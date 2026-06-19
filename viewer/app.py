@@ -2743,37 +2743,36 @@ class MainWindow(QMainWindow):
         if fn:
             self.main_view.add_image_from_file(fn)
 
-    def _clear_workspace(self):
+    def _clear_workspace(self, keep_panes: bool = False):
         """v1.6.0 G3: 새 폴더 로드 전 메인/검색결과 비우기.
-
-        v1.6.2: 히스토리 관련 클리어 제거 (해당 패널 삭제됨).
+        260618-21: keep_panes=True 면 두 뷰어 창과 썸네일을 **보존**(2단에서 다른 폴더를 열어도
+        기존 창이 닫히지 않게) — 검색 결과만 비운다.
         """
         try:
-            # 메인 뷰어 — 260606-8: 두 창 모두 비움
-            for mv in self._mv:
-                if mv._doc is not None:
-                    mv._doc.close()
-                    mv._doc = None
-                mv.scene.clear()
-                mv._page_item = None
-                mv.spin_page.setMaximum(1)
-                mv.lbl_page_total.setText("/ 0")
-            # 페이지 썸네일 — 260616-21: 리스트만 비우면 load_document 의 '동일 파일' 가드가
-            #   재채움을 건너뛰어 단일 파일 열 때 썸네일이 비어 보임 → 문서 상태도 초기화.
-            self.page_thumbs.list.clear()
-            try:
-                if getattr(self.page_thumbs, "_doc", None) is not None:
-                    self.page_thumbs._doc.close()
-            except Exception:
-                pass
-            self.page_thumbs._doc = None
-            self.page_thumbs._doc_path = None
-            self.page_thumbs._doc_mtime = None
-            # 검색 결과
+            if not keep_panes:
+                # 메인 뷰어 — 260606-8: 두 창 모두 비움
+                for mv in self._mv:
+                    if mv._doc is not None:
+                        mv._doc.close()
+                        mv._doc = None
+                    mv.scene.clear()
+                    mv._page_item = None
+                    mv.spin_page.setMaximum(1)
+                    mv.lbl_page_total.setText("/ 0")
+                # 페이지 썸네일 — 260616-21: 리스트만 비우면 '동일 파일' 가드로 재채움이 안 됨 → 상태도 초기화.
+                self.page_thumbs.list.clear()
+                try:
+                    if getattr(self.page_thumbs, "_doc", None) is not None:
+                        self.page_thumbs._doc.close()
+                except Exception:
+                    pass
+                self.page_thumbs._doc = None
+                self.page_thumbs._doc_path = None
+                self.page_thumbs._doc_mtime = None
+                self._current_main = None
+            # 검색 결과(폴더 바뀌면 항상 초기화)
             self.search_results.set_results("", [])
             self._last_results = []
-            # 메인 상태
-            self._current_main = None
         except Exception:
             pass
 
@@ -2781,8 +2780,9 @@ class MainWindow(QMainWindow):
         self._cancel_active_indexing()       # 260611-89: 이전 폴더 인덱싱 즉시 중단
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
-            # v1.6.0 G3: 폴더(=책갈피 리스트)가 바뀌면 메인/히스토리/검색결과 클리어
-            self._clear_workspace()
+            # v1.6.0 G3 / 260618-21: 폴더 변경 시 워크스페이스 정리.
+            #   2단이면 기존 뷰어 창을 보존(다른 폴더 열어도 옆 창 안 닫힘).
+            self._clear_workspace(keep_panes=getattr(self, "_split_on", False))
             self._folder = folder
             self._hyperlinks = None             # 260609-3: 폴더 바뀌면 링크 저장소 재생성
             self._page_meta = None              # 260609-14: 크롭·숨김 저장소 재생성
