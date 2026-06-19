@@ -21,6 +21,10 @@ ffmpeg.exe
 ffmpeg*.zip
 tesseract/
 nltk_data/
+# 릴리스/구성요소 산출물(저장소엔 넣지 않음 — 릴리스 자산으로만 업로드)
+tesseract.zip
+PolyPDF-*.zip
+*-win64.zip
 
 # Local user data / runtime artifacts (must NOT be committed)
 index.db
