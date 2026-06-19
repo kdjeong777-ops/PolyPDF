@@ -1183,86 +1183,53 @@ class MainWindow(QMainWindow):
         self.act_present.triggered.connect(self._open_presentation)
         self.addAction(self.act_present)           # 메뉴에 없어도 F5 동작 유지
 
-        # v1.5.1 → 260618-8: '설정' → '도구' 메뉴(구 파일의 도구 항목들을 상부로 이동)
+        # 260618-16: '도구' 메뉴 — 기능별 6개 구역으로 재배열(섹션 헤더 + 항목)
         m_tools = bar.addMenu("도구(&T)")
-        # 260606-15: PDF 병합 (맨 위)
-        a_merge = self._sc_act_merge = QAction("PDF 병합...", self)
-        a_merge.triggered.connect(lambda: self._on_merge_files(None))
-        m_tools.addAction(a_merge)
-        # 260606-11/15: 단어장·책갈피 동시 생성
-        a_study_bm = QAction("단어장·책갈피 동시 생성...", self)
-        a_study_bm.triggered.connect(self._action_build_study_and_bookmarks)
-        m_tools.addAction(a_study_bm)
-        # v1.6.16: 외부 pdf_bookmarker 통합
-        a_bookmarker = QAction("책갈피 자동 생성...", self)
-        a_bookmarker.triggered.connect(self.action_open_bookmarker)
-        m_tools.addAction(a_bookmarker)
-        a_study_build = QAction("단어장 생성 (OCR·어휘)...", self)
-        a_study_build.triggered.connect(self._action_build_study)
-        m_tools.addAction(a_study_build)
-        # 260611-101(P3): 용어집(PDF/CSV) 가져오기
-        a_gloss = QAction("용어집 가져오기 (PDF·CSV)...", self)
-        a_gloss.triggered.connect(self._action_import_glossary)
-        m_tools.addAction(a_gloss)
-        # 260611-106(P7): 사전 내보내기(TBX/CSV)
-        a_gloss_ex = QAction("사전 내보내기 (TBX·CSV)...", self)
-        a_gloss_ex.triggered.connect(self._action_export_dict)
-        m_tools.addAction(a_gloss_ex)
-        # 260615-6: ⑦ 사용자 CSV 사전 양식 예제 저장
-        a_csv_sample = QAction("용어집 CSV 양식 예제 저장...", self)
-        a_csv_sample.triggered.connect(self._action_save_csv_sample)
-        m_tools.addAction(a_csv_sample)
-        # 260615-15: 사전 백업/복원 + 인터넷 사전 보강(이어하기)
-        a_dict_backup = QAction("사전 백업 (내보내기)...", self)
-        a_dict_backup.triggered.connect(self._action_backup_dict)
-        m_tools.addAction(a_dict_backup)
-        a_dict_restore = QAction("사전 복원 (가져오기)...", self)
-        a_dict_restore.triggered.connect(self._action_restore_dict)
-        m_tools.addAction(a_dict_restore)
-        a_online_enrich = QAction("인터넷 사전 보강 (이어하기)...", self)
-        a_online_enrich.triggered.connect(self._action_online_enrich)
-        m_tools.addAction(a_online_enrich)
-        a_dict_clean = QAction("사전 정리 (HTML 마크업 제거)", self)
-        a_dict_clean.triggered.connect(self._action_sanitize_dict)
-        m_tools.addAction(a_dict_clean)
-        a_onterm_recl = QAction("온용어 다시 분류 (용어집별·재조회)...", self)
-        a_onterm_recl.triggered.connect(self._action_reclassify_onterm)
-        m_tools.addAction(a_onterm_recl)
-        # 260616-1: 법제처 법령·고시 검색
-        a_law = QAction("법령·고시 검색 (법제처)...", self)
-        a_law.triggered.connect(self._action_law_search)
-        m_tools.addAction(a_law)
-        a_reindex = QAction("인덱스 재구축", self)
-        a_reindex.triggered.connect(self.action_reindex)
-        m_tools.addAction(a_reindex)
-        # 260615-3: ② 선·도형·글·하이퍼링크를 PDF 에 삽입 저장
-        a_embed_hl = QAction("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)...", self)
-        a_embed_hl.triggered.connect(self._action_save_decorated_pdf)
-        m_tools.addAction(a_embed_hl)
 
-        m_tools.addSeparator()
-        a_pref = QAction("환경설정...", self)
-        a_pref.triggered.connect(self.action_open_settings)
-        m_tools.addAction(a_pref)
-        a_keys = QAction("단축키 설정...", self)     # 260606-19
-        a_keys.triggered.connect(self._edit_shortcuts)
-        m_tools.addAction(a_keys)
-        m_tools.addSeparator()
-        # 260611-91: 배포용 기본값 — 현재 설정/스타일을 기본값으로 저장 / 기본값으로 초기화
-        a_savedef = QAction("현재 설정을 기본값으로 저장(배포용)…", self)
-        a_savedef.triggered.connect(self._save_current_as_default)
-        m_tools.addAction(a_savedef)
-        a_reset = QAction("설정 초기화(기본값으로 되돌리기)…", self)
-        a_reset.triggered.connect(self._reset_to_defaults)
-        m_tools.addAction(a_reset)
-        m_tools.addSeparator()
-        a_defpdf = QAction("Windows 기본 PDF 앱으로 등록…", self)  # 260611-11
-        a_defpdf.triggered.connect(self._register_pdf_handler)
-        m_tools.addAction(a_defpdf)
-        # 260618-12: 선택 구성요소(녹화 ffmpeg / OCR Tesseract) 설치
-        a_components = QAction("구성요소 설치(녹화·OCR)…", self)
-        a_components.triggered.connect(self._open_components_installer)
-        m_tools.addAction(a_components)
+        def _act(text, slot):
+            a = QAction(text, self)
+            a.triggered.connect(slot)
+            m_tools.addAction(a)
+            return a
+
+        # 📄 PDF 및 문서 작업
+        m_tools.addSection("📄 PDF 및 문서 작업")
+        a_merge = self._sc_act_merge = _act("PDF 병합...", lambda: self._on_merge_files(None))
+        _act("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)...", self._action_save_decorated_pdf)
+
+        # 🔖 책갈피 및 단어장 생성
+        m_tools.addSection("🔖 책갈피 및 단어장 생성")
+        _act("단어장·책갈피 동시 생성...", self._action_build_study_and_bookmarks)
+        _act("책갈피 자동 생성...", self.action_open_bookmarker)
+        _act("단어장 생성 (OCR·어휘)...", self._action_build_study)
+
+        # 📖 사전 및 용어집 관리
+        m_tools.addSection("📖 사전 및 용어집 관리")
+        _act("용어집 가져오기 (PDF·CSV)...", self._action_import_glossary)
+        _act("사전 복원 (가져오기)...", self._action_restore_dict)
+        _act("용어집 CSV 양식 예제 저장...", self._action_save_csv_sample)
+        _act("인터넷 사전 보강 (이어하기)...", self._action_online_enrich)
+        _act("사전 내보내기 (TBX·CSV)...", self._action_export_dict)
+        _act("사전 백업 (내보내기)...", self._action_backup_dict)
+        _act("사전 정리 (HTML 마크업 제거)", self._action_sanitize_dict)
+        _act("온용어 다시 분류 (용어집별·재조회)...", self._action_reclassify_onterm)
+
+        # 🔍 검색 및 데이터 구축
+        m_tools.addSection("🔍 검색 및 데이터 구축")
+        _act("법령·고시 검색 (법제처)...", self._action_law_search)
+        _act("인덱스 재구축", self.action_reindex)
+
+        # ⚙️ 프로그램 환경설정
+        m_tools.addSection("⚙️ 프로그램 환경설정")
+        _act("단축키 설정...", self._edit_shortcuts)
+        _act("환경설정...", self.action_open_settings)
+        _act("현재 설정을 기본값으로 저장(배포용)…", self._save_current_as_default)
+        _act("설정 초기화(기본값으로 되돌리기)…", self._reset_to_defaults)
+
+        # 💻 시스템 연동 및 설치
+        m_tools.addSection("💻 시스템 연동 및 설치")
+        _act("Windows 기본 PDF 앱으로 등록…", self._register_pdf_handler)
+        _act("구성요소 설치(녹화·OCR)…", self._open_components_installer)
 
         m_help = bar.addMenu("도움말(&H)")
         # v1.6.1 G2: 사용법
@@ -7142,11 +7109,41 @@ class MainWindow(QMainWindow):
         from viewer import theme as _theme
         _theme.set_dark(dark)
         app.setStyle(QStyleFactory.create("Fusion"))
+        # 260618-16: Qt6.5+ 에서 시스템이 다크면 standardPalette() 가 다크를 반환 →
+        #   '밝게'를 골라도 대부분 검게 보이던 문제. 라이트는 **명시적 라이트 팔레트** 강제.
         if not dark:
-            app.setPalette(app.style().standardPalette())
+            try:
+                app.styleHints().setColorScheme(_Qt.ColorScheme.Light)   # Qt6.8+(있으면)
+            except Exception:
+                pass
+            lp = QPalette()
+            win = QColor(240, 240, 240); base = QColor(255, 255, 255)
+            txt = QColor(26, 26, 26); hl = QColor(38, 110, 200)
+            lp.setColor(QPalette.ColorRole.Window, win)
+            lp.setColor(QPalette.ColorRole.WindowText, txt)
+            lp.setColor(QPalette.ColorRole.Base, base)
+            lp.setColor(QPalette.ColorRole.AlternateBase, QColor(245, 245, 245))
+            lp.setColor(QPalette.ColorRole.Text, txt)
+            lp.setColor(QPalette.ColorRole.Button, win)
+            lp.setColor(QPalette.ColorRole.ButtonText, txt)
+            lp.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 225))
+            lp.setColor(QPalette.ColorRole.ToolTipText, txt)
+            lp.setColor(QPalette.ColorRole.PlaceholderText, QColor(120, 120, 120))
+            lp.setColor(QPalette.ColorRole.Highlight, hl)
+            lp.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+            lp.setColor(QPalette.ColorRole.Link, QColor(20, 90, 200))
+            dis = QColor(150, 150, 150)
+            for r in (QPalette.ColorRole.Text, QPalette.ColorRole.ButtonText,
+                      QPalette.ColorRole.WindowText):
+                lp.setColor(QPalette.ColorGroup.Disabled, r, dis)
+            app.setPalette(lp)
             app.setStyleSheet("")
             self._apply_theme_widgets(False)
             return
+        try:
+            app.styleHints().setColorScheme(_Qt.ColorScheme.Dark)
+        except Exception:
+            pass
         p = QPalette()
         bg = QColor(45, 45, 48); base = QColor(30, 30, 32)
         txt = QColor(230, 230, 230); hl = QColor(38, 110, 200)

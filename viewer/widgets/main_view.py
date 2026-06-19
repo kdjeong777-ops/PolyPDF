@@ -691,10 +691,19 @@ class _PdfGraphicsView(QGraphicsView):
     viewActivated = pyqtSignal()           # 260606-8: 이 뷰를 클릭(활성 창 선택)
     regionSelected = pyqtSignal(object)    # 260616-21: 텍스트 영역(scene QRectF) 선택 완료
     viewResized = pyqtSignal()             # 260618-10: 뷰포트 크기 변경(빈 안내 라벨 재중앙)
+    fitPageRequested = pyqtSignal()        # 260618-16: 더블클릭 → 쪽 맞춤
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         self.viewResized.emit()
+
+    def mouseDoubleClickEvent(self, ev):
+        from PyQt6.QtCore import Qt as _Qt
+        if ev.button() == _Qt.MouseButton.LeftButton:
+            self.fitPageRequested.emit()     # 뷰어 더블클릭 = 쪽 맞춤
+            ev.accept()
+            return
+        super().mouseDoubleClickEvent(ev)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1028,7 +1037,7 @@ class MainView(QWidget):
     FIT_PAGE = "쪽 맞춤"
     FIT_PAGE_TWO = "2장 맞춤"     # v1.5.0 M3 (260606-19: 명칭 단축)
     FIT_WIDTH = "폭 맞춤"
-    FIT_NONE = "수동"
+    FIT_NONE = "수동 맞춤"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1252,6 +1261,8 @@ class MainView(QWidget):
         self._page_item: Optional[QGraphicsPixmapItem] = None
 
         # 시그널
+        self.view.fitPageRequested.connect(                       # 260618-16: 더블클릭=쪽 맞춤
+            lambda: self.cmb_fit.setCurrentText(self.FIT_PAGE))
         self.btn_prev_page.clicked.connect(lambda: self._on_step_clicked(-1))
         self.btn_next_page.clicked.connect(lambda: self._on_step_clicked(+1))
         self.spin_page.editingFinished.connect(self._on_spin_edited)
