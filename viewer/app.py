@@ -867,11 +867,13 @@ class MainWindow(QMainWindow):
         cur = None
         try:
             if getattr(self, "_split_on", False) and len(self._mv) > 1:
-                f = self._mv[1].current_file()
-                if f and str(f).lower().endswith(".pdf"):
-                    fld = getattr(self, "_folder", None)
-                    if fld is None or str(Path(f).parent) != str(Path(fld)):
-                        cur = str(f)
+                fld = getattr(self, "_folder", None)
+                for idx in (1, 0):                 # 우측 우선, 그다음 좌측 — '다른 폴더' 창
+                    f = self._mv[idx].current_file()
+                    if f and str(f).lower().endswith(".pdf"):
+                        if fld is None or str(Path(f).parent) != str(Path(fld)):
+                            cur = str(f)
+                            break
         except Exception:
             cur = None
         if not cur:
@@ -1747,10 +1749,23 @@ class MainWindow(QMainWindow):
             self.open_pdf(Path(fn))
 
     def open_pdf(self, pdf_path: Path):
-        """v1.6.11 I1/I2: 단일 PDF 를 열고 그 파일만 인덱싱."""
+        """v1.6.11 I1/I2: 단일 PDF 를 열고 그 파일만 인덱싱.
+        260618-20: 2단 보기에서는 워크스페이스(다른 창·상단 책갈피·폴더)를 비우지 않고
+        **활성 창에만** 로드 → 옆 창 내용 유지, 상단 책갈피 유지, 다른 폴더면 하단에 표시(#7)."""
         pdf_path = Path(pdf_path)
         if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
             self.status.showMessage(f"PDF 파일이 아닙니다: {pdf_path.name}")
+            return
+        if getattr(self, "_split_on", False):
+            # 2단: 활성 창에만 로드(다른 창·폴더·상단 책갈피 보존). 인덱스는 폴더 인덱스에 추가만.
+            self._load_main(HistoryItem(str(pdf_path), 0, "", "bookmark"))
+            try:
+                self._cancel_active_indexing()
+                worker = IndexWorker(self._db_path, self._folder, single_file=pdf_path)
+                worker.error.connect(lambda e: None)
+                self._start_index_worker(worker)
+            except Exception:
+                pass
             return
         self._cancel_active_indexing()       # 260611-89: 이전 인덱싱 즉시 중단
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
