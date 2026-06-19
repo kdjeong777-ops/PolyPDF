@@ -1004,24 +1004,22 @@ class MainWindow(QMainWindow):
                             "background:transparent;border:none;")
             self._panel_toolbar.addWidget(q)
 
-        # 260606-27: 좌측 정렬(가운데 정렬 폐지 — 스페이서 제거)
-        lab("뷰어")
+        # 260606-27: 좌측 정렬 / 260618-18: '뷰어'→'보기', '기능'→'도구', 법령/고시 보기 그룹으로
+        lab("보기")
         mk("1단", "검색·단어장·스크린샷 숨김 (단일 보기)", self._vm_single)
         mk("2단", "2단 보기(쪽 맞춤)", self._vm_split)
         mk("검색", "검색·단어장 창 보이기 · 검색 탭", self._vm_search)
         mk("단어장", "검색·단어장 창 보이기 · 단어장 탭", self._vm_study)
         self._btn_shot = mk("스크린샷", "검색·단어장 숨김 · 스크린샷 보이기", self._vm_shot)
+        mk("법령/고시", "법제처 법령·고시 검색·본문 보기", self._action_law_search)  # 260618-18: 스크린샷 오른쪽
         mk("발표보기", "발표 전체화면 보기 (F5)", self._open_presentation)  # 260609-15(E1)/260618-8
-        # 뷰어모드 ↔ 기능 사이 띄움
+        # 보기 ↔ 도구 사이 띄움
         _sp = QWidget(); _sp.setFixedWidth(20)
         self._panel_toolbar.addWidget(_sp)
-        lab("기능")
+        lab("도구")
         self._btn_merge = mk("PDF병합", "파일 → PDF 병합", lambda: self._on_merge_files(None))
-        mk("책갈피·단어장 동시 생성", "파일 → 단어장·책갈피 동시 생성",
-           self._action_build_study_and_bookmarks)
         mk("책갈피 생성", "파일 → 책갈피 자동 생성", self.action_open_bookmarker)
         mk("단어장 생성", "파일 → 단어장 생성", self._action_build_study)
-        mk("법령/고시", "법제처 법령·고시 검색·본문 보기 (전체화면)", self._action_law_search)
         mk("암호화", "현재 PDF에 암호·권한 설정(암호화 저장)", self.action_encrypt_pdf)
         self._btn_shot_pdf = mk("스크린샷 PDF 저장", "스크린샷 전체를 PDF로", self.action_save_screenshot_pdf)
 
@@ -1221,8 +1219,8 @@ class MainWindow(QMainWindow):
 
         # ⚙️ 프로그램 환경설정
         m_tools.addSection("⚙️ 프로그램 환경설정")
+        _act("환경설정...", self.action_open_settings)        # 260618-18: 환경설정을 단축키 위로
         _act("단축키 설정...", self._edit_shortcuts)
-        _act("환경설정...", self.action_open_settings)
         _act("현재 설정을 기본값으로 저장(배포용)…", self._save_current_as_default)
         _act("설정 초기화(기본값으로 되돌리기)…", self._reset_to_defaults)
 
@@ -4784,10 +4782,10 @@ class MainWindow(QMainWindow):
             }
             self.act_toggle_search.setChecked(False)
             self.act_toggle_shot.setChecked(False)
-            # 260618-8: '1단 PDF + 오른쪽 2단 법령' 2열 구성 — 2단(PDF 분할) 끄고 책갈피 숨김
+            # 260618-18: 책갈피·썸네일·뷰어(1단)·법령 표시 — 2단(PDF 분할)만 끔(뷰어 1단)
             if self.act_split.isChecked():
                 self.act_split.setChecked(False)
-            self._sync_right_layout()          # 우측 패널 → 드로어(숨김)
+            self._sync_right_layout()          # 우측 검색/스크린샷 패널 → 드로어(숨김)
             self.splitter.addWidget(self._law_panel)   # 오른쪽 끝(2단)
             self.splitter.setHandleWidth(8)
             for i in range(self.splitter.count()):
@@ -4802,20 +4800,26 @@ class MainWindow(QMainWindow):
             pass
 
     def _apply_law_embed_sizes(self):
-        """260618-8: '1단 PDF | 2단 법령' 2열 — 책갈피는 숨김(폭 0), PDF·법령 균등."""
+        """260618-18: 책갈피 | 썸네일 | 뷰어(1단) | 법령 순으로 표시.
+        (우측 검색/스크린샷 패널만 숨김 — 책갈피·썸네일은 보이게.)"""
         try:
             n = self.splitter.count()
-            total = sum(self.splitter.sizes()) or max(900, self.width())
-            rest = max(400, total)
-            vw = rest // 2
-            lw = rest - vw
-            sizes = [0] * n            # 책갈피(index 0) 등 나머지는 0 → 숨김
+            total = sum(self.splitter.sizes()) or max(1100, self.width())
+            bk, th = 170, 120
             im = self.splitter.indexOf(self.main_split)
             il = self.splitter.indexOf(self._law_panel)
+            ith = self.splitter.indexOf(self.page_thumbs)
+            rest = max(420, total - bk - th)
+            vw = rest // 2
+            lw = rest - vw
+            sizes = [0] * n
+            sizes[0] = bk                          # 책갈피
+            if 0 <= ith < n:
+                sizes[ith] = th                    # 썸네일
             if 0 <= im < n:
-                sizes[im] = vw
+                sizes[im] = vw                     # 뷰어(1단)
             if 0 <= il < n:
-                sizes[il] = lw
+                sizes[il] = lw                     # 법령
             self.splitter.setSizes(sizes)
         except Exception:
             pass

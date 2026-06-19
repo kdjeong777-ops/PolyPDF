@@ -61,7 +61,7 @@ class SettingsDialog(QDialog):
         gl.addWidget(self.chk_restore)
 
         self.chk_last_page = QCheckBox(
-            "    └ 복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)"
+            "복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)"   # 260618-18: 앞 공백·└ 제거
         )
         self.chk_last_page.setChecked(bool(self._prefs.get("restore_last_page", True)))
         gl.addWidget(self.chk_last_page)
@@ -231,12 +231,7 @@ class SettingsDialog(QDialog):
         f.addRow("시스템 장치:", self.cmb_sys)
         f.addRow("", b_dev)
 
-        self.ed_ffmpeg = QLineEdit(str(self._prefs.get("ffmpeg_path", "")))
-        self.ed_ffmpeg.setPlaceholderText("비우면 자동 탐색(앱 폴더/PATH)")
-        b_ff = QPushButton("찾기…"); b_ff.clicked.connect(self._pick_ffmpeg)
-        ff = QHBoxLayout(); ff.addWidget(self.ed_ffmpeg, 1); ff.addWidget(b_ff)
-        _w2 = QWidget(); _w2.setLayout(ff); f.addRow("ffmpeg 경로:", _w2)
-
+        # 260618-18: 'ffmpeg 경로' 입력 제거 — ffmpeg 은 설치 폴더에 동봉/복사되어 자동 탐색됨.
         keys = list(self._prefs.get("recording_keys", []) or [])
         self.ks_rec = QKeySequenceEdit(QKeySequence(keys[0]) if len(keys) > 0 and keys[0]
                                        else QKeySequence("Ctrl+R"))
@@ -258,16 +253,11 @@ class SettingsDialog(QDialog):
         if d:
             self.ed_rec_dir.setText(d)
 
-    def _pick_ffmpeg(self):
-        p, _ = QFileDialog.getOpenFileName(self, "ffmpeg.exe 선택", "", "ffmpeg (ffmpeg.exe);;모든 파일 (*.*)")
-        if p:
-            self.ed_ffmpeg.setText(p)
-
     def _refresh_devices(self):
         try:
             from viewer.recorder import (find_ffmpeg, list_audio_devices,
                                          guess_mic_device, guess_system_device)
-            ff = find_ffmpeg(self.ed_ffmpeg.text().strip())
+            ff = find_ffmpeg(self._prefs.get("ffmpeg_path", ""))
             devs = list_audio_devices(ff)
         except Exception:
             devs = []
@@ -291,7 +281,6 @@ class SettingsDialog(QDialog):
         self._host._prefs["recording_audio_mode"] = self.cmb_audio.currentData()
         self._host._prefs["recording_mic"] = self.cmb_mic.currentText().strip()
         self._host._prefs["recording_system"] = self.cmb_sys.currentText().strip()
-        self._host._prefs["ffmpeg_path"] = self.ed_ffmpeg.text().strip()
         QMessageBox.information(self, "녹화 테스트", "3초간 화면을 녹화합니다…")
         ok, msg = self._host._test_recording(self)
         # 260611-25: 합격 결과 기록(녹화 시작 전 게이트에서 확인)
@@ -322,7 +311,7 @@ class SettingsDialog(QDialog):
             "recording_system": self.cmb_sys.currentText().strip(),
             "recording_keys": [self.ks_rec.keySequence().toString(),
                                self.ks_recstop.keySequence().toString()],
-            "ffmpeg_path": self.ed_ffmpeg.text().strip(),
+            "ffmpeg_path": str(self._prefs.get("ffmpeg_path", "")),   # 260618-18: UI 제거, 기존값 보존
             # 260606-13: 화면 스타일(테마)
             "theme": self.cmb_theme.currentData(),
             # 260615-9(P11): 인터넷 사전
