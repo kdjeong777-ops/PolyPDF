@@ -123,6 +123,7 @@ class _MergeThread(QThread):
 class _UpdateSignals(QObject):
     """260618-11: 업데이트 확인 스레드 → 메인 스레드 결과 전달."""
     done = pyqtSignal(object, bool)     # (info dict|None, manual)
+    dl_done = pyqtSignal(str)           # 260618-24: 백그라운드 다운로드 완료(zip 경로|"")
 
 
 class MainWindow(QMainWindow):
@@ -222,6 +223,11 @@ class MainWindow(QMainWindow):
         # 260618-11: 업데이트 — 스레드 결과를 메인 스레드로 전달하는 시그널 홀더
         self._update_sig = _UpdateSignals()
         self._update_sig.done.connect(self._on_update_result)
+        self._update_sig.dl_done.connect(self._on_bg_dl_done)   # 260618-24
+        self._pending_update = None    # 260618-24: 새 버전 info(있으면 종료 시 업그레이드 제안)
+        self._pending_zip = None       # 260618-24: 미리 받아둔 업데이트 zip 경로
+        self._dl_in_progress = False
+        self._updating = False         # 260618-24: 업그레이드 진행 중(종료 시 재질문 방지)
         # 시작 시 자동 확인(배포 exe + 설정 켜짐) — 4초 뒤 백그라운드
         try:
             from viewer import updater as _upd
@@ -1326,6 +1332,13 @@ class MainWindow(QMainWindow):
         a_update = QAction("업데이트 확인…", self)
         a_update.triggered.connect(lambda: self._check_for_updates(manual=True))
         m_help.addAction(a_update)
+        # 260618-24(C): 업데이트 자동 다운로드(미리 받아두기) 체크박스 — 기본 켜짐
+        a_autodl = QAction("업데이트 자동 다운로드", self)
+        a_autodl.setCheckable(True)
+        a_autodl.setChecked(bool(getattr(self, "_prefs", {}).get("auto_download_update", True)))
+        a_autodl.toggled.connect(self._on_toggle_auto_download)
+        m_help.addAction(a_autodl)
+        self._act_auto_download = a_autodl
         m_help.addSeparator()
         a_about = QAction("정보", self)
         a_about.triggered.connect(self._show_about)
@@ -6990,6 +7003,7 @@ class MainWindow(QMainWindow):
         self._prefs.setdefault("online_dict_enabled", True)       # 260615-9(P11)/260618-10: 기본 켜기
         self._prefs.setdefault("update_repo", "")                 # 260618-11: GitHub OWNER/REPO
         self._prefs.setdefault("auto_check_update", True)         # 260618-11: 시작 시 업데이트 확인
+        self._prefs.setdefault("auto_download_update", True)      # 260618-24: 백그라운드 미리 다운로드
         self._prefs.setdefault("urimalsaem_key", "")
         self._prefs.setdefault("stdict_key", "")
         self._prefs.setdefault("onterm_key", "")
@@ -7230,6 +7244,8 @@ class MainWindow(QMainWindow):
             "update_repo": str(prefs.get("update_repo", old.get("update_repo", ""))),
             "auto_check_update": bool(prefs.get("auto_check_update",
                                                 old.get("auto_check_update", True))),
+            "auto_download_update": bool(prefs.get("auto_download_update",
+                                                  old.get("auto_download_update", True))),
             # 260606-19: 단축키 오버라이드 보존
             "shortcuts": prefs.get("shortcuts", old.get("shortcuts", {})),
         }
@@ -7680,6 +7696,30 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
 
+        # 260618-24(C): 새 버전이 준비돼 있으면 종료 시 업그레이드 후 종료 제안
+        if getattr(self, "_pending_update", None) and not getattr(self, "_updating", False):
+            info = self._pending_update
+            ver = info.get("version", "")
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle("업그레이드")
+            box.setText(f"새 버전 v{ver} 이(가) 준비되어 있습니다.\n"
+                        "업그레이드 후 종료할까요?")
+            b_up = box.addButton("업그레이드 후 종료", QMessageBox.ButtonRole.AcceptRole)
+            b_no = box.addButton("그냥 종료", QMessageBox.ButtonRole.DestructiveRole)
+            b_cancel = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(b_up)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is b_cancel:
+                event.ignore()
+                return
+            if clicked is b_up:
+                if not self._begin_upgrade():
+                    QMessageBox.warning(self, "업그레이드",
+                                        "업그레이드 시작에 실패했습니다. 그냥 종료합니다.")
+            # b_no → 그냥 종료(업그레이드 안 함)
+
         qs = QSettings()
         qs.setValue("geometry", self.saveGeometry())
         qs.setValue("splitter", self.splitter.saveState())
@@ -7736,6 +7776,17 @@ class MainWindow(QMainWindow):
         return True
 
     # ===== 260618-11: 업데이트(GitHub Releases) =========================
+    def _on_toggle_auto_download(self, checked: bool):
+        """260618-24(C): 업데이트 자동 다운로드 설정 토글."""
+        self._prefs["auto_download_update"] = bool(checked)
+        try:
+            self._save_settings_now()
+        except Exception:
+            pass
+        # 방금 켰고 새 버전을 이미 인지했다면 바로 미리 받기 시작
+        if checked and getattr(self, "_pending_update", None):
+            self._start_bg_update_download(self._pending_update)
+
     def _check_for_updates(self, manual: bool = False):
         """최신 릴리스를 백그라운드로 확인(결과는 _on_update_result). manual=True 면
         저장소 미설정 시 입력받고, 최신/실패도 알림."""
@@ -7784,61 +7835,111 @@ class MainWindow(QMainWindow):
             if manual:
                 QMessageBox.information(self, "업데이트", f"현재 최신 버전입니다. (v{cur})")
             return
-        notes = (info.get("notes") or "").strip()
-        if len(notes) > 1200:
-            notes = notes[:1200] + " …"
         if not updater.is_frozen():
-            QMessageBox.information(
-                self, "업데이트",
-                f"새 버전 v{latest} 이 있습니다(현재 v{cur}).\n"
-                f"개발(소스) 실행 중에는 자동 교체가 적용되지 않습니다.\n{info.get('html_url','')}")
+            if manual:
+                QMessageBox.information(
+                    self, "업데이트",
+                    f"새 버전 v{latest} 이 있습니다(현재 v{cur}).\n"
+                    f"개발(소스) 실행 중에는 자동 교체가 적용되지 않습니다.\n{info.get('html_url','')}")
             return
         if not info.get("asset_url"):
-            QMessageBox.information(
-                self, "업데이트",
-                f"새 버전 v{latest} 이 있으나 배포 zip 자산을 찾지 못했습니다.\n{info.get('html_url','')}")
+            if manual:
+                QMessageBox.information(
+                    self, "업데이트",
+                    f"새 버전 v{latest} 이 있으나 배포 zip 자산을 찾지 못했습니다.\n{info.get('html_url','')}")
             return
-        msg = (f"새 버전이 있습니다.\n\n현재: v{cur}\n최신: v{latest}\n\n"
-               + (notes + "\n\n" if notes else "") + "지금 다운로드해 업데이트할까요?")
-        ret = QMessageBox.question(
-            self, "업데이트", msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes)
-        if ret == QMessageBox.StandardButton.Yes:
-            self._download_and_apply(info)
-
-    def _download_and_apply(self, info):
-        from viewer import updater
-        from PyQt6.QtWidgets import QProgressDialog
-        dlg = QProgressDialog("업데이트 다운로드 중…", "취소", 0, 100, self)
-        dlg.setWindowTitle("업데이트")
-        dlg.setAutoClose(False)
-        dlg.setMinimumDuration(0)
-        dlg.setValue(0)
-
-        def prog(done, total):
-            if dlg.wasCanceled():
-                return False
-            if total > 0:
-                dlg.setValue(int(done * 100 / total))
-                dlg.setLabelText(
-                    f"업데이트 다운로드 중… {done // 1048576}/{total // 1048576} MB")
-            QApplication.processEvents()
-            return True
-
-        path = updater.download_asset(info["asset_url"], progress=prog)
-        dlg.close()
-        if not path:
-            QMessageBox.information(self, "업데이트", "다운로드가 취소되었거나 실패했습니다.")
-            return
-        if updater.apply_update(path):
-            QMessageBox.information(
+        # 260618-24: 새 버전 인지(종료 시 업그레이드 프롬프트용)
+        self._pending_update = info
+        if manual:
+            # D: 확인 → 종료하고 설치(설치 도우미가 파일 없으면 다운로드)
+            notes = (info.get("notes") or "").strip()
+            if len(notes) > 800:
+                notes = notes[:800] + " …"
+            ret = QMessageBox.question(
                 self, "업데이트",
-                "다운로드 완료. 프로그램을 종료하고 업데이트를 적용합니다.\n"
-                "잠시 후 자동으로 다시 시작됩니다.")
-            self.close()        # 종료 → 도우미가 파일 교체 후 재실행
+                f"새 버전이 있습니다.\n\n현재: v{cur}\n최신: v{latest}\n\n"
+                + (notes + "\n\n" if notes else "")
+                + "프로그램을 종료하고 설치합니다. 계속할까요?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes)
+            if ret == QMessageBox.StandardButton.Yes:
+                if self._begin_upgrade():
+                    self.close()
+                else:
+                    QMessageBox.warning(self, "업데이트", "업데이트 적용을 시작하지 못했습니다.")
         else:
-            QMessageBox.warning(self, "업데이트", "업데이트 적용에 실패했습니다.")
+            # C: 시작 시 자동 확인 — 설정 켜져 있으면 백그라운드로 미리 받아둠
+            if self._prefs.get("auto_download_update", True):
+                self._start_bg_update_download(info)
+            else:
+                self.status.showMessage(f"새 버전 v{latest} 사용 가능 — 도움말 → 업데이트 확인", 6000)
+
+    def _start_bg_update_download(self, info):
+        """260618-24: 한가할 때 백그라운드로 업데이트 zip 을 미리 받아 둠(설정 폴더 캐시)."""
+        from viewer import updater
+        url = info.get("asset_url")
+        ver = info.get("version", "")
+        if not url:
+            return
+        dest = updater.pending_zip_path()
+        verf = dest.with_suffix(".ver")
+        try:
+            if dest.exists() and verf.exists() and verf.read_text(encoding="utf-8").strip() == ver:
+                self._pending_zip = str(dest)       # 이미 받아둔 동일 버전
+                return
+        except Exception:
+            pass
+        if getattr(self, "_dl_in_progress", False):
+            return
+        # 인덱싱 중이면(바쁨) 잠시 후 재시도
+        if getattr(self, "_index_workers", None):
+            QTimer.singleShot(15000, lambda: self._start_bg_update_download(info))
+            return
+        self._dl_in_progress = True
+        import threading
+        sig = self._update_sig
+
+        def work():
+            import shutil
+            out = ""
+            try:
+                path = updater.download_asset(url)   # 임시폴더로 받음(진행 UI 없음)
+                if path:
+                    try:
+                        if dest.exists():
+                            dest.unlink()
+                    except Exception:
+                        pass
+                    shutil.move(path, str(dest))
+                    verf.write_text(ver, encoding="utf-8")
+                    out = str(dest)
+            except Exception:
+                out = ""
+            try:
+                sig.dl_done.emit(out)
+            except Exception:
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_bg_dl_done(self, path):
+        self._dl_in_progress = False
+        if path:
+            self._pending_zip = path
+            self.status.showMessage("업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다.", 5000)
+
+    def _begin_upgrade(self) -> bool:
+        """260618-24: 업그레이드 시작 — 받아둔 zip 있으면 사용, 없으면 설치 도우미가 다운로드.
+        성공 시 _updating 플래그(종료 시 재질문 방지) 설정. 호출 후 앱을 종료해야 함."""
+        from viewer import updater
+        info = getattr(self, "_pending_update", None)
+        if not info:
+            return False
+        z = getattr(self, "_pending_zip", None)
+        zp = z if (z and os.path.isfile(z)) else None
+        ok = updater.apply_update(zip_path=zp, url=info.get("asset_url", ""))
+        if ok:
+            self._updating = True
+        return ok
 
     def _open_components_installer(self):
         """260618-12: 녹화(ffmpeg)·OCR(Tesseract) 구성요소를 릴리스에서 설치 폴더로 받기."""

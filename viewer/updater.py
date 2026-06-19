@@ -165,7 +165,8 @@ def download_asset(url: str, progress=None, timeout: float = 30.0):
         return None
 
 
-_PS_INSTALLER = r'''# PolyPDF 업데이트 설치 도우미 (260618-17): 진행률 바 GUI(도스창 아님).
+_PS_INSTALLER = r'''# PolyPDF 업데이트 설치 도우미 (260618-17/24): 진행률 바 GUI(도스창 아님).
+#   파일이 없으면 직접 다운로드(진행바만, 용량 표시 없음) 후 설치.
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -173,6 +174,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $oldPid  = __PID__
 $zipPath = "__ZIP__"
+$url     = "__URL__"
 $install = "__INSTALL__"
 $exe     = "__EXE__"
 
@@ -199,6 +201,30 @@ for ($i=0; $i -lt 120; $i++) {
     [System.Windows.Forms.Application]::DoEvents()
 }
 Start-Sleep -Milliseconds 400
+
+# 1.5) 다운로드(파일이 없을 때만) — 진행바만, 용량 숫자 표시 안 함
+if (([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) -and -not [string]::IsNullOrEmpty($url)) {
+    $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
+    $lbl.Text = "업데이트 다운로드 중..."
+    [System.Windows.Forms.Application]::DoEvents()
+    try {
+        $req = [System.Net.WebRequest]::Create($url)
+        $req.UserAgent = "PolyPDF-Updater"; $req.Timeout = 60000
+        $resp = $req.GetResponse(); $len = $resp.ContentLength
+        $ins = $resp.GetResponseStream(); $outs = [System.IO.File]::Create($zipPath)
+        $buf = New-Object byte[] 262144; $done = [long]0
+        while (($r = $ins.Read($buf,0,$buf.Length)) -gt 0) {
+            $outs.Write($buf,0,$r); $done += $r
+            if ($len -gt 0) { $bar.Value = [Math]::Min(100,[int]($done*100/$len)) }
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        $outs.Close(); $ins.Close(); $resp.Close()
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("다운로드 실패: " + $_.Exception.Message, "PolyPDF 업데이트") | Out-Null
+        $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
+    }
+    $bar.Value = 0
+}
 
 # 2) 압축 해제 = 설치(엔트리별 진행률). 압축 루트에 PolyPDF\ 접두가 있으면 제거.
 try {
@@ -236,11 +262,22 @@ Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
 '''
 
 
-def apply_update(zip_path: str) -> bool:
-    """260618-17: 실행 중 교체 — **진행률 바 GUI 설치 창**(PowerShell WinForms, 콘솔 숨김)을
-    띄워 앱 종료 대기→압축 해제(=설치)→재실행. 성공 시 True 반환 후 호출측이 앱을 종료해야 함.
-    (도스창 대신 progress bar 창이 뜸. 시스템 powershell 사용 — 교체 대상이 아니므로 안전.)"""
-    if not (zip_path and os.path.isfile(zip_path)):
+def pending_zip_path() -> Path:
+    """260618-24: 백그라운드로 미리 받아둔 업데이트 zip 경로(설정 폴더)."""
+    try:
+        from viewer import settings_store
+        d = settings_store.settings_dir()
+    except Exception:
+        d = Path(tempfile.gettempdir())
+    return Path(d) / "PolyPDF-update.zip"
+
+
+def apply_update(zip_path: str = None, url: str = "") -> bool:
+    """260618-17/24: 실행 중 교체 — **진행률 바 GUI 설치 창**(PowerShell WinForms, 콘솔 숨김).
+    앱 종료 대기 → (zip 없으면 url 에서 다운로드, 진행바만) → 압축 해제(설치) → 재실행.
+    성공 시 True(설치 도우미 기동) 반환 후 호출측이 앱을 종료해야 함. zip_path/url 중 하나는 있어야 함."""
+    has_zip = bool(zip_path and os.path.isfile(zip_path))
+    if not has_zip and not url:
         return False
     inst = str(install_dir())
     exe = sys.executable if is_frozen() else os.path.join(inst, "PolyPDF.exe")
@@ -248,7 +285,8 @@ def apply_update(zip_path: str) -> bool:
     ps1 = os.path.join(tempfile.gettempdir(), f"polypdf_update_{pid}.ps1")
     script = (_PS_INSTALLER
               .replace("__PID__", str(pid))
-              .replace("__ZIP__", zip_path)
+              .replace("__ZIP__", zip_path if has_zip else "")
+              .replace("__URL__", url or "")
               .replace("__INSTALL__", inst)
               .replace("__EXE__", exe))
     try:
