@@ -246,15 +246,17 @@ class MainWindow(QMainWindow):
 
         # 1단 책갈피 트리 — 260611-75: 기본 폭 좁게. 260618-19: 세로 스플리터로 래핑
         #   (상=현재 폴더 책갈피, 하=우측 2단 창이 '다른 폴더' 파일일 때 그 파일 표시).
-        self.bookmark_tree = BookmarkTree()
+        self.bookmark_tree = BookmarkTree()         # 상단 = 좌측 창 폴더 목록
         self.bookmark_tree.setMinimumWidth(150)
+        self.bookmark_tree_right = BookmarkTree()   # 260618-22: 하단 = 우측 창 폴더 목록(2단·다른폴더)
+        self.bookmark_tree_right.setMinimumWidth(150)
         self._bk_split = QSplitter(Qt.Orientation.Vertical)
         self._bk_split.addWidget(self.bookmark_tree)
-        self._right_file_panel = self._build_right_file_panel()
-        self._bk_split.addWidget(self._right_file_panel)
+        self._bk_split.addWidget(self.bookmark_tree_right)
         self._bk_split.setCollapsible(0, False)
         self._bk_split.setCollapsible(1, True)
-        self._right_file_panel.hide()           # 기본 숨김(같은 폴더/1단)
+        self.bookmark_tree_right.hide()             # 기본 숨김(같은 폴더/1단/우측 비었을 때)
+        self._folder_right = None                   # 우측 창 폴더
         self.splitter.addWidget(self._bk_split)
 
         # 2단 페이지 썸네일
@@ -839,93 +841,54 @@ class MainWindow(QMainWindow):
         self._sync_bookmark_to_active()
         self._refresh_page_hyperlinks(i)          # 260609-3: 페이지 링크 버튼 갱신
 
-    # ===== 260618-19: 2단 우측 창이 '다른 폴더' 파일일 때 책갈피 하단에 표시 =====
-    def _build_right_file_panel(self):
-        from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTreeWidget
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(4, 2, 4, 4)
-        v.setSpacing(2)
-        self._right_file_label = QLabel("우측 창 파일")
-        self._right_file_label.setWordWrap(True)
-        self._right_file_label.setStyleSheet(
-            "font-weight:bold;color:#1565c0;padding:2px;border-top:1px solid #b0b0b0;")
-        v.addWidget(self._right_file_label)
-        self._right_file_toc = QTreeWidget()
-        self._right_file_toc.setHeaderHidden(True)
-        self._right_file_toc.itemClicked.connect(self._on_right_file_toc_clicked)
-        v.addWidget(self._right_file_toc, 1)
-        self._right_file_cur = None
-        return w
+    # ===== 260618-22: 2단 = 상단(좌측)·하단(우측) 독립 책갈피 트리 =====
+    def _set_pane_folder(self, idx: int, folder):
+        """창(0=좌/1=우)의 폴더를 설정하고 해당 책갈피 트리를 로드.
+        우측은 좌측과 같은 폴더면 하단을 숨겨(중복 제거) 상단을 공유."""
+        folder = Path(folder) if folder else None
+        if idx == 0:
+            self._folder = folder
+            if folder:
+                self.bookmark_tree.load_folder(folder)
+        else:
+            self._folder_right = folder
+            if folder:
+                self.bookmark_tree_right.load_folder(folder)
+        self._sync_right_pane_bookmark()
+        self._update_title()
 
     def _sync_right_pane_bookmark(self):
-        """우측(2단) 창의 현재 파일 폴더가 메인 폴더와 다르면 책갈피 하단에 그 파일(이름+책갈피)을
-        표시, 같은 폴더거나 1단이면 숨김. 불러온 경로 무관(결과 기준 감지)."""
-        panel = getattr(self, "_right_file_panel", None)
-        if panel is None:
+        """하단(우측) 책갈피 표시/숨김 — 2단이고 우측 폴더가 있으며 좌측과 다를 때만 표시."""
+        rt = getattr(self, "bookmark_tree_right", None)
+        if rt is None:
             return
-        cur = None
-        try:
-            if getattr(self, "_split_on", False) and len(self._mv) > 1:
-                fld = getattr(self, "_folder", None)
-                for idx in (1, 0):                 # 우측 우선, 그다음 좌측 — '다른 폴더' 창
-                    f = self._mv[idx].current_file()
-                    if f and str(f).lower().endswith(".pdf"):
-                        if fld is None or str(Path(f).parent) != str(Path(fld)):
-                            cur = str(f)
-                            break
-        except Exception:
-            cur = None
-        if not cur:
-            self._right_file_cur = None
-            panel.hide()
+        lf = getattr(self, "_folder", None)
+        rf = getattr(self, "_folder_right", None)
+        show = bool(getattr(self, "_split_on", False) and rf
+                    and (lf is None or str(Path(rf)) != str(Path(lf))))
+        if not show:
+            rt.hide()
             return
-        if cur == getattr(self, "_right_file_cur", None) and panel.isVisible():
-            return                                   # 이미 표시 중 — 재구성 생략
-        self._right_file_cur = cur
-        self._right_file_label.setText("우측 창 파일:\n" + Path(cur).name)
-        self._right_file_toc.clear()
-        from PyQt6.QtWidgets import QTreeWidgetItem
-        toc = []
-        try:
-            import fitz
-            doc = fitz.open(cur)
-            try:
-                if doc.needs_pass:
-                    from viewer import secure_store
-                    pw = secure_store.recall_any(cur)
-                    if pw:
-                        doc.authenticate(pw)
-                toc = doc.get_toc() or []
-            finally:
-                doc.close()
-        except Exception:
-            toc = []
-        if toc:
-            for _lvl, title, page in toc:               # 플랫 목록(클릭=그 페이지로)
-                it = QTreeWidgetItem([str(title)])
-                it.setData(0, Qt.ItemDataRole.UserRole, max(0, int(page) - 1))
-                self._right_file_toc.addTopLevelItem(it)
-        else:
-            it = QTreeWidgetItem(["(책갈피 없음)"])
-            it.setData(0, Qt.ItemDataRole.UserRole, 0)
-            self._right_file_toc.addTopLevelItem(it)
-        panel.show()
+        rt.show()
         try:
             sizes = self._bk_split.sizes()
             if len(sizes) == 2 and sizes[1] < 60:
                 tot = sum(sizes) or 500
-                self._bk_split.setSizes([int(tot * 0.6), int(tot * 0.4)])
+                self._bk_split.setSizes([int(tot * 0.55), int(tot * 0.45)])
         except Exception:
             pass
 
-    def _on_right_file_toc_clicked(self, item, _col=0):
-        page = item.data(0, Qt.ItemDataRole.UserRole)
-        if page is None or not getattr(self, "_right_file_cur", None):
-            return
+    def _update_title(self):
+        """제목 — 2단이면 '좌측폴더 | 우측폴더'(우측 없으면 좌측만)."""
         try:
-            self._set_active_pane(1)
-            self._mv[1].go_to_page(int(page))
+            lf = getattr(self, "_folder", None)
+            left = str(lf) if lf else ""
+            if getattr(self, "_split_on", False) and getattr(self, "_folder_right", None) \
+                    and (not lf or str(Path(self._folder_right)) != str(Path(lf))):
+                title = f"{left}  |  {self._folder_right}"
+            else:
+                title = left
+            self.setWindowTitle(f"PolyPDF  v{__version__}" + (f"  —  {title}" if title else ""))
         except Exception:
             pass
 
@@ -1633,6 +1596,8 @@ class MainWindow(QMainWindow):
 
     def _wire_signals(self):
         self.bookmark_tree.bookmarkActivated.connect(self._on_bookmark_activated)
+        # 260618-22: 하단(우측) 책갈피 → 우측 창에 열기
+        self.bookmark_tree_right.bookmarkActivated.connect(self._on_bookmark_activated_right)
         self.page_thumbs.pageActivated.connect(lambda pg: self.main_view.go_to_page(pg))
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
@@ -1802,7 +1767,27 @@ class MainWindow(QMainWindow):
                     return
         event.ignore()
 
+    def _pane_at_global(self, gpos) -> int:
+        """260618-22: 전역 좌표가 속한 메인 뷰어 창 인덱스(2단). 못 찾으면 활성 창."""
+        if not getattr(self, "_split_on", False):
+            return 0
+        try:
+            for idx, fr in enumerate(self._panes):
+                tl = fr.mapToGlobal(fr.rect().topLeft())
+                br = fr.mapToGlobal(fr.rect().bottomRight())
+                if tl.x() <= gpos.x() <= br.x() and tl.y() <= gpos.y() <= br.y():
+                    return idx
+        except Exception:
+            pass
+        return self._active_pane
+
     def dropEvent(self, event):
+        # 260618-22: 드롭한 '창'을 대상으로 — 그 창을 활성화 후 열기
+        try:
+            gpos = self.mapToGlobal(event.position().toPoint())
+            self._set_active_pane(self._pane_at_global(gpos))
+        except Exception:
+            pass
         for u in event.mimeData().urls():
             p = Path(u.toLocalFile())
             if p.is_dir():
@@ -2776,27 +2761,44 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def open_folder(self, folder: Path):
-        self._cancel_active_indexing()       # 260611-89: 이전 폴더 인덱싱 즉시 중단
+    def open_folder(self, folder: Path, pane: int = None):
+        """260618-22: 폴더를 활성 창(2단)에 연다. 우측(pane 1)이면 하단 책갈피에 로드(좌측·패널 보존),
+        좌측(pane 0)이면 기존처럼 상단 책갈피·워크스페이스 갱신."""
+        folder = Path(folder)
+        if pane is None:
+            pane = self._active_pane if getattr(self, "_split_on", False) else 0
+        self._cancel_active_indexing()
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
-            # v1.6.0 G3 / 260618-21: 폴더 변경 시 워크스페이스 정리.
-            #   2단이면 기존 뷰어 창을 보존(다른 폴더 열어도 옆 창 안 닫힘).
-            self._clear_workspace(keep_panes=getattr(self, "_split_on", False))
-            self._folder = folder
-            self._hyperlinks = None             # 260609-3: 폴더 바뀌면 링크 저장소 재생성
-            self._page_meta = None              # 260609-14: 크롭·숨김 저장소 재생성
-            self.bookmark_tree.load_folder(folder)
-            self.setWindowTitle(f"PolyPDF  v{__version__}  —  {folder}")
-            self.status.showMessage(f"폴더 로드: {folder}")
-            order_map = self._build_bookmark_order(folder / "bookmarks.json")
-            self.search_results.set_bookmark_order(order_map)
-            self._refresh_search_scope()        # 260616-3: 검색을 책갈피 목록으로 한정
-            self._touch_recent_folder(str(folder))
+            if pane == 1 and getattr(self, "_split_on", False):
+                # 우측 창에 폴더 열기 — 좌측 창·상단 책갈피 보존, 하단에 로드
+                self._set_active_pane(1)
+                self._set_pane_folder(1, folder)      # 하단 트리 로드 + 표시 + 제목
+                self.status.showMessage(f"우측 폴더 로드: {folder}", 2500)
+                self._touch_recent_folder(str(folder))
+                rfolder = folder
+            else:
+                self._clear_workspace(keep_panes=getattr(self, "_split_on", False))
+                self._hyperlinks = None
+                self._page_meta = None
+                self._set_pane_folder(0, folder)      # 좌측/상단 트리 + 제목
+                self.status.showMessage(f"폴더 로드: {folder}")
+                order_map = self._build_bookmark_order(folder / "bookmarks.json")
+                self.search_results.set_bookmark_order(order_map)
+                self._refresh_search_scope()
+                self._touch_recent_folder(str(folder))
+                rfolder = folder
         finally:
             QApplication.restoreOverrideCursor()
-        self._sync_right_pane_bookmark()        # 260618-19: 폴더 변경 → 우측파일 패널 갱신/숨김
-        self.action_reindex()
+        try:
+            self._cancel_active_indexing()
+            worker = IndexWorker(self._db_path, rfolder)
+            worker.progress.connect(self._on_index_progress)
+            worker.finished.connect(self._on_index_finished)
+            worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+            self._start_index_worker(worker)
+        except Exception:
+            pass
 
     @staticmethod
     def _norm_path(p) -> str:
@@ -3095,13 +3097,23 @@ class MainWindow(QMainWindow):
                         and mv._current_page not in set(mv._nav_pages)):
                     mv.go_to_page(mv._current_page)
             self._apply_doc_permissions()              # 260618-1: 권한 기반 UI 활성/비활성
-            self._sync_right_pane_bookmark()           # 260618-19: 우측 다른폴더 파일 책갈피 갱신
+            # 260618-22: 2단에서 로드한 창(활성)의 폴더를 그 창 책갈피 트리에 반영(상=좌/하=우).
+            #   1단은 기존 흐름(open_folder/open_pdf)이 트리를 관리하므로 건드리지 않음.
+            if path.suffix.lower() == ".pdf" and getattr(self, "_split_on", False):
+                self._set_pane_folder(self._active_pane, path.parent)
         finally:
             QApplication.restoreOverrideCursor()
 
     def _on_bookmark_activated(self, file_path: str, page_index: int):
-        item = HistoryItem(file_path, page_index, "", "bookmark")
-        self._load_main(item)
+        # 260618-22: 상단 책갈피 → 좌측 창(2단이면 좌측 활성화 후 로드)
+        if getattr(self, "_split_on", False):
+            self._set_active_pane(0)
+        self._load_main(HistoryItem(file_path, page_index, "", "bookmark"))
+
+    def _on_bookmark_activated_right(self, file_path: str, page_index: int):
+        """260618-22: 하단 책갈피 → 우측 창에 열기."""
+        self._set_active_pane(1)
+        self._load_main(HistoryItem(file_path, page_index, "", "bookmark"))
 
     def _on_file_password_entered(self, file_path: str):
         """260618-1: 책갈피창 우클릭 '암호 입력' 성공 — 그 파일이 현재 열려 있으면
