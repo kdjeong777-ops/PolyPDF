@@ -46,16 +46,19 @@ gh repo create PolyPDF --public --source . --remote origin --push
 
 ---
 
-## 3. 새 버전 낼 때마다 (권장: CI 자동)
+## 3. 새 버전 낼 때마다 (권장: 원클릭)
 
 ```powershell
 cd C:\Claude\MPDF\smart_pdf_viewer
-# 1) viewer\__init__.py 의 __version__ = "2.25.0" 로 수정
-git add -A
-git commit -m "v2.25.0"
-git tag v2.25.0
-git push
-git push origin v2.25.0        # ← 태그 push 가 끝. CI가 빌드→릴리스 자동 생성
+.\scripts\release.ps1 2.26.0     # 버전 bump→commit→태그→push 한 번에 (CI가 빌드·릴리스)
+```
+`release.ps1` 이 `viewer\__init__.py` 의 `__version__` 변경 + 커밋 + 태그 `v2.26.0` + push 까지
+수행하고, GitHub Actions(release.yml)가 빌드해 릴리스를 만듭니다. (잘못된 버전·중복 태그는 자동 차단)
+
+수동으로 하려면:
+```powershell
+# viewer\__init__.py 의 __version__ 수정 후
+git add -A; git commit -m "v2.26.0"; git tag v2.26.0; git push; git push origin v2.26.0
 ```
 
 GitHub Actions(release.yml)가 Windows 에서 빌드하고
