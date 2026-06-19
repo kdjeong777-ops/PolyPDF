@@ -23,8 +23,23 @@ _TESS_READY: Optional[bool] = None
 _TESS_INFO: dict = {}
 
 
+def reset_cache() -> None:
+    """260618-12: 구성요소 설치(Tesseract 다운로드) 후 재탐색하도록 캐시 초기화."""
+    global _TESS_READY, _TESS_INFO
+    _TESS_READY = None
+    _TESS_INFO = {}
+
+
 def _candidate_dirs() -> list[Path]:
     cands: list[Path] = []
+    # 0) 260618-12: 배포 exe 설치 폴더 옆 tesseract\ (앱 '구성요소 설치'로 받은 경우)
+    try:
+        if getattr(sys, "frozen", False):
+            base = Path(sys.executable).resolve().parent
+            cands.append(base / "tesseract" / "Library" / "bin")
+            cands.append(base / "tesseract")
+    except Exception:
+        pass
     # 1) PyInstaller 동봉 (sys._MEIPASS/tesseract/Library/bin)
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:

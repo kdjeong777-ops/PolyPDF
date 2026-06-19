@@ -24,6 +24,7 @@ from typing import Optional
 from PyQt6.QtCore import (Qt, QSettings, QStandardPaths, QThread, pyqtSignal,
                           QEventLoop, QObject)
 from viewer import updater as _updater_preload   # 260618-11: PyInstaller 번들 포함 보장(지연 import 누락 방지)
+from viewer import components as _components_preload  # 260618-12: 구성요소 설치 모듈 번들 포함 보장
 from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QCursor, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
@@ -1258,6 +1259,10 @@ class MainWindow(QMainWindow):
         a_defpdf = QAction("Windows 기본 PDF 앱으로 등록…", self)  # 260611-11
         a_defpdf.triggered.connect(self._register_pdf_handler)
         m_tools.addAction(a_defpdf)
+        # 260618-12: 선택 구성요소(녹화 ffmpeg / OCR Tesseract) 설치
+        a_components = QAction("구성요소 설치(녹화·OCR)…", self)
+        a_components.triggered.connect(self._open_components_installer)
+        m_tools.addAction(a_components)
 
         m_help = bar.addMenu("도움말(&H)")
         # v1.6.1 G2: 사용법
@@ -7665,6 +7670,73 @@ class MainWindow(QMainWindow):
             self.close()        # 종료 → 도우미가 파일 교체 후 재실행
         else:
             QMessageBox.warning(self, "업데이트", "업데이트 적용에 실패했습니다.")
+
+    def _open_components_installer(self):
+        """260618-12: 녹화(ffmpeg)·OCR(Tesseract) 구성요소를 릴리스에서 설치 폴더로 받기."""
+        from viewer import components
+        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+                                      QPushButton, QProgressBar)
+        repo = (self._prefs.get("update_repo") or "").strip() or components.DEFAULT_REPO
+        dlg = QDialog(self)
+        dlg.setWindowTitle("구성요소 설치 (녹화·OCR)")
+        dlg.resize(460, 200)
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel("필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
+                           "(녹화=ffmpeg, OCR=Tesseract · 재시작 불필요)"))
+        bar = QProgressBar(); bar.setRange(0, 100); bar.setValue(0); bar.setVisible(False)
+
+        rows = {}
+
+        def make_row(key, title, installed_fn, install_fn):
+            row = QHBoxLayout()
+            lab = QLabel(title)
+            st = QLabel()
+            btn = QPushButton()
+            row.addWidget(lab, 1)
+            row.addWidget(st)
+            row.addWidget(btn)
+            v.addLayout(row)
+            rows[key] = (st, btn)
+
+            def refresh():
+                ok = installed_fn()
+                st.setText("설치됨 ✓" if ok else "미설치")
+                st.setStyleSheet("color:#2a7;" if ok else "color:#c33;")
+                btn.setText("재설치" if ok else "다운로드")
+
+            def do():
+                bar.setVisible(True); bar.setValue(0)
+                for _s, b in rows.values():
+                    b.setEnabled(False)
+
+                def prog(done, total):
+                    if total > 0:
+                        bar.setValue(int(done * 100 / total))
+                    QApplication.processEvents()
+                    return True
+                ok, info = install_fn(repo, prog)
+                bar.setVisible(False)
+                for _s, b in rows.values():
+                    b.setEnabled(True)
+                if ok:
+                    QMessageBox.information(dlg, "구성요소 설치", f"{title} 설치 완료.")
+                else:
+                    QMessageBox.warning(dlg, "구성요소 설치", f"{title} 설치 실패:\n{info}")
+                refresh()
+
+            btn.clicked.connect(do)
+            refresh()
+
+        make_row("ffmpeg", "녹화 (ffmpeg)",
+                 components.ffmpeg_installed, components.install_ffmpeg)
+        make_row("tess", "OCR (Tesseract)",
+                 components.tesseract_installed, components.install_tesseract)
+        v.addWidget(bar)
+        v.addStretch(1)
+        close = QPushButton("닫기"); close.clicked.connect(dlg.accept)
+        h = QHBoxLayout(); h.addStretch(1); h.addWidget(close)
+        v.addLayout(h)
+        dlg.exec()
 
     def _show_about(self):
         html = (

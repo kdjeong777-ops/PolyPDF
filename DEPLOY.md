@@ -5,8 +5,9 @@
 
 이 저장소에는 이미 **GitHub Actions 워크플로**가 있어, **버전 태그를 push 하면
 자동으로 Windows 빌드 → zip → Release 업로드**까지 됩니다.
-- `.github/workflows/release.yml` : 태그 `v*` push 시 빌드·릴리스(ffmpeg/Tesseract/NLTK는
-  러너에서 자동 설치, 실패해도 핵심 뷰어는 빌드). 자산명 `PolyPDF-<tag>-win64.zip`.
+- `.github/workflows/release.yml` : 태그 `v*` push 시 빌드·릴리스. 자산명 `PolyPDF-<tag>-win64.zip`.
+  (참고: v2.25.0부터 **ffmpeg·Tesseract 는 동봉하지 않음** — §3-c 의 `components` 태그로 별도 제공.
+   release.yml 의 ffmpeg/Tesseract 설치 스텝은 더 이상 빌드에 반영되지 않으나 무해. NLTK 는 계속 동봉.)
 - `.github/workflows/ci.yml` : push/PR 마다 오프스크린 GUI 회귀 테스트.
 
 ---
@@ -49,33 +50,53 @@ gh repo create PolyPDF --public --source . --remote origin --push
 
 ```powershell
 cd C:\Claude\MPDF\smart_pdf_viewer
-# 1) viewer\__init__.py 의 __version__ = "2.24.0" 로 수정
+# 1) viewer\__init__.py 의 __version__ = "2.25.0" 로 수정
 git add -A
-git commit -m "v2.24.0"
-git tag v2.24.0
+git commit -m "v2.25.0"
+git tag v2.25.0
 git push
-git push origin v2.24.0        # ← 태그 push 가 끝. CI가 빌드→릴리스 자동 생성
+git push origin v2.25.0        # ← 태그 push 가 끝. CI가 빌드→릴리스 자동 생성
 ```
 
 GitHub Actions(release.yml)가 Windows 에서 빌드하고
-`PolyPDF-v2.24.0-win64.zip` 을 릴리스에 올립니다. 기존 사용자 앱이 자동 감지·업데이트.
+`PolyPDF-v2.25.0-win64.zip` 을 릴리스에 올립니다. 기존 사용자 앱이 자동 감지·업데이트.
 
 ### 3-b. (대안) 로컬 빌드 후 수동 릴리스
 CI를 쓰지 않거나 빠르게 올릴 때:
 ```powershell
 .\build_ci.bat
 powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # PolyPDF-v<ver>-win64.zip
-gh release create v2.24.0 PolyPDF-v2.24.0-win64.zip --title "PolyPDF v2.24.0" --generate-notes
-#   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.24.0 → zip 업로드)
+gh release create v2.25.0 PolyPDF-v2.25.0-win64.zip --title "PolyPDF v2.25.0" --generate-notes
+#   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.25.0 → zip 업로드)
 ```
+
+---
+
+## 3-c. 구성요소(녹화·OCR) 1회 배포 — `components` 태그
+
+앱 배포본에는 **ffmpeg(녹화)·Tesseract(OCR)를 동봉하지 않습니다**(release zip 가벼움).
+사용자는 앱 **도구 → 구성요소 설치(녹화·OCR)…** 에서 필요 시 설치 폴더로 받습니다.
+그 자산을 릴리스의 **고정 태그 `components`** 에 한 번 올려두면 됩니다(버전 무관, 재사용).
+
+```powershell
+cd C:\Claude\MPDF\smart_pdf_viewer
+powershell -ExecutionPolicy Bypass -File scripts\make_components.ps1   # ffmpeg.exe + tesseract.zip 준비
+gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpeg/Tesseract)" --notes "녹화·OCR 구성요소"
+#   (이미 있으면) gh release upload components ffmpeg.exe tesseract.zip --clobber
+#   또는 웹 Releases → 태그 components 릴리스 만들고 두 파일 업로드
+```
+
+- 앱은 `releases/tags/components` 의 `ffmpeg.exe`·`tesseract.zip` 을 받아
+  `ffmpeg.exe`→설치폴더, `tesseract.zip`→설치폴더\tesseract\ 로 풉니다(재시작 불필요).
+- ffmpeg/Tesseract 버전을 바꿀 때만 다시 업로드하면 됩니다(앱 새 버전마다 올릴 필요 없음).
 
 ---
 
 ## 4. 참고 / 주의
 
 - **서명 안 된 exe**: 첫 실행 시 SmartScreen 경고(정상). 없애려면 코드서명 인증서(유료).
-- **릴리스 zip 크기**: ffmpeg·tesseract·모델 포함 시 수백 MB(릴리스 자산 2GB 한도 내 OK).
-  업데이트는 전체 교체 방식이라 매번 전체 다운로드입니다.
-- **CI 자산 설치 실패 시**(choco/네트워크): 녹화/OCR 바이너리 없이 빌드될 수 있음
-  (핵심 뷰어는 동작). 전체 기능 보장이 필요하면 로컬 빌드(3-b) 권장.
+- **릴리스 zip 크기**: ffmpeg·Tesseract 제외로 약 190MB 감소(그래도 PyQt6·PyMuPDF·한국어
+  모델 72MB·NLTK 36MB 등으로 dist 약 590MB, zip 은 압축되어 더 작음). 녹화·OCR 은 사용자가
+  §3-c `components` 에서 받음. 업데이트는 전체 교체 방식이라 매번 전체 다운로드입니다.
+  (더 줄이려면 한국어 모델/NLTK도 components 로 분리 가능 — 필요 시 별도 작업.)
 - **비공개 저장소**: 릴리스 조회에 토큰 내장이 필요해 비권장(현재 공개 전제).
