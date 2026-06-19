@@ -244,10 +244,18 @@ class MainWindow(QMainWindow):
         self.splitter = ToggleSplitter(Qt.Orientation.Horizontal)
         self.splitter.setHandleWidth(8)
 
-        # 1단 책갈피 트리 — 260611-75: 기본 폭 좁게(메인 뷰어 넓게). 더 좁게 드래그도 허용.
+        # 1단 책갈피 트리 — 260611-75: 기본 폭 좁게. 260618-19: 세로 스플리터로 래핑
+        #   (상=현재 폴더 책갈피, 하=우측 2단 창이 '다른 폴더' 파일일 때 그 파일 표시).
         self.bookmark_tree = BookmarkTree()
         self.bookmark_tree.setMinimumWidth(150)
-        self.splitter.addWidget(self.bookmark_tree)
+        self._bk_split = QSplitter(Qt.Orientation.Vertical)
+        self._bk_split.addWidget(self.bookmark_tree)
+        self._right_file_panel = self._build_right_file_panel()
+        self._bk_split.addWidget(self._right_file_panel)
+        self._bk_split.setCollapsible(0, False)
+        self._bk_split.setCollapsible(1, True)
+        self._right_file_panel.hide()           # 기본 숨김(같은 폴더/1단)
+        self.splitter.addWidget(self._bk_split)
 
         # 2단 페이지 썸네일
         self.page_thumbs = PageThumbs()
@@ -819,6 +827,7 @@ class MainWindow(QMainWindow):
             self._active_pane = 0
         self._sync_right_layout()                          # 260606-19: 드로어/컬럼 통합 동기화
         self._set_active_pane(self._active_pane if on else 0)
+        self._sync_right_pane_bookmark()                   # 260618-19: 우측 다른폴더 파일 표시 갱신
 
     def _on_pane_page_changed(self, i: int, page: int):
         if i != self._active_pane:
@@ -829,6 +838,94 @@ class MainWindow(QMainWindow):
         self._mv[i].clear_word_highlights()
         self._sync_bookmark_to_active()
         self._refresh_page_hyperlinks(i)          # 260609-3: 페이지 링크 버튼 갱신
+
+    # ===== 260618-19: 2단 우측 창이 '다른 폴더' 파일일 때 책갈피 하단에 표시 =====
+    def _build_right_file_panel(self):
+        from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTreeWidget
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(4, 2, 4, 4)
+        v.setSpacing(2)
+        self._right_file_label = QLabel("우측 창 파일")
+        self._right_file_label.setWordWrap(True)
+        self._right_file_label.setStyleSheet(
+            "font-weight:bold;color:#1565c0;padding:2px;border-top:1px solid #b0b0b0;")
+        v.addWidget(self._right_file_label)
+        self._right_file_toc = QTreeWidget()
+        self._right_file_toc.setHeaderHidden(True)
+        self._right_file_toc.itemClicked.connect(self._on_right_file_toc_clicked)
+        v.addWidget(self._right_file_toc, 1)
+        self._right_file_cur = None
+        return w
+
+    def _sync_right_pane_bookmark(self):
+        """우측(2단) 창의 현재 파일 폴더가 메인 폴더와 다르면 책갈피 하단에 그 파일(이름+책갈피)을
+        표시, 같은 폴더거나 1단이면 숨김. 불러온 경로 무관(결과 기준 감지)."""
+        panel = getattr(self, "_right_file_panel", None)
+        if panel is None:
+            return
+        cur = None
+        try:
+            if getattr(self, "_split_on", False) and len(self._mv) > 1:
+                f = self._mv[1].current_file()
+                if f and str(f).lower().endswith(".pdf"):
+                    fld = getattr(self, "_folder", None)
+                    if fld is None or str(Path(f).parent) != str(Path(fld)):
+                        cur = str(f)
+        except Exception:
+            cur = None
+        if not cur:
+            self._right_file_cur = None
+            panel.hide()
+            return
+        if cur == getattr(self, "_right_file_cur", None) and panel.isVisible():
+            return                                   # 이미 표시 중 — 재구성 생략
+        self._right_file_cur = cur
+        self._right_file_label.setText("우측 창 파일:\n" + Path(cur).name)
+        self._right_file_toc.clear()
+        from PyQt6.QtWidgets import QTreeWidgetItem
+        toc = []
+        try:
+            import fitz
+            doc = fitz.open(cur)
+            try:
+                if doc.needs_pass:
+                    from viewer import secure_store
+                    pw = secure_store.recall_any(cur)
+                    if pw:
+                        doc.authenticate(pw)
+                toc = doc.get_toc() or []
+            finally:
+                doc.close()
+        except Exception:
+            toc = []
+        if toc:
+            for _lvl, title, page in toc:               # 플랫 목록(클릭=그 페이지로)
+                it = QTreeWidgetItem([str(title)])
+                it.setData(0, Qt.ItemDataRole.UserRole, max(0, int(page) - 1))
+                self._right_file_toc.addTopLevelItem(it)
+        else:
+            it = QTreeWidgetItem(["(책갈피 없음)"])
+            it.setData(0, Qt.ItemDataRole.UserRole, 0)
+            self._right_file_toc.addTopLevelItem(it)
+        panel.show()
+        try:
+            sizes = self._bk_split.sizes()
+            if len(sizes) == 2 and sizes[1] < 60:
+                tot = sum(sizes) or 500
+                self._bk_split.setSizes([int(tot * 0.6), int(tot * 0.4)])
+        except Exception:
+            pass
+
+    def _on_right_file_toc_clicked(self, item, _col=0):
+        page = item.data(0, Qt.ItemDataRole.UserRole)
+        if page is None or not getattr(self, "_right_file_cur", None):
+            return
+        try:
+            self._set_active_pane(1)
+            self._mv[1].go_to_page(int(page))
+        except Exception:
+            pass
 
     def _update_right_panel_visibility(self):
         """호환 별칭 → 통합 레이아웃 동기화."""
@@ -2683,6 +2780,7 @@ class MainWindow(QMainWindow):
             self._touch_recent_folder(str(folder))
         finally:
             QApplication.restoreOverrideCursor()
+        self._sync_right_pane_bookmark()        # 260618-19: 폴더 변경 → 우측파일 패널 갱신/숨김
         self.action_reindex()
 
     @staticmethod
@@ -2982,6 +3080,7 @@ class MainWindow(QMainWindow):
                         and mv._current_page not in set(mv._nav_pages)):
                     mv.go_to_page(mv._current_page)
             self._apply_doc_permissions()              # 260618-1: 권한 기반 UI 활성/비활성
+            self._sync_right_pane_bookmark()           # 260618-19: 우측 다른폴더 파일 책갈피 갱신
         finally:
             QApplication.restoreOverrideCursor()
 
