@@ -165,37 +165,101 @@ def download_asset(url: str, progress=None, timeout: float = 30.0):
         return None
 
 
+_PS_INSTALLER = r'''# PolyPDF 업데이트 설치 도우미 (260618-17): 진행률 바 GUI(도스창 아님).
+$ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$oldPid  = __PID__
+$zipPath = "__ZIP__"
+$install = "__INSTALL__"
+$exe     = "__EXE__"
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "PolyPDF 업데이트 설치"
+$form.Size = New-Object System.Drawing.Size(460,160)
+$form.StartPosition = "CenterScreen"
+$form.FormBorderStyle = "FixedDialog"
+$form.MaximizeBox = $false; $form.MinimizeBox = $false; $form.TopMost = $true
+$lbl = New-Object System.Windows.Forms.Label
+$lbl.SetBounds(18,18,420,22); $lbl.Text = "업데이트를 준비하는 중..."
+$bar = New-Object System.Windows.Forms.ProgressBar
+$bar.SetBounds(18,52,420,26); $bar.Minimum=0; $bar.Maximum=100; $bar.Value=0
+$form.Controls.Add($lbl); $form.Controls.Add($bar)
+$form.Show(); $form.Activate(); [System.Windows.Forms.Application]::DoEvents()
+
+# 1) 기존 프로그램 종료 대기
+$lbl.Text = "기존 프로그램이 종료되기를 기다리는 중..."
+[System.Windows.Forms.Application]::DoEvents()
+for ($i=0; $i -lt 120; $i++) {
+    $p = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
+    if (-not $p) { break }
+    Start-Sleep -Milliseconds 500
+    [System.Windows.Forms.Application]::DoEvents()
+}
+Start-Sleep -Milliseconds 400
+
+# 2) 압축 해제 = 설치(엔트리별 진행률). 압축 루트에 PolyPDF\ 접두가 있으면 제거.
+try {
+    $arc = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+    $total = [Math]::Max(1, $arc.Entries.Count); $n = 0
+    foreach ($e in $arc.Entries) {
+        $rel = $e.FullName.Replace('/', '\')
+        if ($rel -like 'PolyPDF\*') { $rel = $rel.Substring(8) }
+        $n++
+        if (-not [string]::IsNullOrEmpty($rel)) {
+            $dest = Join-Path $install $rel
+            if ([string]::IsNullOrEmpty($e.Name)) {
+                if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Force -Path $dest | Out-Null }
+            } else {
+                $dir = Split-Path $dest -Parent
+                if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+                try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true) } catch {}
+            }
+        }
+        $bar.Value = [Math]::Min(100, [int]($n * 100 / $total))
+        if (($n % 15) -eq 0) { $lbl.Text = "설치 중... ($n / $total)"; [System.Windows.Forms.Application]::DoEvents() }
+    }
+    $arc.Dispose()
+    $bar.Value = 100; $lbl.Text = "설치 완료 — 프로그램을 다시 시작합니다."
+    [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 700
+} catch {
+    [System.Windows.Forms.MessageBox]::Show("업데이트 적용 중 오류가 발생했습니다.`n" + $_.Exception.Message,
+        "PolyPDF 업데이트") | Out-Null
+}
+
+# 3) 재실행 + 정리
+try { Start-Process -FilePath $exe } catch {}
+$form.Close()
+Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+'''
+
+
 def apply_update(zip_path: str) -> bool:
-    """실행 중 교체 도우미 실행(앱 종료 대기→해제→덮어쓰기→재실행). 성공 시 True 반환 후
-    호출측이 앱을 종료해야 한다. frozen(배포 exe)에서만 의미 있음."""
+    """260618-17: 실행 중 교체 — **진행률 바 GUI 설치 창**(PowerShell WinForms, 콘솔 숨김)을
+    띄워 앱 종료 대기→압축 해제(=설치)→재실행. 성공 시 True 반환 후 호출측이 앱을 종료해야 함.
+    (도스창 대신 progress bar 창이 뜸. 시스템 powershell 사용 — 교체 대상이 아니므로 안전.)"""
     if not (zip_path and os.path.isfile(zip_path)):
         return False
     inst = str(install_dir())
     exe = sys.executable if is_frozen() else os.path.join(inst, "PolyPDF.exe")
     pid = os.getpid()
-    extract = os.path.join(tempfile.mkdtemp(prefix="polypdf_ext_"), "new")
-    bat = os.path.join(tempfile.gettempdir(), f"polypdf_update_{pid}.bat")
-    # %%~f0 → 배치 자기 경로(자기 삭제). 압축 루트에 PolyPDF\ 하위가 있으면 그 안을 원본으로.
-    script = (
-        "@echo off\r\n"
-        "chcp 65001 >nul\r\n"
-        "echo PolyPDF 업데이트 적용 중입니다. 잠시만 기다려 주세요...\r\n"
-        ":waitloop\r\n"
-        f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul\r\n'
-        "if not errorlevel 1 ( timeout /t 1 /nobreak >nul & goto waitloop )\r\n"
-        f'powershell -NoProfile -Command "Expand-Archive -LiteralPath \'{zip_path}\' '
-        f"-DestinationPath '{extract}' -Force\"\r\n"
-        f'powershell -NoProfile -Command "$s=\'{extract}\'; '
-        "if (Test-Path (Join-Path $s 'PolyPDF\\PolyPDF.exe')) { $s=Join-Path $s 'PolyPDF' }; "
-        f"Copy-Item -Path (Join-Path $s '*') -Destination '{inst}' -Recurse -Force\"\r\n"
-        f'start "" "{exe}"\r\n'
-        'del "%~f0"\r\n'
-    )
+    ps1 = os.path.join(tempfile.gettempdir(), f"polypdf_update_{pid}.ps1")
+    script = (_PS_INSTALLER
+              .replace("__PID__", str(pid))
+              .replace("__ZIP__", zip_path)
+              .replace("__INSTALL__", inst)
+              .replace("__EXE__", exe))
     try:
-        with open(bat, "w", encoding="utf-8") as f:
+        # PS5.1 이 한글을 정확히 읽도록 UTF-8 BOM 으로 기록
+        with open(ps1, "w", encoding="utf-8-sig", newline="\r\n") as f:
             f.write(script)
-        # 진행 콘솔을 보이게 띄움(교체 중임을 사용자가 인지)
-        subprocess.Popen(["cmd", "/c", bat], close_fds=True)
+        # 콘솔 숨김(WinForms 진행창만 표시). 시스템 powershell.exe 사용.
+        subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-WindowStyle", "Hidden", "-File", ps1],
+            creationflags=CREATE_NO_WINDOW, close_fds=True)
         return True
     except Exception:
         return False
