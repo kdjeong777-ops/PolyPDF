@@ -692,6 +692,7 @@ class _PdfGraphicsView(QGraphicsView):
     regionSelected = pyqtSignal(object)    # 260616-21: 텍스트 영역(scene QRectF) 선택 완료
     viewResized = pyqtSignal()             # 260618-10: 뷰포트 크기 변경(빈 안내 라벨 재중앙)
     fitPageRequested = pyqtSignal()        # 260618-16: 더블클릭 → 쪽 맞춤
+    pathDropped = pyqtSignal(str)          # 260618-23: 뷰어에 PDF/폴더 드롭 → 이 창에 열기
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -753,9 +754,19 @@ class _PdfGraphicsView(QGraphicsView):
         if md.hasImage():
             return True
         if md.hasUrls():
+            from pathlib import Path as _P
             for u in md.urls():
-                if u.isLocalFile() and u.toLocalFile().lower().endswith(self._IMG_EXT):
+                if not u.isLocalFile():
+                    continue
+                lf = u.toLocalFile()
+                # 260618-23: 이미지(편집 삽입) + PDF/폴더(뷰어 열기) 모두 허용
+                if lf.lower().endswith(self._IMG_EXT) or lf.lower().endswith(".pdf"):
                     return True
+                try:
+                    if _P(lf).is_dir():
+                        return True
+                except Exception:
+                    pass
         return False
 
     def dragEnterEvent(self, e):
@@ -773,6 +784,17 @@ class _PdfGraphicsView(QGraphicsView):
     def dropEvent(self, e):
         md = e.mimeData()
         ownr = self._owner
+        # 260618-23: PDF/폴더 드롭 → 이 창에 열기(편집모드 무관). 이미지(편집모드)는 아래 삽입 처리.
+        if md.hasUrls():
+            from pathlib import Path as _P
+            for u in md.urls():
+                if not u.isLocalFile():
+                    continue
+                lf = u.toLocalFile()
+                if lf.lower().endswith(".pdf") or _P(lf).is_dir():
+                    self.pathDropped.emit(lf)
+                    e.acceptProposedAction()
+                    return
         if ownr is None or not getattr(ownr, "_img_edit", False):
             return super().dropEvent(e)
         from PyQt6.QtGui import QImage, QPixmap as _QPix

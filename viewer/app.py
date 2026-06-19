@@ -933,17 +933,43 @@ class MainWindow(QMainWindow):
             pass
 
     def _sync_bookmark_to_active(self):
-        """260606-9: 책갈피 트리를 활성 창의 파일·페이지에 맞춰 선택·스크롤."""
+        """260606-9/260618-23: 활성 창의 책갈피 트리(좌=상단/우=하단)를 그 창 파일·페이지에 맞춰 선택."""
         try:
-            mv = self._mv[self._active_pane]
+            idx = self._active_pane
+            mv = self._mv[idx]
             f = mv.current_file()
             if f and str(f).lower().endswith(".pdf"):
-                self.bookmark_tree.select_for_page(f, mv.current_page())
+                tree = self.bookmark_tree if idx == 0 else self.bookmark_tree_right
+                tree.select_for_page(f, mv.current_page())
         except Exception:
             pass
 
+    def _on_pane_path_drop(self, idx: int, path: str):
+        """260618-23: 뷰어 창에 PDF/폴더 드롭 → 그 창(idx)에 열기.
+        폴더면 정렬순 첫 파일의 첫 페이지, 파일이면 그 파일 첫 페이지."""
+        from pathlib import Path as _P
+        p = _P(path)
+        self._set_active_pane(idx if getattr(self, "_split_on", False) else 0)
+        tgt = self._active_pane
+        if p.is_dir():
+            self.open_folder(p, pane=tgt)
+            tree = self.bookmark_tree if tgt == 0 else self.bookmark_tree_right
+            files = []
+            try:
+                files = tree.ordered_pdf_files() or tree.all_file_paths() or []
+            except Exception:
+                files = []
+            if files:
+                if tgt == 0:
+                    self._on_bookmark_activated(str(files[0]), 0)
+                else:
+                    self._on_bookmark_activated_right(str(files[0]), 0)
+        elif p.suffix.lower() == ".pdf":
+            self.open_pdf(p)
+
     def _wire_pane_signals(self, mv, idx: int):
         mv.activated.connect(lambda i=idx: self._set_active_pane(i))
+        mv.view.pathDropped.connect(lambda pth, i=idx: self._on_pane_path_drop(i, pth))  # 260618-23
         mv.contextMenuRequested.connect(
             lambda pos, i=idx: (self._set_active_pane(i),
                                 self._on_viewer_context_menu(pos)))
@@ -1722,11 +1748,14 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"PDF 파일이 아닙니다: {pdf_path.name}")
             return
         if getattr(self, "_split_on", False):
-            # 2단: 활성 창에만 로드(다른 창·폴더·상단 책갈피 보존). 인덱스는 폴더 인덱스에 추가만.
+            # 2단: 활성 창에만 로드(다른 창·폴더·반대편 책갈피 보존).
+            #   260618-23: 단독 파일을 '열기'(드롭/즐겨찾기/파일열기)한 것이므로 그 창의 폴더를
+            #   이 파일의 폴더로 설정(상=좌/하=우 트리에 반영). 책갈피 클릭은 _load_main 만 호출해 폴더 불변.
             self._load_main(HistoryItem(str(pdf_path), 0, "", "bookmark"))
+            self._set_pane_folder(self._active_pane, pdf_path.parent)
             try:
                 self._cancel_active_indexing()
-                worker = IndexWorker(self._db_path, self._folder, single_file=pdf_path)
+                worker = IndexWorker(self._db_path, pdf_path.parent, single_file=pdf_path)
                 worker.error.connect(lambda e: None)
                 self._start_index_worker(worker)
             except Exception:
@@ -3097,10 +3126,10 @@ class MainWindow(QMainWindow):
                         and mv._current_page not in set(mv._nav_pages)):
                     mv.go_to_page(mv._current_page)
             self._apply_doc_permissions()              # 260618-1: 권한 기반 UI 활성/비활성
-            # 260618-22: 2단에서 로드한 창(활성)의 폴더를 그 창 책갈피 트리에 반영(상=좌/하=우).
-            #   1단은 기존 흐름(open_folder/open_pdf)이 트리를 관리하므로 건드리지 않음.
-            if path.suffix.lower() == ".pdf" and getattr(self, "_split_on", False):
-                self._set_pane_folder(self._active_pane, path.parent)
+            # 260618-23: 책갈피 트리(상=좌/하=우) 표시/숨김만 갱신. **폴더는 바꾸지 않음** —
+            #   상단 트리에서 하위폴더 파일을 클릭해도 그 창의 폴더(=열었던 폴더)는 유지.
+            #   폴더 변경은 '폴더/파일 열기'(open_folder/open_pdf)에서만 일어남.
+            self._sync_right_pane_bookmark()
         finally:
             QApplication.restoreOverrideCursor()
 
