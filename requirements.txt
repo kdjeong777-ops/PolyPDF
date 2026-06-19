@@ -1,0 +1,20 @@
+PyQt6>=6.5.0
+PyMuPDF>=1.23.0
+openpyxl>=3.1.0
+# Pillow: PyInstaller 가 EXE 아이콘으로 PNG → ICO 변환할 때 필요 (v1.6.2 빌드 에러 수정)
+Pillow>=10.0.0
+# v1.6.17: 벤더링된 pdf_bookmarker 의 런타임 의존성
+pdfplumber>=0.11
+pypdfium2>=4.0
+pypdf>=4.0
+# v1.6.20: 파일 휴지통 이동
+send2trash>=1.8
+# 단어학습(OCR·어휘) P1+ — 계획서 §8.2. Tesseract 바이너리는 별도 동봉(§14.5).
+pytesseract>=0.3.10      # Tesseract OCR 래퍼 (단어좌표 TSV)
+wordfreq>=3.0            # 난이도(zipf) — 영어. 한국어는 MeCab 필요(§15.2)
+nltk>=3.8                # WordNet 뜻·예문 + 영어 표제어화
+kiwipiepy>=0.17          # 한국어 형태소·표제어 (P0 검증: 3.14 동작)
+kiwipiepy_model>=0.21    # ★ kiwipiepy 한국어 모델(별도 103MB) — 빌드 동봉 필수(없으면 Kiwi() 크래시)
+python-docx>=1.1         # 260603: 단어학습 Word(.docx) 내보내기
+lameenc>=1.7              # 260606: 재생내용 mp3 저장(libmp3lame 내장)
+pywin32>=306             # 260603: 음성 읽기(Windows SAPI, win32com) — Windows 전용

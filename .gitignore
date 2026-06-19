@@ -1,0 +1,50 @@
+# ===== PolyPDF .gitignore =====
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# PyInstaller build output
+build/
+dist/
+*.spec.bak
+
+# Large bundled runtime deps (download/install separately — see README)
+ffmpeg.exe
+ffmpeg*.zip
+tesseract/
+nltk_data/
+
+# Local user data / runtime artifacts (must NOT be committed)
+index.db
+settings.json
+settings.*.bak.json
+*.session.json
+
+# Build/dev logs & scratch
+build_log*.txt
+build_*.log
+*_err.log
+selftest*.db
+selftest*.log
+_probe.*
+_diag.*
+_hltest.txt
+_exe_err.log
+gui*.png
+
+# OS
+Thumbs.db
+.DS_Store
+
+# NOTE intentionally NOT ignored (commit these):
+#   viewer/  main.py  requirements.txt  build_ci.bat  run.bat
+#   resources/  test_*.py  README.md  .github/
+#   default_settings.json  (optional: a curated default profile to ship)

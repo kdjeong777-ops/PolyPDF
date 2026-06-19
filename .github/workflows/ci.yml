@@ -1,0 +1,45 @@
+name: CI (tests)
+
+# 푸시·PR 마다 오프스크린으로 GUI 회귀 테스트(자체 PDF 생성 테스트만; OCR/녹화 바이너리 불필요)
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run offscreen GUI tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONUNBUFFERED: "1"
+        run: |
+          $tests = @(
+            "test_draw_paint","test_draw_unify","test_main_draw_v2","test_pen45",
+            "test_image_geom","test_image_tools","test_image_annot",
+            "test_panel_toolbar","test_capture","test_bookmark_panel","test_fullwidth",
+            "test_present_draw","test_present_erase","test_present_options","test_present_split",
+            "test_close_edit_confirm"
+          )
+          $fail = 0
+          foreach ($t in $tests) {
+            Write-Host "=== $t ==="
+            python "$t.py"
+            if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: $t"; $fail = 1 }
+          }
+          if ($fail -ne 0) { exit 1 }

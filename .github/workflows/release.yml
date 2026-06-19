@@ -1,0 +1,75 @@
+name: Release (build Windows exe)
+
+# 버전 태그(v1.88.0 등)를 push 하면 Windows 빌드 → zip → GitHub Release 에 자동 업로드.
+#   git tag v1.88.0 && git push origin v1.88.0
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:          # 수동 실행도 허용
+
+permissions:
+  contents: write             # Release 생성/업로드 권한
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      # --- 선택: 전체 기능(OCR/녹화)용 바이너리 동봉. 실패해도 핵심 뷰어는 빌드됨 ---
+      - name: Stage ffmpeg (recording) — optional
+        continue-on-error: true
+        run: |
+          choco install ffmpeg -y --no-progress
+          $ff = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
+          if ($ff) { Copy-Item $ff ".\ffmpeg.exe" -Force; echo "ffmpeg staged" }
+
+      - name: Stage Tesseract (OCR) — optional
+        continue-on-error: true
+        run: |
+          choco install tesseract -y --no-progress
+          $dir = "C:\Program Files\Tesseract-OCR"
+          if (Test-Path "$dir\tesseract.exe") {
+            New-Item -ItemType Directory -Force ".\tesseract" | Out-Null
+            Copy-Item "$dir\*" ".\tesseract" -Recurse -Force
+            echo "tesseract staged"
+          }
+
+      - name: Stage NLTK WordNet (vocab) — optional
+        continue-on-error: true
+        run: python -m nltk.downloader -d nltk_data wordnet omw-1.4
+
+      - name: Build (PyInstaller via build_ci.bat)
+        run: cmd /c build_ci.bat
+
+      - name: Package zip
+        id: pkg
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if (-not $tag) { $tag = "dev" }
+          $zip = "PolyPDF-$tag-win64.zip"
+          Compress-Archive -Path "dist\PolyPDF\*" -DestinationPath $zip -Force
+          echo "zip=$zip" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PolyPDF-${{ github.ref_name }}
+          path: ${{ steps.pkg.outputs.zip }}
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" "${{ steps.pkg.outputs.zip }}" --title "PolyPDF ${{ github.ref_name }}" --generate-notes
