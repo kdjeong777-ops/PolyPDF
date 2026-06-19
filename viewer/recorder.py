@@ -45,22 +45,28 @@ def find_ffmpeg(configured: str = "") -> str:
     return w or ""
 
 
-def list_audio_devices(ffmpeg: str) -> list:
-    """dshow 오디오 입력 장치명 목록."""
+def _list_devices_text(ffmpeg: str) -> str:
+    """ffmpeg -list_devices 출력 텍스트(stderr+stdout). 실패 시 ''."""
     if not ffmpeg:
-        return []
+        return ""
     try:
         p = subprocess.run([ffmpeg, "-hide_banner", "-f", "dshow",
                             "-list_devices", "true", "-i", "dummy"],
                            capture_output=True, timeout=15,
                            creationflags=CREATE_NO_WINDOW)
-        # 장치명이 한글/유니코드일 수 있어 utf-8(보조 cp949)로 디코드
         raw = (p.stderr or b"") + (p.stdout or b"")
         try:
-            out = raw.decode("utf-8")
+            return raw.decode("utf-8")
         except Exception:
-            out = raw.decode("cp949", errors="replace")
+            return raw.decode("cp949", errors="replace")
     except Exception:
+        return ""
+
+
+def list_audio_devices(ffmpeg: str) -> list:
+    """dshow 오디오 입력 장치명(친숙한 이름) 목록 — 드롭다운 표시용."""
+    out = _list_devices_text(ffmpeg)
+    if not out:
         return []
     names, in_audio = [], False
     for line in out.splitlines():
@@ -70,7 +76,6 @@ def list_audio_devices(ffmpeg: str) -> list:
                 names.append(m.group(1))
         elif "DirectShow audio devices" in line:
             in_audio = True
-    # 일부 빌드는 (audio) 태그 없이 섹션으로 구분 → 보조 파싱
     if not names:
         for line in out.splitlines():
             if "DirectShow video devices" in line:
@@ -82,6 +87,40 @@ def list_audio_devices(ffmpeg: str) -> list:
                 if m:
                     names.append(m.group(1))
     return names
+
+
+def _norm_dev(s: str) -> str:
+    return re.sub(r"\s+", "", (s or "")).lower()
+
+
+def audio_alt_map(ffmpeg: str) -> dict:
+    """친숙한 오디오 장치명(정규화) → 대체 이름('@device_cm_…', ASCII) 매핑.
+    260618-15: 장치명에 ®·괄호·한글이 있으면 subprocess 로 ffmpeg 에 넘길 때 매칭이 깨져
+    'Could not find audio only device' 가 났다. ASCII 대체 이름으로 열면 그 문제가 사라진다."""
+    out = _list_devices_text(ffmpeg)
+    amap, cur = {}, None
+    for line in out.splitlines():
+        m = re.search(r'"([^"]+)"\s*\(audio\)', line)
+        if m:
+            cur = m.group(1)
+            continue
+        if cur is not None:
+            ma = re.search(r'Alternative name\s+"([^"]+)"', line)
+            if ma:
+                amap[_norm_dev(cur)] = ma.group(1)
+                cur = None
+    return amap
+
+
+def resolve_audio_device(ffmpeg: str, name: str) -> str:
+    """260618-15: 친숙한 장치명을 대체 이름(@device…)으로 해석. 이미 @… 이거나 매칭 실패 시 원본."""
+    if not name or name.startswith("@"):
+        return name
+    try:
+        alt = audio_alt_map(ffmpeg).get(_norm_dev(name))
+        return alt or name
+    except Exception:
+        return name
 
 
 def guess_system_device(devices: list) -> str:
@@ -124,7 +163,8 @@ def build_command(ffmpeg, out_path, *, audio_mode="none", mic="", system="",
             _seen.add(k); _uniq.append(a)
     audios = _uniq
     for a in audios:
-        cmd += ["-f", "dshow", "-i", f"audio={a}"]
+        dev = resolve_audio_device(ffmpeg, a)      # 260618-15: ASCII 대체 이름 우선(유니코드 매칭 깨짐 방지)
+        cmd += ["-f", "dshow", "-i", f"audio={dev}"]
     # 인코딩
     cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", str(int(crf)),
             "-pix_fmt", "yuv420p", "-r", str(int(fps))]
