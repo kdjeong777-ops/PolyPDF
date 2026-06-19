@@ -60,45 +60,66 @@ def valid_repo(repo: str) -> bool:
     return bool(repo) and "/" in repo and not repo.upper().startswith("OWNER")
 
 
-def check_latest(repo: str, timeout: float = 8.0):
-    """최신 릴리스 정보 dict 또는 None(네트워크/없음). 외부 입력은 데이터로만 취급."""
-    if not valid_repo(repo):
-        return None
+def _get_json(url: str, timeout: float):
     req = urllib.request.Request(
-        _API_LATEST.format(repo=repo.strip()),
-        headers={"Accept": "application/vnd.github+json", "User-Agent": _UA})
+        url, headers={"Accept": "application/vnd.github+json", "User-Agent": _UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read().decode("utf-8"))
+            return json.loads(r.read().decode("utf-8"))
     except Exception:
         return None
-    if not isinstance(data, dict):
+
+
+def _to_info(rel):
+    """릴리스 dict → 표준 info. 자산 zip 은 'win' 포함분 우선, 없으면 첫 zip."""
+    if not isinstance(rel, dict):
         return None
-    tag = str(data.get("tag_name") or "")
-    asset_url = None
-    asset_name = None
-    # 자산 zip 선택: 'win'/'windows' 포함 zip 우선, 없으면 첫 zip.
-    #   (CI 는 PolyPDF-<tag>-win64.zip, 수동 스크립트도 -win64.zip 로 통일)
-    zips = [a for a in (data.get("assets") or [])
+    tag = str(rel.get("tag_name") or "")
+    zips = [a for a in (rel.get("assets") or [])
             if str(a.get("name") or "").lower().endswith(".zip")]
-    pick = None
-    for a in zips:
-        if "win" in str(a.get("name") or "").lower():
-            pick = a
-            break
-    if pick is None and zips:
-        pick = zips[0]
-    if pick is not None:
-        asset_url = pick.get("browser_download_url")
-        asset_name = str(pick.get("name") or "")
+
+    # 260618-14: 자동 업데이트는 경량 'update' zip 우선(없으면 win64 full, 그다음 첫 zip).
+    #   update zip 은 안 바뀌는 무거운 부분(ffmpeg·tesseract·모델)을 제외 → 기존 설치분 보존.
+    def _score(a):
+        n = str(a.get("name") or "").lower()
+        return (1 if "update" in n else 0, 1 if "win" in n else 0)
+    pick = max(zips, key=_score) if zips else None
     return {
         "tag": tag,
         "version": tag.lstrip("vV"),
-        "notes": str(data.get("body") or ""),
-        "asset_url": asset_url,
-        "asset_name": asset_name,
-        "html_url": str(data.get("html_url") or ""),
+        "notes": str(rel.get("body") or ""),
+        "asset_url": pick.get("browser_download_url") if pick else None,
+        "asset_name": str(pick.get("name") or "") if pick else None,
+        "html_url": str(rel.get("html_url") or ""),
     }
+
+
+def check_latest(repo: str, timeout: float = 8.0):
+    """최신 '버전' 릴리스 정보 dict 또는 None.
+
+    260618-13: `/releases` 목록에서 **유효 SemVer 태그 중 최고 버전**을 고른다
+    (`components` 등 비버전 태그·draft 는 제외). 과거 `/releases/latest` 만 쓰면 `components`
+    릴리스를 나중에 올렸을 때 그게 'latest' 로 반환돼(버전=0.0.0) 업데이트를 못 찾던 문제가
+    있었다. 목록 조회 실패 시 `/releases/latest` 로 폴백."""
+    if not valid_repo(repo):
+        return None
+    repo = repo.strip()
+    data = _get_json(f"https://api.github.com/repos/{repo}/releases", timeout)
+    best = None
+    best_v = (-1, -1, -1)
+    if isinstance(data, list):
+        for rel in data:
+            if not isinstance(rel, dict) or rel.get("draft"):
+                continue
+            v = _vtuple(str(rel.get("tag_name") or ""))
+            if v == (0, 0, 0):              # 비버전 태그(components 등) 제외
+                continue
+            if v > best_v:
+                best_v = v
+                best = rel
+    if best is None:                        # 폴백: /releases/latest
+        best = _get_json(_API_LATEST.format(repo=repo), timeout)
+    return _to_info(best)
 
 
 def is_frozen() -> bool:

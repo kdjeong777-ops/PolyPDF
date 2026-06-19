@@ -105,8 +105,8 @@ def guess_mic_device(devices: list) -> str:
 
 
 def build_command(ffmpeg, out_path, *, audio_mode="none", mic="", system="",
-                  fps=30, crf=23, abitrate="192k"):
-    """ffmpeg 명령 인자 리스트 생성."""
+                  fps=30, crf=23, abitrate="192k", duration=None):
+    """ffmpeg 명령 인자 리스트 생성. duration(초)이 주어지면 그 시간 뒤 자동 종료(테스트용)."""
     cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "warning",
            "-f", "gdigrab", "-framerate", str(int(fps)), "-i", "desktop"]
     audios = []
@@ -136,6 +136,8 @@ def build_command(ffmpeg, out_path, *, audio_mode="none", mic="", system="",
         cmd += ["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", abitrate]
     else:
         cmd += ["-map", "0:v", "-an"]
+    if duration:
+        cmd += ["-t", str(int(duration))]      # 260618-14: 테스트용 자동 종료
     cmd += ["-movflags", "+faststart", str(out_path)]
     return cmd
 

@@ -3731,39 +3731,52 @@ class MainWindow(QMainWindow):
         self._update_rec_buttons()
 
     def _test_recording(self, parent=None):
-        """260609-17(F4): 사전 테스트 — 3초 녹화 후 결과 안내."""
-        import time as _t, tempfile, subprocess
-        from viewer.recorder import find_ffmpeg, ScreenRecorder, CREATE_NO_WINDOW
+        """260609-17(F4)/260618-14: 3초 테스트 녹화 — 실패 시 ffmpeg 실제 오류·종료코드 표시.
+        출력이 비면 백신(Defender)의 ffmpeg 실행 차단을 의심해 안내(조용한 실패 방지)."""
+        import tempfile, subprocess
+        from viewer.recorder import (find_ffmpeg, build_command, CREATE_NO_WINDOW)
         ff = find_ffmpeg(self._prefs.get("ffmpeg_path", ""))
         if not ff:
-            return False, "ffmpeg 를 찾을 수 없습니다."
+            return False, "ffmpeg 를 찾을 수 없습니다. (구성요소 설치 또는 설정에서 경로 지정)"
         out = Path(tempfile.gettempdir()) / "polypdf_rectest.mp4"
         try:
             if out.exists():
                 out.unlink()
         except Exception:
             pass
-        rec = ScreenRecorder(ff, out,
-                             audio_mode=self._prefs.get("recording_audio_mode", "mic"),
-                             mic=self._prefs.get("recording_mic", ""),
-                             system=self._prefs.get("recording_system", ""))
-        ok, msg = rec.start()
-        if not ok:
-            return False, msg
-        _t.sleep(3.0)
-        rec.stop()
-        _t.sleep(0.4)
+        am = self._prefs.get("recording_audio_mode", "mic")
+        cmd = build_command(ff, str(out), audio_mode=am,
+                            mic=self._prefs.get("recording_mic", ""),
+                            system=self._prefs.get("recording_system", ""), duration=3)
+        try:
+            p = subprocess.run(cmd, capture_output=True, timeout=30,
+                               creationflags=CREATE_NO_WINDOW)
+            rc = p.returncode
+            err = (p.stderr or b"").decode("utf-8", "replace").strip()
+        except FileNotFoundError:
+            return False, ("ffmpeg 실행 파일이 없습니다(백신이 삭제·격리했을 수 있음).\n"
+                           "Windows 보안에서 ffmpeg.exe 를 허용/복원하거나 다시 설치하세요.")
+        except subprocess.TimeoutExpired:
+            return False, "테스트 시간 초과(녹화가 정상 종료되지 않음)."
+        except OSError as e:
+            return False, ("ffmpeg 을 실행할 수 없습니다(백신 차단 의심): %s\n"
+                           "설치 폴더의 ffmpeg.exe 를 Windows 보안 예외에 추가하세요." % e)
         if not out.exists() or out.stat().st_size < 1024:
-            return False, "녹화 파일이 생성되지 않았습니다(화면 캡처 실패)."
+            tail = "\n".join(err.splitlines()[-6:]) if err else ""
+            msg = "녹화 파일이 생성되지 않았습니다 (ffmpeg 종료코드 %s)." % rc
+            if tail:
+                msg += "\n\n[ffmpeg 오류]\n" + tail
+            else:
+                msg += ("\n\nffmpeg 출력이 전혀 없습니다 — 백신(Windows Defender)이 ffmpeg 실행을 "
+                        "차단했을 수 있습니다. 설치 폴더의 ffmpeg.exe 를 보안 예외에 추가한 뒤 다시 시도하세요.")
+            return False, msg
         # 오디오 스트림 유무 확인
         try:
-            p = subprocess.run([ff, "-hide_banner", "-i", str(out)],
-                               capture_output=True, creationflags=CREATE_NO_WINDOW)
-            info = (p.stderr or b"").decode("utf-8", "replace")
-            has_audio = "Audio:" in info
+            pr = subprocess.run([ff, "-hide_banner", "-i", str(out)],
+                                capture_output=True, creationflags=CREATE_NO_WINDOW)
+            has_audio = "Audio:" in (pr.stderr or b"").decode("utf-8", "replace")
         except Exception:
             has_audio = False
-        am = self._prefs.get("recording_audio_mode", "mic")
         if am != "none" and not has_audio:
             return True, ("화면 녹화는 정상입니다. 단, 선택한 오디오가 녹음되지 않았습니다.\n"
                           "장치 선택을 확인하세요(시스템 소리는 Stereo Mix/가상 오디오 필요).")

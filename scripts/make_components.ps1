@@ -1,4 +1,4 @@
-# 260618-12: 앱 '구성요소 설치'가 받을 자산(ffmpeg.exe, tesseract.zip)을 준비한다.
+﻿# 260618-12: 앱 '구성요소 설치'가 받을 자산(ffmpeg.exe, tesseract.zip)을 준비한다.
 #   릴리스의 고정 태그 'components' 에 1회 업로드해 두면, 모든 버전의 앱이 거기서 받는다.
 #   (ffmpeg/Tesseract 는 앱 버전과 무관 → 바뀔 때만 다시 업로드)
 # 사용: powershell -ExecutionPolicy Bypass -File scripts\make_components.ps1

@@ -5,22 +5,24 @@
 
 이 저장소에는 이미 **GitHub Actions 워크플로**가 있어, **버전 태그를 push 하면
 자동으로 Windows 빌드 → zip → Release 업로드**까지 됩니다.
-- `.github/workflows/release.yml` : 태그 `v*` push 시 빌드·릴리스. 자산명 `PolyPDF-<tag>-win64.zip`.
-  (참고: v2.25.0부터 **ffmpeg·Tesseract 는 동봉하지 않음** — §3-c 의 `components` 태그로 별도 제공.
-   release.yml 의 ffmpeg/Tesseract 설치 스텝은 더 이상 빌드에 반영되지 않으나 무해. NLTK 는 계속 동봉.)
+- `.github/workflows/release.yml` : 태그 `v*` push 시 빌드 후 **두 자산** 업로드 —
+  `PolyPDF-<tag>-win64.zip`(전체=첫 설치용)과 `PolyPDF-<tag>-win64-update.zip`(업데이트용, 무거운
+  불변부 제외). v2.26.0부터 **ffmpeg·Tesseract 재동봉**(다운로드+은밀실행을 Defender 가 차단하던 문제 회피).
 - `.github/workflows/ci.yml` : push/PR 마다 오프스크린 GUI 회귀 테스트.
 
 ---
 
 ## 1. 동작 원리
 
-- 앱이 `releases/latest` 의 **태그**(예 `v2.23.0`)를 `viewer/__init__.py` 의
-  `__version__`(`2.23.0`)과 비교 → 새 버전이면 릴리스의 **zip 자산**(이름에 `win`
-  포함분 우선)을 받아, 도우미 배치가 앱 종료 대기 → 설치 폴더 덮어쓰기 → 재실행.
-- 저장소는 앱 설정 `update_repo`(`OWNER/REPO`). 최초 '업데이트 확인…' 시 입력받아 저장.
+- 앱이 **전체 릴리스 목록에서 최고 SemVer 태그**(예 `v2.26.0`)를 `__version__` 과 비교
+  (`components` 등 비버전·draft 제외). 새 버전이면 **`update` zip 자산을 우선**(없으면 full)
+  내려받아, 도우미 배치가 앱 종료 대기 → 설치 폴더 **덮어쓰기(없는 파일은 보존)** → 재실행.
+- **업데이트가 가벼운 이유**: `update` zip 은 안 바뀌는 무거운 부분(ffmpeg·Tesseract·한국어
+  모델·NLTK)을 제외 → 덮어쓰기 시 기존 설치분이 **그대로 보존**되어 다시 받지 않음.
+- 저장소는 앱 기본값 `kdjeong777-ops/PolyPDF` 고정(설정 `update_repo` 로 변경 가능).
 - 자동 확인: 배포 exe 에서 시작 4초 뒤 1회(`auto_check_update`, 기본 켜짐).
 
-> 규약: 태그 = `v`+버전. 자산 = zip(루트에 `PolyPDF.exe`·`_internal\` 또는 `PolyPDF\` 하위).
+> 규약: 태그 = `v`+버전. 첫 설치 = full zip, 자동 업데이트 = update zip(이름에 `update`).
 
 ---
 
@@ -68,38 +70,38 @@ GitHub Actions(release.yml)가 Windows 에서 빌드하고
 CI를 쓰지 않거나 빠르게 올릴 때:
 ```powershell
 .\build_ci.bat
-powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # PolyPDF-v<ver>-win64.zip
-gh release create v2.25.0 PolyPDF-v2.25.0-win64.zip --title "PolyPDF v2.25.0" --generate-notes
-#   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.25.0 → zip 업로드)
+powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # full + update zip 2종 생성
+gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip --title "PolyPDF v2.26.0" --generate-notes
+#   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.26.0 → 두 zip 업로드)
 ```
 
 ---
 
-## 3-c. 구성요소(녹화·OCR) 1회 배포 — `components` 태그
+## 3-c. (선택) 구성요소 별도 설치 — `components` 태그
 
-앱 배포본에는 **ffmpeg(녹화)·Tesseract(OCR)를 동봉하지 않습니다**(release zip 가벼움).
-사용자는 앱 **도구 → 구성요소 설치(녹화·OCR)…** 에서 필요 시 설치 폴더로 받습니다.
-그 자산을 릴리스의 **고정 태그 `components`** 에 한 번 올려두면 됩니다(버전 무관, 재사용).
+v2.26.0부터 ffmpeg·Tesseract 는 **release(full) zip 에 동봉**되어 첫 설치만으로 녹화·OCR 이
+동작합니다. 따라서 `components` 태그/구성요소 설치는 **선택적 폴백**입니다(번들이 우선 사용됨).
+번들 없이 따로 받게 하려면 아래처럼 `components` 태그에 자산을 올려둘 수 있습니다:
 
 ```powershell
 cd C:\Claude\MPDF\smart_pdf_viewer
 powershell -ExecutionPolicy Bypass -File scripts\make_components.ps1   # ffmpeg.exe + tesseract.zip 준비
-gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpeg/Tesseract)" --notes "녹화·OCR 구성요소"
+gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpeg/Tesseract)" --prerelease --notes "녹화·OCR 구성요소"
 #   (이미 있으면) gh release upload components ffmpeg.exe tesseract.zip --clobber
-#   또는 웹 Releases → 태그 components 릴리스 만들고 두 파일 업로드
 ```
-
-- 앱은 `releases/tags/components` 의 `ffmpeg.exe`·`tesseract.zip` 을 받아
-  `ffmpeg.exe`→설치폴더, `tesseract.zip`→설치폴더\tesseract\ 로 풉니다(재시작 불필요).
-- ffmpeg/Tesseract 버전을 바꿀 때만 다시 업로드하면 됩니다(앱 새 버전마다 올릴 필요 없음).
+> 주의: `components` 릴리스는 반드시 **pre-release** 로 두세요(아니면 `releases/latest` 를 가로채
+> 구버전 앱의 업데이트 확인이 깨집니다 — 신버전은 목록에서 최고 버전을 고르므로 영향 없음).
 
 ---
 
 ## 4. 참고 / 주의
 
 - **서명 안 된 exe**: 첫 실행 시 SmartScreen 경고(정상). 없애려면 코드서명 인증서(유료).
-- **릴리스 zip 크기**: ffmpeg·Tesseract 제외로 약 190MB 감소(그래도 PyQt6·PyMuPDF·한국어
-  모델 72MB·NLTK 36MB 등으로 dist 약 590MB, zip 은 압축되어 더 작음). 녹화·OCR 은 사용자가
-  §3-c `components` 에서 받음. 업데이트는 전체 교체 방식이라 매번 전체 다운로드입니다.
-  (더 줄이려면 한국어 모델/NLTK도 components 로 분리 가능 — 필요 시 별도 작업.)
+- **zip 크기**: full 은 ffmpeg·Tesseract·모델 포함으로 큼(dist 약 780MB, zip 은 압축되어 작음).
+  **update zip 은 그 무거운 불변부(≈290MB)를 빼서** 자동 업데이트가 그만큼 가볍습니다. 첫 설치만
+  full, 이후는 update.
+- **서명 안 된 exe / 백신**: 첫 실행 SmartScreen 경고(정상). 드물게 Defender 가 ffmpeg.exe 를
+  false-positive 로 차단할 수 있는데, 번들(사용자가 직접 압축 해제)이면 다운로드+은밀실행 패턴이
+  없어 확률이 낮습니다. 차단 시 녹화 테스트가 **ffmpeg 오류/차단 안내**를 표시하니, 설치 폴더의
+  ffmpeg.exe 를 Windows 보안 예외에 추가하면 됩니다.
 - **비공개 저장소**: 릴리스 조회에 토큰 내장이 필요해 비권장(현재 공개 전제).

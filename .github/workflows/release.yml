@@ -53,23 +53,48 @@ jobs:
       - name: Build (PyInstaller via build_ci.bat)
         run: cmd /c build_ci.bat
 
-      - name: Package zip
+      - name: Package zips (full + update)
         id: pkg
         run: |
           $tag = "${{ github.ref_name }}"
           if (-not $tag) { $tag = "dev" }
-          $zip = "PolyPDF-$tag-win64.zip"
-          Compress-Archive -Path "dist\PolyPDF\*" -DestinationPath $zip -Force
-          echo "zip=$zip" >> $env:GITHUB_OUTPUT
+          $full = "PolyPDF-$tag-win64.zip"
+          Compress-Archive -Path "dist\PolyPDF\*" -DestinationPath $full -Force
+          # 260618-14: 업데이트용 zip — 안 바뀌는 무거운 부분 제외(앱이 우선 사용, 기존 설치분 보존)
+          $stage = "$env:TEMP\polypdf_upd"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          Copy-Item "dist\PolyPDF" $stage -Recurse
+          foreach ($p in @("ffmpeg.exe","tesseract","kiwipiepy_model","nltk_data")) {
+            $t = Join-Path "$stage\_internal" $p
+            if (Test-Path $t) { Remove-Item $t -Recurse -Force }
+          }
+          $upd = "PolyPDF-$tag-win64-update.zip"
+          Compress-Archive -Path "$stage\*" -DestinationPath $upd -Force
+          echo "full=$full" >> $env:GITHUB_OUTPUT
+          echo "upd=$upd" >> $env:GITHUB_OUTPUT
 
       - name: Upload build artifact (always)
         uses: actions/upload-artifact@v4
         with:
           name: PolyPDF-${{ github.ref_name }}
-          path: ${{ steps.pkg.outputs.zip }}
+          path: |
+            ${{ steps.pkg.outputs.full }}
+            ${{ steps.pkg.outputs.upd }}
 
-      - name: Create GitHub Release (on tag)
+      - name: Create or update GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "${{ steps.pkg.outputs.zip }}" --title "PolyPDF ${{ github.ref_name }}" --generate-notes
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $full = "${{ steps.pkg.outputs.full }}"
+          $upd  = "${{ steps.pkg.outputs.upd }}"
+          # 이미 릴리스가 있으면(수동으로 좋은 번들 자산 업로드한 경우) CI 가 덮어쓰지 않음 —
+          # 없는 자산만 보충 시도하고 항상 성공 종료(수동 자산 보존). 없으면 새로 생성.
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $full $upd 2>$null
+            exit 0
+          } else {
+            gh release create $tag $full $upd --title "PolyPDF $tag" --generate-notes
+          }
