@@ -22,6 +22,8 @@ import urllib.request
 from pathlib import Path
 
 ASSET_NAME = "PolyPDF-windows.zip"
+# 260618-11: 기본 업데이트 저장소(설정 update_repo 가 비어 있으면 이 값 사용 — 입력 불필요).
+DEFAULT_REPO = "kdjeong777-ops/PolyPDF"
 _API_LATEST = "https://api.github.com/repos/{repo}/releases/latest"
 _UA = "PolyPDF-Updater"
 CREATE_NO_WINDOW = 0x08000000

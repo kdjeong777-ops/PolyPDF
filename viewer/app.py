@@ -7566,15 +7566,15 @@ class MainWindow(QMainWindow):
         """최신 릴리스를 백그라운드로 확인(결과는 _on_update_result). manual=True 면
         저장소 미설정 시 입력받고, 최신/실패도 알림."""
         from viewer import updater
-        repo = (self._prefs.get("update_repo") or "").strip()
+        # 260618-11: 설정값이 있으면 우선, 없으면 기본 저장소(고정) — 입력 불필요.
+        repo = (self._prefs.get("update_repo") or "").strip() or updater.DEFAULT_REPO
         if not updater.valid_repo(repo):
             if not manual:
                 return
             from PyQt6.QtWidgets import QInputDialog
             txt, ok = QInputDialog.getText(
                 self, "업데이트 저장소 설정",
-                "GitHub 저장소를 'OWNER/REPO' 형식으로 입력하세요\n(예: kdjeong777/PolyPDF):",
-                text=repo)
+                "GitHub 저장소를 'OWNER/REPO' 형식으로 입력하세요:", text=repo)
             if not ok or not updater.valid_repo((txt or "").strip()):
                 return
             repo = txt.strip()
