@@ -308,7 +308,8 @@ class KipoSearchPanel(QWidget):
 
     def _on_pdf(self, path, dbg):
         if not path:
-            self.info.setText("PDF 를 받지 못했습니다. " + (dbg[-1] if dbg else ""))
+            msg = dbg[-1] if dbg else "PDF 를 받지 못했습니다."
+            self.info.setText(msg)
             return
         self.info.setText("PDF 저장·열기 완료")
         win = self._win

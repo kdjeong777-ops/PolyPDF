@@ -194,36 +194,66 @@ def read_detail_debug(key: str, appno: str, timeout: float = 15.0):
     return _wrap("<h3 style='color:#1456c4'>원문(상세)</h3>" + "".join(rows)), [f"{status} ok"]
 
 
-def fetch_fulltext_pdf_url_debug(key: str, appno: str, timeout: float = 20.0):
-    """(pdf_url, [진단...]). getPubFullTextInfoSearch — 공개/공고 전문 PDF 경로."""
-    key = (key or "").strip()
-    appno = "".join(ch for ch in str(appno or "") if ch.isdigit())
-    if not key or not appno:
-        return "", ["키/출원번호 없음"]
-    url = (_BASE + "/getPubFullTextInfoSearch?"
-           + urllib.parse.urlencode({"applicationNumber": appno, "ServiceKey": key}))
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": _UA})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw = r.read(); status = r.status
-        root = ET.fromstring(raw)
-    except Exception as e:
-        return "", [f"ERR {type(e).__name__}: {str(e)[:90]}"]
-    succ = (_findtext_local(root, "successYN") or "").strip().upper()
-    if succ == "N":
-        msg = (_findtext_local(root, "resultMsg") or _findtext_local(root, "resultCode") or "조회 실패")
-        return "", [f"{status} 실패: {msg} (공개전문 서비스 활용신청 필요할 수 있음)"]
-    # PDF URL: http…pdf 인 leaf 우선, 없으면 path/url 류 필드
+# 전문(全文) PDF 서비스 — 공개공보(공개전문)·공고/등록공보(공고전문) 순으로 시도.
+#   특허는 공개공보가 없고 공고(등록)공보만 있는 경우가 많아, 공개전문만 보면 다수가 누락됨.
+_FULLTEXT_OPS = [
+    ("getPubFullTextInfoSearch", "공개전문"),
+    ("getAnnFullTextInfoSearch", "공고전문"),
+]
+# PDF 경로일 가능성이 높은 필드명(소문자)
+_PDF_PATH_TAGS = ("path", "docpath", "filepath", "url", "downloadurl", "fileurl", "pdfurl")
+
+
+def _extract_pdf_url(root) -> str:
+    """응답 루트에서 PDF URL 추출 — http…pdf leaf 우선, 없으면 path/url 류 필드."""
     for el in root.iter():
         if list(el):
             continue
         t = (el.text or "").strip()
         if t.lower().startswith("http") and ".pdf" in t.lower():
-            return t, [f"{status} ok"]
+            return t
     for el in root.iter():
-        if _local(el.tag).lower() in ("path", "docpath", "filepath", "url") and (el.text or "").strip():
-            return el.text.strip(), [f"{status} ok(path)"]
-    return "", [f"{status} PDF 경로 없음", raw[:200].decode('utf-8', 'replace')]
+        if list(el):
+            continue
+        if _local(el.tag).lower() in _PDF_PATH_TAGS and (el.text or "").strip():
+            return el.text.strip()
+    return ""
+
+
+def fetch_fulltext_pdf_url_debug(key: str, appno: str, timeout: float = 20.0):
+    """(pdf_url, [진단...]). 공개전문→공고전문 순으로 전문 PDF 경로를 찾는다."""
+    key = (key or "").strip()
+    appno = "".join(ch for ch in str(appno or "") if ch.isdigit())
+    if not key or not appno:
+        return "", ["키/출원번호 없음"]
+    dbg = []
+    last_raw = b""
+    for op, label in _FULLTEXT_OPS:
+        url = (_BASE + "/" + op + "?"
+               + urllib.parse.urlencode({"applicationNumber": appno, "ServiceKey": key}))
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": _UA})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                raw = r.read(); status = r.status
+            last_raw = raw
+            root = ET.fromstring(raw)
+        except Exception as e:
+            dbg.append(f"{label} ERR {type(e).__name__}: {str(e)[:80]}")
+            continue
+        succ = (_findtext_local(root, "successYN") or "").strip().upper()
+        if succ == "N":
+            msg = (_findtext_local(root, "resultMsg")
+                   or _findtext_local(root, "resultCode") or "조회 실패")
+            dbg.append(f"{label} {status} 실패: {msg}")
+            continue
+        pdf = _extract_pdf_url(root)
+        if pdf:
+            return pdf, dbg + [f"{label} {status} ok"]
+        dbg.append(f"{label} {status} PDF 없음")  # 본문 비어있음(해당 공보 없음) → 다음 서비스
+    # 모두 실패 — 진단에 마지막 응답 일부 첨부
+    tail = last_raw[:300].decode("utf-8", "replace") if last_raw else ""
+    return "", dbg + (["응답: " + tail] if tail else []) + \
+        ["전문(공개/공고) PDF 를 찾지 못했습니다. 미공개·미등록이거나 전문 서비스 활용신청이 필요할 수 있습니다."]
 
 
 def download_fulltext_pdf_debug(key: str, appno: str, dest_dir: str,
