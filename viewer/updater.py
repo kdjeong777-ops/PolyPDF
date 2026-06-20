@@ -104,7 +104,14 @@ def check_latest(repo: str, timeout: float = 8.0):
     if not valid_repo(repo):
         return None
     repo = repo.strip()
-    data = _get_json(f"https://api.github.com/repos/{repo}/releases", timeout)
+    # 260618-32: 프리릴리즈도 포함하는 `/releases` 목록을 우선 사용(최대 100개).
+    #   `/releases/latest` 는 프리릴리즈를 제외하므로, 목록 조회가 실패했을 때 거기로 곧바로
+    #   떨어지면 '전부 프리릴리즈'인 저장소에서 업데이트를 못 찾는다 → 목록을 1회 재시도한 뒤,
+    #   그래도 실패할 때만 `/releases/latest` 로 폴백(안정판 전용 저장소 대비).
+    list_url = f"https://api.github.com/repos/{repo}/releases?per_page=100"
+    data = _get_json(list_url, timeout)
+    if not isinstance(data, list):
+        data = _get_json(list_url, timeout)          # 일시적 실패 1회 재시도
     best = None
     best_v = (-1, -1, -1)
     if isinstance(data, list):
@@ -117,7 +124,7 @@ def check_latest(repo: str, timeout: float = 8.0):
             if v > best_v:
                 best_v = v
                 best = rel
-    if best is None:                        # 폴백: /releases/latest
+    if best is None:                        # 최후 폴백: /releases/latest(프리릴리즈 제외 — 안정판만)
         best = _get_json(_API_LATEST.format(repo=repo), timeout)
     return _to_info(best)
 
