@@ -592,15 +592,40 @@ class LawSearchPanel(QWidget):
 
     # ----- 즐겨찾기로 직접 열기 -----
     def show_saved(self, row: dict):
-        """저장된 법령 즐겨찾기 항목의 본문을 바로 표시(검색 없이)."""
-        self._cur_row = row
-        self._cur_item = None        # 트리 항목 없음(조문 자식 부착 생략)
-        self.info.setText(f"즐겨찾기: {row.get('name','')}")
-        self.viewer.setHtml(
-            f"<p style='color:#888'>본문을 불러오는 중… "
-            f"<b>{row.get('name','')}</b></p>")
-        self._cworker = _ContentWorker(self._oc, row)
-        self._start_worker(self._cworker, self._on_content)
+        """260618-40: 즐겨찾기 클릭 — 좌측 트리에 **모든 법령 즐겨찾기**를 책갈피로 표시하고,
+        클릭한 항목을 선택(→우측 본문 표시·좌측 강조)."""
+        favs = list(getattr(self._win, "_law_favorites", []) or []) if self._win else []
+        rows = []
+        for f in (favs or [row]):
+            r = dict(f)
+            if not r.get("kind"):
+                r["kind"] = f.get("kind_label", "")
+            rows.append(r)
+        self.tree.clear()
+        self._cur_row = None
+        self._cur_item = None
+        self._on_search_done(rows)          # 그룹 트리 채움(즐겨찾기 = 책갈피 목록)
+        self.info.setText(f"즐겨찾기 {len(rows)}건")
+        self._select_fav(row)               # 클릭 항목 선택 → _on_select 가 본문 로드
+
+    def _select_fav(self, fav: dict):
+        key = (fav.get("name"), fav.get("target"))
+        root = self.tree.invisibleRootItem()
+
+        def walk(node):
+            for i in range(node.childCount()):
+                ch = node.child(i)
+                r = ch.data(0, self._ROW)
+                if r and (r.get("name"), r.get("target")) == key:
+                    return ch
+                found = walk(ch)
+                if found:
+                    return found
+            return None
+        it = walk(root)
+        if it is not None:
+            self.tree.setCurrentItem(it)
+            self.tree.scrollToItem(it)
 
 
 class LawFavoritesManager(QDialog):

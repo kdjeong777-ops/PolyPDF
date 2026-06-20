@@ -368,12 +368,49 @@ class KcscSearchPanel(QWidget):
             self._win._manage_kcsc_favorites()
 
     def show_saved(self, fav: dict):
-        """저장된 즐겨찾기 항목 본문을 바로 표시(검색 없이)."""
-        self._cur_item = None
-        self.info.setText(f"즐겨찾기: {fav.get('name','')}")
-        self.viewer.setHtml(f"<p style='color:#888'>본문을 불러오는 중… "
-                            f"<b>{fav.get('name','')}</b></p>")
-        self._load_content(fav.get("ctype") or "", str(fav.get("code") or ""), None)
+        """260618-40: 즐겨찾기 클릭 — 좌측 트리에 **모든 건설기준 즐겨찾기**를 책갈피로
+        표시하고, 클릭한 항목을 선택(→우측 본문 표시·좌측 강조)."""
+        favs = list(getattr(self._win, "_kcsc_favorites", []) or []) if self._win else []
+        rows = [dict(f) for f in (favs or [fav])]
+        self.tree.clear(); self._cur_item = None
+        groups: dict = {}
+        order: list = []
+        for r in rows:
+            c = r.get("category") or "기타"
+            if c not in groups:
+                groups[c] = []; order.append(c)
+            groups[c].append(r)
+        multi = len(order) > 1
+        for c in order:
+            if multi:
+                g = QTreeWidgetItem([f"{c}  ({len(groups[c])})"])
+                self.tree.addTopLevelItem(g); g.setExpanded(True)
+                for r in groups[c]:
+                    g.addChild(self._leaf(r))
+            else:
+                for r in groups[c]:
+                    self.tree.addTopLevelItem(self._leaf(r))
+        self.info.setText(f"즐겨찾기 {len(rows)}건")
+        self._select_fav(fav)
+
+    def _select_fav(self, fav: dict):
+        key = (str(fav.get("code") or ""), fav.get("ctype") or "")
+        root = self.tree.invisibleRootItem()
+
+        def walk(node):
+            for i in range(node.childCount()):
+                ch = node.child(i)
+                r = ch.data(0, _ROLE_ROW)
+                if r and (str(r.get("code") or ""), r.get("ctype") or "") == key:
+                    return ch
+                found = walk(ch)
+                if found:
+                    return found
+            return None
+        it = walk(root)
+        if it is not None:
+            self.tree.setCurrentItem(it)
+            self.tree.scrollToItem(it)
 
     # ----- 찾기 -----
     def _show_find(self):

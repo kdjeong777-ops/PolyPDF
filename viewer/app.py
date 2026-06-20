@@ -5287,6 +5287,7 @@ class MainWindow(QMainWindow):
             "ctype": row.get("ctype", ""), "category": row.get("category", ""),
         })
         try:
+            self._refresh_favorites_menu()
             self._save_settings_now()
         except Exception:
             pass
@@ -7945,6 +7946,22 @@ class MainWindow(QMainWindow):
                 act = QAction(label, self)
                 act.triggered.connect(
                     lambda _checked=False, ff=f: self._open_law_favorite(ff))
+                self.menu_favorites.addAction(act)
+
+        # 260618-40: 건설기준(KCSC) 즐겨찾기 — 법령·고시 아래 별도 구역
+        if self._kcsc_favorites:
+            self.menu_favorites.addSeparator()
+            hdr = QAction("건설기준(KCSC) 즐겨찾기", self)
+            hdr.setEnabled(False)
+            self.menu_favorites.addAction(hdr)
+            for f in self._kcsc_favorites:
+                label = "🏗 " + f.get("name", "?")
+                cat = f.get("category")
+                if cat:
+                    label += f"  ({cat})"
+                act = QAction(label, self)
+                act.triggered.connect(
+                    lambda _checked=False, ff=f: self._open_kcsc_favorite(ff))
                 self.menu_favorites.addAction(act)
 
     def _add_current_folder_favorite(self):
