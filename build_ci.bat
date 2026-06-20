@@ -203,6 +203,8 @@ pyinstaller ^
     --hidden-import viewer.study.online_dict ^
     --hidden-import viewer.study.law_api ^
     --hidden-import viewer.widgets.law_search_dialog ^
+    --hidden-import viewer.study.kcsc_api ^
+    --hidden-import viewer.widgets.kcsc_search_dialog ^
     --hidden-import viewer.widgets.toggle_splitter ^
     --hidden-import viewer.widgets.icons ^
     --hidden-import viewer.widgets.image_search_dialog ^

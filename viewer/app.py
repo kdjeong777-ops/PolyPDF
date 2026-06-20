@@ -172,6 +172,9 @@ class MainWindow(QMainWindow):
         self._law_panel = None                # 260616-19: 임베드된 법령·고시 패널
         self._law_window = None               # 260616-19: 전체화면 팝아웃 창(없으면 임베드)
         self._law_saved = None                # 법령 패널 표시 전 메인 레이아웃 백업
+        self._kcsc_panel = None               # 260618-37: 건설기준(KCSC) 패널(법령과 동일 슬롯)
+        self._kcsc_window = None
+        self._kcsc_saved = None
         self._prefs: dict = {
             "restore_session": True, "restore_last_page": True,
             "restore_screenshots": True, "screenshot_max": 30,
@@ -1215,6 +1218,7 @@ class MainWindow(QMainWindow):
         mk("단어장", "검색·단어장 창 보이기 · 단어장 탭", self._vm_study)
         self._btn_shot = mk("스크린샷", "검색·단어장 숨김 · 스크린샷 보이기", self._vm_shot)
         mk("법령/고시", "법제처 법령·고시 검색·본문 보기", self._action_law_search)  # 260618-18: 스크린샷 오른쪽
+        mk("건설기준", "국가건설기준센터(KCSC) KDS·KCS 본문 보기", self._action_kcsc_search)  # 260618-37
         mk("발표보기", "발표 전체화면 보기 (F5)", self._open_presentation)  # 260609-15(E1)/260618-8
         # 보기 ↔ 도구 사이 띄움
         _sp = QWidget(); _sp.setFixedWidth(20)
@@ -1368,6 +1372,7 @@ class MainWindow(QMainWindow):
                 ("검색", self._vm_search), ("단어장", self._vm_study),
                 ("스크린샷", self._vm_shot),
                 ("법령/고시", self._action_law_search),
+                ("건설기준(KCSC)", self._action_kcsc_search),
                 ("발표보기", self._open_presentation)):
             _a = QAction(_label, self)
             _a.triggered.connect(lambda _checked=False, s=_slot: s())
@@ -1418,6 +1423,7 @@ class MainWindow(QMainWindow):
         # 🔍 검색 및 데이터 구축
         m_tools.addSection("🔍 검색 및 데이터 구축")
         _act("법령·고시 검색 (법제처)...", self._action_law_search)
+        _act("건설기준 (KCSC) 보기...", self._action_kcsc_search)
         _act("인덱스 재구축", self.action_reindex)
 
         # ⚙️ 프로그램 환경설정
@@ -5077,6 +5083,8 @@ class MainWindow(QMainWindow):
         oc = self._law_oc_or_warn()
         if not oc:
             return
+        if self._kcsc_panel is not None:       # 260618-37: 사이드 슬롯 공유 — 건설기준 먼저 닫기
+            self._close_kcsc()
         if self._law_panel is not None:        # 이미 열려 있음
             if self._law_window is not None:
                 self._law_window.raise_()
@@ -5222,6 +5230,157 @@ class MainWindow(QMainWindow):
             if "shot" in s:
                 self.act_toggle_shot.setChecked(s["shot"])
             if "split" in s:                          # 260618-8: 2단(PDF) 상태 복원
+                self.act_split.setChecked(s["split"])
+            self._sync_right_layout()
+            if s.get("splitter"):
+                self.splitter.restoreState(s["splitter"])
+        except Exception:
+            pass
+
+    # ===== 260618-37: 건설기준(KCSC) — 법령·고시와 동일한 사이드 패널 방식 =====
+    def _kcsc_key_or_warn(self) -> str:
+        key = (self._prefs.get("kcsc_key") or "").strip()
+        if not key:
+            QMessageBox.information(
+                self, "건설기준(KCSC)",
+                "설정 → '인터넷 사전'의 'KCSC 키'(국가건설기준센터 OPEN API 인증키, "
+                "www.kcsc.re.kr/support/api 에서 무료 발급)를 먼저 입력하세요.")
+        return key
+
+    def _action_kcsc_search(self, checked: bool = False):
+        """260618-37: 국가건설기준센터(KDS/KCS) 본문 패널(메인 오른쪽 2단 임베드/전체화면)."""
+        key = self._kcsc_key_or_warn()
+        if not key:
+            return
+        if self._law_panel is not None:        # 사이드 슬롯 공유 — 법령 먼저 닫기
+            self._close_law()
+        if self._kcsc_panel is not None:
+            if self._kcsc_window is not None:
+                self._kcsc_window.raise_(); self._kcsc_window.activateWindow()
+            return
+        from viewer.widgets.kcsc_search_dialog import KcscSearchPanel
+        self._kcsc_panel = KcscSearchPanel(key, self)
+        self._kcsc_panel.closeRequested.connect(self._close_kcsc)
+        self._kcsc_panel.fullscreenToggled.connect(self._toggle_kcsc_fullscreen)
+        self._enter_kcsc_layout()
+
+    def _enter_kcsc_layout(self):
+        try:
+            self._kcsc_saved = {
+                "splitter": self.splitter.saveState(),
+                "search": self.act_toggle_search.isChecked(),
+                "shot": self.act_toggle_shot.isChecked(),
+                "split": self.act_split.isChecked(),
+                "handle": self.splitter.handleWidth(),
+            }
+            self.act_toggle_search.setChecked(False)
+            self.act_toggle_shot.setChecked(False)
+            if self.act_split.isChecked():
+                self.act_split.setChecked(False)
+            self._sync_right_layout()
+            self.splitter.addWidget(self._kcsc_panel)
+            self.splitter.setHandleWidth(8)
+            for i in range(self.splitter.count()):
+                self.splitter.setCollapsible(i, True)
+            il = self.splitter.indexOf(self._kcsc_panel)
+            if 0 <= il < self.splitter.count():
+                self.splitter.setCollapsible(il, False)
+            self._kcsc_panel.set_fullscreen(False)
+            self._apply_kcsc_embed_sizes()
+        except Exception:
+            pass
+
+    def _apply_kcsc_embed_sizes(self):
+        try:
+            n = self.splitter.count()
+            total = sum(self.splitter.sizes()) or max(1100, self.width())
+            bk, th = 170, 120
+            im = self.splitter.indexOf(self.main_split)
+            il = self.splitter.indexOf(self._kcsc_panel)
+            ith = self.splitter.indexOf(self.page_thumbs)
+            rest = max(420, total - bk - th)
+            vw = rest // 2
+            lw = rest - vw
+            sizes = [0] * n
+            sizes[0] = bk
+            if 0 <= ith < n:
+                sizes[ith] = th
+            if 0 <= im < n:
+                sizes[im] = vw
+            if 0 <= il < n:
+                sizes[il] = lw
+            self.splitter.setSizes(sizes)
+        except Exception:
+            pass
+
+    def _toggle_kcsc_fullscreen(self):
+        if self._kcsc_panel is None:
+            return
+        from viewer.widgets.kcsc_search_dialog import KcscHostWindow
+        if self._kcsc_window is None:
+            self._kcsc_embed_sizes = self.splitter.sizes()
+            self._kcsc_window = KcscHostWindow()
+            self._kcsc_window.setWindowTitle("건설기준(KCSC) (전체화면)")
+            from PyQt6.QtWidgets import QVBoxLayout
+            lay = QVBoxLayout(self._kcsc_window)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.addWidget(self._kcsc_panel)
+            self._kcsc_window.closed.connect(self._embed_kcsc_from_window)
+            self._kcsc_panel.set_fullscreen(True)
+            self._kcsc_window.showMaximized()
+        else:
+            self._embed_kcsc_from_window()
+
+    def _embed_kcsc_from_window(self):
+        if self._kcsc_panel is None:
+            return
+        win = self._kcsc_window
+        self._kcsc_window = None
+        try:
+            self.splitter.addWidget(self._kcsc_panel)
+            self._kcsc_panel.set_fullscreen(False)
+            saved = getattr(self, "_kcsc_embed_sizes", None)
+            if saved and len(saved) == self.splitter.count():
+                self.splitter.setSizes(saved)
+            else:
+                self._apply_kcsc_embed_sizes()
+            self._kcsc_panel.show()
+        except Exception:
+            pass
+        if win is not None:
+            try:
+                win.closed.disconnect()
+            except Exception:
+                pass
+            win.deleteLater()
+
+    def _close_kcsc(self):
+        panel = self._kcsc_panel
+        win = self._kcsc_window
+        self._kcsc_panel = None
+        self._kcsc_window = None
+        try:
+            if panel is not None:
+                panel.setParent(None)
+                panel.deleteLater()
+            if win is not None:
+                try:
+                    win.closed.disconnect()
+                except Exception:
+                    pass
+                win.close()
+                win.deleteLater()
+        except Exception:
+            pass
+        s = getattr(self, "_kcsc_saved", None) or {}
+        try:
+            if "handle" in s:
+                self.splitter.setHandleWidth(s["handle"])
+            if "search" in s:
+                self.act_toggle_search.setChecked(s["search"])
+            if "shot" in s:
+                self.act_toggle_shot.setChecked(s["shot"])
+            if "split" in s:
                 self.act_split.setChecked(s["split"])
             self._sync_right_layout()
             if s.get("splitter"):
@@ -7164,6 +7323,7 @@ class MainWindow(QMainWindow):
         self._prefs.setdefault("stdict_key", "")
         self._prefs.setdefault("onterm_key", "")
         self._prefs.setdefault("law_oc", "")
+        self._prefs.setdefault("kcsc_key", "")        # 260618-37: 국가건설기준센터 OPEN API 키
         self._apply_prefs(self._prefs)
         # 260606-19: 단축키 오버라이드 적용
         try:
@@ -7396,6 +7556,7 @@ class MainWindow(QMainWindow):
             "stdict_key": str(prefs.get("stdict_key", old.get("stdict_key", ""))),
             "onterm_key": str(prefs.get("onterm_key", old.get("onterm_key", ""))),
             "law_oc": str(prefs.get("law_oc", old.get("law_oc", ""))),
+            "kcsc_key": str(prefs.get("kcsc_key", old.get("kcsc_key", ""))),  # 260618-37
             # 260618-11: 업데이트(GitHub Releases)
             "update_repo": str(prefs.get("update_repo", old.get("update_repo", ""))),
             "auto_check_update": bool(prefs.get("auto_check_update",

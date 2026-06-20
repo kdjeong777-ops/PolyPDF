@@ -166,6 +166,9 @@ class SettingsDialog(QDialog):
         self.ed_law_oc = _QLe(str(self._prefs.get("law_oc", "")))
         self.ed_law_oc.setPlaceholderText("법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)")
         ol.addRow("법제처 OC:", self.ed_law_oc)
+        self.ed_kcsc_key = _QLe(str(self._prefs.get("kcsc_key", "")))   # 260618-37
+        self.ed_kcsc_key.setPlaceholderText("국가건설기준센터(KCSC) OPEN API 키 (무료 발급)")
+        ol.addRow("KCSC 키:", self.ed_kcsc_key)
         ol.addRow(QLabel("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
                          "한국어 사전은 위 키 입력 시 사용.</small>"))
         layout.addWidget(grp_od)
@@ -320,4 +323,5 @@ class SettingsDialog(QDialog):
             "stdict_key": self.ed_stdict_key.text().strip(),
             "onterm_key": self.ed_onterm_key.text().strip(),
             "law_oc": self.ed_law_oc.text().strip(),
+            "kcsc_key": self.ed_kcsc_key.text().strip(),   # 260618-37
         }
