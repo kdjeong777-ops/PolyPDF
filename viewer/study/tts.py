@@ -93,12 +93,22 @@ class TTS:
         # 260618-7: 발화 직후 SAPI 가 아직 RunningState==speaking 으로 전환되기 전
         #   (비동기 시작 레이스)에는 '말하는 중'으로 간주해 폴링 루프가 첫 발화를
         #   퍼지·건너뛰지 않게 한다. 한 번이라도 speaking 을 본 뒤 Done 이면 진짜 종료.
+        # 260618-26: 일부 환경(특정 SAPI/EXE)에서 RunningState 가 speaking 으로 전혀
+        #   바뀌지 않아 0.6s 유예 후 곧바로 다음 문장을 PURGE → 들리기도 전에 끊겨
+        #   '무음'처럼 되는 문제 → 유예를 1.5s 로 늘림. (정상 환경은 speaking 을 보는
+        #   즉시 _spk_seen 으로 전환되므로 영향 없음.)
         if self._spk_issued and not self._spk_seen:
             import time as _t
-            if (_t.time() - self._spk_t0) < 0.6:
+            if (_t.time() - self._spk_t0) < 1.5:
                 return True
             self._spk_issued = False     # 유예 경과 — 시작 실패로 보고 진행
         return False
+
+    def saw_speaking(self) -> bool:
+        """260618-26: 이번 발화에서 RunningState==speaking 을 실제로 관측했는지.
+        False 면 엔진의 발화상태 보고를 신뢰할 수 없으므로(읽기 루프가) 추정 발화시간을
+        대신 사용한다."""
+        return bool(self._spk_seen)
 
     def word_span(self):
         """현재 읽는 단어의 (입력텍스트내 문자위치, 길이). 없으면 None. (카라오케 표시용)"""

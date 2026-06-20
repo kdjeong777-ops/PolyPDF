@@ -72,6 +72,8 @@ class ReadAloud(QObject):
         self._owptr = 0              # 카라오케 매칭 포인터
         self._oscale = 1.0
         self._last_span = None
+        self._spk_started = 0.0       # 260618-26: 현재 문장 발화 시작 시각
+        self._cur_min_dur = 0.0       # 260618-26: 현재 문장 최소 보장 발화시간
         self._timer = QTimer(self)
         self._timer.setInterval(120)     # 카라오케 추종 위해 빠르게 폴링
         self._timer.timeout.connect(self._tick)
@@ -288,11 +290,22 @@ class ReadAloud(QObject):
         except Exception:
             return None
 
+    def _estimate_dur(self, s: str) -> float:
+        """260618-26: 문장 발화 추정 시간(초). 엔진이 발화상태를 보고하지 않는 환경에서
+        문장이 다 읽히기 전에 다음 문장으로 넘어가(PURGE) '무음'이 되는 것을 막는 하한."""
+        n = max(1, len(s.strip()))
+        cps = 7.0 if _HANGUL.search(s) else 12.0       # 초당 글자수(대략)
+        cps *= max(0.4, 1.0 + (self.rate * 0.06))      # 빠르기 반영
+        return max(0.5, n / cps)
+
     def _speak_cur(self):
         if 0 <= self._si < len(self._sents):
+            import time
             s = self._sents[self._si]
             self._highlight_sentence(self._si)         # 읽는 '문장' 전체 강조
             lang = "kor" if _HANGUL.search(s) else "eng"
+            self._spk_started = time.time()            # 260618-26: 발화 시작 시각
+            self._cur_min_dur = self._estimate_dur(s)  # 260618-26: 최소 보장 시간
             # 260618-25: speak() 실패(False)는 종전엔 무시되어 '무음'으로만 보였음 →
             #   사용자에게 원인을 알려 진단 가능하게 함(엔진은 재초기화 후 재시도까지 수행).
             ok = self.mw._study_get_tts().speak(s, lang)
@@ -309,6 +322,17 @@ class ReadAloud(QObject):
         tts = self.mw._study_get_tts()
         if tts.is_speaking():
             return                                      # 문장 단위 강조라 폴링 중 갱신 불필요
+        # 260618-26: 엔진이 'speaking' 을 한 번도 보고하지 않은 경우(상태 보고 불가 환경)
+        #   추정 발화시간이 지나기 전에는 넘어가지 않음 → 문장이 끊겨 무음되는 것 방지.
+        #   (정상 환경은 saw_speaking()=True 라 즉시 다음 문장으로 진행 — 지연 없음.)
+        try:
+            if not tts.saw_speaking():
+                import time
+                if (time.time() - getattr(self, "_spk_started", 0.0)
+                        ) < getattr(self, "_cur_min_dur", 0.0):
+                    return
+        except Exception:
+            pass
         # 현재 문장 끝 → 다음
         self._si += 1
         if self._si < len(self._sents):

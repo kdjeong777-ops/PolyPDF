@@ -281,7 +281,7 @@ class SettingsDialog(QDialog):
         self._host._prefs["recording_audio_mode"] = self.cmb_audio.currentData()
         self._host._prefs["recording_mic"] = self.cmb_mic.currentText().strip()
         self._host._prefs["recording_system"] = self.cmb_sys.currentText().strip()
-        QMessageBox.information(self, "녹화 테스트", "3초간 화면을 녹화합니다…")
+        # 260618-26: 사전 확인 없이 바로 테스트 녹화 진행(요청) — 결과만 아래에 표시.
         ok, msg = self._host._test_recording(self)
         # 260611-25: 합격 결과 기록(녹화 시작 전 게이트에서 확인)
         self._host._prefs["recording_test_ok"] = bool(ok)

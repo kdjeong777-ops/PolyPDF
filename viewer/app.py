@@ -850,53 +850,62 @@ class MainWindow(QMainWindow):
                 pass
 
     def _view_as_split(self):
-        """260618-25(우클릭 '2단창 보기'): 1단 → 2단. 현재(좌측) 책갈피를 우측에도 복사하고
-        지금 보던 파일·페이지가 우측 창에 보이게 한다."""
+        """260618-26(우클릭 '2단창 보기'): 1단 → 2단. **2창(우측)에 기존 내용이 없을 때만**
+        1창(좌측)에서 보던 화면(파일·페이지)과 책갈피를 2창에 복사한다. 우측에 이미 내용이
+        있으면(이전 2단 작업분) 그대로 두고 2단으로만 전환한다."""
         if getattr(self, "_split_on", False):
             return
-        src = self._mv[0]
-        f = src.current_file()
-        pg = src.current_page() if f else 0
+        left = self._mv[0]
+        lf = left.current_file()
+        lpg = left.current_page() if lf else 0
         self._toggle_split(True)
         try:
             self.act_split.setChecked(True)
         except Exception:
             pass
-        # 우측 책갈피 = 좌측 폴더(복사) → 하단 책갈피창 표시
-        if getattr(self, "_folder", None):
-            self._set_pane_folder(1, self._folder)
-        self._set_active_pane(1)
-        if f:
-            self._load_main(HistoryItem(str(f), pg, "", "bookmark"))
+        right_empty = (self._mv[1].current_file() is None)
+        if right_empty:
+            # 2창 비어 있음 → 1창의 책갈피·화면을 우측에 복사
+            if getattr(self, "_folder", None):
+                self._set_pane_folder(1, self._folder)
+            self._set_active_pane(1)
+            if lf:
+                self._load_main(HistoryItem(str(lf), lpg, "", "bookmark"))
+        else:
+            # 2창에 기존 내용 보존 → 우측 책갈피 갱신 후 우측 활성화
+            self._set_active_pane(1)
+            self._sync_right_pane_bookmark()
         self._sync_split_menu_state()
 
-    def _view_as_single(self, keep_pane: int = 1):
-        """260618-25(우클릭 '1단창 보기'): 2단 → 1단. 보존할 창(keep_pane)의 책갈피와
-        현재 파일·페이지를 단일(좌측) 창으로 옮긴다('2단창 보기'의 반대)."""
+    def _view_as_single(self, *_a):
+        """260618-26(우클릭 '1단창 보기'): 2단 → 1단. **2창(우측)에서 보던 화면(파일·페이지)과
+        책갈피를 1창(좌측)으로 복사**한 뒤 단일 창으로 전환한다('2단창 보기'의 반대 방향).
+        2창이 비어 있으면 좌측 현재 내용을 유지한 채 1단으로만 전환."""
         if not getattr(self, "_split_on", False):
             return
-        keep_pane = 1 if keep_pane not in (0, 1) else keep_pane
-        src = self._mv[keep_pane]
-        f = src.current_file()
-        pg = src.current_page() if f else 0
-        folder = (self._folder_right if keep_pane == 1 else self._folder)
+        right = self._mv[1]
+        rf = right.current_file()
+        rpg = right.current_page() if rf else 0
+        folder = getattr(self, "_folder_right", None)
         self._toggle_split(False)               # 우측 숨김, 활성=좌측(0)
         try:
             self.act_split.setChecked(False)
         except Exception:
             pass
-        if folder:
-            self._set_pane_folder(0, folder)
-        if f:
-            self._load_main(HistoryItem(str(f), pg, "", "bookmark"))
+        if rf:
+            if folder:
+                self._set_pane_folder(0, folder)
+            self._set_active_pane(0)
+            self._load_main(HistoryItem(str(rf), rpg, "", "bookmark"))
         self._sync_split_menu_state()
 
     def _on_split_view_requested(self, want_dual: bool, from_pane: int = 0):
-        """260618-25: 책갈피/뷰어 우클릭의 1단/2단 보기 전환 핸들러."""
+        """260618-26: 책갈피/뷰어 우클릭의 1단/2단 보기 전환 핸들러.
+        2단창 보기=1창→2창(우측 비었을 때만), 1단창 보기=2창→1창."""
         if want_dual:
             self._view_as_split()
         else:
-            self._view_as_single(from_pane)
+            self._view_as_single()
 
     def _on_pane_page_changed(self, i: int, page: int):
         if i != self._active_pane:
