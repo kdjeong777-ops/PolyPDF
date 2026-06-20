@@ -293,7 +293,15 @@ class ReadAloud(QObject):
             s = self._sents[self._si]
             self._highlight_sentence(self._si)         # 읽는 '문장' 전체 강조
             lang = "kor" if _HANGUL.search(s) else "eng"
-            self.mw._study_get_tts().speak(s, lang)
+            # 260618-25: speak() 실패(False)는 종전엔 무시되어 '무음'으로만 보였음 →
+            #   사용자에게 원인을 알려 진단 가능하게 함(엔진은 재초기화 후 재시도까지 수행).
+            ok = self.mw._study_get_tts().speak(s, lang)
+            if not ok:
+                try:
+                    self.mw.status.showMessage(
+                        "음성 출력에 실패했습니다(SAPI 음성 확인). 다시 시도해 주세요.", 4000)
+                except Exception:
+                    pass
 
     def _tick(self):
         if not self._active:

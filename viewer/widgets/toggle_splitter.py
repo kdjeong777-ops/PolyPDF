@@ -12,7 +12,8 @@ from PyQt6.QtCore import Qt
 
 class _ToggleHandle(QSplitterHandle):
     def paintEvent(self, ev):
-        """260618-10: 손잡이 중앙에 잡기 좋은 그립 표식 — 더 진하고 길게."""
+        """260618-10: 손잡이 중앙에 잡기 좋은 그립 표식 — 더 진하고 길게.
+        260618-25: 중간 그립 길이를 종전의 50% 로 축소(요청)."""
         super().paintEvent(ev)
         try:
             p = QPainter(self)
@@ -21,15 +22,15 @@ class _ToggleHandle(QSplitterHandle):
             p.setBrush(QColor(110, 110, 110))     # 진한 회색(라이트/다크 모두 보임)
             r = self.rect()
             if self.orientation() == Qt.Orientation.Horizontal:
-                # 가로 스플리터 → 세로 손잡이: 중앙에 '긴' 세로 그립
+                # 가로 스플리터 → 세로 손잡이: 중앙에 세로 그립(종전의 절반 길이)
                 gw = min(4, r.width())
-                gh = int(min(160, max(80, r.height() * 0.35)))
+                gh = int(min(80, max(40, r.height() * 0.175)))
                 x = (r.width() - gw) / 2.0
                 y = (r.height() - gh) / 2.0
                 p.drawRoundedRect(int(x), int(y), gw, gh, 2, 2)
             else:
                 gh = min(4, r.height())
-                gw = int(min(160, max(80, r.width() * 0.35)))
+                gw = int(min(80, max(40, r.width() * 0.175)))
                 x = (r.width() - gw) / 2.0
                 y = (r.height() - gh) / 2.0
                 p.drawRoundedRect(int(x), int(y), gw, gh, 2, 2)

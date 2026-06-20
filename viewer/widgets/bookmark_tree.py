@@ -132,6 +132,7 @@ class BookmarkTree(QWidget):
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
     fileOpCompleted = pyqtSignal(str, str)   # v1.6.21: (old, new) new=="" 삭제, new==old 실패
+    splitViewRequested = pyqtSignal(bool)    # 260618-25: 1단/2단 보기 전환(True=2단창 보기)
 
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
@@ -149,6 +150,7 @@ class BookmarkTree(QWidget):
         super().__init__(parent)
         self._root_dir: Optional[Path] = None
         self._edit_mode: bool = False               # v1.6.18
+        self._split_on: bool = False                # 260618-25: 우클릭 1단/2단 라벨용
         self._mode: str = "none"                    # v1.6.19: none|json|flat|single
         self._pdfs_flat: list = []                  # v1.6.19: 평탄 모드 파일 캐시
         self._dirty: bool = False                   # 260606-4: 편집 변경 여부
@@ -857,6 +859,14 @@ class BookmarkTree(QWidget):
             sel_files = []
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
+        # 260618-25: 1단↔2단 보기 전환(맨 위)
+        if self._split_on:
+            act_split_view = menu.addAction("1단창 보기")
+            _split_want = False
+        else:
+            act_split_view = menu.addAction("2단창 보기")
+            _split_want = True
+        menu.addSeparator()
         act_merge = None
         if sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
             act_merge = menu.addAction(f"선택 {len(sel_files)}개 파일 병합...")
@@ -885,6 +895,8 @@ class BookmarkTree(QWidget):
         chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
         if chosen is None:
             return
+        if chosen == act_split_view:
+            self.splitViewRequested.emit(_split_want); return
         if chosen == act_merge:
             self.mergeFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
         elif act_password is not None and chosen == act_password:
@@ -922,6 +934,10 @@ class BookmarkTree(QWidget):
 
     def is_edit_mode(self) -> bool:
         return self._edit_mode
+
+    def set_split_state(self, on: bool) -> None:
+        """260618-25: 현재 1단/2단 상태(우클릭 메뉴 라벨 결정용)."""
+        self._split_on = bool(on)
 
     def set_edit_mode(self, on: bool):
         on = bool(on)

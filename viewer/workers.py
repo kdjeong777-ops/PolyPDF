@@ -36,7 +36,12 @@ class IndexWorker(QObject):
                     if self._cancel:
                         return
                     self.progress.emit(0, 1, str(self.single_file))
-                    idx.index_file(Path(self.single_file))
+                    # 260618-25: 이름(경로)·수정시각·크기 동일하면 재인덱싱 생략
+                    #   (폴더 인덱싱과 동일한 needs_reindex 가드 — 단일 파일 열기마다
+                    #    무조건 재인덱싱하던 비효율 제거).
+                    p = Path(self.single_file)
+                    if idx.needs_reindex(p):
+                        idx.index_file(p)
                     self.progress.emit(1, 1, str(self.single_file))
                 else:
                     idx.index_folder(

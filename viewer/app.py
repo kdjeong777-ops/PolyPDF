@@ -836,6 +836,67 @@ class MainWindow(QMainWindow):
         self._sync_right_layout()                          # 260606-19: 드로어/컬럼 통합 동기화
         self._set_active_pane(self._active_pane if on else 0)
         self._sync_right_pane_bookmark()                   # 260618-19: 우측 다른폴더 파일 표시 갱신
+        self._sync_split_menu_state()                      # 260618-25: 우클릭 1단/2단 라벨
+
+    def _sync_split_menu_state(self):
+        """260618-25: 책갈피 트리 우클릭 메뉴의 1단/2단 라벨용 상태 전달."""
+        on = bool(getattr(self, "_split_on", False))
+        for t in (getattr(self, "bookmark_tree", None),
+                  getattr(self, "bookmark_tree_right", None)):
+            try:
+                if t is not None:
+                    t.set_split_state(on)
+            except Exception:
+                pass
+
+    def _view_as_split(self):
+        """260618-25(우클릭 '2단창 보기'): 1단 → 2단. 현재(좌측) 책갈피를 우측에도 복사하고
+        지금 보던 파일·페이지가 우측 창에 보이게 한다."""
+        if getattr(self, "_split_on", False):
+            return
+        src = self._mv[0]
+        f = src.current_file()
+        pg = src.current_page() if f else 0
+        self._toggle_split(True)
+        try:
+            self.act_split.setChecked(True)
+        except Exception:
+            pass
+        # 우측 책갈피 = 좌측 폴더(복사) → 하단 책갈피창 표시
+        if getattr(self, "_folder", None):
+            self._set_pane_folder(1, self._folder)
+        self._set_active_pane(1)
+        if f:
+            self._load_main(HistoryItem(str(f), pg, "", "bookmark"))
+        self._sync_split_menu_state()
+
+    def _view_as_single(self, keep_pane: int = 1):
+        """260618-25(우클릭 '1단창 보기'): 2단 → 1단. 보존할 창(keep_pane)의 책갈피와
+        현재 파일·페이지를 단일(좌측) 창으로 옮긴다('2단창 보기'의 반대)."""
+        if not getattr(self, "_split_on", False):
+            return
+        keep_pane = 1 if keep_pane not in (0, 1) else keep_pane
+        src = self._mv[keep_pane]
+        f = src.current_file()
+        pg = src.current_page() if f else 0
+        folder = (self._folder_right if keep_pane == 1 else self._folder)
+        self._toggle_split(False)               # 우측 숨김, 활성=좌측(0)
+        try:
+            self.act_split.setChecked(False)
+        except Exception:
+            pass
+        if folder:
+            self._set_pane_folder(0, folder)
+        if f:
+            self._load_main(HistoryItem(str(f), pg, "", "bookmark"))
+        self._sync_split_menu_state()
+
+    def _on_split_view_requested(self, want_dual: bool, from_pane: int = 0):
+        """260618-25: 책갈피/뷰어 우클릭의 1단/2단 보기 전환 핸들러."""
+        if want_dual:
+            self._view_as_split()
+        else:
+            self._view_as_single(from_pane)
 
     def _on_pane_page_changed(self, i: int, page: int):
         if i != self._active_pane:
@@ -864,16 +925,28 @@ class MainWindow(QMainWindow):
         self._update_title()
 
     def _sync_right_pane_bookmark(self):
-        """하단(우측) 책갈피 표시/숨김 — 2단이고 우측 폴더가 있으며 좌측과 다를 때만 표시."""
+        """하단(우측) 책갈피 표시/숨김.
+        260618-25: 2단 보기에서는 좌/우 폴더가 같아도 **항상 하단 책갈피창을 표시**(요청).
+        우측 폴더가 비어 있으면 좌측 폴더로 미러링해 하단이 비지 않게 한다.
+        (종전 v2.30.0: '좌측과 다를 때만 표시' → 본 요청으로 대체.)"""
         rt = getattr(self, "bookmark_tree_right", None)
         if rt is None:
             return
+        if not getattr(self, "_split_on", False):
+            rt.hide()
+            return
         lf = getattr(self, "_folder", None)
         rf = getattr(self, "_folder_right", None)
-        show = bool(getattr(self, "_split_on", False) and rf
-                    and (lf is None or str(Path(rf)) != str(Path(lf))))
-        if not show:
-            rt.hide()
+        # 우측 폴더가 없으면 좌측과 동일하게(미러) — 2단이면 하단을 반드시 채움
+        if rf is None and lf is not None:
+            self._folder_right = lf
+            try:
+                self.bookmark_tree_right.load_folder(lf)
+            except Exception:
+                pass
+            rf = lf
+        if rf is None:
+            rt.hide()           # 양쪽 모두 폴더 없음(표시할 책갈피 없음)
             return
         rt.show()
         try:
@@ -1637,6 +1710,11 @@ class MainWindow(QMainWindow):
         self.bookmark_tree.bookmarkActivated.connect(self._on_bookmark_activated)
         # 260618-22: 하단(우측) 책갈피 → 우측 창에 열기
         self.bookmark_tree_right.bookmarkActivated.connect(self._on_bookmark_activated_right)
+        # 260618-25: 책갈피 우클릭 1단/2단 보기(상=좌측 기준, 하=우측 기준)
+        self.bookmark_tree.splitViewRequested.connect(
+            lambda want: self._on_split_view_requested(want, 0))
+        self.bookmark_tree_right.splitViewRequested.connect(
+            lambda want: self._on_split_view_requested(want, 1))
         self.page_thumbs.pageActivated.connect(lambda pg: self.main_view.go_to_page(pg))
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
@@ -2474,6 +2552,13 @@ class MainWindow(QMainWindow):
         act_print1 = menu.addAction(f"현재 페이지 인쇄 (p.{page})")
         act_print1.setEnabled(can_print)
         menu.addSeparator()
+        # 260618-25: 1단↔2단 보기 전환(우클릭 옵션)
+        act_to_dual = act_to_single = None
+        if getattr(self, "_split_on", False):
+            act_to_single = menu.addAction("1단창 보기")
+        else:
+            act_to_dual = menu.addAction("2단창 보기")
+        menu.addSeparator()
         act_add = menu.addAction(f"책갈피 추가 (p.{page})") if edit else None
         # 260609-11(C1): 하이퍼링크 등록은 편집모드에서만
         act_hl = menu.addAction(f"하이퍼링크 등록… (p.{page})") if edit else None
@@ -2543,6 +2628,11 @@ class MainWindow(QMainWindow):
         chosen = menu.exec(global_pos)
         if chosen is None:
             return
+        # 260618-25: 1단/2단 보기 전환(우클릭한 창을 기준으로)
+        if act_to_dual is not None and chosen == act_to_dual:
+            self._view_as_split(); return
+        if act_to_single is not None and chosen == act_to_single:
+            self._view_as_single(self._active_pane); return
         # 260617-2: 텍스트 복사(블럭/페이지)·블럭설정·현재 페이지 인쇄
         if chosen == act_copy:
             self.main_view.copy_selection(); return

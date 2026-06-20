@@ -18,6 +18,7 @@ class TTS:
         self._by_name = {}        # 성우 이름 -> token
         self._ok = None
         self._forced = None       # 사용자가 고른 성우 토큰(있으면 우선)
+        self._forced_name = None  # 260618-25: 고른 성우 '이름'(재초기화 후 토큰 재해석용)
         # 260618-7: 비동기 발화 시작 레이스 보정용 — 발화 직후 RunningState 가 잠시
         #   Done(1) 로 보여 자동읽기 폴링이 첫 단어를 건너뛰던(무음) 문제 방지.
         self._spk_t0 = 0.0        # 마지막 speak 시각
@@ -54,7 +55,21 @@ class TTS:
     def set_voice_name(self, name: Optional[str]) -> None:
         """성우 고정(None 이면 언어 자동)."""
         self._ensure()
+        self._forced_name = name or None
         self._forced = self._by_name.get(name) if name else None
+
+    def _reinit(self) -> bool:
+        """260618-25: 캐시된 SpVoice 가 일부 환경에서 깨져 무음이 될 때 1회 재초기화.
+        성우 토큰은 새로 열거되므로, 고른 성우는 '이름' 으로 다시 해석한다."""
+        self._ok = None
+        self._voice = None
+        self._tok = {"kor": None, "eng": None}
+        self._by_name = {}
+        self._forced = None
+        self._ensure()
+        if self._ok and self._forced_name:
+            self._forced = self._by_name.get(self._forced_name)
+        return bool(self._ok and self._voice is not None)
 
     def set_rate(self, rate: int) -> None:
         """빠르기 -10(느림)~10(빠름)."""
@@ -108,20 +123,38 @@ class TTS:
         self._ensure()
         if not self._ok or self._voice is None:
             return False
-        try:
+        flags = _ASYNC if queue else (_ASYNC | _PURGE)
+
+        def _do() -> bool:
             tok = self._select(lang)
-            if tok is not None and self._voice.Voice != tok:
-                self._voice.Voice = tok
-            flags = _ASYNC if queue else (_ASYNC | _PURGE)
+            if tok is not None:
+                # 260618-25: 성우 설정은 별도 try — 일부 환경에서 COM 토큰 비교/설정이
+                #   예외를 던져도 '발화 자체'는 막지 않도록(무음 방지).
+                try:
+                    if self._voice.Voice != tok:
+                        self._voice.Voice = tok
+                except Exception:
+                    try:
+                        self._voice.Voice = tok
+                    except Exception:
+                        pass
             self._voice.Speak(text, flags)
-            # 260618-7: 시작 레이스 보정 상태 갱신
             import time as _t
             self._spk_t0 = _t.time()
             self._spk_issued = True
             if not queue:
                 self._spk_seen = False
             return True
+
+        try:
+            return _do()
         except Exception:
+            # 260618-25: 캐시된 음성 객체가 깨진 경우 1회 재초기화 후 재시도(무음 복구)
+            try:
+                if self._reinit():
+                    return _do()
+            except Exception:
+                pass
             return False
 
     def stop(self) -> None:
