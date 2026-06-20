@@ -73,6 +73,20 @@ jobs:
           echo "full=$full" >> $env:GITHUB_OUTPUT
           echo "upd=$upd" >> $env:GITHUB_OUTPUT
 
+      # --- 설치 프로그램(setup.exe): Program Files 설치 + PDF 기본앱 연결 + API키 안내 ---
+      - name: Build installer (Inno Setup)
+        id: inst
+        continue-on-error: true        # 설치본 실패해도 zip 릴리스는 계속
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe" }
+          $ver = (Select-String -Path "viewer\__init__.py" -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          & $iscc "/DMyAppVersion=$ver" "installer\PolyPDF.iss"
+          $setup = "PolyPDF-Setup-v$ver.exe"
+          if (Test-Path $setup) { echo "setup=$setup" >> $env:GITHUB_OUTPUT; echo "installer built: $setup" }
+          else { echo "installer NOT built" }
+
       - name: Upload build artifact (always)
         uses: actions/upload-artifact@v4
         with:
@@ -80,6 +94,7 @@ jobs:
           path: |
             ${{ steps.pkg.outputs.full }}
             ${{ steps.pkg.outputs.upd }}
+            ${{ steps.inst.outputs.setup }}
 
       - name: Create or update GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
@@ -89,12 +104,15 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $full = "${{ steps.pkg.outputs.full }}"
           $upd  = "${{ steps.pkg.outputs.upd }}"
-          # 이미 릴리스가 있으면(수동으로 좋은 번들 자산 업로드한 경우) CI 가 덮어쓰지 않음 —
-          # 없는 자산만 보충 시도하고 항상 성공 종료(수동 자산 보존). 없으면 새로 생성.
+          $setup = "${{ steps.inst.outputs.setup }}"
+          # 자산 목록(설치본은 빌드된 경우에만 포함)
+          $assets = @($full, $upd)
+          if ($setup -and (Test-Path $setup)) { $assets += $setup }
+          # 이미 릴리스가 있으면 없는 자산만 보충(수동 자산 보존). 없으면 새로 생성.
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $full $upd 2>$null
+            gh release upload $tag $assets 2>$null
             exit 0
           } else {
-            gh release create $tag $full $upd --title "PolyPDF $tag" --generate-notes
+            gh release create $tag $assets --title "PolyPDF $tag" --generate-notes
           }

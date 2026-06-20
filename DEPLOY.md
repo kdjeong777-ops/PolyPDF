@@ -94,9 +94,34 @@ gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpe
 
 ---
 
+## 3-d. 설치 프로그램(setup.exe) — Program Files 설치본 (260618-30)
+
+zip(압축 풀어 실행) 외에 **정식 설치 프로그램**도 함께 배포합니다.
+
+- 정의: [`installer/PolyPDF.iss`](installer/PolyPDF.iss) (Inno Setup 6), 안내문 [`installer/guide_ko.txt`](installer/guide_ko.txt).
+- **CI 자동 빌드**: 태그 push 시 `release.yml` 이 Inno Setup(choco)을 설치해 컴파일 →
+  **`PolyPDF-Setup-v<ver>.exe`** 를 zip 2종과 함께 릴리스 자산으로 업로드(설치본 실패해도 zip 릴리스는 계속).
+- **로컬 빌드**(선택): `build_ci.bat` 빌드 후
+  `powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1` (Inno Setup 6 필요:
+  `winget install -e --id JRSoftware.InnoSetup`).
+
+설치본이 하는 일:
+- `C:\Program Files\PolyPDF` 에 설치(관리자 권한), 시작 메뉴·(선택)바탕화면 바로가기.
+- **PDF 기본 앱 연결**(체크박스, 기본 꺼짐): PolyPDF 를 `.pdf` 연결 후보로 **등록**(ProgID·RegisteredApplications)
+  하고, 설치 후 **Windows '기본 앱' 설정창**을 열어 사용자가 `.pdf → PolyPDF` 를 직접 선택하게 함.
+  > Windows 10/11 은 보안상 설치 프로그램이 기본 앱을 **자동 강제 지정할 수 없음** → 등록+안내가 정상 방식.
+  > (앱은 `PolyPDF.exe "<file.pdf>"` 인자를 처리하므로 연결 시 더블클릭으로 열림.)
+- **API 키 안내**: 설치 마지막에 `guide_ko.txt`(무료 오픈API 4종 — 표준국어대사전·우리말샘·온용어·법제처 OC —
+  발급 주소와 `설정 → 인터넷 사전` 입력 위치) 표시, `{app}\사용안내(API키).txt` 로도 동봉.
+
+> 자동 업데이트(도움말 → 업데이트 확인)는 설치본에도 동일 적용되나, 교체는 설치 폴더(Program Files)에
+> 쓰기가 필요하므로 관리자 권한으로 실행됐을 때 적용됩니다. (zip 설치본은 권한 제약 없음.)
+
+---
+
 ## 4. 참고 / 주의
 
-- **서명 안 된 exe**: 첫 실행 시 SmartScreen 경고(정상). 없애려면 코드서명 인증서(유료).
+- **서명 안 된 exe/setup**: 첫 실행 시 SmartScreen 경고(정상). 없애려면 코드서명 인증서(유료).
 - **zip 크기**: full 은 ffmpeg·Tesseract·모델 포함으로 큼(dist 약 780MB, zip 은 압축되어 작음).
   **update zip 은 그 무거운 불변부(≈290MB)를 빼서** 자동 업데이트가 그만큼 가볍습니다. 첫 설치만
   full, 이후는 update.
