@@ -74,6 +74,14 @@ class ReadAloud(QObject):
         self._last_span = None
         self._spk_started = 0.0       # 260618-26: 현재 문장 발화 시작 시각
         self._cur_min_dur = 0.0       # 260618-26: 현재 문장 최소 보장 발화시간
+        # 260618-29: 읽는 중 사용자가 페이지를 바꾸면 그 페이지부터 다시 읽기.
+        #   _reading_page=리더가 현재 읽는 페이지(리더 자신의 페이지 넘김과 사용자 이동 구분).
+        self._reading_page = -1
+        self._pending_restart_page = None
+        self._restart_timer = QTimer(self)
+        self._restart_timer.setSingleShot(True)
+        self._restart_timer.setInterval(250)      # 빠른 연속 이동은 멈춘 뒤 1회만 재시작
+        self._restart_timer.timeout.connect(self._do_restart)
         self._timer = QTimer(self)
         self._timer.setInterval(120)     # 카라오케 추종 위해 빠르게 폴링
         self._timer.timeout.connect(self._tick)
@@ -173,6 +181,9 @@ class ReadAloud(QObject):
     def stop(self):
         self._active = False
         self._timer.stop()
+        self._restart_timer.stop()        # 260618-29
+        self._pending_restart_page = None
+        self._reading_page = -1
         try:
             self.mw._study_get_tts().stop()
         except Exception:
@@ -197,12 +208,46 @@ class ReadAloud(QObject):
         if not self._pages:
             self.stop(); return
         page = self._pages[self._pi]
+        self._reading_page = page       # 260618-29: 리더가 읽는 페이지(사용자 이동 구분용)
         self._v.go_to_page(page)        # 읽는 페이지로 화면 자동 이동
         self._sents = sentences_of(self._page_text(page))
         self._si = 0
         self._load_owords(page)
         self._build_spans()
         self._speak_cur()
+
+    def on_page_changed(self, page: int):
+        """260618-29: 읽는 중 '읽기 대상 창'의 페이지가 바뀌면 호출. 리더 자신이 넘긴
+        페이지면 무시, 사용자가 다른 페이지로 이동했으면 그 페이지부터 다시 읽는다.
+        빠른 연속 이동은 디바운스(250ms) 후 1회만 재시작."""
+        if not self._active:
+            return
+        if page == self._reading_page:
+            return                              # 리더가 넘긴 페이지 — 무시
+        self._pending_restart_page = page
+        self._restart_timer.start()
+
+    def _do_restart(self):
+        if not self._active:
+            return
+        page = self._pending_restart_page
+        self._pending_restart_page = None
+        if page is None or page == self._reading_page:
+            return
+        self._restart_at_page(page)
+
+    def _restart_at_page(self, page: int):
+        """현재 읽기 모드·범위를 유지한 채 page 부터 다시 읽기(기존 발화 중단)."""
+        try:
+            self.mw._study_get_tts().stop()
+        except Exception:
+            pass
+        total = self._page_count()
+        page = max(0, min(page, total - 1))
+        all_pages = self.mode in ("전체", "전체연속")
+        self._pages = list(range(page, total)) if all_pages else [page]
+        self._pi = 0
+        self._load_page()
 
     def _load_owords(self, page: int):
         """현재 페이지 단어 좌표(읽기순서) 로드 — 카라오케 하이라이트용."""

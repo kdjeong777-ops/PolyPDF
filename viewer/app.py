@@ -927,6 +927,14 @@ class MainWindow(QMainWindow):
         self._copy_pane_to(src, 1 - src)
 
     def _on_pane_page_changed(self, i: int, page: int):
+        # 260618-29: 본문 읽는 중 그 창의 페이지가 (사용자에 의해) 바뀌면 그 페이지부터 다시 읽기.
+        #   읽기 대상 창(_view) 기준으로 판단하므로 활성창 조기반환보다 먼저 처리.
+        try:
+            ra = self.read_aloud
+            if ra.is_active() and getattr(ra, "_view", None) is self._mv[i]:
+                ra.on_page_changed(page)
+        except Exception:
+            pass
         if i != self._active_pane:
             return
         self.page_thumbs.select_page(page)
