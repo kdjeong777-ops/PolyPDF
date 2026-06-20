@@ -134,7 +134,59 @@ def fetch_content(key: str, ctype: str, code: str, timeout: float = 12.0) -> str
     return fetch_content_debug(key, ctype, code, timeout)[0]
 
 
+def list_codes_debug(key: str, ctype: str = "", query: str = "", timeout: float = 12.0):
+    """260618-38: 건설기준 목록(CodeList). (rows, [진단...]).
+    GET /OpenApi/CodeList?type={KDS|KCS}&key={KEY}  (소문자 파라미터) → JSON 배열.
+    query 가 있으면 이름·코드·fullCode 부분일치로 클라이언트 필터.
+    rows: {code, fullCode, name, ctype, version, updateDate, parents:[..]}."""
+    key = (key or "").strip()
+    ctype = (ctype or "").strip().upper()
+    if not key:
+        return [], ["KCSC 키 없음"]
+    params = {"key": key}
+    if ctype:
+        params["type"] = ctype
+    url = _BASE + "/CodeList?" + urllib.parse.urlencode(params)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read()
+            status = r.status
+        data = json.loads(raw.decode("utf-8", "replace"))
+    except Exception as e:
+        return [], [f"ERR {type(e).__name__}: {str(e)[:90]}"]
+    items = data if isinstance(data, list) else [data]
+    rows = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        name = (str(it.get("name") or "")).strip()
+        code = str(it.get("code") or "").strip()
+        if not (name or code):
+            continue
+        parents = [(p.get("name") or "").strip()
+                   for p in (it.get("listParentCodes") or [])
+                   if isinstance(p, dict) and (p.get("name") or "").strip()]
+        rows.append({
+            "code": code,
+            "fullCode": str(it.get("fullCode") or "").strip(),
+            "name": name,
+            "ctype": str(it.get("codeType") or ctype).strip(),
+            "version": str(it.get("version") or "").strip(),
+            "updateDate": str(it.get("updateDate") or "").strip(),
+            "parents": parents,
+        })
+    q = (query or "").strip().lower()
+    if q:
+        rows = [r for r in rows if q in r["name"].lower()
+                or q in r["code"].lower() or q in r["fullCode"].lower()]
+    if not rows:
+        msg = ""
+        if items and isinstance(items[0], dict):
+            msg = str(items[0].get("message") or "").strip()
+        return [], [f"{status} 결과 없음 — 키/타입 확인" + (f" ({msg})" if msg else "")]
+    return rows, [f"{status} {len(rows)}건"]
+
+
 def list_codes(key: str, ctype: str = "", query: str = "", timeout: float = 12.0):
-    """260618-37: 건설기준 목록(CodeList). **요청 파라미터 미확정** — 추후 지원.
-    현재는 빈 목록을 반환(패널은 코드 직접 입력 방식 사용). 확정 시 여기 구현."""
-    return []
+    return list_codes_debug(key, ctype, query, timeout)[0]

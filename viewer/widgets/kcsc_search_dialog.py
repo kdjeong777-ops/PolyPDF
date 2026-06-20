@@ -1,8 +1,9 @@
-"""건설기준(KCSC) 본문 뷰어 — 국가건설기준센터 OPEN API (260618-37).
+"""건설기준(KCSC) 검색·본문 뷰어 — 국가건설기준센터 OPEN API (260618-37/38).
 
 법령·고시 패널(law_search_dialog)과 동일한 사이드 패널 방식.
-현재(CodeViewer 우선): **코드체계(KDS/KCS) + 코드번호 직접 입력 → 본문 표시**.
-목록(CodeList) 검색은 API 형식 확정 후 추가 예정.
+- 검색: 코드체계(KDS/KCS) + 이름/코드 → CodeList(목록) → 결과 트리.
+- 본문: 결과 선택 → CodeViewer → 우측 표시(절 목록은 결과 항목의 자식으로).
+- 코드 직접 보기: 검색 결과가 없고 입력이 코드면 CodeViewer 직접 시도.
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtGui import QDesktopServices, QShortcut, QKeySequence, QTextDocument
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
-    QComboBox, QListWidget, QListWidgetItem, QTextBrowser, QWidget,
+    QComboBox, QTreeWidget, QTreeWidgetItem, QTextBrowser, QWidget,
 )
 
 from viewer.study.kcsc_api import TYPES, TYPE_NAMES
@@ -18,10 +19,28 @@ from viewer.widgets.toggle_splitter import ToggleSplitter
 from viewer.widgets.icons import themed_icon
 
 _SITE = "https://www.kcsc.re.kr"
+_ROLE_ROW = Qt.ItemDataRole.UserRole + 1       # 결과(row dict)
+_ROLE_ANCHOR = Qt.ItemDataRole.UserRole + 2    # 절 앵커
+
+
+class _ListWorker(QThread):
+    done = pyqtSignal(list, list)              # rows, debug
+
+    def __init__(self, key, ctype, query):
+        super().__init__()
+        self._key, self._ctype, self._q = key, ctype, query
+
+    def run(self):
+        try:
+            from viewer.study.kcsc_api import list_codes_debug
+            rows, dbg = list_codes_debug(self._key, self._ctype, self._q)
+            self.done.emit(rows, dbg)
+        except Exception as e:
+            self.done.emit([], [f"ERR {type(e).__name__}: {e}"])
 
 
 class _ContentWorker(QThread):
-    done = pyqtSignal(str, list, list, dict)      # html, debug, arts, meta
+    done = pyqtSignal(str, list, list, dict)   # html, debug, arts, meta
 
     def __init__(self, key, ctype, code):
         super().__init__()
@@ -46,18 +65,17 @@ class KcscHostWindow(QWidget):
 
 
 class KcscSearchPanel(QWidget):
-    """건설기준(KCSC) 본문 패널. 메인 오른쪽 2단 임베드 / 전체화면 팝아웃."""
+    """건설기준(KCSC) 검색+본문 패널. 메인 오른쪽 2단 임베드 / 전체화면 팝아웃."""
     closeRequested = pyqtSignal()
     fullscreenToggled = pyqtSignal()
 
     def __init__(self, key: str, win=None):
         super().__init__()
-        self.setWindowTitle("건설기준(KCSC) 본문 보기")
+        self.setWindowTitle("건설기준(KCSC) 검색·본문")
         self._key = key
         self._win = win
-        self._cworker = None
-        self._workers: list = []           # 실행 중 스레드 보관(terminate 크래시 방지)
-        self._arts: list = []
+        self._workers: list = []
+        self._cur_item = None        # 본문을 표시 중인 결과 항목(절 자식 부착용)
 
         self.setMinimumWidth(360)
         try:
@@ -70,7 +88,7 @@ class KcscSearchPanel(QWidget):
 
         v = QVBoxLayout(self)
 
-        # --- 제목줄: '건설기준(KCSC)' + 전체화면 + 닫기 ---
+        # --- 제목줄 ---
         title_row = QHBoxLayout()
         title = QLabel("건설기준(KCSC)")
         tf = title.font(); tf.setBold(True); tf.setPointSize(max(11, tf.pointSize() + 2))
@@ -92,16 +110,16 @@ class KcscSearchPanel(QWidget):
         title_row.addWidget(self.btn_close)
         v.addLayout(title_row)
 
-        # --- 입력줄: 코드체계(KDS/KCS) + 코드번호 + 보기 + 지구본 ---
+        # --- 검색줄: 코드체계 + 검색어(이름/코드) + 검색 + 지구본 ---
         top = QHBoxLayout()
         self.cmb_type = QComboBox()
         for code_t, name_t in TYPES:
             self.cmb_type.addItem(f"{code_t} · {name_t}", code_t)
         self.ed = QLineEdit()
-        self.ed.setPlaceholderText("코드번호 (예: 114010)")
-        self.ed.returnPressed.connect(self._view)
-        self.btn_view = QPushButton("보기")
-        self.btn_view.clicked.connect(self._view)
+        self.ed.setPlaceholderText("이름 또는 코드 검색 (예: 콘크리트, 114010)")
+        self.ed.returnPressed.connect(self._search)
+        self.btn_search = QPushButton("검색")
+        self.btn_search.clicked.connect(self._search)
         self.btn_globe = QPushButton()
         self.btn_globe.setIcon(themed_icon("globe"))
         self.btn_globe.setFixedWidth(36)
@@ -109,22 +127,23 @@ class KcscSearchPanel(QWidget):
         self.btn_globe.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(_SITE)))
         top.addWidget(self.cmb_type)
         top.addWidget(self.ed, 1)
-        top.addWidget(self.btn_view)
+        top.addWidget(self.btn_search)
         top.addWidget(self.btn_globe)
         v.addLayout(top)
 
-        self.info = QLabel("코드체계(KDS/KCS)와 코드번호를 입력하고 [보기]. (목록 검색은 추후 지원)")
+        self.info = QLabel("코드체계(KDS/KCS) 선택 후 이름/코드로 검색하세요.")
         self.info.setStyleSheet("color:#888;")
         self.info.setWordWrap(True)
         v.addWidget(self.info)
 
-        # --- 본문: 좌(절 목록) / 우(본문) ---
+        # --- 본문: 좌(결과·절 트리) / 우(본문) ---
         self.split = ToggleSplitter(Qt.Orientation.Horizontal)
         self.split.setHandleWidth(8)
-        self.sec_list = QListWidget()
-        self.sec_list.itemClicked.connect(self._on_section)
-        self.sec_list.currentItemChanged.connect(lambda *_: self._on_section(self.sec_list.currentItem()))
-        self.split.addWidget(self.sec_list)
+        self.tree = QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.currentItemChanged.connect(lambda *_: self._on_select())
+        self.tree.itemClicked.connect(lambda *_: self._on_select())
+        self.split.addWidget(self.tree)
         self.viewer = QTextBrowser()
         self.viewer.setOpenExternalLinks(True)
         self.viewer.setPlaceholderText("본문이 여기에 표시됩니다.")
@@ -133,10 +152,10 @@ class KcscSearchPanel(QWidget):
         self.split.setStretchFactor(0, 0)
         self.split.setStretchFactor(1, 1)
         self.split.setCollapsible(0, True)
-        self.split.setSizes([260, 740])
+        self.split.setSizes([300, 700])
         v.addWidget(self.split, 1)
 
-        # --- 본문 내 찾기 바(Ctrl+F) ---
+        # --- 찾기 바(Ctrl+F) ---
         self.find_bar = QWidget()
         fb = QHBoxLayout(self.find_bar)
         fb.setContentsMargins(2, 2, 2, 2)
@@ -170,57 +189,97 @@ class KcscSearchPanel(QWidget):
         else:
             self.closeRequested.emit()
 
-    # ----- 본문 조회 -----
-    def _view(self):
-        ctype = self.cmb_type.currentData()
-        code = (self.ed.text() or "").strip()
-        if not code:
-            self.info.setText("코드번호를 입력하세요. (예: 114010)")
-            return
+    # ----- 검색(목록) -----
+    def _search(self):
         if not (self._key or "").strip():
             self.info.setText("설정 → '인터넷 사전'의 KCSC 키를 먼저 입력하세요.")
             return
+        ctype = self.cmb_type.currentData()
+        q = (self.ed.text() or "").strip()
+        self.info.setText("검색 중…")
+        self.tree.clear(); self.viewer.clear(); self._cur_item = None
+        w = _ListWorker(self._key, ctype, q)
+        self._workers.append(w)
+        w.done.connect(lambda rows, dbg, q=q, ct=ctype: self._on_list(rows, dbg, q, ct))
+        w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
+        w.start()
+
+    def _on_list(self, rows, dbg, query, ctype):
+        self.tree.clear()
+        if not rows:
+            # 결과 없음 + 입력이 코드처럼 보이면 CodeViewer 직접 시도
+            if query and query.replace(" ", "").isalnum():
+                self.info.setText("목록에 없음 — 코드로 직접 조회합니다…")
+                self._load_content(ctype, query.strip(), None)
+                return
+            self.info.setText("검색 결과가 없습니다. " + (dbg[-1] if dbg else ""))
+            return
+        groups: dict = {}
+        for r in rows:
+            top = (r.get("parents") or ["기타"])[0] or "기타"
+            groups.setdefault(top, []).append(r)
+        for gname in groups:
+            parent = QTreeWidgetItem([gname]) if len(groups) > 1 else None
+            if parent is not None:
+                self.tree.addTopLevelItem(parent)
+                parent.setExpanded(True)
+            for r in groups[gname]:
+                label = f"{r['name']} ({r['code']})" if r.get("code") else r["name"]
+                it = QTreeWidgetItem([label])
+                it.setData(0, _ROLE_ROW, r)
+                (parent.addChild(it) if parent is not None
+                 else self.tree.addTopLevelItem(it))
+        self.info.setText(f"{len(rows)}건")
+
+    # ----- 선택 → 본문 / 절 이동 -----
+    def _on_select(self):
+        it = self.tree.currentItem()
+        if it is None:
+            return
+        anchor = it.data(0, _ROLE_ANCHOR)
+        if anchor:
+            self.viewer.scrollToAnchor(anchor)
+            return
+        row = it.data(0, _ROLE_ROW)
+        if isinstance(row, dict) and row.get("code"):
+            self._load_content(row.get("ctype") or self.cmb_type.currentData(),
+                               row["code"], it)
+
+    def _load_content(self, ctype, code, item):
+        self._cur_item = item
         self.info.setText("불러오는 중…")
-        self.sec_list.clear(); self.viewer.clear()
         w = _ContentWorker(self._key, ctype, code)
         self._workers.append(w)
         w.done.connect(self._on_content)
         w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
-        self._cworker = w
         w.start()
 
     def _on_content(self, html, dbg, arts, meta):
         if not html:
             self.info.setText("표시할 본문이 없습니다. " + (dbg[-1] if dbg else ""))
             return
-        self._arts = arts or []
         self.viewer.setHtml(html)
-        self.sec_list.clear()
-        for label, anchor in self._arts:
-            it = QListWidgetItem(label)
-            it.setData(Qt.ItemDataRole.UserRole, anchor)
-            self.sec_list.addItem(it)
         name = meta.get("name") or ""
         ver = meta.get("version") or ""
         self.info.setText((f"{name}" + (f"  (v{ver})" if ver else "")) if name
                           else (dbg[-1] if dbg else ""))
-
-    def _on_section(self, item):
-        if item is None:
-            return
-        anchor = item.data(Qt.ItemDataRole.UserRole)
-        if anchor:
-            self.viewer.scrollToAnchor(anchor)
+        # 절 목록을 현재 결과 항목의 자식으로(있을 때)
+        it = self._cur_item
+        if it is not None:
+            it.takeChildren()
+            for label, anchor in (arts or []):
+                ch = QTreeWidgetItem([label])
+                ch.setData(0, _ROLE_ANCHOR, anchor)
+                it.addChild(ch)
+            it.setExpanded(True)
 
     # ----- 찾기 -----
     def _show_find(self):
         self.find_bar.setVisible(True)
-        self.find_edit.setFocus()
-        self.find_edit.selectAll()
+        self.find_edit.setFocus(); self.find_edit.selectAll()
 
     def _hide_find(self):
-        self.find_bar.hide()
-        self.viewer.setFocus()
+        self.find_bar.hide(); self.viewer.setFocus()
 
     def _find(self, backward: bool):
         q = self.find_edit.text()
@@ -228,7 +287,6 @@ class KcscSearchPanel(QWidget):
             return
         flags = QTextDocument.FindFlag.FindBackward if backward else QTextDocument.FindFlag(0)
         if not self.viewer.find(q, flags):
-            # 끝/처음으로 감아서 재시도
             cur = self.viewer.textCursor()
             cur.movePosition(cur.MoveOperation.End if backward else cur.MoveOperation.Start)
             self.viewer.setTextCursor(cur)
