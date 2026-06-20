@@ -5447,8 +5447,8 @@ class MainWindow(QMainWindow):
         key = (self._prefs.get("kipo_signkey") or "").strip()
         if not key:
             QMessageBox.information(
-                self, "특허 등록정보(KIPO)",
-                "설정 → '인터넷 사전'의 'KIPO signKey'(특허청 patent.go.kr 웹서비스 인증키)를 "
+                self, "특허 검색(KIPRIS)",
+                "설정 → '인터넷 사전'의 '특허(KIPRIS) 키'(KIPRIS Plus accessKey)를 "
                 "먼저 입력하세요.")
         return key
 
@@ -5601,17 +5601,20 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _add_kipo_favorite_entry(self, row: dict):
-        """260618-43: 특허 등록건을 즐겨찾기에 추가(등록번호 기준 중복 방지)."""
-        rgst = str(row.get("rgstNo") or "").strip()
-        if not rgst:
+    def _add_kipo_favorite_entry(self, item: dict):
+        """260618-44: 특허 검색 결과(항목)를 즐겨찾기에 추가(출원/등록번호 기준 중복 방지)."""
+        appno = str(item.get("applicationNumber") or "").strip()
+        regno = str(item.get("registerNumber") or "").strip()
+        name = (item.get("inventionTitle") or "").strip()
+        key = appno or regno or name
+        if not key:
             return
-        name = (row.get("name") or "").strip()
         for f in self._kipo_favorites:
-            if str(f.get("rgstNo")) == rgst:
-                self.status.showMessage(f"이미 특허 즐겨찾기에 있음: {name or rgst}", 3000)
+            if (f.get("appNo") or f.get("regNo") or f.get("name")) == key:
+                self.status.showMessage(f"이미 특허 즐겨찾기에 있음: {name or key}", 3000)
                 return
-        self._kipo_favorites.append({"kind": "kipo", "rgstNo": rgst, "name": name})
+        self._kipo_favorites.append({"kind": "kipo", "name": name, "appNo": appno,
+                                     "regNo": regno, "item": dict(item)})
         try:
             self._refresh_favorites_menu()
             self._save_settings_now()
@@ -8177,7 +8180,7 @@ class MainWindow(QMainWindow):
             hdr.setEnabled(False)
             self.menu_favorites.addAction(hdr)
             for f in self._kipo_favorites:
-                label = "📄 " + (f.get("name") or f"등록 {f.get('rgstNo','?')}")
+                label = "📄 " + (f.get("name") or f.get("appNo") or f.get("regNo") or "특허")
                 act = QAction(label, self)
                 act.triggered.connect(
                     lambda _checked=False, ff=f: self._open_kipo_favorite(ff))

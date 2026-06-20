@@ -1,30 +1,42 @@
-"""특허청(KIPO) 특허 등록정보 — patent.go.kr 웹서비스(REST/JSON) (260618-43).
+"""특허 검색 — KIPRIS Plus 특허실용신안 항목별검색(getAdvancedSearch) (260618-44).
 
-- 베이스: https://www.patent.go.kr/smart/webservice/rgt/{method}.do  (JSON)
-  · readRgstBasicInfo  — 등록번호(rgstNo)로 등록 기본정보
-  · readRgstNoInfo     — 출원인코드(apAgtCd)의 등록번호 목록
-  · readRgstHistInfo   — 등록 이력,  readRgstRightInfo — 권리자
-- 인증: signKey(쿼리 파라미터). 응답 공통: {errorType, procResult, errorMsg, ...데이터...}
-표준 라이브러리(urllib)만 사용. 응답 필드명은 기관 정의를 그대로 키:값 표로 표시(방어적).
+- 엔드포인트: http://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice/getAdvancedSearch
+- 인증: accessKey (KIPRIS Plus 발급 키, 쿼리 파라미터)
+- 응답: XML <response><header>successYN/resultMsg</header><body><items><item>…</item></items><count>…</count></response>
+- 검색 항목(IN): word(자유)·inventionTitle(명칭)·astrtCont(초록/내용)·registerNumber(등록번호)·
+  applicant(출원인)·applicationNumber(출원번호)·ipcNumber 등. patent/utility(true/false), pageNo·numOfRows(≤500).
+- 결과(OUT item): inventionTitle·astrtCont·registerNumber·registerDate·applicationNumber·applicationDate·
+  openNumber·publicationNumber·applicantName·ipcNumber·registerStatus·drawing(이미지) 등.
+표준 라이브러리(urllib + xml.etree)만 사용.
 """
 from __future__ import annotations
 
-import json
-import re
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 
-_UA = "Mozilla/5.0 (PolyPDF KIPO viewer)"
-_BASE = "https://www.patent.go.kr/smart/webservice/rgt"
+_UA = "Mozilla/5.0 (PolyPDF KIPRIS viewer)"
+_BASE = "http://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice"
 
-# 데이터가 아닌 제어/페이지 필드(표에서 제외)
-_CONTROL = {"errortype", "procresult", "errormsg", "resultmsg", "resultcode",
-            "totalcount", "pageperrow", "pageno", "count", "result"}
-# 등록번호로 추정되는 키(부분일치, 소문자)
-_RGST_KEYS = ("rgstno", "regno", "registrationnumber", "rgst_no")
-# 명칭으로 추정되는 키
-_TITLE_KEYS = ("inventiontitle", "title", "etitl", "ettitl", "invtitle",
-               "발명의명칭", "고안의명칭", "디자인의대상", "상표명칭", "name", "titl")
+# 검색 기준(패널 드롭다운) → IN 파라미터명
+SEARCH_FIELDS = [
+    ("word", "자유검색"),
+    ("inventionTitle", "발명의명칭"),
+    ("astrtCont", "초록(내용)"),
+    ("applicant", "출원인"),
+    ("registerNumber", "등록번호"),
+    ("applicationNumber", "출원번호"),
+]
+# 결과 상세 표시용 라벨(순서)
+_OUT_LABELS = [
+    ("inventionTitle", "발명의명칭"), ("registerStatus", "등록상태"),
+    ("applicationNumber", "출원번호"), ("applicationDate", "출원일자"),
+    ("openNumber", "공개번호"), ("openDate", "공개일자"),
+    ("publicationNumber", "공고번호"), ("publicationDate", "공고일자"),
+    ("registerNumber", "등록번호"), ("registerDate", "등록일자"),
+    ("applicantName", "출원인"), ("ipcNumber", "IPC"),
+    ("astrtCont", "초록"),
+]
 
 
 def _esc(s) -> str:
@@ -37,133 +49,89 @@ def _wrap(body: str) -> str:
             + body + "</div>")
 
 
-def _get_json(method: str, params: dict, timeout: float):
-    url = _BASE + "/" + method + ".do?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        raw = r.read()
-        status = r.status
-    txt = raw.decode("utf-8", "replace")
+def _fmt_date(s: str) -> str:
+    s = (s or "").strip()
+    return f"{s[0:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 and s.isdigit() else s
+
+
+def _item_dict(el) -> dict:
+    d = {}
+    for ch in el:
+        d[ch.tag.strip()] = (ch.text or "").strip()
+    return d
+
+
+def search_advanced_debug(key: str, field: str, query: str,
+                          page: int = 1, rows: int = 30, timeout: float = 15.0):
+    """(items[], total, [진단...]). field=IN 파라미터명(word/inventionTitle/…), query=검색어."""
+    key = (key or "").strip()
+    query = (query or "").strip()
+    if not key:
+        return [], 0, ["KIPRIS accessKey 없음"]
+    if not query:
+        return [], 0, ["검색어를 입력하세요."]
+    field = field if field in dict(SEARCH_FIELDS) else "word"
+    params = {
+        "accessKey": key, field: query,
+        "patent": "true", "utility": "true",
+        "pageNo": max(1, int(page)), "numOfRows": max(1, min(500, int(rows))),
+        "sortSpec": "AD", "descSort": "true",
+    }
+    url = _BASE + "/getAdvancedSearch?" + urllib.parse.urlencode(params)
     try:
-        data = json.loads(txt)
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read()
+            status = r.status
+    except Exception as e:
+        return [], 0, [f"ERR {type(e).__name__}: {str(e)[:90]}"]
+    try:
+        root = ET.fromstring(raw)
     except Exception:
-        data = None
-    return status, data, txt
+        return [], 0, [f"{status} XML 파싱 실패", raw[:160].decode('utf-8', 'replace')]
+    succ = (root.findtext(".//successYN") or "").strip().upper()
+    if succ == "N":
+        msg = (root.findtext(".//resultMsg") or root.findtext(".//resultCode") or "조회 실패").strip()
+        return [], 0, [f"{status} 실패: {msg} (accessKey/검색어 확인)"]
+    items = [_item_dict(el) for el in root.iter("item")]
+    try:
+        total = int((root.findtext(".//count/totalCount")
+                     or root.findtext(".//totalCount") or len(items)))
+    except Exception:
+        total = len(items)
+    if not items:
+        return [], total, [f"{status} 결과 없음"]
+    return items, total, [f"{status} {len(items)}건 (전체 {total})"]
 
 
-def _proc_failed(data):
-    """procResult=false 면 (True, 메시지). 성공/판단불가면 (False, '')."""
-    if isinstance(data, dict):
-        pr = str(data.get("procResult") or data.get("procresult") or "").strip().lower()
-        if pr == "false":
-            msg = (data.get("errorMsg") or data.get("errorType")
-                   or data.get("resultMsg") or "조회 실패")
-            return True, str(msg)
-    return False, ""
+def item_label(it: dict) -> str:
+    title = (it.get("inventionTitle") or "(명칭 없음)").strip()
+    num = (it.get("registerNumber") or it.get("applicationNumber") or "").strip()
+    return f"{title} ({num})" if num else title
 
 
-def _records(data):
-    """JSON 응답에서 데이터 레코드(dict) 목록을 방어적으로 추출."""
-    if isinstance(data, list):
-        return [x for x in data if isinstance(x, dict)]
-    if isinstance(data, dict):
-        for v in data.values():                    # 중첩 리스트 우선
-            if isinstance(v, list) and v and isinstance(v[0], dict):
-                return v
-        for k, v in data.items():                  # 중첩 단일 객체
-            if isinstance(v, dict) and k.lower() not in _CONTROL:
-                return [v]
-        rest = {k: v for k, v in data.items()       # 최상위(제어필드 제외)
-                if k.lower() not in _CONTROL and not isinstance(v, (dict, list))}
-        return [rest] if rest else []
-    return []
-
-
-def _find(rec: dict, key_subs) -> str:
-    for k, v in rec.items():
-        kl = k.lower().replace("_", "")
-        if any(s in kl for s in key_subs) and v not in (None, ""):
-            return str(v)
-    return ""
-
-
-def _kv_table(rec: dict) -> str:
+def format_item(it: dict) -> str:
+    """검색결과 항목(dict) → 상세 표시 HTML."""
+    title = (it.get("inventionTitle") or "").strip() or "특허"
+    out = [f"<h2 style='color:#1456c4;margin:2px 0'>{_esc(title)}</h2>"]
     rows = []
-    for k, v in rec.items():
-        if k.lower() in _CONTROL:
+    for key, label in _OUT_LABELS:
+        if key in ("inventionTitle",):
             continue
-        if isinstance(v, (dict, list)):
-            v = json.dumps(v, ensure_ascii=False)
-        if v in (None, ""):
+        v = (it.get(key) or "").strip()
+        if not v:
             continue
+        if key.endswith("Date"):
+            v = _fmt_date(v)
         rows.append(
             "<tr>"
             f"<th style='text-align:left;color:#555;font-weight:600;"
-            f"padding:3px 12px 3px 0;white-space:nowrap;vertical-align:top'>{_esc(k)}</th>"
+            f"padding:3px 12px 3px 0;white-space:nowrap;vertical-align:top'>{_esc(label)}</th>"
             f"<td style='padding:3px 0'>{_esc(v)}</td></tr>")
-    return ("<table style='border-collapse:collapse'>" + "".join(rows) + "</table>"
-            if rows else "")
-
-
-def read_basic_info_debug(signkey: str, rgstno: str, timeout: float = 12.0):
-    """(표시 HTML, [진단...], meta). 등록번호로 등록 기본정보."""
-    signkey = (signkey or "").strip()
-    rgstno = re.sub(r"\D", "", str(rgstno or ""))
-    if not signkey:
-        return "", ["KIPO signKey 없음"], {}
-    if not rgstno:
-        return "", ["등록번호(숫자)를 입력하세요."], {}
-    try:
-        st, data, txt = _get_json("readRgstBasicInfo",
-                                  {"signKey": signkey, "rgstNo": rgstno}, timeout)
-    except Exception as e:
-        return "", [f"ERR {type(e).__name__}: {str(e)[:90]}"], {}
-    failed, msg = _proc_failed(data)
-    if failed:
-        return "", [f"{st} 실패: {msg} (signKey/등록번호 확인)"], {}
-    recs = _records(data)
-    if not recs:
-        return "", [f"{st} 데이터 없음", txt[:160]], {}
-    rec = recs[0]
-    title = _find(rec, _TITLE_KEYS)
-    meta = {"name": title or f"등록 {rgstno}", "rgstNo": rgstno}
-    head = _esc(title) if title else f"등록번호 {rgstno}"
-    html = _wrap(
-        f"<h2 style='color:#1456c4;margin:2px 0'>{head}</h2>"
-        f"<p style='color:#666;margin:0 0 8px'>등록번호 {_esc(rgstno)}</p>"
-        + _kv_table(rec))
-    return html, [f"{st} ok"], meta
-
-
-def list_reg_numbers_debug(signkey: str, apagtcd: str, page: int = 1,
-                           per_row: int = 100, timeout: float = 12.0):
-    """(rows, [진단...]). 출원인코드의 등록번호 목록. rows: {rgstNo, name, raw}."""
-    signkey = (signkey or "").strip()
-    apagtcd = (apagtcd or "").strip()
-    if not signkey:
-        return [], ["KIPO signKey 없음"]
-    if not apagtcd:
-        return [], ["출원인코드를 입력하세요."]
-    try:
-        st, data, txt = _get_json("readRgstNoInfo",
-                                  {"signKey": signkey, "apAgtCd": apagtcd,
-                                   "pageNo": max(1, page),
-                                   "pagePerRow": max(1, min(100, per_row))}, timeout)
-    except Exception as e:
-        return [], [f"ERR {type(e).__name__}: {str(e)[:90]}"]
-    failed, msg = _proc_failed(data)
-    if failed:
-        return [], [f"{st} 실패: {msg} (signKey/출원인코드 확인)"]
-    rows = []
-    for rec in _records(data):
-        rgst = re.sub(r"\D", "", _find(rec, _RGST_KEYS))
-        if not rgst:
-            continue
-        rows.append({"rgstNo": rgst, "name": _find(rec, _TITLE_KEYS), "raw": rec})
-    if not rows:
-        return [], [f"{st} 결과 없음", txt[:160]]
-    return rows, [f"{st} {len(rows)}건"]
-
-
-def read_basic_info(signkey: str, rgstno: str, timeout: float = 12.0) -> str:
-    return read_basic_info_debug(signkey, rgstno, timeout)[0]
+    if rows:
+        out.append("<table style='border-collapse:collapse'>" + "".join(rows) + "</table>")
+    img = (it.get("drawing") or it.get("bigDrawing") or "").strip()
+    if img.startswith("http"):
+        out.append(f"<p style='margin-top:10px'><img src='{_esc(img)}' "
+                   f"style='max-width:100%;border:1px solid #ddd'/></p>")
+    return _wrap("".join(out))
