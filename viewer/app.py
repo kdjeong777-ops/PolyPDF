@@ -7810,10 +7810,30 @@ class MainWindow(QMainWindow):
             self.open_pdf(Path(target))
             return
         self.open_folder(Path(target))
+        # 260618-28: 폴더를 연 '그 창'(2단이면 활성=드롭/즐겨찾기 대상 창)에 파일을 로드해야 한다.
+        #   종전엔 항상 _on_bookmark_activated(=좌측/1창)로 보내서, 2창에서 즐겨찾기로 폴더를
+        #   바꾸면 하단 책갈피만 바뀌고 2창 뷰어는 그대로(파일이 1창에 열리는) 버그가 있었음.
+        pane = self._active_pane if getattr(self, "_split_on", False) else 0
+
+        def _open_in_pane(path, page=0):
+            if pane == 1:
+                self._on_bookmark_activated_right(str(path), page)
+            else:
+                self._on_bookmark_activated(str(path), page)
+
         # 260615-4: ⑩ 폴더 즐겨찾기에 파일이 기록돼 있으면 그 파일 첫 페이지로
         f = fav.get("file")
         if f and Path(f).exists():
-            self._on_bookmark_activated(str(f), 0)
+            _open_in_pane(f, 0)
+        elif kind == "folder":
+            # 파일 미기록 폴더 즐겨찾기 → 그 창에 정렬순 첫 파일 첫 페이지(드롭과 동일 동작)
+            tree = self.bookmark_tree_right if pane == 1 else self.bookmark_tree
+            try:
+                files = tree.ordered_pdf_files() or tree.all_file_paths() or []
+            except Exception:
+                files = []
+            if files:
+                _open_in_pane(files[0], 0)
         if kind == "search":
             q = fav.get("query", "")
             if q:
