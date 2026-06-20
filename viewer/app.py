@@ -1451,7 +1451,17 @@ class MainWindow(QMainWindow):
         # 260618-33: 베타(테스트) 업데이트 채널 — 켜면 -beta/-rc 등 프리릴리즈도 받음(기본 꺼짐=정식만)
         a_beta = QAction("베타(테스트) 버전도 받기", self)
         a_beta.setCheckable(True)
-        a_beta.setChecked(str(getattr(self, "_prefs", {}).get("update_channel", "stable")).lower() == "beta")
+        # 260618-36: 1.0 이전(pre-stable)에는 빌드가 베타로만 나오므로 항상 베타 수신 → 체크·잠금.
+        _pre10 = False
+        try:
+            from viewer import updater as _u0
+            _pre10 = int((_u0.current_version().lstrip("vV").split(".")[0]) or "0") == 0
+        except Exception:
+            pass
+        a_beta.setChecked(_pre10 or str(getattr(self, "_prefs", {}).get("update_channel", "beta")).lower() == "beta")
+        if _pre10:
+            a_beta.setEnabled(False)
+            a_beta.setToolTip("1.0 이전에는 항상 베타(테스트) 버전을 받습니다.")
         a_beta.toggled.connect(self._on_toggle_update_channel)
         m_help.addAction(a_beta)
         self._act_update_beta = a_beta
@@ -7149,7 +7159,7 @@ class MainWindow(QMainWindow):
         self._prefs.setdefault("update_repo", "")                 # 260618-11: GitHub OWNER/REPO
         self._prefs.setdefault("auto_check_update", True)         # 260618-11: 시작 시 업데이트 확인
         self._prefs.setdefault("auto_download_update", True)      # 260618-24: 백그라운드 미리 다운로드
-        self._prefs.setdefault("update_channel", "stable")        # 260618-33: stable|beta(테스트)
+        self._prefs.setdefault("update_channel", "beta")          # 260618-33/36: stable|beta(1.0 전엔 beta 기본)
         self._prefs.setdefault("urimalsaem_key", "")
         self._prefs.setdefault("stdict_key", "")
         self._prefs.setdefault("onterm_key", "")
@@ -7393,7 +7403,7 @@ class MainWindow(QMainWindow):
             "auto_download_update": bool(prefs.get("auto_download_update",
                                                   old.get("auto_download_update", True))),
             "update_channel": str(prefs.get("update_channel",
-                                            old.get("update_channel", "stable"))),  # 260618-33
+                                            old.get("update_channel", "beta"))),  # 260618-33/36
             # 260606-19: 단축키 오버라이드 보존
             "shortcuts": prefs.get("shortcuts", old.get("shortcuts", {})),
         }
@@ -7868,10 +7878,16 @@ class MainWindow(QMainWindow):
         if getattr(self, "_pending_update", None) and not getattr(self, "_updating", False):
             info = self._pending_update
             ver = info.get("version", "")
+            # 260618-36: 베타면 명시
+            try:
+                from viewer import updater as _u
+                _kind = "베타(테스트) 버전" if _u.is_prerelease_tag(info.get("tag", "")) else "버전"
+            except Exception:
+                _kind = "버전"
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Icon.Question)
             box.setWindowTitle("업그레이드")
-            box.setText(f"새 버전 v{ver} 이(가) 준비되어 있습니다.\n"
+            box.setText(f"새 {_kind} v{ver} 이(가) 준비되어 있습니다.\n"
                         "업그레이드 후 종료할까요?")
             b_up = box.addButton("업그레이드 후 종료", QMessageBox.ButtonRole.AcceptRole)
             b_no = box.addButton("그냥 종료", QMessageBox.ButtonRole.DestructiveRole)
@@ -7991,7 +8007,14 @@ class MainWindow(QMainWindow):
         import threading
         sig = self._update_sig
 
-        channel = str(self._prefs.get("update_channel", "stable"))
+        channel = str(self._prefs.get("update_channel", "beta"))
+        # 260618-36: 1.0 이전(major 0=pre-stable)에는 빌드가 베타로만 나오므로, 저장된 설정과
+        #   무관하게 항상 베타를 포함해 새 베타 업그레이드를 찾는다. 1.0 이후엔 설정값을 따른다.
+        try:
+            if int((updater.current_version().lstrip("vV").split(".")[0]) or "0") == 0:
+                channel = "beta"
+        except Exception:
+            pass
 
         def work():
             info = updater.check_latest(repo, channel=channel)
@@ -8030,15 +8053,20 @@ class MainWindow(QMainWindow):
             return
         # 260618-24: 새 버전 인지(종료 시 업그레이드 프롬프트용)
         self._pending_update = info
+        # 260618-36: 베타(테스트) 릴리스면 프롬프트에 명시 — 사용자가 알고 동의하게.
+        is_beta = updater.is_prerelease_tag(info.get("tag", ""))
+        kind = "베타(테스트) 버전" if is_beta else "버전"
         if manual:
             # D: 확인 → 종료하고 설치(설치 도우미가 파일 없으면 다운로드)
             notes = (info.get("notes") or "").strip()
             if len(notes) > 800:
                 notes = notes[:800] + " …"
+            title = "베타 업데이트" if is_beta else "업데이트"
             ret = QMessageBox.question(
-                self, "업데이트",
-                f"새 버전이 있습니다.\n\n현재: v{cur}\n최신: v{latest}\n\n"
+                self, title,
+                f"새 {kind}이 있습니다.\n\n현재: v{cur}\n최신: v{latest}\n\n"
                 + (notes + "\n\n" if notes else "")
+                + ("이 버전은 테스트(베타)입니다. " if is_beta else "")
                 + "프로그램을 종료하고 설치합니다. 계속할까요?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes)
@@ -8052,7 +8080,7 @@ class MainWindow(QMainWindow):
             if self._prefs.get("auto_download_update", True):
                 self._start_bg_update_download(info)
             else:
-                self.status.showMessage(f"새 버전 v{latest} 사용 가능 — 도움말 → 업데이트 확인", 6000)
+                self.status.showMessage(f"새 {kind} v{latest} 사용 가능 — 도움말 → 업데이트 확인", 6000)
 
     def _start_bg_update_download(self, info):
         """260618-24: 한가할 때 백그라운드로 업데이트 zip 을 미리 받아 둠(설정 폴더 캐시)."""
