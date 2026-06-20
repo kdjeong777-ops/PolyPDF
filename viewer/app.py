@@ -176,6 +176,10 @@ class MainWindow(QMainWindow):
         self._kcsc_window = None
         self._kcsc_saved = None
         self._kcsc_favorites: list = []       # 260618-39: 건설기준 즐겨찾기
+        self._kipo_panel = None               # 260618-43: 특허(KIPO) 등록정보 패널(동일 슬롯)
+        self._kipo_window = None
+        self._kipo_saved = None
+        self._kipo_favorites: list = []       # 260618-43: 특허 즐겨찾기
         self._prefs: dict = {
             "restore_session": True, "restore_last_page": True,
             "restore_screenshots": True, "screenshot_max": 30,
@@ -1220,6 +1224,7 @@ class MainWindow(QMainWindow):
         self._btn_shot = mk("스크린샷", "검색·단어장 숨김 · 스크린샷 보이기", self._vm_shot)
         mk("법령/고시", "법제처 법령·고시 검색·본문 보기", self._action_law_search)  # 260618-18: 스크린샷 오른쪽
         mk("건설기준", "국가건설기준센터(KCSC) KDS·KCS 본문 보기", self._action_kcsc_search)  # 260618-37
+        mk("특허", "특허청(KIPO) 특허 등록정보 조회", self._action_kipo_search)  # 260618-43
         mk("발표보기", "발표 전체화면 보기 (F5)", self._open_presentation)  # 260609-15(E1)/260618-8
         # 보기 ↔ 도구 사이 띄움
         _sp = QWidget(); _sp.setFixedWidth(20)
@@ -1374,6 +1379,7 @@ class MainWindow(QMainWindow):
                 ("스크린샷", self._vm_shot),
                 ("법령/고시", self._action_law_search),
                 ("건설기준(KCSC)", self._action_kcsc_search),
+                ("특허(등록정보)", self._action_kipo_search),
                 ("발표보기", self._open_presentation)):
             _a = QAction(_label, self)
             _a.triggered.connect(lambda _checked=False, s=_slot: s())
@@ -1425,6 +1431,7 @@ class MainWindow(QMainWindow):
         m_tools.addSection("🔍 검색 및 데이터 구축")
         _act("법령·고시 검색 (법제처)...", self._action_law_search)
         _act("건설기준 (KCSC) 보기...", self._action_kcsc_search)
+        _act("특허 등록정보 (KIPO)...", self._action_kipo_search)
         _act("인덱스 재구축", self.action_reindex)
 
         # ⚙️ 프로그램 환경설정
@@ -5086,6 +5093,8 @@ class MainWindow(QMainWindow):
             return
         if self._kcsc_panel is not None:       # 260618-37: 사이드 슬롯 공유 — 건설기준 먼저 닫기
             self._close_kcsc()
+        if self._kipo_panel is not None:       # 260618-43
+            self._close_kipo()
         if self._law_panel is not None:        # 이미 열려 있음
             if self._law_window is not None:
                 self._law_window.raise_()
@@ -5258,6 +5267,8 @@ class MainWindow(QMainWindow):
             return
         if self._law_panel is not None:        # 사이드 슬롯 공유 — 법령 먼저 닫기
             self._close_law()
+        if self._kipo_panel is not None:       # 260618-43
+            self._close_kipo()
         if self._kcsc_panel is not None:
             if self._kcsc_window is not None:
                 self._kcsc_window.raise_(); self._kcsc_window.activateWindow()
@@ -5430,6 +5441,197 @@ class MainWindow(QMainWindow):
                 self.splitter.restoreState(s["splitter"])
         except Exception:
             pass
+
+    # ===== 260618-43: 특허(KIPO) 등록정보 — 법령·KCSC 와 동일한 사이드 패널 =====
+    def _kipo_signkey_or_warn(self) -> str:
+        key = (self._prefs.get("kipo_signkey") or "").strip()
+        if not key:
+            QMessageBox.information(
+                self, "특허 등록정보(KIPO)",
+                "설정 → '인터넷 사전'의 'KIPO signKey'(특허청 patent.go.kr 웹서비스 인증키)를 "
+                "먼저 입력하세요.")
+        return key
+
+    def _action_kipo_search(self, checked: bool = False):
+        self._open_kipo()
+
+    def _open_kipo(self, fav: dict | None = None):
+        key = self._kipo_signkey_or_warn()
+        if not key:
+            return
+        if self._law_panel is not None:
+            self._close_law()
+        if self._kcsc_panel is not None:
+            self._close_kcsc()
+        if self._kipo_panel is not None:
+            if self._kipo_window is not None:
+                self._kipo_window.raise_(); self._kipo_window.activateWindow()
+            if fav:
+                self._kipo_panel.show_saved(fav)
+            return
+        from viewer.widgets.kipo_search_dialog import KipoSearchPanel
+        self._kipo_panel = KipoSearchPanel(key, self)
+        self._kipo_panel.closeRequested.connect(self._close_kipo)
+        self._kipo_panel.fullscreenToggled.connect(self._toggle_kipo_fullscreen)
+        self._enter_kipo_layout()
+        if fav:
+            self._kipo_panel.show_saved(fav)
+
+    def _enter_kipo_layout(self):
+        try:
+            self._kipo_saved = {
+                "splitter": self.splitter.saveState(),
+                "search": self.act_toggle_search.isChecked(),
+                "shot": self.act_toggle_shot.isChecked(),
+                "split": self.act_split.isChecked(),
+                "handle": self.splitter.handleWidth(),
+            }
+            self.act_toggle_search.setChecked(False)
+            self.act_toggle_shot.setChecked(False)
+            if self.act_split.isChecked():
+                self.act_split.setChecked(False)
+            self._sync_right_layout()
+            self.splitter.addWidget(self._kipo_panel)
+            self.splitter.setHandleWidth(8)
+            for i in range(self.splitter.count()):
+                self.splitter.setCollapsible(i, True)
+            il = self.splitter.indexOf(self._kipo_panel)
+            if 0 <= il < self.splitter.count():
+                self.splitter.setCollapsible(il, False)
+            self._kipo_panel.set_fullscreen(False)
+            self._apply_kipo_embed_sizes()
+        except Exception:
+            pass
+
+    def _apply_kipo_embed_sizes(self):
+        try:
+            n = self.splitter.count()
+            total = sum(self.splitter.sizes()) or max(1100, self.width())
+            bk, th = 170, 120
+            im = self.splitter.indexOf(self.main_split)
+            il = self.splitter.indexOf(self._kipo_panel)
+            ith = self.splitter.indexOf(self.page_thumbs)
+            rest = max(420, total - bk - th)
+            vw = rest // 2
+            lw = rest - vw
+            sizes = [0] * n
+            sizes[0] = bk
+            if 0 <= ith < n:
+                sizes[ith] = th
+            if 0 <= im < n:
+                sizes[im] = vw
+            if 0 <= il < n:
+                sizes[il] = lw
+            self.splitter.setSizes(sizes)
+        except Exception:
+            pass
+
+    def _toggle_kipo_fullscreen(self):
+        if self._kipo_panel is None:
+            return
+        from viewer.widgets.kipo_search_dialog import KipoHostWindow
+        if self._kipo_window is None:
+            self._kipo_embed_sizes = self.splitter.sizes()
+            self._kipo_window = KipoHostWindow()
+            self._kipo_window.setWindowTitle("특허 등록정보 (전체화면)")
+            from PyQt6.QtWidgets import QVBoxLayout
+            lay = QVBoxLayout(self._kipo_window)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.addWidget(self._kipo_panel)
+            self._kipo_window.closed.connect(self._embed_kipo_from_window)
+            self._kipo_panel.set_fullscreen(True)
+            self._kipo_window.showMaximized()
+        else:
+            self._embed_kipo_from_window()
+
+    def _embed_kipo_from_window(self):
+        if self._kipo_panel is None:
+            return
+        win = self._kipo_window
+        self._kipo_window = None
+        try:
+            self.splitter.addWidget(self._kipo_panel)
+            self._kipo_panel.set_fullscreen(False)
+            saved = getattr(self, "_kipo_embed_sizes", None)
+            if saved and len(saved) == self.splitter.count():
+                self.splitter.setSizes(saved)
+            else:
+                self._apply_kipo_embed_sizes()
+            self._kipo_panel.show()
+        except Exception:
+            pass
+        if win is not None:
+            try:
+                win.closed.disconnect()
+            except Exception:
+                pass
+            win.deleteLater()
+
+    def _close_kipo(self):
+        panel = self._kipo_panel
+        win = self._kipo_window
+        self._kipo_panel = None
+        self._kipo_window = None
+        try:
+            if panel is not None:
+                panel.setParent(None)
+                panel.deleteLater()
+            if win is not None:
+                try:
+                    win.closed.disconnect()
+                except Exception:
+                    pass
+                win.close()
+                win.deleteLater()
+        except Exception:
+            pass
+        s = getattr(self, "_kipo_saved", None) or {}
+        try:
+            if "handle" in s:
+                self.splitter.setHandleWidth(s["handle"])
+            if "search" in s:
+                self.act_toggle_search.setChecked(s["search"])
+            if "shot" in s:
+                self.act_toggle_shot.setChecked(s["shot"])
+            if "split" in s:
+                self.act_split.setChecked(s["split"])
+            self._sync_right_layout()
+            if s.get("splitter"):
+                self.splitter.restoreState(s["splitter"])
+        except Exception:
+            pass
+
+    def _add_kipo_favorite_entry(self, row: dict):
+        """260618-43: 특허 등록건을 즐겨찾기에 추가(등록번호 기준 중복 방지)."""
+        rgst = str(row.get("rgstNo") or "").strip()
+        if not rgst:
+            return
+        name = (row.get("name") or "").strip()
+        for f in self._kipo_favorites:
+            if str(f.get("rgstNo")) == rgst:
+                self.status.showMessage(f"이미 특허 즐겨찾기에 있음: {name or rgst}", 3000)
+                return
+        self._kipo_favorites.append({"kind": "kipo", "rgstNo": rgst, "name": name})
+        try:
+            self._refresh_favorites_menu()
+            self._save_settings_now()
+        except Exception:
+            pass
+        self.status.showMessage(f"특허 즐겨찾기 추가: {name or rgst}", 3000)
+
+    def _open_kipo_favorite(self, fav: dict):
+        self._open_kipo(fav)
+
+    def _manage_kipo_favorites(self):
+        from viewer.widgets.law_search_dialog import LawFavoritesManager
+        dlg = LawFavoritesManager(self._kipo_favorites, self)
+        dlg.setWindowTitle("특허 등록정보 즐겨찾기 관리")
+        if dlg.exec():
+            self._kipo_favorites = dlg.result_favorites()
+            try:
+                self._save_settings_now()
+            except Exception:
+                pass
 
     def _add_law_favorite_entry(self, row: dict):
         """260616-6: 법령·고시 항목을 (메인 즐겨찾기와 분리된) 법령 즐겨찾기에 추가."""
@@ -7367,6 +7569,7 @@ class MainWindow(QMainWindow):
         self._prefs.setdefault("onterm_key", "")
         self._prefs.setdefault("law_oc", "")
         self._prefs.setdefault("kcsc_key", "")        # 260618-37: 국가건설기준센터 OPEN API 키
+        self._prefs.setdefault("kipo_signkey", "")    # 260618-43: 특허청 patent.go.kr signKey
         self._apply_prefs(self._prefs)
         # 260606-19: 단축키 오버라이드 적용
         try:
@@ -7405,6 +7608,7 @@ class MainWindow(QMainWindow):
         self._favorites = list(data.get("favorites", []))
         self._law_favorites = list(data.get("law_favorites", []))   # 260616-6
         self._kcsc_favorites = list(data.get("kcsc_favorites", []))  # 260618-39
+        self._kipo_favorites = list(data.get("kipo_favorites", []))  # 260618-43
         self._refresh_favorites_menu()
 
         # 260603-4: 단어장·읽기 설정 복원(모든 선택 유지)
@@ -7601,6 +7805,7 @@ class MainWindow(QMainWindow):
             "onterm_key": str(prefs.get("onterm_key", old.get("onterm_key", ""))),
             "law_oc": str(prefs.get("law_oc", old.get("law_oc", ""))),
             "kcsc_key": str(prefs.get("kcsc_key", old.get("kcsc_key", ""))),  # 260618-37
+            "kipo_signkey": str(prefs.get("kipo_signkey", old.get("kipo_signkey", ""))),  # 260618-43
             # 260618-11: 업데이트(GitHub Releases)
             "update_repo": str(prefs.get("update_repo", old.get("update_repo", ""))),
             "auto_check_update": bool(prefs.get("auto_check_update",
@@ -7777,6 +7982,7 @@ class MainWindow(QMainWindow):
             "favorites": self._favorites,
             "law_favorites": self._law_favorites,
             "kcsc_favorites": self._kcsc_favorites,   # 260618-39
+            "kipo_favorites": self._kipo_favorites,   # 260618-43
             # 260603-4: 단어장·읽기 모든 선택/설정 저장
             "study_settings": self.study_panel.get_settings(),
             "read_aloud": {
@@ -7962,6 +8168,19 @@ class MainWindow(QMainWindow):
                 act = QAction(label, self)
                 act.triggered.connect(
                     lambda _checked=False, ff=f: self._open_kcsc_favorite(ff))
+                self.menu_favorites.addAction(act)
+
+        # 260618-43: 특허(KIPO) 등록정보 즐겨찾기 — 별도 구역
+        if self._kipo_favorites:
+            self.menu_favorites.addSeparator()
+            hdr = QAction("특허(KIPO) 즐겨찾기", self)
+            hdr.setEnabled(False)
+            self.menu_favorites.addAction(hdr)
+            for f in self._kipo_favorites:
+                label = "📄 " + (f.get("name") or f"등록 {f.get('rgstNo','?')}")
+                act = QAction(label, self)
+                act.triggered.connect(
+                    lambda _checked=False, ff=f: self._open_kipo_favorite(ff))
                 self.menu_favorites.addAction(act)
 
     def _add_current_folder_favorite(self):
