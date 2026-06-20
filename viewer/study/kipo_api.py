@@ -54,11 +54,35 @@ def _fmt_date(s: str) -> str:
     return f"{s[0:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 and s.isdigit() else s
 
 
+def _local(tag: str) -> str:
+    """네임스페이스 접두 제거({ns}tag → tag)."""
+    return tag.split("}")[-1] if "}" in tag else tag
+
+
 def _item_dict(el) -> dict:
-    d = {}
-    for ch in el:
-        d[ch.tag.strip()] = (ch.text or "").strip()
-    return d
+    return {_local(ch.tag): (ch.text or "").strip() for ch in el}
+
+
+def _findtext_local(root, name: str) -> str:
+    for el in root.iter():
+        if _local(el.tag) == name:
+            return (el.text or "").strip()
+    return ""
+
+
+# 결과 레코드(행) 판별용 — 이 필드들이 2개 이상 직접 자식이면 한 건으로 본다(요소명 무관).
+_FIELD_TAGS = {"inventionTitle", "applicationNumber", "registerNumber", "astrtCont",
+               "applicantName", "applicant", "ipcNumber", "openNumber",
+               "publicationNumber", "applicationDate", "registerDate", "indexNo"}
+
+
+def _extract_records(root) -> list:
+    recs = []
+    for el in root.iter():
+        kids = [_local(c.tag) for c in el]
+        if sum(1 for k in kids if k in _FIELD_TAGS) >= 2:
+            recs.append(_item_dict(el))
+    return recs
 
 
 def search_advanced_debug(key: str, field: str, query: str,
@@ -88,19 +112,21 @@ def search_advanced_debug(key: str, field: str, query: str,
     try:
         root = ET.fromstring(raw)
     except Exception:
-        return [], 0, [f"{status} XML 파싱 실패", raw[:160].decode('utf-8', 'replace')]
-    succ = (root.findtext(".//successYN") or "").strip().upper()
+        return [], 0, [f"{status} XML 파싱 실패", raw[:200].decode('utf-8', 'replace')]
+    succ = (_findtext_local(root, "successYN") or "").strip().upper()
     if succ == "N":
-        msg = (root.findtext(".//resultMsg") or root.findtext(".//resultCode") or "조회 실패").strip()
+        msg = (_findtext_local(root, "resultMsg")
+               or _findtext_local(root, "resultCode") or "조회 실패")
         return [], 0, [f"{status} 실패: {msg} (accessKey/검색어 확인)"]
-    items = [_item_dict(el) for el in root.iter("item")]
+    items = _extract_records(root)
     try:
-        total = int((root.findtext(".//count/totalCount")
-                     or root.findtext(".//totalCount") or len(items)))
+        total = int(_findtext_local(root, "totalCount") or len(items))
     except Exception:
         total = len(items)
     if not items:
-        return [], total, [f"{status} 결과 없음"]
+        # 진단: 응답 앞부분을 보여 줘 구조 파악(요소명/오류 확인)
+        snippet = raw[:200].decode('utf-8', 'replace').replace("\n", " ")
+        return [], total, [f"{status} 결과 없음", snippet]
     return items, total, [f"{status} {len(items)}건 (전체 {total})"]
 
 
