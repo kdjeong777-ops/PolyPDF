@@ -35,18 +35,64 @@ class TTS:
         try:
             import win32com.client
             self._voice = win32com.client.Dispatch("SAPI.SpVoice")
-            for tok in self._voice.GetVoices():
-                lang = (tok.GetAttribute("Language") or "").lower()
-                name = (tok.GetAttribute("Name") or "")
+            seen = set()    # 260618-31: 표시명(Desktop 접미 제거) 기준 중복 방지
+
+            def _add(tok):
+                try:
+                    name = (tok.GetAttribute("Name") or "")
+                except Exception:
+                    return
+                if not name:
+                    return
+                base = name.replace(" Desktop", "").strip().lower()
+                if base in seen:
+                    return
+                seen.add(base)
                 self._by_name[name] = tok
+                lang = (tok.GetAttribute("Language") or "").lower()
                 if "412" in lang and self._tok["kor"] is None:   # 412 = Korean
                     self._tok["kor"] = tok
                 elif "409" in lang and self._tok["eng"] is None:  # 409 = English(US)
                     self._tok["eng"] = tok
+
+            # 1) 클래식 SAPI5 음성
+            for tok in self._voice.GetVoices():
+                _add(tok)
+            # 2) 260618-31: OneCore(최신·추가 설치) 음성도 포함 — 클래식 GetVoices 에는
+            #    안 나오는 음성(예: Mark, 한국어 SunHi, Windows '음성' 설정에서 추가한 언어
+            #    음성)을 레지스트리 토큰으로 등록해 성우 목록·언어 자동선택에 사용.
+            self._add_onecore_voices(win32com.client, _add)
             self._ok = True
         except Exception:
             self._ok = False
             self._voice = None
+
+    @staticmethod
+    def _add_onecore_voices(wc, add) -> None:
+        """260618-31: HKLM\\...\\Speech_OneCore\\Voices\\Tokens 의 음성을 SpObjectToken 으로
+        만들어 add(tok). SAPI 호환(MSTTS) 음성이면 voice.Voice 로 사용 가능."""
+        try:
+            import winreg
+        except Exception:
+            return
+        base = r"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as k:
+                i = 0
+                while True:
+                    try:
+                        sub = winreg.EnumKey(k, i)
+                        i += 1
+                    except OSError:
+                        break
+                    try:
+                        tok = wc.Dispatch("SAPI.SpObjectToken")
+                        tok.SetId(r"HKEY_LOCAL_MACHINE\%s\%s" % (base, sub))
+                        add(tok)
+                    except Exception:
+                        continue
+        except Exception:
+            pass
 
     def voice_names(self) -> list[str]:
         self._ensure()
