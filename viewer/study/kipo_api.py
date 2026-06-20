@@ -1,7 +1,7 @@
 """특허 검색 — KIPRIS Plus 특허실용신안 항목별검색(getAdvancedSearch) (260618-44).
 
 - 엔드포인트: http://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice/getAdvancedSearch
-- 인증: accessKey (KIPRIS Plus 발급 키, 쿼리 파라미터)
+- 인증: ServiceKey (KIPRIS Plus 발급 키, 쿼리 파라미터)  ※ accessKey 아님(미등록 오류남)
 - 응답: XML <response><header>successYN/resultMsg</header><body><items><item>…</item></items><count>…</count></response>
 - 검색 항목(IN): word(자유)·inventionTitle(명칭)·astrtCont(초록/내용)·registerNumber(등록번호)·
   applicant(출원인)·applicationNumber(출원번호)·ipcNumber 등. patent/utility(true/false), pageNo·numOfRows(≤500).
@@ -96,7 +96,7 @@ def search_advanced_debug(key: str, field: str, query: str,
         return [], 0, ["검색어를 입력하세요."]
     field = field if field in dict(SEARCH_FIELDS) else "word"
     params = {
-        "accessKey": key, field: query,
+        "ServiceKey": key, field: query,    # 260618-46: 인증 파라미터는 ServiceKey (accessKey 아님)
         "patent": "true", "utility": "true",
         "pageNo": max(1, int(page)), "numOfRows": max(1, min(500, int(rows))),
         "sortSpec": "AD", "descSort": "true",
@@ -117,7 +117,7 @@ def search_advanced_debug(key: str, field: str, query: str,
     if succ == "N":
         msg = (_findtext_local(root, "resultMsg")
                or _findtext_local(root, "resultCode") or "조회 실패")
-        return [], 0, [f"{status} 실패: {msg} (accessKey/검색어 확인)"]
+        return [], 0, [f"{status} 실패: {msg} (KIPRIS ServiceKey/검색어 확인)"]
     items = _extract_records(root)
     try:
         total = int(_findtext_local(root, "totalCount") or len(items))

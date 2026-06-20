@@ -170,7 +170,7 @@ class SettingsDialog(QDialog):
         self.ed_kcsc_key.setPlaceholderText("국가건설기준센터(KCSC) OPEN API 키 (무료 발급)")
         ol.addRow("KCSC 키:", self.ed_kcsc_key)
         self.ed_kipo_key = _QLe(str(self._prefs.get("kipo_signkey", "")))   # 260618-43/44
-        self.ed_kipo_key.setPlaceholderText("KIPRIS Plus accessKey (특허 명칭·내용 검색)")
+        self.ed_kipo_key.setPlaceholderText("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)")
         ol.addRow("특허(KIPRIS) 키:", self.ed_kipo_key)
         ol.addRow(QLabel("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
                          "한국어 사전은 위 키 입력 시 사용.</small>"))
