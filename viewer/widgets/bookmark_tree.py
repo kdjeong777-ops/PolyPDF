@@ -67,11 +67,60 @@ _AUTH_ROLE = Qt.ItemDataRole.UserRole + 6
 
 
 class _EditableTree(QTreeWidget):
-    """드래그 재배치(InternalMove) 발생 시 dropped 시그널 — 편집 '변경됨' 추적용(260606-4)."""
+    """드래그 재배치(InternalMove) 발생 시 dropped 시그널 — 편집 '변경됨' 추적용(260606-4).
+    260618-27: 외부에서 PDF/폴더를 드롭하면 pathDropped 로 알림(이 트리=해당 창에 등록).
+    드래그가 이 트리 위에 올라오면 테두리 강조(상/하단 영역 구분)."""
     dropped = pyqtSignal()
     delPressed = pyqtSignal()       # 260611-56: DEL 키 → 선택 삭제(휴지통)
+    pathDropped = pyqtSignal(str)   # 260618-27: 외부 PDF/폴더 드롭(이 창에 열기)
+
+    @staticmethod
+    def _ext_paths(md):
+        """드롭 가능한 외부 경로(PDF/폴더)만 추출."""
+        out = []
+        if md is not None and md.hasUrls():
+            from pathlib import Path as _P
+            for u in md.urls():
+                if not u.isLocalFile():
+                    continue
+                lf = u.toLocalFile()
+                try:
+                    if lf.lower().endswith(".pdf") or _P(lf).is_dir():
+                        out.append(lf)
+                except Exception:
+                    pass
+        return out
+
+    def _set_drop_hl(self, on: bool):
+        if on:
+            if not hasattr(self, "_base_ss"):
+                self._base_ss = self.styleSheet()
+            self.setStyleSheet((self._base_ss or "")
+                               + "\nQTreeWidget{border:2px solid #1565c0; background:rgba(21,101,192,0.08);}")
+        else:
+            self.setStyleSheet(getattr(self, "_base_ss", ""))
+
+    def dragEnterEvent(self, e):
+        if self._ext_paths(e.mimeData()):
+            e.acceptProposedAction(); self._set_drop_hl(True); return
+        super().dragEnterEvent(e)
+
+    def dragMoveEvent(self, e):
+        if self._ext_paths(e.mimeData()):
+            e.acceptProposedAction(); return
+        super().dragMoveEvent(e)
+
+    def dragLeaveEvent(self, e):
+        self._set_drop_hl(False)
+        super().dragLeaveEvent(e)
 
     def dropEvent(self, e):
+        paths = self._ext_paths(e.mimeData())
+        if paths:
+            self._set_drop_hl(False)
+            self.pathDropped.emit(paths[0])     # 첫 항목(정렬순 첫 파일/폴더)
+            e.acceptProposedAction()
+            return
         super().dropEvent(e)
         self.dropped.emit()
 
@@ -132,7 +181,9 @@ class BookmarkTree(QWidget):
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
     fileOpCompleted = pyqtSignal(str, str)   # v1.6.21: (old, new) new=="" 삭제, new==old 실패
-    splitViewRequested = pyqtSignal(bool)    # 260618-25: 1단/2단 보기 전환(True=2단창 보기)
+    splitViewRequested = pyqtSignal(bool)    # 260618-25: 1단→2단 진입(True)
+    pathDropped = pyqtSignal(str)            # 260618-27: 외부 PDF/폴더 드롭 → 이 창에 열기
+    copyPaneRequested = pyqtSignal()         # 260618-27: 이 책갈피창 기준 반대 창으로 복사
 
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
@@ -151,6 +202,7 @@ class BookmarkTree(QWidget):
         self._root_dir: Optional[Path] = None
         self._edit_mode: bool = False               # v1.6.18
         self._split_on: bool = False                # 260618-25: 우클릭 1단/2단 라벨용
+        self._pane_idx: int = 0                      # 260618-27: 0=상단(1창)/1=하단(2창)
         self._mode: str = "none"                    # v1.6.19: none|json|flat|single
         self._pdfs_flat: list = []                  # v1.6.19: 평탄 모드 파일 캐시
         self._dirty: bool = False                   # 260606-4: 편집 변경 여부
@@ -339,6 +391,10 @@ class BookmarkTree(QWidget):
         self.tree.customContextMenuRequested.connect(self._on_tree_context_menu)
         self.tree.dropped.connect(self._on_tree_dropped)
         self.tree.delPressed.connect(self._on_del_key)    # 260611-56: DEL=선택 삭제
+        # 260618-27: 외부 PDF/폴더 드롭 → 이 책갈피창(=해당 메인 창)에 등록. 비편집 모드에서도
+        #   외부 드롭은 받도록 acceptDrops 상시 ON(내부 재배치 드래그는 편집모드에서만).
+        self.tree.setAcceptDrops(True)
+        self.tree.pathDropped.connect(self.pathDropped.emit)
         # v1.6.2: 갈매기(▸) 펼침 시 PDF 내부 TOC lazy load
         self.tree.itemExpanded.connect(self._on_item_expanded)
         layout.addWidget(self.tree, 1)
@@ -424,7 +480,7 @@ class BookmarkTree(QWidget):
             item.setData(0, self.DATA_PAGE, 0)
             self._decorate_file_node(item, pdf)
             self.tree.addTopLevelItem(item)
-        self.info.setText(f"{len(pdfs)}개 PDF (bookmarks.json 없음)")
+        self.info.setText(f"{len(pdfs)}개 PDF")   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
 
     def _sorted_flat(self) -> list:
         mode = self._sort_combo.currentText() if hasattr(self, "_sort_combo") else self.SORT_BOOK
@@ -859,13 +915,15 @@ class BookmarkTree(QWidget):
             sel_files = []
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
-        # 260618-25: 1단↔2단 보기 전환(맨 위)
+        # 260618-27: 1단=‘2단 보기’(진입), 2단=이 창 기준 반대 창으로 복사
+        #   상단(1창)='2창으로 복사', 하단(2창)='1창으로 복사'.
         if self._split_on:
-            act_split_view = menu.addAction("1단창 보기")
-            _split_want = False
+            act_split_view = menu.addAction(
+                "1창으로 복사" if self._pane_idx == 1 else "2창으로 복사")
+            _is_copy = True
         else:
-            act_split_view = menu.addAction("2단창 보기")
-            _split_want = True
+            act_split_view = menu.addAction("2단 보기")
+            _is_copy = False
         menu.addSeparator()
         act_merge = None
         if sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
@@ -896,7 +954,11 @@ class BookmarkTree(QWidget):
         if chosen is None:
             return
         if chosen == act_split_view:
-            self.splitViewRequested.emit(_split_want); return
+            if _is_copy:
+                self.copyPaneRequested.emit()
+            else:
+                self.splitViewRequested.emit(True)
+            return
         if chosen == act_merge:
             self.mergeFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
         elif act_password is not None and chosen == act_password:
@@ -939,6 +1001,10 @@ class BookmarkTree(QWidget):
         """260618-25: 현재 1단/2단 상태(우클릭 메뉴 라벨 결정용)."""
         self._split_on = bool(on)
 
+    def set_pane_role(self, idx: int) -> None:
+        """260618-27: 이 책갈피창의 창 인덱스(0=상단/1창, 1=하단/2창)."""
+        self._pane_idx = 1 if idx == 1 else 0
+
     def set_edit_mode(self, on: bool):
         on = bool(on)
         # 260606-4: 편집 모드를 끌 때 변경분이 있으면 저장 여부 확인
@@ -977,9 +1043,11 @@ class BookmarkTree(QWidget):
             self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
             self.tree.setDropIndicatorShown(True)
         else:
+            # 260618-27: 비편집 모드에서도 외부 PDF/폴더 드롭은 받도록 DropOnly 유지
+            #   (내부 재배치 드래그만 비활성).
             self.tree.setDragEnabled(False)
-            self.tree.setAcceptDrops(False)
-            self.tree.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+            self.tree.setAcceptDrops(True)
+            self.tree.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
             self.tree.setDropIndicatorShown(False)
 
     def _toggle_sel_mode(self):

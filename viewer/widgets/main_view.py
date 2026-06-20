@@ -749,24 +749,27 @@ class _PdfGraphicsView(QGraphicsView):
 
     def _drop_ok(self, md):
         ownr = self._owner
-        if ownr is None or not getattr(ownr, "_img_edit", False):
-            return False
-        if md.hasImage():
-            return True
+        edit = bool(ownr is not None and getattr(ownr, "_img_edit", False))
+        # 260618-27: PDF/폴더(뷰어에 열기)는 **편집모드와 무관하게 항상 허용** — 종전엔
+        #   편집모드가 아니면 _drop_ok 가 False 라 dragEnter 가 거부되어 뷰어 드롭이
+        #   아예 동작하지 않았다. 이미지(편집 삽입)는 편집모드에서만.
         if md.hasUrls():
             from pathlib import Path as _P
             for u in md.urls():
                 if not u.isLocalFile():
                     continue
                 lf = u.toLocalFile()
-                # 260618-23: 이미지(편집 삽입) + PDF/폴더(뷰어 열기) 모두 허용
-                if lf.lower().endswith(self._IMG_EXT) or lf.lower().endswith(".pdf"):
+                if lf.lower().endswith(".pdf"):
                     return True
                 try:
                     if _P(lf).is_dir():
                         return True
                 except Exception:
                     pass
+                if edit and lf.lower().endswith(self._IMG_EXT):
+                    return True
+        if edit and md.hasImage():
+            return True
         return False
 
     def dragEnterEvent(self, e):

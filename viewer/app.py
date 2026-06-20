@@ -878,16 +878,15 @@ class MainWindow(QMainWindow):
         self._sync_split_menu_state()
 
     def _view_as_single(self, *_a):
-        """260618-26(우클릭 '1단창 보기'): 2단 → 1단. **2창(우측)에서 보던 화면(파일·페이지)과
-        책갈피를 1창(좌측)으로 복사**한 뒤 단일 창으로 전환한다('2단창 보기'의 반대 방향).
-        2창이 비어 있으면 좌측 현재 내용을 유지한 채 1단으로만 전환."""
+        """260618-26: 2단 → 1단(우측 숨김). 우측 내용을 좌측으로 가져온 뒤 단일 창.
+        (현재 우클릭 메뉴에서는 사용 안 함 — 1단 전환은 툴바 2단 토글로. 호환용 유지.)"""
         if not getattr(self, "_split_on", False):
             return
         right = self._mv[1]
         rf = right.current_file()
         rpg = right.current_page() if rf else 0
         folder = getattr(self, "_folder_right", None)
-        self._toggle_split(False)               # 우측 숨김, 활성=좌측(0)
+        self._toggle_split(False)
         try:
             self.act_split.setChecked(False)
         except Exception:
@@ -899,13 +898,33 @@ class MainWindow(QMainWindow):
             self._load_main(HistoryItem(str(rf), rpg, "", "bookmark"))
         self._sync_split_menu_state()
 
+    def _copy_pane_to(self, src: int, dst: int):
+        """260618-27: 2단에서 src 창의 화면(파일·페이지)과 책갈피(폴더)를 dst 창과 그
+        책갈피창(상=1창/하=2창)에 복사. **2단 유지**.
+        1창→2창='2창으로 복사', 2창→1창='1창으로 복사'(요청)."""
+        if not getattr(self, "_split_on", False):
+            return
+        if src not in (0, 1) or dst not in (0, 1) or src == dst:
+            return
+        smv = self._mv[src]
+        f = smv.current_file()
+        pg = smv.current_page() if f else 0
+        folder = self._folder if src == 0 else self._folder_right
+        if folder:
+            self._set_pane_folder(dst, folder)   # dst 책갈피창(상/하단)=src 폴더
+        self._set_active_pane(dst)
+        if f:
+            self._load_main(HistoryItem(str(f), pg, "", "bookmark"))
+        self._sync_split_menu_state()
+
     def _on_split_view_requested(self, want_dual: bool, from_pane: int = 0):
-        """260618-26: 책갈피/뷰어 우클릭의 1단/2단 보기 전환 핸들러.
-        2단창 보기=1창→2창(우측 비었을 때만), 1단창 보기=2창→1창."""
+        """260618-27: 1단 → 2단 진입(책갈피/뷰어 우클릭 '2단 보기')."""
         if want_dual:
             self._view_as_split()
-        else:
-            self._view_as_single()
+
+    def _on_copy_pane_requested(self, src: int):
+        """260618-27: 책갈피 우클릭 '○창으로 복사' — 상단(src=0)=1창→2창, 하단(src=1)=2창→1창."""
+        self._copy_pane_to(src, 1 - src)
 
     def _on_pane_page_changed(self, i: int, page: int):
         if i != self._active_pane:
@@ -1719,11 +1738,21 @@ class MainWindow(QMainWindow):
         self.bookmark_tree.bookmarkActivated.connect(self._on_bookmark_activated)
         # 260618-22: 하단(우측) 책갈피 → 우측 창에 열기
         self.bookmark_tree_right.bookmarkActivated.connect(self._on_bookmark_activated_right)
-        # 260618-25: 책갈피 우클릭 1단/2단 보기(상=좌측 기준, 하=우측 기준)
+        # 260618-25/27: 책갈피 우클릭 — 1단=‘2단 보기’, 2단=반대 창으로 복사
+        self.bookmark_tree.set_pane_role(0)
+        self.bookmark_tree_right.set_pane_role(1)
         self.bookmark_tree.splitViewRequested.connect(
             lambda want: self._on_split_view_requested(want, 0))
         self.bookmark_tree_right.splitViewRequested.connect(
             lambda want: self._on_split_view_requested(want, 1))
+        self.bookmark_tree.copyPaneRequested.connect(
+            lambda: self._on_copy_pane_requested(0))        # 상단(1창)→2창
+        self.bookmark_tree_right.copyPaneRequested.connect(
+            lambda: self._on_copy_pane_requested(1))        # 하단(2창)→1창
+        # 260618-27: 외부 PDF/폴더를 상단(좌=1창)/하단(우=2창) 책갈피창에 드롭 → 해당 창에 등록.
+        #   드롭 대상 창이 명확하므로 활성창 선택 없이 그 창으로 바로 연다.
+        self.bookmark_tree.pathDropped.connect(lambda p: self._on_pane_path_drop(0, p))
+        self.bookmark_tree_right.pathDropped.connect(lambda p: self._on_pane_path_drop(1, p))
         self.page_thumbs.pageActivated.connect(lambda pg: self.main_view.go_to_page(pg))
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
@@ -2561,12 +2590,14 @@ class MainWindow(QMainWindow):
         act_print1 = menu.addAction(f"현재 페이지 인쇄 (p.{page})")
         act_print1.setEnabled(can_print)
         menu.addSeparator()
-        # 260618-25: 1단↔2단 보기 전환(우클릭 옵션)
-        act_to_dual = act_to_single = None
+        # 260618-27: 1단=‘2단 보기’(진입), 2단=현재 창 기준 ‘반대 창으로 복사’.
+        #   1창(좌,active 0)→‘2창으로 복사’, 2창(우,active 1)→‘1창으로 복사’.
+        act_to_dual = act_copy_other = None
         if getattr(self, "_split_on", False):
-            act_to_single = menu.addAction("1단창 보기")
+            act_copy_other = menu.addAction(
+                "2창으로 복사" if self._active_pane == 0 else "1창으로 복사")
         else:
-            act_to_dual = menu.addAction("2단창 보기")
+            act_to_dual = menu.addAction("2단 보기")
         menu.addSeparator()
         act_add = menu.addAction(f"책갈피 추가 (p.{page})") if edit else None
         # 260609-11(C1): 하이퍼링크 등록은 편집모드에서만
@@ -2637,11 +2668,11 @@ class MainWindow(QMainWindow):
         chosen = menu.exec(global_pos)
         if chosen is None:
             return
-        # 260618-25: 1단/2단 보기 전환(우클릭한 창을 기준으로)
+        # 260618-27: 2단 보기 진입 / 반대 창으로 복사
         if act_to_dual is not None and chosen == act_to_dual:
             self._view_as_split(); return
-        if act_to_single is not None and chosen == act_to_single:
-            self._view_as_single(self._active_pane); return
+        if act_copy_other is not None and chosen == act_copy_other:
+            self._copy_pane_to(self._active_pane, 1 - self._active_pane); return
         # 260617-2: 텍스트 복사(블럭/페이지)·블럭설정·현재 페이지 인쇄
         if chosen == act_copy:
             self.main_view.copy_selection(); return
