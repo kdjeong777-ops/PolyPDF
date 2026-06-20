@@ -71,6 +71,15 @@ def _format(it: dict):
     if sub:
         out.append(f'<p style="color:#666;margin:0 0 8px">{_esc(sub)}</p>')
 
+    # 260618-41: 제목 중복 제거 —
+    #   ① title 이 이미 label 로 시작하면 label 을 또 붙이지 않음(예: "1.1.1"+"1.1.1 프라임…").
+    #   ② 하위 항목은 부모 title 을 그대로 반복 → 직전 절 제목과 같으면 번호(label)만.
+    #   ③ contents 가 제목/헤더를 그대로 반복하면 본문 생략. 본문이 자기 번호로 시작하면
+    #      번호만짜리 헤더는 생략(자기설명형 조항).
+    def _norm(x):
+        return re.sub(r"\s+", " ", x or "").strip()
+
+    last_title = None
     for s in (it.get("list") or []):
         if not isinstance(s, dict):
             continue
@@ -80,16 +89,34 @@ def _format(it: dict):
             level = 0
         label = (str(s.get("label") or "")).strip()
         stitle = (str(s.get("title") or "")).strip()
-        head = " ".join(x for x in (label, stitle) if x).strip()
+        ctext = _norm(re.sub(r"<[^>]+>", " ", str(s.get("contents") or "")))
+
+        is_new_title = bool(stitle) and stitle != last_title
+        if is_new_title:
+            head = stitle if (label and stitle.startswith(label)) else (
+                f"{label} {stitle}".strip() if label else stitle)
+            last_title = stitle
+        else:
+            head = label                      # 제목 반복(자식) → 번호만
+
+        # 본문: 제목/헤더만 반복하는 contents 는 생략
+        if ctext and ctext not in (_norm(stitle), _norm(head)):
+            body = _contents_to_html(s.get("contents"))
+        else:
+            body = ""
+        # 자기설명형 조항(본문이 자기 번호로 시작)은 번호만짜리 헤더 생략
+        if body and head and head == label and ctext.startswith(label):
+            head = ""
+
         indent = min(max(level, 0), 6) * 1.2
         if head:
-            anchor = f"sec_{len(arts) + 1}"
-            arts.append((head, anchor))
+            if is_new_title:                  # 제목 있는 절만 좌측 네비(arts) 등록
+                anchor = f"sec_{len(arts) + 1}"
+                arts.append((head, anchor))
+                out.append(f'<a name="{anchor}"></a>')
             out.append(
-                f'<a name="{anchor}"></a>'
                 f'<p style="margin:11px 0 2px {indent}em">'
                 f'<b><span style="color:#1456c4">{_esc(head)}</span></b></p>')
-        body = _contents_to_html(s.get("contents"))
         if body:
             out.append(f'<div style="margin:2px 0 4px {indent + 0.6}em">{body}</div>')
     return _wrap("".join(out)), arts, meta
