@@ -1448,6 +1448,13 @@ class MainWindow(QMainWindow):
         a_autodl.toggled.connect(self._on_toggle_auto_download)
         m_help.addAction(a_autodl)
         self._act_auto_download = a_autodl
+        # 260618-33: 베타(테스트) 업데이트 채널 — 켜면 -beta/-rc 등 프리릴리즈도 받음(기본 꺼짐=정식만)
+        a_beta = QAction("베타(테스트) 버전도 받기", self)
+        a_beta.setCheckable(True)
+        a_beta.setChecked(str(getattr(self, "_prefs", {}).get("update_channel", "stable")).lower() == "beta")
+        a_beta.toggled.connect(self._on_toggle_update_channel)
+        m_help.addAction(a_beta)
+        self._act_update_beta = a_beta
         m_help.addSeparator()
         a_about = QAction("정보", self)
         a_about.triggered.connect(self._show_about)
@@ -7142,6 +7149,7 @@ class MainWindow(QMainWindow):
         self._prefs.setdefault("update_repo", "")                 # 260618-11: GitHub OWNER/REPO
         self._prefs.setdefault("auto_check_update", True)         # 260618-11: 시작 시 업데이트 확인
         self._prefs.setdefault("auto_download_update", True)      # 260618-24: 백그라운드 미리 다운로드
+        self._prefs.setdefault("update_channel", "stable")        # 260618-33: stable|beta(테스트)
         self._prefs.setdefault("urimalsaem_key", "")
         self._prefs.setdefault("stdict_key", "")
         self._prefs.setdefault("onterm_key", "")
@@ -7384,6 +7392,8 @@ class MainWindow(QMainWindow):
                                                 old.get("auto_check_update", True))),
             "auto_download_update": bool(prefs.get("auto_download_update",
                                                   old.get("auto_download_update", True))),
+            "update_channel": str(prefs.get("update_channel",
+                                            old.get("update_channel", "stable"))),  # 260618-33
             # 260606-19: 단축키 오버라이드 보존
             "shortcuts": prefs.get("shortcuts", old.get("shortcuts", {})),
         }
@@ -7945,6 +7955,16 @@ class MainWindow(QMainWindow):
         if checked and getattr(self, "_pending_update", None):
             self._start_bg_update_download(self._pending_update)
 
+    def _on_toggle_update_channel(self, checked: bool):
+        """260618-33: 베타(테스트) 채널 토글 — 켜면 -beta/-rc 등 프리릴리즈도 후보."""
+        self._prefs["update_channel"] = "beta" if checked else "stable"
+        try:
+            self._save_settings_now()
+        except Exception:
+            pass
+        # 채널을 바꾸면 즉시 한 번 재확인(수동 알림 없이)
+        self._check_for_updates(manual=False)
+
     def _check_for_updates(self, manual: bool = False):
         """최신 릴리스를 백그라운드로 확인(결과는 _on_update_result). manual=True 면
         저장소 미설정 시 입력받고, 최신/실패도 알림."""
@@ -7971,8 +7991,10 @@ class MainWindow(QMainWindow):
         import threading
         sig = self._update_sig
 
+        channel = str(self._prefs.get("update_channel", "stable"))
+
         def work():
-            info = updater.check_latest(repo)
+            info = updater.check_latest(repo, channel=channel)
             try:
                 sig.done.emit(info, bool(manual))
             except Exception:

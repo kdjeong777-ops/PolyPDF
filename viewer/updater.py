@@ -38,7 +38,7 @@ def current_version() -> str:
 
 
 def _vtuple(s: str) -> tuple:
-    """'v2.23.0' / '2.23.0-rc1' → (2,23,0). 숫자 외 토큰에서 중단."""
+    """'v2.23.0' / '2.23.0-rc1' → (2,23,0). 숫자 외 토큰에서 중단. (호환용 — 거친 X.Y.Z)"""
     s = (s or "").strip().lstrip("vV")
     out: list = []
     for p in re.split(r"[.\-+_]", s):
@@ -51,8 +51,51 @@ def _vtuple(s: str) -> tuple:
     return tuple(out[:3])
 
 
+def _vkey(s: str):
+    """260618-33: SemVer 정렬키 또는 None(비버전 태그).
+    프리릴리즈(`-beta`/`-rc` 등)는 같은 X.Y.Z 정식보다 **작게** 정렬한다.
+      'v2.41.0'        → ((2,41,0), 1, ())            # final flag 1
+      'v2.41.0-beta.1' → ((2,41,0), 0, ((0,1,''), (1,0,'beta')...))  # final flag 0 < 1
+    식별자 비교: 숫자(0,n,'') < 문자(1,0,str); 필드수 적은 쪽이 작음(SemVer 규칙)."""
+    s = (s or "").strip().lstrip("vV").split("+", 1)[0]
+    if "-" in s:
+        rel, pre = s.split("-", 1)
+    else:
+        rel, pre = s, None
+    parts = rel.split(".")
+    if not parts or not parts[0].isdigit():
+        return None                              # 비버전(components 등)
+    nums: list = []
+    for p in parts:
+        if p.isdigit():
+            nums.append(int(p))
+        else:
+            break
+    while len(nums) < 3:
+        nums.append(0)
+    nums = tuple(nums[:3])
+    if pre is None:
+        return (nums, 1, ())                     # 정식
+    ids = []
+    for part in re.split(r"[.\-_]", pre):
+        if not part:
+            continue
+        if part.isdigit():
+            ids.append((0, int(part), ""))       # 숫자 식별자 우선(작음)
+        else:
+            ids.append((1, 0, part.lower()))
+    return (nums, 0, tuple(ids))
+
+
+def is_prerelease_tag(tag: str) -> bool:
+    """260618-33: 태그 접미사 기준 프리릴리즈 여부(예: 'v2.41.0-beta.1')."""
+    k = _vkey(tag)
+    return bool(k is not None and k[1] == 0)
+
+
 def is_newer(latest: str, current: str) -> bool:
-    return _vtuple(latest) > _vtuple(current)
+    kl, kc = _vkey(latest), _vkey(current)
+    return bool(kl is not None and kc is not None and kl > kc)
 
 
 def valid_repo(repo: str) -> bool:
@@ -94,8 +137,13 @@ def _to_info(rel):
     }
 
 
-def check_latest(repo: str, timeout: float = 8.0):
+def check_latest(repo: str, timeout: float = 8.0, channel: str = "stable"):
     """최신 '버전' 릴리스 정보 dict 또는 None.
+
+    260618-33: 업데이트 채널 — `channel="stable"` 은 **태그 접미사 프리릴리즈
+    (`-beta`/`-rc` 등)를 제외**하고 정식만 고려, `"beta"` 는 전부 고려(프리릴리즈<정식
+    SemVer 우선순위). GitHub `prerelease` 플래그는 보지 않음(표시용) — 채널 구분은
+    오로지 **태그 접미사**로 한다.
 
     260618-13: `/releases` 목록에서 **유효 SemVer 태그 중 최고 버전**을 고른다
     (`components` 등 비버전 태그·draft 는 제외). 과거 `/releases/latest` 만 쓰면 `components`
@@ -112,17 +160,20 @@ def check_latest(repo: str, timeout: float = 8.0):
     data = _get_json(list_url, timeout)
     if not isinstance(data, list):
         data = _get_json(list_url, timeout)          # 일시적 실패 1회 재시도
+    beta = (str(channel or "stable").lower() == "beta")
     best = None
-    best_v = (-1, -1, -1)
+    best_k = None
     if isinstance(data, list):
         for rel in data:
             if not isinstance(rel, dict) or rel.get("draft"):
                 continue
-            v = _vtuple(str(rel.get("tag_name") or ""))
-            if v == (0, 0, 0):              # 비버전 태그(components 등) 제외
+            k = _vkey(str(rel.get("tag_name") or ""))
+            if k is None:                   # 비버전 태그(components 등) 제외
                 continue
-            if v > best_v:
-                best_v = v
+            if not beta and k[1] == 0:      # stable 채널: 접미사 프리릴리즈 제외
+                continue
+            if best_k is None or k > best_k:
+                best_k = k
                 best = rel
     if best is None:                        # 최후 폴백: /releases/latest(프리릴리즈 제외 — 안정판만)
         best = _get_json(_API_LATEST.format(repo=repo), timeout)
