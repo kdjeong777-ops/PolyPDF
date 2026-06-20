@@ -134,19 +134,17 @@ def fetch_content(key: str, ctype: str, code: str, timeout: float = 12.0) -> str
     return fetch_content_debug(key, ctype, code, timeout)[0]
 
 
-def list_codes_debug(key: str, ctype: str = "", query: str = "", timeout: float = 12.0):
-    """260618-38: 건설기준 목록(CodeList). (rows, [진단...]).
-    GET /OpenApi/CodeList?type={KDS|KCS}&key={KEY}  (소문자 파라미터) → JSON 배열.
-    query 가 있으면 이름·코드·fullCode 부분일치로 클라이언트 필터.
-    rows: {code, fullCode, name, ctype, version, updateDate, parents:[..]}."""
+def fetch_catalog_debug(key: str, timeout: float = 20.0):
+    """260618-39: 건설기준 전체 카탈로그(CodeList) 한 번에. (rows, [진단...]).
+    GET /OpenApi/CodeList?key={KEY}  (소문자) → JSON 배열(모든 코드체계 포함).
+    ※ 서버가 type 파라미터로 필터하지 않아(설계기준 선택해도 전부 반환) 전체를 받아
+      클라이언트에서 카테고리·검색어로 거른다.
+    rows: {code, fullCode, name, ctype, version, updateDate, parents:[..], category}.
+      category = 코드체계(분류) 표시명(parents 의 최상위, 없으면 codeType 표시명)."""
     key = (key or "").strip()
-    ctype = (ctype or "").strip().upper()
     if not key:
         return [], ["KCSC 키 없음"]
-    params = {"key": key}
-    if ctype:
-        params["type"] = ctype
-    url = _BASE + "/CodeList?" + urllib.parse.urlencode(params)
+    url = _BASE + "/CodeList?" + urllib.parse.urlencode({"key": key})
     try:
         req = urllib.request.Request(url, headers={"User-Agent": _UA})
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -164,29 +162,37 @@ def list_codes_debug(key: str, ctype: str = "", query: str = "", timeout: float 
         code = str(it.get("code") or "").strip()
         if not (name or code):
             continue
+        ctype = str(it.get("codeType") or "").strip()
         parents = [(p.get("name") or "").strip()
                    for p in (it.get("listParentCodes") or [])
                    if isinstance(p, dict) and (p.get("name") or "").strip()]
+        category = parents[0] if parents else TYPE_NAMES.get(ctype, ctype)
         rows.append({
             "code": code,
             "fullCode": str(it.get("fullCode") or "").strip(),
             "name": name,
-            "ctype": str(it.get("codeType") or ctype).strip(),
+            "ctype": ctype,
             "version": str(it.get("version") or "").strip(),
             "updateDate": str(it.get("updateDate") or "").strip(),
             "parents": parents,
+            "category": category,
         })
-    q = (query or "").strip().lower()
-    if q:
-        rows = [r for r in rows if q in r["name"].lower()
-                or q in r["code"].lower() or q in r["fullCode"].lower()]
     if not rows:
         msg = ""
         if items and isinstance(items[0], dict):
             msg = str(items[0].get("message") or "").strip()
-        return [], [f"{status} 결과 없음 — 키/타입 확인" + (f" ({msg})" if msg else "")]
+        return [], [f"{status} 결과 없음 — KCSC 키 확인" + (f" ({msg})" if msg else "")]
     return rows, [f"{status} {len(rows)}건"]
 
 
 def list_codes(key: str, ctype: str = "", query: str = "", timeout: float = 12.0):
-    return list_codes_debug(key, ctype, query, timeout)[0]
+    """호환용: 전체 카탈로그에서 category(코드체계)·query 로 필터."""
+    rows, _ = fetch_catalog_debug(key, timeout)
+    ct = (ctype or "").strip().upper()
+    if ct:
+        rows = [r for r in rows if (r.get("ctype") or "").upper() == ct]
+    q = (query or "").strip().lower()
+    if q:
+        rows = [r for r in rows if q in r["name"].lower()
+                or q in r["code"].lower() or q in r["fullCode"].lower()]
+    return rows

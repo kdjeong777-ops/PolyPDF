@@ -175,6 +175,7 @@ class MainWindow(QMainWindow):
         self._kcsc_panel = None               # 260618-37: 건설기준(KCSC) 패널(법령과 동일 슬롯)
         self._kcsc_window = None
         self._kcsc_saved = None
+        self._kcsc_favorites: list = []       # 260618-39: 건설기준 즐겨찾기
         self._prefs: dict = {
             "restore_session": True, "restore_last_page": True,
             "restore_screenshots": True, "screenshot_max": 30,
@@ -5249,6 +5250,9 @@ class MainWindow(QMainWindow):
 
     def _action_kcsc_search(self, checked: bool = False):
         """260618-37: 국가건설기준센터(KDS/KCS) 본문 패널(메인 오른쪽 2단 임베드/전체화면)."""
+        self._open_kcsc()
+
+    def _open_kcsc(self, fav: dict | None = None):
         key = self._kcsc_key_or_warn()
         if not key:
             return
@@ -5257,12 +5261,50 @@ class MainWindow(QMainWindow):
         if self._kcsc_panel is not None:
             if self._kcsc_window is not None:
                 self._kcsc_window.raise_(); self._kcsc_window.activateWindow()
+            if fav:
+                self._kcsc_panel.show_saved(fav)
             return
         from viewer.widgets.kcsc_search_dialog import KcscSearchPanel
         self._kcsc_panel = KcscSearchPanel(key, self)
         self._kcsc_panel.closeRequested.connect(self._close_kcsc)
         self._kcsc_panel.fullscreenToggled.connect(self._toggle_kcsc_fullscreen)
         self._enter_kcsc_layout()
+        if fav:
+            self._kcsc_panel.show_saved(fav)
+
+    def _add_kcsc_favorite_entry(self, row: dict):
+        """260618-39: 건설기준 항목을 KCSC 즐겨찾기에 추가(중복 방지)."""
+        name = (row.get("name") or "").strip()
+        code = str(row.get("code") or "").strip()
+        if not (name or code):
+            return
+        for f in self._kcsc_favorites:
+            if str(f.get("code")) == code and (f.get("ctype") or "") == (row.get("ctype") or ""):
+                self.status.showMessage(f"이미 건설기준 즐겨찾기에 있음: {name}", 3000)
+                return
+        self._kcsc_favorites.append({
+            "kind": "kcsc", "name": name, "code": code,
+            "ctype": row.get("ctype", ""), "category": row.get("category", ""),
+        })
+        try:
+            self._save_settings_now()
+        except Exception:
+            pass
+        self.status.showMessage(f"건설기준 즐겨찾기 추가: {name}", 3000)
+
+    def _open_kcsc_favorite(self, fav: dict):
+        self._open_kcsc(fav)
+
+    def _manage_kcsc_favorites(self):
+        from viewer.widgets.law_search_dialog import LawFavoritesManager
+        dlg = LawFavoritesManager(self._kcsc_favorites, self)
+        dlg.setWindowTitle("건설기준(KCSC) 즐겨찾기 관리")
+        if dlg.exec():
+            self._kcsc_favorites = dlg.result_favorites()
+            try:
+                self._save_settings_now()
+            except Exception:
+                pass
 
     def _enter_kcsc_layout(self):
         try:
@@ -7361,6 +7403,7 @@ class MainWindow(QMainWindow):
         # 즐겨찾기 로드 (세션 복원 여부와 무관)
         self._favorites = list(data.get("favorites", []))
         self._law_favorites = list(data.get("law_favorites", []))   # 260616-6
+        self._kcsc_favorites = list(data.get("kcsc_favorites", []))  # 260618-39
         self._refresh_favorites_menu()
 
         # 260603-4: 단어장·읽기 설정 복원(모든 선택 유지)
@@ -7732,6 +7775,7 @@ class MainWindow(QMainWindow):
             "preferences": self._prefs,
             "favorites": self._favorites,
             "law_favorites": self._law_favorites,
+            "kcsc_favorites": self._kcsc_favorites,   # 260618-39
             # 260603-4: 단어장·읽기 모든 선택/설정 저장
             "study_settings": self.study_panel.get_settings(),
             "read_aloud": {

@@ -1,20 +1,21 @@
-"""건설기준(KCSC) 검색·본문 뷰어 — 국가건설기준센터 OPEN API (260618-37/38).
+"""건설기준(KCSC) 검색·본문 뷰어 — 국가건설기준센터 OPEN API (260618-37/38/39).
 
 법령·고시 패널(law_search_dialog)과 동일한 사이드 패널 방식.
-- 검색: 코드체계(KDS/KCS) + 이름/코드 → CodeList(목록) → 결과 트리.
-- 본문: 결과 선택 → CodeViewer → 우측 표시(절 목록은 결과 항목의 자식으로).
-- 코드 직접 보기: 검색 결과가 없고 입력이 코드면 CodeViewer 직접 시도.
+- 카탈로그(CodeList)를 한 번 받아 캐시 → 코드체계(전체/설계기준/표준시방서/전문시방서…)
+  드롭다운(데이터 기반) + 이름·코드 검색을 **클라이언트에서** 필터.
+- 본문: 결과 선택 → CodeViewer → 우측 표시(절 목록은 결과 항목의 자식).
+- 즐겨찾기: 법령과 동일(메인 윈도가 _kcsc_favorites 관리).
 """
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
-from PyQt6.QtGui import QDesktopServices, QShortcut, QKeySequence, QTextDocument
+from PyQt6.QtGui import (QDesktopServices, QShortcut, QKeySequence, QTextDocument,
+                         QAction)
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
-    QComboBox, QTreeWidget, QTreeWidgetItem, QTextBrowser, QWidget,
+    QComboBox, QTreeWidget, QTreeWidgetItem, QTextBrowser, QWidget, QMenu,
 )
 
-from viewer.study.kcsc_api import TYPES, TYPE_NAMES
 from viewer.widgets.toggle_splitter import ToggleSplitter
 from viewer.widgets.icons import themed_icon
 
@@ -23,17 +24,17 @@ _ROLE_ROW = Qt.ItemDataRole.UserRole + 1       # 결과(row dict)
 _ROLE_ANCHOR = Qt.ItemDataRole.UserRole + 2    # 절 앵커
 
 
-class _ListWorker(QThread):
+class _CatalogWorker(QThread):
     done = pyqtSignal(list, list)              # rows, debug
 
-    def __init__(self, key, ctype, query):
+    def __init__(self, key):
         super().__init__()
-        self._key, self._ctype, self._q = key, ctype, query
+        self._key = key
 
     def run(self):
         try:
-            from viewer.study.kcsc_api import list_codes_debug
-            rows, dbg = list_codes_debug(self._key, self._ctype, self._q)
+            from viewer.study.kcsc_api import fetch_catalog_debug
+            rows, dbg = fetch_catalog_debug(self._key)
             self.done.emit(rows, dbg)
         except Exception as e:
             self.done.emit([], [f"ERR {type(e).__name__}: {e}"])
@@ -75,7 +76,8 @@ class KcscSearchPanel(QWidget):
         self._key = key
         self._win = win
         self._workers: list = []
-        self._cur_item = None        # 본문을 표시 중인 결과 항목(절 자식 부착용)
+        self._cur_item = None
+        self._all_rows = None         # 카탈로그 캐시(전체)
 
         self.setMinimumWidth(360)
         try:
@@ -88,12 +90,18 @@ class KcscSearchPanel(QWidget):
 
         v = QVBoxLayout(self)
 
-        # --- 제목줄 ---
+        # --- 제목줄: 건설기준(KCSC) + 즐겨찾기 + 전체화면 + 닫기 ---
         title_row = QHBoxLayout()
         title = QLabel("건설기준(KCSC)")
         tf = title.font(); tf.setBold(True); tf.setPointSize(max(11, tf.pointSize() + 2))
         title.setFont(tf)
         title_row.addWidget(title)
+        self.btn_fav = QPushButton("⭐ 즐겨찾기")
+        self.btn_fav.setIcon(themed_icon("star"))
+        self._fav_menu = QMenu(self)
+        self._fav_menu.aboutToShow.connect(self._rebuild_fav_menu)
+        self.btn_fav.setMenu(self._fav_menu)
+        title_row.addWidget(self.btn_fav)
         title_row.addStretch(1)
         self.btn_full = QPushButton("⛶ 전체화면")
         self.btn_full.setToolTip("전체화면(별도 창) ↔ 내부화면(메인 오른쪽)")
@@ -110,11 +118,11 @@ class KcscSearchPanel(QWidget):
         title_row.addWidget(self.btn_close)
         v.addLayout(title_row)
 
-        # --- 검색줄: 코드체계 + 검색어(이름/코드) + 검색 + 지구본 ---
+        # --- 검색줄: 코드체계(전체+데이터기반) + 검색어 + 검색 + 지구본 ---
         top = QHBoxLayout()
         self.cmb_type = QComboBox()
-        for code_t, name_t in TYPES:
-            self.cmb_type.addItem(f"{code_t} · {name_t}", code_t)
+        self.cmb_type.addItem("전체 (전체에서 찾기)", "")     # 제일 위 = 전체
+        self.cmb_type.currentIndexChanged.connect(lambda *_: self._apply_filter())
         self.ed = QLineEdit()
         self.ed.setPlaceholderText("이름 또는 코드 검색 (예: 콘크리트, 114010)")
         self.ed.returnPressed.connect(self._search)
@@ -131,7 +139,7 @@ class KcscSearchPanel(QWidget):
         top.addWidget(self.btn_globe)
         v.addLayout(top)
 
-        self.info = QLabel("코드체계(KDS/KCS) 선택 후 이름/코드로 검색하세요.")
+        self.info = QLabel("코드체계를 고르고 이름/코드로 검색하세요. (전체=모든 체계에서 찾기)")
         self.info.setStyleSheet("color:#888;")
         self.info.setWordWrap(True)
         v.addWidget(self.info)
@@ -141,6 +149,8 @@ class KcscSearchPanel(QWidget):
         self.split.setHandleWidth(8)
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._on_tree_menu)
         self.tree.currentItemChanged.connect(lambda *_: self._on_select())
         self.tree.itemClicked.connect(lambda *_: self._on_select())
         self.split.addWidget(self.tree)
@@ -152,7 +162,7 @@ class KcscSearchPanel(QWidget):
         self.split.setStretchFactor(0, 0)
         self.split.setStretchFactor(1, 1)
         self.split.setCollapsible(0, True)
-        self.split.setSizes([300, 700])
+        self.split.setSizes([320, 680])
         v.addWidget(self.split, 1)
 
         # --- 찾기 바(Ctrl+F) ---
@@ -189,47 +199,86 @@ class KcscSearchPanel(QWidget):
         else:
             self.closeRequested.emit()
 
-    # ----- 검색(목록) -----
+    # ----- 카탈로그 로드 + 필터 -----
     def _search(self):
         if not (self._key or "").strip():
             self.info.setText("설정 → '인터넷 사전'의 KCSC 키를 먼저 입력하세요.")
             return
-        ctype = self.cmb_type.currentData()
-        q = (self.ed.text() or "").strip()
-        self.info.setText("검색 중…")
-        self.tree.clear(); self.viewer.clear(); self._cur_item = None
-        w = _ListWorker(self._key, ctype, q)
-        self._workers.append(w)
-        w.done.connect(lambda rows, dbg, q=q, ct=ctype: self._on_list(rows, dbg, q, ct))
-        w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
-        w.start()
+        if self._all_rows is None:
+            self.info.setText("목록 불러오는 중…")
+            w = _CatalogWorker(self._key)
+            self._workers.append(w)
+            w.done.connect(self._on_catalog)
+            w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
+            w.start()
+        else:
+            self._apply_filter()
 
-    def _on_list(self, rows, dbg, query, ctype):
-        self.tree.clear()
+    def _on_catalog(self, rows, dbg):
         if not rows:
-            # 결과 없음 + 입력이 코드처럼 보이면 CodeViewer 직접 시도
-            if query and query.replace(" ", "").isalnum():
-                self.info.setText("목록에 없음 — 코드로 직접 조회합니다…")
-                self._load_content(ctype, query.strip(), None)
-                return
-            self.info.setText("검색 결과가 없습니다. " + (dbg[-1] if dbg else ""))
+            self.info.setText("목록을 불러오지 못했습니다. " + (dbg[-1] if dbg else ""))
             return
-        groups: dict = {}
+        self._all_rows = rows
+        # 드롭다운: '전체' + 데이터에 나온 카테고리(최초 등장 순서)
+        seen = []
         for r in rows:
-            top = (r.get("parents") or ["기타"])[0] or "기타"
-            groups.setdefault(top, []).append(r)
-        for gname in groups:
-            parent = QTreeWidgetItem([gname]) if len(groups) > 1 else None
-            if parent is not None:
-                self.tree.addTopLevelItem(parent)
-                parent.setExpanded(True)
-            for r in groups[gname]:
-                label = f"{r['name']} ({r['code']})" if r.get("code") else r["name"]
-                it = QTreeWidgetItem([label])
-                it.setData(0, _ROLE_ROW, r)
-                (parent.addChild(it) if parent is not None
-                 else self.tree.addTopLevelItem(it))
-        self.info.setText(f"{len(rows)}건")
+            c = r.get("category") or ""
+            if c and c not in seen:
+                seen.append(c)
+        self.cmb_type.blockSignals(True)
+        cur = self.cmb_type.currentData()
+        self.cmb_type.clear()
+        self.cmb_type.addItem("전체 (전체에서 찾기)", "")
+        for c in seen:
+            self.cmb_type.addItem(c, c)
+        # 이전 선택 유지
+        idx = self.cmb_type.findData(cur) if cur else 0
+        self.cmb_type.setCurrentIndex(idx if idx >= 0 else 0)
+        self.cmb_type.blockSignals(False)
+        self._apply_filter()
+
+    def _apply_filter(self):
+        if self._all_rows is None:
+            return
+        cat = self.cmb_type.currentData() or ""
+        q = (self.ed.text() or "").strip().lower()
+        rows = self._all_rows
+        if cat:
+            rows = [r for r in rows if (r.get("category") or "") == cat]
+        if q:
+            rows = [r for r in rows if q in r["name"].lower()
+                    or q in r["code"].lower() or q in (r.get("fullCode") or "").lower()]
+        self.tree.clear(); self._cur_item = None
+        if not rows:
+            self.info.setText("검색 결과가 없습니다.")
+            return
+        # 카테고리 선택 시 평면, 전체 시 카테고리 그룹
+        big = len(rows) > 1500
+        if cat:
+            for r in rows:
+                self.tree.addTopLevelItem(self._leaf(r))
+        else:
+            groups: dict = {}
+            order: list = []
+            for r in rows:
+                c = r.get("category") or "기타"
+                if c not in groups:
+                    groups[c] = []; order.append(c)
+                groups[c].append(r)
+            for c in order:
+                g = QTreeWidgetItem([f"{c}  ({len(groups[c])})"])
+                self.tree.addTopLevelItem(g)
+                for r in groups[c]:
+                    g.addChild(self._leaf(r))
+                g.setExpanded(not big)        # 너무 많으면 접어둠
+        self.info.setText(f"{len(rows)}건" + ("  · 검색어를 입력하면 좁혀집니다." if big else ""))
+
+    @staticmethod
+    def _leaf(r: dict) -> QTreeWidgetItem:
+        label = f"{r['name']} ({r['code']})" if r.get("code") else r["name"]
+        it = QTreeWidgetItem([label])
+        it.setData(0, _ROLE_ROW, r)
+        return it
 
     # ----- 선택 → 본문 / 절 이동 -----
     def _on_select(self):
@@ -242,8 +291,11 @@ class KcscSearchPanel(QWidget):
             return
         row = it.data(0, _ROLE_ROW)
         if isinstance(row, dict) and row.get("code"):
-            self._load_content(row.get("ctype") or self.cmb_type.currentData(),
-                               row["code"], it)
+            self._load_content(row.get("ctype") or "", row["code"], it)
+
+    def _current_row(self):
+        it = self.tree.currentItem()
+        return it.data(0, _ROLE_ROW) if it is not None else None
 
     def _load_content(self, ctype, code, item):
         self._cur_item = item
@@ -263,7 +315,6 @@ class KcscSearchPanel(QWidget):
         ver = meta.get("version") or ""
         self.info.setText((f"{name}" + (f"  (v{ver})" if ver else "")) if name
                           else (dbg[-1] if dbg else ""))
-        # 절 목록을 현재 결과 항목의 자식으로(있을 때)
         it = self._cur_item
         if it is not None:
             it.takeChildren()
@@ -272,6 +323,57 @@ class KcscSearchPanel(QWidget):
                 ch.setData(0, _ROLE_ANCHOR, anchor)
                 it.addChild(ch)
             it.setExpanded(True)
+
+    # ----- 즐겨찾기 -----
+    def _on_tree_menu(self, pos):
+        it = self.tree.itemAt(pos)
+        if it is None or it.data(0, _ROLE_ROW) is None:
+            return
+        self.tree.setCurrentItem(it)
+        menu = QMenu(self)
+        a_fav = QAction("⭐ 즐겨찾기에 추가", self)
+        a_fav.triggered.connect(self._add_favorite_current)
+        menu.addAction(a_fav)
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _add_favorite_current(self):
+        row = self._current_row()
+        if not row:
+            return
+        win = self._win
+        if win is not None and hasattr(win, "_add_kcsc_favorite_entry"):
+            win._add_kcsc_favorite_entry(row)
+            self.info.setText(f"즐겨찾기에 추가: {row.get('name','')}")
+
+    def _rebuild_fav_menu(self):
+        self._fav_menu.clear()
+        favs = list(getattr(self._win, "_kcsc_favorites", []) or []) if self._win else []
+        if not favs:
+            a = self._fav_menu.addAction("(즐겨찾기 없음)")
+            a.setEnabled(False)
+        else:
+            for f in favs:
+                label = f.get("name", "?")
+                cat = f.get("category")
+                if cat:
+                    label += f"  ({cat})"
+                act = self._fav_menu.addAction(label)
+                act.triggered.connect(lambda _=False, ff=f: self.show_saved(ff))
+        self._fav_menu.addSeparator()
+        mng = self._fav_menu.addAction("즐겨찾기 관리...")
+        mng.triggered.connect(self._manage_favs)
+
+    def _manage_favs(self):
+        if self._win is not None and hasattr(self._win, "_manage_kcsc_favorites"):
+            self._win._manage_kcsc_favorites()
+
+    def show_saved(self, fav: dict):
+        """저장된 즐겨찾기 항목 본문을 바로 표시(검색 없이)."""
+        self._cur_item = None
+        self.info.setText(f"즐겨찾기: {fav.get('name','')}")
+        self.viewer.setHtml(f"<p style='color:#888'>본문을 불러오는 중… "
+                            f"<b>{fav.get('name','')}</b></p>")
+        self._load_content(fav.get("ctype") or "", str(fav.get("code") or ""), None)
 
     # ----- 찾기 -----
     def _show_find(self):
