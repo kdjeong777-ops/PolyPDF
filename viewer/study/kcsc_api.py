@@ -23,6 +23,9 @@ _BASE = "https://kcsc.re.kr/OpenApi"
 TYPES = [("KDS", "설계기준"), ("KCS", "표준시방서")]
 TYPE_NAMES = dict(TYPES)
 
+# 260618-42: 헤더로 표시할 가치가 없는 일반 라벨(본문/내용 등) — 본문만 출력.
+_GENERIC_LABELS = {"본문", "내용", "본 문", "내 용"}
+
 
 def _esc(s: str) -> str:
     return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -106,6 +109,9 @@ def _format(it: dict):
             body = ""
         # 자기설명형 조항(본문이 자기 번호로 시작)은 번호만짜리 헤더 생략
         if body and head and head == label and ctext.startswith(label):
+            head = ""
+        # 260618-42: '본문'/'내용' 같은 일반 라벨은 헤더로 표시하지 않음(반복 노이즈)
+        if _norm(head) in _GENERIC_LABELS:
             head = ""
 
         indent = min(max(level, 0), 6) * 1.2
