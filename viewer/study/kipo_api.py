@@ -11,6 +11,9 @@
 """
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -128,6 +131,122 @@ def search_advanced_debug(key: str, field: str, query: str,
         snippet = raw[:200].decode('utf-8', 'replace').replace("\n", " ")
         return [], total, [f"{status} 결과 없음", snippet]
     return items, total, [f"{status} {len(items)}건 (전체 {total})"]
+
+
+# 상세 응답의 주요 태그 → 한글 라벨(없으면 원 태그)
+_DETAIL_LABELS = {
+    "inventionTitle": "발명의명칭", "inventionTitleEng": "발명의명칭(영문)",
+    "astrtCont": "초록", "abstractInfo": "초록",
+    "claim": "청구항", "claimScope": "청구범위", "claimInfo": "청구항",
+    "applicantName": "출원인", "inventorName": "발명자", "agentName": "대리인",
+    "ipcNumber": "IPC", "applicationNumber": "출원번호", "applicationDate": "출원일자",
+    "registerNumber": "등록번호", "registerDate": "등록일자",
+    "openNumber": "공개번호", "openDate": "공개일자",
+    "publicationNumber": "공고번호", "publicationDate": "공고일자",
+    "registerStatus": "등록상태", "legalStatusInfo": "법적상태",
+    "applicantCode": "출원인코드", "bigDrawing": "도면", "drawing": "도면",
+}
+_DETAIL_SKIP = {"successYN", "resultCode", "resultMsg", "requestMsgID",
+                "responseTime", "responseMsgID", "pageNo", "numOfRows",
+                "totalCount", "docName", "indexNo"}
+
+
+def read_detail_debug(key: str, appno: str, timeout: float = 15.0):
+    """(상세 HTML, [진단...]). getBibliographyDetailInfoSearch — 청구범위·초록·서지 상세."""
+    key = (key or "").strip()
+    appno = "".join(ch for ch in str(appno or "") if ch.isdigit())
+    if not key:
+        return "", ["KIPRIS ServiceKey 없음"]
+    if not appno:
+        return "", ["출원번호가 없습니다."]
+    url = (_BASE + "/getBibliographyDetailInfoSearch?"
+           + urllib.parse.urlencode({"applicationNumber": appno, "ServiceKey": key}))
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read(); status = r.status
+        root = ET.fromstring(raw)
+    except Exception as e:
+        return "", [f"ERR {type(e).__name__}: {str(e)[:90]}"]
+    succ = (_findtext_local(root, "successYN") or "").strip().upper()
+    if succ == "N":
+        msg = (_findtext_local(root, "resultMsg") or _findtext_local(root, "resultCode") or "조회 실패")
+        return "", [f"{status} 실패: {msg} (상세서지 서비스 활용신청 필요할 수 있음)"]
+    # 모든 leaf 필드를 순서대로 라벨:값 으로(원본 내용 전체 표시)
+    rows = []
+    for el in root.iter():
+        if list(el):                       # 컨테이너는 건너뜀
+            continue
+        tag = _local(el.tag)
+        if tag in _DETAIL_SKIP:
+            continue
+        txt = (el.text or "").strip()
+        if not txt:
+            continue
+        label = _DETAIL_LABELS.get(tag, tag)
+        if tag.endswith("Date"):
+            txt = _fmt_date(txt)
+        rows.append(
+            f"<p style='margin:6px 0 2px'><b style='color:#1456c4'>{_esc(label)}</b></p>"
+            f"<div style='margin:0 0 4px 1em;white-space:pre-wrap'>{_esc(txt)}</div>")
+    if not rows:
+        return "", [f"{status} 상세 내용 없음", raw[:200].decode('utf-8', 'replace')]
+    return _wrap("<h3 style='color:#1456c4'>원문(상세)</h3>" + "".join(rows)), [f"{status} ok"]
+
+
+def fetch_fulltext_pdf_url_debug(key: str, appno: str, timeout: float = 20.0):
+    """(pdf_url, [진단...]). getPubFullTextInfoSearch — 공개/공고 전문 PDF 경로."""
+    key = (key or "").strip()
+    appno = "".join(ch for ch in str(appno or "") if ch.isdigit())
+    if not key or not appno:
+        return "", ["키/출원번호 없음"]
+    url = (_BASE + "/getPubFullTextInfoSearch?"
+           + urllib.parse.urlencode({"applicationNumber": appno, "ServiceKey": key}))
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read(); status = r.status
+        root = ET.fromstring(raw)
+    except Exception as e:
+        return "", [f"ERR {type(e).__name__}: {str(e)[:90]}"]
+    succ = (_findtext_local(root, "successYN") or "").strip().upper()
+    if succ == "N":
+        msg = (_findtext_local(root, "resultMsg") or _findtext_local(root, "resultCode") or "조회 실패")
+        return "", [f"{status} 실패: {msg} (공개전문 서비스 활용신청 필요할 수 있음)"]
+    # PDF URL: http…pdf 인 leaf 우선, 없으면 path/url 류 필드
+    for el in root.iter():
+        if list(el):
+            continue
+        t = (el.text or "").strip()
+        if t.lower().startswith("http") and ".pdf" in t.lower():
+            return t, [f"{status} ok"]
+    for el in root.iter():
+        if _local(el.tag).lower() in ("path", "docpath", "filepath", "url") and (el.text or "").strip():
+            return el.text.strip(), [f"{status} ok(path)"]
+    return "", [f"{status} PDF 경로 없음", raw[:200].decode('utf-8', 'replace')]
+
+
+def download_fulltext_pdf_debug(key: str, appno: str, dest_dir: str,
+                                name: str = "", timeout: float = 90.0):
+    """(저장경로, [진단...]). 공개전문 PDF 를 dest_dir 에 내려받아 경로 반환."""
+    pdf_url, dbg = fetch_fulltext_pdf_url_debug(key, appno, timeout=20.0)
+    if not pdf_url:
+        return "", dbg
+    safe = re.sub(r'[\\/:*?"<>|]+', "_", (name or appno)).strip()[:80] or appno
+    appdigits = "".join(ch for ch in str(appno) if ch.isdigit())
+    fname = f"{safe} ({appdigits}).pdf" if appdigits and appdigits not in safe else f"{safe}.pdf"
+    dest = os.path.join(dest_dir, fname)
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        req = urllib.request.Request(pdf_url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as f:
+            shutil.copyfileobj(r, f)
+        size = os.path.getsize(dest)
+        if size < 1000:                     # 너무 작으면 PDF 아님(오류 페이지)
+            return "", dbg + [f"내려받은 파일이 비정상(크기 {size})"]
+        return dest, dbg + [f"저장 {size} bytes"]
+    except Exception as e:
+        return "", dbg + [f"download ERR {type(e).__name__}: {str(e)[:80]}"]
 
 
 def item_label(it: dict) -> str:

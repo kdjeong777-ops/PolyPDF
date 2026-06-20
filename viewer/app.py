@@ -5452,6 +5452,17 @@ class MainWindow(QMainWindow):
                 "먼저 입력하세요.")
         return key
 
+    def _patent_save_dir(self) -> str:
+        """260618-47: 특허(전자명세서) PDF 저장 폴더. 설정값 없으면 기본(문서\\PolyPDF_특허)."""
+        d = (self._prefs.get("patent_save_dir") or "").strip()
+        if not d:
+            d = str(Path.home() / "Documents" / "PolyPDF_특허")
+        try:
+            os.makedirs(d, exist_ok=True)
+        except Exception:
+            pass
+        return d
+
     def _action_kipo_search(self, checked: bool = False):
         self._open_kipo()
 
@@ -7572,7 +7583,8 @@ class MainWindow(QMainWindow):
         self._prefs.setdefault("onterm_key", "")
         self._prefs.setdefault("law_oc", "")
         self._prefs.setdefault("kcsc_key", "")        # 260618-37: 국가건설기준센터 OPEN API 키
-        self._prefs.setdefault("kipo_signkey", "")    # 260618-43: 특허청 patent.go.kr signKey
+        self._prefs.setdefault("kipo_signkey", "")    # 260618-43: 특허(KIPRIS) ServiceKey
+        self._prefs.setdefault("patent_save_dir", "")  # 260618-47: 특허 PDF 저장 폴더
         self._apply_prefs(self._prefs)
         # 260606-19: 단축키 오버라이드 적용
         try:
@@ -7809,6 +7821,7 @@ class MainWindow(QMainWindow):
             "law_oc": str(prefs.get("law_oc", old.get("law_oc", ""))),
             "kcsc_key": str(prefs.get("kcsc_key", old.get("kcsc_key", ""))),  # 260618-37
             "kipo_signkey": str(prefs.get("kipo_signkey", old.get("kipo_signkey", ""))),  # 260618-43
+            "patent_save_dir": str(prefs.get("patent_save_dir", old.get("patent_save_dir", ""))),  # 260618-47
             # 260618-11: 업데이트(GitHub Releases)
             "update_repo": str(prefs.get("update_repo", old.get("update_repo", ""))),
             "auto_check_update": bool(prefs.get("auto_check_update",

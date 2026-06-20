@@ -77,6 +77,26 @@ gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update
 
 ---
 
+## 3-f. 버전 라인 — 0.x(pre-stable) → 1.0(정식) (260618-34)
+
+안정화 전이므로 **0.x 라인**으로 운영하고, 안정화되면 **v1.0.0** 을 낸다. 업데이터는 항상
+**최고 SemVer** 를 받으므로(낮은 번호로 못 내려감) 다음 규칙을 지킨다.
+
+- **번호는 단조 증가만**: `0.42.0` → `0.43.0` → … → `1.0.0`(정식). 절대 낮추지 않는다.
+- **★ 2.x → 0.x 재기준 시(1회성) 필수 절차** — 안 하면 0.x 사용자가 옛 `v2.x` 로 역상승한다:
+  1. **기존 `v2.x` GitHub 릴리스를 draft(숨김)** → 업데이터가 0.x 만 보게 한다(공개 API 는 draft 제외).
+     ```powershell
+     # 기존 2.x 릴리스를 전부 draft 로 숨김(되돌리려면 --draft=false)
+     gh release list --limit 200 --json tagName -q '.[].tagName' | ? { $_ -like 'v2.*' } | % { gh release edit $_ --draft }
+     ```
+  2. **v0.42.0 발행**(zip + 설치본). 3-a/3-d 절차대로.
+  3. **기존 2.41.0 설치 사용자에게 새 0.x 설치본 1회 수동 재설치 안내**(번호가 낮아 자동 업데이트 불가).
+     이후 0.x→…→1.0 은 자동 업데이트 정상.
+- **1.0 출시**: 안정화되면 `v1.0.0` 태그 발행 → 0.x 사용자 전원 자동 승급(`1.0.0 > 0.x`).
+- 베타 채널과 병행: `v1.0.0-rc.1` 로 RC 를 테스터에게(§3-e) → 확정 시 `v1.0.0`.
+
+---
+
 ## 3-c. (선택) 구성요소 별도 설치 — `components` 태그
 
 v2.26.0부터 ffmpeg·Tesseract 는 **release(full) zip 에 동봉**되어 첫 설치만으로 녹화·OCR 이
@@ -91,6 +111,31 @@ gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpe
 ```
 > 주의: `components` 릴리스는 반드시 **pre-release** 로 두세요(아니면 `releases/latest` 를 가로채
 > 구버전 앱의 업데이트 확인이 깨집니다 — 신버전은 목록에서 최고 버전을 고르므로 영향 없음).
+
+---
+
+## 3-e. 업데이트 채널 — 정식(stable) / 베타(beta) (260618-33)
+
+테스터에게는 나이트리를, 일반 사용자에게는 정식만 배포하는 **2채널** 운영.
+
+- **채널 구분 = 태그 접미사**(GitHub `prerelease` 플래그가 아님 — 플래그는 표시용일 뿐 업데이터가 무시):
+  - 정식: `v2.41.0`
+  - 베타/나이트리: `v2.41.0-beta.1`, `v2.41.0-rc.2`, `v2.41.0-beta.20260620` 등 (`X.Y.Z-` 뒤에 식별자)
+- **앱 설정**: 도움말 → **'베타(테스트) 버전도 받기'**(기본 꺼짐).
+  - **stable**(기본): 접미사 프리릴리즈를 **무시**, 정식 `vX.Y.Z` 중 최고만 받음.
+  - **beta**: 정식+프리릴리즈 **모두** 후보. SemVer 우선순위로 `2.41.0-beta.1 < 2.41.0` 이므로,
+    베타 테스터는 rc/베타를 받다가 **정식이 나오면 정식으로** 올라감.
+- **버전 관리 규칙**(권장):
+  - 정식 릴리스만 단조 증가 SemVer(MAJOR=호환깨짐/스키마, MINOR=기능, PATCH=수정).
+  - 베타는 다음 정식 번호에 `-beta.N`/`-rc.N`. 정식 확정 시 같은 X.Y.Z 의 접미사 없는 태그를 올림.
+  - 예: `v2.42.0-beta.1` → `v2.42.0-beta.2` → `v2.42.0`(정식).
+
+```powershell
+# 베타(나이트리) 올리기 — 프리릴리즈 태그로 push (CI 가 zip+설치본 생성)
+cd C:\Claude\MPDF\smart_pdf_viewer; git tag -a v2.42.0-beta.1 -m "PolyPDF v2.42.0-beta.1"; git push origin main v2.42.0-beta.1
+#   GitHub Release 는 prerelease 로 표시(권장): gh release edit v2.42.0-beta.1 --prerelease
+```
+> 정식만 쓰는 일반 사용자는 `-beta`/`-rc` 태그를 절대 받지 않으므로, 베타를 자유롭게 올려도 안전합니다.
 
 ---
 

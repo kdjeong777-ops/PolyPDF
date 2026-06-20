@@ -39,6 +39,38 @@ class _SearchWorker(QThread):
             self.done.emit([], 0, [f"ERR {type(e).__name__}: {e}"])
 
 
+class _DetailWorker(QThread):
+    done = pyqtSignal(str, list)               # html, debug
+
+    def __init__(self, key, appno):
+        super().__init__()
+        self._key, self._appno = key, appno
+
+    def run(self):
+        try:
+            from viewer.study.kipo_api import read_detail_debug
+            html, dbg = read_detail_debug(self._key, self._appno)
+            self.done.emit(html, dbg)
+        except Exception as e:
+            self.done.emit("", [f"ERR {type(e).__name__}: {e}"])
+
+
+class _PdfWorker(QThread):
+    done = pyqtSignal(str, list)               # saved_path, debug
+
+    def __init__(self, key, appno, dest_dir, name):
+        super().__init__()
+        self._k, self._a, self._d, self._n = key, appno, dest_dir, name
+
+    def run(self):
+        try:
+            from viewer.study.kipo_api import download_fulltext_pdf_debug
+            path, dbg = download_fulltext_pdf_debug(self._k, self._a, self._d, self._n)
+            self.done.emit(path, dbg)
+        except Exception as e:
+            self.done.emit("", [f"ERR {type(e).__name__}: {e}"])
+
+
 class KipoHostWindow(QWidget):
     closed = pyqtSignal()
 
@@ -108,6 +140,12 @@ class KipoSearchPanel(QWidget):
         self.ed.returnPressed.connect(self._search)
         self.btn_search = QPushButton("검색")
         self.btn_search.clicked.connect(self._search)
+        self.btn_detail = QPushButton("원문")
+        self.btn_detail.setToolTip("선택 특허의 원문(상세·청구범위) 보기")
+        self.btn_detail.clicked.connect(self._read_detail)
+        self.btn_pdf = QPushButton("명세서PDF")
+        self.btn_pdf.setToolTip("선택 특허의 전자명세서 PDF 를 받아 뷰어로 열기(지정 폴더에 저장)")
+        self.btn_pdf.clicked.connect(self._open_fulltext)
         self.btn_globe = QPushButton()
         self.btn_globe.setIcon(themed_icon("globe"))
         self.btn_globe.setFixedWidth(36)
@@ -116,6 +154,8 @@ class KipoSearchPanel(QWidget):
         top.addWidget(self.cmb_mode)
         top.addWidget(self.ed, 1)
         top.addWidget(self.btn_search)
+        top.addWidget(self.btn_detail)
+        top.addWidget(self.btn_pdf)
         top.addWidget(self.btn_globe)
         v.addLayout(top)
 
@@ -218,6 +258,63 @@ class KipoSearchPanel(QWidget):
             t = (row.get("inventionTitle") or "").strip()
             if t:
                 self.info.setText(t)
+
+    def _read_detail(self):
+        row = self._current_row()
+        if not isinstance(row, dict):
+            self.info.setText("먼저 목록에서 특허를 선택하세요.")
+            return
+        appno = (row.get("applicationNumber") or "").strip()
+        if not appno:
+            self.info.setText("출원번호가 없어 원문을 불러올 수 없습니다.")
+            return
+        self.info.setText("원문(상세) 불러오는 중…")
+        w = _DetailWorker(self._key, appno)
+        self._workers.append(w)
+        w.done.connect(self._on_detail)
+        w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
+        w.start()
+
+    def _on_detail(self, html, dbg):
+        if not html:
+            self.info.setText("원문을 불러오지 못했습니다. " + (dbg[-1] if dbg else ""))
+            return
+        self.viewer.setHtml(html)
+        self.info.setText("원문(상세) 표시")
+
+    def _open_fulltext(self):
+        """전자명세서(공개전문) PDF 를 지정 폴더에 저장하고 PolyPDF 뷰어로 연다."""
+        row = self._current_row()
+        if not isinstance(row, dict):
+            self.info.setText("먼저 목록에서 특허를 선택하세요.")
+            return
+        appno = (row.get("applicationNumber") or "").strip()
+        if not appno:
+            self.info.setText("출원번호가 없어 명세서를 받을 수 없습니다.")
+            return
+        win = self._win
+        dest = ""
+        if win is not None and hasattr(win, "_patent_save_dir"):
+            dest = win._patent_save_dir()
+        if not dest:
+            self.info.setText("특허 저장 폴더 설정이 필요합니다.")
+            return
+        self.info.setText("전자명세서 PDF 내려받는 중…")
+        w = _PdfWorker(self._key, appno, dest, (row.get("inventionTitle") or "").strip())
+        self._workers.append(w)
+        w.done.connect(self._on_pdf)
+        w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
+        w.start()
+
+    def _on_pdf(self, path, dbg):
+        if not path:
+            self.info.setText("PDF 를 받지 못했습니다. " + (dbg[-1] if dbg else ""))
+            return
+        self.info.setText("PDF 저장·열기 완료")
+        win = self._win
+        if win is not None and hasattr(win, "open_pdf"):
+            from pathlib import Path
+            win.open_pdf(Path(path))
 
     # ----- 즐겨찾기 -----
     def _on_tree_menu(self, pos):

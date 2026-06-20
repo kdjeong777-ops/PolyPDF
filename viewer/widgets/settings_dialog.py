@@ -172,6 +172,21 @@ class SettingsDialog(QDialog):
         self.ed_kipo_key = _QLe(str(self._prefs.get("kipo_signkey", "")))   # 260618-43/44
         self.ed_kipo_key.setPlaceholderText("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)")
         ol.addRow("특허(KIPRIS) 키:", self.ed_kipo_key)
+        # 260618-47: 특허(전자명세서) PDF 저장 폴더 + 찾아보기
+        from PyQt6.QtWidgets import QHBoxLayout as _HB, QWidget as _QW, QPushButton as _QPb, QFileDialog as _QFD
+        self.ed_patent_dir = _QLe(str(self._prefs.get("patent_save_dir", "")))
+        self.ed_patent_dir.setPlaceholderText("비우면 문서\\PolyPDF_특허")
+        _pw = _QW(); _ph = _HB(_pw); _ph.setContentsMargins(0, 0, 0, 0)
+        _pbtn = _QPb("찾아보기…")
+
+        def _pick_dir():
+            d = _QFD.getExistingDirectory(self, "특허 PDF 저장 폴더 선택",
+                                          self.ed_patent_dir.text().strip() or "")
+            if d:
+                self.ed_patent_dir.setText(d)
+        _pbtn.clicked.connect(_pick_dir)
+        _ph.addWidget(self.ed_patent_dir, 1); _ph.addWidget(_pbtn)
+        ol.addRow("특허 PDF 저장 폴더:", _pw)
         ol.addRow(QLabel("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
                          "한국어 사전은 위 키 입력 시 사용.</small>"))
         layout.addWidget(grp_od)
@@ -328,4 +343,5 @@ class SettingsDialog(QDialog):
             "law_oc": self.ed_law_oc.text().strip(),
             "kcsc_key": self.ed_kcsc_key.text().strip(),   # 260618-37
             "kipo_signkey": self.ed_kipo_key.text().strip(),   # 260618-43
+            "patent_save_dir": self.ed_patent_dir.text().strip(),   # 260618-47
         }
