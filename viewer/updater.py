@@ -223,8 +223,13 @@ def download_asset(url: str, progress=None, timeout: float = 30.0):
         return None
 
 
-_PS_INSTALLER = r'''# PolyPDF 업데이트 설치 도우미 (260618-17/24): 진행률 바 GUI(도스창 아님).
-#   파일이 없으면 직접 다운로드(진행바만, 용량 표시 없음) 후 설치.
+# 260621-50: 자동 업데이트가 'Program Files'(관리자 권한 필요) 설치본을 덮어쓰지 못하고
+#   실패를 catch{}로 삼켜 '설치 완료'만 띄운 뒤 옛 버전 그대로이던 치명적 버그 수정.
+#   ① 설치 폴더가 쓰기 불가면 UAC로 자체 승격(RunAs)해서 적용. ② 교체 실패 건수를 세어
+#   하나라도 실패하면 '완료' 대신 정직하게 오류 안내(거짓 성공 금지). ③ 승격 후 재실행은
+#   explorer 경유로 일반 권한 복귀(앱이 관리자로 뜨지 않게).
+_PS_INSTALLER = r'''# PolyPDF 업데이트 설치 도우미 (260621-50): 진행률 바 GUI(도스창 아님). 자체 승격 지원.
+param([switch]$Elevated)
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -235,6 +240,17 @@ $zipPath = "__ZIP__"
 $url     = "__URL__"
 $install = "__INSTALL__"
 $exe     = "__EXE__"
+
+function Test-DirWritable([string]$p) {
+    try {
+        if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p | Out-Null }
+        $t = Join-Path $p ("._wtest_{0}.tmp" -f $PID)
+        [System.IO.File]::WriteAllText($t, "x")
+        Remove-Item -LiteralPath $t -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch { return $false }
+}
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "PolyPDF 업데이트 설치"
@@ -249,42 +265,69 @@ $bar.SetBounds(18,52,420,26); $bar.Minimum=0; $bar.Maximum=100; $bar.Value=0
 $form.Controls.Add($lbl); $form.Controls.Add($bar)
 $form.Show(); $form.Activate(); [System.Windows.Forms.Application]::DoEvents()
 
-# 1) 기존 프로그램 종료 대기
-$lbl.Text = "기존 프로그램이 종료되기를 기다리는 중..."
-[System.Windows.Forms.Application]::DoEvents()
-for ($i=0; $i -lt 120; $i++) {
-    $p = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
-    if (-not $p) { break }
-    Start-Sleep -Milliseconds 500
+if (-not $Elevated) {
+    # 1) 기존 프로그램 종료 대기
+    $lbl.Text = "기존 프로그램이 종료되기를 기다리는 중..."
     [System.Windows.Forms.Application]::DoEvents()
-}
-Start-Sleep -Milliseconds 400
-
-# 1.5) 다운로드(파일이 없을 때만) — 진행바만, 용량 숫자 표시 안 함
-if (([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) -and -not [string]::IsNullOrEmpty($url)) {
-    $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
-    $lbl.Text = "업데이트 다운로드 중..."
-    [System.Windows.Forms.Application]::DoEvents()
-    try {
-        $req = [System.Net.WebRequest]::Create($url)
-        $req.UserAgent = "PolyPDF-Updater"; $req.Timeout = 60000
-        $resp = $req.GetResponse(); $len = $resp.ContentLength
-        $ins = $resp.GetResponseStream(); $outs = [System.IO.File]::Create($zipPath)
-        $buf = New-Object byte[] 262144; $done = [long]0
-        while (($r = $ins.Read($buf,0,$buf.Length)) -gt 0) {
-            $outs.Write($buf,0,$r); $done += $r
-            if ($len -gt 0) { $bar.Value = [Math]::Min(100,[int]($done*100/$len)) }
-            [System.Windows.Forms.Application]::DoEvents()
-        }
-        $outs.Close(); $ins.Close(); $resp.Close()
-    } catch {
-        [System.Windows.Forms.MessageBox]::Show("다운로드 실패: " + $_.Exception.Message, "PolyPDF 업데이트") | Out-Null
-        $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
+    for ($i=0; $i -lt 120; $i++) {
+        $p = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
+        if (-not $p) { break }
+        Start-Sleep -Milliseconds 500
+        [System.Windows.Forms.Application]::DoEvents()
     }
-    $bar.Value = 0
+    Start-Sleep -Milliseconds 400
+
+    # 1.5) 다운로드(파일이 없을 때만) — 진행바만, 용량 숫자 표시 안 함
+    if (([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) -and -not [string]::IsNullOrEmpty($url)) {
+        $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
+        $lbl.Text = "업데이트 다운로드 중..."
+        [System.Windows.Forms.Application]::DoEvents()
+        try {
+            $req = [System.Net.WebRequest]::Create($url)
+            $req.UserAgent = "PolyPDF-Updater"; $req.Timeout = 60000
+            $resp = $req.GetResponse(); $len = $resp.ContentLength
+            $ins = $resp.GetResponseStream(); $outs = [System.IO.File]::Create($zipPath)
+            $buf = New-Object byte[] 262144; $done = [long]0
+            while (($r = $ins.Read($buf,0,$buf.Length)) -gt 0) {
+                $outs.Write($buf,0,$r); $done += $r
+                if ($len -gt 0) { $bar.Value = [Math]::Min(100,[int]($done*100/$len)) }
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+            $outs.Close(); $ins.Close(); $resp.Close()
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("다운로드 실패: " + $_.Exception.Message, "PolyPDF 업데이트") | Out-Null
+            $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
+        }
+        $bar.Value = 0
+    }
+
+    # 1.7) 설치 폴더가 쓰기 불가(예: Program Files)면 UAC로 자체 승격해서 적용
+    if (-not (Test-DirWritable $install) -and -not $isAdmin) {
+        $lbl.Text = "관리자 권한으로 업데이트를 적용합니다..."; [System.Windows.Forms.Application]::DoEvents()
+        try {
+            Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+                '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden',
+                '-File', $PSCommandPath, '-Elevated') | Out-Null
+            # 승격 인스턴스가 압축 해제·재실행·정리(.ps1 삭제)를 담당. 이 인스턴스는 종료.
+            $form.Close(); exit
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show(
+                "업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.`n" +
+                "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요.",
+                "PolyPDF 업데이트") | Out-Null
+            $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
+        }
+    }
+} else {
+    # 승격 인스턴스: 부모가 이미 종료대기·다운로드를 마침. zip 경로 보정.
+    if ([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) {
+        $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
+    }
+    Start-Sleep -Milliseconds 300
 }
 
 # 2) 압축 해제 = 설치(엔트리별 진행률). 압축 루트에 PolyPDF\ 접두가 있으면 제거.
+$fail = 0
 try {
     $arc = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
     $total = [Math]::Max(1, $arc.Entries.Count); $n = 0
@@ -299,22 +342,36 @@ try {
             } else {
                 $dir = Split-Path $dest -Parent
                 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-                try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true) } catch {}
+                try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true) }
+                catch { $fail++ }
             }
         }
         $bar.Value = [Math]::Min(100, [int]($n * 100 / $total))
         if (($n % 15) -eq 0) { $lbl.Text = "설치 중... ($n / $total)"; [System.Windows.Forms.Application]::DoEvents() }
     }
     $arc.Dispose()
-    $bar.Value = 100; $lbl.Text = "설치 완료 — 프로그램을 다시 시작합니다."
-    [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 700
 } catch {
+    $fail = -1
     [System.Windows.Forms.MessageBox]::Show("업데이트 적용 중 오류가 발생했습니다.`n" + $_.Exception.Message,
         "PolyPDF 업데이트") | Out-Null
 }
 
-# 3) 재실행 + 정리
-try { Start-Process -FilePath $exe } catch {}
+if ($fail -eq 0) {
+    $bar.Value = 100; $lbl.Text = "설치 완료 — 프로그램을 다시 시작합니다."
+    [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 700
+} elseif ($fail -gt 0) {
+    # 거짓 성공 금지: 일부 파일 교체 실패(권한 등)를 정직하게 알림.
+    [System.Windows.Forms.MessageBox]::Show(
+        "업데이트를 완료하지 못했습니다. $fail 개 파일을 교체하지 못했습니다(권한 문제일 수 있음).`n" +
+        "최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요.",
+        "PolyPDF 업데이트") | Out-Null
+}
+
+# 3) 재실행 + 정리. 승격 상태면 explorer 경유로 일반 권한으로 복귀 실행.
+try {
+    if ($Elevated -or $isAdmin) { Start-Process "explorer.exe" -ArgumentList ('"' + $exe + '"') }
+    else { Start-Process -FilePath $exe }
+} catch {}
 $form.Close()
 Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
 '''
