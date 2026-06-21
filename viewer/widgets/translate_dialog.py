@@ -16,24 +16,26 @@ from ..study import translate_api as tapi
 class _CountWorker(QThread):
     done = pyqtSignal(int, list)
 
-    def __init__(self, key, text, model):
+    def __init__(self, key, text, model, auth="api"):
         super().__init__()
-        self._key, self._text, self._model = key, text, model
+        self._key, self._text, self._model, self._auth = key, text, model, auth
 
     def run(self):
-        n, dbg = tapi.count_tokens_debug(self._key, self._text, model=self._model)
+        n, dbg = tapi.count_tokens_debug(self._key, self._text,
+                                         model=self._model, auth=self._auth)
         self.done.emit(n, dbg)
 
 
 class _TransWorker(QThread):
     done = pyqtSignal(str, list)
 
-    def __init__(self, key, text, model):
+    def __init__(self, key, text, model, auth="api"):
         super().__init__()
-        self._key, self._text, self._model = key, text, model
+        self._key, self._text, self._model, self._auth = key, text, model, auth
 
     def run(self):
-        out, dbg = tapi.translate_text_debug(self._key, self._text, model=self._model)
+        out, dbg = tapi.translate_text_debug(self._key, self._text,
+                                             model=self._model, auth=self._auth)
         self.done.emit(out, dbg)
 
 
@@ -43,14 +45,22 @@ class TranslatePocDialog(QDialog):
         self.setWindowTitle("PDF 번역 (베타·Claude) — PoC")
         self.resize(820, 640)
         self._prefs = prefs or {}
+        self._auth = str(self._prefs.get("translate_auth", "api")).strip()
         self._key = str(self._prefs.get("anthropic_api_key", "")).strip()
         self._model = str(self._prefs.get("translate_model", tapi.DEFAULT_MODEL))
         self._workers = []
 
         v = QVBoxLayout(self)
         label = next((l for mid, l, *_ in tapi.MODELS if mid == self._model), self._model)
+        if self._auth == "login":
+            authtxt = "Claude 로그인(구독)"
+            ready = True
+        else:
+            authtxt = "API 키"
+            ready = bool(self._key)
+        status = "준비됨" if ready else "<span style=color:#c00>설정 필요</span>"
         v.addWidget(QLabel(f"<b>모델:</b> {label} &nbsp;|&nbsp; "
-                           f"<b>키:</b> {'설정됨' if self._key else '<span style=color:#c00>없음</span>'}"))
+                           f"<b>인증:</b> {authtxt} ({status})"))
         v.addWidget(QLabel("번역할 본문(현재 PDF 앞부분을 채워 두었습니다. 수정 가능):"))
         self.ed = QPlainTextEdit()
         self.ed.setPlainText(initial_text or "")
@@ -84,8 +94,12 @@ class TranslatePocDialog(QDialog):
                               "개발 환경이면 'pip install anthropic'.")
             self.btn_count.setEnabled(False)
             self.btn_run.setEnabled(False)
+        elif self._auth == "login":
+            self.info.setText("Claude 로그인(구독) 모드 — 터미널에서 'claude' 또는 'ant auth login' "
+                              "으로 로그인되어 있어야 합니다. '예상 토큰·비용'으로 연결을 확인하세요.")
         elif not self._key:
-            self.info.setText("설정 → '번역(Claude)' 에서 API 키를 먼저 입력하세요.")
+            self.info.setText("설정 → '번역(Claude)' 에서 API 키를 입력하거나 인증 방식을 "
+                              "'Claude 로그인(구독)'으로 바꾸세요.")
 
     # ----- 토큰/비용 -----
     def _count(self):
@@ -95,7 +109,7 @@ class TranslatePocDialog(QDialog):
             return
         self.info.setText("토큰 계산 중…")
         self.btn_count.setEnabled(False)
-        w = _CountWorker(self._key, text, self._model)
+        w = _CountWorker(self._key, text, self._model, self._auth)
         self._workers.append(w)
         w.done.connect(self._on_count)
         w.finished.connect(lambda w=w: self._drop(w))
@@ -128,7 +142,7 @@ class TranslatePocDialog(QDialog):
         self.info.setText("번역 중… (모델 응답 대기)")
         self.out.setPlainText("")
         self.btn_run.setEnabled(False)
-        w = _TransWorker(self._key, text, self._model)
+        w = _TransWorker(self._key, text, self._model, self._auth)
         self._workers.append(w)
         w.done.connect(self._on_trans)
         w.finished.connect(lambda w=w: self._drop(w))

@@ -202,8 +202,16 @@ class SettingsDialog(QDialog):
             _DEFMODEL = "claude-opus-4-8"
         grp_tr = QGroupBox("번역 (Claude)")
         trl = QFormLayout(grp_tr)
+        self.cmb_translate_auth = _QCmb()
+        self.cmb_translate_auth.addItem("API 키", "api")
+        self.cmb_translate_auth.addItem("Claude 로그인 (구독·OAuth)", "login")
+        _cur_a = str(self._prefs.get("translate_auth", "api"))
+        _ai = self.cmb_translate_auth.findData(_cur_a)
+        self.cmb_translate_auth.setCurrentIndex(_ai if _ai >= 0 else 0)
+        trl.addRow("인증 방식:", self.cmb_translate_auth)
         self.ed_anthropic_key = _QLe(str(self._prefs.get("anthropic_api_key", "")))
-        self.ed_anthropic_key.setPlaceholderText("Anthropic API 키 (console.anthropic.com → API Keys)")
+        self.ed_anthropic_key.setPlaceholderText(
+            "API 키 모드: sk-ant-… (console.anthropic.com) · 로그인 모드: 비워둠")
         try:
             self.ed_anthropic_key.setEchoMode(_QLe.EchoMode.Password)
         except Exception:
@@ -221,8 +229,12 @@ class SettingsDialog(QDialog):
         self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
         trl.addRow(self.chk_translate_consent)
         trl.addRow(QLabel(
-            "<small>키는 사용자 본인 발급분만 사용합니다. 번역은 토큰 단위로 과금되며, "
-            "실행 전 예상 비용을 안내합니다. 민감 문서 전송에 주의하세요.</small>"))
+            "<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
+            "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 먼저 터미널에서 "
+            "<code>claude</code> 또는 <code>ant auth login</code> 으로 로그인해야 합니다(설치·로그인 선행, "
+            "토큰 만료 시 재로그인, 구독 약관·한도 유의).<br>"
+            "키는 본인 발급분만 사용하며, 번역은 토큰 단위 과금 — 실행 전 예상 비용을 안내합니다. "
+            "민감 문서 전송에 주의하세요.</small>"))
         layout.addWidget(grp_tr)
 
         info = QLabel(
@@ -379,6 +391,7 @@ class SettingsDialog(QDialog):
             "kipo_signkey": self.ed_kipo_key.text().strip(),   # 260618-43
             "patent_save_dir": self.ed_patent_dir.text().strip(),   # 260618-47
             # 260621-P0: 번역(Claude)
+            "translate_auth": self.cmb_translate_auth.currentData(),
             "anthropic_api_key": self.ed_anthropic_key.text().strip(),
             "translate_model": self.cmb_translate_model.currentData(),
             "translate_consent": self.chk_translate_consent.isChecked(),

@@ -42,9 +42,42 @@ def available() -> bool:
         return False
 
 
-def _client(key: str):
+_OAUTH_BETA = "oauth-2025-04-20"
+
+
+def _client(key: str = "", auth: str = "api"):
+    """auth='api' → API 키 / auth='login' → Claude 구독 로그인(OAuth, SDK 가 ant/Claude
+    로그인 프로필 또는 ANTHROPIC_AUTH_TOKEN 자동 해석; /v1/messages 는 oauth 베타 헤더 필요)."""
     import anthropic
+    if (auth or "api") == "login":
+        kwargs = {"default_headers": {"anthropic-beta": _OAUTH_BETA}}
+        k = (key or "").strip()
+        if k:                       # 사용자가 단기 토큰을 직접 넣은 경우만
+            kwargs["auth_token"] = k
+        return anthropic.Anthropic(**kwargs)
     return anthropic.Anthropic(api_key=(key or "").strip())
+
+
+def _need_key_missing(key: str, auth: str) -> bool:
+    """api 모드에서만 키가 필수(login 모드는 프로필/토큰을 SDK 가 해석)."""
+    return (auth or "api") != "login" and not (key or "").strip()
+
+
+def _auth_hint(e: Exception, auth: str) -> str:
+    """오류 메시지에 인증 모드별 안내 덧붙임."""
+    name = type(e).__name__
+    s = str(e).lower()
+    if (auth or "api") == "login" and (
+            "resolve" in s or "credential" in s or "auth" in s or "api_key" in s
+            or "Authentication" in name):
+        return " (Claude 로그인 필요 — 터미널에서 'claude' 또는 'ant auth login')"
+    if "Authentication" in name:
+        return " (API 키를 확인하세요)"
+    if "RateLimit" in name:
+        return " (속도 제한 — 잠시 후 다시 시도)"
+    if "PermissionDenied" in name:
+        return " (이 모델 사용 권한이 없습니다)"
+    return ""
 
 
 def _glossary_block(glossary) -> str:
@@ -78,44 +111,45 @@ def estimate_cost(model: str, in_tokens: int, out_tokens: int) -> float:
     return (in_tokens / 1_000_000.0) * pin + (out_tokens / 1_000_000.0) * pout
 
 
-def count_tokens_debug(key: str, text: str, model: str = DEFAULT_MODEL, glossary=None):
-    """(입력토큰수, [진단]). 키 검증 겸용(잘못된 키면 ERR)."""
+def count_tokens_debug(key: str, text: str, model: str = DEFAULT_MODEL,
+                       glossary=None, auth: str = "api"):
+    """(입력토큰수, [진단]). 키/로그인 검증 겸용(인증 실패면 ERR)."""
     if not available():
         return -1, ["anthropic SDK 미설치 — 'pip install anthropic'"]
-    if not (key or "").strip():
+    if _need_key_missing(key, auth):
         return -1, ["API 키 없음 — 설정 → 번역(Claude)"]
     try:
-        c = _client(key)
+        c = _client(key, auth)
         r = c.messages.count_tokens(
             model=model, system=_system(glossary),
             messages=[{"role": "user", "content": text or "x"}])
         n = int(r.input_tokens)
         return n, [f"입력 토큰 {n}"]
     except Exception as e:
-        return -1, [f"ERR {type(e).__name__}: {str(e)[:140]}"]
+        return -1, [f"ERR {type(e).__name__}: {str(e)[:140]}{_auth_hint(e, auth)}"]
 
 
-def verify_key_debug(key: str, model: str = DEFAULT_MODEL):
-    """(성공여부, [진단]). count_tokens 로 키·모델 접근 가능성 확인."""
-    n, dbg = count_tokens_debug(key, "ping", model=model)
+def verify_auth_debug(key: str, model: str = DEFAULT_MODEL, auth: str = "api"):
+    """(성공여부, [진단]). count_tokens 로 키/로그인·모델 접근 가능성 확인."""
+    n, dbg = count_tokens_debug(key, "ping", model=model, auth=auth)
     return (n >= 0), dbg
 
 
 def translate_text_debug(key: str, text: str, model: str = DEFAULT_MODEL,
                          glossary=None, effort: str = "medium",
-                         max_tokens: int = 64000, on_text=None):
+                         max_tokens: int = 64000, on_text=None, auth: str = "api"):
     """(번역문, [진단]). 스트리밍으로 한국어 번역(P0 단일 청크).
 
-    on_text(delta:str): 진행 콜백(선택). 거부/오류 시 빈 문자열 + 진단.
+    auth='api'|'login'. on_text(delta:str): 진행 콜백(선택). 거부/오류 시 빈 문자열 + 진단.
     """
     if not available():
         return "", ["anthropic SDK 미설치 — 'pip install anthropic'"]
-    if not (key or "").strip():
+    if _need_key_missing(key, auth):
         return "", ["API 키 없음 — 설정 → 번역(Claude)"]
     if not (text or "").strip():
         return "", ["번역할 내용이 없습니다."]
     try:
-        c = _client(key)
+        c = _client(key, auth)
         parts = []
         with c.messages.stream(
             model=model, max_tokens=max_tokens,
@@ -152,12 +186,4 @@ def translate_text_debug(key: str, text: str, model: str = DEFAULT_MODEL,
             return "", dbg + ["번역 결과가 비어 있습니다."]
         return out, dbg
     except Exception as e:
-        name = type(e).__name__
-        hint = ""
-        if "Authentication" in name:
-            hint = " (API 키를 확인하세요)"
-        elif "RateLimit" in name:
-            hint = " (속도 제한 — 잠시 후 다시 시도)"
-        elif "PermissionDenied" in name:
-            hint = " (이 모델 사용 권한이 없습니다)"
-        return "", [f"ERR {name}: {str(e)[:140]}{hint}"]
+        return "", [f"ERR {type(e).__name__}: {str(e)[:140]}{_auth_hint(e, auth)}"]
