@@ -303,6 +303,28 @@ class SettingsDialog(QDialog):
         self._on_translate_auth_changed()
         self._refresh_login_status()
 
+        # 260621-P3: 모든 API 키를 *** 로 가림 + '키 표시' 토글
+        self._key_edits = [self.ed_urimal_key, self.ed_stdict_key, self.ed_onterm_key,
+                           self.ed_law_oc, self.ed_kcsc_key, self.ed_kipo_key,
+                           self.ed_anthropic_key]
+        for _e in self._key_edits:
+            try:
+                _e.setEchoMode(_QLe.EchoMode.Password)
+            except Exception:
+                pass
+        self.chk_show_keys = _QCb("API 키 표시 (체크 해제 시 *** 로 가림)")
+        self.chk_show_keys.setChecked(False)
+
+        def _toggle_show_keys(on):
+            m = _QLe.EchoMode.Normal if on else _QLe.EchoMode.Password
+            for _e in self._key_edits:
+                try:
+                    _e.setEchoMode(m)
+                except Exception:
+                    pass
+        self.chk_show_keys.toggled.connect(_toggle_show_keys)
+        layout.addWidget(self.chk_show_keys)
+
         info = QLabel(
             "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
             "검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"

@@ -1222,9 +1222,9 @@ class MainWindow(QMainWindow):
         mk("검색", "검색·단어장 창 보이기 · 검색 탭", self._vm_search)
         mk("단어장", "검색·단어장 창 보이기 · 단어장 탭", self._vm_study)
         self._btn_shot = mk("스크린샷", "검색·단어장 숨김 · 스크린샷 보이기", self._vm_shot)
-        mk("법령/고시", "법제처 법령·고시 검색·본문 보기", self._action_law_search)  # 260618-18: 스크린샷 오른쪽
-        mk("건설기준", "국가건설기준센터(KCSC) KDS·KCS 본문 보기", self._action_kcsc_search)  # 260618-37
-        mk("특허", "특허청(KIPO) 특허 등록정보 조회", self._action_kipo_search)  # 260618-43
+        self._btn_law = mk("법령/고시", "법제처 법령·고시 검색·본문 보기", self._action_law_search)  # 260618-18
+        self._btn_kcsc = mk("건설기준", "국가건설기준센터(KCSC) KDS·KCS 본문 보기", self._action_kcsc_search)  # 260618-37
+        self._btn_kipo = mk("특허", "특허청(KIPO) 특허 등록정보 조회", self._action_kipo_search)  # 260618-43
         mk("발표보기", "발표 전체화면 보기 (F5)", self._open_presentation)  # 260609-15(E1)/260618-8
         # 보기 ↔ 도구 사이 띄움
         _sp = QWidget(); _sp.setFixedWidth(20)
@@ -1384,6 +1384,10 @@ class MainWindow(QMainWindow):
             _a = QAction(_label, self)
             _a.triggered.connect(lambda _checked=False, s=_slot: s())
             m_view.addAction(_a)
+            # 260621-P3: API 키 게이팅용 — 보기 메뉴의 외부 API 항목 저장
+            if not hasattr(self, "_view_acts"):
+                self._view_acts = {}
+            self._view_acts[_label] = _a
 
         # 260606-8: 2분할 보기 상태 act (메뉴엔 표시 안 함 — 보기 메뉴/툴바로 제어, 상태 동기화용)
         self.act_split = QAction("🗗 2단 보기", self)
@@ -1429,14 +1433,14 @@ class MainWindow(QMainWindow):
 
         # 🌐 번역 (Claude)
         m_tools.addSection("🌐 번역 (Claude)")
-        _act("현재 PDF 번역 (베타·Claude)...", self._action_translate_pdf)
-        _act("여러 PDF 번역 (목록)...", self._action_translate_files)
+        self._act_tr_pdf = _act("현재 PDF 번역 (베타·Claude)...", self._action_translate_pdf)
+        self._act_tr_files = _act("여러 PDF 번역 (목록)...", self._action_translate_files)
 
         # 🔍 검색 및 데이터 구축
         m_tools.addSection("🔍 검색 및 데이터 구축")
-        _act("법령·고시 검색 (법제처)...", self._action_law_search)
-        _act("건설기준 (KCSC) 보기...", self._action_kcsc_search)
-        _act("특허 등록정보 (KIPO)...", self._action_kipo_search)
+        self._act_law = _act("법령·고시 검색 (법제처)...", self._action_law_search)
+        self._act_kcsc = _act("건설기준 (KCSC) 보기...", self._action_kcsc_search)
+        self._act_kipo = _act("특허 등록정보 (KIPO)...", self._action_kipo_search)
         _act("인덱스 재구축", self.action_reindex)
 
         # ⚙️ 프로그램 환경설정
@@ -7918,6 +7922,47 @@ class MainWindow(QMainWindow):
                 mv.set_hyperlink_offset(off)
         except Exception:
             pass
+        # 260621-P3: API 키 미입력 기능 게이팅
+        try:
+            self._gate_api_dependent_ui(self._prefs)
+        except Exception:
+            pass
+
+    def _gate_api_dependent_ui(self, prefs: dict):
+        """260621-P3: 외부 API 키가 없으면 관련 툴바 버튼은 숨기고 메뉴 항목은 비활성화.
+        키가 입력되면 다시 보이게/활성화. (법령·고시/건설기준/특허/번역)"""
+        p = prefs or {}
+        has_law = bool(str(p.get("law_oc", "")).strip())
+        has_kcsc = bool(str(p.get("kcsc_key", "")).strip())
+        has_kipo = bool(str(p.get("kipo_signkey", "")).strip())
+        has_tr = (str(p.get("translate_auth", "api")).strip() == "login"
+                  or bool(str(p.get("anthropic_api_key", "")).strip()))
+        va = getattr(self, "_view_acts", {}) or {}
+
+        def _btn(name, on):
+            b = getattr(self, name, None)
+            if b is not None:
+                b.setVisible(on)        # 툴바 버튼은 숨김/표시
+
+        def _act_en(a, on):
+            if a is not None:
+                a.setEnabled(on)        # 메뉴 항목은 활성/비활성
+
+        # 법령·고시
+        _btn("_btn_law", has_law)
+        _act_en(va.get("법령/고시"), has_law)
+        _act_en(getattr(self, "_act_law", None), has_law)
+        # 건설기준(KCSC)
+        _btn("_btn_kcsc", has_kcsc)
+        _act_en(va.get("건설기준(KCSC)"), has_kcsc)
+        _act_en(getattr(self, "_act_kcsc", None), has_kcsc)
+        # 특허(KIPO)
+        _btn("_btn_kipo", has_kipo)
+        _act_en(va.get("특허(등록정보)"), has_kipo)
+        _act_en(getattr(self, "_act_kipo", None), has_kipo)
+        # 번역(Claude) — 툴바 버튼 없음, 메뉴만
+        _act_en(getattr(self, "_act_tr_pdf", None), has_tr)
+        _act_en(getattr(self, "_act_tr_files", None), has_tr)
 
     def apply_theme(self, mode: str):
         """260606-13: 화면 스타일 적용 — light/dark/auto(시스템). Fusion+팔레트."""
