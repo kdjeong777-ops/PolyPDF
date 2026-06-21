@@ -28,6 +28,39 @@ class _AntLoginWorker(QThread):
         self.done.emit(ok, msg)
 
 
+def _verify_external_key(kind: str, key: str):
+    """260621-P3: 외부 API 키 확인 디스패치 → (성공여부, 메시지)."""
+    try:
+        if kind == "law":
+            from ..study import law_api
+            return law_api.verify_oc_debug(key)
+        if kind == "kcsc":
+            from ..study import kcsc_api
+            return kcsc_api.verify_key_debug(key)
+        if kind == "kipo":
+            from ..study import kipo_api
+            return kipo_api.verify_key_debug(key)
+        if kind in ("stdict", "urimal", "onterm"):
+            from ..study import online_dict
+            return online_dict.verify_provider_debug(kind, key)
+    except Exception as e:
+        return False, f"{type(e).__name__}: {str(e)[:80]}"
+    return False, "알 수 없는 항목"
+
+
+class _KeyVerifyWorker(QThread):
+    """260621-P3: 외부 API 키 확인(백그라운드)."""
+    done = pyqtSignal(bool, str)
+
+    def __init__(self, kind, key):
+        super().__init__()
+        self._kind, self._key = kind, key
+
+    def run(self):
+        ok, msg = _verify_external_key(self._kind, self._key)
+        self.done.emit(ok, msg)
+
+
 class _ConnTestWorker(QThread):
     """260621-P3: 입력된 키/로그인으로 연결·인증 확인(count_tokens — 무료, 크레딧 불요)."""
     done = pyqtSignal(int, list)
@@ -195,22 +228,22 @@ class SettingsDialog(QDialog):
         ol.addRow(self.chk_online_dict)
         self.ed_urimal_key = _QLe(str(self._prefs.get("urimalsaem_key", "")))
         self.ed_urimal_key.setPlaceholderText("국립국어원 우리말샘 오픈API 인증키 (무료 발급)")
-        ol.addRow("우리말샘 키:", self.ed_urimal_key)
+        ol.addRow("우리말샘 키:", self._keyrow(self.ed_urimal_key, "urimal"))
         self.ed_stdict_key = _QLe(str(self._prefs.get("stdict_key", "")))
         self.ed_stdict_key.setPlaceholderText("표준국어대사전 오픈API 인증키 (무료 발급)")
-        ol.addRow("표준국어대사전 키:", self.ed_stdict_key)
+        ol.addRow("표준국어대사전 키:", self._keyrow(self.ed_stdict_key, "stdict"))
         self.ed_onterm_key = _QLe(str(self._prefs.get("onterm_key", "")))
         self.ed_onterm_key.setPlaceholderText("국립국어원 온용어(전문용어) 오픈API 인증키 (무료 발급)")
-        ol.addRow("온용어 키:", self.ed_onterm_key)
+        ol.addRow("온용어 키:", self._keyrow(self.ed_onterm_key, "onterm"))
         self.ed_law_oc = _QLe(str(self._prefs.get("law_oc", "")))
         self.ed_law_oc.setPlaceholderText("법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)")
-        ol.addRow("법제처 OC:", self.ed_law_oc)
+        ol.addRow("법제처 OC:", self._keyrow(self.ed_law_oc, "law"))
         self.ed_kcsc_key = _QLe(str(self._prefs.get("kcsc_key", "")))   # 260618-37
         self.ed_kcsc_key.setPlaceholderText("국가건설기준센터(KCSC) OPEN API 키 (무료 발급)")
-        ol.addRow("KCSC 키:", self.ed_kcsc_key)
+        ol.addRow("KCSC 키:", self._keyrow(self.ed_kcsc_key, "kcsc"))
         self.ed_kipo_key = _QLe(str(self._prefs.get("kipo_signkey", "")))   # 260618-43/44
         self.ed_kipo_key.setPlaceholderText("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)")
-        ol.addRow("특허(KIPRIS) 키:", self.ed_kipo_key)
+        ol.addRow("특허(KIPRIS) 키:", self._keyrow(self.ed_kipo_key, "kipo"))
         # 260618-47: 특허(전자명세서) PDF 저장 폴더 + 찾아보기
         from PyQt6.QtWidgets import QHBoxLayout as _HB, QWidget as _QW, QPushButton as _QPb, QFileDialog as _QFD
         self.ed_patent_dir = _QLe(str(self._prefs.get("patent_save_dir", "")))
@@ -494,6 +527,42 @@ class SettingsDialog(QDialog):
         except Exception:
             pass
         self._refresh_login_status()
+
+    def _keyrow(self, edit, kind):
+        """260621-P3: [키 입력칸 | 확인 버튼 | 상태] 한 줄 위젯(외부 API 키 확인용)."""
+        from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel
+        w = QWidget(); h = QHBoxLayout(w)
+        h.setContentsMargins(0, 0, 0, 0); h.setSpacing(4)
+        btn = QPushButton("확인"); btn.setFixedWidth(46)
+        lbl = QLabel(""); lbl.setMinimumWidth(70)
+        h.addWidget(edit, 1); h.addWidget(btn); h.addWidget(lbl)
+        btn.clicked.connect(lambda: self._do_verify_key(kind, edit, btn, lbl))
+        return w
+
+    def _do_verify_key(self, kind, edit, btn, lbl):
+        key = edit.text().strip()
+        if not key:
+            lbl.setText("<span style='color:#c00'>키 없음</span>")
+            return
+        btn.setEnabled(False)
+        lbl.setText("확인 중…")
+        if not hasattr(self, "_verify_workers"):
+            self._verify_workers = []
+        w = _KeyVerifyWorker(kind, key)
+        self._verify_workers.append(w)
+
+        def _fin(ok, msg, b=btn, l=lbl, ww=w):
+            b.setEnabled(True)
+            color = "#0a0" if ok else "#c00"
+            mark = "✓" if ok else "✗"
+            l.setText(f"<span style='color:{color}'>{mark} {msg[:16]}</span>")
+            l.setToolTip(msg)
+            try:
+                self._verify_workers.remove(ww)
+            except Exception:
+                pass
+        w.done.connect(_fin)
+        w.start()
 
     def _test_translate_conn(self):
         """현재 입력값(키·모델·인증)으로 연결·인증 확인(저장 전에도 테스트 가능)."""

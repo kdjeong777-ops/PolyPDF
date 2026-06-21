@@ -311,3 +311,17 @@ def fetch_content_debug(oc: str, row: dict, timeout: float = 12.0):
             if out:
                 return out, dbg, arts
     return "", dbg, []
+
+
+def verify_oc_debug(oc: str, timeout: float = 10.0):
+    """(성공여부, 메시지). 법제처 OC 키 확인 — 공통어로 1건 검색."""
+    oc = (oc or "").strip()
+    if not oc:
+        return False, "OC 없음"
+    try:
+        rows = search(oc, "도로", "law", display=1, timeout=timeout)
+    except Exception as e:
+        return False, f"오류: {type(e).__name__}: {str(e)[:80]}"
+    if rows:
+        return True, f"정상 (예: {(rows[0].get('name') or '')[:18]})"
+    return False, "결과 없음 — OC(법제처 키) 확인 필요"

@@ -280,3 +280,25 @@ def lookup_all(term_ko: str, term_en: str, *, prefs: dict) -> dict:
                 and p.get("source") and p["source"] not in merged["sources"]:
             merged["sources"].append(p["source"])
     return merged
+
+
+def verify_provider_debug(provider: str, key: str, timeout: float = 8.0):
+    """(성공여부, 메시지). 한국어 사전 키 확인 — 공통어 조회."""
+    key = (key or "").strip()
+    if not key:
+        return False, "키 없음"
+    word = "도로" if provider == "onterm" else "물"
+    try:
+        if provider == "stdict":
+            r = stdict(word, key, timeout)
+        elif provider == "urimal":
+            r = urimalsaem(word, key, timeout)
+        elif provider == "onterm":
+            r = onterm(word, key, timeout)
+        else:
+            return False, "알 수 없는 제공자"
+    except Exception as e:
+        return False, f"오류: {str(e)[:80]}"
+    if r.get("def_ko"):
+        return True, "정상"
+    return False, "결과 없음 — 키 확인 필요"

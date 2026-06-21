@@ -310,3 +310,17 @@ def format_item(it: dict) -> str:
         out.append(f"<p style='margin-top:10px'><img src='{_esc(img)}' "
                    f"style='max-width:100%;border:1px solid #ddd'/></p>")
     return _wrap("".join(out))
+
+
+def verify_key_debug(key: str, timeout: float = 15.0):
+    """(성공여부, 메시지). KIPRIS ServiceKey 확인 — 1건 검색."""
+    key = (key or "").strip()
+    if not key:
+        return False, "키 없음"
+    try:
+        items, total, dbg = search_advanced_debug(key, "word", "도로", 1, 1, timeout=timeout)
+    except Exception as e:
+        return False, f"오류: {type(e).__name__}: {str(e)[:80]}"
+    if items or (total and int(total) > 0):
+        return True, "정상"
+    return False, ("실패: " + (dbg[-1] if dbg else "키 확인 필요"))

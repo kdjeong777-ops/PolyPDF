@@ -229,3 +229,14 @@ def list_codes(key: str, ctype: str = "", query: str = "", timeout: float = 12.0
         rows = [r for r in rows if q in r["name"].lower()
                 or q in r["code"].lower() or q in r["fullCode"].lower()]
     return rows
+
+
+def verify_key_debug(key: str, timeout: float = 15.0):
+    """(성공여부, 메시지). KCSC 키 확인 — 카탈로그 조회."""
+    key = (key or "").strip()
+    if not key:
+        return False, "키 없음"
+    rows, dbg = fetch_catalog_debug(key, timeout=timeout)
+    if rows:
+        return True, f"정상 ({len(rows)}건)"
+    return False, ("실패: " + (dbg[-1] if dbg else "결과 없음"))
