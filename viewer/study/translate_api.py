@@ -78,12 +78,12 @@ def _client(key: str = "", auth: str = "api"):
     /v1/messages 에 oauth 베타 헤더를 붙인다."""
     import anthropic
     if (auth or "api") == "login":
-        kwargs = {"default_headers": {"anthropic-beta": _OAUTH_BETA}}
+        kwargs = {"default_headers": {"anthropic-beta": _OAUTH_BETA}, "max_retries": 4}
         tok = _login_token(key)
         if tok:
             kwargs["auth_token"] = tok
         return anthropic.Anthropic(**kwargs)
-    return anthropic.Anthropic(api_key=(key or "").strip())
+    return anthropic.Anthropic(api_key=(key or "").strip(), max_retries=4)
 
 
 def _need_key_missing(key: str, auth: str) -> bool:
@@ -95,6 +95,10 @@ def _auth_hint(e: Exception, auth: str) -> str:
     """오류 메시지에 인증 모드별 안내 덧붙임."""
     name = type(e).__name__
     s = str(e).lower()
+    if "APIConnection" in name or "connection error" in s or "connecterror" in s:
+        return ("네트워크 연결 오류 — api.anthropic.com 에 접속하지 못했습니다. "
+                "인터넷·VPN·프록시·방화벽/백신(PolyPDF.exe 의 인터넷 접속 차단)을 확인하고 "
+                "다시 시도하세요.")
     if "credit balance" in s or "credit" in s and "low" in s:
         return (" → API 크레딧 부족입니다. console.anthropic.com → Billing 에서 크레딧을 "
                 "충전하세요. (Claude 구독(Pro/Max)은 API 사용에 적용되지 않습니다.)")

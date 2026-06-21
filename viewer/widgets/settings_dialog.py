@@ -26,6 +26,24 @@ class _AntLoginWorker(QThread):
         self.progress.emit("브라우저에서 로그인 완료를 기다리는 중…")
         ok, msg = ant_cli.login()
         self.done.emit(ok, msg)
+
+
+class _ConnTestWorker(QThread):
+    """260621-P3: 입력된 키/로그인으로 연결·인증 확인(count_tokens — 무료, 크레딧 불요)."""
+    done = pyqtSignal(int, list)
+
+    def __init__(self, key, model, auth):
+        super().__init__()
+        self._key, self._model, self._auth = key, model, auth
+
+    def run(self):
+        try:
+            from ..study import translate_api as tapi
+            n, dbg = tapi.count_tokens_debug(
+                self._key, "연결 확인 ping", model=self._model, auth=self._auth)
+        except Exception as e:
+            n, dbg = -1, [f"ERR {type(e).__name__}: {str(e)[:120]}"]
+        self.done.emit(n, dbg)
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -257,6 +275,16 @@ class SettingsDialog(QDialog):
         _lh.addWidget(self.btn_ant_logout)
         trl.addRow("구독 로그인:", _lw)
 
+        # 260621-P3: 연결·인증 확인(무료 count_tokens — 크레딧 없이 토큰/인증 점검)
+        _cw = _QW2(); _ch = _HB2(_cw); _ch.setContentsMargins(0, 0, 0, 0)
+        self.lbl_conn_status = QLabel("")
+        self.btn_test_conn = _QPb2("연결 확인")
+        self.btn_test_conn.setToolTip("입력한 키/로그인으로 Claude 에 연결·인증되는지 확인(무료)")
+        self.btn_test_conn.clicked.connect(self._test_translate_conn)
+        _ch.addWidget(self.lbl_conn_status, 1)
+        _ch.addWidget(self.btn_test_conn)
+        trl.addRow("연결 확인:", _cw)
+
         self.chk_translate_consent = _QCb(
             "번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의")
         self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
@@ -444,6 +472,26 @@ class SettingsDialog(QDialog):
         except Exception:
             pass
         self._refresh_login_status()
+
+    def _test_translate_conn(self):
+        """현재 입력값(키·모델·인증)으로 연결·인증 확인(저장 전에도 테스트 가능)."""
+        auth = self.cmb_translate_auth.currentData()
+        key = self.ed_anthropic_key.text().strip()
+        model = self.cmb_translate_model.currentData()
+        self.btn_test_conn.setEnabled(False)
+        self.lbl_conn_status.setText("확인 중…")
+        self._conn_worker = _ConnTestWorker(key, model, auth)
+        self._conn_worker.done.connect(self._on_conn_test_done)
+        self._conn_worker.start()
+
+    def _on_conn_test_done(self, n: int, dbg: list):
+        self.btn_test_conn.setEnabled(True)
+        if n >= 0:
+            self.lbl_conn_status.setText(
+                f"<span style='color:#0a0'>정상 ✓ (입력 토큰 {n}) — 번역은 API 크레딧 필요</span>")
+        else:
+            msg = (dbg[-1] if dbg else "실패")
+            self.lbl_conn_status.setText(f"<span style='color:#c00'>실패: {msg}</span>")
 
     def result_prefs(self) -> dict:
         return {
