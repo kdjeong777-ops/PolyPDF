@@ -231,8 +231,7 @@ class SettingsDialog(QDialog):
         self.cmb_translate_auth.setCurrentIndex(_ai if _ai >= 0 else 0)
         trl.addRow("인증 방식:", self.cmb_translate_auth)
         self.ed_anthropic_key = _QLe(str(self._prefs.get("anthropic_api_key", "")))
-        self.ed_anthropic_key.setPlaceholderText(
-            "API 키 모드: sk-ant-… (console.anthropic.com) · 로그인 모드: 비워둠")
+        self.ed_anthropic_key.setPlaceholderText("sk-ant-… (로그인 모드면 비워둠)")
         try:
             self.ed_anthropic_key.setEchoMode(_QLe.EchoMode.Password)
         except Exception:
@@ -262,13 +261,15 @@ class SettingsDialog(QDialog):
             "번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의")
         self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
         trl.addRow(self.chk_translate_consent)
-        trl.addRow(QLabel(
+        _hlp_tr = QLabel(
             "<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
             "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 "
-            "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요). "
-            "토큰 만료 시 재로그인, 구독 약관·한도 유의.<br>"
-            "키는 본인 발급분만 사용하며, 번역은 토큰 단위 과금 — 실행 전 예상 비용을 안내합니다. "
-            "민감 문서 전송에 주의하세요.</small>"))
+            "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요).<br>"
+            "<b>주의</b>: 번역(Messages API)은 <b>API 크레딧</b>이 필요합니다 — Claude 구독(Pro/Max)은 "
+            "API 사용에 적용되지 않으니, console.anthropic.com → Billing 에서 크레딧을 충전하세요. "
+            "민감 문서 전송에 주의.</small>")
+        _hlp_tr.setWordWrap(True)
+        trl.addRow(_hlp_tr)
         layout.addWidget(grp_tr)
         self.cmb_translate_auth.currentIndexChanged.connect(self._on_translate_auth_changed)
         self._on_translate_auth_changed()

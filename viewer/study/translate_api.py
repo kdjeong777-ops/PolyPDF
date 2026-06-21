@@ -95,6 +95,9 @@ def _auth_hint(e: Exception, auth: str) -> str:
     """오류 메시지에 인증 모드별 안내 덧붙임."""
     name = type(e).__name__
     s = str(e).lower()
+    if "credit balance" in s or "credit" in s and "low" in s:
+        return (" → API 크레딧 부족입니다. console.anthropic.com → Billing 에서 크레딧을 "
+                "충전하세요. (Claude 구독(Pro/Max)은 API 사용에 적용되지 않습니다.)")
     if (auth or "api") == "login" and (
             "resolve" in s or "credential" in s or "auth" in s or "api_key" in s
             or "Authentication" in name):
