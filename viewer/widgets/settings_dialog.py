@@ -4,7 +4,28 @@ v1.6.2: 히스토리 패널 제거 — 관련 옵션(`restore_history`, `history
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+
+
+class _AntLoginWorker(QThread):
+    """260621-P3: ant 자동 설치 + 브라우저 로그인(백그라운드)."""
+    progress = pyqtSignal(str)
+    done = pyqtSignal(bool, str)
+
+    def run(self):
+        try:
+            from ..study import ant_cli
+        except Exception as e:
+            self.done.emit(False, f"모듈 오류: {e}")
+            return
+        try:
+            ant_cli.ensure_installed(progress=self.progress.emit)
+        except Exception as e:
+            self.done.emit(False, f"Anthropic CLI 설치 실패: {str(e)[:120]}")
+            return
+        self.progress.emit("브라우저에서 로그인 완료를 기다리는 중…")
+        ok, msg = ant_cli.login()
+        self.done.emit(ok, msg)
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -224,18 +245,34 @@ class SettingsDialog(QDialog):
         _mi = self.cmb_translate_model.findData(_cur_m)
         self.cmb_translate_model.setCurrentIndex(_mi if _mi >= 0 else 0)
         trl.addRow("번역 모델:", self.cmb_translate_model)
+        # 260621-P3: 구독 로그인 — 앱 내 'Claude 로그인' 버튼(ant 자동설치+브라우저)
+        from PyQt6.QtWidgets import QHBoxLayout as _HB2, QWidget as _QW2, QPushButton as _QPb2
+        _lw = _QW2(); _lh = _HB2(_lw); _lh.setContentsMargins(0, 0, 0, 0)
+        self.lbl_login_status = QLabel("")
+        self.btn_ant_login = _QPb2("Claude 로그인")
+        self.btn_ant_logout = _QPb2("로그아웃")
+        self.btn_ant_login.clicked.connect(self._ant_login)
+        self.btn_ant_logout.clicked.connect(self._ant_logout)
+        _lh.addWidget(self.lbl_login_status, 1)
+        _lh.addWidget(self.btn_ant_login)
+        _lh.addWidget(self.btn_ant_logout)
+        trl.addRow("구독 로그인:", _lw)
+
         self.chk_translate_consent = _QCb(
             "번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의")
         self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
         trl.addRow(self.chk_translate_consent)
         trl.addRow(QLabel(
             "<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
-            "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 먼저 터미널에서 "
-            "<code>claude</code> 또는 <code>ant auth login</code> 으로 로그인해야 합니다(설치·로그인 선행, "
-            "토큰 만료 시 재로그인, 구독 약관·한도 유의).<br>"
+            "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 "
+            "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요). "
+            "토큰 만료 시 재로그인, 구독 약관·한도 유의.<br>"
             "키는 본인 발급분만 사용하며, 번역은 토큰 단위 과금 — 실행 전 예상 비용을 안내합니다. "
             "민감 문서 전송에 주의하세요.</small>"))
         layout.addWidget(grp_tr)
+        self.cmb_translate_auth.currentIndexChanged.connect(self._on_translate_auth_changed)
+        self._on_translate_auth_changed()
+        self._refresh_login_status()
 
         info = QLabel(
             "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
@@ -357,6 +394,55 @@ class SettingsDialog(QDialog):
         except Exception:
             pass
         (QMessageBox.information if ok else QMessageBox.warning)(self, "녹화 테스트", msg)
+
+    # ── 번역 구독 로그인(ant) ──────────────────────────── 260621-P3
+    def _on_translate_auth_changed(self):
+        login = (self.cmb_translate_auth.currentData() == "login")
+        for w in (self.lbl_login_status, self.btn_ant_login, self.btn_ant_logout):
+            w.setEnabled(login)
+        self.ed_anthropic_key.setEnabled(not login)
+        if login:
+            self._refresh_login_status()
+        else:
+            self.lbl_login_status.setText("")
+
+    def _refresh_login_status(self):
+        try:
+            from ..study import ant_cli
+        except Exception:
+            self.lbl_login_status.setText("모듈 없음")
+            return
+        if not ant_cli.is_installed():
+            self.lbl_login_status.setText("<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>")
+        elif ant_cli.is_logged_in():
+            self.lbl_login_status.setText("<span style='color:#0a0'>로그인됨 ✓</span>")
+        else:
+            self.lbl_login_status.setText("<span style='color:#c60'>로그인 필요</span>")
+
+    def _ant_login(self):
+        self.btn_ant_login.setEnabled(False)
+        self.lbl_login_status.setText("준비 중…")
+        self._ant_worker = _AntLoginWorker()
+        self._ant_worker.progress.connect(self.lbl_login_status.setText)
+        self._ant_worker.done.connect(self._on_ant_login_done)
+        self._ant_worker.start()
+
+    def _on_ant_login_done(self, ok: bool, msg: str):
+        self.btn_ant_login.setEnabled(True)
+        from PyQt6.QtWidgets import QMessageBox
+        if ok:
+            QMessageBox.information(self, "Claude 로그인", "로그인되었습니다. 이제 번역을 사용할 수 있습니다.")
+        else:
+            QMessageBox.warning(self, "Claude 로그인", "로그인하지 못했습니다.\n" + (msg or ""))
+        self._refresh_login_status()
+
+    def _ant_logout(self):
+        try:
+            from ..study import ant_cli
+            ant_cli.logout()
+        except Exception:
+            pass
+        self._refresh_login_status()
 
     def result_prefs(self) -> dict:
         return {

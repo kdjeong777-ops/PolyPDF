@@ -208,6 +208,7 @@ pyinstaller ^
     --hidden-import viewer.study.kipo_api ^
     --hidden-import viewer.widgets.kipo_search_dialog ^
     --hidden-import viewer.study.translate_api ^
+    --hidden-import viewer.study.ant_cli ^
     --hidden-import viewer.widgets.translate_dialog ^
     --hidden-import viewer.widgets.translate_files_dialog ^
     --collect-all anthropic ^

@@ -60,15 +60,28 @@ def extract_pdf_text(path, max_pages: int = 0, max_chars: int = 0) -> str:
 _OAUTH_BETA = "oauth-2025-04-20"
 
 
+def _login_token(key: str = "") -> str:
+    """로그인 모드 토큰: 사용자가 직접 넣은 값 우선, 없으면 ant(구독 로그인)에서 가져옴(자동 갱신)."""
+    k = (key or "").strip()
+    if k:
+        return k
+    try:
+        from . import ant_cli
+        return ant_cli.access_token()
+    except Exception:
+        return ""
+
+
 def _client(key: str = "", auth: str = "api"):
-    """auth='api' → API 키 / auth='login' → Claude 구독 로그인(OAuth, SDK 가 ant/Claude
-    로그인 프로필 또는 ANTHROPIC_AUTH_TOKEN 자동 해석; /v1/messages 는 oauth 베타 헤더 필요)."""
+    """auth='api' → API 키 / auth='login' → Claude 구독 로그인(OAuth).
+    로그인 모드는 ant(`auth print-credentials`)에서 받은 액세스 토큰을 Bearer 로 사용하고
+    /v1/messages 에 oauth 베타 헤더를 붙인다."""
     import anthropic
     if (auth or "api") == "login":
         kwargs = {"default_headers": {"anthropic-beta": _OAUTH_BETA}}
-        k = (key or "").strip()
-        if k:                       # 사용자가 단기 토큰을 직접 넣은 경우만
-            kwargs["auth_token"] = k
+        tok = _login_token(key)
+        if tok:
+            kwargs["auth_token"] = tok
         return anthropic.Anthropic(**kwargs)
     return anthropic.Anthropic(api_key=(key or "").strip())
 
@@ -85,7 +98,7 @@ def _auth_hint(e: Exception, auth: str) -> str:
     if (auth or "api") == "login" and (
             "resolve" in s or "credential" in s or "auth" in s or "api_key" in s
             or "Authentication" in name):
-        return " (Claude 로그인 필요 — 터미널에서 'claude' 또는 'ant auth login')"
+        return " (Claude 로그인 필요 — 설정 → '번역(Claude)' 의 [Claude 로그인] 버튼)"
     if "Authentication" in name:
         return " (API 키를 확인하세요)"
     if "RateLimit" in name:
