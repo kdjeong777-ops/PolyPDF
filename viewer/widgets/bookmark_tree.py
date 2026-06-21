@@ -178,6 +178,8 @@ class BookmarkTree(QWidget):
     createStudyRequested = pyqtSignal(str)      # 260606-5: 파일 우클릭 '단어장 생성'
     createStudyBookmarksRequested = pyqtSignal(str)  # 260606-11: '단어장·책갈피 동시 생성'
     mergeFilesRequested = pyqtSignal(list)      # 260606-13: 선택 파일들 병합(경로 리스트)
+    translateFileRequested = pyqtSignal(str)    # 260621-P0: 파일 우클릭 '번역'(단일)
+    translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
     fileOpCompleted = pyqtSignal(str, str)   # v1.6.21: (old, new) new=="" 삭제, new==old 실패
@@ -926,13 +928,16 @@ class BookmarkTree(QWidget):
             _is_copy = False
         menu.addSeparator()
         act_merge = None
+        act_translate_sel = None
         if sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
             act_merge = menu.addAction(f"선택 {len(sel_files)}개 파일 병합...")
+            act_translate_sel = menu.addAction(f"선택 {len(sel_files)}개 파일 번역...")  # 260621-P0
             menu.addSeparator()
         # 260606-4: 파일(최상위) 노드면 (책갈피 생성, 책갈피 편집)도 제공
         is_file = item.parent() is None and bool(item.data(0, self.DATA_FILE))
         act_create = act_editmode = None
         act_study = act_study_bm = None
+        act_translate = None
         act_password = None
         if is_file:
             # 260618-1: 암호화 파일이면 '암호 입력'(마스터/제한 무관 새 암호)
@@ -943,6 +948,7 @@ class BookmarkTree(QWidget):
             act_editmode = menu.addAction("책갈피 편집")
             act_study = menu.addAction("단어장 생성")
             act_study_bm = menu.addAction("단어장·책갈피 동시 생성")
+            act_translate = menu.addAction("번역...")   # 260621-P0: 단일 파일 번역
             menu.addSeparator()
         # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         act_fav_folder = menu.addAction("현재 폴더를 즐겨찾기에 추가")
@@ -961,6 +967,10 @@ class BookmarkTree(QWidget):
             return
         if chosen == act_merge:
             self.mergeFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
+        elif act_translate_sel is not None and chosen == act_translate_sel:
+            self.translateFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
+        elif act_translate is not None and chosen == act_translate:
+            self.translateFileRequested.emit(item.data(0, self.DATA_FILE))
         elif act_password is not None and chosen == act_password:
             self._prompt_file_password(item, item.data(0, self.DATA_FILE))
         elif chosen == act_create:

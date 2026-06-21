@@ -42,6 +42,21 @@ def available() -> bool:
         return False
 
 
+def extract_pdf_text(path, max_pages: int = 0, max_chars: int = 0) -> str:
+    """PDF 본문 텍스트 추출(P0 간이 — 머리말/꼬리말 제거·연결은 P1 `pdf_extract`).
+    max_pages>0 면 앞쪽 그 페이지수만, max_chars>0 면 글자수 상한."""
+    try:
+        import fitz
+        doc = fitz.open(str(path))
+        n = doc.page_count if max_pages <= 0 else min(max_pages, doc.page_count)
+        parts = [doc[i].get_text("text") for i in range(n)]
+        doc.close()
+        out = "\n".join(parts).strip()
+        return out[:max_chars] if max_chars and max_chars > 0 else out
+    except Exception:
+        return ""
+
+
 _OAUTH_BETA = "oauth-2025-04-20"
 
 

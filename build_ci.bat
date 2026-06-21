@@ -209,6 +209,7 @@ pyinstaller ^
     --hidden-import viewer.widgets.kipo_search_dialog ^
     --hidden-import viewer.study.translate_api ^
     --hidden-import viewer.widgets.translate_dialog ^
+    --hidden-import viewer.widgets.translate_files_dialog ^
     --collect-all anthropic ^
     --hidden-import viewer.widgets.toggle_splitter ^
     --hidden-import viewer.widgets.icons ^

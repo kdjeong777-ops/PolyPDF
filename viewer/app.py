@@ -1429,7 +1429,8 @@ class MainWindow(QMainWindow):
 
         # 🌐 번역 (Claude)
         m_tools.addSection("🌐 번역 (Claude)")
-        _act("PDF 번역 (베타·Claude)...", self._action_translate_pdf)
+        _act("현재 PDF 번역 (베타·Claude)...", self._action_translate_pdf)
+        _act("여러 PDF 번역 (목록)...", self._action_translate_files)
 
         # 🔍 검색 및 데이터 구축
         m_tools.addSection("🔍 검색 및 데이터 구축")
@@ -1875,6 +1876,8 @@ class MainWindow(QMainWindow):
         self.bookmark_tree.createStudyBookmarksRequested.connect(
             lambda f: self._action_build_study_and_bookmarks(file_path=f))
         self.bookmark_tree.mergeFilesRequested.connect(self._on_merge_files)
+        self.bookmark_tree.translateFileRequested.connect(self._action_translate_file)  # 260621-P0
+        self.bookmark_tree.translateFilesRequested.connect(self._action_translate_files)  # 260621-P0
         # 260606-22: 책갈피 편집모드 ↔ 썸네일 페이지 편집(삭제/이동) 동기화
         self.bookmark_tree.btn_edit.toggled.connect(self.page_thumbs.set_edit_mode)
         self.bookmark_tree.btn_edit.toggled.connect(self._on_edit_mode_toggled)  # 260609-22(J3)
@@ -4905,14 +4908,14 @@ class MainWindow(QMainWindow):
         except Exception:
             return "eng"
 
-    def _action_translate_pdf(self, checked: bool = False):
-        """260621-P0: PDF 번역 PoC(Claude). 현재 PDF 앞부분 텍스트를 채워 다이얼로그를 연다."""
+    def _translate_auth_ready_or_warn(self) -> bool:
+        """260621-P0: 번역 사용 가능 여부(모듈·인증) 확인 + 안내."""
         from viewer.study import translate_api as _tapi
         if not _tapi.available():
             QMessageBox.information(
                 self, "PDF 번역",
                 "번역 모듈(anthropic)이 포함되어 있지 않습니다. 최신 배포본을 사용하세요.")
-            return
+            return False
         auth = (self._prefs.get("translate_auth") or "api").strip()
         key = (self._prefs.get("anthropic_api_key") or "").strip()
         if auth != "login" and not key:
@@ -4920,21 +4923,44 @@ class MainWindow(QMainWindow):
                 self, "PDF 번역",
                 "설정 → '번역(Claude)' 에서 Anthropic API 키를 먼저 입력하세요.\n"
                 "(키 발급: https://console.anthropic.com → API Keys)\n"
-                "또는 인증 방식을 'Claude 로그인(구독)'으로 바꾸고 터미널에서 로그인하세요.")
+                "또는 인증 방식을 'Claude 로그인(구독)'으로 바꾸세요.")
+            return False
+        return True
+
+    def _action_translate_pdf(self, checked: bool = False):
+        """260621-P0: 현재 열린 PDF 번역(단일)."""
+        if not self._study_pdf or not Path(self._study_pdf).exists():
+            QMessageBox.information(self, "PDF 번역", "먼저 PDF 를 여세요.")
             return
+        self._action_translate_file(str(self._study_pdf))
+
+    def _action_translate_file(self, path: str):
+        """260621-P0: 단일 PDF 번역 — 앞부분 텍스트를 채워 PoC 다이얼로그를 연다.
+        (책갈피 우클릭 '번역...' / 현재 PDF 번역에서 호출)"""
+        if not self._translate_auth_ready_or_warn():
+            return
+        from viewer.study import translate_api as _tapi
         init = ""
         try:
-            if self._study_pdf and Path(self._study_pdf).exists():
-                import fitz
-                doc = fitz.open(self._study_pdf)
-                parts = [doc.load_page(i).get_text("text")
-                         for i in range(min(2, doc.page_count))]
-                doc.close()
-                init = "\n".join(parts).strip()[:6000]
+            if path and Path(path).exists():
+                init = _tapi.extract_pdf_text(path, max_pages=2, max_chars=6000)
         except Exception:
             init = ""
         from viewer.widgets.translate_dialog import TranslatePocDialog
         TranslatePocDialog(self._prefs, self, initial_text=init).exec()
+
+    def _action_translate_files(self, preselected=None):
+        """260621-P0: 여러 PDF 번역 — 병합형 선택 목록(좌 전체/우 대상, 추가·순서·삭제)."""
+        if not self._translate_auth_ready_or_warn():
+            return
+        all_files = []
+        try:
+            all_files = self.bookmark_tree.all_file_paths()
+        except Exception:
+            pass
+        pre = [p for p in (preselected or []) if p and str(p).lower().endswith(".pdf")]
+        from viewer.widgets.translate_files_dialog import TranslateFilesDialog
+        TranslateFilesDialog(all_files, pre, self._prefs, self).exec()
 
     @staticmethod
     def _dict_src_label(h: dict) -> str:
