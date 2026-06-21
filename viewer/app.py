@@ -1427,6 +1427,10 @@ class MainWindow(QMainWindow):
         _act("사전 정리 (HTML 마크업 제거)", self._action_sanitize_dict)
         _act("온용어 다시 분류 (용어집별·재조회)...", self._action_reclassify_onterm)
 
+        # 🌐 번역 (Claude)
+        m_tools.addSection("🌐 번역 (Claude)")
+        _act("PDF 번역 (베타·Claude)...", self._action_translate_pdf)
+
         # 🔍 검색 및 데이터 구축
         m_tools.addSection("🔍 검색 및 데이터 구축")
         _act("법령·고시 검색 (법제처)...", self._action_law_search)
@@ -4901,6 +4905,35 @@ class MainWindow(QMainWindow):
         except Exception:
             return "eng"
 
+    def _action_translate_pdf(self, checked: bool = False):
+        """260621-P0: PDF 번역 PoC(Claude). 현재 PDF 앞부분 텍스트를 채워 다이얼로그를 연다."""
+        from viewer.study import translate_api as _tapi
+        if not _tapi.available():
+            QMessageBox.information(
+                self, "PDF 번역",
+                "번역 모듈(anthropic)이 포함되어 있지 않습니다. 최신 배포본을 사용하세요.")
+            return
+        key = (self._prefs.get("anthropic_api_key") or "").strip()
+        if not key:
+            QMessageBox.information(
+                self, "PDF 번역",
+                "설정 → '번역(Claude)' 에서 Anthropic API 키를 먼저 입력하세요.\n"
+                "(키 발급: https://console.anthropic.com → API Keys)")
+            return
+        init = ""
+        try:
+            if self._study_pdf and Path(self._study_pdf).exists():
+                import fitz
+                doc = fitz.open(self._study_pdf)
+                parts = [doc.load_page(i).get_text("text")
+                         for i in range(min(2, doc.page_count))]
+                doc.close()
+                init = "\n".join(parts).strip()[:6000]
+        except Exception:
+            init = ""
+        from viewer.widgets.translate_dialog import TranslatePocDialog
+        TranslatePocDialog(self._prefs, self, initial_text=init).exec()
+
     @staticmethod
     def _dict_src_label(h: dict) -> str:
         """260615-7(P9): 출처 표시 = '구분 / 출처명'(구분 없으면 출처명만)."""
@@ -7585,6 +7618,9 @@ class MainWindow(QMainWindow):
         self._prefs.setdefault("kcsc_key", "")        # 260618-37: 국가건설기준센터 OPEN API 키
         self._prefs.setdefault("kipo_signkey", "")    # 260618-43: 특허(KIPRIS) ServiceKey
         self._prefs.setdefault("patent_save_dir", "")  # 260618-47: 특허 PDF 저장 폴더
+        self._prefs.setdefault("anthropic_api_key", "")   # 260621-P0: 번역(Claude) API 키
+        self._prefs.setdefault("translate_model", "claude-opus-4-8")  # 260621-P0
+        self._prefs.setdefault("translate_consent", False)  # 260621-P0: 외부 전송 동의
         self._apply_prefs(self._prefs)
         # 260606-19: 단축키 오버라이드 적용
         try:
@@ -7822,6 +7858,10 @@ class MainWindow(QMainWindow):
             "kcsc_key": str(prefs.get("kcsc_key", old.get("kcsc_key", ""))),  # 260618-37
             "kipo_signkey": str(prefs.get("kipo_signkey", old.get("kipo_signkey", ""))),  # 260618-43
             "patent_save_dir": str(prefs.get("patent_save_dir", old.get("patent_save_dir", ""))),  # 260618-47
+            # 260621-P0: 번역(Claude)
+            "anthropic_api_key": str(prefs.get("anthropic_api_key", old.get("anthropic_api_key", ""))),
+            "translate_model": str(prefs.get("translate_model", old.get("translate_model", "claude-opus-4-8"))),
+            "translate_consent": bool(prefs.get("translate_consent", old.get("translate_consent", False))),
             # 260618-11: 업데이트(GitHub Releases)
             "update_repo": str(prefs.get("update_repo", old.get("update_repo", ""))),
             "auto_check_update": bool(prefs.get("auto_check_update",

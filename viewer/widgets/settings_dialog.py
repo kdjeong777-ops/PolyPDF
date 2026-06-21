@@ -191,6 +191,40 @@ class SettingsDialog(QDialog):
                          "한국어 사전은 위 키 입력 시 사용.</small>"))
         layout.addWidget(grp_od)
 
+        # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
+        from PyQt6.QtWidgets import QComboBox as _QCmb
+        try:
+            from ..study import translate_api as _tapi
+            _MODELS = _tapi.MODELS
+            _DEFMODEL = _tapi.DEFAULT_MODEL
+        except Exception:
+            _MODELS = [("claude-opus-4-8", "Claude Opus 4.8", 5.0, 25.0)]
+            _DEFMODEL = "claude-opus-4-8"
+        grp_tr = QGroupBox("번역 (Claude)")
+        trl = QFormLayout(grp_tr)
+        self.ed_anthropic_key = _QLe(str(self._prefs.get("anthropic_api_key", "")))
+        self.ed_anthropic_key.setPlaceholderText("Anthropic API 키 (console.anthropic.com → API Keys)")
+        try:
+            self.ed_anthropic_key.setEchoMode(_QLe.EchoMode.Password)
+        except Exception:
+            pass
+        trl.addRow("Claude API 키:", self.ed_anthropic_key)
+        self.cmb_translate_model = _QCmb()
+        for mid, label, *_ in _MODELS:
+            self.cmb_translate_model.addItem(label, mid)
+        _cur_m = str(self._prefs.get("translate_model", _DEFMODEL))
+        _mi = self.cmb_translate_model.findData(_cur_m)
+        self.cmb_translate_model.setCurrentIndex(_mi if _mi >= 0 else 0)
+        trl.addRow("번역 모델:", self.cmb_translate_model)
+        self.chk_translate_consent = _QCb(
+            "번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의")
+        self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
+        trl.addRow(self.chk_translate_consent)
+        trl.addRow(QLabel(
+            "<small>키는 사용자 본인 발급분만 사용합니다. 번역은 토큰 단위로 과금되며, "
+            "실행 전 예상 비용을 안내합니다. 민감 문서 전송에 주의하세요.</small>"))
+        layout.addWidget(grp_tr)
+
         info = QLabel(
             "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
             "검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
@@ -344,4 +378,8 @@ class SettingsDialog(QDialog):
             "kcsc_key": self.ed_kcsc_key.text().strip(),   # 260618-37
             "kipo_signkey": self.ed_kipo_key.text().strip(),   # 260618-43
             "patent_save_dir": self.ed_patent_dir.text().strip(),   # 260618-47
+            # 260621-P0: 번역(Claude)
+            "anthropic_api_key": self.ed_anthropic_key.text().strip(),
+            "translate_model": self.cmb_translate_model.currentData(),
+            "translate_consent": self.chk_translate_consent.isChecked(),
         }
