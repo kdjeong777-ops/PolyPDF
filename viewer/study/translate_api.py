@@ -91,6 +91,19 @@ def _need_key_missing(key: str, auth: str) -> bool:
     return (auth or "api") != "login" and not (key or "").strip()
 
 
+def _err_detail(e: Exception) -> str:
+    """예외 + 하위 원인(__cause__/__context__) 체인을 드러내 진단을 돕는다."""
+    parts = [f"{type(e).__name__}: {str(e)[:120]}"]
+    c = getattr(e, "__cause__", None) or getattr(e, "__context__", None)
+    seen = 0
+    while c is not None and seen < 3:
+        parts.append(f"← {type(c).__name__}: {str(c)[:120]}")
+        nxt = getattr(c, "__cause__", None) or getattr(c, "__context__", None)
+        c = nxt if nxt is not c else None
+        seen += 1
+    return "  ".join(parts)
+
+
 def _auth_hint(e: Exception, auth: str) -> str:
     """오류 메시지에 인증 모드별 안내 덧붙임."""
     name = type(e).__name__
@@ -161,7 +174,7 @@ def count_tokens_debug(key: str, text: str, model: str = DEFAULT_MODEL,
         n = int(r.input_tokens)
         return n, [f"입력 토큰 {n}"]
     except Exception as e:
-        return -1, [f"ERR {type(e).__name__}: {str(e)[:140]}{_auth_hint(e, auth)}"]
+        return -1, [f"ERR {_err_detail(e)}{_auth_hint(e, auth)}"]
 
 
 def verify_auth_debug(key: str, model: str = DEFAULT_MODEL, auth: str = "api"):
@@ -221,4 +234,4 @@ def translate_text_debug(key: str, text: str, model: str = DEFAULT_MODEL,
             return "", dbg + ["번역 결과가 비어 있습니다."]
         return out, dbg
     except Exception as e:
-        return "", [f"ERR {type(e).__name__}: {str(e)[:140]}{_auth_hint(e, auth)}"]
+        return "", [f"ERR {_err_detail(e)}{_auth_hint(e, auth)}"]
