@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtGui import (QDesktopServices, QShortcut, QKeySequence, QTextDocument,
                          QAction)
@@ -22,6 +24,28 @@ from viewer.widgets.icons import themed_icon
 _SITE = "https://www.kcsc.re.kr"
 _ROLE_ROW = Qt.ItemDataRole.UserRole + 1       # 결과(row dict)
 _ROLE_ANCHOR = Qt.ItemDataRole.UserRole + 2    # 절 앵커
+
+# 260621-62: 본문 속 코드 참조(예: 'KCS 44 50 10', 'KDS 11 40 10')를 하이퍼링크로.
+#   태그(<...>)는 그대로 두고, 태그 밖 텍스트의 KDS/KCS + 숫자(공백 포함)만 매칭.
+#   숫자에서 공백 제거 후 6자리면 코드로 인정 → kcsc://{KDS|KCS}/{코드}
+_CODE_RE = re.compile(r'(?P<tag><[^>]+>)|(?P<pfx>\b(?:KDS|KCS))[ \t]*(?P<num>(?:\d[ \t]*){4,8})')
+
+
+def linkify_codes(html: str) -> str:
+    def _repl(m):
+        if m.group('tag'):
+            return m.group('tag')
+        pfx = m.group('pfx')
+        digits = re.sub(r'\D', '', m.group('num') or "")
+        if len(digits) != 6:
+            return m.group(0)
+        text = m.group(0).rstrip()
+        return (f'<a href="kcsc://{pfx}/{digits}" '
+                f'style="color:#1456c4;text-decoration:underline;">{text}</a>')
+    try:
+        return _CODE_RE.sub(_repl, html or "")
+    except Exception:
+        return html or ""
 
 
 class _CatalogWorker(QThread):
@@ -78,6 +102,8 @@ class KcscSearchPanel(QWidget):
         self._workers: list = []
         self._cur_item = None
         self._all_rows = None         # 카탈로그 캐시(전체)
+        self._hist: list = []         # 260621-62: 본 기준 히스토리 [(ctype, code, item)]
+        self._hist_idx = -1
 
         self.setMinimumWidth(360)
         try:
@@ -96,6 +122,15 @@ class KcscSearchPanel(QWidget):
         tf = title.font(); tf.setBold(True); tf.setPointSize(max(11, tf.pointSize() + 2))
         title.setFont(tf)
         title_row.addWidget(title)
+        # 260621-62: 뒤로/앞으로(본문 코드 링크·항목 이동 히스토리)
+        self.btn_back = QPushButton("◀")
+        self.btn_back.setFixedWidth(30); self.btn_back.setToolTip("뒤로 (이전 본 기준)")
+        self.btn_back.clicked.connect(self._nav_back)
+        self.btn_fwd = QPushButton("▶")
+        self.btn_fwd.setFixedWidth(30); self.btn_fwd.setToolTip("앞으로 (다음 본 기준)")
+        self.btn_fwd.clicked.connect(self._nav_fwd)
+        self.btn_back.setEnabled(False); self.btn_fwd.setEnabled(False)
+        title_row.addWidget(self.btn_back); title_row.addWidget(self.btn_fwd)
         self.btn_fav = QPushButton("⭐ 즐겨찾기")
         self.btn_fav.setIcon(themed_icon("star"))
         self._fav_menu = QMenu(self)
@@ -155,7 +190,8 @@ class KcscSearchPanel(QWidget):
         self.tree.itemClicked.connect(lambda *_: self._on_select())
         self.split.addWidget(self.tree)
         self.viewer = QTextBrowser()
-        self.viewer.setOpenExternalLinks(True)
+        self.viewer.setOpenLinks(False)            # 260621-62: 코드 링크/외부 링크 직접 처리
+        self.viewer.anchorClicked.connect(self._on_anchor)
         self.viewer.setPlaceholderText("본문이 여기에 표시됩니다.")
         self.viewer.setStyleSheet("QTextBrowser{background:#ffffff;color:#1a1a1a;}")
         self.split.addWidget(self.viewer)
@@ -297,8 +333,15 @@ class KcscSearchPanel(QWidget):
         it = self.tree.currentItem()
         return it.data(0, _ROLE_ROW) if it is not None else None
 
-    def _load_content(self, ctype, code, item):
+    def _load_content(self, ctype, code, item, push: bool = True):
         self._cur_item = item
+        if push:
+            cur = self._hist[self._hist_idx][:2] if (0 <= self._hist_idx < len(self._hist)) else None
+            if cur != (ctype, code):
+                self._hist = self._hist[:self._hist_idx + 1]
+                self._hist.append((ctype, code, item))
+                self._hist_idx = len(self._hist) - 1
+        self._update_nav()
         self.info.setText("불러오는 중…")
         w = _ContentWorker(self._key, ctype, code)
         self._workers.append(w)
@@ -306,11 +349,50 @@ class KcscSearchPanel(QWidget):
         w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
         w.start()
 
+    # ----- 코드 링크 · 뒤로/앞으로 -----
+    def _on_anchor(self, url: QUrl):
+        """본문 링크 클릭: kcsc:// 코드는 내부(같은 창)에서 열고, 외부는 브라우저, #앵커는 스크롤."""
+        s = url.toString()
+        if s.startswith("kcsc://"):
+            rest = s[len("kcsc://"):]
+            ctype, _, code = rest.partition("/")
+            ctype = (ctype or "").strip().upper()
+            code = re.sub(r"\D", "", code or "")
+            if ctype in ("KDS", "KCS") and len(code) == 6:
+                self._open_code(ctype, code)
+            return
+        if url.scheme().lower() in ("http", "https"):
+            QDesktopServices.openUrl(url)
+            return
+        frag = url.fragment() or (s[1:] if s.startswith("#") else "")
+        if frag:
+            self.viewer.scrollToAnchor(frag)
+
+    def _open_code(self, ctype: str, code: str):
+        """260621-62: 코드 링크를 내부 화면(같은 본문창)에서 연다(히스토리에 기록)."""
+        self._load_content(ctype, code, None, push=True)
+
+    def _nav_back(self):
+        if self._hist_idx > 0:
+            self._hist_idx -= 1
+            ct, cd, it = self._hist[self._hist_idx]
+            self._load_content(ct, cd, it, push=False)
+
+    def _nav_fwd(self):
+        if self._hist_idx < len(self._hist) - 1:
+            self._hist_idx += 1
+            ct, cd, it = self._hist[self._hist_idx]
+            self._load_content(ct, cd, it, push=False)
+
+    def _update_nav(self):
+        self.btn_back.setEnabled(self._hist_idx > 0)
+        self.btn_fwd.setEnabled(self._hist_idx < len(self._hist) - 1)
+
     def _on_content(self, html, dbg, arts, meta):
         if not html:
             self.info.setText("표시할 본문이 없습니다. " + (dbg[-1] if dbg else ""))
             return
-        self.viewer.setHtml(html)
+        self.viewer.setHtml(linkify_codes(html))
         name = meta.get("name") or ""
         ver = meta.get("version") or ""
         self.info.setText((f"{name}" + (f"  (v{ver})" if ver else "")) if name
