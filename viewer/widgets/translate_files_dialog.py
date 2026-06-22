@@ -60,12 +60,12 @@ class _BatchWorker(QThread):
                 self.one_done.emit(str(p), False, "본문 텍스트 추출 실패(스캔본일 수 있음)")
                 continue
             glossary = []
-            if store is not None:
-                try:
-                    from ..study import glossary_build as gb
-                    glossary = gb.build_glossary(text, store)
-                except Exception:
-                    glossary = []
+            try:
+                from ..study import glossary_build as gb
+                glossary = gb.build_glossary_with_auto(
+                    text, store, self._key, self._model, self._auth)
+            except Exception:
+                glossary = []
             out, dbg = tapi.translate_text_debug(
                 self._key, text, model=self._model, auth=self._auth, glossary=glossary)
             if not out:

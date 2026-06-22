@@ -185,6 +185,53 @@ def verify_auth_debug(key: str, model: str = DEFAULT_MODEL, auth: str = "api"):
     return (n >= 0), dbg
 
 
+def propose_glossary_debug(key: str, text: str, known_en=None,
+                           model: str = DEFAULT_MODEL, auth: str = "api",
+                           max_terms: int = 40):
+    """(list[{en,ko}], [진단]). 본문에서 핵심 전문용어를 추출·한국어 대역 제안(구조화 출력).
+    known_en 에 든 용어는 제외(이미 사전에 있는 것). 미등록 용어 자동 용어집(P2b §6.2)."""
+    import json
+    if not available():
+        return [], ["anthropic SDK 미설치"]
+    if _need_key_missing(key, auth):
+        return [], ["API 키/로그인 없음"]
+    sample = (text or "")[:8000]
+    if not sample.strip():
+        return [], ["본문 없음"]
+    known = ", ".join(sorted({(k or "").strip().lower() for k in (known_en or []) if k}))[:1500]
+    system = (
+        "당신은 도로·아스팔트 등 공학 분야 전문 학술 번역가입니다. 주어진 영문 본문에서 "
+        "그 분야의 핵심 전문용어(영문)를 추출하고 표준 한국어 대역을 제시하세요. "
+        "약어는 한국어로 풀어쓰되 필요하면 약어를 병기합니다. 일반 단어·고유명사·저자명·"
+        "기관명은 제외합니다. en 은 본문에 나온 형태, ko 는 한국어 대역. "
+        f"최대 {max_terms}개." + (f" 이미 등록된 용어는 제외: {known}" if known else ""))
+    schema = {
+        "type": "object",
+        "properties": {"terms": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"en": {"type": "string"}, "ko": {"type": "string"}},
+            "required": ["en", "ko"], "additionalProperties": False}}},
+        "required": ["terms"], "additionalProperties": False}
+    try:
+        c = _client(key, auth)
+        r = c.messages.create(
+            model=model, max_tokens=4000,
+            system=system,
+            output_config={"format": {"type": "json_schema", "schema": schema}},
+            messages=[{"role": "user", "content": "본문:\n\n" + sample}])
+        txt = next((b.text for b in r.content if getattr(b, "type", "") == "text"), "")
+        data = json.loads(txt) if txt else {}
+        out = []
+        for t in (data.get("terms") or []):
+            en = (t.get("en") or "").strip()
+            ko = (t.get("ko") or "").strip()
+            if en and ko:
+                out.append({"en": en, "ko": ko})
+        return out[:max_terms], [f"제안 {len(out)}개"]
+    except Exception as e:
+        return [], [f"ERR {_err_detail(e)}{_auth_hint(e, auth)}"]
+
+
 def _split_text(text: str, max_chars: int = 7000) -> list:
     """긴 본문을 단락 경계로 청크 분할(전체 번역용). 단락이 너무 길면 강제 분할."""
     text = text or ""

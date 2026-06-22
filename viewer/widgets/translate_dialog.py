@@ -16,28 +16,47 @@ from ..study import translate_api as tapi
 class _CountWorker(QThread):
     done = pyqtSignal(int, list)
 
-    def __init__(self, key, text, model, auth="api", glossary=None):
+    def __init__(self, key, text, model, auth="api"):
         super().__init__()
         self._key, self._text, self._model, self._auth = key, text, model, auth
-        self._glossary = glossary
 
     def run(self):
-        n, dbg = tapi.count_tokens_debug(self._key, self._text, model=self._model,
-                                         glossary=self._glossary, auth=self._auth)
+        n, dbg = tapi.count_tokens_debug(self._key, self._text,
+                                         model=self._model, auth=self._auth)
         self.done.emit(n, dbg)
 
 
 class _TransWorker(QThread):
     done = pyqtSignal(str, list)
+    gloss = pyqtSignal(int)        # 용어집 개수(빌드 후)
 
-    def __init__(self, key, text, model, auth="api", glossary=None):
+    def __init__(self, key, text, model, auth="api"):
         super().__init__()
         self._key, self._text, self._model, self._auth = key, text, model, auth
-        self._glossary = glossary
 
     def run(self):
+        # P2/P2b: 사전 1순위 + Claude 자동 제안 용어집(스레드 전용 DictStore)
+        glossary = []
+        store = None
+        try:
+            from ..study.dict_store import DictStore
+            store = DictStore()
+        except Exception:
+            store = None
+        try:
+            from ..study import glossary_build as gb
+            glossary = gb.build_glossary_with_auto(
+                self._text, store, self._key, self._model, self._auth)
+        except Exception:
+            glossary = []
+        self.gloss.emit(len(glossary))
         out, dbg = tapi.translate_text_debug(self._key, self._text, model=self._model,
-                                             glossary=self._glossary, auth=self._auth)
+                                             glossary=glossary, auth=self._auth)
+        if store is not None:
+            try:
+                store.close()
+            except Exception:
+                pass
         self.done.emit(out, dbg)
 
 
@@ -62,10 +81,9 @@ class TranslatePocDialog(QDialog):
             authtxt = "API 키"
             ready = bool(self._key)
         status = "준비됨" if ready else "<span style=color:#c00>설정 필요</span>"
-        gtxt = (f" &nbsp;|&nbsp; <b>용어집:</b> {len(self._glossary)}개 적용"
-                if self._glossary else "")
         v.addWidget(QLabel(f"<b>모델:</b> {label} &nbsp;|&nbsp; "
-                           f"<b>인증:</b> {authtxt} ({status}){gtxt}"))
+                           f"<b>인증:</b> {authtxt} ({status}) &nbsp;|&nbsp; "
+                           f"<b>용어집:</b> 사전+자동 제안(번역 시 생성)"))
         v.addWidget(QLabel("번역할 본문(현재 PDF 앞부분을 채워 두었습니다. 수정 가능):"))
         self.ed = QPlainTextEdit()
         self.ed.setPlainText(initial_text or "")
@@ -114,7 +132,7 @@ class TranslatePocDialog(QDialog):
             return
         self.info.setText("토큰 계산 중…")
         self.btn_count.setEnabled(False)
-        w = _CountWorker(self._key, text, self._model, self._auth, self._glossary)
+        w = _CountWorker(self._key, text, self._model, self._auth)
         self._workers.append(w)
         w.done.connect(self._on_count)
         w.finished.connect(lambda w=w: self._drop(w))
@@ -144,11 +162,12 @@ class TranslatePocDialog(QDialog):
                 "(설정 → '번역(Claude)' 에서 항상 동의로 둘 수 있습니다.)")
             if r != QMessageBox.StandardButton.Yes:
                 return
-        self.info.setText("번역 중… (모델 응답 대기)")
+        self.info.setText("용어집 생성 + 번역 준비 중…")
         self.out.setPlainText("")
         self.btn_run.setEnabled(False)
-        w = _TransWorker(self._key, text, self._model, self._auth, self._glossary)
+        w = _TransWorker(self._key, text, self._model, self._auth)
         self._workers.append(w)
+        w.gloss.connect(lambda n: self.info.setText(f"용어집 {n}개 적용 · 번역 중…"))
         w.done.connect(self._on_trans)
         w.finished.connect(lambda w=w: self._drop(w))
         w.start()
