@@ -191,7 +191,7 @@ class KcscSearchPanel(QWidget):
         self.split.addWidget(self.tree)
         self.viewer = QTextBrowser()
         self.viewer.setOpenLinks(False)            # 260621-62: 코드 링크/외부 링크 직접 처리
-        self.viewer.anchorClicked.connect(self._on_anchor)
+        self.viewer.anchorClicked.connect(self._on_anchor_left)
         self.viewer.setPlaceholderText("본문이 여기에 표시됩니다.")
         self.viewer.setStyleSheet("QTextBrowser{background:#ffffff;color:#1a1a1a;}")
         self.split.addWidget(self.viewer)
@@ -199,7 +199,16 @@ class KcscSearchPanel(QWidget):
         self.split.setStretchFactor(1, 1)
         self.split.setCollapsible(0, True)
         self.split.setSizes([320, 680])
-        v.addWidget(self.split, 1)
+        # 260621-63: 중앙 영역을 교체 가능한 컨테이너로(내부=단일 split / 전체화면=2단)
+        self._center = QWidget()
+        self._center_lay = QVBoxLayout(self._center)
+        self._center_lay.setContentsMargins(0, 0, 0, 0)
+        self._center_lay.addWidget(self.split)
+        v.addWidget(self._center, 1)
+        self._is_full = False
+        self._fs_split = None
+        self.tree2 = None
+        self.viewer2 = None
 
         # --- 찾기 바(Ctrl+F) ---
         self.find_bar = QWidget()
@@ -227,7 +236,73 @@ class KcscSearchPanel(QWidget):
 
     # ----- 레이아웃 -----
     def set_fullscreen(self, is_full: bool):
+        """260621-63: 전체화면=2단(좌측 세로 상/하 책갈피 + 본문 좌/우), 내부=단일 split."""
+        is_full = bool(is_full)
         self.btn_full.setText("▣ 내부화면" if is_full else "⛶ 전체화면")
+        if is_full == self._is_full:
+            return
+        self._is_full = is_full
+        if is_full:
+            self._build_fs()
+            self._fs_left.insertWidget(0, self.tree)       # 상단 책갈피
+            self._fs_right.insertWidget(0, self.viewer)    # 좌측 본문
+            self._center_lay.removeWidget(self.split)
+            self.split.setParent(None)
+            self._center_lay.addWidget(self._fs_split)
+            self._fs_split.show()
+            self._fs_left.setSizes([400, 400])
+            self._fs_right.setSizes([560, 560])
+            self._fs_split.setSizes([320, 1080])
+        else:
+            self.split.insertWidget(0, self.tree)
+            self.split.insertWidget(1, self.viewer)
+            if self._fs_split is not None:
+                self._center_lay.removeWidget(self._fs_split)
+                self._fs_split.setParent(None)
+            self._center_lay.addWidget(self.split)
+            self.split.show()
+            self.split.setSizes([320, 680])
+
+    def _build_fs(self):
+        """전체화면용 2단 위젯(하단 책갈피 tree2 · 우측 본문 viewer2) 1회 생성."""
+        if self._fs_split is not None:
+            return
+        from PyQt6.QtWidgets import QSplitter
+        self.tree2 = QTreeWidget()
+        self.tree2.setHeaderHidden(True)
+        self.tree2.currentItemChanged.connect(lambda *_: self._on_select2())
+        self.tree2.itemClicked.connect(lambda *_: self._on_select2())
+        self.viewer2 = QTextBrowser()
+        self.viewer2.setOpenLinks(False)
+        self.viewer2.anchorClicked.connect(self._on_anchor_right)
+        self.viewer2.setStyleSheet("QTextBrowser{background:#ffffff;color:#1a1a1a;}")
+        self.viewer2.setPlaceholderText("좌측 본문의 코드 링크를 누르면 여기(우측)에서 열립니다.")
+        self._fs_left = QSplitter(Qt.Orientation.Vertical)    # 상단/하단 책갈피
+        self._fs_left.addWidget(self.tree2)                   # 하단(상단 tree 는 진입 시 0번에 삽입)
+        self._fs_right = QSplitter(Qt.Orientation.Horizontal)  # 좌측/우측 본문
+        self._fs_right.addWidget(self.viewer2)                # 우측(좌측 viewer 는 진입 시 0번)
+        self._fs_split = QSplitter(Qt.Orientation.Horizontal)
+        self._fs_split.setHandleWidth(8)
+        self._fs_split.addWidget(self._fs_left)
+        self._fs_split.addWidget(self._fs_right)
+        self._fs_split.setStretchFactor(0, 0)
+        self._fs_split.setStretchFactor(1, 1)
+
+    def _on_select2(self):
+        """하단 책갈피 선택 → 우측 본문의 해당 절로 스크롤(또는 코드면 우측에 로드)."""
+        if self.tree2 is None:
+            return
+        it = self.tree2.currentItem()
+        if it is None:
+            return
+        anchor = it.data(0, _ROLE_ANCHOR)
+        if anchor and self.viewer2 is not None:
+            self.viewer2.scrollToAnchor(anchor)
+            return
+        row = it.data(0, _ROLE_ROW)
+        if isinstance(row, dict) and row.get("code"):
+            self._load_content(row.get("ctype") or "", row["code"], None,
+                               push=False, target="right")
 
     def _on_escape(self):
         if self.find_bar.isVisible():
@@ -333,8 +408,9 @@ class KcscSearchPanel(QWidget):
         it = self.tree.currentItem()
         return it.data(0, _ROLE_ROW) if it is not None else None
 
-    def _load_content(self, ctype, code, item, push: bool = True):
-        self._cur_item = item
+    def _load_content(self, ctype, code, item, push: bool = True, target: str = "left"):
+        if target == "left":
+            self._cur_item = item
         if push:
             cur = self._hist[self._hist_idx][:2] if (0 <= self._hist_idx < len(self._hist)) else None
             if cur != (ctype, code):
@@ -345,13 +421,19 @@ class KcscSearchPanel(QWidget):
         self.info.setText("불러오는 중…")
         w = _ContentWorker(self._key, ctype, code)
         self._workers.append(w)
-        w.done.connect(self._on_content)
+        w.done.connect(lambda h, d, a, m, t=target: self._on_content(h, d, a, m, t))
         w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
         w.start()
 
     # ----- 코드 링크 · 뒤로/앞으로 -----
-    def _on_anchor(self, url: QUrl):
-        """본문 링크 클릭: kcsc:// 코드는 내부(같은 창)에서 열고, 외부는 브라우저, #앵커는 스크롤."""
+    def _on_anchor_left(self, url: QUrl):
+        # 전체화면이면 좌측 본문의 코드 링크는 우측에서 연다; 내부화면은 같은 창.
+        self._anchor(url, self.viewer, "right" if self._is_full else "left")
+
+    def _on_anchor_right(self, url: QUrl):
+        self._anchor(url, self.viewer2, "right")
+
+    def _anchor(self, url: QUrl, src_viewer, code_target: str):
         s = url.toString()
         if s.startswith("kcsc://"):
             rest = s[len("kcsc://"):]
@@ -359,18 +441,19 @@ class KcscSearchPanel(QWidget):
             ctype = (ctype or "").strip().upper()
             code = re.sub(r"\D", "", code or "")
             if ctype in ("KDS", "KCS") and len(code) == 6:
-                self._open_code(ctype, code)
+                self._open_code(ctype, code, target=code_target)
             return
         if url.scheme().lower() in ("http", "https"):
             QDesktopServices.openUrl(url)
             return
         frag = url.fragment() or (s[1:] if s.startswith("#") else "")
-        if frag:
-            self.viewer.scrollToAnchor(frag)
+        if frag and src_viewer is not None:
+            src_viewer.scrollToAnchor(frag)
 
-    def _open_code(self, ctype: str, code: str):
-        """260621-62: 코드 링크를 내부 화면(같은 본문창)에서 연다(히스토리에 기록)."""
-        self._load_content(ctype, code, None, push=True)
+    def _open_code(self, ctype: str, code: str, target: str = "left"):
+        """260621-62/63: 코드 링크 열기. target='left'=같은 본문창(내부),
+        'right'=전체화면 우측 본문(+하단 책갈피)."""
+        self._load_content(ctype, code, None, push=(target == "left"), target=target)
 
     def _nav_back(self):
         if self._hist_idx > 0:
@@ -388,13 +471,25 @@ class KcscSearchPanel(QWidget):
         self.btn_back.setEnabled(self._hist_idx > 0)
         self.btn_fwd.setEnabled(self._hist_idx < len(self._hist) - 1)
 
-    def _on_content(self, html, dbg, arts, meta):
+    def _on_content(self, html, dbg, arts, meta, target: str = "left"):
         if not html:
             self.info.setText("표시할 본문이 없습니다. " + (dbg[-1] if dbg else ""))
             return
-        self.viewer.setHtml(linkify_codes(html))
+        linked = linkify_codes(html)
         name = meta.get("name") or ""
         ver = meta.get("version") or ""
+        if target == "right" and self.viewer2 is not None:
+            # 우측 본문 + 하단 책갈피(절)
+            self.viewer2.setHtml(linked)
+            self.tree2.clear()
+            for label, anchor in (arts or []):
+                ch = QTreeWidgetItem([label])
+                ch.setData(0, _ROLE_ANCHOR, anchor)
+                self.tree2.addTopLevelItem(ch)
+            self.info.setText((f"우측: {name}" + (f" (v{ver})" if ver else "")) if name
+                              else (dbg[-1] if dbg else ""))
+            return
+        self.viewer.setHtml(linked)
         self.info.setText((f"{name}" + (f"  (v{ver})" if ver else "")) if name
                           else (dbg[-1] if dbg else ""))
         it = self._cur_item
