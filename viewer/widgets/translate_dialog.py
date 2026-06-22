@@ -4,6 +4,9 @@ SOT: `PDF 번역·요약 작업 계획서.md` (P0). 본격 파이프라인(추�
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QPlainTextEdit,
@@ -27,12 +30,13 @@ class _CountWorker(QThread):
 
 
 class _TransWorker(QThread):
-    done = pyqtSignal(str, list)
-    stage = pyqtSignal(str)        # 진행 단계 안내
+    done = pyqtSignal(str, list, str, str)   # full_text, dbg, docx_path, pdf_path
+    stage = pyqtSignal(str)                   # 진행 단계 안내
 
-    def __init__(self, key, text, model, auth="api"):
+    def __init__(self, key, text, model, auth="api", source_path=""):
         super().__init__()
         self._key, self._text, self._model, self._auth = key, text, model, auth
+        self._source_path = source_path or ""
 
     def run(self):
         # P2/P2b: 사전 1순위 + Claude 자동 제안 용어집(스레드 전용 DictStore)
@@ -59,7 +63,7 @@ class _TransWorker(QThread):
         translation, dbg = tapi.translate_text_debug(
             self._key, self._text, model=self._model, glossary=glossary, auth=self._auth)
         if not translation:
-            self.done.emit("", dbg)
+            self.done.emit("", dbg, "", "")
             return
         # P3: 요약 + 서지(APA) → 산출물 순서로 조립(서지 → 요약 → 전문)
         self.stage.emit("요약·서지 생성 중…")
@@ -68,15 +72,30 @@ class _TransWorker(QThread):
                                              self._model, self._auth)
         summary, _s = sm.summarize_debug(self._key, self._text, self._model, self._auth)
         full = sm.assemble(citation, summary, translation)
-        self.done.emit(full, dbg)
+        # P4: Word/PDF 산출물(논문 폴더, 책갈피)
+        docx_path = pdf_path = ""
+        if self._source_path:
+            try:
+                self.stage.emit("Word/PDF 문서 생성 중…")
+                from ..study import export_translation as ex
+                folder = os.path.dirname(os.path.abspath(self._source_path))
+                name = os.path.splitext(os.path.basename(self._source_path))[0]
+                docx_path, pdf_path, _d = ex.save_translation_doc(
+                    folder, name, citation=citation, summary=summary,
+                    translation=translation, glossary=glossary)
+            except Exception:
+                docx_path = pdf_path = ""
+        self.done.emit(full, dbg, docx_path, pdf_path)
 
 
 class TranslatePocDialog(QDialog):
-    def __init__(self, prefs: dict, parent=None, initial_text: str = "", glossary=None):
+    def __init__(self, prefs: dict, parent=None, initial_text: str = "", glossary=None,
+                 source_path: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("PDF 번역 (베타·Claude) — PoC")
+        self.setWindowTitle("PDF 번역 (베타·Claude)")
         self.resize(820, 640)
         self._prefs = prefs or {}
+        self._source_path = source_path or ""
         self._auth = str(self._prefs.get("translate_auth", "api")).strip()
         self._key = str(self._prefs.get("anthropic_api_key", "")).strip()
         self._model = str(self._prefs.get("translate_model", tapi.DEFAULT_MODEL))
@@ -176,20 +195,33 @@ class TranslatePocDialog(QDialog):
         self.info.setText("용어집 생성 + 번역 준비 중…")
         self.out.setPlainText("")
         self.btn_run.setEnabled(False)
-        w = _TransWorker(self._key, text, self._model, self._auth)
+        w = _TransWorker(self._key, text, self._model, self._auth, self._source_path)
         self._workers.append(w)
         w.stage.connect(self.info.setText)
         w.done.connect(self._on_trans)
         w.finished.connect(lambda w=w: self._drop(w))
         w.start()
 
-    def _on_trans(self, out, dbg):
+    def _on_trans(self, out, dbg, docx_path="", pdf_path=""):
         self.btn_run.setEnabled(True)
         if not out:
             self.info.setText("번역 실패: " + (dbg[-1] if dbg else ""))
             return
-        self.info.setText("완료 · " + (" | ".join(dbg) if dbg else ""))
         self.out.setPlainText(out)
+        saved = ""
+        if pdf_path:
+            saved = " · 저장: " + os.path.basename(pdf_path) + " (+docx)"
+        elif docx_path:
+            saved = " · 저장: " + os.path.basename(docx_path) + " (PDF 변환 실패 — Word 필요)"
+        self.info.setText("완료" + saved)
+        # 저장된 PDF 를 뷰어로 열기
+        if pdf_path:
+            try:
+                par = self.parent()
+                if par is not None and hasattr(par, "open_pdf"):
+                    par.open_pdf(Path(pdf_path))
+            except Exception:
+                pass
 
     def _drop(self, w):
         try:

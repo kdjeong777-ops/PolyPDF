@@ -71,21 +71,26 @@ class _BatchWorker(QThread):
             if not out:
                 self.one_done.emit(str(p), False, (dbg[-1] if dbg else "번역 실패"))
                 continue
-            # P3: 요약 + 서지(APA) → 산출물 순서(서지→요약→전문)로 조립
+            # P3: 요약 + 서지(APA)
+            translation = out
+            citation = summary = ""
             try:
                 from ..study import summarize as sm
                 citation, _c = sm.citation_apa_debug(self._key, text[:2500], self._model, self._auth)
                 summary, _s = sm.summarize_debug(self._key, text, self._model, self._auth)
-                out = sm.assemble(citation, summary, out)
             except Exception:
                 pass
+            # P4: Word/PDF 산출물(서지→요약→전문→용어집, 책갈피)
             try:
-                dest = Path(p).with_name(Path(p).stem + "_번역.txt")
-                dest.write_text(out, encoding="utf-8")
+                from ..study import export_translation as ex
+                docx_path, pdf_path, _d = ex.save_translation_doc(
+                    str(Path(p).parent), Path(p).stem,
+                    citation=citation, summary=summary, translation=translation,
+                    glossary=glossary)
                 ok += 1
-                self.one_done.emit(str(p), True, f"저장: {dest.name}")
+                self.one_done.emit(str(p), True, f"저장: {Path(pdf_path or docx_path).name}")
             except Exception as e:
-                self.one_done.emit(str(p), False, f"저장 실패: {type(e).__name__}")
+                self.one_done.emit(str(p), False, f"저장 실패: {type(e).__name__}: {str(e)[:60]}")
         if store is not None:
             try:
                 store.close()
@@ -181,8 +186,8 @@ class TranslateFilesDialog(QDialog):
         run_row.addWidget(self.btn_close)
         v.addLayout(run_row)
 
-        self.info = QLabel("결과는 각 PDF 옆에 '{이름}_번역.txt' 로 저장됩니다. "
-                           "(요약·Word/PDF·책갈피는 후속 단계에서 추가)")
+        self.info = QLabel("각 PDF 옆에 '{이름}_번역.docx/.pdf' 로 저장됩니다 "
+                           "(서지→요약→전문→용어집, PDF 책갈피).")
         self.info.setStyleSheet("color:#555;")
         self.info.setWordWrap(True)
         v.addWidget(self.info)
@@ -306,7 +311,7 @@ class TranslateFilesDialog(QDialog):
 
     def _on_all_done(self, ok, total):
         self.btn_run.setEnabled(True)
-        self.info.setText(f"완료: {ok}/{total} 개 번역 저장. (각 PDF 옆 '_번역.txt')")
+        self.info.setText(f"완료: {ok}/{total} 개 번역 저장 (각 PDF 옆 '_번역.docx/.pdf').")
 
     def reject(self):
         if self._worker is not None and self._worker.isRunning():

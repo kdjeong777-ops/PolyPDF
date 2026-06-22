@@ -4953,9 +4953,9 @@ class MainWindow(QMainWindow):
                         or _tapi.extract_pdf_text(path, max_chars=200000))
         except Exception:
             init = ""
-        # 용어집(사전 1순위 + 자동 제안)은 번역 워커가 백그라운드에서 생성·주입(P2/P2b)
+        # 용어집(사전 1순위 + 자동 제안)·요약·서지·Word/PDF 산출은 번역 워커가 백그라운드 처리
         from viewer.widgets.translate_dialog import TranslatePocDialog
-        TranslatePocDialog(self._prefs, self, initial_text=init).exec()
+        TranslatePocDialog(self._prefs, self, initial_text=init, source_path=str(path)).exec()
 
     def _action_translate_files(self, preselected=None):
         """260621-P0: 여러 PDF 번역 — 병합형 선택 목록(좌 전체/우 대상, 추가·순서·삭제)."""
