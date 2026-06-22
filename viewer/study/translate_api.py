@@ -10,6 +10,8 @@ SOT: `PDF 번역·요약 작업 계획서.md`.
 """
 from __future__ import annotations
 
+import re
+
 DEFAULT_MODEL = "claude-opus-4-8"
 
 # (id, 표시이름, 입력$/1M, 출력$/1M) — 비용 추정용(개략, 변동 가능)
@@ -183,12 +185,64 @@ def verify_auth_debug(key: str, model: str = DEFAULT_MODEL, auth: str = "api"):
     return (n >= 0), dbg
 
 
+def _split_text(text: str, max_chars: int = 7000) -> list:
+    """긴 본문을 단락 경계로 청크 분할(전체 번역용). 단락이 너무 길면 강제 분할."""
+    text = text or ""
+    if len(text) <= max_chars:
+        return [text] if text.strip() else []
+    paras = re.split(r"\n\s*\n", text)
+    chunks: list = []
+    cur = ""
+    for p in paras:
+        if len(p) > max_chars:
+            if cur:
+                chunks.append(cur); cur = ""
+            for i in range(0, len(p), max_chars):
+                chunks.append(p[i:i + max_chars])
+            continue
+        if cur and len(cur) + len(p) + 2 > max_chars:
+            chunks.append(cur); cur = p
+        else:
+            cur = (cur + "\n\n" + p) if cur else p
+    if cur:
+        chunks.append(cur)
+    return [c for c in chunks if c.strip()]
+
+
+def _stream_translate(client, text, model, glossary, effort, max_tokens, on_text):
+    """한 청크 스트리밍 번역 → (번역문, stop_reason). 예외는 호출측에서 처리."""
+    parts = []
+    with client.messages.stream(
+        model=model, max_tokens=max_tokens,
+        system=_system(glossary),
+        thinking={"type": "adaptive"},
+        output_config={"effort": effort},
+        messages=[{"role": "user", "content":
+                   "다음 외국어 본문을 한국어로 번역하세요. 번역문만 출력하세요.\n\n" + text}],
+    ) as stream:
+        for t in stream.text_stream:
+            parts.append(t)
+            if on_text:
+                try:
+                    on_text(t)
+                except Exception:
+                    pass
+        msg = stream.get_final_message()
+    out = "".join(parts).strip()
+    if not out:
+        for b in getattr(msg, "content", []) or []:
+            if getattr(b, "type", "") == "text":
+                out += b.text
+        out = out.strip()
+    return out, getattr(msg, "stop_reason", "")
+
+
 def translate_text_debug(key: str, text: str, model: str = DEFAULT_MODEL,
                          glossary=None, effort: str = "medium",
                          max_tokens: int = 64000, on_text=None, auth: str = "api"):
-    """(번역문, [진단]). 스트리밍으로 한국어 번역(P0 단일 청크).
+    """(번역문, [진단]). 긴 본문은 단락 경계로 청크 분할해 **전체** 번역 후 이어붙인다.
 
-    auth='api'|'login'. on_text(delta:str): 진행 콜백(선택). 거부/오류 시 빈 문자열 + 진단.
+    auth='api'|'login'. on_text(delta:str): 진행 콜백(선택). 오류 시에도 그때까지의 번역을 반환.
     """
     if not available():
         return "", ["anthropic SDK 미설치 — 'pip install anthropic'"]
@@ -196,42 +250,29 @@ def translate_text_debug(key: str, text: str, model: str = DEFAULT_MODEL,
         return "", ["API 키 없음 — 설정 → 번역(Claude)"]
     if not (text or "").strip():
         return "", ["번역할 내용이 없습니다."]
+    chunks = _split_text(text, max_chars=7000)
+    if not chunks:
+        return "", ["번역할 내용이 없습니다."]
     try:
         c = _client(key, auth)
-        parts = []
-        with c.messages.stream(
-            model=model, max_tokens=max_tokens,
-            system=_system(glossary),
-            thinking={"type": "adaptive"},
-            output_config={"effort": effort},
-            messages=[{"role": "user", "content":
-                       "다음 외국어 본문을 한국어로 번역하세요. 번역문만 출력하세요.\n\n" + text}],
-        ) as stream:
-            for t in stream.text_stream:
-                parts.append(t)
-                if on_text:
-                    try:
-                        on_text(t)
-                    except Exception:
-                        pass
-            msg = stream.get_final_message()
-        out = "".join(parts).strip()
-        if not out:
-            for b in getattr(msg, "content", []) or []:
-                if getattr(b, "type", "") == "text":
-                    out += b.text
-            out = out.strip()
-        stop = getattr(msg, "stop_reason", "")
-        usage = getattr(msg, "usage", None)
-        dbg = [f"ok stop={stop}"]
-        if usage is not None:
-            dbg.append(
-                f"in={getattr(usage,'input_tokens',0)} out={getattr(usage,'output_tokens',0)} "
-                f"cache_r={getattr(usage,'cache_read_input_tokens',0)}")
-        if stop == "refusal":
-            return "", dbg + ["요청이 거부되었습니다(refusal)."]
-        if not out:
-            return "", dbg + ["번역 결과가 비어 있습니다."]
-        return out, dbg
     except Exception as e:
         return "", [f"ERR {_err_detail(e)}{_auth_hint(e, auth)}"]
+    outs: list = []
+    n = len(chunks)
+    for i, ch in enumerate(chunks, 1):
+        if n > 1 and on_text:
+            try:
+                on_text(f"\n\n[{i}/{n} 번역 중…]\n")
+            except Exception:
+                pass
+        try:
+            o, stop = _stream_translate(c, ch, model, glossary, effort, max_tokens, on_text)
+        except Exception as e:
+            partial = "\n\n".join(outs).strip()
+            return partial, [f"{i}/{n} 청크 오류: {_err_detail(e)}{_auth_hint(e, auth)}"]
+        if stop == "refusal":
+            return "\n\n".join(outs).strip(), [f"{i}/{n} 청크에서 거부됨(refusal)."]
+        if not o:
+            return "\n\n".join(outs).strip(), [f"{i}/{n} 청크 결과 비어 있음."]
+        outs.append(o)
+    return "\n\n".join(outs).strip(), [f"완료 ({n}개 청크)" if n > 1 else "완료"]

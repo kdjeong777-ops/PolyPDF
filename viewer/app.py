@@ -4947,7 +4947,7 @@ class MainWindow(QMainWindow):
         init = ""
         try:
             if path and Path(path).exists():
-                init = _tapi.extract_pdf_text(path, max_pages=2, max_chars=6000)
+                init = _tapi.extract_pdf_text(path, max_chars=200000)  # 전체 본문(긴 문서는 청크 번역)
         except Exception:
             init = ""
         from viewer.widgets.translate_dialog import TranslatePocDialog
