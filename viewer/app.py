@@ -1422,6 +1422,7 @@ class MainWindow(QMainWindow):
 
         # 📖 사전 및 용어집 관리
         m_tools.addSection("📖 사전 및 용어집 관리")
+        _act("단어장 관리 (출처·우선순위·폴더)...", self._action_dict_manager)
         _act("용어집 가져오기 (PDF·CSV)...", self._action_import_glossary)
         _act("사전 복원 (가져오기)...", self._action_restore_dict)
         _act("용어집 CSV 양식 예제 저장...", self._action_save_csv_sample)
@@ -4890,7 +4891,27 @@ class MainWindow(QMainWindow):
                         "기본 용어집 적재: " + ", ".join(seeded), 4000)
             except Exception:
                 pass
+            # 단어장 폴더 → dict.db 출처 동기화(하이브리드)
+            try:
+                from viewer.study import glossary_folder as _gf
+                _gf.sync_folder(self._dict_store, self._prefs)
+            except Exception:
+                pass
         return self._dict_store
+
+    def _action_dict_manager(self, checked: bool = False):
+        """260621-70: 단어장 관리(출처 on/off·우선순위·폴더)."""
+        from viewer.widgets.dict_manager_dialog import DictManagerDialog
+        dlg = DictManagerDialog(self._study_get_dict(), self._prefs, host=self, parent=self)
+
+        def _refresh():
+            try:
+                self.study_panel.set_dict_sources(self._study_get_dict().list_sources())
+            except Exception:
+                pass
+        dlg.changed.connect(_refresh)
+        dlg.exec()
+        _refresh()
 
     def _study_get_tts(self):
         if self._tts is None:

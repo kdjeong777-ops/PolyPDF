@@ -210,7 +210,9 @@ pyinstaller ^
     --hidden-import viewer.study.translate_api ^
     --hidden-import viewer.study.pdf_extract ^
     --hidden-import viewer.study.glossary_build ^
+    --hidden-import viewer.study.glossary_folder ^
     --hidden-import viewer.study.summarize ^
+    --hidden-import viewer.widgets.dict_manager_dialog ^
     --hidden-import viewer.study.export_translation ^
     --hidden-import viewer.study.ant_cli ^
     --hidden-import viewer.widgets.translate_dialog ^
