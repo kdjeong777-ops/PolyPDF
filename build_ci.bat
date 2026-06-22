@@ -209,6 +209,7 @@ pyinstaller ^
     --hidden-import viewer.widgets.kipo_search_dialog ^
     --hidden-import viewer.study.translate_api ^
     --hidden-import viewer.study.pdf_extract ^
+    --hidden-import viewer.study.glossary_build ^
     --hidden-import viewer.study.ant_cli ^
     --hidden-import viewer.widgets.translate_dialog ^
     --hidden-import viewer.widgets.translate_files_dialog ^

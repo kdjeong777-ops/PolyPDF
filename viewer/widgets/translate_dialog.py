@@ -16,31 +16,33 @@ from ..study import translate_api as tapi
 class _CountWorker(QThread):
     done = pyqtSignal(int, list)
 
-    def __init__(self, key, text, model, auth="api"):
+    def __init__(self, key, text, model, auth="api", glossary=None):
         super().__init__()
         self._key, self._text, self._model, self._auth = key, text, model, auth
+        self._glossary = glossary
 
     def run(self):
-        n, dbg = tapi.count_tokens_debug(self._key, self._text,
-                                         model=self._model, auth=self._auth)
+        n, dbg = tapi.count_tokens_debug(self._key, self._text, model=self._model,
+                                         glossary=self._glossary, auth=self._auth)
         self.done.emit(n, dbg)
 
 
 class _TransWorker(QThread):
     done = pyqtSignal(str, list)
 
-    def __init__(self, key, text, model, auth="api"):
+    def __init__(self, key, text, model, auth="api", glossary=None):
         super().__init__()
         self._key, self._text, self._model, self._auth = key, text, model, auth
+        self._glossary = glossary
 
     def run(self):
-        out, dbg = tapi.translate_text_debug(self._key, self._text,
-                                             model=self._model, auth=self._auth)
+        out, dbg = tapi.translate_text_debug(self._key, self._text, model=self._model,
+                                             glossary=self._glossary, auth=self._auth)
         self.done.emit(out, dbg)
 
 
 class TranslatePocDialog(QDialog):
-    def __init__(self, prefs: dict, parent=None, initial_text: str = ""):
+    def __init__(self, prefs: dict, parent=None, initial_text: str = "", glossary=None):
         super().__init__(parent)
         self.setWindowTitle("PDF 번역 (베타·Claude) — PoC")
         self.resize(820, 640)
@@ -48,6 +50,7 @@ class TranslatePocDialog(QDialog):
         self._auth = str(self._prefs.get("translate_auth", "api")).strip()
         self._key = str(self._prefs.get("anthropic_api_key", "")).strip()
         self._model = str(self._prefs.get("translate_model", tapi.DEFAULT_MODEL))
+        self._glossary = list(glossary or [])
         self._workers = []
 
         v = QVBoxLayout(self)
@@ -59,8 +62,10 @@ class TranslatePocDialog(QDialog):
             authtxt = "API 키"
             ready = bool(self._key)
         status = "준비됨" if ready else "<span style=color:#c00>설정 필요</span>"
+        gtxt = (f" &nbsp;|&nbsp; <b>용어집:</b> {len(self._glossary)}개 적용"
+                if self._glossary else "")
         v.addWidget(QLabel(f"<b>모델:</b> {label} &nbsp;|&nbsp; "
-                           f"<b>인증:</b> {authtxt} ({status})"))
+                           f"<b>인증:</b> {authtxt} ({status}){gtxt}"))
         v.addWidget(QLabel("번역할 본문(현재 PDF 앞부분을 채워 두었습니다. 수정 가능):"))
         self.ed = QPlainTextEdit()
         self.ed.setPlainText(initial_text or "")
@@ -109,7 +114,7 @@ class TranslatePocDialog(QDialog):
             return
         self.info.setText("토큰 계산 중…")
         self.btn_count.setEnabled(False)
-        w = _CountWorker(self._key, text, self._model, self._auth)
+        w = _CountWorker(self._key, text, self._model, self._auth, self._glossary)
         self._workers.append(w)
         w.done.connect(self._on_count)
         w.finished.connect(lambda w=w: self._drop(w))
@@ -142,7 +147,7 @@ class TranslatePocDialog(QDialog):
         self.info.setText("번역 중… (모델 응답 대기)")
         self.out.setPlainText("")
         self.btn_run.setEnabled(False)
-        w = _TransWorker(self._key, text, self._model, self._auth)
+        w = _TransWorker(self._key, text, self._model, self._auth, self._glossary)
         self._workers.append(w)
         w.done.connect(self._on_trans)
         w.finished.connect(lambda w=w: self._drop(w))

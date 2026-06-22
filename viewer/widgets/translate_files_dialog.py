@@ -41,6 +41,13 @@ class _BatchWorker(QThread):
     def run(self):
         total = len(self._files)
         ok = 0
+        # P2: 워커 스레드 전용 DictStore(용어집 1순위) — 메인 연결과 분리
+        store = None
+        try:
+            from ..study.dict_store import DictStore
+            store = DictStore()
+        except Exception:
+            store = None
         for i, p in enumerate(self._files, 1):
             if self._stop:
                 break
@@ -52,8 +59,15 @@ class _BatchWorker(QThread):
             if not text:
                 self.one_done.emit(str(p), False, "본문 텍스트 추출 실패(스캔본일 수 있음)")
                 continue
+            glossary = []
+            if store is not None:
+                try:
+                    from ..study import glossary_build as gb
+                    glossary = gb.build_glossary(text, store)
+                except Exception:
+                    glossary = []
             out, dbg = tapi.translate_text_debug(
-                self._key, text, model=self._model, auth=self._auth)
+                self._key, text, model=self._model, auth=self._auth, glossary=glossary)
             if not out:
                 self.one_done.emit(str(p), False, (dbg[-1] if dbg else "번역 실패"))
                 continue
@@ -64,6 +78,11 @@ class _BatchWorker(QThread):
                 self.one_done.emit(str(p), True, f"저장: {dest.name}")
             except Exception as e:
                 self.one_done.emit(str(p), False, f"저장 실패: {type(e).__name__}")
+        if store is not None:
+            try:
+                store.close()
+            except Exception:
+                pass
         self.all_done.emit(ok, total)
 
 

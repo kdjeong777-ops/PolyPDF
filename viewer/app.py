@@ -4953,8 +4953,15 @@ class MainWindow(QMainWindow):
                         or _tapi.extract_pdf_text(path, max_chars=200000))
         except Exception:
             init = ""
+        # P2: 전문 용어사전(dict.db) 1순위 용어집 — 본문 등장 용어만 수집해 번역에 주입
+        glossary = []
+        try:
+            from viewer.study import glossary_build as _gb
+            glossary = _gb.build_glossary(init, self._study_get_dict())
+        except Exception:
+            glossary = []
         from viewer.widgets.translate_dialog import TranslatePocDialog
-        TranslatePocDialog(self._prefs, self, initial_text=init).exec()
+        TranslatePocDialog(self._prefs, self, initial_text=init, glossary=glossary).exec()
 
     def _action_translate_files(self, preselected=None):
         """260621-P0: 여러 PDF 번역 — 병합형 선택 목록(좌 전체/우 대상, 추가·순서·삭제)."""
