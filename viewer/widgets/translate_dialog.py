@@ -28,7 +28,7 @@ class _CountWorker(QThread):
 
 class _TransWorker(QThread):
     done = pyqtSignal(str, list)
-    gloss = pyqtSignal(int)        # 용어집 개수(빌드 후)
+    stage = pyqtSignal(str)        # 진행 단계 안내
 
     def __init__(self, key, text, model, auth="api"):
         super().__init__()
@@ -36,6 +36,7 @@ class _TransWorker(QThread):
 
     def run(self):
         # P2/P2b: 사전 1순위 + Claude 자동 제안 용어집(스레드 전용 DictStore)
+        self.stage.emit("용어집 생성 중…")
         glossary = []
         store = None
         try:
@@ -49,15 +50,25 @@ class _TransWorker(QThread):
                 self._text, store, self._key, self._model, self._auth)
         except Exception:
             glossary = []
-        self.gloss.emit(len(glossary))
-        out, dbg = tapi.translate_text_debug(self._key, self._text, model=self._model,
-                                             glossary=glossary, auth=self._auth)
         if store is not None:
             try:
                 store.close()
             except Exception:
                 pass
-        self.done.emit(out, dbg)
+        self.stage.emit(f"용어집 {len(glossary)}개 적용 · 번역 중…")
+        translation, dbg = tapi.translate_text_debug(
+            self._key, self._text, model=self._model, glossary=glossary, auth=self._auth)
+        if not translation:
+            self.done.emit("", dbg)
+            return
+        # P3: 요약 + 서지(APA) → 산출물 순서로 조립(서지 → 요약 → 전문)
+        self.stage.emit("요약·서지 생성 중…")
+        from ..study import summarize as sm
+        citation, _c = sm.citation_apa_debug(self._key, self._text[:2500],
+                                             self._model, self._auth)
+        summary, _s = sm.summarize_debug(self._key, self._text, self._model, self._auth)
+        full = sm.assemble(citation, summary, translation)
+        self.done.emit(full, dbg)
 
 
 class TranslatePocDialog(QDialog):
@@ -167,7 +178,7 @@ class TranslatePocDialog(QDialog):
         self.btn_run.setEnabled(False)
         w = _TransWorker(self._key, text, self._model, self._auth)
         self._workers.append(w)
-        w.gloss.connect(lambda n: self.info.setText(f"용어집 {n}개 적용 · 번역 중…"))
+        w.stage.connect(self.info.setText)
         w.done.connect(self._on_trans)
         w.finished.connect(lambda w=w: self._drop(w))
         w.start()

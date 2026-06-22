@@ -71,6 +71,14 @@ class _BatchWorker(QThread):
             if not out:
                 self.one_done.emit(str(p), False, (dbg[-1] if dbg else "번역 실패"))
                 continue
+            # P3: 요약 + 서지(APA) → 산출물 순서(서지→요약→전문)로 조립
+            try:
+                from ..study import summarize as sm
+                citation, _c = sm.citation_apa_debug(self._key, text[:2500], self._model, self._auth)
+                summary, _s = sm.summarize_debug(self._key, text, self._model, self._auth)
+                out = sm.assemble(citation, summary, out)
+            except Exception:
+                pass
             try:
                 dest = Path(p).with_name(Path(p).stem + "_번역.txt")
                 dest.write_text(out, encoding="utf-8")
