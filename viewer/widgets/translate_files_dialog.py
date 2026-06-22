@@ -46,7 +46,9 @@ class _BatchWorker(QThread):
                 break
             name = Path(p).name
             self.progress.emit(i, total, f"[{i}/{total}] {name} 추출·번역 중…")
-            text = tapi.extract_pdf_text(p, max_chars=200000)  # 전체 본문(긴 문서는 청크 번역)
+            # P1: 머리말/꼬리말 제거·본문 연결된 정제 본문(실패 시 원시 추출 폴백)
+            from ..study import pdf_extract as px
+            text = px.extract_clean_text(p, max_chars=200000) or tapi.extract_pdf_text(p, max_chars=200000)
             if not text:
                 self.one_done.emit(str(p), False, "본문 텍스트 추출 실패(스캔본일 수 있음)")
                 continue

@@ -4947,7 +4947,10 @@ class MainWindow(QMainWindow):
         init = ""
         try:
             if path and Path(path).exists():
-                init = _tapi.extract_pdf_text(path, max_chars=200000)  # 전체 본문(긴 문서는 청크 번역)
+                # P1: 머리말/꼬리말 제거·본문 연결된 정제 본문(실패 시 원시 추출 폴백)
+                from viewer.study import pdf_extract as _px
+                init = (_px.extract_clean_text(path, max_chars=200000)
+                        or _tapi.extract_pdf_text(path, max_chars=200000))
         except Exception:
             init = ""
         from viewer.widgets.translate_dialog import TranslatePocDialog
