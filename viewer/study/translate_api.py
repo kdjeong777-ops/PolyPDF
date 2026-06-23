@@ -31,7 +31,9 @@ _SYSTEM_BASE = (
     "② 학술적 문체와 원문 의미를 보존한다(과도한 의역 금지).\n"
     "③ 수식·단위·인용 표기[N]·그림/표 번호·고유명사는 원형을 유지한다.\n"
     "④ 머리말·꼬리말·페이지번호 같은 반복 잡음은 무시하고 본문이 자연스럽게 이어지도록 번역한다.\n"
-    "⑤ 한국어 번역문만 출력한다. 머리말·설명·메모를 덧붙이지 않는다."
+    "⑤ 한국어 번역문만 출력한다. 머리말·설명·메모를 덧붙이지 않는다.\n"
+    "⑥ 【수식N】 형태의 토큰(예: 【수식1】)은 수식 자리표시자이다. 절대 번역·변형·삭제하지 말고 "
+    "원래 위치에 그대로 한 줄로 둔다."
 )
 
 
@@ -228,6 +230,63 @@ def propose_glossary_debug(key: str, text: str, known_en=None,
             if en and ko:
                 out.append({"en": en, "ko": ko})
         return out[:max_terms], [f"제안 {len(out)}개"]
+    except Exception as e:
+        return [], [f"ERR {_err_detail(e)}{_auth_hint(e, auth)}"]
+
+
+def translate_table_image_debug(key: str, image_path: str,
+                                model: str = DEFAULT_MODEL, auth: str = "api"):
+    """(rows_ko, [진단]). 표 이미지를 비전으로 인식해 행/열 구조 그대로 한국어로 재구성.
+
+    rows_ko = list[list[str]] (첫 행 = 머리글). 표가 없거나 실패 시 빈 리스트.
+    번역 표를 '이상한 텍스트'가 아닌 실제 표 형식으로 만들기 위함(P4c 보완)."""
+    import base64
+    import json
+    import os as _os
+    if not available():
+        return [], ["anthropic SDK 미설치"]
+    if _need_key_missing(key, auth):
+        return [], ["API 키/로그인 없음"]
+    if not (image_path and _os.path.exists(image_path)):
+        return [], ["이미지 없음"]
+    ext = _os.path.splitext(image_path)[1].lower()
+    media = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+    try:
+        with open(image_path, "rb") as f:
+            data_b64 = base64.standard_b64encode(f.read()).decode("ascii")
+    except Exception:
+        return [], ["이미지 읽기 실패"]
+    system = (
+        "당신은 도로·아스팔트 등 공학 분야 전문 학술 번역가입니다. 이미지에는 논문의 표 "
+        "1개와 주변 본문이 함께 있을 수 있습니다. **표만** 인식하고 주변 본문 문단은 무시하세요. "
+        "표 위/아래의 **표 제목(캡션, 예: 'Table 1. …')은 포함하지 말고**, 표의 머리글 행부터 "
+        "시작하세요. 행/열 구조를 그대로 유지하되 셀 내용을 한국어로 번역합니다. 숫자·단위·기호·"
+        "시료 ID 는 그대로 둡니다. 머리글(헤더) 행을 첫 행으로 포함하고, 각 행의 셀 개수를 "
+        "열 수에 맞춰 채웁니다(빈 칸은 빈 문자열). 이미지에 표가 없으면 rows 를 빈 배열로 반환.")
+    schema = {
+        "type": "object",
+        "properties": {"rows": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}}}},
+        "required": ["rows"], "additionalProperties": False}
+    try:
+        c = _client(key, auth)
+        r = c.messages.create(
+            model=model, max_tokens=8000, system=system,
+            output_config={"format": {"type": "json_schema", "schema": schema}},
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64",
+                                             "media_type": media, "data": data_b64}},
+                {"type": "text", "text": "이 표를 한국어로 번역해 행/열 그대로 반환하세요."},
+            ]}])
+        if getattr(r, "stop_reason", "") == "refusal":
+            return [], ["표 인식 거부됨"]
+        txt = next((b.text for b in r.content if getattr(b, "type", "") == "text"), "")
+        data = json.loads(txt) if txt else {}
+        rows = [[str(c) for c in row] for row in (data.get("rows") or [])
+                if isinstance(row, list)]
+        rows = [r for r in rows if any((c or "").strip() for c in r)]
+        return rows, [f"표 {len(rows)}행"]
     except Exception as e:
         return [], [f"ERR {_err_detail(e)}{_auth_hint(e, auth)}"]
 

@@ -16,6 +16,17 @@ def _word_surfaces(text: str):
     return re.findall(r"[A-Za-z]+", text or "")
 
 
+def _primary_ko(ko: str) -> str:
+    """다중 뜻('조닝, 지구분할' / '조닝; 지구분할')은 번역 주입 시 대표(첫) 뜻만 사용해
+    대역을 명확히 한다. 표제어의 괄호 주석은 보존."""
+    s = (ko or "").strip()
+    for sep in (",", ";", "/", "·", "∙"):
+        idx = s.find(sep)
+        if idx > 0:
+            s = s[:idx].strip()
+    return s or (ko or "").strip()
+
+
 def build_glossary(text: str, store, max_terms: int = 200) -> list:
     """(list[{en, ko, note, source}]). 본문에 등장하는 사전 용어만 수집."""
     if not text or store is None:
@@ -50,7 +61,7 @@ def build_glossary(text: str, store, max_terms: int = 200) -> list:
         if not en or not ko or key in seen:
             continue
         seen.add(key)
-        out.append({"en": en, "ko": ko, "note": "",
+        out.append({"en": en, "ko": _primary_ko(ko), "note": "",
                     "source": (r.get("src_kind") or "")})
         if len(out) >= max_terms:
             break

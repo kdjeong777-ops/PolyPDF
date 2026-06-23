@@ -180,6 +180,7 @@ class BookmarkTree(QWidget):
     mergeFilesRequested = pyqtSignal(list)      # 260606-13: 선택 파일들 병합(경로 리스트)
     translateFileRequested = pyqtSignal(str)    # 260621-P0: 파일 우클릭 '번역'(단일)
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
+    editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
     fileOpCompleted = pyqtSignal(str, str)   # v1.6.21: (old, new) new=="" 삭제, new==old 실패
@@ -193,6 +194,7 @@ class BookmarkTree(QWidget):
     DATA_IS_TOC_PLACEHOLDER = Qt.ItemDataRole.UserRole + 3   # v1.6.2: 펼치기 유도용 더미 자식 표식
     DATA_ENCRYPTED = _ENC_ROLE                       # 260611-57: 암호화 파일 표식
     DATA_AUTH = _AUTH_ROLE                            # 260618-1: 인증 상태(owner/user/locked)
+    DATA_BASELABEL = Qt.ItemDataRole.UserRole + 7    # 260623: 해시태그 접미 적용 전 원본 라벨
 
     SORT_BOOK = "책갈피 순"
     SORT_NAME = "이름 순"
@@ -244,12 +246,22 @@ class BookmarkTree(QWidget):
         self.search_edit.textChanged.connect(self._on_filter)
         search_row.addWidget(self.search_edit, 1)
 
-        self.btn_fav = QPushButton("⭐")
-        self.btn_fav.setFixedWidth(28)
-        self.btn_fav.setToolTip("현재 폴더를 즐겨찾기에 추가")
-        self.btn_fav.clicked.connect(self.favoriteRequested.emit)
-        search_row.addWidget(self.btn_fav)
+        # 260623: 즐겨찾기 별 버튼 삭제 → 해시태그(#) 필터 버튼. (폴더 즐겨찾기는 우클릭 메뉴로)
+        from PyQt6.QtWidgets import QMenu
+        self.btn_tag = QPushButton("#")
+        self.btn_tag.setFixedWidth(28)
+        self.btn_tag.setToolTip("해시태그로 검색 — 등록된 태그 보기/선택")
+        self._tag_menu = QMenu(self)
+        self._tag_menu.aboutToShow.connect(self._rebuild_tag_menu)
+        self.btn_tag.setMenu(self._tag_menu)
+        search_row.addWidget(self.btn_tag)
         layout.addLayout(search_row)
+
+        try:
+            from viewer.tag_store import TagStore
+            self._tags = TagStore()
+        except Exception:
+            self._tags = None
 
         # v1.6.19: 파일 정렬 콤보
         sort_row = QHBoxLayout()
@@ -258,6 +270,7 @@ class BookmarkTree(QWidget):
         self._sort_combo = QComboBox()
         self._sort_combo.addItems([self.SORT_BOOK, self.SORT_NAME,
                                    self.SORT_MTIME, self.SORT_SIZE])
+        self._sort_combo.setCurrentText(self.SORT_MTIME)   # 초기 정렬 = 수정일순(내림차순)
         self._sort_combo.currentTextChanged.connect(self._on_sort_changed)
         sort_row.addWidget(self._sort_combo, 1)
         layout.addLayout(sort_row)
@@ -626,9 +639,60 @@ class BookmarkTree(QWidget):
     def _decorate_file_node(self, item: QTreeWidgetItem, pdf_path: Path):
         """260611-57/59: 암호화·책갈피 검사를 '배경 큐'에 등록(시작 지연 방지).
         실제 표식(붉은 삼각형/원·펼침 placeholder)은 _probe_tick 에서 점진 적용."""
+        self._apply_tag_label(item, str(pdf_path))
         self._probe_queue.append((item, str(pdf_path)))
         if not self._probe_timer.isActive():
             self._probe_timer.start()
+
+    # --- 해시태그(파일 분류) -------------------------------------------------
+    def _apply_tag_label(self, item: QTreeWidgetItem, path: str):
+        """파일명 뒤에 ` #태그` 접미를 붙여 표시(원본 라벨은 DATA_BASELABEL 에 보존)."""
+        if self._tags is None:
+            return
+        base = item.data(0, self.DATA_BASELABEL)
+        if base is None:
+            base = item.text(0)
+            item.setData(0, self.DATA_BASELABEL, base)
+        tags = self._tags.get(path)
+        suffix = ("   " + "  ".join("#" + t for t in tags)) if tags else ""
+        item.setText(0, base + suffix)
+        item.setToolTip(0, (item.toolTip(0) or path))
+
+    def _rebuild_tag_menu(self):
+        """'#' 버튼 메뉴 — 등록된 모든 태그(클릭 시 검색박스에 #태그 추가)."""
+        self._tag_menu.clear()
+        tags = self._tags.all_tags() if self._tags else []
+        if not tags:
+            a = self._tag_menu.addAction("(등록된 해시태그 없음 — 파일 우클릭 → 해시태그 편집)")
+            a.setEnabled(False)
+            return
+        for t in tags:
+            act = self._tag_menu.addAction("#" + t)
+            act.triggered.connect(lambda _=False, tag=t: self._add_tag_to_search(tag))
+        self._tag_menu.addSeparator()
+        clr = self._tag_menu.addAction("검색 비우기")
+        clr.triggered.connect(lambda: self.search_edit.clear())
+
+    def _add_tag_to_search(self, tag: str):
+        cur = self.search_edit.text().split()
+        if ("#" + tag).lower() not in [c.lower() for c in cur]:
+            self.search_edit.setText((self.search_edit.text() + " #" + tag).strip())
+
+    def _edit_file_tags(self, path: str):
+        """파일 해시태그 편집 다이얼로그 → 저장 후 라벨/필터 갱신."""
+        if self._tags is None or not path:
+            return
+        from viewer.widgets.tag_edit_dialog import TagEditDialog
+        dlg = TagEditDialog(Path(path).stem, self._tags.get(path),
+                            self._tags.all_tags(), self)
+        if dlg.exec():
+            self._tags.set(path, dlg.tags())
+            # 같은 파일의 모든 노드 라벨 갱신
+            for i in range(self.tree.topLevelItemCount()):
+                it = self.tree.topLevelItem(i)
+                if it.data(0, self.DATA_FILE) == path:
+                    self._apply_tag_label(it, path)
+            self._on_filter(self.search_edit.text())
 
     def _reset_probe_queue(self):
         """트리 재구성 시 이전 큐(이미 삭제된 항목 참조) 폐기."""
@@ -807,23 +871,42 @@ class BookmarkTree(QWidget):
     # --- 필터 -------------------------------------------------------------
 
     def _on_filter(self, text: str):
-        text = text.lower().strip()
+        toks = (text or "").strip().split()
+        tagq = [t[1:].lower() for t in toks if t.startswith("#") and len(t) > 1]
+        textq = " ".join(t for t in toks if not t.startswith("#")).lower().strip()
 
-        def match(item: QTreeWidgetItem) -> bool:
-            if not text or text in item.text(0).lower():
-                ok = True
-            else:
-                ok = False
-            child_match = False
-            for i in range(item.childCount()):
-                if match(item.child(i)):
-                    child_match = True
-            visible = ok or child_match
-            item.setHidden(not visible)
-            return visible
+        def text_match(item: QTreeWidgetItem) -> bool:
+            ok = (not textq) or (textq in item.text(0).lower())
+            child = any(text_match(item.child(i)) for i in range(item.childCount()))
+            return ok or child
+
+        def file_has_tags(path) -> bool:
+            if not tagq:
+                return True
+            ftags = [t.lower() for t in (self._tags.get(path) if (self._tags and path) else [])]
+            return all(any(ft == q or ft.startswith(q) for ft in ftags) for q in tagq)
 
         for i in range(self.tree.topLevelItemCount()):
-            match(self.tree.topLevelItem(i))
+            it = self.tree.topLevelItem(i)
+            path = it.data(0, self.DATA_FILE)
+            is_file = bool(path)
+            # 해시태그 필터는 파일에만 적용. 텍스트는 파일명/자식(책갈피)에 적용.
+            vis = (file_has_tags(path) if is_file else True) and text_match(it)
+            it.setHidden(not vis)
+            # 자식(책갈피) 가시성: 부모 보일 때 텍스트로 거름
+            if vis:
+                for c in range(it.childCount()):
+                    self._filter_text_recursive(it.child(c), textq)
+
+    def _filter_text_recursive(self, item: QTreeWidgetItem, textq: str) -> bool:
+        ok = (not textq) or (textq in item.text(0).lower())
+        child = False
+        for i in range(item.childCount()):
+            if self._filter_text_recursive(item.child(i), textq):
+                child = True
+        vis = ok or child
+        item.setHidden(not vis)
+        return vis
 
     # --- 활성화 -----------------------------------------------------------
 
@@ -938,6 +1021,8 @@ class BookmarkTree(QWidget):
         act_create = act_editmode = None
         act_study = act_study_bm = None
         act_translate = None
+        act_edit_gloss = None
+        act_tags = None
         act_password = None
         if is_file:
             # 260618-1: 암호화 파일이면 '암호 입력'(마스터/제한 무관 새 암호)
@@ -948,7 +1033,16 @@ class BookmarkTree(QWidget):
             act_editmode = menu.addAction("책갈피 편집")
             act_study = menu.addAction("단어장 생성")
             act_study_bm = menu.addAction("단어장·책갈피 동시 생성")
+            act_tags = menu.addAction("해시태그 편집...")   # 260623: 파일 분류 태그
             act_translate = menu.addAction("번역...")   # 260621-P0: 단일 파일 번역
+            act_edit_gloss = menu.addAction("번역 용어집 교정...")  # 260623: 오역 용어 수정
+            try:                                         # 용어집 사이드카 없으면 비활성화
+                from viewer.study.export_translation import resolve_glossary_sidecar
+                if not resolve_glossary_sidecar(item.data(0, self.DATA_FILE)):
+                    act_edit_gloss.setEnabled(False)
+                    act_edit_gloss.setToolTip("이 PDF 의 번역 용어집이 없습니다(먼저 번역).")
+            except Exception:
+                pass
             menu.addSeparator()
         # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         act_fav_folder = menu.addAction("현재 폴더를 즐겨찾기에 추가")
@@ -970,7 +1064,12 @@ class BookmarkTree(QWidget):
         elif act_translate_sel is not None and chosen == act_translate_sel:
             self.translateFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
         elif act_translate is not None and chosen == act_translate:
-            self.translateFileRequested.emit(item.data(0, self.DATA_FILE))
+            # 'PDF번역' 창을 열고 이 파일을 우측(번역 대상)에 담는다
+            self.translateFilesRequested.emit([item.data(0, self.DATA_FILE)])
+        elif act_edit_gloss is not None and chosen == act_edit_gloss:
+            self.editGlossaryRequested.emit(item.data(0, self.DATA_FILE))
+        elif act_tags is not None and chosen == act_tags:
+            self._edit_file_tags(item.data(0, self.DATA_FILE))
         elif act_password is not None and chosen == act_password:
             self._prompt_file_password(item, item.data(0, self.DATA_FILE))
         elif chosen == act_create:

@@ -68,8 +68,47 @@ def _block_paragraph(txt: str) -> str:
     return s
 
 
-def extract_clean_debug(path, max_chars: int = 0):
-    """(정제 본문, info). info={pages, removed_headers:[..], n_paras}."""
+def _overlaps_region(b, rects, frac: float = 0.5) -> bool:
+    """블록 b 가 제외 rect 들 중 하나와 frac 이상(면적 기준) 겹치면 True."""
+    x0, y0, x1, y1 = b[0], b[1], b[2], b[3]
+    area = max(1.0, (x1 - x0) * (y1 - y0))
+    for rx0, ry0, rx1, ry1 in rects:
+        ix = max(0.0, min(x1, rx1) - max(x0, rx0))
+        iy = max(0.0, min(y1, ry1) - max(y0, ry0))
+        if ix * iy >= frac * area:
+            return True
+    return False
+
+
+def _sidebar_ids(rect, blocks):
+    """1면 좌측 narrow 사이드바(MDPI Citation/Copyright 등) 블록 id 집합. 없으면 빈 집합.
+
+    좁은(전폭 0.32 미만) 좌측(좌여백 근처) 블록이 3개 이상이면 사이드바로 판정(단단 논문 무해)."""
+    lim_x1 = rect.x0 + rect.width * 0.32
+    left_edge = rect.x0 + rect.width * 0.10
+    narrow = [b for b in blocks if b[2] < lim_x1 and b[0] < left_edge]
+    return {id(b) for b in narrow} if len(narrow) >= 3 else set()
+
+
+def _placeholder_token(b, plist):
+    """블록 b 가 수식 placeholder rect 와 겹치면 그 토큰(【수식N】)을 반환, 아니면 None."""
+    if not plist:
+        return None
+    for rect, token in plist:
+        if _overlaps_region(b, [rect], frac=0.4):
+            return token
+    return None
+
+
+def extract_clean_debug(path, max_chars: int = 0, exclude_regions=None,
+                        drop_sidebar: bool = True, placeholders=None):
+    """(정제 본문, info). info={pages, removed_headers:[..], n_paras}.
+
+    exclude_regions={page_index:[(x0,y0,x1,y1)]} — 표/캡션 영역을 본문에서 제외(중복 방지).
+    placeholders={page_index:[((x0,y0,x1,y1), token)]} — 수식 블록을 토큰으로 치환(위치 보존).
+    drop_sidebar — 1면 좌측 narrow 사이드바(MDPI) 제외."""
+    exclude_regions = exclude_regions or {}
+    placeholders = placeholders or {}
     info = {"pages": 0, "removed_headers": [], "n_paras": 0}
     try:
         import fitz
@@ -108,15 +147,22 @@ def extract_clean_debug(path, max_chars: int = 0):
     headers = {nm for nm, c in band_count.items() if c >= thr}
     info["removed_headers"] = sorted(headers)
 
-    # --- 2차: 머리말/꼬리말·페이지번호 제외 후 읽기순서로 본문 구성 ---
+    # --- 2차: 머리말/꼬리말·페이지번호·표/캡션 영역·사이드바 제외 후 읽기순서로 본문 구성 ---
     paras = []
-    for (rect, bl) in pages_blocks:
+    for pi, (rect, bl) in enumerate(pages_blocks):
         h = rect.height or 1.0
         top_lim = rect.y0 + h * 0.12
         bot_lim = rect.y0 + h * 0.88
+        ex_rects = exclude_regions.get(pi) or []
+        plist = placeholders.get(pi) or []
+        side = _sidebar_ids(rect, bl) if (drop_sidebar and pi == 0) else set()
         kept = []
         for b in bl:
             x0, y0, x1, y1, txt = b
+            if id(b) in side:
+                continue                          # 1면 좌측 사이드바 제거
+            if ex_rects and _overlaps_region(b, ex_rects) and not _placeholder_token(b, plist):
+                continue                          # 표/캡션 영역 제거(단, 수식 블록은 토큰으로 보존)
             in_band = (y1 <= top_lim) or (y0 >= bot_lim)
             if in_band:
                 nm = _norm(txt)
@@ -124,6 +170,10 @@ def extract_clean_debug(path, max_chars: int = 0):
                     continue                      # 반복 헤더/푸터·페이지번호 제거
             kept.append(b)
         for b in _order_reading(kept, rect):
+            tok = _placeholder_token(b, plist)    # 수식 블록 → 토큰(번역 안 함)
+            if tok:
+                paras.append(tok)
+                continue
             para = _block_paragraph(b[4])
             if para:
                 paras.append(para)
@@ -137,6 +187,9 @@ def extract_clean_debug(path, max_chars: int = 0):
     return text, info
 
 
-def extract_clean_text(path, max_chars: int = 0) -> str:
-    txt, _ = extract_clean_debug(path, max_chars=max_chars)
+def extract_clean_text(path, max_chars: int = 0, exclude_regions=None,
+                       drop_sidebar: bool = True, placeholders=None) -> str:
+    txt, _ = extract_clean_debug(path, max_chars=max_chars,
+                                 exclude_regions=exclude_regions, drop_sidebar=drop_sidebar,
+                                 placeholders=placeholders)
     return txt

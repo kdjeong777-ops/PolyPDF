@@ -83,6 +83,35 @@ def citation_apa_debug(key, head_text, model=None, auth="api"):
         return "", [f"ERR {tapi._err_detail(e)}{tapi._auth_hint(e, auth)}"]
 
 
+def translate_captions(key, captions, model=None, auth="api"):
+    """그림/표 캡션 리스트 → 한국어 리스트(입력 순서·개수 유지, 1회 호출). 실패 시 빈 문자열."""
+    from viewer.study import translate_api as tapi
+    import json
+    model = model or tapi.DEFAULT_MODEL
+    caps = list(captions or [])
+    if not caps:
+        return []
+    if not tapi.available() or tapi._need_key_missing(key, auth) \
+            or not any((c or "").strip() for c in caps):
+        return [""] * len(caps)
+    system = ("다음 그림/표 캡션들을 한국어로 번역하세요. 'Figure/Table N' 같은 번호·라벨은 "
+              "그대로 유지하고 제목만 번역. 입력 순서대로 동일 개수의 항목을 반환하세요.")
+    schema = {"type": "object", "properties": {
+        "items": {"type": "array", "items": {"type": "string"}}},
+        "required": ["items"], "additionalProperties": False}
+    payload = "\n".join(f"{i+1}. {c}" for i, c in enumerate(caps))
+    try:
+        c = tapi._client(key, auth)
+        r = c.messages.create(model=model, max_tokens=3000, system=system,
+                              output_config={"format": {"type": "json_schema", "schema": schema}},
+                              messages=[{"role": "user", "content": payload}])
+        txt = next((b.text for b in r.content if getattr(b, "type", "") == "text"), "")
+        items = (json.loads(txt) if txt else {}).get("items") or []
+        return [(items[i] if i < len(items) else "") for i in range(len(caps))]
+    except Exception:
+        return [""] * len(caps)
+
+
 def assemble(citation: str, summary: str, translation: str) -> str:
     """산출물 순서: 서지 → (2줄) 요약 → (구분) 전문 번역."""
     parts = []

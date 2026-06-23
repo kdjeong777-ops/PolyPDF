@@ -1231,6 +1231,7 @@ class MainWindow(QMainWindow):
         self._panel_toolbar.addWidget(_sp)
         lab("도구")
         self._btn_merge = mk("PDF병합", "파일 → PDF 병합", lambda: self._on_merge_files(None))
+        self._btn_tr = mk("번역", "PDF 번역 (목록 창)", lambda: self._action_translate_files())  # 260623
         mk("책갈피 생성", "파일 → 책갈피 자동 생성", self.action_open_bookmarker)
         mk("단어장 생성", "파일 → 단어장 생성", self._action_build_study)
         mk("암호화", "현재 PDF에 암호·권한 설정(암호화 저장)", self.action_encrypt_pdf)
@@ -1434,8 +1435,7 @@ class MainWindow(QMainWindow):
 
         # 🌐 번역 (Claude)
         m_tools.addSection("🌐 번역 (Claude)")
-        self._act_tr_pdf = _act("현재 PDF 번역 (베타·Claude)...", self._action_translate_pdf)
-        self._act_tr_files = _act("여러 PDF 번역 (목록)...", self._action_translate_files)
+        self._act_tr_files = _act("PDF번역", self._action_translate_files)
 
         # 🔍 검색 및 데이터 구축
         m_tools.addSection("🔍 검색 및 데이터 구축")
@@ -1882,6 +1882,7 @@ class MainWindow(QMainWindow):
             lambda f: self._action_build_study_and_bookmarks(file_path=f))
         self.bookmark_tree.mergeFilesRequested.connect(self._on_merge_files)
         self.bookmark_tree.translateFileRequested.connect(self._action_translate_file)  # 260621-P0
+        self.bookmark_tree.editGlossaryRequested.connect(self._action_edit_glossary)  # 260623
         self.bookmark_tree.translateFilesRequested.connect(self._action_translate_files)  # 260621-P0
         # 260606-22: 책갈피 편집모드 ↔ 썸네일 페이지 편집(삭제/이동) 동기화
         self.bookmark_tree.btn_edit.toggled.connect(self.page_thumbs.set_edit_mode)
@@ -4978,6 +4979,27 @@ class MainWindow(QMainWindow):
         from viewer.widgets.translate_dialog import TranslatePocDialog
         TranslatePocDialog(self._prefs, self, initial_text=init, source_path=str(path)).exec()
 
+    def _action_edit_glossary(self, path: str):
+        """260623: 그 PDF(원본/번역본)의 번역 용어집(사이드카)을 불러와 오역 용어 교정(→ 사용자 사전)."""
+        if not path:
+            return
+        import json
+        from viewer.study import export_translation as ex
+        sc = ex.resolve_glossary_sidecar(path)
+        gl = []
+        if sc:
+            try:
+                with open(sc, encoding="utf-8") as f:
+                    gl = (json.load(f) or {}).get("glossary") or []
+            except Exception:
+                gl = []
+        if not gl:
+            self.status.showMessage(
+                f"'{Path(path).stem}' 의 번역 용어집이 없습니다. 먼저 번역을 실행하세요.", 6000)
+            return
+        from viewer.widgets.glossary_edit_dialog import GlossaryEditDialog
+        GlossaryEditDialog(gl, self._prefs, str(path), self).exec()
+
     def _action_translate_files(self, preselected=None):
         """260621-P0: 여러 PDF 번역 — 병합형 선택 목록(좌 전체/우 대상, 추가·순서·삭제)."""
         if not self._translate_auth_ready_or_warn():
@@ -4989,7 +5011,12 @@ class MainWindow(QMainWindow):
             pass
         pre = [p for p in (preselected or []) if p and str(p).lower().endswith(".pdf")]
         from viewer.widgets.translate_files_dialog import TranslateFilesDialog
-        TranslateFilesDialog(all_files, pre, self._prefs, self).exec()
+        # 비모달 — 번역 실행 시 창을 숨기고 백그라운드로 돌릴 수 있게(앱이 참조 보관해 GC 방지)
+        dlg = TranslateFilesDialog(all_files, pre, self._prefs, self)
+        self._tr_files_dialog = dlg
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     @staticmethod
     def _dict_src_label(h: dict) -> str:
@@ -7985,8 +8012,8 @@ class MainWindow(QMainWindow):
         _btn("_btn_kipo", has_kipo)
         _act_en(va.get("특허(등록정보)"), has_kipo)
         _act_en(getattr(self, "_act_kipo", None), has_kipo)
-        # 번역(Claude) — 툴바 버튼 없음, 메뉴만
-        _act_en(getattr(self, "_act_tr_pdf", None), has_tr)
+        # 번역(Claude) — 툴바 'PDF번역' 버튼 + 메뉴
+        _btn("_btn_tr", has_tr)
         _act_en(getattr(self, "_act_tr_files", None), has_tr)
 
     def apply_theme(self, mode: str):

@@ -52,3 +52,6 @@ Thumbs.db
 #   viewer/  main.py  requirements.txt  build_ci.bat  run.bat
 #   resources/  test_*.py  README.md  .github/
 #   default_settings.json  (optional: a curated default profile to ship)
+
+# 로컬 빌드 로그
+_build_*.log

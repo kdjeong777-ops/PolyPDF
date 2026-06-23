@@ -25,10 +25,15 @@ _SITE = "https://www.kcsc.re.kr"
 _ROLE_ROW = Qt.ItemDataRole.UserRole + 1       # 결과(row dict)
 _ROLE_ANCHOR = Qt.ItemDataRole.UserRole + 2    # 절 앵커
 
-# 260621-62: 본문 속 코드 참조(예: 'KCS 44 50 10', 'KDS 11 40 10')를 하이퍼링크로.
-#   태그(<...>)는 그대로 두고, 태그 밖 텍스트의 KDS/KCS + 숫자(공백 포함)만 매칭.
-#   숫자에서 공백 제거 후 6자리면 코드로 인정 → kcsc://{KDS|KCS}/{코드}
-_CODE_RE = re.compile(r'(?P<tag><[^>]+>)|(?P<pfx>\b(?:KDS|KCS))[ \t]*(?P<num>(?:\d[ \t]*){4,8})')
+# 260621-62 / 260623: 본문 속 코드 참조를 하이퍼링크로.
+#   prefix = KDS/KCS/EXCS/SMCS (설계기준/표준시방서/고속도로공사·서울시 전문시방서).
+#   숫자(공백 포함) 6자리 + 선택적 '(항목번호)'(예: 'KCS 44 55 15(2.4.7)', 'EXCS 44 50 10 (1.3)').
+#   태그(<...>)는 그대로 두고 태그 밖 텍스트만 매칭 → kcsc://{prefix}/{코드}[/{항목}]
+# 항목번호: '2.4.7' 또는 '1.9 (2)'(절 1.9 의 하위 (2)) 형태 모두 허용.
+_CODE_RE = re.compile(
+    r'(?P<tag><[^>]+>)|'
+    r'(?P<pfx>\b(?:KDS|KCS|EXCS|SMCS))[ \t]*(?P<num>(?:\d[ \t]*){4,8})'
+    r'(?:[ \t]*\((?P<item>\d+(?:\.\d+)*(?:[ \t]*\(\d+\))?)\))?')
 
 
 def linkify_codes(html: str) -> str:
@@ -39,8 +44,10 @@ def linkify_codes(html: str) -> str:
         digits = re.sub(r'\D', '', m.group('num') or "")
         if len(digits) != 6:
             return m.group(0)
+        item = re.sub(r'\s+', '', m.group('item') or "")     # '1.9 (2)' → '1.9(2)'
+        href = f"kcsc://{pfx}/{digits}" + (f"/{item}" if item else "")
         text = m.group(0).rstrip()
-        return (f'<a href="kcsc://{pfx}/{digits}" '
+        return (f'<a href="{href}" '
                 f'style="color:#1456c4;text-decoration:underline;">{text}</a>')
     try:
         return _CODE_RE.sub(_repl, html or "")
@@ -102,6 +109,7 @@ class KcscSearchPanel(QWidget):
         self._workers: list = []
         self._cur_item = None
         self._all_rows = None         # 카탈로그 캐시(전체)
+        self._pending_link = None     # 카탈로그 로딩 후 처리할 코드링크 (prefix, code, item, target)
         self._hist: list = []         # 260621-62: 본 기준 히스토리 [(ctype, code, item)]
         self._hist_idx = -1
 
@@ -330,6 +338,12 @@ class KcscSearchPanel(QWidget):
             self.info.setText("목록을 불러오지 못했습니다. " + (dbg[-1] if dbg else ""))
             return
         self._all_rows = rows
+        # 카탈로그 로딩을 기다리던 본문 코드링크가 있으면 이어서 처리
+        if self._pending_link is not None:
+            pfx, code, item, target = self._pending_link
+            self._pending_link = None
+            self._open_code(pfx, code, item, target=target)
+            return
         # 드롭다운: '전체' + 데이터에 나온 카테고리(최초 등장 순서)
         seen = []
         for r in rows:
@@ -408,7 +422,8 @@ class KcscSearchPanel(QWidget):
         it = self.tree.currentItem()
         return it.data(0, _ROLE_ROW) if it is not None else None
 
-    def _load_content(self, ctype, code, item, push: bool = True, target: str = "left"):
+    def _load_content(self, ctype, code, item, push: bool = True, target: str = "left",
+                      clause: str = ""):
         if target == "left":
             self._cur_item = item
         if push:
@@ -421,7 +436,7 @@ class KcscSearchPanel(QWidget):
         self.info.setText("불러오는 중…")
         w = _ContentWorker(self._key, ctype, code)
         self._workers.append(w)
-        w.done.connect(lambda h, d, a, m, t=target: self._on_content(h, d, a, m, t))
+        w.done.connect(lambda h, d, a, m, t=target, cl=clause: self._on_content(h, d, a, m, t, cl))
         w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
         w.start()
 
@@ -436,12 +451,12 @@ class KcscSearchPanel(QWidget):
     def _anchor(self, url: QUrl, src_viewer, code_target: str):
         s = url.toString()
         if s.startswith("kcsc://"):
-            rest = s[len("kcsc://"):]
-            ctype, _, code = rest.partition("/")
-            ctype = (ctype or "").strip().upper()
-            code = re.sub(r"\D", "", code or "")
-            if ctype in ("KDS", "KCS") and len(code) == 6:
-                self._open_code(ctype, code, target=code_target)
+            parts = s[len("kcsc://"):].split("/")
+            pfx = (parts[0] if parts else "").strip().upper()
+            code = re.sub(r"\D", "", parts[1] if len(parts) > 1 else "")
+            item = (parts[2].strip() if len(parts) > 2 else "")
+            if pfx and len(code) == 6:
+                self._open_code(pfx, code, item, target=code_target)
             return
         if url.scheme().lower() in ("http", "https"):
             QDesktopServices.openUrl(url)
@@ -450,10 +465,35 @@ class KcscSearchPanel(QWidget):
         if frag and src_viewer is not None:
             src_viewer.scrollToAnchor(frag)
 
-    def _open_code(self, ctype: str, code: str, target: str = "left"):
-        """260621-62/63: 코드 링크 열기. target='left'=같은 본문창(내부),
-        'right'=전체화면 우측 본문(+하단 책갈피)."""
-        self._load_content(ctype, code, None, push=(target == "left"), target=target)
+    def _open_code(self, prefix: str, code: str, item: str = "", target: str = "left"):
+        """본문 코드 링크 열기 — prefix(KDS/KCS/EXCS/SMCS)를 카탈로그 분류로 해석해
+        (코드+분류) 행의 ctype 으로 본문 로드 + 항목번호(item) 절로 스크롤.
+        target='left'=같은 본문창(내부), 'right'=전체화면 우측 본문(+하단 책갈피)."""
+        from viewer.study.kcsc_api import resolve_catalog_row, PREFIX_CATEGORY
+        if self._all_rows is None:
+            # 카탈로그 미로딩 → 1회 로딩 후 이 링크를 이어서 처리
+            self._pending_link = (prefix, code, item, target)
+            if not (self._key or "").strip():
+                self.info.setText("설정 → '인터넷 사전'의 KCSC 키를 먼저 입력하세요.")
+                return
+            self.info.setText("목록 불러오는 중…")
+            w = _CatalogWorker(self._key)
+            self._workers.append(w)
+            w.done.connect(self._on_catalog)
+            w.finished.connect(lambda w=w: self._workers.remove(w) if w in self._workers else None)
+            w.start()
+            return
+        row = resolve_catalog_row(self._all_rows, prefix, code)
+        if row is not None:
+            ctype = row.get("ctype") or prefix
+        elif prefix in ("KDS", "KCS"):
+            ctype = prefix                  # 폴백: KDS/KCS 는 prefix=ctype
+        else:
+            cat = PREFIX_CATEGORY.get(prefix, prefix)
+            self.info.setText(f"'{prefix} {code}' 에 해당하는 {cat} 기준을 목록에서 찾지 못했습니다.")
+            return
+        self._load_content(ctype, code, None, push=(target == "left"),
+                           target=target, clause=item)
 
     def _nav_back(self):
         if self._hist_idx > 0:
@@ -471,7 +511,16 @@ class KcscSearchPanel(QWidget):
         self.btn_back.setEnabled(self._hist_idx > 0)
         self.btn_fwd.setEnabled(self._hist_idx < len(self._hist) - 1)
 
-    def _on_content(self, html, dbg, arts, meta, target: str = "left"):
+    @staticmethod
+    def _scroll_clause(viewer, clause: str):
+        """항목번호('1.9(2)' 등)의 **주 절번호(1.9)** 앵커로 스크롤(하위 (2)는 그 절 안)."""
+        if not clause or viewer is None:
+            return
+        m = re.match(r"\d+(?:\.\d+)*", clause)
+        if m:
+            viewer.scrollToAnchor(f"cl-{m.group(0)}")
+
+    def _on_content(self, html, dbg, arts, meta, target: str = "left", clause: str = ""):
         if not html:
             self.info.setText("표시할 본문이 없습니다. " + (dbg[-1] if dbg else ""))
             return
@@ -486,10 +535,12 @@ class KcscSearchPanel(QWidget):
                 ch = QTreeWidgetItem([label])
                 ch.setData(0, _ROLE_ANCHOR, anchor)
                 self.tree2.addTopLevelItem(ch)
+            self._scroll_clause(self.viewer2, clause)
             self.info.setText((f"우측: {name}" + (f" (v{ver})" if ver else "")) if name
                               else (dbg[-1] if dbg else ""))
             return
         self.viewer.setHtml(linked)
+        self._scroll_clause(self.viewer, clause)
         self.info.setText((f"{name}" + (f"  (v{ver})" if ver else "")) if name
                           else (dbg[-1] if dbg else ""))
         it = self._cur_item

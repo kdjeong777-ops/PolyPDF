@@ -23,6 +23,41 @@ _BASE = "https://kcsc.re.kr/OpenApi"
 TYPES = [("KDS", "설계기준"), ("KCS", "표준시방서")]
 TYPE_NAMES = dict(TYPES)
 
+# 본문 코드링크 prefix → 카탈로그 분류(category) 키워드. 같은 6자리 코드가 여러 분류에
+# 중복 존재(예: 445010 = 표준시방서/고속도로공사/서울시)하므로 prefix 로 분류를 지정한다.
+PREFIX_CATEGORY = {
+    "KDS": "설계기준",
+    "KCS": "표준시방서",
+    "EXCS": "고속도로",          # 고속도로공사 전문시방서(한국도로공사)
+    "SMCS": "서울",              # 서울시 전문시방서
+}
+
+
+def resolve_catalog_row(rows, prefix, code):
+    """카탈로그(rows)에서 (코드 + prefix 분류 키워드)에 맞는 행을 찾는다. 없으면 None."""
+    digits = re.sub(r"\D", "", code or "")
+    if not digits:
+        return None
+    cands = [r for r in (rows or [])
+             if re.sub(r"\D", "", r.get("code") or "") == digits]
+    if not cands:
+        return None
+    kw = PREFIX_CATEGORY.get((prefix or "").upper())
+    if kw:
+        for r in cands:
+            if kw in (r.get("category") or ""):
+                return r
+    return cands[0]
+
+
+_CLAUSE_RE = re.compile(r"^\s*(\d+(?:\.\d+)+)")
+
+
+def _clause_no(s: str):
+    """라벨/제목 앞의 절 번호('2.4.7 …' → '2.4.7'). 점이 있는 다단 번호만."""
+    m = _CLAUSE_RE.match(s or "")
+    return m.group(1) if m else None
+
 # 260618-42: 헤더로 표시할 가치가 없는 일반 라벨(본문/내용 등) — 본문만 출력.
 _GENERIC_LABELS = {"본문", "내용", "본 문", "내 용"}
 
@@ -115,6 +150,10 @@ def _format(it: dict):
             head = ""
 
         indent = min(max(level, 0), 6) * 1.2
+        # 절 번호 앵커(본문 코드링크의 '(2.4.7)' 항목 이동용) — 제목/번호에서 추출
+        cl = _clause_no(label) or _clause_no(stitle) or _clause_no(head)
+        if cl:
+            out.append(f'<a name="cl-{cl}"></a>')
         if head:
             if is_new_title:                  # 제목 있는 절만 좌측 네비(arts) 등록
                 anchor = f"sec_{len(arts) + 1}"

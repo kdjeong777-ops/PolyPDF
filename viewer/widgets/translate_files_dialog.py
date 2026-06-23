@@ -52,10 +52,20 @@ class _BatchWorker(QThread):
             if self._stop:
                 break
             name = Path(p).name
-            self.progress.emit(i, total, f"[{i}/{total}] {name} 추출·번역 중…")
-            # P1: 머리말/꼬리말 제거·본문 연결된 정제 본문(실패 시 원시 추출 폴백)
+            self.progress.emit(i, total, f"[{i}/{total}] {name} 그림·표·수식 추출 중…")
+            # P4c/P4d/P4e: 그림·표·수식을 먼저 추출 → 영역을 본문에서 제외/토큰화
+            figs, tabs = self._build_assets(p)
+            from ..study import pdf_assets as pa
+            adir = str(Path(p).parent / (Path(p).stem + "_assets"))
+            equations = pa.extract_equations(p, adir)
+            regions = pa.regions_by_page(figs, tabs)
+            placeholders = pa.equation_placeholders(equations)
+            self.progress.emit(i, total, f"[{i}/{total}] {name} 본문 추출·번역 중…")
+            # P1: 머리말/꼬리말·표/캡션·사이드바 제외 + 수식 토큰화 정제 본문(실패 시 폴백)
             from ..study import pdf_extract as px
-            text = px.extract_clean_text(p, max_chars=200000) or tapi.extract_pdf_text(p, max_chars=200000)
+            text = px.extract_clean_text(p, max_chars=200000, exclude_regions=regions,
+                                         placeholders=placeholders) \
+                or tapi.extract_pdf_text(p, max_chars=200000)
             if not text:
                 self.one_done.emit(str(p), False, "본문 텍스트 추출 실패(스캔본일 수 있음)")
                 continue
@@ -80,13 +90,13 @@ class _BatchWorker(QThread):
                 summary, _s = sm.summarize_debug(self._key, text, self._model, self._auth)
             except Exception:
                 pass
-            # P4: Word/PDF 산출물(서지→요약→전문→용어집, 책갈피)
+            # P4: Word/PDF 산출물(서지→요약→전문[그림/표 인라인]→용어집, 책갈피)
             try:
                 from ..study import export_translation as ex
                 docx_path, pdf_path, _d = ex.save_translation_doc(
                     str(Path(p).parent), Path(p).stem,
                     citation=citation, summary=summary, translation=translation,
-                    glossary=glossary)
+                    glossary=glossary, figures=figs, tables=tabs, equations=equations)
                 ok += 1
                 self.one_done.emit(str(p), True, f"저장: {Path(pdf_path or docx_path).name}")
             except Exception as e:
@@ -98,6 +108,42 @@ class _BatchWorker(QThread):
                 pass
         self.all_done.emit(ok, total)
 
+    def _build_assets(self, p):
+        """(figures, tables) — 그림/표 추출 + 캡션 일괄 번역 + 표 비전 그리드 재구성(최대 12)."""
+        try:
+            import os
+            from ..study import pdf_assets as pa
+            from ..study import summarize as sm
+            adir = str(Path(p).parent / (Path(p).stem + "_assets"))
+            figs, tabs, _rep = pa.extract_assets_report(str(p), adir)
+            if not figs and not tabs:
+                return [], []
+            caps = [f.get("caption", "") for f in figs] + [t.get("caption", "") for t in tabs]
+            ko = sm.translate_captions(self._key, caps, self._model, self._auth)
+            for i, f in enumerate(figs):
+                f["caption_ko"] = ko[i] if i < len(ko) else ""
+            for j, t in enumerate(tabs):
+                t["caption_ko"] = ko[len(figs) + j] if len(figs) + j < len(ko) else ""
+            for t in tabs[:12]:
+                t["rows_ko"] = self._table_rows_ko(t)
+            return figs, tabs
+        except Exception:
+            return [], []
+
+    def _table_rows_ko(self, t):
+        """표(연속 표면 여러 이미지) 비전 번역 → 병합 그리드. 연속부 머리글 행 1개 제거."""
+        import os
+        rows_all = []
+        for k, im in enumerate(t.get("images") or [t.get("image")]):
+            if not (im and os.path.exists(im)):
+                continue
+            rows, _ = tapi.translate_table_image_debug(
+                self._key, im, model=self._model, auth=self._auth)
+            if k > 0 and rows and rows_all:
+                rows = rows[1:]                  # 연속 페이지 머리글 반복 제거
+            rows_all.extend(rows)
+        return rows_all
+
 
 class TranslateFilesDialog(QDialog):
     _DATA = Qt.ItemDataRole.UserRole
@@ -105,7 +151,7 @@ class TranslateFilesDialog(QDialog):
     def __init__(self, all_files: list, preselected: list = None,
                  prefs: dict = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("여러 PDF 번역")
+        self.setWindowTitle("PDF번역")
         self.setMinimumSize(760, 520)
         self.setAcceptDrops(True)
         self._prefs = prefs or {}
@@ -119,21 +165,35 @@ class TranslateFilesDialog(QDialog):
             "왼쪽에서 파일을 골라 <b>→</b> 로 오른쪽(번역 대상)에 등록하세요. "
             "오른쪽 <b>위에서부터</b> 순서대로 번역합니다. 외부 PDF는 끌어다 놓기로 추가."))
 
+        self._all_files = [str(p) for p in (all_files or [])
+                           if str(p).lower().endswith(".pdf")]
+
         body = QHBoxLayout()
-        # 좌: 전체 파일
+        # 좌: 전체 파일 + 정렬(이름/수정일, 오름/내림)
         lcol = QVBoxLayout()
-        lcol.addWidget(QLabel("책갈피창 전체 파일"))
+        lhdr = QHBoxLayout()
+        lhdr.addWidget(QLabel("책갈피창 전체 파일"))
+        lhdr.addStretch(1)
+        from PyQt6.QtWidgets import QComboBox
+        self.cmb_sort = QComboBox()
+        self.cmb_sort.addItem("이름순", "name")
+        self.cmb_sort.addItem("수정일순", "mtime")
+        self.cmb_sort.setToolTip("좌측 파일 목록 정렬 기준")
+        self.cmb_sort.setCurrentIndex(1)            # 초기 정렬 = 수정일순
+        self.cmb_sort.currentIndexChanged.connect(lambda *_: self._populate_left())
+        self.btn_sort_dir = QPushButton("▼")
+        self.btn_sort_dir.setFixedWidth(28)
+        self.btn_sort_dir.setToolTip("오름/내림차순 전환")
+        self._sort_desc = True                      # 초기 = 내림차순
+        self.btn_sort_dir.clicked.connect(self._toggle_sort_dir)
+        lhdr.addWidget(self.cmb_sort)
+        lhdr.addWidget(self.btn_sort_dir)
+        lcol.addLayout(lhdr)
         self.left = QListWidget()
         self.left.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        for p in (all_files or []):
-            if not str(p).lower().endswith(".pdf"):
-                continue
-            it = QListWidgetItem(Path(p).stem)
-            it.setData(self._DATA, str(p))
-            it.setToolTip(str(p))
-            self.left.addItem(it)
         lcol.addWidget(self.left, 1)
         body.addLayout(lcol, 1)
+        self._populate_left()
 
         # 가운데: → 버튼
         mid = QVBoxLayout()
@@ -203,6 +263,33 @@ class TranslateFilesDialog(QDialog):
             "QLabel{background:rgba(42,125,225,0.16);border:3px dashed #2a7de1;"
             "border-radius:12px;color:#1565c0;font-size:17px;font-weight:bold;}")
         self._overlay.hide()
+
+    # ── 좌측 목록 정렬/구성 ────────────────────────────────────
+    def _populate_left(self):
+        """좌측 전체 파일 목록을 정렬 기준(이름/수정일)·방향대로 채움."""
+        import os
+        key = self.cmb_sort.currentData() if hasattr(self, "cmb_sort") else "name"
+        files = list(self._all_files)
+        if key == "mtime":
+            def _mt(p):
+                try:
+                    return os.path.getmtime(p)
+                except Exception:
+                    return 0.0
+            files.sort(key=_mt, reverse=self._sort_desc)
+        else:
+            files.sort(key=lambda p: Path(p).stem.lower(), reverse=self._sort_desc)
+        self.left.clear()
+        for p in files:
+            it = QListWidgetItem(Path(p).stem)
+            it.setData(self._DATA, str(p))
+            it.setToolTip(str(p))
+            self.left.addItem(it)
+
+    def _toggle_sort_dir(self):
+        self._sort_desc = not self._sort_desc
+        self.btn_sort_dir.setText("▼" if self._sort_desc else "▲")
+        self._populate_left()
 
     # ── 목록 조작 ──────────────────────────────────────────────
     def _has_right(self, path: str) -> bool:
@@ -302,16 +389,45 @@ class TranslateFilesDialog(QDialog):
                 return
         self.btn_run.setEnabled(False)
         self.log.clear()
+        self._total = len(files)
         self._worker = _BatchWorker(files, self._key, self._model, self._auth)
-        self._worker.progress.connect(lambda i, n, m: self.info.setText(m))
+        self._worker.progress.connect(self._on_progress)
         self._worker.one_done.connect(
             lambda p, ok, d: self.log.appendPlainText(("✓ " if ok else "✗ ") + Path(p).name + " — " + d))
         self._worker.all_done.connect(self._on_all_done)
         self._worker.start()
+        # 백그라운드 실행 — 창을 숨기고 진행은 메인 하부 상태바에 표시(다른 작업 가능)
+        self._bg = True
+        self.hide()
+        self._status_msg(f"PDF 번역 시작… (0/{self._total})")
+
+    def _win_status(self):
+        w = self.parent()
+        return w if (w is not None and hasattr(w, "status")) else None
+
+    def _status_msg(self, msg, timeout=0):
+        st = self._win_status()
+        if st is not None:
+            try:
+                st.status.showMessage("🌐 " + msg, timeout)
+            except Exception:
+                pass
+
+    def _on_progress(self, i, n, m):
+        self.info.setText(m)
+        # 'ㅇㅇㅇ 파일 번역 중 (2/10)…' 형태로 하부 상태바 표시
+        self._status_msg(m)
 
     def _on_all_done(self, ok, total):
         self.btn_run.setEnabled(True)
         self.info.setText(f"완료: {ok}/{total} 개 번역 저장 (각 PDF 옆 '_번역.docx/.pdf').")
+        self._status_msg(f"PDF 번역 완료: {ok}/{total}", 8000)
+        # 모든 번역 종료 → 창을 다시 띄워 결과(로그) 표시
+        if getattr(self, "_bg", False):
+            self._bg = False
+            self.show()
+            self.raise_()
+            self.activateWindow()
 
     def reject(self):
         if self._worker is not None and self._worker.isRunning():

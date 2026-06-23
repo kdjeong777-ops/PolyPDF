@@ -261,6 +261,22 @@ class DictStore:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    def upsert_user_term(self, term_en: str, term_ko: str, *, def_ko: str = "") -> int:
+        """사용자 사전(User)에 (영문 표제어 → 한글 대역) 교정 1건 저장(중복 시 갱신).
+
+        번역 용어집의 오역을 고칠 때 사용 — User 가 최우선이라 이후 모든 번역에 반영된다.
+        같은 영문 표제어의 기존 User 항목은 비우고 새로 넣어 중복을 막는다."""
+        en = (term_en or "").strip()
+        ko = (term_ko or "").strip()
+        if not en or not ko:
+            return 0
+        nen = normalize_key(en)
+        self.conn.execute(
+            "DELETE FROM dict_entry WHERE source_id=? AND norm_en=?",
+            (USER_SOURCE_ID, nen))
+        self.conn.commit()
+        return self.add_entry(source_id=USER_SOURCE_ID, term_en=en, term_ko=ko, def_ko=def_ko)
+
     def add_entries(self, source_id: str, rows: Iterable[dict]) -> int:
         """대량 적재(임포트용). rows: term_ko/term_en/def_ko/def_en/examples/reference/level/hanja/image."""
         data = [(source_id, r.get("term_ko", ""), r.get("term_en", ""),
