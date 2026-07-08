@@ -83,6 +83,20 @@ class KipoSearchPanel(QWidget):
     """특허(KIPRIS) 검색 패널."""
     closeRequested = pyqtSignal()
     fullscreenToggled = pyqtSignal()
+    CONTENT_LABEL = "특허"            # 260623: 메인 검색바가 이 패널 본문을 검색할 때 표시명
+
+    def search_body(self, query: str, backward: bool = False) -> bool:
+        """메인 검색바 → 이 패널 본문(내부화면 viewer) 검색(감김). 매치 시 True."""
+        v = self.viewer
+        if not query or v is None:
+            return False
+        flags = QTextDocument.FindFlag.FindBackward if backward else QTextDocument.FindFlag(0)
+        if v.find(query, flags):
+            return True
+        cur = v.textCursor()
+        cur.movePosition(cur.MoveOperation.End if backward else cur.MoveOperation.Start)
+        v.setTextCursor(cur)
+        return v.find(query, flags)
 
     def __init__(self, key: str, win=None):
         super().__init__()
@@ -202,7 +216,8 @@ class KipoSearchPanel(QWidget):
         self.find_bar.setVisible(False)
         v.addWidget(self.find_bar)
 
-        QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find)
+        self._find_sc = QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find)
+        self._find_sc.setEnabled(False)        # 260623: 내부화면은 메인 검색바 사용
         QShortcut(QKeySequence("Esc"), self.find_edit, activated=self._hide_find)
 
         for b in self.findChildren(QPushButton):
@@ -212,6 +227,8 @@ class KipoSearchPanel(QWidget):
     # ----- 레이아웃 -----
     def set_fullscreen(self, is_full: bool):
         self.btn_full.setText("▣ 내부화면" if is_full else "⛶ 전체화면")
+        if getattr(self, "_find_sc", None) is not None:
+            self._find_sc.setEnabled(bool(is_full))   # 260623: 패널 Ctrl+F 는 전체화면만
 
     def _on_escape(self):
         if self.find_bar.isVisible():

@@ -100,6 +100,21 @@ class LawSearchPanel(QWidget):
 
     closeRequested = pyqtSignal()
     fullscreenToggled = pyqtSignal()
+    CONTENT_LABEL = "법령/고시"       # 260623: 메인 검색바가 이 패널 본문을 검색할 때 표시명
+
+    def search_body(self, query: str, backward: bool = False) -> bool:
+        """메인 검색바 → 이 패널 본문(내부화면 viewer) 검색(감김). 매치 시 True."""
+        from PyQt6.QtGui import QTextDocument
+        v = self.viewer
+        if not query or v is None:
+            return False
+        flags = QTextDocument.FindFlag.FindBackward if backward else QTextDocument.FindFlag(0)
+        if v.find(query, flags):
+            return True
+        cur = v.textCursor()
+        cur.movePosition(cur.MoveOperation.End if backward else cur.MoveOperation.Start)
+        v.setTextCursor(cur)
+        return v.find(query, flags)
 
     def __init__(self, oc: str, win=None):
         super().__init__()
@@ -253,7 +268,8 @@ class LawSearchPanel(QWidget):
         v.addWidget(self.find_bar)
 
         from PyQt6.QtGui import QShortcut, QKeySequence
-        QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find)
+        self._find_sc = QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find)
+        self._find_sc.setEnabled(False)        # 260623: 내부화면은 메인 검색바 사용
         QShortcut(QKeySequence("Esc"), self.find_edit, activated=self._hide_find)
 
         # 260616-15: Enter 가 '닫기/기본버튼'으로 작동해 창이 닫히던 문제 방지 —
@@ -271,6 +287,8 @@ class LawSearchPanel(QWidget):
     def set_fullscreen(self, is_full: bool):
         """260616-19: 토글 버튼 라벨 갱신(전체화면/내부화면)."""
         self.btn_full.setText("▣ 내부화면" if is_full else "⛶ 전체화면")
+        if getattr(self, "_find_sc", None) is not None:
+            self._find_sc.setEnabled(bool(is_full))   # 260623: 패널 Ctrl+F 는 전체화면만
 
     def _on_escape(self):
         """260618-8: ESC — 찾기바 열려 있으면 닫고, 아니면 패널 닫기."""

@@ -87,6 +87,13 @@ class SearchBar(QWidget):
         self.edit.setFocus()
         self.edit.selectAll()
 
+    def set_context_label(self, label: str = ""):
+        """검색 대상 표시 — 우측창(건설기준/법령/특허) 활성 시 '○○ 내용 검색', 없으면 PDF 기본."""
+        if label:
+            self.edit.setPlaceholderText(f"{label} 내용 검색...  (Ctrl+F)")
+        else:
+            self.edit.setPlaceholderText("검색...  (Enter: 검색, Ctrl+F: 포커스)")
+
     def current_query(self) -> str:
         return self.edit.text().strip()
 

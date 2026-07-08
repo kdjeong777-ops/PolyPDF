@@ -100,6 +100,20 @@ class KcscSearchPanel(QWidget):
     """건설기준(KCSC) 검색+본문 패널. 메인 오른쪽 2단 임베드 / 전체화면 팝아웃."""
     closeRequested = pyqtSignal()
     fullscreenToggled = pyqtSignal()
+    CONTENT_LABEL = "건설기준"        # 260623: 메인 검색바가 이 패널 본문을 검색할 때 표시명
+
+    def search_body(self, query: str, backward: bool = False) -> bool:
+        """메인 검색바 → 이 패널 본문(내부화면 viewer) 검색(감김). 매치 시 True."""
+        v = self.viewer
+        if not query or v is None:
+            return False
+        flags = QTextDocument.FindFlag.FindBackward if backward else QTextDocument.FindFlag(0)
+        if v.find(query, flags):
+            return True
+        cur = v.textCursor()
+        cur.movePosition(cur.MoveOperation.End if backward else cur.MoveOperation.Start)
+        v.setTextCursor(cur)
+        return v.find(query, flags)
 
     def __init__(self, key: str, win=None):
         super().__init__()
@@ -235,7 +249,9 @@ class KcscSearchPanel(QWidget):
         self.find_bar.setVisible(False)
         v.addWidget(self.find_bar)
 
-        QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find)
+        # 260623: 내부화면에선 메인 검색바가 본문을 검색 → 패널 자체 Ctrl+F 는 전체화면에서만
+        self._find_sc = QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find)
+        self._find_sc.setEnabled(False)
         QShortcut(QKeySequence("Esc"), self.find_edit, activated=self._hide_find)
 
         for b in self.findChildren(QPushButton):
@@ -247,6 +263,7 @@ class KcscSearchPanel(QWidget):
         """260621-63: 전체화면=2단(좌측 세로 상/하 책갈피 + 본문 좌/우), 내부=단일 split."""
         is_full = bool(is_full)
         self.btn_full.setText("▣ 내부화면" if is_full else "⛶ 전체화면")
+        self._find_sc.setEnabled(is_full)      # 260623: 패널 Ctrl+F 는 전체화면에서만
         if is_full == self._is_full:
             return
         self._is_full = is_full

@@ -179,6 +179,8 @@ class MainWindow(QMainWindow):
         self._kipo_panel = None               # 260618-43: 특허(KIPO) 등록정보 패널(동일 슬롯)
         self._kipo_window = None
         self._kipo_saved = None
+        self._content_panel = None            # 260623: 메인 검색바가 본문 검색할 우측 패널(없으면 PDF)
+        self._content_query = ""              # 260623: 우측 패널 본문 검색어(◀▶ 이동용)
         self._kipo_favorites: list = []       # 260618-43: 특허 즐겨찾기
         self._prefs: dict = {
             "restore_session": True, "restore_last_page": True,
@@ -3140,7 +3142,30 @@ class MainWindow(QMainWindow):
             pass
 
     # ===== 검색 ========================================================
+    def _set_content_search(self, panel):
+        """260623: 메인 검색바의 검색 대상을 우측 패널(건설기준/법령/특허) 본문으로 전환/복귀.
+        panel=None 이면 PDF 내용 검색으로 복귀(플레이스홀더 원복)."""
+        self._content_panel = panel
+        self._content_query = ""
+        try:
+            label = getattr(panel, "CONTENT_LABEL", "") if panel is not None else ""
+            self.search_bar.set_context_label(label)
+        except Exception:
+            pass
+
     def action_search(self, query: str):
+        # 260623: 우측 패널(건설기준/법령/특허)이 열려 있으면 그 본문을 검색
+        if self._content_panel is not None:
+            self._content_query = query
+            found = False
+            try:
+                found = self._content_panel.search_body(query)
+            except Exception:
+                found = False
+            self.status.showMessage(
+                (f"{getattr(self._content_panel, 'CONTENT_LABEL', '')} 검색: {query!r}"
+                 + ("" if found else " — 없음")), 3000)
+            return
         if not self._folder:
             self.status.showMessage("폴더를 먼저 여세요.")
             return
@@ -5224,6 +5249,7 @@ class MainWindow(QMainWindow):
         self._law_panel.closeRequested.connect(self._close_law)
         self._law_panel.fullscreenToggled.connect(self._toggle_law_fullscreen)
         self._enter_law_layout()               # 메인 패널 슬라이드 + 오른쪽 2단 임베드
+        self._set_content_search(self._law_panel)    # 검색바 → 법령/고시 본문 검색
         if fav:
             self._law_panel.show_saved(fav)
 
@@ -5334,6 +5360,7 @@ class MainWindow(QMainWindow):
         win = self._law_window
         self._law_panel = None
         self._law_window = None
+        self._set_content_search(None)          # 검색바 → PDF 내용 검색 복귀
         try:
             if panel is not None:
                 panel.setParent(None)          # splitter/창에서 제거
@@ -5397,6 +5424,7 @@ class MainWindow(QMainWindow):
         self._kcsc_panel.closeRequested.connect(self._close_kcsc)
         self._kcsc_panel.fullscreenToggled.connect(self._toggle_kcsc_fullscreen)
         self._enter_kcsc_layout()
+        self._set_content_search(self._kcsc_panel)   # 검색바 → 건설기준 본문 검색
         if fav:
             self._kcsc_panel.show_saved(fav)
 
@@ -5530,6 +5558,7 @@ class MainWindow(QMainWindow):
         win = self._kcsc_window
         self._kcsc_panel = None
         self._kcsc_window = None
+        self._set_content_search(None)          # 검색바 → PDF 내용 검색 복귀
         try:
             if panel is not None:
                 panel.setParent(None)
@@ -5602,6 +5631,7 @@ class MainWindow(QMainWindow):
         self._kipo_panel.closeRequested.connect(self._close_kipo)
         self._kipo_panel.fullscreenToggled.connect(self._toggle_kipo_fullscreen)
         self._enter_kipo_layout()
+        self._set_content_search(self._kipo_panel)   # 검색바 → 특허 본문 검색
         if fav:
             self._kipo_panel.show_saved(fav)
 
@@ -5700,6 +5730,7 @@ class MainWindow(QMainWindow):
         win = self._kipo_window
         self._kipo_panel = None
         self._kipo_window = None
+        self._set_content_search(None)          # 검색바 → PDF 내용 검색 복귀
         try:
             if panel is not None:
                 panel.setParent(None)
@@ -7036,8 +7067,23 @@ class MainWindow(QMainWindow):
             return 0
 
     # ===== 전역 매치 < > 순회 (v1.6.2) ==================================
+    def _content_match(self, backward: bool) -> bool:
+        """우측 패널 본문 검색 이동(◀▶). 활성 패널 없으면 False."""
+        if self._content_panel is None:
+            return False
+        q = self._content_query or self.search_bar.current_query()
+        if not q:
+            return True
+        try:
+            self._content_panel.search_body(q, backward)
+        except Exception:
+            pass
+        return True
+
     def _global_next_match(self):
-        """검색바 ▶: 현재 파일 매치가 남았으면 다음으로, 아니면 다음 파일 첫 매치."""
+        """검색바 ▶: 우측 패널 활성 시 그 본문의 다음 매치, 아니면 PDF 매치 이동."""
+        if self._content_match(False):
+            return
         mv = self.main_view
         if mv._matches:
             total = sum(len(h.rects) for h in mv._matches)
@@ -7047,6 +7093,8 @@ class MainWindow(QMainWindow):
         self._jump_search_file(+1)
 
     def _global_prev_match(self):
+        if self._content_match(True):
+            return
         mv = self.main_view
         if mv._matches:
             if mv._current_match > 0:
