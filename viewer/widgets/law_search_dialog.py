@@ -102,19 +102,12 @@ class LawSearchPanel(QWidget):
     fullscreenToggled = pyqtSignal()
     CONTENT_LABEL = "법령/고시"       # 260623: 메인 검색바가 이 패널 본문을 검색할 때 표시명
 
-    def search_body(self, query: str, backward: bool = False) -> bool:
-        """메인 검색바 → 이 패널 본문(내부화면 viewer) 검색(감김). 매치 시 True."""
-        from PyQt6.QtGui import QTextDocument
-        v = self.viewer
-        if not query or v is None:
-            return False
-        flags = QTextDocument.FindFlag.FindBackward if backward else QTextDocument.FindFlag(0)
-        if v.find(query, flags):
-            return True
-        cur = v.textCursor()
-        cur.movePosition(cur.MoveOperation.End if backward else cur.MoveOperation.Start)
-        v.setTextCursor(cur)
-        return v.find(query, flags)
+    def search_body(self, query: str, backward: bool = False):
+        """메인 검색바 → 이 패널 본문 검색(전체 하이라이트 + 이동). (현재, 전체) 반환."""
+        from viewer.widgets.content_find import search
+        if not hasattr(self, "_find_state"):
+            self._find_state = {}
+        return search(self.viewer, query, backward, self._find_state)
 
     def __init__(self, oc: str, win=None):
         super().__init__()

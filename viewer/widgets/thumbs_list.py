@@ -33,6 +33,8 @@ class PageThumbs(QWidget):
     fileBoundaryRequested = pyqtSignal(int)    # 260610-1: 목록 끝 휠/↑↓ → 이전(-1)/다음(+1) 파일
     printPagesRequested = pyqtSignal(object)       # 260616-21: 선택 페이지 인쇄(0-based list)
     screenshotPagesRequested = pyqtSignal(object)  # 260616-21: 선택 페이지 스크린샷으로 복사
+    copyPagesRequested = pyqtSignal(object)        # 260821: 선택 썸네일 복사(이 문서 0-based)
+    pastePagesRequested = pyqtSignal(int)          # 260821: 붙여넣기(기준 표시행 뒤에 삽입)
 
     THUMB_DPI = 48
     NUM_BAND = 18           # 260606-26: 썸네일 하단 페이지번호 띠 높이
@@ -48,6 +50,8 @@ class PageThumbs(QWidget):
         self._rotations = {}                 # 260609-15(A1): {page0: deg}
         self._decorated = set()              # 260609-21(J4): 꾸밈(하이퍼링크/선긋기) 페이지
         self._img_resolver = None            # 260611-18(A5): page0->[삽입 이미지 dict] (썸네일 베이킹)
+        self._paste_available = None         # 260821: () -> int (붙여넣기 대기 쪽수; app 이 주입)
+        self._ext_docs = {}                  # 260822: 붙여넣기 스테이징 — {src_path: PdfDocument} 렌더 캐시
         # 260606-28/29: 폭 치수(_build_ui 가 참조하므로 먼저 계산).
         #   폭 고정(리사이즈 불가) — 더 넓혀도 할 일이 없고, 번호가 하단으로 가며
         #   우측 여백이 과해진 문제도 함께 해소. 아이콘 캔버스 폭=뷰포트 가용폭(가운데 정렬용).
@@ -138,17 +142,95 @@ class PageThumbs(QWidget):
             self.list.setDropIndicatorShown(False)
 
     def current_page_sequence(self) -> list:
-        """현재 표시 순서의 원본 페이지 인덱스(0-based) 목록(삭제분 제외)."""
+        """현재 표시 순서의 '자체 문서' 페이지 인덱스(0-based) 목록(삭제분·외부 붙여넣기 제외)."""
         out = []
         for i in range(self.list.count()):
             p = self.list.item(i).data(Qt.ItemDataRole.UserRole)
-            if p is not None:
-                out.append(int(p))
+            if isinstance(p, int):
+                out.append(p)
         return out
 
+    def current_page_plan(self) -> list:
+        """260822: 표시 순서대로의 저장 계획 — 자체=('own', idx), 붙여넣기=('ext', src, page)."""
+        plan = []
+        for i in range(self.list.count()):
+            v = self.list.item(i).data(Qt.ItemDataRole.UserRole)
+            if isinstance(v, int):
+                plan.append(("own", v))
+            elif isinstance(v, (tuple, list)) and len(v) == 2:
+                plan.append(("ext", str(v[0]), int(v[1])))
+        return plan
+
     def is_page_dirty(self) -> bool:
-        seq = self.current_page_sequence()
-        return seq != list(range(self._orig_count))
+        """자체 페이지 삭제/이동 또는 외부 붙여넣기가 있으면 dirty."""
+        return self.current_page_plan() != [("own", i) for i in range(self._orig_count)]
+
+    def insert_external_pages(self, after_row: int, src_path: str, pages) -> int:
+        """260822: 다른 PDF의 페이지들을 기준 표시행 뒤에 '스테이징' 삽입(미저장). 삽입 수 반환."""
+        pages = [int(p) for p in (pages or [])]
+        if not pages:
+            return 0
+        row = max(0, min(int(after_row) + 1, self.list.count()))
+        try:
+            default_h = (self.list.item(0).sizeHint().height() if self.list.count()
+                         else self._thumb_size.height() + self.NUM_BAND + self.ITEM_MARGIN)
+        except Exception:
+            default_h = self._thumb_size.height() + self.NUM_BAND + self.ITEM_MARGIN
+        for p in pages:
+            it = QListWidgetItem("")
+            it.setData(Qt.ItemDataRole.UserRole, (str(src_path), int(p)))
+            it.setSizeHint(QSize(self._icon_w, default_h))
+            self.list.insertItem(row, it)
+            row += 1
+        self._apply_filter()
+        self._render_timer.start()
+        return len(pages)
+
+    def _ext_doc(self, src: str):
+        """붙여넣기 원본 렌더용 PdfDocument(캐시). 실패 시 None."""
+        d = self._ext_docs.get(src, None)
+        if d is None:
+            try:
+                d = PdfDocument(src)
+            except Exception:
+                d = False
+            self._ext_docs[src] = d
+        return d or None
+
+    def _render_ext_item(self, item, src: str, epg: int):
+        """붙여넣기(외부 PDF) 썸네일 렌더 — 파란 '붙여넣기 p.N' 띠로 구분."""
+        doc = self._ext_doc(src)
+        if doc is None:
+            return
+        try:
+            from PyQt6.QtCore import QRect
+            rp = doc.render_thumbnail(epg, dpi=self.THUMB_DPI)
+            qimg = QImage(rp.samples, rp.width, rp.height,
+                          rp.width * 3, QImage.Format.Format_RGB888)
+            pix = QPixmap.fromImage(qimg).scaled(
+                self._thumb_size, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            band = self.NUM_BAND
+            card_w = pix.width()
+            card_h = pix.height() + band
+            canvas_w = max(self.list.iconSize().width(), card_w)
+            bordered = QPixmap(canvas_w, card_h)
+            bordered.fill(QColor(0, 0, 0, 0))
+            x0 = (canvas_w - card_w) // 2
+            p = QPainter(bordered)
+            p.fillRect(x0, 0, card_w, pix.height(), QColor("white"))
+            p.fillRect(x0, pix.height(), card_w, band, QColor("#2a7de1"))    # 파란 띠
+            p.drawPixmap(x0, 0, pix)
+            p.setPen(QPen(QColor("#2a7de1"), 2))
+            p.drawRect(x0, 0, card_w - 1, card_h - 1)
+            p.setPen(QColor("#ffffff"))
+            p.drawText(QRect(x0, pix.height(), card_w, band),
+                       Qt.AlignmentFlag.AlignCenter, f"붙여넣기 p.{int(epg) + 1}")
+            p.end()
+            item.setIcon(QIcon(bordered))
+            item.setToolTip(f"붙여넣기 대기: {Path(src).name} p.{int(epg) + 1}")
+        except Exception:
+            pass
 
     def _move_selected(self, direction: int):
         rows = sorted(self.list.row(it) for it in self.list.selectedItems())
@@ -206,6 +288,19 @@ class PageThumbs(QWidget):
                 return False
         if obj is self.list and event.type() == QEvent.Type.KeyPress:
             k = event.key()
+            # 260821: Ctrl+C 복사 / Ctrl+V 붙여넣기(다른 PDF 로도)
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                if k == Qt.Key.Key_C and self._doc is not None:
+                    sel = sorted({int(it.data(Qt.ItemDataRole.UserRole))
+                                  for it in self.list.selectedItems()
+                                  if it.data(Qt.ItemDataRole.UserRole) is not None})
+                    if sel:
+                        self.copyPagesRequested.emit(sel)
+                        return True
+                if k == Qt.Key.Key_V and self._doc is not None and self._edit_mode \
+                        and self._paste_available and self._paste_available() > 0:
+                    self.pastePagesRequested.emit(self.list.currentRow())
+                    return True
             if self._edit_mode:
                 if k == Qt.Key.Key_Up:
                     self._move_selected(-1); return True
@@ -260,6 +355,16 @@ class PageThumbs(QWidget):
             act_print = menu.addAction(f"선택 페이지 인쇄 ({len(sel_print)}쪽)")
             act_shot = menu.addAction(f"선택 페이지 스크린샷으로 복사 ({len(sel_print)}쪽)")
             menu.addSeparator()
+        # 260821: 선택 페이지 복사(항상) / 붙여넣기(편집모드만 — 붙여넣기는 수정 작업)
+        act_copy = act_paste = None
+        if self._doc is not None and sel_print:
+            act_copy = menu.addAction(f"선택 페이지 복사 ({len(sel_print)}쪽)")
+        _pcnt = self._paste_available() if self._paste_available else 0
+        if self._doc is not None and self._edit_mode and _pcnt > 0:
+            _where = "맨 뒤" if item is None else f"p.{int(page) + 1} 뒤" if page is not None else "이 뒤"
+            act_paste = menu.addAction(f"붙여넣기 ({_pcnt}쪽) — {_where}")
+        if act_copy or act_paste:
+            menu.addSeparator()
         act_add = act_del = act_apply = None
         if self._edit_mode:
             n = len(self.list.selectedItems())
@@ -303,6 +408,12 @@ class PageThumbs(QWidget):
             self.printPagesRequested.emit(sel_print); return
         if chosen == act_shot:
             self.screenshotPagesRequested.emit(sel_print); return
+        if chosen is not None and chosen == act_copy:     # 260821
+            self.copyPagesRequested.emit(sel_print); return
+        if chosen is not None and chosen == act_paste:
+            self.pastePagesRequested.emit(self.list.row(item) if item is not None
+                                          else self.list.count() - 1)
+            return
         if chosen == act_del:
             self._delete_selected()
         elif chosen == act_apply:
@@ -363,6 +474,13 @@ class PageThumbs(QWidget):
         if self._doc is not None:
             self._doc.close()
             self._doc = None
+        for _d in list(self._ext_docs.values()):    # 260822: 붙여넣기 스테이징 캐시 정리
+            try:
+                if _d:
+                    _d.close()
+            except Exception:
+                pass
+        self._ext_docs = {}
         self.list.clear()
 
         if not path.exists() or path.suffix.lower() != ".pdf":
@@ -432,6 +550,9 @@ class PageThumbs(QWidget):
             if not item.icon().isNull():
                 continue
             page_idx = item.data(Qt.ItemDataRole.UserRole)
+            if isinstance(page_idx, (tuple, list)):     # 260822: 붙여넣기(외부 PDF) 썸네일
+                self._render_ext_item(item, str(page_idx[0]), int(page_idx[1]))
+                continue
             try:
                 rp = self._doc.render_thumbnail(page_idx, dpi=self.THUMB_DPI)
                 qimg = QImage(rp.samples, rp.width, rp.height,
@@ -602,7 +723,10 @@ class PageThumbs(QWidget):
         for i in range(self.list.count()):
             it = self.list.item(i)
             pg = it.data(Qt.ItemDataRole.UserRole)
-            vis = pg is not None and self.page_visible_in_filter(int(pg))
+            if isinstance(pg, (tuple, list)):        # 붙여넣기 항목은 항상 표시
+                vis = True
+            else:
+                vis = pg is not None and self.page_visible_in_filter(int(pg))
             it.setHidden(not vis)
             if vis and first_visible is None:
                 first_visible = i
@@ -623,7 +747,7 @@ class PageThumbs(QWidget):
 
     def _on_activated(self, item: QListWidgetItem):
         page_idx = item.data(Qt.ItemDataRole.UserRole)
-        if page_idx is not None:
+        if isinstance(page_idx, int):            # 붙여넣기(tuple) 항목은 본문 이동 안 함
             self.pageActivated.emit(int(page_idx))
 
     def _sync_icon_width(self):

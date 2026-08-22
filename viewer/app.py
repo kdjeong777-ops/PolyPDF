@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import (Qt, QSettings, QStandardPaths, QThread, pyqtSignal,
-                          QEventLoop, QObject)
+                          QEventLoop, QObject, QTimer)
 from viewer import updater as _updater_preload   # 260618-11: PyInstaller 번들 포함 보장(지연 import 누락 방지)
 from viewer import components as _components_preload  # 260618-12: 구성요소 설치 모듈 번들 포함 보장
 from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QCursor, QIcon
@@ -185,6 +185,7 @@ class MainWindow(QMainWindow):
         self._prefs: dict = {
             "restore_session": True, "restore_last_page": True,
             "restore_screenshots": True, "screenshot_max": 30,
+            "open_edit_mode": True,       # 260822: 시작 시 편집 모드(기본) / 보기 모드
             # v1.6.23: 상단 토글 툴바만 prefs 로 관리 (기본 숨김).
             # 패널(검색결과/스크린샷) 가시성은 panels_visible 로 저장·복원, 기본 True.
             "show_panel_toolbar": True,   # 260606-25: 패널 툴바 기본 보이기
@@ -1299,9 +1300,14 @@ class MainWindow(QMainWindow):
             pass
 
     def _on_toolbar_search(self):
-        """260616-3: 툴바 검색창 Enter — 검색창을 보이게 하고 검색 실행."""
+        """260616-3: 툴바 검색창 Enter — 검색 실행.
+        260708: 우측창(건설기준/법령/특허) 열려 있으면 왼쪽 검색패널을 띄우지 않고
+        슬라이드 오버레이로만 그 본문을 검색."""
         text = self.toolbar_search.text().strip()
         if not text:
+            return
+        if self._content_panel is not None:
+            self._open_content_find(text)
             return
         self._vm_search()                    # 검색 탭/패널을 보이게 함
         try:
@@ -1533,7 +1539,7 @@ class MainWindow(QMainWindow):
             "merge": ("action", self._sc_act_merge),
             "quit": ("action", self._sc_act_quit),
             "present": ("action", self.act_present),
-            "search_focus": ("func", self.search_bar.focus_search),
+            "search_focus": ("func", self._focus_search),
             "next_match": ("func", self._global_next_match),
             "prev_match": ("func", self._global_prev_match),
             "capture": ("func", lambda: self._do_capture(self.main_view)),
@@ -1873,6 +1879,12 @@ class MainWindow(QMainWindow):
         # 260611-18(A4): '저장' 버튼이 page_meta(개체/주석 등)도 디스크에 저장하도록 훅 주입
         self.bookmark_tree.set_meta_hooks(lambda: bool(self._edit_dirty),
                                           self._save_meta_from_button)
+        # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
+        self.bookmark_tree.set_page_edit_hooks(self._page_edits_dirty, self._page_edit_save,
+                                               self._finalize_save)
+        # 260822: 폴더 모드 → 파일 모드 전환 시 대상 = 현재 본문 파일
+        self.bookmark_tree.set_current_file_getter(
+            lambda: (self.main_view.current_file() if self.main_view else None))
         # 260611-9: 편집 취소 → 숨김/회전/선긋기/하이퍼링크도 스냅샷으로 되돌리기
         self.bookmark_tree.editCancelled.connect(self._on_edit_cancelled)
         # v1.6.20 K5: 메인 페이지로 책갈피 추가
@@ -1890,6 +1902,12 @@ class MainWindow(QMainWindow):
         self.bookmark_tree.btn_edit.toggled.connect(self.page_thumbs.set_edit_mode)
         self.bookmark_tree.btn_edit.toggled.connect(self._on_edit_mode_toggled)  # 260609-22(J3)
         self.page_thumbs.applyPageEditsRequested.connect(self._on_apply_page_edits)
+        # 260821: 썸네일 복사/붙여넣기(다른 PDF 로도)
+        self._thumb_clip = None       # {"src": path, "pages": [0-based idx...]}
+        self.page_thumbs.copyPagesRequested.connect(self._on_copy_pages)
+        self.page_thumbs.pastePagesRequested.connect(self._on_paste_pages)
+        self.page_thumbs._paste_available = (
+            lambda: len(self._thumb_clip["pages"]) if self._thumb_clip else 0)
         # v1.6.21: 파일 작업 핸드셰이크 (메인이 열고 있는 파일도 작업 가능)
         self.bookmark_tree.releaseFileRequested.connect(self._on_release_file)
         self.bookmark_tree.fileOpCompleted.connect(self._on_file_op_completed)
@@ -2307,6 +2325,174 @@ class MainWindow(QMainWindow):
             return True
         finally:
             doc.close()
+
+    def _page_edits_dirty(self) -> bool:
+        """260821: 썸네일 페이지 삭제/이동 미저장 여부(💾 저장 통합용)."""
+        try:
+            pt = self.page_thumbs
+            return bool(getattr(pt, "_doc", None)) and pt.is_page_dirty()
+        except Exception:
+            return False
+
+    def _edit_save_dst(self, src, shift: bool):
+        """저장 목적지 결정 — shift 없으면 원본 덮어쓰기, shift 면 `_edited`(충돌 시 (k)).
+        (dst_path, overwrite) 반환."""
+        from pathlib import Path as _P
+        src = _P(src)
+        if not shift:
+            return src, True                         # 원본 덮어쓰기
+        base = src.stem + "_edited"
+        d = src.with_name(base + ".pdf")
+        if not d.exists():
+            return d, False
+        for k in range(1, 1000):
+            d = src.with_name(f"{base} ({k}).pdf")
+            if not d.exists():
+                return d, False
+        return d, False
+
+    def _finalize_save(self, src, produced, shift=None) -> str:
+        """260822: 편집 저장 산출물(produced 임시 PDF)을 목적지에 배치.
+        기본=원본 덮어쓰기(열린 핸들 닫고 교체), Shift+저장=`_edited`(충돌 시 (k)).
+        최종 경로(str) 반환. 로드는 호출측이 수행."""
+        from pathlib import Path as _P
+        import os as _os
+        if shift is None:
+            shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        src = _P(src); produced = _P(produced)
+        dst, overwrite = self._edit_save_dst(src, shift)
+        try:
+            if overwrite:
+                self._close_main_view_doc()          # 원본 잠금 해제(뷰어·썸네일 핸들)
+                QApplication.processEvents()
+            _os.replace(str(produced), str(dst))
+        except Exception:
+            # 덮어쓰기 실패(잠금 등) → _edited 로 폴백
+            fb, _ = self._edit_save_dst(src, True)
+            _os.replace(str(produced), str(fb))
+            dst = fb
+        return str(dst)
+
+    def _page_edit_save(self, src_str: str, bookmarks_raw):
+        """260821/260822: 💾 저장 — 썸네일의 페이지 순서/삭제로 PDF 재구성 + 책갈피 remap.
+        기본=원본 덮어쓰기, Shift+저장=`{이름}_edited.pdf`(충돌 시 (k)). 저장 후 로드."""
+        from pathlib import Path as _P
+        import os as _os
+        pt = self.page_thumbs
+        plan = pt.current_page_plan()          # ('own',idx) 또는 ('ext',src,page) 목록
+        if not plan:
+            QMessageBox.warning(self, "페이지 편집 저장", "최소 1쪽은 남겨야 합니다.")
+            return
+        src = _P(src_str)
+        shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        recon = src.with_name(src.stem + "_recon_tmp.pdf")
+        book_tmp = src.with_name(src.stem + "_book_tmp.pdf")
+        produced = recon
+        saved_n = 0
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        try:
+            import fitz
+            sdoc = fitz.open(str(src))
+            ext_cache = {}                     # esrc -> fitz doc (붙여넣기 원본)
+            odoc = fitz.open()
+            ownpos = {}                        # 원본 페이지(0-based) → 새 위치(0-based)
+            outc = 0
+            try:
+                for entry in plan:
+                    if entry[0] == "own":
+                        idx = entry[1]
+                        if 0 <= idx < sdoc.page_count:
+                            odoc.insert_pdf(sdoc, from_page=idx, to_page=idx)
+                            ownpos[idx] = outc; outc += 1
+                    else:                      # ('ext', esrc, epg) — 붙여넣기 페이지
+                        esrc, epg = entry[1], entry[2]
+                        ed = ext_cache.get(esrc)
+                        if ed is None:
+                            ed = sdoc if esrc == str(src) else fitz.open(esrc)
+                            ext_cache[esrc] = ed
+                        if 0 <= epg < ed.page_count:
+                            odoc.insert_pdf(ed, from_page=epg, to_page=epg)
+                            outc += 1
+                if outc == 0:
+                    raise RuntimeError("저장할 페이지가 없습니다.")
+                odoc.save(str(recon), garbage=4, deflate=True)
+                saved_n = outc
+            finally:
+                odoc.close()
+                for ed in ext_cache.values():
+                    if ed is not sdoc:
+                        try:
+                            ed.close()
+                        except Exception:
+                            pass
+                sdoc.close()
+            # 책갈피 remap: 삭제된 페이지 책갈피는 버리고, 남은 원본 페이지는 새 번호로
+            bms = [(t, ownpos[p1 - 1] + 1, lv) for (t, p1, lv) in (bookmarks_raw or [])
+                   if (p1 - 1) in ownpos]
+            if bms:
+                from viewer import bookmarker_bridge as bridge
+                if bridge.is_available():
+                    import pdf_bookmarker as pb
+                    blist = [pb.Bookmark(title=t, page=p, level=lv) for (t, p, lv) in bms]
+                    bridge.apply_to_pdf(recon, book_tmp, blist)
+                    try:
+                        _os.remove(str(recon))
+                    except Exception:
+                        pass
+                    produced = book_tmp
+            final = self._finalize_save(src, produced, shift)
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            for t in (recon, book_tmp):
+                try:
+                    if t.exists():
+                        _os.remove(str(t))
+                except Exception:
+                    pass
+            QMessageBox.warning(self, "페이지 편집 저장 실패", str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        self.status.showMessage(f"페이지 편집 저장: {saved_n}쪽 → {_P(final).name}", 6000)
+        try:
+            self.bookmark_tree.add_or_refresh_file(final)
+            self._load_main(HistoryItem(final, 0, "", "bookmark"))
+            self._index_single_file(_P(final))
+        except Exception:
+            pass
+
+    def _on_copy_pages(self, pages):
+        """260821: 현재 PDF 썸네일에서 선택한 페이지(0-based)를 복사(다른 PDF 로 붙여넣기용)."""
+        pt = self.page_thumbs
+        doc = getattr(pt, "_doc", None)
+        if not doc or not pages:
+            return
+        try:
+            src = str(doc.path)
+        except Exception:
+            src = str(getattr(pt, "_doc_path", "") or "")
+        if not src:
+            return
+        self._thumb_clip = {"src": src, "pages": [int(p) for p in pages]}
+        self.status.showMessage(
+            f"썸네일 {len(pages)}쪽 복사됨 — 다른 PDF 썸네일에서 붙여넣기(Ctrl+V)", 5000)
+
+    def _on_paste_pages(self, after_row: int):
+        """260822: 복사한 페이지를 현재 PDF 썸네일의 기준 행 '뒤'에 **스테이징 삽입**(미저장).
+        자동 저장하지 않고 상태만 기억 → 💾 '저장'을 눌러야 실제 파일로 반영(편집모드만)."""
+        clip = self._thumb_clip
+        pt = self.page_thumbs
+        doc = getattr(pt, "_doc", None)
+        if not clip or not doc:
+            return
+        if not getattr(pt, "_edit_mode", False):      # 편집모드에서만 붙여넣기 허용
+            self.status.showMessage("붙여넣기는 편집모드(✏)에서만 됩니다.", 4000)
+            return
+        src_pages = list(clip.get("pages") or [])
+        if not src_pages:
+            return
+        n = pt.insert_external_pages(after_row, clip.get("src"), src_pages)
+        self.status.showMessage(
+            f"붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요.", 6000)
 
     def _on_apply_page_edits(self):
         """260606-22: 썸네일에서 편집한 페이지 순서/삭제를 새 PDF로 저장."""
@@ -3152,19 +3338,35 @@ class MainWindow(QMainWindow):
             self.search_bar.set_context_label(label)
         except Exception:
             pass
+        if panel is None:                       # 우측창 닫힘 → 슬라이드 오버레이도 닫기
+            ov = getattr(self, "_cf_overlay", None)
+            if ov is not None and ov.isVisible():
+                ov.close_overlay()
+
+    def _focus_search(self):
+        """260708: Ctrl+F — 우측 패널(건설기준/법령/특허) 열려 있으면 슬라이드 오버레이,
+        아니면 기존 PDF 검색바 포커스."""
+        if self._content_panel is not None:
+            self._open_content_find()
+        else:
+            self.search_bar.focus_search()
+
+    def _open_content_find(self, seed=None):
+        """우측 패널 본문 검색 오버레이(슬라이드)를 연다 — 검색 입력·개수·이동·결과 목록.
+        우측창이 열려 있을 때의 유일한 검색 UI(왼쪽 검색패널은 띄우지 않음)."""
+        if self._content_panel is None:
+            return
+        if getattr(self, "_cf_overlay", None) is None:
+            from viewer.widgets.content_find_overlay import ContentFindOverlay
+            self._cf_overlay = ContentFindOverlay(self.centralWidget() or self)
+        q = seed if seed is not None else self.search_bar.current_query()
+        self._cf_overlay.open_for(self._content_panel, seed_query=q)
 
     def action_search(self, query: str):
-        # 260623: 우측 패널(건설기준/법령/특허)이 열려 있으면 그 본문을 검색
+        # 260708: 우측 패널(건설기준/법령/특허) 열려 있으면 슬라이드 오버레이로만 그 본문 검색
         if self._content_panel is not None:
             self._content_query = query
-            found = False
-            try:
-                found = self._content_panel.search_body(query)
-            except Exception:
-                found = False
-            self.status.showMessage(
-                (f"{getattr(self._content_panel, 'CONTENT_LABEL', '')} 검색: {query!r}"
-                 + ("" if found else " — 없음")), 3000)
+            self._open_content_find(query)
             return
         if not self._folder:
             self.status.showMessage("폴더를 먼저 여세요.")
@@ -3405,6 +3607,14 @@ class MainWindow(QMainWindow):
         # 편집(책갈피 편집)
         try:
             self.bookmark_tree.btn_edit.setEnabled(can_modify)
+            # 260822: 시작 시 1회 — 설정의 '시작 모드'가 편집이면 편집모드로 진입
+            if (can_modify and not getattr(self, "_open_mode_applied", False)
+                    and self._prefs.get("open_edit_mode", True)
+                    and not self.bookmark_tree.is_edit_mode()):
+                self._open_mode_applied = True
+                self.bookmark_tree.btn_edit.setChecked(True)
+            elif can_modify:
+                self._open_mode_applied = True
         except Exception:
             pass
         # 스크린샷·스크린샷 PDF — 내용 복사(추출) 권한 기준
@@ -5779,7 +5989,7 @@ class MainWindow(QMainWindow):
             self._save_settings_now()
         except Exception:
             pass
-        self.status.showMessage(f"특허 즐겨찾기 추가: {name or rgst}", 3000)
+        self.status.showMessage(f"특허 즐겨찾기 추가: {name or key}", 3000)
 
     def _open_kipo_favorite(self, fav: dict):
         self._open_kipo(fav)
@@ -7068,16 +7278,14 @@ class MainWindow(QMainWindow):
 
     # ===== 전역 매치 < > 순회 (v1.6.2) ==================================
     def _content_match(self, backward: bool) -> bool:
-        """우측 패널 본문 검색 이동(◀▶). 활성 패널 없으면 False."""
+        """우측 패널 본문 검색 이동(◀▶) — 슬라이드 오버레이가 열려 있으면 그쪽으로. 없으면 소비만."""
         if self._content_panel is None:
             return False
-        q = self._content_query or self.search_bar.current_query()
-        if not q:
-            return True
-        try:
-            self._content_panel.search_body(q, backward)
-        except Exception:
-            pass
+        ov = getattr(self, "_cf_overlay", None)
+        if ov is not None and ov.isVisible():
+            ov._nav(backward)
+        elif (self._content_query or self.search_bar.current_query()):
+            self._open_content_find(self._content_query or self.search_bar.current_query())
         return True
 
     def _global_next_match(self):

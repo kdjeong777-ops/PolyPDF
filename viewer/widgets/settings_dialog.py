@@ -145,6 +145,17 @@ class SettingsDialog(QDialog):
         self.chk_restore_shots.setChecked(bool(self._prefs.get("restore_screenshots", True)))
         gl.addWidget(self.chk_restore_shots)
 
+        # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
+        mrow = QHBoxLayout()
+        mrow.addWidget(QLabel("PolyPDF 시작 모드:"))
+        self.cmb_open_mode = QComboBox()
+        self.cmb_open_mode.addItem("편집 모드 (수정·저장 가능)", "edit")
+        self.cmb_open_mode.addItem("보기 모드 (읽기 전용)", "view")
+        _om = "edit" if bool(self._prefs.get("open_edit_mode", True)) else "view"
+        self.cmb_open_mode.setCurrentIndex(0 if _om == "edit" else 1)
+        mrow.addWidget(self.cmb_open_mode, 1)
+        gl.addLayout(mrow)
+
         layout.addWidget(grp_start)
 
         # ── 스크린샷 한도 ─────────────────────────────────
@@ -589,6 +600,7 @@ class SettingsDialog(QDialog):
             "restore_session": self.chk_restore.isChecked(),
             "restore_last_page": self.chk_last_page.isChecked(),
             "restore_screenshots": self.chk_restore_shots.isChecked(),
+            "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
             "screenshot_max": int(self.spin_screenshot.value()),
             # v1.6.23: 패널 토글 툴바 가시성
             "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),

@@ -209,11 +209,16 @@ class BookmarkTree(QWidget):
         self._pane_idx: int = 0                      # 260618-27: 0=상단(1창)/1=하단(2창)
         self._mode: str = "none"                    # v1.6.19: none|json|flat|single
         self._pdfs_flat: list = []                  # v1.6.19: 평탄 모드 파일 캐시
+        self._single_file: Optional[Path] = None    # 260822: 파일 모드로 연 단일 PDF
+        self._current_file_getter = None            # 260822: 앱이 현재 본문 파일 경로 제공
         self._dirty: bool = False                   # 260606-4: 편집 변경 여부
         self._reload_fn = None                       # 260611-9: 편집 취소 시 원본 재로드용
         # 260611-18(A4): 저장 버튼이 page_meta(숨김/회전/선긋기/이미지/하이퍼링크)도 저장
         self._meta_is_dirty = None                   # () -> bool
         self._meta_commit = None                     # () -> None (디스크 저장 + 썸네일 반영)
+        self._page_edit_dirty = None                 # 260821: () -> bool (썸네일 페이지 삭제/이동)
+        self._page_edit_save = None                  # 260821: (src, bookmarks_raw) -> None (앱 재구성 저장)
+        self._finalize_save = None                   # 260822: (src, produced) -> final_path (덮어쓰기/_edited)
         # 260611-61: 네비게이션 합치기 — 선택 클릭이 click+currentChanged 로 2번 발화하는 것을
         #   1회로 합치고, 트리 선택 하이라이트가 먼저 그려진 뒤(지연) 이동/암호창이 뜨게 함.
         self._pending_nav = None
@@ -229,6 +234,12 @@ class BookmarkTree(QWidget):
         """260611-18(A4): app 이 page_meta 미저장 여부·커밋을 주입."""
         self._meta_is_dirty = is_dirty_fn
         self._meta_commit = commit_fn
+
+    def set_page_edit_hooks(self, dirty_fn, save_fn, finalize_fn=None):
+        """260821/260822: app 이 썸네일 페이지 편집 여부·재구성 저장·저장 목적지 배치를 주입."""
+        self._page_edit_dirty = dirty_fn
+        self._page_edit_save = save_fn
+        self._finalize_save = finalize_fn
 
     def set_merge_allowed(self, allowed: bool):
         """260618-1: 현재 문서 권한에 따라 병합 메뉴 허용 여부(앱이 주입)."""
@@ -263,7 +274,7 @@ class BookmarkTree(QWidget):
         except Exception:
             self._tags = None
 
-        # v1.6.19: 파일 정렬 콤보
+        # v1.6.19: 파일 정렬 콤보 + 260822: 파일/폴더 모드 전환 버튼(정렬 콤보 오른쪽)
         sort_row = QHBoxLayout()
         sort_row.setContentsMargins(0, 0, 0, 0)
         sort_row.addWidget(QLabel("정렬:"))
@@ -271,8 +282,15 @@ class BookmarkTree(QWidget):
         self._sort_combo.addItems([self.SORT_BOOK, self.SORT_NAME,
                                    self.SORT_MTIME, self.SORT_SIZE])
         self._sort_combo.setCurrentText(self.SORT_MTIME)   # 초기 정렬 = 수정일순(내림차순)
+        self._sort_combo.setMaximumWidth(96)               # 폭 줄여 모드 버튼 자리 확보
         self._sort_combo.currentTextChanged.connect(self._on_sort_changed)
-        sort_row.addWidget(self._sort_combo, 1)
+        sort_row.addWidget(self._sort_combo)
+        self.btn_mode = QPushButton("📁 폴더")
+        self.btn_mode.setToolTip("파일 모드 ↔ 폴더 모드 전환\n"
+                                 "· 파일 모드: 현재 파일만 표시\n"
+                                 "· 폴더 모드: 그 폴더의 PDF 전체 표시")
+        self.btn_mode.clicked.connect(self._toggle_view_mode)
+        sort_row.addWidget(self.btn_mode, 1)
         layout.addLayout(sort_row)
 
         # v1.6.18: 책갈피 편집 툴바 (260606-4추가: 연필 아이콘 적용)
@@ -476,12 +494,14 @@ class BookmarkTree(QWidget):
             self.info.setText(
                 f"{data.get('source_pdf', '')} · {data.get('total_pages', '?')}p"
             )
+            self._update_mode_button()
             return True
 
         # 폴더 안의 PDF 파일들을 평면 트리로
         self._mode = "flat"             # v1.6.19
         self._pdfs_flat = list(self._root_dir.rglob("*.pdf"))
         self._render_flat()             # 정렬 콤보 반영
+        self._update_mode_button()
         return True
 
     def _render_flat(self):
@@ -515,10 +535,78 @@ class BookmarkTree(QWidget):
             self._render_flat()
         # json/single 모드는 무시 (JSON 순서/단일 파일 유지)
 
+    # ----- 260822: 파일/폴더 모드 -----
+    def set_current_file_getter(self, fn):
+        """앱이 현재 본문 파일 경로를 제공(폴더→파일 전환 시 대상 파일)."""
+        self._current_file_getter = fn
+
+    def _is_file_mode(self) -> bool:
+        return self._mode == "single"
+
+    def _update_mode_button(self):
+        """모드 버튼 라벨을 현재 모드에 맞게 — 파일 모드면 '폴더 모드로', 폴더면 '파일 모드로'."""
+        if not hasattr(self, "btn_mode"):
+            return
+        if self._is_file_mode():
+            self.btn_mode.setText("📄 파일")   # 현재=파일, 클릭 시 폴더로
+        else:
+            self.btn_mode.setText("📁 폴더")   # 현재=폴더, 클릭 시 파일로
+
+    def _current_selected_file(self):
+        """트리에서 선택된 최상위 파일(없으면 앱 제공 현재 파일)."""
+        it = self.tree.currentItem()
+        while it is not None and not it.data(0, self.DATA_FILE):
+            it = it.parent()
+        if it is not None and it.data(0, self.DATA_FILE):
+            return Path(it.data(0, self.DATA_FILE))
+        if callable(self._current_file_getter):
+            try:
+                f = self._current_file_getter()
+                if f and str(f).lower().endswith(".pdf"):
+                    return Path(f)
+            except Exception:
+                pass
+        return None
+
+    def _toggle_view_mode(self):
+        """파일 모드 ↔ 폴더 모드 전환."""
+        if self._is_file_mode():
+            # 파일 → 폴더: 현재 파일이 있는 폴더의 PDF 전체 표시, 그 파일 선택
+            f = self._single_file or self._current_selected_file()
+            folder = (f.parent if f else self._root_dir)
+            if not folder or not Path(folder).exists():
+                self.info.setText("폴더를 찾을 수 없습니다.")
+                return
+            self.load_folder(folder)
+            if f:
+                self._select_top_file(f)
+        else:
+            # 폴더 → 파일: 선택(또는 현재 본문) 파일만 표시
+            f = self._current_selected_file()
+            if not f or not f.exists():
+                self.info.setText("파일 모드로 볼 파일을 먼저 선택하세요.")
+                return
+            self.load_single_pdf(f)
+
+    def _select_top_file(self, path):
+        """최상위 파일 노드 중 path 를 선택·스크롤."""
+        key = str(Path(path).resolve()).lower()
+        for i in range(self.tree.topLevelItemCount()):
+            it = self.tree.topLevelItem(i)
+            d = it.data(0, self.DATA_FILE)
+            try:
+                if d and str(Path(d).resolve()).lower() == key:
+                    self.tree.setCurrentItem(it)
+                    self.tree.scrollToItem(it)
+                    return
+            except Exception:
+                pass
+
     def load_single_pdf(self, pdf_path: str | Path) -> bool:
         """v1.6.11 I1/I2: 단일 PDF 한 개만 트리에 표시 (내부 TOC lazy load)."""
         p = Path(pdf_path)
         self._root_dir = p.parent
+        self._single_file = p            # 260822: 파일 모드 → 폴더 모드 전환 기준
         self._reload_fn = lambda pp=p: self.load_single_pdf(pp)   # 260611-9: 취소 재로드
         self._mode = "single"            # v1.6.19
         self._pdfs_flat = []
@@ -534,6 +622,7 @@ class BookmarkTree(QWidget):
         self.tree.addTopLevelItem(item)
         item.setExpanded(False)
         self.info.setText(f"{p.name} (단일 파일)")
+        self._update_mode_button()
         return True
 
     def all_file_paths(self) -> list:
@@ -1706,6 +1795,13 @@ class BookmarkTree(QWidget):
         self._walk_collect(target, 0, bookmarks_raw)
         # 260606-13: 원본 PDF의 현재 책갈피(TOC)와 비교해 '실제 변경 여부'로 메시지 결정
         orig = self._read_orig_toc(src)
+        # 260821: 썸네일에서 페이지 삭제/이동이 있으면 앱이 페이지 재구성 + 책갈피 remap 으로 저장.
+        #   (기존엔 페이지 편집이 이 저장 경로에 없어 '변경 사항이 없습니다'로 저장 안 되던 버그)
+        if self._page_edit_dirty and self._page_edit_dirty() and self._page_edit_save:
+            self._page_edit_save(str(src), bookmarks_raw)
+            self._dirty = False
+            self._commit_meta()
+            return
         if bookmarks_raw == orig:
             self._dirty = False
             self._commit_meta()          # 개체/주석 등 page_meta 변경은 저장
@@ -1726,8 +1822,15 @@ class BookmarkTree(QWidget):
                 raise RuntimeError(bridge.get_status())
             import pdf_bookmarker as pb  # alias 등록됨
             bms = [pb.Bookmark(title=t, page=p, level=l) for (t, p, l) in bookmarks_raw]
-            dst = src.with_name(src.stem + "_edited.pdf")
-            out = bridge.apply_to_pdf(src, dst, bms)
+            # 260822: 임시로 생성 후 목적지 배치(기본=원본 덮어쓰기, Shift=_edited(충돌 시 (k)))
+            tmp = src.with_name(src.stem + "_book_savetmp.pdf")
+            out = bridge.apply_to_pdf(src, tmp, bms)
+            if self._finalize_save is not None:
+                out = self._finalize_save(str(src), str(out))
+            else:
+                _dst = src.with_name(src.stem + "_edited.pdf")
+                import os as _os
+                _os.replace(str(out), str(_dst)); out = str(_dst)
         except Exception as e:
             QMessageBox.warning(self, "저장 실패", str(e))
             return

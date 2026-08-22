@@ -217,6 +217,8 @@ pyinstaller ^
     --hidden-import viewer.widgets.glossary_edit_dialog ^
     --hidden-import viewer.tag_store ^
     --hidden-import viewer.widgets.tag_edit_dialog ^
+    --hidden-import viewer.widgets.content_find ^
+    --hidden-import viewer.widgets.content_find_overlay ^
     --hidden-import viewer.study.export_translation ^
     --hidden-import viewer.study.ant_cli ^
     --hidden-import viewer.widgets.translate_dialog ^
