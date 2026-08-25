@@ -191,6 +191,7 @@ pyinstaller ^
     --hidden-import viewer.widgets.flow_layout ^
     --hidden-import viewer.widgets.read_aloud ^
     --hidden-import viewer.widgets.print_dialog ^
+    --hidden-import viewer.widgets.image_to_pdf_dialog ^
     --hidden-import viewer.study ^
     --hidden-import viewer.study.ocr ^
     --hidden-import viewer.study.vocab ^

@@ -1234,6 +1234,8 @@ class MainWindow(QMainWindow):
         self._panel_toolbar.addWidget(_sp)
         lab("도구")
         self._btn_merge = mk("PDF병합", "파일 → PDF 병합", lambda: self._on_merge_files(None))
+        self._btn_img2pdf = mk("이미지→PDF", "이미지 파일 → PDF 변환",
+                               lambda: self.action_image_to_pdf())  # 260825-13
         self._btn_tr = mk("번역", "PDF 번역 (목록 창)", lambda: self._action_translate_files())  # 260623
         mk("책갈피 생성", "파일 → 책갈피 자동 생성", self.action_open_bookmarker)
         mk("단어장 생성", "파일 → 단어장 생성", self._action_build_study)
@@ -1421,6 +1423,7 @@ class MainWindow(QMainWindow):
         # 📄 PDF 및 문서 작업
         m_tools.addSection("📄 PDF 및 문서 작업")
         a_merge = self._sc_act_merge = _act("PDF 병합...", lambda: self._on_merge_files(None))
+        _act("이미지 → PDF 변환...", lambda: self.action_image_to_pdf())  # 260825-13
         _act("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)...", self._action_save_decorated_pdf)
 
         # 🔖 책갈피 및 단어장 생성
@@ -2650,10 +2653,31 @@ class MainWindow(QMainWindow):
         res = {"ok": False, "err": None, "cancelled": False}
         th = _MergeThread(job, self)
 
+        # 260825-16/17: 하트비트 — tick 이 없는 긴 구간(예: 최종 PDF 저장)에도
+        #   막대 애니메이션(|→||→|||→||)으로 '진행 중'을 계속 표시.
+        #   (\ 는 한글 폰트에서 ₩ 로 보여 사용 안 함. 경과시간 표시 없음.)
+        from PyQt6.QtCore import QTimer
+        st = {"lbl": "준비 중…", "d": 0, "t": 1, "k": 0}
+        _SPIN = ("|", "||", "|||", "||")
+
+        def _render():
+            sp = _SPIN[st["k"] % len(_SPIN)]
+            prog.setLabelText(f"{st['lbl']}  ({st['d']}/{st['t']})   {sp}")
+
         def _on_prog(d, t, lbl):
             prog.setMaximum(max(1, t))
             prog.setValue(min(d, t))
-            prog.setLabelText(f"{lbl}  ({d}/{t})")
+            st.update(d=d, t=t, lbl=lbl)
+            _render()
+
+        def _beat():
+            st["k"] += 1
+            _render()
+        hb = QTimer(self)
+        hb.setInterval(250)
+        hb.timeout.connect(_beat)
+        hb.start()
+
         th.progressed.connect(_on_prog)
         th.failed.connect(lambda e: res.__setitem__("err", e))
         th.cancelledSig.connect(lambda: res.__setitem__("cancelled", True))
@@ -2664,6 +2688,7 @@ class MainWindow(QMainWindow):
         th.start()
         loop.exec()                # 작업이 끝날 때까지 UI 이벤트 처리(응답성 유지)
         th.wait()
+        hb.stop()
         # 진행창을 확실히 닫고 화면에서 즉시 제거(후처리로 인한 100% 잔상 방지)
         prog.reset()
         prog.hide()
@@ -7569,6 +7594,114 @@ class MainWindow(QMainWindow):
         if not ok:
             QMessageBox.information(self, "PDF로 인쇄", "내보낼 이미지가 없습니다.")
         return ok
+
+    def _images_to_pdf(self, paths, out_path, progress=None, downscale=False,
+                       max_px=2600) -> bool:
+        """이미지들을 PDF 로 저장(각 1페이지).
+
+        downscale=True: QImage 로 재인코딩·축소(150dpi 페이지) — 다단 배치·저장 속도/
+        안정성↑, 이형(CMYK 등)·손상 포맷 정규화. False: 원본 그대로 삽입(무손실).
+        progress(done,total,label)->bool: False 면 MergeCancelled 로 취소.
+        """
+        import fitz
+        from viewer.twoup import MergeCancelled
+        d = fitz.open()
+        total = max(1, len(paths))
+        for i, p in enumerate(paths):
+            placed = False
+            if downscale:
+                try:
+                    from PyQt6.QtGui import QImage
+                    from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
+                    img = QImage(str(p))
+                    if not img.isNull():
+                        if max(img.width(), img.height()) > max_px:
+                            img = img.scaled(
+                                max_px, max_px,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation)
+                        ba = QByteArray(); buf = QBuffer(ba)
+                        buf.open(QIODevice.OpenModeFlag.WriteOnly)
+                        img.save(buf, "PNG" if img.hasAlphaChannel() else "JPEG", 88)
+                        buf.close()
+                        w_pt = img.width() / 150.0 * 72.0
+                        h_pt = img.height() / 150.0 * 72.0
+                        pg = d.new_page(width=w_pt, height=h_pt)
+                        pg.insert_image(fitz.Rect(0, 0, w_pt, h_pt), stream=bytes(ba))
+                        placed = True
+                except Exception:
+                    placed = False
+            if not placed:
+                try:
+                    pix = fitz.Pixmap(str(p))
+                    pg = d.new_page(width=pix.width, height=pix.height)
+                    pg.insert_image(fitz.Rect(0, 0, pix.width, pix.height),
+                                    filename=str(p))
+                except Exception:
+                    pass
+            if progress is not None and progress(i + 1, total, "이미지 변환 중") is False:
+                d.close()
+                raise MergeCancelled()
+        ok = d.page_count > 0
+        if ok:
+            d.save(out_path)
+        d.close()
+        return ok
+
+    def action_image_to_pdf(self, initial_paths=None):
+        """260825-13: 이미지 파일 → PDF 변환(목록·미리보기·순서변경·다단).
+
+        260825-14: 무거운 작업(이미지 변환·다단 배치)을 백그라운드 스레드로 실행
+        (`_run_merge_job`) → 대량/대형 이미지에서도 '응답 없음' 없이 진행·취소.
+        """
+        from viewer.widgets.image_to_pdf_dialog import ImageToPdfDialog
+        dlg = ImageToPdfDialog(self, initial_paths=initial_paths,
+                               preset_api=self._merge_preset_api())
+        if not dlg.exec():
+            return
+        paths = dlg.result_paths()
+        if not paths:
+            QMessageBox.information(self, "이미지 → PDF", "변환할 이미지를 추가하세요.")
+            return
+        default_name = Path(paths[0]).stem + "_이미지.pdf"
+        tmp = self._mk_print_tmpdir("polypdf_img2pdf_")
+        base = str(tmp / "images.pdf")
+        nup = dlg.nup_enabled()
+        settings = dlg.nup_settings() if nup else None
+        out_final = str(tmp / "nup.pdf") if nup else base
+        name = Path(paths[0]).stem
+        gen = self._gen_source_bookmarks
+
+        def _job(progress, _paths=paths, _base=base, _out=out_final,
+                 _nup=nup, _s=settings, _name=name, _gen=gen):
+            # 다단은 QImage 로 정규화·축소(이형/손상 포맷·초대용량으로 build_twoup 가
+            # 멈추던 문제 방지). 1단은 원본 그대로 삽입(무손실).
+            if not self._images_to_pdf(_paths, _base, progress, downscale=_nup):
+                return
+            if _nup:
+                from viewer.twoup import build_twoup
+                build_twoup([{"type": "pdf", "path": _base, "name": _name}], _s, _out,
+                            gen_bookmarks_fn=_gen, progress=progress)
+
+        res = self._run_merge_job(_job, "이미지 → PDF" + (" (다단)" if nup else ""))
+        if res.get("cancelled"):
+            self.status.showMessage("취소했습니다.", 4000)
+            return
+        if res.get("err"):
+            QMessageBox.warning(self, "이미지 → PDF", res["err"])
+            return
+        import fitz as _f
+        try:
+            nd = _f.open(out_final); npg = nd.page_count; nd.close()
+        except Exception:
+            npg = 0
+        if not npg:
+            QMessageBox.information(self, "이미지 → PDF", "생성된 페이지가 없습니다.")
+            return
+        dst = self._save_pdf_dialog(default_name)
+        if dst and self._copy_pdf(out_final, dst):
+            self.status.showMessage(f"PDF 저장: {dst}", 4000)
+            self._after_pdf_created(dst)
 
     def _build_nup_pdf(self, cur, pages, settings):
         """260611-37/54: 선택 페이지를 다단(N-up)으로 구성(목차 제외). 출력 PDF 경로 반환(실패 None)."""
