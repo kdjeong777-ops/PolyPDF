@@ -1006,8 +1006,9 @@ class BookmarkTree(QWidget):
         #   (이동하면 select_for_page 가 setCurrentItem 으로 다중 선택을 깨뜨려 다중선택 실패)
         from PyQt6.QtWidgets import QApplication
         mods = QApplication.keyboardModifiers()
-        if (self._edit_mode and (mods & (Qt.KeyboardModifier.ControlModifier
-                                         | Qt.KeyboardModifier.ShiftModifier))):
+        # 260825-5: Ctrl/Shift+클릭 = 다중 선택 제스처 → 메인 이동 안 함(보기·편집 공통).
+        if (mods & (Qt.KeyboardModifier.ControlModifier
+                    | Qt.KeyboardModifier.ShiftModifier)):
             return
         path = item.data(0, self.DATA_FILE)
         # 260606-4: 편집 모드에서도 선택 시 해당 책갈피 위치로 메인 이동
@@ -1043,8 +1044,9 @@ class BookmarkTree(QWidget):
             return
         from PyQt6.QtWidgets import QApplication
         mods = QApplication.keyboardModifiers()
-        if self._edit_mode and (mods & (Qt.KeyboardModifier.ControlModifier
-                                        | Qt.KeyboardModifier.ShiftModifier)):
+        # 260825-5: Ctrl/Shift 다중선택 제스처는 이동 제외(보기·편집 공통).
+        if (mods & (Qt.KeyboardModifier.ControlModifier
+                    | Qt.KeyboardModifier.ShiftModifier)):
             return
         path = cur.data(0, self.DATA_FILE)
         if path and not cur.data(0, self.DATA_IS_TOC_PLACEHOLDER):
@@ -1255,8 +1257,10 @@ class BookmarkTree(QWidget):
         self._sync_selection_mode()
 
     def _sync_selection_mode(self, *_):
+        # 260825-5: 보기 모드에서도 Ctrl/Shift+클릭으로 여러 파일 선택 가능(인쇄 등).
+        #   평범한 클릭은 단일 선택+이동, Ctrl/Shift 클릭은 다중 선택(이동 안 함).
         if not self._edit_mode:
-            self.tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+            self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             return
         mode = (QAbstractItemView.SelectionMode.ExtendedSelection
                 if self._multi_sel
@@ -1854,6 +1858,25 @@ class BookmarkTree(QWidget):
             d = it.data(0, self.DATA_FILE)
             if d and str(d).lower().endswith(".pdf"):
                 out.append(str(d))
+        return out
+
+    def selected_file_paths(self) -> list:
+        """260825: 선택된 PDF 파일 노드 경로(트리 순서·중복 제거) — 여러 파일 인쇄용.
+
+        QTreeWidgetItem 은 unhashable 이라 set 에 넣으면 예외 → item.isSelected() 로 판정."""
+        out, seen = [], set()
+
+        def walk(item):
+            for i in range(item.childCount()):
+                ch = item.child(i)
+                d = ch.data(0, self.DATA_FILE)
+                if ch.isSelected() and d and str(d).lower().endswith(".pdf"):
+                    s = str(d)
+                    if s not in seen:
+                        seen.add(s); out.append(s)
+                walk(ch)
+
+        walk(self.tree.invisibleRootItem())
         return out
 
     def ordered_pdf_files(self) -> list:

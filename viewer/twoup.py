@@ -673,7 +673,25 @@ def _docx_to_pdf(docx_path, pdf_path):
             pass
 
 
-def _fill_cover_docx(template, cover, out_docx):
+def _apply_page_size(doc, ow, oh):
+    """260825-4: 기본 생성 표지·목차 docx 의 용지 크기/방향을 본문 시트(ow×oh)에 맞춤.
+
+    (현재는 항상 세로 A4 로 생성되어 가로 2단 본문과 방향이 어긋나던 문제 수정.)
+    사용자 지정 템플릿에는 적용하지 않는다(템플릿 자체 레이아웃 유지)."""
+    if not ow or not oh:
+        return
+    try:
+        from docx.shared import Pt
+        from docx.enum.section import WD_ORIENT
+        sec = doc.sections[0]
+        sec.orientation = WD_ORIENT.LANDSCAPE if ow > oh else WD_ORIENT.PORTRAIT
+        sec.page_width = Pt(float(ow))
+        sec.page_height = Pt(float(oh))
+    except Exception:
+        pass
+
+
+def _fill_cover_docx(template, cover, out_docx, ow=None, oh=None):
     """표지 양식 docx 의 {{TITLE}}/{{SUBTITLE}}/{{COMPANY}}/{{NAME}} 치환(없으면 기본 생성)."""
     try:
         from docx import Document
@@ -697,6 +715,7 @@ def _fill_cover_docx(template, cover, out_docx):
                             p.text = p.text.replace(k, v)
         else:
             doc = Document()
+            _apply_page_size(doc, ow, oh)     # 260825-4: 본문 방향/크기에 맞춤
             for _ in range(6):
                 doc.add_paragraph("")
             h = doc.add_paragraph(); h.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -714,7 +733,7 @@ def _fill_cover_docx(template, cover, out_docx):
         return False
 
 
-def _fill_toc_docx(template, entries, out_docx):
+def _fill_toc_docx(template, entries, out_docx, ow=None, oh=None):
     """목차 양식 docx 의 {{TOC}} 단락을 '파일명 ... 쪽' 목록으로 치환(없으면 기본 생성)."""
     try:
         from docx import Document
@@ -738,6 +757,7 @@ def _fill_toc_docx(template, entries, out_docx):
                     doc.add_paragraph(f"{name} ............ {pg}")
         else:
             doc = Document()
+            _apply_page_size(doc, ow, oh)     # 260825-4: 본문 방향/크기에 맞춤
             h = doc.add_paragraph(); r = h.add_run("목차"); r.bold = True; r.font.size = Pt(24)
             doc.add_paragraph("")
             for name, pg in entries:
@@ -866,7 +886,7 @@ def _fitz_toc_doc(entries, w, h):
     return d
 
 
-def _fill_divider_docx(template, title, out_docx):
+def _fill_divider_docx(template, title, out_docx, ow=None, oh=None):
     """간지 양식의 {{TITLE}}/{{NAME}} 을 파일명으로 치환(없으면 기본 생성)."""
     try:
         from docx import Document
@@ -887,6 +907,7 @@ def _fill_divider_docx(template, title, out_docx):
                             p.text = p.text.replace(k, title)
         else:
             doc = Document()
+            _apply_page_size(doc, ow, oh)     # 260825-6: 본문 방향/크기에 맞춤
             for _ in range(8):
                 doc.add_paragraph("")
             h = doc.add_paragraph(); h.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1128,7 +1149,8 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
             _tk("표지 생성 중…")
             if not fast and tmpdir is not None:
                 cp = str(tmpdir / "cover.pdf"); cd = str(tmpdir / "cover.docx")
-                if _fill_cover_docx(s.get("cover_template", ""), s.get("cover", {}), cd) \
+                if _fill_cover_docx(s.get("cover_template", ""), s.get("cover", {}), cd,
+                                    ow=fw, oh=fh) \
                         and _docx_to_pdf(cd, cp):
                     try:
                         cover_doc = fitz.open(cp)
@@ -1177,7 +1199,8 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
             dd = None
             if not fast and tmpdir is not None:
                 dp = str(tmpdir / f"div_{i}.pdf"); dx = str(tmpdir / f"div_{i}.docx")
-                if _fill_divider_docx(s.get("divider_template", ""), fb["name"], dx) \
+                if _fill_divider_docx(s.get("divider_template", ""), fb["name"], dx,
+                                      ow=fw, oh=fh) \
                         and _docx_to_pdf(dx, dp):
                     try:
                         dd = fitz.open(dp); _paint_bg_behind(dd, s.get("divider_bg", "#eef2f7"))
@@ -1288,7 +1311,8 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
 def _make_toc_doc(entries, w, h, s, fast, tmpdir, seq):
     if not fast and tmpdir is not None:
         tp = str(tmpdir / f"toc_{seq}.pdf"); tx = str(tmpdir / f"toc_{seq}.docx")
-        if _fill_toc_docx(s.get("toc_template", ""), entries, tx) and _docx_to_pdf(tx, tp):
+        if _fill_toc_docx(s.get("toc_template", ""), entries, tx, ow=w, oh=h) \
+                and _docx_to_pdf(tx, tp):
             try:
                 return fitz.open(tp)
             except Exception:

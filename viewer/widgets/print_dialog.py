@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QRadioButton, QButtonGroup,
-    QSpinBox, QLabel, QDialogButtonBox, QWidget, QCheckBox, QPushButton, QComboBox,
+    QSpinBox, QLabel, QDialogButtonBox, QCheckBox, QPushButton, QComboBox,
 )
 
 
 class PrintScopeDialog(QDialog):
     def __init__(self, page_count: int, cur_page: int,
                  n_thumb_sel: int, n_shot_sel: int, parent=None,
-                 preset_api=None, sample=None):
+                 preset_api=None, sample=None, n_files_sel: int = 0):
         super().__init__(parent)
         self.setWindowTitle("인쇄")
         self.page_count = page_count
@@ -26,13 +26,16 @@ class PrintScopeDialog(QDialog):
         self.rb_all = QRadioButton(f"현재 문서 전체 ({page_count} 페이지)")
         self.rb_all.setChecked(True)
         self.rb_cur = QRadioButton(f"현재 페이지 (p.{cur_page + 1})")
-        self.rb_range = QRadioButton("페이지 범위")
+        # 260825-3: '선택한 썸네일 페이지'를 '현재 페이지' 아래로 이동
         self.rb_thumb = QRadioButton(f"선택한 썸네일 페이지 ({n_thumb_sel}개)")
         self.rb_thumb.setEnabled(n_thumb_sel > 0)
+        # 260825-1/9: 책갈피창에서 선택한 여러 PDF 파일만 인쇄(트리 선택 그대로)
+        self.rb_files = QRadioButton(f"선택한 책갈피 파일 인쇄 ({n_files_sel}개)")
+        self.rb_files.setEnabled(n_files_sel > 0)
+        self.rb_range = QRadioButton("페이지 범위")
         self.rb_shot = QRadioButton(f"스크린샷(선택 {n_shot_sel}개, 없으면 전체)")
-        for rb in (self.rb_all, self.rb_cur, self.rb_range, self.rb_thumb, self.rb_shot):
+        for rb in self.grp_order():
             self.grp.addButton(rb)
-            v.addWidget(rb)
 
         # 범위 스핀
         row = QHBoxLayout()
@@ -44,10 +47,23 @@ class PrintScopeDialog(QDialog):
         self.sp_to = QSpinBox(); self.sp_to.setRange(1, page_count); self.sp_to.setValue(page_count)
         row.addWidget(self.sp_to)
         row.addStretch(1)
-        v.addLayout(row)
+
+        # 260825-2/3: 순서 = 전체 / 현재 / 썸네일 / 책갈피파일 / 범위(+시작·끝) / 스크린샷
+        v.addWidget(self.rb_all)
+        v.addWidget(self.rb_cur)
+        v.addWidget(self.rb_thumb)
+        v.addWidget(self.rb_files)
+        v.addWidget(self.rb_range)
+        v.addLayout(row)                    # '페이지 범위' 바로 밑에 시작·끝
+        v.addWidget(self.rb_shot)
         self.rb_range.toggled.connect(
             lambda on: (self.sp_from.setEnabled(on), self.sp_to.setEnabled(on)))
         self.sp_from.setEnabled(False); self.sp_to.setEnabled(False)
+        # 여러 개 선택했으면 그 범위를 기본 선택 — 책갈피 파일(2개+) 우선, 다음 썸네일(2개+)
+        if n_files_sel >= 2:
+            self.rb_files.setChecked(True)
+        elif n_thumb_sel >= 2:                # 260825-6: 썸네일 여러 장 선택 → 자동 선택
+            self.rb_thumb.setChecked(True)
 
         # 260611-37/54: 다단 인쇄(표지만, 목차 제외) + 등록 스타일 선택
         nrow = QHBoxLayout()
@@ -72,6 +88,10 @@ class PrintScopeDialog(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
+
+    def grp_order(self):
+        return (self.rb_all, self.rb_cur, self.rb_thumb,
+                self.rb_files, self.rb_range, self.rb_shot)
 
     def _reload_presets(self):
         self.cmb_preset.clear()
@@ -134,4 +154,6 @@ class PrintScopeDialog(QDialog):
             return {"mode": "range", "from": min(a, b), "to": max(a, b)}
         if self.rb_thumb.isChecked():
             return {"mode": "thumb"}
+        if self.rb_files.isChecked():
+            return {"mode": "files"}
         return {"mode": "shot"}

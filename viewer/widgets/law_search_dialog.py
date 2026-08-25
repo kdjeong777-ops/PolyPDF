@@ -118,6 +118,8 @@ class LawSearchPanel(QWidget):
         self._cworker = None
         self._cur_row = None
         self._cur_item = None        # 본문을 표시 중인 법령 트리 항목(조문 자식 부착용)
+        self._pending_anchor = None  # 260825-9: 다른 법령 조문 선택 시 로드 후 스크롤할 앵커
+        self._pending_label = None   # 260825-10: 재로드 arts 에서 라벨로 앵커 재매칭
         self._workers: list = []     # 260616-14: 실행 중 스레드 보관(GC·terminate 크래시 방지)
 
         # 260618-8: 좁게 끌어도 제목줄 버튼(전체화면/X)이 잘리지 않도록 최소 폭 보장
@@ -514,16 +516,46 @@ class LawSearchPanel(QWidget):
         it = self.tree.currentItem()
         if it is None:
             return
-        # 조문(앵커) 자식 클릭 → 본문에서 해당 조로 스크롤(재요청 없음)
+        # 조문(앵커) 자식 클릭
         anchor = it.data(0, self._ANCHOR)
         if anchor:
-            self.viewer.scrollToAnchor(anchor)
+            # 260825-9: 이 조문이 속한 법령(부모 row)이 현재 표시 중인 법령과 다르면
+            #   그 법령 본문을 먼저 로드한 뒤 해당 조로 스크롤(기존: 현재 본문에서만 스크롤).
+            parent = it.parent()
+            prow = parent.data(0, self._ROW) if parent is not None else None
+            if prow is not None and prow is not self._cur_row:
+                self._pending_anchor = anchor
+                self._pending_label = it.text(0)
+                self._load_row(prow, parent)
+                return
+            self._scroll_to_anchor(anchor)
             return
         row = it.data(0, self._ROW)
         if not row or row is self._cur_row:
             return
+        self._pending_anchor = None
+        self._load_row(row, it)
+
+    def _scroll_to_anchor(self, anchor: str):
+        """앵커로 이동 — 레이아웃 완료 전 스크롤/맨 위로 튐 방지(강제 레이아웃 + 여러 틱 재시도)."""
+        if not anchor:
+            return
+        from PyQt6.QtCore import QTimer
+
+        def _go(a=anchor):
+            try:
+                self.viewer.document().documentLayout().documentSize()  # 레이아웃 강제
+            except Exception:
+                pass
+            self.viewer.scrollToAnchor(a)
+        _go()
+        for d in (30, 120, 300, 600):
+            QTimer.singleShot(d, _go)
+
+    def _load_row(self, row, item):
+        """법령 트리 항목(row)의 본문을 로드(조문 자식은 item 에 부착)."""
         self._cur_row = row
-        self._cur_item = it
+        self._cur_item = item
         self.viewer.setHtml(
             f"<p style='color:#888'>본문을 불러오는 중… "
             f"<b>{row.get('name','')}</b></p>")
@@ -532,19 +564,27 @@ class LawSearchPanel(QWidget):
         self._start_worker(self._cworker, self._on_content)
 
     def _populate_articles(self, item, arts):
-        """260616-10: 선택한 법령 항목 아래에 조문 책갈피(앵커)를 채운다."""
+        """260616-10: 선택한 법령 항목 아래에 조문 책갈피(앵커)를 채운다.
+
+        260825-10: 자식 재구성 중 선택 항목이 삭제되며 currentItemChanged→_on_select 가
+        스퓨리어스 호출되어 스크롤이 제목으로 튀던 문제 → 재구성 동안 시그널 차단.
+        """
         if item is None:
             return
-        # 기존 조문 자식 제거(재선택 시 중복 방지)
-        for i in range(item.childCount() - 1, -1, -1):
-            item.removeChild(item.child(i))
-        for label, anchor in arts:
-            ch = QTreeWidgetItem([label])
-            ch.setData(0, self._ANCHOR, anchor)
-            ch.setToolTip(0, label)
-            item.addChild(ch)
-        if arts:
-            item.setExpanded(True)
+        self.tree.blockSignals(True)
+        try:
+            # 기존 조문 자식 제거(재선택 시 중복 방지)
+            for i in range(item.childCount() - 1, -1, -1):
+                item.removeChild(item.child(i))
+            for label, anchor in arts:
+                ch = QTreeWidgetItem([label])
+                ch.setData(0, self._ANCHOR, anchor)
+                ch.setToolTip(0, label)
+                item.addChild(ch)
+            if arts:
+                item.setExpanded(True)
+        finally:
+            self.tree.blockSignals(False)
 
     def _on_content(self, html, dbg, arts, row):
         if row is not self._cur_row:
@@ -554,6 +594,32 @@ class LawSearchPanel(QWidget):
             self.viewer.setHtml(html)
         else:
             self._show_content_fallback(row, dbg)
+        # 260825-9/10: 다른 법령 조문을 선택해 로드한 경우 → 로드 후 해당 조로 스크롤.
+        #   앵커 번호가 재생성되므로 새 arts 에서 '라벨'로 앵커를 다시 찾고,
+        #   setHtml 레이아웃이 끝나도록 약간 지연 후(그리고 두 번) 스크롤.
+        anch = self._pending_anchor
+        if anch:
+            label = self._pending_label
+            self._pending_anchor = None
+            self._pending_label = None
+            target = anch
+            if label:                        # 재로드 arts 에서 라벨로 앵커 재매칭
+                for lbl, a in (arts or []):
+                    if lbl == label:
+                        target = a
+                        break
+            # 260825-11: 자식 재구성으로 선택이 기준명(부모)으로 옮겨가므로, 그 조문 항목 재선택
+            if label and self._cur_item is not None:
+                self.tree.blockSignals(True)
+                try:
+                    for i in range(self._cur_item.childCount()):
+                        ch = self._cur_item.child(i)
+                        if ch.text(0) == label:
+                            self.tree.setCurrentItem(ch)
+                            break
+                finally:
+                    self.tree.blockSignals(False)
+            self._scroll_to_anchor(target)
 
     def _show_content_fallback(self, row, dbg=None):
         link = row.get("link") or ""

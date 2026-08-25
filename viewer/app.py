@@ -2629,14 +2629,12 @@ class MainWindow(QMainWindow):
                 self.bookmark_tree.add_or_refresh_file(out)
             except Exception:
                 pass
-            try:
-                self._load_main(HistoryItem(str(out), 0, "", "bookmark"))
-            except Exception:
-                pass
             self._index_single_file(out)        # 백그라운드
             # 260606-24: 책갈피는 병합 시 원본별로 이미 임베드 → auto면 '단어장'만 생성
             if auto:
                 self._action_build_study()      # 백그라운드(확인창)
+            # 260825-5: 생성 종료 후 '파일 열기(별도 새 창·기본)/폴더 열기' 선택
+            self._after_pdf_created(out)
         QTimer.singleShot(0, _post_merge)
 
     def _run_merge_job(self, job, title):
@@ -7448,13 +7446,19 @@ class MainWindow(QMainWindow):
         cur_page = self.main_view.current_page()
         n_thumb = len(self.page_thumbs.list.selectedItems())
         n_shot = len(self.shot_strip.list.selectedItems())
-        if not is_pdf and self.shot_strip.list.count() == 0:
+        try:
+            sel_files = self.bookmark_tree.selected_file_paths()
+        except Exception:
+            sel_files = []
+        n_files = len(sel_files)
+        if not is_pdf and self.shot_strip.list.count() == 0 and n_files == 0:
             QMessageBox.information(self, "인쇄", "인쇄할 문서가 없습니다.")
             return
         from viewer.widgets.print_dialog import PrintScopeDialog
         dlg = PrintScopeDialog(max(pc, 1), cur_page, n_thumb, n_shot, self,
                                preset_api=self._merge_preset_api(),
-                               sample=(str(cur) if is_pdf else None))
+                               sample=(str(cur) if is_pdf else None),
+                               n_files_sel=n_files)
         if not dlg.exec():
             return
         spec = dlg.result_spec()
@@ -7465,8 +7469,15 @@ class MainWindow(QMainWindow):
                 dst = self._save_pdf_dialog("스크린샷.pdf")
                 if dst and self._export_images_pdf(shots, dst):
                     self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                    self._after_pdf_created(dst)
             else:
                 self._print_images(shots)
+            return
+        if spec["mode"] == "files":
+            if not sel_files:
+                QMessageBox.information(self, "인쇄", "책갈피창에서 인쇄할 PDF 파일을 선택하세요.")
+                return
+            self._print_selected_files(sel_files, dlg, to_pdf)
             return
         if not is_pdf:
             QMessageBox.information(self, "인쇄", "현재 메인 문서가 PDF 가 아닙니다.")
@@ -7492,6 +7503,7 @@ class MainWindow(QMainWindow):
                 dst = self._save_pdf_dialog(Path(cur).stem + "_다단.pdf")
                 if dst and self._copy_pdf(out_nup, dst):
                     self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                    self._after_pdf_created(dst)
                 return
             import fitz
             nd = fitz.open(out_nup); npages = list(range(nd.page_count)); nd.close()
@@ -7501,6 +7513,7 @@ class MainWindow(QMainWindow):
             dst = self._save_pdf_dialog(Path(cur).stem + "_인쇄.pdf")
             if dst and self._export_pages_pdf(cur, pages, dst):
                 self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                self._after_pdf_created(dst)
             return
         self._print_pdf_pages(cur, pages)
 
@@ -7559,9 +7572,9 @@ class MainWindow(QMainWindow):
 
     def _build_nup_pdf(self, cur, pages, settings):
         """260611-37/54: 선택 페이지를 다단(N-up)으로 구성(목차 제외). 출력 PDF 경로 반환(실패 None)."""
-        import fitz, tempfile
+        import fitz
         from viewer.twoup import build_twoup
-        tmpdir = Path(tempfile.mkdtemp(prefix="polypdf_nupprint_"))
+        tmpdir = self._mk_print_tmpdir("polypdf_nupprint_")
         src_sub = str(tmpdir / "sub.pdf"); out_nup = str(tmpdir / "nup.pdf")
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         # 260617-6: 진행 표시(하단 상태바) — 동기 작업 중 멈춘 듯 보이지 않게 processEvents
@@ -7591,6 +7604,162 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "인쇄", "구성된 페이지가 없습니다.")
             return None
         return out_nup
+
+    def _mk_print_tmpdir(self, prefix):
+        """260825-6: 인쇄용 임시 폴더 생성 + 앱 종료 시 자동 정리(atexit) 등록."""
+        import tempfile, atexit, shutil
+        d = tempfile.mkdtemp(prefix=prefix)
+        atexit.register(shutil.rmtree, d, ignore_errors=True)
+        return Path(d)
+
+    def _build_nup_pdf_items(self, items, settings):
+        """260825: 여러 항목(파일)을 다단(N-up)으로 구성. 출력 PDF 경로 반환(실패 None)."""
+        import fitz
+        from viewer.twoup import build_twoup
+        tmpdir = self._mk_print_tmpdir("polypdf_nupfiles_")
+        out_nup = str(tmpdir / "nup.pdf")
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        self.status.showMessage("다단 PDF 생성 중…")
+        QApplication.processEvents()
+
+        def _tick(*a, **k):
+            msg = next((str(x) for x in a if isinstance(x, str)), "")
+            self.status.showMessage(f"다단 PDF 생성 중… {msg}".strip())
+            QApplication.processEvents()
+            return True
+        try:
+            build_twoup(items, settings, out_nup,
+                        gen_bookmarks_fn=self._gen_source_bookmarks,
+                        log=_tick, progress=_tick)
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, "인쇄", f"다단 구성 실패: {e}")
+            return None
+        QApplication.restoreOverrideCursor()
+        nd = fitz.open(out_nup); n = nd.page_count; nd.close()
+        if not n:
+            QMessageBox.information(self, "인쇄", "구성된 페이지가 없습니다.")
+            return None
+        return out_nup
+
+    def _combine_pdfs_temp(self, files) -> str | None:
+        """260825: 여러 PDF 의 전체 페이지를 하나의 임시 PDF 로 이어붙임. 경로 반환(실패 None)."""
+        import fitz
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        self.status.showMessage("여러 파일 인쇄 준비 중…")
+        QApplication.processEvents()
+        td = fitz.open()
+        try:
+            for f in files:
+                try:
+                    sd = fitz.open(f); td.insert_pdf(sd); sd.close()
+                except Exception:
+                    continue
+            if not td.page_count:
+                return None
+            out = str(self._mk_print_tmpdir("polypdf_multi_") / "combined.pdf")
+            td.save(out)
+            return out
+        except Exception as e:
+            QMessageBox.warning(self, "인쇄", f"여러 파일 준비 실패: {e}")
+            return None
+        finally:
+            td.close()
+            QApplication.restoreOverrideCursor()
+
+    def _print_selected_files(self, files, dlg, to_pdf):
+        """260825-1: 책갈피창에서 선택한 여러 PDF 파일 전체를 하나로 이어 인쇄/PDF."""
+        files = [f for f in (files or []) if f and str(f).lower().endswith(".pdf")]
+        if not files:
+            QMessageBox.information(self, "인쇄", "선택한 PDF 파일이 없습니다.")
+            return
+        default_stem = (Path(files[0]).stem + f"_외{len(files) - 1}건"
+                        if len(files) > 1 else Path(files[0]).stem)
+        if dlg.nup_enabled():
+            items = [{"type": "pdf", "path": f, "name": Path(f).stem} for f in files]
+            out_nup = self._build_nup_pdf_items(items, dlg.nup_settings())
+            if not out_nup:
+                return
+            if to_pdf:
+                dst = self._save_pdf_dialog(default_stem + "_다단.pdf")
+                if dst and self._copy_pdf(out_nup, dst):
+                    self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                    self._after_pdf_created(dst)
+                return
+            import fitz
+            nd = fitz.open(out_nup); npages = list(range(nd.page_count)); nd.close()
+            self._print_pdf_pages(out_nup, npages)
+            return
+        combined = self._combine_pdfs_temp(files)
+        if not combined:
+            QMessageBox.information(self, "인쇄", "인쇄할 페이지가 없습니다.")
+            return
+        if to_pdf:
+            dst = self._save_pdf_dialog(default_stem + "_인쇄.pdf")
+            if dst and self._copy_pdf(combined, dst):
+                self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                self._after_pdf_created(dst)
+            return
+        import fitz
+        nd = fitz.open(combined); npages = list(range(nd.page_count)); nd.close()
+        self._print_pdf_pages(combined, npages)
+
+    def _after_pdf_created(self, path):
+        """260825-5: PDF 생성 종료 후 '파일 열기(기본)/폴더 열기/닫기' 선택."""
+        try:
+            path = str(path)
+            box = QMessageBox(self)
+            box.setWindowTitle("PDF 생성 완료")
+            box.setText(f"PDF를 생성했습니다:\n{Path(path).name}\n\n어떻게 열까요?")
+            b_file = box.addButton("파일 열기", QMessageBox.ButtonRole.AcceptRole)
+            b_dir = box.addButton("폴더 열기", QMessageBox.ButtonRole.ActionRole)
+            box.addButton("닫기", QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(b_file)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is b_file:
+                self._open_pdf_new_window(path)
+            elif clicked is b_dir:
+                self._open_containing_folder(path)
+        except Exception:
+            pass
+
+    def _open_pdf_new_window(self, path):
+        """260825-5: 생성된 PDF 를 별도 새 창(파일 모드)으로 띄운다."""
+        import os, sys
+        from PyQt6.QtCore import QProcess
+        try:
+            if getattr(sys, "frozen", False):
+                ok = QProcess.startDetached(sys.executable, [str(path)])
+            else:
+                ok = QProcess.startDetached(
+                    sys.executable, [os.path.abspath(sys.argv[0]), str(path)])
+            if ok:
+                return
+        except Exception:
+            pass
+        # 폴백: 현재 창에서 파일 모드로 열기
+        try:
+            self.open_pdf(Path(path))
+        except Exception:
+            pass
+
+    def _open_containing_folder(self, path):
+        """260825-5: 생성된 PDF 가 있는 폴더를 열고(가능하면 해당 파일 선택)."""
+        import os
+        try:
+            if os.name == "nt":
+                import subprocess
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(str(path))])
+                return
+        except Exception:
+            pass
+        try:
+            from PyQt6.QtGui import QDesktopServices
+            from PyQt6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path).parent)))
+        except Exception:
+            pass
 
     def _shot_paths_to_print(self) -> list:
         metas = self.shot_strip.all_meta()
