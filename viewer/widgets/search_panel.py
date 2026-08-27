@@ -113,7 +113,16 @@ class SearchResults(QWidget):
         self._results: list = []
         self._query = ""
         self._order_map: dict = {}             # v1.4.0 P3
+        self._order_map_norm: dict = {}        # 260827: 경로 정규화 키(대소문자/구분자 무시)
         self._build_ui()
+
+    @staticmethod
+    def _norm_key(p) -> str:
+        import os
+        try:
+            return os.path.normcase(os.path.normpath(str(p)))
+        except Exception:
+            return str(p)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -125,7 +134,9 @@ class SearchResults(QWidget):
         head.addStretch(1)
         head.addWidget(QLabel("정렬"))
         self.sort_combo = QComboBox()
-        self.sort_combo.addItems(["이름 순", "횟수 순"])
+        # 260827: '책갈피 순'(책갈피창 파일 정렬 + 페이지 순)을 기본으로.
+        self.sort_combo.addItems(["책갈피 순", "이름 순", "횟수 순"])
+        self.sort_combo.setCurrentIndex(0)
         self.sort_combo.currentIndexChanged.connect(lambda _: self._render_results())
         head.addWidget(self.sort_combo)
 
@@ -163,8 +174,9 @@ class SearchResults(QWidget):
         layout.addWidget(self.tree, 1)
 
     def set_bookmark_order(self, order_map: dict):
-        """v1.4.0 P3: 파일 절대경로 -> 출현 순번."""
+        """v1.4.0 P3: 파일 절대경로 -> 출현 순번(책갈피창 시각 순서)."""
         self._order_map = dict(order_map or {})
+        self._order_map_norm = {self._norm_key(k): v for k, v in self._order_map.items()}
         self._render_results()
 
     def set_results(self, query: str, results: list):
@@ -192,17 +204,22 @@ class SearchResults(QWidget):
         return flat
 
     def _sorted_groups(self, groups: dict):
+        import os
         sort_key = self.sort_combo.currentText()
         if sort_key == "횟수 순":
             return sorted(groups.items(),
                           key=lambda kv: -sum(r.match_count for r in kv[1]))
-        # 책갈피 순: order_map 사용. 없으면 가나다 순으로 폴백.
-        if self._order_map:
+        if sort_key == "이름 순":
+            return sorted(groups.items(),
+                          key=lambda kv: os.path.basename(kv[0]).lower())
+        # 책갈피 순(기본): 책갈피창 파일 순서(order_map). 없으면 이름순 폴백.
+        if self._order_map_norm:
             return sorted(
                 groups.items(),
-                key=lambda kv: (self._order_map.get(kv[0], 10**9), kv[0]),
+                key=lambda kv: (self._order_map_norm.get(self._norm_key(kv[0]), 10**9),
+                                os.path.basename(kv[0]).lower()),
             )
-        return sorted(groups.items(), key=lambda kv: kv[0])
+        return sorted(groups.items(), key=lambda kv: os.path.basename(kv[0]).lower())
 
     def _render_results(self):
         self.tree.clear()
@@ -240,3 +257,26 @@ class SearchResults(QWidget):
         page = item.data(0, self.DATA_PAGE) or 0
         query = item.data(0, self.DATA_QUERY) or ""
         self.resultActivated.emit(file_path, int(page), query)
+
+    def select_and_activate(self, file_path, page_index) -> bool:
+        """260827: 지정 (파일, 페이지) 결과 항목을 선택·스크롤하고 이동(activate).
+        해당 페이지 자식이 없으면 파일 노드만 선택. 반환: 활성화 성공 여부."""
+        if not file_path:
+            return False
+        nf = self._norm_key(file_path)
+        root = self.tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            top = root.child(i)
+            if self._norm_key(top.data(0, self.DATA_FILE) or "") != nf:
+                continue
+            for j in range(top.childCount()):
+                ch = top.child(j)
+                if int(ch.data(0, self.DATA_PAGE) or 0) == int(page_index):
+                    self.tree.setCurrentItem(ch)
+                    self.tree.scrollToItem(ch)
+                    self._on_activated(ch, 0)
+                    return True
+            self.tree.setCurrentItem(top)
+            self.tree.scrollToItem(top)
+            return False
+        return False

@@ -49,16 +49,42 @@ class PdfIndex:
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.migrated = False
+        try:
+            self.conn = sqlite3.connect(self.db_path)
+            self.conn.row_factory = sqlite3.Row
+            self._init_schema()
+        except sqlite3.DatabaseError:
+            # 260827: index.db 손상(malformed) → 파일 삭제 후 새로 생성(캐시라 안전).
+            #   다음 인덱싱이 다시 채운다. PdfIndex 생성이 실패해 검색/인덱싱이 통째로
+            #   깨지던 문제 방지.
+            self._recreate_corrupt_db()
+
+    def _recreate_corrupt_db(self):
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+        import os as _os
+        for suf in ("", "-wal", "-shm", "-journal"):
+            try:
+                _os.remove(str(self.db_path) + suf)
+            except OSError:
+                pass
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self._init_schema()
+        self.migrated = True
 
     # --- 스키마 ------------------------------------------------------------
 
-    # 260825: FTS 토크나이저 스키마 버전. trigram 으로 올리면서 1회 전체 재인덱싱.
-    SCHEMA_VERSION = 2
+    # 260825: FTS 토크나이저 스키마 버전. 2=trigram(파괴적, 폐기), 3=trigram(내용 보존 복사).
+    SCHEMA_VERSION = 3
+    _FTS_TRIGRAM = ("CREATE VIRTUAL TABLE {name} USING fts5("
+                    "text, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')")
 
     def _init_schema(self):
+        self.migrated = False
         cur = self.conn.cursor()
         cur.execute(
             """
@@ -74,19 +100,42 @@ class PdfIndex:
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(files)")}
         if "size" not in cols:
             self.conn.execute("ALTER TABLE files ADD COLUMN size INTEGER")
-        # 260825: FTS5 트라이그램 토크나이저 — LIKE '%…%' 부분일치(한글 포함)를 **색인**으로
-        #   빠르게(기존 unicode61 은 LIKE 전체 스캔). user_version 으로 1회 마이그레이션.
+
+        # 260825: FTS5 tokenizer 를 trigram 으로 — LIKE '%…%' 부분일치(한글 포함)를 **색인**으로.
+        #   ★ 기존 인덱스 텍스트를 **보존 복사**(재인덱싱 없이) → 검색이 비는 구간 없음.
+        row = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='pages_fts'"
+        ).fetchone()
+        exists = row is not None
+        is_trigram = exists and ("trigram" in (row["sql"] or ""))
         uv = int(self.conn.execute("PRAGMA user_version").fetchone()[0] or 0)
-        migrate = uv < self.SCHEMA_VERSION
-        if migrate:
-            self.conn.execute("DROP TABLE IF EXISTS pages_fts")
-        self.conn.execute(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5("
-            "text, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')"
-        )
-        if migrate:
-            # 토크나이저가 바뀌었으니 전체 재인덱싱 유도(files 비움 → needs_reindex=True)
-            self.conn.execute("DELETE FROM files")
+
+        if not exists:
+            self.conn.execute(self._FTS_TRIGRAM.format(name="pages_fts"))
+        elif not is_trigram:
+            # 구 unicode61 → trigram 으로 **내용 보존 복사**(pages_fts 의 텍스트 재사용).
+            #   손상(malformed) 등으로 실패하면 예외가 __init__ 으로 전파되어 index.db 를
+            #   삭제·재생성(캐시라 안전) → 재인덱싱으로 복구.
+            self.conn.execute("DROP TABLE IF EXISTS pages_fts_new")
+            self.conn.execute(self._FTS_TRIGRAM.format(name="pages_fts_new"))
+            self.conn.execute(
+                "INSERT INTO pages_fts_new(text, file_id, page_index) "
+                "SELECT text, file_id, page_index FROM pages_fts")
+            self.conn.execute("DROP TABLE pages_fts")
+            self.conn.execute("ALTER TABLE pages_fts_new RENAME TO pages_fts")
+            self.migrated = True
+
+        # 일관성: 색인이 비었는데 files 기록만 남아있으면(구 파괴적 마이그레이션 잔재 등)
+        #   needs_reindex 가 계속 False → 검색 0 이던 상태 → files 비워 재인덱싱 유도.
+        if uv < self.SCHEMA_VERSION:
+            try:
+                fts_n = self.conn.execute("SELECT count(*) FROM pages_fts").fetchone()[0]
+                files_n = self.conn.execute("SELECT count(*) FROM files").fetchone()[0]
+                if fts_n == 0 and files_n > 0:
+                    self.conn.execute("DELETE FROM files")
+                    self.migrated = True
+            except Exception:
+                pass
             self.conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
         self.conn.commit()
 

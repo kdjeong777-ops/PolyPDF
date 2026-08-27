@@ -228,6 +228,8 @@ class MainWindow(QMainWindow):
         self._wire_signals()
         self._restore_settings()
         self._update_right_panel_visibility()   # 260606-10: 패널 비면 메인 전체 폭
+        # 260825: 검색 색인이 비어 있으면(트라이그램 마이그레이션 잔재 등) 자동 재인덱싱
+        QTimer.singleShot(1200, self._startup_index_check)
 
         # 260618-11: 업데이트 — 스레드 결과를 메인 스레드로 전달하는 시그널 홀더
         self._update_sig = _UpdateSignals()
@@ -3308,6 +3310,35 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _startup_index_check(self) -> None:
+        """260825: 시작 시 검색 색인이 비어 있으면(구 파괴적 마이그레이션 잔재) 재인덱싱.
+        색인이 이미 채워져 있으면(정상) 아무 것도 하지 않음 — 불필요한 재인덱싱 회피."""
+        try:
+            from viewer.indexer import PdfIndex
+            ix = PdfIndex(self._db_path)
+            try:
+                empty = ix.conn.execute("SELECT count(*) FROM pages_fts").fetchone()[0] == 0
+            finally:
+                ix.close()
+            if not empty or not self._folder:
+                return
+            # 파일 모드면 그 파일만, 폴더 모드면 폴더 전체 재인덱싱
+            file_mode = bool(getattr(self.bookmark_tree, "_is_file_mode", lambda: False)())
+            if file_mode:
+                cur = self.main_view.current_file() if self.main_view else None
+                if cur and str(cur).lower().endswith(".pdf"):
+                    w = IndexWorker(self._db_path, Path(cur).parent, single_file=Path(cur))
+                    w.error.connect(lambda e: None)
+                    self._start_index_worker(w)
+            else:
+                w = IndexWorker(self._db_path, self._folder)
+                w.progress.connect(self._on_index_progress)
+                w.finished.connect(self._on_index_finished)
+                w.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+                self._start_index_worker(w)
+        except Exception:
+            pass
+
     def _refresh_search_scope(self) -> None:
         """260616-3: 검색 범위를 현재 책갈피 트리에 표시된 파일들로 한정.
         파일이 없으면 None(전체 인덱스 검색)."""
@@ -3481,8 +3512,43 @@ class MainWindow(QMainWindow):
             results = [r for r in results
                        if self._norm_path(r.file_path) in scope]
         self._last_results = list(results)
+        # 260827: 책갈피창 파일 시각 순서를 검색 결과 '책갈피 순' 정렬에 반영(폴더모드 포함)
+        try:
+            files = (self.bookmark_tree.ordered_pdf_files()
+                     or self.bookmark_tree.all_file_paths() or [])
+            self.search_results.set_bookmark_order({p: i for i, p in enumerate(files)})
+        except Exception:
+            pass
         self.search_results.set_results(query, results)
         self.status.showMessage(f"검색 완료: {len(results)}개 페이지", 3000)
+        # 260827: 현재 파일의 현재 페이지 기준 '앞(이전 페이지)에서 가장 가까운' 결과를 선택·이동
+        self._auto_select_search_result(results)
+
+    def _auto_select_search_result(self, results: list) -> None:
+        """검색 직후, 현재 본문 파일의 현재 페이지 기준으로 앞쪽(이전 페이지)에서 가장 가까운
+        결과를 자동 선택하고 그 페이지로 이동. 현재 파일 결과가 없으면 표시 순서상 첫 결과."""
+        if not results:
+            return
+        try:
+            cur = self.main_view.current_file() if self.main_view else None
+            cur_page = self.main_view.current_page() if self.main_view else 0
+        except Exception:
+            cur, cur_page = None, 0
+        target = None
+        if cur:
+            ncur = self._norm_path(cur)
+            same = [r for r in results if self._norm_path(r.file_path) == ncur]
+            if same:
+                before = [r for r in same if r.page_index <= cur_page]
+                target = (max(before, key=lambda r: r.page_index) if before
+                          else min(same, key=lambda r: r.page_index))
+        if target is None:
+            disp = self.search_results.get_displayed_results()
+            target = disp[0] if disp else results[0]
+        try:
+            self.search_results.select_and_activate(target.file_path, target.page_index)
+        except Exception:
+            pass
 
     def action_export_search_excel(self):
         results = self.search_results.get_displayed_results()
@@ -7562,6 +7628,18 @@ class MainWindow(QMainWindow):
             return
         spec = dlg.result_spec()
         to_pdf = dlg.to_pdf()
+        # 260827: 실제 인쇄면 다이얼로그에서 고른 프린터/색상/양면/방향자동/포함 옵션 적용
+        self._print_opts = None
+        if not to_pdf:
+            _sm, _pct = dlg.size_mode()
+            self._print_opts = {
+                "printer": self._make_printer(dlg),
+                "auto_orient": dlg.auto_orient(),
+                "include_decorations": dlg.include_decorations(),
+                "alignment": dlg.alignment(),
+                "size_mode": _sm,
+                "scale_pct": _pct,
+            }
         if spec["mode"] == "shot":
             shots = self._shot_paths_to_print()
             if to_pdf:
@@ -7976,15 +8054,68 @@ class MainWindow(QMainWindow):
         return [metas[r].get("path") for r in rows
                 if 0 <= r < len(metas) and metas[r].get("path")]
 
-    def _print_render(self, count: int, draw_fn) -> None:
-        """QPrinter 설정 + 페이지별 draw_fn(painter, target_rect, index) 호출."""
+    def _make_printer(self, dlg):
+        """260827: 인쇄 다이얼로그에서 고른 프린터·색상·단면/양면으로 QPrinter 구성."""
+        from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo
+        printer = None
+        try:
+            name = dlg.printer_name()
+            if name:
+                info = QPrinterInfo.printerInfo(name)
+                if not info.isNull():
+                    printer = QPrinter(info, QPrinter.PrinterMode.HighResolution)
+        except Exception:
+            printer = None
+        if printer is None:
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        try:
+            from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo
+            cm = dlg.color_mode()
+            if cm is None:
+                # 260827: '프린터 기본' → 프린터가 컬러 지원하면 컬러, 아니면 흑백
+                try:
+                    info = QPrinterInfo.printerInfo(dlg.printer_name())
+                    supports_color = ((not info.isNull())
+                                      and QPrinter.ColorMode.Color in info.supportedColorModes())
+                    cm = (QPrinter.ColorMode.Color if supports_color
+                          else QPrinter.ColorMode.GrayScale)
+                except Exception:
+                    cm = None
+            if cm is not None:
+                printer.setColorMode(cm)
+            dm = dlg.duplex_mode()
+            if dm is not None:
+                printer.setDuplex(dm)
+            sz = dlg.page_size()               # 260827: 용지 크기(프린터 지원 목록)
+            if sz is not None:
+                printer.setPageSize(sz)
+            printer.setCopyCount(int(dlg.copies()))
+        except Exception:
+            pass
+        return printer
+
+    def _print_render(self, count: int, draw_fn, orient_fn=None) -> None:
+        """QPrinter 설정 + 페이지별 draw_fn(painter, target_rect, index) 호출.
+
+        260827: `_print_opts`(프린터/방향자동) 를 사용해 QPrintDialog 없이 인쇄하고,
+        방향 자동 시 orient_fn(i)->QPageLayout.Orientation 으로 페이지별 용지 방향을 맞춤.
+        """
         from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
         from PyQt6.QtGui import QPainter
         if count <= 0:
             return
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        if QPrintDialog(printer, self).exec() != QPrintDialog.DialogCode.Accepted:
-            return
+        opts = getattr(self, "_print_opts", None) or {}
+        printer = opts.get("printer")
+        auto = bool(opts.get("auto_orient")) and orient_fn is not None
+        if printer is None:
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            if QPrintDialog(printer, self).exec() != QPrintDialog.DialogCode.Accepted:
+                return
+        if auto:
+            try:
+                printer.setPageOrientation(orient_fn(0))   # 첫 페이지 방향(균일 문서 커버)
+            except Exception:
+                pass
         painter = QPainter()
         if not painter.begin(printer):
             QMessageBox.warning(self, "인쇄", "프린터를 열 수 없습니다.")
@@ -7993,6 +8124,11 @@ class MainWindow(QMainWindow):
         try:
             for i in range(count):
                 if i > 0:
+                    if auto:
+                        try:
+                            printer.setPageOrientation(orient_fn(i))
+                        except Exception:
+                            pass
                     printer.newPage()
                 draw_fn(painter, painter.viewport(), i)
                 if i % 3 == 0:
@@ -8003,14 +8139,34 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
-    def _draw_image_fit(self, painter, target, img) -> None:
+    def _draw_image_fit(self, painter, target, img, natural_dpi=None) -> None:
+        """260827: 크기 모드(맞춤/실제/배율)+정렬(가운데/좌상)로 페이지 이미지를 인쇄면에 그린다.
+        natural_dpi 는 img 가 렌더된 dpi(실제크기·배율 계산용, PDF=200). None 이면 항상 '맞춤'."""
         from PyQt6.QtCore import QRect
         if img.isNull():
             return
-        scaled = img.scaled(target.size(), Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation)
-        x = target.x() + (target.width() - scaled.width()) // 2
-        y = target.y() + (target.height() - scaled.height()) // 2
+        opts = getattr(self, "_print_opts", None) or {}
+        mode = opts.get("size_mode", "fit")
+        pct = opts.get("scale_pct", 100)
+        if mode in ("actual", "scale") and natural_dpi:
+            try:
+                dpi = float(painter.device().logicalDpiX()) or float(natural_dpi)
+            except Exception:
+                dpi = float(natural_dpi)
+            f = dpi / float(natural_dpi)
+            if mode == "scale":
+                f *= max(1, int(pct)) / 100.0
+            dw = max(1, int(img.width() * f)); dh = max(1, int(img.height() * f))
+            scaled = img.scaled(dw, dh, Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation)
+        else:
+            scaled = img.scaled(target.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation)
+        if opts.get("alignment", "center") == "topleft":
+            x, y = target.x(), target.y()
+        else:
+            x = target.x() + (target.width() - scaled.width()) // 2
+            y = target.y() + (target.height() - scaled.height()) // 2
         painter.drawImage(QRect(x, y, scaled.width(), scaled.height()), scaled)
 
     def _thumb_doc_path(self):
@@ -8027,6 +8183,7 @@ class MainWindow(QMainWindow):
         pages = sorted({int(p) for p in (pages or []) if p is not None})
         if not cur or not pages:
             return
+        self._print_opts = None      # 260827: 썸네일 직접 인쇄는 시스템 인쇄창(QPrintDialog) 사용
         self._print_pdf_pages(cur, pages)
 
     def _on_thumb_screenshot_pages(self, pages):
@@ -8066,13 +8223,16 @@ class MainWindow(QMainWindow):
             return
         import fitz
         from PyQt6.QtGui import QImage
+        from PyQt6.QtGui import QPageLayout
         doc = fitz.open(pdf_path)
-        # 260615-3: ① 인쇄에도 꾸밈(선·도형·글)+하이퍼링크 포함
-        try:
-            self._bake_drawings_into_doc(doc, self._decorations_norm_for(pdf_path))
-            self._bake_hyperlinks_into_doc(doc, pdf_path)
-        except Exception:
-            pass
+        # 260615-3/260827: 인쇄에 꾸밈(선·도형·글)+하이퍼링크 포함 — '문서만' 이면 생략
+        opts = getattr(self, "_print_opts", None) or {}
+        if opts.get("include_decorations", True):
+            try:
+                self._bake_drawings_into_doc(doc, self._decorations_norm_for(pdf_path))
+                self._bake_hyperlinks_into_doc(doc, pdf_path)
+            except Exception:
+                pass
 
         def draw(painter, target, i):
             page = doc.load_page(pages[i])
@@ -8080,22 +8240,33 @@ class MainWindow(QMainWindow):
             pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
             img = QImage(pix.samples, pix.width, pix.height, pix.width * 3,
                          QImage.Format.Format_RGB888).copy()
-            self._draw_image_fit(painter, target, img)
+            self._draw_image_fit(painter, target, img, natural_dpi=200)
+
+        def orient_fn(i):
+            r = doc.load_page(pages[i]).rect
+            return (QPageLayout.Orientation.Landscape if r.width >= r.height
+                    else QPageLayout.Orientation.Portrait)
         try:
-            self._print_render(len(pages), draw)
+            self._print_render(len(pages), draw, orient_fn=orient_fn)
         finally:
             doc.close()
 
     def _print_images(self, paths: list) -> None:
-        from PyQt6.QtGui import QImage
+        from PyQt6.QtGui import QImage, QPageLayout
         paths = [p for p in paths if p and Path(p).exists()]
         if not paths:
             QMessageBox.information(self, "인쇄", "인쇄할 스크린샷이 없습니다.")
             return
+        imgs = [QImage(str(p)) for p in paths]
 
         def draw(painter, target, i):
-            self._draw_image_fit(painter, target, QImage(str(paths[i])))
-        self._print_render(len(paths), draw)
+            self._draw_image_fit(painter, target, imgs[i])
+
+        def orient_fn(i):
+            im = imgs[i]
+            return (QPageLayout.Orientation.Landscape if im.width() >= im.height()
+                    else QPageLayout.Orientation.Portrait)
+        self._print_render(len(paths), draw, orient_fn=orient_fn)
 
     def _ensure_shots_visible(self):
         """260603-3: 스크린샷 항목이 있으면 패널 자동 표시(기본은 숨김)."""
