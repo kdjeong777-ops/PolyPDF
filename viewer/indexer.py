@@ -55,9 +55,12 @@ class PdfIndex:
 
     # --- 스키마 ------------------------------------------------------------
 
+    # 260825: FTS 토크나이저 스키마 버전. trigram 으로 올리면서 1회 전체 재인덱싱.
+    SCHEMA_VERSION = 2
+
     def _init_schema(self):
         cur = self.conn.cursor()
-        cur.executescript(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS files(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,20 +68,26 @@ class PdfIndex:
                 mtime REAL NOT NULL,
                 page_count INTEGER NOT NULL
             );
-            CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
-                text,
-                file_id UNINDEXED,
-                page_index UNINDEXED,
-                tokenize='unicode61 remove_diacritics 0'
-            );
             """
         )
-        # 260618-3: 파일 용량(size) 컬럼 추가 — 수정날짜+용량 변화 없으면 재인덱싱 생략.
-        #   기존 DB(컬럼 없음)는 한 번에 추가하되, 기존 행 size=NULL 은 'mtime 만으로 판단'
-        #   하여 업그레이드 시 전체 재인덱싱(시간 낭비)이 일어나지 않도록 한다.
+        # 260618-3: 파일 용량(size) 컬럼 — 수정날짜+용량 변화 없으면 재인덱싱 생략.
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(files)")}
         if "size" not in cols:
             self.conn.execute("ALTER TABLE files ADD COLUMN size INTEGER")
+        # 260825: FTS5 트라이그램 토크나이저 — LIKE '%…%' 부분일치(한글 포함)를 **색인**으로
+        #   빠르게(기존 unicode61 은 LIKE 전체 스캔). user_version 으로 1회 마이그레이션.
+        uv = int(self.conn.execute("PRAGMA user_version").fetchone()[0] or 0)
+        migrate = uv < self.SCHEMA_VERSION
+        if migrate:
+            self.conn.execute("DROP TABLE IF EXISTS pages_fts")
+        self.conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5("
+            "text, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')"
+        )
+        if migrate:
+            # 토크나이저가 바뀌었으니 전체 재인덱싱 유도(files 비움 → needs_reindex=True)
+            self.conn.execute("DELETE FROM files")
+            self.conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
         self.conn.commit()
 
     # --- 인덱싱 ------------------------------------------------------------
@@ -184,11 +193,14 @@ class PdfIndex:
         # LIKE 와일드카드(%, _, \) 이스케이프 후 부분일치 패턴 구성
         esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{esc}%"
+        # 260825: trigram FTS — `p.text LIKE ?`(컬럼 직접, lower() 미사용)면 3자↑ 질의는
+        #   트라이그램 색인을 사용해 빠름(대소문자 무시=토크나이저 기본). 함수로 감싸면 색인
+        #   최적화가 깨지므로 lower() 를 쓰지 않는다(LIKE 자체가 대소문자 무시).
         sql = """
             SELECT f.path AS path, p.page_index AS page_index, p.text AS text
             FROM pages_fts AS p
             JOIN files AS f ON f.id = p.file_id
-            WHERE lower(p.text) LIKE lower(?) ESCAPE '\\'
+            WHERE p.text LIKE ? ESCAPE '\\'
             ORDER BY f.path, p.page_index
             LIMIT ?
         """

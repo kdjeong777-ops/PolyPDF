@@ -187,6 +187,7 @@ class BookmarkTree(QWidget):
     splitViewRequested = pyqtSignal(bool)    # 260618-25: 1단→2단 진입(True)
     pathDropped = pyqtSignal(str)            # 260618-27: 외부 PDF/폴더 드롭 → 이 창에 열기
     copyPaneRequested = pyqtSignal()         # 260618-27: 이 책갈피창 기준 반대 창으로 복사
+    viewModeChanged = pyqtSignal(bool, str)  # 260825: (is_folder, 폴더|파일 경로) — 파일↔폴더 전환
 
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
@@ -580,6 +581,7 @@ class BookmarkTree(QWidget):
             self.load_folder(folder)
             if f:
                 self._select_top_file(f)
+            self.viewModeChanged.emit(True, str(folder))
         else:
             # 폴더 → 파일: 선택(또는 현재 본문) 파일만 표시
             f = self._current_selected_file()
@@ -587,6 +589,7 @@ class BookmarkTree(QWidget):
                 self.info.setText("파일 모드로 볼 파일을 먼저 선택하세요.")
                 return
             self.load_single_pdf(f)
+            self.viewModeChanged.emit(False, str(f))
 
     def _select_top_file(self, path):
         """최상위 파일 노드 중 path 를 선택·스크롤."""

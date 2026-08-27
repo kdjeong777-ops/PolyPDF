@@ -732,6 +732,11 @@ class _PdfGraphicsView(QGraphicsView):
     def _editing(self) -> bool:
         return bool(getattr(self._owner, "_img_edit", False))
 
+    def _text_sel_ok(self) -> bool:
+        """260825: 텍스트 선택/블럭 허용 여부 — 편집모드라도 '도구 미선택'이면 허용.
+        (펜/도형/지우개/선택 도구가 활성일 때만 드래그가 그리기·이동으로 소비됨.)"""
+        return getattr(self._owner, "_draw_tool", None) is None
+
     def arm_block_select(self, on: bool = True):
         """260617-5: '블럭설정 후 텍스트 복사' — 다음 좌드래그를 사각형 블럭 선택으로(1회).
         좌상→우하 드래그 영역의 텍스트를 복사. 십자 포인터."""
@@ -826,7 +831,7 @@ class _PdfGraphicsView(QGraphicsView):
             pass
         # 260617-5: 블럭설정(무장) → 사각형 러버밴드 시작(단어 선택보다 우선)
         if (self._block_armed and event.button() == Qt.MouseButton.LeftButton
-                and not self._editing()):
+                and self._text_sel_ok()):
             from PyQt6.QtWidgets import QRubberBand
             from PyQt6.QtCore import QRect, QSize
             self._brb_origin = self._press_pos
@@ -835,8 +840,9 @@ class _PdfGraphicsView(QGraphicsView):
             self._brb.setGeometry(QRect(self._brb_origin, QSize()))
             self._brb.show()
             return
-        # 260617-3: 비편집(보기) 모드 좌클릭 → 텍스트 선택 시작점 기록(드래그 시 단어 선택)
-        if (event.button() == Qt.MouseButton.LeftButton and not self._editing()):
+        # 260617-3/260825: 좌클릭 → 텍스트 선택 시작점 기록(드래그 시 단어 선택).
+        #   편집모드라도 도구 미선택이면 허용(뷰어와 동일한 내용 선택·복사).
+        if (event.button() == Qt.MouseButton.LeftButton and self._text_sel_ok()):
             z = getattr(self._owner, "_zoom", 1.0) or 1.0
             sp = self.mapToScene(self._press_pos)
             self._press_scene = (sp.x() / z, sp.y() / z)
@@ -863,7 +869,7 @@ class _PdfGraphicsView(QGraphicsView):
             return
         # 260617-3: 텍스트 선택 종료 — 드래그면 선택 확정(유지), 클릭이면 해제 + 읽기 점프
         if (event.button() == Qt.MouseButton.LeftButton
-                and self._press_scene is not None and not self._editing()):
+                and self._press_scene is not None and self._text_sel_ok()):
             was_drag = self._dragging
             self._press_scene = None
             self._dragging = False

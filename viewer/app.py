@@ -74,8 +74,6 @@ from viewer.widgets.thumbs_list import PageThumbs
 from viewer.widgets.main_view import MainView
 from viewer.widgets.search_panel import SearchBar, SearchResults
 from viewer.widgets.strip import MiniStrip
-from viewer.widgets.settings_dialog import SettingsDialog
-from viewer.widgets.screenshot_pdf_dialog import ScreenshotPdfDialog
 from viewer.widgets.study_panel import StudyPanel
 from viewer import screenshot as ss
 from viewer.resources_path import resource_path
@@ -1005,15 +1003,24 @@ class MainWindow(QMainWindow):
             pass
 
     def _update_title(self):
-        """제목 — 2단이면 '좌측폴더 | 우측폴더'(우측 없으면 좌측만)."""
+        """제목 — 2단이면 '좌측폴더 | 우측폴더'(우측 없으면 좌측만) + 현재 본문 파일명."""
         try:
             lf = getattr(self, "_folder", None)
             left = str(lf) if lf else ""
             if getattr(self, "_split_on", False) and getattr(self, "_folder_right", None) \
                     and (not lf or str(Path(self._folder_right)) != str(Path(lf))):
-                title = f"{left}  |  {self._folder_right}"
+                base = f"{left}  |  {self._folder_right}"
             else:
-                title = left
+                base = left
+            parts = [p for p in (base,) if p]
+            # 260825: 현재 본문 파일명도 표시(다른 파일 선택 시 제목 갱신)
+            try:
+                cur = self.main_view.current_file() if self.main_view else None
+                if cur and str(cur).lower().endswith(".pdf"):
+                    parts.append(Path(cur).name)
+            except Exception:
+                pass
+            title = "  —  ".join(parts)
             self.setWindowTitle(f"PolyPDF  v{__version__}" + (f"  —  {title}" if title else ""))
         except Exception:
             pass
@@ -1400,6 +1407,12 @@ class MainWindow(QMainWindow):
                 self._view_acts = {}
             self._view_acts[_label] = _a
 
+        # 260825: 뷰어 옵션(우클릭) 메뉴를 단축키로 — 보기 메뉴에 노출(단축키 표시) + 설정 등록
+        m_view.addSeparator()
+        self._sc_act_option_menu = QAction("옵션 메뉴 (현재 페이지)", self)
+        self._sc_act_option_menu.triggered.connect(self._show_viewer_option_menu)
+        m_view.addAction(self._sc_act_option_menu)
+
         # 260606-8: 2분할 보기 상태 act (메뉴엔 표시 안 함 — 보기 메뉴/툴바로 제어, 상태 동기화용)
         self.act_split = QAction("🗗 2단 보기", self)
         self.act_split.setCheckable(True)
@@ -1519,6 +1532,7 @@ class MainWindow(QMainWindow):
             ("search_focus",  ("검색바 포커스", "Ctrl+F", "탐색")),
             ("next_match",    ("다음 매치", "F3", "탐색")),
             ("prev_match",    ("이전 매치", "Shift+F3", "탐색")),
+            ("option_menu",   ("옵션 메뉴(우클릭)", "Shift+F10", "탐색")),
             ("toggle_split",  ("2단 보기", "Ctrl+Shift+2", "보기")),
             ("present",       ("발표보기", "F5", "보기")),
             ("capture",       ("화면 캡처", "Ctrl+Shift+S", "캡처·저장")),
@@ -1545,6 +1559,7 @@ class MainWindow(QMainWindow):
             "search_focus": ("func", self._focus_search),
             "next_match": ("func", self._global_next_match),
             "prev_match": ("func", self._global_prev_match),
+            "option_menu": ("action", self._sc_act_option_menu),
             "capture": ("func", lambda: self._do_capture(self.main_view)),
             "save_shots_pdf": ("func", self.action_save_screenshot_pdf),
             "clipboard_save": ("func", self._on_clipboard_save),
@@ -1914,6 +1929,7 @@ class MainWindow(QMainWindow):
         # v1.6.21: 파일 작업 핸드셰이크 (메인이 열고 있는 파일도 작업 가능)
         self.bookmark_tree.releaseFileRequested.connect(self._on_release_file)
         self.bookmark_tree.fileOpCompleted.connect(self._on_file_op_completed)
+        self.bookmark_tree.viewModeChanged.connect(self._on_view_mode_changed)  # 260825
         self.bookmark_tree.filePasswordEntered.connect(self._on_file_password_entered)  # 260618-1
         self._released_state = None    # (path, page_index) — 작업 직전 닫은 파일 기억
 
@@ -2833,6 +2849,18 @@ class MainWindow(QMainWindow):
             return
         self._prompt_add_bookmark(cur, int(page_index) + 1)
 
+    def _show_viewer_option_menu(self):
+        """260825: 뷰어 옵션(우클릭) 메뉴를 단축키/메뉴로 표시 — 현재 뷰 중앙 위치."""
+        mv = self.main_view
+        if mv is None:
+            return
+        try:
+            gp = mv.mapToGlobal(mv.rect().center())
+        except Exception:
+            from PyQt6.QtGui import QCursor as _QC
+            gp = _QC.pos()
+        self._on_viewer_context_menu(gp)
+
     def _on_viewer_context_menu(self, global_pos):
         """260606-4: 뷰어 우클릭 메뉴. 책갈피 추가(편집모드) + 하이퍼링크 등록(260609-3)."""
         cur = self.main_view.current_file() if self.main_view else None
@@ -3240,6 +3268,46 @@ class MainWindow(QMainWindow):
         """260616-3: 경로 비교용 정규화(대소문자·구분자·.. 정리)."""
         return os.path.normcase(os.path.normpath(str(p)))
 
+    def _on_view_mode_changed(self, is_folder: bool, path: str) -> None:
+        """260825: 책갈피창 파일↔폴더 모드 전환 시 검색 범위·인덱싱·제목 갱신.
+
+        - 폴더 모드: 그 폴더 전체를 검색 범위로 확장하고 폴더를 인덱싱(폴더 전체 검색).
+        - 파일 모드: 그 파일만 검색 범위·인덱싱.
+        """
+        try:
+            p = Path(path)
+            if is_folder:
+                self._folder = p
+                try:
+                    order_map = self._build_bookmark_order(p / "bookmarks.json")
+                    self.search_results.set_bookmark_order(order_map)
+                except Exception:
+                    pass
+                self._refresh_search_scope()          # 트리=폴더 → 범위 확장
+                try:
+                    self._cancel_active_indexing()
+                    worker = IndexWorker(self._db_path, p)
+                    worker.progress.connect(self._on_index_progress)
+                    worker.finished.connect(self._on_index_finished)
+                    worker.error.connect(
+                        lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+                    self._start_index_worker(worker)
+                except Exception:
+                    pass
+            else:
+                self._folder = p.parent
+                self._refresh_search_scope()          # 트리=단일 → 그 파일만
+                try:
+                    self._cancel_active_indexing()
+                    worker = IndexWorker(self._db_path, p.parent, single_file=p)
+                    worker.error.connect(lambda e: None)
+                    self._start_index_worker(worker)
+                except Exception:
+                    pass
+            self._update_title()
+        except Exception:
+            pass
+
     def _refresh_search_scope(self) -> None:
         """260616-3: 검색 범위를 현재 책갈피 트리에 표시된 파일들로 한정.
         파일이 없으면 None(전체 인덱스 검색)."""
@@ -3368,11 +3436,16 @@ class MainWindow(QMainWindow):
 
     def _focus_search(self):
         """260708: Ctrl+F — 우측 패널(건설기준/법령/특허) 열려 있으면 슬라이드 오버레이,
-        아니면 기존 PDF 검색바 포커스."""
+        아니면 PDF 검색바 포커스. 260825: 검색 영역이 숨겨져 있으면 먼저 표시."""
         if self._content_panel is not None:
             self._open_content_find()
-        else:
-            self.search_bar.focus_search()
+            return
+        try:
+            if not self.search_bar.isVisible():
+                self._vm_search()           # 검색 영역이 안 보이면 표시
+        except Exception:
+            pass
+        self.search_bar.focus_search()
 
     def _open_content_find(self, seed=None):
         """우측 패널 본문 검색 오버레이(슬라이드)를 연다 — 검색 입력·개수·이동·결과 목록.
@@ -3561,6 +3634,7 @@ class MainWindow(QMainWindow):
                     pass
             self._current_main = item
             self.status.showMessage(f"로드 완료: {path.name}", 2500)
+            self._update_title()                               # 260825: 현재 파일명 제목 반영
             self._refresh_page_hyperlinks(self._active_pane)   # 260609-3
             if path.suffix.lower() == ".pdf":
                 self._refresh_hidden_ui(str(path))             # 260609-14(D5)
@@ -8121,6 +8195,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "안내", "저장할 스크린샷이 없습니다.")
             return
         # v1.6.4 C1: 저장 옵션 대화상자 (검색어 형광펜 / 상단 파일명 / 하단 페이지번호)
+        from viewer.widgets.screenshot_pdf_dialog import ScreenshotPdfDialog  # 260825: 지연 임포트
         dlg = ScreenshotPdfDialog(self._prefs, self)
         if dlg.exec() != dlg.DialogCode.Accepted:
             return
