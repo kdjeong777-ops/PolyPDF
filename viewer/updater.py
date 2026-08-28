@@ -167,6 +167,14 @@ def _to_info(rel):
         asset_url, asset_name = None, ""
     # 260628(A): 같은 릴리스의 '<자산명>.sha256' 무결성 파일(있으면).
     sha_url = ""
+    # 260628-12(U8): 잔존 파일 정리용 정식 파일목록(있으면). 없으면 정리는 생략된다.
+    man_url = ""
+    for a in assets:
+        if str(a.get("name") or "").lower().endswith(".manifest.txt"):
+            man_url = a.get("browser_download_url") or ""
+            break
+    if man_url and not is_trusted_asset_url(man_url):
+        man_url = ""
     if asset_name:
         want = (asset_name + ".sha256").lower()
         for a in assets:
@@ -182,8 +190,32 @@ def _to_info(rel):
         "asset_url": asset_url,
         "asset_name": asset_name,
         "sha_url": sha_url,
+        "manifest_url": man_url,        # 260628-12(U8)
         "html_url": str(rel.get("html_url") or ""),
     }
+
+
+def fetch_manifest(info: dict, timeout: float = 20.0) -> str:
+    """260628-12(U8): 릴리스의 `*.manifest.txt`(정식 파일목록)를 임시파일로 받아 경로 반환.
+
+    없거나 실패하면 `""` — 그러면 설치 도우미가 **정리를 통째로 건너뛴다**(안전 실패).
+    목록은 반드시 **full 빌드 기준**이어야 한다. update zip 기준으로 만들면 무거운 자산
+    (ffmpeg·tesseract 등)이 목록에 없어 지워진다."""
+    url = str((info or {}).get("manifest_url") or "")
+    if not url or not is_trusted_asset_url(url):
+        return ""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = r.read()
+        if not data or len(data.splitlines()) < 500:      # 잘린 목록이면 쓰지 않는다
+            return ""
+        path = os.path.join(tempfile.gettempdir(), "polypdf_update_manifest.txt")
+        with open(path, "wb") as f:
+            f.write(data)
+        return path
+    except Exception:
+        return ""
 
 
 def fetch_expected_sha256(info: dict, timeout: float = 10.0) -> str:
@@ -323,6 +355,7 @@ $url     = _b64 "__URL_B64__"
 $install = _b64 "__INSTALL_B64__"
 $exe     = _b64 "__EXE_B64__"
 $expSha  = _b64 "__SHA_B64__"     # 260628(A): 기대 SHA-256(hex). 빈 값이면 검증 생략.
+$manPath = _b64 "__MANIFEST_B64__"  # 260628-12(U8): 정식 파일목록 경로. 빈 값이면 정리 생략.
 
 function Test-ZipHash([string]$path, [string]$want) {
     # 260628(A): 압축 해제 **직전** 해시 검증. 승격(UAC) 인스턴스에서도 다시 수행해야
@@ -526,6 +559,58 @@ try {
         "PolyPDF 업데이트") | Out-Null
 }
 
+# ── 260628-12 (U8): 잔존 파일 정리 ────────────────────────────────────────
+#   업데이트는 '덮어쓰기 전용'이라, 새 버전에서 없어진 파일이 설치 폴더에 영구히 남는다.
+#   특히 _internal 의 옛 .pyd/.dll 은 새 것과 공존하다 로드 순서에 따라 '깨끗한 설치에선
+#   되는데 업데이트한 기기에서만 깨지는' 증상을 만든다.
+#   → 릴리스가 제공한 **정식 파일목록(manifest)** 에 없는 파일만 지운다.
+#
+#   ★ 안전장치 — 하나라도 어긋나면 **정리를 통째로 건너뛴다**(업데이트 자체는 성공 처리).
+#     a) manifest 가 없거나 못 읽으면 생략 — 옛 릴리스로의 업데이트에서 오작동 금지
+#     b) 항목이 500개 미만이면 생략 — 잘린 목록으로 대량 삭제하는 사고 방지
+#     c) 삭제 대상이 전체의 40% 를 넘으면 생략 — 목록이 엉뚱할 때의 최후 방어
+#     d) 실행 중인 exe 는 절대 대상에서 제외
+#     e) 개별 삭제 실패는 무시(권한 등) — 업데이트를 실패로 만들지 않는다
+if ($fail -eq 0 -and -not [string]::IsNullOrEmpty($manPath) -and (Test-Path $manPath)) {
+    try {
+        $lbl.Text = "정리 중..."; [System.Windows.Forms.Application]::DoEvents()
+        $keep = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+        foreach ($ln in [IO.File]::ReadAllLines($manPath)) {
+            $t = $ln.Trim().TrimStart('.').TrimStart('\','/')
+            if ($t) { [void]$keep.Add(($t -replace '/', '\')) }
+        }
+        if ($keep.Count -lt 500) { throw 'manifest too small' }        # (b)
+        $root = [IO.Path]::GetFullPath($install).TrimEnd('\') + '\'
+        $all = @(Get-ChildItem -LiteralPath $install -Recurse -File -Force -ErrorAction SilentlyContinue)
+        $stale = @()
+        foreach ($f in $all) {
+            $rel = $f.FullName.Substring($root.Length)
+            if ($keep.Contains($rel)) { continue }
+            if ($f.FullName -ieq $exe) { continue }                    # (d)
+            $stale += $f.FullName
+        }
+        if ($all.Count -gt 0 -and ($stale.Count / $all.Count) -gt 0.40) { throw 'too many stale' }  # (c)
+        $removed = 0
+        foreach ($p in $stale) {
+            try { Remove-Item -LiteralPath $p -Force -ErrorAction Stop; $removed++ } catch { }   # (e)
+        }
+        # 빈 폴더 정리(실패 무시)
+        foreach ($d in (Get-ChildItem -LiteralPath $install -Recurse -Directory -Force -ErrorAction SilentlyContinue |
+                        Sort-Object { $_.FullName.Length } -Descending)) {
+            try {
+                if (-not (Get-ChildItem -LiteralPath $d.FullName -Force -ErrorAction SilentlyContinue)) {
+                    Remove-Item -LiteralPath $d.FullName -Force -ErrorAction Stop
+                }
+            } catch { }
+        }
+        [IO.File]::AppendAllText("$env:TEMP\polypdf_update_cleanup.log",
+            ("{0}  manifest={1} files={2} stale={3} removed={4}`r`n" -f (Get-Date -Format s), $keep.Count, $all.Count, $stale.Count, $removed))
+    } catch {
+        [IO.File]::AppendAllText("$env:TEMP\polypdf_update_cleanup.log",
+            ("{0}  cleanup skipped: {1}`r`n" -f (Get-Date -Format s), $_.Exception.Message))
+    }
+}
+
 if ($fail -eq 0) {
     $bar.Value = 100; $lbl.Text = "설치 완료 — 프로그램을 다시 시작합니다."
     [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 700
@@ -557,7 +642,8 @@ def pending_zip_path() -> Path:
     return Path(d) / "PolyPDF-update.zip"
 
 
-def apply_update(zip_path: str = None, url: str = "", sha256: str = "") -> bool:
+def apply_update(zip_path: str = None, url: str = "", sha256: str = "",
+                 manifest_path: str = "") -> bool:
     """260618-17/24: 실행 중 교체 — **진행률 바 GUI 설치 창**(PowerShell WinForms, 콘솔 숨김).
     앱 종료 대기 → (zip 없으면 url 에서 다운로드, 진행바만) → 압축 해제(설치) → 재실행.
     성공 시 True(설치 도우미 기동) 반환 후 호출측이 앱을 종료해야 함. zip_path/url 중 하나는 있어야 함."""
@@ -582,7 +668,10 @@ def apply_update(zip_path: str = None, url: str = "", sha256: str = "") -> bool:
               .replace("__URL_B64__", _b64(url or ""))
               .replace("__INSTALL_B64__", _b64(inst))
               .replace("__EXE_B64__", _b64(exe))
-              .replace("__SHA_B64__", _b64(str(sha256 or "").strip().lower())))
+              .replace("__SHA_B64__", _b64(str(sha256 or "").strip().lower()))
+              # 260628-12(U8): 정식 파일목록. 없으면 빈 값 → 정리 생략(안전).
+              .replace("__MANIFEST_B64__", _b64(manifest_path if (manifest_path and
+                                                os.path.isfile(manifest_path)) else "")))
     try:
         # PS5.1 이 한글을 정확히 읽도록 UTF-8 BOM 으로 기록
         with open(ps1, "w", encoding="utf-8-sig", newline="\r\n") as f:

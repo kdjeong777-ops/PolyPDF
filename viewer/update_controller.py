@@ -209,7 +209,15 @@ class UpdateMixin:
                 sha = updater.fetch_expected_sha256(info)
         except Exception:
             sha = ""
-        ok = updater.apply_update(zip_path=zp, url=info.get("asset_url", ""), sha256=sha)
+        # 260628-12(U8): 릴리스가 제공하면 **정식 파일목록**을 함께 넘겨, 새 버전에서
+        #   없어진 파일을 설치 도우미가 지운다. 없으면 빈 값 → 정리 생략(안전 실패).
+        man = ""
+        try:
+            man = updater.fetch_manifest(info)
+        except Exception:
+            man = ""
+        ok = updater.apply_update(zip_path=zp, url=info.get("asset_url", ""), sha256=sha,
+                                  manifest_path=man)
         if ok:
             self._updating = True
         return ok

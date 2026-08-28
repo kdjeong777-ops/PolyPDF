@@ -4892,6 +4892,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 환경설정 적용 (v1.6.2: history 관련 키 제거)
         self._prefs = dict(data.get("preferences", {}))
         self._prefs.setdefault("restore_session", True)
+        self._prefs.setdefault("start_view_single", True)   # 260628-13: 시작 시 1단+쪽맞춤
         self._prefs.setdefault("restore_last_page", True)
         self._prefs.setdefault("restore_screenshots", True)
         self._prefs.setdefault("screenshot_max", 30)
@@ -5087,6 +5088,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             except Exception:
                 pass
 
+        self._apply_start_view()      # 260628-13: 시작 보기 상태(1단 + 쪽 맞춤)
+
+    def _apply_start_view(self):
+        """260628-13(사용자 요청): 프로그램을 켜면 **'1단' + 쪽 맞춤**으로 시작한다.
+
+        마지막 세션의 레이아웃을 그대로 복원하면 2단이거나 검색·스크린샷 패널이 열린 채
+        떠서 첫 화면이 어수선했다. `_vm_single()` 은 패널 툴바의 '1단' 버튼과 **같은 동작**
+        (2단 해제 + 검색·스크린샷 패널 숨김 + 우측 레이아웃 동기화)이라 별도 로직을 두지 않는다.
+
+        ※ 세션 복원(`_load_main`)이 **끝난 뒤** 불러야 한다 — 문서를 열면서 맞춤 모드가
+          다시 잡히므로, 먼저 부르면 덮어써진다.
+        ※ 끄고 싶으면 `start_view_single=False` — 그러면 종전처럼 저장된 레이아웃을 따른다.
+        """
+        if not self._prefs.get("start_view_single", True):
+            return
+        try:
+            self._vm_single()
+        except Exception:
+            pass
+        for mv in getattr(self, "_mv", []):
+            try:
+                mv.set_fit_mode(mv.FIT_PAGE)      # 콤보 표시까지 함께 갱신된다
+            except Exception:
+                pass
+
     # ===== 설정 (v1.5.1) ===============================================
     def action_open_settings(self):
         # 260628(FIX): `SettingsDialog` 가 어디에서도 import 되지 않아 이 메서드를 호출하면
@@ -5111,6 +5137,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return bool(prefs.get(k, old.get(k, False)))
         self._prefs = {
             "restore_session": prefs.get("restore_session", True),
+            # 260628-13: 허용목록 방식이라 여기 없으면 저장되지 않는다.
+            "start_view_single": bool(prefs.get("start_view_single",
+                                              old.get("start_view_single", True))),
             "restore_last_page": prefs.get("restore_last_page", True),
             "restore_screenshots": prefs.get("restore_screenshots", True),
             "screenshot_max": int(prefs.get("screenshot_max", 30)),
