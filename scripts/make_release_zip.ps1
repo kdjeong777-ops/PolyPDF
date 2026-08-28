@@ -36,10 +36,21 @@ Write-Host "update zip 생성 중 ..."
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $upd -CompressionLevel Optimal
 Remove-Item $stage -Recurse -Force
 
+# 260628(보안 A): 무결성 검증용 SHA-256 사이드카 — 앱이 '<자산명>.sha256' 을 찾아
+#   다운로드 직후 + 압축 해제 직전(승격 인스턴스 포함) 검증한다. **반드시 함께 업로드**.
+$shas = @()
+foreach ($z in @($full, $upd)) {
+    $h = (Get-FileHash -LiteralPath $z -Algorithm SHA256).Hash.ToLower()
+    $sp = "$z.sha256"
+    "$h  $(Split-Path $z -Leaf)" | Out-File -FilePath $sp -Encoding ascii -NoNewline
+    $shas += $sp
+}
+
 $mbF = [math]::Round((Get-Item $full).Length/1MB,1)
 $mbU = [math]::Round((Get-Item $upd).Length/1MB,1)
 Write-Host ""
 Write-Host "생성 완료 (v$ver):"
 Write-Host "  $full   ($mbF MB)  ← 첫 설치 배포용"
 Write-Host "  $upd    ($mbU MB)  ← 자동 업데이트용(앱이 이걸 우선 받음)"
-Write-Host "업로드: gh release create v$ver `"$full`" `"$upd`" --title `"PolyPDF v$ver`" --generate-notes"
+Write-Host "  + .sha256 2개 (무결성 검증용 — 빠지면 앱이 검증을 생략함)"
+Write-Host "업로드: gh release create v$ver `"$full`" `"$upd`" `"$($shas[0])`" `"$($shas[1])`" --title `"PolyPDF v$ver`" --generate-notes"

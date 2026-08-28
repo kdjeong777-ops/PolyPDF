@@ -70,8 +70,17 @@ jobs:
           }
           $upd = "PolyPDF-$tag-win64-update.zip"
           Compress-Archive -Path "$stage\*" -DestinationPath $upd -Force
+          # 260628(보안 A): 자동 업데이트 무결성 검증용 SHA-256 자산.
+          #   앱은 '<자산명>.sha256' 을 찾아 다운로드 직후 + **압축 해제 직전(승격 인스턴스 포함)**
+          #   다시 검증한다. 형식은 sha256sum 관례(`<hex>  <파일명>`).
+          foreach ($z in @($full, $upd)) {
+            $h = (Get-FileHash -LiteralPath $z -Algorithm SHA256).Hash.ToLower()
+            "$h  $z" | Out-File -FilePath "$z.sha256" -Encoding ascii -NoNewline
+          }
           echo "full=$full" >> $env:GITHUB_OUTPUT
           echo "upd=$upd" >> $env:GITHUB_OUTPUT
+          echo "fullsha=$full.sha256" >> $env:GITHUB_OUTPUT
+          echo "updsha=$upd.sha256" >> $env:GITHUB_OUTPUT
 
       # --- 설치 프로그램(setup.exe): Program Files 설치 + PDF 기본앱 연결 + API키 안내 ---
       - name: Build installer (Inno Setup)
@@ -106,7 +115,8 @@ jobs:
           $upd  = "${{ steps.pkg.outputs.upd }}"
           $setup = "${{ steps.inst.outputs.setup }}"
           # 자산 목록(설치본은 빌드된 경우에만 포함)
-          $assets = @($full, $upd)
+          # 260628(A): .sha256 자산도 함께 게시 — 없으면 앱이 무결성 검증을 생략한다.
+          $assets = @($full, $upd, "${{ steps.pkg.outputs.fullsha }}", "${{ steps.pkg.outputs.updsha }}")
           if ($setup -and (Test-Path $setup)) { $assets += $setup }
           # 이미 릴리스가 있으면 없는 자산만 보충(수동 자산 보존). 없으면 새로 생성.
           gh release view $tag *> $null

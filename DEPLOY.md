@@ -5,9 +5,10 @@
 
 이 저장소에는 이미 **GitHub Actions 워크플로**가 있어, **버전 태그를 push 하면
 자동으로 Windows 빌드 → zip → Release 업로드**까지 됩니다.
-- `.github/workflows/release.yml` : 태그 `v*` push 시 빌드 후 **두 자산** 업로드 —
+- `.github/workflows/release.yml` : 태그 `v*` push 시 빌드 후 **두 자산 + 각 해시** 업로드 —
   `PolyPDF-<tag>-win64.zip`(전체=첫 설치용)과 `PolyPDF-<tag>-win64-update.zip`(업데이트용, 무거운
-  불변부 제외). v2.26.0부터 **ffmpeg·Tesseract 재동봉**(다운로드+은밀실행을 Defender 가 차단하던 문제 회피).
+  불변부 제외), 그리고 **`<각 zip>.sha256`**. v2.26.0부터 **ffmpeg·Tesseract 재동봉**(다운로드+은밀실행을 Defender 가 차단하던 문제 회피).
+- **★ `.sha256` 자산은 보안 필수(260628)**: 앱이 이 파일로 ① 다운로드 직후, ② **압축 해제 직전(관리자 승격 인스턴스에서 다시)** 무결성을 검증한다. ②가 UAC 승인 대기 중 zip 바꿔치기(권한상승)를 막는 핵심이다. **해시 자산을 빠뜨리면 앱은 검증 없이 설치**하므로(구 릴리스 하위호환), 수동 릴리스에서도 반드시 함께 올릴 것 — `scripts/make_release_zip.ps1` 이 자동 생성하고 업로드 명령을 출력한다. 또한 자산 URL 이 **github.com 계열이 아니면 업데이트를 아예 하지 않는다**(안전한 실패).
 - `.github/workflows/ci.yml` : push/PR 마다 오프스크린 GUI 회귀 테스트.
 
 ---
@@ -71,7 +72,7 @@ CI를 쓰지 않거나 빠르게 올릴 때:
 ```powershell
 .\build_ci.bat
 powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # full + update zip 2종 생성
-gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip --title "PolyPDF v2.26.0" --generate-notes
+gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip PolyPDF-v2.26.0-win64.zip.sha256 PolyPDF-v2.26.0-win64-update.zip.sha256 --title "PolyPDF v2.26.0" --generate-notes
 #   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.26.0 → 두 zip 업로드)
 ```
 

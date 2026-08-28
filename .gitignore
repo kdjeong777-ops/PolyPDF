@@ -15,6 +15,9 @@ env/
 build/
 dist/
 *.spec.bak
+# 260628: PolyPDF.spec 은 build_ci.bat 실행 시 PyInstaller 가 **매번 자동 재생성**하는
+#   산출물이다(수동 편집·주석은 다음 빌드에서 사라짐). 권위 있는 빌드 설정은 build_ci.bat.
+PolyPDF.spec
 
 # Large bundled runtime deps (download/install separately — see README)
 ffmpeg.exe

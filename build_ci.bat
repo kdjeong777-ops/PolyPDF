@@ -1,5 +1,8 @@
 @echo off
 setlocal
+REM 260628-2: 이 파일은 UTF-8 로 저장돼 있다. 콘솔 코드페이지를 UTF-8 로 맞추지 않으면
+REM   아래 한글 [ERROR]/[WARN] 메시지가 깨져 나와 빌드 실패 원인을 읽을 수 없다.
+chcp 65001 >nul
 
 REM 260616: 빌드(PyInstaller·python 워커) 우선순위 High 로 상향 — CPU 경쟁 시 분석 단계가
 REM   극단적으로 느려지던 문제 완화(무관리자). ※ Windows 는 High 부모의 자식을 Normal 로 만들므로
@@ -51,8 +54,8 @@ if errorlevel 1 ( echo [ERROR] pip upgrade failed. & exit /b 1 )
 echo.
 echo [3/5] Installing PyQt6, PyMuPDF, openpyxl, Pillow, pdfplumber, pypdfium2,
 echo       pypdf, send2trash, PyInstaller... (~180 MB)
-REM v1.6.2: Pillow 가 requirements.txt ???�함?�어 ?�음 (PyInstaller ?�이�?변?�용).
-REM v1.6.16~21: pdf_bookmarker ?�존??pdfplumber/pypdfium2/pypdf) + send2trash ???�봉.
+REM v1.6.2: Pillow 가 requirements.txt 에 포함되어 있음 (PyInstaller 아이콘 변환용).
+REM v1.6.16~21: pdf_bookmarker 의존성(pdfplumber/pypdfium2/pypdf) + send2trash 도 동봉.
 python -m pip install -r requirements.txt pyinstaller
 if errorlevel 1 ( echo [ERROR] Package install failed. & exit /b 1 )
 
@@ -62,9 +65,9 @@ if not exist "resources\icon.ico" (
     if exist "resources\icon.png" (
         echo Generating icon.ico from icon.png ...
         python -c "from PIL import Image; im=Image.open('resources/icon.png').convert('RGBA'); im.save('resources/icon.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
-        if errorlevel 1 ( echo [ERROR] icon.ico 변???�패. Pillow 가 ?�치?�었?��? ?�인. & exit /b 1 )
+        if errorlevel 1 ( echo [ERROR] icon.ico 변환 실패. Pillow 가 설치되었는지 확인. & exit /b 1 )
     ) else (
-        echo [WARN] resources\icon.png ???�습?�다. ?�이�??�이 빌드?�니??
+        echo [WARN] resources\icon.png 도 없습니다. 아이콘 없이 빌드합니다.
     )
 )
 
@@ -76,13 +79,13 @@ if exist "dist"  rmdir /s /q "dist"
 if exist "PolyPDF.spec" del "PolyPDF.spec"
 if exist "Smart_PDF_Viewer.spec" del "Smart_PDF_Viewer.spec"
 
-REM v1.6.2: __pycache__ ?�리 (stale .pyc 가 번들???�이??�?방�?)
+REM v1.6.2: __pycache__ 정리 (stale .pyc 가 번들에 섞이는 것 방지)
 for /d /r %%d in (__pycache__) do @if exist "%%d" rmdir /s /q "%%d"
 
-REM v1.6.2: 빌드 ??syntax 검�???깨진 ?�스가 EXE ???�어가 ?��???SyntaxError ?�는 �?방�?
+REM v1.6.2: 빌드 전 syntax 검증 — 깨진 소스가 EXE 에 들어가 런타임 SyntaxError 나는 것 방지
 echo Verifying source syntax...
 python -m py_compile main.py
-if errorlevel 1 ( echo [ERROR] main.py 가 컴파?�되지 ?�습?�다. & exit /b 1 )
+if errorlevel 1 ( echo [ERROR] main.py 가 컴파일되지 않습니다. & exit /b 1 )
 for %%f in (viewer\app.py viewer\history.py viewer\indexer.py viewer\pdf_doc.py ^
             viewer\screenshot.py viewer\settings_store.py viewer\workers.py ^
             viewer\resources_path.py viewer\bookmarker_bridge.py ^
@@ -95,22 +98,22 @@ for %%f in (viewer\app.py viewer\history.py viewer\indexer.py viewer\pdf_doc.py 
             viewer\widgets\study_panel.py viewer\study\__init__.py ^
             viewer\study\ocr.py viewer\study\vocab.py viewer\study\study_store.py) do (
     python -m py_compile %%f
-    if errorlevel 1 ( echo [ERROR] %%f 가 컴파?�되지 ?�습?�다. & exit /b 1 )
+    if errorlevel 1 ( echo [ERROR] %%f 가 컴파일되지 않습니다. & exit /b 1 )
 )
 echo  All source files compile OK.
 
-REM v1.6.2: --icon ??.ico �?변�? Pillow 가 ?�어???�전 변?�된 ico �??�용.
-REM         resources ?�더??--add-data �??�봉?�어 ?��??�에 icon.png ???�근 가??
+REM v1.6.2: --icon 을 .ico 로 변경. Pillow 가 없어도 사전 변환된 ico 를 사용.
+REM         resources 폴더는 --add-data 로 동봉되어 런타임에 icon.png 도 접근 가능.
 set ICON_ARG=
 if exist "resources\icon.ico" set ICON_ARG=--icon "resources/icon.ico"
 
-REM v1.7.0 ?�어?�습: Tesseract ?�리 + NLTK WordNet ?�이???�봉 (계획??§14.5/§8.3).
-REM   개발?��? 빌드 ???�음??준�?
-REM   1) tesseract\  ?�더??portable Tesseract (Library\bin\*.dll + tesseract.exe,
-REM      share\tessdata\{eng,kor}.traineddata). micromamba env ??Library/share �?복사.
-REM      ?? study_spike\mamba\envs\ocr ??Library, share �?build ?�더 tesseract\ �?
-REM   2) nltk_data\  ?�더??WordNet (python -m nltk.downloader -d nltk_data wordnet omw-1.4).
-REM   ?��??��? viewer\study\ocr.py 가 sys._MEIPASS\tesseract ?�서 ?�동 ?�색, NLTK ??nltk_data.
+REM v1.7.0 단어학습: Tesseract 트리 + NLTK WordNet 데이터 동봉 (계획서 §14.5/§8.3).
+REM   개발자가 빌드 전 다음을 준비:
+REM   1) tesseract\  폴더에 portable Tesseract (Library\bin\*.dll + tesseract.exe,
+REM      share\tessdata\{eng,kor}.traineddata). micromamba env 의 Library/share 를 복사.
+REM      예) study_spike\mamba\envs\ocr 의 Library, share 를 build 폴더 tesseract\ 로.
+REM   2) nltk_data\  폴더에 WordNet (python -m nltk.downloader -d nltk_data wordnet omw-1.4).
+REM   런타임은 viewer\study\ocr.py 가 sys._MEIPASS\tesseract 에서 자동 탐색, NLTK 는 nltk_data.
 REM 260618-14: ffmpeg(녹화)/Tesseract(OCR) 재동봉 — 다운로드+은밀실행 패턴을 Defender 가
 REM   차단하던 문제 회피(번들은 사용자가 직접 푼 앱의 일부라 차단 확률↓). 용량은 커짐.
 REM   (구성요소 설치 기능은 선택적 폴백으로 유지 — 번들이 있으면 그걸 우선 사용)
@@ -122,12 +125,12 @@ if exist "nltk_data"                    set NLTK_ARG=--add-data "nltk_data;nltk_
 set FFMPEG_ARG=
 if exist "ffmpeg.exe"                   set FFMPEG_ARG=--add-binary "ffmpeg.exe;."
 
-REM v1.6.2 빌드 ?�러 ?�정: viewer ?�키지�??��? import 경로???�출.
-REM   - `--paths "."` 만으로는 PyInstaller modulegraph �??��??�고,
-REM     `--collect-submodules viewer` 가 ?�출?�는 Python ?��? import 가 viewer �?�?찾아
-REM     ?�제 번들?�서 viewer.app ?�이 ?�락?�는 ?�상???�었??
-REM   - PYTHONPATH ?�경변??+ ?��? 경로 --paths "%cd%" �??�쪽 모두 ?�결.
-REM   - 추�?�?viewer/ ?�더 ?�체�?--add-data �??�이???�봉 (?��???sys.path ?�백??.
+REM v1.6.2 빌드 에러 수정: viewer 패키지를 표준 import 경로에 노출.
+REM   - `--paths "."` 만으로는 PyInstaller modulegraph 만 인지하고,
+REM     `--collect-submodules viewer` 가 호출하는 Python 표준 import 가 viewer 를 못 찾아
+REM     실제 번들에서 viewer.app 등이 누락되는 현상이 있었음.
+REM   - PYTHONPATH 환경변수 + 절대 경로 --paths "%cd%" 로 양쪽 모두 해결.
+REM   - 추가로 viewer/ 폴더 전체를 --add-data 로 데이터 동봉 (런타임 sys.path 폴백용).
 set "PYTHONPATH=%cd%;%PYTHONPATH%"
 
 pyinstaller ^
@@ -156,81 +159,7 @@ pyinstaller ^
     %NLTK_ARG% ^
     %ICON_ARG% ^
     --hidden-import viewer ^
-    --hidden-import viewer.app ^
-    --hidden-import viewer.history ^
-    --hidden-import viewer.indexer ^
-    --hidden-import viewer.pdf_doc ^
-    --hidden-import viewer.screenshot ^
-    --hidden-import viewer.settings_store ^
-    --hidden-import viewer.workers ^
-    --hidden-import viewer.updater ^
-    --hidden-import viewer.components ^
-    --hidden-import viewer.resources_path ^
-    --hidden-import viewer.global_hotkey ^
-    --hidden-import viewer.bookmarker_bridge ^
-    --hidden-import viewer._vendor ^
-    --hidden-import viewer._vendor.pdf_bookmarker ^
-    --hidden-import viewer._vendor.pdf_bookmarker.core ^
-    --hidden-import viewer._vendor.pdf_bookmarker.auto ^
-    --hidden-import viewer._vendor.pdf_bookmarker.toc_extractor ^
-    --hidden-import viewer._vendor.pdf_bookmarker.font_extractor ^
-    --hidden-import viewer._vendor.pdf_bookmarker.pdf_writer ^
-    --hidden-import viewer.widgets ^
-    --hidden-import viewer.widgets.bookmark_tree ^
-    --hidden-import viewer.widgets.main_view ^
-    --hidden-import viewer.widgets.search_panel ^
-    --hidden-import viewer.widgets.settings_dialog ^
-    --hidden-import viewer.widgets.help_dialog ^
-    --hidden-import viewer.widgets.favorites_dialog ^
-    --hidden-import viewer.widgets.strip ^
-    --hidden-import viewer.widgets.thumbs_list ^
-    --hidden-import viewer.widgets.bookmarker_dialog ^
-    --hidden-import viewer.widgets.screenshot_pdf_dialog ^
-    --hidden-import viewer.widgets.study_panel ^
-    --hidden-import viewer.widgets.study_edit_dialog ^
-    --hidden-import viewer.widgets.flow_layout ^
-    --hidden-import viewer.widgets.read_aloud ^
-    --hidden-import viewer.widgets.print_dialog ^
-    --hidden-import viewer.widgets.image_to_pdf_dialog ^
-    --hidden-import viewer.study ^
-    --hidden-import viewer.study.ocr ^
-    --hidden-import viewer.study.vocab ^
-    --hidden-import viewer.study.study_store ^
-    --hidden-import viewer.study.dict_store ^
-    --hidden-import viewer.study.glossary_import ^
-    --hidden-import viewer.study.term_spotter ^
-    --hidden-import viewer.study.dict_export ^
-    --hidden-import viewer.study.image_fetch ^
-    --hidden-import viewer.study.online_dict ^
-    --hidden-import viewer.study.law_api ^
-    --hidden-import viewer.widgets.law_search_dialog ^
-    --hidden-import viewer.study.kcsc_api ^
-    --hidden-import viewer.widgets.kcsc_search_dialog ^
-    --hidden-import viewer.study.kipo_api ^
-    --hidden-import viewer.widgets.kipo_search_dialog ^
-    --hidden-import viewer.study.translate_api ^
-    --hidden-import viewer.study.pdf_extract ^
-    --hidden-import viewer.study.glossary_build ^
-    --hidden-import viewer.study.glossary_folder ^
-    --hidden-import viewer.study.summarize ^
-    --hidden-import viewer.study.pdf_assets ^
-    --hidden-import viewer.widgets.dict_manager_dialog ^
-    --hidden-import viewer.widgets.glossary_edit_dialog ^
-    --hidden-import viewer.tag_store ^
-    --hidden-import viewer.widgets.tag_edit_dialog ^
-    --hidden-import viewer.widgets.content_find ^
-    --hidden-import viewer.widgets.content_find_overlay ^
-    --hidden-import viewer.study.export_translation ^
-    --hidden-import viewer.study.ant_cli ^
-    --hidden-import viewer.widgets.translate_dialog ^
-    --hidden-import viewer.widgets.translate_files_dialog ^
     --collect-all anthropic ^
-    --hidden-import viewer.widgets.toggle_splitter ^
-    --hidden-import viewer.widgets.icons ^
-    --hidden-import viewer.widgets.image_search_dialog ^
-    --hidden-import viewer.study.tts ^
-    --hidden-import viewer.study.export_docx ^
-    --hidden-import viewer.study.mp3_export ^
     --hidden-import pytesseract ^
     --hidden-import wordfreq ^
     --hidden-import nltk ^
@@ -249,8 +178,8 @@ pyinstaller ^
     main.py
 if errorlevel 1 ( echo [ERROR] PyInstaller build failed. & exit /b 1 )
 
-REM 260603: build\ ?�리 ??build\PolyPDF\PolyPDF.exe(불완??부?�로?? python DLL ?�락) ?�실??방�?.
-REM   ?�제 ?�행 ?�일?� dist\PolyPDF\PolyPDF.exe ?�나뿐이 ?�도�?
+REM 260603: build\ 정리 — build\PolyPDF\PolyPDF.exe(불완전 부트로더, python DLL 누락) 오실행 방지.
+REM   실제 실행 파일은 dist\PolyPDF\PolyPDF.exe 하나뿐이 되도록.
 if exist "build" rmdir /s /q "build"
 
 echo.

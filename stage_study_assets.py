@@ -1,6 +1,6 @@
 """빌드 전 단어학습 동봉 자산 준비 (계획서 §14.5/§8.3).
 
-빌드 폴더(smart_pdf_viewer/)에 다음을 만든다 — build.bat 의 %TESS_ARG%/%NLTK_ARG% 가 자동 인식:
+빌드 폴더(smart_pdf_viewer/)에 다음을 만든다 — build_ci.bat 의 %TESS_ARG%/%NLTK_ARG% 가 자동 인식:
   tesseract/Library/bin/*        (portable Tesseract: tesseract.exe + DLL 전체, libcurl 포함)
   tesseract/share/tessdata/*     (eng/kor traineddata)
   nltk_data/                     (WordNet + omw-1.4)
@@ -124,7 +124,7 @@ def main():
     n = stage_nltk()
     stage_ko_levels()    # resources/ 는 build 시 자동 동봉 → 실패해도 빌드는 진행
     stage_ko_en()
-    print("\n결과:", "완료. 이제 build.bat 실행 가능." if (t and n)
+    print("\n결과:", "완료. 이제 build_ci.bat 실행 가능." if (t and n)
           else "일부 누락 — 위 안내 참고.")
     sys.exit(0 if (t and n) else 1)
 
