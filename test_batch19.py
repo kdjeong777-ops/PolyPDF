@@ -15,7 +15,8 @@ mw = MainWindow()
 mv = mw._mv[0]
 
 ck("2장 맞춤", mv.FIT_PAGE_TWO == "2장 맞춤", mv.FIT_PAGE_TWO)
-ck("수동", mv.FIT_NONE == "수동", mv.FIT_NONE)
+# 260628-2: v2.27.0(260618-16)에서 맞춤 콤보 '수동' → '수동 맞춤' 으로 개명됨
+ck("수동 맞춤", mv.FIT_NONE == "수동 맞춤", mv.FIT_NONE)
 ck("캡쳐 버튼 글자 삭제·폭<=36", mw.btn_capture.text() == "" and mw.btn_capture.maximumWidth() <= 36)
 ck("읽기메뉴 폭 78", mw.btn_read_menu.maximumWidth() == 78)
 from viewer.widgets.capture_settings import CaptureSizesDialog
@@ -23,7 +24,7 @@ _dn = CaptureSizesDialog([]).result_sizes()[0]["name"]
 ck("사용자 명칭 단축(기본)", _dn == "사용자1", _dn)
 # 콤보 항목 텍스트
 items = [mv.cmb_fit.itemText(i) for i in range(mv.cmb_fit.count())]
-ck("콤보에 2장 맞춤·수동", "2장 맞춤" in items and "수동" in items, f"{items}")
+ck("콤보에 2장 맞춤·수동 맞춤", "2장 맞춤" in items and "수동 맞춤" in items, f"{items}")
 
 # 패널 드로어/확장
 mw.act_toggle_search.setChecked(True); mw.act_toggle_shot.setChecked(True)
@@ -41,4 +42,6 @@ mw.act_split.setChecked(False)
 ck("2분할 해제+둘다→컬럼", not mw._panel_in_drawer)
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

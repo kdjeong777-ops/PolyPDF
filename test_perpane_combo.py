@@ -14,7 +14,8 @@ from viewer.app import MainWindow
 mw = MainWindow()
 
 # 메뉴명 단축
-check("2분할 메뉴명 '🗗 2분할 보기'", mw.act_split.text() == "🗗 2분할 보기")
+# 260628-2: v1.28.2(260609-1)에서 '2분할 보기' → '2단 보기' 로 명칭 통일됨
+check("2단 메뉴명 '🗗 2단 보기'", mw.act_split.text() == "🗗 2단 보기", mw.act_split.text())
 
 # 창별 읽기 컨트롤: 두 창 모두 읽기 버튼+메뉴 존재, 각 창 툴바에 들어감
 check("두 창 읽기 버튼 구성", len(mw._read_btns) == 2)
@@ -68,4 +69,6 @@ else:
     print("  SKIP store 헤딩(PDF 없음)")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

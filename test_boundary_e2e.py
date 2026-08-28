@@ -50,6 +50,16 @@ chk(len(files) == 3, "트리 ordered_pdf_files = 3개", str(files))
 # B 를 트리 활성화 경로 그대로 로드
 mw._on_bookmark_activated(files[1], 0); app.processEvents()
 chk(Path(mv.current_file() or "").name == "B.pdf", "B.pdf 로드", str(mv.current_file()))
+# 260628-2: 260822 부터 '시작 모드' 기본값이 **편집**(prefs `open_edit_mode`)이라, 파일을 로드하면
+#   `_apply_doc_permissions` 가 트리·썸네일을 편집모드로 켠다. 그런데 썸네일 목록의 경계 이동
+#   (260610-1)은 **뷰어모드 전용**이다 — 편집모드에서 ↑/↓ 는 '페이지 순서 이동', 휠은 스크롤만
+#   하는 것이 사양(`thumbs_list.eventFilter` 의 `if not self._edit_mode` 분기).
+#   이 테스트가 검증하려는 것은 뷰어모드 경계 이동이므로 **로드 뒤** 명시적으로 뷰어모드로 맞춘다.
+#   ※ 썸네일 편집모드는 `btn_edit.toggled → page_thumbs.set_edit_mode` 로만 전파되므로
+#     (app.py:1944) 슬롯인 `bookmark_tree.set_edit_mode(False)` 를 직접 부르면 전파되지 않는다.
+#     반드시 **버튼 체크를 해제**해야 한다.
+mw.bookmark_tree.btn_edit.setChecked(False); app.processEvents()
+chk(not mw.page_thumbs._edit_mode, "썸네일 뷰어모드(편집 아님)")
 
 def wheel(view, dy):
     """실제 휠 이벤트를 뷰포트에 전달."""
@@ -167,4 +177,6 @@ chk(all(b.focusPolicy() == Qt.FocusPolicy.NoFocus for b in tp._filter_btns.value
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 mw.close()
-sys.exit(0 if not fails else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if not fails else 1)

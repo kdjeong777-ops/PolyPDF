@@ -26,8 +26,15 @@ check("mp3 아이콘 비율 ≤ 2.2 (여백 포함·글자 축소)", (w / h) <= 
 
 from viewer.app import MainWindow
 mw = MainWindow()
-check("단어장 mp3 iconSize 40x20", mw.study_panel.btn_mp3.iconSize() == QSize(40, 20))
-check("메인 mp3 iconSize 40x20", mw.btn_main_mp3.iconSize() == QSize(40, 20))
+# 260628-2: 40×20 은 260611-31 이전 사양이다. 그 항목이 mp3 아이콘을 **정사각**(분홍 음표+＋)으로
+#   교체하면서 메인 툴바는 24×24 가 됐고, 단어장 패널 헤더는 버튼 4종을 26×26 칸에 22×22 아이콘으로
+#   통일(메인 툴바 높이 26 과 맞춤)했다.
+_sz = mw.study_panel.btn_mp3.iconSize()
+check(f"단어장 mp3 iconSize 22x22 (실측 {_sz.width()}x{_sz.height()})", _sz == QSize(22, 22))
+check("단어장 mp3 버튼 26x26 정사각", mw.study_panel.btn_mp3.size() == QSize(26, 26),
+      str(mw.study_panel.btn_mp3.size()))
+_sz2 = mw.btn_main_mp3.iconSize()
+check(f"메인 mp3 iconSize 24x24 (실측 {_sz2.width()}x{_sz2.height()})", _sz2 == QSize(24, 24))
 
 # 파일 우클릭 '단어장 생성'
 bt = mw.bookmark_tree
@@ -72,4 +79,6 @@ else:
     print("  SKIP 캡처(테스트 PDF 없음)")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

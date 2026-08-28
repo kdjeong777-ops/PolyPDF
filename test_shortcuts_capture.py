@@ -59,8 +59,16 @@ mw._refresh_global_capture_hotkey()
 chk(True, "전역 핫키 해제 무예외")
 
 # 6) 선긋기 단축키 핸들러(편집모드 아닐 때 무동작·예외 없음)
+# 260628-2: `_draw_sc_mode` 는 선 종류를 **순환**시키고 그 값을 settings.json 에
+#   즉시 저장한다(공유 설정). 원복하지 않으면 스위트를 돌릴 때마다 0→1→2→0 으로
+#   밀려, 초기값 0 을 전제하는 `test_main_draw_v2` 가 3회 중 2회 실패한다(실측).
+_saved_line_mode = mw._prefs.get("draw_line_mode", 0)
 mw._draw_sc_pen(0); mw._draw_sc_mode(); mw._draw_sc_erase(1); mw._draw_sc_clear()
 chk(True, "선긋기 단축키 핸들러 무예외(비편집)")
+try:                                   # 공유 설정 원복(다른 테스트 오염 방지)
+    mw._on_main_draw_mode_changed(int(_saved_line_mode))
+except Exception:
+    pass
 
 # 7) 전역 캡처 디바운스 — 빠른 2연속은 1회만(스크린샷 2개 생기는 문제 방지)
 calls = {"n": 0}

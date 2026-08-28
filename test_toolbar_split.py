@@ -32,8 +32,11 @@ check("좁아지면 툴바 2단(높이 증가)", narrow > wide, f"wide={wide} na
 # 위젯 폭 축소
 check("페이지칸 폭 ≤ 48", mv.spin_page.maximumWidth() <= 48 or mv.spin_page.width() <= 48)
 check("보기콤보 폭 ≤ 90", mv.cmb_fit.maximumWidth() <= 90)
-# 캡쳐 버튼 명칭 '캡쳐'
-check("캡쳐 버튼 '캡쳐'", "캡쳐" in mw.btn_capture.text() and "화면" not in mw.btn_capture.text())
+# 캡쳐 버튼: v1.25.0(260606-19)에서 **글자 삭제 → 아이콘만·폭 34**(그 전 260606-9 의 '캡쳐' 라벨은 폐기)
+check("캡쳐 버튼 아이콘만(글자 없음)", mw.btn_capture.text() == "" and not mw.btn_capture.icon().isNull(),
+      f"text={mw.btn_capture.text()!r}")
+check("캡쳐 버튼 폭 34", mw.btn_capture.width() == 34, f"w={mw.btn_capture.width()}")
+check("캡쳐 툴팁에 '캡처'", "캡처" in mw.btn_capture.toolTip(), mw.btn_capture.toolTip())
 # 툴바 순서: › 다음 캡쳐
 tb = mv._toolbar
 i_next = tb.indexOf(mv.btn_next_page)
@@ -41,6 +44,9 @@ i_cap = tb.indexOf(mw.btn_capture.parent())   # 260606-17: 캡쳐는 캡쳐그�
 check("› 다음에 캡쳐그룹", i_cap == i_next + 1, f"next={i_next} cap={i_cap}")
 
 # 2분할 시 검색·스크린샷 → 슬라이딩 드로어(오버레이)로 이동(평소 숨김)
+# 260628-2: 컬럼 4단은 저장된 `panels_visible` 의존이므로(계획서 §3.1) 두 패널을 명시적으로 켠 뒤 전환을 본다.
+mw.act_toggle_search.setChecked(True)
+mw.act_toggle_shot.setChecked(True)
 mw.act_split.setChecked(True)
 check("2분할 켜면 right_panel→드로어", mw.right_panel.parent() is mw._drawer)
 check("드로어 기본 닫힘", mw._drawer_open is False)
@@ -49,7 +55,12 @@ sizes = mw.main_split.sizes()
 check("좌우 분할 동일 폭", abs(sizes[0] - sizes[1]) <= 2, f"{sizes}")
 # 끄면 복원
 mw.act_split.setChecked(False)
-check("2분할 끄면 right_panel 복귀(4단)", mw.splitter.indexOf(mw.right_panel) == 3)
+check("2분할 끄면 right_panel 복귀(4단)",
+      mw.splitter.indexOf(mw.right_panel) == 3 and not mw._panel_in_drawer,
+      f"idx={mw.splitter.indexOf(mw.right_panel)} drawer={mw._panel_in_drawer}")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2: `sys.exit` 는 Qt teardown 을 거치며 0xC0000409 로 죽어 종료코드가 무의미했다
+# -> `test_side_panels.py` 관례대로 `os._exit`.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

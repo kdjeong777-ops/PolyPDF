@@ -68,9 +68,11 @@ pw._erase_at(QPoint(400, y+80))
 chk(len(pw._strokes.get(0,[]))==1, "멀리(80px) 떨어지면 안 지워짐",
     f"n={len(pw._strokes.get(0,[]))}")
 
-# 썸네일 패널: 배경 40% 불투명 검정 + 일반 화살표 커서
+# 썸네일 패널: 배경 짙은 회색(불투명) + 일반 화살표 커서
+#   색 기준 = 화면 디자인 작업 계획서 §2.5 "발표(전체화면) 썸네일 패널 배경" = #2b2b2b
+#   (1.53.3 의 #3c3c3c → 1.89.5(260611-97) 에서 #2b2b2b 로 확정)
 tp = pw._thumb_panel
-chk("#3c3c3c" in tp.styleSheet(), "패널 배경 일반 회색", tp.styleSheet())
+chk("#2b2b2b" in tp.styleSheet(), "패널 배경 짙은 회색(#2b2b2b)", tp.styleSheet())
 chk(tp.cursor().shape() == Qt.CursorShape.ArrowCursor, "패널 일반 화살표 커서")
 chk(tp.list.cursor().shape() == Qt.CursorShape.ArrowCursor, "패널 리스트 화살표 커서")
 

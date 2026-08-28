@@ -77,3 +77,6 @@ chk(calls == [], "이전 파일 없음 → 동작 안 함")
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 mw.close()
+# 260628-2 (§14.7): 종료코드가 없어 CI 가 실패를 감지하지 못했다 + Qt teardown 크래시 회피.
+sys.stdout.flush()
+os._exit(0 if not fails else 1)

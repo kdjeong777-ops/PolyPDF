@@ -17,12 +17,12 @@ app = QApplication.instance() or QApplication(sys.argv)
 
 # 1) 본화면 설정 다이얼로그에서 발표 보기 위젯 제거 + result_prefs 에 키 없음
 from viewer.widgets.settings_dialog import SettingsDialog
-sd = SettingsDialog({"presentation_split": True, "presentation_overlap_pct": 12,
+sd = SettingsDialog({"presentation_overlap_pct": 12,   # 260628(B5): presentation_split 설정 제거
                      "presentation_topbar_h": 70})
 chk(not hasattr(sd, "chk_present_split"), "본화면 설정에서 '상하 2분할' 위젯 제거")
 chk(not hasattr(sd, "spin_overlap"), "본화면 설정에서 '겹침%' 위젯 제거")
 rp = sd.result_prefs()
-chk("presentation_split" not in rp and "presentation_overlap_pct" not in rp
+chk("presentation_overlap_pct" not in rp
     and "presentation_topbar_h" not in rp, "result_prefs 에 발표 보기 키 없음")
 chk(hasattr(sd, "focus_recording"), "녹화 설정 포커스 메서드 존재")
 
@@ -31,12 +31,11 @@ from viewer.app import MainWindow
 mw = MainWindow()
 mw._prefs["presentation_overlap_pct"] = 25
 mw._prefs["presentation_topbar_h"] = 88
-mw._prefs["presentation_split"] = True
 mw._apply_prefs(sd.result_prefs())     # 발표 키 미포함 → 보존되어야
 chk(mw._prefs["presentation_overlap_pct"] == 25
     and mw._prefs["presentation_topbar_h"] == 88
-    and mw._prefs["presentation_split"] is True, "발표 보기 설정값 보존",
-    str([mw._prefs[k] for k in ("presentation_overlap_pct","presentation_topbar_h","presentation_split")]))
+    , "발표 보기 설정값 보존",
+    str([mw._prefs[k] for k in ("presentation_overlap_pct","presentation_topbar_h")]))
 
 # 3) recording_test_ok 영속(_apply_prefs 보존)
 mw._prefs["recording_test_ok"] = True

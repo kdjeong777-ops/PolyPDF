@@ -45,6 +45,10 @@ chk("rgba(" in css0 and "background" in css0, "버튼 배경에 색·투명도(r
 
 # 2) 선 종류 3단계 순환(직선→하이라이트→자유곡선)
 mv.set_draw_mode(True); app.processEvents()
+# 260628-2: `draw_line_mode` 는 settings.json 에 저장되는 **공유 설정**이라
+#   직전 실행 상태에 좌우된다 → 순환을 검사하기 전에 기준을 명시적으로 확정한다
+#   (§3.1 '레이아웃 테스트 작성 규칙'과 같은 취지).
+mv.set_draw_line_mode(0); app.processEvents()
 chk(mv._draw_line_mode == 0 and mv._draw_mode_btn.text() == "─", "초기 직선 모드(─)")
 mv._cycle_draw_mode(); app.processEvents()
 chk(mv._draw_line_mode == 1 and mv._draw_mode_btn.text() == "▬", "순환1 하이라이트(▬)")

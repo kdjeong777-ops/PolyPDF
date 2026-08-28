@@ -26,7 +26,7 @@ app = QApplication.instance() or QApplication(sys.argv)
 from viewer.widgets.presentation import PresentationWindow
 from viewer.widgets.main_view import MV_DEFAULT_PENS
 pw = PresentationWindow(str(tmp/"P.pdf"), 0, None, pens=[dict(p) for p in MV_DEFAULT_PENS],
-                        split_mode=True, eraser_widths=[12,30], line_mode=2)
+                        eraser_widths=[12,30], line_mode=2)   # 260628(B5): split_mode 인자 제거
 pw.resize(800,600); pw.show(); app.processEvents()
 # 260611-27: 분할 기본값은 방향(세로>가로)으로 결정 — 세로 페이지면 기본 ON
 chk(pw._split_mode and pw._page_is_split(), "세로 페이지 → 상하2분할 기본 ON")
@@ -72,9 +72,9 @@ lists = pw.findChildren(QListWidget)
 chk(all(l.focusPolicy()==Qt.FocusPolicy.NoFocus for l in lists), "썸네일 리스트 NoFocus")
 chk(pw.focusPolicy()==Qt.FocusPolicy.StrongFocus, "창 StrongFocus")
 
-# 패널 배경 일반 회색(투명 없음)
-chk("#3c3c3c" in pw._thumb_panel.styleSheet() and "rgba" not in pw._thumb_panel.styleSheet(),
-    "패널 배경 일반 회색(투명 없음)", pw._thumb_panel.styleSheet())
+# 패널 배경 짙은 회색(투명 없음) — 화면 디자인 작업 계획서 §2.5 토큰 #2b2b2b
+chk("#2b2b2b" in pw._thumb_panel.styleSheet() and "rgba" not in pw._thumb_panel.styleSheet(),
+    "패널 배경 짙은 회색(#2b2b2b, 투명 없음)", pw._thumb_panel.styleSheet())
 
 pw.close()
 

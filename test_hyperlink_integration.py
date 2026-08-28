@@ -93,3 +93,22 @@ chk((folder / "hyperlinks.json").exists(), "hyperlinks.json 생성")
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 mw.close()
+
+# 260628-2 (§14.7): 종료코드가 없어 CI 가 실패를 감지하지 못했다.
+# ★ 이 파일만 `os._exit` 를 쓸 수 없다 — mp4 링크로 QtMultimedia(FFmpeg 백엔드)가 로드되며,
+#   오버레이를 닫아 player 를 teardown 해도 백엔드 스레드가 남아 ExitProcess 의 DLL detach 에서
+#   **교착**한다(실측: 60s+ 무응답, 재현 100%). TerminateProcess 는 detach 를 돌리지 않아 안전하다.
+#   ※ GetCurrentProcess 의 의사 핸들은 (HANDLE)-1 이라 restype/argtype 을 c_void_p 로 지정하지
+#      않으면 32비트로 잘려 호출이 조용히 실패한다(실측).
+sys.stdout.flush()
+sys.stderr.flush()
+_code = 0 if not fails else 1
+try:
+    import ctypes
+    _k = ctypes.windll.kernel32
+    _k.GetCurrentProcess.restype = ctypes.c_void_p
+    _k.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+    _k.TerminateProcess(_k.GetCurrentProcess(), _code)
+except Exception:
+    pass
+os._exit(_code)   # 폴백(비윈도우)

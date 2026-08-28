@@ -36,4 +36,6 @@ mw.act_toggle_shot.setChecked(True)
 check("스크린샷 켜면 컬럼", not mw._panel_in_drawer)
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

@@ -24,6 +24,9 @@ def key(w, k, text=""):
 w = PresentationWindow(PDF, 10)
 w.resize(1280, 800)
 w.show_presentation(); app.processEvents()
+# 260611-26/27: 세로 페이지 PDF 는 상하 2분할이 기본 ON 이라 →/Space 가 '같은 페이지 하부'로
+#   먼저 소비된다. Phase 1 은 페이지 단위 탐색만 보므로 분할을 끈다(분할은 Phase 3 담당).
+w.set_split(False)
 pc = w._doc.page_count
 chk(w._page == 10, "시작 페이지 설정")
 chk(w._label.pixmap() is not None and not w._label.pixmap().isNull(), "페이지 렌더됨")
@@ -108,7 +111,12 @@ chk(len(res) == 3 and res[0]["name"] == "A" and res[0]["fill"].lower() == "#1122
     "포인터 설정 다이얼로그 결과 보존")
 
 # ===== Phase 3: 상하 2분할 =====
-w3 = PresentationWindow(PDF, 5, split_mode=True, overlap_pct=10)
+# 260611-26/27: 분할 기본값은 생성자 인자가 아니라 '페이지 방향'(세로>가로 → ON)으로
+#   진입·파일전환 시 자동 결정된다(`_orient_split_default`). 이 PDF 는 세로 페이지라 ON.
+# 260628(발표 SOT B5): `split_mode=` 인자는 제거됐다(분할은 페이지 방향 자동 판정).
+#   분할 상태를 테스트에서 강제하려면 생성 후 set_split() 을 쓴다.
+w3 = PresentationWindow(PDF, 5, overlap_pct=10)
+w3.set_split(True)
 w3.resize(1280, 720); w3.show_presentation(); app.processEvents()
 chk(w3._split_mode and w3._split_half == 0, "분할 모드 시작 = 상부")
 chk(w3._label.pixmap() is not None and not w3._label.pixmap().isNull(), "분할 렌더됨")
@@ -148,6 +156,10 @@ def resolver(cur, direction):
 
 w4 = PresentationWindow(PDF, 0, sibling_resolver=resolver)
 w4.resize(1200, 800); w4.show_presentation(); app.processEvents()
+# 260611-26/27: 세로 페이지 PDF 는 상하 2분할이 기본 ON 이라, 마지막 페이지에서 →는
+#   '하부로 이동'이 먼저 소비되어 경계 무장이 한 박자 늦는다. 여기서는 파일 경계 로직만
+#   보려는 것이므로 분할을 끄고 검사한다(분할 동작은 Phase 3 / test_present_split.py 담당).
+w4.set_split(False)
 last = w4._doc.page_count - 1
 w4._go(last)                          # 마지막 페이지
 chk(w4._armed == 0, "마지막 페이지(무장 전)")
@@ -156,6 +168,7 @@ chk(w4._armed == 1 and w4._armed_path == PDF_B, "마지막에서 다음 → 다�
 chk(w4._label.pixmap() is not None and not w4._label.pixmap().isNull(), "오버레이 렌더됨")
 key(w4, Qt.Key.Key_Right)             # 다시 다음 → 실제 전환(첫 페이지)
 chk(w4._armed == 0 and w4._page == 0, "재선택 → 다음 파일 첫 페이지로 전환")
+w4.set_split(False)   # 260611-26: 파일 전환 시 분할 기본값이 방향으로 재계산되므로 다시 해제
 # 무장 중 ESC → 취소(닫지 않음)
 w4._go(last); key(w4, Qt.Key.Key_Right)
 chk(w4._armed == 1, "재무장")
@@ -175,6 +188,7 @@ def hl_resolver(path, page0):
 # 시작은 링크 없는 페이지(10) — D7 자동표시 영향 배제
 w5 = PresentationWindow(PDF, 10, hyperlink_resolver=hl_resolver)
 w5.resize(1280, 800); w5.show_presentation(); app.processEvents()
+w5.set_split(False)   # 260611-26/27: 상단 띠 검사이므로 분할(같은 페이지 하부 이동) 배제
 chk(not w5._topbar.isVisible(), "상단 띠 초기 숨김(링크 없는 페이지)")
 # 상단으로 마우스 이동 → 표시
 from PyQt6.QtGui import QMouseEvent as _ME2

@@ -70,11 +70,18 @@ from PyQt6.QtWidgets import QApplication
 app = QApplication.instance() or QApplication(sys.argv)
 mw = MainWindow()
 mv = mw.main_view
-check("‹ 폭 26", mv.btn_prev_page.width() == 26 or mv.btn_prev_page.minimumWidth() == 26)
-check("+ 줌 폭 26", mv.btn_zoom_in.minimumWidth() == 26)
-check("읽기 ▶ 폭 28", mw.btn_read.minimumWidth() == 28)
-check("읽기메뉴 폭 96 고정", mw.btn_read_menu.minimumWidth() == 96
-      and mw.btn_read_menu.maximumWidth() == 96)
+# 260628-2: v1.25.0(260606-19) '툴바 폭 최소화' 로 치수가 바뀌었다
+#   ‹ 26→24 / + 26→24 / 읽기 ▶ 28→26 / 읽기메뉴 96→78(코드에도 '260606-19: 폭 최소' 주석).
+#   높이는 v1.22.1(260606-14)의 MainView.TOOLBAR_H 로 통일돼 있으므로 함께 확인한다.
+H = mv.TOOLBAR_H
+check(f"‹ 폭 24 (실측 {mv.btn_prev_page.width()})", mv.btn_prev_page.width() == 24)
+check(f"+ 줌 폭 24 (실측 {mv.btn_zoom_in.width()})", mv.btn_zoom_in.width() == 24)
+check(f"읽기 ▶ 폭 26 (실측 {mw.btn_read.width()})", mw.btn_read.width() == 26)
+check(f"읽기메뉴 폭 78 고정 (실측 {mw.btn_read_menu.minimumWidth()}~{mw.btn_read_menu.maximumWidth()})",
+      mw.btn_read_menu.minimumWidth() == 78 and mw.btn_read_menu.maximumWidth() == 78)
+check(f"툴바 버튼 높이 = TOOLBAR_H({H}) 통일",
+      mv.btn_prev_page.height() == H and mv.btn_zoom_in.height() == H
+      and mw.btn_read.height() == H and mw.btn_read_menu.height() == H)
 check("메인 mp3 버튼 존재", hasattr(mw, "btn_main_mp3"))
 check("_on_main_mp3 메서드", callable(getattr(mw, "_on_main_mp3", None)))
 check("_hide_shots_if_empty 메서드", callable(getattr(mw, "_hide_shots_if_empty", None)))
@@ -87,4 +94,6 @@ except Exception as e:
     check(f"hide_shots ({e})", False)
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

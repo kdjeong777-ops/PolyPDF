@@ -26,8 +26,11 @@ from PyQt6.QtWidgets import QTreeWidgetItem
 bt = BookmarkTree()
 # 레이아웃: 단일/다중 컨테이너 + 트리 서브클래스
 check("트리=_EditableTree(드롭 추적)", isinstance(bt.tree, _EditableTree))
-check("단일/다중 컨테이너 존재", hasattr(bt, "sel_mode_widget"))
-check("비편집시 단일/다중 숨김", bt.sel_mode_widget.isHidden())
+# 260628-2: 260611-8 에서 단일/다중이 **라디오 2개 → 토글 버튼 1개**(`btn_sel_mode`)로 바뀌고
+#   컨테이너도 `sel_mode_widget` → 편집 조작 묶음 `edit_ops` 로 통합됐다(비편집시 숨김).
+check("단일/다중 토글 버튼 존재", hasattr(bt, "btn_sel_mode"))
+check("편집 조작 컨테이너 존재", hasattr(bt, "edit_ops"))
+check("비편집시 편집 조작(단일/다중 포함) 숨김", bt.edit_ops.isHidden())
 # 휴지통 아이콘 색상(이모지 변형선택자 포함)
 trash = [b for b in bt.findChildren(type(bt.btn_edit)) if "🗑" in b.text()]
 check("휴지통 아이콘 컬러 이모지(🗑️)", any("️" in b.text() for b in trash),
@@ -46,7 +49,7 @@ check("add_bookmark 후 dirty=True", bt._dirty is True)
 # 편집 모드 진입 → dirty 리셋, 단일/다중 표시
 bt.set_edit_mode(True)
 check("편집 진입시 dirty 리셋", bt._dirty is False)
-check("편집시 단일/다중 표시", not bt.sel_mode_widget.isHidden())
+check("편집시 단일/다중 표시", not bt.edit_ops.isHidden())
 check("편집시 edit_ops 표시", not bt.edit_ops.isHidden())
 
 # 선택→이동 시그널(편집 모드에서도 emit)
@@ -54,7 +57,10 @@ moved = {}
 bt.bookmarkActivated.connect(lambda p, pg: moved.update(path=p, page=pg))
 ch = root.child(root.childCount() - 1)   # '테스트절' p.9
 bt._on_activated(ch)
-check("편집모드 선택→bookmarkActivated emit", moved.get("page") == 8,
+# 260628-2: 260611-61 부터 이동 발행이 `QTimer.singleShot(0, _flush_nav)` 로 **지연**된다
+#   (선택 하이라이트를 먼저 그린 뒤 이동·암호창이 뜨도록) → 이벤트 루프를 한 번 돌려야 emit 된다.
+app.processEvents()
+check("편집모드 선택→bookmarkActivated emit(지연 발행)", moved.get("page") == 8,
       f"moved={moved}")
 
 # 변경 작업 → dirty
@@ -128,15 +134,31 @@ mw = MainWindow()
 check("main_view contextMenuRequested 시그널", hasattr(mw.main_view, "contextMenuRequested"))
 check("_on_viewer_context_menu 핸들러", callable(getattr(mw, "_on_viewer_context_menu", None)))
 check("_prompt_add_bookmark 헬퍼", callable(getattr(mw, "_prompt_add_bookmark", None)))
-# 편집모드 아니면 우클릭 메뉴 무시(예외 없이 통과)
-fired = {"n": 0}
-_origm = type(mw.main_view).contextMenuRequested
-mw.bookmark_tree.set_edit_mode(False)
+# 260628-2: '편집모드가 아니면 메뉴가 안 뜬다'는 전제는 낡았다 — 260617-2 가 **편집모드와 무관한**
+#   텍스트 복사·블럭설정·현재 페이지 인쇄를 넣었으므로 비편집에서도 메뉴는 뜬다.
+#   현행 사양은 '책갈피 추가·하이퍼링크 등록은 편집모드에서만'. exec() 는 모달이라
+#   가로채서 항목 구성만 확인한다(인자도 None 이 아니라 실제 QPoint 여야 한다).
+from PyQt6.QtWidgets import QMenu
+from PyQt6.QtCore import QPoint
+seen = {}
+_orig_exec = QMenu.exec
+QMenu.exec = lambda self, *a, **k: seen.update(
+    texts=[x.text() for x in self.actions()]) or None
 try:
-    mw._on_viewer_context_menu(None)   # 편집모드 아님 → 즉시 반환(메뉴 안 뜸)
-    check("비편집모드 우클릭 무시", True)
-except Exception as e:
-    check(f"비편집모드 우클릭 무시 ({e})", False)
+    for _mode, _label in ((False, "비편집"), (True, "편집")):
+        seen.clear()
+        mw.bookmark_tree.set_edit_mode(_mode)
+        mw._on_viewer_context_menu(QPoint(10, 10))
+        _texts = seen.get("texts", [])
+        _has_add = any("책갈피 추가" in t for t in _texts)
+        check(f"{_label}모드 우클릭 메뉴 예외 없음", bool(_texts), f"n={len(_texts)}")
+        check(f"{_label}모드: 책갈피 추가 " + ("있음" if _mode else "없음"),
+              _has_add is _mode, f"texts={_texts}")
+finally:
+    QMenu.exec = _orig_exec
+    mw.bookmark_tree.set_edit_mode(False)
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

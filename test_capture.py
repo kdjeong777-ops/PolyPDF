@@ -56,4 +56,6 @@ texts = [mw.shot_strip.list.item(i).text() for i in range(mw.shot_strip.list.cou
 check("썸네일 번호 1..N", texts == ["1", "2"], f"{texts}")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

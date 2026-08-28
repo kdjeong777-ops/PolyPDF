@@ -68,4 +68,6 @@ for m in mw.menuBar().findChildren(type(mw.menuBar().actions()[0])):
 check("_on_merge_files 시그니처(preselected)", "preselected" in __import__("inspect").signature(mw._on_merge_files).parameters)
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

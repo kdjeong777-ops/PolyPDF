@@ -46,4 +46,6 @@ ck("상단 겹침 없음 → 중앙", probe(int(mx * 0.02), 0) == 0, f"off={mw._
 ck("하단 겹침 없음 → 중앙", probe(int(mx * 0.98), mx) == 0, f"off={mw._handle_offset}")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

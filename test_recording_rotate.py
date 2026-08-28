@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """260611-23: 녹화 파일명(<파일>_날짜_시각)·파일 전환 시 녹화 재시작·fileChanged 시그널."""
-import os, sys, re, tempfile, json
+import os, sys, re, tempfile, json, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -39,7 +39,17 @@ class FakeRec:
 old = FakeRec("old")
 mw._rec = old
 mw._make_recorder = lambda out: (FakeRec(Path(out).name), "ffmpeg")  # ff 존재 가장
+# 260628(발표 SOT B7): 파일 전환 시 이전 녹화 종료(stop, 최대 8초)를 **백그라운드**에서 한다.
+#   → 호출은 즉시 반환하므로 완료까지 이벤트 루프를 돌려야 한다.
+#   또한 전환 콜백은 '발표가 아직 진행 중'일 때만 새 녹화를 시작하므로 _present 를 세워둔다.
+class _PresStub:                       # _update_rec_buttons 가 호출하는 최소 인터페이스
+    def set_recording_state(self, *a, **k): pass
+mw._present = _PresStub()
 mw._on_present_file_changed("C:/x/새강의.pdf")
+for _ in range(100):
+    app.processEvents(); time.sleep(0.02)
+    if any(e[0] == "start" for e in events):
+        break
 chk(("stop", "old") in events, "전환 시 이전 녹화 종료")
 started = [e for e in events if e[0] == "start"]
 chk(len(started) == 1 and re.match(r"^새강의_\d{8}_\d{4}_\d{2}\.mp4$", started[0][1]) is not None,

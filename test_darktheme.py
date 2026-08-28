@@ -55,4 +55,6 @@ heights = [mv.btn_prev_page.minimumHeight(), mv.btn_next_page.minimumHeight(),
 check("모든 툴바 버튼 높이 통일(=H)", all(h == H for h in heights), f"H={H} hs={heights}")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

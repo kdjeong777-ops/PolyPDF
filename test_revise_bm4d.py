@@ -15,8 +15,11 @@ check("CARD_H 축소(<=160)", MiniStrip.CARD_H <= 160, f"CARD_H={MiniStrip.CARD_
 
 from viewer.app import MainWindow
 mw = MainWindow()
+# 260628-2: `<=180` 은 v1.19.1(260606-6, CARD_H 210→150 · 리스트 +22) 시점 값이다.
+#   그 뒤 260606-17 이 **썸네일 아래 '번호' 줄**을 넣으며 +16 이 더해져 현행은 CARD_H+22+16 이다.
 lh = mw.shot_strip.list.maximumHeight()
-check("스크린샷 리스트 높이 축소(<=180)", lh <= 180, f"list fixedH={lh}")
+_expect = mw.shot_strip.CARD_H + 22 + 16
+check(f"스크린샷 리스트 높이 = CARD_H+22+16 ({_expect})", lh == _expect, f"list fixedH={lh}")
 
 # 단어장 편집 아이콘 = 책갈피 편집 아이콘과 동일 이미지(연필)
 from viewer.resources_path import resource_path
@@ -30,8 +33,23 @@ from PyQt6.QtCore import QSize
 ref = QIcon(resource_path("icon_edit.png"))
 def key(ic):
     return ic.pixmap(QSize(18, 18)).toImage()
-check("단어장 편집 = 책갈피 편집과 동일 이미지",
-      key(sp_icon) == key(ref) and key(bt_icon) == key(ref))
+# 260628-2: '둘이 같은 이미지'는 v1.19.1(260606-6) 사양이고, 그 뒤 **260611-9** 가 책갈피 편집
+#   아이콘을 **상태별**로 바꿨다 — 비선택=파란 연필(icon_edit_blue), 편집 중=붉은 연필(icon_edit_red).
+#   따라서 현행 사양은 '단어장 편집 = icon_edit.png' + '책갈피 편집 = 파랑↔빨강 전환' 이다.
+check("단어장 편집 = icon_edit.png", key(sp_icon) == key(ref))
+_blue = QIcon(resource_path("icon_edit_blue.png") or "")
+_red = QIcon(resource_path("icon_edit_red.png") or "")
+# ※ MainWindow 는 세션 복원 중 `_apply_doc_permissions` 에서 편집모드를 켤 수 있으므로
+#   (그러면 아이콘이 이미 붉은 연필이다) 캡처해 둔 참조 대신 **상태를 정해 놓고 그때의 아이콘**을 읽는다.
+mw.bookmark_tree.btn_edit.setChecked(False)
+check("책갈피 편집(비선택) = 파란 연필",
+      key(mw.bookmark_tree.btn_edit.icon()) == key(_blue))
+mw.bookmark_tree.btn_edit.setChecked(True)
+check("책갈피 편집(편집 중) = 붉은 연필",
+      key(mw.bookmark_tree.btn_edit.icon()) == key(_red))
+mw.bookmark_tree.btn_edit.setChecked(False)
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)

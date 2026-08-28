@@ -18,12 +18,27 @@ check("두 메인뷰 존재", hasattr(mw, "_mv") and len(mw._mv) == 2)
 check("기본 활성=0", mw._active_pane == 0)
 check("두번째 창 기본 숨김", mw._panes[1].isHidden())
 check("main_view 프로퍼티=활성창", mw.main_view is mw._mv[0])
-# 4단 불변(splitter 자식 수)
-check("가로 splitter 자식 4개 유지", mw.splitter.count() == 4)
+# 레이아웃 불변(계획서 §3.1) — 260628: 자식 수 상수(4)는 낡은 기대값이었다.
+#   v1.20.2/v1.25.0 의 _sync_right_layout 이 2분할 ON 또는 검색·스크린샷 둘 다 숨김일 때
+#   right_panel 을 슬라이드 드로어로 reparent 하므로 count 는 4(컬럼)↔3(드로어) 로 변한다.
+#   초기 상태는 저장된 panels_visible 에 따라 머신마다 다르므로, 토글을 명시해 고정한다.
+def _cols():   # 현재 배치에서 기대되는 splitter 자식 수
+    return 3 if mw._panel_in_drawer else 4
+
+check("메인 뷰어 칸 = splitter 자식 1개(index 2)", mw.splitter.indexOf(mw.main_split) == 2)
+check("배치와 splitter 자식 수 일치", mw.splitter.count() == _cols(),
+      f"count={mw.splitter.count()} drawer={mw._panel_in_drawer}")
+mw.act_toggle_search.setChecked(True)
+mw.act_toggle_shot.setChecked(True)
+check("두 패널 표시 → 컬럼 4단", not mw._panel_in_drawer and mw.splitter.count() == 4,
+      f"count={mw.splitter.count()}")
+check("컬럼 4단에서도 메인 뷰어는 index 2", mw.splitter.indexOf(mw.main_split) == 2)
 
 # 활성 전환
 mw.act_split.setChecked(True)       # 2분할 켜기
 check("2분할 켜면 오른쪽 창 표시", not mw._panes[1].isHidden() and mw._split_on)
+check("2분할 켜면 우측 패널 → 드로어(3단)", mw._panel_in_drawer and mw.splitter.count() == 3,
+      f"count={mw.splitter.count()}")
 mw._set_active_pane(1)
 check("활성 전환 → main_view=오른쪽", mw.main_view is mw._mv[1] and mw._active_pane == 1)
 mw._set_active_pane(0)
@@ -61,6 +76,12 @@ else:
 mw.act_split.setChecked(False)
 check("2분할 끄면 오른쪽 숨김+활성0", mw._panes[1].isHidden() and mw._active_pane == 0
       and not mw._split_on)
+check("2분할 끄면 우측 패널 → 컬럼 4단 복원",
+      not mw._panel_in_drawer and mw.splitter.count() == 4
+      and mw.splitter.indexOf(mw.main_split) == 2,
+      f"count={mw.splitter.count()} drawer={mw._panel_in_drawer}")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
-sys.exit(0 if ok else 1)
+# 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
+sys.stdout.flush()
+os._exit(0 if ok else 1)
