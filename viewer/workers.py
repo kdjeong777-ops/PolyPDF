@@ -187,16 +187,17 @@ class SearchWorker(QObject):
     finished = pyqtSignal(str, list)   # query, results
     error = pyqtSignal(str)
 
-    def __init__(self, db_path: Path, query: str):
+    def __init__(self, db_path: Path, query: str, paths: list | None = None):
         super().__init__()
         self.db_path = db_path
         self.query = query
+        self.paths = paths                 # 260828: 검색 범위 파일 목록(None=전체)
 
     def run(self):
         try:
             idx = PdfIndex(self.db_path)
             try:
-                res = idx.search(self.query)
+                res = idx.search(self.query, paths=self.paths)
             finally:
                 idx.close()
             self.finished.emit(self.query, res)
@@ -469,7 +470,11 @@ class StudyMp3Worker(QObject):
 
 def run_in_thread(worker: QObject, parent_keep: list) -> QThread:
     """worker.run 을 새 QThread 에서 실행. 참조 보존을 위해 parent_keep 리스트에 넣어두면
-    GC 로 사라지지 않는다."""
+    GC 로 사라지지 않는다.
+
+    260628: **완료 시 keep 리스트에서 자동 제거**(누수 정리). 종전에는 append 만 하고
+    제거가 없어 긴 세션에서 죽은 QThread·worker 래퍼가 무한 누적됐다. 호출측은 별도
+    정리 코드를 넣지 않는다(마스터 SOT §11.9)."""
     th = QThread()
     worker.moveToThread(th)
     th.started.connect(worker.run)
@@ -480,6 +485,17 @@ def run_in_thread(worker: QObject, parent_keep: list) -> QThread:
         worker.finished.connect(worker.deleteLater)
     parent_keep.append(th)
     parent_keep.append(worker)
+
+    def _prune():
+        # 스레드 종료 후 keep 리스트에서 자기 자신(th·worker)만 제거. 리스트를 통째로
+        # 비우지 않는다 — 동시에 도는 다른 작업의 참조를 끊으면 안 됨.
+        for obj in (th, worker):
+            try:
+                parent_keep.remove(obj)
+            except ValueError:
+                pass
+
+    th.finished.connect(_prune)
     th.start()
     return th
 

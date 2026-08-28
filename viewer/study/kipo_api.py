@@ -19,7 +19,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 _UA = "Mozilla/5.0 (PolyPDF KIPRIS viewer)"
-_BASE = "http://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice"
+_BASE = "https://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice"
 
 # 검색 기준(패널 드롭다운) → IN 파라미터명
 SEARCH_FIELDS = [
@@ -262,6 +262,8 @@ def download_fulltext_pdf_debug(key: str, appno: str, dest_dir: str,
     pdf_url, dbg = fetch_fulltext_pdf_url_debug(key, appno, timeout=20.0)
     if not pdf_url:
         return "", dbg
+    if not pdf_url.lower().startswith("https://"):   # 260628: 중간자 변조 방지 — 평문 HTTP PDF 거부
+        return "", dbg + [f"보안: 비-HTTPS PDF URL 차단({pdf_url[:60]})"]
     safe = re.sub(r'[\\/:*?"<>|]+', "_", (name or appno)).strip()[:80] or appno
     appdigits = "".join(ch for ch in str(appno) if ch.isdigit())
     fname = f"{safe} ({appdigits}).pdf" if appdigits and appdigits not in safe else f"{safe}.pdf"

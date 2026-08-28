@@ -3,7 +3,6 @@
 옵션 '인터넷 사전 포함'이 켜졌을 때만 호출. 표준 라이브러리(urllib)만 사용.
 - Free Dictionary API(dictionaryapi.dev): 영어 뜻·예문·발음. 키 불필요. (Wiktionary CC BY-SA)
 - 표준국어대사전 OpenAPI: 한국어 뜻. 사용자 무료 키 필요.
-- 우리말샘 OpenAPI: 한국어 뜻. 사용자 무료 키 필요.
 - Tatoeba: 한·영 예문. 키 불필요.
 각 함수는 실패 시 빈 결과를 돌려준다(예외 전파 안 함). 반환:
   {"def_ko": [..], "def_en": [..], "examples": [{"text","ref"}], "source": "표시명"}
@@ -26,7 +25,7 @@ def _get_json(url: str, timeout: float = 8.0):
 
 def _strip_tags(s: str) -> str:
     """260615-16: HTML 엔티티(&#44; &lt; 등) 복원 → 태그 제거 → 공백 정리.
-    (우리말샘/온용어/표준국어대사전 정의에 섞인 꾸밈 마크업 제거)"""
+    (온용어/표준국어대사전 정의에 섞인 꾸밈 마크업 제거)"""
     import html as _html
     t = _html.unescape(str(s or ""))      # &#44;→',', &lt;strong&gt;→<strong>
     t = re.sub(r"<[^>]+>", "", t)          # 태그 제거
@@ -74,32 +73,6 @@ def stdict(word: str, key: str, timeout: float = 8.0) -> dict:
             de = _strip_tags(sense.get("definition", ""))
             if de and de not in out["def_ko"]:
                 out["def_ko"].append(de)
-    except Exception:
-        pass
-    return out
-
-
-def urimalsaem(word: str, key: str, timeout: float = 8.0) -> dict:
-    """한국어 단어 → 뜻·예문. 우리말샘 OpenAPI(사용자 키)."""
-    out = {"def_ko": [], "def_en": [], "examples": [], "source": "우리말샘"}
-    if not key:
-        return out
-    try:
-        url = ("https://opendict.korean.go.kr/api/search?"
-               + urllib.parse.urlencode({"key": key, "q": word,
-                                         "req_type": "json", "num": 5}))
-        data = _get_json(url, timeout)
-        items = (data.get("channel", {}) or {}).get("item", []) or []
-        if isinstance(items, dict):
-            items = [items]
-        for it in items[:5]:
-            senses = it.get("sense", [])
-            if isinstance(senses, dict):
-                senses = [senses]
-            for s in senses[:2]:
-                de = _strip_tags(s.get("definition", ""))
-                if de and de not in out["def_ko"]:
-                    out["def_ko"].append(de)
     except Exception:
         pass
     return out
@@ -186,7 +159,6 @@ def tatoeba(word: str, lang: str = "eng", timeout: float = 8.0) -> dict:
 ONLINE_PROVIDERS = {
     "online_onterm":      ("온용어", True),
     "online_stdict":      ("표준국어대사전", False),
-    "online_urimalsaem":  ("우리말샘", False),
     "online_freedict":    ("Free Dictionary", False),
     "online_tatoeba":     ("Tatoeba", False),
 }
@@ -233,8 +205,6 @@ def lookup_sources(term_ko: str, term_en: str, *, prefs: dict) -> list:
     if ko:
         r = stdict(ko, prefs.get("stdict_key", ""))
         add("online_stdict", "표준국어대사전", False, r["def_ko"], examples=r["examples"])
-        r = urimalsaem(ko, prefs.get("urimalsaem_key", ""))
-        add("online_urimalsaem", "우리말샘", False, r["def_ko"], examples=r["examples"])
         ot = onterm(ko, prefs.get("onterm_key", ""))
         bg = ot.get("by_glossary") or {}
         if bg:                       # 용어집별로 세분
@@ -255,7 +225,7 @@ def lookup_sources(term_ko: str, term_en: str, *, prefs: dict) -> list:
 
 def lookup_all(term_ko: str, term_en: str, *, prefs: dict) -> dict:
     """옵션/키에 따라 사용 가능한 인터넷 사전을 모아 조회·병합.
-    prefs: {online_dict_enabled, urimalsaem_key, stdict_key}."""
+    prefs: {online_dict_enabled, stdict_key}."""
     merged = {"def_ko": [], "def_en": [], "examples": [], "sources": []}
     if not prefs.get("online_dict_enabled"):
         return merged
@@ -265,7 +235,6 @@ def lookup_all(term_ko: str, term_en: str, *, prefs: dict) -> dict:
         parts.append(tatoeba(term_en.strip(), "eng"))
     if (term_ko or "").strip():
         parts.append(stdict(term_ko.strip(), prefs.get("stdict_key", "")))
-        parts.append(urimalsaem(term_ko.strip(), prefs.get("urimalsaem_key", "")))
         parts.append(onterm(term_ko.strip(), prefs.get("onterm_key", "")))
         parts.append(tatoeba(term_ko.strip(), "kor"))
     for p in parts:
@@ -291,8 +260,6 @@ def verify_provider_debug(provider: str, key: str, timeout: float = 8.0):
     try:
         if provider == "stdict":
             r = stdict(word, key, timeout)
-        elif provider == "urimal":
-            r = urimalsaem(word, key, timeout)
         elif provider == "onterm":
             r = onterm(word, key, timeout)
         else:

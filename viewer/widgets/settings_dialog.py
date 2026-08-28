@@ -40,7 +40,7 @@ def _verify_external_key(kind: str, key: str):
         if kind == "kipo":
             from ..study import kipo_api
             return kipo_api.verify_key_debug(key)
-        if kind in ("stdict", "urimal", "onterm"):
+        if kind in ("stdict", "onterm"):
             from ..study import online_dict
             return online_dict.verify_provider_debug(kind, key)
     except Exception as e:
@@ -237,9 +237,6 @@ class SettingsDialog(QDialog):
         self.chk_online_dict = _QCb("인터넷 사전 포함 (켜면 단어 편집기에서 온라인 조회)")
         self.chk_online_dict.setChecked(bool(self._prefs.get("online_dict_enabled", False)))
         ol.addRow(self.chk_online_dict)
-        self.ed_urimal_key = _QLe(str(self._prefs.get("urimalsaem_key", "")))
-        self.ed_urimal_key.setPlaceholderText("국립국어원 우리말샘 오픈API 인증키 (무료 발급)")
-        ol.addRow("우리말샘 키:", self._keyrow(self.ed_urimal_key, "urimal"))
         self.ed_stdict_key = _QLe(str(self._prefs.get("stdict_key", "")))
         self.ed_stdict_key.setPlaceholderText("표준국어대사전 오픈API 인증키 (무료 발급)")
         ol.addRow("표준국어대사전 키:", self._keyrow(self.ed_stdict_key, "stdict"))
@@ -348,7 +345,7 @@ class SettingsDialog(QDialog):
         self._refresh_login_status()
 
         # 260621-P3: 모든 API 키를 *** 로 가림 + '키 표시' 토글
-        self._key_edits = [self.ed_urimal_key, self.ed_stdict_key, self.ed_onterm_key,
+        self._key_edits = [self.ed_stdict_key, self.ed_onterm_key,
                            self.ed_law_oc, self.ed_kcsc_key, self.ed_kipo_key,
                            self.ed_anthropic_key]
         for _e in self._key_edits:
@@ -407,8 +404,14 @@ class SettingsDialog(QDialog):
         self.ed_rec_dir = QLineEdit(str(self._prefs.get("recording_dir", "")))
         self.ed_rec_dir.setPlaceholderText("비우면 현재 책갈피 폴더에 저장")
         b_dir = QPushButton("찾기…"); b_dir.clicked.connect(self._pick_rec_dir)
-        rd = QHBoxLayout(); rd.addWidget(self.ed_rec_dir, 1); rd.addWidget(b_dir)
-        _w1 = QWidget(); _w1.setLayout(rd); f.addRow("저장 위치:", _w1)
+        # 260628(UI): 래퍼 QWidget 의 **기본 여백(약 9px)** 때문에 입력칸이 안쪽으로 밀리고
+        #   행 높이도 아래 콤보들과 달라 보였다 → 여백 0·간격 4 로 맞춰 다른 행과 정렬 통일
+        #   (같은 목적의 `_keyrow` 는 이미 이렇게 되어 있었고 이 행만 누락).
+        _w1 = QWidget()
+        rd = QHBoxLayout(_w1)
+        rd.setContentsMargins(0, 0, 0, 0); rd.setSpacing(4)
+        rd.addWidget(self.ed_rec_dir, 1); rd.addWidget(b_dir)
+        f.addRow("저장 위치:", _w1)
 
         self.cmb_audio = QComboBox()
         for v, t in [("none", "영상만(소리 없음)"), ("mic", "마이크"),
@@ -621,7 +624,6 @@ class SettingsDialog(QDialog):
             "theme": self.cmb_theme.currentData(),
             # 260615-9(P11): 인터넷 사전
             "online_dict_enabled": self.chk_online_dict.isChecked(),
-            "urimalsaem_key": self.ed_urimal_key.text().strip(),
             "stdict_key": self.ed_stdict_key.text().strip(),
             "onterm_key": self.ed_onterm_key.text().strip(),
             "law_oc": self.ed_law_oc.text().strip(),

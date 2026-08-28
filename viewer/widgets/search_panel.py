@@ -118,11 +118,9 @@ class SearchResults(QWidget):
 
     @staticmethod
     def _norm_key(p) -> str:
-        import os
-        try:
-            return os.path.normcase(os.path.normpath(str(p)))
-        except Exception:
-            return str(p)
+        """260827: 경로 정규화 키. 260628: 표준 `pathutil.norm_key` 위임(SOT §7.0)."""
+        from viewer.pathutil import norm_key
+        return norm_key(p)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)

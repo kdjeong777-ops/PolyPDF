@@ -113,13 +113,46 @@ def _get_json(url: str, timeout: float):
         return None
 
 
+# 260628(보안감사 A): 업데이트 자산은 GitHub 호스트에서만 받는다.
+#   자산 URL 은 GitHub API 응답(browser_download_url)에서 오지만, 저장소가
+#   잘못 설정/침해되면 임의 호스트를 가리킬 수 있으므로 다운로드 전에 검증한다.
+_TRUSTED_ASSET_HOSTS = ("github.com", "objects.githubusercontent.com",
+                        "release-assets.githubusercontent.com")
+
+
+def is_trusted_asset_url(url: str) -> bool:
+    """https + GitHub 계열 호스트만 허용(서브도메인은 접미사 일치)."""
+    try:
+        from urllib.parse import urlparse
+        u = urlparse(str(url or ""))
+        if u.scheme != "https" or not u.hostname:
+            return False
+        h = u.hostname.lower()
+        return any(h == d or h.endswith("." + d) for d in _TRUSTED_ASSET_HOSTS)
+    except Exception:
+        return False
+
+
+def sha256_file(path) -> str:
+    """파일의 SHA-256 소문자 hex. 실패 시 ''."""
+    import hashlib
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
 def _to_info(rel):
     """릴리스 dict → 표준 info. 자산 zip 은 'win' 포함분 우선, 없으면 첫 zip."""
     if not isinstance(rel, dict):
         return None
     tag = str(rel.get("tag_name") or "")
-    zips = [a for a in (rel.get("assets") or [])
-            if str(a.get("name") or "").lower().endswith(".zip")]
+    assets = rel.get("assets") or []
+    zips = [a for a in assets if str(a.get("name") or "").lower().endswith(".zip")]
 
     # 260618-14: 자동 업데이트는 경량 'update' zip 우선(없으면 win64 full, 그다음 첫 zip).
     #   update zip 은 안 바뀌는 무거운 부분(ffmpeg·tesseract·모델)을 제외 → 기존 설치분 보존.
@@ -127,14 +160,47 @@ def _to_info(rel):
         n = str(a.get("name") or "").lower()
         return (1 if "update" in n else 0, 1 if "win" in n else 0)
     pick = max(zips, key=_score) if zips else None
+    asset_url = pick.get("browser_download_url") if pick else None
+    asset_name = str(pick.get("name") or "") if pick else ""
+    # 260628(A): 신뢰 호스트가 아니면 자산을 버린다(업데이트 미제공 = 안전한 실패).
+    if asset_url and not is_trusted_asset_url(asset_url):
+        asset_url, asset_name = None, ""
+    # 260628(A): 같은 릴리스의 '<자산명>.sha256' 무결성 파일(있으면).
+    sha_url = ""
+    if asset_name:
+        want = (asset_name + ".sha256").lower()
+        for a in assets:
+            if str(a.get("name") or "").lower() == want:
+                u = a.get("browser_download_url")
+                if is_trusted_asset_url(u):
+                    sha_url = u
+                break
     return {
         "tag": tag,
         "version": tag.lstrip("vV"),
         "notes": str(rel.get("body") or ""),
-        "asset_url": pick.get("browser_download_url") if pick else None,
-        "asset_name": str(pick.get("name") or "") if pick else None,
+        "asset_url": asset_url,
+        "asset_name": asset_name,
+        "sha_url": sha_url,
         "html_url": str(rel.get("html_url") or ""),
     }
+
+
+def fetch_expected_sha256(info: dict, timeout: float = 10.0) -> str:
+    """릴리스의 `<자산명>.sha256` 을 읽어 기대 해시(소문자 hex) 반환. 없으면 ''.
+
+    파일 형식은 `sha256sum` 관례(`<hex>  <파일명>`)와 hex 단독 모두 허용."""
+    url = (info or {}).get("sha_url") or ""
+    if not url or not is_trusted_asset_url(url):
+        return ""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            txt = r.read(4096).decode("utf-8", "replace").strip()
+    except Exception:
+        return ""
+    tok = txt.split()[0].lower() if txt.split() else ""
+    return tok if (len(tok) == 64 and all(c in "0123456789abcdef" for c in tok)) else ""
 
 
 def check_latest(repo: str, timeout: float = 8.0, channel: str = "stable"):
@@ -190,9 +256,14 @@ def install_dir() -> Path:
     return Path(__file__).resolve().parent.parent      # 개발 실행: 패키지 상위
 
 
-def download_asset(url: str, progress=None, timeout: float = 30.0):
-    """릴리스 zip 다운로드. progress(done,total)->False 면 취소. 성공 시 파일경로, 실패 None."""
+def download_asset(url: str, progress=None, timeout: float = 30.0, expect_sha256: str = ""):
+    """릴리스 zip 다운로드. progress(done,total)->False 면 취소. 성공 시 파일경로, 실패 None.
+
+    260628(A): ① **신뢰 호스트(GitHub)만** 허용, ② `expect_sha256` 이 주어지면
+    받은 파일의 SHA-256 을 검증하고 **불일치 시 삭제 후 None**(변조·손상 차단)."""
     if not url:
+        return None
+    if not is_trusted_asset_url(url):
         return None
     dest_dir = tempfile.mkdtemp(prefix="polypdf_upd_")
     dest = os.path.join(dest_dir, ASSET_NAME)
@@ -213,6 +284,15 @@ def download_asset(url: str, progress=None, timeout: float = 30.0):
                             return None
                     except Exception:
                         pass
+        # 260628(A): 무결성 검증 — 기대 해시가 있으면 반드시 일치해야 한다.
+        if expect_sha256:
+            got = sha256_file(dest)
+            if got != str(expect_sha256).strip().lower():
+                try:
+                    os.remove(dest)
+                except Exception:
+                    pass
+                return None
         return dest
     except Exception:
         try:
@@ -235,11 +315,25 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+# 260628: 값은 base64 로 전달 → PS 문자열 스플라이싱 인젝션( " / $(...) ) 원천 차단.
+function _b64([string]$s) { if ([string]::IsNullOrEmpty($s)) { return "" } return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($s)) }
 $oldPid  = __PID__
-$zipPath = "__ZIP__"
-$url     = "__URL__"
-$install = "__INSTALL__"
-$exe     = "__EXE__"
+$zipPath = _b64 "__ZIP_B64__"
+$url     = _b64 "__URL_B64__"
+$install = _b64 "__INSTALL_B64__"
+$exe     = _b64 "__EXE_B64__"
+$expSha  = _b64 "__SHA_B64__"     # 260628(A): 기대 SHA-256(hex). 빈 값이면 검증 생략.
+
+function Test-ZipHash([string]$path, [string]$want) {
+    # 260628(A): 압축 해제 **직전** 해시 검증. 승격(UAC) 인스턴스에서도 다시 수행해야
+    #   한다 — zip 이 사용자 쓰기 가능 경로(%TEMP%·설정폴더)에 있어, UAC 승인 대기 중
+    #   다른 프로세스가 바꿔치기하면 관리자 권한으로 그 파일이 설치되기 때문(TOCTOU/권한상승).
+    if ([string]::IsNullOrEmpty($want)) { return $true }        # 해시 미게시 릴리스 → 생략
+    try {
+        $got = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower()
+        return ($got -eq $want.ToLower())
+    } catch { return $false }
+}
 
 function Test-DirWritable([string]$p) {
     try {
@@ -265,8 +359,24 @@ $bar.SetBounds(18,52,420,26); $bar.Minimum=0; $bar.Maximum=100; $bar.Value=0
 $form.Controls.Add($lbl); $form.Controls.Add($bar)
 $form.Show(); $form.Activate(); [System.Windows.Forms.Application]::DoEvents()
 
+function Get-PolyPdfProcs {
+    # 260628(U1): 같은 설치본($exe)으로 실행 중인 PolyPDF 프로세스 전부.
+    #   Path 조회는 보호된 프로세스에서 예외가 나므로 개별 try 로 감싼다.
+    $out = @()
+    try {
+        foreach ($p in (Get-Process -ErrorAction SilentlyContinue)) {
+            $pp = $null
+            try { $pp = $p.Path } catch { $pp = $null }
+            if ($pp -and ($pp -ieq $exe)) { $out += $p }
+        }
+    } catch {}
+    return @($out)
+}
+
 if (-not $Elevated) {
-    # 1) 기존 프로그램 종료 대기
+    # 1) 기존 프로그램 종료 대기 — 요청한 창(oldPid) + **동시에 열려 있는 다른 PolyPDF 창 전부**
+    #    (260628/U1: 종전에는 oldPid 하나만 기다려, 다른 창이 열려 있으면 그 창이 _internal\*.pyd
+    #     등을 잠근 채 설치가 진행돼 **파일 교체 실패 → 부분 설치**(구·신 혼재)가 됐다.)
     $lbl.Text = "기존 프로그램이 종료되기를 기다리는 중..."
     [System.Windows.Forms.Application]::DoEvents()
     for ($i=0; $i -lt 120; $i++) {
@@ -276,6 +386,41 @@ if (-not $Elevated) {
         [System.Windows.Forms.Application]::DoEvents()
     }
     Start-Sleep -Milliseconds 400
+
+    # 1.2) 다른 창: **정상 종료 요청 먼저**(U2) — 각 창에서 저장 확인창이 정상 동작하게.
+    $others = Get-PolyPdfProcs
+    if ($others.Count -gt 0) {
+        $lbl.Text = "다른 PolyPDF 창을 닫는 중... ($($others.Count)개)"
+        [System.Windows.Forms.Application]::DoEvents()
+        foreach ($p in $others) { try { $p.CloseMainWindow() | Out-Null } catch {} }
+        for ($i=0; $i -lt 120; $i++) {          # 최대 60초 대기(저장 여부 응답 시간 포함)
+            $others = Get-PolyPdfProcs
+            if ($others.Count -eq 0) { break }
+            $lbl.Text = "다른 PolyPDF 창이 닫히기를 기다리는 중... ($($others.Count)개 남음)"
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+    }
+    # 1.3) 그래도 남으면 **강제 종료 여부를 사용자에게 질문**(U2 — 묻지 않고 Kill 금지).
+    $others = Get-PolyPdfProcs
+    if ($others.Count -gt 0) {
+        $ans = [System.Windows.Forms.MessageBox]::Show(
+            "다른 PolyPDF 창 $($others.Count)개가 아직 열려 있습니다.`n" +
+            "열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아" +
+            " 업데이트가 실패합니다.`n`n" +
+            "[예] 남은 창을 강제로 닫고 계속`n" +
+            "[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)",
+            "PolyPDF 업데이트", [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning)
+        if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) {
+            $form.Close()
+            Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+            exit
+        }
+        $lbl.Text = "남은 창을 닫는 중..."; [System.Windows.Forms.Application]::DoEvents()
+        foreach ($p in (Get-PolyPdfProcs)) { try { $p.Kill() } catch {} }
+        Start-Sleep -Milliseconds 900
+    }
 
     # 1.5) 다운로드(파일이 없을 때만) — 진행바만, 용량 숫자 표시 안 함
     if (([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) -and -not [string]::IsNullOrEmpty($url)) {
@@ -323,10 +468,31 @@ if (-not $Elevated) {
     if ([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) {
         $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
     }
+    # 260628(U1): 승격 사이에 창이 다시 떴을 수 있으므로 잔여 인스턴스를 짧게 대기.
+    #   (여기서 강제 종료는 하지 않는다 — 남으면 U3 실패 카운트로 정직하게 보고됨.)
+    for ($i=0; $i -lt 20; $i++) {
+        if ((Get-PolyPdfProcs).Count -eq 0) { break }
+        $lbl.Text = "다른 PolyPDF 창이 닫히기를 기다리는 중..."
+        Start-Sleep -Milliseconds 500
+        [System.Windows.Forms.Application]::DoEvents()
+    }
     Start-Sleep -Milliseconds 300
 }
 
 # 2) 압축 해제 = 설치(엔트리별 진행률). 압축 루트에 PolyPDF\ 접두가 있으면 제거.
+# 260628(A): ★ 해제 직전 무결성 재검증(승격 인스턴스 포함) — 실패 시 설치 중단.
+if (-not (Test-ZipHash $zipPath $expSha)) {
+    [System.Windows.Forms.MessageBox]::Show(
+        "업데이트 파일이 손상되었거나 변조되었습니다(무결성 검증 실패).`n" +
+        "안전을 위해 설치를 중단했습니다.`n`n" +
+        "잠시 후 다시 시도하거나, 공식 릴리스에서 설치본을 내려받아 주세요.",
+        "PolyPDF 업데이트", [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    try { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue } catch {}
+    $form.Close()
+    Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+    exit
+}
 $fail = 0
 try {
     $arc = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
@@ -337,6 +503,10 @@ try {
         $n++
         if (-not [string]::IsNullOrEmpty($rel)) {
             $dest = Join-Path $install $rel
+            # 260628: zip-slip 방어 — 설치 폴더 밖으로 벗어나는 엔트리는 건너뜀.
+            $installFull = [IO.Path]::GetFullPath($install).TrimEnd('\') + '\'
+            $destFull = [IO.Path]::GetFullPath($dest)
+            if (-not $destFull.StartsWith($installFull, [StringComparison]::OrdinalIgnoreCase)) { $fail++; continue }
             if ([string]::IsNullOrEmpty($e.Name)) {
                 if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Force -Path $dest | Out-Null }
             } else {
@@ -387,23 +557,32 @@ def pending_zip_path() -> Path:
     return Path(d) / "PolyPDF-update.zip"
 
 
-def apply_update(zip_path: str = None, url: str = "") -> bool:
+def apply_update(zip_path: str = None, url: str = "", sha256: str = "") -> bool:
     """260618-17/24: 실행 중 교체 — **진행률 바 GUI 설치 창**(PowerShell WinForms, 콘솔 숨김).
     앱 종료 대기 → (zip 없으면 url 에서 다운로드, 진행바만) → 압축 해제(설치) → 재실행.
     성공 시 True(설치 도우미 기동) 반환 후 호출측이 앱을 종료해야 함. zip_path/url 중 하나는 있어야 함."""
     has_zip = bool(zip_path and os.path.isfile(zip_path))
     if not has_zip and not url:
         return False
+    # 260628(A): 도우미가 직접 받는 경우도 신뢰 호스트만.
+    if url and not is_trusted_asset_url(url):
+        return False
     inst = str(install_dir())
     exe = sys.executable if is_frozen() else os.path.join(inst, "PolyPDF.exe")
     pid = os.getpid()
     ps1 = os.path.join(tempfile.gettempdir(), f"polypdf_update_{pid}.ps1")
+
+    def _b64(s: str) -> str:
+        import base64
+        return base64.b64encode((s or "").encode("utf-8")).decode("ascii")
+
     script = (_PS_INSTALLER
               .replace("__PID__", str(pid))
-              .replace("__ZIP__", zip_path if has_zip else "")
-              .replace("__URL__", url or "")
-              .replace("__INSTALL__", inst)
-              .replace("__EXE__", exe))
+              .replace("__ZIP_B64__", _b64(zip_path if has_zip else ""))
+              .replace("__URL_B64__", _b64(url or ""))
+              .replace("__INSTALL_B64__", _b64(inst))
+              .replace("__EXE_B64__", _b64(exe))
+              .replace("__SHA_B64__", _b64(str(sha256 or "").strip().lower())))
     try:
         # PS5.1 이 한글을 정확히 읽도록 UTF-8 BOM 으로 기록
         with open(ps1, "w", encoding="utf-8-sig", newline="\r\n") as f:

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QEvent, QSize
 from PyQt6.QtGui import (QImage, QPixmap, QPainter, QColor, QCursor, QPen,
-                         QPalette, QTransform, QIcon)
+                         QPalette, QTransform, QIcon, QKeySequence)
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QMenu, QLineEdit
 
 from viewer.pdf_doc import PdfDocument
@@ -36,7 +36,7 @@ DEFAULT_PENS = [
     {"name": "사용자선 3", "color": "#ffd400", "width": 14, "alpha": 40},
 ]
 DEFAULT_PEN_KEYS = ["Ctrl+1", "Ctrl+2", "Ctrl+3"]
-DEFAULT_REC_KEYS = ["Ctrl+R", "Ctrl+Shift+R"]   # [녹화/재개, 중지]
+DEFAULT_REC_KEYS = ["Ctrl+R", "Ctrl+Shift+R"]   # [녹화/정지 토글, 중단] — 260628(§9.0)
 
 
 class _PresThumbPanel(QWidget):
@@ -226,6 +226,77 @@ class _PageLineEdit(QLineEdit):
         super().keyPressEvent(e)
 
 
+class _RecDot(QWidget):
+    """260628(발표 SOT §9.0.1): 녹화 표시등 — **화면에는 보이고 녹화물에는 안 잡히는** 붉은 점.
+
+    상단 띠는 자동으로 숨으므로 발표자가 녹화 여부를 상시 확인할 수 있는 유일한 표시다.
+    녹화는 화면 캡처(gdigrab)이므로 일반 오버레이는 반드시 녹화물에 찍힌다 →
+    **별도 최상위 창**으로 만들고 `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` 를 건다
+    (표시 affinity 는 HWND 단위라 자식 위젯으로는 불가).
+    적용에 실패하면(구 Windows 등) **표시등을 띄우지 않는다** — 녹화물에 찍히느니 안 보이는 편이 낫다.
+    """
+    WDA_EXCLUDEFROMCAPTURE = 0x11
+    D = 18                       # 점 지름(px)
+    PAD = 8                      # 260628: 우상단 **모서리**에 붙임(사용자 지정 위치)
+
+    def __init__(self, parent=None):
+        super().__init__(None, Qt.WindowType.FramelessWindowHint
+                         | Qt.WindowType.WindowStaysOnTopHint
+                         | Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.resize(self.D + 8, self.D + 8)
+        self._state = "rec"      # rec | paused | dead
+        self._on = True          # 깜박임 위상
+
+    def _apply_exclusion(self) -> bool:
+        """캡처 제외 적용. 성공 시 True(=표시해도 안전)."""
+        try:
+            import ctypes
+            return bool(ctypes.windll.user32.SetWindowDisplayAffinity(
+                int(self.winId()), self.WDA_EXCLUDEFROMCAPTURE))
+        except Exception:
+            return False
+
+    def show_for(self, owner, state: str):
+        """owner(발표 창) 우측 상단에 배치해 표시. 캡처 제외 실패 시 표시하지 않는다."""
+        self._state = state
+        try:
+            g = owner.frameGeometry()
+            self.move(g.right() - self.width() - self.PAD, g.top() + self.PAD)
+        except Exception:
+            pass
+        if not self.isVisible():
+            self.show()
+        if not self._apply_exclusion():      # 핸들 재생성 대비 — 표시할 때마다 재적용
+            self.hide()
+            return False
+        self.raise_()
+        self.update()
+        return True
+
+    def blink(self):
+        self._on = not self._on
+        self.update()
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        r = self.rect().adjusted(4, 4, -4, -4)
+        if self._state == "rec":
+            col = QColor(255, 60, 60) if self._on else QColor(170, 20, 20)
+        elif self._state == "paused":
+            col = QColor(150, 60, 60)                 # 일시정지 = 어둡게 고정
+        else:                                          # dead = 녹화 끊김 경고
+            col = QColor(255, 190, 0) if self._on else QColor(120, 90, 0)
+        p.setBrush(col)
+        p.setPen(QPen(QColor(0, 0, 0, 140), 2))
+        p.drawEllipse(r)
+        p.end()
+
+
 class _DrawOverlay(QWidget):
     """발표 펜 그리기를 표시하는 투명 오버레이(마우스 이벤트는 통과)."""
 
@@ -334,7 +405,7 @@ class PresentationWindow(QWidget):
 
     def __init__(self, file_path, page0: int = 0, parent=None,
                  pointers=None, pointer_active: int = 0,
-                 split_mode: bool = False, overlap_pct: int = 10,
+                 overlap_pct: int = 10,
                  sibling_resolver=None, hyperlink_resolver=None,
                  topbar_h: int = 64, bookmark_resolver=None,
                  crop_resolver=None, hidden_resolver=None, rotation_resolver=None,
@@ -355,7 +426,9 @@ class PresentationWindow(QWidget):
         self._ptr_timer.setInterval(POINTER_HIDE_MS)
         self._ptr_timer.timeout.connect(self._hide_pointer)
         # 260609-6: 상하 2분할(세로 긴 페이지 가독성) — 상/하 + 중앙 겹침
-        self._split_mode = bool(split_mode)
+        # 260628(발표 SOT B5): 분할은 **항상 페이지 방향으로 자동 판정**한다(아래 _orient_split_default). 종전 `split_mode=` 인자는 여기서 넣어도 __init__ 뒷부분에서
+        #   덮어써 **사용자 설정이 한 번도 반영되지 않았다** → 인자·설정을 제거하고 자동 판정으로 확정.
+        self._split_mode = False
         self._split_half = 0                  # 0=상부, 1=하부
         self._overlap_frac = max(0.0, min(0.4, float(overlap_pct) / 100.0))
         # 260609-7: 파일 경계 50% 오버레이(다음/이전 파일 미리보기 → 재선택 시 전환)
@@ -642,17 +715,36 @@ class PresentationWindow(QWidget):
                    "border-radius:6px;padding:4px 10px;font-size:15px;font-weight:bold;}"
                    "QPushButton:hover{background:rgba(255,255,255,0.25);}"
                    "QPushButton:disabled{color:#777;}")
+        # 260628(발표 SOT §9.0): **2버튼**(녹화/정지 토글 + 중단). 종전 3버튼(●/‖/■)은
+        #   '지금 무엇을 누르는지'가 헷갈렸다 → 토글 버튼이 **다음 동작**을 보여준다.
+        # 260628: 녹화 경과시간 — 상단 띠의 녹화 버튼 **왼쪽**(사용자 지정 위치).
+        #   ※ 상단 띠는 발표 창의 일부라 **띠가 보이는 동안에는 녹화물에도 찍힌다**
+        #     (표시등과 달리 캡처 제외 대상이 아님). 띠는 평소 자동으로 숨는다.
+        self._tb_rectime = QLabel("")
+        self._tb_rectime.setStyleSheet(
+            "QLabel{color:#ff8a8a;font-size:14px;font-weight:bold;padding:0 6px;}")
+        self._tb_rectime.setVisible(False)
+        row1.addWidget(self._tb_rectime)
         self._tb_rec = QPushButton("●"); self._tb_rec.setStyleSheet(rec_css)
-        self._tb_rec.setToolTip("녹화/재개")
-        self._tb_rec.clicked.connect(self.recordToggleRequested)
-        self._tb_recpause = QPushButton("‖"); self._tb_recpause.setStyleSheet(rec_css)
-        self._tb_recpause.setToolTip("일시정지")
-        self._tb_recpause.clicked.connect(self.recordPauseRequested)
+        self._tb_rec.setToolTip("녹화 시작")     # 상태에 따라 set_recording_state 가 갱신
+        self._tb_rec.clicked.connect(self._on_rec_toggle_clicked)
         self._tb_recstop = QPushButton("■"); self._tb_recstop.setStyleSheet(rec_css)
-        self._tb_recstop.setToolTip("중지")
+        self._tb_recstop.setToolTip("녹화 중단 · 저장" + self._rec_key_hint(1))
         self._tb_recstop.clicked.connect(self.recordStopRequested)
-        for b in (self._tb_rec, self._tb_recpause, self._tb_recstop):
+        for b in (self._tb_rec, self._tb_recstop):
             row1.addWidget(b)
+        # 녹화 중 테두리 깜박임 + 표시등 깜박임 공용 타이머
+        self._rec_blink = QTimer(self)
+        self._rec_blink.setInterval(600)
+        self._rec_blink.timeout.connect(self._on_rec_blink)
+        self._rec_dot = None
+        self._rec_on = False          # 녹화 중(일시정지 아님)
+        self._rec_paused = False
+        # 260628: 경과시간(초). 일시정지 중에는 증가하지 않고, 녹화가 끝나면 0 으로 리셋.
+        self._rec_secs = 0
+        self._rec_clock = QTimer(self)
+        self._rec_clock.setInterval(1000)
+        self._rec_clock.timeout.connect(self._on_rec_tick)
         self.set_recording_state(False, False)
         # 260611-86: 가운데 정렬 — 페이지 이동(좌)·닫기(우) 제외하고 중앙 그룹을 중앙에
         row1.addStretch(1)
@@ -672,29 +764,128 @@ class PresentationWindow(QWidget):
         self._tb_page_items = []        # 콤보 인덱스 → page0(숨김 제외)
         self._topbar.hide()
 
-    def set_recording_state(self, recording: bool, paused: bool):
-        """260609-17(F4): 녹화 버튼 색/활성 상태 갱신."""
+    def _on_rec_toggle_clicked(self):
+        """260628(§9.0): 한 버튼이 상태에 따라 시작/재개 ↔ 일시정지를 보낸다."""
+        if self._rec_on and not self._rec_paused:
+            self.recordPauseRequested.emit()
+        else:
+            self.recordToggleRequested.emit()
+
+    def _rec_btn_css(self, *, recording: bool, border: str) -> str:
+        """녹화 토글 버튼 스타일. recording=True 면 '정지(‖)' 모습(테두리 깜박임 대상)."""
+        bg = "rgba(190,30,30,0.95)" if recording else "rgba(110,16,16,0.95)"  # 암적색(대기)
+        return ("QPushButton{background:%s;color:#fff;border:2px solid %s;border-radius:6px;"
+                "padding:2px 8px;font-size:15px;font-weight:bold;}"
+                "QPushButton:disabled{color:#888;background:rgba(255,255,255,0.06);"
+                "border:2px solid transparent;}" % (bg, border))
+
+    @staticmethod
+    def _key_hint(seq: str) -> str:
+        """260628: 단축키 문자열 → 툴팁 접미(' (Ctrl+R)'). 미설정이면 빈 문자열.
+
+        ★ 하드코딩하지 않는다 — 녹화 키는 설정 `recording_keys`, 펜 키는 `pen_keys` 로
+        바뀔 수 있으므로 **실제 설정값**을 표시해야 안내가 어긋나지 않는다."""
+        if not seq:
+            return ""
+        try:
+            txt = QKeySequence(seq).toString(QKeySequence.SequenceFormat.NativeText)
+        except Exception:
+            txt = str(seq)
+        return f"  ({txt})" if txt else ""
+
+    def _rec_key_hint(self, idx: int) -> str:
+        rk = getattr(self, "_rec_keys", None) or []
+        return self._key_hint(rk[idx]) if len(rk) > idx else ""
+
+    def _on_rec_tick(self):
+        """260628: 녹화 경과시간 1초 증가 + 라벨 갱신(일시정지 중에는 타이머가 멈춘다)."""
+        self._rec_secs += 1
+        self._update_rec_time_label()
+
+    def _update_rec_time_label(self):
+        lab = getattr(self, "_tb_rectime", None)
+        if lab is None:
+            return
+        t = int(getattr(self, "_rec_secs", 0))
+        h, rem = divmod(t, 3600)
+        m, sec = divmod(rem, 60)
+        lab.setText(f"{h}:{m:02d}:{sec:02d}" if h else f"{m:02d}:{sec:02d}")
+
+    def _on_rec_blink(self):
+        """녹화 중: 버튼 테두리를 밝은 붉은색으로 깜박이고, 표시등도 함께 깜박인다."""
+        self._blink_on = not getattr(self, "_blink_on", False)
+        b = "#ff5a5a" if self._blink_on else "rgba(255,90,90,0.15)"
+        try:
+            self._tb_rec.setStyleSheet(self._rec_btn_css(recording=True, border=b))
+        except Exception:
+            pass
+        d = getattr(self, "_rec_dot", None)
+        if d is not None and d.isVisible():
+            d.blink()
+
+    def set_recording_state(self, recording: bool, paused: bool, dead: bool = False):
+        """260609-17(F4) / 260628(§9.0 재작성): **2버튼** 상태 + 캡처 제외 표시등.
+
+        - 녹화 중  : 토글 = `‖`(정지) + 밝은 붉은 테두리 깜박임, 표시등 = 붉은 점 깜박임
+        - 일시정지 : 토글 = `●`(암적색 원형, 재개), 표시등 = 어두운 붉은 점(고정)
+        - 대기     : 토글 = `●`(암적색 원형, 시작), 표시등 숨김, 중단 버튼 비활성
+        - dead     : 녹화가 예기치 않게 끊김(B6) — 표시등을 **경고색**으로(전체화면에서는
+          상태바가 안 보이므로 이 표시가 유일한 통지 수단)."""
         rec = getattr(self, "_tb_rec", None)
         if rec is None:
             return
-        base = ("QPushButton{{background:{bg};color:#fff;border:none;border-radius:6px;"
-                "padding:4px 10px;font-size:15px;font-weight:bold;}}"
-                "QPushButton:disabled{{color:#777;background:rgba(255,255,255,0.06);}}")
-        if recording and not paused:
-            self._tb_rec.setStyleSheet(base.format(bg="rgba(220,40,40,0.95)"))  # 빨간 녹화중
-            self._tb_rec.setEnabled(False)
-            self._tb_recpause.setEnabled(True)
-            self._tb_recstop.setEnabled(True)
-        elif recording and paused:
-            self._tb_rec.setStyleSheet(base.format(bg="rgba(220,160,40,0.95)"))
-            self._tb_rec.setEnabled(True)      # 재개
-            self._tb_recpause.setEnabled(False)
-            self._tb_recstop.setEnabled(True)
+        self._rec_on = bool(recording)
+        self._rec_paused = bool(paused)
+        active = recording and not paused
+
+        # ----- 경과시간(상단 띠) -----
+        if active:
+            self._tb_rectime.setVisible(True)
+            self._update_rec_time_label()
+            if not self._rec_clock.isActive():
+                self._rec_clock.start()
         else:
-            self._tb_rec.setStyleSheet(base.format(bg="rgba(220,40,40,0.55)"))
-            self._tb_rec.setEnabled(True)      # 시작
-            self._tb_recpause.setEnabled(False)
-            self._tb_recstop.setEnabled(False)
+            self._rec_clock.stop()
+            if recording:                          # 일시정지: 시간 유지·계속 표시
+                self._tb_rectime.setVisible(True)
+                self._update_rec_time_label()
+            else:                                  # 녹화 종료(또는 대기) → 리셋·숨김
+                self._rec_secs = 0
+                self._tb_rectime.setVisible(False)
+
+        if active:
+            self._tb_rec.setText("‖")
+            self._tb_rec.setToolTip("일시정지" + self._rec_key_hint(0))
+            self._tb_rec.setEnabled(True)
+            self._tb_recstop.setEnabled(True)
+            self._tb_recstop.setToolTip("녹화 중단 · 저장" + self._rec_key_hint(1))
+            self._blink_on = True
+            self._tb_rec.setStyleSheet(self._rec_btn_css(recording=True, border="#ff5a5a"))
+            if not self._rec_blink.isActive():
+                self._rec_blink.start()
+        else:
+            self._tb_rec.setText("●")
+            self._tb_rec.setToolTip(("재개" if recording else "녹화 시작")
+                                    + self._rec_key_hint(0))
+            self._tb_rec.setEnabled(True)
+            self._tb_recstop.setEnabled(bool(recording))
+            self._tb_rec.setStyleSheet(
+                self._rec_btn_css(recording=False, border="rgba(255,255,255,0.25)"))
+            if self._rec_blink.isActive() and not dead:
+                self._rec_blink.stop()
+
+        # ----- 표시등(캡처 제외) -----
+        want = "rec" if active else ("paused" if recording else ("dead" if dead else None))
+        if want is None:
+            d = getattr(self, "_rec_dot", None)
+            if d is not None:
+                d.hide()
+            return
+        if getattr(self, "_rec_dot", None) is None:
+            self._rec_dot = _RecDot(self)
+        self._rec_dot.show_for(self, want)      # 실패(구 Windows)하면 스스로 숨는다
+        if want == "dead" and not self._rec_blink.isActive():
+            self._rec_blink.start()             # 경고는 깜박여서 눈에 띄게
 
     def eventFilter(self, obj, ev):
         try:
@@ -1003,15 +1194,36 @@ class PresentationWindow(QWidget):
         return 0.0, 0.0
 
     def _render_cropped(self, dpi):
-        """260609-14(D4): 렌더 후 상/하단 크롭(%) 적용한 픽스맵."""
-        pm = self._render_pixmap(dpi)
+        """260609-14(D4): 렌더 후 상/하단 크롭(%) 적용한 픽스맵.
+
+        260628(발표 SOT B1): **결과를 캐시**한다 — 키 = (파일, 페이지, dpi, 회전, 크롭상, 크롭하).
+        분할 상↔하 전환은 같은 페이지를 자르기만 하면 되는데 종전에는 PyMuPDF 렌더를 매번
+        다시 했다(실측 42.9 ms 전량 낭비; 세로 페이지는 분할이 기본 ON 이라 페이지 넘김의
+        절반이 여기에 해당). 메모리 상한을 위해 **최근 2장만** 보관한다.
+        키에 회전·크롭을 포함하므로 크롭/회전 설정이 바뀌면 자동으로 새로 렌더된다."""
         ct, cb = self._get_crop()
+        try:
+            rot = int(self._rotation() or 0)
+        except Exception:
+            rot = 0
+        key = (str(self._path), int(self._page), int(dpi), rot,
+               round(float(ct), 3), round(float(cb), 3))
+        cache = getattr(self, "_pm_cache", None)
+        if cache is None:
+            cache = self._pm_cache = {}
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        pm = self._render_pixmap(dpi)
         if ct > 0 or cb > 0:
             H = pm.height()
             t = int(H * ct / 100.0)
             b = int(H * cb / 100.0)
             h2 = max(1, H - t - b)
             pm = pm.copy(0, min(t, H - 1), pm.width(), h2)
+        if len(cache) >= 2:                 # 오래된 항목부터 제거(삽입 순서)
+            cache.pop(next(iter(cache)), None)
+        cache[key] = pm
         return pm
 
     def _current_pixmap_fit(self, sw, sh):
@@ -1336,10 +1548,12 @@ class PresentationWindow(QWidget):
                     if ks and QKeySequence(ks).toString().lower() == pl:
                         self._set_pen(i)
                         return
-                # 260609-17(F4): 녹화/중지 단축키
+                # 260609-17(F4) / 260628(§9.0): 녹화 **토글**·중단 단축키.
+                #   버튼과 같은 의미여야 한다 — 종전에는 항상 '시작/재개'만 보내
+                #   녹화 중 단축키를 눌러도 일시정지가 되지 않았다(2버튼화로 불일치 노출).
                 rk = self._rec_keys
                 if len(rk) >= 1 and rk[0] and QKeySequence(rk[0]).toString().lower() == pl:
-                    self.recordToggleRequested.emit(); return
+                    self._on_rec_toggle_clicked(); return
                 if len(rk) >= 2 and rk[1] and QKeySequence(rk[1]).toString().lower() == pl:
                     self.recordStopRequested.emit(); return
         if k == Qt.Key.Key_Escape:
@@ -1783,7 +1997,9 @@ class PresentationWindow(QWidget):
             pr = self._pens[i]
             col = pr.get("color", "#ff3030")
             sel = pen_tool and (i == self._pen_active)
-            pb.setToolTip(f"{pr.get('name','선')} (굵기 {pr.get('width',3)})")
+            pk = getattr(self, "_pen_keys", None) or []
+            pb.setToolTip(f"{pr.get('name','선')} (굵기 {pr.get('width',3)})"
+                          + (self._key_hint(pk[i]) if len(pk) > i else ""))
             border = "4px solid #ff7a00" if sel else "1px solid #888"   # 260611-5: 굵게·주황
             pb.setStyleSheet(
                 f"QPushButton{{background:{col};color:#000;font-weight:bold;"
@@ -2187,6 +2403,18 @@ class PresentationWindow(QWidget):
         p.restore()
 
     def closeEvent(self, e):
+        # 260628(§9.0.1): 표시등은 별도 최상위 창이므로 발표 창과 함께 반드시 정리한다.
+        try:
+            if getattr(self, "_rec_blink", None) is not None:
+                self._rec_blink.stop()
+            if getattr(self, "_rec_clock", None) is not None:
+                self._rec_clock.stop()
+            if getattr(self, "_rec_dot", None) is not None:
+                self._rec_dot.hide()
+                self._rec_dot.deleteLater()
+                self._rec_dot = None
+        except Exception:
+            pass
         # 260611-22: 시계 작동 중이면 종료 전 확인
         try:
             if self._timer_ctl.state != self._timer_ctl.OFF and not getattr(self, "_timer_force_close", False):

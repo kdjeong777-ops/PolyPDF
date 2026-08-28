@@ -206,17 +206,28 @@ class PdfIndex:
         should_cancel: Callable[[], bool] | None = None,
     ):
         """폴더 내 모든 PDF 인덱싱. progress(완료수, 전체수, 현재파일명).
-        260611-89: should_cancel() 가 True 면 즉시 중단(다른 폴더/파일 열 때)."""
+        260611-89: should_cancel() 가 True 면 즉시 중단(다른 폴더/파일 열 때).
+
+        260828: **영구 캐시** — 사라진 파일 정리를 '이 폴더 하위 경로'로 한정.
+        (종전: DB 전체에서 현재 폴더에 없는 경로를 모두 삭제 → 다른 폴더로 전환할 때마다
+        이전 폴더 인덱스가 통째로 사라져 재방문 시 전체 재인덱싱. 이제 폴더별 인덱스가
+        보존되어, 이미 연 적 있는 폴더/파일은 변경분(mtime+size)만 재인덱싱.)"""
         if should_cancel and should_cancel():
             return
         pdfs = sorted(folder.rglob("*.pdf"))
-        # 사라진 파일 정리
+        # 사라진 파일 정리 — **이 폴더 하위**만 (다른 폴더 캐시는 보존)
+        import os as _os
+        from viewer.pathutil import norm_key          # 260628: 경로 키 표준(SOT §7.0)
+        prefix = norm_key(folder)
+        if not prefix.endswith(_os.sep):
+            prefix += _os.sep
         existing_paths = {row["path"] for row in self.conn.execute("SELECT path FROM files")}
         live_paths = {str(p) for p in pdfs}
         for stale in existing_paths - live_paths:
             if should_cancel and should_cancel():
                 return
-            self.remove_file(Path(stale))
+            if norm_key(stale).startswith(prefix):
+                self.remove_file(Path(stale))
 
         total = len(pdfs)
         for idx, pdf in enumerate(pdfs, 1):
@@ -229,7 +240,7 @@ class PdfIndex:
 
     # --- 검색 --------------------------------------------------------------
 
-    def search(self, query: str, limit: int = 1000) -> list:
+    def search(self, query: str, limit: int = 1000, paths: list | None = None) -> list:
         """부분일치(substring) 검색. 페이지 단위 결과를 SearchResult 리스트로 반환.
 
         260616-3: FTS5 MATCH(토큰 단위)는 한글 합성어를 분리하지 못해
@@ -245,15 +256,28 @@ class PdfIndex:
         # 260825: trigram FTS — `p.text LIKE ?`(컬럼 직접, lower() 미사용)면 3자↑ 질의는
         #   트라이그램 색인을 사용해 빠름(대소문자 무시=토크나이저 기본). 함수로 감싸면 색인
         #   최적화가 깨지므로 lower() 를 쓰지 않는다(LIKE 자체가 대소문자 무시).
-        sql = """
+        # 260828: 영구(다중 폴더) 캐시에서 검색 범위를 SQL 로 한정 — LIMIT 이
+        #   다른 폴더 결과로 채워지지 않게. paths=None 이면 전체.
+        args: list = [like]
+        scope_sql = ""
+        if paths:
+            # 260628: 표준 키(pathutil.norm_key)로 통일. ★ 아래 SQL 변환
+            #   `lower(replace(f.path,'/','\'))` 과 **같은 문자열**을 만들어야 한다(SOT §7.0).
+            from viewer.pathutil import norm_key
+            keys = sorted({norm_key(p) for p in paths})
+            scope_sql = (" AND lower(replace(f.path,'/','\\')) IN (%s)"
+                         % ",".join("?" for _ in keys))
+            args.extend(keys)
+        args.append(limit)
+        sql = f"""
             SELECT f.path AS path, p.page_index AS page_index, p.text AS text
             FROM pages_fts AS p
             JOIN files AS f ON f.id = p.file_id
-            WHERE p.text LIKE ? ESCAPE '\\'
+            WHERE p.text LIKE ? ESCAPE '\\'{scope_sql}
             ORDER BY f.path, p.page_index
             LIMIT ?
         """
-        cur = self.conn.execute(sql, (like, limit))
+        cur = self.conn.execute(sql, args)
 
         results: list = []
         pat = re.compile(re.escape(q), re.IGNORECASE)

@@ -23,7 +23,58 @@ PERSONAL_TOP_KEYS = ["favorites", "law_favorites", "recent_folders",
 PERSONAL_PREF_KEYS = {"recording_dir", "recording_mic", "recording_system",
                       "ffmpeg_path", "bookmarker_path", "recording_keys",
                       "recording_test_ok"}
+
+# 260628(보안감사): API 키 등 **비밀 값** — 마스터 SOT §8.2.0 의 3중 규칙 대상.
+#   ① 저장 시 DPAPI 암호화, ② 마이그레이션 백업에서 제거, ③ 배포용 기본값에서 제외.
+#   ★ ③ 이 특히 중요: default_settings.json 은 사용자가 프로그램과 **함께 배포**하는
+#     파일이라, 키가 섞이면 받는 사람 전원에게 유출된다.
+SECRET_PREF_KEYS = {"anthropic_api_key", "law_oc", "kcsc_key", "kipo_signkey",
+                    "stdict_key", "onterm_key"}
 DEFAULT_PROFILE_NAME = "default_settings.json"
+
+
+def _map_secrets(data: dict, fn) -> dict:
+    """`preferences` 안의 비밀 키에 fn 을 적용한 **사본**을 반환(원본 비변경).
+
+    ★ 원본 dict 를 제자리 변경하면 메모리의 키가 암호문으로 바뀌어 API 호출이 깨진다."""
+    if not isinstance(data, dict):
+        return data
+    prefs = data.get("preferences")
+    if not isinstance(prefs, dict):
+        return data
+    hit = [k for k in SECRET_PREF_KEYS if isinstance(prefs.get(k), str) and prefs.get(k)]
+    if not hit:
+        return data
+    out = dict(data)
+    new_prefs = dict(prefs)
+    for k in hit:
+        try:
+            new_prefs[k] = fn(new_prefs[k])
+        except Exception:
+            pass
+    out["preferences"] = new_prefs
+    return out
+
+
+def _encrypt_secrets(data: dict) -> dict:
+    from viewer import secure_store
+    return _map_secrets(data, secure_store.protect_text)
+
+
+def _decrypt_secrets(data: dict) -> dict:
+    from viewer import secure_store
+    return _map_secrets(data, secure_store.unprotect_text)
+
+
+def _strip_secrets(data: dict) -> dict:
+    """비밀 값을 **제거**한 사본(백업·배포용 기본값에 사용)."""
+    if not isinstance(data, dict):
+        return data
+    out = dict(data)
+    prefs = out.get("preferences")
+    if isinstance(prefs, dict):
+        out["preferences"] = {k: v for k, v in prefs.items() if k not in SECRET_PREF_KEYS}
+    return out
 
 
 def settings_dir() -> Path:
@@ -66,6 +117,10 @@ def extract_distributable_defaults(settings: dict, name: str = "기본값") -> d
     prefs = dict(out.get("preferences") or {})
     for pk in PERSONAL_PREF_KEYS:
         prefs.pop(pk, None)
+    # ★ 260628(보안): API 키는 **무조건 제외**. 이 파일은 프로그램과 함께 배포되므로
+    #   키가 섞이면 배포본을 받는 사람 전원에게 유출된다. SOT §8.2.0 규칙 ③.
+    for sk in SECRET_PREF_KEYS:
+        prefs.pop(sk, None)
     out["preferences"] = prefs
     return out
 
@@ -261,7 +316,9 @@ def load(name: str = "settings.json") -> dict:
             for k in CONFIG_TOP_KEYS:
                 if k in prof:
                     base[k] = prof[k]
-        return _migrate(base)
+        # 260628: 첫 실행 경로도 동일하게 복호화 통과(배포 프로파일엔 비밀 값이 없어야
+        #   정상이지만, 구 프로파일이 남아 있어도 일관되게 처리 — SOT §8.2.0).
+        return _decrypt_secrets(_migrate(base))
     try:
         raw = p.read_text(encoding="utf-8")
         d = json.loads(raw)
@@ -283,16 +340,25 @@ def load(name: str = "settings.json") -> dict:
         try:
             bak = p.with_name(p.stem + f".v{old_v}.bak.json")
             if not bak.exists():
-                bak.write_text(raw, encoding="utf-8")
+                # 260628(보안): 백업에는 비밀 값을 남기지 않는다(구: raw 원문 그대로 복사 →
+                #   평문 시절 키가 .bak 에 영구 잔존). SOT §8.2.0 규칙 ②.
+                bak.write_text(
+                    json.dumps(_strip_secrets(d), ensure_ascii=False, indent=2),
+                    encoding="utf-8")
         except Exception:
             pass
-    return _migrate(d)
+    # 260628(보안): 저장된 비밀 값은 DPAPI 복호화해 메모리에서는 평문으로 사용.
+    #   마커 없는 구버전 평문은 그대로 통과하며, 다음 save() 때 자동 암호화된다.
+    return _decrypt_secrets(_migrate(d))
 
 
 def save(data: dict, name: str = "settings.json") -> None:
     p = settings_path(name)
     data.setdefault("schema_version", CURRENT_SCHEMA)
+    # 260628(보안): 비밀 값은 DPAPI 로 감싸 저장. ★ 사본에만 적용(원본을 바꾸면
+    #   메모리의 키가 암호문이 되어 API 호출이 깨진다). SOT §8.2.0.
+    payload = _encrypt_secrets(data)
     try:
-        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass

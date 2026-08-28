@@ -67,6 +67,51 @@ def _unprotect(b64: str) -> str:
     return data.decode("utf-8")
 
 
+# 260628: 범용 텍스트 보호 API — settings.json 의 API 키 암호화에 재사용(마스터 SOT §8.2.0).
+#   PDF 암호(위 _protect/_unprotect)와 같은 DPAPI 사용자 범위이며, 설명 문자열만 다르다.
+DPAPI_PREFIX = "dpapi:v1:"
+
+
+def protect_text(text: str) -> str:
+    """평문 → `dpapi:v1:<base64>`. DPAPI 불가·빈 값·이미 보호된 값이면 **원본 그대로**.
+
+    (원본 반환 = 저장 자체를 막지 않음. 키를 잃는 편이 평문 저장보다 나쁘다는 판단.)"""
+    if not text or not isinstance(text, str):
+        return text
+    if text.startswith(DPAPI_PREFIX):
+        return text
+    if not available():
+        return text
+    try:
+        import win32crypt
+        blob = win32crypt.CryptProtectData(text.encode("utf-8"), "PolyPDF secret",
+                                           None, None, None, 0)
+        return DPAPI_PREFIX + base64.b64encode(blob).decode("ascii")
+    except Exception:
+        return text
+
+
+def unprotect_text(value: str) -> str:
+    """`dpapi:v1:<base64>` → 평문. 마커가 없으면(구버전 평문) **그대로 반환**.
+
+    ★ 복호화 실패(다른 계정·PC 로 복사된 설정, DPAPI 불가 환경 등)면 **암호문을 그대로
+    돌려준다**. 빈 문자열을 반환하면 그 빈 값이 다음 저장 때 파일에 기록되어 **키가 영구
+    소실**된다(복구 불가). 암호문을 유지하면 파일의 원본이 보존되고(`protect_text` 가
+    마커 붙은 값을 건드리지 않음), 해당 API 호출만 실패하므로 사용자가 다시 입력하거나
+    원래 계정에서 정상 복호화할 수 있다 — '키를 잃는 편이 더 나쁘다'(SOT §8.2.0)."""
+    if not value or not isinstance(value, str):
+        return value
+    if not value.startswith(DPAPI_PREFIX):
+        return value                      # 구버전 평문 — 다음 저장 때 자동 암호화
+    try:
+        import win32crypt
+        blob = base64.b64decode(value[len(DPAPI_PREFIX):])
+        _desc, data = win32crypt.CryptUnprotectData(blob, None, None, None, 0)
+        return data.decode("utf-8")
+    except Exception:
+        return value                      # 복호화 실패 — 원본 보존(소실 방지)
+
+
 def _load() -> dict:
     p = _store_path()
     if not p.exists():

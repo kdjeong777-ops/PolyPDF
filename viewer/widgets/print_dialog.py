@@ -12,7 +12,10 @@ from PyQt6.QtWidgets import (
     QWidget, QGroupBox, QFormLayout,
 )
 
-class PrintScopeDialog(QDialog):
+from viewer.widgets.nup_preset import NupPresetMixin   # 260628: 다단 프리셋 공통(SOT §11.10)
+
+
+class PrintScopeDialog(NupPresetMixin, QDialog):
     def __init__(self, page_count: int, cur_page: int,
                  n_thumb_sel: int, n_shot_sel: int, parent=None,
                  preset_api=None, sample=None, n_files_sel: int = 0):
@@ -376,22 +379,8 @@ class PrintScopeDialog(QDialog):
         return (self.rb_all, self.rb_cur, self.rb_thumb,
                 self.rb_files, self.rb_range, self.rb_shot)
 
-    def _reload_presets(self):
-        self.cmb_preset.clear()
-        self.cmb_preset.addItem("(기본 설정)", None)
-        try:
-            for p in ((self._preset_api or {}).get("get_presets", lambda: [])() or []):
-                self.cmb_preset.addItem(p.get("name", "(이름없음)"), p)
-        except Exception:
-            pass
-        if not self._preset_api:
-            self.cmb_preset.setEnabled(False)
-
-    def _on_preset_pick(self, *_):
-        p = self.cmb_preset.currentData()
-        if isinstance(p, dict):
-            self._nup_settings = dict(p)
-            self.chk_nup.setChecked(True)
+    # 260628: _reload_presets/_on_preset_pick/_on_nup_toggle/_open_nup/nup_enabled 는
+    #   NupPresetMixin 공통 구현 사용(SOT §11.10).
 
     def _accept_pdf(self, *_):
         self._to_pdf = True
@@ -400,25 +389,6 @@ class PrintScopeDialog(QDialog):
     def to_pdf(self) -> bool:
         return self._to_pdf
 
-    def _on_nup_toggle(self, on):
-        self.btn_nup.setEnabled(on)
-
-    def _open_nup(self):
-        from viewer.widgets.twoup_dialog import TwoUpSettingsDialog
-        dlg = TwoUpSettingsDialog(self._nup_settings, self,
-                                  preset_api=self._preset_api, sample=self._sample)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self._nup_settings = dlg.get_settings()
-        cur = dlg.current_preset_name() if hasattr(dlg, "current_preset_name") else ""
-        self._reload_presets()
-        if cur:
-            i = self.cmb_preset.findText(cur)
-            if i >= 0:
-                self.cmb_preset.setCurrentIndex(i)
-                self.chk_nup.setChecked(True)
-
-    def nup_enabled(self) -> bool:
-        return self.chk_nup.isChecked()
 
     def nup_settings(self) -> dict:
         from viewer.twoup import merge_twoup_settings

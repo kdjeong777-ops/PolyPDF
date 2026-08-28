@@ -592,13 +592,16 @@ class BookmarkTree(QWidget):
             self.viewModeChanged.emit(False, str(f))
 
     def _select_top_file(self, path):
-        """최상위 파일 노드 중 path 를 선택·스크롤."""
-        key = str(Path(path).resolve()).lower()
+        """최상위 파일 노드 중 path 를 선택·스크롤.
+        260628: 비교 키를 표준 `pathutil.norm_key` 로 통일(app·검색결과와 동일 키; SOT §7.0).
+        구 `Path.resolve().lower()` 는 파일시스템을 타서 느리고 없는 파일에서 예외."""
+        from viewer.pathutil import norm_key
+        key = norm_key(path)
         for i in range(self.tree.topLevelItemCount()):
             it = self.tree.topLevelItem(i)
             d = it.data(0, self.DATA_FILE)
             try:
-                if d and str(Path(d).resolve()).lower() == key:
+                if d and norm_key(d) == key:
                     self.tree.setCurrentItem(it)
                     self.tree.scrollToItem(it)
                     return
@@ -1966,17 +1969,10 @@ def _ancestors(it: QTreeWidgetItem, root: QTreeWidgetItem):
 
 
 def _unique_path(target: Path) -> Path:
-    """target 이 존재하면 (1), (2), ... 접미사로 충돌 회피."""
-    if not target.exists():
-        return target
-    stem, suffix = target.stem, target.suffix
-    parent = target.parent
-    i = 1
-    while True:
-        cand = parent / f"{stem} ({i}){suffix}"
-        if not cand.exists():
-            return cand
-        i += 1
+    """target 이 존재하면 (1), (2), ... 접미사로 충돌 회피.
+    260628: 표준 `pathutil.unique_path` 위임(SOT §7.0)."""
+    from viewer.pathutil import unique_path
+    return unique_path(target)
 
 
 def _stat(p: Path):
