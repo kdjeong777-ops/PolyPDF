@@ -9,6 +9,7 @@ import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 
 ok = True
 def check(name, cond, extra=""):
@@ -38,7 +39,7 @@ check("휴지통 아이콘 컬러 이모지(🗑️)", any("️" in b.text() for
 
 # 가짜 단일 PDF 트리 구성
 import fitz
-PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = _fx.text_pdf()
 bt.load_single_pdf(PDF)
 root = bt.tree.topLevelItem(0)
 # 자식 책갈피 2개 추가(편집 대상)
@@ -102,7 +103,7 @@ check("result_options save_pdf=True", opts.get("save_pdf") is True)
 
 # ---------- _pdf_is_scanned / auto→ocr ----------
 from viewer.workers import _pdf_is_scanned
-HM = r"C:/Claude/MPDF/_samples/HM.pdf"
+HM = _fx.scanned_pdf()
 if os.path.exists(HM):
     check("HM(스캔본) is_scanned=True", _pdf_is_scanned(HM) is True)
 check("아스팔트(디지털 레이어) is_scanned=False", _pdf_is_scanned(PDF) is False)

@@ -4,6 +4,7 @@ import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 ok = True
 def check(n, c, e=""):
     global ok; print(("  OK  " if c else " FAIL ") + n + (f"  {e}" if e else "")); ok = ok and bool(c)
@@ -45,7 +46,7 @@ check("2분할 끄면 right_panel 복귀(4단)",
 check("핸들 숨김", mw._drawer_btn.isHidden())
 
 # 책갈피 활성창 위치 동기화
-PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = _fx.text_pdf()
 if os.path.exists(PDF):
     mw.bookmark_tree.load_single_pdf(PDF)      # 트리에 파일 노드+TOC
     mw._load_main(HistoryItem(PDF, 0, "", "bookmark"))

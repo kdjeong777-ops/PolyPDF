@@ -4,6 +4,7 @@ import os, sys, tempfile
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 ok = True
 def check(n, c, e=""):
     global ok; print(("  OK  " if c else " FAIL ") + n + (f"  {e}" if e else "")); ok = ok and bool(c)
@@ -48,7 +49,7 @@ check("mergeFilesRequested 시그널", hasattr(mw.bookmark_tree, "mergeFilesRequ
 
 # 책갈피 저장 메시지: _read_orig_toc + 빈 책갈피 허용 경로
 from viewer.widgets.bookmark_tree import BookmarkTree
-PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = _fx.text_pdf()
 if os.path.exists(PDF):
     toc = BookmarkTree._read_orig_toc(PDF)
     check("_read_orig_toc 동작(원본 책갈피 읽음)", isinstance(toc, list) and len(toc) > 0,

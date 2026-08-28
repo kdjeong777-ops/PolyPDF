@@ -4,6 +4,7 @@ import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 
 ok = True
 def check(name, cond, extra=""):
@@ -62,7 +63,7 @@ import viewer.app as appmod
 appmod.ss.save_screenshot = lambda *a, **k: __import__("pathlib").Path(
     os.environ.get("TEMP", ".")) / "cap_test.png"
 mw.shot_strip.add_item = lambda *a, **k: None
-PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = _fx.text_pdf()
 from viewer.app import HistoryItem
 if os.path.exists(PDF):
     mw._load_main(HistoryItem(PDF, 0, "", "bookmark"))

@@ -3,11 +3,12 @@ import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(__file__))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 
 from PyQt6.QtWidgets import QApplication
 from viewer.app import MainWindow
 
-PDF = r"C:\Claude\MPDF\_samples\24 아스팔트콘크리트포장시공지침.pdf"
+PDF = _fx.text_pdf()
 app = QApplication.instance() or QApplication(sys.argv)
 mw = MainWindow(); mw.resize(1100, 800); mw.show(); app.processEvents()
 

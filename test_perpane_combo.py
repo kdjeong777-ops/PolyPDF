@@ -4,6 +4,7 @@ import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 ok = True
 def check(n, c, e=""):
     global ok; print(("  OK  " if c else " FAIL ") + n + (f"  {e}" if e else "")); ok = ok and bool(c)
@@ -45,8 +46,8 @@ from viewer.study.ocr_headings import extract_headings_from_store
 from viewer.study.study_store import StudyStore, file_key_for
 from viewer.study import vocab as study_vocab
 import fitz
-PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
-PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = _fx.text_pdf()
+PDF = _fx.text_pdf()
 if os.path.exists(PDF):
     import tempfile
     db = os.path.join(tempfile.mkdtemp(), "s.db")

@@ -4,6 +4,7 @@ import os, sys, tempfile
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 ok = True
 def ck(n, c, e=""):
     global ok; print(("  OK  " if c else " FAIL ") + n + (f"  {e}" if e else "")); ok = ok and bool(c)
@@ -23,7 +24,7 @@ from PyQt6.QtGui import QImage
 img = os.path.join(t, "s.png"); im = QImage(80, 100, QImage.Format.Format_RGB32); im.fill(0xAABBCC); im.save(img)
 
 # fitz 병합: (손상 가능)아스팔트 + a.pdf + 이미지
-ASP = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+ASP = _fx.text_pdf()
 out = os.path.join(t, "merged.pdf")
 out_doc = fitz.open()
 total = 0

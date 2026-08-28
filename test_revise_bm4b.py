@@ -4,6 +4,7 @@ import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 
 ok = True
 def check(name, cond, extra=""):
@@ -45,7 +46,7 @@ check("툴바 순서 캡쳐<읽기그룹<mp3", i_cap < i_grp < i_mp3,
 # 다이얼로그: 자동열기 체크 제거
 from viewer.widgets.bookmarker_dialog import BookmarkerDialog
 from pathlib import Path
-PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = _fx.text_pdf()
 dlg = BookmarkerDialog(default_pdf=Path(PDF))
 check("자동열기 체크 제거", not hasattr(dlg, "chk_open"))
 check("result_options open_after 없음", "open_after" not in dlg.result_options())
@@ -61,7 +62,7 @@ bt.add_or_refresh_file(PDF)
 check("같은 파일 add_or_refresh → 노드 수 유지", bt.tree.topLevelItemCount() == n0,
       f"{n0}->{bt.tree.topLevelItemCount()}")
 # 다른 파일 → 노드 추가(기존 유지)
-other = r"C:/Claude/MPDF/_samples/HM.pdf"
+other = _fx.scanned_pdf()
 if os.path.exists(other):
     bt.add_or_refresh_file(other)
     check("다른 파일 추가 → 노드 +1(기존 유지)", bt.tree.topLevelItemCount() == n0 + 1,

@@ -61,6 +61,10 @@ else:
     print("  SKIP 임베드 라운드트립(소형 PDF/모듈 없음)")
 
 # --- 3) 실제 스캔본 OCR (HM.pdf 앞부분) ---
+# 260628-10: ★ 이 파일만 생성 픽스처(test_fixtures)를 쓰지 않는다.
+#   여기는 **실제 스캔본의 장식체를 OCR 이 읽어내는지**(정규식 보정 포함)를 보는 검사다.
+#   깨끗한 합성 이미지로 바꾸면 통과는 쉬워지지만 검사의 의미가 사라진다.
+#   파일이 없으면 아래 검사는 건너뛴다(가짜 통과가 아니라 명시적 SKIP).
 HM = r"C:/Claude/MPDF/_samples/HM.pdf"
 if os.path.exists(HM):
     # 정규식 경로(큰글자자동 OFF)로 'CHAPTER 1' 인식 검증 — CHAPTER 1은 10p

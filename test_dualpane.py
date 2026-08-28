@@ -4,6 +4,7 @@ import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_fixtures as _fx        # 260628-10: 샘플 PDF를 직접 생성
 ok = True
 def check(n, c, e=""):
     global ok; print(("  OK  " if c else " FAIL ") + n + (f"  {e}" if e else "")); ok = ok and bool(c)
@@ -45,8 +46,8 @@ mw._set_active_pane(0)
 check("활성 복귀 → main_view=왼쪽", mw.main_view is mw._mv[0])
 
 # 두 PDF 로드(활성 창에 로드)
-A = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
-B = r"C:/Claude/MPDF/_samples/HM.pdf"
+A = _fx.text_pdf()
+B = _fx.scanned_pdf()
 import os.path as _p
 if _p.exists(A) and _p.exists(B):
     mw._set_active_pane(0)
