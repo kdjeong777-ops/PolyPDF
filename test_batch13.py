@@ -48,7 +48,7 @@ check("mergeFilesRequested 시그널", hasattr(mw.bookmark_tree, "mergeFilesRequ
 
 # 책갈피 저장 메시지: _read_orig_toc + 빈 책갈피 허용 경로
 from viewer.widgets.bookmark_tree import BookmarkTree
-PDF = r"C:/Claude/MPDF/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
 if os.path.exists(PDF):
     toc = BookmarkTree._read_orig_toc(PDF)
     check("_read_orig_toc 동작(원본 책갈피 읽음)", isinstance(toc, list) and len(toc) > 0,

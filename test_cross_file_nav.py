@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from PyQt6.QtWidgets import QApplication
 from viewer.app import MainWindow
 
-PDF = r"C:\Claude\MPDF\24 아스팔트콘크리트포장시공지침.pdf"
+PDF = r"C:\Claude\MPDF\_samples\24 아스팔트콘크리트포장시공지침.pdf"
 app = QApplication.instance() or QApplication(sys.argv)
 mw = MainWindow(); mw.resize(1100, 800); mw.show(); app.processEvents()
 

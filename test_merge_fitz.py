@@ -23,7 +23,7 @@ from PyQt6.QtGui import QImage
 img = os.path.join(t, "s.png"); im = QImage(80, 100, QImage.Format.Format_RGB32); im.fill(0xAABBCC); im.save(img)
 
 # fitz 병합: (손상 가능)아스팔트 + a.pdf + 이미지
-ASP = r"C:/Claude/MPDF/24 아스팔트콘크리트포장시공지침.pdf"
+ASP = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
 out = os.path.join(t, "merged.pdf")
 out_doc = fitz.open()
 total = 0

@@ -7,7 +7,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import QApplication
 from viewer.app import MainWindow
 
-SRC_PDF = r"C:\Claude\MPDF\24 아스팔트콘크리트포장시공지침.pdf"
+SRC_PDF = r"C:\Claude\MPDF\_samples\24 아스팔트콘크리트포장시공지침.pdf"
 
 fails = []
 def chk(c, m):

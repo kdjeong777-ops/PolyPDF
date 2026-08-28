@@ -10,7 +10,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-PDF = r"C:/Claude/MPDF/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
 ok = True
 
 def check(name, cond):

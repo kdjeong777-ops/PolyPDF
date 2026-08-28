@@ -45,8 +45,8 @@ mw._set_active_pane(0)
 check("활성 복귀 → main_view=왼쪽", mw.main_view is mw._mv[0])
 
 # 두 PDF 로드(활성 창에 로드)
-A = r"C:/Claude/MPDF/24 아스팔트콘크리트포장시공지침.pdf"
-B = r"C:/Claude/MPDF/HM.pdf"
+A = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+B = r"C:/Claude/MPDF/_samples/HM.pdf"
 import os.path as _p
 if _p.exists(A) and _p.exists(B):
     mw._set_active_pane(0)

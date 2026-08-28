@@ -45,7 +45,7 @@ check("2분할 끄면 right_panel 복귀(4단)",
 check("핸들 숨김", mw._drawer_btn.isHidden())
 
 # 책갈피 활성창 위치 동기화
-PDF = r"C:/Claude/MPDF/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
 if os.path.exists(PDF):
     mw.bookmark_tree.load_single_pdf(PDF)      # 트리에 파일 노드+TOC
     mw._load_main(HistoryItem(PDF, 0, "", "bookmark"))

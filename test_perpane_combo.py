@@ -45,8 +45,8 @@ from viewer.study.ocr_headings import extract_headings_from_store
 from viewer.study.study_store import StudyStore, file_key_for
 from viewer.study import vocab as study_vocab
 import fitz
-PDF = r"C:/Claude/MPDF/24 아스팔트콘크리트포장시콘크리트포장시공지침.pdf"
-PDF = r"C:/Claude/MPDF/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
+PDF = r"C:/Claude/MPDF/_samples/24 아스팔트콘크리트포장시공지침.pdf"
 if os.path.exists(PDF):
     import tempfile
     db = os.path.join(tempfile.mkdtemp(), "s.db")

@@ -9,7 +9,7 @@ from PyQt6.QtCore import QEvent
 from PyQt6.QtWidgets import QApplication
 from viewer.widgets.presentation import PresentationWindow
 
-PDF = r"C:\Claude\MPDF\24 아스팔트콘크리트포장시공지침.pdf"
+PDF = r"C:\Claude\MPDF\_samples\24 아스팔트콘크리트포장시공지침.pdf"
 app = QApplication.instance() or QApplication(sys.argv)
 
 fails = []
