@@ -119,12 +119,22 @@ jobs:
           $assets = @($full, $upd, "${{ steps.pkg.outputs.fullsha }}", "${{ steps.pkg.outputs.updsha }}")
           if ($setup -and (Test-Path $setup)) { $assets += $setup }
           # 이미 릴리스가 있으면 없는 자산만 보충(수동 자산 보존). 없으면 새로 생성.
+          # 260628-6: 태그에 -beta/-rc 등 접미사가 있으면 **GitHub prerelease 로 표시**한다.
+          #   앱의 업데이트 채널 판정은 '태그 접미사'로 하고 이 플래그는 보지 않으므로
+          #   (updater.check_latest) 앱 동작은 바뀌지 않는다. 목적은 릴리스 페이지에서
+          #   베타가 'Latest' 배지를 달아 정식처럼 보이던 오해를 없애는 것.
+          $isPre = $tag -match '-'
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             # 260618-35: --clobber 필수 — 릴리스가 이미 있고(수동 생성 등) 같은 이름 자산이
             #   있으면 --clobber 없이는 업로드 전체가 실패해 '새 자산(설치본)'까지 누락된다.
             gh release upload $tag $assets --clobber
+            if ($isPre) { gh release edit $tag --prerelease } else { gh release edit $tag --prerelease=false --latest }
             exit 0
           } else {
-            gh release create $tag $assets --title "PolyPDF $tag" --generate-notes
+            if ($isPre) {
+              gh release create $tag $assets --title "PolyPDF $tag" --generate-notes --prerelease
+            } else {
+              gh release create $tag $assets --title "PolyPDF $tag" --generate-notes --latest
+            }
           }

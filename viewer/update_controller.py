@@ -53,7 +53,7 @@ class UpdateMixin:
         import threading
         sig = self._update_sig
 
-        channel = str(self._prefs.get("update_channel", "beta"))
+        channel = str(self._prefs.get("update_channel", "stable"))   # 260628-6(④)
         # 260618-36: 1.0 이전(major 0=pre-stable)에는 빌드가 베타로만 나오므로, 저장된 설정과
         #   무관하게 항상 베타를 포함해 새 베타 업그레이드를 찾는다. 1.0 이후엔 설정값을 따른다.
         try:

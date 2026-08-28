@@ -122,7 +122,13 @@ gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpe
 - **채널 구분 = 태그 접미사**(GitHub `prerelease` 플래그가 아님 — 플래그는 표시용일 뿐 업데이터가 무시):
   - 정식: `v2.41.0`
   - 베타/나이트리: `v2.41.0-beta.1`, `v2.41.0-rc.2`, `v2.41.0-beta.20260620` 등 (`X.Y.Z-` 뒤에 식별자)
-- **앱 설정**: 도움말 → **'베타(테스트) 버전도 받기'**(기본 꺼짐).
+- **앱 설정**: 도움말 → **'베타(테스트) 버전도 받기'**(기본 꺼짐 = `update_channel: stable`).
+  - **260628-6**: 기본값이 `stable` 이다. 다만 **1.0 이전(major 0)에는 저장값과 무관하게 항상 beta**
+    로 강제되고 메뉴도 체크+비활성이다(`update_controller`) — 지금 전원이 베타를 받는 이유.
+  - 사용자가 메뉴로 직접 고르면 **`update_channel_explicit=True`** 가 남고, **1.0 진입 시** 그
+    표시가 없는 사용자만 1회 `stable` 로 되돌린다 → *설정을 만진 적 없는 사람이 1.0 이후에도
+    계속 베타를 받는 고착*을 막는다. (이 플래그는 저장 페이로드가 허용목록 방식이라
+    `_build_settings_payload` 에 함께 넣어야 하며, 빠지면 조용히 유실된다.)
   - **stable**(기본): 접미사 프리릴리즈를 **무시**, 정식 `vX.Y.Z` 중 최고만 받음.
   - **beta**: 정식+프리릴리즈 **모두** 후보. SemVer 우선순위로 `2.41.0-beta.1 < 2.41.0` 이므로,
     베타 테스터는 rc/베타를 받다가 **정식이 나오면 정식으로** 올라감.
@@ -130,13 +136,30 @@ gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpe
   - 정식 릴리스만 단조 증가 SemVer(MAJOR=호환깨짐/스키마, MINOR=기능, PATCH=수정).
   - 베타는 다음 정식 번호에 `-beta.N`/`-rc.N`. 정식 확정 시 같은 X.Y.Z 의 접미사 없는 태그를 올림.
   - 예: `v2.42.0-beta.1` → `v2.42.0-beta.2` → `v2.42.0`(정식).
+  - **★ 정식을 낸 뒤의 베타는 반드시 다음 마이너로 올린다** — `0.45.0` 정식 후에 다시
+    `0.45.0-beta.102` 를 내면 **정식보다 낮아 아무도 받지 못한다**(프리릴리즈 < 같은 X.Y.Z 정식).
+    → `0.46.0-beta.1` 부터. 회귀 테스트 `test_update_channel.py` 가 이 우선순위를 검사한다.
 
 ```powershell
 # 베타(나이트리) 올리기 — 프리릴리즈 태그로 push (CI 가 zip+설치본 생성)
 cd C:\Claude\MPDF\smart_pdf_viewer; git tag -a v2.42.0-beta.1 -m "PolyPDF v2.42.0-beta.1"; git push origin main v2.42.0-beta.1
-#   GitHub Release 는 prerelease 로 표시(권장): gh release edit v2.42.0-beta.1 --prerelease
+#   260628-6: prerelease 표시는 **release.yml 이 자동 부여**한다(태그에 '-' 가 있으면
+#   --prerelease, 없으면 --latest). 수동 `gh release edit` 불필요.
 ```
 > 정식만 쓰는 일반 사용자는 `-beta`/`-rc` 태그를 절대 받지 않으므로, 베타를 자유롭게 올려도 안전합니다.
+
+### ★ 릴리스 보존 규칙 (260628-6)
+
+**릴리스를 지우지 않는다. 최소 직전 1~2개는 남긴다.**
+
+실측 시점 원격은 **태그 8개 / 릴리스 1개**(`v0.45.0-beta.79` 만)였다. 자동 삭제 로직은 없으므로
+(`gh release delete` 0건) 과거 릴리스는 수동으로 지워졌거나 게시되지 않은 것이다.
+릴리스가 1개뿐이면 **문제가 생겼을 때 되돌아갈 곳이 없다** — 베타 운영 중에는 특히 위험하다.
+
+- 태그를 밀었으면 **릴리스가 실제로 생겼는지 확인**한다: `gh release list --limit 10`
+- 문제 버전이 나오면 직전 정상 릴리스로 재설치를 안내할 수 있어야 한다.
+- 숨기고 싶은 옛 릴리스는 **삭제 대신 draft** 로 내린다(§3-f 의 2.x 재기준 절차와 동일).
+  draft 는 업데이터의 공개 API 목록에서 빠지면서 자산은 보존된다.
 
 ---
 

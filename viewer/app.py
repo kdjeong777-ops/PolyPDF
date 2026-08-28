@@ -1530,7 +1530,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             _pre10 = int((_u0.current_version().lstrip("vV").split(".")[0]) or "0") == 0
         except Exception:
             pass
-        a_beta.setChecked(_pre10 or str(getattr(self, "_prefs", {}).get("update_channel", "beta")).lower() == "beta")
+        a_beta.setChecked(_pre10 or str(getattr(self, "_prefs", {}).get("update_channel", "stable")).lower() == "beta")
         if _pre10:
             a_beta.setEnabled(False)
             a_beta.setToolTip("1.0 이전에는 항상 베타(테스트) 버전을 받습니다.")
@@ -4943,7 +4943,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._prefs.setdefault("update_repo", "")                 # 260618-11: GitHub OWNER/REPO
         self._prefs.setdefault("auto_check_update", True)         # 260618-11: 시작 시 업데이트 확인
         self._prefs.setdefault("auto_download_update", True)      # 260618-24: 백그라운드 미리 다운로드
-        self._prefs.setdefault("update_channel", "beta")          # 260618-33/36: stable|beta(1.0 전엔 beta 기본)
+        # 260628-6(④): 기본값은 **stable**. 1.0 이전에는 어차피 update_controller 가
+        #   채널을 beta 로 강제하므로 오늘 동작은 그대로이고, **1.0 이후** 설정을 만진 적 없는
+        #   사용자가 계속 베타를 받는 고착만 막는다. 사용자가 메뉴로 고른 경우엔
+        #   `update_channel_explicit=True` 가 찍히므로 그 선택을 존중한다.
+        self._prefs.setdefault("update_channel", "stable")        # 260618-33/36, 260628-6
+        self._prefs.setdefault("update_channel_explicit", False)  # 260628-6
+        try:    # 1.0 전환 1회: 명시 선택이 아니면 stable 로 되돌린다.
+            _major = int((__version__.lstrip("vV").split(".")[0]) or "0")
+            if (_major >= 1 and not self._prefs.get("update_channel_explicit")
+                    and str(self._prefs.get("update_channel", "")).lower() == "beta"):
+                self._prefs["update_channel"] = "stable"
+        except Exception:
+            pass
         self._prefs.setdefault("stdict_key", "")
         self._prefs.setdefault("onterm_key", "")
         self._prefs.setdefault("law_oc", "")
@@ -5205,7 +5217,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             "auto_download_update": bool(prefs.get("auto_download_update",
                                                   old.get("auto_download_update", True))),
             "update_channel": str(prefs.get("update_channel",
-                                            old.get("update_channel", "beta"))),  # 260618-33/36
+                                            old.get("update_channel", "stable"))),  # 260618-33, 260628-6/36
+            # 260628-6(④): 사용자가 메뉴로 직접 고른 값인지 — 1.0 전환 마이그레이션이 이 값을 보고
+            #   덮어쓸지 정하므로 **반드시 함께 저장**한다(페이로드는 허용목록 방식이라 누락 시 유실).
+            "update_channel_explicit": bool(prefs.get(
+                "update_channel_explicit", old.get("update_channel_explicit", False))),
             # 260606-19: 단축키 오버라이드 보존
             "shortcuts": prefs.get("shortcuts", old.get("shortcuts", {})),
         }
@@ -5870,6 +5886,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _on_toggle_update_channel(self, checked: bool):
         """260618-33: 베타(테스트) 채널 토글 — 켜면 -beta/-rc 등 프리릴리즈도 후보."""
         self._prefs["update_channel"] = "beta" if checked else "stable"
+        # 260628-6(④): 사용자가 직접 고른 값임을 남겨 1.0 전환 마이그레이션이 덮지 않게 한다.
+        self._prefs["update_channel_explicit"] = True
         try:
             self._save_settings_now()
         except Exception:
