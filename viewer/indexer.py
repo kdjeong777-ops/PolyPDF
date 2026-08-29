@@ -325,6 +325,22 @@ class PdfIndex:
 
     # --- 정리 --------------------------------------------------------------
 
+    def page_texts(self, file_path: str | Path) -> list:
+        """260829(태그 SOT §4.1): 읽기 전용 헬퍼 — 색인된 페이지 텍스트(페이지 순).
+        태그·키워드 자동 생성(auto_tag)이 본문 재파싱 없이 쓰는 입구. 미색인이면 [].
+        스키마·prune 규칙 소유는 검색 SOT(§13) — 여기서는 조회만 한다."""
+        try:
+            row = self.conn.execute(
+                "SELECT id FROM files WHERE path=?", (str(file_path),)).fetchone()
+            if not row:
+                return []
+            cur = self.conn.execute(
+                "SELECT text FROM pages_fts WHERE file_id=? ORDER BY page_index",
+                (row["id"],))
+            return [r[0] or "" for r in cur]
+        except Exception:
+            return []
+
     def close(self):
         try:
             self.conn.close()

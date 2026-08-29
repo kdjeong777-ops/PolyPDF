@@ -246,6 +246,206 @@ check("restore 성공", st.restore_backup())
 check("★ 복원 = 스냅샷과 완전 일치",
       json.dumps(st._data, sort_keys=True, ensure_ascii=False) == snapshot)
 
+# ═════════════════════════ P1 — auto_tag.py (§4·§5.2·§5.3·§5.6·§9.4) ═════
+import fitz  # noqa: E402
+from collections import Counter  # noqa: E402
+
+from viewer import auto_tag as AT  # noqa: E402
+from viewer.auto_tag import (Features, build_profiles, classify_format,  # noqa: E402
+                             extract_features, extract_year, partition,
+                             strip_headers, suggest_tags, topic_similarities)
+
+
+def _mk_pdf(name, pages, image_pages=()):
+    """테스트 전용 소형 PDF 생성(§12 — 외부 파일 의존 금지).
+    pages = [(w, h, text), ...]; image_pages 인덱스엔 전면 이미지 삽입."""
+    p = os.path.join(WORK, name)
+    d = fitz.open()
+    pm = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 60, 60))
+    pm.set_rect(pm.irect, (200, 60, 60))
+    for i, (w, h, text) in enumerate(pages):
+        pg = d.new_page(width=w, height=h)
+        if text:
+            pg.insert_textbox(fitz.Rect(30, 30, w - 30, h - 30), text, fontsize=10)
+        if i in image_pages:
+            pg.insert_image(fitz.Rect(5, 5, w - 5, h - 5), pixmap=pm)
+    d.save(p)
+    d.close()
+    return p
+
+
+def _fmt(path, texts=None, **kw):
+    """★ 텍스트는 page_texts 로 직접 공급 — 프로덕션 경로(index.db 공급)와 동일.
+    (테스트 PDF 의 기본 폰트가 한글을 '?' 로 렌더해 추출 텍스트를 쓸 수 없다.)"""
+    return classify_format(extract_features(path, page_texts=texts), **kw)
+
+
+os.makedirs(WORK, exist_ok=True)
+
+# ── 형식 분류기 (§5.3 — §12-23~30) ──────────────────────────────────────
+present = _mk_pdf("발표.pdf", [(960, 540, f"슬라이드 {i}") for i in range(12)])
+check("§12-25 발표자료(가로+저텍스트)", _fmt(present) == "발표자료")
+
+guide_land = _mk_pdf("포장 지침.pdf", [(960, 540, "요약") for _ in range(12)])
+check("§12-23 명시어가 레이아웃을 이김", _fmt(guide_land) == "지침")
+
+receipt = _mk_pdf("거래.pdf", [(595, 842,
+    "공급자 (주)도로자재\n사업자등록번호 123-45-67890\n공급가액 1,200,000\n합계 1,320,000")])
+_r_txt = ["공급자 (주)도로자재 사업자등록번호 123-45-67890 공급가액 1,200,000 합계 1,320,000"]
+check("§12-25a 영수증 1p — 기사로 안 샘", _fmt(receipt, _r_txt) == "영수증")
+
+cert = _mk_pdf("자재시험.pdf", [(595, 842,
+    "시험항목: 압축강도\n시험결과: 32.5 MPa\n판정: 합격\n발급 수수료 20,000원"),
+    (595, 842, "시험기관: 한국건설시험원 KS F 2405")])
+_c_txt = ["시험항목: 압축강도 시험결과: 32.5 MPa 판정: 합격 발급 수수료 20,000원 "
+          "시료명 아스팔트 혼합물 채취일 규격 밀도 안정도 흐름값 공극률 포화도",
+          "시험기관: 한국건설시험원 주소 경기도 고양시 시험자 홍길동 심의자 김철수 "
+          "시험일자 비고 본 성적서는 시험 시료에 한하며 무단 복제를 금합니다"]
+check("§12-29b 시험성적서(수수료 금액 있어도)", _fmt(cert, _c_txt) == "시험성적서")
+
+official = _mk_pdf("점검안내.pdf", [(595, 842,
+    "수신 서울시설공단\n발신 안전보건실\n문서번호 제2025-123호\n합동점검을 안내합니다."),
+    (595, 842, "붙임 1부. 끝.")])
+_o_txt = ["수신 서울시설공단 발신 안전보건실 문서번호 제2025-123호 합동점검 안내 "
+          "귀 기관의 무궁한 발전을 기원합니다 아래와 같이 점검 일정을 알려드리니 협조 바랍니다",
+          "일시 장소 참석 대상 준비 서류 안전보건 관리 계획서 붙임 1부. 끝. "
+          "담당자 연락처 문의 사항은 안전보건실로 연락 주시기 바랍니다"]
+check("§12-26b 공문 2p — 브로셔 아님", _fmt(official, _o_txt) == "공문")
+
+paper = _mk_pdf("study.pdf", [(595, 842,
+    "Abstract\nPorous asphalt mixture performance."), (595, 842, "Method by Kim et al. 2020")]
+    + [(595, 842, f"body {i}") for i in range(5)]
+    + [(595, 842, "References\n[1] doi:10.1000/x")])
+_topics = ["gradation design", "binder content", "compaction energy",
+           "permeability testing", "rutting resistance", "field validation"]
+_p_txt = (["Abstract Porous asphalt mixture performance study with detailed analysis."]
+          + [f"Method by Kim et al. 2020 covering {t} with experimental data and results."
+             for t in _topics]
+          + ["References [1] doi:10.1000/x journal of pavement engineering"])
+check("§12 논문(구조 신호)", _fmt(paper, _p_txt) == "논문")
+
+brochure = _mk_pdf("홍보물.pdf", [(595, 842, "신제품") for _ in range(4)],
+                   image_pages=(0, 1, 2, 3))
+check("§12-26 브로셔(≤8p·이미지 비중)", _fmt(brochure) == "브로셔")
+
+article = _mk_pdf("스크랩.pdf", [(595, 842,
+    "도로신문 2024.03.15\n배수성 포장 확대" + " 본문" * 200) for _ in range(3)])
+_a_txt = ["도로신문 2024.03.15 배수성 포장 확대" + " 본문" * 200] * 3
+check("§12-26 기사(≤4p+발행일)", _fmt(article, _a_txt) == "기사")
+
+unknown = _mk_pdf("메모.pdf", [(595, 842, "회의 메모" + " 항목" * 300) for _ in range(3)])
+_u_txt = ["회의 메모" + " 항목" * 300] * 3
+check("§12-27 판정 불가 → 형식 없음", _fmt(unknown, _u_txt) is None)
+
+plain25 = _mk_pdf("연구자료.pdf", [(595, 842, f"내용 {i}" + " 본문" * 300)
+                                   for i in range(25)])
+check("§12 기본값 보고서(≥20p)", _fmt(plain25) == "보고서")
+check("§12-29 alias 매핑(보고서→외국보고서)",
+      _fmt(plain25, rules={"alias": {"보고서": "외국보고서"}}) == "외국보고서")
+
+alias_name = _mk_pdf("세금계산서_3월.pdf", [(595, 842, "내역")])
+check("§12-29 별칭 파일명 → 영수증", _fmt(alias_name) == "영수증")
+
+check("형식은 파일당 1개(§12-24) — 반환형 str",
+      isinstance(_fmt(receipt, _r_txt), str))
+
+# 스캔 PDF(§12-28): 텍스트 0 — 형식(파일명)·연도는 나오고 주제는 억제
+scan_guide = os.path.join(WORK, "스캔 포장지침 2021.pdf")
+shutil.copy2(PDF2, scan_guide)
+sf = extract_features(scan_guide)
+check("§12-28 스캔 감지", sf.scanned)
+check("§12-28 스캔에도 형식(파일명)", classify_format(sf) == "지침")
+sy, ssrc, _ = extract_year(sf, today_year=2026)
+check("§12-28 스캔에도 연도(파일명)", sy == 2021 and ssrc == "name")
+sugg = suggest_tags(sf, {"배수성": {"porous": 1.0}}, {}, 1)
+check("§12-28 스캔 → 주제 억제", all(s["axis"] == "형식" for s in sugg))
+
+# ── 머리말 제거 (§12-6) ─────────────────────────────────────────────────
+_words = ["개요", "재료", "배합", "시공", "다짐", "양생", "평가", "유지", "보수", "결언"]
+hdr_pages = [f"대한도로학회 회보 제{i}호\n배수성 포장의 공극률 {_words[i]} 내용"
+             for i in range(10)]
+cleaned, removed = strip_headers(hdr_pages)
+check("§12-6 머리말 반복 줄 제거", removed and all("회보" not in p for p in cleaned))
+check("§12-6 본문은 보존", all("공극률" in p for p in cleaned))
+short = ["머리말 없음"] * 3
+check("§12-6 짧은 문서는 판정 안 함", strip_headers(short)[0] == short)
+
+# ── L1 — §3.1-② 시나리오: 영문 논문 + #배수성 프로파일 (§12-4) ──────────
+def _feat_txt(name, text):
+    # 3페이지(<HDR_MIN_PAGES) — 동일 문장 반복이 머리말 제거에 걸리지 않게
+    return extract_features(os.path.join(WORK, name), page_texts=[text] * 3,
+                            open_pdf=False)
+
+p1 = _feat_txt("p1.pdf", "porous asphalt OGFC drainage permeable void ratio")
+p2 = _feat_txt("p2.pdf", "porous pavement OGFC permeable friction course drainage")
+p3 = _feat_txt("p3.pdf", "open graded OGFC porous drainage stormwater")
+manual_doc = _feat_txt("m1.pdf", "사용자 매뉴얼 설치 방법 화면 버튼 클릭 usb")
+df = Counter()
+for ft in (p1, p2, p3, manual_doc):
+    df.update(set(ft.terms))
+profiles = build_profiles({"배수성": [p1.terms, p2.terms, p3.terms],
+                           "설명서": [manual_doc.terms]}, df, 4)
+newdoc = _feat_txt("new.pdf",
+                   "mix design of porous asphalt OGFC drainage layer permeable")
+sims = topic_similarities(newdoc, profiles, df, 4)
+check("§12-4 ★ 영문 porous 논문 → #배수성",
+      sims.get("배수성", 0) >= AT.TUNING["SUGGEST_MIN"]
+      and sims["배수성"] > sims.get("설명서", 0), f"sims={sims}")
+sg = suggest_tags(newdoc, profiles, df, 4, known_tags=["배수성", "설명서"])
+check("제안에 주제 태그 포함", any(s["tag"] == "배수성" and s["axis"] == "주제"
+                                   for s in sg))
+
+# ── 연도 추출 (§9.4 — §12-46~52) ────────────────────────────────────────
+def _yr(stem="", folders=(), head="", meta=None):
+    ft = Features(stem=stem, head_text=head, meta=meta or {},
+                  folder_names=list(folders))
+    return extract_year(ft, today_year=2026)
+
+check("§12-46 파일명 YYYYMMDD", _yr("vpn 사용자 매뉴얼-20250818")[0] == 2025)
+check("§12-47 ★ v버전 오탐 방지", _yr("mnl+om,kor,dc-v4212+#2+brand-kr,v1.0")[0] is None)
+check("§12-48 ★ 미래 연도 거부", _yr("계획서 2027")[0] is None)
+check("§12-49 2자리 연도 미채택", _yr("24 아스팔트콘크리트포장시공지침")[0] is None)
+check("§9.4-② 폴더 YYMMDD", _yr("자료", folders=["230718바이오매스"]) == (2023, "folder", 0.8))
+check("폴더 6자리 단독(250527)", _yr("자료", folders=["250527"])[0] == 2025)
+check("폴더 순번 오탐 없음(10. 건축연구본부)", _yr("자료", folders=["10. 건축연구본부"])[0] is None)
+check("§12 1페이지 ©연도", _yr("자료", head="© 2021 Korea Expressway") == (2021, "page1", 0.6))
+check("§12-50 ★ 본문(참고문헌) 안 훑음 — head 밖 연도 무시",
+      _yr("자료", head="")[0] is None)
+check("meta 최후 폴백(저신뢰)", _yr("자료", meta={"creationDate": "D:20190402"})
+      == (2019, "meta", 0.3))
+check("§12-52 못 찾으면 None(추측 금지)", _yr("아스팔트 지침") == (None, "", 0.0))
+
+# ── 2단 임계값·상한 (§5.6 — §12-14·15·22·30) ────────────────────────────
+mk = lambda tag, sc, kind, ax: {"tag": tag, "score": sc, "kind": kind,
+                                "axis": ax, "why": "t"}
+res = partition([
+    mk("발표자료", 1.0, "new", "형식"),            # 신규 형식 → 자동(§5.4-5 예외)
+    mk("배수성", 0.70, "existing", "주제"),
+    mk("순환", 0.60, "existing", "주제"),
+    mk("아스팔트", 0.58, "existing", "주제"),
+    mk("포장설계", 0.57, "existing", "주제"),      # 주제 4번째 → 상한 초과
+    mk("바이오", 0.40, "existing", "주제"),        # 게이트 미달 → 제안만
+    mk("공극률", 0.90, "new", "주제"),             # 신규 주제 → 점수 무관 미부여
+])
+auto_tags = [s["tag"] for s in res["auto"]]
+check("§12-30 신규 형식 자동 부여", "발표자료" in auto_tags)
+check("§12-14 게이트 미달 → 제안만", "바이오" not in auto_tags)
+check("§12-15 ★ 신규 주제 점수 무관 미부여", "공극률" not in auto_tags)
+check("§12-22 상한 형식1+주제3", len(auto_tags) == 4
+      and "포장설계" not in auto_tags, f"auto={auto_tags}")
+check("제안 목록에 잔여 보존", {s["tag"] for s in res["suggest"]}
+      >= {"포장설계", "바이오", "공극률"})
+
+# 축 유도(§5.1 — auto_axis 필드 없이)
+check("axis_of 유도", AT.axis_of("논문") == "형식" and AT.axis_of("배수성") == "주제"
+      and AT.axis_of("외국보고서", {"alias": {"보고서": "외국보고서"}}) == "형식")
+
+# 프로파일 캐시(§5.2 — mtime 무효화)
+cachep = os.path.join(WORK, "tag_profile.json")
+AT.save_profile_cache(cachep, 111, profiles)
+check("프로파일 캐시 적중", AT.load_profile_cache(cachep, 111) is not None)
+check("프로파일 캐시 mtime 무효화", AT.load_profile_cache(cachep, 222) is None)
+
 # ── 머지 게이트 3·5: 실제 file_tags.json 사본 하위호환 ───────────────────
 real = os.path.expandvars(r"%APPDATA%\LocalTools\PolyPDF\file_tags.json")
 if os.path.exists(real):
