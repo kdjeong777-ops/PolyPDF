@@ -317,7 +317,23 @@ class PrintMixin:
         import tempfile, atexit, shutil
         d = tempfile.mkdtemp(prefix=prefix)
         atexit.register(shutil.rmtree, d, ignore_errors=True)
+        # 260628-15: 앱은 종료 시 `os._exit` 로 끝내므로(§14.x 종료 크래시 회피) atexit 가
+        #   돌지 않는다. 목록을 들고 있다가 closeEvent 에서 **직접** 지운다.
+        try:
+            self._print_tmpdirs.append(d)
+        except AttributeError:
+            self._print_tmpdirs = [d]
         return Path(d)
+
+    def cleanup_print_tmpdirs(self):
+        """260628-15: 인쇄용 임시폴더 정리(종료 시 closeEvent 에서 호출)."""
+        import shutil
+        for d in list(getattr(self, "_print_tmpdirs", [])):
+            try:
+                shutil.rmtree(d, ignore_errors=True)
+            except Exception:
+                pass
+        self._print_tmpdirs = []
 
     def _build_nup_pdf_items(self, items, settings):
         """260825: 여러 항목(파일)을 다단(N-up)으로 구성. 출력 PDF 경로 반환(실패 None)."""

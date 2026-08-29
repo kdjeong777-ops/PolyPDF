@@ -224,7 +224,31 @@ def main():
             QTimer.singleShot(0, lambda p=pdf_arg: win.open_pdf(Path(p)))
     except Exception:
         pass
-    sys.exit(app.exec())
+    code = app.exec()
+
+    # 260628-14: ★ 종료 크래시 회피 — 이벤트 루프가 끝난 뒤 **즉시** 프로세스를 끝낸다.
+    #
+    #   증상: 창을 정상적으로 닫아도 Windows 이벤트 로그에 매번
+    #     `PolyPDF.exe … Qt6Core.dll … 0xC0000409`(STATUS_STACK_BUFFER_OVERRUN) 가 쌓이고
+    #     WER 보고가 뜬다(2026-08-29 사용자 보고, 설치본·개발본 양쪽 재현).
+    #     오프스크린 테스트에서 겪은 것과 **같은 원인**으로, 거기서도 `os._exit` 로 우회했다(§14.7).
+    #
+    #   여기는 `app.exec()` 가 반환한 뒤 = **모든 저장이 끝나고**(closeEvent 에서 QSettings·
+    #   settings.json 기록) 남은 일이 Qt 객체 소멸뿐인 지점이다. 그 소멸이 바로 죽는 곳이라
+    #   건너뛴다. ※ closeEvent 안에서 부르면 안 된다 — `mw.close()` 를 쓰는 오프스크린
+    #     테스트까지 프로세스가 죽고, Qt 콜백 안에서의 ExitProcess 는 오히려 더 위험하다
+    #     (실제로 테스트 5개가 깨져 이 자리로 옮겼다).
+    #   ※ `os._exit` 는 atexit 를 건너뛴다. 그렇다고 `atexit._run_exitfuncs()` 를 부르면
+    #     **그 안에서 바로 이 크래시가 난다**(2026-08-29 표식 추적으로 확인 — app.exec() 반환
+    #     직후 표식은 찍히고 그 다음 표식이 안 찍혔다). PyQt 등이 등록한 정리가 결국 같은
+    #     Qt teardown 을 타기 때문이다. → **일괄 실행하지 않는다.**
+    #     우리 쪽 정리(인쇄 임시폴더)는 closeEvent 에서 이미 끝낸다.
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        pass
+    os._exit(code)
 
 
 if __name__ == "__main__":

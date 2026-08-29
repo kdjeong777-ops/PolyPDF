@@ -717,7 +717,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._after_capture()
 
     def _after_capture(self):
-        if getattr(self, "_panel_in_drawer", False):
+        """캡처 직후 결과를 보여 준다.
+
+        260628-14(회귀 수정): 드로어 **자동표시**(1.5초 뒤 접힘)는 원래 **2단 보기** 때문에
+        패널을 화면 밖으로 비켜 둔 경우를 위한 것이다(260606-13). 그런데 시작 기본 상태가
+        '패널 숨김'(§3.1.1)이 되면서 **평상시에도 드로어 모드**가 되어, 캡처 결과가 잠깐
+        나타났다 사라져 **'캡처가 안 된다'로 보였다**(사용자 보고).
+        → 2단 때만 자동표시를 쓰고, 그 외에는 스크린샷 패널을 **정식으로 펼친다**
+          (`act_toggle_shot` → `_sync_right_layout` 이 컬럼 모드로 되돌린다).
+        """
+        if getattr(self, "_panel_in_drawer", False) and getattr(self, "_split_on", False):
             self._drawer_auto_show()
         else:
             self._ensure_shots_visible()
@@ -5853,6 +5862,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260611-91: 설정 초기화 재시작 중이면 옛 메모리 상태로 settings.json 을 덮어쓰지 않음
         if not getattr(self, "_skip_save_on_close", False):
             self._save_settings_now()
+        # 260628-15: 종료를 `os._exit` 로 끝내 atexit 가 돌지 않으므로 여기서 직접 정리한다.
+        try:
+            self.cleanup_print_tmpdirs()
+        except Exception:
+            pass
         super().closeEvent(event)
 
     def _confirm_close_edit(self) -> bool:
