@@ -3464,7 +3464,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not self._prefs.get("auto_tag_enabled", True) and not force:
             return                                    # §3.5 각주 — 끄면 제안만(다이얼로그)
         if getattr(self, "_autotag_worker", None) is not None:
-            return                                    # 이미 실행 중
+            # 260830 최종검토: 실행 중 새 요청(폴더 전환 등)은 버리지 않고 재큐잉 —
+            # 끝나면 한 번 다시 돈다(새 폴더가 스캔에서 빠지는 틈 방지).
+            self._autotag_rescan = True
+            return
         store = getattr(self.bookmark_tree, "_tags", None)
         if store is None:
             return
@@ -3506,6 +3509,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _on_autotag_error(self, msg):
         self._autotag_worker = None
         self.status.showMessage(f"태그 계산 오류: {msg}", 4000)
+        self._autotag_maybe_rescan()
+
+    def _autotag_maybe_rescan(self):
+        """실행 중 들어온 재요청 처리(폴더 전환 등 — 260830 최종검토)."""
+        if getattr(self, "_autotag_rescan", False):
+            self._autotag_rescan = False
+            QTimer.singleShot(200, self._start_autotag_scan)
 
     def _on_autotag_finished(self, results, stats):
         """워커 결과를 UI 스레드에서 적용 — 재연결(§6.1)·자동 부여(§5.6)·연도(§9.4).
@@ -3559,6 +3569,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             msg += f", 이동 재연결 {n_moved}건"
         self.status.showMessage(msg, 5000)
         self._autotag_first_summary(stats, n_auto)
+        self._autotag_maybe_rescan()
 
     def _autotag_first_summary(self, stats, n_auto):
         """§8.2 첫 실행 요약 — 1회 모달. 무엇을 '안 했는지'도 말한다(조용한 누락 금지)."""
