@@ -188,13 +188,23 @@ class PageThumbs(QWidget):
 
     def _ext_doc(self, src: str):
         """붙여넣기 원본 렌더용 PdfDocument(캐시). 실패 시 None."""
-        d = self._ext_docs.get(src, None)
+        d = self._ext_docs.pop(src, None)      # 260829: 적중 시 뒤로 보내 LRU 유지
         if d is None:
             try:
                 d = PdfDocument(src)
             except Exception:
                 d = False
-            self._ext_docs[src] = d
+        self._ext_docs[src] = d
+        # 260829(§19.11 P-B): 상한 4 — 원본 PDF 를 여럿 오가며 붙여넣어도 핸들·fitz
+        #   메모리가 무한히 쌓이지 않게. 가장 오래 안 쓴 것부터 close.
+        while len(self._ext_docs) > 4:
+            _k = next(iter(self._ext_docs))
+            _old = self._ext_docs.pop(_k)
+            try:
+                if _old:
+                    _old.close()
+            except Exception:
+                pass
         return d or None
 
     def _render_ext_item(self, item, src: str, epg: int):

@@ -67,6 +67,13 @@ class PageCache:
         self._cur = 0
 
 
+# 260829(§19.11 P-A): ★ 앱 전역 단일 렌더 캐시.
+#   문서마다 PageCache 를 따로 가지면 2단·발표·썸네일이 각각 256MB 를 들고
+#   최악 GB 대가 된다 → 전역 예산 하나로 통일. 키의 cache_tag(경로|mtime)가
+#   문서를 구분하므로 공유해도 섞이지 않는다.
+GLOBAL_PAGE_CACHE = PageCache(max_bytes=256 * 1024 * 1024)
+
+
 class PdfDocument:
     """PyMuPDF 문서 래퍼."""
 
@@ -78,7 +85,12 @@ class PdfDocument:
             self._authed = not bool(self.doc.needs_pass)
         except Exception:
             self._authed = True
-        self.cache = cache or PageCache()
+        self.cache = cache or GLOBAL_PAGE_CACHE      # 260829: 기본 = 전역 캐시(§19.11)
+        # 260829: 캐시 태그 — mtime 포함으로 파일 변경 시 낡은 픽셀 재사용 방지.
+        try:
+            self._cache_tag = f"{self.path}|{self.path.stat().st_mtime_ns}"
+        except Exception:
+            self._cache_tag = str(self.path)
 
     @property
     def needs_password(self) -> bool:
@@ -141,7 +153,7 @@ class PdfDocument:
             effective_dpi = round(base_dpi * scale)
         effective_dpi = max(72, min(600, effective_dpi))   # 안전 범위
 
-        key = RenderKey(str(self.path), page_index, effective_dpi, rgba)
+        key = RenderKey(self._cache_tag, page_index, effective_dpi, rgba)   # 260829: mtime 포함 태그
         cached = self.cache.get(key)
         if cached is not None:
             return cached
@@ -156,6 +168,28 @@ class PdfDocument:
             page_rect=tuple(page.rect),
             is_rgba=bool(rgba),
         )
+        self.cache.put(key, result)
+        return result
+
+    def render_scaled(self, page_index: int, physical_scale: float) -> RenderedPage:
+        """260829(§19.11 P-A): 물리 배율 지정 렌더 — 메인 뷰어(1:1 파이프라인) 전용.
+
+        배율을 1e-4 단위로 정수화해 캐시 키로 쓴다(§19.9 백로그 구현) — 같은
+        페이지·배율 재방문(페이지 왕복·유휴 복귀)은 재렌더 없이 캐시 적중.
+        ※ 반환 samples 는 캐시 소유라 LRU 회수될 수 있다 — 호출자는 QImage 를
+          반드시 .copy() 로 분리할 것(직접 참조 시 회수 타이밍에 크래시).
+        """
+        q = max(0.1, min(20.0, float(physical_scale)))
+        scale_q = int(round(q * 10000))                 # 정수화(부동소수 지터 미스 방지)
+        key = RenderKey(self._cache_tag, page_index, scale_q, False)
+        cached = self.cache.get(key)
+        if cached is not None:
+            return cached
+        page = self.doc.load_page(page_index)
+        mat = fitz.Matrix(scale_q / 10000, scale_q / 10000)
+        pix = page.get_pixmap(matrix=mat, alpha=False, colorspace=fitz.csRGB)
+        result = RenderedPage(width=pix.width, height=pix.height,
+                              samples=pix.samples, page_rect=tuple(page.rect))
         self.cache.put(key, result)
         return result
 

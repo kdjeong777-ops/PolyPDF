@@ -1696,15 +1696,21 @@ class BookmarkTree(QWidget):
         260609-11: 편집 모드에서도 동작(요청). blockSignals 로 네비게이션은 발생 안 함."""
         if not file_path:
             return
+        # 260829(§19.11 P-D): Path.resolve() 는 항목마다 디스크 syscall(_getfinalpathname)을
+        #   부른다 — 페이지 이동마다 파일 수만큼 반복돼(실측 732회/페이지, 127ms) 유휴 복귀
+        #   프리징의 주범이었다. 프로젝트 표준 norm_key(normcase+normpath, 순수 문자열)로 교체.
         try:
-            fpr = Path(file_path).resolve()
+            from viewer.pathutil import norm_key
+            fpk = norm_key(file_path)
         except Exception:
-            fpr = None
+            fpk = str(file_path).lower()
+            def norm_key(p):  # 폴백 — 동일 규칙 근사
+                return str(p).lower()
         top = None
         for i in range(self.tree.topLevelItemCount()):
             it = self.tree.topLevelItem(i)
             d = it.data(0, self.DATA_FILE)
-            if d and (d == str(file_path) or (fpr is not None and Path(d).resolve() == fpr)):
+            if d and (d == str(file_path) or norm_key(d) == fpk):
                 top = it
                 break
         if top is None:

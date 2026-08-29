@@ -373,6 +373,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._drawer_timer = _QTimer(self)
         self._drawer_timer.setSingleShot(True)
         self._drawer_timer.timeout.connect(self._on_drawer_idle_timeout)
+
+        # 260829(§19.11 P-C): 창 비활성 15분 → 렌더 캐시 자발 해제(복귀 프리징 대책).
+        #   활성화되면 changeEvent 가 stop — 실사용 중에는 절대 발화하지 않는다.
+        self._idle_release_timer = _QTimer(self)
+        self._idle_release_timer.setSingleShot(True)
+        self._idle_release_timer.setInterval(15 * 60 * 1000)
+        self._idle_release_timer.timeout.connect(self._release_render_memory)
         self._handle_offset = 0              # 260606-20: 손잡이 세로 비킴 오프셋
         self._last_scroll_val = 0
         for mv in self._mv:                  # 뷰어 스크롤 시 손잡이 위치 갱신
@@ -5868,6 +5875,39 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         super().closeEvent(event)
+
+    def _release_render_memory(self):
+        """260829(§19.11 P-C): 렌더 캐시·fitz 스토어 자발 해제.
+
+        메모리 압박 시 OS 가 워킹셋을 통째로 트림하면 복귀가 초 단위로 언다 —
+        트림당하기 전에 스스로 비워 스왑 오염을 줄인다. 복귀 비용은 현재 페이지
+        1회 재렌더(캐시 미스와 같은 경로)뿐이라 회귀가 없다."""
+        try:
+            from viewer.pdf_doc import GLOBAL_PAGE_CACHE
+            GLOBAL_PAGE_CACHE.clear()
+        except Exception:
+            pass
+        try:
+            import fitz
+            fitz.TOOLS.store_shrink(100)          # MuPDF 내부 스토어 비움
+        except Exception:
+            pass
+
+    def changeEvent(self, event):
+        """260829(§19.11 P-C): 최소화 즉시 + 비활성 15분 후 렌더 캐시 해제."""
+        try:
+            from PyQt6.QtCore import QEvent as _QEv
+            et = event.type()
+            if et == _QEv.Type.WindowStateChange and self.isMinimized():
+                self._release_render_memory()
+            elif et == _QEv.Type.ActivationChange:
+                if self.isActiveWindow():
+                    self._idle_release_timer.stop()
+                else:
+                    self._idle_release_timer.start()
+        except Exception:
+            pass
+        super().changeEvent(event)
 
     def _confirm_close_edit(self) -> bool:
         """편집모드 + 미저장 변경이 있으면 저장/저장 안 함/취소를 묻는다.

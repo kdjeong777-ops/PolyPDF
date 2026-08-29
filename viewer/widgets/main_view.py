@@ -1947,12 +1947,11 @@ class MainView(QWidget):
         # 물리 픽셀 = 논리 * DPR. PyMuPDF 에 이 크기로 직접 요청.
         dpr = self.view.devicePixelRatioF() or 1.0
         physical_scale = zoom * dpr
-        mat = fitz.Matrix(physical_scale, physical_scale)
-        pix = page_obj.get_pixmap(matrix=mat, alpha=False)
-
-        # samples 버퍼는 pix 의 수명에 묶여있으므로 QImage.copy() 로 분리
+        # 260829(§19.11 P-A): 전역 렌더 캐시 경유 — 같은 페이지·배율 재방문은 재렌더 없음.
+        #   캐시 버퍼는 LRU 회수될 수 있으므로 .copy() 로 수명 분리(필수).
+        rp = self._doc.render_scaled(self._current_page, physical_scale)
         img = QImage(
-            pix.samples, pix.width, pix.height, pix.width * 3,
+            rp.samples, rp.width, rp.height, rp.width * 3,
             QImage.Format.Format_RGB888,
         ).copy()
         qpix = QPixmap.fromImage(img)
@@ -2086,9 +2085,9 @@ class MainView(QWidget):
 
         dpr = self.view.devicePixelRatioF() or 1.0
         ps = zoom * dpr
-        mat = fitz.Matrix(ps, ps)
-        pix_l = page_left.get_pixmap(matrix=mat, alpha=False)
-        pix_r = page_right.get_pixmap(matrix=mat, alpha=False) if page_right else None
+        # 260829(§19.11 P-A): 2쪽 보기도 전역 캐시 경유(좌/우 각각 1페이지 키).
+        pix_l = self._doc.render_scaled(idx_left, ps)
+        pix_r = self._doc.render_scaled(idx_right, ps) if page_right else None
 
         gap_px = int(gap_pt * ps)
         total_w_px = pix_l.width + gap_px + (pix_r.width if pix_r else 0)
@@ -3419,7 +3418,8 @@ class MainView(QWidget):
     def _save_page_images(self):
         f = self.current_file()
         if self._img_setter and f and not self._is_image:
-            out = [{"data": o["data"], "rect": [round(v, 5) for v in o["rect"]],
+            out = [{"data": o["data"] or self._pix_to_b64(o["pix"]),   # 260829: 지연 생성
+                    "rect": [round(v, 5) for v in o["rect"]],
                     "shape": o["shape"], "alpha": int(o["alpha"]),
                     "rot": round(float(o.get("rot", 0.0)), 2)}
                    for o in self._img_objects]
@@ -3443,7 +3443,9 @@ class MainView(QWidget):
         else:
             fh = 0.35
         fh = max(0.05, min(0.9, fh)); fw = max(0.05, min(0.9, fw))
-        obj = {"pix": pix, "data": self._pix_to_b64(pix),
+        # 260829(§19.11 P-B): b64 는 저장 시점(_save_page_images)에만 생성 — 편집 중
+        #   pix+b64 이중 보관 제거(이미지가 많으면 메모리 2배였다).
+        obj = {"pix": pix, "data": None,
                "rect": [0.5 - fw / 2, 0.5 - fh / 2, fw, fh],
                "shape": shape or self._img_shape, "alpha": 100, "rot": 0.0}
         self._img_objects.append(obj)
