@@ -537,7 +537,7 @@ class AutoTagWorker(QObject):
     error = pyqtSignal(str)
 
     def __init__(self, db_path, paths, tagged_docs, known_tags, rules,
-                 today_year, store_keys, fp_missing_keys):
+                 today_year, store_keys, fp_missing_keys, kw_skip_keys=()):
         super().__init__()
         self.db_path = db_path
         self.paths = [str(p) for p in paths]
@@ -547,15 +547,71 @@ class AutoTagWorker(QObject):
         self.today_year = int(today_year)
         self.store_keys = set(store_keys)         # 경로 적중 판별(지문 생략 — §6.1 ①)
         self.fp_missing_keys = set(fp_missing_keys)   # 항목은 있는데 fp 없는 것 — 채움
+        self.kw_skip_keys = set(kw_skip_keys)     # 260830 P4: kw_edited(§9.1) — 생성 생략
         self._cancel = False
+
+    @staticmethod
+    def _ko_lookup_map():
+        """260830 P4(§9.2-5): dict.db 영→한 대역 맵 — 없거나 실패하면 None(병기 생략)."""
+        try:
+            import sqlite3
+            from viewer.settings_store import settings_dir
+            p = Path(settings_dir()) / "dict.db"
+            if not p.exists():
+                return None
+            con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+            try:
+                m = {}
+                for ne, tk in con.execute(
+                        "SELECT norm_en, term_ko FROM dict_entry "
+                        "WHERE enabled=1 AND norm_en<>'' AND term_ko<>''"):
+                    m.setdefault(ne.lower(), tk)
+                return m
+            finally:
+                con.close()
+        except Exception:
+            return None
+
+    def _folder_ctx(self):
+        """260830 P5(§5.4.1 ③·⑤): 파일별 상위 폴더명(루트 제외·3단계)과
+        점유율 30% 초과 폴더 제외 집합, 대형 폴더(≥20) 목록."""
+        import os as _os
+        total = max(1, len(self.paths))
+        try:
+            root = _os.path.commonpath(self.paths) if len(self.paths) > 1 \
+                else _os.path.dirname(self.paths[0])
+        except Exception:
+            root = ""
+        dir_count = {}
+        for p in self.paths:
+            d = _os.path.dirname(p)
+            dir_count[d] = dir_count.get(d, 0) + 1
+        over = {d for d, n in dir_count.items() if n / total >= 0.30}  # 점유율 상한
+        names = {}
+        for p in self.paths:
+            out, d = [], _os.path.dirname(p)
+            depth = 0
+            while d and _os.path.normcase(d) != _os.path.normcase(root) and depth < 3:
+                if d not in over:
+                    out.append(_os.path.basename(d))
+                d2 = _os.path.dirname(d)
+                if d2 == d:
+                    break
+                d, depth = d2, depth + 1
+            names[p] = out
+        big_dirs = {d for d, n in dir_count.items() if n >= 20}
+        return names, big_dirs, dir_count
 
     def request_cancel(self):
         self._cancel = True
 
     def run(self):
         try:
+            import os as _os
             from viewer.auto_tag import (build_profiles, extract_features,
-                                         extract_year, partition, suggest_tags)
+                                         extract_year, new_tag_candidates,
+                                         partition, suggest_keywords,
+                                         suggest_tags)
             from viewer.tag_store import TagStore
             try:
                 ix = PdfIndex(self.db_path)
@@ -569,21 +625,37 @@ class AutoTagWorker(QObject):
                         return t
                 return None                       # extract_features 가 fitz 폴백
 
-            # 1패스: 특징 추출 + 전역 DF(§3.3.1-①)
+            folder_names, big_dirs, dir_count = self._folder_ctx()
+            ko_map = self._ko_lookup_map()
+            ko_lookup = (lambda w: ko_map.get(w.lower())) if ko_map else None
+
+            # 1패스: 특징 추출 + 전역 DF(§3.3.1-①) + 대형 폴더 공통어 DF(§9.2-3)
             feats, df = {}, {}
+            dir_term_df = {d: {} for d in big_dirs}
             total = len(self.paths)
             for i, p in enumerate(self.paths):
                 if self._cancel:
                     return
                 try:
-                    f = extract_features(p, page_texts=texts(p))
+                    f = extract_features(p, page_texts=texts(p),
+                                         folder_names=folder_names.get(p))
                 except Exception:
                     continue
                 feats[p] = f
                 for t in set(f.terms):
                     df[t] = df.get(t, 0) + 1
+                d = _os.path.dirname(p)
+                if d in big_dirs:
+                    dd = dir_term_df[d]
+                    for t in set(f.terms):
+                        dd[t] = dd.get(t, 0) + 1
                 self.progress.emit(i + 1, total * 2, p)
             n_docs = max(1, len(feats))
+            # 폴더 공통어(§9.2-3): ≥20파일 폴더에서 60% 이상 문서에 나오는 어휘
+            folder_common = {}
+            for d in big_dirs:
+                th = max(2, int(dir_count[d] * 0.6))
+                folder_common[d] = {t for t, n in dir_term_df[d].items() if n >= th}
 
             # 프로파일(§5.2) — 태그가 붙은 파일들의 특징어로 학습
             tag_docs = {}
@@ -595,9 +667,10 @@ class AutoTagWorker(QObject):
             # 260830 P3: 단일 파일 즉석 제안(§8.1)용 세션 캐시 — app 이 회수해 보관
             self.profiles, self.df, self.n_docs = profiles, df, n_docs
 
-            # 2패스: 제안·게이트·연도·지문
+            # 2패스: 제안·게이트·연도·지문·키워드(§9)·신규 후보 적립(§5.4-5)
             results = []
-            n_auto_files = n_new_candidates = 0
+            n_auto_files = 0
+            candidates = {}                            # {태그: {"n":, "files": []}}
             key = TagStore._key
             for i, p in enumerate(self.paths):
                 if self._cancel:
@@ -616,12 +689,25 @@ class AutoTagWorker(QObject):
                         fp, size = TagStore._fp_of(p)      # 무거운 계산은 워커에서(§6.1)
                 except Exception:
                     pass
+                # §9 키워드 — 게이트 없음, kw_edited 만 생략. 표시는 병기(치환 아님)
+                kws = None
+                if k not in self.kw_skip_keys:
+                    fc = folder_common.get(_os.path.dirname(p))
+                    kws = [(w["word"] + (f" ({w['ko']})" if w.get("ko") else ""))
+                           for w in suggest_keywords(f, df, n_docs,
+                                                     ko_lookup=ko_lookup,
+                                                     folder_common=fc)]
+                # §5.4-5 신규 후보 — 붙이지 않고 적립
+                for c in new_tag_candidates(f, df, n_docs, self.known_tags,
+                                            ko_lookup=ko_lookup):
+                    cur = candidates.setdefault(c["tag"], {"n": 0, "files": []})
+                    cur["n"] += 1
+                    if len(cur["files"]) < 8:
+                        cur["files"].append(p)
                 auto = [(s["tag"], s["score"]) for s in part["auto"]]
                 if auto:
                     n_auto_files += 1
-                n_new_candidates += sum(1 for s in part["suggest"]
-                                        if s.get("kind") == "new")
-                results.append({"path": p, "auto": auto,
+                results.append({"path": p, "auto": auto, "keywords": kws,
                                 "year": year, "year_src": ysrc, "year_conf": yconf,
                                 "fp": fp, "size": size, "scanned": f.scanned})
                 self.progress.emit(total + i + 1, total * 2, p)
@@ -629,7 +715,7 @@ class AutoTagWorker(QObject):
                 ix.close()
             self.finished.emit(results, {
                 "total": total, "auto_files": n_auto_files,
-                "new_candidates": n_new_candidates,
+                "new_candidates": len(candidates), "candidates": candidates,
                 "known_tags": len(self.known_tags)})
         except Exception as e:                    # noqa: BLE001
             self.error.emit(str(e))

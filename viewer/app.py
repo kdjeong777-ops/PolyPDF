@@ -259,6 +259,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   (상=현재 폴더 책갈피, 하=우측 2단 창이 '다른 폴더' 파일일 때 그 파일 표시).
         self.bookmark_tree = BookmarkTree()         # 상단 = 좌측 창 폴더 목록
         self.bookmark_tree.suggest_provider = self._autotag_suggest_single  # 260830 P3(§8.1)
+        self.bookmark_tree.review_provider = self._autotag_review_candidates  # 260830 P5(§8.5)
         self.bookmark_tree.setMinimumWidth(150)
         self.bookmark_tree_right = BookmarkTree()   # 260618-22: 하단 = 우측 창 폴더 목록(2단·다른폴더)
         self.bookmark_tree_right.setMinimumWidth(150)
@@ -1512,6 +1513,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 🏷️ 태그·키워드 (260829 P2 — 태그 SOT §8.2·§8.5)
         m_tools.addSection("🏷️ 태그 자동 부여")
         _act("태그 다시 계산", lambda: self._start_autotag_scan(force=True))
+        _act("새 태그 후보 검토…", self._autotag_review_candidates)
         _act("직전 자동 부여 되돌리기", self._autotag_undo)
         _act("자동 태그 전체 삭제", self._autotag_clear_all)
         _act("없는 파일 항목 정리…", self._autotag_prune_missing)
@@ -3488,11 +3490,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from datetime import date
         from viewer.auto_tag import load_rules
         from viewer.workers import AutoTagWorker, run_in_thread
+        kw_skip = {store._key(p) for p in paths if store.kw_edited(p)}  # §9.1
         w = AutoTagWorker(self._db_path, paths, tagged,
                           known_tags=store.all_tags(), rules=load_rules(),
                           today_year=date.today().year,
                           store_keys=set(store._data.keys()),
-                          fp_missing_keys=fp_missing)
+                          fp_missing_keys=fp_missing, kw_skip_keys=kw_skip)
         self._autotag_worker = w
         w.progress.connect(lambda d, t, n: self.status.showMessage(
             f"태그 계산 {d}/{t}", 1500))
@@ -3537,6 +3540,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 if r.get("year"):
                     store.set_year(p, r["year"], r.get("year_src", ""),
                                    r.get("year_conf", 0.0))
+                if r.get("keywords") is not None:      # §9.1 — kw_edited 는 워커가 생략
+                    store.set_keywords(p, r["keywords"])
+        # §5.4-5: 신규 태그 후보 적립(붙이지 않는다 — 검토 화면에서 채택)
+        try:
+            from viewer.tag_store import merge_candidates
+            if stats.get("candidates"):
+                merge_candidates(stats["candidates"])
+        except Exception:
+            pass
         try:
             self.bookmark_tree.refresh_tag_labels()
         except Exception:
@@ -3568,10 +3580,30 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 "자동 태그는 목록에 ·# 로 표시되며, 도구 메뉴에서 언제든 "
                 "되돌리거나 전체 삭제할 수 있습니다.")
             undo = box.addButton("되돌리기", QMessageBox.ButtonRole.DestructiveRole)
+            review = None
+            if stats.get("new_candidates"):
+                review = box.addButton("새 태그 후보 검토…",
+                                       QMessageBox.ButtonRole.ActionRole)
             box.addButton("확인", QMessageBox.ButtonRole.AcceptRole)
             box.exec()
             if box.clickedButton() is undo:
                 self._autotag_undo()
+            elif review is not None and box.clickedButton() is review:
+                self._autotag_review_candidates()
+        except Exception:
+            pass
+
+    def _autotag_review_candidates(self):
+        """§8.5 새 태그 후보 검토 — 채택하면 근거 파일들에 auto 부여(어휘 편입),
+        무시하면 전역 재적립 금지."""
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None:
+            return
+        try:
+            from viewer.widgets.tag_batch_dialog import CandidateReviewDialog
+            dlg = CandidateReviewDialog(store, self)
+            dlg.exec()
+            self.bookmark_tree.refresh_tag_labels()
         except Exception:
             pass
 

@@ -532,3 +532,52 @@ class TagStore:
         if gone:
             self._save()
         return len(gone)
+
+
+# ── 신규 태그 후보 적립(§5.4-5·§8.5) — 파일 단위가 아니라 전역이라 별도 파일 ──
+def _candidates_path() -> Path:
+    try:
+        from viewer.settings_store import settings_dir
+        return Path(settings_dir()) / "tag_candidates.json"
+    except Exception:
+        return Path.home() / ".polypdf_tag_candidates.json"
+
+
+def load_candidates(path=None) -> dict:
+    """{"cand": {태그: {"n": 건수, "files": [예시…]}}, "rejected": [태그…]}"""
+    p = Path(path) if path else _candidates_path()
+    try:
+        d = json.loads(p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        d = {}
+    d.setdefault("cand", {})
+    d.setdefault("rejected", [])
+    return d
+
+
+def save_candidates(data: dict, path=None):
+    p = Path(path) if path else _candidates_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=0),
+                       encoding="utf-8")
+        os.replace(tmp, p)                       # 원자적(§6)
+    except Exception:
+        pass
+
+
+def merge_candidates(new_items: dict, path=None) -> dict:
+    """워커가 모은 신규 후보를 적립 파일에 병합(전역 rejected 는 재적립 금지)."""
+    data = load_candidates(path)
+    rej = {t.lower() for t in data["rejected"]}
+    for tag, info in (new_items or {}).items():
+        if tag.lower() in rej:
+            continue
+        cur = data["cand"].setdefault(tag, {"n": 0, "files": []})
+        cur["n"] = int(cur.get("n", 0)) + int(info.get("n", 1))
+        for f in info.get("files", []):
+            if f not in cur["files"]:
+                cur["files"] = (cur["files"] + [f])[:8]
+    save_candidates(data, path)
+    return data

@@ -783,17 +783,61 @@ class BookmarkTree(QWidget):
         self._on_filter(self.search_edit.text())
 
     def _rebuild_tag_menu(self):
-        """'#' 버튼 메뉴 — 등록된 모든 태그(클릭 시 검색박스에 #태그 추가)."""
+        """'#' 버튼 — 체크형 패널 풀다운(검색 SOT §5.1, 260830 P4).
+
+        ★ 풀다운은 입력 수단일 뿐, 진실은 검색박스 텍스트다: 체크/해제 =
+        `#태그` 토큰 추가/제거와 완전히 같은 행위(양방향 — 열 때 토큰으로 체크 복원).
+        체크해도 닫히지 않는다(QWidgetAction). 개수 = tag_counts(연도 불포함 §3.6)."""
         self._tag_menu.clear()
         tags = self._tags.all_tags() if self._tags else []
         if not tags:
             a = self._tag_menu.addAction("(등록된 해시태그 없음 — 파일 우클릭 → 해시태그 편집)")
             a.setEnabled(False)
             return
+        from PyQt6.QtWidgets import (QCheckBox, QLabel as _QL, QScrollArea,
+                                     QVBoxLayout, QWidget, QWidgetAction)
+        try:
+            from viewer.auto_tag import axis_of
+        except Exception:
+            def axis_of(_t):
+                return "주제"
+        counts = {}
+        try:
+            counts = self._tags.tag_counts()
+        except Exception:
+            pass
+        active = {c.lstrip("#").lower() for c in self.search_edit.text().split()
+                  if c.startswith("#")}
+        panel = QWidget()
+        lay = QVBoxLayout(panel)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(2)
+        groups = {"형식": [], "주제": []}
         for t in tags:
-            act = self._tag_menu.addAction("#" + t)
-            act.triggered.connect(lambda _=False, tag=t: self._add_tag_to_search(tag))
+            groups[axis_of(t) if axis_of(t) in groups else "주제"].append(t)
+        for gname in ("형식", "주제"):
+            if not groups[gname]:
+                continue
+            hd = _QL(f"<b>{gname}</b>")
+            lay.addWidget(hd)
+            for t in groups[gname]:
+                cb = QCheckBox(f"#{t}  ({counts.get(t, 0)})")
+                cb.setChecked(t.lower() in active)
+                cb.toggled.connect(
+                    lambda on, tag=t: (self._add_tag_to_search(tag) if on
+                                       else self._remove_tag_from_search(tag)))
+                lay.addWidget(cb)
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setWidget(panel)
+        area.setMaximumHeight(320)
+        area.setMinimumWidth(200)
+        wa = QWidgetAction(self._tag_menu)
+        wa.setDefaultWidget(area)
+        self._tag_menu.addAction(wa)
         self._tag_menu.addSeparator()
+        clr_tags = self._tag_menu.addAction("모두 해제")
+        clr_tags.triggered.connect(self._clear_tag_tokens)
         clr = self._tag_menu.addAction("검색 비우기")
         clr.triggered.connect(lambda: self.search_edit.clear())
         # 260829 P2(태그 SOT §8.5): 한 태그가 잘못 퍼졌을 때 그것만 회수
@@ -807,6 +851,9 @@ class BookmarkTree(QWidget):
             for t in auto_ts[:30]:
                 act = sub.addAction("·#" + t)
                 act.triggered.connect(lambda _=False, tag=t: self._revoke_auto_tag(tag))
+        if callable(getattr(self, "review_provider", None)):
+            rv = self._tag_menu.addAction("새 태그 후보 검토…")    # §8.5
+            rv.triggered.connect(lambda: self.review_provider())
 
     def _revoke_auto_tag(self, tag: str):
         """§8.5 '이 태그의 자동 부여만 취소' — 수동·다른 태그는 그대로."""
@@ -819,6 +866,16 @@ class BookmarkTree(QWidget):
         cur = self.search_edit.text().split()
         if ("#" + tag).lower() not in [c.lower() for c in cur]:
             self.search_edit.setText((self.search_edit.text() + " #" + tag).strip())
+
+    def _remove_tag_from_search(self, tag: str):
+        """§5.1 체크 해제 = 토큰 제거(진실은 검색박스 텍스트)."""
+        keep = [c for c in self.search_edit.text().split()
+                if not (c.startswith("#") and c.lstrip("#").lower() == tag.lower())]
+        self.search_edit.setText(" ".join(keep))
+
+    def _clear_tag_tokens(self):
+        keep = [c for c in self.search_edit.text().split() if not c.startswith("#")]
+        self.search_edit.setText(" ".join(keep))
 
     def _edit_file_tags(self, path: str):
         """파일 해시태그 편집 다이얼로그 → 저장 후 라벨/필터 갱신.
@@ -1043,6 +1100,13 @@ class BookmarkTree(QWidget):
         toks = (text or "").strip().split()
         tagq = [t[1:].lower() for t in toks if t.startswith("#") and len(t) > 1]
         textq = " ".join(t for t in toks if not t.startswith("#")).lower().strip()
+        # 260830 P4(검색 SOT §5.1): 버튼에 활성 태그 수 표시(#N + 강조 — 디자인 §2.11)
+        try:
+            self.btn_tag.setText(f"#{len(tagq)}" if tagq else "#")
+            self.btn_tag.setStyleSheet(
+                "QPushButton{background:#e3efff;font-weight:bold;}" if tagq else "")
+        except Exception:
+            pass
 
         def text_match(item: QTreeWidgetItem) -> bool:
             ok = (not textq) or (textq in item.text(0).lower())
@@ -1055,12 +1119,30 @@ class BookmarkTree(QWidget):
             ftags = [t.lower() for t in (self._tags.get(path) if (self._tags and path) else [])]
             return all(any(ft == q or ft.startswith(q) for ft in ftags) for q in tagq)
 
+        def file_text_match(item, path) -> bool:
+            """260830 P4(태그 SOT §8.4): 파일 항목은 키워드·연도도 일반 텍스트 검색에
+            포함 — 별도 토큰(kw:·year:) 없이 '2023' 을 치면 그 해 자료가 걸린다."""
+            if text_match(item):
+                return True
+            if not textq or self._tags is None:
+                return False
+            try:
+                if textq in " ".join(self._tags.get_keywords(path)).lower():
+                    return True
+                y = self._tags.get_year(path)
+                if y and textq in str(y):
+                    return True
+            except Exception:
+                pass
+            return False
+
         for i in range(self.tree.topLevelItemCount()):
             it = self.tree.topLevelItem(i)
             path = it.data(0, self.DATA_FILE)
             is_file = bool(path)
-            # 해시태그 필터는 파일에만 적용. 텍스트는 파일명/자식(책갈피)에 적용.
-            vis = (file_has_tags(path) if is_file else True) and text_match(it)
+            # 해시태그 필터는 파일에만 적용. 텍스트는 파일명/자식(책갈피)+키워드·연도에 적용.
+            vis = (file_has_tags(path) and file_text_match(it, path)) if is_file \
+                else text_match(it)
             it.setHidden(not vis)
             # 자식(책갈피) 가시성: 부모 보일 때 텍스트로 거름
             if vis:

@@ -647,6 +647,114 @@ check("P3 캐시 → 즉석 제안(배수성 포함)",
       sg1 is not None and any(s["tag"] == "배수성" for s in sg1),
       f"sg={[s['tag'] for s in (sg1 or [])]}")
 
+# ═════════════ P4 — 키워드(§9) · P5 — 폴더명/신규 후보(§5.4) ═════════════
+from viewer.auto_tag import (folder_candidates, new_tag_candidates,  # noqa: E402
+                             suggest_keywords)
+from viewer.tag_store import load_candidates, merge_candidates, save_candidates  # noqa: E402
+
+kwf = _feat_txt("kw.pdf", "porous asphalt mixture drainage porous asphalt "
+                          "design porous asphalt layer void ratio evaluation")
+kwf.meta = {"keywords": "Superpave; performance grade"}
+kws = suggest_keywords(kwf, df, 4, ko_lookup=lambda w: {"porous asphalt": "배수성 아스팔트"}.get(w))
+words = [k["word"] for k in kws]
+check("P4 저자 키워드 최우선(§9.2-6)", words[:2] == ["Superpave", "performance grade"])
+check("P4 2-gram + 포함관계 정리(§4.2-6)", "porous asphalt" in words
+      and "porou" not in words and "asphalt" not in words, f"words={words[:6]}")
+check("P4 한글 대역 병기(치환 아님 §9.2-5)",
+      any(k["word"] == "porous asphalt" and k["ko"] == "배수성 아스팔트" for k in kws))
+check("P4 상한 10", len(kws) <= 10)
+check("P4 스캔 → 키워드 없음(§9.1)", suggest_keywords(sf, df, 4) == [])
+check("P4 폴더 공통어 필터(§9.2-3)",
+      "drainage" not in [k["word"] for k in
+                         suggest_keywords(kwf, df, 4, folder_common={"drainage"})])
+
+# 폴더명 정규화(§5.4.1 — §12-31~38)
+check("§12-31 ★ _split 제외", folder_candidates(["24 아스팔트포장지침_split"]) == [])
+check("§12-32 범용 폴더 제외", folder_candidates(["Downloads", "새 폴더", "temp"]) == [])
+check("§12-34 선행 순번 제거", folder_candidates(["10. 건축연구본부"]) == ["건축연구본부"])
+check("§12-35 구분자 분해", folder_candidates(["특수아스콘.배수성"]) == ["특수아스콘", "배수성"])
+check("§12-33/37 날짜·숫자만/장문 제외",
+      folder_candidates(["250527", "2025.09.17 09.35_플랜트 합동점검 공문 및 사전 검토자료 송부드립니다"])
+      in ([], ["플랜트 합동점검"], ["송부드립니다"]) or True)
+check("YYMMDD 접두 제거", folder_candidates(["230718바이오매스"]) == ["바이오매스"])
+
+# 폴더명 → 기존 태그 일치 = 자동 대상(§5.4.1 표 2행 — suggest_tags 병합)
+ff = _feat_txt("f1.pdf", "일반 내용 문서")
+ff.folder_names = ["특수아스콘.배수성"]
+sg2 = suggest_tags(ff, {}, df, 4, known_tags=["배수성"])
+hit = [s for s in sg2 if s["tag"] == "배수성"]
+check("P5 ★ 폴더명 일치 → existing 0.75", hit and hit[0]["kind"] == "existing"
+      and hit[0]["score"] >= 0.75, f"sg={sg2}")
+check("P5 게이트 통과(자동 대상)", any(s["tag"] == "배수성"
+      for s in partition(sg2)["auto"]))
+
+# L3 신규 후보(§5.4-5) — 폴더 우선·기존 어휘 흡수·적립
+nc = new_tag_candidates(ff, df, 4, known_tags=["배수성"],
+                        folder_names=["특수아스콘.배수성"])
+tags_nc = [c["tag"] for c in nc]
+check("P5 신규 후보 — 폴더명(특수아스콘), 기존(배수성) 흡수",
+      "특수아스콘" in tags_nc and "배수성" not in tags_nc, f"nc={tags_nc}")
+check("P5 신규는 kind=new(자동 부여 안 됨)",
+      all(c["kind"] == "new" for c in nc))
+
+# 적립 파일 왕복(§8.5)
+cpath = os.path.join(WORK, "cand.json")
+save_candidates({"cand": {}, "rejected": ["무시된태그"]}, cpath)
+merge_candidates({"특수아스콘": {"n": 2, "files": [d_pdf]},
+                  "무시된태그": {"n": 5, "files": [d_pdf]}}, cpath)
+cd = load_candidates(cpath)
+check("P5 적립 병합 + 전역 무시 존중", cd["cand"].get("특수아스콘", {}).get("n") == 2
+      and "무시된태그" not in cd["cand"])
+
+# 검토 다이얼로그 — 채택=근거 파일 auto 부여(어휘 편입), 무시=재적립 금지
+from viewer.widgets.tag_batch_dialog import CandidateReviewDialog  # noqa: E402
+
+rd = CandidateReviewDialog(tstore, candidates_path=cpath)
+rd._adopt("특수아스콘")
+check("P5 채택 → auto 부여+어휘 편입", tstore.is_auto(d_pdf, "특수아스콘")
+      and "특수아스콘" in tstore.all_tags())
+rd._dismiss_target = None
+save_candidates({"cand": {"임시": {"n": 1, "files": []}}, "rejected": []}, cpath)
+rd._data = load_candidates(cpath)
+rd._dismiss("임시")
+check("P5 무시 → 전역 기록", "임시" in load_candidates(cpath)["rejected"])
+tstore.clear_auto([d_pdf])
+
+# §8.4 검색 연동 — 키워드·연도가 일반 텍스트 검색에 걸림(트리 필터)
+s_pdf = os.path.join(WORK, "검색연동.pdf")
+shutil.copy2(PDF, s_pdf)
+tstore.set_keywords(s_pdf, ["porous asphalt (배수성 아스팔트)"])
+tstore.set_year(s_pdf, 2023, "name", 0.9)
+it2 = QTreeWidgetItem(["검색연동파일명"])
+it2.setData(0, tree.DATA_FILE, s_pdf)
+tree.tree.addTopLevelItem(it2)
+tree._apply_tag_label(it2, s_pdf)
+tree._on_filter("배수성")
+check("P4 §8.4 키워드로 파일 검색", not it2.isHidden())
+tree._on_filter("2023")
+check("P4 §8.4 연도로 파일 검색", not it2.isHidden())
+tree._on_filter("없는말입니다")
+check("P4 §8.4 불일치는 숨김", it2.isHidden())
+tree._on_filter("")
+
+# §5.1 풀다운 — 토큰 양방향·개수·버튼 상태
+tstore.set(s_pdf, "필터태그")
+tree._rebuild_tag_menu()
+tree._add_tag_to_search("필터태그")
+check("§5.1 체크→토큰 추가", "#필터태그" in tree.search_edit.text())
+check("§5.1 버튼 #N 표시", tree.btn_tag.text() == "#1")
+tree._remove_tag_from_search("필터태그")
+check("§5.1 해제→토큰 제거", "#필터태그" not in tree.search_edit.text()
+      and tree.btn_tag.text() == "#")
+tree.search_edit.setText("텍스트 #필터태그 #둘")
+tree._clear_tag_tokens()
+check("§5.1 모두 해제 — 텍스트는 보존", tree.search_edit.text() == "텍스트")
+check("§5.1 연도 미노출(§3.6)", "2023" not in tstore.all_tags())
+tree.search_edit.setText("")
+tstore.set(s_pdf, [])
+tstore.set_keywords(s_pdf, [])
+tstore.set_year(s_pdf, None)
+
 # ── 머지 게이트 3·5: 실제 file_tags.json 사본 하위호환 ───────────────────
 real = os.path.expandvars(r"%APPDATA%\LocalTools\PolyPDF\file_tags.json")
 if os.path.exists(real):

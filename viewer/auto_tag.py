@@ -117,9 +117,13 @@ def _tokenize(text: str) -> list:
             t = t.lower().strip("-")
             if len(t) < 3 or t in _STOP_EN:
                 continue
-            if len(t) > 4 and t.endswith("es") and not t.endswith("ss"):
+            # 단복수 병합(§3.3.1-③) — 260830 교정: porous/class/analysis 처럼 s 가
+            # 어미가 아닌 단어를 깎지 않는다(-ss/-us/-is 보호). boxes/churches 는
+            # -es 계열만 2자 제거, 그 외(cases·mixtures)는 -s 1자 제거로 충분.
+            if len(t) > 4 and t.endswith(("ches", "shes", "xes", "sses", "zes")):
                 t = t[:-2]
-            elif len(t) > 3 and t.endswith("s") and not t.endswith("ss"):
+            elif (len(t) > 3 and t.endswith("s")
+                  and not t.endswith(("ss", "us", "is"))):
                 t = t[:-1]
         else:
             if t in _STOP_KO:
@@ -474,13 +478,33 @@ def suggest_tags(f: Features, profiles: dict, df: dict, n_docs: int,
         out.append({"tag": fmt, "score": 1.0, "axis": "형식",
                     "kind": "existing" if fmt.lower() in known else "new",
                     "why": "형식 규칙(§5.3)"})
-    if not f.scanned:                        # 주제는 텍스트 필요(§4.2 각주)
-        sims = topic_similarities(f, profiles, df, n_docs)
-        for tag, sc in sorted(sims.items(), key=lambda kv: -kv[1]):
-            if sc >= TUNING["SUGGEST_MIN"] and axis_of(tag, rules) == "주제":
-                out.append({"tag": tag, "score": min(1.0, sc), "axis": "주제",
-                            "kind": "existing",
-                            "why": f"#{tag} 파일과 유사도 {sc:.2f}(§5.2)"})
+    # 주제 점수(§5.6): max(L1 유사도, 폴더명 일치 0.75) + 겹침 보너스 0.10
+    sims = {} if f.scanned else topic_similarities(f, profiles, df, n_docs)
+    folder_hit = set()
+    known_low = {t.lower(): t for t in (known_tags or [])}
+    for w in folder_candidates(f.folder_names):
+        wl = w.lower()
+        for kl, orig in known_low.items():
+            if wl == kl or wl.startswith(kl) or kl.startswith(wl):
+                folder_hit.add(orig)                 # §5.4.1 — 기존 어휘 확인 = 자동 대상
+    topic_scores = {}
+    for tag, sc in sims.items():
+        if axis_of(tag, rules) == "주제":
+            topic_scores[tag] = min(1.0, sc)
+    for tag in folder_hit:
+        if axis_of(tag, rules) != "주제":
+            continue
+        base = topic_scores.get(tag, 0.0)
+        topic_scores[tag] = min(1.0, max(base, 0.75) + (0.10 if base > 0 else 0.0))
+    for tag, sc in sorted(topic_scores.items(), key=lambda kv: -kv[1]):
+        if sc >= TUNING["SUGGEST_MIN"]:
+            why = []
+            if sims.get(tag, 0) >= TUNING["SUGGEST_MIN"]:
+                why.append(f"#{tag} 파일과 유사도 {sims[tag]:.2f}(§5.2)")
+            if tag in folder_hit:
+                why.append("폴더명 일치(§5.4.1)")
+            out.append({"tag": tag, "score": round(sc, 4), "axis": "주제",
+                        "kind": "existing", "why": " · ".join(why)})
     if extra is not None:                    # §5.5 — 현재 항상 None
         try:
             out += list(extra(f, sorted(known)) or [])
@@ -509,3 +533,179 @@ def partition(suggestions: list) -> dict:
         else:
             sugg.append(s)                   # kind=new(적립) 또는 게이트 미달(제안만)
     return {"auto": auto, "suggest": sugg}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §9 — ② 내용 키워드 (함축, 최대 10) — P4
+# ═══════════════════════════════════════════════════════════════════════
+
+def _token_seq(text: str) -> list:
+    """토큰 시퀀스(순서 보존) — 2-gram 생성용(§9.2-2)."""
+    return _tokenize(text or "")
+
+
+def _bigrams(tokens: list) -> Counter:
+    """인접 토큰 2-gram(§9.2-2) — 한/영 모두 공백 결합('배수성 아스팔트')."""
+    out = Counter()
+    for a, b in zip(tokens, tokens[1:]):
+        if a != b:
+            out[a + " " + b] += 1
+    return out
+
+
+def _drop_contained(cands: list) -> list:
+    """§4.2-6 포함관계 정리 — 짧은 쪽이 긴 쪽에 포함되면 짧은 쪽 탈락."""
+    out = []
+    for w, sc, ko in cands:
+        if any(w != w2 and w in w2 for w2, _s, _k in cands):
+            continue
+        out.append((w, sc, ko))
+    return out
+
+
+def suggest_keywords(f: Features, df: dict, n_docs: int,
+                     ko_lookup=None, top: int = None,
+                     folder_common: set | None = None) -> list:
+    """§9 키워드: [{word, score, ko}] 상위 top(기본 10).
+    - 게이트 없음(§9.1 — 틀려도 검색 재현율을 해치지 않는다). 스캔이면 [].
+    - 점수 = 로그 포화 TF(가중 포함) × 전역 IDF(§9.2-3). 위치 가중은 f.terms 에 내장.
+    - `folder_common` = 대형 동질 폴더의 공통어(§9.2-3 필터 — 워커가 계산해 전달).
+    - `metadata.keywords`(저자)는 무조건 상위(§9.2-6).
+    - `ko_lookup(영문)` → 한글 대역이 있으면 병기(§9.2-5 — 치환하지 않는다)."""
+    if f.scanned:
+        return []
+    top = top or MAX_KEYWORDS_SUGGEST
+    n_docs = max(1, n_docs)
+    cand = Counter(f.terms)
+    cand.update(_bigrams(_token_seq(f.full_text)))
+    fc = folder_common or set()
+
+    scored = []
+    for w, tf in cand.items():
+        if w in fc:                                   # 폴더 공통어 제외(§9.2-3)
+            continue
+        if len(w) < 2 or len(w) > 40 or w.replace(" ", "").isdigit():
+            continue
+        idf = math.log(n_docs / (1 + df.get(w, 0))) + 1.0
+        scored.append((w, (1.0 + math.log(max(1.0, tf))) * idf))
+    scored.sort(key=lambda x: -x[1])
+
+    # 저자 키워드 최우선(§9.2-6)
+    author = []
+    raw_kw = str(f.meta.get("keywords") or "")
+    for w in re.split(r"[;,\n]+", raw_kw):
+        w = w.strip()
+        if 1 < len(w) <= 40:
+            author.append(w)
+
+    picked, seen = [], set()
+    for w in author:
+        if w.lower() not in seen:
+            seen.add(w.lower())
+            picked.append((w, 10.0, None))
+    for w, sc in scored:
+        if len(picked) >= top * 2:                    # 포함관계 정리 여유분
+            break
+        if w.lower() not in seen:
+            seen.add(w.lower())
+            picked.append((w, sc, None))
+    picked = _drop_contained(picked)[:top]
+
+    out = []
+    for w, sc, _ in picked:
+        ko = None
+        if ko_lookup is not None and re.match(r"^[a-z][a-z \-]*$", w):
+            try:
+                ko = ko_lookup(w) or None             # 병기(치환 아님 — §9.2-5)
+            except Exception:
+                ko = None
+        out.append({"word": w, "score": round(sc, 3), "ko": ko})
+    return out
+
+
+MAX_KEYWORDS_SUGGEST = 10      # §9.1 — store 의 MAX_KEYWORDS 와 동일 상한
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §5.4.1 — 폴더명 신호 + §5.4 L3 신규 태그 후보 — P5
+# ═══════════════════════════════════════════════════════════════════════
+
+_FOLDER_EXCLUDE = {"downloads", "documents", "desktop", "다운로드", "문서",
+                   "바탕화면", "새 폴더", "temp", "tmp", "backup", "백업",
+                   "첨부", "자료", "기타"}
+
+
+def folder_candidates(folder_names: list, root_name: str = "") -> list:
+    """§5.4.1: 상위 폴더명 → 정규화된 주제 후보들. 제외 규칙 통과분만.
+    점유율 상한(30%)·깊이 제한은 호출자(워커) 몫 — 여기는 이름 하나의 정규화."""
+    out, seen = [], set()
+    for name in folder_names or []:
+        s = (name or "").strip()
+        if not s or s == root_name:
+            continue
+        low = s.lower()
+        if low in _FOLDER_EXCLUDE:
+            continue
+        if low.endswith("_split"):        # ★ 분할기 산출 폴더 — 원본명 중복, 정보 0(§5.4.1-①2)
+            continue
+        s = re.sub(r"^\s*[\[\(]?\d+[\]\)]?[\s.\-_·]+", "", s)      # 선행 순번
+        s = re.sub(r"^\s*(?:19|20)?\d{6}\s*", "", s)               # 선행 YYMMDD(연도는 §9.4 가 재활용)
+        s = re.sub(r"^\s*\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}[^_]*_?", "", s)   # 날짜시각 접두
+        s = re.sub(r"\([^)]*\)", " ", s)                           # 괄호 부가정보
+        s = re.sub(r"(수정|최종|final|v)\s*\d*\s*$", "", s, flags=re.I)    # 후행 버전
+        for part in re.split(r"[.·_,/]+", s):                      # 구분자 분해
+            p = part.strip()
+            if not (2 <= len(p) <= 12):
+                continue
+            if p.replace(" ", "").isdigit() or p.lower() in _FOLDER_EXCLUDE:
+                continue
+            if p.lower() in _STOP_KO or p.lower() == "수정":
+                continue
+            if p.lower() not in seen:
+                seen.add(p.lower())
+                out.append(p)
+    return out
+
+
+def new_tag_candidates(f: Features, df: dict, n_docs: int, known_tags,
+                       ko_lookup=None, folder_names: list | None = None,
+                       max_new: int = 3) -> list:
+    """§5.4 L3: 신규 태그 후보 — 자동 부여하지 않고 적립용(§5.4-5).
+    ① 폴더명 후보(사용자가 만든 분류 — 우선) ② 특징어 상위 중 일반성 있는 것
+    (DF ≥ 2 — 여러 파일에 나타나는 상위 개념, §5.4-1: DF=1 은 키워드지 태그가 아니다).
+    기존 어휘와 접두/포함 일치는 흡수(§5.4-3 — 어휘 폭발의 유일한 방어선)."""
+    known_low = {t.lower() for t in (known_tags or [])}
+
+    def absorbed(w: str) -> bool:
+        wl = w.lower()
+        return any(wl == k or wl.startswith(k) or k.startswith(wl)
+                   for k in known_low)
+
+    out, seen = [], set()
+    for w in folder_candidates(folder_names or f.folder_names):
+        if not absorbed(w) and axis_of(w) == "주제" and w.lower() not in seen:
+            seen.add(w.lower())
+            out.append({"tag": w, "score": 0.75, "kind": "new", "axis": "주제",
+                        "why": "폴더명(§5.4.1 — 사용자가 만든 분류)"})
+    if not f.scanned:
+        dv = _tfidf_vec(f.terms, df, max(1, n_docs), 20)
+        for w, sc in sorted(dv.items(), key=lambda kv: -kv[1]):
+            if len(out) >= max_new:
+                break
+            if df.get(w, 0) < 2:                     # 일반성 조건(§5.4-1)
+                continue
+            if len(w) < 2 or len(w) > 12 or absorbed(w) or w.lower() in seen:
+                continue
+            ko = None
+            if ko_lookup is not None and re.match(r"^[a-z][a-z \-]*$", w):
+                try:
+                    ko = ko_lookup(w) or None        # 영문 상위어 한글화(§5.4-2)
+                except Exception:
+                    ko = None
+            tag = ko or w
+            if absorbed(tag) or tag.lower() in seen:
+                continue
+            seen.add(tag.lower())
+            out.append({"tag": tag, "score": 0.6, "kind": "new", "axis": "주제",
+                        "why": "특징어 상위(§5.4)" + (f" — {w} 대역" if ko else "")})
+    return out[:max_new]
