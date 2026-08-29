@@ -821,14 +821,41 @@ class BookmarkTree(QWidget):
             self.search_edit.setText((self.search_edit.text() + " #" + tag).strip())
 
     def _edit_file_tags(self, path: str):
-        """파일 해시태그 편집 다이얼로그 → 저장 후 라벨/필터 갱신."""
+        """파일 해시태그 편집 다이얼로그 → 저장 후 라벨/필터 갱신.
+
+        260829 P3(§8.1): 입력줄은 **수동만**, 자동 태그는 칩(✕거절/📌승격)으로 분리.
+        ★ P2 잠복 결함 수정 — 기존엔 get() 합집합을 입력줄에 넣어 확인만 눌러도
+        자동 태그 전부가 manual 로 저장(무단 승격)됐다."""
         if self._tags is None or not path:
             return
         from viewer.widgets.tag_edit_dialog import TagEditDialog
-        dlg = TagEditDialog(Path(path).stem, self._tags.get(path),
-                            self._tags.all_tags(), self)
+        auto = self._tags.get_auto(path)
+        conf = {}
+        try:
+            v = self._tags._data.get(self._tags._key(path))
+            if isinstance(v, dict):
+                conf = dict(v.get("auto_conf") or {})
+        except Exception:
+            pass
+        sugg = None
+        if callable(getattr(self, "suggest_provider", None)):
+            try:
+                sugg = self.suggest_provider(path)       # 세션 캐시 기반(§8.1) — 없으면 None
+            except Exception:
+                sugg = None
+        dlg = TagEditDialog(Path(path).stem, self._tags.get_manual(path),
+                            self._tags.all_tags(), self,
+                            auto_tags=auto, auto_conf=conf, suggestions=sugg)
         if dlg.exec():
+            # ★ 순서 고정: set(수동 교체) → promote(auto→manual 추가) → reject.
+            #   promote 를 set 앞에 두면 입력줄이 manual 을 덮어써 승격이 사라진다.
             self._tags.set(path, dlg.tags())
+            pro = dlg.promoted_tags()
+            if pro:
+                self._tags.promote(path, pro)            # 📌 만 승격(§8.1 — 확인은 승격 아님)
+            rej = dlg.rejected_tags()
+            if rej:
+                self._tags.reject(path, rej)             # 영구 — 다시 붙지 않음(§1-⑤)
             # 같은 파일의 모든 노드 라벨 갱신
             for i in range(self.tree.topLevelItemCount()):
                 it = self.tree.topLevelItem(i)

@@ -258,6 +258,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 1단 책갈피 트리 — 260611-75: 기본 폭 좁게. 260618-19: 세로 스플리터로 래핑
         #   (상=현재 폴더 책갈피, 하=우측 2단 창이 '다른 폴더' 파일일 때 그 파일 표시).
         self.bookmark_tree = BookmarkTree()         # 상단 = 좌측 창 폴더 목록
+        self.bookmark_tree.suggest_provider = self._autotag_suggest_single  # 260830 P3(§8.1)
         self.bookmark_tree.setMinimumWidth(150)
         self.bookmark_tree_right = BookmarkTree()   # 260618-22: 하단 = 우측 창 폴더 목록(2단·다른폴더)
         self.bookmark_tree_right.setMinimumWidth(150)
@@ -3506,7 +3507,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _on_autotag_finished(self, results, stats):
         """워커 결과를 UI 스레드에서 적용 — 재연결(§6.1)·자동 부여(§5.6)·연도(§9.4).
         ★ 일괄 적용 전 백업 필수(§6) — 실패하면 아무것도 쓰지 않는다."""
+        w = self._autotag_worker
         self._autotag_worker = None
+        # 260830 P3: 세션 제안 캐시(§8.1) — 편집 다이얼로그의 즉석 제안이 이걸 쓴다
+        if w is not None and getattr(w, "profiles", None) is not None:
+            self._autotag_ctx = (w.profiles, w.df, w.n_docs)
         store = getattr(self.bookmark_tree, "_tags", None)
         if store is None or not results:
             return
@@ -3569,6 +3574,33 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._autotag_undo()
         except Exception:
             pass
+
+    def _autotag_suggest_single(self, path):
+        """260830 P3(§8.1): 편집 다이얼로그의 즉석 제안 — 세션 캐시(프로파일·DF)로
+        해당 파일 1개만 동기 계산(§7 1초 예산 내). 캐시 없으면 None(구획 숨김)."""
+        ctx = getattr(self, "_autotag_ctx", None)
+        if ctx is None:
+            return None
+        try:
+            from viewer.auto_tag import extract_features, load_rules, suggest_tags
+            from viewer.indexer import PdfIndex
+            profiles, df, n_docs = ctx
+            texts = None
+            try:
+                ix = PdfIndex(self._db_path)
+                try:
+                    texts = ix.page_texts(str(path)) or None
+                finally:
+                    ix.close()
+            except Exception:
+                pass
+            f = extract_features(path, page_texts=texts)
+            store = getattr(self.bookmark_tree, "_tags", None)
+            known = store.all_tags() if store else []
+            return suggest_tags(f, profiles, df, n_docs,
+                                known_tags=known, rules=load_rules())
+        except Exception:
+            return None
 
     def _autotag_undo(self):
         """§8.5 직전 일괄 부여 되돌리기 — file_tags.bak.json 복원."""

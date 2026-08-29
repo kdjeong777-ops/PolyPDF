@@ -592,6 +592,8 @@ class AutoTagWorker(QObject):
                 if cs:
                     tag_docs[tag] = cs
             profiles = build_profiles(tag_docs, df, n_docs)
+            # 260830 P3: 단일 파일 즉석 제안(§8.1)용 세션 캐시 — app 이 회수해 보관
+            self.profiles, self.df, self.n_docs = profiles, df, n_docs
 
             # 2패스: 제안·게이트·연도·지문
             results = []

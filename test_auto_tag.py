@@ -590,6 +590,63 @@ check("P2 끔 → 스캔 미시작", mw._start_autotag_scan() is None
       and getattr(mw, "_autotag_worker", None) is None)
 mw._prefs["auto_tag_enabled"] = True
 
+# ═════════════════════ P3 — 편집 다이얼로그 (§8.1) ═══════════════════════
+from viewer.widgets.tag_edit_dialog import TagEditDialog  # noqa: E402
+
+d_pdf = os.path.join(WORK, "다이얼로그.pdf")
+shutil.copy2(PDF, d_pdf)
+tstore.set(d_pdf, "수동A")
+tstore.set_auto(d_pdf, ["자동B", "자동C"], conf={"자동B": 0.62, "자동C": 0.71})
+
+dlg = TagEditDialog("다이얼로그", tstore.get_manual(d_pdf), tstore.all_tags(),
+                    auto_tags=tstore.get_auto(d_pdf),
+                    auto_conf={"자동B": 0.62, "자동C": 0.71},
+                    suggestions=[{"tag": "제안기존", "score": 0.4, "kind": "existing"},
+                                 {"tag": "제안신규", "score": 0.9, "kind": "new"}])
+check("P3 입력줄 = 수동만(★ 무단 승격 결함 수정)", dlg.tags().split() == ["수동A"])
+check("P3 자동 칩 2개 + 근거 툴팁",
+      set(dlg._rej_btns) == {"자동B", "자동C"}
+      and "0.62" in dlg._rej_btns["자동B"].toolTip())
+check("P3 조작 없이 확인 = 승격 아님(§8.1)",
+      dlg.rejected_tags() == [] and dlg.promoted_tags() == [])
+
+dlg._rej_btns["자동B"].setChecked(True)          # ✕ 거절
+dlg._pin_btns["자동C"].setChecked(True)          # 📌 승격
+check("P3 거절/승격 수집", dlg.rejected_tags() == ["자동B"]
+      and dlg.promoted_tags() == ["자동C"])
+dlg._pin_btns["자동B"].click()                    # 거절된 태그를 고정 클릭 → 배타 전환
+check("P3 거절↔고정 상호 배타", not dlg._rej_btns["자동B"].isChecked()
+      and dlg._pin_btns["자동B"].isChecked())
+dlg._pin_btns["자동B"].setChecked(False)
+dlg._rej_btns["자동B"].setChecked(True)
+dlg._add_tag("제안신규")                          # 신규 후보 클릭 = 수동 채택
+check("P3 제안 클릭 → 입력줄 추가", "제안신규" in dlg.tags().split())
+
+# 적용 순서(set → promote → reject) — bookmark_tree._edit_file_tags 와 동일 절차
+tstore.set(d_pdf, dlg.tags())
+tstore.promote(d_pdf, dlg.promoted_tags())
+tstore.reject(d_pdf, dlg.rejected_tags())
+check("P3 적용 — 승격이 set 에 안 덮임", "자동C" in tstore.get_manual(d_pdf))
+check("P3 적용 — 거절 영구", "자동B" in tstore.get_rejected(d_pdf)
+      and not tstore.is_auto(d_pdf, "자동B"))
+check("P3 적용 — 신규 수동 채택", "제안신규" in tstore.get_manual(d_pdf))
+tstore.set_auto(d_pdf, ["자동B", "자동D"])        # 재계산 시뮬
+check("P3 재계산 — 거절 재부여 금지·승격 유지",
+      not tstore.is_auto(d_pdf, "자동B") and "자동C" in tstore.get_manual(d_pdf)
+      and tstore.is_auto(d_pdf, "자동D"))
+tstore.set(d_pdf, [])
+tstore.clear_auto([d_pdf])
+
+# 제안 캐시 배선(§8.1) — 캐시 없으면 None(구획 숨김), 있으면 리스트
+check("P3 제안 provider 배선", tree.suggest_provider == mw._autotag_suggest_single)
+mw._autotag_ctx = None
+check("P3 캐시 없음 → None", mw._autotag_suggest_single(d_pdf) is None)
+mw._autotag_ctx = (profiles, df, 4)               # P1 절의 배수성 프로파일 재사용
+sg1 = mw._autotag_suggest_single(p2_files["논문4"])
+check("P3 캐시 → 즉석 제안(배수성 포함)",
+      sg1 is not None and any(s["tag"] == "배수성" for s in sg1),
+      f"sg={[s['tag'] for s in (sg1 or [])]}")
+
 # ── 머지 게이트 3·5: 실제 file_tags.json 사본 하위호환 ───────────────────
 real = os.path.expandvars(r"%APPDATA%\LocalTools\PolyPDF\file_tags.json")
 if os.path.exists(real):
