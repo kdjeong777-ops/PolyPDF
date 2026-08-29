@@ -360,6 +360,21 @@ check("§12-28 스캔에도 연도(파일명)", sy == 2021 and ssrc == "name")
 sugg = suggest_tags(sf, {"배수성": {"porous": 1.0}}, {}, 1)
 check("§12-28 스캔 → 주제 억제", all(s["axis"] == "형식" for s in sugg))
 
+# ── 260829 보강: 형식·스캔 판정은 머리말 제거 '전' 원문 기준 ─────────────
+# 여러 페이지 성적서 철 — 구조 토큰(시험항목·판정)이 전 페이지에 정당하게 반복.
+# 제거 후 텍스트로 판정하면 미분류로 빠지던 실결함의 회귀 테스트.
+_book_pg = ("시험항목: 압축강도 시험결과: 32.5 MPa 판정: 합격 "
+            "시험기관 한국건설시험원 시료 아스팔트 혼합물 공극률 밀도 안정도")
+_book = [_book_pg] * 6                       # 6/6 페이지 반복 = 머리말 제거 대상
+cert_book = _mk_pdf("성적서철.pdf", [(595, 842, t) for t in _book])
+check("★ 반복 구조 성적서 철 → 시험성적서(원문 판정)",
+      _fmt(cert_book, _book) == "시험성적서")
+bf = extract_features(cert_book, page_texts=_book)
+check("★ 반복 제거가 스캔 판정을 왜곡하지 않음", not bf.scanned)
+check("특징어는 제거본 기준(머리말 반복어 소거)", bf.terms.get("시험항목") is None
+      or bf.terms.get("시험항목", 0) <= AT.TUNING["W_NAME"])
+check("SCAN_MIN_CHARS 가 TUNING 에 있음(§9.3)", "SCAN_MIN_CHARS" in AT.TUNING)
+
 # ── 머리말 제거 (§12-6) ─────────────────────────────────────────────────
 _words = ["개요", "재료", "배합", "시공", "다짐", "양생", "평가", "유지", "보수", "결언"]
 hdr_pages = [f"대한도로학회 회보 제{i}호\n배수성 포장의 공극률 {_words[i]} 내용"

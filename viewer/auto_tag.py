@@ -37,6 +37,7 @@ TUNING = {
     "ARTICLE_MAX_PAGES": 4,    # §5.3 기사
     "REPORT_MIN_PAGES": 20,    # §5.3 보고서 기본값 조건
     "YEAR_MIN": 1990,          # §9.4 오탐 방어 ①
+    "SCAN_MIN_CHARS": 40,      # 페이지당 이 미만이면 스캔(텍스트 레이어 없음) 판정
 }
 
 # ── 형식 어휘(§5.3 — 닫힌 13종) + 별칭 ──────────────────────────────────
@@ -98,6 +99,7 @@ class Features:
     toc_titles: list = field(default_factory=list)
     head_text: str = ""            # 앞 1~2페이지(머리말 제거 후)
     full_text: str = ""            # 전처리 후 전체(표본) 텍스트
+    struct_text: str = ""          # ★ 원문(제거 전) 앞 3p+뒤 2p — 형식 판정 전용
     scanned: bool = False          # 텍스트 레이어 없음(§4.2 각주)
     aspect: float = 0.0            # 종횡비 중앙값(w/h)
     text_per_page: float = 0.0     # 페이지당 문자 수
@@ -234,14 +236,21 @@ def extract_features(path, page_texts=None, folder_names=None,
     if not f.page_count:
         f.page_count = len(page_texts)
 
+    # ★ 스캔 판정·형식 판정은 머리말 제거 **전** 원문 기준(260829 보강).
+    #   구조 토큰(수신·사업자등록번호·시험항목·판정)은 여러 페이지 성적서·공문 철에서
+    #   모든 페이지에 정당하게 반복된다 — 제거 후 텍스트로 판정하면 그런 문서가
+    #   미분류로 빠지고, 스캔 판정도 왜곡된다. 제거본은 특징어(TF-IDF) 전용.
+    raw_chars = sum(len(p) for p in page_texts)
+    f.scanned = (not page_texts) or raw_chars < \
+        TUNING["SCAN_MIN_CHARS"] * max(1, len(page_texts))
+    _n = len(page_texts)
+    _idx = list(range(min(3, _n))) + [i for i in (_n - 2, _n - 1) if 3 <= i < _n]
+    f.struct_text = "\n".join(page_texts[i] for i in _idx)   # 앞 3p + 뒤 2p(중복 없이)
+
     pages, _removed = strip_headers(page_texts)
     f.full_text = "\n".join(pages)
     f.head_text = "\n".join(pages[:TUNING["HEAD_PAGES"]])
-    total_chars = sum(len(p) for p in pages)
-    f.text_per_page = total_chars / max(1, len(pages))
-    f.scanned = bool(page_texts) and total_chars < 40 * max(1, len(pages))
-    if not page_texts:
-        f.scanned = True                     # 텍스트를 얻지 못함 = 스캔 취급
+    f.text_per_page = raw_chars / max(1, len(page_texts))
 
     # 가중 tf(§4.1 표) — 로그 포화는 점수 계산 시(§3.3.1-②)
     ban = _etal_names(f.full_text)
@@ -280,7 +289,7 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
     반환은 alias(§5.3 사용자 어휘 접합) 적용 후 표시명."""
     rules = rules or {}
     name = (f.stem + " " + str(f.meta.get("title") or "")).lower()
-    txt = (f.head_text + "\n" + f.full_text[:20000]).lower() if not f.scanned else ""
+    txt = f.struct_text[:20000].lower()      # ★ 원문 기준(위 보강) — 스캔이면 자연히 빈 문자열
     fmt = None
 
     # ① 명시어 — 사람이 이름에 써 둔 것이 가장 확실
