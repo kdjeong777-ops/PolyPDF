@@ -440,14 +440,35 @@ class TagStore:
         self._save()
         return fp
 
-    def rehome_missing(self, new_path) -> str:
+    def set_fp(self, path, fp: str, size: int):
+        """워커가 계산한 지문을 채워 넣기(§6.1 — UI 스레드에서 저장만). 항목 없으면 무시."""
+        k = self._key(path)
+        if k in self._data and fp:
+            v = self._dictify(k)
+            v["fp"] = fp
+            v["size"] = int(size or 0)
+            self._save()
+
+    def auto_tag_set(self) -> list:
+        """자동 부여된 태그의 어휘(§8.5 '이 태그의 자동 부여만 취소' 메뉴용) — 빈도 내림차순."""
+        cnt = {}
+        for v in self._data.values():
+            if isinstance(v, dict):
+                for t in (v.get("auto") or []):
+                    cnt[t] = cnt.get(t, 0) + 1
+        return sorted(cnt, key=lambda t: (-cnt[t], t.lower()))
+
+    def rehome_missing(self, new_path, fp: str | None = None,
+                       size: int | None = None) -> str:
         """§6.1 재연결 절차. 반환: 'exists'(경로 적중=비용 0) / 'moved'(이사 — 태그 따라감)
-        / 'copy'(복사본 — 상속 안 함) / 'new'(모름) / 'ambiguous'(지문 충돌 — 안전하게 포기)."""
+        / 'copy'(복사본 — 상속 안 함) / 'new'(모름) / 'ambiguous'(지문 충돌 — 안전하게 포기).
+        `fp`/`size` 를 주면 지문 계산을 건너뛴다(워커가 미리 계산 — UI 스레드 무봉쇄)."""
         k_new = self._key(new_path)
         if k_new in self._data:
             return "exists"                          # ① 경로 적중 — 지문 계산 없음
         try:
-            fp, size = self._fp_of(new_path)         # ② 빗나감 — 이때만 지문 계산
+            if fp is None:
+                fp, size = self._fp_of(new_path)     # ② 빗나감 — 이때만 지문 계산
         except Exception:
             return "new"
 

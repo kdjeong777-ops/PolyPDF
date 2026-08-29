@@ -749,9 +749,38 @@ class BookmarkTree(QWidget):
             base = item.text(0)
             item.setData(0, self.DATA_BASELABEL, base)
         tags = self._tags.get(path)
-        suffix = ("   " + "  ".join("#" + t for t in tags)) if tags else ""
+        # 260829 P2(태그 SOT §8.3·디자인 §2.11): 자동 태그는 `·#` 중점 접두로 구분 —
+        # 표시 구분은 장식이 아니라 자동 부여의 안전장치다(확인을 대신한다).
+        def _chip(t):
+            return ("·#" if self._tags.is_auto(path, t) else "#") + t
+        suffix = ("   " + "  ".join(_chip(t) for t in tags)) if tags else ""
         item.setText(0, base + suffix)
-        item.setToolTip(0, (item.toolTip(0) or path))
+        tip = path
+        try:
+            y = self._tags.get_year(path)
+            kws = self._tags.get_keywords(path)
+            extra = [x for x in ([f"작성연도 {y}"] if y else [])
+                     + (["키워드: " + " · ".join(kws)] if kws else [])]
+            if extra:
+                tip = path + "\n" + "\n".join(extra)
+        except Exception:
+            pass
+        item.setToolTip(0, tip)
+
+    def refresh_tag_labels(self):
+        """260829 P2: 자동 부여/되돌리기 후 전체 파일 라벨·필터 갱신(§8.5)."""
+        if self._tags is None:
+            return
+        try:
+            self._tags._load()                      # 다른 경로(백업 복원)로 바뀐 파일 재읽기
+        except Exception:
+            pass
+        for i in range(self.tree.topLevelItemCount()):
+            it = self.tree.topLevelItem(i)
+            p = it.data(0, self.DATA_FILE)
+            if p:
+                self._apply_tag_label(it, p)
+        self._on_filter(self.search_edit.text())
 
     def _rebuild_tag_menu(self):
         """'#' 버튼 메뉴 — 등록된 모든 태그(클릭 시 검색박스에 #태그 추가)."""
@@ -767,6 +796,24 @@ class BookmarkTree(QWidget):
         self._tag_menu.addSeparator()
         clr = self._tag_menu.addAction("검색 비우기")
         clr.triggered.connect(lambda: self.search_edit.clear())
+        # 260829 P2(태그 SOT §8.5): 한 태그가 잘못 퍼졌을 때 그것만 회수
+        auto_ts = []
+        try:
+            auto_ts = self._tags.auto_tag_set()
+        except Exception:
+            pass
+        if auto_ts:
+            sub = self._tag_menu.addMenu("자동 부여 취소")
+            for t in auto_ts[:30]:
+                act = sub.addAction("·#" + t)
+                act.triggered.connect(lambda _=False, tag=t: self._revoke_auto_tag(tag))
+
+    def _revoke_auto_tag(self, tag: str):
+        """§8.5 '이 태그의 자동 부여만 취소' — 수동·다른 태그는 그대로."""
+        if self._tags is None:
+            return
+        self._tags.clear_auto_tag(tag)
+        self.refresh_tag_labels()
 
     def _add_tag_to_search(self, tag: str):
         cur = self.search_edit.text().split()

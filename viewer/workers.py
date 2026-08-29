@@ -522,3 +522,112 @@ class OnlineDictFetchWorker(QThread):
                 provs = []
             out.append((lemma, lang, provs))
         self.done.emit(out)
+
+
+class AutoTagWorker(QObject):
+    """260829(태그 SOT §8.2·P2): 태그·연도 자동 계산 워커.
+
+    ★ TagStore 를 직접 만지지 않는다 — 스레드 경합 회피. 계산 결과만 emit 하고
+      적용(rehome·set_auto·set_year)은 UI 스레드(app._on_autotag_finished)가
+      `store.bulk()` 안에서 한다. 지문(§6.1)도 여기서 계산해 넘긴다(무거운 부분).
+    본문은 index.db(`page_texts`) 우선 — 미색인만 fitz 폴백(§7 재파싱 금지).
+    """
+    progress = pyqtSignal(int, int, str)      # done, total, current
+    finished = pyqtSignal(list, dict)         # results, stats
+    error = pyqtSignal(str)
+
+    def __init__(self, db_path, paths, tagged_docs, known_tags, rules,
+                 today_year, store_keys, fp_missing_keys):
+        super().__init__()
+        self.db_path = db_path
+        self.paths = [str(p) for p in paths]
+        self.tagged_docs = dict(tagged_docs)      # {태그: [경로…]} — 프로파일 학습용
+        self.known_tags = list(known_tags)
+        self.rules = dict(rules or {})
+        self.today_year = int(today_year)
+        self.store_keys = set(store_keys)         # 경로 적중 판별(지문 생략 — §6.1 ①)
+        self.fp_missing_keys = set(fp_missing_keys)   # 항목은 있는데 fp 없는 것 — 채움
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        try:
+            from viewer.auto_tag import (build_profiles, extract_features,
+                                         extract_year, partition, suggest_tags)
+            from viewer.tag_store import TagStore
+            try:
+                ix = PdfIndex(self.db_path)
+            except Exception:
+                ix = None
+
+            def texts(p):
+                if ix is not None:
+                    t = ix.page_texts(p)
+                    if t:
+                        return t
+                return None                       # extract_features 가 fitz 폴백
+
+            # 1패스: 특징 추출 + 전역 DF(§3.3.1-①)
+            feats, df = {}, {}
+            total = len(self.paths)
+            for i, p in enumerate(self.paths):
+                if self._cancel:
+                    return
+                try:
+                    f = extract_features(p, page_texts=texts(p))
+                except Exception:
+                    continue
+                feats[p] = f
+                for t in set(f.terms):
+                    df[t] = df.get(t, 0) + 1
+                self.progress.emit(i + 1, total * 2, p)
+            n_docs = max(1, len(feats))
+
+            # 프로파일(§5.2) — 태그가 붙은 파일들의 특징어로 학습
+            tag_docs = {}
+            for tag, plist in self.tagged_docs.items():
+                cs = [feats[p].terms for p in plist if p in feats]
+                if cs:
+                    tag_docs[tag] = cs
+            profiles = build_profiles(tag_docs, df, n_docs)
+
+            # 2패스: 제안·게이트·연도·지문
+            results = []
+            n_auto_files = n_new_candidates = 0
+            key = TagStore._key
+            for i, p in enumerate(self.paths):
+                if self._cancel:
+                    return
+                f = feats.get(p)
+                if f is None:
+                    continue
+                sugg = suggest_tags(f, profiles, df, n_docs,
+                                    known_tags=self.known_tags, rules=self.rules)
+                part = partition(sugg)
+                year, ysrc, yconf = extract_year(f, self.today_year)
+                k = key(p)
+                fp = size = None
+                try:
+                    if k not in self.store_keys or k in self.fp_missing_keys:
+                        fp, size = TagStore._fp_of(p)      # 무거운 계산은 워커에서(§6.1)
+                except Exception:
+                    pass
+                auto = [(s["tag"], s["score"]) for s in part["auto"]]
+                if auto:
+                    n_auto_files += 1
+                n_new_candidates += sum(1 for s in part["suggest"]
+                                        if s.get("kind") == "new")
+                results.append({"path": p, "auto": auto,
+                                "year": year, "year_src": ysrc, "year_conf": yconf,
+                                "fp": fp, "size": size, "scanned": f.scanned})
+                self.progress.emit(total + i + 1, total * 2, p)
+            if ix is not None:
+                ix.close()
+            self.finished.emit(results, {
+                "total": total, "auto_files": n_auto_files,
+                "new_candidates": n_new_candidates,
+                "known_tags": len(self.known_tags)})
+        except Exception as e:                    # noqa: BLE001
+            self.error.emit(str(e))

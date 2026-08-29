@@ -1508,6 +1508,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._act_kipo = _act("특허 등록정보 (KIPO)...", self._action_kipo_search)
         _act("인덱스 재구축", self.action_reindex)
 
+        # 🏷️ 태그·키워드 (260829 P2 — 태그 SOT §8.2·§8.5)
+        m_tools.addSection("🏷️ 태그 자동 부여")
+        _act("태그 다시 계산", lambda: self._start_autotag_scan(force=True))
+        _act("직전 자동 부여 되돌리기", self._autotag_undo)
+        _act("자동 태그 전체 삭제", self._autotag_clear_all)
+        _act("없는 파일 항목 정리…", self._autotag_prune_missing)
+
         # ⚙️ 프로그램 환경설정
         m_tools.addSection("⚙️ 프로그램 환경설정")
         _act("환경설정...", self.action_open_settings)        # 260618-18: 환경설정을 단축키 위로
@@ -3441,6 +3448,169 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _on_index_finished(self):
         self.progress.setVisible(False)
         self.status.showMessage("인덱싱 완료", 3000)
+        # 260829 P2(태그 SOT §8.2): 인덱싱 직후 자동 부여 — 본문이 index.db 에 막
+        # 들어간 시점이라 추가 I/O 가 없다. 실패해도 인덱싱 결과에는 영향 없음.
+        try:
+            QTimer.singleShot(400, self._start_autotag_scan)
+        except Exception:
+            pass
+
+    # ── 태그 자동 부여 파이프라인 (260829 P2 — 태그 SOT §8.2·§8.5) ─────────
+    def _start_autotag_scan(self, force: bool = False):
+        """전 파일 태그·연도 계산 워커 시작. force=메뉴 '다시 계산'(§3.5-C)."""
+        if not self._prefs.get("auto_tag_enabled", True) and not force:
+            return                                    # §3.5 각주 — 끄면 제안만(다이얼로그)
+        if getattr(self, "_autotag_worker", None) is not None:
+            return                                    # 이미 실행 중
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None:
+            return
+        try:
+            paths = [p for p in self.bookmark_tree.all_file_paths()
+                     if str(p).lower().endswith(".pdf")]
+        except Exception:
+            paths = []
+        if not paths:
+            return
+        # 스냅샷(워커는 store 를 만지지 않는다 — 스레드 경합 회피)
+        tagged = {}
+        fp_missing = set()
+        for p in paths:
+            k = store._key(p)
+            v = store._data.get(k)
+            if v is None:
+                continue
+            for t in store.get_manual(p):             # 프로파일 학습은 수동 태그만(§3.1 시범 표본 과적합 방지 완화)
+                tagged.setdefault(t, []).append(str(p))
+            if isinstance(v, dict) and not v.get("fp"):
+                fp_missing.add(k)
+        from datetime import date
+        from viewer.auto_tag import load_rules
+        from viewer.workers import AutoTagWorker, run_in_thread
+        w = AutoTagWorker(self._db_path, paths, tagged,
+                          known_tags=store.all_tags(), rules=load_rules(),
+                          today_year=date.today().year,
+                          store_keys=set(store._data.keys()),
+                          fp_missing_keys=fp_missing)
+        self._autotag_worker = w
+        w.progress.connect(lambda d, t, n: self.status.showMessage(
+            f"태그 계산 {d}/{t}", 1500))
+        w.finished.connect(self._on_autotag_finished)
+        w.error.connect(self._on_autotag_error)
+        run_in_thread(w, self._thread_keep)
+
+    def _on_autotag_error(self, msg):
+        self._autotag_worker = None
+        self.status.showMessage(f"태그 계산 오류: {msg}", 4000)
+
+    def _on_autotag_finished(self, results, stats):
+        """워커 결과를 UI 스레드에서 적용 — 재연결(§6.1)·자동 부여(§5.6)·연도(§9.4).
+        ★ 일괄 적용 전 백업 필수(§6) — 실패하면 아무것도 쓰지 않는다."""
+        self._autotag_worker = None
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None or not results:
+            return
+        if not store.backup():
+            self.status.showMessage("태그 백업 실패 — 자동 부여를 건너뜀(§6)", 5000)
+            return
+        n_auto = n_moved = 0
+        with store.bulk():
+            for r in results:
+                p = r["path"]
+                if r.get("fp"):
+                    st = store.rehome_missing(p, fp=r["fp"], size=r.get("size"))
+                    if st == "moved":
+                        n_moved += 1
+                    elif st == "exists":
+                        store.set_fp(p, r["fp"], r.get("size") or 0)
+                if r["auto"]:
+                    tags = [t for t, _ in r["auto"]]
+                    store.set_auto(p, tags,
+                                   conf={t: s for t, s in r["auto"]})
+                    if store.get_auto(p):
+                        n_auto += 1
+                if r.get("year"):
+                    store.set_year(p, r["year"], r.get("year_src", ""),
+                                   r.get("year_conf", 0.0))
+        try:
+            self.bookmark_tree.refresh_tag_labels()
+        except Exception:
+            pass
+        msg = (f"태그 자동 부여: {stats.get('total', 0)}개 검토, "
+               f"{n_auto}개 파일에 부여")
+        if n_moved:
+            msg += f", 이동 재연결 {n_moved}건"
+        self.status.showMessage(msg, 5000)
+        self._autotag_first_summary(stats, n_auto)
+
+    def _autotag_first_summary(self, stats, n_auto):
+        """§8.2 첫 실행 요약 — 1회 모달. 무엇을 '안 했는지'도 말한다(조용한 누락 금지)."""
+        if self._prefs.get("autotag_summary_shown", False):
+            return
+        self._prefs["autotag_summary_shown"] = True
+        try:
+            self._save_settings_now()
+        except Exception:
+            pass
+        try:
+            box = QMessageBox(self)
+            box.setWindowTitle("태그 자동 부여")
+            box.setText(
+                f"{stats.get('total', 0)}개 파일을 살펴봤습니다.\n\n"
+                f"· {n_auto}개 파일에 태그를 붙였습니다"
+                f" (기존 태그 {stats.get('known_tags', 0)}종 사용)\n"
+                f"· 새 태그 후보 {stats.get('new_candidates', 0)}건은 붙이지 않았습니다\n\n"
+                "자동 태그는 목록에 ·# 로 표시되며, 도구 메뉴에서 언제든 "
+                "되돌리거나 전체 삭제할 수 있습니다.")
+            undo = box.addButton("되돌리기", QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton("확인", QMessageBox.ButtonRole.AcceptRole)
+            box.exec()
+            if box.clickedButton() is undo:
+                self._autotag_undo()
+        except Exception:
+            pass
+
+    def _autotag_undo(self):
+        """§8.5 직전 일괄 부여 되돌리기 — file_tags.bak.json 복원."""
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None:
+            return
+        ok = store.restore_backup()
+        try:
+            self.bookmark_tree.refresh_tag_labels()
+        except Exception:
+            pass
+        self.status.showMessage("직전 자동 부여를 되돌렸습니다" if ok
+                                else "되돌릴 백업이 없습니다", 4000)
+
+    def _autotag_clear_all(self):
+        """§8.5 자동 태그 전체 삭제 — manual 무손실."""
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None:
+            return
+        store.clear_auto()
+        try:
+            self.bookmark_tree.refresh_tag_labels()
+        except Exception:
+            pass
+        self.status.showMessage("자동 태그를 전부 지웠습니다(수동 태그는 유지)", 4000)
+
+    def _autotag_prune_missing(self):
+        """§8.5·§6.1 없는 파일 항목 정리 — ★ 개수 확인 후에만(앱이 임의로 지우지 않는다)."""
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None:
+            return
+        n = store.count_missing()
+        if n == 0:
+            QMessageBox.information(self, "항목 정리", "없는 파일 항목이 없습니다.")
+            return
+        r = QMessageBox.question(
+            self, "항목 정리",
+            f"디스크에 없는 파일의 태그 항목 {n}건을 지울까요?\n"
+            "(휴지통 복원 예정인 파일이 있다면 지우지 마세요 — 복원 시 태그가 살아납니다.)")
+        if r == QMessageBox.StandardButton.Yes:
+            removed = store.prune_missing()
+            self.status.showMessage(f"{removed}건 정리", 4000)
 
     def _index_single_file(self, path) -> None:
         """260606-4: 새로 만든/편집한 PDF 1개를 백그라운드 인덱싱 → 검색에 포함."""
@@ -4909,6 +5079,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._prefs = dict(data.get("preferences", {}))
         self._prefs.setdefault("restore_session", True)
         self._prefs.setdefault("start_view_single", True)   # 260628-13: 시작 시 1단+쪽맞춤
+        self._prefs.setdefault("auto_tag_enabled", True)    # 260829 P2: 태그 자동 부여(태그 SOT §3.5)
+        self._prefs.setdefault("autotag_summary_shown", False)  # §8.2 첫 실행 요약 1회
         self._prefs.setdefault("restore_last_page", True)
         self._prefs.setdefault("restore_screenshots", True)
         self._prefs.setdefault("screenshot_max", 30)
@@ -5156,6 +5328,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             # 260628-13: 허용목록 방식이라 여기 없으면 저장되지 않는다.
             "start_view_single": bool(prefs.get("start_view_single",
                                               old.get("start_view_single", True))),
+            # 260829 P2: 태그 자동 부여 — 허용목록 미등재 시 조용히 유실(§14.2 함정)
+            "auto_tag_enabled": bool(prefs.get("auto_tag_enabled",
+                                               old.get("auto_tag_enabled", True))),
+            "autotag_summary_shown": bool(prefs.get("autotag_summary_shown",
+                                                    old.get("autotag_summary_shown", False))),
             "restore_last_page": prefs.get("restore_last_page", True),
             "restore_screenshots": prefs.get("restore_screenshots", True),
             "screenshot_max": int(prefs.get("screenshot_max", 30)),

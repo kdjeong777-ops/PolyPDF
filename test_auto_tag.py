@@ -461,6 +461,135 @@ AT.save_profile_cache(cachep, 111, profiles)
 check("프로파일 캐시 적중", AT.load_profile_cache(cachep, 111) is not None)
 check("프로파일 캐시 mtime 무효화", AT.load_profile_cache(cachep, 222) is None)
 
+# ═════════════════════ P2 — 자동 부여 파이프라인 (§8.2·§8.3·§8.5) ═════════
+# 여기부터는 Qt 필요(워커·트리 라벨) — 오프스크린.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PyQt6.QtWidgets import QApplication  # noqa: E402
+
+_qapp = QApplication(sys.argv)
+_qapp.setApplicationName("PolyPDF")
+_qapp.setOrganizationName("LocalTools")
+
+from viewer.workers import AutoTagWorker  # noqa: E402
+
+P2DIR = os.path.join(WORK, "p2폴더")
+os.makedirs(P2DIR, exist_ok=True)
+# 시나리오 폴더: 지침(파일명)·발표(레이아웃)·영문 porous 논문 4건(3 태그 + 1 신규)
+p2_files = {}
+p2_files["지침"] = _mk_pdf(os.path.join("p2폴더", "포장 관리 지침.pdf"),
+                           [(595, 842, "content page " + "word " * 30)] * 3)
+p2_files["발표"] = _mk_pdf(os.path.join("p2폴더", "성과 발표.pdf"),
+                           [(960, 540, f"slide {i}") for i in range(12)])
+_eng = ("porous asphalt OGFC drainage permeable void ratio design "
+        "mixture gradation performance evaluation test result")
+for i in range(1, 5):
+    p2_files[f"논문{i}"] = _mk_pdf(os.path.join("p2폴더", f"porous_{i}_2023.pdf"),
+                                   [(595, 842, _eng + f" variant {i}")] * 3)
+
+p2_store_path = os.path.join(WORK, "p2_tags.json")
+st2 = TagStore(p2_store_path)
+for i in range(1, 4):                          # 3건에 수동 태그(시범 입력 시뮬)
+    st2.set(p2_files[f"논문{i}"], "배수성")
+st2.reject(p2_files["논문4"], ["거부태그"])     # rejected 존중 확인용
+
+_results = {}
+
+
+def _collect(res, stats):
+    _results["res"] = res
+    _results["stats"] = stats
+
+
+tagged = {"배수성": [p2_files[f"논문{i}"] for i in range(1, 4)]}
+w = AutoTagWorker(db_path=os.path.join(WORK, "no_index.db"),
+                  paths=list(p2_files.values()), tagged_docs=tagged,
+                  known_tags=st2.all_tags(), rules={}, today_year=2026,
+                  store_keys=set(st2._data.keys()), fp_missing_keys=set())
+w.finished.connect(_collect)
+w.error.connect(lambda e: _results.update(err=e))
+w.run()                                        # 동기 실행(테스트 결정성)
+check("P2 워커 완료(오류 없음)", "res" in _results and "err" not in _results,
+      str(_results.get("err", "")))
+res_by_path = {r["path"]: r for r in _results.get("res", [])}
+
+
+def _auto_tags_of(key_):
+    r = res_by_path.get(p2_files[key_], {})
+    return [t for t, _ in r.get("auto", [])]
+
+
+check("P2 형식 자동(지침·파일명)", "지침" in _auto_tags_of("지침"))
+check("P2 형식 자동(발표자료·레이아웃)", "발표자료" in _auto_tags_of("발표"))
+check("P2 ★ L1 주제 자동 — 4번째 porous 논문에 배수성",
+      "배수성" in _auto_tags_of("논문4"), f"auto={_auto_tags_of('논문4')}")
+check("P2 연도(파일명 2023)", res_by_path[p2_files["논문4"]]["year"] == 2023)
+check("P2 신규 파일 지문 동봉", bool(res_by_path[p2_files["발표"]].get("fp")))
+
+# 적용 단계 시뮬(§6 백업 → bulk 적용) — app._on_autotag_finished 와 같은 순서
+assert st2.backup()
+with st2.bulk():
+    for r in _results["res"]:
+        if r.get("fp"):
+            s_ = st2.rehome_missing(r["path"], fp=r["fp"], size=r.get("size"))
+            if s_ == "exists":
+                st2.set_fp(r["path"], r["fp"], r.get("size") or 0)
+        if r["auto"]:
+            st2.set_auto(r["path"], [t for t, _ in r["auto"]],
+                         conf={t: s for t, s in r["auto"]})
+        if r.get("year"):
+            st2.set_year(r["path"], r["year"], r["year_src"], r["year_conf"])
+check("P2 적용 — manual 무손실", st2.get_manual(p2_files["논문1"]) == ["배수성"])
+check("P2 적용 — 자동 태그 저장+conf",
+      st2.is_auto(p2_files["논문4"], "배수성")
+      and st2._data[key(p2_files["논문4"])]["auto_conf"].get("배수성", 0) > 0)
+check("P2 적용 — rejected 존중(재부여 안 됨)",
+      "거부태그" not in st2.get(p2_files["논문4"]))
+check("P2 적용 — 연도는 태그 아님", "2023" not in st2.tag_counts())
+assert st2.restore_backup()
+check("P2 되돌리기 — 자동 부여 전으로", st2.get_auto(p2_files["논문4"]) == [])
+
+# ── 트리 표시 구분(§8.3 — MainWindow 통합) ──────────────────────────────
+from viewer.app import MainWindow  # noqa: E402
+
+mw = MainWindow()
+mw._skip_save_on_close = True
+tree = mw.bookmark_tree
+# ★ 실사용 store 를 건드리지 않는다 — 임시 store 로 교체(§13 게이트: 원본은 사본으로만)
+tstore = TagStore(os.path.join(WORK, "ui_tags.json"))
+tree._tags = tstore
+tree_pdf = os.path.join(WORK, "표시확인.pdf")
+shutil.copy2(PDF, tree_pdf)
+tstore.set(tree_pdf, "수동태그")
+tstore.set_auto(tree_pdf, ["자동태그"])
+tstore.set_year(tree_pdf, 2024, "name", 0.9)
+tstore.set_keywords(tree_pdf, ["키워드하나"])
+from PyQt6.QtWidgets import QTreeWidgetItem  # noqa: E402
+
+it = QTreeWidgetItem(["표시확인"])
+it.setData(0, tree.DATA_FILE, tree_pdf)
+tree.tree.addTopLevelItem(it)
+tree._apply_tag_label(it, tree_pdf)
+lbl = it.text(0)
+check("§8.3 표시 — 수동 #·자동 ·# 구분", "#수동태그" in lbl and "·#자동태그" in lbl
+      and "#자동태그" != lbl, f"lbl={lbl!r}")
+check("§8.3 연도·키워드는 접미 아님·툴팁", "2024" not in lbl
+      and "2024" in it.toolTip(0) and "키워드하나" in it.toolTip(0))
+check("§8.5 자동 취소 어휘", "자동태그" in tstore.auto_tag_set())
+tree._revoke_auto_tag("자동태그")
+check("§8.5 이 태그만 회수", not tstore.is_auto(tree_pdf, "자동태그")
+      and tstore.get_manual(tree_pdf) == ["수동태그"])
+# 정리 — 실제 사용자 store 에 넣은 테스트 항목 제거
+tstore.set(tree_pdf, [])
+tstore.set_year(tree_pdf, None)
+tstore.set_keywords(tree_pdf, [])
+
+# 설정 키 회귀(§14.2 허용목록 함정)
+check("P2 설정 기본값", mw._prefs.get("auto_tag_enabled") is True)
+mw._prefs["auto_tag_enabled"] = False
+check("P2 끔 → 스캔 미시작", mw._start_autotag_scan() is None
+      and getattr(mw, "_autotag_worker", None) is None)
+mw._prefs["auto_tag_enabled"] = True
+
 # ── 머지 게이트 3·5: 실제 file_tags.json 사본 하위호환 ───────────────────
 real = os.path.expandvars(r"%APPDATA%\LocalTools\PolyPDF\file_tags.json")
 if os.path.exists(real):
