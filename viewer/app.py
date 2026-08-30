@@ -5154,7 +5154,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._prefs = dict(data.get("preferences", {}))
         self._prefs.setdefault("restore_session", True)
         self._prefs.setdefault("start_view_single", True)   # 260628-13: 시작 시 1단+쪽맞춤
-        self._prefs.setdefault("auto_tag_enabled", True)    # 260829 P2: 태그 자동 부여(태그 SOT §3.5)
+        # 260830(사용자 결정): 태그 자동 부여는 **옵트인** — 환경설정에서 체크해야 동작.
+        #   실사용 정확도 피드백(발표자료→보고서 오분류)으로 기본 꺼짐 전환(태그 SOT §3.5).
+        self._prefs.setdefault("auto_tag_enabled", False)
+        # ★ 1회 마이그레이션: beta.104 는 옵트인 UI 없이 기본 켜짐으로 나가
+        #   settings.json 에 true 가 저장돼 있다 — 그것은 사용자의 명시적 선택이
+        #   아니므로 한 번 강제로 끈다(이후에는 환경설정 체크가 유일한 켜는 길).
+        if not self._prefs.get("auto_tag_optin_migrated", False):
+            self._prefs["auto_tag_enabled"] = False
+            self._prefs["auto_tag_optin_migrated"] = True
         self._prefs.setdefault("autotag_summary_shown", False)  # §8.2 첫 실행 요약 1회
         self._prefs.setdefault("restore_last_page", True)
         self._prefs.setdefault("restore_screenshots", True)
@@ -5405,7 +5413,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                               old.get("start_view_single", True))),
             # 260829 P2: 태그 자동 부여 — 허용목록 미등재 시 조용히 유실(§14.2 함정)
             "auto_tag_enabled": bool(prefs.get("auto_tag_enabled",
-                                               old.get("auto_tag_enabled", True))),
+                                               old.get("auto_tag_enabled", False))),
+            "auto_tag_optin_migrated": bool(prefs.get("auto_tag_optin_migrated",
+                                            old.get("auto_tag_optin_migrated", False))),
             "autotag_summary_shown": bool(prefs.get("autotag_summary_shown",
                                                     old.get("autotag_summary_shown", False))),
             "restore_last_page": prefs.get("restore_last_page", True),

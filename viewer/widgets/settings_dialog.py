@@ -145,6 +145,14 @@ class SettingsDialog(QDialog):
         self.chk_restore_shots.setChecked(bool(self._prefs.get("restore_screenshots", True)))
         gl.addWidget(self.chk_restore_shots)
 
+        # 260830(태그 SOT §3.5, 사용자 결정): 태그 자동 부여는 옵트인 — 기본 꺼짐.
+        self.chk_auto_tag = QCheckBox(
+            "파일 해시태그·키워드 자동 부여 (인덱싱 후 백그라운드 — 자동 태그는 ·# 로 구분, "
+            "도구 메뉴에서 되돌리기 가능)"
+        )
+        self.chk_auto_tag.setChecked(bool(self._prefs.get("auto_tag_enabled", False)))
+        gl.addWidget(self.chk_auto_tag)
+
         # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
         mrow = QHBoxLayout()
         mrow.addWidget(QLabel("PolyPDF 시작 모드:"))
@@ -603,6 +611,7 @@ class SettingsDialog(QDialog):
             "restore_session": self.chk_restore.isChecked(),
             "restore_last_page": self.chk_last_page.isChecked(),
             "restore_screenshots": self.chk_restore_shots.isChecked(),
+            "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
             "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
             "screenshot_max": int(self.spin_screenshot.value()),
             # v1.6.23: 패널 토글 툴바 가시성

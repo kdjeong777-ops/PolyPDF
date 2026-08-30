@@ -337,11 +337,25 @@ unknown = _mk_pdf("메모.pdf", [(595, 842, "회의 메모" + " 항목" * 300) f
 _u_txt = ["회의 메모" + " 항목" * 300] * 3
 check("§12-27 판정 불가 → 형식 없음", _fmt(unknown, _u_txt) is None)
 
+# 260830 보수화: 기본값 보고서는 이름 또는 (≥20p AND 목차 AND 세로) — SOT §5.3 표 그대로
 plain25 = _mk_pdf("연구자료.pdf", [(595, 842, f"내용 {i}" + " 본문" * 300)
                                    for i in range(25)])
-check("§12 기본값 보고서(≥20p)", _fmt(plain25) == "보고서")
+check("★ 무목차 25p → 보고서 아님(보수화)", _fmt(plain25) is None)
+named_rep = _mk_pdf("연구 보고서.pdf", [(595, 842, "내용" + " 본문" * 300)] * 5)
+check("이름 '보고서' → 보고서", _fmt(named_rep) == "보고서")
 check("§12-29 alias 매핑(보고서→외국보고서)",
-      _fmt(plain25, rules={"alias": {"보고서": "외국보고서"}}) == "외국보고서")
+      _fmt(named_rep, rules={"alias": {"보고서": "외국보고서"}}) == "외국보고서")
+# 목차 있는 25p 세로 → 보고서 / 같은 조건 가로 → 제외(발표자료 오분류 실사용 보고 대응)
+toc_rep = os.path.join(WORK, "목차문서.pdf")
+_d = fitz.open()
+for i in range(25):
+    _d.new_page(width=595, height=842).insert_textbox(
+        fitz.Rect(30, 30, 565, 812), f"chapter {i} " + "text " * 200, fontsize=10)
+_d.set_toc([[1, f"장 {i}", i + 1] for i in range(5)])
+_d.save(toc_rep); _d.close()
+check("목차+세로 25p → 보고서", _fmt(toc_rep) == "보고서")
+wide_heavy = _mk_pdf("가로자료.pdf", [(960, 540, "dense " + "text " * 300)] * 25)
+check("★ 텍스트 많은 가로 25p → 보고서로 안 찍힘", _fmt(wide_heavy) is None)
 
 alias_name = _mk_pdf("세금계산서_3월.pdf", [(595, 842, "내역")])
 check("§12-29 별칭 파일명 → 영수증", _fmt(alias_name) == "영수증")
@@ -583,11 +597,19 @@ tstore.set(tree_pdf, [])
 tstore.set_year(tree_pdf, None)
 tstore.set_keywords(tree_pdf, [])
 
-# 설정 키 회귀(§14.2 허용목록 함정)
-check("P2 설정 기본값", mw._prefs.get("auto_tag_enabled") is True)
-mw._prefs["auto_tag_enabled"] = False
-check("P2 끔 → 스캔 미시작", mw._start_autotag_scan() is None
+# 설정 키 회귀(§14.2 허용목록 함정) — 260830: 옵트인 전환(기본 꺼짐)
+check("P2 ★ 설정 기본값 = 꺼짐(옵트인)", mw._prefs.get("auto_tag_enabled") is False)
+check("P2 기본(꺼짐) → 스캔 미시작", mw._start_autotag_scan() is None
       and getattr(mw, "_autotag_worker", None) is None)
+# 환경설정 체크박스 배선
+from viewer.widgets.settings_dialog import SettingsDialog  # noqa: E402
+
+sd = SettingsDialog(dict(mw._prefs), mw, host=mw)
+check("P2 환경설정 체크박스 존재·기본 해제", hasattr(sd, "chk_auto_tag")
+      and not sd.chk_auto_tag.isChecked())
+sd.chk_auto_tag.setChecked(True)
+check("P2 체크 → result_prefs 반영", sd.result_prefs().get("auto_tag_enabled") is True)
+sd.deleteLater()
 mw._prefs["auto_tag_enabled"] = True
 
 # ═════════════════════ P3 — 편집 다이얼로그 (§8.1) ═══════════════════════

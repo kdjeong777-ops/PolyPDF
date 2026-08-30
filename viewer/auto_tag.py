@@ -331,11 +331,17 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
               and re.search(r"\d{4}\s?[.\-/년]\s?\d{1,2}\s?[.\-/월]", txt)):
             fmt = "기사"
 
-    # ④ 기본값 — 보고서(조건 못 맞추면 형식 없음)
+    # ④ 기본값 — 보고서(조건 못 맞추면 형식 없음).
+    #   260830 시정: SOT §5.3 의 '보고서 = 이름 + 목차 + ≥20p' 에서 **목차 조건이 구현에서
+    #   빠져** 페이지수만으로 보고서를 찍었고, 텍스트 많은 가로 발표자료가 ③을 통과해
+    #   #보고서로 오분류됐다(실사용 보고). 목차 필수 + 가로 문서 제외로 보수화 —
+    #   틀린 형식보다 없는 편이 낫다(§3.5-A).
     if fmt is None:
         if "보고서" in name or "report" in name:
             fmt = "보고서"
-        elif f.page_count >= TUNING["REPORT_MIN_PAGES"] and not f.scanned:
+        elif (f.page_count >= TUNING["REPORT_MIN_PAGES"] and not f.scanned
+              and f.toc_titles                                # 목차 있어야(§5.3 표)
+              and f.aspect < 1.2):                            # 가로 문서는 기본값 제외
             fmt = "보고서"
 
     if fmt is None:
