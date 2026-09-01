@@ -154,6 +154,25 @@ labels = [ac.text() for ac in sub.actions() if ac.text()]
 chk(any("sub_b" in s for s in labels), "④ 서브메뉴에 하위 폴더 후보", f"{labels[:4]}")
 chk("새 폴더 만들기..." in labels and "다른 폴더 선택..." in labels,
     "④ 서브메뉴에 '새 폴더 만들기'·'다른 폴더 선택'")
+# 260901-4: 두 항목이 **맨 위** 두 줄
+chk(labels[:2] == ["새 폴더 만들기...", "다른 폴더 선택..."],
+    "④ '새 폴더 만들기'·'다른 폴더 선택'이 맨 위", f"{labels[:3]}")
+
+# 260901-4: 기준 폴더 = 선택한 파일이 있는 세부 폴더
+deep_pdf = root / "sub_a" / "deep" / "d1.pdf"
+chk(bt._source_folder_of([deep_pdf]) == deep_pdf.parent,
+    "④ 기준 폴더 = 선택 파일의 세부 폴더")
+QInputDialog.getText = staticmethod(lambda *a, **k: ("하위신설", True))
+nd2 = bt._ask_new_folder(base=bt._source_folder_of([deep_pdf]))
+chk(nd2 == deep_pdf.parent / "하위신설" and nd2.is_dir(),
+    "④ '새 폴더 만들기' — 그 세부 폴더 아래에 생성", f"{nd2}")
+seen_start = {}
+from PyQt6.QtWidgets import QFileDialog
+QFileDialog.getExistingDirectory = staticmethod(
+    lambda parent, title, start="", *a, **k: (seen_start.setdefault("s", start), "")[1])
+bt._ask_pick_folder(False, start=bt._source_folder_of([deep_pdf]))
+chk(seen_start.get("s") == str(deep_pdf.parent),
+    "④ '다른 폴더 선택' — 그 세부 폴더에서 열림", f"{seen_start.get('s')}")
 
 # ── ⑤ 폴더 이름 변경 / 삭제 (260901-3) ───────────────────────────────
 QInputDialog.getText = staticmethod(lambda *a, **k: ("보고서모음", True))

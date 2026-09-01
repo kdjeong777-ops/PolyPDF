@@ -1830,22 +1830,49 @@ class BookmarkTree(QWidget):
             pass
         return out
 
+    def _source_folder_of(self, paths: list):
+        """260901-4: 선택한 파일들이 있는 폴더(모두 같은 폴더일 때). 섞였으면 첫 파일 기준.
+
+        '새 폴더 만들기'·'다른 폴더 선택'의 **기준 위치**다 — 정리하려는 자료가 있는
+        세부 폴더에서 시작해야 옮길 곳을 루트부터 다시 찾지 않는다."""
+        folders = []
+        for p in paths:
+            d = Path(p).parent
+            if d not in folders:
+                folders.append(d)
+        if folders:
+            return folders[0]
+        return self._root_dir
+
     def _add_transfer_submenu(self, menu, title: str, file_items: list, move: bool):
         """260901-2: '파일 복사/이동' 서브메뉴 — 대상 폴더 후보를 나열.
 
-        후보 순서: ① 트리에서 선택·클릭한 폴더 ② 루트 아래 하위 폴더 ③ 새 폴더 만들기 ④ 직접 선택.
+        260901-4(사용자 요청) 순서: ① 새 폴더 만들기 ② 다른 폴더 선택 ③ 트리에서 선택한 폴더
+        ④ 루트 아래 하위 폴더. ①②를 맨 위에 두는 이유는 하위 폴더가 많을 때 목록 끝까지
+        내려가야 닿던 문제를 없애기 위함이고, 둘 다 **선택한 파일이 있는 세부 폴더**를
+        기준으로 연다(`_source_folder_of`).
         각 항목은 자체 `triggered` 로 실행한다(바깥 chosen 분기와 무관)."""
         from PyQt6.QtWidgets import QMenu
         sub = QMenu(title, menu)
         paths = [Path(it.data(0, self.DATA_FILE)) for it in file_items]
+        src = self._source_folder_of(paths)
 
         def add(label, folder):
             a = sub.addAction(label)
             a.triggered.connect(lambda _=False, d=folder: self._transfer_files(paths, d, move))
 
+        a_new = sub.addAction("새 폴더 만들기...")     # ①
+        a_new.triggered.connect(
+            lambda _=False: self._transfer_files(paths, self._ask_new_folder(base=src), move))
+        a_pick = sub.addAction("다른 폴더 선택...")    # ②
+        a_pick.triggered.connect(
+            lambda _=False: self._transfer_files(paths, self._ask_pick_folder(move, start=src),
+                                                move))
+        sub.addSeparator()
+
         picked = [it for it in self.tree.selectedItems() if self._is_folder_node(it)]
         seen = set()
-        for it in picked:                      # ① 선택된 폴더 행
+        for it in picked:                      # ③ 선택된 폴더 행
             d = Path(it.toolTip(0))
             if str(d) not in seen:
                 seen.add(str(d)); add(f"📂 {d.name}  (선택한 폴더)", d)
@@ -1854,15 +1881,8 @@ class BookmarkTree(QWidget):
             if seen:
                 sub.addSeparator()
             root = self._root_dir
-            for d in subs[:40]:                # ② 하위 폴더
+            for d in subs[:40]:                # ④ 하위 폴더
                 add(str(d.relative_to(root)).replace("\\", " / "), d)
-        sub.addSeparator()
-        a_new = sub.addAction("새 폴더 만들기...")     # ③
-        a_new.triggered.connect(
-            lambda _=False: self._transfer_files(paths, self._ask_new_folder(), move))
-        a_pick = sub.addAction("다른 폴더 선택...")    # ④
-        a_pick.triggered.connect(
-            lambda _=False: self._transfer_files(paths, self._ask_pick_folder(move), move))
         menu.addMenu(sub)
         return sub
 
@@ -1963,10 +1983,12 @@ class BookmarkTree(QWidget):
         self._sync_after_transfer(folder.parent)
         self.info.setText(f"폴더 삭제됨: {folder.name}")
 
-    def _ask_pick_folder(self, move: bool):
-        start = str(self._root_dir) if self._root_dir else ""
+    def _ask_pick_folder(self, move: bool, start=None):
+        """260901-4: 시작 위치 = 선택한 파일이 있는 세부 폴더(없으면 루트)."""
+        base = start if start is not None else self._root_dir
         d = QFileDialog.getExistingDirectory(
-            self, "이동 대상 폴더" if move else "복사 대상 폴더", start)
+            self, "이동 대상 폴더" if move else "복사 대상 폴더",
+            str(base) if base else "")
         return Path(d) if d else None
 
     def _transfer_files(self, paths: list, dst, move: bool):
@@ -2055,7 +2077,9 @@ class BookmarkTree(QWidget):
             QMessageBox.information(self, "안내", "복사할 PDF 파일을 선택하세요.")
             return
         paths = [Path(it.data(0, self.DATA_FILE)) for it in sel]
-        self._transfer_files(paths, self._ask_pick_folder(False), False)
+        # 260901-4: 선택한 파일이 있는 세부 폴더에서 열기(우클릭 '다른 폴더 선택'과 동일)
+        self._transfer_files(paths, self._ask_pick_folder(
+            False, start=self._source_folder_of(paths)), False)
 
     def _op_keep_selected(self):
         target = self._target_file_item()
