@@ -99,11 +99,20 @@ def _refresh(p, c):
     p.drawLine(QPointF(12.8, 7.0), QPointF(9.4, 6.4))
 
 
+def _folder(p, c):
+    """260901-2: 책갈피 트리 폴더 그룹 행용 — 탭 달린 폴더 윤곽(디자인 §4.4: 1.4~1.8px 라인)."""
+    p.setPen(QPen(c, 1.5))
+    poly = QPolygonF([QPointF(2.2, 12.8), QPointF(2.2, 4.0), QPointF(6.3, 4.0),
+                      QPointF(7.6, 5.6), QPointF(13.8, 5.6), QPointF(13.8, 12.8)])
+    p.drawPolygon(poly)
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
     "chevron_left": _chevron_left, "chevron_right": _chevron_right,
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
+    "folder": _folder,
 }
 
 

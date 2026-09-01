@@ -21,21 +21,24 @@ chk(hasattr(bt, "btn_edit_single") and not bt.btn_edit_single.icon().isNull(),
     "책갈피명 수정 버튼(새 아이콘) 존재")
 chk(hasattr(bt, "btn_save"), "btn_save 존재")
 chk(bt.btn_save.isHidden(), "비편집 시 저장 숨김")
-chk(hasattr(bt, "btn_sel_mode") and not hasattr(bt, "rb_multi"),
-    "단일/다중 라디오 → 토글 버튼 1개로 대체")
+# 260901-2: '다중/단일' 토글 폐지 → 그 자리에 보기 전환(단일/트리) 버튼
+chk(hasattr(bt, "btn_view_mode") and not hasattr(bt, "btn_sel_mode")
+    and not hasattr(bt, "rb_multi"),
+    "다중/단일 토글 → 단일/트리 보기 버튼으로 교체")
 
-# 2) 단일/다중 토글 동작 + 트리 선택모드 반영(편집모드)
+# 2) 선택은 항상 다중 가능(편집·비편집 공통) + 보기 토글 라벨
 bt.set_edit_mode(True)
 chk(not bt.btn_save.isHidden(), "편집모드 시 저장 보임")
-chk(bt._multi_sel and bt.btn_sel_mode.text() == "다중", "초기 다중")
 chk(bt.tree.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection,
-    "다중 → ExtendedSelection(실제 다중 선택 가능)")
-bt._toggle_sel_mode()
-chk(not bt._multi_sel and bt.btn_sel_mode.text() == "단일", "토글 → 단일")
-chk(bt.tree.selectionMode() == QAbstractItemView.SelectionMode.SingleSelection,
-    "단일 → SingleSelection")
-bt._toggle_sel_mode()
-chk(bt._multi_sel and bt.btn_sel_mode.text() == "다중", "다시 토글 → 다중")
+    "편집모드도 ExtendedSelection(항상 다중 선택 가능)")
+chk(bt.is_tree_view() and bt.btn_view_mode.text() == "트리",
+    "보기 기본값=트리 (260901-2 사용자 지정)")
+bt.set_tree_view(False)
+chk(not bt.is_tree_view() and bt.btn_view_mode.text() == "단일", "단일 보기로 전환")
+chk(bt.tree.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection,
+    "단일 보기에서도 다중 선택 유지")
+bt.set_tree_view(True)
+chk(bt.is_tree_view() and bt.btn_view_mode.text() == "트리", "트리 보기로 복귀")
 
 # 3) 동일 페이지에 책갈피 2개 — 현재 선택이 그 페이지면 유지(마지막으로 안 옮김)
 bt.set_edit_mode(False)

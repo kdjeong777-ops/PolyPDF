@@ -188,6 +188,8 @@ class BookmarkTree(QWidget):
     pathDropped = pyqtSignal(str)            # 260618-27: 외부 PDF/폴더 드롭 → 이 창에 열기
     copyPaneRequested = pyqtSignal()         # 260618-27: 이 책갈피창 기준 반대 창으로 복사
     viewModeChanged = pyqtSignal(bool, str)  # 260825: (is_folder, 폴더|파일 경로) — 파일↔폴더 전환
+    filesRelocated = pyqtSignal(list)        # 260901-2: [[old, new], ...] 파일 복사/이동 완료
+    viewListModeChanged = pyqtSignal(bool)   # 260901-3: 사용자가 목록 보기를 바꿈(True=트리)
 
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
@@ -196,6 +198,11 @@ class BookmarkTree(QWidget):
     DATA_ENCRYPTED = _ENC_ROLE                       # 260611-57: 암호화 파일 표식
     DATA_AUTH = _AUTH_ROLE                            # 260618-1: 인증 상태(owner/user/locked)
     DATA_BASELABEL = Qt.ItemDataRole.UserRole + 7    # 260623: 해시태그 접미 적용 전 원본 라벨
+    DATA_IS_FOLDER = Qt.ItemDataRole.UserRole + 8    # 260901-2: 트리 보기의 폴더 그룹 행
+
+    # 260901-2: 폴더 그룹 행 색 — 디자인 SOT §2.5(테마 무관, 밝은 노랑+어두운 글자)
+    FOLDER_ROW_BG = "#fdf3c0"
+    FOLDER_ROW_FG = "#1a1a1a"
 
     SORT_BOOK = "책갈피 순"
     SORT_NAME = "이름 순"
@@ -210,6 +217,9 @@ class BookmarkTree(QWidget):
         self._pane_idx: int = 0                      # 260618-27: 0=상단(1창)/1=하단(2창)
         self._mode: str = "none"                    # v1.6.19: none|json|flat|single
         self._pdfs_flat: list = []                  # v1.6.19: 평탄 모드 파일 캐시
+        # 260901-2: False=단일(평탄) / True=트리(폴더 그룹). **기본은 트리**(사용자 지정) —
+        #   하위 폴더가 없으면 트리여도 평탄 목록과 같은 모양이라 기본값으로 안전하다.
+        self._view_tree: bool = True
         self._single_file: Optional[Path] = None    # 260822: 파일 모드로 연 단일 PDF
         self._current_file_getter = None            # 260822: 앱이 현재 본문 파일 경로 제공
         self._dirty: bool = False                   # 260606-4: 편집 변경 여부
@@ -356,7 +366,10 @@ class BookmarkTree(QWidget):
             _b.setMinimumWidth(0)
         self._edit_row = edit_row
         self._apply_edit_row_stretch(False)
-        # 260611-8: 책갈피 선택 단일/다중 — 라디오 2개 → 토글 버튼 1개(클릭마다 전환)
+        # 260901-2: '다중/단일' 토글 폐지 — 선택은 **항상 다중 가능**(ExtendedSelection)으로 통일.
+        #   종전 토글은 편집모드에서만 단일 선택으로 되돌리는 용도였는데, 보기 모드는 이미
+        #   상시 다중이라 모드에 따라 제스처가 달라지는 혼란만 남았다. 그 자리에는 보기 전환
+        #   버튼(단일/트리)을 둔다.
         self._multi_sel = True
 
         # 260611-18(C1·C2): 편집 보조 버튼을 2줄로 — 각 줄을 패널 전체 폭(편집/취소/저장 줄과
@@ -374,10 +387,14 @@ class BookmarkTree(QWidget):
         eo = _QVBox(self.edit_ops)
         eo.setContentsMargins(0, 0, 0, 0); eo.setSpacing(3)
 
-        # 단일/다중 토글 — 책갈피 선택 전용
-        self.btn_sel_mode = QPushButton("다중")
-        self.btn_sel_mode.setToolTip("책갈피 선택: 단일 ↔ 다중 (클릭마다 전환)")
-        self.btn_sel_mode.clicked.connect(self._toggle_sel_mode)
+        # 260901-2: 단일/트리 보기 토글 — 라벨 = **현재 보기**(클릭마다 전환).
+        #   단일: 하위 폴더와 무관하게 모든 PDF 를 한 위계로. 트리: 폴더 그룹 아래로 묶어 표시.
+        self.btn_view_mode = QPushButton("트리" if self._view_tree else "단일")
+        self.btn_view_mode.setToolTip(
+            "목록 보기: 단일 ↔ 트리 (클릭마다 전환)\n"
+            "단일 = 하위 폴더 구분 없이 모든 PDF 를 한 위계로\n"
+            "트리 = 폴더명 아래에 그 폴더의 파일을 묶어서")
+        self.btn_view_mode.clicked.connect(self._toggle_tree_view)
         # 책갈피명 수정(단일 편집) — 첨부 아이콘
         self.btn_edit_single = QPushButton()
         _bep = resource_path("icon_bookmark_edit.png")
@@ -388,10 +405,10 @@ class BookmarkTree(QWidget):
         self.btn_edit_single.setToolTip("책갈피명 수정 (단일 편집: 제목·페이지)")
         self.btn_edit_single.clicked.connect(self._op_edit_single)
 
-        # 1행: [다중] ◀ ▶ ▲ ▼ [책갈피명수정] — 전체 폭 균등 분배
+        # 1행: [단일/트리] ◀ ▶ ▲ ▼ [책갈피명수정] — 전체 폭 균등 분배
         row1 = QWidget()
         r1 = QHBoxLayout(row1); r1.setContentsMargins(0, 0, 0, 0); r1.setSpacing(3)
-        for b in (self.btn_sel_mode,
+        for b in (self.btn_view_mode,
                   self._mk_btn("◀", "내어쓰기 (상위로)", self._op_outdent),
                   self._mk_btn("▶", "들여쓰기 (하위로)", self._op_indent),
                   self._mk_btn("▲", "위로 이동 (같은 부모 안)", self._op_move_up),
@@ -415,6 +432,8 @@ class BookmarkTree(QWidget):
 
         self.tree = _EditableTree()
         self.tree.setHeaderHidden(True)
+        # 260901-2: 생성 시점부터 다중 선택 가능(종전엔 편집모드 전환 때 비로소 적용됐다).
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.itemActivated.connect(self._on_activated)
         self.tree.itemClicked.connect(self._on_activated)
         # 260611-60: 선택만 바뀌어도(키보드 ↑↓ 등) 해당 파일·페이지로 이동
@@ -505,18 +524,171 @@ class BookmarkTree(QWidget):
         self._update_mode_button()
         return True
 
+    # ----- 260901-2: 행 종류 판별 · 파일 노드 순회 (★ 트리 보기 필수 계약) -----
+    #   트리 보기에서 파일 노드는 폴더 그룹 행의 **자식**이 되므로, 종전 관용구
+    #   `it.parent() is None and it.data(0, DATA_FILE)` 는 전부 거짓이 된다.
+    #   새 코드는 반드시 아래 헬퍼를 쓴다(마스터 SOT §7.6).
+    def _is_folder_node(self, it) -> bool:
+        return bool(it is not None and it.data(0, self.DATA_IS_FOLDER))
+
+    def _is_file_node(self, it) -> bool:
+        return bool(it is not None and it.data(0, self.DATA_FILE)
+                    and not it.data(0, self.DATA_IS_FOLDER))
+
+    def _iter_file_nodes(self):
+        """보기 모드와 무관하게 트리의 모든 파일 노드를 트리 출현 순서로 순회."""
+        for i in range(self.tree.topLevelItemCount()):
+            it = self.tree.topLevelItem(i)
+            if self._is_folder_node(it):
+                yield from self._iter_folder_files(it)
+            elif self._is_file_node(it):
+                yield it
+
+    def _iter_folder_files(self, folder_item):
+        """폴더 그룹 행 아래의 파일 노드(하위 폴더 포함)."""
+        for i in range(folder_item.childCount()):
+            ch = folder_item.child(i)
+            if self._is_folder_node(ch):
+                yield from self._iter_folder_files(ch)
+            elif self._is_file_node(ch):
+                yield ch
+
+    def _file_node_of(self, it):
+        """임의 행 → 소속 파일 노드(자기 자신 포함). 폴더 행이면 None."""
+        cur = it
+        while cur is not None:
+            if self._is_file_node(cur):
+                return cur
+            if self._is_folder_node(cur):
+                return None
+            cur = cur.parent()
+        return None
+
+    def _selected_file_nodes(self) -> list:
+        """선택된 파일 노드(트리 순서·중복 제거). 폴더 행을 골랐으면 그 아래 파일 전체."""
+        out, seen = [], set()
+
+        def add(node):
+            p = node.data(0, self.DATA_FILE)
+            if p and p not in seen:
+                seen.add(p); out.append(node)
+
+        for it in self.tree.selectedItems():
+            if self._is_folder_node(it):
+                for f in self._iter_folder_files(it):
+                    add(f)
+            else:
+                f = self._file_node_of(it)
+                if f is not None:
+                    add(f)
+        return out
+
+    # ----- 렌더 -----------------------------------------------------------
+    def is_tree_view(self) -> bool:
+        """260901-2: True=트리(폴더 그룹) 보기 / False=단일(평탄) 보기."""
+        return bool(self._view_tree)
+
+    def set_tree_view(self, on: bool):
+        """260901-2: 보기 모드 전환. 평탄 모드(bookmarks.json 없음)에서만 의미가 있다."""
+        on = bool(on)
+        if on == self._view_tree:
+            return
+        self._view_tree = on
+        if hasattr(self, "btn_view_mode"):
+            self.btn_view_mode.setText("트리" if on else "단일")
+        if self._mode == "flat":
+            cur = self._current_selected_file()
+            self._render_flat()
+            if cur:
+                self._select_top_file(cur)
+            self._on_filter(self.search_edit.text())
+
+    def _toggle_tree_view(self):
+        if self._mode != "flat":
+            QMessageBox.information(
+                self, "안내",
+                "단일/트리 보기는 폴더를 연 목록에서만 동작합니다.\n"
+                "(bookmarks.json 이 있는 분할 폴더·단일 파일 보기는 그 구조를 그대로 유지합니다.)")
+            return
+        self.set_tree_view(not self._view_tree)
+        # 260901-3: **사용자가 직접 바꾼 경우에만** 알린다(프로그램적 set_tree_view 는 조용히)
+        #   — 앱이 이 신호로 설정을 저장하고 반대편 트리에 반영하는데, set_tree_view 에서
+        #     발신하면 반영이 다시 신호를 낳아 되먹임이 된다.
+        self.viewListModeChanged.emit(self._view_tree)
+
     def _render_flat(self):
-        """v1.6.19: 평탄 모드 렌더 — 현재 정렬 콤보 적용."""
+        """v1.6.19: 평탄 모드 렌더 — 현재 정렬 콤보 적용.
+        260901-2: 트리 보기면 폴더 그룹으로 묶어 렌더."""
         self._reset_probe_queue()
         self.tree.clear()
         pdfs = self._sorted_flat()
-        for pdf in pdfs:
-            item = QTreeWidgetItem([pdf.stem])
-            item.setData(0, self.DATA_FILE, str(pdf))
-            item.setData(0, self.DATA_PAGE, 0)
-            self._decorate_file_node(item, pdf)
-            self.tree.addTopLevelItem(item)
+        if self._view_tree:
+            self._render_tree_grouped(pdfs)
+        else:
+            for pdf in pdfs:
+                self.tree.addTopLevelItem(self._make_file_node(pdf))
         self.info.setText(f"{len(pdfs)}개 PDF")   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
+
+    def _make_file_node(self, pdf: Path) -> QTreeWidgetItem:
+        item = QTreeWidgetItem([pdf.stem])
+        item.setData(0, self.DATA_FILE, str(pdf))
+        item.setData(0, self.DATA_PAGE, 0)
+        self._decorate_file_node(item, pdf)
+        return item
+
+    def _render_tree_grouped(self, pdfs: list):
+        """260901-2: 루트 기준 상대 폴더 계층으로 묶어 렌더.
+
+        배치(디자인 §2.8): **폴더 그룹 먼저(이름 순) → 루트 직속 파일**(정렬 콤보 순).
+        하위 폴더는 계층 그대로 중첩하고, 파일은 자기 폴더 행의 자식(한 단계 들여쓰기)."""
+        root = self._root_dir
+        groups = {}          # rel_parts(tuple) -> [Path, ...]  (루트 직속은 ())
+        for pdf in pdfs:
+            try:
+                rel = pdf.parent.relative_to(root) if root else Path(".")
+                parts = tuple(p for p in rel.parts if p not in (".", ""))
+            except Exception:
+                parts = ()   # 루트 밖(방어) — 루트 직속으로
+            groups.setdefault(parts, []).append(pdf)
+
+        folder_items = {}    # rel_parts -> QTreeWidgetItem
+
+        def folder_item(parts: tuple) -> QTreeWidgetItem:
+            """폴더 행을 만들거나 재사용(상위 폴더가 없으면 함께 생성)."""
+            if parts in folder_items:
+                return folder_items[parts]
+            it = QTreeWidgetItem([parts[-1]])
+            self._style_folder_node(it, (root / Path(*parts)) if root else Path(*parts))
+            if len(parts) == 1:
+                self.tree.addTopLevelItem(it)
+            else:
+                folder_item(parts[:-1]).addChild(it)
+            it.setExpanded(True)
+            folder_items[parts] = it
+            return it
+
+        for parts in sorted((k for k in groups if k), key=lambda t: [s.lower() for s in t]):
+            parent = folder_item(parts)
+            for pdf in groups[parts]:
+                parent.addChild(self._make_file_node(pdf))
+        for pdf in groups.get((), []):          # 루트 직속 파일은 폴더 그룹 아래에
+            self.tree.addTopLevelItem(self._make_file_node(pdf))
+
+    def _style_folder_node(self, item: QTreeWidgetItem, folder: Path):
+        """260901-2: 폴더 그룹 행 — 옅은 노랑 배경 + 굵게 + 폴더 아이콘(디자인 §2.5)."""
+        from PyQt6.QtGui import QBrush, QColor, QFont
+        item.setData(0, self.DATA_IS_FOLDER, True)
+        item.setData(0, self.DATA_PAGE, None)
+        item.setBackground(0, QBrush(QColor(self.FOLDER_ROW_BG)))
+        item.setForeground(0, QBrush(QColor(self.FOLDER_ROW_FG)))
+        f = QFont(item.font(0)); f.setBold(True); item.setFont(0, f)
+        try:
+            from viewer.widgets.icons import themed_icon
+            # 배경이 테마 무관 밝은 노랑 → 아이콘 전경도 라이트로 강제(디자인 §2.5 각주)
+            item.setIcon(0, themed_icon("folder", dark=False))
+        except Exception:
+            pass
+        item.setToolTip(0, str(folder))
 
     def _sorted_flat(self) -> list:
         mode = self._sort_combo.currentText() if hasattr(self, "_sort_combo") else self.SORT_BOOK
@@ -597,11 +769,13 @@ class BookmarkTree(QWidget):
         구 `Path.resolve().lower()` 는 파일시스템을 타서 느리고 없는 파일에서 예외."""
         from viewer.pathutil import norm_key
         key = norm_key(path)
-        for i in range(self.tree.topLevelItemCount()):
-            it = self.tree.topLevelItem(i)
+        for it in self._iter_file_nodes():          # 260901-2: 트리 보기 포함
             d = it.data(0, self.DATA_FILE)
             try:
                 if d and norm_key(d) == key:
+                    par = it.parent()                  # 폴더 그룹 안이면 펼쳐서 보이게
+                    while par is not None:
+                        par.setExpanded(True); par = par.parent()
                     self.tree.setCurrentItem(it)
                     self.tree.scrollToItem(it)
                     return
@@ -775,8 +949,7 @@ class BookmarkTree(QWidget):
             self._tags._load()                      # 다른 경로(백업 복원)로 바뀐 파일 재읽기
         except Exception:
             pass
-        for i in range(self.tree.topLevelItemCount()):
-            it = self.tree.topLevelItem(i)
+        for it in self._iter_file_nodes():          # 260901-2: 트리 보기 포함
             p = it.data(0, self.DATA_FILE)
             if p:
                 self._apply_tag_label(it, p)
@@ -914,8 +1087,7 @@ class BookmarkTree(QWidget):
             if rej:
                 self._tags.reject(path, rej)             # 영구 — 다시 붙지 않음(§1-⑤)
             # 같은 파일의 모든 노드 라벨 갱신
-            for i in range(self.tree.topLevelItemCount()):
-                it = self.tree.topLevelItem(i)
+            for it in self._iter_file_nodes():      # 260901-2: 트리 보기 포함
                 if it.data(0, self.DATA_FILE) == path:
                     self._apply_tag_label(it, path)
             self._on_filter(self.search_edit.text())
@@ -1136,8 +1308,15 @@ class BookmarkTree(QWidget):
                 pass
             return False
 
-        for i in range(self.tree.topLevelItemCount()):
-            it = self.tree.topLevelItem(i)
+        def apply_row(it) -> bool:
+            """행 하나를 거르고 가시성을 반환. 260901-2: 폴더 행은 '보이는 자식이 있으면' 보인다."""
+            if self._is_folder_node(it):
+                any_visible = False
+                for c in range(it.childCount()):
+                    if apply_row(it.child(c)):
+                        any_visible = True
+                it.setHidden(not any_visible)
+                return any_visible
             path = it.data(0, self.DATA_FILE)
             is_file = bool(path)
             # 해시태그 필터는 파일에만 적용. 텍스트는 파일명/자식(책갈피)+키워드·연도에 적용.
@@ -1148,6 +1327,10 @@ class BookmarkTree(QWidget):
             if vis:
                 for c in range(it.childCount()):
                     self._filter_text_recursive(it.child(c), textq)
+            return vis
+
+        for i in range(self.tree.topLevelItemCount()):
+            apply_row(self.tree.topLevelItem(i))
 
     def _filter_text_recursive(self, item: QTreeWidgetItem, textq: str) -> bool:
         ok = (not textq) or (textq in item.text(0).lower())
@@ -1226,7 +1409,7 @@ class BookmarkTree(QWidget):
         """항목 종류에 맞는 편집 창(파일명 / 책갈피 제목·페이지)."""
         if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
             return
-        if item.parent() is None and item.data(0, self.DATA_FILE):
+        if self._is_file_node(item):
             self._edit_file_node(item)
             return
         target = self._target_file_item() or _top_of(item)
@@ -1246,7 +1429,7 @@ class BookmarkTree(QWidget):
             return
         # 260606-13: 편집모드에서 여러 파일 선택 후 우클릭 → 병합 메뉴(선택 유지)
         sel_files = [it for it in self.tree.selectedItems()
-                     if it.parent() is None and it.data(0, self.DATA_FILE)]
+                     if self._is_file_node(it)]
         if not (self._edit_mode and item.isSelected() and len(sel_files) >= 2):
             if not item.isSelected():
                 self.tree.setCurrentItem(item)
@@ -1269,8 +1452,28 @@ class BookmarkTree(QWidget):
             act_merge = menu.addAction(f"선택 {len(sel_files)}개 파일 병합...")
             act_translate_sel = menu.addAction(f"선택 {len(sel_files)}개 파일 번역...")  # 260621-P0
             menu.addSeparator()
+        # 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
+        xfer_files = self._selected_file_nodes() if self._edit_mode else []
+        if item.isSelected() is False and self._edit_mode:
+            f = self._file_node_of(item)
+            xfer_files = ([f] if f is not None
+                          else (list(self._iter_folder_files(item))
+                                if self._is_folder_node(item) else []))
+        if xfer_files:
+            n = len(xfer_files)
+            # 항목은 각자 triggered 로 처리 — 아래 chosen 분기와 겹치지 않는다.
+            self._add_transfer_submenu(menu, f"파일 복사 ({n}개)", xfer_files, False)
+            self._add_transfer_submenu(menu, f"파일 이동 ({n}개)", xfer_files, True)
+            menu.addSeparator()
+        # 260901-3: 폴더 행 우클릭 — 폴더 이름 변경 / 삭제(빈 폴더만)
+        act_fold_new = act_fold_ren = act_fold_del = None
+        if self._edit_mode and self._is_folder_node(item):
+            act_fold_new = menu.addAction("이 폴더 안에 새 폴더...")
+            act_fold_ren = menu.addAction("폴더 이름 변경...")
+            act_fold_del = menu.addAction("폴더 삭제")
+            menu.addSeparator()
         # 260606-4: 파일(최상위) 노드면 (책갈피 생성, 책갈피 편집)도 제공
-        is_file = item.parent() is None and bool(item.data(0, self.DATA_FILE))
+        is_file = self._is_file_node(item)
         act_create = act_editmode = None
         act_study = act_study_bm = None
         act_translate = None
@@ -1311,6 +1514,16 @@ class BookmarkTree(QWidget):
                 self.copyPaneRequested.emit()
             else:
                 self.splitViewRequested.emit(True)
+            return
+        if act_fold_new is not None and chosen in (act_fold_new, act_fold_ren, act_fold_del):
+            folder = Path(item.toolTip(0))          # 폴더 행은 툴팁에 실제 경로를 담는다
+            if chosen == act_fold_new:
+                if self._ask_new_folder(base=folder):
+                    self._sync_after_transfer(folder)
+            elif chosen == act_fold_ren:
+                self._rename_folder(folder)
+            else:
+                self._delete_folder(folder)
             return
         if chosen == act_merge:
             self.mergeFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
@@ -1412,46 +1625,30 @@ class BookmarkTree(QWidget):
             self.tree.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
             self.tree.setDropIndicatorShown(False)
 
-    def _toggle_sel_mode(self):
-        """260611-8: 단일↔다중 토글(클릭마다 전환). 책갈피 선택 모드에만 영향."""
-        self._multi_sel = not self._multi_sel
-        self.btn_sel_mode.setText("다중" if self._multi_sel else "단일")
-        self._sync_selection_mode()
-
     def _sync_selection_mode(self, *_):
         # 260825-5: 보기 모드에서도 Ctrl/Shift+클릭으로 여러 파일 선택 가능(인쇄 등).
         #   평범한 클릭은 단일 선택+이동, Ctrl/Shift 클릭은 다중 선택(이동 안 함).
-        if not self._edit_mode:
-            self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-            return
-        mode = (QAbstractItemView.SelectionMode.ExtendedSelection
-                if self._multi_sel
-                else QAbstractItemView.SelectionMode.SingleSelection)
-        self.tree.setSelectionMode(mode)
+        # 260901-2: 편집모드도 동일 — '다중/단일' 토글을 없애고 **항상 ExtendedSelection**.
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
     # ---- target 파일 식별 -----------------------------------------------
     def _target_file_item(self) -> Optional[QTreeWidgetItem]:
         """편집 대상 파일 노드. 단일 PDF 모드면 그 파일, 폴더 모드면 선택 항목 기준."""
-        n = self.tree.topLevelItemCount()
         sel = self.tree.selectedItems()
         # 1) 단일 PDF 트리
-        roots_with_file = [self.tree.topLevelItem(i)
-                           for i in range(n)
-                           if self.tree.topLevelItem(i).data(0, self.DATA_FILE)]
-        if len(roots_with_file) == 1:
-            return roots_with_file[0]
-        # 2) 선택의 최상위 조상
+        # 260901-2: 트리 보기에서는 파일이 폴더 행의 자식이므로 최상위가 아니라 파일 노드로 센다.
+        files = list(self._iter_file_nodes())
+        if len(files) == 1:
+            return files[0]
+        # 2) 선택 항목이 속한 파일 노드(모두 같은 파일이어야 함)
         if sel:
-            # 모두 같은 최상위에 있어야 함
-            def top_of(it: QTreeWidgetItem) -> QTreeWidgetItem:
-                while it.parent() is not None:
-                    it = it.parent()
-                return it
-            tops = {id(top_of(it)): top_of(it) for it in sel}
+            tops = {}
+            for it in sel:
+                f = self._file_node_of(it)
+                if f is not None:
+                    tops[id(f)] = f
             if len(tops) == 1:
-                t = next(iter(tops.values()))
-                if t.data(0, self.DATA_FILE):
-                    return t
+                return next(iter(tops.values()))
         return None
 
     # ---- 선택 항목 수집 -------------------------------------------------
@@ -1534,7 +1731,7 @@ class BookmarkTree(QWidget):
         if not sel:
             return
         files = [it for it in sel
-                 if it.parent() is None and it.data(0, self.DATA_FILE)]
+                 if self._is_file_node(it)]
         bookmarks = [it for it in sel if it not in files]
         # 책갈피 노드는 target 자손인 것만
         if bookmarks:
@@ -1586,9 +1783,7 @@ class BookmarkTree(QWidget):
             try:
                 _send2trash(str(p))
                 trashed += 1
-                idx = self.tree.indexOfTopLevelItem(it)
-                if idx >= 0:
-                    self.tree.takeTopLevelItem(idx)
+                self._take_node(it)          # 260901-2: 트리 보기(폴더 자식)도 제거
                 # 평탄 모드 캐시 동기화
                 if self._mode == "flat":
                     self._pdfs_flat = [q for q in self._pdfs_flat if q != p]
@@ -1599,35 +1794,268 @@ class BookmarkTree(QWidget):
         if trashed:
             self.info.setText(f"파일 {trashed}개 휴지통으로 이동됨")
 
-    def _op_copy_to(self):
-        """v1.6.20 K4: 선택한 PDF 파일들을 다른 폴더로 복사."""
-        sel = [it for it in self.tree.selectedItems()
-               if it.parent() is None and it.data(0, self.DATA_FILE)]
-        if not sel:
-            QMessageBox.information(self, "안내", "복사할 PDF 파일(최상위 항목)을 선택하세요.")
+    def _take_node(self, it: QTreeWidgetItem):
+        """260901-2: 트리에서 노드 제거 — 최상위/폴더 자식 어느 쪽이든.
+
+        종전 `indexOfTopLevelItem` 만 쓰던 코드는 트리 보기에서 파일이 폴더 행의 자식이라
+        인덱스가 -1 이 되어 **삭제해도 목록에 남아 있었다**."""
+        par = it.parent()
+        if par is not None:
+            par.takeChild(par.indexOfChild(it))
+            if self._is_folder_node(par) and par.childCount() == 0:
+                self._take_node(par)          # 빈 폴더 행은 함께 정리
             return
+        idx = self.tree.indexOfTopLevelItem(it)
+        if idx >= 0:
+            self.tree.takeTopLevelItem(idx)
+
+    # ---- 260901-2: 파일 복사 / 이동 -------------------------------------
+    def _subfolders(self) -> list:
+        """루트 아래 하위 폴더(상대경로 순). 숨김·`__`·`.git` 류는 제외."""
+        root = self._root_dir
+        if not root or not Path(root).exists():
+            return []
+        out = []
+        try:
+            for d in sorted(Path(root).rglob("*")):
+                if not d.is_dir():
+                    continue
+                rel = d.relative_to(root)
+                if any(s.startswith(".") or s.startswith("__") for s in rel.parts):
+                    continue
+                if len(rel.parts) > 4:        # 너무 깊은 곳은 메뉴에서 생략(직접 선택으로)
+                    continue
+                out.append(d)
+        except Exception:
+            pass
+        return out
+
+    def _add_transfer_submenu(self, menu, title: str, file_items: list, move: bool):
+        """260901-2: '파일 복사/이동' 서브메뉴 — 대상 폴더 후보를 나열.
+
+        후보 순서: ① 트리에서 선택·클릭한 폴더 ② 루트 아래 하위 폴더 ③ 새 폴더 만들기 ④ 직접 선택.
+        각 항목은 자체 `triggered` 로 실행한다(바깥 chosen 분기와 무관)."""
+        from PyQt6.QtWidgets import QMenu
+        sub = QMenu(title, menu)
+        paths = [Path(it.data(0, self.DATA_FILE)) for it in file_items]
+
+        def add(label, folder):
+            a = sub.addAction(label)
+            a.triggered.connect(lambda _=False, d=folder: self._transfer_files(paths, d, move))
+
+        picked = [it for it in self.tree.selectedItems() if self._is_folder_node(it)]
+        seen = set()
+        for it in picked:                      # ① 선택된 폴더 행
+            d = Path(it.toolTip(0))
+            if str(d) not in seen:
+                seen.add(str(d)); add(f"📂 {d.name}  (선택한 폴더)", d)
+        subs = [d for d in self._subfolders() if str(d) not in seen]
+        if subs:
+            if seen:
+                sub.addSeparator()
+            root = self._root_dir
+            for d in subs[:40]:                # ② 하위 폴더
+                add(str(d.relative_to(root)).replace("\\", " / "), d)
+        sub.addSeparator()
+        a_new = sub.addAction("새 폴더 만들기...")     # ③
+        a_new.triggered.connect(
+            lambda _=False: self._transfer_files(paths, self._ask_new_folder(), move))
+        a_pick = sub.addAction("다른 폴더 선택...")    # ④
+        a_pick.triggered.connect(
+            lambda _=False: self._transfer_files(paths, self._ask_pick_folder(move), move))
+        menu.addMenu(sub)
+        return sub
+
+    def _ask_new_folder(self, base=None):
+        """루트(또는 선택·지정 폴더) 아래에 새 폴더를 만들고 그 경로를 반환. 취소면 None."""
+        from PyQt6.QtWidgets import QInputDialog
+        if base is None:
+            base = self._root_dir
+            for it in self.tree.selectedItems():
+                if self._is_folder_node(it):
+                    base = Path(it.toolTip(0)); break
+        if not base:
+            QMessageBox.information(self, "안내", "먼저 폴더를 열어 주세요.")
+            return None
+        name, ok = QInputDialog.getText(
+            self, "새 폴더 만들기", f"{base} 아래에 만들 폴더 이름:")
+        name = (name or "").strip()
+        if not ok or not name:
+            return None
+        if _INVALID_FILENAME_RE.search(name):
+            QMessageBox.warning(self, "오류", "폴더 이름에 사용할 수 없는 글자가 있습니다.")
+            return None
+        d = Path(base) / name
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            QMessageBox.warning(self, "폴더 만들기 실패", f"{name}: {e}")
+            return None
+        return d
+
+    def _rename_folder(self, folder: Path):
+        """260901-3: 폴더 이름 변경 — 안에 든 PDF 의 태그도 새 경로로 함께 옮긴다.
+
+        폴더를 통째로 rename 하면 그 아래 모든 파일의 경로가 바뀌므로, 태그 저장소의
+        키(경로)도 같이 갱신해야 태그가 끊기지 않는다(태그 SOT §6.1)."""
+        from PyQt6.QtWidgets import QInputDialog
+        folder = Path(folder)
+        if not folder.is_dir():
+            QMessageBox.warning(self, "오류", f"폴더가 없습니다: {folder}")
+            return
+        name, ok = QInputDialog.getText(self, "폴더 이름 변경", "새 폴더 이름:", text=folder.name)
+        name = (name or "").strip()
+        if not ok or not name or name == folder.name:
+            return
+        if _INVALID_FILENAME_RE.search(name):
+            QMessageBox.warning(self, "오류", "폴더 이름에 사용할 수 없는 글자가 있습니다.")
+            return
+        new = folder.with_name(name)
+        if new.exists():
+            QMessageBox.warning(self, "오류", f"같은 이름의 폴더가 이미 있습니다: {name}")
+            return
+        inside = sorted(folder.rglob("*.pdf"))
+        for p in inside:                      # 열려 있으면 핸들 해제(v1.6.21 규약)
+            self.releaseFileRequested.emit(str(p))
+        QApplication.processEvents()
+        try:
+            folder.rename(new)
+        except Exception as e:
+            QMessageBox.warning(self, "이름 변경 실패",
+                                f"{folder.name}: {e}\n다른 프로그램이 폴더 안 파일을 "
+                                "잡고 있을 수 있습니다.")
+            return
+        pairs = []
+        for old_p in inside:
+            new_p = new / old_p.relative_to(folder)
+            self._after_move(old_p, new_p)    # 태그 승계
+            pairs.append([str(old_p), str(new_p)])
+        self._sync_after_transfer(new)
+        if pairs:
+            self.filesRelocated.emit(pairs)   # 인덱스·메인뷰 갱신
+        self.info.setText(f"폴더 이름 변경: {folder.name} → {name}")
+
+    def _delete_folder(self, folder: Path):
+        """260901-3: 폴더 삭제 — **비어 있을 때만**.
+
+        안에 파일이 있으면 지우지 않는다(대량 유실 방지). 파일부터 옮기거나 지우게 안내한다."""
+        folder = Path(folder)
+        if not folder.is_dir():
+            QMessageBox.warning(self, "오류", f"폴더가 없습니다: {folder}")
+            return
+        rest = [p for p in folder.rglob("*") if p.is_file()]
+        if rest:
+            QMessageBox.information(
+                self, "삭제할 수 없음",
+                f"'{folder.name}' 안에 파일이 {len(rest)}개 있습니다.\n\n"
+                "먼저 파일을 다른 폴더로 옮기거나 삭제한 뒤 폴더를 지워 주세요.\n"
+                "(실수로 자료가 통째로 사라지지 않도록 빈 폴더만 삭제합니다.)")
+            return
+        if QMessageBox.question(
+                self, "폴더 삭제",
+                f"빈 폴더를 삭제할까요?\n\n{folder}") != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            shutil.rmtree(folder)             # 빈 폴더(하위 빈 폴더 포함)
+        except Exception as e:
+            QMessageBox.warning(self, "삭제 실패", f"{folder.name}: {e}")
+            return
+        self._sync_after_transfer(folder.parent)
+        self.info.setText(f"폴더 삭제됨: {folder.name}")
+
+    def _ask_pick_folder(self, move: bool):
         start = str(self._root_dir) if self._root_dir else ""
-        dst_dir = QFileDialog.getExistingDirectory(self, "복사 대상 폴더", start)
-        if not dst_dir:
+        d = QFileDialog.getExistingDirectory(
+            self, "이동 대상 폴더" if move else "복사 대상 폴더", start)
+        return Path(d) if d else None
+
+    def _transfer_files(self, paths: list, dst, move: bool):
+        """260901-2: 파일들을 dst 로 복사/이동.
+
+        이동은 되돌리기 어려우므로 ① 확인을 받고 ② 뷰어 핸들을 먼저 풀고(`releaseFileRequested`)
+        ③ 성공한 것만 태그를 새 경로로 옮긴 뒤(`TagStore.rehome` — 태그 SOT §6.1)
+        ④ `filesRelocated` 로 앱에 알려 인덱스·메인뷰를 갱신하게 한다."""
+        if dst is None:
             return
-        dst = Path(dst_dir)
-        copied = 0
-        errors = []
-        for it in sel:
-            src = Path(it.data(0, self.DATA_FILE))
+        dst = Path(dst)
+        paths = [Path(p) for p in paths]
+        if not paths:
+            return
+        if not dst.is_dir():
+            QMessageBox.warning(self, "오류", f"대상 폴더가 없습니다: {dst}")
+            return
+        word = "이동" if move else "복사"
+        # 대상이 원본과 같은 폴더면 이동은 무의미(복사는 사본 생성이라 허용)
+        if move:
+            paths = [p for p in paths if p.parent.resolve() != dst.resolve()]
+            if not paths:
+                QMessageBox.information(self, "안내", "이미 그 폴더에 있는 파일입니다.")
+                return
+            if QMessageBox.question(
+                    self, "파일 이동",
+                    f"{len(paths)}개 파일을 아래 폴더로 이동할까요?\n\n{dst}\n\n"
+                    "디스크상 파일이 실제로 옮겨집니다.") != QMessageBox.StandardButton.Yes:
+                return
+        done, pairs, errors = 0, [], []
+        for src in paths:
             if not src.exists():
                 errors.append(f"{src.name}: 원본 없음")
                 continue
             target = _unique_path(dst / src.name)
             try:
-                shutil.copy2(src, target)
-                copied += 1
+                if move:
+                    self.releaseFileRequested.emit(str(src))   # v1.6.21 핸들 해제 규약
+                    QApplication.processEvents()
+                    shutil.move(str(src), str(target))
+                    self._after_move(src, target)
+                    pairs.append([str(src), str(target)])
+                else:
+                    shutil.copy2(src, target)
+                    pairs.append(["", str(target)])
+                done += 1
             except Exception as e:
                 errors.append(f"{src.name}: {e}")
-        msg = f"{copied}개 파일을 {dst} 로 복사했습니다."
+        if pairs:
+            self._sync_after_transfer(dst)
+            self.filesRelocated.emit(pairs)
+        msg = f"{done}개 파일을 {dst} 로 {word}했습니다."
         if errors:
             msg += "\n실패: " + ", ".join(errors[:5])
-        QMessageBox.information(self, "복사 완료", msg)
+        self.info.setText(f"파일 {done}개 {word}됨")
+        QMessageBox.information(self, f"{word} 완료", msg)
+
+    def _after_move(self, src: Path, dst: Path):
+        """이동한 파일의 해시태그·키워드를 새 경로로 승계(태그 SOT §6.1)."""
+        if self._tags is None:
+            return
+        try:
+            self._tags.rehome(str(src), str(dst))
+        except Exception:
+            pass
+
+    def _sync_after_transfer(self, dst: Path):
+        """복사/이동 후 목록 재구성 — 루트 안의 변화만 반영(편집 중 책갈피는 건드리지 않음)."""
+        if self._mode != "flat" or not self._root_dir:
+            return
+        try:
+            cur = self._current_selected_file()
+            self._pdfs_flat = list(Path(self._root_dir).rglob("*.pdf"))
+            self._render_flat()
+            if cur and Path(cur).exists():
+                self._select_top_file(cur)
+            self._on_filter(self.search_edit.text())
+        except Exception:
+            pass
+
+    def _op_copy_to(self):
+        """v1.6.20 K4: 선택한 PDF 파일들을 다른 폴더로 복사.
+        260901-2: 대상 선택·실행은 우클릭 '파일 복사'와 같은 구현을 쓴다."""
+        sel = self._selected_file_nodes()
+        if not sel:
+            QMessageBox.information(self, "안내", "복사할 PDF 파일을 선택하세요.")
+            return
+        paths = [Path(it.data(0, self.DATA_FILE)) for it in sel]
+        self._transfer_files(paths, self._ask_pick_folder(False), False)
 
     def _op_keep_selected(self):
         target = self._target_file_item()
@@ -1668,7 +2096,7 @@ class BookmarkTree(QWidget):
             return
         it = sel[0]
         # v1.6.20: 최상위 파일 노드면 파일명 변경 다이얼로그
-        if it.parent() is None and it.data(0, self.DATA_FILE):
+        if self._is_file_node(it):
             self._edit_file_node(it)
             return
         # 일반 책갈피 — 제목/페이지
@@ -1783,8 +2211,7 @@ class BookmarkTree(QWidget):
         except Exception:
             fp = None
         target = None
-        for i in range(self.tree.topLevelItemCount()):
-            top = self.tree.topLevelItem(i)
+        for top in self._iter_file_nodes():         # 260901-2: 트리 보기 포함
             d = top.data(0, self.DATA_FILE)
             if not d:
                 continue
@@ -1826,8 +2253,7 @@ class BookmarkTree(QWidget):
             fpr = fp.resolve()
         except Exception:
             fpr = None
-        for i in range(self.tree.topLevelItemCount()):
-            top = self.tree.topLevelItem(i)
+        for top in self._iter_file_nodes():         # 260901-2: 트리 보기 포함
             d = top.data(0, self.DATA_FILE)
             if d and (d == str(fp) or (fpr is not None and Path(d).resolve() == fpr)):
                 self._refresh_file_toc(top)
@@ -1863,8 +2289,7 @@ class BookmarkTree(QWidget):
             def norm_key(p):  # 폴백 — 동일 규칙 근사
                 return str(p).lower()
         top = None
-        for i in range(self.tree.topLevelItemCount()):
-            it = self.tree.topLevelItem(i)
+        for it in self._iter_file_nodes():          # 260901-2: 트리 보기 포함
             d = it.data(0, self.DATA_FILE)
             if d and (d == str(file_path) or norm_key(d) == fpk):
                 top = it
@@ -2021,8 +2446,7 @@ class BookmarkTree(QWidget):
     def all_file_paths(self) -> list:
         """260606-15: 트리의 최상위 파일 노드 경로 목록(PDF 병합 좌측 리스트용)."""
         out = []
-        for i in range(self.tree.topLevelItemCount()):
-            it = self.tree.topLevelItem(i)
+        for it in self._iter_file_nodes():          # 260901-2: 트리 보기 포함
             d = it.data(0, self.DATA_FILE)
             if d and str(d).lower().endswith(".pdf"):
                 out.append(str(d))

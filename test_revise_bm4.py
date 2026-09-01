@@ -29,9 +29,10 @@ bt = BookmarkTree()
 check("트리=_EditableTree(드롭 추적)", isinstance(bt.tree, _EditableTree))
 # 260628-2: 260611-8 에서 단일/다중이 **라디오 2개 → 토글 버튼 1개**(`btn_sel_mode`)로 바뀌고
 #   컨테이너도 `sel_mode_widget` → 편집 조작 묶음 `edit_ops` 로 통합됐다(비편집시 숨김).
-check("단일/다중 토글 버튼 존재", hasattr(bt, "btn_sel_mode"))
+# 260901-2: 그 토글은 폐지되고(선택은 항상 다중) 같은 자리에 보기 전환 버튼이 들어갔다.
+check("보기 전환(단일/트리) 버튼 존재", hasattr(bt, "btn_view_mode"))
 check("편집 조작 컨테이너 존재", hasattr(bt, "edit_ops"))
-check("비편집시 편집 조작(단일/다중 포함) 숨김", bt.edit_ops.isHidden())
+check("비편집시 편집 조작(보기 전환 포함) 숨김", bt.edit_ops.isHidden())
 # 휴지통 아이콘 색상(이모지 변형선택자 포함)
 trash = [b for b in bt.findChildren(type(bt.btn_edit)) if "🗑" in b.text()]
 check("휴지통 아이콘 컬러 이모지(🗑️)", any("️" in b.text() for b in trash),

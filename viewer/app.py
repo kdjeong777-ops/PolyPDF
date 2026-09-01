@@ -1863,6 +1863,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.bookmark_tree.bookmarkActivated.connect(self._on_bookmark_activated)
         # 260618-22: 하단(우측) 책갈피 → 우측 창에 열기
         self.bookmark_tree_right.bookmarkActivated.connect(self._on_bookmark_activated_right)
+        # 260901-2: 하단 트리의 파일 복사/이동도 같은 처리(인덱스·메인뷰 갱신)
+        self.bookmark_tree_right.filesRelocated.connect(self._on_files_relocated)
         # 260618-25/27: 책갈피 우클릭 — 1단=‘2단 보기’, 2단=반대 창으로 복사
         self.bookmark_tree.set_pane_role(0)
         self.bookmark_tree_right.set_pane_role(1)
@@ -1979,6 +1981,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # v1.6.21: 파일 작업 핸드셰이크 (메인이 열고 있는 파일도 작업 가능)
         self.bookmark_tree.releaseFileRequested.connect(self._on_release_file)
         self.bookmark_tree.fileOpCompleted.connect(self._on_file_op_completed)
+        self.bookmark_tree.filesRelocated.connect(self._on_files_relocated)   # 260901-2
         self.bookmark_tree.viewModeChanged.connect(self._on_view_mode_changed)  # 260825
         self.bookmark_tree.filePasswordEntered.connect(self._on_file_password_entered)  # 260618-1
         self._released_state = None    # (path, page_index) — 작업 직전 닫은 파일 기억
@@ -2274,6 +2277,54 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._load_main(HistoryItem(target, int(page), "", "bookmark"))
         except Exception:
             pass
+
+    def _on_bookmark_view_mode_changed(self, on: bool):
+        """260901-3: 목록 보기(트리/단일) 전환 — 설정에 저장하고 반대편 트리에도 반영."""
+        self._prefs["bookmark_tree_view"] = bool(on)
+        for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+            if bt is not None and bt.is_tree_view() != bool(on):
+                bt.set_tree_view(bool(on))       # 조용히(신호 없음) — 되먹임 방지
+        try:
+            self._save_settings_now()
+        except Exception:
+            pass
+
+    def _on_files_relocated(self, pairs: list):
+        """260901-2: 책갈피 트리에서 파일을 복사/이동한 뒤 처리.
+
+        pairs = [[old, new], ...] — old 가 "" 면 복사(원본 유지). 이동이면 옛 경로의
+        검색 인덱스를 지우고 새 경로를 인덱싱하며, 메인 뷰어가 옮겨진 파일을 보고
+        있었다면 새 경로로 다시 연다(핸들은 트리가 이미 풀어 둔 상태)."""
+        moved_from = [str(o) for o, _n in pairs if o]
+        try:
+            from viewer.indexer import Indexer
+            idx = Indexer(self._db_path)
+            try:
+                for old in moved_from:
+                    idx.remove_file(Path(old))
+            finally:
+                idx.close()
+        except Exception:
+            pass
+        for _old, new in pairs:                 # 새 경로는 검색에 다시 포함
+            try:
+                self._index_single_file(Path(new))
+            except Exception:
+                pass
+        # 메인 뷰어가 옮겨진 파일을 보고 있었으면 새 경로로 재로드
+        try:
+            from viewer.pathutil import norm_key            # SOT §7.0 표준 키
+            cur = self.main_view.current_file() if self.main_view else None
+            if cur:
+                ck = norm_key(cur)
+                for old, new in pairs:
+                    if old and norm_key(old) == ck and Path(new).exists():
+                        page = self.main_view.current_page()
+                        self._load_main(HistoryItem(str(new), int(page), "", "bookmark"))
+                        break
+        except Exception:
+            pass
+        self._refresh_search_scope()
 
     def _on_add_bookmark_requested(self, target_file: str):
         """v1.6.20 K5: 메인 뷰어 현재 페이지로 책갈피 추가."""
@@ -5153,6 +5204,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._prefs["auto_tag_enabled"] = False
             self._prefs["auto_tag_optin_migrated"] = True
         self._prefs.setdefault("autotag_summary_shown", False)  # §8.2 첫 실행 요약 1회
+        # 260901-3: 책갈피 목록 보기 — 기본 트리(사용자 지정). 두 트리(상·하단)에 함께 적용.
+        self._prefs.setdefault("bookmark_tree_view", True)
+        try:
+            _tv = bool(self._prefs.get("bookmark_tree_view", True))
+            for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                if _bt is not None:
+                    _bt.set_tree_view(_tv)
+                    _bt.viewListModeChanged.connect(self._on_bookmark_view_mode_changed)
+        except Exception:
+            pass
         self._prefs.setdefault("restore_last_page", True)
         self._prefs.setdefault("restore_screenshots", True)
         self._prefs.setdefault("screenshot_max", 30)
@@ -5407,6 +5468,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                             old.get("auto_tag_optin_migrated", False))),
             "autotag_summary_shown": bool(prefs.get("autotag_summary_shown",
                                                     old.get("autotag_summary_shown", False))),
+            # 260901-3: 책갈피 목록 보기(트리/단일) — 마지막 상태 기억. 기본 True(트리).
+            #   ※ 허용목록 미등재 시 조용히 유실(§14.2 함정) — SettingsDialog 미관리 키라
+            #     반드시 old 폴백으로 보존한다.
+            "bookmark_tree_view": bool(prefs.get("bookmark_tree_view",
+                                                 old.get("bookmark_tree_view", True))),
             "restore_last_page": prefs.get("restore_last_page", True),
             "restore_screenshots": prefs.get("restore_screenshots", True),
             "screenshot_max": int(prefs.get("screenshot_max", 30)),
