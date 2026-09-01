@@ -2236,13 +2236,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             except Exception:
                 pass
         try:
-            if getattr(self.page_thumbs, "_doc", None) is not None:
-                try:
-                    self.page_thumbs._doc.close()
-                except Exception:
-                    pass
-                self.page_thumbs._doc = None
-            self.page_thumbs.list.clear()
+            # 260901: 붙여넣기 스테이징 캐시(_ext_docs)까지 함께 닫아야 파일 잠금이 완전히 풀린다.
+            self.page_thumbs.clear_document()
         except Exception:
             pass
         self._current_main = None
@@ -3229,15 +3224,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     mv.spin_page.setMaximum(1)
                     mv.lbl_page_total.setText("/ 0")
                 # 페이지 썸네일 — 260616-21: 리스트만 비우면 '동일 파일' 가드로 재채움이 안 됨 → 상태도 초기화.
-                self.page_thumbs.list.clear()
-                try:
-                    if getattr(self.page_thumbs, "_doc", None) is not None:
-                        self.page_thumbs._doc.close()
-                except Exception:
-                    pass
-                self.page_thumbs._doc = None
-                self.page_thumbs._doc_path = None
-                self.page_thumbs._doc_mtime = None
+                self.page_thumbs.clear_document()      # 260901: 초기화 로직 일원화
                 self._current_main = None
             # 검색 결과(폴더 바뀌면 항상 초기화)
             self.search_results.set_results("", [])
@@ -3954,7 +3941,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._refresh_study_panel(item.page_index or 0)
             else:
                 self.main_view.load_image(path)
-                self.page_thumbs.list.clear()
+                # 260901: 리스트만 비우면 '같은 파일' 가드에 걸려, 원본 PDF 로 돌아왔을 때
+                #   썸네일이 영영 비어 있었다 → 상태까지 초기화(핸들도 해제).
+                self.page_thumbs.clear_document()
                 try:
                     self.page_thumbs.title.setText(self.page_thumbs._format_title(path.name))
                 except Exception:

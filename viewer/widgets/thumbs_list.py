@@ -470,6 +470,30 @@ class PageThumbs(QWidget):
         scale = min(tw / pw, th / ph)
         return int(round(ph * scale)) + self.NUM_BAND
 
+    def clear_document(self):
+        """260901: 패널을 비우고 문서 상태까지 초기화(핸들 해제).
+
+        바깥에서 `list.clear()` 만 하면 아래 '같은 파일' 가드에 걸려 같은 PDF 로
+        돌아왔을 때 썸네일이 다시 채워지지 않는다(스크린샷 보기 → 원본 복귀).
+        패널을 비우는 곳은 모두 이 메서드를 쓴다.
+        """
+        if self._doc is not None:
+            try:
+                self._doc.close()
+            except Exception:
+                pass
+            self._doc = None
+        for _d in list(self._ext_docs.values()):    # 260822: 붙여넣기 스테이징 캐시 정리
+            try:
+                if _d:
+                    _d.close()
+            except Exception:
+                pass
+        self._ext_docs = {}
+        self.list.clear()
+        self._doc_path = None
+        self._doc_mtime = None
+
     def load_document(self, file_path):
         path = Path(file_path)
         try:
@@ -478,8 +502,11 @@ class PageThumbs(QWidget):
             mt = 0
         # 260611-62: 같은 파일·버전이 이미 로드돼 있으면 재로드 생략(썸네일 2중 리프레시 방지).
         #   (책갈피 선택 시 활성창 동기화와 _load_main 이 같은 파일을 두 번 로드하던 문제)
+        # 260901: 목록이 비었으면 가드하지 않는다 — 상태만 남고 항목이 없는 조합에서는
+        #   '이미 로드됨'이 거짓이므로, 무조건 재채움이 맞다(2차 안전망).
         if (self._doc is not None and getattr(self, "_doc_path", None) == str(path)
-                and getattr(self, "_doc_mtime", None) == mt):
+                and getattr(self, "_doc_mtime", None) == mt
+                and self.list.count() > 0):
             return
         if self._doc is not None:
             self._doc.close()
