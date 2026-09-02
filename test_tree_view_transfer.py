@@ -275,6 +275,49 @@ for mode in (True, False):
     chk(bt.tree.currentItem() is other and other.isSelected(),
         f"⑧ {'편집' if mode else '뷰어'}모드 우클릭 — 대상 항목은 선택됨(메뉴 동작 기준)")
 
+# ── ⑨ 260902-5: 파일 아이콘·1행 순서·우클릭 메뉴·이동 후 커서 유지 ──────
+bt.set_edit_mode(True)
+ft = [n for n in bt._iter_file_nodes() if n.text(0).startswith("toc")][0]
+chk(not ft.icon(0).isNull(), "⑨ 파일 행 앞 문서 아이콘")
+ft.setExpanded(True); app.processEvents()
+bms = [ft.child(i) for i in range(ft.childCount())]
+chk(all(b.icon(0).isNull() for b in bms), "⑨ 책갈피 행에는 아이콘 없음(구분)")
+r1 = bt.edit_ops.layout().itemAt(0).widget().layout()
+order = [r1.itemAt(i).widget() for i in range(r1.count())]
+chk(order[0] is bt.btn_view_mode and order[1] is bt.btn_edit_single,
+    "⑨ 1행 = [트리][책갈피명 수정][◀][▶][▲][▼]", f"{[w.text() for w in order]}")
+
+# 우클릭 메뉴 라벨(편집모드): 파일엔 '책갈피 편집' 없음 / 책갈피엔 '책갈피 수정...'
+captured = {}
+QMenu.exec = lambda self, *a, **k: (captured.__setitem__("labels", [a_.text() for a_ in self.actions() if a_.text()]), None)[1]
+bt._on_tree_context_menu(bt.tree.visualItemRect(ft).center())
+chk("책갈피 편집" not in captured["labels"] and "책갈피 생성" in captured["labels"],
+    "⑨ 파일 우클릭 — '책갈피 편집' 삭제(생성은 유지)", f"{captured['labels'][:6]}")
+bt._on_tree_context_menu(bt.tree.visualItemRect(bms[0]).center())
+chk("책갈피 수정..." in captured["labels"], "⑨ 책갈피 우클릭 — '책갈피 수정...' 추가", f"{captured['labels'][:4]}")
+
+# ▲▼ 단일 이동 후 커서 유지
+bt.tree.clearSelection(); bt.tree.setCurrentItem(bms[0]); bms[0].setSelected(True)
+bt._op_move_down(); app.processEvents()
+chk(bt.tree.currentItem() is bms[0] and bms[0].isSelected() and ft.indexOfChild(bms[0]) == 1,
+    "⑨ ▼ 단일 이동 후 커서·선택이 옮긴 책갈피에 유지", f"cur={bt.tree.currentItem().text(0) if bt.tree.currentItem() else None}")
+bt._op_move_up(); app.processEvents()
+chk(bt.tree.currentItem() is bms[0] and ft.indexOfChild(bms[0]) == 0, "⑨ ▲ 복귀 후 커서 유지")
+# ▶ 다중 들여쓰기 후 커서·선택 유지
+# (Ctrl+클릭 다중 선택과 같게: 현재 항목을 먼저 잡고 나머지를 선택 — setCurrentItem 은 선택을 지운다)
+bt.tree.clearSelection(); bt.tree.setCurrentItem(bms[1])
+for b in (bms[1], bms[2]): b.setSelected(True)
+bt._op_indent(); app.processEvents()
+# 트리 순서대로 처리: 둘째→첫째 아래, 셋째→(앞 형제가 된) 첫째 아래
+chk(bms[1].parent() is bms[0] and bms[2].parent() is bms[0],
+    "⑨ ▶ 다중 들여쓰기 수행", f"p1={bms[1].parent().text(0)} p2={bms[2].parent().text(0)}")
+chk(bt.tree.currentItem() is bms[1] and bms[1].isSelected() and bms[2].isSelected(),
+    "⑨ ▶ 들여쓰기 후 커서·다중 선택 유지")
+bt._op_outdent(); app.processEvents()
+chk(bt.tree.currentItem() in (bms[1], bms[2]) and bms[1].isSelected() and bms[2].isSelected(),
+    "⑨ ◀ 내어쓰기 후 커서·다중 선택 유지")
+bt.set_edit_mode(False)
+
 bt.close()
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")

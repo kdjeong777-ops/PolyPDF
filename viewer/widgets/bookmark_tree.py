@@ -417,12 +417,14 @@ class BookmarkTree(QWidget):
         # 1행: [단일/트리] ◀ ▶ ▲ ▼ [책갈피명수정] — 전체 폭 균등 분배
         row1 = QWidget()
         r1 = QHBoxLayout(row1); r1.setContentsMargins(0, 0, 0, 0); r1.setSpacing(3)
+        # 260902-5(사용자 요청): 책갈피명 수정을 트리 버튼 바로 오른쪽으로 — 뒤따르는
+        #   ◀▶▲▼ 가 '책갈피' 조작임이 한눈에 읽히도록.
         for b in (self.btn_view_mode,
-                  self._mk_btn("◀", "내어쓰기 (상위로)", self._op_outdent),
-                  self._mk_btn("▶", "들여쓰기 (하위로)", self._op_indent),
-                  self._mk_btn("▲", "위로 이동 (같은 부모 안)", self._op_move_up),
-                  self._mk_btn("▼", "아래로 이동 (같은 부모 안)", self._op_move_down),
-                  self.btn_edit_single):
+                  self.btn_edit_single,
+                  self._mk_btn("◀", "책갈피 내어쓰기 (상위로)", self._op_outdent),
+                  self._mk_btn("▶", "책갈피 들여쓰기 (하위로)", self._op_indent),
+                  self._mk_btn("▲", "책갈피 위로 이동 (같은 부모 안)", self._op_move_up),
+                  self._mk_btn("▼", "책갈피 아래로 이동 (같은 부모 안)", self._op_move_down)):
             r1.addWidget(_expand(b), 1)
 
         # 2행: 🗑️삭제 ⭐선택만 📋복사 — 전체 폭 균등 분배
@@ -657,6 +659,7 @@ class BookmarkTree(QWidget):
         item = QTreeWidgetItem([pdf.stem])
         item.setData(0, self.DATA_FILE, str(pdf))
         item.setData(0, self.DATA_PAGE, 0)
+        item.setIcon(0, self._leaf_icon())          # 260902-5: 파일 표식
         self._decorate_file_node(item, pdf)
         return item
 
@@ -1283,8 +1286,20 @@ class BookmarkTree(QWidget):
             levels.append(level)
 
     def _leaf_icon(self):
-        from PyQt6.QtGui import QIcon
-        return QIcon()
+        """260902-5(사용자 요청): 파일 행 앞 문서 아이콘 — 파일과 그 아래 책갈피를 한눈에 구분.
+        테마 단색(§4.3). 테마 전환 시 refresh_icons() 가 다시 칠한다."""
+        try:
+            from viewer.widgets.icons import themed_icon
+            return themed_icon("file")
+        except Exception:
+            from PyQt6.QtGui import QIcon
+            return QIcon()
+
+    def refresh_icons(self):
+        """260902-5: 테마 전환 후 파일 행 아이콘 재적용(폴더 행은 테마 무관이라 그대로)."""
+        ico = self._leaf_icon()
+        for it in self._iter_file_nodes():
+            it.setIcon(0, ico)
 
     def _dir_icon(self):
         from PyQt6.QtGui import QIcon
@@ -1513,8 +1528,15 @@ class BookmarkTree(QWidget):
             menu.addSeparator()
         # 260606-4: 파일(최상위) 노드면 (책갈피 생성, 책갈피 편집)도 제공
         is_file = self._is_file_node(item)
-        act_create = act_editmode = None
+        act_create = None
+        act_bm_edit = None
         act_study = act_study_bm = None
+        # 260902-5(사용자 요청): 책갈피 행 우클릭 → '책갈피 수정...'(제목·페이지). 편집모드 전용.
+        is_bookmark = (not is_file and not self._is_folder_node(item)
+                       and bool(item.data(0, self.DATA_FILE)))
+        if is_bookmark and self._edit_mode:
+            act_bm_edit = menu.addAction("책갈피 수정...")
+            menu.addSeparator()
         act_translate = None
         act_edit_gloss = None
         act_tags = None
@@ -1525,7 +1547,7 @@ class BookmarkTree(QWidget):
                 act_password = menu.addAction("암호 입력")
                 menu.addSeparator()
             act_create = menu.addAction("책갈피 생성")
-            act_editmode = menu.addAction("책갈피 편집")
+            # 260902-5: '책갈피 편집'(편집모드 진입) 삭제 — 편집 버튼과 중복이고 책갈피 수정과 혼동.
             act_study = menu.addAction("단어장 생성")
             act_study_bm = menu.addAction("단어장·책갈피 동시 생성")
             act_tags = menu.addAction("해시태그 편집...")   # 260623: 파일 분류 태그
@@ -1579,8 +1601,8 @@ class BookmarkTree(QWidget):
             self._prompt_file_password(item, item.data(0, self.DATA_FILE))
         elif chosen == act_create:
             self.createBookmarksRequested.emit(item.data(0, self.DATA_FILE))
-        elif chosen == act_editmode:
-            self.set_edit_mode(True)
+        elif act_bm_edit is not None and chosen == act_bm_edit:
+            self._edit_item(item)                    # 책갈피 제목·페이지 편집 창
         elif chosen == act_study:
             self.createStudyRequested.emit(item.data(0, self.DATA_FILE))
         elif chosen == act_study_bm:
@@ -1737,6 +1759,7 @@ class BookmarkTree(QWidget):
             parent.takeChild(idx)
             prev.addChild(it)
             prev.setExpanded(True)
+        self._restore_cursor(items)
         self._mark_dirty()
 
     def _op_outdent(self):
@@ -1757,6 +1780,7 @@ class BookmarkTree(QWidget):
             p_idx = grand.indexOfChild(parent)
             parent.takeChild(parent.indexOfChild(it))
             grand.insertChild(p_idx + 1, it)
+        self._restore_cursor(items)
         self._mark_dirty()
 
     # ---- 삭제 / 선택만 남기기 ------------------------------------------
@@ -2337,6 +2361,7 @@ class BookmarkTree(QWidget):
         item = QTreeWidgetItem([fp.stem])
         item.setData(0, self.DATA_FILE, str(fp))
         item.setData(0, self.DATA_PAGE, 0)
+        item.setIcon(0, self._leaf_icon())          # 260902-5: 파일 표식
         self._attach_toc_placeholder(item, fp)
         self.tree.addTopLevelItem(item)
         if self._mode == "flat" and fp not in self._pdfs_flat:
@@ -2444,7 +2469,34 @@ class BookmarkTree(QWidget):
                     self.tree.takeTopLevelItem(idx)
                     self.tree.insertTopLevelItem(new_idx, it)
                 it.setSelected(True)
+        self._restore_cursor(items)
         self._mark_dirty()
+
+    def _restore_cursor(self, items: list):
+        """260902-5(사용자 보고): 이동·들여쓰기 뒤 **현재 항목(커서)** 이 옮긴 책갈피에 남게.
+
+        take/insert 로 노드를 옮기면 Qt 가 현재 항목을 비우고 선택도 풀린다(단일 선택은
+        커서가 사라지고, 들여쓰기는 다중 선택도 풀렸다). 옮긴 것들을 다시 선택하고 첫
+        항목을 현재로 — blockSignals 로 감싸 네비게이션(파일 이동)은 일으키지 않는다."""
+        items = [it for it in items if it is not None]
+        if not items:
+            return
+        from PyQt6.QtCore import QItemSelectionModel
+        self.tree.blockSignals(True)
+        try:
+            for it in items:
+                par = it.parent()
+                while par is not None:            # 접힌 부모 안으로 들어갔으면 펼쳐서 보이게
+                    par.setExpanded(True); par = par.parent()
+            # ★ setCurrentItem 은 기본 명령이 ClearAndSelect 라 **다른 선택을 지운다**(다중
+            #   선택이 풀리던 원인). 커서만 옮기는 NoUpdate 로 현재 항목을 잡고, 선택은 따로.
+            self.tree.selectionModel().setCurrentIndex(
+                self.tree.indexFromItem(items[0]), QItemSelectionModel.SelectionFlag.NoUpdate)
+            for it in items:
+                it.setSelected(True)
+        finally:
+            self.tree.blockSignals(False)
+        self.tree.scrollToItem(items[0])
 
     # ---- 저장: 평탄화 → apply_bookmarks_to_pdf -------------------------
     def _op_save(self):

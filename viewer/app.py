@@ -5727,6 +5727,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _apply_theme_widgets(self, dark: bool):
         """260606-14: 팔레트로 안 잡히는 곳(메인뷰 배경·드로어·썸네일 카드)에 테마 반영."""
+        # 260902-5: 책갈피 트리 파일 아이콘(테마 단색) 재적용
+        for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+            try:
+                if _bt is not None:
+                    _bt.refresh_icons()
+            except Exception:
+                pass
         # 260606-15: 스타일시트가 설정된 위젯은 팔레트 변경만으론 갱신 안 됨 → 재폴리시
         # 260606-27: 팔레트 의존(스타일시트 없는) 버튼/메뉴는 repaint 가 안 와서
         #            전환 직후 옛 색으로 남았다가 클릭해야 갱신되던 문제 → 전 위젯 update()

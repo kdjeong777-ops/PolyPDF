@@ -107,12 +107,22 @@ def _folder(p, c):
     p.drawPolygon(poly)
 
 
+def _file(p, c):
+    """260902-5: 책갈피 트리 파일 행용 — 모서리 접힌 문서 윤곽(디자인 §4.4)."""
+    p.setPen(QPen(c, 1.5))
+    poly = QPolygonF([QPointF(4.0, 2.2), QPointF(9.6, 2.2), QPointF(12.2, 4.8),
+                      QPointF(12.2, 13.8), QPointF(4.0, 13.8)])
+    p.drawPolygon(poly)
+    p.drawLine(QPointF(9.6, 2.2), QPointF(9.6, 4.8))
+    p.drawLine(QPointF(9.6, 4.8), QPointF(12.2, 4.8))
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
     "chevron_left": _chevron_left, "chevron_right": _chevron_right,
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
-    "folder": _folder,
+    "folder": _folder, "file": _file,
 }
 
 
