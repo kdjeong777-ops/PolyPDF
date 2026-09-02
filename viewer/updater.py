@@ -480,7 +480,22 @@ if (-not $Elevated) {
     }
 
     # 1.7) 설치 폴더가 쓰기 불가(예: Program Files)면 UAC로 자체 승격해서 적용
-    if (-not (Test-DirWritable $install) -and -not $isAdmin) {
+    # 260902-2: 루트만 검사하면 놓친다 — 옛 설치본(0.43 등)은 루트는 쓸 수 있는데 `_internal`
+    #   아래 일부 폴더(setuptools 등)가 관리자 소유라, 압축 해제 중 '액세스 거부'로 실패했다.
+    #   → `_internal` 과 그 안의 첫 하위 폴더 몇 개까지 같이 검사한다.
+    $needElevate = -not (Test-DirWritable $install)
+    if (-not $needElevate) {
+        $intl = Join-Path $install "_internal"
+        if (Test-Path $intl) {
+            if (-not (Test-DirWritable $intl)) { $needElevate = $true }
+            else {
+                foreach ($sd in (Get-ChildItem -LiteralPath $intl -Directory -Force -ErrorAction SilentlyContinue | Select-Object -First 40)) {
+                    if (-not (Test-DirWritable $sd.FullName)) { $needElevate = $true; break }
+                }
+            }
+        }
+    }
+    if ($needElevate -and -not $isAdmin) {
         $lbl.Text = "관리자 권한으로 업데이트를 적용합니다..."; [System.Windows.Forms.Application]::DoEvents()
         try {
             Start-Process powershell.exe -Verb RunAs -ArgumentList @(
@@ -527,6 +542,7 @@ if (-not (Test-ZipHash $zipPath $expSha)) {
     exit
 }
 $fail = 0
+$denied = $false
 try {
     $arc = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
     $total = [Math]::Max(1, $arc.Entries.Count); $n = 0
@@ -540,13 +556,21 @@ try {
             $installFull = [IO.Path]::GetFullPath($install).TrimEnd('\') + '\'
             $destFull = [IO.Path]::GetFullPath($dest)
             if (-not $destFull.StartsWith($installFull, [StringComparison]::OrdinalIgnoreCase)) { $fail++; continue }
+            # 260902-2: 폴더 생성이 '액세스 거부'로 터지면 종전엔 바깥 catch 로 빠져 **설치가
+            #   통째로 중단**됐다('setuptools' 경로에 대한 액세스가 거부되었습니다). 개별 실패로
+            #   세고 계속 진행하되, 거부가 한 번이라도 있으면 $denied 를 켜 승격 재시도로 넘긴다.
             if ([string]::IsNullOrEmpty($e.Name)) {
-                if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Force -Path $dest | Out-Null }
+                try { if (-not (Test-Path -LiteralPath $dest)) { New-Item -ItemType Directory -Force -Path $dest | Out-Null } }
+                catch { $fail++; if ($_.Exception -is [System.UnauthorizedAccessException] -or $_.Exception.InnerException -is [System.UnauthorizedAccessException]) { $denied = $true } }
             } else {
                 $dir = Split-Path $dest -Parent
-                if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-                try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true) }
-                catch { $fail++ }
+                try {
+                    if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+                    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
+                } catch {
+                    $fail++
+                    if ($_.Exception -is [System.UnauthorizedAccessException] -or $_.Exception.InnerException -is [System.UnauthorizedAccessException]) { $denied = $true }
+                }
             }
         }
         $bar.Value = [Math]::Min(100, [int]($n * 100 / $total))
@@ -608,6 +632,26 @@ if ($fail -eq 0 -and -not [string]::IsNullOrEmpty($manPath) -and (Test-Path $man
     } catch {
         [IO.File]::AppendAllText("$env:TEMP\polypdf_update_cleanup.log",
             ("{0}  cleanup skipped: {1}`r`n" -f (Get-Date -Format s), $_.Exception.Message))
+    }
+}
+
+# 260902-2: 사전 검사를 통과했는데도 해제 중 '액세스 거부'가 났으면(깊은 폴더가 관리자
+#   소유 등) 여기서 UAC 승격으로 **한 번 더** 적용한다. 같은 zip 을 덮어쓰므로 안전하고,
+#   승격 인스턴스가 재실행·정리를 맡는다. 승격 후에도 실패하면 아래 정직한 오류 안내.
+if ($fail -gt 0 -and $denied -and -not $Elevated -and -not $isAdmin) {
+    $lbl.Text = "일부 폴더에 권한이 없어 관리자 권한으로 다시 적용합니다..."
+    [System.Windows.Forms.Application]::DoEvents()
+    try {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+            '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden',
+            '-File', $PSCommandPath, '-Elevated') | Out-Null
+        $form.Close(); exit
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show(
+            "일부 폴더에 쓰기 권한이 없어 업데이트를 마치지 못했습니다($fail 개). 관리자 권한 요청이 취소되었습니다.`n" +
+            "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요.",
+            "PolyPDF 업데이트") | Out-Null
+        $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
     }
 }
 
