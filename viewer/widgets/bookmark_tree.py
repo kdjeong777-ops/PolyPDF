@@ -203,6 +203,7 @@ class BookmarkTree(QWidget):
     # 260901-2: 폴더 그룹 행 색 — 디자인 SOT §2.5(테마 무관, 밝은 노랑+어두운 글자)
     FOLDER_ROW_BG = "#fdf3c0"
     FOLDER_ROW_FG = "#1a1a1a"
+    TREE_INDENT = 12        # 260902-1: 계층 들여쓰기(px) — 디자인 SOT §2.8
 
     SORT_BOOK = "책갈피 순"
     SORT_NAME = "이름 순"
@@ -323,6 +324,14 @@ class BookmarkTree(QWidget):
         edit_row.setContentsMargins(0, 0, 0, 0)
         edit_row.addWidget(self.btn_edit)
         # 260611-61: 새로고침(↻) — 편집모드가 아닐 때만 노출. 외부에서 파일 추가 시 트리 갱신.
+        # 260902-1(사용자 요청): 뷰어 모드에서도 목록 보기(트리/단일)를 바꿀 수 있게 —
+        #   편집 버튼 오른쪽. 편집모드에서는 edit_ops 1행의 같은 버튼이 대신하므로 숨긴다.
+        #   두 버튼의 라벨은 set_tree_view 가 함께 갱신한다.
+        self.btn_view_mode_v = QPushButton("트리" if self._view_tree else "단일")
+        self.btn_view_mode_v.setFixedWidth(44)
+        self.btn_view_mode_v.setToolTip("목록 보기: 단일 ↔ 트리 (클릭마다 전환)")
+        self.btn_view_mode_v.clicked.connect(self._toggle_tree_view)
+        edit_row.addWidget(self.btn_view_mode_v)
         self.btn_refresh = QPushButton("↻")
         self.btn_refresh.setFixedWidth(30)
         self.btn_refresh.setToolTip("책갈피 새로고침 (외부에서 파일이 추가/변경된 경우)")
@@ -432,6 +441,15 @@ class BookmarkTree(QWidget):
 
         self.tree = _EditableTree()
         self.tree.setHeaderHidden(True)
+        # 260902-1(사용자 요청, 디자인 §2.8): 계층 들여쓰기 20→12px — 폴더>파일>책갈피 3단이
+        #   쌓이면 좁은 패널에서 글자가 거의 안 보였다. 긴 이름은 '…' 로 자르지 않고 열 폭을
+        #   내용에 맞춰 가로 스크롤로 끝까지 볼 수 있게(탐색기 관례).
+        self.tree.setIndentation(self.TREE_INDENT)
+        self.tree.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.tree.header().setStretchLastSection(False)
+        from PyQt6.QtWidgets import QHeaderView as _QHV
+        self.tree.header().setSectionResizeMode(0, _QHV.ResizeMode.ResizeToContents)
+        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # 260901-2: 생성 시점부터 다중 선택 가능(종전엔 편집모드 전환 때 비로소 적용됐다).
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.itemActivated.connect(self._on_activated)
@@ -532,26 +550,31 @@ class BookmarkTree(QWidget):
         return bool(it is not None and it.data(0, self.DATA_IS_FOLDER))
 
     def _is_file_node(self, it) -> bool:
-        return bool(it is not None and it.data(0, self.DATA_FILE)
-                    and not it.data(0, self.DATA_IS_FOLDER))
+        """파일 노드 = DATA_FILE 이 있고, 폴더 행이 아니며, **부모가 파일/책갈피가 아닌** 행.
+
+        260902-1(결함 수정): 책갈피(TOC) 자식도 DATA_FILE 을 갖는다(페이지 이동용). 종전
+        판정이 그것을 파일로 오판해 '책갈피명 수정'이 파일명 수정으로 가고, 우클릭 메뉴가
+        책갈피에 파일 메뉴를 띄웠다. 부모 조건이 종전 `parent() is None` 의 본뜻이다."""
+        if it is None or not it.data(0, self.DATA_FILE) or it.data(0, self.DATA_IS_FOLDER):
+            return False
+        par = it.parent()
+        return par is None or not par.data(0, self.DATA_FILE)
 
     def _iter_file_nodes(self):
-        """보기 모드와 무관하게 트리의 모든 파일 노드를 트리 출현 순서로 순회."""
+        """보기 모드와 무관하게 트리의 모든 파일 노드를 트리 출현 순서로 순회.
+        폴더 행·(JSON 모드의) 그룹 행처럼 DATA_FILE 이 없는 행은 안으로 내려간다."""
         for i in range(self.tree.topLevelItemCount()):
-            it = self.tree.topLevelItem(i)
-            if self._is_folder_node(it):
-                yield from self._iter_folder_files(it)
-            elif self._is_file_node(it):
-                yield it
+            yield from self._iter_folder_files(self.tree.topLevelItem(i), _self_ok=True)
 
-    def _iter_folder_files(self, folder_item):
-        """폴더 그룹 행 아래의 파일 노드(하위 폴더 포함)."""
-        for i in range(folder_item.childCount()):
-            ch = folder_item.child(i)
-            if self._is_folder_node(ch):
-                yield from self._iter_folder_files(ch)
-            elif self._is_file_node(ch):
-                yield ch
+    def _iter_folder_files(self, node, _self_ok=False):
+        """node 아래(또는 node 자신)의 파일 노드. 파일 노드 아래(책갈피)로는 내려가지 않는다."""
+        if _self_ok and self._is_file_node(node):
+            yield node
+            return
+        if node.data(0, self.DATA_FILE):          # 파일/책갈피 — 그 아래는 책갈피뿐
+            return
+        for i in range(node.childCount()):
+            yield from self._iter_folder_files(node.child(i), _self_ok=True)
 
     def _file_node_of(self, it):
         """임의 행 → 소속 파일 노드(자기 자신 포함). 폴더 행이면 None."""
@@ -594,8 +617,9 @@ class BookmarkTree(QWidget):
         if on == self._view_tree:
             return
         self._view_tree = on
-        if hasattr(self, "btn_view_mode"):
-            self.btn_view_mode.setText("트리" if on else "단일")
+        for b in (getattr(self, "btn_view_mode", None), getattr(self, "btn_view_mode_v", None)):
+            if b is not None:
+                b.setText("트리" if on else "단일")
         if self._mode == "flat":
             cur = self._current_selected_file()
             self._render_flat()
@@ -1432,7 +1456,19 @@ class BookmarkTree(QWidget):
                      if self._is_file_node(it)]
         if not (self._edit_mode and item.isSelected() and len(sel_files) >= 2):
             if not item.isSelected():
-                self.tree.setCurrentItem(item)
+                # 260902-3(사용자 보고 — 편집모드 우클릭 무반응·'2단 보기'로 튐): 종전
+                #   setCurrentItem 이 currentItemChanged → 네비게이션(파일 열기)을 일으켜,
+                #   **메뉴가 떠 있는 동안** 다른 PDF 가 로드됐다. 큰 파일이면 메뉴 아래에서
+                #   로딩이 돌다 팝업이 닫히고(무반응), 그 사이 한 번 더 누르면 첫 항목
+                #   '2단 보기'가 눌렸다. 우클릭은 **선택만** 바꾼다 — 이동은 좌클릭/Enter 의 몫.
+                self.tree.blockSignals(True)
+                try:
+                    self.tree.clearSelection()
+                    self.tree.setCurrentItem(item)
+                    item.setSelected(True)
+                finally:
+                    self.tree.blockSignals(False)
+                self._pending_nav = None            # 직전에 예약된 이동도 취소
             sel_files = []
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
@@ -1462,9 +1498,12 @@ class BookmarkTree(QWidget):
         if xfer_files:
             n = len(xfer_files)
             # 항목은 각자 triggered 로 처리 — 아래 chosen 분기와 겹치지 않는다.
-            self._add_transfer_submenu(menu, f"파일 복사 ({n}개)", xfer_files, False)
-            self._add_transfer_submenu(menu, f"파일 이동 ({n}개)", xfer_files, True)
-            menu.addSeparator()
+            try:
+                self._add_transfer_submenu(menu, f"파일 복사 ({n}개)", xfer_files, False)
+                self._add_transfer_submenu(menu, f"파일 이동 ({n}개)", xfer_files, True)
+                menu.addSeparator()
+            except Exception:
+                pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
         # 260901-3: 폴더 행 우클릭 — 폴더 이름 변경 / 삭제(빈 폴더만)
         act_fold_new = act_fold_ren = act_fold_del = None
         if self._edit_mode and self._is_folder_node(item):
@@ -1564,10 +1603,11 @@ class BookmarkTree(QWidget):
         r = getattr(self, "_edit_row", None)
         if r is None:
             return
-        r.setStretch(0, 1 if on else 0)   # 편집
-        r.setStretch(2, 1 if on else 0)   # 취소
-        r.setStretch(3, 1 if on else 0)   # 저장
-        r.setStretch(4, 0 if on else 1)   # trailing stretch
+        # 260902-1: 인덱스 고정(0/2/3/4)이던 것을 위젯 기준으로 — 행에 버튼(트리/단일)을
+        #   끼워 넣자 번호가 밀려 취소/저장 대신 엉뚱한 항목이 늘어나던 것을 방지.
+        for b in (self.btn_edit, self.btn_cancel, self.btn_save):
+            r.setStretchFactor(b, 1 if on else 0)
+        r.setStretch(r.count() - 1, 0 if on else 1)   # trailing stretch(마지막 항목)
 
     def is_edit_mode(self) -> bool:
         return self._edit_mode
@@ -1605,6 +1645,7 @@ class BookmarkTree(QWidget):
         self.btn_save.setVisible(on)          # 260611-8: 저장은 편집모드에서만
         self.btn_cancel.setVisible(on)        # 260611-9: 취소도 편집모드에서만
         self.btn_refresh.setVisible(not on)   # 260611-61: 새로고침은 비편집모드에서만
+        self.btn_view_mode_v.setVisible(not on)  # 260902-1: 뷰어 모드 전용(편집모드는 edit_ops)
         self._apply_edit_row_stretch(on)      # 260611-73: 편집모드=3버튼 전체폭 균등
         self.btn_edit.blockSignals(True)
         self.btn_edit.setChecked(on)
@@ -1815,17 +1856,25 @@ class BookmarkTree(QWidget):
         root = self._root_dir
         if not root or not Path(root).exists():
             return []
+        # 260902-1: 종전 `rglob("*")` 는 파일까지 전부 훑어, 다운로드 폴더처럼 항목이 많은
+        #   곳에서 우클릭 메뉴가 수 초~수십 초 뒤에 떠 '메뉴가 안 뜬다'로 보였다.
+        #   → 폴더만, 깊이 4 까지, 최대 200개. 정렬은 상대경로 기준(대소문자 무시).
         out = []
+        root = Path(root)
         try:
-            for d in sorted(Path(root).rglob("*")):
-                if not d.is_dir():
+            import os
+            for cur, dirs, _files in os.walk(root, topdown=True):
+                rel_depth = len(Path(cur).relative_to(root).parts)
+                dirs[:] = sorted((d for d in dirs
+                                  if not d.startswith(".") and not d.startswith("__")),
+                                 key=str.lower)
+                if rel_depth >= 4:            # 너무 깊은 곳은 메뉴에서 생략(직접 선택으로)
+                    dirs[:] = []
                     continue
-                rel = d.relative_to(root)
-                if any(s.startswith(".") or s.startswith("__") for s in rel.parts):
-                    continue
-                if len(rel.parts) > 4:        # 너무 깊은 곳은 메뉴에서 생략(직접 선택으로)
-                    continue
-                out.append(d)
+                for d in dirs:
+                    out.append(Path(cur) / d)
+                    if len(out) >= 200:
+                        return out
         except Exception:
             pass
         return out
@@ -2348,10 +2397,10 @@ class BookmarkTree(QWidget):
             cpg = cur.data(0, self.DATA_PAGE)
             if (cpg is not None and not cur.data(0, self.DATA_IS_TOC_PLACEHOLDER)
                     and int(cpg) == best[1]):
-                node = cur                      # 현재 선택이 같은 파일(top) 소속일 때만 유지
-                while node.parent() is not None:
-                    node = node.parent()
-                if node is top:
+                # 260902-1: 트리 보기에서는 최상위 조상이 **폴더 행**이라 `top` 과 달라져
+                #   '같은 파일' 판정이 항상 실패 → 파일 노드를 클릭해도 첫 책갈피로 튀고,
+                #   같은 페이지의 여러 책갈피 중 마지막만 골라지던 결함. 소속 파일 노드로 비교.
+                if self._file_node_of(cur) is top:
                     target = cur
         self.tree.blockSignals(True)
         self.tree.setCurrentItem(target)

@@ -209,6 +209,72 @@ chk(seen == [], "⑥ 프로그램적 전환은 신호 없음(되먹임 방지)")
 bt._toggle_tree_view()
 chk(seen == [True], "⑥ 사용자 전환만 viewListModeChanged 발신", f"{seen}")
 
+# ── ⑦ 260902-1: 책갈피 자식 판정·동기화·들여쓰기·뷰어 모드 버튼 ─────────
+import fitz as _fz
+tp = root / "sub_a" / "toc.pdf"
+_d = _fz.open()
+for _i in range(3): _d.new_page().insert_text((40, 80), f"p{_i}")
+_d.set_toc([[1, "첫째", 1], [1, "둘째", 1], [1, "셋째", 2]]); _d.save(str(tp)); _d.close()
+bt._sync_after_transfer(root); app.processEvents()
+ft = [n for n in bt._iter_file_nodes() if n.text(0).startswith("toc")][0]
+ft.setExpanded(True); app.processEvents()
+bms = [ft.child(i) for i in range(ft.childCount())]
+chk(len(bms) == 3 and not any(bt._is_file_node(b) for b in bms),
+    "⑦ 책갈피 자식은 파일 노드가 아님(DATA_FILE 있어도)", f"{[b.text(0) for b in bms]}")
+chk(bt._file_node_of(bms[0]) is ft, "⑦ _file_node_of(책갈피) = 소속 파일 노드")
+chk(len([n for n in bt._iter_file_nodes() if n is ft]) == 1 and
+    not any(n in bms for n in bt._iter_file_nodes()),
+    "⑦ _iter_file_nodes 가 책갈피를 파일로 세지 않음")
+# 책갈피명 수정 → 책갈피 편집 경로
+_called = []
+bt._edit_bookmark_node = lambda it, tgt: _called.append(("bm", it.text(0)))
+bt._edit_file_node = lambda it: _called.append(("file", it.text(0)))
+bt.set_edit_mode(True)
+bt.tree.clearSelection(); bt.tree.setCurrentItem(bms[0]); bms[0].setSelected(True)
+bt._op_edit_single()
+chk(_called == [("bm", "첫째")], "⑦ '책갈피명 수정' → 책갈피 편집(파일명 수정 아님)", f"{_called}")
+bt.set_edit_mode(False)
+# 페이지 동기가 클릭한 파일/첫 책갈피를 유지(트리 보기)
+bt.tree.clearSelection(); bt.tree.setCurrentItem(ft); bt.select_for_page(str(tp), 0)
+chk(bt.tree.currentItem() is ft, "⑦ 파일 클릭 후 동기 — 파일 노드 유지")
+bt.tree.setCurrentItem(bms[0]); bt.select_for_page(str(tp), 0)
+chk(bt.tree.currentItem() is bms[0], "⑦ 같은 페이지 책갈피 2개 — 첫째 클릭 유지")
+bt.tree.setCurrentItem(bms[1]); bt.select_for_page(str(tp), 0)
+chk(bt.tree.currentItem() is bms[1], "⑦ 같은 페이지 책갈피 2개 — 둘째 클릭 유지")
+# 들여쓰기·긴 이름
+chk(bt.tree.indentation() == bt.TREE_INDENT == 12, "⑦ 들여쓰기 12px(디자인 §2.8)")
+from PyQt6.QtCore import Qt as _Qt
+chk(bt.tree.textElideMode() == _Qt.TextElideMode.ElideNone, "⑦ 긴 이름 '…' 자르지 않음(가로 스크롤)")
+# 뷰어 모드 버튼: 편집 오른쪽, 편집모드에서 숨김, 라벨 동기
+row = bt._edit_row
+idx_edit = next(i for i in range(row.count()) if row.itemAt(i).widget() is bt.btn_edit)
+chk(row.itemAt(idx_edit + 1).widget() is bt.btn_view_mode_v, "⑦ 뷰어 모드 트리/단일 버튼이 편집 바로 오른쪽")
+chk(not bt.btn_view_mode_v.isHidden(), "⑦ 뷰어 모드에서 보임")
+bt.set_edit_mode(True); chk(bt.btn_view_mode_v.isHidden(), "⑦ 편집모드에서는 숨김(edit_ops 버튼이 대신)")
+bt.set_edit_mode(False)
+bt.set_tree_view(False)
+chk(bt.btn_view_mode_v.text() == "단일" == bt.btn_view_mode.text(), "⑦ 두 버튼 라벨 동기")
+bt.set_tree_view(True)
+# 하위 폴더 나열이 파일을 훑지 않음(폴더만·상한)
+chk(all(d.is_dir() for d in bt._subfolders()) and len(bt._subfolders()) <= 200,
+    "⑦ _subfolders 폴더만·상한 200")
+
+# ── ⑧ 260902-3: 우클릭은 선택만 바꾸고 이동(네비게이션)하지 않는다 ──────
+navs = []
+bt.bookmarkActivated.connect(lambda f, pg: navs.append(Path(f).name))
+QMenu.exec = lambda self, *a, **k: None
+for mode in (True, False):
+    bt.set_edit_mode(mode)
+    files = list(bt._iter_file_nodes())
+    bt.tree.clearSelection(); bt.tree.setCurrentItem(files[0])
+    app.processEvents(); navs.clear()
+    other = files[-1]
+    bt._on_tree_context_menu(bt.tree.visualItemRect(other).center())
+    from PyQt6.QtTest import QTest; QTest.qWait(150)   # 예약된 이동이 있다면 여기서 발화
+    chk(navs == [], f"⑧ {'편집' if mode else '뷰어'}모드 우클릭 — 다른 파일로 이동하지 않음", f"{navs}")
+    chk(bt.tree.currentItem() is other and other.isSelected(),
+        f"⑧ {'편집' if mode else '뷰어'}모드 우클릭 — 대상 항목은 선택됨(메뉴 동작 기준)")
+
 bt.close()
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
