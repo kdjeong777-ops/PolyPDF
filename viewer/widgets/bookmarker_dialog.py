@@ -295,15 +295,13 @@ class BookmarkerDialog(QDialog):
         if not fn or not Path(fn).exists():
             self.edit_toc_pages.setPlaceholderText("먼저 PDF 파일을 지정하세요")
             return
+        from viewer import toc_parse
         try:
-            from viewer._vendor.pdf_bookmarker.toc_extractor import TocBookmarkExtractor
-            pages = TocBookmarkExtractor(fn).find_toc_pages()
+            pages = toc_parse.find_toc_pages(fn)         # 260904-2: 관대한 탐지(표본 6~11쪽)
         except Exception:
             pages = []
         if pages:
-            self.edit_toc_pages.setText(
-                f"{pages[0]}-{pages[-1]}" if pages == list(range(pages[0], pages[-1] + 1))
-                else ", ".join(map(str, pages)))
+            self.edit_toc_pages.setText(toc_parse.format_page_spec(pages))
         else:
             self.edit_toc_pages.setText("")
             self.edit_toc_pages.setPlaceholderText("자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)")

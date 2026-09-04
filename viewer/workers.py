@@ -129,8 +129,8 @@ class BookmarkerWorker(QObject):
             toc_pages = list(self.opts.get("toc_pages") or [])
             if mode in ("auto", "toc") and not toc_pages:
                 try:
-                    from viewer._vendor.pdf_bookmarker.toc_extractor import TocBookmarkExtractor
-                    toc_pages = TocBookmarkExtractor(str(self.input_pdf)).find_toc_pages()
+                    from viewer import toc_parse as _tp
+                    toc_pages = _tp.find_toc_pages(self.input_pdf)     # 260904-2: 관대한 탐지
                 except Exception:
                     toc_pages = []
             if toc_pages and mode in ("auto", "toc"):
