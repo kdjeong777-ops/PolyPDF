@@ -123,6 +123,21 @@ class BookmarkerWorker(QObject):
                     raise RuntimeError("저장할 책갈피가 없습니다.")
                 self._write_and_finish(bridge, bookmarks, method, res, mode)
                 return
+            # ── 260904-10(§4.4): 기존 책갈피 수정 — 지금 PDF 의 목차를 그대로 표로 ──
+            if mode == "existing":
+                from viewer import toc_parse as _tp
+                rows = _tp.existing_rows(self.input_pdf)
+                if not rows:
+                    raise RuntimeError("이 PDF에는 기존 책갈피가 없습니다.")
+                if self.opts.get("review", True):
+                    self.finished.emit({"phase": "review", "method": "existing", "rows": rows,
+                                        "candidates": [], "offset": 0, "toc_pages": []})
+                    return
+                import pdf_bookmarker as _pb
+                bookmarks = [_pb.Bookmark(title=t_, page=p_, level=l_)
+                             for (t_, p_, l_) in _tp.to_bookmarks(rows)]
+                self._write_and_finish(bridge, bookmarks, "existing", res, "review")
+                return
             # ── 260904-1(§4.4): 목차 쪽 지정 → 관대한 파서(toc_parse) 로 표 생성 ──
             #   사용자가 쪽을 지정했거나, auto/toc 에서 탐지된 목차 쪽이 있으면 이 경로.
             #   (내장 파서는 점선 리더 형식만 알아 OCR 텍스트층 스캔본에서 0건이었다.)

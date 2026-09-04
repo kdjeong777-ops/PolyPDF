@@ -276,33 +276,62 @@ def _lnds(keys: list[int]) -> set:
     return out
 
 
+def existing_rows(pdf_path) -> list[dict]:
+    """PDF 에 이미 들어 있는 책갈피 → 검토 표 행(260904-10).
+
+    fitz 의 레벨은 1부터라 표(0=장)에 맞춰 1 을 뺀다. 목차 쪽은 없고(원문 차례를 모른다)
+    실제 쪽만 채운다 — 표에서 제목·레벨·쪽을 고쳐 다시 저장하는 '기존 책갈피 수정' 경로의 입력."""
+    try:
+        import fitz
+    except Exception:
+        return []
+    rows = []
+    try:
+        d = fitz.open(str(pdf_path))
+        try:
+            for item in d.get_toc(simple=True) or []:
+                lv, title, page = item[0], item[1], item[2]
+                if not str(title).strip():
+                    continue
+                rows.append({"title": str(title).strip(), "toc_page": None,
+                             "page": (int(page) if int(page) > 0 else None),
+                             "level": max(0, int(lv) - 1), "src": "existing"})
+        finally:
+            d.close()
+    except Exception:
+        return []
+    return rows
+
+
 def sort_by_toc_page(rows: list[dict]) -> int:
     """목차 쪽이 중간에 줄어들지 않도록 (260904-8). 바뀐 행 수를 돌려준다.
 
     구간(`_page_segments`)마다: ① 줄어든 쪽이 자릿수 누락으로 보이면 **번호를 고친다**(앞뒤 순서 안에 드는 후보 —
     20→120, 31→311, 3→312; `repaired`), ② 그래도 순서 밖인 행은 **가장 긴 비감소 열에 속하지 않는 행**으로 보고
     쪽 순서에 맞는 자리(그 쪽 이하의 마지막 행 뒤)로 옮긴다(`moved`). 표·그림 목록은 쪽이 처음부터 시작하므로 구간을 나눈다.
-    옮긴/고친 행은 검토 표에서 목차 쪽 셀을 파란 배경으로 표시한다."""
+    옮긴/고친 행은 검토 표에서 목차 쪽 셀을 파란 배경으로 표시한다.
+    기준 열은 목차 쪽 — 목차 쪽이 하나도 없으면(기존 책갈피 수정 경로) 실제 쪽으로 본다(260904-10)."""
     changed = 0
     out = []
+    field = "toc_page" if any(r.get("toc_page") for r in rows) else "page"
     for seg in _page_segments(rows):
         sub = [rows[i] for i in seg]
         keys = []
         for r in sub:
-            p = r.get("toc_page")
+            p = r.get(field)
             keys.append(int(p) if p else (keys[-1] if keys else 0))
         # ① 자릿수 복원
         prevmax = 0
         for j, r in enumerate(sub):
             if keys[j] >= prevmax:
                 prevmax = keys[j]; continue
-            if not r.get("toc_page"):
+            if not r.get(field):
                 continue
             nxt = next((keys[k] for k in range(j + 1, len(sub)) if keys[k] >= prevmax), None)
             hi = nxt if nxt is not None else prevmax + 30
             cand = next((c for c in _repair_candidates(keys[j]) if prevmax <= c <= hi), None)
             if cand is not None:
-                r["toc_page"] = cand; r["repaired"] = True; keys[j] = cand; changed += 1
+                r[field] = cand; r["repaired"] = True; keys[j] = cand; changed += 1
                 prevmax = cand
         # ② 순서 밖 행 이동
         keep = _lnds(keys)

@@ -83,8 +83,26 @@ class BookmarkerDialog(QDialog):
 
         layout.addWidget(grp_in)
 
+        # ── 260904-10: 기존 책갈피가 있으면 새로 만들지 / 고칠지 ──────────
+        self.grp_exist = QGroupBox("기존 책갈피")
+        ev = QVBoxLayout(self.grp_exist)
+        self.lbl_exist = QLabel()
+        self.lbl_exist.setWordWrap(True)
+        ev.addWidget(self.lbl_exist)
+        self.rb_bm_new = QRadioButton("새로 만들기 — 목차를 다시 읽어 기존 책갈피를 대체합니다")
+        self.rb_bm_edit = QRadioButton("기존 책갈피 수정 — 지금 책갈피를 표로 불러와 제목·레벨·쪽을 고칩니다")
+        self.bg_exist = QButtonGroup(self)
+        for rb in (self.rb_bm_edit, self.rb_bm_new):
+            self.bg_exist.addButton(rb)
+            ev.addWidget(rb)
+        self.rb_bm_edit.setChecked(True)              # 있는 책갈피를 지우지 않는 쪽이 기본
+        self.rb_bm_edit.toggled.connect(self._sync_exist_mode)
+        layout.addWidget(self.grp_exist)
+        self.grp_exist.setVisible(False)
+
         # ── 모드 ───────────────────────────────────────────────────
         grp_mode = QGroupBox("추출 모드")
+        self.grp_mode = grp_mode
         mv = QVBoxLayout(grp_mode)
         ml = QHBoxLayout()
         self.rb_auto = QRadioButton("자동 (목차 있으면 TOC, 없으면 폰트)")
@@ -115,6 +133,7 @@ class BookmarkerDialog(QDialog):
 
         # ── 260904-1(§4.4): 목차 쪽 지정 + 검토 표 ─────────────────────
         grp_toc = QGroupBox("목차(차례) 쪽 지정 — 자동 탐지가 놓칠 때")
+        self.grp_toc = grp_toc
         ft = QFormLayout(grp_toc)
         self.edit_toc_pages = QLineEdit("")
         self.edit_toc_pages.setPlaceholderText("예: 6-11  (비우면 자동 탐지 — PDF 쪽 번호, 1부터)")
@@ -137,6 +156,7 @@ class BookmarkerDialog(QDialog):
 
         # ── 오프셋 (TOC 모드) ──────────────────────────────────────
         grp_off = QGroupBox("TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)")
+        self.grp_off = grp_off
         fo = QFormLayout(grp_off)
         self.spin_offset = QSpinBox()
         self.spin_offset.setRange(-100, 200)
@@ -219,8 +239,43 @@ class BookmarkerDialog(QDialog):
         self._recheck_timer.setInterval(300)
         self._recheck_timer.timeout.connect(self._recheck_module)
         self.edit_path.textChanged.connect(lambda _t: self._recheck_timer.start())
+        # 260904-10: 입력 PDF 가 바뀌면 기존 책갈피 개수를 다시 센다(300ms 디바운스)
+        self._exist_timer = QTimer(self)
+        self._exist_timer.setSingleShot(True)
+        self._exist_timer.setInterval(300)
+        self._exist_timer.timeout.connect(self._recheck_existing)
+        self.edit_input.textChanged.connect(lambda _t: self._exist_timer.start())
         # 초기 1회 확인
         self._recheck_module()
+        self._recheck_existing()
+
+    # --- 260904-10: 기존 책갈피 ---------------------------------------
+    def _recheck_existing(self):
+        """입력 PDF 의 기존 책갈피 개수를 세어 선택 그룹을 보이거나 감춘다."""
+        fn = self.edit_input.text().strip()
+        n = 0
+        if fn and Path(fn).exists() and fn.lower().endswith(".pdf"):
+            try:
+                from viewer import toc_parse
+                n = len(toc_parse.existing_rows(fn))
+            except Exception:
+                n = 0
+        self._existing_count = n
+        self.grp_exist.setVisible(n > 0)
+        if n:
+            self.lbl_exist.setText(
+                f"이 PDF에는 이미 책갈피 <b>{n}개</b>가 있습니다. 어떻게 할지 고르세요.")
+        self._sync_exist_mode()
+
+    def _sync_exist_mode(self):
+        """'기존 책갈피 수정'이면 추출(모드·목차 쪽·오프셋)은 쓰지 않으므로 비활성."""
+        edit = self.editing_existing()
+        for w in (self.grp_mode, self.grp_toc, self.grp_off):
+            w.setEnabled(not edit)
+
+    def editing_existing(self) -> bool:
+        """기존 책갈피를 고치는 경로인가(기존 책갈피가 있고 '수정'을 골랐을 때)."""
+        return bool(getattr(self, "_existing_count", 0)) and self.rb_bm_edit.isChecked()
 
     def _recheck_module(self):
         """모듈 가용성 재확인 후 OK/경고 UI 갱신."""
@@ -320,12 +375,13 @@ class BookmarkerDialog(QDialog):
 
     # --- 결과 -------------------------------------------------------
     def result_options(self) -> dict:
+        edit = self.editing_existing()                        # 260904-10
         return {
             "input_pdf": self.edit_input.text().strip(),
-            "toc_pages": self.toc_pages(),                    # 260904-1
-            "review": self.chk_review.isChecked(),            # 260904-1
+            "toc_pages": [] if edit else self.toc_pages(),     # 260904-1
+            "review": True if edit else self.chk_review.isChecked(),
             "bookmarker_path": self.edit_path.text().strip(),
-            "mode": self._mode(),
+            "mode": "existing" if edit else self._mode(),
             "ocr_font_auto": self.chk_ocr_fontauto.isChecked(),
             "offset": (None if self.spin_offset.value() == 0
                        else int(self.spin_offset.value())),

@@ -337,6 +337,65 @@ if _d6: _d6.close()
 chk(len(outs) >= 1 and n6 == 8,
     "⑥ 검토 창 [저장] → 확정 저장 워커 → 책갈피 8개 PDF", f"{[o.name for o in outs]}")
 
+# ── ⑦ 기존 책갈피 수정 경로 (260904-10) ──────────────────────────────────
+pdfe = root / "hasbm.pdf"
+de = fitz.open()
+for _ in range(6):
+    de.new_page().insert_text((60, 80), "body")
+de.set_toc([[1, "Chapter 1", 1], [2, "Section 1.1", 2], [1, "Chapter 2", 4]])
+de.save(str(pdfe)); de.close()
+rows_x = T.existing_rows(pdfe)
+chk([(r["title"], r["level"], r["page"]) for r in rows_x]
+    == [("Chapter 1", 0, 1), ("Section 1.1", 1, 2), ("Chapter 2", 0, 4)]
+    and all(r["src"] == "existing" and r["toc_page"] is None for r in rows_x),
+    "⑦ 기존 책갈피 → 검토 표 행(fitz 레벨 1-based → 표 0-based, 실제 쪽만)", f"{rows_x}")
+chk(T.existing_rows(pdf) == [], "⑦ 책갈피 없는 PDF → 빈 목록")
+# 목차 쪽이 없으면 [쪽순 정렬] 은 실제 쪽을 기준으로
+rows_pg = [{"title": "A", "level": 0, "toc_page": None, "page": 10},
+           {"title": "B", "level": 0, "toc_page": None, "page": 3},
+           {"title": "C", "level": 0, "toc_page": None, "page": 12}]
+T.sort_by_toc_page(rows_pg)
+chk([r["title"] for r in rows_pg] == ["B", "A", "C"] and rows_pg[0].get("moved"),
+    "⑦ 목차 쪽이 없으면 정렬 기준은 실제 쪽", f"{[(r['title'], r['page']) for r in rows_pg]}")
+# 대화상자: 기존 책갈피가 있으면 선택 그룹 + 기본 '수정'
+bd2 = BookmarkerDialog(default_pdf=pdfe, prefs={})
+o2 = bd2.result_options()
+chk(bd2.grp_exist.isVisibleTo(bd2) and bd2.rb_bm_edit.isChecked() and "3개" in bd2.lbl_exist.text()
+    and o2["mode"] == "existing" and o2["review"] is True and not bd2.grp_mode.isEnabled(),
+    "⑦ 기존 책갈피 3개 → 선택 그룹, 기본 '수정'(추출 옵션 비활성, mode=existing·review 강제)",
+    f"{o2['mode']} {bd2.lbl_exist.text()[:40]}")
+bd2.rb_bm_new.setChecked(True)
+o2b = bd2.result_options()
+chk(o2b["mode"] == "auto" and bd2.grp_mode.isEnabled(), "⑦ '새로 만들기' 선택 → 종전 추출 경로", f"{o2b['mode']}")
+bd3 = BookmarkerDialog(default_pdf=pdf, prefs={})
+chk(not bd3.grp_exist.isVisibleTo(bd3) and bd3.result_options()["mode"] == "auto",
+    "⑦ 책갈피 없는 PDF → 선택 그룹 숨김")
+# 워커: existing + review → 표만, 저장 없음 / 확정 저장
+got.clear()
+opts_e = {"input_pdf": str(pdfe), "mode": "existing", "review": True, "save_pdf": True,
+          "overwrite": False, "save_txt": False, "out_dir": str(root)}
+we = BookmarkerWorker(pdfe, opts_e)
+we.finished.connect(lambda r: got.update(r)); we.error.connect(lambda e: got.update(err=e)); we.run()
+chk(got.get("phase") == "review" and got.get("method") == "existing" and len(got.get("rows", [])) == 3
+    and not (root / "hasbm_bookmarked.pdf").exists(),
+    "⑦ 워커 existing — 기존 3행을 검토 단계로, 파일은 쓰지 않음", f"{got.get('err')}")
+got.clear()
+we2 = BookmarkerWorker(pdfe, {**opts_e, "review": False,
+                              "bookmarks": [("고친 제목", 2, 0), ("Chapter 2", 4, 0)], "method": "existing"})
+we2.finished.connect(lambda r: got.update(r)); we2.error.connect(lambda e: got.update(err=e)); we2.run()
+oute = root / "hasbm_bookmarked.pdf"
+_de = fitz.open(str(oute)) if oute.exists() else None
+toce = _de.get_toc() if _de else []
+if _de: _de.close()
+chk(got.get("phase") == "done" and len(toce) == 2 and toce[0][1] == "고친 제목" and toce[0][2] == 2,
+    "⑦ 수정한 표 → 저장(기존 책갈피 대체)", f"{toce}")
+# 검토 창 제목
+dlge = TocReviewDialog(pdfe, rows_x, offset=0, candidates=[], method="existing", toc_pages=[])
+chk("기존 책갈피 수정" in dlge.windowTitle() and not dlge.grp_offset.isVisibleTo(dlge)
+    and not dlge.rb_pv_toc.isEnabled(),
+    "⑦ 검토 창 — 제목 '기존 책갈피 수정', 오프셋 컨트롤 없음, 목차 보기 비활성", f"{dlge.windowTitle()}")
+dlge.close()
+
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 sys.stdout.flush()

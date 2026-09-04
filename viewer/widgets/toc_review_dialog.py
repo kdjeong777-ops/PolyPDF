@@ -89,7 +89,8 @@ class TocReviewDialog(QDialog):
         self._rows = [dict(r) for r in rows]
         self._page_count = self._count_pages()
         self._offset = int(offset)
-        self.setWindowTitle(f"책갈피 검토 — {self.pdf_path.name}")
+        self.setWindowTitle(("기존 책갈피 수정 — " if method == "existing" else "책갈피 검토 — ")
+                            + self.pdf_path.name)
         # 260904-2(사용자 요청): 전체 화면의 3/4 크기, 미리보기를 오른쪽에 충분히 크게
         try:
             scr = (parent.screen() if parent is not None else QApplication.primaryScreen()).availableGeometry()
