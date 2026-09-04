@@ -128,6 +128,9 @@ class PageThumbs(QWidget):
     # ===== 260606-22: 책갈피 편집모드 — 페이지 삭제/이동 =====
     def set_edit_mode(self, on: bool):
         self._edit_mode = bool(on)
+        self.list.setToolTip(
+            "페이지 순서 변경: 마우스로 끌어 놓기 또는 Alt+↑/↓  ·  삭제: Delete  ·  이동: ↑/↓"
+            if on else "")
         if on:
             self.list.setMovement(QListWidget.Movement.Snap)
             self.list.setDragEnabled(True)
@@ -312,13 +315,18 @@ class PageThumbs(QWidget):
                     self.pastePagesRequested.emit(self.list.currentRow())
                     return True
             if self._edit_mode:
-                if k == Qt.Key.Key_Up:
-                    self._move_selected(-1); return True
-                if k == Qt.Key.Key_Down:
-                    self._move_selected(+1); return True
+                # 260902-6(사용자 요청): 편집모드에서도 ↑/↓ 는 **탐색**(뷰어모드와 동일).
+                #   종전엔 ↑/↓ 가 선택 페이지를 재배열해, 썸네일을 클릭한 뒤 키로 이동하면
+                #   그 페이지가 옮겨졌다. 재배열은 **드래그**(마우스를 누른 채 이동) 또는
+                #   Alt+↑/↓ 로만.
+                if event.modifiers() & Qt.KeyboardModifier.AltModifier:
+                    if k == Qt.Key.Key_Up:
+                        self._move_selected(-1); return True
+                    if k == Qt.Key.Key_Down:
+                        self._move_selected(+1); return True
                 if k in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
                     self._delete_selected(); return True
-            elif event.modifiers() == Qt.KeyboardModifier.NoModifier:
+            if event.modifiers() == Qt.KeyboardModifier.NoModifier:
                 # 260610-1: 뷰어모드 ↑/↓·PgUp/PgDn = 보이는(필터 통과) 썸네일 이동
                 #           + 뷰어 페이지 동기, 첫/끝에서 한 번 더 → 이전/다음 파일.
                 #           Shift/Ctrl 조합은 기본(다중 선택 확장, 260603-3)에 위임.

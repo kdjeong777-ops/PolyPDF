@@ -2289,6 +2289,56 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
 
+    def _save_page_edits_for(self, cur_file: str):
+        """260902-6: 다른 파일로 이동하기 직전, **현재 본문 파일** 의 페이지 편집을 저장.
+
+        `bookmark_tree._op_save()` 는 트리의 선택 파일을 대상으로 하는데, 이 시점엔 선택이
+        이미 새 파일로 옮겨져 있어 쓰면 **엉뚱한 파일에 저장**된다 → 경로를 명시해 호출."""
+        raw = []
+        try:
+            for node in self.bookmark_tree._iter_file_nodes():
+                if str(node.data(0, self.bookmark_tree.DATA_FILE)) == str(cur_file):
+                    self.bookmark_tree._walk_collect(node, 0, raw)
+                    break
+        except Exception:
+            raw = []
+        self._page_edit_save(str(cur_file), raw)
+
+    def _discard_page_edits(self, cur_file: str):
+        """260902-6: 페이지 편집을 버린다 — 썸네일을 디스크 상태로 다시 읽는다."""
+        try:
+            self.page_thumbs.clear_document()
+            self.page_thumbs.load_document(cur_file)
+        except Exception:
+            pass
+
+    # ── 260902-6: 폴더 인덱싱 진행 창(검색 SOT §4.4) ─────────────────────
+    def _attach_indexing_dialog(self, worker):
+        """폴더 단위 인덱싱이면 진행 창을 붙인다(단일 파일 인덱싱은 상태바만)."""
+        if getattr(worker, "single_file", None) is not None:
+            return
+        self._close_indexing_dialog()
+        try:
+            from viewer.widgets.indexing_dialog import IndexingDialog
+            folder = getattr(worker, "folder", None)
+            dlg = IndexingDialog(self, Path(folder).name if folder else "")
+            worker.progress.connect(dlg.on_progress)
+            worker.finished.connect(dlg.on_finished)
+            worker.error.connect(lambda _e: dlg.on_finished())
+            self._indexing_dialog = dlg
+            dlg.start()
+        except Exception:
+            self._indexing_dialog = None
+
+    def _close_indexing_dialog(self):
+        dlg = getattr(self, "_indexing_dialog", None)
+        self._indexing_dialog = None
+        if dlg is not None:
+            try:
+                dlg.on_finished()
+            except Exception:
+                pass
+
     def _on_files_relocated(self, pairs: list):
         """260901-2: 책갈피 트리에서 파일을 복사/이동한 뒤 처리.
 
@@ -3456,6 +3506,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             except Exception:
                 pass
         self._index_workers = []
+        self._close_indexing_dialog()                 # 260902-6
 
     def _start_index_worker(self, worker):
         """260611-89: 이전 인덱싱을 취소하고 새 인덱싱 시작(겹치지 않게)."""
@@ -3466,6 +3517,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if w in self._index_workers:
                 self._index_workers.remove(w)
         worker.finished.connect(_done)
+        self._attach_indexing_dialog(worker)          # 260902-6: 폴더 인덱싱 진행 창
         run_in_thread(worker, self._thread_keep)
 
     def action_reindex(self):
@@ -3950,7 +4002,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """메인 뷰어에 항목 로드 (BusyCursor)."""
         # 260609-23(J2): 편집모드 미저장 변경 + 다른 파일 이동 → 저장 확인
         try:
-            if self._in_edit() and self._edit_snap is not None and self._edit_dirty:
+            # 260902-6(사용자 보고): 썸네일 페이지 삭제/이동(page edits)도 미저장 변경이다 —
+            #   종전엔 page_meta(_edit_dirty)만 봐서 페이지를 지운 뒤 다른 파일로 가면 그냥
+            #   지나가 편집이 버려졌다.
+            meta_dirty = self._in_edit() and self._edit_snap is not None and self._edit_dirty
+            page_dirty = self._in_edit() and self._page_edits_dirty()
+            if meta_dirty or page_dirty:
                 cur = self.main_view.current_file() if self.main_view else None
                 tgt = str(Path(item.file_path))
                 if cur and str(Path(cur)) != tgt:
@@ -3958,9 +4015,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     if choice == "cancel":
                         return                      # 이동 취소(현재 파일 유지)
                     if choice == "save":
-                        self._commit_edit()
+                        if page_dirty:
+                            self._save_page_edits_for(cur)   # 현재 파일 기준(트리 선택은 이미 새 파일)
+                        if meta_dirty:
+                            self._commit_edit()
                     else:
-                        self._restore_edit()
+                        if meta_dirty:
+                            self._restore_edit()
+                        if page_dirty:
+                            self._discard_page_edits(cur)
                     self._edit_snap = None
                     self._snapshot_edit()           # 새 파일 편집 기준 재설정
         except Exception:
@@ -3988,6 +4051,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     self.status.showMessage("암호 입력이 취소되었습니다.", 2500)
                     return
                 self.page_thumbs.load_document(path)
+                # 260902-6(사용자 보고): 이전 파일로 넘어가면 본문은 마지막 쪽인데 썸네일은
+                #   맨 위(row -1)에 머물렀다 — load_document 의 pageChanged 가 썸네일 재로드
+                #   **전에** 나가 select_page 가 옛 문서에 떨어져 무시된 것. 재로드 뒤 다시 맞춘다.
+                try:
+                    self.page_thumbs.select_page(self.main_view.current_page())
+                except Exception:
+                    pass
                 self._study_pdf = path           # 단어장 컨텍스트
                 self._refresh_study_panel(item.page_index or 0)
             else:
