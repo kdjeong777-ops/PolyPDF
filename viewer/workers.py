@@ -110,6 +110,57 @@ class BookmarkerWorker(QObject):
                 )
 
             mode = self.opts.get("mode", "auto")
+            res = {}
+            # ── 260904-1(§4.4): 검토 표에서 확정한 책갈피 — 추출 없이 바로 저장 ──
+            pre = self.opts.get("bookmarks")
+            if pre:
+                import pdf_bookmarker as _pb
+                bookmarks = [_pb.Bookmark(title=str(t_), page=int(p_), level=int(l_))
+                             for (t_, p_, l_) in pre if str(t_).strip() and int(p_) > 0]
+                method = self.opts.get("method") or "review"
+                mode = "review"
+                if not bookmarks:
+                    raise RuntimeError("저장할 책갈피가 없습니다.")
+                self._write_and_finish(bridge, bookmarks, method, res, mode)
+                return
+            # ── 260904-1(§4.4): 목차 쪽 지정 → 관대한 파서(toc_parse) 로 표 생성 ──
+            #   사용자가 쪽을 지정했거나, auto/toc 에서 탐지된 목차 쪽이 있으면 이 경로.
+            #   (내장 파서는 점선 리더 형식만 알아 OCR 텍스트층 스캔본에서 0건이었다.)
+            toc_pages = list(self.opts.get("toc_pages") or [])
+            if mode in ("auto", "toc") and not toc_pages:
+                try:
+                    from viewer._vendor.pdf_bookmarker.toc_extractor import TocBookmarkExtractor
+                    toc_pages = TocBookmarkExtractor(str(self.input_pdf)).find_toc_pages()
+                except Exception:
+                    toc_pages = []
+            if toc_pages and mode in ("auto", "toc"):
+                from viewer import toc_parse
+                self.progress.emit(f"목차 쪽 {toc_pages[0]}~{toc_pages[-1]} 읽는 중...")
+                rows = toc_parse.parse_toc_pages(self.input_pdf, toc_pages)
+                if rows:
+                    self.progress.emit("오프셋(목차 쪽 → 실제 쪽) 추정 중...")
+                    cands = toc_parse.suggest_offsets(self.input_pdf, rows, toc_pages)
+                    off = self.opts.get("offset")
+                    if off is None:
+                        off = cands[0][0] if cands else 0
+                    if self.opts.get("review"):
+                        # 검토 단계: 표만 돌려주고 끝. 앱이 검토 창을 띄운 뒤 bookmarks 로 재호출.
+                        self.finished.emit({"phase": "review", "method": "toc",
+                                            "rows": rows, "candidates": cands, "offset": int(off),
+                                            "toc_pages": toc_pages})
+                        return
+                    import fitz
+                    _d = fitz.open(str(self.input_pdf)); _n = _d.page_count; _d.close()
+                    toc_parse.apply_offset(rows, int(off), _n, keep_manual=False)
+                    import pdf_bookmarker as _pb
+                    bookmarks = [_pb.Bookmark(title=t_, page=p_, level=l_)
+                                 for (t_, p_, l_) in toc_parse.to_bookmarks(rows)]
+                    res = {"offset": int(off)}
+                    self._write_and_finish(bridge, bookmarks, "toc", res, "toc")
+                    return
+                elif mode == "toc":
+                    raise RuntimeError("지정한 목차 쪽에서 항목을 읽지 못했습니다. 쪽 범위를 확인하세요.")
+                # auto 인데 항목이 없으면 종전 경로(폰트/OCR)로 계속
             # 260606-4: '자동'인데 스캔 이미지 PDF면 OCR 모드로 자동 전환
             if mode == "auto" and _pdf_is_scanned(self.input_pdf):
                 self.progress.emit("스캔 이미지 감지 — OCR 모드로 추출")
@@ -144,7 +195,20 @@ class BookmarkerWorker(QObject):
                 pass
             if not bookmarks:
                 raise RuntimeError("추출된 책갈피가 없습니다.")
+            # 260904-1: 폰트/OCR 결과도 검토 표를 거칠 수 있다(오프셋 없음 — 실제 쪽 그대로)
+            if self.opts.get("review"):
+                rows = [{"title": b.title, "toc_page": None, "page": int(b.page),
+                         "level": int(b.level), "src": method} for b in bookmarks]
+                self.finished.emit({"phase": "review", "method": method, "rows": rows,
+                                    "candidates": [], "offset": 0, "toc_pages": []})
+                return
+            self._write_and_finish(bridge, bookmarks, method, res, mode)
+        except Exception as e:
+            self.error.emit(str(e))
 
+    def _write_and_finish(self, bridge, bookmarks, method, res, mode):
+        """260904-1: 추출/검토 결과를 PDF·txt 로 쓰고 finished 발신(종전 저장 꼬리를 분리)."""
+        try:
             out_dir = Path(self.opts.get("out_dir") or self.input_pdf.parent)
             out_dir.mkdir(parents=True, exist_ok=True)
             stem = self.input_pdf.stem
@@ -172,9 +236,10 @@ class BookmarkerWorker(QObject):
                 txt_out = bridge.write_txt(bookmarks, out_dir / f"{stem}_bookmarks.txt")
 
             self.finished.emit({
+                "phase": "done",
                 "count": len(bookmarks),
                 "method": method,
-                "offset": (None if mode == "ocr" else res.get("offset")),
+                "offset": (None if mode in ("ocr", "review") else res.get("offset")),
                 "pdf_out": str(pdf_out) if pdf_out else None,
                 "txt_out": str(txt_out) if txt_out else None,
             })

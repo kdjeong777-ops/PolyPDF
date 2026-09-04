@@ -2134,6 +2134,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._prefs["bookmarker_save_pdf"] = bool(opts["save_pdf"])
         self._prefs["bookmarker_overwrite"] = bool(opts.get("overwrite"))
         self._prefs["bookmarker_save_txt"] = bool(opts["save_txt"])
+        self._prefs["bookmarker_review"] = bool(opts.get("review", True))    # 260904-1
         try:
             self._save_settings_now()
         except Exception:
@@ -2172,6 +2173,47 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.progress.setRange(0, 0)
         self.status.showMessage("책갈피 자동 생성 시작...")
 
+        self._bookmarker_opts = dict(opts)               # 260904-1: 검토 뒤 저장 단계에 재사용
+        self._bookmarker_pdf = in_pdf
+        worker = BookmarkerWorker(in_pdf, opts)
+        worker.progress.connect(lambda m: self.status.showMessage(m))
+        worker.finished.connect(self._on_bookmarker_done)
+        worker.error.connect(self._on_bookmarker_error)
+        run_in_thread(worker, self._thread_keep)
+
+    def _on_bookmarker_review(self, result: dict):
+        """260904-1(§4.4): 검토 단계 — 표를 띄워 고치게 하고, [저장]이면 확정 목록으로 재호출."""
+        from viewer.widgets.toc_review_dialog import TocReviewDialog
+        in_pdf = Path(self._bookmarker_pdf)
+        dlg = TocReviewDialog(in_pdf, result.get("rows") or [],
+                              offset=int(result.get("offset") or 0),
+                              candidates=result.get("candidates") or [],
+                              method=result.get("method") or "toc",
+                              toc_pages=result.get("toc_pages") or [], parent=self)
+        # 행을 고르면 본문 뷰어도 그 쪽으로(같은 파일이 열려 있을 때만) — 큰 화면으로 대조
+        def _pv(p0):
+            try:
+                cur = self.main_view.current_file() if self.main_view else None
+                if cur and Path(cur).resolve() == in_pdf.resolve():
+                    self.main_view.go_to_page(int(p0))
+            except Exception:
+                pass
+        dlg.previewPageRequested.connect(_pv)
+        if dlg.exec() != dlg.DialogCode.Accepted:
+            self.status.showMessage("책갈피 생성 취소(검토 표에서 취소)", 4000)
+            return
+        bms = dlg.result_bookmarks()
+        opts = dict(self._bookmarker_opts or {})
+        opts.update({"bookmarks": bms, "review": False, "method": result.get("method") or "toc"})
+        if opts.get("overwrite"):
+            try:
+                cur = self.main_view.current_file() if self.main_view else None
+                if cur and Path(cur).resolve() == in_pdf.resolve():
+                    self._close_main_view_doc(); QApplication.processEvents()
+            except Exception:
+                pass
+        self.progress.setVisible(True); self.progress.setRange(0, 0)
+        self.status.showMessage(f"책갈피 {len(bms)}개 저장 중...")
         worker = BookmarkerWorker(in_pdf, opts)
         worker.progress.connect(lambda m: self.status.showMessage(m))
         worker.finished.connect(self._on_bookmarker_done)
@@ -2180,6 +2222,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _on_bookmarker_done(self, result: dict):
         self.progress.setVisible(False)
+        if result.get("phase") == "review":                  # 260904-1
+            self._on_bookmarker_review(result)
+            return
         parts = [f"방법={result.get('method')}", f"개수={result.get('count')}"]
         if result.get("offset") is not None:
             parts.append(f"오프셋={result['offset']}")
@@ -5297,6 +5342,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._prefs.setdefault("bookmarker_ocr_font_auto", True)  # v1.15.0/260606-4
         self._prefs.setdefault("bookmarker_save_txt", False)      # v1.6.16
         self._prefs.setdefault("bookmarker_open_after", True)     # v1.6.16
+        self._prefs.setdefault("bookmarker_review", True)         # 260904-1: 저장 전 검토 표
         self._prefs.setdefault("show_panel_toolbar", True)        # 260606-25: 기본 보이기
         # 260609-2/28: 페이지 경계에서 다음/이전 파일 이동 — 기본 켜짐.
         #   미설정(None 포함)이면 True 로(예전 null 저장본도 켜지도록).
@@ -5564,6 +5610,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                                   old.get("bookmarker_save_txt", False))),
             "bookmarker_open_after": bool(prefs.get("bookmarker_open_after",
                                                     old.get("bookmarker_open_after", True))),
+            "bookmarker_review": bool(prefs.get("bookmarker_review",          # 260904-1(허용목록)
+                                                old.get("bookmarker_review", True))),
             # v1.6.23: 패널 토글 툴바 가시성만 prefs 로 관리
             "show_panel_toolbar": bool(prefs.get(
                 "show_panel_toolbar", old.get("show_panel_toolbar", True))),

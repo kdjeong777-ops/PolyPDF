@@ -113,6 +113,28 @@ class BookmarkerDialog(QDialog):
         layout.addWidget(grp_mode)
         self.rb_ocr.toggled.connect(self._sync_ocr_enabled)
 
+        # ── 260904-1(§4.4): 목차 쪽 지정 + 검토 표 ─────────────────────
+        grp_toc = QGroupBox("목차(차례) 쪽 지정 — 자동 탐지가 놓칠 때")
+        ft = QFormLayout(grp_toc)
+        self.edit_toc_pages = QLineEdit("")
+        self.edit_toc_pages.setPlaceholderText("예: 6-11  (비우면 자동 탐지 — PDF 쪽 번호, 1부터)")
+        self.btn_detect_toc = QPushButton("자동 탐지")
+        self.btn_detect_toc.setToolTip("PDF 앞부분에서 목차로 보이는 쪽을 찾아 채웁니다")
+        self.btn_detect_toc.setAutoDefault(False); self.btn_detect_toc.setDefault(False)
+        self.btn_detect_toc.clicked.connect(self._detect_toc_pages)
+        row_toc = QHBoxLayout()
+        row_toc.addWidget(self.edit_toc_pages, 1)
+        row_toc.addWidget(self.btn_detect_toc)
+        ft.addRow("목차 쪽:", row_toc)
+        self.chk_review = QCheckBox("저장 전에 책갈피 표를 검토한다 (실제 쪽과 대조·수정·삭제·추가)")
+        self.chk_review.setChecked(bool(p.get("bookmarker_review", True)))
+        ft.addRow("", self.chk_review)
+        hint_toc = QLabel("<small>스캔본처럼 목차를 못 알아보는 책은 목차 쪽을 직접 적어 주세요. "
+                          "검토 표에서는 오프셋(목차 쪽→실제 쪽)을 추천받고, 행마다 실제 쪽을 미리보기로 확인해 고칠 수 있습니다.</small>")
+        hint_toc.setStyleSheet("color:#888;"); hint_toc.setWordWrap(True)
+        ft.addRow("", hint_toc)
+        layout.addWidget(grp_toc)
+
         # ── 오프셋 (TOC 모드) ──────────────────────────────────────
         grp_off = QGroupBox("TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)")
         fo = QFormLayout(grp_off)
@@ -267,10 +289,43 @@ class BookmarkerDialog(QDialog):
             return "ocr"
         return "auto"
 
+    def _detect_toc_pages(self):
+        """260904-1: 내장 탐지기로 목차 쪽 후보를 채운다(없으면 안내)."""
+        fn = self.edit_input.text().strip()
+        if not fn or not Path(fn).exists():
+            self.edit_toc_pages.setPlaceholderText("먼저 PDF 파일을 지정하세요")
+            return
+        try:
+            from viewer._vendor.pdf_bookmarker.toc_extractor import TocBookmarkExtractor
+            pages = TocBookmarkExtractor(fn).find_toc_pages()
+        except Exception:
+            pages = []
+        if pages:
+            self.edit_toc_pages.setText(
+                f"{pages[0]}-{pages[-1]}" if pages == list(range(pages[0], pages[-1] + 1))
+                else ", ".join(map(str, pages)))
+        else:
+            self.edit_toc_pages.setText("")
+            self.edit_toc_pages.setPlaceholderText("자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)")
+
+    def toc_pages(self) -> list:
+        """입력한 목차 쪽 목록(1-based). 비면 []."""
+        fn = self.edit_input.text().strip()
+        n = 10 ** 6
+        try:
+            import fitz
+            d = fitz.open(fn); n = d.page_count; d.close()
+        except Exception:
+            pass
+        from viewer import toc_parse
+        return toc_parse.parse_page_spec(self.edit_toc_pages.text(), n)
+
     # --- 결과 -------------------------------------------------------
     def result_options(self) -> dict:
         return {
             "input_pdf": self.edit_input.text().strip(),
+            "toc_pages": self.toc_pages(),                    # 260904-1
+            "review": self.chk_review.isChecked(),            # 260904-1
             "bookmarker_path": self.edit_path.text().strip(),
             "mode": self._mode(),
             "ocr_font_auto": self.chk_ocr_fontauto.isChecked(),
