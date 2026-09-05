@@ -95,4 +95,5 @@ git add -A; git commit -m "fix: ..."; git push      # 소스 갱신(설정/스�
 | Ctrl+Shift+S | 스크린샷 캡처 |
 | Ctrl+S | 스크린샷 PDF 일괄 저장 |
 | F5 | 발표 보기(전체화면) |
+| S / D (발표 중) | 상하 2분할 보기 / 좌우 2쪽 보기 토글 |
 | Ctrl+Q | 종료 |

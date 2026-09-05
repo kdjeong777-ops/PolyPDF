@@ -40,18 +40,12 @@ class BookmarkerDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # 내장 라이브러리 안내
-        info = QLabel(
-            "내장 <b>pdf_bookmarker</b> 라이브러리를 사용합니다 "
-            "(런타임 의존성: pypdf · pdfplumber · pypdfium2 — requirements.txt)."
-        )
-        info.setStyleSheet("color:#555;")
-        info.setWordWrap(True)
-        layout.addWidget(info)
-
-        # 가용성 안내 — 동적 재확인 (경로 변경 시 갱신)
+        # 260905(§4.4.6.1): 모듈 안내는 **로드에 실패했을 때만** 보인다.
+        #   내장본이라 실사용에서 실패하지 않는데도 "로드 완료 — <내부 경로>" 상자가
+        #   창을 열 때마다 첫 두 줄을 차지하고 설치 경로까지 드러냈다.
         self.warn = QLabel()
         self.warn.setWordWrap(True)
+        self.warn.setVisible(False)
         layout.addWidget(self.warn)
 
         # ── 입력 ───────────────────────────────────────────────────
@@ -68,18 +62,8 @@ class BookmarkerDialog(QDialog):
         row_in.addWidget(btn_browse_in)
         fi.addRow("PDF 파일:", row_in)
 
-        # 모듈 경로(고급)
-        self.edit_path = QLineEdit(p.get("bookmarker_path", ""))
-        self.edit_path.setPlaceholderText(
-            "(내장 라이브러리 사용 — 외부 버전을 쓰려면 여기에 경로 지정)"
-        )
-        btn_browse_path = QPushButton("...")
-        btn_browse_path.setFixedWidth(32)
-        btn_browse_path.clicked.connect(self._browse_pkg)
-        row_path = QHBoxLayout()
-        row_path.addWidget(self.edit_path, 1)
-        row_path.addWidget(btn_browse_path)
-        fi.addRow("모듈 경로(선택):", row_path)
+        # 260905(§4.4.6.1): '모듈 경로(선택)' 입력칸 삭제 — 내장본을 쓰므로 외부 버전을
+        #   가리킬 이유가 없고, 잘못 지정하면 로드만 깨진다(설정 bookmarker_path 도 제거).
 
         layout.addWidget(grp_in)
 
@@ -238,7 +222,6 @@ class BookmarkerDialog(QDialog):
         self._recheck_timer.setSingleShot(True)
         self._recheck_timer.setInterval(300)
         self._recheck_timer.timeout.connect(self._recheck_module)
-        self.edit_path.textChanged.connect(lambda _t: self._recheck_timer.start())
         # 260904-10: 입력 PDF 가 바뀌면 기존 책갈피 개수를 다시 센다(300ms 디바운스)
         self._exist_timer = QTimer(self)
         self._exist_timer.setSingleShot(True)
@@ -278,24 +261,22 @@ class BookmarkerDialog(QDialog):
         return bool(getattr(self, "_existing_count", 0)) and self.rb_bm_edit.isChecked()
 
     def _recheck_module(self):
-        """모듈 가용성 재확인 후 OK/경고 UI 갱신."""
-        path = self.edit_path.text().strip() or None
-        ok = bridge.recheck(path)
+        """260905(§4.4.6.1): 모듈 가용성 확인 — **실패했을 때만** 안내를 띄운다."""
+        ok = bridge.recheck(None)
         self._ok_btn.setEnabled(ok)
         if ok:
-            self.warn.setText(
-                f"<small style='color:#070'>모듈 로드 완료 — {bridge.get_status()}</small>"
-            )
-            self.warn.setStyleSheet("padding:4px; background:#f4fff4;")
-        else:
-            self.warn.setText(
-                "<b>라이브러리 로드 실패.</b><br>"
-                f"<small>{bridge.get_status()}</small><br>"
-                "런타임 의존성을 설치하세요:<br>"
-                "  • <code>pip install -r requirements.txt</code> "
-                "(또는 <code>pip install pdfplumber pypdfium2 pypdf</code>)"
-            )
-            self.warn.setStyleSheet("color:#a33; padding:6px; background:#fff4f4;")
+            self.warn.clear()
+            self.warn.setVisible(False)
+            return
+        self.warn.setText(
+            "<b>pdf_bookmarker 라이브러리를 불러오지 못했습니다.</b><br>"
+            f"<small>{bridge.get_status()}</small><br>"
+            "런타임 의존성(pypdf · pdfplumber · pypdfium2)을 설치하세요:<br>"
+            "  • <code>pip install -r requirements.txt</code> "
+            "(또는 <code>pip install pdfplumber pypdfium2 pypdf</code>)"
+        )
+        self.warn.setStyleSheet("color:#a33; padding:6px; background:#fff4f4;")
+        self.warn.setVisible(True)
 
     # --- helpers ----------------------------------------------------
     def _browse_input(self):
@@ -305,13 +286,6 @@ class BookmarkerDialog(QDialog):
             self.edit_input.setText(fn)
             if not self.edit_outdir.text():
                 self.edit_outdir.setText(str(Path(fn).parent))
-
-    def _browse_pkg(self):
-        start = self.edit_path.text() or ""
-        d = QFileDialog.getExistingDirectory(self, "pdf_bookmarker 패키지의 부모 폴더", start)
-        if d:
-            self.edit_path.setText(d)
-            self._recheck_module()           # 즉시 재확인
 
     def _browse_outdir(self):
         start = self.edit_outdir.text() or ""
@@ -380,7 +354,6 @@ class BookmarkerDialog(QDialog):
             "input_pdf": self.edit_input.text().strip(),
             "toc_pages": [] if edit else self.toc_pages(),     # 260904-1
             "review": True if edit else self.chk_review.isChecked(),
-            "bookmarker_path": self.edit_path.text().strip(),
             "mode": "existing" if edit else self._mode(),
             "ocr_font_auto": self.chk_ocr_fontauto.isChecked(),
             "offset": (None if self.spin_offset.value() == 0

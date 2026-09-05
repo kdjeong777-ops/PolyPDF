@@ -386,8 +386,9 @@ class EditMixin:
         return self._page_meta
 
     def _crop_for(self, path, page0):
+        """260905(발표 SOT §4.2.1): (top%, bottom%, left%, right%) 4원소."""
         st = self._ensure_page_meta_store()
-        return st.get_crop(path, page0) if st else (0.0, 0.0)
+        return st.get_crop(path, page0) if st else (0.0, 0.0, 0.0, 0.0)
 
     def _hidden_for(self, path):
         st = self._ensure_page_meta_store()
@@ -679,31 +680,6 @@ class EditMixin:
         st.rotate_pages(cur, pages, delta)
         self._persist_meta(st)           # 260609-23(J2)
         self._refresh_hidden_ui(cur)
-
-    def _on_crop_settings(self):
-        """발표 우클릭 '크롭 설정…' → 다이얼로그 → 저장·재렌더."""
-        w = getattr(self, "_present", None)
-        st = self._ensure_page_meta_store()
-        if not w or not st:
-            return
-        path = str(w._path); page0 = int(w._page)
-        from viewer.widgets.crop_dialog import CropDialog
-        g = st.get_global_crop(path)
-        pg = st.get_crop(path, page0)
-        dlg = CropDialog(page0 + 1, g, pg, st.has_page_crop(path, page0), w)
-        if not dlg.exec():
-            return
-        r = dlg.result()
-        if r["reset"]:
-            st.reset_crop(path)
-        else:
-            st.set_global_crop(path, *r["global"])
-            if r["page_enabled"]:
-                st.set_page_crop(path, page0, *r["page"])
-            else:
-                st.clear_page_crop(path, page0)
-        st.save()
-        w.refresh()
 
     def _set_pages_hidden(self, pages, hidden: bool):
         """260609-14(D5): 페이지 숨김/해제 — 저장 + 썸네일·뷰어·발표 갱신."""

@@ -141,14 +141,28 @@ class PdfIndex:
 
     # --- 인덱싱 ------------------------------------------------------------
 
+    def _find_file_row(self, file_path, cols: str = "id, mtime, size"):
+        """260905(검색 SOT §3): 경로로 `files` 행 찾기 — **정확 일치 먼저, 없으면 정규화 키**.
+
+        ★ 같은 폴더를 대소문자만 다른 경로로 열면(`…\\sub` vs `…\\SUB`) 정확 일치가 빗나가
+        멀쩡한 파일을 다시 읽었다(실측 재현). SQL 변환은 검색 범위와 **같은 식**을 쓴다(§7.0).
+        정확 일치를 먼저 두는 것은 비용 때문 — 정규화 조회는 UNIQUE 색인을 못 타 전체 훑기다."""
+        row = self.conn.execute(
+            f"SELECT {cols} FROM files WHERE path = ?", (str(file_path),)
+        ).fetchone()
+        if row is not None:
+            return row
+        from viewer.pathutil import norm_key
+        return self.conn.execute(
+            f"SELECT {cols} FROM files WHERE lower(replace(path,'/','\\')) = ?",
+            (norm_key(file_path),),
+        ).fetchone()
+
     def needs_reindex(self, file_path: Path) -> bool:
         """260618-3: 기록된 수정날짜(mtime)+용량(size) 모두 변화 없으면 재인덱싱 생략.
         size 가 NULL(구버전 DB 기록)인 경우는 mtime 만으로 판단(업그레이드 시 불필요한
         전체 재인덱싱 방지)."""
-        cur = self.conn.execute(
-            "SELECT mtime, size FROM files WHERE path = ?", (str(file_path),)
-        )
-        row = cur.fetchone()
+        row = self._find_file_row(file_path, "mtime, size")
         if row is None:
             return True
         try:
@@ -162,8 +176,7 @@ class PdfIndex:
             return False  # 파일이 사라진 경우는 재인덱싱 안 함
 
     def remove_file(self, file_path: Path):
-        cur = self.conn.execute("SELECT id FROM files WHERE path = ?", (str(file_path),))
-        row = cur.fetchone()
+        row = self._find_file_row(file_path, "id")      # 260905: 철자가 달라도 찾는다
         if row:
             fid = row["id"]
             self.conn.execute("DELETE FROM pages_fts WHERE file_id = ?", (fid,))
@@ -222,17 +235,24 @@ class PdfIndex:
         if not prefix.endswith(_os.sep):
             prefix += _os.sep
         existing_paths = {row["path"] for row in self.conn.execute("SELECT path FROM files")}
-        live_paths = {str(p) for p in pdfs}
-        for stale in existing_paths - live_paths:
+        # 260905: '살아 있는 파일' 비교도 **정규화 키**로 — 대소문자만 다른 경로로 열었을 때
+        #   멀쩡한 행을 '사라진 파일'로 지우고 다시 읽던 결함(실측 재현).
+        live_keys = {norm_key(p) for p in pdfs}
+        for stale in existing_paths:
             if should_cancel and should_cancel():
                 return
-            if norm_key(stale).startswith(prefix):
+            k = norm_key(stale)
+            if k not in live_keys and k.startswith(prefix):
                 self.remove_file(Path(stale))
 
         total = len(pdfs)
         for idx, pdf in enumerate(pdfs, 1):
             if should_cancel and should_cancel():
                 return
+            # 260905(§4.4): 시작도 알린다 — 완료 때만 알리면 첫 파일이 끝날 때까지 진행 창이
+            #   총 개수도 파일명도 없이 '준비 중...' 만 띄워 멈춘 것처럼 보인다(사용자 보고).
+            if progress:
+                progress(idx - 1, total, pdf.name)
             if self.needs_reindex(pdf):
                 self.index_file(pdf)
             if progress:
@@ -330,8 +350,7 @@ class PdfIndex:
         태그·키워드 자동 생성(auto_tag)이 본문 재파싱 없이 쓰는 입구. 미색인이면 [].
         스키마·prune 규칙 소유는 검색 SOT(§13) — 여기서는 조회만 한다."""
         try:
-            row = self.conn.execute(
-                "SELECT id FROM files WHERE path=?", (str(file_path),)).fetchone()
+            row = self._find_file_row(file_path, "id")   # 260905: 철자가 달라도 찾는다
             if not row:
                 return []
             cur = self.conn.execute(

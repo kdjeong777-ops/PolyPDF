@@ -37,6 +37,9 @@ DEFAULT_PENS = [
 ]
 DEFAULT_PEN_KEYS = ["Ctrl+1", "Ctrl+2", "Ctrl+3"]
 DEFAULT_REC_KEYS = ["Ctrl+R", "Ctrl+Shift+R"]   # [녹화/정지 토글, 중단] — 260628(§9.0)
+# 260905(§6): 상단 호버 띠의 최소 높이. 내용이 크면 그만큼 늘어난다.
+#   종전 설정 presentation_topbar_h 는 실질 기능이 없어 삭제했다 — 되살리지 말 것.
+TOPBAR_MIN_H = 56
 
 
 class _PresThumbPanel(QWidget):
@@ -310,7 +313,11 @@ class _DrawOverlay(QWidget):
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        strokes = list(self._owner._strokes.get(self._owner._page, []))
+        # 260905(§4.1.2): 좌우 2쪽이면 보이는 두 쪽의 선을 모두 그린다(한 쪽만 보면
+        #   오른쪽 칸에 그린 선이 사라진다).
+        strokes = []
+        for _pg in self._owner._shown_pages():
+            strokes += list(self._owner._strokes.get(_pg, []))
         if self._owner._cur_stroke is not None:
             strokes = strokes + [self._owner._cur_stroke]
         hl_op = int(getattr(self._owner, "_highlight_alpha", 35))
@@ -387,9 +394,10 @@ class PresentationWindow(QWidget):
     pointerChanged = pyqtSignal(int)            # 260609-5: 활성 포인터 인덱스 변경
     pointerSettingsRequested = pyqtSignal()     # 260609-5: '포인터 설정…'
     splitModeChanged = pyqtSignal(bool)         # 260609-6: 상하 2분할 토글
+    dualModeChanged = pyqtSignal(bool)          # 260905: 좌우 2쪽 보기 토글(영속)
+    facingChanged = pyqtSignal(bool)            # 260905: 맞쪽(앞 빈 페이지) 토글(영속)
     hyperlinkActivated = pyqtSignal(object)     # 260609-8: 상단 띠 하이퍼링크 클릭(link dict)
     linkPlayRequested = pyqtSignal()            # 260611-85: '링크실행'(페이지 미디어 순차 재생)
-    cropSettingsRequested = pyqtSignal()        # 260609-14: '크롭 설정…'
     penChanged = pyqtSignal(int)                # 260609-16(F3): 활성 펜 변경
     penSettingsRequested = pyqtSignal()         # 260609-16(F3): '선 설정…'
     recordToggleRequested = pyqtSignal()        # 260609-17(F4): ● 녹화/재개
@@ -407,7 +415,8 @@ class PresentationWindow(QWidget):
                  pointers=None, pointer_active: int = 0,
                  overlap_pct: int = 10,
                  sibling_resolver=None, hyperlink_resolver=None,
-                 topbar_h: int = 64, bookmark_resolver=None,
+                 bookmark_resolver=None,
+                 dual_mode: bool = False, facing: bool = False,
                  crop_resolver=None, hidden_resolver=None, rotation_resolver=None,
                  pens=None, pen_active: int = 0, pen_keys=None, rec_keys=None,
                  pen_straight: bool = True, eraser_widths=None,
@@ -431,6 +440,13 @@ class PresentationWindow(QWidget):
         self._split_mode = False
         self._split_half = 0                  # 0=상부, 1=하부
         self._overlap_frac = max(0.0, min(0.4, float(overlap_pct) / 100.0))
+        # 260905(발표 SOT §4.1): 좌우 2쪽 보기 · 맞쪽 — 상하 2분할과 **상호배타**.
+        #   상하분할과 달리 사용자가 명시적으로 켜는 모드라 **설정에 저장**하고,
+        #   켜져 있는 동안에는 상하분할 자동판정(_orient_split_default)을 건너뛴다.
+        self._dual_mode = bool(dual_mode)
+        self._facing = bool(facing)
+        self._dual_rects = {}                 # {page0: (x, y, w, h)} — 매 렌더 갱신
+        self._vis_cache = None                # (path, [보이는 page0…])
         # 260609-7: 파일 경계 50% 오버레이(다음/이전 파일 미리보기 → 재선택 시 전환)
         self._sibling_resolver = sibling_resolver
         self._armed = 0                       # 0=없음, +1=다음 파일, -1=이전 파일
@@ -439,7 +455,9 @@ class PresentationWindow(QWidget):
         self._hyperlink_resolver = hyperlink_resolver
         self._bookmark_resolver = bookmark_resolver
         self._hl_buttons = []
-        self._topbar_h = max(40, int(topbar_h))   # D1: 띠 높이(설정)
+        # 260905(발표 SOT §6): 상단 띠 높이 설정 삭제 — 띠는 내용에 맞춰 자동.
+        #   종전 presentation_topbar_h 는 adjustSize() 뒤 최소 높이만 강제하는 값이었고
+        #   호버 감지 영역(max(48, 창높이 10%))과도 무관해 실질 기능이 없었다.
         self._suppress_combo = False              # 페이지 콤보 시그널 가드
         self._autoshown_page = -1                 # D3: 자동표시한 페이지(중복 방지)
         self._autohide_timer = QTimer(self)       # D3: 링크 페이지 2초 후 자동 숨김
@@ -490,8 +508,9 @@ class PresentationWindow(QWidget):
                 vp = self._visible_step(self._page, -1)
             if vp is not None:
                 self._page = vp
-        # 260611-26: 상하 2분할 기본값 = 페이지 가로>세로(가로 페이지)일 때만 ON.
-        self._split_mode = self._orient_split_default()
+        # 260611-26: 상하 2분할 기본값 = 페이지 방향(세로>가로)일 때만 ON.
+        # 260905: 좌우 2쪽이 켜져 있으면 자동판정을 건너뛴다(§4.1 — 안 그러면 좌우 2쪽이 저 혼자 꺼진다).
+        self._split_mode = False if self._dual_mode else self._orient_split_default()
         # 260615-2: ⑦ 화면 채움(비율 변경) / ⑧ 표시 모니터 선택
         self._fill_screen = False           # True=비율 무시하고 화면 꽉 채움(늘림)
         self._target_screen = None          # 표시할 QScreen(None=기본/현재)
@@ -1037,9 +1056,9 @@ class PresentationWindow(QWidget):
         tb.setFixedWidth(self.width())
         tb.move(0, 0)
         tb.adjustSize()
-        # 최소 높이는 설정값, 내용(줄바꿈)이 많으면 그만큼 늘어남
-        if tb.height() < self._topbar_h:
-            tb.setFixedHeight(self._topbar_h)
+        # 260905(§6): 높이는 내용이 정한다 — 설정 항목(presentation_topbar_h)은 삭제됐다.
+        if tb.height() < TOPBAR_MIN_H:
+            tb.setFixedHeight(TOPBAR_MIN_H)
             tb.setFixedWidth(self.width())
 
     def _show_topbar(self, auto: bool = False):
@@ -1137,31 +1156,42 @@ class PresentationWindow(QWidget):
         self._apply_pointer()
         self._ptr_timer.start()
 
-    def _page_points(self):
+    def _page_points(self, page=None):
+        p = self._page if page is None else int(page)
         try:
-            pg = self._doc.doc.load_page(self._page)
+            pg = self._doc.doc.load_page(p)
             r = pg.rect
             w, h = float(r.width), float(r.height)
-            if self._rotation() in (90, 270):   # 260609-15(A1): 회전 시 폭/높이 스왑
+            if self._rotation(p) in (90, 270):   # 260609-15(A1): 회전 시 폭/높이 스왑
                 w, h = h, w
             return w, h
         except Exception:
             return 595.0, 842.0     # A4 fallback
 
-    def _rotation(self) -> int:
+    def _crop_points(self, page=None):
+        """260905(§4.2.2): 크롭으로 **남는** 페이지 크기(pt). DPI 산정의 기준."""
+        pw, ph = self._page_points(page)
+        t, b, l, r = self._get_crop(page)
+        vw = max(1.0, pw * max(0.05, 1.0 - (l + r) / 100.0))
+        vh = max(1.0, ph * max(0.05, 1.0 - (t + b) / 100.0))
+        return vw, vh
+
+    def _rotation(self, page=None) -> int:
+        p = self._page if page is None else int(page)
         if self._rotation_resolver:
             try:
-                return int(self._rotation_resolver(str(self._path), self._page)) % 360
+                return int(self._rotation_resolver(str(self._path), p)) % 360
             except Exception:
                 return 0
         return 0
 
-    def _render_pixmap(self, dpi):
-        rp = self._doc.render(self._page, dpi=dpi)
+    def _render_pixmap(self, dpi, page=None):
+        p = self._page if page is None else int(page)
+        rp = self._doc.render(p, dpi=dpi)
         img = QImage(rp.samples, rp.width, rp.height,
                      rp.width * 3, QImage.Format.Format_RGB888)
         pm = QPixmap.fromImage(img)
-        rot = self._rotation()          # 260609-15(A1)
+        rot = self._rotation(p)          # 260609-15(A1)
         if rot:
             pm = pm.transformed(QTransform().rotate(rot),
                                 Qt.TransformationMode.SmoothTransformation)
@@ -1169,8 +1199,9 @@ class PresentationWindow(QWidget):
 
     def _page_is_split(self):
         """260611-28: 상하 2분할이 켜져 있어도 '가로가 더 긴 페이지(세로<가로)'는 그 페이지만
-        분할 해제. 토글 기본값은 진입/파일전환 시 페이지 방향(세로>가로)으로 결정."""
-        if not self._split_mode:
+        분할 해제. 토글 기본값은 진입/파일전환 시 페이지 방향(세로>가로)으로 결정.
+        260905: 좌우 2쪽 보기와는 상호배타(§4.1)."""
+        if self._dual_mode or not self._split_mode:
             return False
         pw, ph = self._page_points()
         return ph >= pw
@@ -1183,77 +1214,105 @@ class PresentationWindow(QWidget):
         except Exception:
             return False
 
-    def _get_crop(self):
-        """(top%, bottom%) — 페이지별 우선."""
+    def _get_crop(self, page=None):
+        """(top%, bottom%, left%, right%) — 260905(§4.2.1) 4방향. 페이지별·홀짝 우선순위는 저장소가 판단."""
+        p = self._page if page is None else int(page)
         if self._crop_resolver:
             try:
-                t, b = self._crop_resolver(str(self._path), self._page)
-                return float(t), float(b)
+                v = list(self._crop_resolver(str(self._path), p) or [])
+                v = (v + [0.0, 0.0, 0.0, 0.0])[:4]
+                return tuple(max(0.0, min(45.0, float(x))) for x in v)
             except Exception:
-                return 0.0, 0.0
-        return 0.0, 0.0
+                return (0.0, 0.0, 0.0, 0.0)
+        return (0.0, 0.0, 0.0, 0.0)
 
-    def _render_cropped(self, dpi):
-        """260609-14(D4): 렌더 후 상/하단 크롭(%) 적용한 픽스맵.
+    def _render_cropped(self, dpi, page=None):
+        """260609-14(D4) / 260905: 렌더 후 상·하·좌·우 크롭(%) 적용한 픽스맵.
 
-        260628(발표 SOT B1): **결과를 캐시**한다 — 키 = (파일, 페이지, dpi, 회전, 크롭상, 크롭하).
+        260628(발표 SOT B1): **결과를 캐시**한다 — 키 = (파일, 페이지, dpi, 회전, 크롭 상·하·좌·우).
         분할 상↔하 전환은 같은 페이지를 자르기만 하면 되는데 종전에는 PyMuPDF 렌더를 매번
         다시 했다(실측 42.9 ms 전량 낭비; 세로 페이지는 분할이 기본 ON 이라 페이지 넘김의
-        절반이 여기에 해당). 메모리 상한을 위해 **최근 2장만** 보관한다.
+        절반이 여기에 해당).
+        260905: 좌우 2쪽 보기는 한 화면에 2쪽을 쓰므로 보관량을 **최근 4장**으로 늘렸다
+        (2장이면 좌·우가 매 렌더마다 서로를 밀어내 캐시가 무의미해진다).
         키에 회전·크롭을 포함하므로 크롭/회전 설정이 바뀌면 자동으로 새로 렌더된다."""
-        ct, cb = self._get_crop()
+        p = self._page if page is None else int(page)
+        ct, cb, cl, cr = self._get_crop(p)
         try:
-            rot = int(self._rotation() or 0)
+            rot = int(self._rotation(p) or 0)
         except Exception:
             rot = 0
-        key = (str(self._path), int(self._page), int(dpi), rot,
-               round(float(ct), 3), round(float(cb), 3))
+        key = (str(self._path), int(p), int(dpi), rot,
+               round(float(ct), 3), round(float(cb), 3),
+               round(float(cl), 3), round(float(cr), 3))
         cache = getattr(self, "_pm_cache", None)
         if cache is None:
             cache = self._pm_cache = {}
         hit = cache.get(key)
         if hit is not None:
             return hit
-        pm = self._render_pixmap(dpi)
-        if ct > 0 or cb > 0:
-            H = pm.height()
+        pm = self._render_pixmap(dpi, p)
+        if ct > 0 or cb > 0 or cl > 0 or cr > 0:
+            W, H = pm.width(), pm.height()
             t = int(H * ct / 100.0)
             b = int(H * cb / 100.0)
+            x = int(W * cl / 100.0)
+            rr = int(W * cr / 100.0)
             h2 = max(1, H - t - b)
-            pm = pm.copy(0, min(t, H - 1), pm.width(), h2)
-        if len(cache) >= 2:                 # 오래된 항목부터 제거(삽입 순서)
+            w2 = max(1, W - x - rr)
+            pm = pm.copy(min(x, W - 1), min(t, H - 1), w2, h2)
+        if len(cache) >= 4:                 # 오래된 항목부터 제거(삽입 순서)
             cache.pop(next(iter(cache)), None)
         cache[key] = pm
         return pm
 
+    # 260905(§4): 중앙 겹침 띠 — 하부(이미 본 곳)는 진하게, 상부(다음에 다시 볼 곳)는 연하게.
+    #   두 값을 같게 만들지 말 것(사용자가 명시적으로 구분을 요구했다).
+    OVERLAP_ALPHA_LOWER = 51
+    OVERLAP_ALPHA_UPPER = 30
+
     def _current_pixmap_fit(self, sw, sh):
-        """현재 페이지(또는 분할 반쪽)를 화면맞춤 픽스맵으로 반환(크롭 반영)."""
-        pw_pt, ph_pt = self._page_points()
-        if pw_pt <= 0 or ph_pt <= 0:
+        """현재 페이지(분할 반쪽 / 좌우 펼침)를 화면맞춤 픽스맵으로 반환(크롭 반영).
+
+        260905(§4.2.2): DPI 는 **크롭하고 남는 크기** 기준으로 산정한다. 종전에는 전체
+        페이지를 맞춘 뒤 잘라서, 크롭해도 글자가 커지지 않고 검은 여백만 늘었다."""
+        if self._dual_mode:
+            return self._dual_pixmap_fit(sw, sh)
+        vw, vh = self._crop_points()
+        if vw <= 0 or vh <= 0:
             return None
         try:
             if self._page_is_split():
-                dpi = max(72, min(400, int(sw * 72.0 / pw_pt)))   # 폭맞춤
-                pm = self._render_cropped(dpi)    # 크롭된 화면 기준 재산정(D4)
+                dpi = max(72, min(400, int(sw * 72.0 / vw)))      # 크롭 후 폭맞춤
+                pm = self._render_cropped(dpi)
                 H = pm.height()
                 ov = int(H * self._overlap_frac)
                 mid = H // 2
                 if self._split_half == 0:
                     pm = pm.copy(0, 0, pm.width(), min(H, mid + ov // 2))
+                    # 260905: 상부를 볼 때 '다음에 다시 볼' 아래쪽 겹침부를 연한 띠로
+                    if ov > 0:
+                        _p = QPainter(pm)
+                        _p.fillRect(0, max(0, pm.height() - ov), pm.width(), ov,
+                                    QColor(0, 0, 0, self.OVERLAP_ALPHA_UPPER))
+                        _p.end()
                 else:
                     y0 = max(0, mid - ov // 2)
                     pm = pm.copy(0, y0, pm.width(), H - y0)
                     # 260609-16(F2): 하단 볼 때, 상단에서 이미 본 겹침부를 반투명 띠로
                     if ov > 0:
                         _p = QPainter(pm)
-                        _p.fillRect(0, 0, pm.width(), ov, QColor(0, 0, 0, 51))
+                        _p.fillRect(0, 0, pm.width(), ov,
+                                    QColor(0, 0, 0, self.OVERLAP_ALPHA_LOWER))
                         _p.end()
             else:
-                dpi = min(sw * 72.0 / pw_pt, sh * 72.0 / ph_pt)
+                dpi = min(sw * 72.0 / vw, sh * 72.0 / vh)
                 dpi = max(72, min(400, int(dpi)))
                 pm = self._render_cropped(dpi)
-            # 260615-2: ⑦ 화면 채움 — 비율 무시하고 sw×sh 로 늘려 전체 채움
-            if self._fill_screen and not self._page_is_split():
+            # 260615-2 / 260905(§4.1.3): 화면 채움 — 비율 무시하고 sw×sh 로 늘려 전체 채움.
+            #   종전에는 `not self._page_is_split()` 조건 탓에 상하 2분할(세로 페이지 기본 ON)
+            #   에서 통째로 건너뛰어져 사실상 동작하지 않았다 → 분할 반쪽에도 적용한다.
+            if self._fill_screen:
                 pm = pm.scaled(sw, sh, Qt.AspectRatioMode.IgnoreAspectRatio,
                                Qt.TransformationMode.SmoothTransformation)
             elif pm.width() > sw or pm.height() > sh:
@@ -1261,6 +1320,146 @@ class PresentationWindow(QWidget):
                                Qt.TransformationMode.SmoothTransformation)
             return pm
         except Exception:
+            return None
+
+    # ===== 260905(§4.1): 좌우 2쪽 보기 =====
+    DUAL_GAP_PX = 10
+
+    def _vis_list(self):
+        """숨김을 뺀 '보이는 페이지' 목록(파일 단위 캐시). 펼침 계산의 기준."""
+        cache = getattr(self, "_vis_cache", None)
+        if cache is not None and cache[0] == str(self._path):
+            return cache[1]
+        n = self._doc.page_count
+        try:
+            hidden = set(self._hidden_resolver(str(self._path)) or set()) \
+                if self._hidden_resolver else set()
+        except Exception:
+            hidden = set()
+        lst = [p for p in range(n) if p not in hidden] or list(range(n))
+        self._vis_cache = (str(self._path), lst)
+        return lst
+
+    def _vis_index(self, page0=None):
+        """page0 의 '보이는 목록' 안 위치(없으면 가장 가까운 앞쪽)."""
+        p = self._page if page0 is None else int(page0)
+        vis = self._vis_list()
+        try:
+            return vis.index(p)
+        except ValueError:
+            best = 0
+            for i, v in enumerate(vis):
+                if v <= p:
+                    best = i
+            return best
+
+    def _dual_slot(self, i):
+        """보이는 인덱스 → 펼침 번호(§4.1.1)."""
+        return (i + 1) // 2 if self._facing else i // 2
+
+    def _dual_slot_indices(self, k):
+        """펼침 번호 → (좌 인덱스|None, 우 인덱스|None). 맞쪽 0번은 좌측이 빈 칸."""
+        if self._facing:
+            if k <= 0:
+                return (None, 0)
+            return (2 * k - 1, 2 * k)
+        return (2 * k, 2 * k + 1)
+
+    def _dual_pages(self, page0=None):
+        """그 페이지가 속한 펼침의 (좌 page0|None, 우 page0|None). 기본은 현재 페이지."""
+        vis = self._vis_list()
+        if not vis:
+            return (None, None)
+        li, ri = self._dual_slot_indices(self._dual_slot(self._vis_index(page0)))
+
+        def _at(idx):
+            return vis[idx] if (idx is not None and 0 <= idx < len(vis)) else None
+        return (_at(li), _at(ri))
+
+    # --- 260905(§4.2.3): 보기 설정 미리보기가 쓰는 쪽 계산 ---
+    #   다이얼로그가 짝 규칙을 따로 구현하면 §4.1.1 과 갈라진다 → 여기 것을 그대로 쓴다.
+    def preview_pages_for(self, page0):
+        """미리보기에 늘어놓을 쪽 목록. 좌우 2쪽이면 [좌, 우](빈 칸은 None), 아니면 [쪽]."""
+        if not self._dual_mode:
+            return [int(page0)]
+        return list(self._dual_pages(page0))
+
+    def preview_step(self, page0, direction):
+        """미리보기 이동 — 좌우 2쪽이면 펼침 단위, 아니면 보이는 쪽 단위. 끝이면 None."""
+        vis = self._vis_list()
+        if not vis:
+            return None
+        i = self._vis_index(page0)
+        if not self._dual_mode:
+            j = i + (1 if direction > 0 else -1)
+            return vis[j] if 0 <= j < len(vis) else None
+        k = self._dual_slot(i) + (1 if direction > 0 else -1)
+        if k < 0:
+            return None
+        li, ri = self._dual_slot_indices(k)
+        cand = [x for x in (li, ri) if x is not None and 0 <= x < len(vis)]
+        return vis[cand[0]] if cand else None
+
+    def _shown_pages(self):
+        """지금 화면에 보이는 page0 목록 — 그리기·지우개·오버레이가 다루는 범위."""
+        if self._dual_mode:
+            return [p for p in self._dual_pages() if p is not None]
+        return [self._page]
+
+    def _dual_pixmap_fit(self, sw, sh):
+        """두 쪽을 각자의 크롭으로 자른 뒤 나란히 합성(§4.1.2). 쪽별 화면 사각형을 기록."""
+        self._dual_rects = {}
+        left, right = self._dual_pages()
+        if left is None and right is None:
+            return None
+        try:
+            gap = self.DUAL_GAP_PX
+            # 크롭 후 크기(pt)로 배율 산정 — 빈 칸은 상대 쪽과 같은 크기로 자리만 차지
+            szs = {}
+            for p in (left, right):
+                if p is not None:
+                    szs[p] = self._crop_points(p)
+            ref = next(iter(szs.values()))
+            wl, hl = szs.get(left, ref)
+            wr, hr = szs.get(right, ref)
+            tot_w, tot_h = wl + wr, max(hl, hr)
+            if tot_w <= 0 or tot_h <= 0:
+                return None
+            scale = min(max(1, sw - gap) / tot_w, sh / tot_h)
+            dpi = max(72, min(400, int(scale * 72.0)))
+            pms = {p: self._render_cropped(dpi, p) for p in szs}
+            pw_l = pms[left].width() if left is not None else int(wl * dpi / 72.0)
+            pw_r = pms[right].width() if right is not None else int(wr * dpi / 72.0)
+            ph_max = max([pm.height() for pm in pms.values()] or [1])
+            cw, ch = max(1, pw_l + gap + pw_r), max(1, ph_max)
+            # 스케일은 마지막에 딱 한 번(§4.1.2). DPI 하한(72) 때문에 캔버스가 화면보다
+            #   커질 수 있고, 화면 채움이면 비율을 무시하고 축·별로 늘린다(§4.1.3).
+            if self._fill_screen:
+                sx, sy = sw / cw, sh / ch
+            else:
+                sx = sy = min(1.0, sw / cw, sh / ch)
+            canvas = QPixmap(cw, ch)
+            canvas.fill(QColor(0, 0, 0, 0))     # 빈 칸은 배경(검정) 그대로 — §4.1.1
+            p = QPainter(canvas)
+            ox = (sw - int(cw * sx)) // 2      # QLabel AlignCenter 기준 화면 오프셋
+            oy = (sh - int(ch * sy)) // 2
+            for pg, x in ((left, 0), (right, pw_l + gap)):
+                if pg is None:
+                    continue
+                pm = pms[pg]
+                y = (ch - pm.height()) // 2
+                p.drawPixmap(x, y, pm)
+                # ★ 쪽별 사각형에도 같은 배율을 곱한다 — 빠뜨리면 그리기 좌표가 어긋난다.
+                self._dual_rects[int(pg)] = (ox + x * sx, oy + y * sy,
+                                             pm.width() * sx, pm.height() * sy)
+            p.end()
+            if abs(sx - 1.0) > 1e-6 or abs(sy - 1.0) > 1e-6:
+                canvas = canvas.scaled(max(1, int(cw * sx)), max(1, int(ch * sy)),
+                                       Qt.AspectRatioMode.IgnoreAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
+            return canvas
+        except Exception:
+            self._dual_rects = {}
             return None
 
     def _render(self):
@@ -1342,6 +1541,8 @@ class PresentationWindow(QWidget):
 
     def set_split(self, on: bool):
         on = bool(on)
+        if on and self._dual_mode:      # 260905(§4.1): 상호배타 — 좌우 2쪽을 먼저 끈다
+            self.set_dual(False)
         if on != self._split_mode:
             self._armed = 0          # 분할 토글 시 경계 무장 해제
             self._armed_path = None
@@ -1349,6 +1550,43 @@ class PresentationWindow(QWidget):
             self._split_half = 0
             self._render()
             self.splitModeChanged.emit(on)
+
+    def set_dual(self, on: bool):
+        """260905(§4.1): 좌우 2쪽 보기. 상하 2분할과 상호배타."""
+        on = bool(on)
+        if on and self._split_mode:
+            # splitModeChanged 를 정직하게 발신하되 set_split 재귀는 피한다
+            self._split_mode = False
+            self._split_half = 0
+            self.splitModeChanged.emit(False)
+        if on == self._dual_mode:
+            return
+        self._armed = 0
+        self._armed_path = None
+        self._dual_mode = on
+        self._dual_rects = {}
+        self._render()
+        self.dualModeChanged.emit(on)
+
+    def set_fill_screen(self, on: bool):
+        """260905(§4.1.3): 화면 채움(비율 변경). 세션 한정 — 저장하지 않는다."""
+        on = bool(on)
+        if on == self._fill_screen:
+            return
+        self._fill_screen = on
+        self._dual_rects = {}
+        self._render()
+
+    def set_facing(self, on: bool):
+        """260905(§4.1): 맞쪽 — 맨 앞에 빈 칸 한 장을 끼워 실제 책의 펼침과 맞춘다."""
+        on = bool(on)
+        if on == self._facing:
+            return
+        self._facing = on
+        self._dual_rects = {}
+        if self._dual_mode:
+            self._render()
+        self.facingChanged.emit(on)
 
     # --- 260609-7: 파일 경계 오버레이 ---
     def _arm_boundary(self, direction: int) -> bool:
@@ -1385,6 +1623,8 @@ class PresentationWindow(QWidget):
             tp.list.clear()           # 260609-24(I5): 새 파일 → 썸네일 재생성 예약
         self._armed = 0
         self._armed_path = None
+        self._vis_cache = None            # 260905: 파일이 바뀌면 보이는 페이지 목록 재계산
+        self._dual_rects = {}
         self._page = (self._doc.page_count - 1) if to_end else 0
         # 260609-14(D5): 진입 페이지가 숨김이면 보이는 페이지로
         if self._is_hidden(self._page):
@@ -1393,8 +1633,9 @@ class PresentationWindow(QWidget):
                 vp = self._visible_step(self._page, +1 if to_end else -1)
             if vp is not None:
                 self._page = vp
-        # 260611-26: 새 파일의 방향(가로>세로)으로 상하 2분할 기본값 재계산
-        self._split_mode = self._orient_split_default()
+        # 260611-26: 새 파일의 방향(세로>가로)으로 상하 2분할 기본값 재계산
+        # 260905(§4.1): 좌우 2쪽이 켜져 있으면 건너뛴다 — 안 그러면 좌우 2쪽이 저 혼자 꺼진다.
+        self._split_mode = False if self._dual_mode else self._orient_split_default()
         # 다음→첫쪽 상부 / 이전→마지막쪽(세로 분할 페이지면 하부)
         self._split_half = 1 if (self._page_is_split() and to_end) else 0
         self._render()
@@ -1417,6 +1658,8 @@ class PresentationWindow(QWidget):
 
     def refresh(self):
         """260609-14: 외부(크롭·숨김 변경) 후 현재 화면 재렌더."""
+        self._vis_cache = None            # 260905: 숨김이 바뀌면 펼침 계산이 달라진다
+        self._avg_lh_cache = {}
         if self._is_hidden(self._page):
             self._go(self._page)            # 현재가 숨겨졌으면 보이는 페이지로
         else:
@@ -1478,6 +1721,11 @@ class PresentationWindow(QWidget):
             self._split_half = 1
             self._render()
             return
+        if self._dual_mode:                       # 260905(§4.1.1): 펼침 단위 이동
+            if self._dual_step(+1):
+                return
+            self._arm_boundary(+1)
+            return
         nv = self._visible_step(self._page, +1)   # 숨김 건너뜀
         if nv is not None:
             self._page = nv
@@ -1502,6 +1750,11 @@ class PresentationWindow(QWidget):
             self._split_half = 0
             self._render()
             return
+        if self._dual_mode:                       # 260905(§4.1.1): 펼침 단위 이동
+            if self._dual_step(-1):
+                return
+            self._arm_boundary(-1)
+            return
         pv = self._visible_step(self._page, -1)   # 숨김 건너뜀
         if pv is not None:
             self._page = pv
@@ -1511,6 +1764,23 @@ class PresentationWindow(QWidget):
             return
         # 첫 보이는 뷰 → 이전 파일 경계 무장(있으면)
         self._arm_boundary(-1)
+
+    def _dual_step(self, direction: int) -> bool:
+        """260905(§4.1.1): 펼침 하나 앞/뒤로. 갈 곳이 없으면 False(=파일 경계 무장)."""
+        vis = self._vis_list()
+        if not vis:
+            return False
+        k = self._dual_slot(self._vis_index()) + int(direction)
+        if k < 0:
+            return False
+        li, ri = self._dual_slot_indices(k)
+        cand = [i for i in (li, ri) if i is not None and 0 <= i < len(vis)]
+        if not cand:
+            return False
+        self._page = vis[cand[0]]
+        self._split_half = 0
+        self._render()
+        return True
 
     def _commit_numbuf(self):
         if self._numbuf:
@@ -1592,6 +1862,9 @@ class PresentationWindow(QWidget):
         if k == Qt.Key.Key_S:                 # 260609-6: 상하 2분할 토글
             self.set_split(not self._split_mode)
             return
+        if k == Qt.Key.Key_D:                 # 260905(§4.1): 좌우 2쪽 보기 토글
+            self.set_dual(not self._dual_mode)
+            return
         super().keyPressEvent(e)
 
     def _evt_pos(self, e):
@@ -1647,6 +1920,21 @@ class PresentationWindow(QWidget):
             self._hide_topbar()
         super().mouseMoveEvent(e)
 
+    def _stroke_page_at(self, pos):
+        """260905(§4.1.2): 화면 좌표가 속한 쪽. 좌우 2쪽이 아니면 현재 페이지."""
+        if not self._dual_mode:
+            return int(self._page)
+        x, y = float(pos.x()), float(pos.y())
+        best, bestd = None, None
+        for pg, (rx, ry, rw, rh) in (self._dual_rects or {}).items():
+            if rx <= x <= rx + rw and ry <= y <= ry + rh:
+                return int(pg)
+            cx, cy = rx + rw / 2.0, ry + rh / 2.0
+            d = (x - cx) ** 2 + (y - cy) ** 2
+            if bestd is None or d < bestd:
+                best, bestd = int(pg), d
+        return best if best is not None else int(self._page)
+
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             pos = self._evt_pos(e)
@@ -1662,6 +1950,13 @@ class PresentationWindow(QWidget):
                       "points": [pos],
                       # 260611-7: 상하2분할일 때 그린 반쪽 기록 → 다른 반쪽엔 안 보이게
                       "half": (self._split_half if self._page_is_split() else 0)}
+                # 260905(§4.1.2): 좌우 2쪽이면 '누른 지점이 속한 쪽'에 귀속하고,
+                #   그릴 당시의 화면 사각형을 함께 저장한다(정규화가 이 값을 쓴다).
+                st["pg"] = self._stroke_page_at(pos)
+                if self._dual_mode:
+                    rect = self._dual_rects.get(int(st["pg"]))
+                    if rect:
+                        st["rect"] = tuple(float(v) for v in rect)
                 # 260611-4: 하이라이트 모드 — 누른 위치의 텍스트 줄 높이(화면 px 띠)
                 if self._line_mode == 1:
                     from PyQt6.QtCore import QPoint
@@ -1696,20 +1991,24 @@ class PresentationWindow(QWidget):
         pw, ph = self._page_points()
         if ph <= 0:
             return 1.0
-        ct, cb = self._get_crop()
-        vis = max(0.05, 1.0 - (ct + cb) / 100.0)
+        vw, vh = self._crop_points()       # 260905: 크롭 후 남는 크기가 배율의 기준
         try:
-            if not self._page_is_split():
+            # 260905: 좌우 2쪽은 렌더가 기록한 쪽별 사각형이 곧 실측 배율
+            if self._dual_mode:
+                rect = self._dual_rects.get(int(self._page))
+                if rect:
+                    return max(0.05, rect[3] / vh)
+            elif not self._page_is_split():
                 pm = self._label.pixmap()
                 if pm is not None and not pm.isNull():
-                    return pm.height() / (ph * vis)   # 실제 표시 배율(크롭 반영)
+                    return pm.height() / vh   # 실제 표시 배율(크롭 반영)
         except Exception:
             pass
         sw, sh = max(1, self.width()), max(1, self.height())
         if self._page_is_split():
-            dpi = max(72, min(400, int(sw * 72.0 / pw)))
+            dpi = max(72, min(400, int(sw * 72.0 / vw)))
         else:
-            dpi = max(72, min(400, int(min(sw * 72.0 / pw, sh * 72.0 / ph))))
+            dpi = max(72, min(400, int(min(sw * 72.0 / vw, sh * 72.0 / vh))))
         return dpi / 72.0
 
     def _avg_line_height_screen(self):
@@ -1738,6 +2037,20 @@ class PresentationWindow(QWidget):
         except Exception:
             return max(8.0, self.height() * 0.02)
 
+    def _clip_stroke_to_page(self, stroke):
+        """260905(§4.1.2): 좌우 2쪽에서 반대 칸으로 넘어간 부분을 귀속된 쪽 영역으로 자른다."""
+        if not self._dual_mode:
+            return
+        rect = stroke.get("rect")
+        if not rect:
+            return
+        from PyQt6.QtCore import QPoint
+        x0, y0, w, h = rect
+        x1, y1 = x0 + w, y0 + h
+        stroke["points"] = [QPoint(int(max(x0, min(x1, p.x()))),
+                                   int(max(y0, min(y1, p.y()))))
+                            for p in stroke.get("points", [])]
+
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             moved = self._drag_moved
@@ -1750,7 +2063,10 @@ class PresentationWindow(QWidget):
                 stroke = self._cur_stroke
                 self._cur_stroke = None
                 if moved and len(stroke["points"]) >= 2:
-                    self._strokes.setdefault(self._page, []).append(stroke)
+                    # 260905(§4.1.2): 좌우 2쪽이면 누른 쪽에 귀속(st["pg"])
+                    self._clip_stroke_to_page(stroke)
+                    self._strokes.setdefault(int(stroke.get("pg", self._page)),
+                                             []).append(stroke)
                     self._draw_overlay.update()
                 else:
                     (self._prev if x <= int(self.width() * 0.10) else self._next)()
@@ -1811,6 +2127,33 @@ class PresentationWindow(QWidget):
         _sw.setStyleSheet("QWidget{color:#fff;background:transparent;}"
                           "QCheckBox{color:#fff;} QLabel{color:#fff;}")
         _wa = QWidgetAction(menu); _wa.setDefaultWidget(_sw); menu.addAction(_wa)
+        # 260905(§4.1): 좌우 2쪽 보기 + 맞쪽 — 상하 2분할 바로 아래 줄
+        _dw = QWidget()
+        _dhb = QHBoxLayout(_dw); _dhb.setContentsMargins(20, 4, 14, 4); _dhb.setSpacing(8)
+        cb_dual = QCheckBox("좌우 2쪽 보기"); cb_dual.setChecked(self._dual_mode)
+        cb_face = QCheckBox("맞쪽"); cb_face.setChecked(self._facing)
+        cb_face.setEnabled(self._dual_mode)
+        cb_face.setToolTip("맨 앞에 빈 페이지 1장을 넣어 실제 책의 펼침과 맞춥니다.")
+        cb_dual.toggled.connect(cb_face.setEnabled)
+        cb_dual.toggled.connect(self.set_dual)
+        cb_face.toggled.connect(self.set_facing)
+        _dhb.addWidget(cb_dual); _dhb.addWidget(cb_face); _dhb.addStretch(1)
+        _dw.setStyleSheet("QWidget{color:#fff;background:transparent;}"
+                          "QCheckBox{color:#fff;} QCheckBox:disabled{color:#888;}")
+        _wad = QWidgetAction(menu); _wad.setDefaultWidget(_dw); menu.addAction(_wad)
+        # 260905(§4.1.3): '화면 채움(비율 변경)' — 종전 '화면' 서브메뉴에서 이 자리로 이동
+        _fw = QWidget()
+        _fhb = QHBoxLayout(_fw); _fhb.setContentsMargins(20, 4, 14, 4); _fhb.setSpacing(8)
+        cb_fill = QCheckBox("화면 채움 (비율 변경)"); cb_fill.setChecked(self._fill_screen)
+        cb_fill.setToolTip("페이지 비율을 무시하고 화면을 꽉 채웁니다. 저장하지 않습니다(기본 꺼짐).")
+        cb_fill.toggled.connect(self.set_fill_screen)
+        _fhb.addWidget(cb_fill); _fhb.addStretch(1)
+        _fw.setStyleSheet("QWidget{color:#fff;background:transparent;}"
+                          "QCheckBox{color:#fff;}")
+        _waf = QWidgetAction(menu); _waf.setDefaultWidget(_fw); menu.addAction(_waf)
+        # 상호배타(§4.1)를 메뉴에서도 즉시 보이게 — 한쪽을 켜면 반대쪽 체크가 풀린다
+        cb_split.toggled.connect(lambda on: on and cb_dual.setChecked(False))
+        cb_dual.toggled.connect(lambda on: on and cb_split.setChecked(False))
         menu.addSeparator()
         # 260611-26: '발표 보기 설정'→'보기 설정'(상단 띠 높이 + 크롭)
         act_view_set = menu.addAction("보기 설정…")
@@ -1831,35 +2174,30 @@ class PresentationWindow(QWidget):
         act_rec_on.setCheckable(True)
         act_rec_on.setChecked(bool(self._timer_cfg.get("rec_on_start", True)))
         menu.addSeparator()
-        # 260615-2: ⑦ 화면 채움(비율 변경) + ⑧ 표시 모니터 선택
-        dm = menu.addMenu("화면")
-        dm.setStyleSheet(_MENU_CSS)
-        act_fill = dm.addAction("화면 채움 (비율 변경)")
-        act_fill.setCheckable(True); act_fill.setChecked(self._fill_screen)
+        # 260615-2 / 260905(§4.1.3): ⑧ 표시 모니터 선택만 남긴다.
+        #   '화면 채움'은 좌우 2쪽 아래 체크박스로 옮겼다. 모니터가 하나면 메뉴를 만들지 않는다.
         scr_acts = []
         try:
             from PyQt6.QtWidgets import QApplication
             screens = QApplication.screens()
             if len(screens) > 1:
-                dm.addSeparator()
+                dm = menu.addMenu("화면")
+                dm.setStyleSheet(_MENU_CSS)
                 cur = self.screen()
                 for i, sc in enumerate(screens):
                     a = dm.addAction(f"모니터 {i+1}  ({sc.geometry().width()}×"
                                      f"{sc.geometry().height()})")
                     a.setCheckable(True); a.setChecked(sc is cur)
                     scr_acts.append((a, sc))
+                menu.addSeparator()
         except Exception:
             pass
-        menu.addSeparator()
         act_quit = menu.addAction("전체화면 보기 취소")
         chosen = menu.exec(e.globalPos())
         if chosen is None:
             return
         if chosen == act_quit:
             self.close()
-        elif chosen == act_fill:
-            self._fill_screen = not self._fill_screen
-            self._render()
         elif scr_acts and chosen in [a for a, _ in scr_acts]:
             sc = next(s for a, s in scr_acts if a is chosen)
             self.set_target_screen(sc)
@@ -2017,7 +2355,8 @@ class PresentationWindow(QWidget):
             eb.style().unpolish(eb); eb.style().polish(eb); eb.update()
 
     def _clear_drawings(self):
-        self._strokes.pop(self._page, None)
+        for _pg in self._shown_pages():       # 260905: 좌우 2쪽이면 보이는 두 쪽 모두
+            self._strokes.pop(_pg, None)
         self._cur_stroke = None
         if getattr(self, "_draw_overlay", None) is not None:
             self._draw_overlay.update()
@@ -2065,11 +2404,14 @@ class PresentationWindow(QWidget):
         """현재 파일의 화면 스트로크를 페이지 비율(0..1)로 변환 → {page0:[stroke]}."""
         out = {}
         for page0, strokes in self._strokes.items():
-            x0, y0, w, h = self._page_norm_rect(page0)
-            if w <= 0 or h <= 0:
-                continue
+            base = self._page_norm_rect(page0)
             conv = []
             for st in strokes:
+                # 260905(§4.1.2): 좌우 2쪽에서 그린 선은 '그릴 당시의 사각형'으로 되돌린다.
+                #   없으면 종전대로 쪽맞춤 사각형(단일 페이지 표시 기준).
+                x0, y0, w, h = st.get("rect") or base
+                if w <= 0 or h <= 0:
+                    continue
                 pts = [[max(0.0, min(1.0, (p.x() - x0) / w)),
                         max(0.0, min(1.0, (p.y() - y0) / h))]
                        for p in st.get("points", [])]
@@ -2107,7 +2449,9 @@ class PresentationWindow(QWidget):
         기존엔 스트로크의 꼭짓점만 검사해, 끝점 2개뿐인 직선/하이라이트는 중간을
         문질러도 안 지워졌다. 커서와 각 세그먼트의 최소 거리가 반경 이하면 제거,
         하이라이트 띠는 사각형 안에 들어오면 제거."""
-        pg = self._strokes.get(self._page)
+        # 260905(§4.1.2): 좌우 2쪽이면 보이는 두 쪽 모두가 지우기 대상
+        target = self._stroke_page_at(pos) if self._dual_mode else self._page
+        pg = self._strokes.get(target)
         if not pg:
             return
         r = max(8.0, float(self._erase_width))
@@ -2143,7 +2487,7 @@ class PresentationWindow(QWidget):
 
         keep = [st for st in pg if not hit(st)]
         if len(keep) != len(pg):
-            self._strokes[self._page] = keep
+            self._strokes[target] = keep
             if getattr(self, "_draw_overlay", None) is not None:
                 self._draw_overlay.update()
 
@@ -2281,14 +2625,6 @@ class PresentationWindow(QWidget):
         """260611-26: 메뉴의 '중앙겹침' 입력 → 즉시 반영 + 영속."""
         self.set_overlap_pct(val)
         self.overlapChanged.emit(int(val))
-
-    def set_topbar_height(self, px):
-        """260611-25: 상단 띠 높이(px) 즉시 반영."""
-        self._topbar_h = max(40, int(px))
-        try:
-            self._position_topbar()
-        except Exception:
-            pass
 
     def _open_timer_settings(self):
         from viewer.widgets.pres_timer import open_settings_dialog

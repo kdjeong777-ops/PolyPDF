@@ -123,6 +123,51 @@ mw._attach_indexing_dialog(w_single)
 chk(getattr(mw, "_indexing_dialog", None) is None, "④ 단일 파일 인덱싱엔 창 없음(상태바만)")
 chk(mw.status.currentMessage() is not None, "④ 상태바 메시지 경로 유지")
 
+# ── ⑤ 260905: 인덱싱 진행은 '시작'도 알린다 + 경로 대소문자 무시(검색 SOT §3·§4.4) ──
+import tempfile as _tf
+from viewer.indexer import PdfIndex
+iroot = Path(_tf.mkdtemp(prefix="idxcase_"))
+(iroot / "sub").mkdir()
+def _mk(p, n=2):
+    d = fitz.open()
+    for i in range(n):
+        d.new_page(width=300, height=400).insert_text((30, 60), f"{p.stem} {i}")
+    d.save(str(p)); d.close()
+_mk(iroot / "a.pdf"); _mk(iroot / "sub" / "b.pdf")
+
+idx = PdfIndex(iroot / "ix.db")
+events = []
+idx.index_folder(iroot, progress=lambda d, t, n: events.append((d, t, n)))
+chk(events and events[0][0] == 0 and events[0][1] == 2 and events[0][2].endswith(".pdf"),
+    "⑤ 첫 신호가 시작 알림(0/N·파일명) — '준비 중...' 로 머무르지 않음", str(events[:2]))
+chk(len(events) == 4 and events[-1][0] == 2,
+    "⑤ 파일마다 시작·완료 두 번, 마지막은 N/N", str(events))
+# 진행 창이 첫 신호만으로 총 개수·파일명을 보여 준다
+dlg5 = IndexingDialog(mw, iroot.name)
+dlg5.on_progress(*events[0])
+chk(dlg5.bar.maximum() == 2 and dlg5.bar.value() == 0
+    and dlg5.lbl_file.text() != "준비 중..." and dlg5.lbl_file.text().endswith(".pdf"),
+    "⑤ 시작 알림만으로 총 개수·현재 파일명 표시", f"{dlg5.bar.format()} / {dlg5.lbl_file.text()}")
+dlg5.on_finished()
+
+# 대소문자만 다른 경로로 하위 폴더를 열어도 다시 읽지 않는다
+calls = []
+_orig_if = PdfIndex.index_file
+def _spy(self, p):
+    calls.append(Path(p).name); return _orig_if(self, p)
+PdfIndex.index_file = _spy
+try:
+    idx.index_folder(Path(str(iroot / "sub").replace("\sub", "\SUB")))
+    chk(calls == [], "⑤ 대소문자만 다른 경로 → 재인덱싱 없음", str(calls))
+    n_after = len(list(idx.conn.execute("SELECT path FROM files")))
+    chk(n_after == 2, "⑤ 상위 폴더 파일 인덱스도 지워지지 않음", str(n_after))
+    calls.clear()
+    idx.index_folder(iroot / "sub")
+    chk(calls == [], "⑤ 정상 경로로 다시 열어도 재인덱싱 없음", str(calls))
+finally:
+    PdfIndex.index_file = _orig_if
+    idx.close()
+
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 sys.stdout.flush()

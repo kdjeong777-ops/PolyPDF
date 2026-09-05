@@ -58,7 +58,7 @@ for mod in [
     "viewer.widgets.flow_layout", "viewer.widgets.read_aloud", "viewer.widgets.print_dialog",
     "viewer.widgets.merge_dialog", "viewer.widgets.region_capture",
     "viewer.widgets.hyperlink_dialog", "viewer.widgets.presentation",
-    "viewer.widgets.pointer_settings_dialog", "viewer.widgets.crop_dialog",
+    "viewer.widgets.pointer_settings_dialog", "viewer.widgets.view_settings_dialog",
     "viewer.widgets.pen_settings_dialog",
     "viewer.widgets.capture_settings", "viewer.widgets.shortcuts_dialog",
     "viewer.study", "viewer.study.ocr", "viewer.study.vocab", "viewer.study.study_store",

@@ -85,7 +85,7 @@ class BookmarkerWorker(QObject):
 
     opts:
       input_pdf, mode("auto"|"toc"|"font"), offset(int|None),
-      save_pdf(bool), save_txt(bool), out_dir(str), bookmarker_path(str).
+      save_pdf(bool), save_txt(bool), out_dir(str).
     결과: {count, method, offset, pdf_out (Path|None), txt_out (Path|None)}.
     """
     progress = pyqtSignal(str)
@@ -104,7 +104,7 @@ class BookmarkerWorker(QObject):
     def run(self):
         try:
             from viewer import bookmarker_bridge as bridge
-            if not bridge.is_available(self.opts.get("bookmarker_path") or None):
+            if not bridge.is_available():
                 raise RuntimeError(
                     f"pdf_bookmarker 모듈 로드 실패: {bridge.get_status()}"
                 )
@@ -221,6 +221,46 @@ class BookmarkerWorker(QObject):
         except Exception as e:
             self.error.emit(str(e))
 
+    def _overwrite_in_place(self, bridge, bookmarks) -> Path:
+        """260905(§4.4.6.2): 원본을 제자리에서 교체.
+
+        ★ 임시 파일은 **반드시 원본과 같은 폴더**에 만든다 — 다른 볼륨이면 `os.replace`
+        가 원자적이지 않아 실패 시 원본이 남는다는 보장이 깨진다.
+        ★ 어떤 경로로 끝나든 임시 파일을 지운다 — 남으면 그 폴더의 책갈피 트리·검색
+        인덱스에 **쓰레기 PDF 로 잡힌다**(실측으로 확인한 종전 결함).
+        ★ 다른 곳에서 그 PDF 를 열고 있으면 교체가 `PermissionError` 로 실패한다.
+        짧게 재시도한 뒤에도 안 되면 **무엇을 해야 하는지 적힌 오류**를 낸다."""
+        import os as _os
+        import time as _time
+        tmp = self.input_pdf.with_name(self.input_pdf.stem + ".bm_tmp.pdf")
+        try:
+            if tmp.exists():          # 지난 실패의 잔재
+                tmp.unlink()
+        except Exception:
+            pass
+        try:
+            bridge.apply_to_pdf(self.input_pdf, tmp, bookmarks)
+            last = None
+            for i in range(4):        # 인덱싱·백신의 짧은 점유는 기다리면 풀린다
+                try:
+                    _os.replace(tmp, self.input_pdf)
+                    return self.input_pdf
+                except PermissionError as e:
+                    last = e
+                    _time.sleep(0.15)
+            raise RuntimeError(
+                f"'{self.input_pdf.name}' 을(를) 다른 프로그램이 열고 있어 덮어쓸 수 없습니다.\n"
+                "그 PDF 를 연 창(다른 PDF 뷰어 등)을 닫고 다시 시도하거나, "
+                "'새 PDF로 저장'을 선택하세요.\n"
+                f"(원본은 그대로 있습니다 — {last})"
+            )
+        finally:
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except Exception:
+                pass
+
     def _write_and_finish(self, bridge, bookmarks, method, res, mode):
         """260904-1: 추출/검토 결과를 PDF·txt 로 쓰고 finished 발신(종전 저장 꼬리를 분리)."""
         try:
@@ -232,12 +272,8 @@ class BookmarkerWorker(QObject):
             if self.opts.get("save_pdf", True):
                 self.progress.emit("PDF에 책갈피 임베드 중...")
                 if self.opts.get("overwrite"):
-                    # 260606-4: 현재 PDF에 저장 — 임시 파일로 쓰고 원본을 교체
-                    import os as _os
-                    tmp = self.input_pdf.with_name(self.input_pdf.stem + ".bm_tmp.pdf")
-                    bridge.apply_to_pdf(self.input_pdf, tmp, bookmarks)
-                    _os.replace(tmp, self.input_pdf)
-                    pdf_out = self.input_pdf
+                    # 260606-4 / 260905(§4.4.6.2): 현재 PDF에 저장 — 임시 파일로 쓰고 교체.
+                    pdf_out = self._overwrite_in_place(bridge, bookmarks)
                 else:
                     pdf_out = bridge.apply_to_pdf(
                         self.input_pdf,

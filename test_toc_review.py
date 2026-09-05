@@ -396,6 +396,79 @@ chk("기존 책갈피 수정" in dlge.windowTitle() and not dlge.grp_offset.isVi
     "⑦ 검토 창 — 제목 '기존 책갈피 수정', 오프셋 컨트롤 없음, 목차 보기 비활성", f"{dlge.windowTitle()}")
 dlge.close()
 
+# ── ⑧ 260905(§4.4.4): 우클릭 메뉴 — 위/아래 추가·삭제 / 미리보기에서 쪽 기준 추가 ──
+from PyQt6.QtCore import Qt as _Qt
+# toc_page 를 비워 둔다 — 창이 열릴 때 [오프셋 적용](initial)이 실제 쪽을 덮어쓰지 않도록
+rows_m = [{"title": "A", "toc_page": None, "page": 3, "level": 0, "src": "p1", "manual": True},
+          {"title": "B", "toc_page": None, "page": 6, "level": 1, "src": "p1", "manual": True},
+          {"title": "C", "toc_page": None, "page": 10, "level": 1, "src": "p1", "manual": True}]
+dlgm = TocReviewDialog(pdf, rows_m, offset=0, candidates=[], method="toc", toc_pages=[1])
+chk(dlgm.table.contextMenuPolicy() == _Qt.ContextMenuPolicy.CustomContextMenu,
+    "⑧ 표에 우클릭 메뉴 정책")
+chk(dlgm.lbl_pv.contextMenuPolicy() == _Qt.ContextMenuPolicy.CustomContextMenu,
+    "⑧ 미리보기에 우클릭 메뉴 정책")
+chk(all(hasattr(dlgm, m) for m in ("_on_table_menu", "_on_preview_menu",
+                                   "add_bookmark_at_page", "_insert_pos_for_page")),
+    "⑧ 우클릭 동작 메서드 존재")
+
+# 위에 추가 / 아래에 추가
+dlgm.table.setCurrentCell(1, COL_TITLE)
+dlgm._add_row("above")
+chk(dlgm.table.currentRow() == 1 and dlgm.table.item(1, COL_TITLE).text() == ""
+    and dlgm.table.item(2, COL_TITLE).text() == "B",
+    "⑧ '위에 책갈피 추가' — 현재 행 자리에 삽입",
+    [dlgm.table.item(i, COL_TITLE).text() for i in range(dlgm.table.rowCount())])
+dlgm.table.closePersistentEditor(dlgm.table.item(1, COL_TITLE))
+dlgm.table.removeRow(1)
+dlgm.table.setCurrentCell(1, COL_TITLE)
+dlgm._add_row("below")
+chk(dlgm.table.item(1, COL_TITLE).text() == "B" and dlgm.table.item(2, COL_TITLE).text() == ""
+    and dlgm.table.item(3, COL_TITLE).text() == "C",
+    "⑧ '아래에 책갈피 추가' — 현재 행 다음에 삽입",
+    [dlgm.table.item(i, COL_TITLE).text() for i in range(dlgm.table.rowCount())])
+dlgm.table.removeRow(2)
+# 레벨·출처 쪽 상속
+dlgm.table.setCurrentCell(1, COL_TITLE)
+dlgm._add_row("below")
+chk(dlgm.table.item(2, COL_LEVEL).text() == dlgm.table.item(1, COL_LEVEL).text(),
+    "⑧ 새 행이 기준 행의 레벨을 물려받음")
+dlgm.table.removeRow(2)
+
+# 삭제(여러 행)
+dlgm.table.clearSelection()
+dlgm.table.selectRow(0); dlgm.table.selectRow(2)
+before = dlgm.table.rowCount()
+dlgm._del_rows()
+chk(dlgm.table.rowCount() == before - 1, "⑧ '책갈피 삭제' — 선택 행 제거",
+    f"{before} -> {dlgm.table.rowCount()}")
+dlgm.close()
+
+# 미리보기 우클릭 추가 — 쪽 번호 순서 자리에
+dlgp = TocReviewDialog(pdf, rows_m, offset=0, candidates=[], method="toc", toc_pages=[1])
+chk(dlgp._insert_pos_for_page(1) == 0, "⑧ 첫 쪽보다 앞이면 맨 위",
+    str(dlgp._insert_pos_for_page(1)))
+chk(dlgp._insert_pos_for_page(8) == 2, "⑧ 6쪽과 10쪽 사이면 2번째 자리",
+    str(dlgp._insert_pos_for_page(8)))
+chk(dlgp._insert_pos_for_page(12) == 3, "⑧ 마지막 쪽보다 뒤면 맨 끝")
+at = dlgp.add_bookmark_at_page(8)
+titles = [dlgp.table.item(i, COL_TITLE).text() for i in range(dlgp.table.rowCount())]
+pages = [dlgp.table.item(i, COL_PAGE).text() for i in range(dlgp.table.rowCount())]
+chk(at == 2 and pages == ["3", "6", "8", "10"],
+    "⑧ 미리보기 쪽으로 추가 — 쪽 순서 자리에 들어감", str(pages))
+chk(titles[2] == "" and dlgp.table.currentRow() == 2, "⑧ 새 행이 선택되고 제목은 비어 있음")
+chk(dlgp.table.item(2, COL_PAGE).background().color().name() == "#fff8e1",
+    "⑧ 직접 고른 쪽이므로 수동(노랑) 표시",
+    dlgp.table.item(2, COL_PAGE).background().color().name())
+chk(dlgp.table.item(2, COL_LEVEL).text() == dlgp.table.item(1, COL_LEVEL).text(),
+    "⑧ 바로 위 행의 레벨을 물려받음")
+chk(dlgp.table.item(2, COL_PAGE).data(_Qt.ItemDataRole.UserRole) is None,
+    "⑧ 이전 값 없음 — 처음 고쳐도 이후 행을 옮기지 않음")
+# 쪽 범위 밖은 문서 범위로 클램프
+big = dlgp.add_bookmark_at_page(99999)
+chk(int(dlgp.table.item(big, COL_PAGE).text()) <= dlgp._page_count,
+    "⑧ 문서 쪽 수를 넘지 않게 보정", dlgp.table.item(big, COL_PAGE).text())
+dlgp.close()
+
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 sys.stdout.flush()

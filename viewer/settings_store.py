@@ -21,7 +21,7 @@ PERSONAL_TOP_KEYS = ["favorites", "law_favorites", "recent_folders",
                      "screenshots", "screenshots_meta"]
 #   머신 종속 환경설정(경로 등) — 기본값에서 제외, 초기화 시 유지:
 PERSONAL_PREF_KEYS = {"recording_dir", "recording_mic", "recording_system",
-                      "ffmpeg_path", "bookmarker_path", "recording_keys",
+                      "ffmpeg_path", "recording_keys",
                       "recording_test_ok"}
 
 # 260628(보안감사): API 키 등 **비밀 값** — 마스터 SOT §8.2.0 의 3중 규칙 대상.

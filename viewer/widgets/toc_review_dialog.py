@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
                              QTableWidget, QTableWidgetItem, QSpinBox, QComboBox,
                              QAbstractItemView, QHeaderView, QSplitter, QWidget,
                              QDialogButtonBox, QMessageBox, QRadioButton, QApplication,
-                             QCheckBox, QScrollArea, QStyledItemDelegate)
+                             QCheckBox, QScrollArea, QStyledItemDelegate, QMenu)
 
 from viewer import toc_parse
 
@@ -161,10 +161,13 @@ class TocReviewDialog(QDialog):
         self.table.verticalHeader().setDefaultSectionSize(22)
         self.table.itemChanged.connect(self._on_item_changed)
         self.table.currentCellChanged.connect(lambda r, _c, _pr, _pc: self._show_preview(r))
+        # 260905(§4.4.4): 행 우클릭 — 위/아래에 책갈피 추가·삭제
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._on_table_menu)
         ll.addWidget(self.table, 1)
         ops = QHBoxLayout()
         for label, tip, slot in (
-                ("행 추가", "현재 행 아래에 새 항목", self._add_row),
+                ("행 추가", "현재 행 아래에 새 항목", lambda: self._add_row("below")),
                 ("삭제", "선택 행 삭제", self._del_rows),
                 ("▲", "위로", lambda: self._move(-1)),
                 ("▼", "아래로", lambda: self._move(+1)),
@@ -201,6 +204,9 @@ class TocReviewDialog(QDialog):
         rl.addLayout(top)
         self.lbl_pv = QLabel(); self.lbl_pv.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         self.lbl_pv.setStyleSheet("background:#f3f3f3;")
+        # 260905(§4.4.4): 미리보기 우클릭 — 보고 있는 쪽으로 책갈피 추가
+        self.lbl_pv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.lbl_pv.customContextMenuRequested.connect(self._on_preview_menu)
         self.pv_scroll = QScrollArea(); self.pv_scroll.setWidget(self.lbl_pv)
         self.pv_scroll.setWidgetResizable(True)
         self.pv_scroll.setMinimumSize(360, 300)
@@ -373,9 +379,13 @@ class TocReviewDialog(QDialog):
         finally:
             self.table.blockSignals(False)
 
-    def _add_row(self):
+    def _add_row(self, where: str = "below"):
+        """260905(§4.4.4): 현재 행의 **아래**(기본) 또는 **위**에 빈 항목을 넣는다."""
         cur = self.table.currentRow()
-        at = (cur + 1) if cur >= 0 else self.table.rowCount()
+        if cur < 0:
+            at = self.table.rowCount()
+        else:
+            at = cur if where == "above" else cur + 1
         base = self._row_dict(cur) if cur >= 0 else {"level": 0}
         self.table.blockSignals(True)
         # 260904-6: 출처 목차 쪽(src)을 물려받아 '목차 보기' 미리보기가 첫 목차 쪽으로 튀지 않게
@@ -386,6 +396,69 @@ class TocReviewDialog(QDialog):
         self.table.blockSignals(False)
         self.table.setCurrentCell(at, COL_TITLE)
         self.table.editItem(self.table.item(at, COL_TITLE))
+
+    # ── 260905(§4.4.4): 우클릭 메뉴 ─────────────────────────────────
+    def _on_table_menu(self, pos):
+        """표 행 우클릭 — 위/아래에 책갈피 추가, 선택 행 삭제."""
+        idx = self.table.indexAt(pos)
+        if idx.isValid() and idx.row() not in self._sel_rows():
+            # 우클릭은 대상을 고르기만 한다(선택이 이미 있으면 그대로 — 여러 행 삭제용)
+            self.table.setCurrentCell(idx.row(), COL_TITLE)
+        menu = QMenu(self)
+        a_above = menu.addAction("위에 책갈피 추가")
+        a_below = menu.addAction("아래에 책갈피 추가")
+        menu.addSeparator()
+        n = len(self._sel_rows())
+        a_del = menu.addAction("책갈피 삭제" if n <= 1 else f"책갈피 삭제 ({n}개)")
+        a_del.setEnabled(n > 0)          # 지울 행이 있을 때만(추가는 빈 표에서도 가능)
+        chosen = menu.exec(self.table.viewport().mapToGlobal(pos))
+        if chosen is a_above:
+            self._add_row("above")
+        elif chosen is a_below:
+            self._add_row("below")
+        elif chosen is a_del:
+            self._del_rows()
+
+    def _on_preview_menu(self, pos):
+        """미리보기 우클릭 — 지금 보고 있는 쪽으로 책갈피 추가(쪽 번호 순서 자리에)."""
+        menu = QMenu(self)
+        body = (self._pv_mode == "body")
+        pg = self._pv_page
+        if body and pg:
+            act = menu.addAction(f"이 쪽에 책갈피 추가 (p.{int(pg)})")
+        else:
+            act = menu.addAction("이 쪽에 책갈피 추가 — '내용 보기'에서만")
+            act.setEnabled(False)
+        chosen = menu.exec(self.lbl_pv.mapToGlobal(pos))
+        if chosen is act and act.isEnabled():
+            self.add_bookmark_at_page(int(pg))
+
+    def _insert_pos_for_page(self, page: int) -> int:
+        """실제 쪽이 오름차순이 되도록 `page` 가 들어갈 행 위치(쪽이 빈 행은 건너뛴다)."""
+        for i in range(self.table.rowCount()):
+            it = self.table.item(i, COL_PAGE)
+            p = toc_parse.fix_ocr_number(it.text()) if it else None
+            if p is not None and int(p) > int(page):
+                return i
+        return self.table.rowCount()
+
+    def add_bookmark_at_page(self, page: int) -> int:
+        """260905(§4.4.4): 실제 쪽 `page` 짜리 빈 항목을 **쪽 순서에 맞는 자리**에 넣고 제목 편집.
+
+        레벨·출처 쪽은 **바로 위 행**에서 물려받아 위계 안에 자연스럽게 들어간다.
+        쪽은 사용자가 직접 고른 값이므로 **수동(노랑)** 으로 표시한다."""
+        page = max(1, min(self._page_count or page, int(page)))
+        at = self._insert_pos_for_page(page)
+        base = self._row_dict(at - 1) if at > 0 else {"level": 0}
+        self.table.blockSignals(True)
+        self._append_row({"level": base.get("level", 0), "title": "", "toc_page": None,
+                          "page": page, "src": base.get("src") or "", "manual": True}, at)
+        # _add_row 와 같은 규칙 — 처음 고칠 때 이후 행을 따라 옮기지 않는다
+        self.table.item(at, COL_PAGE).setData(Qt.ItemDataRole.UserRole, None)
+        self.table.blockSignals(False)
+        self.table.setCurrentCell(at, COL_TITLE)
+        self.table.editItem(self.table.item(at, COL_TITLE))
+        return at
 
     def _sel_rows(self) -> list[int]:
         return sorted({i.row() for i in self.table.selectedIndexes()})

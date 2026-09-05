@@ -185,8 +185,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             "presentation_pointer_active": 0,
             # 260609-6: 발표 상하 2분할·중앙 겹침%
             "presentation_overlap_pct": 10,
-            # 260609-12(D1): 발표 상단 띠 높이(px)
-            "presentation_topbar_h": 64,
+            # 260905(발표 SOT §4.1): 좌우 2쪽 보기·맞쪽(영속)
+            "presentation_dual": False,
+            "presentation_facing": False,
             # 260609-16(F3): 발표 펜(빈 값이면 모듈 기본)·활성·단축키
             "presentation_pens": [],
             "presentation_pen_active": 0,
@@ -2128,7 +2129,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
 
         # prefs 기본값 갱신
-        self._prefs["bookmarker_path"] = opts.get("bookmarker_path", "")
         self._prefs["bookmarker_mode"] = opts.get("mode", "auto")
         self._prefs["bookmarker_ocr_font_auto"] = bool(opts.get("ocr_font_auto", True))
         self._prefs["bookmarker_save_pdf"] = bool(opts["save_pdf"])
@@ -2248,6 +2248,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _on_bookmarker_error(self, msg: str):
         self.progress.setVisible(False)
+        # 260905(§4.4.6.2): '현재 PDF에 저장'은 쓰기 직전에 본문 문서를 닫는다. 되살리는
+        #   경로가 성공 분기에만 있어, 실패하면 본문이 빈 채로 남았다 → 여기서 다시 연다.
+        try:
+            src = getattr(self, "_bookmarker_pdf", None)
+            if src and Path(src).exists() and self._current_main is None:
+                self._load_main(HistoryItem(str(src), 0, "", "bookmark"))
+        except Exception:
+            pass
         self.status.showMessage(f"책갈피 생성 오류: {msg}", 8000)
         QMessageBox.warning(self, "책갈피 생성 실패", msg)
 
@@ -3051,6 +3059,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 "2창으로 복사" if self._active_pane == 0 else "1창으로 복사")
         else:
             act_to_dual = menu.addAction("2단 보기")
+        # 260905(사용자 요청): '2단 보기' 바로 아래 — 우클릭에서 바로 전체화면 발표로
+        act_present = menu.addAction("발표보기")
         menu.addSeparator()
         act_add = menu.addAction(f"책갈피 추가 (p.{page})") if edit else None
         # 260609-11(C1): 하이퍼링크 등록은 편집모드에서만
@@ -3126,6 +3136,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._view_as_split(); return
         if act_copy_other is not None and chosen == act_copy_other:
             self._copy_pane_to(self._active_pane, 1 - self._active_pane); return
+        if chosen == act_present:              # 260905: 우클릭 → 발표보기(F5 와 같은 경로)
+            self._open_presentation(); return
         # 260617-2: 텍스트 복사(블럭/페이지)·블럭설정·현재 페이지 인쇄
         if chosen == act_copy:
             self.main_view.copy_selection(); return
@@ -4279,14 +4291,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         pointers = self._prefs.get("presentation_pointers") or DEFAULT_POINTERS
         active = int(self._prefs.get("presentation_pointer_active", 0))
         overlap = int(self._prefs.get("presentation_overlap_pct", 10))
-        topbar_h = int(self._prefs.get("presentation_topbar_h", 64))
         self._present = PresentationWindow(cur, page, self,
                                            pointers=pointers, pointer_active=active,
                                            overlap_pct=overlap,
                                            sibling_resolver=self._presentation_sibling,
                                            hyperlink_resolver=self._presentation_hyperlinks,
-                                           topbar_h=topbar_h,
                                            bookmark_resolver=self._presentation_bookmarks,
+                                           # 260905(발표 SOT §4.1): 좌우 2쪽·맞쪽은 영속 설정
+                                           dual_mode=bool(self._prefs.get("presentation_dual", False)),
+                                           facing=bool(self._prefs.get("presentation_facing", False)),
                                            crop_resolver=self._crop_for,
                                            hidden_resolver=self._hidden_for,
                                            rotation_resolver=self._rotation_for,
@@ -4301,7 +4314,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                            highlight_alpha=self._draw_highlight_alpha(),
                                            timer_cfg=self._prefs.get("presentation_timer"))  # 260611-19
         self._present.splitModeChanged.connect(self._on_present_split_changed)
-        self._present.cropSettingsRequested.connect(self._on_crop_settings)
+        self._present.dualModeChanged.connect(self._on_present_dual_changed)    # 260905
+        self._present.facingChanged.connect(self._on_present_facing_changed)    # 260905
         self._present.penChanged.connect(self._on_pen_changed)
         self._present.penSettingsRequested.connect(self._on_pen_settings)
         self._present.penStraightChanged.connect(self._on_pen_straight_changed)
@@ -4333,6 +4347,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   발표 중 토글은 **그 세션에만** 적용한다(저장하지 않음 — 저장해도 반영되지 않아 오해만 낳았다).
         pass
 
+    def _on_present_dual_changed(self, on: bool):
+        """260905(발표 SOT §4.1): 좌우 2쪽 보기는 **영속**(상하 2분할과 다름)."""
+        self._prefs["presentation_dual"] = bool(on)
+        self._save_settings_now()
+
+    def _on_present_facing_changed(self, on: bool):
+        self._prefs["presentation_facing"] = bool(on)
+        self._save_settings_now()
+
     def _on_pres_timer_cfg(self, cfg):
         """260611-19: 발표시간 설정 영속."""
         self._prefs["presentation_timer"] = cfg
@@ -4344,79 +4367,55 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._save_settings_now()
 
     def _on_present_view_settings(self):
-        """260611-26: '보기 설정' — 상단 띠 높이 + 크롭(구 '크롭 설정' 내용 병합)."""
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QGroupBox,
-                                     QSpinBox, QCheckBox, QPushButton, QDialogButtonBox)
+        """260905(발표 SOT §4.2): '보기 설정' — 크롭 4방향·홀짝 좌우 + 미리보기.
+
+        260611-26 의 '상단 띠 높이' 항목은 삭제했다(§6 — 최소 높이만 강제하는 값이라
+        실질 기능이 없었다)."""
+        from PyQt6.QtWidgets import QDialog
+        from viewer.widgets.view_settings_dialog import ViewSettingsDialog
         w = getattr(self, "_present", None)
-        par = w or self
         st = self._ensure_page_meta_store()
-        dlg = QDialog(par)
-        dlg.setWindowTitle("보기 설정")
-        v = QVBoxLayout(dlg)
-        # 상단 띠 높이
-        grp_tb = QGroupBox("상단 띠")
-        tf = QFormLayout(grp_tb)
-        sp_tb = QSpinBox(); sp_tb.setRange(40, 240); sp_tb.setSuffix(" px")
-        sp_tb.setValue(int(self._prefs.get("presentation_topbar_h", 64)))
-        tf.addRow("상단 띠 높이:", sp_tb)
-        v.addWidget(grp_tb)
-
-        # 크롭(현재 발표 파일/페이지) — 상단 띠 높이 아래에 병합
-        crop = None
-        if w is not None and st is not None:
-            path = str(w._path); page0 = int(w._page)
-            g = st.get_global_crop(path); pg = st.get_crop(path, page0)
-            has_pg = st.has_page_crop(path, page0)
-
-            def _sp(val):
-                s = QSpinBox(); s.setRange(0, 45); s.setSuffix(" %")
-                s.setValue(int(round(float(val)))); return s
-            grp_g = QGroupBox("크롭 — 전체 페이지(전역)")
-            gf = QFormLayout(grp_g)
-            sp_gt = _sp(g[0]); sp_gb = _sp(g[1])
-            gf.addRow("상단 크롭:", sp_gt); gf.addRow("하단 크롭:", sp_gb)
-            v.addWidget(grp_g)
-            grp_p = QGroupBox(f"크롭 — 현재 페이지 p.{page0 + 1}")
-            pf = QFormLayout(grp_p)
-            chk_pg = QCheckBox("이 페이지에만 별도 적용"); chk_pg.setChecked(bool(has_pg))
-            pf.addRow(chk_pg)
-            sp_pt = _sp(pg[0]); sp_pb = _sp(pg[1])
-            pf.addRow("상단 크롭:", sp_pt); pf.addRow("하단 크롭:", sp_pb)
-            v.addWidget(grp_p)
-            btn_reset = QPushButton("크롭 초기화(이 파일 전체)")
-            v.addWidget(btn_reset)
-            cstate = {"reset": False}
-            btn_reset.clicked.connect(lambda: (cstate.__setitem__("reset", True), dlg.accept()))
-            crop = (path, page0, sp_gt, sp_gb, chk_pg, sp_pt, sp_pb, cstate)
-
-        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
-                              | QDialogButtonBox.StandardButton.Cancel)
-        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject)
-        v.addWidget(bb)
+        if w is None or st is None:
+            return
+        path = str(w._path)
+        page0 = int(w._page)
+        # 미리보기 구성 — 좌우 2쪽이면 펼침 그대로, 상하 2분할은 반영하지 않는다(§4.2.3).
+        #   쪽 이동 규칙(펼침 단위·숨김 건너뜀)은 발표창 것을 그대로 쓴다.
+        try:
+            pv = w.preview_pages_for(page0)
+        except Exception:
+            pv = [page0]
+        dlg = ViewSettingsDialog(
+            page_no=page0 + 1,
+            global_crop=st.get_global_crop(path),
+            page_crop=st.get_crop(path, page0),
+            has_page_crop=st.has_page_crop(path, page0),
+            oddeven=st.get_oddeven_crop(path),
+            preview_pages=pv,
+            renderer=(lambda p, dpi: w._render_pixmap(dpi, p)),
+            pages_for=w.preview_pages_for,
+            step=w.preview_step,
+            # 쪽을 옮겼을 때 그 쪽에 저장된 개별 크롭을 보여 주기 위한 조회(§4.2.3.1)
+            page_crop_of=(lambda p: st.get_crop(path, p)
+                          if st.has_page_crop(path, p) else None),
+            parent=w,
+        )
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        # 상단 띠 높이 저장·반영
-        self._prefs["presentation_topbar_h"] = int(sp_tb.value())
-        self._save_settings_now()
-        if w is not None:
-            try:
-                w.set_topbar_height(sp_tb.value())
-            except Exception:
-                pass
-        # 크롭 저장·반영
-        if crop is not None and st is not None:
-            path, page0, sp_gt, sp_gb, chk_pg, sp_pt, sp_pb, cstate = crop
-            if cstate["reset"]:
-                st.reset_crop(path)
-            else:
-                st.set_global_crop(path, sp_gt.value(), sp_gb.value())
-                if chk_pg.isChecked():
-                    st.set_page_crop(path, page0, sp_pt.value(), sp_pb.value())
-                else:
-                    st.clear_page_crop(path, page0)
-            st.save()
-            if w is not None:
-                w.refresh()
+        r = dlg.result_values()
+        if r["reset"]:
+            st.reset_crop(path)
+        else:
+            st.set_global_crop(path, *r["global"])
+            st.set_oddeven_crop(path, r["oddeven_enabled"], r["odd"], r["even"])
+            # 260905(§4.2.3.1): '적용'으로 고정한 쪽 + 편집 중이던 쪽을 한꺼번에 저장
+            for pg, v in (r.get("page_crops") or {}).items():
+                st.set_page_crop(path, int(pg), *v)
+            for pg in (r.get("page_clears") or []):
+                st.clear_page_crop(path, int(pg))
+        st.save()
+        # 크롭이 바뀌면 렌더 캐시 키도 바뀌지만, 숨김·목록 캐시는 refresh 가 비운다.
+        w.refresh()
 
     def _on_pen_changed(self, idx: int):
         self._prefs["presentation_pen_active"] = int(idx)
@@ -5335,7 +5334,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._prefs.setdefault("pdf_save_show_query", False)      # v1.6.4
         self._prefs.setdefault("pdf_save_show_filename", False)   # v1.6.4
         self._prefs.setdefault("pdf_save_show_pageno", False)     # v1.6.4
-        self._prefs.setdefault("bookmarker_path", "")             # v1.6.16
         self._prefs.setdefault("bookmarker_mode", "auto")         # v1.6.16
         self._prefs.setdefault("bookmarker_save_pdf", True)       # v1.6.16
         self._prefs.setdefault("bookmarker_overwrite", False)     # 260606-4
@@ -5352,7 +5350,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._prefs.setdefault("presentation_pointers", [])       # 260609-5
         self._prefs.setdefault("presentation_pointer_active", 0)  # 260609-5
         self._prefs.setdefault("presentation_overlap_pct", 10)    # 260609-6
-        self._prefs.setdefault("presentation_topbar_h", 64)       # 260609-12(D1)
+        self._prefs.setdefault("presentation_dual", False)        # 260905(§4.1)
+        self._prefs.setdefault("presentation_facing", False)      # 260905(§4.1)
         self._prefs.setdefault("presentation_pens", [])           # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_active", 0)      # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_keys", [])       # 260609-16(F3)
@@ -5596,8 +5595,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             "pdf_save_show_filename": _pdf("pdf_save_show_filename"),
             "pdf_save_show_pageno": _pdf("pdf_save_show_pageno"),
             # v1.6.16: 책갈피 자동 생성 옵션 (다이얼로그 기본값 — SettingsDialog 미관리)
-            "bookmarker_path": str(prefs.get("bookmarker_path",
-                                             old.get("bookmarker_path", ""))),
             "bookmarker_mode": str(prefs.get("bookmarker_mode",
                                              old.get("bookmarker_mode", "auto"))),
             "bookmarker_save_pdf": bool(prefs.get("bookmarker_save_pdf",
@@ -5637,9 +5634,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             "presentation_overlap_pct": int(prefs.get(
                 "presentation_overlap_pct",
                 old.get("presentation_overlap_pct", 10))),
-            "presentation_topbar_h": int(prefs.get(
-                "presentation_topbar_h",
-                old.get("presentation_topbar_h", 64))),
+            # 260905(§4.1): 좌우 2쪽·맞쪽 — SettingsDialog 가 모르는 키라 old 로 보존해야
+            #   설정창을 한 번 여는 것만으로 조용히 사라지지 않는다(§14.2 함정).
+            "presentation_dual": bool(prefs.get(
+                "presentation_dual", old.get("presentation_dual", False))),
+            "presentation_facing": bool(prefs.get(
+                "presentation_facing", old.get("presentation_facing", False))),
             # 260609-16(F3): 발표 펜
             "presentation_pens": list(prefs.get(
                 "presentation_pens", old.get("presentation_pens", []))),

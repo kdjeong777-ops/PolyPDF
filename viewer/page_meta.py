@@ -1,8 +1,14 @@
 """260609-14 (D4·D5): 페이지별 메타(크롭·숨김) — 폴더 사이드카 JSON, lazy 로드.
 
 시작 속도 영향 최소화: 폴더 열 때 한 번 읽고, 변경 시에만 저장.
-크롭은 페이지 높이 대비 백분율(상/하), 0~45%. 페이지별 값이 전역보다 우선.
+크롭은 페이지 크기 대비 백분율 **[상, 하, 좌, 우]**, 각 0~45%. 페이지별 값이 전역보다 우선.
 숨김은 0-based 페이지 집합. 키=base_folder 기준 상대경로(/).
+
+2026-09-05 (발표 SOT §4.2): 스키마 v2 — 좌·우 크롭과 홀짝 좌우 크롭 추가.
+  * `crop_global` / `crop_pages` 는 4원소 `[t, b, l, r]`. v1 의 2원소 `[t, b]` 는
+    읽을 때 `_crop4()` 가 `[t, b, 0, 0]` 으로 채운다(옛 사이드카 값 보존).
+  * `crop_oddeven = {"enabled": bool, "odd": [l, r], "even": [l, r]}` — 스캔본의
+    제본 여백처럼 **쪽 번호(1-based) 홀/짝에 따라 좌·우만** 달리 자를 때 쓴다.
 """
 from __future__ import annotations
 
@@ -12,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 SIDECAR_NAME = "page_meta.json"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 CROP_MAX = 45.0
 
 
@@ -22,6 +28,26 @@ def _clamp_crop(v) -> float:
     except Exception:
         return 0.0
     return max(0.0, min(CROP_MAX, v))
+
+
+def _crop4(v) -> tuple:
+    """[t,b] / [t,b,l,r] / None → (t, b, l, r) 클램프 튜플(v1 하위호환)."""
+    try:
+        seq = list(v or [])
+    except Exception:
+        seq = []
+    seq = (seq + [0.0, 0.0, 0.0, 0.0])[:4]
+    return tuple(_clamp_crop(x) for x in seq)
+
+
+def _lr2(v) -> tuple:
+    """[l, r] → (l, r) 클램프 튜플."""
+    try:
+        seq = list(v or [])
+    except Exception:
+        seq = []
+    seq = (seq + [0.0, 0.0])[:2]
+    return tuple(_clamp_crop(x) for x in seq)
 
 
 class PageMetaStore:
@@ -52,7 +78,7 @@ class PageMetaStore:
         if key not in files:
             if not create:
                 return None
-            files[key] = {"crop_global": [0.0, 0.0], "crop_pages": {},
+            files[key] = {"crop_global": [0.0, 0.0, 0.0, 0.0], "crop_pages": {},
                           "hidden": [], "rotation": {}, "drawings": {}}
         files[key].setdefault("rotation", {})       # 260609-15(A1): 구버전 보강
         files[key].setdefault("drawings", {})       # 260609-22(J3): 선긋기
@@ -84,44 +110,71 @@ class PageMetaStore:
         except Exception:
             return False
 
-    # --- 크롭(D4) ---
+    # --- 크롭(D4 / 2026-09-05 4방향·홀짝) ---
     def get_crop(self, file_path, page0):
-        """(top%, bottom%) — 페이지별 값 우선, 없으면 전역."""
+        """(top%, bottom%, left%, right%) — 발표 SOT §4.2.1 우선순위.
+
+        1) 그 페이지의 개별 크롭이 있으면 4값 전부 그것.
+        2) 없으면 상·하 = 전역, 좌·우 = 홀짝 크롭이 켜져 있으면 쪽번호(1-based)
+           홀/짝 값, 아니면 전역 좌·우.
+        """
         key = self._key(file_path)
         fr = self._data["files"].get(key) if key else None
         if not fr:
-            return (0.0, 0.0)
+            return (0.0, 0.0, 0.0, 0.0)
         pg = str(int(page0))
         if pg in fr.get("crop_pages", {}):
-            t, b = fr["crop_pages"][pg]
-            return (_clamp_crop(t), _clamp_crop(b))
-        g = fr.get("crop_global", [0.0, 0.0])
-        return (_clamp_crop(g[0]), _clamp_crop(g[1]))
+            return _crop4(fr["crop_pages"][pg])
+        t, b, gl, gr = _crop4(fr.get("crop_global"))
+        oe = fr.get("crop_oddeven") or {}
+        if oe.get("enabled"):
+            # 1-based 쪽번호의 홀/짝 — 맞쪽 빈 페이지와 무관하게 일정해야 한다.
+            l, r = _lr2(oe.get("odd" if (int(page0) + 1) % 2 else "even"))
+            return (t, b, l, r)
+        return (t, b, gl, gr)
 
     def get_global_crop(self, file_path):
+        """(top%, bottom%, left%, right%)."""
         key = self._key(file_path)
         fr = self._data["files"].get(key) if key else None
-        g = (fr or {}).get("crop_global", [0.0, 0.0])
-        return (_clamp_crop(g[0]), _clamp_crop(g[1]))
+        return _crop4((fr or {}).get("crop_global"))
+
+    def get_oddeven_crop(self, file_path):
+        """(enabled, (odd_l, odd_r), (even_l, even_r))."""
+        key = self._key(file_path)
+        fr = self._data["files"].get(key) if key else None
+        oe = (fr or {}).get("crop_oddeven") or {}
+        return (bool(oe.get("enabled")), _lr2(oe.get("odd")), _lr2(oe.get("even")))
+
+    def set_oddeven_crop(self, file_path, enabled, odd, even) -> bool:
+        key = self._key(file_path)
+        if key is None:
+            return False
+        self._file(key, create=True)["crop_oddeven"] = {
+            "enabled": bool(enabled),
+            "odd": list(_lr2(odd)),
+            "even": list(_lr2(even)),
+        }
+        return True
 
     def has_page_crop(self, file_path, page0) -> bool:
         key = self._key(file_path)
         fr = self._data["files"].get(key) if key else None
         return bool(fr and str(int(page0)) in fr.get("crop_pages", {}))
 
-    def set_global_crop(self, file_path, top, bottom) -> bool:
+    def set_global_crop(self, file_path, top, bottom, left=0.0, right=0.0) -> bool:
         key = self._key(file_path)
         if key is None:
             return False
-        self._file(key, create=True)["crop_global"] = [_clamp_crop(top), _clamp_crop(bottom)]
+        self._file(key, create=True)["crop_global"] = list(_crop4([top, bottom, left, right]))
         return True
 
-    def set_page_crop(self, file_path, page0, top, bottom) -> bool:
+    def set_page_crop(self, file_path, page0, top, bottom, left=0.0, right=0.0) -> bool:
         key = self._key(file_path)
         if key is None:
             return False
         self._file(key, create=True)["crop_pages"][str(int(page0))] = \
-            [_clamp_crop(top), _clamp_crop(bottom)]
+            list(_crop4([top, bottom, left, right]))
         return True
 
     def clear_page_crop(self, file_path, page0) -> bool:
@@ -133,12 +186,13 @@ class PageMetaStore:
         return False
 
     def reset_crop(self, file_path) -> bool:
-        """전역+페이지별 크롭 초기화."""
+        """전역+페이지별+홀짝 크롭 초기화."""
         key = self._key(file_path)
         fr = self._data["files"].get(key) if key else None
         if fr:
-            fr["crop_global"] = [0.0, 0.0]
+            fr["crop_global"] = [0.0, 0.0, 0.0, 0.0]
             fr["crop_pages"] = {}
+            fr.pop("crop_oddeven", None)
             return True
         return False
 
