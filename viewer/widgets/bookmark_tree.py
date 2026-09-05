@@ -190,6 +190,7 @@ class BookmarkTree(QWidget):
     viewModeChanged = pyqtSignal(bool, str)  # 260825: (is_folder, 폴더|파일 경로) — 파일↔폴더 전환
     filesRelocated = pyqtSignal(list)        # 260901-2: [[old, new], ...] 파일 복사/이동 완료
     viewListModeChanged = pyqtSignal(bool)   # 260901-3: 사용자가 목록 보기를 바꿈(True=트리)
+    filesListed = pyqtSignal()               # 260906-1: 폴더 목록 채우기 완료(비동기 스캔 후)
 
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
@@ -199,6 +200,16 @@ class BookmarkTree(QWidget):
     DATA_AUTH = _AUTH_ROLE                            # 260618-1: 인증 상태(owner/user/locked)
     DATA_BASELABEL = Qt.ItemDataRole.UserRole + 7    # 260623: 해시태그 접미 적용 전 원본 라벨
     DATA_IS_FOLDER = Qt.ItemDataRole.UserRole + 8    # 260901-2: 트리 보기의 폴더 그룹 행
+    DATA_PROBED = Qt.ItemDataRole.UserRole + 9       # 260906-1: 표식 검사 큐에 넣은 행
+
+    # 260906-1(마스터 SOT §5 '폴더 열기 3단 규칙'):
+    SCAN_BUDGET_MS = 150     # 메인 스레드에서 목록을 훑어 볼 예산. 넘기면 워커로 넘긴다.
+    FILL_CHUNK = 400         # 한 틱의 행 수 상한(시간 상한에 먼저 걸리는 것이 보통)
+    FILL_SLICE_MS = 25       # ★ 한 틱이 쓰는 시간 상한 — 개수로 끊으면 느린 드라이브에서
+                             #   한 틱이 수백 ms 로 늘어 창이 멈춘 느낌이 난다(실측)
+    FILL_INTERVAL_MS = 10    # ★ 0 금지 — Windows WM_TIMER 가 굶는다(§5)
+    PROBE_INTERVAL_MS = 20   # 표식 검사 간격(종전 0)
+    PROBE_PER_TICK = 3       # 한 번에 검사할 파일 수(종전 6)
 
     # 260901-2: 폴더 그룹 행 색 — 디자인 SOT §2.5(테마 무관, 밝은 노랑+어두운 글자)
     FOLDER_ROW_BG = "#fdf3c0"
@@ -238,8 +249,22 @@ class BookmarkTree(QWidget):
         # 260611-59: 암호화/책갈피 표식을 배경(점진)으로 검사 — 시작·폴더로딩 지연 방지
         self._probe_queue: list = []
         self._probe_timer = QTimer(self)
-        self._probe_timer.setInterval(0)
+        self._probe_timer.setInterval(self.PROBE_INTERVAL_MS)
         self._probe_timer.timeout.connect(self._probe_tick)
+        # 260906-1: 폴더 스캔(워커) 상태 — 늦게 오는 이전 폴더 결과는 토큰으로 거른다.
+        self._scan_worker = None
+        self._scan_token = 0
+        self._scan_keep: list = []
+        self._scan_after = None      # 스캔→채우기 완료 후 1회 실행
+        self._scan_stats: dict = {}  # {경로: (크기, 수정시각)} — 정렬용(스캔 때 공짜로 얻음)
+        # 260906-1: 트리 점진 채우기 상태
+        self._fill_plan: list = []
+        self._fill_pos = 0
+        self._fill_folders: dict = {}
+        self._fill_after = None      # 채우기 완료 후 1회 실행(선택 복원 등)
+        self._fill_timer = QTimer(self)
+        self._fill_timer.setInterval(self.FILL_INTERVAL_MS)
+        self._fill_timer.timeout.connect(self._fill_tick)
         self._build_ui()
 
     def set_meta_hooks(self, is_dirty_fn, commit_fn):
@@ -470,6 +495,14 @@ class BookmarkTree(QWidget):
         self.tree.pathDropped.connect(self.pathDropped.emit)
         # v1.6.2: 갈매기(▸) 펼침 시 PDF 내부 TOC lazy load
         self.tree.itemExpanded.connect(self._on_item_expanded)
+        # 260906-1: 화면에 보이는 행만 표식 검사(마스터 SOT §5) — 스크롤·펼침·접힘·크기변경마다
+        #   다시 걷는다. rangeChanged 는 창 크기·행 수가 바뀔 때도 오므로 리사이즈까지 덮는다.
+        self.tree.verticalScrollBar().valueChanged.connect(
+            lambda _v: self._queue_visible_probes())
+        self.tree.verticalScrollBar().rangeChanged.connect(
+            lambda _a, _b: self._queue_visible_probes())
+        self.tree.itemExpanded.connect(lambda _it: self._queue_visible_probes())
+        self.tree.itemCollapsed.connect(lambda _it: self._queue_visible_probes())
         layout.addWidget(self.tree, 1)
 
         self.info = QLabel()
@@ -515,9 +548,16 @@ class BookmarkTree(QWidget):
             self._reload_fn()
 
     def load_folder(self, folder: str | Path) -> bool:
-        """folder 안의 bookmarks.json 을 우선 사용. 없으면 PDF 파일 목록을 트리로."""
+        """folder 안의 bookmarks.json 을 우선 사용. 없으면 PDF 파일 목록을 트리로.
+
+        260906-1: PDF 목록 수집은 **예산(SCAN_BUDGET_MS) 안에 끝나면 즉시**, 넘기면
+        워커 스레드로 넘기고 이 함수는 바로 반환한다 — 즉 큰 폴더에서는 반환 시점에
+        트리가 비어 있을 수 있다. 목록에 의존하는 쪽은 `filesListed` 를 기다린다.
+        """
         self._root_dir = Path(folder)
         self._reload_fn = lambda f=Path(folder): self.load_folder(f)   # 260611-9: 취소 재로드
+        self._cancel_scan()          # 260906-1: 이전 폴더 스캔 중단(결과 섞임 방지)
+        self._cancel_fill()
         self._reset_probe_queue()
         self.tree.clear()
 
@@ -535,14 +575,92 @@ class BookmarkTree(QWidget):
                 f"{data.get('source_pdf', '')} · {data.get('total_pages', '?')}p"
             )
             self._update_mode_button()
+            self._queue_visible_probes()      # 260906-1: json 모드도 보이는 행부터 표식 검사
             return True
 
         # 폴더 안의 PDF 파일들을 평면 트리로
         self._mode = "flat"             # v1.6.19
-        self._pdfs_flat = list(self._root_dir.rglob("*.pdf"))
-        self._render_flat()             # 정렬 콤보 반영
+        self._pdfs_flat = []
         self._update_mode_button()
+        self._scan_pdfs()               # 260906-1: 예산 내면 즉시 렌더, 아니면 워커로
         return True
+
+    # ----- 260906-1: 폴더 스캔 (마스터 SOT §5 '폴더 열기 3단 규칙') -------------
+    def _scan_pdfs(self, after=None):
+        """PDF 목록 수집 — 메인에서 예산만큼만 훑고, 남으면 워커에 넘긴다.
+
+        보통 폴더는 예산 안에서 끝나 **종전과 똑같이** 그 자리에서 렌더된다.
+        예산을 넘긴 큰 폴더만 비동기가 되므로, 작은 폴더의 동작·테스트는 그대로다.
+        `after` 는 트리를 다 채운 뒤 1회 실행된다(선택 복원 등).
+        """
+        import time
+        from viewer.pathutil import iter_pdfs
+        self._scan_after = after
+        # 예산은 **폴더를 하나 훑을 때마다** 확인한다(`should_cancel`). 찾은 PDF 수로 세면
+        # 하위 폴더가 수만 개인데 PDF 는 몇 개뿐인 트리에서 확인 지점이 오지 않는다.
+        deadline = time.monotonic() + self.SCAN_BUDGET_MS / 1000.0
+
+        def _expired() -> bool:
+            return time.monotonic() > deadline
+
+        stats: dict = {}
+        try:
+            found = list(iter_pdfs(self._root_dir, should_cancel=_expired, stats=stats))
+        except Exception:
+            found = []
+        if not _expired():
+            self._pdfs_flat = found
+            self._scan_stats = stats
+            self._render_flat(after=after)
+            return
+        # 예산 초과 — 부분 결과는 버리고(중복·순서 뒤섞임 방지) 워커가 처음부터 다시 훑는다.
+        self._pdfs_flat = []
+        self._scan_stats = {}
+        self.info.setText("PDF 찾는 중...")
+        self._start_scan_worker(self._root_dir)
+
+    def _start_scan_worker(self, folder: Path):
+        from viewer.workers import FolderScanWorker, run_in_thread
+        self._scan_token += 1
+        token = self._scan_token
+        w = FolderScanWorker(folder)
+        self._scan_worker = w
+        w.batch.connect(lambda paths, st, t=token: self._on_scan_batch(t, paths, st))
+        w.finished.connect(lambda done, t=token: self._on_scan_done(t, done))
+        w.error.connect(lambda _e: None)
+        run_in_thread(w, self._scan_keep)
+
+    def _cancel_scan(self):
+        """진행 중인 폴더 스캔 중단 + 토큰 증가(이미 큐에 든 신호까지 무시)."""
+        self._scan_token += 1
+        w, self._scan_worker = self._scan_worker, None
+        if w is not None:
+            try:
+                w.request_cancel()
+            except Exception:
+                pass
+
+    def _on_scan_batch(self, token: int, paths: list, stats: dict):
+        # 워커 스레드에서 오는 신호 — 위젯이 이미 없어졌을 수 있다(앱 종료 중).
+        try:
+            if token != self._scan_token or self._mode != "flat":
+                return
+            self._pdfs_flat.extend(paths)
+            self._scan_stats.update(stats)
+            self.info.setText(f"{len(self._pdfs_flat)}개 PDF 찾는 중...")
+        except RuntimeError:
+            return
+
+    def _on_scan_done(self, token: int, completed: bool):
+        try:
+            if token != self._scan_token or self._mode != "flat":
+                return
+            self._scan_worker = None
+            if completed:
+                self._render_flat(after=getattr(self, "_scan_after", None))
+            self._scan_after = None
+        except RuntimeError:
+            return
 
     # ----- 260901-2: 행 종류 판별 · 파일 노드 순회 (★ 트리 보기 필수 계약) -----
     #   트리 보기에서 파일 노드는 폴더 그룹 행의 **자식**이 되므로, 종전 관용구
@@ -624,10 +742,8 @@ class BookmarkTree(QWidget):
                 b.setText("트리" if on else "단일")
         if self._mode == "flat":
             cur = self._current_selected_file()
-            self._render_flat()
-            if cur:
-                self._select_top_file(cur)
-            self._on_filter(self.search_edit.text())
+            # 260906-1: 행이 다 들어온 뒤에 선택을 되살린다(점진 채우기 — 즉시 부르면 없다).
+            self._render_flat(after=(lambda c=cur: self._select_top_file(c)) if cur else None)
 
     def _toggle_tree_view(self):
         if self._mode != "flat":
@@ -642,18 +758,133 @@ class BookmarkTree(QWidget):
         #     발신하면 반영이 다시 신호를 낳아 되먹임이 된다.
         self.viewListModeChanged.emit(self._view_tree)
 
-    def _render_flat(self):
+    def _render_flat(self, after=None):
         """v1.6.19: 평탄 모드 렌더 — 현재 정렬 콤보 적용.
-        260901-2: 트리 보기면 폴더 그룹으로 묶어 렌더."""
+        260901-2: 트리 보기면 폴더 그룹으로 묶어 렌더.
+        260906-1: 행 생성은 한 틱에 **FILL_SLICE_MS 만큼만** 나눠 넣는다(마스터 SOT §5) —
+        파일이 수만 개면 위젯 생성만으로도 창이 멈춘다. 한 틱에 끝나면 종전과 같다.
+
+        ★ 행이 **나중에** 생기므로, 다 그린 뒤 해야 하는 일(선택 복원 등)은 호출 직후가
+        아니라 `after` 로 넘긴다. 검색어 재적용은 완료 시 자동으로 한다."""
         self._reset_probe_queue()
+        self._cancel_fill()
+        self._fill_after = after
         self.tree.clear()
         pdfs = self._sorted_flat()
-        if self._view_tree:
-            self._render_tree_grouped(pdfs)
-        else:
-            for pdf in pdfs:
-                self.tree.addTopLevelItem(self._make_file_node(pdf))
         self.info.setText(f"{len(pdfs)}개 PDF")   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
+        self._fill_plan = self._build_fill_plan(pdfs)
+        self._fill_pos = 0
+        self._fill_folders = {}
+        if not self._fill_plan:                   # 빈 폴더도 '다 채웠다'로 알린다
+            self._finish_fill()
+            return
+        self._fill_tick()                         # 첫 덩이는 즉시(작은 폴더는 여기서 끝)
+        if self._fill_plan:
+            self._fill_timer.start()
+
+    def _build_fill_plan(self, pdfs: list) -> list:
+        """260906-1: 넣을 순서를 **위젯 없이** 먼저 정한다 — [(rel_parts|None, pdf), ...].
+
+        `None` 은 최상위 행. 배치 규칙은 종전 `_render_tree_grouped` 와 같다
+        (디자인 §2.8: 폴더 그룹 먼저(이름 순) → 루트 직속 파일).
+        """
+        if not self._view_tree:
+            return [(None, p) for p in pdfs]
+        root = self._root_dir
+        # 260906-1: 상대 경로는 **문자열 자르기**로 낸다. `Path.relative_to` 는 파일마다
+        #   Path 를 새로 만들어, 파일 28,954개에서 이 루프만 0.8초가 걸렸다(실측).
+        import os as _os
+        rootstr = str(root) if root else ""
+        if rootstr and not rootstr.endswith(_os.sep):
+            rootstr += _os.sep
+        rlen = len(rootstr)
+        groups: dict = {}
+        for pdf in pdfs:
+            d = str(pdf.parent)
+            if rootstr and d.startswith(rootstr):
+                parts = tuple(x for x in d[rlen:].split(_os.sep) if x)
+            else:
+                parts = ()          # 루트 자신 또는 루트 밖(방어) — 루트 직속으로
+            groups.setdefault(parts, []).append(pdf)
+        plan: list = []
+        for parts in sorted((k for k in groups if k), key=lambda t: [x.lower() for x in t]):
+            for pdf in groups[parts]:
+                plan.append((parts, pdf))
+        for pdf in groups.get((), []):            # 루트 직속 파일은 폴더 그룹 아래에
+            plan.append((None, pdf))
+        return plan
+
+    def _fill_folder_item(self, parts: tuple) -> QTreeWidgetItem:
+        """폴더 행을 만들거나 재사용(상위 폴더가 없으면 함께 생성)."""
+        it = self._fill_folders.get(parts)
+        if it is not None:
+            return it
+        root = self._root_dir
+        it = QTreeWidgetItem([parts[-1]])
+        self._style_folder_node(it, (root / Path(*parts)) if root else Path(*parts))
+        if len(parts) == 1:
+            self.tree.addTopLevelItem(it)
+        else:
+            self._fill_folder_item(parts[:-1]).addChild(it)
+        it.setExpanded(True)
+        self._fill_folders[parts] = it
+        return it
+
+    def _fill_tick(self):
+        """계획의 다음 덩이를 트리에 넣는다. 다 넣으면 타이머를 멈추고 알린다."""
+        plan = self._fill_plan
+        if not plan:
+            self._fill_timer.stop()
+            return
+        import time
+        deadline = time.monotonic() + self.FILL_SLICE_MS / 1000.0
+        end = min(len(plan), self._fill_pos + self.FILL_CHUNK)
+        pos = self._fill_pos
+        self.tree.setUpdatesEnabled(False)
+        try:
+            while pos < end:
+                parts, pdf = plan[pos]
+                node = self._make_file_node(pdf)
+                if parts is None:
+                    self.tree.addTopLevelItem(node)
+                else:
+                    self._fill_folder_item(parts).addChild(node)
+                pos += 1
+                # 시간 상한 확인은 16행마다(시계 호출 자체도 비용이다)
+                if (pos & 0x0F) == 0 and time.monotonic() > deadline:
+                    break
+        finally:
+            self.tree.setUpdatesEnabled(True)
+        self._fill_pos = end = pos
+        if end >= len(plan):
+            self._finish_fill()
+        else:
+            self._queue_visible_probes()
+
+    def _finish_fill(self):
+        """채우기 완료 — 검색어 재적용 → 예약된 후처리 → 보이는 행 검사 → 알림."""
+        self._fill_timer.stop()
+        self._fill_plan = []
+        self._fill_folders = {}
+        # 채우는 동안 들어온 행에도 현재 검색어를 적용한다(빈 검색어면 전부 보임 = 기본).
+        if (self.search_edit.text() or "").strip():
+            self._on_filter(self.search_edit.text())
+        fn, self._fill_after = self._fill_after, None
+        if fn is not None:
+            try:
+                fn()
+            except Exception:
+                pass
+        self._queue_visible_probes()
+        self.filesListed.emit()
+
+    def _cancel_fill(self):
+        """진행 중인 점진 채우기 중단(트리를 다시 그리기 전에 반드시)."""
+        self._fill_timer.stop()
+        self._fill_plan = []
+        self._fill_pos = 0
+        self._fill_folders = {}
+        self._fill_after = None
 
     def _make_file_node(self, pdf: Path) -> QTreeWidgetItem:
         item = QTreeWidgetItem([pdf.stem])
@@ -662,44 +893,6 @@ class BookmarkTree(QWidget):
         item.setIcon(0, self._leaf_icon())          # 260902-5: 파일 표식
         self._decorate_file_node(item, pdf)
         return item
-
-    def _render_tree_grouped(self, pdfs: list):
-        """260901-2: 루트 기준 상대 폴더 계층으로 묶어 렌더.
-
-        배치(디자인 §2.8): **폴더 그룹 먼저(이름 순) → 루트 직속 파일**(정렬 콤보 순).
-        하위 폴더는 계층 그대로 중첩하고, 파일은 자기 폴더 행의 자식(한 단계 들여쓰기)."""
-        root = self._root_dir
-        groups = {}          # rel_parts(tuple) -> [Path, ...]  (루트 직속은 ())
-        for pdf in pdfs:
-            try:
-                rel = pdf.parent.relative_to(root) if root else Path(".")
-                parts = tuple(p for p in rel.parts if p not in (".", ""))
-            except Exception:
-                parts = ()   # 루트 밖(방어) — 루트 직속으로
-            groups.setdefault(parts, []).append(pdf)
-
-        folder_items = {}    # rel_parts -> QTreeWidgetItem
-
-        def folder_item(parts: tuple) -> QTreeWidgetItem:
-            """폴더 행을 만들거나 재사용(상위 폴더가 없으면 함께 생성)."""
-            if parts in folder_items:
-                return folder_items[parts]
-            it = QTreeWidgetItem([parts[-1]])
-            self._style_folder_node(it, (root / Path(*parts)) if root else Path(*parts))
-            if len(parts) == 1:
-                self.tree.addTopLevelItem(it)
-            else:
-                folder_item(parts[:-1]).addChild(it)
-            it.setExpanded(True)
-            folder_items[parts] = it
-            return it
-
-        for parts in sorted((k for k in groups if k), key=lambda t: [s.lower() for s in t]):
-            parent = folder_item(parts)
-            for pdf in groups[parts]:
-                parent.addChild(self._make_file_node(pdf))
-        for pdf in groups.get((), []):          # 루트 직속 파일은 폴더 그룹 아래에
-            self.tree.addTopLevelItem(self._make_file_node(pdf))
 
     def _style_folder_node(self, item: QTreeWidgetItem, folder: Path):
         """260901-2: 폴더 그룹 행 — 옅은 노랑 배경 + 굵게 + 폴더 아이콘(디자인 §2.5)."""
@@ -724,10 +917,21 @@ class BookmarkTree(QWidget):
             # JSON 없는 평탄 모드에서 '책갈피 순'은 의미가 없으므로 이름 순 폴백
             lst.sort(key=lambda p: p.stem.lower())
         elif mode == self.SORT_MTIME:
-            lst.sort(key=lambda p: _stat(p).st_mtime, reverse=True)
+            lst.sort(key=lambda p: self._sort_stat(p)[1], reverse=True)
         elif mode == self.SORT_SIZE:
-            lst.sort(key=lambda p: _stat(p).st_size, reverse=True)
+            lst.sort(key=lambda p: self._sort_stat(p)[0], reverse=True)
         return lst
+
+    def _sort_stat(self, p) -> tuple:
+        """정렬 키용 (크기, 수정시각). 260906-1: 스캔할 때 `os.scandir` 가 이미 준 값을 쓴다.
+
+        여기서 `Path.stat()` 을 다시 부르면 **파일 수만큼** 디스크를 때린다 — 실측
+        외장 SSD 의 PDF 28,954개 수정일 정렬에 12.5초가 걸렸고 그동안 창이 멈췄다."""
+        v = self._scan_stats.get(str(p))
+        if v is not None:
+            return v
+        st = _stat(p)
+        return (st.st_size, st.st_mtime)
 
     def _on_sort_changed(self, _text: str):
         """정렬 콤보 변경 — 평탄 모드에서만 재렌더."""
@@ -830,6 +1034,8 @@ class BookmarkTree(QWidget):
         item.setExpanded(False)
         self.info.setText(f"{p.name} (단일 파일)")
         self._update_mode_button()
+        # 260906-1: 파일 1개뿐이라 비용이 없다 — 표식(암호화·책갈피 ▸)을 바로 확정한다.
+        self._ensure_probed(item, force=True)
         return True
 
     def all_file_paths(self) -> list:
@@ -933,12 +1139,14 @@ class BookmarkTree(QWidget):
         return cache[key]
 
     def _decorate_file_node(self, item: QTreeWidgetItem, pdf_path: Path):
-        """260611-57/59: 암호화·책갈피 검사를 '배경 큐'에 등록(시작 지연 방지).
-        실제 표식(붉은 삼각형/원·펼침 placeholder)은 _probe_tick 에서 점진 적용."""
+        """260611-57/59: 암호화·책갈피 표식(붉은 삼각형/원·펼침 placeholder)은 `_probe_tick`
+        이 점진 적용한다. 여기서는 이름표(해시태그)만 붙인다.
+
+        260906-1: 종전에는 **폴더의 모든 파일**을 여기서 큐에 넣었다. 검사 한 건이
+        `fitz.open`(실측 평균 20ms)이라 파일이 29,000개면 메인 스레드가 10분 멈췄다.
+        → 큐 등록은 `_queue_visible_probes()` 가 **보이는 행에 한해** 한다(마스터 SOT §5).
+        """
         self._apply_tag_label(item, str(pdf_path))
-        self._probe_queue.append((item, str(pdf_path)))
-        if not self._probe_timer.isActive():
-            self._probe_timer.start()
 
     # --- 해시태그(파일 분류) -------------------------------------------------
     def _apply_tag_label(self, item: QTreeWidgetItem, path: str):
@@ -1119,17 +1327,93 @@ class BookmarkTree(QWidget):
                     self._apply_tag_label(it, path)
             self._on_filter(self.search_edit.text())
 
+    def showEvent(self, e):
+        """260906-1: 처음 보일 때·창 크기가 바뀔 때도 보이는 행을 검사 큐에 넣는다.
+
+        스크롤바 신호만으로는 부족하다 — 항목이 한 화면에 다 들어가면 범위가 바뀌지 않아
+        신호가 오지 않고, 위젯이 뜨기 전에는 뷰포트 높이가 0 이라 아무것도 안 보인다."""
+        super().showEvent(e)
+        self._queue_visible_probes()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._queue_visible_probes()
+
     def _reset_probe_queue(self):
         """트리 재구성 시 이전 큐(이미 삭제된 항목 참조) 폐기."""
         self._probe_queue = []
         self._probe_timer.stop()
+
+    def _visible_file_items(self) -> list:
+        """260906-1: 지금 뷰포트에 보이는 **파일 행**들. 없으면 빈 목록."""
+        out: list = []
+        try:
+            tree = self.tree
+            h = tree.viewport().height()
+        except Exception:
+            return out
+        y = 0
+        for _ in range(400):            # 방어 상한(행 높이가 0으로 보고되는 경우)
+            if y >= h:
+                break
+            it = tree.itemAt(4, y)
+            if it is None:
+                break
+            r = tree.visualItemRect(it)
+            y = (r.bottom() + 1) if r.height() > 0 else (y + 18)
+            if self._is_file_node(it):
+                out.append(it)
+        return out
+
+    def _queue_visible_probes(self):
+        """보이는 파일 행 중 아직 검사하지 않은 것만 큐에 넣는다(마스터 SOT §5).
+
+        스크롤·펼침·채우기 때마다 불린다 — 한 번 넣은 행은 `DATA_PROBED` 로 표시해
+        같은 행을 다시 열지 않는다."""
+        added = False
+        for it in self._visible_file_items():
+            if it.data(0, self.DATA_PROBED):
+                continue
+            path = it.data(0, self.DATA_FILE)
+            if not path or not str(path).lower().endswith(".pdf"):
+                continue
+            it.setData(0, self.DATA_PROBED, True)
+            self._probe_queue.append((it, str(path)))
+            added = True
+        if added and not self._probe_timer.isActive():
+            self._probe_timer.start()
+
+    def _ensure_probed(self, item, force: bool = False) -> None:
+        """그 행 하나를 **지금 바로** 검사(우클릭 메뉴처럼 결과가 즉시 필요한 경우).
+
+        보이는 행만 검사하므로, 아직 차례가 오지 않은 행에서도 암호화 여부를 알아야 하는
+        곳은 이것을 부른다. 파일 1개라 비용은 fitz.open 한 번(실측 20ms).
+
+        `DATA_PROBED` 는 **큐에 넣었다**는 뜻이지 검사가 끝났다는 뜻이 아니다 — 큐에만 들어간
+        행에서 결과가 당장 필요하면 `force=True`(결과는 `_probe_cache` 가 받쳐 준다)."""
+        try:
+            if item is None or (item.data(0, self.DATA_PROBED) and not force):
+                return
+            path = item.data(0, self.DATA_FILE)
+            if not path or not str(path).lower().endswith(".pdf"):
+                return
+            item.setData(0, self.DATA_PROBED, True)
+            enc, has_toc, auth = self._probe_pdf(Path(path))
+            if enc:
+                item.setData(0, self.DATA_ENCRYPTED, True)
+                item.setData(0, self.DATA_AUTH, auth)
+                item.setToolTip(0, self._enc_tooltip(auth))
+            if has_toc and item.childCount() == 0:
+                self._attach_toc_placeholder(item, Path(path))
+        except Exception:
+            pass
 
     def _probe_tick(self):
         """한 번에 소량만 검사해 UI 응답성 유지. 빈 큐면 타이머 정지."""
         if not self._probe_queue:
             self._probe_timer.stop()
             return
-        for _ in range(6):
+        for _ in range(self.PROBE_PER_TICK):
             if not self._probe_queue:
                 break
             item, path = self._probe_queue.pop(0)
@@ -1223,6 +1507,10 @@ class BookmarkTree(QWidget):
         # 이미 로드한 적 있으면 패스
         if item.data(0, self.DATA_TOC_LOADED):
             return
+        # 260906-1: 표식 검사는 보이는 행만 하므로, 아직 차례가 오지 않은 행을 펼쳤을 수 있다.
+        #   그 경우 placeholder 가 없어 **책갈피가 안 펼쳐진 것처럼** 보인다 → 이 행만 즉시 검사.
+        if self._is_file_node(item):
+            self._ensure_probed(item, force=True)
         # 자식 중 placeholder 가 있는지 확인
         ph_idx = -1
         for i in range(item.childCount()):
@@ -1466,6 +1754,8 @@ class BookmarkTree(QWidget):
         item = self.tree.itemAt(pos)
         if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
             return
+        # 260906-1: 메뉴가 암호화 여부(DATA_ENCRYPTED)를 보므로, 아직 검사 전이면 이 행만 즉시.
+        self._ensure_probed(item if self._is_file_node(item) else self._file_node_of(item))
         # 260606-13: 편집모드에서 여러 파일 선택 후 우클릭 → 병합 메뉴(선택 유지)
         sel_files = [it for it in self.tree.selectedItems()
                      if self._is_file_node(it)]
@@ -2134,11 +2424,10 @@ class BookmarkTree(QWidget):
             return
         try:
             cur = self._current_selected_file()
-            self._pdfs_flat = list(Path(self._root_dir).rglob("*.pdf"))
-            self._render_flat()
-            if cur and Path(cur).exists():
-                self._select_top_file(cur)
-            self._on_filter(self.search_edit.text())
+            keep = cur if (cur and Path(cur).exists()) else None
+            # 260906-1: 목록 재수집도 예산 규칙을 따른다(큰 폴더에서 복사/이동 뒤 멈춤 방지).
+            #   선택 복원은 트리를 다 채운 뒤에(after) — 행이 나중에 생기기 때문.
+            self._scan_pdfs(after=(lambda c=keep: self._select_top_file(c)) if keep else None)
         except Exception:
             pass
 

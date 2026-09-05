@@ -1984,6 +1984,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.bookmark_tree.fileOpCompleted.connect(self._on_file_op_completed)
         self.bookmark_tree.filesRelocated.connect(self._on_files_relocated)   # 260901-2
         self.bookmark_tree.viewModeChanged.connect(self._on_view_mode_changed)  # 260825
+        # 260906-1: 큰 폴더는 목록이 **나중에** 찬다(비동기 스캔) — 다 차면 검색 범위를 다시
+        #   계산한다. open_folder 직후의 _refresh_search_scope 는 그때 빈 트리를 보고
+        #   범위를 '전체'로 두므로, 이 신호가 없으면 그 폴더로 한정되지 않는다.
+        self.bookmark_tree.filesListed.connect(self._refresh_search_scope)
         self.bookmark_tree.filePasswordEntered.connect(self._on_file_password_entered)  # 260618-1
         self._released_state = None    # (path, page_index) — 작업 직전 닫은 파일 기억
 
@@ -5457,7 +5461,33 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
 
+        # 260906-1(마스터 SOT §5 '시작 복원은 창을 띄운 뒤'): 여기까지는 위젯 상태만 —
+        #   비용이 파일 수에 비례하는 일(폴더 열기·마지막 문서·스크린샷)은 창이 뜬 뒤로 미룬다.
+        #   `__init__` 안에서 폴더를 열면 그 폴더가 큰 만큼 **창이 뜨기도 전에** 멈추고
+        #   스플래시만 남는다(260905 사용자 보고: 외장 드라이브 루트가 마지막 폴더였던 경우).
         if not self._prefs.get("restore_session", True):
+            return                        # (종전과 동일 — 이 경우 시작 보기도 적용하지 않는다)
+        self._apply_start_view()          # 첫 화면 상태(1단+쪽맞춤)는 즉시 잡는다
+        self._session_data = data
+        QTimer.singleShot(0, self._restore_session_deferred)
+
+    def _restore_session_deferred(self):
+        """260906-1: 이벤트 루프 진입 후(=창이 보인 뒤) 실행되는 세션 복원.
+
+        ※ 오프스크린 테스트처럼 이벤트 루프를 돌리지 않는 곳에서는 **실행되지 않는다** —
+          `MainWindow()` 생성만으로 사용자의 마지막 폴더를 열던 부작용도 함께 사라진다.
+          테스트가 세션 복원 자체를 봐야 하면 이 메서드를 직접 부른다.
+        """
+        data = getattr(self, "_session_data", None) or {}
+        self._session_data = None
+        # 미뤄 둔 사이에 이미 무언가를 열었으면(명령줄 인자 PDF·드롭·사용자 조작) 덮지 않는다.
+        #   동기 복원 때는 있을 수 없던 경합이라 명시적으로 막는다. 창에 문서가 떠 있는지도
+        #   함께 본다 — `_load_main` 을 거치지 않고 뷰에 직접 띄운 경우까지 덮으면 안 된다.
+        try:
+            opened = any(mv.current_file() for mv in getattr(self, "_mv", []))
+        except Exception:
+            opened = False
+        if self._folder is not None or self._current_main is not None or opened:
             return
 
         last = data.get("last_folder")

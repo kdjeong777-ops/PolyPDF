@@ -57,6 +57,56 @@ class IndexWorker(QObject):
             self.finished.emit()
 
 
+class FolderScanWorker(QObject):
+    """260906-1: 폴더 하위 PDF 목록을 백그라운드에서 수집(마스터 SOT §5·§7.2.1).
+
+    책갈피 트리가 `Path.rglob("*.pdf")` 를 **메인 스레드에서** 돌던 것을 대신한다.
+    외장 드라이브 루트(실측 PDF 28,954개)를 열면 목록 수집만으로 창이 멈췄다.
+
+    결과는 `batch`(기본 300개마다)로 나눠 보낸다 — 전량을 한 번에 보내면 목록이
+    차기 전까지 아무 표시도 못 한다. 폴더를 바꿀 때는 `request_cancel()`.
+    """
+    batch = pyqtSignal(list, dict)  # (list[Path], {경로: (크기, 수정시각)}) — 부분 결과
+    finished = pyqtSignal(bool)     # True=완주 / False=취소
+    error = pyqtSignal(str)
+
+    BATCH = 300
+
+    def __init__(self, folder: Path):
+        super().__init__()
+        self.folder = Path(folder)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        from viewer.pathutil import iter_pdfs
+        found: list = []
+        stats: dict = {}
+        try:
+            for pdf in iter_pdfs(self.folder, should_cancel=lambda: self._cancel,
+                                 stats=stats):
+                found.append(pdf)
+                if len(found) >= self.BATCH:
+                    # 정렬용 크기·수정시각을 함께 보낸다 — 메인에서 다시 stat 하면
+                    # 파일 수만큼 디스크를 때려 정렬 한 번에 창이 멈춘다(마스터 §5).
+                    #
+                    # ★ `stats` 는 **복사해서 보내고 비운다**. 제너레이터가 첫 호출 때 받은
+                    #   그 dict 에 계속 쓰므로, 여기서 새 dict 로 바꿔 달면(재바인딩)
+                    #   제너레이터는 옛 dict 에 쓰고 두 번째 배치부터는 **빈 dict 가 간다**
+                    #   (실측: 25,709개 중 484개만 전달돼 정렬이 다시 stat 을 탔다).
+                    self.batch.emit(found, dict(stats))
+                    stats.clear()
+                    found = []
+            if found and not self._cancel:
+                self.batch.emit(found, dict(stats))
+        except Exception as e:                      # noqa: BLE001
+            self.error.emit(str(e))
+        finally:
+            self.finished.emit(not self._cancel)
+
+
 def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
     """앞부분 표본 페이지를 보고 스캔 이미지 PDF인지 판정(260606-4 자동 분기용)."""
     try:

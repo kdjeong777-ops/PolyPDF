@@ -22,7 +22,7 @@ import os
 import re
 from pathlib import Path
 
-__all__ = ["norm_key", "unique_path", "safe_name"]
+__all__ = ["norm_key", "unique_path", "safe_name", "iter_pdfs"]
 
 # 파일명 금지문자(Windows) — 치환 대상
 _BAD_CHARS = re.compile(r'[\\/:*?"<>|]+')
@@ -63,3 +63,45 @@ def safe_name(s: str, fallback: str = "", maxlen: int = 80) -> str:
     out = _BAD_CHARS.sub("_", (s or "").strip())
     out = _WS.sub(" ", out).strip(" .")
     return out[:maxlen] if out else fallback
+
+
+def iter_pdfs(folder, should_cancel=None, stats=None):
+    """260906-1: `folder` 하위의 PDF 를 하나씩 내놓는 제너레이터 (`rglob("*.pdf")` 대체).
+
+    `Path.rglob` 은 **끝까지 돌아야** 첫 결과를 쓸 수 있고 중간에 멈출 수도 없어,
+    파일이 수만 개인 트리(외장 드라이브 루트 등)를 열면 호출한 스레드가 통째로 멈춘다.
+    이 함수는 `os.scandir` 재귀라 항목마다 양보·취소가 가능하다(마스터 SOT §5).
+
+    - `should_cancel()` 이 True 를 내면 즉시 중단한다(폴더당 한 번 이상 확인).
+    - 권한이 없는 하위 폴더는 **건너뛴다**(전체 스캔은 계속).
+    - 심볼릭 링크·정션 폴더로는 **내려가지 않는다** — `rglob` 과 같은 규칙이고
+      순환 링크에서 무한 루프에 빠지지 않는다.
+    - 확장자 판정은 대소문자를 무시한다(`.PDF` 포함) — `rglob` 과 동일.
+    - `stats` 에 dict 를 주면 `{경로문자열: (크기, 수정시각)}` 를 함께 채운다. Windows 의
+      `os.scandir` 는 이 값을 디렉터리 열거에서 **이미 받아 오므로 추가 비용이 없다** —
+      나중에 정렬하려고 `Path.stat()` 을 다시 부르면 파일 수만큼 디스크를 또 때린다
+      (실측: 외장 SSD 의 PDF 28,954개를 수정일로 정렬하는 데 **12.5초**, 그동안 창이 멈춘다).
+    """
+    stack = [str(folder)]
+    while stack:
+        if should_cancel is not None and should_cancel():
+            return
+        cur = stack.pop()
+        try:
+            with os.scandir(cur) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                        elif entry.name.lower().endswith(".pdf"):
+                            if stats is not None:
+                                try:
+                                    st = entry.stat(follow_symlinks=False)
+                                    stats[entry.path] = (st.st_size, st.st_mtime)
+                                except OSError:
+                                    pass
+                            yield Path(entry.path)
+                    except OSError:
+                        continue          # 개별 항목 접근 실패는 건너뛴다
+        except (PermissionError, OSError):
+            continue                      # 못 여는 폴더는 건너뛰고 나머지를 계속

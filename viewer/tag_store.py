@@ -32,6 +32,7 @@ import os
 import re
 import time
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 
 MAX_KEYWORDS = 10          # §9.1 — 파일당 키워드 상한
@@ -48,6 +49,26 @@ def normalize_tags(tags) -> list:
             seen.add(t.lower())
             out.append(t)
     return out
+
+
+@lru_cache(maxsize=20000)
+def _tag_key(raw: str) -> str:
+    """태그 저장 키 — `Path.resolve()` 소문자. **저장 형식이므로 바꾸지 않는다**.
+
+    260906-1(성능): `resolve()` 는 호출마다 `nt._getfinalpathname` 을 2회 부른다(실측).
+    라벨 한 줄을 그리는 데 `get`·`get_year`·`get_keywords` 가 각각 키를 만들어 **행마다
+    6회 syscall** 이 났고, 폴더 열기의 최대 비용이었다(1,000행 1.06초 중 0.92초).
+    같은 문자열은 다시 계산하지 않는다 — 결과 형식은 종전과 **바이트 동일**하므로
+    `file_tags.json` 기존 키와 그대로 맞는다.
+
+    ※ 표준 `pathutil.norm_key`(파일시스템을 타지 않음)로 바꾸는 편이 더 빠르지만,
+      **저장된 키 형식이 달라져** 기존 태그가 통째로 미아가 된다 → 마이그레이션이
+      필요한 별개 작업(마스터 §15 백로그).
+    """
+    try:
+        return str(Path(raw).resolve()).lower()
+    except Exception:
+        return raw.lower()
 
 
 class TagStore:
@@ -127,10 +148,7 @@ class TagStore:
     # ── 키/레코드 ─────────────────────────────────────────────────────────
     @staticmethod
     def _key(p) -> str:
-        try:
-            return str(Path(p).resolve()).lower()
-        except Exception:
-            return str(p or "").lower()
+        return _tag_key(str(p or ""))
 
     def _dictify(self, key: str) -> dict:
         """v1(list) 항목을 v2(dict)로 승격(lazy 마이그레이션, §6). 없으면 생성."""
