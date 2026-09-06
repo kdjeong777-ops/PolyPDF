@@ -107,6 +107,69 @@ class FolderScanWorker(QObject):
             self.finished.emit(not self._cancel)
 
 
+
+class ProbeWorker(QObject):
+    """260906-2: 책갈피 트리의 암호화·책갈피 표식 검사를 **워커 스레드에서** 수행.
+
+    검사 한 건은 `fitz.open`(+`get_toc`)이라 파일이 크면 통째로 오래 걸린다 —
+    실측 `_samples` 의 232MB PDF 들에서 메인 스레드가 **4.5초 연속** 멈췄고 창이
+    '응답 없음' 이 됐다(260906 사용자 보고, 스택 샘플링으로 지점 확인).
+    보이는 행만 검사하도록 줄여도(260906-1) 큰 파일 하나면 멈춤은 그대로여서,
+    검사 자체를 메인 밖으로 뺀다. 결과는 파일 1건마다 `result` 로 보낸다.
+    """
+    result = pyqtSignal(dict)      # {path, size, mtime, enc, has_toc, auth}
+    finished = pyqtSignal()
+
+    def __init__(self, paths: list):
+        super().__init__()
+        self.paths = list(paths)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        import fitz
+        for path in self.paths:
+            if self._cancel:
+                break
+            try:
+                st = Path(path).stat()
+                size, mtime = int(st.st_size), int(st.st_mtime)
+            except Exception:
+                continue
+            enc, has_toc, auth = False, False, None
+            try:
+                doc = fitz.open(path)
+                try:
+                    enc = bool(doc.needs_pass)
+                    if enc:
+                        auth = "locked"
+                        try:
+                            from viewer import secure_store
+                            pw = secure_store.recall_any(path)
+                        except Exception:
+                            pw = None
+                        lvl = doc.authenticate(pw) if pw else 0
+                        if lvl:
+                            # PyMuPDF: 4=owner(전체) / 2=user(제한). 둘 다면 owner.
+                            auth = "owner" if (lvl & 4) else "user"
+                            has_toc = bool(doc.get_toc())
+                        else:
+                            has_toc = None          # 미상(잠김)
+                    else:
+                        has_toc = bool(doc.get_toc())
+                finally:
+                    doc.close()
+            except Exception:
+                enc, has_toc, auth = False, False, None
+            if self._cancel:
+                break
+            self.result.emit({"path": path, "size": size, "mtime": mtime,
+                              "enc": enc, "has_toc": has_toc, "auth": auth})
+        self.finished.emit()
+
+
 def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
     """앞부분 표본 페이지를 보고 스캔 이미지 PDF인지 판정(260606-4 자동 분기용)."""
     try:

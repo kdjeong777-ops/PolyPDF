@@ -114,6 +114,21 @@ try:
     bt3._queue_visible_probes()             # 같은 화면에서 다시 불러도 늘지 않는다
     chk(len(bt3._probe_queue) == before, "④ 같은 행을 두 번 넣지 않는다(DATA_PROBED)")
 
+    # ── ④-b 260906-2: 검사는 워커가 한다 — 메인 스레드에서 열지 않는다 ──
+    #   큰 PDF 는 `fitz.open` 한 건이 수 초라, 보이는 행만 검사해도 메인에서 하면 멈춘다
+    #   (실측 4.5초 '응답 없음'). `_probe_tick` 은 큐를 워커에 넘기고 즉시 돌아와야 한다.
+    t0 = time.time()
+    bt3._probe_tick()
+    hand_ms = (time.time() - t0) * 1000
+    chk(bt3._probe_worker is not None, "④-b 검사를 워커 스레드에 넘긴다")
+    chk(hand_ms < 100, "④-b 넘기는 데 걸리는 시간이 짧다(메인에서 열지 않음)",
+        f"{hand_ms:.0f}ms")
+    chk(not bt3._probe_queue, "④-b 넘긴 큐는 비워진다")
+    t_end = time.time() + 30
+    while time.time() < t_end and bt3._probe_worker is not None:
+        app.processEvents(); time.sleep(0.005)
+    chk(bt3._probe_worker is None, "④-b 다 끝나면 워커를 놓는다")
+
     # ── ⑤ 반복 타이머 간격 0 금지 ────────────────────────────────────────
     chk(bt3._probe_timer.interval() >= 10, "⑤ 표식 검사 타이머 간격 ≥ 10ms",
         f"{bt3._probe_timer.interval()}ms")
@@ -127,8 +142,13 @@ try:
     orig = io.open(SPATH, encoding="utf-8").read() if SPATH.exists() else None
     try:
         d = json.loads(orig) if orig else {}
+        # 260906-3: 전제를 **명시**한다(§14.7) — 시작 동작·기억한 대상 둘 다.
+        #   앞선 테스트가 남긴 값에 기대면 스위트 순서에 따라 흔들린다(실측 재현).
         d["last_folder"] = str(small)
-        d.setdefault("preferences", {})["restore_session"] = True
+        d["last_open"] = {"kind": "folder", "path": str(small)}
+        _p = d.setdefault("preferences", {})
+        _p["restore_session"] = True
+        _p["startup_mode"] = "last"
         io.open(SPATH, "w", encoding="utf-8", newline="\n").write(
             json.dumps(d, ensure_ascii=False, indent=2))
 

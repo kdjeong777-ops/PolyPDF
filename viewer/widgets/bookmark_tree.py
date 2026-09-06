@@ -208,8 +208,7 @@ class BookmarkTree(QWidget):
     FILL_SLICE_MS = 25       # ★ 한 틱이 쓰는 시간 상한 — 개수로 끊으면 느린 드라이브에서
                              #   한 틱이 수백 ms 로 늘어 창이 멈춘 느낌이 난다(실측)
     FILL_INTERVAL_MS = 10    # ★ 0 금지 — Windows WM_TIMER 가 굶는다(§5)
-    PROBE_INTERVAL_MS = 20   # 표식 검사 간격(종전 0)
-    PROBE_PER_TICK = 3       # 한 번에 검사할 파일 수(종전 6)
+    PROBE_INTERVAL_MS = 20   # 표식 검사 '모으기' 지연 — 스크롤마다 워커를 띄우지 않기 위해
 
     # 260901-2: 폴더 그룹 행 색 — 디자인 SOT §2.5(테마 무관, 밝은 노랑+어두운 글자)
     FOLDER_ROW_BG = "#fdf3c0"
@@ -251,6 +250,11 @@ class BookmarkTree(QWidget):
         self._probe_timer = QTimer(self)
         self._probe_timer.setInterval(self.PROBE_INTERVAL_MS)
         self._probe_timer.timeout.connect(self._probe_tick)
+        # 260906-2: 표식 검사는 워커 스레드가 한다(큰 파일 1건이 메인을 멈추던 문제).
+        self._probe_worker = None
+        self._probe_pending: dict = {}
+        self._probe_keep: list = []
+        self._probe_token = 0        # 취소된 이전 검사의 결과가 새 트리에 섞이지 않게
         # 260906-1: 폴더 스캔(워커) 상태 — 늦게 오는 이전 폴더 결과는 토큰으로 거른다.
         self._scan_worker = None
         self._scan_token = 0
@@ -1340,9 +1344,17 @@ class BookmarkTree(QWidget):
         self._queue_visible_probes()
 
     def _reset_probe_queue(self):
-        """트리 재구성 시 이전 큐(이미 삭제된 항목 참조) 폐기."""
+        """트리 재구성 시 이전 큐(이미 삭제된 항목 참조) 폐기 + 진행 중 검사 취소."""
         self._probe_queue = []
         self._probe_timer.stop()
+        self._probe_pending = {}
+        self._probe_token = getattr(self, "_probe_token", 0) + 1
+        w, self._probe_worker = getattr(self, "_probe_worker", None), None
+        if w is not None:
+            try:
+                w.request_cancel()      # 남은 파일은 열지 않는다(다른 폴더로 넘어갔다)
+            except Exception:
+                pass
 
     def _visible_file_items(self) -> list:
         """260906-1: 지금 뷰포트에 보이는 **파일 행**들. 없으면 빈 목록."""
@@ -1409,32 +1421,64 @@ class BookmarkTree(QWidget):
             pass
 
     def _probe_tick(self):
-        """한 번에 소량만 검사해 UI 응답성 유지. 빈 큐면 타이머 정지."""
-        if not self._probe_queue:
-            self._probe_timer.stop()
+        """260906-2: 모아 둔 행들을 **워커 스레드**에 넘긴다(타이머는 모으기용 지연).
+
+        종전에는 여기서 직접 `fitz.open` 을 했다 — 파일이 크면 한 건에 수 초가 걸려
+        메인 스레드가 그대로 멈췄고, 창이 '응답 없음' 이 됐다(실측 4.5초, 260906 보고).
+        보이는 행만 검사해도(260906-1) 큰 파일 하나면 같은 일이 벌어진다."""
+        self._probe_timer.stop()
+        if self._probe_worker is not None or not self._probe_queue:
             return
-        for _ in range(self.PROBE_PER_TICK):
-            if not self._probe_queue:
-                break
-            item, path = self._probe_queue.pop(0)
-            try:
-                enc, has_toc, auth = self._probe_pdf(Path(path))
-                if enc:
-                    item.setData(0, self.DATA_ENCRYPTED, True)
-                    item.setData(0, self.DATA_AUTH, auth)
-                    item.setToolTip(0, self._enc_tooltip(auth))
-                if has_toc and item.childCount() == 0:   # json 자식 있으면 부착 안 함
-                    self._attach_toc_placeholder(item, Path(path))
-            except RuntimeError:
-                continue        # 항목이 이미 삭제됨(트리 재구성)
-            except Exception:
-                continue
-        if not self._probe_queue:
-            self._probe_timer.stop()
+        pending: dict = {}
+        for item, path in self._probe_queue:
+            pending.setdefault(path, []).append(item)
+        self._probe_queue = []
+        self._probe_pending = pending
+        from viewer.workers import ProbeWorker, run_in_thread
+        self._probe_token += 1
+        token = self._probe_token
+        w = ProbeWorker(list(pending.keys()))
+        self._probe_worker = w
+        w.result.connect(lambda r, t=token: self._on_probe_result(t, r))
+        w.finished.connect(lambda t=token: self._on_probe_finished(t))
+        run_in_thread(w, self._probe_keep)
+
+    def _on_probe_result(self, token: int, r: dict):
+        """워커가 파일 1건을 다 본 결과를 트리에 반영(메인 스레드)."""
+        if token != self._probe_token:
+            return                  # 취소된 이전 세대(다른 폴더) — 버린다
         try:
+            cache = getattr(self, "_probe_cache", None)
+            if cache is None:
+                cache = self._probe_cache = {}
+            cache[(r["path"], r["size"], r["mtime"])] = (r["enc"], r["has_toc"], r["auth"])
+            for item in self._probe_pending.pop(r["path"], []):
+                try:
+                    if r["enc"]:
+                        item.setData(0, self.DATA_ENCRYPTED, True)
+                        item.setData(0, self.DATA_AUTH, r["auth"])
+                        item.setToolTip(0, self._enc_tooltip(r["auth"]))
+                    if r["has_toc"] and item.childCount() == 0:  # json 자식 있으면 부착 안 함
+                        self._attach_toc_placeholder(item, Path(r["path"]))
+                except RuntimeError:
+                    continue        # 항목이 이미 삭제됨(트리 재구성)
             self.tree.viewport().update()
+        except RuntimeError:
+            return
         except Exception:
-            pass
+            return
+
+    def _on_probe_finished(self, token: int):
+        """한 묶음이 끝났다 — 그 사이 스크롤로 쌓인 행이 있으면 이어서 검사한다."""
+        if token != self._probe_token:
+            return
+        try:
+            self._probe_worker = None
+            self._probe_pending = {}
+            if self._probe_queue and not self._probe_timer.isActive():
+                self._probe_timer.start()
+        except RuntimeError:
+            return
 
     @staticmethod
     def _enc_tooltip(auth) -> str:

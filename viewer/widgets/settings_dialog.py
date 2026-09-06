@@ -127,10 +127,33 @@ class SettingsDialog(QDialog):
         grp_start = QGroupBox("시작 시 동작")
         gl = QVBoxLayout(grp_start)
 
-        self.chk_restore = QCheckBox("프로그램 시작 시 기존 작업 화면을 그대로 복원")
-        self.chk_restore.setChecked(bool(self._prefs.get("restore_session", True)))
-        self.chk_restore.toggled.connect(self._on_restore_toggled)
-        gl.addWidget(self.chk_restore)
+        # 260906-3(사용자 결정): 파일·폴더를 지정하지 않고 실행했을 때 무엇을 열지 — 3택.
+        #   '마지막'은 1번째 뷰어가 보던 **형태 그대로**(폴더면 폴더, 파일이면 그 파일만) 연다.
+        from PyQt6.QtWidgets import QRadioButton, QButtonGroup
+        self.rb_start_last = QRadioButton("마지막에 열었던 폴더·파일 열기 (기본)")
+        self.rb_start_path = QRadioButton("지정한 폴더·파일 열기:")
+        self.rb_start_none = QRadioButton("아무것도 열지 않고 빈 화면으로 시작")
+        self._start_group = QButtonGroup(self)
+        for _rb in (self.rb_start_last, self.rb_start_path, self.rb_start_none):
+            self._start_group.addButton(_rb)
+        _sm = str(self._prefs.get("startup_mode", "last"))
+        {"path": self.rb_start_path, "none": self.rb_start_none}.get(
+            _sm, self.rb_start_last).setChecked(True)
+        gl.addWidget(self.rb_start_last)
+
+        prow = QHBoxLayout()
+        prow.addWidget(self.rb_start_path)
+        self.ed_startup_path = QLineEdit(str(self._prefs.get("startup_path", "") or ""))
+        self.ed_startup_path.setPlaceholderText("폴더 또는 PDF 파일 경로")
+        prow.addWidget(self.ed_startup_path, 1)
+        _bf = QPushButton("폴더…"); _bf.clicked.connect(self._pick_startup_folder)
+        _bp = QPushButton("파일…"); _bp.clicked.connect(self._pick_startup_file)
+        prow.addWidget(_bf); prow.addWidget(_bp)
+        gl.addLayout(prow)
+        gl.addWidget(self.rb_start_none)
+
+        # 종전 키(`restore_session`)는 다운그레이드 호환으로만 저장한다 — 화면에는 없다.
+        self.rb_start_last.toggled.connect(self._on_restore_toggled)
 
         self.chk_last_page = QCheckBox(
             "복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)"   # 260618-18: 앞 공백·└ 제거
@@ -138,12 +161,10 @@ class SettingsDialog(QDialog):
         self.chk_last_page.setChecked(bool(self._prefs.get("restore_last_page", True)))
         gl.addWidget(self.chk_last_page)
 
-        # v1.6.2: 히스토리 복원 토글 제거. 스크린샷만 남음.
-        self.chk_restore_shots = QCheckBox(
-            "프로그램 시작 시 스크린샷 리스트 그대로 복원 (해제 = 비워서 시작)"
-        )
-        self.chk_restore_shots.setChecked(bool(self._prefs.get("restore_screenshots", True)))
-        gl.addWidget(self.chk_restore_shots)
+        # 260906-3(사용자 결정): 스크린샷 복원 항목 삭제 — 시작은 **항상 빈 목록**이고,
+        #   종료할 때 목록이 있으면 PDF로 저장할지 묻는다(스크린샷 SOT).
+        gl.addWidget(QLabel("<small>캡처 목록은 항상 빈 상태로 시작합니다. "
+                            "종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>"))
 
         # 260830(태그 SOT §3.5, 사용자 결정): 태그 자동 부여는 옵트인 — 기본 꺼짐.
         self.chk_auto_tag = QCheckBox(
@@ -390,10 +411,27 @@ class SettingsDialog(QDialog):
         btns.rejected.connect(self.reject)
         self._outer.addWidget(btns)
 
-        self._on_restore_toggled(self.chk_restore.isChecked())
+        self._on_restore_toggled(self.rb_start_last.isChecked())
 
     def _on_restore_toggled(self, on: bool):
-        self.chk_last_page.setEnabled(on)
+        """'마지막에 열었던 …' 일 때만 '마지막 페이지' 항목이 뜻을 가진다."""
+        self.chk_last_page.setEnabled(bool(on))
+
+    def _pick_startup_folder(self):
+        from PyQt6.QtWidgets import QFileDialog
+        d = QFileDialog.getExistingDirectory(self, "시작 시 열 폴더 선택",
+                                             self.ed_startup_path.text() or "")
+        if d:
+            self.ed_startup_path.setText(d)
+            self.rb_start_path.setChecked(True)
+
+    def _pick_startup_file(self):
+        from PyQt6.QtWidgets import QFileDialog
+        f, _ = QFileDialog.getOpenFileName(self, "시작 시 열 PDF 선택",
+                                           self.ed_startup_path.text() or "", "PDF (*.pdf)")
+        if f:
+            self.ed_startup_path.setText(f)
+            self.rb_start_path.setChecked(True)
 
     def focus_recording(self):
         """260611-25: 녹화 설정 그룹으로 스크롤 이동."""
@@ -608,9 +646,13 @@ class SettingsDialog(QDialog):
 
     def result_prefs(self) -> dict:
         return {
-            "restore_session": self.chk_restore.isChecked(),
+            "startup_mode": ("path" if self.rb_start_path.isChecked()
+                             else "none" if self.rb_start_none.isChecked() else "last"),
+            "startup_path": self.ed_startup_path.text().strip(),
+            # 다운그레이드 호환 — 구버전은 이 키만 본다(있으면 '마지막 것 열기'로 동작).
+            "restore_session": not self.rb_start_none.isChecked(),
             "restore_last_page": self.chk_last_page.isChecked(),
-            "restore_screenshots": self.chk_restore_shots.isChecked(),
+            "restore_screenshots": False,          # 260906-3: 시작은 항상 빈 목록
             "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
             "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
             "screenshot_max": int(self.spin_screenshot.value()),

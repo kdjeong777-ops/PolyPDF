@@ -5229,12 +5229,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         meta = self.shot_strip.all_meta()
         if not meta:
             QMessageBox.information(self, "안내", "저장할 스크린샷이 없습니다.")
-            return
+            return False
         # v1.6.4 C1: 저장 옵션 대화상자 (검색어 형광펜 / 상단 파일명 / 하단 페이지번호)
         from viewer.widgets.screenshot_pdf_dialog import ScreenshotPdfDialog  # 260825: 지연 임포트
         dlg = ScreenshotPdfDialog(self._prefs, self)
         if dlg.exec() != dlg.DialogCode.Accepted:
-            return
+            return False
         opts = dlg.result_options()
         # 선택값을 prefs 에 기억 → 다음 저장의 기본값
         self._prefs["pdf_save_show_query"] = bool(opts["show_query"])
@@ -5246,7 +5246,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         default = f"{prefix}screenshots.pdf"
         out, _ = QFileDialog.getSaveFileName(self, "스크린샷 PDF 저장", default, "PDF (*.pdf)")
         if not out:
-            return
+            return False
         try:
             saved = ss.export_pdf_from_meta(
                 meta, out,
@@ -5255,8 +5255,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 show_pageno=opts["show_pageno"],
             )
             self.status.showMessage(f"PDF 저장: {saved}", 4000)
+            return True                      # 260906-3: 종료 시 확인이 결과를 본다
         except Exception as e:
             QMessageBox.warning(self, "PDF 저장 실패", str(e))
+            return False
 
     # ===== 설정 ========================================================
     # v1.6.2: 4단 기본값. 우측 패널 안쪽 세로 splitter 는 self.right_splitter.
@@ -5333,7 +5335,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         self._prefs.setdefault("restore_last_page", True)
-        self._prefs.setdefault("restore_screenshots", True)
+        # 260906-3(사용자 결정): 시작 동작 3택 — 아무것도 지정하지 않고 실행했을 때 무엇을 열까.
+        #   last(기본) = 1번째 뷰어가 마지막에 보던 **그 형태 그대로**(폴더면 폴더, 파일이면 그 파일만)
+        #   path       = 지정한 폴더/파일
+        #   none       = 아무것도 열지 않음(빈 화면 — 억지로 만들지 않는다)
+        _had_startup = "startup_mode" in self._prefs
+        self._prefs.setdefault("startup_mode", "last")
+        self._prefs.setdefault("startup_path", "")
+        if not _had_startup and not self._prefs.get("restore_session", True):
+            self._prefs["startup_mode"] = "none"      # 구 `restore_session=False` 1회 승계
+        self._prefs.setdefault("restore_screenshots", False)   # 260906-3: 시작은 항상 빈 목록
         self._prefs.setdefault("screenshot_max", 30)
         self._prefs.setdefault("pdf_save_show_query", False)      # v1.6.4
         self._prefs.setdefault("pdf_save_show_filename", False)   # v1.6.4
@@ -5465,62 +5476,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   비용이 파일 수에 비례하는 일(폴더 열기·마지막 문서·스크린샷)은 창이 뜬 뒤로 미룬다.
         #   `__init__` 안에서 폴더를 열면 그 폴더가 큰 만큼 **창이 뜨기도 전에** 멈추고
         #   스플래시만 남는다(260905 사용자 보고: 외장 드라이브 루트가 마지막 폴더였던 경우).
-        if not self._prefs.get("restore_session", True):
-            return                        # (종전과 동일 — 이 경우 시작 보기도 적용하지 않는다)
-        self._apply_start_view()          # 첫 화면 상태(1단+쪽맞춤)는 즉시 잡는다
+        self._apply_start_view()          # 첫 화면 상태(1단+쪽맞춤)는 시작 동작과 무관하게 적용
+        # 260906-3: 캡쳐 모드·크기는 파일을 여는 일이 아니므로 여기서(동기) 복원한다.
+        self._restore_capture_prefs(data)
+        if str(self._prefs.get("startup_mode", "last")) == "none":
+            return                        # 아무것도 열지 않는다
         self._session_data = data
         QTimer.singleShot(0, self._restore_session_deferred)
 
-    def _restore_session_deferred(self):
-        """260906-1: 이벤트 루프 진입 후(=창이 보인 뒤) 실행되는 세션 복원.
-
-        ※ 오프스크린 테스트처럼 이벤트 루프를 돌리지 않는 곳에서는 **실행되지 않는다** —
-          `MainWindow()` 생성만으로 사용자의 마지막 폴더를 열던 부작용도 함께 사라진다.
-          테스트가 세션 복원 자체를 봐야 하면 이 메서드를 직접 부른다.
-        """
-        data = getattr(self, "_session_data", None) or {}
-        self._session_data = None
-        # 미뤄 둔 사이에 이미 무언가를 열었으면(명령줄 인자 PDF·드롭·사용자 조작) 덮지 않는다.
-        #   동기 복원 때는 있을 수 없던 경합이라 명시적으로 막는다. 창에 문서가 떠 있는지도
-        #   함께 본다 — `_load_main` 을 거치지 않고 뷰에 직접 띄운 경우까지 덮으면 안 된다.
-        try:
-            opened = any(mv.current_file() for mv in getattr(self, "_mv", []))
-        except Exception:
-            opened = False
-        if self._folder is not None or self._current_main is not None or opened:
-            return
-
-        last = data.get("last_folder")
-        if last and Path(last).exists():
-            self.open_folder(Path(last))
-
-        # v1.6.2: 스크린샷 복원 — 신규 screenshots_meta 우선, 폴백으로 옛 screenshots
-        if self._prefs.get("restore_screenshots", True):
-            meta_list = data.get("screenshots_meta")
-            if meta_list:
-                for m in meta_list:
-                    sp = m.get("path", "")
-                    if not sp or not Path(sp).exists():
-                        continue
-                    self.shot_strip.add_item(
-                        sp, kind=m.get("kind", "image"),
-                        label=Path(sp).stem,
-                        page_index=int(m.get("page") or 0),
-                        thumb_pdf_path=m.get("src_pdf"),
-                        src_pdf=m.get("src_pdf"),
-                        src_page=m.get("src_page"),
-                        src_query=m.get("src_query"),
-                        prepend=False,
-                    )
-            else:
-                for sp in data.get("screenshots", []):
-                    if Path(sp).exists():
-                        self.shot_strip.add_item(
-                            sp, kind="image", label=Path(sp).stem, prepend=False
-                        )
-        self._ensure_shots_visible()    # 260603-3: 복원된 스크린샷이 있으면 자동 표시
-
-        # 260606-17: 캡쳐 모드/복사크기/사용자 크기 복원
+    def _restore_capture_prefs(self, data: dict) -> None:
+        """260606-17: 캡쳐 모드/복사크기/사용자 크기 복원 — 파일을 열지 않으므로 시작 동작과 무관."""
         try:
             self._cap_mode = str(data.get("capture_mode", "full"))
             self._cap_copy = str(data.get("capture_copy", "visible"))
@@ -5536,21 +5501,85 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
 
-        # 마지막 메인 문서 복원
+    def _startup_target(self, data: dict):
+        """260906-3: 시작할 때 열 대상 → (Path, "file"|"folder") 또는 (None, None).
+
+        `startup_mode` 는 세 가지다(§4.x·환경설정 '시작 동작').
+          last — 1번째 뷰어가 마지막에 보던 것을 **그 형태 그대로**. 폴더로 보고 있었으면 폴더,
+                 파일 하나만 보고 있었으면 **그 파일만**(상위 폴더를 훑지 않는다).
+          path — 사용자가 지정해 둔 폴더/파일.
+          none — 없음.
+        기억해 둔 대상이 사라졌으면 아무것도 열지 않는다 — 대신 다른 것을 열어 주지 않는다.
+        """
+        mode = str(self._prefs.get("startup_mode", "last"))
+        if mode == "none":
+            return (None, None)
+        kind = None
+        if mode == "path":
+            target = str(self._prefs.get("startup_path", "") or "")
+        else:
+            last_open = data.get("last_open") or {}
+            target = str(last_open.get("path", "") or "")
+            kind = last_open.get("kind")
+            if not target:                      # 구 설정 승계(last_open 이 없던 버전)
+                target = str(data.get("last_folder", "") or "")
+                kind = "folder"
+        if not target:
+            return (None, None)
+        p = Path(target)
+        if not p.exists():
+            return (None, None)
+        if kind not in ("file", "folder"):
+            kind = "file" if p.is_file() else "folder"
+        return (p, kind)
+
+    def _restore_session_deferred(self):
+        """260906-1: 이벤트 루프 진입 후(=창이 보인 뒤) 실행되는 시작 대상 열기.
+
+        ※ 오프스크린 테스트처럼 이벤트 루프를 돌리지 않는 곳에서는 **실행되지 않는다** —
+          `MainWindow()` 생성만으로 사용자의 마지막 폴더를 열던 부작용도 함께 사라진다.
+          테스트가 이 동작을 봐야 하면 이 메서드를 직접 부른다.
+        """
+        data = getattr(self, "_session_data", None) or {}
+        self._session_data = None
+        # 미뤄 둔 사이에 이미 무언가를 열었으면(명령줄 인자 PDF·드롭·사용자 조작) 덮지 않는다.
+        #   동기 복원 때는 있을 수 없던 경합이라 명시적으로 막는다. 창에 문서가 떠 있는지도
+        #   함께 본다 — `_load_main` 을 거치지 않고 뷰에 직접 띄운 경우까지 덮으면 안 된다.
+        try:
+            opened = any(mv.current_file() for mv in getattr(self, "_mv", []))
+        except Exception:
+            opened = False
+        if self._folder is not None or self._current_main is not None or opened:
+            return
+
+        target, kind = self._startup_target(data)
+        if target is None:
+            return                              # 빈 화면 그대로 (260906-3)
+
+        if kind == "file":
+            self.open_pdf(target)               # 그 파일만 — 상위 폴더를 훑지 않는다
+        else:
+            self.open_folder(target)
+
+        # 마지막 메인 문서·페이지 복원 — **지금 연 대상 안의 문서일 때만**.
         last_main = data.get("last_main")
-        if last_main and isinstance(last_main, dict):
+        if isinstance(last_main, dict) and last_main.get("file_path"):
             try:
-                fp = last_main.get("file_path", "")
-                if fp and Path(fp).exists():
-                    pg = (last_main.get("page_index") or 0) if self._prefs.get("restore_last_page", True) else 0
-                    item = HistoryItem(
-                        file_path=fp,
-                        page_index=pg,
-                        query=last_main.get("query", ""),
-                        origin=last_main.get("origin", "bookmark"),
-                        label=last_main.get("label", ""),
-                    )
-                    self._load_main(item)
+                fp = Path(str(last_main.get("file_path")))
+                keep_page = bool(self._prefs.get("restore_last_page", True))
+                inside = (fp == target) if kind == "file" else (target in fp.parents)
+                if fp.exists() and inside:
+                    if kind == "file" and keep_page:
+                        # open_pdf 가 이미 그 파일을 열었으므로 페이지만 맞춘다.
+                        self.main_view.go_to_page(int(last_main.get("page_index") or 0))
+                    elif kind == "folder":
+                        self._load_main(HistoryItem(
+                            file_path=str(fp),
+                            page_index=(int(last_main.get("page_index") or 0) if keep_page else 0),
+                            query=last_main.get("query", ""),
+                            origin=last_main.get("origin", "bookmark"),
+                            label=last_main.get("label", ""),
+                        ))
             except Exception:
                 pass
 
@@ -5603,6 +5632,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return bool(prefs.get(k, old.get(k, False)))
         self._prefs = {
             "restore_session": prefs.get("restore_session", True),
+            # 260906-3: 시작 동작 3택(last|path|none)과 지정 경로. ★ 여기 없으면 조용히 유실된다.
+            "startup_mode": str(prefs.get("startup_mode",
+                                          old.get("startup_mode", "last")) or "last"),
+            "startup_path": str(prefs.get("startup_path",
+                                          old.get("startup_path", "")) or ""),
             # 260628-13: 허용목록 방식이라 여기 없으면 저장되지 않는다.
             "start_view_single": bool(prefs.get("start_view_single",
                                               old.get("start_view_single", True))),
@@ -5929,6 +5963,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
 
+    def _current_open_target(self) -> dict:
+        """260906-3: 1번째 뷰어가 지금 보고 있는 대상 → {"kind": "file"|"folder", "path": ...}.
+
+        책갈피창이 **파일 모드**면 그 파일 하나, 아니면 폴더. 아무것도 없으면 빈 dict."""
+        try:
+            bt = self.bookmark_tree
+            if bool(getattr(bt, "_is_file_mode", lambda: False)()):
+                cur = getattr(bt, "_single_file", None)
+                if cur and Path(cur).exists():
+                    return {"kind": "file", "path": str(cur)}
+            if self._folder:
+                return {"kind": "folder", "path": str(self._folder)}
+        except Exception:
+            pass
+        return {}
+
     def _build_settings_payload(self) -> dict:
         """settings.json 저장 페이로드 (closeEvent / _save_settings_now 공용)."""
         return {
@@ -5936,10 +5986,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             "render_dpi": self.main_view._base_dpi,
             "fit_mode": self.main_view._fit_mode,
             "last_folder": str(self._folder) if self._folder else "",
+            # 260906-3: 1번째 뷰어가 보던 것을 **형태까지** 기억한다 — 파일 모드로 보던 것을
+            #   다음 실행에서 상위 폴더로 열어 버리면 열라고 하지 않은 폴더를 훑게 된다.
+            "last_open": self._current_open_target(),
             "recent_folders": self._recent_folders,
-            # v1.6.2: history 키 제거. 옛 screenshots(PNG 경로만)는 호환을 위해 같이 저장.
-            "screenshots": self.shot_strip.all_paths(),
-            "screenshots_meta": self.shot_strip.all_meta(),
+            # 260906-3(사용자 결정): 스크린샷 목록은 **저장하지 않는다** — 시작은 항상 빈 목록이고,
+            #   남겨 두면 지워진 캡처 경로만 설정 파일에 쌓인다. 종료 시 PDF 저장을 묻는다.
+            "screenshots": [],
+            "screenshots_meta": [],
             "panels_visible": {
                 "search_results": self.act_toggle_search.isChecked(),
                 "screenshots": self.act_toggle_shot.isChecked(),
@@ -6280,9 +6334,43 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self.search_bar.edit.setText(q)
                 self.action_search(q)
 
+    def _confirm_close_screenshots(self) -> bool:
+        """260906-3: 캡처 목록이 있으면 PDF 저장 여부를 묻는다. 계속 종료해도 되면 True.
+
+        [저장] 은 '스크린샷 PDF 저장'과 **같은 경로**를 쓴다(옵션 대화상자 → 파일 선택).
+        그 안에서 취소하면 종료도 취소한다 — 저장하려던 목록이 그대로 사라지면 안 된다."""
+        try:
+            if self.shot_strip.list.count() <= 0:
+                return True
+        except Exception:
+            return True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("스크린샷")
+        box.setText("캡처 목록이 있습니다. PDF로 모아 저장할까요?"
+                    "\n(저장하지 않으면 목록은 사라집니다. 다음 실행은 빈 목록으로 시작합니다.)")
+        b_save = box.addButton("저장", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("저장 안 함", QMessageBox.ButtonRole.DestructiveRole)
+        b_cancel = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_save)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is b_cancel:
+            return False
+        if clicked is b_save:
+            return bool(self.action_save_screenshot_pdf())
+        return True                          # 저장 안 함 → 그대로 종료
+
     def closeEvent(self, event):
         # 260611-17: 편집모드에서 X(종료) 시 저장/저장 안 함/취소 선택
         if not self._confirm_close_edit():
+            event.ignore()
+            return
+
+        # 260906-3(사용자 결정): 캡처 목록은 다음 실행에 복원되지 않는다 → 남아 있으면
+        #   지금 PDF로 모아 저장할지 묻는다. 위치는 편집 저장 확인 **뒤**, 되돌릴 수 없는
+        #   정리(녹화 종료 등) **앞**(발표 SOT §9.1 위치 규칙과 같은 이유).
+        if not self._confirm_close_screenshots():
             event.ignore()
             return
 
