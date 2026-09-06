@@ -1,6 +1,7 @@
 """QThread 기반 백그라운드 작업자."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -120,6 +121,10 @@ class ProbeWorker(QObject):
     result = pyqtSignal(dict)      # {path, size, mtime, enc, has_toc, auth}
     finished = pyqtSignal()
 
+    # 260906-5(마스터 SOT §5 '배경 작업 4가지 의무'):
+    YIELD_S = 0.005        # ② 파일마다 GIL 양보 — 없으면 메인이 굶어 '응답 없음'
+    MAX_MB = 40            # ③ 이보다 큰 파일은 배경에서 열지 않는다(여는 데만 수 초)
+
     def __init__(self, paths: list, db_path=None):
         super().__init__()
         self.paths = list(paths)
@@ -156,6 +161,9 @@ class ProbeWorker(QObject):
                 size, mtime = int(st.st_size), int(st.st_mtime)
             except Exception:
                 continue
+            if size > self.MAX_MB * 1024 * 1024:
+                # ③ 큰 파일은 배경에서 건너뛴다 — 펼치거나 우클릭할 때 그 자리에서 연다.
+                continue
             enc, has_toc, auth = False, False, None
             try:
                 doc = fitz.open(path)
@@ -190,6 +198,8 @@ class ProbeWorker(QObject):
                     pass
             self.result.emit({"path": path, "size": size, "mtime": mtime,
                               "enc": enc, "has_toc": has_toc, "auth": auth})
+            if self.YIELD_S:
+                time.sleep(self.YIELD_S)      # ② 메인에 GIL 조각을 넘긴다
 
 
 def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:

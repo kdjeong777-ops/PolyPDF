@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import os
+import time
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -80,6 +81,7 @@ class PdfIndex:
 
     # 260825: FTS 토크나이저 스키마 버전. 2=trigram(파괴적, 폐기), 3=trigram(내용 보존 복사).
     SCHEMA_VERSION = 3
+    YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(마스터 SOT §5 ②)
     _FTS_TRIGRAM = ("CREATE VIRTUAL TABLE {name} USING fts5("
                     "text, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')")
 
@@ -259,6 +261,10 @@ class PdfIndex:
                     except Exception:
                         text = ""
                     rows.append((text, file_id, i))
+                    # 260906-5(마스터 §5 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
+                    #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.
+                    if (i & 0x1F) == 0x1F:
+                        time.sleep(self.YIELD_S)
                 self.conn.executemany(
                     "INSERT INTO pages_fts(text, file_id, page_index) VALUES(?, ?, ?)",
                     rows,
@@ -307,6 +313,7 @@ class PdfIndex:
 
         total = len(pdfs)
         for idx, pdf in enumerate(pdfs, 1):
+            time.sleep(self.YIELD_S)          # 260906-5(마스터 §5 ②): 파일마다 GIL 양보
             if should_cancel and should_cancel():
                 return
             # 260905(§4.4): 시작도 알린다 — 완료 때만 알리면 첫 파일이 끝날 때까지 진행 창이

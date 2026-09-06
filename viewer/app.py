@@ -2404,6 +2404,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         없어 '작업이 없는데 느리다'로 보였다. 조사도 같은 창·상태바에 드러낸다."""
         self._probe_busy = (total > 0 and done < total)
         dlg = getattr(self, "_indexing_dialog", None)
+        if dlg is None and self._probe_busy:
+            # 260906-5(마스터 SOT §5 ④): 인덱싱이 없어도 조사만으로 **같은 창**을 띄운다.
+            #   상태바만 바뀌면 사용자는 멈춘 것으로 본다(260906 보고).
+            try:
+                from viewer.widgets.indexing_dialog import IndexingDialog
+                dlg = IndexingDialog(self, Path(self._folder).name if self._folder else "")
+                self._indexing_dialog = dlg
+                dlg.start()
+            except Exception:
+                dlg = None
         if dlg is not None and self._probe_busy:
             try:
                 dlg.set_phase("목록을 조사하는 중입니다",
@@ -2433,6 +2443,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             folder = getattr(worker, "folder", None)
             dlg = IndexingDialog(self, Path(folder).name if folder else "")
             self._index_busy = True
+            # 260906-5(마스터 SOT §5 ①): 파일을 여는 작업은 한 번에 하나만 — 인덱싱 중에는
+            #   목록 조사를 멈춘다. 인덱싱이 probe_cache 를 채우므로 끝난 뒤엔 대개 할 일이 없다.
+            self._set_probe_paused(True)
             worker.progress.connect(dlg.on_progress)
             # 260906-4: 인덱싱이 끝나도 **목록 조사가 남아 있으면 창을 닫지 않는다**
             #   (닫혀 있는데 느리면 사용자는 원인을 알 수 없다 — 260906 보고).
@@ -2443,9 +2456,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             self._indexing_dialog = None
 
+    def _set_probe_paused(self, on: bool) -> None:
+        for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+            if _bt is not None:
+                try:
+                    _bt.set_probe_paused(on)
+                except Exception:
+                    pass
+
     def _on_index_phase_done(self):
-        """인덱싱 단계 종료 — 목록 조사가 돌고 있으면 같은 창을 그 단계로 넘긴다."""
+        """인덱싱 단계 종료 — 멈춰 둔 목록 조사를 풀고, 남아 있으면 같은 창을 넘긴다."""
         self._index_busy = False
+        self._set_probe_paused(False)         # 260906-5: 이제 조사 차례
         if getattr(self, "_probe_busy", False):
             dlg = getattr(self, "_indexing_dialog", None)
             if dlg is not None:

@@ -262,6 +262,7 @@ class BookmarkTree(QWidget):
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
+        self._probe_paused = False   # 260906-5(마스터 §5 ①): 인덱싱 중에는 조사를 멈춘다
         self._probe_scan_timer = QTimer(self)     # 260906-4: 보이는 행 걷기를 모아서 1회
         self._probe_scan_timer.setSingleShot(True)
         self._probe_scan_timer.setInterval(self.PROBE_SCAN_DELAY_MS)
@@ -1499,6 +1500,16 @@ class BookmarkTree(QWidget):
         except Exception:
             pass
 
+    def set_probe_paused(self, on: bool) -> None:
+        """260906-5(마스터 SOT §5 ①): 파일을 여는 배경 작업은 **한 번에 하나만**.
+
+        인덱싱이 도는 동안에는 목록 조사를 멈춘다 — 둘이 겹치면 메인이 받는 GIL 조각이
+        반으로 줄어 창이 '응답 없음' 이 된다. 인덱싱이 `probe_cache` 를 채우므로 끝난 뒤에는
+        조사할 것이 대개 남지 않는다. 큐는 그대로 두고 풀릴 때 이어서 한다."""
+        self._probe_paused = bool(on)
+        if not self._probe_paused and self._probe_queue and not self._probe_timer.isActive():
+            self._probe_timer.start()
+
     def _probe_tick(self):
         """260906-2: 모아 둔 행들을 **워커 스레드**에 넘긴다(타이머는 모으기용 지연).
 
@@ -1506,7 +1517,7 @@ class BookmarkTree(QWidget):
         메인 스레드가 그대로 멈췄고, 창이 '응답 없음' 이 됐다(실측 4.5초, 260906 보고).
         보이는 행만 검사해도(260906-1) 큰 파일 하나면 같은 일이 벌어진다."""
         self._probe_timer.stop()
-        if self._probe_worker is not None or not self._probe_queue:
+        if self._probe_paused or self._probe_worker is not None or not self._probe_queue:
             return
         pending: dict = {}
         for item, path in self._probe_queue:

@@ -129,6 +129,38 @@ try:
     chk(seen["prog"] > 0, "④ 조사 진행을 알린다(진행 창·상태바용)", f"{seen['prog']}회")
     chk(seen["done"] > 0, "④ 조사가 끝나면 알린다", f"{seen['done']}회")
 
+    # ── ④-b 260906-5: 배경 작업 4가지 의무(마스터 SOT §5) ────────────────
+    from viewer.workers import ProbeWorker
+    from viewer.indexer import PdfIndex as _PI
+    chk(ProbeWorker.YIELD_S > 0 and _PI.YIELD_S > 0,
+        "④-b ② 파일마다 GIL 을 양보한다(양보 간격 > 0)",
+        f"probe {ProbeWorker.YIELD_S}s / index {_PI.YIELD_S}s")
+    chk(0 < ProbeWorker.MAX_MB <= 200,
+        "④-b ③ 큰 파일은 배경에서 열지 않는다(상한 존재)", f"{ProbeWorker.MAX_MB}MB")
+    big = root / "큰파일.pdf"
+    with open(big, "wb") as f:                     # 상한을 넘는 더미(열리지 않아야 한다)
+        f.write(b"%PDF-1.4" + b"\n" + b"0" * (ProbeWorker.MAX_MB * 1024 * 1024 + 1024))
+    got = {"n": 0}
+    w = ProbeWorker([str(big)])
+    w.result.connect(lambda r: got.__setitem__("n", got["n"] + 1))
+    w.run()
+    chk(got["n"] == 0, "④-b ③ 상한을 넘는 파일은 결과도 내지 않는다(열지 않았다)")
+    big.unlink()
+
+    bt4 = make_tree(PdfIndex(db))
+    bt4.set_probe_paused(True)
+    bt4.load_folder(root)
+    t_end = time.time() + 5
+    while time.time() < t_end and bt4._fill_plan:
+        app.processEvents(); time.sleep(0.005)
+    bt4._probe_tick()                              # 멈춘 동안에는 워커를 띄우지 않는다
+    chk(bt4._probe_worker is None,
+        "④-b ① 인덱싱 중(일시정지)에는 조사를 시작하지 않는다")
+    bt4.set_probe_paused(False)
+    settle(bt4)
+    chk(bt4._probe_worker is None and not bt4._probe_queue,
+        "④-b ① 풀면 이어서 끝낸다")
+
     # ── ⑤ 스크롤 신호에서 즉시 걷지 않는다(되먹임 방지) ─────────────────
     chk(callable(getattr(bt3, "_schedule_visible_probes", None)),
         "⑤ 걷기 예약 진입점이 있다")

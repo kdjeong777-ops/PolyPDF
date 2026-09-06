@@ -19,11 +19,13 @@ from PyQt6.QtWidgets import (QDialog, QLabel, QProgressBar, QPushButton,
 
 
 class IndexingDialog(QDialog):
-    SHOW_DELAY_MS = 700          # 이 시간 안에 끝나면 아예 안 띄운다(깜빡임 방지)
+    SHOW_DELAY_MS = 400          # 이 시간 안에 끝나면 아예 안 띄운다(깜빡임 방지)
+    #   260906-5: 700→400 — 준비 작업이 시작되면 **먼저 창부터** 보여야 한다.
+    #   종전에는 메인이 굶어 타이머가 못 돌아 '응답 없음' 이 먼저 떴다(사용자 보고).
 
     def __init__(self, parent=None, folder_name: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("PolyPDF — 폴더 인덱싱")
+        self.setWindowTitle("PolyPDF — 폴더 준비")   # 260906-5: 인덱싱+목록 조사 공용
         # 도구 창: 메인 위에 머물되 모달 아님. 닫기(✕)는 '아래로 숨기기'와 같다.
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowTitleHint
                             | Qt.WindowType.CustomizeWindowHint
@@ -35,7 +37,7 @@ class IndexingDialog(QDialog):
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 14, 16, 12); lay.setSpacing(8)
-        self.lbl_title = QLabel("<b>폴더를 인덱싱하는 중입니다</b>"
+        self.lbl_title = QLabel("<b>폴더를 준비하는 중입니다</b>"
                                 + (f" — {folder_name}" if folder_name else ""))
         self.lbl_title.setWordWrap(True)
         lay.addWidget(self.lbl_title)
