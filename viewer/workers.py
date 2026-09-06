@@ -120,9 +120,10 @@ class ProbeWorker(QObject):
     result = pyqtSignal(dict)      # {path, size, mtime, enc, has_toc, auth}
     finished = pyqtSignal()
 
-    def __init__(self, paths: list):
+    def __init__(self, paths: list, db_path=None):
         super().__init__()
         self.paths = list(paths)
+        self.db_path = db_path      # 260906-4: 결과를 인덱스에 적어 다음엔 안 열게
         self._cancel = False
 
     def request_cancel(self):
@@ -130,6 +131,23 @@ class ProbeWorker(QObject):
 
     def run(self):
         import fitz
+        idx = None
+        if self.db_path is not None:
+            try:
+                idx = PdfIndex(self.db_path)
+            except Exception:
+                idx = None
+        try:
+            self._run_all(fitz, idx)
+        finally:
+            if idx is not None:
+                try:
+                    idx.close()
+                except Exception:
+                    pass
+            self.finished.emit()
+
+    def _run_all(self, fitz, idx):
         for path in self.paths:
             if self._cancel:
                 break
@@ -165,9 +183,13 @@ class ProbeWorker(QObject):
                 enc, has_toc, auth = False, False, None
             if self._cancel:
                 break
+            if idx is not None:
+                try:
+                    idx.probe_set(path, size, mtime, enc, has_toc, auth)
+                except Exception:
+                    pass
             self.result.emit({"path": path, "size": size, "mtime": mtime,
                               "enc": enc, "has_toc": has_toc, "auth": auth})
-        self.finished.emit()
 
 
 def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:

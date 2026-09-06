@@ -191,6 +191,8 @@ class BookmarkTree(QWidget):
     filesRelocated = pyqtSignal(list)        # 260901-2: [[old, new], ...] 파일 복사/이동 완료
     viewListModeChanged = pyqtSignal(bool)   # 260901-3: 사용자가 목록 보기를 바꿈(True=트리)
     filesListed = pyqtSignal()               # 260906-1: 폴더 목록 채우기 완료(비동기 스캔 후)
+    probeProgress = pyqtSignal(int, int, str)  # 260906-4: 목록 조사 진행(done, total, 파일명)
+    probeFinished = pyqtSignal()               # 260906-4: 목록 조사 끝
 
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
@@ -209,6 +211,7 @@ class BookmarkTree(QWidget):
                              #   한 틱이 수백 ms 로 늘어 창이 멈춘 느낌이 난다(실측)
     FILL_INTERVAL_MS = 10    # ★ 0 금지 — Windows WM_TIMER 가 굶는다(§5)
     PROBE_INTERVAL_MS = 20   # 표식 검사 '모으기' 지연 — 스크롤마다 워커를 띄우지 않기 위해
+    PROBE_SCAN_DELAY_MS = 80  # 260906-4: 보이는 행 걷기 지연(스크롤 중에는 걷지 않는다)
 
     # 260901-2: 폴더 그룹 행 색 — 디자인 SOT §2.5(테마 무관, 밝은 노랑+어두운 글자)
     FOLDER_ROW_BG = "#fdf3c0"
@@ -255,6 +258,15 @@ class BookmarkTree(QWidget):
         self._probe_pending: dict = {}
         self._probe_keep: list = []
         self._probe_token = 0        # 취소된 이전 검사의 결과가 새 트리에 섞이지 않게
+        self._probe_total = 0        # 260906-4: 이번 묶음 진행 표시용
+        self._probe_done = 0
+        self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
+        self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
+        self._probe_scan_timer = QTimer(self)     # 260906-4: 보이는 행 걷기를 모아서 1회
+        self._probe_scan_timer.setSingleShot(True)
+        self._probe_scan_timer.setInterval(self.PROBE_SCAN_DELAY_MS)
+        self._probe_scan_timer.timeout.connect(self._queue_visible_probes)
+        self._in_visible_scan = False            # 재진입 방지(걷는 도중 신호가 다시 온다)
         # 260906-1: 폴더 스캔(워커) 상태 — 늦게 오는 이전 폴더 결과는 토큰으로 거른다.
         self._scan_worker = None
         self._scan_token = 0
@@ -499,14 +511,16 @@ class BookmarkTree(QWidget):
         self.tree.pathDropped.connect(self.pathDropped.emit)
         # v1.6.2: 갈매기(▸) 펼침 시 PDF 내부 TOC lazy load
         self.tree.itemExpanded.connect(self._on_item_expanded)
-        # 260906-1: 화면에 보이는 행만 표식 검사(마스터 SOT §5) — 스크롤·펼침·접힘·크기변경마다
-        #   다시 걷는다. rangeChanged 는 창 크기·행 수가 바뀔 때도 오므로 리사이즈까지 덮는다.
+        # 260906-1: 화면에 보이는 행만 표식 검사(마스터 SOT §5) — 스크롤·펼침·접힘마다 다시 걷되,
+        #   ★ 신호에서 **바로 걷지 않고 한 번으로 모은다**(`_schedule_visible_probes`).
+        #   260906-4(실측): 표식을 붙이면 행 모양이 바뀌고 → 스크롤바 `rangeChanged` 가 다시 와서
+        #   같은 걷기를 부르는 **되먹임**이 생겼다. 휠 1회에 이 함수가 평균 7회 돌아
+        #   스크롤이 굼떴다(휠 1건 24ms). rangeChanged 연결은 끊는다 — 행이 늘어나는 경우는
+        #   채우기(`_fill_tick`)가 직접 부르므로 놓치지 않는다.
         self.tree.verticalScrollBar().valueChanged.connect(
-            lambda _v: self._queue_visible_probes())
-        self.tree.verticalScrollBar().rangeChanged.connect(
-            lambda _a, _b: self._queue_visible_probes())
-        self.tree.itemExpanded.connect(lambda _it: self._queue_visible_probes())
-        self.tree.itemCollapsed.connect(lambda _it: self._queue_visible_probes())
+            lambda _v: self._schedule_visible_probes())
+        self.tree.itemExpanded.connect(lambda _it: self._schedule_visible_probes())
+        self.tree.itemCollapsed.connect(lambda _it: self._schedule_visible_probes())
         layout.addWidget(self.tree, 1)
 
         self.info = QLabel()
@@ -1377,11 +1391,31 @@ class BookmarkTree(QWidget):
                 out.append(it)
         return out
 
+    def _schedule_visible_probes(self):
+        """260906-4: 보이는 행 걷기를 **모아서 한 번**만 예약한다.
+
+        스크롤 중에는 타이머가 계속 뒤로 밀려 걷지 않는다 — 손을 떼면 그때 한 번 걷는다.
+        신호마다 즉시 걷던 종전 방식은 표식 부착 → 행 변경 → 스크롤바 신호 → 다시 걷기의
+        되먹임을 만들어 휠 1회에 7회씩 돌았다(실측)."""
+        try:
+            self._probe_scan_timer.start()      # 이미 대기 중이면 시각만 미뤄진다
+        except Exception:
+            pass
+
     def _queue_visible_probes(self):
         """보이는 파일 행 중 아직 검사하지 않은 것만 큐에 넣는다(마스터 SOT §5).
 
-        스크롤·펼침·채우기 때마다 불린다 — 한 번 넣은 행은 `DATA_PROBED` 로 표시해
-        같은 행을 다시 열지 않는다."""
+        한 번 넣은 행은 `DATA_PROBED` 로 표시해 같은 행을 다시 열지 않는다.
+        ★ 재진입 금지 — 걷는 도중의 `setData` 가 다시 신호를 부를 수 있다."""
+        if getattr(self, "_in_visible_scan", False):
+            return
+        self._in_visible_scan = True
+        try:
+            self._queue_visible_probes_inner()
+        finally:
+            self._in_visible_scan = False
+
+    def _queue_visible_probes_inner(self):
         added = False
         for it in self._visible_file_items():
             if it.data(0, self.DATA_PROBED):
@@ -1390,10 +1424,55 @@ class BookmarkTree(QWidget):
             if not path or not str(path).lower().endswith(".pdf"):
                 continue
             it.setData(0, self.DATA_PROBED, True)
+            known = self._known_probe(str(path))
+            if known is not None:            # 260906-4: 이미 아는 파일은 **열지 않는다**
+                self._apply_probe(it, str(path), known)
+                continue
             self._probe_queue.append((it, str(path)))
             added = True
         if added and not self._probe_timer.isActive():
             self._probe_timer.start()
+
+    def _known_probe(self, path: str):
+        """이 파일의 조사 결과를 이미 아는가 → (enc, has_toc, auth) 또는 None.
+
+        260906-4: ① 이번 실행에서 본 것(`_probe_cache`), ② 인덱스에 적어 둔 것
+        (`probe_provider` — 인덱싱 때 같이 기록된다). 둘 다 파일 크기·수정시각이
+        같을 때만 쓴다. 종전에는 캐시를 두고도 **묻지 않아**, 정렬을 바꾸거나 같은
+        폴더를 다시 열 때마다 같은 파일을 또 열었다(실측)."""
+        try:
+            st = Path(path).stat()
+            key = (path, int(st.st_size), int(st.st_mtime))
+        except Exception:
+            return None
+        cache = getattr(self, "_probe_cache", None)
+        if cache and key in cache:
+            return cache[key]
+        fn = getattr(self, "probe_provider", None)
+        if callable(fn):
+            try:
+                got = fn(path, int(st.st_size), int(st.st_mtime))
+            except Exception:
+                got = None
+            if got is not None:
+                if cache is None:
+                    cache = self._probe_cache = {}
+                cache[key] = tuple(got)
+                return tuple(got)
+        return None
+
+    def _apply_probe(self, item, path: str, res: tuple) -> None:
+        """조사 결과를 행에 반영(암호화 표식 · 책갈피 펼침 표시)."""
+        enc, has_toc, auth = res
+        try:
+            if enc:
+                item.setData(0, self.DATA_ENCRYPTED, True)
+                item.setData(0, self.DATA_AUTH, auth)
+                item.setToolTip(0, self._enc_tooltip(auth))
+            if has_toc and item.childCount() == 0:
+                self._attach_toc_placeholder(item, Path(path))
+        except RuntimeError:
+            pass
 
     def _ensure_probed(self, item, force: bool = False) -> None:
         """그 행 하나를 **지금 바로** 검사(우클릭 메뉴처럼 결과가 즉시 필요한 경우).
@@ -1437,7 +1516,11 @@ class BookmarkTree(QWidget):
         from viewer.workers import ProbeWorker, run_in_thread
         self._probe_token += 1
         token = self._probe_token
-        w = ProbeWorker(list(pending.keys()))
+        paths = list(pending.keys())
+        self._probe_total = len(paths)
+        self._probe_done = 0
+        self.probeProgress.emit(0, self._probe_total, "")
+        w = ProbeWorker(paths, db_path=getattr(self, "probe_db_path", None))
         self._probe_worker = w
         w.result.connect(lambda r, t=token: self._on_probe_result(t, r))
         w.finished.connect(lambda t=token: self._on_probe_finished(t))
@@ -1451,17 +1534,13 @@ class BookmarkTree(QWidget):
             cache = getattr(self, "_probe_cache", None)
             if cache is None:
                 cache = self._probe_cache = {}
-            cache[(r["path"], r["size"], r["mtime"])] = (r["enc"], r["has_toc"], r["auth"])
+            res = (r["enc"], r["has_toc"], r["auth"])
+            cache[(r["path"], r["size"], r["mtime"])] = res
             for item in self._probe_pending.pop(r["path"], []):
-                try:
-                    if r["enc"]:
-                        item.setData(0, self.DATA_ENCRYPTED, True)
-                        item.setData(0, self.DATA_AUTH, r["auth"])
-                        item.setToolTip(0, self._enc_tooltip(r["auth"]))
-                    if r["has_toc"] and item.childCount() == 0:  # json 자식 있으면 부착 안 함
-                        self._attach_toc_placeholder(item, Path(r["path"]))
-                except RuntimeError:
-                    continue        # 항목이 이미 삭제됨(트리 재구성)
+                self._apply_probe(item, r["path"], res)
+            self._probe_done += 1
+            self.probeProgress.emit(self._probe_done, self._probe_total,
+                                    Path(r["path"]).name)
             self.tree.viewport().update()
         except RuntimeError:
             return
@@ -1477,6 +1556,8 @@ class BookmarkTree(QWidget):
             self._probe_pending = {}
             if self._probe_queue and not self._probe_timer.isActive():
                 self._probe_timer.start()
+            else:
+                self.probeFinished.emit()
         except RuntimeError:
             return
 

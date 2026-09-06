@@ -100,6 +100,22 @@ class PdfIndex:
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(files)")}
         if "size" not in cols:
             self.conn.execute("ALTER TABLE files ADD COLUMN size INTEGER")
+        # 260906-4: 책갈피창 '목록 조사'(암호화·내부 책갈피 유무) 결과의 영구 캐시.
+        #   ★ `files` 와 **별도 테이블**이다 — files 에 얹으면 인덱싱되지 않은 폴더에서는
+        #   적을 자리가 없고, 조사만 하고 행을 만들면 `needs_reindex` 가 False 가 되어
+        #   그 파일이 영영 인덱싱되지 않는다(검색이 조용히 비는 함정).
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS probe_cache(
+                key TEXT PRIMARY KEY,      -- pathutil.norm_key(경로)
+                size INTEGER NOT NULL,
+                mtime REAL NOT NULL,
+                encrypted INTEGER NOT NULL,
+                has_toc INTEGER,           -- NULL = 잠겨서 모름
+                auth TEXT
+            );
+            """
+        )
 
         # 260825: FTS5 tokenizer 를 trigram 으로 — LIKE '%…%' 부분일치(한글 포함)를 **색인**으로.
         #   ★ 기존 인덱스 텍스트를 **보존 복사**(재인덱싱 없이) → 검색이 비는 구간 없음.
@@ -140,6 +156,37 @@ class PdfIndex:
         self.conn.commit()
 
     # --- 인덱싱 ------------------------------------------------------------
+
+    # --- 260906-4: 목록 조사(표식) 캐시 -------------------------------------
+    def probe_get(self, file_path, size: int, mtime: float):
+        """저장해 둔 (암호화, 책갈피유무, 인증상태). 모르거나 파일이 바뀌었으면 None.
+
+        `size`/`mtime` 는 **호출측이 지금 디스크에서 본 값** — 기록과 다르면 내용이
+        바뀐 것이므로 쓰지 않는다(재인덱싱 판정과 같은 기준)."""
+        from viewer.pathutil import norm_key
+        row = self.conn.execute(
+            "SELECT size, mtime, encrypted, has_toc, auth FROM probe_cache WHERE key=?",
+            (norm_key(file_path),)).fetchone()
+        if row is None:
+            return None
+        try:
+            if int(row["size"]) != int(size) or abs(float(row["mtime"]) - float(mtime)) > 1:
+                return None
+        except Exception:
+            return None
+        has_toc = None if row["has_toc"] is None else bool(row["has_toc"])
+        return (bool(row["encrypted"]), has_toc, row["auth"])
+
+    def probe_set(self, file_path, size: int, mtime: float,
+                  enc: bool, has_toc, auth) -> None:
+        """조사 결과 기록(같은 파일은 덮어쓴다). 인덱싱 여부와 무관하게 남는다."""
+        from viewer.pathutil import norm_key
+        self.conn.execute(
+            "INSERT OR REPLACE INTO probe_cache(key, size, mtime, encrypted, has_toc, auth)"
+            " VALUES(?, ?, ?, ?, ?, ?)",
+            (norm_key(file_path), int(size), float(mtime), 1 if enc else 0,
+             None if has_toc is None else (1 if has_toc else 0), auth))
+        self.conn.commit()
 
     def _find_file_row(self, file_path, cols: str = "id, mtime, size"):
         """260905(검색 SOT §3): 경로로 `files` 행 찾기 — **정확 일치 먼저, 없으면 정규화 키**.
@@ -191,6 +238,13 @@ class PdfIndex:
         except Exception:
             return  # 손상된 파일은 건너뜀
         try:
+            # 260906-4: 어차피 연 김에 목록 조사 값(암호화·내부 책갈피)도 같이 기록한다 —
+            #   책갈피창이 같은 파일을 다시 열지 않아도 되게(마스터 SOT §5).
+            try:
+                _enc = bool(doc.needs_pass)
+                _toc = (False if _enc else bool(doc.get_toc()))
+            except Exception:
+                _enc, _toc = False, False
             with self.conn:
                 _st = file_path.stat()
                 cur = self.conn.execute(
@@ -209,6 +263,12 @@ class PdfIndex:
                     "INSERT INTO pages_fts(text, file_id, page_index) VALUES(?, ?, ?)",
                     rows,
                 )
+            # 조사 캐시도 같이 채운다 — 목록이 이 파일을 다시 열지 않게(260906-4).
+            try:
+                self.probe_set(file_path, int(_st.st_size), _st.st_mtime,
+                               _enc, (None if _enc else _toc), "locked" if _enc else None)
+            except Exception:
+                pass
         finally:
             doc.close()
 

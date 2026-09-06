@@ -91,6 +91,23 @@ class IndexingDialog(QDialog):
         self.hide_to_status()
         ev.ignore()
 
+    # ── 단계 전환 ─────────────────────────────────────────────────────
+    def set_phase(self, title: str, hint: str = "") -> None:
+        """260906-4: 같은 창으로 다음 단계를 보여 준다(인덱싱 → 목록 조사).
+
+        창을 닫았다 새로 띄우면 깜빡이고, 닫힌 채 작업만 계속되면 사용자는 '아무 것도
+        안 하는데 느리다'로 본다(260906 보고). 제목·안내만 바꾸고 창은 그대로 둔다."""
+        if self._finished:
+            return
+        self.lbl_title.setText(f"<b>{title}</b>")
+        if hint:
+            self.lbl_hint.setText(hint)
+        self.bar.setRange(0, 0)                 # 새 단계의 총량을 받기 전까지 '바쁨'
+        self.bar.setFormat("")
+        self.lbl_file.setText("준비 중...")
+        if not self._hidden_by_user and not self.isVisible():
+            self._show_timer.start(self.SHOW_DELAY_MS)
+
     # ── 진행 갱신 ─────────────────────────────────────────────────────
     def on_progress(self, done: int, total: int, name: str):
         if total > 0:

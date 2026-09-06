@@ -1988,6 +1988,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   계산한다. open_folder 직후의 _refresh_search_scope 는 그때 빈 트리를 보고
         #   범위를 '전체'로 두므로, 이 신호가 없으면 그 폴더로 한정되지 않는다.
         self.bookmark_tree.filesListed.connect(self._refresh_search_scope)
+        # 260906-4: 목록 조사(표식) — 인덱스에 적어 둔 값을 먼저 보고, 없을 때만 파일을 연다.
+        #   결과는 워커가 인덱스에 적어 다음 실행부터 다시 열지 않는다.
+        for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+            if _bt is None:
+                continue
+            _bt.probe_provider = self._probe_info_cached
+            _bt.probe_db_path = self._db_path
+        self.bookmark_tree.probeProgress.connect(self._on_probe_progress)
+        self.bookmark_tree.probeFinished.connect(self._on_probe_finished)
         self.bookmark_tree.filePasswordEntered.connect(self._on_file_password_entered)  # 260618-1
         self._released_state = None    # (path, page_index) — 작업 직전 닫은 파일 기억
 
@@ -2370,6 +2379,50 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             pass
 
     # ── 260902-6: 폴더 인덱싱 진행 창(검색 SOT §4.4) ─────────────────────
+    def _probe_info_cached(self, path: str, size: int, mtime: float):
+        """260906-4: 인덱스에 적어 둔 목록 조사 값 → (enc, has_toc, auth) 또는 None.
+
+        읽기 전용 조회 하나라 비용이 거의 없다(파일을 열지 않는다). 연결은 한 번 만들어
+        재사용하고, 실패하면 조용히 None — 캐시가 없을 뿐 동작은 그대로다."""
+        idx = getattr(self, "_probe_idx", None)
+        if idx is None:
+            try:
+                from viewer.indexer import PdfIndex
+                idx = self._probe_idx = PdfIndex(self._db_path)
+            except Exception:
+                self._probe_idx = None
+                return None
+        try:
+            return idx.probe_get(path, size, mtime)
+        except Exception:
+            return None
+
+    def _on_probe_progress(self, done: int, total: int, name: str):
+        """260906-4: 목록 조사 진행 — 인덱싱 창을 이어 쓰고 상태바에도 남긴다.
+
+        사용자 보고(260906): 인덱싱 창이 닫힌 뒤에도 한동안 휠이 버벅이는데 아무 표시가
+        없어 '작업이 없는데 느리다'로 보였다. 조사도 같은 창·상태바에 드러낸다."""
+        self._probe_busy = (total > 0 and done < total)
+        dlg = getattr(self, "_indexing_dialog", None)
+        if dlg is not None and self._probe_busy:
+            try:
+                dlg.set_phase("목록을 조사하는 중입니다",
+                              "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
+                              "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
+                              "한 번 조사한 파일은 다시 조사하지 않습니다.")
+                dlg.on_progress(done, total, name)
+            except Exception:
+                pass
+        if total > 0:
+            self.status.showMessage(f"목록 조사 {done} / {total}" + (f" — {name}" if name else ""),
+                                    4000)
+
+    def _on_probe_finished(self):
+        self._probe_busy = False
+        self.status.clearMessage()
+        if not getattr(self, "_index_busy", False):
+            self._close_indexing_dialog()
+
     def _attach_indexing_dialog(self, worker):
         """폴더 단위 인덱싱이면 진행 창을 붙인다(단일 파일 인덱싱은 상태바만)."""
         if getattr(worker, "single_file", None) is not None:
@@ -2379,13 +2432,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             from viewer.widgets.indexing_dialog import IndexingDialog
             folder = getattr(worker, "folder", None)
             dlg = IndexingDialog(self, Path(folder).name if folder else "")
+            self._index_busy = True
             worker.progress.connect(dlg.on_progress)
-            worker.finished.connect(dlg.on_finished)
-            worker.error.connect(lambda _e: dlg.on_finished())
+            # 260906-4: 인덱싱이 끝나도 **목록 조사가 남아 있으면 창을 닫지 않는다**
+            #   (닫혀 있는데 느리면 사용자는 원인을 알 수 없다 — 260906 보고).
+            worker.finished.connect(self._on_index_phase_done)
+            worker.error.connect(lambda _e: self._on_index_phase_done())
             self._indexing_dialog = dlg
             dlg.start()
         except Exception:
             self._indexing_dialog = None
+
+    def _on_index_phase_done(self):
+        """인덱싱 단계 종료 — 목록 조사가 돌고 있으면 같은 창을 그 단계로 넘긴다."""
+        self._index_busy = False
+        if getattr(self, "_probe_busy", False):
+            dlg = getattr(self, "_indexing_dialog", None)
+            if dlg is not None:
+                try:
+                    dlg.set_phase("목록을 조사하는 중입니다",
+                                  "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
+                                  "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
+                                  "한 번 조사한 파일은 다시 조사하지 않습니다.")
+                except Exception:
+                    pass
+            return
+        self._close_indexing_dialog()
 
     def _close_indexing_dialog(self):
         dlg = getattr(self, "_indexing_dialog", None)

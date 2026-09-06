@@ -102,6 +102,9 @@ try:
     bt3 = bt2                               # 이미 다 채워진 트리를 그대로 쓴다
     bt3._probe_timer.stop()                 # 큐가 빠지지 않게 멈춘 뒤 센다
     bt3._probe_queue = []
+    # 260906-4: 조사 캐시도 비운다 — 이미 아는 파일은 큐에 넣지 않는 것이 **정상**이라,
+    #   비우지 않으면 이 검사(‘보이는 행만 들어간다’)의 전제가 성립하지 않는다.
+    bt3._probe_cache = {}
     for it in bt3._iter_file_nodes():       # 이전에 매긴 검사 표식 초기화
         it.setData(0, bt3.DATA_PROBED, None)
     bt3._queue_visible_probes()
