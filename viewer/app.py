@@ -2388,7 +2388,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if idx is None:
             try:
                 from viewer.indexer import PdfIndex
-                idx = self._probe_idx = PdfIndex(self._db_path)
+                # 260906-6(마스터 SOT §5 ⑤): UI 스레드 연결은 **기다리지 않는다** —
+                #   못 읽으면 '모름'(None)일 뿐이고, 그 파일은 워커가 한 번 더 본다.
+                idx = self._probe_idx = PdfIndex(self._db_path,
+                                                 busy_ms=PdfIndex.BUSY_MS_UI)
             except Exception:
                 self._probe_idx = None
                 return None
@@ -3576,9 +3579,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _startup_index_check(self) -> None:
         """260825: 시작 시 검색 색인이 비어 있으면(구 파괴적 마이그레이션 잔재) 재인덱싱.
         색인이 이미 채워져 있으면(정상) 아무 것도 하지 않음 — 불필요한 재인덱싱 회피."""
+        # 260906-6(마스터 SOT §5 ⑤): 이 점검은 시작 1.2초 뒤 = **폴더 인덱싱이 한창일 때**
+        #   메인 스레드에서 돌던 조회다. 인덱싱이 도는 동안에는 뒤로 미룬다 — 급한 일이
+        #   아니고(색인이 비었을 때만 쓸모 있다), 잠금을 두고 UI 가 기다릴 이유가 없다.
+        if getattr(self, "_index_workers", None):
+            QTimer.singleShot(5000, self._startup_index_check)
+            return
         try:
             from viewer.indexer import PdfIndex
-            ix = PdfIndex(self._db_path)
+            ix = PdfIndex(self._db_path, busy_ms=PdfIndex.BUSY_MS_UI)
             try:
                 empty = ix.conn.execute("SELECT count(*) FROM pages_fts").fetchone()[0] == 0
             finally:
@@ -3875,7 +3884,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             profiles, df, n_docs = ctx
             texts = None
             try:
-                ix = PdfIndex(self._db_path)
+                ix = PdfIndex(self._db_path, busy_ms=PdfIndex.BUSY_MS_UI)
                 try:
                     texts = ix.page_texts(str(path)) or None
                 finally:

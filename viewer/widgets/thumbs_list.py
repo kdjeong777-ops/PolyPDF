@@ -67,6 +67,9 @@ class PageThumbs(QWidget):
         self._render_timer.setInterval(16)    # 260611-12: 80→16ms(한 프레임) — 더 빨리 표시
         self._render_timer.timeout.connect(self._render_visible)
 
+    # 260906-7: 한 번에 붙잡는 시간 상한(ms) — 넘기면 남은 썸네일은 다음 틱으로.
+    RENDER_SLICE_MS = 30
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -582,11 +585,23 @@ class PageThumbs(QWidget):
         self.list.blockSignals(False)
 
     def _render_visible(self):
+        """260906-7(마스터 SOT §5 ⑥): 보이는 썸네일을 **시간으로 끊어** 렌더한다.
+
+        종전에는 보이는 항목 전부를 **한 번에** 그렸다. 한 장은 `fitz` 로 쪽을 여는 C 호출이라
+        중간에 이벤트를 처리할 수 없고, 배경 인덱싱이 GIL 을 나눠 쓰는 동안에는 한 장의
+        비용이 몇 배로 늘어난다. 그래서 이 반복문 하나가 메시지 펌프를 5초 넘게 막고
+        창이 '응답 없음' 이 됐다(260906 사용자 보고, 설치본 스택 표본으로 지점 확인 —
+        `_render_visible → render_thumbnail → fz_load_page` 에서 MainThread 가 GIL 보유).
+
+        이제 `RENDER_SLICE_MS` 를 넘기면 남은 것은 타이머에 넘기고 즉시 돌아온다.
+        화면에 차는 속도는 사실상 그대로고(한 틱에 여러 장), 창은 계속 살아 있다."""
         if not self._doc:
             return
+        import time as _time
         # 260611-12: 보이는 영역 + 한 화면 아래까지 미리 렌더 → 스크롤 시 '뒤늦게 뜸' 완화
         vr = self.list.viewport().rect()
         viewport = vr.adjusted(0, -vr.height(), 0, vr.height())
+        deadline = _time.monotonic() + self.RENDER_SLICE_MS / 1000.0
         for i in range(self.list.count()):
             item = self.list.item(i)
             rect = self.list.visualItemRect(item)
@@ -594,6 +609,11 @@ class PageThumbs(QWidget):
                 continue
             if not item.icon().isNull():
                 continue
+            if _time.monotonic() >= deadline:
+                # 남은 것은 다음 틱에 — 여기서 돌아가야 창이 메시지를 펌프한다.
+                if not self._render_timer.isActive():
+                    self._render_timer.start()
+                return
             page_idx = item.data(Qt.ItemDataRole.UserRole)
             if isinstance(page_idx, (tuple, list)):     # 260822: 붙여넣기(외부 PDF) 썸네일
                 self._render_ext_item(item, str(page_idx[0]), int(page_idx[1]))

@@ -47,19 +47,40 @@ class PdfIndex:
         pages_fts(text, file_id UNINDEXED, page_index UNINDEXED) - FTS5 가상 테이블
     """
 
-    def __init__(self, db_path: str | Path):
+    # 260906-6(마스터 SOT §5 ⑤ 'DB 잠금 의무'): 대기 상한을 **부르는 쪽이 정한다**.
+    #   sqlite3 의 기본 대기는 5.0초인데, 이는 Windows 가 창을 '응답 없음' 으로 표시하는
+    #   시간과 **정확히 같다** — 배경 인덱싱이 쓰기를 쥔 사이 UI 스레드가 조회 하나만 해도
+    #   그대로 5초를 기다려 창이 죽은 것처럼 보인다(실측 단일 조회 2.49초 정지).
+    BUSY_MS_UI = 200        # UI 스레드: 잠깐이라도 기다리지 않는다(못 읽으면 '모름')
+    BUSY_MS_BG = 30000      # 워커: 얼마든 기다려도 좋다(사용자를 막지 않는다)
+
+    def __init__(self, db_path: str | Path, busy_ms: int = BUSY_MS_BG):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.migrated = False
+        self.busy_ms = int(busy_ms)
         try:
-            self.conn = sqlite3.connect(self.db_path)
+            self.conn = sqlite3.connect(self.db_path, timeout=self.busy_ms / 1000.0)
             self.conn.row_factory = sqlite3.Row
+            self._tune()
             self._init_schema()
-        except sqlite3.DatabaseError:
+        except sqlite3.DatabaseError as e:
             # 260827: index.db 손상(malformed) → 파일 삭제 후 새로 생성(캐시라 안전).
             #   다음 인덱싱이 다시 채운다. PdfIndex 생성이 실패해 검색/인덱싱이 통째로
             #   깨지던 문제 방지.
+            # ★ 260906-6: '손상' 만 재생성한다. `OperationalError`("database is locked")도
+            #   `DatabaseError` 의 하위라, 종전 코드는 **잠깐 잠긴 것만으로 100MB 색인을
+            #   통째로 지웠다**(대기 상한을 200ms 로 줄이면서 현실이 된 위험). 잠금·권한
+            #   등은 그대로 올려 보내고, 부르는 쪽이 '이번엔 못 읽었다'로 넘긴다.
+            if not self._is_corrupt_error(e):
+                raise
             self._recreate_corrupt_db()
+
+    @staticmethod
+    def _is_corrupt_error(e: Exception) -> bool:
+        msg = str(e).lower()
+        return ("malformed" in msg or "not a database" in msg
+                or "file is encrypted" in msg or "corrupt" in msg)
 
     def _recreate_corrupt_db(self):
         try:
@@ -72,16 +93,47 @@ class PdfIndex:
                 _os.remove(str(self.db_path) + suf)
             except OSError:
                 pass
-        self.conn = sqlite3.connect(self.db_path)
+        self.conn = sqlite3.connect(self.db_path, timeout=self.busy_ms / 1000.0)
         self.conn.row_factory = sqlite3.Row
+        self._tune()
         self._init_schema()
         self.migrated = True
+
+    def _tune(self):
+        """260906-6: 연결 하나마다 거는 잠금 규칙 — **WAL + 대기 상한**.
+
+        종전 `index.db` 는 SQLite 기본인 롤백 저널(delete) 모드였다. 이 모드에서는
+        **쓰는 쪽이 읽는 쪽을 막는다** — 배경 인덱싱이 한 파일을 적는 동안(FTS 자료가
+        페이지 캐시를 넘으면 커밋 전부터 EXCLUSIVE 로 올라간다) UI 스레드의 조회가
+        통째로 대기한다. 실측: 큰 PDF 12개를 인덱싱하는 동안 UI 조회 하나가 **2.49초**
+        멈췄고, 기본 대기 상한 5.0초에 닿으면 Windows 가 창을 '응답 없음' 으로 칠한다.
+
+        WAL 에서는 읽는 쪽이 쓰는 쪽을 기다리지 않는다(각자 스냅샷을 본다). 저널 모드는
+        **DB 파일에 한 번 새겨지면 유지**되므로 다음 실행부터는 이 설정이 그대로 쓰인다.
+        네트워크 드라이브 등 WAL 이 안 되는 곳에서는 조용히 종전 모드로 남는다(동작 동일).
+        """
+        try:
+            self.conn.execute(f"PRAGMA busy_timeout = {self.busy_ms}")
+        except Exception:
+            pass
+        try:
+            self.conn.execute("PRAGMA journal_mode = WAL")
+        except Exception:
+            pass                      # 못 바꿔도 동작에는 지장 없다(느려질 뿐)
+        try:
+            # 캐시라 전원이 끊겨도 다시 만들면 된다 — 매 커밋 fsync 는 과하다.
+            self.conn.execute("PRAGMA synchronous = NORMAL")
+            self.conn.execute("PRAGMA wal_autocheckpoint = 512")
+        except Exception:
+            pass
 
     # --- 스키마 ------------------------------------------------------------
 
     # 260825: FTS 토크나이저 스키마 버전. 2=trigram(파괴적, 폐기), 3=trigram(내용 보존 복사).
     SCHEMA_VERSION = 3
     YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(마스터 SOT §5 ②)
+    WRITE_CHUNK = 128        # 260906-6: 쓰기 트랜잭션 한 번에 담는 쪽 수(잠금 시간 상한)
+    PAGES_PENDING = -1       # 260906-6: '본문을 아직 다 적지 못했다' 표식
     _FTS_TRIGRAM = ("CREATE VIRTUAL TABLE {name} USING fts5("
                     "text, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')")
 
@@ -211,9 +263,15 @@ class PdfIndex:
         """260618-3: 기록된 수정날짜(mtime)+용량(size) 모두 변화 없으면 재인덱싱 생략.
         size 가 NULL(구버전 DB 기록)인 경우는 mtime 만으로 판단(업그레이드 시 불필요한
         전체 재인덱싱 방지)."""
-        row = self._find_file_row(file_path, "mtime, size")
+        row = self._find_file_row(file_path, "mtime, size, page_count")
         if row is None:
             return True
+        try:
+            # 260906-6: 본문을 다 적기 전에 끊긴 행은 다시 읽는다(§5 ⑤).
+            if int(row["page_count"]) < 0:
+                return True
+        except Exception:
+            pass
         try:
             st = file_path.stat()
             if abs(row["mtime"] - st.st_mtime) > 1e-3:
@@ -247,28 +305,48 @@ class PdfIndex:
                 _toc = (False if _enc else bool(doc.get_toc()))
             except Exception:
                 _enc, _toc = False, False
+            # 260906-6(마스터 §5 ⑤): 본문 읽기(느림)를 **쓰기 트랜잭션 밖**에서 한다.
+            #   종전에는 파일 하나를 통째로 한 트랜잭션에 담아, 719쪽짜리 78MB PDF 하나가
+            #   쓰기 잠금을 수십 초 쥐었다. 그 사이 UI 스레드의 조회는 그대로 대기한다.
+            #   이제 쪽 묶음마다 짧게 끊어 적으므로 잠금을 쥐는 시간이 수십 ms 로 준다.
+            _st = file_path.stat()
             with self.conn:
-                _st = file_path.stat()
                 cur = self.conn.execute(
                     "INSERT INTO files(path, mtime, page_count, size) VALUES(?, ?, ?, ?)",
-                    (str(file_path), _st.st_mtime, doc.page_count, int(_st.st_size)),
+                    (str(file_path), _st.st_mtime, self.PAGES_PENDING, int(_st.st_size)),
                 )
                 file_id = cur.lastrowid
-                rows = []
-                for i in range(doc.page_count):
-                    try:
-                        text = doc.load_page(i).get_text("text")
-                    except Exception:
-                        text = ""
-                    rows.append((text, file_id, i))
-                    # 260906-5(마스터 §5 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
-                    #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.
-                    if (i & 0x1F) == 0x1F:
-                        time.sleep(self.YIELD_S)
-                self.conn.executemany(
-                    "INSERT INTO pages_fts(text, file_id, page_index) VALUES(?, ?, ?)",
-                    rows,
-                )
+            rows = []
+
+            def _flush():
+                if not rows:
+                    return
+                with self.conn:
+                    self.conn.executemany(
+                        "INSERT INTO pages_fts(text, file_id, page_index) VALUES(?, ?, ?)",
+                        rows)
+                rows.clear()
+
+            for i in range(doc.page_count):
+                try:
+                    text = doc.load_page(i).get_text("text")
+                except Exception:
+                    text = ""
+                rows.append((text, file_id, i))
+                # 260906-5(마스터 §5 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
+                #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.
+                if (i & 0x1F) == 0x1F:
+                    time.sleep(self.YIELD_S)
+                if len(rows) >= self.WRITE_CHUNK:
+                    _flush()
+                    time.sleep(self.YIELD_S)
+            _flush()
+            # ★ 쪽을 다 적은 **뒤에야** 진짜 쪽수를 넣는다 — 중간에 끊기면 `page_count` 가
+            #   `PAGES_PENDING` 으로 남아 `needs_reindex` 가 다시 읽게 한다(검색이 조용히
+            #   비는 것을 막는 표식).
+            with self.conn:
+                self.conn.execute("UPDATE files SET page_count=? WHERE id=?",
+                                  (doc.page_count, file_id))
             # 조사 캐시도 같이 채운다 — 목록이 이 파일을 다시 열지 않게(260906-4).
             try:
                 self.probe_set(file_path, int(_st.st_size), _st.st_mtime,
@@ -293,7 +371,13 @@ class PdfIndex:
         보존되어, 이미 연 적 있는 폴더/파일은 변경분(mtime+size)만 재인덱싱.)"""
         if should_cancel and should_cancel():
             return
-        pdfs = sorted(folder.rglob("*.pdf"))
+        # 260906-7(SOT §7.0·§5): `rglob` 대신 표준 `iter_pdfs` — **중간에 멈출 수 있다**.
+        #   `rglob` 은 끝까지 돌아야 첫 결과가 나와, 파일이 많은 폴더에서는 취소 요청을
+        #   받고도 계속 돌며 GIL 을 나눠 가진다(그동안 메인의 렌더가 몇 배로 느려진다).
+        from viewer.pathutil import iter_pdfs
+        pdfs = sorted(iter_pdfs(folder, should_cancel=should_cancel))
+        if should_cancel and should_cancel():
+            return
         # 사라진 파일 정리 — **이 폴더 하위**만 (다른 폴더 캐시는 보존)
         import os as _os
         from viewer.pathutil import norm_key          # 260628: 경로 키 표준(SOT §7.0)
