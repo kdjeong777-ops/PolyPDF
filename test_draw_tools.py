@@ -106,6 +106,25 @@ try:
         "③ Shift 를 누르면 자석이 풀린다(회전 핸들과 같은 규칙)", f"{ang:.1f}도")
     chk(mv.IMG_SNAP_DEG > 0, "③ 자석 임계각이 정해져 있다", f"±{mv.IMG_SNAP_DEG}도")
 
+    # ── ④ 실행 초기에는 아무 도구도 안 골라져 있다 (260907-6) ───────────
+    fresh = MainView()
+    fresh.resize(900, 800); fresh.show()
+    fresh.load_document(pdf, 0)
+    app.processEvents()
+    chk(fresh._draw_kind is None and fresh._pen_idx is None and fresh._draw_tool is None,
+        "④ 실행 초기에 선긋기 등이 안 골라져 있다",
+        f"kind={fresh._draw_kind} tool={fresh._draw_tool}")
+    chk(fresh.view._text_sel_ok(),
+        "④ 기본은 '텍스트 복사' 의 본문 선택 모드")
+    fresh.set_draw_mode(True)
+    chk(fresh._draw_tool is None and fresh.view._text_sel_ok(),
+        "④ 편집모드에 들어가도 도구는 안 골라진다")
+    fresh._toggle_line()
+    chk(fresh._draw_tool is not None, "④ (전제) 선긋기를 켜면 도구가 생긴다")
+    fresh.set_draw_mode(False)
+    chk(fresh._draw_tool is None and fresh.view._text_sel_ok(),
+        "④ 편집모드를 나가면 텍스트 선택으로 돌아온다")
+
     # ── ② 개체선택: 범위(고무줄) 선택 ───────────────────────────────────
     mv._page_strokes = []
     mv._img_objects = []
@@ -121,6 +140,30 @@ try:
                             "shape": "rect", "alpha": 100, "rot": 0.0})
     mv._draw_kind = "select"; mv._apply_tool()
     chk(mv._draw_tool == ("select", None), "② 개체선택 도구가 켜진다")
+
+    # ★ 260907-6: **실제 마우스 이벤트로** 확인한다. 헬퍼(`_rubber_pick`)만 부르는
+    #   검사는 '눌러도 고무줄이 시작되지 않던' 결함을 놓쳤다(응답성 SOT §7 과 같은 원칙).
+    def m_ev(kind, pos, buttons, btn):
+        return QMouseEvent(kind, QPointF(pos), btn, buttons,
+                           Qt.KeyboardModifier.NoModifier)
+
+    vp = mv.view.viewport()
+    a = mv._norm_to_view(0.05, 0.05, pr)
+    b = mv._norm_to_view(0.35, 0.45, pr)
+    r_press = mv.eventFilter(vp, m_ev(QEvent.Type.MouseButtonPress, a,
+                                      Qt.MouseButton.LeftButton,
+                                      Qt.MouseButton.LeftButton))
+    chk(r_press is True and getattr(mv, "_rubber_from", None) is not None,
+        "② 빈 곳을 누르면 고무줄이 시작된다(실제 이벤트)",
+        f"consumed={r_press}")
+    mv.eventFilter(vp, m_ev(QEvent.Type.MouseMove, b, Qt.MouseButton.LeftButton,
+                            Qt.MouseButton.NoButton))
+    chk(mv._rubber is not None, "② 끄는 동안 고무줄이 그려진다", str(mv._rubber))
+    mv.eventFilter(vp, m_ev(QEvent.Type.MouseButtonRelease, b,
+                            Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton))
+    n = len(mv._multi_strokes) + len(mv._multi_images)
+    chk(mv._rubber is None and getattr(mv, "_rubber_from", None) is None,
+        "② 놓으면 고무줄이 걷힌다")
 
     box = QRectF(pr.left() + 0.05 * pr.width(), pr.top() + 0.05 * pr.height(),
                  0.30 * pr.width(), 0.40 * pr.height())

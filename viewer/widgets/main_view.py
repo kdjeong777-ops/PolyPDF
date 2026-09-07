@@ -1345,7 +1345,12 @@ class MainView(QWidget):
         self._draw_tool = None            # 파생: None/('pen',idx)/('erase',w)/('select',None)
         self._draw_line_mode = 0          # 260611-2: 0=직선 / 1=하이라이트 / 2=자유곡선
         self._draw_highlight_alpha = 35   # 260611-2: 하이라이트 전용 불투명도(%)
-        self._draw_kind = "line"          # 기본 모드=선
+        # 260907-6(사용자 요청): **실행 초기에는 아무 그리기 도구도 고르지 않는다.**
+        #   기본은 '텍스트 복사' 와 같은 **본문 텍스트 선택** 모드다(도구가 없으면
+        #   드래그가 텍스트 선택으로 간다 — `_PdfGraphicsView._text_sel_ok`).
+        #   종전 기본값 "line" 은 편집모드에 들어가는 순간 선긋기 버튼이 눌린 것처럼
+        #   보이게 했고, 본문을 끌면 선이 그어졌다.
+        self._draw_kind = None            # 기본 모드=없음(텍스트 선택)
         self._shape_kind = "rect"         # 도형 종류(항상 보유): rect/round/circle
         self._last_pen_idx = None         # 260907-5: 마지막으로 쓴 색상버튼(선/도형 자동 선택)
         self._multi_strokes = []          # 260907-5: 범위 선택된 선/도형/글상자 인덱스
@@ -2429,8 +2434,10 @@ class MainView(QWidget):
         """편집모드 진입/이탈 — 선긋기 도구 모음 표시·도구 해제."""
         self._draw_bar.setVisible(bool(on))
         if not on:
-            self._pen_idx = None; self._draw_kind = "line"; self._shape_kind = "rect"
+            # 260907-6: 편집모드를 나가면 **도구 없음**(텍스트 선택)으로 돌아간다.
+            self._pen_idx = None; self._draw_kind = None; self._shape_kind = "rect"
             self._stroke_selected = -1
+            self._multi_clear(); self._rubber = None; self._rubber_from = None
             self._apply_tool()           # 260611-76: 편집 종료 시 모드/펜 해제·복귀
         self.set_image_edit(bool(on))      # 260611-15: 이미지 조작도 편집모드에서만
         # 260611-2: 도구바 표시로 뷰포트 크기가 바뀌므로 오버레이 위치 재동기
@@ -2784,6 +2791,8 @@ class MainView(QWidget):
                 self._erase_k = 0
         elif tool == ("select", None):
             self._draw_kind = "select"
+        elif tool is not None:
+            pass
         self._apply_tool()
 
     def _load_page_strokes(self):
@@ -4387,19 +4396,32 @@ class MainView(QWidget):
                             #   골라도 **첫 드래그가 통째로 사라져** 아무 일도 안 하는 것처럼
                             #   보였다(선택 해제에만 쓰이고 끝). 그릴 도구가 있을 때만 먹는다.
                             _armed = bool(getattr(self.view, "_block_armed", False))
-                            if self._draw_tool is not None and not _armed:
+                            if self._draw_tool is not None and not _armed and not is_select:
                                 return True                        # 이 클릭은 그리기 안 함
+                            # 260907-6: 개체선택일 때는 여기서 멈추지 않는다 —
+                            #   사진을 껐으니 이어서 **범위 선택**을 시작해야 한다.
                         if is_select:
+                            # 260907-5: 이미 범위로 고른 것 위를 누르면 **함께 이동**
+                            if self._has_multi() and self._multi_hit(pos, pr):
+                                self._multi_drag = {"last": pos}
+                                self.view.setFocus(); return True
                             # 260611-70: 그린 선/도형을 클릭하면 선택+이동 시작
                             si = self._stroke_hit_index(pos, pr)
                             if si >= 0:
+                                self._multi_clear()
                                 self._stroke_selected = si
                                 self._stroke_drag = {"last": pos}
                                 self.view.setFocus(); ov.repaint()  # 260611-79: 선택 즉시 표시
                                 return True
                             if self._stroke_selected != -1:
-                                self._stroke_selected = -1; ov.repaint()
-                            return False                           # 빈 곳: 패닝 허용
+                                self._stroke_selected = -1
+                            # 260907-5(사용자 요청): 빈 곳에서 끌면 **범위 선택**을 시작한다.
+                            #   놓을 때 크기를 보고 '클릭(해제)' 인지 '범위' 인지 가른다.
+                            self._multi_clear()
+                            self._rubber_from = pos
+                            self._rubber = None
+                            self.view.setFocus(); ov.repaint()
+                            return True
                         # 개체 없음 + 펜/지우개면 아래 드로잉으로 진행
                     elif t == QEvent.Type.MouseMove \
                             and (ev.buttons() & Qt.MouseButton.LeftButton) \
