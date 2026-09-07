@@ -126,9 +126,19 @@ class LineTextSettingsDialog(QDialog):
         rf.addWidget(self._cb_bold); rf.addWidget(self._cb_italic)
         form.addRow("문자 폰트", _wrap(rf))
         self._cb_color = _ColorBtn("#111111"); form.addRow("문자 색상", self._cb_color)
-        self._sp_size = QDoubleSpinBox(); self._sp_size.setRange(0.5, 15.0)
-        self._sp_size.setSingleStep(0.2); self._sp_size.setSuffix(" %")
-        form.addRow("문자 크기(페이지 대비)", self._sp_size)
+        # 260907-1(사용자 요청): 단위를 **pt** 로. 종전 '페이지 대비 %' 는 값을 봐도
+        #   결과를 가늠할 수 없어 '작동하지 않는다'로 보였고, 같은 문서라도 종이 크기가
+        #   다르면 글자 크기가 달라졌다. pt 는 인쇄했을 때의 실제 크기다(워드·한글과 같은 기준).
+        self._sp_size = QDoubleSpinBox(); self._sp_size.setRange(4.0, 200.0)
+        self._sp_size.setSingleStep(1.0); self._sp_size.setDecimals(1)
+        self._sp_size.setSuffix(" pt")
+        form.addRow("문자 크기", self._sp_size)
+        # 260907-1: 자간 — 박스 좌상단 ◀▶ 버튼과 같은 값.
+        self._sp_spacing = QDoubleSpinBox(); self._sp_spacing.setRange(-3.0, 30.0)
+        self._sp_spacing.setSingleStep(0.5); self._sp_spacing.setDecimals(1)
+        self._sp_spacing.setSuffix(" pt")
+        self._sp_spacing.setToolTip("글자 사이 간격. 0 = 폰트 기본값")
+        form.addRow("글자 간격(자간)", self._sp_spacing)
         self._cb_boxline = QCheckBox("적용 (색·굵기·투명도는 색상버튼 스타일)")
         form.addRow("텍스트 박스선", self._cb_boxline)
         self._cb_bg = QCheckBox("적용"); self._cb_bgcolor = _ColorBtn("#fff7c0")
@@ -169,7 +179,8 @@ class LineTextSettingsDialog(QDialog):
     def _editor_to_style(self, name):
         return {"name": name, "family": self._cmb_font.currentText(),
                 "color": self._cb_color.color_name(),
-                "size": self._sp_size.value() / 100.0,
+                "size_pt": float(self._sp_size.value()),
+                "spacing_pt": float(self._sp_spacing.value()),
                 "bold": self._cb_bold.isChecked(), "italic": self._cb_italic.isChecked(),
                 "box_line": self._cb_boxline.isChecked(),
                 "bg": self._cb_bgcolor.color_name() if self._cb_bg.isChecked() else None,
@@ -181,7 +192,12 @@ class LineTextSettingsDialog(QDialog):
         i = self._cmb_font.findText(s.get("family", "맑은 고딕"))
         self._cmb_font.setCurrentIndex(max(0, i))
         self._cb_color._color = QColor(s.get("color", "#111111")); self._cb_color._apply()
-        self._sp_size.setValue(float(s.get("size", 0.022)) * 100.0)
+        # 260907-1: 옛 스타일(`size`=페이지 대비 비율)은 A4 기준으로 1회 환산해 보여 준다.
+        sz = s.get("size_pt")
+        if sz is None:
+            sz = float(s.get("size", 0.022)) * 842.0
+        self._sp_size.setValue(max(4.0, min(200.0, float(sz))))
+        self._sp_spacing.setValue(float(s.get("spacing_pt", 0.0) or 0.0))
         self._cb_bold.setChecked(bool(s.get("bold", False)))
         self._cb_italic.setChecked(bool(s.get("italic", False)))
         self._cb_boxline.setChecked(bool(s.get("box_line", False)))

@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QSpinBox,
     QScrollBar,
+    QTextEdit,
 )
 
 from viewer.pdf_doc import PdfDocument
@@ -71,17 +72,26 @@ MV_DEFAULT_PENS = [
 ]
 
 # 260611-74(Phase2): 글쓰기 텍스트 박스 스타일 프리셋(버튼 ▾ 풀다운에서 선택).
-#   size = 페이지 높이 대비 글자 크기(정규화), bg/border = None 또는 색.
+#   260907-1: 글자 크기 단위를 **pt** 로 바꿨다(`size_pt`). 종전 `size` 는 '페이지 높이 대비
+#   비율' 이라 사용자가 값을 봐도 결과를 가늠할 수 없었고(설정창의 '%' 가 안 먹는 것처럼
+#   보였다), 같은 문서를 다른 종이 크기로 열면 글자 크기가 달라졌다. pt 는 **인쇄했을 때의
+#   실제 크기**이고 워드·한글과 같은 기준이라 예측이 된다.
+#   `size`(비율)는 **읽기 전용 하위호환**으로만 남는다 — 옛 자료를 열면 그 페이지의 pt 로
+#   1회 환산해 보이던 크기를 그대로 유지한다(`_text_qfont`).
 MV_TEXT_STYLES = [
-    ("본문", {"size": 0.022, "color": "#111111", "bold": False, "italic": False,
+    ("본문", {"size_pt": 18.0, "color": "#111111", "bold": False, "italic": False,
               "bg": None, "border": None}),
-    ("제목", {"size": 0.040, "color": "#0b3d91", "bold": True, "italic": False,
+    ("제목", {"size_pt": 34.0, "color": "#0b3d91", "bold": True, "italic": False,
               "bg": None, "border": None}),
-    ("메모", {"size": 0.020, "color": "#5a4500", "bold": False, "italic": False,
+    ("메모", {"size_pt": 17.0, "color": "#5a4500", "bold": False, "italic": False,
               "bg": "#fff7c0", "border": "#d9c25a"}),
-    ("강조", {"size": 0.024, "color": "#c0143c", "bold": True, "italic": False,
+    ("강조", {"size_pt": 20.0, "color": "#c0143c", "bold": True, "italic": False,
               "bg": "#ffe2e8", "border": "#c0143c"}),
 ]
+# 260907-1: 글자 크기·자간의 허용 범위(pt). 폰트엔진 폭주·크래시 방지 겸 UI 상한.
+MV_SIZE_PT_MIN, MV_SIZE_PT_MAX = 4.0, 200.0
+MV_SPACING_PT_MIN, MV_SPACING_PT_MAX = -3.0, 30.0
+MV_A4_PT_H = 842.0        # 옛 `size`(비율)를 pt 로 환산할 때의 기준(페이지를 모를 때)
 MV_TEXT_STYLE_MAP = {n: s for n, s in MV_TEXT_STYLES}
 # 260611-74: 지시선 화살표 끝 모양
 MV_LEADER_TIPS = ("arrow", "circle", "plain")
@@ -108,6 +118,69 @@ def smooth_polyline_path(pts):
         path.quadTo(QPointF(c), mid)
     path.lineTo(QPointF(pts[-1]))
     return path
+
+
+class _InlineTextEdit(QTextEdit):
+    """260907-1: 글쓰기 인라인 입력칸 — **조합 중(IME)에도 크기를 알린다**.
+
+    한글은 자·모를 조합하는 동안 문서에 글자가 들어가지 않아 `textChanged` 가 오지 않는다.
+    그래서 박스가 안 커지고 조합 중인 글자가 잘려 보였다(사용자 보고 260907).
+    입력기 이벤트를 받을 때마다 `imeChanged` 를 내어 주인이 박스를 다시 재게 한다."""
+
+    imeChanged = pyqtSignal()
+
+    def inputMethodEvent(self, e):
+        super().inputMethodEvent(e)
+        try:
+            self.imeChanged.emit()
+        except RuntimeError:
+            pass
+
+
+class _TextBoxBar(QWidget):
+    """260907-1(사용자 요청): 텍스트 박스 좌상단의 글자 크기·자간 조절 띠.
+
+    ▲▼ 글자 크기(±1pt) / ◀▶ 자간(±0.5pt). **그 박스의 글 전체**에 적용된다.
+    글을 쓰는 중이거나 박스를 선택했을 때 보인다(사용자 결정 260907).
+    디자인 근거: 화면 디자인 SOT §2 — 본문 위에 겹치는 도구는 작고 낮은 대비로."""
+
+    BTNS = (("▲", "글자 크게 (+1pt)", 1.0, 0.0),
+            ("▼", "글자 작게 (-1pt)", -1.0, 0.0),
+            ("◀", "자간 좁게 (-0.5pt)", 0.0, -0.5),
+            ("▶", "자간 넓게 (+0.5pt)", 0.0, 0.5))
+
+    def __init__(self, parent, owner):
+        super().__init__(parent)
+        self._owner = owner
+        self._idx = -1
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        # 버튼을 눌러도 입력 포커스를 뺏지 않는다 — 조합 중이던 한글이 끊기면 안 된다.
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(3, 2, 3, 2)
+        lay.setSpacing(2)
+        self.setStyleSheet(
+            "QWidget{background:rgba(255,255,255,0.92);border:1px solid #b9b9b9;"
+            "border-radius:4px;}"
+            "QToolButton{border:none;background:transparent;padding:1px 4px;"
+            "font-size:12px;color:#333;}"
+            "QToolButton:hover{background:#e8f0fe;border-radius:3px;}")
+        for glyph, tip, ds, dsp in self.BTNS:
+            b = QToolButton(self)
+            b.setText(glyph)
+            b.setToolTip(tip)
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.setAutoRepeat(True)
+            b.setAutoRepeatDelay(400)
+            b.setAutoRepeatInterval(90)
+            b.clicked.connect(lambda _=False, a=ds, c=dsp: self._hit(a, c))
+            lay.addWidget(b)
+
+    def set_target(self, idx: int):
+        self._idx = int(idx)
+
+    def _hit(self, d_size, d_spacing):
+        self._owner._text_bar_adjust(self._idx, d_size=d_size, d_spacing=d_spacing)
 
 
 class _MainDrawOverlay(QWidget):
@@ -287,6 +360,12 @@ class _MainDrawOverlay(QWidget):
                     p.setPen(QPen(QColor(255, 122, 0, 230), 1, Qt.PenStyle.DashLine))
                     p.drawRect(box.adjusted(-3, -3, 3, 3))
         p.end()
+        # 260907-1: 선택이 바뀌면 좌상단 조절 띠도 따라간다(위젯 이동은 재도색을
+        #   부르지 않아 되먹임이 없다 — 응답성 SOT §6).
+        try:
+            self._owner._sync_text_toolbar()
+        except Exception:
+            pass
 
     def _stroke_bbox_view(self, st, pr):
         from PyQt6.QtCore import QRect
@@ -482,9 +561,11 @@ class _MainDrawOverlay(QWidget):
         align = (Qt.AlignmentFlag.AlignHCenter if st.get("align") == 1
                  else Qt.AlignmentFlag.AlignRight if st.get("align") == 2
                  else Qt.AlignmentFlag.AlignLeft)
-        pad = 4
+        # 260907-1: 박스가 글에 맞춰 자라므로 **위 정렬**이 맞다(가운데 정렬이면 자동
+        #   맞춤 중에 글이 위아래로 흔들려 보인다). 여백은 입력칸과 같은 값을 쓴다.
+        pad = self._owner.TEXT_PAD
         p.drawText(QRectF(-hw + pad, -hh + pad, 2 * hw - 2 * pad, 2 * hh - 2 * pad),
-                   int(align | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap),
+                   int(align | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
                    st.get("text", ""))
         p.restore()
 
@@ -1240,7 +1321,8 @@ class MainView(QWidget):
         self._text_edit_idx = -1          # 편집 중 _page_strokes 인덱스
         self._leader_drag = None          # {"origin":[fx,fy], "cur":QPoint} 지시선 끌기
         # 260611-77: 신규 박스 기본 스타일(우클릭 '…박스 설정'에서 편집). 테두리/선은 펜에서 별도.
-        _base = {"family": "맑은 고딕", "size": 0.022, "color": "#111111",
+        _base = {"family": "맑은 고딕", "size_pt": 18.0, "spacing_pt": 0.0,
+                 "color": "#111111",
                  "bold": False, "italic": False, "box_line": False,
                  "bg": None, "bg_alpha": 100, "align": 0}
         self._text_defaults = dict(_base)
@@ -2440,14 +2522,15 @@ class MainView(QWidget):
         self._draw_kind = "text"
         self._apply_tool()
 
-    _STYLE_KEYS = ("family", "size", "color", "bold", "italic",
+    _STYLE_KEYS = ("family", "size_pt", "spacing_pt", "color", "bold", "italic",
                    "box_line", "bg", "bg_alpha", "align")
 
     def _seed_text_styles(self):
         """260611-78: 기본 글쓰기 스타일(본문/제목/메모/강조)을 전체 필드 dict 로."""
         out = []
         for name, s in MV_TEXT_STYLES:
-            out.append({"name": name, "family": "맑은 고딕", "size": float(s["size"]),
+            out.append({"name": name, "family": "맑은 고딕",
+                        "size_pt": float(s["size_pt"]), "spacing_pt": 0.0,
                         "color": s["color"], "bold": bool(s["bold"]),
                         "italic": bool(s.get("italic", False)),
                         "box_line": s["border"] is not None, "bg": s["bg"],
@@ -2982,7 +3065,8 @@ class MainView(QWidget):
         self._shape_press = pos
         self._shape_press_geom = self._shape_geom(st, pr)
         # 260611-79: 글자 크기 스케일의 '기준값'을 누름 시점에 고정(매 이동마다 곱해 폭증→크래시 방지)
-        self._xform_size0 = float(st.get("size", 0.022))
+        self._xform_size0 = (self._style_size_pt(st)
+                             if (st.get("text_box") or st.get("leader")) else 0.0)
 
     def _shape_transform_move(self, pos, pr, shift=False):
         import math
@@ -3021,11 +3105,25 @@ class MainView(QWidget):
         nx, ny = ax * nhw, ay * nhh
         c1x = anchor_x - (nx * ca - ny * sa); c1y = anchor_y - (nx * sa + ny * ca)
         self._shape_set_geom(st, c1x, c1y, nhw, nhh, rot0, pr)
-        # 260611-79: 텍스트/지시선 박스 크기 조절 시 글자 크기도 세로 비율로 스케일.
-        #   기준=누름 시점 크기(_xform_size0)로 계산(누적 곱 금지) + 범위 클램프(폭증·크래시 방지).
-        if (st.get("text_box") or st.get("leader")) and hh0 > 1.0 and ay != 0:
-            s0 = getattr(self, "_xform_size0", float(st.get("size", 0.022)))
-            st["size"] = max(0.004, min(0.5, s0 * (nhh / hh0)))
+        if st.get("text_box") or st.get("leader"):
+            # 260907-1(사용자 결정): **변 핸들 = 박스만, 모서리 핸들 = 글자 크기까지.**
+            #   변으로 한 축을 정하면 **반대 축은 글에 맞춰 자동**으로 따라간다.
+            #   기준 크기는 누름 시점 값(`_xform_size0`)으로 계산한다 — 이동마다 곱하면
+            #   값이 폭증해 폰트엔진이 죽는다(260611-79 에 실제로 겪음).
+            corner = drag in ("tl", "tr", "bl", "br")
+            keep = ("r" if "l" in drag else "l") + ("b" if "t" in drag else "t")
+            if corner:
+                if hh0 > 1.0:
+                    s0 = getattr(self, "_xform_size0", 0.0) or self._style_size_pt(st)
+                    st["size_pt"] = max(MV_SIZE_PT_MIN,
+                                        min(MV_SIZE_PT_MAX, s0 * (nhh / hh0)))
+            elif drag in ("l", "r"):          # 가로를 정했다 → 세로 자동
+                w = min(2 * nhw, self._text_max_w(st, pr))
+                self._text_apply_size(st, pr, w, self._text_fit_h(st, pr, w), keep)
+            elif drag in ("t", "b"):          # 세로를 정했다 → 가로 자동
+                h = 2 * nhh
+                self._text_apply_size(st, pr, self._text_fit_w(st, pr, h), h, keep)
+            self._position_text_editor()      # 편집 중이면 입력칸도 같이 움직인다
         self._draw_overlay.update()
 
     # ===== 260611-74(Phase2): 글쓰기 텍스트 박스 + 지시선 엔진 =====
@@ -3051,7 +3149,8 @@ class MainView(QWidget):
     def _new_style_fields(self, name=None):
         """프리셋(글꼴 성격) → 글자색·크기·굵기·배경. 테두리/선은 색상버튼에서 별도."""
         s = MV_TEXT_STYLE_MAP.get(name or self._text_style, MV_TEXT_STYLE_MAP["본문"])
-        return {"family": "맑은 고딕", "size": float(s["size"]), "color": s["color"],
+        return {"family": "맑은 고딕", "size_pt": float(s["size_pt"]),
+                "spacing_pt": 0.0, "color": s["color"],
                 "bold": bool(s["bold"]), "italic": bool(s.get("italic", False)),
                 "bg": s["bg"], "bg_alpha": 100,
                 "box_line": s["border"] is not None, "style": name or self._text_style}
@@ -3092,15 +3191,136 @@ class MainView(QWidget):
         self._page_strokes.append(st)
         return len(self._page_strokes) - 1
 
+    def _page_pt_height(self) -> float:
+        """260907-1: 지금 페이지의 **세로 길이(pt)**. pt↔화면픽셀 환산의 기준.
+
+        `page.rect` 는 PDF 좌표(1pt = 1/72인치)라 인쇄했을 때의 실제 크기와 같다.
+        페이지마다 값이 다를 수 있으므로 (파일, 쪽) 으로 캐시한다 — 글자를 그릴 때마다
+        `load_page` 를 부르면 화면 갱신이 그만큼 느려진다(응답성 SOT §4 ⑥)."""
+        key = (self.current_file(), int(self._current_page))
+        cached = getattr(self, "_page_pt_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        h = MV_A4_PT_H
+        try:
+            h = float(self._doc.doc.load_page(self._current_page).rect.height) or MV_A4_PT_H
+        except Exception:
+            pass
+        self._page_pt_cache = (key, h)
+        return h
+
+    def _style_size_pt(self, st) -> float:
+        """260907-1: 이 박스의 글자 크기(pt). 옛 자료(`size`=페이지 대비 비율)는 **1회 환산**.
+
+        환산은 그 페이지의 실제 세로 pt 로 하므로 **보이던 크기가 그대로 유지**된다.
+        환산한 값은 `st` 에 적어 두어 다음부터는 pt 로만 다룬다."""
+        v = st.get("size_pt")
+        if v is None:
+            legacy = st.get("size")
+            v = (float(legacy) * self._page_pt_height()) if legacy is not None else 18.0
+            st["size_pt"] = v
+        return max(MV_SIZE_PT_MIN, min(MV_SIZE_PT_MAX, float(v)))
+
+    def _pt_to_px(self, pt: float, pr) -> float:
+        """pt → 현재 배율의 화면 픽셀. `pr` 은 페이지가 그려진 뷰 사각형."""
+        return float(pt) * (pr.height() / max(1.0, self._page_pt_height()))
+
     def _text_qfont(self, st, pr):
         from PyQt6.QtGui import QFont
-        # 260611-79: 글자 픽셀 크기 상한(폰트엔진 폭주/크래시 방지)
-        px = max(7, min(800, int(round(float(st.get("size", 0.022)) * pr.height()))))
+        # 260611-79/260907-1: pt → 픽셀. 상한은 폰트엔진 폭주/크래시 방지.
+        px = max(7, min(800, int(round(self._pt_to_px(self._style_size_pt(st), pr)))))
         f = QFont(st.get("family", "맑은 고딕"))
         f.setPixelSize(px)
         f.setBold(bool(st.get("bold", False)))
         f.setItalic(bool(st.get("italic", False)))
+        # 260907-1(사용자 요청): 자간 — 박스 좌상단 ◀▶ 버튼이 이 값을 움직인다.
+        sp = float(st.get("spacing_pt", 0.0) or 0.0)
+        if sp:
+            f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, self._pt_to_px(sp, pr))
         return f
+
+    # ---- 260907-1: 텍스트 박스 자동 맞춤(사용자 요청) ----
+    #   규칙: 글자 크기가 정하고 박스가 따라간다.
+    #     · 글을 쓰면 가로로 늘다가 **페이지 오른쪽 끝**에 닿으면 줄을 바꾸고 세로로 는다.
+    #     · 좌·우 핸들로 **가로를 정하면 세로가** 자동, 상·하 핸들로 **세로를 정하면 가로가** 자동.
+    #     · 대각선(모서리) 핸들은 종전처럼 **글자 크기까지** 함께 키운다(마우스로 크기 조절).
+    TEXT_PAD = 4              # 그릴 때(_draw_text_box)와 같은 안쪽 여백(px)
+    TEXT_MIN_W = 24.0         # 박스 최소 폭(px)
+
+    def _text_layout_size(self, st, pr, width_px=None):
+        """이 박스의 글을 `width_px` 안에 흘렸을 때의 (폭, 높이) 픽셀.
+
+        `width_px=None` 이면 줄바꿈 없이(한 줄) 잰다. 그리기와 같은 폰트를 쓰므로
+        화면에 나오는 결과와 어긋나지 않는다."""
+        from PyQt6.QtGui import QTextDocument, QTextOption
+        doc = QTextDocument()
+        doc.setDocumentMargin(0.0)
+        doc.setDefaultFont(self._text_qfont(st, pr))
+        opt = QTextOption()
+        opt.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        doc.setDefaultTextOption(opt)
+        doc.setPlainText(st.get("text", "") or " ")
+        doc.setTextWidth(-1 if width_px is None else max(8.0, float(width_px)))
+        sz = doc.size()
+        return float(sz.width()), float(sz.height())
+
+    def _text_max_w(self, st, pr):
+        """이 박스가 늘어날 수 있는 최대 폭 — **페이지 오른쪽 끝**까지."""
+        rc = st.get("rect", [0, 0, 0.1, 0.05])
+        x0 = min(rc[0], rc[2])
+        return max(self.TEXT_MIN_W, (1.0 - x0) * pr.width())
+
+    def _text_fit_h(self, st, pr, w_px):
+        """가로가 `w_px` 일 때 필요한 세로(px)."""
+        pad2 = self.TEXT_PAD * 2
+        _, h = self._text_layout_size(st, pr, max(8.0, w_px - pad2))
+        return h + pad2
+
+    def _text_fit_w(self, st, pr, h_px):
+        """세로가 `h_px` 안에 들어가는 **가장 좁은 가로**(px) — 이분 탐색.
+
+        넓힐수록 줄 수가 줄어 높이가 단조 감소하므로 이분 탐색이 성립한다.
+        최대 폭(페이지 끝)으로도 안 들어가면 최대 폭을 준다."""
+        lo = self.TEXT_MIN_W
+        hi = self._text_max_w(st, pr)
+        if self._text_fit_h(st, pr, hi) > h_px:
+            return hi
+        for _ in range(18):                 # 폭 1px 미만까지 좁힌다
+            mid = (lo + hi) / 2.0
+            if self._text_fit_h(st, pr, mid) <= h_px:
+                hi = mid
+            else:
+                lo = mid
+            if hi - lo < 1.0:
+                break
+        return hi
+
+    def _text_natural_size(self, st, pr):
+        """지금 글자 크기로 글을 흘렸을 때의 자연스러운 (폭, 높이) — 타자 중 auto-grow 용.
+
+        한 줄로 재서 페이지 오른쪽 끝을 넘지 않으면 그대로, 넘으면 **끝에 맞춰 줄바꿈**한다."""
+        pad2 = self.TEXT_PAD * 2
+        w1, h1 = self._text_layout_size(st, pr, None)
+        max_w = self._text_max_w(st, pr)
+        if w1 + pad2 <= max_w:
+            return max(self.TEXT_MIN_W, w1 + pad2), h1 + pad2
+        return max_w, self._text_fit_h(st, pr, max_w)
+
+    def _text_apply_size(self, st, pr, w_px, h_px, keep="tl"):
+        """박스 rect(정규화)를 픽셀 크기로 갱신. `keep` 은 고정할 모서리."""
+        rc = st.get("rect", [0, 0, 0.1, 0.05])
+        x0 = min(rc[0], rc[2]); y0 = min(rc[1], rc[3])
+        x1 = max(rc[0], rc[2]); y1 = max(rc[1], rc[3])
+        fw = w_px / max(1.0, pr.width()); fh = h_px / max(1.0, pr.height())
+        if "r" in keep:
+            nx0, nx1 = x1 - fw, x1
+        else:
+            nx0, nx1 = x0, x0 + fw
+        if "b" in keep:
+            ny0, ny1 = y1 - fh, y1
+        else:
+            ny0, ny1 = y0, y0 + fh
+        st["rect"] = [nx0, ny0, nx1, ny1]
 
     def _textbox_hit_index(self, pos, pr):
         """텍스트/지시선 박스 본문 적중 인덱스(위에 그린 것 우선). 없으면 -1."""
@@ -3117,71 +3337,102 @@ class MainView(QWidget):
 
     # ---- 인라인 편집기(QTextEdit, auto-grow) ----
     def _begin_text_edit(self, idx, pr):
-        from PyQt6.QtWidgets import QTextEdit
-        from PyQt6.QtGui import QColor
+        from PyQt6.QtGui import QColor, QTextOption
         if not (0 <= idx < len(self._page_strokes)):
             return
         self._commit_text_editor()
         st = self._page_strokes[idx]
         # self.view 의 자식(오버레이와 동일) — 오버레이 위에 표시되도록 raise
-        ed = QTextEdit(self.view)
+        ed = _InlineTextEdit(self.view)
         ed.setAcceptRichText(False)
         ed.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         ed.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        ed.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        # 260907-1: 페이지 오른쪽 끝에 닿으면 줄을 바꾼다(폭은 _on_text_changed 가 정한다).
+        ed.setLineWrapMode(_InlineTextEdit.LineWrapMode.WidgetWidth)
+        ed.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        ed.document().setDocumentMargin(0.0)
         ed.setFont(self._text_qfont(st, pr))
         c = QColor(st.get("color", "#111111"))
         bg = st.get("bg")
         ed.setStyleSheet(
-            "QTextEdit{color:%s;background:%s;border:1px dashed #ff7a00;padding:2px;}"
-            % (c.name(), (QColor(bg).name() if bg else "rgba(255,255,255,0.85)")))
+            "QTextEdit{color:%s;background:%s;border:1px dashed #ff7a00;padding:%dpx;}"
+            % (c.name(), (QColor(bg).name() if bg else "rgba(255,255,255,0.85)"),
+               self.TEXT_PAD))
         ed.setPlainText(st.get("text", ""))
         ed.installEventFilter(self)
         ed.textChanged.connect(self._on_text_changed)
+        # 260907-1: 한글을 조합하는 동안에도 박스를 키운다(_editor_text_with_preedit 참조).
+        ed.imeChanged.connect(self._on_text_changed)
         self._text_editor = ed
         self._text_edit_idx = idx
         self._text_edit_page = self._current_page   # 커밋 시 이 페이지로 저장
         self._text_edit_file = self.current_file()
-        self._position_text_editor()
+        self._on_text_changed()
         ed.show(); ed.raise_(); ed.setFocus()
         cur = ed.textCursor(); cur.movePosition(cur.MoveOperation.End)
         ed.setTextCursor(cur)
+        self._sync_text_toolbar()
         if self._draw_overlay is not None:
             self._draw_overlay.update()
 
+    @staticmethod
+    def _editor_text_with_preedit(ed) -> str:
+        """260907-1: **조합 중인 한글까지 포함한** 지금 화면의 글.
+
+        한글은 자·모를 조합하는 동안 문서(document)에 들어가지 않고 `preedit` 영역에만
+        있다. 그래서 `toPlainText()` 로 재면 조합 중인 글자만큼 폭·높이가 모자라
+        **입력 중에는 글자가 반쯤 잘려 보였다**(사용자 보고 260907). 조합이 끝나면
+        문서에 들어가므로 그때는 멀쩡해 보였던 것이다."""
+        out = []
+        b = ed.document().firstBlock()
+        while b.isValid():
+            t = b.text()
+            lay = b.layout()
+            pe = lay.preeditAreaText() if lay is not None else ""
+            if pe:
+                pos = max(0, min(len(t), lay.preeditAreaPosition()))
+                t = t[:pos] + pe + t[pos:]
+            out.append(t)
+            b = b.next()
+        return chr(10).join(out)
+
     def _on_text_changed(self):
-        """입력에 따라 박스를 오른쪽·아래로 auto-grow(정규화 rect 갱신)."""
+        """입력에 따라 박스를 auto-grow — 오른쪽 끝에 닿으면 줄바꿈하고 아래로 는다."""
         ed = self._text_editor
         idx = self._text_edit_idx
         if ed is None or not (0 <= idx < len(self._page_strokes)):
             return
+        if getattr(self, "_text_sync_busy", False):
+            return
         pr = self._page_view_rect()
         if pr is None:
             return
-        st = self._page_strokes[idx]
-        from PyQt6.QtGui import QFontMetrics
-        fm = QFontMetrics(ed.font())
-        lines = ed.toPlainText().split("\n") or [""]
-        tw = max((fm.horizontalAdvance(ln) for ln in lines), default=0)
-        th = fm.lineSpacing() * max(1, len(lines))
-        pad = 8
-        wv = tw + pad * 2 + 4
-        hv = th + pad
-        fw = wv / max(1, pr.width()); fh = hv / max(1, pr.height())
-        if st.get("leader") and st.get("box_anchor"):
-            # 지시선: 시작점(글 시작)=박스 하단-좌측 고정 → 위로·오른쪽으로 늘어남
-            bx, by = st["box_anchor"]
-            st["rect"] = [bx, by - fh, bx + fw, by]
-        else:
-            rc = st.get("rect", [0, 0, 0.1, 0.05])
-            x0 = min(rc[0], rc[2]); y0 = min(rc[1], rc[3])
-            st["rect"] = [x0, y0, x0 + fw, y0 + fh]
-        st["text"] = ed.toPlainText()
-        self._position_text_editor()
+        self._text_sync_busy = True
+        try:
+            st = self._page_strokes[idx]
+            st["text"] = ed.toPlainText()
+            # 측정에는 **조합 중인 글자까지** 넣는다(_editor_text_with_preedit).
+            probe = dict(st)
+            probe["text"] = self._editor_text_with_preedit(ed) or " "
+            w, h = self._text_natural_size(probe, pr)
+            if st.get("leader") and st.get("box_anchor"):
+                # 지시선: 글 시작점(박스 좌하단)을 고정 → 위·오른쪽으로 늘어난다
+                bx, by = st["box_anchor"]
+                st["rect"] = [bx, by - h / max(1.0, pr.height()),
+                              bx + w / max(1.0, pr.width()), by]
+            else:
+                self._text_apply_size(st, pr, w, h, keep="tl")
+            self._position_text_editor()
+        finally:
+            self._text_sync_busy = False
         if self._draw_overlay is not None:
             self._draw_overlay.update()
 
     def _position_text_editor(self):
+        """입력칸을 박스와 **정확히 같은 자리**에 둔다.
+
+        입력칸에는 테두리(frame)가 있으므로 그만큼 바깥으로 넓혀 놓아야 글이 놓이는
+        안쪽 영역이 박스와 일치한다 — 어긋나면 입력 중 글자가 잘려 보인다."""
         ed = self._text_editor
         idx = self._text_edit_idx
         if ed is None or not (0 <= idx < len(self._page_strokes)):
@@ -3197,7 +3448,70 @@ class MainView(QWidget):
         # 오버레이(self.view 자식)와 같은 좌표계로 보정: pr 은 뷰포트 좌표 = 오버레이 로컬
         ox = self._draw_overlay.x() if self._draw_overlay is not None else 0
         oy = self._draw_overlay.y() if self._draw_overlay is not None else 0
-        ed.setGeometry(int(ox + x0), int(oy + y0), max(40, int(w)), max(24, int(h)))
+        fw = ed.frameWidth()
+        ed.setGeometry(int(ox + x0) - fw, int(oy + y0) - fw,
+                       max(int(self.TEXT_MIN_W), int(w)) + 2 * fw,
+                       max(20, int(h)) + 2 * fw)
+        self._sync_text_toolbar()
+
+    # ---- 260907-1(사용자 요청): 박스 좌상단 크기·자간 조절 버튼 ----
+    def _sync_text_toolbar(self):
+        """편집 중이거나 선택된 텍스트 박스가 있으면 좌상단에 조절 버튼을 띄운다.
+
+        ▲▼ = 글자 크기(pt), ◀▶ = 자간(pt). **그 박스의 글 전체**에 적용된다."""
+        idx = self._text_edit_idx
+        if idx < 0:
+            i = self._stroke_selected
+            if 0 <= i < len(self._page_strokes):
+                stx = self._page_strokes[i]
+                idx = i if (stx.get("text_box") or stx.get("leader")) else -1
+        bar = getattr(self, "_text_bar", None)
+        pr = self._page_view_rect()
+        if idx < 0 or pr is None or not self._img_edit:
+            if bar is not None:
+                bar.hide()
+            return
+        if bar is None:
+            bar = self._text_bar = _TextBoxBar(self.view, self)
+        bar.set_target(idx)
+        st = self._page_strokes[idx]
+        rc = st.get("rect", [0, 0, 0.1, 0.05])
+        x0 = pr.left() + min(rc[0], rc[2]) * pr.width()
+        y0 = pr.top() + min(rc[1], rc[3]) * pr.height()
+        ox = self._draw_overlay.x() if self._draw_overlay is not None else 0
+        oy = self._draw_overlay.y() if self._draw_overlay is not None else 0
+        bw, bh = bar.sizeHint().width(), bar.sizeHint().height()
+        by = oy + y0 - bh - 4
+        if by < oy:                       # 페이지 위쪽에 붙었으면 박스 아래로
+            by = oy + y0 + abs(rc[3] - rc[1]) * pr.height() + 4
+        bar.setGeometry(int(ox + x0), int(by), bw, bh)
+        bar.show(); bar.raise_()
+
+    def _text_bar_adjust(self, idx, d_size=0.0, d_spacing=0.0):
+        """▲▼◀▶ 한 번 = 글자 크기 ±1pt / 자간 ±0.5pt. 박스는 글에 맞춰 다시 잡는다."""
+        if not (0 <= idx < len(self._page_strokes)):
+            return
+        pr = self._page_view_rect()
+        if pr is None:
+            return
+        st = self._page_strokes[idx]
+        if d_size:
+            st["size_pt"] = max(MV_SIZE_PT_MIN, min(
+                MV_SIZE_PT_MAX, self._style_size_pt(st) + d_size))
+        if d_spacing:
+            st["spacing_pt"] = max(MV_SPACING_PT_MIN, min(
+                MV_SPACING_PT_MAX, float(st.get("spacing_pt", 0.0) or 0.0) + d_spacing))
+        ed = self._text_editor
+        if ed is not None and self._text_edit_idx == idx:
+            ed.setFont(self._text_qfont(st, pr))
+            self._on_text_changed()
+        else:
+            w, h = self._text_natural_size(st, pr)
+            self._text_apply_size(st, pr, w, h, keep="tl")
+            self._save_page_strokes()
+        self._sync_text_toolbar()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
 
     def _commit_text_editor(self):
         ed = getattr(self, "_text_editor", None)
@@ -3212,6 +3526,7 @@ class MainView(QWidget):
         except Exception:
             pass
         ed.hide(); ed.deleteLater()
+        self._sync_text_toolbar()          # 260907-1: 편집이 끝나면 띠도 정리·재배치
         if 0 <= idx < len(self._page_strokes):
             st = self._page_strokes[idx]
             if txt.strip() == "":
@@ -3368,7 +3683,19 @@ class MainView(QWidget):
             st = self._page_strokes[idx]
             for k, v in fields.items():
                 st[k] = v
+            # 260907-1: 글자 크기·자간·폰트가 바뀌면 박스도 글에 맞춰 다시 잡는다.
+            if any(k in fields for k in ("size_pt", "spacing_pt", "family",
+                                         "bold", "italic")):
+                pr = self._page_view_rect()
+                if pr is not None and not (st.get("leader") and st.get("box_anchor")):
+                    w, h = self._text_natural_size(st, pr)
+                    self._text_apply_size(st, pr, w, h, keep="tl")
+                ed = self._text_editor
+                if ed is not None and self._text_edit_idx == idx and pr is not None:
+                    ed.setFont(self._text_qfont(st, pr))
+                    self._position_text_editor()
             self._save_page_strokes()
+            self._sync_text_toolbar()
             if self._draw_overlay is not None:
                 self._draw_overlay.update()
 

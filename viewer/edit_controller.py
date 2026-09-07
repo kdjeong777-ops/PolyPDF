@@ -292,7 +292,13 @@ class EditMixin:
         txt = stk.get("text", "")
         if not txt.strip():
             return
-        fs = max(5.0, float(stk.get("size", 0.022)) * ph)
+        # 260907-1: 글자 크기 단위가 pt 가 됐다. PDF 좌표도 pt 라 **그대로** 넣으면 된다
+        #   (인쇄물의 실제 크기 = 화면에서 보던 크기). 옛 자료의 `size`(페이지 대비 비율)는
+        #   그 페이지 높이를 곱해 환산한다 — 보이던 크기가 유지된다.
+        _spt = stk.get("size_pt")
+        if _spt is None:
+            _spt = float(stk.get("size", 0.022)) * ph
+        fs = max(5.0, min(200.0, float(_spt)))
         ff = self._korean_fontfile(stk.get("family"))
         kw = dict(fontsize=fs, color=trgb, align=int(stk.get("align", 0)))
         if ff:

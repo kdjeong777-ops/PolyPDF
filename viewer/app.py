@@ -3384,10 +3384,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         b_color.clicked.connect(lambda: _pick("color", b_color))
         form.addRow("문자 색상", b_color)
 
-        # 크기
-        sp_size = QDoubleSpinBox(); sp_size.setRange(0.5, 15.0); sp_size.setSingleStep(0.2)
-        sp_size.setSuffix(" %"); sp_size.setValue(float(st.get("size", 0.022)) * 100.0)
-        form.addRow("문자 크기(페이지 대비)", sp_size)
+        # 크기·자간 — 260907-1: 단위 pt(인쇄했을 때의 실제 크기). 종전 '페이지 대비 %' 는
+        #   값을 봐도 결과를 가늠할 수 없었다. 옛 값은 A4 기준으로 1회 환산해 보여 준다.
+        _spt = st.get("size_pt")
+        if _spt is None:
+            _spt = float(st.get("size", 0.022)) * 842.0
+        sp_size = QDoubleSpinBox(); sp_size.setRange(4.0, 200.0); sp_size.setSingleStep(1.0)
+        sp_size.setDecimals(1); sp_size.setSuffix(" pt")
+        sp_size.setValue(max(4.0, min(200.0, float(_spt))))
+        form.addRow("문자 크기", sp_size)
+        sp_spacing = QDoubleSpinBox(); sp_spacing.setRange(-3.0, 30.0)
+        sp_spacing.setSingleStep(0.5); sp_spacing.setDecimals(1); sp_spacing.setSuffix(" pt")
+        sp_spacing.setValue(float(st.get("spacing_pt", 0.0) or 0.0))
+        sp_spacing.setToolTip("글자 사이 간격. 0 = 폰트 기본값")
+        form.addRow("글자 간격(자간)", sp_spacing)
 
         # 박스선 on/off (색·굵기·투명도는 색상버튼 스타일)
         cb_boxline = QCheckBox("적용 (색·굵기·투명도는 색상버튼 스타일)")
@@ -3438,7 +3448,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         fields = {"family": cmb_font.currentText(), "color": state["color"],
-                  "size": sp_size.value() / 100.0,
+                  "size_pt": float(sp_size.value()),
+                  "spacing_pt": float(sp_spacing.value()),
                   "bold": cb_bold.isChecked(), "italic": cb_italic.isChecked(),
                   "box_line": cb_boxline.isChecked(),
                   "bg": state["bg"] if cb_bg.isChecked() else None,
