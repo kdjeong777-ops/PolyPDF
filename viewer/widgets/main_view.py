@@ -4194,7 +4194,13 @@ class MainView(QWidget):
                         # 빈 곳
                         if self._img_selected != -1:
                             self._img_selected = -1; ov.repaint()  # 260611-79: 즉시 갱신
-                            return True                            # 이 클릭은 그리기 안 함
+                            # 260907-4: 도구가 없거나 블럭설정을 기다리는 중이면 **먹지 않는다**.
+                            #   종전에는 사진을 넣거나 고른 뒤 '텍스트 복사'·'블럭설정' 을
+                            #   골라도 **첫 드래그가 통째로 사라져** 아무 일도 안 하는 것처럼
+                            #   보였다(선택 해제에만 쓰이고 끝). 그릴 도구가 있을 때만 먹는다.
+                            _armed = bool(getattr(self.view, "_block_armed", False))
+                            if self._draw_tool is not None and not _armed:
+                                return True                        # 이 클릭은 그리기 안 함
                         if is_select:
                             # 260611-70: 그린 선/도형을 클릭하면 선택+이동 시작
                             si = self._stroke_hit_index(pos, pr)
@@ -4283,6 +4289,11 @@ class MainView(QWidget):
 
     def _img_update_hover_cursor(self, pos, pr):
         """260611-16/18: 모서리=대각, 변=가로/세로, 회전핸들=십자, 개체 위=이동 커서."""
+        # 260907-4: **블럭설정을 기다리는 중이면 커서를 건드리지 않는다.**
+        #   `arm_block_select` 가 세운 십자를 여기서 지워 버려, 사용자는 블럭설정이
+        #   안 걸린 줄 알았다(드래그하면 실제로는 됐다).
+        if getattr(self.view, "_block_armed", False):
+            return
         vp = self.view.viewport()
         idx, handle = self._img_hit(pos, pr)
         if handle == "rot":

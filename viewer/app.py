@@ -3490,6 +3490,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             mv.set_draw_tool(("select", None) if then_select else None)
         except Exception:
             pass
+        if not then_select:
+            # 260907-4: 골라 둔 사진·선까지 풀어 둔다. 남아 있으면 **다음 첫 클릭이
+            #   '선택 해제' 에 쓰이고 사라져** 드래그가 시작되지 않는다.
+            try:
+                mv._img_selected = -1
+                mv._stroke_selected = -1
+                if mv._draw_overlay is not None:
+                    mv._draw_overlay.update()
+            except Exception:
+                pass
 
     def _insert_image_from_file(self):
         from PyQt6.QtWidgets import QFileDialog
