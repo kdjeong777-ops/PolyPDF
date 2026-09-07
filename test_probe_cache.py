@@ -129,7 +129,7 @@ try:
     chk(seen["prog"] > 0, "④ 조사 진행을 알린다(진행 창·상태바용)", f"{seen['prog']}회")
     chk(seen["done"] > 0, "④ 조사가 끝나면 알린다", f"{seen['done']}회")
 
-    # ── ④-b 260906-5: 배경 작업 4가지 의무(마스터 SOT §5) ────────────────
+    # ── ④-b 260906-5: 배경 작업 여섯 가지 의무(응답성 SOT §4) ────────────────
     from viewer.workers import ProbeWorker
     from viewer.indexer import PdfIndex as _PI
     chk(ProbeWorker.YIELD_S > 0 and _PI.YIELD_S > 0,

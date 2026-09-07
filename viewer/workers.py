@@ -59,7 +59,7 @@ class IndexWorker(QObject):
 
 
 class FolderScanWorker(QObject):
-    """260906-1: 폴더 하위 PDF 목록을 백그라운드에서 수집(마스터 SOT §5·§7.2.1).
+    """260906-1: 폴더 하위 PDF 목록을 백그라운드에서 수집(응답성 SOT §4.1 · 마스터 §7.2.1).
 
     책갈피 트리가 `Path.rglob("*.pdf")` 를 **메인 스레드에서** 돌던 것을 대신한다.
     외장 드라이브 루트(실측 PDF 28,954개)를 열면 목록 수집만으로 창이 멈췄다.
@@ -91,7 +91,7 @@ class FolderScanWorker(QObject):
                 found.append(pdf)
                 if len(found) >= self.BATCH:
                     # 정렬용 크기·수정시각을 함께 보낸다 — 메인에서 다시 stat 하면
-                    # 파일 수만큼 디스크를 때려 정렬 한 번에 창이 멈춘다(마스터 §5).
+                    # 파일 수만큼 디스크를 때려 정렬 한 번에 창이 멈춘다(응답성 SOT §4).
                     #
                     # ★ `stats` 는 **복사해서 보내고 비운다**. 제너레이터가 첫 호출 때 받은
                     #   그 dict 에 계속 쓰므로, 여기서 새 dict 로 바꿔 달면(재바인딩)
@@ -121,7 +121,7 @@ class ProbeWorker(QObject):
     result = pyqtSignal(dict)      # {path, size, mtime, enc, has_toc, auth}
     finished = pyqtSignal()
 
-    # 260906-5(마스터 SOT §5 '배경 작업 4가지 의무'):
+    # 260906-5(응답성 SOT §4 '배경 작업 여섯 가지 의무'):
     YIELD_S = 0.005        # ② 파일마다 GIL 양보 — 없으면 메인이 굶어 '응답 없음'
     MAX_MB = 40            # ③ 이보다 큰 파일은 배경에서 열지 않는다(여는 데만 수 초)
 
@@ -478,6 +478,8 @@ class StudyBuildWorker(QObject):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
+    YIELD_S = 0.005      # 260906-8(응답성 SOT §4 ②): 쪽마다 GIL 양보
+
     def __init__(self, pdf_path: Path, *, lang: str = "eng", dpi: int = 300,
                  db_path: Optional[Path] = None, force_ocr: bool = False,
                  with_vocab: bool = True, online_prefs: Optional[dict] = None,
@@ -540,6 +542,10 @@ class StudyBuildWorker(QObject):
                     break
                 if store.is_page_done(fkey, i):
                     continue
+                # 260906-8(응답성 SOT §4 ②): 쪽마다 GIL 양보 — OCR·본문 추출은 C 호출이라
+                #   양보 없이 돌면 그 사이 메인이 굶는다(사용자가 띄운 작업이어도 창은 살아야).
+                if self.YIELD_S:
+                    time.sleep(self.YIELD_S)
                 try:
                     res = study_ocr.build_page(doc, i, lang=self.lang,
                                                dpi=self.dpi, force_ocr=self.force_ocr)
@@ -797,6 +803,8 @@ class AutoTagWorker(QObject):
     finished = pyqtSignal(list, dict)         # results, stats
     error = pyqtSignal(str)
 
+    YIELD_S = 0.005      # 260906-8(응답성 SOT §4 ②): 파일마다 GIL 양보
+
     def __init__(self, db_path, paths, tagged_docs, known_tags, rules,
                  today_year, store_keys, fp_missing_keys, kw_skip_keys=()):
         super().__init__()
@@ -897,6 +905,10 @@ class AutoTagWorker(QObject):
             for i, p in enumerate(self.paths):
                 if self._cancel:
                     return
+                # 260906-8(응답성 SOT §4 ②): 파일마다 GIL 양보 — 색인에 없는 파일은
+                #   `extract_features` 가 fitz 로 폴백해 그 사이 메인이 굶는다.
+                if self.YIELD_S:
+                    time.sleep(self.YIELD_S)
                 try:
                     f = extract_features(p, page_texts=texts(p),
                                          folder_names=folder_names.get(p))
@@ -936,6 +948,8 @@ class AutoTagWorker(QObject):
             for i, p in enumerate(self.paths):
                 if self._cancel:
                     return
+                if self.YIELD_S:
+                    time.sleep(self.YIELD_S)      # 260906-8(응답성 SOT §4 ②)
                 f = feats.get(p)
                 if f is None:
                     continue

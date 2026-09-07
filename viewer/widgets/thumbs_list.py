@@ -585,7 +585,7 @@ class PageThumbs(QWidget):
         self.list.blockSignals(False)
 
     def _render_visible(self):
-        """260906-7(마스터 SOT §5 ⑥): 보이는 썸네일을 **시간으로 끊어** 렌더한다.
+        """260906-7(응답성 SOT §4 ⑥): 보이는 썸네일을 **시간으로 끊어** 렌더한다.
 
         종전에는 보이는 항목 전부를 **한 번에** 그렸다. 한 장은 `fitz` 로 쪽을 여는 C 호출이라
         중간에 이벤트를 처리할 수 없고, 배경 인덱싱이 GIL 을 나눠 쓰는 동안에는 한 장의

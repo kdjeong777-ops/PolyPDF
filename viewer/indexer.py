@@ -47,7 +47,7 @@ class PdfIndex:
         pages_fts(text, file_id UNINDEXED, page_index UNINDEXED) - FTS5 가상 테이블
     """
 
-    # 260906-6(마스터 SOT §5 ⑤ 'DB 잠금 의무'): 대기 상한을 **부르는 쪽이 정한다**.
+    # 260906-6(응답성 SOT §4 ⑤ 'DB 잠금 의무'): 대기 상한을 **부르는 쪽이 정한다**.
     #   sqlite3 의 기본 대기는 5.0초인데, 이는 Windows 가 창을 '응답 없음' 으로 표시하는
     #   시간과 **정확히 같다** — 배경 인덱싱이 쓰기를 쥔 사이 UI 스레드가 조회 하나만 해도
     #   그대로 5초를 기다려 창이 죽은 것처럼 보인다(실측 단일 조회 2.49초 정지).
@@ -131,7 +131,7 @@ class PdfIndex:
 
     # 260825: FTS 토크나이저 스키마 버전. 2=trigram(파괴적, 폐기), 3=trigram(내용 보존 복사).
     SCHEMA_VERSION = 3
-    YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(마스터 SOT §5 ②)
+    YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(응답성 SOT §4 ②)
     WRITE_CHUNK = 128        # 260906-6: 쓰기 트랜잭션 한 번에 담는 쪽 수(잠금 시간 상한)
     PAGES_PENDING = -1       # 260906-6: '본문을 아직 다 적지 못했다' 표식
     _FTS_TRIGRAM = ("CREATE VIRTUAL TABLE {name} USING fts5("
@@ -299,13 +299,13 @@ class PdfIndex:
             return  # 손상된 파일은 건너뜀
         try:
             # 260906-4: 어차피 연 김에 목록 조사 값(암호화·내부 책갈피)도 같이 기록한다 —
-            #   책갈피창이 같은 파일을 다시 열지 않아도 되게(마스터 SOT §5).
+            #   책갈피창이 같은 파일을 다시 열지 않아도 되게(응답성 SOT §4).
             try:
                 _enc = bool(doc.needs_pass)
                 _toc = (False if _enc else bool(doc.get_toc()))
             except Exception:
                 _enc, _toc = False, False
-            # 260906-6(마스터 §5 ⑤): 본문 읽기(느림)를 **쓰기 트랜잭션 밖**에서 한다.
+            # 260906-6(응답성 SOT §4 ⑤): 본문 읽기(느림)를 **쓰기 트랜잭션 밖**에서 한다.
             #   종전에는 파일 하나를 통째로 한 트랜잭션에 담아, 719쪽짜리 78MB PDF 하나가
             #   쓰기 잠금을 수십 초 쥐었다. 그 사이 UI 스레드의 조회는 그대로 대기한다.
             #   이제 쪽 묶음마다 짧게 끊어 적으므로 잠금을 쥐는 시간이 수십 ms 로 준다.
@@ -333,7 +333,7 @@ class PdfIndex:
                 except Exception:
                     text = ""
                 rows.append((text, file_id, i))
-                # 260906-5(마스터 §5 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
+                # 260906-5(응답성 SOT §4 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
                 #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.
                 if (i & 0x1F) == 0x1F:
                     time.sleep(self.YIELD_S)
@@ -397,7 +397,7 @@ class PdfIndex:
 
         total = len(pdfs)
         for idx, pdf in enumerate(pdfs, 1):
-            time.sleep(self.YIELD_S)          # 260906-5(마스터 §5 ②): 파일마다 GIL 양보
+            time.sleep(self.YIELD_S)          # 260906-5(응답성 SOT §4 ②): 파일마다 GIL 양보
             if should_cancel and should_cancel():
                 return
             # 260905(§4.4): 시작도 알린다 — 완료 때만 알리면 첫 파일이 끝날 때까지 진행 창이

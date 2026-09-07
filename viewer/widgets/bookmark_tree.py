@@ -204,7 +204,7 @@ class BookmarkTree(QWidget):
     DATA_IS_FOLDER = Qt.ItemDataRole.UserRole + 8    # 260901-2: 트리 보기의 폴더 그룹 행
     DATA_PROBED = Qt.ItemDataRole.UserRole + 9       # 260906-1: 표식 검사 큐에 넣은 행
 
-    # 260906-1(마스터 SOT §5 '폴더 열기 3단 규칙'):
+    # 260906-1(응답성 SOT §4.1 '폴더 열기 3단 규칙'):
     SCAN_BUDGET_MS = 150     # 메인 스레드에서 목록을 훑어 볼 예산. 넘기면 워커로 넘긴다.
     FILL_CHUNK = 400         # 한 틱의 행 수 상한(시간 상한에 먼저 걸리는 것이 보통)
     FILL_SLICE_MS = 25       # ★ 한 틱이 쓰는 시간 상한 — 개수로 끊으면 느린 드라이브에서
@@ -262,7 +262,7 @@ class BookmarkTree(QWidget):
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
-        self._probe_paused = False   # 260906-5(마스터 §5 ①): 인덱싱 중에는 조사를 멈춘다
+        self._probe_paused = False   # 260906-5(응답성 SOT §4 ①): 인덱싱 중에는 조사를 멈춘다
         self._probe_scan_timer = QTimer(self)     # 260906-4: 보이는 행 걷기를 모아서 1회
         self._probe_scan_timer.setSingleShot(True)
         self._probe_scan_timer.setInterval(self.PROBE_SCAN_DELAY_MS)
@@ -512,7 +512,7 @@ class BookmarkTree(QWidget):
         self.tree.pathDropped.connect(self.pathDropped.emit)
         # v1.6.2: 갈매기(▸) 펼침 시 PDF 내부 TOC lazy load
         self.tree.itemExpanded.connect(self._on_item_expanded)
-        # 260906-1: 화면에 보이는 행만 표식 검사(마스터 SOT §5) — 스크롤·펼침·접힘마다 다시 걷되,
+        # 260906-1: 화면에 보이는 행만 표식 검사(응답성 SOT §4) — 스크롤·펼침·접힘마다 다시 걷되,
         #   ★ 신호에서 **바로 걷지 않고 한 번으로 모은다**(`_schedule_visible_probes`).
         #   260906-4(실측): 표식을 붙이면 행 모양이 바뀌고 → 스크롤바 `rangeChanged` 가 다시 와서
         #   같은 걷기를 부르는 **되먹임**이 생겼다. 휠 1회에 이 함수가 평균 7회 돌아
@@ -604,7 +604,7 @@ class BookmarkTree(QWidget):
         self._scan_pdfs()               # 260906-1: 예산 내면 즉시 렌더, 아니면 워커로
         return True
 
-    # ----- 260906-1: 폴더 스캔 (마스터 SOT §5 '폴더 열기 3단 규칙') -------------
+    # ----- 260906-1: 폴더 스캔 (응답성 SOT §4.1 '폴더 열기 3단 규칙') -------------
     def _scan_pdfs(self, after=None):
         """PDF 목록 수집 — 메인에서 예산만큼만 훑고, 남으면 워커에 넘긴다.
 
@@ -780,7 +780,7 @@ class BookmarkTree(QWidget):
     def _render_flat(self, after=None):
         """v1.6.19: 평탄 모드 렌더 — 현재 정렬 콤보 적용.
         260901-2: 트리 보기면 폴더 그룹으로 묶어 렌더.
-        260906-1: 행 생성은 한 틱에 **FILL_SLICE_MS 만큼만** 나눠 넣는다(마스터 SOT §5) —
+        260906-1: 행 생성은 한 틱에 **FILL_SLICE_MS 만큼만** 나눠 넣는다(응답성 SOT §4) —
         파일이 수만 개면 위젯 생성만으로도 창이 멈춘다. 한 틱에 끝나면 종전과 같다.
 
         ★ 행이 **나중에** 생기므로, 다 그린 뒤 해야 하는 일(선택 복원 등)은 호출 직후가
@@ -1163,7 +1163,7 @@ class BookmarkTree(QWidget):
 
         260906-1: 종전에는 **폴더의 모든 파일**을 여기서 큐에 넣었다. 검사 한 건이
         `fitz.open`(실측 평균 20ms)이라 파일이 29,000개면 메인 스레드가 10분 멈췄다.
-        → 큐 등록은 `_queue_visible_probes()` 가 **보이는 행에 한해** 한다(마스터 SOT §5).
+        → 큐 등록은 `_queue_visible_probes()` 가 **보이는 행에 한해** 한다(응답성 SOT §4).
         """
         self._apply_tag_label(item, str(pdf_path))
 
@@ -1404,7 +1404,7 @@ class BookmarkTree(QWidget):
             pass
 
     def _queue_visible_probes(self):
-        """보이는 파일 행 중 아직 검사하지 않은 것만 큐에 넣는다(마스터 SOT §5).
+        """보이는 파일 행 중 아직 검사하지 않은 것만 큐에 넣는다(응답성 SOT §4).
 
         한 번 넣은 행은 `DATA_PROBED` 로 표시해 같은 행을 다시 열지 않는다.
         ★ 재진입 금지 — 걷는 도중의 `setData` 가 다시 신호를 부를 수 있다."""
@@ -1501,7 +1501,7 @@ class BookmarkTree(QWidget):
             pass
 
     def set_probe_paused(self, on: bool) -> None:
-        """260906-5(마스터 SOT §5 ①): 파일을 여는 배경 작업은 **한 번에 하나만**.
+        """260906-5(응답성 SOT §4 ①): 파일을 여는 배경 작업은 **한 번에 하나만**.
 
         인덱싱이 도는 동안에는 목록 조사를 멈춘다 — 둘이 겹치면 메인이 받는 GIL 조각이
         반으로 줄어 창이 '응답 없음' 이 된다. 인덱싱이 `probe_cache` 를 채우므로 끝난 뒤에는

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""260906-7: 메인 스레드의 반복문은 '시간'으로 끊는다 (마스터 SOT §5 ⑥).
+"""260906-7: 메인 스레드의 반복문은 '시간'으로 끊는다 (응답성 SOT §4 ⑥).
 
 설치본을 스택 표본으로 잡아 보니, 창이 '(응답 없음)' 인 순간 마지막 지점은 워커가 아니라
 **메인 스레드 자신**이었다.
@@ -17,7 +17,8 @@
   ① 예산이 개수가 아니라 시간이다(`RENDER_SLICE_MS`)
   ② 한 장이 느려도 `_render_visible` 한 번은 짧게 끝나고, 남은 것은 타이머로 넘긴다
   ③ 끝까지 렌더는 된다(예산은 미루는 것이지 버리는 것이 아니다)
-  ④ 배경 목록 수집은 취소 가능해야 한다 — `index_folder` 에 `rglob` 금지(§7.0)
+  ④ 배경 목록 수집은 취소 가능해야 한다 — `index_folder` 에 rglob 금지(§7.0)
+  ④-b 태그 계산도 의무 ①(한 번에 하나만)·②(GIL 양보)를 지킨다
 """
 import os, sys, time, inspect, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -90,6 +91,28 @@ try:
     chk(done >= min(6, pt.list.count()),
         "③ 미룬 것도 결국 다 그려진다", f"{done}장")
     pt._doc.render_thumbnail = _orig
+
+    # ── ④-b 260906-8: 태그 계산도 의무 ①② 를 지킨다 ────────────────────
+    #   `extract_features` 는 색인에 없는 파일에서 fitz 로 폴백해 **파일을 연다**.
+    #   인덱싱·목록 조사와 겹치면 메인이 받는 GIL 조각이 반으로 준다.
+    from viewer.workers import AutoTagWorker
+    chk(getattr(AutoTagWorker, "YIELD_S", 0) > 0,
+        "④-b 태그 계산도 파일마다 GIL 을 양보한다",
+        f"{getattr(AutoTagWorker, 'YIELD_S', None)}s")
+    from viewer.app import MainWindow
+    mw = MainWindow(); mw._skip_save_on_close = True
+    mw._prefs["auto_tag_enabled"] = True
+    mw._index_workers = [object()]              # 인덱싱이 도는 중인 척
+    mw._autotag_worker = None
+    mw._start_autotag_scan()
+    chk(mw._autotag_worker is None,
+        "④-b 인덱싱 중에는 태그 계산을 시작하지 않는다(뒤로 미룬다)")
+    mw._index_workers = []
+    mw._probe_busy = True                       # 목록 조사가 도는 중인 척
+    mw._start_autotag_scan()
+    chk(mw._autotag_worker is None,
+        "④-b 목록 조사 중에도 시작하지 않는다")
+    mw._probe_busy = False
 
     # ── ④ 목록 수집은 취소 가능 ──────────────────────────────────────────
     src = inspect.getsource(PdfIndex.index_folder)

@@ -2388,7 +2388,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if idx is None:
             try:
                 from viewer.indexer import PdfIndex
-                # 260906-6(마스터 SOT §5 ⑤): UI 스레드 연결은 **기다리지 않는다** —
+                # 260906-6(응답성 SOT §4 ⑤): UI 스레드 연결은 **기다리지 않는다** —
                 #   못 읽으면 '모름'(None)일 뿐이고, 그 파일은 워커가 한 번 더 본다.
                 idx = self._probe_idx = PdfIndex(self._db_path,
                                                  busy_ms=PdfIndex.BUSY_MS_UI)
@@ -2408,7 +2408,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._probe_busy = (total > 0 and done < total)
         dlg = getattr(self, "_indexing_dialog", None)
         if dlg is None and self._probe_busy:
-            # 260906-5(마스터 SOT §5 ④): 인덱싱이 없어도 조사만으로 **같은 창**을 띄운다.
+            # 260906-5(응답성 SOT §4 ④): 인덱싱이 없어도 조사만으로 **같은 창**을 띄운다.
             #   상태바만 바뀌면 사용자는 멈춘 것으로 본다(260906 보고).
             try:
                 from viewer.widgets.indexing_dialog import IndexingDialog
@@ -2446,7 +2446,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             folder = getattr(worker, "folder", None)
             dlg = IndexingDialog(self, Path(folder).name if folder else "")
             self._index_busy = True
-            # 260906-5(마스터 SOT §5 ①): 파일을 여는 작업은 한 번에 하나만 — 인덱싱 중에는
+            # 260906-5(응답성 SOT §4 ①): 파일을 여는 작업은 한 번에 하나만 — 인덱싱 중에는
             #   목록 조사를 멈춘다. 인덱싱이 probe_cache 를 채우므로 끝난 뒤엔 대개 할 일이 없다.
             self._set_probe_paused(True)
             worker.progress.connect(dlg.on_progress)
@@ -3579,7 +3579,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _startup_index_check(self) -> None:
         """260825: 시작 시 검색 색인이 비어 있으면(구 파괴적 마이그레이션 잔재) 재인덱싱.
         색인이 이미 채워져 있으면(정상) 아무 것도 하지 않음 — 불필요한 재인덱싱 회피."""
-        # 260906-6(마스터 SOT §5 ⑤): 이 점검은 시작 1.2초 뒤 = **폴더 인덱싱이 한창일 때**
+        # 260906-6(응답성 SOT §4 ⑤): 이 점검은 시작 1.2초 뒤 = **폴더 인덱싱이 한창일 때**
         #   메인 스레드에서 돌던 조회다. 인덱싱이 도는 동안에는 뒤로 미룬다 — 급한 일이
         #   아니고(색인이 비었을 때만 쓸모 있다), 잠금을 두고 UI 가 기다릴 이유가 없다.
         if getattr(self, "_index_workers", None):
@@ -3717,6 +3717,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """전 파일 태그·연도 계산 워커 시작. force=메뉴 '다시 계산'(§3.5-C)."""
         if not self._prefs.get("auto_tag_enabled", True) and not force:
             return                                    # §3.5 각주 — 끄면 제안만(다이얼로그)
+        # 260906-8(응답성 SOT §4 ① '한 번에 하나만'): 태그 계산도 색인에 없는 파일에서는
+        #   fitz 로 폴백해 파일을 연다. 인덱싱·목록 조사가 도는 동안에는 뒤로 미룬다 —
+        #   둘이 겹치면 메인이 받는 GIL 조각이 반으로 줄어 창이 '응답 없음' 이 된다.
+        if getattr(self, "_index_workers", None) or getattr(self, "_probe_busy", False):
+            QTimer.singleShot(3000, lambda: self._start_autotag_scan(force))
+            return
         if getattr(self, "_autotag_worker", None) is not None:
             # 260830 최종검토: 실행 중 새 요청(폴더 전환 등)은 버리지 않고 재큐잉 —
             # 끝나면 한 번 다시 돈다(새 폴더가 스캔에서 빠지는 틈 방지).
@@ -3754,6 +3760,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                           store_keys=set(store._data.keys()),
                           fp_missing_keys=fp_missing, kw_skip_keys=kw_skip)
         self._autotag_worker = w
+        self._set_probe_paused(True)              # 260906-8(응답성 SOT §4 ①)
         w.progress.connect(lambda d, t, n: self.status.showMessage(
             f"태그 계산 {d}/{t}", 1500))
         w.finished.connect(self._on_autotag_finished)
@@ -3762,6 +3769,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _on_autotag_error(self, msg):
         self._autotag_worker = None
+        self._set_probe_paused(False)             # 260906-8(응답성 SOT §4 ①)
         self.status.showMessage(f"태그 계산 오류: {msg}", 4000)
         self._autotag_maybe_rescan()
 
@@ -3776,6 +3784,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         ★ 일괄 적용 전 백업 필수(§6) — 실패하면 아무것도 쓰지 않는다."""
         w = self._autotag_worker
         self._autotag_worker = None
+        self._set_probe_paused(False)             # 260906-8(응답성 SOT §4 ①)
         # 260830 P3: 세션 제안 캐시(§8.1) — 편집 다이얼로그의 즉석 제안이 이걸 쓴다
         if w is not None and getattr(w, "profiles", None) is not None:
             self._autotag_ctx = (w.profiles, w.df, w.n_docs)
@@ -5575,7 +5584,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
 
-        # 260906-1(마스터 SOT §5 '시작 복원은 창을 띄운 뒤'): 여기까지는 위젯 상태만 —
+        # 260906-1(응답성 SOT §4.2 '시작 복원은 창을 띄운 뒤'): 여기까지는 위젯 상태만 —
         #   비용이 파일 수에 비례하는 일(폴더 열기·마지막 문서·스크린샷)은 창이 뜬 뒤로 미룬다.
         #   `__init__` 안에서 폴더를 열면 그 폴더가 큰 만큼 **창이 뜨기도 전에** 멈추고
         #   스플래시만 남는다(260905 사용자 보고: 외장 드라이브 루트가 마지막 폴더였던 경우).

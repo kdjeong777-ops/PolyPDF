@@ -135,7 +135,7 @@ from viewer.app import MainWindow
 mw = MainWindow()
 # 260906-1: 뷰어 우클릭 메뉴는 **PDF 가 열려 있어야** 뜬다(`_on_viewer_context_menu` 첫 줄).
 #   종전에는 `MainWindow()` 가 생성 중에 세션(마지막 문서)을 복원해 준 덕에 우연히 열려 있었다.
-#   이제 세션 복원은 창을 띄운 뒤로 미뤄지므로(마스터 SOT §5), 전제를 **명시적으로** 만든다.
+#   이제 세션 복원은 창을 띄운 뒤로 미뤄지므로(응답성 SOT §4), 전제를 **명시적으로** 만든다.
 from viewer.history import HistoryItem as _HI
 mw._load_main(_HI(_fx.text_pdf(), 0, "", "bookmark"))
 check("main_view contextMenuRequested 시그널", hasattr(mw.main_view, "contextMenuRequested"))
