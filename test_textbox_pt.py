@@ -8,7 +8,10 @@
      가로를 손으로 정하면 세로가, 세로를 정하면 가로가 자동으로 따라온다.
   ④ 박스 좌상단에 글자 크기 ▲▼ · 자간 ◀▶ 버튼.
 
-사용자 결정(260907): **변 핸들 = 박스만, 모서리 핸들 = 글자 크기까지.**
+260907-2 재지시: **어떤 핸들도 글자 크기를 바꾸지 않는다**(크기는 ▲▼·설정으로만).
+  ⑤ 크기 띠(▲▼)는 박스 왼쪽 가운데, 자간 띠(◀▶)는 위쪽 가운데.
+  ⑥ 글을 쓰는 중에도 핸들·테두리로 크기 조절·이동이 된다.
+  ⑦ 색상버튼(선 종류)을 안 골라도 텍스트 박스를 만든다 — 선 없이.
 """
 import os, sys, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -105,32 +108,33 @@ try:
     chk(abs(mv._text_fit_h(st, pr, w_for_h) - h_for_half) <= h_for_half * 0.35,
         "③-b 세로를 주면 그 안에 들어가는 가로를 찾는다", f"{w_for_h:.0f}px")
 
-    # ── ③-c 핸들: 변=박스만, 모서리=글자 크기 ───────────────────────────
+    # ── ③-c 핸들: 어떤 핸들도 글자 크기를 바꾸지 않는다 (260907-2 재지시) ─
     mv._stroke_selected = len(mv._page_strokes) - 1
-    st["rect"] = [0.1, 0.1, 0.5, 0.2]
-    before_pt = mv._style_size_pt(st)
-    mv._shape_transform_press(pr.center(), pr, "r")     # 오른쪽 변
-    cx, cy, hw, hh, rot = mv._shape_press_geom
     from PyQt6.QtCore import QPoint
-    mv._shape_transform_move(QPoint(int(cx + hw * 0.6), int(cy)), pr)
-    chk(abs(mv._style_size_pt(st) - before_pt) < 0.01,
-        "③-c 변 핸들은 글자 크기를 바꾸지 않는다",
-        f"{before_pt:.1f} → {mv._style_size_pt(st):.1f}pt")
+    for handle, dx, dy in (("r", 0.6, 0.0), ("b", 0.0, 0.6),
+                           ("br", 2.0, 2.0), ("tl", -2.0, -2.0)):
+        st["rect"] = [0.1, 0.1, 0.5, 0.2]
+        before_pt = mv._style_size_pt(st)
+        mv._shape_transform_press(pr.center(), pr, handle)
+        cx, cy, hw, hh, rot = mv._shape_press_geom
+        mv._shape_transform_move(QPoint(int(cx + hw * dx), int(cy + hh * dy)), pr)
+        chk(abs(mv._style_size_pt(st) - before_pt) < 0.01,
+            f"③-c '{handle}' 핸들은 글자 크기를 바꾸지 않는다",
+            f"{before_pt:.1f} → {mv._style_size_pt(st):.1f}pt")
 
-    st["rect"] = [0.1, 0.1, 0.5, 0.2]
-    before_pt = mv._style_size_pt(st)
-    mv._shape_transform_press(pr.center(), pr, "br")    # 오른쪽 아래 모서리
+    # 크기를 바꿔도 글은 박스 안에 들어간다(반대 축 자동)
+    st["rect"] = [0.1, 0.1, 0.6, 0.3]
+    mv._shape_transform_press(pr.center(), pr, "r")
     cx, cy, hw, hh, rot = mv._shape_press_geom
-    mv._shape_transform_move(QPoint(int(cx + hw * 2), int(cy + hh * 2)), pr)
-    chk(mv._style_size_pt(st) > before_pt + 0.5,
-        "③-c 모서리 핸들은 글자 크기까지 키운다",
-        f"{before_pt:.1f} → {mv._style_size_pt(st):.1f}pt")
-    chk(MV_SIZE_PT_MIN <= mv._style_size_pt(st) <= MV_SIZE_PT_MAX,
-        "③-c 글자 크기는 범위 안에 머문다(폰트엔진 보호)")
+    mv._shape_transform_move(QPoint(int(cx - hw * 0.5), int(cy)), pr)
+    w_now = abs(st["rect"][2] - st["rect"][0]) * pr.width()
+    h_now = abs(st["rect"][3] - st["rect"][1]) * pr.height()
+    chk(abs(h_now - mv._text_fit_h(st, pr, w_now)) < 2.0,
+        "③-c 가로를 좁히면 세로가 글에 맞춰 따라온다",
+        f"{h_now:.0f} ≈ {mv._text_fit_h(st, pr, w_now):.0f}px")
 
     # ── ② 조합 중(IME) 한글이 크기 계산에 들어간다 ──────────────────────
-    chk(issubclass(_InlineTextEdit, __import__("PyQt6.QtWidgets", fromlist=["QTextEdit"]).QTextEdit)
-        and hasattr(_InlineTextEdit, "imeChanged"),
+    chk(hasattr(_InlineTextEdit, "imeChanged"),
         "② 입력칸이 조합(IME) 변화를 알린다")
     idx = len(mv._page_strokes) - 1
     st["text"] = ""
@@ -140,36 +144,81 @@ try:
     if ed is not None:
         from PyQt6.QtGui import QInputMethodEvent
         h0 = abs(st["rect"][3] - st["rect"][1])
-        ev = QInputMethodEvent("한글을 조합하는 중입니다 " * 4, [])
-        ed.inputMethodEvent(ev)          # 조합 중 — 문서에는 아직 안 들어간다
+        ed.inputMethodEvent(QInputMethodEvent("한글을 조합하는 중입니다 " * 4, []))
         app.processEvents()
         chk(ed.toPlainText() == "", "② 조합 중에는 문서가 비어 있다(전제)")
         h1 = abs(st["rect"][3] - st["rect"][1])
         chk(h1 > h0 or abs(st["rect"][2] - st["rect"][0]) > 0.05,
             "② 조합 중인 글자만큼 박스가 커진다(잘리지 않는다)",
             f"세로 {h0:.4f} → {h1:.4f}")
-        got = mv._editor_text_with_preedit(ed)
-        chk("조합하는" in got, "② 조합 중 글자를 읽어 온다", repr(got[:20]))
+        chk("조합하는" in mv._editor_text_with_preedit(ed), "② 조합 중 글자를 읽어 온다")
 
-    # ── ④ 조절 버튼 ─────────────────────────────────────────────────────
+    # ── ④ 조절 띠 두 개 — 크기는 왼쪽 가운데, 자간은 위쪽 가운데 ────────
     mv._sync_text_toolbar()
-    bar = getattr(mv, "_text_bar", None)
-    chk(isinstance(bar, _TextBoxBar) and bar.isVisible(),
-        "④ 편집 중에 좌상단 조절 띠가 보인다")
-    chk(len(_TextBoxBar.BTNS) == 4,
-        "④ 버튼 4개(크기 ▲▼ · 자간 ◀▶)", str([b[0] for b in _TextBoxBar.BTNS]))
+    sz = getattr(mv, "_text_bar", None)
+    sp = getattr(mv, "_text_bar_sp", None)
+    chk(isinstance(sz, _TextBoxBar) and sz.isVisible(), "④ 크기 띠(▲▼)가 보인다")
+    chk(isinstance(sp, _TextBoxBar) and sp.isVisible(), "④ 자간 띠(◀▶)가 보인다")
+    chk(len(_TextBoxBar.SIZE_BTNS) == 2 and len(_TextBoxBar.SPACING_BTNS) == 2,
+        "④ 띠마다 버튼 2개씩", str([b[0] for b in _TextBoxBar.BTNS]))
+    rc = st["rect"]
+    bx0 = pr.left() + min(rc[0], rc[2]) * pr.width()
+    by0 = pr.top() + min(rc[1], rc[3]) * pr.height()
+    bw_px = abs(rc[2] - rc[0]) * pr.width()
+    bh_px = abs(rc[3] - rc[1]) * pr.height()
+    ox = mv._draw_overlay.x() if mv._draw_overlay is not None else 0
+    oy = mv._draw_overlay.y() if mv._draw_overlay is not None else 0
+    sz_cy = sz.y() + sz.height() / 2.0
+    chk(abs(sz_cy - (oy + by0 + bh_px / 2.0)) <= 3,
+        "④ 크기 띠는 박스 세로 가운데", f"{sz_cy:.0f} vs {oy + by0 + bh_px / 2.0:.0f}")
+    chk(sz.x() + sz.width() <= ox + bx0 + 1 or sz.x() >= ox + bx0 + bw_px - 1,
+        "④ 크기 띠는 박스 왼쪽(자리가 없으면 오른쪽)")
+    sp_cx = sp.x() + sp.width() / 2.0
+    chk(abs(sp_cx - (ox + bx0 + bw_px / 2.0)) <= 3,
+        "④ 자간 띠는 박스 가로 가운데", f"{sp_cx:.0f} vs {ox + bx0 + bw_px / 2.0:.0f}")
+    chk(sp.y() + sp.height() <= oy + by0 + 1 or sp.y() >= oy + by0 + bh_px - 1,
+        "④ 자간 띠는 박스 위쪽(자리가 없으면 아래)")
+
     p0 = mv._style_size_pt(st)
     mv._text_bar_adjust(idx, d_size=1.0)
     chk(abs(mv._style_size_pt(st) - (p0 + 1.0)) < 0.01,
         "④ ▲ 한 번에 글자 +1pt", f"{p0:.1f} → {mv._style_size_pt(st):.1f}")
     s0 = float(st.get("spacing_pt", 0.0))
     mv._text_bar_adjust(idx, d_spacing=0.5)
-    chk(abs(float(st["spacing_pt"]) - (s0 + 0.5)) < 0.01,
-        "④ ▶ 한 번에 자간 +0.5pt", f"{s0:.1f} → {st['spacing_pt']:.1f}")
-    f = mv._text_qfont(st, pr)
-    chk(f.letterSpacing() != 0.0, "④ 자간이 실제 폰트에 반영된다",
-        f"{f.letterSpacing():.2f}px")
+    chk(abs(float(st["spacing_pt"]) - (s0 + 0.5)) < 0.01, "④ ▶ 한 번에 자간 +0.5pt")
+    chk(mv._text_qfont(st, pr).letterSpacing() != 0.0, "④ 자간이 실제 폰트에 반영된다")
+
+    # ── ⑥ 글 쓰는 중에도 테두리·핸들을 잡을 수 있다 (260907-2) ──────────
+    cx, cy, hw, hh, rot = mv._shape_geom(st, pr)
+    chk(mv._edit_grab_handle(QPoint(int(cx + hw), int(cy)), pr) is not None,
+        "⑥ 편집 중 오른쪽 변 핸들을 잡는다")
+    # 핸들(변 가운데)에서 떨어진 테두리 지점 — 여기를 잡으면 '이동'
+    chk(mv._edit_grab_handle(QPoint(int(cx - hw * 0.5), int(cy - hh + 2)), pr) == "move",
+        "⑥ 편집 중 테두리 '선'을 잡으면 이동")
+    chk(mv._edit_grab_handle(QPoint(int(cx), int(cy)), pr) is None,
+        "⑥ 박스 안쪽은 글자 선택 그대로(이동 아님)")
+    chk(mv._editor_pos_to_view(QPoint(0, 0)) is not None,
+        "⑥ 입력칸 좌표 → 페이지 좌표 변환이 있다")
     mv._commit_text_editor()
+
+    # ── ⑦ 선(색상버튼)을 안 골라도 텍스트 박스가 만들어진다 (260907-2) ──
+    mv._draw_kind = "text"
+    mv._pen_idx = None
+    mv._apply_tool()
+    chk(mv._draw_tool is not None,
+        "⑦ 색상버튼 미선택이어도 글쓰기 도구가 켜진다", str(mv._draw_tool))
+    mv._text_defaults["box_line"] = True          # 선이 켜진 스타일이라도
+    n0 = len(mv._page_strokes)
+    new_idx = mv._new_text_box([0.2, 0.2])
+    chk(len(mv._page_strokes) == n0 + 1, "⑦ 박스가 실제로 만들어진다")
+    chk(mv._page_strokes[new_idx].get("box_line") is False,
+        "⑦ 선을 안 골랐으므로 박스선 없이 만든다")
+    mv._pen_idx = 0
+    mv._apply_tool()
+    mv._text_defaults["box_line"] = True
+    idx2 = mv._new_text_box([0.3, 0.3])
+    chk(mv._page_strokes[idx2].get("box_line") is True,
+        "⑦ 선을 고르면 종전대로 박스선이 켜진다")
 
     # ── ⑤ PDF 로 구울 때도 pt 를 그대로 쓴다 ────────────────────────────
     import inspect

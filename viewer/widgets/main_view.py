@@ -138,34 +138,39 @@ class _InlineTextEdit(QTextEdit):
 
 
 class _TextBoxBar(QWidget):
-    """260907-1(사용자 요청): 텍스트 박스 좌상단의 글자 크기·자간 조절 띠.
+    """260907-1/2(사용자 요청): 텍스트 박스에 붙는 작은 조절 띠.
 
-    ▲▼ 글자 크기(±1pt) / ◀▶ 자간(±0.5pt). **그 박스의 글 전체**에 적용된다.
-    글을 쓰는 중이거나 박스를 선택했을 때 보인다(사용자 결정 260907).
+    260907-2 로 **둘로 나눴다** — 크기(▲▼)는 박스 **왼쪽 가운데**, 자간(◀▶)은
+    박스 **위쪽 가운데**. 한 덩이로 좌상단에 몰아 두면 어느 버튼이 무엇을 하는지
+    방향으로 읽히지 않았다(위/아래 = 크기, 좌/우 = 간격이라는 뜻이 자리에서 드러난다).
+
+    적용 대상은 **그 박스의 글 전체**다. 글을 쓰는 중이거나 박스를 선택했을 때 보인다.
     디자인 근거: 화면 디자인 SOT §2 — 본문 위에 겹치는 도구는 작고 낮은 대비로."""
 
-    BTNS = (("▲", "글자 크게 (+1pt)", 1.0, 0.0),
-            ("▼", "글자 작게 (-1pt)", -1.0, 0.0),
-            ("◀", "자간 좁게 (-0.5pt)", 0.0, -0.5),
-            ("▶", "자간 넓게 (+0.5pt)", 0.0, 0.5))
+    SIZE_BTNS = (("▲", "글자 크게 (+1pt)", 1.0, 0.0),
+                 ("▼", "글자 작게 (-1pt)", -1.0, 0.0))
+    SPACING_BTNS = (("◀", "자간 좁게 (-0.5pt)", 0.0, -0.5),
+                    ("▶", "자간 넓게 (+0.5pt)", 0.0, 0.5))
+    # 옛 이름(한 덩이 시절) — 검사·외부 참조 호환
+    BTNS = SIZE_BTNS + SPACING_BTNS
 
-    def __init__(self, parent, owner):
+    def __init__(self, parent, owner, vertical=False, buttons=None):
         super().__init__(parent)
         self._owner = owner
         self._idx = -1
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         # 버튼을 눌러도 입력 포커스를 뺏지 않는다 — 조합 중이던 한글이 끊기면 안 된다.
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(3, 2, 3, 2)
-        lay.setSpacing(2)
+        lay = QVBoxLayout(self) if vertical else QHBoxLayout(self)
+        lay.setContentsMargins(2, 2, 2, 2)
+        lay.setSpacing(1)
         self.setStyleSheet(
             "QWidget{background:rgba(255,255,255,0.92);border:1px solid #b9b9b9;"
             "border-radius:4px;}"
-            "QToolButton{border:none;background:transparent;padding:1px 4px;"
-            "font-size:12px;color:#333;}"
+            "QToolButton{border:none;background:transparent;padding:0px 3px;"
+            "font-size:11px;color:#333;}"
             "QToolButton:hover{background:#e8f0fe;border-radius:3px;}")
-        for glyph, tip, ds, dsp in self.BTNS:
+        for glyph, tip, ds, dsp in (buttons or self.BTNS):
             b = QToolButton(self)
             b.setText(glyph)
             b.setToolTip(tip)
@@ -2432,7 +2437,12 @@ class MainView(QWidget):
             tool = ("erase", int(w))
         elif k == "select":
             tool = ("select", None)
-        elif k in ("line", "shape", "text") and self._pen_idx is not None:
+        elif k == "text":
+            # 260907-2(사용자 요청): 글쓰기는 **색상버튼(선 종류)을 안 골라도** 쓸 수 있다.
+            #   종전에는 펜이 없으면 도구 자체가 꺼져 **텍스트 박스가 아예 안 만들어졌다**.
+            #   펜이 없으면 박스선 없이 만든다(`-1` = 선 없음, `_pen_style_fields` 참조).
+            tool = ("pen", self._pen_idx if self._pen_idx is not None else -1)
+        elif k in ("line", "shape") and self._pen_idx is not None:
             tool = ("pen", self._pen_idx)
         else:
             tool = None
@@ -3106,18 +3116,14 @@ class MainView(QWidget):
         c1x = anchor_x - (nx * ca - ny * sa); c1y = anchor_y - (nx * sa + ny * ca)
         self._shape_set_geom(st, c1x, c1y, nhw, nhh, rot0, pr)
         if st.get("text_box") or st.get("leader"):
-            # 260907-1(사용자 결정): **변 핸들 = 박스만, 모서리 핸들 = 글자 크기까지.**
-            #   변으로 한 축을 정하면 **반대 축은 글에 맞춰 자동**으로 따라간다.
-            #   기준 크기는 누름 시점 값(`_xform_size0`)으로 계산한다 — 이동마다 곱하면
-            #   값이 폭증해 폰트엔진이 죽는다(260611-79 에 실제로 겪음).
-            corner = drag in ("tl", "tr", "bl", "br")
+            # 260907-2(사용자 재지시): **박스 크기를 바꿔도 글자 크기는 그대로 둔다.**
+            #   종전(260907-1)에는 모서리 핸들이 글자까지 키웠으나, 크기는 좌측 ▲▼
+            #   버튼과 설정으로만 바꾸는 것으로 정리했다 — 박스를 조금 넓히려다
+            #   글자가 같이 커지는 일이 없다.
+            #   한 축을 정하면 **반대 축은 글에 맞춰 자동**(§4.5.3).
             keep = ("r" if "l" in drag else "l") + ("b" if "t" in drag else "t")
-            if corner:
-                if hh0 > 1.0:
-                    s0 = getattr(self, "_xform_size0", 0.0) or self._style_size_pt(st)
-                    st["size_pt"] = max(MV_SIZE_PT_MIN,
-                                        min(MV_SIZE_PT_MAX, s0 * (nhh / hh0)))
-            elif drag in ("l", "r"):          # 가로를 정했다 → 세로 자동
+            if drag in ("l", "r", "tl", "tr", "bl", "br"):
+                # 가로를 정했다 → 세로 자동(모서리도 가로를 따른다 — 글이 잘리지 않게)
                 w = min(2 * nhw, self._text_max_w(st, pr))
                 self._text_apply_size(st, pr, w, self._text_fit_h(st, pr, w), keep)
             elif drag in ("t", "b"):          # 세로를 정했다 → 가로 자동
@@ -3156,8 +3162,19 @@ class MainView(QWidget):
                 "box_line": s["border"] is not None, "style": name or self._text_style}
 
     def _pen_style_fields(self):
-        """260611-76: 박스선/지시선의 색·굵기·투명도 = 선택된 색상버튼 스타일."""
+        """260611-76: 박스선/지시선의 색·굵기·투명도 = 선택된 색상버튼 스타일.
+
+        260907-2(사용자 요청): **색상버튼을 안 골랐으면 박스선을 끄고** 만든다.
+        스타일(메모·강조 등)이 박스선을 켜 두었더라도 마찬가지다 — 사용자가 선을
+        고르지 않았는데 선이 그려지면 안 되고, 그렇다고 **박스를 안 만들면 더 곤란하다**
+        (종전에는 아무 일도 일어나지 않아 '글쓰기가 안 된다'로 보였다).
+        지시선은 선이 본체라 글자색으로 그린다."""
         pen = self._active_pen()
+        if self._pen_idx is None:
+            tc = self._text_defaults.get("color", "#111111")
+            return {"box_line": False, "border_color": tc, "border_w": 1,
+                    "border_alpha": 100,
+                    "line_color": tc, "line_w": 2, "line_alpha": 100}
         return {"border_color": pen.get("color", "#ff3030"),
                 "border_w": int(pen.get("width", 3)),
                 "border_alpha": int(pen.get("alpha", 100)),
@@ -3454,38 +3471,93 @@ class MainView(QWidget):
                        max(20, int(h)) + 2 * fw)
         self._sync_text_toolbar()
 
+    # ---- 260907-2: 글 쓰는 중에도 박스를 조절·이동한다 ----
+    EDGE_GRAB_PX = 6          # 테두리 선을 '잡았다'로 보는 띠 두께(px)
+
+    def _editor_pos_to_view(self, pos):
+        """입력칸 안의 좌표 → 오버레이(=페이지 사각형)와 같은 좌표계."""
+        from PyQt6.QtCore import QPoint
+        ed = self._text_editor
+        if ed is None:
+            return pos
+        ox = self._draw_overlay.x() if self._draw_overlay is not None else 0
+        oy = self._draw_overlay.y() if self._draw_overlay is not None else 0
+        return QPoint(int(ed.x() + pos.x() - ox), int(ed.y() + pos.y() - oy))
+
+    def _edit_grab_handle(self, vpos, pr):
+        """글 쓰는 중 이 지점에서 무엇을 잡았나 — 핸들 이름 / 'move' / None.
+
+        박스 **안쪽**은 None(글자 선택 그대로). 잡히는 것은 8개 크기 핸들·회전 핸들과
+        **테두리 선 띠**(`EDGE_GRAB_PX`)뿐이다 — 사용자가 말한 '선을 잡고 이동'."""
+        st = self._selected_xform()
+        if st is None:
+            return None
+        h = self._shape_handle_at(vpos, pr)
+        if h in ("rot", "tl", "tr", "bl", "br", "t", "b", "l", "r"):
+            return h
+        if h != "move":
+            return None
+        cx, cy, hw, hh, rot = self._shape_geom(st, pr)
+        lx, ly = self._img_v2l(cx, cy, rot, vpos.x(), vpos.y())
+        g = self.EDGE_GRAB_PX
+        on_edge = (abs(abs(lx) - hw) <= g) or (abs(abs(ly) - hh) <= g)
+        return "move" if on_edge else None
+
     # ---- 260907-1(사용자 요청): 박스 좌상단 크기·자간 조절 버튼 ----
     def _sync_text_toolbar(self):
-        """편집 중이거나 선택된 텍스트 박스가 있으면 좌상단에 조절 버튼을 띄운다.
+        """편집 중이거나 선택된 텍스트 박스가 있으면 조절 띠 두 개를 붙인다.
 
-        ▲▼ = 글자 크기(pt), ◀▶ = 자간(pt). **그 박스의 글 전체**에 적용된다."""
+        260907-2(사용자 요청): **크기 ▲▼ 는 박스 왼쪽 가운데**, **자간 ◀▶ 는 위쪽 가운데**.
+        방향이 곧 뜻이 되도록 자리를 나눴다. 적용 대상은 그 박스의 글 전체."""
         idx = self._text_edit_idx
         if idx < 0:
             i = self._stroke_selected
             if 0 <= i < len(self._page_strokes):
                 stx = self._page_strokes[i]
                 idx = i if (stx.get("text_box") or stx.get("leader")) else -1
-        bar = getattr(self, "_text_bar", None)
+        size_bar = getattr(self, "_text_bar", None)
+        sp_bar = getattr(self, "_text_bar_sp", None)
         pr = self._page_view_rect()
         if idx < 0 or pr is None or not self._img_edit:
-            if bar is not None:
-                bar.hide()
+            for b in (size_bar, sp_bar):
+                if b is not None:
+                    b.hide()
             return
-        if bar is None:
-            bar = self._text_bar = _TextBoxBar(self.view, self)
-        bar.set_target(idx)
+        if size_bar is None:
+            size_bar = self._text_bar = _TextBoxBar(
+                self.view, self, vertical=True, buttons=_TextBoxBar.SIZE_BTNS)
+        if sp_bar is None:
+            sp_bar = self._text_bar_sp = _TextBoxBar(
+                self.view, self, vertical=False, buttons=_TextBoxBar.SPACING_BTNS)
+        size_bar.set_target(idx); sp_bar.set_target(idx)
         st = self._page_strokes[idx]
         rc = st.get("rect", [0, 0, 0.1, 0.05])
         x0 = pr.left() + min(rc[0], rc[2]) * pr.width()
         y0 = pr.top() + min(rc[1], rc[3]) * pr.height()
+        bw_px = abs(rc[2] - rc[0]) * pr.width()
+        bh_px = abs(rc[3] - rc[1]) * pr.height()
         ox = self._draw_overlay.x() if self._draw_overlay is not None else 0
         oy = self._draw_overlay.y() if self._draw_overlay is not None else 0
-        bw, bh = bar.sizeHint().width(), bar.sizeHint().height()
-        by = oy + y0 - bh - 4
-        if by < oy:                       # 페이지 위쪽에 붙었으면 박스 아래로
-            by = oy + y0 + abs(rc[3] - rc[1]) * pr.height() + 4
-        bar.setGeometry(int(ox + x0), int(by), bw, bh)
-        bar.show(); bar.raise_()
+        gap = 4
+
+        # 크기(▲▼) — 왼쪽 가운데. 왼쪽이 좁으면 오른쪽으로 넘긴다.
+        sw, sh = size_bar.sizeHint().width(), size_bar.sizeHint().height()
+        sx = ox + x0 - sw - gap
+        if sx < ox:
+            sx = ox + x0 + bw_px + gap
+        sy = oy + y0 + (bh_px - sh) / 2.0
+        size_bar.setGeometry(int(sx), int(sy), sw, sh)
+
+        # 자간(◀▶) — 위쪽 가운데. 위가 좁으면 아래로 넘긴다.
+        pw, ph = sp_bar.sizeHint().width(), sp_bar.sizeHint().height()
+        px = ox + x0 + (bw_px - pw) / 2.0
+        py = oy + y0 - ph - gap
+        if py < oy:
+            py = oy + y0 + bh_px + gap
+        sp_bar.setGeometry(int(px), int(py), pw, ph)
+
+        for b in (size_bar, sp_bar):
+            b.show(); b.raise_()
 
     def _text_bar_adjust(self, idx, d_size=0.0, d_spacing=0.0):
         """▲▼◀▶ 한 번 = 글자 크기 ±1pt / 자간 ±0.5pt. 박스는 글에 맞춰 다시 잡는다."""
@@ -3608,10 +3680,8 @@ class MainView(QWidget):
             if hi >= 0:
                 self._stroke_selected = hi
                 self._begin_text_edit(hi, pr); return True
-            # 3) 빈 곳 — 색상버튼(스타일)이 있어야 작성 가능
+            # 3) 빈 곳 — 새 박스. 260907-2: **색상버튼을 안 골라도** 만든다(선 없이).
             self._img_selected = -1
-            if self._pen_idx is None:
-                return True       # 색상 미선택 → 작성 안 함(패닝/그리기도 안 함)
             if self._text_kind == "leader":
                 # 시작점 누름 = 박스 하단(글 시작) + 선 시작
                 self._leader_drag = {"origin": self._view_to_norm(pos, pr),
@@ -4010,12 +4080,48 @@ class MainView(QWidget):
         try:
             ov = self._draw_overlay
             # 260611-74: 인라인 텍스트 편집기 — Esc/포커스아웃=커밋, Enter=줄바꿈(통과)
+            # 260907-2(사용자 요청): **글을 쓰는 중에도** 박스 크기 조절·이동이 된다.
+            #   입력칸(QTextEdit)이 박스를 덮고 있어 오버레이가 마우스를 못 받는다 →
+            #   여기서 먼저 가로채, 핸들이나 **테두리 선**을 잡았으면 변형으로 돌린다.
+            #   박스 **안쪽**은 종전대로 글자 선택이다("선을 잡고 이동" — 사용자 표현).
             if self._text_editor is not None and obj is self._text_editor:
                 tt = ev.type()
                 if tt == QEvent.Type.KeyPress and ev.key() == Qt.Key.Key_Escape:
                     self._commit_text_editor(); return True
                 if tt == QEvent.Type.FocusOut:
+                    # 핸들·테두리를 끄는 중이면 편집을 끝내지 않는다(끝나면 다시 못 잡는다)
+                    if getattr(self, "_text_edit_drag", False):
+                        return True
                     self._commit_text_editor(); return True
+                pr = self._page_view_rect()
+                if pr is not None and tt in (QEvent.Type.MouseButtonPress,
+                                             QEvent.Type.MouseMove,
+                                             QEvent.Type.MouseButtonRelease):
+                    vpos = self._editor_pos_to_view(ev.position().toPoint())
+                    if tt == QEvent.Type.MouseButtonPress \
+                            and ev.button() == Qt.MouseButton.LeftButton:
+                        h = self._edit_grab_handle(vpos, pr)
+                        if h is not None:
+                            self._text_edit_drag = True
+                            self._shape_transform_press(vpos, pr, h)
+                            return True
+                    elif tt == QEvent.Type.MouseMove \
+                            and getattr(self, "_text_edit_drag", False) \
+                            and (ev.buttons() & Qt.MouseButton.LeftButton):
+                        self._shape_transform_move(
+                            vpos, pr,
+                            bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier))
+                        return True
+                    elif tt == QEvent.Type.MouseButtonRelease \
+                            and getattr(self, "_text_edit_drag", False):
+                        self._text_edit_drag = False
+                        self._shape_drag = None
+                        self._save_page_strokes()
+                        try:
+                            self._text_editor.setFocus()
+                        except Exception:
+                            pass
+                        return True
                 return super().eventFilter(obj, ev)
             if ov is None or obj is not self.view.viewport():
                 return super().eventFilter(obj, ev)
