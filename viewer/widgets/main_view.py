@@ -364,6 +364,28 @@ class _MainDrawOverlay(QWidget):
                     p.setBrush(Qt.BrushStyle.NoBrush)
                     p.setPen(QPen(QColor(255, 122, 0, 230), 1, Qt.PenStyle.DashLine))
                     p.drawRect(box.adjusted(-3, -3, 3, 3))
+        # 260907-5: 범위 선택 — 끄는 중인 고무줄과 고른 것들의 점선 테두리
+        rb = getattr(self._owner, "_rubber", None)
+        if rb is not None:
+            p.setBrush(QColor(21, 101, 192, 30))
+            p.setPen(QPen(QColor("#1565c0"), 1, Qt.PenStyle.DashLine))
+            p.drawRect(rb)
+        if self._owner._has_multi():
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(QColor("#1565c0"), 2, Qt.PenStyle.DashLine))
+            for i in self._owner._multi_strokes:
+                if 0 <= i < len(self._owner._page_strokes):
+                    bb = self._owner._stroke_bbox_view_any(
+                        self._owner._page_strokes[i], pr)
+                    if bb is not None:
+                        p.drawRect(bb.adjusted(-3, -3, 3, 3))
+            for i in self._owner._multi_images:
+                if 0 <= i < len(self._owner._img_objects):
+                    rc = self._owner._img_objects[i].get("rect", [0, 0, 0, 0])
+                    p.drawRect(QRectF(pr.left() + rc[0] * pr.width(),
+                                      pr.top() + rc[1] * pr.height(),
+                                      rc[2] * pr.width(), rc[3] * pr.height())
+                               .adjusted(-3, -3, 3, 3))
         p.end()
         # 260907-1: 선택이 바뀌면 좌상단 조절 띠도 따라간다(위젯 이동은 재도색을
         #   부르지 않아 되먹임이 없다 — 응답성 SOT §6).
@@ -700,9 +722,22 @@ class _MainDrawOverlay(QWidget):
                 sp = self._norm(self._press, pr)
                 self._cur["points"] = [[sp[0], yc], [cp[0], yc]]
             elif self._owner._draw_line_mode == 0 and self._press:
-                # 모드 0=직선(시작 y 고정 수평선)
+                # 260907-5(사용자 요청): 모드 0=직선 — **어느 각도로든** 긋는다.
+                #   종전에는 시작점의 y 를 고정해 **수평선만** 그어졌다.
+                #   90° 근처(±SNAP_DEG)에서는 자석처럼 붙는다. Shift 를 누르면 자석 해제
+                #   (회전 핸들과 같은 규칙 — MainView.IMG_SNAP_DEG).
+                import math as _m
                 sp = self._norm(self._press, pr)
-                self._cur["points"] = [sp, [cp[0], sp[1]]]
+                dx = pos.x() - self._press.x(); dy = pos.y() - self._press.y()
+                if not (e.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+                    ang = _m.degrees(_m.atan2(dy, dx))
+                    near = round(ang / 90.0) * 90.0
+                    if abs(((ang - near + 180) % 360) - 180) <= self._owner.IMG_SNAP_DEG:
+                        r = (dx * dx + dy * dy) ** 0.5
+                        a = _m.radians(near)
+                        dx, dy = r * _m.cos(a), r * _m.sin(a)
+                self._cur["points"] = [sp, [sp[0] + dx / max(1.0, pr.width()),
+                                            sp[1] + dy / max(1.0, pr.height())]]
             else:
                 # 모드 2=자유곡선
                 self._cur["points"].append(cp)
@@ -1100,6 +1135,22 @@ class _PdfGraphicsView(QGraphicsView):
                 ownr._img_nudge(0, +step); event.accept(); return
             if k in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
                 ownr._img_delete_selected(); event.accept(); return
+        # 260907-5: 범위로 여러 개를 골랐으면 함께 지우고 함께 옮긴다
+        if (ownr is not None and getattr(ownr, "_img_edit", False)
+                and ownr._has_multi()):
+            if k in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+                ownr._multi_delete(); event.accept(); return
+            pr = ownr._page_view_rect()
+            if pr is not None and k in (Qt.Key.Key_Left, Qt.Key.Key_Right,
+                                        Qt.Key.Key_Up, Qt.Key.Key_Down):
+                st = 1 if (event.modifiers() & Qt.KeyboardModifier.ShiftModifier) else 3
+                ownr._multi_translate(
+                    ({Qt.Key.Key_Left: -st, Qt.Key.Key_Right: st}.get(k, 0))
+                    / max(1.0, pr.width()),
+                    ({Qt.Key.Key_Up: -st, Qt.Key.Key_Down: st}.get(k, 0))
+                    / max(1.0, pr.height()))
+                ownr._save_page_strokes(); ownr._save_page_images()
+                ownr._draw_overlay.update(); event.accept(); return
         # 260611-70: 선택된 선/도형 — 방향키 이동 / Del 삭제
         if (ownr is not None and getattr(ownr, "_img_edit", False)
                 and getattr(ownr, "_stroke_selected", -1) >= 0):
@@ -1296,6 +1347,12 @@ class MainView(QWidget):
         self._draw_highlight_alpha = 35   # 260611-2: 하이라이트 전용 불투명도(%)
         self._draw_kind = "line"          # 기본 모드=선
         self._shape_kind = "rect"         # 도형 종류(항상 보유): rect/round/circle
+        self._last_pen_idx = None         # 260907-5: 마지막으로 쓴 색상버튼(선/도형 자동 선택)
+        self._multi_strokes = []          # 260907-5: 범위 선택된 선/도형/글상자 인덱스
+        self._multi_images = []           # 260907-5: 범위 선택된 사진 인덱스
+        self._rubber = None               # 260907-5: 범위 선택 고무줄(뷰 좌표 QRect)
+        self._rubber_from = None          # 260907-5: 고무줄 시작점
+        self._multi_drag = None           # 260907-5: 여러 개 함께 끌기
         self._shape_fill = "none"         # none|semi|full (도형 채움 스타일)
         self._update_shape_button()
         self._update_line_button()
@@ -2384,9 +2441,24 @@ class MainView(QWidget):
         """260611-76: 색상버튼 = 스타일(색·굵기·투명도) 선택. 모드(선/도형/글쓰기)는 유지.
         같은 펜 재클릭 = 스타일 해제. 모드가 비어 있으면 기본 '선긋기'로 작동 시작."""
         self._pen_idx = None if self._pen_idx == idx else idx
-        if self._pen_idx is not None and self._draw_kind in (None, "erase"):
-            self._draw_kind = "line"      # 색상버튼만 누르면 자연스럽게 선긋기 시작
+        if self._pen_idx is not None:
+            self._last_pen_idx = self._pen_idx    # 260907-5: 마지막으로 쓴 색을 기억
+            if self._draw_kind in (None, "erase"):
+                self._draw_kind = "line"  # 색상버튼만 누르면 자연스럽게 선긋기 시작
         self._apply_tool()
+
+    def _ensure_pen(self):
+        """260907-5(사용자 요청): 선·도형을 켤 때 **색이 없으면 골라 준다**.
+
+        색상버튼이 하나도 안 눌린 상태로 선/박스 버튼을 누르면 종전에는 도구가 켜지지
+        않아 **아무 일도 일어나지 않았다**. 마지막으로 쓴 색을 되살리고, 그것도 없으면
+        1번을 쓴다."""
+        if self._pen_idx is not None:
+            return
+        last = getattr(self, "_last_pen_idx", None)
+        pens = self._draw_pens or MV_DEFAULT_PENS
+        self._pen_idx = last if (last is not None and 0 <= last < len(pens)) else 0
+        self._last_pen_idx = self._pen_idx
 
     def _on_draw_erase(self, k):
         """260611-76: 지우개 = 별도 모드. 4버튼과 상호배타. 같은 지우개 재클릭=해제."""
@@ -2449,6 +2521,9 @@ class MainView(QWidget):
         self._draw_tool = tool
         if tool != ("select", None):
             self._stroke_drag = None
+            # 260907-5: 개체선택을 벗어나면 범위 선택도 푼다(끌던 고무줄도 버린다)
+            self._multi_clear(); self._rubber = None; self._rubber_from = None
+            self._multi_drag = None
         ov = self._draw_overlay
         if ov is not None:
             ov.set_active(tool is not None)
@@ -2459,12 +2534,15 @@ class MainView(QWidget):
         """260611-71/76: 선긋기 단일 클릭 = 선택/해제 토글(4버튼 상호배타)."""
         self._draw_kind = None if self._draw_kind == "line" else "line"
         self._stroke_selected = -1
+        if self._draw_kind == "line":
+            self._ensure_pen()            # 260907-5: 색이 없으면 마지막 색(없으면 1번)
         self._apply_tool()
 
     def _cycle_draw_mode(self):
         """260611-2/71: 선긋기 더블 클릭 = 선 종류(직선→하이라이트→자유곡선) 변경(+선택)."""
         self._draw_kind = "line"
         self._stroke_selected = -1
+        self._ensure_pen()                # 260907-5
         self.set_draw_line_mode((self._draw_line_mode + 1) % 3)
         self.drawModeChanged.emit(self._draw_line_mode)
         self._apply_tool()
@@ -2474,6 +2552,8 @@ class MainView(QWidget):
         self._draw_kind = None if self._draw_kind == "shape" else "shape"
         if self._draw_kind != "shape":
             self._stroke_selected = -1
+        else:
+            self._ensure_pen()            # 260907-5
         self._apply_tool()
 
     def _cycle_shape_kind(self):
@@ -2481,6 +2561,7 @@ class MainView(QWidget):
         i = self._SHAPE_KIND_ORDER.index(self._shape_kind) if self._shape_kind in self._SHAPE_KIND_ORDER else 0
         self._shape_kind = self._SHAPE_KIND_ORDER[(i + 1) % len(self._SHAPE_KIND_ORDER)]
         self._draw_kind = "shape"
+        self._ensure_pen()                # 260907-5
         self._apply_tool()
 
     def _set_shape_fill(self, kind):
@@ -2718,6 +2799,7 @@ class MainView(QWidget):
         else:
             self._page_strokes = []
         self._stroke_selected = -1; self._stroke_drag = None   # 260611-70: 페이지 전환 시 해제
+        self._multi_clear(); self._rubber = None; self._rubber_from = None  # 260907-5
         # 260611-80: 페이지가 바뀌면 되돌리기/다시실행 스택 초기화 + 기준 상태 갱신
         import copy
         self._undo_stack = []; self._redo_stack = []
@@ -2973,6 +3055,112 @@ class MainView(QWidget):
                         if self._pt_seg_dist(px, py, vp[k - 1], vp[k]) <= TH + w / 2.0:
                             return i
         return -1
+
+    # ---- 260907-5(사용자 요청): 개체선택 = 범위(고무줄) 선택 ----
+    #   '개체 선택' 을 켠 뒤 **빈 곳에서 좌상→우하로 끌면** 그 사각형에 걸친 개체를
+    #   모두 고른다. 종전에는 하나씩만 고를 수 있어, 여러 개를 같이 옮기거나 지우려면
+    #   같은 일을 개수만큼 되풀이해야 했다.
+    RUBBER_MIN_PX = 4         # 이보다 작으면 '클릭' 으로 본다(선택 해제)
+
+    def _multi_clear(self):
+        self._multi_strokes = []
+        self._multi_images = []
+
+    def _has_multi(self) -> bool:
+        return bool(getattr(self, "_multi_strokes", None)
+                    or getattr(self, "_multi_images", None))
+
+    def _rubber_pick(self, rect_v, pr):
+        """뷰 좌표 사각형에 걸친 선/도형/글상자와 사진을 모두 고른다.
+
+        '걸치면' 선택이다(완전히 품을 필요 없다) — 긴 선 하나를 고르려고 화면 밖까지
+        끌어야 하는 일이 없도록."""
+        self._multi_clear()
+        for i, st in enumerate(self._page_strokes):
+            bb = self._stroke_bbox_view_any(st, pr)
+            if bb is not None and rect_v.intersects(bb):
+                self._multi_strokes.append(i)
+        for i, ob in enumerate(self._img_objects):
+            rc = ob.get("rect", [0, 0, 0, 0])
+            bb = QRectF(pr.left() + rc[0] * pr.width(), pr.top() + rc[1] * pr.height(),
+                        rc[2] * pr.width(), rc[3] * pr.height())
+            if rect_v.intersects(bb):
+                self._multi_images.append(i)
+        # 하나만 걸렸으면 종전 단일 선택으로 넘긴다 — 핸들(크기·회전)을 그대로 쓴다.
+        if len(self._multi_strokes) == 1 and not self._multi_images:
+            self._stroke_selected = self._multi_strokes[0]
+            self._multi_clear()
+        elif len(self._multi_images) == 1 and not self._multi_strokes:
+            self._img_selected = self._multi_images[0]
+            self._multi_clear()
+        elif self._has_multi():
+            self._stroke_selected = -1
+            self._img_selected = -1
+        return len(getattr(self, "_multi_strokes", [])) + \
+            len(getattr(self, "_multi_images", []))
+
+    def _stroke_bbox_view_any(self, st, pr):
+        """선/도형/글상자 무엇이든 뷰 좌표 바깥 사각형(QRectF). 못 구하면 None."""
+        try:
+            if st.get("shape") or st.get("text_box") or st.get("leader"):
+                cx, cy, hw, hh, _rot = self._shape_geom(st, pr)
+                return QRectF(cx - hw, cy - hh, 2 * hw, 2 * hh)
+            pts = st.get("points") or []
+            if not pts:
+                return None
+            xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+            pad = float(st.get("h", 0.0)) / 2.0 if st.get("hl") else 0.0
+            return QRectF(pr.left() + min(xs) * pr.width(),
+                          pr.top() + (min(ys) - pad) * pr.height(),
+                          max(1.0, (max(xs) - min(xs)) * pr.width()),
+                          max(1.0, (max(ys) - min(ys) + 2 * pad) * pr.height()))
+        except Exception:
+            return None
+
+    def _multi_hit(self, pos, pr) -> bool:
+        """지금 고른 것들 중 하나라도 이 지점을 품는가(=끌면 다 같이 움직인다)."""
+        for i in getattr(self, "_multi_strokes", []):
+            if 0 <= i < len(self._page_strokes):
+                bb = self._stroke_bbox_view_any(self._page_strokes[i], pr)
+                if bb is not None and bb.adjusted(-3, -3, 3, 3).contains(float(pos.x()),
+                                                                        float(pos.y())):
+                    return True
+        for i in getattr(self, "_multi_images", []):
+            if 0 <= i < len(self._img_objects):
+                rc = self._img_objects[i].get("rect", [0, 0, 0, 0])
+                bb = QRectF(pr.left() + rc[0] * pr.width(), pr.top() + rc[1] * pr.height(),
+                            rc[2] * pr.width(), rc[3] * pr.height())
+                if bb.adjusted(-3, -3, 3, 3).contains(float(pos.x()), float(pos.y())):
+                    return True
+        return False
+
+    def _multi_translate(self, dnx, dny):
+        """고른 것들을 함께 옮긴다(정규화 좌표 증분)."""
+        for i in getattr(self, "_multi_strokes", []):
+            if 0 <= i < len(self._page_strokes):
+                self._stroke_translate(i, dnx, dny)
+        for i in getattr(self, "_multi_images", []):
+            if 0 <= i < len(self._img_objects):
+                rc = self._img_objects[i].get("rect")
+                if rc:
+                    rc[0] = max(-0.5, min(1.5, rc[0] + dnx))
+                    rc[1] = max(-0.5, min(1.5, rc[1] + dny))
+
+    def _multi_delete(self):
+        """고른 것들을 함께 지운다(Del)."""
+        for i in sorted(getattr(self, "_multi_strokes", []), reverse=True):
+            if 0 <= i < len(self._page_strokes):
+                self._page_strokes.pop(i)
+        for i in sorted(getattr(self, "_multi_images", []), reverse=True):
+            if 0 <= i < len(self._img_objects):
+                self._img_objects.pop(i)
+        self._multi_clear()
+        self._stroke_selected = -1
+        self._img_selected = -1
+        self._save_page_strokes()
+        self._save_page_images()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
 
     def _stroke_translate(self, idx, dnx, dny):
         if not (0 <= idx < len(self._page_strokes)):
@@ -4223,6 +4411,39 @@ class MainView(QWidget):
                             and ev.button() == Qt.MouseButton.LeftButton \
                             and self._img_drag is not None:
                         self._img_mouse_release()
+                        return True
+                    # 260907-5: 여러 개 함께 이동 / 범위 선택(고무줄) 진행·확정
+                    elif t == QEvent.Type.MouseMove and (
+                            ev.buttons() & Qt.MouseButton.LeftButton) and getattr(
+                            self, "_multi_drag", None) is not None:
+                        cur = ev.position().toPoint(); last = self._multi_drag["last"]
+                        self._multi_translate(
+                            (cur.x() - last.x()) / max(1.0, pr.width()),
+                            (cur.y() - last.y()) / max(1.0, pr.height()))
+                        self._multi_drag["last"] = cur; ov.update()
+                        return True
+                    elif t == QEvent.Type.MouseButtonRelease and (
+                            ev.button() == Qt.MouseButton.LeftButton) and getattr(
+                            self, "_multi_drag", None) is not None:
+                        self._multi_drag = None
+                        self._save_page_strokes(); self._save_page_images()
+                        return True
+                    elif t == QEvent.Type.MouseMove and (
+                            ev.buttons() & Qt.MouseButton.LeftButton) and getattr(
+                            self, "_rubber_from", None) is not None:
+                        self._rubber = QRect(self._rubber_from,
+                                             ev.position().toPoint()).normalized()
+                        ov.update()
+                        return True
+                    elif t == QEvent.Type.MouseButtonRelease and (
+                            ev.button() == Qt.MouseButton.LeftButton) and getattr(
+                            self, "_rubber_from", None) is not None:
+                        rb = self._rubber
+                        self._rubber_from = None; self._rubber = None
+                        if rb is not None and (rb.width() >= self.RUBBER_MIN_PX
+                                               or rb.height() >= self.RUBBER_MIN_PX):
+                            self._rubber_pick(QRectF(rb), pr)
+                        ov.update()
                         return True
                     # 260611-70: 선택된 선/도형 이동
                     elif t == QEvent.Type.MouseMove \
