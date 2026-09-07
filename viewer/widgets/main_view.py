@@ -560,18 +560,18 @@ class _MainDrawOverlay(QWidget):
             bdc.setAlpha(int(round(float(st.get("border_alpha", 100)) * 2.55)))
             pen = QPen(bdc); pen.setWidth(max(1, int(st.get("border_w", 1))))
             p.setPen(pen); p.setBrush(Qt.BrushStyle.NoBrush); p.drawRect(local)
-        f = self._owner._text_qfont(st, pr)
-        p.setFont(f)
-        p.setPen(QColor(st.get("color", "#111111")))
-        align = (Qt.AlignmentFlag.AlignHCenter if st.get("align") == 1
-                 else Qt.AlignmentFlag.AlignRight if st.get("align") == 2
-                 else Qt.AlignmentFlag.AlignLeft)
-        # 260907-1: 박스가 글에 맞춰 자라므로 **위 정렬**이 맞다(가운데 정렬이면 자동
-        #   맞춤 중에 글이 위아래로 흔들려 보인다). 여백은 입력칸과 같은 값을 쓴다.
+        # 260907-3: **재는 것과 같은 문서로 그린다**(`_text_doc`). 종전 `drawText` 는
+        #   띄어쓰기에서만 줄을 바꿔, 띄어쓰기 없는 한글이 한 줄로 붙어 잘려 보였다.
+        # 260907-1: 박스가 글에 맞춰 자라므로 **위 정렬**이다. 여백은 입력칸과 같은 값.
         pad = self._owner.TEXT_PAD
-        p.drawText(QRectF(-hw + pad, -hh + pad, 2 * hw - 2 * pad, 2 * hh - 2 * pad),
-                   int(align | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
-                   st.get("text", ""))
+        iw = max(1.0, 2 * hw - 2 * pad); ih = max(1.0, 2 * hh - 2 * pad)
+        doc = self._owner._text_doc(st, pr, iw)
+        p.save()
+        p.translate(-hw + pad, -hh + pad)
+        p.setClipRect(QRectF(0, 0, iw, ih))
+        p.setPen(QColor(st.get("color", "#111111")))   # drawContents 가 펜 색을 글자색으로
+        doc.drawContents(p)
+        p.restore()
         p.restore()
 
     def _paint_leader(self, p, st, pr, with_box=True, skip_bg=False):
@@ -3264,21 +3264,49 @@ class MainView(QWidget):
     TEXT_PAD = 4              # 그릴 때(_draw_text_box)와 같은 안쪽 여백(px)
     TEXT_MIN_W = 24.0         # 박스 최소 폭(px)
 
-    def _text_layout_size(self, st, pr, width_px=None):
-        """이 박스의 글을 `width_px` 안에 흘렸을 때의 (폭, 높이) 픽셀.
+    def _text_doc(self, st, pr, width_px=None):
+        """260907-3: 텍스트 박스의 글을 흘려 놓은 `QTextDocument`.
 
-        `width_px=None` 이면 줄바꿈 없이(한 줄) 잰다. 그리기와 같은 폰트를 쓰므로
-        화면에 나오는 결과와 어긋나지 않는다."""
+        **재는 것과 그리는 것이 이것 하나를 같이 쓴다.** 종전에는 재기는
+        `QTextDocument`(어디서든 줄바꿈), 그리기는 `QPainter.drawText(TextWordWrap)`
+        (**띄어쓰기에서만** 줄바꿈)로 서로 달랐다. 그래서 띄어쓰기 없는 한글을 쓰면
+        입력 중에는 아래로 흘러가다가, 작성을 끝내면 **한 줄로 붙어 일부가 안 보였다**
+        (사용자 보고 260907). 같은 문서를 쓰면 그런 어긋남이 원리적으로 없다.
+
+        `width_px=None` 이면 줄바꿈 없이(한 줄) 잰다."""
         from PyQt6.QtGui import QTextDocument, QTextOption
+        text = st.get("text", "") or ""
+        f = self._text_qfont(st, pr)
+        a = int(st.get("align", 0) or 0)
+        key = (text, f.family(), f.pixelSize(), f.bold(), f.italic(),
+               round(f.letterSpacing(), 2), a,
+               -1.0 if width_px is None else round(float(width_px), 1))
+        cache = getattr(self, "_text_doc_cache", None)
+        if cache is None:
+            cache = self._text_doc_cache = {}
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
         doc = QTextDocument()
         doc.setDocumentMargin(0.0)
-        doc.setDefaultFont(self._text_qfont(st, pr))
+        doc.setDefaultFont(f)
         opt = QTextOption()
         opt.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        opt.setAlignment(Qt.AlignmentFlag.AlignHCenter if a == 1
+                         else Qt.AlignmentFlag.AlignRight if a == 2
+                         else Qt.AlignmentFlag.AlignLeft)
         doc.setDefaultTextOption(opt)
-        doc.setPlainText(st.get("text", "") or " ")
+        doc.setPlainText(text)
         doc.setTextWidth(-1 if width_px is None else max(8.0, float(width_px)))
-        sz = doc.size()
+        if len(cache) > 64:            # 페이지를 넘나들어도 몇 개만 들고 있는다
+            cache.clear()
+        cache[key] = doc
+        return doc
+
+    def _text_layout_size(self, st, pr, width_px=None):
+        """이 박스의 글을 `width_px` 안에 흘렸을 때의 (폭, 높이) 픽셀."""
+        probe = st if (st.get("text") or "").strip() else dict(st, text=" ")
+        sz = self._text_doc(probe, pr, width_px).size()
         return float(sz.width()), float(sz.height())
 
     def _text_max_w(self, st, pr):
@@ -3847,6 +3875,15 @@ class MainView(QWidget):
                "shape": shape or self._img_shape, "alpha": 100, "rot": 0.0}
         self._img_objects.append(obj)
         self._img_selected = len(self._img_objects) - 1
+        # 260907-3(사용자 요청): 사진을 넣는 순간 **그리기 도구를 끄고 개체선택으로** 넘긴다.
+        #   선긋기·하이라이트·글쓰기가 켜진 채였으면 방금 넣은 사진을 잡으려는 드래그가
+        #   선을 긋거나 글상자를 만들어, 옮기지도 크기를 바꾸지도 못했다.
+        #   여기(공통 삽입 지점)에 두어 메뉴·Ctrl+V·드롭 어느 길로 넣어도 같게 동작한다.
+        try:
+            self._commit_text_editor()
+            self.set_draw_tool(("select", None))
+        except Exception:
+            pass
         self._save_page_images()
         if self._draw_overlay is not None:
             self._draw_overlay.update()

@@ -220,12 +220,59 @@ try:
     chk(mv._page_strokes[idx2].get("box_line") is True,
         "⑦ 선을 고르면 종전대로 박스선이 켜진다")
 
+    # ── ⑧ 띄어쓰기가 없어도 그릴 때 줄이 바뀐다 (260907-3) ──────────────
+    #   종전에는 재기(QTextDocument, 어디서든 줄바꿈)와 그리기(drawText, 띄어쓰기에서만)가
+    #   달라, 띄어쓰기 없는 한글이 작성 후 한 줄로 붙어 잘려 보였다.
+    import inspect as _insp
+    from viewer.widgets.main_view import _MainDrawOverlay
+    draw_src = _insp.getsource(_MainDrawOverlay._draw_text_box)
+    chk("_text_doc" in draw_src and "p.drawText(" not in draw_src,
+        "⑧ 그리기도 재기와 **같은 문서**를 쓴다(drawText 줄바꿈 규칙 제거)")
+    nospace = dict(st, text="가나다라마바사아자차카타파하" * 20, size_pt=20.0,
+                   spacing_pt=0.0, rect=[0.1, 0.1, 0.4, 0.2])
+    w_one, h_one = mv._text_layout_size(nospace, pr, None)
+    box_w = 0.2 * pr.width()
+    doc = mv._text_doc(nospace, pr, box_w)
+    chk(doc.size().height() > h_one * 1.5,
+        "⑧ 띄어쓰기가 없어도 좁은 폭에서 여러 줄로 흐른다",
+        f"한 줄 {h_one:.0f} → {doc.size().height():.0f}px")
+    chk(doc.size().width() <= box_w + 1.0,
+        "⑧ 흘린 글이 박스 폭을 넘지 않는다(잘려 보이지 않는다)",
+        f"{doc.size().width():.0f} <= {box_w:.0f}px")
+    chk(mv._text_doc(nospace, pr, box_w) is doc,
+        "⑧ 같은 조건이면 문서를 다시 만들지 않는다(도색마다 재생성 금지)")
+
+    # ── ⑨ 텍스트 복사·사진 삽입은 그리기 도구를 끈다 (260907-3) ─────────
+    from viewer.app import MainWindow
+    chk(callable(getattr(MainWindow, "_cancel_draw_tools", None)),
+        "⑨ 그리기 도구 취소 진입점이 있다")
+    app_src = _insp.getsource(MainWindow._on_main_context_menu)         if hasattr(MainWindow, "_on_main_context_menu") else _insp.getsource(MainWindow)
+    chk(app_src.count("_cancel_draw_tools") >= 2,
+        "⑨ '텍스트 복사'·'블럭설정 후 텍스트 복사' 둘 다 도구를 끈다")
+    ins_src = _insp.getsource(MainView.add_image_from_pixmap)
+    chk("set_draw_tool" in ins_src and "select" in ins_src,
+        "⑨ 사진을 넣으면 개체선택으로 넘어간다(바로 옮길 수 있게)")
+    mv._draw_kind = "line"; mv._pen_idx = 0; mv._apply_tool()
+    from PyQt6.QtGui import QPixmap
+    pm = QPixmap(40, 30); pm.fill()
+    mv.add_image_from_pixmap(pm)
+    chk(mv._draw_tool == ("select", None),
+        "⑨ 선긋기 중에 넣어도 도구가 개체선택으로 바뀐다", str(mv._draw_tool))
+    chk(mv._img_selected == len(mv._img_objects) - 1,
+        "⑨ 넣은 사진이 곧바로 선택돼 있다")
+
     # ── ⑤ PDF 로 구울 때도 pt 를 그대로 쓴다 ────────────────────────────
     import inspect
     from viewer.edit_controller import EditMixin
     src = inspect.getsource(EditMixin)
     chk("size_pt" in src, "⑤ PDF 굽기가 pt 값을 쓴다(인쇄 크기 = 화면 크기)")
     chk("* ph" in src, "⑤ 옛 자료(비율)도 그대로 구워진다(하위호환)")
+    # 260907-3: 구울 때도 화면과 같은 자리에서 줄이 바뀐다
+    wrapped = EditMixin._wrap_like_screen("가나다라마바사아자차카타파하" * 10, 20.0, 100.0)
+    chk(wrapped.count(chr(10)) >= 3,
+        "⑤ 띄어쓰기가 없어도 구울 때 줄이 나뉜다", f"{wrapped.count(chr(10)) + 1}줄")
+    chk(wrapped.replace(chr(10), "") == "가나다라마바사아자차카타파하" * 10,
+        "⑤ 줄만 나눌 뿐 글자는 그대로다")
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

@@ -305,6 +305,11 @@ class EditMixin:
             kw.update(fontfile=ff, fontname="krfont")
         pad = 2
         box = fitz.Rect(x0 + pad, y0 + pad, x1 - pad, y1 - pad)
+        # 260907-3: **화면과 같은 자리에서 줄을 바꾼다.** `insert_textbox` 는 띄어쓰기에서만
+        #   줄을 바꿔, 띄어쓰기 없는 한글이 박스를 넘치면 아래 '3배 박스' 폴백으로 빠져
+        #   화면과 전혀 다른 모양이 됐다. 화면이 쓰는 것과 같은 배치기로 미리 줄을 나눠
+        #   넣는다(줄바꿈 문자는 `insert_textbox` 가 그대로 지킨다).
+        txt = self._wrap_like_screen(txt, fs, box.width, stk.get("family"))
         try:
             rcv = page.insert_textbox(box, txt, **kw)
             if rcv < 0:   # 안 들어가면 박스를 넉넉히 넓혀 재시도
@@ -316,6 +321,45 @@ class EditMixin:
                 page.insert_textbox(box, txt, fontsize=fs, color=trgb)
             except Exception:
                 pass
+
+    @staticmethod
+    def _wrap_like_screen(text: str, fs: float, width_pt: float, family=None) -> str:
+        """260907-3: 화면과 같은 배치기(`QTextDocument`)로 줄을 미리 나눈다.
+
+        화면의 `MainView._text_doc` 과 같은 규칙(`WrapAtWordBoundaryOrAnywhere`)을 쓰므로
+        **띄어쓰기가 없어도** 같은 자리에서 줄이 바뀐다. 좌표 단위가 양쪽 모두 pt 라
+        글자 크기·폭을 그대로 넣으면 된다. 실패하면 원문 그대로(종전 동작)."""
+        try:
+            from PyQt6.QtGui import QTextDocument, QTextOption, QFont
+            from PyQt6.QtCore import Qt as _Qt
+            doc = QTextDocument()
+            doc.setDocumentMargin(0.0)
+            f = QFont(family or "맑은 고딕")
+            f.setPixelSize(max(1, int(round(float(fs)))))
+            doc.setDefaultFont(f)
+            opt = QTextOption()
+            opt.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+            doc.setDefaultTextOption(opt)
+            doc.setPlainText(text)
+            doc.setTextWidth(max(8.0, float(width_pt)))
+            _ = doc.size()          # ★ 배치를 실제로 시키는 한 줄 — 이게 없으면
+            #    가 0 이라 '한 줄' 로 나오고 줄이 안 나뉜다(실측).
+            out = []
+            b = doc.firstBlock()
+            while b.isValid():
+                lay = b.layout()
+                t = b.text()
+                n = lay.lineCount() if lay is not None else 0
+                if n <= 1:
+                    out.append(t)
+                else:
+                    for i in range(n):
+                        ln = lay.lineAt(i)
+                        out.append(t[ln.textStart():ln.textStart() + ln.textLength()])
+                b = b.next()
+            return "\n".join(out) if out else text
+        except Exception:
+            return text
 
     def _bake_hyperlinks_into_doc(self, doc, cur):
         """260615-3: 등록 하이퍼링크를 열린 doc 에 라벨 버튼+링크 주석으로 삽입.

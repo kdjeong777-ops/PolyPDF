@@ -3193,6 +3193,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 lambda: (setattr(self.main_view, "_img_shape",
                                  getattr(self, "_ins_file_shape", None)
                                  or getattr(self.main_view, "_img_shape", "rect") or "rect"),
+                         # 260907-3: 도구 끄기·개체선택 전환은 공통 삽입 지점
+                         #   (`main_view.add_image_from_pixmap`)이 한다 — 메뉴·Ctrl+V·드롭 동일.
                          self._insert_image_from_file()))
             self._add_insert_split(
                 menu, "클립보드 삽입",
@@ -3241,8 +3243,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._open_presentation(); return
         # 260617-2: 텍스트 복사(블럭/페이지)·블럭설정·현재 페이지 인쇄
         if chosen == act_copy:
+            self._cancel_draw_tools()          # 260907-3: 그리기 중이면 끄고 복사
             self.main_view.copy_selection(); return
         if chosen == act_sel:
+            self._cancel_draw_tools()          # 260907-3: 끄지 않으면 드래그가 선이 된다
             self.main_view.arm_text_selection()
             self.status.showMessage(
                 "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다.", 5000)
@@ -3467,6 +3471,25 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from PyQt6.QtWidgets import QWidget
         w = QWidget(); layout.setContentsMargins(0, 0, 0, 0); w.setLayout(layout)
         return w
+
+    def _cancel_draw_tools(self, then_select: bool = False) -> None:
+        """260907-3(사용자 요청): 선긋기·하이라이트·글쓰기 등 **그리기 도구를 끈다**.
+
+        도구가 켜져 있으면 본문 드래그가 그리기로 가로채여, 텍스트 복사·블럭 설정이
+        되지 않고 삽입한 사진도 잡히지 않았다. 사용자가 그 기능을 고른 순간이 곧
+        '그리기를 그만두겠다'는 뜻이므로 여기서 정리한다.
+
+        `then_select=True` 면 **개체선택**으로 넘긴다 — 방금 넣은 사진을 바로 옮길 수 있게.
+        """
+        mv = self.main_view
+        try:
+            mv._commit_text_editor()      # 쓰던 글이 있으면 먼저 확정
+        except Exception:
+            pass
+        try:
+            mv.set_draw_tool(("select", None) if then_select else None)
+        except Exception:
+            pass
 
     def _insert_image_from_file(self):
         from PyQt6.QtWidgets import QFileDialog
