@@ -8,6 +8,8 @@ import os
 import time
 import re
 import sqlite3
+
+from viewer import dbutil as _dbutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator
@@ -51,8 +53,10 @@ class PdfIndex:
     #   sqlite3 의 기본 대기는 5.0초인데, 이는 Windows 가 창을 '응답 없음' 으로 표시하는
     #   시간과 **정확히 같다** — 배경 인덱싱이 쓰기를 쥔 사이 UI 스레드가 조회 하나만 해도
     #   그대로 5초를 기다려 창이 죽은 것처럼 보인다(실측 단일 조회 2.49초 정지).
-    BUSY_MS_UI = 200        # UI 스레드: 잠깐이라도 기다리지 않는다(못 읽으면 '모름')
-    BUSY_MS_BG = 30000      # 워커: 얼마든 기다려도 좋다(사용자를 막지 않는다)
+    #   260906-9: 값·거는 방법은 `viewer.dbutil` 이 소유한다(어느 DB든 같은 규칙).
+    #   여기 이름은 기존 호출부·검사 호환을 위해 남긴 별칭이다.
+    BUSY_MS_UI = _dbutil.BUSY_MS_UI     # UI 스레드: 기다리지 않는다(못 읽으면 '모름')
+    BUSY_MS_BG = _dbutil.BUSY_MS_BG     # 워커: 얼마든 기다려도 좋다
 
     def __init__(self, db_path: str | Path, busy_ms: int = BUSY_MS_BG):
         self.db_path = Path(db_path)
@@ -60,9 +64,7 @@ class PdfIndex:
         self.migrated = False
         self.busy_ms = int(busy_ms)
         try:
-            self.conn = sqlite3.connect(self.db_path, timeout=self.busy_ms / 1000.0)
-            self.conn.row_factory = sqlite3.Row
-            self._tune()
+            self.conn = _dbutil.connect(self.db_path, self.busy_ms)
             self._init_schema()
         except sqlite3.DatabaseError as e:
             # 260827: index.db 손상(malformed) → 파일 삭제 후 새로 생성(캐시라 안전).
@@ -76,11 +78,7 @@ class PdfIndex:
                 raise
             self._recreate_corrupt_db()
 
-    @staticmethod
-    def _is_corrupt_error(e: Exception) -> bool:
-        msg = str(e).lower()
-        return ("malformed" in msg or "not a database" in msg
-                or "file is encrypted" in msg or "corrupt" in msg)
+    _is_corrupt_error = staticmethod(_dbutil.is_corrupt_error)
 
     def _recreate_corrupt_db(self):
         try:
@@ -93,39 +91,18 @@ class PdfIndex:
                 _os.remove(str(self.db_path) + suf)
             except OSError:
                 pass
-        self.conn = sqlite3.connect(self.db_path, timeout=self.busy_ms / 1000.0)
-        self.conn.row_factory = sqlite3.Row
-        self._tune()
+        self.conn = _dbutil.connect(self.db_path, self.busy_ms)
         self._init_schema()
         self.migrated = True
 
     def _tune(self):
-        """260906-6: 연결 하나마다 거는 잠금 규칙 — **WAL + 대기 상한**.
+        """260906-6/9: 연결 하나에 거는 잠금 규칙 — **WAL + 대기 상한**.
 
-        종전 `index.db` 는 SQLite 기본인 롤백 저널(delete) 모드였다. 이 모드에서는
-        **쓰는 쪽이 읽는 쪽을 막는다** — 배경 인덱싱이 한 파일을 적는 동안(FTS 자료가
-        페이지 캐시를 넘으면 커밋 전부터 EXCLUSIVE 로 올라간다) UI 스레드의 조회가
-        통째로 대기한다. 실측: 큰 PDF 12개를 인덱싱하는 동안 UI 조회 하나가 **2.49초**
-        멈췄고, 기본 대기 상한 5.0초에 닿으면 Windows 가 창을 '응답 없음' 으로 칠한다.
-
-        WAL 에서는 읽는 쪽이 쓰는 쪽을 기다리지 않는다(각자 스냅샷을 본다). 저널 모드는
-        **DB 파일에 한 번 새겨지면 유지**되므로 다음 실행부터는 이 설정이 그대로 쓰인다.
-        네트워크 드라이브 등 WAL 이 안 되는 곳에서는 조용히 종전 모드로 남는다(동작 동일).
-        """
-        try:
-            self.conn.execute(f"PRAGMA busy_timeout = {self.busy_ms}")
-        except Exception:
-            pass
-        try:
-            self.conn.execute("PRAGMA journal_mode = WAL")
-        except Exception:
-            pass                      # 못 바꿔도 동작에는 지장 없다(느려질 뿐)
-        try:
-            # 캐시라 전원이 끊겨도 다시 만들면 된다 — 매 커밋 fsync 는 과하다.
-            self.conn.execute("PRAGMA synchronous = NORMAL")
-            self.conn.execute("PRAGMA wal_autocheckpoint = 512")
-        except Exception:
-            pass
+        본문은 `viewer.dbutil.tune` 이 소유한다(응답성 SOT §4 ⑤ '어느 DB든' —
+        `index.db` 만 고쳐 두면 `dict.db`·`study.db` 에 같은 사고가 남는다).
+        종전 `index.db` 는 SQLite 기본인 롤백 저널 모드였고, 그 모드는 **쓰는 쪽이 읽는
+        쪽을 막는다** — 배경 인덱싱 중 UI 조회 하나가 **2.49초** 멈추는 것을 실측했다."""
+        _dbutil.tune(self.conn, self.busy_ms)
 
     # --- 스키마 ------------------------------------------------------------
 

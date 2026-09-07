@@ -4138,23 +4138,36 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if ret != QMessageBox.StandardButton.Yes:
             return
 
-        self.status.showMessage(f"일괄 캡쳐 시작 ({len(results)} 페이지)")
-        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        # 260906-9(응답성 SOT §6): 종전에는 `BusyCursor` + `processEvents()` 루프였다 —
+        #   페이지마다 PDF 를 열고 렌더하므로 수백 장이면 몇 분이고, 그동안 창은
+        #   **멈춘 것으로 보이며 멈출 방법도 없었다**. 이 반복은 `_load_main`·
+        #   `action_screenshot` 이 둘 다 UI 를 만지므로 워커로 옮길 수 없다 →
+        #   §6 이 허용하는 형태(진행 표시 + **취소**)로 바꾼다.
+        from PyQt6.QtWidgets import QProgressDialog
         # v1.6.6: 결과를 만든 실제 검색어를 전달해야 형광펜(D2/C1)이 적용됨.
         q = self.search_results.current_query()
+        dlg = QProgressDialog("일괄 캡쳐 중…", "취소", 0, len(results), self)
+        dlg.setWindowTitle("일괄 캡쳐")
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setMinimumDuration(400)       # 금방 끝나면 깜빡이지 않는다
+        dlg.setAutoClose(True)
+        done = 0
         try:
             for i, r in enumerate(results, 1):
+                if dlg.wasCanceled():
+                    break
                 item = HistoryItem(r.file_path, r.page_index, q, "search")
                 self._load_main(item)
-                # 렌더가 끝나길 잠시 기다리고 캡처
-                QApplication.processEvents()
                 self.action_screenshot()
-                if i % 5 == 0:
-                    self.status.showMessage(f"일괄 캡쳐 {i}/{len(results)}")
-                    QApplication.processEvents()
-            self.status.showMessage(f"일괄 캡쳐 완료: {len(results)} 장", 5000)
+                done = i
+                dlg.setLabelText(f"일괄 캡쳐 {i} / {len(results)}\n{Path(r.file_path).name}")
+                dlg.setValue(i)           # setValue 가 이벤트를 처리한다(취소 반응)
+            if done < len(results):
+                self.status.showMessage(f"일괄 캡쳐 취소됨: {done} 장", 5000)
+            else:
+                self.status.showMessage(f"일괄 캡쳐 완료: {done} 장", 5000)
         finally:
-            QApplication.restoreOverrideCursor()
+            dlg.close()
 
     # ===== 메인 전환 (v1.6.2 — 히스토리 push 로직 제거) ================
     def _capture_main_state(self) -> Optional[HistoryItem]:
@@ -5752,6 +5765,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             # 260628-13: 허용목록 방식이라 여기 없으면 저장되지 않는다.
             "start_view_single": bool(prefs.get("start_view_single",
                                               old.get("start_view_single", True))),
+            # 260906-9(감사, §14.2 함정): 환경설정 '문서 열 때 모드'(편집/보기)가 허용목록에
+            #   빠져 있어 **사용자가 고른 값이 조용히 사라졌다**(260822 도입 이후 계속).
+            "open_edit_mode": bool(prefs.get("open_edit_mode",
+                                             old.get("open_edit_mode", True))),
             # 260829 P2: 태그 자동 부여 — 허용목록 미등재 시 조용히 유실(§14.2 함정)
             "auto_tag_enabled": bool(prefs.get("auto_tag_enabled",
                                                old.get("auto_tag_enabled", False))),

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import re
 import sqlite3
+
+from viewer import dbutil as _dbutil
 import time
 from pathlib import Path
 from typing import Iterable, Optional
@@ -42,11 +44,14 @@ def default_db_path() -> Path:
 class DictStore:
     """계층형 사전 저장소(Base/User 공존, 출처 kind 로 구분)."""
 
-    def __init__(self, db_path: str | Path | None = None):
+    def __init__(self, db_path: str | Path | None = None,
+                 busy_ms: int = _dbutil.BUSY_MS_BG):
+        # 260906-9(응답성 SOT §4 ⑤ '어느 DB든'): 표준 연결 — WAL + 대기 상한.
+        #   종전에는 `sqlite3.connect` 기본값이라 **쓰는 쪽이 읽는 쪽을 막았고**,
+        #   파이썬 기본 대기 5.0초는 Windows 가 '응답 없음' 을 칠하는 시간과 같다.
+        #   UI 스레드에서 바로 쓰는 곳은 `busy_ms=_dbutil.BUSY_MS_UI` 를 준다.
         self.db_path = Path(db_path) if db_path else default_db_path()
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
+        self.conn = _dbutil.connect(self.db_path, busy_ms)
         self._init_schema()
         self._ensure_default_sources()
         self._migrate_user_words()

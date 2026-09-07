@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+
+from viewer import dbutil as _dbutil
 import time
 from pathlib import Path
 from typing import Iterable, Optional
@@ -30,11 +32,13 @@ def default_db_path() -> Path:
 
 
 class StudyStore:
-    def __init__(self, db_path: str | Path | None = None):
+    def __init__(self, db_path: str | Path | None = None,
+                 busy_ms: int = _dbutil.BUSY_MS_BG):
+        # 260906-9(응답성 SOT §4 ⑤ '어느 DB든'): 표준 연결 — WAL + 대기 상한.
+        #   단어장 만들기 워커가 이 DB 를 적는 동안 UI 가 읽으면, 종전 저널 모드에서는
+        #   최대 5초(= '응답 없음' 시간) 멈췄다. UI 쪽은 `busy_ms=_dbutil.BUSY_MS_UI`.
         self.db_path = Path(db_path) if db_path else default_db_path()
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
+        self.conn = _dbutil.connect(self.db_path, busy_ms)
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -261,7 +265,8 @@ class UserStore:
     """사용자 편집(뜻·예시) 전용 별도 DB. study.db 재생성과 무관하게 보존.
     조회 시 study.db 의 자동 뜻/예시보다 **우선** 적용."""
 
-    def __init__(self, db_path: str | Path | None = None):
+    def __init__(self, db_path: str | Path | None = None,
+                 busy_ms: int = _dbutil.BUSY_MS_BG):
         if db_path is None:
             try:
                 from viewer.settings_store import settings_dir
@@ -269,9 +274,7 @@ class UserStore:
             except Exception:
                 db_path = Path.home() / ".polypdf_user_study.db"
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
+        self.conn = _dbutil.connect(self.db_path, busy_ms)   # 260906-9(§4 ⑤)
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS user_word("
             " lemma TEXT, lang TEXT, definition TEXT, example TEXT, updated_at TEXT,"

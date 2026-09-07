@@ -2433,7 +2433,10 @@ class BookmarkTree(QWidget):
         if new.exists():
             QMessageBox.warning(self, "오류", f"같은 이름의 폴더가 이미 있습니다: {name}")
             return
-        inside = sorted(folder.rglob("*.pdf"))
+        # 260906-9(응답성 SOT §6): `rglob` 금지 — 끝까지 돌아야 첫 결과가 나오고 취소가
+        #   안 된다. 표준 수집기는 대소문자도 무시한다(`.PDF` 도 핸들 해제·태그 승계 대상).
+        from viewer.pathutil import iter_pdfs
+        inside = sorted(iter_pdfs(folder))
         for p in inside:                      # 열려 있으면 핸들 해제(v1.6.21 규약)
             self.releaseFileRequested.emit(str(p))
         QApplication.processEvents()
@@ -2454,6 +2457,35 @@ class BookmarkTree(QWidget):
             self.filesRelocated.emit(pairs)   # 인덱스·메인뷰 갱신
         self.info.setText(f"폴더 이름 변경: {folder.name} → {name}")
 
+    EMPTY_CHECK_CAP = 200      # 260906-9: '비었는가' 판정에 훑는 항목 상한
+
+    @staticmethod
+    def _count_files(folder: Path, cap: int = 200):
+        """260906-9(응답성 SOT §6): 하위 파일 수를 **상한까지만** 센다 → (개수, 잘렸나).
+
+        `rglob("*")` 은 수만 개짜리 트리를 끝까지 훑어 메인 스레드를 붙잡는다.
+        비었는지만 알면 되는 자리에서는 상한에서 멈추고 '이상' 으로 알린다."""
+        import os as _os
+        n = 0
+        stack = [str(folder)]
+        while stack:
+            cur = stack.pop()
+            try:
+                with _os.scandir(cur) as it:
+                    for e in it:
+                        try:
+                            if e.is_dir(follow_symlinks=False):
+                                stack.append(e.path)
+                            else:
+                                n += 1
+                                if n >= cap:
+                                    return n, True
+                        except OSError:
+                            continue
+            except (PermissionError, OSError):
+                continue
+        return n, False
+
     def _delete_folder(self, folder: Path):
         """260901-3: 폴더 삭제 — **비어 있을 때만**.
 
@@ -2462,11 +2494,14 @@ class BookmarkTree(QWidget):
         if not folder.is_dir():
             QMessageBox.warning(self, "오류", f"폴더가 없습니다: {folder}")
             return
-        rest = [p for p in folder.rglob("*") if p.is_file()]
-        if rest:
+        # 260906-9(응답성 SOT §6): 종전 `rglob("*")` 은 **트리 전체를 끝까지** 훑었다.
+        #   여기서 필요한 것은 '비었는가' 뿐이므로 상한까지만 세고 멈춘다.
+        n_rest, capped = self._count_files(folder, cap=self.EMPTY_CHECK_CAP)
+        if n_rest:
+            how_many = f"{n_rest}개 이상" if capped else f"{n_rest}개"
             QMessageBox.information(
                 self, "삭제할 수 없음",
-                f"'{folder.name}' 안에 파일이 {len(rest)}개 있습니다.\n\n"
+                f"'{folder.name}' 안에 파일이 {how_many} 있습니다.\n\n"
                 "먼저 파일을 다른 폴더로 옮기거나 삭제한 뒤 폴더를 지워 주세요.\n"
                 "(실수로 자료가 통째로 사라지지 않도록 빈 폴더만 삭제합니다.)")
             return
