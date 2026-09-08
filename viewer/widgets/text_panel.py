@@ -37,6 +37,7 @@ class TextPanel(QWidget):
     bookmarkFromHighlight = pyqtSignal(object)  # [{page,title,level}, …]
     exportWordRequested = pyqtSignal(str)       # "page" | "range" | "all"
     ocrRequested = pyqtSignal()                 # 스캔본인데 OCR 결과가 없을 때
+    highlightAdded = pyqtSignal(int, int, int, int, str)  # 쪽, 줄, 시작, 끝, 색
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -109,6 +110,15 @@ class TextPanel(QWidget):
         self.btn_hl = QPushButton("하이라이트")
         self.btn_hl.setToolTip("고른 글을 칠합니다")
         self.btn_hl.clicked.connect(self._on_highlight)
+        self.btn_style_apply = QPushButton("스타일 적용")
+        self.btn_style_apply.setToolTip("고른 줄을 위에서 고른 스타일(제목/내용)로 바꿉니다")
+        self.btn_style_apply.clicked.connect(self.apply_style_to_selection)
+        bar3.addWidget(self.btn_style_apply)
+        self.btn_ocr = QPushButton("단어장 생성")
+        self.btn_ocr.setToolTip("스캔본을 읽어 글자를 만듭니다(OCR)")
+        self.btn_ocr.clicked.connect(self.ocrRequested.emit)
+        self.btn_ocr.setVisible(False)
+        bar3.addWidget(self.btn_ocr)
         bar3.addWidget(self.btn_hl)
         self.btn_bm = QPushButton("책갈피로")
         self.btn_bm.setToolTip("칠한 곳으로 책갈피를 만듭니다(저장은 책갈피창 💾)")
@@ -175,6 +185,26 @@ class TextPanel(QWidget):
     def _on_style_pick(self):
         self._sync_style_widgets()
 
+    def apply_style_to_selection(self):
+        """260908-3(감사, SOT §4): 고른 줄(들)의 **스타일을 바꾼다**.
+
+        SOT 표에는 있었는데 코드에 없었다 — 콤보가 '어느 스타일을 편집할지' 만 골랐다.
+        OCR 폴백에는 글자 크기가 없어 전부 '내용' 으로 잡히므로, 손으로 제목을 지정하는
+        길이 반드시 필요하다(SOT §3.4)."""
+        key = self._cur_style_key()
+        cur = self.edit.textCursor()
+        a, b = sorted((cur.selectionStart(), cur.selectionEnd()))
+        doc = self.edit.document()
+        i0 = doc.findBlock(a).blockNumber()
+        i1 = doc.findBlock(b).blockNumber()
+        n = 0
+        for i in range(i0, i1 + 1):
+            if 0 <= i < len(self._rows):
+                self._rows[i]["style"] = key
+                n += 1
+        self._apply_styles()
+        self.info.setText(f"{n}줄을 '{'제목' if key == 'title' else '내용'}' 으로 바꿨습니다.")
+
     def _set_style(self, key, value):
         self._styles[self._cur_style_key()][key] = value
         self._apply_styles()
@@ -231,6 +261,36 @@ class TextPanel(QWidget):
             msg += f" · 표 {n_tb}"
         msg += ")"
         self.info.setText(note or msg)
+        # 스캔본인데 OCR 결과가 없으면 그 자리에서 만들 수 있게(SOT §3.1)
+        self.btn_ocr.setVisible(bool(note) and not self._rows)
+
+    def set_busy(self, msg: str) -> None:
+        """260908-3: 워커가 뽑는 동안 무엇을 하는지 알린다(응답성 SOT §4 ④)."""
+        self.info.setText(msg or "")
+
+    def restore_highlights(self, marks) -> None:
+        """260908-3(감사, SOT §6): 저장해 둔 하이라이트를 다시 칠한다.
+
+        종전에는 칠한 것이 **쪽을 넘기면 사라졌다** — 저장소(`text_fix_store`)는 만들어
+        놓고 창이 쓰지 않았다. SOT 와 코드가 어긋난 자리였다."""
+        if not marks:
+            return
+        doc = self.edit.document()
+        self._loading = True
+        try:
+            for line, a, b, color in marks:
+                blk = doc.findBlockByNumber(int(line))
+                if not blk.isValid():
+                    continue
+                cur = QTextCursor(blk)
+                cur.setPosition(blk.position() + int(a))
+                cur.setPosition(blk.position() + int(b),
+                                QTextCursor.MoveMode.KeepAnchor)
+                fmt = QTextCharFormat()
+                fmt.setBackground(QColor(color or HL_COLOR))
+                cur.mergeCharFormat(fmt)
+        finally:
+            self._loading = False
 
     def omit_tables(self) -> bool:
         return self.cb_omit.isChecked()
@@ -281,6 +341,13 @@ class TextPanel(QWidget):
         fmt = QTextCharFormat()
         fmt.setBackground(QColor(HL_COLOR))
         cur.mergeCharFormat(fmt)
+        # 260908-3(SOT §6): 저장해 둬야 쪽을 넘겼다 와도 남는다
+        blk = self.edit.document().findBlock(cur.selectionStart())
+        if blk.isValid():
+            a = cur.selectionStart() - blk.position()
+            b = cur.selectionEnd() - blk.position()
+            self.highlightAdded.emit(self._page, blk.blockNumber(),
+                                     int(a), int(b), HL_COLOR)
         self.info.setText("칠했습니다. [책갈피로] 를 누르면 칠한 곳으로 책갈피를 만듭니다.")
 
     def highlighted_lines(self) -> list:

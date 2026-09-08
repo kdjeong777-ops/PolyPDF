@@ -2545,6 +2545,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         tp.applyToPdfRequested.connect(self._on_text_apply_pdf)
         tp.bookmarkFromHighlight.connect(self._on_text_make_bookmarks)
         tp.exportWordRequested.connect(self._on_text_export_word)
+        tp.highlightAdded.connect(self._on_text_highlight)      # 260908-3(SOT §6)
+        tp.ocrRequested.connect(self._on_text_need_ocr)
         try:
             tp.set_styles(self._prefs.get("text_panel_styles") or {})
         except Exception:
@@ -2576,21 +2578,50 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if not ocr_text:
                 note = ("이 쪽은 스캔본이라 글자가 없습니다. "
                         "[단어장 생성] 으로 이 문서를 읽으면 여기에 글이 나옵니다.")
-        rows = tx.page_lines(mv._doc.doc, cur, page,
-                             tables=("omit" if tp.omit_tables() else "lines"),
-                             ocr_text=ocr_text)
+        # 260908-3(감사): 추출을 **워커로** 옮긴다. 표 인식이 큰 문서의 첫 쪽에서 7.4초라
+        #   메인에서 돌리면 쪽을 넘길 때마다 창이 멈췄다(응답성 SOT §4 ①②·§5 #1).
+        from viewer.workers import TextPageWorker, run_in_thread
+        prev = getattr(self, "_text_worker", None)
+        if prev is not None:
+            try:
+                prev.request_cancel()
+            except Exception:
+                pass
+        self._text_token = getattr(self, "_text_token", 0) + 1
+        tok = self._text_token
+        tp.set_busy(f"p.{page + 1} 읽는 중…" if not note else note)
+        w = TextPageWorker(cur, page,
+                           tables=("omit" if tp.omit_tables() else "lines"),
+                           ocr_text=ocr_text, token=tok)
+        self._text_worker = w
+        w.done.connect(lambda pg, rows, t: self._on_text_rows(cur, pg, rows, t, note))
+        w.error.connect(lambda msg, t: tp.set_busy(f"읽지 못했습니다: {msg}")
+                        if t == self._text_token else None)
+        w.finished.connect(lambda: setattr(self, "_text_worker", None))
+        run_in_thread(w, self._thread_keep)
+
+    def _on_text_rows(self, path, page, rows, token, note=""):
+        """워커가 뽑아 온 줄을 창에 넣는다 — **마지막 요청만** 쓴다(쪽을 빨리 넘길 때)."""
+        if token != getattr(self, "_text_token", 0):
+            return
+        tp = getattr(self, "text_panel", None)
+        if tp is None:
+            return
+        rows = list(rows or [])
         # 고쳐 둔 줄을 얹는다(SOT §5.1 ①)
-        fixes = self._text_store().get_fixes(cur, page)
+        fixes = self._text_store().get_fixes(path, page)
         for i, t in fixes.items():
             if 0 <= i < len(rows):
                 rows[i]["text"] = t
-        tp.set_page(cur, page, rows, note)
+        tp.set_page(path, page, rows, note)
+        tp.restore_highlights(self._text_store().get_highlights(path, page))
 
     def _ocr_page_text(self, path, page: int) -> str:
         """study.db 에 저장된 OCR 결과(단어장 SOT 소유). 없으면 빈 문자열."""
         try:
             from viewer.study.study_store import StudyStore, file_key_for
-            st = StudyStore()
+            from viewer import dbutil as _db
+            st = StudyStore(busy_ms=_db.BUSY_MS_UI)     # 260908-3(응답성 §4 ⑤)
             try:
                 return st.get_page_text(file_key_for(path), int(page)) or ""
             finally:
@@ -2616,6 +2647,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                     style="select", scroll=True)
         except Exception:
             pass
+
+    def _on_text_highlight(self, page, line, a, b, color):
+        """칠한 곳을 저장한다 — 쪽을 넘겼다 와도 남는다(SOT §6)."""
+        cur = self.main_view.current_file() if self.main_view else None
+        if cur:
+            self._text_store().add_highlight(cur, page, line, a, b, color)
+
+    def _on_text_need_ocr(self):
+        """스캔본인데 글자가 없다 → 단어장 생성(OCR)을 그 자리에서 시작(SOT §3.1)."""
+        cur = self.main_view.current_file() if self.main_view else None
+        if cur:
+            self._on_create_study_requested(str(cur))
 
     def _on_text_line_edited(self, page, line, text, orig=""):
         cur = self.main_view.current_file() if self.main_view else None
@@ -2655,6 +2698,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from viewer.text_apply import apply_fixes_to_pdf
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
+            from viewer import text_extract2 as _tx2
+            _tx2.close_cache()          # 260908-3: 열어 둔 pdfplumber 핸들이 원본을 잡는다
             self._close_main_view_doc()
             QApplication.processEvents()
             out, err = apply_fixes_to_pdf(cur, page, rows, fixes, self._finalize_save)

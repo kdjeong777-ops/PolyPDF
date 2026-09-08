@@ -40,6 +40,17 @@ SELECT EXISTS(SELECT 1 FROM pragma_compile_options WHERE compile_options = 'ENAB
 """
 
 
+def _apply_text_fixes(file_path, page: int, text: str) -> str:
+    """260908-3: 텍스트 창 교정을 색인 본문에 반영(텍스트 창 SOT §5.3).
+
+    저장소가 없거나 교정이 없으면 원문 그대로 — 인덱싱은 이것 때문에 실패하지 않는다."""
+    try:
+        from viewer.text_fix_store import store
+        return store().apply_to_copy(file_path, page, text)
+    except Exception:
+        return text
+
+
 class PdfIndex:
     """PDF 폴더에 대한 FTS5 인덱스를 관리.
 
@@ -309,6 +320,10 @@ class PdfIndex:
                     text = doc.load_page(i).get_text("text")
                 except Exception:
                     text = ""
+                # 260908-3(감사, 검색창 SOT §3 · 텍스트 창 SOT §5.3): 텍스트 창에서
+                #   고친 글을 **색인에도** 넣는다. 안 그러면 화면·복사는 고쳐졌는데
+                #   검색만 옛 글자로 남아, 찾은 것이 안 찾아지는 일이 생긴다.
+                text = _apply_text_fixes(file_path, i, text)
                 rows.append((text, file_id, i))
                 # 260906-5(응답성 SOT §4 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
                 #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.

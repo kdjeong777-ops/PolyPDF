@@ -58,26 +58,74 @@ def _line_items(page):
     return out
 
 
-def _tables(pdf_path, page_index: int):
-    """[(bbox, rows)] — pdfplumber 로 찾은 표. 없거나 실패하면 빈 목록."""
+# 260908-3(응답성 SOT §4 ⑥, 감사에서 발견): **pdfplumber 핸들을 재사용한다.**
+#   쪽을 넘길 때마다 `pdfplumber.open()` 을 새로 하면 그 문서를 처음부터 다시 뜯는다 —
+#   실측 348쪽 61MB 문서에서 **쪽당 8.5~17초**(응답 없음 문턱의 두세 배)였다.
+#   같은 핸들을 쓰면 쪽당 29~192ms 다. 파일이 바뀌거나 수정되면 새로 연다.
+_PLUMB = {"key": None, "pdf": None}
+_TCACHE = {}          # (파일키, 쪽) -> [(bbox, rows)]
+_TCACHE_MAX = 64
+
+
+def _plumber(pdf_path):
+    import os
+    try:
+        key = (str(pdf_path), os.path.getmtime(pdf_path))
+    except Exception:
+        return None
+    if _PLUMB["key"] == key and _PLUMB["pdf"] is not None:
+        return _PLUMB["pdf"]
+    close_cache()
     try:
         import pdfplumber
+        _PLUMB["pdf"] = pdfplumber.open(str(pdf_path))
+        _PLUMB["key"] = key
     except Exception:
+        _PLUMB["key"] = None
+        _PLUMB["pdf"] = None
+    return _PLUMB["pdf"]
+
+
+def close_cache() -> None:
+    """열어 둔 핸들·표 결과를 놓는다. 파일을 지우거나 덮어쓰기 전에 부른다."""
+    pdf = _PLUMB.get("pdf")
+    _PLUMB["pdf"] = None
+    _PLUMB["key"] = None
+    _TCACHE.clear()
+    if pdf is not None:
+        try:
+            pdf.close()
+        except Exception:
+            pass
+
+
+def _tables(pdf_path, page_index: int):
+    """[(bbox, rows)] — pdfplumber 로 찾은 표. 없거나 실패하면 빈 목록."""
+    pdf = _plumber(pdf_path)
+    if pdf is None:
         return []
+    ck = (_PLUMB.get("key"), int(page_index))
+    hit = _TCACHE.get(ck)
+    if hit is not None:
+        return hit
+    out = []
     try:
-        with pdfplumber.open(str(pdf_path)) as pdf:
-            if page_index >= len(pdf.pages):
-                return []
+        if page_index < len(pdf.pages):
             pg = pdf.pages[page_index]
-            out = []
             for t in pg.find_tables():
                 rows = t.extract() or []
-                if not rows:
-                    continue
-                out.append((tuple(t.bbox), rows))
-            return out
+                if rows:
+                    out.append((tuple(t.bbox), rows))
+            try:
+                pg.flush_cache()            # 쪽마다 붙잡는 메모리를 놓는다
+            except Exception:
+                pass
     except Exception:
-        return []
+        out = []
+    if len(_TCACHE) > _TCACHE_MAX:
+        _TCACHE.clear()
+    _TCACHE[ck] = out
+    return out
 
 
 def _inside(rect, box, frac: float = 0.6) -> bool:

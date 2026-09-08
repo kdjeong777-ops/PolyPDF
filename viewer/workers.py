@@ -225,6 +225,55 @@ def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
         return False
 
 
+class TextPageWorker(QObject):
+    """260908-3: 텍스트 창의 **쪽 추출을 워커에서** (응답성 SOT §4 ①②·§5 #1).
+
+    감사에서 드러난 것: 표 인식(pdfplumber)이 큰 문서의 첫 쪽에서 **7.4초**, 핸들을
+    새로 열면 쪽당 **8.5~17초**였다. 그대로 메인에서 돌리면 쪽을 넘길 때마다 창이
+    멈춘다('응답 없음' 문턱의 몇 배). 쪽 하나를 뽑는 일을 통째로 워커로 옮긴다.
+
+    한 번에 하나만 산다 — 쪽을 빠르게 넘기면 앞의 것을 취소하고 마지막 것만 쓴다.
+    """
+    done = pyqtSignal(int, object, int)      # page, rows, token
+    error = pyqtSignal(str, int)
+    finished = pyqtSignal()
+
+    def __init__(self, doc_path, page: int, *, tables: str = "lines",
+                 ocr_text: str = "", token: int = 0):
+        super().__init__()
+        self.doc_path = str(doc_path)
+        self.page = int(page)
+        self.tables = tables
+        self.ocr_text = ocr_text or ""
+        self.token = int(token)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        try:
+            if self._cancel:
+                return
+            import fitz
+            from viewer import text_extract2 as tx
+            # ★ 워커 안에서 **따로 연다** — 메인 뷰어의 문서 객체를 두 스레드가 함께
+            #   쓰면 PyMuPDF 가 깨진다(문서 객체는 스레드 안전하지 않다).
+            doc = fitz.open(self.doc_path)
+            try:
+                rows = tx.page_lines(doc, self.doc_path, self.page,
+                                     tables=self.tables, ocr_text=self.ocr_text)
+            finally:
+                doc.close()
+            if not self._cancel:
+                self.done.emit(self.page, rows, self.token)
+        except Exception as e:                # noqa: BLE001
+            if not self._cancel:
+                self.error.emit(str(e), self.token)
+        finally:
+            self.finished.emit()
+
+
 class BookmarkerWorker(QObject):
     """v1.6.16: 외부 pdf_bookmarker 호출. extract → (옵션) embed PDF / write txt.
 

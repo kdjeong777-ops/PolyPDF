@@ -183,6 +183,65 @@ try:
         f"{len(mw.text_panel.rows())}줄")
     chk("text_panel_styles" in mw._build_settings_payload().get("preferences", {}),
         "④ 스타일이 설정에 저장된다(허용목록 통과)")
+    # ── 감사(260908-3): 응답성·SOT 정합 ─────────────────────────────────
+    src_tx = inspect.getsource(tx)
+    chk("_plumber" in src_tx and "close_cache" in src_tx,
+        "감사① pdfplumber 핸들을 재사용한다(쪽마다 새로 열지 않는다)")
+    import time as _t
+    doc2 = fitz.open(str(pdf))
+    ts = []
+    for pg in range(min(4, doc2.page_count)):
+        t0 = _t.time(); tx.page_lines(doc2, str(pdf), pg); ts.append(_t.time() - t0)
+    t0 = _t.time(); tx.page_lines(doc2, str(pdf), 0); again = _t.time() - t0
+    chk(again < max(ts) + 0.05, "감사① 같은 쪽은 캐시로 다시 뽑지 않는다",
+        f"처음 {max(ts)*1000:.0f}ms → 다시 {again*1000:.0f}ms")
+    tx.close_cache()
+
+    from viewer.workers import TextPageWorker
+    chk(hasattr(TextPageWorker, "request_cancel"),
+        "감사② 쪽 추출 워커가 있고 취소된다(응답성 §4 ①)")
+    wsrc = inspect.getsource(TextPageWorker)
+    chk("fitz.open(self.doc_path)" in wsrc,
+        "감사② 워커가 문서를 따로 연다(PyMuPDF 문서는 스레드 안전하지 않다)")
+    app_src = inspect.getsource(MainWindow._reload_text_panel)
+    chk("TextPageWorker" in app_src and "request_cancel" in app_src,
+        "감사② 창 적재가 워커를 쓰고 앞의 것을 취소한다")
+    chk("_text_token" in app_src, "감사② 세대 토큰으로 마지막 요청만 쓴다")
+
+    chk(hasattr(tp, "restore_highlights"),
+        "감사③ 하이라이트를 다시 칠하는 길이 있다(쪽을 넘겨도 남는다)")
+    tp.set_page(str(pdf), 0, rows)
+    tp.restore_highlights([[0, 0, 5, "#ffe680"]])
+    chk(len(tp.highlighted_lines()) == 1, "감사③ 저장해 둔 하이라이트가 되살아난다")
+
+    chk(hasattr(tp, "apply_style_to_selection"),
+        "감사④ 고른 줄의 스타일을 바꾸는 길이 있다")
+    c2 = tp.edit.textCursor(); c2.movePosition(c2.MoveOperation.Start)
+    # ★ Down 은 **화면상 줄**로 움직인다(줄바꿈된 긴 줄에서는 같은 블록 안에 머문다).
+    #   줄(블록) 단위로 고르려면 NextBlock 을 쓴다.
+    c2.movePosition(c2.MoveOperation.NextBlock, c2.MoveMode.KeepAnchor)
+    tp.edit.setTextCursor(c2)
+    tp.cmb_style.setCurrentIndex(0)
+    tp.apply_style_to_selection()
+    chk(tp.rows()[1]["style"] == "title", "감사④ 내용 줄을 제목으로 바꿀 수 있다",
+        f"sel={c2.selectionStart()}~{c2.selectionEnd()} key={tp._cur_style_key()} "
+        f"styles={[r['style'] for r in tp.rows()[:3]]}")
+
+    chk(hasattr(tp, "btn_ocr"), "감사⑤ [단어장 생성] 단추가 있다")
+    tp.set_page(str(pdf), 0, [], "스캔본입니다")
+    chk(tp.btn_ocr.isVisible() is True, "감사⑤ 글자가 없을 때만 보인다")
+    tp.set_page(str(pdf), 0, rows)
+    chk(tp.btn_ocr.isVisible() is False, "감사⑤ 글이 있으면 숨는다")
+
+    from viewer import indexer as _ix
+    isrc = inspect.getsource(_ix)
+    chk("_apply_text_fixes" in isrc,
+        "감사⑥ 검색 색인에도 교정이 얹힌다(찾은 것이 안 찾아지지 않게)")
+    ocr_src = inspect.getsource(MainWindow._ocr_page_text)
+    chk("BUSY_MS_UI" in ocr_src, "감사⑦ study.db 연결이 UI 대기 상한을 쓴다(응답성 §4 ⑤)")
+    ap_src = inspect.getsource(MainWindow._on_text_apply_pdf)
+    chk("close_cache" in ap_src,
+        "감사⑧ PDF 를 덮어쓰기 전에 열린 핸들을 놓는다")
 finally:
     shutil.rmtree(root, ignore_errors=True)
 
