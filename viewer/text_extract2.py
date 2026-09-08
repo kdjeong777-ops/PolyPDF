@@ -19,6 +19,12 @@ TITLE_RATIO = 1.15          # 중앙값 대비 이 배 이상이면 제목
 # 260908-6(SOT §3.5): OCR 잡음으로 보는 글자 상자 높이(pt). A4 에서 4pt = 약 1.4mm 라
 #   사람이 읽으라고 넣은 글자일 수 없다. 실측 잡음 1.4~3.4 / 진짜 글 5.3~27.9.
 NOISE_MIN_H_PT = 4.0
+# 260908-7(SOT §3.6): 같은 줄에 있는 조각을 하나로 잇는 기준.
+ROW_OVERLAP = 0.55      # 세로로 이만큼 겹치면 '같은 줄'
+GLUE_GAP = 0.25         # 글자크기 대비 이보다 좁으면 붙여 쓴다
+COL_GAP = 2.5           # 이보다 넓게 벌어지면 '다른 칸' — " | " 로 잇는다
+CELL_SEP = " | "
+COL_ALIGN = 0.40        # 단으로 보려면 왼쪽 끝이 이 비율 이상 맞아야 한다
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
 
 
@@ -84,9 +90,140 @@ def _line_items(page):
     except Exception:
         blocks.sort(key=lambda t: (t[0][1], t[0][0]))
     _NOISE["n"] = noise
+    # 260908-7(SOT §3.6): 조각을 **같은 줄끼리 이어 붙인다**.
+    #   PyMuPDF 는 가로로 벌어진 글을 각각 다른 `line` 으로 준다. 그대로 두면
+    #   `[ Hot Asphalt Paving Mixture` 와 `]` 가 두 줄이 되고, 표 한 행의 칸들이
+    #   블록 순서대로 흩어져 **앞뒤가 바뀐 여러 줄**로 보인다(사용자 보고 260908).
     out = []
-    for _bb, lines in blocks:
-        out.extend(lines)
+    for col_frags in _by_column(blocks, page):
+        out.extend(_merge_rows(col_frags))
+    return out
+
+
+def _row_bands(frags):
+    """세로로 겹치는 조각끼리 묶는다 — [[조각…]] (같은 줄 후보)."""
+    bands = []
+    for f in sorted(frags, key=lambda f: (f[0][1], f[0][0])):
+        rect = f[0]
+        h = rect[3] - rect[1]
+        for bd in bands:
+            ov = min(rect[3], bd["y1"]) - max(rect[1], bd["y0"])
+            if ov > 0 and ov >= ROW_OVERLAP * min(h, bd["y1"] - bd["y0"]):
+                bd["items"].append(f)
+                bd["y0"], bd["y1"] = min(bd["y0"], rect[1]), max(bd["y1"], rect[3])
+                break
+        else:
+            bands.append({"y0": rect[1], "y1": rect[3], "items": [f]})
+    return bands
+
+
+def _gutter_x(bands, page):
+    """2단 쪽의 **빈 세로 띠**(단 사이 여백)의 x. 2단이 아니면 None (SOT §3.6).
+
+    2단 판정을 블록 위치로 어림하면 **표가 있는 1단 쪽을 2단으로 잘못 본다** —
+    실제로 그렇게 판정해 표 한 행의 왼쪽 칸과 오른쪽 칸이 갈라졌다(260908-7).
+    그래서 '가운데 근처에 글이 거의 가로지르지 않는 띠가 있는가' 를 직접 본다.
+    **줄 단위로 센다** — 전폭 제목 한두 줄이 가로지른다고 2단이 아닌 것은 아니다.
+    """
+    try:
+        rect = page.rect
+        w = float(rect.width or 0.0)
+        mid = (float(rect.x0) + float(rect.x1)) / 2.0
+    except Exception:
+        return None
+    if w <= 0 or len(bands) < 6:
+        return None
+    allow = max(1, int(len(bands) * 0.15))       # 전폭 제목 등은 이만큼 봐준다
+    lo, hi = mid - 0.15 * w, mid + 0.15 * w
+    step = max(0.5, w / 400.0)
+    best_a = best_b = None
+    a = None
+    x = lo
+    while x <= hi:
+        cross = 0
+        for bd in bands:
+            if any(f[0][0] < x < f[0][2] for f in bd["items"]):
+                cross += 1
+                if cross > allow:
+                    break
+        if cross > allow:
+            a = None
+        else:
+            if a is None:
+                a = x
+            if best_a is None or (x - a) > (best_b - best_a):
+                best_a, best_b = a, x
+        x += step
+    if best_a is None or (best_b - best_a) < 0.04 * w:
+        return None
+    gx = (best_a + best_b) / 2.0
+    frags = [f for bd in bands for f in bd["items"]]
+    left = [f for f in frags if f[0][2] <= gx]
+    right = [f for f in frags if f[0][0] >= gx]
+    if len(left) < 5 or len(right) < 5:
+        return None
+    # ★ 표와 가르는 마지막 관문: **왼쪽 끝이 맞춰져 있는가.**
+    #   글의 단은 왼쪽 여백이 일정하다(실측 100%). 표·서식은 칸마다 제각각이다(5~9%).
+    #   가운데 빈 띠만 보고 판단하면 **칸이 두 무리로 놓인 서식을 2단으로 잘못 본다**
+    #   — 실제로 배합설계 서식이 그렇게 갈라져 한 행이 두 줄이 됐다(260908-7).
+    if _left_edge_share(left) < COL_ALIGN or _left_edge_share(right) < COL_ALIGN:
+        return None
+    return gx
+
+
+def _left_edge_share(frags) -> float:
+    """왼쪽 끝(2pt 로 반올림)이 가장 흔한 값과 같은 조각의 비율."""
+    if not frags:
+        return 0.0
+    counts = {}
+    for f in frags:
+        k = round(f[0][0] / 2.0)
+        counts[k] = counts.get(k, 0) + 1
+    return max(counts.values()) / float(len(frags))
+
+
+def _by_column(blocks, page):
+    """[[조각…]] — 2단이면 좌·우 두 묶음, 아니면 한 묶음(읽기 순서 유지)."""
+    frags = [f for _bb, lines in blocks for f in lines]
+    gx = _gutter_x(_row_bands(frags), page)
+    if gx is None:
+        return [frags]
+    left = [f for f in frags if (f[0][0] + f[0][2]) / 2.0 < gx]
+    right = [f for f in frags if (f[0][0] + f[0][2]) / 2.0 >= gx]
+    return [left, right]
+
+
+def _merge_rows(frags):
+    """세로로 겹치는 조각을 **한 줄**로 잇는다 — 왼쪽부터 오른쪽으로.
+
+    잇는 방법은 벌어진 폭에 따른다(SOT §3.6).
+      - 글자크기의 0.25 배 미만 → 붙여 쓴다
+      - 2.5 배 미만 → 공백 하나
+      - 그 이상 → `" | "` — 표의 다른 칸으로 본다(§3.3 과 같은 표기)
+    """
+    out = []
+    for bd in _row_bands(frags):
+        items = sorted(bd["items"], key=lambda f: f[0][0])
+        text = items[0][1].rstrip()
+        x0, y0, x1, y1 = items[0][0]
+        for rect, txt, size in items[1:]:
+            piece = txt.strip()
+            if not piece:
+                continue
+            ref = max(1.0, size or (rect[3] - rect[1]))
+            gap = rect[0] - x1
+            if gap < GLUE_GAP * ref:
+                sep = ""
+            elif gap < COL_GAP * ref:
+                sep = "" if (not text or text.endswith(" ")) else " "
+            else:
+                sep = CELL_SEP
+            text = text.rstrip() + sep + piece if sep == CELL_SEP else text + sep + piece
+            x0, y0 = min(x0, rect[0]), min(y0, rect[1])
+            x1, y1 = max(x1, rect[2]), max(y1, rect[3])
+        # 대표 크기 = **글자가 가장 많은 조각**의 크기(제목/내용 판정용, SOT §3.4)
+        size = max(items, key=lambda f: len(f[1].strip()))[2]
+        out.append(((x0, y0, x1, y1), text, size))
     return out
 
 
@@ -297,26 +434,26 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
         rows_out.append({"text": txt, "style": st, "rect": rect, "kind": "text"})
 
     if tbl:
-        # 표와 겹치는 본문 줄을 빼고, 그 자리에 표 줄을 넣는다
-        keep = []
-        for r in rows_out:
-            if any(_inside(r["rect"], bb) for bb, _rows in tbl):
-                continue
-            keep.append(r)
-        for bb, rows in tbl:
-            if tables == "omit":
+        # 260908-7(SOT §3.3 개정): **우리가 이은 줄을 그대로 쓰고 표시만 한다.**
+        #   종전에는 표 안의 본문 줄을 빼고 pdfplumber 가 뽑은 칸으로 갈아 끼웠는데,
+        #   실측(아스팔트 지침 41쪽)에서 pdfplumber 가 3열 표의 가운데 칸에만 두 줄을
+        #   몰아 넣고 나머지를 None 으로 뽑아 **모래당량·50 이상 같은 칸이 사라졌다**.
+        #   §3.6 의 줄 잇기가 이미 한 행을 왼쪽부터 한 줄로 만들어 주므로, 표 사각형은
+        #   '여기가 표다' 를 표시하고 생략 옵션을 처리하는 데만 쓴다.
+        if tables == "omit":
+            keep = [r for r in rows_out
+                    if not any(_inside(r["rect"], bb) for bb, _rows in tbl)]
+            for bb, rows in tbl:
                 cols = max((len(r) for r in rows), default=0)
                 keep.append({"text": TABLE_OMIT_FMT.format(cols=cols, rows=len(rows)),
                              "style": "body", "rect": bb, "kind": "table"})
-            else:
-                for row in rows:
-                    line = _row_line(row)
-                    if line.strip(" |"):
-                        keep.append({"text": line, "style": "body",
-                                     "rect": bb, "kind": "table"})
-        keep.sort(key=lambda r: ((r["rect"][1] if r["rect"] else 0),
-                                 (r["rect"][0] if r["rect"] else 0)))
-        rows_out = keep
+            keep.sort(key=lambda r: ((r["rect"][1] if r["rect"] else 0),
+                                     (r["rect"][0] if r["rect"] else 0)))
+            rows_out = keep
+        else:
+            for r in rows_out:
+                if any(_inside(r["rect"], bb) for bb, _rows in tbl):
+                    r["kind"] = "table"
     _NOISE["n"] = noise          # 표 처리가 `_line_items` 를 다시 부르지 않음을 명시
     return rows_out
 
