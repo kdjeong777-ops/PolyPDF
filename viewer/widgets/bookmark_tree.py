@@ -1987,6 +1987,19 @@ class BookmarkTree(QWidget):
             except Exception:
                 pass
             menu.addSeparator()
+        # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
+        act_exp_all = menu.addAction("책갈피 모두 펼치기")
+        act_col_all = menu.addAction("책갈피 모두 접기")
+        act_sort_pg = None
+        if self._edit_mode:
+            _n_bm = len([it for it in self.tree.selectedItems()
+                         if it.data(0, self.DATA_PAGE) is not None
+                         and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)])
+            if _n_bm:
+                act_sort_pg = menu.addAction(f"선택 책갈피 {_n_bm}개 페이지순 정렬")
+                act_sort_pg.setToolTip("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 "
+                                       "레벨을 윗 책갈피에 맞춥니다")
+        menu.addSeparator()
         # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         act_fav_folder = menu.addAction("현재 폴더를 즐겨찾기에 추가")
         act_fav_file = menu.addAction("현재 파일을 즐겨찾기에 추가") if is_file else None
@@ -1996,6 +2009,12 @@ class BookmarkTree(QWidget):
         chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
         if chosen is None:
             return
+        if chosen == act_exp_all:                       # 260908-1
+            self._op_expand_all(True); return
+        if chosen == act_col_all:
+            self._op_expand_all(False); return
+        if act_sort_pg is not None and chosen == act_sort_pg:
+            self._op_sort_by_page(); return
         if chosen == act_split_view:
             if _is_copy:
                 self.copyPaneRequested.emit()
@@ -2166,6 +2185,26 @@ class BookmarkTree(QWidget):
         return result
 
     # ---- 들여쓰기 / 내어쓰기 -------------------------------------------
+    def _quiet_tree(self):
+        """260908-1: 노드를 떼었다 붙이는 동안 트리 신호를 막는 컨텍스트.
+
+        `takeChild` 로 **현재 항목이 사라지면** Qt 가 현재를 이웃으로 옮기며
+        `currentItemChanged` 를 낸다 → 본화면이 **바로 위 책갈피로 이동**했다
+        (사용자 보고 260908: "레벨 조정 후 상부 책갈피로 이동"). 조작이 끝난 뒤
+        `_restore_cursor` 가 제자리를 잡아 주므로, 그 사이의 신호는 버린다."""
+        tree = self.tree
+
+        class _Q:
+            def __enter__(self_inner):
+                tree.blockSignals(True)
+                return self_inner
+
+            def __exit__(self_inner, *a):
+                tree.blockSignals(False)
+                return False
+
+        return _Q()
+
     def _op_indent(self):
         target = self._target_file_item()
         if target is None:
@@ -2176,15 +2215,16 @@ class BookmarkTree(QWidget):
             return
         # 트리 출현 순서대로
         items.sort(key=lambda it: _path_to(it, target))
-        for it in items:
-            parent = it.parent() or target
-            idx = parent.indexOfChild(it)
-            if idx <= 0:
-                continue
-            prev = parent.child(idx - 1)
-            parent.takeChild(idx)
-            prev.addChild(it)
-            prev.setExpanded(True)
+        with self._quiet_tree():                       # 260908-1
+            for it in items:
+                parent = it.parent() or target
+                idx = parent.indexOfChild(it)
+                if idx <= 0:
+                    continue
+                prev = parent.child(idx - 1)
+                parent.takeChild(idx)
+                prev.addChild(it)
+                prev.setExpanded(True)
         self._restore_cursor(items)
         self._mark_dirty()
 
@@ -2198,16 +2238,102 @@ class BookmarkTree(QWidget):
             return
         # 역순(bottom-up)
         items.sort(key=lambda it: _path_to(it, target), reverse=True)
-        for it in items:
-            parent = it.parent()
-            if parent is None or parent is target:
-                continue        # 이미 최상위 (level 0) — 더 못 올림
-            grand = parent.parent() or target
-            p_idx = grand.indexOfChild(parent)
-            parent.takeChild(parent.indexOfChild(it))
-            grand.insertChild(p_idx + 1, it)
+        with self._quiet_tree():                       # 260908-1
+            for it in items:
+                parent = it.parent()
+                if parent is None or parent is target:
+                    continue    # 이미 최상위 (level 0) — 더 못 올림
+                grand = parent.parent() or target
+                p_idx = grand.indexOfChild(parent)
+                parent.takeChild(parent.indexOfChild(it))
+                grand.insertChild(p_idx + 1, it)
         self._restore_cursor(items)
         self._mark_dirty()
+
+    # ---- 260908-1(사용자 요청): 모두 펼치기 / 모두 접기 ------------------
+    def _op_expand_all(self, on: bool):
+        """이 파일(없으면 트리 전체)의 책갈피를 모두 펼치거나 접는다.
+
+        깊은 목차를 한 번에 훑거나 한 번에 정리하려는 조작이라 **파일 노드 자체는
+        접지 않는다** — 접으면 목록에서 사라져 다시 찾아야 한다."""
+        target = self._target_file_item()
+
+        def walk(node):
+            for i in range(node.childCount()):
+                c = node.child(i)
+                if c.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+                    continue
+                c.setExpanded(on)
+                walk(c)
+
+        with self._quiet_tree():
+            if target is not None:
+                target.setExpanded(True)
+                walk(target)
+            else:
+                for i in range(self.tree.topLevelItemCount()):
+                    top = self.tree.topLevelItem(i)
+                    top.setExpanded(True)
+                    walk(top)
+
+    # ---- 260908-1(사용자 요청): 선택 책갈피를 페이지순으로 정렬 ----------
+    def _op_sort_by_page(self):
+        """고른 책갈피들(과 그 하위)을 **페이지 순서**로 다시 늘어놓는다.
+
+        규칙(사용자 지시):
+          - 고른 것들과 그 **하위 전부**를 한 묶음으로 본다.
+          - 페이지 오름차순으로 늘어놓는다(같은 쪽이면 원래 순서 유지 — 안정 정렬).
+          - **레벨은 바로 윗 책갈피와 같게** 맞춘다. 즉 고른 것들이 있던 자리의
+            부모 밑에 **한 줄로(평탄하게)** 놓인다 — 하위였던 것도 같은 줄로 올라온다.
+        페이지 정보가 없는 항목은 순서를 흔들지 않도록 맨 뒤에 원래 순서로 붙인다.
+        """
+        target = self._target_file_item()
+        if target is None:
+            QMessageBox.information(self, "안내", "편집할 PDF 파일을 트리에서 선택하세요.")
+            return
+        roots = self._selected_editable(target)
+        if not roots:
+            QMessageBox.information(self, "안내", "정렬할 책갈피를 선택하세요.")
+            return
+        roots.sort(key=lambda it: _path_to(it, target))
+        parent = roots[0].parent() or target
+        at = parent.indexOfChild(roots[0])
+
+        # 고른 것 + 하위 전부를 모은다(트리 순서 유지 = 안정 정렬의 기준)
+        flat = []
+
+        def collect(node):
+            flat.append(node)
+            for i in range(node.childCount()):
+                collect(node.child(i))
+
+        for r in roots:
+            collect(r)
+
+        # 떼어 내기 — 부모가 먼저 사라지면 자식도 함께 빠지므로 뿌리만 뗀다
+        with self._quiet_tree():
+            for r in roots:
+                p = r.parent() or target
+                p.takeChild(p.indexOfChild(r))
+            # 자식은 각자의 부모에서 떼어 평탄하게
+            for it in flat:
+                p = it.parent()
+                if p is not None:
+                    p.takeChild(p.indexOfChild(it))
+
+            def page_of(it):
+                v = it.data(0, self.DATA_PAGE)
+                return int(v) if isinstance(v, int) else None
+
+            with_page = [(i, it) for i, it in enumerate(flat) if page_of(it) is not None]
+            no_page = [it for it in flat if page_of(it) is None]
+            with_page.sort(key=lambda pair: (page_of(pair[1]), pair[0]))
+            ordered = [it for _i, it in with_page] + no_page
+            for k, it in enumerate(ordered):
+                parent.insertChild(min(at + k, parent.childCount()), it)
+        self._restore_cursor(ordered)
+        self._mark_dirty()
+        self.info.setText(f"페이지순 정렬: {len(ordered)}개")
 
     # ---- 삭제 / 선택만 남기기 ------------------------------------------
     def _on_del_key(self):
@@ -2760,8 +2886,61 @@ class BookmarkTree(QWidget):
         # 앱에 대상 파일 알림 → 앱이 메인 뷰어 페이지/제목을 받아 add_bookmark 호출
         self.addBookmarkRequested.emit(target.data(0, self.DATA_FILE))
 
-    def add_bookmark(self, file_path: str, page_1based: int, title: str) -> None:
-        """v1.6.20 K5: 트리의 대상 파일 노드 끝에 자식 책갈피 추가 (저장 시 반영)."""
+    def suggest_add_level(self, file_path: str = "") -> tuple:
+        """260908-1(사용자 요청): 새 책갈피의 **기본 레벨**과 고를 수 있는 최대 레벨.
+
+        기본값은 **바로 위 책갈피와 같은 레벨** — 목차를 이어 쓰는 것이 보통이라,
+        고른 자리의 형제로 놓는 것이 기대에 맞는다. 고른 것이 없으면 맨 끝 항목 기준.
+        반환 (기본 레벨, 최대 레벨) — 둘 다 1부터 센다(사용자에게 보이는 수)."""
+        anchor = self._selected_bookmark_anchor(file_path)
+        if anchor is None:
+            return 1, 1
+        lv = 0
+        p = anchor.parent()
+        while p is not None and p.data(0, self.DATA_PAGE) is not None:
+            lv += 1
+            p = p.parent()
+        return lv + 1, lv + 2      # 같은 레벨(기본) 또는 한 단계 아래까지
+
+    def _selected_bookmark_anchor(self, file_path: str = ""):
+        """새 책갈피를 놓을 기준이 되는 '고른 책갈피'. 없으면 그 파일의 마지막 책갈피."""
+        for it in self.tree.selectedItems():
+            if it.data(0, self.DATA_PAGE) is not None                     and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+                if not file_path or self._same_file(it, file_path):
+                    return it
+        node = self._file_node_for_path(file_path) if file_path else None
+        if node is not None and node.childCount():
+            last = node.child(node.childCount() - 1)
+            return last if last.data(0, self.DATA_PAGE) is not None else None
+        return None
+
+    def _same_file(self, item, file_path: str) -> bool:
+        d = item.data(0, self.DATA_FILE)
+        if not d or not file_path:
+            return False
+        if d == file_path:
+            return True
+        try:
+            return Path(d).resolve() == Path(file_path).resolve()
+        except Exception:
+            return False
+
+    def _file_node_for_path(self, file_path: str):
+        for top in self._iter_file_nodes():
+            if self._same_file(top, file_path):
+                return top
+        return None
+
+    def add_bookmark(self, file_path: str, page_1based: int, title: str,
+                     level: int = None) -> None:
+        """v1.6.20 K5: 책갈피 추가 (저장 시 PDF 에 반영).
+
+        260908-1(사용자 요청) 세 가지가 바뀌었다.
+          - **고른 책갈피 바로 아래**에 넣는다(종전에는 파일 끝에 붙였다).
+          - `level` 로 깊이를 정한다. 1 = 고른 것과 같은 레벨(형제),
+            2 = 고른 것의 하위. 주지 않으면 같은 레벨.
+          - 넣은 **그 하나만** 선택한다(종전에는 이전에 넣은 것까지 다중 선택됐다).
+        """
         # 대상 파일 노드 찾기(경로 슬래시 차이에 견고하게 — resolve 비교)
         try:
             fp = Path(file_path).resolve()
@@ -2785,9 +2964,24 @@ class BookmarkTree(QWidget):
         ch.setData(0, self.DATA_FILE, file_path)
         ch.setData(0, self.DATA_PAGE, max(0, int(page_1based) - 1))
         ch.setData(0, self.DATA_TOC_LOADED, True)
-        target.addChild(ch)
-        target.setExpanded(True)
-        ch.setSelected(True)
+        anchor = self._selected_bookmark_anchor(file_path)
+        with self._quiet_tree():
+            if anchor is None:
+                target.addChild(ch)                 # 책갈피가 하나도 없으면 끝에
+            elif int(level or 1) >= 2:
+                anchor.insertChild(0, ch)           # 고른 것의 **하위** 첫 자리
+                anchor.setExpanded(True)
+            else:
+                par = anchor.parent() or target     # 고른 것의 **바로 아래 형제**
+                par.insertChild(par.indexOfChild(anchor) + 1, ch)
+            target.setExpanded(True)
+            p = ch.parent()
+            while p is not None:
+                p.setExpanded(True); p = p.parent()
+            # 260908-1: **넣은 하나만** 선택 — 종전에는 이전 것들이 남아 다중 선택됐다.
+            self.tree.clearSelection()
+            ch.setSelected(True)
+            self.tree.setCurrentItem(ch)
         self.tree.scrollToItem(ch)
         self._mark_dirty()
 

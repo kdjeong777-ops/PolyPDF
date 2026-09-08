@@ -1535,7 +1535,18 @@ class StudyMixin:
             self.study_panel.set_building(False)
             self.progress.setVisible(False)
             if summary.get("error"):
-                QMessageBox.warning(self, "단어장", f"실패: {summary['error']}")
+                # 260908-1: Tesseract 의 영어 원문 오류를 그대로 보여 주면 사용자가
+                #   무엇을 해야 하는지 알 수 없다. 학습 데이터가 없는 것이면 그렇게 말한다.
+                msg = str(summary["error"])
+                if "traineddata" in msg or "Failed loading language" in msg:
+                    try:
+                        from viewer.study import ocr as _ocr
+                        hint = _ocr.missing_language("kor+eng")
+                    except Exception:
+                        hint = ""
+                    if hint:
+                        msg = hint
+                QMessageBox.warning(self, "단어장", f"실패: {msg}")
                 self.status.showMessage("단어장 생성 실패", 4000)
                 return
             v = (summary.get("vocab") or {}).get("vocab", 0)

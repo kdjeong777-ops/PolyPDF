@@ -3260,7 +3260,12 @@ class MainView(QWidget):
                 return name
         cx, cy, hw, hh, rot = self._shape_geom(st, pr)
         lx, ly = self._img_v2l(cx, cy, rot, px, py)
-        if -hw <= lx <= hw and -hh <= ly <= hh:
+        # 260908-1(사용자 재요청): **테두리 '선' 을 잡으면 이동**이 되어야 한다.
+        #   종전에는 박스 **안쪽**만 인정해, 귀퉁이와 변 가운데 사각형 **사이의 선**을
+        #   집으면 아무 일도 없었다(경계가 정확히 선 위라 화면 좌표를 정수로 자르는
+        #   순간 한 픽셀 바깥으로 밀려 났다). 선 둘레 `EDGE_GRAB_PX` 만큼을 함께 인정한다.
+        tol = self.EDGE_GRAB_PX
+        if -hw - tol <= lx <= hw + tol and -hh - tol <= ly <= hh + tol:
             return "move"
         return None
 
@@ -3460,8 +3465,14 @@ class MainView(QWidget):
     #     · 대각선(모서리) 핸들은 종전처럼 **글자 크기까지** 함께 키운다(마우스로 크기 조절).
     TEXT_PAD = 4              # 그릴 때(_draw_text_box)와 같은 안쪽 여백(px)
     TEXT_MIN_W = 24.0         # 박스 최소 폭(px)
+    # 260908-1: 박스를 글에 딱 맞추면 **마지막 글자가 잘린다**(사용자 보고).
+    #   `QTextDocument.size()` 는 반올림된 값이라, 그 폭을 그대로 박스로 삼으면 그릴 때
+    #   같은 글이 한 칸을 못 얻어 다음 줄로 넘어가고, 박스 높이는 한 줄뿐이라 사라진다.
+    #   정규화 좌표(0~1)를 오갈 때 생기는 미세 오차도 같은 쪽으로 작용한다.
+    #   재는 값에 **여유 2px**를 얹어 그런 경계에 걸리지 않게 한다.
+    TEXT_SLACK = 2.0
 
-    def _text_doc(self, st, pr, width_px=None):
+    def _text_doc(self, st, pr, width_px=None, cache=True):
         """260907-3: 텍스트 박스의 글을 흘려 놓은 `QTextDocument`.
 
         **재는 것과 그리는 것이 이것 하나를 같이 쓴다.** 종전에는 재기는
@@ -3478,12 +3489,13 @@ class MainView(QWidget):
         key = (text, f.family(), f.pixelSize(), f.bold(), f.italic(),
                round(f.letterSpacing(), 2), a,
                -1.0 if width_px is None else round(float(width_px), 1))
-        cache = getattr(self, "_text_doc_cache", None)
-        if cache is None:
-            cache = self._text_doc_cache = {}
-        hit = cache.get(key)
-        if hit is not None:
-            return hit
+        store = getattr(self, "_text_doc_cache", None)
+        if store is None:
+            store = self._text_doc_cache = {}
+        if cache:
+            hit = store.get(key)
+            if hit is not None:
+                return hit
         doc = QTextDocument()
         doc.setDocumentMargin(0.0)
         doc.setDefaultFont(f)
@@ -3495,15 +3507,16 @@ class MainView(QWidget):
         doc.setDefaultTextOption(opt)
         doc.setPlainText(text)
         doc.setTextWidth(-1 if width_px is None else max(8.0, float(width_px)))
-        if len(cache) > 64:            # 페이지를 넘나들어도 몇 개만 들고 있는다
-            cache.clear()
-        cache[key] = doc
+        if cache:
+            if len(store) > 64:        # 페이지를 넘나들어도 몇 개만 들고 있는다
+                store.clear()
+            store[key] = doc
         return doc
 
-    def _text_layout_size(self, st, pr, width_px=None):
+    def _text_layout_size(self, st, pr, width_px=None, cache=True):
         """이 박스의 글을 `width_px` 안에 흘렸을 때의 (폭, 높이) 픽셀."""
         probe = st if (st.get("text") or "").strip() else dict(st, text=" ")
-        sz = self._text_doc(probe, pr, width_px).size()
+        sz = self._text_doc(probe, pr, width_px, cache=cache).size()
         return float(sz.width()), float(sz.height())
 
     def _text_max_w(self, st, pr):
@@ -3512,24 +3525,28 @@ class MainView(QWidget):
         x0 = min(rc[0], rc[2])
         return max(self.TEXT_MIN_W, (1.0 - x0) * pr.width())
 
-    def _text_fit_h(self, st, pr, w_px):
+    def _text_fit_h(self, st, pr, w_px, cache=True):
         """가로가 `w_px` 일 때 필요한 세로(px)."""
+        import math as _m
         pad2 = self.TEXT_PAD * 2
-        _, h = self._text_layout_size(st, pr, max(8.0, w_px - pad2))
-        return h + pad2
+        _, h = self._text_layout_size(st, pr, max(8.0, w_px - pad2), cache=cache)
+        return _m.ceil(h) + pad2
 
     def _text_fit_w(self, st, pr, h_px):
         """세로가 `h_px` 안에 들어가는 **가장 좁은 가로**(px) — 이분 탐색.
 
         넓힐수록 줄 수가 줄어 높이가 단조 감소하므로 이분 탐색이 성립한다.
         최대 폭(페이지 끝)으로도 안 들어가면 최대 폭을 준다."""
+        # 260908-1(응답성 SOT §4 ⑥): 이분 탐색이 만드는 중간 폭은 **캐시에 넣지 않는다**.
+        #   한 번 끌 때마다 열몇 개가 쌓여 상한(64)을 넘기고, 그때마다 캐시를 통째로
+        #   비워 **그리기 경로가 매번 문서를 다시 만들게** 했다(도색이 그만큼 느려진다).
         lo = self.TEXT_MIN_W
         hi = self._text_max_w(st, pr)
-        if self._text_fit_h(st, pr, hi) > h_px:
+        if self._text_fit_h(st, pr, hi, cache=False) > h_px:
             return hi
-        for _ in range(18):                 # 폭 1px 미만까지 좁힌다
+        for _ in range(14):                 # 폭 1px 미만까지 좁힌다
             mid = (lo + hi) / 2.0
-            if self._text_fit_h(st, pr, mid) <= h_px:
+            if self._text_fit_h(st, pr, mid, cache=False) <= h_px:
                 hi = mid
             else:
                 lo = mid
@@ -3541,11 +3558,14 @@ class MainView(QWidget):
         """지금 글자 크기로 글을 흘렸을 때의 자연스러운 (폭, 높이) — 타자 중 auto-grow 용.
 
         한 줄로 재서 페이지 오른쪽 끝을 넘지 않으면 그대로, 넘으면 **끝에 맞춰 줄바꿈**한다."""
+        import math as _m
         pad2 = self.TEXT_PAD * 2
+        slack = self.TEXT_SLACK
         w1, h1 = self._text_layout_size(st, pr, None)
+        want = _m.ceil(w1) + pad2 + slack          # 260908-1: 마지막 글자 여유
         max_w = self._text_max_w(st, pr)
-        if w1 + pad2 <= max_w:
-            return max(self.TEXT_MIN_W, w1 + pad2), h1 + pad2
+        if want <= max_w:
+            return max(self.TEXT_MIN_W, want), _m.ceil(h1) + pad2
         return max_w, self._text_fit_h(st, pr, max_w)
 
     def _text_apply_size(self, st, pr, w_px, h_px, keep="tl"):

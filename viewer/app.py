@@ -2540,23 +2540,57 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 f"먼저 트리에서 '{Path(target_file).name}' 를 열어 주세요.")
             return
         page = self.main_view.current_page() + 1  # 1-based
-        title, ok = QInputDialog.getText(self, "책갈피 추가",
-                                         f"현재 페이지(p.{page})에 추가할 책갈피 제목:")
+        title, level, ok = self._ask_bookmark(target_file, page)
         if not ok:
             return
-        self.bookmark_tree.add_bookmark(target_file, page, title)
+        self.bookmark_tree.add_bookmark(target_file, page, title, level)
         self.status.showMessage(
             f"책갈피 추가됨: {title or '(제목 없음)'}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다.",
             6000)
 
+    def _ask_bookmark(self, target_file: str, page: int):
+        """260908-1(사용자 요청): 책갈피 제목 **+ 레벨**을 함께 묻는다 → (제목, 레벨, 확인).
+
+        레벨 기본값은 **바로 위(고른) 책갈피와 같은 레벨**이다 — 목차를 이어 쓰는 것이
+        보통이라 형제로 놓이는 것이 기대에 맞는다. 한 단계 아래(하위)도 고를 수 있다.
+        고른 책갈피가 없으면 레벨 선택이 의미 없으므로 제목만 묻는다."""
+        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit,
+                                     QComboBox, QDialogButtonBox, QLabel)
+        try:
+            base, top = self.bookmark_tree.suggest_add_level(target_file)
+        except Exception:
+            base, top = 1, 1
+        dlg = QDialog(self)
+        dlg.setWindowTitle("책갈피 추가")
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel(f"현재 페이지 <b>p.{page}</b> 에 책갈피를 추가합니다."))
+        form = QFormLayout()
+        ed = QLineEdit()
+        ed.setPlaceholderText("책갈피 제목")
+        form.addRow("제목", ed)
+        cmb = None
+        if top > base:
+            cmb = QComboBox()
+            cmb.addItem(f"윗 책갈피와 같은 단계 (레벨 {base})", 1)
+            cmb.addItem(f"윗 책갈피의 하위 (레벨 {base + 1})", 2)
+            cmb.setCurrentIndex(0)                       # 기본 = 같은 단계
+            form.addRow("단계", cmb)
+        v.addLayout(form)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
+                              | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        ed.setFocus()
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return "", 1, False
+        return ed.text(), (cmb.currentData() if cmb is not None else 1), True
+
     def _prompt_add_bookmark(self, cur: str, page_1based: int):
         """제목 입력 → 트리 대상 파일에 책갈피 추가(저장은 편집모드 💾)."""
-        from PyQt6.QtWidgets import QInputDialog
-        title, ok = QInputDialog.getText(
-            self, "책갈피 추가", f"p.{page_1based}에 추가할 책갈피 제목:")
+        title, level, ok = self._ask_bookmark(cur, page_1based)   # 260908-1: 레벨 포함
         if not ok:
             return
-        self.bookmark_tree.add_bookmark(cur, page_1based, title)
+        self.bookmark_tree.add_bookmark(cur, page_1based, title, level)
         self.status.showMessage(
             f"책갈피 추가됨: {title or '(제목 없음)'}  (p.{page_1based}) — "
             "책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다.", 6000)
@@ -2662,12 +2696,39 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if overwrite:
                 self._close_main_view_doc()          # 원본 잠금 해제(뷰어·썸네일 핸들)
                 QApplication.processEvents()
-            _os.replace(str(produced), str(dst))
-        except Exception:
-            # 덮어쓰기 실패(잠금 등) → _edited 로 폴백
+            # 260908-1(사용자 보고 "저장하면 원본에 안 들어간다"): 핸들이 풀리는 데
+            #   시간이 걸릴 수 있다(백신 검사·썸네일 정리). 한 번 실패했다고 곧바로
+            #   `_edited` 로 새 파일을 만들면 사용자는 원본이 안 바뀐 것만 본다.
+            #   짧게 여러 번 다시 시도한다.
+            import time as _t
+            last = None
+            for _i in range(12):                     # 약 1.8초
+                try:
+                    _os.replace(str(produced), str(dst))
+                    last = None
+                    break
+                except Exception as e:               # noqa: BLE001
+                    last = e
+                    QApplication.processEvents()
+                    _t.sleep(0.15)
+            if last is not None:
+                raise last
+        except Exception as e:                       # noqa: BLE001
+            # 끝내 못 덮어썼다 → `_edited` 로 저장하고 **그 사실을 알린다**.
+            #   종전에는 조용히 폴백해, 원본이 안 바뀐 이유를 알 수 없었다.
             fb, _ = self._edit_save_dst(src, True)
             _os.replace(str(produced), str(fb))
             dst = fb
+            if overwrite:
+                try:
+                    QMessageBox.warning(
+                        self, "저장",
+                        f"원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n\n"
+                        f"저장한 파일: {fb.name}\n원본: {src.name}\n\n"
+                        f"원인: {e}\n\n"
+                        "다른 프로그램이 원본을 열고 있으면 닫은 뒤 다시 저장해 주세요.")
+                except Exception:
+                    pass
         return str(dst)
 
     def _page_edit_save(self, src_str: str, bookmarks_raw):
@@ -3151,6 +3212,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         act_sel.setEnabled(can_copy)
         act_print1 = menu.addAction(f"현재 페이지 인쇄 (p.{page})")
         act_print1.setEnabled(can_print)
+        # 260908-1(사용자 요청): 썸네일창과 같은 90° 회전을 **본문 우클릭에도** 둔다.
+        #   썸네일을 열지 않고도 보고 있는 쪽을 바로 돌릴 수 있게. 대상은 현재 페이지.
+        act_rot_l = menu.addAction(f"왼쪽 90° 회전 (p.{page})")
+        act_rot_r = menu.addAction(f"오른쪽 90° 회전 (p.{page})")
         menu.addSeparator()
         # 260618-27: 1단=‘2단 보기’(진입), 2단=현재 창 기준 ‘반대 창으로 복사’.
         #   1창(좌,active 0)→‘2창으로 복사’, 2창(우,active 1)→‘1창으로 복사’.
@@ -3250,6 +3315,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.main_view.arm_text_selection()
             self.status.showMessage(
                 "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다.", 5000)
+            return
+        if chosen in (act_rot_l, act_rot_r):        # 260908-1
+            self._rotate_pages([page - 1], -90 if chosen is act_rot_l else +90)
             return
         if chosen == act_print1:
             self._print_pdf_pages(cur, [page - 1]); return

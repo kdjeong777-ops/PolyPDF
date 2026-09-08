@@ -125,11 +125,23 @@ def ensure_tesseract() -> dict:
             except (OSError, AttributeError):
                 os.environ["PATH"] = str(d) + os.pathsep + os.environ.get("PATH", "")
             exe = cand
-            # tessdata: env/share/tessdata (conda 구조) 또는 형제 tessdata
-            for td in (d.parent.parent / "share" / "tessdata", d / "tessdata"):
-                if td.exists():
-                    os.environ["TESSDATA_PREFIX"] = str(td)
+            # tessdata: env/share/tessdata(conda 구조) 또는 형제 tessdata.
+            # 260908-1: **먼저 있는 것을 고르지 않는다** — 후보가 둘 다 있으면
+            #   `kor.traineddata` 가 실제로 든 쪽을 고른다. 옛 설치본에는 `tessdata/` 에
+            #   eng·osd 만 있어, 그 폴더를 잡은 뒤 한국어 OCR 이 Tesseract 의 영어 원문
+            #   오류로 실패했다(사용자 보고 260908: "Error opening data file … kor.traineddata").
+            cands_td = [d.parent.parent / "share" / "tessdata", d / "tessdata"]
+            best = None
+            for td in cands_td:
+                if not td.exists():
+                    continue
+                if best is None:
+                    best = td
+                if (td / "kor.traineddata").exists():
+                    best = td
                     break
+            if best is not None:
+                os.environ["TESSDATA_PREFIX"] = str(best)
             break
     if exe is not None:
         pytesseract.pytesseract.tesseract_cmd = str(exe)
@@ -148,6 +160,31 @@ def ensure_tesseract() -> dict:
         _TESS_READY = False
         _TESS_INFO = {"ok": False, "error": f"tesseract 실행 불가: {e}"}
     return _TESS_INFO
+
+
+def missing_language(lang: str) -> str:
+    """260908-1: 이 언어의 학습 데이터가 없으면 **사람이 읽을 수 있는 안내**를 돌려준다.
+
+    없으면 빈 문자열. Tesseract 가 내는 영어 원문 오류
+    ("Error opening data file …/kor.traineddata")는 사용자가 무엇을 해야 하는지
+    알려 주지 않는다(사용자 보고 260908 — PDF 병합 뒤 OCR 에서 그대로 노출됐다)."""
+    info = ensure_tesseract()
+    if not info.get("ok"):
+        return ""
+    td = info.get("tessdata") or ""
+    need = [x for x in str(lang or "eng").split("+") if x]
+    gone = []
+    for code in need:
+        if td and not (Path(td) / f"{code}.traineddata").exists():
+            gone.append(code)
+    if not gone:
+        return ""
+    names = {"kor": "한국어", "eng": "영어", "jpn": "일본어", "chi_sim": "중국어(간체)"}
+    label = " · ".join(names.get(c, c) for c in gone)
+    return (f"{label} OCR 학습 데이터가 없습니다({', '.join(c + '.traineddata' for c in gone)}).\n\n"
+            f"찾은 위치: {td or '(미설정)'}\n\n"
+            "도구 → 구성요소 설치에서 OCR(Tesseract)을 다시 받으면 채워집니다. "
+            "설치본이 오래된 경우 프로그램을 최신 버전으로 올리면 함께 들어옵니다.")
 
 
 # --- 스캔 감지(텍스트 레이어 품질) ----------------------------------------
