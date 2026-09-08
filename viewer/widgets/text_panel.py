@@ -183,10 +183,11 @@ class TextPanel(QWidget):
         self.btn_style_apply.setToolTip("고른 줄을 위에서 고른 스타일(제목/내용)로 바꿉니다")
         self.btn_style_apply.clicked.connect(self.apply_style_to_selection)
         bar3.addWidget(self.btn_style_apply)
-        self.btn_ocr = QPushButton("단어장 생성")
-        self.btn_ocr.setToolTip("스캔본을 읽어 글자를 만듭니다(OCR)")
+        # 260908-8(사용자 지시): **늘 보인다.** 종전에는 글자가 아예 없을 때만 나와서,
+        #   OCR 이 잘못 읽은 쪽을 다시 읽힐 방법이 없었다.
+        self.btn_ocr = QPushButton("OCR 다시 읽기")
+        self.btn_ocr.setToolTip("이 쪽을 OCR 로 다시 읽습니다. 빈 공간의 잡음 글자는 같은 규칙으로 걸러집니다.")
         self.btn_ocr.clicked.connect(self.ocrRequested.emit)
-        self.btn_ocr.setVisible(False)
         bar3.addWidget(self.btn_ocr)
         bar3.addWidget(self.btn_hl)
         self.btn_bm = QPushButton("책갈피로")
@@ -337,8 +338,8 @@ class TextPanel(QWidget):
             msg += f" · 표 {n_tb}"
         msg += ")"
         self.info.setText(note or msg)
-        # 스캔본인데 OCR 결과가 없으면 그 자리에서 만들 수 있게(SOT §3.1)
-        self.btn_ocr.setVisible(bool(note) and not self._rows)
+        # 260908-8: 단추는 늘 보인다(위 참조). 글자가 아예 없을 때만 문구를 바꿔 안내한다.
+        self.btn_ocr.setText("OCR 로 읽기" if not self._rows else "OCR 다시 읽기")
 
     def set_busy(self, msg: str) -> None:
         """260908-3: 워커가 뽑는 동안 무엇을 하는지 알린다(응답성 SOT §4 ④)."""

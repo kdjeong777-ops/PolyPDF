@@ -15,10 +15,16 @@
 """
 from __future__ import annotations
 
-TITLE_RATIO = 1.15          # 중앙값 대비 이 배 이상이면 제목
+# 260908-8(SOT §3.4, 사용자 지시): 제목은 **크기가 많이 차이 날 때만**.
+#   1.15 배는 너무 낮아 본문과 같은 크기의 굵은 줄까지 제목이 됐다(실측 지침 문서에서
+#   `제4장 …` 같은 본문 크기 줄이 제목으로 잡혔다). 굵기(bold)는 **판정에 쓰지 않는다**.
+TITLE_RATIO = 1.40          # 중앙값 대비 이 배 이상이어야 제목
+TITLE_MIN_GAP_PT = 2.0      # 그리고 중앙값보다 이만큼(pt)은 커야 한다
 # 260908-6(SOT §3.5): OCR 잡음으로 보는 글자 상자 높이(pt). A4 에서 4pt = 약 1.4mm 라
 #   사람이 읽으라고 넣은 글자일 수 없다. 실측 잡음 1.4~3.4 / 진짜 글 5.3~27.9.
-NOISE_MIN_H_PT = 4.0
+# 260908-8: 판정 본문은 `viewer/text_noise.py` 가 소유한다(텍스트 창·OCR·단어장 공용).
+from viewer import text_noise as _noise          # noqa: E402
+NOISE_MIN_H_PT = _noise.MIN_H_PT
 # 260908-7(SOT §3.6): 같은 줄에 있는 조각을 하나로 잇는 기준.
 ROW_OVERLAP = 0.55      # 세로로 이만큼 겹치면 '같은 줄'
 GLUE_GAP = 0.25         # 글자크기 대비 이보다 좁으면 붙여 쓴다
@@ -71,7 +77,7 @@ def _line_items(page):
             if x1 <= x0 or y1 <= y0:            # 뒤집히거나 납작한 상자 — 글자가 아니다
                 noise += 1
                 continue
-            if ocr_layer and (y1 - y0) < NOISE_MIN_H_PT:
+            if ocr_layer and _noise.is_noise_box(txt, x0, y0, x1, y1):
                 noise += 1
                 continue
             lines.append(((x0, y0, x1, y1), txt, size))
@@ -89,7 +95,6 @@ def _line_items(page):
         blocks.sort(key=lambda t: index.get((round(t[0][0], 2), round(t[0][1], 2)), 1 << 30))
     except Exception:
         blocks.sort(key=lambda t: (t[0][1], t[0][0]))
-    _NOISE["n"] = noise
     # 260908-7(SOT §3.6): 조각을 **같은 줄끼리 이어 붙인다**.
     #   PyMuPDF 는 가로로 벌어진 글을 각각 다른 `line` 으로 준다. 그대로 두면
     #   `[ Hot Asphalt Paving Mixture` 와 `]` 가 두 줄이 되고, 표 한 행의 칸들이
@@ -97,6 +102,13 @@ def _line_items(page):
     out = []
     for col_frags in _by_column(blocks, page):
         out.extend(_merge_rows(col_frags))
+    if ocr_layer:
+        # 260908-8(SOT §3.5): **줄을 이은 뒤에** 기호만 남은 줄을 뺀다(`■`·`☜`).
+        #   조각 단계에서 빼면 `[ 제목 ]` 의 `]` 처럼 이어져야 할 것까지 사라진다.
+        kept = [it for it in out if not _noise.is_symbol_only(it[1])]
+        noise += len(out) - len(kept)
+        out = kept
+    _NOISE["n"] = noise
     return out
 
 
@@ -397,17 +409,23 @@ def _row_line(row) -> str:
 
 
 def _classify(items):
-    """대표 크기의 **중앙값**으로 제목/내용을 가른다(SOT §3.4)."""
+    """대표 크기의 **중앙값**으로 제목/내용을 가른다(SOT §3.4).
+
+    260908-8(사용자 지시): **크기가 많이 차이 날 때만** 제목이다 — 배수(`TITLE_RATIO`)와
+    절대 차이(`TITLE_MIN_GAP_PT`)를 **둘 다** 넘어야 한다. 굵기는 보지 않는다:
+    '크기는 거의 같은데 진하다' 는 이유로 제목이 되면 본문이 온통 제목이 된다.
+    """
     sizes = sorted(s for _r, _t, s in items if s > 0)
     if not sizes:
         return ["body"] * len(items)
     mid = sizes[len(sizes) // 2]
-    thr = mid * TITLE_RATIO
+    thr = max(mid * TITLE_RATIO, mid + TITLE_MIN_GAP_PT)
     return ["title" if (s > 0 and s >= thr) else "body" for _r, _t, s in items]
 
 
 def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
-               ocr_text: str = "", tables_cached_only: bool = False) -> list:
+               ocr_text: str = "", tables_cached_only: bool = False,
+               ocr_words=None, ocr_dpi: int = 0) -> list:
     """쪽 하나의 줄 목록(SOT §3). `tables` = "lines"(기본) / "omit" / "off".
 
     `ocr_text` 는 텍스트층이 쓸 만하지 않을 때 쓰는 OCR 결과(단어장 SOT 의 study.db).
@@ -416,6 +434,12 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
         page = doc.load_page(int(page_index))
     except Exception:
         return []
+    if ocr_words:
+        # 260908-8: [OCR 다시 읽기] 로 새로 읽은 쪽 — 그 결과를 우선한다(SOT §3.1).
+        rows = lines_from_words(ocr_words, dpi=ocr_dpi, page=page)
+        if rows:
+            _NOISE["n"] = 0
+            return rows
     items = _line_items(page)
     noise = last_noise_count()
 
@@ -457,6 +481,41 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
     _NOISE["n"] = noise          # 표 처리가 `_line_items` 를 다시 부르지 않음을 명시
     return rows_out
 
+
+def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
+    """OCR 낱말 상자 → **줄 목록**(SOT §3.1·§3.6, 260908-8).
+
+    종전 OCR 폴백은 저장된 본문을 줄바꿈으로 쪼개기만 해서 **좌표가 없었다** —
+    본문 강조도, [PDF 에 반영]도 못 했다. 낱말 상자를 쓰면 §3.6 의 줄 잇기를 그대로
+    태울 수 있어 좌표가 살아 있고, 잡음 규칙도 같은 것이 적용된다.
+
+    `dpi` 가 0 이면 좌표가 이미 pt 다(디지털 레이어). 아니면 픽셀 → pt 로 환산한다.
+    """
+    if not words:
+        return []
+    k = 1.0 if not dpi else 72.0 / float(dpi)
+    frags = []
+    for w in words:
+        try:
+            x0, y0 = float(w['x0']) * k, float(w['y0']) * k
+            x1, y1 = float(w['x1']) * k, float(w['y1']) * k
+            t = str(w.get('surface') or '')
+        except Exception:
+            continue
+        if not t.strip():
+            continue
+        if _noise.is_noise_box(t, x0, y0, x1, y1):
+            continue
+        frags.append(((x0, y0, x1, y1), t, max(1.0, y1 - y0)))
+    if not frags:
+        return []
+    items = []
+    for col in ([frags] if page is None else _by_column([((0, 0, 0, 0), frags)], page)):
+        items.extend(_merge_rows(col))
+    items = [it for it in items if not _noise.is_symbol_only(it[1])]
+    styles = _classify(items)
+    return [{'text': t, 'style': st, 'rect': r, 'kind': 'text'}
+            for (r, t, _s), st in zip(items, styles)]
 
 def has_text_layer(doc, page_index: int) -> bool:
     """이 쪽에 쓸 만한 텍스트층이 있는가(스캔본이면 False → OCR 을 쓴다)."""

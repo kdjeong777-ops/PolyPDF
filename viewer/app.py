@@ -2612,9 +2612,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   둘 다 GIL 을 오래 쥔다. 미룬 것은 인덱싱이 끝나면 다시 뽑는다.
         busy_idx = bool(getattr(self, "_index_workers", None))
         self._text_tables_deferred = busy_idx
+        # 260908-8: [OCR 다시 읽기] 로 다시 읽은 쪽은 **그 결과**를 쓴다(SOT §3.1).
+        forced = getattr(self, "_text_force_ocr", None) or set()
+        ow, odpi = ((self._ocr_page_words(cur, page), self._ocr_page_dpi(cur, page))
+                    if (str(cur), int(page)) in forced else (None, 0))
         w = TextPageWorker(cur, page,
                            tables=("omit" if tp.omit_tables() else "lines"),
-                           ocr_text=ocr_text, token=tok, cached_only=busy_idx)
+                           ocr_text=ocr_text, token=tok, cached_only=busy_idx,
+                           ocr_words=ow, ocr_dpi=odpi)
         self._text_worker = w
         w.done.connect(lambda pg, rows, t, _w=w:
                        self._on_text_rows(cur, pg, rows, t, note,
@@ -2644,6 +2649,30 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         tp.set_page(path, page, rows, note)
         tp.restore_highlights(self._text_store().get_highlights(path, page))
 
+    def _ocr_page_words(self, path, page: int):
+        """study.db 에 저장된 OCR 낱말 상자(단어장 SOT 소유). 없으면 빈 목록."""
+        try:
+            from viewer.study.study_store import StudyStore, file_key_for
+            from viewer import dbutil as _db
+            st = StudyStore(busy_ms=_db.BUSY_MS_UI)
+            try:
+                return st.get_page_words(file_key_for(str(path)), int(page))
+            finally:
+                st.close()
+        except Exception:
+            return []
+
+    def _ocr_page_dpi(self, path, page: int) -> int:
+        try:
+            from viewer.study.study_store import StudyStore, file_key_for
+            from viewer import dbutil as _db
+            st = StudyStore(busy_ms=_db.BUSY_MS_UI)
+            try:
+                return int(st.get_page_dpi(file_key_for(str(path)), int(page)) or 0)
+            finally:
+                st.close()
+        except Exception:
+            return 0
     def _ocr_page_text(self, path, page: int) -> str:
         """study.db 에 저장된 OCR 결과(단어장 SOT 소유). 없으면 빈 문자열."""
         try:
@@ -2683,10 +2712,60 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._text_store().add_highlight(cur, page, line, a, b, color)
 
     def _on_text_need_ocr(self):
-        """스캔본인데 글자가 없다 → 단어장 생성(OCR)을 그 자리에서 시작(SOT §3.1)."""
+        """260908-8(사용자 지시): [OCR 다시 읽기] — **이 쪽만** 다시 읽는다(SOT §3.1).
+
+        종전에는 글자가 아예 없을 때만 나오는 단추였고, 누르면 문서 전체 단어장 생성을
+        시작했다. OCR 이 잘못 읽은 쪽을 다시 읽힐 방법이 없었다. 이제 보고 있는 쪽
+        하나만 워커에서 다시 읽고(응답성 SOT §4 ①②), 결과를 `study.db` 에 남겨
+        단어장·검색도 같은 결과를 쓰게 한다. 잡음 규칙은 `text_noise` 가 소유한다.
+        """
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if not cur or mv._doc is None:
+            return
+        page = mv.current_page()
+        tp = self.text_panel
+        prev = getattr(self, '_text_ocr_worker', None)
+        if prev is not None:
+            try:
+                prev.request_cancel()
+            except Exception:
+                pass
+        self._text_token = getattr(self, '_text_token', 0) + 1
+        tok = self._text_token
+        tp.set_busy(f'p.{page + 1} OCR 로 다시 읽는 중… (조금 걸립니다)')
+        from viewer.workers import TextOcrPageWorker, run_in_thread
+        w = TextOcrPageWorker(cur, page, lang=self._ocr_lang_for(cur),
+                              db_path=None, token=tok)
+        self._text_ocr_worker = w
+        w.done.connect(self._on_text_ocr_done)
+        w.error.connect(lambda msg, t: tp.set_busy(f'OCR 실패: {msg}')
+                        if t == self._text_token else None)
+        w.finished.connect(lambda: setattr(self, '_text_ocr_worker', None))
+        run_in_thread(w, self._thread_keep)
+
+    def _on_text_ocr_done(self, page, words, dpi, token):
+        """다시 읽은 결과를 그 쪽에 적용하고, 다음부터도 그 결과를 쓰게 표시한다."""
+        if token != getattr(self, '_text_token', 0):
+            return
         cur = self.main_view.current_file() if self.main_view else None
-        if cur:
-            self._on_create_study_requested(str(cur))
+        if not cur:
+            return
+        forced = getattr(self, '_text_force_ocr', None)
+        if forced is None:
+            forced = self._text_force_ocr = set()
+        forced.add((str(cur), int(page)))
+        if not words:
+            self.text_panel.set_busy('OCR 이 이 쪽에서 글자를 찾지 못했습니다.')
+            return
+        self._reload_text_panel()
+
+    def _ocr_lang_for(self, path) -> str:
+        """이 문서의 OCR 언어 — 단어장 SOT 의 판정을 그대로 쓴다."""
+        try:
+            return self._detect_study_lang(Path(path))
+        except Exception:
+            return 'kor'
 
     def _on_text_line_edited(self, page, line, text, orig="", rect=None):
         cur = self.main_view.current_file() if self.main_view else None

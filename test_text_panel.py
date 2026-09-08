@@ -227,11 +227,16 @@ try:
         f"sel={c2.selectionStart()}~{c2.selectionEnd()} key={tp._cur_style_key()} "
         f"styles={[r['style'] for r in tp.rows()[:3]]}")
 
-    chk(hasattr(tp, "btn_ocr"), "감사⑤ [단어장 생성] 단추가 있다")
+    # 260908-8(사용자 지시): 단추는 **늘 보인다** — OCR 이 잘못 읽은 쪽을 다시 읽히려면
+    #   글자가 있는 쪽에서도 눌러야 한다. 문구만 상황에 따라 바뀐다.
+    chk(hasattr(tp, "btn_ocr"), "감사⑤ [OCR 다시 읽기] 단추가 있다")
     tp.set_page(str(pdf), 0, [], "스캔본입니다")
-    chk(tp.btn_ocr.isVisible() is True, "감사⑤ 글자가 없을 때만 보인다")
+    chk(tp.btn_ocr.isVisible() is True, "감사⑤ 글자가 없을 때 보인다")
+    chk(tp.btn_ocr.text() == "OCR 로 읽기", "감사⑤ 글자가 없으면 '읽기'", tp.btn_ocr.text())
     tp.set_page(str(pdf), 0, rows)
-    chk(tp.btn_ocr.isVisible() is False, "감사⑤ 글이 있으면 숨는다")
+    chk(tp.btn_ocr.isVisible() is True, "감사⑤ 글이 있어도 계속 보인다(260908-8)")
+    chk(tp.btn_ocr.text() == "OCR 다시 읽기", "감사⑤ 글이 있으면 '다시 읽기'",
+        tp.btn_ocr.text())
 
     from viewer import indexer as _ix
     isrc = inspect.getsource(_ix)

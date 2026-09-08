@@ -18,6 +18,8 @@ from typing import Optional
 
 import fitz
 
+from viewer import text_noise as _noise
+
 # --- Tesseract 위치 해석 --------------------------------------------------
 _TESS_READY: Optional[bool] = None
 _TESS_INFO: dict = {}
@@ -297,8 +299,13 @@ def render_page(doc: "fitz.Document", page_index: int, dpi: int = 300):
     return img, page.rect, (pix.width, pix.height)
 
 
-def ocr_image(img, lang: str = "eng", psm: int = 6) -> dict:
-    """이미지 OCR → {text, conf, words:[{surface,x0,y0,x1,y1,conf}]} (픽셀 좌표)."""
+def ocr_image(img, lang: str = "eng", psm: int = 6, dpi: int = 300) -> dict:
+    """이미지 OCR → {text, conf, words:[{surface,x0,y0,x1,y1,conf}]} (픽셀 좌표).
+
+    260908-8(텍스트 창 SOT §3.5 · 이 문서 §14.3): **글자로 볼 수 없는 낱말은 버린다.**
+    OCR 은 종이의 티·괘선을 `픔`·`■` 같은 글자로 읽는다. 그것을 그대로 두면
+    본문·단어장·검색 색인이 모두 오염된다. 판정은 `viewer.text_noise` 가 소유한다.
+    """
     info = ensure_tesseract()
     if not info.get("ok"):
         raise RuntimeError(f"Tesseract 사용 불가: {info.get('error')}")
@@ -324,6 +331,9 @@ def ocr_image(img, lang: str = "eng", psm: int = 6) -> dict:
             continue
         x, y, w, h = (data["left"][i], data["top"][i],
                       data["width"][i], data["height"][i])
+        if not _noise.keep_ocr_word(s, x, y, x + w, y + h, c / 100.0,
+                                    scale=72.0 / max(1, int(dpi))):
+            continue                    # 260908-8: 잡음은 본문에서도 뺀다
         words.append({"surface": s, "x0": float(x), "y0": float(y),
                       "x1": float(x + w), "y1": float(y + h), "conf": c / 100.0})
         confs.append(c / 100.0)
@@ -345,12 +355,27 @@ def ocr_image(img, lang: str = "eng", psm: int = 6) -> dict:
 
 
 def words_from_layer(page: "fitz.Page") -> dict:
-    """디지털 레이어에서 단어+좌표 추출 (point 좌표). OCR 대체."""
+    """디지털 레이어에서 단어+좌표 추출 (point 좌표). OCR 대체.
+
+    260908-8: 이 경로도 **스캔본을 탄다** — 그림 위에 보이지 않게 얹힌 OCR 글자층은
+    `decide_source` 가 'layer' 로 판정하기 때문이다. 그런 쪽에서는 텍스트 창과 **같은
+    규칙**으로 잡음 낱말을 뺀다(텍스트 창 SOT §3.5). 사람이 넣은 글자층은 건드리지 않는다.
+    """
     raw = page.get_text("words")   # [x0,y0,x1,y1, word, block,line,wordno]
     words = [{"surface": w[4], "x0": float(w[0]), "y0": float(w[1]),
               "x1": float(w[2]), "y1": float(w[3]), "conf": 1.0}
              for w in raw if w[4].strip()]
-    return {"text": page.get_text("text"), "conf": 1.0, "words": words}
+    text = page.get_text("text")
+    try:
+        from viewer.text_extract2 import _is_ocr_layer
+        invisible = _is_ocr_layer(page)
+    except Exception:
+        invisible = False
+    if invisible:
+        words = [w for w in words
+                 if _noise.keep_ocr_word(w["surface"], w["x0"], w["y0"],
+                                         w["x1"], w["y1"], w["conf"])]
+    return {"text": text, "conf": 1.0, "words": words}
 
 
 def build_page(doc: "fitz.Document", page_index: int, *,
@@ -365,6 +390,6 @@ def build_page(doc: "fitz.Document", page_index: int, *,
         res.update(source="layer", dpi=0, engine="pymupdf", why=why)
         return res
     img, _, _ = render_page(doc, page_index, dpi=dpi)
-    res = ocr_image(img, lang=lang)
+    res = ocr_image(img, lang=lang, dpi=dpi)
     res.update(source="ocr", dpi=dpi, engine="tesseract", why=why)
     return res

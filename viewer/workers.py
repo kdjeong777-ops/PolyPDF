@@ -224,6 +224,68 @@ def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
         return False
 
 
+class TextOcrPageWorker(QObject):
+    """260908-8: 텍스트 창의 [OCR 다시 읽기] — **한 쪽만** 다시 읽는다.
+
+    단어장 생성(`StudyBuildWorker`)은 문서 전체를 읽어 오래 걸린다. 사용자가 보고 있는
+    쪽 하나만 다시 읽을 길이 없어 이 워커를 둔다. 결과는 `study.db` 에 남겨
+    단어장·검색이 함께 쓰고, 잡음 규칙은 `text_noise` 가 소유한다(텍스트 창 SOT §3.5).
+
+    응답성 SOT §4 ①②: 워커는 **자기 문서를 따로 연다**(PyMuPDF 문서는 스레드 안전하지
+    않다). 렌더 + Tesseract 는 C 호출이라 메인에서 돌리면 쪽당 수 초 멈춘다.
+    """
+    done = pyqtSignal(int, object, int, int)     # page, words, dpi, token
+    error = pyqtSignal(str, int)
+    finished = pyqtSignal()
+
+    def __init__(self, doc_path, page: int, *, lang: str = 'kor+eng',
+                 dpi: int = 300, db_path=None, token: int = 0):
+        super().__init__()
+        self.doc_path = str(doc_path)
+        self.page = int(page)
+        self.lang = lang
+        self.dpi = int(dpi)
+        self.db_path = db_path
+        self.token = int(token)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        try:
+            if self._cancel:
+                return
+            import fitz
+            from viewer.study import ocr as study_ocr
+            doc = fitz.open(self.doc_path)
+            try:
+                res = study_ocr.build_page(doc, self.page, lang=self.lang,
+                                           dpi=self.dpi, force_ocr=True)
+            finally:
+                doc.close()
+            words = res.get('words') or []
+            dpi = int(res.get('dpi') or 0)
+            try:                        # 단어장·검색이 같은 결과를 쓰게 남긴다
+                from viewer.study.study_store import StudyStore, file_key_for
+                st = StudyStore(self.db_path)   # None 이면 표준 study.db
+                try:
+                    st.save_page(file_key_for(self.doc_path), self.page,
+                                 res['text'], dpi=res['dpi'],
+                                 engine=res['engine'], source=res['source'],
+                                 conf=res['conf'], words=words, lang=self.lang)
+                finally:
+                    st.close()
+            except Exception:
+                pass            # 저장 실패가 화면 표시를 막지는 않는다
+            if not self._cancel:
+                self.done.emit(self.page, words, dpi, self.token)
+        except Exception as e:                # noqa: BLE001
+            if not self._cancel:
+                self.error.emit(str(e), self.token)
+        finally:
+            self.finished.emit()
+
 class TextPageWorker(QObject):
     """260908-3: 텍스트 창의 **쪽 추출을 워커에서** (응답성 SOT §4 ①②·§5 #1).
 
@@ -238,7 +300,8 @@ class TextPageWorker(QObject):
     finished = pyqtSignal()
 
     def __init__(self, doc_path, page: int, *, tables: str = "lines",
-                 ocr_text: str = "", token: int = 0, cached_only: bool = False):
+                 ocr_text: str = "", token: int = 0, cached_only: bool = False,
+                 ocr_words=None, ocr_dpi: int = 0):
         super().__init__()
         self.doc_path = str(doc_path)
         self.page = int(page)
@@ -247,6 +310,8 @@ class TextPageWorker(QObject):
         self.token = int(token)
         self.cached_only = bool(cached_only)   # 260908-5: 인덱싱 중이면 표를 새로 파지 않는다
         self.noise = 0                         # 260908-6: 뺀 OCR 잡음 줄 수
+        self.ocr_words = ocr_words             # 260908-8: [OCR 다시 읽기] 결과
+        self.ocr_dpi = int(ocr_dpi or 0)
         self._cancel = False
 
     def request_cancel(self):
@@ -264,7 +329,9 @@ class TextPageWorker(QObject):
             try:
                 rows = tx.page_lines(doc, self.doc_path, self.page,
                                      tables=self.tables, ocr_text=self.ocr_text,
-                                     tables_cached_only=self.cached_only)
+                                     tables_cached_only=self.cached_only,
+                                     ocr_words=self.ocr_words,
+                                     ocr_dpi=self.ocr_dpi)
                 # 260908-6(SOT §3.5): 뺀 잡음 줄 수 — 창 안내에 남긴다
                 self.noise = tx.last_noise_count()
             finally:
