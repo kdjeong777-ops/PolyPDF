@@ -48,12 +48,30 @@ def tune(conn: sqlite3.Connection, busy_ms: int = BUSY_MS_BG) -> None:
 
 
 def connect(db_path, busy_ms: int = BUSY_MS_BG,
-            row_factory: bool = True) -> sqlite3.Connection:
+            row_factory: bool = True,
+            readonly: bool = False) -> sqlite3.Connection:
     """표준 연결 — 부모 폴더 생성 + `timeout` + `tune()`.
 
     `busy_ms` 는 `sqlite3.connect(timeout=)` 와 `PRAGMA busy_timeout` 양쪽에 건다
-    (앞의 것은 파이썬 쪽 대기, 뒤의 것은 SQLite 쪽 대기 — 둘 다 맞춰야 한다)."""
+    (앞의 것은 파이썬 쪽 대기, 뒤의 것은 SQLite 쪽 대기 — 둘 다 맞춰야 한다).
+
+    260908-9(감사): `readonly=True` 는 **읽기만 하려는 곳**을 위한 것이다
+    (예: 태그 워커가 `dict.db` 의 대역 맵을 훑을 때). 종전에는 그런 곳이
+    `sqlite3.connect(... mode=ro ...)` 를 직접 불러 **대기 상한이 기본 5초**였다 —
+    응답성 SOT §4 ⑤ 가 '어느 DB든' 이라고 못박은 바로 그 구멍이다.
+    읽기 전용에서는 저널 모드를 바꿀 수 없으므로 대기 상한만 건다.
+    """
     p = Path(db_path)
+    if readonly:
+        conn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True,
+                               timeout=int(busy_ms) / 1000.0)
+        if row_factory:
+            conn.row_factory = sqlite3.Row
+        try:
+            conn.execute(f"PRAGMA busy_timeout = {int(busy_ms)}")
+        except Exception:
+            pass
+        return conn
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
     except Exception:

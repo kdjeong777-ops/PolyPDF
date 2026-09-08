@@ -34,12 +34,14 @@ def chk(cond, msg, extra=""):
 
 
 import fitz
+import test_fixtures as _fx
 from viewer import text_extract2 as tx
 
 root = Path(tempfile.mkdtemp(prefix="polypdf_rows_"))
-KRFONT = r"C:\Windows\Fonts\malgun.ttf"
-SAMPLE_GUIDE = Path(r"C:\Claude\MPDF\_samples\24 아스팔트콘크리트포장시공지침.pdf")
-SAMPLE_SCAN = Path(r"C:\Claude\MPDF\_samples\260908-인성배합설계.pdf.textfix.bak.pdf")
+KRFONT = _fx.KRFONT
+# 260908-9(감사, CLAUDE.md §3): 업무 문서 절대경로를 쓰지 않는다 — 그 파일이 없는
+#   기계에서 조용히 건너뛰어지고(가짜 통과), 파일명이 **공개 저장소**에 남는다.
+#   실제 문서에서 확인한 성질만 픽스처로 재현한다(`test_fixtures.py`).
 
 
 def make(name, draw, w=595, h=842):
@@ -151,44 +153,41 @@ try:
     chk(all(t.count(" | ") == 3 for t in tf),
         "⑥ 한 행에 네 칸이 순서대로 들어간다", str(tf[:1]))
 
-    # ── ⑦⑧ 실제 문서 ───────────────────────────────────────────
-    if SAMPLE_GUIDE.exists():
-        tx.close_cache()
-        d = fitz.open(str(SAMPLE_GUIDE))
-        rows = tx.page_lines(d, str(SAMPLE_GUIDE), 40, tables="lines")
-        d.close()
-        tg = [r["text"] for r in rows]
-        chk(any("모래당량" in t and "KS F 2340" in t and "50 이상" in t for t in tg),
-            "⑧ pdfplumber 가 칸을 놓쳐도 한 행이 온전히 남는다",
-            str([t for t in tg if "모래당량" in t]))
-        chk(any("항" in t and "시 험 방 법" in t and "기" in t for t in tg),
-            "⑧ 머리행도 한 줄")
-        chk(any(r["kind"] == "table" for r in rows),
-            "⑧ 표 사각형 안의 줄에는 표시가 붙는다")
-    else:
-        print("SKIP - 지침 샘플 없음")
+    # ── ⑦⑧ 픽스처로 재현한 실제 문서의 성질 ────────────────────
+    #   ⑧ 은 실측(괘선 3열 표)에서 pdfplumber 가 가운데 칸에만 두 줄을 몰아 넣고
+    #   나머지를 None 으로 뽑아 칸이 사라진 것을 계기로 만든 규칙이다. 여기서는
+    #   **뽑기 결과와 무관하게 글이 남는지**를 본다.
+    guide = Path(_fx.ruled_table_pdf())
+    tx.close_cache()
+    d = fitz.open(str(guide))
+    chk(len(tx._tables(str(guide), 0)) >= 1, "⑧ 괘선 표는 pdfplumber 가 잡는다")
+    rows = tx.page_lines(d, str(guide), 0, tables="lines")
+    d.close()
+    tg = [r["text"] for r in rows]
+    chk(any("모래당량" in t and "KS F 2340" in t and "50 이상" in t for t in tg),
+        "⑧ 표 한 행의 세 칸이 한 줄에 온전히 남는다",
+        str([t for t in tg if "모래당량" in t]))
+    chk(any("항" in t and "시 험 방 법" in t for t in tg), "⑧ 머리행도 한 줄")
+    chk(any(r["kind"] == "table" for r in rows),
+        "⑧ 표 사각형 안의 줄에는 표시가 붙는다")
+    chk(any("<표 1>" in t for t in tg), "⑧ 표 밖의 글은 본문으로 남는다")
 
-    if SAMPLE_SCAN.exists():
-        tx.close_cache()
-        d = fitz.open(str(SAMPLE_SCAN))
-        chk(len(tx._tables(str(SAMPLE_SCAN), 1)) == 0,
-            "⑦ 스캔본은 pdfplumber 가 표를 못 찾는다(괘선이 그림)")
-        rows = tx.page_lines(d, str(SAMPLE_SCAN), 1, tables="lines")
-        d.close()
-        ts = [r["text"] for r in rows]
-        chk(any("제품종튜" in t and "구 분" in t for t in ts),
-            "⑦ 그래도 한 행이 한 줄로 나온다", str([t for t in ts if "제품종튜" in t]))
-        chk(len(rows) < 60, "⑦ 조각 248개가 40여 줄로 모인다", str(len(rows)) + "줄")
-        tx.close_cache()
-        d = fitz.open(str(SAMPLE_SCAN))
-        p1 = [r["text"] for r in tx.page_lines(d, str(SAMPLE_SCAN), 0, tables="off")]
-        d.close()
-        chk(any(t.strip().startswith("[ Hot Asphalt") and t.strip().endswith("]")
-                for t in p1),
-            "① 사용자가 본 그 줄 — '[ … ]' 가 한 줄이 된다", str(p1))
-    else:
-        print("SKIP - 스캔 샘플 없음")
-
+    scan = Path(_fx.scanned_form_pdf())
+    tx.close_cache()
+    d = fitz.open(str(scan))
+    chk(tx._is_ocr_layer(d.load_page(0)) is True,
+        "⑦ 보이지 않는 글자층(스캔 서식)으로 알아본다")
+    chk(len(tx._tables(str(scan), 0)) == 0,
+        "⑦ 괘선이 그림이면 pdfplumber 는 표를 못 찾는다")
+    rows = tx.page_lines(d, str(scan), 0, tables="lines")
+    d.close()
+    ts = [r["text"] for r in rows]
+    chk(any("제품종류" in t and "구 분" in t and t.count(" | ") == 3 for t in ts),
+        "⑦ 표를 못 찾아도 한 행이 한 줄로 나온다", str(ts[:1]))
+    chk(len(rows) == 5, "⑦ 조각 15개가 5줄로 모인다", str(len(rows)) + "줄")
+    chk(any(t.strip().startswith("[ Hot Asphalt") and t.strip().endswith("]")
+            for t in ts),
+        "① 사용자가 본 그 줄 — '[ … ]' 가 한 줄이 된다", str(ts))
 finally:
     try:
         tx.close_cache()

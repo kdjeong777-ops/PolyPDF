@@ -14,6 +14,11 @@
                  (`_pdf_is_scanned` → False, `_read_orig_toc`/`load_single_pdf` 용)
   scanned_pdf()  스캔 모사 — 페이지가 **이미지 뿐**이라 텍스트 레이어가 없음, 14쪽
                  (`_pdf_is_scanned` → True. 앞 12쪽 표본의 60% 이상이 'ocr' 로 판정되면 참)
+  ruled_table_pdf()  괘선이 **선으로 그려진** 3열 표 — pdfplumber 가 표로 인식한다
+                 (텍스트 창 SOT §3.3 — 칸을 놓쳐도 글을 잃지 않는지)
+  scanned_form_pdf() 스캔 서식 모사 — 그림 위에 **보이지 않는 글자**(render mode 3)로
+                 4칸짜리 행을 얹고 잡음(작은 글자·기호·홀쭉한 한 글자)을 섞었다
+                 (SOT §3.5·§3.6 — 잡음 거르기·한 행 한 줄·2단 오해 방지)
 
 생성 비용을 매번 치르지 않도록 `%TEMP%` 아래 **버전 붙은 폴더에 캐시**한다.
 픽스처 내용을 바꾸면 `_VER` 을 올려 캐시를 무효화할 것.
@@ -25,7 +30,7 @@
 import os
 from pathlib import Path
 
-_VER = "v1"
+_VER = "v3"
 _DIR = Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".") / f"polypdf_fixtures_{_VER}"
 
 # TOC — 계층(레벨 1/2)을 섞어 트리 구성까지 검사되게 한다.
@@ -45,6 +50,13 @@ _TOC = [
 ]
 _TEXT_PAGES = 30
 _SCAN_PAGES = 14
+# 한글이 든 픽스처용 글꼴 — 없으면 기본 글꼴(라틴만)로 만든다.
+_KRFONT = next((f for f in (r'C:\Windows\Fonts\malgun.ttf',
+                            r'C:\Windows\Fonts\gulim.ttc')
+                if Path(f).exists()), '')
+
+
+KRFONT = _KRFONT      # 검사에서도 같은 글꼴을 쓴다(한글 픽스처)
 
 
 def _ensure_dir() -> Path:
@@ -102,6 +114,77 @@ def scanned_pdf() -> str:
         _build_scanned_pdf(p)
     return str(p)
 
+
+def _build_ruled_table_pdf(dst) -> None:
+    """괘선을 **선으로** 그린 3열 표 — pdfplumber 가 표로 잡는다."""
+    import fitz
+    doc = fitz.open()
+    pg = doc.new_page(width=595, height=842)
+    x = [70.0, 240.0, 400.0, 520.0]
+    y = [160.0, 185.0, 210.0, 235.0]
+    for yy in y:
+        pg.draw_line(fitz.Point(x[0], yy), fitz.Point(x[-1], yy))
+    for xx in x:
+        pg.draw_line(fitz.Point(xx, y[0]), fitz.Point(xx, y[-1]))
+    rows = [('항 목', '시 험 방 법', '기 준'),
+            ('모래당량(%)', 'KS F 2340', '50 이상'),
+            ('잔골재 입형(%)', 'KS F 2384', '45 이상')]
+    kw = dict(fontsize=10, fontfile=_KRFONT, fontname='kr') if _KRFONT else dict(fontsize=10)
+    for r, cells in enumerate(rows):
+        for c, t in enumerate(cells):
+            pg.insert_text((x[c] + 6, y[r] + 17), t, **kw)
+    pg.insert_text((70, 120), '<표 1> 잔골재의 품질', **kw)
+    doc.save(str(dst))
+    doc.close()
+
+
+def _build_scanned_form_pdf(dst) -> None:
+    """그림 위에 **보이지 않는 글자**로 얹은 서식 + 잡음(§3.5)."""
+    import fitz
+    doc = fitz.open()
+    pg = doc.new_page(width=595, height=842)
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 595, 842))
+    pix.clear_with(255)
+    pg.insert_image(pg.rect, pixmap=pix)
+    base = dict(render_mode=3)
+    if _KRFONT:
+        base.update(fontfile=_KRFONT, fontname='kr')
+    # 한 행에 네 칸 — 가운데가 비어 보이지만 2단이 아니다(왼쪽 끝이 제각각)
+    cells = [(52, 100, '제품종류'), (155, 100, '일반아스팔트혼합물'),
+             (330, 100, '구 분'), (440, 100, '요약표'),
+             (52, 130, '제품규격'), (200, 130, 'WC-3'),
+             (330, 130, '작성자'), (470, 130, '홍길동'),
+             (52, 160, '작성일자'), (185, 160, '2026년 2월'),
+             (330, 160, '확인자'), (469, 160, '김철수')]
+    for cx, cy, t in cells:
+        pg.insert_text((cx, cy), t, fontsize=10, **base)
+    pg.insert_text((60, 220), '[ Hot Asphalt Paving Mixture', fontsize=10, **base)
+    pg.insert_text((215, 220), ']', fontsize=10, **base)   # 같은 줄의 닫는 괄호
+    pg.insert_text((60, 260), '아주 큰 제목', fontsize=30, **base)
+    # 잡음 셋 — 너무 작다 / 기호만 / 한 글자인데 홀쭉하다
+    pg.insert_text((400, 60), '픔', fontsize=2.0, **base)
+    pg.insert_text((430, 300), '■', fontsize=16, **base)
+    pg.insert_text((470, 300), '☜', fontsize=14, **base)
+    doc.save(str(dst))
+    doc.close()
+
+
+def ruled_table_pdf() -> str:
+    """괘선이 그려진 3열 표가 든 PDF 경로(텍스트 창 SOT §3.3)."""
+    d = _ensure_dir()
+    p = d / 'sample_table.pdf'
+    if not p.exists() or p.stat().st_size == 0:
+        _build_ruled_table_pdf(p)
+    return str(p)
+
+
+def scanned_form_pdf() -> str:
+    """보이지 않는 글자층 + 잡음이 든 서식 PDF 경로(텍스트 창 SOT §3.5·§3.6)."""
+    d = _ensure_dir()
+    p = d / 'sample_scanform.pdf'
+    if not p.exists() or p.stat().st_size == 0:
+        _build_scanned_form_pdf(p)
+    return str(p)
 
 def toc_entries():
     """`text_pdf()` 에 심은 TOC(레벨, 제목, 1-based 페이지) 사본."""

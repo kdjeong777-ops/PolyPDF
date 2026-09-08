@@ -942,12 +942,14 @@ class AutoTagWorker(QObject):
     def _ko_lookup_map():
         """260830 P4(§9.2-5): dict.db 영→한 대역 맵 — 없거나 실패하면 None(병기 생략)."""
         try:
-            import sqlite3
             from viewer.settings_store import settings_dir
+            from viewer import dbutil as _db
             p = Path(settings_dir()) / "dict.db"
             if not p.exists():
                 return None
-            con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+            # 260908-9(감사, 응답성 SOT §4 ⑤ '어느 DB든'): 표준 연결로 연다.
+            #   종전 `sqlite3.connect(...)` 직접 호출은 **대기 상한이 기본 5초**였다.
+            con = _db.connect(p, _db.BUSY_MS_BG, row_factory=False, readonly=True)
             try:
                 m = {}
                 for ne, tk in con.execute(
