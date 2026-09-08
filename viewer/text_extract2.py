@@ -99,15 +99,30 @@ def close_cache() -> None:
             pass
 
 
-def _tables(pdf_path, page_index: int):
-    """[(bbox, rows)] — pdfplumber 로 찾은 표. 없거나 실패하면 빈 목록."""
-    pdf = _plumber(pdf_path)
-    if pdf is None:
-        return []
-    ck = (_PLUMB.get("key"), int(page_index))
+def _tables(pdf_path, page_index: int, *, cached_only: bool = False):
+    """[(bbox, rows)] — pdfplumber 로 찾은 표. 없거나 실패하면 빈 목록.
+
+    260908-5: 캐시를 **두 겹**으로 본다. ① 이번 실행의 메모리(`_TCACHE`), ② index.db 의
+    `page_tables`. 둘 다 `pdfplumber` 를 열기 **전에** 본다 — 표 찾기가 실측 쪽당
+    150ms~7초라, 캐시가 맞는데도 문서를 여는 것은 그 값을 헛되이 치르는 일이다.
+    """
+    size, mtime = _stat(pdf_path)
+    ck = ((str(pdf_path), size, mtime), int(page_index))
     hit = _TCACHE.get(ck)
     if hit is not None:
         return hit
+    db = _db_get(pdf_path, page_index)
+    if db is not None:
+        _TCACHE[ck] = db
+        return db
+    if cached_only:
+        # 260908-5(응답성 SOT §4 ①): 인덱싱이 도는 동안에는 표를 **새로 파지 않는다** —
+        #   둘 다 GIL 을 오래 쥐어 겹치면 창이 굼떠진다. 인덱싱이 끝나면 다시 부른다.
+        #   결과를 캐시에 넣지 않는 것이 요점이다(다음 호출이 제대로 파도록).
+        return []
+    pdf = _plumber(pdf_path)
+    if pdf is None:
+        return []
     out = []
     try:
         if page_index < len(pdf.pages):
@@ -125,7 +140,65 @@ def _tables(pdf_path, page_index: int):
     if len(_TCACHE) > _TCACHE_MAX:
         _TCACHE.clear()
     _TCACHE[ck] = out
+    _db_put(pdf_path, page_index, out)
     return out
+
+
+# 260908-5: 표 결과의 **영구 캐시**(index.db `page_tables`). 앱이 db 경로를 준다.
+_DB_PATH = None
+
+
+def set_table_cache_db(path) -> None:
+    """앱 시작 때 한 번 — 없으면 캐시 없이 동작한다(기능 저하, 오류 아님)."""
+    global _DB_PATH
+    _DB_PATH = str(path) if path else None
+
+
+def _stat(pdf_path):
+    import os
+    try:
+        st = os.stat(pdf_path)
+        return int(st.st_size), float(st.st_mtime)
+    except Exception:
+        return None, None
+
+
+def _db_get(pdf_path, page):
+    if not _DB_PATH:
+        return None
+    size, mtime = _stat(pdf_path)
+    if size is None:
+        return None
+    try:
+        from viewer.indexer import PdfIndex
+        ix = PdfIndex(_DB_PATH)
+        try:
+            got = ix.tables_get(pdf_path, page, size, mtime)
+        finally:
+            ix.close()
+        if got is None:
+            return None
+        return [(tuple(bb), rows) for bb, rows in got]
+    except Exception:
+        return None
+
+
+def _db_put(pdf_path, page, data) -> None:
+    if not _DB_PATH:
+        return
+    size, mtime = _stat(pdf_path)
+    if size is None:
+        return
+    try:
+        from viewer.indexer import PdfIndex
+        ix = PdfIndex(_DB_PATH)
+        try:
+            ix.tables_set(pdf_path, page, size, mtime,
+                          [[list(bb), rows] for bb, rows in data])
+        finally:
+            ix.close()
+    except Exception:
+        pass
 
 
 def _inside(rect, box, frac: float = 0.6) -> bool:
@@ -157,7 +230,7 @@ def _classify(items):
 
 
 def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
-               ocr_text: str = "") -> list:
+               ocr_text: str = "", tables_cached_only: bool = False) -> list:
     """쪽 하나의 줄 목록(SOT §3). `tables` = "lines"(기본) / "omit" / "off".
 
     `ocr_text` 는 텍스트층이 쓸 만하지 않을 때 쓰는 OCR 결과(단어장 SOT 의 study.db).
@@ -175,7 +248,8 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
                 out.append({"text": ln, "style": "body", "rect": None, "kind": "text"})
         return out
 
-    tbl = _tables(pdf_path, page_index) if tables != "off" else []
+    tbl = (_tables(pdf_path, page_index, cached_only=tables_cached_only)
+           if tables != "off" else [])
     styles = _classify(items)
     rows_out = []
     for (rect, txt, _size), st in zip(items, styles):

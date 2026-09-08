@@ -5,11 +5,11 @@
 from __future__ import annotations
 
 import os
-import time
 import re
 import sqlite3
 
 from viewer import dbutil as _dbutil
+from viewer import pacing as _pacing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator
@@ -120,6 +120,10 @@ class PdfIndex:
     # 260825: FTS 토크나이저 스키마 버전. 2=trigram(파괴적, 폐기), 3=trigram(내용 보존 복사).
     SCHEMA_VERSION = 3
     YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(응답성 SOT §4 ②)
+    # 260908-5(응답성 SOT §4 ⑦): 간격이 아니라 **점유율**로 조절한다.
+    #   5ms 간격만으로는 쪽 하나가 무거울 때 배경이 벽시계를 거의 다 쓴다 —
+    #   실측 100초 인덱싱 동안 UI 하트비트가 기대의 47% 였다.
+    BG_DUTY = _pacing.BG_DUTY
     WRITE_CHUNK = 128        # 260906-6: 쓰기 트랜잭션 한 번에 담는 쪽 수(잠금 시간 상한)
     PAGES_PENDING = -1       # 260906-6: '본문을 아직 다 적지 못했다' 표식
     _FTS_TRIGRAM = ("CREATE VIRTUAL TABLE {name} USING fts5("
@@ -155,6 +159,23 @@ class PdfIndex:
                 encrypted INTEGER NOT NULL,
                 has_toc INTEGER,           -- NULL = 잠겨서 모름
                 auth TEXT
+            );
+            """
+        )
+
+        # 260908-5(성능): 표 인식 결과의 **영구 캐시**. pdfplumber 의 표 찾기는 쪽당
+        #   150ms~7초로 비싸고, 같은 문서를 다시 열면 처음부터 다시 판다. 크기·수정시각이
+        #   같으면 결과도 같으므로 여기에 남겨 **다음 실행에서도 그대로 쓴다**
+        #   (`probe_cache` 와 같은 생각 — 텍스트 창 SOT §3.0).
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS page_tables(
+                key TEXT NOT NULL,         -- pathutil.norm_key(경로)
+                page INTEGER NOT NULL,
+                size INTEGER NOT NULL,
+                mtime REAL NOT NULL,
+                data TEXT NOT NULL,        -- JSON: [[bbox, rows], …]
+                PRIMARY KEY(key, page)
             );
             """
         )
@@ -230,6 +251,40 @@ class PdfIndex:
              None if has_toc is None else (1 if has_toc else 0), auth))
         self.conn.commit()
 
+    # --- 260908-5: 표 인식 캐시 -------------------------------------------
+    def tables_get(self, file_path, page: int, size: int, mtime: float):
+        """저장해 둔 표 결과. 모르거나 파일이 바뀌었으면 None."""
+        import json as _json
+        from viewer.pathutil import norm_key
+        try:
+            row = self.conn.execute(
+                "SELECT size, mtime, data FROM page_tables WHERE key=? AND page=?",
+                (norm_key(file_path), int(page))).fetchone()
+        except Exception:
+            return None
+        if row is None:
+            return None
+        try:
+            if int(row["size"]) != int(size)                     or abs(float(row["mtime"]) - float(mtime)) > 1:
+                return None
+            return _json.loads(row["data"])
+        except Exception:
+            return None
+
+    def tables_set(self, file_path, page: int, size: int, mtime: float, data) -> None:
+        """표 결과 기록(같은 쪽은 덮어쓴다)."""
+        import json as _json
+        from viewer.pathutil import norm_key
+        try:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO page_tables(key, page, size, mtime, data)"
+                " VALUES(?, ?, ?, ?, ?)",
+                (norm_key(file_path), int(page), int(size), float(mtime),
+                 _json.dumps(data, ensure_ascii=False)))
+            self.conn.commit()
+        except Exception:
+            pass
+
     def _find_file_row(self, file_path, cols: str = "id, mtime, size"):
         """260905(검색 SOT §3): 경로로 `files` 행 찾기 — **정확 일치 먼저, 없으면 정규화 키**.
 
@@ -277,6 +332,10 @@ class PdfIndex:
             self.conn.execute("DELETE FROM pages_fts WHERE file_id = ?", (fid,))
             self.conn.execute("DELETE FROM files WHERE id = ?", (fid,))
             self.conn.commit()
+
+    def _pace(self):
+        """응답성 SOT §4 ⑦ — 방금 일한 만큼 비례해 쉰다(폴더 전체가 한 박자를 공유)."""
+        return _pacing.pace(self)
 
     def index_file(self, file_path: Path):
         """단일 PDF 인덱싱(또는 재인덱싱)."""
@@ -328,10 +387,10 @@ class PdfIndex:
                 # 260906-5(응답성 SOT §4 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
                 #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.
                 if (i & 0x1F) == 0x1F:
-                    time.sleep(self.YIELD_S)
+                    self._pace()
                 if len(rows) >= self.WRITE_CHUNK:
                     _flush()
-                    time.sleep(self.YIELD_S)
+                    self._pace()
             _flush()
             # ★ 쪽을 다 적은 **뒤에야** 진짜 쪽수를 넣는다 — 중간에 끊기면 `page_count` 가
             #   `PAGES_PENDING` 으로 남아 `needs_reindex` 가 다시 읽게 한다(검색이 조용히
@@ -389,7 +448,7 @@ class PdfIndex:
 
         total = len(pdfs)
         for idx, pdf in enumerate(pdfs, 1):
-            time.sleep(self.YIELD_S)          # 260906-5(응답성 SOT §4 ②): 파일마다 GIL 양보
+            self._pace()                      # 260906-5/260908-5(SOT §4 ②·⑦): 파일마다
             if should_cancel and should_cancel():
                 return
             # 260905(§4.4): 시작도 알린다 — 완료 때만 알리면 첫 파일이 끝날 때까지 진행 창이

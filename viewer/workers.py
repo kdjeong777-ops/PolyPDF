@@ -1,13 +1,13 @@
 """QThread 기반 백그라운드 작업자."""
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from viewer.indexer import PdfIndex
+from viewer import pacing as _pacing
 
 
 class IndexWorker(QObject):
@@ -198,8 +198,7 @@ class ProbeWorker(QObject):
                     pass
             self.result.emit({"path": path, "size": size, "mtime": mtime,
                               "enc": enc, "has_toc": has_toc, "auth": auth})
-            if self.YIELD_S:
-                time.sleep(self.YIELD_S)      # ② 메인에 GIL 조각을 넘긴다
+            _pacing.pace(self)                # ②·⑦ 메인에 GIL 조각을 넘긴다(점유율 조절)
 
 
 def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
@@ -239,13 +238,14 @@ class TextPageWorker(QObject):
     finished = pyqtSignal()
 
     def __init__(self, doc_path, page: int, *, tables: str = "lines",
-                 ocr_text: str = "", token: int = 0):
+                 ocr_text: str = "", token: int = 0, cached_only: bool = False):
         super().__init__()
         self.doc_path = str(doc_path)
         self.page = int(page)
         self.tables = tables
         self.ocr_text = ocr_text or ""
         self.token = int(token)
+        self.cached_only = bool(cached_only)   # 260908-5: 인덱싱 중이면 표를 새로 파지 않는다
         self._cancel = False
 
     def request_cancel(self):
@@ -262,7 +262,8 @@ class TextPageWorker(QObject):
             doc = fitz.open(self.doc_path)
             try:
                 rows = tx.page_lines(doc, self.doc_path, self.page,
-                                     tables=self.tables, ocr_text=self.ocr_text)
+                                     tables=self.tables, ocr_text=self.ocr_text,
+                                     tables_cached_only=self.cached_only)
             finally:
                 doc.close()
             if not self._cancel:
@@ -593,8 +594,7 @@ class StudyBuildWorker(QObject):
                     continue
                 # 260906-8(응답성 SOT §4 ②): 쪽마다 GIL 양보 — OCR·본문 추출은 C 호출이라
                 #   양보 없이 돌면 그 사이 메인이 굶는다(사용자가 띄운 작업이어도 창은 살아야).
-                if self.YIELD_S:
-                    time.sleep(self.YIELD_S)
+                _pacing.pace(self)            # 260908-5: 간격이 아니라 점유율(§4 ⑦)
                 try:
                     res = study_ocr.build_page(doc, i, lang=self.lang,
                                                dpi=self.dpi, force_ocr=self.force_ocr)
@@ -956,8 +956,7 @@ class AutoTagWorker(QObject):
                     return
                 # 260906-8(응답성 SOT §4 ②): 파일마다 GIL 양보 — 색인에 없는 파일은
                 #   `extract_features` 가 fitz 로 폴백해 그 사이 메인이 굶는다.
-                if self.YIELD_S:
-                    time.sleep(self.YIELD_S)
+                _pacing.pace(self)            # 260908-5: 간격이 아니라 점유율(§4 ⑦)
                 try:
                     f = extract_features(p, page_texts=texts(p),
                                          folder_names=folder_names.get(p))
@@ -997,8 +996,7 @@ class AutoTagWorker(QObject):
             for i, p in enumerate(self.paths):
                 if self._cancel:
                     return
-                if self.YIELD_S:
-                    time.sleep(self.YIELD_S)      # 260906-8(응답성 SOT §4 ②)
+                _pacing.pace(self)                # 260906-8/260908-5(§4 ②·⑦)
                 f = feats.get(p)
                 if f is None:
                     continue

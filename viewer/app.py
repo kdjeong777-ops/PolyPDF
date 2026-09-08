@@ -2558,6 +2558,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         tp.applyToPdfRequested.connect(self._on_text_apply_pdf)
         tp.bookmarkFromHighlight.connect(self._on_text_make_bookmarks)
         tp.exportWordRequested.connect(self._on_text_export_word)
+        try:    # 260908-5: 표 인식 결과를 index.db 에 남겨 다음 실행에도 재사용
+            from viewer import text_extract2 as _tx0
+            _tx0.set_table_cache_db(self._db_path)
+        except Exception:
+            pass
         tp.highlightAdded.connect(self._on_text_highlight)      # 260908-3(SOT §6)
         tp.ocrRequested.connect(self._on_text_need_ocr)
         try:
@@ -2603,9 +2608,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._text_token = getattr(self, "_text_token", 0) + 1
         tok = self._text_token
         tp.set_busy(f"p.{page + 1} 읽는 중…" if not note else note)
+        # 260908-5(응답성 SOT §4 ①): 인덱싱이 도는 동안에는 표 인식을 미룬다 —
+        #   둘 다 GIL 을 오래 쥔다. 미룬 것은 인덱싱이 끝나면 다시 뽑는다.
+        busy_idx = bool(getattr(self, "_index_workers", None))
+        self._text_tables_deferred = busy_idx
         w = TextPageWorker(cur, page,
                            tables=("omit" if tp.omit_tables() else "lines"),
-                           ocr_text=ocr_text, token=tok)
+                           ocr_text=ocr_text, token=tok, cached_only=busy_idx)
         self._text_worker = w
         w.done.connect(lambda pg, rows, t: self._on_text_rows(cur, pg, rows, t, note))
         w.error.connect(lambda msg, t: tp.set_busy(f"읽지 못했습니다: {msg}")
@@ -4074,6 +4083,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _on_index_finished(self):
         self.progress.setVisible(False)
         self.status.showMessage("인덱싱 완료", 3000)
+        # 260908-5: 인덱싱 때문에 미뤄 둔 표 인식을 이제 마저 한다(응답성 SOT §4 ①).
+        if getattr(self, "_text_tables_deferred", False):
+            self._text_tables_deferred = False
+            try:
+                QTimer.singleShot(600, self._reload_text_panel)
+            except Exception:
+                pass
         # 260829 P2(태그 SOT §8.2): 인덱싱 직후 자동 부여 — 본문이 index.db 에 막
         # 들어간 시점이라 추가 I/O 가 없다. 실패해도 인덱싱 결과에는 영향 없음.
         try:

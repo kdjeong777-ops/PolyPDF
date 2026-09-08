@@ -35,6 +35,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 
+
 MAX_KEYWORDS = 10          # §9.1 — 파일당 키워드 상한
 
 
@@ -66,9 +67,28 @@ def _tag_key(raw: str) -> str:
       필요한 별개 작업(마스터 §15 백로그).
     """
     try:
-        return str(Path(raw).resolve()).lower()
+        # 260908-5(성능): `resolve()` 는 **파일마다** 파일시스템을 두 번 탄다.
+        #   폴더를 열 때 파일 수만큼 나므로, 폴더 하나에 메인 스레드가 누계 650ms 붙잡혔다
+        #   (응답성 SOT §7 실측, 1초 넘는 정지 6회의 주된 원인).
+        #   경로에서 **디렉터리만 resolve** 하고 파일명을 붙이면 결과 문자열은 같으면서
+        #   호출 수가 '파일 수' 에서 '폴더 수' 로 준다(같은 폴더는 캐시가 받는다).
+        #   ★ 키 형식은 종전과 **바이트 동일** — 기존 `file_tags.json` 이 그대로 맞는다.
+        pp = Path(raw)
+        parent = _resolve_dir(str(pp.parent))
+        if parent:
+            return (parent + "\\" + pp.name).lower()
+        return str(pp.resolve()).lower()
     except Exception:
         return raw.lower()
+
+
+@lru_cache(maxsize=4096)
+def _resolve_dir(d: str) -> str:
+    """폴더 경로의 `resolve()` — 같은 폴더는 한 번만 판다."""
+    try:
+        return str(Path(d).resolve())
+    except Exception:
+        return ""
 
 
 class TagStore:
@@ -148,7 +168,14 @@ class TagStore:
     # ── 키/레코드 ─────────────────────────────────────────────────────────
     @staticmethod
     def _key(p) -> str:
+        """저장 키. **정적 메서드로 유지한다** — `TagStore._key` 를 클래스에서 직접 부르는
+        곳이 있다(`workers.AutoTagWorker`, `test_auto_tag.py`). 260908-5 에 인스턴스
+        메서드로 바꿨다가 그 호출이 깨졌다.
+
+        비용은 `_tag_key` 쪽에서 없앴다 — 부모 디렉터리만 `resolve` 하고 캐시한다
+        (응답성 SOT §4.5·§12). 300건 79.6ms → 2.1ms 라 빠른 길을 따로 둘 이유가 없다."""
         return _tag_key(str(p or ""))
+
 
     def _dictify(self, key: str) -> dict:
         """v1(list) 항목을 v2(dict)로 승격(lazy 마이그레이션, §6). 없으면 생성."""
