@@ -1205,8 +1205,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.study_panel = StudyPanel()
         self.search_tabs = QTabWidget()
         self.search_tabs.setDocumentMode(True)     # 260606-7: 탭 프레임/여백 축소
-        self.search_tabs.addTab(self.search_area, "🔎 검색")
+        # 260908-2(사용자 지시, 텍스트 창 SOT §2): 순서는 **텍스트 → 단어장 → 검색**
+        from viewer.widgets.text_panel import TextPanel
+        self.text_panel = TextPanel()
+        self.search_tabs.addTab(self.text_panel, "📄 텍스트")
         self.search_tabs.addTab(self.study_panel, "📖 단어장")
+        self.search_tabs.addTab(self.search_area, "🔎 검색")
 
         self.right_splitter = QSplitter(Qt.Orientation.Vertical)
         self.right_splitter.setHandleWidth(2)      # 260606-7: 분할 손잡이 폭 축소
@@ -1932,6 +1936,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.search_tabs.currentChanged.connect(
             lambda _i: self._refresh_study_panel(self.main_view.current_page())
             if self.search_tabs.currentWidget() is self.study_panel else None)
+        # 260908-2: 텍스트 탭으로 오면 그때 뽑는다(안 볼 때는 뽑지 않는다 — 응답성 §4 ⑥)
+        self.search_tabs.currentChanged.connect(lambda _i: self._reload_text_panel())
+        self._wire_text_panel()
 
         self.search_bar.searchRequested.connect(self.action_search)
         self.search_bar.queryCleared.connect(lambda: self.main_view.set_query(""))
@@ -2529,6 +2536,198 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         self._refresh_search_scope()
+
+    # ===== 260908-2: 텍스트 창 (텍스트 창 SOT) =====================
+    def _wire_text_panel(self):
+        tp = self.text_panel
+        tp.lineFocused.connect(self._on_text_line_focused)
+        tp.lineEdited.connect(self._on_text_line_edited)
+        tp.applyToPdfRequested.connect(self._on_text_apply_pdf)
+        tp.bookmarkFromHighlight.connect(self._on_text_make_bookmarks)
+        tp.exportWordRequested.connect(self._on_text_export_word)
+        try:
+            tp.set_styles(self._prefs.get("text_panel_styles") or {})
+        except Exception:
+            pass
+
+    def _text_store(self):
+        from viewer.text_fix_store import store
+        return store()
+
+    def _reload_text_panel(self):
+        """현재 쪽의 줄 목록을 뽑아 텍스트 창에 넣는다(SOT §3).
+
+        텍스트 창이 보이지 않으면 아무 것도 하지 않는다 — 쪽을 넘길 때마다 쓰지도 않을
+        추출을 돌리면 그만큼 느려진다(응답성 SOT §4 ⑥)."""
+        tp = getattr(self, "text_panel", None)
+        if tp is None or self.search_tabs.currentWidget() is not tp:
+            return
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if not cur or not str(cur).lower().endswith(".pdf") or mv._doc is None:
+            tp.set_page("", 0, [], "PDF 를 먼저 여세요.")
+            return
+        page = mv.current_page()
+        from viewer import text_extract2 as tx
+        note = ""
+        ocr_text = ""
+        if not tx.has_text_layer(mv._doc.doc, page):
+            ocr_text = self._ocr_page_text(cur, page)
+            if not ocr_text:
+                note = ("이 쪽은 스캔본이라 글자가 없습니다. "
+                        "[단어장 생성] 으로 이 문서를 읽으면 여기에 글이 나옵니다.")
+        rows = tx.page_lines(mv._doc.doc, cur, page,
+                             tables=("omit" if tp.omit_tables() else "lines"),
+                             ocr_text=ocr_text)
+        # 고쳐 둔 줄을 얹는다(SOT §5.1 ①)
+        fixes = self._text_store().get_fixes(cur, page)
+        for i, t in fixes.items():
+            if 0 <= i < len(rows):
+                rows[i]["text"] = t
+        tp.set_page(cur, page, rows, note)
+
+    def _ocr_page_text(self, path, page: int) -> str:
+        """study.db 에 저장된 OCR 결과(단어장 SOT 소유). 없으면 빈 문자열."""
+        try:
+            from viewer.study.study_store import StudyStore, file_key_for
+            st = StudyStore()
+            try:
+                return st.get_page_text(file_key_for(path), int(page)) or ""
+            finally:
+                st.close()
+        except Exception:
+            return ""
+
+    def _on_text_line_focused(self, page, rects):
+        """텍스트 창에서 줄을 고르거나 고쳤다 → **본문에서 그 자리를 강조**(사용자 요청)."""
+        if page < 0:                     # 표 옵션 변경 등 — 다시 뽑아 달라는 신호
+            self._reload_text_panel()
+            return
+        mv = self.main_view
+        if mv is None:
+            return
+        try:
+            if not rects:
+                mv.clear_word_highlights()
+                return
+            if mv.current_page() != page:
+                mv.go_to_page(page)
+            mv.highlight_word_rects([tuple(r) for r in rects if r],
+                                    style="select", scroll=True)
+        except Exception:
+            pass
+
+    def _on_text_line_edited(self, page, line, text, orig=""):
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur:
+            return
+        self._text_store().set_fix(cur, page, line, text, orig)
+
+    def _on_text_apply_pdf(self):
+        """고친 글을 **OCR 텍스트층**에 다시 적는다(SOT §5.2)."""
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if not cur or mv._doc is None:
+            return
+        page = mv.current_page()
+        rows = self.text_panel.rows()
+        fixes = self._text_store().get_fixes(cur, page)
+        if not fixes:
+            QMessageBox.information(self, "텍스트", "이 쪽에는 고친 내용이 없습니다.")
+            return
+        from viewer import text_extract2 as tx
+        if tx.has_text_layer(mv._doc.doc, page):
+            QMessageBox.information(
+                self, "텍스트",
+                "이 쪽은 원래 글자가 있는 PDF 입니다.\n\n"
+                "그 글자는 화면에 보이는 내용이라, 다시 적으면 글꼴이 바뀌어 문서 모양이 "
+                "달라집니다. 그래서 PDF 는 건드리지 않았습니다.\n\n"
+                "고친 내용은 그대로 남아 있고, 본문 복사·검색에는 이미 반영됩니다.")
+            return
+        ok = QMessageBox.question(
+            self, "PDF 에 반영",
+            f"이 쪽({page + 1})의 OCR 글자를 고친 내용으로 다시 적습니다.\n"
+            f"고친 줄: {len(fixes)}개\n\n"
+            "화면에 보이는 모양은 그대로이고 복사·검색 결과만 바뀝니다.\n"
+            "원본은 백업해 둡니다. 계속할까요?")
+        if ok != QMessageBox.StandardButton.Yes:
+            return
+        from viewer.text_apply import apply_fixes_to_pdf
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        try:
+            self._close_main_view_doc()
+            QApplication.processEvents()
+            out, err = apply_fixes_to_pdf(cur, page, rows, fixes, self._finalize_save)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if err:
+            QMessageBox.warning(self, "PDF 에 반영", f"실패: {err}")
+            return
+        self._text_store().clear_page_fixes(cur, page)
+        self.open_pdf(Path(out))
+        self.status.showMessage(f"텍스트층에 반영했습니다 — {Path(out).name}", 6000)
+
+    def _on_text_make_bookmarks(self, items):
+        """칠한 곳으로 책갈피를 만든다(SOT §6)."""
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur or not items:
+            return
+        for it in items:
+            self.bookmark_tree.add_bookmark(cur, int(it["page"]), it["title"],
+                                            int(it.get("level", 1)))
+        self.status.showMessage(
+            f"책갈피 {len(items)}개 추가 — 책갈피창 편집(✏)에서 저장(💾)해야 PDF 에 들어갑니다.",
+            7000)
+
+    def _on_text_export_word(self, scope: str):
+        """Word 저장 — 현재 쪽 / 쪽 범위 / 문서 전체(사용자 결정 260908, SOT §7)."""
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if not cur or mv._doc is None:
+            return
+        n = mv._doc.page_count
+        page = mv.current_page()
+        if scope == "page":
+            pages = [page]
+        elif scope == "all":
+            pages = list(range(n))
+        else:
+            from PyQt6.QtWidgets import QInputDialog
+            txt, ok = QInputDialog.getText(
+                self, "쪽 범위", f"내보낼 쪽 범위 (1~{n}), 예: 3-12",
+                text=f"{page + 1}-{min(n, page + 10)}")
+            if not ok:
+                return
+            try:
+                a, _, b = str(txt).partition("-")
+                lo = max(1, int(a.strip() or 1)); hi = min(n, int((b or a).strip() or lo))
+                pages = list(range(lo - 1, hi))
+            except Exception:
+                QMessageBox.warning(self, "쪽 범위", "3-12 처럼 적어 주세요.")
+                return
+        if not pages:
+            return
+        from PyQt6.QtWidgets import QFileDialog
+        dst, _ = QFileDialog.getSaveFileName(
+            self, "Word 로 저장", str(Path(cur).with_suffix("")) + ".docx",
+            "Word 문서 (*.docx)")
+        if not dst:
+            return
+        from viewer.text_word import export_pages_to_docx
+        tp = self.text_panel
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        try:
+            ok, msg = export_pages_to_docx(
+                cur, mv._doc.doc, pages, dst, tp.styles(),
+                omit_tables=tp.omit_tables(),
+                fix_lookup=lambda pg: self._text_store().get_fixes(cur, pg),
+                ocr_lookup=lambda pg: self._ocr_page_text(cur, pg))
+        finally:
+            QApplication.restoreOverrideCursor()
+        if ok:
+            self.status.showMessage(f"Word 저장: {Path(dst).name} ({len(pages)}쪽)", 6000)
+        else:
+            QMessageBox.warning(self, "Word 저장", f"실패: {msg}")
 
     def _on_add_bookmark_requested(self, target_file: str):
         """v1.6.20 K5: 메인 뷰어 현재 페이지로 책갈피 추가."""
@@ -4895,6 +5094,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _on_main_page_changed(self, page: int):
         """페이지가 바뀐 직후, 보류 중인 자동 스크린샷이 있으면 캡처."""
+        try:
+            self._reload_text_panel()        # 260908-2: 텍스트 창은 현재 쪽을 따라간다
+        except Exception:
+            pass
         if self._pending_screenshot_after_load:
             self._pending_screenshot_after_load = False
             QApplication.processEvents()
@@ -5881,6 +6084,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             #   빠져 있어 **사용자가 고른 값이 조용히 사라졌다**(260822 도입 이후 계속).
             "open_edit_mode": bool(prefs.get("open_edit_mode",
                                              old.get("open_edit_mode", True))),
+            # 260908-2(텍스트 창 SOT §3.4): 제목/내용 스타일 값. 허용목록에 없으면
+            #   조용히 사라진다(§8.2 함정) — `test_prefs_allowlist.py` 가 지킨다.
+            "text_panel_styles": dict(prefs.get("text_panel_styles",
+                                                old.get("text_panel_styles", {})) or {}),
             # 260829 P2: 태그 자동 부여 — 허용목록 미등재 시 조용히 유실(§14.2 함정)
             "auto_tag_enabled": bool(prefs.get("auto_tag_enabled",
                                                old.get("auto_tag_enabled", False))),
@@ -6204,6 +6411,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
 
+    def _text_prefs_snapshot(self) -> dict:
+        """260908-2: 저장 직전에 텍스트 창의 스타일을 prefs 에 담는다(SOT §3.4)."""
+        try:
+            tp = getattr(self, "text_panel", None)
+            if tp is not None:
+                self._prefs["text_panel_styles"] = tp.styles()
+        except Exception:
+            pass
+        return self._prefs
+
     def _current_open_target(self) -> dict:
         """260906-3: 1번째 뷰어가 지금 보고 있는 대상 → {"kind": "file"|"folder", "path": ...}.
 
@@ -6244,7 +6461,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             "capture_mode": getattr(self, "_cap_mode", "full"),
             "capture_copy": getattr(self, "_cap_copy", "visible"),
             "capture_sizes": getattr(self, "_cap_sizes", []),
-            "preferences": self._prefs,
+            # 260908-2: 텍스트 창의 최신 스타일 값을 담아 둔다(다음 실행에 그대로)
+            "preferences": self._text_prefs_snapshot(),
             "favorites": self._favorites,
             "law_favorites": self._law_favorites,
             "kcsc_favorites": self._kcsc_favorites,   # 260618-39

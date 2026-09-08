@@ -1673,6 +1673,20 @@ class MainView(QWidget):
         self.textCopied.emit(n)
         return n
 
+    def _apply_text_fixes(self, txt: str) -> str:
+        """260908-2(텍스트 창 SOT §5.3): 복사한 글에 **텍스트 창에서 고친 내용**을 얹는다.
+
+        스캔본을 OCR 로 읽으면 글자가 틀린다(`ㅂ1ㅓ`). 사용자가 텍스트 창에서 고쳤으면
+        복사도 고친 글로 나와야 한다 — 그것이 고치는 이유다."""
+        try:
+            from viewer.text_fix_store import store
+            cur = self.current_file()
+            if not cur:
+                return txt
+            return store().apply_to_copy(cur, self._current_page, txt)
+        except Exception:
+            return txt
+
     def copy_page_text(self) -> int:
         """현재 페이지 전체 텍스트를 클립보드로. 반환: 글자수."""
         from PyQt6.QtWidgets import QApplication
@@ -1684,6 +1698,7 @@ class MainView(QWidget):
             txt = self._doc.doc.load_page(self._current_page).get_text("text")
         except Exception:
             txt = ""
+        txt = self._apply_text_fixes(txt)          # 260908-2
         n = len((txt or "").strip())
         if n:
             QApplication.clipboard().setText(txt)
@@ -1700,6 +1715,7 @@ class MainView(QWidget):
             self.textCopied.emit(-1); return 0
         txt = self._sel_text if (self._sel_text and self._sel_text.strip()) \
             else self._region_text(None)
+        txt = self._apply_text_fixes(txt)          # 260908-2
         n = len((txt or "").strip())
         if n:
             QApplication.clipboard().setText(txt)
