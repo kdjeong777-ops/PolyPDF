@@ -2616,13 +2616,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                            tables=("omit" if tp.omit_tables() else "lines"),
                            ocr_text=ocr_text, token=tok, cached_only=busy_idx)
         self._text_worker = w
-        w.done.connect(lambda pg, rows, t: self._on_text_rows(cur, pg, rows, t, note))
+        w.done.connect(lambda pg, rows, t, _w=w:
+                       self._on_text_rows(cur, pg, rows, t, note,
+                                          getattr(_w, "noise", 0)))
         w.error.connect(lambda msg, t: tp.set_busy(f"읽지 못했습니다: {msg}")
                         if t == self._text_token else None)
         w.finished.connect(lambda: setattr(self, "_text_worker", None))
         run_in_thread(w, self._thread_keep)
 
-    def _on_text_rows(self, path, page, rows, token, note=""):
+    def _on_text_rows(self, path, page, rows, token, note="", noise=0):
         """워커가 뽑아 온 줄을 창에 넣는다 — **마지막 요청만** 쓴다(쪽을 빨리 넘길 때)."""
         if token != getattr(self, "_text_token", 0):
             return
@@ -2630,11 +2632,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if tp is None:
             return
         rows = list(rows or [])
-        # 고쳐 둔 줄을 얹는다(SOT §5.1 ①)
-        fixes = self._text_store().get_fixes(path, page)
+        # 고쳐 둔 줄을 얹는다(SOT §5.1 ①). 260908-6: 줄 번호가 아니라 **자리로 되맞춘다**
+        #   — 잡음 거르기·표 옵션으로 목록이 달라져도 고침이 제 줄에 붙는다(SOT §5.1.1).
+        fixes = self._text_store().remap(path, page, rows)
         for i, t in fixes.items():
             if 0 <= i < len(rows):
+                rows[i].setdefault("orig", rows[i].get("text", ""))
                 rows[i]["text"] = t
+        if noise and not note:   # 260908-6(SOT §3.5): 조용히 빼지 않는다
+            note = f"p.{page + 1} · {len(rows)}줄 · 잡음 {noise}줄 숨김"
         tp.set_page(path, page, rows, note)
         tp.restore_highlights(self._text_store().get_highlights(path, page))
 
@@ -2682,11 +2688,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if cur:
             self._on_create_study_requested(str(cur))
 
-    def _on_text_line_edited(self, page, line, text, orig=""):
+    def _on_text_line_edited(self, page, line, text, orig="", rect=None):
         cur = self.main_view.current_file() if self.main_view else None
         if not cur:
             return
-        self._text_store().set_fix(cur, page, line, text, orig)
+        # 260908-6(SOT §5.1.1): 자리를 같이 남긴다 — 줄 번호는 흔들린다.
+        if rect is None:
+            rows = self.text_panel.rows()
+            rect = rows[line].get("rect") if 0 <= line < len(rows) else None
+        self._text_store().set_fix(cur, page, line, text, orig, rect)
 
     def _on_text_apply_pdf(self):
         """고친 글을 **OCR 텍스트층**에 다시 적는다(SOT §5.2)."""
@@ -2696,7 +2706,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         page = mv.current_page()
         rows = self.text_panel.rows()
-        fixes = self._text_store().get_fixes(cur, page)
+        # 260908-6(SOT §5.1.1): 줄 번호가 아니라 **저장해 둔 사각형**을 지운다.
+        items = self._text_store().get_items(cur, page)
+        fixes = items
         if not fixes:
             QMessageBox.information(self, "텍스트", "이 쪽에는 고친 내용이 없습니다.")
             return
@@ -2709,10 +2721,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 "달라집니다. 그래서 PDF 는 건드리지 않았습니다.\n\n"
                 "고친 내용은 그대로 남아 있고, 본문 복사·검색에는 이미 반영됩니다.")
             return
+        n_del = sum(1 for it in items if not it["text"])   # 260908-6: 빈 줄 = 지우기
         ok = QMessageBox.question(
             self, "PDF 에 반영",
             f"이 쪽({page + 1})의 OCR 글자를 고친 내용으로 다시 적습니다.\n"
-            f"고친 줄: {len(fixes)}개\n\n"
+            f"고친 줄: {len(fixes)}개"
+            + (f" (그중 {n_del}줄은 지웁니다)" if n_del else "") + "\n\n"
             "화면에 보이는 모양은 그대로이고 복사·검색 결과만 바뀝니다.\n"
             "원본은 백업해 둡니다. 계속할까요?")
         if ok != QMessageBox.StandardButton.Yes:
@@ -2727,9 +2741,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             out, err = apply_fixes_to_pdf(cur, page, rows, fixes, self._finalize_save)
         finally:
             QApplication.restoreOverrideCursor()
-        if err:
+        if err and not out:
             QMessageBox.warning(self, "PDF 에 반영", f"실패: {err}")
             return
+        if err:                     # 260908-6: 반영은 됐지만 못 적은 줄이 있다 — 숨기지 않는다
+            QMessageBox.information(self, "PDF 에 반영", err)
         self._text_store().clear_page_fixes(cur, page)
         self.open_pdf(Path(out))
         self.status.showMessage(f"텍스트층에 반영했습니다 — {Path(out).name}", 6000)

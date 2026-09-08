@@ -98,20 +98,81 @@ class TextFixStore:
         return text
 
     def set_fix(self, file_path, page: int, line: int, text: str,
-                orig: str = None) -> None:
+                orig: str = None, rect=None) -> None:
         """고친 글을 남긴다. `orig`(원래 글)도 함께 두면 **복사·검색에서 치환**할 수 있다.
 
         복사한 글은 줄 번호를 모른 채 오므로(사용자가 아무 데나 긁는다), 원문 조각을
-        찾아 바꾸는 방법 말고는 반영할 길이 없다(SOT §5.3)."""
+        찾아 바꾸는 방법 말고는 반영할 길이 없다(SOT §5.3).
+
+        260908-6(SOT §5.1.1): **자리(사각형)를 같이 적는다.** 줄 번호는 흔들린다 —
+        잡음 거르기·표 옵션·재추출로 목록이 조금만 달라져도 고침이 다른 줄에 붙었고,
+        [PDF 에 반영] 이 **엉뚱한 줄을 지웠다**(사용자 보고, 1쪽 제목이 사라졌다).
+        사각형이 있으면 반영은 줄 번호가 아니라 그 사각형을 지운다."""
         d = self._doc(file_path, create=True)
         pg = d.setdefault("fix", {}).setdefault(str(int(page)), {})
         if text is None:
             pg.pop(str(int(line)), None)
         else:
-            pg[str(int(line))] = ({"o": orig, "t": text} if orig else text)
+            rec = {"t": text}
+            if orig:
+                rec["o"] = orig
+            if rect:
+                rec["r"] = [round(float(v), 2) for v in rect]
+            pg[str(int(line))] = rec
         if not pg:
             d["fix"].pop(str(int(page)), None)
         self.save()
+
+    def get_items(self, file_path, page: int) -> list:
+        """[{"line", "text", "orig", "rect"}] — 반영·되맞춤이 쓰는 온전한 형태."""
+        d = self._doc(file_path)
+        if not d:
+            return []
+        raw = (d.get("fix") or {}).get(str(int(page))) or {}
+        out = []
+        for k, v in raw.items():
+            try:
+                ln = int(k)
+            except Exception:
+                continue
+            if isinstance(v, dict):
+                out.append({"line": ln, "text": v.get("t", ""),
+                            "orig": v.get("o") or "",
+                            "rect": tuple(v["r"]) if v.get("r") else None})
+            else:
+                out.append({"line": ln, "text": v, "orig": "", "rect": None})
+        out.sort(key=lambda x: x["line"])
+        return out
+
+    def remap(self, file_path, page: int, rows: list) -> dict:
+        """저장된 고침을 **지금의 줄 목록에 되맞춘다**(SOT §5.1.1).
+
+        자리(사각형) → 원래 글 → 줄 번호 순으로 찾는다. 못 찾은 것은 **버리지 않는다** —
+        다음에 같은 쪽을 열 때 다시 맞춰 본다(표 옵션을 껐다 켜면 목록이 달라진다).
+        반환 `{줄번호: 고친 글}` 은 지금 목록 기준이다."""
+        items = self.get_items(file_path, page)
+        if not items or not rows:
+            return {}
+        by_rect = {}
+        for i, r in enumerate(rows):
+            rc = r.get("rect")
+            if rc:
+                by_rect.setdefault(tuple(round(float(v), 2) for v in rc), i)
+        out = {}
+        for it in items:
+            i = None
+            if it["rect"] is not None:
+                i = by_rect.get(tuple(round(float(v), 2) for v in it["rect"]))
+            if i is None and it["orig"]:
+                for j, r in enumerate(rows):
+                    if j not in out and r.get("text") == it["orig"]:
+                        i = j
+                        break
+            if i is None and it["rect"] is None and not it["orig"]:
+                i = it["line"] if 0 <= it["line"] < len(rows) else None
+            if i is not None:
+                out[i] = it["text"]
+        return out
 
     def clear_page_fixes(self, file_path, page: int) -> None:
         d = self._doc(file_path)

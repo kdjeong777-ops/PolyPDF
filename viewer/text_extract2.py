@@ -16,15 +16,40 @@
 from __future__ import annotations
 
 TITLE_RATIO = 1.15          # 중앙값 대비 이 배 이상이면 제목
+# 260908-6(SOT §3.5): OCR 잡음으로 보는 글자 상자 높이(pt). A4 에서 4pt = 약 1.4mm 라
+#   사람이 읽으라고 넣은 글자일 수 없다. 실측 잡음 1.4~3.4 / 진짜 글 5.3~27.9.
+NOISE_MIN_H_PT = 4.0
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
 
 
+def _is_ocr_layer(page) -> bool:
+    """이 쪽의 글자가 **보이지 않는 OCR 층**인가(SOT §3.5).
+
+    스캔본은 그림 위에 render mode 3(보이지 않음)으로 글자를 얹는다. 그 층에는 OCR 이
+    종이의 티를 글자로 잘못 읽은 것이 섞여 있어, 잡음 거르기는 **이런 쪽에만** 한다 —
+    사람이 넣은 작은 글씨를 지우면 안 된다."""
+    try:
+        tr = page.get_texttrace()
+    except Exception:
+        return False
+    if not tr:
+        return False
+    inv = sum(1 for sp in tr if sp.get("type") == 3)
+    return inv >= len(tr) * 0.9
+
+
 def _line_items(page):
-    """PyMuPDF 줄 → [(rect, 글, 대표크기)] — 빈 줄 제외, 블록 읽기 순서."""
+    """PyMuPDF 줄 → [(rect, 글, 대표크기)] — 빈 줄 제외, 블록 읽기 순서.
+
+    260908-6(SOT §3.5): 보이지 않는 OCR 층인 쪽에서는 **글자라고 볼 수 없이 작은 줄**을
+    뺀다. 반환값에 잡음 수를 곁들이지 않고, 부르는 쪽이 필요하면 `last_noise_count()` 로 본다.
+    """
     try:
         d = page.get_text("dict")
     except Exception:
         return []
+    ocr_layer = _is_ocr_layer(page)
+    noise = 0
     blocks = []
     for b in d.get("blocks", []):
         if b.get("type") != 0:                  # 0=텍스트
@@ -37,6 +62,12 @@ def _line_items(page):
                 continue
             size = max((float(sp.get("size", 0) or 0) for sp in spans), default=0.0)
             x0, y0, x1, y1 = ln.get("bbox", (0, 0, 0, 0))
+            if x1 <= x0 or y1 <= y0:            # 뒤집히거나 납작한 상자 — 글자가 아니다
+                noise += 1
+                continue
+            if ocr_layer and (y1 - y0) < NOISE_MIN_H_PT:
+                noise += 1
+                continue
             lines.append(((x0, y0, x1, y1), txt, size))
         if lines:
             bb = b.get("bbox", (0, 0, 0, 0))
@@ -52,10 +83,19 @@ def _line_items(page):
         blocks.sort(key=lambda t: index.get((round(t[0][0], 2), round(t[0][1], 2)), 1 << 30))
     except Exception:
         blocks.sort(key=lambda t: (t[0][1], t[0][0]))
+    _NOISE["n"] = noise
     out = []
     for _bb, lines in blocks:
         out.extend(lines)
     return out
+
+
+_NOISE = {"n": 0}
+
+
+def last_noise_count() -> int:
+    """바로 앞 `_line_items` 가 뺀 잡음 줄 수(SOT §3.5 — 창 안내에 쓴다)."""
+    return int(_NOISE.get("n", 0))
 
 
 # 260908-3(응답성 SOT §4 ⑥, 감사에서 발견): **pdfplumber 핸들을 재사용한다.**
@@ -240,6 +280,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
     except Exception:
         return []
     items = _line_items(page)
+    noise = last_noise_count()
 
     if not items:                       # 텍스트층 없음 → OCR 폴백(좌표 없음)
         out = []
@@ -276,6 +317,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
         keep.sort(key=lambda r: ((r["rect"][1] if r["rect"] else 0),
                                  (r["rect"][0] if r["rect"] else 0)))
         rows_out = keep
+    _NOISE["n"] = noise          # 표 처리가 `_line_items` 를 다시 부르지 않음을 명시
     return rows_out
 
 

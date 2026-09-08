@@ -26,6 +26,75 @@ HL_COLOR = "#ffe680"
 _FONTS = ["맑은 고딕", "굴림", "바탕", "돋움", "Segoe UI"]
 
 
+class _LockedLinesEdit(QTextEdit):
+    """260908-6(SOT §5.1.1): **줄 수가 변하지 않는** 편집기.
+
+    사용자 보고: 잡음 줄을 통째로 지우고 [PDF 에 반영] 했더니 엉뚱한 줄이 지워지고
+    아래 글이 밀려 맞춰졌다. 원인은 이 창이 **편집기의 블록 번호**를 줄 번호로 쓰는데
+    줄을 지우면 아래 번호가 하나씩 당겨져, 그 뒤의 편집이 전부 한 칸 어긋난 줄에
+    기록된 것이었다.
+
+    그래서 줄을 **합치거나 늘리는 입력 자체를 막는다**.
+      - Enter/Return — 새 줄을 만들지 않는다
+      - 줄 처음에서 Backspace / 줄 끝에서 Delete — 윗줄·아랫줄과 합쳐진다
+      - 여러 줄에 걸친 선택을 한 번에 지우기 — 줄이 합쳐진다(줄마다 비운다)
+      - 줄바꿈이 든 붙여넣기 — 줄바꿈을 공백으로 바꿔 넣는다
+
+    **지우기는 '내용을 비우는 것'** 이다. 빈 줄 = "이 줄의 글자를 PDF 에서 지운다".
+    """
+
+    def keyPressEvent(self, e):
+        k = e.key()
+        cur = self.textCursor()
+        if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            return                                   # 새 줄 없음
+        if cur.hasSelection() and k in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
+            if self._clear_selection_per_line(cur):
+                return
+        if (k == Qt.Key.Key_Backspace and not cur.hasSelection()
+                and cur.positionInBlock() == 0):
+            return                                   # 윗줄과 합쳐지는 것을 막는다
+        if (k == Qt.Key.Key_Delete and not cur.hasSelection()
+                and cur.positionInBlock() == len(cur.block().text())):
+            return                                   # 아랫줄과 합쳐지는 것을 막는다
+        super().keyPressEvent(e)
+
+    def _clear_selection_per_line(self, cur) -> bool:
+        """여러 줄 선택을 지울 때 **줄마다 비운다**(줄바꿈은 남긴다). 처리했으면 True."""
+        doc = self.document()
+        a = doc.findBlock(cur.selectionStart())
+        b = doc.findBlock(cur.selectionEnd())
+        if a.blockNumber() == b.blockNumber():
+            return False
+        s0, s1 = cur.selectionStart(), cur.selectionEnd()
+        cur.beginEditBlock()
+        blk = b
+        while blk.isValid() and blk.blockNumber() >= a.blockNumber():
+            lo = max(s0, blk.position())
+            hi = min(s1, blk.position() + len(blk.text()))
+            if hi > lo:
+                c = QTextCursor(doc)
+                c.setPosition(lo)
+                c.setPosition(hi, QTextCursor.MoveMode.KeepAnchor)
+                c.removeSelectedText()
+            blk = blk.previous()
+        cur.endEditBlock()
+        end = QTextCursor(doc)                       # 선택을 풀고 시작점에 둔다
+        end.setPosition(min(s0, doc.characterCount() - 1))
+        self.setTextCursor(end)
+        return True
+
+    def insertFromMimeData(self, src):
+        """붙여넣기의 줄바꿈을 공백으로 — 줄이 늘지 않게."""
+        txt = src.text() if src is not None else ""
+        if not txt:
+            return
+        for ch in (chr(13) + chr(10), chr(13), chr(10)):
+            txt = txt.replace(ch, ' ')
+        flat = txt
+        self.textCursor().insertText(flat)
+
+
 class TextPanel(QWidget):
     """페이지 본문 표시·편집 창."""
 
@@ -145,7 +214,7 @@ class TextPanel(QWidget):
         self.info.setWordWrap(True)
         v.addWidget(self.info)
 
-        self.edit = QTextEdit()
+        self.edit = _LockedLinesEdit()
         self.edit.setAcceptRichText(False)
         self.edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.edit.cursorPositionChanged.connect(self._on_cursor)
@@ -248,9 +317,16 @@ class TextPanel(QWidget):
     def set_page(self, path: str, page: int, rows: list, note: str = ""):
         """앱이 뽑아 준 줄 목록을 표시(SOT §3)."""
         self._path, self._page, self._rows = str(path or ""), int(page), list(rows or [])
+        # 260908-6(SOT §5.1.1): **줄 하나에 블록 하나**. 글 안의 줄바꿈은 공백으로 —
+        #   블록 수와 `_rows` 길이가 어긋나면 그 뒤의 편집이 엉뚱한 줄에 기록된다.
+        for r in self._rows:
+            t = str(r.get("text", ""))
+            for ch in (chr(13) + chr(10), chr(13), chr(10)):
+                t = t.replace(ch, " ")
+            r["text"] = t
         self._loading = True
         try:
-            self.edit.setPlainText("\n".join(r.get("text", "") for r in self._rows))
+            self.edit.setPlainText(chr(10).join(r["text"] for r in self._rows))
         finally:
             self._loading = False
         self._apply_styles()
@@ -318,6 +394,12 @@ class TextPanel(QWidget):
     def _on_text_changed(self):
         if self._loading:
             return
+        # 260908-6(SOT §5.1.1) 안전망: 줄 수가 달라졌다면 **어느 줄을 고쳤는지 알 수 없다**.
+        #   그대로 두면 그 뒤의 편집이 전부 한 칸씩 어긋난 줄에 기록된다(사용자 보고).
+        #   위 편집기가 막아 두었으므로 여기 오면 안 되지만, 오면 되돌리고 알린다.
+        if self.edit.document().blockCount() != len(self._rows):
+            self._resync_blocks()
+            return
         i = self.current_line()
         if not (0 <= i < len(self._rows)):
             return
@@ -332,6 +414,20 @@ class TextPanel(QWidget):
             self.lineEdited.emit(self._page, i, txt, orig)
             rc = self._rows[i].get("rect")
             self.lineFocused.emit(self._page, [rc] if rc else [])
+
+    def _resync_blocks(self) -> None:
+        """줄 수가 어긋났을 때 지금의 `_rows` 로 되돌린다(260908-6 안전망)."""
+        self._loading = True
+        try:
+            cur_line = min(self.current_line(), max(0, len(self._rows) - 1))
+            self.edit.setPlainText(chr(10).join(r.get("text", "") for r in self._rows))
+            self._apply_styles()
+            blk = self.edit.document().findBlockByNumber(cur_line)
+            if blk.isValid():
+                self.edit.setTextCursor(QTextCursor(blk))
+        finally:
+            self._loading = False
+        self.info.setText("줄은 지우거나 새로 만들 수 없습니다 — 내용을 비우면 그 줄이 지워집니다.")
 
     def _on_highlight(self):
         cur = self.edit.textCursor()

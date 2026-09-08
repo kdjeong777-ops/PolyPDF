@@ -246,6 +246,7 @@ class TextPageWorker(QObject):
         self.ocr_text = ocr_text or ""
         self.token = int(token)
         self.cached_only = bool(cached_only)   # 260908-5: 인덱싱 중이면 표를 새로 파지 않는다
+        self.noise = 0                         # 260908-6: 뺀 OCR 잡음 줄 수
         self._cancel = False
 
     def request_cancel(self):
@@ -264,6 +265,8 @@ class TextPageWorker(QObject):
                 rows = tx.page_lines(doc, self.doc_path, self.page,
                                      tables=self.tables, ocr_text=self.ocr_text,
                                      tables_cached_only=self.cached_only)
+                # 260908-6(SOT §3.5): 뺀 잡음 줄 수 — 창 안내에 남긴다
+                self.noise = tx.last_noise_count()
             finally:
                 doc.close()
             if not self._cancel:
