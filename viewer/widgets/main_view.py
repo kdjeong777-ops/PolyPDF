@@ -2386,9 +2386,17 @@ class MainView(QWidget):
         self._text_btn.setMenu(self._text_menu)
         hb.addWidget(self._text_btn)
         # 260611-16: 개체선택 버튼(선 종류 버튼 오른쪽) — 눌러서 이미지 선택/이동/수정
-        self._draw_select_btn = QPushButton("⤢"); self._draw_select_btn.setFixedSize(28, H)
+        # 260908-4(사용자 요청): 글리프 `⤢` → 그림 아이콘(점선 상자 + 화살표).
+        #   무엇을 하는 단추인지 글자보다 그림이 빨리 읽힌다(디자인 SOT §2).
+        self._draw_select_btn = QPushButton(); self._draw_select_btn.setFixedSize(28, H)
         self._draw_select_btn.setCheckable(True)
         self._draw_select_btn.setToolTip("개체 선택(이미지 이동·크기·삭제)")
+        _sp = resource_path("icon_select_box.png")
+        if _sp:
+            self._draw_select_btn.setIcon(QIcon(_sp))
+            self._draw_select_btn.setIconSize(QSize(H - 4, H - 4))
+        else:
+            self._draw_select_btn.setText("⤢")
         self._draw_select_btn.clicked.connect(self._on_draw_select)
         hb.addWidget(self._draw_select_btn)
         # 260611-1: 지우개 2종(얇게/두껍게)·청소 — 첨부 아이콘 사용(없으면 글리프 폴백)
@@ -2406,7 +2414,8 @@ class MainView(QWidget):
             b.clicked.connect(lambda _=False, kk=k: self._on_draw_erase(kk))
             hb.addWidget(b); self._draw_erase_btns.append(b)
         bclr = QPushButton(); bclr.setFixedSize(30, H); bclr.setToolTip("청소(현재 페이지 선긋기 지움)")
-        _bp = resource_path("icon_broom.png")
+        # 260908-4: 빗자루 → **문서+지우개** 그림. 옆의 두 지우개와 한 벌로 읽힌다.
+        _bp = resource_path("icon_eraser_page.png") or resource_path("icon_broom.png")
         if _bp:
             bclr.setIcon(QIcon(_bp)); bclr.setIconSize(_ico_sz)
         else:

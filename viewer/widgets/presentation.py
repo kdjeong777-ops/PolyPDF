@@ -661,7 +661,8 @@ class PresentationWindow(QWidget):
             self._tb_erasers.append(eb)
         # 260609-18(G4): 전체 청소 버튼 — 지우개 아이콘
         self._tb_erase = QPushButton()
-        _bp = resource_path("icon_broom.png")     # 260611-2: 본문과 동일 청소 아이콘
+        _bp = (resource_path("icon_eraser_page.png")      # 260908-4: 본문 지우개와 한 벌
+               or resource_path("icon_broom.png"))
         self._tb_erase.setIcon(QIcon(_bp) if _bp else self._make_eraser_icon())
         self._tb_erase.setFixedWidth(38)
         self._tb_erase.setToolTip("청소 — 현재 페이지의 선 모두 지우기")

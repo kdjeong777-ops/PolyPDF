@@ -217,6 +217,34 @@ try:
     chk(mv._has_multi(), "② (전제) 둘이 걸려 범위 선택 상태")
     mv._draw_kind = "line"; mv._apply_tool()
     chk(not mv._has_multi(), "② 다른 도구로 바꾸면 범위 선택이 풀린다")
+    # ── ⑤ 도구 아이콘 (260908-4, 사용자 요청) ───────────────────────────
+    from viewer.resources_path import resource_path
+    from PyQt6.QtGui import QIcon
+    for fn in ("icon_select_box.png", "icon_eraser_thin.png",
+               "icon_eraser_thick.png", "icon_eraser_page.png"):
+        pth = resource_path(fn)
+        chk(bool(pth) and not QIcon(pth).isNull(), f"⑤ 아이콘이 있다: {fn}")
+    chk(not mv._draw_select_btn.icon().isNull() and mv._draw_select_btn.text() == "",
+        "⑤ 개체선택이 글리프가 아니라 그림이다")
+    for i, b in enumerate(mv._draw_erase_btns):
+        chk(not b.icon().isNull(), f"⑤ 지우개 {i + 1} 이 그림이다")
+    import inspect as _in
+    from viewer.widgets.main_view import MainView as _MV
+    ui = _in.getsource(_MV._build_ui) if hasattr(_MV, "_build_ui") else ""
+    chk("icon_eraser_page.png" in _in.getsource(_MV),
+        "⑤ 청소 단추가 페이지 지우개 그림을 쓴다(옆 지우개들과 한 벌)")
+
+    # ── ⑥ 숨긴 패널 손잡이는 스크롤바보다 좁다 (260908-4) ───────────────
+    from PyQt6.QtWidgets import QStyle
+    from viewer.app import MainWindow as _MW
+    mw2 = _MW(); mw2._skip_save_on_close = True
+    ext = mw2.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+    hw = mw2._drawer_handle_w()
+    chk(hw < ext, "⑥ 손잡이가 스크롤바보다 좁다(안쪽으로 들어가 보인다)",
+        f"손잡이 {hw}px < 스크롤바 {ext}px")
+    chk(hw >= 8, "⑥ 그래도 잡을 수 있을 만큼은 된다", f"{hw}px")
+    chk("PM_ScrollBarExtent" in _in.getsource(_MW._drawer_handle_w),
+        "⑥ 스크롤바 폭을 스타일에서 물어 본다(테마·DPI 마다 다르다)")
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

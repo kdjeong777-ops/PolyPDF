@@ -417,9 +417,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _drawer_width(self) -> int:
         return min(360, max(220, self._central.width() // 2))
 
+    def _drawer_handle_w(self) -> int:
+        """260908-4(사용자 요청): 숨긴 패널의 손잡이 폭 — **스크롤바보다 조금 좁게**.
+
+        종전 20px 는 스크롤바(윈도우 기본 17px)보다 넓어 손잡이가 밖으로 튀어나와
+        보였다. 스크롤바 폭에서 4px 를 뺀 값을 쓰면 **한 칸 안쪽으로 들어가** 보인다.
+        스크롤바 폭은 테마·DPI 마다 다르므로 스타일에서 직접 물어 본다."""
+        try:
+            from PyQt6.QtWidgets import QStyle
+            ext = self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+        except Exception:
+            ext = 17
+        return max(8, int(ext) - 4)
+
     def _position_handle(self):
         W = self._central.width(); H = self._central.height()
-        bw, bh = 20, 96
+        bw, bh = self._drawer_handle_w(), 96
         dw = self._drawer_width()
         hx = (W - dw - bw) if self._drawer_open else (W - bw)
         # 260606-20: 스크롤바와 겹치면 손잡이를 위/아래로 비킴(_handle_offset)
