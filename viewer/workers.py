@@ -360,11 +360,24 @@ class StudyVocabWorker(QObject):
     def request_cancel(self):
         self._cancel = True
 
-    def _clean_texts(self):
-        """텍스트 창이 정제한 쪽 글 — 실패하면 None(부르는 쪽이 날것으로 돌아간다)."""
+    def _clean_texts(self, store=None, fkey=None):
+        """텍스트 창이 정제한 쪽 글 — 실패하면 None(부르는 쪽이 날것으로 돌아간다).
+
+        ★ 스캔 쪽은 **`study.db` 에 담긴 OCR 낱말**로 줄을 만든다. 그 쪽의 PDF 글자층은
+        대개 OCR 결과보다 나쁘다(실측: 띄어쓰기가 아예 없는 글자층 때문에 표제어가
+        엉망이 됐다). 단어장이 쓰는 글과 **같은 것**에 규칙을 걸어야 뜻이 있다."""
         try:
             from viewer import text_extract2 as tx
-            got = tx.clean_page_texts(self.doc_path)
+            look = None
+            if store is not None and fkey:
+                def _look_words(pno, _s=store, _k=fkey):
+                    try:
+                        return (_s.get_page_words(_k, pno),
+                                _s.get_page_dpi(_k, pno))
+                    except Exception:
+                        return (None, 0)
+                look = _look_words
+            got = tx.clean_page_texts(self.doc_path, words_lookup=look)
             return got or None
         except Exception:
             return None
@@ -384,7 +397,8 @@ class StudyVocabWorker(QObject):
                 _pacing.pace(self)
                 # 260910(SOT §3.1.5): 날것이 아니라 **텍스트 창이 정제한 글**로 만든다
                 summary = study_vocab.build_vocab(
-                    st, fkey, self.lang, pages_text=self._clean_texts())
+                    st, fkey, self.lang,
+                    pages_text=self._clean_texts(st, fkey))
             finally:
                 st.close()
             if not self._cancel:
@@ -802,7 +816,14 @@ class StudyBuildWorker(QObject):
                 # 260910(SOT §3.1.5): 텍스트 창이 정제한 글로 낱말을 뽑는다
                 try:
                     from viewer import text_extract2 as _tx
-                    _clean = _tx.clean_page_texts(self.pdf_path) or None
+                    def _look(pno, _s=store, _k=fkey):
+                        try:
+                            return (_s.get_page_words(_k, pno),
+                                    _s.get_page_dpi(_k, pno))
+                        except Exception:
+                            return (None, 0)
+                    _clean = _tx.clean_page_texts(
+                        self.pdf_path, words_lookup=_look) or None
                 except Exception:
                     _clean = None
                 vocab_summary = study_vocab.build_vocab(

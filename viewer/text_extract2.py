@@ -796,7 +796,8 @@ def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
                              (x['rect'][0] if x.get('rect') else 0)))
     return keep
 
-def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None) -> list:
+def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
+                     words_lookup=None) -> list:
     """쪽마다 **이 창이 보여 주는 글**을 모아 [(쪽, 글)] 로 (SOT §3.1.5, 260910).
 
     단어장은 종전에 `study.db` 의 **날것 `ocr_page.text`** 를 읽어 낱말을 뽑았다.
@@ -806,6 +807,11 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None) -> list:
 
     여기서는 §3.A 의 열 단계를 다 거친 줄을 쓰고, 고침(§5.1)까지 얹는다.
     실패하면 빈 목록을 돌려준다 — 부르는 쪽이 날것으로 돌아갈 수 있게.
+
+    ★ `words_lookup(쪽) -> (낱말상자, dpi)` 를 주면 **그 낱말로** 줄을 만든다.
+      단어장은 스캔 쪽을 OCR 로 읽어 `study.db` 에 담아 두는데, 그 쪽의 PDF **글자층**은
+      대개 그보다 나쁘다(실측: 어떤 책은 글자층에 띄어쓰기가 아예 없어 표제어가
+      엉망이 됐다). **단어장이 쓰는 글과 같은 것**에 규칙을 걸어야 뜻이 있다.
     """
     try:
         import fitz
@@ -828,8 +834,10 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None) -> list:
                 continue
             try:
                 ocr = (ocr_lookup(pno) if ocr_lookup else '') or ''
+                words, wdpi = (words_lookup(pno) if words_lookup else (None, 0))
                 rows = page_lines(doc, str(pdf_path), pno, tables='lines',
-                                  ocr_text=ocr)
+                                  ocr_text=ocr, ocr_words=words or None,
+                                  ocr_dpi=int(wdpi or 0))
             except Exception:
                 continue
             lines = [r.get('text', '') for r in rows]

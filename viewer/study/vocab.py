@@ -236,15 +236,49 @@ def level_ko(lemma: str) -> tuple[str, Optional[float]]:
         return "미정", None
 
 
+# 260910(사용자 보고 '의미없는 단어를 단어장으로만 만든 경우가 많다'): 한국어에는
+#   영어의 `is_noise_en` 같은 거르개가 **아예 없었다** — 길이 2 이상이면 무엇이든
+#   표제어가 됐다. 스캔본 OCR 은 `끼미`·`래드`·`제간` 같은 조각을 끝없이 만든다.
+KO_DROP_ONCE_OOV = True     # 사전에 없고 문서에 한 번뿐이면 뺀다
+
+
+def is_noise_ko(lemma: str, oov: bool, freq: int) -> bool:
+    """한국어 표제어로 쓸 수 없는 것인가 (단어학습 SOT §17.5).
+
+    **실측으로 고른 규칙**(배합설계 6쪽, 손으로 분류한 잡음 12 · 진짜 8):
+
+    | 신호 | 잡음 | 진짜 |
+    | --- | --- | --- |
+    | 문서에 한 번뿐 | 11/12 | 3/8 |
+    | 형태소 사전에 없음(OOV) | 8/12 | 2/8 |
+    | **둘 다** | **8/12** | **2/8** |
+
+    kiwi 점수는 겹쳐서 못 쓴다(진짜 −9.8~−20.5 / 잡음 −13.0~−42.5).
+
+    **한계**: 사전에 없으면서 문서에 딱 한 번 나오는 **진짜 전문용어**는 빠진다
+    (위 표본에서 `안정도`·`더스트`). 다만 쪽수가 많아질수록 그런 낱말은 여러 번
+    나오므로 실제 문서에서는 덜 빠진다 — 6쪽 표본은 가장 불리한 조건이다.
+    """
+    if len(lemma) < 2:
+        return True
+    if KO_DROP_ONCE_OOV and oov and freq <= 1:
+        return True
+    return False
+
 def tokens_ko(text: str) -> list[tuple[str, str]]:
-    """(표제어, 품사) 내용어 목록."""
+    """(표제어, 품사) 내용어 목록. 사전에 없는 것(OOV)은 `_KO_OOV` 에 모아 둔다."""
     kiwi = _ensure_kiwi()
     out = []
     for t in kiwi.tokenize(text):
         if t.tag in _KO_CONTENT and len(t.form) >= 2:
             lemma = t.form + ("다" if t.tag in ("VV", "VA") else "")
+            if getattr(t, "oov", None):
+                _KO_OOV.add(lemma)      # 260910: 잡음 거르개(§17.5)가 쓴다
             out.append((lemma, t.tag))
     return out
+
+
+_KO_OOV: set = set()
 
 
 # --- 빌드 ------------------------------------------------------------------
@@ -269,6 +303,7 @@ def build_vocab(store, file_key: str, lang: str = "eng",
     if not ko:
         texts = [mend_ocr_hyphens_en(t) for t in texts]  # OCR 공백-하이픈 보정
 
+    _KO_OOV.clear()                 # 260910: 문서마다 새로 센다
     book_freq: Counter = Counter()
     page_lemmas: dict[int, Counter] = defaultdict(Counter)
     surface_of: dict[str, str] = {}
@@ -310,7 +345,8 @@ def build_vocab(store, file_key: str, lang: str = "eng",
     kept = set()
     for lemma, freq in book_freq.items():
         if ko:
-            if len(lemma) < 2:
+            # 260910(§17.5): 영어처럼 한국어도 거른다 — 종전엔 길이만 봤다
+            if is_noise_ko(lemma, lemma in _KO_OOV, int(freq)):
                 continue
             level, z = level_ko(lemma)
             has_syn = False

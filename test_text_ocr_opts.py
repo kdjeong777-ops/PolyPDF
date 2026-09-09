@@ -374,6 +374,22 @@ try:
     bs = inspect.getsource(StudyBuildWorker.run)
     chk('clean_page_texts' in bs, '⑮ 단어장 생성도 정제된 글을 쓴다')
 
+    # ── ⑯ 한국어 표제어 거르개 (단어학습 SOT §17.5) ──────────────
+    from viewer.study import vocab as _v
+    chk(hasattr(_v, 'is_noise_ko'), '⑯ 한국어에도 거르개가 있다(종전엔 영어만)')
+    chk(_v.is_noise_ko('끼미', True, 1) is True,
+        '⑯ 사전에 없고 한 번뿐이면 뺀다')
+    chk(_v.is_noise_ko('안정도', True, 3) is False,
+        '⑯ 사전에 없어도 여러 번 나오면 남긴다 — 전문용어')
+    chk(_v.is_noise_ko('골재', False, 1) is False,
+        '⑯ 사전에 있으면 한 번뿐이어도 남긴다')
+    chk(_v.is_noise_ko('가', False, 9) is True, '⑯ 한 글자는 표제어가 아니다')
+    vsig2 = inspect.signature(_v.build_vocab)
+    chk('pages_text' in vsig2.parameters, '⑯ 정제된 글을 받는다(§3.1.5)')
+    bsrc = inspect.getsource(_v.build_vocab)
+    chk('is_noise_ko' in bsrc, '⑯ 표제어를 고를 때 실제로 부른다')
+    chk('_KO_OOV.clear()' in bsrc, '⑯ 문서마다 새로 센다(앞 문서가 남지 않게)')
+
     # ── ⑭ 도구의 OCR · 보기의 텍스트 (SOT §2.1) ──────────────────
     asrc3 = inspect.getsource(MainWindow._action_ocr_read)
     chk('_vm_text' in asrc3 and '_on_text_need_ocr' in asrc3,
