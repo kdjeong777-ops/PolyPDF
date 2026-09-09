@@ -2619,7 +2619,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         w = TextPageWorker(cur, page,
                            tables=("omit" if tp.omit_tables() else "lines"),
                            ocr_text=ocr_text, token=tok, cached_only=busy_idx,
-                           ocr_words=ow, ocr_dpi=odpi)
+                           ocr_words=ow, ocr_dpi=odpi,
+                           join_lines=tp.join_lines())
         self._text_worker = w
         w.done.connect(lambda pg, rows, t, _w=w:
                        self._on_text_rows(cur, pg, rows, t, note,

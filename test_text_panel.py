@@ -48,7 +48,9 @@ try:
     doc = fitz.open(str(pdf))
 
     # ── ② ⑤ 본문 추출과 제목 판정 ───────────────────────────────────────
-    rows = tx.page_lines(doc, str(pdf), 0)
+    # 260910: 이 검사는 §3 의 '뽑기' 를 본다 — §3.7(문장 잇기)은 줄 수를 바꾸므로 끄고 잰다
+    #   (픽스처의 본문은 모두 같은 폭이라 잇기가 켜지면 한 문단으로 합쳐진다).
+    rows = tx.page_lines(doc, str(pdf), 0, join_lines=False)
     chk(len(rows) > 3, "② 쪽의 본문 줄을 뽑는다", f"{len(rows)}줄")
     chk(rows[0]["style"] == "title",
         "⑤ 글자가 큰 첫 줄이 제목으로 잡힌다", rows[0]["text"][:24])
@@ -179,7 +181,9 @@ try:
     mw.open_pdf(pdf); app.processEvents()
     mw.search_tabs.setCurrentWidget(mw.text_panel)
     mw._reload_text_panel(); app.processEvents()
-    chk(len(mw.text_panel.rows()) > 3, "① 탭을 고르면 현재 쪽이 채워진다",
+    _txt = " ".join(r["text"] for r in mw.text_panel.rows())
+    chk(bool(mw.text_panel.rows()) and "sample body text" in _txt,
+        "① 탭을 고르면 현재 쪽이 채워진다",
         f"{len(mw.text_panel.rows())}줄")
     chk("text_panel_styles" in mw._build_settings_payload().get("preferences", {}),
         "④ 스타일이 설정에 저장된다(허용목록 통과)")

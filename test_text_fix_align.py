@@ -87,7 +87,7 @@ try:
     tx.close_cache()
     d = fitz.open(str(scan))
     chk(tx._is_ocr_layer(d.load_page(0)) is True, "① 보이지 않는 OCR 층으로 알아본다")
-    rows = tx.page_lines(d, str(scan), 0, tables="off")
+    rows = tx.page_lines(d, str(scan), 0, tables="off", join_lines=False)
     texts = [r["text"] for r in rows]
     chk(all("픔" not in t and "똬" not in t for t in texts),
         "① 빈 공간의 잡음 글자는 줄 목록에 오지 않는다", str(texts))
@@ -103,7 +103,7 @@ try:
                  if b.get("type") == 0
                  for ln in b.get("lines", [])
                  if "".join(s.get("text", "") for s in ln.get("spans", [])).strip()])
-    chk(len(tx.page_lines(d2, str(plain), 0, tables="off")) == n_raw,
+    chk(len(tx.page_lines(d2, str(plain), 0, tables="off", join_lines=False)) == n_raw,
         "② 일반 PDF 는 한 줄도 빼지 않는다", str(n_raw) + "줄")
     d2.close()
 
@@ -189,7 +189,7 @@ try:
     shutil.copy2(str(scan), str(work))
     tx.close_cache()
     dw = fitz.open(str(work))
-    wrows = tx.page_lines(dw, str(work), 0, tables="off")
+    wrows = tx.page_lines(dw, str(work), 0, tables="off", join_lines=False)
     target = dict(wrows[1])                       # '둘째 줄입니다'
     dw.close()
     # 줄 번호는 일부러 **틀리게** 준다 — 사각형이 이겨야 한다
@@ -199,7 +199,7 @@ try:
     chk(bool(out) and not err, "⑦ 줄 번호가 틀려도 사각형으로 반영된다", err or "")
     tx.close_cache()
     do = fitz.open(out)
-    after = [r["text"] for r in tx.page_lines(do, out, 0, tables="off")]
+    after = [r["text"] for r in tx.page_lines(do, out, 0, tables="off", join_lines=False)]
     do.close()
     chk("둘째 줄입니다" not in after, "⑦ 지정한 줄이 지워졌다", str(after))
     chk("첫째 줄입니다" in after and "셋째 줄입니다" in after,
@@ -210,7 +210,7 @@ try:
     shutil.copy2(str(scan), str(src2))
     tx.close_cache()
     d3 = fitz.open(str(src2))
-    r3 = tx.page_lines(d3, str(src2), 0, tables="off")
+    r3 = tx.page_lines(d3, str(src2), 0, tables="off", join_lines=False)
     d3.close()
     tiny = (10.0, 10.0, 11.0, 11.0)          # 1pt 사각형 — 긴 글이 들어갈 수 없다
     out2, err2 = apply_fixes_to_pdf(str(src2), 0, r3,

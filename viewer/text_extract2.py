@@ -357,8 +357,13 @@ def _merge_rows(frags):
             x1, y1 = max(x1, rect[2]), max(y1, rect[3])
         # 대표 크기 = **글자가 가장 많은 조각**의 크기(제목/내용 판정용, SOT §3.4)
         size = max(items, key=lambda f: len(f[1].strip()))[2]
+        # 260910(SOT §3.7): 끝의 빈칸을 **남긴다** — 문장을 이을 때 그 자리가
+        #   낱말 경계였는지 알려 주는 유일한 단서다. 판단은 **마지막 조각의 원본**으로
+        #   한다: `text` 는 이미 다듬여 있어 그것으로 재면 언제나 빈칸이 없다.
+        tail = ' ' if items[-1][1].endswith((' ', chr(9))) else ''
         out.append(((x0, y0, x1, y1),
-                    fix_number_spaces(fix_number_ocr(text)), size))
+                    fix_number_spaces(fix_number_ocr(text.rstrip())) + tail,
+                    size))
     return out
 
 
@@ -531,6 +536,121 @@ def _row_line(row) -> str:
     return " | ".join(cells)
 
 
+SENT_END = set('.?!。？！:;')
+JOIN_FILL = 1.0          # 오른쪽 여백까지 찼다고 보는 기준(여백 − 글자 하나)
+# 줄 **간격**이 아니라 **줄 사이 거리(pitch)** 를 글자 크기로 잰다 — 간격으로 재면
+#   글자가 큰데 줄이 성긴 쪽(발표자료·서식)에서 남남인 줄이 붙는다(260910 실측).
+#   실측 pitch÷크기: 이어지는 본문 1.6~1.8 / 따로 놓인 줄 2.9.
+JOIN_PITCH = 2.2
+JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다
+_LIST_HEAD = None
+
+
+def _starts_list(text) -> bool:
+    """목록 표시로 시작하는가 — `1.` `가.` `①` `•` `-` `(1)` 등 (SOT §3.7 ⑦)."""
+    global _LIST_HEAD
+    if _LIST_HEAD is None:
+        import re
+        _LIST_HEAD = re.compile(
+            r'^\s*(?:\(?\d+[.)]|\(?[가-힣][.)]|[①-⑳]|[•·▶◊▊☞*\-–—]\s|○|※)')
+    return bool(_LIST_HEAD.match(text or ''))
+
+
+def _join_sep(a_text, b_text) -> str:
+    """두 줄을 어떻게 이을지 — 빈칸 / 붙임 / 분철 떼기 (SOT §3.7)."""
+    if a_text.endswith(' '):
+        return ' '
+    a = a_text.rstrip()
+    b = (b_text or '').lstrip()
+    if not a or not b:
+        return ''
+    if a.endswith('-') and ('a' <= b[0] <= 'z'):
+        return '-drop'
+    if _is_cjk(a[-1]) and _is_cjk(b[0]):
+        return ''
+    return ' '
+
+
+def join_sentences(rows) -> list:
+    """종이 때문에 끊긴 줄을 **한 문장으로** 잇는다 (SOT §3.7).
+
+    문장부호만으로 판단하지 않는다 — 제목·표 제목·그림 제목도 부호로 끝나지 않는다.
+    가장 강한 신호는 **줄이 오른쪽 여백까지 찼는가** 다(실측: 이어지는 본문 1.00,
+    제목·문단 마지막 줄 0.28~0.94).
+    """
+    body = [r for r in rows
+            if r.get('rect') and r.get('style') == 'body'
+            and r.get('kind') == 'text' and ' | ' not in r.get('text', '')]
+    if len(body) < 2:
+        return list(rows)
+    rights = sorted(r['rect'][2] for r in body)
+    margin = rights[int(len(rights) * 0.9)]
+    out = []
+    for r in rows:
+        r = dict(r)
+        r.setdefault('rects', [r['rect']] if r.get('rect') else [])
+        prev = out[-1] if out else None
+        if prev is not None and _can_join(prev, r, margin):
+            # ★ 조건 판정은 **마지막에 붙인 줄**로 한다(`_can_join` 안에서 `_last`).
+            sep = _join_sep(prev.get('_tail', prev['text']), r['text'])
+            a = prev['text']
+            if sep == '-drop':
+                a, sep = a.rstrip()[:-1], ''
+            prev['text'] = a.rstrip() + sep + r['text'].lstrip()
+            prev['rects'] = list(prev.get('rects', [])) + list(r.get('rects', []))
+            pr, rr = prev['rect'], r['rect']
+            prev['rect'] = (min(pr[0], rr[0]), min(pr[1], rr[1]),
+                            max(pr[2], rr[2]), max(pr[3], rr[3]))
+            prev['_last'] = rr           # 다음 판정의 기준
+            prev['_tail'] = r['text']    # 끝의 빈칸도 마지막 줄의 것
+            continue
+        out.append(r)
+    for r in out:
+        r['text'] = r['text'].rstrip()
+        r.pop('_last', None)
+        r.pop('_tail', None)
+    return out
+
+
+def _can_join(a, b, margin) -> bool:
+    """SOT §3.7 의 여덟 조건을 모두 본다."""
+    # ★ 260910: 이미 이어 붙인 줄이면 **마지막에 붙인 줄**로 잰다. 합친 사각형으로 재면
+    #   오른쪽 끝이 늘 여백까지 차 있어 ④ 가 무력해진다(문단 마지막 줄까지 붙는다).
+    ra = a.get('_last') or a.get('rect')
+    rb = b.get('rect')
+    if not ra or not rb:
+        return False
+    ta = a.get('_tail', a.get('text', ''))
+    tb = b.get('text', '')
+    if a.get('style') != 'body' or b.get('style') != 'body':
+        return False                                    # ①
+    if a.get('kind') != 'text' or b.get('kind') != 'text':
+        return False                                    # ①
+    if ' | ' in ta or ' | ' in tb:
+        return False                                    # ②
+    core = ta.rstrip()
+    if not core or core[-1] in SENT_END:
+        return False                                    # ③
+    sa = max(1.0, a.get('size') or (ra[3] - ra[1]))
+    sb = max(1.0, b.get('size') or (rb[3] - rb[1]))
+    if ra[2] < margin - sa * JOIN_FILL:
+        return False                                    # ④ 오른쪽이 안 찼다
+    # ⑤ 왼쪽 여백. 뒷줄이 들여써져 있으면 보통 **새 문단**이지만, 앞줄이 목록 항목의
+    #   첫 줄이면(`(3) …`) 그 다음 줄들은 표시 아래로 들여쓰는 것이 정상이다
+    #   (내어쓰기). 실측 지침 41쪽: 첫 줄 x=68.0, 이어지는 줄 x=86.8.
+    if rb[0] > ra[0] + sa and not _starts_list(ta):
+        return False
+    if rb[0] > ra[0] + sa * 4:
+        return False                                    # 너무 많이 들여썼다 — 다른 글
+    pitch = rb[1] - ra[1]                               # ⑥ 줄 사이 거리
+    if pitch <= 0 or pitch > max(sa, sb) * JOIN_PITCH:
+        return False
+    if _starts_list(tb):
+        return False                                    # ⑦
+    if abs(sa - sb) > max(sa, sb) * JOIN_SIZE_TOL:
+        return False                                    # ⑧
+    return True
+
 def _classify(items):
     """대표 크기의 **중앙값**으로 제목/내용을 가른다(SOT §3.4).
 
@@ -548,7 +668,7 @@ def _classify(items):
 
 def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
                ocr_text: str = "", tables_cached_only: bool = False,
-               ocr_words=None, ocr_dpi: int = 0) -> list:
+               ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True) -> list:
     """쪽 하나의 줄 목록(SOT §3). `tables` = "lines"(기본) / "omit" / "off".
 
     `ocr_text` 는 텍스트층이 쓸 만하지 않을 때 쓰는 OCR 결과(단어장 SOT 의 study.db).
@@ -562,12 +682,15 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
         rows = lines_from_words(ocr_words, dpi=ocr_dpi, page=page)
         if rows:
             _NOISE["n"] = 0
+            if join_lines:
+                rows = join_sentences(rows)
             if not has_text_layer(doc, page_index):
                 return rows                     # 스캔 쪽 — OCR 이 전부다
             # 260909-2(SOT §3.1.3): 글자층이 있는 쪽은 **갈아 끼우지 않고 합친다**.
             #   글자층이 정확하고, 그림 속 글만 OCR 로 채운다.
             base = page_lines(doc, pdf_path, page_index, tables=tables,
-                              tables_cached_only=tables_cached_only)
+                              tables_cached_only=tables_cached_only,
+                              join_lines=join_lines)
             return merge_layer_and_ocr(base, rows)
     items = _line_items(page)
     noise = last_noise_count()
@@ -583,8 +706,9 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
            if tables != "off" else [])
     styles = _classify(items)
     rows_out = []
-    for (rect, txt, _size), st in zip(items, styles):
-        rows_out.append({"text": txt, "style": st, "rect": rect, "kind": "text"})
+    for (rect, txt, size), st in zip(items, styles):
+        rows_out.append({"text": txt, "style": st, "rect": rect, "kind": "text",
+                         "size": size})
 
     if tbl:
         # 260908-7(SOT §3.3 개정): **우리가 이은 줄을 그대로 쓰고 표시만 한다.**
@@ -608,6 +732,8 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
                 if any(_inside(r["rect"], bb) for bb, _rows in tbl):
                     r["kind"] = "table"
     _NOISE["n"] = noise          # 표 처리가 `_line_items` 를 다시 부르지 않음을 명시
+    if join_lines:               # 260910(SOT §3.7): 종이 때문에 끊긴 문장을 잇는다
+        rows_out = join_sentences(rows_out)
     return rows_out
 
 
@@ -643,8 +769,8 @@ def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
         items.extend(_merge_rows(col))
     items = [it for it in items if not _noise.is_symbol_only(it[1])]
     styles = _classify(items)
-    return [{'text': t, 'style': st, 'rect': r, 'kind': 'text'}
-            for (r, t, _s), st in zip(items, styles)]
+    return [{'text': t, 'style': st, 'rect': r, 'kind': 'text', 'size': sz}
+            for (r, t, sz), st in zip(items, styles)]
 
 def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
     """글자층 줄 + **그림 속에만 있던** OCR 줄 (SOT §3.1.3, 260909-2).

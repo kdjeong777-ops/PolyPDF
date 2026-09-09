@@ -349,7 +349,7 @@ class TextPageWorker(QObject):
 
     def __init__(self, doc_path, page: int, *, tables: str = "lines",
                  ocr_text: str = "", token: int = 0, cached_only: bool = False,
-                 ocr_words=None, ocr_dpi: int = 0):
+                 ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True):
         super().__init__()
         self.doc_path = str(doc_path)
         self.page = int(page)
@@ -360,6 +360,7 @@ class TextPageWorker(QObject):
         self.noise = 0                         # 260908-6: 뺀 OCR 잡음 줄 수
         self.ocr_words = ocr_words             # 260908-8: [OCR 다시 읽기] 결과
         self.ocr_dpi = int(ocr_dpi or 0)
+        self.join_lines = bool(join_lines)   # 260910(SOT §3.7)
         self._cancel = False
 
     def request_cancel(self):
@@ -379,7 +380,8 @@ class TextPageWorker(QObject):
                                      tables=self.tables, ocr_text=self.ocr_text,
                                      tables_cached_only=self.cached_only,
                                      ocr_words=self.ocr_words,
-                                     ocr_dpi=self.ocr_dpi)
+                                     ocr_dpi=self.ocr_dpi,
+                                     join_lines=self.join_lines)
                 # 260908-6(SOT §3.5): 뺀 잡음 줄 수 — 창 안내에 남긴다
                 self.noise = tx.last_noise_count()
             finally:

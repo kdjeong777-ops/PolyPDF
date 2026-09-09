@@ -73,7 +73,7 @@ try:
     one = make("one.pdf", draw_row)
     tx.close_cache()
     d = fitz.open(str(one))
-    rows = tx.page_lines(d, str(one), 0, tables="off")
+    rows = tx.page_lines(d, str(one), 0, tables="off", join_lines=False)
     d.close()
     texts = [r["text"] for r in rows]
     chk(any(t.startswith("[ Hot Asphalt") and t.rstrip().endswith("]") for t in texts),
@@ -100,7 +100,7 @@ try:
     sz = make("size.pdf", draw_size)
     tx.close_cache()
     d = fitz.open(str(sz))
-    r = tx.page_lines(d, str(sz), 0, tables="off")
+    r = tx.page_lines(d, str(sz), 0, tables="off", join_lines=False)
     d.close()
     line = [x for x in r if "긴 문장" in x["text"]]
     chk(len(line) == 1, "⑨ 한 줄로 이어졌다", str([x["text"] for x in r]))
@@ -118,7 +118,7 @@ try:
     two = make("two.pdf", draw_2col)
     tx.close_cache()
     d = fitz.open(str(two))
-    rows = tx.page_lines(d, str(two), 0, tables="off")
+    rows = tx.page_lines(d, str(two), 0, tables="off", join_lines=False)
     d.close()
     t2 = [r["text"] for r in rows]
     chk(len(rows) == 25, "⑤ 2단 쪽은 좌·우를 잇지 않는다(25줄)", str(len(rows)) + "줄")
@@ -145,7 +145,7 @@ try:
     form = make("form.pdf", draw_form)
     tx.close_cache()
     d = fitz.open(str(form))
-    rows = tx.page_lines(d, str(form), 0, tables="off")
+    rows = tx.page_lines(d, str(form), 0, tables="off", join_lines=False)
     d.close()
     tf = [r["text"] for r in rows]
     chk(len(rows) == 4, "⑥ 서식은 4행 = 4줄 (2단으로 오해하지 않는다)",
@@ -161,7 +161,7 @@ try:
     tx.close_cache()
     d = fitz.open(str(guide))
     chk(len(tx._tables(str(guide), 0)) >= 1, "⑧ 괘선 표는 pdfplumber 가 잡는다")
-    rows = tx.page_lines(d, str(guide), 0, tables="lines")
+    rows = tx.page_lines(d, str(guide), 0, tables="lines", join_lines=False)
     d.close()
     tg = [r["text"] for r in rows]
     chk(any("모래당량" in t and "KS F 2340" in t and "50 이상" in t for t in tg),
@@ -179,7 +179,7 @@ try:
         "⑦ 보이지 않는 글자층(스캔 서식)으로 알아본다")
     chk(len(tx._tables(str(scan), 0)) == 0,
         "⑦ 괘선이 그림이면 pdfplumber 는 표를 못 찾는다")
-    rows = tx.page_lines(d, str(scan), 0, tables="lines")
+    rows = tx.page_lines(d, str(scan), 0, tables="lines", join_lines=False)
     d.close()
     ts = [r["text"] for r in rows]
     chk(any("제품종류" in t and "구 분" in t and t.count(" | ") == 3 for t in ts),

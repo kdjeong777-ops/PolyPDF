@@ -171,6 +171,13 @@ class TextPanel(QWidget):
         self.cb_omit.setToolTip("표 안 내용을 '[표 n열 × m행]' 한 줄로 줄입니다")
         self.cb_omit.toggled.connect(lambda _: self.reload())
         bar2.addWidget(self.cb_omit)
+        # 260910(SOT §3.7, 사용자 요청): 끊긴 문장을 이어서 보여 준다.
+        self.cb_join = QCheckBox("문장 잇기")
+        self.cb_join.setChecked(True)
+        self.cb_join.setToolTip("종이 때문에 아랫줄로 끊긴 문장을 이어서 보여 줍니다. "
+                                "제목·표 제목·표 칸은 잇지 않습니다.")
+        self.cb_join.toggled.connect(lambda _: self.reload())
+        bar2.addWidget(self.cb_join)
         bar2.addStretch(1)
         v.addLayout(bar2)
 
@@ -372,6 +379,10 @@ class TextPanel(QWidget):
     def omit_tables(self) -> bool:
         return self.cb_omit.isChecked()
 
+    def join_lines(self) -> bool:
+        """260910(SOT §3.7): 종이 때문에 끊긴 문장을 이어서 보여 줄지."""
+        return self.cb_join.isChecked()
+
     def reload(self):
         """표 옵션이 바뀌면 앱에 다시 뽑아 달라고 한다."""
         self.lineFocused.emit(-1, None)          # 앱이 이 신호로 재적재를 알아챈다
@@ -389,8 +400,10 @@ class TextPanel(QWidget):
             return
         i = self.current_line()
         if 0 <= i < len(self._rows):
-            rc = self._rows[i].get("rect")
-            self.lineFocused.emit(self._page, [rc] if rc else [])
+            # 260910(SOT §3.7): 이은 줄은 **원래 줄들을 모두** 칠한다
+            rcs = self._rows[i].get("rects") or (
+                [self._rows[i]["rect"]] if self._rows[i].get("rect") else [])
+            self.lineFocused.emit(self._page, list(rcs))
 
     def _on_text_changed(self):
         if self._loading:
@@ -413,8 +426,9 @@ class TextPanel(QWidget):
             self._rows[i].setdefault("orig", orig)
             self._rows[i]["text"] = txt
             self.lineEdited.emit(self._page, i, txt, orig)
-            rc = self._rows[i].get("rect")
-            self.lineFocused.emit(self._page, [rc] if rc else [])
+            rcs = self._rows[i].get("rects") or (
+                [self._rows[i]["rect"]] if self._rows[i].get("rect") else [])
+            self.lineFocused.emit(self._page, list(rcs))
 
     def _resync_blocks(self) -> None:
         """줄 수가 어긋났을 때 지금의 `_rows` 로 되돌린다(260908-6 안전망)."""

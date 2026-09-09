@@ -96,7 +96,7 @@ try:
     scan = scan_page(root / "scan.pdf")
     tx.close_cache()
     d = fitz.open(str(scan))
-    rows = tx.page_lines(d, str(scan), 0, tables="off")
+    rows = tx.page_lines(d, str(scan), 0, tables="off", join_lines=False)
     texts = [r["text"] for r in rows]
     chk(not any("■" in t or "☜" in t or "픔" in t for t in texts),
         "①③ 기호·너무 작은 글자가 줄 목록에 없다", str(texts))
@@ -126,7 +126,7 @@ try:
     n_raw = len([1 for b in page.get_text("dict")["blocks"] if b.get("type") == 0
                  for ln in b.get("lines", [])
                  if "".join(s.get("text", "") for s in ln.get("spans", [])).strip()])
-    chk(len(tx.page_lines(d2, str(plain), 0, tables="off")) == n_raw,
+    chk(len(tx.page_lines(d2, str(plain), 0, tables="off", join_lines=False)) == n_raw,
         "④ 일반 PDF 는 한 줄도 빠지지 않는다", str(n_raw))
     d2.close()
 
