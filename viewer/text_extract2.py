@@ -796,6 +796,56 @@ def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
                              (x['rect'][0] if x.get('rect') else 0)))
     return keep
 
+def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None) -> list:
+    """쪽마다 **이 창이 보여 주는 글**을 모아 [(쪽, 글)] 로 (SOT §3.1.5, 260910).
+
+    단어장은 종전에 `study.db` 의 **날것 `ocr_page.text`** 를 읽어 낱말을 뽑았다.
+    그 글은 화면과 다르다 — 기호 줄이 살아 있고, 표 칸이 흩어져 있고, 끊긴 낱말
+    (`취사` + `선택`)이 따로 놀고, 고쳐 둔 것이 반영돼 있지 않다. 그래서
+    **의미 없는 낱말이 단어장에 많이 들어갔다**(사용자 보고).
+
+    여기서는 §3.A 의 열 단계를 다 거친 줄을 쓰고, 고침(§5.1)까지 얹는다.
+    실패하면 빈 목록을 돌려준다 — 부르는 쪽이 날것으로 돌아갈 수 있게.
+    """
+    try:
+        import fitz
+    except Exception:
+        return []
+    try:
+        doc = fitz.open(str(pdf_path))
+    except Exception:
+        return []
+    try:
+        from viewer.text_fix_store import store as _fix_store
+        fixes = _fix_store()
+    except Exception:
+        fixes = None
+    out = []
+    try:
+        idx = range(doc.page_count) if pages is None else [int(p) for p in pages]
+        for pno in idx:
+            if pno < 0 or pno >= doc.page_count:
+                continue
+            try:
+                ocr = (ocr_lookup(pno) if ocr_lookup else '') or ''
+                rows = page_lines(doc, str(pdf_path), pno, tables='lines',
+                                  ocr_text=ocr)
+            except Exception:
+                continue
+            lines = [r.get('text', '') for r in rows]
+            if fixes is not None:
+                try:
+                    lines = fixes.apply_to_text(str(pdf_path), pno, lines)
+                except Exception:
+                    pass
+            out.append((pno, chr(10).join(x for x in lines if x)))
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+    return out
+
 def has_text_layer(doc, page_index: int) -> bool:
     """이 쪽에 쓸 만한 텍스트층이 있는가(스캔본이면 False → OCR 을 쓴다)."""
     try:

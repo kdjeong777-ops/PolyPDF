@@ -249,9 +249,15 @@ def tokens_ko(text: str) -> list[tuple[str, str]]:
 
 # --- 빌드 ------------------------------------------------------------------
 def build_vocab(store, file_key: str, lang: str = "eng",
-                progress=None) -> dict:
-    """study.db 의 ocr_page 텍스트로 어휘 테이블을 구축. 반환 요약 dict."""
-    pages = list(store.iter_all_text(file_key))
+                progress=None, pages_text=None) -> dict:
+    """어휘 테이블을 구축. 반환 요약 dict.
+
+    260910(텍스트 창 SOT §3.1.5 · 이 문서 §14.12): `pages_text` 를 주면 **그 글**로
+    만든다. 텍스트 창이 정제한 글(기호 줄 제거·표 한 행 한 줄·끊긴 문장 잇기·고침 반영)
+    을 넘기기 위한 것이다. 날것 `ocr_page.text` 로 만들면 **의미 없는 낱말이 많이
+    들어간다**(사용자 보고 260910). 안 주면 종전대로 `store.iter_all_text()`.
+    """
+    pages = list(pages_text) if pages_text else list(store.iter_all_text(file_key))
     if not pages:
         return {"vocab": 0, "pages": 0, "note": "ocr_page 없음 — 먼저 P1 빌드"}
 

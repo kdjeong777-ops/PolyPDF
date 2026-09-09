@@ -34,10 +34,11 @@ print("버튼 목록:", btn_texts)
 #   260618-8 ①  '전체화면' → '발표보기' 개명
 #   260618-18 ② '책갈피·단어장 동시 생성' 버튼 삭제(도구 메뉴엔 유지)
 #   +법령/고시·건설기준(260618-37)·특허(260618-43)·이미지→PDF(260825-13)·번역(260623)
-expected = ["1단", "2단", "검색", "단어장", "스크린샷", "법령/고시",
+#   260910 보기에 '텍스트', 도구에 'OCR' 추가 + 보기의 탭 버튼 차례를 우측 탭 순서와 같게
+expected = ["1단", "2단", "텍스트", "단어장", "검색", "스크린샷", "법령/고시",
             "건설기준", "특허", "발표보기",
             "PDF병합", "이미지→PDF", "번역", "책갈피 생성",
-            "단어장 생성", "암호화", "스크린샷 PDF 저장"]
+            "단어장 생성", "OCR", "암호화", "스크린샷 PDF 저장"]
 for e in expected:
     chk(e in btn_texts, f"버튼 존재: {e}")
 chk(btn_texts == expected, "버튼 순서: §2.9 표와 일치")
@@ -75,7 +76,7 @@ chk(mw.act_toggle_shot.isChecked(), "스크린샷: shot on")
 
 # 5) 패널 버튼 스타일/가운데 정렬 (260606-26)
 chk(len(getattr(mw, "_panel_btns", [])) == len(expected),
-    f"패널 버튼 {len(expected)}개 등록(§2.9 — 보기 9 + 도구 7)")
+    f"패널 버튼 {len(expected)}개 등록(§2.9 — 보기 10 + 도구 8)")
 mw._style_panel_toolbar(True)
 chk("#48" in mw._panel_btns[0].styleSheet(), "다크 스타일 적용(옅은 회색)")
 mw._style_panel_toolbar(False)

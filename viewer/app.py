@@ -1286,8 +1286,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         lab("보기")
         mk("1단", "검색·단어장·스크린샷 숨김 (단일 보기)", self._vm_single)
         mk("2단", "2단 보기(쪽 맞춤)", self._vm_split)
-        mk("검색", "검색·단어장 창 보이기 · 검색 탭", self._vm_search)
+        # 260910(사용자 지시): 우측 첫 탭인 '텍스트' 도 보기 그룹에 둔다 —
+        #   탭 순서(텍스트/단어장/검색)와 같은 차례로 놓는다(텍스트 창 SOT §2).
+        mk("텍스트", "검색·단어장 창 보이기 · 텍스트 탭", self._vm_text)
         mk("단어장", "검색·단어장 창 보이기 · 단어장 탭", self._vm_study)
+        mk("검색", "검색·단어장 창 보이기 · 검색 탭", self._vm_search)
         self._btn_shot = mk("스크린샷", "검색·단어장 숨김 · 스크린샷 보이기", self._vm_shot)
         self._btn_law = mk("법령/고시", "법제처 법령·고시 검색·본문 보기", self._action_law_search)  # 260618-18
         self._btn_kcsc = mk("건설기준", "국가건설기준센터(KCSC) KDS·KCS 본문 보기", self._action_kcsc_search)  # 260618-37
@@ -1303,6 +1306,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._btn_tr = mk("번역", "PDF 번역 (목록 창)", lambda: self._action_translate_files())  # 260623
         mk("책갈피 생성", "파일 → 책갈피 자동 생성", self.action_open_bookmarker)
         mk("단어장 생성", "파일 → 단어장 생성", self._action_build_study)
+        # 260910(사용자 지시): OCR 을 도구에서 바로 — 범위·언어·워터마크를 고르는 창이
+        #   먼저 열린다(텍스트 창 SOT §3.1.2). 텍스트 창을 열어 두지 않아도 쓸 수 있게.
+        mk("OCR", "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)",
+           self._action_ocr_read)
         mk("암호화", "현재 PDF에 암호·권한 설정(암호화 저장)", self.action_encrypt_pdf)
         self._btn_shot_pdf = mk("스크린샷 PDF 저장", "스크린샷 전체를 PDF로", self.action_save_screenshot_pdf)
 
@@ -1410,6 +1417,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.search_tabs.setCurrentWidget(self.study_panel)
         self._sync_right_layout()
 
+    def _vm_text(self):
+        """260910(사용자 지시): 우측 창을 켜고 **텍스트 탭**으로. `_vm_study` 와 같은 꼴."""
+        if self.act_split.isChecked():
+            self.act_split.setChecked(False)
+        self.act_toggle_search.setChecked(True)
+        self.search_tabs.setCurrentWidget(self.text_panel)
+        self._sync_right_layout()
+
+    def _action_ocr_read(self):
+        """260910(사용자 지시): 도구 패널의 [OCR] — 텍스트 창을 켜고 그 대화상자를 연다.
+
+        읽은 결과를 보여 줄 곳이 텍스트 창이므로, 창을 먼저 켜고 부른다.
+        범위·언어·워터마크는 그 대화상자가 정한다(텍스트 창 SOT §3.1.2).
+        """
+        self._vm_text()
+        self._on_text_need_ocr()
+
     def _vm_shot(self):
         if self.act_split.isChecked():
             self.act_split.setChecked(False)
@@ -1453,7 +1477,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         m_view = bar.addMenu("보기(&B)")
         for _label, _slot in (
                 ("1단", self._vm_single), ("2단", self._vm_split),
-                ("검색", self._vm_search), ("단어장", self._vm_study),
+                ("텍스트", self._vm_text),
+                ("단어장", self._vm_study), ("검색", self._vm_search),
                 ("스크린샷", self._vm_shot),
                 ("법령/고시", self._action_law_search),
                 ("건설기준(KCSC)", self._action_kcsc_search),
@@ -2788,8 +2813,44 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                                dlgp.setLabelText(m)))
             w.finished.connect(dlgp.close)
             self._ocr_progress = dlgp
+        # 260910(사용자 지시, 텍스트 창 SOT §3.1.4): **다 읽은 뒤** 단어장을 다시 만든다.
+        #   낱말은 `ocr_page.text` 에서 뽑은 것이라, 그 글을 갈아 끼우면 곧바로 낡는다.
+        #   쪽마다가 아니라 문서 한 번이고, OCR 이 끝난 뒤라야 겹치지 않는다(응답성 §4 ①).
+        w.finished.connect(lambda _p=path, _l=lang: self._rebuild_study_vocab(_p, _l))
         w.finished.connect(lambda: setattr(self, '_text_ocr_worker', None))
         run_in_thread(w, self._thread_keep)
+
+    def _rebuild_study_vocab(self, path, lang):
+        """OCR 을 다시 읽은 뒤 단어장을 그 글로 다시 만든다(단어학습 SOT §14.12).
+
+        단어장이 **이미 있는 문서만** 다시 만든다 — 만든 적 없는 문서에 몰래 만들지 않는다.
+        판단은 워커 안에서 한다(DB 를 UI 스레드에서 읽지 않게)."""
+        from viewer.workers import StudyVocabWorker, run_in_thread
+        prev = getattr(self, '_vocab_worker', None)
+        if prev is not None:
+            try:
+                prev.request_cancel()
+            except Exception:
+                pass
+        w = StudyVocabWorker(path, lang=lang)
+        self._vocab_worker = w
+        w.done.connect(self._on_study_vocab_rebuilt)
+        w.error.connect(lambda msg: self.status.showMessage(
+            '단어장 갱신 실패: %s' % msg, 6000))
+        w.finished.connect(lambda: setattr(self, '_vocab_worker', None))
+        run_in_thread(w, self._thread_keep)
+
+    def _on_study_vocab_rebuilt(self, summary):
+        """다시 만든 단어장을 창에 반영한다."""
+        n = int((summary or {}).get('vocab') or 0)
+        if not n:
+            return                      # 단어장이 없던 문서 — 아무 것도 하지 않는다
+        try:
+            self._refresh_study_panel(self.main_view.current_page())
+        except Exception:
+            pass
+        self.status.showMessage(
+            'OCR 을 다시 읽어 단어장을 새로 만들었습니다 — 낱말 %d개' % n, 6000)
 
     def _on_text_ocr_done(self, page, words, dpi, token):
         """다시 읽은 쪽을 기억해 두고, 지금 보고 있는 쪽이면 새로 그린다."""

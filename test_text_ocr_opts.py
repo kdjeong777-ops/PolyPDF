@@ -337,6 +337,52 @@ try:
     chk(dlg2.values()['skip_text'] is True, '⑨ 글자 있는 쪽 건너뛰기가 기본 켬')
     chk(dlg2.values()['revert'] is False, '⑩ 되돌리기는 눌렀을 때만')
 
+    # ── ⑬ 단어장은 OCR 이 끝난 뒤 (SOT §3.1.4 · 단어학습 §14.12) ──
+    from viewer.workers import StudyVocabWorker
+    vsrc = inspect.getsource(StudyVocabWorker.run)
+    chk('build_vocab' in vsrc, '⑬ 어휘만 다시 만든다')
+    chk('force_ocr' not in vsrc and 'render_page' not in vsrc,
+        '⑬ OCR 을 다시 하지 않는다 — 이미 저장된 글만 훑는다')
+    chk('vocab_count' in vsrc,
+        '⑬ 단어장이 이미 있는 문서만 — 만든 적 없는 문서에 몰래 만들지 않는다')
+    ssrc = inspect.getsource(MainWindow._start_text_ocr)
+    chk('_rebuild_study_vocab' in ssrc and 'w.finished.connect' in ssrc,
+        '⑬ OCR 워커가 **끝난 뒤** 잇는다(쪽마다가 아니라 한 번)')
+    rsrc = inspect.getsource(MainWindow._rebuild_study_vocab)
+    chk('run_in_thread' in rsrc, '⑬ 워커에서 돈다(응답성 §4 ②)')
+
+    # ── ⑮ 단어장은 정제된 글로 (SOT §3.1.5 · 단어학습 §14.12) ────
+    #   날것 `ocr_page.text` 로 만들면 기호 줄·흩어진 표 칸·끊긴 낱말이 낱말이 된다.
+    _scan = Path(_fx.scanned_form_pdf())
+    cl = tx.clean_page_texts(str(_scan))
+    chk(bool(cl) and cl[0][0] == 0, '⑮ 쪽마다 정제된 글을 돌려준다', str(len(cl)) + '쪽')
+    ct = cl[0][1] if cl else ''
+    chk('■' not in ct and '☜' not in ct,
+        '⑮ 기호만 남은 줄이 낱말이 되지 않는다', repr(ct[:40]))
+    chk('제품종류 | 일반아스팔트혼합물' in ct,
+        '⑮ 표 한 행이 한 줄로 — 칸이 흩어지지 않는다', repr(ct.splitlines()[:1]))
+    chk(tx.clean_page_texts(str(root / 'no_such.pdf')) == [],
+        '⑮ 못 열면 빈 목록 — 부르는 쪽이 날것으로 돌아간다')
+    from viewer.study import vocab as _vocab
+    vsig = inspect.signature(_vocab.build_vocab)
+    chk('pages_text' in vsig.parameters, '⑮ build_vocab 이 정제된 글을 받는다')
+    chk(vsig.parameters['pages_text'].default is None,
+        '⑮ 안 주면 종전대로 — 뒤로 호환')
+    vs = inspect.getsource(StudyVocabWorker._clean_texts)
+    chk('clean_page_texts' in vs, '⑮ 갱신 워커가 정제된 글을 쓴다')
+    from viewer.workers import StudyBuildWorker
+    bs = inspect.getsource(StudyBuildWorker.run)
+    chk('clean_page_texts' in bs, '⑮ 단어장 생성도 정제된 글을 쓴다')
+
+    # ── ⑭ 도구의 OCR · 보기의 텍스트 (SOT §2.1) ──────────────────
+    asrc3 = inspect.getsource(MainWindow._action_ocr_read)
+    chk('_vm_text' in asrc3 and '_on_text_need_ocr' in asrc3,
+        '⑭ 도구의 [OCR] 은 텍스트 창을 켜고 대화상자를 연다')
+    chk(hasattr(MainWindow, '_vm_text'), '⑭ 보기의 [텍스트] 가 있다')
+    vt = inspect.getsource(MainWindow._vm_text)
+    chk('text_panel' in vt and 'setCurrentWidget' in vt,
+        '⑭ 우측 창을 켜고 텍스트 탭으로 간다')
+
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

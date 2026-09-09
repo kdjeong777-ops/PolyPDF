@@ -334,6 +334,67 @@ class TextOcrPageWorker(QObject):
         finally:
             self.finished.emit()
 
+class StudyVocabWorker(QObject):
+    """260910: **어휘만** 다시 만든다 (단어학습 SOT §14.12 · 텍스트 창 SOT §3.1.4).
+
+    단어장의 낱말은 `study.db` 의 `ocr_page.text` 에서 뽑아 만든 것이다. 텍스트 창의
+    [OCR 다시 읽기] 가 그 글을 갈아 끼우면 **낱말은 옛 글에서 뽑은 채로 남는다** —
+    화면은 고쳐졌는데 단어장만 옛 글자인, 검색에서 먼저 겪은 것과 같은 어긋남이다.
+
+    `StudyBuildWorker` 와 달리 **OCR 을 다시 하지 않는다** — 이미 저장된 글만 훑는다.
+    응답성 SOT §4 ①②: OCR 이 끝난 뒤에 시작하고, 워커에서 돈다.
+    """
+    done = pyqtSignal(dict)          # build_vocab 요약
+    error = pyqtSignal(str)
+    finished = pyqtSignal()
+
+    YIELD_S = 0.005                  # 응답성 SOT §4 ②·⑦
+
+    def __init__(self, doc_path, *, lang: str = 'kor', db_path=None):
+        super().__init__()
+        self.doc_path = str(doc_path)
+        self.lang = lang
+        self.db_path = db_path
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def _clean_texts(self):
+        """텍스트 창이 정제한 쪽 글 — 실패하면 None(부르는 쪽이 날것으로 돌아간다)."""
+        try:
+            from viewer import text_extract2 as tx
+            got = tx.clean_page_texts(self.doc_path)
+            return got or None
+        except Exception:
+            return None
+
+    def run(self):
+        try:
+            if self._cancel:
+                return
+            from viewer.study.study_store import StudyStore, file_key_for
+            from viewer.study import vocab as study_vocab
+            st = StudyStore(self.db_path)
+            try:
+                fkey = file_key_for(self.doc_path)
+                # ★ 단어장을 만든 적 없는 문서에 몰래 만들지 않는다(§14.12)
+                if st.vocab_count(fkey) <= 0:
+                    return
+                _pacing.pace(self)
+                # 260910(SOT §3.1.5): 날것이 아니라 **텍스트 창이 정제한 글**로 만든다
+                summary = study_vocab.build_vocab(
+                    st, fkey, self.lang, pages_text=self._clean_texts())
+            finally:
+                st.close()
+            if not self._cancel:
+                self.done.emit(summary or {})
+        except Exception as e:                # noqa: BLE001
+            if not self._cancel:
+                self.error.emit(str(e))
+        finally:
+            self.finished.emit()
+
 class TextPageWorker(QObject):
     """260908-3: 텍스트 창의 **쪽 추출을 워커에서** (응답성 SOT §4 ①②·§5 #1).
 
@@ -738,7 +799,14 @@ class StudyBuildWorker(QObject):
             if self.with_vocab and not self._cancel:
                 self.progress.emit(total, total, "어휘 분석 중...")
                 from viewer.study import vocab as study_vocab
-                vocab_summary = study_vocab.build_vocab(store, fkey, self.lang)
+                # 260910(SOT §3.1.5): 텍스트 창이 정제한 글로 낱말을 뽑는다
+                try:
+                    from viewer import text_extract2 as _tx
+                    _clean = _tx.clean_page_texts(self.pdf_path) or None
+                except Exception:
+                    _clean = None
+                vocab_summary = study_vocab.build_vocab(
+                    store, fkey, self.lang, pages_text=_clean)
 
             # 260615-14: 인터넷 사전 자동 보강(옵션) — 각 단어를 온라인 조회해 dict.db 캐시
             online_n = 0
