@@ -184,7 +184,8 @@ if HAVE_SOT:
     # 자체 changelog 를 가진 문서는 3열 표 형식을 지킨다(마스터에 위임한 문서는 제외)
     delegated = ("버전 연대기(§0 changelog)는 마스터", "변경 이력(버전 한 줄)은 마스터")
     for name, txt in SOTS.items():
-        if name in ("CLAUDE.md", "뷰어 변경상세 아카이브.md"):
+        # 아카이브는 이력을 담는 곳이라 자체 changelog 를 두지 않는다(260910)
+        if name == "CLAUDE.md" or "아카이브" in name:
             continue
         if any(d in txt for d in delegated):
             continue
@@ -202,6 +203,58 @@ if HAVE_SOT:
         except Exception:
             leak.append("(git 실행 불가) " + n)
     chk(not leak, "★ 모든 SOT 문서가 공개 저장소에서 무시된다", str(leak))
+
+print(NL + "=== CLAUDE.md §4 — SOT 는 '지금 사양' 만 담는다 (260910) ===")
+# 문서 절반이 연대기가 되면 '지금 무엇이 규칙인가' 를 이력에서 캐내야 한다.
+#   실제로 마스터(§17·§18)와 단어학습(§23~§71, 52%)이 그렇게 됐다.
+if HAVE_SOT:
+    import re as _re
+    # '연대기 장' = 번호 뒤에 **날짜나 '수정/Phase'** 가 오고 버전이 붙은 것.
+    #   `## 6. 디렉터리 구조 (v1.6.2)` 처럼 사양 장에 버전만 붙은 것은 아니다.
+    # '연대기 장' = 번호 뒤에 **날짜나 '수정N/Phase N'** 이 오고 버전이 붙은 것.
+    #   `## 6. 디렉터리 구조 (v1.6.2)` 처럼 사양 장에 버전만 붙은 것은 아니다.
+    _D = chr(92) + 'd'
+    _ESC = chr(92)
+    CHRON = _re.compile('^## ' + _D + '+[a-z]?' + _ESC + '. '
+                        + '(?:' + _D + '{6}|.*수정' + _D + '|.*Phase ' + _D + ')'
+                        + '.*' + _ESC + '(v' + _D + '+' + _ESC + '.' + _D + '+'
+                        + _ESC + '.' + _D + '+' + _ESC + ')')
+    for name, txt in SOTS.items():
+        if '아카이브' in name or name == 'CLAUDE.md':
+            continue        # 아카이브는 이력을 담는 곳이다
+        bad_ch = [l for l in txt.splitlines() if CHRON.match(l)]
+        chk(not bad_ch, '연대기 장이 SOT 본문에 남아 있지 않다 — ' + name,
+            str(len(bad_ch)) + '장' if bad_ch else '')
+    # 아카이브도 CLAUDE.md 에 등재돼 있어야 한다(어디에 무엇이 있는지 한곳에서 보이게)
+    claude = SOTS.get('CLAUDE.md', '')
+    arch = [n for n in SOTS if '아카이브' in n]
+    miss = [n for n in arch if n not in claude]
+    chk(not miss, '아카이브 문서가 CLAUDE.md §3 에 등재돼 있다', str(miss))
+    # 모든 SOT 가 CLAUDE.md 에 이름이 있어야 한다
+    miss2 = [n for n in SOTS if n != 'CLAUDE.md' and n not in claude]
+    chk(not miss2, '모든 SOT 가 CLAUDE.md 에 등재돼 있다', str(miss2))
+
+print(NL + "=== 문서가 가리키는 절이 실제로 있는가 (260910) ===")
+# 코드 주석이 `단어학습 SOT §14.8` 처럼 가리키는데 그 절이 없으면, 다음 사람은
+#   규칙의 근거를 찾지 못한다. 문서를 재구성할 때 가장 먼저 낡는 것이 이 참조다.
+if HAVE_SOT:
+    import re as _re2
+    NAMED_SOT = {
+        '텍스트 창': '텍스트 창 작업 계획서.md',
+        '단어학습': '단어학습(OCR·어휘) 기능 작업계획서.md',
+        '응답성': '응답성 작업 계획서.md',
+        '검색창': '검색창 작업 계획서.md',
+    }
+    bad_ref = []
+    pat = _re2.compile(r'(텍스트 창|단어학습|응답성|검색창)\s*SOT\s*(§[0-9]+(?:\.[0-9]+)*)')
+    for f, src in CODE.items():
+        for who, sec in pat.findall(read(f)):        # 주석까지 본다
+            doc = SOTS.get(NAMED_SOT[who], '')
+            num = sec[1:]
+            if not _re2.search(r'^#{2,4} ' + _re2.escape(num) + r'[ .]', doc, _re2.M):
+                bad_ref.append('%s: %s SOT %s' % (f.name, who, sec))
+    chk(not bad_ref, '코드가 가리키는 SOT 절이 실제로 있다',
+        str(sorted(set(bad_ref))[:6]))
 
 print(NL + "=== 텍스트 창 SOT §3.5.1 — 잡음 판정의 단일 소유 ===")
 owner = ROOT / "viewer" / "text_noise.py"
