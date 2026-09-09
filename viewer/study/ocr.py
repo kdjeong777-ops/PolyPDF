@@ -411,7 +411,9 @@ def _join_words_by_gap(parts) -> str:
     """
     NL = chr(10)
     try:
-        from viewer.text_extract2 import GLUE_GAP, CJK_GLUE_GAP, _is_cjk_pair
+        from viewer.text_extract2 import (GLUE_GAP, CJK_GLUE_GAP, NUM_GLUE_GAP,
+                                          _is_cjk_pair, _is_num_pair,
+                                          fix_number_spaces)
     except Exception:              # 모듈을 못 불러오면 종전대로 공백
         out = ''
         for q in parts:
@@ -434,10 +436,16 @@ def _join_words_by_gap(parts) -> str:
         else:
             ref = max(1.0, float(q['y1']) - float(q['y0']))
             gap = float(q['x0']) - float(prev['x1'])
-            glue = CJK_GLUE_GAP if _is_cjk_pair(text, t) else GLUE_GAP
+            if _is_cjk_pair(text, t):
+                glue = CJK_GLUE_GAP
+            elif _is_num_pair(text, t):
+                glue = NUM_GLUE_GAP
+            else:
+                glue = GLUE_GAP
             text += ('' if gap < glue * ref else ' ') + t
         prev = q
-    return text
+    # 260909-3: 줄 단위로 수 사이의 빈칸을 마저 없앤다(텍스트 창 SOT §3.6.2)
+    return chr(10).join(fix_number_spaces(x) for x in text.split(chr(10)))
 
 def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     """이미지 OCR → {text, conf, words:[{surface,x0,y0,x1,y1,conf}]} (픽셀 좌표).

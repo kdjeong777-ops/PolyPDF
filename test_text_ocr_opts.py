@@ -224,6 +224,27 @@ try:
         chk('사용 규제 사항' in r['text'],
             '⑧ **본문(검색·단어장)도** 같은 규칙으로 이어진다', repr(r['text'][:40]))
 
+    # ── ⑪ 숫자 띄어쓰기 (SOT §3.6.2, 260909-3 사용자 보고) ────────
+    chk(tx._is_num_pair('9', '5') and tx._is_num_pair('.', '6%'),
+        '⑪ 한쪽이 한 글자면 수를 잇는다')
+    chk(not tx._is_num_pair('95.', '6%'),
+        '⑪ 둘 다 두 글자 이상이면 잇지 않는다(이어 붙인 것이 아니라 **원래 토막**으로 잰다)')
+    chk(not tx._is_num_pair('3.9261', '4.0065'),
+        '⑪ 둘 다 온전한 수면 붙이지 않는다 — 다른 값이다')
+    chk(not tx._is_num_pair('1', 'BIN'), '⑪ 숫자가 아닌 것과는 잇지 않는다')
+    for src_t, want in (('9 5 . 6%', '95.6%'), ('4 . 4', '4.4'),
+                        ('1 000.0', '1000.0'), ('3 1 .0', '31.0'),
+                        ('2 . 3 9 2', '2.392'), ('1 8.2', '18.2')):
+        got = tx.fix_number_spaces(src_t)
+        chk(got == want, '⑪ 쪼개진 수를 붙인다 — %r' % src_t, repr(got))
+    for keep in ('3.9261 4.0065', '15.3 16.0 22.0', '제8조 2026년02월',
+                 '1 BIN', 'PG 64-22', '20 mm'):
+        chk(tx.fix_number_spaces(keep) == keep,
+            '⑪ 멀쩡한 것은 건드리지 않는다 — %r' % keep,
+            repr(tx.fix_number_spaces(keep)))
+    chk(tx.fix_number_spaces('계 | 1 000.0 | 1 OO.0') == '계 | 1000.0 | 1 OO.0',
+        '⑪ 칸 구분(|) 을 넘어 붙지 않는다')
+
     # ── ⑨ 글자층+그림 섞인 쪽은 합친다 (SOT §3.1.3) ──────────────
     from PIL import Image, ImageDraw, ImageFont
     im = Image.new('RGB', (1000, 260), 'white')

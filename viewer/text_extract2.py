@@ -33,6 +33,11 @@ GLUE_GAP = 0.25         # 글자크기 대비 이보다 좁으면 붙여 쓴다(
 #   0.25 언저리라 붙일지 띄울지가 글자마다 뒤집혔다. 실측(300dpi, 간격÷높이):
 #   한 낱말 안 0.14~0.40 / 낱말 사이 0.50~0.94 → 경계를 0.45 로 둔다.
 CJK_GLUE_GAP = 0.45
+# 260909-3(사용자 보고 '숫자가 한 자씩 띄어 써진다'): 숫자도 마찬가지다 —
+#   흐린 스캔에서는 Tesseract 가 숫자를 한 자씩 낱말로 내놓는다. 다만 **완전한 두 수**
+#   (`3.9261` | `4.0065`)를 붙이면 안 되므로, **한쪽이 한 글자일 때만** 넓은 기준을 쓴다.
+NUM_GLUE_GAP = 0.45
+_NUM_CHARS = set('0123456789.,%')
 COL_GAP = 2.5           # 이보다 넓게 벌어지면 '다른 칸' — " | " 로 잇는다
 CELL_SEP = " | "
 COL_ALIGN = 0.40        # 단으로 보려면 왼쪽 끝이 이 비율 이상 맞아야 한다
@@ -228,6 +233,45 @@ def _is_cjk_pair(left, right) -> bool:
     b = (right or '').lstrip()[:1]
     return bool((a and _is_cjk(a)) or (b and _is_cjk(b)))
 
+def _is_num_pair(left, right) -> bool:
+    """숫자가 한 자씩 흩어진 자리인가 (SOT §3.6.2).
+
+    양쪽 다 숫자·소수점·쉼표·%% 로만 되어 있고 **한쪽이 한 글자**일 때만 참이다.
+    `3.9261` 과 `4.0065` 처럼 둘 다 온전한 수면 붙이지 않는다 — 다른 값이다.
+    """
+    a = (left or '').rstrip().split(' ')[-1]
+    b = (right or '').lstrip().split(' ')[0]
+    if not a or not b:
+        return False
+    if not (set(a) <= _NUM_CHARS and set(b) <= _NUM_CHARS):
+        return False
+    if not (any(c.isdigit() for c in a) or any(c.isdigit() for c in b)):
+        return False
+    return len(a) == 1 or len(b) == 1
+
+
+def fix_number_spaces(text: str) -> str:
+    """글 안에 이미 들어 있는 **수 사이의 빈칸**을 없앤다 (SOT §3.6.2).
+
+    흐린 스캔의 글자층에는 `9 5 . 6%`·`4 . 4`·`1 000.0` 처럼 수가 쪼개져 들어 있다
+    (그 PDF 를 만든 OCR 이 그렇게 적었다). 자리 정보가 없으니 글자만 보고 고친다.
+
+    **한 글자짜리 토막이 낀 자리만** 붙인다 — `3.9261 4.0065` 처럼 둘 다 온전한 수는
+    서로 다른 값이므로 건드리지 않는다.
+    """
+    if not text or ' ' not in text:
+        return text
+    toks = text.split(' ')
+    out = [toks[0]]
+    prev = toks[0]                  # **원래 토막**으로 판단한다 — 이어 붙인 것이 길어지면
+    for t in toks[1:]:              #   '한쪽이 한 글자' 조건이 곧 거짓이 되어 뒤가 끊긴다
+        if t and prev and _is_num_pair(prev, t):
+            out[-1] = out[-1] + t
+        else:
+            out.append(t)
+        prev = t
+    return ' '.join(out)
+
 def _merge_rows(frags):
     """세로로 겹치는 조각을 **한 줄**로 잇는다 — 왼쪽부터 오른쪽으로.
 
@@ -247,7 +291,12 @@ def _merge_rows(frags):
                 continue
             ref = max(1.0, size or (rect[3] - rect[1]))
             gap = rect[0] - x1
-            glue = CJK_GLUE_GAP if _is_cjk_pair(text, piece) else GLUE_GAP
+            if _is_cjk_pair(text, piece):
+                glue = CJK_GLUE_GAP
+            elif _is_num_pair(text, piece):
+                glue = NUM_GLUE_GAP
+            else:
+                glue = GLUE_GAP
             if gap < glue * ref:
                 sep = ""
             elif gap < COL_GAP * ref:
@@ -259,7 +308,7 @@ def _merge_rows(frags):
             x1, y1 = max(x1, rect[2]), max(y1, rect[3])
         # 대표 크기 = **글자가 가장 많은 조각**의 크기(제목/내용 판정용, SOT §3.4)
         size = max(items, key=lambda f: len(f[1].strip()))[2]
-        out.append(((x0, y0, x1, y1), text, size))
+        out.append(((x0, y0, x1, y1), fix_number_spaces(text), size))
     return out
 
 
