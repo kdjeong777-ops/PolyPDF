@@ -38,6 +38,11 @@ CJK_GLUE_GAP = 0.45
 #   (`3.9261` | `4.0065`)를 붙이면 안 되므로, **한쪽이 한 글자일 때만** 넓은 기준을 쓴다.
 NUM_GLUE_GAP = 0.45
 _NUM_CHARS = set('0123456789.,%')
+# 260909-4(사용자 지시): OCR 이 숫자를 닮은 글자로 잘못 읽은 것도 되돌린다.
+#   실측(배합설계 2쪽 글자층): `44 . O`·`O .5`·`1 OO.O`·`2026년O2월`.
+#   **글자를 바꾸는 일**이라 조건을 좁게 건다 — §3.6.3.
+_LOOKALIKE = {'O': '0', 'o': '0', 'l': '1', 'I': '1'}
+_NUMRUN_CHARS = _NUM_CHARS | set(_LOOKALIKE) | {' '}
 COL_GAP = 2.5           # 이보다 넓게 벌어지면 '다른 칸' — " | " 로 잇는다
 CELL_SEP = " | "
 COL_ALIGN = 0.40        # 단으로 보려면 왼쪽 끝이 이 비율 이상 맞아야 한다
@@ -272,6 +277,50 @@ def fix_number_spaces(text: str) -> str:
         prev = t
     return ' '.join(out)
 
+def _is_ascii_letter(ch) -> bool:
+    return ('a' <= ch <= 'z') or ('A' <= ch <= 'Z')
+
+
+def fix_number_ocr(text: str) -> str:
+    """수 안에서 `0`→`O`, `1`→`l`·`I` 로 잘못 읽은 것을 되돌린다 (SOT §3.6.3).
+
+    **글자를 바꾸는 일**이라 세 가지를 모두 만족할 때만 바꾼다.
+      ① 그 토막이 숫자·소수점·쉼표·%%·닮은 글자·빈칸 으로만 되어 있다
+      ② 원래 토막에 **진짜 숫자가 하나 이상** 있다 — 홀로 있는 `O` 는 글자다
+      ③ 바꾼 결과가 **수의 모양**이다(소수점 하나, 천 단위 쉼표만)
+    그리고 토막의 앞뒤가 **영문 글자가 아니어야** 한다 — `No. 1` 이 `N0.1` 이 되면 안 된다
+    (한글은 영문 글자가 아니므로 `2026년O2월` 은 고쳐진다).
+
+    빈칸은 **그대로 둔다**. 붙이는 일은 `fix_number_spaces()` 가 따로 한다.
+    """
+    if not text:
+        return text
+    import re
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] not in _NUMRUN_CHARS:
+            out.append(text[i])
+            i += 1
+            continue
+        j = i
+        while j < n and text[j] in _NUMRUN_CHARS:
+            j += 1
+        run = text[i:j]
+        core = run.strip()
+        before = text[i - 1] if i > 0 else ''
+        after = text[j] if j < n else ''
+        ok = bool(core) and any(c.isdigit() for c in core)
+        if ok and (_is_ascii_letter(before) or _is_ascii_letter(after)):
+            ok = False
+        if ok:
+            cand = ''.join(_LOOKALIKE.get(c, c) for c in core if c != ' ')
+            if re.match(r'^\d+(,\d{3})*(\.\d+)?%?$', cand):
+                run = ''.join(_LOOKALIKE.get(c, c) for c in run)
+        out.append(run)
+        i = j
+    return ''.join(out)
+
 def _merge_rows(frags):
     """세로로 겹치는 조각을 **한 줄**로 잇는다 — 왼쪽부터 오른쪽으로.
 
@@ -308,7 +357,8 @@ def _merge_rows(frags):
             x1, y1 = max(x1, rect[2]), max(y1, rect[3])
         # 대표 크기 = **글자가 가장 많은 조각**의 크기(제목/내용 판정용, SOT §3.4)
         size = max(items, key=lambda f: len(f[1].strip()))[2]
-        out.append(((x0, y0, x1, y1), fix_number_spaces(text), size))
+        out.append(((x0, y0, x1, y1),
+                    fix_number_spaces(fix_number_ocr(text)), size))
     return out
 
 

@@ -245,6 +245,30 @@ try:
     chk(tx.fix_number_spaces('계 | 1 000.0 | 1 OO.0') == '계 | 1000.0 | 1 OO.0',
         '⑪ 칸 구분(|) 을 넘어 붙지 않는다')
 
+    # ── ⑫ 0 을 O 로 읽은 것 (SOT §3.6.3, 260909-4 사용자 지시) ────
+    #   "숫자가 명확할 때만 수정하도록 하는 규칙" — 네 조건을 모두 만족할 때만.
+    FIX = (('44 . O', '44.0'), ('O .5', '0.5'), ('1 OO.O', '100.0'),
+           ('1 OOO.0', '1000.0'), ('2026년O2월', '2026년02월'),
+           ('5 . O', '5.0'), ('42 . O', '42.0'), ('3.O', '3.0'),
+           ('1O형', '10형'))
+    for src_t, want in FIX:
+        got = tx.fix_number_spaces(tx.fix_number_ocr(src_t))
+        chk(got == want, '⑫ 수가 분명하면 되돌린다 — %r' % src_t, repr(got))
+    KEEP = ('No. 1',        # ④ 앞이 영문 글자
+            'IoT',          # ② 숫자가 없다
+            '1L', '100ml',  # ③ 수의 모양이 아니다
+            'O', 'OO', 'O형', 'l',   # ② 진짜 숫자가 없다
+            '3.9261 4.0065',         # ③ 소수점이 둘
+            '2 B I N', 'PG 64-22', 'Cotton wool', 'TABLE 10', '처l 크기')
+    for keep in KEEP:
+        got = tx.fix_number_ocr(keep)
+        chk(got == keep, '⑫ 분명하지 않으면 건드리지 않는다 — %r' % keep, repr(got))
+    chk(tx.fix_number_ocr('O') == 'O' and tx.fix_number_ocr('1O') == '10',
+        '⑫ 곁에 진짜 숫자가 있을 때만 바꾼다(② 조건)')
+    chk(tx.fix_number_ocr('44 . O') == '44 . 0',
+        '⑫ 글자만 바꾸고 빈칸은 그대로 둔다(붙이기는 §3.6.2 가 한다)',
+        repr(tx.fix_number_ocr('44 . O')))
+
     # ── ⑨ 글자층+그림 섞인 쪽은 합친다 (SOT §3.1.3) ──────────────
     from PIL import Image, ImageDraw, ImageFont
     im = Image.new('RGB', (1000, 260), 'white')
