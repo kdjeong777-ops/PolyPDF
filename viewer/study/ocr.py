@@ -230,6 +230,12 @@ def _image_coverage(page: "fitz.Page") -> float:
 #   고르지 않는다.** OCR 을 돌리는 상황은 텍스트층이 없거나 못 믿을 때인데, 글자가
 #   하나도 없으면 `한글 0 > 라틴 0` 이 거짓이라 `eng` 로 떨어져 한글 문서를 영문으로
 #   읽었다. 기본값을 한글+영문으로 두고, 설치된 것만 골라 쓴다.
+# 260909-2(§14.11): 쪽 나누기 방식(psm). P0 스파이크는 소설 본문 한 쪽으로 재어
+#   `--psm 6`(균일한 한 덩어리)을 골랐는데, 그 값은 **여러 구역이 섞인 쪽**에서
+#   그림 속 글을 통째로 놓친다(실측: 붙여 넣은 표 그림을 psm 6 은 못 읽고 4 는 읽는다).
+#   `--psm 4`(크기가 제각각인 한 단)가 실제 문서 3종에서 고루 가장 많이 읽었다.
+DEFAULT_PSM = 4
+
 DEFAULT_LANG = "kor+eng"
 FALLBACK_LANG = "eng"
 
@@ -397,7 +403,43 @@ def render_page(doc: "fitz.Document", page_index: int, dpi: int = 300,
     return img, page.rect, (pix.width, pix.height)
 
 
-def ocr_image(img, lang: str = "eng", psm: int = 6, dpi: int = 300) -> dict:
+def _join_words_by_gap(parts) -> str:
+    """낱말 상자를 **간격으로** 이어 한 줄 글로 (텍스트 창 SOT §3.6.2).
+
+    `parts` 는 낱말 dict 와 개행 표시가 섞인 목록이다. 잇는 규칙은 텍스트 창의
+    §3.6 과 **같은 것**을 쓴다 — 규칙이 갈라지면 화면과 검색이 서로 달라진다.
+    """
+    NL = chr(10)
+    try:
+        from viewer.text_extract2 import GLUE_GAP, CJK_GLUE_GAP, _is_cjk_pair
+    except Exception:              # 모듈을 못 불러오면 종전대로 공백
+        out = ''
+        for q in parts:
+            t = q if isinstance(q, str) else q.get('surface', '')
+            out += t if t == NL else (
+                ('' if (not out or out.endswith(NL)) else ' ') + t)
+        return out
+    text = ''
+    prev = None
+    for q in parts:
+        if isinstance(q, str):     # 개행
+            text += q
+            prev = None
+            continue
+        t = str(q.get('surface', ''))
+        if not t:
+            continue
+        if prev is None or not text or text.endswith(NL):
+            text += t
+        else:
+            ref = max(1.0, float(q['y1']) - float(q['y0']))
+            gap = float(q['x0']) - float(prev['x1'])
+            glue = CJK_GLUE_GAP if _is_cjk_pair(text, t) else GLUE_GAP
+            text += ('' if gap < glue * ref else ' ') + t
+        prev = q
+    return text
+
+def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     """이미지 OCR → {text, conf, words:[{surface,x0,y0,x1,y1,conf}]} (픽셀 좌표).
 
     260908-8(텍스트 창 SOT §3.5 · 이 문서 §14.3): **글자로 볼 수 없는 낱말은 버린다.**
@@ -408,7 +450,7 @@ def ocr_image(img, lang: str = "eng", psm: int = 6, dpi: int = 300) -> dict:
     if not info.get("ok"):
         raise RuntimeError(f"Tesseract 사용 불가: {info.get('error')}")
     import pytesseract
-    cfg = f"--psm {psm}"
+    cfg = f"--psm {int(psm) or DEFAULT_PSM}"
     data = pytesseract.image_to_data(img, lang=lang, config=cfg,
                                      output_type=pytesseract.Output.DICT)
     words = []
@@ -440,14 +482,12 @@ def ocr_image(img, lang: str = "eng", psm: int = 6, dpi: int = 300) -> dict:
             if prev_line is not None and line != prev_line:
                 parts.append("\n")
             prev_line = line
-        parts.append(s)
-    # parts 를 줄 구조로 합침('\n' 토큰은 개행, 나머지는 공백)
-    text = ""
-    for p in parts:
-        if p == "\n":
-            text += "\n"
-        else:
-            text += ("" if (not text or text.endswith("\n")) else " ") + p
+        parts.append(words[-1])
+    # 260909-2(텍스트 창 SOT §3.6.2): 본문도 **글자 사이 간격**으로 잇는다.
+    #   종전에는 낱말을 공백으로만 이어, 한글이 `재 생 점 가 제` 로 흩어졌다 —
+    #   Tesseract 가 한글을 글자 하나하나 낱말로 내놓기 때문이다. 화면만 고치면
+    #   검색·단어장에는 흩어진 채로 남는다.
+    text = _join_words_by_gap(parts)
     avg = sum(confs) / len(confs) if confs else 0.0
     return {"text": text, "conf": avg, "words": words}
 

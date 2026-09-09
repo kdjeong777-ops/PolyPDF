@@ -246,7 +246,7 @@ class TextOcrPageWorker(QObject):
 
     def __init__(self, doc_path, pages, *, lang: str = '',
                  dpi: int = 300, db_path=None, token: int = 0,
-                 drop_watermark: bool = True):
+                 drop_watermark: bool = True, skip_text_pages: bool = True):
         super().__init__()
         self.doc_path = str(doc_path)
         self.pages = [int(p) for p in (pages if isinstance(pages, (list, tuple))
@@ -256,12 +256,29 @@ class TextOcrPageWorker(QObject):
         self.db_path = db_path
         self.token = int(token)
         self.drop_watermark = bool(drop_watermark)
+        self.skip_text_pages = bool(skip_text_pages)
         self.noise = 0
         self._cancel = False
 
     def request_cancel(self):
         self._cancel = True
 
+    @staticmethod
+    def _skippable(doc, page_index: int) -> bool:
+        """이 쪽은 OCR 하지 않아도 되는가 — 글자층이 있고 그림이 거의 없다.
+
+        판정은 단어학습 SOT §14.3 의 `decide_source` 를 그대로 쓴다. 다만 그림이
+        섞인 쪽(붙여 넣은 표·사진)은 **건너뛰지 않는다** — 그림 속 글을 채워야 한다.
+        """
+        try:
+            from viewer.study import ocr as study_ocr
+            page = doc.load_page(int(page_index))
+            src, _why = study_ocr.decide_source(page)
+            if src != 'layer':
+                return False
+            return study_ocr._image_coverage(page) < 0.05
+        except Exception:
+            return False
     def run(self):
         try:
             if self._cancel:
@@ -282,6 +299,12 @@ class TextOcrPageWorker(QObject):
                 for i, pg in enumerate(self.pages):
                     if self._cancel:
                         break
+                    # 260909-2(텍스트 창 SOT §3.1.2): 글자층이 멀쩡하고 그림도 거의
+                    #   없는 쪽은 건너뛴다 — 그런 쪽은 OCR 이 원본보다 반드시 나쁘다.
+                    #   그림이 섞인 쪽은 읽어서 **합친다**(§3.1.3).
+                    if self.skip_text_pages and self._skippable(doc, pg):
+                        self.progress.emit(i + 1, total, f'{pg + 1}쪽 건너뜀(글자 있음)')
+                        continue
                     self.progress.emit(i, total, f'{pg + 1}쪽 읽는 중…')
                     res = study_ocr.build_page(
                         doc, pg, lang=lang, dpi=self.dpi, force_ocr=True,

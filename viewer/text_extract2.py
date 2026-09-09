@@ -27,7 +27,12 @@ from viewer import text_noise as _noise          # noqa: E402
 NOISE_MIN_H_PT = _noise.MIN_H_PT
 # 260908-7(SOT §3.6): 같은 줄에 있는 조각을 하나로 잇는 기준.
 ROW_OVERLAP = 0.55      # 세로로 이만큼 겹치면 '같은 줄'
-GLUE_GAP = 0.25         # 글자크기 대비 이보다 좁으면 붙여 쓴다
+GLUE_GAP = 0.25         # 글자크기 대비 이보다 좁으면 붙여 쓴다(라틴)
+# 260909-2(SOT §3.6.2, 사용자 보고 "재생첨가제 → 재생점 가제"): 한글은 다르다.
+#   Tesseract 가 한글을 **글자 하나하나 낱말로** 내놓는데, 그 글자 사이 간격이
+#   0.25 언저리라 붙일지 띄울지가 글자마다 뒤집혔다. 실측(300dpi, 간격÷높이):
+#   한 낱말 안 0.14~0.40 / 낱말 사이 0.50~0.94 → 경계를 0.45 로 둔다.
+CJK_GLUE_GAP = 0.45
 COL_GAP = 2.5           # 이보다 넓게 벌어지면 '다른 칸' — " | " 로 잇는다
 CELL_SEP = " | "
 COL_ALIGN = 0.40        # 단으로 보려면 왼쪽 끝이 이 비율 이상 맞아야 한다
@@ -205,6 +210,24 @@ def _by_column(blocks, page):
     return [left, right]
 
 
+def _is_cjk(ch) -> bool:
+    """한글·한자·가나인가(띄어쓰기 규칙이 라틴과 다르다, SOT §3.6.2)."""
+    o = ord(ch)
+    return (0xAC00 <= o <= 0xD7A3 or 0x1100 <= o <= 0x11FF      # 한글
+            or 0x3130 <= o <= 0x318F
+            or 0x4E00 <= o <= 0x9FFF or 0xF900 <= o <= 0xFAFF   # 한자
+            or 0x3040 <= o <= 0x30FF)                           # 가나
+
+
+def _is_cjk_pair(left, right) -> bool:
+    """맞닿는 두 글자 중 **하나라도** CJK 면 CJK 규칙을 쓴다.
+
+    `제`+`8`, `8`+`조` 처럼 숫자가 섞인 자리도 한 낱말 안이다(실측 §3.6.2).
+    """
+    a = (left or '').rstrip()[-1:]
+    b = (right or '').lstrip()[:1]
+    return bool((a and _is_cjk(a)) or (b and _is_cjk(b)))
+
 def _merge_rows(frags):
     """세로로 겹치는 조각을 **한 줄**로 잇는다 — 왼쪽부터 오른쪽으로.
 
@@ -224,7 +247,8 @@ def _merge_rows(frags):
                 continue
             ref = max(1.0, size or (rect[3] - rect[1]))
             gap = rect[0] - x1
-            if gap < GLUE_GAP * ref:
+            glue = CJK_GLUE_GAP if _is_cjk_pair(text, piece) else GLUE_GAP
+            if gap < glue * ref:
                 sep = ""
             elif gap < COL_GAP * ref:
                 sep = "" if (not text or text.endswith(" ")) else " "
@@ -435,11 +459,17 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
     except Exception:
         return []
     if ocr_words:
-        # 260908-8: [OCR 다시 읽기] 로 새로 읽은 쪽 — 그 결과를 우선한다(SOT §3.1).
+        # 260908-8: [OCR 다시 읽기] 로 새로 읽은 쪽.
         rows = lines_from_words(ocr_words, dpi=ocr_dpi, page=page)
         if rows:
             _NOISE["n"] = 0
-            return rows
+            if not has_text_layer(doc, page_index):
+                return rows                     # 스캔 쪽 — OCR 이 전부다
+            # 260909-2(SOT §3.1.3): 글자층이 있는 쪽은 **갈아 끼우지 않고 합친다**.
+            #   글자층이 정확하고, 그림 속 글만 OCR 로 채운다.
+            base = page_lines(doc, pdf_path, page_index, tables=tables,
+                              tables_cached_only=tables_cached_only)
+            return merge_layer_and_ocr(base, rows)
     items = _line_items(page)
     noise = last_noise_count()
 
@@ -516,6 +546,30 @@ def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
     styles = _classify(items)
     return [{'text': t, 'style': st, 'rect': r, 'kind': 'text'}
             for (r, t, _s), st in zip(items, styles)]
+
+def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
+    """글자층 줄 + **그림 속에만 있던** OCR 줄 (SOT §3.1.3, 260909-2).
+
+    사용자 보고: 표지 제목·붙여 넣은 표 그림의 글이 텍스트 창에 아예 안 나온다.
+    그 쪽은 **글자층과 그림이 섞인 쪽**이었다 — 글자층만 읽으니 그림 속 글은 없고,
+    OCR 로 갈아 끼우면 멀쩡한 글자층까지 짐작한 글자로 바뀐다. 그래서 **합친다**.
+
+    글자층 줄은 그대로 두고, OCR 줄 중 **어느 글자층 줄과도 겹치지 않는 것**만 더한다
+    (겹치면 같은 글을 두 번 보여 주게 된다). 자리 순서로 다시 정렬한다.
+    """
+    keep = list(layer_rows or [])
+    for r in (ocr_rows or []):
+        rc = r.get('rect')
+        if not rc:
+            continue
+        if any(_inside(rc, x['rect'], frac) for x in keep if x.get('rect')):
+            continue
+        r = dict(r)
+        r['kind'] = 'ocr'          # 어디서 왔는지 남긴다(창 안내·검증용)
+        keep.append(r)
+    keep.sort(key=lambda x: ((x['rect'][1] if x.get('rect') else 0),
+                             (x['rect'][0] if x.get('rect') else 0)))
+    return keep
 
 def has_text_layer(doc, page_index: int) -> bool:
     """이 쪽에 쓸 만한 텍스트층이 있는가(스캔본이면 False → OCR 을 쓴다)."""

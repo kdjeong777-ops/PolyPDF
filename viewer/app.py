@@ -2733,11 +2733,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         opts = dlg.values()
-        self._ocr_opts = {'lang': opts['lang'], 'watermark': opts['watermark']}
+        self._ocr_opts = {'lang': opts['lang'], 'watermark': opts['watermark'],
+                          'skip_text': opts.get('skip_text', True)}
+        if opts.get('revert'):      # 260909-2: 이 문서를 원래 글자층으로 되돌린다
+            forced = getattr(self, '_text_force_ocr', None) or set()
+            self._text_force_ocr = {k for k in forced if k[0] != str(cur)}
+            self._reload_text_panel()
+            self.status.showMessage('원래 글자층으로 되돌렸습니다.', 4000)
+            return
         lang = opts['lang'] or self._ocr_lang_for(cur)
-        self._start_text_ocr(cur, opts['pages'], lang, opts['watermark'])
+        self._start_text_ocr(cur, opts['pages'], lang, opts['watermark'],
+                             opts.get('skip_text', True))
 
-    def _start_text_ocr(self, path, pages, lang, watermark):
+    def _start_text_ocr(self, path, pages, lang, watermark, skip_text=True):
         """OCR 워커를 띄운다. 여러 쪽이면 진행창(취소 가능)을 붙인다."""
         from PyQt6.QtWidgets import QProgressDialog
         from viewer.study import ocr as _so
@@ -2754,16 +2762,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 prev.request_cancel()
             except Exception:
                 pass
-        self._text_token = getattr(self, '_text_token', 0) + 1
-        tok = self._text_token
+        # 260909-2(사용자 보고 '전체 읽기가 그 쪽까지만 진행된다'): OCR 은 **자기 표**를
+        #   쓴다. 종전에는 화면 갱신용 `_text_token` 을 함께 썼는데, 첫 쪽 결과가 오면
+        #   `_reload_text_panel()` 이 그 표를 올려 **그 뒤 쪽의 결과가 전부 버려졌다**.
+        #   워커는 계속 읽고 있었지만 화면·표시가 첫 쪽에서 멈춘 것처럼 보였다.
+        self._ocr_token = getattr(self, '_ocr_token', 0) + 1
+        tok = self._ocr_token
         tp.set_busy('OCR 로 읽는 중… (%d쪽)' % len(pages))
         from viewer.workers import TextOcrPageWorker, run_in_thread
         w = TextOcrPageWorker(path, pages, lang=lang, db_path=None, token=tok,
-                              drop_watermark=watermark)
+                              drop_watermark=watermark, skip_text_pages=skip_text)
         self._text_ocr_worker = w
         w.done.connect(self._on_text_ocr_done)
         w.error.connect(lambda msg, t: tp.set_busy('OCR 실패: %s' % msg)
-                        if t == self._text_token else None)
+                        if t == getattr(self, '_ocr_token', 0) else None)
         if len(pages) > 1:
             dlgp = QProgressDialog('OCR 준비 중…', '중지', 0, len(pages), self)
             dlgp.setWindowTitle('OCR 다시 읽기')
@@ -2780,7 +2792,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _on_text_ocr_done(self, page, words, dpi, token):
         """다시 읽은 쪽을 기억해 두고, 지금 보고 있는 쪽이면 새로 그린다."""
-        if token != getattr(self, '_text_token', 0):
+        if token != getattr(self, '_ocr_token', 0):
             return
         cur = self.main_view.current_file() if self.main_view else None
         if not cur:

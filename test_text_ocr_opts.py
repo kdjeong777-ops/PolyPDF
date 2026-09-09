@@ -183,6 +183,115 @@ try:
         print("SKIP - Tesseract 없음(⑦ 실제 OCR 검사 생략)")
     wd.close()
 
+    # ── ⑧ 한글 띄어쓰기 (SOT §3.6.2 · 단어학습 §14.10) ───────────
+    from viewer import text_extract2 as tx
+    chk(tx.CJK_GLUE_GAP > tx.GLUE_GAP,
+        '⑧ 한글은 라틴보다 붙임 기준이 넉넉하다',
+        '%.2f > %.2f' % (tx.CJK_GLUE_GAP, tx.GLUE_GAP))
+    chk(tx._is_cjk_pair('제', '8') and tx._is_cjk_pair('8', '조'),
+        '⑧ 숫자가 섞여도 한쪽이 한글이면 한글 규칙')
+    chk(not tx._is_cjk_pair('the', 'layer'), '⑧ 라틴끼리는 라틴 규칙')
+    # 글자 높이 20pt 기준: 낱말 안 0.30(=6pt) 은 붙고, 낱말 사이 0.55(=11pt) 는 띈다
+    def line(gaps, texts, h=20.0):
+        fr, x = [], 0.0
+        for g, t in zip([0.0] + gaps, texts):
+            x += g
+            fr.append(((x, 0.0, x + h * len(t), h), t, h))
+            x += h * len(t)
+        return tx._merge_rows(fr)[0][1]
+    got = line([6.0, 11.0], ['재생', '첨가제', '사용'])
+    chk(got == '재생첨가제 사용', '⑧ 한글 — 낱말 안은 붙이고 사이는 띈다', repr(got))
+    got2 = line([6.0, 11.0], ['the', 'layer', 'to'], h=12.0)
+    chk(got2 == 'the layer to', '⑧ 라틴은 낱말마다 띈다', repr(got2))
+
+    if HAVE_TESS:
+        sp = fitz.open()
+        spp = sp.new_page(width=595, height=842)
+        spp.insert_text((60, 200), '1. 재생첨가제 사용 규제 사항', fontsize=20,
+                        fontfile=KRFONT, fontname='kr')
+        sppath = root / 'sp.pdf'
+        sp.save(str(sppath))
+        sp.close()
+        sd = fitz.open(str(sppath))
+        r = so.build_page(sd, 0, lang=so.resolve_lang('kor+eng'), dpi=300,
+                          force_ocr=True)
+        rows = tx.lines_from_words(r['words'], dpi=r['dpi'])
+        sd.close()
+        txt = rows[0]['text'] if rows else ''
+        chk('사용 규제 사항' in txt, '⑧ 실제 OCR 에서 낱말 사이가 띄어진다', repr(txt))
+        chk('가 제' not in txt and '재 생' not in txt,
+            '⑧ 낱말 안이 흩어지지 않는다(사용자 보고)', repr(txt))
+        chk('사용 규제 사항' in r['text'],
+            '⑧ **본문(검색·단어장)도** 같은 규칙으로 이어진다', repr(r['text'][:40]))
+
+    # ── ⑨ 글자층+그림 섞인 쪽은 합친다 (SOT §3.1.3) ──────────────
+    from PIL import Image, ImageDraw, ImageFont
+    im = Image.new('RGB', (1000, 260), 'white')
+    dr = ImageDraw.Draw(im)
+    # 합치는 **구조**를 보는 검사다 — 한글 OCR 품질은 ⑧ 에서 따로 본다.
+    dr.text((40, 60), 'TABLE ANALYSIS RESULT',
+            font=ImageFont.truetype(KRFONT, 90), fill=(0, 0, 0))
+    cap = root / 'cap.png'
+    im.save(str(cap))
+    mx = fitz.open()
+    mp = mx.new_page(width=595, height=842)
+    mp.insert_text((50, 80), '표지 제목입니다', fontsize=18,
+                   fontfile=KRFONT, fontname='kr')
+    # 글자층이 '쓸 만하다' 고 판정될 만큼은 있어야 한다(단어학습 SOT §14.3)
+    for i in range(8):
+        mp.insert_text((50, 120 + i * 22), '본문 문장이 이어지는 줄 ' + str(i),
+                       fontsize=12, fontfile=KRFONT, fontname='kr')
+    mp.insert_image(fitz.Rect(50, 400, 545, 545), filename=str(cap))
+    mpath = root / 'mixed.pdf'
+    mx.save(str(mpath))
+    mx.close()
+    md = fitz.open(str(mpath))
+    chk(tx.has_text_layer(md, 0) is True, '⑨ 글자층이 있는 쪽이다')
+    from viewer.workers import TextOcrPageWorker as _W
+    chk(_W._skippable(md, 0) is False,
+        '⑨ 그림이 섞이면 건너뛰지 않는다(그림 속 글을 채워야 한다)')
+    base = [r['text'] for r in tx.page_lines(md, str(mpath), 0, tables='off')]
+    chk(any('표지 제목' in t for t in base), '⑨ 글자층 줄은 원래 나온다',
+        str(base[:2]))
+    if HAVE_TESS:
+        r = so.build_page(md, 0, lang=so.resolve_lang('kor+eng'), dpi=300,
+                          force_ocr=True, drop_watermark_bg=True)
+        merged = tx.page_lines(md, str(mpath), 0, tables='off',
+                               ocr_words=r['words'], ocr_dpi=r['dpi'])
+        mt = [x['text'] for x in merged]
+        chk(any('표지 제목입니다' == t for t in mt),
+            '⑨ 글자층 줄이 **그대로** 남는다(짐작한 글자로 바뀌지 않는다)', str(mt[:2]))
+        chk(any('ANALYSIS' in t.upper() for t in mt),
+            '⑨ 그림 속 글이 더해진다', str([t for t in mt if '본문 문장' not in t]))
+        chk(any(x['kind'] == 'ocr' for x in merged),
+            '⑨ 더해진 줄은 어디서 왔는지 표시된다')
+    md.close()
+
+    # 순수 텍스트 쪽은 건너뛴다
+    pu = fitz.open()
+    pp = pu.new_page(width=595, height=842)
+    for i in range(10):
+        pp.insert_text((50, 100 + i * 20), '순수 텍스트 줄입니다 ' + str(i),
+                       fontsize=11, fontfile=KRFONT, fontname='kr')
+    ppath = root / 'pure.pdf'
+    pu.save(str(ppath))
+    pu.close()
+    pd = fitz.open(str(ppath))
+    chk(_W._skippable(pd, 0) is True, '⑨ 그림 없는 글자 쪽은 건너뛴다')
+    pd.close()
+
+    # ── ⑩ 세대 표 · 되돌리기 ────────────────────────────────────
+    asrc2 = inspect.getsource(MainWindow._start_text_ocr)
+    chk('_ocr_token' in asrc2 and '_text_token' not in asrc2.split('#')[0],
+        '⑩ OCR 은 화면 갱신과 **다른 세대 표**를 쓴다(전체 읽기가 첫 쪽에서 멈추던 결함)')
+    dsrc2 = inspect.getsource(MainWindow._on_text_ocr_done)
+    chk('_ocr_token' in dsrc2, '⑩ 결과도 그 표로 확인한다')
+    nsrc = inspect.getsource(MainWindow._on_text_need_ocr)
+    chk('revert' in nsrc, '⑩ [원래 글자층 보기] 로 되돌릴 수 있다')
+    dlg2 = OcrOptionsDialog(page=0, page_count=5)
+    chk(dlg2.values()['skip_text'] is True, '⑨ 글자 있는 쪽 건너뛰기가 기본 켬')
+    chk(dlg2.values()['revert'] is False, '⑩ 되돌리기는 눌렀을 때만')
+
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

@@ -80,6 +80,13 @@ class OcrOptionsDialog(QDialog):
             "연한 진짜 글자(회색 캡션 등)도 함께 사라질 수 있습니다.")
         v.addWidget(self.cb_wm)
 
+        self.cb_skip = QCheckBox("글자가 이미 있는 쪽은 건너뛰기 (권장)")
+        self.cb_skip.setChecked(bool(last.get("skip_text", True)))
+        self.cb_skip.setToolTip(
+            "글자층이 멀쩡한 쪽은 OCR 이 원본보다 반드시 나쁩니다. "
+            "그림이 섞인 쪽은 건너뛰지 않고, 그림 속 글만 더해 줍니다.")
+        v.addWidget(self.cb_skip)
+
         self.lbl_note = QLabel("")
         self.lbl_note.setWordWrap(True)
         v.addWidget(self.lbl_note)
@@ -89,6 +96,13 @@ class OcrOptionsDialog(QDialog):
         self.sp_from.valueChanged.connect(self._update_note)
         self.sp_to.valueChanged.connect(self._update_note)
 
+        # 260909-2: 잘못 읽힌 문서를 **원래대로 되돌릴 길**이 있어야 한다(SOT §3.1.2).
+        self._revert = False
+        self.btn_revert = QPushButton("원래 글자층 보기")
+        self.btn_revert.setToolTip("이 문서의 'OCR 로 보기' 표시를 지웁니다.")
+        self.btn_revert.clicked.connect(self._do_revert)
+        v.addWidget(self.btn_revert)
+
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                               | QDialogButtonBox.StandardButton.Cancel)
         for b in bb.buttons():
@@ -97,6 +111,10 @@ class OcrOptionsDialog(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
+
+    def _do_revert(self):
+        self._revert = True
+        self.accept()
 
     # ---------------- 값 ----------------
     def pages(self) -> list:
@@ -112,7 +130,9 @@ class OcrOptionsDialog(QDialog):
     def values(self) -> dict:
         return {"pages": self.pages(),
                 "lang": self.cmb_lang.currentData() or "",
-                "watermark": self.cb_wm.isChecked()}
+                "watermark": self.cb_wm.isChecked(),
+                "skip_text": self.cb_skip.isChecked(),
+                "revert": self._revert}
 
     def _update_note(self):
         n = len(self.pages())
