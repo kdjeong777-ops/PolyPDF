@@ -2712,18 +2712,41 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._text_store().add_highlight(cur, page, line, a, b, color)
 
     def _on_text_need_ocr(self):
-        """260908-8(사용자 지시): [OCR 다시 읽기] — **이 쪽만** 다시 읽는다(SOT §3.1).
+        """260908-8/260909: [OCR 다시 읽기] — 범위·언어·워터마크를 고른 뒤 읽는다.
 
-        종전에는 글자가 아예 없을 때만 나오는 단추였고, 누르면 문서 전체 단어장 생성을
-        시작했다. OCR 이 잘못 읽은 쪽을 다시 읽힐 방법이 없었다. 이제 보고 있는 쪽
-        하나만 워커에서 다시 읽고(응답성 SOT §4 ①②), 결과를 `study.db` 에 남겨
-        단어장·검색도 같은 결과를 쓰게 한다. 잡음 규칙은 `text_noise` 가 소유한다.
+        텍스트 창 SOT §3.1.1·§3.1.2. 한 쪽이면 조용히, 여러 쪽이면 진행창 + 취소
+        (응답성 SOT §4 ④). 결과는 쪽마다 `study.db` 에 남아 단어장·검색이 함께 쓴다.
         """
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not cur or mv._doc is None:
             return
         page = mv.current_page()
+        try:
+            n_pages = int(mv._doc.page_count())
+        except Exception:
+            n_pages = page + 1
+        from PyQt6.QtWidgets import QDialog, QProgressDialog
+        from viewer.widgets.ocr_options_dialog import OcrOptionsDialog
+        dlg = OcrOptionsDialog(self, page=page, page_count=n_pages,
+                               last=getattr(self, '_ocr_opts', None))
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        opts = dlg.values()
+        self._ocr_opts = {'lang': opts['lang'], 'watermark': opts['watermark']}
+        lang = opts['lang'] or self._ocr_lang_for(cur)
+        self._start_text_ocr(cur, opts['pages'], lang, opts['watermark'])
+
+    def _start_text_ocr(self, path, pages, lang, watermark):
+        """OCR 워커를 띄운다. 여러 쪽이면 진행창(취소 가능)을 붙인다."""
+        from PyQt6.QtWidgets import QProgressDialog
+        from viewer.study import ocr as _so
+        miss = _so.missing_langs(lang)
+        if miss:        # 조용히 다른 언어로 읽지 않는다(단어학습 SOT §14.8)
+            QMessageBox.information(
+                self, 'OCR',
+                '이 설치본에는 다음 언어 자료가 없습니다: ' + ', '.join(miss)
+                + '. 있는 언어로만 읽습니다: ' + _so.resolve_lang(lang))
         tp = self.text_panel
         prev = getattr(self, '_text_ocr_worker', None)
         if prev is not None:
@@ -2733,19 +2756,30 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 pass
         self._text_token = getattr(self, '_text_token', 0) + 1
         tok = self._text_token
-        tp.set_busy(f'p.{page + 1} OCR 로 다시 읽는 중… (조금 걸립니다)')
+        tp.set_busy('OCR 로 읽는 중… (%d쪽)' % len(pages))
         from viewer.workers import TextOcrPageWorker, run_in_thread
-        w = TextOcrPageWorker(cur, page, lang=self._ocr_lang_for(cur),
-                              db_path=None, token=tok)
+        w = TextOcrPageWorker(path, pages, lang=lang, db_path=None, token=tok,
+                              drop_watermark=watermark)
         self._text_ocr_worker = w
         w.done.connect(self._on_text_ocr_done)
-        w.error.connect(lambda msg, t: tp.set_busy(f'OCR 실패: {msg}')
+        w.error.connect(lambda msg, t: tp.set_busy('OCR 실패: %s' % msg)
                         if t == self._text_token else None)
+        if len(pages) > 1:
+            dlgp = QProgressDialog('OCR 준비 중…', '중지', 0, len(pages), self)
+            dlgp.setWindowTitle('OCR 다시 읽기')
+            dlgp.setWindowModality(Qt.WindowModality.NonModal)
+            dlgp.setMinimumDuration(400)
+            dlgp.canceled.connect(w.request_cancel)
+            w.progress.connect(lambda d, t, m: (dlgp.setMaximum(t),
+                                               dlgp.setValue(d),
+                                               dlgp.setLabelText(m)))
+            w.finished.connect(dlgp.close)
+            self._ocr_progress = dlgp
         w.finished.connect(lambda: setattr(self, '_text_ocr_worker', None))
         run_in_thread(w, self._thread_keep)
 
     def _on_text_ocr_done(self, page, words, dpi, token):
-        """다시 읽은 결과를 그 쪽에 적용하고, 다음부터도 그 결과를 쓰게 표시한다."""
+        """다시 읽은 쪽을 기억해 두고, 지금 보고 있는 쪽이면 새로 그린다."""
         if token != getattr(self, '_text_token', 0):
             return
         cur = self.main_view.current_file() if self.main_view else None
@@ -2755,17 +2789,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if forced is None:
             forced = self._text_force_ocr = set()
         forced.add((str(cur), int(page)))
+        if int(page) != self.main_view.current_page():
+            return                      # 다른 쪽은 저장만 — 화면은 건드리지 않는다
         if not words:
             self.text_panel.set_busy('OCR 이 이 쪽에서 글자를 찾지 못했습니다.')
             return
         self._reload_text_panel()
 
     def _ocr_lang_for(self, path) -> str:
-        """이 문서의 OCR 언어 — 단어장 SOT 의 판정을 그대로 쓴다."""
+        """'자동' 을 골랐을 때의 언어 — 판정은 단어학습 SOT §14.8 이 소유한다."""
         try:
-            return self._detect_study_lang(Path(path))
+            from viewer.study import ocr as _so
+            mv = self.main_view
+            if mv is not None and mv._doc is not None:
+                return _so.detect_lang(mv._doc.doc)
+            return _so.default_lang()
         except Exception:
-            return 'kor'
+            return 'kor+eng'
 
     def _on_text_line_edited(self, page, line, text, orig="", rect=None):
         cur = self.main_view.current_file() if self.main_view else None

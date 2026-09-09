@@ -226,6 +226,78 @@ def _image_coverage(page: "fitz.Page") -> float:
         return 0.0
 
 
+# 260909(§14.8, 사용자 보고 "PDF OCR 시 한글이 안 되고 있어"): 언어를 **텍스트층으로
+#   고르지 않는다.** OCR 을 돌리는 상황은 텍스트층이 없거나 못 믿을 때인데, 글자가
+#   하나도 없으면 `한글 0 > 라틴 0` 이 거짓이라 `eng` 로 떨어져 한글 문서를 영문으로
+#   읽었다. 기본값을 한글+영문으로 두고, 설치된 것만 골라 쓴다.
+DEFAULT_LANG = "kor+eng"
+FALLBACK_LANG = "eng"
+
+
+def available_langs() -> list:
+    """이 기계에서 쓸 수 있는 Tesseract 언어 목록(번들 tessdata 기준)."""
+    try:
+        info = ensure_tesseract()
+        if not info.get("ok"):
+            return []
+        import pytesseract
+        return sorted(pytesseract.get_languages(config=""))
+    except Exception:
+        return []
+
+
+def default_lang() -> str:
+    """기본 OCR 언어 — 설치된 것만 남긴 `kor+eng`(§14.8)."""
+    return resolve_lang(DEFAULT_LANG)
+
+
+def resolve_lang(lang: str) -> str:
+    """요청한 언어 중 **설치된 것만** 남긴다. 하나도 없으면 `eng`.
+
+    조용히 틀린 언어로 읽느니 줄여서라도 맞는 언어로 읽는다. 무엇이 빠졌는지는
+    `missing_langs()` 로 알 수 있다(부르는 쪽이 사용자에게 알린다).
+    """
+    want = [x for x in str(lang or "").split("+") if x]
+    if not want:
+        want = DEFAULT_LANG.split("+")
+    have = set(available_langs())
+    if not have:
+        return "+".join(want)          # 목록을 못 얻으면 요청대로 시도한다
+    keep = [x for x in want if x in have]
+    if keep:
+        return "+".join(keep)
+    return FALLBACK_LANG if FALLBACK_LANG in have else (sorted(have)[0] if have else FALLBACK_LANG)
+
+
+def missing_langs(lang: str) -> list:
+    """요청했지만 설치돼 있지 않은 언어(사용자 안내용)."""
+    have = set(available_langs())
+    if not have:
+        return []
+    return [x for x in str(lang or "").split("+") if x and x not in have]
+
+
+def detect_lang(doc, pages: int = 5) -> str:
+    """'자동' — 텍스트층으로 짐작하되, **글자가 적으면 믿지 않는다**(§14.8).
+
+    종전 판정의 결함이 여기 있었다: 스캔본은 텍스트층이 비어 있어 어느 쪽으로도
+    셀 수 없는데, 그때 조용히 영문으로 떨어졌다. 이제 기본값(한글+영문)으로 돌아간다.
+    """
+    try:
+        n = min(int(pages), doc.page_count)
+        sample = "".join(doc.load_page(i).get_text("text") for i in range(n))
+    except Exception:
+        return default_lang()
+    if len(sample.strip()) < 30:
+        return default_lang()
+    han = len(_HANGUL_RE.findall(sample))
+    lat = len(_WORD_RE.findall(sample))
+    if han == 0 and lat > 0:
+        return resolve_lang("eng")
+    if han > 0 and lat == 0:
+        return resolve_lang("kor")
+    return default_lang()
+
 def decide_source(page: "fitz.Page") -> tuple[str, dict]:
     """이 페이지를 'layer'(레이어 사용) 또는 'ocr'(재OCR) 중 무엇으로 처리할지 판정.
 
@@ -289,13 +361,39 @@ def strip_repeated_lines(pages_text: list[str], threshold: float = 0.4) -> list[
 
 
 # --- 렌더 + OCR -----------------------------------------------------------
-def render_page(doc: "fitz.Document", page_index: int, dpi: int = 300):
-    """페이지를 dpi 로 렌더해 (PIL.Image, page_rect) 반환."""
+# 260909(§14.9, 사용자 지시): 워터마크는 본문 **뒤에 연하게** 깔린다. 크기·위치로는
+#   본문과 못 가르므로(전면을 가로지르는 큰 글씨가 많다) **밝기로** 가른다.
+#   실측 근거: 스캔본 본문 글자는 거의 검정(<100), 워터마크는 옅은 회색(>180).
+WM_KEEP_LUMA = 140          # 0~255. 이보다 밝은 픽셀은 흰색으로 지운다
+
+
+def drop_watermark(img):
+    """연한 픽셀을 흰색으로 — 워터마크를 지우고 본문만 남긴다(§14.9).
+
+    한계: **연한 진짜 글자**(회색 캡션·도장)도 함께 사라질 수 있다. 그래서 옵션이다.
+    """
+    try:
+        g = img.convert("L")
+        # point() 로 한 번에 — 픽셀 반복문은 300dpi A4 에서 몇 초씩 걸린다
+        bw = g.point(lambda v: 0 if v < WM_KEEP_LUMA else 255, mode="L")
+        return bw.convert("RGB")
+    except Exception:
+        return img          # 못 지워도 OCR 자체는 돌아야 한다
+
+
+def render_page(doc: "fitz.Document", page_index: int, dpi: int = 300,
+                drop_watermark_bg: bool = False):
+    """페이지를 dpi 로 렌더해 (PIL.Image, page_rect, 픽셀크기) 반환.
+
+    `drop_watermark_bg=True` 면 연한 배경(워터마크)을 지우고 넘긴다(§14.9).
+    """
     from PIL import Image
     page = doc.load_page(page_index)
     zoom = dpi / 72.0
     pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    if drop_watermark_bg:
+        img = drop_watermark(img)
     return img, page.rect, (pix.width, pix.height)
 
 
@@ -380,7 +478,8 @@ def words_from_layer(page: "fitz.Page") -> dict:
 
 def build_page(doc: "fitz.Document", page_index: int, *,
                lang: str = "eng", dpi: int = 300,
-               force_ocr: bool = False) -> dict:
+               force_ocr: bool = False,
+               drop_watermark_bg: bool = False) -> dict:
     """한 페이지를 처리해 {source, text, conf, words, dpi, engine} 반환.
     source='layer' 면 텍스트 레이어 사용, 'ocr' 면 Tesseract."""
     page = doc.load_page(page_index)
@@ -389,7 +488,8 @@ def build_page(doc: "fitz.Document", page_index: int, *,
         res = words_from_layer(page)
         res.update(source="layer", dpi=0, engine="pymupdf", why=why)
         return res
-    img, _, _ = render_page(doc, page_index, dpi=dpi)
-    res = ocr_image(img, lang=lang, dpi=dpi)
+    img, _, _ = render_page(doc, page_index, dpi=dpi,
+                            drop_watermark_bg=drop_watermark_bg)
+    res = ocr_image(img, lang=resolve_lang(lang), dpi=dpi)
     res.update(source="ocr", dpi=dpi, engine="tesseract", why=why)
     return res

@@ -180,9 +180,13 @@ try:
         "⑧ 워커가 자기 문서를 따로 연다(응답성 SOT §4)")
     chk("save_page" in src_w, "⑧ 결과를 study.db 에 남긴다 — 단어장·검색이 같이 쓴다")
     from viewer.app import MainWindow
+    # 260909: 범위를 고르게 되면서 워커 띄우기가 `_start_text_ocr` 로 갈라졌다.
+    #   기본은 여전히 '보고 있는 쪽 하나' 다(대화상자 기본값, `test_text_ocr_opts.py` ④).
     src_a = inspect.getsource(MainWindow._on_text_need_ocr)
-    chk("TextOcrPageWorker" in src_a and "current_page" in src_a,
-        "⑧ 앱은 **보고 있는 쪽 하나만** 다시 읽는다")
+    chk("OcrOptionsDialog" in src_a and "current_page" in src_a,
+        "⑧ 앱은 보고 있는 쪽을 기준으로 범위를 묻는다")
+    chk("TextOcrPageWorker" in inspect.getsource(MainWindow._start_text_ocr),
+        "⑧ 고른 범위를 워커로 넘긴다")
 
 finally:
     try:

@@ -225,28 +225,38 @@ def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
 
 
 class TextOcrPageWorker(QObject):
-    """260908-8: 텍스트 창의 [OCR 다시 읽기] — **한 쪽만** 다시 읽는다.
+    """260908-8: 텍스트 창의 [OCR 다시 읽기] — **고른 쪽들**을 다시 읽는다.
 
-    단어장 생성(`StudyBuildWorker`)은 문서 전체를 읽어 오래 걸린다. 사용자가 보고 있는
-    쪽 하나만 다시 읽을 길이 없어 이 워커를 둔다. 결과는 `study.db` 에 남겨
-    단어장·검색이 함께 쓰고, 잡음 규칙은 `text_noise` 가 소유한다(텍스트 창 SOT §3.5).
+    단어장 생성(`StudyBuildWorker`)은 문서 전체를 읽고 어휘까지 만들어 오래 걸린다.
+    사용자가 보고 있는 쪽만, 또는 원하는 범위만 다시 읽을 길이 없어 이 워커를 둔다.
+    결과는 `study.db` 에 **쪽마다 바로** 남겨 단어장·검색이 함께 쓰고, 중간에 취소해도
+    읽은 데까지 보존된다(텍스트 창 SOT §3.1.2).
 
-    응답성 SOT §4 ①②: 워커는 **자기 문서를 따로 연다**(PyMuPDF 문서는 스레드 안전하지
+    응답성 SOT §4 ①②⑦: 워커는 **자기 문서를 따로 연다**(PyMuPDF 문서는 스레드 안전하지
     않다). 렌더 + Tesseract 는 C 호출이라 메인에서 돌리면 쪽당 수 초 멈춘다.
+    쪽마다 `pacing.pace` 로 점유율을 맞춘다 — 실측 300dpi 한 쪽 4.4초라 348쪽이면
+    25분이 넘는다.
     """
     done = pyqtSignal(int, object, int, int)     # page, words, dpi, token
+    progress = pyqtSignal(int, int, str)         # done, total, 안내
     error = pyqtSignal(str, int)
     finished = pyqtSignal()
 
-    def __init__(self, doc_path, page: int, *, lang: str = 'kor+eng',
-                 dpi: int = 300, db_path=None, token: int = 0):
+    YIELD_S = 0.005      # 응답성 SOT §4 ②·⑦
+
+    def __init__(self, doc_path, pages, *, lang: str = '',
+                 dpi: int = 300, db_path=None, token: int = 0,
+                 drop_watermark: bool = True):
         super().__init__()
         self.doc_path = str(doc_path)
-        self.page = int(page)
+        self.pages = [int(p) for p in (pages if isinstance(pages, (list, tuple))
+                                       else [pages])]
         self.lang = lang
         self.dpi = int(dpi)
         self.db_path = db_path
         self.token = int(token)
+        self.drop_watermark = bool(drop_watermark)
+        self.noise = 0
         self._cancel = False
 
     def request_cancel(self):
@@ -258,28 +268,43 @@ class TextOcrPageWorker(QObject):
                 return
             import fitz
             from viewer.study import ocr as study_ocr
+            from viewer.study.study_store import StudyStore, file_key_for
+            lang = study_ocr.resolve_lang(self.lang or study_ocr.default_lang())
+            total = len(self.pages)
             doc = fitz.open(self.doc_path)
+            store = None
             try:
-                res = study_ocr.build_page(doc, self.page, lang=self.lang,
-                                           dpi=self.dpi, force_ocr=True)
+                try:
+                    store = StudyStore(self.db_path)
+                except Exception:
+                    store = None
+                fkey = file_key_for(self.doc_path)
+                for i, pg in enumerate(self.pages):
+                    if self._cancel:
+                        break
+                    self.progress.emit(i, total, f'{pg + 1}쪽 읽는 중…')
+                    res = study_ocr.build_page(
+                        doc, pg, lang=lang, dpi=self.dpi, force_ocr=True,
+                        drop_watermark_bg=self.drop_watermark)
+                    words = res.get('words') or []
+                    if store is not None:      # 쪽마다 바로 — 취소해도 남는다
+                        try:
+                            store.save_page(fkey, pg, res['text'], dpi=res['dpi'],
+                                            engine=res['engine'], source=res['source'],
+                                            conf=res['conf'], words=words, lang=lang)
+                        except Exception:
+                            pass
+                    if not self._cancel:
+                        self.done.emit(pg, words, int(res.get('dpi') or 0), self.token)
+                    self.progress.emit(i + 1, total, f'{pg + 1}쪽')
+                    _pacing.pace(self)
             finally:
                 doc.close()
-            words = res.get('words') or []
-            dpi = int(res.get('dpi') or 0)
-            try:                        # 단어장·검색이 같은 결과를 쓰게 남긴다
-                from viewer.study.study_store import StudyStore, file_key_for
-                st = StudyStore(self.db_path)   # None 이면 표준 study.db
-                try:
-                    st.save_page(file_key_for(self.doc_path), self.page,
-                                 res['text'], dpi=res['dpi'],
-                                 engine=res['engine'], source=res['source'],
-                                 conf=res['conf'], words=words, lang=self.lang)
-                finally:
-                    st.close()
-            except Exception:
-                pass            # 저장 실패가 화면 표시를 막지는 않는다
-            if not self._cancel:
-                self.done.emit(self.page, words, dpi, self.token)
+                if store is not None:
+                    try:
+                        store.close()
+                    except Exception:
+                        pass
         except Exception as e:                # noqa: BLE001
             if not self._cancel:
                 self.error.emit(str(e), self.token)
