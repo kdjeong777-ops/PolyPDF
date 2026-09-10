@@ -237,6 +237,11 @@ class MiniStrip(QWidget):
         self.list.customContextMenuRequested.connect(self._show_menu)
 
         layout.addWidget(self.list)
+        # 260910(사용자 보고 "제목과 창 사이 간격이 너무 넓다"): 남는 높이를 **아래로**
+        #   몰아 준다. 늘어나는 항목이 없으면 Qt 가 남는 공간을 항목들 사이에 나눠 넣어,
+        #   패널이 내용보다 크면 제목과 목록이 위아래로 벌어져 보인다.
+        #   실측: 패널 400px · 내용 213px → 종전엔 그 차이가 사이로 들어갔다.
+        layout.addStretch(1)
 
     # --- 항목 ----------------------------------------------------------
     def add_item(self, file_path: str, *, kind: str = "pdf",

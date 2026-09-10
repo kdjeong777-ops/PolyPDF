@@ -35,16 +35,49 @@ jobs:
           $ff = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
           if ($ff) { Copy-Item $ff ".\ffmpeg.exe" -Force; echo "ffmpeg staged" }
 
-      - name: Stage Tesseract (OCR) — optional
+      # 260910(사용자 보고 "빌드된 것에 kor 이 없어 한국어 OCR 이 안 된다", 단어학습 SOT §14.13)
+      #   `tesseract/` 는 .gitignore 라 체크아웃에 없다 → CI 가 **스스로 마련해야** 한다.
+      #   choco 기본 설치에는 **eng 만** 있어 `kor` 은 따로 받는다.
+      - name: Stage Tesseract (OCR)
         continue-on-error: true
         run: |
           choco install tesseract -y --no-progress
-          $dir = "C:\Program Files\Tesseract-OCR"
-          if (Test-Path "$dir\tesseract.exe") {
-            New-Item -ItemType Directory -Force ".\tesseract" | Out-Null
-            Copy-Item "$dir\*" ".\tesseract" -Recurse -Force
+          $dir = "C:\\Program Files\\Tesseract-OCR"
+          if (Test-Path "$dir\\tesseract.exe") {
+            New-Item -ItemType Directory -Force ".\\tesseract" | Out-Null
+            Copy-Item "$dir\\*" ".\\tesseract" -Recurse -Force
             echo "tesseract staged"
           }
+
+      - name: Stage Korean tessdata (kor, osd, eng)
+        continue-on-error: true
+        run: |
+          $td = ".\\tesseract\\tessdata"
+          New-Item -ItemType Directory -Force $td | Out-Null
+          $base = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main"
+          foreach ($lang in @("kor", "osd", "eng")) {
+            $dst = Join-Path $td "$lang.traineddata"
+            if (Test-Path $dst) { continue }
+            Invoke-WebRequest -Uri "$base/$lang.traineddata" -OutFile $dst -UseBasicParsing
+            echo "downloaded $lang"
+          }
+          Get-ChildItem $td | Select-Object Name, Length
+
+      # ★ 여기서 실패하면 배포를 멈춘다 — 종전에는 조용히 넘어가 **OCR 없는 배포본**이
+      #   나갔다(사용자 보고 260910). 없으면 고치고 태그를 다시 밀어야 한다.
+      - name: Verify OCR bundle (fail the release if missing)
+        shell: pwsh
+        run: |
+          $exe = @(".\\tesseract\\tesseract.exe",
+                   ".\\tesseract\\Library\\bin\\tesseract.exe") |
+                 Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $exe) { throw "tesseract.exe 가 없습니다 - OCR 없는 배포본은 내지 않는다" }
+          $dirs = @(".\\tesseract\\tessdata", ".\\tesseract\\share\\tessdata")
+          foreach ($lang in @("eng", "kor")) {
+            $hit = $dirs | Where-Object { Test-Path (Join-Path $_ "$lang.traineddata") }
+            if (-not $hit) { throw "$lang.traineddata 가 없습니다 - 한국어 OCR 이 안 됩니다" }
+          }
+          echo "OCR bundle ok: $exe"
 
       - name: Stage NLTK WordNet (vocab) — optional
         continue-on-error: true

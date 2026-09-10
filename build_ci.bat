@@ -120,6 +120,22 @@ REM   (구성요소 설치 기능은 선택적 폴백으로 유지 — 번들이
 set TESS_ARG=
 if exist "tesseract\tesseract.exe"              set TESS_ARG=--add-data "tesseract;tesseract"
 if exist "tesseract\Library\bin\tesseract.exe"  set TESS_ARG=--add-data "tesseract;tesseract"
+REM 260910(사용자 보고 "빌드된 것에 kor 이 없다", 단어학습 SOT §14.13):
+REM   `tesseract\` 는 .gitignore 라 CI 체크아웃에는 없다. 그러면 위 if 가 거짓이 되어
+REM   **아무것도 동봉하지 않은 채 빌드가 성공한다** — 개발 기계에서는 폴더가 있어
+REM   절대 드러나지 않는 실패다. 그래서 무엇을 담았는지 **화면에 남긴다**.
+echo(
+echo   [OCR 동봉 점검]
+if not defined TESS_ARG (
+  echo     ^^! tesseract 트리 없음 — 이 빌드는 OCR 을 못 한다.
+  echo       CI 는 release.yml 의 'Verify OCR bundle' 이 여기서 실패시킨다.
+) else (
+  echo     - tesseract 트리 동봉
+  if exist "tesseract	essdata\kor.traineddata"        echo     - kor.traineddata ^(tessdata^)
+  if exist "tesseract\share	essdata\kor.traineddata" echo     - kor.traineddata ^(share	essdata^)
+  if not exist "tesseract	essdata\kor.traineddata" if not exist "tesseract\share	essdata\kor.traineddata" echo     ^^! kor.traineddata 없음 — 한국어 OCR 이 안 된다.
+)
+echo(
 set NLTK_ARG=
 if exist "nltk_data"                    set NLTK_ARG=--add-data "nltk_data;nltk_data"
 set FFMPEG_ARG=

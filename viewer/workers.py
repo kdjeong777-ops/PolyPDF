@@ -728,6 +728,7 @@ class StudyBuildWorker(QObject):
     def __init__(self, pdf_path: Path, *, lang: str = "eng", dpi: int = 300,
                  db_path: Optional[Path] = None, force_ocr: bool = False,
                  with_vocab: bool = True, online_prefs: Optional[dict] = None,
+                 drop_watermark: bool = True,
                  online_only: bool = False):
         super().__init__()
         self.pdf_path = Path(pdf_path)
@@ -736,6 +737,7 @@ class StudyBuildWorker(QObject):
         self.db_path = db_path
         self.force_ocr = force_ocr
         self.with_vocab = with_vocab       # OCR 후 어휘(P2)까지 빌드
+        self.drop_watermark = bool(drop_watermark)   # 260910(§14.9)
         self.online_prefs = dict(online_prefs or {})  # 260615-14: 빌드 시 인터넷 사전 보강
         self.online_only = online_only     # 260615-15: 재OCR 없이 인터넷 보강만(이어하기)
         self._cancel = False
@@ -775,7 +777,12 @@ class StudyBuildWorker(QObject):
             fkey = file_key_for(self.pdf_path)
             doc = fitz.open(self.pdf_path)
             total = doc.page_count
-            store.set_meta(fkey, str(self.pdf_path), total, self.lang)
+            # 260910(단어학습 SOT §14.8): 언어 판정은 **고쳐진 것**을 쓴다.
+            #   부르는 쪽이 준 값이 있으면 설치된 언어로 줄여 쓰고, 없으면 문서를 보고
+            #   고른다(글자가 적으면 기본값 kor+eng — 스캔본에서 eng 로 떨어지던 결함).
+            _lang = (study_ocr.resolve_lang(self.lang) if self.lang
+                     else study_ocr.detect_lang(doc))
+            store.set_meta(fkey, str(self.pdf_path), total, _lang)
 
             done0 = len(store.done_pages(fkey))
             self.progress.emit(done0, total, f"재개: {done0}/{total} 완료됨")
@@ -791,8 +798,14 @@ class StudyBuildWorker(QObject):
                 #   양보 없이 돌면 그 사이 메인이 굶는다(사용자가 띄운 작업이어도 창은 살아야).
                 _pacing.pace(self)            # 260908-5: 간격이 아니라 점유율(§4 ⑦)
                 try:
-                    res = study_ocr.build_page(doc, i, lang=self.lang,
-                                               dpi=self.dpi, force_ocr=self.force_ocr)
+                    # 260910(사용자 지시): 단어장 생성도 텍스트 창과 **같은 조건**으로
+                    #   읽는다 — 언어는 고쳐진 판정(단어학습 SOT §14.8), 워터마크는
+                    #   지우고(§14.9). 종전에는 이 경로만 옛 판정을 쓰고 워터마크를
+                    #   그대로 읽어, 단어장에 워터마크 글자가 들어갔다.
+                    res = study_ocr.build_page(
+                        doc, i, lang=_lang, dpi=self.dpi,
+                        force_ocr=self.force_ocr,
+                        drop_watermark_bg=self.drop_watermark)
                 except Exception as pe:
                     # OCR 필요한데 Tesseract 불가 등 — 페이지 스킵하고 계속
                     if not info.get("ok"):
@@ -803,7 +816,7 @@ class StudyBuildWorker(QObject):
                     ocr_used = True
                 store.save_page(fkey, i, res["text"], dpi=res["dpi"],
                                 engine=res["engine"], source=res["source"],
-                                conf=res["conf"], words=res["words"], lang=self.lang)
+                                conf=res["conf"], words=res["words"], lang=_lang)
                 processed += 1
                 if i % 1 == 0:
                     self.progress.emit(processed, total,
@@ -827,7 +840,7 @@ class StudyBuildWorker(QObject):
                 except Exception:
                     _clean = None
                 vocab_summary = study_vocab.build_vocab(
-                    store, fkey, self.lang, pages_text=_clean)
+                    store, fkey, _lang, pages_text=_clean)
 
             # 260615-14: 인터넷 사전 자동 보강(옵션) — 각 단어를 온라인 조회해 dict.db 캐시
             online_n = 0

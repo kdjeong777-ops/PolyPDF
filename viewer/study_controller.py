@@ -1419,7 +1419,9 @@ class StudyMixin:
         path = Path(self._study_pdf)
         self.study_panel.set_building(True)
         self.progress.setVisible(True); self.progress.setRange(0, 0)
-        worker = StudyBuildWorker(path, lang=self._detect_study_lang(path),
+        # 260910(단어학습 SOT §14.8): 언어는 **워커가** 고른다 — 옛 `_detect_study_lang`
+        #   은 텍스트층으로 판정해, 글자가 없는 스캔본을 늘 `eng` 로 떨어뜨렸다.
+        worker = StudyBuildWorker(path, lang="",
                                   online_prefs=op, online_only=True)
         self._study_worker = worker
 
