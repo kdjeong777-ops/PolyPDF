@@ -74,10 +74,12 @@ chk("all_pages" not in src and "all_pages" not in rs,
 
 print()
 print("=== (2) 모드마다 읽는 범위 (§1.1) ===")
+# 260911(사용자 지시로 재확정): 전체·전체연속의 **첫 바퀴는 지금 쪽부터 끝까지**.
+#   전체연속은 한 바퀴를 돈 **뒤부터** 1쪽~끝을 되풀이한다(`_wrap_pages`).
 cases = [("1회", 18, [18], False),
          ("연속", 18, [18], True),
-         ("전체", 18, list(range(21)), False),
-         ("전체연속", 18, list(range(21)), True)]
+         ("전체", 18, [18, 19, 20], False),
+         ("전체연속", 18, [18, 19, 20], True)]
 for mode, start, want_pages, want_repeat in cases:
     r = mk(mode)
     pages, pi = r._page_plan(start)
@@ -90,15 +92,18 @@ for mode, start, want_pages, want_repeat in cases:
 print()
 print("=== (3) 사용자가 본 결함이 재현되지 않는다 ===")
 r = mk("전체연속")
-pages, pi = r._page_plan(20)          # 마지막 쪽에서 걸었다
-chk(len(pages) == 21, "(3) 마지막 쪽에서 전체연속 — 그 쪽만 되풀이하지 않는다",
-    "%d쪽" % len(pages))
+r._pages, _ = r._page_plan(20)        # 마지막 쪽에서 걸었다
+chk(r._pages == [20], "(3) 첫 바퀴는 지금 쪽부터 — 마지막 쪽이면 그 쪽뿐", str(r._pages))
+chk(len(r._wrap_pages()) == 21,
+    "(3) 그래도 두 바퀴째는 1쪽~끝 — 그 쪽만 되풀이하지 않는다",
+    "%d쪽" % len(r._wrap_pages()))
 r = mk("전체")
 pages, _ = r._page_plan(20)
-chk(len(pages) == 21, "(3) 마지막 쪽에서 전체 — 문서를 다 읽는다", "%d쪽" % len(pages))
-r = mk("전체")
-pages, _ = r._page_plan(18)
-chk(pages[0] == 0, "(3) 18쪽에서 걸어도 1쪽부터 — 앞쪽이 빠지지 않는다", str(pages[:3]))
+chk(pages == [20], "(3) 마지막 쪽에서 전체는 그 쪽만 읽고 끝", str(pages))
+r = mk("연속")
+r._pages, _ = r._page_plan(7)
+chk(r._wrap_pages() == [7],
+    "(3) 연속은 두 바퀴째도 그 쪽 — 한 쪽 반복이 규격이다", str(r._wrap_pages()))
 
 print()
 print("=== (4) 가장자리 ===")
@@ -115,6 +120,8 @@ done = inspect.getsource(ReadAloud._tick)
 chk("_home_page" in done, "(5) 시작한 쪽을 기억해 둔다")
 st = inspect.getsource(ReadAloud.start)
 chk("_home_page = start_page" in st, "(5) 누른 자리를 기억한다")
+chk("_wrap_pages" in inspect.getsource(ReadAloud._tick),
+    "(5) 되풀이는 두 바퀴째 목록으로 갈아탄다")
 chk("current_page() != int(home)" in done,
     "(5) 이미 그 쪽이면 옮기지 않는다 — 쓸데없이 한 번 더 움직이지 않게")
 chk(done.index("self.stop()") < done.index("go_to_page"),
@@ -131,6 +138,26 @@ lo = inspect.getsource(ReadAloud._load_owords)
 chk("if not self._owords:" in lo and "_layer_words" in lo,
     "(6) study.db 에 낱말이 없을 때만 물러선다")
 chk("self._oscale = 1.0" in lo, "(6) 글자층 좌표는 이미 pt 라 배율 1")
+
+print()
+print("=== (7) 강조 범위 = 텍스트 창 줄 범위 (§1.3) ===")
+u = inspect.getsource(ReadAloud._page_units)
+chk("display_rows" in u, "(7) 텍스트 창과 같은 줄에서 자리를 얻는다")
+chk("rects" in u, "(7) 이은 줄이면 원래 줄들을 다 갖는다")
+hs = inspect.getsource(ReadAloud._highlight_sentence)
+chk("self._srects" in hs, "(7) 칠할 때 그 자리를 쓴다")
+chk("_words_in" in hs, "(7) 낱말 상자는 단어장 낱말을 가려내는 데만")
+chk("self._spans" in hs, "(7) 자리를 못 얻으면 종전 낱말 방식으로 물러선다")
+lp = inspect.getsource(ReadAloud._load_page)
+chk("_page_units" in lp, "(7) 쪽을 열 때 단위를 만든다")
+chk("sentences_of(self._page_text(page))" in lp,
+    "(7) 실패하면 글만으로라도 읽는다 — 읽기가 멈추지는 않게")
+
+# 한 줄에 문장이 여럿이면 그 문장들은 같은 자리를 갖는다
+import viewer.widgets.read_aloud as _ra
+chk(_ra._SENT_END_RE.search("끝났다.") is not None, "(7) 문장 끝을 알아본다")
+chk(_ra._SENT_END_RE.search("아직 이어진다") is None,
+    "(7) 부호로 안 끝나면 다음 줄과 잇는다(자리도 합친다)")
 
 print()
 print("=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")

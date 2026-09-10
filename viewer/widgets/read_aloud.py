@@ -50,6 +50,8 @@ def sentences_of(text: str) -> list[str]:
     return merged
 
 
+
+_SENT_END_RE = re.compile(r'[.?!。？！]"?\s*$')
 class ReadAloud(QObject):
     """본문 읽기 상태 머신. mw 에서 main_view·study store·tts 접근."""
     stateChanged = pyqtSignal(bool)
@@ -77,6 +79,7 @@ class ReadAloud(QObject):
         # 260618-29: 읽는 중 사용자가 페이지를 바꾸면 그 페이지부터 다시 읽기.
         #   _reading_page=리더가 현재 읽는 페이지(리더 자신의 페이지 넘김과 사용자 이동 구분).
         self._reading_page = -1
+        self._srects: list = []      # 260911: 문장마다의 자리(텍스트 창과 같은 범위)
         self._home_page = None       # 260911: 읽기를 시작한 쪽(끝나면 여기로)
         self._pending_restart_page = None
         self._restart_timer = QTimer(self)
@@ -221,15 +224,26 @@ class ReadAloud(QObject):
         시작하면 읽을 쪽이 한둘뿐이고, 마지막 쪽에서 전체연속을 걸면 **그 쪽만 끝없이
         되풀이**했다(사용자 보고 "다음 페이지로 안 넘어가고 다시 해당 페이지를 읽어").
 
-        전체는 **1쪽부터 끝까지** 읽는다. 보고 있던 쪽부터 시작하면 그 앞쪽은 영영
-        안 읽히기 때문이다('전체' 라는 말과 어긋난다). 그래서 누르면 1쪽으로 옮겨
-        시작한다 — 지금 쪽만 읽고 싶으면 1회·연속이 그 자리다.
+        260911(사용자 지시로 확정): 전체·전체연속의 **첫 바퀴는 지금 쪽부터 끝까지**다.
+        누르자마자 1쪽으로 뛰지 않게 — 보던 자리에서 이어 읽는 것이 자연스럽다.
+        **전체연속은 한 바퀴를 돈 뒤부터 1쪽~끝을 되풀이**한다(`_wrap_pages`).
         """
         total = max(1, self._page_count())
         start = max(0, min(int(start), total - 1))
         if self.mode in ("전체", "전체연속"):
-            return list(range(total)), 0
+            return list(range(start, total)), 0
         return [start], 0
+
+    def _wrap_pages(self) -> list:
+        """되풀이 두 바퀴째부터의 쪽 목록 (SOT §1.1).
+
+        전체연속은 '지금 쪽~끝' 을 한 번 읽은 뒤에는 **1쪽부터** 되풀이한다 —
+        그러지 않으면 시작 쪽 앞은 영영 안 읽힌다. 연속(한 쪽 반복)은 목록이
+        한 쪽뿐이라 그대로다.
+        """
+        if self.mode == "전체연속":
+            return list(range(max(1, self._page_count())))
+        return list(self._pages)
 
     def _load_page(self):
         if not self._pages:
@@ -237,7 +251,15 @@ class ReadAloud(QObject):
         page = self._pages[self._pi]
         self._reading_page = page       # 260618-29: 리더가 읽는 페이지(사용자 이동 구분용)
         self._v.go_to_page(page)        # 읽는 페이지로 화면 자동 이동
-        self._sents = sentences_of(self._page_text(page))
+        # 260911(SOT §1.3): 글과 **자리**를 함께 얻는다 — 강조 범위를 텍스트 창과 맞추려면
+        #   낱말이 아니라 줄의 자리가 필요하다. 자리를 못 얻으면 종전 길로 물러선다.
+        units = self._page_units(page)
+        if units:
+            self._sents = [u[0] for u in units]
+            self._srects = [u[1] for u in units]
+        else:
+            self._sents = sentences_of(self._page_text(page))
+            self._srects = []
         self._si = 0
         self._load_owords(page)
         self._build_spans()
@@ -361,25 +383,39 @@ class ReadAloud(QObject):
     def _highlight_sentence(self, si: int):
         """현재 문장 구간 전체를 강조(읽는 위치=문장). 단어장 단어는 주황으로 구분,
         그 중 첫 단어를 단어장 상단으로."""
-        if not (0 <= si < len(self._spans)) or not self._owords:
-            self._v.clear_word_highlights(); return
-        start, last = self._spans[si]
-        if start is None or last is None or last < start:
-            self._v.clear_word_highlights(); return
-        s = self._oscale
+        # 260911(사용자 지시, SOT §1.3): 칠하는 **범위는 줄의 자리** — 텍스트 창에서
+        #   그 줄에 커서를 두었을 때와 같다. 낱말 상자는 단어장 낱말을 가려내는 데만 쓴다.
         plain, vocab = [], []
         first_vocab_lemma = None
-        for j in range(start, min(last + 1, len(self._owords))):
-            w = self._owords[j]
-            rect = (w["x0"] * s, w["y0"] * s, w["x1"] * s, w["y1"] * s)
-            clean = re.sub(r"[^0-9A-Za-z가-힣]", "", (w.get("surface") or "").lower())
-            lem = self._vocab_lemma(clean) if clean else None
-            if lem:
-                vocab.append(rect)
-                if first_vocab_lemma is None:
-                    first_vocab_lemma = lem
-            else:
-                plain.append(rect)
+        if 0 <= si < len(self._srects) and self._srects[si]:
+            plain = [tuple(r) for r in self._srects[si] if r]
+            for w, rect in self._words_in(plain):
+                clean = re.sub(r"[^0-9A-Za-z가-힣]", "", (w.get("surface") or "").lower())
+                lem = self._vocab_lemma(clean) if clean else None
+                if lem:
+                    vocab.append(rect)
+                    if first_vocab_lemma is None:
+                        first_vocab_lemma = lem
+            if not plain:
+                self._v.clear_word_highlights(); return
+        else:
+            if not (0 <= si < len(self._spans)) or not self._owords:
+                self._v.clear_word_highlights(); return
+            start, last = self._spans[si]
+            if start is None or last is None or last < start:
+                self._v.clear_word_highlights(); return
+            s = self._oscale
+            for j in range(start, min(last + 1, len(self._owords))):
+                w = self._owords[j]
+                rect = (w["x0"] * s, w["y0"] * s, w["x1"] * s, w["y1"] * s)
+                clean = re.sub(r"[^0-9A-Za-z가-힣]", "", (w.get("surface") or "").lower())
+                lem = self._vocab_lemma(clean) if clean else None
+                if lem:
+                    vocab.append(rect)
+                    if first_vocab_lemma is None:
+                        first_vocab_lemma = lem
+                else:
+                    plain.append(rect)
         self._v.highlight_word_groups(
             [(plain, "read"), (vocab, "read_vocab")], scroll=True)
         if first_vocab_lemma:
@@ -387,6 +423,25 @@ class ReadAloud(QObject):
                 self.mw.study_panel.select_lemma(first_vocab_lemma, to_top=True)
             except Exception:
                 pass
+
+    def _words_in(self, rects) -> list:
+        """그 자리들 안에 든 낱말 [(낱말, 사각형)] (SOT §1.3).
+
+        단어장 낱말만 주황으로 구분하려면 어느 낱말이 그 줄에 있는지 알아야 한다.
+        """
+        out = []
+        sc = self._oscale
+        for w in (self._owords or []):
+            try:
+                r = (w["x0"] * sc, w["y0"] * sc, w["x1"] * sc, w["y1"] * sc)
+            except Exception:
+                continue
+            cx, cy = (r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0
+            for q in rects:
+                if q[0] <= cx <= q[2] and q[1] <= cy <= q[3]:
+                    out.append((w, r))
+                    break
+        return out
 
     def _vocab_lemma(self, clean: str):
         """현재 표시(난이도 필터 반영) 단어장에 있으면 그 표제어, 없으면 None."""
@@ -457,6 +512,9 @@ class ReadAloud(QObject):
                 f"읽는 중: {self._pages[self._pi]+1} 페이지", 2000)
             self._load_page()
         elif self.repeat:
+            # 260911(SOT §1.1): 전체연속은 한 바퀴 뒤부터 **1쪽~끝**을 되풀이한다.
+            #   연속은 목록이 한 쪽뿐이라 그대로 그 쪽을 되풀이한다.
+            self._pages = self._wrap_pages()
             self._pi = 0
             self._load_page()
         else:
@@ -472,6 +530,60 @@ class ReadAloud(QObject):
                         self._v.go_to_page(int(home))
                 except Exception:
                     pass
+
+    def _page_units(self, page: int) -> list:
+        """읽을 단위 [(글, 자리들)] — 자리는 **텍스트 창이 칠하는 그 범위** (SOT §1.3).
+
+        260911(사용자 지시 "읽기시에도 텍스트 창과 연관된 본문 하이라이트 범위와
+        일치시켜"): 종전 읽기 강조는 **낱말 상자**로 그 문장만 칠했고, 텍스트 창은
+        **줄(이은 줄이면 원래 줄들 전부)** 를 칠했다. 같은 곳을 봐도 범위가 달랐다.
+
+        이제 읽기도 **줄의 자리**를 쓴다. 한 줄에 문장이 여럿이면 그 문장들은 모두 그
+        줄의 자리를 갖는다 — 텍스트 창에서 그 줄에 커서를 두었을 때와 같은 범위다.
+        줄이 문장부호로 끝나지 않으면 다음 줄과 이어 한 문장으로 보고, 자리도 합친다.
+        """
+        try:
+            from viewer import text_extract2 as tx
+            cur = self._v.current_file()
+            if not cur:
+                return []
+            look = None
+            try:
+                from viewer.study.study_store import file_key_for
+                store = self.mw._study_get_store()
+                fk = file_key_for(cur)
+
+                def _look(pno, _s=store, _k=fk):
+                    try:
+                        return (_s.get_page_words(_k, pno),
+                                _s.get_page_dpi(_k, pno))
+                    except Exception:
+                        return (None, 0)
+                look = _look
+            except Exception:
+                look = None
+            rows = tx.display_rows(cur, int(page), words_lookup=look)
+        except Exception:
+            return []
+        units, pend_t, pend_r = [], "", []
+        for r in rows:
+            t = (r.get("text") or "").strip()
+            if not t:
+                continue
+            rcs = list(r.get("rects") or [])
+            ss = sentences_of(t) or [t]
+            if pend_t:
+                ss[0] = (pend_t + " " + ss[0]).strip()
+                rcs = pend_r + rcs
+                pend_t, pend_r = "", []
+            if ss and not _SENT_END_RE.search(ss[-1]):
+                pend_t, pend_r = ss[-1], list(rcs)   # 다음 줄로 이어진다
+                ss = ss[:-1]
+            for one in ss:
+                units.append((one, list(rcs)))
+        if pend_t:
+            units.append((pend_t, list(pend_r)))
+        return units
 
     def _page_text(self, page: int) -> str:
         """읽을 글 — **텍스트 창이 보여 주는 것과 같은 글** (SOT §3.6.9).

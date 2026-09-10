@@ -1326,6 +1326,57 @@ def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
     return out
 
 
+def display_rows(pdf_path, page: int, *, ocr_lookup=None, words_lookup=None) -> list:
+    """쪽 하나를 **텍스트 창이 보여 주는 그대로** 돌려준다 — 글과 **자리**를 함께.
+
+    260911(SOT §3.1.6): `clean_page_texts` 는 글만 준다. 읽기(TTS)는 강조까지 해야 해서
+    **줄마다의 사각형**이 필요하다. 두 곳이 각자 줄을 만들면 언젠가 어긋나므로,
+    같은 `page_lines` 를 한 번 태워 그 결과를 함께 쓴다.
+
+    돌려주는 각 줄: `{'text', 'rect', 'rects'}` — `rects` 는 이은 줄의 **원래 줄들**이다
+    (§3.7). 고침(§5.1)이 있으면 글에 반영해 준다.
+    """
+    try:
+        import fitz
+    except Exception:
+        return []
+    try:
+        doc = fitz.open(str(pdf_path))
+    except Exception:
+        return []
+    try:
+        pno = int(page)
+        if pno < 0 or pno >= doc.page_count:
+            return []
+        try:
+            ocr = (ocr_lookup(pno) if ocr_lookup else '') or ''
+            words, wdpi = (words_lookup(pno) if words_lookup else (None, 0))
+            rows = page_lines(doc, str(pdf_path), pno, tables='lines',
+                              ocr_text=ocr, ocr_words=words or None,
+                              ocr_dpi=int(wdpi or 0))
+        except Exception:
+            return []
+        lines = [r.get('text', '') for r in rows]
+        try:
+            from viewer.text_fix_store import store as _fix_store
+            lines = _fix_store().apply_to_text(str(pdf_path), pno, lines)
+        except Exception:
+            pass
+        out = []
+        for r, t in zip(rows, lines):
+            if not (t or '').strip():
+                continue
+            rcs = r.get('rects') or ([r['rect']] if r.get('rect') else [])
+            out.append({'text': t, 'rect': r.get('rect'),
+                        'rects': [tuple(x) for x in rcs if x]})
+        return out
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+
+
 def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
                      words_lookup=None) -> list:
     """쪽마다 **이 창이 보여 주는 글**을 모아 [(쪽, 글)] 로 (SOT §3.1.5, 260910).
