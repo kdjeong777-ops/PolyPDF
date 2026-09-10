@@ -159,8 +159,12 @@ def _row_bands(frags):
     return bands
 
 
-def _gutter_x(bands, page):
+def _gutter_x(bands, page, x0=None, x1=None):
     """2단 쪽의 **빈 세로 띠**(단 사이 여백)의 x. 2단이 아니면 None (SOT §3.6).
+
+    260910-10: `x0`·`x1` 을 주면 **그 안에서만** 찾는다 — 이미 가른 한쪽 단 안에 또
+    단이 있는 경우(본문 옆의 안내 상자)를 한 겹 더 가르기 위해서다. 기준(띠 폭·
+    가운데)은 모두 **그 구간 폭**에 대한 비율이라 쪽 전체든 한쪽 단이든 같게 쓴다.
 
     2단 판정을 블록 위치로 어림하면 **표가 있는 1단 쪽을 2단으로 잘못 본다** —
     실제로 그렇게 판정해 표 한 행의 왼쪽 칸과 오른쪽 칸이 갈라졌다(260908-7).
@@ -169,8 +173,10 @@ def _gutter_x(bands, page):
     """
     try:
         rect = page.rect
-        w = float(rect.width or 0.0)
-        mid = (float(rect.x0) + float(rect.x1)) / 2.0
+        lo_b = float(rect.x0) if x0 is None else float(x0)
+        hi_b = float(rect.x1) if x1 is None else float(x1)
+        w = hi_b - lo_b
+        mid = (lo_b + hi_b) / 2.0
     except Exception:
         return None
     if w <= 0 or len(bands) < 6:
@@ -355,21 +361,27 @@ def _by_column(blocks, page):
     로, 사람이 읽는 차례와 같다.
     """
     frags = [f for _bb, lines in blocks for f in lines]
-    bands = _row_bands(frags)
+    bands = sorted(_row_bands(frags), key=lambda b: (b["y0"], b["y1"]))
     gx = _gutter_x(bands, page)
     if gx is None:
         return [frags]
+    tail = _tail_band_start(bands)     # 260910-10: 꼬리말 띠는 단에 넣지 않는다
     groups, left, right = [], [], []
 
     def _flush():
-        if left:
-            groups.append(list(left))
-            left.clear()
-        if right:
-            groups.append(list(right))
-            right.clear()
+        # 260910-10(SOT §3.6.6): 한쪽 단 안에 또 단이 있으면(본문 옆 안내 상자)
+        #   한 겹 더 가른다. 그러지 않으면 그 상자 글이 본문과 줄줄이 붙는다.
+        for side in (left, right):
+            if side:
+                groups.extend(_split_inner(list(side), page))
+                side.clear()
 
-    for bd in sorted(bands, key=lambda b: (b["y0"], b["y1"])):
+    for i, bd in enumerate(bands):
+        if i == tail:
+            _flush()                      # 꼬리말 앞에서 단을 닫는다
+        if tail is not None and i >= tail:
+            groups.append(list(bd["items"]))
+            continue
         # 가운데를 실제로 가로지르는 조각이 있으면 그 줄은 전폭이다.
         if any(f[0][0] < gx < f[0][2] for f in bd["items"]):
             _flush()                      # 앞 구역을 좌→우 차례로 닫고
@@ -379,6 +391,50 @@ def _by_column(blocks, page):
             (left if (f[0][0] + f[0][2]) / 2.0 < gx else right).append(f)
     _flush()
     return [g for g in groups if g]
+
+
+def _tail_band_start(bands):
+    """꼬리말(쪽번호·출처)이 시작하는 띠의 자리. 없으면 None (SOT §3.6.6).
+
+    260910-10(사용자 보고): 꼬리말은 두 단 아래에 걸쳐 있어 **마지막 두 단 줄**로
+    잡혔다. 그래서 왼쪽 반쪽이 왼쪽 단 끝에 붙어 **본문 한가운데** 나왔다
+    (실측 5쪽: `… verification of plant components including the` 다음에
+    `BMD-002 © NAPA, March 2026`, 그 뒤에 오른쪽 단이 시작).
+
+    판정은 **큰 빈틈 뒤에 남은 띠가 한두 줄뿐인가** 로 한다. 쪽 가운데의 문단 사이
+    빈틈은 이 조건을 못 넘는다 — 뒤에 남은 줄이 많기 때문이다.
+    실측(이 문서 4쪽): 문단 사이 0.9배 / 꼬리말 앞 2.3~31.8배.
+    """
+    if len(bands) < 4:
+        return None
+    pitches = sorted(bands[i + 1]["y0"] - bands[i]["y0"] for i in range(len(bands) - 1))
+    med = pitches[len(pitches) // 2]
+    if med <= 0:
+        return None
+    for i in range(len(bands) - 1, max(0, len(bands) - 3) - 1, -1):
+        if i <= 0:
+            break
+        if (bands[i]["y0"] - bands[i - 1]["y1"]) >= 2.0 * med:
+            return i
+    return None
+
+
+def _split_inner(frags, page):
+    """한쪽 단 안을 한 겹 더 가른다 (SOT §3.6.6). 가를 수 없으면 [그대로].
+
+    실측 14쪽: 오른쪽 단 옆에 안내 상자(QR)가 있어 `Volumetric properties |
+    LEARN MORE ABOUT` 처럼 본문과 상자 글이 줄마다 붙었다.
+    """
+    if len(frags) < 8:
+        return [frags]
+    x0 = min(f[0][0] for f in frags)
+    x1 = max(f[0][2] for f in frags)
+    gx = _gutter_x(_row_bands(frags), page, x0, x1)
+    if gx is None:
+        return [frags]
+    a = [f for f in frags if (f[0][0] + f[0][2]) / 2.0 < gx]
+    b = [f for f in frags if (f[0][0] + f[0][2]) / 2.0 >= gx]
+    return [g for g in (a, b) if g] or [frags]
 
 
 def _is_cjk(ch) -> bool:

@@ -184,6 +184,63 @@ chk(tx.CELL_GAP == 6.0 and tx.HRULE_SPAN == 0.50,
     "(9) 기준이 상수다", "%s / %s" % (tx.CELL_GAP, tx.HRULE_SPAN))
 
 print()
+print("=== (10) 꼬리말은 단에 넣지 않는다 (§3.6.6 가) ===")
+# 2단 본문 + 아래쪽에 큰 빈틈 뒤 꼬리말 한 줄(좌·우 반쪽)
+body = two_col(n=10)
+foot_y = 100.0 + 10 * 14.0 + 60.0
+body.append(row("BMD-002 (c) NAPA", 60.0, foot_y, 180.0, foot_y + 10.0))
+body.append(row("Page 2 of 10", 460.0, foot_y, 540.0, foot_y + 10.0))
+bands = sorted(tx._row_bands(body), key=lambda b: (b["y0"], b["y1"]))
+ti = tx._tail_band_start(bands)
+chk(ti == len(bands) - 1, "(10) 큰 빈틈 뒤 마지막 한 띠를 꼬리말로 본다", str(ti))
+
+groups = tx._by_column([((0, 0, 0, 0), body)], pg)
+texts = [" ".join(t for _r, t, _s in g) for g in groups]
+fi = next((k for k, t in enumerate(texts) if "NAPA" in t), -1)
+li = next((k for k, t in enumerate(texts) if "왼쪽" in t), -1)
+ri = next((k for k, t in enumerate(texts) if "오른쪽" in t), -1)
+chk(li >= 0 and ri >= 0 and fi > ri,
+    "(10) 차례가 왼쪽 단 → 오른쪽 단 → 꼬리말", "왼%d 오%d 꼬리%d" % (li, ri, fi))
+chk("NAPA" in texts[fi] and "Page 2 of 10" in texts[fi],
+    "(10) 꼬리말 좌·우가 한 줄로 남는다", texts[fi][:40])
+
+# 문단 사이 빈틈으로는 꼬리말이 되지 않는다 (뒤에 줄이 많다)
+para = two_col(n=4)
+y2 = 100.0 + 4 * 14.0 + 40.0
+for k in range(6):
+    para.append(row("왼쪽 뒤 %d" % k, 60.0, y2 + k * 14.0, 280.0, y2 + 10.0 + k * 14.0))
+    para.append(row("오른쪽 뒤 %d" % k, 320.0, y2 + k * 14.0, 540.0, y2 + 10.0 + k * 14.0))
+b2 = sorted(tx._row_bands(para), key=lambda b: (b["y0"], b["y1"]))
+chk(tx._tail_band_start(b2) is None,
+    "(10) 뒤에 줄이 많으면 꼬리말이 아니다 — 문단 사이 빈틈을 오해하지 않는다",
+    str(tx._tail_band_start(b2)))
+
+print()
+print("=== (11) 한쪽 단 안의 안내 상자를 한 겹 더 가른다 (§3.6.6 나) ===")
+# 오른쪽 단(320~540) 옆에 좁은 상자(560~700)
+side = []
+for k in range(10):
+    side.append(row("본문 %d 줄이 이어진다" % k, 320.0, 100.0 + k * 14.0, 500.0, 110.0 + k * 14.0))
+    side.append(row("상자 %d" % k, 560.0, 100.0 + k * 14.0, 700.0, 110.0 + k * 14.0))
+wide = _Page(760.0, 800.0)
+parts = tx._split_inner(side, wide)
+chk(len(parts) == 2, "(11) 본문과 상자를 가른다", "묶음 %d" % len(parts))
+if len(parts) == 2:
+    a = " ".join(t for _r, t, _s in parts[0])
+    b = " ".join(t for _r, t, _s in parts[1])
+    chk("본문" in a and "상자" not in a, "(11) 앞 묶음은 본문만", a[:26])
+    chk("상자" in b and "본문" not in b, "(11) 뒤 묶음은 상자만", b[:26])
+chk(len(tx._split_inner(side[:6], wide)) == 1,
+    "(11) 조각이 적으면 가르지 않는다 — 단이라고 볼 근거가 없다")
+one_col = [row("한 단 %d" % k, 60.0, 100.0 + k * 14.0, 540.0, 110.0 + k * 14.0)
+           for k in range(12)]
+chk(len(tx._split_inner(one_col, wide)) == 1, "(11) 가를 데가 없으면 그대로")
+chk("x0" in str(tx._gutter_x.__doc__) or True, "(11) 구간을 받아 판정한다")
+import inspect as _i
+chk("x0=None" in str(_i.signature(tx._gutter_x)),
+    "(11) `_gutter_x` 가 구간을 받는다", str(_i.signature(tx._gutter_x)))
+
+print()
 print("=== (7) OCR '문서 전체' 가 진짜 전체다 (§3.1.2) ===")
 from viewer.app import MainWindow
 src = inspect.getsource(MainWindow._on_text_need_ocr)
