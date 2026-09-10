@@ -3,7 +3,8 @@
 
 사용자 지시 셋을 한 창에 모은다.
   - "한글이 안 되고 있어" → 언어를 **고를 수 있게**(기본 한글+영문)
-  - "문서 전체 OCR 도 선택적으로" → 범위(현재 쪽 / 쪽 범위 / 문서 전체)
+  - "문서 전체 OCR 도 선택적으로" → 범위(문서 전체 / 현재 쪽 / 쪽 범위)
+  - 260910-3 "'문서 전체' 를 기본으로, 맨 위로" → 그 차례와 기본값(§3.1.2)
   - "뒷배경 워터마크는 인식하지 않도록" → 체크상자(기본 켬)
 
 값의 뜻과 한계는 SOT 가 갖는다. 이 창은 **고르게만** 한다.
@@ -39,9 +40,17 @@ class OcrOptionsDialog(QDialog):
         self.rb_range = QRadioButton("쪽 범위")
         self.rb_all = QRadioButton(f"문서 전체 ({self._count}쪽)")
         grp = QButtonGroup(self)
-        for b in (self.rb_one, self.rb_range, self.rb_all):
+        for b in (self.rb_all, self.rb_one, self.rb_range):
             grp.addButton(b)
-        self.rb_one.setChecked(True)
+        # 260910-3(사용자 지시, 텍스트 창 SOT §3.1.2): **'문서 전체' 가 맨 위이고 기본**이다.
+        #   이 단추를 누른 사람은 '이 문서가 제대로 안 읽혔다' 고 판단한 사람이라, 그
+        #   판단의 단위는 쪽이 아니라 문서다. 한 쪽만 읽어 두면 텍스트 창·단어장·검색이
+        #   쪽마다 다른 규칙으로 만들어진 글을 섞어 쓰게 된다.
+        #   넓은 기본값의 비용은 이미 막혀 있다 — 글자층이 멀쩡한 쪽은 건너뛰고(아래
+        #   `cb_skip`, 기본 켬), 여러 쪽이면 진행창·취소가 붙으며(응답성 SOT §4 ④),
+        #   `_update_note()` 가 예상 시간을 미리 적어 준다.
+        self.rb_all.setChecked(True)
+        v.addWidget(self.rb_all)
         v.addWidget(self.rb_one)
 
         row = QHBoxLayout()
@@ -58,7 +67,6 @@ class OcrOptionsDialog(QDialog):
         row.addWidget(self.sp_to)
         row.addStretch(1)
         v.addLayout(row)
-        v.addWidget(self.rb_all)
         self.rb_range.toggled.connect(self.sp_from.setEnabled)
         self.rb_range.toggled.connect(self.sp_to.setEnabled)
 

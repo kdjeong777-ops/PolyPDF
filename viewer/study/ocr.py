@@ -241,15 +241,33 @@ FALLBACK_LANG = "eng"
 
 
 def available_langs() -> list:
-    """이 기계에서 쓸 수 있는 Tesseract 언어 목록(번들 tessdata 기준)."""
+    """이 기계에서 쓸 수 있는 Tesseract 언어 목록(번들 tessdata 기준).
+
+    260910-3(§14.16): 근거를 **둘 다** 본다 — `--list-langs` 와 tessdata 폴더의
+    실제 `*.traineddata` 파일. 종전에는 `missing_langs()` 가 앞엣것만,
+    `missing_language()` 가 뒤엣것만 봐서 **같은 물음에 다른 답**이 나올 수 있었다.
+    둘을 합치면 한쪽이 빠뜨려도 한국어가 사라지지 않는다. 보는 폴더는
+    `ensure_tesseract()` 가 고른 그 폴더라 tesseract 가 실제로 읽을 곳과 같다.
+    """
     try:
         info = ensure_tesseract()
         if not info.get("ok"):
             return []
-        import pytesseract
-        return sorted(pytesseract.get_languages(config=""))
     except Exception:
         return []
+    have = set()
+    try:
+        import pytesseract
+        have.update(pytesseract.get_languages(config=""))
+    except Exception:
+        pass
+    try:
+        td = info.get("tessdata") or ""
+        if td:
+            have.update(q.stem for q in Path(td).glob("*.traineddata"))
+    except Exception:
+        pass
+    return sorted(have)
 
 
 def default_lang() -> str:

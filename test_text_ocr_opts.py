@@ -103,7 +103,12 @@ try:
     # ── ④ 범위 대화상자 ─────────────────────────────────────────
     dlg = OcrOptionsDialog(page=4, page_count=30)
     v = dlg.values()
-    chk(v["pages"] == [4], "④ 기본은 현재 쪽만", str(v["pages"]))
+    # 260910-3(사용자 지시, 텍스트 창 SOT §3.1.2): 기본은 **문서 전체**로 바뀌었다.
+    #   이 단추를 누른 사람의 판단 단위는 쪽이 아니라 문서다. 쪽만 읽으면 텍스트 창·
+    #   단어장·검색이 쪽마다 다른 규칙의 글을 섞어 쓰게 된다. 차례·기본값의 자세한
+    #   근거와 회귀 검사는 `test_ocr_dialog_default.py` 가 갖는다.
+    chk(v["pages"] == list(range(30)), "④ 기본은 문서 전체", str(len(v["pages"])) + "쪽")
+    chk(dlg.rb_one.isChecked() is False, "④ '현재 쪽' 은 더는 기본이 아니다")
     chk(v["lang"] == "kor+eng", "④ 기본 언어가 한글+영문", str(v["lang"]))
     chk(v["watermark"] is True, "④ 워터마크 지우기가 기본 켬")
     dlg.rb_all.setChecked(True)

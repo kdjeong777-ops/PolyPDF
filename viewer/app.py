@@ -2777,10 +2777,28 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from viewer.study import ocr as _so
         miss = _so.missing_langs(lang)
         if miss:        # 조용히 다른 언어로 읽지 않는다(단어학습 SOT §14.8)
+            # 260910-3(사용자 확인 요청, §14.16): 안내문이 **스스로를 증명**하게 한다.
+            #   종전 문구는 'kor 이 없어 eng 로 읽는다' 만 말했다. 그런데 화면에는
+            #   한글이 멀쩡히 보이니(글자층이 있는 쪽은 OCR 을 아예 건너뛴다) 사용자
+            #   눈에는 안내문이 거짓말로 보였다. 실제로는 둘 다 옳았다 — 안내문은
+            #   *이번에 OCR 한 쪽* 이야기고, 보이던 한글은 *읽지 않은 쪽* 의 원본이다.
+            #   그래서 (1) 어디를 찾아봤는지 (2) 무엇을 **안 하는지** 를 함께 적는다.
+            where = ''
+            try:
+                td = (_so.ensure_tesseract() or {}).get('tessdata') or ''
+                if td:
+                    where = '\n\n찾아본 위치: ' + td
+            except Exception:
+                pass
+            extra = ''
+            if skip_text:
+                extra = ('\n\n글자가 이미 있는 쪽은 건너뜁니다. 그런 쪽의 한글은 '
+                         'PDF 원본 글자라 그대로 보입니다 — OCR 이 읽은 것이 아닙니다.')
             QMessageBox.information(
                 self, 'OCR',
                 '이 설치본에는 다음 언어 자료가 없습니다: ' + ', '.join(miss)
-                + '. 있는 언어로만 읽습니다: ' + _so.resolve_lang(lang))
+                + '. 있는 언어로만 읽습니다: ' + _so.resolve_lang(lang)
+                + where + extra)
         tp = self.text_panel
         prev = getattr(self, '_text_ocr_worker', None)
         if prev is not None:
