@@ -77,6 +77,7 @@ class ReadAloud(QObject):
         # 260618-29: 읽는 중 사용자가 페이지를 바꾸면 그 페이지부터 다시 읽기.
         #   _reading_page=리더가 현재 읽는 페이지(리더 자신의 페이지 넘김과 사용자 이동 구분).
         self._reading_page = -1
+        self._home_page = None       # 260911: 읽기를 시작한 쪽(끝나면 여기로)
         self._pending_restart_page = None
         self._restart_timer = QTimer(self)
         self._restart_timer.setSingleShot(True)
@@ -164,6 +165,8 @@ class ReadAloud(QObject):
         start_page = mv.current_page()
         total = self._page_count()
         self.repeat = self.mode in ("연속", "전체연속")
+        # 260911(사용자 지시): 다 읽고 나면 **누른 자리로 돌려놓는다**(SOT §1.1).
+        self._home_page = start_page
         self._pages, self._pi = self._page_plan(start_page)
         tts.set_rate(self.rate)
         self._active = True
@@ -282,6 +285,15 @@ class ReadAloud(QObject):
             self._owords = store.get_page_words(fk, page)
             dpi = store.get_page_dpi(fk, page)
             self._oscale = (72.0 / dpi) if dpi > 0 else 1.0
+            if not self._owords:
+                # 260911(사용자 보고 "첫 쪽만 강조되고 둘째 쪽부터는 안 된다",
+                #   영상·음성 SOT §1.2): `study.db` 에는 **OCR 한 쪽만** 낱말이 있다.
+                #   [OCR 다시 읽기] 는 글자층이 멀쩡한 쪽을 건너뛰므로(텍스트 창
+                #   §3.1.2), 디지털 PDF 는 그림이 섞인 쪽만 낱말이 남는다. 그 쪽만
+                #   강조되고 나머지는 조용히 안 됐다.
+                #   글자층이 있으면 **그 낱말 상자**를 쓰면 된다 — 좌표가 이미 pt 다.
+                self._owords = self._layer_words(page)
+                self._oscale = 1.0
             # 260911(SOT §3.6.9): 글을 단 차례로 읽으니 **낱말도 같은 차례**여야 한다.
             #   글은 단 차례인데 낱말이 OCR 차례면 강조가 엉뚱한 자리로 튄다.
             try:
@@ -293,6 +305,32 @@ class ReadAloud(QObject):
                 pass
         except Exception:
             self._owords = []
+
+    def _layer_words(self, page: int) -> list:
+        """PDF 글자층의 낱말 상자 (영상·음성 SOT §1.2). 없으면 빈 목록.
+
+        좌표는 이미 pt 라 `_oscale = 1.0` 이다. `study.db` 에 OCR 낱말이 없는 쪽
+        (=글자층이 멀쩡해 OCR 을 건너뛴 쪽)의 강조는 이것으로 한다.
+        """
+        try:
+            pg = self._v._doc.doc.load_page(int(page))
+        except Exception:
+            return []
+        out = []
+        try:
+            for w in pg.get_text("words"):
+                t = str(w[4] or "").strip()
+                if t:
+                    out.append({"surface": t, "x0": float(w[0]), "y0": float(w[1]),
+                                "x1": float(w[2]), "y1": float(w[3])})
+        except Exception:
+            return []
+        try:
+            from viewer import text_extract2 as tx
+            out = tx.words_in_reading_order(out, dpi=0, page=pg)
+        except Exception:
+            pass
+        return out
 
     _ALIGN_WINDOW = 10     # 문장 정렬 시 ocr_word 전방 탐색 폭
 
@@ -422,8 +460,18 @@ class ReadAloud(QObject):
             self._pi = 0
             self._load_page()
         else:
+            # 260911(사용자 지시, SOT §1.1): 다 읽었으면 멈추고 **시작한 쪽으로**
+            #   돌아간다. '전체' 는 1쪽부터 읽으므로, 끝내고 그대로 두면 사용자가
+            #   보던 자리를 잃는다.
             self.mw.status.showMessage("읽기 완료", 3000)
+            home = getattr(self, "_home_page", None)
             self.stop()
+            if home is not None:
+                try:
+                    if self._v.current_page() != int(home):
+                        self._v.go_to_page(int(home))
+                except Exception:
+                    pass
 
     def _page_text(self, page: int) -> str:
         """읽을 글 — **텍스트 창이 보여 주는 것과 같은 글** (SOT §3.6.9).

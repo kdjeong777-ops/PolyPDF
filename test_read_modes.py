@@ -110,6 +110,29 @@ chk(r._page_plan(99) == ([4], 0), "(4) 범위 밖 쪽은 마지막으로 여민�
 chk(r._page_plan(-3) == ([0], 0), "(4) 음수도 여민다", str(r._page_plan(-3)))
 
 print()
+print("=== (5) 다 읽으면 시작한 쪽으로 돌아온다 (§1.1) ===")
+done = inspect.getsource(ReadAloud._tick)
+chk("_home_page" in done, "(5) 시작한 쪽을 기억해 둔다")
+st = inspect.getsource(ReadAloud.start)
+chk("_home_page = start_page" in st, "(5) 누른 자리를 기억한다")
+chk("current_page() != int(home)" in done,
+    "(5) 이미 그 쪽이면 옮기지 않는다 — 쓸데없이 한 번 더 움직이지 않게")
+chk(done.index("self.stop()") < done.index("go_to_page"),
+    "(5) 멈춘 뒤에 옮긴다 — 옮기다 다시 읽히지 않게")
+
+print()
+print("=== (6) 강조는 OCR 낱말이 없어도 된다 (§1.2) ===")
+chk(hasattr(ReadAloud, "_layer_words"), "(6) 글자층 낱말을 쓸 길이 있다")
+lw = inspect.getsource(ReadAloud._layer_words)
+chk('get_text("words")' in lw, "(6) PDF 글자층의 낱말 상자를 읽는다")
+chk("words_in_reading_order" in lw,
+    "(6) 그 낱말도 단 차례로 — 읽는 글과 어긋나면 강조가 튄다")
+lo = inspect.getsource(ReadAloud._load_owords)
+chk("if not self._owords:" in lo and "_layer_words" in lo,
+    "(6) study.db 에 낱말이 없을 때만 물러선다")
+chk("self._oscale = 1.0" in lo, "(6) 글자층 좌표는 이미 pt 라 배율 1")
+
+print()
 print("=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for msg in fails:
     print(" -", msg)
