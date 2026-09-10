@@ -2965,10 +2965,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not cur:
             return
         # 260908-6(SOT §5.1.1): 자리를 같이 남긴다 — 줄 번호는 흔들린다.
-        if rect is None:
-            rows = self.text_panel.rows()
-            rect = rows[line].get("rect") if 0 <= line < len(rows) else None
-        self._text_store().set_fix(cur, page, line, text, orig, rect)
+        rects = None
+        rows = self.text_panel.rows()
+        if 0 <= line < len(rows):
+            if rect is None:
+                rect = rows[line].get("rect")
+            # 260910-11(SOT §5.1.2): 합친 줄이면 원래 자리들도 남긴다 —
+            #   지울 때 그 자리들만 지워야 두 문단 사이의 딴 글이 안 지워진다.
+            rects = rows[line].get("rects") or None
+        self._text_store().set_fix(cur, page, line, text, orig, rect, rects)
 
     def _on_text_apply_pdf(self):
         """고친 글을 **OCR 텍스트층**에 다시 적는다(SOT §5.2)."""

@@ -98,7 +98,7 @@ class TextFixStore:
         return text
 
     def set_fix(self, file_path, page: int, line: int, text: str,
-                orig: str = None, rect=None) -> None:
+                orig: str = None, rect=None, rects=None) -> None:
         """고친 글을 남긴다. `orig`(원래 글)도 함께 두면 **복사·검색에서 치환**할 수 있다.
 
         복사한 글은 줄 번호를 모른 채 오므로(사용자가 아무 데나 긁는다), 원문 조각을
@@ -118,6 +118,10 @@ class TextFixStore:
                 rec["o"] = orig
             if rect:
                 rec["r"] = [round(float(v), 2) for v in rect]
+            # 260910-11(SOT §5.1.2): 합친 줄은 **원래 자리들**도 남긴다. 지울 때는
+            #   그 자리들만 지워야 두 문단 사이의 딴 글까지 지워지지 않는다.
+            if rects:
+                rec["rs"] = [[round(float(v), 2) for v in r] for r in rects if r]
             pg[str(int(line))] = rec
         if not pg:
             d["fix"].pop(str(int(page)), None)
@@ -138,7 +142,9 @@ class TextFixStore:
             if isinstance(v, dict):
                 out.append({"line": ln, "text": v.get("t", ""),
                             "orig": v.get("o") or "",
-                            "rect": tuple(v["r"]) if v.get("r") else None})
+                            "rect": tuple(v["r"]) if v.get("r") else None,
+                            # 260910-11: 합친 줄의 원래 자리들(§5.1.2)
+                            "rects": [tuple(r) for r in (v.get("rs") or [])]})
             else:
                 out.append({"line": ln, "text": v, "orig": "", "rect": None})
         out.sort(key=lambda x: x["line"])

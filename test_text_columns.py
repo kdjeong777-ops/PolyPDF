@@ -241,6 +241,69 @@ chk("x0=None" in str(_i.signature(tx._gutter_x)),
     "(11) `_gutter_x` 가 구간을 받는다", str(_i.signature(tx._gutter_x)))
 
 print()
+print("=== (12) OCR 낱말 상자로도 단을 알아본다 (§3.6.7 가) ===")
+# 낱말 상자를 흉내 낸다 — 한 줄을 낱말 여러 개로 쪼갠다
+def words_two_col(n=12):
+    out = []
+    for k in range(n):
+        y = 100.0 + k * 14.0
+        x = 60.0
+        for w in ("left", "column", "word", str(k)):
+            wid = 8.0 * len(w)
+            out.append(row(w, x, y, x + wid, y + 10.0))
+            x += wid + 3.0
+        x = 320.0
+        for w in ("right", "column", "word", str(k)):
+            wid = 8.0 * len(w)
+            out.append(row(w, x, y, x + wid, y + 10.0))
+            x += wid + 3.0
+    return out
+
+
+wf = words_two_col()
+chk(tx._gutter_x(tx._row_bands(wf), pg) is None,
+    "(12) 낱말 그대로는 정렬도가 낮아 2단으로 안 보인다(종전 결함)")
+pieces = tx._line_pieces(wf)
+chk(tx._gutter_x(tx._row_bands(pieces), pg) is not None,
+    "(12) 줄 조각으로 모으면 2단이 보인다",
+    str(tx._gutter_x(tx._row_bands(pieces), pg)))
+g1 = tx._by_column([((0, 0, 0, 0), wf)], pg, word_level=True)
+chk(len(g1) >= 2, "(12) word_level 이면 단이 갈린다", "묶음 %d" % len(g1))
+if len(g1) >= 2:
+    a = " ".join(t for _r, t, _s in g1[0])
+    chk("left" in a and "right" not in a, "(12) 첫 묶음은 왼쪽 단만", a[:26])
+chk(len(tx._by_column([((0, 0, 0, 0), wf)], pg)) == 1,
+    "(12) word_level 이 아니면 종전 그대로(회귀 없음)")
+
+print()
+print("=== (13) 겹쳐 보기 — 중복 없음, 차례 유지 (§3.6.7 나·다) ===")
+layer = [
+    {"text": "INTRODUCTION", "rect": (54.0, 100.0, 123.0, 112.0), "kind": "text"},
+    {"text": "CURRENT APPROACHES", "rect": (317.0, 100.0, 463.0, 112.0), "kind": "text"},
+    {"text": "In the realm of", "rect": (54.0, 120.0, 267.0, 132.0), "kind": "text"},
+    {"text": "There are four", "rect": (317.0, 120.0, 554.0, 132.0), "kind": "text"},
+]
+# 두 단에 걸친 OCR 줄 — 어느 한 줄에도 절반이 안 들지만 합치면 다 덮인다
+spanning = [{"text": "INTRODUCTION | CURRENT APPROACHES",
+             "rect": (55.0, 100.0, 463.0, 112.0), "kind": "text"}]
+out = tx.merge_layer_and_ocr(layer, spanning)
+chk(len(out) == 4, "(13) 두 단에 걸친 중복 줄을 버린다", "%d줄" % len(out))
+chk([r["text"] for r in out] == [r["text"] for r in layer],
+    "(13) 글자층 차례가 그대로다(다시 정렬하지 않는다)")
+
+# 그림 속에만 있던 글은 남기고, 제 자리 뒤에 끼운다
+only_img = [{"text": "그림 속 글", "rect": (54.0, 140.0, 200.0, 152.0), "kind": "text"}]
+out2 = tx.merge_layer_and_ocr(layer, only_img)
+chk(len(out2) == 5, "(13) 겹치지 않는 OCR 줄은 더한다", "%d줄" % len(out2))
+_names = [r["text"] for r in out2]
+_ix = _names.index("그림 속 글")
+chk(_names[_ix - 1] == "In the realm of",
+    "(13) 같은 단에서 바로 위 줄 뒤에 들어간다 — 맨 끝이 아니다", str(_names))
+chk(out2[_ix].get("kind") == "ocr", "(13) 어디서 왔는지 남긴다")
+chk([r["text"] for r in out2 if r.get("kind") != "ocr"] == [r["text"] for r in layer],
+    "(13) 글자층 줄의 차례는 건드리지 않는다")
+
+print()
 print("=== (7) OCR '문서 전체' 가 진짜 전체다 (§3.1.2) ===")
 from viewer.app import MainWindow
 src = inspect.getsource(MainWindow._on_text_need_ocr)

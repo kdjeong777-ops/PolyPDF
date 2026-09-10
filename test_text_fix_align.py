@@ -118,22 +118,38 @@ try:
     chk(tp.edit.document().blockCount() == 5, "③ 줄 하나에 블록 하나",
         str(tp.edit.document().blockCount()) + "블록")
 
+    # 260910-11(사용자 요청, SOT §5.1.2): **합치기는 이제 허용한다.** 종전에는 줄
+    #   번호가 당겨지는 것을 막으려 입력 자체를 막았는데, 이제 줄과 **자리(사각형)를
+    #   함께** 합쳐 번호를 맞춰 두므로 어긋나지 않는다. 늘리는 것은 여전히 막는다.
     c = QTextCursor(tp.edit.document().findBlockByNumber(1))
     c.movePosition(QTextCursor.MoveOperation.EndOfBlock)
     tp.edit.setTextCursor(c)
     key(tp.edit, Qt.Key.Key_Delete)
-    chk(tp.edit.document().blockCount() == 5, "③ 줄 끝 Delete 로 합쳐지지 않는다")
+    chk(tp.edit.document().blockCount() == 4, "③ 줄 끝 Delete 로 아랫줄과 합쳐진다",
+        str(tp.edit.document().blockCount()) + "블록")
+    chk(len(tp.rows()) == 4, "③ 줄 목록도 함께 줄어 번호가 어긋나지 않는다",
+        str(len(tp.rows())) + "행")
+    _m = tp.rows()[1]
+    chk(_m.get("text") == "줄1 줄2", "③ 두 줄의 글이 이어 붙는다", repr(_m.get("text")))
+    chk(len(_m.get("rects") or []) == 2, "③ 원래 자리 둘을 기억한다",
+        str(len(_m.get("rects") or [])))
+    chk(_m.get("rect") == (0.0, 10.0, 100.0, 29.0),
+        "③ 합친 자리는 첫 줄 좌상 ~ 둘째 줄 우하", str(_m.get("rect")))
+
     tp.edit.setTextCursor(QTextCursor(tp.edit.document().findBlockByNumber(2)))
     key(tp.edit, Qt.Key.Key_Backspace)
-    chk(tp.edit.document().blockCount() == 5, "③ 줄 처음 Backspace 로 합쳐지지 않는다")
+    chk(tp.edit.document().blockCount() == 3, "③ 줄 처음 Backspace 로 윗줄과 합쳐진다",
+        str(tp.edit.document().blockCount()) + "블록")
+    chk(len(tp.rows()) == 3, "③ 이때도 줄 목록이 같이 줄어든다")
     key(tp.edit, Qt.Key.Key_Return, NL)
-    chk(tp.edit.document().blockCount() == 5, "③ Enter 로 줄이 늘지 않는다")
+    chk(tp.edit.document().blockCount() == 3, "③ Enter 로 줄이 늘지는 않는다",
+        str(tp.edit.document().blockCount()) + "블록")
 
     md = QMimeData()
     md.setText("가" + NL + "나" + NL + "다")
     tp.edit.insertFromMimeData(md)
     app.processEvents()
-    chk(tp.edit.document().blockCount() == 5, "③ 여러 줄 붙여넣기도 줄을 늘리지 않는다",
+    chk(tp.edit.document().blockCount() == 3, "③ 여러 줄 붙여넣기도 줄을 늘리지 않는다",
         str(tp.edit.document().blockCount()) + "블록")
 
     tp.set_page("x.pdf", 0, [dict(r) for r in prows])

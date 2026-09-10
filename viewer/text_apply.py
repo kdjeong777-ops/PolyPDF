@@ -103,16 +103,21 @@ def apply_fixes_to_pdf(src, page_index: int, rows: list, fixes,
                     rc = rows[i].get("rect") if 0 <= i < len(rows) else None
                 if not rc:
                     continue
-                targets.append((fitz.Rect(*rc), str(it.get("text", ""))))
+                # 260910-11(SOT §5.1.2): 합친 줄은 **원래 자리들**을 지우고
+                #   합친 자리에 쓴다. 합친 자리를 통째로 지우면 두 문단 사이에 있던
+                #   딴 글까지 사라진다.
+                erase = [fitz.Rect(*r) for r in (it.get("rects") or []) if r]                     or [fitz.Rect(*rc)]
+                targets.append((fitz.Rect(*rc), str(it.get("text", "")), erase))
             if not targets:
                 return "", "고친 줄의 위치를 알 수 없습니다(OCR 좌표 없음)."
-            for rect, _t in targets:
-                page.add_redact_annot(rect)
+            for _rect, _t, erase in targets:
+                for e in erase:
+                    page.add_redact_annot(e)
             # 그림은 건드리지 않는다 — 스캔본의 본 모습이 그림이다
             page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
             ff = _korean_font_file()
             unwritten = 0
-            for rect, text in targets:
+            for rect, text, _erase in targets:
                 if not _write_invisible(page, rect, text, ff):
                     unwritten += 1
             doc.save(str(tmp), garbage=3, deflate=True)

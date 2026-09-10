@@ -43,6 +43,10 @@ class _LockedLinesEdit(QTextEdit):
     **지우기는 '내용을 비우는 것'** 이다. 빈 줄 = "이 줄의 글자를 PDF 에서 지운다".
     """
 
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._merge_cb = None      # 260910-11: 패널이 '줄 합치기' 를 맡는다
+
     def keyPressEvent(self, e):
         k = e.key()
         cur = self.textCursor()
@@ -51,12 +55,21 @@ class _LockedLinesEdit(QTextEdit):
         if cur.hasSelection() and k in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
             if self._clear_selection_per_line(cur):
                 return
+        # 260910-11(사용자 요청, SOT §5.1.2): 합치기는 **막지 않고 제대로 한다.**
+        #   종전에는 입력 자체를 막았다 — 줄 번호가 당겨져 그 뒤 편집이 어긋나기
+        #   때문이었다. 이제 줄과 **자리(사각형)를 함께** 합쳐 번호를 맞춰 둔다.
         if (k == Qt.Key.Key_Backspace and not cur.hasSelection()
                 and cur.positionInBlock() == 0):
-            return                                   # 윗줄과 합쳐지는 것을 막는다
+            i = cur.blockNumber()
+            if i > 0 and self._merge_cb is not None:
+                self._merge_cb(i - 1)
+            return
         if (k == Qt.Key.Key_Delete and not cur.hasSelection()
                 and cur.positionInBlock() == len(cur.block().text())):
-            return                                   # 아랫줄과 합쳐지는 것을 막는다
+            i = cur.blockNumber()
+            if i < self.document().blockCount() - 1 and self._merge_cb is not None:
+                self._merge_cb(i)
+            return
         super().keyPressEvent(e)
 
     def _clear_selection_per_line(self, cur) -> bool:
@@ -223,6 +236,7 @@ class TextPanel(QWidget):
         v.addWidget(self.info)
 
         self.edit = _LockedLinesEdit()
+        self.edit._merge_cb = self._merge_line_with_next
         self.edit.setAcceptRichText(False)
         self.edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.edit.cursorPositionChanged.connect(self._on_cursor)
@@ -429,6 +443,62 @@ class TextPanel(QWidget):
             rcs = self._rows[i].get("rects") or (
                 [self._rows[i]["rect"]] if self._rows[i].get("rect") else [])
             self.lineFocused.emit(self._page, list(rcs))
+
+    def _merge_line_with_next(self, i: int) -> bool:
+        """`i` 번 줄과 그 다음 줄을 **한 줄로** 합친다 (SOT §5.1.2, 260910-11 사용자 요청).
+
+        사용자 요청: *"2개 이상의 문단을 합칠 때, 1번째 문단의 좌상 점과 (좌·우 폭),
+        2번째 문단의 우하점과 (좌·우 폭)을 확인하여 두 문단의 PDF 블록을 합치도록"*.
+
+        **자리를 어떻게 합치나.** 두 줄의 사각형을 모두 감싸는 하나로 만든다 —
+        왼쪽은 둘 중 더 왼쪽, 위는 첫 줄의 위, 오른쪽은 둘 중 더 오른쪽, 아래는 둘째
+        줄의 아래. 즉 **첫 줄의 좌상 · 둘째 줄의 우하**가 그대로 모서리가 된다.
+
+        **칠하기는 원래 줄들을 따로 기억한다**(`rects`). 합친 하나로만 칠하면 두 문단
+        사이의 빈 곳까지 덮어 버린다. 반영(§5.1)은 `rects` 를 지우고 합친 자리에 쓴다.
+
+        세 줄 이상은 이 동작을 **거듭하면** 된다 — 합친 줄에서 다시 Backspace 를 누른다.
+        """
+        rows = self._rows
+        if not (0 <= i < len(rows) - 1):
+            return False
+        a, b = rows[i], rows[i + 1]
+        ta, tb = a.get("text", ""), b.get("text", "")
+        sep = "" if (not ta or ta.endswith(" ") or not tb) else " "
+        merged = ta + sep + tb
+
+        ra = a.get("rects") or ([a["rect"]] if a.get("rect") else [])
+        rb = b.get("rects") or ([b["rect"]] if b.get("rect") else [])
+        rects = list(ra) + list(rb)
+        rect = None
+        if rects:
+            rect = (min(r[0] for r in rects), min(r[1] for r in rects),
+                    max(r[2] for r in rects), max(r[3] for r in rects))
+
+        a.setdefault("orig", a.get("text") or "")
+        a["orig"] = (a.get("orig") or "") + sep + (b.get("orig") or tb)
+        a["text"] = merged
+        a["rects"] = rects
+        if rect:
+            a["rect"] = rect
+        del rows[i + 1]
+
+        self._loading = True
+        try:
+            from PyQt6.QtGui import QTextCursor
+            self.edit.setPlainText(chr(10).join(r.get("text", "") for r in rows))
+            self._apply_styles()
+            blk = self.edit.document().findBlockByNumber(i)
+            if blk.isValid():
+                c = QTextCursor(blk)
+                c.setPosition(blk.position() + min(len(ta) + len(sep), len(merged)))
+                self.edit.setTextCursor(c)
+        finally:
+            self._loading = False
+        self.lineEdited.emit(self._page, i, merged, a.get("orig") or "")
+        self.lineFocused.emit(self._page, list(rects))
+        self.info.setText("두 줄을 합쳤습니다 — 반영하면 두 자리가 하나로 들어갑니다.")
+        return True
 
     def _resync_blocks(self) -> None:
         """줄 수가 어긋났을 때 지금의 `_rows` 로 되돌린다(260908-6 안전망)."""

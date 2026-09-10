@@ -346,7 +346,29 @@ def _table_cells(frags, page):
     return groups if multi else None
 
 
-def _by_column(blocks, page):
+def _line_pieces(frags):
+    """낱말 상자를 **줄 조각**으로 모은다 — 단 판정에만 쓴다 (SOT §3.6.7).
+
+    260910-11: OCR 은 **낱말마다** 상자를 준다. 그 상태로 `_left_edge_share` 를 재면
+    낱말이 제각기 다른 x 에서 시작하므로 정렬도가 바닥이라, **2단인 쪽도 2단이 아니라고**
+    나온다(실측 1쪽: 글자층은 gutter 307.5 인데 같은 쪽 OCR 은 None).
+
+    한 줄 안에서 낱말 사이는 좁고(빈칸 두어 점) 단 사이는 넓다. 그래서 `_split_cols`
+    (6pt)로 모으면 **단마다 한 줄 조각**이 되고, 그 조각의 왼쪽 끝은 글자층의 줄과 같다.
+    """
+    out = []
+    for bd in _row_bands(frags):
+        for grp in _split_cols(bd["items"]):
+            x0 = min(f[0][0] for f in grp)
+            y0 = min(f[0][1] for f in grp)
+            x1 = max(f[0][2] for f in grp)
+            y1 = max(f[0][3] for f in grp)
+            out.append(((x0, y0, x1, y1), " ".join(f[1] for f in grp),
+                        max(f[2] for f in grp)))
+    return out
+
+
+def _by_column(blocks, page, word_level: bool = False):
     """[[조각…]] — 읽는 차례대로 나눈 묶음들 (SOT §3.6.4).
 
     260910-8(사용자 보고 "2단인데 위에 전체 내용이 있거나 중간에 사진이 있을 경우
@@ -362,7 +384,11 @@ def _by_column(blocks, page):
     """
     frags = [f for _bb, lines in blocks for f in lines]
     bands = sorted(_row_bands(frags), key=lambda b: (b["y0"], b["y1"]))
-    gx = _gutter_x(bands, page)
+    # 260910-11(SOT §3.6.7): 낱말 상자로 들어온 경우 **판정만** 줄 조각으로 한다.
+    #   차례를 세우는 것은 원래 조각 그대로여야 `_merge_rows` 의 간격 규칙이 산다.
+    _det = sorted(_row_bands(_line_pieces(frags)),
+                  key=lambda b: (b["y0"], b["y1"])) if word_level else bands
+    gx = _gutter_x(_det, page)
     if gx is None:
         return [frags]
     tail = _tail_band_start(bands)     # 260910-10: 꼬리말 띠는 단에 넣지 않는다
@@ -1059,7 +1085,8 @@ def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
     if not frags:
         return []
     items = []
-    for col in ([frags] if page is None else _by_column([((0, 0, 0, 0), frags)], page)):
+    for col in ([frags] if page is None
+                else _by_column([((0, 0, 0, 0), frags)], page, word_level=True)):
         items.extend(_merge_rows(col))
     items = [it for it in items if not _noise.is_symbol_only(it[1])]
     styles = _classify(items)
@@ -1073,22 +1100,68 @@ def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
     그 쪽은 **글자층과 그림이 섞인 쪽**이었다 — 글자층만 읽으니 그림 속 글은 없고,
     OCR 로 갈아 끼우면 멀쩡한 글자층까지 짐작한 글자로 바뀐다. 그래서 **합친다**.
 
-    글자층 줄은 그대로 두고, OCR 줄 중 **어느 글자층 줄과도 겹치지 않는 것**만 더한다
-    (겹치면 같은 글을 두 번 보여 주게 된다). 자리 순서로 다시 정렬한다.
+    260910-11(사용자 보고 "순서와 내용 구분에 문제가 있다", SOT §3.6.7): 두 가지를 고쳤다.
+
+    ① **덮였는지는 여러 줄을 합쳐 본다.** 종전에는 OCR 줄이 *한* 글자층 줄 안에
+       절반 넘게 드는지만 봤다. 2단 쪽에서 OCR 줄이 두 단에 걸치면 어느 한 줄에도
+       절반이 안 들어 **같은 글이 한 번 더** 나왔다(실측 1쪽: `INTRODUCTION`,
+       `CURRENT APPROACHES TO BMD`, 그리고 `INTRODUCTION | CURRENT APPROACHES TO BMD`).
+       이제 겹친 넓이를 **모두 더해** 판단한다.
+
+    ② **글자층의 차례를 흐트러뜨리지 않는다.** 종전에는 합친 뒤 (y, x) 로 다시
+       정렬해, 애써 세운 단 차례(왼쪽 단 전부 → 오른쪽 단 전부)가 **줄마다 좌우로
+       엇갈리는** 차례로 돌아갔다. 이제 글자층 차례를 그대로 두고, 더할 줄만 **제
+       자리 뒤에** 끼운다.
     """
     keep = list(layer_rows or [])
+    rects = [x.get('rect') for x in keep]
+
+    def _covered(rc):
+        area = max(1e-6, (rc[2] - rc[0]) * (rc[3] - rc[1]))
+        hit = 0.0
+        for q in rects:
+            if not q:
+                continue
+            w = min(rc[2], q[2]) - max(rc[0], q[0])
+            h = min(rc[3], q[3]) - max(rc[1], q[1])
+            if w > 0 and h > 0:
+                hit += w * h
+        return (hit / area) >= frac
+
+    extra = []
     for r in (ocr_rows or []):
         rc = r.get('rect')
-        if not rc:
-            continue
-        if any(_inside(rc, x['rect'], frac) for x in keep if x.get('rect')):
+        if not rc or _covered(rc):
             continue
         r = dict(r)
         r['kind'] = 'ocr'          # 어디서 왔는지 남긴다(창 안내·검증용)
-        keep.append(r)
-    keep.sort(key=lambda x: ((x['rect'][1] if x.get('rect') else 0),
-                             (x['rect'][0] if x.get('rect') else 0)))
-    return keep
+        extra.append(r)
+    if not extra:
+        return keep
+
+    # 더할 줄마다 '어느 글자층 줄 뒤인가' 를 정한다 — 같은 단(가로로 겹침)에서
+    # 바로 위에 있는 줄. 없으면 맨 앞에 둔다.
+    after = {}
+    for r in extra:
+        rc = r['rect']
+        best, best_y = -1, None
+        for k, q in enumerate(rects):
+            if not q:
+                continue
+            if min(rc[2], q[2]) - max(rc[0], q[0]) <= 0:     # 가로로 안 겹치면 다른 단
+                continue
+            if q[1] <= rc[1] and (best_y is None or q[1] >= best_y):
+                best, best_y = k, q[1]
+        after.setdefault(best, []).append(r)
+    for v in after.values():
+        v.sort(key=lambda x: (x['rect'][1], x['rect'][0]))
+
+    out = list(after.get(-1, []))
+    for k, row in enumerate(keep):
+        out.append(row)
+        out.extend(after.get(k, []))
+    return out
+
 
 def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
                      words_lookup=None) -> list:
