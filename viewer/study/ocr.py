@@ -132,16 +132,11 @@ def ensure_tesseract() -> dict:
             #   `kor.traineddata` 가 실제로 든 쪽을 고른다. 옛 설치본에는 `tessdata/` 에
             #   eng·osd 만 있어, 그 폴더를 잡은 뒤 한국어 OCR 이 Tesseract 의 영어 원문
             #   오류로 실패했다(사용자 보고 260908: "Error opening data file … kor.traineddata").
-            cands_td = [d.parent.parent / "share" / "tessdata", d / "tessdata"]
-            best = None
-            for td in cands_td:
-                if not td.exists():
-                    continue
-                if best is None:
-                    best = td
-                if (td / "kor.traineddata").exists():
-                    best = td
-                    break
+            # 260910-6(§14.17): 동봉 두 배치 + **사용자 폴더**를 함께 놓고 고른다.
+            #   차례가 곧 우선순위 — 가진 언어 수가 같으면 앞엣것(동봉본)이 이긴다.
+            best = _pick_tessdata([d.parent.parent / "share" / "tessdata",
+                                   d / "tessdata",
+                                   user_tessdata_dir()])
             if best is not None:
                 os.environ["TESSDATA_PREFIX"] = str(best)
             break
@@ -240,6 +235,44 @@ DEFAULT_LANG = "kor+eng"
 FALLBACK_LANG = "eng"
 
 
+def user_tessdata_dir() -> Path:
+    """쓰기 권한이 있는 tessdata 폴더 (§14.17).
+
+    동봉 폴더는 보통 `C:@Program Files@PolyPDF@_internal@...` 이라 관리자 권한 없이는
+    한 글자도 못 쓴다. 언어 자료를 그 자리에서 받아 고치려면 사용자 폴더가 필요하다.
+    """.replace("@", chr(92))
+    # 시험·지원용 우회로. 실제 실행에서는 쓰지 않는다.
+    over = os.environ.get("POLYPDF_TESSDATA_DIR")
+    if over:
+        return Path(over)
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    return Path(base) / "PolyPDF" / "tessdata"
+
+
+def _langs_in(d) -> set:
+    try:
+        return {q.stem for q in Path(d).glob("*.traineddata")}
+    except Exception:
+        return set()
+
+
+def _pick_tessdata(cands) -> "Optional[Path]":
+    """후보 중 **필요한 언어를 더 많이 가진** 폴더 (§14.17).
+
+    260908-1 은 '`kor` 이 든 쪽' 이라는 단발 규칙이었다. 사용자 폴더가 후보로 늘면서
+    일반화한다 — 같으면 동봉본(변하지 않는 쪽)을 쓴다. 그래서 후보 차례가 곧 우선순위다.
+    """
+    need = {x for x in DEFAULT_LANG.split("+") if x}
+    best, best_score = None, -1
+    for d in cands:
+        if not d or not Path(d).exists():
+            continue
+        score = len(need & _langs_in(d))
+        if score > best_score:
+            best, best_score = Path(d), score
+    return best
+
+
 def available_langs() -> list:
     """이 기계에서 쓸 수 있는 Tesseract 언어 목록(번들 tessdata 기준).
 
@@ -291,6 +324,71 @@ def resolve_lang(lang: str) -> str:
     if keep:
         return "+".join(keep)
     return FALLBACK_LANG if FALLBACK_LANG in have else (sorted(have)[0] if have else FALLBACK_LANG)
+
+
+TESSDATA_URL = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/%s.traineddata"
+
+
+def repair_langs(codes, progress=None) -> tuple:
+    """모자란 언어 자료를 **받아서** 쓸 수 있게 만든다 (§14.17). 반환 (ok, 사람이 읽을 말).
+
+    왜 사용자 폴더인가 — 동봉 폴더는 `Program Files` 안이라 관리자 권한 없이 못 쓴다.
+    왜 복사부터 하나 — Tesseract 는 tessdata 폴더를 **하나만** 본다. 받은 언어만 두면
+    이번에는 동봉돼 있던 `eng` 를 잃는다. 그래서 있는 것을 먼저 옮겨 놓고 모자란 것만 받는다.
+
+    `progress(done, total)` 이 False 를 돌려주면 그만둔다(취소).
+    """
+    import shutil
+    from viewer.components import _download
+
+    want = [x for x in (codes or []) if x]
+    if not want:
+        return True, "받을 것이 없습니다."
+    dst = user_tessdata_dir()
+    try:
+        dst.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        return False, "폴더를 만들 수 없습니다: %s" % e
+
+    # ① 지금 쓰고 있는 폴더의 자료를 먼저 옮겨 둔다(없는 것만).
+    cur = os.environ.get("TESSDATA_PREFIX") or ""
+    if cur and Path(cur) != dst:
+        for q in _langs_in(cur):
+            t = dst / ("%s.traineddata" % q)
+            if not t.exists():
+                try:
+                    shutil.copy2(Path(cur) / ("%s.traineddata" % q), t)
+                except Exception:
+                    pass
+
+    # ② 모자란 것만 받는다. 받다 만 파일이 남지 않게 `.part` 로 받고 바꿔 끼운다.
+    got, failed = [], []
+    for code in want:
+        if (dst / ("%s.traineddata" % code)).exists():
+            continue
+        data = _download(TESSDATA_URL % code, progress)
+        if not data:
+            failed.append(code)
+            continue
+        tmp = dst / ("%s.traineddata.part" % code)
+        try:
+            tmp.write_bytes(data)
+            os.replace(tmp, dst / ("%s.traineddata" % code))
+            got.append(code)
+        except Exception:
+            failed.append(code)
+            try:
+                tmp.unlink()
+            except Exception:
+                pass
+
+    reset_cache()               # 다음 부름부터 새 폴더를 다시 고른다
+    ensure_tesseract()
+    if failed:
+        return False, ("받지 못한 언어: %s. 인터넷 연결을 확인하거나 설치 프로그램으로 "
+                       "다시 설치하세요." % ", ".join(failed))
+    return True, ("언어 자료를 준비했습니다: %s%s위치: %s"
+                  % (", ".join(got) if got else "(이미 있음)", chr(10) * 2, dst))
 
 
 def missing_langs(lang: str) -> list:

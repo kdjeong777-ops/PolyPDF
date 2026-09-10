@@ -97,9 +97,25 @@ jobs:
           $stage = "$env:TEMP\polypdf_upd"
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           Copy-Item "dist\PolyPDF" $stage -Recurse
-          foreach ($p in @("ffmpeg.exe","tesseract","kiwipiepy_model","nltk_data")) {
+          # 260910-6(사용자 보고 "설치본에 아직 kor 이 없다", 단어학습 SOT §14.17):
+          #   무거운 자산은 '안 바뀐다' 는 가정으로 빼 왔는데, `kor` 은 beta.142 에서
+          #   **새로 들어온 파일**이었다. 그래서 한 번이라도 앱 안에서 업데이트한
+          #   설치본은 새 배포본을 내도 영영 `kor` 을 못 받았다.
+          #   → 엔진·DLL(약 100MB)은 계속 빼되 **`tessdata` 는 남긴다**(약 16MB).
+          #     바뀌는 것은 언어 자료이지 엔진이 아니다.
+          foreach ($p in @("ffmpeg.exe","kiwipiepy_model","nltk_data")) {
             $t = Join-Path "$stage\_internal" $p
             if (Test-Path $t) { Remove-Item $t -Recurse -Force }
+          }
+          $tess = Join-Path "$stage\_internal" "tesseract"
+          if (Test-Path $tess) {
+            Get-ChildItem $tess -Force | Where-Object { $_.Name -ne "tessdata" } |
+              Remove-Item -Recurse -Force
+            $kept = Join-Path $tess "tessdata"
+            if (Test-Path $kept) {
+              Write-Host "update zip keeps tessdata:"
+              Get-ChildItem $kept -Filter *.traineddata | Select-Object Name, Length
+            }
           }
           $upd = "PolyPDF-$tag-win64-update.zip"
           Compress-Archive -Path "$stage\*" -DestinationPath $upd -Force

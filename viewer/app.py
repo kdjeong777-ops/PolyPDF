@@ -2771,34 +2771,92 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._start_text_ocr(cur, opts['pages'], lang, opts['watermark'],
                              opts.get('skip_text', True))
 
+    def _offer_ocr_lang_repair(self, miss, lang) -> bool:
+        """모자란 OCR 언어 자료를 지금 받겠냐고 묻고, 받는다 (단어학습 SOT §14.17).
+
+        반환 True = 계속 진행(받았든, 사용자가 '그냥 진행' 을 골랐든).
+        반환 False = 사용자가 그만뒀다.
+
+        내려받기는 워커에서 한다 — 네트워크가 죽으면 몇십 초를 잡고 있을 수 있다
+        (응답성 SOT §4 ①).
+        """
+        from PyQt6.QtWidgets import QProgressDialog
+        names = {'kor': '한국어', 'eng': '영어', 'jpn': '일본어'}
+        label = ', '.join(names.get(c, c) for c in miss)
+        box = QMessageBox(self)
+        box.setWindowTitle('OCR 언어 자료')
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setText('이 설치본에는 %s OCR 자료가 없습니다.' % label)
+        box.setInformativeText(
+            '지금 내려받으면(약 2MB) 다시 설치하지 않고 바로 쓸 수 있습니다.'
+            + chr(10) + '받은 자료는 쓰기 권한이 있는 사용자 폴더에 둡니다.')
+        b_get = box.addButton('지금 내려받기', QMessageBox.ButtonRole.AcceptRole)
+        b_skip = box.addButton('있는 언어로 진행', QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton('취소', QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_get)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is b_skip:
+            return True
+        if clicked is not b_get:
+            return False
+
+        from viewer.workers import OcrLangRepairWorker, run_in_thread
+        dlg = QProgressDialog('OCR 언어 자료를 받는 중…', '중지', 0, 0, self)
+        dlg.setWindowTitle('OCR 언어 자료')
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setMinimumDuration(0)
+        w = OcrLangRepairWorker(miss)
+        self._lang_repair_worker = w
+        out = {}
+        w.progress.connect(lambda d, t: (dlg.setMaximum(t), dlg.setValue(d))
+                           if t else None)
+        w.done.connect(lambda ok, msg: out.update(ok=ok, msg=msg))
+        w.finished.connect(dlg.close)
+        dlg.canceled.connect(w.request_cancel)
+        run_in_thread(w, self._thread_keep)
+        dlg.exec()
+        while 'ok' not in out and w.thread() is not None and dlg.isVisible():
+            QApplication.processEvents()
+        self._lang_repair_worker = None
+        if out.get('ok'):
+            QMessageBox.information(self, 'OCR 언어 자료', out.get('msg') or '준비했습니다.')
+        elif out:
+            QMessageBox.warning(self, 'OCR 언어 자료', out.get('msg') or '받지 못했습니다.')
+        return True
+
     def _start_text_ocr(self, path, pages, lang, watermark, skip_text=True):
         """OCR 워커를 띄운다. 여러 쪽이면 진행창(취소 가능)을 붙인다."""
         from PyQt6.QtWidgets import QProgressDialog
         from viewer.study import ocr as _so
         miss = _so.missing_langs(lang)
         if miss:        # 조용히 다른 언어로 읽지 않는다(단어학습 SOT §14.8)
-            # 260910-3(사용자 확인 요청, §14.16): 안내문이 **스스로를 증명**하게 한다.
-            #   종전 문구는 'kor 이 없어 eng 로 읽는다' 만 말했다. 그런데 화면에는
-            #   한글이 멀쩡히 보이니(글자층이 있는 쪽은 OCR 을 아예 건너뛴다) 사용자
-            #   눈에는 안내문이 거짓말로 보였다. 실제로는 둘 다 옳았다 — 안내문은
-            #   *이번에 OCR 한 쪽* 이야기고, 보이던 한글은 *읽지 않은 쪽* 의 원본이다.
-            #   그래서 (1) 어디를 찾아봤는지 (2) 무엇을 **안 하는지** 를 함께 적는다.
-            where = ''
-            try:
-                td = (_so.ensure_tesseract() or {}).get('tessdata') or ''
-                if td:
-                    where = '\n\n찾아본 위치: ' + td
-            except Exception:
-                pass
-            extra = ''
-            if skip_text:
-                extra = ('\n\n글자가 이미 있는 쪽은 건너뜁니다. 그런 쪽의 한글은 '
-                         'PDF 원본 글자라 그대로 보입니다 — OCR 이 읽은 것이 아닙니다.')
-            QMessageBox.information(
-                self, 'OCR',
-                '이 설치본에는 다음 언어 자료가 없습니다: ' + ', '.join(miss)
-                + '. 있는 언어로만 읽습니다: ' + _so.resolve_lang(lang)
-                + where + extra)
+            # 260910-6(사용자 보고 '설치본에 아직 kor 이 없다', §14.17): 알리는 데서
+            #   그치지 않고 **그 자리에서 고칠 길**을 준다. 원인은 앱 업데이트가
+            #   `tesseract` 를 통째로 건너뛰어 온 것이라, 새 배포본을 내도 이미
+            #   업데이트해 둔 설치본에는 닿지 않는다. 받은 자료는 쓰기 권한이 있는
+            #   사용자 폴더에 둔다 — Program Files 는 관리자 권한이 필요하다.
+            if not self._offer_ocr_lang_repair(miss, lang):
+                return          # 사용자가 그만뒀다
+            miss = _so.missing_langs(lang)
+            if miss:
+                where = ''
+                try:
+                    td = (_so.ensure_tesseract() or {}).get('tessdata') or ''
+                    if td:
+                        where = '\n\n찾아본 위치: ' + td
+                except Exception:
+                    pass
+                extra = ''
+                if skip_text:
+                    extra = ('\n\n글자가 이미 있는 쪽은 건너뜁니다. 그런 쪽의 한글은 '
+                             'PDF 원본 글자라 그대로 보입니다 — OCR 이 읽은 것이 아닙니다.')
+                QMessageBox.information(
+                    self, 'OCR',
+                    '이 설치본에는 다음 언어 자료가 없습니다: ' + ', '.join(miss)
+                    + '. 있는 언어로만 읽습니다: ' + _so.resolve_lang(lang)
+                    + where + extra)
+
         tp = self.text_panel
         prev = getattr(self, '_text_ocr_worker', None)
         if prev is not None:

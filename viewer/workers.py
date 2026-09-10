@@ -224,6 +224,42 @@ def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
         return False
 
 
+class OcrLangRepairWorker(QObject):
+    """260910-6(단어학습 SOT §14.17): 모자란 OCR 언어 자료를 받아 온다.
+
+    내려받기는 네트워크가 죽으면 몇십 초씩 잡고 있을 수 있어 **반드시 워커**에서 한다
+    (응답성 SOT §4 ①). 취소는 `request_cancel()` — 다음 덩어리에서 멈춘다.
+    """
+    done = pyqtSignal(bool, str)         # ok, 사람이 읽을 말
+    progress = pyqtSignal(int, int)      # 받은 바이트, 전체(0=모름)
+    finished = pyqtSignal()
+
+    def __init__(self, codes):
+        super().__init__()
+        self.codes = list(codes or [])
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        try:
+            from viewer.study import ocr as study_ocr
+
+            def _p(done, total):
+                self.progress.emit(int(done), int(total))
+                return not self._cancel
+
+            ok, msg = study_ocr.repair_langs(self.codes, progress=_p)
+            if self._cancel:
+                ok, msg = False, "내려받기를 멈췄습니다."
+            self.done.emit(bool(ok), str(msg))
+        except Exception as e:
+            self.done.emit(False, "언어 자료 준비 실패: %s" % e)
+        finally:
+            self.finished.emit()
+
+
 class TextOcrPageWorker(QObject):
     """260908-8: 텍스트 창의 [OCR 다시 읽기] — **고른 쪽들**을 다시 읽는다.
 
