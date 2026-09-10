@@ -402,6 +402,17 @@ def _by_column(blocks, page, word_level: bool = False):
                 groups.extend(_split_inner(list(side), page))
                 side.clear()
 
+    # 260910-12(SOT §3.6.8): '가로지른다' 는 **양쪽으로 넉넉히** 뻗은 것만.
+    try:
+        _bx0 = min(f[0][0] for f in frags)
+        _bx1 = max(f[0][2] for f in frags)
+        _need = max(1.0, (_bx1 - _bx0) * COL_CROSS)
+    except ValueError:
+        _need = 1.0
+
+    def _crosses(f):
+        return min(gx - f[0][0], f[0][2] - gx) >= _need
+
     for i, bd in enumerate(bands):
         if i == tail:
             _flush()                      # 꼬리말 앞에서 단을 닫는다
@@ -409,7 +420,7 @@ def _by_column(blocks, page, word_level: bool = False):
             groups.append(list(bd["items"]))
             continue
         # 가운데를 실제로 가로지르는 조각이 있으면 그 줄은 전폭이다.
-        if any(f[0][0] < gx < f[0][2] for f in bd["items"]):
+        if any(_crosses(f) for f in bd["items"]):
             _flush()                      # 앞 구역을 좌→우 차례로 닫고
             groups.append(list(bd["items"]))   # 전폭 줄을 제 자리에 둔다
             continue
@@ -784,6 +795,15 @@ JOIN_FILL = 1.0          # 오른쪽 여백까지 찼다고 보는 기준(여백
 # 260910-4(SOT §3.7.6): 빈칸이 본문 폭의 이 비율을 넘으면 어떤 어절이 와도 문단 끝.
 #   목차·제목처럼 크게 남는 줄이 긴 낱말 하나 때문에 이어지는 것을 막는다.
 JOIN_GAP_MAX = 0.40
+# 260910-12(SOT §3.7.8): '다음 어절이 들어갔겠는가' 에 여유를 둔다.
+#   그림 옆으로 글이 흐르면 줄마다 쓸 수 있는 폭이 달라, 우리가 잰 여백으로는
+#   '들어갔겠다' 로 보이지만 실제로는 그림에 막혀 넘어간 자리가 있다.
+#   넉넉히 남았을 때만 문단 끝으로 본다.
+JOIN_WORD_SLACK = 1.5
+# 260910-12(SOT §3.6.8): 전폭 줄로 보려면 **양쪽으로 이만큼씩** 뻗어야 한다.
+#   조금 넘어선 것까지 전폭으로 보면, 그 줄에 딸린 다른 단의 글까지 한 줄로 붙는다
+#   (실측 1쪽: 지도 범례가 가운데를 살짝 넘어 왼쪽 단 마지막 줄과 붙었다).
+COL_CROSS = 0.15
 # 260910-4(SOT §3.7.6 나): 한글 한 글자 목록 표시는 **가나다 차례**만 인정한다.
 #   아무 글자나 받으면 `포함)` 의 `함)` 이 목록으로 보여 문장이 끊긴다.
 KO_LIST_ORDER = "가나다라마바사아자차카타파하"
@@ -838,17 +858,25 @@ def join_sentences(rows) -> list:
             and r.get('kind') == 'text' and ' | ' not in r.get('text', '')]
     if len(body) < 2:
         return list(rows)
-    rights = sorted(r['rect'][2] for r in body)
-    margin = rights[int(len(rights) * 0.9)]
-    # 260910-4(SOT §3.7.6 가): 본문 폭 — ④ 의 '너무 많이 남았다' 한도를 재는 자.
-    #   왼쪽도 10분위로 잡아 들여쓴 줄 하나에 흔들리지 않게 한다.
-    lefts = sorted(r['rect'][0] for r in body)
-    span = margin - lefts[int(len(lefts) * 0.1)]
+    # 260910-12(사용자 보고 "부호로 잇는 규칙이 적용 안 된다", SOT §3.7.8):
+    #   여백은 **단마다** 잰다. 쪽 하나로 재면 2단 쪽에서 왼쪽 단이 한 줄도 못 잇는다 —
+    #   실측 1쪽: 쪽 전체 90분위 556.9 인데 왼쪽 단은 **가장 긴 줄도 300.2** 라
+    #   ④(오른쪽까지 찼는가)가 언제나 거짓이었다.
+    cols = _column_extents(body)
+    idx = {id(q): i for i, q in enumerate(body)}
     out = []
     for r in rows:
         r = dict(r)
         r.setdefault('rects', [r['rect']] if r.get('rect') else [])
         prev = out[-1] if out else None
+        # 260910-12: 이웃한 줄(같은 단, 앞뒤 4줄)로 **그 자리의** 여백을 본다.
+        _k = idx.get(id(r))
+        _near = None
+        if _k is not None:
+            _lo, _hi = max(0, _k - 4), min(len(body), _k + 5)
+            _near = [q for q in body[_lo:_hi]
+                     if abs(q['rect'][0] - r['rect'][0]) <= 24.0]
+        margin, span = _extent_for(cols, r, _near)
         if prev is not None and _can_join(prev, r, margin, span):
             # ★ 조건 판정은 **마지막에 붙인 줄**로 한다(`_can_join` 안에서 `_last`).
             # 260910-4(SOT §3.7.7): 왜 넘어갔는지가 빈칸 여부를 가른다.
@@ -917,6 +945,70 @@ def _unclosed_paren(t) -> bool:
     return t.count('(') > t.count(')')
 
 
+def _column_extents(body) -> list:
+    """단마다 (왼쪽끝 범위, 오른쪽 여백, 본문 폭) (SOT §3.7.8).
+
+    260910-12: §3.7 의 ④ 는 '이 줄이 오른쪽 여백까지 찼는가' 를 본다. 그 여백을
+    **쪽 하나로** 재면 2단 쪽에서 왼쪽 단이 통째로 탈락한다 — 왼쪽 단의 가장 긴 줄도
+    오른쪽 단의 여백보다 한참 짧기 때문이다(실측 1쪽: 300.2 대 556.9).
+
+    단은 **왼쪽 끝이 일정하다**(§3.6.1). 그래서 왼쪽 끝을 무리 지어 단을 가른다.
+    사이가 본문 폭의 10% 넘게 벌어지면 다른 단으로 본다. 1단 쪽이면 무리가 하나라
+    종전과 똑같이 동작한다.
+    """
+    if not body:
+        return []
+    xs = sorted(r['rect'][0] for r in body)
+    lo = xs[0]
+    hi = max(r['rect'][2] for r in body)
+    gap = max(1.0, (hi - lo) * 0.10)
+    groups = [[xs[0]]]
+    for x in xs[1:]:
+        if x - groups[-1][-1] > gap:
+            groups.append([x])
+        else:
+            groups[-1].append(x)
+    out = []
+    for g in groups:
+        g0, g1 = g[0], g[-1]
+        mine = [r for r in body if g0 - 0.5 <= r['rect'][0] <= g1 + 0.5]
+        if not mine:
+            continue
+        rights = sorted(r['rect'][2] for r in mine)
+        margin = rights[int(len(rights) * 0.9)]
+        lefts = sorted(r['rect'][0] for r in mine)
+        span = margin - lefts[int(len(lefts) * 0.1)]
+        out.append((g0, g1, margin, span))
+    return out
+
+
+def _extent_for(cols, r, near=None):
+    """그 줄이 속한 단의 (여백, 본문 폭). 못 찾으면 가장 가까운 단 (SOT §3.7.8).
+
+    `near` 는 **바로 이웃한 줄들**이다. 주면 그 안의 가장 긴 오른쪽 끝을 여백으로 쓴다 —
+    그림 옆으로 글이 좁게 흐르는 구간은 단 전체보다 여백이 앞에 있기 때문이다
+    (실측 1쪽 'DEFINITION OF BMD' 문단: 단 여백 292.9, 그 문단은 260 에서 끝난다).
+    단 여백보다 넓어지지는 않게 묶어 둔다.
+    """
+    rc = r.get('rect')
+    if not cols or not rc:
+        return (0.0, 0.0)
+    x0 = rc[0]
+    got = None
+    for g0, g1, margin, span in cols:
+        if g0 - 0.5 <= x0 <= g1 + 0.5:
+            got = (margin, span)
+            break
+    if got is None:
+        best = min(cols, key=lambda c: min(abs(x0 - c[0]), abs(x0 - c[1])))
+        got = (best[2], best[3])
+    if near:
+        loc = max(q['rect'][2] for q in near if q.get('rect'))
+        if loc < got[0]:
+            return (loc, got[1])
+    return got
+
+
 def _can_join(a, b, margin, span: float = 0.0) -> bool:
     """SOT §3.7 의 여덟 조건을 모두 본다."""
     # ★ 260910: 이미 이어 붙인 줄이면 **마지막에 붙인 줄**로 잰다. 합친 사각형으로 재면
@@ -947,8 +1039,8 @@ def _can_join(a, b, margin, span: float = 0.0) -> bool:
         if span > 0 and gap > span * JOIN_GAP_MAX:
             return False            # 너무 많이 남았다 — 어떤 어절이 와도 문단 끝
         w = _first_word_width(b)
-        if w <= 0 or gap >= w:
-            return False            # 들어갔을 텐데 넘어갔다 → 문단이 끝났다
+        if w <= 0 or gap >= w * JOIN_WORD_SLACK:
+            return False            # 넉넉히 들어갔을 텐데 넘어갔다 → 문단이 끝났다
     # ⑤ 왼쪽 여백. 뒷줄이 들여써져 있으면 보통 **새 문단**이지만, 앞줄이 목록 항목의
     #   첫 줄이면(`(3) …`) 그 다음 줄들은 표시 아래로 들여쓰는 것이 정상이다
     #   (내어쓰기). 실측 지침 41쪽: 첫 줄 x=68.0, 이어지는 줄 x=86.8.

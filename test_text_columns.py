@@ -304,6 +304,66 @@ chk([r["text"] for r in out2 if r.get("kind") != "ocr"] == [r["text"] for r in l
     "(13) 글자층 줄의 차례는 건드리지 않는다")
 
 print()
+print("=== (14) 여백은 단마다 잰다 (§3.7.8) ===")
+# 왼쪽 단은 280 에서, 오른쪽 단은 540 에서 끝난다
+body = []
+for k in range(10):
+    y = 100.0 + k * 14.0
+    body.append({"text": "왼쪽 %d 줄이 이어진다" % k, "style": "body", "kind": "text",
+                 "rect": (60.0, y, 280.0, y + 10.0), "size": 10.0})
+    body.append({"text": "오른쪽 %d 줄이 이어진다" % k, "style": "body", "kind": "text",
+                 "rect": (320.0, y, 540.0, y + 10.0), "size": 10.0})
+cols = tx._column_extents(body)
+chk(len(cols) == 2, "(14) 왼쪽 끝으로 단을 가른다", "단 %d" % len(cols))
+if len(cols) == 2:
+    chk(abs(cols[0][2] - 280.0) < 1.0, "(14) 왼쪽 단 여백은 왼쪽 단에서 잰다",
+        "%.1f" % cols[0][2])
+    chk(abs(cols[1][2] - 540.0) < 1.0, "(14) 오른쪽 단 여백은 오른쪽 단에서 잰다",
+        "%.1f" % cols[1][2])
+m_l, _s_l = tx._extent_for(cols, body[0])
+m_r, _s_r = tx._extent_for(cols, body[1])
+chk(m_l < m_r, "(14) 줄마다 제 단의 여백을 쓴다", "%.0f vs %.0f" % (m_l, m_r))
+one = [{"text": "한 단 %d" % k, "style": "body", "kind": "text",
+        "rect": (60.0, 100.0 + k * 14.0, 500.0, 110.0 + k * 14.0), "size": 10.0}
+       for k in range(10)]
+chk(len(tx._column_extents(one)) == 1, "(14) 1단 쪽은 무리가 하나 — 종전과 같다")
+
+# 실제로 이어지는가 (종전에는 왼쪽 단이 한 줄도 못 이었다)
+joined = tx.join_sentences(body)
+chk(len(joined) < len(body), "(14) 2단 쪽에서도 문장이 이어진다",
+    "%d -> %d" % (len(body), len(joined)))
+
+print()
+print("=== (15) '들어갔겠는가' 에 여유를 둔다 (§3.7.8 고침 3) ===")
+chk(tx.JOIN_WORD_SLACK == 1.5, "(15) 여유가 상수다", str(tx.JOIN_WORD_SLACK))
+_a = {"text": "앞줄이 여기서 끝난다", "style": "body", "kind": "text",
+      "rect": (60.0, 100.0, 262.0, 110.0), "size": 10.0}
+_b = {"text": "다음", "style": "body", "kind": "text",
+      "rect": (60.0, 114.0, 100.0, 124.0), "size": 10.0}
+# 빈틈 18, 어절 폭 40 -> 여유 없이도 잇는다
+chk(tx._can_join(_a, _b, 280.0, 220.0), "(15) 어절이 안 들어가면 잇는다")
+# 빈틈이 어절의 1.5배를 넘으면 문단 끝
+_c = dict(_a); _c["rect"] = (60.0, 100.0, 180.0, 110.0)
+chk(not tx._can_join(_c, _b, 280.0, 220.0),
+    "(15) 넉넉히 남았으면 문단 끝으로 본다")
+
+print()
+print("=== (16) 전폭은 양쪽으로 넉넉히 뻗은 것만 (§3.6.8) ===")
+chk(tx.COL_CROSS == 0.15, "(16) 기준이 상수다", str(tx.COL_CROSS))
+# 2단 + 아래쪽에 '가운데를 살짝 넘는' 범례
+legend = two_col(n=10)
+ly = 100.0 + 10 * 14.0
+legend.append(row("왼쪽 단 마지막 줄", 60.0, ly, 187.0, ly + 10.0))
+legend.append(row("범례 항목 A", 278.0, ly, 375.0, ly + 10.0))   # 가운데(300)를 살짝 넘는다
+legend.append(row("범례 항목 B", 398.0, ly, 495.0, ly + 10.0))
+groups = tx._by_column([((0, 0, 0, 0), legend)], pg)
+texts = [" ".join(t for _r, t, _s in g) for g in groups]
+mixed = [t for t in texts if "왼쪽 단 마지막" in t and "범례" in t]
+chk(not mixed, "(16) 왼쪽 단 마지막 줄이 범례와 한 묶음이 되지 않는다", str(mixed[:1]))
+chk(any("왼쪽 단 마지막" in t for t in texts), "(16) 그 줄은 그대로 남는다")
+chk(any("범례" in t for t in texts), "(16) 범례도 그대로 남는다")
+
+print()
 print("=== (7) OCR '문서 전체' 가 진짜 전체다 (§3.1.2) ===")
 from viewer.app import MainWindow
 src = inspect.getsource(MainWindow._on_text_need_ocr)
