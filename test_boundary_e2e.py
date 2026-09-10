@@ -74,16 +74,39 @@ def wheel(view, dy):
     QApplication.sendEvent(vp, ev)
     app.processEvents()
 
+
+def wheel_cross(view, dy):
+    """260910-5(마스터 SOT §19.1): 쪽·파일 경계를 **넘기려는** 손짓.
+
+    경계에 닿은 첫 칸은 이제 넘기지 않는다(관성 휠이 그냥 지나가던 것을 막는다).
+    넘기려면 한 박자 쉬고 한 칸 더 굴려야 한다. 시험에서 실제로 350ms 를 기다리는
+    대신 '닿은 시각' 을 과거로 돌려 같은 상태를 만든다.
+    """
+    wheel(view, dy)                       # 첫 접촉 - 여기서는 넘어가지 않는다
+    try:
+        view._edge_ms -= 10000.0          # 머문 시간을 채운 것으로
+    except AttributeError:
+        pass
+    wheel(view, dy)                       # 이 칸에서 넘어간다
+
+
+# 260910-5: **한 칸으로는 넘어가지 않는다** — 이번 규칙의 핵심 보장.
+mv.go_to_page(2); app.processEvents()
+wheel(mv.view, -120)
+chk(Path(mv.current_file() or "").name == "B.pdf",
+    "[경계] 휠 한 칸으로는 파일을 넘기지 않는다(§19.1.2 규칙 2)",
+    f"now={Path(mv.current_file() or '').name}")
+
 # --- 1) 필터 '전체' 상태: 휠로 B 마지막 → C ---------------------------
 mv.go_to_page(2); app.processEvents()
 chk(mv._current_page == 2, "B 마지막 페이지(2)로 이동")
-wheel(mv.view, -120)
+wheel_cross(mv.view, -120)
 chk(Path(mv.current_file() or "").name == "C.pdf",
     "[전체] B 마지막에서 휠다운 → C.pdf", f"now={Path(mv.current_file() or '').name} page={mv._current_page}")
 chk(mv._current_page == 0, "[전체] C 첫 페이지", f"page={mv._current_page}")
 
 # --- 2) 휠로 C 첫 → B 마지막 -------------------------------------------
-wheel(mv.view, +120)
+wheel_cross(mv.view, +120)
 chk(Path(mv.current_file() or "").name == "B.pdf",
     "[전체] C 첫에서 휠업 → B.pdf", f"now={Path(mv.current_file() or '').name}")
 chk(mv._current_page == 2, "[전체] B 마지막 페이지로", f"page={mv._current_page}")
@@ -101,7 +124,7 @@ tp = mw.page_thumbs
 tp._filter_btns["visible"].click(); app.processEvents()        # 실제 버튼 클릭
 chk(tp._filter == "visible", "필터 '보임' 클릭됨")
 mv.go_to_page(2); app.processEvents()
-wheel(mv.view, -120)
+wheel_cross(mv.view, -120)
 chk(Path(mv.current_file() or "").name == "C.pdf",
     "[보임] B 마지막에서 휠다운 → C.pdf", f"now={Path(mv.current_file() or '').name}")
 

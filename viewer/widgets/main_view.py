@@ -97,6 +97,15 @@ MV_TEXT_STYLE_MAP = {n: s for n, s in MV_TEXT_STYLES}
 MV_LEADER_TIPS = ("arrow", "circle", "plain")
 
 
+def _perf_ms() -> float:
+    """단조 시계(ms). 260910-5: 경계에 머문 시간을 재는 데만 쓴다.
+
+    벽시계가 아니라 `perf_counter` 라 시각 보정·서머타임에 흔들리지 않는다.
+    """
+    import time
+    return time.perf_counter() * 1000.0
+
+
 def smooth_polyline_path(pts):
     """260611-83: 자유곡선을 부드럽게 — 점들을 지나는 2차 베지어(중점) 곡선 경로.
 
@@ -829,6 +838,11 @@ class _PdfGraphicsView(QGraphicsView):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # 260910-5(마스터 SOT §19.1): 쪽 경계에서 넘기기 전에 확인하는 '의도'.
+        #   여기(__init__)에 둔다 — 휠은 마우스를 움직이지 않아도 들어온다.
+        self._edge_dir = 0                    # 닿아 있는 경계(+1 아래끝 / -1 위끝)
+        self._edge_ms = 0.0                   # 그 경계에 닿은 시각(ms)
+        self._edge_sum = 0                    # 닿은 뒤 굴린 양의 합
         self.setRenderHints(
             QPainter.RenderHint.Antialiasing
             | QPainter.RenderHint.SmoothPixmapTransform
@@ -1077,6 +1091,10 @@ class _PdfGraphicsView(QGraphicsView):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._image_mode = False              # v1.6.8 F3: 이미지 모드면 휠=일반 스크롤
 
+    # 260910-5(마스터 SOT §19.1.2): 경계를 넘기려면 **둘 다** 넘어야 한다.
+    EDGE_HOLD_MS = 350        # 경계에 닿고 이만큼은 넘기지 않는다
+    EDGE_PUSH = 120           # 그 뒤에도 휠 한 칸만큼 더 굴려야 한다
+
     def wheelEvent(self, event: QWheelEvent):
         # v1.6.9 G2: 이미지 모드도 PDF 와 동일 — 페이지(스크린샷)내 스크롤하다
         #            끝에서 한 번 더 굴리면 다음/이전 항목으로(_on_page_step 분기).
@@ -1086,17 +1104,39 @@ class _PdfGraphicsView(QGraphicsView):
             event.accept()
             return
 
-        # 일반 휠: 스크롤바 끝에서 한 번 더 굴리면 페이지 이동
+        # 일반 휠: 쪽 안에서는 그냥 스크롤, 끝에 닿으면 **한 박자 쉰 뒤** 쪽 이동.
+        # 260910-5(사용자 보고 "페이지 끝에서 순식간에 넘어가 이어진 내용인지 모르겠다",
+        #   마스터 SOT §19.1): 종전에는 끝에 닿은 **바로 다음 칸**이 곧 쪽 넘김이라,
+        #   관성 휠·고해상도 휠이 한 번 튕기면 멈춘 줄도 모르는 사이 넘어갔다.
+        #   이제 ① 처음 닿은 칸은 넘기지 않고 ② 그 뒤에도 **머문 시간과 굴린 양을
+        #   둘 다** 넘겨야 넘어간다. 하나만 보면 천천히 굴리는 사람이 못 넘기거나
+        #   (양만 봄) 관성 휠이 그냥 지나간다(시간만 봄).
         sb = self.verticalScrollBar()
         delta = event.angleDelta().y()
-        if delta < 0 and sb.value() == sb.maximum():
-            self.pageStep.emit(+1)
+        at_edge = 0
+        if delta < 0 and sb.value() >= sb.maximum():
+            at_edge = +1
+        elif delta > 0 and sb.value() <= sb.minimum():
+            at_edge = -1
+        if at_edge:
+            if self._edge_dir != at_edge:
+                # 처음 닿았다 — 이 칸은 '끝에 닿았음' 을 알리는 데 쓴다
+                self._edge_dir = at_edge
+                self._edge_ms = _perf_ms()
+                self._edge_sum = 0
+                event.accept()
+                return
+            self._edge_sum += abs(delta)
+            if (_perf_ms() - self._edge_ms) < self.EDGE_HOLD_MS                     or self._edge_sum < self.EDGE_PUSH:
+                event.accept()
+                return
+            self._edge_dir = 0          # 한 손짓에 한 쪽만
+            self._edge_sum = 0
+            self.pageStep.emit(at_edge)
             event.accept()
             return
-        if delta > 0 and sb.value() == sb.minimum():
-            self.pageStep.emit(-1)
-            event.accept()
-            return
+        self._edge_dir = 0              # 쪽 안으로 돌아왔다 — 처음부터 다시 센다
+        self._edge_sum = 0
         super().wheelEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent):
@@ -1834,7 +1874,14 @@ class MainView(QWidget):
                     return vp.grab(r)
         return vp.grab()
 
-    def go_to_page(self, page_index: int):
+    def go_to_page(self, page_index: int, at_bottom: bool = False):
+        """그 쪽으로 간다. `at_bottom` 이면 **그 쪽의 아래끝**에서 시작한다.
+
+        260910-5(사용자 보고, 마스터 SOT §19.1): 위로 굴려 이전 쪽으로 갈 때 종전에는
+        늘 맨 위로 갔다 — 그 쪽의 아래 전체를 건너뛰는 셈이라, 사용자가 "건너뛴
+        내용인지 인지하기 어렵다" 고 한 바로 그 자리다. 뒤로 가는 사람은 방금 지나온
+        글을 다시 보려는 것이므로 아래끝이 이어지는 자리다.
+        """
         if not self._doc:
             return
         page_index = max(0, min(self._doc.page_count - 1, page_index))
@@ -1851,7 +1898,13 @@ class MainView(QWidget):
         self._update_hidden_band()                           # 260609-14(D5): 페이지별 숨김 띠
         self._load_page_strokes()                            # 260609-22(J3): 페이지 선긋기 로드
         self._load_page_images()                             # 260611-15: 페이지 삽입 이미지 로드
-        self.view.verticalScrollBar().setValue(0)            # 페이지 상단으로
+        _sb = self.view.verticalScrollBar()
+        if at_bottom:
+            # 렌더 직후라 스크롤 범위가 아직 갱신 전일 수 있다 — 강제로 맞춘 뒤 잡는다.
+            self.view.viewport().updateGeometry()
+            _sb.setValue(_sb.maximum())
+        else:
+            _sb.setValue(0)                                  # 페이지 상단으로
         self.spin_page.blockSignals(True)
         self.spin_page.setValue(page_index + 1)
         self.spin_page.blockSignals(False)
@@ -2039,7 +2092,8 @@ class MainView(QWidget):
         if nxt is None:
             self.fileBoundaryRequested.emit(+1 if delta > 0 else -1)
             return
-        self.go_to_page(nxt)
+        # 260910-5(SOT §19.1.2 규칙 1): 뒤로 넘기면 그 쪽의 **아래끝**에서 시작한다.
+        self.go_to_page(nxt, at_bottom=(delta < 0))
 
     def _zoom_by(self, factor: float):
         # 사용자 비율로 전환
