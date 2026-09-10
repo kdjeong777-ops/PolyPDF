@@ -122,6 +122,68 @@ chk(tx._gutter_x(tx._row_bands(one), pg) is None, "(6) 1단은 2단이 아니다
 chk(len(tx._by_column([((0, 0, 0, 0), one)], pg)) == 1, "(6) 한 묶음으로 둔다")
 
 print()
+print("=== (9) 칸 안에 여러 줄이 든 표는 칸 단위로 (§3.6.5) ===")
+
+
+class _DrawPage(_Page):
+    """가로 줄이 그려진 쪽. `get_drawings()` 만 흉내 낸다."""
+
+    def __init__(self, ys, w=760.0, h=600.0):
+        super().__init__(w, h)
+        self._ys = list(ys)
+
+    def get_drawings(self):
+        class _P:
+            def __init__(self, x, y):
+                self.x, self.y = x, y
+        out = []
+        for y in self._ys:
+            out.append({"items": [("l", _P(20.0, y), _P(740.0, y))]})
+        return out
+
+
+rules = [100.0, 200.0, 300.0]
+pg2 = _DrawPage(rules)
+chk(tx._hrules(pg2) == rules, "(9) 전폭 가로 줄을 찾는다", str(tx._hrules(pg2)))
+chk(tx._hrules(_Page()) == [], "(9) 줄이 없으면 빈 목록")
+
+# 칸 사이 빈틈으로 열을 가른다
+band = [row("왼쪽 칸", 60.0, 110.0, 200.0, 120.0),
+        row("오른쪽 칸", 300.0, 110.0, 500.0, 120.0)]
+cols = tx._split_cols(band)
+chk(len(cols) == 2, "(9) 가로 빈틈으로 칸을 가른다", "칸 %d" % len(cols))
+near = [row("붙은", 60.0, 110.0, 200.0, 120.0),
+        row("칸", 203.0, 110.0, 300.0, 120.0)]
+chk(len(tx._split_cols(near)) == 1, "(9) 빈틈이 좁으면 같은 칸", str(len(tx._split_cols(near))))
+
+# 여러 줄짜리 칸 -> 칸 단위
+multi = []
+for k in range(3):
+    multi.append(row("왼쪽 %d 줄" % k, 60.0, 110.0 + k * 14.0, 200.0, 120.0 + k * 14.0))
+    multi.append(row("오른쪽 %d 줄" % k, 300.0, 110.0 + k * 14.0, 500.0, 120.0 + k * 14.0))
+multi += [row("한줄 항목", 60.0, 210.0, 200.0, 220.0),
+          row("YES NO", 300.0, 210.0, 380.0, 220.0)]
+groups = tx._table_cells(multi, pg2)
+chk(groups is not None, "(9) 여러 줄 칸이 있으면 칸 모드로 간다")
+if groups:
+    texts = [" ".join(t for _r, t, _s in g) for g in groups]
+    lefts = [t for t in texts if "왼쪽" in t and "오른쪽" not in t]
+    chk(bool(lefts), "(9) 왼쪽 칸의 세 줄이 한 묶음", (lefts or [""])[0][:30])
+    both = [t for t in texts if "한줄 항목" in t and "YES" in t]
+    chk(bool(both), "(9) 한 줄짜리 행은 종전대로 한 줄로", (both or [""])[0][:30])
+
+# 한 줄짜리만 있으면 표 모드로 가지 않는다
+only1 = [row("항목 %d" % k, 60.0, 110.0 + k * 30.0, 200.0, 120.0 + k * 30.0)
+         for k in range(6)]
+only1 += [row("YES NO", 300.0, 110.0 + k * 30.0, 380.0, 120.0 + k * 30.0)
+          for k in range(6)]
+chk(tx._table_cells(only1, _DrawPage([100.0, 130.0, 160.0, 190.0, 220.0, 250.0, 280.0]))
+    is None, "(9) 칸이 모두 한 줄이면 종전 경로 그대로")
+chk(tx._table_cells(multi, _Page()) is None, "(9) 가로 줄이 없으면 표가 아니다")
+chk(tx.CELL_GAP == 6.0 and tx.HRULE_SPAN == 0.50,
+    "(9) 기준이 상수다", "%s / %s" % (tx.CELL_GAP, tx.HRULE_SPAN))
+
+print()
 print("=== (7) OCR '문서 전체' 가 진짜 전체다 (§3.1.2) ===")
 from viewer.app import MainWindow
 src = inspect.getsource(MainWindow._on_text_need_ocr)

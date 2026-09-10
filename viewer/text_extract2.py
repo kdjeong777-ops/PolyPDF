@@ -54,6 +54,10 @@ COL_FULL = 0.60
 # 한쪽 단이 다른 쪽보다 이 비율보다 좁으면 **단이 아니라 값 칸**이다(목차의 쪽번호 등).
 #   실측: 목차 0.06~0.09 / 진짜 2단 0.45~1.87.
 COL_WIDTH_MIN = 0.25
+# 260910-9(SOT §3.6.5): 표의 **가로 줄**로 행을 가른다. 그 행 안의 어느 칸이든
+#   두 줄 이상이면 **칸 단위로** 읽는다 — 줄 단위로 이으면 칸끼리 뒤섞인다.
+CELL_GAP = 6.0          # 칸 사이 가로 빈틈(pt). 이보다 벌어지면 다른 칸
+HRULE_SPAN = 0.50       # 본문 폭의 이 비율을 넘는 가로 줄만 '행 구분선'
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
 
 
@@ -123,7 +127,10 @@ def _line_items(page):
     #   `[ Hot Asphalt Paving Mixture` 와 `]` 가 두 줄이 되고, 표 한 행의 칸들이
     #   블록 순서대로 흩어져 **앞뒤가 바뀐 여러 줄**로 보인다(사용자 보고 260908).
     out = []
-    for col_frags in _by_column(blocks, page):
+    # 260910-9(SOT §3.6.5): 가로 줄로 나뉜 표에 **여러 줄짜리 칸**이 있으면 칸 단위로.
+    _flat = [f for _bb, lines in blocks for f in lines]
+    _cells = _table_cells(_flat, page)
+    for col_frags in (_cells if _cells is not None else _by_column(blocks, page)):
         out.extend(_merge_rows(col_frags))
     if ocr_layer:
         # 260908-8(SOT §3.5): **줄을 이은 뒤에** 기호만 남은 줄을 뺀다(`■`·`☜`).
@@ -245,6 +252,92 @@ def _left_edge_share(frags) -> float:
         k = round(f[0][0] / 2.0)
         counts[k] = counts.get(k, 0) + 1
     return max(counts.values()) / float(len(frags))
+
+
+def _hrules(page) -> list:
+    """쪽에 그려진 **전폭 가로 줄**의 y 목록 (SOT §3.6.5).
+
+    표의 행 구분선이다. 세로 줄이 없는 표(이 문서의 Table 1~3)는 pdfplumber 가
+    칸을 못 잡지만, 가로 줄은 그려져 있어 **행 경계는 정확히 알 수 있다**.
+    """
+    try:
+        w = float(page.rect.width or 0.0)
+        need = HRULE_SPAN * w
+        ys = []
+        for d in page.get_drawings():
+            for it in d.get("items", []):
+                if it[0] == "l":
+                    a, b = it[1], it[2]
+                    if abs(a.y - b.y) < 1.0 and abs(a.x - b.x) >= need:
+                        ys.append(float(a.y))
+                elif it[0] == "re":
+                    r = it[1]
+                    if r.height < 3.0 and r.width >= need:
+                        ys.append(float(r.y0))
+        out = []
+        for y in sorted(ys):
+            if not out or abs(y - out[-1]) > 2.0:
+                out.append(y)
+        return out
+    except Exception:
+        return []
+
+
+def _split_cols(frags) -> list:
+    """한 행 안의 조각을 **가로 빈틈**으로 칸마다 나눈다 (SOT §3.6.5)."""
+    if not frags:
+        return []
+    order = sorted(frags, key=lambda f: (f[0][0], f[0][1]))
+    cols, cur, edge = [], [order[0]], order[0][0][2]
+    for f in order[1:]:
+        if f[0][0] - edge > CELL_GAP:
+            cols.append(cur)
+            cur = [f]
+            edge = f[0][2]
+        else:
+            cur.append(f)
+            edge = max(edge, f[0][2])
+    cols.append(cur)
+    return cols
+
+
+def _table_cells(frags, page):
+    """가로 줄로 나뉜 표를 **칸 단위**로 읽는 차례. 표가 아니면 None (SOT §3.6.5).
+
+    260910-9(사용자 보고 "텍스트 창에서 제대로 인식 못 한다"): 칸 안에 여러 줄이 든 표를
+    줄 단위로 이으면 **다른 칸의 첫 줄끼리** 붙는다 — 실측(NAPA Table 1):
+    `Virgin asphalt binder source. | Variations in the high, intermediate,`.
+    두 칸 다 문장이 이어지는 글이라 그렇게 붙이면 양쪽 다 못 읽는다.
+
+    판정은 **행마다** 한다. 칸이 모두 한 줄인 행(점검표의 `항목 | YES NO`)은 종전대로
+    한 줄로 잇는 편이 낫다 — 그 줄은 실제로 한 줄이기 때문이다.
+    """
+    rules = _hrules(page)
+    if len(rules) < 2:
+        return None
+    inner = [f for f in frags if rules[0] < (f[0][1] + f[0][3]) / 2.0 < rules[-1]]
+    if len(inner) < 6:
+        return None
+    outside = [f for f in frags if f not in inner]
+    above = [f for f in outside if (f[0][1] + f[0][3]) / 2.0 <= rules[0]]
+    below = [f for f in outside if (f[0][1] + f[0][3]) / 2.0 >= rules[-1]]
+    groups, multi = [], False
+    if above:
+        groups.append(above)
+    for k in range(len(rules) - 1):
+        y0, y1 = rules[k], rules[k + 1]
+        band = [f for f in inner if y0 < (f[0][1] + f[0][3]) / 2.0 < y1]
+        if not band:
+            continue
+        cols = _split_cols(band)
+        if any(len(_row_bands(c)) > 1 for c in cols):
+            multi = True
+            groups.extend(cols)          # 칸마다 따로 — 왼쪽부터
+        else:
+            groups.append(band)          # 한 줄짜리 행은 종전대로
+    if below:
+        groups.append(below)
+    return groups if multi else None
 
 
 def _by_column(blocks, page):
