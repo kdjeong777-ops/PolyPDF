@@ -538,11 +538,18 @@ def _row_line(row) -> str:
 
 SENT_END = set('.?!。？！:;')
 JOIN_FILL = 1.0          # 오른쪽 여백까지 찼다고 보는 기준(여백 − 글자 하나)
+# 260910-4(SOT §3.7.6): 빈칸이 본문 폭의 이 비율을 넘으면 어떤 어절이 와도 문단 끝.
+#   목차·제목처럼 크게 남는 줄이 긴 낱말 하나 때문에 이어지는 것을 막는다.
+JOIN_GAP_MAX = 0.40
+# 260910-4(SOT §3.7.6 나): 한글 한 글자 목록 표시는 **가나다 차례**만 인정한다.
+#   아무 글자나 받으면 `포함)` 의 `함)` 이 목록으로 보여 문장이 끊긴다.
+KO_LIST_ORDER = "가나다라마바사아자차카타파하"
 # 줄 **간격**이 아니라 **줄 사이 거리(pitch)** 를 글자 크기로 잰다 — 간격으로 재면
 #   글자가 큰데 줄이 성긴 쪽(발표자료·서식)에서 남남인 줄이 붙는다(260910 실측).
 #   실측 pitch÷크기: 이어지는 본문 1.6~1.8 / 따로 놓인 줄 2.9.
 JOIN_PITCH = 2.2
 JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다
+_CAPTION_HEAD = None
 _LIST_HEAD = None
 
 
@@ -552,12 +559,17 @@ def _starts_list(text) -> bool:
     if _LIST_HEAD is None:
         import re
         _LIST_HEAD = re.compile(
-            r'^\s*(?:\(?\d+[.)]|\(?[가-힣][.)]|[①-⑳]|[•·▶◊▊☞*\-–—]\s|○|※)')
+            r'^\s*(?:\(?\d+[.)]|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—]\s|○|※)')
     return bool(_LIST_HEAD.match(text or ''))
 
 
-def _join_sep(a_text, b_text) -> str:
-    """두 줄을 어떻게 이을지 — 빈칸 / 붙임 / 분철 떼기 (SOT §3.7)."""
+def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
+    """두 줄을 어떻게 이을지 — 빈칸 / 붙임 / 분철 떼기 (SOT §3.7·§3.7.7).
+
+    `wrapped` 는 **어절이 안 들어가서 넘어갔는가**(④ 의 둘째 갈래). 참이면 줄이 바뀐
+    자리는 **어절 경계**이므로 한글끼리라도 빈칸을 넣는다. 거짓(줄이 여백까지 꽉 참)이면
+    낱말 가운데서 잘렸을 수 있어 붙인다 — 실측 `의무사` + `용대상` = `의무사용대상`.
+    """
     if a_text.endswith(' '):
         return ' '
     a = a_text.rstrip()
@@ -567,7 +579,7 @@ def _join_sep(a_text, b_text) -> str:
     if a.endswith('-') and ('a' <= b[0] <= 'z'):
         return '-drop'
     if _is_cjk(a[-1]) and _is_cjk(b[0]):
-        return ''
+        return ' ' if wrapped else ''
     return ' '
 
 
@@ -585,14 +597,23 @@ def join_sentences(rows) -> list:
         return list(rows)
     rights = sorted(r['rect'][2] for r in body)
     margin = rights[int(len(rights) * 0.9)]
+    # 260910-4(SOT §3.7.6 가): 본문 폭 — ④ 의 '너무 많이 남았다' 한도를 재는 자.
+    #   왼쪽도 10분위로 잡아 들여쓴 줄 하나에 흔들리지 않게 한다.
+    lefts = sorted(r['rect'][0] for r in body)
+    span = margin - lefts[int(len(lefts) * 0.1)]
     out = []
     for r in rows:
         r = dict(r)
         r.setdefault('rects', [r['rect']] if r.get('rect') else [])
         prev = out[-1] if out else None
-        if prev is not None and _can_join(prev, r, margin):
+        if prev is not None and _can_join(prev, r, margin, span):
             # ★ 조건 판정은 **마지막에 붙인 줄**로 한다(`_can_join` 안에서 `_last`).
-            sep = _join_sep(prev.get('_tail', prev['text']), r['text'])
+            # 260910-4(SOT §3.7.7): 왜 넘어갔는지가 빈칸 여부를 가른다.
+            #   어절이 안 들어가서 넘어갔으면 그 자리는 어절 경계다.
+            _ra = prev.get('_last') or prev['rect']
+            _sa = max(1.0, prev.get('size') or 0)
+            _wrapped = (margin - _ra[2]) > _sa * JOIN_FILL
+            sep = _join_sep(prev.get('_tail', prev['text']), r['text'], _wrapped)
             a = prev['text']
             if sep == '-drop':
                 a, sep = a.rstrip()[:-1], ''
@@ -612,7 +633,48 @@ def join_sentences(rows) -> list:
     return out
 
 
-def _can_join(a, b, margin) -> bool:
+def _first_word_width(b) -> float:
+    """뒷줄 **첫 어절**의 대략 폭 (SOT §3.7.6 가).
+
+    글꼴·크기를 따로 알 필요가 없게 **그 줄 자신에게서** 기준을 뽑는다 —
+    줄 폭 ÷ 글자 수로 글자 하나의 평균 폭을 구하고 첫 어절 글자 수를 곱한다.
+    한글/영문이 섞여도, 두 단 편집이라 쪽마다 폭이 달라도 스스로 맞는다.
+    """
+    t = (b.get('text') or '').strip()
+    rb = b.get('rect')
+    if not t or not rb:
+        return 0.0
+    avg = (rb[2] - rb[0]) / max(1, len(t))
+    return avg * len(t.split(' ', 1)[0])
+
+
+def _is_caption(t) -> bool:
+    """표·그림 제목으로 시작하는가 (SOT §3.7.6 다).
+
+    260910-4: 캡션은 부호로 끝나지 않고 길이도 본문과 비슷할 수 있어 ④ 만으로는
+    본문과 갈리지 않는다. 그런데 **첫머리는 규칙적이다** — `표 1` `그림 2`
+    `<표 3>` `Table 1` `Figure 2`. 그 표시를 직접 본다.
+    """
+    global _CAPTION_HEAD
+    if _CAPTION_HEAD is None:
+        import re
+        _CAPTION_HEAD = re.compile(
+            r'^\s*[\[<(]?\s*(?:표|그림|사진|도표|부표|Table|Figure|Fig|Photo)'
+            r'\s*[\]>)]?\s*[-.]?\s*\d', re.IGNORECASE)
+    return bool(_CAPTION_HEAD.match(t or ''))
+
+
+def _unclosed_paren(t) -> bool:
+    """앞줄에 닫히지 않은 `(` 가 있는가 (SOT §3.7.6 나).
+
+    있으면 뒷줄 첫머리의 `)` 는 그 괄호를 닫는 **이어지는 글**이지 목록 표시가 아니다.
+    실측: `…아스팔트 함량 시험 포` + `함)을 평가하는…` — `시험(` 이 열려 있었다.
+    """
+    t = t or ''
+    return t.count('(') > t.count(')')
+
+
+def _can_join(a, b, margin, span: float = 0.0) -> bool:
     """SOT §3.7 의 여덟 조건을 모두 본다."""
     # ★ 260910: 이미 이어 붙인 줄이면 **마지막에 붙인 줄**로 잰다. 합친 사각형으로 재면
     #   오른쪽 끝이 늘 여백까지 차 있어 ④ 가 무력해진다(문단 마지막 줄까지 붙는다).
@@ -633,8 +695,17 @@ def _can_join(a, b, margin) -> bool:
         return False                                    # ③
     sa = max(1.0, a.get('size') or (ra[3] - ra[1]))
     sb = max(1.0, b.get('size') or (rb[3] - rb[1]))
-    if ra[2] < margin - sa * JOIN_FILL:
-        return False                                    # ④ 오른쪽이 안 찼다
+    # ④ 오른쪽이 찼는가. 260910-4(SOT §3.7.6 가): 고정 문턱만 보면 **11.4pt 모자란**
+    #   줄이 탈락했는데, 뒷줄 첫 어절은 18pt 라 애초에 들어갈 수 없었다 — 문단이 끝난 게
+    #   아니라 자리가 없어 넘어간 것이다. 그래서 거의 찼으면 통과, 덜 찼으면
+    #   **그 빈칸에 뒷줄 첫 어절이 들어갔겠는가**를 묻는다.
+    gap = margin - ra[2]
+    if gap > sa * JOIN_FILL:
+        if span > 0 and gap > span * JOIN_GAP_MAX:
+            return False            # 너무 많이 남았다 — 어떤 어절이 와도 문단 끝
+        w = _first_word_width(b)
+        if w <= 0 or gap >= w:
+            return False            # 들어갔을 텐데 넘어갔다 → 문단이 끝났다
     # ⑤ 왼쪽 여백. 뒷줄이 들여써져 있으면 보통 **새 문단**이지만, 앞줄이 목록 항목의
     #   첫 줄이면(`(3) …`) 그 다음 줄들은 표시 아래로 들여쓰는 것이 정상이다
     #   (내어쓰기). 실측 지침 41쪽: 첫 줄 x=68.0, 이어지는 줄 x=86.8.
@@ -645,10 +716,16 @@ def _can_join(a, b, margin) -> bool:
     pitch = rb[1] - ra[1]                               # ⑥ 줄 사이 거리
     if pitch <= 0 or pitch > max(sa, sb) * JOIN_PITCH:
         return False
-    if _starts_list(tb):
+    # ⑦ 260910-4(SOT §3.7.6 나): 앞줄에 닫히지 않은 `(` 가 있으면 뒷줄의 `)` 는
+    #   목록 표시가 아니라 그 괄호를 닫는 이어지는 글이다.
+    if _starts_list(tb) and not _unclosed_paren(ta):
         return False                                    # ⑦
     if abs(sa - sb) > max(sa, sb) * JOIN_SIZE_TOL:
         return False                                    # ⑧
+    # ⑨ 260910-4(SOT §3.7.6 다): 표·그림 제목은 **첫머리로** 알아본다.
+    #   캡션은 부호로 끝나지 않고 길이도 본문과 비슷할 수 있어 ④ 로는 안 갈린다.
+    if _is_caption(ta):
+        return False
     return True
 
 def _classify(items):

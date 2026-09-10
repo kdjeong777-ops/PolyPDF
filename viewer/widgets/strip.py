@@ -333,6 +333,31 @@ class MiniStrip(QWidget):
             self.list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
             self.list.setMinimumHeight(0)
             self.list.setFixedHeight(self.CARD_H + 22 + 16)
+        self._fit_height(on)
+
+    def _fit_height(self, expanded: bool):
+        """260910-4(사용자 보고 "스크린샷창이 위에 떠 있어", 디자인 SOT §2.8.2).
+
+        접힌 모드에서는 **자기 내용 높이를 최대 높이로 삼는다**. 그러면 세로 분할자가
+        이 칸에 더 줄 수 없어 남는 높이가 전부 위 칸(텍스트·단어장·검색)으로 간다 —
+        스크린샷 묶음은 늘 창 아래에 붙는다. 실측: 칸 500px · 내용 213px 이었다.
+
+        §2.8.1 의 `addStretch(1)` 은 남는 높이를 **칸 안에서** 아래로 몰아 줬을 뿐,
+        칸 자체가 내용보다 큰 것은 그대로였다. 그래서 여기서 한도를 건다.
+
+        펼침 모드(스크린샷만 보기)는 격자로 세로를 채워야 하므로 한도를 푼다.
+        두 모드가 서로를 망가뜨리지 않게 **모드를 바꿀 때마다** 다시 정한다.
+        """
+        if expanded:
+            self.setMaximumHeight(16777215)
+            return
+        lay = self.layout()
+        if lay is None:
+            return
+        # 늘어나는 자리(addStretch)는 sizeHint 에 0 으로 잡히므로 그대로 내용 높이다.
+        h = lay.sizeHint().height()
+        m = lay.contentsMargins()
+        self.setMaximumHeight(max(1, h + m.top() + m.bottom()))
 
     def _renumber(self):
         """260606-17: 썸네일 아래에 표시순서 번호를 갱신."""
