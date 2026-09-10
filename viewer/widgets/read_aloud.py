@@ -163,10 +163,8 @@ class ReadAloud(QObject):
             return
         start_page = mv.current_page()
         total = self._page_count()
-        all_pages = self.mode in ("전체", "전체연속")
         self.repeat = self.mode in ("연속", "전체연속")
-        self._pages = list(range(start_page, total)) if all_pages else [start_page]
-        self._pi = 0
+        self._pages, self._pi = self._page_plan(start_page)
         tts.set_rate(self.rate)
         self._active = True
         self.stateChanged.emit(True)
@@ -203,6 +201,32 @@ class ReadAloud(QObject):
             return self._v._doc.page_count
         except Exception:
             return 1
+
+    def _page_plan(self, start: int):
+        """모드에 맞는 (읽을 쪽 목록, 시작 자리) (영상·음성 SOT §1.1).
+
+        260911(사용자 지시로 규격 확정):
+
+        | 모드 | 읽는 범위 | 끝나면 |
+        | --- | --- | --- |
+        | 1회 | 지금 쪽 | 멈춘다 |
+        | 연속 | 지금 쪽 | 그 쪽을 다시 |
+        | 전체 | **문서 전체** | 멈춘다 |
+        | 전체연속 | **문서 전체** | **첫 쪽부터 다시** |
+
+        종전에는 전체·전체연속이 **지금 쪽부터 마지막 쪽까지**였다. 그래서 뒤쪽에서
+        시작하면 읽을 쪽이 한둘뿐이고, 마지막 쪽에서 전체연속을 걸면 **그 쪽만 끝없이
+        되풀이**했다(사용자 보고 "다음 페이지로 안 넘어가고 다시 해당 페이지를 읽어").
+
+        전체는 **1쪽부터 끝까지** 읽는다. 보고 있던 쪽부터 시작하면 그 앞쪽은 영영
+        안 읽히기 때문이다('전체' 라는 말과 어긋난다). 그래서 누르면 1쪽으로 옮겨
+        시작한다 — 지금 쪽만 읽고 싶으면 1회·연속이 그 자리다.
+        """
+        total = max(1, self._page_count())
+        start = max(0, min(int(start), total - 1))
+        if self.mode in ("전체", "전체연속"):
+            return list(range(total)), 0
+        return [start], 0
 
     def _load_page(self):
         if not self._pages:
@@ -242,11 +266,7 @@ class ReadAloud(QObject):
             self.mw._study_get_tts().stop()
         except Exception:
             pass
-        total = self._page_count()
-        page = max(0, min(page, total - 1))
-        all_pages = self.mode in ("전체", "전체연속")
-        self._pages = list(range(page, total)) if all_pages else [page]
-        self._pi = 0
+        self._pages, self._pi = self._page_plan(page)
         self._load_page()
 
     def _load_owords(self, page: int):
