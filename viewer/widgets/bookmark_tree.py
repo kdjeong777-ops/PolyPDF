@@ -726,6 +726,43 @@ class BookmarkTree(QWidget):
             cur = cur.parent()
         return None
 
+    def _reveal_in_explorer(self, path: str):
+        """탐색기에서 그 파일이 든 폴더를 열고 파일을 고른다 (260910-8).
+
+        `explorer /select,` 는 폴더를 열면서 그 파일을 짚어 준다 — 폴더만 여는 것보다
+        어느 파일인지 바로 보인다. 실패하면 폴더만 연다.
+        """
+        import os
+        import subprocess
+        from PyQt6.QtCore import QUrl
+        from PyQt6.QtGui import QDesktopServices
+        p = str(path or "")
+        if not p:
+            return
+        try:
+            if os.path.exists(p):
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(p)])
+                return
+        except Exception:
+            pass
+        d = os.path.dirname(p)
+        if d and os.path.isdir(d):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(d))
+
+    def _file_path_of(self, it) -> str:
+        """임의 행 → 그 행이 속한 **파일 경로**. 없으면 빈 문자열.
+
+        260910-8: '파일 폴더 열기' 는 책갈피 행에서도 눌린다. 책갈피는 파일의 자식이라
+        위로 올라가 파일 노드를 찾는다(`_file_node_of`).
+        """
+        node = self._file_node_of(it)
+        if node is None:
+            return ""
+        try:
+            return str(node.data(0, self.DATA_FILE) or "")
+        except Exception:
+            return ""
+
     def _selected_file_nodes(self) -> list:
         """선택된 파일 노드(트리 순서·중복 제거). 폴더 행을 골랐으면 그 아래 파일 전체."""
         out, seen = [], set()
@@ -1936,6 +1973,13 @@ class BookmarkTree(QWidget):
             xfer_files = ([f] if f is not None
                           else (list(self._iter_folder_files(item))
                                 if self._is_folder_node(item) else []))
+        # 260910-8(사용자 요청): '파일 폴더 열기' 를 '파일 복사' **바로 위**에 둔다.
+        #   책갈피에서 고른 파일이 실제로 어디 있는지 탐색기로 바로 열어 본다.
+        #   편집모드가 아니어도 쓸 수 있어야 하므로 `xfer_files` 와 따로 구한다.
+        act_open_dir = None
+        _dir_target = self._file_path_of(item)
+        if _dir_target:
+            act_open_dir = menu.addAction("파일 폴더 열기")
         if xfer_files:
             n = len(xfer_files)
             # 항목은 각자 triggered 로 처리 — 아래 chosen 분기와 겹치지 않는다.
@@ -2007,6 +2051,9 @@ class BookmarkTree(QWidget):
         act_rename = menu.addAction("이름 변경")
         act_delete = menu.addAction("삭제")
         chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
+        if act_open_dir is not None and chosen is act_open_dir:
+            self._reveal_in_explorer(_dir_target)
+            return
         if chosen is None:
             return
         if chosen == act_exp_all:                       # 260908-1

@@ -46,6 +46,14 @@ _NUMRUN_CHARS = _NUM_CHARS | set(_LOOKALIKE) | {' '}
 COL_GAP = 2.5           # 이보다 넓게 벌어지면 '다른 칸' — " | " 로 잇는다
 CELL_SEP = " | "
 COL_ALIGN = 0.40        # 단으로 보려면 왼쪽 끝이 이 비율 이상 맞아야 한다
+# 260910-8(SOT §3.6.4): 단 사이 빈 띠의 최소 폭(쪽 너비 대비).
+#   실측 0.012~0.038 — 종전 0.04 는 **실제 2단 쪽을 하나도 통과시키지 못했다**.
+COL_GUTTER_MIN = 0.015
+# 본문 폭의 이 비율을 넘게 걸치는 **조각**은 전폭 줄(제목·머리띠·넓은 캡션)이다.
+COL_FULL = 0.60
+# 한쪽 단이 다른 쪽보다 이 비율보다 좁으면 **단이 아니라 값 칸**이다(목차의 쪽번호 등).
+#   실측: 목차 0.06~0.09 / 진짜 2단 0.45~1.87.
+COL_WIDTH_MIN = 0.25
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
 
 
@@ -160,7 +168,21 @@ def _gutter_x(bands, page):
         return None
     if w <= 0 or len(bands) < 6:
         return None
-    allow = max(1, int(len(bands) * 0.15))       # 전폭 제목 등은 이만큼 봐준다
+    # 260910-8(SOT §3.6.4): **전폭 조각은 세지 않는다.** 제목·머리띠·넓은 캡션이
+    #   가운데를 가로지른다고 그 쪽이 2단이 아닌 것은 아니다 — 사용자 보고
+    #   "위에 전체 내용이 있거나 중간에 사진이 있을 경우" 가 바로 이것이다.
+    #   폭은 **띠가 아니라 조각 하나**로 잰다. 좌·우 단의 두 줄이 한 띠에 묶이면
+    #   띠 폭은 늘 전폭이라, 띠로 재면 본문까지 전폭으로 오해한다(실측: 38줄 중 24줄).
+    try:
+        _f = [f for bd in bands for f in bd["items"]]
+        _body = max(1.0, max(x[0][2] for x in _f) - min(x[0][0] for x in _f))
+    except Exception:
+        _body = w
+    bands = [bd for bd in bands
+             if max(f[0][2] - f[0][0] for f in bd["items"]) < COL_FULL * _body] or bands
+    if len(bands) < 6:
+        return None
+    allow = max(1, int(len(bands) * 0.15))       # 남은 줄 중 이만큼은 봐준다
     lo, hi = mid - 0.15 * w, mid + 0.15 * w
     step = max(0.5, w / 400.0)
     best_a = best_b = None
@@ -181,7 +203,7 @@ def _gutter_x(bands, page):
             if best_a is None or (x - a) > (best_b - best_a):
                 best_a, best_b = a, x
         x += step
-    if best_a is None or (best_b - best_a) < 0.04 * w:
+    if best_a is None or (best_b - best_a) < COL_GUTTER_MIN * w:
         return None
     gx = (best_a + best_b) / 2.0
     frags = [f for bd in bands for f in bd["items"]]
@@ -195,7 +217,23 @@ def _gutter_x(bands, page):
     #   — 실제로 배합설계 서식이 그렇게 갈라져 한 행이 두 줄이 됐다(260908-7).
     if _left_edge_share(left) < COL_ALIGN or _left_edge_share(right) < COL_ALIGN:
         return None
+    # 260910-8(SOT §3.6.4): **한쪽이 지나치게 좁으면 단이 아니다.** 목차는 왼쪽에 제목,
+    #   오른쪽에 쪽번호가 놓여 위 관문을 모두 지나간다. 그런데 그것을 2단으로 갈라
+    #   읽으면 제목이 전부 나온 뒤 쪽번호가 몰려 나와 짝이 끊긴다.
+    #   실측(가운데 폭): 목차 0.06~0.09 / 진짜 2단 0.45~1.87.
+    lw = _median_w(left)
+    rw = _median_w(right)
+    if max(lw, rw) <= 0 or min(lw, rw) / max(lw, rw) < COL_WIDTH_MIN:
+        return None
     return gx
+
+
+def _median_w(frags) -> float:
+    """조각 폭의 중앙값 (SOT §3.6.4). 한두 줄이 길어도 흔들리지 않게 중앙값을 쓴다."""
+    ws = sorted((f[0][2] - f[0][0]) for f in frags)
+    if not ws:
+        return 0.0
+    return ws[len(ws) // 2]
 
 
 def _left_edge_share(frags) -> float:
@@ -210,14 +248,44 @@ def _left_edge_share(frags) -> float:
 
 
 def _by_column(blocks, page):
-    """[[조각…]] — 2단이면 좌·우 두 묶음, 아니면 한 묶음(읽기 순서 유지)."""
+    """[[조각…]] — 읽는 차례대로 나눈 묶음들 (SOT §3.6.4).
+
+    260910-8(사용자 보고 "2단인데 위에 전체 내용이 있거나 중간에 사진이 있을 경우
+    단 구분 없이 읽는다"): 종전에는 쪽 전체를 **좌 한 덩어리 · 우 한 덩어리**로만
+    갈랐다. 그러면 전폭 제목이 어느 한쪽 단의 글 사이에 끼어 들어간다.
+
+    이제 쪽을 세로로 **토막 낸다** — 전폭 줄은 제 자리에 그대로 두고, 그 사이의
+    2단 구역만 좌·우로 가른다. 그래서 나오는 차례는
+
+        전폭 제목 → (구역1 좌 → 구역1 우) → 전폭 사진 설명 → (구역2 좌 → 구역2 우)
+
+    로, 사람이 읽는 차례와 같다.
+    """
     frags = [f for _bb, lines in blocks for f in lines]
-    gx = _gutter_x(_row_bands(frags), page)
+    bands = _row_bands(frags)
+    gx = _gutter_x(bands, page)
     if gx is None:
         return [frags]
-    left = [f for f in frags if (f[0][0] + f[0][2]) / 2.0 < gx]
-    right = [f for f in frags if (f[0][0] + f[0][2]) / 2.0 >= gx]
-    return [left, right]
+    groups, left, right = [], [], []
+
+    def _flush():
+        if left:
+            groups.append(list(left))
+            left.clear()
+        if right:
+            groups.append(list(right))
+            right.clear()
+
+    for bd in sorted(bands, key=lambda b: (b["y0"], b["y1"])):
+        # 가운데를 실제로 가로지르는 조각이 있으면 그 줄은 전폭이다.
+        if any(f[0][0] < gx < f[0][2] for f in bd["items"]):
+            _flush()                      # 앞 구역을 좌→우 차례로 닫고
+            groups.append(list(bd["items"]))   # 전폭 줄을 제 자리에 둔다
+            continue
+        for f in bd["items"]:
+            (left if (f[0][0] + f[0][2]) / 2.0 < gx else right).append(f)
+    _flush()
+    return [g for g in groups if g]
 
 
 def _is_cjk(ch) -> bool:

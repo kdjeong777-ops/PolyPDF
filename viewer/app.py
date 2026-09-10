@@ -2748,9 +2748,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not cur or mv._doc is None:
             return
         page = mv.current_page()
-        try:
-            n_pages = int(mv._doc.page_count())
-        except Exception:
+        # 260910-8(사용자 보고 "'문서 전체' 인데 보고 있던 쪽까지만 읽는다", SOT §3.1.2):
+        #   `page_count` 는 **속성**이다. `page_count()` 로 부르면 TypeError 가 나고
+        #   조용한 except 가 `page + 1` 로 떨어뜨려, '문서 전체' 가 **1쪽~현재 쪽**이 됐다.
+        #   대화상자는 받은 쪽수를 그대로 믿었으니 화면에도 그 수가 맞게 보였다.
+        n_pages = int(getattr(mv._doc, "page_count", 0) or 0)
+        if n_pages <= 0:
             n_pages = page + 1
         from PyQt6.QtWidgets import QDialog, QProgressDialog
         from viewer.widgets.ocr_options_dialog import OcrOptionsDialog
