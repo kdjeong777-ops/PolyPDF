@@ -843,6 +843,17 @@ class _PdfGraphicsView(QGraphicsView):
         self._edge_dir = 0                    # 닿아 있는 경계(+1 아래끝 / -1 위끝)
         self._edge_ms = 0.0                   # 그 경계에 닿은 시각(ms)
         self._edge_sum = 0                    # 닿은 뒤 굴린 양의 합
+        # 260910-6(마스터 SOT §19.1.3): 1회성 설정은 여기 — 종전에는 이 네 줄이
+        #   mouseMoveEvent 맨 끝에 있어 **마우스가 움직일 때마다** 실행됐다.
+        #   실측상 정책 값은 load_document/load_image 와 같아 증상은 없었으나,
+        #   _image_mode 는 실제로 덮어써졌고(첫 이동에 True→False) 생성 직후에는
+        #   속성 자체가 없었다. 이벤트 처리기는 그 이벤트만 처리한다.
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        # v1.6.8 F1: 메인 PDF 는 내장 세로바 숨김(doc_scroll 이 대신 표시).
+        #            load_document/load_image 에서 모드별로 정책 재설정.
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._image_mode = False              # v1.6.8 F3: 이미지 모드면 휠=일반 스크롤
         self.setRenderHints(
             QPainter.RenderHint.Antialiasing
             | QPainter.RenderHint.SmoothPixmapTransform
@@ -1084,12 +1095,6 @@ class _PdfGraphicsView(QGraphicsView):
         except Exception:
             pass
         super().mouseMoveEvent(event)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        # v1.6.8 F1: 메인 PDF 는 내장 세로바 숨김(doc_scroll 이 대신 표시).
-        #            load_document/load_image 에서 모드별로 정책 재설정.
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self._image_mode = False              # v1.6.8 F3: 이미지 모드면 휠=일반 스크롤
 
     # 260910-5(마스터 SOT §19.1.2): 경계를 넘기려면 **둘 다** 넘어야 한다.
     EDGE_HOLD_MS = 350        # 경계에 닿고 이만큼은 넘기지 않는다
