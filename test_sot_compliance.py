@@ -190,6 +190,43 @@ if HAVE_SOT:
         if any(d in txt for d in delegated):
             continue
         chk(hdr in txt, "§0 changelog 가 3열 표 형식 — " + name)
+
+print(NL + "=== CLAUDE.md §4 — 연대기는 §0 안에, 날짜 내림차순 (260910-7) ===")
+# 마스터의 연대기 행 35개가 문서 앞머리 '문서 지도' 표(인용문 `>`) 안으로 새어 있었다.
+#   `>` 없는 행이 인용문을 끊어 **문서 지도 표가 머리글만 남아 깨졌고**, 날짜가 가장
+#   최근인 행이 문서 11번째 줄에 있어 다음 사람이 '§0 최상단' 을 찾으면 그 자리에 또
+#   넣게 됐다 — beta.108 부터 beta.146 까지 실제로 그렇게 자랐다.
+#   되돌리는 것만으로는 재발한다. 그래서 여기서 검사한다(이 파일 첫머리의 태도 그대로).
+if HAVE_SOT:
+    CROW = re.compile(r"^[|]\s*(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9])\s*[|]")
+    for name, txt in SOTS.items():
+        if name == "CLAUDE.md" or "아카이브" in name:
+            continue
+        if any(d in txt for d in delegated):
+            continue
+        lines = txt.splitlines()
+        h0 = next((i for i, l in enumerate(lines) if l.startswith("## 0.")), -1)
+        if h0 < 0:
+            continue
+        # ⓐ §0 머리글 **앞**의 연대기 행 = 다른 표 안에 끼어든 것이다
+        early = [i + 1 for i in range(h0) if CROW.match(lines[i])]
+        chk(not early, "ⓐ 연대기 행이 §0 앞에 없다 — " + name,
+            ("줄 " + str(early[:3]) + " 등 " + str(len(early)) + "행") if early else "")
+        # ⓑ §0 표의 날짜가 내림차순 — 표 **한가운데** 잘못 끼우는 것까지 잡는다
+        i = h0
+        while i < len(lines) and not lines[i].startswith("| ---"):
+            i += 1
+        i += 1
+        body = []
+        while i < len(lines) and lines[i].startswith("|"):
+            body.append(lines[i])
+            i += 1
+        ds = [CROW.match(l).group(1) for l in body if CROW.match(l)]
+        rev = [k for k in range(1, len(ds)) if ds[k] > ds[k - 1]]
+        chk(not rev, "ⓑ §0 연대기가 날짜 내림차순 — " + name,
+            (str(len(rev)) + "곳 역행 "
+             + str([ds[k - 1] + "->" + ds[k] for k in rev[:2]])) if rev
+            else str(len(ds)) + "행")
 # SOT 문서는 공개 저장소에 들어가지 않는다(패턴이 아니라 git 판정으로 확인)
 if HAVE_SOT:
     names = [n for n in SOTS if n != "CLAUDE.md"] + ["CLAUDE.md"]
