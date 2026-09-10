@@ -364,6 +364,65 @@ chk(any("왼쪽 단 마지막" in t for t in texts), "(16) 그 줄은 그대로 
 chk(any("범례" in t for t in texts), "(16) 범례도 그대로 남는다")
 
 print()
+print("=== (17) 본문 읽기도 단 차례로 (§3.6.9) ===")
+
+
+def _w(surface, x0, y0, x1, y1):
+    return {"surface": surface, "x0": x0, "y0": y0, "x1": x1, "y1": y1}
+
+
+# 전폭 제목 한 줄 + 2단 본문 (좌표는 pt, dpi=0)
+ws = [_w("MOVING", 57.0, 80.0, 236.0, 118.0),
+      _w("BEYOND", 251.0, 80.0, 440.0, 118.0)]
+for k in range(8):
+    y = 140.0 + k * 14.0
+    ws.append(_w("left%d" % k, 60.0, y, 200.0, y + 10.0))
+    ws.append(_w("right%d" % k, 320.0, y, 460.0, y + 10.0))
+
+got = tx.words_in_reading_order(ws, dpi=0, page=pg)
+names = [w["surface"] for w in got]
+chk(len(got) == len(ws), "(17) 낱말을 하나도 잃지 않는다", "%d/%d" % (len(got), len(ws)))
+chk(names[:2] == ["MOVING", "BEYOND"],
+    "(17) 전폭 제목이 좌·우로 찢어지지 않는다", str(names[:2]))
+li = [i for i, n in enumerate(names) if n.startswith("left")]
+ri = [i for i, n in enumerate(names) if n.startswith("right")]
+chk(max(li) < min(ri), "(17) 왼쪽 단을 다 읽은 뒤 오른쪽 단",
+    "왼쪽 마지막 %d < 오른쪽 처음 %d" % (max(li), min(ri)))
+chk(names[2:2+8] == ["left%d" % k for k in range(8)],
+    "(17) 왼쪽 단은 위에서 아래로", str(names[2:6]))
+
+chk(tx.words_in_reading_order([], dpi=0, page=pg) == [],
+    "(17) 빈 목록은 그대로")
+chk(tx.words_in_reading_order(ws, dpi=0, page=None) == ws,
+    "(17) 쪽이 없으면 손대지 않는다")
+bad = [{"surface": "x"}]
+chk(tx.words_in_reading_order(bad, dpi=0, page=pg) == bad,
+    "(17) 좌표를 못 읽으면 원래 차례를 지킨다")
+
+print()
+print("=== (18) 칸 빈틈은 글자 크기를 따른다 (§3.6.9) ===")
+chk(tx.CELL_GAP_H == 0.60, "(18) 비율이 상수다", str(tx.CELL_GAP_H))
+big = [row("MOVING", 57.0, 80.0, 236.0, 118.0, size=37.0),
+       row("BEYOND", 251.0, 80.0, 440.0, 118.0, size=37.0)]
+chk(len(tx._split_cols(big)) == 1,
+    "(18) 큰 제목의 넓은 낱말 사이(14.8pt)는 같은 칸", str(len(tx._split_cols(big))))
+small = [row("항목", 60.0, 100.0, 200.0, 110.0),
+         row("값", 214.0, 100.0, 300.0, 110.0)]
+chk(len(tx._split_cols(small)) == 2,
+    "(18) 본문 크기에서는 6pt 기준 그대로", str(len(tx._split_cols(small))))
+
+print()
+print("=== (19) 읽기가 텍스트 창과 같은 글을 쓴다 ===")
+import inspect as _i2
+from viewer.widgets.read_aloud import ReadAloud
+_pt = _i2.getsource(ReadAloud._page_text)
+chk("clean_page_texts" in _pt, "(19) 텍스트 창이 정제한 글을 먼저 쓴다")
+chk("extract_text" in _pt, "(19) 실패하면 종전 길로 물러선다")
+_lo = _i2.getsource(ReadAloud._load_owords)
+chk("words_in_reading_order" in _lo,
+    "(19) 강조용 낱말도 같은 차례로 — 글과 어긋나면 강조가 튄다")
+
+print()
 print("=== (7) OCR '문서 전체' 가 진짜 전체다 (§3.1.2) ===")
 from viewer.app import MainWindow
 src = inspect.getsource(MainWindow._on_text_need_ocr)

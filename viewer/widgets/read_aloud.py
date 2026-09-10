@@ -262,6 +262,15 @@ class ReadAloud(QObject):
             self._owords = store.get_page_words(fk, page)
             dpi = store.get_page_dpi(fk, page)
             self._oscale = (72.0 / dpi) if dpi > 0 else 1.0
+            # 260911(SOT §3.6.9): 글을 단 차례로 읽으니 **낱말도 같은 차례**여야 한다.
+            #   글은 단 차례인데 낱말이 OCR 차례면 강조가 엉뚱한 자리로 튄다.
+            try:
+                from viewer import text_extract2 as tx
+                pg = self._v._doc.doc.load_page(int(page))
+                self._owords = tx.words_in_reading_order(
+                    self._owords, dpi=int(dpi or 0), page=pg)
+            except Exception:
+                pass
         except Exception:
             self._owords = []
 
@@ -397,6 +406,42 @@ class ReadAloud(QObject):
             self.stop()
 
     def _page_text(self, page: int) -> str:
+        """읽을 글 — **텍스트 창이 보여 주는 것과 같은 글** (SOT §3.6.9).
+
+        260911(사용자 보고 "OCR 다시 읽기로 텍스트 창은 잘 구성되는데 본문 읽기는
+        2단을 그냥 1단처럼 읽는다"): 종전에는 `study.db` 의 **날것 OCR 글**이나 PDF
+        글자층을 그대로 읽었다. 둘 다 줄 단위로 쪽을 가로지르므로 2단 쪽에서는 왼쪽
+        단 한 줄, 오른쪽 단 한 줄을 번갈아 읽는다.
+
+        이제 `clean_page_texts`(§3.1.5)를 먼저 쓴다 — 단 가르기·표 칸·문장 잇기·
+        잡음 거르기를 다 거친 글이다. 실패하면 종전 두 길로 물러선다.
+        """
+        try:
+            from viewer import text_extract2 as tx
+            from viewer.study.study_store import file_key_for
+            cur = self._v.current_file()
+            if cur:
+                look = None
+                try:
+                    store = self.mw._study_get_store()
+                    fk = file_key_for(cur)
+
+                    def _look(pno, _s=store, _k=fk):
+                        try:
+                            return (_s.get_page_words(_k, pno),
+                                    _s.get_page_dpi(_k, pno))
+                        except Exception:
+                            return (None, 0)
+                    look = _look
+                except Exception:
+                    look = None
+                got = tx.clean_page_texts(cur, [int(page)], words_lookup=look)
+                if got:
+                    t = (got[0][1] or "").strip()
+                    if len(t) > 20:
+                        return t
+        except Exception:
+            pass
         # 1) 단어장(study.db) OCR 텍스트 우선(스캔본 정확) — 대상 창의 파일 기준
         try:
             from viewer.study.study_store import file_key_for

@@ -57,6 +57,7 @@ COL_WIDTH_MIN = 0.25
 # 260910-9(SOT §3.6.5): 표의 **가로 줄**로 행을 가른다. 그 행 안의 어느 칸이든
 #   두 줄 이상이면 **칸 단위로** 읽는다 — 줄 단위로 이으면 칸끼리 뒤섞인다.
 CELL_GAP = 6.0          # 칸 사이 가로 빈틈(pt). 이보다 벌어지면 다른 칸
+CELL_GAP_H = 0.60       # 글자 높이의 이 비율도 넘어야 다른 칸(큰 제목 대비)
 HRULE_SPAN = 0.50       # 본문 폭의 이 비율을 넘는 가로 줄만 '행 구분선'
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
 
@@ -290,19 +291,30 @@ def _hrules(page) -> list:
 
 
 def _split_cols(frags) -> list:
-    """한 행 안의 조각을 **가로 빈틈**으로 칸마다 나눈다 (SOT §3.6.5)."""
+    """한 행 안의 조각을 **가로 빈틈**으로 칸마다 나눈다 (SOT §3.6.5).
+
+    260911(SOT §3.6.9): 빈틈 기준은 **글자 크기에 따라** 커진다. 큰 제목은 낱말
+    사이가 원래 넓어(실측 `MOVING`~`BEYOND` **14.8pt**, 글자 높이 37.5) 고정 6pt 로
+    자르면 제목 한 줄이 낱말마다 쪼개지고, 그러면 좌·우 단으로 찢어진다.
+    본문(높이 10 안팎)에서는 6pt 그대로다.
+    """
     if not frags:
         return []
     order = sorted(frags, key=lambda f: (f[0][0], f[0][1]))
-    cols, cur, edge = [], [order[0]], order[0][0][2]
+    cols, cur = [], [order[0]]
+    edge = order[0][0][2]
+    hi = order[0][0][3] - order[0][0][1]
     for f in order[1:]:
-        if f[0][0] - edge > CELL_GAP:
+        h = max(hi, f[0][3] - f[0][1])
+        if f[0][0] - edge > max(CELL_GAP, h * CELL_GAP_H):
             cols.append(cur)
             cur = [f]
             edge = f[0][2]
+            hi = f[0][3] - f[0][1]
         else:
             cur.append(f)
             edge = max(edge, f[0][2])
+            hi = max(hi, f[0][3] - f[0][1])
     cols.append(cur)
     return cols
 
@@ -383,12 +395,25 @@ def _by_column(blocks, page, word_level: bool = False):
     로, 사람이 읽는 차례와 같다.
     """
     frags = [f for _bb, lines in blocks for f in lines]
+    # 260910-11(SOT §3.6.7)·260911(§3.6.9): 낱말 상자로 들어오면 **줄 조각으로 묶어**
+    #   판정도 차례도 그 위에서 한다. 낱말 하나는 가운데를 가로지를 수 없어, 낱말로
+    #   전폭을 따지면 전폭 제목이 좌·우로 찢어진다(실측: `MOVING` 은 왼쪽, `BEYOND`
+    #   는 오른쪽). 조각으로 묶으면 제목 한 줄이 통째로 전폭이 된다.
+    #   내보낼 때는 **원래 낱말로 되돌린다** — `_merge_rows` 의 간격 규칙이 살아야 한다.
+    owners = None
+    if word_level:
+        pieces, owners = [], {}
+        for bd in _row_bands(frags):
+            for grp in _split_cols(bd["items"]):
+                g = sorted(grp, key=lambda q: q[0][0])
+                rect = (min(f[0][0] for f in g), min(f[0][1] for f in g),
+                        max(f[0][2] for f in g), max(f[0][3] for f in g))
+                pc = (rect, " ".join(f[1] for f in g), max(f[2] for f in g))
+                pieces.append(pc)
+                owners[id(pc)] = g
+        frags = pieces
     bands = sorted(_row_bands(frags), key=lambda b: (b["y0"], b["y1"]))
-    # 260910-11(SOT §3.6.7): 낱말 상자로 들어온 경우 **판정만** 줄 조각으로 한다.
-    #   차례를 세우는 것은 원래 조각 그대로여야 `_merge_rows` 의 간격 규칙이 산다.
-    _det = sorted(_row_bands(_line_pieces(frags)),
-                  key=lambda b: (b["y0"], b["y1"])) if word_level else bands
-    gx = _gutter_x(_det, page)
+    gx = _gutter_x(bands, page)
     if gx is None:
         return [frags]
     tail = _tail_band_start(bands)     # 260910-10: 꼬리말 띠는 단에 넣지 않는다
@@ -427,7 +452,10 @@ def _by_column(blocks, page, word_level: bool = False):
         for f in bd["items"]:
             (left if (f[0][0] + f[0][2]) / 2.0 < gx else right).append(f)
     _flush()
-    return [g for g in groups if g]
+    groups = [g for g in groups if g]
+    if owners is not None:      # 조각을 원래 낱말로 되돌린다
+        groups = [[w for pc in g for w in owners.get(id(pc), [pc])] for g in groups]
+    return groups
 
 
 def _tail_band_start(bands):
@@ -1184,6 +1212,49 @@ def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
     styles = _classify(items)
     return [{'text': t, 'style': st, 'rect': r, 'kind': 'text', 'size': sz}
             for (r, t, sz), st in zip(items, styles)]
+
+def words_in_reading_order(words, *, dpi: int = 0, page=None) -> list:
+    """OCR 낱말을 **읽는 차례**로 다시 늘어놓는다 (SOT §3.6.9).
+
+    260911(사용자 보고 "본문 읽기가 2단을 1단처럼 읽는다"): `study.db` 의 낱말은
+    **OCR 이 준 차례** 그대로다 — 줄 단위로 쪽을 가로지르므로 2단 쪽에서는 왼쪽 단
+    한 줄, 오른쪽 단 한 줄이 번갈아 나온다.
+
+    텍스트 창은 §3.6 의 규칙으로 이미 단을 갈라 읽는다. 읽기(TTS)와 그 강조도
+    **같은 차례**를 써야 한다 — 글은 단 차례인데 낱말은 OCR 차례면 강조가 엉뚱한
+    자리로 튄다. 그래서 같은 `_by_column` 을 태워 낱말 자체를 다시 늘어놓는다.
+
+    돌려주는 것은 **원래 낱말 dict 그대로**(좌표·surface 보존), 차례만 바뀐다.
+    """
+    src = list(words or [])
+    if not src or page is None:
+        return src
+    k = 1.0 if not dpi else 72.0 / float(dpi)
+    frags, keep = [], []
+    for w in src:
+        try:
+            x0, y0 = float(w['x0']) * k, float(w['y0']) * k
+            x1, y1 = float(w['x1']) * k, float(w['y1']) * k
+        except Exception:
+            return src                      # 좌표를 못 읽으면 손대지 않는다
+        frags.append(((x0, y0, x1, y1), str(w.get('surface') or ''),
+                      max(1.0, y1 - y0)))
+        keep.append(w)
+    pos = {id(f): i for i, f in enumerate(frags)}
+    try:
+        groups = _by_column([((0, 0, 0, 0), frags)], page, word_level=True)
+    except Exception:
+        return src
+    out = []
+    for grp in groups:
+        for bd in sorted(_row_bands(grp), key=lambda b: (b["y0"], b["y1"])):
+            for f in sorted(bd["items"], key=lambda q: q[0][0]):
+                i = pos.get(id(f))
+                if i is not None:
+                    out.append(keep[i])
+    # 하나라도 빠지면 원래 차례를 쓴다 — 읽다 마는 것보다 낫다
+    return out if len(out) == len(src) else src
+
 
 def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
     """글자층 줄 + **그림 속에만 있던** OCR 줄 (SOT §3.1.3, 260909-2).
