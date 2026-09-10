@@ -131,9 +131,9 @@ if not defined TESS_ARG (
   echo       CI 는 release.yml 의 'Verify OCR bundle' 이 여기서 실패시킨다.
 ) else (
   echo     - tesseract 트리 동봉
-  if exist "tesseract	essdata\kor.traineddata"        echo     - kor.traineddata ^(tessdata^)
-  if exist "tesseract\share	essdata\kor.traineddata" echo     - kor.traineddata ^(share	essdata^)
-  if not exist "tesseract	essdata\kor.traineddata" if not exist "tesseract\share	essdata\kor.traineddata" echo     ^^! kor.traineddata 없음 — 한국어 OCR 이 안 된다.
+  if exist "tesseract\tessdata\kor.traineddata"        echo     - kor.traineddata ^(tessdata^)
+  if exist "tesseract\share\tessdata\kor.traineddata" echo     - kor.traineddata ^(share\tessdata^)
+  if not exist "tesseract\tessdata\kor.traineddata" if not exist "tesseract\share\tessdata\kor.traineddata" echo     ^^! kor.traineddata 없음 — 한국어 OCR 이 안 된다.
 )
 echo(
 set NLTK_ARG=

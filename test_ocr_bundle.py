@@ -27,6 +27,8 @@ from pathlib import Path
 
 ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
 NL = chr(10)
+TAB = chr(9)
+BS = chr(92)          # 경로 역슬래시는 상수로 — 리터럴에 쓰면 또 뭉개진다
 fails = []
 
 
@@ -72,6 +74,21 @@ chk("OCR 동봉 점검" in bat, "③ 동봉 여부를 화면에 남긴다")
 chk("kor.traineddata" in bat, "③ kor 유무를 따로 알린다")
 chk("TESS_ARG" in bat, "③ 동봉 인자를 쓴다")
 
+# 260910-2: 진단이 **거짓말을 하지 않는가**. 실제로 겪은 사고 —
+#   패치 스크립트가 `tesseract\tessdata` 의 역슬래시+t 를 **탭 문자**로 바꿔 넣어
+#   `if exist` 가 영원히 거짓이 되었다. kor 은 동봉됐는데 "없음" 이라 찍혔다.
+#   동봉 자체는 멀쩡하니 빌드는 성공하고, 화면만 반대로 말한다 — 가장 나쁜 형태다.
+#   탭은 배치 경로에 쓸 일이 없으므로 **탭이 하나라도 있으면 그 사고**로 본다.
+chk(TAB not in bat,
+    "③ 배치에 탭 문자가 없다(경로의 역슬래시+t 가 탭으로 뭉개진 흔적)",
+    "탭 %d 곳" % bat.count(TAB))
+# 두 배치(layout)를 모두 본다: CI 는 tesseract+tessdata, 개발 기계(micromamba)는
+#   tesseract+share+tessdata 에 둔다. 한쪽만 보면 다른 쪽에서 또 거짓말한다.
+_CI_TD  = BS.join(["tesseract", "tessdata", "kor.traineddata"])
+_DEV_TD = BS.join(["tesseract", "share", "tessdata", "kor.traineddata"])
+chk(_CI_TD in bat,  "③ CI 배치를 본다", _CI_TD)
+chk(_DEV_TD in bat, "③ 개발 배치를 본다", _DEV_TD)
+
 print(NL + "=== ④ 런타임이 kor 이 든 폴더를 고른다 ===")
 from viewer.study import ocr as so
 src = inspect.getsource(so.ensure_tesseract)
@@ -99,6 +116,17 @@ csrc = inspect.getsource(sc)
 chk("_detect_study_lang(path)" not in csrc.split("StudyBuildWorker(path, lang=")[1][:80]
     if "StudyBuildWorker(path, lang=" in csrc else True,
     "⑤ 부르는 쪽이 옛 판정을 넘기지 않는다")
+
+print(NL + "=== ⑥ 이 기계의 트리와 진단이 어긋나지 않는다 ===")
+tree = ROOT / "tesseract"
+if not tree.exists():
+    print("SKIP - 이 기계에는 tesseract 트리가 없다(CI 체크아웃과 같은 상태)")
+else:
+    hits = sorted(str(q.relative_to(ROOT)) for q in tree.rglob("kor.traineddata"))
+    chk(bool(hits), "⑥ 트리에 kor.traineddata 가 있다", str(hits))
+    for h in hits:
+        chk(h.replace("/", BS) in bat,
+            "⑥ 진단이 그 경로를 실제로 검사한다", h)
 
 print(NL + "=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for m in fails:
