@@ -141,7 +141,7 @@ OWNER_RULES = [
     (("test_img2pdf", "test_image_pdf"), "이미지 PDF 변환"),
     (("test_media_", "test_tts_", "test_record_"), "영상 및 음성"),
     (("test_folder_scan", "test_ui_stall", "test_perf_", "test_prefs_allowlist",
-      "test_tool_cancel", "test_startup_open", "test_sot_compliance"), "응답성"),
+      "test_tool_cancel", "test_startup_open", "test_sot_"), "응답성"),
     (("test_theme_", "test_design_", "test_draw_tools"), "화면 디자인"),
 ]
 
