@@ -1300,18 +1300,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         _sp = QWidget(); _sp.setFixedWidth(20)
         self._panel_toolbar.addWidget(_sp)
         lab("도구")
+        # 260911-1(사용자 지시, 디자인 SOT §2.9·§2.9.1): 차례의 뜻은 **얼마나 자주 쓰는가** —
+        #   읽기(OCR) → 그 결과로 만드는 것(단어장·책갈피) → 문서를 합치고 바꾸는 일
+        #   → 어찌다 한 번 쓰는 일(암호화). `도구(&T)` 메뉴 첫 구역이 **같은 차례**다.
+        mk("OCR", "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)",
+           self._action_ocr_read)
+        mk("단어장 생성", "파일 → 단어장 생성", self._action_build_study)
+        mk("책갈피 생성", "파일 → 책갈피 자동 생성", self.action_open_bookmarker)
         self._btn_merge = mk("PDF병합", "파일 → PDF 병합", lambda: self._on_merge_files(None))
         self._btn_img2pdf = mk("이미지→PDF", "이미지 파일 → PDF 변환",
                                lambda: self.action_image_to_pdf())  # 260825-13
-        self._btn_tr = mk("번역", "PDF 번역 (목록 창)", lambda: self._action_translate_files())  # 260623
-        mk("책갈피 생성", "파일 → 책갈피 자동 생성", self.action_open_bookmarker)
-        mk("단어장 생성", "파일 → 단어장 생성", self._action_build_study)
-        # 260910(사용자 지시): OCR 을 도구에서 바로 — 범위·언어·워터마크를 고르는 창이
-        #   먼저 열린다(텍스트 창 SOT §3.1.2). 텍스트 창을 열어 두지 않아도 쓸 수 있게.
-        mk("OCR", "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)",
-           self._action_ocr_read)
-        mk("암호화", "현재 PDF에 암호·권한 설정(암호화 저장)", self.action_encrypt_pdf)
         self._btn_shot_pdf = mk("스크린샷 PDF 저장", "스크린샷 전체를 PDF로", self.action_save_screenshot_pdf)
+        mk("암호화", "현재 PDF에 암호·권한 설정(암호화 저장)", self.action_encrypt_pdf)
+        # `번역` 은 지시 목록에 없다 — 지우라는 뜻이 아니라 자리를 정하지 않은 것으로 읽어 맨 뒤에 둔다.
+        self._btn_tr = mk("번역", "PDF 번역 (목록 창)", lambda: self._action_translate_files())  # 260623
 
         # 260616-3: 패널 툴바 오른쪽 끝에 검색 입력창(돋보기 + '검색').
         #   Enter 시 검색 실행 + 검색창(검색 탭)이 숨겨져 있으면 보이게 함.
@@ -1518,17 +1520,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             m_tools.addAction(a)
             return a
 
-        # 📄 PDF 및 문서 작업
-        m_tools.addSection("📄 PDF 및 문서 작업")
+        # 🧰 도구 — 260911-1(사용자 지시): 패널 툴바 '도구' 그룹과 **같은 차례**.
+        #   같은 것을 두 곳에서 다른 차례로 보여 주지 않는다(디자인 SOT §2.9.1).
+        m_tools.addSection("🧰 도구")
+        _act("OCR 로 읽기 (쪽 범위·언어·워터마크)...", self._action_ocr_read)
+        _act("단어장 생성 (OCR·어휘)...", self._action_build_study)
+        _act("책갈피 자동 생성...", self.action_open_bookmarker)
         a_merge = self._sc_act_merge = _act("PDF 병합...", lambda: self._on_merge_files(None))
         _act("이미지 → PDF 변환...", lambda: self.action_image_to_pdf())  # 260825-13
-        _act("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)...", self._action_save_decorated_pdf)
+        _act("스크린샷 PDF 저장...", self.action_save_screenshot_pdf)
+        _act("암호화 (암호·권한 설정)...", self.action_encrypt_pdf)
+        self._act_tr_files = _act("PDF번역", self._action_translate_files)
 
-        # 🔖 책갈피 및 단어장 생성
-        m_tools.addSection("🔖 책갈피 및 단어장 생성")
+        # 📄 그 밖의 PDF·생성 작업 — 옆의 두 구역이 한 항목씩만 남아 합쳤다.
+        m_tools.addSection("📄 그 밖의 PDF·생성 작업")
         _act("단어장·책갈피 동시 생성...", self._action_build_study_and_bookmarks)
-        _act("책갈피 자동 생성...", self.action_open_bookmarker)
-        _act("단어장 생성 (OCR·어휘)...", self._action_build_study)
+        _act("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)...", self._action_save_decorated_pdf)
 
         # 📖 사전 및 용어집 관리
         m_tools.addSection("📖 사전 및 용어집 관리")
@@ -1541,10 +1548,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         _act("사전 백업 (내보내기)...", self._action_backup_dict)
         _act("사전 정리 (HTML 마크업 제거)", self._action_sanitize_dict)
         _act("온용어 다시 분류 (용어집별·재조회)...", self._action_reclassify_onterm)
-
-        # 🌐 번역 (Claude)
-        m_tools.addSection("🌐 번역 (Claude)")
-        self._act_tr_files = _act("PDF번역", self._action_translate_files)
 
         # 🔍 검색 및 데이터 구축
         m_tools.addSection("🔍 검색 및 데이터 구축")

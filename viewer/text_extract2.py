@@ -60,6 +60,88 @@ CELL_GAP = 6.0          # 칸 사이 가로 빈틈(pt). 이보다 벌어지면 �
 CELL_GAP_H = 0.60       # 글자 높이의 이 비율도 넘어야 다른 칸(큰 제목 대비)
 HRULE_SPAN = 0.50       # 본문 폭의 이 비율을 넘는 가로 줄만 '행 구분선'
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
+# 260911-1(SOT §3.6.10): 글자층에 **빈칸이 아예 없는** PDF — 글자 자리로 띄어쓰기를 되살린다.
+#   아래아한글에서 내보낸 보고서가 빈칸 글자를 아예 넣지 않았다(사용자 보고).
+#   실측(빈틈÷글자크기): 한 낱말 안 0.05 / 낱말 사이 0.49~0.55 — 열 배 차이다.
+SPACE_GAP = 0.25
+# 그 줄의 빈틈 중 후보가 이 비율을 넘으면 **자간 벌리기**(균등분할)다 — 손대지 않는다.
+SPACE_DENSE = 0.80
+_SPACE_NO_BEFORE = set("%)]}>,.·…~’”」』、。!?;:")
+_SPACE_NO_AFTER = set("([{<‘“「『")
+
+
+def _restore_spaces(chars) -> str:
+    """글자 사이 빈틈으로 **지워진 띄어쓰기**를 되살린다(SOT §3.6.10).
+
+    `chars` 는 `[(글자, bbox, 글자크기)]`. 반환값은 빈칸을 돌려놓은 줄 글이다.
+    둘 다 손대지 않는 경우가 있다 — 후보가 하나도 없거나, 거꾸로 많아서
+    (`SPACE_DENSE`) **자간을 벌린 줄**로 보일 때다.
+    """
+    raw = "".join(c[0] for c in chars)
+    if len(chars) < 2:
+        return raw
+    cand = []
+    holes = 0
+    for i in range(1, len(chars)):
+        c, bb, size = chars[i]
+        pc, pbb, psize = chars[i - 1]
+        if not c.strip() or not pc.strip():      # 이미 빈칸이 있는 자리
+            continue
+        holes += 1
+        ref = max(float(size or 0), float(psize or 0))
+        if ref <= 0:
+            continue
+        if float(bb[0]) - float(pbb[2]) < SPACE_GAP * ref:
+            continue
+        if c in _SPACE_NO_BEFORE or pc in _SPACE_NO_AFTER:
+            continue
+        cand.append(i)
+    if not cand:
+        return raw
+    if holes and len(cand) / holes >= SPACE_DENSE:
+        return raw                               # 자간 벌리기 — 낱말 경계가 아니다
+    at = set(cand)
+    out = []
+    for i, (c, _bb, _sz) in enumerate(chars):
+        if i in at:
+            out.append(" ")
+        out.append(c)
+    return "".join(out)
+
+
+def _line_text(ln, restore: bool) -> str:
+    """줄 하나의 글. `restore` 면 글자 자리로 빈칸을 되살린다(§3.6.10).
+
+    `rawdict` 의 span 에는 `text` 가 **없다** — 글자를 이어 만든다. 되살리기를
+    건너뛰더라도 글 자체는 돌려줘야 한다(안 그랬다가 OCR 층 쪽이 통째로 빈
+    줄이 됐다 — 검사 2개가 잡았다).
+
+    가로쓰기 줄만 되살린다 — 세로쓰기·돌린 줄은 가로 빈틈이 뜻을 잃는다."""
+    spans = ln.get("spans", []) or []
+    chars = []
+    plain = []
+    for sp in spans:
+        t = sp.get("text")
+        if t:
+            plain.append(t)
+        size = float(sp.get("size", 0) or 0)
+        for ch in sp.get("chars", []) or []:
+            c = ch.get("c", "")
+            if not t:
+                plain.append(c)
+            chars.append((c, ch.get("bbox") or (0, 0, 0, 0), size))
+    flat = "".join(plain)
+    if not restore or not chars:
+        return flat
+    if int(ln.get("wmode", 0) or 0) != 0:
+        return flat
+    d = ln.get("dir") or (1, 0)
+    try:
+        if abs(float(d[0]) - 1.0) > 1e-6 or abs(float(d[1])) > 1e-6:
+            return flat
+    except Exception:
+        return flat
+    return _restore_spaces(chars)
 
 
 def _is_ocr_layer(page) -> bool:
@@ -84,11 +166,21 @@ def _line_items(page):
     260908-6(SOT §3.5): 보이지 않는 OCR 층인 쪽에서는 **글자라고 볼 수 없이 작은 줄**을
     뺀다. 반환값에 잡음 수를 곁들이지 않고, 부르는 쪽이 필요하면 `last_noise_count()` 로 본다.
     """
+    # 260911-1(SOT §3.6.10): 글자 자리는 `dict` 에 없다 — `rawdict` 라야 `span["chars"]`
+    #   가 따라온다. 표본 6종 14,163줄로 두 방식의 글이 같음을 확인했고, 빨라졌으면
+    #   빨라졌지 느려지지는 않는다(13.3 → 10.7 ms/쪽). 안 되면 `dict` 로 물러선다.
+    raw = True
     try:
-        d = page.get_text("dict")
+        d = page.get_text("rawdict")
     except Exception:
-        return []
+        raw = False
+        try:
+            d = page.get_text("dict")
+        except Exception:
+            return []
     ocr_layer = _is_ocr_layer(page)
+    # OCR 글자층은 자리가 고르지 않고 이미 §3.6.2 의 낱말 규칙이 돌고 있다 — 겹치면 망가진다.
+    restore = raw and not ocr_layer
     noise = 0
     blocks = []
     for b in d.get("blocks", []):
@@ -97,7 +189,7 @@ def _line_items(page):
         lines = []
         for ln in b.get("lines", []):
             spans = ln.get("spans", []) or []
-            txt = "".join(sp.get("text", "") for sp in spans)
+            txt = _line_text(ln, restore)
             if not txt.strip():
                 continue
             size = max((float(sp.get("size", 0) or 0) for sp in spans), default=0.0)
