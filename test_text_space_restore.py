@@ -125,6 +125,25 @@ tail = [("에", 0.0, 10.0), ("\u00a0", 10.0, 13.0)]
 chk(tx._line_text(ln(tail, 10.0), True).endswith(" "),
     "⑩ 줄 끝의 NBSP 도 빈칸으로 남아 문장 잇기가 알아본다")
 
+# ── ⑪ 도는 차례 — ③ → ② → ① (§3.6.10, 차례가 뒤집히면 여기서 드러난다) ──
+#   NBSP 로 찍힌 두 칸 중 뒤엣것을 다음 글자가 덮는 줄. 세 단계가 제 차례로
+#   돌아야만 `근 몇` 이 된다.
+#     · ③ 이 늦으면  → `isspace()` 가 NBSP 를 놓쳐 덮인 칸이 안 지워진다
+#     · ② 가 늦으면  → ① 이 없는 빈칸을 두고 빈틈을 재 낱말 경계를 잘못 잡는다
+order = [("근", 95.52, 103.21), ("\u00a0", 103.21, 105.09),
+         ("\u00a0", 105.09, 106.96), ("몇", 105.09, 112.78)]
+got = tx._line_text(ln(order, 8.37), True)
+chk(got == "근 몇", "⑪ 세 단계가 제 차례로 돈다(NBSP → 덮인 칸 → 되살리기)", repr(got))
+
+#   ② 를 건너뛰면 실제로 달라지는지 — 차례가 뜻이 있다는 증거
+raw = [(c if c != "\u00a0" else " ", x0, x1) for c, x0, x1 in order]
+chars = [(c, (x0, 0.0, x1, 8.37), 8.37) for c, x0, x1 in raw]
+chk(tx._restore_spaces(chars) != "근 몇",
+    "⑪ 덮인 칸을 안 지우면 결과가 달라진다 — 차례가 규칙의 일부다",
+    repr(tx._restore_spaces(chars)))
+chk(tx._restore_spaces(tx._drop_covered_spaces(chars)) == "근 몇",
+    "⑪ 지운 뒤 되살리면 맞는다")
+
 # ── ⑧ 진짜 PDF 로 끝까지 ───────────────────────────────────────
 root = tempfile.mkdtemp(prefix="polypdf_space_")
 try:

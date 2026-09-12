@@ -163,6 +163,35 @@ for sec in ("14.13", "14.15", "14.16", "14.17"):
     seg = m.group(0) if m else ""
     chk("§14.19" in seg, "⑥ §%s 가 §14.19 를 가리킨다" % sec)
 
+# ── ⑦ §14.18 표가 코드와 같은가 (260912-3) ────────────────────────────
+print(NL + "=== ⑦ 스캔 감지 표가 코드와 어긋나지 않는다 (§14.18) ===")
+# 1번 규칙에 '보이는 층' 조건을 넣었는데 표만 옛 문장으로 남으면, 다음 사람이
+#   표를 믿고 코드를 '고쳐' 되돌린다 — 실제로 이 표가 하루 동안 그렇게 어긋나 있었다.
+sec18 = re.search(r"^### 14\.18[ .].*?(?=^### |^## )", b14, re.M | re.S)
+seg18 = sec18.group(0) if sec18 else ""
+r18 = re.search(r"^\| 1 \|.*$", seg18, re.M)
+row1 = r18.group(0) if r18 else ""
+chk("안 보이는 층" in row1 or "_is_ocr_layer" in row1,
+    "⑦ 1번 규칙에 '안 보이는 층' 조건이 적혀 있다", row1[:90])
+chk("_overlaid_ocr_layer" in OCR_PY and "_is_ocr_layer" in OCR_PY,
+    "⑦ 코드도 그 조건을 쓴다")
+chk(re.search(r"cov >= 0\.6 and _overlaid_ocr_layer\(page\)", OCR_PY) is not None,
+    "⑦ 두 조건을 **모두** 본다")
+chk("§14.18.1" in b14, "⑦ 그 까닭(§14.18.1)이 문서에 있다")
+
+# ── ⑧ 빈칸 손보기 문턱은 텍스트 창이 소유한다 ─────────────────────────
+print(NL + "=== ⑧ 빈칸 손보기 값의 단일 소유 (§3.6.10) ===")
+TX_PY = code("viewer/text_extract2.py")
+for nm in ("SPACE_GAP", "SPACE_COVERED"):
+    pat = r"%s\s*=\s*[0-9.]+" % nm
+    where = [d for d in SOTS if re.search(pat, body(d))]
+    chk(where in ([TXT_SOT], []), "⑧ `%s` 값은 텍스트 창 SOT 밖에 적히지 않는다" % nm, str(where))
+    chk(re.search(r"^%s\s*=" % nm, TX_PY, re.M) is not None, "⑧ `%s` 가 코드에 있다" % nm)
+chk("_SPACE_LIKE" in TX_PY and "\\u00a0" in TX_PY.replace("\u00a0", "\\u00a0"),
+    "⑧ `_SPACE_LIKE` 가 코드에 있다")
+chk("SPACE_COVERED" in body(OCR_SOT) and "텍스트 창" in body(OCR_SOT),
+    "⑧ OCR SOT 는 값을 적지 않고 가리키기만 한다")
+
 print(NL + ("=== ALL PASS ===" if not fails else "=== FAILURE (%d) ===" % len(fails)))
 for f in fails:
     print(" -", f)
