@@ -843,6 +843,10 @@ class _PdfGraphicsView(QGraphicsView):
         self._edge_dir = 0                    # 닿아 있는 경계(+1 아래끝 / -1 위끝)
         self._edge_ms = 0.0                   # 그 경계에 닿은 시각(ms)
         self._edge_sum = 0                    # 닿은 뒤 굴린 양의 합
+        # 260912-4(입력 SOT §2.3): 트랙패드는 손을 뗀 뒤에도 **관성**으로 이벤트를 더
+        #   보낸다. 그것을 의도로 세면 방향을 뒤집을 때 경계 시계가 끝없이 되감긴다.
+        self._fling = False                   # 지금 오는 것이 관성인가
+        self._user_dir = 0                    # 사람이 마지막으로 민 방향(+아래/-위)
         # 260910-6(마스터 SOT §19.1.3): 1회성 설정은 여기 — 종전에는 이 네 줄이
         #   mouseMoveEvent 맨 끝에 있어 **마우스가 움직일 때마다** 실행됐다.
         #   실측상 정책 값은 load_document/load_image 와 같아 증상은 없었으나,
@@ -1116,6 +1120,40 @@ class _PdfGraphicsView(QGraphicsView):
         #   이제 ① 처음 닿은 칸은 넘기지 않고 ② 그 뒤에도 **머문 시간과 굴린 양을
         #   둘 다** 넘겨야 넘어간다. 하나만 보면 천천히 굴리는 사람이 못 넘기거나
         #   (양만 봄) 관성 휠이 그냥 지나간다(시간만 봄).
+        # 260912-4(입력 SOT §2.3, 사용자 보고 "아래로 넘기다 위로 뒤집으면 잘 안 된다"):
+        #   트랙패드는 손가락을 **떼고 나서도** 관성으로 이벤트를 보낸다. 종전에는 그것을
+        #   사람의 의도와 똑같이 셌다 — 방향이 바뀔 때마다 경계 시계를 처음으로 되감으니,
+        #   남은 아래쪽 관성과 새 위쪽 손짓이 섞이면 **영영 넘어가지 않았다**
+        #   (실측: 200건·2,932단위·1.6초를 넣어도 안 넘어감).
+        phase = event.phase()
+        if phase == Qt.ScrollPhase.ScrollBegin:
+            self._fling = False         # 손가락을 새로 얹었다 — 여기서부터가 의도다
+            self._edge_dir = 0          # 새 손짓이니 경계도 처음부터
+            self._edge_sum = 0
+        elif phase == Qt.ScrollPhase.ScrollUpdate:
+            self._fling = False         # 손가락이 닿아 있다
+        elif phase == Qt.ScrollPhase.ScrollMomentum:
+            self._fling = True          # 손은 이미 떠났다
+        elif phase == Qt.ScrollPhase.ScrollEnd:
+            self._fling = False
+
+        _dy = event.angleDelta().y()
+        if not self._fling and _dy:
+            self._user_dir = +1 if _dy < 0 else -1   # 사람이 민 방향을 기억한다
+        if self._fling:
+            # 관성은 **의도가 아니다.** 쪽을 넘기지 않고, 경계 상태도 건드리지 않는다.
+            #   비우는 쪽이 더 고약했다 — 남은 관성이 경계 밖 이벤트로 들어와 사람이
+            #   쌓아 둔 것을 매번 지웠다.
+            _md = +1 if _dy < 0 else (-1 if _dy > 0 else 0)
+            if self._user_dir and _md and _md != self._user_dir:
+                # **뒤집었다 — 앞 손짓의 관성은 취소한다.** 스크롤도 시키지 않는다.
+                #   이것을 흘려보내면 사람이 애써 붙인 경계를 관성이 도로 밀어내,
+                #   위로 넘기려 해도 영영 넘어가지 않는다(실측: 200건 1.6초 실패).
+                event.accept()
+                return
+            super().wheelEvent(event)
+            return
+
         sb = self.verticalScrollBar()
         delta = event.angleDelta().y()
         at_edge = 0
@@ -1132,7 +1170,8 @@ class _PdfGraphicsView(QGraphicsView):
                 event.accept()
                 return
             self._edge_sum += abs(delta)
-            if (_perf_ms() - self._edge_ms) < self.EDGE_HOLD_MS                     or self._edge_sum < self.EDGE_PUSH:
+            if (_perf_ms() - self._edge_ms) < self.EDGE_HOLD_MS \
+                    or self._edge_sum < self.EDGE_PUSH:
                 event.accept()
                 return
             self._edge_dir = 0          # 한 손짓에 한 쪽만
@@ -1210,12 +1249,35 @@ class _PdfGraphicsView(QGraphicsView):
                 ownr._stroke_translate(ownr._stroke_selected, dnx, dny)
                 ownr._save_page_strokes(); ownr._draw_overlay.update()
                 event.accept(); return
-        if k in (Qt.Key.Key_PageDown, Qt.Key.Key_Down):
+        # 260912-4(입력 SOT §3): PageUp/PageDown 은 **늘 쪽 단위**다.
+        if k == Qt.Key.Key_PageDown:
             self.pageStep.emit(+1)
             event.accept()
             return
-        if k in (Qt.Key.Key_PageUp, Qt.Key.Key_Up):
+        if k == Qt.Key.Key_PageUp:
             self.pageStep.emit(-1)
+            event.accept()
+            return
+        # ↑/↓ 와 빈칸은 **쪽 안에 갈 자리가 있으면 먼저 그 안에서** 움직인다.
+        #   종전에는 곧바로 쪽을 넘겨, 확대한 쪽의 아래쪽을 키보드로는 볼 수 없었다.
+        #   쪽 맞춤(스크롤 자리 없음)일 때는 예전과 **똑같이** 쪽이 넘어간다.
+        #   경계에서의 한 박자(§2.2)는 휠에만 둔다 — 키는 한 번 누름이 곧 한 번의 의도다.
+        if k in (Qt.Key.Key_Down, Qt.Key.Key_Up, Qt.Key.Key_Space):
+            sb = self.verticalScrollBar()
+            up = (k == Qt.Key.Key_Up) or (
+                k == Qt.Key.Key_Space
+                and bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier))
+            room = (sb.value() > sb.minimum()) if up else (sb.value() < sb.maximum())
+            if room:
+                if k == Qt.Key.Key_Space:
+                    sb.triggerAction(sb.SliderAction.SliderPageStepSub if up
+                                     else sb.SliderAction.SliderPageStepAdd)
+                else:
+                    sb.triggerAction(sb.SliderAction.SliderSingleStepSub if up
+                                     else sb.SliderAction.SliderSingleStepAdd)
+                event.accept()
+                return
+            self.pageStep.emit(-1 if up else +1)
             event.accept()
             return
         if k == Qt.Key.Key_Home:

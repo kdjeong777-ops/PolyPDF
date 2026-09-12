@@ -142,6 +142,7 @@ OWNER_RULES = [
     (("test_media_", "test_tts_", "test_record_"), "영상 및 음성"),
     (("test_folder_scan", "test_ui_stall", "test_perf_", "test_prefs_allowlist",
       "test_tool_cancel", "test_startup_open", "test_sot_"), "응답성"),
+    (("test_input_", "test_wheel_"), "입력 장치"),
     (("test_theme_", "test_design_", "test_draw_tools"), "화면 디자인"),
 ]
 
@@ -165,6 +166,7 @@ if HAVE_SOT:
     NAMED = {
         "텍스트 창": "텍스트 창 작업 계획서.md",
         "응답성": "응답성 작업 계획서.md",
+        "입력 장치": "입력 장치 작업 계획서.md",
     }
     for owner, sot_name in NAMED.items():
         txt = SOTS.get(sot_name, "")
