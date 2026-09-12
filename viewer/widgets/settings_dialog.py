@@ -217,15 +217,18 @@ class SettingsDialog(QDialog):
         info_tb.setStyleSheet("color:#666;"); info_tb.setWordWrap(True)
         pl.addWidget(info_tb)
         # 260609-2: 페이지 경계에서 다음/이전 파일로 이동
+        # 260912-6(입력 SOT §2.4): 이제 **물고 나서** 움직인다 — '자동 이동' 이라는
+        #   문구가 낡았다. 설정은 경계 이동 자체를 켜고 끄는 스위치고, 물음은 그 안에서의 확인이다.
         self.chk_cross_file_nav = QCheckBox(
-            "마지막/첫 페이지에서 다음·이전 파일로 자동 이동 (책갈피창 순서)"
+            "마지막/첫 페이지에서 다음·이전 파일로 이동 (책갈피창 순서)"
         )
         self.chk_cross_file_nav.setChecked(
             self._prefs.get("cross_file_nav", True) is not False)   # 260609-28: 미설정=켜짐
         pl.addWidget(self.chk_cross_file_nav)
         info_cfn = QLabel(
-            "<small>켜면 마지막 페이지에서 '다음'을 누르면 다음 파일의 첫 페이지로, "
-            "첫 페이지에서 '이전'을 누르면 이전 파일의 마지막 페이지로 이동합니다.</small>"
+            "<small>켜면 마지막 페이지에서 '다음'을 누를 때 다음 파일의 이름과 첫 쪽을 "
+            "보여 주고 물은 뒤에 옮깁니다(첫 페이지에서 '이전' 도 같습니다). "
+            "책갈피창에서 항목을 골라 옮길 때는 물지 않습니다. 끄면 경계에서 아예 옮기지 않습니다.</small>"
         )
         info_cfn.setStyleSheet("color:#666;"); info_cfn.setWordWrap(True)
         pl.addWidget(info_cfn)
