@@ -15,6 +15,8 @@
 """
 from __future__ import annotations
 
+import re
+
 # 260908-8(SOT §3.4, 사용자 지시): 제목은 **크기가 많이 차이 날 때만**.
 #   1.15 배는 너무 낮아 본문과 같은 크기의 굵은 줄까지 제목이 됐다(실측 지침 문서에서
 #   `제4장 …` 같은 본문 크기 줄이 제목으로 잡혔다). 굵기(bold)는 **판정에 쓰지 않는다**.
@@ -60,6 +62,28 @@ CELL_GAP = 6.0          # 칸 사이 가로 빈틈(pt). 이보다 벌어지면 �
 CELL_GAP_H = 0.60       # 글자 높이의 이 비율도 넘어야 다른 칸(큰 제목 대비)
 HRULE_SPAN = 0.50       # 본문 폭의 이 비율을 넘는 가로 줄만 '행 구분선'
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
+# 260913-2(SOT §3.5.2, 사용자 지시): 쪽 가장자의 **세로 띄**·머리말·꼬리말은
+#   본문이 아니다. 실측(AASHTO 기준문 3쪽): 세로 띄는 바깥 여백 10% 안에
+#   폭 1.4% · 3글자 이하 조각이 높이의 60~75% 에 걸쳐 88~113개 쌓여 있었다.
+#   깨끗한 표본 4종에는 그런 조각이 **하나도 없다**.
+SIDE_MARGIN = 0.10       # 쪽 폭의 이 비율 안(왼·오른 바깥)에 있어야 한다
+SIDE_WIDTH = 0.03        # 그리고 이보다 좀아야 한다(쪽 폭 대비)
+SIDE_CHARS = 4           # 글자 수도 이하
+SIDE_MIN_N = 8           # 이만큼 모여 있고
+SIDE_SPAN = 0.40         # 높이의 이만큼에 걸쳐 있어야 '띄' 다
+HEAD_BAND = 0.08         # 위쪽 이 비율 안 → 머리말 후보
+FOOT_BAND = 0.88         # 아랫쪽 이 비율 밖 → 꼬리말 후보
+EDGE_GAP = 1.5           # 본문과 이만큼(줄 높이 배) 떨어져 있어야 한다
+# 260913-2 보강(실측으로 본문을 잃어 좀혔다):
+#   ① '세로 띄' 는 조각이 좀은 것만으로 부족하다 — **한 줄기에 모여** 있어야 한다.
+#     그렇게 안 하면 쪽 왼쪽의 좁은 표 칸(`구분`·`13mm`·`10mm`)까지 버렸다.
+#   ② 머리말·꼬리말은 자리만으로 가를 수 없다 — **옆 쪽에도 같은 것이 있어야** 한다.
+#     자리로만 가르니 단 마지막 줄(`demanding conditions.`)까지 꼬리말로 봤다.
+SIDE_SPREAD = 0.02       # 띄 조각들이 차지하는 가로 폭이 이 이내여야 '한 줄기'
+#   실측: 진짜 세로 띄 **0.014~0.015** / 쪽 가장자의 표 칸 **0.024~0.059**.
+#   사이가 넣넥해 0.02 로 둔다 — 표 칸을 버리면 본문을 잃는다.
+EDGE_PEERS = 2           # 옆 쪽 이만큼을 둘러본다
+EDGE_SIM = 0.60          # 글자가 이만큼 닮았으면 '되풀이되는 것'
 # 260911-1(SOT §3.6.10): 글자층에 **빈칸이 아예 없는** PDF — 글자 자리로 띄어쓰기를 되살린다.
 #   아래아한글에서 내보낸 보고서가 빈칸 글자를 아예 넣지 않았다(사용자 보고).
 #   실측(빈틈÷글자크기): 한 낱말 안 0.05 / 낱말 사이 0.49~0.55 — 열 배 차이다.
@@ -259,6 +283,22 @@ def _line_items(page):
     #   `[ Hot Asphalt Paving Mixture` 와 `]` 가 두 줄이 되고, 표 한 행의 칸들이
     #   블록 순서대로 흩어져 **앞뒤가 바뀐 여러 줄**로 보인다(사용자 보고 260908).
     out = []
+    # 260913-2(SOT §3.5.2, 사용자 지시): 세로 띠·머리말·꼬리말은 **잇기 전에** 버린다.
+    #   잇고 나면 세로 띠 조각이 본문 줄에 `|` 로 붙어 떼어낼 수 없다
+    #   (실측: `낡쥰~ | Fracture and Damage…`). 판정은 **쪽 전체**를 보고 한다 —
+    #   띠는 블록을 가로질러 흩어져 있어 블록마다 따로 보면 못 찾는다.
+    _all = [f for _bb, lns in blocks for f in lns]
+    _keep, _dropped = drop_edge_frags(_all, page)
+    if _dropped:
+        _ok = {id(f) for f in _keep}
+        _nb = []
+        for _bb, _lns in blocks:
+            _l2 = [f for f in _lns if id(f) in _ok]
+            if _l2:
+                _nb.append((_bb, _l2))
+        if _nb:
+            blocks = _nb
+            noise += _dropped
     # 260910-9(SOT §3.6.5): 가로 줄로 나뉜 표에 **여러 줄짜리 칸**이 있으면 칸 단위로.
     _flat = [f for _bb, lines in blocks for f in lines]
     _cells = _table_cells(_flat, page)
@@ -272,6 +312,131 @@ def _line_items(page):
         out = kept
     _NOISE["n"] = noise
     return out
+
+
+def drop_edge_frags(frags, page):
+    """세로 띄·머리말·꼬리말 조각을 버린다 → `(남은 조각, 버린 수)` (SOT §3.5.2).
+
+    사용자 지시: *"세로 띄, 상단부 머리말, 하단부 꼬리말 등은 텍스트 창에서 제외"*.
+
+    **잉는 순서가 중요하다** — 잃는 일이라 잉기 전에 해야 한다(§3.A 2단계).
+    잉고 나면 세로 띄 조각이 본문 줄에 `|` 로 붙어 떼어낼 수 없다
+    (실측: `낙쥴~ | Fracture and Damage…`).
+    """
+    if not frags:
+        return frags, 0
+    try:
+        pw, ph = float(page.rect.width), float(page.rect.height)
+    except Exception:
+        return frags, 0
+    if pw <= 0 or ph <= 0:
+        return frags, 0
+    heights = sorted(max(1e-6, r[3] - r[1]) for r, _t, _s in frags)
+    lh = heights[len(heights) // 2] if heights else 0.0
+
+    # (가) 세로 띄 — 바깥 여백의 좀고 짧은 조각이 높이 대부분에 쌓인 것
+    side = set()
+    for lo, hi in ((0.0, SIDE_MARGIN), (1.0 - SIDE_MARGIN, 1.0)):
+        cand = []
+        for i, (r, t, _s) in enumerate(frags):
+            if (r[0] / pw) >= lo and (r[2] / pw) <= hi \
+                    and (r[2] - r[0]) <= pw * SIDE_WIDTH \
+                    and len(t.strip()) <= SIDE_CHARS:
+                cand.append(i)
+        if len(cand) < SIDE_MIN_N:
+            continue
+        ys = [frags[i][0][1] / ph for i in cand] + [frags[i][0][3] / ph for i in cand]
+        xs = [frags[i][0][0] / pw for i in cand] + [frags[i][0][2] / pw for i in cand]
+        # **한 줄기**여야 한다 — 가로로 퍼져 있으면 표 칸이지 띠가 아니다(실측)
+        if (max(ys) - min(ys)) >= SIDE_SPAN and (max(xs) - min(xs)) <= SIDE_SPREAD:
+            side.update(cand)
+
+    rest = [i for i in range(len(frags)) if i not in side]
+    if not rest:
+        return frags, 0                      # 다 버릴 일은 없다 — 그대로 둔다
+
+    # (나) 머리말·꼬리말 — 위·아래 띄에 있고 본문과 **떨어져** 있어야 한다
+    ys0 = sorted(frags[i][0][1] for i in rest)
+    ys1 = sorted(frags[i][0][3] for i in rest)
+    edge = set()
+    body = [i for i in rest
+            if HEAD_BAND < (frags[i][0][1] / ph) and (frags[i][0][1] / ph) < FOOT_BAND]
+    if body:
+        body_top = min(frags[i][0][1] for i in body)
+        body_bot = max(frags[i][0][3] for i in body)
+        for i in rest:
+            r = frags[i][0]
+            if (r[3] / ph) <= HEAD_BAND and (body_top - r[3]) >= lh * EDGE_GAP:
+                edge.add(i)
+            elif (r[1] / ph) >= FOOT_BAND and (r[1] - body_bot) >= lh * EDGE_GAP:
+                edge.add(i)
+
+    # **되풀이되는가** — 머리말·꼬리말은 옆 쪽에도 거의 같은 글이 같은 자리에 있다.
+    #   자리만으로 가르면 단의 마지막 줄까지 꼬리말로 본다(실측: `demanding conditions.`).
+    if edge:
+        peers = _edge_peer_texts(page)
+        if peers is None:
+            edge = set()                     # 옆 쪽을 못 보면 **버리지 않는다**
+        else:
+            edge = {i for i in edge if _looks_repeated(frags[i][1], peers)}
+
+    drop = side | edge
+    if len(drop) >= len(frags):
+        return frags, 0
+    return [f for i, f in enumerate(frags) if i not in drop], len(drop)
+
+
+def _norm_edge(t: str) -> str:
+    """쪽 번호처럼 쪽마다 바뀌는 것은 지운 뒤 견준다(`- 10 -` 과 `- 11 -` 은 같은 꼬리말)."""
+    return re.sub(r"[0-9IVXivx]+", "#", str(t or "")).strip()
+
+
+def _looks_repeated(t: str, peers) -> bool:
+    a = _norm_edge(t)
+    if len(a) < 2:
+        return True                          # `i`·`3` 같은 쪽 번호 — 자리로 이미 걸렀다
+    for b in peers:
+        if a == b:
+            return True
+        if a and b:
+            same = sum(1 for x, y in zip(a, b) if x == y)
+            if same / max(len(a), len(b)) >= EDGE_SIM:
+                return True
+    return False
+
+
+def _edge_peer_texts(page):
+    """옆 쪽들의 **위·아래 띠** 글. 못 보면 None(그때는 버리지 않는다)."""
+    try:
+        doc = page.parent
+        n = int(doc.page_count)
+        cur = int(page.number)
+    except Exception:
+        return None
+    out = []
+    seen = 0
+    for d in (-2, -1, 1, 2):
+        k = cur + d
+        if k < 0 or k >= n or seen >= EDGE_PEERS:
+            continue
+        try:
+            pg = doc.load_page(k)
+            ph2 = float(pg.rect.height)
+            if ph2 <= 0:
+                continue
+            for b in pg.get_text("dict").get("blocks", []):
+                if b.get("type") != 0:
+                    continue
+                for ln in b.get("lines", []):
+                    x0, y0, x1, y1 = ln.get("bbox", (0, 0, 0, 0))
+                    if (y1 / ph2) <= HEAD_BAND or (y0 / ph2) >= FOOT_BAND:
+                        t = "".join(sp.get("text", "") for sp in ln.get("spans", []))
+                        if t.strip():
+                            out.append(_norm_edge(t.strip()))
+            seen += 1
+        except Exception:
+            continue
+    return out if seen else None
 
 
 def _row_bands(frags):
