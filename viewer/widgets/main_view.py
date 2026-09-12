@@ -1373,6 +1373,10 @@ class MainView(QWidget):
         self._sel_text = ""             # 선택된 텍스트
         self._copy_allowed = True        # 260618-1: 문서 복사 권한(없으면 복사 차단)
         self._sel_start = None          # 선택 시작점(PDF 좌표)
+        # 260913-1(입력 SOT §2.8): 본문의 줄·낱말을 **텍스트 창과 같은 곳**에서 가져온다.
+        #   앱이 study.db 의 OCR 낱말을 이 함수로 넣어 준다(뷰어는 DB 를 모른다).
+        self._ocr_words_provider = None
+        self._view_src_cache = None     # (키, {"lines": …, "words": …})
         self._current_match = -1
         # _base_dpi 는 호환을 위해 보존하나, 본 파이프라인에선 zoom 만 사용
         self._base_dpi = 192
@@ -1882,6 +1886,13 @@ class MainView(QWidget):
         if not self._doc:
             return
         if self._rotations.get(self._current_page, 0):
+            return
+        # 260913-1(입력 SOT §2.8, 사용자 결정): 끌어 고르고 **복사하는 글자도**
+        #   텍스트 창 것으로 한다 — 스캔본에서 PDF 가 품은 글자층보다 훨씬 낫고,
+        #   2단 쪽에서 차례가 뒤섞이지 않는다.
+        got = self._view_src().get("words")
+        if got:
+            self._page_words = got
             return
         try:
             import fitz
@@ -2943,16 +2954,95 @@ class MainView(QWidget):
         """260611-1: 줄 탐지 실패 시 폴백 띠 높이(정규화) — 페이지 높이의 소량."""
         return 0.018
 
-    def _hl_lines(self):
-        """이 쪽의 글줄 상자 → `[(x0, y0, x1, y1)]` (정규화, 위에서 아래로).
+    def set_ocr_words_provider(self, fn):
+        """앱이 `(경로, 쪽) -> (낱말목록, dpi)` 를 넣어 준다 (입력 SOT §2.8)."""
+        self._ocr_words_provider = fn
+        self._view_src_cache = None
 
-        260912-7(입력 SOT §2.5): 끌 때마다 쪽을 다시 뽑으면 마우스가 무거워진다.
-        쪽이 바뀔 때까지 기억해 둔다.
+    def _view_src(self):
+        """이 쪽의 **줄 사각형과 낱말** — 텍스트 창과 같은 차례로 (§2.8).
+
+        사용자 보고: *"스캔본의 경우 텍스트 창의 본문 위치 인식이 잘 되지만(2단에서도)
+        PDF 본문의 OCR 결과의 위치는 정확하지 않다."*
+
+        자리가 틀린 것이 아니라 **줄을 묶고 늘어놓는 방식**이 달랐다(실측: 2단 쪽에서
+        `get_text` 는 좌·우 단을 번갈아 내놓고, 표 쪽은 168조각으로 흩어진다).
+        그래서 텍스트 창이 쓰는 `text_extract2` 를 **그대로** 쓴다 — 표 인식은 끄고
+        (느리다) 문장 잇기도 끈다(칠하기는 줄 단위여야 한다).
+
+        쪽이 바뀔 때까지 기억한다. 실측 5~50 ms/쪽 — 끌 때마다 다시 뽑으면 무겁다.
         """
-        key = (id(self._doc), self._current_page)
-        cached = getattr(self, "_hl_lines_cache", None)
+        key = (id(self._doc), self._current_page,
+               self._rotations.get(self._current_page, 0))
+        cached = getattr(self, "_view_src_cache", None)
         if cached is not None and cached[0] == key:
             return cached[1]
+        out = {"lines": [], "words": []}
+        try:
+            from viewer import text_extract2 as _tx
+            import fitz as _fitz
+            path = self.current_file()
+            page = self._doc.doc.load_page(self._current_page) if self._doc else None
+            if path and page is not None:
+                ow, odpi = [], 0
+                if self._ocr_words_provider:
+                    try:
+                        ow, odpi = self._ocr_words_provider(path, self._current_page)
+                    except Exception:
+                        ow, odpi = [], 0
+                rows = _tx.page_lines(self._doc.doc, path, self._current_page,
+                                      tables="off", join_lines=False,
+                                      ocr_words=(ow or None), ocr_dpi=int(odpi or 0))
+                pw, ph = float(page.rect.width), float(page.rect.height)
+                if pw > 0 and ph > 0:
+                    for r in rows:
+                        for rc in (r.get("rects")
+                                   or ([r["rect"]] if r.get("rect") else [])):
+                            if rc and rc[2] > rc[0] and rc[3] > rc[1]:
+                                out["lines"].append((rc[0] / pw, rc[1] / ph,
+                                                     rc[2] / pw, rc[3] / ph))
+                # 낱말 — 같은 차례로(2단이면 좌측 단을 끝까지 먼저)
+                if ow:
+                    k = 72.0 / float(odpi or 72)
+                    src = [dict(surface=w.get("surface", ""),
+                                x0=float(w["x0"]) * k, y0=float(w["y0"]) * k,
+                                x1=float(w["x1"]) * k, y1=float(w["y1"]) * k)
+                           for w in ow]
+                else:
+                    src = [dict(surface=w[4], x0=w[0], y0=w[1], x1=w[2], y1=w[3])
+                           for w in page.get_text("words")]
+                # 260913-1: **우리 OCR 만** 낱말로 묶는다(§3.6.2). Tesseract 는 한글을
+                #   글자 하나씩 내놓지만, PDF 글자층의 낱말은 이미 낱말이다 —
+                #   거기까지 묶으면 영문이 `ENSURINGPLANT…` 로 붙는다(실측).
+                if ow:
+                    src = _tx.merge_words_by_gap(src)
+                src = _tx.words_in_reading_order(src, dpi=0, page=page)
+                line_i, prev = -1, None
+                for w in src:
+                    t = str(w.get("surface") or "")
+                    if not t.strip():
+                        continue
+                    r = self._disp_search_rect(
+                        page, _fitz.Rect(w["x0"], w["y0"], w["x1"], w["y1"]))
+                    yc, h = (r.y0 + r.y1) / 2.0, max(1.0, r.y1 - r.y0)
+                    if prev is None or abs(yc - prev) > h * 0.55:
+                        line_i += 1
+                    prev = yc
+                    out["words"].append((r.x0, r.y0, r.x1, r.y1, t, 0, line_i))
+        except Exception:
+            out = {"lines": [], "words": []}
+        self._view_src_cache = (key, out)
+        return out
+
+    def _hl_lines(self):
+        """이 쪽의 글줄 상자 → `[(x0, y0, x1, y1)]` (정규화, 읽는 차례).
+
+        260913-1(§2.8): 텍스트 창과 **같은 곳**에서 가져온다. 못 얻으면 종전처럼
+        `get_text("dict")` 로 물러선다 — 칠할 자리가 아예 없어지면 안 된다.
+        """
+        got = self._view_src().get("lines")
+        if got:
+            return got
         out = []
         try:
             if self._doc and not self._is_image:
@@ -2968,7 +3058,6 @@ class MainView(QWidget):
             out.sort(key=lambda r: (r[1], r[0]))
         except Exception:
             out = []
-        self._hl_lines_cache = (key, out)
         return out
 
     def _hl_bands_between(self, sp, cp):

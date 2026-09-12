@@ -1347,6 +1347,49 @@ def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
     return [{'text': t, 'style': st, 'rect': r, 'kind': 'text', 'size': sz}
             for (r, t, sz), st in zip(items, styles)]
 
+def merge_words_by_gap(words) -> list:
+    """낱말 상자를 **낱말 단위로** 묶는다 (SOT §3.6.2 의 규칙 그대로).
+
+    260913-1(입력 SOT §2.8): Tesseract 는 한글을 **글자 하나하나** 낱말로 내놓는다.
+    그대로 본문 뷰어에 넘기면 끌어서 고를 때 `티` `검` `사` 가 따로 잡히고, 복사한
+    글도 글자마다 띄어진다. 여기서 붙여 준다 — 붙임/띄움 기준은 §3.6.2 가 소유하고
+    이 함수는 그것을 **부르기만** 한다(같은 규칙이 두 벌이 되면 반드시 어긋난다).
+
+    받는 것도 주는 것도 `{"surface", "x0", "y0", "x1", "y1"}` 목록이다.
+    """
+    out = []
+    for w in words or []:
+        try:
+            t = str(w.get("surface") or "")
+            x0, y0 = float(w["x0"]), float(w["y0"])
+            x1, y1 = float(w["x1"]), float(w["y1"])
+        except Exception:
+            continue
+        if not t.strip():
+            continue
+        if out:
+            p = out[-1]
+            lo = min(p["y1"] - p["y0"], y1 - y0)
+            ov = min(p["y1"], y1) - max(p["y0"], y0)
+            same_row = lo > 0 and (ov / lo) >= ROW_OVERLAP
+            ref = max(1.0, min(p["y1"] - p["y0"], y1 - y0))
+            gap = x0 - p["x1"]
+            if _is_cjk_pair(p["surface"], t):
+                glue = CJK_GLUE_GAP
+            elif _is_num_pair(p["surface"], t):
+                glue = NUM_GLUE_GAP
+            else:
+                glue = GLUE_GAP
+            if same_row and gap < glue * ref:
+                p["surface"] += t
+                p["x1"] = max(p["x1"], x1)
+                p["y0"] = min(p["y0"], y0)
+                p["y1"] = max(p["y1"], y1)
+                continue
+        out.append({"surface": t, "x0": x0, "y0": y0, "x1": x1, "y1": y1})
+    return out
+
+
 def words_in_reading_order(words, *, dpi: int = 0, page=None) -> list:
     """OCR 낱말을 **읽는 차례**로 다시 늘어놓는다 (SOT §3.6.9).
 

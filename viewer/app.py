@@ -1181,6 +1181,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         mv.hyperlinkActivated.connect(
             lambda link, i=idx: (i == self._active_pane) and self._launch_hyperlink(link))
         mv.drawModeChanged.connect(self._on_main_draw_mode_changed)   # 260611-4: 공유 동기
+        # 260913-1(입력 SOT §2.8): 본문이 텍스트 창과 **같은 줄·낛말**을 쓰게 한다.
+        #   뷰어는 study.db 를 모르므로 앱이 넣어 준다.
+        mv.set_ocr_words_provider(self._view_ocr_words)
 
     def _build_search_area(self) -> QWidget:
         wrap = QWidget()
@@ -2682,6 +2685,35 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             note = f"p.{page + 1} · {len(rows)}줄 · 잡음 {noise}줄 숨김"
         tp.set_page(path, page, rows, note)
         tp.restore_highlights(self._text_store().get_highlights(path, page))
+
+    def _view_ocr_words(self, path, page: int):
+        """본문 뷰어에 줄 `(낱말목록, dpi)` 을 준다 (입력 SOT §2.8).
+
+        **우리가 읽은 OCR 이 있을 때만** 준다. 디지털 PDF 의 멀쩡한 글자층을
+        우리 OCR 로 갈아 끼우면 되레 나빠진다(단어학습 SOT §14.18 과 같은 판단).
+        """
+        # **언제 우리 것을 쓰나** — 좀게 잡는다(실측 근거, §2.8).
+        #   어떤 책은 PDF 가 품은 OCR 층이 우리 것보다 낛다(실측: '심리검사의이해'
+        #   를 우리는 '티검사의 이해' 로 읽었다). 그런 문서까지 갈아 끼우면 복사가 나빠진다.
+        #   그래서 ① 쓸 글자층이 아예 없거나 ② 사용자가 **그 쪽을 다시 읽혀을 때**만 쓴다.
+        try:
+            mv = self.main_view
+            if mv is None or mv._doc is None:
+                return ([], 0)
+            from viewer import text_extract2 as _tx
+            has_layer = _tx.has_text_layer(mv._doc.doc, int(page))
+            forced = getattr(self, "_text_force_ocr", None) or set()
+            if has_layer and (str(path), int(page)) not in forced:
+                return ([], 0)
+        except Exception:
+            pass
+        try:
+            ws = self._ocr_page_words(path, page)
+            if not ws:
+                return ([], 0)
+            return (ws, self._ocr_page_dpi(path, page))
+        except Exception:
+            return ([], 0)
 
     def _ocr_page_words(self, path, page: int):
         """study.db 에 저장된 OCR 낱말 상자(단어장 SOT 소유). 없으면 빈 목록."""
