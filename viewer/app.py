@@ -5073,12 +5073,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if j < 0 or j >= len(files):
                 return
             target = files[j]
+            # 260912-5(입력 SOT §2.4, 사용자 지시): 파일이 바뀌는 것은 쪽이 넘어가는
+            #   것과 무게가 다르다 — 보던 자리·확대율·선택이 모두 새 문서의 것으로
+            #   갈린다. **넘어가기 전에 한 번 묻는다.** 책갈피창에서 고를 때는 묻지
+            #   않는다: 그쪽은 `_on_bookmark_activated()` 로 바로 가므로, 물음을 여기
+            #   한 곳에만 두면 저절로 제외된다.
+            if not self._ask_cross_file(target, direction > 0):
+                return
             page = 0 if direction > 0 else 10 ** 9   # 다음=첫장 / 이전=끝장(클램프)
             self._on_bookmark_activated(target, page)
             self.status.showMessage(
                 f"{'다음' if direction > 0 else '이전'} 파일: {Path(target).name}", 2000)
         except Exception:
             pass
+
+    def _ask_cross_file(self, target, forward: bool) -> bool:
+        """파일 경계를 넘을지 묻는다 (입력 SOT §2.4). 참이면 넘어간다.
+
+        창을 띄우지 못하면 **넘어간다** — 물음을 못 띄웠다고 이동까지 막으면
+        사용자는 아무 일도 일어나지 않는 이유를 알 수 없다.
+        """
+        try:
+            from viewer.widgets.file_cross_dialog import FileCrossDialog
+            dlg = FileCrossDialog(self, path=target, forward=bool(forward))
+            return bool(dlg.exec())
+        except Exception:
+            return True
 
     # ===== 260609-4 (D): 발표 전체화면 보기 ==============================
     def _open_presentation(self):

@@ -40,6 +40,10 @@ app = QApplication.instance() or QApplication(sys.argv)
 from viewer.app import MainWindow
 mw = MainWindow(); mw.resize(1200, 800); mw.show(); app.processEvents()
 mw._prefs["cross_file_nav"] = True
+# 260912-5(입력 SOT §2.4): 파일 경계에 **물음**이 생겼다. 이 검사가 보려는 것은
+#   물음이 아니라 넘어간 뒤의 상태라, 여기서는 '예' 를 대신 눌러 준다.
+#   물음 자체는 `test_input_cross_file.py` 가 따로 본다.
+mw._ask_cross_file = lambda *_a, **_k: True
 mw._active_pane = 0
 mv = mw._mv[0]
 
