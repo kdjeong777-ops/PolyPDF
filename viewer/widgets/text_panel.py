@@ -120,6 +120,9 @@ class TextPanel(QWidget):
     exportWordRequested = pyqtSignal(str)       # "page" | "range" | "all"
     ocrRequested = pyqtSignal()                 # 스캔본인데 OCR 결과가 없을 때
     highlightAdded = pyqtSignal(int, int, int, int, str)  # 쪽, 줄, 시작, 끝, 색
+    # 260912-7(입력 SOT §2.7, 사용자 지시): '본문에도 표시' 가 켜져 있을 때,
+    #   칠한 줄의 자리를 본문에 그리라고 알린다 — (쪽, [사각형…])
+    highlightMarked = pyqtSignal(int, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -199,10 +202,19 @@ class TextPanel(QWidget):
         self.btn_hl = QPushButton("하이라이트")
         self.btn_hl.setToolTip("고른 글을 칠합니다")
         self.btn_hl.clicked.connect(self._on_highlight)
+        # 260912-7(사용자 지시): 켜 두면 여기서 칠할 때 **본문에도** 같은 자리를 칠한다.
+        #   본문 쪽 색은 그리기 도구의 **선 1**(입력 SOT §2.7) — 사용자가 펜 설정에서
+        #   바꾸면 그 색을 따른다. 기본은 꺼짐: 본문에 자국을 남기는 일이라 묻지 않고
+        #   하지 않는다.
+        self.cb_mark_pdf = QCheckBox("본문에도 표시")
+        self.cb_mark_pdf.setToolTip(
+            "켜면 여기서 칠한 곳을 본문에도 칠합니다(그리기 도구의 선 1 색). "
+            "본문의 자국은 지우개로 지울 수 있습니다.")
         self.btn_style_apply = QPushButton("스타일 적용")
         self.btn_style_apply.setToolTip("고른 줄을 위에서 고른 스타일(제목/내용)로 바꿉니다")
         self.btn_style_apply.clicked.connect(self.apply_style_to_selection)
         bar3.addWidget(self.btn_style_apply)
+        bar3.addWidget(self.cb_mark_pdf)
         # 260908-8(사용자 지시): **늘 보인다.** 종전에는 글자가 아예 없을 때만 나와서,
         #   OCR 이 잘못 읽은 쪽을 다시 읽힐 방법이 없었다.
         self.btn_ocr = QPushButton("OCR 다시 읽기")
@@ -529,7 +541,41 @@ class TextPanel(QWidget):
             b = cur.selectionEnd() - blk.position()
             self.highlightAdded.emit(self._page, blk.blockNumber(),
                                      int(a), int(b), HL_COLOR)
+        # 260912-7(§2.7): 켜져 있으면 **본문에도** 그 줄들의 자리를 칠한다.
+        if self.cb_mark_pdf.isChecked():
+            rects = self._rects_in_selection(cur)
+            if rects:
+                self.highlightMarked.emit(self._page, rects)
+                self.info.setText("칠했습니다 — 본문에도 표시했습니다.")
+                return
         self.info.setText("칠했습니다. [책갈피로] 를 누르면 칠한 곳으로 책갈피를 만듭니다.")
+
+    def _rects_in_selection(self, cur) -> list:
+        """고른 구간이 걸친 **줄들의 PDF 자리** (입력 SOT §2.7).
+
+        글자 단위 자리는 알 수 없다 — 이 창이 가진 것은 줄(또는 이은 줄)의 사각형뿐이다.
+        그래서 **걸친 줄 전체**를 칠한다. 이은 줄이면 원래 줄들을 모두 돌려주므로
+        본문에서도 문단 전체가 칠해진다(§3.7 과 같은 자리).
+        """
+        doc = self.edit.document()
+        a = doc.findBlock(cur.selectionStart()).blockNumber()
+        b = doc.findBlock(max(cur.selectionStart(),
+                              cur.selectionEnd() - 1)).blockNumber()
+        lo, hi = (a, b) if a <= b else (b, a)
+        out = []
+        for i in range(lo, hi + 1):
+            if not (0 <= i < len(self._rows)):
+                continue
+            r = self._rows[i]
+            rcs = r.get("rects") or ([r["rect"]] if r.get("rect") else [])
+            out.extend([tuple(x) for x in rcs if x])
+        return out
+
+    def mark_pdf_enabled(self) -> bool:
+        return bool(self.cb_mark_pdf.isChecked())
+
+    def set_mark_pdf(self, on: bool) -> None:
+        self.cb_mark_pdf.setChecked(bool(on))
 
     def highlighted_lines(self) -> list:
         """칠해진 줄 → [{"line": i, "text": 칠한 글, "style": …}] (SOT §6)."""

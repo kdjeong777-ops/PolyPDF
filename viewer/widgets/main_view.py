@@ -63,6 +63,33 @@ def _hyperlink_icon(ln: dict) -> str:
 
 
 # 260609-22(J3) / 260611-1: 본문 선긋기 기본 펜(본문 전용 5개, 발표와 분리)
+def hl_bands(st):
+    """하이라이트 한 획의 **띠 목록** → `[(x0, x1, yc, h)]` (정규화 좌표).
+
+    260912-7(입력 SOT §2.5): 여러 줄에 걸친 하이라이트는 **줄마다 한 띠**다.
+    띠를 읽는 곳이 여섯 군데라(칠하기·평탄화·사각형·지우개·집기·PDF 반영)
+    각자 `points` 를 해석하면 한 곳만 고쳐도 나머지가 어긋난다 — **여기서만 만든다.**
+
+    옛 기록(`bands` 가 없는 것)은 `points`+`h` 로 띠 하나를 만들어 돌려준다.
+    이미 그려 둔 하이라이트가 그대로 보여야 한다.
+    """
+    bs = st.get("bands")
+    if bs:
+        out = []
+        for b in bs:
+            try:
+                out.append((float(b[0]), float(b[1]), float(b[2]), float(b[3])))
+            except Exception:
+                continue
+        if out:
+            return out
+    pts = st.get("points") or []
+    if len(pts) < 2:
+        return []
+    return [(float(pts[0][0]), float(pts[-1][0]),
+             float(pts[0][1]), float(st.get("h", 0.0)))]
+
+
 MV_DEFAULT_PENS = [
     {"name": "선 1", "color": "#ff3030", "width": 3, "alpha": 100},
     {"name": "선 2", "color": "#30a0ff", "width": 4, "alpha": 100},
@@ -418,11 +445,16 @@ class _MainDrawOverlay(QWidget):
         if not pts:
             return None
         if st.get("hl"):
-            (a0, yc), (a1, _y) = pts[0], pts[-1]
-            bh = float(st.get("h", 0.0))
-            tl = self._to_view(min(a0, a1), yc - bh / 2, pr)
-            br = self._to_view(max(a0, a1), yc + bh / 2, pr)
-            return QRect(tl, br).normalized()
+            bands = hl_bands(st)                            # 260912-7
+            if not bands:
+                return None
+            rc = None
+            for (a0, a1, yc, bh) in bands:
+                tl = self._to_view(min(a0, a1), yc - bh / 2, pr)
+                br = self._to_view(max(a0, a1), yc + bh / 2, pr)
+                one = QRect(tl, br).normalized()
+                rc = one if rc is None else rc.united(one)
+            return rc
         vp = [self._to_view(x, y, pr) for x, y in pts]
         xs = [q.x() for q in vp]; ys = [q.y() for q in vp]
         return QRect(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
@@ -544,11 +576,10 @@ class _MainDrawOverlay(QWidget):
         if len(pts) < 2:
             return
         if st.get("hl"):
-            bh = float(st.get("h", 0.0))
-            (x0, yc), (x1, _y) = pts[0], pts[-1]
-            top = self._to_view(min(x0, x1), yc - bh / 2.0, pr)
-            bot = self._to_view(max(x0, x1), yc + bh / 2.0, pr)
-            painter.fillRect(QRect(top, bot).normalized(), color)
+            for (x0, x1, yc, bh) in hl_bands(st):          # 260912-7: 줄마다 한 띠
+                top = self._to_view(min(x0, x1), yc - bh / 2.0, pr)
+                bot = self._to_view(max(x0, x1), yc + bh / 2.0, pr)
+                painter.fillRect(QRect(top, bot).normalized(), color)
             return
         pen = QPen(color); pen.setWidth(int(st.get("width", 3)))
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -690,6 +721,9 @@ class _MainDrawOverlay(QWidget):
                 cur["hl"] = True
                 cur["h"] = bh
                 cur["points"] = [[sp[0], yc], [sp[0], yc]]
+                # 260912-7: 여러 줄에 걸치면 **줄마다 한 띠**. 누른 순간은 한 띠다.
+                cur["bands"] = [[sp[0], sp[0], yc, bh]]
+                cur["_sp"] = [sp[0], sp[1]]
             self._cur = cur
 
     def mouseMoveEvent(self, e):
@@ -726,10 +760,15 @@ class _MainDrawOverlay(QWidget):
                 self.update()
                 return
             if self._cur.get("hl"):
-                # 가로 구간만 확장(y=줄 중앙 고정), 띠 높이 유지
-                yc = self._cur["points"][0][1]
-                sp = self._norm(self._press, pr)
-                self._cur["points"] = [[sp[0], yc], [cp[0], yc]]
+                # 260912-7(사용자 보고 "한 줄만 선택되고 아래 줄은 안 이어짐"):
+                #   종전에는 누른 줄에 y 를 고정하고 **가로로만** 늘려, 아래로 끌어도
+                #   아무 일이 없었다. 이제 지나간 줄마다 띠를 만든다.
+                sp = self._cur.get("_sp") or self._norm(self._press, pr)
+                bands = self._owner._hl_bands_between(sp, cp)
+                self._cur["bands"] = [list(b) for b in bands]
+                self._cur["h"] = bands[0][3]
+                self._cur["points"] = [[bands[0][0], bands[0][2]],
+                                       [bands[-1][1], bands[-1][2]]]
             elif self._owner._draw_line_mode == 0 and self._press:
                 # 260907-5(사용자 요청): 모드 0=직선 — **어느 각도로든** 긋는다.
                 #   종전에는 시작점의 y 를 고정해 **수평선만** 그어졌다.
@@ -760,6 +799,7 @@ class _MainDrawOverlay(QWidget):
             self._owner._save_page_strokes()
         elif self._cur is not None:
             st = self._cur; self._cur = None
+            st.pop("_sp", None)          # 260912-7: 끄는 동안만 쓰던 값 — 저장하지 않는다
             if st.get("shape"):              # 260611-69(Stage1): 도형 저장(최소 크기 이상)
                 if st["shape"] == "circle":
                     ok = float(st.get("r", 0)) > 0.004
@@ -1573,6 +1613,9 @@ class MainView(QWidget):
                              activated=self.copy_selection)            # 260617-2 Ctrl+C
         _sc_copy.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.view.viewActivated.connect(self.activated.emit)
+        # 260912-7(입력 SOT §2.6, 사용자 지시): 본문을 고르면 텍스트 창이 걸어 둔
+        #   강조는 역할을 다했다 — 그것만 지운다.
+        self.view.viewActivated.connect(self._drop_panel_highlight)
 
     def set_hover_words(self, items) -> None:
         """단어장 단어 호버 영역 설정. items=[(x0,y0,x1,y1,lemma)] (PDF point)."""
@@ -2288,6 +2331,15 @@ class MainView(QWidget):
         self._position_hl_overlay()
 
     # --- 단어학습 하이라이트 (P4 / 260603) --------------------------------
+    def _drop_panel_highlight(self):
+        """본문을 누르면 **텍스트 창이 걸어 둔 강조만** 지운다 (입력 SOT §2.6).
+
+        읽기(TTS)·단어장이 건 강조는 그대로 둔다 — 사용자가 본문을 눌렀다고 해서
+        읽기가 끝난 것은 아니다. 그래서 지우개가 아니라 **출처를 보고** 지운다.
+        """
+        if getattr(self, "_word_hl_src", None) == "text_panel":
+            self.clear_word_highlights()
+
     def clear_word_highlights(self):
         for it in getattr(self, "_word_hl_items", []):
             try:
@@ -2296,6 +2348,7 @@ class MainView(QWidget):
                 pass
         self._word_hl_items = []
         self._word_hl_groups = []     # [(rects_pt, style)]
+        self._word_hl_src = None      # 260912-7: 누가 걸었나(§2.6)
 
     # 스타일별 (배경, 테두리)
     _HL_STYLES = {
@@ -2319,10 +2372,16 @@ class MainView(QWidget):
                 self.scene.addItem(item)
                 self._word_hl_items.append(item)
 
-    def highlight_word_groups(self, groups, scroll: bool = True):
+    def highlight_word_groups(self, groups, scroll: bool = True, src=None):
         """여러 묶음을 각자 스타일로 강조. groups=[(rects_pt, style), ...].
-        scroll=True 면 첫 사각형이 보이도록 스크롤."""
+        scroll=True 면 첫 사각형이 보이도록 스크롤.
+
+        260912-7(입력 SOT §2.6): `src` 는 **누가 걸었는지**다. 본문을 누르면
+        텍스트 창이 건 것만 지우기 위해 필요하다 — 읽기(TTS)나 단어장이 건 것은
+        사용자가 본문을 눌렀다고 해서 끝난 것이 아니다.
+        """
         self.clear_word_highlights()
+        self._word_hl_src = src
         self._word_hl_groups = [(list(r), s) for (r, s) in groups if r]
         if not self._word_hl_groups:
             return
@@ -2333,13 +2392,14 @@ class MainView(QWidget):
             self.view.ensureVisible(QRectF(x0 * z, y0 * z, (x1 - x0) * z, (y1 - y0) * z))
 
     def highlight_word_rects(self, rects_pt: list, strong: bool = True,
-                             style: str = None, scroll: bool = None):
+                             style: str = None, scroll: bool = None, src=None):
         """단일 묶음 강조(호환). style 미지정 시 strong→select/all."""
         if style is None:
             style = "select" if strong else "all"
         if scroll is None:
             scroll = (style != "all")
-        self.highlight_word_groups([(list(rects_pt or []), style)], scroll=scroll)
+        self.highlight_word_groups([(list(rects_pt or []), style)],
+                                   scroll=scroll, src=src)
 
 
     def _render_two_pages(self):
@@ -2883,6 +2943,81 @@ class MainView(QWidget):
         """260611-1: 줄 탐지 실패 시 폴백 띠 높이(정규화) — 페이지 높이의 소량."""
         return 0.018
 
+    def _hl_lines(self):
+        """이 쪽의 글줄 상자 → `[(x0, y0, x1, y1)]` (정규화, 위에서 아래로).
+
+        260912-7(입력 SOT §2.5): 끌 때마다 쪽을 다시 뽑으면 마우스가 무거워진다.
+        쪽이 바뀔 때까지 기억해 둔다.
+        """
+        key = (id(self._doc), self._current_page)
+        cached = getattr(self, "_hl_lines_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        out = []
+        try:
+            if self._doc and not self._is_image:
+                page = self._doc.doc.load_page(self._current_page)
+                pw, ph = page.rect.width, page.rect.height
+                if pw > 0 and ph > 0:
+                    d = page.get_text("dict")
+                    for blk in d.get("blocks", []):
+                        for ln in blk.get("lines", []):
+                            x0, y0, x1, y1 = ln.get("bbox", (0, 0, 0, 0))
+                            if x1 > x0 and y1 > y0:
+                                out.append((x0 / pw, y0 / ph, x1 / pw, y1 / ph))
+            out.sort(key=lambda r: (r[1], r[0]))
+        except Exception:
+            out = []
+        self._hl_lines_cache = (key, out)
+        return out
+
+    def _hl_bands_between(self, sp, cp):
+        """누른 점 → 지금 점 사이를 **줄마다 한 띠**로 (§2.5).
+
+        첫 줄은 시작 x 부터 그 줄 오른끝까지, 가운데 줄은 통째로, 마지막 줄은 그 줄
+        왼끝부터 끝 x 까지 — 어느 PDF 뷰어에서나 형광펜이 이렇게 움직인다.
+        글줄을 못 찾으면 **종전처럼 한 띠**로 돌려준다(그래야 그림 위에도 칠해진다).
+        """
+        lines = self._hl_lines()
+        (sx, sy), (cx, cy) = sp, cp
+        up = cy < sy
+        if up:                                   # 위로 끌면 시작/끝을 바꿔 생각한다
+            (sx, sy), (cx, cy) = (cx, cy), (sx, sy)
+
+        def _row(fy):
+            best, bd = None, 1e9
+            for r in lines:
+                d = 0.0 if r[1] <= fy <= r[3] else min(abs(fy - r[1]), abs(fy - r[3]))
+                if d < bd:
+                    bd, best = d, r
+            return best
+
+        a, b = _row(sy), _row(cy)
+        if a is None or b is None:
+            yc = (sy + cy) / 2.0
+            return [(min(sx, cx), max(sx, cx), yc, self._hl_default_h())]
+        i0 = lines.index(a)
+        i1 = lines.index(b)
+        if i1 < i0:
+            i0, i1 = i1, i0
+        if i0 == i1:
+            r = lines[i0]
+            return [(min(sx, cx), max(sx, cx), (r[1] + r[3]) / 2.0, r[3] - r[1])]
+        bands = []
+        for k in range(i0, i1 + 1):
+            r = lines[k]
+            yc, h = (r[1] + r[3]) / 2.0, r[3] - r[1]
+            if k == i0:
+                x0, x1 = min(max(sx, r[0]), r[2]), r[2]
+            elif k == i1:
+                x0, x1 = r[0], max(min(cx, r[2]), r[0])
+            else:
+                x0, x1 = r[0], r[2]
+            if x1 > x0:
+                bands.append((x0, x1, yc, h))
+        return bands or [(min(sx, cx), max(sx, cx),
+                          (sy + cy) / 2.0, self._hl_default_h())]
+
     def _hl_band_at(self, fx, fy):
         """260611-1: 정규화 좌표(fx,fy)의 텍스트 줄 (y0n, y1n). 못 찾으면 None."""
         try:
@@ -3082,13 +3217,15 @@ class MainView(QWidget):
                 return False
             vp = [to_view(p) for p in pts]
             if st.get("hl"):
-                # 띠 사각형: x[min..max], yc±h/2
-                bh = float(st.get("h", 0.0)) * pr.height()
-                (x0, yc) = vp[0]; (x1, _y) = vp[-1]
-                left, right = min(x0, x1), max(x0, x1)
-                top, bot = yc - bh / 2.0, yc + bh / 2.0
-                return (left - rad <= ex <= right + rad
-                        and top - rad <= ey <= bot + rad)
+                # 띠 사각형: x[min..max], yc±h/2 — 260912-7: 띠마다 본다
+                for (a0, a1, yc, bh) in hl_bands(st):
+                    p0 = to_view([min(a0, a1), yc])
+                    p1 = to_view([max(a0, a1), yc])
+                    hh = bh * pr.height() / 2.0
+                    if (p0[0] - rad <= ex <= p1[0] + rad
+                            and p0[1] - hh - rad <= ey <= p0[1] + hh + rad):
+                        return True
+                return False
             for i in range(1, len(vp)):
                 if seg_dist(ex, ey, vp[i - 1][0], vp[i - 1][1],
                             vp[i][0], vp[i][1]) <= rad:
@@ -3196,14 +3333,14 @@ class MainView(QWidget):
                         return i
             else:
                 pts = st.get("points", [])
-                if st.get("hl") and len(pts) >= 2:
-                    (a0, yc), (a1, _y) = pts[0], pts[-1]
-                    t = self._norm_to_view(min(a0, a1), yc, pr)
-                    b2 = self._norm_to_view(max(a0, a1), yc, pr)
-                    bh = float(st.get("h", 0.0)) * pr.height()
-                    if (min(t.x(), b2.x()) - TH <= px <= max(t.x(), b2.x()) + TH
-                            and abs(py - t.y()) <= bh / 2 + TH):
-                        return i
+                if st.get("hl") and (pts or st.get("bands")):
+                    for (a0, a1, yc, bhn) in hl_bands(st):   # 260912-7
+                        t = self._norm_to_view(min(a0, a1), yc, pr)
+                        b2 = self._norm_to_view(max(a0, a1), yc, pr)
+                        bh = bhn * pr.height()
+                        if (min(t.x(), b2.x()) - TH <= px <= max(t.x(), b2.x()) + TH
+                                and abs(py - t.y()) <= bh / 2 + TH):
+                            return i
                 elif len(pts) >= 2:
                     vp = [self._norm_to_view(x, y, pr) for x, y in pts]
                     for k in range(1, len(vp)):
@@ -3261,6 +3398,17 @@ class MainView(QWidget):
                 cx, cy, hw, hh, _rot = self._shape_geom(st, pr)
                 return QRectF(cx - hw, cy - hh, 2 * hw, 2 * hh)
             pts = st.get("points") or []
+            if st.get("hl"):                                 # 260912-7: 띠 전부를 감싼다
+                bands = hl_bands(st)
+                if not bands:
+                    return None
+                xs = [v for (a0, a1, _y, _h) in bands for v in (a0, a1)]
+                ys = [v for (_a, _b, yc, h) in bands
+                      for v in (yc - h / 2.0, yc + h / 2.0)]
+                return QRectF(pr.left() + min(xs) * pr.width(),
+                              pr.top() + min(ys) * pr.height(),
+                              max(1.0, (max(xs) - min(xs)) * pr.width()),
+                              max(1.0, (max(ys) - min(ys)) * pr.height()))
             if not pts:
                 return None
             xs = [p[0] for p in pts]; ys = [p[1] for p in pts]

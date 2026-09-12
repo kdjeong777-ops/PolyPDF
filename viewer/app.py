@@ -176,6 +176,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             # 패널(검색결과/스크린샷) 가시성은 panels_visible 로 저장·복원, 기본 True.
             "show_panel_toolbar": True,   # 260606-25: 패널 툴바 기본 보이기
             "cross_file_nav": True,       # 260609-2/28: 페이지 경계에서 다음/이전 파일 이동(기본 켜짐)
+            # 260912-7(입력 SOT §2.7): 텍스트 창에서 칠하면 본문에도 표시할지.
+            #   기본 꺼짐 — 본문에 자국을 남기는 일은 묻지 않고 하지 않는다.
+            "text_hl_mark_pdf": False,
             # 260609-3: 하이퍼링크 URL 허용 도메인(youtube 등). 빈 값이면 모듈 기본 사용.
             "hyperlink_url_allowlist": [],
             # 260609-11(C8): 페이지 내 하이퍼링크 버튼의 상단 오프셋(px)
@@ -2582,6 +2585,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _wire_text_panel(self):
         tp = self.text_panel
         tp.lineFocused.connect(self._on_text_line_focused)
+        tp.highlightMarked.connect(self._on_text_highlight_mark)   # 260912-7(§2.7)
         tp.lineEdited.connect(self._on_text_line_edited)
         tp.applyToPdfRequested.connect(self._on_text_apply_pdf)
         tp.bookmarkFromHighlight.connect(self._on_text_make_bookmarks)
@@ -2595,6 +2599,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         tp.ocrRequested.connect(self._on_text_need_ocr)
         try:
             tp.set_styles(self._prefs.get("text_panel_styles") or {})
+            tp.set_mark_pdf(bool(self._prefs.get("text_hl_mark_pdf", False)))
         except Exception:
             pass
 
@@ -2730,7 +2735,51 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if mv.current_page() != page:
                 mv.go_to_page(page)
             mv.highlight_word_rects([tuple(r) for r in rects if r],
-                                    style="select", scroll=True)
+                                    style="select", scroll=True,
+                                    src="text_panel")   # 260912-7(§2.6)
+        except Exception:
+            pass
+
+    def _on_text_highlight_mark(self, page, rects):
+        """텍스트 창에서 칠한 자리를 **본문 그리기 층**에도 얹는다 (입력 SOT §2.7).
+
+        사용자 지시: "옵션을 킨 상태에서 텍스트창을 하이라이트하면 해당 내용이
+        본 PDF 에도 하이라이트 되는 거야. 이 경우 1번 색상을 적용해."
+
+        PDF 파일 자체는 건드리지 않는다 — 그리기 층(편집모드의 선·형광펜과 같은 곳)에
+        얹는다. 그래야 지우개로 지울 수 있고, [PDF 에 반영] 을 누를 때 함께 들어간다.
+        """
+        mv = self.main_view
+        if mv is None or not rects:
+            return
+        try:
+            if mv.current_page() != int(page):
+                return                      # 다른 쪽이면 얹지 않는다(자리가 어긋난다)
+            pg = mv._doc.doc.load_page(int(page))
+            pw, ph = float(pg.rect.width), float(pg.rect.height)
+            if pw <= 0 or ph <= 0:
+                return
+            # 260912-7 보충 지시: **색상버튼이 골라져 있으면 그 색**, 안 골라져
+            #   있으면 선 1. `_active_pen()` 이 정확히 그 규칙이라 그대로 쓴다 —
+            #   여기서 같은 판단을 다시 만들면 둘이 어긋난다(입력 SOT §2.7).
+            pen = mv._active_pen()
+            bands = []
+            for (x0, y0, x1, y1) in rects:
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                bands.append([x0 / pw, x1 / pw, ((y0 + y1) / 2.0) / ph,
+                              (y1 - y0) / ph])
+            if not bands:
+                return
+            st = {"color": pen.get("color", "#ff3030"),
+                  "width": int(pen.get("width", 3)),
+                  "alpha": int(pen.get("alpha", 100)),
+                  "hl": True, "bands": bands, "h": bands[0][3],
+                  "points": [[bands[0][0], bands[0][2]],
+                             [bands[-1][1], bands[-1][2]]]}
+            mv._page_strokes.append(st)
+            mv._save_page_strokes()
+            mv._draw_overlay.update()
         except Exception:
             pass
 
@@ -6478,6 +6527,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             #   조용히 사라진다(§8.2 함정) — `test_prefs_allowlist.py` 가 지킨다.
             "text_panel_styles": dict(prefs.get("text_panel_styles",
                                                 old.get("text_panel_styles", {})) or {}),
+            # 260912-7(§2.7): 허용목록에 빠지면 조용히 사라진다(마스터 §14.2 의 교훈)
+            "text_hl_mark_pdf": bool(prefs.get("text_hl_mark_pdf",
+                                               old.get("text_hl_mark_pdf", False))),
             # 260829 P2: 태그 자동 부여 — 허용목록 미등재 시 조용히 유실(§14.2 함정)
             "auto_tag_enabled": bool(prefs.get("auto_tag_enabled",
                                                old.get("auto_tag_enabled", False))),
@@ -6807,6 +6859,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             tp = getattr(self, "text_panel", None)
             if tp is not None:
                 self._prefs["text_panel_styles"] = tp.styles()
+                self._prefs["text_hl_mark_pdf"] = tp.mark_pdf_enabled()
         except Exception:
             pass
         return self._prefs
