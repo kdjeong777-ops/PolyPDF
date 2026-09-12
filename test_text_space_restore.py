@@ -97,6 +97,34 @@ chk(tx._line_text(raw_only, False) == "가나다라",
     tx._line_text(raw_only, False))
 chk(tx._line_text(raw_only, True) == "가나 다라", "⑦ 되살리면 물론 띄어쓴다")
 
+# ── ⑨ 뒤 글자에 덮인 빈칸은 지운다 (§3.6.10 ②) ─────────────────
+#   구글 번역본 PDF 는 낱말 사이에 빈칸을 둘 찍는데, 둘째 것의 자리를 다음
+#   글자가 그대로 덮는다 — 종이에는 한 칸으로 보인다.
+dbl = [("근", 95.52, 103.21), (" ", 103.21, 105.09), (" ", 105.09, 106.96),
+       ("몇", 105.09, 112.78)]
+got = tx._line_text(ln(dbl, 8.37), True)
+chk(got == "근 몇", "⑨ 덮인 빈칸은 지운다 — 한 칸만 남는다", repr(got))
+chk(tx._line_text(ln(dbl, 8.37), False) == "근 몇",
+    "⑨ 되살리기를 끄더라도 지운다 — 자리를 잰 사실이지 짐작이 아니다")
+chk(tx.SPACE_COVERED == 0.5, "⑨ 파고드는 기준은 0.5pt")
+
+#   일부러 넣은 두 칸은 겹치지 않으므로 남는다
+wide = [("총", 0.0, 10.0), (" ", 10.0, 13.0), (" ", 13.0, 16.0), ("칙", 16.0, 26.0)]
+keep = tx._line_text(ln(wide, 10.0), True)
+chk(keep == "총  칙", "⑨ 겹치지 않는 두 칸은 그대로 둔다(`제1장 총  칙`)", repr(keep))
+
+# ── ⑩ `\xa0` 도 빈칸이다 (§3.6.10 ③) ──────────────────────────
+nb = [("성", 0.0, 10.0), ("\u00a0", 10.0, 13.0), ("힘", 13.0, 23.0)]
+got = tx._line_text(ln(nb, 10.0), True)
+chk(got == "성 힘", "⑩ NBSP 를 보통 빈칸으로 바꾼다", repr(got))
+chk(" " in got and "\u00a0" not in got, "⑩ 바뀐 글에 NBSP 가 남지 않는다", repr(got))
+chk("\u00a0" in tx._SPACE_LIKE and "\u202f" in tx._SPACE_LIKE,
+    "⑩ 같은 부류의 빈칸도 함께 본다")
+#   §3.7 이 '원문이 빈칸으로 끝났는가' 를 볼 수 있어야 한다 — 그래야 `성공에힘입어` 가 안 된다
+tail = [("에", 0.0, 10.0), ("\u00a0", 10.0, 13.0)]
+chk(tx._line_text(ln(tail, 10.0), True).endswith(" "),
+    "⑩ 줄 끝의 NBSP 도 빈칸으로 남아 문장 잇기가 알아본다")
+
 # ── ⑧ 진짜 PDF 로 끝까지 ───────────────────────────────────────
 root = tempfile.mkdtemp(prefix="polypdf_space_")
 try:

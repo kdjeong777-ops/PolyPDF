@@ -68,6 +68,39 @@ SPACE_GAP = 0.25
 SPACE_DENSE = 0.80
 _SPACE_NO_BEFORE = set("%)]}>,.·…~’”」』、。!?;:")
 _SPACE_NO_AFTER = set("([{<‘“「『")
+# 260912-2(SOT §3.6.10 ②): **뒤 글자에 덮인 빈칸**은 지운다. 구글 번역본 PDF 가
+#   낱말 사이에 NBSP 를 **두 개** 찍는데, 실측하면 둘째 것의 자리(105.09~106.96)를
+#   다음 글자가 그대로 덮는다(105.09~112.78) — 종이에는 빈칸이 **하나만** 보인다.
+#   그대로 두면 텍스트 창·단어장·읽기가 모두 `조지아  교통부의` 로 두 칸이 된다.
+SPACE_COVERED = 0.5     # 뒤 글자가 이만큼(pt) 안으로 파고들면 그 빈칸은 없는 것
+# 260912-2(SOT §3.6.10 ③): `\xa0`(줄바꿈 없는 빈칸) 같은 것도 **빈칸이다**.
+#   구글 번역본 PDF 가 낱말 사이를 전부 NBSP 로 찍는데, 아래 규칙들은 하나같이
+#   보통 빈칸(`' '`)을 찾는다 — §3.7 의 '원문이 빈칸으로 끝났는가'(`endswith(' ')`)가
+#   언제나 거짓이 되어 `성공에` + `힘입어` 가 `성공에힘입어` 로 붙었다.
+_SPACE_LIKE = {"\u00a0", "\u2007", "\u202f", "\u2009", "\u200a", "\ufeff"}
+
+
+def _drop_covered_spaces(chars):
+    """뒤 글자가 덮어 버린 빈칸을 뺀다 (SOT §3.6.10 ②).
+
+    빈칸 글자의 자리를 **다음 글자가 파고들면** 그 빈칸은 종이에 나타나지 않는다.
+    자리를 재서 아는 것이라 글자를 보고 짐작하지 않는다 — 일부러 넣은 두 칸
+    (`제1장 총  칙`)은 서로 겹치지 않으므로 그대로 남는다.
+    """
+    if len(chars) < 2:
+        return chars
+    out = []
+    for i, cur in enumerate(chars):
+        c, bb, _sz = cur
+        if c.isspace() and i + 1 < len(chars):
+            nb = chars[i + 1][1]
+            try:
+                if float(nb[0]) <= float(bb[0]) + SPACE_COVERED:
+                    continue                 # 다음 글자가 이 빈칸을 덮는다
+            except Exception:
+                pass
+        out.append(cur)
+    return out
 
 
 def _restore_spaces(chars) -> str:
@@ -123,14 +156,20 @@ def _line_text(ln, restore: bool) -> str:
     for sp in spans:
         t = sp.get("text")
         if t:
+            for _sl in _SPACE_LIKE:               # §3.6.10 ③
+                if _sl in t:
+                    t = t.replace(_sl, " ")
             plain.append(t)
         size = float(sp.get("size", 0) or 0)
         for ch in sp.get("chars", []) or []:
             c = ch.get("c", "")
+            if c in _SPACE_LIKE:                  # §3.6.10 ③
+                c = " "
             if not t:
                 plain.append(c)
             chars.append((c, ch.get("bbox") or (0, 0, 0, 0), size))
-    flat = "".join(plain)
+    chars = _drop_covered_spaces(chars)
+    flat = "".join(c for c, _b, _s in chars) if chars else "".join(plain)
     if not restore or not chars:
         return flat
     if int(ln.get("wmode", 0) or 0) != 0:
@@ -730,6 +769,9 @@ def _merge_rows(frags):
             x0, y0 = min(x0, rect[0]), min(y0, rect[1])
             x1, y1 = max(x1, rect[2]), max(y1, rect[3])
         # 대표 크기 = **글자가 가장 많은 조각**의 크기(제목/내용 판정용, SOT §3.4)
+        #   260912-2: OCR 쪽에서는 이 값이 흔들린다(§3.4.1 백로그) — '글자 수로 무게를
+        #   준 중앙값' 으로 바꿔 봤으나 표 많은 스캔 서식이 되레 나빠져(제목 38 → 69)
+        #   되돌렸다. 고치려면 제목 판정 자체를 손봐야 한다.
         size = max(items, key=lambda f: len(f[1].strip()))[2]
         # 260910(SOT §3.7): 끝의 빈칸을 **남긴다** — 문장을 이을 때 그 자리가
         #   낱말 경계였는지 알려 주는 유일한 단서다. 판단은 **마지막 조각의 원본**으로

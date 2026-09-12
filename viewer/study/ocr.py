@@ -420,6 +420,23 @@ def detect_lang(doc, pages: int = 5) -> str:
         return resolve_lang("kor")
     return default_lang()
 
+def _overlaid_ocr_layer(page) -> bool:
+    """이 쪽의 글자층이 **스캐너가 덧씌운 보이지 않는 OCR 층**인가 (§14.18).
+
+    판정 본문은 텍스트 창 SOT §3.5 가 소유한다(`text_extract2._is_ocr_layer`) —
+    여기서 다시 만들지 않는다. 못 부르면 **덧씌운 층이 아니라고** 본다:
+    멀쩡한 글자층을 버리는 쪽이 더 나쁘다.
+    """
+    try:
+        from viewer.text_extract2 import _is_ocr_layer
+    except Exception:
+        return False
+    try:
+        return bool(_is_ocr_layer(page))
+    except Exception:
+        return False
+
+
 def decide_source(page: "fitz.Page") -> tuple[str, dict]:
     """이 페이지를 'layer'(레이어 사용) 또는 'ocr'(재OCR) 중 무엇으로 처리할지 판정.
 
@@ -432,8 +449,14 @@ def decide_source(page: "fitz.Page") -> tuple[str, dict]:
     latin = len(_WORD_RE.findall(text))
 
     # 전면 이미지(스캔본) → 레이어가 있어도 재OCR (덧씌운 OCR 레이어 신뢰 불가)
+    # 260912-2(§14.18, 사용자 보고): 다만 **보이지 않는 글자층일 때만** 그렇다.
+    #   스캐너가 얹은 OCR 층은 render mode 3(안 보임)이지만, 배경 그림 위에 진짜
+    #   글을 **그려 넣은** 문서(구글 번역본·전면 배경을 깐 보고서)는 보이는 글자층이고
+    #   그 글이 원본 그대로다. 종전에는 점유율만 보고 그 멀쩡한 층을 버리고 OCR 해
+    #   `조 지 아 교 통 부` 처럼 글자마다 끊기고 본문이 제목으로 뒤집혔다(사용자 보고).
+    #   실측(표본 4종 각 4쪽): 진짜 스캔 3종 = 안 보이는 층 100%, 구글 번역본 = 0%.
     cov = _image_coverage(page) if has_img else 0.0
-    if cov >= 0.6:
+    if cov >= 0.6 and _overlaid_ocr_layer(page):
         return "ocr", {"reason": "scanned-page", "img_cov": round(cov, 2)}
 
     # 텍스트가 거의 없고 이미지가 있으면 명백한 스캔
