@@ -370,6 +370,13 @@ if HAVE_SOT:
                 bad_ref.append('%s: %s SOT %s' % (f.name, who, sec))
     chk(not bad_ref, '코드가 가리키는 SOT 절이 실제로 있다',
         str(sorted(set(bad_ref))[:6]))
+    # 260913-13: `[글](§5.1.1)` 은 링크처럼 보이지만 눌러도 가지 않는다(주소가 파일도 앵커도 아님).
+    #   SOT 는 절을 평문 `§번호` 로 가리킨다.
+    sec_links = ['%s: %s' % (n[:10], m) for n, t in SOTS.items()
+                 for m in _re2.findall(r'\[[^\]\n]*\]\(§[^)\n]*\)',
+                                       _re2.sub(r'`[^`\n]*`', '', t))]   # 코드 표기 안의 예시는 제외
+    chk(not sec_links, 'SOT 가 절을 링크 `[글](§N)` 이 아니라 평문 §N 으로 가리킨다',
+        str(sec_links[:4]))
 
 print(NL + "=== 텍스트 창 SOT §3.5.1 — 잡음 판정의 단일 소유 ===")
 owner = ROOT / "viewer" / "text_noise.py"
