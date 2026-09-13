@@ -173,6 +173,37 @@ if HAVE_SOT:
         miss = [n for n in buckets.get(owner, []) if n not in txt]
         chk(not miss, "%s 소유 검사가 그 SOT §검증 표에 있다" % owner, str(miss))
 
+    # 260913-9(§14.7.1): SOT 본문에는 검사 항목 수를 적지 않는다 — 숫자는 곧 낡는다. §0 이력만 예외.
+    def _body(txt):
+        return re.sub(r"^## 0\..*?(?=^## [1-9])", "", txt, flags=re.S | re.M)
+    counted = []
+    for name, txt in SOTS.items():
+        if name == "CLAUDE.md" or "아카이브" in name:
+            continue
+        b = _body(txt)
+        counted += ["%s: %s" % (name[:12], x) for x in
+                    re.findall(r"test_[a-z0-9_]+\.py`?\)?\s*\(?\*{0,2}[0-9]+\s*항목", b)]
+        if "| 파일 | 항목 |" in b:
+            counted.append("%s: '항목' 열" % name[:12])
+    chk(not counted, "§14.7.1 SOT 본문(§0 밖)에 검사 항목 수가 없다", str(counted[:4]))
+
+print(NL + "=== 마스터 §6 — 모듈 지도 ===")
+if HAVE_SOT:
+    # 260913-9: 모든 모듈이 §6 에 한 줄씩 있어야 한다 — 어느 SOT 를 읽을지 찾을 길을 남긴다.
+    mst = SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", "")
+    s6 = mst.find("## 6. 디렉터리 구조"); s7 = mst.find("## 7. 모듈별 공개 API")
+    sec6 = mst[s6:s7] if 0 <= s6 < s7 else ""
+    chk(bool(sec6), "마스터 §6 모듈 지도가 있다")
+    want = ["viewer/" + p.name for p in (ROOT / "viewer").glob("*.py")]
+    for sub in ("widgets", "study"):
+        want += ["%s/%s" % (sub, p.name) for p in (ROOT / "viewer" / sub).glob("*.py")
+                 if p.name != "__init__.py"]
+    miss = sorted(w for w in want if "`%s`" % w not in sec6)
+    chk(not miss, "모든 모듈이 §6 에 있다(새 모듈은 한 줄 추가)", str(miss[:6]))
+    listed = set(re.findall(r"`((?:viewer|widgets|study)/[A-Za-z0-9_]+\.py)`", sec6))
+    gone = sorted(listed - set(want))
+    chk(not gone, "§6 에 없어진 모듈이 남아 있지 않다", str(gone[:6]))
+
 print(NL + "=== CLAUDE.md — 문서·저장소 규약 ===")
 ver = read(ROOT / "viewer" / "__init__.py")
 m = re.search(r'__version__\s*=\s*"([^"]+)"', ver)

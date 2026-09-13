@@ -303,7 +303,7 @@ class TextOcrPageWorker(QObject):
     def _skippable(doc, page_index: int) -> bool:
         """이 쪽은 OCR 하지 않아도 되는가 — 글자층이 있고 그림이 거의 없다.
 
-        판정은 단어학습 SOT §14.3 의 `decide_source` 를 그대로 쓴다. 다만 그림이
+        판정은 단어학습 SOT §14.18 의 `decide_source` 를 그대로 쓴다. 다만 그림이
         섞인 쪽(붙여 넣은 표·사진)은 **건너뛰지 않는다** — 그림 속 글을 채워야 한다.
         """
         try:

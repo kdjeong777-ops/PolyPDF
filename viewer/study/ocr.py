@@ -591,7 +591,7 @@ def _join_words_by_gap(parts) -> str:
 def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     """이미지 OCR → {text, conf, words:[{surface,x0,y0,x1,y1,conf}]} (픽셀 좌표).
 
-    260908-8(텍스트 창 SOT §3.5 · 이 문서 §14.3): **글자로 볼 수 없는 낱말은 버린다.**
+    260908-8(텍스트 창 SOT §3.5 · 단어학습 SOT §14.6): **글자로 볼 수 없는 낱말은 버린다.**
     OCR 은 종이의 티·괘선을 `픔`·`■` 같은 글자로 읽는다. 그것을 그대로 두면
     본문·단어장·검색 색인이 모두 오염된다. 판정은 `viewer.text_noise` 가 소유한다.
     """
@@ -644,9 +644,10 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
 def words_from_layer(page: "fitz.Page") -> dict:
     """디지털 레이어에서 단어+좌표 추출 (point 좌표). OCR 대체.
 
-    260908-8: 이 경로도 **스캔본을 탄다** — 그림 위에 보이지 않게 얹힌 OCR 글자층은
-    `decide_source` 가 'layer' 로 판정하기 때문이다. 그런 쪽에서는 텍스트 창과 **같은
-    규칙**으로 잡음 낱말을 뺀다(텍스트 창 SOT §3.5). 사람이 넣은 글자층은 건드리지 않는다.
+    260908-8: 이 경로도 **스캔본을 탈 수 있다** — 보이지 않게 얹힌 OCR 글자층이라도 그림
+    점유율이 1번 문턱 미만인 쪽은 `decide_source` 가 'layer' 로 판정한다(단어학습 SOT §14.18).
+    그런 쪽에서는 텍스트 창과 **같은 규칙**으로 잡음 낱말을 뺀다(텍스트 창 SOT §3.5).
+    사람이 넣은 글자층은 건드리지 않는다.
     """
     raw = page.get_text("words")   # [x0,y0,x1,y1, word, block,line,wordno]
     words = [{"surface": w[4], "x0": float(w[0]), "y0": float(w[1]),
