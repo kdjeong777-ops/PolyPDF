@@ -1181,7 +1181,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         mv.hyperlinkActivated.connect(
             lambda link, i=idx: (i == self._active_pane) and self._launch_hyperlink(link))
         mv.drawModeChanged.connect(self._on_main_draw_mode_changed)   # 260611-4: 공유 동기
-        # 260913-1(입력 SOT §2.8): 본문이 텍스트 창과 **같은 줄·낛말**을 쓰게 한다.
+        # 260913-1(입력 SOT §2.8): 본문이 텍스트 창과 **같은 줄·낱말**을 쓰게 한다.
         #   뷰어는 study.db 를 모르므로 앱이 넣어 준다.
         mv.set_ocr_words_provider(self._view_ocr_words)
 
@@ -2342,7 +2342,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     # --- v1.6.21: 파일 작업 핸드셰이크 ----------------------------------
     def _close_main_view_doc(self):
         """메인 뷰어·페이지 썸네일의 PDF 핸들을 즉시 해제 (트리/검색결과는 유지).
-        260606-8: 두 창 모두 해제(파일 잠금 방지)."""
+        260606-8: 두 창 모두 해제(파일 잠금 방지).
+        260913-4: 텍스트 창의 표 찾기(pdfplumber) 핸들도 **여기서** 놓는다 — 저장 경로마다
+        따로 부르게 두면 빠뜨린 경로에서 원본이 잠긴다(텍스트 창 SOT §5.2)."""
+        try:
+            from viewer import text_extract2 as _tx2
+            _tx2.close_cache()
+        except Exception:
+            pass
         for mv in getattr(self, "_mv", []):
             try:
                 if getattr(mv, "_doc", None) is not None:
@@ -2649,13 +2656,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         busy_idx = bool(getattr(self, "_index_workers", None))
         self._text_tables_deferred = busy_idx
         # 260908-8: [OCR 다시 읽기] 로 다시 읽은 쪽은 **그 결과**를 쓴다(SOT §3.1).
-        forced = getattr(self, "_text_force_ocr", None) or set()
-        ow, odpi = ((self._ocr_page_words(cur, page), self._ocr_page_dpi(cur, page))
-                    if (str(cur), int(page)) in forced else (None, 0))
+        # 260913-6(SOT §3.1, 사용자 결정): 원천은 본문과 **같은 규칙** — 스캔 쪽은 우리 OCR.
+        ow, odpi = self._view_ocr_words(cur, page)
+        # 260913-4(SOT §3.5.2): 옆 쪽 OCR 낱말 — 조금씩 다르게 읽힌 꼬리말을 알아본다
+        peers = []
+        if ow:
+            for k in (page - 1, page + 1):
+                if 0 <= k < mv._doc.page_count:
+                    pw, pd = self._view_ocr_words(cur, k)
+                    if pw:
+                        peers.append((pw, pd))
         w = TextPageWorker(cur, page,
                            tables=("omit" if tp.omit_tables() else "lines"),
                            ocr_text=ocr_text, token=tok, cached_only=busy_idx,
-                           ocr_words=ow, ocr_dpi=odpi,
+                           ocr_words=ow or None, ocr_dpi=odpi, ocr_peer_words=peers or None,
                            join_lines=tp.join_lines())
         self._text_worker = w
         w.done.connect(lambda pg, rows, t, _w=w:
@@ -2676,42 +2690,35 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         rows = list(rows or [])
         # 고쳐 둔 줄을 얹는다(SOT §5.1 ①). 260908-6: 줄 번호가 아니라 **자리로 되맞춘다**
         #   — 잡음 거르기·표 옵션으로 목록이 달라져도 고침이 제 줄에 붙는다(SOT §5.1.1).
-        fixes = self._text_store().remap(path, page, rows)
-        for i, t in fixes.items():
-            if 0 <= i < len(rows):
-                rows[i].setdefault("orig", rows[i].get("text", ""))
-                rows[i]["text"] = t
+        #   260913-4(SOT §5.1.3): 합친 줄은 **원래 자리들**로 찾아 다시 합친다 — 종전
+        #   `remap` 은 합친 사각형·합친 글을 찾다가 조용히 실패해 합친 줄이 풀렸다.
+        st_ = {}
+        rows = self._text_store().apply_to_rows(path, page, rows, stats=st_)
         if noise and not note:   # 260908-6(SOT §3.5): 조용히 빼지 않는다
             note = f"p.{page + 1} · {len(rows)}줄 · 잡음 {noise}줄 숨김"
+        # 260913-6(SOT §5.1.4): 원천이 바뀌어 겹침으로도 못 찾은 고침 — 조용히 숨기지 않는다
+        if st_.get("unmatched") and not self._text_store().is_applied(path, page):
+            note = (note + " · " if note else "") + \
+                f"옛 고침 {st_['unmatched']}개가 지금 줄과 맞지 않습니다"
         tp.set_page(path, page, rows, note)
         tp.restore_highlights(self._text_store().get_highlights(path, page))
 
     def _view_ocr_words(self, path, page: int):
-        """본문 뷰어에 줄 `(낱말목록, dpi)` 을 준다 (입력 SOT §2.8).
+        """이 쪽에 쓸 **우리 OCR** `(낱말목록, dpi)` — 본문·텍스트 창·Word 가 함께 쓴다.
 
-        **우리가 읽은 OCR 이 있을 때만** 준다. 디지털 PDF 의 멀쩡한 글자층을
-        우리 OCR 로 갈아 끼우면 되레 나빠진다(단어학습 SOT §14.18 과 같은 판단).
-        """
-        # **언제 우리 것을 쓰나** — 좀게 잡는다(실측 근거, §2.8).
-        #   어떤 책은 PDF 가 품은 OCR 층이 우리 것보다 낛다(실측: '심리검사의이해'
-        #   를 우리는 '티검사의 이해' 로 읽었다). 그런 문서까지 갈아 끼우면 복사가 나빠진다.
-        #   그래서 ① 쓸 글자층이 아예 없거나 ② 사용자가 **그 쪽을 다시 읽혀을 때**만 쓴다.
+        판단은 `text_extract2.pick_ocr_words` 한 곳이 한다(텍스트 창 SOT §3.1, 260913-6 사용자 결정
+        "우리 OCR로 통일"). 쓸 만한 글자층이 있는 쪽은 사용자가 [OCR 다시 읽기] 하지 않았으면 그대로
+        둔다 — `검사의이해` 처럼 PDF 층이 우리 것보다 나은 문서가 있다(입력 SOT §2.8)."""
         try:
             mv = self.main_view
             if mv is None or mv._doc is None:
                 return ([], 0)
             from viewer import text_extract2 as _tx
-            has_layer = _tx.has_text_layer(mv._doc.doc, int(page))
             forced = getattr(self, "_text_force_ocr", None) or set()
-            if has_layer and (str(path), int(page)) not in forced:
-                return ([], 0)
-        except Exception:
-            pass
-        try:
-            ws = self._ocr_page_words(path, page)
-            if not ws:
-                return ([], 0)
-            return (ws, self._ocr_page_dpi(path, page))
+            return _tx.pick_ocr_words(
+                mv._doc.doc, int(page),
+                lambda k: (self._ocr_page_words(path, k), self._ocr_page_dpi(path, k)),
+                forced=(str(path), int(page)) in forced)
         except Exception:
             return ([], 0)
 
@@ -3060,56 +3067,185 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._text_store().set_fix(cur, page, line, text, orig, rect, rects)
 
     def _on_text_apply_pdf(self):
-        """고친 글을 **OCR 텍스트층**에 다시 적는다(SOT §5.2)."""
+        """[PDF 에 반영] — 스캔 쪽의 **보이지 않는 글자층을 창의 줄로 다시 쓴다**(SOT §5.4).
+
+        260913-4(§5.2): 고친 내용이 있는 **모든 쪽**을 한 번에, 편집모드 안내(§5.2.1).
+        260913-6(사용자 결정 "보이지않는 글자층을 다시 디자인해서 넣어"): 고친 줄만 바꿔 끼우던
+        것을 **쪽의 층 전체 다시 쓰기**로. 범위(고친 쪽만 / 스캔 쪽 전체)를 고르고, 쓰기는
+        `TextLayerWorker` 가 임시 파일까지 — 원본 덮어쓰기는 `_on_text_layer_done` 에서 메인이 한다."""
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not cur or mv._doc is None:
             return
+        if getattr(self, "_text_layer_worker", None) is not None:
+            self.status.showMessage("글자층을 쓰는 중입니다 — 끝난 뒤 다시 눌러 주세요.", 4000)
+            return
         page = mv.current_page()
-        rows = self.text_panel.rows()
-        # 260908-6(SOT §5.1.1): 줄 번호가 아니라 **저장해 둔 사각형**을 지운다.
-        items = self._text_store().get_items(cur, page)
-        fixes = items
-        if not fixes:
-            QMessageBox.information(self, "텍스트", "이 쪽에는 고친 내용이 없습니다.")
-            return
+        store = self._text_store()
         from viewer import text_extract2 as tx
-        if tx.has_text_layer(mv._doc.doc, page):
+        doc = mv._doc.doc
+        # 260913-6(§5.1.4): 반영한 뒤에도 고침은 남는다 — **아직 반영하지 않은** 쪽만 센다.
+        pending = [p for p in store.pages_to_apply(cur) if p < doc.page_count]
+        layer = [p for p in pending if tx.has_text_layer(doc, p)]
+        todo = [p for p in pending if p not in layer]
+        # 260913-4(SOT §5.2.1): 저장 안 한 **쪽 편집**은 쪽 번호를 바꾸고, 반영 뒤 다시 읽기는
+        #   **책갈피 편집**을 덮는다 — 먼저 저장하거나 취소하게 한다.
+        in_edit = self._in_edit()
+        tree_dirty = in_edit and bool(getattr(self.bookmark_tree, "_dirty", False))
+        if in_edit and (self._page_edits_dirty() or tree_dirty):
             QMessageBox.information(
-                self, "텍스트",
-                "이 쪽은 원래 글자가 있는 PDF 입니다.\n\n"
-                "그 글자는 화면에 보이는 내용이라, 다시 적으면 글꼴이 바뀌어 문서 모양이 "
-                "달라집니다. 그래서 PDF 는 건드리지 않았습니다.\n\n"
-                "고친 내용은 그대로 남아 있고, 본문 복사·검색에는 이미 반영됩니다.")
+                self, "PDF 에 반영",
+                "편집모드에서 저장하지 않은 쪽 편집·책갈피 편집이 있습니다.\n\n"
+                "먼저 저장(💾)하거나 취소한 뒤 다시 [PDF 에 반영] 을 눌러 주세요.")
             return
-        n_del = sum(1 for it in items if not it["text"])   # 260908-6: 빈 줄 = 지우기
-        ok = QMessageBox.question(
-            self, "PDF 에 반영",
-            f"이 쪽({page + 1})의 OCR 글자를 고친 내용으로 다시 적습니다.\n"
-            f"고친 줄: {len(fixes)}개"
-            + (f" (그중 {n_del}줄은 지웁니다)" if n_del else "") + "\n\n"
-            "화면에 보이는 모양은 그대로이고 복사·검색 결과만 바뀝니다.\n"
-            "원본은 백업해 둡니다. 계속할까요?")
-        if ok != QMessageBox.StandardButton.Yes:
+        msg = ""
+        if not in_edit:
+            # 260913-4(SOT §5.2.1, 사용자 지시): 편집모드가 아니면 바꾼 뒤 저장한다고 알린다
+            msg += "PDF 본문을 고치므로 편집모드로 바꾼 뒤 저장합니다.\n\n"
+        if todo:
+            n_fix = sum(len(store.get_items(cur, p)) for p in todo)
+            msg += (f"반영할 고침: {self._page_list_text(todo)} ({len(todo)}쪽, {n_fix}줄)\n")
+        else:
+            msg += "아직 반영하지 않은 고침은 없습니다.\n"
+        if layer:
+            msg += (f"건너뛰는 쪽: {self._page_list_text(layer)} "
+                    "— 원래 글자가 있는 쪽이라 PDF 는 건드리지 않습니다.\n")
+        msg += ("\n스캔 쪽의 **보이지 않는 글자층**을 텍스트 창의 글(고침 포함)로 다시 씁니다.\n"
+                "화면에 보이는 모양은 그대로이고 복사·검색 결과가 창과 같아집니다.\n"
+                "원본은 백업해 둡니다.").replace("**", "")
+        scope = self._ask_layer_scope(msg, has_fixed=bool(todo))
+        if scope not in ("fixed", "all"):
             return
-        from viewer.text_apply import apply_fixes_to_pdf
+        if not in_edit:
+            try:
+                self.bookmark_tree.btn_edit.setChecked(True)   # toggled → 편집모드 진입 처리
+            except Exception:
+                pass
+        forced = {int(p) for (f, p) in (getattr(self, "_text_force_ocr", None) or set())
+                  if str(f) == str(cur)}
+        from PyQt6.QtWidgets import QProgressDialog
+        from viewer.workers import TextLayerWorker, run_in_thread
+        self._text_layer_token = getattr(self, "_text_layer_token", 0) + 1
+        tok = self._text_layer_token
+        w = TextLayerWorker(cur, todo, scope=scope, forced_pages=forced, token=tok)
+        self._text_layer_worker = w
+        dlgp = QProgressDialog("글자층 준비 중…", "중지", 0, max(1, len(todo)), self)
+        dlgp.setWindowTitle("PDF 에 반영")
+        dlgp.setWindowModality(Qt.WindowModality.NonModal)
+        dlgp.setMinimumDuration(400)
+        dlgp.canceled.connect(w.request_cancel)
+        w.progress.connect(lambda d, t, m: (dlgp.setMaximum(max(1, t)), dlgp.setValue(d),
+                                           dlgp.setLabelText(m)))
+        w.finished.connect(dlgp.close)
+        self._text_layer_progress = dlgp
+        w.done.connect(lambda tmp, st, t, _c=cur, _p=page:
+                       self._on_text_layer_done(_c, _p, tmp, st, t))
+        w.error.connect(lambda m, t: QMessageBox.warning(self, "PDF 에 반영", f"실패: {m}")
+                        if t == getattr(self, "_text_layer_token", 0) else None)
+        w.finished.connect(lambda: setattr(self, "_text_layer_worker", None))
+        run_in_thread(w, self._thread_keep)
+
+    def _ask_layer_scope(self, msg: str, has_fixed: bool) -> str:
+        """범위 고르기(SOT §5.4) → "fixed" / "all" / "" (취소). 검사가 바꿔 끼울 수 있게 따로 둔다."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("PDF 에 반영")
+        box.setText(msg)
+        b_fix = box.addButton("고친 쪽만", QMessageBox.ButtonRole.AcceptRole) if has_fixed else None
+        b_all = box.addButton("스캔 쪽 전체", QMessageBox.ButtonRole.ActionRole)
+        b_no = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        box.setEscapeButton(b_no)
+        box.exec()
+        c = box.clickedButton()
+        if b_fix is not None and c is b_fix:
+            return "fixed"
+        if c is b_all:
+            return "all"
+        return ""
+
+    def _on_text_layer_done(self, cur, page, tmp, stats, token):
+        """워커가 임시 파일을 만들었다 — 원본에 넣고 결과를 알린다(메인, SOT §5.4)."""
+        if token != getattr(self, "_text_layer_token", 0):
+            return
+        stats = stats or {}
+        if stats.get("cancelled"):
+            self.status.showMessage("PDF 에 반영을 중지했습니다 — 원본은 그대로입니다.", 5000)
+            return
+        if not tmp:
+            why = stats.get("reasons") or {}
+            QMessageBox.information(
+                self, "PDF 에 반영",
+                "다시 쓸 쪽이 없었습니다.\n\n"
+                + ("".join(f"· {p + 1}쪽: {r}\n" for p, r in sorted(why.items())[:8])
+                   or "스캔 쪽에 적을 글(우리 OCR·고침)이 없습니다."))
+            return
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
-            from viewer import text_extract2 as _tx2
-            _tx2.close_cache()          # 260908-3: 열어 둔 pdfplumber 핸들이 원본을 잡는다
+            # 260913-4: 원본을 쥘 수 있는 핸들(표 찾기 포함)은 `_close_main_view_doc` 가 모두 놓는다
             self._close_main_view_doc()
             QApplication.processEvents()
-            out, err = apply_fixes_to_pdf(cur, page, rows, fixes, self._finalize_save)
+            try:
+                out = str(self._finalize_save(cur, tmp))
+            except Exception as e:               # noqa: BLE001
+                QApplication.restoreOverrideCursor()
+                QMessageBox.warning(self, "PDF 에 반영", f"실패: {e}")
+                self._reload_after_text_apply(cur, page)
+                return
         finally:
             QApplication.restoreOverrideCursor()
-        if err and not out:
-            QMessageBox.warning(self, "PDF 에 반영", f"실패: {err}")
-            return
-        if err:                     # 260908-6: 반영은 됐지만 못 적은 줄이 있다 — 숨기지 않는다
-            QMessageBox.information(self, "PDF 에 반영", err)
-        self._text_store().clear_page_fixes(cur, page)
-        self.open_pdf(Path(out))
-        self.status.showMessage(f"텍스트층에 반영했습니다 — {Path(out).name}", 6000)
+        store = self._text_store()
+        rewritten = list(stats.get("rewritten") or [])
+        fallback = list(stats.get("fallback") or [])
+        # 다시 쓴 쪽은 결과가 '원천 + 고침' 이라 고침을 **남기고 표시만** 한다(§5.1.4).
+        store.mark_applied(cur, [p for p in rewritten if store.get_items(cur, p)])
+        # 물러선 길(줄 바꿔 끼우기)은 되풀이하면 겹쳐 적힌다 — 종전대로 고침을 비운다(§5.2).
+        for p in fallback:
+            store.clear_page_fixes(cur, p)
+        self._reload_after_text_apply(out, page)
+        notes = [f"글자층을 다시 쓴 쪽: {len(rewritten)}쪽 ({int(stats.get('lines') or 0)}줄)"]
+        if fallback:
+            notes.append(f"고친 줄만 바꿔 끼운 쪽: {self._page_list_text(fallback)}")
+        reasons = stats.get("reasons") or {}
+        if reasons:
+            notes.append("다시 쓰지 않은 쪽: " + ", ".join(
+                f"{p + 1}쪽({r})" for p, r in sorted(reasons.items())[:6]))
+        if int(stats.get("unwritten") or 0):
+            notes.append(f"{stats['unwritten']}줄은 자리가 좁아 다시 적지 못했습니다.")
+        if Path(out).name != Path(cur).name:
+            notes.append(f"저장한 파일: {Path(out).name}")
+        QMessageBox.information(self, "PDF 에 반영", "\n".join(notes))
+        self.status.showMessage(
+            f"텍스트층에 반영했습니다 — {Path(out).name} · {len(rewritten) + len(fallback)}쪽", 6000)
+
+    @staticmethod
+    def _page_list_text(pages) -> str:
+        """[0, 1, 4] → '1, 2, 5쪽' (많으면 앞 10개만)."""
+        ps = sorted(int(p) + 1 for p in pages)
+        head = ", ".join(str(p) for p in ps[:10])
+        return head + (f" 외 {len(ps) - 10}" if len(ps) > 10 else "") + "쪽"
+
+    def _reload_after_text_apply(self, path, page: int):
+        """반영 뒤 다시 읽기 — **보던 쪽으로**, 작업공간은 그대로(SOT §5.2).
+
+        260913-4: 종전 `open_pdf` 는 작업공간(폴더 트리)을 비우고 첫 쪽으로 갔다. 쪽 편집 저장
+        (`_page_edit_save`)과 같은 방식으로 다시 읽는다."""
+        bt = self.bookmark_tree
+        try:
+            # 파일 노드를 다시 고르면 트리가 **그 파일 첫 쪽으로 가기**를 예약한다 — 보던 쪽을
+            #   덮으므로 신호를 막고 예약도 지운다(우클릭 선택과 같은 방식, bookmark_tree).
+            bt.tree.blockSignals(True)
+            try:
+                bt.add_or_refresh_file(str(path))
+            finally:
+                bt.tree.blockSignals(False)
+            bt._pending_nav = None
+        except Exception:
+            pass
+        self._load_main(HistoryItem(str(path), int(page), "", "bookmark"))
+        try:
+            self._index_single_file(Path(path))
+        except Exception:
+            pass
 
     def _on_text_make_bookmarks(self, items):
         """칠한 곳으로 책갈피를 만든다(SOT §6)."""
@@ -3164,7 +3300,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             ok, msg = export_pages_to_docx(
                 cur, mv._doc.doc, pages, dst, tp.styles(),
                 omit_tables=tp.omit_tables(),
-                fix_lookup=lambda pg: self._text_store().get_fixes(cur, pg),
+                fix_rows=lambda pg, rows: self._text_store().apply_to_rows(cur, pg, rows),
+                words_lookup=lambda pg: self._view_ocr_words(cur, pg),
                 ocr_lookup=lambda pg: self._ocr_page_text(cur, pg))
         finally:
             QApplication.restoreOverrideCursor()
@@ -3352,6 +3489,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     break
                 except Exception as e:               # noqa: BLE001
                     last = e
+                    if _i == 0:
+                        # 260913-4(§4.7.5): 참조 순환에 갇혀 아직 안 닫힌 핸들이 있으면 풀린다
+                        #   (실측: 텍스트 창 표 찾기 핸들이 그렇게 원본을 잠갔다). 실패 때만.
+                        import gc as _gc
+                        _gc.collect()
                     QApplication.processEvents()
                     _t.sleep(0.15)
             if last is not None:

@@ -21,6 +21,8 @@ from pathlib import Path
 from viewer.pathutil import norm_key
 
 _LOCK = threading.RLock()
+# 260913-6(SOT §5.1.4): 자리가 똑같지 않을 때 '같은 줄' 로 볼 겹침 — 겹친 넓이 ÷ 둘 중 작은 넓이
+FIX_OVERLAP = 0.6
 _NAME = "text_fix.json"
 
 
@@ -159,6 +161,10 @@ class TextFixStore:
         items = self.get_items(file_path, page)
         if not items or not rows:
             return {}
+        return self._remap_items(items, rows)
+
+    @staticmethod
+    def _remap_items(items, rows) -> dict:
         by_rect = {}
         for i, r in enumerate(rows):
             rc = r.get("rect")
@@ -180,26 +186,151 @@ class TextFixStore:
                 out[i] = it["text"]
         return out
 
+    def apply_to_rows(self, file_path, page: int, rows: list, stats=None) -> list:
+        """줄 목록에 고침을 얹은 **사본**을 돌려준다 — 고침을 얹는 곳은 모두 이것을 쓴다(SOT §5.1.3).
+
+        260913-4(사용자 보고 "줄나누기를 합쳤는데 다시 돌아가면 그대로"): 합친 고침은 합친
+        사각형·합친 원래 글로 저장돼, 다시 열면 그와 같은 줄이 없어 되맞춤이 조용히 실패했다.
+        원래 자리(`rects`)가 둘 이상이면 **그 자리들을 가진 줄들**을 찾아 첫 줄에 합치고
+        나머지를 뺀다. 종전에는 창만 자리로 얹고 본문 읽기·단어장·Word 는 **줄 번호로** 얹었다.
+
+        260913-6(SOT §5.1.4): 자리가 똑같지 않으면 **겹치는 줄**을 찾는다 — 원천이 원문 OCR 층에서
+        우리 OCR 로 바뀌면 같은 줄의 사각형이 몇 pt 어긋난다. 합친 줄에는 `parts`(합쳐진 원래
+        줄들의 자리·글)를 남긴다 — 글자층 다시 쓰기(§5.4)가 원래 줄에 도로 나눠 적는다.
+        `stats` 에 dict 를 주면 못 찾은 고침 수를 `unmatched` 로 채운다."""
+        rows = [dict(r) for r in (rows or [])]
+        items = self.get_items(file_path, page)
+        if stats is not None:
+            stats["unmatched"] = 0
+        if not items or not rows:
+            if stats is not None:
+                stats["unmatched"] = len(items) if not rows else 0
+            return rows
+
+        def key(rc):
+            return tuple(round(float(v), 2) for v in rc)
+
+        owner = {}                                   # 원래 자리 → 줄 번호
+        boxes = []                                   # (줄 번호, 자리)
+        for i, r in enumerate(rows):
+            for rc in (r.get("rects") or ([r["rect"]] if r.get("rect") else [])):
+                if rc:
+                    owner.setdefault(key(rc), i)
+                    boxes.append((i, tuple(float(v) for v in rc)))
+
+        def find(rc):
+            i = owner.get(key(rc))
+            if i is not None:
+                return i
+            x0, y0, x1, y1 = (float(v) for v in rc)
+            a1 = max(0.0, x1 - x0) * max(0.0, y1 - y0)
+            best, bi = 0.0, None
+            for j, (bx0, by0, bx1, by1) in boxes:
+                iw = min(x1, bx1) - max(x0, bx0)
+                ih = min(y1, by1) - max(y0, by0)
+                if iw <= 0 or ih <= 0:
+                    continue
+                a2 = (bx1 - bx0) * (by1 - by0)
+                r = (iw * ih) / max(1e-6, min(a1, a2))
+                if r > best:
+                    best, bi = r, j
+            return bi if best >= FIX_OVERLAP else None
+
+        drop = set()
+        rest = []
+        unmatched = 0
+        for it in items:
+            rs = [r for r in (it.get("rects") or []) if r] or ([it["rect"]] if it.get("rect") else [])
+            if not rs:
+                rest.append(it)                      # 자리를 안 적은 옛 기록 — 원래 글·줄 번호로
+                continue
+            idx = [find(r) for r in rs]
+            if not all(i is not None for i in idx):
+                unmatched += 1                       # 버리지 않는다 — 다음에 다시 맞춰 본다
+                continue
+            group = sorted(set(idx))
+            first = group[0]
+            row = rows[first]
+            if len(group) >= 2:
+                row["parts"] = [(tuple(rows[g]["rect"]) if rows[g].get("rect") else None,
+                                 rows[g].get("text", "")) for g in group]
+                allr = []
+                for g in group:
+                    allr.extend(rows[g].get("rects") or ([rows[g]["rect"]] if rows[g].get("rect") else []))
+                row["rects"] = [tuple(r) for r in allr if r]
+                if row["rects"]:
+                    row["rect"] = (min(r[0] for r in row["rects"]), min(r[1] for r in row["rects"]),
+                                   max(r[2] for r in row["rects"]), max(r[3] for r in row["rects"]))
+                row.setdefault("orig", " ".join(t for _r, t in row["parts"]))
+                drop.update(g for g in group if g != first)
+            else:
+                row.setdefault("orig", row.get("text", ""))
+            row["text"] = it["text"]
+        if rest:
+            fx = self._remap_items(rest, rows)
+            unmatched += max(0, len(rest) - len(fx))
+            for i, t in fx.items():
+                if 0 <= i < len(rows) and i not in drop:
+                    rows[i].setdefault("orig", rows[i].get("text", ""))
+                    rows[i]["text"] = t
+        if stats is not None:
+            stats["unmatched"] = unmatched
+        return [r for i, r in enumerate(rows) if i not in drop]
+
+    def pages_with_fixes(self, file_path) -> list:
+        """고침이 있는 쪽(0-based) — [PDF 에 반영] 이 문서 전체를 한 번에 넣을 때 쓴다(SOT §5.2)."""
+        d = self._doc(file_path)
+        out = []
+        for k, v in ((d or {}).get("fix") or {}).items():
+            try:
+                if v:
+                    out.append(int(k))
+            except Exception:
+                continue
+        return sorted(out)
+
+    # ---- 반영 표시 (SOT §5.1.4, 260913-6) --------------------------------
+    def page_sig(self, file_path, page: int) -> str:
+        """그 쪽 고침의 서명 — 고침이 바뀌면 달라진다."""
+        d = self._doc(file_path)
+        raw = ((d or {}).get("fix") or {}).get(str(int(page))) or {}
+        if not raw:
+            return ""
+        import hashlib
+        blob = json.dumps(raw, ensure_ascii=False, sort_keys=True)
+        return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
+
+    def mark_applied(self, file_path, pages) -> None:
+        """이 쪽들의 **지금 고침**을 PDF 에 반영했다고 적는다. 고침은 지우지 않는다(§5.1.4)."""
+        d = self._doc(file_path, create=True)
+        ap = d.setdefault("applied", {})
+        for p in pages:
+            sig = self.page_sig(file_path, p)
+            if sig:
+                ap[str(int(p))] = sig
+            else:
+                ap.pop(str(int(p)), None)
+        self.save()
+
+    def is_applied(self, file_path, page: int) -> bool:
+        d = self._doc(file_path)
+        sig = self.page_sig(file_path, page)
+        return bool(sig) and ((d or {}).get("applied") or {}).get(str(int(page))) == sig
+
+    def pages_to_apply(self, file_path) -> list:
+        """고침이 있고, 그 고침을 아직 반영하지 않은 쪽."""
+        return [p for p in self.pages_with_fixes(file_path) if not self.is_applied(file_path, p)]
+
     def clear_page_fixes(self, file_path, page: int) -> None:
         d = self._doc(file_path)
         if d:
             (d.get("fix") or {}).pop(str(int(page)), None)
+            (d.get("applied") or {}).pop(str(int(page)), None)
             self.save()
 
     def has_fixes(self, file_path) -> bool:
         d = self._doc(file_path)
         return bool(d and d.get("fix"))
-
-    def apply_to_text(self, file_path, page: int, lines: list) -> list:
-        """줄 목록에 교정을 얹은 사본. `lines` 는 문자열 목록."""
-        fx = self.get_fixes(file_path, page)
-        if not fx:
-            return list(lines)
-        out = list(lines)
-        for i, t in fx.items():
-            if 0 <= i < len(out):
-                out[i] = t
-        return out
 
     # ---- 하이라이트 ----------------------------------------------------
     def get_highlights(self, file_path, page: int) -> list:

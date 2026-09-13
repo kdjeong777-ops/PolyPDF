@@ -445,6 +445,119 @@ class StudyVocabWorker(QObject):
         finally:
             self.finished.emit()
 
+class TextLayerWorker(QObject):
+    """260913-6: 텍스트 창 [PDF 에 반영] — 스캔 쪽의 **보이지 않는 글자층을 다시 쓴다**(텍스트 창 SOT §5.4).
+
+    쪽마다 줄 뽑기·쓰기가 5~200ms 라 '스캔 쪽 전체' 면 메인에서 멈춘다(응답성 SOT §4.4).
+    워커는 **자기 문서를 따로 열어 임시 파일까지만** 만든다. 원본 덮어쓰기(핸들 닫기·재시도)는
+    메인이 `done` 을 받아 한다 — 원본 핸들을 쥔 곳이 메인이다. 중지하면 임시 파일은 없다.
+
+    원천 규칙은 `text_extract2.pick_ocr_words`(§3.1) 하나를 그대로 쓴다 — 창과 다르면 안 된다.
+    """
+    done = pyqtSignal(str, object, int)          # 임시 파일("" = 바꾼 것 없음), 통계, token
+    progress = pyqtSignal(int, int, str)         # done, total, 안내
+    error = pyqtSignal(str, int)
+    finished = pyqtSignal()
+
+    YIELD_S = 0.005      # 응답성 SOT §4 ②·⑦
+
+    def __init__(self, doc_path, pages, *, scope: str = "fixed", forced_pages=(),
+                 token: int = 0, db_path=None):
+        super().__init__()
+        self.doc_path = str(doc_path)
+        self.pages = sorted({int(p) for p in (pages or [])})
+        self.scope = scope                       # "fixed" | "all"
+        self.forced = {int(p) for p in (forced_pages or [])}
+        self.token = int(token)
+        self.db_path = db_path
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        store = None
+        try:
+            from viewer import text_extract2 as tx
+            from viewer import text_apply as ta
+            from viewer.text_fix_store import store as fix_store
+            try:
+                from viewer.study.study_store import StudyStore, file_key_for
+                store = StudyStore(self.db_path)
+                fkey = file_key_for(self.doc_path)
+            except Exception:
+                store, fkey = None, ""
+
+            def look(p):
+                if store is None:
+                    return ([], 0)
+                try:
+                    return (store.get_page_words(fkey, int(p)) or [],
+                            int(store.get_page_dpi(fkey, int(p)) or 0))
+                except Exception:
+                    return ([], 0)
+
+            pages = list(self.pages)
+            if self.scope == "all":
+                import fitz
+                d = fitz.open(self.doc_path)
+                try:
+                    n = d.page_count
+                finally:
+                    d.close()
+                have = set(pages)
+                for p in range(n):
+                    if self._cancel:
+                        break
+                    if p not in have and look(p)[0]:
+                        have.add(p)
+                    _pacing.pace(self)
+                pages = sorted(have)
+
+            def pick(doc, p):
+                return tx.pick_ocr_words(doc, p, look, forced=(p in self.forced))
+
+            def rows_for(doc, p):
+                ws, dpi = pick(doc, p)
+                peers = (tx._peer_words(lambda k: pick(doc, k), p, doc.page_count)
+                         if ws else None)
+                return tx.page_lines(doc, self.doc_path, p, tables="off", join_lines=False,
+                                     ocr_words=ws or None, ocr_dpi=dpi,
+                                     ocr_peer_words=peers)
+
+            fs = fix_store()
+
+            def tick(k, total, p):
+                if p >= 0:
+                    self.progress.emit(k, total, f"{p + 1}쪽 글자층 쓰는 중…")
+                _pacing.pace(self)
+
+            tmp, stats = ta.build_layer_pdf(
+                self.doc_path, pages,
+                rows_for=rows_for,
+                fixes_for=lambda p, rows: fs.apply_to_rows(self.doc_path, p, rows),
+                items_for=lambda p: fs.get_items(self.doc_path, p),
+                progress=tick, cancelled=lambda: self._cancel)
+            if self._cancel:                     # 중지 — 원본은 그대로, 임시 파일은 남기지 않는다
+                if tmp:
+                    try:
+                        Path(tmp).unlink()
+                    except Exception:
+                        pass
+                tmp = ""
+                stats["cancelled"] = True
+            self.done.emit(tmp, stats, self.token)
+        except Exception as e:                   # noqa: BLE001
+            self.error.emit(str(e), self.token)
+        finally:
+            if store is not None:
+                try:
+                    store.close()
+                except Exception:
+                    pass
+            self.finished.emit()
+
+
 class TextPageWorker(QObject):
     """260908-3: 텍스트 창의 **쪽 추출을 워커에서** (응답성 SOT §4 ①②·§5 #1).
 
@@ -460,7 +573,8 @@ class TextPageWorker(QObject):
 
     def __init__(self, doc_path, page: int, *, tables: str = "lines",
                  ocr_text: str = "", token: int = 0, cached_only: bool = False,
-                 ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True):
+                 ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True,
+                 ocr_peer_words=None):
         super().__init__()
         self.doc_path = str(doc_path)
         self.page = int(page)
@@ -471,6 +585,7 @@ class TextPageWorker(QObject):
         self.noise = 0                         # 260908-6: 뺀 OCR 잡음 줄 수
         self.ocr_words = ocr_words             # 260908-8: [OCR 다시 읽기] 결과
         self.ocr_dpi = int(ocr_dpi or 0)
+        self.ocr_peer_words = ocr_peer_words   # 260913-4: 옆 쪽 OCR 낱말(꼬리말 판정)
         self.join_lines = bool(join_lines)   # 260910(SOT §3.7)
         self._cancel = False
 
@@ -492,6 +607,7 @@ class TextPageWorker(QObject):
                                      tables_cached_only=self.cached_only,
                                      ocr_words=self.ocr_words,
                                      ocr_dpi=self.ocr_dpi,
+                                     ocr_peer_words=self.ocr_peer_words,
                                      join_lines=self.join_lines)
                 # 260908-6(SOT §3.5): 뺀 잡음 줄 수 — 창 안내에 남긴다
                 self.noise = tx.last_noise_count()

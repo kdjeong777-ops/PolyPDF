@@ -248,9 +248,14 @@ try:
         "감사⑥ 검색 색인에도 교정이 얹힌다(찾은 것이 안 찾아지지 않게)")
     ocr_src = inspect.getsource(MainWindow._ocr_page_text)
     chk("BUSY_MS_UI" in ocr_src, "감사⑦ study.db 연결이 UI 대기 상한을 쓴다(응답성 §4 ⑤)")
-    ap_src = inspect.getsource(MainWindow._on_text_apply_pdf)
-    chk("close_cache" in ap_src,
-        "감사⑧ PDF 를 덮어쓰기 전에 열린 핸들을 놓는다")
+    # 260913-4(SOT §5.2): 핸들 해제는 한 곳 — 반영은 그것을 부르고, 그것이 표 찾기 핸들까지 놓는다
+    # 260913-6(SOT §5.4): 덮어쓰기는 워커가 끝난 뒤 `_on_text_layer_done` 에서 메인이 한다
+    ap_src = inspect.getsource(MainWindow._on_text_layer_done)
+    cv_src = inspect.getsource(MainWindow._close_main_view_doc)
+    chk("_close_main_view_doc()" in ap_src
+        and ap_src.index("_close_main_view_doc()") < ap_src.index("_finalize_save(")
+        and "close_cache()" in cv_src,
+        "감사⑧ PDF 를 덮어쓰기 전에 열린 핸들을 놓는다(표 찾기 핸들 포함, 한 곳에서)")
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""260913-2: 세로 띠·머리말·꼬리말 거르기 (텍스트 창 SOT §3.5.2).
+"""260913-2·260913-4: 세로 띠·머리말·꼬리말 거르기 (텍스트 창 SOT §3.5.2).
 
 사용자 지시: **"세로 띠, 상단부 머리말, 하단부 꼬리말 등은 텍스트 창에서 제외하도록 해."**
 
@@ -125,6 +125,73 @@ try:
     chk(tx._norm_edge("real body sentence") != tx._norm_edge("Page 2 of 10"),
         "⑤ 본문과 꼬리말은 다르게 본다")
 
+    # ── ⑥ OCR 이 쪽마다 조금씩 다르게 읽은 꼬리말 (260913-4, 사용자 보고 AASHTO) ──
+    #   실측 꼬리말 셋 — 같은 글인데 글자가 밀리고 빈칸이 다르다.
+    noisy = ["(c)2024 by the Amerlcan Association or Statc Highwav and Transportation",
+             "(c)2()24 by 1he Amcrlc@n AssociKIIion of State HIghway and Tmnsportalion",
+             "(c)2024 bV thc Amer]can Assoc iati on or St@te H ighway and Transportatlon"]
+    dst6 = os.path.join(root, "noisy.pdf")
+    doc = fitz.open()
+    for pi in range(3):
+        pg = doc.new_page(width=W, height=H)
+        for i in range(12):
+            pg.insert_text((120, 140 + i * 26), "body line %d of page %d here" % (i + 1, pi),
+                           fontsize=11)
+        pg.insert_text((80, H - 60), noisy[pi], fontsize=8)
+        pg.insert_text((250, H - 45), "A A S H T O" if pi == 1 else "AASHTO", fontsize=8)
+    doc.save(dst6)
+    doc.close()
+    d6 = fitz.open(dst6)
+    t6, _n6 = kept_texts(d6[1])
+    chk(not any("Association" in t or "AssociKIIion" in t for t in t6),
+        "⑥ OCR 이 **조금씩 다르게** 읽은 꼬리말도 되풀이로 본다", str([t for t in t6 if "by" in t]))
+    chk("A A S H T O" not in t6, "⑥ 빈칸만 다른 꼬리말(`A A S H T O` / `AASHTO`)도 같다")
+    chk(sum(1 for t in t6 if t.startswith("body line")) == 12, "⑥ 본문 12줄은 그대로")
+    old = tx._norm_edge(noisy[1])
+    chk(sum(1 for x, y in zip(old, tx._norm_edge(noisy[0])) if x == y) / len(old) < tx.EDGE_SIM,
+        "⑥ (자리마다 견주던 종전 방식으로는 못 알아본다 — 원인 재현)")
+    chk(not tx._looks_repeated("demanding conditions.", [tx._norm_edge(x) for x in noisy]),
+        "⑥ 꼬리말과 닮지 않은 단 끝 줄은 되풀이가 아니다")
+
+    # ── ⑦ OCR 낱말 길 — 옆 쪽 OCR 낱말로 꼬리말을 거른다 ──────────────────
+    def words_of(page_texts, y_foot):
+        ws = []
+        for i, t in enumerate(page_texts):
+            x = 120.0
+            for w in t.split():
+                ws.append({"surface": w, "x0": x, "y0": 140 + i * 26 - 10,
+                           "x1": x + 6 * len(w), "y1": 140 + i * 26 + 2})
+                x += 6 * len(w) + 5
+        return ws
+
+    blank = os.path.join(root, "blank.pdf")
+    doc = fitz.open()
+    for _ in range(3):
+        doc.new_page(width=W, height=H)
+    doc.save(blank)
+    doc.close()
+    db = fitz.open(blank)
+
+    def ocr_words(pi):
+        body = ["body line %d of page %d here" % (i + 1, pi) for i in range(12)]
+        ws = words_of(body, 0)
+        x = 80.0
+        for w in noisy[pi].split():
+            ws.append({"surface": w, "x0": x, "y0": H - 68, "x1": x + 5 * len(w), "y1": H - 58})
+            x += 5 * len(w) + 4
+        return ws
+
+    rows_np = tx.lines_from_words(ocr_words(1), dpi=0, page=db[1])
+    rows_p = tx.lines_from_words(ocr_words(1), dpi=0, page=db[1],
+                                 peer_words=[(ocr_words(0), 0), (ocr_words(2), 0)])
+    chk(any("Association" in r["text"] or "Assoc" in r["text"] for r in rows_np),
+        "⑦ 옆 쪽 낱말이 없으면 버리지 않는다(자리만으로 가르지 않는다)")
+    chk(not any("Assoc" in r["text"] for r in rows_p),
+        "⑦ 옆 쪽 OCR 낱말을 주면 꼬리말을 버린다", str([r["text"] for r in rows_p][-3:]))
+    chk(sum(1 for r in rows_p if "body line" in r["text"]) == 12,
+        "⑦ 낱말 길에서도 본문은 그대로")
+    db.close()
+    d6.close()
     d.close()
 finally:
     shutil.rmtree(root, ignore_errors=True)

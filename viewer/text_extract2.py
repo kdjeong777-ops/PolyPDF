@@ -62,28 +62,32 @@ CELL_GAP = 6.0          # 칸 사이 가로 빈틈(pt). 이보다 벌어지면 �
 CELL_GAP_H = 0.60       # 글자 높이의 이 비율도 넘어야 다른 칸(큰 제목 대비)
 HRULE_SPAN = 0.50       # 본문 폭의 이 비율을 넘는 가로 줄만 '행 구분선'
 TABLE_OMIT_FMT = "[표 {cols}열 × {rows}행]"
-# 260913-2(SOT §3.5.2, 사용자 지시): 쪽 가장자의 **세로 띄**·머리말·꼬리말은
-#   본문이 아니다. 실측(AASHTO 기준문 3쪽): 세로 띄는 바깥 여백 10% 안에
+# 260913-2(SOT §3.5.2, 사용자 지시): 쪽 가장자의 **세로 띠**·머리말·꼬리말은
+#   본문이 아니다. 실측(AASHTO 기준문 3쪽): 세로 띠는 바깥 여백 10% 안에
 #   폭 1.4% · 3글자 이하 조각이 높이의 60~75% 에 걸쳐 88~113개 쌓여 있었다.
 #   깨끗한 표본 4종에는 그런 조각이 **하나도 없다**.
 SIDE_MARGIN = 0.10       # 쪽 폭의 이 비율 안(왼·오른 바깥)에 있어야 한다
-SIDE_WIDTH = 0.03        # 그리고 이보다 좀아야 한다(쪽 폭 대비)
+SIDE_WIDTH = 0.03        # 그리고 이보다 좁아야 한다(쪽 폭 대비)
 SIDE_CHARS = 4           # 글자 수도 이하
 SIDE_MIN_N = 8           # 이만큼 모여 있고
-SIDE_SPAN = 0.40         # 높이의 이만큼에 걸쳐 있어야 '띄' 다
+SIDE_SPAN = 0.40         # 높이의 이만큼에 걸쳐 있어야 '띠' 다
 HEAD_BAND = 0.08         # 위쪽 이 비율 안 → 머리말 후보
 FOOT_BAND = 0.88         # 아랫쪽 이 비율 밖 → 꼬리말 후보
 EDGE_GAP = 1.5           # 본문과 이만큼(줄 높이 배) 떨어져 있어야 한다
-# 260913-2 보강(실측으로 본문을 잃어 좀혔다):
-#   ① '세로 띄' 는 조각이 좀은 것만으로 부족하다 — **한 줄기에 모여** 있어야 한다.
+# 260913-2 보강(실측으로 본문을 잃어 좁혔다):
+#   ① '세로 띠' 는 조각이 좁은 것만으로 부족하다 — **한 줄기에 모여** 있어야 한다.
 #     그렇게 안 하면 쪽 왼쪽의 좁은 표 칸(`구분`·`13mm`·`10mm`)까지 버렸다.
 #   ② 머리말·꼬리말은 자리만으로 가를 수 없다 — **옆 쪽에도 같은 것이 있어야** 한다.
 #     자리로만 가르니 단 마지막 줄(`demanding conditions.`)까지 꼬리말로 봤다.
-SIDE_SPREAD = 0.02       # 띄 조각들이 차지하는 가로 폭이 이 이내여야 '한 줄기'
-#   실측: 진짜 세로 띄 **0.014~0.015** / 쪽 가장자의 표 칸 **0.024~0.059**.
-#   사이가 넣넥해 0.02 로 둔다 — 표 칸을 버리면 본문을 잃는다.
+SIDE_SPREAD = 0.02       # 띠 조각들이 차지하는 가로 폭이 이 이내여야 '한 줄기'
+#   실측: 진짜 세로 띠 **0.014~0.015** / 쪽 가장자의 표 칸 **0.024~0.059**.
+#   사이가 넉넉해 0.02 로 둔다 — 표 칸을 버리면 본문을 잃는다.
 EDGE_PEERS = 2           # 옆 쪽 이만큼을 둘러본다
-EDGE_SIM = 0.60          # 글자가 이만큼 닮았으면 '되풀이되는 것'
+EDGE_SIM = 0.70          # 빈칸을 뺀 **순서 유사도**가 이만큼이면 '되풀이되는 것'
+# 260913-4(SOT §3.5.2, 사용자 보고 "AASHTO 하단이 반복되는데 꼬리말로 인식 못한다"):
+#   종전에는 **같은 자리의 글자끼리** 견줬다(0.60). OCR 이 쪽마다 한 글자만 더 읽어도
+#   그 뒤가 전부 밀려 같은 꼬리말이 0.10~0.36 이 됐다. 순서 유사도로는 0.73~0.95.
+#   실측(표본 10종 각 30쪽): 새로 버린 것은 모두 꼬리말, 종전에 버리던 것은 그대로.
 # 260911-1(SOT §3.6.10): 글자층에 **빈칸이 아예 없는** PDF — 글자 자리로 띄어쓰기를 되살린다.
 #   아래아한글에서 내보낸 보고서가 빈칸 글자를 아예 넣지 않았다(사용자 보고).
 #   실측(빈틈÷글자크기): 한 낱말 안 0.05 / 낱말 사이 0.49~0.55 — 열 배 차이다.
@@ -314,14 +318,19 @@ def _line_items(page):
     return out
 
 
-def drop_edge_frags(frags, page):
-    """세로 띄·머리말·꼬리말 조각을 버린다 → `(남은 조각, 버린 수)` (SOT §3.5.2).
+def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
+                    peers=None):
+    """세로 띠·머리말·꼬리말 조각을 버린다 → `(남은 조각, 버린 수)` (SOT §3.5.2).
 
-    사용자 지시: *"세로 띄, 상단부 머리말, 하단부 꼬리말 등은 텍스트 창에서 제외"*.
+    사용자 지시: *"세로 띠, 상단부 머리말, 하단부 꼬리말 등은 텍스트 창에서 제외"*.
 
-    **잉는 순서가 중요하다** — 잃는 일이라 잉기 전에 해야 한다(§3.A 2단계).
-    잉고 나면 세로 띄 조각이 본문 줄에 `|` 로 붙어 떼어낼 수 없다
-    (실측: `낙쥴~ | Fracture and Damage…`).
+    **잇는 순서가 중요하다** — 버리는 일이라 잇기 전에 해야 한다(§3.A 2단계).
+    잇고 나면 세로 띠 조각이 본문 줄에 `|` 로 붙어 떼어낼 수 없다
+    (실측: `낡쥰~ | Fracture and Damage…`).
+
+    260913-4: OCR **낱말**로 만든 줄은 두 번에 나눠 부른다(§3.5.2) — 세로 띠는 낱말 단계에서
+    (`edge=False`), 머리말·꼬리말은 줄을 이은 뒤 줄 단위로(`side=False`). `peers` 는 옆 쪽의
+    글자층 말고도 **더 볼 글**(옆 쪽 OCR 줄)이다.
     """
     if not frags:
         return frags, 0
@@ -334,9 +343,10 @@ def drop_edge_frags(frags, page):
     heights = sorted(max(1e-6, r[3] - r[1]) for r, _t, _s in frags)
     lh = heights[len(heights) // 2] if heights else 0.0
 
-    # (가) 세로 띄 — 바깥 여백의 좀고 짧은 조각이 높이 대부분에 쌓인 것
+    # (가) 세로 띠 — 바깥 여백의 좁고 짧은 조각이 높이 대부분에 쌓인 것
+    do_side, do_edge = bool(side), bool(edge)
     side = set()
-    for lo, hi in ((0.0, SIDE_MARGIN), (1.0 - SIDE_MARGIN, 1.0)):
+    for lo, hi in (((0.0, SIDE_MARGIN), (1.0 - SIDE_MARGIN, 1.0)) if do_side else ()):
         cand = []
         for i, (r, t, _s) in enumerate(frags):
             if (r[0] / pw) >= lo and (r[2] / pw) <= hi \
@@ -355,13 +365,13 @@ def drop_edge_frags(frags, page):
     if not rest:
         return frags, 0                      # 다 버릴 일은 없다 — 그대로 둔다
 
-    # (나) 머리말·꼬리말 — 위·아래 띄에 있고 본문과 **떨어져** 있어야 한다
+    # (나) 머리말·꼬리말 — 위·아래 띠에 있고 본문과 **떨어져** 있어야 한다
     ys0 = sorted(frags[i][0][1] for i in rest)
     ys1 = sorted(frags[i][0][3] for i in rest)
     edge = set()
     body = [i for i in rest
             if HEAD_BAND < (frags[i][0][1] / ph) and (frags[i][0][1] / ph) < FOOT_BAND]
-    if body:
+    if body and do_edge:
         body_top = min(frags[i][0][1] for i in body)
         body_bot = max(frags[i][0][3] for i in body)
         for i in rest:
@@ -374,11 +384,13 @@ def drop_edge_frags(frags, page):
     # **되풀이되는가** — 머리말·꼬리말은 옆 쪽에도 거의 같은 글이 같은 자리에 있다.
     #   자리만으로 가르면 단의 마지막 줄까지 꼬리말로 본다(실측: `demanding conditions.`).
     if edge:
-        peers = _edge_peer_texts(page)
-        if peers is None:
+        seen = _edge_peer_texts(page)
+        more = [_norm_edge(t) for t in (peers or []) if str(t or "").strip()]
+        if seen is None and not more:
             edge = set()                     # 옆 쪽을 못 보면 **버리지 않는다**
         else:
-            edge = {i for i in edge if _looks_repeated(frags[i][1], peers)}
+            allp = list(seen or []) + more
+            edge = {i for i in edge if _looks_repeated(frags[i][1], allp)}
 
     drop = side | edge
     if len(drop) >= len(frags):
@@ -392,16 +404,25 @@ def _norm_edge(t: str) -> str:
 
 
 def _looks_repeated(t: str, peers) -> bool:
-    a = _norm_edge(t)
+    """옆 쪽에 비슷한 글이 있나 — 빈칸을 빼고 **순서 유사도**로 견준다(260913-4).
+
+    OCR 은 같은 꼬리말도 `A A S H T O`·`AASHTO` 로 달리 띄우고 한두 글자를 더 읽는다.
+    같은 자리의 글자끼리 견주면 그 뒤가 전부 밀려 '다른 글' 이 된다."""
+    import difflib
+    a = re.sub(r"\s+", "", _norm_edge(t))
     if len(a) < 2:
         return True                          # `i`·`3` 같은 쪽 번호 — 자리로 이미 걸렀다
     for b in peers:
+        b = re.sub(r"\s+", "", str(b or ""))
+        if not b:
+            continue
         if a == b:
             return True
-        if a and b:
-            same = sum(1 for x, y in zip(a, b) if x == y)
-            if same / max(len(a), len(b)) >= EDGE_SIM:
-                return True
+        # 길이가 크게 다르면 닮을 수 없다 — 긴 옆 쪽 글마다 비교를 치르지 않는다
+        if min(len(a), len(b)) * 2 < max(len(a), len(b)):
+            continue
+        if difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= EDGE_SIM:
+            return True
     return False
 
 
@@ -961,6 +982,12 @@ def last_noise_count() -> int:
 #   실측 348쪽 61MB 문서에서 **쪽당 8.5~17초**(응답 없음 문턱의 두세 배)였다.
 #   같은 핸들을 쓰면 쪽당 29~192ms 다. 파일이 바뀌거나 수정되면 새로 연다.
 _PLUMB = {"key": None, "pdf": None}
+# 260913-4: 여는 것·닫는 것은 **한 번에 한 스레드**만 한다. 텍스트 창 작업과 앞뒤 쪽
+#   미리 읽기가 동시에 `_plumber` 에 들어오면 둘 다 새로 열고 하나가 다른 하나를 덮어쓴다.
+#   덮인 핸들은 아무도 닫지 않아 가비지 수집 전까지 **원본을 잠근다** — 'PDF에 반영' 이
+#   `_edited.pdf` 로 빠지던 원인이었다(실측: gc 를 돌리면 풀렸다).
+import threading as _threading
+_PLUMB_LOCK = _threading.RLock()
 _TCACHE = {}          # (파일키, 쪽) -> [(bbox, rows)]
 _TCACHE_MAX = 64
 
@@ -971,25 +998,27 @@ def _plumber(pdf_path):
         key = (str(pdf_path), os.path.getmtime(pdf_path))
     except Exception:
         return None
-    if _PLUMB["key"] == key and _PLUMB["pdf"] is not None:
+    with _PLUMB_LOCK:
+        if _PLUMB["key"] == key and _PLUMB["pdf"] is not None:
+            return _PLUMB["pdf"]
+        close_cache()
+        try:
+            import pdfplumber
+            _PLUMB["pdf"] = pdfplumber.open(str(pdf_path))
+            _PLUMB["key"] = key
+        except Exception:
+            _PLUMB["key"] = None
+            _PLUMB["pdf"] = None
         return _PLUMB["pdf"]
-    close_cache()
-    try:
-        import pdfplumber
-        _PLUMB["pdf"] = pdfplumber.open(str(pdf_path))
-        _PLUMB["key"] = key
-    except Exception:
-        _PLUMB["key"] = None
-        _PLUMB["pdf"] = None
-    return _PLUMB["pdf"]
 
 
 def close_cache() -> None:
     """열어 둔 핸들·표 결과를 놓는다. 파일을 지우거나 덮어쓰기 전에 부른다."""
-    pdf = _PLUMB.get("pdf")
-    _PLUMB["pdf"] = None
-    _PLUMB["key"] = None
-    _TCACHE.clear()
+    with _PLUMB_LOCK:
+        pdf = _PLUMB.get("pdf")
+        _PLUMB["pdf"] = None
+        _PLUMB["key"] = None
+        _TCACHE.clear()
     if pdf is not None:
         try:
             pdf.close()
@@ -1407,7 +1436,8 @@ def _classify(items):
 
 def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
                ocr_text: str = "", tables_cached_only: bool = False,
-               ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True) -> list:
+               ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True,
+               ocr_peer_words=None) -> list:
     """쪽 하나의 줄 목록(SOT §3). `tables` = "lines"(기본) / "omit" / "off".
 
     `ocr_text` 는 텍스트층이 쓸 만하지 않을 때 쓰는 OCR 결과(단어장 SOT 의 study.db).
@@ -1418,7 +1448,9 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
         return []
     if ocr_words:
         # 260908-8: [OCR 다시 읽기] 로 새로 읽은 쪽.
-        rows = lines_from_words(ocr_words, dpi=ocr_dpi, page=page)
+        # 260913-4(§3.5.2): 옆 쪽 OCR 낱말 — 꼬리말 되풀이를 알아보는 데 쓴다
+        rows = lines_from_words(ocr_words, dpi=ocr_dpi, page=page,
+                                peer_words=ocr_peer_words)
         if rows:
             _NOISE["n"] = 0
             if join_lines:
@@ -1476,7 +1508,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
     return rows_out
 
 
-def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
+def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None) -> list:
     """OCR 낱말 상자 → **줄 목록**(SOT §3.1·§3.6, 260908-8).
 
     종전 OCR 폴백은 저장된 본문을 줄바꿈으로 쪼개기만 해서 **좌표가 없었다** —
@@ -1503,14 +1535,57 @@ def lines_from_words(words, *, dpi: int = 0, page=None) -> list:
         frags.append(((x0, y0, x1, y1), t, max(1.0, y1 - y0)))
     if not frags:
         return []
+    # 260913-4(SOT §3.5.2): 세로 띠는 **낱말 단계**에서 버린다 — 잇고 나면 본문 줄에 붙는다.
+    if page is not None:
+        frags, _n = drop_edge_frags(frags, page, edge=False)
     items = []
     for col in ([frags] if page is None
                 else _by_column([((0, 0, 0, 0), frags)], page, word_level=True)):
         items.extend(_merge_rows(col))
     items = [it for it in items if not _noise.is_symbol_only(it[1])]
+    # 머리말·꼬리말은 **줄을 이은 뒤** 줄 단위로 — 낱말 하나는 옆 쪽 꼬리말 한 줄과 같을 수 없다.
+    if page is not None and items:
+        items, _n = drop_edge_frags(items, page, side=False,
+                                    peers=peer_texts_from_words(peer_words))
     styles = _classify(items)
     return [{'text': t, 'style': st, 'rect': r, 'kind': 'text', 'size': sz}
             for (r, t, sz), st in zip(items, styles)]
+
+def peer_texts_from_words(peer_words) -> list:
+    """옆 쪽들의 OCR 낱말 `[(낱말상자, dpi), …]` → 줄 글 목록(§3.5.2 되풀이 판정용).
+
+    되풀이 판정은 빈칸을 빼고 견주므로 줄 안의 띄어쓰기는 따지지 않는다 — 같은 높이의
+    낱말을 왼쪽부터 이어 붙이기만 한다. 좌표 단위(dpi)는 줄을 가르는 데 쓰이지 않는다."""
+    out = []
+    for ent in peer_words or []:
+        try:
+            pair = isinstance(ent, (tuple, list)) and len(ent) == 2
+            ws = ent[0] if pair and not isinstance(ent[0], dict) else ent
+        except Exception:
+            continue
+        boxes = []
+        for w in ws or []:
+            try:
+                t = str(w.get("surface") or "").strip()
+                y0, y1 = float(w["y0"]), float(w["y1"])
+                x0 = float(w["x0"])
+            except Exception:
+                continue
+            if t:
+                boxes.append(((y0 + y1) / 2.0, max(1e-6, y1 - y0), x0, t))
+        boxes.sort()
+        line, yc, hh = [], None, 0.0
+        for c, h, x0, t in boxes:
+            if yc is not None and abs(c - yc) > 0.5 * max(h, hh):
+                out.append("".join(tt for _x, tt in sorted(line)))
+                line = []
+            if not line:
+                yc, hh = c, h
+            line.append((x0, t))
+        if line:
+            out.append("".join(tt for _x, tt in sorted(line)))
+    return out
+
 
 def merge_words_by_gap(words) -> list:
     """낱말 상자를 **낱말 단위로** 묶는다 (SOT §3.6.2 의 규칙 그대로).
@@ -1668,6 +1743,20 @@ def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
     return out
 
 
+def _peer_words(words_lookup, pno: int, n: int) -> list:
+    """옆 쪽(앞뒤 하나씩)의 OCR 낱말 — 꼬리말 되풀이 판정용(§3.5.2). 못 읽으면 건너뛴다."""
+    out = []
+    for k in (pno - 1, pno + 1):
+        if 0 <= k < n:
+            try:
+                ws, dpi = words_lookup(k)
+            except Exception:
+                continue
+            if ws:
+                out.append((ws, dpi))
+    return out
+
+
 def display_rows(pdf_path, page: int, *, ocr_lookup=None, words_lookup=None) -> list:
     """쪽 하나를 **텍스트 창이 보여 주는 그대로** 돌려준다 — 글과 **자리**를 함께.
 
@@ -1695,17 +1784,20 @@ def display_rows(pdf_path, page: int, *, ocr_lookup=None, words_lookup=None) -> 
             words, wdpi = (words_lookup(pno) if words_lookup else (None, 0))
             rows = page_lines(doc, str(pdf_path), pno, tables='lines',
                               ocr_text=ocr, ocr_words=words or None,
-                              ocr_dpi=int(wdpi or 0))
+                              ocr_dpi=int(wdpi or 0),
+                              ocr_peer_words=(_peer_words(words_lookup, pno, doc.page_count)
+                                              if words else None))
         except Exception:
             return []
-        lines = [r.get('text', '') for r in rows]
+        # 260913-4(SOT §5.1.3): 고침은 **자리로** 얹는다(합친 줄 포함) — 창과 같은 함수
         try:
             from viewer.text_fix_store import store as _fix_store
-            lines = _fix_store().apply_to_text(str(pdf_path), pno, lines)
+            rows = _fix_store().apply_to_rows(str(pdf_path), pno, rows)
         except Exception:
             pass
         out = []
-        for r, t in zip(rows, lines):
+        for r in rows:
+            t = r.get('text', '')
             if not (t or '').strip():
                 continue
             rcs = r.get('rects') or ([r['rect']] if r.get('rect') else [])
@@ -1749,6 +1841,14 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
         fixes = _fix_store()
     except Exception:
         fixes = None
+    if words_lookup is not None:
+        # 260913-4: 옆 쪽 낱말도 읽으므로(§3.5.2) 한 쪽을 두세 번 묻지 않게 기억한다
+        _raw_lookup, _memo = words_lookup, {}
+
+        def words_lookup(k, _f=_raw_lookup, _m=_memo):
+            if k not in _m:
+                _m[k] = _f(k)
+            return _m[k]
     out = []
     try:
         idx = range(doc.page_count) if pages is None else [int(p) for p in pages]
@@ -1760,15 +1860,18 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
                 words, wdpi = (words_lookup(pno) if words_lookup else (None, 0))
                 rows = page_lines(doc, str(pdf_path), pno, tables='lines',
                                   ocr_text=ocr, ocr_words=words or None,
-                                  ocr_dpi=int(wdpi or 0))
+                                  ocr_dpi=int(wdpi or 0),
+                                  ocr_peer_words=(_peer_words(words_lookup, pno,
+                                                              doc.page_count)
+                                                  if words else None))
             except Exception:
                 continue
-            lines = [r.get('text', '') for r in rows]
-            if fixes is not None:
+            if fixes is not None:           # 260913-4(SOT §5.1.3): 자리로 얹는다
                 try:
-                    lines = fixes.apply_to_text(str(pdf_path), pno, lines)
+                    rows = fixes.apply_to_rows(str(pdf_path), pno, rows)
                 except Exception:
                     pass
+            lines = [r.get('text', '') for r in rows]
             out.append((pno, chr(10).join(x for x in lines if x)))
     finally:
         try:
@@ -1776,6 +1879,26 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
         except Exception:
             pass
     return out
+
+def pick_ocr_words(doc, page_index: int, words_lookup, forced: bool = False):
+    """이 쪽에 **우리 OCR 낱말**을 쓸지 정한다 → `(낱말상자, dpi)` 또는 `([], 0)` (SOT §3.1).
+
+    260913-6(사용자 결정 "우리 OCR로 통일"): 판단은 **여기 한 곳**이다 — 본문 뷰어(입력 SOT §2.8)·
+    텍스트 창·Word 저장·글자층 다시 쓰기(§5.4)가 모두 이것을 거친다.
+      · 쓸 만한 글자층이 있고 사용자가 다시 읽히지 않았다 → 쓰지 않는다(층이 가장 정확하다)
+      · 그 밖(스캔본, 스캐너 OCR 층만 있는 쪽 포함, 또는 [OCR 다시 읽기] 한 쪽) → 우리 OCR 이 있으면 쓴다
+    `words_lookup(쪽) -> (낱말상자, dpi)` 는 study.db 를 읽는 쪽이 준다(소유 경계)."""
+    try:
+        if not forced and has_text_layer(doc, int(page_index)):
+            return ([], 0)
+    except Exception:
+        return ([], 0)
+    try:
+        ws, dpi = words_lookup(int(page_index))
+    except Exception:
+        return ([], 0)
+    return (ws, int(dpi or 0)) if ws else ([], 0)
+
 
 def has_text_layer(doc, page_index: int) -> bool:
     """이 쪽에 쓸 만한 텍스트층이 있는가(스캔본이면 False → OCR 을 쓴다)."""

@@ -32,7 +32,7 @@ def _apply_run(run, st):
 
 def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
                          omit_tables: bool = False,
-                         fix_lookup=None, ocr_lookup=None) -> tuple:
+                         fix_rows=None, ocr_lookup=None, words_lookup=None) -> tuple:
     """쪽 목록을 docx 로. 반환 (성공여부, 메시지)."""
     try:
         from docx import Document
@@ -47,13 +47,18 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
             ocr = ""
             if not tx.has_text_layer(doc_fitz, pg):
                 ocr = (ocr_lookup(pg) if ocr_lookup else "") or ""
+            # 260913-6(텍스트 창 SOT §3.1·§7): 원천은 창과 같다 — 스캔 쪽은 우리 OCR
+            ws, wdpi = ((words_lookup(pg) or ([], 0)) if words_lookup else ([], 0))
             rows = tx.page_lines(doc_fitz, pdf_path, pg,
                                  tables=("omit" if omit_tables else "lines"),
-                                 ocr_text=ocr)
-            fixes = (fix_lookup(pg) if fix_lookup else {}) or {}
-            for i, t in fixes.items():
-                if 0 <= i < len(rows):
-                    rows[i]["text"] = t
+                                 ocr_text=ocr, ocr_words=ws or None, ocr_dpi=int(wdpi or 0))
+            # 260913-4(텍스트 창 SOT §5.1.3): 줄 번호가 아니라 **자리로** 얹는다(합친 줄 포함).
+            #   `fix_rows(쪽, 줄목록) -> 줄목록` — 창·본문 읽기·단어장과 같은 함수를 쓴다.
+            if fix_rows is not None:
+                try:
+                    rows = fix_rows(pg, rows)
+                except Exception:
+                    pass
             if not rows:
                 continue
             for r in rows:
