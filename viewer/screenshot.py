@@ -126,15 +126,48 @@ def export_pdf(image_paths: Iterable[str | Path], out_pdf: str | Path) -> Path:
     return out
 
 
+_MEASURE_FONT: dict = {}     # 글꼴 파일 → fitz.Font (폭 재기용, 쪽마다 13MB 를 다시 읽지 않게)
+
+
+def _center_text(page, band, text: str, size: float, color, fontfile: str) -> None:
+    """260913-7(마스터 §4.5.10·§4.5.11): 띠 가운데에 맑은 고딕 한 줄. 넘치면 글자를 줄인다(최소 5pt)."""
+    from viewer.pdf_font import fresh_font_name
+    avail = max(10.0, band.width - 16)
+    font = _MEASURE_FONT.get(fontfile)
+    if font is None:
+        font = _MEASURE_FONT[fontfile] = fitz.Font(fontfile=fontfile)
+    w = font.text_length(text, fontsize=size)
+    if w > avail:
+        size = max(5.0, size * avail / w)
+        w = font.text_length(text, fontsize=size)
+    x = band.x0 + (band.width - w) / 2.0
+    y = band.y0 + band.height / 2.0 + size * 0.36      # 글자 가운데 ≈ 띠 가운데
+    page.insert_text((x, y), text, fontsize=size, color=color, fontfile=fontfile,
+                     fontname=fresh_font_name(page, "krhdr"))
+
+
 def _overlay_header_footer(page, *, top_text: str | None = None,
                            bottom_text: str | None = None) -> None:
     """v1.6.4: 페이지 상/하단에 흰 배경 + 가운데 텍스트 오버레이.
 
-    한글 파일명 대응을 위해 `insert_textbox`(내장 라틴 폰트) 가 아닌
-    `insert_htmlbox`(유니코드 자동 폰트) 를 사용. 실패해도 저장은 계속.
+    260913-7(마스터 §4.5.10): 맑은 고딕으로 `insert_text` 한다. 종전 `insert_htmlbox` 는
+    쪽마다 대체 글꼴 3.6MB 를 따로 넣어 10쪽이 36MB 가 됐다. 맑은 고딕 파일이 없을 때만
+    종전 `insert_htmlbox`. 실패해도 저장은 계속.
     """
+    from viewer.pdf_font import text_font_file
+    ff = text_font_file()
     try:
         R = page.rect
+        if ff:
+            if top_text:
+                band = fitz.Rect(R.x0, R.y0, R.x1, R.y0 + 26)
+                page.draw_rect(band, color=(1, 1, 1), fill=(1, 1, 1), overlay=True)
+                _center_text(page, band, top_text, 11.0, (0, 0, 0), ff)
+            if bottom_text:
+                band = fitz.Rect(R.x0, R.y1 - 24, R.x1, R.y1)
+                page.draw_rect(band, color=(1, 1, 1), fill=(1, 1, 1), overlay=True)
+                _center_text(page, band, bottom_text, 10.0, (0.267, 0.267, 0.267), ff)
+            return
         if top_text:
             band = fitz.Rect(R.x0, R.y0, R.x1, R.y0 + 26)
             page.draw_rect(band, color=(1, 1, 1), fill=(1, 1, 1), overlay=True)
@@ -251,7 +284,10 @@ def export_pdf_from_meta(meta_list: Iterable[dict], out_pdf: str | Path,
                 _overlay_header_footer(new_doc[-1], top_text=top,
                                        bottom_text=bottom)
 
-        new_doc.save(out)
+        # 260913-7(마스터 §4.5.10): 넣은 글꼴은 쓴 글자만, 겹친 개체는 정리해 저장.
+        from viewer.pdf_font import subset_fonts_safely
+        subset_fonts_safely(new_doc)
+        new_doc.save(out, garbage=4, deflate=True)
     finally:
         new_doc.close()
         for d in opened.values():

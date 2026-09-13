@@ -217,25 +217,6 @@ class EditMixin:
         except Exception as e:
             QMessageBox.warning(self, "저장 실패", str(e))
 
-    # 260611-76: 글꼴 이름 → Windows TTF/TTC 경로
-    _FONT_FILES = {
-        "맑은 고딕": [r"C:\Windows\Fonts\malgun.ttf"],
-        "굴림": [r"C:\Windows\Fonts\gulim.ttc"],
-        "바탕": [r"C:\Windows\Fonts\batang.ttc"],
-        "돋움": [r"C:\Windows\Fonts\dotum.ttc", r"C:\Windows\Fonts\gulim.ttc"],
-    }
-
-    def _korean_fontfile(self, family=None):
-        """260611-74/76: 글꼴 이름에 맞는 TTF/TTC 경로. 없으면 맑은고딕→폴백."""
-        import os
-        cands = list(self._FONT_FILES.get(family or "맑은 고딕", []))
-        cands += [r"C:\Windows\Fonts\malgun.ttf", r"C:\Windows\Fonts\gulim.ttc",
-                  r"C:\Windows\Fonts\batang.ttc", r"C:\Windows\Fonts\NanumGothic.ttf"]
-        for c in cands:
-            if os.path.exists(c):
-                return c
-        return None
-
     def _bake_text_stroke(self, fitz, QColor, page, stk, pw, ph):
         """260611-74/76: 텍스트 박스/지시선 굽기 — 배경(투명도)·박스선·지시선(색상버튼 스타일)·텍스트."""
         import math
@@ -303,12 +284,14 @@ class EditMixin:
         if _spt is None:
             _spt = float(stk.get("size", 0.022)) * ph
         fs = max(5.0, min(200.0, float(_spt)))
-        ff = self._korean_fontfile(stk.get("family"))
+        # 260913-7(SOT §4.5.11): 글꼴은 맑은 고딕 하나 — 옛 자료의 `family` 는 무시한다.
+        from viewer.pdf_font import fresh_font_name, insert_textbox_styled, text_font_file
+        ff = text_font_file()
+        bold = bool(stk.get("bold", False)); italic = bool(stk.get("italic", False))
         kw = dict(fontsize=fs, color=trgb, align=int(stk.get("align", 0)))
         if ff:
             # 260913-5(SOT §4.5.10 ②): 한 번 저장한 쪽의 krfont 는 이미 부분집합 — 같은 이름이면
             #   insert_font 가 그것을 재사용해 새 글자가 사라진다. 그런 이름은 비켜 간다.
-            from viewer.pdf_font import fresh_font_name
             kw.update(fontfile=ff, fontname=fresh_font_name(page, "krfont"))
         pad = 2
         box = fitz.Rect(x0 + pad, y0 + pad, x1 - pad, y1 - pad)
@@ -316,13 +299,14 @@ class EditMixin:
         #   줄을 바꿔, 띄어쓰기 없는 한글이 박스를 넘치면 아래 '3배 박스' 폴백으로 빠져
         #   화면과 전혀 다른 모양이 됐다. 화면이 쓰는 것과 같은 배치기로 미리 줄을 나눠
         #   넣는다(줄바꿈 문자는 `insert_textbox` 가 그대로 지킨다).
-        txt = self._wrap_like_screen(txt, fs, box.width, stk.get("family"))
+        txt = self._wrap_like_screen(txt, fs, box.width, bold=bold, italic=italic)
         try:
-            rcv = page.insert_textbox(box, txt, **kw)
+            # 260913-7: 굵게·기울임도 굽는다 — 같은 글꼴로 흉내(글꼴 파일이 늘지 않음).
+            rcv = insert_textbox_styled(fitz, page, box, txt, bold=bold, italic=italic, **kw)
             if rcv < 0:   # 안 들어가면 박스를 넉넉히 넓혀 재시도
                 big = fitz.Rect(x0, y0, x0 + (x1 - x0) * 3 + fs * len(txt),
                                 y0 + (y1 - y0) * 3 + fs * 4)
-                page.insert_textbox(big, txt, **kw)
+                insert_textbox_styled(fitz, page, big, txt, bold=bold, italic=italic, **kw)
         except Exception:
             try:
                 page.insert_textbox(box, txt, fontsize=fs, color=trgb)
@@ -330,19 +314,23 @@ class EditMixin:
                 pass
 
     @staticmethod
-    def _wrap_like_screen(text: str, fs: float, width_pt: float, family=None) -> str:
+    def _wrap_like_screen(text: str, fs: float, width_pt: float, family=None, *,
+                          bold=False, italic=False) -> str:
         """260907-3: 화면과 같은 배치기(`QTextDocument`)로 줄을 미리 나눈다.
 
         화면의 `MainView._text_doc` 과 같은 규칙(`WrapAtWordBoundaryOrAnywhere`)을 쓰므로
         **띄어쓰기가 없어도** 같은 자리에서 줄이 바뀐다. 좌표 단위가 양쪽 모두 pt 라
-        글자 크기·폭을 그대로 넣으면 된다. 실패하면 원문 그대로(종전 동작)."""
+        글자 크기·폭을 그대로 넣으면 된다. 실패하면 원문 그대로(종전 동작).
+        260913-7(§4.5.11): 글꼴은 맑은 고딕 하나(`family` 는 무시), 굵게·기울임은 화면처럼 켜고 잰다."""
         try:
             from PyQt6.QtGui import QTextDocument, QTextOption, QFont
             from PyQt6.QtCore import Qt as _Qt
+            from viewer.pdf_font import TEXT_FAMILY
             doc = QTextDocument()
             doc.setDocumentMargin(0.0)
-            f = QFont(family or "맑은 고딕")
+            f = QFont(TEXT_FAMILY)
             f.setPixelSize(max(1, int(round(float(fs)))))
+            f.setBold(bool(bold)); f.setItalic(bool(italic))
             doc.setDefaultFont(f)
             opt = QTextOption()
             opt.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)

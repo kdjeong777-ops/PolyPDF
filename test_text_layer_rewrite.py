@@ -292,6 +292,61 @@ try:
     chk(got.get("tmp") == "" and got["st"].get("cancelled"), "⑦ 중지하면 임시 파일이 없다")
     chk(open(str(s4), "rb").read() == before, "⑦ 중지해도 원본은 그대로")
     chk(not list(root.glob("*_textlayer_tmp.pdf")), "⑦ 임시 파일이 남지 않는다")
+
+    # ── ⑧ 글꼴 — 앱이 실제로 타는 길(TextLayerWorker → build_layer_pdf → rewrite_page_layer) ──
+    #    규칙은 마스터 §4.5.10(① 쓴 글자만 ② 부분집합 이름 비켜 가기). 260913-8 감사: 종전 글꼴 검사
+    #    (test_text_apply_multi C)는 **앱이 더는 부르지 않는** apply_fixes_by_page 길만 봤다.
+    s8 = scan_pdf(root / "font.pdf", pages=1)
+    sst = StudyStore(dbp)
+    sst.save_page(file_key_for(str(s8)), 0, "x", dpi=0, engine="t", source="ocr",
+                  conf=90.0, words=our_words(0), lang="eng")
+    sst.close()
+    d = fitz.open(str(s8))
+    r8 = rows_for_factory(look)(d, 0)
+    d.close()
+    tx.close_cache()
+
+    def run_worker(subset_impl=None):
+        """앱과 같은 워커로 '고친 쪽만' 반영해 임시 파일을 만든다. subset_impl 로 부분집합을 바꿔 끼운다."""
+        orig = fitz.Document.subset_fonts
+        if subset_impl is not None:
+            fitz.Document.subset_fonts = subset_impl
+        res = {}
+        try:
+            wk = TextLayerWorker(str(s8), [0], scope="fixed", db_path=dbp)
+            wk.done.connect(lambda tmp, st, t: res.update(tmp=tmp, st=st))
+            wk.run()
+        finally:
+            fitz.Document.subset_fonts = orig
+        return res.get("tmp") or "", res.get("st") or {}
+
+    STORE.set_fix(str(s8), 0, 0, "첫 반영 가나다 Fracture p1", "", r8[0]["rect"])
+    full8, _ = run_worker(lambda self, *a, **k: None)
+    sz_full = os.path.getsize(full8) if full8 else 0
+    if full8:
+        os.remove(full8)
+    tmp8, st8 = run_worker()
+    sz_real = os.path.getsize(tmp8) if tmp8 else 0
+    chk(bool(tmp8) and st8.get("rewritten") == [0], "⑧ 준비 — 워커가 그 쪽을 다시 썼다", str(st8))
+    chk(sz_real and sz_real < sz_full / 5 and sz_full - sz_real > 3_000_000,
+        "⑧ 다시 쓴 층에 글꼴 **전체**가 들어가지 않는다(부분집합 없이 저장한 것과 견줌)",
+        "(%s → %s B)" % (format(sz_full, ","), format(sz_real, ",")))
+    shutil.move(tmp8, str(s8))
+    # 같은 쪽에 **새 글자**로 다시 반영 — 한 번 저장한 krfix 는 부분집합이라 이름을 비켜 가야 한다
+    NEW8 = "둘째 반영 흙쫓뷁 휘몰아쳐"
+    STORE.set_fix(str(s8), 0, 1, NEW8, "", r8[1]["rect"])
+    tmp8b, _st = run_worker()
+    o8 = fitz.open(tmp8b) if tmp8b else None
+    t8 = o8[0].get_text() if o8 else ""
+    names8 = sorted(f[4] for f in o8[0].get_fonts() if f[4].startswith("krfix")) if o8 else []
+    hits8 = len(o8[0].search_for("흙쫓뷁")) if o8 else 0
+    if o8:
+        o8.close()
+        os.remove(tmp8b)
+    chk(NEW8 in t8 and "첫 반영 가나다" in t8,
+        "⑧ 같은 쪽에 새 글자로 **다시** 반영해도 새 글·앞의 글이 모두 추출된다", repr(t8[:120]))
+    chk(hits8 == 1, "⑧ 다시 반영한 새 글자도 검색된다")
+    chk("krfix2" in names8, "⑧ 부분집합이 된 krfix 는 비켜 간다(krfix2)", str(names8))
 finally:
     try:
         tx.close_cache()

@@ -2,7 +2,8 @@
 
 - 선긋기 탭: 5펜 색·굵기·투명도 + 하이라이트 투명도 + 지우개 면적(기존 선긋기 설정 이동).
 - 글쓰기 탭: 최대 7개 사용자 스타일 관리(이름·저장·삭제·위/아래) + 스타일 편집기
-  (폰트·색상·크기·박스선 on/off·배경색+불투명도·정렬·지시선 끝모양).
+  (굵게·기울임·색상·크기·박스선 on/off·배경색+불투명도·정렬·지시선 끝모양).
+  260913-7: 글꼴은 맑은 고딕 하나(마스터 §4.5.11) — 선택 없음.
 """
 from __future__ import annotations
 
@@ -14,10 +15,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt
 
+from viewer.pdf_font import TEXT_FAMILY
 from viewer.widgets.pen_settings_dialog import _ColorBtn
 
 MAX_STYLES = 7
-_FONTS = ["맑은 고딕", "굴림", "바탕", "돋움"]
 _TIP_GLYPH = [("arrow", "→", "뾰족한 화살표"), ("circle", "●", "끝 원형"),
               ("plain", "—", "직선")]
 
@@ -120,9 +121,10 @@ class LineTextSettingsDialog(QDialog):
 
         # 하단: 스타일 편집기
         form = QFormLayout()
-        self._cmb_font = QComboBox(); self._cmb_font.addItems(_FONTS)
+        # 260913-7(마스터 §4.5.11): 글꼴은 맑은 고딕 하나 — 선택 없이 표시만.
+        self._lbl_font = QLabel(TEXT_FAMILY)
         self._cb_bold = QCheckBox("굵게"); self._cb_italic = QCheckBox("기울임")
-        rf = QHBoxLayout(); rf.addWidget(self._cmb_font, 1)
+        rf = QHBoxLayout(); rf.addWidget(self._lbl_font, 1)
         rf.addWidget(self._cb_bold); rf.addWidget(self._cb_italic)
         form.addRow("문자 폰트", _wrap(rf))
         self._cb_color = _ColorBtn("#111111"); form.addRow("문자 색상", self._cb_color)
@@ -177,7 +179,7 @@ class LineTextSettingsDialog(QDialog):
         self._lst.blockSignals(False)
 
     def _editor_to_style(self, name):
-        return {"name": name, "family": self._cmb_font.currentText(),
+        return {"name": name, "family": TEXT_FAMILY,
                 "color": self._cb_color.color_name(),
                 "size_pt": float(self._sp_size.value()),
                 "spacing_pt": float(self._sp_spacing.value()),
@@ -189,8 +191,6 @@ class LineTextSettingsDialog(QDialog):
 
     def _load_style(self, s):
         self._ed_name.setText(s.get("name", ""))
-        i = self._cmb_font.findText(s.get("family", "맑은 고딕"))
-        self._cmb_font.setCurrentIndex(max(0, i))
         self._cb_color._color = QColor(s.get("color", "#111111")); self._cb_color._apply()
         # 260907-1: 옛 스타일(`size`=페이지 대비 비율)은 A4 기준으로 1회 환산해 보여 준다.
         sz = s.get("size_pt")

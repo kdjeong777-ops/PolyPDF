@@ -2708,7 +2708,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         판단은 `text_extract2.pick_ocr_words` 한 곳이 한다(텍스트 창 SOT §3.1, 260913-6 사용자 결정
         "우리 OCR로 통일"). 쓸 만한 글자층이 있는 쪽은 사용자가 [OCR 다시 읽기] 하지 않았으면 그대로
-        둔다 — `검사의이해` 처럼 PDF 층이 우리 것보다 나은 문서가 있다(입력 SOT §2.8)."""
+        둔다 — 디지털 PDF 의 글자층은 어떤 OCR 보다 정확하다(텍스트 창 SOT §3.1)."""
         try:
             mv = self.main_view
             if mv is None or mv._doc is None:
@@ -4207,7 +4207,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             st = self.main_view.text_defaults(is_leader)
         from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
                                      QPushButton, QCheckBox, QDoubleSpinBox, QComboBox,
-                                     QColorDialog, QDialogButtonBox, QSpinBox)
+                                     QColorDialog, QDialogButtonBox, QSpinBox, QLabel)
         from PyQt6.QtGui import QColor
         dlg = QDialog(self)
         _t = "지시선 글쓰기 박스" if is_leader else "글쓰기 박스"
@@ -4226,13 +4226,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if c.isValid():
                 state[key] = c.name(); _swatch(btn, state[key])
 
-        # 폰트
-        cmb_font = QComboBox(); cmb_font.addItems(["맑은 고딕", "굴림", "바탕", "돋움"])
-        fam = st.get("family", "맑은 고딕")
-        cmb_font.setCurrentIndex(max(0, cmb_font.findText(fam)))
+        # 폰트 — 260913-7(마스터 §4.5.11): 맑은 고딕 하나, 선택 없이 표시만
+        from viewer.pdf_font import TEXT_FAMILY
+        lbl_font = QLabel(TEXT_FAMILY)
         cb_bold = QCheckBox("굵게"); cb_bold.setChecked(bool(st.get("bold", False)))
         cb_italic = QCheckBox("기울임"); cb_italic.setChecked(bool(st.get("italic", False)))
-        row_f = QHBoxLayout(); row_f.addWidget(cmb_font, 1)
+        row_f = QHBoxLayout(); row_f.addWidget(lbl_font, 1)
         row_f.addWidget(cb_bold); row_f.addWidget(cb_italic)
         form.addRow("문자 폰트", self._wrap_row(row_f))
 
@@ -4304,7 +4303,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         lay.addWidget(bb)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        fields = {"family": cmb_font.currentText(), "color": state["color"],
+        fields = {"family": TEXT_FAMILY, "color": state["color"],
                   "size_pt": float(sp_size.value()),
                   "spacing_pt": float(sp_spacing.value()),
                   "bold": cb_bold.isChecked(), "italic": cb_italic.isChecked(),

@@ -3831,7 +3831,9 @@ class MainView(QWidget):
         from PyQt6.QtGui import QFont
         # 260611-79/260907-1: pt → 픽셀. 상한은 폰트엔진 폭주/크래시 방지.
         px = max(7, min(800, int(round(self._pt_to_px(self._style_size_pt(st), pr)))))
-        f = QFont(st.get("family", "맑은 고딕"))
+        # 260913-7(SOT §4.5.11): 글꼴은 맑은 고딕 하나 — 옛 자료의 `family` 는 무시(PDF 와 같게).
+        from viewer.pdf_font import TEXT_FAMILY
+        f = QFont(TEXT_FAMILY)
         f.setPixelSize(px)
         f.setBold(bool(st.get("bold", False)))
         f.setItalic(bool(st.get("italic", False)))
