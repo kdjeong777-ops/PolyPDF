@@ -260,6 +260,25 @@ if HAVE_SOT:
             (str(len(rev)) + "곳 역행 "
              + str([ds[k - 1] + "->" + ds[k] for k in rev[:2]])) if rev
             else str(len(ds)) + "행")
+print(NL + "=== CLAUDE.md §4 — 마스터 §0 은 버전별 한 줄, 원문은 이력 아카이브 (260913-11) ===")
+# 행마다 상세를 풀어 써 마스터 §0 이 문서의 71% 가 됐다(평균 1KB/행). 규칙은 '버전 한 줄 요약'
+#   이었는데 검사가 없어 조용히 자랐다 — 길이와 짝을 여기서 막는다.
+if HAVE_SOT:
+    MROW = re.compile(r"^\| (\d{4}-\d{2}-\d{2}) \| ([^|]+?) \| (.*) \|\s*$")
+    mst0 = SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", "")
+    arc0 = SOTS.get("뷰어 변경 이력 아카이브.md", "")
+    chk(bool(arc0), "이력 아카이브 문서가 있다")
+    mrows = [MROW.match(l) for l in mst0.splitlines() if l.startswith("| 20")]
+    mrows = [m for m in mrows if m]
+    MAXLEN = 220
+    longr = [m.group(1) + " " + m.group(2) for m in mrows if len(m.group(0)) > MAXLEN]
+    chk(not longr, "마스터 §0 행이 한 줄 요약이다(%d자 이하, 상세는 이력 아카이브)" % MAXLEN,
+        str(longr[:3]))
+    unpaired = [m.group(1) + " " + m.group(2) for m in mrows
+                if ("| %s | %s | %s" % (m.group(1), m.group(2), m.group(3))) not in arc0]
+    chk(not unpaired, "마스터 §0 행마다 같은 날짜·버전·제목의 원문 행이 이력 아카이브에 있다",
+        str(unpaired[:3]))
+
 # SOT 문서는 공개 저장소에 들어가지 않는다(패턴이 아니라 git 판정으로 확인)
 if HAVE_SOT:
     names = [n for n in SOTS if n != "CLAUDE.md"] + ["CLAUDE.md"]
