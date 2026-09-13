@@ -197,3 +197,13 @@ jobs:
               gh release create $tag $assets --title "PolyPDF $tag" --generate-notes --latest
             }
           }
+
+      # 260913-14 (SOT 마스터 §14.5 U9): 버전 릴리스는 최근 10개만 둔다. git 태그는 지우지 않는다.
+      #   릴리스는 이미 게시된 뒤라 정리 실패가 릴리스 실패로 보이지 않게 continue-on-error.
+      - name: Prune old releases (keep newest 10, tags kept)
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/prune_releases.ps1 -Keep 10 -Repo "${{ github.repository }}"

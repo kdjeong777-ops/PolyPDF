@@ -67,6 +67,10 @@ git add -A; git commit -m "v2.26.0"; git tag v2.26.0; git push; git push origin 
 GitHub Actions(release.yml)가 Windows 에서 빌드하고
 `PolyPDF-v2.25.0-win64.zip` 을 릴리스에 올립니다. 기존 사용자 앱이 자동 감지·업데이트.
 
+> **오래된 릴리스 자동 정리**: 릴리스를 만든 직후 `scripts/prune_releases.ps1` 이 **버전 릴리스를 최근 10개만** 남기고
+> 나머지를 지웁니다. **git 태그는 남기므로** 옛 버전 소스는 저장소 Tags 의 Source code 로 받을 수 있습니다.
+> `components` 같은 비버전 릴리스는 건드리지 않습니다. 수동 미리보기: `.\scripts\prune_releases.ps1 -DryRun`
+
 ### 3-b. (대안) 로컬 빌드 후 수동 릴리스
 CI를 쓰지 않거나 빠르게 올릴 때:
 ```powershell

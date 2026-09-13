@@ -398,6 +398,19 @@ bat = read(ROOT / "build_ci.bat")
 chk("--collect-submodules viewer" in bat,
     "`viewer.*` 는 자동 포함 — 새 모듈에 별도 등재가 필요 없다")
 
+print(NL + "=== 마스터 §14.5 U9 — 릴리스 보존 개수가 한 곳과 일치 (260913-14) ===")
+rel = read(ROOT / ".github" / "workflows" / "release.yml")
+pr = read(ROOT / "scripts" / "prune_releases.ps1")
+mk = re.search(r"prune_releases\.ps1\s+-Keep\s+(\d+)", rel)
+chk(bool(mk), "release.yml 이 릴리스 뒤에 prune_releases.ps1 -Keep N 을 부른다")
+pr_code = "\n".join(l for l in pr.splitlines() if not l.lstrip().startswith("#"))
+chk("gh release delete" in pr_code and "--cleanup-tag" not in pr_code,
+    "정리 스크립트가 git 태그를 지우지 않는다(--cleanup-tag 없음)")
+if HAVE_SOT and mk:
+    u9 = re.search(r"U9 — 버전 릴리스는 최근 (\d+)개", SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", ""))
+    chk(bool(u9) and u9.group(1) == mk.group(1), "SOT U9 보존 개수 = release.yml -Keep",
+        "%s / %s" % (u9.group(1) if u9 else None, mk.group(1)))
+
 print(NL + "=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for msg in fails:
     print(" -", msg)
