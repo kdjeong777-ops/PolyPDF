@@ -2,7 +2,7 @@
 
 kengdic: surface(한)→gloss(영). 역으로 영어 단일어 gloss → 한국어 surface 매핑.
 영어 표제어(lemmatized lower) → 한국어 뜻 목록(최대 4). 런타임 vocab.define_en_ko 가 사용.
-사용: python gen_en_ko_dict.py  (smart_pdf_viewer/ 에서)
+사용: python gen_en_ko_dict.py  (public/ 에서)
 """
 from __future__ import annotations
 import csv

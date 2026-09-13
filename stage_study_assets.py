@@ -1,6 +1,6 @@
 """빌드 전 단어학습 동봉 자산 준비 (계획서 §14.5/§8.3).
 
-빌드 폴더(smart_pdf_viewer/)에 다음을 만든다 — build_ci.bat 의 %TESS_ARG%/%NLTK_ARG% 가 자동 인식:
+빌드 폴더(public/)에 다음을 만든다 — build_ci.bat 의 %TESS_ARG%/%NLTK_ARG% 가 자동 인식:
   tesseract/Library/bin/*        (portable Tesseract: tesseract.exe + DLL 전체, libcurl 포함)
   tesseract/share/tessdata/*     (eng/kor traineddata)
   nltk_data/                     (WordNet + omw-1.4)
@@ -13,8 +13,8 @@ import shutil
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent          # smart_pdf_viewer/
-REPO = HERE.parent                              # MPDF/
+HERE = Path(__file__).resolve().parent          # public/
+REPO = HERE.parent                              # PolyPDF/ (private 작업 폴더)
 ENV = REPO / "study_spike" / "mamba" / "envs" / "ocr"
 DEST = HERE / "tesseract"
 NLTK_DIR = HERE / "nltk_data"

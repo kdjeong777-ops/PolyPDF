@@ -4,7 +4,7 @@
 출력: resources/ko_en_dict.csv (surface, gloss[; 로 최대3개]).
 런타임(vocab.define_ko_en)은 이 CSV 만 읽음 → 오프라인. 출처고지는 도움말 About.
 
-사용: python gen_ko_en_dict.py   (smart_pdf_viewer/ 에서)
+사용: python gen_ko_en_dict.py   (public/ 에서)
 """
 from __future__ import annotations
 import csv

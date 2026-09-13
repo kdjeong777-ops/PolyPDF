@@ -52,9 +52,9 @@ def _try_import() -> Optional[object]:
 
 
 def _sibling_repo_root() -> Path:
-    """`main.py` 의 부모(=smart_pdf_viewer/)의 부모(=repo 루트)."""
-    # viewer/bookmarker_bridge.py 기준: parent=viewer/, parent.parent=smart_pdf_viewer/,
-    # parent.parent.parent = repo root (smart_pdf_viewer 의 형제 폴더가 여기).
+    """`main.py` 의 부모(=public/)의 부모(=repo 루트)."""
+    # viewer/bookmarker_bridge.py 기준: parent=viewer/, parent.parent=public/,
+    # parent.parent.parent = repo root (public 의 형제 폴더가 여기).
     return Path(__file__).resolve().parent.parent.parent
 
 

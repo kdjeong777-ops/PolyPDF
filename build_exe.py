@@ -1,6 +1,6 @@
 """직접 PyInstaller 빌드 러너 (build_ci.bat 와 동일 산출 — venv 재설치 생략, 현 환경 사용).
 
-smart_pdf_viewer/ 에서 실행:  python build_exe.py
+public/ 에서 실행:  python build_exe.py
 tesseract/ · nltk_data/ 가 있으면(stage_study_assets.py 산출) 자동 동봉.
 """
 from __future__ import annotations

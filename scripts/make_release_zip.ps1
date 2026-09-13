@@ -5,7 +5,7 @@
 #   ※ 보통은 'git push --tags' → GitHub Actions(release.yml)가 자동 생성. 이 스크립트는 수동 업로드용.
 # 사용: build_ci.bat 빌드 후 -> powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot          # smart_pdf_viewer
+$root = Split-Path -Parent $PSScriptRoot          # public
 $src  = Join-Path $root "dist\PolyPDF"
 if (-not (Test-Path (Join-Path $src "PolyPDF.exe"))) {
     Write-Error "빌드 산출물이 없습니다: $src\PolyPDF.exe `n먼저 build_ci.bat 로 빌드하세요."

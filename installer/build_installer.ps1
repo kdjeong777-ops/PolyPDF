@@ -3,7 +3,7 @@
 #   Inno Setup 6(ISCC.exe) 필요:  winget install -e --id JRSoftware.InnoSetup
 #   사용:  powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot          # smart_pdf_viewer
+$root = Split-Path -Parent $PSScriptRoot          # public
 $iss  = Join-Path $PSScriptRoot "PolyPDF.iss"
 
 if (-not (Test-Path (Join-Path $root "dist\PolyPDF\PolyPDF.exe"))) {

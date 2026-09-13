@@ -53,7 +53,7 @@ def _candidate_dirs() -> list[Path]:
         cands.append(Path(env))
     # 3) 개발용 micromamba 환경 (repo/study_spike/mamba/envs/ocr/Library/bin)
     try:
-        repo = Path(__file__).resolve().parents[3]   # .../MPDF
+        repo = Path(__file__).resolve().parents[3]   # .../PolyPDF
         cands.append(repo / "study_spike" / "mamba" / "envs" / "ocr" / "Library" / "bin")
     except Exception:
         pass

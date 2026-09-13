@@ -4,7 +4,7 @@ wordfreq.get_frequency_dict('ko') 는 MeCab 없이 읽힌다(저장된 빈도 �
 zipf = log10(freq)+9 로 환산 → 계획 §3.3 밴딩(초/중/고).
 런타임(viewer.study.vocab.level_ko)은 이 CSV 만 읽으므로 배포 EXE 에 MeCab 불필요.
 
-사용:  python gen_ko_levels.py   (smart_pdf_viewer/ 에서)
+사용:  python gen_ko_levels.py   (public/ 에서)
 출력:  resources/ko_levels.csv  (word,level)
 """
 from __future__ import annotations

@@ -3,7 +3,7 @@
 #        (또는 프로젝트 루트에서:  .\scripts\release.ps1 2.26.0)
 param([Parameter(Mandatory = $true)][string]$Version)
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot          # smart_pdf_viewer
+$root = Split-Path -Parent $PSScriptRoot          # public
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     Write-Error "버전 형식이 잘못됨: '$Version' (예: 2.26.0)"; exit 1

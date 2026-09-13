@@ -11,7 +11,7 @@ def main() -> int:
         print("사용법: python scripts/bump_version.py X.Y.Z (예: 2.26.0)", file=sys.stderr)
         return 2
     ver = sys.argv[1]
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # smart_pdf_viewer
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # public
     path = os.path.join(root, "viewer", "__init__.py")
     s = io.open(path, encoding="utf-8").read()
     s2, n = re.subn(r'__version__\s*=\s*"[^"]*"',

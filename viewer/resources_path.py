@@ -18,7 +18,7 @@ def resource_path(name: str) -> str:
         if cand.exists():
             return str(cand)
     # 패키지 디렉터리 기준
-    here = Path(__file__).resolve().parent.parent  # smart_pdf_viewer/
+    here = Path(__file__).resolve().parent.parent  # public/
     cand = here / "resources" / name
     if cand.exists():
         return str(cand)

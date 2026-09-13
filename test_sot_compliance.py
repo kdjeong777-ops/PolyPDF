@@ -27,7 +27,7 @@ sys.path.insert(0, HERE)
 from pathlib import Path
 
 ROOT = Path(HERE)
-SOT_DIR = ROOT.parent                       # MPDF/ — SOT 문서가 있는 곳(비공개)
+SOT_DIR = ROOT.parent                       # PolyPDF/ — SOT 문서가 있는 곳(비공개)
 NL = chr(10)
 fails = []
 

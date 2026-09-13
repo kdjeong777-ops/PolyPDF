@@ -3,7 +3,7 @@
 #   (ffmpeg/Tesseract 는 앱 버전과 무관 → 바뀔 때만 다시 업로드)
 # 사용: powershell -ExecutionPolicy Bypass -File scripts\make_components.ps1
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot          # smart_pdf_viewer
+$root = Split-Path -Parent $PSScriptRoot          # public
 $ff   = Join-Path $root "ffmpeg.exe"
 $tess = Join-Path $root "tesseract"
 $zip  = Join-Path $root "tesseract.zip"
