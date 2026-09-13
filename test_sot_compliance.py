@@ -411,6 +411,19 @@ if HAVE_SOT and mk:
     chk(bool(u9) and u9.group(1) == mk.group(1), "SOT U9 보존 개수 = release.yml -Keep",
         "%s / %s" % (u9.group(1) if u9 else None, mk.group(1)))
 
+print(NL + "=== 마스터 §14.5 U16 — 구성요소 릴리스 태그·자산 이름 (260913-15) ===")
+comp = read(ROOT / "viewer" / "components.py")
+ct = re.search(r'COMPONENTS_TAG\s*=\s*"([^"]+)"', comp)
+chk(bool(ct), "components.py 에 COMPONENTS_TAG 가 있다")
+chk('get("ffmpeg.exe")' in comp and 'get("tesseract.zip")' in comp,
+    "설치가 자산 이름 ffmpeg.exe·tesseract.zip 으로 찾는다")
+if HAVE_SOT and ct:
+    mst16 = SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", "")
+    m16 = re.search(r"U16 — .*?고정 태그 `([^`]+)`", mst16)
+    chk(bool(m16) and m16.group(1) == ct.group(1), "SOT U16 태그 = COMPONENTS_TAG",
+        "%s / %s" % (m16.group(1) if m16 else None, ct.group(1)))
+    chk("`ffmpeg.exe`" in mst16 and "`tesseract.zip`" in mst16, "SOT U16 에 자산 이름이 적혀 있다")
+
 print(NL + "=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for msg in fails:
     print(" -", msg)
