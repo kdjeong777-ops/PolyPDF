@@ -260,23 +260,49 @@ if HAVE_SOT:
             (str(len(rev)) + "곳 역행 "
              + str([ds[k - 1] + "->" + ds[k] for k in rev[:2]])) if rev
             else str(len(ds)) + "행")
-print(NL + "=== CLAUDE.md §4 — 마스터 §0 은 버전별 한 줄, 원문은 이력 아카이브 (260913-11) ===")
+print(NL + "=== CLAUDE.md §4 — §0 은 버전별 한 줄, 원문은 이력 아카이브 (260913-11·12) ===")
 # 행마다 상세를 풀어 써 마스터 §0 이 문서의 71% 가 됐다(평균 1KB/행). 규칙은 '버전 한 줄 요약'
-#   이었는데 검사가 없어 조용히 자랐다 — 길이와 짝을 여기서 막는다.
+#   이었는데 검사가 없어 조용히 자랐다 — 길이와 짝을 여기서 막는다. 모듈 SOT §0 도 같다(260913-12).
 if HAVE_SOT:
     MROW = re.compile(r"^\| (\d{4}-\d{2}-\d{2}) \| ([^|]+?) \| (.*) \|\s*$")
-    mst0 = SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", "")
     arc0 = SOTS.get("뷰어 변경 이력 아카이브.md", "")
     chk(bool(arc0), "이력 아카이브 문서가 있다")
-    mrows = [MROW.match(l) for l in mst0.splitlines() if l.startswith("| 20")]
-    mrows = [m for m in mrows if m]
     MAXLEN = 220
-    longr = [m.group(1) + " " + m.group(2) for m in mrows if len(m.group(0)) > MAXLEN]
-    chk(not longr, "마스터 §0 행이 한 줄 요약이다(%d자 이하, 상세는 이력 아카이브)" % MAXLEN,
+    longr, unpaired, stray = [], [], []
+    for name, txt in SOTS.items():
+        if name == "CLAUDE.md" or "아카이브" in name:
+            continue
+        lines = txt.splitlines()
+        # §0 changelog 표 = '## 0.' 절 안의 '| 날짜 | 버전 | 내용 |' 표. 마스터 위임 문서에는 없다.
+        h0 = next((i for i, l in enumerate(lines) if l.startswith("## 0.")), -1)
+        nxt = next((i for i in range(h0 + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+        hi = next((i for i in range(max(h0, 0), nxt) if lines[i] == hdr), -1) if h0 >= 0 else -1
+        in_table = set()
+        if hi >= 0:
+            i = hi + 2
+            while i < len(lines) and lines[i].startswith("|"):
+                in_table.add(i)
+                i += 1
+        for i, l in enumerate(lines):
+            t = l.lstrip("> ").strip()      # 인용문·들여쓴 표 안의 행도 본다
+            m = MROW.match(t) if t.startswith("| 20") else None
+            if not m:
+                continue
+            tag = "%s %s %s" % (name[:10], m.group(1), m.group(2))
+            if i not in in_table:
+                # 본문 표 안에 끼어든 이력 행 — 260910-7(마스터), 260913-12(발표 §4 표)
+                stray.append(tag + " 줄 " + str(i + 1))
+                continue
+            if len(m.group(0)) > MAXLEN:
+                longr.append(tag)
+            # 굵은 제목이 없는 옛 행은 첫 문장을 줄여 끝에 '…' 를 붙였다 — 원문의 앞부분과 대조
+            title = m.group(3)[:-1] if m.group(3).endswith("…") else m.group(3)
+            if ("| %s | %s | %s" % (m.group(1), m.group(2), title)) not in arc0:
+                unpaired.append(tag)
+    chk(not stray, "§0 표 밖(본문 표·인용문)에 날짜 이력 행이 없다", str(stray[:3]))
+    chk(not longr, "모든 SOT §0 행이 한 줄 요약이다(%d자 이하, 상세는 이력 아카이브)" % MAXLEN,
         str(longr[:3]))
-    unpaired = [m.group(1) + " " + m.group(2) for m in mrows
-                if ("| %s | %s | %s" % (m.group(1), m.group(2), m.group(3))) not in arc0]
-    chk(not unpaired, "마스터 §0 행마다 같은 날짜·버전·제목의 원문 행이 이력 아카이브에 있다",
+    chk(not unpaired, "§0 행마다 같은 날짜·버전·제목의 원문 행이 이력 아카이브에 있다",
         str(unpaired[:3]))
 
 # SOT 문서는 공개 저장소에 들어가지 않는다(패턴이 아니라 git 판정으로 확인)

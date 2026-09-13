@@ -52,6 +52,8 @@ HAVE = OCR_SOT in SOTS and TXT_SOT in SOTS
 
 def body(name):
     """§0 변경 이력을 뺀 본문 — 이력의 옛 값은 검사하지 않는다."""
+    if "아카이브" in name:
+        return ""       # 260913-11·12: §0 원문이 이력 아카이브로 옮겨 갔다 — 문서 전체가 이력이다
     txt = SOTS.get(name, "")
     m = re.search(r"^## 0\. ", txt, re.M)
     if not m:
