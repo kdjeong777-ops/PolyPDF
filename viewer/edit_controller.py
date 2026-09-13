@@ -205,6 +205,10 @@ class EditMixin:
                     self._bake_hyperlinks_into_doc(doc, file_path)
                 except Exception:
                     pass
+            # 260913-3(SOT §4.5.10): 글쓰기 굽기는 fontfile= 로 글꼴 **전체**(맑은 고딕 13MB)를
+            #   넣는다 → 쓴 글자만 남겨 저장. 실패해도 저장은 한다(PyMuPDF 1.23 은 fontTools 필요).
+            from viewer.pdf_font import subset_fonts_safely
+            subset_fonts_safely(doc)
             doc.save(out, garbage=4, deflate=True)
             doc.close()
             self.status.showMessage(f"PDF 꾸밈 저장: {Path(out).name}", 4000)
@@ -302,7 +306,10 @@ class EditMixin:
         ff = self._korean_fontfile(stk.get("family"))
         kw = dict(fontsize=fs, color=trgb, align=int(stk.get("align", 0)))
         if ff:
-            kw.update(fontfile=ff, fontname="krfont")
+            # 260913-5(SOT §4.5.10 ②): 한 번 저장한 쪽의 krfont 는 이미 부분집합 — 같은 이름이면
+            #   insert_font 가 그것을 재사용해 새 글자가 사라진다. 그런 이름은 비켜 간다.
+            from viewer.pdf_font import fresh_font_name
+            kw.update(fontfile=ff, fontname=fresh_font_name(page, "krfont"))
         pad = 2
         box = fitz.Rect(x0 + pad, y0 + pad, x1 - pad, y1 - pad)
         # 260907-3: **화면과 같은 자리에서 줄을 바꾼다.** `insert_textbox` 는 띄어쓰기에서만

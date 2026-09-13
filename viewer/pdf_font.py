@@ -1,0 +1,41 @@
+# -*- coding: utf-8 -*-
+"""260913-5: `fontfile=` 로 글을 넣어 저장하는 PDF 의 글꼴 규칙 (마스터 SOT §4.5.10).
+
+① 저장 직전 `subset_fonts_safely(doc)` — 글꼴 **전체**(맑은 고딕 13MB)가 아니라 쓴 글자만 담는다.
+② 글을 적기 전 `fresh_font_name(page, 기본이름)` — `Page.insert_font` 는 그 쪽에 **같은 이름의
+   글꼴이 있으면 재사용**한다. 한 번 저장한 쪽의 글꼴은 이미 부분집합(`ABCDEF+…`)이라, 그 이름으로
+   새 글자를 적으면 모양이 깨지고 추출·검색에서 빠진다. 그런 이름은 비켜 간다.
+
+쓰는 곳: `edit_controller`(krfont) · `text_apply`(krfix) · `twoup`(krf/pnf, ① 만).
+"""
+from __future__ import annotations
+
+import re
+
+_SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
+
+
+def subset_fonts_safely(doc) -> bool:
+    """쓴 글자만 남긴다. 실패해도 저장은 해야 하므로 예외를 삼키고 False.
+    (PyMuPDF 1.23 의 `subset_fonts` 는 fontTools 가 필요하다 — 1.24+ 는 MuPDF 자체 기능.)"""
+    try:
+        doc.subset_fonts()
+        return True
+    except Exception:                            # noqa: BLE001
+        return False
+
+
+def fresh_font_name(page, base: str) -> str:
+    """이 쪽에 새 글자를 적을 때 쓸 글꼴 이름.
+
+    같은 이름이 없거나, 있어도 **부분집합이 아니면**(같은 저장 안에서 방금 넣은 전체 글꼴)
+    `base` 그대로. 부분집합 표시가 붙은 같은 이름이면 `base2`, `base3`… 으로 비켜 간다."""
+    try:
+        used = {f[4]: (f[3] or "") for f in page.get_fonts()}
+    except Exception:                            # noqa: BLE001
+        return base
+    name, n = base, 1
+    while name in used and _SUBSET_TAG.match(used[name]):
+        n += 1
+        name = f"{base}{n}"
+    return name

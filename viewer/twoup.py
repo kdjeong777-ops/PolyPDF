@@ -1369,6 +1369,11 @@ def build_twoup(items, settings, out_path, gen_bookmarks_fn=None, log=None, prog
     final, _infos = _assemble(items, s, fast=False, gen_bookmarks_fn=gen_bookmarks_fn,
                               tick=_tick, tmpdir=tmpdir)
     _tick("최종 저장 중…")
+    # 260913-5(마스터 SOT §4.5.10 ①): 표지·목차·간지의 fitz 폴백(_kr_text)과 쪽번호 글꼴 지정
+    #   (_draw_footer)은 fontfile= 로 글꼴 **전체**를 넣는다(2파일 병합 7.48MB → 0.39MB).
+    #   글은 새로 만든 쪽에만 적으므로 같은 이름 재사용 함정(②)은 없다.
+    from viewer.pdf_font import subset_fonts_safely
+    subset_fonts_safely(final)
     final.save(out_path, garbage=4, deflate=True)
     pages = final.page_count
     final.close()
