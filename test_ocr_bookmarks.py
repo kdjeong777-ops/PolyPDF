@@ -7,7 +7,8 @@
 """
 import os, sys
 sys.stdout.reconfigure(encoding="utf-8")
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 
 ok = True
 def check(name, cond, extra=""):
@@ -45,7 +46,7 @@ check("헤딩 줄이 본문보다 큼", lines[0]["h"] > lines[1]["h"])
 import fitz
 from viewer._vendor.pdf_bookmarker.core import Bookmark
 from viewer import bookmarker_bridge as bridge
-small = r"C:/Claude/MPDF/smart_pdf_viewer/260518_1333_screenshots.pdf"
+small = os.path.join(HERE, "260518_1333_screenshots.pdf")
 if os.path.exists(small) and bridge.is_available():
     d = fitz.open(small); npg = d.page_count; d.close()
     bms = [Bookmark("CHAPTER 1", 1, 0)]
@@ -65,7 +66,8 @@ else:
 #   여기는 **실제 스캔본의 장식체를 OCR 이 읽어내는지**(정규식 보정 포함)를 보는 검사다.
 #   깨끗한 합성 이미지로 바꾸면 통과는 쉬워지지만 검사의 의미가 사라진다.
 #   파일이 없으면 아래 검사는 건너뛴다(가짜 통과가 아니라 명시적 SKIP).
-HM = r"C:/Claude/MPDF/_samples/HM.pdf"
+#   260913: 저장소 폴더를 옮겨도 깨지지 않게 절대경로 대신 상위 작업 폴더 기준 상대경로.
+HM = os.path.join(os.path.dirname(HERE), "_samples", "HM.pdf")
 if os.path.exists(HM):
     # 정규식 경로(큰글자자동 OFF)로 'CHAPTER 1' 인식 검증 — CHAPTER 1은 10p
     def make_cancel(limit):

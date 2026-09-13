@@ -149,7 +149,7 @@ REM   - PYTHONPATH 환경변수 + 절대 경로 --paths "%cd%" 로 양쪽 모두
 REM   - 추가로 viewer/ 폴더 전체를 --add-data 로 데이터 동봉 (런타임 sys.path 폴백용).
 set "PYTHONPATH=%cd%;%PYTHONPATH%"
 
-pyinstaller ^
+python -m PyInstaller ^
     --name "PolyPDF" ^
     --windowed ^
     --onedir ^

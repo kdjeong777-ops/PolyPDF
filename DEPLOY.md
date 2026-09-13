@@ -34,7 +34,7 @@
 > (GitHub 100MB 한도/대용량). 저장소엔 코드만, 대용량은 릴리스 zip(CI가 생성)에만.
 
 ```powershell
-cd C:\Claude\MPDF\smart_pdf_viewer
+cd C:\My\PolyPDF\smart_pdf_viewer
 # git init·첫 커밋은 이미 되어 있을 수 있음(git log 로 확인). 없으면:
 #   git init; git add .; git commit -m "PolyPDF v2.23.0"
 
@@ -52,7 +52,7 @@ gh repo create PolyPDF --public --source . --remote origin --push
 ## 3. 새 버전 낼 때마다 (권장: 원클릭)
 
 ```powershell
-cd C:\Claude\MPDF\smart_pdf_viewer
+cd C:\My\PolyPDF\smart_pdf_viewer
 .\scripts\release.ps1 2.26.0     # 버전 bump→commit→태그→push 한 번에 (CI가 빌드·릴리스)
 ```
 `release.ps1` 이 `viewer\__init__.py` 의 `__version__` 변경 + 커밋 + 태그 `v2.26.0` + push 까지
@@ -121,7 +121,7 @@ v2.26.0부터 ffmpeg·Tesseract 는 **release(full) zip 에 동봉**되어 첫 �
 번들 없이 따로 받게 하려면 아래처럼 `components` 태그에 자산을 올려둘 수 있습니다:
 
 ```powershell
-cd C:\Claude\MPDF\smart_pdf_viewer
+cd C:\My\PolyPDF\smart_pdf_viewer
 powershell -ExecutionPolicy Bypass -File scripts\make_components.ps1   # ffmpeg.exe + tesseract.zip 준비
 gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpeg/Tesseract)" --prerelease --notes "녹화·OCR 구성요소"
 #   (이미 있으면) gh release upload components ffmpeg.exe tesseract.zip --clobber
@@ -158,7 +158,7 @@ gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpe
 
 ```powershell
 # 베타(나이트리) 올리기 — 프리릴리즈 태그로 push (CI 가 zip+설치본 생성)
-cd C:\Claude\MPDF\smart_pdf_viewer; git tag -a v2.42.0-beta.1 -m "PolyPDF v2.42.0-beta.1"; git push origin main v2.42.0-beta.1
+cd C:\My\PolyPDF\smart_pdf_viewer; git tag -a v2.42.0-beta.1 -m "PolyPDF v2.42.0-beta.1"; git push origin main v2.42.0-beta.1
 #   260628-6: prerelease 표시는 **release.yml 이 자동 부여**한다(태그에 '-' 가 있으면
 #   --prerelease, 없으면 --latest). 수동 `gh release edit` 불필요.
 ```
