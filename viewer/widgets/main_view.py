@@ -887,6 +887,12 @@ class _PdfGraphicsView(QGraphicsView):
         #   보낸다. 그것을 의도로 세면 방향을 뒤집을 때 경계 시계가 끝없이 되감긴다.
         self._fling = False                   # 지금 오는 것이 관성인가
         self._user_dir = 0                    # 사람이 마지막으로 민 방향(+아래/-위)
+        # 260914-1(입력 SOT §2.2 규칙 4~8): 떨림·지체로 쪽이 넘어가지 않게 하는 상태.
+        self._last_wheel_ms = -1e9            # 마지막으로 센 휠 시각(쌓인 양을 비울지)
+        self._flip_ms = -1e9                  # 쪽을 넘기고 **다 그린** 시각
+        self._flip_dir = 0                    # 그때 넘긴 방향
+        self._need_new_gesture = False        # 트랙패드: 넘긴 뒤 손을 새로 얹어야 다음 쪽
+        self._ts_off = None                   # (처리 시각 − 이벤트 시각) 중 가장 작았던 값
         # 260910-6(마스터 SOT §19.1.3): 1회성 설정은 여기 — 종전에는 이 네 줄이
         #   mouseMoveEvent 맨 끝에 있어 **마우스가 움직일 때마다** 실행됐다.
         #   실측상 정책 값은 load_document/load_image 와 같아 증상은 없었으나,
@@ -1140,9 +1146,33 @@ class _PdfGraphicsView(QGraphicsView):
             pass
         super().mouseMoveEvent(event)
 
-    # 260910-5(마스터 SOT §19.1.2): 경계를 넘기려면 **둘 다** 넘어야 한다.
-    EDGE_HOLD_MS = 350        # 경계에 닿고 이만큼은 넘기지 않는다
-    EDGE_PUSH = 120           # 그 뒤에도 휠 한 칸만큼 더 굴려야 한다
+    # 260914-1(입력 SOT §2.2): 값의 원본은 여기다. 다른 문서는 절을 가리킨다.
+    EDGE_PUSH = 120           # 휠 한 칸 — 이만큼 굴리면 넘긴다
+    EDGE_HOLD_MS = 150        # 확대한 쪽: 끝에 닿고 이만큼은 넘기지 않는다
+    EDGE_IDLE_MS = 200        # 휠이 이만큼 멈추면 쌓인 양은 0
+    FLIP_LOCK_MS = 120        # 넘긴(다 그린) 직후 이만큼 들어온 휠은 버린다
+    FLIP_BOUNCE_MS = 250      # 넘긴 직후 이만큼은 반대 방향 휠을 버린다
+    STALE_MS = 250            # 만들어진 뒤 이만큼 늦게 처리된 휠로는 넘기지 않는다
+
+    def _wheel_lag_ms(self, event, now: float) -> float:
+        """이 휠 이벤트가 만들어진 뒤 얼마나 늦게 처리되고 있나(ms). 모르면 0.
+
+        OS 이벤트 시각과 우리 시계는 기준점이 다르다 — 그래서 둘의 차이 중 **가장
+        작았던 값**을 '늦지 않음' 으로 보고 거기에 견준다(입력 SOT §2.2 규칙 7).
+        """
+        try:
+            ts = int(event.timestamp())
+        except Exception:
+            return 0.0
+        if ts <= 0:
+            return 0.0                    # 합성 이벤트 — 시각이 없다
+        off = now - ts
+        base = self._ts_off
+        # 처음이거나, 시계가 되감겼거나(32비트 되돌이·절전) 한참 만이면 기준을 새로 잡는다
+        if base is None or off < base or off - base > 60000.0:
+            self._ts_off = off
+            return 0.0
+        return off - base
 
     def wheelEvent(self, event: QWheelEvent):
         # v1.6.9 G2: 이미지 모드도 PDF 와 동일 — 페이지(스크린샷)내 스크롤하다
@@ -1165,11 +1195,15 @@ class _PdfGraphicsView(QGraphicsView):
         #   사람의 의도와 똑같이 셌다 — 방향이 바뀔 때마다 경계 시계를 처음으로 되감으니,
         #   남은 아래쪽 관성과 새 위쪽 손짓이 섞이면 **영영 넘어가지 않았다**
         #   (실측: 200건·2,932단위·1.6초를 넣어도 안 넘어감).
+        # 260914-1(입력 SOT §2.2 개정, 사용자 지시 "약간의 움직임으로 넘어가게, 다만 떨림·
+        #   지체로는 넘어가지 않게"): 쪽 맞춤이면 한 칸에 한 쪽. 대신 ① 멈추면 쌓인 양을
+        #   비우고 ② 넘긴 직후·되튐·늦게 처리된 이벤트로는 넘기지 않는다.
         phase = event.phase()
         if phase == Qt.ScrollPhase.ScrollBegin:
             self._fling = False         # 손가락을 새로 얹었다 — 여기서부터가 의도다
             self._edge_dir = 0          # 새 손짓이니 경계도 처음부터
             self._edge_sum = 0
+            self._need_new_gesture = False
         elif phase == Qt.ScrollPhase.ScrollUpdate:
             self._fling = False         # 손가락이 닿아 있다
         elif phase == Qt.ScrollPhase.ScrollMomentum:
@@ -1196,32 +1230,66 @@ class _PdfGraphicsView(QGraphicsView):
 
         sb = self.verticalScrollBar()
         delta = event.angleDelta().y()
+        if not delta:
+            super().wheelEvent(event)   # 가로 휠 등 — 쪽과 무관
+            return
+        now = _perf_ms()
+        lag = self._wheel_lag_ms(event, now)   # 모든 칸에서 재야 기준(가장 작은 차이)이 바르다
+        sd = +1 if delta < 0 else -1    # +1 아래로 / -1 위로
+        since_flip = now - self._flip_ms
+        if since_flip < self.FLIP_LOCK_MS or (
+                sd != self._flip_dir and since_flip < self.FLIP_BOUNCE_MS):
+            # 규칙 5·6: 넘긴 직후 — 그리는 동안 쌓였던 이벤트이거나 걸쇠가 되튄 것이다
+            event.accept()
+            return
+        if now - self._last_wheel_ms > self.EDGE_IDLE_MS:
+            self._edge_sum = 0          # 규칙 4: 멈췄다 — 떨림이 시간을 두고 쌓이지 않게
+            self._need_new_gesture = False
+        self._last_wheel_ms = now
+
+        room = sb.maximum() > sb.minimum()
         at_edge = 0
-        if delta < 0 and sb.value() >= sb.maximum():
+        if sd > 0 and sb.value() >= sb.maximum():
             at_edge = +1
-        elif delta > 0 and sb.value() <= sb.minimum():
+        elif sd < 0 and sb.value() <= sb.minimum():
             at_edge = -1
         if at_edge:
-            if self._edge_dir != at_edge:
-                # 처음 닿았다 — 이 칸은 '끝에 닿았음' 을 알리는 데 쓴다
-                self._edge_dir = at_edge
-                self._edge_ms = _perf_ms()
+            if lag > self.STALE_MS:
+                # 규칙 7: 창이 멈춘 사이 굴린 칸이다 — 한참 뒤 '갑자기' 넘기지 않는다
                 self._edge_sum = 0
                 event.accept()
                 return
+            if self._edge_dir != at_edge:
+                self._edge_dir = at_edge
+                self._edge_ms = now
+                self._edge_sum = 0
+                if room:
+                    # 확대한 쪽인데 스크롤로 닿은 게 아니다(키·막대 등) — 이 칸은 알림으로 쓴다
+                    event.accept()
+                    return
             self._edge_sum += abs(delta)
-            if (_perf_ms() - self._edge_ms) < self.EDGE_HOLD_MS \
-                    or self._edge_sum < self.EDGE_PUSH:
+            held = (not room) or (now - self._edge_ms) >= self.EDGE_HOLD_MS
+            if (not held or self._edge_sum < self.EDGE_PUSH
+                    or self._need_new_gesture):
                 event.accept()
                 return
-            self._edge_dir = 0          # 한 손짓에 한 쪽만
+            self._edge_dir = 0
             self._edge_sum = 0
+            self._flip_dir = at_edge
+            self._need_new_gesture = (phase != Qt.ScrollPhase.NoScrollPhase)   # 규칙 8
             self.pageStep.emit(at_edge)
+            self._flip_ms = _perf_ms()  # 규칙 5: **다 그린 뒤**부터 잰다
             event.accept()
             return
         self._edge_dir = 0              # 쪽 안으로 돌아왔다 — 처음부터 다시 센다
         self._edge_sum = 0
         super().wheelEvent(event)
+        # 규칙 3: 이 칸으로 끝에 닿았으면 **지금부터** 한 박자를 센다(닿는 칸을 버리지 않는다)
+        if room:
+            if sd > 0 and sb.value() >= sb.maximum():
+                self._edge_dir, self._edge_ms = +1, now
+            elif sd < 0 and sb.value() <= sb.minimum():
+                self._edge_dir, self._edge_ms = -1, now
 
     def keyPressEvent(self, event: QKeyEvent):
         k = event.key()
@@ -1331,6 +1399,63 @@ class _PdfGraphicsView(QGraphicsView):
         super().keyPressEvent(event)
 
 
+class _PageSlide(QWidget):
+    """260914-1(입력 SOT §2.9): 쪽 넘김 애니메이션 — 떠 둔 두 장을 위아래로 밀어 그린다.
+
+    겉모습일 뿐이다. 문서·장면은 이미 새 쪽으로 바뀐 뒤라, 도는 동안의 입력은 마우스를
+    통과시켜 새 쪽에 그대로 듣게 한다.
+    """
+    DURATION_MS = 180
+
+    def __init__(self, owner: QWidget):
+        super().__init__(owner)
+        from PyQt6.QtCore import QVariantAnimation, QEasingCurve
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._old = None
+        self._new = None
+        self._dir = 1
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(self.DURATION_MS)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(lambda _v: self.update())
+        self._anim.finished.connect(self.stop)
+        self.hide()
+
+    def is_running(self) -> bool:
+        return self.isVisible()
+
+    def start(self, old: QPixmap, new: QPixmap, direction: int, rect: QRect):
+        self._anim.stop()
+        self._old, self._new = old, new
+        self._dir = 1 if direction > 0 else -1
+        self.setGeometry(rect)
+        self.show()
+        self.raise_()
+        self._anim.start()
+
+    def stop(self):
+        self._anim.stop()
+        self.hide()
+        self._old = self._new = None          # 떠 둔 그림을 붙들고 있지 않는다
+
+    def progress(self) -> float:
+        v = self._anim.currentValue()
+        return float(v) if v is not None else 0.0
+
+    def paintEvent(self, _ev):
+        if self._old is None or self._new is None:
+            return
+        h = self.height()
+        off = int(round(self.progress() * h))
+        p = QPainter(self)
+        # 앞으로(+1): 지금 쪽이 위로 나가고 새 쪽이 아래에서 올라온다. 뒤로(-1): 반대.
+        p.drawPixmap(0, -self._dir * off, self._old)
+        p.drawPixmap(0, self._dir * (h - off), self._new)
+        p.end()
+
+
 class MainView(QWidget):
     """1:1 직접 렌더링 메인 뷰어 (v1.4.2)."""
     pageChanged = pyqtSignal(int)
@@ -1353,6 +1478,11 @@ class MainView(QWidget):
     FIT_PAGE_TWO = "2장 맞춤"     # v1.5.0 M3 (260606-19: 명칭 단축)
     FIT_WIDTH = "폭 맞춤"
     FIT_NONE = "수동 맞춤"
+
+    # 260914-1(입력 SOT §2.10): 이어 보기 — 값의 원본은 여기다
+    CONT_GAP_PX = 12             # 붙인 쪽 사이 간격
+    CONT_HYST_PX = 24            # 간격 가운데에서 이만큼 더 지나야 지금 쪽이 바뀐다
+    CONT_SETTLE_MS = 250         # 지금 쪽이 바뀌고 스크롤이 이만큼 멈추면 pageChanged
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1382,6 +1512,14 @@ class MainView(QWidget):
         self._base_dpi = 192
         self._render_pending = False
         self._scroll_guard = False            # v1.6.8 F1: doc_scroll ↔ view 동기 재귀 방지
+        # 260914-1(입력 SOT §2.9·§2.10): 쪽 넘김 애니메이션 · 이어 보기
+        self._flip_anim = True                # 앱이 set_page_flip_anim 으로 넣는다
+        self._continuous = False              # 앱이 set_page_scroll_mode 로 넣는다
+        self._cont_cur_h = 0.0                # 지금 쪽의 논리 높이(px)
+        self._cont_prev_h = None              # 위에 붙인 이전 쪽 높이(없으면 None)
+        self._cont_next = False               # 아래에 다음 쪽을 붙였나
+        self._cont_pending = False            # 지금 쪽 다시 붙이기가 예약됐나
+        self._page_slide = None
 
         self._build_ui()
 
@@ -1390,6 +1528,13 @@ class MainView(QWidget):
         self._resize_debounce.setSingleShot(True)
         self._resize_debounce.setInterval(150)
         self._resize_debounce.timeout.connect(self._render_current)
+        # 260914-1(§2.10): 이어 보기에서 지금 쪽이 바뀌면 **멈춘 뒤 한 번** 알린다
+        self._cont_settle = QTimer(self)
+        self._cont_settle.setSingleShot(True)
+        self._cont_settle.setInterval(self.CONT_SETTLE_MS)
+        self._cont_settle.timeout.connect(
+            lambda: self.pageChanged.emit(self._current_page) if self._doc else None)
+        self._page_slide = _PageSlide(self)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -2011,6 +2156,9 @@ class MainView(QWidget):
             fwd = [p for p in self._nav_pages if p >= page_index]
             page_index = fwd[0] if fwd else self._nav_pages[-1]
         self._current_page = page_index
+        if self._page_slide is not None:
+            self._page_slide.stop()           # 260914-1(§2.9): 낡은 겉모습을 남기지 않는다
+        self._cont_settle.stop()              # 260914-1(§2.10): 아래에서 바로 알린다
         try:
             self.clear_text_selection()       # 260617-3: 페이지 바뀌면 텍스트 선택 해제
         except Exception:
@@ -2023,9 +2171,10 @@ class MainView(QWidget):
         if at_bottom:
             # 렌더 직후라 스크롤 범위가 아직 갱신 전일 수 있다 — 강제로 맞춘 뒤 잡는다.
             self.view.viewport().updateGeometry()
-            _sb.setValue(_sb.maximum())
+            # 260914-1(§2.10): 막대의 끝이 아니라 **지금 쪽의** 아래끝(이어 보기에선 다르다)
+            _sb.setValue(self._page_span()[1])
         else:
-            _sb.setValue(0)                                  # 페이지 상단으로
+            _sb.setValue(0)                                  # 페이지 상단으로(지금 쪽 원점)
         self.spin_page.blockSignals(True)
         self.spin_page.setValue(page_index + 1)
         self.spin_page.blockSignals(False)
@@ -2052,7 +2201,8 @@ class MainView(QWidget):
         n, i = nu
         U = self._DOC_U
         vsb = self.view.verticalScrollBar()
-        frac = (vsb.value() / vsb.maximum()) if vsb.maximum() > 0 else 0.0
+        lo, hi = self._page_span()            # 260914-1(§2.10): 지금 쪽 안의 범위
+        frac = min(1.0, max(0.0, (vsb.value() - lo) / (hi - lo))) if hi > lo else 0.0
         val = int(i * U + frac * U)
         self._scroll_guard = True
         self.doc_scroll.setRange(0, max(0, n * U - 1))
@@ -2080,8 +2230,9 @@ class MainView(QWidget):
                 self.go_to_page(idx)
         vsb = self.view.verticalScrollBar()
         self._scroll_guard = True
-        if vsb.maximum() > 0:
-            vsb.setValue(int(frac * vsb.maximum()))
+        lo, hi = self._page_span()            # 260914-1(§2.10): 지금 쪽 안의 범위
+        if hi > lo:
+            vsb.setValue(int(lo + frac * (hi - lo)))
         self._scroll_guard = False
         self._update_doc_scroll()
 
@@ -2091,6 +2242,7 @@ class MainView(QWidget):
             return
         if self._doc or self._is_image:
             self._update_doc_scroll()
+        self._cont_schedule()                 # 260914-1(§2.10): 가운데가 옆 쪽으로 갔나
 
     def _on_spin_edited(self):
         """페이지 번호 입력 — v1.6.8 F2: 이미지 모드면 스크린샷 이동."""
@@ -2194,7 +2346,43 @@ class MainView(QWidget):
         if nxt is None:
             self.fileBoundaryRequested.emit(+1 if direction > 0 else -1)
             return
-        self.go_to_page(nxt)
+        self._flip_to(nxt, direction)
+
+    # --- 260914-1(입력 SOT §2.9): 쪽 넘김 애니메이션 --------------------------
+    def set_page_flip_anim(self, on: bool):
+        self._flip_anim = bool(on)
+        if not self._flip_anim and self._page_slide is not None:
+            self._page_slide.stop()
+
+    def _view_area_rect(self) -> QRect:
+        """뷰포트가 이 위젯 안에서 차지하는 사각형(애니메이션을 얹고 뜨는 자리)."""
+        vp = self.view.viewport()
+        return QRect(vp.mapTo(self, QPoint(0, 0)), vp.size())
+
+    def _flip_to(self, nxt: int, direction: int, at_bottom: bool = False):
+        """한 쪽 넘김. 켜져 있으면 넘기기 직전·직후 화면을 떠서 밀어 보인다.
+
+        이어 보기에서는 하지 않는다 — 스크롤 자체가 이어짐이다(§2.10).
+        """
+        slide = self._page_slide
+        anim = (self._flip_anim and slide is not None and not self._is_image
+                and not self._cont_active() and self.isVisible())
+        old = None
+        if anim:
+            slide.stop()
+            try:
+                old = self.grab(self._view_area_rect())
+            except Exception:
+                old = None
+        self.go_to_page(nxt, at_bottom=at_bottom)
+        if old is None or old.isNull():
+            return
+        try:
+            new = self.grab(self._view_area_rect())
+        except Exception:
+            return
+        if not new.isNull():
+            slide.start(old, new, direction, self._view_area_rect())
 
     def _on_page_step(self, delta: int):
         if self._is_image:                       # v1.6.9 G2: 스크린샷 리스트 순회
@@ -2214,7 +2402,161 @@ class MainView(QWidget):
             self.fileBoundaryRequested.emit(+1 if delta > 0 else -1)
             return
         # 260910-5(SOT §19.1.2 규칙 1): 뒤로 넘기면 그 쪽의 **아래끝**에서 시작한다.
-        self.go_to_page(nxt, at_bottom=(delta < 0))
+        # 260914-1(입력 SOT §2.9): 한 쪽 넘김은 애니메이션을 거친다(켜져 있으면).
+        self._flip_to(nxt, 1 if delta > 0 else -1, at_bottom=(delta < 0))
+
+    # --- 260914-1(입력 SOT §2.10): 이어 보기 — 앞뒤 쪽 붙여 보기 -----------------
+    def set_page_scroll_mode(self, mode: str):
+        """`page`(한 쪽씩, 기본) / `continuous`(이어 보기)."""
+        on = (str(mode) == "continuous")
+        if on == self._continuous:
+            return
+        self._continuous = on
+        if self._doc is not None and not self._is_image:
+            sb = self.view.verticalScrollBar()
+            keep = sb.value()
+            self._render_current()
+            lo, hi = self._page_span()
+            sb.setValue(max(lo, min(hi, keep)))   # 지금 쪽 안의 자리는 그대로
+
+    def page_scroll_mode(self) -> str:
+        return "continuous" if self._continuous else "page"
+
+    def _cont_active(self) -> bool:
+        """이어 보기가 **지금 이 화면에** 걸리나. 2쪽 보기·이미지 보기는 한 쪽씩."""
+        return (self._continuous and self._doc is not None and not self._is_image
+                and self._fit_mode != self.FIT_PAGE_TWO)
+
+    def _page_span(self):
+        """지금 쪽 안에서 세로 스크롤 값이 움직이는 범위 (맨 위, 아래끝).
+
+        스크롤 값은 장면의 y 다(변환 없음). 한 쪽씩이면 막대 범위와 같고, 이어 보기면
+        막대의 끝이 옆 쪽의 끝이므로 지금 쪽 높이로 잘라 쓴다."""
+        vsb = self.view.verticalScrollBar()
+        if not (self._cont_active()
+                and (self._cont_prev_h is not None or self._cont_next)):
+            return vsb.minimum(), vsb.maximum()
+        vp_h = self.view.viewport().height()
+        lo = max(vsb.minimum(), min(vsb.maximum(), 0))
+        hi = int(round(self._cont_cur_h - vp_h))
+        hi = max(lo, min(vsb.maximum(), hi))
+        return lo, hi
+
+    def _page_pixmap(self, page_index: int, zoom: float, dpr: float) -> QPixmap:
+        """옆 쪽 그림 — 지금 쪽과 같은 배율·회전. 캐시(§19.11)를 거친다."""
+        rp = self._doc.render_scaled(page_index, zoom * dpr)
+        img = QImage(rp.samples, rp.width, rp.height, rp.width * 3,
+                     QImage.Format.Format_RGB888).copy()
+        pix = QPixmap.fromImage(img)
+        rot = self._rotations.get(page_index, 0)
+        if rot:
+            pix = pix.transformed(QTransform().rotate(rot),
+                                  Qt.TransformationMode.SmoothTransformation)
+        pix.setDevicePixelRatio(dpr)
+        return pix
+
+    def _add_neighbor_pages(self, cur_w: float, cur_h: float, zoom: float, dpr: float):
+        self._cont_cur_h = float(cur_h)
+        self._cont_prev_h = None
+        self._cont_next = False
+        if not self._cont_active():
+            return
+        gap = self.CONT_GAP_PX
+        left, top, right, bottom = 0.0, 0.0, float(cur_w), float(cur_h)
+        for sign in (-1, +1):
+            p = self._nav_step(self._current_page, sign)
+            if p is None:
+                continue
+            try:
+                pix = self._page_pixmap(p, zoom, dpr)
+            except Exception:
+                continue                  # 옆 쪽을 못 그려도 지금 쪽은 보여야 한다
+            w, h = pix.width() / dpr, pix.height() / dpr
+            x = (cur_w - w) / 2.0
+            y = -(gap + h) if sign < 0 else cur_h + gap
+            it = self.scene.addPixmap(pix)
+            it.setPos(x, y)
+            left, right = min(left, x), max(right, x + w)
+            top, bottom = min(top, y), max(bottom, y + h)
+            if sign < 0:
+                self._cont_prev_h = h
+            else:
+                self._cont_next = True
+        self.scene.setSceneRect(left, top, right - left, bottom - top)
+
+    def _cont_target(self):
+        """화면 가운데가 옆 쪽으로 넘어갔으면 (그 쪽, 원점 이동량), 아니면 None."""
+        if not self._cont_active() or self._doc is None:
+            return None
+        sb = self.view.verticalScrollBar()
+        center = sb.value() + self.view.viewport().height() / 2.0
+        gap, hyst = self.CONT_GAP_PX, self.CONT_HYST_PX
+        if self._cont_next and center > self._cont_cur_h + gap / 2.0 + hyst:
+            nxt = self._nav_step(self._current_page, +1)
+            if nxt is not None:
+                return nxt, self._cont_cur_h + gap
+        if self._cont_prev_h is not None and center < -gap / 2.0 - hyst:
+            prv = self._nav_step(self._current_page, -1)
+            if prv is not None:
+                return prv, -(self._cont_prev_h + gap)
+        return None
+
+    def _cont_schedule(self):
+        """스크롤 중에는 장면을 바로 갈지 않는다 — 이벤트가 끝난 뒤 한 번(예약)."""
+        if self._cont_pending or not self._cont_active():
+            return
+        if self._cont_target() is None:
+            return
+        self._cont_pending = True
+        QTimer.singleShot(0, self._cont_apply)
+
+    def _cont_apply(self):
+        self._cont_pending = False
+        # 여러 쪽을 한꺼번에 지나쳤으면 가운데에 닿을 때까지 거듭 붙인다
+        for _ in range(50):
+            tgt = self._cont_target()
+            if tgt is None:
+                break
+            self._cont_reanchor(*tgt)
+
+    def _cont_reanchor(self, page_index: int, shift: float):
+        """그 쪽을 원점으로 다시 붙이고 **보이는 자리는 그대로** 둔다."""
+        sb = self.view.verticalScrollBar()
+        hsb = self.view.horizontalScrollBar()
+        keep_v = sb.value() - shift
+        keep_h = hsb.value()
+        self._current_page = page_index
+        try:
+            self.clear_text_selection()
+        except Exception:
+            pass
+        self._render_current()
+        self._update_hidden_band()
+        self._load_page_strokes()
+        self._load_page_images()
+        sb.setValue(int(round(keep_v)))
+        hsb.setValue(keep_h)
+        self.spin_page.blockSignals(True)
+        self.spin_page.setValue(page_index + 1)
+        self.spin_page.blockSignals(False)
+        self._update_match_counter()
+        self._update_doc_scroll()
+        self._cont_settle.start()         # 멈춘 뒤 한 번 알린다(텍스트 창 등)
+
+    def _cont_press_page(self, vp_pos) -> None:
+        """옆 쪽을 누르면 누르기 전에 그 쪽을 지금 쪽으로 삼는다."""
+        if not self._cont_active():
+            return
+        y = self.view.mapToScene(vp_pos).y()
+        gap = self.CONT_GAP_PX
+        if self._cont_next and y > self._cont_cur_h + gap / 2.0:
+            nxt = self._nav_step(self._current_page, +1)
+            if nxt is not None:
+                self._cont_reanchor(nxt, self._cont_cur_h + gap)
+        elif self._cont_prev_h is not None and y < -gap / 2.0:
+            prv = self._nav_step(self._current_page, -1)
+            if prv is not None:
+                self._cont_reanchor(prv, -(self._cont_prev_h + gap))
 
     def _zoom_by(self, factor: float):
         # 사용자 비율로 전환
@@ -2308,6 +2650,8 @@ class MainView(QWidget):
         logical_w = qpix.width() / dpr
         logical_h = qpix.height() / dpr
         self.scene.setSceneRect(0, 0, logical_w, logical_h)
+        # 260914-1(입력 SOT §2.10): 이어 보기 — 지금 쪽은 원점 그대로, 앞뒤 쪽을 위아래에
+        self._add_neighbor_pages(logical_w, logical_h, zoom, dpr)
 
         # 하이라이트: PDF pt → 논리 px (= zoom 배). 회전 시 좌표 불일치 → 생략.
         if self._query and not rot:
@@ -2467,6 +2811,8 @@ class MainView(QWidget):
         self.scene.clear()
         self._page_item = self.scene.addPixmap(canvas)
         self.scene.setSceneRect(0, 0, total_w_px / dpr, total_h_px / dpr)
+        self._cont_prev_h = None                  # 260914-1(§2.10): 2쪽 보기는 한 쪽씩
+        self._cont_next = False
 
         # 하이라이트 (현재 페이지 = 좌측)
         if self._query:
@@ -4717,6 +5063,12 @@ class MainView(QWidget):
         불안정해, 발표 모드처럼 입력을 뷰포트에서 받아 오버레이 핸들러에 넘긴다.
         도구가 없으면 통과(기존 패닝/호버 유지)."""
         try:
+            # 260914-1(입력 SOT §2.10): 이어 보기에서 옆 쪽을 누르면 그 쪽이 먼저 지금 쪽이 된다
+            #   — 선택·그리기가 누른 쪽 좌표로 가게. 글상자 편집 중에는 건드리지 않는다.
+            if (self._continuous and self._text_editor is None
+                    and obj is self.view.viewport()
+                    and ev.type() == QEvent.Type.MouseButtonPress):
+                self._cont_press_page(ev.position().toPoint())
             ov = self._draw_overlay
             # 260611-74: 인라인 텍스트 편집기 — Esc/포커스아웃=커밋, Enter=줄바꿈(통과)
             # 260907-2(사용자 요청): **글을 쓰는 중에도** 박스 크기 조절·이동이 된다.
@@ -5063,6 +5415,8 @@ class MainView(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if self._page_slide is not None:
+            self._page_slide.stop()           # 260914-1(§2.9): 떠 둔 그림 크기가 어긋난다
         self._update_empty_label()            # 260606-30: 빈 창 안내 중앙 유지
         self._position_hl_overlay()           # 260609-3: 하이퍼링크 오버레이 우상단 유지
         self._position_draw_overlay()         # 260609-22(J3): 선긋기 오버레이

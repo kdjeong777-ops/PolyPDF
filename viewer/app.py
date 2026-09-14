@@ -176,6 +176,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             # 패널(검색결과/스크린샷) 가시성은 panels_visible 로 저장·복원, 기본 True.
             "show_panel_toolbar": True,   # 260606-25: 패널 툴바 기본 보이기
             "cross_file_nav": True,       # 260609-2/28: 페이지 경계에서 다음/이전 파일 이동(기본 켜짐)
+            # 260914-1(입력 SOT §2.9·§2.10): 쪽 넘김 애니메이션(기본 켜짐) · 이동 방식(기본 한 쪽씩)
+            "page_flip_anim": True,
+            "page_scroll_mode": "page",
             # 260912-7(입력 SOT §2.7): 텍스트 창에서 칠하면 본문에도 표시할지.
             #   기본 꺼짐 — 본문에 자국을 남기는 일은 묻지 않고 하지 않는다.
             "text_hl_mark_pdf": False,
@@ -6413,6 +6416,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   미설정(None 포함)이면 True 로(예전 null 저장본도 켜지도록).
         if self._prefs.get("cross_file_nav") is None:
             self._prefs["cross_file_nav"] = True
+        self._prefs.setdefault("page_flip_anim", True)            # 260914-1(입력 SOT §2.9)
+        self._prefs.setdefault("page_scroll_mode", "page")        # 260914-1(입력 SOT §2.10)
+        self._apply_page_flow_prefs()
         self._prefs.setdefault("hyperlink_url_allowlist", [])     # 260609-3
         self._prefs.setdefault("presentation_pointers", [])       # 260609-5
         self._prefs.setdefault("presentation_pointer_active", 0)  # 260609-5
@@ -6742,6 +6748,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             # 260609-2/28: 페이지 경계에서 다음/이전 파일로 이동 — 미설정이면 켜짐
             "cross_file_nav": (lambda v: True if v is None else bool(v))(
                 prefs.get("cross_file_nav", old.get("cross_file_nav"))),
+            # 260914-1(입력 SOT §2.9·§2.10): 허용목록에 빠지면 조용히 사라진다(§14.2)
+            "page_flip_anim": bool(prefs.get("page_flip_anim",
+                                             old.get("page_flip_anim", True))),
+            #   값은 그대로 둔다 — 'continuous' 가 아니면 한 쪽씩으로 읽는 것은 뷰어가 한다
+            "page_scroll_mode": str(prefs.get("page_scroll_mode",
+                                              old.get("page_scroll_mode", "page"))),
             # 260609-3: 하이퍼링크 URL 허용 도메인
             "hyperlink_url_allowlist": list(prefs.get(
                 "hyperlink_url_allowlist",
@@ -6847,11 +6859,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 mv.set_hyperlink_offset(off)
         except Exception:
             pass
+        self._apply_page_flow_prefs()             # 260914-1(입력 SOT §2.9·§2.10)
         # 260621-P3: API 키 미입력 기능 게이팅
         try:
             self._gate_api_dependent_ui(self._prefs)
         except Exception:
             pass
+
+    def _apply_page_flow_prefs(self):
+        """260914-1(입력 SOT §2.9·§2.10): 쪽 넘김 애니메이션·이동 방식을 두 뷰어에 넣는다."""
+        for mv in getattr(self, "_mv", []) or []:
+            try:
+                mv.set_page_flip_anim(bool(self._prefs.get("page_flip_anim", True)))
+                mv.set_page_scroll_mode(str(self._prefs.get("page_scroll_mode", "page")))
+            except Exception:
+                pass
 
     def _gate_api_dependent_ui(self, prefs: dict):
         """260621-P3: 외부 API 키가 없으면 관련 툴바 버튼은 숨기고 메뉴 항목은 비활성화.

@@ -232,6 +232,27 @@ class SettingsDialog(QDialog):
         )
         info_cfn.setStyleSheet("color:#666;"); info_cfn.setWordWrap(True)
         pl.addWidget(info_cfn)
+        # 260914-1(입력 SOT §2.9·§2.10): 페이지 이동 방식 · 쪽 넘김 애니메이션
+        row_psm = QHBoxLayout()
+        row_psm.addWidget(QLabel("페이지 이동 방식:"))
+        self.cmb_page_scroll_mode = QComboBox()
+        self.cmb_page_scroll_mode.addItem("한 쪽씩", "page")
+        self.cmb_page_scroll_mode.addItem("이어 보기 (앞뒤 쪽을 붙여 조금씩 스크롤)", "continuous")
+        self.cmb_page_scroll_mode.setCurrentIndex(
+            1 if self._prefs.get("page_scroll_mode", "page") == "continuous" else 0)
+        row_psm.addWidget(self.cmb_page_scroll_mode, 1)
+        pl.addLayout(row_psm)
+        self.chk_page_flip_anim = QCheckBox("쪽 넘김 애니메이션 (한 쪽씩일 때 위아래로 밀기)")
+        self.chk_page_flip_anim.setChecked(
+            self._prefs.get("page_flip_anim", True) is not False)
+        pl.addWidget(self.chk_page_flip_anim)
+        info_psm = QLabel(
+            "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
+            "온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). "
+            "2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
+        )
+        info_psm.setStyleSheet("color:#666;"); info_psm.setWordWrap(True)
+        pl.addWidget(info_psm)
         layout.addWidget(grp_panels)
 
         # 260611-25: '발표(전체화면) 보기' 설정은 전체화면 우클릭 옵션으로 이동(여기서 제거).
@@ -663,6 +684,8 @@ class SettingsDialog(QDialog):
             "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),
             # 260609-2: 페이지 경계 파일 이동
             "cross_file_nav": self.chk_cross_file_nav.isChecked(),
+            "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
+            "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
             # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
             # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋
             "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),

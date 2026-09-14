@@ -73,6 +73,12 @@ def edge(v, where):
     v._edge_sum = 0
     v._fling = False
     v._user_dir = 0
+    # 260914-1(§2.2 규칙 5~8): 앞 검사에서 넘긴 여운도 비운다 — 실제로는 새 손짓 전에
+    #   시간이 흐르거나 손을 새로 얹는다(ScrollBegin).
+    v._flip_ms = -1e9
+    v._flip_dir = 0
+    v._need_new_gesture = False
+    v._last_wheel_ms = -1e9
     v._steps.clear()
 
 
