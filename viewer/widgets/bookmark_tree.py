@@ -3041,10 +3041,9 @@ class BookmarkTree(QWidget):
             return False
         if d == file_path:
             return True
-        try:
-            return Path(d).resolve() == Path(file_path).resolve()
-        except Exception:
-            return False
+        # 260915-10(응답성 SOT §4.4): `Path.resolve()` 는 노드마다 디스크를 탄다 — 표준 비교 키(SOT §7.0)로
+        from viewer.pathutil import norm_key
+        return norm_key(d) == norm_key(file_path)
 
     def _file_node_for_path(self, file_path: str):
         for top in self._iter_file_nodes():
@@ -3062,19 +3061,8 @@ class BookmarkTree(QWidget):
             2 = 고른 것의 하위. 주지 않으면 같은 레벨.
           - 넣은 **그 하나만** 선택한다(종전에는 이전에 넣은 것까지 다중 선택됐다).
         """
-        # 대상 파일 노드 찾기(경로 슬래시 차이에 견고하게 — resolve 비교)
-        try:
-            fp = Path(file_path).resolve()
-        except Exception:
-            fp = None
-        target = None
-        for top in self._iter_file_nodes():         # 260901-2: 트리 보기 포함
-            d = top.data(0, self.DATA_FILE)
-            if not d:
-                continue
-            if d == file_path or (fp is not None and Path(d).resolve() == fp):
-                target = top
-                break
+        # 대상 파일 노드 찾기(경로 슬래시·대소문자 차이에 견고하게 — 260915-10: resolve 대신 norm_key)
+        target = self._file_node_for_path(file_path)
         if target is None:
             return
         # placeholder 가 남아있으면 한 번 펼쳐서 lazy load 시키기
@@ -3125,28 +3113,25 @@ class BookmarkTree(QWidget):
         저장했을 때, 새 노드를 **원본 바로 아래**(같은 부모)에 넣고 원본 노드는 디스크 상태로
         다시 읽는다 — 편집은 새 파일로 갔으니 원본 노드에 편집한 책갈피가 남아 있으면 안 된다."""
         fp = Path(file_path)
-        try:
-            fpr = fp.resolve()
-        except Exception:
-            fpr = None
-
-        def _same(node, p, pr):
-            d = node.data(0, self.DATA_FILE)
-            return bool(d) and (d == str(p) or (pr is not None and Path(d).resolve() == pr))
+        # 260915-10(응답성 SOT §4.4): 종전에는 노드마다 `Path.resolve()`(디스크 조회)를 두 번씩 불러
+        #   파일 300개 폴더에서 저장 뒤 0.4~0.6초 메인이 섰다. 표준 비교 키(SOT §7.0)로 — 파일시스템을 타지 않는다.
+        from viewer.pathutil import norm_key
+        fk = norm_key(fp)
+        ak = norm_key(after) if after else None
 
         anchor = None
         for top in self._iter_file_nodes():         # 260901-2: 트리 보기 포함
-            if _same(top, fp, fpr):
+            d = top.data(0, self.DATA_FILE)
+            if not d:
+                continue
+            dk = norm_key(d)
+            if dk == fk:
                 self._refresh_file_toc(top)
                 self.tree.setCurrentItem(top)
                 self.tree.scrollToItem(top)
                 return
-            if after and anchor is None:
-                try:
-                    if _same(top, Path(after), Path(after).resolve()):
-                        anchor = top
-                except Exception:
-                    pass
+            if ak is not None and anchor is None and dk == ak:
+                anchor = top
         # 없으면 새 파일 노드로 추가(기존 목록은 그대로) — 원본이 있으면 그 바로 아래, 없으면 맨 끝
         item = QTreeWidgetItem([fp.stem])
         item.setData(0, self.DATA_FILE, str(fp))

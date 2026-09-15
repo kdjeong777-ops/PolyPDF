@@ -2429,11 +2429,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self.bookmark_tree.add_or_refresh_file(pdf_out)
             except Exception:
                 pass
-            try:
-                self._load_main(HistoryItem(str(pdf_out), 0, "", "bookmark"))
-            except Exception:
-                pass
-            self._index_single_file(pdf_out)        # 새 PDF를 검색 인덱스에 포함
+            self._open_saved_file(pdf_out)          # 색인(검색 포함) 먼저 걸고 연다 — 260915-10
 
     def _on_bookmarker_error(self, msg: str):
         self.progress.setVisible(False)
@@ -2455,11 +2451,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.bookmark_tree.add_or_refresh_file(dst, after=src)   # 260915-1(§4.7.5)
         except Exception:
             pass
-        try:
-            self._load_main(HistoryItem(str(dst), 0, "", "bookmark"))
-        except Exception:
-            pass
-        self._index_single_file(dst)                # 편집본을 검색 인덱스에 포함
+        self._open_saved_file(dst)                  # 색인(검색 포함) 먼저 걸고 연다 — 260915-10
 
     # --- v1.6.21: 파일 작업 핸드셰이크 ----------------------------------
     def _close_main_view_doc(self):
@@ -3367,11 +3359,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             bt._pending_nav = None
         except Exception:
             pass
-        self._load_main(HistoryItem(str(path), int(page), "", "bookmark"))
-        try:
-            self._index_single_file(Path(path))
-        except Exception:
-            pass
+        self._open_saved_file(path, int(page))      # 색인 먼저 걸고 연다 — 260915-10
 
     def _on_text_make_bookmarks(self, items):
         """칠한 곳으로 책갈피를 만든다(SOT §6)."""
@@ -3860,8 +3848,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         try:
             # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
             self.bookmark_tree.add_or_refresh_file(final, after=str(src))
-            self._load_main(HistoryItem(final, 0, "", "bookmark"))
-            self._index_single_file(_P(final))
+            self._open_saved_file(final)            # 색인 먼저 걸고 연다 — 260915-10
         except Exception:
             pass
 
@@ -3943,11 +3930,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.bookmark_tree.add_or_refresh_file(out)
         except Exception:
             pass
-        try:
-            self._load_main(HistoryItem(str(out), 0, "", "bookmark"))
-        except Exception:
-            pass
-        self._index_single_file(out)
+        self._open_saved_file(out)                  # 색인 먼저 걸고 연다 — 260915-10
 
     def _on_merge_files(self, preselected: list = None):
         """260606-15: PDF 병합 — 좌(전체)/우(대상) 다이얼로그. 스크린샷·드롭·정렬·자동생성."""
@@ -5234,6 +5217,26 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if r == QMessageBox.StandardButton.Yes:
             removed = store.prune_missing()
             self.status.showMessage(f"{removed}건 정리", 4000)
+
+    def _open_saved_file(self, path, page: int = 0) -> None:
+        """260915-10(응답성 SOT §4.4): 저장·생성한 PDF 를 **색인부터 걸고** 본문에 연다.
+
+        순서가 요점이다. 파일을 열면 텍스트 창이 곧바로 그 쪽을 뽑는데, 이때 색인이 돌고 있어야
+        표 인식(pdfplumber — 쪽 하나를 봐도 문서 전체 쪽 목록을 순수 파이썬으로 읽는다, 1000쪽 ≈1초)을
+        색인이 끝날 때까지 미룬다(§4 ①, `_reload_text_panel`). 종전에는 열고 나서 색인을 걸어 둘이 겹쳐
+        GIL 을 다퉜다 — 다시 열기 0.1→0.4초, 그 뒤 0.25~0.33초씩 끊겼다(실측).
+
+        또 `add_or_refresh_file` 이 새 노드를 고르면 트리가 **그 파일 열기를 예약**한다(`_emit_nav`) —
+        여기서 직접 여니 예약은 지운다. 종전에는 책갈피 편집 저장 뒤 같은 파일을 **두 번** 열었다."""
+        try:
+            self.bookmark_tree._pending_nav = None
+        except Exception:
+            pass
+        self._index_single_file(Path(path))
+        try:
+            self._load_main(HistoryItem(str(path), int(page or 0), "", "bookmark"))
+        except Exception:
+            pass
 
     def _index_single_file(self, path) -> None:
         """260606-4: 새로 만든/편집한 PDF 1개를 백그라운드 인덱싱 → 검색에 포함."""
