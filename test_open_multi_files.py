@@ -115,6 +115,31 @@ try:
                             Qt.KeyboardModifier.NoModifier)); spin(8)
     chk(tops() == ["D"], "A 하나를 끌어 놓으면 종전과 같다", str(tops()))
 
+    # ── A2. 폴더 목록을 채우는 중에 파일 모드로 열기 — 종전에는 앱이 죽었다 ──────────
+    #   실측(빌드 exe): 시작 때 복원한 폴더를 채우는 중 PDF 인자로 열면 채우기 틱이 지운 행에 붙이다
+    #   RuntimeError → 0xC0000409. load_single_pdf·load_pdf_files 가 채우기를 먼저 멈춘다.
+    many = root / "many"; many.mkdir()
+    for i in range(1500):                          # 하위 폴더 + 트리 보기 — 폴더 행 밑에 붙이는 길(_fill_folder_item)
+        sub = many / f"s{i // 50:02d}"; sub.mkdir(exist_ok=True)
+        shutil.copyfile(str(A), str(sub / f"m{i:04d}.pdf"))
+    bt.set_tree_view(True)
+    errs = []
+    old_hook = sys.excepthook
+    sys.excepthook = lambda t, v, tb: errs.append(f"{t.__name__}: {v}")
+    try:
+        for opener in (lambda: mw.open_pdf(B), lambda: mw.open_pdfs([B, C])):
+            bt._fill_timer.stop()
+            mw.open_folder(many); app.processEvents()
+            filling = bt._fill_timer.isActive() or bool(getattr(bt, "_fill_plan", None)) or \
+                bool(getattr(bt, "_scan_worker", None))
+            chk(filling, "준비 — 폴더 목록이 아직 채워지는 중이다")
+            opener(); spin(40, 20)
+            chk(bt._is_file_mode() and not errs, "A2 채우는 중 파일 모드로 열어도 오류가 없다", str(errs[:2]))
+            errs.clear()
+    finally:
+        sys.excepthook = old_hook
+    shutil.rmtree(many, ignore_errors=True)
+
     # ── B. 모으기(별도 프로세스) ──────────────────────────────────────
     env = dict(os.environ, POLYPDF_OPEN_GATHER_NAME=f"polypdf-open-test-{os.getpid()}")
     me = os.path.abspath(__file__)

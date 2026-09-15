@@ -1079,6 +1079,10 @@ class BookmarkTree(QWidget):
         self._reload_fn = lambda pp=p: self.load_single_pdf(pp)   # 260611-9: 취소 재로드
         self._mode = "single"            # v1.6.19
         self._pdfs_flat = []
+        # 260915-3: 폴더 목록을 채우던 중이면 먼저 멈춘다 — 안 멈추면 다음 채우기 틱이 지운 행에
+        #   붙이다 RuntimeError 로 앱이 죽었다(실측: 시작 때 복원한 폴더를 채우는 중 PDF 인자로 열기).
+        self._cancel_scan()
+        self._cancel_fill()
         self._reset_probe_queue()
         self.tree.clear()
         if not p.exists():
@@ -1120,6 +1124,8 @@ class BookmarkTree(QWidget):
         self._reload_fn = lambda fs=tuple(files): self.load_pdf_files(fs)
         self._mode = "single"
         self._pdfs_flat = []
+        self._cancel_scan()              # load_single_pdf 와 같은 이유
+        self._cancel_fill()
         self._reset_probe_queue()
         self.tree.clear()
         for p in files:
