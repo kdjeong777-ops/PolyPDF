@@ -199,6 +199,30 @@ try:
     chk(after_calls == [str(other)], "3 다른 폴더면 종전대로 완료창", str(after_calls))
     shutil.rmtree(other.parent, ignore_errors=True)
 
+    # ── 3b. 파일 모드에서 병합 — 파일 모드 그대로 목록에 넣고 그 파일을 고른다(260915-6) ──
+    tops = lambda: [bt.tree.topLevelItem(i).text(0) for i in range(bt.tree.topLevelItemCount())]
+    after_calls.clear()
+    mw.open_pdfs([root / "A.pdf", root / "B.pdf", root / "C.pdf"]); spin(10)
+    chk(bt._is_file_mode() and tops() == ["A", "B", "C"], "준비 — 파일 모드 A·B·C", str(tops()))
+    fm1 = root / "AB_filemode.pdf"                 # 책갈피창 기준 폴더 안(종전: 폴더를 다시 읽어 폴더 모드로 바뀜)
+    run_merge(fm1)
+    cur = bt.tree.currentItem()
+    chk(bt._is_file_mode() and tops() == ["A", "AB_filemode", "B", "C"],
+        "3b 같은 폴더에 저장해도 **파일 모드 그대로** 목록에 들어간다(파일명 순)", str(tops()))
+    chk(cur is not None and bt._file_node_of(cur).text(0) == "AB_filemode" and
+        Path(mw.main_view.current_file()).name == "AB_filemode.pdf",
+        "3b 병합한 파일이 **선택**되고 본문에 열린다", cur.text(0) if cur else "")
+    other2 = Path(tempfile.mkdtemp(prefix="polypdf_merge_out2_")) / "ZZ_out.pdf"
+    run_merge(other2)
+    cur = bt.tree.currentItem()
+    chk(bt._is_file_mode() and tops() == ["A", "AB_filemode", "B", "C", "ZZ_out"] and
+        cur is not None and bt._file_node_of(cur).text(0) == "ZZ_out",
+        "3b 다른 폴더에 저장해도 파일 모드 목록에 넣고 선택한다", str(tops()))
+    chk(after_calls == [], "3b 파일 모드에서는 완료창을 띄우지 않는다", str(after_calls))
+    chk(len(mw._search_scope or ()) == 5, "3b 검색 범위에도 들어간다", str(len(mw._search_scope or ())))
+    shutil.rmtree(other2.parent, ignore_errors=True)
+    mw.open_folder(root); spin(20)                 # 뒤 검사(4)는 폴더 모드 기준
+
     # ── 4. 다른 PolyPDF 창이 같은 PDF 를 열고 있을 때 저장 ─────────────────
     src = root / "B.pdf"
 

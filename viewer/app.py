@@ -4065,8 +4065,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         그 파일을 골라 본문에 연다. 해당하면 True(끝나면 `then()`), 아니면 False(아무것도 안 함).
 
         책갈피창에 저장하지 않은 편집이 있으면 다시 읽지 않고(편집이 사라진다) 노드만 넣는다.
-        폴더 목록은 비동기로 채워질 수 있어(`filesListed`) 채워진 뒤에 고른다."""
+        폴더 목록은 비동기로 채워질 수 있어(`filesListed`) 채워진 뒤에 고른다.
+
+        260915-6(§4.8.3, 사용자 지시): 책갈피창이 **파일 모드**면 저장 위치와 상관없이 **파일 모드 그대로**
+        목록에 더하고(파일명 순) 그 파일을 골라 연다 — 종전에는 폴더 안이면 폴더를 다시 읽어 폴더 모드로 바뀌었고,
+        밖이면 완료창이 떴다."""
         bt = self.bookmark_tree
+        if bt._is_file_mode() and bt.tree.topLevelItemCount() and Path(path).exists():
+            try:
+                if getattr(bt, "_dirty", False):
+                    bt.add_or_refresh_file(str(path))       # 미저장 편집 보존 — 다시 싣지 않고 노드만
+                else:
+                    bt.add_pdf_files([str(path)])
+                bt.tree.blockSignals(True)
+                try:
+                    bt._select_top_file(str(path))
+                finally:
+                    bt.tree.blockSignals(False)
+                bt._pending_nav = None
+                self._refresh_search_scope()
+                self._load_main(HistoryItem(str(path), 0, "", "bookmark"))
+            except Exception:
+                pass
+            if then is not None:
+                then()
+            return True
         root = getattr(bt, "_root_dir", None)
         try:
             p = Path(path).resolve()
