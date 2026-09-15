@@ -863,6 +863,7 @@ class _PdfGraphicsView(QGraphicsView):
     viewResized = pyqtSignal()             # 260618-10: 뷰포트 크기 변경(빈 안내 라벨 재중앙)
     fitPageRequested = pyqtSignal()        # 260618-16: 더블클릭 → 쪽 맞춤
     pathDropped = pyqtSignal(str)          # 260618-23: 뷰어에 PDF/폴더 드롭 → 이 창에 열기
+    pathsDropped = pyqtSignal(list)        # 260915-5(§4.9.2): 놓은 PDF/폴더 전부(종전은 첫 항목만)
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -991,14 +992,12 @@ class _PdfGraphicsView(QGraphicsView):
         # 260618-23: PDF/폴더 드롭 → 이 창에 열기(편집모드 무관). 이미지(편집모드)는 아래 삽입 처리.
         if md.hasUrls():
             from pathlib import Path as _P
-            for u in md.urls():
-                if not u.isLocalFile():
-                    continue
-                lf = u.toLocalFile()
-                if lf.lower().endswith(".pdf") or _P(lf).is_dir():
-                    self.pathDropped.emit(lf)
-                    e.acceptProposedAction()
-                    return
+            found = [u.toLocalFile() for u in md.urls() if u.isLocalFile()
+                     and (u.toLocalFile().lower().endswith(".pdf") or _P(u.toLocalFile()).is_dir())]
+            if found:
+                self.pathsDropped.emit(found)      # 260915-5(§4.9.2): 전부 — 앱이 목록에 더한다
+                e.acceptProposedAction()
+                return
         if ownr is None or not getattr(ownr, "_img_edit", False):
             return super().dropEvent(e)
         from PyQt6.QtGui import QImage, QPixmap as _QPix

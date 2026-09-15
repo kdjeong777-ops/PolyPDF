@@ -1157,6 +1157,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _wire_pane_signals(self, mv, idx: int):
         mv.activated.connect(lambda i=idx: self._set_active_pane(i))
         mv.view.pathDropped.connect(lambda pth, i=idx: self._on_pane_path_drop(i, pth))  # 260618-23
+        mv.view.pathsDropped.connect(lambda ps, i=idx: self._on_paths_dropped(i, ps))    # 260915-5
         mv.contextMenuRequested.connect(
             lambda pos, i=idx: (self._set_active_pane(i),
                                 self._on_viewer_context_menu(pos)))
@@ -1935,6 +1936,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   드롭 대상 창이 명확하므로 활성창 선택 없이 그 창으로 바로 연다.
         self.bookmark_tree.pathDropped.connect(lambda p: self._on_pane_path_drop(0, p))
         self.bookmark_tree_right.pathDropped.connect(lambda p: self._on_pane_path_drop(1, p))
+        # 260915-5(§4.9.2): 놓은 것 전부 — PDF 는 그 창의 목록에 더하고, 폴더면 종전대로 폴더 열기
+        self.bookmark_tree.pathsDropped.connect(lambda ps: self._on_paths_dropped(0, ps))
+        self.bookmark_tree_right.pathsDropped.connect(lambda ps: self._on_paths_dropped(1, ps))
         self.page_thumbs.pageActivated.connect(lambda pg: self.main_view.go_to_page(pg))
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
@@ -2175,23 +2179,64 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             bt.tree.blockSignals(False)
         self._index_files(shown)
 
-    def add_pdfs(self, paths):
-        """260915-3(§4.9): 이미 연 창에 PDF 를 더한다 — 책갈피창이 파일 모드면 목록 뒤에 붙이고
-        (본문은 그대로), 아니면 그 파일들로 파일 모드를 연다. 탐색기 다중 열기를 모을 때 쓴다."""
-        files = [str(p) for p in paths or [] if Path(p).exists() and str(p).lower().endswith(".pdf")]
+    def add_pdfs(self, paths, pane=None):
+        """260915-3/260915-5(§4.9.2): 창의 **지금 목록에 PDF 를 더한다** — 본문은 보던 파일 그대로.
+
+        - 책갈피창이 파일 모드면 목록에 더한다(파일명 순).
+        - 폴더 모드면 파일 모드로 바꿔 **보던 파일 + 더한 파일** 한 목록으로(사용자 결정).
+        - 아무것도 안 열려 있으면 그 파일들로 파일 모드를 연다.
+        - 책갈피창에 저장하지 않은 편집이 있으면 더하지 않는다(다시 싣으면 편집이 사라진다).
+        끌어 놓기(책갈피창·본문·창)와 탐색기 다중 열기 모으기가 모두 이것을 쓴다."""
+        files = [str(p) for p in paths or [] if Path(p).is_file() and str(p).lower().endswith(".pdf")]
         if not files:
             return
-        bt = self.bookmark_tree
-        cur = self.main_view.current_file() if self.main_view else None
-        if bt._is_file_mode() and cur:
-            added = bt.add_pdf_files(files)
-            if added:
-                self._refresh_search_scope()
-                n = len(bt.all_file_paths())
-                self.status.showMessage(f"파일 {len(added)}개를 목록에 더했습니다(모두 {n}개).", 5000)
-                self._index_files(added)
+        split = getattr(self, "_split_on", False)
+        tgt = (pane if pane in (0, 1) else self._active_pane) if split else 0
+        bt = self.bookmark_tree_right if tgt == 1 else self.bookmark_tree
+        mv = self._mv[tgt] if tgt < len(getattr(self, "_mv", [])) else self.main_view
+        if getattr(bt, "_dirty", False):
+            QMessageBox.information(
+                self, "파일 추가",
+                "책갈피창에 저장하지 않은 편집이 있어 파일을 더하지 않았습니다.\n"
+                "편집을 저장하거나 취소한 뒤 다시 놓아 주세요.")
             return
-        self.open_pdfs(files)
+        cur = mv.current_file() if mv is not None else None
+        cur = str(cur) if cur and str(cur).lower().endswith(".pdf") and Path(str(cur)).exists() else None
+        if bt._is_file_mode() and bt.tree.topLevelItemCount():
+            added = bt.add_pdf_files(files)
+        elif cur:
+            from viewer.pathutil import norm_key
+            ck = norm_key(cur)
+            bt.load_pdf_files([cur] + files)
+            added = [f for f in files if norm_key(f) != ck]
+            bt.tree.blockSignals(True)
+            try:
+                bt._select_top_file(cur)
+            finally:
+                bt.tree.blockSignals(False)
+            bt._pending_nav = None
+        else:
+            if split:
+                self._set_active_pane(tgt)
+            self.open_pdfs(files)
+            return
+        n = len(bt.all_file_paths())
+        if added:
+            self._refresh_search_scope()
+            self.status.showMessage(f"파일 {len(added)}개를 목록에 더했습니다(모두 {n}개).", 5000)
+            self._index_files(added)
+        else:
+            self.status.showMessage("이미 목록에 있는 파일입니다.", 4000)
+
+    def _on_paths_dropped(self, idx: int, paths):
+        """260915-5(§4.9.2): 책갈피창·본문·창에 놓은 것 — 폴더가 있으면 종전대로 폴더 열기,
+        PDF 만이면 그 창의 목록에 더한다."""
+        ps = [Path(p) for p in paths or []]
+        dirs = [p for p in ps if p.is_dir()]
+        if dirs:
+            self._on_pane_path_drop(idx, str(dirs[0]))
+            return
+        self.add_pdfs([str(p) for p in ps if p.suffix.lower() == ".pdf"], pane=idx)
 
     def _index_files(self, files):
         """파일 모드의 파일들만 색인(한 작업으로 차례로)."""
@@ -2238,23 +2283,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._set_active_pane(self._pane_at_global(gpos))
         except Exception:
             pass
-        # 260915-3(§4.9, 사용자 지시): PDF 를 **여러 개** 놓으면 모두 파일 모드 목록으로.
-        #   폴더가 섞여 있으면 종전대로 첫 폴더(또는 첫 PDF)가 이긴다.
-        urls = [Path(u.toLocalFile()) for u in event.mimeData().urls()]
-        pdfs = [p for p in urls if p.suffix.lower() == ".pdf" and p.is_file()]
-        if len(pdfs) >= 2 and not any(p.is_dir() for p in urls):
-            self.open_pdfs(pdfs)
+        # 260915-5(§4.9.2): 책갈피창·본문과 같은 규칙 — 폴더면 폴더 열기, PDF 면 지금 목록에 더한다.
+        urls = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
+        ok = [p for p in urls if p.lower().endswith(".pdf") or Path(p).is_dir()]
+        if ok:
+            self._on_paths_dropped(self._active_pane, ok)
             event.acceptProposedAction()
             return
-        for p in urls:
-            if p.is_dir():
-                self.open_folder(p)
-                event.acceptProposedAction()
-                return
-            if p.suffix.lower() == ".pdf":
-                self.open_pdf(p)
-                event.acceptProposedAction()
-                return
         event.ignore()
 
     # --- v1.6.16: 책갈피 자동 생성 (외부 pdf_bookmarker) ----------------

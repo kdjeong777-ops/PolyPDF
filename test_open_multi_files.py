@@ -81,39 +81,79 @@ try:
     tops = lambda: [bt.tree.topLevelItem(i).text(0) for i in range(bt.tree.topLevelItemCount())]
 
     # ── A. 앱 ──────────────────────────────────────────────────────
-    mw.open_pdfs([A, B, C, A, root / "없음.pdf"]); spin(10)
+    msgs = []
+    QMessageBox.information = staticmethod(lambda *a, **k: msgs.append(a[2]))
+    mw.open_pdfs([C, A, B, C, root / "없음.pdf"]); spin(10)
     chk(bt._is_file_mode() and tops() == ["A", "B", "C"],
-        "A 여러 파일을 **파일 모드** 한 목록에(받은 순서·중복·없는 파일 제외)", str(tops()))
-    chk(Path(mw.main_view.current_file()).name == "A.pdf", "A 첫 파일을 본문에 연다")
+        "A 여러 파일을 **파일 모드** 한 목록에 — **파일명 순**·중복·없는 파일 제외", str(tops()))
+    chk(Path(mw.main_view.current_file()).name == "A.pdf", "A 이름 순 첫 파일을 본문에 연다")
     chk(len(mw._search_scope or ()) == 3, "A 검색 범위는 그 파일들", str(mw._search_scope))
     chk("3개 파일" in bt.info.text(), "A 책갈피창에 파일 수", bt.info.text())
     it = bt.tree.topLevelItem(1); bt.tree.setCurrentItem(it); bt.tree.itemClicked.emit(it, 0); spin(15)
     chk(Path(mw.main_view.current_file()).name == "B.pdf", "A 목록의 다른 파일을 누르면 그 파일이 열린다",
         str(mw.main_view.current_file()))
 
-    mw.add_pdfs([C, D]); spin(8)
+    mw.add_pdfs([D, C]); spin(8)
     chk(tops() == ["A", "B", "C", "D"] and Path(mw.main_view.current_file()).name == "B.pdf",
-        "A 모아 받은 파일은 목록 **뒤에** 붙고 보던 파일은 그대로", str(tops()))
+        "A 모아 받은 파일도 이름 순으로 들어가고 보던 파일은 그대로", str(tops()))
     chk(len(mw._search_scope or ()) == 4, "A 더한 파일도 검색 범위에")
 
     bt.tree.setCurrentItem(bt.tree.topLevelItem(1)); spin(2)
     bt._toggle_view_mode(); spin(15)
-    chk(not bt._is_file_mode() and Path(bt._root_dir).name == "y", "A '폴더 모드로' 는 **고른 파일**의 폴더",
+    chk(not bt._is_file_mode() and Path(bt._root_dir).name == "y", "A '폴더 모드로' 는 **선택된 파일**의 폴더",
+        str(bt._root_dir))
+    mw.open_pdf(B); spin(8)
+    bt._single_file = A                            # 파일 모드로 연 파일과 선택이 다를 때(하나뿐이어도)
+    bt._toggle_view_mode(); spin(15)
+    chk(Path(bt._root_dir).name == "y", "A 파일 하나여도 **선택된 파일** 기준(종전: 파일 모드로 연 파일)",
         str(bt._root_dir))
 
     mw.open_pdf(A); spin(8)
     chk(bt._is_file_mode() and tops() == ["A"] and "단일 파일" in bt.info.text(), "A 하나만 열면 종전과 같다")
 
-    md = QMimeData(); md.setUrls([QUrl.fromLocalFile(str(C)), QUrl.fromLocalFile(str(B))])
-    ev = QDropEvent(QPointF(50, 50), Qt.DropAction.CopyAction, md, Qt.MouseButton.LeftButton,
-                    Qt.KeyboardModifier.NoModifier)
-    mw.dropEvent(ev); spin(10)
-    chk(tops() == ["C", "B"] and Path(mw.main_view.current_file()).name == "C.pdf",
-        "A 창에 PDF 여러 개를 끌어 놓으면 모두 파일 모드로", str(tops()))
-    md1 = QMimeData(); md1.setUrls([QUrl.fromLocalFile(str(D))])
-    mw.dropEvent(QDropEvent(QPointF(50, 50), Qt.DropAction.CopyAction, md1, Qt.MouseButton.LeftButton,
-                            Qt.KeyboardModifier.NoModifier)); spin(8)
-    chk(tops() == ["D"], "A 하나를 끌어 놓으면 종전과 같다", str(tops()))
+    def mime(*paths):
+        md = QMimeData(); md.setUrls([QUrl.fromLocalFile(str(x)) for x in paths]); return md
+
+    def drop_on(widget, *paths):
+        md = mime(*paths)                          # QDropEvent 는 QMimeData 를 소유하지 않는다 — 붙잡아 둔다
+        widget.dropEvent(QDropEvent(QPointF(40, 40), Qt.DropAction.CopyAction, md,
+                                    Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+        spin(10)
+
+    drop_on(bt.tree, C, B)                         # 실제 책갈피창 드롭 처리기
+    chk(tops() == ["A", "B", "C"] and Path(mw.main_view.current_file()).name == "A.pdf",
+        "B 책갈피창에 여러 개 놓으면 **지금 목록에 더한다**(이름 순, 본문 그대로)", str(tops()))
+    drop_on(mw.main_view.view, D)                  # 실제 본문 드롭 처리기
+    chk(tops() == ["A", "B", "C", "D"] and Path(mw.main_view.current_file()).name == "A.pdf",
+        "B 본문에 놓아도 목록에 더한다(사용자 결정)", str(tops()))
+    drop_on(bt.tree, B)
+    chk(tops() == ["A", "B", "C", "D"], "B 이미 있는 파일은 다시 넣지 않는다")
+    cur_node = bt.tree.currentItem()
+    chk(cur_node is not None and bt._file_node_of(cur_node).text(0) == "A", "B 더한 뒤에도 보던 파일이 선택돼 있다",
+        cur_node.text(0) if cur_node else "")
+
+    bt.tree.setCurrentItem(bt.tree.topLevelItem(0)); spin(2)
+    bt._toggle_view_mode(); spin(15)
+    chk(not bt._is_file_mode(), "준비 — 폴더 모드(x)")
+    drop_on(bt.tree, B)
+    chk(bt._is_file_mode() and tops() == ["A", "B"] and Path(mw.main_view.current_file()).name == "A.pdf",
+        "B 폴더 모드에서 놓으면 **보던 파일 + 놓은 파일** 파일 모드 목록", str(tops()))
+
+    _md = mime(C)
+    mw.dropEvent(QDropEvent(QPointF(40, 40), Qt.DropAction.CopyAction, _md,
+                            Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)); spin(8)
+    chk(tops() == ["A", "B", "C"], "B 창(그 밖의 자리)에 놓아도 같은 규칙", str(tops()))
+
+    bt._dirty = True
+    msgs.clear()
+    drop_on(bt.tree, D)
+    chk(tops() == ["A", "B", "C"] and msgs and "저장하지 않은 편집" in msgs[-1],
+        "B 책갈피창에 저장 안 한 편집이 있으면 더하지 않고 알린다", str(msgs))
+    bt._dirty = False
+
+    drop_on(bt.tree, root / "y")
+    chk(not bt._is_file_mode() and Path(bt._root_dir).name == "y", "B 폴더를 놓으면 종전대로 그 폴더를 연다",
+        str(bt._root_dir))
 
     # ── A2. 폴더 목록을 채우는 중에 파일 모드로 열기 — 종전에는 앱이 죽었다 ──────────
     #   실측(빌드 exe): 시작 때 복원한 폴더를 채우는 중 PDF 인자로 열면 채우기 틱이 지운 행에 붙이다

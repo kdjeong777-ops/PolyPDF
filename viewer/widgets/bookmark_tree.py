@@ -73,6 +73,7 @@ class _EditableTree(QTreeWidget):
     dropped = pyqtSignal()
     delPressed = pyqtSignal()       # 260611-56: DEL 키 → 선택 삭제(휴지통)
     pathDropped = pyqtSignal(str)   # 260618-27: 외부 PDF/폴더 드롭(이 창에 열기)
+    pathsDropped = pyqtSignal(list)  # 260915-5(§4.9.2): 놓은 PDF/폴더 **전부**(종전 pathDropped 는 첫 항목만)
 
     @staticmethod
     def _ext_paths(md):
@@ -118,7 +119,9 @@ class _EditableTree(QTreeWidget):
         paths = self._ext_paths(e.mimeData())
         if paths:
             self._set_drop_hl(False)
-            self.pathDropped.emit(paths[0])     # 첫 항목(정렬순 첫 파일/폴더)
+            # 260915-5(§4.9.2, 사용자 보고 "책갈피창에 놓았는데 파일명이 추가되지 않았다"): 종전에는
+            #   첫 항목만 넘겨 그 파일 하나로 목록을 새로 열었다 → 전부 넘기고 앱이 목록에 더한다.
+            self.pathsDropped.emit(list(paths))
             e.acceptProposedAction()
             return
         super().dropEvent(e)
@@ -186,6 +189,7 @@ class BookmarkTree(QWidget):
     fileOpCompleted = pyqtSignal(str, str)   # v1.6.21: (old, new) new=="" 삭제, new==old 실패
     splitViewRequested = pyqtSignal(bool)    # 260618-25: 1단→2단 진입(True)
     pathDropped = pyqtSignal(str)            # 260618-27: 외부 PDF/폴더 드롭 → 이 창에 열기
+    pathsDropped = pyqtSignal(list)          # 260915-5(§4.9.2): 놓은 PDF/폴더 전부
     copyPaneRequested = pyqtSignal()         # 260618-27: 이 책갈피창 기준 반대 창으로 복사
     viewModeChanged = pyqtSignal(bool, str)  # 260825: (is_folder, 폴더|파일 경로) — 파일↔폴더 전환
     filesRelocated = pyqtSignal(list)        # 260901-2: [[old, new], ...] 파일 복사/이동 완료
@@ -510,6 +514,7 @@ class BookmarkTree(QWidget):
         #   외부 드롭은 받도록 acceptDrops 상시 ON(내부 재배치 드래그는 편집모드에서만).
         self.tree.setAcceptDrops(True)
         self.tree.pathDropped.connect(self.pathDropped.emit)
+        self.tree.pathsDropped.connect(self.pathsDropped.emit)
         # v1.6.2: 갈매기(▸) 펼침 시 PDF 내부 TOC lazy load
         self.tree.itemExpanded.connect(self._on_item_expanded)
         # 260906-1: 화면에 보이는 행만 표식 검사(응답성 SOT §4) — 스크롤·펼침·접힘마다 다시 걷되,
@@ -1032,9 +1037,9 @@ class BookmarkTree(QWidget):
         """파일 모드 ↔ 폴더 모드 전환."""
         if self._is_file_mode():
             # 파일 → 폴더: 현재 파일이 있는 폴더의 PDF 전체 표시, 그 파일 선택
-            f = self._single_file or self._current_selected_file()
-            if self.tree.topLevelItemCount() > 1:     # 260915-3: 여러 파일이면 고른 파일 기준
-                f = self._current_selected_file() or f
+            # 260915-5(§4.9.1, 사용자 지시): **지금 선택된 파일**의 폴더로 연다 — 선택이 없으면 본문 파일,
+            #   그것도 없으면 파일 모드로 연 파일. (종전은 파일 모드로 연 파일이 먼저였다.)
+            f = self._current_selected_file() or self._single_file
             folder = (f.parent if f else self._root_dir)
             if not folder or not Path(folder).exists():
                 self.info.setText("폴더를 찾을 수 없습니다.")
@@ -1114,6 +1119,9 @@ class BookmarkTree(QWidget):
                 continue
             seen.add(k)
             files.append(p)
+        # 260915-5(§4.9.1, 사용자 지시): **파일명 순** — 폴더 모드 '이름 순'(`_sorted_flat`)과 같은 키.
+        #   탐색기 다중 열기는 실행 순서가 정해져 있지 않아 받은 순서로 두면 매번 달랐다.
+        files.sort(key=lambda q: (q.stem.lower(), str(q).lower()))
         if len(files) <= 1:
             if files:
                 self.load_single_pdf(files[0])
