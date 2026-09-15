@@ -17,11 +17,14 @@ class IndexWorker(QObject):
     error = pyqtSignal(str)
 
     def __init__(self, db_path: Path, folder: Path,
-                 single_file: Optional[Path] = None):
+                 single_file: Optional[Path] = None, files: Optional[list] = None):
         super().__init__()
         self.db_path = db_path
         self.folder = folder
         self.single_file = single_file      # v1.6.11: 지정 시 이 파일만 인덱싱
+        # 260915-3(§4.9): 파일 모드로 여러 파일을 열면 그 파일들만(한 작업 안에서 차례로 —
+        #   작업을 여럿 띄우면 `_start_index_worker` 가 앞 작업을 취소한다)
+        self.files = [Path(f) for f in files] if files else None
         self._cancel = False                # 260611-89: 다른 폴더/파일 열 때 중단
 
     def request_cancel(self):
@@ -33,17 +36,19 @@ class IndexWorker(QObject):
                 return
             idx = PdfIndex(self.db_path)
             try:
-                if self.single_file is not None:
-                    if self._cancel:
-                        return
-                    self.progress.emit(0, 1, str(self.single_file))
-                    # 260618-25: 이름(경로)·수정시각·크기 동일하면 재인덱싱 생략
-                    #   (폴더 인덱싱과 동일한 needs_reindex 가드 — 단일 파일 열기마다
-                    #    무조건 재인덱싱하던 비효율 제거).
-                    p = Path(self.single_file)
-                    if idx.needs_reindex(p):
-                        idx.index_file(p)
-                    self.progress.emit(1, 1, str(self.single_file))
+                targets = self.files or ([Path(self.single_file)] if self.single_file is not None else None)
+                if targets is not None:
+                    n = len(targets)
+                    for k, p in enumerate(targets):
+                        if self._cancel:
+                            return
+                        self.progress.emit(k, n, str(p))
+                        # 260618-25: 이름(경로)·수정시각·크기 동일하면 재인덱싱 생략
+                        #   (폴더 인덱싱과 동일한 needs_reindex 가드 — 단일 파일 열기마다
+                        #    무조건 재인덱싱하던 비효율 제거).
+                        if idx.needs_reindex(p):
+                            idx.index_file(p)
+                        self.progress.emit(k + 1, n, str(p))
                 else:
                     idx.index_folder(
                         self.folder,

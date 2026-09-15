@@ -290,8 +290,15 @@ class MergeFilesDialog(QDialog):
             self._add_right_pdf(p)
 
         self.chk_auto = QCheckBox("병합 후 책갈피와 단어장 자동 생성")
-        self.chk_auto.setChecked(True)
+        # 260915-4(§4.8.4, 사용자 결정): 기본은 끔 — 책갈피 없는 원본마다 글꼴 분석·OCR 이 병합 안에서 돌아
+        #   파일 하나에 수십 초~수 분이 걸렸다(실측 139쪽 46초). 필요할 때만 켠다.
+        self.chk_auto.setChecked(False)
         v.addWidget(self.chk_auto)
+        # 260915-4(§4.8.4, 사용자 결정): 기본은 빠른 저장(그대로 합쳐 저장). 켜면 파일 사이의 같은 글꼴·
+        #   이미지를 하나로 정리해 용량을 줄인다 — 실측 139MB 기준 저장 0.2초→15초, 용량 −11%.
+        self.chk_compact = QCheckBox("용량 줄이기 (같은 글꼴·이미지 정리 — 큰 파일은 저장이 오래 걸림)")
+        self.chk_compact.setChecked(False)
+        v.addWidget(self.chk_compact)
 
         # 260611-29: 2단 축소 배치(쪽번호·목차·표지)
         self._twoup_settings = None
@@ -482,6 +489,9 @@ class MergeFilesDialog(QDialog):
 
     def auto_build(self) -> bool:
         return self.chk_auto.isChecked()
+
+    def compact(self) -> bool:
+        return self.chk_compact.isChecked()
 
     # 260611-29: 2단 축소 배치
     def _on_twoup_toggled(self, on):

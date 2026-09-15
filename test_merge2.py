@@ -37,8 +37,8 @@ check("파일명순 정렬", pdfnames == sorted(pdfnames), f"{pdfnames}")
 # 삭제
 d.right.item(0).setSelected(True); d._delete_right()
 check("삭제 후 3개", d.right.count() == 3)
-# 자동생성 기본 체크
-check("자동생성 기본 체크", d.auto_build() is True)
+# 자동생성 기본값 — 260915-4(§4.8.4, 사용자 결정): 병합이 기다리지 않게 기본은 끔
+check("자동생성 기본 끔", d.auto_build() is False)
 # 드롭(메서드 직접): 외부 pdf 추가
 d._add_right_pdf(r"C:/x/delta.pdf")
 check("외부 PDF 추가", any(it.get("path", "").endswith("delta.pdf") for it in d.result_items()))

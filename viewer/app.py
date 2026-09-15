@@ -2136,6 +2136,76 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
         self._start_index_worker(worker)
 
+    def open_pdfs(self, paths):
+        """260915-3(§4.9, 사용자 지시): PDF 여러 개를 **파일 모드** 한 목록으로 연다 — 첫 파일을 본문에.
+
+        하나면 `open_pdf` 와 같다. 2단 보기면 활성 창의 책갈피창에 싣고 그 창에만 연다(옆 창 보존)."""
+        files = [Path(p) for p in paths or []
+                 if Path(p).exists() and Path(p).suffix.lower() == ".pdf"]
+        if len(files) <= 1:
+            if files:
+                self.open_pdf(files[0])
+            return
+        split = getattr(self, "_split_on", False)
+        bt = (self.bookmark_tree_right if split and self._active_pane == 1 else self.bookmark_tree)
+        self._cancel_active_indexing()
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        try:
+            if not split:
+                self._clear_workspace()
+                self._folder = files[0].parent
+            elif self._active_pane == 1:
+                self._folder_right = files[0].parent
+            else:
+                self._folder = files[0].parent
+            shown = bt.load_pdf_files(files)
+            if not split:
+                self.search_results.set_bookmark_order({})
+            self._refresh_search_scope()
+            if split:
+                self._sync_right_pane_bookmark()
+            self.status.showMessage(f"파일 {len(shown)}개 로드", 4000)
+        finally:
+            QApplication.restoreOverrideCursor()
+        self._load_main(HistoryItem(shown[0], 0, "", "bookmark"))
+        try:
+            bt.tree.blockSignals(True)
+            bt._select_top_file(shown[0])
+        finally:
+            bt.tree.blockSignals(False)
+        self._index_files(shown)
+
+    def add_pdfs(self, paths):
+        """260915-3(§4.9): 이미 연 창에 PDF 를 더한다 — 책갈피창이 파일 모드면 목록 뒤에 붙이고
+        (본문은 그대로), 아니면 그 파일들로 파일 모드를 연다. 탐색기 다중 열기를 모을 때 쓴다."""
+        files = [str(p) for p in paths or [] if Path(p).exists() and str(p).lower().endswith(".pdf")]
+        if not files:
+            return
+        bt = self.bookmark_tree
+        cur = self.main_view.current_file() if self.main_view else None
+        if bt._is_file_mode() and cur:
+            added = bt.add_pdf_files(files)
+            if added:
+                self._refresh_search_scope()
+                n = len(bt.all_file_paths())
+                self.status.showMessage(f"파일 {len(added)}개를 목록에 더했습니다(모두 {n}개).", 5000)
+                self._index_files(added)
+            return
+        self.open_pdfs(files)
+
+    def _index_files(self, files):
+        """파일 모드의 파일들만 색인(한 작업으로 차례로)."""
+        try:
+            self.progress.setVisible(True)
+            self.progress.setRange(0, 0)
+            worker = IndexWorker(self._db_path, Path(files[0]).parent, files=[Path(f) for f in files])
+            worker.progress.connect(self._on_index_progress)
+            worker.finished.connect(self._on_index_finished)
+            worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+            self._start_index_worker(worker)
+        except Exception:
+            pass
+
     # --- v1.6.11 I2: 드래그&드롭 ---------------------------------------
     def dragEnterEvent(self, event):
         md = event.mimeData()
@@ -2168,8 +2238,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._set_active_pane(self._pane_at_global(gpos))
         except Exception:
             pass
-        for u in event.mimeData().urls():
-            p = Path(u.toLocalFile())
+        # 260915-3(§4.9, 사용자 지시): PDF 를 **여러 개** 놓으면 모두 파일 모드 목록으로.
+        #   폴더가 섞여 있으면 종전대로 첫 폴더(또는 첫 PDF)가 이긴다.
+        urls = [Path(u.toLocalFile()) for u in event.mimeData().urls()]
+        pdfs = [p for p in urls if p.suffix.lower() == ".pdf" and p.is_file()]
+        if len(pdfs) >= 2 and not any(p.is_dir() for p in urls):
+            self.open_pdfs(pdfs)
+            event.acceptProposedAction()
+            return
+        for p in urls:
             if p.is_dir():
                 self.open_folder(p)
                 event.acceptProposedAction()
@@ -3907,7 +3984,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                progress=progress))
             title = "PDF 병합(2단 배치)"
         else:
-            job = lambda progress: self._do_normal_merge(items, out, auto, progress)
+            compact = bool(getattr(dlg, "compact", lambda: False)())
+            job = lambda progress: self._do_normal_merge(items, out, auto, progress, compact=compact)
             title = "PDF 병합"
         res = self._run_merge_job(job, title)
         if res.get("cancelled"):
@@ -4062,8 +4140,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         QApplication.processEvents()
         return res
 
-    def _do_normal_merge(self, items, out, auto, progress):
-        """260611-33: 일반 PDF 병합(스레드 실행). progress(done,total,label)->bool(계속)."""
+    def _do_normal_merge(self, items, out, auto, progress, compact=False):
+        """260611-33: 일반 PDF 병합(스레드 실행). progress(done,total,label)->bool(계속).
+
+        260915-4(§4.8.4): 기본은 **빠른 저장**(`garbage=1` — 안 쓰는 객체만 뺀다). `compact` 면 종전
+        정리 저장(`garbage=4, deflate`). 저장 뒤 다시 열어 **쪽수**가 합과 같은지 확인한다."""
         import fitz
         from viewer.twoup import MergeCancelled
         out_doc = fitz.open()
@@ -4104,15 +4185,30 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                         offset += n
                     finally:
                         src.close()
-            progress(total, total, "저장 중…")
+            progress(total, total, "용량 줄여 저장 중…(오래 걸릴 수 있음)" if compact else "저장 중…")
             if merged_toc:
                 try:
                     out_doc.set_toc(self._normalize_toc(merged_toc))
                 except Exception:
                     pass
-            out_doc.save(out, garbage=4, deflate=True)
+            if compact:
+                out_doc.save(out, garbage=4, deflate=True)
+            else:
+                out_doc.save(out, garbage=1)
         finally:
             out_doc.close()
+        # 검사 — 저장한 파일을 다시 열어 쪽수 확인(열리지 않거나 다르면 오류로 알린다. 파일은 남긴다)
+        try:
+            chk = fitz.open(out)
+            try:
+                got = chk.page_count
+            finally:
+                chk.close()
+        except Exception as e:                   # noqa: BLE001
+            raise RuntimeError(f"병합한 파일을 다시 열지 못했습니다: {e}\n저장한 파일: {out}")
+        if got != offset:
+            raise RuntimeError(f"병합 결과의 쪽수가 맞지 않습니다 — 원본 합 {offset}쪽, 결과 {got}쪽.\n"
+                               f"저장한 파일: {out}")
 
     # ===== 260611-36: 병합 배치 사용자 스타일(프리셋) =====
     def _merge_preset_api(self) -> dict:

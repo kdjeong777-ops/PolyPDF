@@ -1033,6 +1033,8 @@ class BookmarkTree(QWidget):
         if self._is_file_mode():
             # 파일 → 폴더: 현재 파일이 있는 폴더의 PDF 전체 표시, 그 파일 선택
             f = self._single_file or self._current_selected_file()
+            if self.tree.topLevelItemCount() > 1:     # 260915-3: 여러 파일이면 고른 파일 기준
+                f = self._current_selected_file() or f
             folder = (f.parent if f else self._root_dir)
             if not folder or not Path(folder).exists():
                 self.info.setText("폴더를 찾을 수 없습니다.")
@@ -1093,6 +1095,64 @@ class BookmarkTree(QWidget):
         # 260906-1: 파일 1개뿐이라 비용이 없다 — 표식(암호화·책갈피 ▸)을 바로 확정한다.
         self._ensure_probed(item, force=True)
         return True
+
+    def load_pdf_files(self, paths) -> list:
+        """260915-3(마스터 §4.9): **파일 모드**로 여러 PDF 를 한 목록에 — 받은 순서, 중복·없는 파일 제외.
+
+        하나뿐이면 `load_single_pdf` 와 같다. 표식 검사는 보이는 행부터(파일이 많을 수 있다).
+        '폴더 모드로' 전환은 **고른 파일**의 폴더로 간다(`_toggle_view_mode`). 표시한 경로 목록을 돌려준다."""
+        from viewer.pathutil import norm_key
+        seen, files = set(), []
+        for x in paths or []:
+            p = Path(x)
+            k = norm_key(str(p))
+            if k in seen or not p.exists() or p.suffix.lower() != ".pdf":
+                continue
+            seen.add(k)
+            files.append(p)
+        if len(files) <= 1:
+            if files:
+                self.load_single_pdf(files[0])
+            return [str(f) for f in files]
+        self._root_dir = files[0].parent
+        self._single_file = files[0]
+        self._file_list = list(files)
+        self._reload_fn = lambda fs=tuple(files): self.load_pdf_files(fs)
+        self._mode = "single"
+        self._pdfs_flat = []
+        self._reset_probe_queue()
+        self.tree.clear()
+        for p in files:
+            item = QTreeWidgetItem([p.stem])
+            item.setData(0, self.DATA_FILE, str(p))
+            item.setData(0, self.DATA_PAGE, 0)
+            item.setToolTip(0, str(p))
+            self._decorate_file_node(item, p)
+            self.tree.addTopLevelItem(item)
+        self.info.setText(f"{len(files)}개 파일 (파일 모드)")
+        self._update_mode_button()
+        self._queue_visible_probes()
+        return [str(f) for f in files]
+
+    def add_pdf_files(self, paths) -> list:
+        """260915-3(§4.9): 지금 파일 모드 목록 **뒤에** 더한다(이미 있는 것은 뺀다). 더한 경로 목록."""
+        from viewer.pathutil import norm_key
+        have = {norm_key(str(d)) for d in self.all_file_paths()}
+        cur = [Path(d) for d in self.all_file_paths()]
+        new = [str(Path(x)) for x in paths or []
+               if Path(x).exists() and str(x).lower().endswith(".pdf") and norm_key(str(x)) not in have]
+        if not new:
+            return []
+        keep = self.tree.currentItem()
+        keep_file = self._file_node_of(keep).data(0, self.DATA_FILE) if keep is not None and self._file_node_of(keep) else None
+        shown = self.load_pdf_files([str(c) for c in cur] + new)
+        if keep_file:
+            self.tree.blockSignals(True)
+            try:
+                self._select_top_file(keep_file)
+            finally:
+                self.tree.blockSignals(False)
+        return [p for p in new if p in shown]
 
     def all_file_paths(self) -> list:
         """260616-3: 현재 트리에 표시된 모든 PDF 파일 경로(중복 제거, 출현 순).

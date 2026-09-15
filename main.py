@@ -183,6 +183,22 @@ def main():
         pass
     app = QApplication(sys.argv)
 
+    # 260915-3(마스터 §4.9, 사용자 지시): 탐색기에서 PDF 여러 개를 골라 열면 Windows 가 파일마다
+    #   따로 실행한다 → 먼저 뜬 실행(대표)에게 파일을 넘기고 이 실행은 창 없이 끝난다.
+    #   스플래시·무거운 준비 **전에** 해야 창이 번쩍이지 않는다.
+    pdf_args = [a for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
+    gather = None
+    if pdf_args:
+        try:
+            from viewer.open_gather import OpenGather, hand_off
+            gather = OpenGather()
+            if not gather.claim():
+                gather = None
+                if hand_off(pdf_args):
+                    os._exit(0)
+        except Exception:
+            gather = None
+
     # 260606-29: ★ QApplication 직후 — 무엇보다 먼저 스플래시(앱이름/아이콘/마이그레이션
     #            보다 앞). repaint() 로 동기 즉시 페인트 → 체감 지연 최소화.
     _ico = resource_path("icon.png")
@@ -217,11 +233,25 @@ def main():
         _fade_out_splash(app, splash, win)
     # 260611-11: 인자로 받은 PDF 열기 — '연결 프로그램/기본 PDF 뷰어'로 더블클릭/Open with 지원.
     try:
-        pdf_arg = next((a for a in sys.argv[1:]
-                        if a.lower().endswith(".pdf") and os.path.exists(a)), None)
-        if pdf_arg:
+        if pdf_args:
             from PyQt6.QtCore import QTimer
-            QTimer.singleShot(0, lambda p=pdf_arg: win.open_pdf(Path(p)))
+            state = {"opened": False}
+
+            def _open_initial():
+                # 260915-3(§4.9): 이 실행의 파일 + 그새 넘겨받은 파일을 한 번에(여럿이면 파일 모드 목록)
+                files = list(pdf_args) + (list(gather.pending) if gather is not None else [])
+                state["opened"] = True
+                if len(files) > 1:
+                    win.open_pdfs(files)
+                else:
+                    win.open_pdf(Path(files[0]))
+                if gather is not None:
+                    gather.close_after()          # 창이 뜬 뒤 잠깐만 더 받는다
+
+            if gather is not None:
+                gather.filesReceived.connect(
+                    lambda fs: win.add_pdfs(fs) if state["opened"] else None)
+            QTimer.singleShot(0, _open_initial)
     except Exception:
         pass
     code = app.exec()
