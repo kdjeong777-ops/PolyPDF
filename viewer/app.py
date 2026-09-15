@@ -3686,7 +3686,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         src = _P(src); produced = _P(produced)
         dst, overwrite = self._edit_save_dst(src, shift)
         if not overwrite:
-            _os.replace(str(produced), str(dst))
+            err = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), f"새 이름으로 저장 중: {dst.name}")
+            if err is not None:
+                raise err
             # 260915-2: 새 파일로 저장해도 썸네일의 편집 목록을 비운다 — 안 그러면 호출측이 새 파일을
             #   열 때 '저장하지 않은 쪽 편집이 있다' 고 다시 묻는다(방금 저장했는데).
             self._close_main_view_doc()
@@ -3712,7 +3714,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     raise SaveCancelled("저장을 취소했습니다 — 원본은 그대로입니다.")
                 if choice == "rename":
                     fb, _ = self._edit_save_dst(src, True)
-                    _os.replace(str(produced), str(fb))
+                    err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)),
+                                           f"새 이름으로 저장 중: {fb.name}")
+                    if err is not None:
+                        raise err
                     self._close_main_view_doc()      # 위 Shift 저장과 같은 이유
                     return str(fb)
                 released = link.release(holders, dst)
@@ -3725,47 +3730,63 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 except Exception:
                     pass
 
-    def _place_over_original(self, src, produced, dst) -> str:
-        """원본 자리에 놓기 — 바꿔치기 → 제자리 덮어쓰기 → `_edited`(§4.7.5)."""
-        from pathlib import Path as _P
-        import os as _os
-        self._close_main_view_doc()                  # 원본 잠금 해제(뷰어·썸네일·표 찾기 핸들)
-        QApplication.processEvents()
-        # 260908-1: 핸들이 풀리는 데 시간이 걸릴 수 있어(백신 검사·썸네일 정리) 짧게 다시 시도한다.
-        import time as _t
-        last = None
-        for _i in range(self.SAVE_REPLACE_TRIES):
-            try:
-                _os.replace(str(produced), str(dst))
-                return str(dst)
-            except Exception as e:                   # noqa: BLE001
-                last = e
-                if _i == 0:
-                    # 260913-4: 참조 순환에 갇혀 아직 안 닫힌 핸들이 있으면 풀린다. 실패 때만.
-                    import gc as _gc
-                    _gc.collect()
-                QApplication.processEvents()
-                _t.sleep(0.15)
-        # 260915-1(사용자 보고 "지금도 마찬가지로 발생"): 배경 스레드(색인·목록 조사·텍스트 창
-        #   작업)가 원본을 읽고 있으면 UI 가 그 핸들을 닫을 수 없어 바꿔치기가 끝내 거부된다.
-        #   그런 핸들은 쓰기 공유를 허용하므로 **같은 파일에 제자리로** 덮어쓴다(백업·되돌리기 포함).
-        #   ★ 260915-8(응답성 SOT §4.4): 제자리 쓰기는 **배경 스레드 + 진행창**에서 한다 — 실측 232MB 에
-        #   3~7초(기존 파일 위에 쓰기라 복사보다 훨씬 느리다)라 메인에서 하면 그대로 창이 멈춘다.
-        #   진행창은 0.3초가 넘을 때만 보인다. 쓰는 도중 취소는 받지 않는다(원본이 반쯤 쓰인 채 남는다).
-        from viewer.file_overwrite import overwrite_in_place
+    def _file_op_bg(self, fn, label: str):
+        """260915-9(응답성 SOT §4.4): 파일 옮기기·덮어쓰기를 **배경 스레드 + 진행창**에서. 실패면 그 예외, 성공이면 None.
 
-        def _job(progress, _p=produced, _d=dst):
-            progress(0, 1, f"원본에 쓰는 중: {_d.name}")
-            overwrite_in_place(_p, _d)
+        `os.replace` 도 메인에서 부르지 않는다 — 방금 쓴 큰 파일은 실시간 백신 검사가 끝날 때까지 이름 바꾸기가
+        붙들려 실측 **2.6초·21.4초** 메인이 섰다(82MB). 진행창은 0.3초가 넘을 때만 보이고, 도중 취소는 받지 않는다."""
+        out = {}
+
+        def _job(progress):
+            progress(0, 1, label)
+            try:
+                fn()
+            except Exception as e:                   # noqa: BLE001
+                out["e"] = e
             progress(1, 1, "완료")
         res = self._run_merge_job(_job, "원본에 저장", cancellable=False)
-        if res.get("ok"):
+        if "e" in out:
+            return out["e"]
+        return None if res.get("ok") else RuntimeError(res.get("err") or "파일 작업 실패")
+
+    def _place_over_original(self, src, produced, dst) -> str:
+        """원본 자리에 놓기 — 바꿔치기 → 제자리 덮어쓰기 → `_edited`(§4.7.5). 파일 작업은 모두 배경(`_file_op_bg`)."""
+        from pathlib import Path as _P
+        import os as _os
+        import time as _t
+        self._close_main_view_doc()                  # 원본 잠금 해제(뷰어·썸네일·표 찾기 핸들) — 메인에서
+        QApplication.processEvents()
+        last = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), f"원본에 놓는 중: {dst.name}")
+        if last is None:
             return str(dst)
-        last = RuntimeError(res.get("err") or "제자리 덮어쓰기 실패")
+        # 260913-4: 참조 순환에 갇혀 아직 안 닫힌 핸들이 있으면 풀린다 — 실패 때만, Qt 객체가 섞일 수 있어 **메인에서**.
+        import gc as _gc
+        _gc.collect()
+        QApplication.processEvents()
+        # 260908-1: 핸들이 늦게 풀리면(백신 검사·썸네일 정리) 짧게 다시 시도한다.
+        # 260915-1(사용자 보고 "지금도 마찬가지로 발생"): 배경 스레드(색인·목록 조사·텍스트 창 작업)가 원본을 읽고
+        #   있으면 UI 가 그 핸들을 닫을 수 없어 바꿔치기가 끝내 거부된다. 그런 핸들은 쓰기 공유를 허용하므로
+        #   **같은 파일에 제자리로** 덮어쓴다(백업·되돌리기 포함). 실측 232MB 3~7초 — 역시 배경에서(260915-8).
+        from viewer.file_overwrite import overwrite_in_place
+
+        def _retry_then_in_place(_p=produced, _d=dst):
+            for _i in range(self.SAVE_REPLACE_TRIES - 1):
+                _t.sleep(0.15)
+                try:
+                    _os.replace(str(_p), str(_d))
+                    return
+                except OSError:
+                    pass
+            overwrite_in_place(_p, _d)
+        last = self._file_op_bg(_retry_then_in_place, f"원본에 쓰는 중: {dst.name}") or None
+        if last is None:
+            return str(dst)
         # 그래도 안 되면(다른 프로그램이 쓰기를 막고 열었거나 읽기 전용) `_edited` 로 저장하고
         #   **알린다**. 알림은 호출측이 책갈피창을 갱신하고 새 파일로 옮긴 **뒤에** 뜨게 미룬다.
         fb, _ = self._edit_save_dst(src, True)
-        _os.replace(str(produced), str(fb))
+        err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)), f"새 이름으로 저장 중: {fb.name}")
+        if err is not None:
+            raise err
         msg = (f"원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n\n"
                f"저장한 파일: {fb.name}\n원본: {src.name}\n\n"
                f"원인: {last}\n\n"
@@ -3794,59 +3815,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         recon = src.with_name(src.stem + "_recon_tmp.pdf")
         book_tmp = src.with_name(src.stem + "_book_tmp.pdf")
-        produced = recon
-        saved_n = 0
+        # 260915-9(§4.7.9, 응답성 SOT §4.4): 쪽 재구성·저장·책갈피 다시 쓰기는 **배경 스레드 + 진행창**에서
+        #   임시 파일까지만 만든다(실측 메인에서 최장 정지 1.1~3.0초). 원본에 놓기는 아래 메인에서 —
+        #   다른 PolyPDF 창 확인 대화상자가 메인에서 떠야 한다. 진행창에서 취소하면 임시 파일을 지우고 편집은 남는다.
+        from viewer import page_edit_build as _peb
+        from viewer.twoup import MergeCancelled
+        built = {}
+        raw_bm = list(bookmarks_raw or [])
+        plan = list(plan)
+
+        def _job(progress):
+            try:
+                built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress))
+            except _peb.Cancelled:
+                raise MergeCancelled()
+        res = self._run_merge_job(_job, "쪽 편집 저장")
+        if res.get("cancelled"):
+            self.status.showMessage("쪽 편집 저장을 취소했습니다 — 원본·편집은 그대로입니다.", 5000)
+            return
+        if not res.get("ok"):
+            QMessageBox.warning(self, "페이지 편집 저장 실패", res.get("err") or "알 수 없는 오류")
+            return
+        produced = _P(built["path"])
+        saved_n = int(built.get("pages") or 0)
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
-            import fitz
-            sdoc = fitz.open(str(src))
-            ext_cache = {}                     # esrc -> fitz doc (붙여넣기 원본)
-            odoc = fitz.open()
-            ownpos = {}                        # 원본 페이지(0-based) → 새 위치(0-based)
-            outc = 0
-            try:
-                for entry in plan:
-                    if entry[0] == "own":
-                        idx = entry[1]
-                        if 0 <= idx < sdoc.page_count:
-                            odoc.insert_pdf(sdoc, from_page=idx, to_page=idx)
-                            ownpos[idx] = outc; outc += 1
-                    else:                      # ('ext', esrc, epg) — 붙여넣기 페이지
-                        esrc, epg = entry[1], entry[2]
-                        ed = ext_cache.get(esrc)
-                        if ed is None:
-                            ed = sdoc if esrc == str(src) else fitz.open(esrc)
-                            ext_cache[esrc] = ed
-                        if 0 <= epg < ed.page_count:
-                            odoc.insert_pdf(ed, from_page=epg, to_page=epg)
-                            outc += 1
-                if outc == 0:
-                    raise RuntimeError("저장할 페이지가 없습니다.")
-                odoc.save(str(recon), garbage=4, deflate=True)
-                saved_n = outc
-            finally:
-                odoc.close()
-                for ed in ext_cache.values():
-                    if ed is not sdoc:
-                        try:
-                            ed.close()
-                        except Exception:
-                            pass
-                sdoc.close()
-            # 책갈피 remap: 삭제된 페이지 책갈피는 버리고, 남은 원본 페이지는 새 번호로
-            bms = [(t, ownpos[p1 - 1] + 1, lv) for (t, p1, lv) in (bookmarks_raw or [])
-                   if (p1 - 1) in ownpos]
-            if bms:
-                from viewer import bookmarker_bridge as bridge
-                if bridge.is_available():
-                    import pdf_bookmarker as pb
-                    blist = [pb.Bookmark(title=t, page=p, level=lv) for (t, p, lv) in bms]
-                    bridge.apply_to_pdf(recon, book_tmp, blist)
-                    try:
-                        _os.remove(str(recon))
-                    except Exception:
-                        pass
-                    produced = book_tmp
             final = self._finalize_save(src, produced, shift)
         except Exception as e:
             QApplication.restoreOverrideCursor()

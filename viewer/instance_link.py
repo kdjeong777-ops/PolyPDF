@@ -41,6 +41,33 @@ def _user() -> str:
     return "".join(c for c in u if c.isalnum()) or "user"
 
 
+def _pid_alive(pid) -> bool:
+    """260915-9: 등록된 프로세스가 살아 있나 — 죽은 등록에 연결을 시도하면 항목마다 `CONNECT_MS` 를 기다린다
+    (실측 0.65초). Windows 는 `OpenProcess`+`GetExitCodeProcess`. 판단이 안 서면 True(연결로 확인)."""
+    try:
+        pid = int(pid)
+    except Exception:
+        return True
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.OpenProcess.restype = ctypes.c_void_p
+        h = k32.OpenProcess(0x1000, False, pid)          # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return ctypes.get_last_error() == 5          # 접근 거부 = 있기는 하다
+        try:
+            code = ctypes.c_ulong()
+            if not k32.GetExitCodeProcess(ctypes.c_void_p(h), ctypes.byref(code)):
+                return True
+            return code.value == 259                     # STILL_ACTIVE
+        finally:
+            k32.CloseHandle(ctypes.c_void_p(h))
+    except Exception:
+        return True
+
+
 def same_file(a, b) -> bool:
     try:
         from viewer.pathutil import norm_key
@@ -109,11 +136,19 @@ class InstanceLink(QObject):
         out = []
         for f in entries:
             try:
-                name = json.loads(f.read_text(encoding="utf-8")).get("server")
+                info = json.loads(f.read_text(encoding="utf-8"))
+                name = info.get("server")
             except Exception:
-                name = None
-            if name and name != self.name:
-                out.append((name, f))
+                info, name = {}, None
+            if not name or name == self.name:
+                continue
+            if not _pid_alive(info.get("pid")):
+                try:
+                    f.unlink(missing_ok=True)            # 끝난 프로세스 — 연결해 보지 않고 치운다
+                except Exception:
+                    pass
+                continue
+            out.append((name, f))
         return out
 
     @staticmethod
