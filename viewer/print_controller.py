@@ -87,8 +87,7 @@ class PrintMixin:
         elif spec["mode"] == "range":
             pages = list(range(spec["from"], spec["to"] + 1))
         else:  # thumb
-            pages = sorted({self.page_thumbs.list.row(it)
-                            for it in self.page_thumbs.list.selectedItems()})
+            pages = sorted(set(self.page_thumbs.selected_pages()))   # 260915-1: 행이 아니라 쪽 번호
         pages = [p for p in pages if 0 <= p < pc]
         if not pages:
             QMessageBox.information(self, "인쇄", "인쇄할 페이지가 없습니다.")

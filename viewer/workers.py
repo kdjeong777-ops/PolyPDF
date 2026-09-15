@@ -790,6 +790,13 @@ class BookmarkerWorker(QObject):
                 except PermissionError as e:
                     last = e
                     _time.sleep(0.15)
+            # 260915-1(§4.7.5): 앱 안의 배경 스레드가 읽는 중이면 바꿔치기만 막힌다 — 제자리로 덮어쓴다
+            try:
+                from viewer.file_overwrite import overwrite_in_place
+                overwrite_in_place(tmp, self.input_pdf)
+                return self.input_pdf
+            except Exception as e:     # noqa: BLE001
+                last = e
             raise RuntimeError(
                 f"'{self.input_pdf.name}' 을(를) 다른 프로그램이 열고 있어 덮어쓸 수 없습니다.\n"
                 "그 PDF 를 연 창(다른 PDF 뷰어 등)을 닫고 다시 시도하거나, "

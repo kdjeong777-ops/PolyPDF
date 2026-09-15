@@ -756,14 +756,25 @@ class EditMixin:
                     mv.set_nav_pages(None)
                 return
             tp = self.page_thumbs
-            if getattr(tp, "_filter", "all") == "all":
+            # 260915-1(마스터 §4.7.7): 저장 전 쪽 이동·삭제가 있으면 본문 넘김도 **썸네일 순서**를
+            #   따른다(지운 쪽은 건너뛴다). 썸네일이 이 창의 문서일 때만.
+            seq = None
+            try:
+                same = (getattr(tp, "_doc", None) is not None
+                        and str(tp._doc.path) == str(mv.current_file()))
+                if same and tp.is_page_dirty():
+                    seq = tp.current_page_sequence()
+            except Exception:
+                seq = None
+            if getattr(tp, "_filter", "all") == "all" and not seq:
                 mv.set_nav_pages(None)
                 return
             n = mv._doc.page_count
-            pages = [p for p in range(n) if tp.page_visible_in_filter(p)]
+            base = seq if seq else range(n)
+            pages = [p for p in base if tp.page_visible_in_filter(p)]
             if not pages:
                 pages = [mv._current_page]   # 빈 필터 → 현재 페이지에 고정
-            mv.set_nav_pages(pages)
+            mv.set_nav_pages(pages, ordered=bool(seq))
         except Exception:
             pass
 

@@ -812,8 +812,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _do_capture(self, view):
         """캡쳐 버튼: 썸네일 다중선택→전체화면 multi, 아니면 현재 모드."""
-        sel_rows = sorted({self.page_thumbs.list.row(it)
-                           for it in self.page_thumbs.list.selectedItems()})
+        # 260915-1: 행이 아니라 **쪽 번호** — 쪽을 옮긴 뒤에는 둘이 다르다
+        sel_rows = self.page_thumbs.selected_pages()
         is_pdf = bool(view.current_file() and str(view.current_file()).lower().endswith(".pdf"))
         if len(sel_rows) >= 2 and is_pdf:
             self._capture_pages(view, sel_rows)       # 다중선택 = 전체화면(모드 무시)
@@ -1938,6 +1938,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.page_thumbs.pageActivated.connect(lambda pg: self.main_view.go_to_page(pg))
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
+        self.page_thumbs.pageOrderChanged.connect(self._on_thumb_order_changed)   # 260915-1(§4.7.7)
         self.page_thumbs.fileBoundaryRequested.connect(            # 260610-1
             lambda d: self._on_file_boundary(d, self._active_pane))
         self.page_thumbs.addBookmarkAtPage.connect(self._on_thumb_add_bookmark)
@@ -2333,7 +2334,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """v1.6.18: 책갈피 편집 저장 완료 → 260606-4: 목록 유지하며 새로고침 + 메인 로드."""
         self.status.showMessage(f"책갈피 저장: {Path(dst).name}", 6000)
         try:
-            self.bookmark_tree.add_or_refresh_file(dst)
+            self.bookmark_tree.add_or_refresh_file(dst, after=src)   # 260915-1(§4.7.5)
         except Exception:
             pass
         try:
@@ -3204,8 +3205,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 물러선 길(줄 바꿔 끼우기)은 되풀이하면 겹쳐 적힌다 — 종전대로 고침을 비운다(§5.2).
         for p in fallback:
             store.clear_page_fixes(cur, p)
-        self._reload_after_text_apply(out, page)
-        notes = [f"글자층을 다시 쓴 쪽: {len(rewritten)}쪽 ({int(stats.get('lines') or 0)}줄)"]
+        self._reload_after_text_apply(out, page, src=cur)
+        notes =[f"글자층을 다시 쓴 쪽: {len(rewritten)}쪽 ({int(stats.get('lines') or 0)}줄)"]
         if fallback:
             notes.append(f"고친 줄만 바꿔 끼운 쪽: {self._page_list_text(fallback)}")
         reasons = stats.get("reasons") or {}
@@ -3227,7 +3228,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         head = ", ".join(str(p) for p in ps[:10])
         return head + (f" 외 {len(ps) - 10}" if len(ps) > 10 else "") + "쪽"
 
-    def _reload_after_text_apply(self, path, page: int):
+    def _reload_after_text_apply(self, path, page: int, src=None):
         """반영 뒤 다시 읽기 — **보던 쪽으로**, 작업공간은 그대로(SOT §5.2).
 
         260913-4: 종전 `open_pdf` 는 작업공간(폴더 트리)을 비우고 첫 쪽으로 갔다. 쪽 편집 저장
@@ -3238,7 +3239,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             #   덮으므로 신호를 막고 예약도 지운다(우클릭 선택과 같은 방식, bookmark_tree).
             bt.tree.blockSignals(True)
             try:
-                bt.add_or_refresh_file(str(path))
+                bt.add_or_refresh_file(str(path), after=str(src) if src else None)
             finally:
                 bt.tree.blockSignals(False)
             bt._pending_nav = None
@@ -3440,6 +3441,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             return False
 
+    def _on_thumb_order_changed(self):
+        """260915-1(§4.7.7): 썸네일 쪽 순서가 바뀜(미저장) — 본문 넘김 순서를 맞추고, 본문에 떠 있는
+        쪽이 지워졌으면 옮긴 순서의 가까운 쪽으로 간다."""
+        self._push_nav_filter()
+        try:
+            mv = self.main_view
+            if mv and mv._doc is not None and self.page_thumbs.row_of_page(mv.current_page()) >= 0:
+                if len(self.page_thumbs.list.selectedItems()) <= 1:
+                    self.page_thumbs.select_page(mv.current_page())
+        except Exception:
+            pass
+
     def _page_edits_dirty(self) -> bool:
         """260821: 썸네일 페이지 삭제/이동 미저장 여부(💾 저장 통합용)."""
         try:
@@ -3465,59 +3478,64 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 return d, False
         return d, False
 
+    SAVE_REPLACE_TRIES = 4                           # 바꿔치기 재시도(약 0.6초) — 그 뒤는 제자리 덮어쓰기
+
     def _finalize_save(self, src, produced, shift=None) -> str:
         """260822: 편집 저장 산출물(produced 임시 PDF)을 목적지에 배치.
         기본=원본 덮어쓰기(열린 핸들 닫고 교체), Shift+저장=`_edited`(충돌 시 (k)).
-        최종 경로(str) 반환. 로드는 호출측이 수행."""
+        최종 경로(str) 반환. 로드·책갈피창 갱신은 호출측이 수행(§4.7.5)."""
         from pathlib import Path as _P
         import os as _os
         if shift is None:
             shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         src = _P(src); produced = _P(produced)
         dst, overwrite = self._edit_save_dst(src, shift)
-        try:
-            if overwrite:
-                self._close_main_view_doc()          # 원본 잠금 해제(뷰어·썸네일 핸들)
+        if not overwrite:
+            _os.replace(str(produced), str(dst))
+            return str(dst)
+        self._close_main_view_doc()                  # 원본 잠금 해제(뷰어·썸네일·표 찾기 핸들)
+        QApplication.processEvents()
+        # 260908-1: 핸들이 풀리는 데 시간이 걸릴 수 있어(백신 검사·썸네일 정리) 짧게 다시 시도한다.
+        import time as _t
+        last = None
+        for _i in range(self.SAVE_REPLACE_TRIES):
+            try:
+                _os.replace(str(produced), str(dst))
+                return str(dst)
+            except Exception as e:                   # noqa: BLE001
+                last = e
+                if _i == 0:
+                    # 260913-4: 참조 순환에 갇혀 아직 안 닫힌 핸들이 있으면 풀린다. 실패 때만.
+                    import gc as _gc
+                    _gc.collect()
                 QApplication.processEvents()
-            # 260908-1(사용자 보고 "저장하면 원본에 안 들어간다"): 핸들이 풀리는 데
-            #   시간이 걸릴 수 있다(백신 검사·썸네일 정리). 한 번 실패했다고 곧바로
-            #   `_edited` 로 새 파일을 만들면 사용자는 원본이 안 바뀐 것만 본다.
-            #   짧게 여러 번 다시 시도한다.
-            import time as _t
-            last = None
-            for _i in range(12):                     # 약 1.8초
-                try:
-                    _os.replace(str(produced), str(dst))
-                    last = None
-                    break
-                except Exception as e:               # noqa: BLE001
-                    last = e
-                    if _i == 0:
-                        # 260913-4(§4.7.5): 참조 순환에 갇혀 아직 안 닫힌 핸들이 있으면 풀린다
-                        #   (실측: 텍스트 창 표 찾기 핸들이 그렇게 원본을 잠갔다). 실패 때만.
-                        import gc as _gc
-                        _gc.collect()
-                    QApplication.processEvents()
-                    _t.sleep(0.15)
-            if last is not None:
-                raise last
+                _t.sleep(0.15)
+        # 260915-1(사용자 보고 "지금도 마찬가지로 발생"): 배경 스레드(색인·목록 조사·텍스트 창
+        #   작업)가 원본을 읽고 있으면 UI 가 그 핸들을 닫을 수 없어 바꿔치기가 끝내 거부된다.
+        #   그런 핸들은 쓰기 공유를 허용하므로 **같은 파일에 제자리로** 덮어쓴다(백업·되돌리기 포함).
+        try:
+            from viewer.file_overwrite import overwrite_in_place
+            overwrite_in_place(produced, dst)
+            return str(dst)
         except Exception as e:                       # noqa: BLE001
-            # 끝내 못 덮어썼다 → `_edited` 로 저장하고 **그 사실을 알린다**.
-            #   종전에는 조용히 폴백해, 원본이 안 바뀐 이유를 알 수 없었다.
-            fb, _ = self._edit_save_dst(src, True)
-            _os.replace(str(produced), str(fb))
-            dst = fb
-            if overwrite:
-                try:
-                    QMessageBox.warning(
-                        self, "저장",
-                        f"원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n\n"
-                        f"저장한 파일: {fb.name}\n원본: {src.name}\n\n"
-                        f"원인: {e}\n\n"
-                        "다른 프로그램이 원본을 열고 있으면 닫은 뒤 다시 저장해 주세요.")
-                except Exception:
-                    pass
-        return str(dst)
+            last = e
+        # 그래도 안 되면(다른 프로그램이 쓰기를 막고 열었거나 읽기 전용) `_edited` 로 저장하고
+        #   **알린다**. 알림은 호출측이 책갈피창을 갱신하고 새 파일로 옮긴 **뒤에** 뜨게 미룬다.
+        fb, _ = self._edit_save_dst(src, True)
+        _os.replace(str(produced), str(fb))
+        msg = (f"원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n\n"
+               f"저장한 파일: {fb.name}\n원본: {src.name}\n\n"
+               f"원인: {last}\n\n"
+               "다른 프로그램이 원본을 열고 있거나 읽기 전용이면, 닫거나 해제한 뒤 다시 저장해 주세요.")
+        from PyQt6.QtCore import QTimer
+
+        def _warn():
+            try:
+                QMessageBox.warning(self, "저장", msg)
+            except Exception:
+                pass
+        QTimer.singleShot(0, _warn)
+        return str(fb)
 
     def _page_edit_save(self, src_str: str, bookmarks_raw):
         """260821/260822: 💾 저장 — 썸네일의 페이지 순서/삭제로 PDF 재구성 + 책갈피 remap.
@@ -3600,7 +3618,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         QApplication.restoreOverrideCursor()
         self.status.showMessage(f"페이지 편집 저장: {saved_n}쪽 → {_P(final).name}", 6000)
         try:
-            self.bookmark_tree.add_or_refresh_file(final)
+            # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
+            self.bookmark_tree.add_or_refresh_file(final, after=str(src))
             self._load_main(HistoryItem(final, 0, "", "bookmark"))
             self._index_single_file(_P(final))
         except Exception:

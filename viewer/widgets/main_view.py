@@ -2312,11 +2312,20 @@ class MainView(QWidget):
         return self._fit_mode == self.FIT_PAGE_TWO
 
     # 260609-26: 썸네일 필터로 뷰어 페이지 이동 제한
-    def set_nav_pages(self, pages):
-        """허용 페이지 목록(정렬) 또는 None(전체). 현재 페이지가 빠지면 가까운 허용으로."""
-        self._nav_pages = sorted(int(p) for p in pages) if pages is not None else None
+    def set_nav_pages(self, pages, ordered: bool = False):
+        """허용 페이지 목록(정렬) 또는 None(전체). 현재 페이지가 빠지면 가까운 허용으로.
+
+        260915-1(마스터 §4.7.7): `ordered` 면 **주어진 순서 그대로** 둔다 — 썸네일에서 쪽을 옮기고
+        아직 저장하지 않았을 때, 본문 넘김도 옮긴 순서를 따르게 한다."""
+        if pages is None:
+            self._nav_pages = None
+        else:
+            ps = [int(p) for p in pages]
+            self._nav_pages = ps if ordered else sorted(ps)
+        self._nav_pos = ({p: i for i, p in enumerate(self._nav_pages)}
+                         if self._nav_pages else {})
         if (self._nav_pages is not None and self._doc and not self._is_image
-                and self._current_page not in set(self._nav_pages)):
+                and self._current_page not in self._nav_pos):
             self.go_to_page(self._current_page)   # go_to_page 가 스냅
 
     def _nav_step(self, cur, direction):
@@ -2324,6 +2333,10 @@ class MainView(QWidget):
         if not self._nav_pages:
             nxt = cur + direction
             return nxt if 0 <= nxt < self._doc.page_count else None
+        pos = getattr(self, "_nav_pos", {}).get(cur)
+        if pos is not None:                       # 260915-1: 목록 안이면 **목록 순서로** 한 칸
+            i = pos + direction
+            return self._nav_pages[i] if 0 <= i < len(self._nav_pages) else None
         if direction > 0:
             for p in self._nav_pages:
                 if p > cur:

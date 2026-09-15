@@ -3044,27 +3044,51 @@ class BookmarkTree(QWidget):
         item.setExpanded(False)
         item.setExpanded(True)        # itemExpanded → _on_item_expanded 가 lazy load
 
-    def add_or_refresh_file(self, file_path: str):
-        """기존 트리 목록을 유지한 채 해당 파일 노드를 추가하거나 책갈피를 갱신."""
+    def add_or_refresh_file(self, file_path: str, after: str = None):
+        """기존 트리 목록을 유지한 채 해당 파일 노드를 추가하거나 책갈피를 갱신.
+
+        260915-1(마스터 §4.7.5): `after` = 이 파일을 만든 원본. 원본을 못 덮어써 새 이름으로
+        저장했을 때, 새 노드를 **원본 바로 아래**(같은 부모)에 넣고 원본 노드는 디스크 상태로
+        다시 읽는다 — 편집은 새 파일로 갔으니 원본 노드에 편집한 책갈피가 남아 있으면 안 된다."""
         fp = Path(file_path)
         try:
             fpr = fp.resolve()
         except Exception:
             fpr = None
+
+        def _same(node, p, pr):
+            d = node.data(0, self.DATA_FILE)
+            return bool(d) and (d == str(p) or (pr is not None and Path(d).resolve() == pr))
+
+        anchor = None
         for top in self._iter_file_nodes():         # 260901-2: 트리 보기 포함
-            d = top.data(0, self.DATA_FILE)
-            if d and (d == str(fp) or (fpr is not None and Path(d).resolve() == fpr)):
+            if _same(top, fp, fpr):
                 self._refresh_file_toc(top)
                 self.tree.setCurrentItem(top)
                 self.tree.scrollToItem(top)
                 return
-        # 없으면 새 최상위 파일 노드로 추가(기존 목록은 그대로)
+            if after and anchor is None:
+                try:
+                    if _same(top, Path(after), Path(after).resolve()):
+                        anchor = top
+                except Exception:
+                    pass
+        # 없으면 새 파일 노드로 추가(기존 목록은 그대로) — 원본이 있으면 그 바로 아래, 없으면 맨 끝
         item = QTreeWidgetItem([fp.stem])
         item.setData(0, self.DATA_FILE, str(fp))
         item.setData(0, self.DATA_PAGE, 0)
         item.setIcon(0, self._leaf_icon())          # 260902-5: 파일 표식
         self._attach_toc_placeholder(item, fp)
-        self.tree.addTopLevelItem(item)
+        if anchor is not None:
+            self._refresh_file_toc(anchor)
+            anchor.setExpanded(False)
+            par = anchor.parent()
+            if par is not None:
+                par.insertChild(par.indexOfChild(anchor) + 1, item)
+            else:
+                self.tree.insertTopLevelItem(self.tree.indexOfTopLevelItem(anchor) + 1, item)
+        else:
+            self.tree.addTopLevelItem(item)
         if self._mode == "flat" and fp not in self._pdfs_flat:
             self._pdfs_flat.append(fp)
         item.setExpanded(True)

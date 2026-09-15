@@ -35,6 +35,7 @@ class PageThumbs(QWidget):
     screenshotPagesRequested = pyqtSignal(object)  # 260616-21: 선택 페이지 스크린샷으로 복사
     copyPagesRequested = pyqtSignal(object)        # 260821: 선택 썸네일 복사(이 문서 0-based)
     pastePagesRequested = pyqtSignal(int)          # 260821: 붙여넣기(기준 표시행 뒤에 삽입)
+    pageOrderChanged = pyqtSignal()                # 260915-1: 쪽 이동·삭제·끌어 놓기·붙여넣기(미저장 순서 변경)
 
     THUMB_DPI = 48
     NUM_BAND = 18           # 260606-26: 썸네일 하단 페이지번호 띠 높이
@@ -66,6 +67,13 @@ class PageThumbs(QWidget):
         self._render_timer.setSingleShot(True)
         self._render_timer.setInterval(16)    # 260611-12: 80→16ms(한 프레임) — 더 빨리 표시
         self._render_timer.timeout.connect(self._render_visible)
+        # 260915-1(마스터 §4.7.7): 목록 순서가 바뀌면(Alt+↑/↓·Delete·끌어 놓기·붙여넣기) 한 번만 알린다.
+        #   끌어 놓기는 Qt 가 행을 넣고 지우는 신호로만 알 수 있어 모델 신호를 모은다.
+        #   간격 0 타이머는 쓰지 않는다(응답성 SOT §6) — 한 번만 예약하는 깃발로 모은다.
+        self._order_pending = False
+        _m = self.list.model()
+        for _sig in (_m.rowsMoved, _m.rowsInserted, _m.rowsRemoved):
+            _sig.connect(self._schedule_order_changed)
 
     # 260906-7: 한 번에 붙잡는 시간 상한(ms) — 넘기면 남은 썸네일은 다음 틱으로.
     RENDER_SLICE_MS = 30
@@ -154,6 +162,39 @@ class PageThumbs(QWidget):
             p = self.list.item(i).data(Qt.ItemDataRole.UserRole)
             if isinstance(p, int):
                 out.append(p)
+        return out
+
+    def _schedule_order_changed(self, *_a):
+        if self._order_pending:
+            return
+        self._order_pending = True
+        QTimer.singleShot(0, self._emit_order_changed)
+
+    def _emit_order_changed(self):
+        self._order_pending = False
+        self.pageOrderChanged.emit()
+
+    def row_of_page(self, page_index: int) -> int:
+        """260915-1: 이 문서 쪽(0-based)이 **지금 목록의 몇째 행**인지. 없으면(삭제) -1.
+
+        쪽을 옮기거나 지우면 행 번호와 쪽 번호가 달라진다 — 행을 쪽으로 쓰면 본문과 썸네일이
+        서로 다른 쪽을 가리킨다(260915-1 사용자 보고 '이동이 제대로 적용되지 않고 이상하게 보여')."""
+        n = self.list.count()
+        if 0 <= page_index < n and self.list.item(page_index).data(Qt.ItemDataRole.UserRole) == page_index:
+            return page_index                    # 순서가 그대로면 곧바로
+        for i in range(n):
+            if self.list.item(i).data(Qt.ItemDataRole.UserRole) == page_index:
+                return i
+        return -1
+
+    def selected_pages(self) -> list:
+        """260915-1: 고른 썸네일의 **이 문서 쪽 번호**(0-based, 목록 순서). 붙여넣기 항목은 뺀다."""
+        out = []
+        for i in range(self.list.count()):
+            it = self.list.item(i)
+            v = it.data(Qt.ItemDataRole.UserRole)
+            if it.isSelected() and isinstance(v, int):
+                out.append(v)
         return out
 
     def current_page_plan(self) -> list:
@@ -252,20 +293,38 @@ class PageThumbs(QWidget):
         rows = sorted(self.list.row(it) for it in self.list.selectedItems())
         if not rows:
             return
+        cur = self.list.currentItem()
+        moved = []
         if direction < 0:
             if rows[0] <= 0:
                 return
             for r in rows:
                 it = self.list.takeItem(r)
                 self.list.insertItem(r - 1, it)
-                it.setSelected(True)
+                moved.append(it)
         else:
             if rows[-1] >= self.list.count() - 1:
                 return
             for r in reversed(rows):
                 it = self.list.takeItem(r)
                 self.list.insertItem(r + 1, it)
+                moved.append(it)
+        # 260915-1: take/insert 는 선택과 **현재 항목(커서)** 을 흩뜨린다 — 커서가 옛 행에 남으면
+        #   다음 Alt+↑/↓·클릭이 엉뚱한 쪽을 가리킨다. 옮긴 것들을 고르고 커서도 따라가게 한다.
+        from PyQt6.QtCore import QItemSelectionModel
+        keep = cur if cur in moved else (moved[0] if moved else None)
+        self.list.blockSignals(True)
+        try:
+            self.list.clearSelection()
+            for it in moved:
                 it.setSelected(True)
+            if keep is not None:
+                self.list.selectionModel().setCurrentIndex(
+                    self.list.indexFromItem(keep), QItemSelectionModel.SelectionFlag.NoUpdate)
+        finally:
+            self.list.blockSignals(False)
+        if keep is not None:
+            self.list.scrollToItem(keep)
         self._render_timer.start()
 
     def _delete_selected(self):
@@ -571,17 +630,19 @@ class PageThumbs(QWidget):
         단, 사용자가 Shift/Ctrl 로 여러 썸네일을 선택 중이면 그 선택을 지우지 않고
         현재 항목(포커스)만 이동(NoUpdate). 과거 setCurrentRow 가 다중선택을 매번
         초기화해 Shift 연속선택이 풀리고 Ctrl 선택이 버벅이던 문제 수정."""
-        if not (0 <= page_index < self.list.count()):
+        # 260915-1: 쪽 번호를 **행으로 바꿔** 쓴다 — 쪽을 옮기거나 지운 뒤에는 둘이 다르다.
+        row = self.row_of_page(int(page_index))
+        if row < 0:
             return
         from PyQt6.QtCore import QItemSelectionModel
         self.list.blockSignals(True)
         if len(self.list.selectedItems()) > 1:
-            idx = self.list.model().index(page_index, 0)
+            idx = self.list.model().index(row, 0)
             self.list.selectionModel().setCurrentIndex(
                 idx, QItemSelectionModel.SelectionFlag.NoUpdate)   # 선택 유지·포커스만 이동
         else:
-            self.list.setCurrentRow(page_index)                    # 단일: 기존대로 현재 페이지 강조
-        self.list.scrollToItem(self.list.item(page_index))
+            self.list.setCurrentRow(row)                           # 단일: 기존대로 현재 페이지 강조
+        self.list.scrollToItem(self.list.item(row))
         self.list.blockSignals(False)
 
     def _render_visible(self):
