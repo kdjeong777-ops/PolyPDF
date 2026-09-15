@@ -3749,12 +3749,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260915-1(사용자 보고 "지금도 마찬가지로 발생"): 배경 스레드(색인·목록 조사·텍스트 창
         #   작업)가 원본을 읽고 있으면 UI 가 그 핸들을 닫을 수 없어 바꿔치기가 끝내 거부된다.
         #   그런 핸들은 쓰기 공유를 허용하므로 **같은 파일에 제자리로** 덮어쓴다(백업·되돌리기 포함).
-        try:
-            from viewer.file_overwrite import overwrite_in_place
-            overwrite_in_place(produced, dst)
+        #   ★ 260915-8(응답성 SOT §4.4): 제자리 쓰기는 **배경 스레드 + 진행창**에서 한다 — 실측 232MB 에
+        #   3~7초(기존 파일 위에 쓰기라 복사보다 훨씬 느리다)라 메인에서 하면 그대로 창이 멈춘다.
+        #   진행창은 0.3초가 넘을 때만 보인다. 쓰는 도중 취소는 받지 않는다(원본이 반쯤 쓰인 채 남는다).
+        from viewer.file_overwrite import overwrite_in_place
+
+        def _job(progress, _p=produced, _d=dst):
+            progress(0, 1, f"원본에 쓰는 중: {_d.name}")
+            overwrite_in_place(_p, _d)
+            progress(1, 1, "완료")
+        res = self._run_merge_job(_job, "원본에 저장", cancellable=False)
+        if res.get("ok"):
             return str(dst)
-        except Exception as e:                       # noqa: BLE001
-            last = e
+        last = RuntimeError(res.get("err") or "제자리 덮어쓰기 실패")
         # 그래도 안 되면(다른 프로그램이 쓰기를 막고 열었거나 읽기 전용) `_edited` 로 저장하고
         #   **알린다**. 알림은 호출측이 책갈피창을 갱신하고 새 파일로 옮긴 **뒤에** 뜨게 미룬다.
         fb, _ = self._edit_save_dst(src, True)
@@ -4141,11 +4148,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             _select()                                   # 목록이 이미 다 찼다(동기 경로)
         return True
 
-    def _run_merge_job(self, job, title):
+    def _run_merge_job(self, job, title, cancellable=True):
         """260611-33: job(progress)을 _MergeThread 로 실행. 모달 진행창으로 응답성 유지.
-        반환: {ok, err, cancelled}."""
+        반환: {ok, err, cancelled}. `cancellable=False` 면 취소 버튼을 두지 않는다(도중에 멈추면
+        안 되는 일 — 원본 제자리 쓰기, 260915-8)."""
         from PyQt6.QtWidgets import QProgressDialog
         prog = QProgressDialog("준비 중…", "취소", 0, 100, self)
+        if not cancellable:
+            prog.setCancelButton(None)
         prog.setWindowTitle(title)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(300)

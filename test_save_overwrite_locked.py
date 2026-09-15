@@ -145,6 +145,54 @@ try:
     # 단독 실행 약 1초, 전체 검사 중 부하에서 4.5초를 봤다 — 재시도가 길어지는 퇴행만 잡는다
     chk(took < 8.0, "B 저장이 오래 멈추지 않는다", "%.2fs" % took)
 
+    # ── B2. 제자리 쓰기 동안 창이 멈추지 않는다(260915-8, 응답성 SOT §2·§4.4) ─────────
+    #   실측 232MB 제자리 쓰기 3~7초 — 메인에서 하면 그대로 정지다. 느린 디스크를 **2초 지연**으로 흉내 내
+    #   하트비트 최장 간격을 잰다(메인에서 쓰면 ≥2초, 배경 스레드면 짧다 — 수정 전 코드로 실패 확인).
+    from PyQt6.QtCore import QTimer, QElapsedTimer
+    from viewer import file_overwrite as _fo
+    make_pdf(root / "SLOW.pdf")
+    src_b = root / "SLOW.pdf"
+    mw.open_folder(root); spin(20)
+    mw._load_main(HistoryItem(str(src_b), 0, "", "bookmark")); spin(10)
+    if not mw._in_edit():
+        bt.btn_edit.setChecked(True); spin(4)
+    pt.list.clearSelection(); pt.list.item(1).setSelected(True); pt._delete_selected()
+    bt.tree.setCurrentItem(node_of(src_b)); spin(2)
+    stop2 = threading.Event()
+
+    def holder2():
+        dd = fitz.open(str(src_b)); dd.load_page(0).get_text(); stop2.wait(30); dd.close()
+    th2 = threading.Thread(target=holder2); th2.start(); time.sleep(0.3)
+    real_ow = _fo.overwrite_in_place
+    span = {}
+
+    def slow_ow(new_file, dst):
+        span["t0"] = clock.elapsed()
+        time.sleep(2.0)                                  # 느린 디스크
+        real_ow(new_file, dst)
+        span["t1"] = clock.elapsed()
+    gaps = []
+    clock = QElapsedTimer(); clock.start()
+    last = {"t": None}
+
+    def beat():
+        now = clock.elapsed()
+        if last["t"] is not None:
+            gaps.append((last["t"], now))
+        last["t"] = now
+    hb = QTimer(); hb.setInterval(50); hb.timeout.connect(beat); hb.start()
+    _fo.overwrite_in_place = slow_ow
+    try:
+        bt._op_save()
+    finally:
+        _fo.overwrite_in_place = real_ow
+        stop2.set(); th2.join(); hb.stop()
+    spin(10)
+    chk(pages(src_b) == 7 and "t1" in span, "B2 느린 디스크여도 제자리로 저장된다", str(pages(src_b)))
+    inside = [b - a for a, b in gaps if "t0" in span and b > span["t0"] and a < span.get("t1", 0)]
+    worst = max(inside) if inside else 99999
+    chk(worst < 700, "B2 제자리 쓰기 동안 창이 멈추지 않는다(하트비트 최장 간격)", "%dms" % worst)
+
     # ── C. 부득이 새 파일 — 다른 프로그램이 쓰기를 막고 연 원본 ─────────────────
     msgs.clear()
     open_and_edit()
