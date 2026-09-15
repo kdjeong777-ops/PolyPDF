@@ -1939,6 +1939,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
         self.page_thumbs.pageOrderChanged.connect(self._on_thumb_order_changed)   # 260915-1(§4.7.7)
+        # 260915-2(§4.7.8): 다른 PolyPDF 창과 '이 PDF 를 놓아 달라' 를 주고받는 통로
+        try:
+            from viewer.instance_link import InstanceLink
+            self._instance_link = InstanceLink(self._on_instance_request, self)
+        except Exception:
+            self._instance_link = None
         self.page_thumbs.fileBoundaryRequested.connect(            # 260610-1
             lambda d: self._on_file_boundary(d, self._active_pane))
         self.page_thumbs.addBookmarkAtPage.connect(self._on_thumb_add_bookmark)
@@ -3192,7 +3198,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 out = str(self._finalize_save(cur, tmp))
             except Exception as e:               # noqa: BLE001
                 QApplication.restoreOverrideCursor()
-                QMessageBox.warning(self, "PDF 에 반영", f"실패: {e}")
+                from viewer.file_overwrite import SaveCancelled
+                if isinstance(e, SaveCancelled):    # 260915-2: 사용자가 취소 — 고침은 남는다
+                    self.status.showMessage(str(e), 5000)
+                else:
+                    QMessageBox.warning(self, "PDF 에 반영", f"실패: {e}")
                 self._reload_after_text_apply(cur, page)
                 return
         finally:
@@ -3478,7 +3488,80 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 return d, False
         return d, False
 
-    SAVE_REPLACE_TRIES = 4                           # 바꿔치기 재시도(약 0.6초) — 그 뒤는 제자리 덮어쓰기
+    # ── 260915-2(§4.7.8): 다른 PolyPDF 창과의 핸드셰이크 ─────────────────
+    def _on_instance_request(self, op, path, page=None) -> dict:
+        """다른 창의 요청 처리 — query(열고 있나·미저장 편집) / release(놓기) / reload(다시 열기)."""
+        from viewer.instance_link import same_file
+        panes = [(i, mv) for i, mv in enumerate(getattr(self, "_mv", []))
+                 if mv.current_file() and same_file(mv.current_file(), path)]
+        if op == "query":
+            if not panes:
+                return {"open": False}
+            dirty = bool(self._in_edit() and (
+                getattr(self, "_edit_dirty", False) or self._page_edits_dirty()
+                or getattr(self.bookmark_tree, "_dirty", False)))
+            return {"open": True, "dirty": dirty, "title": self.windowTitle()}
+        if op == "release":
+            if not panes:
+                return {"ok": True, "page": 0}
+            if self._on_instance_request("query", path).get("dirty"):
+                return {"ok": False, "dirty": True}
+            i, mv = next(((i, mv) for i, mv in panes if i == self._active_pane), panes[0])
+            pg = int(mv.current_page())
+            self._peer_released = {"path": str(path), "pane": i, "page": pg}
+            self._close_main_view_doc()
+            QApplication.processEvents()
+            self.status.showMessage(
+                f"다른 PolyPDF 창이 '{Path(path).name}' 을(를) 저장하는 동안 닫았습니다.", 8000)
+            return {"ok": True, "page": pg}
+        if op == "reload":
+            st = getattr(self, "_peer_released", None)
+            self._peer_released = None
+            if st and same_file(st["path"], path) and Path(path).exists():
+                from PyQt6.QtCore import QTimer
+
+                def _reopen():
+                    try:
+                        if getattr(self, "_split_on", False):
+                            self._set_active_pane(st["pane"])
+                        self._load_main(HistoryItem(str(path), int(page or st["page"]), "", "bookmark"))
+                        self.status.showMessage(f"'{Path(path).name}' 을(를) 다시 열었습니다(저장됨).", 6000)
+                    except Exception:
+                        pass
+                QTimer.singleShot(0, _reopen)          # 응답을 먼저 보내고 연다
+            return {"ok": True}
+        return {"error": f"알 수 없는 요청: {op}"}
+
+    def _ask_peer_release(self, name: str, holders: list) -> str:
+        """다른 창이 열고 있을 때 묻는다 → "release" / "rename" / "cancel". 검사가 바꿔 끼울 수 있게 따로."""
+        dirty = any(h.get("dirty") for h in holders)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning if dirty else QMessageBox.Icon.Question)
+        box.setWindowTitle("다른 PolyPDF 창에서 열려 있음")
+        n = len(holders)
+        head = (f"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n\n"
+                "그 창이 파일을 읽는 동안 덮어쓰면, 그 창은 바뀐 파일을 옛 상태로 읽어 화면이 깨지거나 "
+                "오류가 날 수 있습니다.")
+        if dirty:
+            box.setText(head + "\n\n그 창에 이 파일의 저장하지 않은 편집이 있어 닫을 수 없습니다.\n"
+                        "그 창에서 편집을 저장하거나 되돌린 뒤 다시 저장하거나, 새 이름으로 저장하세요.")
+            b_rel = None
+        else:
+            box.setText(head + "\n\n그 창에서 파일을 잠시 닫고 저장한 뒤, 그 창은 보던 쪽으로 다시 엽니다.")
+            b_rel = box.addButton("닫고 저장", QMessageBox.ButtonRole.AcceptRole)
+        b_new = box.addButton("새 이름으로 저장", QMessageBox.ButtonRole.ActionRole)
+        b_no = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_rel or b_new)
+        box.setEscapeButton(b_no)
+        box.exec()
+        c = box.clickedButton()
+        if b_rel is not None and c is b_rel:
+            return "release"
+        if c is b_new:
+            return "rename"
+        return "cancel"
+
+    SAVE_REPLACE_TRIES = 4                          # 바꿔치기 재시도(약 0.6초) — 그 뒤는 제자리 덮어쓰기
 
     def _finalize_save(self, src, produced, shift=None) -> str:
         """260822: 편집 저장 산출물(produced 임시 PDF)을 목적지에 배치.
@@ -3492,7 +3575,48 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         dst, overwrite = self._edit_save_dst(src, shift)
         if not overwrite:
             _os.replace(str(produced), str(dst))
+            # 260915-2: 새 파일로 저장해도 썸네일의 편집 목록을 비운다 — 안 그러면 호출측이 새 파일을
+            #   열 때 '저장하지 않은 쪽 편집이 있다' 고 다시 묻는다(방금 저장했는데).
+            self._close_main_view_doc()
             return str(dst)
+        # 260915-2(§4.7.8, 사용자 지시): 다른 PolyPDF 창이 같은 PDF 를 보고 있으면 설명하고 묻는다 —
+        #   [닫고 저장] 그 창이 놓게 한 뒤 저장하고 보던 쪽으로 다시 열게 / [새 이름으로 저장] / [취소].
+        #   그 창에 저장 안 한 편집이 있으면 [닫고 저장] 은 없다(그 창 편집 보호).
+        link = getattr(self, "_instance_link", None)
+        released = []
+        if link is not None:
+            try:
+                holders = link.holders(dst)
+            except Exception:
+                holders = []
+            if holders:
+                choice = self._ask_peer_release(dst.name, holders)
+                if choice == "cancel":
+                    try:
+                        produced.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    from viewer.file_overwrite import SaveCancelled
+                    raise SaveCancelled("저장을 취소했습니다 — 원본은 그대로입니다.")
+                if choice == "rename":
+                    fb, _ = self._edit_save_dst(src, True)
+                    _os.replace(str(produced), str(fb))
+                    self._close_main_view_doc()      # 위 Shift 저장과 같은 이유
+                    return str(fb)
+                released = link.release(holders, dst)
+        try:
+            return self._place_over_original(src, produced, dst)
+        finally:
+            if released:
+                try:
+                    link.reload(released, dst)
+                except Exception:
+                    pass
+
+    def _place_over_original(self, src, produced, dst) -> str:
+        """원본 자리에 놓기 — 바꿔치기 → 제자리 덮어쓰기 → `_edited`(§4.7.5)."""
+        from pathlib import Path as _P
+        import os as _os
         self._close_main_view_doc()                  # 원본 잠금 해제(뷰어·썸네일·표 찾기 핸들)
         QApplication.processEvents()
         # 260908-1: 핸들이 풀리는 데 시간이 걸릴 수 있어(백신 검사·썸네일 정리) 짧게 다시 시도한다.
@@ -3613,6 +3737,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                         _os.remove(str(t))
                 except Exception:
                     pass
+            from viewer.file_overwrite import SaveCancelled
+            if isinstance(e, SaveCancelled):          # 260915-2: 사용자가 취소 — 편집은 그대로 남는다
+                self.status.showMessage(str(e), 5000)
+                return
             QMessageBox.warning(self, "페이지 편집 저장 실패", str(e))
             return
         QApplication.restoreOverrideCursor()
@@ -3722,6 +3850,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                      if p and str(p).lower().endswith((".png", ".jpg", ".jpeg"))]
         except Exception:
             pass
+        if not preselected:
+            # 260915-2(§4.8.1, 사용자 지시): 도구 모음·메뉴의 'PDF병합' 도 책갈피창에서 **여러 파일을
+            #   골라 둔 상태**면 그 파일들을 오른쪽(병합 대상)에 넣는다. 종전에는 우클릭 메뉴만 넣었다.
+            try:
+                sel = self.bookmark_tree.selected_file_paths()
+                preselected = sel if len(sel) >= 2 else None
+            except Exception:
+                preselected = None
         pre = [p for p in (preselected or []) if p and str(p).lower().endswith(".pdf")]
         from viewer.widgets.merge_dialog import MergeFilesDialog
         dlg = MergeFilesDialog(all_files, pre, shots, self,
@@ -3790,17 +3926,84 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from PyQt6.QtCore import QTimer
 
         def _post_merge():
+            # 260915-2(§4.8.3, 사용자 지시): 책갈피창 폴더(하위 폴더 포함)에 저장됐으면 폴더를 다시
+            #   읽고 새 파일을 골라 본문에 연다 — 완료창은 띄우지 않는다. 그 밖의 폴더면 종전대로.
+            def _after_shown():
+                self._index_single_file(out)        # 백그라운드
+                # 260606-24: 책갈피는 병합 시 원본별로 이미 임베드 → auto면 '단어장'만 생성
+                if auto:
+                    self._action_build_study()      # 백그라운드(확인창) — 새 파일이 열린 뒤
+            if self._reveal_created_file(out, then=_after_shown):
+                self.status.showMessage(f"병합 완료 → {Path(out).name} (책갈피창에서 선택)", 6000)
+                return
             try:
                 self.bookmark_tree.add_or_refresh_file(out)
             except Exception:
                 pass
             self._index_single_file(out)        # 백그라운드
-            # 260606-24: 책갈피는 병합 시 원본별로 이미 임베드 → auto면 '단어장'만 생성
             if auto:
                 self._action_build_study()      # 백그라운드(확인창)
             # 260825-5: 생성 종료 후 '파일 열기(별도 새 창·기본)/폴더 열기' 선택
             self._after_pdf_created(out)
         QTimer.singleShot(0, _post_merge)
+
+    def _reveal_created_file(self, path, then=None) -> bool:
+        """260915-2(§4.8.3): 새로 만든 PDF 가 **책갈피창 폴더 안**(하위 폴더 포함)이면 폴더를 다시 읽고
+        그 파일을 골라 본문에 연다. 해당하면 True(끝나면 `then()`), 아니면 False(아무것도 안 함).
+
+        책갈피창에 저장하지 않은 편집이 있으면 다시 읽지 않고(편집이 사라진다) 노드만 넣는다.
+        폴더 목록은 비동기로 채워질 수 있어(`filesListed`) 채워진 뒤에 고른다."""
+        bt = self.bookmark_tree
+        root = getattr(bt, "_root_dir", None)
+        try:
+            p = Path(path).resolve()
+            if not root or not p.exists():
+                return False
+            p.relative_to(Path(root).resolve())
+        except Exception:
+            return False
+
+        def _find():
+            from viewer.pathutil import norm_key
+            k = norm_key(str(p))
+            for n in bt._iter_file_nodes():
+                d = n.data(0, bt.DATA_FILE)
+                if d and norm_key(str(d)) == k:
+                    return n
+            return None
+
+        done = {"v": False}
+
+        def _select():
+            if done["v"]:
+                return
+            done["v"] = True
+            try:
+                bt.filesListed.disconnect(_select)
+            except Exception:
+                pass
+            node = _find()
+            try:
+                if node is None:
+                    bt.add_or_refresh_file(str(path))
+                else:
+                    bt.tree.setCurrentItem(node)
+                    bt.tree.scrollToItem(node)          # 접힌 폴더는 펼쳐서 보인다
+                bt._pending_nav = None
+                self._load_main(HistoryItem(str(path), 0, "", "bookmark"))
+            except Exception:
+                pass
+            if then is not None:
+                then()
+
+        if getattr(bt, "_dirty", False):
+            _select()
+            return True
+        bt.filesListed.connect(_select)
+        bt.load_folder(Path(root))
+        if bt._mode == "json" or _find() is not None:
+            _select()                                   # 목록이 이미 다 찼다(동기 경로)
+        return True
 
     def _run_merge_job(self, job, title):
         """260611-33: job(progress)을 _MergeThread 로 실행. 모달 진행창으로 응답성 유지.
@@ -7534,6 +7737,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 QApplication.processEvents()
                 _r.stop()                      # stdin 'q' → moov 정상 마감(최대 8초 대기)
                 self._rec = None
+        except Exception:
+            pass
+
+        try:
+            if getattr(self, "_instance_link", None) is not None:
+                self._instance_link.close()      # 260915-2(§4.7.8): 다른 창이 더는 찾지 않게
         except Exception:
             pass
 

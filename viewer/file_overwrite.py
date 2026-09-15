@@ -23,6 +23,10 @@ from pathlib import Path
 CHUNK = 4 << 20
 
 
+class SaveCancelled(Exception):
+    """260915-2(§4.7.8): 사용자가 저장을 취소했다 — 호출측은 오류로 알리지 않는다."""
+
+
 def backup_path(dst) -> Path:
     dst = Path(dst)
     return dst.with_name("~" + dst.name + ".polypdf-bak")

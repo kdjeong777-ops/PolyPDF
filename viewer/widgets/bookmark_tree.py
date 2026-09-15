@@ -3279,6 +3279,9 @@ class BookmarkTree(QWidget):
                 import os as _os
                 _os.replace(str(out), str(_dst)); out = str(_dst)
         except Exception as e:
+            from viewer.file_overwrite import SaveCancelled
+            if isinstance(e, SaveCancelled):          # 260915-2: 사용자가 취소 — 편집은 그대로 남는다
+                return
             QMessageBox.warning(self, "저장 실패", str(e))
             return
         self._dirty = False

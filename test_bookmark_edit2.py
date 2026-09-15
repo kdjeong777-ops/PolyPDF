@@ -151,7 +151,8 @@ try:
 
     # ── ⑦⑧⑨ 배선 확인 ──────────────────────────────────────────────────
     from viewer.app import MainWindow
-    fin = inspect.getsource(MainWindow._finalize_save)
+    # 260915-2: 원본 자리에 놓는 순서는 `_place_over_original` 로 옮겼다(§4.7.5·§4.7.8)
+    fin = inspect.getsource(MainWindow._finalize_save) + inspect.getsource(MainWindow._place_over_original)
     chk("for _i in range(" in fin and "sleep" in fin,
         "⑦ 원본 덮어쓰기를 여러 번 다시 시도한다(핸들이 늦게 풀려도)")
     chk("QMessageBox.warning" in fin,

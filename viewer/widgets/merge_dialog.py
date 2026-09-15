@@ -11,10 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QDialogButtonBox, QAbstractItemView, QCheckBox,
-    QComboBox,
+    QComboBox, QWidget, QSizePolicy,
 )
 
 SHOTS_NAME = "사용자 스크린샷"
@@ -48,6 +49,141 @@ class _DropList(QListWidget):
             super().dropEvent(e)
 
 
+class FilePreview(QWidget):
+    """260915-2(마스터 §4.8.2): 병합 창 오른쪽 — 고른 파일 하나를 쪽 넘김으로 미리 본다.
+
+    PDF 는 문서를 **하나만** 열어 두고(쪽을 넘길 때마다 다시 열지 않게) 대상이 바뀌거나 창이 닫히면
+    곧바로 닫는다 — 병합 뒤 원본 저장을 막지 않게(§4.7.5). 스크린샷 묶음은 이미지를 차례로 보인다."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._key = None            # 지금 보이는 대상(경로 또는 이미지 목록)
+        self._doc = None            # 열린 fitz 문서(PDF 일 때)
+        self._images = None         # 스크린샷 경로 목록(이미지일 때)
+        self._page = 0
+        self._count = 0
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        self.lbl_title = QLabel("미리보기")
+        self.lbl_title.setWordWrap(True)
+        v.addWidget(self.lbl_title)
+        self.canvas = QLabel()
+        self.canvas.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.canvas.setMinimumSize(240, 300)
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.canvas.setStyleSheet("QLabel{border:1px solid palette(mid);}")
+        v.addWidget(self.canvas, 1)
+        nav = QHBoxLayout()
+        self.btn_prev = QPushButton("◀"); self.btn_prev.setFixedWidth(40)
+        self.btn_next = QPushButton("▶"); self.btn_next.setFixedWidth(40)
+        self.lbl_page = QLabel("")
+        self.lbl_page.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.btn_prev.clicked.connect(lambda: self.step(-1))
+        self.btn_next.clicked.connect(lambda: self.step(+1))
+        nav.addWidget(self.btn_prev); nav.addWidget(self.lbl_page, 1); nav.addWidget(self.btn_next)
+        v.addLayout(nav)
+        self.clear("파일을 하나 고르면 여기에 미리 보입니다.")
+
+    # ── 대상 ──────────────────────────────────────────────
+    def _close_doc(self):
+        if self._doc is not None:
+            try:
+                self._doc.close()
+            except Exception:
+                pass
+        self._doc = None
+
+    def clear(self, msg: str = ""):
+        self._close_doc()
+        self._key, self._images, self._page, self._count = None, None, 0, 0
+        self.lbl_title.setText("미리보기")
+        self.canvas.setPixmap(QPixmap())
+        self.canvas.setText(msg)
+        self._sync_nav()
+
+    def show_pdf(self, path: str):
+        if self._key == ("pdf", str(path)):
+            return
+        self.clear()
+        self._key = ("pdf", str(path))
+        self.lbl_title.setText(Path(path).name)
+        try:
+            import fitz
+            doc = fitz.open(str(path))
+            if doc.needs_pass:
+                try:
+                    from viewer import secure_store
+                    pw = secure_store.recall_any(str(path))
+                    if pw:
+                        doc.authenticate(pw)
+                except Exception:
+                    pass
+            if doc.needs_pass:
+                doc.close()
+                self.canvas.setText("암호가 걸린 문서라 미리 볼 수 없습니다.")
+                return
+            self._doc, self._count = doc, doc.page_count
+        except Exception as e:           # noqa: BLE001
+            self.canvas.setText(f"미리 볼 수 없습니다.\n{e}")
+            return
+        self._render()
+
+    def show_images(self, paths: list, name: str):
+        key = ("shots", tuple(paths))
+        if self._key == key:
+            return
+        self.clear()
+        self._key, self._images, self._count = key, list(paths), len(paths)
+        self.lbl_title.setText(name)
+        self._render()
+
+    def step(self, d: int):
+        if self._count and 0 <= self._page + d < self._count:
+            self._page += d
+            self._render()
+
+    # ── 그리기 ────────────────────────────────────────────
+    def _sync_nav(self):
+        self.btn_prev.setEnabled(self._count > 0 and self._page > 0)
+        self.btn_next.setEnabled(self._count > 0 and self._page < self._count - 1)
+        self.lbl_page.setText(f"{self._page + 1} / {self._count}" if self._count else "")
+
+    def _render(self):
+        self._sync_nav()
+        if not self._count:
+            self.canvas.setText("쪽이 없습니다.")
+            return
+        box = self.canvas.contentsRect().size()
+        w, h = max(200, box.width() - 8), max(260, box.height() - 8)
+        dpr = self.devicePixelRatioF() or 1.0
+        pix = QPixmap()
+        try:
+            if self._doc is not None:
+                import fitz
+                pg = self._doc.load_page(self._page)
+                z = min(w / max(1.0, pg.rect.width), h / max(1.0, pg.rect.height)) * dpr
+                pm = pg.get_pixmap(matrix=fitz.Matrix(z, z), alpha=False)
+                img = QImage(pm.samples, pm.width, pm.height, pm.stride,
+                             QImage.Format.Format_RGB888).copy()
+                pix = QPixmap.fromImage(img)
+            elif self._images:
+                pix = QPixmap(str(self._images[self._page]))
+                if not pix.isNull():
+                    pix = pix.scaled(int(w * dpr), int(h * dpr), Qt.AspectRatioMode.KeepAspectRatio,
+                                     Qt.TransformationMode.SmoothTransformation)
+        except Exception as e:           # noqa: BLE001
+            self.canvas.setText(f"미리 볼 수 없습니다.\n{e}")
+            return
+        pix.setDevicePixelRatio(dpr)
+        self.canvas.setText("")
+        self.canvas.setPixmap(pix)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self._count:
+            self._render()
+
+
 class MergeFilesDialog(QDialog):
     _DATA = Qt.ItemDataRole.UserRole
 
@@ -55,7 +191,7 @@ class MergeFilesDialog(QDialog):
                  screenshot_paths: list = None, parent=None, preset_api=None):
         super().__init__(parent)
         self.setWindowTitle("PDF 병합")
-        self.setMinimumSize(720, 460)
+        self.setMinimumSize(1040, 520)
         self.setAcceptDrops(True)
         self._screenshot_paths = list(screenshot_paths or [])
         self._order = 0
@@ -139,6 +275,13 @@ class MergeFilesDialog(QDialog):
         rbtns.addStretch(1)
         rcol.addLayout(rbtns)
         body.addLayout(rcol, 1)
+
+        # 260915-2(§4.8.2): 우측 리스트 오른쪽 — 파일 미리보기
+        self.preview = FilePreview(self)
+        body.addWidget(self.preview, 1)
+        self._preview_src = None                   # 마지막으로 고른 목록(left/right)
+        self.left.itemSelectionChanged.connect(lambda: self._on_list_selection(self.left))
+        self.right.itemSelectionChanged.connect(lambda: self._on_list_selection(self.right))
 
         v.addLayout(body, 1)
 
@@ -296,6 +439,35 @@ class MergeFilesDialog(QDialog):
                 self._add_right_pdf(p)
                 n += 1
         e.acceptProposedAction()
+
+    # ── 260915-2(§4.8.2): 미리보기 대상 ─────────────────────────
+    def _on_list_selection(self, src):
+        """방금 선택을 바꾼 목록이 미리보기 대상이다. 그 목록에서 **하나만** 골랐을 때 보인다.
+        (다른 목록의 선택은 건드리지 않는다 — '→' 등록 등 기존 조작이 그대로 동작하게.)"""
+        if src.selectedItems():
+            self._preview_src = src
+        elif self._preview_src is not src:
+            return                                  # 대상이 아닌 목록의 선택 해제 — 그대로
+        self._update_preview()
+
+    def _update_preview(self):
+        src = self._preview_src
+        sel = src.selectedItems() if src is not None else []
+        if len(sel) != 1:
+            self.preview.clear("파일을 하나 고르면 여기에 미리 보입니다." if not sel
+                               else f"{len(sel)}개를 골랐습니다 — 하나만 고르면 미리 보입니다.")
+            return
+        d = sel[0].data(self._DATA)
+        if src is self.left:
+            self.preview.show_pdf(str(d))
+        elif isinstance(d, dict) and d.get("type") == "pdf":
+            self.preview.show_pdf(d["path"])
+        elif isinstance(d, dict) and d.get("type") == "shots":
+            self.preview.show_images(d.get("paths") or [], d.get("name") or SHOTS_NAME)
+
+    def done(self, r):
+        self.preview.clear()                        # 원본 핸들을 병합·저장 전에 놓는다
+        super().done(r)
 
     # ── 결과 ───────────────────────────────────────────────────
     def _on_accept(self):

@@ -67,15 +67,29 @@ got = fitz.open(str(src)); toc = got.get_toc(); got.close()
 chk([t[1] for t in toc] == ["1장", "1.1 절", "2장"], "원본에 새 책갈피 반영", str(toc))
 chk(not (src.with_name(src.stem + ".bm_tmp.pdf")).exists(), "임시 파일 남지 않음")
 
-# 다른 곳에서 연 상태 → 정직한 오류 + 임시 파일 정리 + 원본 보존
+# 260915-1(§4.4.6.2 B): 앱 안의 읽기 핸들(fitz)은 이제 막지 못한다 — 제자리로 덮어쓴다
 held = fitz.open(str(src))
+w1 = BookmarkerWorker(src, {"bookmarks": bms, "review": False, "overwrite": True,
+                            "save_pdf": True, "save_txt": False})
+done1, err1 = [], []
+w1.finished.connect(lambda r: done1.append(r))
+w1.error.connect(lambda m: err1.append(m))
+w1.run()
+held.close()
+chk(not err1 and done1, "앱 안에서 읽는 핸들이 있어도 덮어쓴다(제자리)", str(err1))
+
+# 다른 프로그램이 **쓰기를 막고** 연 상태 → 정직한 오류 + 임시 파일 정리 + 원본 보존
+import ctypes
+_k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_k32.CreateFileW.restype = ctypes.c_void_p
+_h = _k32.CreateFileW(str(src), 0x80000000, 0x1, None, 3, 0x80, None)   # GENERIC_READ, SHARE_READ 만
 w2 = BookmarkerWorker(src, {"bookmarks": [("바뀐제목", 1, 0)], "review": False,
                             "overwrite": True, "save_pdf": True, "save_txt": False})
 done2, err2 = [], []
 w2.finished.connect(lambda r: done2.append(r))
 w2.error.connect(lambda m: err2.append(m))
 w2.run()
-held.close()
+_k32.CloseHandle(ctypes.c_void_p(_h))
 chk(bool(err2), "점유 중이면 오류로 알림", str(err2))
 if err2:
     chk("다른 프로그램이 열고 있어" in err2[0] and "새 PDF로 저장" in err2[0],
