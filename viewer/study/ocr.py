@@ -551,6 +551,8 @@ def _join_words_by_gap(parts) -> str:
     NL = chr(10)
     try:
         from viewer.text_extract2 import (GLUE_GAP, CJK_GLUE_GAP, NUM_GLUE_GAP,
+                                          CJK_GLUE_TOP, CJK_GLUE_MIN,
+                                          CJK_GLUE_MAX, CJK_GLUE_MIN_N,
                                           _is_cjk_pair, _is_num_pair,
                                           fix_number_spaces, fix_number_ocr)
     except Exception:              # 모듈을 못 불러오면 종전대로 공백
@@ -560,29 +562,65 @@ def _join_words_by_gap(parts) -> str:
             out += t if t == NL else (
                 ('' if (not out or out.endswith(NL)) else ' ') + t)
         return out
-    text = ''
-    prev = None
+    # 260916-1(텍스트 창 SOT §3.6.12): 한글 문턱은 **이 쪽의 빈틈 분포**에서 뽑고,
+    #   재는 자는 **그 줄 상자 높이의 중앙값**으로 한다. 텍스트 창과 같은 규칙이라야
+    #   화면과 검색·단어장이 같은 글을 본다(§3.6.2 가 요구하는 것).
+    lines = []                       # [[낱말…], …] — 개행으로 끊는다
+    cur = []
     for q in parts:
-        if isinstance(q, str):     # 개행
-            text += q
-            prev = None
-            continue
-        t = str(q.get('surface', ''))
-        if not t:
-            continue
-        if prev is None or not text or text.endswith(NL):
-            text += t
-        else:
-            ref = max(1.0, float(q['y1']) - float(q['y0']))
-            gap = float(q['x0']) - float(prev['x1'])
-            if _is_cjk_pair(text, t):
-                glue = CJK_GLUE_GAP
-            elif _is_num_pair(text, t):
-                glue = NUM_GLUE_GAP
+        if isinstance(q, str):
+            lines.append(cur)
+            cur = []
+        elif str(q.get('surface', '')):
+            cur.append(q)
+    lines.append(cur)
+    refs = []
+    for ws in lines:
+        hs = sorted(max(1.0, float(w['y1']) - float(w['y0'])) for w in ws)
+        refs.append(max(1.0, hs[len(hs) // 2]) if hs else 1.0)
+    vals = []
+    for ws, ref in zip(lines, refs):
+        for a, b in zip(ws, ws[1:]):
+            if not _is_cjk_pair(str(a['surface']), str(b['surface'])):
+                continue
+            r = (float(b['x0']) - float(a['x1'])) / ref
+            if -0.5 <= r <= CJK_GLUE_TOP:
+                vals.append(r)
+    cjk_gap = CJK_GLUE_GAP
+    if len(vals) >= CJK_GLUE_MIN_N:
+        best, t = -1.0, CJK_GLUE_MIN - 0.10
+        while t <= CJK_GLUE_MAX + 0.10 + 1e-9:
+            lo = [v for v in vals if v < t]
+            hi = [v for v in vals if v >= t]
+            if len(lo) >= 5 and len(hi) >= 5:
+                wl, wh = len(lo) / len(vals), len(hi) / len(vals)
+                var = wl * wh * (sum(lo)/len(lo) - sum(hi)/len(hi)) ** 2
+                if var > best:
+                    best, cjk_gap = var, t
+            t += 0.01
+        cjk_gap = min(CJK_GLUE_MAX, max(CJK_GLUE_MIN, cjk_gap))
+
+    chunks = []
+    for ws, row_ref in zip(lines, refs):
+        text = ''
+        prev = None
+        for q in ws:
+            t = str(q['surface'])
+            if prev is None:
+                text += t
             else:
-                glue = GLUE_GAP
-            text += ('' if gap < glue * ref else ' ') + t
-        prev = q
+                ref = max(1.0, float(q['y1']) - float(q['y0']))
+                gap = float(q['x0']) - float(prev['x1'])
+                if _is_cjk_pair(text, t):
+                    glue, ref = cjk_gap, row_ref
+                elif _is_num_pair(text, t):
+                    glue = NUM_GLUE_GAP
+                else:
+                    glue = GLUE_GAP
+                text += ('' if gap < glue * ref else ' ') + t
+            prev = q
+        chunks.append(text)
+    text = NL.join(chunks)
     # 260909-3/4: 줄마다 수를 바로잡는다 — 닮은 글자(O→0) 되돌리기(§3.6.3) 뒤에
     #   빈칸 없애기(§3.6.2). 순서가 중요하다: `1 OO.O` 는 글자를 먼저 고쳐야 붙는다.
     return chr(10).join(fix_number_spaces(fix_number_ocr(x))

@@ -35,6 +35,15 @@ GLUE_GAP = 0.25         # 글자크기 대비 이보다 좁으면 붙여 쓴다(
 #   0.25 언저리라 붙일지 띄울지가 글자마다 뒤집혔다. 실측(300dpi, 간격÷높이):
 #   한 낱말 안 0.14~0.40 / 낱말 사이 0.50~0.94 → 경계를 0.45 로 둔다.
 CJK_GLUE_GAP = 0.45
+# 260916-1(SOT §3.6.12, 사용자 지시 '기준을 재검토해'): **한 값으로는 안 된다.**
+#   `image_to_string` 의 띄어쓰기를 정답 삼아 표본 4종 9,980곳을 재 보니 문서마다
+#   최적이 갈렸다 — 성격심리·심리검사 0.33 / 아스팔트지침 0.50 이상. 0.45 로 고정하면
+#   앞의 두 문서에서 열 곳에 한 곳꼴로 틀린다(9.6%·11.9%).
+#   그래서 **쪽마다 스스로 뽑는다**(`cjk_gap_threshold`) — 빈틈 분포는 '낱말 안' 과
+#   '낱말 사이' 두 봉우리라, 그 골짜기를 오츠로 찾으면 문서가 달라져도 따라간다.
+CJK_GLUE_MIN, CJK_GLUE_MAX = 0.25, 0.55   # 뽑은 값을 이 사이로 가둔다
+CJK_GLUE_TOP = 1.0      # 이보다 넓은 빈틈은 칸 사이 — 문턱을 뽑을 때 뺀다
+CJK_GLUE_MIN_N = 40     # 표본이 이보다 적으면 뽑지 않는다(기본값을 쓴다)
 # 260909-3(사용자 보고 '숫자가 한 자씩 띄어 써진다'): 숫자도 마찬가지다 —
 #   흐린 스캔에서는 Tesseract 가 숫자를 한 자씩 낱말로 내놓는다. 다만 **완전한 두 수**
 #   (`3.9261` | `4.0065`)를 붙이면 안 되므로, **한쪽이 한 글자일 때만** 넓은 기준을 쓴다.
@@ -730,9 +739,23 @@ def _by_column(blocks, page, word_level: bool = False):
                 owners[id(pc)] = g
         frags = pieces
     bands = sorted(_row_bands(frags), key=lambda b: (b["y0"], b["y1"]))
+
+    def _restore(groups):
+        """묶음 안의 줄 조각을 **원래 낱말로** 되돌린다 (260916-1).
+
+        260916-1(SOT §3.6.11, 사용자 보고): 되돌리기가 **2단으로 갈린 길에만** 있어서,
+        단이 하나면(`gx is None` — 보통의 책 쪽) 공백으로 이어 붙인 줄 조각이 그대로
+        나갔다. 그러면 `_merge_rows` 의 간격 규칙(§3.6.2)이 아예 돌지 못해 OCR 이
+        글자마다 낸 낱말이 `성 격 은` 으로 흩어진다. 나가는 길이 둘이므로 되돌리기도
+        **두 곳 모두**에서 한다.
+        """
+        if owners is None:
+            return groups
+        return [[w for pc in g for w in owners.get(id(pc), [pc])] for g in groups]
+
     gx = _gutter_x(bands, page)
     if gx is None:
-        return [frags]
+        return _restore([frags])
     tail = _tail_band_start(bands)     # 260910-10: 꼬리말 띠는 단에 넣지 않는다
     groups, left, right = [], [], []
 
@@ -770,9 +793,7 @@ def _by_column(blocks, page, word_level: bool = False):
             (left if (f[0][0] + f[0][2]) / 2.0 < gx else right).append(f)
     _flush()
     groups = [g for g in groups if g]
-    if owners is not None:      # 조각을 원래 낱말로 되돌린다
-        groups = [[w for pc in g for w in owners.get(id(pc), [pc])] for g in groups]
-    return groups
+    return _restore(groups)     # 조각을 원래 낱말로 되돌린다
 
 
 def _tail_band_start(bands):
@@ -920,17 +941,72 @@ def fix_number_ocr(text: str) -> str:
         i = j
     return ''.join(out)
 
-def _merge_rows(frags):
+def cjk_gap_threshold(frags, bands=None):
+    """이 쪽의 **낱말 사이 빈틈 문턱**을 빈틈 분포에서 뽑는다 (SOT §3.6.12, 260916-1).
+
+    OCR 이 한글을 글자마다 낱말로 내놓으므로, 한 줄의 빈틈은 두 봉우리를 이룬다 —
+    **글자 사이**(좁다)와 **낱말 사이**(넓다). 그 골짜기를 1차원 오츠로 찾는다.
+    문서가 달라도 그 문서 자신의 분포를 보므로 따라간다(§3.7.6 의 교훈과 같다).
+
+    잰 값은 `빈틈 ÷ 그 줄 상자 높이의 중앙값` 이다 — 상자 하나의 잉크 높이로 재면
+    `으로`(받침 없음)처럼 낮은 상자에서 비율이 부풀어 흔들린다.
+
+    표본이 `CJK_GLUE_MIN_N` 에 못 미치면 **None** 을 준다(부르는 쪽이 기본값을 쓴다).
+    """
+    vals = []
+    for bd in (bands if bands is not None else _row_bands(frags)):
+        items = sorted(bd["items"], key=lambda f: f[0][0])
+        if len(items) < 2:
+            continue
+        hs = sorted(max(1.0, f[0][3] - f[0][1]) for f in items)
+        ref = max(1.0, hs[len(hs) // 2])
+        for a, b in zip(items, items[1:]):
+            ta, tb = a[1].strip(), b[1].strip()
+            if not ta or not tb:
+                continue
+            if not _is_cjk_pair(ta, tb):
+                continue
+            r = (b[0][0] - a[0][2]) / ref
+            if -0.5 <= r <= CJK_GLUE_TOP:      # 칸 사이(아주 넓은 빈틈)는 뺀다
+                vals.append(r)
+    if len(vals) < CJK_GLUE_MIN_N:
+        return None
+    best, thr = -1.0, None
+    step = 0.01
+    t = CJK_GLUE_MIN - 0.10
+    while t <= CJK_GLUE_MAX + 0.10 + 1e-9:
+        lo = [v for v in vals if v < t]
+        hi = [v for v in vals if v >= t]
+        if len(lo) >= 5 and len(hi) >= 5:
+            wl, wh = len(lo) / len(vals), len(hi) / len(vals)
+            var = wl * wh * (sum(lo) / len(lo) - sum(hi) / len(hi)) ** 2
+            if var > best:
+                best, thr = var, t
+        t += step
+    if thr is None:
+        return None
+    return min(CJK_GLUE_MAX, max(CJK_GLUE_MIN, thr))
+
+
+def _merge_rows(frags, cjk_gap=None):
     """세로로 겹치는 조각을 **한 줄**로 잇는다 — 왼쪽부터 오른쪽으로.
 
     잇는 방법은 벌어진 폭에 따른다(SOT §3.6).
       - 글자크기의 0.25 배 미만 → 붙여 쓴다
       - 2.5 배 미만 → 공백 하나
       - 그 이상 → `" | "` — 표의 다른 칸으로 본다(§3.3 과 같은 표기)
+
+    260916-1(SOT §3.6.12): `cjk_gap` 을 주면 **한글 문턱**을 그 값으로 하고, 재는
+    자도 **그 줄 상자 높이의 중앙값**으로 바꾼다. OCR 낱말 상자로 들어올 때만 준다 —
+    글자층의 `size` 는 이미 글꼴 크기라 흔들리지 않는다.
     """
     out = []
     for bd in _row_bands(frags):
         items = sorted(bd["items"], key=lambda f: f[0][0])
+        row_ref = None
+        if cjk_gap is not None:
+            hs = sorted(max(1.0, f[0][3] - f[0][1]) for f in items)
+            row_ref = max(1.0, hs[len(hs) // 2])
         text = items[0][1].rstrip()
         x0, y0, x1, y1 = items[0][0]
         for rect, txt, size in items[1:]:
@@ -940,7 +1016,10 @@ def _merge_rows(frags):
             ref = max(1.0, size or (rect[3] - rect[1]))
             gap = rect[0] - x1
             if _is_cjk_pair(text, piece):
-                glue = CJK_GLUE_GAP
+                if row_ref is not None:
+                    glue, ref = cjk_gap, row_ref
+                else:
+                    glue = CJK_GLUE_GAP
             elif _is_num_pair(text, piece):
                 glue = NUM_GLUE_GAP
             else:
@@ -1167,6 +1246,21 @@ KO_LIST_ORDER = "가나다라마바사아자차카타파하"
 #   글자가 큰데 줄이 성긴 쪽(발표자료·서식)에서 남남인 줄이 붙는다(260910 실측).
 #   실측 pitch÷크기: 이어지는 본문 1.6~1.8 / 따로 놓인 줄 2.9.
 JOIN_PITCH = 2.2
+# 260916-1(SOT §3.7.9, 사용자 지시 '줄 붙이는 방법이 적정한지 검토해'): **크기로 재면
+#   문서마다 어긋난다.** `size` 가 글자층에서는 글꼴 크기(em)인데 OCR 낱말 상자에서는
+#   **잉크 높이**라 1.3~1.4배 작다. 실측 pitch÷size 중앙값 — NAPA 1.12 / 보고서 2.00 /
+#   지침 1.31~2.40 / 성격심리 **1.95~2.50** / 심리검사 1.83~2.29. 곧 성격심리는 본문
+#   줄이 **하나도** 2.2 를 넘지 못해 ⑥ 이 문단을 통째로 막았고, 보고서는 2.00 이라
+#   여유가 10% 뿐이었다.
+#   **그 쪽의 보통 줄 거리로 잰다** — 이어지는 줄은 1.00, 문단·구역 사이라야 커진다
+#   (실측 90분위: 멀쩡한 쪽 1.00~1.31, 구역이 갈린 쪽 2.4~5.2). §3.7.6 의 교훈과 같다.
+#   다만 **줄이 성긴 쪽에서는 이 자를 쓸 수 없다** — 쪽 전체가 성기면 중앙값도 성겨
+#   비율이 1.00 이 되어 남남인 줄까지 붙는다(§3.7.5 함정 3 이 적어 둔 발표자료·서식).
+#   그래서 그런 쪽은 **종전 크기 기준으로 되돌린다**. 실측 중앙줄거리÷크기: 보통 쪽
+#   1.12~2.50 / 성긴 서식 4.29 → 경계 3.0.
+JOIN_PITCH_REL = 1.45    # 그 쪽의 중앙 줄거리의 이 배를 넘으면 남남으로 본다
+JOIN_PITCH_SPARSE = 3.0  # 중앙 줄거리가 글자 크기의 이 배를 넘으면 '성긴 쪽'
+JOIN_PITCH_MIN_N = 4     # 줄이 이보다 적으면 중앙값을 믿지 않는다(종전 크기 기준)
 JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다
 _CAPTION_HEAD = None
 _LIST_HEAD = None
@@ -1182,12 +1276,77 @@ def _starts_list(text) -> bool:
     return bool(_LIST_HEAD.match(text or ''))
 
 
+import threading as _th                                      # noqa: E402
+_KIWI = {"obj": None, "bad": False}
+# 260916-1: 만드는 데 1.5초 걸린다(한 번뿐). 텍스트 창 워커와 읽어 주기가 동시에
+#   들어오면 둘 다 만들어 3초를 쓰므로 **만드는 동안만** 잠근다. `space()` 는 잠그지
+#   않는다 — kiwi 는 여러 갈래로 부르는 것을 견디고, 여기서 잠그면 워커가 줄 선다.
+_KIWI_LOCK = _th.Lock()
+
+
+def _ko_wants_space(a, b, ctx: int = 8) -> bool:
+    """한글끼리 이을 때 그 자리에 빈칸이 있었나 — **말뭉치로 묻는다** (SOT §3.7.10).
+
+    260916-1: §3.7.7 은 기하로만 갈랐고, 그래서 **양쪽 정렬된 한글 책**에서는 줄이 늘
+    꽉 차 보여 언제나 '붙임' 으로 갔다(`성향적` + `관점을` → `성향적관점을`).
+    §3.6.10·§3.7.7 이 두 번 재어 보고 '낱말 사전이 있어야 풀린다' 고 적어 둔 자리다 —
+    **그 사전이 이미 이 프로그램에 있다**(단어장이 쓰는 `kiwipiepy`).
+
+    앞줄 **마지막 어절**과 뒷줄 **첫 어절**만 붙여 `Kiwi.space` 에 물어, 그 자리에
+    빈칸이 생기면 어절 경계로 본다. 문맥은 여덟 글자면 충분하다(스물까지 재 봐도 같다).
+
+    실측(표본 1,011곳, `image_to_string` 의 맞는 띄어쓰기를 정답으로):
+    종전 규칙 70.5% → **95.6%**. 문서별 성격심리 69.5→95.6 · 심리검사 70.7→96.5 ·
+    아스팔트지침 74.4→93.2. 값이 0.23 ms/곳이라 쪽마다 수십 번 물어도 눈에 띄지 않는다.
+
+    kiwi 를 못 불러오면 **False** 를 주어 부르는 쪽이 기하 규칙으로 돌아가게 한다.
+    """
+    if _KIWI["bad"]:
+        return False
+    k = _KIWI["obj"]
+    if k is None:
+        with _KIWI_LOCK:
+            k = _KIWI["obj"]
+            if k is None and not _KIWI["bad"]:
+                try:
+                    from kiwipiepy import Kiwi
+                    k = _KIWI["obj"] = Kiwi()
+                except Exception:
+                    _KIWI["bad"] = True
+        if k is None:
+            return False
+    ta, tb = a[max(0, len(a) - ctx):], b[:ctx]
+    i = ta.rfind(' ')
+    head, tail = (ta[:i + 1], ta[i + 1:]) if i >= 0 else ('', ta)
+    j = tb.find(' ')
+    nxt, rest = (tb[:j], tb[j:]) if j >= 0 else (tb, '')
+    probe = head + tail + nxt + rest
+    at = len((head + tail).replace(' ', ''))      # 빈칸을 뺀 글자 수로 센다
+    try:
+        out = k.space(probe)
+    except Exception:
+        _KIWI["bad"] = True
+        return False
+    n = 0
+    for x, ch in enumerate(out):
+        if ch == ' ' and (x == 0 or out[x - 1] != ' ') and n == at:
+            return True
+        if ch != ' ':
+            n += 1
+            if n > at:
+                break
+    return False
+
+
 def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
-    """두 줄을 어떻게 이을지 — 빈칸 / 붙임 / 분철 떼기 (SOT §3.7·§3.7.7).
+    """두 줄을 어떻게 이을지 — 빈칸 / 붙임 / 분철 떼기 (SOT §3.7·§3.7.7·§3.7.10).
 
     `wrapped` 는 **어절이 안 들어가서 넘어갔는가**(④ 의 둘째 갈래). 참이면 줄이 바뀐
     자리는 **어절 경계**이므로 한글끼리라도 빈칸을 넣는다. 거짓(줄이 여백까지 꽉 참)이면
     낱말 가운데서 잘렸을 수 있어 붙인다 — 실측 `의무사` + `용대상` = `의무사용대상`.
+
+    260916-1(§3.7.10): 한글끼리는 기하보다 **말뭉치**가 낫다(70.5% → 95.6%). 기하는
+    kiwi 가 없을 때의 폴백으로 남는다.
     """
     if a_text.endswith(' '):
         return ' '
@@ -1198,6 +1357,8 @@ def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
     if a.endswith('-') and ('a' <= b[0] <= 'z'):
         return '-drop'
     if _is_cjk(a[-1]) and _is_cjk(b[0]):
+        if _ko_wants_space(a, b):
+            return ' '
         return ' ' if wrapped else ''
     return ' '
 
@@ -1219,6 +1380,7 @@ def join_sentences(rows) -> list:
     #   실측 1쪽: 쪽 전체 90분위 556.9 인데 왼쪽 단은 **가장 긴 줄도 300.2** 라
     #   ④(오른쪽까지 찼는가)가 언제나 거짓이었다.
     cols = _column_extents(body)
+    med_pitch = _median_pitch(body)
     idx = {id(q): i for i, q in enumerate(body)}
     out = []
     for r in rows:
@@ -1233,7 +1395,7 @@ def join_sentences(rows) -> list:
             _near = [q for q in body[_lo:_hi]
                      if abs(q['rect'][0] - r['rect'][0]) <= 24.0]
         margin, span = _extent_for(cols, r, _near)
-        if prev is not None and _can_join(prev, r, margin, span):
+        if prev is not None and _can_join(prev, r, margin, span, med_pitch):
             # ★ 조건 판정은 **마지막에 붙인 줄**로 한다(`_can_join` 안에서 `_last`).
             # 260910-4(SOT §3.7.7): 왜 넘어갔는지가 빈칸 여부를 가른다.
             #   어절이 안 들어가서 넘어갔으면 그 자리는 어절 경계다.
@@ -1258,6 +1420,22 @@ def join_sentences(rows) -> list:
         r.pop('_last', None)
         r.pop('_tail', None)
     return out
+
+
+def _median_pitch(body) -> float:
+    """그 쪽 본문의 **보통 줄 거리**(위끝~위끝의 중앙값) (SOT §3.7.9, 260916-1).
+
+    줄이 `JOIN_PITCH_MIN_N` 에 못 미치면 0 을 준다 — 부르는 쪽이 종전 크기 기준을 쓴다.
+    """
+    if len(body) < JOIN_PITCH_MIN_N:
+        return 0.0
+    rows = sorted(body, key=lambda r: (r['rect'][1], r['rect'][0]))
+    ps = sorted(b['rect'][1] - a['rect'][1]
+                for a, b in zip(rows, rows[1:])
+                if b['rect'][1] - a['rect'][1] > 0)
+    if len(ps) < JOIN_PITCH_MIN_N - 1:
+        return 0.0
+    return ps[len(ps) // 2]
 
 
 def _first_word_width(b) -> float:
@@ -1365,7 +1543,7 @@ def _extent_for(cols, r, near=None):
     return got
 
 
-def _can_join(a, b, margin, span: float = 0.0) -> bool:
+def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0) -> bool:
     """SOT §3.7 의 여덟 조건을 모두 본다."""
     # ★ 260910: 이미 이어 붙인 줄이면 **마지막에 붙인 줄**로 잰다. 합친 사각형으로 재면
     #   오른쪽 끝이 늘 여백까지 차 있어 ④ 가 무력해진다(문단 마지막 줄까지 붙는다).
@@ -1405,7 +1583,13 @@ def _can_join(a, b, margin, span: float = 0.0) -> bool:
     if rb[0] > ra[0] + sa * 4:
         return False                                    # 너무 많이 들여썼다 — 다른 글
     pitch = rb[1] - ra[1]                               # ⑥ 줄 사이 거리
-    if pitch <= 0 or pitch > max(sa, sb) * JOIN_PITCH:
+    if pitch <= 0:
+        return False
+    # 260916-1(SOT §3.7.9): 그 쪽의 **보통 줄 거리**로 잰다 — 없거나 쪽이 성기면 크기로.
+    if med_pitch > 0 and med_pitch <= max(sa, sb) * JOIN_PITCH_SPARSE:
+        if pitch > med_pitch * JOIN_PITCH_REL:
+            return False
+    elif pitch > max(sa, sb) * JOIN_PITCH:
         return False
     # ⑦ 260910-4(SOT §3.7.6 나): 앞줄에 닫히지 않은 `(` 가 있으면 뒷줄의 `)` 는
     #   목록 표시가 아니라 그 괄호를 닫는 이어지는 글이다.
@@ -1538,10 +1722,15 @@ def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None) -> list
     # 260913-4(SOT §3.5.2): 세로 띠는 **낱말 단계**에서 버린다 — 잇고 나면 본문 줄에 붙는다.
     if page is not None:
         frags, _n = drop_edge_frags(frags, page, edge=False)
+    # 260916-1(SOT §3.6.12): 한글 문턱은 **이 쪽의 빈틈 분포**에서 뽑는다.
+    #   단을 가르기 전에 쪽 전체로 뽑는다 — 표본이 많을수록 골짜기가 뚜렷하다.
+    cjk_gap = cjk_gap_threshold(frags)
+    if cjk_gap is None:
+        cjk_gap = CJK_GLUE_GAP
     items = []
     for col in ([frags] if page is None
                 else _by_column([((0, 0, 0, 0), frags)], page, word_level=True)):
-        items.extend(_merge_rows(col))
+        items.extend(_merge_rows(col, cjk_gap=cjk_gap))
     items = [it for it in items if not _noise.is_symbol_only(it[1])]
     # 머리말·꼬리말은 **줄을 이은 뒤** 줄 단위로 — 낱말 하나는 옆 쪽 꼬리말 한 줄과 같을 수 없다.
     if page is not None and items:
