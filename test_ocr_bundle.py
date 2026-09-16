@@ -112,10 +112,26 @@ sig = inspect.signature(StudyBuildWorker.__init__)
 chk("drop_watermark" in sig.parameters, "⑤ 워터마크는 끌 수 있다")
 chk(sig.parameters["drop_watermark"].default is True, "⑤ 기본은 켬")
 from viewer import study_controller as sc
+import fitz
+import test_fixtures as fx
 csrc = inspect.getsource(sc)
-chk("_detect_study_lang(path)" not in csrc.split("StudyBuildWorker(path, lang=")[1][:80]
-    if "StudyBuildWorker(path, lang=" in csrc else True,
-    "⑤ 부르는 쪽이 옛 판정을 넘기지 않는다")
+# 260916-2(§14.14): **글자로 찾지 말고 결과를 본다.** 종전 검사는
+#   `csrc.split(...)[1][:80]` 로 **첫 호출부 하나**만 보았고, 마침 그 하나가 고쳐진 쪽
+#   (`online_only` 이어하기)이라 통과했다 — 정작 단어장 생성 본체는 옛 판정을 계속
+#   썼다(표본 7종 중 **5종**에서 텍스트 창과 다른 언어로 읽었다). 게다가 그 본체는
+#   `lang=lang` 처럼 **지역변수**로 넘겨 글자 찾기로는 애초에 보이지 않는다.
+#   그래서 `_detect_study_lang` 이 **무엇을 돌려주는지**로 못박는다.
+_scan = fx.scanned_pdf()            # 글자층이 없는 스캔 모사 — 종전에는 늘 `eng` 였다
+_want = so.detect_lang(fitz.open(_scan))
+_got = sc.StudyMixin._detect_study_lang(None, Path(_scan))
+chk(_got == _want,
+    "⑤ 스캔본에서 텍스트 창과 **같은 언어**를 고른다(§14.8)",
+    "단어장 %s / 텍스트 창 %s" % (_got, _want))
+chk(_got == so.default_lang(),
+    "⑤ 글자가 없으면 기본값(한글+영문) — `eng` 로 떨어지지 않는다", _got)
+_det = inspect.getsource(sc.StudyMixin._detect_study_lang)
+chk("[가-힣]" not in _det,
+    "⑤ 부르는 쪽이 언어를 **따로 세지 않는다**(판정 함수는 하나, §14.8)")
 
 print(NL + "=== ⑥ 이 기계의 트리와 진단이 어긋나지 않는다 ===")
 tree = ROOT / "tesseract"

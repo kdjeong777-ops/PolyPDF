@@ -81,18 +81,40 @@ class StudyMixin:
         return self._tts
 
     def _detect_study_lang(self, path: Path) -> str:
-        """간단 언어 감지 — 첫 몇 페이지에 한글이 많으면 kor, 아니면 eng."""
+        """이 문서를 무슨 언어로 읽을까 — **판정은 `study.ocr` 하나**가 한다.
+
+        260916-2(단어학습 SOT §14.8, 사용자 지시 '같은 방법을 쓰는지 확인해'):
+        종전에는 여기서 따로 셌다 — 첫 다섯 쪽의 한글/라틴 글자 수를 견주어
+        **`kor` 또는 `eng` 하나만** 돌려주었다. 그래서 텍스트 창 [OCR 다시 읽기]
+        (기본 `kor+eng`)와 **다른 언어로 읽었다**. 실측 표본 7종 중 **5종이 달랐다**:
+
+        | 문서 | 종전 단어장 생성 | 텍스트 창 |
+        | --- | --- | --- |
+        | 성격심리·심리검사·배합설계·보고서 | `kor` | `kor+eng` |
+        | HM(스캔본) | `eng` | `kor+eng` |
+
+        스캔본은 글자층이 비어 있어 어느 쪽으로도 셀 수 없는데 조용히 `eng` 로
+        떨어졌다 — §14.8 이 고쳤다고 적어 둔 바로 그 결함이다. 그 고침은
+        형제 호출부(`online_only` 이어하기)에만 닿았고 **여기는 남아 있었다**.
+        글자층이 깨진 문서(성격심리는 글자층이 통째로 깨진 글이다)에서는 더 나쁘다 —
+        깨진 글자를 세어 언어를 정했다.
+
+        이제 `study.ocr.detect_lang` 하나만 쓴다(글자가 적으면 기본값 `kor+eng`).
+        """
         try:
-            import fitz, re
+            import fitz
+            from viewer.study import ocr as study_ocr
             doc = fitz.open(path)
-            sample = "".join(doc.load_page(i).get_text("text")
-                             for i in range(min(5, doc.page_count)))
-            doc.close()
-            hangul = len(re.findall(r"[가-힣]", sample))
-            latin = len(re.findall(r"[A-Za-z]", sample))
-            return "kor" if hangul > latin else "eng"
+            try:
+                return study_ocr.detect_lang(doc)
+            finally:
+                doc.close()
         except Exception:
-            return "eng"
+            try:
+                from viewer.study import ocr as study_ocr
+                return study_ocr.default_lang()
+            except Exception:
+                return "eng"
 
     def _translate_auth_ready_or_warn(self) -> bool:
         """260621-P0: 번역 사용 가능 여부(모듈·인증) 확인 + 안내."""
