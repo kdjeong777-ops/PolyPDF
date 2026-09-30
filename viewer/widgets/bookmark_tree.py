@@ -182,6 +182,7 @@ class BookmarkTree(QWidget):
     createStudyBookmarksRequested = pyqtSignal(str)  # 260606-11: '단어장·책갈피 동시 생성'
     mergeFilesRequested = pyqtSignal(list)      # 260606-13: 선택 파일들 병합(경로 리스트)
     translateFileRequested = pyqtSignal(str)    # 260621-P0: 파일 우클릭 '번역'(단일)
+    flattenFileRequested = pyqtSignal(str)      # 260930-2(§4.7.13): 파일 우클릭 '일반뷰어용으로 저장'
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
@@ -2082,6 +2083,7 @@ class BookmarkTree(QWidget):
             act_bm_edit = menu.addAction("책갈피 수정...")
             menu.addSeparator()
         act_translate = None
+        act_flatten = None
         act_edit_gloss = None
         act_tags = None
         act_password = None
@@ -2095,6 +2097,13 @@ class BookmarkTree(QWidget):
             act_study = menu.addAction("단어장 생성")
             act_study_bm = menu.addAction("단어장·책갈피 동시 생성")
             act_tags = menu.addAction("해시태그 편집...")   # 260623: 파일 분류 태그
+            # 260930-2(마스터 §4.7.13, 사용자 요청): 저장을 이 메뉴에도. **누른 그 파일**에
+            #   작용한다 — '책갈피 생성'·'단어장 생성'·'번역' 과 같은 방식이라 일관된다.
+            menu.addSeparator()
+            act_flatten = menu.addAction("일반뷰어용으로 저장 (꾸밈·사진 굽기)...")
+            act_flatten.setToolTip(
+                "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")
+            menu.addSeparator()
             act_translate = menu.addAction("번역...")   # 260621-P0: 단일 파일 번역
             act_edit_gloss = menu.addAction("번역 용어집 교정...")  # 260623: 오역 용어 수정
             try:                                         # 용어집 사이드카 없으면 비활성화
@@ -2159,6 +2168,8 @@ class BookmarkTree(QWidget):
         elif act_translate is not None and chosen == act_translate:
             # 'PDF번역' 창을 열고 이 파일을 우측(번역 대상)에 담는다
             self.translateFilesRequested.emit([item.data(0, self.DATA_FILE)])
+        elif act_flatten is not None and chosen == act_flatten:      # 260930-2
+            self.flattenFileRequested.emit(item.data(0, self.DATA_FILE))
         elif act_edit_gloss is not None and chosen == act_edit_gloss:
             self.editGlossaryRequested.emit(item.data(0, self.DATA_FILE))
         elif act_tags is not None and chosen == act_tags:

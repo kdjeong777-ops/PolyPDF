@@ -88,6 +88,90 @@ class EditMixin:
             pass
         self.status.showMessage("선긋기를 본화면에 적용했습니다.", 3000)
 
+    # 260930-2(마스터 §4.7.13, 사용자 보고): 삽입 이미지(주석)도 **굽는다**.
+    #   종전에는 인쇄('문서 + 주석·꾸미기')도 'PDF 꾸밈 저장' 도 선·도형·글·하이퍼링크만
+    #   굽고 **사진은 빠뜨렸다** — 화면과 썸네일에는 보이는데 인쇄물·저장본에는 없었다.
+    IMG_BAKE_DPI = 200          # 굽는 해상도(인쇄 200dpi 와 같게)
+
+    def _bake_images_into_doc(self, doc, path):
+        """이 파일의 삽입 이미지를 열린 `doc` 에 굽는다 (인쇄·꾸밈 저장 공용).
+
+        **화면과 같은 규칙으로 그린다** — 자리(정규화 `rect`)·회전(`rot`)·투명도(`alpha`)·
+        모양(`shape`)을 Qt 로 합성한 뒤 그 결과를 한 장으로 넣는다. fitz 로 따로 흉내 내면
+        (회전은 90° 배수만, 투명도·둥근 모양은 없다) 화면과 달라진다.
+
+        회전한 그림은 **축에 나란한 테두리 상자**에 맞춰 넣는다 — 그래야 돌린 모서리가
+        잘리지 않는다.
+        """
+        import math, base64
+        import fitz
+        from PyQt6.QtGui import QImage, QPainter, QPainterPath, QPixmap
+        from PyQt6.QtCore import QRectF
+        st = self._ensure_page_meta_store()
+        if not st:
+            return 0
+        done = 0
+        for page0 in sorted(st.pages_with_images(path)):
+            if page0 < 0 or page0 >= doc.page_count:
+                continue
+            page = doc[page0]
+            W, H = float(page.rect.width), float(page.rect.height)
+            for d in (st.get_images(path, page0) or []):
+                pm = QPixmap()
+                try:
+                    pm.loadFromData(base64.b64decode(d.get("data", "")), "PNG")
+                except Exception:
+                    continue
+                if pm.isNull():
+                    continue
+                fx, fy, fw, fh = d.get("rect", [0.1, 0.1, 0.3, 0.3])
+                w_pt, h_pt = float(fw) * W, float(fh) * H
+                if w_pt <= 0 or h_pt <= 0:
+                    continue
+                rot = float(d.get("rot", 0.0) or 0.0)
+                alpha = max(0, min(100, int(d.get("alpha", 100))))
+                shape = d.get("shape", "rect")
+                # 돌린 뒤의 테두리 상자(pt)
+                th = math.radians(rot)
+                bw = abs(w_pt * math.cos(th)) + abs(h_pt * math.sin(th))
+                bh = abs(w_pt * math.sin(th)) + abs(h_pt * math.cos(th))
+                sc = self.IMG_BAKE_DPI / 72.0
+                iw, ih = max(1, int(bw * sc)), max(1, int(bh * sc))
+                canvas = QImage(iw, ih, QImage.Format.Format_ARGB32_Premultiplied)
+                canvas.fill(0)                       # 투명 — 본문 글자를 가리지 않는다
+                pr = QPainter(canvas)
+                pr.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+                pr.translate(iw / 2.0, ih / 2.0)
+                if rot:
+                    pr.rotate(rot)
+                pr.setOpacity(alpha / 100.0)
+                local = QRectF(-w_pt * sc / 2.0, -h_pt * sc / 2.0, w_pt * sc, h_pt * sc)
+                if shape in ("round", "circle"):      # 화면과 같은 모양 자르기
+                    path_ = QPainterPath()
+                    if shape == "circle":
+                        path_.addEllipse(local)
+                    else:
+                        rr = min(local.width(), local.height()) * 0.18
+                        path_.addRoundedRect(local, rr, rr)
+                    pr.setClipPath(path_)
+                pr.drawPixmap(local.toRect(), pm)
+                pr.end()
+                from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
+                ba = QByteArray(); qb = QBuffer(ba)
+                qb.open(QIODevice.OpenModeFlag.WriteOnly)
+                canvas.save(qb, "PNG")
+                qb.close()
+                cx = (float(fx) + float(fw) / 2.0) * W
+                cy = (float(fy) + float(fh) / 2.0) * H
+                rect = fitz.Rect(cx - bw / 2.0, cy - bh / 2.0,
+                                 cx + bw / 2.0, cy + bh / 2.0)
+                try:
+                    page.insert_image(rect, stream=bytes(ba), overlay=True)
+                    done += 1
+                except Exception:
+                    continue
+        return done
+
     def _bake_drawings_into_doc(self, doc, norm):
         """260615-3: 정규화 선긋기(선·도형·텍스트박스·지시선·하이라이트)를 열린 doc 에 베이크.
         norm: {page0: [stroke, ...]}. (인쇄/PDF꾸밈저장 공용)"""
@@ -190,8 +274,8 @@ class EditMixin:
         src = Path(file_path)
         from PyQt6.QtWidgets import QFileDialog
         out, _ = QFileDialog.getSaveFileName(
-            self, "PDF 꾸밈 저장 — 새 PDF로 저장",
-            str(src.with_name(src.stem + "_꾸밈.pdf")), "PDF (*.pdf)")
+            self, "일반뷰어용으로 저장 — 새 PDF로",
+            str(src.with_name(src.stem + "_일반뷰어용.pdf")), "PDF (*.pdf)")
         if not out:
             return
         try:
@@ -199,6 +283,7 @@ class EditMixin:
             from PyQt6.QtGui import QColor
             doc = fitz.open(str(src))
             self._bake_drawings_into_doc(doc, norm)
+            self._bake_images_into_doc(doc, file_path)   # 260930-2(§4.7.13): 사진도
             # 260615-3: ② 하이퍼링크도 함께 PDF 에 베이크(꾸밈 저장)
             if with_hyperlinks:
                 try:
@@ -211,9 +296,11 @@ class EditMixin:
             subset_fonts_safely(doc)
             doc.save(out, garbage=4, deflate=True)
             doc.close()
-            self.status.showMessage(f"PDF 꾸밈 저장: {Path(out).name}", 4000)
+            self.status.showMessage(f"일반뷰어용으로 저장: {Path(out).name}", 4000)
             QMessageBox.information(self, "저장 완료",
-                                   f"선·도형·글·하이퍼링크를 삽입한 PDF를 저장했습니다.\n{out}")
+                                   f"꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. "
+                                   f"다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다."
+                                   + chr(10) + str(out))
         except Exception as e:
             QMessageBox.warning(self, "저장 실패", str(e))
 
@@ -403,10 +490,17 @@ class EditMixin:
                     x += w + gap
                 y += btn_h + 4
 
-    def _action_save_decorated_pdf(self):
-        """260615-3: ② 'PDF 꾸밈 저장' — 선·도형·텍스트박스·지시선 + 하이퍼링크를
-        새 PDF 에 삽입 저장. (구 '하이퍼링크 삽입 저장' 확장)"""
-        cur = self.main_view.current_file() if self.main_view else None
+    def _action_save_decorated_pdf(self, checked: bool = False, file_path=None):
+        """일반뷰어용으로 저장 — 꾸밈·사진·하이퍼링크를 **쪽 내용으로 구워** 새 PDF 로.
+
+        260615-3 '(PDF 꾸밈 저장)' 을 260930-2(마스터 §4.7.13, 사용자 요청)에 이름과 범위를
+        넓혔다. PolyPDF 가 따로 들고 있던 꾸밈·삽입 사진은 **다른 프로그램에서는 보이지
+        않는다** — 구워야 어디서든 같게 보인다. 글자는 그대로 두므로 검색·복사도 된다.
+
+        `file_path` 를 주면 그 파일을(책갈피창 우클릭), 없으면 본문에 열린 파일을 쓴다.
+        """
+        cur = str(file_path) if file_path else (
+            self.main_view.current_file() if self.main_view else None)
         if not cur or not str(cur).lower().endswith(".pdf"):
             QMessageBox.information(self, "안내", "먼저 PDF를 표시하세요.")
             return
@@ -414,10 +508,29 @@ class EditMixin:
         norm = self._decorations_norm_for(cur)
         st_hl = self._ensure_hyperlink_store()
         has_hl = bool(st_hl and st_hl.pages_with_links(cur))
-        if not norm and not has_hl:
-            QMessageBox.information(self, "안내",
-                                   "이 파일에 저장할 꾸밈(선·도형·글)이나 하이퍼링크가 없습니다.")
+        # 260930-2: **사진만 있어도** 구울 것이 있다 — 종전에는 여기서 돌아서 버렸다.
+        st_im = self._ensure_page_meta_store()
+        has_img = bool(st_im and st_im.pages_with_images(cur))
+        if not norm and not has_hl and not has_img:
+            QMessageBox.information(
+                self, "안내",
+                "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크가 없습니다.")
             return
+        # 260930-2: 아직 저장하지 않은 쪽 편집이 있으면 알린다 — 구운 파일은 **원본 쪽**
+        #   기준이라 그 편집이 빠진다.
+        try:
+            tp = self.page_thumbs
+            same = (getattr(tp, "_doc", None) is not None
+                    and str(tp._doc.path) == str(cur))
+            if same and tp.is_page_dirty():
+                if QMessageBox.question(
+                        self, "일반뷰어용으로 저장",
+                        "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. "
+                        "지금 구우면 그 편집은 빠집니다. 계속할까요?"
+                ) != QMessageBox.StandardButton.Yes:
+                    return
+        except Exception:
+            pass
         self._apply_drawings_to_pdf(norm, cur, with_hyperlinks=True)
 
     def _ensure_page_meta_store(self):
@@ -763,7 +876,9 @@ class EditMixin:
                 same = (getattr(tp, "_doc", None) is not None
                         and str(tp._doc.path) == str(mv.current_file()))
                 if same and tp.is_page_dirty():
-                    seq = tp.current_page_sequence()
+                    # 260930-2(§4.7.12): 넘김은 **보이는 대로** 간다 — 끼워 둔 쪽도 자리를
+                    #   차지한다. 저장용 목록(`current_page_sequence`)은 자체 쪽만이라 다르다.
+                    seq = tp.current_nav_ids()
             except Exception:
                 seq = None
             if getattr(tp, "_filter", "all") == "all" and not seq:
@@ -771,7 +886,9 @@ class EditMixin:
                 return
             n = mv._doc.page_count
             base = seq if seq else range(n)
-            pages = [p for p in base if tp.page_visible_in_filter(p)]
+            # 스테이징 쪽에는 필터(보임/꾸밈/숨김)가 없다 — 늘 보인다.
+            pages = [p for p in base
+                     if tp.is_staged_page(p) or tp.page_visible_in_filter(p)]
             if not pages:
                 pages = [mv._current_page]   # 빈 필터 → 현재 페이지에 고정
             mv.set_nav_pages(pages, ordered=bool(seq))

@@ -217,6 +217,84 @@ try:
     chk(pt.current_page_sequence() == [0, 1, 2],
         "④ '자체 쪽' 목록에는 섞이지 않는다", pt.current_page_sequence())
 
+    # ── ⑭ 넣은 쪽이 **본문에도** 보인다 (260930-2, 사용자 보고) ──────
+    #   종전에는 썸네일에만 있고 본문으로 갈 길이 없었다(붙여넣기 때부터의 한계) —
+    #   `_on_activated` 가 tuple 항목을 그냥 건너뛰었고, 넘김 목록에도 안 들어갔다.
+    ids = pt.current_nav_ids()
+    chk(len(ids) == pt.list.count(),
+        "⑭ 본문 넘김 목록이 **보이는 대로** — 끼운 쪽도 자리를 차지한다", ids)
+    sid = [x for x in ids if PageThumbs.is_staged_page(x)]
+    chk(len(sid) == 2, "⑭ 끼운 두 쪽에 합성 번호가 붙었다", sid)
+    chk(pt.current_page_sequence() == [0, 1, 2],
+        "⑭ 저장용 목록은 **자체 쪽만** 그대로(저장 계약을 건드리지 않았다)")
+    chk(pt.staged_source(sid[0]) is not None
+        and pt.staged_source(sid[0])[0] == tmp_pdf,
+        "⑭ 합성 번호로 원본 PDF·쪽을 되찾는다", pt.staged_source(sid[0]))
+    obj = pt.staged_page_obj(sid[0])
+    chk(obj is not None and abs(obj[0].load_page(obj[1]).rect.width - 595) < 1,
+        "⑭ 본문이 그릴 fitz 쪽을 준다(문서 쪽 크기)",
+        obj[0].load_page(obj[1]).rect if obj else None)
+    chk(pt.row_of_page(sid[0]) == 2,
+        "⑭ 합성 번호 ↔ 행 동기(본문↔썸네일이 같은 쪽을 가리킨다)", pt.row_of_page(sid[0]))
+    got2 = []
+    pt.pageActivated.connect(lambda x: got2.append(x))
+    pt._on_activated(pt.list.item(2))
+    chk(got2 == [sid[0]], "⑭ 끼운 썸네일을 누르면 **본문으로 간다**", got2)
+    pt._on_activated(pt.list.item(0))
+    chk(got2[-1] == 0, "⑭ 자체 쪽은 종전대로 쪽 번호", got2[-1])
+    chk(PageThumbs.is_staged_page(0) is False
+        and PageThumbs.is_staged_page(PageThumbs.STAGED_BASE) is True,
+        "⑭ 합성 번호는 어떤 쪽 수보다도 커서 자체 쪽과 겹치지 않는다")
+    # ★ 큰 번호라고 다 스테이징이 아니다 — '마지막 쪽으로' 같은 이동은 큰 sentinel 을
+    #   넘긴다. 풀리지 않으면 **스테이징이 아니다**(파일 경계 넘김이 깨졌던 자리).
+    chk(pt.staged_page_obj(10 ** 9) is None,
+        "⑭ ★ 풀리지 않는 큰 번호는 스테이징이 아니다(sentinel 오인 금지)")
+
+    # ── ⑮ 클립보드 사진을 우클릭 메뉴로 (260930-3, 사용자 보고) ─────
+    #   종전에는 **편집모드일 때만** 항목이 보여, 편집모드가 아니면 메뉴에 아예 없어
+    #   기능이 빠진 것처럼 보였다. 이제 늘 보이고, 편집모드가 아니면 꺼져 있다.
+    from PyQt6.QtGui import QImage as _QI
+    _clip = _QI(300, 200, _QI.Format.Format_RGB32)
+    _clip.fill(0xFF3366)
+    QApplication.clipboard().setImage(_clip)
+    chk(pt._clipboard_has_image(), "⑮ 클립보드의 그림을 알아본다")
+
+    def _menu_labels(edit_on):
+        """우클릭 메뉴를 실제로 만들어 항목 이름을 본다(만들고 곧바로 닫는다)."""
+        from PyQt6.QtCore import QTimer, QPoint
+        pt.set_edit_mode(edit_on)
+        out = {}
+        def _grab():
+            for w in QApplication.topLevelWidgets():
+                if w.__class__.__name__ == "QMenu" and w.isVisible():
+                    out["items"] = [(a.text(), a.isEnabled()) for a in w.actions()]
+                    w.close()
+        QTimer.singleShot(0, _grab)
+        pt._on_list_menu(QPoint(5, 100000))      # 빈 곳 우클릭
+        return out.get("items", [])
+
+    for on in (True, False):
+        items = _menu_labels(on)
+        hit = [(t, e) for t, e in items if "사진을 새 쪽으로" in t]
+        chk(bool(hit), "⑮ 편집모드 %s — 항목이 **보인다**" % ("켬" if on else "끔"),
+            hit[0][0] if hit else items)
+        if hit:
+            chk(hit[0][1] is on,
+                "⑮ 편집모드 %s — %s 있다" % ("켬" if on else "끔",
+                                             "쓸 수" if on else "꺼져"), hit[0][1])
+    pt.set_edit_mode(True)
+
+    # 기준 행 — 사용자 지시 '선택하고 있는 썸네일 다음으로'
+    chk(pt._img_ref_row(pt.list.item(1)) == 1, "⑮ 누른 썸네일이 기준")
+    pt.list.clearSelection(); pt.list.setCurrentRow(0)
+    pt.list.item(0).setSelected(True)
+    chk(pt._img_ref_row(None) == 0,
+        "⑮ ★ 빈 곳을 눌러도 **고른 썸네일** 다음이다(사용자 지시)", pt._img_ref_row(None))
+    pt.list.item(0).setSelected(False); pt.list.item(2).setSelected(True)
+    chk(pt._img_ref_row(None) == 2, "⑮ 고른 것이 바뀌면 기준도 따라간다")
+    png = pt._clipboard_image_to_temp()
+    chk(png and os.path.exists(png), "⑮ 클립보드 그림을 임시 PNG 로 떨군다")
+
     # ── ⑨ 임시 파일 정리 ───────────────────────────────────────────
     chk(os.path.exists(tmp_pdf), "⑨ 저장 전에는 임시 PDF 가 살아 있다")
     pt.clear_document()

@@ -38,6 +38,10 @@ class PageThumbs(QWidget):
     pageOrderChanged = pyqtSignal()                # 260915-1: 쪽 이동·삭제·끌어 놓기·붙여넣기(미저장 순서 변경)
     addImagePagesRequested = pyqtSignal(int, object)  # 260930-1(§4.7.11): (기준행, [그림경로…]) 새 쪽으로
     imageDropRefused = pyqtSignal()                # 260930-1(§4.7.11): 편집모드가 아니라 받지 않았다
+    # 260930-2(마스터 §4.7.12): 스테이징 쪽(붙여넣기·사진)은 **문서에 없는 쪽**이라 쪽 번호가 없다.
+    #   본문에 보여 주려면 번호가 있어야 해서, 쪽 수를 넘는 자리에 **합성 번호**를 준다.
+    #   `STAGED_BASE + 일련번호` — 어떤 문서의 쪽 수보다도 크므로 자체 쪽과 겹치지 않는다.
+    STAGED_BASE = 1000000
 
     THUMB_DPI = 48
     NUM_BAND = 18           # 260606-26: 썸네일 하단 페이지번호 띠 높이
@@ -58,6 +62,7 @@ class PageThumbs(QWidget):
         # 260930-1(마스터 §4.7.11): 사진으로 만든 1쪽 PDF·임시 PNG — 저장할 때까지 살아 있어야
         #   하므로 여기서 들고 있다가 문서를 닫거나 목록을 비울 때 지운다.
         self._staged_tmp = []                # [임시 파일 경로]
+        self._staged_seq = 0                 # 260930-2: 스테이징 쪽에 주는 일련번호(안정적)
         self._staged_dir = None              # 이 문서의 임시 폴더(TemporaryDirectory)
         # 260606-28/29: 폭 치수(_build_ui 가 참조하므로 먼저 계산).
         #   폭 고정(리사이즈 불가) — 더 넓혀도 할 일이 없고, 번호가 하단으로 가며
@@ -190,6 +195,13 @@ class PageThumbs(QWidget):
         쪽을 옮기거나 지우면 행 번호와 쪽 번호가 달라진다 — 행을 쪽으로 쓰면 본문과 썸네일이
         서로 다른 쪽을 가리킨다(260915-1 사용자 보고 '이동이 제대로 적용되지 않고 이상하게 보여')."""
         n = self.list.count()
+        if self.is_staged_page(page_index):      # 260930-2: 스테이징 쪽은 일련번호로 찾는다
+            uid = int(page_index) - self.STAGED_BASE
+            for i in range(n):
+                v = self.list.item(i).data(Qt.ItemDataRole.UserRole)
+                if isinstance(v, (tuple, list)) and len(v) >= 3 and int(v[2]) == uid:
+                    return i
+            return -1
         if 0 <= page_index < n and self.list.item(page_index).data(Qt.ItemDataRole.UserRole) == page_index:
             return page_index                    # 순서가 그대로면 곧바로
         for i in range(n):
@@ -214,7 +226,9 @@ class PageThumbs(QWidget):
             v = self.list.item(i).data(Qt.ItemDataRole.UserRole)
             if isinstance(v, int):
                 plan.append(("own", v))
-            elif isinstance(v, (tuple, list)) and len(v) == 2:
+            elif isinstance(v, (tuple, list)) and len(v) >= 2:
+                # 260930-2: 셋째 칸(일련번호)이 있어도 **내보내는 모양은 그대로** 둔다 —
+                #   저장 재구성(§4.7.9)이 읽는 계약이라 바꾸면 안 된다.
                 plan.append(("ext", str(v[0]), int(v[1])))
         return plan
 
@@ -284,6 +298,74 @@ class PageThumbs(QWidget):
                     out.append(f)
         return out
 
+    # ----- 260930-2(마스터 §4.7.12): 스테이징 쪽을 **본문에도** 보여 주기 -----
+    @classmethod
+    def is_staged_page(cls, page_index) -> bool:
+        """이 번호가 스테이징 쪽(문서에 아직 없는 쪽)인가."""
+        try:
+            return int(page_index) >= cls.STAGED_BASE
+        except Exception:
+            return False
+
+    def staged_source(self, page_index):
+        """합성 번호 → `(원본 PDF 경로, 쪽)`. 없으면 None."""
+        if not self.is_staged_page(page_index):
+            return None
+        uid = int(page_index) - self.STAGED_BASE
+        for i in range(self.list.count()):
+            v = self.list.item(i).data(Qt.ItemDataRole.UserRole)
+            if isinstance(v, (tuple, list)) and len(v) >= 3 and int(v[2]) == uid:
+                return (str(v[0]), int(v[1]))
+        return None
+
+    def staged_page_obj(self, page_index):
+        """합성 번호 → `(fitz 문서, 쪽)`. 본문이 그리는 데 쓴다. 없으면 None.
+
+        렌더용 문서는 썸네일이 이미 들고 있는 LRU 캐시(`_ext_doc`)를 **그대로** 쓴다 —
+        같은 원본을 두 번 열지 않는다.
+        """
+        src = self.staged_source(page_index)
+        if not src:
+            return None
+        d = self._ext_doc(src[0])
+        try:
+            return (d.doc, src[1]) if d is not None else None
+        except Exception:
+            return None
+
+    def current_nav_ids(self) -> list:
+        """지금 목록 순서의 **본문 넘김 번호** — 자체 쪽은 쪽 번호, 스테이징 쪽은 합성 번호.
+
+        260930-2: `current_page_sequence()` 는 자체 쪽만 준다(저장용). 본문 넘김은
+        **보이는 대로** 가야 하므로 스테이징 쪽도 자리를 차지한다.
+        """
+        out = []
+        for i in range(self.list.count()):
+            v = self.list.item(i).data(Qt.ItemDataRole.UserRole)
+            if isinstance(v, int):
+                out.append(v)
+            elif isinstance(v, (tuple, list)) and len(v) >= 3:
+                out.append(self.STAGED_BASE + int(v[2]))
+        return out
+
+    def _img_ref_row(self, item) -> int:
+        """사진을 **어느 썸네일 뒤에** 넣을지 — 기준 행 (260930-3, 사용자 지시).
+
+        사용자 지시: *"추가 시 선택하고 있는 썸네일 다음으로 추가하여야 해."*
+        차례로 본다 — ① 오른쪽 버튼으로 누른 썸네일, ② 지금 **고른** 썸네일(여럿이면
+        마지막), ③ 커서가 있는 썸네일. 그래도 없으면 맨 뒤(-1).
+
+        빈 곳을 눌렀다고 곧바로 맨 뒤로 보내면, 썸네일을 골라 둔 사용자가 엉뚱한 자리에
+        넣게 된다 — 그것이 이 함수가 있는 까닭이다.
+        """
+        if item is not None:
+            return self.list.row(item)
+        rows = [self.list.row(it) for it in self.list.selectedItems()]
+        if rows:
+            return max(rows)
+        cur = self.list.currentRow()
+        return cur if cur >= 0 else self.list.count() - 1
+
     def _drop_row(self, pos) -> int:
         """떨어뜨린 자리의 기준 행 — 빈 곳이면 맨 뒤(§4.7.11)."""
         it = self.list.itemAt(pos)
@@ -302,7 +384,10 @@ class PageThumbs(QWidget):
             default_h = self._thumb_size.height() + self.NUM_BAND + self.ITEM_MARGIN
         for p in pages:
             it = QListWidgetItem("")
-            it.setData(Qt.ItemDataRole.UserRole, (str(src_path), int(p)))
+            # 260930-2: 셋째 칸은 **합성 번호용 일련번호** — 쪽을 옮겨도 변하지 않는다.
+            self._staged_seq += 1
+            it.setData(Qt.ItemDataRole.UserRole,
+                       (str(src_path), int(p), int(self._staged_seq)))
             it.setSizeHint(QSize(self._icon_w, default_h))
             self.list.insertItem(row, it)
             row += 1
@@ -552,10 +637,18 @@ class PageThumbs(QWidget):
             act_paste = menu.addAction(f"붙여넣기 ({_pcnt}쪽) — {_where}")
         # 260930-1(§4.7.11): 클립보드 **그림**을 새 쪽으로. 쪽 붙여넣기(위)와 다른 일이라
         #   이름으로 가른다 — 본문 Ctrl+V 는 그 쪽 '위에' 사진을 붙인다(§0 260611-15).
+        # 260930-3(사용자 보고 '기존에 요청했는데 안 들어가 있어'): 종전에는 **편집모드일
+        #   때만** 항목을 보여 줘, 편집모드가 아니면 메뉴에 아예 없어서 기능이 빠진 것처럼
+        #   보였다. 이제 클립보드에 그림이 있으면 **늘 보여 주고**, 편집모드가 아니면
+        #   **끈 채로 까닭을 이름에 적는다**(§4.7.11).
         act_img = None
-        if self._doc is not None and self._edit_mode and self._clipboard_has_image():
-            _w = "맨 뒤" if item is None else f"p.{int(page) + 1} 뒤" if page is not None else "이 뒤"
-            act_img = menu.addAction(f"사진을 새 쪽으로 붙여넣기 — {_w}")
+        if self._doc is not None and self._clipboard_has_image():
+            _r = self._img_ref_row(item)
+            _w = "맨 뒤" if _r < 0 else f"p.{_r + 1} 뒤"
+            act_img = menu.addAction(
+                f"사진을 새 쪽으로 붙여넣기 — {_w}"
+                + ("" if self._edit_mode else "  (편집모드 ✏ 에서)"))
+            act_img.setEnabled(bool(self._edit_mode))
         if act_copy or act_paste or act_img:
             menu.addSeparator()
         act_add = act_del = act_apply = None
@@ -608,10 +701,9 @@ class PageThumbs(QWidget):
                                           else self.list.count() - 1)
             return
         if chosen is not None and chosen == act_img:          # 260930-1(§4.7.11)
-            row = self.list.row(item) if item is not None else self.list.count() - 1
             png = self._clipboard_image_to_temp()
             if png:
-                self.addImagePagesRequested.emit(row, [png])
+                self.addImagePagesRequested.emit(self._img_ref_row(item), [png])
             return
         if chosen == act_del:
             self._delete_selected()
@@ -994,8 +1086,12 @@ class PageThumbs(QWidget):
 
     def _on_activated(self, item: QListWidgetItem):
         page_idx = item.data(Qt.ItemDataRole.UserRole)
-        if isinstance(page_idx, int):            # 붙여넣기(tuple) 항목은 본문 이동 안 함
+        if isinstance(page_idx, int):
             self.pageActivated.emit(int(page_idx))
+        elif isinstance(page_idx, (tuple, list)) and len(page_idx) >= 3:
+            # 260930-2(사용자 보고 '삽입한 뒤 본화면이 안 보임', §4.7.12): 스테이징 쪽도
+            #   본문으로 간다. 종전에는 여기서 그냥 돌아섰다(260822 붙여넣기 때부터).
+            self.pageActivated.emit(self.STAGED_BASE + int(page_idx[2]))
 
     def _sync_icon_width(self):
         """260606-30: 아이콘/아이템 폭을 리스트 뷰포트 실제 폭에 맞춰 가운데 정렬을 정확히.

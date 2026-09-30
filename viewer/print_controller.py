@@ -646,6 +646,7 @@ class PrintMixin:
         if opts.get("include_decorations", True):
             try:
                 self._bake_drawings_into_doc(doc, self._decorations_norm_for(pdf_path))
+                self._bake_images_into_doc(doc, pdf_path)   # 260930-2(§4.7.13): 사진도
                 self._bake_hyperlinks_into_doc(doc, pdf_path)
             except Exception:
                 pass

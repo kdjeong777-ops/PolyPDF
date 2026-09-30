@@ -1944,7 +1944,7 @@ class MainView(QWidget):
         z = self._zoom or 1.0
         urot = self._rotations.get(self._current_page, 0)
         try:
-            page = self._doc.doc.load_page(self._current_page)
+            page = self._page_for(self._current_page)
             if urot or scene_rect is None:
                 return page.get_text("text")
             import fitz
@@ -1993,7 +1993,7 @@ class MainView(QWidget):
         if not self._copy_allowed:           # 260618-1: 복사 권한 없음
             self.textCopied.emit(-1); return 0
         try:
-            txt = self._doc.doc.load_page(self._current_page).get_text("text")
+            txt = self._page_for(self._current_page).get_text("text")
         except Exception:
             txt = ""
         txt = self._apply_text_fixes(txt)          # 260908-2
@@ -2040,7 +2040,7 @@ class MainView(QWidget):
             return
         try:
             import fitz
-            page = self._doc.doc.load_page(self._current_page)
+            page = self._page_for(self._current_page)
             out = []
             for w in page.get_text("words", sort=True):
                 r = self._disp_search_rect(page, fitz.Rect(w[0], w[1], w[2], w[3]))
@@ -2139,6 +2139,53 @@ class MainView(QWidget):
                     return vp.grab(r)
         return vp.grab()
 
+    # ----- 260930-2(마스터 §4.7.12): 아직 저장 전인 '스테이징 쪽' 을 본문에도 보여 준다 -----
+    def set_staged_resolver(self, fn):
+        """합성 쪽 번호 → `(fitz 문서, 쪽)` 를 주는 함수. `None` 이면 종전대로.
+
+        썸네일에 끼워 둔 쪽(붙여넣기·사진)은 **아직 이 문서에 없다.** 그래서 본문이
+        `self._doc` 만 보면 그릴 수가 없다 — 그 쪽을 어디서 가져올지 썸네일에게 묻는다.
+        """
+        self._staged_resolver = fn
+
+    def _is_staged(self, page_index) -> bool:
+        """이 번호가 **실제로 풀리는** 스테이징 쪽인가.
+
+        ★ 번호가 크다는 것만으로 판정하면 안 된다(260930-2 실측) — '이전 파일의 마지막
+        쪽으로' 같은 이동은 큰 番호를 sentinel 로 넘기는데, 그것을 스테이징으로 오해하면
+        `go_to_page` 의 쪽 번호 자르기를 건너뛰어 **쪽이 10억이 된다**(파일 경계 넘김 검사
+        3항목이 이것을 잡았다). 그래서 **해석기가 실제로 돌려주는지**까지 본다.
+        """
+        fn = getattr(self, "_staged_resolver", None)
+        if fn is None:
+            return False
+        try:
+            from viewer.widgets.thumbs_list import PageThumbs
+            if not PageThumbs.is_staged_page(page_index):
+                return False
+            return fn(int(page_index)) is not None
+        except Exception:
+            return False
+
+    def _page_for(self, page_index):
+        """그릴 쪽 하나. 스테이징 쪽이면 **다른 문서**에서 가져온다. 못 구하면 None."""
+        if self._is_staged(page_index):
+            try:
+                got = self._staged_resolver(int(page_index))
+            except Exception:
+                got = None
+            if not got:
+                return None
+            doc, pno = got
+            try:
+                return doc.load_page(int(pno))
+            except Exception:
+                return None
+        try:
+            return self._doc.doc.load_page(int(page_index))
+        except Exception:
+            return None
+
     def go_to_page(self, page_index: int, at_bottom: bool = False):
         """그 쪽으로 간다. `at_bottom` 이면 **그 쪽의 아래끝**에서 시작한다.
 
@@ -2149,7 +2196,8 @@ class MainView(QWidget):
         """
         if not self._doc:
             return
-        page_index = max(0, min(self._doc.page_count - 1, page_index))
+        if not self._is_staged(page_index):      # 260930-2: 스테이징 쪽은 쪽 수 밖이라 자르지 않는다
+            page_index = max(0, min(self._doc.page_count - 1, page_index))
         # 260609-26: 필터가 있으면 허용 페이지로 스냅(앞쪽 우선)
         if self._nav_pages and page_index not in set(self._nav_pages):
             fwd = [p for p in self._nav_pages if p >= page_index]
@@ -2613,7 +2661,9 @@ class MainView(QWidget):
             self._render_two_pages()
             return
 
-        page_obj = self._doc.doc.load_page(self._current_page)
+        page_obj = self._page_for(self._current_page)   # 260930-2: 스테이징 쪽도 그린다
+        if page_obj is None:
+            return
         pdf_w = page_obj.rect.width
         pdf_h = page_obj.rect.height
         if pdf_w <= 0 or pdf_h <= 0:
@@ -3340,7 +3390,7 @@ class MainView(QWidget):
             from viewer import text_extract2 as _tx
             import fitz as _fitz
             path = self.current_file()
-            page = self._doc.doc.load_page(self._current_page) if self._doc else None
+            page = self._page_for(self._current_page) if self._doc else None
             if path and page is not None:
                 ow, odpi = [], 0
                 if self._ocr_words_provider:
@@ -3404,7 +3454,7 @@ class MainView(QWidget):
         out = []
         try:
             if self._doc and not self._is_image:
-                page = self._doc.doc.load_page(self._current_page)
+                page = self._page_for(self._current_page)
                 pw, ph = page.rect.width, page.rect.height
                 if pw > 0 and ph > 0:
                     d = page.get_text("dict")
@@ -3470,7 +3520,7 @@ class MainView(QWidget):
         try:
             if not self._doc or self._is_image:
                 return None
-            page = self._doc.doc.load_page(self._current_page)
+            page = self._page_for(self._current_page)
             pw, ph = page.rect.width, page.rect.height
             if pw <= 0 or ph <= 0:
                 return None
@@ -4152,6 +4202,7 @@ class MainView(QWidget):
         return len(self._page_strokes) - 1
 
     def _page_pt_height(self) -> float:
+        # 260930-2(§4.7.12): 스테이징 쪽도 높이를 재야 스크롤이 맞다 — `_page_for` 로 간다.
         """260907-1: 지금 페이지의 **세로 길이(pt)**. pt↔화면픽셀 환산의 기준.
 
         `page.rect` 는 PDF 좌표(1pt = 1/72인치)라 인쇄했을 때의 실제 크기와 같다.
@@ -4163,7 +4214,7 @@ class MainView(QWidget):
             return cached[1]
         h = MV_A4_PT_H
         try:
-            h = float(self._doc.doc.load_page(self._current_page).rect.height) or MV_A4_PT_H
+            h = float(self._page_for(self._current_page).rect.height) or MV_A4_PT_H
         except Exception:
             pass
         self._page_pt_cache = (key, h)
@@ -4616,7 +4667,7 @@ class MainView(QWidget):
         try:
             if not self._doc or self._is_image:
                 return out
-            page = self._doc.doc.load_page(self._current_page)
+            page = self._page_for(self._current_page)
             pw, ph = page.rect.width, page.rect.height
             if pw <= 0 or ph <= 0:
                 return out
@@ -5471,7 +5522,7 @@ class MainView(QWidget):
         if li < 0 or not (self._doc and self._query):
             return
         try:
-            page_obj = self._doc.doc.load_page(self._current_page)
+            page_obj = self._page_for(self._current_page)
             rects = page_obj.search_for(self._query)
             if not rects or li >= len(rects):
                 return

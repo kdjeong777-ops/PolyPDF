@@ -1465,6 +1465,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         a_open_file.triggered.connect(self.action_open_pdf)
         m_file.addAction(a_open_file)
 
+        # 260930-2(마스터 §4.7.13, 사용자 요청): 저장을 **파일 메뉴에도** 둔다.
+        #   종전에는 책갈피창의 💾 단추 하나뿐이라 찾기 어려웠다.
+        m_file.addSeparator()
+        a_save = QAction("저장", self)
+        a_save.setToolTip("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작).")
+        a_save.triggered.connect(lambda: self.bookmark_tree._op_save())
+        m_file.addAction(a_save)
+        a_save_as = QAction("다른 이름으로 저장 (_edited)...", self)
+        a_save_as.triggered.connect(self._action_save_as)
+        m_file.addAction(a_save_as)
+        a_flat = QAction("일반뷰어용으로 저장 (꾸밈·사진 굽기)...", self)
+        a_flat.setToolTip("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")
+        a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
+        m_file.addAction(a_flat)
+        m_file.addSeparator()
+
         # 260603-3: 인쇄
         a_print = self._sc_act_print = QAction("인쇄...", self)
         a_print.triggered.connect(self.action_print)
@@ -1940,6 +1956,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.bookmark_tree.pathsDropped.connect(lambda ps: self._on_paths_dropped(0, ps))
         self.bookmark_tree_right.pathsDropped.connect(lambda ps: self._on_paths_dropped(1, ps))
         self.page_thumbs.pageActivated.connect(lambda pg: self.main_view.go_to_page(pg))
+        # 260930-2(§4.7.12): 본문이 '아직 저장 전인 쪽' 을 그릴 수 있게 썸네일에게 묻는다.
+        self.main_view.set_staged_resolver(self.page_thumbs.staged_page_obj)
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
         self.page_thumbs.pageOrderChanged.connect(self._on_thumb_order_changed)   # 260915-1(§4.7.7)
@@ -2035,6 +2053,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             lambda f: self._action_build_study_and_bookmarks(file_path=f))
         self.bookmark_tree.mergeFilesRequested.connect(self._on_merge_files)
         self.bookmark_tree.translateFileRequested.connect(self._action_translate_file)  # 260621-P0
+        self.bookmark_tree.flattenFileRequested.connect(          # 260930-2(§4.7.13)
+            lambda f: self._action_save_decorated_pdf(file_path=f))
         self.bookmark_tree.editGlossaryRequested.connect(self._action_edit_glossary)  # 260623
         self.bookmark_tree.translateFilesRequested.connect(self._action_translate_files)  # 260621-P0
         # 260606-22: 책갈피 편집모드 ↔ 썸네일 페이지 편집(삭제/이동) 동기화
@@ -3666,6 +3686,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     SAVE_REPLACE_TRIES = 4                          # 바꿔치기 재시도(약 0.6초) — 그 뒤는 제자리 덮어쓰기
 
+    def _action_save_as(self):
+        """260930-2(§4.7.13): '다른 이름으로 저장' — 💾 와 **같은 길**에 Shift 만 세운 것.
+
+        저장 순서·다른 창 확인·배경 파일 작업(마스터 §4.7.5·§4.7.8)을 그대로 타야 하므로
+        저장 경로를 새로 만들지 않는다. 깃발은 한 번 쓰고 반드시 내린다.
+        """
+        self._force_save_as = True
+        try:
+            self.bookmark_tree._op_save()
+        finally:
+            self._force_save_as = False
+
     def _finalize_save(self, src, produced, shift=None) -> str:
         """260822: 편집 저장 산출물(produced 임시 PDF)을 목적지에 배치.
         기본=원본 덮어쓰기(열린 핸들 닫고 교체), Shift+저장=`_edited`(충돌 시 (k)).
@@ -3673,7 +3705,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from pathlib import Path as _P
         import os as _os
         if shift is None:
-            shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+            # 260930-2(§4.7.13): 파일 메뉴의 '다른 이름으로 저장' 은 Shift 를 누를 수 없다 —
+            #   한 번만 서는 깃발로 같은 길을 탄다(저장 규칙을 두 벌로 만들지 않는다).
+            shift = bool(getattr(self, "_force_save_as", False)) or bool(
+                QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         src = _P(src); produced = _P(produced)
         dst, overwrite = self._edit_save_dst(src, shift)
         if not overwrite:
@@ -3929,6 +3964,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.status.showMessage("읽을 수 있는 사진이 없습니다.", 4000)
             return
         pt.insert_external_pages(after_row, tmp_pdf, range(n))
+        # 260930-2(사용자 보고 '삽입한 뒤 본화면이 안 보임', §4.7.12): 넣자마자 **첫 쪽을
+        #   본문에 보여 준다** — 넣은 것이 맞는지 바로 확인할 수 있어야 한다.
+        try:
+            self._push_nav_filter()               # 넘김 목록에 새 쪽을 먼저 넣고
+            row = max(0, min(int(after_row) + 1, pt.list.count() - 1))
+            v = pt.list.item(row).data(Qt.ItemDataRole.UserRole)
+            if isinstance(v, (tuple, list)) and len(v) >= 3:
+                pt.select_page(pt.STAGED_BASE + int(v[2]))
+                self.main_view.go_to_page(pt.STAGED_BASE + int(v[2]))
+        except Exception:
+            pass
         self.status.showMessage(
             f"사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요.", 6000)
 
