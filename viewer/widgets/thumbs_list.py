@@ -36,6 +36,8 @@ class PageThumbs(QWidget):
     copyPagesRequested = pyqtSignal(object)        # 260821: 선택 썸네일 복사(이 문서 0-based)
     pastePagesRequested = pyqtSignal(int)          # 260821: 붙여넣기(기준 표시행 뒤에 삽입)
     pageOrderChanged = pyqtSignal()                # 260915-1: 쪽 이동·삭제·끌어 놓기·붙여넣기(미저장 순서 변경)
+    addImagePagesRequested = pyqtSignal(int, object)  # 260930-1(§4.7.11): (기준행, [그림경로…]) 새 쪽으로
+    imageDropRefused = pyqtSignal()                # 260930-1(§4.7.11): 편집모드가 아니라 받지 않았다
 
     THUMB_DPI = 48
     NUM_BAND = 18           # 260606-26: 썸네일 하단 페이지번호 띠 높이
@@ -53,6 +55,10 @@ class PageThumbs(QWidget):
         self._img_resolver = None            # 260611-18(A5): page0->[삽입 이미지 dict] (썸네일 베이킹)
         self._paste_available = None         # 260821: () -> int (붙여넣기 대기 쪽수; app 이 주입)
         self._ext_docs = {}                  # 260822: 붙여넣기 스테이징 — {src_path: PdfDocument} 렌더 캐시
+        # 260930-1(마스터 §4.7.11): 사진으로 만든 1쪽 PDF·임시 PNG — 저장할 때까지 살아 있어야
+        #   하므로 여기서 들고 있다가 문서를 닫거나 목록을 비울 때 지운다.
+        self._staged_tmp = []                # [임시 파일 경로]
+        self._staged_dir = None              # 이 문서의 임시 폴더(TemporaryDirectory)
         # 260606-28/29: 폭 치수(_build_ui 가 참조하므로 먼저 계산).
         #   폭 고정(리사이즈 불가) — 더 넓혀도 할 일이 없고, 번호가 하단으로 가며
         #   우측 여백이 과해진 문제도 함께 해소. 아이콘 캔버스 폭=뷰포트 가용폭(가운데 정렬용).
@@ -154,6 +160,10 @@ class PageThumbs(QWidget):
             self.list.setAcceptDrops(False)
             self.list.setDragDropMode(QListWidget.DragDropMode.NoDragDrop)
             self.list.setDropIndicatorShown(False)
+        # 260930-1(§4.7.11): 뷰포트는 **늘** 받는다 — 편집모드가 아닐 때 그림을 끌어다
+        #   놓으면 '편집모드에서만 됩니다' 를 알려야 하는데, 받지 않으면 그 기회조차 없다.
+        #   `DragDropMode` 는 위 그대로라 제 안에서 옮기기는 편집모드에서만 된다.
+        self.list.viewport().setAcceptDrops(True)
 
     def current_page_sequence(self) -> list:
         """현재 표시 순서의 '자체 문서' 페이지 인덱스(0-based) 목록(삭제분·외부 붙여넣기 제외)."""
@@ -211,6 +221,73 @@ class PageThumbs(QWidget):
     def is_page_dirty(self) -> bool:
         """자체 페이지 삭제/이동 또는 외부 붙여넣기가 있으면 dirty."""
         return self.current_page_plan() != [("own", i) for i in range(self._orig_count)]
+
+    # ===== 260930-1(마스터 §4.7.11): 사진을 새 쪽으로 =====
+    @staticmethod
+    def _clipboard_has_image() -> bool:
+        from PyQt6.QtWidgets import QApplication
+        try:
+            md = QApplication.clipboard().mimeData()
+            return bool(md is not None and md.hasImage())
+        except Exception:
+            return False
+
+    def _clipboard_image_to_temp(self):
+        """클립보드 그림을 임시 PNG 로 떨군다 — 그 뒤로는 파일 끌어 놓기와 **같은 길**이다.
+
+        §4.7.11: 세 입구 중 클립보드만 파일이 아니라서 여기서 한 번 맞춰 준다.
+        """
+        from PyQt6.QtWidgets import QApplication
+        try:
+            img = QApplication.clipboard().image()
+        except Exception:
+            return None
+        if img is None or img.isNull():
+            return None
+        path = self.staged_temp_path(".png")
+        return path if img.save(path, "PNG") else None
+
+    def staged_temp_path(self, suffix: str) -> str:
+        """이 문서의 임시 폴더에 새 임시 파일 경로를 하나 낸다(아직 만들지는 않는다).
+
+        스테이징이 가리키는 1쪽 PDF 는 **저장할 때까지 살아 있어야** 하므로 문서 단위
+        임시 폴더에 모아 두고, 문서를 닫거나 목록을 비울 때 통째로 지운다.
+        """
+        import tempfile, uuid
+        if self._staged_dir is None:
+            self._staged_dir = tempfile.TemporaryDirectory(prefix="polypdf_pages_")
+        path = str(Path(self._staged_dir.name) / (uuid.uuid4().hex + suffix))
+        self._staged_tmp.append(path)
+        return path
+
+    def _drop_staged_temps(self):
+        """사진으로 만든 임시 파일을 지운다(문서 닫기·목록 비우기와 같은 자리)."""
+        self._staged_tmp = []
+        d, self._staged_dir = self._staged_dir, None
+        if d is not None:
+            try:
+                d.cleanup()
+            except Exception:
+                pass
+
+    def _image_paths_from_mime(self, mime) -> list:
+        """끌어온 것 중 **그림 파일만** 골라 준다 (§4.7.11 — PDF 는 이번 범위가 아니다)."""
+        from viewer.image_page import is_image_path
+        out = []
+        if mime is not None and mime.hasUrls():
+            for u in mime.urls():
+                try:
+                    f = u.toLocalFile()
+                except Exception:
+                    f = ""
+                if f and is_image_path(f):
+                    out.append(f)
+        return out
+
+    def _drop_row(self, pos) -> int:
+        """떨어뜨린 자리의 기준 행 — 빈 곳이면 맨 뒤(§4.7.11)."""
+        it = self.list.itemAt(pos)
+        return self.list.row(it) if it is not None else self.list.count() - 1
 
     def insert_external_pages(self, after_row: int, src_path: str, pages) -> int:
         """260822: 다른 PDF의 페이지들을 기준 표시행 뒤에 '스테이징' 삽입(미저장). 삽입 수 반환."""
@@ -332,6 +409,36 @@ class PageThumbs(QWidget):
             self.list.takeItem(self.list.row(it))
 
     def eventFilter(self, obj, event):
+        # 260930-1(마스터 §4.7.11): 그림을 끌어다 놓으면 **새 쪽**으로 더한다.
+        #   목록은 `InternalMove`(쪽 순서 바꾸기)라 Qt 는 바깥에서 온 끌기를 거들떠보지
+        #   않는다 — 그래서 Qt 보다 **먼저** 여기서 받는다. 그림이 아닐 때는 False 를 주어
+        #   종전 동작(제 안에서 옮기기)을 그대로 둔다.
+        if obj is self.list.viewport() and event.type() in (
+                QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+            try:
+                paths = self._image_paths_from_mime(event.mimeData())
+            except Exception:
+                paths = []
+            if not paths:
+                return False                     # 그림이 아니다 — 종전대로
+            if not self._edit_mode:
+                # 아무 일도 안 일어나면 고장으로 보인다 — 까닭을 알린다(§4.7.11).
+                event.ignore()
+                if event.type() == QEvent.Type.Drop:
+                    self.imageDropRefused.emit()
+                return True
+            # ★ **복사로 받는다**(§4.7.11). 스크린샷 스트립은 `InternalMove` 라 끌기가
+            #   끝나고 결과가 `MoveAction` 이면 Qt 가 **원본 컷을 스트립에서 지운다**
+            #   (`QAbstractItemView::startDrag` 가 move 면 고른 행을 치운다).
+            #   `setDropAction` 은 **보낸 쪽이 내놓은 것 중에서만** 고를 수 있으므로
+            #   복사를 안 내놓았으면 그대로 받는다(받지 않는 것보다 낫다).
+            if event.possibleActions() & Qt.DropAction.CopyAction:
+                event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            if event.type() == QEvent.Type.Drop:
+                self.addImagePagesRequested.emit(
+                    self._drop_row(event.position().toPoint()), paths)
+            return True
         # 260611-12: 세로 스크롤바가 생기거나 사라져 뷰포트 폭이 바뀌면(가운데 정렬 기준 변경)
         #   아이콘 폭을 재동기화하고 카드를 다시 그려 '스크롤바 고려한 중앙 정렬' 유지.
         if obj is self.list.viewport() and event.type() == QEvent.Type.Resize:
@@ -443,7 +550,13 @@ class PageThumbs(QWidget):
         if self._doc is not None and self._edit_mode and _pcnt > 0:
             _where = "맨 뒤" if item is None else f"p.{int(page) + 1} 뒤" if page is not None else "이 뒤"
             act_paste = menu.addAction(f"붙여넣기 ({_pcnt}쪽) — {_where}")
-        if act_copy or act_paste:
+        # 260930-1(§4.7.11): 클립보드 **그림**을 새 쪽으로. 쪽 붙여넣기(위)와 다른 일이라
+        #   이름으로 가른다 — 본문 Ctrl+V 는 그 쪽 '위에' 사진을 붙인다(§0 260611-15).
+        act_img = None
+        if self._doc is not None and self._edit_mode and self._clipboard_has_image():
+            _w = "맨 뒤" if item is None else f"p.{int(page) + 1} 뒤" if page is not None else "이 뒤"
+            act_img = menu.addAction(f"사진을 새 쪽으로 붙여넣기 — {_w}")
+        if act_copy or act_paste or act_img:
             menu.addSeparator()
         act_add = act_del = act_apply = None
         if self._edit_mode:
@@ -493,6 +606,12 @@ class PageThumbs(QWidget):
         if chosen is not None and chosen == act_paste:
             self.pastePagesRequested.emit(self.list.row(item) if item is not None
                                           else self.list.count() - 1)
+            return
+        if chosen is not None and chosen == act_img:          # 260930-1(§4.7.11)
+            row = self.list.row(item) if item is not None else self.list.count() - 1
+            png = self._clipboard_image_to_temp()
+            if png:
+                self.addImagePagesRequested.emit(row, [png])
             return
         if chosen == act_del:
             self._delete_selected()
@@ -560,6 +679,7 @@ class PageThumbs(QWidget):
             except Exception:
                 pass
         self._ext_docs = {}
+        self._drop_staged_temps()                   # 260930-1(§4.7.11): 사진 임시 파일도 함께
         self.list.clear()
         self._doc_path = None
         self._doc_mtime = None
@@ -588,6 +708,7 @@ class PageThumbs(QWidget):
             except Exception:
                 pass
         self._ext_docs = {}
+        self._drop_staged_temps()                   # 260930-1(§4.7.11): 사진 임시 파일도 함께
         self.list.clear()
 
         if not path.exists() or path.suffix.lower() != ".pdf":

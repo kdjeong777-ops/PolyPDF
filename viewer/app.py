@@ -2045,6 +2045,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._thumb_clip = None       # {"src": path, "pages": [0-based idx...]}
         self.page_thumbs.copyPagesRequested.connect(self._on_copy_pages)
         self.page_thumbs.pastePagesRequested.connect(self._on_paste_pages)
+        self.page_thumbs.addImagePagesRequested.connect(self._on_add_image_pages)   # 260930-1
+        self.page_thumbs.imageDropRefused.connect(lambda: self.status.showMessage(
+            '쪽 추가는 편집모드(✏)에서만 됩니다.', 4000))
         self.page_thumbs._paste_available = (
             lambda: len(self._thumb_clip["pages"]) if self._thumb_clip else 0)
         # v1.6.21: 파일 작업 핸드셰이크 (메인이 열고 있는 파일도 작업 가능)
@@ -3885,6 +3888,49 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         n = pt.insert_external_pages(after_row, clip.get("src"), src_pages)
         self.status.showMessage(
             f"붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요.", 6000)
+
+    def _on_add_image_pages(self, after_row: int, paths):
+        """260930-1(마스터 §4.7.11): 사진을 **새 쪽**으로 기준 행 뒤에 스테이징 삽입(미저장).
+
+        클립보드·스크린샷 스트립·바깥 파일 셋이 모두 여기로 온다 — 들어올 때 이미
+        '그림 파일 목록' 하나로 맞춰져 있다. 사진을 **1쪽짜리 PDF** 로 바꿔 넣으므로
+        그 뒤(썸네일 렌더·미저장 표시·저장 재구성·취소)는 §4.7.7 이 그대로 처리한다.
+        """
+        pt = self.page_thumbs
+        doc = getattr(pt, "_doc", None)
+        paths = [str(x) for x in (paths or [])]
+        if not doc or not paths:
+            return
+        if not getattr(pt, "_edit_mode", False):
+            self.status.showMessage("쪽 추가는 편집모드(✏)에서만 됩니다.", 4000)
+            return
+        from viewer.image_page import images_to_pdf, page_size_of
+        size = page_size_of(str(doc.path))        # 문서 첫 쪽 크기(§4.7.11, 사용자 결정)
+        tmp_pdf = pt.staged_temp_path(".pdf")
+        # 260930-1(응답성 SOT §4): 변환은 **배경**에서. 실측 스크린샷 5장 0.10초 /
+        #   3000x2000 사진 20장 0.92초 — 흔한 경우는 눈에 띄지 않지만 많이 끌어다 놓으면
+        #   1초에 닿는다. `_run_merge_job` 은 300ms 를 넘을 때만 진행창을 띄우므로
+        #   짧은 경우에는 창이 뜨지 않는다. 새 워커를 만들지 않고 이미 있는 것을 쓴다
+        #   (이미지→PDF 변환도 같은 러너를 쓴다).
+        out = {}
+
+        def _job(prog):
+            out["n"] = images_to_pdf(paths, tmp_pdf, page_size=size, progress=prog)
+
+        res = self._run_merge_job(_job, "사진을 쪽으로")
+        if res.get("cancelled"):
+            self.status.showMessage("취소했습니다.", 4000)
+            return
+        if res.get("err"):
+            self.status.showMessage(f"사진을 쪽으로 만들지 못했습니다: {res['err']}", 6000)
+            return
+        n = int(out.get("n") or 0)
+        if not n:
+            self.status.showMessage("읽을 수 있는 사진이 없습니다.", 4000)
+            return
+        pt.insert_external_pages(after_row, tmp_pdf, range(n))
+        self.status.showMessage(
+            f"사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요.", 6000)
 
     def _on_apply_page_edits(self):
         """260606-22: 썸네일에서 편집한 페이지 순서/삭제를 새 PDF로 저장."""

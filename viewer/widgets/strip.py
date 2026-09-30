@@ -146,6 +146,33 @@ def make_card_pixmap(thumb: QPixmap, label: str, page_label: str = "",
     return pix
 
 
+class _DragOutList(QListWidget):
+    """260930-1(마스터 §4.7.11): 컷을 **밖으로** 끌어낼 수 있는 목록.
+
+    스크린샷 컷은 디스크에 저장된 PNG 다. 끌 때 그 **경로를 함께 실어** 주면 본문
+    썸네일이 파일 탐색기에서 끌어온 것과 **똑같이** 받아 새 쪽으로 만든다 —
+    받는 쪽에 스트립 전용 길을 따로 내지 않는다.
+
+    제 안에서 순서를 바꾸는 것(`InternalMove`)은 종전 그대로다. 받는 쪽이 **복사**로
+    받으므로(`CopyAction`) 밖으로 끌어내도 스트립의 컷은 지워지지 않는다.
+    """
+
+    def mimeData(self, items):
+        md = super().mimeData(items)
+        try:
+            from PyQt6.QtCore import QUrl
+            urls = []
+            for it in items or []:
+                p = it.data(MiniStrip.DATA_PATH)
+                if p and Path(str(p)).exists():
+                    urls.append(QUrl.fromLocalFile(str(p)))
+            if urls and md is not None:
+                md.setUrls(urls)
+        except Exception:
+            pass
+        return md
+
+
 class MiniStrip(QWidget):
     """가로 스크롤 미니창. v1.5.0: (path, page) 시그널.
 
@@ -206,7 +233,7 @@ class MiniStrip(QWidget):
         head.addWidget(self.clear_btn)
         layout.addLayout(head)
 
-        self.list = QListWidget()
+        self.list = _DragOutList(self)
         self.list.setFlow(QListWidget.Flow.LeftToRight)
         self.list.setWrapping(False)
         self.list.setIconSize(QSize(self.CARD_W, self.CARD_H))
