@@ -645,8 +645,10 @@ class PageThumbs(QWidget):
         if self._doc is not None and self._clipboard_has_image():
             _r = self._img_ref_row(item)
             _w = "맨 뒤" if _r < 0 else f"p.{_r + 1} 뒤"
+            # 260930-4(사용자 지시): 이름을 '클립보드 사진 새쪽 붙이기' 로.
+            #   무엇을(클립보드 사진) 어디에(새 쪽) 넣는지가 이름에 다 들어간다.
             act_img = menu.addAction(
-                f"사진을 새 쪽으로 붙여넣기 — {_w}"
+                f"클립보드 사진 새쪽 붙이기 — {_w}"
                 + ("" if self._edit_mode else "  (편집모드 ✏ 에서)"))
             act_img.setEnabled(bool(self._edit_mode))
         if act_copy or act_paste or act_img:
@@ -703,7 +705,14 @@ class PageThumbs(QWidget):
         if chosen is not None and chosen == act_img:          # 260930-1(§4.7.11)
             png = self._clipboard_image_to_temp()
             if png:
-                self.addImagePagesRequested.emit(self._img_ref_row(item), [png])
+                # ★ 260930-4(사용자 보고 '실행 후 프로그램 종료됨'): **메뉴가 다 닫힌 뒤에**
+                #   보낸다. 받는 쪽이 모달 진행창(`_run_merge_job` 의 중첩 이벤트 루프)을
+                #   여는데, 아직 이 핸들러 안이라 `QMenu` 가 살아 있는 채로 중첩 루프가
+                #   돌면 Qt 가 무너진다(파이썬 예외 없이 프로세스가 끝난다).
+                #   `singleShot(0)` 이면 이 슬롯이 돌아가 메뉴가 정리된 뒤에 실행된다.
+                _row, _p = self._img_ref_row(item), [png]
+                QTimer.singleShot(
+                    0, lambda r=_row, p=_p: self.addImagePagesRequested.emit(r, p))
             return
         if chosen == act_del:
             self._delete_selected()

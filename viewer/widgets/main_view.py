@@ -1817,6 +1817,7 @@ class MainView(QWidget):
                 return False                  # 취소 — 기존 self._doc / 화면 유지
         if self._doc is not None:
             self._doc.close()
+        self._close_staged_doc()      # 260930-4: 끼운 쪽 원본도 놓는다(임시 파일 잠금 방지)
         self._doc = newdoc
         self._is_image = False               # v1.6.4 C2: PDF 모드
         self._update_empty_label()           # 260606-30: 문서 로드 → 안내 숨김
@@ -2151,6 +2152,8 @@ class MainView(QWidget):
     def _is_staged(self, page_index) -> bool:
         """이 번호가 **실제로 풀리는** 스테이징 쪽인가.
 
+        해석기는 **경로와 쪽**만 준다(`(원본 PDF, 쪽)`) — 살아 있는 문서를 주고받지 않는다.
+
         ★ 번호가 크다는 것만으로 판정하면 안 된다(260930-2 실측) — '이전 파일의 마지막
         쪽으로' 같은 이동은 큰 番호를 sentinel 로 넘기는데, 그것을 스테이징으로 오해하면
         `go_to_page` 의 쪽 번호 자르기를 건너뛰어 **쪽이 10억이 된다**(파일 경계 넘김 검사
@@ -2167,8 +2170,37 @@ class MainView(QWidget):
         except Exception:
             return False
 
+    def _staged_doc_for(self, src: str):
+        """끼운 쪽의 원본 PDF — **본문이 제 것으로 연다** (260930-4).
+
+        ★ 종전에는 썸네일의 LRU 캐시가 들고 있는 fitz 문서를 그대로 받아 썼다. 그 캐시는
+        문서를 닫거나(`clear_document`) 넷을 넘으면(LRU 축출) **언제든 닫는다** — 본문이
+        그리는 도중에 닫히면 파이썬 예외 없이 프로세스가 끝난다. 남이 소유한 살아 있는
+        객체를 건네받지 않고, **경로만** 받아 제가 연다(한 개만 들고 있다가 바꾼다).
+        """
+        cur = getattr(self, "_staged_doc", None)
+        if cur is not None and cur[0] == src:
+            return cur[1]
+        self._close_staged_doc()
+        try:
+            import fitz
+            d = fitz.open(src)
+        except Exception:
+            return None
+        self._staged_doc = (src, d)
+        return d
+
+    def _close_staged_doc(self):
+        cur = getattr(self, "_staged_doc", None)
+        self._staged_doc = None
+        if cur is not None:
+            try:
+                cur[1].close()
+            except Exception:
+                pass
+
     def _page_for(self, page_index):
-        """그릴 쪽 하나. 스테이징 쪽이면 **다른 문서**에서 가져온다. 못 구하면 None."""
+        """그릴 쪽 하나. 끼운 쪽이면 **그 원본 PDF**에서 가져온다. 못 구하면 None."""
         if self._is_staged(page_index):
             try:
                 got = self._staged_resolver(int(page_index))
@@ -2176,9 +2208,12 @@ class MainView(QWidget):
                 got = None
             if not got:
                 return None
-            doc, pno = got
+            src, pno = str(got[0]), int(got[1])
+            d = self._staged_doc_for(src)
+            if d is None:
+                return None
             try:
-                return doc.load_page(int(pno))
+                return d.load_page(pno)
             except Exception:
                 return None
         try:

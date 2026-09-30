@@ -230,10 +230,15 @@ try:
     chk(pt.staged_source(sid[0]) is not None
         and pt.staged_source(sid[0])[0] == tmp_pdf,
         "⑭ 합성 번호로 원본 PDF·쪽을 되찾는다", pt.staged_source(sid[0]))
-    obj = pt.staged_page_obj(sid[0])
-    chk(obj is not None and abs(obj[0].load_page(obj[1]).rect.width - 595) < 1,
-        "⑭ 본문이 그릴 fitz 쪽을 준다(문서 쪽 크기)",
-        obj[0].load_page(obj[1]).rect if obj else None)
+    # 260930-4: 해석기는 **경로와 쪽**만 준다 — 살아 있는 문서를 주고받지 않는다.
+    #   남의 LRU 캐시가 소유한 문서를 그리다 그 캐시가 닫으면 프로세스가 그냥 끝난다.
+    from viewer.widgets.main_view import MainView as _MV
+    import inspect as _isp
+    _srcmv = _isp.getsource(_MV._page_for)
+    chk("_staged_doc_for" in _srcmv,
+        "⑭ ★ 본문은 끼운 쪽 원본을 **제가 연다**(남의 캐시를 쓰지 않는다)")
+    chk("staged_source" in _isp.getsource(__import__('viewer.app', fromlist=['x'])),
+        "⑭ 해석기로 **경로형**을 넘긴다")
     chk(pt.row_of_page(sid[0]) == 2,
         "⑭ 합성 번호 ↔ 행 동기(본문↔썸네일이 같은 쪽을 가리킨다)", pt.row_of_page(sid[0]))
     got2 = []
@@ -275,7 +280,7 @@ try:
 
     for on in (True, False):
         items = _menu_labels(on)
-        hit = [(t, e) for t, e in items if "사진을 새 쪽으로" in t]
+        hit = [(t, e) for t, e in items if "클립보드 사진 새쪽 붙이기" in t]
         chk(bool(hit), "⑮ 편집모드 %s — 항목이 **보인다**" % ("켬" if on else "끔"),
             hit[0][0] if hit else items)
         if hit:
@@ -294,6 +299,21 @@ try:
     chk(pt._img_ref_row(None) == 2, "⑮ 고른 것이 바뀌면 기준도 따라간다")
     png = pt._clipboard_image_to_temp()
     chk(png and os.path.exists(png), "⑮ 클립보드 그림을 임시 PNG 로 떨군다")
+
+    # ── ⑯ 메뉴에서는 **메뉴가 닫힌 뒤에** 보낸다 (260930-4, 사용자 보고 '종료됨') ──
+    #   받는 쪽이 모달 진행창(중첩 이벤트 루프)을 여는데, 아직 메뉴 핸들러 안이라
+    #   `QMenu` 가 살아 있는 채로 중첩 루프가 돌면 Qt 가 무너진다(파이썬 예외 없이 종료).
+    #   오프스크린에서는 QMenu 가 뜨지 않아 클릭까지 몰 수 없어 **코드로** 고정한다.
+    import inspect as _i2
+    _menu_src = _i2.getsource(PageThumbs._on_list_menu)
+    _seg = _menu_src[_menu_src.find("chosen == act_img"):]
+    chk("QTimer.singleShot" in _seg[:600],
+        "⑯ ★ 클립보드 붙이기는 **메뉴가 닫힌 뒤** 보낸다(모달 창 중첩 방지)")
+    from viewer.app import MainWindow as _MW
+    _slot = _i2.getsource(_MW._on_add_image_pages)
+    chk("try:" in _slot and "except Exception" in _slot,
+        "⑯ 슬롯에서 예외가 **새어 나가지 않는다**(PyQt6 은 새면 프로세스를 끝낸다)")
+    chk("_add_image_pages_impl" in _slot, "⑯ 본체는 따로 두고 슬롯은 감싸기만")
 
     # ── ⑨ 임시 파일 정리 ───────────────────────────────────────────
     chk(os.path.exists(tmp_pdf), "⑨ 저장 전에는 임시 PDF 가 살아 있다")

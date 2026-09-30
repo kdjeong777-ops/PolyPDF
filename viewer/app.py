@@ -1957,7 +1957,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.bookmark_tree_right.pathsDropped.connect(lambda ps: self._on_paths_dropped(1, ps))
         self.page_thumbs.pageActivated.connect(lambda pg: self.main_view.go_to_page(pg))
         # 260930-2(§4.7.12): 본문이 '아직 저장 전인 쪽' 을 그릴 수 있게 썸네일에게 묻는다.
-        self.main_view.set_staged_resolver(self.page_thumbs.staged_page_obj)
+        self.main_view.set_staged_resolver(self.page_thumbs.staged_source)
         self.page_thumbs.pageFilterChanged.connect(                # 260609-26
             lambda _=None: self._push_nav_filter())
         self.page_thumbs.pageOrderChanged.connect(self._on_thumb_order_changed)   # 260915-1(§4.7.7)
@@ -3931,6 +3931,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         '그림 파일 목록' 하나로 맞춰져 있다. 사진을 **1쪽짜리 PDF** 로 바꿔 넣으므로
         그 뒤(썸네일 렌더·미저장 표시·저장 재구성·취소)는 §4.7.7 이 그대로 처리한다.
         """
+        # ★ 260930-4(사용자 보고 '실행 후 프로그램 종료됨'): 이 함수는 **슬롯**이다.
+        #   PyQt6 은 슬롯에서 빠져나온 예외를 만나면 프로세스를 끝낸다 — 무엇이 터지든
+        #   사용자는 '프로그램이 꺼졌다' 만 본다. 그래서 여기서 모두 받아 알린다.
+        try:
+            self._add_image_pages_impl(int(after_row), paths)
+        except Exception as e:                                # noqa: BLE001
+            import traceback
+            traceback.print_exc()
+            self.status.showMessage("사진을 쪽으로 넣지 못했습니다: %s" % e, 8000)
+
+    def _add_image_pages_impl(self, after_row: int, paths):
         pt = self.page_thumbs
         doc = getattr(pt, "_doc", None)
         paths = [str(x) for x in (paths or [])]
