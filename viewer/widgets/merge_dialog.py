@@ -17,9 +17,9 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QDialogButtonBox, QAbstractItemView, QCheckBox,
     QComboBox, QWidget, QSizePolicy,
 )
-from viewer.i18n import tr, korea_only_visible
+from viewer.i18n import tr, tr_noop, korea_only_visible
 
-SHOTS_NAME = "사용자 스크린샷"
+SHOTS_NAME = tr_noop("사용자 스크린샷")      # 병합 목록 이름이자 만든 PDF 의 책갈피 제목 — 쓰는 때 tr(§8)
 
 
 def _has_pdf_urls(mime) -> bool:
@@ -386,9 +386,9 @@ class MergeFilesDialog(QDialog):
     def _add_screenshots(self):
         if not self._screenshot_paths:
             return
-        it = QListWidgetItem(tr('🖼 {SHOTS_NAME} ({n}장)').format(SHOTS_NAME=SHOTS_NAME, n=len(self._screenshot_paths)))
+        it = QListWidgetItem(tr('🖼 {SHOTS_NAME} ({n}장)').format(SHOTS_NAME=tr(SHOTS_NAME), n=len(self._screenshot_paths)))
         it.setData(self._DATA, {"type": "shots", "paths": list(self._screenshot_paths),
-                                "name": SHOTS_NAME, "order": self._next_order()})
+                                "name": tr(SHOTS_NAME), "order": self._next_order()})
         self.right.addItem(it)
 
     def _move_right(self, direction: int):
@@ -478,7 +478,7 @@ class MergeFilesDialog(QDialog):
         elif isinstance(d, dict) and d.get("type") == "pdf":
             self.preview.show_pdf(d["path"])
         elif isinstance(d, dict) and d.get("type") == "shots":
-            self.preview.show_images(d.get("paths") or [], d.get("name") or SHOTS_NAME)
+            self.preview.show_images(d.get("paths") or [], d.get("name") or tr(SHOTS_NAME))
 
     def done(self, r):
         self.preview.clear()                        # 원본 핸들을 병합·저장 전에 놓는다

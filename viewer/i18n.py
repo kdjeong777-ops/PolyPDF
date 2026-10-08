@@ -154,6 +154,13 @@ def _chain(code: str) -> list:
     return out
 
 
+def resource_chain() -> list:
+    """언어별 리소스(도움말 등)를 찾을 차례 — 지금 언어 → fallback → 한국어(원문). SOT §8.
+    예: `for c in resource_chain(): resources/help/help_<c>.html` 이 있으면 그것."""
+    out = _chain(_lang) if _lang != KO else []
+    return out + [KO]
+
+
 def _translations_for(codes: list):
     """사슬의 `.mo` 들을 add_fallback 으로 잇는다. 하나도 없으면 NullTranslations."""
     head = None

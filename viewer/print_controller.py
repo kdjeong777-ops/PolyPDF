@@ -70,7 +70,7 @@ class PrintMixin:
         if spec["mode"] == "shot":
             shots = self._shot_paths_to_print()
             if to_pdf:
-                dst = self._save_pdf_dialog("스크린샷.pdf")
+                dst = self._save_pdf_dialog(tr("스크린샷.pdf"))
                 if dst and self._export_images_pdf(shots, dst):
                     self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                     self._after_pdf_created(dst)
@@ -103,7 +103,7 @@ class PrintMixin:
             if not out_nup:
                 return
             if to_pdf:
-                dst = self._save_pdf_dialog(Path(cur).stem + "_다단.pdf")
+                dst = self._save_pdf_dialog(tr('{stem}_다단.pdf').format(stem=Path(cur).stem))
                 if dst and self._copy_pdf(out_nup, dst):
                     self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                     self._after_pdf_created(dst)
@@ -113,7 +113,7 @@ class PrintMixin:
             self._print_pdf_pages(out_nup, npages)
             return
         if to_pdf:
-            dst = self._save_pdf_dialog(Path(cur).stem + "_인쇄.pdf")
+            dst = self._save_pdf_dialog(tr('{stem}_인쇄.pdf').format(stem=Path(cur).stem))
             if dst and self._export_pages_pdf(cur, pages, dst):
                 self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                 self._after_pdf_created(dst)
@@ -241,7 +241,7 @@ class PrintMixin:
         if not paths:
             QMessageBox.information(self, tr("이미지 → PDF"), tr("변환할 이미지를 추가하세요."))
             return
-        default_name = Path(paths[0]).stem + "_이미지.pdf"
+        default_name = tr('{stem}_이미지.pdf').format(stem=Path(paths[0]).stem)
         tmp = self._mk_print_tmpdir("polypdf_img2pdf_")
         base = str(tmp / "images.pdf")
         nup = dlg.nup_enabled()
@@ -410,7 +410,7 @@ class PrintMixin:
         if not files:
             QMessageBox.information(self, tr("인쇄"), tr("선택한 PDF 파일이 없습니다."))
             return
-        default_stem = (Path(files[0]).stem + f"_외{len(files) - 1}건"
+        default_stem = (tr("{stem}_외{n}건").format(stem=Path(files[0]).stem, n=len(files) - 1)
                         if len(files) > 1 else Path(files[0]).stem)
         if dlg.nup_enabled():
             items = [{"type": "pdf", "path": f, "name": Path(f).stem} for f in files]
@@ -418,7 +418,7 @@ class PrintMixin:
             if not out_nup:
                 return
             if to_pdf:
-                dst = self._save_pdf_dialog(default_stem + "_다단.pdf")
+                dst = self._save_pdf_dialog(tr('{stem}_다단.pdf').format(stem=default_stem))
                 if dst and self._copy_pdf(out_nup, dst):
                     self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                     self._after_pdf_created(dst)
@@ -432,7 +432,7 @@ class PrintMixin:
             QMessageBox.information(self, tr("인쇄"), tr("인쇄할 페이지가 없습니다."))
             return
         if to_pdf:
-            dst = self._save_pdf_dialog(default_stem + "_인쇄.pdf")
+            dst = self._save_pdf_dialog(tr('{stem}_인쇄.pdf').format(stem=default_stem))
             if dst and self._copy_pdf(combined, dst):
                 self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                 self._after_pdf_created(dst)

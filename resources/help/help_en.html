@@ -1,0 +1,157 @@
+<!-- PolyPDF help (English) — multilingual SOT §8. Korean-only features (§7: laws, KCSC, KIPO, vocabulary, translation) are left out. -->
+<h2>Using PolyPDF</h2>
+
+<h3>1. Getting started</h3>
+<ul>
+  <li><b>File → Open Folder</b> (Ctrl+O) — choose a folder that contains PDFs.
+    If the folder has a <code>bookmarks.json</code>, it is shown as a bookmark tree; otherwise
+    all PDFs are listed in a flat tree.</li>
+  <li><b>File → Open File</b> (Ctrl+Shift+O) — open a single PDF.</li>
+  <li>You can also <b>drag and drop</b> a PDF file or folder onto the window.</li>
+  <li>The first time you open a folder, its text is indexed in the background (progress in the status bar).</li>
+</ul>
+
+<h3>2. Screen layout</h3>
+<ul>
+  <li><b>Bookmarks panel (left)</b>: click to load the file in the main viewer. Expand a file
+    node (▸) to see the PDF's own bookmarks (TOC). <b>Right-click</b> a file or bookmark for
+    more (open file location, save as, save for PolyPDF, save for other viewers,
+    rename or delete files and bookmarks, build bookmarks, and so on).</li>
+  <li><b>Expand All Bookmarks</b> (right-click): expands the bookmarks of every file
+    <b>visible</b> in the panel. While it is on (checked in the menu), files that appear as you
+    scroll or as the list changes are expanded too.
+    <b>Collapse All Bookmarks</b> turns this off and collapses back to the file rows.</li>
+  <li><b>Page thumbnails (second column)</b>: every page of the current PDF. Click to jump.
+    <b>Right-click</b> a thumbnail → 'Add Bookmark' (to the current file in the tree).</li>
+  <li><b>Main viewer (center)</b>: toolbar = ‹ [page] /N › · zoom −/+ ·
+    <b>screen capture</b> · read aloud <b>▶</b> + <b>range ▾</b> (once/continuous/all/all continuous · speed · voice) ·
+    <b>mp3</b> (save the current PDF split by bookmarks) · view combo (page / 2 pages / width / custom zoom).
+    The vertical scrollbar on the right shows your <b>progress through the whole document</b> (drag to move).</li>
+  <li><b>Split view</b> (Ctrl+2): splits the main viewer into <b>two panes</b> so you can view
+    <b>two PDFs at once</b>. Click a pane to make it <b>active</b> (blue border); bookmarks,
+    search, thumbnails and reading then work on the active pane, and each pane's
+    <b>📷 capture</b>, read and mp3 buttons work on that pane alone.</li>
+  <li><b>Sliding panel</b>: in split view, or when search and screenshots are <b>both hidden</b>,
+    the right panel becomes a <b>slide-out drawer</b> that you open with the edge handle (‹)
+    (it opens briefly during a capture and closes after 1.5 seconds). With only screenshots on, it shows as a grid.</li>
+  <li><b>Text · search · screenshots (right)</b>: text and search tabs (top) + screenshots (bottom).
+    Toggle them from the toolbar's View buttons. When all screenshots are deleted, the screenshot area hides itself.</li>
+</ul>
+
+<h3>2-1. Read aloud (TTS) · mp3</h3>
+<ul>
+  <li>Toolbar <b>▶</b> = read the body text from the current page / stop (headers, tables,
+    formulas and figures are skipped). The <b>sentence</b> being read is highlighted in light blue,
+    and pages follow automatically. Click a sentence to read from there.</li>
+  <li><b>Range ▾</b>: once / continuous / all / all continuous, plus <b>speed and voice</b>.</li>
+  <li>Toolbar <b>mp3</b> (MP3 icon): saves the current PDF as mp3 files (+ .lrc lyrics),
+    <b>split by bookmark level (1/2/3)</b> (one file if there are no bookmarks).</li>
+</ul>
+
+<h3>3. Search</h3>
+<ul>
+  <li>Type in the search bar at the top right and press Enter. Matches are highlighted in the text.</li>
+  <li>Sort results: <b>by name</b> (bookmark order) / <b>by match count</b>.</li>
+  <li><b>F3 / Shift+F3</b> or the search bar's <b>▶ / ◀</b>: next / previous match.
+    After the last match in a file, it jumps to the first match of the next file in the results.</li>
+  <li><b>Save</b>: save the results to Excel (.xlsx) (the file name gets a date-time prefix).</li>
+  <li><b>Capture all</b>: take screenshots of every matching page in the results.
+    If there are more results than the limit, the limit is raised automatically.</li>
+</ul>
+
+<h3>4. Screenshots / screen capture</h3>
+<ul>
+  <li>Capture with the main toolbar's <b>📷 capture</b> button or <b>Ctrl+Shift+S</b>. Choose the
+    mode from the <b>drop-down</b> next to the capture icon:
+    <b>Full screen</b> (current page / selected thumbnails) · <b>Region</b> (drag a box on the screen,
+    move or resize it, then press Enter or double-click to capture) · <b>Custom size 1–5</b>
+    (a box of a set size at the point you click; set names and pixel sizes in 'Custom Size Settings').
+    <b>Capture quality</b> (as shown / original quality).</li>
+  <li>Select <b>several thumbnails</b> and capture to save each page full screen <b>in one go</b>.</li>
+  <li>Each screenshot card shows its <b>order number</b> underneath (updated when you reorder or delete).</li>
+  <li><b>Copy to Clipboard</b> (📋): copies the screenshots to the clipboard in order →
+    paste them one by one from the <b>Win+V</b> list.</li>
+  <li><b>Import from Clipboard</b> (📥): adds the picture on the clipboard (copied from a capture tool,
+    or image files copied in File Explorer) as screenshot cards.</li>
+  <li>In 2-page view, the left and right pages are saved as separate cards.</li>
+  <li><b>Click</b> a screenshot card to show it in the main viewer. If there was a search term when it was
+    captured, the original page is re-rendered with the highlight.</li>
+  <li>While showing screenshots, ◀ ▶ · page number · the right scrollbar · the mouse wheel move through
+    the <b>whole screenshot list</b>, and the view combo switches page / width / custom zoom (fit page by default).</li>
+  <li><b>💾 Save PDF</b> or <b>Ctrl+S</b>: saves all screenshots into one PDF.
+    In the options dialog choose <b>① highlight search terms</b> (on = high-resolution re-render,
+    off = original 1:1) <b>② file name at the top</b> <b>③ page number at the bottom</b>.
+    Your choices become the defaults next time. After saving you are asked whether to <b>load it in this window</b>.</li>
+</ul>
+
+<h3>5. Build bookmarks automatically (Tools → Generate Bookmarks Automatically... / right-click a file → 'Build Bookmarks')</h3>
+<ul>
+  <li>Analyzes the current PDF (or the file you right-clicked in the tree) and builds bookmarks.</li>
+  <li>Modes: <b>Auto</b> (TOC if present, otherwise font; <b>OCR automatically for scanned images</b>) ·
+    <b>Force TOC</b> · <b>Force font</b> · <b>Scanned/Image (OCR)</b>. OCR mode recognizes headings such as
+    'CHAPTER 1' in scanned books, with an option to include large text as headings.</li>
+  <li>If several bookmarks land on the same page, only <b>chapter titles (CHAPTER 1) and numbers (1, 1.1)</b>
+    are kept and the noise is removed.</li>
+  <li>Output: <b>save as new PDF</b> or <b>save to current PDF</b> (overwrite — you are warned if it already has
+    bookmarks). A bookmark <b>.txt</b> for ALPDF can also be saved. When done, the bookmark list
+    <b>refreshes automatically</b> (the existing file list is kept), and new PDFs in the same folder are added.</li>
+</ul>
+
+<h3>6. Bookmark edit mode (the [✎ Edit] button above the bookmark tree)</h3>
+<ul>
+  <li><b>Edit</b> (pencil icon) toggle: single/tree buttons appear next to it.
+    While editing, clicking a bookmark <b>moves the main viewer there</b>, and <b>double-clicking</b>
+    opens the edit window. <b>Right-click</b> an item → rename or delete files and bookmarks.</li>
+  <li><b>◀ / ▶</b>: outdent / indent. <b>▲ / ▼</b>: move up / down. You can also drag with the mouse.</li>
+  <li><b>✎</b> edit one item (title · page / file name), <b>🗑️</b> delete (bookmark = remove from tree ·
+    file = Recycle Bin), <b>⭐ keep selected</b>, <b>📋 copy</b>, <b>➕ page</b> (bookmark at the current page),
+    <b>💾 save</b> (&lt;original&gt;_edited.pdf). You can also add a bookmark at the current page by
+    <b>right-clicking the viewer</b>.</li>
+  <li>If you turn editing off with unsaved changes, you are asked <b>whether to save</b>.</li>
+</ul>
+
+<h3>7. Sorting the bookmark tree</h3>
+<ul>
+  <li>The sort combo under the search bar: <b>Bookmarks (default)</b> · Name · Modified · Size.</li>
+  <li>If there is a bookmarks.json, its order is used; the combo re-sorts immediately only in the flat (folder–PDF) mode.</li>
+</ul>
+
+<h3>8. Keyboard shortcuts</h3>
+<table border="1" cellpadding="4" cellspacing="0">
+<tr><th>Shortcut</th><th>Action</th></tr>
+<tr><td>Ctrl+O</td><td>Open folder</td></tr>
+<tr><td>Ctrl+Shift+O</td><td>Open file</td></tr>
+<tr><td>Ctrl+F</td><td>Focus the search bar</td></tr>
+<tr><td>F3 / Shift+F3</td><td>Next / previous match (across files)</td></tr>
+<tr><td>Down Up PgDn PgUp</td><td>Move pages (±2 in 2-page view) / move through the list in screenshot mode</td></tr>
+<tr><td>Home / End</td><td>First / last page</td></tr>
+<tr><td>Ctrl+Wheel</td><td>Zoom (re-render)</td></tr>
+<tr><td>Ctrl+Shift+S</td><td>Screen capture</td></tr>
+<tr><td>Ctrl+S</td><td>Save screenshots as PDF</td></tr>
+<tr><td>Ctrl+M</td><td>Merge PDFs</td></tr>
+<tr><td>Ctrl+2</td><td>Toggle split view</td></tr>
+<tr><td>Ctrl+Shift+C</td><td>Copy to clipboard</td></tr>
+<tr><td>Ctrl+Q</td><td>Quit</td></tr>
+</table>
+<p><small>You can change any shortcut in <b>Settings → Keyboard Shortcuts...</b>, and
+'Restore Defaults' puts them back.</small></p>
+
+<h3>9. Settings</h3>
+<ul>
+  <li>Restore the last session on startup / open the last viewed page</li>
+  <li>Restore the screenshot list on startup</li>
+  <li>Screenshot list limit (5–1000; raised automatically for batch captures)</li>
+  <li><b>Panels</b>: search results / screenshots — turning both off switches to the slide-out drawer.</li>
+  <li><b>Theme</b>: auto (system) / light / dark.</li>
+  <li><b>Language</b>: Korean / English — applied after restarting.</li>
+  <li><b>Keyboard shortcuts</b>: view, change and restore all shortcuts.</li>
+</ul>
+
+<h3>10. Help / About</h3>
+<ul>
+  <li>Open this guide any time from Help → <b>User Guide</b>.</li>
+  <li>Version, copyright, license (GNU AGPL v3) and open-source notices are in Help → <b>About</b>.</li>
+  <li><b>Check for Updates</b>: if a new version is available, it shows <b>what changes</b> in each version.
+    Pressing [Update] <b>downloads the file first</b>, then closes all open PolyPDF windows and installs
+    (if you cancel the download or it fails, nothing is closed).</li>
+</ul>

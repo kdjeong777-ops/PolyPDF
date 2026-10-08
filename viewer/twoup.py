@@ -805,7 +805,7 @@ def _fill_toc_docx(template, entries, out_docx, ow=None, oh=None):
         else:
             doc = Document()
             _apply_page_size(doc, ow, oh)     # 260825-4: 본문 방향/크기에 맞춤
-            h = doc.add_paragraph(); r = h.add_run("목차"); r.bold = True; r.font.size = Pt(24)
+            h = doc.add_paragraph(); r = h.add_run(tr("목차")); r.bold = True; r.font.size = Pt(24)
             doc.add_paragraph("")
             for name, pg in entries:
                 doc.add_paragraph(f"{name} ............ {pg}")
@@ -834,7 +834,7 @@ def _fitz_cover_pdf(cover, ow, oh, out_pdf):
 def _fitz_toc_pdf(entries, ow, oh, out_pdf):
     d = fitz.open()
     pg = d.new_page(width=ow, height=oh)
-    pg.insert_text((50, 60), "목차", fontsize=22, color=(0, 0, 0))
+    pg.insert_text((50, 60), tr("목차"), fontsize=22, color=(0, 0, 0))
     y = 110
     for name, p in entries:
         if y > oh - 50:
@@ -921,7 +921,7 @@ def _fitz_cover_doc(cover, w, h):
 
 def _fitz_toc_doc(entries, w, h):
     d = fitz.open(); pg = d.new_page(width=w, height=h)
-    _kr_text(pg, (50, 64), "목차", 22, (0, 0, 0), True)
+    _kr_text(pg, (50, 64), tr("목차"), 22, (0, 0, 0), True)
     y = 112
     for name, pnum in entries:
         if y > h - 50:
@@ -1019,7 +1019,7 @@ def write_sample_templates(folder):
             p.add_run(ph).font.size = Pt(14)
 
     def toc(doc):
-        h = doc.add_paragraph(); r = h.add_run("목차"); r.bold = True; r.font.size = Pt(24)
+        h = doc.add_paragraph(); r = h.add_run(tr("목차")); r.bold = True; r.font.size = Pt(24)
         doc.add_paragraph("")
         p = doc.add_paragraph(); p.add_run("{{TOC}}")     # 이 단락이 항목 목록으로 치환됨
 
@@ -1029,15 +1029,15 @@ def write_sample_templates(folder):
         p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         r = p.add_run("{{TITLE}}"); r.bold = True; r.font.size = Pt(30)
 
-    _save("표지_샘플.docx", cover)
-    _save("목차_샘플.docx", toc)
-    _save("간지_샘플.docx", divider)
+    _save(tr("표지_샘플.docx"), cover)
+    _save(tr("목차_샘플.docx"), toc)
+    _save(tr("간지_샘플.docx"), divider)
     return made
 
 
 def _item_name(it):
     if isinstance(it, dict):
-        return it.get("name") or Path(str(it.get("path", "항목"))).stem
+        return it.get("name") or Path(str(it.get("path") or tr("항목"))).stem
     return Path(str(it)).stem
 
 
@@ -1169,7 +1169,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
 
     def _name(it):
         if isinstance(it, dict):
-            return it.get("name") or Path(str(it.get("path", "항목"))).stem
+            return it.get("name") or Path(str(it.get("path") or tr("항목"))).stem
         return Path(str(it)).stem
 
     try:
@@ -1309,7 +1309,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         toc_out = []; prev = 0
         for lvl, title, phys in bm:
             lv = 1 if not toc_out else min(max(1, int(lvl)), prev + 1)
-            toc_out.append([lv, str(title) or "(제목 없음)", int(phys)])
+            toc_out.append([lv, str(title) or tr("(제목 없음)"), int(phys)])
             prev = lv
         try:
             if toc_out:

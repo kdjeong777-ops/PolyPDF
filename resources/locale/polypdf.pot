@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-08 23:02+0900\n"
+"POT-Creation-Date: 2026-10-08 23:16+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1287,6 +1287,7 @@ msgid "병합 실패"
 msgstr ""
 
 #: viewer/app.py:3571 viewer/app.py:3618 viewer/app.py:4530
+#: viewer/page_edit_build.py:55 viewer/twoup.py:1312
 #: viewer/widgets/bookmark_tree.py:1843 viewer/widgets/bookmark_tree.py:3067
 #: viewer/widgets/bookmark_tree.py:3245 viewer/widgets/bookmark_tree.py:3620
 #: viewer/widgets/bookmark_tree.py:3635
@@ -1521,6 +1522,10 @@ msgstr ""
 
 #: viewer/app.py:1917
 msgid "전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"
+msgstr ""
+
+#: viewer/app.py:1989
+msgid "화면캡처.png"
 msgstr ""
 
 #: viewer/app.py:2499
@@ -2247,6 +2252,11 @@ msgstr ""
 msgid "파일이 없거나 보안 정책상 열 수 없습니다."
 msgstr ""
 
+#: viewer/app.py:6750
+#, python-brace-format
+msgid "{stem}_암호화.pdf"
+msgstr ""
+
 #: viewer/app.py:6832
 #, python-brace-format
 msgid "스크린샷 {added}장 추가됨"
@@ -2288,6 +2298,10 @@ msgstr ""
 #: viewer/app.py:803
 #, python-brace-format
 msgid "클립보드로 복사 완료: {clip_total}개 — Win+V 로 붙여넣기"
+msgstr ""
+
+#: viewer/app.py:843
+msgid "클립보드.png"
 msgstr ""
 
 #: viewer/app.py:1220
@@ -2661,6 +2675,11 @@ msgstr ""
 msgid "편집을 종료하기 전에 어떻게 할까요?"
 msgstr ""
 
+#: viewer/edit_controller.py:279
+#, python-brace-format
+msgid "{stem}_일반뷰어용.pdf"
+msgstr ""
+
 #: viewer/hyperlinks.py:65
 msgid "기준 폴더가 없습니다. 폴더를 먼저 여세요."
 msgstr ""
@@ -2889,6 +2908,11 @@ msgstr ""
 msgid "변환할 이미지를 추가하세요."
 msgstr ""
 
+#: viewer/print_controller.py:244
+#, python-brace-format
+msgid "{stem}_이미지.pdf"
+msgstr ""
+
 #: viewer/print_controller.py:277
 msgid "생성된 페이지가 없습니다."
 msgstr ""
@@ -2928,6 +2952,10 @@ msgstr ""
 msgid "인쇄할 스크린샷이 없습니다."
 msgstr ""
 
+#: viewer/print_controller.py:73
+msgid "스크린샷.pdf"
+msgstr ""
+
 #: viewer/print_controller.py:82
 msgid "책갈피창에서 인쇄할 PDF 파일을 선택하세요."
 msgstr ""
@@ -2935,6 +2963,16 @@ msgstr ""
 #: viewer/print_controller.py:264
 #, python-brace-format
 msgid "이미지 → PDF{v}"
+msgstr ""
+
+#: viewer/print_controller.py:413
+#, python-brace-format
+msgid "{stem}_외{n}건"
+msgstr ""
+
+#: viewer/print_controller.py:116 viewer/print_controller.py:435
+#, python-brace-format
+msgid "{stem}_인쇄.pdf"
 msgstr ""
 
 #: viewer/print_controller.py:220
@@ -2974,6 +3012,11 @@ msgstr ""
 #: viewer/print_controller.py:590
 #, python-brace-format
 msgid "인쇄 완료: {count} 페이지"
+msgstr ""
+
+#: viewer/print_controller.py:106 viewer/print_controller.py:421
+#, python-brace-format
+msgid "{stem}_다단.pdf"
 msgstr ""
 
 #: viewer/print_controller.py:587
@@ -3178,6 +3221,24 @@ msgstr ""
 msgid "양면(짧은 쪽)"
 msgstr ""
 
+#: viewer/twoup.py:808 viewer/twoup.py:837 viewer/twoup.py:924
+#: viewer/twoup.py:1022 viewer/widgets/toc_review_dialog.py:615
+#: viewer/widgets/twoup_dialog.py:184 viewer/widgets/twoup_dialog.py:375
+msgid "목차"
+msgstr ""
+
+#: viewer/twoup.py:1032
+msgid "표지_샘플.docx"
+msgstr ""
+
+#: viewer/twoup.py:1033
+msgid "목차_샘플.docx"
+msgstr ""
+
+#: viewer/twoup.py:1034
+msgid "간지_샘플.docx"
+msgstr ""
+
 #: viewer/twoup.py:1418
 msgid "최종 저장 중…"
 msgstr ""
@@ -3197,6 +3258,10 @@ msgstr ""
 #: viewer/twoup.py:1428
 #, python-brace-format
 msgid "다단 생성 완료: 총 {pages}쪽"
+msgstr ""
+
+#: viewer/twoup.py:1040 viewer/twoup.py:1172
+msgid "항목"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py:1722
@@ -4382,7 +4447,11 @@ msgstr ""
 msgid "사용자 사전 저장 실패: {name__}: {e}"
 msgstr ""
 
-#: viewer/widgets/help_dialog.py:182
+#: viewer/widgets/help_dialog.py:23
+msgid "사용법 파일을 찾지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/help_dialog.py:29
 msgid "PolyPDF — 사용법"
 msgstr ""
 
@@ -7201,11 +7270,6 @@ msgstr ""
 #: viewer/widgets/toc_review_dialog.py:574
 #, python-brace-format
 msgid "{n}개 행을 옮기거나 쪽 번호를 고쳤습니다(목차 쪽 셀 파란색)."
-msgstr ""
-
-#: viewer/widgets/toc_review_dialog.py:615 viewer/widgets/twoup_dialog.py:184
-#: viewer/widgets/twoup_dialog.py:375
-msgid "목차"
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py:322

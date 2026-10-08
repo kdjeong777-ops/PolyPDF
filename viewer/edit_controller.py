@@ -276,7 +276,7 @@ class EditMixin:
         from PyQt6.QtWidgets import QFileDialog
         out, _ = QFileDialog.getSaveFileName(
             self, tr("저장(일반뷰어용) — 새 PDF로"),
-            str(src.with_name(src.stem + "_일반뷰어용.pdf")), "PDF (*.pdf)")
+            str(src.with_name(tr('{stem}_일반뷰어용.pdf').format(stem=src.stem))), "PDF (*.pdf)")
         if not out:
             return
         try:

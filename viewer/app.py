@@ -840,7 +840,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if not items and md is not None and md.hasImage():
                 img = QApplication.clipboard().image()
                 if img is not None and not img.isNull():
-                    items.append((img, "클립보드.png"))
+                    items.append((img, tr("클립보드.png")))
         except Exception:
             items = []
         if not items:
@@ -1986,7 +1986,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 QApplication.clipboard().setPixmap(pm)
             except Exception:
                 pass
-            saved = ss.save_screenshot(pm, source_name="화면캡처.png")
+            saved = ss.save_screenshot(pm, source_name=tr("화면캡처.png"))
             self.shot_strip.add_item(str(saved), kind="image",
                                      label=Path(saved).stem, prepend=False)
             try:
@@ -6747,7 +6747,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         args = dlg.result_args()
         from PyQt6.QtWidgets import QFileDialog
-        default = str(Path(cur).with_name(Path(cur).stem + "_암호화.pdf"))
+        default = str(Path(cur).with_name(tr('{stem}_암호화.pdf').format(stem=Path(cur).stem)))
         out, _ = QFileDialog.getSaveFileName(self, tr("암호화 PDF 저장"), default, tr("PDF 파일 (*.pdf)"))
         if not out:
             return

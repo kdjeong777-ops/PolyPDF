@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-08 23:02+0900\n"
+"POT-Creation-Date: 2026-10-08 23:16+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -1330,6 +1330,7 @@ msgid "병합 실패"
 msgstr "Merge failed"
 
 #: viewer/app.py:3571 viewer/app.py:3618 viewer/app.py:4530
+#: viewer/page_edit_build.py:55 viewer/twoup.py:1312
 #: viewer/widgets/bookmark_tree.py:1843 viewer/widgets/bookmark_tree.py:3067
 #: viewer/widgets/bookmark_tree.py:3245 viewer/widgets/bookmark_tree.py:3620
 #: viewer/widgets/bookmark_tree.py:3635
@@ -1565,6 +1566,11 @@ msgstr "Registration failed"
 #: viewer/app.py:1917
 msgid "전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"
 msgstr "Global screen-capture shortcut released (works only while the app is active)"
+
+# | msgid "화면 캡처"
+#: viewer/app.py:1989
+msgid "화면캡처.png"
+msgstr "Screen capture.png"
 
 #: viewer/app.py:2499
 #, python-brace-format
@@ -2333,6 +2339,11 @@ msgstr "Cannot Open"
 msgid "파일이 없거나 보안 정책상 열 수 없습니다."
 msgstr "The file does not exist or cannot be opened due to security policy."
 
+#: viewer/app.py:6750
+#, python-brace-format
+msgid "{stem}_암호화.pdf"
+msgstr "{stem}_encrypted.pdf"
+
 #: viewer/app.py:6832
 #, python-brace-format
 msgid "스크린샷 {added}장 추가됨"
@@ -2381,6 +2392,10 @@ msgstr "Failed to start the upgrade. Exiting without upgrading."
 #, python-brace-format
 msgid "클립보드로 복사 완료: {clip_total}개 — Win+V 로 붙여넣기"
 msgstr "Copied to clipboard: {clip_total} — paste with Win+V"
+
+#: viewer/app.py:843
+msgid "클립보드.png"
+msgstr "Clipboard.png"
 
 #: viewer/app.py:1220
 msgid "복사할 텍스트가 없습니다."
@@ -2793,6 +2808,11 @@ msgstr "What would you like to do before switching files?"
 msgid "편집을 종료하기 전에 어떻게 할까요?"
 msgstr "What would you like to do before leaving Edit mode?"
 
+#: viewer/edit_controller.py:279
+#, python-brace-format
+msgid "{stem}_일반뷰어용.pdf"
+msgstr "{stem}_for_other_viewers.pdf"
+
 # | msgid "폴더를 먼저 여세요."
 #: viewer/hyperlinks.py:65
 msgid "기준 폴더가 없습니다. 폴더를 먼저 여세요."
@@ -3054,6 +3074,11 @@ msgstr "Images → PDF"
 msgid "변환할 이미지를 추가하세요."
 msgstr "Add images to convert."
 
+#: viewer/print_controller.py:244
+#, python-brace-format
+msgid "{stem}_이미지.pdf"
+msgstr "{stem}_images.pdf"
+
 # | msgid "변경 사항이 없습니다."
 #: viewer/print_controller.py:277
 msgid "생성된 페이지가 없습니다."
@@ -3099,6 +3124,11 @@ msgstr "This document does not allow printing."
 msgid "인쇄할 스크린샷이 없습니다."
 msgstr "No screenshots to print."
 
+# | msgid "스크린샷 PDF 저장"
+#: viewer/print_controller.py:73
+msgid "스크린샷.pdf"
+msgstr "Screenshots.pdf"
+
 # | msgid "복사할 PDF 파일을 선택하세요."
 #: viewer/print_controller.py:82
 msgid "책갈피창에서 인쇄할 PDF 파일을 선택하세요."
@@ -3109,6 +3139,16 @@ msgstr "Select the PDF files to print in the Bookmarks panel."
 #, python-brace-format
 msgid "이미지 → PDF{v}"
 msgstr "Images → PDF{v}"
+
+#: viewer/print_controller.py:413
+#, python-brace-format
+msgid "{stem}_외{n}건"
+msgstr "{stem}_and_{n}_more"
+
+#: viewer/print_controller.py:116 viewer/print_controller.py:435
+#, python-brace-format
+msgid "{stem}_인쇄.pdf"
+msgstr "{stem}_print.pdf"
 
 #: viewer/print_controller.py:220
 msgid "이미지 변환 중"
@@ -3156,6 +3196,11 @@ msgstr ""
 #, python-brace-format
 msgid "인쇄 완료: {count} 페이지"
 msgstr "Printing complete: {count} pages"
+
+#: viewer/print_controller.py:106 viewer/print_controller.py:421
+#, python-brace-format
+msgid "{stem}_다단.pdf"
+msgstr "{stem}_nup.pdf"
 
 #: viewer/print_controller.py:587
 #, python-brace-format
@@ -3393,6 +3438,24 @@ msgstr "Double-sided (long edge)"
 msgid "양면(짧은 쪽)"
 msgstr "Double-sided (short edge)"
 
+#: viewer/twoup.py:808 viewer/twoup.py:837 viewer/twoup.py:924
+#: viewer/twoup.py:1022 viewer/widgets/toc_review_dialog.py:615
+#: viewer/widgets/twoup_dialog.py:184 viewer/widgets/twoup_dialog.py:375
+msgid "목차"
+msgstr "Contents"
+
+#: viewer/twoup.py:1032
+msgid "표지_샘플.docx"
+msgstr "Cover_sample.docx"
+
+#: viewer/twoup.py:1033
+msgid "목차_샘플.docx"
+msgstr "Contents_sample.docx"
+
+#: viewer/twoup.py:1034
+msgid "간지_샘플.docx"
+msgstr "Divider_sample.docx"
+
 # | msgid "저장 중…"
 #: viewer/twoup.py:1418
 msgid "최종 저장 중…"
@@ -3415,6 +3478,10 @@ msgstr "Laying out…"
 #, python-brace-format
 msgid "다단 생성 완료: 총 {pages}쪽"
 msgstr "N-up complete: {pages} pages total"
+
+#: viewer/twoup.py:1040 viewer/twoup.py:1172
+msgid "항목"
+msgstr "Item"
 
 #: viewer/widgets/bookmark_tree.py:1722
 msgid "암호화 설정 파일"
@@ -4671,8 +4738,15 @@ msgstr "No sentences using '{term}' found in the text."
 msgid "사용자 사전 저장 실패: {name__}: {e}"
 msgstr "Failed to save user dictionary: {name__}: {e}"
 
+# | msgid "받지 못했습니다."
+# | msgid "패키지를 찾지 못했습니다."
+# | msgid "읽을 본문을 찾지 못했습니다."
+#: viewer/widgets/help_dialog.py:23
+msgid "사용법 파일을 찾지 못했습니다."
+msgstr "The user guide file could not be found."
+
 # | msgid "저장(PolyPDF용)"
-#: viewer/widgets/help_dialog.py:182
+#: viewer/widgets/help_dialog.py:29
 msgid "PolyPDF — 사용법"
 msgstr "PolyPDF — Help"
 
@@ -7667,11 +7741,6 @@ msgstr "Add Bookmark on This Page (p.{pg})"
 #, python-brace-format
 msgid "{n}개 행을 옮기거나 쪽 번호를 고쳤습니다(목차 쪽 셀 파란색)."
 msgstr "Moved rows or fixed page numbers in {n} rows (TOC page cells in blue)."
-
-#: viewer/widgets/toc_review_dialog.py:615 viewer/widgets/twoup_dialog.py:184
-#: viewer/widgets/twoup_dialog.py:375
-msgid "목차"
-msgstr "TOC"
 
 #: viewer/widgets/toc_review_dialog.py:322
 msgid "번호를 고친 행"

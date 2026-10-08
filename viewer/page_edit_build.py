@@ -52,7 +52,7 @@ def apply_toc(doc, bms) -> int:
     for title, page, level in bms:
         lvl = int(level) + 1
         lvl = 1 if not toc else max(1, min(lvl, prev + 1))
-        t = str(title).replace("／", "/") or "(제목 없음)"
+        t = str(title).replace("／", "/") or tr("(제목 없음)")
         toc.append([lvl, t, int(page), {"kind": fitz.LINK_GOTO, "page": int(page) - 1,
                                         "to": fitz.Point(0, 0), "bold": True}])
         prev = lvl
