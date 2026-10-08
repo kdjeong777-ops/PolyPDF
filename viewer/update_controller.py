@@ -103,24 +103,14 @@ class UpdateMixin:
         is_beta = updater.is_prerelease_tag(info.get("tag", ""))
         kind = "베타(테스트) 버전" if is_beta else "버전"
         if manual:
-            # D: 확인 → 종료하고 설치(설치 도우미가 파일 없으면 다운로드)
-            notes = (info.get("notes") or "").strip()
-            if len(notes) > 800:
-                notes = notes[:800] + " …"
-            title = "베타 업데이트" if is_beta else "업데이트"
-            ret = QMessageBox.question(
-                self, title,
-                f"새 {kind}이 있습니다.\n\n현재: v{cur}\n최신: v{latest}\n\n"
-                + (notes + "\n\n" if notes else "")
-                + ("이 버전은 테스트(베타)입니다. " if is_beta else "")
-                + "프로그램을 종료하고 설치합니다. 계속할까요?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes)
-            if ret == QMessageBox.StandardButton.Yes:
-                if self._begin_upgrade():
-                    self.close()
-                else:
-                    QMessageBox.warning(self, "업데이트", "업데이트 적용을 시작하지 못했습니다.")
+            # 261008-17·-18(마스터 §14.5 U13·U14): 업데이트 창에서 **바뀐 내용**을 보고 고른다 →
+            #   ① 앱이 켜진 채 먼저 받는다 ② 닫는다(편집 저장 확인은 종료 길) ③ 설치 도우미가
+            #   다른 창을 모두 닫고 확인 ④ 설치. 받기를 실패·취소하면 닫지 않는다.
+            from viewer.widgets.update_dialog import UpdateDialog
+            dlg = UpdateDialog(info, cur, "manual", self)
+            dlg.exec()
+            if dlg.choice == "update":
+                self._upgrade_now()
         else:
             # C: 시작 시 자동 확인 — 설정 켜져 있으면 백그라운드로 미리 받아둠
             if self._prefs.get("auto_download_update", True):
@@ -128,8 +118,9 @@ class UpdateMixin:
             else:
                 self.status.showMessage(f"새 {kind} v{latest} 사용 가능 — 도움말 → 업데이트 확인", 6000)
 
-    def _start_bg_update_download(self, info):
-        """260618-24: 한가할 때 백그라운드로 업데이트 zip 을 미리 받아 둠(설정 폴더 캐시)."""
+    def _start_bg_update_download(self, info, force=False):
+        """260618-24: 한가할 때 백그라운드로 업데이트 zip 을 미리 받아 둠(설정 폴더 캐시).
+        261008-17: 업그레이드 직전 앞쪽 받기(`_ensure_update_zip`)도 이 함수를 쓴다(force=True)."""
         from viewer import updater
         url = info.get("asset_url")
         ver = info.get("version", "")
@@ -145,10 +136,13 @@ class UpdateMixin:
             pass
         if getattr(self, "_dl_in_progress", False):
             return
-        # 인덱싱 중이면(바쁨) 잠시 후 재시도
-        if getattr(self, "_index_workers", None):
+        # 인덱싱 중이면(바쁨) 잠시 후 재시도 — 사용자가 기다리는 앞쪽 받기(force)는 미루지 않는다
+        if getattr(self, "_index_workers", None) and not force:
             QTimer.singleShot(15000, lambda: self._start_bg_update_download(info))
             return
+        import threading as _th
+        self._dl_cancel = _th.Event()          # 261008-17: 앞쪽 받기의 '취소'
+        cancel = self._dl_cancel
         self._dl_in_progress = True
         import threading
         sig = self._update_sig
@@ -159,7 +153,13 @@ class UpdateMixin:
             try:
                 # 260628(A): 릴리스에 '<자산>.sha256' 이 있으면 받은 zip 을 검증(불일치=폐기).
                 exp = updater.fetch_expected_sha256(info)
-                path = updater.download_asset(url, expect_sha256=exp)   # 임시폴더(진행 UI 없음)
+                def prog(done, total):
+                    try:
+                        sig.dl_progress.emit(int(done), int(total))
+                    except Exception:
+                        pass
+                    return not cancel.is_set()             # False → download_asset 이 멈춘다
+                path = updater.download_asset(url, progress=prog, expect_sha256=exp)
                 if path:
                     try:
                         if exp:      # 종료 시 설치 단계에서 재검증할 수 있게 사이드카 저장
@@ -187,6 +187,99 @@ class UpdateMixin:
         if path:
             self._pending_zip = path
             self.status.showMessage("업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다.", 5000)
+
+    def _update_zip_ready(self, info) -> bool:
+        """받아 둔 zip 이 **이 버전** 것인가(.ver 사이드카)."""
+        from viewer import updater
+        dest = updater.pending_zip_path()
+        try:
+            return (dest.is_file() and dest.with_suffix(".ver").is_file()
+                    and dest.with_suffix(".ver").read_text(encoding="utf-8").strip()
+                    == str(info.get("version", "")))
+        except Exception:
+            return False
+
+    def _ensure_update_zip(self, info) -> bool:
+        """261008-17(마스터 §14.5 U13): 업그레이드 **전에** 앱 안에서 받고 검증까지 끝낸다.
+        진행 창(취소 가능)을 띄우고, 백그라운드 받기가 이미 돌고 있으면 그것을 기다린다.
+        받아 둔 같은 버전이 있으면 바로 True. 실패·취소면 False(호출자는 닫지 않는다)."""
+        from viewer import updater
+        from PyQt6.QtCore import QEventLoop, Qt as _Qt
+        from PyQt6.QtWidgets import QProgressDialog, QPushButton
+        if self._update_zip_ready(info):
+            self._pending_zip = str(updater.pending_zip_path())
+            return True
+        sig = self._update_sig
+        loop = QEventLoop()
+        result = {"path": ""}
+        dlg = QProgressDialog("업데이트 파일을 받는 중…", "취소", 0, 0, self)
+        dlg.setWindowTitle("업데이트")
+        dlg.setWindowModality(_Qt.WindowModality.ApplicationModal)
+        dlg.setMinimumDuration(0)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+        # 화면 디자인 SOT §2.7: 취소 단추가 기본 단추면 Enter 한 번에 받기가 취소된다.
+        cancel_btn = QPushButton("취소")
+        cancel_btn.setAutoDefault(False)
+        cancel_btn.setDefault(False)
+        dlg.setCancelButton(cancel_btn)
+
+        def on_prog(done, total):
+            if total > 0:
+                dlg.setMaximum(100)
+                dlg.setValue(min(100, int(done * 100 / total)))
+                dlg.setLabelText("업데이트 파일을 받는 중… %.1f / %.1f MB"
+                                 % (done / 1048576.0, total / 1048576.0))
+
+        def on_done(path):
+            result["path"] = path or ""
+            loop.quit()
+
+        def on_cancel():
+            ev = getattr(self, "_dl_cancel", None)
+            if ev is not None:
+                ev.set()
+            dlg.setLabelText("취소하는 중…")
+
+        sig.dl_progress.connect(on_prog)
+        sig.dl_done.connect(on_done)
+        dlg.canceled.connect(on_cancel)
+        try:
+            dlg.show()
+            if not getattr(self, "_dl_in_progress", False):
+                self._start_bg_update_download(info, force=True)
+            if getattr(self, "_dl_in_progress", False):
+                loop.exec()
+        finally:
+            # ★ QProgressDialog 는 close() 할 때도 canceled 를 낸다 — 먼저 끊지 않으면
+            #   '사용자가 취소함' 으로 기록돼 받기 실패 안내가 사라진다(실측).
+            for s_, f_ in ((dlg.canceled, on_cancel), (sig.dl_progress, on_prog),
+                           (sig.dl_done, on_done)):
+                try:
+                    s_.disconnect(f_)
+                except Exception:
+                    pass
+            dlg.close()
+        ok = bool(result["path"]) and self._update_zip_ready(info)
+        if ok:
+            self._pending_zip = result["path"]
+        else:
+            ev = getattr(self, "_dl_cancel", None)
+            if not (ev is not None and ev.is_set()):
+                QMessageBox.warning(self, "업데이트",
+                                    "업데이트 파일을 받지 못했습니다(연결·무결성 검증 실패).\n"
+                                    "프로그램은 닫지 않았습니다. 잠시 뒤 다시 시도해 주세요.")
+        return ok
+
+    def _upgrade_now(self):
+        """261008-17(U13): 받기 → 닫기 요청. 설치 도우미는 **닫는 길(closeEvent)에서** 시작한다 —
+        편집 저장 확인에서 사용자가 닫기를 취소하면 업그레이드도 시작하지 않게."""
+        info = getattr(self, "_pending_update", None)
+        if not info or not self._ensure_update_zip(info):
+            return
+        self._upgrade_requested = True
+        if not self.close():                   # 닫기를 취소했다 → 업그레이드도 취소
+            self._upgrade_requested = False
 
     def _begin_upgrade(self) -> bool:
         """260618-24: 업그레이드 시작 — 받아둔 zip 있으면 사용, 없으면 설치 도우미가 다운로드.

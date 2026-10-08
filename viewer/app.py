@@ -110,6 +110,7 @@ class _UpdateSignals(QObject):
     """260618-11: 업데이트 확인 스레드 → 메인 스레드 결과 전달."""
     done = pyqtSignal(object, bool)     # (info dict|None, manual)
     dl_done = pyqtSignal(str)           # 260618-24: 백그라운드 다운로드 완료(zip 경로|"")
+    dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
 class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, QMainWindow):
@@ -8175,34 +8176,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
 
         # 260618-24(C): 새 버전이 준비돼 있으면 종료 시 업그레이드 후 종료 제안
+        # 261008-17·-18(마스터 §14.5 U13·U14): 바뀐 내용을 보이는 업데이트 창에서 고르고,
+        #   '업그레이드 후 종료' 면 **닫기 전에 받는다**(실패·취소면 닫지 않는다).
+        #   도움말 → 업데이트에서 이미 받고 닫기를 요청했으면(_upgrade_requested) 묻지 않는다.
         if getattr(self, "_pending_update", None) and not getattr(self, "_updating", False):
             info = self._pending_update
-            ver = info.get("version", "")
-            # 260618-36: 베타면 명시
-            try:
+            if getattr(self, "_upgrade_requested", False):
+                choice = "update"
+            else:
                 from viewer import updater as _u
-                _kind = "베타(테스트) 버전" if _u.is_prerelease_tag(info.get("tag", "")) else "버전"
-            except Exception:
-                _kind = "버전"
-            box = QMessageBox(self)
-            box.setIcon(QMessageBox.Icon.Question)
-            box.setWindowTitle("업그레이드")
-            box.setText(f"새 {_kind} v{ver} 이(가) 준비되어 있습니다.\n"
-                        "업그레이드 후 종료할까요?")
-            b_up = box.addButton("업그레이드 후 종료", QMessageBox.ButtonRole.AcceptRole)
-            b_no = box.addButton("그냥 종료", QMessageBox.ButtonRole.DestructiveRole)
-            b_cancel = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
-            box.setDefaultButton(b_up)
-            box.exec()
-            clicked = box.clickedButton()
-            if clicked is b_cancel:
-                event.ignore()
-                return
-            if clicked is b_up:
+                from viewer.widgets.update_dialog import UpdateDialog
+                dlg = UpdateDialog(info, _u.current_version(), "close", self)
+                dlg.exec()
+                choice = dlg.choice
+                if choice == "cancel":
+                    event.ignore()
+                    return
+                if choice == "update" and not self._ensure_update_zip(info):
+                    event.ignore()                  # 받지 못했다 → 닫지 않고 앱으로
+                    return
+            if choice == "update":
                 if not self._begin_upgrade():
+                    self._upgrade_requested = False
                     QMessageBox.warning(self, "업그레이드",
                                         "업그레이드 시작에 실패했습니다. 그냥 종료합니다.")
-            # b_no → 그냥 종료(업그레이드 안 함)
+            # "quit" → 그냥 종료(업그레이드 안 함)
 
         # 260628(발표 SOT §9): ★ 종료 전 **녹화 안전 종료**. 이 처리가 없으면 발표 녹화 중
         #   앱을 닫았을 때 ffmpeg 가 'q'(정상 종료 신호)를 받지 못해 **MP4 moov 가 기록되지
@@ -8345,40 +8343,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._check_for_updates(manual=False)
 
     def _show_about(self):
-        html = (
-            "<h3>PolyPDF</h3>"
-            "<p>버전 v" + __version__ + "</p>"
-            "<p><b>개발자</b>: KD<br>"
-            "<b>이메일</b>: "
-            "<a href='mailto:kdjeong777@gmail.com'>kdjeong777@gmail.com</a></p>"
-            "<hr>"
-            "<p><b>오픈소스 고지</b><br>"
-            "본 프로그램은 다음 오픈소스 라이브러리를 사용하며, 각 구성요소는 "
-            "해당 라이선스를 따릅니다:</p>"
-            "<ul>"
-            "<li>PyQt6 — Riverbank Computing (GPL v3 / 상용)</li>"
-            "<li>PyMuPDF (MuPDF) — Artifex (AGPL v3 / 상용)</li>"
-            "<li>openpyxl (MIT)</li>"
-            "<li>SQLite — Public Domain</li>"
-            "<li>qpdf — Apache License 2.0 (PDF 분할기 동봉)</li>"
-            "<li>Tesseract OCR — Apache 2.0 / pytesseract — Apache 2.0 (단어장)</li>"
-            "<li>wordfreq (MIT) · NLTK·WordNet (무료) · kiwipiepy (MIT) (단어장)</li>"
-            "<li>kengdic 한영사전 — CC BY-SA 3.0 (한국어 단어 영어뜻; "
-            "© kengdic contributors, garfieldnate/kengdic)</li>"
-            "</ul>"
-            "<p>각 라이브러리의 저작권 및 라이선스 전문은 해당 프로젝트 "
-            "배포물을 참조하십시오.</p>"
-            "<hr>"
-            "<p>본 프로그램은 오픈소스 라이선스를 준수합니다. 라이선스 규정에 "
-            "따라 소스코드가 필요한 분은 개발자 이메일로 요청시 "
-            "보내드리겠습니다.</p>"
-        )
-        box = QMessageBox(self)
-        box.setWindowTitle("PolyPDF — 정보")
-        box.setTextFormat(Qt.TextFormat.RichText)
-        box.setText(html)
-        box.setIcon(QMessageBox.Icon.Information)
-        box.exec()
+        """261008-17(마스터 SOT §14.3): 저작권·AGPL v3·무보증·오픈소스 고지 — 문구와 창은 viewer.about."""
+        from viewer.about import show_about
+        show_about(self, __version__)
 
     def _show_usage(self):
         """v1.6.2: 사용법 다이얼로그 표시 (v1.6.1 G2 에서 누락되었던 메서드 보강)."""

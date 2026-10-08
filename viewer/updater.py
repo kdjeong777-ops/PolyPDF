@@ -275,7 +275,40 @@ def check_latest(repo: str, timeout: float = 8.0, channel: str = "stable"):
                 best = rel
     if best is None:                        # 최후 폴백: /releases/latest(프리릴리즈 제외 — 안정판만)
         best = _get_json(_API_LATEST.format(repo=repo), timeout)
-    return _to_info(best)
+    info = _to_info(best)
+    if info is not None:
+        # 261008-18(마스터 §14.5 U14): 지금 버전 다음부터 새 버전까지 **모든 버전의 설명**.
+        #   여러 버전을 건너뛰어도 무엇이 바뀌는지 업데이트 창에서 볼 수 있게.
+        info["changes"] = collect_changes(data if isinstance(data, list) else [best],
+                                          current_version(), beta, _vkey(info.get("tag", "")))
+    return info
+
+
+def collect_changes(releases, current: str, beta: bool, top_key=None) -> list:
+    """261008-18: `current` 보다 높고 `top_key` 이하인 버전 릴리스의 설명 — 새 버전부터(내림차순).
+    채널 규칙은 check_latest 와 같다(stable 이면 접미사 프리릴리즈 제외). 각 항목:
+    {version, tag, date, notes, url, pre}."""
+    ck = _vkey(current or "")
+    out = []
+    for rel in releases or []:
+        if not isinstance(rel, dict) or rel.get("draft"):
+            continue
+        tag = str(rel.get("tag_name") or "")
+        k = _vkey(tag)
+        if k is None or (not beta and k[1] == 0):
+            continue
+        if ck is not None and k <= ck:
+            continue
+        if top_key is not None and k > top_key:
+            continue
+        out.append((k, {
+            "version": tag.lstrip("vV"), "tag": tag,
+            "date": str(rel.get("published_at") or rel.get("created_at") or "")[:10],
+            "notes": str(rel.get("body") or ""), "url": str(rel.get("html_url") or ""),
+            "pre": k[1] == 0,
+        }))
+    out.sort(key=lambda t: t[0], reverse=True)
+    return [d for _k, d in out]
 
 
 def is_frozen() -> bool:
@@ -420,6 +453,32 @@ if (-not $Elevated) {
     }
     Start-Sleep -Milliseconds 400
 
+    # 1.5) 다운로드(파일이 없을 때만) — 진행바만, 용량 숫자 표시 안 함
+    #   261008-17(마스터 §14.5 U13): 보통은 앱이 **닫기 전에** 받아 넘긴다(이 단계는 예비).
+    #   예비로 받을 때도 **다른 창을 닫기 전에** 받는다 — 받기가 실패하면 다른 창은 그대로 둔다.
+    if (([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) -and -not [string]::IsNullOrEmpty($url)) {
+        $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
+        $lbl.Text = "업데이트 다운로드 중..."
+        [System.Windows.Forms.Application]::DoEvents()
+        try {
+            $req = [System.Net.WebRequest]::Create($url)
+            $req.UserAgent = "PolyPDF-Updater"; $req.Timeout = 60000
+            $resp = $req.GetResponse(); $len = $resp.ContentLength
+            $ins = $resp.GetResponseStream(); $outs = [System.IO.File]::Create($zipPath)
+            $buf = New-Object byte[] 262144; $done = [long]0
+            while (($r = $ins.Read($buf,0,$buf.Length)) -gt 0) {
+                $outs.Write($buf,0,$r); $done += $r
+                if ($len -gt 0) { $bar.Value = [Math]::Min(100,[int]($done*100/$len)) }
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+            $outs.Close(); $ins.Close(); $resp.Close()
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("다운로드 실패: " + $_.Exception.Message, "PolyPDF 업데이트") | Out-Null
+            $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
+        }
+        $bar.Value = 0
+    }
+
     # 1.2) 다른 창: **정상 종료 요청 먼저**(U2) — 각 창에서 저장 확인창이 정상 동작하게.
     $others = Get-PolyPdfProcs
     if ($others.Count -gt 0) {
@@ -453,30 +512,6 @@ if (-not $Elevated) {
         $lbl.Text = "남은 창을 닫는 중..."; [System.Windows.Forms.Application]::DoEvents()
         foreach ($p in (Get-PolyPdfProcs)) { try { $p.Kill() } catch {} }
         Start-Sleep -Milliseconds 900
-    }
-
-    # 1.5) 다운로드(파일이 없을 때만) — 진행바만, 용량 숫자 표시 안 함
-    if (([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) -and -not [string]::IsNullOrEmpty($url)) {
-        $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
-        $lbl.Text = "업데이트 다운로드 중..."
-        [System.Windows.Forms.Application]::DoEvents()
-        try {
-            $req = [System.Net.WebRequest]::Create($url)
-            $req.UserAgent = "PolyPDF-Updater"; $req.Timeout = 60000
-            $resp = $req.GetResponse(); $len = $resp.ContentLength
-            $ins = $resp.GetResponseStream(); $outs = [System.IO.File]::Create($zipPath)
-            $buf = New-Object byte[] 262144; $done = [long]0
-            while (($r = $ins.Read($buf,0,$buf.Length)) -gt 0) {
-                $outs.Write($buf,0,$r); $done += $r
-                if ($len -gt 0) { $bar.Value = [Math]::Min(100,[int]($done*100/$len)) }
-                [System.Windows.Forms.Application]::DoEvents()
-            }
-            $outs.Close(); $ins.Close(); $resp.Close()
-        } catch {
-            [System.Windows.Forms.MessageBox]::Show("다운로드 실패: " + $_.Exception.Message, "PolyPDF 업데이트") | Out-Null
-            $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
-        }
-        $bar.Value = 0
     }
 
     # 1.7) 설치 폴더가 쓰기 불가(예: Program Files)면 UAC로 자체 승격해서 적용

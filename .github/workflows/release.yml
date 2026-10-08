@@ -15,6 +15,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0          # 261008-18(U14): 릴리스 설명을 이전 태그부터의 커밋으로 만든다
 
       - uses: actions/setup-python@v7
         with:
@@ -183,18 +185,22 @@ jobs:
           #   (updater.check_latest) 앱 동작은 바뀌지 않는다. 목적은 릴리스 페이지에서
           #   베타가 'Latest' 배지를 달아 정식처럼 보이던 오해를 없애는 것.
           $isPre = $tag -match '-'
+          # 261008-18(마스터 §14.5 U14): --generate-notes 는 PR 기준이라 'Full Changelog' 한 줄만 남았다
+          #   → 이전 버전 태그부터의 커밋 메시지로 설명을 만든다(앱 업데이트 창이 보여 준다).
+          python scripts/release_notes.py $tag notes.md        # 파일로 직접(UTF-8) — 파이프는 한글이 깨질 수 있다
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             # 260618-35: --clobber 필수 — 릴리스가 이미 있고(수동 생성 등) 같은 이름 자산이
             #   있으면 --clobber 없이는 업로드 전체가 실패해 '새 자산(설치본)'까지 누락된다.
             gh release upload $tag $assets --clobber
+            gh release edit $tag --notes-file notes.md
             if ($isPre) { gh release edit $tag --prerelease } else { gh release edit $tag --prerelease=false --latest }
             exit 0
           } else {
             if ($isPre) {
-              gh release create $tag $assets --title "PolyPDF $tag" --generate-notes --prerelease
+              gh release create $tag $assets --title "PolyPDF $tag" --notes-file notes.md --prerelease
             } else {
-              gh release create $tag $assets --title "PolyPDF $tag" --generate-notes --latest
+              gh release create $tag $assets --title "PolyPDF $tag" --notes-file notes.md --latest
             }
           }
 

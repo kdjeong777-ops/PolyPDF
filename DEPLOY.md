@@ -2,6 +2,7 @@
 
 사용자가 **도움말 → 업데이트 확인…** 으로 새 버전을 받고, **[업데이트]** 한 번으로
 자동 교체·재시작되게 하는 구성입니다. (GitHub Releases 기반, 공개 저장소)
+업데이트 창은 지금 버전 다음부터 새 버전까지 **버전별로 무엇이 바뀌는지**(릴리스 설명) 보여 줍니다.
 
 이 저장소에는 이미 **GitHub Actions 워크플로**가 있어, **버전 태그를 push 하면
 자동으로 Windows 빌드 → zip → Release 업로드**까지 됩니다.
@@ -17,7 +18,11 @@
 
 - 앱이 **전체 릴리스 목록에서 최고 SemVer 태그**(예 `v2.26.0`)를 `__version__` 과 비교
   (`components` 등 비버전·draft 제외). 새 버전이면 **`update` zip 자산을 우선**(없으면 full)
-  내려받아, 도우미 배치가 앱 종료 대기 → 설치 폴더 **덮어쓰기(없는 파일은 보존)** → 재실행.
+  **앱이 켜진 채 먼저 내려받고 검증**한 뒤(취소·실패면 앱을 닫지 않음) 앱을 닫고, 설치 도우미가
+  **다른 PolyPDF 창을 모두 닫고 0개인지 확인** → 설치 폴더 **덮어쓰기(없는 파일은 보존)** → 재실행.
+- **릴리스 설명은 커밋 메시지로 만든다**: `release.yml` 이 `scripts/release_notes.py <태그> notes.md` 로
+  이전 `v*` 태그부터의 커밋 제목·본문 항목을 모아 `--notes-file` 로 올린다(`--generate-notes` 는 PR 기준이라
+  PR 없이 커밋하는 이 저장소에서는 링크 한 줄만 남았다). 커밋 메시지가 곧 사용자가 보는 설명이다.
 - **업데이트가 가벼운 이유**: `update` zip 은 안 바뀌는 무거운 부분(ffmpeg·Tesseract·한국어
   모델·NLTK)을 제외 → 덮어쓰기 시 기존 설치분이 **그대로 보존**되어 다시 받지 않음.
 - 저장소는 앱 기본값 `kdjeong777-ops/PolyPDF` 고정(설정 `update_repo` 로 변경 가능).
@@ -76,7 +81,8 @@ CI를 쓰지 않거나 빠르게 올릴 때:
 ```powershell
 .\build_ci.bat
 powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # full + update zip 2종 생성
-gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip PolyPDF-v2.26.0-win64.zip.sha256 PolyPDF-v2.26.0-win64-update.zip.sha256 --title "PolyPDF v2.26.0" --generate-notes
+python scripts\release_notes.py v2.26.0 notes.md                         # 릴리스 설명(커밋 메시지로)
+gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip PolyPDF-v2.26.0-win64.zip.sha256 PolyPDF-v2.26.0-win64-update.zip.sha256 --title "PolyPDF v2.26.0" --notes-file notes.md
 #   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.26.0 → 두 zip 업로드)
 ```
 
