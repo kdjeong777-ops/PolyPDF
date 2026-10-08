@@ -56,7 +56,9 @@ echo [3/5] Installing PyQt6, PyMuPDF, openpyxl, Pillow, pdfplumber, pypdfium2,
 echo       pypdf, send2trash, PyInstaller... (~180 MB)
 REM v1.6.2: Pillow 가 requirements.txt 에 포함되어 있음 (PyInstaller 아이콘 변환용).
 REM v1.6.16~21: pdf_bookmarker 의존성(pdfplumber/pypdfium2/pypdf) + send2trash 도 동봉.
-python -m pip install -r requirements.txt pyinstaller
+REM 261008(다국어 SOT §3.5): Babel 은 PyInstaller 처럼 **빌드 도구** — 언어팩 .po → .mo 변환용.
+REM   실행 파일에는 들어가지 않는다(앱은 표준 gettext 만 쓴다). 버전 고정.
+python -m pip install -r requirements.txt pyinstaller babel==2.18.0
 if errorlevel 1 ( echo [ERROR] Package install failed. & exit /b 1 )
 
 echo.
@@ -148,6 +150,12 @@ REM     실제 번들에서 viewer.app 등이 누락되는 현상이 있었음.
 REM   - PYTHONPATH 환경변수 + 절대 경로 --paths "%cd%" 로 양쪽 모두 해결.
 REM   - 추가로 viewer/ 폴더 전체를 --add-data 로 데이터 동봉 (런타임 sys.path 폴백용).
 set "PYTHONPATH=%cd%;%PYTHONPATH%"
+
+REM 261008(다국어 SOT §3.5·§3.7): 언어팩 .po → .mo (resources\locale 은 --add-data resources 로 실린다).
+REM   가짜 언어(qps_ploc)는 개발·검사 전용이라 빌드 전에 지운다.
+python scripts\i18n.py clean-pseudo
+python scripts\i18n.py compile
+if errorlevel 1 ( echo [ERROR] 언어팩 .mo 변환 실패. & exit /b 1 )
 
 python -m PyInstaller ^
     --name "PolyPDF" ^

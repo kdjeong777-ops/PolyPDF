@@ -10,6 +10,7 @@
 
 ```powershell
 pip install -r requirements.txt
+python scripts/i18n.py compile   # 언어팩 .po → .mo (Babel 필요: pip install babel==2.18.0). 한국어만 쓰면 생략 가능
 python main.py            # 개발 실행 (또는 .\run.bat)
 .\build_ci.bat            # PyInstaller onedir 빌드 → dist\PolyPDF\PolyPDF.exe
 ```

@@ -1,0 +1,11 @@
+# PolyPDF — English language pack (다국어(언어팩) SOT §3.2).
+# msgid = 한국어 원문. 빈 msgstr 는 번역 안 됨 → 대체 사슬(한국어 원문)로 보인다.
+# Phase 0: 문구는 아직 비어 있다. 감싸기(Phase 2·3)와 함께 채운다.
+msgid ""
+msgstr ""
+"Project-Id-Version: PolyPDF\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"

@@ -7053,10 +7053,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not right_restored:
             self.right_splitter.setSizes(self.DEFAULT_RIGHT_SPLITTER_SIZES)
 
+        # 261008(다국어 SOT §4 ①): 읽기 **전에** 설정 파일이 있었는지 — 없으면 첫 실행(설치 언어·OS 언어로)
+        try:
+            self._settings_existed = settings_store.settings_path(self.SETTINGS_FILE).exists()
+        except Exception:
+            self._settings_existed = True
         data = settings_store.load(self.SETTINGS_FILE)
 
         # 환경설정 적용 (v1.6.2: history 관련 키 제거)
         self._prefs = dict(data.get("preferences", {}))
+        # 261008(다국어 SOT §4): 언어가 없으면 한 번 정해 설정에 넣는다(이후엔 설정이 기준).
+        #   설정 파일이 이미 있으면 ko — 이 기능 전 설치본은 모두 한국어였다.
+        if not self._prefs.get("language"):
+            from viewer import i18n as _i18n
+            self._prefs["language"] = _i18n.initial_language(
+                getattr(self, "_settings_existed", True))
         self._prefs.setdefault("restore_session", True)
         self._prefs.setdefault("start_view_single", True)   # 260628-13: 시작 시 1단+쪽맞춤
         # 260830(사용자 결정): 태그 자동 부여는 **옵트인** — 환경설정에서 체크해야 동작.
@@ -7369,10 +7380,27 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         dlg = SettingsDialog(self._prefs, self, host=self)
         if dlg.exec() == dlg.DialogCode.Accepted:
             new_prefs = dlg.result_prefs()
+            _lang_before = str(self._prefs.get("language", "ko"))
             self._apply_prefs(new_prefs)
             # 즉시 settings.json 저장
             self._save_settings_now()
             self.status.showMessage("설정 저장됨", 3000)
+            if str(self._prefs.get("language", "ko")) != _lang_before:
+                self._offer_language_restart()
+
+    def _offer_language_restart(self):
+        """261008(다국어 SOT §4): 화면 언어는 재시작 뒤 적용 — 지금 언어와 새 언어로 함께 안내."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("PolyPDF")
+        box.setText("화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
+                    "The display language will be applied after PolyPDF restarts.")
+        b_now = box.addButton("지금 다시 시작 / Restart now", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("나중에 / Later", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_now)
+        box.exec()
+        if box.clickedButton() is b_now:
+            self._restart_app()            # 설정 초기화가 쓰는 재시작 — 닫기는 종료 길(저장 확인)
 
     def _apply_prefs(self, prefs: dict):
         # v1.6.2: history 관련 키 제거. screenshot_max 만 한도로.
@@ -7507,6 +7535,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                             old.get("merge_presets", []))),
             # 260606-13: 화면 스타일(테마)
             "theme": str(prefs.get("theme", old.get("theme", "auto"))),
+            # 261008(다국어 SOT §4): 화면 언어 — 허용목록이라 여기 없으면 조용히 사라진다.
+            "language": str(prefs.get("language", old.get("language", "ko")) or "ko"),
             # 260615-9(P11): 인터넷 사전(단어장)
             "online_dict_enabled": bool(prefs.get("online_dict_enabled",
                                                   old.get("online_dict_enabled", True))),

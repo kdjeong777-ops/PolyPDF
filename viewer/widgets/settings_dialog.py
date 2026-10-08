@@ -281,6 +281,16 @@ class SettingsDialog(QDialog):
                   if cur in [v for v, _ in THEME_LABELS] else 0)
         self.cmb_theme.setCurrentIndex(idx)
         tl.addRow("테마:", self.cmb_theme)
+        # 261008(다국어 SOT §4): 화면 언어 — 항목은 언어팩에서(자기 언어 이름), 재시작 뒤 적용.
+        #   이름표를 두 언어로 적어 어느 언어 화면에서도 읽힌다.
+        from viewer import i18n as _i18n
+        self.cmb_language = QComboBox()
+        for _code, _name, _status in _i18n.available_languages():
+            self.cmb_language.addItem(_name if _status == "complete" else _name + " (β)", _code)
+        _cur_lang = str(self._prefs.get("language") or _i18n.language())
+        _li = self.cmb_language.findData(_cur_lang)
+        self.cmb_language.setCurrentIndex(_li if _li >= 0 else 0)
+        tl.addRow("언어 / Language:", self.cmb_language)
         layout.addWidget(grp_theme)
 
         # ── 인터넷 사전(단어장) ─────────────────────────── 260615-9(P11)
@@ -699,6 +709,7 @@ class SettingsDialog(QDialog):
             "ffmpeg_path": str(self._prefs.get("ffmpeg_path", "")),   # 260618-18: UI 제거, 기존값 보존
             # 260606-13: 화면 스타일(테마)
             "theme": self.cmb_theme.currentData(),
+            "language": self.cmb_language.currentData(),     # 261008(다국어 SOT §4)
             # 260615-9(P11): 인터넷 사전
             "online_dict_enabled": self.chk_online_dict.isChecked(),
             "stdict_key": self.ed_stdict_key.text().strip(),

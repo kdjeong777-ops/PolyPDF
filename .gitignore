@@ -84,3 +84,9 @@ CLAUDE.md
 
 # 260628-7: PyInstaller 중간 산출물(빌드 후 자동 삭제되지만 누락돼 있었다)
 build/
+
+# 261008(다국어 SOT §3.5): 언어팩 빌드 산출물 — .po 가 원본, .mo 는 build_ci.bat 가 만든다.
+#   가짜 언어(qps_ploc)는 개발·검사 전용, installer/languages.iss 는 Phase 6 에서 생성.
+resources/locale/**/*.mo
+resources/locale/qps_ploc/
+installer/languages.iss

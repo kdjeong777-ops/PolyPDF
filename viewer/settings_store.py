@@ -24,7 +24,10 @@ PERSONAL_TOP_KEYS = ["favorites", "law_favorites", "recent_folders", "recent_fil
 #   머신 종속 환경설정(경로 등) — 기본값에서 제외, 초기화 시 유지:
 PERSONAL_PREF_KEYS = {"recording_dir", "recording_mic", "recording_system",
                       "ffmpeg_path", "recording_keys",
-                      "recording_test_ok"}
+                      "recording_test_ok",
+                      # 261008(다국어 SOT §4): 화면 언어 — 배포 기본값에 넣지 않고(첫 실행 규칙을
+                      #   따르게), 설정을 초기화해도 화면 언어는 그대로.
+                      "language"}
 
 # 260628(보안감사): API 키 등 **비밀 값** — 마스터 SOT §8.2.0 의 3중 규칙 대상.
 #   ① 저장 시 DPAPI 암호화, ② 마이그레이션 백업에서 제거, ③ 배포용 기본값에서 제외.
@@ -150,6 +153,20 @@ def merge_reset(current: dict, profile: Optional[dict]) -> dict:
 
 def settings_path(name: str = "settings.json") -> Path:
     return settings_dir() / name
+
+
+def peek_pref(key: str, name: str = "settings.json"):
+    """261008(다국어 SOT §3.6): `preferences.<key>` 만 **읽기 전용**으로 꺼낸다.
+
+    시작 때 창을 만들기 전에 화면 언어를 정하려고 쓴다. `load()` 는 스키마가 오르면 백업을 쓰고
+    마이그레이션하므로 여기서 부르면 그 일을 두 번 하게 된다 — 파싱만 하고, 실패하면 None.
+    앱 이름(`setApplicationName`)을 정한 **뒤**에 불러야 올바른 폴더를 본다(마스터 §14.2.1)."""
+    try:
+        d = json.loads(settings_path(name).read_text(encoding="utf-8"))
+        prefs = d.get("preferences") if isinstance(d, dict) else None
+        return prefs.get(key) if isinstance(prefs, dict) else None
+    except Exception:
+        return None
 
 
 def _migrate_v1_to_v2(d: dict) -> dict:

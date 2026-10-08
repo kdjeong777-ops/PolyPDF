@@ -1,0 +1,10 @@
+{
+  "code": "en",
+  "name": "English",
+  "name_ko": "영어",
+  "fallback": [],
+  "qt": "qtbase_en",
+  "inno": "compiler:Default.isl",
+  "direction": "ltr",
+  "status": "partial"
+}

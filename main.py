@@ -102,6 +102,23 @@ ERROR_LOG_NAME = "error.log"
 ERROR_LOG_MAX = 1_000_000          # 이보다 커지면 비우고 새로 적는다(설정 폴더를 불리지 않게)
 
 
+def _install_language(app) -> None:
+    """261008(다국어 SOT §3.6): 화면 언어를 정하고 번역·Qt 기본 번역을 설치한다.
+
+    ★ `setApplicationName` **뒤**여야 한다 — 설정 폴더가 앱 이름으로 정해진다(마스터 §14.2.1).
+    ★ 창을 만들기 **전**이어야 한다 — 창은 문구를 `__init__` 에서 정한다(그래서 언어 변경은 재시작).
+    설정은 `peek_pref` 로 언어만 읽는다(`load()` 의 마이그레이션·백업을 두 번 하지 않게).
+    설정에 언어가 없으면 처음 정하는 규칙(설정 파일 있음 → ko, 없음 → 설치 언어·OS 언어)."""
+    try:
+        from viewer import i18n, settings_store
+        code = settings_store.peek_pref("language")
+        if not code:
+            code = i18n.initial_language(settings_store.settings_path().exists())
+        i18n.install(app, code)
+    except Exception:
+        pass                 # 언어를 못 정해도 한국어(원문)로 뜬다
+
+
 def _install_excepthook() -> None:
     """261008-1(마스터 §14.7.3, 사용자 결정): 처리 안 된 Python 예외가 **앱을 끄지 않게**.
 
@@ -267,6 +284,7 @@ def main():
 
     _migrate_appdata()       # v1.6.15: 구 'Smart PDF Viewer' AppData 1회 이전
     _install_excepthook()    # 261008-1(§14.7.3): 처리 안 된 예외로 창이 사라지지 않게(앱 이름 뒤 — 기록 폴더)
+    _install_language(app)   # 261008(다국어 SOT §3.6): 앱 이름 뒤·창 만들기 전 — 화면 언어 + Qt 기본 번역
 
     # --- 여기서부터 무거운 로딩(스플래시가 보이는 동안 진행) ---
     import fitz                                  # v1.3.0 C: PyMuPDF AA 레벨
