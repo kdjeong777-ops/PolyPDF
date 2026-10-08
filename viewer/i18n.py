@@ -93,7 +93,10 @@ def available_languages() -> list:
 
 # ── 번역 ──────────────────────────────────────────────────────────────────
 def tr(text: str) -> str:
-    """화면 문구. `text` = 한국어 원문(키). 번역이 없으면 원문."""
+    """화면 문구. `text` = 한국어 원문(키). 번역이 없으면 원문.
+    빈 글자는 그대로 — gettext 는 빈 키에 .mo 머리(메타데이터)를 돌려준다(`tr(변수)` 가 빈 값일 때)."""
+    if not text:
+        return text
     return _trans.gettext(text)
 
 

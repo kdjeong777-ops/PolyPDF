@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer.twoup import compose_preview, merge_twoup_settings
+from viewer.i18n import tr
 
 _KEYS = ("margin_top", "margin_bottom", "margin_left", "margin_right",
          "gap", "gap_v", "crop_top", "crop_bottom", "crop_left", "crop_right")
@@ -191,8 +192,8 @@ class _PreviewCanvas(QWidget):
 def _guide_radios(parent, current, on_change):
     """가이드 옵션버튼(여백/크롭/숨김) 행 + 버튼그룹 반환."""
     row = QHBoxLayout()
-    row.addWidget(QLabel("가이드:"))
-    rbm = QRadioButton("여백"); rbc = QRadioButton("크롭"); rbh = QRadioButton("숨김")
+    row.addWidget(QLabel(tr("가이드:")))
+    rbm = QRadioButton(tr("여백")); rbc = QRadioButton(tr("크롭")); rbh = QRadioButton(tr("숨김"))
     bg = QButtonGroup(parent)
     for rb, mode in [(rbm, "margin"), (rbc, "crop"), (rbh, "none")]:
         bg.addButton(rb)
@@ -218,15 +219,15 @@ class MergePreviewWidget(QWidget):
         root = QHBoxLayout(self); root.setContentsMargins(0, 0, 0, 0)
         left = QVBoxLayout()
         nav = QHBoxLayout()
-        self.b_prev = QPushButton("◀ 이전"); self.b_prev.clicked.connect(self._prev_sheet)
-        self.b_next = QPushButton("다음 ▶"); self.b_next.clicked.connect(self._next_sheet)
+        self.b_prev = QPushButton(tr("◀ 이전")); self.b_prev.clicked.connect(self._prev_sheet)
+        self.b_next = QPushButton(tr("다음 ▶")); self.b_next.clicked.connect(self._next_sheet)
         self.lbl_nav = QLabel("1 / 1"); self.lbl_nav.setAlignment(Qt.AlignmentFlag.AlignCenter)
         nav.addWidget(self.b_prev); nav.addWidget(self.lbl_nav, 1); nav.addWidget(self.b_next)
         left.addLayout(nav)
         self.canvas = _PreviewCanvas()
         self.canvas.changed.connect(self._on_drag)
         left.addWidget(self.canvas, 1)
-        b_full = QPushButton("전체 화면으로 보기")
+        b_full = QPushButton(tr("전체 화면으로 보기"))
         b_full.clicked.connect(self._open_fullscreen)
         left.addWidget(b_full)
         root.addLayout(left, 1)
@@ -235,21 +236,21 @@ class MergePreviewWidget(QWidget):
         grow, self._bg = _guide_radios(self, self.canvas._show, self.canvas.set_show)
         side.addLayout(grow)
         self.sp = {}
-        gm = QGroupBox("여백 / 간격 (pt)"); fm = QFormLayout(gm)
-        for key, lab in [("margin_top", "상단 여백"), ("margin_bottom", "하단 여백"),
-                         ("margin_left", "좌측 여백"), ("margin_right", "우측 여백"),
-                         ("gap", "가로 간격"), ("gap_v", "세로 간격")]:
+        gm = QGroupBox(tr("여백 / 간격 (pt)")); fm = QFormLayout(gm)
+        for key, lab in [("margin_top", tr("상단 여백")), ("margin_bottom", tr("하단 여백")),
+                         ("margin_left", tr("좌측 여백")), ("margin_right", tr("우측 여백")),
+                         ("gap", tr("가로 간격")), ("gap_v", tr("세로 간격"))]:
             self.sp[key] = self._mk_spin(key, 0, 400, " pt")
             fm.addRow(lab + ":", self.sp[key])
         side.addWidget(gm)
-        gc = QGroupBox("원본 크롭 (%)"); fc = QFormLayout(gc)
-        for key, lab in [("crop_top", "상단"), ("crop_bottom", "하단"),
-                         ("crop_left", "좌측"), ("crop_right", "우측")]:
+        gc = QGroupBox(tr("원본 크롭 (%)")); fc = QFormLayout(gc)
+        for key, lab in [("crop_top", tr("상단")), ("crop_bottom", tr("하단")),
+                         ("crop_left", tr("좌측")), ("crop_right", tr("우측"))]:
             self.sp[key] = self._mk_spin(key, 0, 45, " %")
             fc.addRow(lab + ":", self.sp[key])
         side.addWidget(gc)
-        hint = QLabel("파란선=여백, 초록선=간격, 주황선=크롭.\n"
-                      "드래그/숫자로 조정하고 ◀▶로 페이지를 넘겨 확인하세요.")
+        hint = QLabel(tr("파란선=여백, 초록선=간격, 주황선=크롭.\n"
+                      "드래그/숫자로 조정하고 ◀▶로 페이지를 넘겨 확인하세요."))
         hint.setWordWrap(True); hint.setStyleSheet("color:#888;font-size:11px;")
         side.addWidget(hint)
         side.addStretch(1)
@@ -355,7 +356,7 @@ class FullscreenPreview(QWidget):
     def __init__(self, base, vals, sample, sheet, show, parent=None):
         super().__init__(parent)
         self.setWindowFlag(Qt.WindowType.Window, True)
-        self.setWindowTitle("병합 미리보기 — 전체화면")
+        self.setWindowTitle(tr("병합 미리보기 — 전체화면"))
         self._base = base; self.vals = vals; self._sample = sample
         self._sheet = sheet; self._total = 1
         self.setStyleSheet("background:#202020;")
@@ -374,8 +375,8 @@ class FullscreenPreview(QWidget):
         self.b_next = QPushButton("▶", self); self.b_next.setStyleSheet(navcss)
         self.b_next.setFixedSize(48, 104); self.b_next.clicked.connect(self._next)
         self.cmb_guide = QComboBox(self)
-        self.cmb_guide.addItem("여백", "margin"); self.cmb_guide.addItem("크롭", "crop")
-        self.cmb_guide.addItem("숨김", "none")
+        self.cmb_guide.addItem(tr("여백"), "margin"); self.cmb_guide.addItem(tr("크롭"), "crop")
+        self.cmb_guide.addItem(tr("숨김"), "none")
         self.cmb_guide.setCurrentIndex({"margin": 0, "crop": 1, "none": 2}.get(show, 0))
         self.cmb_guide.setStyleSheet(
             "QComboBox{background:#ffffff;color:#222;padding:4px 10px;border:1px solid #888;"
@@ -456,7 +457,7 @@ class MergePreviewDialog(QDialog):
 
     def __init__(self, settings, sample, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("병합 미리보기 / 여백·간격·크롭 조정")
+        self.setWindowTitle(tr("병합 미리보기 / 여백·간격·크롭 조정"))
         self.resize(960, 660)
         v = QVBoxLayout(self)
         self.widget = MergePreviewWidget(settings, sample, self)

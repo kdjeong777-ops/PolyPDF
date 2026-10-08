@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import ctypes
 from pathlib import Path
+from viewer.i18n import tr
 
 CREATE_NO_WINDOW = 0x08000000
 
@@ -224,9 +225,9 @@ class ScreenRecorder:
 
     def start(self):
         if self.is_recording():
-            return True, "이미 녹화 중입니다."
+            return True, tr("이미 녹화 중입니다.")
         if not self.ffmpeg or not os.path.isfile(self.ffmpeg):
-            return False, "ffmpeg 를 찾을 수 없습니다."
+            return False, tr("ffmpeg 를 찾을 수 없습니다.")
         try:
             Path(self.out_path).parent.mkdir(parents=True, exist_ok=True)
             self._proc = subprocess.Popen(
@@ -234,10 +235,10 @@ class ScreenRecorder:
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 creationflags=CREATE_NO_WINDOW)
             self._paused = False
-            return True, "녹화 시작"
+            return True, tr("녹화 시작")
         except Exception as e:
             self._proc = None
-            return False, f"녹화 시작 실패: {e}"
+            return False, tr('녹화 시작 실패: {e}').format(e=e)
 
     def pause(self):
         if self.is_recording() and not self._paused:

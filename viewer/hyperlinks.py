@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
+from viewer.i18n import tr
 
 # 작업 파일 화이트리스트(문서·미디어). 소문자 확장자(점 제외).
 ALLOWED_EXT = {
@@ -59,30 +60,29 @@ def validate_file_target(base_folder, target_path):
     try:
         base = Path(base_folder).resolve(strict=False)
     except Exception:
-        return False, "기준 폴더가 유효하지 않습니다."
+        return False, tr("기준 폴더가 유효하지 않습니다.")
     if not base.exists() or not base.is_dir():
-        return False, "기준 폴더가 없습니다. 폴더를 먼저 여세요."
+        return False, tr("기준 폴더가 없습니다. 폴더를 먼저 여세요.")
     try:
         tgt = Path(target_path).resolve(strict=False)
     except Exception:
-        return False, "파일 경로가 유효하지 않습니다."
+        return False, tr("파일 경로가 유효하지 않습니다.")
     if not tgt.exists() or not tgt.is_file():
-        return False, "파일이 존재하지 않습니다."
+        return False, tr("파일이 존재하지 않습니다.")
 
     ext = _ext_of(tgt)
     if ext in BLOCKED_EXT:
-        return False, f"보안상 등록할 수 없는 형식입니다(.{ext})."
+        return False, tr('보안상 등록할 수 없는 형식입니다(.{ext}).').format(ext=ext)
     if ext not in ALLOWED_EXT:
-        return False, (f"허용되지 않은 형식입니다(.{ext}). "
-                       "문서·이미지·동영상 등 작업 파일만 등록할 수 있습니다.")
+        return False, (tr('허용되지 않은 형식입니다(.{ext}). 문서·이미지·동영상 등 작업 파일만 등록할 수 있습니다.').format(ext=ext))
 
     # 경로 봉쇄: 대상이 base 내부여야 함(심볼릭/.. 우회 방지)
     try:
         common = os.path.commonpath([str(base), str(tgt)])
     except ValueError:
-        return False, "다른 드라이브의 파일은 등록할 수 없습니다."
+        return False, tr("다른 드라이브의 파일은 등록할 수 없습니다.")
     if os.path.normcase(common) != os.path.normcase(str(base)):
-        return False, "책갈피 폴더 안의 파일만 등록할 수 있습니다."
+        return False, tr("책갈피 폴더 안의 파일만 등록할 수 있습니다.")
 
     rel = os.path.relpath(str(tgt), str(base)).replace("\\", "/")
     return True, rel
@@ -93,20 +93,20 @@ def validate_url(url, allowlist=None):
     allow = [d.lower().lstrip(".") for d in (allowlist or DEFAULT_URL_ALLOWLIST)]
     u = (url or "").strip()
     if not u:
-        return False, "주소가 비어 있습니다."
+        return False, tr("주소가 비어 있습니다.")
     try:
         pr = urlparse(u)
     except Exception:
-        return False, "주소 형식이 올바르지 않습니다."
+        return False, tr("주소 형식이 올바르지 않습니다.")
     if pr.scheme.lower() != "https":
-        return False, "보안을 위해 https:// 주소만 등록할 수 있습니다."
+        return False, tr("보안을 위해 https:// 주소만 등록할 수 있습니다.")
     host = (pr.hostname or "").lower()
     if not host:
-        return False, "주소에 도메인이 없습니다."
+        return False, tr("주소에 도메인이 없습니다.")
     ok = any(host == d or host.endswith("." + d) for d in allow)
     if not ok:
-        return False, ("허용 목록에 없는 도메인입니다. "
-                       "유튜브 등 허용된 주소만 등록할 수 있습니다.")
+        return False, (tr("허용 목록에 없는 도메인입니다. "
+                       "유튜브 등 허용된 주소만 등록할 수 있습니다."))
     return True, u
 
 
@@ -222,7 +222,7 @@ class HyperlinkStore:
     def add_file_link(self, file_path, page0, name, target_path):
         key = self._rel_key(file_path)
         if key is None:
-            return False, "현재 파일이 책갈피 폴더 안에 있지 않습니다."
+            return False, tr("현재 파일이 책갈피 폴더 안에 있지 않습니다.")
         ok, rel_or_err = validate_file_target(self.base, target_path)
         if not ok:
             return False, rel_or_err
@@ -230,19 +230,19 @@ class HyperlinkStore:
         nm = (name or "").strip() or Path(rel_or_err).stem
         self._bucket(key, page0, create=True).append(
             {"name": nm, "kind": "file", "target": rel_or_err})
-        return True, "등록되었습니다."
+        return True, tr("등록되었습니다.")
 
     def add_url_link(self, file_path, page0, name, url):
         key = self._rel_key(file_path)
         if key is None:
-            return False, "현재 파일이 책갈피 폴더 안에 있지 않습니다."
+            return False, tr("현재 파일이 책갈피 폴더 안에 있지 않습니다.")
         ok, url_or_err = validate_url(url, self.url_allowlist)
         if not ok:
             return False, url_or_err
         nm = (name or "").strip() or url_or_err
         self._bucket(key, page0, create=True).append(
             {"name": nm, "kind": "url", "target": url_or_err})
-        return True, "등록되었습니다."
+        return True, tr("등록되었습니다.")
 
     def rename_link(self, file_path, page0, index, new_name) -> bool:
         """260609-11: 등록 링크의 명칭 변경."""

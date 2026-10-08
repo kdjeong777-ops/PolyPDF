@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGroupBox,
     QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
 )
+from viewer.i18n import tr
 
 CROP_MAX = 45
 PREVIEW_GAP_PX = 8          # 미리보기 펼침 간격
@@ -58,7 +59,7 @@ class ViewSettingsDialog(QDialog):
         둘 다 없으면 쪽 이동 버튼은 비활성이고 `preview_pages` 만 보여 준다.
         page_crop_of(page0)->(t,b,l,r)|None 은 **저장된** 개별 크롭을 알려 준다(§4.2.3.1)."""
         super().__init__(parent)
-        self.setWindowTitle("보기 설정")
+        self.setWindowTitle(tr("보기 설정"))
         self._renderer = renderer
         self._preview_pages = list(preview_pages or [])
         self._page0 = int(page_no) - 1
@@ -83,45 +84,45 @@ class ViewSettingsDialog(QDialog):
         p = _crop4(page_crop)
         oe_on, oe_odd, oe_even = oddeven if oddeven else (False, (0, 0), (0, 0))
 
-        left.addWidget(QLabel("페이지 가장자리를 잘라 본문을 크게 봅니다(%).\n"
-                              "자른 만큼 실제 발표 화면에서 확대됩니다."))
+        left.addWidget(QLabel(tr("페이지 가장자리를 잘라 본문을 크게 봅니다(%).\n"
+                              "자른 만큼 실제 발표 화면에서 확대됩니다.")))
 
-        grp_g = QGroupBox("크롭 — 전체 페이지(전역)")
+        grp_g = QGroupBox(tr("크롭 — 전체 페이지(전역)"))
         gf = QFormLayout(grp_g)
         self.sp_gt, self.sp_gb = self._spin(g[0]), self._spin(g[1])
         self.sp_gl, self.sp_gr = self._spin(g[2]), self._spin(g[3])
-        gf.addRow("상단:", self.sp_gt)
-        gf.addRow("하단:", self.sp_gb)
-        gf.addRow("좌측:", self.sp_gl)
-        gf.addRow("우측:", self.sp_gr)
+        gf.addRow(tr("상단:"), self.sp_gt)
+        gf.addRow(tr("하단:"), self.sp_gb)
+        gf.addRow(tr("좌측:"), self.sp_gl)
+        gf.addRow(tr("우측:"), self.sp_gr)
         left.addWidget(grp_g)
 
-        grp_oe = QGroupBox("홀수/짝수 페이지 좌·우 크롭 달리하기")
+        grp_oe = QGroupBox(tr("홀수/짝수 페이지 좌·우 크롭 달리하기"))
         of = QFormLayout(grp_oe)
-        self.chk_oe = QCheckBox("쪽번호 홀/짝에 따라 좌·우를 따로 적용")
-        self.chk_oe.setToolTip("스캔본의 제본 여백처럼 쪽마다 여백이 좌우로 번갈아 생길 때 씁니다.\n"
-                               "판정 기준은 PDF 쪽번호(1부터)이며, 맞쪽 빈 페이지와 무관합니다.")
+        self.chk_oe = QCheckBox(tr("쪽번호 홀/짝에 따라 좌·우를 따로 적용"))
+        self.chk_oe.setToolTip(tr("스캔본의 제본 여백처럼 쪽마다 여백이 좌우로 번갈아 생길 때 씁니다.\n"
+                               "판정 기준은 PDF 쪽번호(1부터)이며, 맞쪽 빈 페이지와 무관합니다."))
         self.chk_oe.setChecked(bool(oe_on))
         of.addRow(self.chk_oe)
         self.sp_ol, self.sp_or = self._spin(oe_odd[0]), self._spin(oe_odd[1])
         self.sp_el, self.sp_er = self._spin(oe_even[0]), self._spin(oe_even[1])
-        of.addRow("홀수쪽 좌측:", self.sp_ol)
-        of.addRow("홀수쪽 우측:", self.sp_or)
-        of.addRow("짝수쪽 좌측:", self.sp_el)
-        of.addRow("짝수쪽 우측:", self.sp_er)
+        of.addRow(tr("홀수쪽 좌측:"), self.sp_ol)
+        of.addRow(tr("홀수쪽 우측:"), self.sp_or)
+        of.addRow(tr("짝수쪽 좌측:"), self.sp_el)
+        of.addRow(tr("짝수쪽 우측:"), self.sp_er)
         left.addWidget(grp_oe)
 
-        self.grp_page = QGroupBox(f"크롭 — 개별 쪽 (p.{int(page_no)})")
+        self.grp_page = QGroupBox(tr('크롭 — 개별 쪽 (p.{page_no})').format(page_no=int(page_no)))
         grp_p = self.grp_page
         pf = QFormLayout(grp_p)
         # 체크박스 + '적용' 버튼 한 줄 — 버튼은 체크했을 때만 보인다(§4.2.3.1)
         prow = QHBoxLayout()
-        self.chk_page = QCheckBox("이 페이지에만 별도 적용")
+        self.chk_page = QCheckBox(tr("이 페이지에만 별도 적용"))
         self.chk_page.setChecked(bool(has_page_crop))
-        self.btn_apply_page = QPushButton("적용")
+        self.btn_apply_page = QPushButton(tr("적용"))
         self.btn_apply_page.setAutoDefault(False)
-        self.btn_apply_page.setToolTip("지금 미리보기에 보이는 쪽에 위 값을 고정합니다.\n"
-                                       "쪽을 옮긴 뒤 다시 누르면 그 쪽에도 적용됩니다.")
+        self.btn_apply_page.setToolTip(tr("지금 미리보기에 보이는 쪽에 위 값을 고정합니다.\n"
+                                       "쪽을 옮긴 뒤 다시 누르면 그 쪽에도 적용됩니다."))
         self.btn_apply_page.clicked.connect(self._on_apply_page)
         prow.addWidget(self.chk_page)
         prow.addWidget(self.btn_apply_page)
@@ -132,13 +133,13 @@ class ViewSettingsDialog(QDialog):
         pf.addRow(self.lbl_pinned)
         self.sp_pt, self.sp_pb = self._spin(p[0]), self._spin(p[1])
         self.sp_pl, self.sp_pr = self._spin(p[2]), self._spin(p[3])
-        pf.addRow("상단:", self.sp_pt)
-        pf.addRow("하단:", self.sp_pb)
-        pf.addRow("좌측:", self.sp_pl)
-        pf.addRow("우측:", self.sp_pr)
+        pf.addRow(tr("상단:"), self.sp_pt)
+        pf.addRow(tr("하단:"), self.sp_pb)
+        pf.addRow(tr("좌측:"), self.sp_pl)
+        pf.addRow(tr("우측:"), self.sp_pr)
         left.addWidget(grp_p)
 
-        btn_reset = QPushButton("크롭 초기화(이 파일 전체)")
+        btn_reset = QPushButton(tr("크롭 초기화(이 파일 전체)"))
         btn_reset.clicked.connect(self._on_reset)
         left.addWidget(btn_reset)
         left.addStretch(1)
@@ -151,7 +152,7 @@ class ViewSettingsDialog(QDialog):
 
         # --- 미리보기(오른쪽) ---
         right = QVBoxLayout()
-        self.lbl_preview_title = QLabel("미리보기")
+        self.lbl_preview_title = QLabel(tr("미리보기"))
         right.addWidget(self.lbl_preview_title)
         self.preview = QLabel()
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -167,8 +168,8 @@ class ViewSettingsDialog(QDialog):
         # 쪽 이동(§4.2.3) — 이동 단위는 발표 화면과 같다(좌우 2쪽이면 펼침 단위, 숨김은 건너뜀)
         nav = QHBoxLayout()
         nav.addStretch(1)
-        self.btn_prev = QPushButton("◀ 이전")
-        self.btn_next = QPushButton("다음 ▶")
+        self.btn_prev = QPushButton(tr("◀ 이전"))
+        self.btn_next = QPushButton(tr("다음 ▶"))
         self.btn_prev.setAutoDefault(False)
         self.btn_next.setAutoDefault(False)
         self.btn_prev.clicked.connect(lambda: self._step(-1))
@@ -248,10 +249,10 @@ class ViewSettingsDialog(QDialog):
     def _sync_page_group(self):
         on = self.chk_page.isChecked()
         self.btn_apply_page.setVisible(on)
-        self.grp_page.setTitle(f"크롭 — 개별 쪽 (p.{int(self._cur) + 1})")
+        self.grp_page.setTitle(tr('크롭 — 개별 쪽 (p.{cur})').format(cur=int(self._cur) + 1))
         pinned = sorted(self._page_overrides)
         self.lbl_pinned.setText(
-            ("개별 적용된 쪽: " + ", ".join(str(p + 1) for p in pinned)) if pinned else "")
+            (tr('개별 적용된 쪽: {join}').format(join=', '.join((str(p + 1) for p in pinned)))) if pinned else "")
 
     def _load_page_crop_for(self, page0):
         """쪽을 옮겼을 때 그 쪽의 개별 크롭을 불러온다.
@@ -314,7 +315,7 @@ class ViewSettingsDialog(QDialog):
         self.btn_next.setEnabled(has and self._step_fn(self._cur, +1) is not None)
         nums = [str(int(p) + 1) for p in self._preview_pages if p is not None]
         self.lbl_preview_title.setText(
-            "미리보기 — " + ("·".join(nums) + "쪽" if nums else "표시할 쪽 없음"))
+            tr('미리보기 — {v}').format(v=tr('{join}쪽').format(join='·'.join(nums)) if nums else tr('표시할 쪽 없음')))
 
     # --- 크롭 계산(저장소 우선순위와 같아야 한다 — 발표 SOT §4.2.1) ---
     def effective_crop(self, page0):
@@ -377,7 +378,7 @@ class ViewSettingsDialog(QDialog):
                 pms[int(pg)] = self._cropped(pg)
         real = [pm for pm in pms.values() if pm is not None and not pm.isNull()]
         if not real:
-            self.preview.setText("미리보기를 표시할 수 없습니다.")
+            self.preview.setText(tr("미리보기를 표시할 수 없습니다."))
             return
         ref = real[0]
         gap = PREVIEW_GAP_PX if len(pages) > 1 else 0

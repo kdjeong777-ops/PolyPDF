@@ -5,6 +5,7 @@ v1.6.2: 히스토리 패널 제거 — 관련 옵션(`restore_history`, `history
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from viewer.i18n import tr, tr_noop
 
 
 class _AntLoginWorker(QThread):
@@ -16,14 +17,14 @@ class _AntLoginWorker(QThread):
         try:
             from ..study import ant_cli
         except Exception as e:
-            self.done.emit(False, f"모듈 오류: {e}")
+            self.done.emit(False, tr('모듈 오류: {e}').format(e=e))
             return
         try:
             ant_cli.ensure_installed(progress=self.progress.emit)
         except Exception as e:
-            self.done.emit(False, f"Anthropic CLI 설치 실패: {str(e)[:120]}")
+            self.done.emit(False, tr('Anthropic CLI 설치 실패: {e}').format(e=str(e)[:120]))
             return
-        self.progress.emit("브라우저에서 로그인 완료를 기다리는 중…")
+        self.progress.emit(tr("브라우저에서 로그인 완료를 기다리는 중…"))
         ok, msg = ant_cli.login()
         self.done.emit(ok, msg)
 
@@ -45,7 +46,7 @@ def _verify_external_key(kind: str, key: str):
             return online_dict.verify_provider_debug(kind, key)
     except Exception as e:
         return False, f"{type(e).__name__}: {str(e)[:80]}"
-    return False, "알 수 없는 항목"
+    return False, tr("알 수 없는 항목")
 
 
 class _KeyVerifyWorker(QThread):
@@ -73,7 +74,7 @@ class _ConnTestWorker(QThread):
         try:
             from ..study import translate_api as tapi
             n, dbg = tapi.count_tokens_debug(
-                self._key, "연결 확인 ping", model=self._model, auth=self._auth)
+                self._key, tr("연결 확인 ping"), model=self._model, auth=self._auth)
         except Exception as e:
             n, dbg = -1, [f"ERR {type(e).__name__}: {str(e)[:120]}"]
         self.done.emit(n, dbg)
@@ -99,8 +100,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QKeySequence
 
 # 260606-13: 화면 스타일(테마) 옵션
-THEME_LABELS = [("auto", "자동 (시스템 설정 따름)"), ("light", "밝게 (화이트)"),
-                ("dark", "어둡게 (다크)")]
+THEME_LABELS = [("auto", tr_noop("자동 (시스템 설정 따름)")), ("light", tr_noop("밝게 (화이트)")),
+                ("dark", tr_noop("어둡게 (다크)"))]
 
 
 class SettingsDialog(QDialog):
@@ -108,7 +109,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, prefs: dict, parent=None, host=None):
         super().__init__(parent)
-        self.setWindowTitle("설정")
+        self.setWindowTitle(tr("설정"))
         self.setMinimumWidth(440)
         self._prefs = dict(prefs)
         self._host = host       # 260609-17(F4): 녹화 테스트·장치 조회용
@@ -124,15 +125,15 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(_content)
 
         # ── 시작 시 동작 ─────────────────────────────────
-        grp_start = QGroupBox("시작 시 동작")
+        grp_start = QGroupBox(tr("시작 시 동작"))
         gl = QVBoxLayout(grp_start)
 
         # 260906-3(사용자 결정): 파일·폴더를 지정하지 않고 실행했을 때 무엇을 열지 — 3택.
         #   '마지막'은 1번째 뷰어가 보던 **형태 그대로**(폴더면 폴더, 파일이면 그 파일만) 연다.
         from PyQt6.QtWidgets import QRadioButton, QButtonGroup
-        self.rb_start_last = QRadioButton("마지막에 열었던 폴더·파일 열기 (기본)")
-        self.rb_start_path = QRadioButton("지정한 폴더·파일 열기:")
-        self.rb_start_none = QRadioButton("아무것도 열지 않고 빈 화면으로 시작")
+        self.rb_start_last = QRadioButton(tr("마지막에 열었던 폴더·파일 열기 (기본)"))
+        self.rb_start_path = QRadioButton(tr("지정한 폴더·파일 열기:"))
+        self.rb_start_none = QRadioButton(tr("아무것도 열지 않고 빈 화면으로 시작"))
         self._start_group = QButtonGroup(self)
         for _rb in (self.rb_start_last, self.rb_start_path, self.rb_start_none):
             self._start_group.addButton(_rb)
@@ -144,10 +145,10 @@ class SettingsDialog(QDialog):
         prow = QHBoxLayout()
         prow.addWidget(self.rb_start_path)
         self.ed_startup_path = QLineEdit(str(self._prefs.get("startup_path", "") or ""))
-        self.ed_startup_path.setPlaceholderText("폴더 또는 PDF 파일 경로")
+        self.ed_startup_path.setPlaceholderText(tr("폴더 또는 PDF 파일 경로"))
         prow.addWidget(self.ed_startup_path, 1)
-        _bf = QPushButton("폴더…"); _bf.clicked.connect(self._pick_startup_folder)
-        _bp = QPushButton("파일…"); _bp.clicked.connect(self._pick_startup_file)
+        _bf = QPushButton(tr("폴더…")); _bf.clicked.connect(self._pick_startup_folder)
+        _bp = QPushButton(tr("파일…")); _bp.clicked.connect(self._pick_startup_file)
         prow.addWidget(_bf); prow.addWidget(_bp)
         gl.addLayout(prow)
         gl.addWidget(self.rb_start_none)
@@ -156,30 +157,30 @@ class SettingsDialog(QDialog):
         self.rb_start_last.toggled.connect(self._on_restore_toggled)
 
         self.chk_last_page = QCheckBox(
-            "복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)"   # 260618-18: 앞 공백·└ 제거
+            tr("복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)")   # 260618-18: 앞 공백·└ 제거
         )
         self.chk_last_page.setChecked(bool(self._prefs.get("restore_last_page", True)))
         gl.addWidget(self.chk_last_page)
 
         # 260906-3(사용자 결정): 스크린샷 복원 항목 삭제 — 시작은 **항상 빈 목록**이고,
         #   종료할 때 목록이 있으면 PDF로 저장할지 묻는다(스크린샷 SOT).
-        gl.addWidget(QLabel("<small>캡처 목록은 항상 빈 상태로 시작합니다. "
-                            "종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>"))
+        gl.addWidget(QLabel(tr("<small>캡처 목록은 항상 빈 상태로 시작합니다. "
+                            "종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>")))
 
         # 260830(태그 SOT §3.5, 사용자 결정): 태그 자동 부여는 옵트인 — 기본 꺼짐.
         self.chk_auto_tag = QCheckBox(
-            "파일 해시태그·키워드 자동 부여 (인덱싱 후 백그라운드 — 자동 태그는 ·# 로 구분, "
-            "도구 메뉴에서 되돌리기 가능)"
+            tr("파일 해시태그·키워드 자동 부여 (인덱싱 후 백그라운드 — 자동 태그는 ·# 로 구분, "
+            "도구 메뉴에서 되돌리기 가능)")
         )
         self.chk_auto_tag.setChecked(bool(self._prefs.get("auto_tag_enabled", False)))
         gl.addWidget(self.chk_auto_tag)
 
         # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
         mrow = QHBoxLayout()
-        mrow.addWidget(QLabel("PolyPDF 시작 모드:"))
+        mrow.addWidget(QLabel(tr("PolyPDF 시작 모드:")))
         self.cmb_open_mode = QComboBox()
-        self.cmb_open_mode.addItem("편집 모드 (수정·저장 가능)", "edit")
-        self.cmb_open_mode.addItem("보기 모드 (읽기 전용)", "view")
+        self.cmb_open_mode.addItem(tr("편집 모드 (수정·저장 가능)"), "edit")
+        self.cmb_open_mode.addItem(tr("보기 모드 (읽기 전용)"), "view")
         _om = "edit" if bool(self._prefs.get("open_edit_mode", True)) else "view"
         self.cmb_open_mode.setCurrentIndex(0 if _om == "edit" else 1)
         mrow.addWidget(self.cmb_open_mode, 1)
@@ -188,31 +189,31 @@ class SettingsDialog(QDialog):
         layout.addWidget(grp_start)
 
         # ── 스크린샷 한도 ─────────────────────────────────
-        grp_hist = QGroupBox("스크린샷 한도 (썸네일 갯수)")
+        grp_hist = QGroupBox(tr("스크린샷 한도 (썸네일 갯수)"))
         fl = QFormLayout(grp_hist)
 
         self.spin_screenshot = QSpinBox()
         self.spin_screenshot.setRange(5, 1000)   # v1.6.2: 일괄 캡쳐 시 자동 확장 대비 상한 ↑
         self.spin_screenshot.setValue(int(self._prefs.get("screenshot_max", 30)))
-        self.spin_screenshot.setSuffix(" 개")
-        fl.addRow("스크린샷 리스트:", self.spin_screenshot)
+        self.spin_screenshot.setSuffix(tr(" 개"))
+        fl.addRow(tr("스크린샷 리스트:"), self.spin_screenshot)
 
         layout.addWidget(grp_hist)
 
         # ── 패널 토글 툴바 (v1.6.23) ─────────────────────
         # 검색결과/스크린샷 패널의 표시는 설정 메뉴(상단)·툴바에서 토글.
         # 여기서는 상단 토글 툴바 자체의 가시성만 제어 (기본 OFF — 메인 공간 확보).
-        grp_panels = QGroupBox("패널 툴바 (기본 보이기)")
+        grp_panels = QGroupBox(tr("패널 툴바 (기본 보이기)"))
         pl = QVBoxLayout(grp_panels)
         self.chk_show_panel_toolbar = QCheckBox(
-            "상단 패널 툴바([뷰어모드]·[기능]) 보이기"
+            tr("상단 패널 툴바([뷰어모드]·[기능]) 보이기")
         )
         self.chk_show_panel_toolbar.setChecked(
             bool(self._prefs.get("show_panel_toolbar", True)))
         pl.addWidget(self.chk_show_panel_toolbar)
         info_tb = QLabel(
-            "<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 패널 자체의 "
-            "보이기/숨기기는 메뉴 → 설정의 두 토글(검색결과/스크린샷)에서 즉시 가능.</small>"
+            tr("<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 패널 자체의 "
+            "보이기/숨기기는 메뉴 → 설정의 두 토글(검색결과/스크린샷)에서 즉시 가능.</small>")
         )
         info_tb.setStyleSheet("color:#666;"); info_tb.setWordWrap(True)
         pl.addWidget(info_tb)
@@ -220,36 +221,36 @@ class SettingsDialog(QDialog):
         # 260912-6(입력 SOT §2.4): 이제 **물고 나서** 움직인다 — '자동 이동' 이라는
         #   문구가 낡았다. 설정은 경계 이동 자체를 켜고 끄는 스위치고, 물음은 그 안에서의 확인이다.
         self.chk_cross_file_nav = QCheckBox(
-            "마지막/첫 페이지에서 다음·이전 파일로 이동 (책갈피창 순서)"
+            tr("마지막/첫 페이지에서 다음·이전 파일로 이동 (책갈피창 순서)")
         )
         self.chk_cross_file_nav.setChecked(
             self._prefs.get("cross_file_nav", True) is not False)   # 260609-28: 미설정=켜짐
         pl.addWidget(self.chk_cross_file_nav)
         info_cfn = QLabel(
-            "<small>켜면 마지막 페이지에서 '다음'을 누를 때 다음 파일의 이름과 첫 쪽을 "
+            tr("<small>켜면 마지막 페이지에서 '다음'을 누를 때 다음 파일의 이름과 첫 쪽을 "
             "보여 주고 물은 뒤에 옮깁니다(첫 페이지에서 '이전' 도 같습니다). "
-            "책갈피창에서 항목을 골라 옮길 때는 물지 않습니다. 끄면 경계에서 아예 옮기지 않습니다.</small>"
+            "책갈피창에서 항목을 골라 옮길 때는 물지 않습니다. 끄면 경계에서 아예 옮기지 않습니다.</small>")
         )
         info_cfn.setStyleSheet("color:#666;"); info_cfn.setWordWrap(True)
         pl.addWidget(info_cfn)
         # 260914-1(입력 SOT §2.9·§2.10): 페이지 이동 방식 · 쪽 넘김 애니메이션
         row_psm = QHBoxLayout()
-        row_psm.addWidget(QLabel("페이지 이동 방식:"))
+        row_psm.addWidget(QLabel(tr("페이지 이동 방식:")))
         self.cmb_page_scroll_mode = QComboBox()
-        self.cmb_page_scroll_mode.addItem("한 쪽씩", "page")
-        self.cmb_page_scroll_mode.addItem("이어 보기 (앞뒤 쪽을 붙여 조금씩 스크롤)", "continuous")
+        self.cmb_page_scroll_mode.addItem(tr("한 쪽씩"), "page")
+        self.cmb_page_scroll_mode.addItem(tr("이어 보기 (앞뒤 쪽을 붙여 조금씩 스크롤)"), "continuous")
         self.cmb_page_scroll_mode.setCurrentIndex(
             1 if self._prefs.get("page_scroll_mode", "page") == "continuous" else 0)
         row_psm.addWidget(self.cmb_page_scroll_mode, 1)
         pl.addLayout(row_psm)
-        self.chk_page_flip_anim = QCheckBox("쪽 넘김 애니메이션 (한 쪽씩일 때 위아래로 밀기)")
+        self.chk_page_flip_anim = QCheckBox(tr("쪽 넘김 애니메이션 (한 쪽씩일 때 위아래로 밀기)"))
         self.chk_page_flip_anim.setChecked(
             self._prefs.get("page_flip_anim", True) is not False)
         pl.addWidget(self.chk_page_flip_anim)
         info_psm = QLabel(
-            "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
+            tr("<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
             "온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). "
-            "2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
+            "2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>")
         )
         info_psm.setStyleSheet("color:#666;"); info_psm.setWordWrap(True)
         pl.addWidget(info_psm)
@@ -258,29 +259,29 @@ class SettingsDialog(QDialog):
         # 260611-25: '발표(전체화면) 보기' 설정은 전체화면 우클릭 옵션으로 이동(여기서 제거).
 
         # ── 하이퍼링크 ── 260609-11(C8) ─────────────────
-        grp_hl = QGroupBox("하이퍼링크")
+        grp_hl = QGroupBox(tr("하이퍼링크"))
         hlf = QFormLayout(grp_hl)
         self.spin_hl_offset = QSpinBox()
         self.spin_hl_offset.setRange(0, 200)
         self.spin_hl_offset.setSuffix(" px")
         self.spin_hl_offset.setValue(int(self._prefs.get("hyperlink_top_offset_px", 10)))
-        hlf.addRow("페이지 내 버튼 상단 오프셋:", self.spin_hl_offset)
+        hlf.addRow(tr("페이지 내 버튼 상단 오프셋:"), self.spin_hl_offset)
         layout.addWidget(grp_hl)
 
         # ── 화면+음성 녹화 ── 260609-17(F4) ─────────────────
         self._build_recording_group(layout)
 
         # ── 화면 스타일(테마) ─────────────────────────────
-        grp_theme = QGroupBox("화면 스타일")
+        grp_theme = QGroupBox(tr("화면 스타일"))
         tl = QFormLayout(grp_theme)
         self.cmb_theme = QComboBox()
         for _val, _lbl in THEME_LABELS:
-            self.cmb_theme.addItem(_lbl, _val)
+            self.cmb_theme.addItem(tr(_lbl), _val)
         cur = str(self._prefs.get("theme", "auto"))
         idx = max(0, [v for v, _ in THEME_LABELS].index(cur)
                   if cur in [v for v, _ in THEME_LABELS] else 0)
         self.cmb_theme.setCurrentIndex(idx)
-        tl.addRow("테마:", self.cmb_theme)
+        tl.addRow(tr("테마:"), self.cmb_theme)
         # 261008(다국어 SOT §4): 화면 언어 — 항목은 언어팩에서(자기 언어 이름), 재시작 뒤 적용.
         #   이름표를 두 언어로 적어 어느 언어 화면에서도 읽힌다.
         from viewer import i18n as _i18n
@@ -290,48 +291,48 @@ class SettingsDialog(QDialog):
         _cur_lang = str(self._prefs.get("language") or _i18n.language())
         _li = self.cmb_language.findData(_cur_lang)
         self.cmb_language.setCurrentIndex(_li if _li >= 0 else 0)
-        tl.addRow("언어 / Language:", self.cmb_language)
+        tl.addRow(tr("언어 / Language:"), self.cmb_language)
         layout.addWidget(grp_theme)
 
         # ── 인터넷 사전(단어장) ─────────────────────────── 260615-9(P11)
         from PyQt6.QtWidgets import QCheckBox as _QCb, QLineEdit as _QLe
-        grp_od = QGroupBox("인터넷 사전 (단어장)")
+        grp_od = QGroupBox(tr("인터넷 사전 (단어장)"))
         ol = QFormLayout(grp_od)
-        self.chk_online_dict = _QCb("인터넷 사전 포함 (켜면 단어 편집기에서 온라인 조회)")
+        self.chk_online_dict = _QCb(tr("인터넷 사전 포함 (켜면 단어 편집기에서 온라인 조회)"))
         self.chk_online_dict.setChecked(bool(self._prefs.get("online_dict_enabled", False)))
         ol.addRow(self.chk_online_dict)
         self.ed_stdict_key = _QLe(str(self._prefs.get("stdict_key", "")))
-        self.ed_stdict_key.setPlaceholderText("표준국어대사전 오픈API 인증키 (무료 발급)")
-        ol.addRow("표준국어대사전 키:", self._keyrow(self.ed_stdict_key, "stdict"))
+        self.ed_stdict_key.setPlaceholderText(tr("표준국어대사전 오픈API 인증키 (무료 발급)"))
+        ol.addRow(tr("표준국어대사전 키:"), self._keyrow(self.ed_stdict_key, "stdict"))
         self.ed_onterm_key = _QLe(str(self._prefs.get("onterm_key", "")))
-        self.ed_onterm_key.setPlaceholderText("국립국어원 온용어(전문용어) 오픈API 인증키 (무료 발급)")
-        ol.addRow("온용어 키:", self._keyrow(self.ed_onterm_key, "onterm"))
+        self.ed_onterm_key.setPlaceholderText(tr("국립국어원 온용어(전문용어) 오픈API 인증키 (무료 발급)"))
+        ol.addRow(tr("온용어 키:"), self._keyrow(self.ed_onterm_key, "onterm"))
         self.ed_law_oc = _QLe(str(self._prefs.get("law_oc", "")))
-        self.ed_law_oc.setPlaceholderText("법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)")
-        ol.addRow("법제처 OC:", self._keyrow(self.ed_law_oc, "law"))
+        self.ed_law_oc.setPlaceholderText(tr("법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)"))
+        ol.addRow(tr("법제처 OC:"), self._keyrow(self.ed_law_oc, "law"))
         self.ed_kcsc_key = _QLe(str(self._prefs.get("kcsc_key", "")))   # 260618-37
-        self.ed_kcsc_key.setPlaceholderText("국가건설기준센터(KCSC) OPEN API 키 (무료 발급)")
-        ol.addRow("KCSC 키:", self._keyrow(self.ed_kcsc_key, "kcsc"))
+        self.ed_kcsc_key.setPlaceholderText(tr("국가건설기준센터(KCSC) OPEN API 키 (무료 발급)"))
+        ol.addRow(tr("KCSC 키:"), self._keyrow(self.ed_kcsc_key, "kcsc"))
         self.ed_kipo_key = _QLe(str(self._prefs.get("kipo_signkey", "")))   # 260618-43/44
-        self.ed_kipo_key.setPlaceholderText("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)")
-        ol.addRow("특허(KIPRIS) 키:", self._keyrow(self.ed_kipo_key, "kipo"))
+        self.ed_kipo_key.setPlaceholderText(tr("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)"))
+        ol.addRow(tr("특허(KIPRIS) 키:"), self._keyrow(self.ed_kipo_key, "kipo"))
         # 260618-47: 특허(전자명세서) PDF 저장 폴더 + 찾아보기
         from PyQt6.QtWidgets import QHBoxLayout as _HB, QWidget as _QW, QPushButton as _QPb, QFileDialog as _QFD
         self.ed_patent_dir = _QLe(str(self._prefs.get("patent_save_dir", "")))
-        self.ed_patent_dir.setPlaceholderText("비우면 문서\\PolyPDF_특허")
+        self.ed_patent_dir.setPlaceholderText(tr("비우면 문서\\PolyPDF_특허"))
         _pw = _QW(); _ph = _HB(_pw); _ph.setContentsMargins(0, 0, 0, 0)
-        _pbtn = _QPb("찾아보기…")
+        _pbtn = _QPb(tr("찾아보기…"))
 
         def _pick_dir():
-            d = _QFD.getExistingDirectory(self, "특허 PDF 저장 폴더 선택",
+            d = _QFD.getExistingDirectory(self, tr("특허 PDF 저장 폴더 선택"),
                                           self.ed_patent_dir.text().strip() or "")
             if d:
                 self.ed_patent_dir.setText(d)
         _pbtn.clicked.connect(_pick_dir)
         _ph.addWidget(self.ed_patent_dir, 1); _ph.addWidget(_pbtn)
-        ol.addRow("특허 PDF 저장 폴더:", _pw)
-        ol.addRow(QLabel("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
-                         "한국어 사전은 위 키 입력 시 사용.</small>"))
+        ol.addRow(tr("특허 PDF 저장 폴더:"), _pw)
+        ol.addRow(QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
+                         "한국어 사전은 위 키 입력 시 사용.</small>")))
         layout.addWidget(grp_od)
 
         # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
@@ -343,63 +344,63 @@ class SettingsDialog(QDialog):
         except Exception:
             _MODELS = [("claude-opus-4-8", "Claude Opus 4.8", 5.0, 25.0)]
             _DEFMODEL = "claude-opus-4-8"
-        grp_tr = QGroupBox("번역 (Claude)")
+        grp_tr = QGroupBox(tr("번역 (Claude)"))
         trl = QFormLayout(grp_tr)
         self.cmb_translate_auth = _QCmb()
-        self.cmb_translate_auth.addItem("API 키", "api")
-        self.cmb_translate_auth.addItem("Claude 로그인 (구독·OAuth)", "login")
+        self.cmb_translate_auth.addItem(tr("API 키"), "api")
+        self.cmb_translate_auth.addItem(tr("Claude 로그인 (구독·OAuth)"), "login")
         _cur_a = str(self._prefs.get("translate_auth", "api"))
         _ai = self.cmb_translate_auth.findData(_cur_a)
         self.cmb_translate_auth.setCurrentIndex(_ai if _ai >= 0 else 0)
-        trl.addRow("인증 방식:", self.cmb_translate_auth)
+        trl.addRow(tr("인증 방식:"), self.cmb_translate_auth)
         self.ed_anthropic_key = _QLe(str(self._prefs.get("anthropic_api_key", "")))
-        self.ed_anthropic_key.setPlaceholderText("sk-ant-… (로그인 모드면 비워둠)")
+        self.ed_anthropic_key.setPlaceholderText(tr("sk-ant-… (로그인 모드면 비워둠)"))
         try:
             self.ed_anthropic_key.setEchoMode(_QLe.EchoMode.Password)
         except Exception:
             pass
-        trl.addRow("Claude API 키:", self.ed_anthropic_key)
+        trl.addRow(tr("Claude API 키:"), self.ed_anthropic_key)
         self.cmb_translate_model = _QCmb()
         for mid, label, *_ in _MODELS:
-            self.cmb_translate_model.addItem(label, mid)
+            self.cmb_translate_model.addItem(tr(label), mid)
         _cur_m = str(self._prefs.get("translate_model", _DEFMODEL))
         _mi = self.cmb_translate_model.findData(_cur_m)
         self.cmb_translate_model.setCurrentIndex(_mi if _mi >= 0 else 0)
-        trl.addRow("번역 모델:", self.cmb_translate_model)
+        trl.addRow(tr("번역 모델:"), self.cmb_translate_model)
         # 260621-P3: 구독 로그인 — 앱 내 'Claude 로그인' 버튼(ant 자동설치+브라우저)
         from PyQt6.QtWidgets import QHBoxLayout as _HB2, QWidget as _QW2, QPushButton as _QPb2
         _lw = _QW2(); _lh = _HB2(_lw); _lh.setContentsMargins(0, 0, 0, 0)
         self.lbl_login_status = QLabel("")
-        self.btn_ant_login = _QPb2("Claude 로그인")
-        self.btn_ant_logout = _QPb2("로그아웃")
+        self.btn_ant_login = _QPb2(tr("Claude 로그인"))
+        self.btn_ant_logout = _QPb2(tr("로그아웃"))
         self.btn_ant_login.clicked.connect(self._ant_login)
         self.btn_ant_logout.clicked.connect(self._ant_logout)
         _lh.addWidget(self.lbl_login_status, 1)
         _lh.addWidget(self.btn_ant_login)
         _lh.addWidget(self.btn_ant_logout)
-        trl.addRow("구독 로그인:", _lw)
+        trl.addRow(tr("구독 로그인:"), _lw)
 
         # 260621-P3: 연결·인증 확인(무료 count_tokens — 크레딧 없이 토큰/인증 점검)
         _cw = _QW2(); _ch = _HB2(_cw); _ch.setContentsMargins(0, 0, 0, 0)
         self.lbl_conn_status = QLabel("")
-        self.btn_test_conn = _QPb2("연결 확인")
-        self.btn_test_conn.setToolTip("입력한 키/로그인으로 Claude 에 연결·인증되는지 확인(무료)")
+        self.btn_test_conn = _QPb2(tr("연결 확인"))
+        self.btn_test_conn.setToolTip(tr("입력한 키/로그인으로 Claude 에 연결·인증되는지 확인(무료)"))
         self.btn_test_conn.clicked.connect(self._test_translate_conn)
         _ch.addWidget(self.lbl_conn_status, 1)
         _ch.addWidget(self.btn_test_conn)
-        trl.addRow("연결 확인:", _cw)
+        trl.addRow(tr("연결 확인:"), _cw)
 
         self.chk_translate_consent = _QCb(
-            "번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의")
+            tr("번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의"))
         self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
         trl.addRow(self.chk_translate_consent)
         _hlp_tr = QLabel(
-            "<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
+            tr("<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
             "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 "
             "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요).<br>"
             "<b>주의</b>: 번역(Messages API)은 <b>API 크레딧</b>이 필요합니다 — Claude 구독(Pro/Max)은 "
             "API 사용에 적용되지 않으니, console.anthropic.com → Billing 에서 크레딧을 충전하세요. "
-            "민감 문서 전송에 주의.</small>")
+            "민감 문서 전송에 주의.</small>"))
         _hlp_tr.setWordWrap(True)
         trl.addRow(_hlp_tr)
         layout.addWidget(grp_tr)
@@ -416,7 +417,7 @@ class SettingsDialog(QDialog):
                 _e.setEchoMode(_QLe.EchoMode.Password)
             except Exception:
                 pass
-        self.chk_show_keys = _QCb("API 키 표시 (체크 해제 시 *** 로 가림)")
+        self.chk_show_keys = _QCb(tr("API 키 표시 (체크 해제 시 *** 로 가림)"))
         self.chk_show_keys.setChecked(False)
 
         def _toggle_show_keys(on):
@@ -430,8 +431,8 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.chk_show_keys)
 
         info = QLabel(
-            "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
-            "검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
+            tr("<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
+            "검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>")
         )
         info.setStyleSheet("color:#666;")
         layout.addWidget(info)
@@ -453,7 +454,7 @@ class SettingsDialog(QDialog):
 
     def _pick_startup_folder(self):
         from PyQt6.QtWidgets import QFileDialog
-        d = QFileDialog.getExistingDirectory(self, "시작 시 열 폴더 선택",
+        d = QFileDialog.getExistingDirectory(self, tr("시작 시 열 폴더 선택"),
                                              self.ed_startup_path.text() or "")
         if d:
             self.ed_startup_path.setText(d)
@@ -461,7 +462,7 @@ class SettingsDialog(QDialog):
 
     def _pick_startup_file(self):
         from PyQt6.QtWidgets import QFileDialog
-        f, _ = QFileDialog.getOpenFileName(self, "시작 시 열 PDF 선택",
+        f, _ = QFileDialog.getOpenFileName(self, tr("시작 시 열 PDF 선택"),
                                            self.ed_startup_path.text() or "", "PDF (*.pdf)")
         if f:
             self.ed_startup_path.setText(f)
@@ -477,13 +478,13 @@ class SettingsDialog(QDialog):
 
     # ── 260609-17(F4): 화면+음성 녹화 설정 ───────────────────
     def _build_recording_group(self, layout):
-        grp = QGroupBox("화면+음성 녹화 (발표 전체화면)")
+        grp = QGroupBox(tr("화면+음성 녹화 (발표 전체화면)"))
         self._grp_rec = grp
         f = QFormLayout(grp)
 
         self.ed_rec_dir = QLineEdit(str(self._prefs.get("recording_dir", "")))
-        self.ed_rec_dir.setPlaceholderText("비우면 현재 책갈피 폴더에 저장")
-        b_dir = QPushButton("찾기…"); b_dir.clicked.connect(self._pick_rec_dir)
+        self.ed_rec_dir.setPlaceholderText(tr("비우면 현재 책갈피 폴더에 저장"))
+        b_dir = QPushButton(tr("찾기…")); b_dir.clicked.connect(self._pick_rec_dir)
         # 260628(UI): 래퍼 QWidget 의 **기본 여백(약 9px)** 때문에 입력칸이 안쪽으로 밀리고
         #   행 높이도 아래 콤보들과 달라 보였다 → 여백 0·간격 4 로 맞춰 다른 행과 정렬 통일
         #   (같은 목적의 `_keyrow` 는 이미 이렇게 되어 있었고 이 행만 누락).
@@ -491,26 +492,26 @@ class SettingsDialog(QDialog):
         rd = QHBoxLayout(_w1)
         rd.setContentsMargins(0, 0, 0, 0); rd.setSpacing(4)
         rd.addWidget(self.ed_rec_dir, 1); rd.addWidget(b_dir)
-        f.addRow("저장 위치:", _w1)
+        f.addRow(tr("저장 위치:"), _w1)
 
         self.cmb_audio = QComboBox()
-        for v, t in [("none", "영상만(소리 없음)"), ("mic", "마이크"),
-                     ("system", "시스템 소리"), ("both", "마이크 + 시스템")]:
+        for v, t in [("none", tr("영상만(소리 없음)")), ("mic", tr("마이크")),
+                     ("system", tr("시스템 소리")), ("both", tr("마이크 + 시스템"))]:
             self.cmb_audio.addItem(t, v)
         am = str(self._prefs.get("recording_audio_mode", "mic"))
         self.cmb_audio.setCurrentIndex(max(0, [self.cmb_audio.itemData(i)
                                                for i in range(self.cmb_audio.count())].index(am)
                                             if am in [self.cmb_audio.itemData(i)
                                                       for i in range(self.cmb_audio.count())] else 1))
-        f.addRow("오디오:", self.cmb_audio)
+        f.addRow(tr("오디오:"), self.cmb_audio)
 
         self.cmb_mic = QComboBox(); self.cmb_mic.setEditable(True)
         self.cmb_mic.setEditText(str(self._prefs.get("recording_mic", "")))
         self.cmb_sys = QComboBox(); self.cmb_sys.setEditable(True)
         self.cmb_sys.setEditText(str(self._prefs.get("recording_system", "")))
-        b_dev = QPushButton("오디오 장치 새로고침"); b_dev.clicked.connect(self._refresh_devices)
-        f.addRow("마이크 장치:", self.cmb_mic)
-        f.addRow("시스템 장치:", self.cmb_sys)
+        b_dev = QPushButton(tr("오디오 장치 새로고침")); b_dev.clicked.connect(self._refresh_devices)
+        f.addRow(tr("마이크 장치:"), self.cmb_mic)
+        f.addRow(tr("시스템 장치:"), self.cmb_sys)
         f.addRow("", b_dev)
 
         # 260618-18: 'ffmpeg 경로' 입력 제거 — ffmpeg 은 설치 폴더에 동봉/복사되어 자동 탐색됨.
@@ -519,19 +520,19 @@ class SettingsDialog(QDialog):
                                        else QKeySequence("Ctrl+R"))
         self.ks_recstop = QKeySequenceEdit(QKeySequence(keys[1]) if len(keys) > 1 and keys[1]
                                            else QKeySequence("Ctrl+Shift+R"))
-        f.addRow("녹화/재개 단축키:", self.ks_rec)
-        f.addRow("중지 단축키:", self.ks_recstop)
+        f.addRow(tr("녹화/재개 단축키:"), self.ks_rec)
+        f.addRow(tr("중지 단축키:"), self.ks_recstop)
 
-        b_test = QPushButton("녹화 테스트 (3초)"); b_test.clicked.connect(self._on_rec_test)
+        b_test = QPushButton(tr("녹화 테스트 (3초)")); b_test.clicked.connect(self._on_rec_test)
         f.addRow("", b_test)
-        info = QLabel("<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 "
-                      "Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>")
+        info = QLabel(tr("<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 "
+                      "Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"))
         info.setWordWrap(True); info.setStyleSheet("color:#666;")
         f.addRow(info)
         layout.addWidget(grp)
 
     def _pick_rec_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "녹화 저장 폴더", self.ed_rec_dir.text())
+        d = QFileDialog.getExistingDirectory(self, tr("녹화 저장 폴더"), self.ed_rec_dir.text())
         if d:
             self.ed_rec_dir.setText(d)
 
@@ -544,8 +545,8 @@ class SettingsDialog(QDialog):
         except Exception:
             devs = []
         if not devs:
-            QMessageBox.information(self, "오디오 장치",
-                                    "오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인).")
+            QMessageBox.information(self, tr("오디오 장치"),
+                                    tr("오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."))
             return
         cur_m, cur_s = self.cmb_mic.currentText(), self.cmb_sys.currentText()
         for cmb in (self.cmb_mic, self.cmb_sys):
@@ -571,7 +572,7 @@ class SettingsDialog(QDialog):
             self._host._save_settings_now()
         except Exception:
             pass
-        (QMessageBox.information if ok else QMessageBox.warning)(self, "녹화 테스트", msg)
+        (QMessageBox.information if ok else QMessageBox.warning)(self, tr("녹화 테스트"), msg)
 
     # ── 번역 구독 로그인(ant) ──────────────────────────── 260621-P3
     def _on_translate_auth_changed(self):
@@ -588,18 +589,18 @@ class SettingsDialog(QDialog):
         try:
             from ..study import ant_cli
         except Exception:
-            self.lbl_login_status.setText("모듈 없음")
+            self.lbl_login_status.setText(tr("모듈 없음"))
             return
         if not ant_cli.is_installed():
-            self.lbl_login_status.setText("<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>")
+            self.lbl_login_status.setText(tr("<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>"))
         elif ant_cli.is_logged_in():
-            self.lbl_login_status.setText("<span style='color:#0a0'>로그인됨 ✓</span>")
+            self.lbl_login_status.setText(tr("<span style='color:#0a0'>로그인됨 ✓</span>"))
         else:
-            self.lbl_login_status.setText("<span style='color:#c60'>로그인 필요</span>")
+            self.lbl_login_status.setText(tr("<span style='color:#c60'>로그인 필요</span>"))
 
     def _ant_login(self):
         self.btn_ant_login.setEnabled(False)
-        self.lbl_login_status.setText("준비 중…")
+        self.lbl_login_status.setText(tr("준비 중…"))
         self._ant_worker = _AntLoginWorker()
         self._ant_worker.progress.connect(self.lbl_login_status.setText)
         self._ant_worker.done.connect(self._on_ant_login_done)
@@ -609,9 +610,9 @@ class SettingsDialog(QDialog):
         self.btn_ant_login.setEnabled(True)
         from PyQt6.QtWidgets import QMessageBox
         if ok:
-            QMessageBox.information(self, "Claude 로그인", "로그인되었습니다. 이제 번역을 사용할 수 있습니다.")
+            QMessageBox.information(self, tr("Claude 로그인"), tr("로그인되었습니다. 이제 번역을 사용할 수 있습니다."))
         else:
-            QMessageBox.warning(self, "Claude 로그인", "로그인하지 못했습니다.\n" + (msg or ""))
+            QMessageBox.warning(self, tr("Claude 로그인"), tr('로그인하지 못했습니다.\n{msg}').format(msg=msg or ''))
         self._refresh_login_status()
 
     def _ant_logout(self):
@@ -627,7 +628,7 @@ class SettingsDialog(QDialog):
         from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel
         w = QWidget(); h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0); h.setSpacing(4)
-        btn = QPushButton("확인"); btn.setFixedWidth(46)
+        btn = QPushButton(tr("확인")); btn.setFixedWidth(46)
         lbl = QLabel(""); lbl.setMinimumWidth(70)
         h.addWidget(edit, 1); h.addWidget(btn); h.addWidget(lbl)
         btn.clicked.connect(lambda: self._do_verify_key(kind, edit, btn, lbl))
@@ -636,10 +637,10 @@ class SettingsDialog(QDialog):
     def _do_verify_key(self, kind, edit, btn, lbl):
         key = edit.text().strip()
         if not key:
-            lbl.setText("<span style='color:#c00'>키 없음</span>")
+            lbl.setText(tr("<span style='color:#c00'>키 없음</span>"))
             return
         btn.setEnabled(False)
-        lbl.setText("확인 중…")
+        lbl.setText(tr("확인 중…"))
         if not hasattr(self, "_verify_workers"):
             self._verify_workers = []
         w = _KeyVerifyWorker(kind, key)
@@ -664,7 +665,7 @@ class SettingsDialog(QDialog):
         key = self.ed_anthropic_key.text().strip()
         model = self.cmb_translate_model.currentData()
         self.btn_test_conn.setEnabled(False)
-        self.lbl_conn_status.setText("확인 중…")
+        self.lbl_conn_status.setText(tr("확인 중…"))
         self._conn_worker = _ConnTestWorker(key, model, auth)
         self._conn_worker.done.connect(self._on_conn_test_done)
         self._conn_worker.start()
@@ -673,10 +674,10 @@ class SettingsDialog(QDialog):
         self.btn_test_conn.setEnabled(True)
         if n >= 0:
             self.lbl_conn_status.setText(
-                f"<span style='color:#0a0'>정상 ✓ (입력 토큰 {n}) — 번역은 API 크레딧 필요</span>")
+                tr("<span style='color:#0a0'>정상 ✓ (입력 토큰 {n}) — 번역은 API 크레딧 필요</span>").format(n=n))
         else:
-            msg = (dbg[-1] if dbg else "실패")
-            self.lbl_conn_status.setText(f"<span style='color:#c00'>실패: {msg}</span>")
+            msg = (dbg[-1] if dbg else tr("실패"))
+            self.lbl_conn_status.setText(tr("<span style='color:#c00'>실패: {msg}</span>").format(msg=msg))
 
     def result_prefs(self) -> dict:
         return {

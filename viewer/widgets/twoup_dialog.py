@@ -12,12 +12,13 @@ from PyQt6.QtCore import Qt
 
 from viewer.twoup import merge_twoup_settings, PAGE_SIZES, DUPLEX_CHOICES, duplex_choice
 from viewer.widgets.merge_preview import MergePreviewWidget
+from viewer.i18n import tr
 
 
 class TwoUpSettingsDialog(QDialog):
     def __init__(self, settings=None, parent=None, preset_api=None, sample=None):
         super().__init__(parent)
-        self.setWindowTitle("다단 생성 설정")
+        self.setWindowTitle(tr("다단 생성 설정"))
         self.resize(1020, 740)
         self._preset_api = preset_api or {}
         self._sample = sample
@@ -36,7 +37,7 @@ class TwoUpSettingsDialog(QDialog):
 
         # ── 스타일(최상단) ──
         srow = QHBoxLayout()
-        srow.addWidget(QLabel("스타일:"))
+        srow.addWidget(QLabel(tr("스타일:")))
         self.cmb_preset = QComboBox()
         # 261008-10: 긴 스타일 이름이 콤보(=설정 칸 전체) 최소 폭을 키워 오른쪽이 잘렸다 →
         #   이름 길이로 넓어지지 않게 한다(펼친 목록에는 전체 이름이 보인다).
@@ -44,14 +45,14 @@ class TwoUpSettingsDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.cmb_preset.setMinimumContentsLength(6)
         self._reload_presets()
-        b_save = QPushButton("저장…"); b_save.clicked.connect(self._save_preset)
-        b_del = QPushButton("삭제"); b_del.clicked.connect(self._delete_preset)
+        b_save = QPushButton(tr("저장…")); b_save.clicked.connect(self._save_preset)
+        b_del = QPushButton(tr("삭제")); b_del.clicked.connect(self._delete_preset)
         # 261008-4(마스터 §11.10, 사용자 요청): 스타일 목록 순서 바꾸기 — 고른 스타일을 한 칸 위/아래로.
         self.btn_preset_up = QPushButton("▲"); self.btn_preset_up.setFixedWidth(28)
-        self.btn_preset_up.setToolTip("고른 스타일을 목록에서 위로")
+        self.btn_preset_up.setToolTip(tr("고른 스타일을 목록에서 위로"))
         self.btn_preset_up.clicked.connect(lambda: self._move_preset(-1))
         self.btn_preset_dn = QPushButton("▼"); self.btn_preset_dn.setFixedWidth(28)
-        self.btn_preset_dn.setToolTip("고른 스타일을 목록에서 아래로")
+        self.btn_preset_dn.setToolTip(tr("고른 스타일을 목록에서 아래로"))
         self.btn_preset_dn.clicked.connect(lambda: self._move_preset(1))
         if not self._preset_api:
             self.cmb_preset.setEnabled(False)
@@ -66,148 +67,148 @@ class TwoUpSettingsDialog(QDialog):
         self._update_move_buttons()
 
         # 용지 / 배치
-        grp_pg = QGroupBox("용지 / 배치")
+        grp_pg = QGroupBox(tr("용지 / 배치"))
         gf = QFormLayout(grp_pg)
         self.cmb_size = QComboBox()
         for k in PAGE_SIZES:
             self.cmb_size.addItem(k, k)
         self._set_combo(self.cmb_size, s.get("page_size", "A4"))
-        gf.addRow("용지 크기:", self.cmb_size)
+        gf.addRow(tr("용지 크기:"), self.cmb_size)
         self.cmb_nup = QComboBox()
-        self.cmb_nup.addItem("2장 (2-up)", 2)
-        self.cmb_nup.addItem("4장 (4-up, 2열×2행)", 4)   # 260617-6
-        self.cmb_nup.addItem("6장 (6-up, 2열×3행)", 6)
-        self.cmb_nup.addItem("8장 (8-up, 2열×4행)", 8)
+        self.cmb_nup.addItem(tr("2장 (2-up)"), 2)
+        self.cmb_nup.addItem(tr("4장 (4-up, 2열×2행)"), 4)   # 260617-6
+        self.cmb_nup.addItem(tr("6장 (6-up, 2열×3행)"), 6)
+        self.cmb_nup.addItem(tr("8장 (8-up, 2열×4행)"), 8)
         self._set_combo(self.cmb_nup, int(s.get("nup", 2)))
-        gf.addRow("한 장에 배치:", self.cmb_nup)
+        gf.addRow(tr("한 장에 배치:"), self.cmb_nup)
         self.cmb_fit = QComboBox()
-        self.cmb_fit.addItem("맞춤 (비율 유지·여백 생김)", "contain")
-        self.cmb_fit.addItem("꽉 채움 (비율 유지·가장자리 잘림)", "cover")
-        self.cmb_fit.addItem("늘이기 (비율 무시·꽉 채움)", "stretch")
+        self.cmb_fit.addItem(tr("맞춤 (비율 유지·여백 생김)"), "contain")
+        self.cmb_fit.addItem(tr("꽉 채움 (비율 유지·가장자리 잘림)"), "cover")
+        self.cmb_fit.addItem(tr("늘이기 (비율 무시·꽉 채움)"), "stretch")
         self._set_combo(self.cmb_fit, s.get("fit_mode", "contain"))
-        gf.addRow("채움 방식:", self.cmb_fit)
-        self.chk_center = QCheckBox("가운데 정렬"); self.chk_center.setChecked(bool(s.get("center", True)))
+        gf.addRow(tr("채움 방식:"), self.cmb_fit)
+        self.chk_center = QCheckBox(tr("가운데 정렬")); self.chk_center.setChecked(bool(s.get("center", True)))
         gf.addRow(self.chk_center)
         # 261008-2(사용자 요청): '양면' 을 프린터 설정과 같은 '양면(긴 쪽)'·'양면(짧은 쪽)' 으로 나눈다.
         #   인쇄 창에서 다단을 켜면 이 값이 프린터 '단면/양면' 에 그대로 걸린다(마스터 §11.10.1).
         self.cmb_duplex = QComboBox()
         for _t, _k in DUPLEX_CHOICES:
-            self.cmb_duplex.addItem(_t, _k)
+            self.cmb_duplex.addItem(tr(_t), _k)
         self._set_combo(self.cmb_duplex, duplex_choice(s))
-        gf.addRow("인쇄 면:", self.cmb_duplex)
+        gf.addRow(tr("인쇄 면:"), self.cmb_duplex)
         self.sp_gutter = self._sp(s.get("gutter", 0))
         # 261008-5(마스터 §11.10.1): 양면이면 종이를 넘기는 축 쪽에 — 시트 방향과 긴/짧은 쪽으로 정해진다
-        self.sp_gutter.setToolTip("단면: 왼쪽.\n양면: 종이를 넘기는 쪽(묶는 가장자리)에 — "
-                                  "좌우로 넘기면 홀수 왼쪽·짝수 오른쪽, 위로 넘기면 홀수 위·짝수 아래.")
-        gf.addRow("제본 여백:", self.sp_gutter)
+        self.sp_gutter.setToolTip(tr("단면: 왼쪽.\n양면: 종이를 넘기는 쪽(묶는 가장자리)에 — "
+                                  "좌우로 넘기면 홀수 왼쪽·짝수 오른쪽, 위로 넘기면 홀수 위·짝수 아래."))
+        gf.addRow(tr("제본 여백:"), self.sp_gutter)
         # 260617-6: 맞쪽 인쇄 — 맨 앞에 여백 페이지 1장 추가(여백색 적용)
-        self.chk_facing = QCheckBox("맞쪽 인쇄 (맨 앞 여백 페이지 1장 추가)")
+        self.chk_facing = QCheckBox(tr("맞쪽 인쇄 (맨 앞 여백 페이지 1장 추가)"))
         self.chk_facing.setChecked(bool(s.get("facing_first", False)))
         gf.addRow(self.chk_facing)
-        self.chk_docbreak = QCheckBox("문서마다 새 페이지에서 시작")
+        self.chk_docbreak = QCheckBox(tr("문서마다 새 페이지에서 시작"))
         self.chk_docbreak.setChecked(bool(s.get("doc_break", False)))
         gf.addRow(self.chk_docbreak)
-        self.chk_doc_odd = QCheckBox("새 문서는 홀수 페이지로 시작")
+        self.chk_doc_odd = QCheckBox(tr("새 문서는 홀수 페이지로 시작"))
         self.chk_doc_odd.setChecked(bool(s.get("doc_start_odd", False)))
         gf.addRow(self.chk_doc_odd)
-        self.chk_mbg = QCheckBox("여백 색 사용")
+        self.chk_mbg = QCheckBox(tr("여백 색 사용"))
         self.chk_mbg.setChecked(bool(s.get("margin_bg_on", False)))
         self.bt_mbg = self._color_btn(s.get("margin_bg", "#ffffff"))
-        gf.addRow(self.chk_mbg); gf.addRow("여백 색:", self.bt_mbg)
+        gf.addRow(self.chk_mbg); gf.addRow(tr("여백 색:"), self.bt_mbg)
         cv.addWidget(grp_pg)
 
         # 쪽번호
-        grp_f = QGroupBox("쪽번호 (출력 장 번호)")
+        grp_f = QGroupBox(tr("쪽번호 (출력 장 번호)"))
         ff = QFormLayout(grp_f)
         self.cmb_fpos = QComboBox()
-        for t, k in [("표시 안함", "none"), ("좌하단", "left"), ("중앙 하단", "center"),
-                     ("우하단", "right"), ("우상단", "topright")]:   # 260617-6
+        for t, k in [(tr("표시 안함"), "none"), (tr("좌하단"), "left"), (tr("중앙 하단"), "center"),
+                     (tr("우하단"), "right"), (tr("우상단"), "topright")]:   # 260617-6
             self.cmb_fpos.addItem(t, k)
         self._set_combo(self.cmb_fpos, s.get("footer_pos", "center"))
         self.sp_fsize = self._sp(s["footer_size"], 6, 48)
-        ff.addRow("위치:", self.cmb_fpos); ff.addRow("글자 크기:", self.sp_fsize)
+        ff.addRow(tr("위치:"), self.cmb_fpos); ff.addRow(tr("글자 크기:"), self.sp_fsize)
         # 글꼴 / 굵기
         self.cmb_ffont = QFontComboBox()
         if s.get("footer_font"):
             self.cmb_ffont.setCurrentFont(QFont(s.get("footer_font")))
-        self.chk_fbold = QCheckBox("굵게"); self.chk_fbold.setChecked(bool(s.get("footer_bold", False)))
-        ff.addRow("글꼴:", self.cmb_ffont); ff.addRow(self.chk_fbold)
+        self.chk_fbold = QCheckBox(tr("굵게")); self.chk_fbold.setChecked(bool(s.get("footer_bold", False)))
+        ff.addRow(tr("글꼴:"), self.cmb_ffont); ff.addRow(self.chk_fbold)
         # 블록(배경)
-        self.chk_fblock = QCheckBox("블록(배경) 사용")
+        self.chk_fblock = QCheckBox(tr("블록(배경) 사용"))
         self.chk_fblock.setChecked(bool(s.get("footer_block", False)))
         ff.addRow(self.chk_fblock)
         self.cmb_fshape = QComboBox()
-        self.cmb_fshape.addItem("직사각형", "rect")
-        self.cmb_fshape.addItem("둥근 직사각형", "round")
+        self.cmb_fshape.addItem(tr("직사각형"), "rect")
+        self.cmb_fshape.addItem(tr("둥근 직사각형"), "round")
         self._set_combo(self.cmb_fshape, s.get("footer_block_shape", "rect"))
-        ff.addRow("블록 종류:", self.cmb_fshape)
+        ff.addRow(tr("블록 종류:"), self.cmb_fshape)
         self.sp_fpad = self._sp(s.get("footer_block_pad", 10), 0, 20, suffix=" %")
-        ff.addRow("블록 크기(여유):", self.sp_fpad)
+        ff.addRow(tr("블록 크기(여유):"), self.sp_fpad)
         self.bt_fbcolor = self._color_btn(s.get("footer_block_color", "#ffffff"))
-        ff.addRow("블록 색:", self.bt_fbcolor)
+        ff.addRow(tr("블록 색:"), self.bt_fbcolor)
         self.sp_falpha = self._sp(s.get("footer_block_alpha", 100), 0, 100, suffix=" %")
-        ff.addRow("블록 투명도:", self.sp_falpha)
+        ff.addRow(tr("블록 투명도:"), self.sp_falpha)
         cv.addWidget(grp_f)
 
         # 선(테두리)
-        grp_l = QGroupBox("선")
+        grp_l = QGroupBox(tr("선"))
         lf = QFormLayout(grp_l)
-        self.chk_bout = QCheckBox("외곽선"); self.chk_bout.setChecked(bool(s.get("border_outer", False)))
-        self.chk_bh = QCheckBox("내부 가로선"); self.chk_bh.setChecked(bool(s.get("border_h", False)))
-        self.chk_bv = QCheckBox("내부 세로선"); self.chk_bv.setChecked(bool(s.get("border_v", False)))
+        self.chk_bout = QCheckBox(tr("외곽선")); self.chk_bout.setChecked(bool(s.get("border_outer", False)))
+        self.chk_bh = QCheckBox(tr("내부 가로선")); self.chk_bh.setChecked(bool(s.get("border_h", False)))
+        self.chk_bv = QCheckBox(tr("내부 세로선")); self.chk_bv.setChecked(bool(s.get("border_v", False)))
         lf.addRow(self.chk_bout); lf.addRow(self.chk_bh); lf.addRow(self.chk_bv)
         self.bt_lcolor = self._color_btn(s.get("line_color", "#888888"))
-        lf.addRow("선 색:", self.bt_lcolor)
+        lf.addRow(tr("선 색:"), self.bt_lcolor)
         self.sp_lwidth = self._sp(s.get("line_width", 1), 0, 12)
-        lf.addRow("선 굵기:", self.sp_lwidth)
+        lf.addRow(tr("선 굵기:"), self.sp_lwidth)
         cv.addWidget(grp_l)
 
         # 표지
-        grp_c = QGroupBox("표지")
+        grp_c = QGroupBox(tr("표지"))
         cf = QFormLayout(grp_c)
-        self.chk_cover = QCheckBox("표지 만들기"); self.chk_cover.setChecked(bool(s.get("make_cover", True)))
+        self.chk_cover = QCheckBox(tr("표지 만들기")); self.chk_cover.setChecked(bool(s.get("make_cover", True)))
         cf.addRow(self.chk_cover)
         cov = s.get("cover", {})
         self.ed_title = QLineEdit(cov.get("title", "")); self.ed_sub = QLineEdit(cov.get("subtitle", ""))
         self.ed_comp = QLineEdit(cov.get("company", "")); self.ed_name = QLineEdit(cov.get("name", ""))
-        cf.addRow("제목:", self.ed_title); cf.addRow("부제:", self.ed_sub)
-        cf.addRow("회사명:", self.ed_comp); cf.addRow("성명:", self.ed_name)
+        cf.addRow(tr("제목:"), self.ed_title); cf.addRow(tr("부제:"), self.ed_sub)
+        cf.addRow(tr("회사명:"), self.ed_comp); cf.addRow(tr("성명:"), self.ed_name)
         self.ed_cov_tpl = QLineEdit(s.get("cover_template", ""))
-        self.ed_cov_tpl.setPlaceholderText("비우면 기본 양식")
-        bc = QPushButton("양식…"); bc.clicked.connect(lambda: self._pick(self.ed_cov_tpl))
+        self.ed_cov_tpl.setPlaceholderText(tr("비우면 기본 양식"))
+        bc = QPushButton(tr("양식…")); bc.clicked.connect(lambda: self._pick(self.ed_cov_tpl))
         rc = QHBoxLayout(); rc.addWidget(self.ed_cov_tpl, 1); rc.addWidget(bc)
-        cf.addRow("표지 Word 양식:", self._wrap(rc))
+        cf.addRow(tr("표지 Word 양식:"), self._wrap(rc))
         cv.addWidget(grp_c)
 
         # 목차
-        grp_t = QGroupBox("목차")
+        grp_t = QGroupBox(tr("목차"))
         tf = QFormLayout(grp_t)
-        self.chk_toc = QCheckBox("목차 만들기"); self.chk_toc.setChecked(bool(s.get("make_toc", True)))
+        self.chk_toc = QCheckBox(tr("목차 만들기")); self.chk_toc.setChecked(bool(s.get("make_toc", True)))
         tf.addRow(self.chk_toc)
         self.ed_toc_tpl = QLineEdit(s.get("toc_template", ""))
-        self.ed_toc_tpl.setPlaceholderText("비우면 기본 양식")
-        bt = QPushButton("양식…"); bt.clicked.connect(lambda: self._pick(self.ed_toc_tpl))
+        self.ed_toc_tpl.setPlaceholderText(tr("비우면 기본 양식"))
+        bt = QPushButton(tr("양식…")); bt.clicked.connect(lambda: self._pick(self.ed_toc_tpl))
         rt = QHBoxLayout(); rt.addWidget(self.ed_toc_tpl, 1); rt.addWidget(bt)
-        tf.addRow("목차 Word 양식:", self._wrap(rt))
+        tf.addRow(tr("목차 Word 양식:"), self._wrap(rt))
         cv.addWidget(grp_t)
 
         # 간지(파일별)
-        grp_d = QGroupBox("간지 (파일별 구분지)")
+        grp_d = QGroupBox(tr("간지 (파일별 구분지)"))
         df = QFormLayout(grp_d)
-        self.chk_div = QCheckBox("각 파일 앞에 간지 만들기 (파일명 기반)")
+        self.chk_div = QCheckBox(tr("각 파일 앞에 간지 만들기 (파일명 기반)"))
         self.chk_div.setChecked(bool(s.get("make_divider", False)))
         df.addRow(self.chk_div)
         self.ed_div_tpl = QLineEdit(s.get("divider_template", ""))
-        self.ed_div_tpl.setPlaceholderText("비우면 기본 양식")
-        bd = QPushButton("양식…"); bd.clicked.connect(lambda: self._pick(self.ed_div_tpl))
+        self.ed_div_tpl.setPlaceholderText(tr("비우면 기본 양식"))
+        bd = QPushButton(tr("양식…")); bd.clicked.connect(lambda: self._pick(self.ed_div_tpl))
         rd = QHBoxLayout(); rd.addWidget(self.ed_div_tpl, 1); rd.addWidget(bd)
-        df.addRow("간지 Word 양식:", self._wrap(rd))
+        df.addRow(tr("간지 Word 양식:"), self._wrap(rd))
         self.bt_div_bg = self._color_btn(s.get("divider_bg", "#eef2f7"))
-        df.addRow("간지 배경색:", self.bt_div_bg)
+        df.addRow(tr("간지 배경색:"), self.bt_div_bg)
         cv.addWidget(grp_d)
 
         # Word 양식 샘플 다운로드
-        b_sample = QPushButton("표지·목차·간지 Word 양식 샘플 저장…")
+        b_sample = QPushButton(tr("표지·목차·간지 Word 양식 샘플 저장…"))
         b_sample.clicked.connect(self._save_samples)
         cv.addWidget(b_sample)
 
@@ -279,7 +280,7 @@ class TwoUpSettingsDialog(QDialog):
         w = QWidget(); w.setLayout(layout); return w
 
     def _pick(self, edit):
-        fn, _ = QFileDialog.getOpenFileName(self, "Word 양식 선택", "", "Word 문서 (*.docx)")
+        fn, _ = QFileDialog.getOpenFileName(self, tr("Word 양식 선택"), "", tr("Word 문서 (*.docx)"))
         if fn:
             edit.setText(fn)
 
@@ -295,18 +296,17 @@ class TwoUpSettingsDialog(QDialog):
 
     def _save_samples(self, *_):
         from pathlib import Path as _P
-        folder = QFileDialog.getExistingDirectory(self, "Word 양식 샘플을 저장할 폴더 선택")
+        folder = QFileDialog.getExistingDirectory(self, tr("Word 양식 샘플을 저장할 폴더 선택"))
         if not folder:
             return
         from viewer.twoup import write_sample_templates
         made = write_sample_templates(folder)
         if made:
-            QMessageBox.information(self, "샘플 저장",
-                                    f"{len(made)}개 양식을 저장했습니다:\n"
-                                    + "\n".join(_P(m).name for m in made))
+            QMessageBox.information(self, tr("샘플 저장"),
+                                    tr('{n}개 양식을 저장했습니다:\n{join}').format(n=len(made), join='\n'.join((_P(m).name for m in made))))
         else:
-            QMessageBox.warning(self, "샘플 저장",
-                                "python-docx가 설치되지 않아 샘플을 만들 수 없습니다.")
+            QMessageBox.warning(self, tr("샘플 저장"),
+                                tr("python-docx가 설치되지 않아 샘플을 만들 수 없습니다."))
 
     def done(self, r):
         try:
@@ -372,8 +372,8 @@ class TwoUpSettingsDialog(QDialog):
         """워드 양식 경로 중 실제로 없는 파일은 비우고, 비운 항목 라벨 목록을 반환."""
         import os
         missing = []
-        for ed, label in ((self.ed_cov_tpl, "표지"), (self.ed_toc_tpl, "목차"),
-                          (self.ed_div_tpl, "간지")):
+        for ed, label in ((self.ed_cov_tpl, tr("표지")), (self.ed_toc_tpl, tr("목차")),
+                          (self.ed_div_tpl, tr("간지"))):
             p = ed.text().strip()
             if p and not os.path.exists(p):
                 ed.setText(""); missing.append(label)
@@ -382,9 +382,8 @@ class TwoUpSettingsDialog(QDialog):
     def _warn_missing_templates(self, missing):
         if missing:
             QMessageBox.warning(
-                self, "양식 파일 없음",
-                "다음 Word 양식 파일을 찾을 수 없어 선택에서 제외했습니다:\n· "
-                + "\n· ".join(f"{m} Word 양식" for m in missing))
+                self, tr("양식 파일 없음"),
+                tr('다음 Word 양식 파일을 찾을 수 없어 선택에서 제외했습니다:\n· {join}').format(join='\n· '.join((tr('{m} Word 양식').format(m=m) for m in missing))))
 
     def current_preset_name(self) -> str:
         """260617-6: 마지막으로 저장/선택한 스타일 이름(인쇄창 풀다운 즉시 반영용)."""
@@ -399,7 +398,7 @@ class TwoUpSettingsDialog(QDialog):
 
     def _save_preset(self):
         cur = self.cmb_preset.currentText()
-        name, ok = QInputDialog.getText(self, "스타일 저장", "스타일 이름:", text=cur)
+        name, ok = QInputDialog.getText(self, tr("스타일 저장"), tr("스타일 이름:"), text=cur)
         if not ok or not name.strip():
             return
         name = name.strip()
@@ -407,8 +406,8 @@ class TwoUpSettingsDialog(QDialog):
                     (self._preset_api.get("get_presets", lambda: [])() or [])]
         if name in existing:        # 260611-41: 같은 이름이면 업데이트 확인
             if QMessageBox.question(
-                self, "스타일 저장",
-                f"'{name}' 스타일이 이미 있습니다. 기존 내용을 업데이트할까요?",
+                self, tr("스타일 저장"),
+                tr("'{name}' 스타일이 이미 있습니다. 기존 내용을 업데이트할까요?").format(name=name),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes) != QMessageBox.StandardButton.Yes:
                 return
@@ -455,7 +454,7 @@ class TwoUpSettingsDialog(QDialog):
         name = self.cmb_preset.currentText()
         if not name:
             return
-        if QMessageBox.question(self, "스타일 삭제", f"'{name}' 스타일을 삭제할까요?") \
+        if QMessageBox.question(self, tr("스타일 삭제"), tr("'{name}' 스타일을 삭제할까요?").format(name=name)) \
                 != QMessageBox.StandardButton.Yes:
             return
         try:

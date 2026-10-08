@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox, QGroupBox,
     QHeaderView, QAbstractItemView,
 )
+from viewer.i18n import tr
 
 
 class HyperlinkDialog(QDialog):
@@ -27,13 +28,13 @@ class HyperlinkDialog(QDialog):
         self._page0 = int(page0)
         self._base = Path(base_folder) if base_folder else None
         self._pending_file = None          # ⬇ 등록 대기 중인 파일 경로
-        self.setWindowTitle(f"하이퍼링크 — {Path(str(file_path)).name} p.{self._page0 + 1}")
+        self.setWindowTitle(tr('하이퍼링크 — {name} p.{page0}').format(name=Path(str(file_path)).name, page0=self._page0 + 1))
         self.setAcceptDrops(True)
         self.resize(500, 470)
         self._build()
         self._refresh_list()
         # 260609-15(C3): 드래그 시 전체 다이얼로그가 드롭 범위임을 표시하는 오버레이
-        self._drop_overlay = QLabel("⬇  파일을 여기에 놓으세요  ⬇", self)
+        self._drop_overlay = QLabel(tr("⬇  파일을 여기에 놓으세요  ⬇"), self)
         self._drop_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._drop_overlay.setStyleSheet(
             "background:rgba(21,101,192,0.18);color:#1565c0;font-size:20px;"
@@ -62,32 +63,32 @@ class HyperlinkDialog(QDialog):
 
         # 명칭
         name_row = QHBoxLayout()
-        name_row.addWidget(QLabel("명칭"))
+        name_row.addWidget(QLabel(tr("명칭")))
         self.ed_name = QLineEdit()
-        self.ed_name.setPlaceholderText("버튼에 표시할 명칭(비우면 파일명/주소)")
+        self.ed_name.setPlaceholderText(tr("버튼에 표시할 명칭(비우면 파일명/주소)"))
         name_row.addWidget(self.ed_name, 1)
         v.addLayout(name_row)
 
         # 파일 등록(대기)
-        grp_f = QGroupBox("파일 (책갈피 폴더 안의 문서·이미지·동영상 등)")
+        grp_f = QGroupBox(tr("파일 (책갈피 폴더 안의 문서·이미지·동영상 등)"))
         fl = QVBoxLayout(grp_f)
-        self.drop = QLabel("⬇  여기로 파일을 끌어다 놓으세요  ⬇")
+        self.drop = QLabel(tr("⬇  여기로 파일을 끌어다 놓으세요  ⬇"))
         self.drop.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.drop.setStyleSheet(
             "QLabel{border:2px dashed #888;border-radius:8px;padding:12px;color:#777;}")
         fl.addWidget(self.drop)
         fr = QHBoxLayout()
-        self.lbl_pending = QLabel("선택된 파일: (없음)")
+        self.lbl_pending = QLabel(tr("선택된 파일: (없음)"))
         self.lbl_pending.setStyleSheet("color:#444;")
         fr.addWidget(self.lbl_pending, 1)
-        btn_pick = QPushButton("파일 선택…")
+        btn_pick = QPushButton(tr("파일 선택…"))
         btn_pick.clicked.connect(self._on_pick_file)
         fr.addWidget(btn_pick)
         fl.addLayout(fr)
         v.addWidget(grp_f)
 
         # URL
-        grp_u = QGroupBox("외부 링크(URL) — https + 허용 도메인(youtube 등)")
+        grp_u = QGroupBox(tr("외부 링크(URL) — https + 허용 도메인(youtube 등)"))
         ul = QHBoxLayout(grp_u)
         self.ed_url = QLineEdit()
         self.ed_url.setPlaceholderText("https://youtu.be/…")
@@ -97,7 +98,7 @@ class HyperlinkDialog(QDialog):
         # ⬇ 등록 버튼
         reg_row = QHBoxLayout()
         reg_row.addStretch(1)
-        self.btn_register = QPushButton("⬇  등록")
+        self.btn_register = QPushButton(tr("⬇  등록"))
         self.btn_register.setStyleSheet(
             "QPushButton{background:#1565c0;color:#fff;font-weight:bold;"
             "padding:6px 28px;border:none;border-radius:6px;}"
@@ -108,9 +109,9 @@ class HyperlinkDialog(QDialog):
         v.addLayout(reg_row)
 
         # 등록된 표(맨 아래, 닫기 바로 위)
-        v.addWidget(QLabel("등록된 하이퍼링크 (명칭 더블클릭 = 이름변경):"))
+        v.addWidget(QLabel(tr("등록된 하이퍼링크 (명칭 더블클릭 = 이름변경):")))
         self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["명칭", "파일명 · URL"])
+        self.table.setHorizontalHeaderLabels([tr("명칭"), tr("파일명 · URL")])
         self.table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(
@@ -123,10 +124,10 @@ class HyperlinkDialog(QDialog):
 
         # 리스트 조작 — 260609-15(C2): 삭제를 이름변경 바로 오른쪽(닫기와 멀리)
         ops = QHBoxLayout()
-        b_up = QPushButton("▲ 위"); b_up.clicked.connect(lambda: self._move(-1))
-        b_dn = QPushButton("▼ 아래"); b_dn.clicked.connect(lambda: self._move(+1))
-        b_rn = QPushButton("이름변경"); b_rn.clicked.connect(self._rename_selected)
-        b_del = QPushButton("삭제"); b_del.clicked.connect(self._delete_selected)
+        b_up = QPushButton(tr("▲ 위")); b_up.clicked.connect(lambda: self._move(-1))
+        b_dn = QPushButton(tr("▼ 아래")); b_dn.clicked.connect(lambda: self._move(+1))
+        b_rn = QPushButton(tr("이름변경")); b_rn.clicked.connect(self._rename_selected)
+        b_del = QPushButton(tr("삭제")); b_del.clicked.connect(self._delete_selected)
         ops.addWidget(b_up); ops.addWidget(b_dn); ops.addWidget(b_rn)
         ops.addSpacing(16); ops.addWidget(b_del)
         ops.addStretch(1)
@@ -135,7 +136,7 @@ class HyperlinkDialog(QDialog):
         # 닫기
         close_row = QHBoxLayout()
         close_row.addStretch(1)
-        btn_close = QPushButton("닫기")
+        btn_close = QPushButton(tr("닫기"))
         btn_close.clicked.connect(self.accept)
         close_row.addWidget(btn_close)
         v.addLayout(close_row)
@@ -192,12 +193,12 @@ class HyperlinkDialog(QDialog):
     # --- 등록 ---
     def _set_pending(self, path):
         self._pending_file = path
-        self.lbl_pending.setText(f"선택된 파일: {Path(path).name}" if path
-                                 else "선택된 파일: (없음)")
+        self.lbl_pending.setText(tr('선택된 파일: {name}').format(name=Path(path).name) if path
+                                 else tr("선택된 파일: (없음)"))
 
     def _on_pick_file(self):
         start = str(self._base) if self._base else ""
-        path, _ = QFileDialog.getOpenFileName(self, "작업 파일 선택", start)
+        path, _ = QFileDialog.getOpenFileName(self, tr("작업 파일 선택"), start)
         if path:
             self._set_pending(path)
 
@@ -208,17 +209,17 @@ class HyperlinkDialog(QDialog):
             ok, msg = self._store.add_url_link(
                 self._file, self._page0, self.ed_name.text(), url)
             if not ok:
-                QMessageBox.warning(self, "등록 불가", msg); return
+                QMessageBox.warning(self, tr("등록 불가"), msg); return
             self.ed_url.clear()
         elif self._pending_file:
             ok, msg = self._store.add_file_link(
                 self._file, self._page0, self.ed_name.text(), self._pending_file)
             if not ok:
-                QMessageBox.warning(self, "등록 불가", msg); return
+                QMessageBox.warning(self, tr("등록 불가"), msg); return
             self._set_pending(None)
         else:
             QMessageBox.information(
-                self, "안내", "URL을 입력하거나 파일을 선택한 뒤 등록하세요.")
+                self, tr("안내"), tr("URL을 입력하거나 파일을 선택한 뒤 등록하세요."))
             return
         self.ed_name.clear()
         self._refresh_list()

@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QDialogButtonBox, QAbstractItemView, QCheckBox,
     QComboBox, QWidget, QSizePolicy,
 )
+from viewer.i18n import tr
 
 SHOTS_NAME = "사용자 스크린샷"
 
@@ -64,7 +65,7 @@ class FilePreview(QWidget):
         self._count = 0
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        self.lbl_title = QLabel("미리보기")
+        self.lbl_title = QLabel(tr("미리보기"))
         self.lbl_title.setWordWrap(True)
         v.addWidget(self.lbl_title)
         self.canvas = QLabel()
@@ -75,8 +76,8 @@ class FilePreview(QWidget):
         self.canvas.setStyleSheet("QLabel{background:#f3f3f3; border:1px solid #c8c8c8;}")
         v.addWidget(self.canvas, 1)
         nav = QHBoxLayout()
-        self.btn_prev = QPushButton("◀ 쪽")
-        self.btn_next = QPushButton("쪽 ▶")
+        self.btn_prev = QPushButton(tr("◀ 쪽"))
+        self.btn_next = QPushButton(tr("쪽 ▶"))
         for b in (self.btn_prev, self.btn_next):       # 디자인 SOT §2.7 — Enter 로 눌리지 않게
             b.setAutoDefault(False); b.setDefault(False)
         self.lbl_page = QLabel("")
@@ -87,7 +88,7 @@ class FilePreview(QWidget):
         nav.addWidget(self.btn_prev); nav.addWidget(self.lbl_page); nav.addWidget(self.btn_next)
         nav.addStretch(1)
         v.addLayout(nav)
-        self.clear("파일을 하나 고르면 여기에 미리 보입니다.")
+        self.clear(tr("파일을 하나 고르면 여기에 미리 보입니다."))
 
     # ── 대상 ──────────────────────────────────────────────
     def _close_doc(self):
@@ -101,7 +102,7 @@ class FilePreview(QWidget):
     def clear(self, msg: str = ""):
         self._close_doc()
         self._key, self._images, self._page, self._count = None, None, 0, 0
-        self.lbl_title.setText("미리보기")
+        self.lbl_title.setText(tr("미리보기"))
         self.canvas.setPixmap(QPixmap())
         self.canvas.setText(msg)
         self._sync_nav()
@@ -125,11 +126,11 @@ class FilePreview(QWidget):
                     pass
             if doc.needs_pass:
                 doc.close()
-                self.canvas.setText("암호가 걸린 문서라 미리 볼 수 없습니다.")
+                self.canvas.setText(tr("암호가 걸린 문서라 미리 볼 수 없습니다."))
                 return
             self._doc, self._count = doc, doc.page_count
         except Exception as e:           # noqa: BLE001
-            self.canvas.setText(f"미리 볼 수 없습니다.\n{e}")
+            self.canvas.setText(tr('미리 볼 수 없습니다.\n{e}').format(e=e))
             return
         self._render()
 
@@ -156,7 +157,7 @@ class FilePreview(QWidget):
     def _render(self):
         self._sync_nav()
         if not self._count:
-            self.canvas.setText("쪽이 없습니다.")
+            self.canvas.setText(tr("쪽이 없습니다."))
             return
         box = self.canvas.contentsRect().size()
         w, h = max(200, box.width() - 8), max(260, box.height() - 8)
@@ -177,7 +178,7 @@ class FilePreview(QWidget):
                     pix = pix.scaled(int(w * dpr), int(h * dpr), Qt.AspectRatioMode.KeepAspectRatio,
                                      Qt.TransformationMode.SmoothTransformation)
         except Exception as e:           # noqa: BLE001
-            self.canvas.setText(f"미리 볼 수 없습니다.\n{e}")
+            self.canvas.setText(tr('미리 볼 수 없습니다.\n{e}').format(e=e))
             return
         pix.setDevicePixelRatio(dpr)
         self.canvas.setText("")
@@ -195,7 +196,7 @@ class MergeFilesDialog(QDialog):
     def __init__(self, all_files: list, preselected: list = None,
                  screenshot_paths: list = None, parent=None, preset_api=None):
         super().__init__(parent)
-        self.setWindowTitle("PDF 병합")
+        self.setWindowTitle(tr("PDF 병합"))
         self.setMinimumSize(1040, 520)
         self.setAcceptDrops(True)
         self._screenshot_paths = list(screenshot_paths or [])
@@ -204,13 +205,13 @@ class MergeFilesDialog(QDialog):
 
         v = QVBoxLayout(self)
         v.addWidget(QLabel(
-            "왼쪽에서 파일을 골라 <b>→</b> 로 오른쪽에 등록하세요. 오른쪽 목록의 "
-            "<b>위에서부터</b> 순서대로 병합됩니다. 외부 PDF는 창에 <b>끌어다 놓기</b>로 추가."))
+            tr("왼쪽에서 파일을 골라 <b>→</b> 로 오른쪽에 등록하세요. 오른쪽 목록의 "
+            "<b>위에서부터</b> 순서대로 병합됩니다. 외부 PDF는 창에 <b>끌어다 놓기</b>로 추가.")))
 
         body = QHBoxLayout()
         # 좌측: 전체 파일
         lcol = QVBoxLayout()
-        lcol.addWidget(QLabel("책갈피창 전체 파일"))
+        lcol.addWidget(QLabel(tr("책갈피창 전체 파일")))
         self.left = _DropList()
         self.left.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         for p in (all_files or []):
@@ -225,7 +226,7 @@ class MergeFilesDialog(QDialog):
         mid = QVBoxLayout()
         mid.addStretch(1)
         btn_add = QPushButton("→")
-        btn_add.setToolTip("선택 파일을 오른쪽(병합 대상)으로")
+        btn_add.setToolTip(tr("선택 파일을 오른쪽(병합 대상)으로"))
         btn_add.setFixedWidth(44)
         btn_add.clicked.connect(self._move_selected)
         mid.addWidget(btn_add)
@@ -235,12 +236,12 @@ class MergeFilesDialog(QDialog):
         # 우측: 병합 대상
         rcol = QVBoxLayout()
         top_r = QHBoxLayout()
-        top_r.addWidget(QLabel("병합 대상 (위→아래 순서)"))
+        top_r.addWidget(QLabel(tr("병합 대상 (위→아래 순서)")))
         top_r.addStretch(1)
-        top_r.addWidget(QLabel("정렬:"))
+        top_r.addWidget(QLabel(tr("정렬:")))
         self.cmb_sort = QComboBox()
-        self.cmb_sort.addItem("등록순", "order")
-        self.cmb_sort.addItem("파일명순", "name")
+        self.cmb_sort.addItem(tr("등록순"), "order")
+        self.cmb_sort.addItem(tr("파일명순"), "name")
         self.cmb_sort.currentIndexChanged.connect(self._apply_sort)
         top_r.addWidget(self.cmb_sort)
         rcol.addLayout(top_r)
@@ -256,15 +257,16 @@ class MergeFilesDialog(QDialog):
         rbtncol.addStretch(1)
         btn_up = QPushButton("▲"); btn_up.setFixedWidth(40)
         btn_dn = QPushButton("▼"); btn_dn.setFixedWidth(40)
-        btn_up.setToolTip("선택 항목 위로 이동")
-        btn_dn.setToolTip("선택 항목 아래로 이동")
+        btn_up.setToolTip(tr("선택 항목 위로 이동"))
+        btn_dn.setToolTip(tr("선택 항목 아래로 이동"))
         btn_up.clicked.connect(lambda: self._move_right(-1))
         btn_dn.clicked.connect(lambda: self._move_right(+1))
         rbtncol.addWidget(btn_up)
         rbtncol.addWidget(btn_dn)
         rbtncol.addSpacing(18)
-        btn_del = QPushButton("삭제"); btn_del.setFixedWidth(40)
-        btn_del.setToolTip("선택 항목을 병합 대상에서 제거")
+        btn_del = QPushButton(tr("삭제"))
+        btn_del.setFixedWidth(max(40, btn_del.fontMetrics().horizontalAdvance(btn_del.text()) + 14))   # 언어마다 길이가 다르다
+        btn_del.setToolTip(tr("선택 항목을 병합 대상에서 제거"))
         btn_del.clicked.connect(self._delete_right)
         rbtncol.addWidget(btn_del)
         rbtncol.addStretch(1)
@@ -272,8 +274,8 @@ class MergeFilesDialog(QDialog):
         rcol.addLayout(rlist_row, 1)
 
         rbtns = QHBoxLayout()
-        btn_shots = QPushButton("스크린샷 리스트 추가")
-        btn_shots.setToolTip("스크린샷 창의 내용을 '사용자 스크린샷' 1개로 추가")
+        btn_shots = QPushButton(tr("스크린샷 리스트 추가"))
+        btn_shots.setToolTip(tr("스크린샷 창의 내용을 '사용자 스크린샷' 1개로 추가"))
         btn_shots.setEnabled(bool(self._screenshot_paths))
         btn_shots.clicked.connect(self._add_screenshots)
         rbtns.addWidget(btn_shots)
@@ -294,38 +296,38 @@ class MergeFilesDialog(QDialog):
         for p in (preselected or []):
             self._add_right_pdf(p)
 
-        self.chk_auto = QCheckBox("병합 후 책갈피와 단어장 자동 생성")
+        self.chk_auto = QCheckBox(tr("병합 후 책갈피와 단어장 자동 생성"))
         # 260915-4(§4.8.4, 사용자 결정): 기본은 끔 — 책갈피 없는 원본마다 글꼴 분석·OCR 이 병합 안에서 돌아
         #   파일 하나에 수십 초~수 분이 걸렸다(실측 139쪽 46초). 필요할 때만 켠다.
         self.chk_auto.setChecked(False)
         v.addWidget(self.chk_auto)
         # 260915-4(§4.8.4, 사용자 결정): 기본은 빠른 저장(그대로 합쳐 저장). 켜면 파일 사이의 같은 글꼴·
         #   이미지를 하나로 정리해 용량을 줄인다 — 실측 139MB 기준 저장 0.2초→15초, 용량 −11%.
-        self.chk_compact = QCheckBox("용량 줄이기 (같은 글꼴·이미지 정리 — 큰 파일은 저장이 오래 걸림)")
+        self.chk_compact = QCheckBox(tr("용량 줄이기 (같은 글꼴·이미지 정리 — 큰 파일은 저장이 오래 걸림)"))
         self.chk_compact.setChecked(False)
         v.addWidget(self.chk_compact)
 
         # 260611-29: 2단 축소 배치(쪽번호·목차·표지)
         self._twoup_settings = None
         trow = QHBoxLayout()
-        self.chk_twoup = QCheckBox("다단 생성 (쪽번호·목차·표지)")
+        self.chk_twoup = QCheckBox(tr("다단 생성 (쪽번호·목차·표지)"))
         self.chk_twoup.toggled.connect(self._on_twoup_toggled)
-        self.btn_twoup = QPushButton("배치 설정…")
+        self.btn_twoup = QPushButton(tr("배치 설정…"))
         self.btn_twoup.setEnabled(False)
         self.btn_twoup.clicked.connect(self._open_twoup_settings)
         trow.addWidget(self.chk_twoup); trow.addWidget(self.btn_twoup); trow.addStretch(1)
         v.addLayout(trow)
 
         bb = QDialogButtonBox(self)
-        self.btn_ok = bb.addButton("병합", QDialogButtonBox.ButtonRole.AcceptRole)
-        bb.addButton("취소", QDialogButtonBox.ButtonRole.RejectRole)
+        self.btn_ok = bb.addButton(tr("병합"), QDialogButtonBox.ButtonRole.AcceptRole)
+        bb.addButton(tr("취소"), QDialogButtonBox.ButtonRole.RejectRole)
         bb.accepted.connect(self._on_accept)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
 
         # 260606-21: 드롭 안내 오버레이(드래그 중 표시) — 창 어디에 놓아도 우측 등록
         self._drop_overlay = QLabel(
-            "📄  여기에 PDF 파일을 끌어다 놓으세요\n(오른쪽 병합 목록에 추가됩니다)", self)
+            tr("📄  여기에 PDF 파일을 끌어다 놓으세요\n(오른쪽 병합 목록에 추가됩니다)"), self)
         self._drop_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._drop_overlay.setStyleSheet(
             "QLabel{background:rgba(42,125,225,0.16);"
@@ -383,7 +385,7 @@ class MergeFilesDialog(QDialog):
     def _add_screenshots(self):
         if not self._screenshot_paths:
             return
-        it = QListWidgetItem(f"🖼 {SHOTS_NAME} ({len(self._screenshot_paths)}장)")
+        it = QListWidgetItem(tr('🖼 {SHOTS_NAME} ({n}장)').format(SHOTS_NAME=SHOTS_NAME, n=len(self._screenshot_paths)))
         it.setData(self._DATA, {"type": "shots", "paths": list(self._screenshot_paths),
                                 "name": SHOTS_NAME, "order": self._next_order()})
         self.right.addItem(it)
@@ -421,7 +423,7 @@ class MergeFilesDialog(QDialog):
             rows.sort(key=lambda d: d.get("order", 0))
         self.right.clear()
         for d in rows:
-            label = (f"🖼 {d['name']} ({len(d['paths'])}장)"
+            label = (tr('🖼 {name} ({n}장)').format(name=d['name'], n=len(d['paths']))
                      if d.get("type") == "shots" else d["name"])
             it = QListWidgetItem(label)
             it.setData(self._DATA, d)
@@ -466,8 +468,8 @@ class MergeFilesDialog(QDialog):
         src = self._preview_src
         sel = src.selectedItems() if src is not None else []
         if len(sel) != 1:
-            self.preview.clear("파일을 하나 고르면 여기에 미리 보입니다." if not sel
-                               else f"{len(sel)}개를 골랐습니다 — 하나만 고르면 미리 보입니다.")
+            self.preview.clear(tr("파일을 하나 고르면 여기에 미리 보입니다.") if not sel
+                               else tr('{n}개를 골랐습니다 — 하나만 고르면 미리 보입니다.').format(n=len(sel)))
             return
         d = sel[0].data(self._DATA)
         if src is self.left:
@@ -485,7 +487,7 @@ class MergeFilesDialog(QDialog):
     def _on_accept(self):
         from PyQt6.QtWidgets import QMessageBox
         if self.right.count() < 1:
-            QMessageBox.information(self, "병합", "병합할 항목을 오른쪽에 추가하세요.")
+            QMessageBox.information(self, tr("병합"), tr("병합할 항목을 오른쪽에 추가하세요."))
             return
         self.accept()
 

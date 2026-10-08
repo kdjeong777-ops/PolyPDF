@@ -16,6 +16,7 @@ import tempfile
 import copy
 
 from PyQt6.QtCore import Qt, QUrl
+from viewer.i18n import tr, tr_noop
 
 
 # ===== 기본 설정 =====
@@ -82,10 +83,10 @@ class ToneEngine:
         "bell": "snd_bell.wav",            # 종소리(1.5s)
     }
     # (표시명, key) — '없음' 포함. 종소리(첨부)를 앞에.
-    NAMES = [("없음", "none"),
-             ("종소리(종료)", "bell_end"), ("높은 종소리", "bell_high"), ("종소리", "bell"),
-             ("높은음 삑", "beep_high"), ("중간음 딩", "beep_mid"),
-             ("낮은음 부저", "beep_low"), ("짧은 2연음", "blip")]
+    NAMES = [(tr_noop("없음"), "none"),
+             (tr_noop("종소리(종료)"), "bell_end"), (tr_noop("높은 종소리"), "bell_high"), (tr_noop("종소리"), "bell"),
+             (tr_noop("높은음 삑"), "beep_high"), (tr_noop("중간음 딩"), "beep_mid"),
+             (tr_noop("낮은음 부저"), "beep_low"), (tr_noop("짧은 2연음"), "blip")]
 
     def __init__(self):
         self._effects = {}
@@ -369,7 +370,7 @@ class PresTimerDialog:
         self.cfg = merge_timer_cfg(cfg)
         self._tone = ToneEngine()
         self.dlg = QDialog(parent)
-        self.dlg.setWindowTitle("발표시간 설정")
+        self.dlg.setWindowTitle(tr("발표시간 설정"))
         self.dlg.resize(820, 860)
         self.dlg.setMinimumWidth(760)
         outer = QVBoxLayout(self.dlg)
@@ -396,7 +397,7 @@ class PresTimerDialog:
         from PyQt6.QtWidgets import QComboBox
         c = QComboBox()
         for name, key in ToneEngine.NAMES:
-            c.addItem(name, key)
+            c.addItem(tr(name), key)
         idx = max(0, [k for _, k in ToneEngine.NAMES].index(cur) if cur in
                   [k for _, k in ToneEngine.NAMES] else 0)
         c.setCurrentIndex(idx)
@@ -414,9 +415,9 @@ class PresTimerDialog:
         w = QWidget()
         h = QHBoxLayout(w); h.setContentsMargins(0, 0, 0, 0); h.setSpacing(2)
         mm = QSpinBox(); mm.setRange(0, 999); mm.setValue(int(total) // 60)
-        mm.setSuffix("분"); mm.setFixedWidth(64)
+        mm.setSuffix(tr("분")); mm.setFixedWidth(64)
         ss = QSpinBox(); ss.setRange(0, 59); ss.setValue(int(total) % 60)
-        ss.setSuffix("초"); ss.setFixedWidth(60)
+        ss.setSuffix(tr("초")); ss.setFixedWidth(60)
         h.addWidget(mm); h.addWidget(QLabel(":")); h.addWidget(ss)
         w._get = lambda: mm.value() * 60 + ss.value()
         return w
@@ -450,47 +451,47 @@ class PresTimerDialog:
         # 260611-28: '타이머 시작시 녹화시작'은 전체화면 우클릭 메뉴로 이동(여기서 제거).
 
         # 2) 준비내용
-        g = self._group("준비내용")
+        g = self._group(tr("준비내용"))
         self.sb_lines = []
         for i in range(2):
             ln = (c["standby"]["lines"] + [{}, {}])[i]
             row = QHBoxLayout()
-            row.addWidget(QLabel(f"{i+1}줄"))
+            row.addWidget(QLabel(tr('{i}줄').format(i=i + 1)))
             ed = QLineEdit(str(ln.get("text", "")))
             fc = QFontComboBox(); fc.setCurrentFont(QFont(ln.get("font", "맑은 고딕")))
             sz = QSpinBox(); sz.setRange(8, 300); sz.setValue(int(ln.get("size", 48)))
-            row.addWidget(ed, 1); row.addWidget(fc); row.addWidget(QLabel("크기")); row.addWidget(sz)
+            row.addWidget(ed, 1); row.addWidget(fc); row.addWidget(QLabel(tr("크기"))); row.addWidget(sz)
             g.addLayout(row)
             self.sb_lines.append((ed, fc, sz))
         srow = QHBoxLayout()
-        srow.addWidget(QLabel("박스 폭%"))
+        srow.addWidget(QLabel(tr("박스 폭%")))
         self.sb_wfrac = QSpinBox(); self.sb_wfrac.setRange(10, 100)
         self.sb_wfrac.setValue(int(c["standby"]["w_frac"] * 100)); srow.addWidget(self.sb_wfrac)
-        srow.addWidget(QLabel("높이%"))
+        srow.addWidget(QLabel(tr("높이%")))
         self.sb_hfrac = QSpinBox(); self.sb_hfrac.setRange(10, 100)
         self.sb_hfrac.setValue(int(c["standby"]["h_frac"] * 100)); srow.addWidget(self.sb_hfrac)
-        srow.addWidget(QLabel("배경"))
+        srow.addWidget(QLabel(tr("배경")))
         self.bt_sbg = self._color_btn(c["standby"]["bg_color"]); srow.addWidget(self.bt_sbg)
-        srow.addWidget(QLabel("투명도%"))
+        srow.addWidget(QLabel(tr("투명도%")))
         self.sb_salpha = QSpinBox(); self.sb_salpha.setRange(0, 100)
         self.sb_salpha.setValue(int(c["standby"]["bg_alpha"])); srow.addWidget(self.sb_salpha)
         g.addLayout(srow)
         brow = QHBoxLayout()
-        brow.addWidget(QLabel("테두리 모양"))
+        brow.addWidget(QLabel(tr("테두리 모양")))
         self.cmb_border = QComboBox()
-        self.cmb_border.addItem("직사각형", "rect")
-        self.cmb_border.addItem("원형테두리 직사각형", "round")
+        self.cmb_border.addItem(tr("직사각형"), "rect")
+        self.cmb_border.addItem(tr("원형테두리 직사각형"), "round")
         self.cmb_border.setCurrentIndex(0 if c["standby"]["border"] == "rect" else 1)
         brow.addWidget(self.cmb_border); brow.addStretch(1)
         g.addLayout(brow)
         # 배경 그림(첨부) — 박스 크기에 cover-crop, 박스 투명도를 그림 투명도로 적용
         irow = QHBoxLayout()
-        irow.addWidget(QLabel("배경 그림"))
-        bt_img = QPushButton("그림 첨부…")
+        irow.addWidget(QLabel(tr("배경 그림")))
+        bt_img = QPushButton(tr("그림 첨부…"))
         bt_img.clicked.connect(self._pick_standby_image)
-        bt_paste = QPushButton("클립보드 붙여넣기")
+        bt_paste = QPushButton(tr("클립보드 붙여넣기"))
         bt_paste.clicked.connect(self._paste_standby_image)
-        bt_clr = QPushButton("그림 제거")
+        bt_clr = QPushButton(tr("그림 제거"))
         bt_clr.clicked.connect(self._clear_standby_image)
         self.lbl_img = QLabel("")
         irow.addWidget(bt_img); irow.addWidget(bt_paste)
@@ -500,14 +501,14 @@ class PresTimerDialog:
         self._update_img_label()
 
         # 3) 발표시간 + 카운트 방향
-        g = self._group("발표시간")
+        g = self._group(tr("발표시간"))
         trow = QHBoxLayout()
-        trow.addWidget(QLabel("5분 단위"))
+        trow.addWidget(QLabel(tr("5분 단위")))
         self.cmb_dur = QComboBox()
         for m in range(5, 65, 5):
-            self.cmb_dur.addItem(f"{m}분", m * 60)
+            self.cmb_dur.addItem(tr('{m}분').format(m=m), m * 60)
         trow.addWidget(self.cmb_dur)
-        trow.addWidget(QLabel("직접입력(분)"))
+        trow.addWidget(QLabel(tr("직접입력(분)")))
         self.sb_dur = QSpinBox(); self.sb_dur.setRange(1, 100000)
         self.sb_dur.setValue(max(1, int(c["duration_sec"]) // 60))
         trow.addWidget(self.sb_dur); trow.addStretch(1)
@@ -516,85 +517,85 @@ class PresTimerDialog:
         self.cmb_dur.activated.connect(
             lambda _i: self.sb_dur.setValue(self.cmb_dur.currentData() // 60))
         drow = QHBoxLayout()
-        self.rb_down = QRadioButton("반대로 카운트 (지정 → 0)")
-        self.rb_up = QRadioButton("0 → 지정")
+        self.rb_down = QRadioButton(tr("반대로 카운트 (지정 → 0)"))
+        self.rb_up = QRadioButton(tr("0 → 지정"))
         (self.rb_down if c["count_dir"] == "down" else self.rb_up).setChecked(True)
         bg = QButtonGroup(self.dlg); bg.addButton(self.rb_down); bg.addButton(self.rb_up)
         drow.addWidget(self.rb_down); drow.addWidget(self.rb_up); drow.addStretch(1)
         g.addLayout(drow)
 
         # 4) 시간표시 위치
-        g = self._group("시간 표시 위치")
+        g = self._group(tr("시간 표시 위치"))
         prow = QHBoxLayout()
-        self.rb_tr = QRadioButton("우상단"); self.rb_tl = QRadioButton("좌상단")
+        self.rb_tr = QRadioButton(tr("우상단")); self.rb_tl = QRadioButton(tr("좌상단"))
         (self.rb_tr if c["pos"] == "top-right" else self.rb_tl).setChecked(True)
         bg2 = QButtonGroup(self.dlg); bg2.addButton(self.rb_tr); bg2.addButton(self.rb_tl)
         prow.addWidget(self.rb_tr); prow.addWidget(self.rb_tl)
-        prow.addWidget(QLabel("끝단 거리(px)"))
+        prow.addWidget(QLabel(tr("끝단 거리(px)")))
         self.sb_margin = QSpinBox(); self.sb_margin.setRange(0, 600)
         self.sb_margin.setValue(int(c["margin"])); prow.addWidget(self.sb_margin)
         prow.addStretch(1)
         g.addLayout(prow)
 
         # 5) 글자
-        g = self._group("글자")
+        g = self._group(tr("글자"))
         f = c["font"]
         frow = QHBoxLayout()
-        frow.addWidget(QLabel("폰트"))
+        frow.addWidget(QLabel(tr("폰트")))
         self.fc_font = QFontComboBox(); self.fc_font.setCurrentFont(QFont(f.get("family", "돋움")))
         frow.addWidget(self.fc_font)
-        frow.addWidget(QLabel("크기(0=자동)"))
+        frow.addWidget(QLabel(tr("크기(0=자동)")))
         self.sb_fsize = QSpinBox(); self.sb_fsize.setRange(0, 500); self.sb_fsize.setValue(int(f.get("size", 0)))
         frow.addWidget(self.sb_fsize)
-        self.cb_bold = QCheckBox("굵게"); self.cb_bold.setChecked(bool(f.get("bold", True)))
+        self.cb_bold = QCheckBox(tr("굵게")); self.cb_bold.setChecked(bool(f.get("bold", True)))
         frow.addWidget(self.cb_bold); frow.addStretch(1)
         g.addLayout(frow)
         crow = QHBoxLayout()
-        self.cb_auto_col = QCheckBox("색 자동(배경 보색)")
+        self.cb_auto_col = QCheckBox(tr("색 자동(배경 보색)"))
         self.cb_auto_col.setChecked(f.get("color", "auto") == "auto")
         crow.addWidget(self.cb_auto_col)
-        crow.addWidget(QLabel("사용자 색"))
+        crow.addWidget(QLabel(tr("사용자 색")))
         self.bt_fcol = self._color_btn(f.get("color") if f.get("color", "auto") != "auto" else "#ffffff")
         crow.addWidget(self.bt_fcol); crow.addStretch(1)
         g.addLayout(crow)
         brow2 = QHBoxLayout()
-        self.cb_fbg = QCheckBox("글자 배경 사용")
+        self.cb_fbg = QCheckBox(tr("글자 배경 사용"))
         self.cb_fbg.setChecked(f.get("bg", "none") == "color")
         brow2.addWidget(self.cb_fbg)
-        brow2.addWidget(QLabel("배경색"))
+        brow2.addWidget(QLabel(tr("배경색")))
         self.bt_fbg = self._color_btn(f.get("bg_color", "#ffffff")); brow2.addWidget(self.bt_fbg)
-        brow2.addWidget(QLabel("투명도%"))
+        brow2.addWidget(QLabel(tr("투명도%")))
         self.sb_fbg_alpha = QSpinBox(); self.sb_fbg_alpha.setRange(0, 100)
         self.sb_fbg_alpha.setValue(int(f.get("bg_alpha", 50))); brow2.addWidget(self.sb_fbg_alpha)
-        brow2.addWidget(QLabel("여백%"))
+        brow2.addWidget(QLabel(tr("여백%")))
         self.sb_fbg_pad = QSpinBox(); self.sb_fbg_pad.setRange(0, 200)
         self.sb_fbg_pad.setValue(int(f.get("bg_pad_pct", 10))); brow2.addWidget(self.sb_fbg_pad)
         g.addLayout(brow2)
 
         # 6) 알람
-        g = self._group("알람")
+        g = self._group(tr("알람"))
         a = c["alarm"]
         erow = QHBoxLayout()
-        erow.addWidget(QLabel("종료 알람 소리"))
+        erow.addWidget(QLabel(tr("종료 알람 소리")))
         self.cmb_end_snd = self._sound_combo((a.get("end") or {}).get("sound", "beep_mid"))
         erow.addWidget(self.cmb_end_snd)
-        erow.addWidget(QLabel("음량"))
+        erow.addWidget(QLabel(tr("음량")))
         self.sl_end_vol = self._vol_slider((a.get("end") or {}).get("vol", 70))
         erow.addWidget(self.sl_end_vol)
-        bt = QPushButton("테스트")
+        bt = QPushButton(tr("테스트"))
         bt.clicked.connect(lambda: self._tone.play(self.cmb_end_snd.currentData(),
                                                    self.sl_end_vol.value()))
         erow.addWidget(bt); erow.addStretch(1)
         g.addLayout(erow)
-        g.addWidget(QLabel("사전 알람 (최대 7행) — 시작=종료 전 시각(분:초), 간격=분:초(0=1회), 반복=횟수(0=무제한)"))
+        g.addWidget(QLabel(tr("사전 알람 (최대 7행) — 시작=종료 전 시각(분:초), 간격=분:초(0=1회), 반복=횟수(0=무제한)")))
         self.pre_rows = []
         self.pre_box = QGridLayout()
-        hdr = ["시작(종료 전)", "간격", "소리", "음량", "반복", "", ""]
+        hdr = [tr("시작(종료 전)"), tr("간격"), tr("소리"), tr("음량"), tr("반복"), "", ""]
         for ci, h in enumerate(hdr):
             self.pre_box.addWidget(QLabel(h), 0, ci)
         g.addLayout(self.pre_box)
         addr = QHBoxLayout()
-        self.bt_add_pre = QPushButton("＋ 행 추가")
+        self.bt_add_pre = QPushButton(tr("＋ 행 추가"))
         self.bt_add_pre.clicked.connect(lambda: self._add_pre_row())
         addr.addWidget(self.bt_add_pre); addr.addStretch(1)
         g.addLayout(addr)
@@ -612,8 +613,8 @@ class PresTimerDialog:
         cmb = self._sound_combo(row.get("sound", "bell"))
         vol = self._vol_slider(int(row.get("vol", 70)))
         cnt = QSpinBox(); cnt.setRange(0, 99); cnt.setValue(int(row.get("count", 0) or 0))
-        cnt.setSuffix("회"); cnt.setFixedWidth(64); cnt.setToolTip("0=무제한")
-        test = QPushButton("테스트")
+        cnt.setSuffix(tr("회")); cnt.setFixedWidth(64); cnt.setToolTip(tr("0=무제한"))
+        test = QPushButton(tr("테스트"))
         test.clicked.connect(lambda _=False, c=cmb, v=vol: self._tone.play(c.currentData(), v.value()))
         rm = QPushButton("✕")
         item = (w_start, w_int, cmb, vol, cnt, test, rm)
@@ -634,14 +635,14 @@ class PresTimerDialog:
         rm.clicked.connect(remove)
 
     def _update_img_label(self):
-        self.lbl_img.setText("첨부됨 ✓" if self._standby_img else "없음")
+        self.lbl_img.setText(tr("첨부됨 ✓") if self._standby_img else tr("없음"))
 
     def _pick_standby_image(self):
         from PyQt6.QtWidgets import QFileDialog
         from PyQt6.QtGui import QPixmap
         fn, _ = QFileDialog.getOpenFileName(
-            self.dlg, "준비 배경 그림 선택", "",
-            "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.webp)")
+            self.dlg, tr("준비 배경 그림 선택"), "",
+            tr("이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.webp)"))
         if not fn:
             return
         pm = QPixmap(fn)
@@ -669,7 +670,7 @@ class PresTimerDialog:
                 if isinstance(qi, QImage) and not qi.isNull():
                     pm = QPixmap.fromImage(qi)
         if pm.isNull():
-            QMessageBox.information(self.dlg, "붙여넣기", "클립보드에 이미지가 없습니다.")
+            QMessageBox.information(self.dlg, tr("붙여넣기"), tr("클립보드에 이미지가 없습니다."))
             return
         if pm.width() > 1200 or pm.height() > 1200:
             pm = pm.scaled(1200, 1200, Qt.AspectRatioMode.KeepAspectRatio,

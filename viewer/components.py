@@ -20,6 +20,7 @@ import urllib.request
 from pathlib import Path
 
 from viewer.updater import install_dir, valid_repo, DEFAULT_REPO, _UA
+from viewer.i18n import tr
 
 COMPONENTS_TAG = "components"
 
@@ -99,10 +100,10 @@ def install_ffmpeg(repo: str = "", progress=None) -> tuple[bool, str]:
     repo = repo_or_default(repo)
     url = _assets(repo).get("ffmpeg.exe")
     if not url:
-        return False, "릴리스에서 ffmpeg.exe 자산을 찾지 못했습니다."
+        return False, tr("릴리스에서 ffmpeg.exe 자산을 찾지 못했습니다.")
     data = _download(url, progress)
     if data is None:
-        return False, "다운로드가 취소되었거나 실패했습니다."
+        return False, tr("다운로드가 취소되었거나 실패했습니다.")
     dest = install_dir() / "ffmpeg.exe"
     try:
         tmp = str(dest) + ".part"
@@ -111,17 +112,17 @@ def install_ffmpeg(repo: str = "", progress=None) -> tuple[bool, str]:
         os.replace(tmp, dest)            # 원자적 교체
         return True, str(dest)
     except Exception as e:
-        return False, f"저장 실패: {e}"
+        return False, tr('저장 실패: {e}').format(e=e)
 
 
 def install_tesseract(repo: str = "", progress=None) -> tuple[bool, str]:
     repo = repo_or_default(repo)
     url = _assets(repo).get("tesseract.zip")
     if not url:
-        return False, "릴리스에서 tesseract.zip 자산을 찾지 못했습니다."
+        return False, tr("릴리스에서 tesseract.zip 자산을 찾지 못했습니다.")
     data = _download(url, progress)
     if data is None:
-        return False, "다운로드가 취소되었거나 실패했습니다."
+        return False, tr("다운로드가 취소되었거나 실패했습니다.")
     base = install_dir()
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -133,7 +134,7 @@ def install_tesseract(repo: str = "", progress=None) -> tuple[bool, str]:
             dest.mkdir(parents=True, exist_ok=True)
             z.extractall(dest)
     except Exception as e:
-        return False, f"압축 해제 실패: {e}"
+        return False, tr('압축 해제 실패: {e}').format(e=e)
     try:
         from viewer.study import ocr
         ocr.reset_cache()                # 재탐색

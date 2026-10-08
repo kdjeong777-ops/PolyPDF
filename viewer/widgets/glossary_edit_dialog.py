@@ -18,12 +18,13 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QTextBrowser,
 )
+from viewer.i18n import tr
 
 
 class GlossaryEditDialog(QDialog):
     def __init__(self, glossary, prefs=None, source_path: str = "", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("번역 용어집 교정")
+        self.setWindowTitle(tr("번역 용어집 교정"))
         self.resize(720, 600)
         self._prefs = prefs or {}
         self._source_path = source_path or ""
@@ -33,12 +34,12 @@ class GlossaryEditDialog(QDialog):
 
         v = QVBoxLayout(self)
         v.addWidget(QLabel(
-            "잘못 번역된 <b>한글 뜻</b>을 고치세요. 한 단어가 아니라 다른 단어와 묶인 용어면 "
+            tr("잘못 번역된 <b>한글 뜻</b>을 고치세요. 한 단어가 아니라 다른 단어와 묶인 용어면 "
             "<b>원어(EN)</b>도 고칠 수 있습니다. <b>[사용자 사전에 저장]</b> 시 최우선으로 "
-            "이후 <b>모든 PDF·번역</b>에 반영됩니다. 행을 누르면 아래에 <b>본문 예문</b>이 보입니다."))
+            "이후 <b>모든 PDF·번역</b>에 반영됩니다. 행을 누르면 아래에 <b>본문 예문</b>이 보입니다.")))
 
         self.tbl = QTableWidget(len(self._glossary), 3)
-        self.tbl.setHorizontalHeaderLabels(["원어(EN) — 수정 가능", "번역(KO) — 수정 가능", "출처"])
+        self.tbl.setHorizontalHeaderLabels([tr("원어(EN) — 수정 가능"), tr("번역(KO) — 수정 가능"), tr("출처")])
         self.tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tbl.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -55,10 +56,10 @@ class GlossaryEditDialog(QDialog):
         self.tbl.currentCellChanged.connect(lambda *_: self._show_examples())
         v.addWidget(self.tbl, 1)
 
-        v.addWidget(QLabel("본문 예문 (선택한 용어가 쓰인 문장):"))
+        v.addWidget(QLabel(tr("본문 예문 (선택한 용어가 쓰인 문장):")))
         self.examples = QTextBrowser()
         self.examples.setMaximumHeight(150)
-        self.examples.setPlaceholderText("표에서 용어를 선택하면 본문에서 그 용어가 쓰인 문장을 보여줍니다.")
+        self.examples.setPlaceholderText(tr("표에서 용어를 선택하면 본문에서 그 용어가 쓰인 문장을 보여줍니다."))
         v.addWidget(self.examples)
 
         self.info = QLabel("")
@@ -67,12 +68,12 @@ class GlossaryEditDialog(QDialog):
         v.addWidget(self.info)
 
         row = QHBoxLayout()
-        self.btn_save = QPushButton("✔ 사용자 사전에 저장")
+        self.btn_save = QPushButton(tr("✔ 사용자 사전에 저장"))
         self.btn_save.clicked.connect(self._save)
-        self.btn_retrans = QPushButton("↻ 이 문서 재번역")
+        self.btn_retrans = QPushButton(tr("↻ 이 문서 재번역"))
         self.btn_retrans.setEnabled(bool(self._source_path))
         self.btn_retrans.clicked.connect(self._retranslate)
-        self.btn_close = QPushButton("닫기")
+        self.btn_close = QPushButton(tr("닫기"))
         self.btn_close.clicked.connect(self.reject)
         row.addWidget(self.btn_save)
         row.addWidget(self.btn_retrans)
@@ -81,7 +82,7 @@ class GlossaryEditDialog(QDialog):
         v.addLayout(row)
 
         if not self._glossary:
-            self.info.setText("이 PDF 의 번역 용어집을 찾지 못했습니다. 먼저 번역을 실행하세요.")
+            self.info.setText(tr("이 PDF 의 번역 용어집을 찾지 못했습니다. 먼저 번역을 실행하세요."))
             self.btn_save.setEnabled(False)
 
     # ----- 본문 예문 -----
@@ -107,13 +108,13 @@ class GlossaryEditDialog(QDialog):
             return
         self._ensure_body()
         if not self._body:
-            self.examples.setPlainText("(본문을 불러올 수 없어 예문을 표시할 수 없습니다.)")
+            self.examples.setPlainText(tr("(본문을 불러올 수 없어 예문을 표시할 수 없습니다.)"))
             return
         sents = re.split(r"(?<=[.!?])\s+", self._body)
         rx = re.compile(re.escape(term), re.I)
         hits = [s.strip() for s in sents if rx.search(s)]
         if not hits:
-            self.examples.setPlainText(f"본문에서 '{term}' 이(가) 쓰인 문장을 찾지 못했습니다.")
+            self.examples.setPlainText(tr("본문에서 '{term}' 이(가) 쓰인 문장을 찾지 못했습니다.").format(term=term))
             return
         html = []
         for s in hits[:5]:
@@ -121,7 +122,7 @@ class GlossaryEditDialog(QDialog):
             esc = (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
             esc = rx.sub(lambda m: f"<b style='color:#1456c4'>{m.group(0)}</b>", esc)
             html.append(f"<p style='margin:3px 0'>• {esc}</p>")
-        more = f"<p style='color:#888'>… 외 {len(hits) - 5}문장</p>" if len(hits) > 5 else ""
+        more = tr("<p style='color:#888'>… 외 {n}문장</p>").format(n=len(hits) - 5) if len(hits) > 5 else ""
         self.examples.setHtml("".join(html) + more)
 
     # ----- 저장 / 재번역 -----
@@ -140,7 +141,7 @@ class GlossaryEditDialog(QDialog):
     def _save(self) -> bool:
         changed = self._changed_terms()
         if not changed:
-            self.info.setText("변경된 용어가 없습니다. 원어(EN)나 한글 뜻을 고친 뒤 다시 저장하세요.")
+            self.info.setText(tr("변경된 용어가 없습니다. 원어(EN)나 한글 뜻을 고친 뒤 다시 저장하세요."))
             return False
         try:
             from ..study.dict_store import DictStore
@@ -149,12 +150,12 @@ class GlossaryEditDialog(QDialog):
                 store.upsert_user_term(en, ko)
             store.close()
         except Exception as e:
-            self.info.setText(f"사용자 사전 저장 실패: {type(e).__name__}: {str(e)[:60]}")
+            self.info.setText(tr('사용자 사전 저장 실패: {name__}: {e}').format(name__=type(e).__name__, e=str(e)[:60]))
             return False
         for i, en, ko in changed:        # 저장본을 새 원래값으로
             self.tbl.item(i, 0).setData(Qt.ItemDataRole.UserRole, en)
             self.tbl.item(i, 1).setData(Qt.ItemDataRole.UserRole, ko)
-        self.info.setText(f"사용자 사전에 {len(changed)}개 용어 저장됨 — 이후 모든 번역에 적용.")
+        self.info.setText(tr('사용자 사전에 {n}개 용어 저장됨 — 이후 모든 번역에 적용.').format(n=len(changed)))
         return True
 
     def _retranslate(self):
@@ -162,10 +163,10 @@ class GlossaryEditDialog(QDialog):
         par = self.parent()
         if not (self._source_path and par is not None
                 and hasattr(par, "_action_translate_files")):
-            self.info.setText("재번역 진입점을 찾지 못했습니다. 저장만 완료했습니다.")
+            self.info.setText(tr("재번역 진입점을 찾지 못했습니다. 저장만 완료했습니다."))
             return
         if QMessageBox.question(
-                self, "재번역", "교정된 용어집으로 이 문서를 다시 번역합니다. 계속할까요?") \
+                self, tr("재번역"), tr("교정된 용어집으로 이 문서를 다시 번역합니다. 계속할까요?")) \
                 != QMessageBox.StandardButton.Yes:
             return
         self.accept()

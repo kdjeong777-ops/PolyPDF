@@ -21,11 +21,12 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QUrl, QTimer, QRect, QPropertyAnimation, QEvent
 from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QWidget, QLabel, QPushButton, QSlider, QHBoxLayout, QStyle)
+from viewer.i18n import tr, tr_noop
 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
 VIDEO_EXT = {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv", ".mpg", ".mpeg"}
 
-SUPPORTED_TEXT = (
+SUPPORTED_TEXT = tr_noop(
     "지원: MP4/MOV/MKV/WebM/AVI · H.264·H.265·VP9·AV1 · AAC·MP3·Opus (권장 MP4=H.264+AAC)")
 
 
@@ -232,8 +233,8 @@ class MediaOverlay(QWidget):
             self.close(); return
         it = self._items[self._idx]
         seq = len(self._items) > 1
-        nav = ("  ·  →다음 / ←이전 / 좌클릭=다음 / ✕·ESC=닫기" if seq
-               else "  ·  좌클릭·✕·ESC=닫기")
+        nav = (tr("  ·  →다음 / ←이전 / 좌클릭=다음 / ✕·ESC=닫기") if seq
+               else tr("  ·  좌클릭·✕·ESC=닫기"))
         pos = f"  [{self._idx + 1}/{len(self._items)}]" if seq else ""
         kind = it.get("type")
         if kind == "image":
@@ -242,14 +243,14 @@ class MediaOverlay(QWidget):
             self._img.show()
             self._cur_pixmap = QPixmap(it["path"])
             if self._cur_pixmap.isNull():
-                self._img.setText("이미지를 열 수 없습니다.\n" + str(it.get("name", "")))
+                self._img.setText(tr('이미지를 열 수 없습니다.\n{get}').format(get=str(it.get('name', ''))))
                 self._img.setStyleSheet("color:#ddd;font-size:20px;background:#000;")
             self._hint.setText(f"{it.get('name','')}{pos}{nav}")
         else:
             self._img.hide(); self._cur_pixmap = None
             self._gview.show(); self._bar.show()
             self._start_video(it["path"])
-            self._hint.setText(f"{it.get('name','')}{pos}{nav}   ·   {SUPPORTED_TEXT}")
+            self._hint.setText(f"{it.get('name','')}{pos}{nav}   ·   {tr(SUPPORTED_TEXT)}")
             self._set_bar(True)             # 시작 시 잠깐 보였다가 자동 숨김
             self._hide_timer.start(2500)
             self._cursor_timer.start()      # 커서 폴링으로 하단 진입 감지
@@ -348,7 +349,7 @@ class MediaOverlay(QWidget):
     def _on_err(self, *a):
         self._img.show(); self._gview.hide(); self._bar.hide()
         self._cur_pixmap = None
-        self._img.setText("이 동영상을 재생할 수 없습니다(코덱 미지원).\n\n" + SUPPORTED_TEXT)
+        self._img.setText(tr('이 동영상을 재생할 수 없습니다(코덱 미지원).\n\n{SUPPORTED_TEXT}').format(SUPPORTED_TEXT=tr(SUPPORTED_TEXT)))
         self._img.setStyleSheet("color:#ddd;font-size:18px;background:#000;")
 
     # ---- 컨트롤바 자동 숨김(슬라이드) ----

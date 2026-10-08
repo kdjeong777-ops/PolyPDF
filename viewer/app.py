@@ -7226,7 +7226,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 norm = []
                 for i in range(5):
                     s = cs[i] if i < len(cs) else {}
-                    norm.append({"name": str(s.get("name", f"사용자{i+1}")),
+                    norm.append({"name": str(s.get("name") or tr("사용자{i}").format(i=i + 1)),
                                  "w": int(s.get("w", 300)), "h": int(s.get("h", 200))})
                 self._cap_sizes = norm
             self._refresh_capture_labels()

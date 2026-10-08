@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer.widgets.nup_preset import NupPresetMixin   # 260628: 다단 프리셋 공통(SOT §11.10)
+from viewer.i18n import tr
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp")
 _PATH_ROLE = Qt.ItemDataRole.UserRole
@@ -70,7 +71,7 @@ class _DropList(QListWidget):
 class ImageToPdfDialog(NupPresetMixin, QDialog):
     def __init__(self, parent=None, initial_paths=None, preset_api=None, sample=None):
         super().__init__(parent)
-        self.setWindowTitle("이미지 → PDF 변환")
+        self.setWindowTitle(tr("이미지 → PDF 변환"))
         self.resize(860, 580)
         self._preset_api = preset_api
         self._sample = sample
@@ -82,17 +83,17 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
 
         # ── 좌측: 목록 + 조작 버튼 ──
         left = QVBoxLayout()
-        left.addWidget(QLabel("이미지 목록 (위→아래 = 페이지 순서, 드래그로 순서 변경)"))
+        left.addWidget(QLabel(tr("이미지 목록 (위→아래 = 페이지 순서, 드래그로 순서 변경)")))
         self.lst = _DropList(self._add_files, self)
         self.lst.currentItemChanged.connect(lambda *_: self._update_preview())
         left.addWidget(self.lst, 1)
         lb = QHBoxLayout()
         for txt, fn, tip in (
-            ("파일 추가", self._pick_files, "이미지 파일 선택(여러 개 가능)"),
-            ("삭제", self._remove_sel, "선택 항목 삭제"),
-            ("전체삭제", self._clear_all, "목록 비우기"),
-            ("▲", lambda: self._move(-1), "위로 이동"),
-            ("▼", lambda: self._move(1), "아래로 이동"),
+            (tr("파일 추가"), self._pick_files, tr("이미지 파일 선택(여러 개 가능)")),
+            (tr("삭제"), self._remove_sel, tr("선택 항목 삭제")),
+            (tr("전체삭제"), self._clear_all, tr("목록 비우기")),
+            ("▲", lambda: self._move(-1), tr("위로 이동")),
+            ("▼", lambda: self._move(1), tr("아래로 이동")),
         ):
             b = QPushButton(txt)
             b.setToolTip(tip)
@@ -105,8 +106,8 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
 
         # ── 우측: 미리보기 ──
         right = QVBoxLayout()
-        right.addWidget(QLabel("미리보기"))
-        self.preview = QLabel("파일을 선택하면 미리보기가 표시됩니다.")
+        right.addWidget(QLabel(tr("미리보기")))
+        self.preview = QLabel(tr("파일을 선택하면 미리보기가 표시됩니다."))
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumWidth(340)
         self.preview.setWordWrap(True)
@@ -122,23 +123,23 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
 
         # ── 다단 옵션 ──
         nrow = QHBoxLayout()
-        self.chk_nup = QCheckBox("다단 저장")
+        self.chk_nup = QCheckBox(tr("다단 저장"))
         self.chk_nup.toggled.connect(lambda on: self.btn_nup.setEnabled(on))
         self.cmb_preset = QComboBox()
         self.cmb_preset.setMinimumWidth(150)
         self._reload_presets()
         self.cmb_preset.activated.connect(self._on_preset_pick)
-        self.btn_nup = QPushButton("설정")
+        self.btn_nup = QPushButton(tr("설정"))
         self.btn_nup.setEnabled(False)
         self.btn_nup.clicked.connect(self._open_nup)
         nrow.addWidget(self.chk_nup)
-        nrow.addWidget(QLabel("스타일:"))
+        nrow.addWidget(QLabel(tr("스타일:")))
         nrow.addWidget(self.cmb_preset, 1)
         nrow.addWidget(self.btn_nup)
         root.addLayout(nrow)
 
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
-        ok = bb.addButton("PDF로 저장", QDialogButtonBox.ButtonRole.AcceptRole)
+        ok = bb.addButton(tr("PDF로 저장"), QDialogButtonBox.ButtonRole.AcceptRole)
         ok.clicked.connect(self.accept)
         bb.rejected.connect(self.reject)
         root.addWidget(bb)
@@ -175,8 +176,8 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
 
     def _pick_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "이미지 파일 선택", "",
-            "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp)")
+            self, tr("이미지 파일 선택"), "",
+            tr("이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp)"))
         if paths:
             self._add_files(paths)
 
@@ -203,14 +204,14 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
     def _update_preview(self):
         it = self.lst.currentItem()
         if it is None:
-            self.preview.setText("파일을 선택하면 미리보기가 표시됩니다.")
+            self.preview.setText(tr("파일을 선택하면 미리보기가 표시됩니다."))
             self.preview.setPixmap(QPixmap())
             self.info.setText("")
             return
         path = it.data(_PATH_ROLE)
         pm = QPixmap(path)
         if pm.isNull():
-            self.preview.setText("미리보기를 불러올 수 없습니다.")
+            self.preview.setText(tr("미리보기를 불러올 수 없습니다."))
             self.info.setText(os.path.basename(path))
             return
         area = self.preview.size()

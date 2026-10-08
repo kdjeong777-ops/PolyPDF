@@ -173,6 +173,12 @@ try:
     T.pseudo(locale_dir=real)
     os.environ["POLYPDF_LANG"] = "qps_ploc"
     i18n.install(None, "ko")
+    # 새 사용자처럼 — 다른 검사가 남긴 설정(한국어로 저장된 사용자 이름 등)을 읽지 않게 빈 설정 폴더로
+    from PyQt6.QtCore import QCoreApplication
+    _old_app = QCoreApplication.applicationName()
+    QCoreApplication.setApplicationName("polypdf_i18n_h_%d" % os.getpid())
+    from viewer import settings_store as _ss
+    _h_dir = _ss.settings_dir()
     from viewer.app import MainWindow
     mw = MainWindow(); mw._skip_save_on_close = True
     from PyQt6.QtWidgets import (QWidget, QAbstractButton, QLabel, QComboBox,
@@ -182,6 +188,8 @@ try:
     bare = []
 
     def _see(t, where):
+        if ":\\" in t or ":/" in t:                    # 최근 파일·폴더 경로 = 사용자 데이터
+            return
         if t and t not in _FONTS and "[!!" not in t and any("가" <= ch <= "힣" for ch in t):
             bare.append((where, t))
 
@@ -203,6 +211,9 @@ try:
         _see(w.toolTip(), nm + ".tip")
         if isinstance(w, (QAbstractButton, QLabel)):
             _see(w.text(), nm)
+            _m = getattr(w, "menu", None)
+            if callable(_m) and _m() is not None:           # 단추에 달린 메뉴(읽기 속도 등)
+                _menu(_m(), nm + ".menu")
         elif isinstance(w, QComboBox):
             for i in range(w.count()):
                 _see(w.itemText(i), nm)
@@ -215,6 +226,8 @@ try:
         "H 메뉴 막대가 모두 번역 표시(감쌈)", str(titles))
     chk(not bare, "H 메인 창에 표시 없는 한국어가 없다(단어학습 패널·글꼴 이름 제외)", str(bare[:10]))
     os.environ.pop("POLYPDF_LANG")
+    QCoreApplication.setApplicationName(_old_app)
+    shutil.rmtree(str(_h_dir), ignore_errors=True)
     T.clean_pseudo(locale_dir=real)
     i18n.install(None, "ko")
 except Exception:

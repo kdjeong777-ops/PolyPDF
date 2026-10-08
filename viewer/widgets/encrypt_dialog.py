@@ -12,19 +12,20 @@ from PyQt6.QtWidgets import (
 )
 
 import fitz
+from viewer.i18n import tr, tr_noop
 
 
 _PRINT_OPTS = [
-    ("인쇄 제한(금지)", 0),
-    ("인쇄 허용(저해상도)", fitz.PDF_PERM_PRINT),
-    ("고해상도 인쇄 허용", fitz.PDF_PERM_PRINT | fitz.PDF_PERM_PRINT_HQ),
+    (tr_noop("인쇄 제한(금지)"), 0),
+    (tr_noop("인쇄 허용(저해상도)"), fitz.PDF_PERM_PRINT),
+    (tr_noop("고해상도 인쇄 허용"), fitz.PDF_PERM_PRINT | fitz.PDF_PERM_PRINT_HQ),
 ]
 _CHANGE_OPTS = [
-    ("변경할 수 없습니다", 0),
-    ("페이지 삽입·삭제·회전", fitz.PDF_PERM_ASSEMBLE),
-    ("양식 작성·서명", fitz.PDF_PERM_FORM),
-    ("주석·양식·서명", fitz.PDF_PERM_ANNOTATE | fitz.PDF_PERM_FORM),
-    ("모든 변경 허용", fitz.PDF_PERM_MODIFY | fitz.PDF_PERM_ASSEMBLE
+    (tr_noop("변경할 수 없습니다"), 0),
+    (tr_noop("페이지 삽입·삭제·회전"), fitz.PDF_PERM_ASSEMBLE),
+    (tr_noop("양식 작성·서명"), fitz.PDF_PERM_FORM),
+    (tr_noop("주석·양식·서명"), fitz.PDF_PERM_ANNOTATE | fitz.PDF_PERM_FORM),
+    (tr_noop("모든 변경 허용"), fitz.PDF_PERM_MODIFY | fitz.PDF_PERM_ASSEMBLE
      | fitz.PDF_PERM_ANNOTATE | fitz.PDF_PERM_FORM),
 ]
 
@@ -52,14 +53,14 @@ def _change_index(perm: int) -> int:
 class EncryptDialog(QDialog):
     def __init__(self, parent=None, file_name: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("암호화")
+        self.setWindowTitle(tr("암호화"))
         self.resize(560, 470)
         self._locked = False
         self._orig_perm = -1
         v = QVBoxLayout(self)
         v.setSpacing(6)
         if file_name:
-            v.addWidget(QLabel(f"대상: {file_name}"))
+            v.addWidget(QLabel(tr('대상: {file_name}').format(file_name=file_name)))
 
         self._info = QLabel("")
         self._info.setStyleSheet("color:#d64; font-weight:bold;")
@@ -67,44 +68,44 @@ class EncryptDialog(QDialog):
         v.addWidget(self._info)
 
         # 열기 암호(user) — 260618-1: 문구 변경
-        self.chk_open = QCheckBox("아래 암호를 입력하여 문서 열음")
+        self.chk_open = QCheckBox(tr("아래 암호를 입력하여 문서 열음"))
         v.addWidget(self.chk_open)
         self.ed_open = QLineEdit(); self.ed_open.setEchoMode(QLineEdit.EchoMode.Password)
-        self.ed_open.setPlaceholderText("암호를 입력")
+        self.ed_open.setPlaceholderText(tr("암호를 입력"))
         v.addLayout(self._pw_row(self.ed_open))
 
         # 권한 암호(owner) — 260618-1: 문구 변경(체크박스만; 암호칸은 권한 그룹 하단으로 이동)
-        self.chk_owner = QCheckBox("문서를 설정에 따라 제한하여 이용")
+        self.chk_owner = QCheckBox(tr("문서를 설정에 따라 제한하여 이용"))
         v.addWidget(self.chk_owner)
         self.ed_owner = QLineEdit(); self.ed_owner.setEchoMode(QLineEdit.EchoMode.Password)
-        self.ed_owner.setPlaceholderText("비밀번호 입력(공개 비밀번호와 다름)")
+        self.ed_owner.setPlaceholderText(tr("비밀번호 입력(공개 비밀번호와 다름)"))
 
         # 권한
         grp = QGroupBox(); f = QFormLayout(grp)
         self.cmb_print = QComboBox()
         for t, _ in _PRINT_OPTS:
-            self.cmb_print.addItem(t)
-        f.addRow("인쇄 권한:", self.cmb_print)
+            self.cmb_print.addItem(tr(t))
+        f.addRow(tr("인쇄 권한:"), self.cmb_print)
         self.cmb_change = QComboBox()
         for t, _ in _CHANGE_OPTS:
-            self.cmb_change.addItem(t)
-        f.addRow("변경 권한:", self.cmb_change)
-        self.chk_copy = QCheckBox("텍스트, 이미지 및 기타 내용의 복사가 가능합니다.")
+            self.cmb_change.addItem(tr(t))
+        f.addRow(tr("변경 권한:"), self.cmb_change)
+        self.chk_copy = QCheckBox(tr("텍스트, 이미지 및 기타 내용의 복사가 가능합니다."))
         f.addRow(self.chk_copy)
         # 260618-1: '제한 해제암호'(owner) 입력칸을 복사 체크박스 아래로 이동
-        f.addRow("제한 해제암호:", self._pw_row(self.ed_owner))
+        f.addRow(tr("제한 해제암호:"), self._pw_row(self.ed_owner))
         v.addWidget(grp)
 
         # 암호화 수준 — 256 고정, 고급에 128 폴백
-        adv = QGroupBox("고급"); ar = QVBoxLayout(adv)
-        ar.addWidget(QLabel("암호화 수준: 256-bit AES (권장)"))
-        self.chk_compat = QCheckBox("호환 모드: 128-bit AES (Acrobat 7 등 구형 뷰어 호환)")
+        adv = QGroupBox(tr("고급")); ar = QVBoxLayout(adv)
+        ar.addWidget(QLabel(tr("암호화 수준: 256-bit AES (권장)")))
+        self.chk_compat = QCheckBox(tr("호환 모드: 128-bit AES (Acrobat 7 등 구형 뷰어 호환)"))
         ar.addWidget(self.chk_compat)
         v.addWidget(adv)
 
         v.addStretch(1)        # 남는 공간은 아래로 — 섹션 사이 빈틈 방지(창이 길어 보이던 문제)
         row = QHBoxLayout(); row.addStretch(1)
-        self.btn_save = QPushButton("저장"); self.btn_cancel = QPushButton("취소")
+        self.btn_save = QPushButton(tr("저장")); self.btn_cancel = QPushButton(tr("취소"))
         row.addWidget(self.btn_save); row.addWidget(self.btn_cancel)
         v.addLayout(row)
         self.btn_save.clicked.connect(self._on_save)
@@ -120,7 +121,7 @@ class EncryptDialog(QDialog):
         """암호 입력칸 + 문자보기(👁) 토글 버튼."""
         row = QHBoxLayout(); row.addWidget(edit, 1)
         btn = QPushButton("👁"); btn.setCheckable(True); btn.setFixedWidth(34)
-        btn.setToolTip("입력한 암호 보기/숨기기")
+        btn.setToolTip(tr("입력한 암호 보기/숨기기"))
 
         def _toggle(on, e=edit):
             e.setEchoMode(QLineEdit.EchoMode.Normal if on else QLineEdit.EchoMode.Password)
@@ -153,7 +154,7 @@ class EncryptDialog(QDialog):
     def _lock(self):
         """권한 제한(읽기 전용 등) 문서 — 제한을 변경하지 못하게 잠금."""
         self._locked = True
-        self._info.setText("이 문서는 권한이 제한되어 있어 권한·암호화 수준을 변경할 수 없습니다.")
+        self._info.setText(tr("이 문서는 권한이 제한되어 있어 권한·암호화 수준을 변경할 수 없습니다."))
         self._info.setVisible(True)
         for w in (self.chk_owner, self.ed_owner, self.cmb_print, self.cmb_change,
                   self.chk_copy, self.chk_compat):
@@ -162,13 +163,13 @@ class EncryptDialog(QDialog):
     def _on_save(self):
         from PyQt6.QtWidgets import QMessageBox
         if not self.chk_open.isChecked() and not self.chk_owner.isChecked():
-            QMessageBox.information(self, "암호화", "열기 암호 또는 권한 암호 중 하나 이상을 설정하세요.")
+            QMessageBox.information(self, tr("암호화"), tr("열기 암호 또는 권한 암호 중 하나 이상을 설정하세요."))
             return
         if self.chk_open.isChecked() and not self.ed_open.text():
-            QMessageBox.information(self, "암호화", "열기 암호를 입력하세요.")
+            QMessageBox.information(self, tr("암호화"), tr("열기 암호를 입력하세요."))
             return
         if self.chk_owner.isChecked() and not self.ed_owner.text() and not self._locked:
-            QMessageBox.information(self, "암호화", "권한 암호를 입력하세요.")
+            QMessageBox.information(self, tr("암호화"), tr("권한 암호를 입력하세요."))
             return
         self.accept()
 

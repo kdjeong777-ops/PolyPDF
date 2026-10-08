@@ -17,6 +17,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from viewer.i18n import tr
 
 __all__ = ["PrintMixin"]
 
@@ -38,7 +39,7 @@ class PrintMixin:
             sel_files = []
         n_files = len(sel_files)
         if not is_pdf and self.shot_strip.list.count() == 0 and n_files == 0:
-            QMessageBox.information(self, "인쇄", "인쇄할 문서가 없습니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("인쇄할 문서가 없습니다."))
             return
         from viewer.widgets.print_dialog import PrintScopeDialog
         try:
@@ -71,19 +72,19 @@ class PrintMixin:
             if to_pdf:
                 dst = self._save_pdf_dialog("스크린샷.pdf")
                 if dst and self._export_images_pdf(shots, dst):
-                    self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                    self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                     self._after_pdf_created(dst)
             else:
                 self._print_images(shots)
             return
         if spec["mode"] == "files":
             if not sel_files:
-                QMessageBox.information(self, "인쇄", "책갈피창에서 인쇄할 PDF 파일을 선택하세요.")
+                QMessageBox.information(self, tr("인쇄"), tr("책갈피창에서 인쇄할 PDF 파일을 선택하세요."))
                 return
             self._print_selected_files(sel_files, dlg, to_pdf)
             return
         if not is_pdf:
-            QMessageBox.information(self, "인쇄", "현재 메인 문서가 PDF 가 아닙니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("현재 메인 문서가 PDF 가 아닙니다."))
             return
         if spec["mode"] == "all":
             pages = list(range(pc))
@@ -95,7 +96,7 @@ class PrintMixin:
             pages = sorted(set(self.page_thumbs.selected_pages()))   # 260915-1: 행이 아니라 쪽 번호
         pages = [p for p in pages if 0 <= p < pc]
         if not pages:
-            QMessageBox.information(self, "인쇄", "인쇄할 페이지가 없습니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("인쇄할 페이지가 없습니다."))
             return
         if dlg.nup_enabled():               # 260611-37/54: 다단 인쇄(표지만, 목차 제외)
             out_nup = self._build_nup_pdf(cur, pages, dlg.nup_settings())
@@ -104,7 +105,7 @@ class PrintMixin:
             if to_pdf:
                 dst = self._save_pdf_dialog(Path(cur).stem + "_다단.pdf")
                 if dst and self._copy_pdf(out_nup, dst):
-                    self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                    self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                     self._after_pdf_created(dst)
                 return
             import fitz
@@ -114,14 +115,14 @@ class PrintMixin:
         if to_pdf:
             dst = self._save_pdf_dialog(Path(cur).stem + "_인쇄.pdf")
             if dst and self._export_pages_pdf(cur, pages, dst):
-                self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                 self._after_pdf_created(dst)
             return
         self._print_pdf_pages(cur, pages)
 
     def _save_pdf_dialog(self, default_name):
         from PyQt6.QtWidgets import QFileDialog
-        path, _ = QFileDialog.getSaveFileName(self, "PDF로 저장", default_name, "PDF 파일 (*.pdf)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("PDF로 저장"), default_name, tr("PDF 파일 (*.pdf)"))
         if path and not path.lower().endswith(".pdf"):
             path += ".pdf"
         return path
@@ -131,12 +132,12 @@ class PrintMixin:
         try:
             shutil.copyfile(src, dst); return True
         except Exception as e:
-            QMessageBox.warning(self, "PDF로 인쇄", f"저장 실패: {e}")
+            QMessageBox.warning(self, tr("PDF로 인쇄"), tr('저장 실패: {e}').format(e=e))
             return False
 
     def _export_pages_pdf(self, src, pages, out_path):
         import fitz
-        self.status.showMessage("PDF 생성 중…")           # 260617-6
+        self.status.showMessage(tr("PDF 생성 중…"))           # 260617-6
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         QApplication.processEvents()
         try:
@@ -146,7 +147,7 @@ class PrintMixin:
             sd.close(); td.save(out_path); td.close()
             return True
         except Exception as e:
-            QMessageBox.warning(self, "PDF로 인쇄", f"저장 실패: {e}")
+            QMessageBox.warning(self, tr("PDF로 인쇄"), tr('저장 실패: {e}').format(e=e))
             return False
         finally:
             QApplication.restoreOverrideCursor()
@@ -166,10 +167,10 @@ class PrintMixin:
             try:
                 d.save(out_path)
             except Exception as e:
-                ok = False; QMessageBox.warning(self, "PDF로 인쇄", f"저장 실패: {e}")
+                ok = False; QMessageBox.warning(self, tr("PDF로 인쇄"), tr('저장 실패: {e}').format(e=e))
         d.close()
         if not ok:
-            QMessageBox.information(self, "PDF로 인쇄", "내보낼 이미지가 없습니다.")
+            QMessageBox.information(self, tr("PDF로 인쇄"), tr("내보낼 이미지가 없습니다."))
         return ok
 
     def _images_to_pdf(self, paths, out_path, progress=None, downscale=False,
@@ -216,7 +217,7 @@ class PrintMixin:
                                     filename=str(p))
                 except Exception:
                     pass
-            if progress is not None and progress(i + 1, total, "이미지 변환 중") is False:
+            if progress is not None and progress(i + 1, total, tr("이미지 변환 중")) is False:
                 d.close()
                 raise MergeCancelled()
         ok = d.page_count > 0
@@ -238,7 +239,7 @@ class PrintMixin:
             return
         paths = dlg.result_paths()
         if not paths:
-            QMessageBox.information(self, "이미지 → PDF", "변환할 이미지를 추가하세요.")
+            QMessageBox.information(self, tr("이미지 → PDF"), tr("변환할 이미지를 추가하세요."))
             return
         default_name = Path(paths[0]).stem + "_이미지.pdf"
         tmp = self._mk_print_tmpdir("polypdf_img2pdf_")
@@ -260,12 +261,12 @@ class PrintMixin:
                 build_twoup([{"type": "pdf", "path": _base, "name": _name}], _s, _out,
                             gen_bookmarks_fn=_gen, progress=progress)
 
-        res = self._run_merge_job(_job, "이미지 → PDF" + (" (다단)" if nup else ""))
+        res = self._run_merge_job(_job, tr('이미지 → PDF{v}').format(v=tr(' (다단)') if nup else ''))
         if res.get("cancelled"):
-            self.status.showMessage("취소했습니다.", 4000)
+            self.status.showMessage(tr("취소했습니다."), 4000)
             return
         if res.get("err"):
-            QMessageBox.warning(self, "이미지 → PDF", res["err"])
+            QMessageBox.warning(self, tr("이미지 → PDF"), res["err"])
             return
         import fitz as _f
         try:
@@ -273,11 +274,11 @@ class PrintMixin:
         except Exception:
             npg = 0
         if not npg:
-            QMessageBox.information(self, "이미지 → PDF", "생성된 페이지가 없습니다.")
+            QMessageBox.information(self, tr("이미지 → PDF"), tr("생성된 페이지가 없습니다."))
             return
         dst = self._save_pdf_dialog(default_name)
         if dst and self._copy_pdf(out_final, dst):
-            self.status.showMessage(f"PDF 저장: {dst}", 4000)
+            self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
             self._after_pdf_created(dst)
 
     def _build_nup_pdf(self, cur, pages, settings):
@@ -292,7 +293,7 @@ class PrintMixin:
         #   불가하던 문제 해소. build_twoup 의 progress(done,total,label)->bool 시그니처가
         #   _MergeThread._progress 와 동일해 그대로 전달한다.
         def job(progress):
-            progress(0, 1, "페이지 추출 중…")
+            progress(0, 1, tr("페이지 추출 중…"))
             sd = fitz.open(cur); td = fitz.open()
             try:
                 for p in pages:
@@ -304,15 +305,15 @@ class PrintMixin:
                         settings, out_nup,
                         log=lambda *a, **k: True, progress=progress)
 
-        res = self._run_merge_job(job, "다단 PDF 생성")
+        res = self._run_merge_job(job, tr("다단 PDF 생성"))
         if res.get("cancelled"):
             return None
         if res.get("err"):
-            QMessageBox.warning(self, "인쇄", f"다단 구성 실패: {res['err']}")
+            QMessageBox.warning(self, tr("인쇄"), tr('다단 구성 실패: {err}').format(err=res['err']))
             return None
         nd = fitz.open(out_nup); n = nd.page_count; nd.close()
         if not n:
-            QMessageBox.information(self, "인쇄", "구성된 페이지가 없습니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("구성된 페이지가 없습니다."))
             return None
         return out_nup
 
@@ -352,15 +353,15 @@ class PrintMixin:
                         gen_bookmarks_fn=self._gen_source_bookmarks,
                         log=lambda *a, **k: True, progress=progress)
 
-        res = self._run_merge_job(job, "다단 PDF 생성")
+        res = self._run_merge_job(job, tr("다단 PDF 생성"))
         if res.get("cancelled"):
             return None
         if res.get("err"):
-            QMessageBox.warning(self, "인쇄", f"다단 구성 실패: {res['err']}")
+            QMessageBox.warning(self, tr("인쇄"), tr('다단 구성 실패: {err}').format(err=res['err']))
             return None
         nd = fitz.open(out_nup); n = nd.page_count; nd.close()
         if not n:
-            QMessageBox.information(self, "인쇄", "구성된 페이지가 없습니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("구성된 페이지가 없습니다."))
             return None
         return out_nup
 
@@ -379,7 +380,7 @@ class PrintMixin:
             try:
                 total = max(1, len(flist))
                 for i, f in enumerate(flist):
-                    if progress(i, total, f"파일 읽는 중… {Path(f).name}") is False:
+                    if progress(i, total, tr('파일 읽는 중… {name}').format(name=Path(f).name)) is False:
                         raise MergeCancelled()
                     try:
                         sd = fitz.open(f); td.insert_pdf(sd); sd.close()
@@ -388,16 +389,16 @@ class PrintMixin:
                 state["pages"] = td.page_count
                 if not td.page_count:
                     return
-                progress(total, total, "저장 중…")
+                progress(total, total, tr("저장 중…"))
                 td.save(out)
             finally:
                 td.close()
 
-        res = self._run_merge_job(job, "여러 파일 인쇄 준비")
+        res = self._run_merge_job(job, tr("여러 파일 인쇄 준비"))
         if res.get("cancelled"):
             return None
         if res.get("err"):
-            QMessageBox.warning(self, "인쇄", f"여러 파일 준비 실패: {res['err']}")
+            QMessageBox.warning(self, tr("인쇄"), tr('여러 파일 준비 실패: {err}').format(err=res['err']))
             return None
         if not state["pages"]:
             return None
@@ -407,7 +408,7 @@ class PrintMixin:
         """260825-1: 책갈피창에서 선택한 여러 PDF 파일 전체를 하나로 이어 인쇄/PDF."""
         files = [f for f in (files or []) if f and str(f).lower().endswith(".pdf")]
         if not files:
-            QMessageBox.information(self, "인쇄", "선택한 PDF 파일이 없습니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("선택한 PDF 파일이 없습니다."))
             return
         default_stem = (Path(files[0]).stem + f"_외{len(files) - 1}건"
                         if len(files) > 1 else Path(files[0]).stem)
@@ -419,7 +420,7 @@ class PrintMixin:
             if to_pdf:
                 dst = self._save_pdf_dialog(default_stem + "_다단.pdf")
                 if dst and self._copy_pdf(out_nup, dst):
-                    self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                    self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                     self._after_pdf_created(dst)
                 return
             import fitz
@@ -428,12 +429,12 @@ class PrintMixin:
             return
         combined = self._combine_pdfs_temp(files)
         if not combined:
-            QMessageBox.information(self, "인쇄", "인쇄할 페이지가 없습니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("인쇄할 페이지가 없습니다."))
             return
         if to_pdf:
             dst = self._save_pdf_dialog(default_stem + "_인쇄.pdf")
             if dst and self._copy_pdf(combined, dst):
-                self.status.showMessage(f"PDF 저장: {dst}", 4000)
+                self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                 self._after_pdf_created(dst)
             return
         import fitz
@@ -445,11 +446,11 @@ class PrintMixin:
         try:
             path = str(path)
             box = QMessageBox(self)
-            box.setWindowTitle("PDF 생성 완료")
-            box.setText(f"PDF를 생성했습니다:\n{Path(path).name}\n\n어떻게 열까요?")
-            b_file = box.addButton("파일 열기", QMessageBox.ButtonRole.AcceptRole)
-            b_dir = box.addButton("폴더 열기", QMessageBox.ButtonRole.ActionRole)
-            box.addButton("닫기", QMessageBox.ButtonRole.RejectRole)
+            box.setWindowTitle(tr("PDF 생성 완료"))
+            box.setText(tr('PDF를 생성했습니다:\n{name}\n\n어떻게 열까요?').format(name=Path(path).name))
+            b_file = box.addButton(tr("파일 열기"), QMessageBox.ButtonRole.AcceptRole)
+            b_dir = box.addButton(tr("폴더 열기"), QMessageBox.ButtonRole.ActionRole)
+            box.addButton(tr("닫기"), QMessageBox.ButtonRole.RejectRole)
             box.setDefaultButton(b_file)
             box.exec()
             clicked = box.clickedButton()
@@ -569,7 +570,7 @@ class PrintMixin:
                 pass
         painter = QPainter()
         if not painter.begin(printer):
-            QMessageBox.warning(self, "인쇄", "프린터를 열 수 없습니다.")
+            QMessageBox.warning(self, tr("인쇄"), tr("프린터를 열 수 없습니다."))
             return
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
@@ -583,10 +584,10 @@ class PrintMixin:
                     printer.newPage()
                 draw_fn(painter, painter.viewport(), i)
                 if i % 3 == 0:
-                    self.status.showMessage(f"인쇄 중 {i+1}/{count}")
+                    self.status.showMessage(tr('인쇄 중 {i}/{count}').format(i=i + 1, count=count))
                     QApplication.processEvents()
             painter.end()
-            self.status.showMessage(f"인쇄 완료: {count} 페이지", 4000)
+            self.status.showMessage(tr('인쇄 완료: {count} 페이지').format(count=count), 4000)
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -640,7 +641,7 @@ class PrintMixin:
     def _print_pdf_pages(self, pdf_path, pages: list) -> None:
         # 260618-1: 현재 문서 인쇄 권한 없으면 차단
         if not getattr(self, "_perm_can_print", True):
-            self.status.showMessage("이 문서는 인쇄 권한이 없습니다.", 3000)
+            self.status.showMessage(tr("이 문서는 인쇄 권한이 없습니다."), 3000)
             return
         import fitz
         from PyQt6.QtGui import QImage
@@ -677,7 +678,7 @@ class PrintMixin:
         from PyQt6.QtGui import QImage, QPageLayout
         paths = [p for p in paths if p and Path(p).exists()]
         if not paths:
-            QMessageBox.information(self, "인쇄", "인쇄할 스크린샷이 없습니다.")
+            QMessageBox.information(self, tr("인쇄"), tr("인쇄할 스크린샷이 없습니다."))
             return
         imgs = [QImage(str(p)) for p in paths]
 

@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QLabel, QKeySequenceEdit,
     QDialogButtonBox, QPushButton, QHBoxLayout, QScrollArea, QWidget, QCheckBox,
 )
+from viewer.i18n import tr
 
 
 class ShortcutsDialog(QDialog):
@@ -16,11 +17,11 @@ class ShortcutsDialog(QDialog):
         defs 가 2-튜플(구버전)이어도 호환되게 처리.
         """
         super().__init__(parent)
-        self.setWindowTitle("단축키 설정")
+        self.setWindowTitle(tr("단축키 설정"))
         self.setMinimumWidth(460)
         self._defs = defs
         v = QVBoxLayout(self)
-        v.addWidget(QLabel("기능별 단축키를 클릭해 새 키 조합을 입력하세요 (그룹별 정리)."))
+        v.addWidget(QLabel(tr("기능별 단축키를 클릭해 새 키 조합을 입력하세요 (그룹별 정리).")))
 
         area = QScrollArea(); area.setWidgetResizable(True)
         inner = QWidget(); g = QGridLayout(inner)
@@ -30,7 +31,7 @@ class ShortcutsDialog(QDialog):
         last_group = None
         for sid, meta in defs.items():
             label = meta[0]; default = meta[1]
-            group = meta[2] if len(meta) > 2 else "기타"
+            group = meta[2] if len(meta) > 2 else tr("기타")
             if group != last_group:
                 hdr = QLabel(f"<b>― {group} ―</b>")
                 g.addWidget(hdr, row, 0, 1, 2); row += 1
@@ -44,15 +45,15 @@ class ShortcutsDialog(QDialog):
 
         # 화면 캡처 전역 단축키 토글 (260611-3 / 요청6)
         self.chk_capture_global = QCheckBox(
-            "화면 캡처를 전역 단축키로 사용 (다른 프로그램 위에서도 작동)")
+            tr("화면 캡처를 전역 단축키로 사용 (다른 프로그램 위에서도 작동)"))
         self.chk_capture_global.setChecked(bool(capture_global))
         self.chk_capture_global.setToolTip(
-            "켜면 활성창이 본 프로그램이 아니거나 시작점이 뷰어 밖일 때 캡처 단축키가 "
-            "전역으로 작동해, 보이는 화면을 스크린샷 목록에 저장합니다.")
+            tr("켜면 활성창이 본 프로그램이 아니거나 시작점이 뷰어 밖일 때 캡처 단축키가 "
+            "전역으로 작동해, 보이는 화면을 스크린샷 목록에 저장합니다."))
         v.addWidget(self.chk_capture_global)
 
         row2 = QHBoxLayout()
-        btn_reset = QPushButton("기본값으로 되돌리기")
+        btn_reset = QPushButton(tr("기본값으로 되돌리기"))
         btn_reset.clicked.connect(self._reset_defaults)
         row2.addWidget(btn_reset)
         row2.addStretch(1)

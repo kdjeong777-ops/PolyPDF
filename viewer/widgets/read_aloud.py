@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import QToolButton, QMenu
 _HANGUL = re.compile(r"[가-힣]")
 _LETTER = re.compile(r"[가-힣A-Za-z]")
 _SENT = re.compile(r"(?<=[.!?。])\s+|\n+|(?<=다\.)\s*|(?<=요\.)\s*")
-RATES = [("느림", -4), ("보통", 0), ("빠름", 4), ("매우 빠름", 8)]
+RATES = [(tr_noop("느림"), -4), (tr_noop("보통"), 0), (tr_noop("빠름"), 4), (tr_noop("매우 빠름"), 8)]
 
 
 def clean_lines_for_reading(text: str) -> list[str]:
@@ -668,7 +668,7 @@ def make_read_buttons(controller: ReadAloud, parent=None):
     rm = menu.addMenu(tr("빠르기"))
     g_r = QActionGroup(rm); g_r.setExclusive(True)
     for label, rate in RATES:
-        a = QAction(label, rm, checkable=True)
+        a = QAction(tr(label), rm, checkable=True)
         a.setChecked(rate == 0)
         a.triggered.connect(lambda _c, r=rate: controller.set_rate(r))
         g_r.addAction(a); rm.addAction(a)

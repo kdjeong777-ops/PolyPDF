@@ -12,13 +12,15 @@ from __future__ import annotations
 
 import re
 
+from viewer.i18n import tr_noop       # 모델 표시 이름(화면에서 tr) — 다국어 SOT §6
+
 DEFAULT_MODEL = "claude-opus-4-8"
 
 # (id, 표시이름, 입력$/1M, 출력$/1M) — 비용 추정용(개략, 변동 가능)
 MODELS = [
-    ("claude-opus-4-8", "Claude Opus 4.8 (최고 품질·1M)", 5.0, 25.0),
-    ("claude-sonnet-4-6", "Claude Sonnet 4.6 (균형·절감)", 3.0, 15.0),
-    ("claude-haiku-4-5", "Claude Haiku 4.5 (저가·간단)", 1.0, 5.0),
+    ("claude-opus-4-8", tr_noop("Claude Opus 4.8 (최고 품질·1M)"), 5.0, 25.0),
+    ("claude-sonnet-4-6", tr_noop("Claude Sonnet 4.6 (균형·절감)"), 3.0, 15.0),
+    ("claude-haiku-4-5", tr_noop("Claude Haiku 4.5 (저가·간단)"), 1.0, 5.0),
 ]
 
 _PRICE = {m[0]: (m[2], m[3]) for m in MODELS}

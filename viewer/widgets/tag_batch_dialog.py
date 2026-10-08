@@ -15,20 +15,21 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer.tag_store import load_candidates, save_candidates
+from viewer.i18n import tr
 
 
 class CandidateReviewDialog(QDialog):
     def __init__(self, store, parent=None, candidates_path=None):
         super().__init__(parent)
-        self.setWindowTitle("새 태그 후보 검토")
+        self.setWindowTitle(tr("새 태그 후보 검토"))
         self.resize(560, 420)
         self._store = store
         self._cpath = candidates_path
         self._data = load_candidates(candidates_path)
         v = QVBoxLayout(self)
         v.addWidget(QLabel(
-            "자동으로 붙이지 않고 모아 둔 새 태그 후보입니다(태그 SOT §5.4-5).\n"
-            "채택하면 근거 파일에 ·자동 태그로 붙고, 이후 계산부터 기존 태그로 쓰입니다."))
+            tr("자동으로 붙이지 않고 모아 둔 새 태그 후보입니다(태그 SOT §5.4-5).\n"
+            "채택하면 근거 파일에 ·자동 태그로 붙고, 이후 계산부터 기존 태그로 쓰입니다.")))
         area = QScrollArea()
         area.setWidgetResizable(True)
         inner = QWidget()
@@ -49,20 +50,19 @@ class CandidateReviewDialog(QDialog):
         cand = sorted(self._data.get("cand", {}).items(),
                       key=lambda kv: -kv[1].get("n", 0))
         if not cand:
-            self._rows.addWidget(QLabel("(검토할 후보가 없습니다.)"))
+            self._rows.addWidget(QLabel(tr("(검토할 후보가 없습니다.)")))
         for tag, info in cand[:60]:
             row = QWidget()
             h = QHBoxLayout(row)
             h.setContentsMargins(0, 0, 0, 0)
             names = ", ".join(os.path.basename(p) for p in info.get("files", [])[:3])
-            lab = QLabel(f"<b>#{tag}</b>  ({info.get('n', 0)}건)  "
-                         f"<span style='color:#888'>{names}</span>")
+            lab = QLabel(tr("<b>#{tag}</b>  ({get}건)  <span style='color:#888'>{names}</span>").format(tag=tag, get=info.get('n', 0), names=names))
             lab.setToolTip("\n".join(info.get("files", [])))
             h.addWidget(lab, 1)
-            b_ok = QPushButton("채택")
+            b_ok = QPushButton(tr("채택"))
             b_ok.clicked.connect(lambda _=False, t=tag: self._adopt(t))
-            b_no = QPushButton("무시")
-            b_no.setToolTip("전역 기록 — 다시 적립되지 않습니다")
+            b_no = QPushButton(tr("무시"))
+            b_no.setToolTip(tr("전역 기록 — 다시 적립되지 않습니다"))
             b_no.clicked.connect(lambda _=False, t=tag: self._dismiss(t))
             h.addWidget(b_ok)
             h.addWidget(b_no)

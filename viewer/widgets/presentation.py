@@ -20,20 +20,21 @@ from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QMenu, QLineEdit
 from viewer.pdf_doc import PdfDocument
 from viewer.resources_path import resource_path
 from viewer.widgets.main_view import smooth_polyline_path   # 260611-83: 자유곡선 부드럽게
+from viewer.i18n import tr, tr_noop
 
 # 260609-5: 발표 포인터 기본 프리셋(설정에서 이름/색/테두리 수정 가능)
 DEFAULT_POINTERS = [
-    {"name": "사용자 포인터 1", "fill": "#ff3030", "border": "#ffffff"},
-    {"name": "사용자 포인터 2", "fill": "#3060ff", "border": "#ffffff"},
-    {"name": "사용자 포인터 3", "fill": "#ffffff", "border": "#202020"},
+    {"name": tr_noop("사용자 포인터 1"), "fill": "#ff3030", "border": "#ffffff"},
+    {"name": tr_noop("사용자 포인터 2"), "fill": "#3060ff", "border": "#ffffff"},
+    {"name": tr_noop("사용자 포인터 3"), "fill": "#ffffff", "border": "#202020"},
 ]
 POINTER_HIDE_MS = 2000          # 2초 무동작 시 포인터 숨김
 
 # 260609-16(F3): 발표 펜(드래그 그리기) 기본 프리셋·단축키
 DEFAULT_PENS = [
-    {"name": "사용자선 1", "color": "#ff3030", "width": 3, "alpha": 100},
-    {"name": "사용자선 2", "color": "#30a0ff", "width": 4, "alpha": 100},
-    {"name": "사용자선 3", "color": "#ffd400", "width": 14, "alpha": 40},
+    {"name": tr_noop("사용자선 1"), "color": "#ff3030", "width": 3, "alpha": 100},
+    {"name": tr_noop("사용자선 2"), "color": "#30a0ff", "width": 4, "alpha": 100},
+    {"name": tr_noop("사용자선 3"), "color": "#ffd400", "width": 14, "alpha": 40},
 ]
 DEFAULT_PEN_KEYS = ["Ctrl+1", "Ctrl+2", "Ctrl+3"]
 DEFAULT_REC_KEYS = ["Ctrl+R", "Ctrl+Shift+R"]   # [녹화/정지 토글, 중단] — 260628(§9.0)
@@ -518,7 +519,7 @@ class PresentationWindow(QWidget):
         # 260609-9: 부모가 있어도 독립 최상위 창이어야 showFullScreen 이 동작.
         #           (부모 위젯의 자식이면 전체화면이 뜨지 않음)
         self.setWindowFlag(Qt.WindowType.Window, True)
-        self.setWindowTitle(f"발표 — {self._path.name}")
+        self.setWindowTitle(tr('발표 — {name}').format(name=self._path.name))
         # 260609-10: 배경을 stylesheet 대신 팔레트로 — stylesheet 가 QMenu 까지
         #            전파되어 우클릭 메뉴가 검은 배경·검은 글씨로 안 보이던 문제 방지.
         self.setAutoFillBackground(True)
@@ -654,7 +655,7 @@ class PresentationWindow(QWidget):
             _ep = resource_path("icon_eraser_thin.png" if ei == 0 else "icon_eraser_thick.png")
             eb.setIcon(QIcon(_ep) if _ep else self._make_part_eraser_icon(ew))
             eb.setCheckable(True); eb.setFixedWidth(38)
-            eb.setToolTip(f"일부분 지우기 ({'얇게' if ei == 0 else '두껍게'}, 굵기 {ew})")
+            eb.setToolTip(tr('일부분 지우기 ({v}, 굵기 {ew})').format(v=tr('얇게') if ei == 0 else tr('두껍게'), ew=ew))
             eb.setCursor(Qt.CursorShape.PointingHandCursor)
             eb.clicked.connect(lambda _=False, k=ei: self._set_eraser(k))
             row1.addWidget(eb)
@@ -665,7 +666,7 @@ class PresentationWindow(QWidget):
                or resource_path("icon_broom.png"))
         self._tb_erase.setIcon(QIcon(_bp) if _bp else self._make_eraser_icon())
         self._tb_erase.setFixedWidth(38)
-        self._tb_erase.setToolTip("청소 — 현재 페이지의 선 모두 지우기")
+        self._tb_erase.setToolTip(tr("청소 — 현재 페이지의 선 모두 지우기"))
         self._tb_erase.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,0.12);border:none;border-radius:6px;"
             "padding:4px;}QPushButton:hover{background:rgba(255,255,255,0.25);}")
@@ -674,23 +675,23 @@ class PresentationWindow(QWidget):
         row1.addWidget(self._tb_erase)
         self._update_tool_buttons()
         # 260609-25(I4): '본화면 적용' 토글(기본 꺼짐) — 나갈 때 선을 본화면/PDF에 적용 확인
-        self._tb_apply = QPushButton("본화면 적용")
+        self._tb_apply = QPushButton(tr("본화면 적용"))
         self._tb_apply.setCheckable(True); self._tb_apply.setChecked(self._apply_on_exit)
-        self._tb_apply.setToolTip("켜면 전체화면 종료 시 그린 선을 본화면/PDF에 적용할지 확인")
+        self._tb_apply.setToolTip(tr("켜면 전체화면 종료 시 그린 선을 본화면/PDF에 적용할지 확인"))
         self._tb_apply.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tb_apply.toggled.connect(self._on_apply_toggled)
         row1.addWidget(self._tb_apply)
         self._update_apply_button()
         # 260611-85/86: '링크실행' — 페이지의 사진·동영상 링크를 전체화면으로 순서대로
         #   (미디어 링크 없는 페이지에선 비활성)
-        self._tb_linkplay = QPushButton("링크실행")
+        self._tb_linkplay = QPushButton(tr("링크실행"))
         self._tb_linkplay.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,0.12);color:#fff;border:none;"
             "border-radius:6px;padding:4px 14px;font-size:16px;font-weight:bold;}"
             "QPushButton:hover{background:rgba(255,255,255,0.25);}"
             "QPushButton:disabled{color:#777;background:rgba(255,255,255,0.05);}")
-        self._tb_linkplay.setToolTip("이 페이지의 사진·동영상 링크를 전체화면으로 보기 "
-                                     "(클릭마다 다음 링크)")
+        self._tb_linkplay.setToolTip(tr("이 페이지의 사진·동영상 링크를 전체화면으로 보기 "
+                                     "(클릭마다 다음 링크)"))
         self._tb_linkplay.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tb_linkplay.setEnabled(False)
         self._tb_linkplay.clicked.connect(lambda: self.linkPlayRequested.emit())
@@ -701,7 +702,7 @@ class PresentationWindow(QWidget):
         #   눌림(체크) 시 배경을 붉은색으로 명확히 표시.
         self._tb_timer = QPushButton()
         self._tb_timer.setCheckable(True)
-        self._tb_timer.setToolTip("발표시간 표시 (켜면 준비내용 → 다음 페이지에서 시간 시작)")
+        self._tb_timer.setToolTip(tr("발표시간 표시 (켜면 준비내용 → 다음 페이지에서 시간 시작)"))
         _tic = resource_path("icon_pres_timer.png")
         if _tic:
             self._tb_timer.setIcon(QIcon(_tic)); self._tb_timer.setIconSize(QSize(24, 24))
@@ -717,7 +718,7 @@ class PresentationWindow(QWidget):
         # 260611-22: 시계 중지 버튼 — 시계 오른쪽. 누르면 멈춤(토글), 중지 중 0.5초 적색 블링크.
         self._tb_timer_stop = QPushButton("⏸")
         self._tb_timer_stop.setCheckable(True)
-        self._tb_timer_stop.setToolTip("시계 중지/재개")
+        self._tb_timer_stop.setToolTip(tr("시계 중지/재개"))
         self._tb_timer_stop_css = nav_css
         self._tb_timer_stop.setStyleSheet(self._tb_timer_stop_css)
         self._tb_timer_stop.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -746,10 +747,10 @@ class PresentationWindow(QWidget):
         self._tb_rectime.setVisible(False)
         row1.addWidget(self._tb_rectime)
         self._tb_rec = QPushButton("●"); self._tb_rec.setStyleSheet(rec_css)
-        self._tb_rec.setToolTip("녹화 시작")     # 상태에 따라 set_recording_state 가 갱신
+        self._tb_rec.setToolTip(tr("녹화 시작"))     # 상태에 따라 set_recording_state 가 갱신
         self._tb_rec.clicked.connect(self._on_rec_toggle_clicked)
         self._tb_recstop = QPushButton("■"); self._tb_recstop.setStyleSheet(rec_css)
-        self._tb_recstop.setToolTip("녹화 중단 · 저장" + self._rec_key_hint(1))
+        self._tb_recstop.setToolTip(tr('녹화 중단 · 저장{rec_key_hint}').format(rec_key_hint=self._rec_key_hint(1)))
         self._tb_recstop.clicked.connect(self.recordStopRequested)
         for b in (self._tb_rec, self._tb_recstop):
             row1.addWidget(b)
@@ -771,7 +772,7 @@ class PresentationWindow(QWidget):
         # 260609-19(H4): 녹화 버튼 ↔ ✕ 사이 간격
         _gap2 = QWidget(); _gap2.setFixedWidth(18); row1.addWidget(_gap2)
         self._tb_close = QPushButton("✕")
-        self._tb_close.setToolTip("전체화면 보기 종료")
+        self._tb_close.setToolTip(tr("전체화면 보기 종료"))
         self._tb_close.setStyleSheet(nav_css)
         self._tb_close.clicked.connect(self.close)   # D2: 전체모드 종료
         row1.addWidget(self._tb_close)
@@ -875,17 +876,17 @@ class PresentationWindow(QWidget):
 
         if active:
             self._tb_rec.setText("‖")
-            self._tb_rec.setToolTip("일시정지" + self._rec_key_hint(0))
+            self._tb_rec.setToolTip(tr('일시정지{rec_key_hint}').format(rec_key_hint=self._rec_key_hint(0)))
             self._tb_rec.setEnabled(True)
             self._tb_recstop.setEnabled(True)
-            self._tb_recstop.setToolTip("녹화 중단 · 저장" + self._rec_key_hint(1))
+            self._tb_recstop.setToolTip(tr('녹화 중단 · 저장{rec_key_hint}').format(rec_key_hint=self._rec_key_hint(1)))
             self._blink_on = True
             self._tb_rec.setStyleSheet(self._rec_btn_css(recording=True, border="#ff5a5a"))
             if not self._rec_blink.isActive():
                 self._rec_blink.start()
         else:
             self._tb_rec.setText("●")
-            self._tb_rec.setToolTip(("재개" if recording else "녹화 시작")
+            self._tb_rec.setToolTip((tr("재개") if recording else tr("녹화 시작"))
                                     + self._rec_key_hint(0))
             self._tb_rec.setEnabled(True)
             self._tb_recstop.setEnabled(bool(recording))
@@ -1473,7 +1474,7 @@ class PresentationWindow(QWidget):
             if pm is not None:
                 self._label.setPixmap(pm)
             else:
-                self._label.setText("페이지를 표시할 수 없습니다.")
+                self._label.setText(tr("페이지를 표시할 수 없습니다."))
                 self._label.setStyleSheet("color:#bbb;font-size:20px;background:#000;")
         # 새 페이지 도착 시 자동표시 재허용(D3) + 그리기 오버레이 갱신(F3)
         if getattr(self, "_rendered_page", -2) != self._page:
@@ -1526,8 +1527,8 @@ class PresentationWindow(QWidget):
         # 상단 배너
         from pathlib import Path as _P
         nm = _P(str(self._armed_path)).name
-        txt = (f"다음으로 이동  ▶   {nm}" if self._armed > 0
-               else f"◀  이전으로 이동   {nm}")
+        txt = (tr('다음으로 이동  ▶   {nm}').format(nm=nm) if self._armed > 0
+               else tr('◀  이전으로 이동   {nm}').format(nm=nm))
         from PyQt6.QtGui import QFont as _QF
         f = _QF(); f.setPointSize(20); f.setBold(True); p.setFont(f)
         fm = p.fontMetrics()
@@ -1617,7 +1618,7 @@ class PresentationWindow(QWidget):
             pass
         self._doc = PdfDocument(str(path))
         self._path = Path(str(path))
-        self.setWindowTitle(f"발표 — {self._path.name}")
+        self.setWindowTitle(tr('발표 — {name}').format(name=self._path.name))
         self._strokes = {}            # 260609-25(I4): 파일 바뀌면 화면 선 초기화(파일별 적용)
         tp = getattr(self, "_thumb_panel", None)
         if tp is not None:
@@ -1794,7 +1795,7 @@ class PresentationWindow(QWidget):
 
     def _update_hint(self):
         if self._numbuf:
-            self._hint.setText(f"페이지 {self._numbuf} / {self._doc.page_count}")
+            self._hint.setText(tr('페이지 {numbuf} / {page_count}').format(numbuf=self._numbuf, page_count=self._doc.page_count))
             self._hint.adjustSize()
             self._hint.move((self.width() - self._hint.width()) // 2,
                             (self.height() - self._hint.height()) // 2)
@@ -2078,49 +2079,49 @@ class PresentationWindow(QWidget):
     def contextMenuEvent(self, e):
         menu = QMenu(self)
         menu.setStyleSheet(_MENU_CSS)        # 260609-10: 가독성(어두운 배경+흰 글씨)
-        act_prev = menu.addAction("이전")
-        act_next = menu.addAction("다음")
+        act_prev = menu.addAction(tr("이전"))
+        act_next = menu.addAction(tr("다음"))
         menu.addSeparator()
         # 260609-5: 포인터 선택 + 설정
-        pm = menu.addMenu("포인터")
+        pm = menu.addMenu(tr("포인터"))
         pm.setStyleSheet(_MENU_CSS)          # 260609-10: 하위메뉴도 가독성
         ptr_acts = []
         for i, pr in enumerate(self._pointers):
-            a = pm.addAction(pr.get("name", f"포인터 {i+1}"))
+            a = pm.addAction(tr(pr.get("name") or "") or tr("포인터 {i}").format(i=i + 1))
             a.setCheckable(True)
             a.setChecked(i == self._ptr_active)
             ptr_acts.append(a)
         pm.addSeparator()
-        act_ptr_set = pm.addAction("포인터 설정…")
+        act_ptr_set = pm.addAction(tr("포인터 설정…"))
         # 260609-16(F3): 펜(선) 선택 + 설정
-        pn = menu.addMenu("선(펜)")
+        pn = menu.addMenu(tr("선(펜)"))
         pn.setStyleSheet(_MENU_CSS)
         pen_acts = []
         for i, pr in enumerate(self._pens):
-            a = pn.addAction(pr.get("name", f"사용자선 {i+1}"))
+            a = pn.addAction(tr(pr.get("name") or "") or tr("사용자선 {i}").format(i=i + 1))
             a.setCheckable(True); a.setChecked(i == self._pen_active)
             pen_acts.append(a)
         pn.addSeparator()
         # 260611-4: 선 종류 3단계
         mode_acts = []
         for mi, mn in enumerate(self._MODE_NAME):
-            a = pn.addAction(mn)
+            a = pn.addAction(tr(mn))
             a.setCheckable(True); a.setChecked(mi == self._line_mode)
             mode_acts.append(a)
         pn.addSeparator()
-        act_pen_set = pn.addAction("선 설정…")
+        act_pen_set = pn.addAction(tr("선 설정…"))
         # 260611-26: '청소'→'선 지우기'
-        act_clear = menu.addAction("선 지우기")
+        act_clear = menu.addAction(tr("선 지우기"))
         menu.addSeparator()
         # 260611-26: 상하 2분할 보기 + 중앙겹침 입력박스(위젯 액션) — '선 지우기' 아래로 이동
         from PyQt6.QtWidgets import (QWidgetAction, QWidget, QHBoxLayout,
                                      QCheckBox, QSpinBox, QLabel)
         _sw = QWidget()
         _shb = QHBoxLayout(_sw); _shb.setContentsMargins(20, 4, 14, 4); _shb.setSpacing(8)
-        cb_split = QCheckBox("상하 2분할 보기"); cb_split.setChecked(self._split_mode)
+        cb_split = QCheckBox(tr("상하 2분할 보기")); cb_split.setChecked(self._split_mode)
         cb_split.toggled.connect(self.set_split)
         _shb.addWidget(cb_split)
-        _shb.addWidget(QLabel("중앙겹침"))
+        _shb.addWidget(QLabel(tr("중앙겹침")))
         sp_ov = QSpinBox(); sp_ov.setRange(0, 40); sp_ov.setSuffix(" %"); sp_ov.setFixedWidth(72)
         sp_ov.setValue(int(round(self._overlap_frac * 100)))
         sp_ov.valueChanged.connect(self._on_overlap_spin)
@@ -2131,10 +2132,10 @@ class PresentationWindow(QWidget):
         # 260905(§4.1): 좌우 2쪽 보기 + 맞쪽 — 상하 2분할 바로 아래 줄
         _dw = QWidget()
         _dhb = QHBoxLayout(_dw); _dhb.setContentsMargins(20, 4, 14, 4); _dhb.setSpacing(8)
-        cb_dual = QCheckBox("좌우 2쪽 보기"); cb_dual.setChecked(self._dual_mode)
-        cb_face = QCheckBox("맞쪽"); cb_face.setChecked(self._facing)
+        cb_dual = QCheckBox(tr("좌우 2쪽 보기")); cb_dual.setChecked(self._dual_mode)
+        cb_face = QCheckBox(tr("맞쪽")); cb_face.setChecked(self._facing)
         cb_face.setEnabled(self._dual_mode)
-        cb_face.setToolTip("맨 앞에 빈 페이지 1장을 넣어 실제 책의 펼침과 맞춥니다.")
+        cb_face.setToolTip(tr("맨 앞에 빈 페이지 1장을 넣어 실제 책의 펼침과 맞춥니다."))
         cb_dual.toggled.connect(cb_face.setEnabled)
         cb_dual.toggled.connect(self.set_dual)
         cb_face.toggled.connect(self.set_facing)
@@ -2145,8 +2146,8 @@ class PresentationWindow(QWidget):
         # 260905(§4.1.3): '화면 채움(비율 변경)' — 종전 '화면' 서브메뉴에서 이 자리로 이동
         _fw = QWidget()
         _fhb = QHBoxLayout(_fw); _fhb.setContentsMargins(20, 4, 14, 4); _fhb.setSpacing(8)
-        cb_fill = QCheckBox("화면 채움 (비율 변경)"); cb_fill.setChecked(self._fill_screen)
-        cb_fill.setToolTip("페이지 비율을 무시하고 화면을 꽉 채웁니다. 저장하지 않습니다(기본 꺼짐).")
+        cb_fill = QCheckBox(tr("화면 채움 (비율 변경)")); cb_fill.setChecked(self._fill_screen)
+        cb_fill.setToolTip(tr("페이지 비율을 무시하고 화면을 꽉 채웁니다. 저장하지 않습니다(기본 꺼짐)."))
         cb_fill.toggled.connect(self.set_fill_screen)
         _fhb.addWidget(cb_fill); _fhb.addStretch(1)
         _fw.setStyleSheet("QWidget{color:#fff;background:transparent;}"
@@ -2157,21 +2158,21 @@ class PresentationWindow(QWidget):
         cb_dual.toggled.connect(lambda on: on and cb_split.setChecked(False))
         menu.addSeparator()
         # 260611-26: '발표 보기 설정'→'보기 설정'(상단 띠 높이 + 크롭)
-        act_view_set = menu.addAction("보기 설정…")
+        act_view_set = menu.addAction(tr("보기 설정…"))
         menu.addSeparator()
         # 260611-26: '발표시간'→'발표시간 설정', '발표시간 표시' 제거(상단 시계 아이콘으로 실행)
-        tm = menu.addMenu("발표시간 설정")
+        tm = menu.addMenu(tr("발표시간 설정"))
         tm.setStyleSheet(_MENU_CSS)
-        act_tm_hide = tm.addAction("시계 숨기기")
+        act_tm_hide = tm.addAction(tr("시계 숨기기"))
         act_tm_hide.setCheckable(True)
         act_tm_hide.setChecked(self._timer_hidden)
-        act_tm_mute = tm.addAction("전체 알람 끄기")
+        act_tm_mute = tm.addAction(tr("전체 알람 끄기"))
         act_tm_mute.setCheckable(True)
         act_tm_mute.setChecked(self._alarm_muted)
         tm.addSeparator()
-        act_tm_set = tm.addAction("발표시간 설정…")
+        act_tm_set = tm.addAction(tr("발표시간 설정…"))
         # 260611-28: 타이머 시작시 녹화시작(기본 체크) — '발표시간 설정' 바로 아래
-        act_rec_on = menu.addAction("타이머 시작시 녹화시작")
+        act_rec_on = menu.addAction(tr("타이머 시작시 녹화시작"))
         act_rec_on.setCheckable(True)
         act_rec_on.setChecked(bool(self._timer_cfg.get("rec_on_start", True)))
         menu.addSeparator()
@@ -2182,18 +2183,17 @@ class PresentationWindow(QWidget):
             from PyQt6.QtWidgets import QApplication
             screens = QApplication.screens()
             if len(screens) > 1:
-                dm = menu.addMenu("화면")
+                dm = menu.addMenu(tr("화면"))
                 dm.setStyleSheet(_MENU_CSS)
                 cur = self.screen()
                 for i, sc in enumerate(screens):
-                    a = dm.addAction(f"모니터 {i+1}  ({sc.geometry().width()}×"
-                                     f"{sc.geometry().height()})")
+                    a = dm.addAction(tr('모니터 {i}  ({width}×{height})').format(i=i + 1, width=sc.geometry().width(), height=sc.geometry().height()))
                     a.setCheckable(True); a.setChecked(sc is cur)
                     scr_acts.append((a, sc))
                 menu.addSeparator()
         except Exception:
             pass
-        act_quit = menu.addAction("전체화면 보기 취소")
+        act_quit = menu.addAction(tr("전체화면 보기 취소"))
         chosen = menu.exec(e.globalPos())
         if chosen is None:
             return
@@ -2299,7 +2299,7 @@ class PresentationWindow(QWidget):
 
     # 260611-4: 선 종류 3단계(본문과 동일 글리프/이름)
     _MODE_GLYPH = ("─", "▬", "〜")
-    _MODE_NAME = ("직선", "하이라이트", "자유곡선")
+    _MODE_NAME = (tr_noop("직선"), tr_noop("하이라이트"), tr_noop("자유곡선"))
 
     def _cycle_line_mode(self):
         self.set_line_mode((self._line_mode + 1) % 3, emit=True)
@@ -2317,7 +2317,7 @@ class PresentationWindow(QWidget):
         if b is None:
             return
         b.setText(self._MODE_GLYPH[self._line_mode])
-        b.setToolTip(f"선 종류: {self._MODE_NAME[self._line_mode]} (클릭해 전환)")
+        b.setToolTip(tr('선 종류: {MODE_NAME} (클릭해 전환)').format(MODE_NAME=tr(self._MODE_NAME[self._line_mode])))
         b.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,0.14);color:#fff;border:none;"
             "border-radius:6px;padding:4px;font-weight:bold;}"
@@ -2337,8 +2337,7 @@ class PresentationWindow(QWidget):
             col = pr.get("color", "#ff3030")
             sel = pen_tool and (i == self._pen_active)
             pk = getattr(self, "_pen_keys", None) or []
-            pb.setToolTip(f"{pr.get('name','선')} (굵기 {pr.get('width',3)})"
-                          + (self._key_hint(pk[i]) if len(pk) > i else ""))
+            pb.setToolTip(tr('{get} (굵기 {get2}){v}').format(get=tr(pr.get('name') or '') or tr('선'), get2=pr.get('width', 3), v=self._key_hint(pk[i]) if len(pk) > i else ''))
             border = "4px solid #ff7a00" if sel else "1px solid #888"   # 260611-5: 굵게·주황
             pb.setStyleSheet(
                 f"QPushButton{{background:{col};color:#000;font-weight:bold;"
@@ -2374,7 +2373,7 @@ class PresentationWindow(QWidget):
         # 260611-84: hover 색도 상태를 반영(켜짐=초록) → 클릭 직후 커서가 위에 있어도 토글이 바로 보임
         base = "rgba(40,165,85,0.97)" if on else "rgba(255,255,255,0.12)"
         hover = "rgba(60,200,110,1.0)" if on else "rgba(255,255,255,0.28)"
-        b.setText("본화면 적용 ✓" if on else "본화면 적용")
+        b.setText(tr("본화면 적용 ✓") if on else tr("본화면 적용"))
         b.setStyleSheet(
             f"QPushButton{{background:{base};color:#fff;border:none;border-radius:6px;"
             "padding:4px 10px;font-weight:bold;}"
@@ -2533,10 +2532,10 @@ class PresentationWindow(QWidget):
                 from PyQt6.QtWidgets import QMessageBox
                 box = QMessageBox(self)
                 box.setIcon(QMessageBox.Icon.Question)
-                box.setWindowTitle("발표시간 종료")
-                box.setText("발표시간을 끌까요?\n(녹화 중이면 저장됩니다)")
-                box.addButton("끄기", QMessageBox.ButtonRole.AcceptRole)
-                b_no = box.addButton("계속", QMessageBox.ButtonRole.RejectRole)
+                box.setWindowTitle(tr("발표시간 종료"))
+                box.setText(tr("발표시간을 끌까요?\n(녹화 중이면 저장됩니다)"))
+                box.addButton(tr("끄기"), QMessageBox.ButtonRole.AcceptRole)
+                b_no = box.addButton(tr("계속"), QMessageBox.ButtonRole.RejectRole)
                 box.setDefaultButton(b_no)
                 box.exec()
                 if box.clickedButton() is b_no:
@@ -2758,10 +2757,10 @@ class PresentationWindow(QWidget):
                 from PyQt6.QtWidgets import QMessageBox
                 box = QMessageBox(self)
                 box.setIcon(QMessageBox.Icon.Question)
-                box.setWindowTitle("전체화면 종료")
-                box.setText("발표시간이 작동 중입니다. 정말 전체화면을 나갈까요?")
-                box.addButton("나가기", QMessageBox.ButtonRole.AcceptRole)
-                b_no = box.addButton("계속", QMessageBox.ButtonRole.RejectRole)
+                box.setWindowTitle(tr("전체화면 종료"))
+                box.setText(tr("발표시간이 작동 중입니다. 정말 전체화면을 나갈까요?"))
+                box.addButton(tr("나가기"), QMessageBox.ButtonRole.AcceptRole)
+                b_no = box.addButton(tr("계속"), QMessageBox.ButtonRole.RejectRole)
                 box.setDefaultButton(b_no)
                 box.exec()
                 if box.clickedButton() is b_no:

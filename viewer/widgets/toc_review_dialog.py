@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
                              QCheckBox, QScrollArea, QStyledItemDelegate, QMenu)
 
 from viewer import toc_parse
+from viewer.i18n import tr
 
 INDENT_PX = 14          # 260904-7: 제목 열 레벨당 들여쓰기(표시만 — 제목 텍스트는 그대로)
 
@@ -89,7 +90,7 @@ class TocReviewDialog(QDialog):
         self._rows = [dict(r) for r in rows]
         self._page_count = self._count_pages()
         self._offset = int(offset)
-        self.setWindowTitle(("기존 책갈피 수정 — " if method == "existing" else "책갈피 검토 — ")
+        self.setWindowTitle((tr("기존 책갈피 수정 — ") if method == "existing" else tr("책갈피 검토 — "))
                             + self.pdf_path.name)
         # 260904-2(사용자 요청): 전체 화면의 3/4 크기, 미리보기를 오른쪽에 충분히 크게
         try:
@@ -101,42 +102,40 @@ class TocReviewDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 10); root.setSpacing(6)
         head = QLabel(
-            f"<b>{'목차 쪽 ' + ', '.join(map(str, self.toc_pages)) + ' 에서 읽은' if self.toc_pages else '추출한'} "
-            f"항목 {len(self._rows)}개</b> — 실제 쪽과 대조해 고친 뒤 [저장]하면 PDF 책갈피로 씁니다. "
-            "행을 고르면 오른쪽에 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다.")
+            tr('<b>{v} 항목 {n}개</b> — 실제 쪽과 대조해 고친 뒤 [저장]하면 PDF 책갈피로 씁니다. 행을 고르면 오른쪽에 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다.').format(v=tr('목차 쪽 {join} 에서 읽은').format(join=', '.join(map(str, self.toc_pages))) if self.toc_pages else tr('추출한'), n=len(self._rows)))
         head.setWordWrap(True)
         root.addWidget(head)
 
         # ── 오프셋 (목차 방식일 때만) ─────────────────────────────────
         self.grp_offset = QWidget()
         fo = QHBoxLayout(self.grp_offset); fo.setContentsMargins(0, 0, 0, 0)
-        fo.addWidget(QLabel("오프셋(실제 쪽 − 목차 쪽):"))
+        fo.addWidget(QLabel(tr("오프셋(실제 쪽 − 목차 쪽):")))
         self.spin_offset = QSpinBox(); self.spin_offset.setRange(-200, 2000); self.spin_offset.setValue(self._offset)
         fo.addWidget(self.spin_offset)
         self.cmb_cand = QComboBox()
         for off, conf in (candidates or []):
-            self.cmb_cand.addItem(f"{off:+d}  (신뢰도 {conf:.0%})", off)
+            self.cmb_cand.addItem(tr('{off:+d}  (신뢰도 {conf:.0%})').format(off=off, conf=conf), off)
         if self.cmb_cand.count() == 0:
-            self.cmb_cand.addItem("(추천 없음)", None); self.cmb_cand.setEnabled(False)
+            self.cmb_cand.addItem(tr("(추천 없음)"), None); self.cmb_cand.setEnabled(False)
         self.cmb_cand.currentIndexChanged.connect(self._pick_candidate)
-        fo.addWidget(QLabel("추천:")); fo.addWidget(self.cmb_cand)
-        self.btn_apply_off = QPushButton("오프셋 적용")
+        fo.addWidget(QLabel(tr("추천:"))); fo.addWidget(self.cmb_cand)
+        self.btn_apply_off = QPushButton(tr("오프셋 적용"))
         self.btn_apply_off.clicked.connect(self._apply_offset)
         fo.addWidget(self.btn_apply_off)
-        self.btn_verify = QPushButton("제목 대조")
-        self.btn_verify.setToolTip("각 행의 실제 쪽 텍스트에 제목 앞부분이 있는지 검사(✓/✗). 저장에는 영향 없음")
+        self.btn_verify = QPushButton(tr("제목 대조"))
+        self.btn_verify.setToolTip(tr("각 행의 실제 쪽 텍스트에 제목 앞부분이 있는지 검사(✓/✗). 저장에는 영향 없음"))
         self.btn_verify.clicked.connect(self._verify)
         fo.addWidget(self.btn_verify)
-        self.btn_renumber = QPushButton("번호 수정")
-        self.btn_renumber.setToolTip("현재 행의 번호를 **바로 위 같은 레벨 형제의 번호 + 1** 로 고치고(형제가 없으면 1), "
+        self.btn_renumber = QPushButton(tr("번호 수정"))
+        self.btn_renumber.setToolTip(tr("현재 행의 번호를 **바로 위 같은 레벨 형제의 번호 + 1** 로 고치고(형제가 없으면 1), "
                                      "그 아래 같은 레벨 형제들도 이어서 +1 씩 다시 매깁니다(상위 레벨이 나오기 전까지). "
-                                     "레벨을 고친 뒤 이 버튼으로 번호를 잇습니다. 형식은 옆 콤보(자동 = 위 형제의 형식)")
+                                     "레벨을 고친 뒤 이 버튼으로 번호를 잇습니다. 형식은 옆 콤보(자동 = 위 형제의 형식)"))
         self.btn_renumber.clicked.connect(self._renumber)
         fo.addWidget(self.btn_renumber)
         self.cmb_numstyle = QComboBox()
-        for label, key in (("형식: 자동", None), ("1.", "dot"), ("1)", "paren"), ("1", "bare")):
+        for label, key in ((tr("형식: 자동"), None), ("1.", "dot"), ("1)", "paren"), ("1", "bare")):
             self.cmb_numstyle.addItem(label, key)
-        self.cmb_numstyle.setToolTip("번호 수정 형식 — 자동: 바로 위 같은 레벨 형제의 형식을 따름(없으면 레벨 1 '1.', 그 아래 '1)')")
+        self.cmb_numstyle.setToolTip(tr("번호 수정 형식 — 자동: 바로 위 같은 레벨 형제의 형식을 따름(없으면 레벨 1 '1.', 그 아래 '1)')"))
         fo.addWidget(self.cmb_numstyle)
         for b in (self.btn_apply_off, self.btn_verify, self.btn_renumber):
             b.setAutoDefault(False); b.setDefault(False)
@@ -149,7 +148,7 @@ class TocReviewDialog(QDialog):
         left = QWidget(); ll = QVBoxLayout(left); ll.setContentsMargins(0, 0, 0, 0)
         self.table = QTableWidget(0, N_COLS)
         self.table.setItemDelegateForColumn(COL_TITLE, _IndentDelegate(self.table))   # 260904-7: 위계 들여쓰기
-        self.table.setHorizontalHeaderLabels(["레벨", "제목", "목차 쪽", "실제 쪽"])
+        self.table.setHorizontalHeaderLabels([tr("레벨"), tr("제목"), tr("목차 쪽"), tr("실제 쪽")])
         hh = self.table.horizontalHeader()
         # 260904-2: 표는 내용이 보일 만큼만 — 제목 열은 내용 맞춤(상한 420px), 나머지는 내용 맞춤.
         hh.setSectionResizeMode(COL_TITLE, QHeaderView.ResizeMode.Interactive)
@@ -167,14 +166,14 @@ class TocReviewDialog(QDialog):
         ll.addWidget(self.table, 1)
         ops = QHBoxLayout()
         for label, tip, slot in (
-                ("행 추가", "현재 행 아래에 새 항목", lambda: self._add_row("below")),
-                ("삭제", "선택 행 삭제", self._del_rows),
-                ("▲", "위로", lambda: self._move(-1)),
-                ("▼", "아래로", lambda: self._move(+1)),
-                ("◀", "레벨 올리기(상위)", lambda: self._level(-1)),
-                ("▶", "레벨 내리기(하위)", lambda: self._level(+1)),
-                ("쪽순 정렬", "목차 쪽이 중간에 줄어들지 않도록 — 자릿수가 빠진 쪽은 고치고(20→120), 순서 밖 행은 제자리로 옮깁니다"
-                             "(표·그림 목록은 따로). 바뀐 행은 목차 쪽 셀이 파란색", self._sort_pages)):
+                (tr("행 추가"), tr("현재 행 아래에 새 항목"), lambda: self._add_row("below")),
+                (tr("삭제"), tr("선택 행 삭제"), self._del_rows),
+                ("▲", tr("위로"), lambda: self._move(-1)),
+                ("▼", tr("아래로"), lambda: self._move(+1)),
+                ("◀", tr("레벨 올리기(상위)"), lambda: self._level(-1)),
+                ("▶", tr("레벨 내리기(하위)"), lambda: self._level(+1)),
+                (tr("쪽순 정렬"), tr("목차 쪽이 중간에 줄어들지 않도록 — 자릿수가 빠진 쪽은 고치고(20→120), 순서 밖 행은 제자리로 옮깁니다"
+                             "(표·그림 목록은 따로). 바뀐 행은 목차 쪽 셀이 파란색"), self._sort_pages)):
             b = QPushButton(label); b.setToolTip(tip); b.clicked.connect(slot)
             b.setAutoDefault(False); b.setDefault(False)          # 디자인 §2.7
             ops.addWidget(b)
@@ -184,21 +183,21 @@ class TocReviewDialog(QDialog):
 
         right = QWidget(); rl = QVBoxLayout(right); rl.setContentsMargins(6, 0, 0, 0)
         top = QHBoxLayout()
-        self.lbl_pv_title = QLabel("미리보기"); self.lbl_pv_title.setStyleSheet("font-weight:bold;")
+        self.lbl_pv_title = QLabel(tr("미리보기")); self.lbl_pv_title.setStyleSheet("font-weight:bold;")
         top.addWidget(self.lbl_pv_title, 1)
         # 260904-2: 미리보기 대상 — '목차' 쪽(항목을 읽어 온 차례 쪽) / '내용' 쪽(실제 쪽)
-        self.rb_pv_toc = QRadioButton("목차 보기"); self.rb_pv_body = QRadioButton("내용 보기")
+        self.rb_pv_toc = QRadioButton(tr("목차 보기")); self.rb_pv_body = QRadioButton(tr("내용 보기"))
         # 260904-4(사용자 요청): 처음엔 '목차 보기' — 읽어 온 원문과 표를 먼저 대조하도록
         (self.rb_pv_toc if self.toc_pages else self.rb_pv_body).setChecked(True)
-        self.rb_pv_toc.setToolTip("이 행을 읽어 온 차례 쪽을 보여 줍니다(제목·쪽번호 원문 확인)")
-        self.rb_pv_body.setToolTip("실제 쪽을 보여 줍니다(◀▶ 로 이웃 쪽을 훑고 '이 쪽으로 확정')")
+        self.rb_pv_toc.setToolTip(tr("이 행을 읽어 온 차례 쪽을 보여 줍니다(제목·쪽번호 원문 확인)"))
+        self.rb_pv_body.setToolTip(tr("실제 쪽을 보여 줍니다(◀▶ 로 이웃 쪽을 훑고 '이 쪽으로 확정')"))
         self.rb_pv_toc.setEnabled(bool(self.toc_pages))
         for rb in (self.rb_pv_toc, self.rb_pv_body):
             rb.toggled.connect(lambda on: on and self._show_preview(self.table.currentRow(), force=True))
             top.addWidget(rb)
         # 260904-3: 가로 꽉 차게(세로는 스크롤) ↔ 쪽 전체 맞춤
-        self.chk_fit_width = QCheckBox("가로 꽉 차게")
-        self.chk_fit_width.setToolTip("미리보기 폭에 쪽 너비를 맞춥니다(세로는 스크롤). 끄면 쪽 전체가 보이게 맞춤")
+        self.chk_fit_width = QCheckBox(tr("가로 꽉 차게"))
+        self.chk_fit_width.setToolTip(tr("미리보기 폭에 쪽 너비를 맞춥니다(세로는 스크롤). 끄면 쪽 전체가 보이게 맞춤"))
         self.chk_fit_width.toggled.connect(lambda _on: self._show_preview(self.table.currentRow(), force=True))
         top.addWidget(self.chk_fit_width)
         rl.addLayout(top)
@@ -213,9 +212,9 @@ class TocReviewDialog(QDialog):
         self.pv_scroll.setStyleSheet("QScrollArea{background:#f3f3f3; border:1px solid #c8c8c8;}")
         rl.addWidget(self.pv_scroll, 1)
         nav = QHBoxLayout()
-        self.btn_pv_prev = QPushButton("◀ 쪽"); self.btn_pv_next = QPushButton("쪽 ▶")
-        self.btn_pv_set = QPushButton("이 쪽으로 확정")
-        self.btn_pv_set.setToolTip("미리보기 중인 쪽을 현재 행의 실제 쪽으로 기록(수동)")
+        self.btn_pv_prev = QPushButton(tr("◀ 쪽")); self.btn_pv_next = QPushButton(tr("쪽 ▶"))
+        self.btn_pv_set = QPushButton(tr("이 쪽으로 확정"))
+        self.btn_pv_set.setToolTip(tr("미리보기 중인 쪽을 현재 행의 실제 쪽으로 기록(수동)"))
         for b in (self.btn_pv_prev, self.btn_pv_next, self.btn_pv_set):
             b.setAutoDefault(False); b.setDefault(False)
         self.btn_pv_prev.clicked.connect(lambda: self._pv_step(-1))
@@ -234,7 +233,7 @@ class TocReviewDialog(QDialog):
 
         # ── 버튼 ────────────────────────────────────────────────────
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self)
-        bb.button(QDialogButtonBox.StandardButton.Save).setText("저장(책갈피 쓰기)")
+        bb.button(QDialogButtonBox.StandardButton.Save).setText(tr("저장(책갈피 쓰기)"))
         for b in bb.buttons():
             b.setAutoDefault(False); b.setDefault(False)
         bb.accepted.connect(self._accept); bb.rejected.connect(self.reject)
@@ -320,7 +319,7 @@ class TocReviewDialog(QDialog):
         if r.get("moved") or r.get("repaired"):
             it = self.table.item(row, COL_TOC)
             it.setBackground(QBrush(_MOVED_BG))
-            it.setToolTip("쪽 순서 정렬로 " + ("번호를 고친 행" if r.get("repaired") else "옮긴 행") + " — 원문과 대조하세요")
+            it.setToolTip(tr('쪽 순서 정렬로 {v} — 원문과 대조하세요').format(v=tr('번호를 고친 행') if r.get('repaired') else tr('옮긴 행')))
 
     def _row_dict(self, row: int) -> dict:
         def txt(c):
@@ -405,11 +404,11 @@ class TocReviewDialog(QDialog):
             # 우클릭은 대상을 고르기만 한다(선택이 이미 있으면 그대로 — 여러 행 삭제용)
             self.table.setCurrentCell(idx.row(), COL_TITLE)
         menu = QMenu(self)
-        a_above = menu.addAction("위에 책갈피 추가")
-        a_below = menu.addAction("아래에 책갈피 추가")
+        a_above = menu.addAction(tr("위에 책갈피 추가"))
+        a_below = menu.addAction(tr("아래에 책갈피 추가"))
         menu.addSeparator()
         n = len(self._sel_rows())
-        a_del = menu.addAction("책갈피 삭제" if n <= 1 else f"책갈피 삭제 ({n}개)")
+        a_del = menu.addAction(tr("책갈피 삭제") if n <= 1 else tr('책갈피 삭제 ({n}개)').format(n=n))
         a_del.setEnabled(n > 0)          # 지울 행이 있을 때만(추가는 빈 표에서도 가능)
         chosen = menu.exec(self.table.viewport().mapToGlobal(pos))
         if chosen is a_above:
@@ -425,9 +424,9 @@ class TocReviewDialog(QDialog):
         body = (self._pv_mode == "body")
         pg = self._pv_page
         if body and pg:
-            act = menu.addAction(f"이 쪽에 책갈피 추가 (p.{int(pg)})")
+            act = menu.addAction(tr('이 쪽에 책갈피 추가 (p.{pg})').format(pg=int(pg)))
         else:
-            act = menu.addAction("이 쪽에 책갈피 추가 — '내용 보기'에서만")
+            act = menu.addAction(tr("이 쪽에 책갈피 추가 — '내용 보기'에서만"))
             act.setEnabled(False)
         chosen = menu.exec(self.lbl_pv.mapToGlobal(pos))
         if chosen is act and act.isEnabled():
@@ -528,10 +527,8 @@ class TocReviewDialog(QDialog):
             ok = bool(res.get(i)); n_ok += ok
             self.table.item(i, COL_TITLE).setBackground(QBrush(_OK_BG if ok else _NG_BG))
         self.table.blockSignals(False)
-        QMessageBox.information(self, "제목 대조",
-                                f"{n_ok} / {self.table.rowCount()} 행에서 실제 쪽에 제목이 확인됐습니다"
-                                "(제목 칸 초록=확인, 빨강=미확인).\n"
-                                "빨간 행은 실제 쪽을 직접 고치거나(미리보기 ◀▶ 후 '이 쪽으로 확정') 삭제하세요.")
+        QMessageBox.information(self, tr("제목 대조"),
+                                tr("{n_ok} / {rowCount} 행에서 실제 쪽에 제목이 확인됐습니다(제목 칸 초록=확인, 빨강=미확인).\n빨간 행은 실제 쪽을 직접 고치거나(미리보기 ◀▶ 후 '이 쪽으로 확정') 삭제하세요.").format(n_ok=n_ok, rowCount=self.table.rowCount()))
 
     def _renumber(self):
         """[번호 수정] (260904-8): 선택한 행마다 번호 = 바로 위 같은 레벨 형제 + 1 (위에서부터 차례로)."""
@@ -549,10 +546,10 @@ class TocReviewDialog(QDialog):
                 it.setText(r["title"])
         self.table.blockSignals(False)
         if not sel:
-            QMessageBox.information(self, "번호 수정", "번호를 고칠 행을 먼저 선택하세요."); return
+            QMessageBox.information(self, tr("번호 수정"), tr("번호를 고칠 행을 먼저 선택하세요.")); return
         if skipped and not n:
-            QMessageBox.information(self, "번호 수정", "장 제목(레벨 0)은 번호를 붙이지 않습니다."); return
-        self.status_msg(f"{n}개 행의 번호를 고쳤습니다(위 형제 + 1, 아래 형제 이어서)." + (f" (장 행 {skipped}개 제외)" if skipped else ""))
+            QMessageBox.information(self, tr("번호 수정"), tr("장 제목(레벨 0)은 번호를 붙이지 않습니다.")); return
+        self.status_msg(tr('{n}개 행의 번호를 고쳤습니다(위 형제 + 1, 아래 형제 이어서).{v}').format(n=n, v=tr(' (장 행 {skipped}개 제외)').format(skipped=skipped) if skipped else ''))
 
     def status_msg(self, text: str):
         """창 제목줄 대신 미리보기 제목 옆에 잠깐 보이는 안내(모달 메시지 없이)."""
@@ -574,8 +571,8 @@ class TocReviewDialog(QDialog):
                 for i, r in enumerate(rows):
                     if r is cur_row:
                         self.table.setCurrentCell(i, COL_TITLE); break
-        QMessageBox.information(self, "쪽순 정렬", f"{n}개 행을 옮기거나 쪽 번호를 고쳤습니다(목차 쪽 셀 파란색)." if n
-                                else "쪽 순서가 이미 맞습니다.")
+        QMessageBox.information(self, tr("쪽순 정렬"), tr('{n}개 행을 옮기거나 쪽 번호를 고쳤습니다(목차 쪽 셀 파란색).').format(n=n) if n
+                                else tr("쪽 순서가 이미 맞습니다."))
 
     def verify_marks(self) -> list:
         """(테스트용) 제목 셀 배경으로 본 대조 결과 — 'ok'/'ng'/''."""
@@ -612,10 +609,10 @@ class TocReviewDialog(QDialog):
         self.btn_pv_set.setEnabled(mode == "body")             # 확정은 내용 보기에서만
         if not pg:
             self._pv_rendered = False
-            self.lbl_pv.setText("실제 쪽이 비어 있습니다" if mode == "body" else "출처 목차 쪽을 알 수 없습니다")
-            self.lbl_pv_title.setText("미리보기"); return
+            self.lbl_pv.setText(tr("실제 쪽이 비어 있습니다") if mode == "body" else tr("출처 목차 쪽을 알 수 없습니다"))
+            self.lbl_pv_title.setText(tr("미리보기")); return
         self.lbl_pv_title.setText(
-            f"{'목차' if mode == 'toc' else '내용'} — {pg}쪽  (행: {r['title'][:28]})")
+            tr('{v} — {pg}쪽  (행: {title})').format(v=tr('목차') if mode == 'toc' else tr('내용'), pg=pg, title=r['title'][:28]))
         # 260904-6: 같은 쪽·같은 모드면 다시 그리지 않는다 — 행 추가/편집/커서 이동에도 보던 위치(스크롤) 유지
         if same and not force:
             return
@@ -650,7 +647,7 @@ class TocReviewDialog(QDialog):
                 d.close()
         except Exception as e:
             self._pv_rendered = False
-            self.lbl_pv.setText(f"렌더 실패: {e}")
+            self.lbl_pv.setText(tr('렌더 실패: {e}').format(e=e))
 
     def _pv_step(self, d: int):
         if self._pv_page is None:
@@ -676,9 +673,9 @@ class TocReviewDialog(QDialog):
         bms = self.result_bookmarks()
         bad = [i + 1 for i, r in enumerate(self.rows()) if not r.get("page")]
         if not bms:
-            QMessageBox.warning(self, "저장", "저장할 항목이 없습니다(실제 쪽이 비어 있음)."); return
+            QMessageBox.warning(self, tr("저장"), tr("저장할 항목이 없습니다(실제 쪽이 비어 있음).")); return
         if bad and QMessageBox.question(
-                self, "저장", f"실제 쪽이 비어 있는 행 {len(bad)}개(예: {bad[:5]})는 제외됩니다. 계속할까요?"
+                self, tr("저장"), tr('실제 쪽이 비어 있는 행 {n}개(예: {bad})는 제외됩니다. 계속할까요?').format(n=len(bad), bad=bad[:5])
         ) != QMessageBox.StandardButton.Yes:
             return
         self.accept()

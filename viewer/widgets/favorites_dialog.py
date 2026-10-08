@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLineEdit, QLabel, QMessageBox, QDialogButtonBox,
     QInputDialog,
 )
+from viewer.i18n import tr
 
 
 # 261008-12: 즐겨찾기 메뉴와 같은 그룹 순서 — 폴더 → 파일 → 검색어(kind 가 없거나 모르면 폴더).
@@ -56,7 +57,7 @@ class FavoritesDialog(QDialog):
 
     def __init__(self, favorites: list, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("즐겨찾기 관리")
+        self.setWindowTitle(tr("즐겨찾기 관리"))
         self.resize(560, 460)
         # 260611-107: 항목 dict 를 깊은 복사 — 다이얼로그 편집(이름변경 등)이 원본을
         #   바로 건드리지 않게 하여, 확인(OK) 시에만 정확히 반영(취소 시 원복).
@@ -66,8 +67,8 @@ class FavoritesDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # 261008-12: 메뉴처럼 폴더 → 파일 → 검색어로 묶어 보이고, 순서는 같은 종류 안에서 바꾼다.
-        info = QLabel("폴더 → 파일 → 검색어 순으로 묶여 있습니다. 같은 종류 안에서 드래그하거나\n"
-                      "↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정.")
+        info = QLabel(tr("폴더 → 파일 → 검색어 순으로 묶여 있습니다. 같은 종류 안에서 드래그하거나\n"
+                      "↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정."))
         info.setStyleSheet("color:#666;")
         layout.addWidget(info)
 
@@ -81,13 +82,13 @@ class FavoritesDialog(QDialog):
 
         # 우측 버튼 패널
         btns = QVBoxLayout()
-        b_up = QPushButton("↑ 위로")
+        b_up = QPushButton(tr("↑ 위로"))
         b_up.clicked.connect(lambda: self._move(-1))
-        b_dn = QPushButton("↓ 아래로")
+        b_dn = QPushButton(tr("↓ 아래로"))
         b_dn.clicked.connect(lambda: self._move(+1))
-        b_rm = QPushButton("삭제")
+        b_rm = QPushButton(tr("삭제"))
         b_rm.clicked.connect(self._remove)
-        b_rn = QPushButton("이름 변경")
+        b_rn = QPushButton(tr("이름 변경"))
         b_rn.clicked.connect(lambda: self._on_rename(self.list.currentItem()))
         btns.addWidget(b_up)
         btns.addWidget(b_dn)
@@ -113,7 +114,7 @@ class FavoritesDialog(QDialog):
     @staticmethod
     def _tip(f: dict) -> str:
         if f.get("kind") == "search":
-            return f"검색: '{f.get('query', '')}' (폴더 {f.get('folder', '')})"
+            return tr("검색: '{get}' (폴더 {get2})").format(get=f.get('query', ''), get2=f.get('folder', ''))
         if f.get("kind") == "file":
             return f.get("file", "") or f.get("folder", "")
         return f.get("folder", "")
@@ -133,8 +134,8 @@ class FavoritesDialog(QDialog):
         row = self.list.currentRow()
         if row < 0: return
         ret = QMessageBox.question(
-            self, "삭제",
-            f"'{self.list.item(row).text()}' 을(를) 삭제할까요?",
+            self, tr("삭제"),
+            tr("'{text}' 을(를) 삭제할까요?").format(text=self.list.item(row).text()),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if ret == QMessageBox.StandardButton.Yes:
@@ -144,8 +145,8 @@ class FavoritesDialog(QDialog):
         if item is None: return
         f = item.data(Qt.ItemDataRole.UserRole) or {}
         old_name = f.get("name", "")
-        new_name, ok = QInputDialog.getText(self, "이름 변경",
-                                            "새 이름:", text=old_name)
+        new_name, ok = QInputDialog.getText(self, tr("이름 변경"),
+                                            tr("새 이름:"), text=old_name)
         if ok and new_name.strip():
             f["name"] = new_name.strip()
             item.setText(f"{KIND_PREFIX[fav_kind(f)]}{f['name']}")
@@ -165,13 +166,13 @@ class AddFavoriteDialog(QDialog):
 
     def __init__(self, suggested_name: str, kind: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("즐겨찾기 등록")
+        self.setWindowTitle(tr("즐겨찾기 등록"))
         self.setMinimumWidth(420)
 
         layout = QVBoxLayout(self)
-        label = {"folder": "📁 폴더", "file": "📄 파일", "search": "🔍 검색"}.get(kind, "📁 폴더")
-        layout.addWidget(QLabel(f"종류: {label}"))
-        layout.addWidget(QLabel("이름 (수정 가능):"))
+        label = {"folder": tr("📁 폴더"), "file": tr("📄 파일"), "search": tr("🔍 검색")}.get(kind, "📁 폴더")
+        layout.addWidget(QLabel(tr('종류: {label}').format(label=label)))
+        layout.addWidget(QLabel(tr("이름 (수정 가능):")))
         self.edit = QLineEdit(suggested_name)
         self.edit.selectAll()
         layout.addWidget(self.edit)

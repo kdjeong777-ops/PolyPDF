@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer.widgets import content_find as cf
+from viewer.i18n import tr
 
 
 class ContentFindOverlay(QWidget):
@@ -34,13 +35,13 @@ class ContentFindOverlay(QWidget):
         v.setSpacing(6)
         bar = QHBoxLayout()
         self.edit = QLineEdit()
-        self.edit.setPlaceholderText("본문 내용 검색")
+        self.edit.setPlaceholderText(tr("본문 내용 검색"))
         self.count = QLabel("0/0")
         self.count.setStyleSheet("color:#666;min-width:44px;")
         self.count.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.btn_prev = QToolButton(); self.btn_prev.setText("∧"); self.btn_prev.setToolTip("이전 (Shift+Enter)")
-        self.btn_next = QToolButton(); self.btn_next.setText("∨"); self.btn_next.setToolTip("다음 (Enter)")
-        self.btn_close = QToolButton(); self.btn_close.setText("✕"); self.btn_close.setToolTip("닫기 (Esc)")
+        self.btn_prev = QToolButton(); self.btn_prev.setText("∧"); self.btn_prev.setToolTip(tr("이전 (Shift+Enter)"))
+        self.btn_next = QToolButton(); self.btn_next.setText("∨"); self.btn_next.setToolTip(tr("다음 (Enter)"))
+        self.btn_close = QToolButton(); self.btn_close.setText("✕"); self.btn_close.setToolTip(tr("닫기 (Esc)"))
         for w in (self.edit, self.count, self.btn_prev, self.btn_next, self.btn_close):
             bar.addWidget(w, 1 if w is self.edit else 0)
         v.addLayout(bar)
@@ -65,8 +66,8 @@ class ContentFindOverlay(QWidget):
     def open_for(self, panel, seed_query: str = ""):
         self._panel = panel
         self._state = {}
-        lbl = getattr(panel, "CONTENT_LABEL", "본문")
-        self.edit.setPlaceholderText(f"{lbl} 내용 검색")
+        lbl = getattr(panel, "CONTENT_LABEL", tr("본문"))
+        self.edit.setPlaceholderText(tr('{lbl} 내용 검색').format(lbl=lbl))
         par = self.parentWidget()
         w = min(480, (par.width() - 40) if par else 480)
         h = 300

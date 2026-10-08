@@ -14,35 +14,36 @@ from PyQt6.QtWidgets import (
     QLabel,
     QDialogButtonBox,
 )
+from viewer.i18n import tr
 
 
 class ScreenshotPdfDialog(QDialog):
     def __init__(self, prefs: dict, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("스크린샷 PDF 저장 옵션")
+        self.setWindowTitle(tr("스크린샷 PDF 저장 옵션"))
         self.setMinimumWidth(440)
         p = dict(prefs or {})
 
         layout = QVBoxLayout(self)
 
-        grp = QGroupBox("저장 옵션")
+        grp = QGroupBox(tr("저장 옵션"))
         gl = QVBoxLayout(grp)
 
-        self.chk_query = QCheckBox("검색어 형광펜 표시 (원본을 고해상도로 재렌더 — 화질 다소 저하)")
+        self.chk_query = QCheckBox(tr("검색어 형광펜 표시 (원본을 고해상도로 재렌더 — 화질 다소 저하)"))
         self.chk_query.setChecked(bool(p.get("pdf_save_show_query", False)))
         gl.addWidget(self.chk_query)
 
         hint = QLabel(
-            "<small>해제 시 원본 PDF 페이지를 그대로 복사 — 원본 화질, 형광펜 없음.</small>"
+            tr("<small>해제 시 원본 PDF 페이지를 그대로 복사 — 원본 화질, 형광펜 없음.</small>")
         )
         hint.setStyleSheet("color:#666; padding-left:18px;")
         gl.addWidget(hint)
 
-        self.chk_filename = QCheckBox("상단에 파일명 표시 (.pdf 제외)")
+        self.chk_filename = QCheckBox(tr("상단에 파일명 표시 (.pdf 제외)"))
         self.chk_filename.setChecked(bool(p.get("pdf_save_show_filename", False)))
         gl.addWidget(self.chk_filename)
 
-        self.chk_pageno = QCheckBox("하단에 페이지 번호 표시 (스크린샷 리스트 순번)")
+        self.chk_pageno = QCheckBox(tr("하단에 페이지 번호 표시 (스크린샷 리스트 순번)"))
         self.chk_pageno.setChecked(bool(p.get("pdf_save_show_pageno", False)))
         gl.addWidget(self.chk_pageno)
 

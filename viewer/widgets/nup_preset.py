@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 from PyQt6.QtWidgets import QDialog
+from viewer.i18n import tr
 
 __all__ = ["NupPresetMixin"]
 
@@ -31,7 +32,7 @@ class NupPresetMixin:
     def _reload_presets(self):
         """프리셋 콤보 재구성. preset_api 가 없으면 콤보를 비활성화."""
         self.cmb_preset.clear()
-        self.cmb_preset.addItem("(기본 설정)", None)
+        self.cmb_preset.addItem(tr("(기본 설정)"), None)
         try:
             for p in ((self._preset_api or {}).get("get_presets", lambda: [])() or []):
                 self.cmb_preset.addItem(p.get("name", "(이름없음)"), p)

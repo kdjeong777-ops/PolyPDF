@@ -17,10 +17,11 @@ from PyQt6.QtCore import Qt
 
 from viewer.pdf_font import TEXT_FAMILY
 from viewer.widgets.pen_settings_dialog import _ColorBtn
+from viewer.i18n import tr, tr_noop
 
 MAX_STYLES = 7
-_TIP_GLYPH = [("arrow", "→", "뾰족한 화살표"), ("circle", "●", "끝 원형"),
-              ("plain", "—", "직선")]
+_TIP_GLYPH = [("arrow", "→", tr_noop("뾰족한 화살표")), ("circle", "●", tr_noop("끝 원형")),
+              ("plain", "—", tr_noop("직선"))]
 
 
 def _wrap(layout):
@@ -31,13 +32,13 @@ def _wrap(layout):
 class LineTextSettingsDialog(QDialog):
     def __init__(self, pens, eraser_widths, highlight_alpha, styles, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("선과 텍스트 입력 설정")
+        self.setWindowTitle(tr("선과 텍스트 입력 설정"))
         self.resize(520, 560)
         self._styles = [dict(s) for s in (styles or [])]
         v = QVBoxLayout(self)
         tabs = QTabWidget()
-        tabs.addTab(self._build_line_tab(pens, eraser_widths, highlight_alpha), "선긋기")
-        tabs.addTab(self._build_text_tab(), "글쓰기")
+        tabs.addTab(self._build_line_tab(pens, eraser_widths, highlight_alpha), tr("선긋기"))
+        tabs.addTab(self._build_text_tab(), tr("글쓰기"))
         v.addWidget(tabs, 1)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                               | QDialogButtonBox.StandardButton.Cancel)
@@ -47,37 +48,37 @@ class LineTextSettingsDialog(QDialog):
     # ---------------- 선긋기 탭 ----------------
     def _build_line_tab(self, pens, eraser_widths, highlight_alpha):
         w = QWidget(); v = QVBoxLayout(w)
-        v.addWidget(QLabel("편집모드 본문/발표에서 왼쪽 드래그로 선을 긋습니다(설정 공유).\n"
-                           "선 1~5의 색·굵기·투명도. 투명도 100%=안 보임, 0%=불투명."))
+        v.addWidget(QLabel(tr("편집모드 본문/발표에서 왼쪽 드래그로 선을 긋습니다(설정 공유).\n"
+                           "선 1~5의 색·굵기·투명도. 투명도 100%=안 보임, 0%=불투명.")))
         self._pen_rows = []
         for i, pr in enumerate(pens):
-            grp = QGroupBox(f"선 {i + 1}"); h = QHBoxLayout(grp)
-            h.addWidget(QLabel("색:")); cb = _ColorBtn(pr.get("color", "#ff3030")); h.addWidget(cb)
-            h.addWidget(QLabel("굵기:"))
+            grp = QGroupBox(tr('선 {i}').format(i=i + 1)); h = QHBoxLayout(grp)
+            h.addWidget(QLabel(tr("색:"))); cb = _ColorBtn(pr.get("color", "#ff3030")); h.addWidget(cb)
+            h.addWidget(QLabel(tr("굵기:")))
             sw = QSpinBox(); sw.setRange(1, 40); sw.setValue(int(pr.get("width", 3))); h.addWidget(sw)
-            h.addWidget(QLabel("투명도:"))
+            h.addWidget(QLabel(tr("투명도:")))
             stp = QSpinBox(); stp.setRange(0, 100); stp.setSuffix(" %")
             stp.setValue(100 - int(pr.get("alpha", 100))); h.addWidget(stp)
             h.addStretch(1)
             v.addWidget(grp); self._pen_rows.append((cb, sw, stp))
-        hg = QGroupBox("하이라이트"); hh = QHBoxLayout(hg)
-        hh.addWidget(QLabel("투명도:"))
+        hg = QGroupBox(tr("하이라이트")); hh = QHBoxLayout(hg)
+        hh.addWidget(QLabel(tr("투명도:")))
         self._sp_hl = QSpinBox(); self._sp_hl.setRange(0, 100); self._sp_hl.setSuffix(" %")
         self._sp_hl.setValue(100 - int(highlight_alpha or 35))
         hh.addWidget(self._sp_hl); hh.addStretch(1); v.addWidget(hg)
         ew = list(eraser_widths or [12, 30])
-        eg = QGroupBox("지우개 면적(px)"); eh = QHBoxLayout(eg)
-        eh.addWidget(QLabel("얇게:"))
+        eg = QGroupBox(tr("지우개 면적(px)")); eh = QHBoxLayout(eg)
+        eh.addWidget(QLabel(tr("얇게:")))
         self._sp_e1 = QSpinBox(); self._sp_e1.setRange(4, 80)
         self._sp_e1.setValue(int(ew[0]) if ew else 12); eh.addWidget(self._sp_e1)
-        eh.addWidget(QLabel("두껍게:"))
+        eh.addWidget(QLabel(tr("두껍게:")))
         self._sp_e2 = QSpinBox(); self._sp_e2.setRange(4, 160)
         self._sp_e2.setValue(int(ew[1]) if len(ew) > 1 else 30); eh.addWidget(self._sp_e2)
         eh.addStretch(1); v.addWidget(eg); v.addStretch(1)
         return w
 
     def result_pens(self):
-        return [{"name": f"선 {i + 1}", "color": cb.color_name(),
+        return [{"name": tr('선 {i}').format(i=i + 1), "color": cb.color_name(),
                  "width": int(sw.value()), "alpha": 100 - int(stp.value())}
                 for i, (cb, sw, stp) in enumerate(self._pen_rows)]
 
@@ -90,13 +91,12 @@ class LineTextSettingsDialog(QDialog):
     # ---------------- 글쓰기 탭 ----------------
     def _build_text_tab(self):
         w = QWidget(); v = QVBoxLayout(w)
-        v.addWidget(QLabel(f"사용자 스타일(최대 {MAX_STYLES}개). 이름을 적고 아래 설정 후 [저장].\n"
-                           "상단 버튼 풀다운에서 선택해 글쓰기/지시선에 적용합니다."))
+        v.addWidget(QLabel(tr('사용자 스타일(최대 {MAX_STYLES}개). 이름을 적고 아래 설정 후 [저장].\n상단 버튼 풀다운에서 선택해 글쓰기/지시선에 적용합니다.').format(MAX_STYLES=MAX_STYLES)))
         # 260611-80: 이름 입력을 리스트 위로
         row_save = QHBoxLayout()
-        row_save.addWidget(QLabel("이름:"))
+        row_save.addWidget(QLabel(tr("이름:")))
         self._ed_name = QLineEdit(); row_save.addWidget(self._ed_name, 1)
-        b_save = QPushButton("저장"); b_save.clicked.connect(self._style_save)
+        b_save = QPushButton(tr("저장")); b_save.clicked.connect(self._style_save)
         row_save.addWidget(b_save)
         v.addLayout(row_save)
         # 스타일 목록(약 5줄 표시, 초과 시 스크롤) + 관리 버튼
@@ -110,7 +110,7 @@ class LineTextSettingsDialog(QDialog):
         self._lst.currentRowChanged.connect(self._on_pick_style)
         top.addWidget(self._lst, 1)
         col = QVBoxLayout()
-        b_del = QPushButton("삭제"); b_del.clicked.connect(self._style_delete)
+        b_del = QPushButton(tr("삭제")); b_del.clicked.connect(self._style_delete)
         b_up = QPushButton("▲"); b_up.clicked.connect(lambda: self._style_move(-1))
         b_dn = QPushButton("▼"); b_dn.clicked.connect(lambda: self._style_move(1))
         for b in (b_del, b_up, b_dn):
@@ -123,42 +123,42 @@ class LineTextSettingsDialog(QDialog):
         form = QFormLayout()
         # 260913-7(마스터 §4.5.11): 글꼴은 맑은 고딕 하나 — 선택 없이 표시만.
         self._lbl_font = QLabel(TEXT_FAMILY)
-        self._cb_bold = QCheckBox("굵게"); self._cb_italic = QCheckBox("기울임")
+        self._cb_bold = QCheckBox(tr("굵게")); self._cb_italic = QCheckBox(tr("기울임"))
         rf = QHBoxLayout(); rf.addWidget(self._lbl_font, 1)
         rf.addWidget(self._cb_bold); rf.addWidget(self._cb_italic)
-        form.addRow("문자 폰트", _wrap(rf))
-        self._cb_color = _ColorBtn("#111111"); form.addRow("문자 색상", self._cb_color)
+        form.addRow(tr("문자 폰트"), _wrap(rf))
+        self._cb_color = _ColorBtn("#111111"); form.addRow(tr("문자 색상"), self._cb_color)
         # 260907-1(사용자 요청): 단위를 **pt** 로. 종전 '페이지 대비 %' 는 값을 봐도
         #   결과를 가늠할 수 없어 '작동하지 않는다'로 보였고, 같은 문서라도 종이 크기가
         #   다르면 글자 크기가 달라졌다. pt 는 인쇄했을 때의 실제 크기다(워드·한글과 같은 기준).
         self._sp_size = QDoubleSpinBox(); self._sp_size.setRange(4.0, 200.0)
         self._sp_size.setSingleStep(1.0); self._sp_size.setDecimals(1)
         self._sp_size.setSuffix(" pt")
-        form.addRow("문자 크기", self._sp_size)
+        form.addRow(tr("문자 크기"), self._sp_size)
         # 260907-1: 자간 — 박스 좌상단 ◀▶ 버튼과 같은 값.
         self._sp_spacing = QDoubleSpinBox(); self._sp_spacing.setRange(-3.0, 30.0)
         self._sp_spacing.setSingleStep(0.5); self._sp_spacing.setDecimals(1)
         self._sp_spacing.setSuffix(" pt")
-        self._sp_spacing.setToolTip("글자 사이 간격. 0 = 폰트 기본값")
-        form.addRow("글자 간격(자간)", self._sp_spacing)
-        self._cb_boxline = QCheckBox("적용 (색·굵기·투명도는 색상버튼 스타일)")
-        form.addRow("텍스트 박스선", self._cb_boxline)
-        self._cb_bg = QCheckBox("적용"); self._cb_bgcolor = _ColorBtn("#fff7c0")
+        self._sp_spacing.setToolTip(tr("글자 사이 간격. 0 = 폰트 기본값"))
+        form.addRow(tr("글자 간격(자간)"), self._sp_spacing)
+        self._cb_boxline = QCheckBox(tr("적용 (색·굵기·투명도는 색상버튼 스타일)"))
+        form.addRow(tr("텍스트 박스선"), self._cb_boxline)
+        self._cb_bg = QCheckBox(tr("적용")); self._cb_bgcolor = _ColorBtn("#fff7c0")
         self._sp_bga = QSpinBox(); self._sp_bga.setRange(0, 100); self._sp_bga.setSuffix(" %")
         rbg = QHBoxLayout(); rbg.addWidget(self._cb_bg); rbg.addWidget(self._cb_bgcolor)
-        rbg.addWidget(QLabel("불투명도:")); rbg.addWidget(self._sp_bga); rbg.addStretch(1)
-        form.addRow("텍스트 박스 배경", _wrap(rbg))
-        self._cmb_align = QComboBox(); self._cmb_align.addItems(["왼쪽", "가운데", "오른쪽"])
-        form.addRow("정렬", self._cmb_align)
+        rbg.addWidget(QLabel(tr("불투명도:"))); rbg.addWidget(self._sp_bga); rbg.addStretch(1)
+        form.addRow(tr("텍스트 박스 배경"), _wrap(rbg))
+        self._cmb_align = QComboBox(); self._cmb_align.addItems([tr("왼쪽"), tr("가운데"), tr("오른쪽")])
+        form.addRow(tr("정렬"), self._cmb_align)
         # 지시선 끝모양(글쓰기 모드에는 미적용)
         self._tip = "arrow"; self._tip_btns = {}
         rtip = QHBoxLayout()
         for key, glyph, tip in _TIP_GLYPH:
-            b = QPushButton(glyph); b.setCheckable(True); b.setFixedWidth(46); b.setToolTip(tip)
+            b = QPushButton(glyph); b.setCheckable(True); b.setFixedWidth(46); b.setToolTip(tr(tip))
             b.clicked.connect(lambda _=False, k=key: self._set_tip(k))
             self._tip_btns[key] = b; rtip.addWidget(b)
         rtip.addStretch(1)
-        form.addRow("지시선 끝모양", _wrap(rtip))
+        form.addRow(tr("지시선 끝모양"), _wrap(rtip))
         v.addLayout(form); v.addStretch(1)
 
         self._refresh_list()
@@ -175,7 +175,7 @@ class LineTextSettingsDialog(QDialog):
         self._lst.blockSignals(True)
         self._lst.clear()
         for s in self._styles:
-            self._lst.addItem(s.get("name", ""))
+            self._lst.addItem(tr(s.get("name", "")))      # 기본 스타일 이름(본문·제목…)만 번역된다
         self._lst.blockSignals(False)
 
     def _editor_to_style(self, name):
@@ -214,20 +214,20 @@ class LineTextSettingsDialog(QDialog):
     def _style_save(self):
         name = self._ed_name.text().strip()
         if not name:
-            QMessageBox.information(self, "스타일 저장", "스타일 이름을 입력하세요."); return
+            QMessageBox.information(self, tr("스타일 저장"), tr("스타일 이름을 입력하세요.")); return
         existing = next((i for i, s in enumerate(self._styles) if s.get("name") == name), -1)
         if existing >= 0:
             if QMessageBox.question(
-                    self, "스타일 덮어쓰기",
-                    f"이미 '{name}' 스타일이 있습니다. 덮어쓸까요?") \
+                    self, tr("스타일 덮어쓰기"),
+                    tr("이미 '{name}' 스타일이 있습니다. 덮어쓸까요?").format(name=name)) \
                     != QMessageBox.StandardButton.Yes:
                 return
             self._styles[existing] = self._editor_to_style(name)
             self._refresh_list(); self._lst.setCurrentRow(existing)
             return
         if len(self._styles) >= MAX_STYLES:
-            QMessageBox.warning(self, "스타일 저장",
-                                f"스타일은 최대 {MAX_STYLES}개까지 저장할 수 있습니다."); return
+            QMessageBox.warning(self, tr("스타일 저장"),
+                                tr('스타일은 최대 {MAX_STYLES}개까지 저장할 수 있습니다.').format(MAX_STYLES=MAX_STYLES)); return
         self._styles.append(self._editor_to_style(name))
         self._refresh_list(); self._lst.setCurrentRow(len(self._styles) - 1)
 

@@ -3341,7 +3341,7 @@ class MainView(QWidget):
         self._text_menu.clear()
         for s in getattr(self, "_text_styles", []):
             nm = s.get("name", "")
-            a = self._text_menu.addAction(nm); a.setCheckable(True); a.setData(nm)
+            a = self._text_menu.addAction(tr(nm)); a.setCheckable(True); a.setData(nm)   # 이름=키, 표시만 번역(§5)
             a.triggered.connect(lambda _=False, n=nm: self._set_text_style(n))
         self._update_text_button()
 

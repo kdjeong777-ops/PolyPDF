@@ -17,6 +17,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QDialogButtonBox,
                              QFrame)
+from viewer.i18n import tr
 
 PREVIEW_W = 220         # 미리보기 최대 가로(px) — 창이 본문을 가리지 않을 만큼만
 PREVIEW_H = 300
@@ -61,13 +62,13 @@ class FileCrossDialog(QDialog):
         super().__init__(parent)
         self._forward = bool(forward)
         stem = Path(str(path)).stem             # 확장자를 뺀 이름(사용자 지시)
-        self.setWindowTitle("다음 PDF 로" if self._forward else "이전 PDF 로")
+        self.setWindowTitle(tr("다음 PDF 로") if self._forward else tr("이전 PDF 로"))
 
         v = QVBoxLayout(self)
         v.setSpacing(10)
 
-        head = QLabel("다음 PDF 를 볼까요?" if self._forward
-                      else "이전 PDF 를 볼까요?")
+        head = QLabel(tr("다음 PDF 를 볼까요?") if self._forward
+                      else tr("이전 PDF 를 볼까요?"))
         f = head.font()
         f.setBold(True)
         f.setPointSize(max(10, f.pointSize() + 1))
@@ -89,7 +90,7 @@ class FileCrossDialog(QDialog):
             shot.setAlignment(Qt.AlignmentFlag.AlignCenter)
             shot.setFrameShape(QFrame.Shape.Box)
             v.addWidget(shot, 0, Qt.AlignmentFlag.AlignCenter)
-            cap = QLabel("첫 쪽" if self._forward else "마지막 쪽")
+            cap = QLabel(tr("첫 쪽") if self._forward else tr("마지막 쪽"))
             cap.setAlignment(Qt.AlignmentFlag.AlignCenter)
             cap.setStyleSheet("color:#888;")
             v.addWidget(cap)
@@ -98,8 +99,8 @@ class FileCrossDialog(QDialog):
                                | QDialogButtonBox.StandardButton.No)
         self.btn_yes = box.button(QDialogButtonBox.StandardButton.Yes)
         self.btn_no = box.button(QDialogButtonBox.StandardButton.No)
-        self.btn_yes.setText("예")
-        self.btn_no.setText("아니오")
+        self.btn_yes.setText(tr("예"))
+        self.btn_no.setText(tr("아니오"))
         self.btn_yes.setDefault(True)           # 누르던 흐름을 잇는 쪽이 기본
         self.btn_yes.setAutoDefault(True)
         box.accepted.connect(self.accept)

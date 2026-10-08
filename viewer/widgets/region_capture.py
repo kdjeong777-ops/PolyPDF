@@ -15,6 +15,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QRect, QPoint, QEventLoop, QSize
 from PyQt6.QtGui import QPainter, QColor, QPen, QGuiApplication, QPixmap, QCursor
 from PyQt6.QtWidgets import QWidget
+from viewer.i18n import tr
 
 _HANDLE = 8        # 핸들 히트 반경(px)
 _MIN = 12          # 최소 박스 크기
@@ -95,12 +96,12 @@ class RegionCaptureOverlay(QWidget):
             p.setPen(QColor("white"))
             size_txt = f"{r.width()} × {r.height()}"
             if self._phase == "edit":
-                size_txt += "    사이즈 설정 후 더블클릭하여 캡쳐하세요"
+                size_txt += tr("    사이즈 설정 후 더블클릭하여 캡쳐하세요")
             p.drawText(r.x(), max(12, r.y() - 6), size_txt)
         # 안내
         p.setPen(QColor("white"))
-        hint = ("좌클릭=좌상단 지정" if self._phase == "place"
-                else "Enter/더블클릭=캡쳐, 드래그=이동/크기조절, Esc=취소")
+        hint = (tr("좌클릭=좌상단 지정") if self._phase == "place"
+                else tr("Enter/더블클릭=캡쳐, 드래그=이동/크기조절, Esc=취소"))
         p.drawText(16, 24, hint)
 
     def _handle_points(self, r: QRect) -> dict:

@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from viewer.pdf_font import fresh_font_name, subset_fonts_safely
+from viewer.i18n import tr
 
 BACKUP_SUFFIX = ".textfix.bak.pdf"
 # 260913-6(SOT §5.4): 글자층 다시 쓰기 — 줄 높이 대비 글자 크기와 밑줄(글자 바닥) 자리
@@ -203,20 +204,20 @@ def plan_layer_lines(rows) -> list:
 def layer_rewrite_blocker(page, lines) -> str:
     """다시 써도 안전한가 — 안전하면 빈 문자열, 아니면 그 까닭(SOT §5.4 안전 조건)."""
     if not lines:
-        return "적을 줄이 없다"
+        return tr("적을 줄이 없다")
     try:
         if int(page.rotation or 0) != 0:
-            return "돌린 쪽"
+            return tr("돌린 쪽")
     except Exception:
-        return "쪽 정보를 못 읽음"
+        return tr("쪽 정보를 못 읽음")
     try:
         for span in page.get_texttrace():
             if span.get("type") != 3 and span.get("chars"):
-                return "보이는 글자가 있다"
+                return tr("보이는 글자가 있다")
     except Exception:
-        return "글자층을 못 읽음"
+        return tr("글자층을 못 읽음")
     if not _korean_font_file():
-        return "글꼴 파일이 없다"
+        return tr("글꼴 파일이 없다")
     return ""
 
 
@@ -340,10 +341,10 @@ def apply_fixes_by_page(src, fixes_by_page: dict, *, rows_by_page=None,
     try:
         import fitz
     except Exception as e:                       # noqa: BLE001
-        return "", f"PyMuPDF 없음: {e}"
+        return "", tr('PyMuPDF 없음: {e}').format(e=e)
     src = Path(src)
     if not src.exists():
-        return "", f"원본이 없습니다: {src}"
+        return "", tr('원본이 없습니다: {src}').format(src=src)
     fixes_by_page = {int(k): v for k, v in (fixes_by_page or {}).items() if v}
     if not fixes_by_page:
         return str(src), ""
@@ -374,7 +375,7 @@ def apply_fixes_by_page(src, fixes_by_page: dict, *, rows_by_page=None,
                 unwritten += _replace_lines(fitz, doc.load_page(pno), targets, ff)
                 done += 1
             if not done:
-                return "", "고친 줄의 위치를 알 수 없습니다(OCR 좌표 없음)."
+                return "", tr("고친 줄의 위치를 알 수 없습니다(OCR 좌표 없음).")
             # 260913-4(SOT §5.2): 한글을 적으려 넣은 글꼴이 **통째로** 들어간다(실측 4.10MB →
             #   11.59MB). 쓴 글자만 남긴다 — 규칙은 마스터 §4.5.10 ①(실패해도 저장은 한다).
             subset_fonts_safely(doc)
@@ -391,9 +392,9 @@ def apply_fixes_by_page(src, fixes_by_page: dict, *, rows_by_page=None,
 
     notes = []
     if unwritten:
-        notes.append(f"{unwritten}줄은 자리가 좁아 다시 적지 못했습니다(그 줄의 옛 글자는 지워졌습니다).")
+        notes.append(tr('{unwritten}줄은 자리가 좁아 다시 적지 못했습니다(그 줄의 옛 글자는 지워졌습니다).').format(unwritten=unwritten))
     if no_place:
-        notes.append("위치를 몰라 건너뛴 쪽: " + ", ".join(str(p) for p in no_place))
+        notes.append(tr('위치를 몰라 건너뛴 쪽: {join}').format(join=', '.join((str(p) for p in no_place))))
     warn = chr(10).join(notes)
     if finalize is not None:
         try:

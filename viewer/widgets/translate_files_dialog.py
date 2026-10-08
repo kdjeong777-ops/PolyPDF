@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..study import translate_api as tapi
+from viewer.i18n import tr
 
 
 def _has_pdf_urls(mime) -> bool:
@@ -52,7 +53,7 @@ class _BatchWorker(QThread):
             if self._stop:
                 break
             name = Path(p).name
-            self.progress.emit(i, total, f"[{i}/{total}] {name} 그림·표·수식 추출 중…")
+            self.progress.emit(i, total, tr('[{i}/{total}] {name} 그림·표·수식 추출 중…').format(i=i, total=total, name=name))
             # P4c/P4d/P4e: 그림·표·수식을 먼저 추출 → 영역을 본문에서 제외/토큰화
             figs, tabs = self._build_assets(p)
             from ..study import pdf_assets as pa
@@ -60,14 +61,14 @@ class _BatchWorker(QThread):
             equations = pa.extract_equations(p, adir)
             regions = pa.regions_by_page(figs, tabs)
             placeholders = pa.equation_placeholders(equations)
-            self.progress.emit(i, total, f"[{i}/{total}] {name} 본문 추출·번역 중…")
+            self.progress.emit(i, total, tr('[{i}/{total}] {name} 본문 추출·번역 중…').format(i=i, total=total, name=name))
             # P1: 머리말/꼬리말·표/캡션·사이드바 제외 + 수식 토큰화 정제 본문(실패 시 폴백)
             from ..study import pdf_extract as px
             text = px.extract_clean_text(p, max_chars=200000, exclude_regions=regions,
                                          placeholders=placeholders) \
                 or tapi.extract_pdf_text(p, max_chars=200000)
             if not text:
-                self.one_done.emit(str(p), False, "본문 텍스트 추출 실패(스캔본일 수 있음)")
+                self.one_done.emit(str(p), False, tr("본문 텍스트 추출 실패(스캔본일 수 있음)"))
                 continue
             glossary = []
             try:
@@ -79,7 +80,7 @@ class _BatchWorker(QThread):
             out, dbg = tapi.translate_text_debug(
                 self._key, text, model=self._model, auth=self._auth, glossary=glossary)
             if not out:
-                self.one_done.emit(str(p), False, (dbg[-1] if dbg else "번역 실패"))
+                self.one_done.emit(str(p), False, (dbg[-1] if dbg else tr("번역 실패")))
                 continue
             # P3: 요약 + 서지(APA)
             translation = out
@@ -98,9 +99,9 @@ class _BatchWorker(QThread):
                     citation=citation, summary=summary, translation=translation,
                     glossary=glossary, figures=figs, tables=tabs, equations=equations)
                 ok += 1
-                self.one_done.emit(str(p), True, f"저장: {Path(pdf_path or docx_path).name}")
+                self.one_done.emit(str(p), True, tr('저장: {name}').format(name=Path(pdf_path or docx_path).name))
             except Exception as e:
-                self.one_done.emit(str(p), False, f"저장 실패: {type(e).__name__}: {str(e)[:60]}")
+                self.one_done.emit(str(p), False, tr('저장 실패: {name__}: {e}').format(name__=type(e).__name__, e=str(e)[:60]))
         if store is not None:
             try:
                 store.close()
@@ -151,7 +152,7 @@ class TranslateFilesDialog(QDialog):
     def __init__(self, all_files: list, preselected: list = None,
                  prefs: dict = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("PDF번역")
+        self.setWindowTitle(tr("PDF번역"))
         self.setMinimumSize(760, 520)
         self.setAcceptDrops(True)
         self._prefs = prefs or {}
@@ -162,8 +163,8 @@ class TranslateFilesDialog(QDialog):
 
         v = QVBoxLayout(self)
         v.addWidget(QLabel(
-            "왼쪽에서 파일을 골라 <b>→</b> 로 오른쪽(번역 대상)에 등록하세요. "
-            "오른쪽 <b>위에서부터</b> 순서대로 번역합니다. 외부 PDF는 끌어다 놓기로 추가."))
+            tr("왼쪽에서 파일을 골라 <b>→</b> 로 오른쪽(번역 대상)에 등록하세요. "
+            "오른쪽 <b>위에서부터</b> 순서대로 번역합니다. 외부 PDF는 끌어다 놓기로 추가.")))
 
         self._all_files = [str(p) for p in (all_files or [])
                            if str(p).lower().endswith(".pdf")]
@@ -172,18 +173,18 @@ class TranslateFilesDialog(QDialog):
         # 좌: 전체 파일 + 정렬(이름/수정일, 오름/내림)
         lcol = QVBoxLayout()
         lhdr = QHBoxLayout()
-        lhdr.addWidget(QLabel("책갈피창 전체 파일"))
+        lhdr.addWidget(QLabel(tr("책갈피창 전체 파일")))
         lhdr.addStretch(1)
         from PyQt6.QtWidgets import QComboBox
         self.cmb_sort = QComboBox()
-        self.cmb_sort.addItem("이름순", "name")
-        self.cmb_sort.addItem("수정일순", "mtime")
-        self.cmb_sort.setToolTip("좌측 파일 목록 정렬 기준")
+        self.cmb_sort.addItem(tr("이름순"), "name")
+        self.cmb_sort.addItem(tr("수정일순"), "mtime")
+        self.cmb_sort.setToolTip(tr("좌측 파일 목록 정렬 기준"))
         self.cmb_sort.setCurrentIndex(1)            # 초기 정렬 = 수정일순
         self.cmb_sort.currentIndexChanged.connect(lambda *_: self._populate_left())
         self.btn_sort_dir = QPushButton("▼")
         self.btn_sort_dir.setFixedWidth(28)
-        self.btn_sort_dir.setToolTip("오름/내림차순 전환")
+        self.btn_sort_dir.setToolTip(tr("오름/내림차순 전환"))
         self._sort_desc = True                      # 초기 = 내림차순
         self.btn_sort_dir.clicked.connect(self._toggle_sort_dir)
         lhdr.addWidget(self.cmb_sort)
@@ -199,7 +200,7 @@ class TranslateFilesDialog(QDialog):
         mid = QVBoxLayout()
         mid.addStretch(1)
         btn_add = QPushButton("→")
-        btn_add.setToolTip("선택 파일을 오른쪽(번역 대상)으로")
+        btn_add.setToolTip(tr("선택 파일을 오른쪽(번역 대상)으로"))
         btn_add.setFixedWidth(44)
         btn_add.clicked.connect(self._move_selected)
         mid.addWidget(btn_add)
@@ -208,7 +209,7 @@ class TranslateFilesDialog(QDialog):
 
         # 우: 번역 대상 + ▲▼·삭제
         rcol = QVBoxLayout()
-        rcol.addWidget(QLabel("번역 대상 (위→아래 순서)"))
+        rcol.addWidget(QLabel(tr("번역 대상 (위→아래 순서)")))
         rlist_row = QHBoxLayout()
         self.right = QListWidget()
         self.right.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -223,7 +224,8 @@ class TranslateFilesDialog(QDialog):
         btn_dn.clicked.connect(lambda: self._move_right(+1))
         rbtncol.addWidget(btn_up); rbtncol.addWidget(btn_dn)
         rbtncol.addSpacing(18)
-        btn_del = QPushButton("삭제"); btn_del.setFixedWidth(40)
+        btn_del = QPushButton(tr("삭제"))
+        btn_del.setFixedWidth(max(40, btn_del.fontMetrics().horizontalAdvance(btn_del.text()) + 14))   # 언어마다 길이가 다르다
         btn_del.clicked.connect(self._delete_right)
         rbtncol.addWidget(btn_del)
         rbtncol.addStretch(1)
@@ -237,17 +239,17 @@ class TranslateFilesDialog(QDialog):
 
         # 실행 행
         run_row = QHBoxLayout()
-        self.btn_run = QPushButton("번역 실행")
+        self.btn_run = QPushButton(tr("번역 실행"))
         self.btn_run.clicked.connect(self._run)
-        self.btn_close = QPushButton("닫기")
+        self.btn_close = QPushButton(tr("닫기"))
         self.btn_close.clicked.connect(self.reject)
         run_row.addWidget(self.btn_run)
         run_row.addStretch(1)
         run_row.addWidget(self.btn_close)
         v.addLayout(run_row)
 
-        self.info = QLabel("각 PDF 옆에 '{이름}_번역.docx/.pdf' 로 저장됩니다 "
-                           "(서지→요약→전문→용어집, PDF 책갈피).")
+        self.info = QLabel(tr("각 PDF 옆에 '{이름}_번역.docx/.pdf' 로 저장됩니다 "
+                           "(서지→요약→전문→용어집, PDF 책갈피)."))
         self.info.setStyleSheet("color:#555;")
         self.info.setWordWrap(True)
         v.addWidget(self.info)
@@ -257,7 +259,7 @@ class TranslateFilesDialog(QDialog):
         v.addWidget(self.log)
 
         # 드롭 오버레이
-        self._overlay = QLabel("📄 여기에 PDF 를 끌어다 놓으세요 (번역 목록에 추가)", self)
+        self._overlay = QLabel(tr("📄 여기에 PDF 를 끌어다 놓으세요 (번역 목록에 추가)"), self)
         self._overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._overlay.setStyleSheet(
             "QLabel{background:rgba(42,125,225,0.16);border:3px dashed #2a7de1;"
@@ -372,19 +374,19 @@ class TranslateFilesDialog(QDialog):
     def _run(self):
         files = self.result_files()
         if not files:
-            self.info.setText("번역할 파일을 오른쪽에 추가하세요.")
+            self.info.setText(tr("번역할 파일을 오른쪽에 추가하세요."))
             return
         if not tapi.available():
-            self.info.setText("번역 모듈(anthropic)이 없습니다. 최신 배포본을 사용하세요.")
+            self.info.setText(tr("번역 모듈(anthropic)이 없습니다. 최신 배포본을 사용하세요."))
             return
         if self._auth != "login" and not self._key:
-            self.info.setText("설정 → '번역(Claude)' 에서 API 키를 입력하거나 "
-                              "인증 방식을 'Claude 로그인'으로 바꾸세요.")
+            self.info.setText(tr("설정 → '번역(Claude)' 에서 API 키를 입력하거나 "
+                              "인증 방식을 'Claude 로그인'으로 바꾸세요."))
             return
         if not bool(self._prefs.get("translate_consent", False)):
             if QMessageBox.question(
-                    self, "외부 전송 동의",
-                    f"{len(files)}개 파일 본문이 Anthropic(Claude) 서버로 전송됩니다.\n계속할까요?") \
+                    self, tr("외부 전송 동의"),
+                    tr('{n}개 파일 본문이 Anthropic(Claude) 서버로 전송됩니다.\n계속할까요?').format(n=len(files))) \
                     != QMessageBox.StandardButton.Yes:
                 return
         self.btn_run.setEnabled(False)
@@ -399,7 +401,7 @@ class TranslateFilesDialog(QDialog):
         # 백그라운드 실행 — 창을 숨기고 진행은 메인 하부 상태바에 표시(다른 작업 가능)
         self._bg = True
         self.hide()
-        self._status_msg(f"PDF 번역 시작… (0/{self._total})")
+        self._status_msg(tr('PDF 번역 시작… (0/{total})').format(total=self._total))
 
     def _win_status(self):
         w = self.parent()
@@ -420,8 +422,8 @@ class TranslateFilesDialog(QDialog):
 
     def _on_all_done(self, ok, total):
         self.btn_run.setEnabled(True)
-        self.info.setText(f"완료: {ok}/{total} 개 번역 저장 (각 PDF 옆 '_번역.docx/.pdf').")
-        self._status_msg(f"PDF 번역 완료: {ok}/{total}", 8000)
+        self.info.setText(tr("완료: {ok}/{total} 개 번역 저장 (각 PDF 옆 '_번역.docx/.pdf').").format(ok=ok, total=total))
+        self._status_msg(tr('PDF 번역 완료: {ok}/{total}').format(ok=ok, total=total), 8000)
         # 모든 번역 종료 → 창을 다시 띄워 결과(로그) 표시
         if getattr(self, "_bg", False):
             self._bg = False

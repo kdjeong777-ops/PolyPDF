@@ -8,6 +8,7 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from viewer.indexer import PdfIndex
 from viewer import pacing as _pacing
+from viewer.i18n import tr
 
 
 class IndexWorker(QObject):
@@ -257,10 +258,10 @@ class OcrLangRepairWorker(QObject):
 
             ok, msg = study_ocr.repair_langs(self.codes, progress=_p)
             if self._cancel:
-                ok, msg = False, "내려받기를 멈췄습니다."
+                ok, msg = False, tr("내려받기를 멈췄습니다.")
             self.done.emit(bool(ok), str(msg))
         except Exception as e:
-            self.done.emit(False, "언어 자료 준비 실패: %s" % e)
+            self.done.emit(False, tr("언어 자료 준비 실패: %s") % e)
         finally:
             self.finished.emit()
 
@@ -344,9 +345,9 @@ class TextOcrPageWorker(QObject):
                     #   없는 쪽은 건너뛴다 — 그런 쪽은 OCR 이 원본보다 반드시 나쁘다.
                     #   그림이 섞인 쪽은 읽어서 **합친다**(§3.1.3).
                     if self.skip_text_pages and self._skippable(doc, pg):
-                        self.progress.emit(i + 1, total, f'{pg + 1}쪽 건너뜀(글자 있음)')
+                        self.progress.emit(i + 1, total, tr('{pg}쪽 건너뜀(글자 있음)').format(pg=pg + 1))
                         continue
-                    self.progress.emit(i, total, f'{pg + 1}쪽 읽는 중…')
+                    self.progress.emit(i, total, tr('{pg}쪽 읽는 중…').format(pg=pg + 1))
                     res = study_ocr.build_page(
                         doc, pg, lang=lang, dpi=self.dpi, force_ocr=True,
                         drop_watermark_bg=self.drop_watermark)
@@ -360,7 +361,7 @@ class TextOcrPageWorker(QObject):
                             pass
                     if not self._cancel:
                         self.done.emit(pg, words, int(res.get('dpi') or 0), self.token)
-                    self.progress.emit(i + 1, total, f'{pg + 1}쪽')
+                    self.progress.emit(i + 1, total, tr('{pg}쪽').format(pg=pg + 1))
                     _pacing.pace(self)
             finally:
                 doc.close()
@@ -534,7 +535,7 @@ class TextLayerWorker(QObject):
 
             def tick(k, total, p):
                 if p >= 0:
-                    self.progress.emit(k, total, f"{p + 1}쪽 글자층 쓰는 중…")
+                    self.progress.emit(k, total, tr('{p}쪽 글자층 쓰는 중…').format(p=p + 1))
                 _pacing.pace(self)
 
             tmp, stats = ta.build_layer_pdf(
@@ -697,10 +698,10 @@ class BookmarkerWorker(QObject):
                     toc_pages = []
             if toc_pages and mode in ("auto", "toc"):
                 from viewer import toc_parse
-                self.progress.emit(f"목차 쪽 {toc_pages[0]}~{toc_pages[-1]} 읽는 중...")
+                self.progress.emit(tr('목차 쪽 {toc_pages}~{toc_pages2} 읽는 중...').format(toc_pages=toc_pages[0], toc_pages2=toc_pages[-1]))
                 rows = toc_parse.parse_toc_pages(self.input_pdf, toc_pages)
                 if rows:
-                    self.progress.emit("오프셋(목차 쪽 → 실제 쪽) 추정 중...")
+                    self.progress.emit(tr("오프셋(목차 쪽 → 실제 쪽) 추정 중..."))
                     cands = toc_parse.suggest_offsets(self.input_pdf, rows, toc_pages)
                     off = self.opts.get("offset")
                     if off is None:
@@ -725,12 +726,12 @@ class BookmarkerWorker(QObject):
                 # auto 인데 항목이 없으면 종전 경로(폰트/OCR)로 계속
             # 260606-4: '자동'인데 스캔 이미지 PDF면 OCR 모드로 자동 전환
             if mode == "auto" and _pdf_is_scanned(self.input_pdf):
-                self.progress.emit("스캔 이미지 감지 — OCR 모드로 추출")
+                self.progress.emit(tr("스캔 이미지 감지 — OCR 모드로 추출"))
                 mode = "ocr"
             if mode == "ocr":
                 # 스캔/이미지 PDF → OCR로 'CHAPTER 1' 등 헤딩 인식
                 from viewer.study.ocr_headings import extract_ocr_bookmarks
-                self.progress.emit("OCR 헤딩 인식 중...")
+                self.progress.emit(tr("OCR 헤딩 인식 중..."))
                 bookmarks = extract_ocr_bookmarks(
                     self.input_pdf,
                     use_font_auto=bool(self.opts.get("ocr_font_auto", True)),
@@ -739,7 +740,7 @@ class BookmarkerWorker(QObject):
                 )
                 method = "ocr"
             else:
-                self.progress.emit("책갈피 추출 중...")
+                self.progress.emit(tr("책갈피 추출 중..."))
                 res = bridge.extract_auto(
                     self.input_pdf,
                     mode=mode,
@@ -824,7 +825,7 @@ class BookmarkerWorker(QObject):
 
             pdf_out = None
             if self.opts.get("save_pdf", True):
-                self.progress.emit("PDF에 책갈피 임베드 중...")
+                self.progress.emit(tr("PDF에 책갈피 임베드 중..."))
                 if self.opts.get("overwrite"):
                     # 260606-4 / 260905(§4.4.6.2): 현재 PDF에 저장 — 임시 파일로 쓰고 교체.
                     pdf_out = self._overwrite_in_place(bridge, bookmarks)
@@ -837,7 +838,7 @@ class BookmarkerWorker(QObject):
 
             txt_out = None
             if self.opts.get("save_txt", False):
-                self.progress.emit("책갈피 텍스트 저장 중...")
+                self.progress.emit(tr("책갈피 텍스트 저장 중..."))
                 txt_out = bridge.write_txt(bookmarks, out_dir / f"{stem}_bookmarks.txt")
 
             self.finished.emit({
@@ -949,7 +950,7 @@ class StudyBuildWorker(QObject):
             store.set_meta(fkey, str(self.pdf_path), total, _lang)
 
             done0 = len(store.done_pages(fkey))
-            self.progress.emit(done0, total, f"재개: {done0}/{total} 완료됨")
+            self.progress.emit(done0, total, tr('재개: {done0}/{total} 완료됨').format(done0=done0, total=total))
 
             processed = done0
             ocr_used = False
@@ -988,7 +989,7 @@ class StudyBuildWorker(QObject):
 
             vocab_summary = None
             if self.with_vocab and not self._cancel:
-                self.progress.emit(total, total, "어휘 분석 중...")
+                self.progress.emit(total, total, tr("어휘 분석 중..."))
                 from viewer.study import vocab as study_vocab
                 # 260910(SOT §3.1.5): 텍스트 창이 정제한 글로 낱말을 뽑는다
                 try:
@@ -1054,7 +1055,7 @@ class StudyBuildWorker(QObject):
             if dic.is_online_fetched(lemma) or dic.lookup(lemma):
                 continue
             if idx % 5 == 0:
-                self.progress.emit(idx, total, f"인터넷 사전 조회 {idx}/{total}")
+                self.progress.emit(idx, total, tr('인터넷 사전 조회 {idx}/{total}').format(idx=idx, total=total))
             ko = lemma if str(lang).startswith("ko") else ""
             en = lemma if not str(lang).startswith("ko") else ""
             try:
@@ -1103,7 +1104,7 @@ class StudyExportWorker(QObject):
             store = StudyStore(self.db_path)
             export_study_docx(
                 store, self.file_key, self.out_path,
-                progress=lambda i, n: self.progress.emit(i, n, "Word 저장 중..."),
+                progress=lambda i, n: self.progress.emit(i, n, tr("Word 저장 중...")),
                 **self.opts)
             self.finished.emit({"out": str(self.out_path)})
         except Exception as e:
@@ -1156,7 +1157,7 @@ class StudyMp3Worker(QObject):
                     done += 1
                 except Exception:
                     pass
-            self.progress.emit(n, n, "완료")
+            self.progress.emit(n, n, tr("완료"))
             self.finished.emit({"saved": done, "skipped": skipped, "total": n,
                                 "cancelled": self._cancel})
         except Exception as e:

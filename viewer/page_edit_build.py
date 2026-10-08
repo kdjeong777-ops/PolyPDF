@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from viewer.i18n import tr
 
 
 class Cancelled(Exception):
@@ -86,7 +87,7 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None) -> dict:
         ownpos, outc, calls = {}, 0, 0
         try:
             for key, a, b, owns in runs(plan, str(src)):
-                tick(outc, total, "쪽 복사 중")
+                tick(outc, total, tr("쪽 복사 중"))
                 if key is None:
                     doc = sdoc
                 else:
@@ -109,7 +110,7 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None) -> dict:
             bms = [(t, ownpos[p1 - 1] + 1, lv) for (t, p1, lv) in (bookmarks_raw or []) if (p1 - 1) in ownpos]
             if bms:
                 apply_toc(odoc, bms)
-            tick(outc, total, "저장 중")
+            tick(outc, total, tr("저장 중"))
             odoc.save(str(recon), garbage=4, deflate=True)
         finally:
             odoc.close()
@@ -120,7 +121,7 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None) -> dict:
                     except Exception:
                         pass
             sdoc.close()
-        tick(total, total, "원본에 놓을 준비")
+        tick(total, total, tr("원본에 놓을 준비"))
         return {"path": str(recon), "pages": outc, "calls": calls, "bookmarks": len(bms)}
     except BaseException:
         for t in (recon, book_tmp):

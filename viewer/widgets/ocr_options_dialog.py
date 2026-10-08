@@ -14,12 +14,13 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
                              QRadioButton, QSpinBox, QCheckBox, QPushButton,
                              QDialogButtonBox, QButtonGroup)
+from viewer.i18n import tr, tr_noop
 
 # (표시 이름, Tesseract 언어 문자열) — "" 는 '자동'(텍스트층으로 짐작)
-LANGS = [("한글 + 영문 (권장)", "kor+eng"),
-         ("한글만", "kor"),
-         ("영문만", "eng"),
-         ("자동", "")]
+LANGS = [(tr_noop("한글 + 영문 (권장)"), "kor+eng"),
+         (tr_noop("한글만"), "kor"),
+         (tr_noop("영문만"), "eng"),
+         (tr_noop("자동"), "")]
 
 
 class OcrOptionsDialog(QDialog):
@@ -28,17 +29,17 @@ class OcrOptionsDialog(QDialog):
     def __init__(self, parent=None, *, page: int = 0, page_count: int = 1,
                  last=None):
         super().__init__(parent)
-        self.setWindowTitle("OCR 다시 읽기")
+        self.setWindowTitle(tr("OCR 다시 읽기"))
         self._page = int(page)
         self._count = max(1, int(page_count))
         last = last or {}
 
         v = QVBoxLayout(self)
-        v.addWidget(QLabel("어디를 다시 읽을까요?"))
+        v.addWidget(QLabel(tr("어디를 다시 읽을까요?")))
 
-        self.rb_one = QRadioButton(f"현재 쪽 ({self._page + 1}쪽)")
-        self.rb_range = QRadioButton("쪽 범위")
-        self.rb_all = QRadioButton(f"문서 전체 ({self._count}쪽)")
+        self.rb_one = QRadioButton(tr('현재 쪽 ({page}쪽)').format(page=self._page + 1))
+        self.rb_range = QRadioButton(tr("쪽 범위"))
+        self.rb_all = QRadioButton(tr('문서 전체 ({count}쪽)').format(count=self._count))
         grp = QButtonGroup(self)
         for b in (self.rb_all, self.rb_one, self.rb_range):
             grp.addButton(b)
@@ -71,28 +72,28 @@ class OcrOptionsDialog(QDialog):
         self.rb_range.toggled.connect(self.sp_to.setEnabled)
 
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel("언어"))
+        row2.addWidget(QLabel(tr("언어")))
         self.cmb_lang = QComboBox()
         for name, code in LANGS:
-            self.cmb_lang.addItem(name, code)
+            self.cmb_lang.addItem(tr(name), code)
         want = last.get("lang", "kor+eng")
         i = self.cmb_lang.findData(want)
         self.cmb_lang.setCurrentIndex(i if i >= 0 else 0)
         row2.addWidget(self.cmb_lang, 1)
         v.addLayout(row2)
 
-        self.cb_wm = QCheckBox("뒷배경 워터마크는 읽지 않기")
+        self.cb_wm = QCheckBox(tr("뒷배경 워터마크는 읽지 않기"))
         self.cb_wm.setChecked(bool(last.get("watermark", True)))
         self.cb_wm.setToolTip(
-            "본문 뒤에 연하게 깔린 글씨를 지우고 읽습니다. "
-            "연한 진짜 글자(회색 캡션 등)도 함께 사라질 수 있습니다.")
+            tr("본문 뒤에 연하게 깔린 글씨를 지우고 읽습니다. "
+            "연한 진짜 글자(회색 캡션 등)도 함께 사라질 수 있습니다."))
         v.addWidget(self.cb_wm)
 
-        self.cb_skip = QCheckBox("글자가 이미 있는 쪽은 건너뛰기 (권장)")
+        self.cb_skip = QCheckBox(tr("글자가 이미 있는 쪽은 건너뛰기 (권장)"))
         self.cb_skip.setChecked(bool(last.get("skip_text", True)))
         self.cb_skip.setToolTip(
-            "글자층이 멀쩡한 쪽은 OCR 이 원본보다 반드시 나쁩니다. "
-            "그림이 섞인 쪽은 건너뛰지 않고, 그림 속 글만 더해 줍니다.")
+            tr("글자층이 멀쩡한 쪽은 OCR 이 원본보다 반드시 나쁩니다. "
+            "그림이 섞인 쪽은 건너뛰지 않고, 그림 속 글만 더해 줍니다."))
         v.addWidget(self.cb_skip)
 
         self.lbl_note = QLabel("")
@@ -106,8 +107,8 @@ class OcrOptionsDialog(QDialog):
 
         # 260909-2: 잘못 읽힌 문서를 **원래대로 되돌릴 길**이 있어야 한다(SOT §3.1.2).
         self._revert = False
-        self.btn_revert = QPushButton("원래 글자층 보기")
-        self.btn_revert.setToolTip("이 문서의 'OCR 로 보기' 표시를 지웁니다.")
+        self.btn_revert = QPushButton(tr("원래 글자층 보기"))
+        self.btn_revert.setToolTip(tr("이 문서의 'OCR 로 보기' 표시를 지웁니다."))
         self.btn_revert.clicked.connect(self._do_revert)
         v.addWidget(self.btn_revert)
 
@@ -147,10 +148,9 @@ class OcrOptionsDialog(QDialog):
         # 실측 300dpi 한 쪽 4.4초(단어학습 SOT §14.7) — 대략만 알린다
         secs = int(n * 4.5)
         if n <= 1:
-            self.lbl_note.setText("한 쪽만 읽습니다. 몇 초 걸립니다.")
+            self.lbl_note.setText(tr("한 쪽만 읽습니다. 몇 초 걸립니다."))
         elif secs < 90:
-            self.lbl_note.setText(f"{n}쪽 — 대략 {secs}초 걸립니다. 도중에 멈출 수 있습니다.")
+            self.lbl_note.setText(tr('{n}쪽 — 대략 {secs}초 걸립니다. 도중에 멈출 수 있습니다.').format(n=n, secs=secs))
         else:
             self.lbl_note.setText(
-                f"{n}쪽 — 대략 {secs // 60}분 걸립니다. 도중에 멈출 수 있고, "
-                "읽은 쪽까지는 남습니다.")
+                tr('{n}쪽 — 대략 {secs}분 걸립니다. 도중에 멈출 수 있고, 읽은 쪽까지는 남습니다.').format(n=n, secs=secs // 60))

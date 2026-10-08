@@ -18,6 +18,7 @@ import importlib
 import sys
 from pathlib import Path
 from typing import Iterable, Optional
+from viewer.i18n import tr
 
 _PKG_NAME = "pdf_bookmarker"
 _loaded = None              # type: ignore[var-annotated]
@@ -42,8 +43,7 @@ def _try_import() -> Optional[object]:
         return None
     if not _is_valid(m):
         _status_msg = (
-            f"'{_PKG_NAME}' 가 namespace package 로 로드됨 — 잘못된 경로일 가능성. "
-            f"패키지의 부모(=__init__.py 가 들어있는 폴더의 상위)를 지정하세요."
+            tr("'{PKG_NAME}' 가 namespace package 로 로드됨 — 잘못된 경로일 가능성. 패키지의 부모(=__init__.py 가 들어있는 폴더의 상위)를 지정하세요.").format(PKG_NAME=_PKG_NAME)
         )
         # 다음 후보가 올바른 경로일 수 있도록 캐시에서 제거
         sys.modules.pop(_PKG_NAME, None)
@@ -89,7 +89,7 @@ def _try_vendored() -> Optional[object]:
         _status_msg = f"vendored import failed: {type(e).__name__}: {e}"
         return None
     if not _is_valid(vendored):
-        _status_msg = "vendored 'pdf_bookmarker' 가 비완전 — 패키지 구조를 확인하세요."
+        _status_msg = tr("vendored 'pdf_bookmarker' 가 비완전 — 패키지 구조를 확인하세요.")
         return None
     sys.modules[_PKG_NAME] = vendored
     return vendored
@@ -149,7 +149,7 @@ def get_status() -> str:
     """마지막 시도의 결과 메시지(없으면 빈 문자열)."""
     if _loaded is not None:
         return f"loaded from {getattr(_loaded, '__file__', '?')}"
-    return _status_msg or "패키지를 찾지 못했습니다."
+    return _status_msg or tr("패키지를 찾지 못했습니다.")
 
 
 # ─── 얇은 API 래퍼 (모듈 미로드 시 RuntimeError) ─────────────────────

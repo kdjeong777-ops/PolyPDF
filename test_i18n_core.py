@@ -86,6 +86,8 @@ try:
     chk(i18n.trp("메뉴", "열기") == "Open" and i18n.trp("트리", "열기") == "Expand", "B trp 문맥별 번역")
     chk(i18n.trn("파일 {n}개", 1).format(n=1) == "1 file" and i18n.trn("파일 {n}개", 3).format(n=3) == "3 files",
         "B trn 복수형(en)")
+    chk(i18n.tr("") == "" and i18n.tr(None) is None,
+        "B 빈 값은 그대로(gettext 는 빈 키에 .mo 머리를 돌려준다 — tr(변수) 가 비었을 때)")
 
     # D
     i18n.install(None, "de")

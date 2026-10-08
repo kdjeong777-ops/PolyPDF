@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 import fitz
-from viewer.i18n import tr_noop   # 261008: 목록 원문 표시 — 쓰는 곳에서 tr()(다국어 SOT §6)
+from viewer.i18n import tr, tr_noop
 
 
 class MergeCancelled(Exception):
@@ -1193,7 +1193,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         # 2) 앞장(표지·목차) 문서 생성 — 목차 쪽 수 확정용 1차
         cover_doc = None; toc_doc = None
         if make_cover:
-            _tk("표지 생성 중…")
+            _tk(tr("표지 생성 중…"))
             if not fast and tmpdir is not None:
                 cp = str(tmpdir / "cover.pdf"); cd = str(tmpdir / "cover.docx")
                 if _fill_cover_docx(s.get("cover_template", ""), s.get("cover", {}), cd,
@@ -1210,7 +1210,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         names = [fb["name"] for fb in file_blocks]
         toc_pages = 0
         if make_toc:
-            _tk("목차 생성 중…")
+            _tk(tr("목차 생성 중…"))
             toc_doc = _make_toc_doc([(n, "") for n in names], fw, fh, s, fast, tmpdir, 0)
             toc_pages = toc_doc.page_count
         front_pages = cover_pages + toc_pages
@@ -1271,7 +1271,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
             else:  # content
                 cells = _render_content_sheet(final, slabs[d["slab"]]["chunk"], s, d["phys"], _doc)
                 page_infos.append({"kind": "content", "cells": cells})
-            _tk("배치 중…")
+            _tk(tr("배치 중…"))
 
         # 6) 번호 인쇄 — 표지 없음 / 목차 로마자 / 본문 아라비아(간지·빈페이지 숨김)
         idx = 0
@@ -1415,7 +1415,7 @@ def build_twoup(items, settings, out_path, gen_bookmarks_fn=None, log=None, prog
 
     final, _infos = _assemble(items, s, fast=False, gen_bookmarks_fn=gen_bookmarks_fn,
                               tick=_tick, tmpdir=tmpdir)
-    _tick("최종 저장 중…")
+    _tick(tr("최종 저장 중…"))
     # 260913-5(마스터 SOT §4.5.10 ①): 표지·목차·간지의 fitz 폴백(_kr_text)과 쪽번호 글꼴 지정
     #   (_draw_footer)은 fontfile= 로 글꼴 **전체**를 넣는다(2파일 병합 7.48MB → 0.39MB).
     #   글은 새로 만든 쪽에만 적으므로 같은 이름 재사용 함정(②)은 없다.
@@ -1425,5 +1425,5 @@ def build_twoup(items, settings, out_path, gen_bookmarks_fn=None, log=None, prog
     pages = final.page_count
     final.close()
     if log:
-        log(f"다단 생성 완료: 총 {pages}쪽")
+        log(tr('다단 생성 완료: 총 {pages}쪽').format(pages=pages))
     return out_path

@@ -22,7 +22,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
                  preset_api=None, sample=None, n_files_sel: int = 0,
                  thumb_pages=None, file_paths=None):
         super().__init__(parent)
-        self.setWindowTitle("인쇄")
+        self.setWindowTitle(tr("인쇄"))
         self.resize(800, 600)
         self.page_count = max(1, page_count)
         self._cur_page = cur_page
@@ -46,29 +46,29 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         # ── 좌 ──
         left = QVBoxLayout()
         self.grp = QButtonGroup(self)
-        self.rb_all = QRadioButton(f"현재 문서 전체 ({page_count} 페이지)")
+        self.rb_all = QRadioButton(tr('현재 문서 전체 ({page_count} 페이지)').format(page_count=page_count))
         self.rb_all.setChecked(True)
-        self.rb_cur = QRadioButton(f"현재 페이지 (p.{cur_page + 1})")
-        self.rb_thumb = QRadioButton(f"선택한 썸네일 페이지 ({n_thumb_sel}개)")
+        self.rb_cur = QRadioButton(tr('현재 페이지 (p.{cur_page})').format(cur_page=cur_page + 1))
+        self.rb_thumb = QRadioButton(tr('선택한 썸네일 페이지 ({n_thumb_sel}개)').format(n_thumb_sel=n_thumb_sel))
         self.rb_thumb.setEnabled(n_thumb_sel > 0)
-        self.rb_files = QRadioButton(f"선택한 책갈피 파일 인쇄 ({n_files_sel}개)")
+        self.rb_files = QRadioButton(tr('선택한 책갈피 파일 인쇄 ({n_files_sel}개)').format(n_files_sel=n_files_sel))
         self.rb_files.setEnabled(n_files_sel > 0)
-        self.rb_range = QRadioButton("페이지 범위")
-        self.rb_shot = QRadioButton(f"스크린샷(선택 {n_shot_sel}개, 없으면 전체)")
+        self.rb_range = QRadioButton(tr("페이지 범위"))
+        self.rb_shot = QRadioButton(tr('스크린샷(선택 {n_shot_sel}개, 없으면 전체)').format(n_shot_sel=n_shot_sel))
         for rb in self.grp_order():
             self.grp.addButton(rb)
 
         rrow = QHBoxLayout()
         rrow.addSpacing(20)
-        rrow.addWidget(QLabel("시작"))
+        rrow.addWidget(QLabel(tr("시작")))
         self.sp_from = QSpinBox(); self.sp_from.setRange(1, page_count); self.sp_from.setValue(1)
         rrow.addWidget(self.sp_from)
-        rrow.addWidget(QLabel("끝"))
+        rrow.addWidget(QLabel(tr("끝")))
         self.sp_to = QSpinBox(); self.sp_to.setRange(1, page_count); self.sp_to.setValue(page_count)
         rrow.addWidget(self.sp_to)
         rrow.addStretch(1)
 
-        left.addWidget(QLabel("<b>인쇄 범위</b>"))
+        left.addWidget(QLabel(tr("<b>인쇄 범위</b>")))
         for rb in (self.rb_all, self.rb_cur, self.rb_thumb, self.rb_files, self.rb_range):
             left.addWidget(rb)
         left.addLayout(rrow)
@@ -82,15 +82,15 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
             self.rb_thumb.setChecked(True)
 
         nrow = QHBoxLayout()
-        self.chk_nup = QCheckBox("다단 인쇄")
+        self.chk_nup = QCheckBox(tr("다단 인쇄"))
         self.chk_nup.toggled.connect(self._on_nup_toggle)
         self.cmb_preset = QComboBox(); self.cmb_preset.setMinimumWidth(120)
         self._reload_presets()
         self.cmb_preset.activated.connect(self._on_preset_pick)
-        self.btn_nup = QPushButton("설정"); self.btn_nup.setEnabled(False)
+        self.btn_nup = QPushButton(tr("설정")); self.btn_nup.setEnabled(False)
         self.btn_nup.clicked.connect(self._open_nup)
         nrow.addWidget(self.chk_nup)
-        nrow.addWidget(QLabel("스타일:"))
+        nrow.addWidget(QLabel(tr("스타일:")))
         nrow.addWidget(self.cmb_preset, 1)
         nrow.addWidget(self.btn_nup)
         left.addLayout(nrow)
@@ -101,7 +101,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         # ── 우: 미리보기 ──
         right = QVBoxLayout()
         prow = QHBoxLayout()
-        prow.addWidget(QLabel("<b>미리보기</b>"))
+        prow.addWidget(QLabel(tr("<b>미리보기</b>")))
         prow.addStretch(1)
         self.btn_prev = QPushButton("◀"); self.btn_prev.setFixedWidth(32)
         self.btn_next = QPushButton("▶"); self.btn_next.setFixedWidth(32)
@@ -110,7 +110,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self.btn_next.clicked.connect(lambda: self._step_preview(1))
         prow.addWidget(self.btn_prev); prow.addWidget(self.lbl_pageno); prow.addWidget(self.btn_next)
         right.addLayout(prow)
-        self.preview = QLabel("미리보기")
+        self.preview = QLabel(tr("미리보기"))
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumWidth(320)
         self.preview.setStyleSheet("background:#e9e9e9;border:1px solid #cccccc;")
@@ -123,8 +123,8 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
 
         bb = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        bb.button(QDialogButtonBox.StandardButton.Ok).setText("인쇄")
-        self.btn_pdf = bb.addButton("PDF로 인쇄", QDialogButtonBox.ButtonRole.ActionRole)
+        bb.button(QDialogButtonBox.StandardButton.Ok).setText(tr("인쇄"))
+        self.btn_pdf = bb.addButton(tr("PDF로 인쇄"), QDialogButtonBox.ButtonRole.ActionRole)
         self.btn_pdf.clicked.connect(self._accept_pdf)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -145,7 +145,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
 
     # ----- 프린터/옵션 -----
     def _build_printer_group(self) -> QGroupBox:
-        gb = QGroupBox("프린터 · 옵션")
+        gb = QGroupBox(tr("프린터 · 옵션"))
         form = QFormLayout(gb)
         self.cmb_printer = QComboBox()
         try:
@@ -160,16 +160,16 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         except Exception:
             pass
         self.cmb_printer.currentIndexChanged.connect(self._reload_paper_sizes)
-        form.addRow("프린터", self.cmb_printer)
+        form.addRow(tr("프린터"), self.cmb_printer)
 
         self.cmb_paper = QComboBox()
         self._reload_paper_sizes()
-        form.addRow("용지 크기", self.cmb_paper)
+        form.addRow(tr("용지 크기"), self.cmb_paper)
 
         # 크기 모드: 맞춤 / 실제 크기 / 사용자 지정 배율(%)
         srow = QHBoxLayout()
         self.cmb_size = QComboBox()
-        self.cmb_size.addItems(["맞춤(용지에 맞게)", "실제 크기", "사용자 지정 배율"])
+        self.cmb_size.addItems([tr("맞춤(용지에 맞게)"), tr("실제 크기"), tr("사용자 지정 배율")])
         srow.setContentsMargins(0, 0, 0, 0)
         srow.addWidget(self.cmb_size, 1)
         self.sp_scale = QSpinBox(); self.sp_scale.setRange(10, 400)
@@ -179,34 +179,34 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self.cmb_size.currentIndexChanged.connect(
             lambda i: self.sp_scale.setEnabled(i == 2))
         sw = QWidget(); sw.setLayout(srow)
-        form.addRow("인쇄 크기", sw)
+        form.addRow(tr("인쇄 크기"), sw)
 
         self.cmb_color = QComboBox()
         # 261008(다국어 SOT §5): 보이는 글자 + 내부 키 — 동작은 키로 고른다(화면 글자로 분기하지 않는다)
         for _t, _k in ((tr("프린터 기본"), "default"), (tr("컬러"), "color"), (tr("흑백"), "gray")):
             self.cmb_color.addItem(_t, _k)
-        form.addRow("색상", self.cmb_color)
+        form.addRow(tr("색상"), self.cmb_color)
 
         self.cmb_duplex = QComboBox()
         from viewer.twoup import DUPLEX_CHOICES       # 다단 설정 창과 같은 키(none|long|short)
         for _t, _k in DUPLEX_CHOICES:
             self.cmb_duplex.addItem(tr(_t), _k)
         self.cmb_duplex.setCurrentIndex(0)      # 기본 단면
-        form.addRow("단면/양면", self.cmb_duplex)
+        form.addRow(tr("단면/양면"), self.cmb_duplex)
 
         self.cmb_include = QComboBox()
         for _t, _k in ((tr("문서 + 주석·꾸미기"), "all"), (tr("문서만"), "doc")):
             self.cmb_include.addItem(_t, _k)
-        form.addRow("포함", self.cmb_include)
+        form.addRow(tr("포함"), self.cmb_include)
 
         self.sp_copies = QSpinBox(); self.sp_copies.setRange(1, 99); self.sp_copies.setValue(1)
         self.sp_copies.setFixedWidth(70)
-        form.addRow("부수", self.sp_copies)
+        form.addRow(tr("부수"), self.sp_copies)
 
-        self.chk_center = QCheckBox("자동 가운데 정렬(작을 때) — 해제 시 좌상 맞춤")
+        self.chk_center = QCheckBox(tr("자동 가운데 정렬(작을 때) — 해제 시 좌상 맞춤"))
         self.chk_center.setChecked(True)
         form.addRow("", self.chk_center)
-        self.chk_auto_orient = QCheckBox("페이지 방향 자동(가로/세로)")
+        self.chk_auto_orient = QCheckBox(tr("페이지 방향 자동(가로/세로)"))
         self.chk_auto_orient.setChecked(True)
         form.addRow("", self.chk_auto_orient)
         return gb
@@ -215,7 +215,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         cur = self.cmb_paper.currentData() if hasattr(self, "cmb_paper") else None
         self.cmb_paper.blockSignals(True)
         self.cmb_paper.clear()
-        self.cmb_paper.addItem("자동(페이지 크기)", None)
+        self.cmb_paper.addItem(tr("자동(페이지 크기)"), None)
         try:
             from PyQt6.QtPrintSupport import QPrinterInfo
             info = QPrinterInfo.printerInfo(self.cmb_printer.currentText())
@@ -340,7 +340,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
             if i >= 0:
                 self.cmb_duplex.setCurrentIndex(i)
             self.cmb_duplex.setEnabled(False)
-            self.cmb_duplex.setToolTip("다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서 바꾸세요).")
+            self.cmb_duplex.setToolTip(tr("다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서 바꾸세요)."))
         else:
             if self._duplex_before_nup is not None:
                 self.cmb_duplex.setCurrentIndex(self._duplex_before_nup)
@@ -410,14 +410,14 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         total = self._preview_count()
         self.btn_prev.setEnabled(self._preview_page > 0)
         self.btn_next.setEnabled(self._preview_page < total - 1)
-        self.lbl_pageno.setText(f"{'시트 ' if nup else ''}{self._preview_page + 1} / {total}")
+        self.lbl_pageno.setText(f"{tr('시트 ') if nup else ''}{self._preview_page + 1} / {total}")
         if not nup and (not self._sample or not str(self._sample).lower().endswith(".pdf")):
-            self.preview.setText("미리보기 없음"); self.preview_cap.setText("")
+            self.preview.setText(tr("미리보기 없음")); self.preview_cap.setText("")
             return
         if not nup:
             ppix = self._render_preview_pixmap(self._preview_page)
         if ppix is None or ppix.isNull():
-            self.preview.setText("미리보기를 만들 수 없습니다."); self.preview_cap.setText("")
+            self.preview.setText(tr("미리보기를 만들 수 없습니다.")); self.preview_cap.setText("")
             return
         from PyQt6.QtGui import QPixmap, QPainter, QColor, QImage
         PREVIEW_DPI = 110.0
@@ -450,12 +450,9 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         pnt.setPen(QColor("#b0b0b0")); pnt.drawRect(0, 0, cw - 1, ch - 1)
         pnt.end()
         self.preview.setPixmap(canvas)
-        orient = "가로" if (page_land if self.chk_auto_orient.isChecked() else False) else "세로"
+        orient = tr("가로") if (page_land if self.chk_auto_orient.isChecked() else False) else tr("세로")
         self.preview_cap.setText(
-            ("다단 · " if nup else "")
-            + f"용지: {self.cmb_paper.currentText()} · {orient} · {self.cmb_size.currentText()}"
-            + " · " + (tr("흑백") if self.cmb_color.currentData() == "gray" else tr("컬러"))
-            + f" · {self.cmb_duplex.currentText()}")
+            tr('{v}용지: {currentText} · {orient} · {currentText2} · {v2} · {currentText3}').format(v=tr('다단 · ') if nup else '', currentText=self.cmb_paper.currentText(), orient=orient, currentText2=self.cmb_size.currentText(), v2=tr('흑백') if self.cmb_color.currentData() == 'gray' else tr('컬러'), currentText3=self.cmb_duplex.currentText()))
 
     def _render_preview_pixmap(self, page_index: int):
         try:

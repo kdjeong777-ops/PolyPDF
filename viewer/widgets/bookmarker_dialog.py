@@ -26,6 +26,8 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer import bookmarker_bridge as bridge
+from viewer.i18n import tr
+from viewer.widgets.flow_layout import FlowLayout
 
 
 class BookmarkerDialog(QDialog):
@@ -34,7 +36,7 @@ class BookmarkerDialog(QDialog):
     def __init__(self, *, default_pdf: Optional[Path] = None,
                  prefs: Optional[dict] = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("책갈피 자동 생성")
+        self.setWindowTitle(tr("책갈피 자동 생성"))
         self.setMinimumWidth(560)
         p = dict(prefs or {})
 
@@ -49,18 +51,18 @@ class BookmarkerDialog(QDialog):
         layout.addWidget(self.warn)
 
         # ── 입력 ───────────────────────────────────────────────────
-        grp_in = QGroupBox("입력")
+        grp_in = QGroupBox(tr("입력"))
         fi = QFormLayout(grp_in)
 
         self.edit_input = QLineEdit(str(default_pdf) if default_pdf else "")
-        self.edit_input.setPlaceholderText("PDF 파일 경로")
+        self.edit_input.setPlaceholderText(tr("PDF 파일 경로"))
         btn_browse_in = QPushButton("...")
         btn_browse_in.setFixedWidth(32)
         btn_browse_in.clicked.connect(self._browse_input)
         row_in = QHBoxLayout()
         row_in.addWidget(self.edit_input, 1)
         row_in.addWidget(btn_browse_in)
-        fi.addRow("PDF 파일:", row_in)
+        fi.addRow(tr("PDF 파일:"), row_in)
 
         # 260905(§4.4.6.1): '모듈 경로(선택)' 입력칸 삭제 — 내장본을 쓰므로 외부 버전을
         #   가리킬 이유가 없고, 잘못 지정하면 로드만 깨진다(설정 bookmarker_path 도 제거).
@@ -68,13 +70,13 @@ class BookmarkerDialog(QDialog):
         layout.addWidget(grp_in)
 
         # ── 260904-10: 기존 책갈피가 있으면 새로 만들지 / 고칠지 ──────────
-        self.grp_exist = QGroupBox("기존 책갈피")
+        self.grp_exist = QGroupBox(tr("기존 책갈피"))
         ev = QVBoxLayout(self.grp_exist)
         self.lbl_exist = QLabel()
         self.lbl_exist.setWordWrap(True)
         ev.addWidget(self.lbl_exist)
-        self.rb_bm_new = QRadioButton("새로 만들기 — 목차를 다시 읽어 기존 책갈피를 대체합니다")
-        self.rb_bm_edit = QRadioButton("기존 책갈피 수정 — 지금 책갈피를 표로 불러와 제목·레벨·쪽을 고칩니다")
+        self.rb_bm_new = QRadioButton(tr("새로 만들기 — 목차를 다시 읽어 기존 책갈피를 대체합니다"))
+        self.rb_bm_edit = QRadioButton(tr("기존 책갈피 수정 — 지금 책갈피를 표로 불러와 제목·레벨·쪽을 고칩니다"))
         self.bg_exist = QButtonGroup(self)
         for rb in (self.rb_bm_edit, self.rb_bm_new):
             self.bg_exist.addButton(rb)
@@ -85,14 +87,14 @@ class BookmarkerDialog(QDialog):
         self.grp_exist.setVisible(False)
 
         # ── 모드 ───────────────────────────────────────────────────
-        grp_mode = QGroupBox("추출 모드")
+        grp_mode = QGroupBox(tr("추출 모드"))
         self.grp_mode = grp_mode
         mv = QVBoxLayout(grp_mode)
-        ml = QHBoxLayout()
-        self.rb_auto = QRadioButton("자동 (목차 있으면 TOC, 없으면 폰트)")
-        self.rb_toc = QRadioButton("TOC 강제")
-        self.rb_font = QRadioButton("폰트 강제")
-        self.rb_ocr = QRadioButton("스캔/이미지 (OCR)")
+        ml = FlowLayout(spacing=10, center=False)      # 다른 언어로 길어지면 줄바꿈(다국어 SOT §6 폭)
+        self.rb_auto = QRadioButton(tr("자동 (목차 있으면 TOC, 없으면 폰트)"))
+        self.rb_toc = QRadioButton(tr("TOC 강제"))
+        self.rb_font = QRadioButton(tr("폰트 강제"))
+        self.rb_ocr = QRadioButton(tr("스캔/이미지 (OCR)"))
         self.bg_mode = QButtonGroup(self)
         for rb in (self.rb_auto, self.rb_toc, self.rb_font, self.rb_ocr):
             self.bg_mode.addButton(rb)
@@ -103,12 +105,12 @@ class BookmarkerDialog(QDialog):
         mv.addLayout(ml)
         # OCR 모드 보조 옵션
         self.chk_ocr_fontauto = QCheckBox(
-            "큰 글자도 헤딩으로 포함 (정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄)")
+            tr("큰 글자도 헤딩으로 포함 (정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄)"))
         self.chk_ocr_fontauto.setChecked(bool(p.get("bookmarker_ocr_font_auto", True)))
         mv.addWidget(self.chk_ocr_fontauto)
         self.lbl_ocr_hint = QLabel(
-            "<small>스캔된 책의 'CHAPTER 1'·'제1장' 등을 Tesseract OCR로 인식해 책갈피를 만듭니다. "
-            "스캔 페이지만 처리하며 페이지가 많으면 다소 시간이 걸립니다.</small>")
+            tr("<small>스캔된 책의 'CHAPTER 1'·'제1장' 등을 Tesseract OCR로 인식해 책갈피를 만듭니다. "
+            "스캔 페이지만 처리하며 페이지가 많으면 다소 시간이 걸립니다.</small>"))
         self.lbl_ocr_hint.setStyleSheet("color:#888;")
         self.lbl_ocr_hint.setWordWrap(True)
         mv.addWidget(self.lbl_ocr_hint)
@@ -116,64 +118,64 @@ class BookmarkerDialog(QDialog):
         self.rb_ocr.toggled.connect(self._sync_ocr_enabled)
 
         # ── 260904-1(§4.4): 목차 쪽 지정 + 검토 표 ─────────────────────
-        grp_toc = QGroupBox("목차(차례) 쪽 지정 — 자동 탐지가 놓칠 때")
+        grp_toc = QGroupBox(tr("목차(차례) 쪽 지정 — 자동 탐지가 놓칠 때"))
         self.grp_toc = grp_toc
         ft = QFormLayout(grp_toc)
         self.edit_toc_pages = QLineEdit("")
-        self.edit_toc_pages.setPlaceholderText("예: 6-11  (비우면 자동 탐지 — PDF 쪽 번호, 1부터)")
-        self.btn_detect_toc = QPushButton("자동 탐지")
-        self.btn_detect_toc.setToolTip("PDF 앞부분에서 목차로 보이는 쪽을 찾아 채웁니다")
+        self.edit_toc_pages.setPlaceholderText(tr("예: 6-11  (비우면 자동 탐지 — PDF 쪽 번호, 1부터)"))
+        self.btn_detect_toc = QPushButton(tr("자동 탐지"))
+        self.btn_detect_toc.setToolTip(tr("PDF 앞부분에서 목차로 보이는 쪽을 찾아 채웁니다"))
         self.btn_detect_toc.setAutoDefault(False); self.btn_detect_toc.setDefault(False)
         self.btn_detect_toc.clicked.connect(self._detect_toc_pages)
         row_toc = QHBoxLayout()
         row_toc.addWidget(self.edit_toc_pages, 1)
         row_toc.addWidget(self.btn_detect_toc)
-        ft.addRow("목차 쪽:", row_toc)
-        self.chk_review = QCheckBox("저장 전에 책갈피 표를 검토한다 (실제 쪽과 대조·수정·삭제·추가)")
+        ft.addRow(tr("목차 쪽:"), row_toc)
+        self.chk_review = QCheckBox(tr("저장 전에 책갈피 표를 검토한다 (실제 쪽과 대조·수정·삭제·추가)"))
         self.chk_review.setChecked(bool(p.get("bookmarker_review", True)))
         ft.addRow("", self.chk_review)
-        hint_toc = QLabel("<small>스캔본처럼 목차를 못 알아보는 책은 목차 쪽을 직접 적어 주세요. "
-                          "검토 표에서는 오프셋(목차 쪽→실제 쪽)을 추천받고, 행마다 실제 쪽을 미리보기로 확인해 고칠 수 있습니다.</small>")
+        hint_toc = QLabel(tr("<small>스캔본처럼 목차를 못 알아보는 책은 목차 쪽을 직접 적어 주세요. "
+                          "검토 표에서는 오프셋(목차 쪽→실제 쪽)을 추천받고, 행마다 실제 쪽을 미리보기로 확인해 고칠 수 있습니다.</small>"))
         hint_toc.setStyleSheet("color:#888;"); hint_toc.setWordWrap(True)
         ft.addRow("", hint_toc)
         layout.addWidget(grp_toc)
 
         # ── 오프셋 (TOC 모드) ──────────────────────────────────────
-        grp_off = QGroupBox("TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)")
+        grp_off = QGroupBox(tr("TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)"))
         self.grp_off = grp_off
         fo = QFormLayout(grp_off)
         self.spin_offset = QSpinBox()
         self.spin_offset.setRange(-100, 200)
         self.spin_offset.setValue(0)
-        self.spin_offset.setSpecialValueText("자동")     # 0 표시 시 '자동'
-        self.spin_offset.setSuffix(" 페이지")
-        fo.addRow("오프셋:", self.spin_offset)
-        hint = QLabel("<small>0 = 추천 후보 1순위 사용. TOC 모드에서만 의미.</small>")
+        self.spin_offset.setSpecialValueText(tr("자동"))     # 0 표시 시 '자동'
+        self.spin_offset.setSuffix(tr(" 페이지"))
+        fo.addRow(tr("오프셋:"), self.spin_offset)
+        hint = QLabel(tr("<small>0 = 추천 후보 1순위 사용. TOC 모드에서만 의미.</small>"))
         hint.setStyleSheet("color:#888;")
         fo.addRow("", hint)
         layout.addWidget(grp_off)
 
         # ── 출력 ───────────────────────────────────────────────────
-        grp_out = QGroupBox("출력")
+        grp_out = QGroupBox(tr("출력"))
         ol = QVBoxLayout(grp_out)
 
         # 260606-4: 새 PDF로 저장 / 현재 PDF에 저장 선택
-        self.rb_save_new = QRadioButton("새 PDF로 저장")
-        self.rb_save_over = QRadioButton("현재 PDF에 저장 (덮어쓰기)")
+        self.rb_save_new = QRadioButton(tr("새 PDF로 저장"))
+        self.rb_save_over = QRadioButton(tr("현재 PDF에 저장 (덮어쓰기)"))
         self.bg_save = QButtonGroup(self)
         self.bg_save.addButton(self.rb_save_new)
         self.bg_save.addButton(self.rb_save_over)
         (self.rb_save_over if p.get("bookmarker_overwrite")
          else self.rb_save_new).setChecked(True)
         row_save = QHBoxLayout()
-        row_save.addWidget(QLabel("PDF 저장:"))
+        row_save.addWidget(QLabel(tr("PDF 저장:")))
         row_save.addWidget(self.rb_save_new)
         row_save.addWidget(self.rb_save_over)
         row_save.addStretch(1)
         ol.addLayout(row_save)
         self.rb_save_over.toggled.connect(self._sync_outdir_enabled)
 
-        self.chk_txt = QCheckBox("알PDF용 책갈피 텍스트(.txt) 저장")
+        self.chk_txt = QCheckBox(tr("알PDF용 책갈피 텍스트(.txt) 저장"))
         self.chk_txt.setChecked(bool(p.get("bookmarker_save_txt", False)))
         ol.addWidget(self.chk_txt)
 
@@ -181,19 +183,19 @@ class BookmarkerDialog(QDialog):
         self.edit_outdir = QLineEdit(
             str(default_pdf.parent) if default_pdf else ""
         )
-        self.edit_outdir.setPlaceholderText("(비우면 PDF 파일과 같은 폴더)")
+        self.edit_outdir.setPlaceholderText(tr("(비우면 PDF 파일과 같은 폴더)"))
         self.btn_browse_out = QPushButton("...")
         self.btn_browse_out.setFixedWidth(32)
         self.btn_browse_out.clicked.connect(self._browse_outdir)
         row_out = QHBoxLayout()
-        row_out.addWidget(QLabel("출력 폴더:"))
+        row_out.addWidget(QLabel(tr("출력 폴더:")))
         row_out.addWidget(self.edit_outdir, 1)
         row_out.addWidget(self.btn_browse_out)
         ol.addLayout(row_out)
 
         # 260606-4: '자동 열기' 체크 제거 — 완료 시 항상 책갈피 새로고침(목록 유지)
-        hint_out = QLabel("<small>완료 후 책갈피 목록이 자동 새로고침됩니다"
-                          "(기존 파일 목록은 그대로 유지).</small>")
+        hint_out = QLabel(tr("<small>완료 후 책갈피 목록이 자동 새로고침됩니다"
+                          "(기존 파일 목록은 그대로 유지).</small>"))
         hint_out.setStyleSheet("color:#888;")
         hint_out.setWordWrap(True)
         ol.addWidget(hint_out)
@@ -247,7 +249,7 @@ class BookmarkerDialog(QDialog):
         self.grp_exist.setVisible(n > 0)
         if n:
             self.lbl_exist.setText(
-                f"이 PDF에는 이미 책갈피 <b>{n}개</b>가 있습니다. 어떻게 할지 고르세요.")
+                tr('이 PDF에는 이미 책갈피 <b>{n}개</b>가 있습니다. 어떻게 할지 고르세요.').format(n=n))
         self._sync_exist_mode()
 
     def _sync_exist_mode(self):
@@ -269,11 +271,7 @@ class BookmarkerDialog(QDialog):
             self.warn.setVisible(False)
             return
         self.warn.setText(
-            "<b>pdf_bookmarker 라이브러리를 불러오지 못했습니다.</b><br>"
-            f"<small>{bridge.get_status()}</small><br>"
-            "런타임 의존성(pypdf · pdfplumber · pypdfium2)을 설치하세요:<br>"
-            "  • <code>pip install -r requirements.txt</code> "
-            "(또는 <code>pip install pdfplumber pypdfium2 pypdf</code>)"
+            tr('<b>pdf_bookmarker 라이브러리를 불러오지 못했습니다.</b><br><small>{get_status}</small><br>런타임 의존성(pypdf · pdfplumber · pypdfium2)을 설치하세요:<br>  • <code>pip install -r requirements.txt</code> (또는 <code>pip install pdfplumber pypdfium2 pypdf</code>)').format(get_status=bridge.get_status())
         )
         self.warn.setStyleSheet("color:#a33; padding:6px; background:#fff4f4;")
         self.warn.setVisible(True)
@@ -281,7 +279,7 @@ class BookmarkerDialog(QDialog):
     # --- helpers ----------------------------------------------------
     def _browse_input(self):
         start = self.edit_input.text() or ""
-        fn, _ = QFileDialog.getOpenFileName(self, "PDF 선택", start, "PDF (*.pdf)")
+        fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 선택"), start, "PDF (*.pdf)")
         if fn:
             self.edit_input.setText(fn)
             if not self.edit_outdir.text():
@@ -289,7 +287,7 @@ class BookmarkerDialog(QDialog):
 
     def _browse_outdir(self):
         start = self.edit_outdir.text() or ""
-        d = QFileDialog.getExistingDirectory(self, "출력 폴더", start)
+        d = QFileDialog.getExistingDirectory(self, tr("출력 폴더"), start)
         if d:
             self.edit_outdir.setText(d)
 
@@ -322,7 +320,7 @@ class BookmarkerDialog(QDialog):
         """260904-1: 내장 탐지기로 목차 쪽 후보를 채운다(없으면 안내)."""
         fn = self.edit_input.text().strip()
         if not fn or not Path(fn).exists():
-            self.edit_toc_pages.setPlaceholderText("먼저 PDF 파일을 지정하세요")
+            self.edit_toc_pages.setPlaceholderText(tr("먼저 PDF 파일을 지정하세요"))
             return
         from viewer import toc_parse
         try:
@@ -333,7 +331,7 @@ class BookmarkerDialog(QDialog):
             self.edit_toc_pages.setText(toc_parse.format_page_spec(pages))
         else:
             self.edit_toc_pages.setText("")
-            self.edit_toc_pages.setPlaceholderText("자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)")
+            self.edit_toc_pages.setPlaceholderText(tr("자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)"))
 
     def toc_pages(self) -> list:
         """입력한 목차 쪽 목록(1-based). 비면 []."""

@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QWidget,
 )
+from viewer.i18n import tr
 
 _CHIP_BLUE = ("QPushButton{color:#1456c4;border:1px solid #cfe0ff;"
               "border-radius:9px;padding:1px 8px;background:#f3f8ff;}"
@@ -41,23 +42,23 @@ class TagEditDialog(QDialog):
         """manual_tags=입력줄 초기값(수동만!), auto_tags=[태그…], auto_conf={태그:점수},
         suggestions=[{tag, score, kind}] | None(세션 캐시 없음 — 구획 숨김)."""
         super().__init__(parent)
-        self.setWindowTitle("해시태그 편집")
+        self.setWindowTitle(tr("해시태그 편집"))
         self.resize(500, 360)
         self._auto = list(auto_tags or [])
         self._rej_btns = {}
         self._pin_btns = {}
         v = QVBoxLayout(self)
-        v.addWidget(QLabel(f"<b>{file_name}</b> 의 해시태그"))
+        v.addWidget(QLabel(tr('<b>{file_name}</b> 의 해시태그').format(file_name=file_name)))
 
-        v.addWidget(QLabel("수동 태그(공백/쉼표 구분, # 생략 가능):"))
+        v.addWidget(QLabel(tr("수동 태그(공백/쉼표 구분, # 생략 가능):")))
         self.ed = QLineEdit(" ".join(manual_tags or []))
-        self.ed.setPlaceholderText("예: 지침 도로 2024")
+        self.ed.setPlaceholderText(tr("예: 지침 도로 2024"))
         v.addWidget(self.ed)
 
         # ── 자동 태그 칩 행(§8.3 구분 · §8.5 거절/승격) ────────────────────
         if self._auto:
-            v.addWidget(QLabel("자동 부여된 태그 — ✕ 지우면 다시 붙지 않고, "
-                               "📌 고정하면 수동 태그가 됩니다:"))
+            v.addWidget(QLabel(tr("자동 부여된 태그 — ✕ 지우면 다시 붙지 않고, "
+                               "📌 고정하면 수동 태그가 됩니다:")))
             row = QWidget()
             h = QHBoxLayout(row)
             h.setContentsMargins(0, 0, 0, 0)
@@ -68,12 +69,11 @@ class TagEditDialog(QDialog):
                 chip.setCheckable(True)               # 체크 = 거절(✕)
                 chip.setStyleSheet(_CHIP_AUTO)
                 sc = conf.get(t)
-                chip.setToolTip(f"자동 부여{f' (신뢰도 {sc:.2f})' if sc else ''}"
-                                " — 클릭하면 거절(다시 붙지 않음)")
+                chip.setToolTip(tr('자동 부여{v} — 클릭하면 거절(다시 붙지 않음)').format(v=tr(' (신뢰도 {sc:.2f})').format(sc=sc) if sc else ''))
                 pin = QPushButton("📌")
                 pin.setCheckable(True)
                 pin.setStyleSheet(_PIN)
-                pin.setToolTip(f"#{t} 를 수동 태그로 고정 — 이후 재계산이 건드리지 않음")
+                pin.setToolTip(tr('#{t} 를 수동 태그로 고정 — 이후 재계산이 건드리지 않음').format(t=t))
 
                 def _excl(_=False, a=chip, b=pin):    # 거절과 고정은 상호 배타
                     if a.isChecked():
@@ -100,13 +100,13 @@ class TagEditDialog(QDialog):
             ex = [s for s in sugg if s.get("kind") == "existing"][:6]
             nw = [s for s in sugg if s.get("kind") == "new"][:4]
             if ex:
-                v.addWidget(QLabel("제안 — 기존 태그(클릭하면 추가):"))
-                v.addWidget(self._chip_row(ex, _CHIP_BLUE, "기존 태그 제안"))
+                v.addWidget(QLabel(tr("제안 — 기존 태그(클릭하면 추가):")))
+                v.addWidget(self._chip_row(ex, _CHIP_BLUE, tr("기존 태그 제안")))
             if nw:
-                v.addWidget(QLabel("제안 — 새 태그 후보(클릭 = 수동 채택):"))
-                v.addWidget(self._chip_row(nw, _CHIP_NEW, "새 태그 후보(§5.4-5 — 자동으로는 붙지 않음)"))
+                v.addWidget(QLabel(tr("제안 — 새 태그 후보(클릭 = 수동 채택):")))
+                v.addWidget(self._chip_row(nw, _CHIP_NEW, tr("새 태그 후보(§5.4-5 — 자동으로는 붙지 않음)")))
 
-        v.addWidget(QLabel("기존 태그(클릭하면 추가):"))
+        v.addWidget(QLabel(tr("기존 태그(클릭하면 추가):")))
         wrap = QWidget()
         self._flow = QHBoxLayout(wrap)
         self._flow.setContentsMargins(0, 0, 0, 0)
@@ -121,7 +121,7 @@ class TagEditDialog(QDialog):
         self._flow.addStretch(1)
         v.addWidget(wrap)
         if not shown:
-            v.addWidget(QLabel("(아직 등록된 태그가 없습니다 — 위에 입력해 만드세요.)"))
+            v.addWidget(QLabel(tr("(아직 등록된 태그가 없습니다 — 위에 입력해 만드세요.)")))
         v.addStretch(1)
 
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
@@ -139,7 +139,7 @@ class TagEditDialog(QDialog):
             b = QPushButton("#" + s["tag"])
             b.setStyleSheet(style)
             sc = s.get("score")
-            b.setToolTip(f"{why_prefix}{f' — 점수 {sc:.2f}' if sc else ''}"
+            b.setToolTip(f"{why_prefix}{tr(' — 점수 {sc:.2f}').format(sc=sc) if sc else ''}"
                          + (f" · {s['why']}" if s.get("why") else ""))
             b.clicked.connect(lambda _=False, tag=s["tag"]: self._add_tag(tag))
             h.addWidget(b)

@@ -5,6 +5,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox,
 )
+from viewer.i18n import tr
 
 USAGE_HTML = """
 <h2>PolyPDF 사용법</h2>
@@ -178,7 +179,7 @@ USAGE_HTML = """
 class HelpDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("PolyPDF — 사용법")
+        self.setWindowTitle(tr("PolyPDF — 사용법"))
         self.resize(760, 680)
 
         layout = QVBoxLayout(self)

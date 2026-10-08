@@ -18,6 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtWidgets import QMessageBox
+from viewer.i18n import tr
 
 __all__ = ["EditMixin"]
 
@@ -56,12 +57,12 @@ class EditMixin:
             return
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("선긋기 적용")
-        box.setText(f"전체화면에서 그린 선을 적용할까요?\n({len(norm)}개 페이지)")
-        b_main = box.addButton("본화면에 적용", QMessageBox.ButtonRole.AcceptRole)
-        b_pdf = box.addButton("PDF로 저장", QMessageBox.ButtonRole.ActionRole)
-        b_both = box.addButton("둘 다", QMessageBox.ButtonRole.ActionRole)
-        box.addButton("적용 안 함", QMessageBox.ButtonRole.RejectRole)
+        box.setWindowTitle(tr("선긋기 적용"))
+        box.setText(tr('전체화면에서 그린 선을 적용할까요?\n({n}개 페이지)').format(n=len(norm)))
+        b_main = box.addButton(tr("본화면에 적용"), QMessageBox.ButtonRole.AcceptRole)
+        b_pdf = box.addButton(tr("PDF로 저장"), QMessageBox.ButtonRole.ActionRole)
+        b_both = box.addButton(tr("둘 다"), QMessageBox.ButtonRole.ActionRole)
+        box.addButton(tr("적용 안 함"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         c = box.clickedButton()
         if c not in (b_main, b_pdf, b_both):
@@ -86,7 +87,7 @@ class EditMixin:
                     mv._load_page_strokes()
         except Exception:
             pass
-        self.status.showMessage("선긋기를 본화면에 적용했습니다.", 3000)
+        self.status.showMessage(tr("선긋기를 본화면에 적용했습니다."), 3000)
 
     # 260930-2(마스터 §4.7.13, 사용자 보고): 삽입 이미지(주석)도 **굽는다**.
     #   종전에는 인쇄('문서 + 주석·꾸미기')도 'PDF 꾸밈 저장' 도 선·도형·글·하이퍼링크만
@@ -274,7 +275,7 @@ class EditMixin:
         src = Path(file_path)
         from PyQt6.QtWidgets import QFileDialog
         out, _ = QFileDialog.getSaveFileName(
-            self, "저장(일반뷰어용) — 새 PDF로",
+            self, tr("저장(일반뷰어용) — 새 PDF로"),
             str(src.with_name(src.stem + "_일반뷰어용.pdf")), "PDF (*.pdf)")
         if not out:
             return
@@ -301,13 +302,11 @@ class EditMixin:
             subset_fonts_safely(doc)
             doc.save(out, garbage=4, deflate=True)
             doc.close()
-            self.status.showMessage(f"저장(일반뷰어용): {Path(out).name}", 4000)
-            QMessageBox.information(self, "저장 완료",
-                                   f"꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. "
-                                   f"다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다."
-                                   + chr(10) + str(out))
+            self.status.showMessage(tr('저장(일반뷰어용): {name}').format(name=Path(out).name), 4000)
+            QMessageBox.information(self, tr("저장 완료"),
+                                   tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out)))
         except Exception as e:
-            QMessageBox.warning(self, "저장 실패", str(e))
+            QMessageBox.warning(self, tr("저장 실패"), str(e))
 
     def _bake_text_stroke(self, fitz, QColor, page, stk, pw, ph):
         """260611-74/76: 텍스트 박스/지시선 굽기 — 배경(투명도)·박스선·지시선(색상버튼 스타일)·텍스트."""
@@ -466,7 +465,7 @@ class EditMixin:
             links = st.links_for(cur, p0)
             items = []
             for ln in links:
-                label = str(ln.get("name", "") or "링크")
+                label = str(ln.get("name", "") or tr("링크"))
                 tw = fitz.get_text_length(label, fontsize=fs) + 2 * pad_x
                 items.append((label, min(tw, pw - 20), ln))
             avail = pw - 20
@@ -507,7 +506,7 @@ class EditMixin:
         cur = str(file_path) if file_path else (
             self.main_view.current_file() if self.main_view else None)
         if not cur or not str(cur).lower().endswith(".pdf"):
-            QMessageBox.information(self, "안내", "먼저 PDF를 표시하세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 PDF를 표시하세요."))
             return
         # 이 파일의 모든 페이지 꾸밈(선긋기) 수집
         norm = self._decorations_norm_for(cur)
@@ -518,8 +517,8 @@ class EditMixin:
         has_img = bool(st_im and st_im.pages_with_images(cur))
         if not norm and not has_hl and not has_img:
             QMessageBox.information(
-                self, "안내",
-                "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크가 없습니다.")
+                self, tr("안내"),
+                tr("이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크가 없습니다."))
             return
         # 260930-2: 아직 저장하지 않은 쪽 편집이 있으면 알린다 — 구운 파일은 **원본 쪽**
         #   기준이라 그 편집이 빠진다.
@@ -529,9 +528,9 @@ class EditMixin:
                     and str(tp._doc.path) == str(cur))
             if same and tp.is_page_dirty():
                 if QMessageBox.question(
-                        self, "저장(일반뷰어용)",
-                        "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. "
-                        "지금 구우면 그 편집은 빠집니다. 계속할까요?"
+                        self, tr("저장(일반뷰어용)"),
+                        tr("저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. "
+                        "지금 구우면 그 편집은 빠집니다. 계속할까요?")
                 ) != QMessageBox.StandardButton.Yes:
                     return
         except Exception:
@@ -749,7 +748,7 @@ class EditMixin:
         except Exception:
             pass
         try:
-            self.status.showMessage("편집 내용을 저장했습니다.", 3000)
+            self.status.showMessage(tr("편집 내용을 저장했습니다."), 3000)
         except Exception:
             pass
 
@@ -768,7 +767,7 @@ class EditMixin:
         except Exception:
             pass
         try:
-            self.status.showMessage("편집 수정 사항을 취소(되돌리기)했습니다.", 3000)
+            self.status.showMessage(tr("편집 수정 사항을 취소(되돌리기)했습니다."), 3000)
         except Exception:
             pass
 
@@ -789,13 +788,11 @@ class EditMixin:
         """미저장 변경 확인. 반환: 'save'/'discard'/'cancel'."""
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("편집 변경사항")
-        box.setText("저장하지 않은 편집 변경사항이 있습니다.\n"
-                    + ("다른 파일로 이동하기 전에 어떻게 할까요?" if switching
-                       else "편집을 종료하기 전에 어떻게 할까요?"))
-        b_save = box.addButton("저장", QMessageBox.ButtonRole.AcceptRole)
-        b_disc = box.addButton("되돌리기(저장 안 함)", QMessageBox.ButtonRole.DestructiveRole)
-        b_keep = box.addButton("계속 편집", QMessageBox.ButtonRole.RejectRole)
+        box.setWindowTitle(tr("편집 변경사항"))
+        box.setText(tr('저장하지 않은 편집 변경사항이 있습니다.\n{v}').format(v=tr('다른 파일로 이동하기 전에 어떻게 할까요?') if switching else tr('편집을 종료하기 전에 어떻게 할까요?')))
+        b_save = box.addButton(tr("저장"), QMessageBox.ButtonRole.AcceptRole)
+        b_disc = box.addButton(tr("되돌리기(저장 안 함)"), QMessageBox.ButtonRole.DestructiveRole)
+        b_keep = box.addButton(tr("계속 편집"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         c = box.clickedButton()
         if c is b_save:
