@@ -20,6 +20,7 @@ import os
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from viewer.i18n import tr
 
 __all__ = ["UpdateMixin"]
 
@@ -38,8 +39,8 @@ class UpdateMixin:
                 return
             from PyQt6.QtWidgets import QInputDialog
             txt, ok = QInputDialog.getText(
-                self, "업데이트 저장소 설정",
-                "GitHub 저장소를 'OWNER/REPO' 형식으로 입력하세요:", text=repo)
+                self, tr("업데이트 저장소 설정"),
+                tr("GitHub 저장소를 'OWNER/REPO' 형식으로 입력하세요:"), text=repo)
             if not ok or not updater.valid_repo((txt or "").strip()):
                 return
             repo = txt.strip()
@@ -49,7 +50,7 @@ class UpdateMixin:
             except Exception:
                 pass
         if manual:
-            self.status.showMessage("업데이트 확인 중…", 3000)
+            self.status.showMessage(tr("업데이트 확인 중…"), 3000)
         import threading
         sig = self._update_sig
 
@@ -76,32 +77,31 @@ class UpdateMixin:
         if not info:
             if manual:
                 QMessageBox.information(
-                    self, "업데이트",
-                    "업데이트 정보를 가져오지 못했습니다.\n인터넷 연결과 저장소 설정을 확인하세요.")
+                    self, tr("업데이트"),
+                    tr("업데이트 정보를 가져오지 못했습니다.\n인터넷 연결과 저장소 설정을 확인하세요."))
             return
         latest = info.get("version") or ""
         if not updater.is_newer(latest, cur):
             if manual:
-                QMessageBox.information(self, "업데이트", f"현재 최신 버전입니다. (v{cur})")
+                QMessageBox.information(self, tr("업데이트"), tr('현재 최신 버전입니다. (v{cur})').format(cur=cur))
             return
         if not updater.is_frozen():
             if manual:
                 QMessageBox.information(
-                    self, "업데이트",
-                    f"새 버전 v{latest} 이 있습니다(현재 v{cur}).\n"
-                    f"개발(소스) 실행 중에는 자동 교체가 적용되지 않습니다.\n{info.get('html_url','')}")
+                    self, tr("업데이트"),
+                    tr('새 버전 v{latest} 이 있습니다(현재 v{cur}).\n개발(소스) 실행 중에는 자동 교체가 적용되지 않습니다.\n{get}').format(latest=latest, cur=cur, get=info.get('html_url', '')))
             return
         if not info.get("asset_url"):
             if manual:
                 QMessageBox.information(
-                    self, "업데이트",
-                    f"새 버전 v{latest} 이 있으나 배포 zip 자산을 찾지 못했습니다.\n{info.get('html_url','')}")
+                    self, tr("업데이트"),
+                    tr('새 버전 v{latest} 이 있으나 배포 zip 자산을 찾지 못했습니다.\n{get}').format(latest=latest, get=info.get('html_url', '')))
             return
         # 260618-24: 새 버전 인지(종료 시 업그레이드 프롬프트용)
         self._pending_update = info
         # 260618-36: 베타(테스트) 릴리스면 프롬프트에 명시 — 사용자가 알고 동의하게.
         is_beta = updater.is_prerelease_tag(info.get("tag", ""))
-        kind = "베타(테스트) 버전" if is_beta else "버전"
+        kind = tr("베타(테스트) 버전") if is_beta else tr("버전")
         if manual:
             # 261008-17·-18(마스터 §14.5 U13·U14): 업데이트 창에서 **바뀐 내용**을 보고 고른다 →
             #   ① 앱이 켜진 채 먼저 받는다 ② 닫는다(편집 저장 확인은 종료 길) ③ 설치 도우미가
@@ -116,7 +116,7 @@ class UpdateMixin:
             if self._prefs.get("auto_download_update", True):
                 self._start_bg_update_download(info)
             else:
-                self.status.showMessage(f"새 {kind} v{latest} 사용 가능 — 도움말 → 업데이트 확인", 6000)
+                self.status.showMessage(tr('새 {kind} v{latest} 사용 가능 — 도움말 → 업데이트 확인').format(kind=kind, latest=latest), 6000)
 
     def _start_bg_update_download(self, info, force=False):
         """260618-24: 한가할 때 백그라운드로 업데이트 zip 을 미리 받아 둠(설정 폴더 캐시).
@@ -186,7 +186,7 @@ class UpdateMixin:
         self._dl_in_progress = False
         if path:
             self._pending_zip = path
-            self.status.showMessage("업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다.", 5000)
+            self.status.showMessage(tr("업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다."), 5000)
 
     def _update_zip_ready(self, info) -> bool:
         """받아 둔 zip 이 **이 버전** 것인가(.ver 사이드카)."""
@@ -212,14 +212,14 @@ class UpdateMixin:
         sig = self._update_sig
         loop = QEventLoop()
         result = {"path": ""}
-        dlg = QProgressDialog("업데이트 파일을 받는 중…", "취소", 0, 0, self)
-        dlg.setWindowTitle("업데이트")
+        dlg = QProgressDialog(tr("업데이트 파일을 받는 중…"), tr("취소"), 0, 0, self)
+        dlg.setWindowTitle(tr("업데이트"))
         dlg.setWindowModality(_Qt.WindowModality.ApplicationModal)
         dlg.setMinimumDuration(0)
         dlg.setAutoClose(False)
         dlg.setAutoReset(False)
         # 화면 디자인 SOT §2.7: 취소 단추가 기본 단추면 Enter 한 번에 받기가 취소된다.
-        cancel_btn = QPushButton("취소")
+        cancel_btn = QPushButton(tr("취소"))
         cancel_btn.setAutoDefault(False)
         cancel_btn.setDefault(False)
         dlg.setCancelButton(cancel_btn)
@@ -228,7 +228,7 @@ class UpdateMixin:
             if total > 0:
                 dlg.setMaximum(100)
                 dlg.setValue(min(100, int(done * 100 / total)))
-                dlg.setLabelText("업데이트 파일을 받는 중… %.1f / %.1f MB"
+                dlg.setLabelText(tr("업데이트 파일을 받는 중… %.1f / %.1f MB")
                                  % (done / 1048576.0, total / 1048576.0))
 
         def on_done(path):
@@ -239,7 +239,7 @@ class UpdateMixin:
             ev = getattr(self, "_dl_cancel", None)
             if ev is not None:
                 ev.set()
-            dlg.setLabelText("취소하는 중…")
+            dlg.setLabelText(tr("취소하는 중…"))
 
         sig.dl_progress.connect(on_prog)
         sig.dl_done.connect(on_done)
@@ -266,9 +266,9 @@ class UpdateMixin:
         else:
             ev = getattr(self, "_dl_cancel", None)
             if not (ev is not None and ev.is_set()):
-                QMessageBox.warning(self, "업데이트",
-                                    "업데이트 파일을 받지 못했습니다(연결·무결성 검증 실패).\n"
-                                    "프로그램은 닫지 않았습니다. 잠시 뒤 다시 시도해 주세요.")
+                QMessageBox.warning(self, tr("업데이트"),
+                                    tr("업데이트 파일을 받지 못했습니다(연결·무결성 검증 실패).\n"
+                                    "프로그램은 닫지 않았습니다. 잠시 뒤 다시 시도해 주세요."))
         return ok
 
     def _upgrade_now(self):
@@ -322,11 +322,11 @@ class UpdateMixin:
                                       QPushButton, QProgressBar)
         repo = (self._prefs.get("update_repo") or "").strip() or components.DEFAULT_REPO
         dlg = QDialog(self)
-        dlg.setWindowTitle("구성요소 설치 (녹화·OCR)")
+        dlg.setWindowTitle(tr("구성요소 설치 (녹화·OCR)"))
         dlg.resize(460, 200)
         v = QVBoxLayout(dlg)
-        v.addWidget(QLabel("필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
-                           "(녹화=ffmpeg, OCR=Tesseract · 재시작 불필요)"))
+        v.addWidget(QLabel(tr("필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
+                           "(녹화=ffmpeg, OCR=Tesseract · 재시작 불필요)")))
         bar = QProgressBar(); bar.setRange(0, 100); bar.setValue(0); bar.setVisible(False)
 
         rows = {}
@@ -344,9 +344,9 @@ class UpdateMixin:
 
             def refresh():
                 ok = installed_fn()
-                st.setText("설치됨 ✓" if ok else "미설치")
+                st.setText(tr("설치됨 ✓") if ok else tr("미설치"))
                 st.setStyleSheet("color:#2a7;" if ok else "color:#c33;")
-                btn.setText("재설치" if ok else "다운로드")
+                btn.setText(tr("재설치") if ok else tr("다운로드"))
 
             def do():
                 bar.setVisible(True); bar.setValue(0)
@@ -363,21 +363,21 @@ class UpdateMixin:
                 for _s, b in rows.values():
                     b.setEnabled(True)
                 if ok:
-                    QMessageBox.information(dlg, "구성요소 설치", f"{title} 설치 완료.")
+                    QMessageBox.information(dlg, tr("구성요소 설치"), tr('{title} 설치 완료.').format(title=title))
                 else:
-                    QMessageBox.warning(dlg, "구성요소 설치", f"{title} 설치 실패:\n{info}")
+                    QMessageBox.warning(dlg, tr("구성요소 설치"), tr('{title} 설치 실패:\n{info}').format(title=title, info=info))
                 refresh()
 
             btn.clicked.connect(do)
             refresh()
 
-        make_row("ffmpeg", "녹화 (ffmpeg)",
+        make_row("ffmpeg", tr("녹화 (ffmpeg)"),
                  components.ffmpeg_installed, components.install_ffmpeg)
         make_row("tess", "OCR (Tesseract)",
                  components.tesseract_installed, components.install_tesseract)
         v.addWidget(bar)
         v.addStretch(1)
-        close = QPushButton("닫기"); close.clicked.connect(dlg.accept)
+        close = QPushButton(tr("닫기")); close.clicked.connect(dlg.accept)
         h = QHBoxLayout(); h.addStretch(1); h.addWidget(close)
         v.addLayout(h)
         dlg.exec()

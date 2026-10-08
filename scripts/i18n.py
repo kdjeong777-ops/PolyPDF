@@ -9,10 +9,11 @@
   python scripts/i18n.py report         팩별 완성도·빈칸·fuzzy·자리표시 불일치
   python scripts/i18n.py pseudo         가짜 언어 qps_ploc 를 .pot 에서 만들고 .mo 까지(개발·검사 전용, SOT §3.7)
   python scripts/i18n.py clean-pseudo   가짜 언어 폴더를 지운다(build_ci.bat 가 빌드 전에 부른다)
+  python scripts/i18n.py inno           내장 팩·번역으로 installer/languages.iss 를 만든다(build_ci.bat — SOT §10)
 
 추출기는 우리 것(AST): `trn(text, n)` 은 인자 하나로 단·복수를 겸하고 `trp(문맥, 원문)` 은 문맥이 앞이라
 Babel 기본 키워드 규칙으로는 못 뽑는다. 키는 **문자열 리터럴**이어야 한다 — 아니면 추출 경고(SOT §6).
-`installer/languages.iss`(inno)는 Phase 6.
+설치 프로그램 문구는 `installer/installer_text.py` 에서 `msgctxt "installer"` 로 뽑는다.
 """
 import ast
 import json
@@ -88,6 +89,8 @@ def source_files(base: Path = ROOT):
     files = [base / "main.py"] if (base / "main.py").is_file() else []
     files += sorted(p for p in (base / "viewer").rglob("*.py")
                     if "__pycache__" not in p.parts and "_vendor" not in p.parts)
+    if (base / "installer" / "installer_text.py").is_file():      # 설치 프로그램 문구(SOT §10.4)
+        files.append(base / "installer" / "installer_text.py")
     return files
 
 
@@ -278,6 +281,107 @@ def clean_pseudo(locale_dir: Path = LOCALE) -> None:
         shutil.rmtree(p, ignore_errors=True)
         print("removed", p)
 
+# ── 설치 프로그램 (SOT §10.1·§10.4, Phase 6) ─────────────────────────────
+INSTALLER = ROOT / "installer"
+INNO_KO = ("korean", r"compiler:Languages\Korean.isl")      # 한국어 = 원문(팩이 아니다)
+
+
+def _installer_table(path: Path = None):
+    """installer_text.py 의 MESSAGES·APP_LANG → {이름: {키: 원문}} (AST — 실행하지 않는다)."""
+    path = path or (INSTALLER / "installer_text.py")
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    out = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict):
+            name = node.targets[0].id
+            table = {}
+            for k, v in zip(node.value.keys, node.value.values):
+                if isinstance(v, ast.Call) and _func_name(v) == "trp" and len(v.args) == 2:
+                    table[_lit(k)] = _lit(v.args[1])
+            out[name] = table
+    return out
+
+
+def _translator(code: str, locale_dir: Path):
+    """그 언어의 installer 문맥 번역(대체 사슬 → 원문). 한국어는 원문."""
+    if code == "ko":
+        return lambda text: text
+    chain, todo = [], [code]
+    while todo:
+        c = todo.pop(0)
+        if c in chain or c == "ko" or not (locale_dir / c / "pack.json").is_file():
+            continue
+        chain.append(c)
+        todo += json.loads((locale_dir / c / "pack.json").read_text(encoding="utf-8")).get("fallback") or []
+    cats = [_read_po(locale_dir / c / "LC_MESSAGES" / (DOMAIN + ".po"), locale=c) for c in chain]
+
+    def t(text):
+        for cat in cats:
+            m = cat.get(text, context="installer")
+            if m is not None and m.string and "fuzzy" not in m.flags:
+                return m.string
+        return text
+    return t
+
+
+def _inno_value(text: str) -> str:
+    """[CustomMessages] 값 — 줄바꿈은 %n, 한 줄로."""
+    return text.replace("\r", "").replace("\n", "%n")
+
+
+def inno(locale_dir: Path = LOCALE, out: Path = None, installer_dir: Path = None) -> Path:
+    """내장 팩 메타·번역으로 installer/languages.iss 를 만든다(build_ci.bat — ISCC 전에).
+    새 언어를 더할 때 .iss 를 손으로 고치지 않는다(SOT §12)."""
+    installer_dir = installer_dir or INSTALLER
+    out = out or (installer_dir / "languages.iss")
+    table = _installer_table(installer_dir / "installer_text.py")
+    msgs, app = table.get("MESSAGES", {}), table.get("APP_LANG", {})
+    # 앱 언어: (코드, 자기 이름, 마법사 언어 이름, 마법사 메시지 파일)
+    langs = [("ko", "한국어", INNO_KO[0], INNO_KO[1])]
+    for d in packs(locale_dir):
+        meta = json.loads((d / "pack.json").read_text(encoding="utf-8"))
+        langs.append((d.name, meta.get("name") or d.name, d.name, meta.get("inno") or ""))
+    wiz = [(c, w, f) for c, _n, w, f in langs if f]            # 마법사 번역이 있는 언어만 [Languages]
+    wiz_names = {c: w for c, w, _f in wiz}
+    fallback_wiz = wiz_names.get("en", INNO_KO[0])
+
+    def guide_src(code):
+        for c in (code, "en", "ko"):
+            if (installer_dir / ("guide_%s.txt" % c)).is_file():
+                return "guide_%s.txt" % c
+        return "guide_ko.txt"
+
+    L = ["; 자동 생성 — scripts/i18n.py inno (build_ci.bat). 손으로 고치지 않는다(다국어 SOT §10).",
+         "; 원본: resources/locale/*/pack.json · .po 의 msgctxt \"installer\" · installer/installer_text.py", "",
+         "[Languages]"]
+    for c, w, f in wiz:
+        L.append('Name: "%s"; MessagesFile: "%s"; InfoAfterFile: "%s"' % (w, f, guide_src(c)))
+    L += ["", "[CustomMessages]"]
+    for c, w, _f in wiz:
+        t = _translator(c, locale_dir)
+        for k, text in msgs.items():
+            L.append("%s.%s=%s" % (w, k, _inno_value(t(text))))
+    L += ["", "[Files]"]
+    for c, _n, _w, _f in langs:
+        name = _translator(c, locale_dir)(app["GuideFile"])
+        L.append('Source: "%s"; DestDir: "{app}"; DestName: "%s"; Check: IsAppLang(\'%s\'); Flags: ignoreversion'
+                 % (guide_src(c), name, c))
+    L += ["", "[Icons]"]
+    for c, _n, _w, _f in langs:
+        t = _translator(c, locale_dir)
+        L.append('Name: "{group}\\%s"; Filename: "{app}\\%s"; Check: IsAppLang(\'%s\')'
+                 % (t(app["GuideIcon"]), t(app["GuideFile"]), c))
+    L += ["", "; [Code] 가 쓰는 앱 언어 목록(쉼표로 나눈다 — 같은 차례)",
+          '#define AppLangCodes "%s"' % ",".join(c for c, *_ in langs),
+          '#define AppLangNames "%s"' % ",".join(n for _c, n, *_ in langs),
+          '#define AppLangWizard "%s"' % ",".join(wiz_names.get(c, fallback_wiz) for c, *_ in langs), ""]
+    text = "\n".join(L)
+    old = out.read_text(encoding="utf-8-sig") if out.is_file() else None
+    if old != text:
+        out.write_text(text, encoding="utf-8-sig")        # BOM — ISCC 가 UTF-8 로 읽는다
+    return out
+
+
 
 # ── 명령줄 ────────────────────────────────────────────────────────────────
 def main(argv) -> int:
@@ -308,6 +412,9 @@ def main(argv) -> int:
         return 0
     if cmd == "clean-pseudo":
         clean_pseudo()
+        return 0
+    if cmd == "inno":
+        print("inno →", inno())
         return 0
     print(__doc__)
     return 2

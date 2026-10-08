@@ -9,6 +9,9 @@
   - 이전 버전 태그(같은 줄기에서 가장 가까운 `v*`)부터 이 태그까지의 커밋을 모은다.
   - 제목: `fix:`/`feat:`/`docs(…):` 머리를 '수정'/'기능'/'문서' 로, 끝의 `(작업번호, 버전)` 괄호는 뺀다.
   - 본문: `- ` 로 시작하는 항목만(검사 파일 이름이 든 줄·Co-Authored-By 는 뺀다).
+  - 261008-27(다국어 SOT §10.4): 커밋 꼬리말 `Release-Note-<코드>: …`(한 줄에 한 항목, 여러 개 가능)으로
+    다른 언어 설명을 쓴다. 본문은 언어마다 `<!-- lang:<코드> -->` 로 시작하는 절로 나뉜다(GitHub 페이지에서는
+    표시가 보이지 않는다). 한국어 절은 언제나 있고, 꼬리말이 없는 커밋은 한국어 절에만 들어간다.
 """
 import re
 import subprocess
@@ -19,6 +22,10 @@ KIND = {"feat": "기능", "fix": "수정", "docs": "문서", "perf": "성능", "
         "build": "빌드", "ci": "빌드", "chore": "정리", "test": "검사"}
 _HEAD = re.compile(r"^(\w+)(?:\([^)]*\))?!?:\s*")
 _TAIL = re.compile(r"\s*\([^()]*\d+\.\d+\.\d+[^()]*\)\s*$")     # 끝의 '(…, 0.45.0-beta.197)'
+_TRAILER = re.compile(r"^Release-Note-([A-Za-z_]+):\s*(.+?)\s*$")
+# 언어마다 절 머리·비교 링크 이름·빈 절(앱 업데이트 창이 이 머리를 지운다 — update_dialog._NOTES_HEAD)
+HEADS = {"ko": ("## 바뀐 내용", "**전체 비교**", "- (설명할 변경이 없습니다)"),
+         "en": ("## What's changed", "**Full comparison**", "- (No notable changes)")}
 
 
 def git(*args) -> str:
@@ -43,7 +50,12 @@ def commits(prev: str, tag: str):
 
 def render(tag: str, prev: str) -> str:
     lines = []
+    other = {}                             # 코드 → [꼬리말 항목]
     for subj, body in commits(prev, tag):
+        for b in body.splitlines():
+            mt = _TRAILER.match(b.strip())
+            if mt:
+                other.setdefault(mt.group(1).lower(), []).append("- " + mt.group(2))
         m = _HEAD.match(subj)
         kind = KIND.get(m.group(1).lower(), "") if m else ""
         title = _TAIL.sub("", subj[m.end():] if m else subj).strip()
@@ -61,11 +73,16 @@ def render(tag: str, prev: str) -> str:
                 lines[-1] += " " + t
             else:
                 keep = False
-    out = ["## 바뀐 내용", ""]
-    out += lines or ["- (설명할 변경이 없습니다)"]
-    if prev:
-        out += ["", f"**전체 비교**: {REPO_URL}/compare/{prev}...{tag}"]
-    return "\n".join(out) + "\n"
+    secs = [("ko", lines)] + [(c, other[c]) for c in sorted(other) if c != "ko"]
+    out = []
+    for code, items in secs:
+        head, cmp_label, empty = HEADS.get(code, HEADS["en"])
+        out += ["<!-- lang:%s -->" % code, head, ""]
+        out += items or [empty]
+        if prev:
+            out += ["", f"{cmp_label}: {REPO_URL}/compare/{prev}...{tag}"]
+        out += [""]
+    return "\n".join(out).rstrip("\n") + "\n"
 
 
 def main():

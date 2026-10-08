@@ -156,6 +156,9 @@ REM   가짜 언어(qps_ploc)는 개발·검사 전용이라 빌드 전에 지�
 python scripts\i18n.py clean-pseudo
 python scripts\i18n.py compile
 if errorlevel 1 ( echo [ERROR] 언어팩 .mo 변환 실패. & exit /b 1 )
+REM 261008-27(다국어 SOT §10.1): 설치 프로그램 언어 목록·마법사 문구 → installer\languages.iss (ISCC 가 #include)
+python scripts\i18n.py inno
+if errorlevel 1 ( echo [ERROR] installer\languages.iss 생성 실패. & exit /b 1 )
 
 python -m PyInstaller ^
     --name "PolyPDF" ^

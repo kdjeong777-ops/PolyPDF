@@ -18,12 +18,22 @@ $ver = if ($verLine) { $verLine.Matches[0].Groups[1].Value } else { "0.0.0" }
 $iscc = $null
 foreach ($p in @(
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe")) {
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+    "${env:LOCALAPPDATA}\Programs\Inno Setup 6\ISCC.exe")) {      # winget 사용자 설치
     if ($p -and (Test-Path $p)) { $iscc = $p; break }
 }
 if (-not $iscc) { $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source }
 if (-not $iscc) {
     Write-Error "ISCC.exe(Inno Setup 6) 를 찾을 수 없습니다.`n설치:  winget install -e --id JRSoftware.InnoSetup"
+}
+
+# 261008-27(다국어 SOT §10.1): 언어 목록·마법사 문구는 build_ci.bat 가 만든다 — 없으면 여기서라도 만든다
+$langIss = Join-Path $PSScriptRoot "languages.iss"
+if (-not (Test-Path $langIss)) {
+    $py = Join-Path $root ".venv\Scripts\python.exe"
+    if (-not (Test-Path $py)) { $py = "python" }
+    & $py (Join-Path $root "scripts\i18n.py") inno
+    if ($LASTEXITCODE -ne 0) { Write-Error "installer\languages.iss 생성 실패" }
 }
 
 Write-Host "ISCC: $iscc"

@@ -21,6 +21,8 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
+from viewer.i18n import tr                      # 설치 도우미 문구(다국어 SOT §10.4)
+
 ASSET_NAME = "PolyPDF-windows.zip"
 # 260618-11: 기본 업데이트 저장소(설정 update_repo 가 비어 있으면 이 값 사용 — 입력 불필요).
 DEFAULT_REPO = "kdjeong777-ops/PolyPDF"
@@ -389,6 +391,9 @@ $install = _b64 "__INSTALL_B64__"
 $exe     = _b64 "__EXE_B64__"
 $expSha  = _b64 "__SHA_B64__"     # 260628(A): 기대 SHA-256(hex). 빈 값이면 검증 생략.
 $manPath = _b64 "__MANIFEST_B64__"  # 260628-12(U8): 정식 파일목록 경로. 빈 값이면 정리 생략.
+# 261008-27(다국어 SOT §10.4): 화면 문구는 앱이 **실행할 때의 언어로** 채워 넘긴다(JSON, base64).
+#   이 스크립트 안에서는 번역하지 않는다. 자리표시는 PowerShell -f 꼴({0}·{1}).
+$T = (_b64 "__TEXT_B64__") | ConvertFrom-Json
 
 function Test-ZipHash([string]$path, [string]$want) {
     # 260628(A): 압축 해제 **직전** 해시 검증. 승격(UAC) 인스턴스에서도 다시 수행해야
@@ -413,13 +418,13 @@ function Test-DirWritable([string]$p) {
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "PolyPDF 업데이트 설치"
+$form.Text = $T.title_install
 $form.Size = New-Object System.Drawing.Size(460,160)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false; $form.MinimizeBox = $false; $form.TopMost = $true
 $lbl = New-Object System.Windows.Forms.Label
-$lbl.SetBounds(18,18,420,22); $lbl.Text = "업데이트를 준비하는 중..."
+$lbl.SetBounds(18,18,420,22); $lbl.Text = $T.preparing
 $bar = New-Object System.Windows.Forms.ProgressBar
 $bar.SetBounds(18,52,420,26); $bar.Minimum=0; $bar.Maximum=100; $bar.Value=0
 $form.Controls.Add($lbl); $form.Controls.Add($bar)
@@ -443,7 +448,7 @@ if (-not $Elevated) {
     # 1) 기존 프로그램 종료 대기 — 요청한 창(oldPid) + **동시에 열려 있는 다른 PolyPDF 창 전부**
     #    (260628/U1: 종전에는 oldPid 하나만 기다려, 다른 창이 열려 있으면 그 창이 _internal\*.pyd
     #     등을 잠근 채 설치가 진행돼 **파일 교체 실패 → 부분 설치**(구·신 혼재)가 됐다.)
-    $lbl.Text = "기존 프로그램이 종료되기를 기다리는 중..."
+    $lbl.Text = $T.wait_exit
     [System.Windows.Forms.Application]::DoEvents()
     for ($i=0; $i -lt 120; $i++) {
         $p = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
@@ -458,7 +463,7 @@ if (-not $Elevated) {
     #   예비로 받을 때도 **다른 창을 닫기 전에** 받는다 — 받기가 실패하면 다른 창은 그대로 둔다.
     if (([string]::IsNullOrEmpty($zipPath) -or -not (Test-Path $zipPath)) -and -not [string]::IsNullOrEmpty($url)) {
         $zipPath = Join-Path $env:TEMP "polypdf_update_dl.zip"
-        $lbl.Text = "업데이트 다운로드 중..."
+        $lbl.Text = $T.downloading
         [System.Windows.Forms.Application]::DoEvents()
         try {
             $req = [System.Net.WebRequest]::Create($url)
@@ -473,7 +478,7 @@ if (-not $Elevated) {
             }
             $outs.Close(); $ins.Close(); $resp.Close()
         } catch {
-            [System.Windows.Forms.MessageBox]::Show("다운로드 실패: " + $_.Exception.Message, "PolyPDF 업데이트") | Out-Null
+            [System.Windows.Forms.MessageBox]::Show(($T.dl_failed -f $_.Exception.Message), $T.title_update) | Out-Null
             $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
         }
         $bar.Value = 0
@@ -482,13 +487,13 @@ if (-not $Elevated) {
     # 1.2) 다른 창: **정상 종료 요청 먼저**(U2) — 각 창에서 저장 확인창이 정상 동작하게.
     $others = Get-PolyPdfProcs
     if ($others.Count -gt 0) {
-        $lbl.Text = "다른 PolyPDF 창을 닫는 중... ($($others.Count)개)"
+        $lbl.Text = ($T.closing_others -f $others.Count)
         [System.Windows.Forms.Application]::DoEvents()
         foreach ($p in $others) { try { $p.CloseMainWindow() | Out-Null } catch {} }
         for ($i=0; $i -lt 120; $i++) {          # 최대 60초 대기(저장 여부 응답 시간 포함)
             $others = Get-PolyPdfProcs
             if ($others.Count -eq 0) { break }
-            $lbl.Text = "다른 PolyPDF 창이 닫히기를 기다리는 중... ($($others.Count)개 남음)"
+            $lbl.Text = ($T.waiting_others -f $others.Count)
             Start-Sleep -Milliseconds 500
             [System.Windows.Forms.Application]::DoEvents()
         }
@@ -497,19 +502,15 @@ if (-not $Elevated) {
     $others = Get-PolyPdfProcs
     if ($others.Count -gt 0) {
         $ans = [System.Windows.Forms.MessageBox]::Show(
-            "다른 PolyPDF 창 $($others.Count)개가 아직 열려 있습니다.`n" +
-            "열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아" +
-            " 업데이트가 실패합니다.`n`n" +
-            "[예] 남은 창을 강제로 닫고 계속`n" +
-            "[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)",
-            "PolyPDF 업데이트", [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            ($T.others_left -f $others.Count),
+            $T.title_update, [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Warning)
         if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) {
             $form.Close()
             Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
             exit
         }
-        $lbl.Text = "남은 창을 닫는 중..."; [System.Windows.Forms.Application]::DoEvents()
+        $lbl.Text = $T.closing_left; [System.Windows.Forms.Application]::DoEvents()
         foreach ($p in (Get-PolyPdfProcs)) { try { $p.Kill() } catch {} }
         Start-Sleep -Milliseconds 900
     }
@@ -531,7 +532,7 @@ if (-not $Elevated) {
         }
     }
     if ($needElevate -and -not $isAdmin) {
-        $lbl.Text = "관리자 권한으로 업데이트를 적용합니다..."; [System.Windows.Forms.Application]::DoEvents()
+        $lbl.Text = $T.elevating; [System.Windows.Forms.Application]::DoEvents()
         try {
             Start-Process powershell.exe -Verb RunAs -ArgumentList @(
                 '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden',
@@ -539,10 +540,7 @@ if (-not $Elevated) {
             # 승격 인스턴스가 압축 해제·재실행·정리(.ps1 삭제)를 담당. 이 인스턴스는 종료.
             $form.Close(); exit
         } catch {
-            [System.Windows.Forms.MessageBox]::Show(
-                "업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.`n" +
-                "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요.",
-                "PolyPDF 업데이트") | Out-Null
+            [System.Windows.Forms.MessageBox]::Show($T.elevate_cancel, $T.title_update) | Out-Null
             $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
         }
     }
@@ -555,7 +553,7 @@ if (-not $Elevated) {
     #   (여기서 강제 종료는 하지 않는다 — 남으면 U3 실패 카운트로 정직하게 보고됨.)
     for ($i=0; $i -lt 20; $i++) {
         if ((Get-PolyPdfProcs).Count -eq 0) { break }
-        $lbl.Text = "다른 PolyPDF 창이 닫히기를 기다리는 중..."
+        $lbl.Text = $T.waiting_others_plain
         Start-Sleep -Milliseconds 500
         [System.Windows.Forms.Application]::DoEvents()
     }
@@ -566,10 +564,8 @@ if (-not $Elevated) {
 # 260628(A): ★ 해제 직전 무결성 재검증(승격 인스턴스 포함) — 실패 시 설치 중단.
 if (-not (Test-ZipHash $zipPath $expSha)) {
     [System.Windows.Forms.MessageBox]::Show(
-        "업데이트 파일이 손상되었거나 변조되었습니다(무결성 검증 실패).`n" +
-        "안전을 위해 설치를 중단했습니다.`n`n" +
-        "잠시 후 다시 시도하거나, 공식 릴리스에서 설치본을 내려받아 주세요.",
-        "PolyPDF 업데이트", [System.Windows.Forms.MessageBoxButtons]::OK,
+        $T.bad_hash,
+        $T.title_update, [System.Windows.Forms.MessageBoxButtons]::OK,
         [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
     try { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue } catch {}
     $form.Close()
@@ -609,13 +605,12 @@ try {
             }
         }
         $bar.Value = [Math]::Min(100, [int]($n * 100 / $total))
-        if (($n % 15) -eq 0) { $lbl.Text = "설치 중... ($n / $total)"; [System.Windows.Forms.Application]::DoEvents() }
+        if (($n % 15) -eq 0) { $lbl.Text = ($T.installing -f $n, $total); [System.Windows.Forms.Application]::DoEvents() }
     }
     $arc.Dispose()
 } catch {
     $fail = -1
-    [System.Windows.Forms.MessageBox]::Show("업데이트 적용 중 오류가 발생했습니다.`n" + $_.Exception.Message,
-        "PolyPDF 업데이트") | Out-Null
+    [System.Windows.Forms.MessageBox]::Show(($T.apply_error -f $_.Exception.Message), $T.title_update) | Out-Null
 }
 
 # ── 260628-12 (U8): 잔존 파일 정리 ────────────────────────────────────────
@@ -630,9 +625,12 @@ try {
 #     c) 삭제 대상이 전체의 40% 를 넘으면 생략 — 목록이 엉뚱할 때의 최후 방어
 #     d) 실행 중인 exe 는 절대 대상에서 제외
 #     e) 개별 삭제 실패는 무시(권한 등) — 업데이트를 실패로 만들지 않는다
+#     f) **`_internal\` 아래만** 지운다(261008-27, 다국어 SOT §10.3) — 설치 폴더 바로 아래의
+#        제거 프로그램(unins000.*)·사용 안내는 설치 프로그램 소유라 매니페스트에 없다. 종전에는 이것까지
+#        지워, 다음 설치 파일이 '기존 버전 제거를 실행하지 못했습니다' 로 멈췄다.
 if ($fail -eq 0 -and -not [string]::IsNullOrEmpty($manPath) -and (Test-Path $manPath)) {
     try {
-        $lbl.Text = "정리 중..."; [System.Windows.Forms.Application]::DoEvents()
+        $lbl.Text = $T.cleaning; [System.Windows.Forms.Application]::DoEvents()
         $keep = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
         foreach ($ln in [IO.File]::ReadAllLines($manPath)) {
             $t = $ln.Trim().TrimStart('.').TrimStart('\','/')
@@ -645,6 +643,7 @@ if ($fail -eq 0 -and -not [string]::IsNullOrEmpty($manPath) -and (Test-Path $man
         foreach ($f in $all) {
             $rel = $f.FullName.Substring($root.Length)
             if ($keep.Contains($rel)) { continue }
+            if (-not $rel.StartsWith('_internal\', [StringComparison]::OrdinalIgnoreCase)) { continue }   # (f)
             if ($f.FullName -ieq $exe) { continue }                    # (d)
             $stale += $f.FullName
         }
@@ -674,7 +673,7 @@ if ($fail -eq 0 -and -not [string]::IsNullOrEmpty($manPath) -and (Test-Path $man
 #   소유 등) 여기서 UAC 승격으로 **한 번 더** 적용한다. 같은 zip 을 덮어쓰므로 안전하고,
 #   승격 인스턴스가 재실행·정리를 맡는다. 승격 후에도 실패하면 아래 정직한 오류 안내.
 if ($fail -gt 0 -and $denied -and -not $Elevated -and -not $isAdmin) {
-    $lbl.Text = "일부 폴더에 권한이 없어 관리자 권한으로 다시 적용합니다..."
+    $lbl.Text = $T.reelevate
     [System.Windows.Forms.Application]::DoEvents()
     try {
         Start-Process powershell.exe -Verb RunAs -ArgumentList @(
@@ -682,23 +681,17 @@ if ($fail -gt 0 -and $denied -and -not $Elevated -and -not $isAdmin) {
             '-File', $PSCommandPath, '-Elevated') | Out-Null
         $form.Close(); exit
     } catch {
-        [System.Windows.Forms.MessageBox]::Show(
-            "일부 폴더에 쓰기 권한이 없어 업데이트를 마치지 못했습니다($fail 개). 관리자 권한 요청이 취소되었습니다.`n" +
-            "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요.",
-            "PolyPDF 업데이트") | Out-Null
+        [System.Windows.Forms.MessageBox]::Show(($T.reelevate_cancel -f $fail), $T.title_update) | Out-Null
         $form.Close(); Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue; exit
     }
 }
 
 if ($fail -eq 0) {
-    $bar.Value = 100; $lbl.Text = "설치 완료 — 프로그램을 다시 시작합니다."
+    $bar.Value = 100; $lbl.Text = $T.done
     [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 700
 } elseif ($fail -gt 0) {
     # 거짓 성공 금지: 일부 파일 교체 실패(권한 등)를 정직하게 알림.
-    [System.Windows.Forms.MessageBox]::Show(
-        "업데이트를 완료하지 못했습니다. $fail 개 파일을 교체하지 못했습니다(권한 문제일 수 있음).`n" +
-        "최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요.",
-        "PolyPDF 업데이트") | Out-Null
+    [System.Windows.Forms.MessageBox]::Show(($T.partial_fail -f $fail), $T.title_update) | Out-Null
 }
 
 # 3) 재실행 + 정리. 승격 상태면 explorer 경유로 일반 권한으로 복귀 실행.
@@ -719,6 +712,49 @@ def pending_zip_path() -> Path:
     except Exception:
         d = Path(tempfile.gettempdir())
     return Path(d) / "PolyPDF-update.zip"
+
+
+def installer_texts() -> dict:
+    """261008-27(다국어 SOT §10.4): 설치 도우미(`_PS_INSTALLER`)의 화면 문구 — **지금 화면 언어로**.
+    자리표시 `{n}`·`{msg}` 등을 PowerShell `-f` 꼴(`{0}`·`{1}`)로 바꿔 넘긴다."""
+
+    def ps(text: str, *names) -> str:
+        for i, nm in enumerate(names):
+            text = text.replace("{%s}" % nm, "{%d}" % i)
+        return text
+    return {
+        "title_install": tr("PolyPDF 업데이트 설치"),
+        "title_update": tr("PolyPDF 업데이트"),
+        "preparing": tr("업데이트를 준비하는 중..."),
+        "wait_exit": tr("기존 프로그램이 종료되기를 기다리는 중..."),
+        "downloading": tr("업데이트 다운로드 중..."),
+        "dl_failed": ps(tr("다운로드 실패: {msg}"), "msg"),
+        "closing_others": ps(tr("다른 PolyPDF 창을 닫는 중... ({n}개)"), "n"),
+        "waiting_others": ps(tr("다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)"), "n"),
+        "waiting_others_plain": tr("다른 PolyPDF 창이 닫히기를 기다리는 중..."),
+        "others_left": ps(tr("다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
+                             "열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 "
+                             "업데이트가 실패합니다.\n\n"
+                             "[예] 남은 창을 강제로 닫고 계속\n"
+                             "[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)"), "n"),
+        "closing_left": tr("남은 창을 닫는 중..."),
+        "elevating": tr("관리자 권한으로 업데이트를 적용합니다..."),
+        "elevate_cancel": tr("업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.\n"
+                             "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."),
+        "bad_hash": tr("업데이트 파일이 손상되었거나 변조되었습니다(무결성 검증 실패).\n"
+                       "안전을 위해 설치를 중단했습니다.\n\n"
+                       "잠시 후 다시 시도하거나, 공식 릴리스에서 설치본을 내려받아 주세요."),
+        "installing": ps(tr("설치 중... ({done} / {total})"), "done", "total"),
+        "apply_error": ps(tr("업데이트 적용 중 오류가 발생했습니다.\n{msg}"), "msg"),
+        "cleaning": tr("정리 중..."),
+        "reelevate": tr("일부 폴더에 권한이 없어 관리자 권한으로 다시 적용합니다..."),
+        "reelevate_cancel": ps(tr("일부 폴더에 쓰기 권한이 없어 업데이트를 마치지 못했습니다({n}개). "
+                                  "관리자 권한 요청이 취소되었습니다.\n"
+                                  "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."), "n"),
+        "done": tr("설치 완료 — 프로그램을 다시 시작합니다."),
+        "partial_fail": ps(tr("업데이트를 완료하지 못했습니다. {n}개 파일을 교체하지 못했습니다(권한 문제일 수 있음).\n"
+                              "최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."), "n"),
+    }
 
 
 def apply_update(zip_path: str = None, url: str = "", sha256: str = "",
@@ -750,7 +786,8 @@ def apply_update(zip_path: str = None, url: str = "", sha256: str = "",
               .replace("__SHA_B64__", _b64(str(sha256 or "").strip().lower()))
               # 260628-12(U8): 정식 파일목록. 없으면 빈 값 → 정리 생략(안전).
               .replace("__MANIFEST_B64__", _b64(manifest_path if (manifest_path and
-                                                os.path.isfile(manifest_path)) else "")))
+                                                os.path.isfile(manifest_path)) else ""))
+              .replace("__TEXT_B64__", _b64(json.dumps(installer_texts(), ensure_ascii=False))))
     try:
         # PS5.1 이 한글을 정확히 읽도록 UTF-8 BOM 으로 기록
         with open(ps1, "w", encoding="utf-8-sig", newline="\r\n") as f:

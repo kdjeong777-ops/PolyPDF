@@ -3,7 +3,7 @@
 `viewer/` 의 한글 문자열이 `tr()`·`trp()`·`trn()`·`tr_noop()` 밖에 있으면 실패한다. 예외는 넷뿐이다.
   - KOREA_ONLY: 한국어가 아니면 숨기는 기능의 모듈(§7) — 감싸지 않는다(사용자 결정 261008-25).
     그 안에서도 모든 언어가 쓰는 코드는 SHARED 로 따로 검사한다(본문 mp3·OCR 엔진)
-  - PENDING: 아직 감싸지 않은 모듈과 그 단계(업데이트 Phase 6). 도움말은 Phase 5 에 resources/help/ 로 나갔다
+  - PENDING: 아직 감싸지 않은 모듈과 그 단계 — Phase 6 으로 비었다(도움말은 Phase 5, 업데이트는 Phase 6 에 감쌌다)
   - DATA: 한국어 처리 자료·정규식이 본업인 모듈(태그 사전·목차 해석·글자층 추출·인덱스 SQL·언어 이름)
   - ALLOW: 감싸지 않기로 정한 값 — 파일·폴더 이름, 글꼴 이름, 사용자 데이터 기본 이름, 내부 키, 정규식
 그 밖에 문서 설명(docstring)·로그·예외 메시지·비교식·첨자는 보지 않는다(§6 '감싸지 않는 것').
@@ -31,15 +31,15 @@ SHARED = {
     "viewer/study_controller.py": {"_on_main_mp3"},   # 본문 mp3 단추
 }
 PENDING = {
-    # Phase 6 — 업데이트 창·받기
-    "viewer/update_controller.py": 6, "viewer/widgets/update_dialog.py": 6, "viewer/updater.py": 6,
 }
 DATA = {
     "viewer/auto_tag.py", "viewer/toc_parse.py", "viewer/text_extract2.py", "viewer/indexer.py",
     "viewer/i18n.py", "viewer/_vendor/",
 }
 _FONTS = {"맑은 고딕", "굴림", "바탕", "돋움"}
-_REGEX = re.compile(r"\\[sdbwSDW]|\[[^\]]*가-힣|\(\?[:=!<]")   # \s·[가-힣]·(?: 가 들면 정규식
+_REGEX = re.compile(r"\\[sdbwSDW*]|\[[^\]]*가-힣|\(\?[:=!<]")   # \s·\*·[가-힣]·(?: 가 들면 정규식
+# 다른 언어의 스크립트를 담은 상수 — 그 안의 한글은 주석뿐이고 화면 문구는 실행 때 채운다(test_i18n_installer E 가 확인)
+SCRIPT_CONSTS = {"viewer/updater.py": {"_PS_INSTALLER"}}
 ALLOW = {
     # 폴더 이름(사용자 디스크의 자리 — 언어를 바꿔도 같아야 한다). 저장 창에 **제안하는** 파일 이름
     #   (`_다단.pdf`·`스크린샷.pdf` 등)과 만든 PDF 안의 글(목차 제목 등)은 Phase 5 에서 만드는 때의 언어로 감쌌다(§8)
@@ -74,8 +74,11 @@ def chk(cond, msg, extra=""):
         fails.append(msg)
 
 
-def bare_korean(path, funcs=None):
+def bare_korean(path, funcs=None, script_consts=()):
     t = ast.parse(open(path, encoding="utf-8").read())
+    if script_consts:                            # 다른 언어 스크립트 상수는 빼고 본다
+        t.body = [n for n in t.body if not (isinstance(n, ast.Assign) and any(
+            isinstance(g, ast.Name) and g.id in script_consts for g in n.targets))]
     if funcs:                                    # 그 함수들만 본다
         t = ast.Module(body=[n for n in ast.walk(t)
                              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in funcs],
@@ -118,7 +121,7 @@ for root, _d, files in os.walk(os.path.join(HERE, "viewer")):
             continue
         scanned += 1
         allow = ALLOW.get(rel, set())
-        for ln, s in bare_korean(os.path.join(HERE, rel), funcs):
+        for ln, s in bare_korean(os.path.join(HERE, rel), funcs, SCRIPT_CONSTS.get(rel, ())):
             if s in _FONTS or _REGEX.search(s):        # 글꼴 이름·정규식(한국어 처리 자료)
                 continue
             if s in allow:

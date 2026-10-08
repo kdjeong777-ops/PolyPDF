@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-08 23:16+0900\n"
+"POT-Creation-Date: 2026-10-08 23:51+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -640,11 +640,13 @@ msgstr "Continue with Available Languages"
 
 #: viewer/app.py:3139 viewer/app.py:3403 viewer/app.py:3789 viewer/app.py:4346
 #: viewer/app.py:5695 viewer/app.py:8190 viewer/app.py:8335
-#: viewer/present_controller.py:172 viewer/widgets/encrypt_dialog.py:108
+#: viewer/present_controller.py:172 viewer/update_controller.py:215
+#: viewer/update_controller.py:222 viewer/widgets/encrypt_dialog.py:108
 #: viewer/widgets/main_view.py:1818 viewer/widgets/merge_dialog.py:324
 #: viewer/widgets/pen_settings_dialog.py:82
 #: viewer/widgets/pen_settings_dialog.py:159
 #: viewer/widgets/pointer_settings_dialog.py:61
+#: viewer/widgets/update_dialog.py:116
 msgid "취소"
 msgstr "Cancel"
 
@@ -2628,7 +2630,7 @@ msgstr "Failed: {m}"
 msgid "병합 중: {get}"
 msgstr "Merging: {get}"
 
-#: viewer/app.py:4427
+#: viewer/app.py:4427 viewer/widgets/merge_dialog.py:22
 msgid "사용자 스크린샷"
 msgstr "User Screenshots"
 
@@ -3102,7 +3104,8 @@ msgstr "No PDF files selected."
 msgid "PDF 생성 완료"
 msgstr "PDF Created"
 
-#: viewer/print_controller.py:453 viewer/widgets/glossary_edit_dialog.py:76
+#: viewer/print_controller.py:453 viewer/update_controller.py:380
+#: viewer/widgets/glossary_edit_dialog.py:76
 #: viewer/widgets/hyperlink_dialog.py:139
 #: viewer/widgets/translate_dialog.py:180
 #: viewer/widgets/translate_files_dialog.py:244
@@ -3482,6 +3485,288 @@ msgstr "N-up complete: {pages} pages total"
 #: viewer/twoup.py:1040 viewer/twoup.py:1172
 msgid "항목"
 msgstr "Item"
+
+# | msgid "베타(테스트) 버전도 받기"
+#: viewer/update_controller.py:104
+msgid "베타(테스트) 버전"
+msgstr "beta (test) version"
+
+#: viewer/update_controller.py:104
+msgid "버전"
+msgstr "version"
+
+#: viewer/update_controller.py:215
+msgid "업데이트 파일을 받는 중…"
+msgstr "Downloading the update…"
+
+# | msgid "업데이트 확인…"
+#: viewer/update_controller.py:80 viewer/update_controller.py:86
+#: viewer/update_controller.py:91 viewer/update_controller.py:97
+#: viewer/update_controller.py:216 viewer/update_controller.py:269
+#: viewer/widgets/update_dialog.py:87 viewer/widgets/update_dialog.py:118
+msgid "업데이트"
+msgstr "Update"
+
+# | msgid "구성요소 설치(녹화·OCR)…"
+#: viewer/update_controller.py:325
+msgid "구성요소 설치 (녹화·OCR)"
+msgstr "Install Components (recording · OCR)"
+
+#: viewer/update_controller.py:374
+msgid "녹화 (ffmpeg)"
+msgstr "Recording (ffmpeg)"
+
+#: viewer/update_controller.py:42
+msgid "업데이트 저장소 설정"
+msgstr "Update Repository Settings"
+
+#: viewer/update_controller.py:43
+msgid "GitHub 저장소를 'OWNER/REPO' 형식으로 입력하세요:"
+msgstr "Enter the GitHub repository as 'OWNER/REPO':"
+
+# | msgid "업데이트 확인…"
+#: viewer/update_controller.py:53
+msgid "업데이트 확인 중…"
+msgstr "Checking for updates…"
+
+#: viewer/update_controller.py:189
+msgid "업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다."
+msgstr "Update downloaded — it can be installed when you quit."
+
+#: viewer/update_controller.py:242
+msgid "취소하는 중…"
+msgstr "Canceling…"
+
+#: viewer/update_controller.py:328
+msgid ""
+"필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
+"(녹화=ffmpeg, OCR=Tesseract · 재시작 불필요)"
+msgstr ""
+"Downloads components for the features you need into the installation folder.\n"
+"(Recording = ffmpeg, OCR = Tesseract · no restart needed)"
+
+#: viewer/update_controller.py:81
+msgid ""
+"업데이트 정보를 가져오지 못했습니다.\n"
+"인터넷 연결과 저장소 설정을 확인하세요."
+msgstr ""
+"Could not get update information.\n"
+"Check your internet connection and repository settings."
+
+#: viewer/update_controller.py:270
+msgid ""
+"업데이트 파일을 받지 못했습니다(연결·무결성 검증 실패).\n"
+"프로그램은 닫지 않았습니다. 잠시 뒤 다시 시도해 주세요."
+msgstr ""
+"Could not download the update (connection or integrity check failed).\n"
+"The program was not closed. Please try again later."
+
+#: viewer/update_controller.py:231
+#, python-format
+msgid "업데이트 파일을 받는 중… %.1f / %.1f MB"
+msgstr "Downloading the update… %.1f / %.1f MB"
+
+# | msgid "첨부됨 ✓"
+#: viewer/update_controller.py:347
+msgid "설치됨 ✓"
+msgstr "Installed ✓"
+
+#: viewer/update_controller.py:347
+msgid "미설치"
+msgstr "Not installed"
+
+#: viewer/update_controller.py:349
+msgid "재설치"
+msgstr "Reinstall"
+
+#: viewer/update_controller.py:349
+msgid "다운로드"
+msgstr "Download"
+
+# | msgid "구성요소 설치(녹화·OCR)…"
+#: viewer/update_controller.py:366 viewer/update_controller.py:368
+msgid "구성요소 설치"
+msgstr "Install Components"
+
+#: viewer/update_controller.py:86
+#, python-brace-format
+msgid "현재 최신 버전입니다. (v{cur})"
+msgstr "You have the latest version. (v{cur})"
+
+#: viewer/update_controller.py:92
+#, python-brace-format
+msgid ""
+"새 버전 v{latest} 이 있습니다(현재 v{cur}).\n"
+"개발(소스) 실행 중에는 자동 교체가 적용되지 않습니다.\n"
+"{get}"
+msgstr ""
+"A new version v{latest} is available (current v{cur}).\n"
+"Automatic replacement does not apply when running from source.\n"
+"{get}"
+
+#: viewer/update_controller.py:98
+#, python-brace-format
+msgid ""
+"새 버전 v{latest} 이 있으나 배포 zip 자산을 찾지 못했습니다.\n"
+"{get}"
+msgstr ""
+"A new version v{latest} is available, but its zip package was not found.\n"
+"{get}"
+
+#: viewer/update_controller.py:119
+#, python-brace-format
+msgid "새 {kind} v{latest} 사용 가능 — 도움말 → 업데이트 확인"
+msgstr "New {kind} v{latest} available — Help → Check for Updates"
+
+#: viewer/update_controller.py:366
+#, python-brace-format
+msgid "{title} 설치 완료."
+msgstr "{title} installed."
+
+#: viewer/update_controller.py:368
+#, python-brace-format
+msgid ""
+"{title} 설치 실패:\n"
+"{info}"
+msgstr ""
+"{title} installation failed:\n"
+"{info}"
+
+# | msgid "PolyPDF — 정보"
+#: viewer/updater.py:725
+msgid "PolyPDF 업데이트 설치"
+msgstr "Installing PolyPDF Update"
+
+# | msgid "PolyPDF — 정보"
+#: viewer/updater.py:726
+msgid "PolyPDF 업데이트"
+msgstr "PolyPDF Update"
+
+# | msgid "준비 중…"
+# | msgid "준비 중..."
+#: viewer/updater.py:727
+msgid "업데이트를 준비하는 중..."
+msgstr "Preparing the update..."
+
+#: viewer/updater.py:728
+msgid "기존 프로그램이 종료되기를 기다리는 중..."
+msgstr "Waiting for the program to close..."
+
+# | msgid "업데이트 자동 다운로드"
+#: viewer/updater.py:729
+msgid "업데이트 다운로드 중..."
+msgstr "Downloading the update..."
+
+#: viewer/updater.py:733
+msgid "다른 PolyPDF 창이 닫히기를 기다리는 중..."
+msgstr "Waiting for other PolyPDF windows to close..."
+
+#: viewer/updater.py:739
+msgid "남은 창을 닫는 중..."
+msgstr "Closing the remaining windows..."
+
+#: viewer/updater.py:740
+msgid "관리자 권한으로 업데이트를 적용합니다..."
+msgstr "Applying the update with administrator rights..."
+
+#: viewer/updater.py:741
+msgid ""
+"업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.\n"
+"최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
+msgstr ""
+"Administrator rights are needed to apply the update. The request was canceled, so the update was not applied.\n"
+"Download the latest installer (PolyPDF-Setup-*.exe) and 'Run as administrator'."
+
+#: viewer/updater.py:743
+msgid ""
+"업데이트 파일이 손상되었거나 변조되었습니다(무결성 검증 실패).\n"
+"안전을 위해 설치를 중단했습니다.\n"
+"\n"
+"잠시 후 다시 시도하거나, 공식 릴리스에서 설치본을 내려받아 주세요."
+msgstr ""
+"The update file is damaged or has been tampered with (integrity check failed).\n"
+"Installation was stopped for safety.\n"
+"\n"
+"Try again later, or download the installer from the official release page."
+
+# | msgid "준비 중…"
+# | msgid "준비 중..."
+#: viewer/updater.py:748
+msgid "정리 중..."
+msgstr "Cleaning up..."
+
+#: viewer/updater.py:749
+msgid "일부 폴더에 권한이 없어 관리자 권한으로 다시 적용합니다..."
+msgstr "Some folders need administrator rights, so the update is applied again as administrator..."
+
+#: viewer/updater.py:753
+msgid "설치 완료 — 프로그램을 다시 시작합니다."
+msgstr "Installation complete — restarting the program."
+
+# | msgid "실패: {msg}"
+#: viewer/updater.py:730
+#, python-brace-format
+msgid "다운로드 실패: {msg}"
+msgstr "Download failed: {msg}"
+
+#: viewer/updater.py:731
+#, python-brace-format
+msgid "다른 PolyPDF 창을 닫는 중... ({n}개)"
+msgstr "Closing other PolyPDF windows... ({n})"
+
+#: viewer/updater.py:732
+#, python-brace-format
+msgid "다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)"
+msgstr "Waiting for other PolyPDF windows to close... ({n} left)"
+
+#: viewer/updater.py:734
+#, python-brace-format
+msgid ""
+"다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
+"열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 업데이트가 실패합니다.\n"
+"\n"
+"[예] 남은 창을 강제로 닫고 계속\n"
+"[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)"
+msgstr ""
+"{n} other PolyPDF window(s) are still open.\n"
+"Open windows lock files, so if you continue some files will not be replaced and the update will fail.\n"
+"\n"
+"[Yes] Force the remaining windows to close and continue\n"
+"[No] Cancel the update (choose this if you have unsaved work)"
+
+# | msgid "목록 조사 {done} / {total}{v}"
+# | msgid "{done} / {total} 파일"
+#: viewer/updater.py:746
+#, python-brace-format
+msgid "설치 중... ({done} / {total})"
+msgstr "Installing... ({done} / {total})"
+
+#: viewer/updater.py:747
+#, python-brace-format
+msgid ""
+"업데이트 적용 중 오류가 발생했습니다.\n"
+"{msg}"
+msgstr ""
+"An error occurred while applying the update.\n"
+"{msg}"
+
+#: viewer/updater.py:750
+#, python-brace-format
+msgid ""
+"일부 폴더에 쓰기 권한이 없어 업데이트를 마치지 못했습니다({n}개). 관리자 권한 요청이 취소되었습니다.\n"
+"최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
+msgstr ""
+"The update could not be finished because some folders are not writable ({n}). The administrator request was canceled.\n"
+"Download the latest installer (PolyPDF-Setup-*.exe) and 'Run as administrator'."
+
+#: viewer/updater.py:754
+#, python-brace-format
+msgid ""
+"업데이트를 완료하지 못했습니다. {n}개 파일을 교체하지 못했습니다(권한 문제일 수 있음).\n"
+"최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."
+msgstr ""
+"The update could not be completed. {n} file(s) could not be replaced (possibly a permission problem).\n"
+"'Run as administrator' the latest installer (PolyPDF-Setup-*.exe)."
 
 #: viewer/widgets/bookmark_tree.py:1722
 msgid "암호화 설정 파일"
@@ -8382,6 +8667,87 @@ msgstr "Style '{name}' already exists. Update it?"
 msgid "{m} Word 양식"
 msgstr "{m} Word template"
 
+# | msgid "베타(테스트) 버전도 받기"
+#: viewer/widgets/update_dialog.py:59
+msgid " · 베타(테스트)"
+msgstr " · beta (test)"
+
+# | msgid "받지 못했습니다."
+# | msgid "패키지를 찾지 못했습니다."
+# | msgid "읽을 본문을 찾지 못했습니다."
+# | msgid "사용법 파일을 찾지 못했습니다."
+#: viewer/widgets/update_dialog.py:75
+msgid "바뀐 내용을 가져오지 못했습니다."
+msgstr "Could not get the list of changes."
+
+#: viewer/widgets/update_dialog.py:93
+msgid "<b>새 베타(테스트) 버전이 있습니다.</b>"
+msgstr "<b>A new beta (test) version is available.</b>"
+
+#: viewer/widgets/update_dialog.py:94
+msgid "<b>새 버전이 있습니다.</b>"
+msgstr "<b>A new version is available.</b>"
+
+#: viewer/widgets/update_dialog.py:87
+msgid "베타 업데이트"
+msgstr "Beta Update"
+
+#: viewer/widgets/update_dialog.py:95
+#, python-brace-format
+msgid "현재 v{cur} → 새 v{new}"
+msgstr "Current v{cur} → new v{new}"
+
+#: viewer/widgets/update_dialog.py:107
+msgid "업데이트 파일을 <b>먼저 받은 뒤</b>, 열린 PolyPDF 창을 모두 닫고 설치합니다."
+msgstr "The update file is <b>downloaded first</b>, then all open PolyPDF windows are closed and it is installed."
+
+# | msgid "업그레이드"
+#: viewer/widgets/update_dialog.py:115
+msgid "업그레이드 후 종료"
+msgstr "Upgrade and Quit"
+
+# | msgid "편집 종료"
+#: viewer/widgets/update_dialog.py:115
+msgid "그냥 종료"
+msgstr "Just Quit"
+
+#: viewer/widgets/update_dialog.py:118
+msgid "나중에"
+msgstr "Later"
+
+# | msgid "일괄 캡쳐"
+# | msgid " 전체 캡쳐"
+#: viewer/widgets/update_dialog.py:63
+msgid "전체 비교"
+msgstr "Full comparison"
+
+# | msgid "페이지"
+# | msgid " 페이지"
+#: viewer/widgets/update_dialog.py:69
+msgid "릴리스 페이지"
+msgstr "release page"
+
+# | msgid "이 문서는 복사 권한이 없습니다."
+# | msgid "이 문서는 인쇄 권한이 없습니다."
+#: viewer/widgets/update_dialog.py:70
+msgid "이 버전에는 자세한 설명이 없습니다."
+msgstr "This version has no detailed notes."
+
+#: viewer/widgets/update_dialog.py:72
+msgid "(이 버전의 설명은 한국어로만 있습니다)"
+msgstr "(The notes for this version are available in Korean only)"
+
+#: viewer/widgets/update_dialog.py:97
+#, python-brace-format
+msgid "({n}개 버전)"
+msgid_plural "({n}개 버전)"
+msgstr[0] "({n} version)"
+msgstr[1] "({n} versions)"
+
+#: viewer/widgets/update_dialog.py:108
+msgid "이 버전은 테스트(베타)입니다."
+msgstr "This is a test (beta) version."
+
 #: viewer/widgets/view_settings_dialog.py:62
 msgid "보기 설정"
 msgstr "View Settings"
@@ -8590,6 +8956,126 @@ msgstr "Writing text layer on page {p}…"
 msgid "{pg}쪽 건너뜀(글자 있음)"
 msgstr "Page {pg} skipped (already has text)"
 
+#: installer/installer_text.py:15
+msgctxt "installer"
+msgid "바탕화면에 바로가기 만들기"
+msgstr "Create a desktop shortcut"
+
+#: installer/installer_text.py:16
+msgctxt "installer"
+msgid "추가 작업:"
+msgstr "Additional tasks:"
+
+#: installer/installer_text.py:17
+msgctxt "installer"
+msgid "PolyPDF 를 PDF 기본 앱으로 설정 (설치 후 Windows 설정에서 한 번 선택 필요)"
+msgstr "Set PolyPDF as the default PDF app (you confirm it once in Windows Settings after setup)"
+
+#: installer/installer_text.py:18
+msgctxt "installer"
+msgid "파일 연결:"
+msgstr "File association:"
+
+# | msgid "PDF 문서 (PolyPDF)"
+#: installer/installer_text.py:19
+msgctxt "installer"
+msgid "PDF 문서 (PolyPDF)"
+msgstr "PDF Document (PolyPDF)"
+
+#: installer/installer_text.py:20
+msgctxt "installer"
+msgid "PDF 뷰어·편집·책갈피·검색·단어장"
+msgstr "PDF viewer · editing · bookmarks · search"
+
+# | msgid "PolyPDF — 정보"
+#: installer/installer_text.py:21
+msgctxt "installer"
+msgid "PolyPDF 실행"
+msgstr "Launch PolyPDF"
+
+#: installer/installer_text.py:22
+msgctxt "installer"
+msgid "Windows '기본 앱' 설정 열기 ( .pdf → PolyPDF 선택 )"
+msgstr "Open Windows 'Default apps' settings ( .pdf → PolyPDF )"
+
+# | msgid "PolyPDF — 정보"
+#: installer/installer_text.py:23
+msgctxt "installer"
+msgid "PolyPDF 제거"
+msgstr "Uninstall PolyPDF"
+
+#: installer/installer_text.py:24
+msgctxt "installer"
+msgid "이미 PolyPDF 가 설치되어 있습니다."
+msgstr "PolyPDF is already installed."
+
+#: installer/installer_text.py:25
+msgctxt "installer"
+msgid "기존 버전: %1"
+msgstr "Installed version: %1"
+
+#: installer/installer_text.py:26
+msgctxt "installer"
+msgid "새 버전:   %1"
+msgstr "New version:       %1"
+
+# | msgid "업그레이드"
+#: installer/installer_text.py:27
+msgctxt "installer"
+msgid "→ 업그레이드입니다."
+msgstr "→ This is an upgrade."
+
+#: installer/installer_text.py:28
+msgctxt "installer"
+msgid "→ 동일한 버전을 다시 설치합니다."
+msgstr "→ The same version will be reinstalled."
+
+#: installer/installer_text.py:29
+msgctxt "installer"
+msgid "→ 더 낮은 버전입니다(다운그레이드)."
+msgstr "→ This is an older version (downgrade)."
+
+#: installer/installer_text.py:30
+msgctxt "installer"
+msgid "기존 버전을 제거한 뒤 새로 설치합니다. 계속하시겠습니까?"
+msgstr "The installed version will be removed and then the new one installed. Continue?"
+
+#: installer/installer_text.py:31
+msgctxt "installer"
+msgid ""
+"기존 버전 제거를 실행하지 못했습니다.\n"
+"제어판에서 기존 PolyPDF 를 수동 제거한 뒤 다시 설치해 주세요."
+msgstr ""
+"Could not run the uninstaller of the installed version.\n"
+"Please uninstall PolyPDF from Control Panel and run setup again."
+
+# | msgid "언어 / Language:"
+#: installer/installer_text.py:33
+msgctxt "installer"
+msgid "PolyPDF 언어 / Language"
+msgstr "PolyPDF Language"
+
+#: installer/installer_text.py:34
+msgctxt "installer"
+msgid "PolyPDF 화면에 쓸 언어를 고르세요."
+msgstr "Choose the language for PolyPDF."
+
+# | msgid "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 설정 → 화면 스타일에서 바꿀 수 있습니다(다시 시작)."
+#: installer/installer_text.py:35
+msgctxt "installer"
+msgid "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 → 화면 스타일에서 바꿀 수 있습니다(다시 시작)."
+msgstr "This can differ from the language of this setup wizard. You can change it later in Tools → Settings → Appearance (restart required)."
+
+#: installer/installer_text.py:39
+msgctxt "installer"
+msgid "사용안내(API키).txt"
+msgstr "Getting Started.txt"
+
+#: installer/installer_text.py:40
+msgctxt "installer"
+msgid "사용 안내 (API 키)"
+msgstr "Getting Started"
+
 #~ msgid "PolyPDF_특허"
 #~ msgstr "PolyPDF_Patents"
 
@@ -8598,4 +9084,9 @@ msgstr "Page {pg} skipped (already has text)"
 
 #~ msgid "한"
 #~ msgstr "한"
+
+# | msgid "PolyPDF — 정보"
+#~ msgctxt "installer"
+#~ msgid "PolyPDF 언어"
+#~ msgstr "PolyPDF language"
 

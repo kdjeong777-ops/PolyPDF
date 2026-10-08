@@ -140,9 +140,40 @@ try:
     here = os.path.dirname(os.path.abspath(__file__))
     out = subprocess.run([sys.executable, os.path.join(here, "scripts", "release_notes.py"), "v0.45.0-beta.196"],
                          capture_output=True, text=True, encoding="utf-8", cwd=here).stdout
-    chk(out.startswith("## 바뀐 내용") and "**수정**" in out and "test_" not in out
+    chk(out.startswith("<!-- lang:ko -->\n## 바뀐 내용") and "**수정**" in out and "test_" not in out
         and "Co-Authored-By" not in out and "/compare/v0.45.0-beta.193...v0.45.0-beta.196" in out,
         "G 릴리스 설명을 커밋 메시지로 만든다(검사 이름·서명 줄 제외)", out[:200])
+
+    # ── H — 언어별 절(다국어 SOT §10.4, 261008-27) ──
+    import shutil
+    repo = tempfile.mkdtemp(prefix="polypdf_relnotes_")
+
+    def g(*a):
+        return subprocess.run(["git", *a], cwd=repo, capture_output=True, text=True, encoding="utf-8")
+    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+    g("commit", "-q", "--allow-empty", "-m", "first"); g("tag", "v1.0.0")
+    g("commit", "-q", "--allow-empty", "-m",
+      "fix: 저장 오류 고침 (1, 1.0.1)\n\n- 저장이 됩니다\n\nRelease-Note-en: Saving works again\n"
+      "Release-Note-en: Faster startup\n\nCo-Authored-By: x <x@x>")
+    g("commit", "-q", "--allow-empty", "-m", "feat: 한국어만 (2, 1.0.1)\n\n- 한국어 설명만")
+    g("tag", "v1.0.1")
+    out2 = subprocess.run([sys.executable, os.path.join(here, "scripts", "release_notes.py"), "v1.0.1"],
+                          capture_output=True, text=True, encoding="utf-8", cwd=repo).stdout
+    shutil.rmtree(repo, ignore_errors=True)
+    secs = _ud.split_lang_sections(out2)
+    chk(set(secs) == {"ko", "en"}, "H 한국어·영어 절", str(list(secs)))
+    chk("저장이 됩니다" in secs.get("ko", "") and "한국어 설명만" in secs.get("ko", "")
+        and "Release-Note" not in secs.get("ko", ""), "H 한국어 절은 모든 커밋, 꼬리말은 빠진다")
+    chk("- Saving works again" in secs.get("en", "") and "- Faster startup" in secs.get("en", "")
+        and "한국어" not in secs.get("en", "") and "What's changed" in secs.get("en", ""),
+        "H 영어 절은 꼬리말 항목만(꼬리말 없는 커밋은 빠진다)")
+    md_en = changes_markdown([{"version": "1.0.1", "notes": out2}], chain=["en", "ko"])
+    chk("Saving works again" in md_en and "저장이 됩니다" not in md_en and "What's changed" not in md_en,
+        "H 영어 화면은 영어 절을 보이고 절 머리는 지운다")
+    md_old = changes_markdown([{"version": "1.0.0", "notes": "## 바뀐 내용\n\n- 옛 설명"}], chain=["en", "ko"])
+    chk("옛 설명" in md_old and "한국어로만" in md_old, "H 표시 없는 옛 설명은 한국어로만 있다는 안내와 함께")
+    md_ko = changes_markdown([{"version": "1.0.1", "notes": out2}], chain=["ko"])
+    chk("저장이 됩니다" in md_ko and "Saving" not in md_ko and "한국어로만" not in md_ko, "H 한국어 화면은 한국어 절")
 except Exception:
     import traceback
     traceback.print_exc()
