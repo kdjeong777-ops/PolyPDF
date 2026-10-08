@@ -104,10 +104,20 @@ try:
         vis = bt._visible_file_items()
         if vis and all(v is not big for v in vis):
             break
+    # 새로 보이는 파일은 지연(디바운스·백그라운드 책갈피 읽기)으로 펼쳐진다 — 고정 대기 대신 최대 3초 동안 확인한다.
+    # 펼치면서 아래 파일이 밀려나 보이는 목록이 바뀔 수 있으므로 매번 다시 읽는다.
+    def all_vis_open():
+        v = bt._visible_file_items()
+        return bool(v) and all(x.data(0, bt.DATA_ALL_EXPANDED) for x in v) \
+            and all(subtree_open(x) for x in v if x.childCount())
+    t0 = time.perf_counter()
+    while not all_vis_open() and time.perf_counter() - t0 < 3:
+        spin(50)
+    print(f"  실측: 새로 보이는 파일이 모두 펼쳐지기까지 {int((time.perf_counter() - t0) * 1000)}ms")
     vis = bt._visible_file_items()
-    chk(vis and all(v.data(0, bt.DATA_ALL_EXPANDED) for v in vis)
-        and all(subtree_open(v) for v in vis if v.childCount()),
-        "B 스크롤해서 새로 보이는 파일들도 펼친다", f"{[v.text(0) for v in vis if not subtree_open(v)][:3]}")
+    chk(all_vis_open(),
+        "B 스크롤해서 새로 보이는 파일들도 펼친다",
+        f"{[(v.text(0), v.data(0, bt.DATA_ALL_EXPANDED), v.childCount()) for v in vis if not (v.data(0, bt.DATA_ALL_EXPANDED) and subtree_open(v))][:3]}")
 
     # ── D 사용자가 접은 파일 ──
     user_closed = next((v for v in vis if v.childCount()), None)
