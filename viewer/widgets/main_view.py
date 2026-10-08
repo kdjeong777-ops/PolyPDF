@@ -2995,8 +2995,6 @@ class MainView(QWidget):
         from PyQt6.QtWidgets import QMenu as _QMenu
         self._shape_btn = _DblTool()
         self._shape_btn.setFixedSize(46, H)        # 글리프+풀다운 화살표가 다 보이게 폭 확보
-        self._shape_btn.setStyleSheet("QToolButton{font-size:17px;}")
-        self._shape_btn.setText(self._SHAPE_GLYPH["rect"])
         self._shape_btn.setToolTip("도형 — 클릭:선택/해제, 더블클릭:종류 변경, ▾:채움")
         self._shape_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self._shape_btn.singleClick.connect(self._toggle_shape)
@@ -3257,11 +3255,37 @@ class MainView(QWidget):
         return ("QToolButton{%sbackground:#f3f3f3;border:1px solid #888;"
                 "border-radius:4px;font-weight:bold;color:#202020;}" % fp)
 
+    @staticmethod
+    def _shape_kind_icon(kind, on):
+        """261008: 도형 버튼 아이콘 — 폰트 글리프(▭❒◯)는 크기·모양이 제각각이라 직접 그린다.
+        직사각형·둥근 사각형은 같은 크기(모서리만 다름), 원은 같은 높이 기준. 글자색과 같은 색."""
+        from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor
+        from PyQt6.QtCore import QRectF
+        from viewer import theme as _theme
+        color = "#e6e6e6" if (not on and _theme.is_dark()) else "#202020"
+        dpr = 2.0
+        # 폭 28 중 왼쪽 18에만 그림 → 가운데 정렬돼도 도형이 왼쪽으로 5px 비켜 ▾ 영역과 띄워짐
+        pm = QPixmap(int(28 * dpr), int(18 * dpr)); pm.setDevicePixelRatio(dpr)
+        pm.fill(QColor(0, 0, 0, 0))
+        p = QPainter(pm); p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setPen(QPen(QColor(color), 1.8)); p.setBrush(QColor(0, 0, 0, 0))
+        if kind == "circle":
+            p.drawEllipse(QRectF(1.9, 1.9, 14.2, 14.2))
+        elif kind == "round":
+            p.drawRoundedRect(QRectF(0.9, 3.4, 16.2, 11.2), 3.6, 3.6)
+        else:
+            p.drawRect(QRectF(0.9, 3.4, 16.2, 11.2))
+        p.end()
+        return QIcon(pm)
+
     def _update_shape_button(self):
         if not hasattr(self, "_shape_btn"):
             return
-        self._shape_btn.setText(self._SHAPE_GLYPH.get(self._shape_kind, "▭"))
-        self._shape_btn.setStyleSheet(self._dbl_css(self._draw_kind == "shape", font_px=17))
+        on = self._draw_kind == "shape"
+        self._shape_btn.setText("")
+        self._shape_btn.setIcon(self._shape_kind_icon(self._shape_kind, on))
+        self._shape_btn.setIconSize(QSize(28, 18))
+        self._shape_btn.setStyleSheet(self._dbl_css(on))
         for a in self._shape_menu.actions():
             a.setChecked(a.data() == self._shape_fill)
 
