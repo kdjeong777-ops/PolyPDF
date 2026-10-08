@@ -4469,7 +4469,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _merge_preset_api(self) -> dict:
         return {"get_presets": self._merge_get_presets,
                 "save_preset": self._merge_save_preset,
-                "delete_preset": self._merge_delete_preset}
+                "delete_preset": self._merge_delete_preset,
+                "move_preset": self._merge_move_preset}       # 261008-4: 순서 바꾸기
 
     def _merge_get_presets(self) -> list:
         return list(self._prefs.get("merge_presets") or [])
@@ -4479,11 +4480,29 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not name:
             return
         cfg = dict(cfg); cfg["name"] = name
-        lst = [p for p in (self._prefs.get("merge_presets") or [])
-               if p.get("name") != name]      # 같은 이름은 덮어쓰기
-        lst.append(cfg)
+        lst = list(self._prefs.get("merge_presets") or [])
+        # 261008-4(마스터 §11.10, 사용자 보고 '수정하면 밑으로 바뀌어 쓰기 어렵다'): 같은 이름은
+        #   **그 자리에서** 덮어쓴다. 종전에는 지우고 끝에 붙여, 고칠 때마다 목록 맨 아래로 내려갔다.
+        idx = next((i for i, p in enumerate(lst) if p.get("name") == name), None)
+        if idx is None:
+            lst.append(cfg)                    # 새 스타일만 끝에
+        else:
+            lst[idx] = cfg
         self._prefs["merge_presets"] = lst
         self._save_settings_now()
+
+    def _merge_move_preset(self, name, delta) -> int:
+        """261008-4: 스타일을 목록에서 delta 칸(-1 위 / +1 아래) 옮긴다. 옮긴 뒤 자리(없으면 -1)."""
+        lst = list(self._prefs.get("merge_presets") or [])
+        i = next((k for k, p in enumerate(lst) if p.get("name") == str(name)), None)
+        if i is None:
+            return -1
+        j = max(0, min(len(lst) - 1, i + int(delta)))
+        if j != i:
+            lst.insert(j, lst.pop(i))
+            self._prefs["merge_presets"] = lst
+            self._save_settings_now()
+        return j
 
     def _merge_delete_preset(self, name):
         lst = [p for p in (self._prefs.get("merge_presets") or [])

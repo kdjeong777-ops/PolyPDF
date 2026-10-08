@@ -41,14 +41,24 @@ class TwoUpSettingsDialog(QDialog):
         self._reload_presets()
         b_save = QPushButton("저장…"); b_save.clicked.connect(self._save_preset)
         b_del = QPushButton("삭제"); b_del.clicked.connect(self._delete_preset)
+        # 261008-4(마스터 §11.10, 사용자 요청): 스타일 목록 순서 바꾸기 — 고른 스타일을 한 칸 위/아래로.
+        self.btn_preset_up = QPushButton("▲"); self.btn_preset_up.setFixedWidth(28)
+        self.btn_preset_up.setToolTip("고른 스타일을 목록에서 위로")
+        self.btn_preset_up.clicked.connect(lambda: self._move_preset(-1))
+        self.btn_preset_dn = QPushButton("▼"); self.btn_preset_dn.setFixedWidth(28)
+        self.btn_preset_dn.setToolTip("고른 스타일을 목록에서 아래로")
+        self.btn_preset_dn.clicked.connect(lambda: self._move_preset(1))
         if not self._preset_api:
             self.cmb_preset.setEnabled(False)
             for b in (b_save, b_del):
                 b.setEnabled(False)
         self.cmb_preset.activated.connect(self._load_preset)   # 선택 즉시 적용
+        self.cmb_preset.currentIndexChanged.connect(lambda _i: self._update_move_buttons())
         srow.addWidget(self.cmb_preset, 1)
+        srow.addWidget(self.btn_preset_up); srow.addWidget(self.btn_preset_dn)
         srow.addWidget(b_save); srow.addWidget(b_del)
         cv.addLayout(srow)
+        self._update_move_buttons()
 
         # 용지 / 배치
         grp_pg = QGroupBox("용지 / 배치")
@@ -402,6 +412,31 @@ class TwoUpSettingsDialog(QDialog):
             self.cmb_preset.setCurrentIndex(i)
         self._cur_preset_name = name        # 260617-6
         self._warn_missing_templates(missing)
+
+    def _update_move_buttons(self):
+        """▲▼ 는 옮길 수 있을 때만 — 목록 맨 위/맨 아래이거나 순서 기능이 없으면 끈다."""
+        if not hasattr(self, "btn_preset_up"):
+            return
+        can = bool(self._preset_api and self._preset_api.get("move_preset"))
+        i, n = self.cmb_preset.currentIndex(), self.cmb_preset.count()
+        self.btn_preset_up.setEnabled(can and i > 0)
+        self.btn_preset_dn.setEnabled(can and 0 <= i < n - 1)
+
+    def _move_preset(self, delta: int):
+        """261008-4: 고른 스타일을 한 칸 옮긴다. 설정 값은 건드리지 않는다(순서만 — 저장 즉시)."""
+        name = self.cmb_preset.currentText()
+        fn = (self._preset_api or {}).get("move_preset")
+        if not name or not callable(fn):
+            return
+        try:
+            fn(name, int(delta))
+        except Exception:
+            return
+        self._reload_presets()
+        i = self.cmb_preset.findText(name)
+        if i >= 0:
+            self.cmb_preset.setCurrentIndex(i)     # 옮긴 그 스타일을 계속 골라 둔다(연달아 누를 수 있게)
+        self._update_move_buttons()
 
     def _delete_preset(self):
         name = self.cmb_preset.currentText()
