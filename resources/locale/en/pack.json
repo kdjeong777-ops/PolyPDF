@@ -6,5 +6,5 @@
   "qt": "qtbase_en",
   "inno": "compiler:Default.isl",
   "direction": "ltr",
-  "status": "partial"
+  "status": "complete"
 }
