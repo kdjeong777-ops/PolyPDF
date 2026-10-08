@@ -120,8 +120,23 @@ def language() -> str:
 
 
 def korea_only_visible() -> bool:
-    """한국 전용 기능(법령·KCSC·KIPO·영어단어 학습)을 보일지 — SOT §7."""
+    """한국 전용 기능(법령·KCSC·KIPO·영어단어 학습·영→한 번역과 사전 관리)을 보일지 — SOT §7."""
     return _lang == KO
+
+
+def korea_only(fn):
+    """한국 전용 기능의 처리기 — 한국어가 아니면 아무것도 하지 않는다(SOT §7).
+    메뉴·단추를 숨겨도 단축키·우클릭·자동 후속 작업(병합 뒤 단어장 등)이 처리기를 부를 수 있어
+    **처리기 자체**를 막는다."""
+    import functools
+
+    @functools.wraps(fn)
+    def _guarded(*a, **k):
+        if not korea_only_visible():
+            return None
+        return fn(*a, **k)
+    _guarded.korea_only = True
+    return _guarded
 
 
 def _chain(code: str) -> list:

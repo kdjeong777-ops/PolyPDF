@@ -19,6 +19,7 @@ from typing import Optional
 import fitz
 
 from viewer import text_noise as _noise
+from viewer.i18n import tr
 
 # --- Tesseract 위치 해석 --------------------------------------------------
 _TESS_READY: Optional[bool] = None
@@ -113,7 +114,7 @@ def ensure_tesseract() -> dict:
         import pytesseract
     except Exception as e:
         _TESS_READY = False
-        _TESS_INFO = {"ok": False, "error": f"pytesseract 미설치: {e}"}
+        _TESS_INFO = {"ok": False, "error": tr('pytesseract 미설치: {e}').format(e=e)}
         return _TESS_INFO
 
     _harden_pytesseract_subprocess(pytesseract)   # 도스창 숨김 + 핸들 안정화
@@ -155,7 +156,7 @@ def ensure_tesseract() -> dict:
                       "version": ver, "langs": langs}
     except Exception as e:
         _TESS_READY = False
-        _TESS_INFO = {"ok": False, "error": f"tesseract 실행 불가: {e}"}
+        _TESS_INFO = {"ok": False, "error": tr('tesseract 실행 불가: {e}').format(e=e)}
     return _TESS_INFO
 
 
@@ -176,12 +177,9 @@ def missing_language(lang: str) -> str:
             gone.append(code)
     if not gone:
         return ""
-    names = {"kor": "한국어", "eng": "영어", "jpn": "일본어", "chi_sim": "중국어(간체)"}
+    names = {"kor": tr("한국어"), "eng": tr("영어"), "jpn": tr("일본어"), "chi_sim": tr("중국어(간체)")}
     label = " · ".join(names.get(c, c) for c in gone)
-    return (f"{label} OCR 학습 데이터가 없습니다({', '.join(c + '.traineddata' for c in gone)}).\n\n"
-            f"찾은 위치: {td or '(미설정)'}\n\n"
-            "도구 → 구성요소 설치에서 OCR(Tesseract)을 다시 받으면 채워집니다. "
-            "설치본이 오래된 경우 프로그램을 최신 버전으로 올리면 함께 들어옵니다.")
+    return (tr('{label} OCR 학습 데이터가 없습니다({join}).\n\n찾은 위치: {td}\n\n도구 → 구성요소 설치에서 OCR(Tesseract)을 다시 받으면 채워집니다. 설치본이 오래된 경우 프로그램을 최신 버전으로 올리면 함께 들어옵니다.').format(label=label, join=', '.join((c + '.traineddata' for c in gone)), td=td or tr('(미설정)')))
 
 
 # --- 스캔 감지(텍스트 레이어 품질) ----------------------------------------
@@ -236,11 +234,11 @@ FALLBACK_LANG = "eng"
 
 
 def user_tessdata_dir() -> Path:
-    """쓰기 권한이 있는 tessdata 폴더 (§14.17).
+    r"""쓰기 권한이 있는 tessdata 폴더 (§14.17).
 
-    동봉 폴더는 보통 `C:@Program Files@PolyPDF@_internal@...` 이라 관리자 권한 없이는
+    동봉 폴더는 보통 `C:\Program Files\PolyPDF\_internal\...` 이라 관리자 권한 없이는
     한 글자도 못 쓴다. 언어 자료를 그 자리에서 받아 고치려면 사용자 폴더가 필요하다.
-    """.replace("@", chr(92))
+    """
     # 시험·지원용 우회로. 실제 실행에서는 쓰지 않는다.
     over = os.environ.get("POLYPDF_TESSDATA_DIR")
     if over:
@@ -343,12 +341,12 @@ def repair_langs(codes, progress=None) -> tuple:
 
     want = [x for x in (codes or []) if x]
     if not want:
-        return True, "받을 것이 없습니다."
+        return True, tr("받을 것이 없습니다.")
     dst = user_tessdata_dir()
     try:
         dst.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        return False, "폴더를 만들 수 없습니다: %s" % e
+        return False, tr("폴더를 만들 수 없습니다: %s") % e
 
     # ① 지금 쓰고 있는 폴더의 자료를 먼저 옮겨 둔다(없는 것만).
     cur = os.environ.get("TESSDATA_PREFIX") or ""
@@ -385,10 +383,10 @@ def repair_langs(codes, progress=None) -> tuple:
     reset_cache()               # 다음 부름부터 새 폴더를 다시 고른다
     ensure_tesseract()
     if failed:
-        return False, ("받지 못한 언어: %s. 인터넷 연결을 확인하거나 설치 프로그램으로 "
-                       "다시 설치하세요." % ", ".join(failed))
-    return True, ("언어 자료를 준비했습니다: %s%s위치: %s"
-                  % (", ".join(got) if got else "(이미 있음)", chr(10) * 2, dst))
+        return False, (tr("받지 못한 언어: %s. 인터넷 연결을 확인하거나 설치 프로그램으로 "
+                       "다시 설치하세요.") % ", ".join(failed))
+    return True, (tr("언어 자료를 준비했습니다: %s%s위치: %s")
+                  % (", ".join(got) if got else tr("(이미 있음)"), chr(10) * 2, dst))
 
 
 def missing_langs(lang: str) -> list:

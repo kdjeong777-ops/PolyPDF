@@ -45,7 +45,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer import side_panel_host as _sp
-from viewer.i18n import tr                               # 261008: 화면 문구(다국어 SOT §6)
+from viewer.i18n import tr, korea_only, korea_only_visible   # 261008: 화면 문구·한국 전용(다국어 SOT §6·§7)
 from viewer.edit_controller import EditMixin
 from viewer.present_controller import PresentMixin
 from viewer.print_controller import PrintMixin
@@ -1356,7 +1356,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260910(사용자 지시): 우측 첫 탭인 '텍스트' 도 보기 그룹에 둔다 —
         #   탭 순서(텍스트/단어장/검색)와 같은 차례로 놓는다(텍스트 창 SOT §2).
         mk(tr("텍스트"), tr("검색·단어장 창 보이기 · 텍스트 탭"), self._vm_text)
-        mk(tr("단어장"), tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study)
+        self._btn_vm_study = mk(tr("단어장"), tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study)
         mk(tr("검색"), tr("검색·단어장 창 보이기 · 검색 탭"), self._vm_search)
         self._btn_shot = mk(tr("스크린샷"), tr("검색·단어장 숨김 · 스크린샷 보이기"), self._vm_shot)
         self._btn_law = mk(tr("법령/고시"), tr("법제처 법령·고시 검색·본문 보기"), self._action_law_search)  # 260618-18
@@ -1372,7 +1372,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   → 어찌다 한 번 쓰는 일(암호화). `도구(&T)` 메뉴 첫 구역이 **같은 차례**다.
         mk("OCR", tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"),
            self._action_ocr_read)
-        mk(tr("단어장 생성"), tr("파일 → 단어장 생성"), self._action_build_study)
+        self._btn_build_study = mk(tr("단어장 생성"), tr("파일 → 단어장 생성"), self._action_build_study)
         mk(tr("책갈피 생성"), tr("파일 → 책갈피 자동 생성"), self.action_open_bookmarker)
         self._btn_merge = mk(tr("PDF병합"), tr("파일 → PDF 병합"), lambda: self._on_merge_files(None))
         self._btn_img2pdf = mk(tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"),
@@ -1479,6 +1479,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.search_tabs.setCurrentWidget(self.search_area)
         self._sync_right_layout()
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _vm_study(self):
         if self.act_split.isChecked():
             self.act_split.setChecked(False)
@@ -1613,7 +1614,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   같은 것을 두 곳에서 다른 차례로 보여 주지 않는다(디자인 SOT §2.9.1).
         m_tools.addSection(tr("🧰 도구"))
         _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read)
-        _act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study)
+        # 261008(다국어 SOT §7): 한국 전용 메뉴 항목 — `_gate_api_dependent_ui` 가 언어에 따라 숨긴다
+        self._ko_only_acts = []
+        self._ko_only_acts.append(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study))
         _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker)
         a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None))
         _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf())  # 260825-13
@@ -1623,20 +1626,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         # 📄 그 밖의 PDF·생성 작업 — 옆의 두 구역이 한 항목씩만 남아 합쳤다.
         m_tools.addSection(tr("📄 그 밖의 PDF·생성 작업"))
-        _act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks)
+        self._ko_only_acts.append(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks))
         _act(tr("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..."), self._action_save_decorated_pdf)
 
         # 📖 사전 및 용어집 관리
-        m_tools.addSection(tr("📖 사전 및 용어집 관리"))
-        _act(tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager)
-        _act(tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary)
-        _act(tr("사전 복원 (가져오기)..."), self._action_restore_dict)
-        _act(tr("용어집 CSV 양식 예제 저장..."), self._action_save_csv_sample)
-        _act(tr("인터넷 사전 보강 (이어하기)..."), self._action_online_enrich)
-        _act(tr("사전 내보내기 (TBX·CSV)..."), self._action_export_dict)
-        _act(tr("사전 백업 (내보내기)..."), self._action_backup_dict)
-        _act(tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict)
-        _act(tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)
+        # 사전·용어집은 단어장과 영→한 번역이 쓴다 — 구역 통째로 한국 전용(사용자 결정 261008-25)
+        self._ko_only_acts.append(m_tools.addSection(tr("📖 사전 및 용어집 관리")))
+        for _t, _s in ((tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
+                       (tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary),
+                       (tr("사전 복원 (가져오기)..."), self._action_restore_dict),
+                       (tr("용어집 CSV 양식 예제 저장..."), self._action_save_csv_sample),
+                       (tr("인터넷 사전 보강 (이어하기)..."), self._action_online_enrich),
+                       (tr("사전 내보내기 (TBX·CSV)..."), self._action_export_dict),
+                       (tr("사전 백업 (내보내기)..."), self._action_backup_dict),
+                       (tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict),
+                       (tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)):
+            self._ko_only_acts.append(_act(_t, _s))
 
         # 🔍 검색 및 데이터 구축
         m_tools.addSection(tr("🔍 검색 및 데이터 구축"))
@@ -3612,6 +3617,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.status.showMessage(
             tr('책갈피 추가됨: {title}  (p.{page_1based}) — 책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다.').format(title=title or tr('(제목 없음)'), page_1based=page_1based), 6000)
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _on_create_study_requested(self, file_path: str):
         """260606-5: 책갈피창 파일 우클릭 '단어장 생성' → 해당 파일을 열고 빌드."""
         p = Path(file_path)
@@ -3628,6 +3634,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._load_main(HistoryItem(str(p), 0, "", "bookmark"))
         self._action_build_study()
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_build_study_and_bookmarks(self, checked: bool = False, file_path: str = None):
         """260606-11: 단어장·책갈피 동시 생성(OCR 1회 공유). 파일 메뉴/트리 우클릭/읽기 제안에서."""
         cur = self.main_view.current_file() if self.main_view else None
@@ -3663,6 +3670,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 txt = ""
             if len(txt.strip()) >= 20:
                 return False                      # 텍스트 레이어로 읽기 가능
+            if not korea_only_visible():
+                # 단어장은 한국 전용(다국어 SOT §7) — 다른 언어에서는 OCR 로 글자층만 만든다
+                ret = QMessageBox.question(
+                    self, tr("문서 인식(OCR)"),
+                    tr("읽을 텍스트가 없습니다(스캔/이미지 문서).\n문서 인식(OCR)으로 읽을까요?"))
+                if ret == QMessageBox.StandardButton.Yes:
+                    self._action_ocr_read()
+                    return True
+                return False
             ret = QMessageBox.question(
                 self, tr("문서 인식(OCR)"),
                 tr("읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
@@ -6352,6 +6368,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 "open.law.go.kr 에서 무료 신청)를 먼저 입력하세요."))
         return oc
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_law_search(self, checked: bool = False):
         """260616-1/19: 법제처 법령·고시 검색·본문 패널. 기본은 메인창 오른쪽 2단(임베드),
         패널의 '전체화면' 토글로 별도 전체화면 창으로 팝아웃/복귀."""
@@ -6408,6 +6425,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 "www.kcsc.re.kr/support/api 에서 무료 발급)를 먼저 입력하세요."))
         return key
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_kcsc_search(self, checked: bool = False):
         """260618-37: 국가건설기준센터(KDS/KCS) 본문 패널(메인 오른쪽 2단 임베드/전체화면)."""
         self._open_kcsc()
@@ -6504,6 +6522,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             pass
         return d
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_kipo_search(self, checked: bool = False):
         self._open_kipo()
 
@@ -7570,8 +7589,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _gate_api_dependent_ui(self, prefs: dict):
         """260621-P3: 외부 API 키가 없으면 관련 툴바 버튼은 숨기고 메뉴 항목은 비활성화.
-        키가 입력되면 다시 보이게/활성화. (법령·고시/건설기준/특허/번역)"""
+        키가 입력되면 다시 보이게/활성화. (법령·고시/건설기준/특허/번역)
+        261008(다국어 SOT §7): **한국 전용 숨김도 여기서 함께** — 따로 두면 설정 확인 때 서로를 되돌린다.
+        보임 = 한국어, 켜짐 = 보임 그리고 키 있음. 한국어가 아니면 메뉴 항목도 숨긴다(비활성으로 두지 않는다)."""
         p = prefs or {}
+        vis = korea_only_visible()
         has_law = bool(str(p.get("law_oc", "")).strip())
         has_kcsc = bool(str(p.get("kcsc_key", "")).strip())
         has_kipo = bool(str(p.get("kipo_signkey", "")).strip())
@@ -7591,23 +7613,38 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         def _act_en(a, on):
             if a is not None:
-                a.setEnabled(on)        # 메뉴 항목은 활성/비활성
+                a.setVisible(vis)       # 한국어가 아니면 숨김(§7)
+                a.setEnabled(vis and on)    # 메뉴 항목은 활성/비활성
 
         # 법령·고시
-        _btn("_btn_law", has_law)
+        _btn("_btn_law", vis and has_law)
         _act_en(va.get("law"), has_law)
         _act_en(getattr(self, "_act_law", None), has_law)
         # 건설기준(KCSC)
-        _btn("_btn_kcsc", has_kcsc)
+        _btn("_btn_kcsc", vis and has_kcsc)
         _act_en(va.get("kcsc"), has_kcsc)
         _act_en(getattr(self, "_act_kcsc", None), has_kcsc)
         # 특허(KIPO)
-        _btn("_btn_kipo", has_kipo)
+        _btn("_btn_kipo", vis and has_kipo)
         _act_en(va.get("kipo"), has_kipo)
         _act_en(getattr(self, "_act_kipo", None), has_kipo)
-        # 번역(Claude) — 툴바 'PDF번역' 버튼 + 메뉴
-        _btn("_btn_tr", has_tr)
+        # 번역(Claude) — 툴바 'PDF번역' 버튼 + 메뉴(영→한이라 한국 전용, 사용자 결정 261008-25)
+        _btn("_btn_tr", vis and has_tr)
         _act_en(getattr(self, "_act_tr_files", None), has_tr)
+        # 영어단어 학습(단어장) — 툴바 단추 2개·보기 메뉴·도구 메뉴·우측 탭(키와 무관)
+        _btn("_btn_vm_study", vis)
+        _btn("_btn_build_study", vis)
+        _act_en(va.get("study"), True)
+        for a in getattr(self, "_ko_only_acts", []):
+            _act_en(a, True)
+        tabs = getattr(self, "search_tabs", None)
+        sp = getattr(self, "study_panel", None)
+        if tabs is not None and sp is not None:
+            i = tabs.indexOf(sp)
+            if i >= 0:
+                if not vis and tabs.currentIndex() == i:
+                    tabs.setCurrentWidget(self.text_panel)
+                tabs.setTabVisible(i, vis)
 
     def apply_theme(self, mode: str):
         """260606-13: 화면 스타일 적용 — light/dark/auto(시스템). Fusion+팔레트."""
@@ -7912,6 +7949,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _refresh_favorites_menu(self):
         from PyQt6.QtGui import QAction
+        ko_only = korea_only_visible()
         self.menu_favorites.clear()
         a_add_folder = QAction(tr("현재 폴더를 즐겨찾기에 추가..."), self)
         a_add_folder.triggered.connect(self._add_current_folder_favorite)
@@ -7954,13 +7992,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     else:
                         act.triggered.connect(lambda _checked=False, ff=f: self._open_favorite(ff))
                     self.menu_favorites.addAction(act)
-        elif not self._law_favorites:
+        elif not (ko_only and self._law_favorites):
             placeholder = QAction(tr("(아직 등록된 즐겨찾기 없음)"), self)
             placeholder.setEnabled(False)
             self.menu_favorites.addAction(placeholder)
 
         # 260616-6: 법령·고시 즐겨찾기는 항상 전체 즐겨찾기 '아래'에 별도 구역으로.
-        if self._law_favorites:
+        #   261008(다국어 SOT §7): 법령·KCSC·KIPO 구역은 한국 전용 — 다른 언어에서는 보이지 않는다
+        #   (즐겨찾기 자료는 지우지 않는다. 한국어로 돌아오면 그대로 보인다).
+        if ko_only and self._law_favorites:
             self.menu_favorites.addSeparator()
             hdr = QAction(tr("법령·고시 즐겨찾기"), self)
             hdr.setEnabled(False)
@@ -7976,7 +8016,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self.menu_favorites.addAction(act)
 
         # 260618-40: 건설기준(KCSC) 즐겨찾기 — 법령·고시 아래 별도 구역
-        if self._kcsc_favorites:
+        if ko_only and self._kcsc_favorites:
             self.menu_favorites.addSeparator()
             hdr = QAction(tr("건설기준(KCSC) 즐겨찾기"), self)
             hdr.setEnabled(False)
@@ -7992,7 +8032,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self.menu_favorites.addAction(act)
 
         # 260618-43: 특허(KIPO) 등록정보 즐겨찾기 — 별도 구역
-        if self._kipo_favorites:
+        if ko_only and self._kipo_favorites:
             self.menu_favorites.addSeparator()
             hdr = QAction(tr("특허(KIPO) 즐겨찾기"), self)
             hdr.setEnabled(False)

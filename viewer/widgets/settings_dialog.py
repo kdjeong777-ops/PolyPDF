@@ -5,7 +5,7 @@ v1.6.2: 히스토리 패널 제거 — 관련 옵션(`restore_history`, `history
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from viewer.i18n import tr, tr_noop
+from viewer.i18n import tr, tr_noop, korea_only_visible
 
 
 class _AntLoginWorker(QThread):
@@ -334,6 +334,7 @@ class SettingsDialog(QDialog):
         ol.addRow(QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
                          "한국어 사전은 위 키 입력 시 사용.</small>")))
         layout.addWidget(grp_od)
+        grp_od.setVisible(korea_only_visible())      # 한국 사전·법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
 
         # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
         from PyQt6.QtWidgets import QComboBox as _QCmb
@@ -404,6 +405,7 @@ class SettingsDialog(QDialog):
         _hlp_tr.setWordWrap(True)
         trl.addRow(_hlp_tr)
         layout.addWidget(grp_tr)
+        grp_tr.setVisible(korea_only_visible())      # 영→한 번역 — 한국 전용(사용자 결정 261008-25)
         self.cmb_translate_auth.currentIndexChanged.connect(self._on_translate_auth_changed)
         self._on_translate_auth_changed()
         self._refresh_login_status()

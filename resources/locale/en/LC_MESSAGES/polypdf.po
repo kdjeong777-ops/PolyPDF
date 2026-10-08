@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-08 22:35+0900\n"
+"POT-Creation-Date: 2026-10-08 23:02+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -216,11 +216,11 @@ msgstr "Panel"
 msgid "🔎 검색·단어"
 msgstr "🔎 Search · Words"
 
-#: viewer/app.py:1353 viewer/app.py:1721 viewer/app.py:1722
+#: viewer/app.py:1353 viewer/app.py:1726 viewer/app.py:1727
 msgid "보기"
 msgstr "View"
 
-#: viewer/app.py:1354 viewer/app.py:1572
+#: viewer/app.py:1354 viewer/app.py:1573
 msgid "1단"
 msgstr "Single"
 
@@ -228,7 +228,7 @@ msgstr "Single"
 msgid "검색·단어장·스크린샷 숨김 (단일 보기)"
 msgstr "Hide Search · Vocabulary · Screenshots (single view)"
 
-#: viewer/app.py:1355 viewer/app.py:1572
+#: viewer/app.py:1355 viewer/app.py:1573
 msgid "2단"
 msgstr "Split"
 
@@ -236,7 +236,7 @@ msgstr "Split"
 msgid "2단 보기(쪽 맞춤)"
 msgstr "Split view (fit page)"
 
-#: viewer/app.py:1358 viewer/app.py:1573
+#: viewer/app.py:1358 viewer/app.py:1574
 msgid "텍스트"
 msgstr "Text"
 
@@ -244,7 +244,7 @@ msgstr "Text"
 msgid "검색·단어장 창 보이기 · 텍스트 탭"
 msgstr "Show Search · Vocabulary panel · Text tab"
 
-#: viewer/app.py:1359 viewer/app.py:1574 viewer/app.py:3619
+#: viewer/app.py:1359 viewer/app.py:1575 viewer/app.py:3625
 #: viewer/widgets/study_panel.py:151
 msgid "단어장"
 msgstr "Vocabulary"
@@ -253,7 +253,7 @@ msgstr "Vocabulary"
 msgid "검색·단어장 창 보이기 · 단어장 탭"
 msgstr "Show Search · Vocabulary panel · Vocabulary tab"
 
-#: viewer/app.py:1360 viewer/app.py:1394 viewer/app.py:1574
+#: viewer/app.py:1360 viewer/app.py:1394 viewer/app.py:1575
 #: viewer/widgets/image_search_dialog.py:56
 msgid "검색"
 msgstr "Search"
@@ -262,7 +262,7 @@ msgstr "Search"
 msgid "검색·단어장 창 보이기 · 검색 탭"
 msgstr "Show Search · Vocabulary panel · Search tab"
 
-#: viewer/app.py:1361 viewer/app.py:1575 viewer/app.py:8145
+#: viewer/app.py:1361 viewer/app.py:1576 viewer/app.py:8185
 msgid "스크린샷"
 msgstr "Screenshots"
 
@@ -270,7 +270,7 @@ msgstr "Screenshots"
 msgid "검색·단어장 숨김 · 스크린샷 보이기"
 msgstr "Hide Search · Vocabulary · show Screenshots"
 
-#: viewer/app.py:1362 viewer/app.py:1576
+#: viewer/app.py:1362 viewer/app.py:1577
 msgid "법령/고시"
 msgstr "Laws/Notices"
 
@@ -286,7 +286,7 @@ msgstr "Construction Standards"
 msgid "국가건설기준센터(KCSC) KDS·KCS 본문 보기"
 msgstr "View KDS·KCS texts (Korea Construction Standards Center, KCSC)"
 
-#: viewer/app.py:1364 viewer/app.py:8001
+#: viewer/app.py:1364 viewer/app.py:8041
 msgid "특허"
 msgstr "Patents"
 
@@ -294,7 +294,7 @@ msgstr "Patents"
 msgid "특허청(KIPO) 특허 등록정보 조회"
 msgstr "Look up patent registration data (KIPO)"
 
-#: viewer/app.py:1365 viewer/app.py:1579 viewer/app.py:1722 viewer/app.py:4596
+#: viewer/app.py:1365 viewer/app.py:1580 viewer/app.py:1727 viewer/app.py:4612
 msgid "발표보기"
 msgstr "Presentation"
 
@@ -310,7 +310,7 @@ msgstr "Tools"
 msgid "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"
 msgstr "Read this document with OCR (page range · language · watermark)"
 
-#: viewer/app.py:1375 viewer/widgets/bookmark_tree.py:2158
+#: viewer/app.py:1375 viewer/widgets/bookmark_tree.py:2160
 #: viewer/widgets/study_panel.py:172 viewer/widgets/study_panel.py:358
 msgid "단어장 생성"
 msgstr "Build Vocabulary"
@@ -319,7 +319,7 @@ msgstr "Build Vocabulary"
 msgid "파일 → 단어장 생성"
 msgstr "File → Build vocabulary"
 
-#: viewer/app.py:1376 viewer/widgets/bookmark_tree.py:2156
+#: viewer/app.py:1376 viewer/widgets/bookmark_tree.py:2157
 msgid "책갈피 생성"
 msgstr "Build Bookmarks"
 
@@ -343,7 +343,7 @@ msgstr "Images→PDF"
 msgid "이미지 파일 → PDF 변환"
 msgstr "Convert image files → PDF"
 
-#: viewer/app.py:1380 viewer/app.py:1724 viewer/app.py:6930 viewer/app.py:6958
+#: viewer/app.py:1380 viewer/app.py:1729 viewer/app.py:6949 viewer/app.py:6977
 msgid "스크린샷 PDF 저장"
 msgstr "Save Screenshot PDF"
 
@@ -351,8 +351,8 @@ msgstr "Save Screenshot PDF"
 msgid "스크린샷 전체를 PDF로"
 msgstr "All screenshots to PDF"
 
-#: viewer/app.py:1381 viewer/app.py:6705 viewer/app.py:6738 viewer/app.py:6762
-#: viewer/app.py:6783 viewer/widgets/encrypt_dialog.py:56
+#: viewer/app.py:1381 viewer/app.py:6724 viewer/app.py:6757 viewer/app.py:6781
+#: viewer/app.py:6802 viewer/widgets/encrypt_dialog.py:56
 #: viewer/widgets/encrypt_dialog.py:166 viewer/widgets/encrypt_dialog.py:169
 #: viewer/widgets/encrypt_dialog.py:172
 msgid "암호화"
@@ -370,307 +370,259 @@ msgstr "Translate"
 msgid "PDF 번역 (목록 창)"
 msgstr "Translate PDF (list window)"
 
-#: viewer/app.py:1515
+#: viewer/app.py:1516
 msgid "파일(&F)"
 msgstr "&File"
 
-#: viewer/app.py:1516
+#: viewer/app.py:1517
 msgid "폴더 열기..."
 msgstr "Open Folder..."
 
-#: viewer/app.py:1521
+#: viewer/app.py:1522
 msgid "파일 열기..."
 msgstr "Open File..."
 
-#: viewer/app.py:1529 viewer/widgets/bookmark_tree.py:2098
+#: viewer/app.py:1530 viewer/widgets/bookmark_tree.py:2099
 msgid "다른 이름으로 저장..."
 msgstr "Save As..."
 
-#: viewer/app.py:1530 viewer/widgets/bookmark_tree.py:2099
+#: viewer/app.py:1531 viewer/widgets/bookmark_tree.py:2100
 msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."
 msgstr "Save bookmarks, annotations and page edits to <original>_edited.pdf."
 
-#: viewer/app.py:1533 viewer/widgets/bookmark_tree.py:2100
+#: viewer/app.py:1534 viewer/widgets/bookmark_tree.py:2101
 msgid "저장(PolyPDF용)"
 msgstr "Save (for PolyPDF)"
 
-#: viewer/app.py:1534 viewer/widgets/bookmark_tree.py:2101
+#: viewer/app.py:1535 viewer/widgets/bookmark_tree.py:2102
 msgid "책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."
 msgstr "Apply bookmarks, annotations and page edits to the original PDF (same as 💾)."
 
-#: viewer/app.py:1537 viewer/widgets/bookmark_tree.py:2102
+#: viewer/app.py:1538 viewer/widgets/bookmark_tree.py:2103
 msgid "저장(일반뷰어용)..."
 msgstr "Save (for other viewers)..."
 
-#: viewer/app.py:1538 viewer/widgets/bookmark_tree.py:2104
+#: viewer/app.py:1539 viewer/widgets/bookmark_tree.py:2105
 msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."
 msgstr "Bake annotations and inserted photos into the page content so other programs show them too."
 
-#: viewer/app.py:1544
+#: viewer/app.py:1545
 msgid "인쇄..."
 msgstr "Print..."
 
-#: viewer/app.py:1550
+#: viewer/app.py:1551
 msgid "최근 폴더"
 msgstr "Recent Folders"
 
-#: viewer/app.py:1553
+#: viewer/app.py:1554
 msgid "최근 파일"
 msgstr "Recent Files"
 
-#: viewer/app.py:1558 viewer/app.py:1735
+#: viewer/app.py:1559 viewer/app.py:1740
 msgid "종료"
 msgstr "Exit"
 
-#: viewer/app.py:1563
+#: viewer/app.py:1564
 msgid "즐겨찾기(&V)"
 msgstr "Fa&vorites"
 
-#: viewer/app.py:1567
+#: viewer/app.py:1568
 msgid "보기(&B)"
 msgstr "&View"
 
-#: viewer/app.py:1588
+#: viewer/app.py:1589
 msgid "옵션 메뉴 (현재 페이지)"
 msgstr "Option Menu (current page)"
 
-#: viewer/app.py:1593
+#: viewer/app.py:1594
 msgid "🗗 2단 보기"
 msgstr "🗗 Split View"
 
-#: viewer/app.py:1598
+#: viewer/app.py:1599
 msgid "📽 발표 보기"
 msgstr "📽 Presentation"
 
-#: viewer/app.py:1604
+#: viewer/app.py:1605
 msgid "도구(&T)"
 msgstr "&Tools"
 
-#: viewer/app.py:1614
+#: viewer/app.py:1615
 msgid "🧰 도구"
 msgstr "🧰 Tools"
 
-#: viewer/app.py:1615
+#: viewer/app.py:1616
 msgid "OCR 로 읽기 (쪽 범위·언어·워터마크)..."
 msgstr "Read with OCR (page range · language · watermark)..."
 
-#: viewer/app.py:1616
-msgid "단어장 생성 (OCR·어휘)..."
-msgstr "Build Vocabulary (OCR · words)..."
-
-#: viewer/app.py:1617
+#: viewer/app.py:1620
 msgid "책갈피 자동 생성..."
 msgstr "Generate Bookmarks Automatically..."
 
-#: viewer/app.py:1618
+#: viewer/app.py:1621
 msgid "PDF 병합..."
 msgstr "Merge PDFs..."
 
-#: viewer/app.py:1619
+#: viewer/app.py:1622
 msgid "이미지 → PDF 변환..."
 msgstr "Convert Images → PDF..."
 
-#: viewer/app.py:1620
+#: viewer/app.py:1623
 msgid "스크린샷 PDF 저장..."
 msgstr "Save Screenshot PDF..."
 
-#: viewer/app.py:1621
+#: viewer/app.py:1624
 msgid "암호화 (암호·권한 설정)..."
 msgstr "Encrypt (password · permissions)..."
 
-#: viewer/app.py:1622 viewer/widgets/translate_files_dialog.py:155
+#: viewer/app.py:1625 viewer/widgets/translate_files_dialog.py:155
 msgid "PDF번역"
 msgstr "Translate PDF"
 
-#: viewer/app.py:1625
+#: viewer/app.py:1628
 msgid "📄 그 밖의 PDF·생성 작업"
 msgstr "📄 Other PDF and Generation Tasks"
 
-#: viewer/app.py:1626
-msgid "단어장·책갈피 동시 생성..."
-msgstr "Build Vocabulary and Bookmarks Together..."
-
-#: viewer/app.py:1627
+#: viewer/app.py:1630
 msgid "PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..."
 msgstr "Save PDF Annotations (lines · shapes · text · hyperlinks)..."
 
-#: viewer/app.py:1630
-msgid "📖 사전 및 용어집 관리"
-msgstr "📖 Dictionaries and Glossaries"
-
-#: viewer/app.py:1631
-msgid "단어장 관리 (출처·우선순위·폴더)..."
-msgstr "Manage Vocabulary (sources · priority · folders)..."
-
-#: viewer/app.py:1632
-msgid "용어집 가져오기 (PDF·CSV)..."
-msgstr "Import Glossary (PDF · CSV)..."
-
-#: viewer/app.py:1633
-msgid "사전 복원 (가져오기)..."
-msgstr "Restore Dictionary (import)..."
-
-#: viewer/app.py:1634
-msgid "용어집 CSV 양식 예제 저장..."
-msgstr "Save Sample Glossary CSV Template..."
-
-#: viewer/app.py:1635
-msgid "인터넷 사전 보강 (이어하기)..."
-msgstr "Enrich with Online Dictionaries (resume)..."
-
-#: viewer/app.py:1636
-msgid "사전 내보내기 (TBX·CSV)..."
-msgstr "Export Dictionary (TBX · CSV)..."
-
-#: viewer/app.py:1637
-msgid "사전 백업 (내보내기)..."
-msgstr "Back Up Dictionary (export)..."
-
-#: viewer/app.py:1638
-msgid "사전 정리 (HTML 마크업 제거)"
-msgstr "Clean Dictionary (remove HTML markup)"
-
-#: viewer/app.py:1639
-msgid "온용어 다시 분류 (용어집별·재조회)..."
-msgstr "Reclassify Onterm Entries (by glossary · re-query)..."
-
-#: viewer/app.py:1642
+#: viewer/app.py:1647
 msgid "🔍 검색 및 데이터 구축"
 msgstr "🔍 Search and Data"
 
-#: viewer/app.py:1643
+#: viewer/app.py:1648
 msgid "법령·고시 검색 (법제처)..."
 msgstr "Search Laws and Notices (MOLEG)..."
 
-#: viewer/app.py:1644
+#: viewer/app.py:1649
 msgid "건설기준 (KCSC) 보기..."
 msgstr "Construction Standards (KCSC)..."
 
-#: viewer/app.py:1645
+#: viewer/app.py:1650
 msgid "특허 등록정보 (KIPO)..."
 msgstr "Patent Registration Data (KIPO)..."
 
-#: viewer/app.py:1646
+#: viewer/app.py:1651
 msgid "인덱스 재구축"
 msgstr "Rebuild Index"
 
-#: viewer/app.py:1649
+#: viewer/app.py:1654
 msgid "🏷️ 태그 자동 부여"
 msgstr "🏷️ Automatic Tagging"
 
-#: viewer/app.py:1650
+#: viewer/app.py:1655
 msgid "태그 다시 계산"
 msgstr "Recalculate Tags"
 
-#: viewer/app.py:1651 viewer/app.py:5371 viewer/widgets/bookmark_tree.py:1420
+#: viewer/app.py:1656 viewer/app.py:5387 viewer/widgets/bookmark_tree.py:1420
 msgid "새 태그 후보 검토…"
 msgstr "Review New Tag Candidates…"
 
-#: viewer/app.py:1652
+#: viewer/app.py:1657
 msgid "직전 자동 부여 되돌리기"
 msgstr "Undo Last Automatic Tagging"
 
-#: viewer/app.py:1653
+#: viewer/app.py:1658
 msgid "자동 태그 전체 삭제"
 msgstr "Delete All Automatic Tags"
 
-#: viewer/app.py:1654
+#: viewer/app.py:1659
 msgid "없는 파일 항목 정리…"
 msgstr "Clean Up Missing File Entries…"
 
-#: viewer/app.py:1657
+#: viewer/app.py:1662
 msgid "⚙️ 프로그램 환경설정"
 msgstr "⚙️ Program Settings"
 
-#: viewer/app.py:1658
+#: viewer/app.py:1663
 msgid "환경설정..."
 msgstr "Settings..."
 
-#: viewer/app.py:1659
+#: viewer/app.py:1664
 msgid "단축키 설정..."
 msgstr "Keyboard Shortcuts..."
 
-#: viewer/app.py:1660
+#: viewer/app.py:1665
 msgid "현재 설정을 기본값으로 저장(배포용)…"
 msgstr "Save Current Settings as Defaults (for distribution)…"
 
-#: viewer/app.py:1661
+#: viewer/app.py:1666
 msgid "설정 초기화(기본값으로 되돌리기)…"
 msgstr "Reset Settings (restore defaults)…"
 
-#: viewer/app.py:1664
+#: viewer/app.py:1669
 msgid "💻 시스템 연동 및 설치"
 msgstr "💻 System Integration and Installation"
 
-#: viewer/app.py:1665
+#: viewer/app.py:1670
 msgid "Windows 기본 PDF 앱으로 등록…"
 msgstr "Register as Windows Default PDF App…"
 
-#: viewer/app.py:1666
+#: viewer/app.py:1671
 msgid "구성요소 설치(녹화·OCR)…"
 msgstr "Install Components (recording · OCR)…"
 
-#: viewer/app.py:1668
+#: viewer/app.py:1673
 msgid "도움말(&H)"
 msgstr "&Help"
 
-#: viewer/app.py:1670
+#: viewer/app.py:1675
 msgid "사용법"
 msgstr "User Guide"
 
-#: viewer/app.py:1674
+#: viewer/app.py:1679
 msgid "업데이트 확인…"
 msgstr "Check for Updates…"
 
-#: viewer/app.py:1678
+#: viewer/app.py:1683
 msgid "업데이트 자동 다운로드"
 msgstr "Download Updates Automatically"
 
-#: viewer/app.py:1685
+#: viewer/app.py:1690
 msgid "베타(테스트) 버전도 받기"
 msgstr "Also Receive Beta (Test) Versions"
 
-#: viewer/app.py:1702
+#: viewer/app.py:1707
 msgid "정보"
 msgstr "About"
 
-#: viewer/app.py:2177
+#: viewer/app.py:2182
 msgid "PDF 폴더 선택"
 msgstr "Select PDF Folder"
 
-#: viewer/app.py:2184
+#: viewer/app.py:2189
 msgid "PDF 파일 열기"
 msgstr "Open PDF File"
 
-#: viewer/app.py:2228 viewer/app.py:5203
+#: viewer/app.py:2233 viewer/app.py:5219
 msgid "인덱싱 준비..."
 msgstr "Preparing index..."
 
-#: viewer/app.py:2452
+#: viewer/app.py:2457
 msgid "책갈피 자동 생성 시작..."
 msgstr "Starting automatic bookmark generation..."
 
-#: viewer/app.py:2534
+#: viewer/app.py:2539
 msgid "책갈피 생성 실패"
 msgstr "Bookmark generation failed"
 
-#: viewer/app.py:3124
+#: viewer/app.py:3129 viewer/study/ocr.py:180
 msgid "한국어"
 msgstr "Korean"
 
-#: viewer/app.py:3124
+#: viewer/app.py:3129 viewer/study/ocr.py:180
 msgid "영어"
 msgstr "English"
 
-#: viewer/app.py:3124
+#: viewer/app.py:3129 viewer/study/ocr.py:180
 msgid "일본어"
 msgstr "Japanese"
 
-#: viewer/app.py:3127 viewer/app.py:3145 viewer/app.py:3162 viewer/app.py:3164
+#: viewer/app.py:3132 viewer/app.py:3150 viewer/app.py:3167 viewer/app.py:3169
 msgid "OCR 언어 자료"
 msgstr "OCR Language Data"
 
-#: viewer/app.py:3131
+#: viewer/app.py:3136
 msgid ""
 "지금 내려받으면(약 2MB) 다시 설치하지 않고 바로 쓸 수 있습니다.\n"
 "받은 자료는 쓰기 권한이 있는 사용자 폴더에 둡니다."
@@ -678,33 +630,33 @@ msgstr ""
 "If you download it now (about 2MB), you can use it right away without reinstalling.\n"
 "Downloaded data is kept in a user folder with write permission."
 
-#: viewer/app.py:3132
+#: viewer/app.py:3137
 msgid "지금 내려받기"
 msgstr "Download Now"
 
-#: viewer/app.py:3133
+#: viewer/app.py:3138
 msgid "있는 언어로 진행"
 msgstr "Continue with Available Languages"
 
-#: viewer/app.py:3134 viewer/app.py:3398 viewer/app.py:3773 viewer/app.py:4330
-#: viewer/app.py:5679 viewer/app.py:8150 viewer/app.py:8295
+#: viewer/app.py:3139 viewer/app.py:3403 viewer/app.py:3789 viewer/app.py:4346
+#: viewer/app.py:5695 viewer/app.py:8190 viewer/app.py:8335
 #: viewer/present_controller.py:172 viewer/widgets/encrypt_dialog.py:108
-#: viewer/widgets/main_view.py:1818 viewer/widgets/merge_dialog.py:323
+#: viewer/widgets/main_view.py:1818 viewer/widgets/merge_dialog.py:324
 #: viewer/widgets/pen_settings_dialog.py:82
 #: viewer/widgets/pen_settings_dialog.py:159
 #: viewer/widgets/pointer_settings_dialog.py:61
 msgid "취소"
 msgstr "Cancel"
 
-#: viewer/app.py:3144
+#: viewer/app.py:3149
 msgid "OCR 언어 자료를 받는 중…"
 msgstr "Downloading OCR language data…"
 
-#: viewer/app.py:3144 viewer/app.py:3219 viewer/app.py:3374
+#: viewer/app.py:3149 viewer/app.py:3224 viewer/app.py:3379
 msgid "중지"
 msgstr "Stop"
 
-#: viewer/app.py:3347
+#: viewer/app.py:3352
 msgid ""
 "PDF 본문을 고치므로 편집모드로 바꾼 뒤 저장합니다.\n"
 "\n"
@@ -712,211 +664,211 @@ msgstr ""
 "This changes the PDF content, so PolyPDF switches to edit mode before saving.\n"
 "\n"
 
-#: viewer/app.py:3352
+#: viewer/app.py:3357
 msgid "아직 반영하지 않은 고침은 없습니다.\n"
 msgstr "There are no corrections waiting to be applied.\n"
 
-#: viewer/app.py:3374
+#: viewer/app.py:3379
 msgid "글자층 준비 중…"
 msgstr "Preparing the text layer…"
 
-#: viewer/app.py:3340 viewer/app.py:3375 viewer/app.py:3385 viewer/app.py:3394
-#: viewer/app.py:3419 viewer/app.py:3435 viewer/app.py:3459
+#: viewer/app.py:3345 viewer/app.py:3380 viewer/app.py:3390 viewer/app.py:3399
+#: viewer/app.py:3424 viewer/app.py:3440 viewer/app.py:3464
 #: viewer/widgets/text_panel.py:238
 msgid "PDF 에 반영"
 msgstr "Apply to PDF"
 
-#: viewer/app.py:3397
+#: viewer/app.py:3402
 msgid "스캔 쪽 전체"
 msgstr "All scanned pages"
 
-#: viewer/app.py:3531
+#: viewer/app.py:3536
 msgid "Word 로 저장"
 msgstr "Save as Word"
 
-#: viewer/app.py:3532 viewer/widgets/twoup_dialog.py:283
+#: viewer/app.py:3537 viewer/widgets/twoup_dialog.py:283
 msgid "Word 문서 (*.docx)"
 msgstr "Word Document (*.docx)"
 
-#: viewer/app.py:3582
+#: viewer/app.py:3587
 msgid "책갈피 추가"
 msgstr "Add Bookmark"
 
-#: viewer/app.py:3587
+#: viewer/app.py:3592
 msgid "책갈피 제목"
 msgstr "Bookmark Title"
 
-#: viewer/app.py:3588 viewer/widgets/main_view.py:113
+#: viewer/app.py:3593 viewer/widgets/main_view.py:113
 #: viewer/widgets/text_panel.py:146 viewer/widgets/text_panel.py:317
 #: viewer/widgets/toc_review_dialog.py:151
 msgid "제목"
 msgstr "Title"
 
-#: viewer/app.py:3763
+#: viewer/app.py:3779
 msgid "다른 PolyPDF 창에서 열려 있음"
 msgstr "Open in Another PolyPDF Window"
 
-#: viewer/app.py:3772
+#: viewer/app.py:3788
 msgid "새 이름으로 저장"
 msgstr "Save with New Name"
 
-#: viewer/app.py:3872
+#: viewer/app.py:3888
 msgid "원본에 저장"
 msgstr "Save to Original"
 
-#: viewer/app.py:3954
+#: viewer/app.py:3970
 msgid "쪽 편집 저장"
 msgstr "Save Page Edits"
 
-#: viewer/app.py:4062
+#: viewer/app.py:4078
 msgid "사진을 쪽으로"
 msgstr "Photos to Pages"
 
-#: viewer/app.py:3934 viewer/app.py:4103
+#: viewer/app.py:3950 viewer/app.py:4119
 msgid "페이지 편집 저장"
 msgstr "Save Page Edits"
 
-#: viewer/app.py:4171
+#: viewer/app.py:4187
 msgid "병합 PDF 저장"
 msgstr "Save Merged PDF"
 
-#: viewer/app.py:4201
+#: viewer/app.py:4217
 msgid "PDF 병합(2단 배치)"
 msgstr "Merge PDFs (N-up layout)"
 
-#: viewer/app.py:1716 viewer/app.py:4205 viewer/widgets/merge_dialog.py:199
+#: viewer/app.py:1721 viewer/app.py:4221 viewer/widgets/merge_dialog.py:199
 msgid "PDF 병합"
 msgstr "Merge PDFs"
 
-#: viewer/app.py:4330 viewer/app.py:4345 viewer/widgets/settings_dialog.py:603
+#: viewer/app.py:4346 viewer/app.py:4361 viewer/widgets/settings_dialog.py:605
 msgid "준비 중…"
 msgstr "Preparing…"
 
-#: viewer/app.py:4576
+#: viewer/app.py:4592
 msgid "텍스트 복사"
 msgstr "Copy Text"
 
-#: viewer/app.py:4578
+#: viewer/app.py:4594
 msgid "블럭설정 후 텍스트 복사"
 msgstr "Copy Text After Selecting a Block"
 
-#: viewer/app.py:4735
+#: viewer/app.py:4751
 msgid "삽입 모양 선택"
 msgstr "Choose Insert Shape"
 
-#: viewer/app.py:4795
+#: viewer/app.py:4811
 msgid "지시선 글쓰기 박스"
 msgstr "Callout Text Box"
 
-#: viewer/app.py:4795
+#: viewer/app.py:4811
 msgid "글쓰기 박스"
 msgstr "Text Box"
 
-#: viewer/app.py:4814 viewer/widgets/line_text_settings_dialog.py:126
+#: viewer/app.py:4830 viewer/widgets/line_text_settings_dialog.py:126
 #: viewer/widgets/pres_timer.py:550 viewer/widgets/text_panel.py:167
 #: viewer/widgets/twoup_dialog.py:134
 msgid "굵게"
 msgstr "Bold"
 
-#: viewer/app.py:4815 viewer/widgets/line_text_settings_dialog.py:126
+#: viewer/app.py:4831 viewer/widgets/line_text_settings_dialog.py:126
 msgid "기울임"
 msgstr "Italic"
 
-#: viewer/app.py:4818 viewer/widgets/line_text_settings_dialog.py:129
+#: viewer/app.py:4834 viewer/widgets/line_text_settings_dialog.py:129
 msgid "문자 폰트"
 msgstr "Font"
 
-#: viewer/app.py:4823 viewer/widgets/line_text_settings_dialog.py:130
+#: viewer/app.py:4839 viewer/widgets/line_text_settings_dialog.py:130
 msgid "문자 색상"
 msgstr "Text Color"
 
-#: viewer/app.py:4833 viewer/widgets/line_text_settings_dialog.py:137
+#: viewer/app.py:4849 viewer/widgets/line_text_settings_dialog.py:137
 msgid "문자 크기"
 msgstr "Text Size"
 
-#: viewer/app.py:4837 viewer/widgets/line_text_settings_dialog.py:142
+#: viewer/app.py:4853 viewer/widgets/line_text_settings_dialog.py:142
 msgid "글자 사이 간격. 0 = 폰트 기본값"
 msgstr "Spacing between letters. 0 = font default"
 
-#: viewer/app.py:4838 viewer/widgets/line_text_settings_dialog.py:143
+#: viewer/app.py:4854 viewer/widgets/line_text_settings_dialog.py:143
 msgid "글자 간격(자간)"
 msgstr "Letter Spacing"
 
-#: viewer/app.py:4841 viewer/widgets/line_text_settings_dialog.py:144
+#: viewer/app.py:4857 viewer/widgets/line_text_settings_dialog.py:144
 msgid "적용 (색·굵기·투명도는 색상버튼 스타일)"
 msgstr "Apply (color, weight and opacity follow the color button style)"
 
-#: viewer/app.py:4843 viewer/widgets/line_text_settings_dialog.py:145
+#: viewer/app.py:4859 viewer/widgets/line_text_settings_dialog.py:145
 msgid "텍스트 박스선"
 msgstr "Text Box Border"
 
-#: viewer/app.py:4846 viewer/widgets/line_text_settings_dialog.py:146
+#: viewer/app.py:4862 viewer/widgets/line_text_settings_dialog.py:146
 #: viewer/widgets/view_settings_dialog.py:122
 msgid "적용"
 msgstr "Apply"
 
-#: viewer/app.py:4853 viewer/widgets/line_text_settings_dialog.py:150
+#: viewer/app.py:4869 viewer/widgets/line_text_settings_dialog.py:150
 msgid "텍스트 박스 배경"
 msgstr "Text Box Background"
 
-#: viewer/app.py:4858 viewer/widgets/line_text_settings_dialog.py:152
+#: viewer/app.py:4874 viewer/widgets/line_text_settings_dialog.py:152
 #: viewer/widgets/search_panel.py:134 viewer/widgets/study_panel.py:276
 msgid "정렬"
 msgstr "Alignment"
 
-#: viewer/app.py:4942
+#: viewer/app.py:4958
 msgid "삽입할 이미지 선택"
 msgstr "Select Image to Insert"
 
-#: viewer/app.py:4943
+#: viewer/app.py:4959
 msgid "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)"
 msgstr "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)"
 
-#: viewer/app.py:5218
+#: viewer/app.py:5234
 msgid "인덱싱 완료"
 msgstr "Indexing complete"
 
-#: viewer/app.py:5446
+#: viewer/app.py:5462
 msgid "자동 태그를 전부 지웠습니다(수동 태그는 유지)"
 msgstr "All automatic tags were deleted (manual tags are kept)"
 
-#: viewer/app.py:5455 viewer/app.py:5458
+#: viewer/app.py:5471 viewer/app.py:5474
 msgid "항목 정리"
 msgstr "Clean Up Entries"
 
-#: viewer/app.py:5622
+#: viewer/app.py:5638
 msgid "엑셀로 저장"
 msgstr "Save as Excel"
 
-#: viewer/app.py:5628
+#: viewer/app.py:5644
 msgid "검색결과"
 msgstr "Search Results"
 
-#: viewer/app.py:5663 viewer/app.py:5680
+#: viewer/app.py:5679 viewer/app.py:5696
 msgid "일괄 캡쳐"
 msgstr "Batch Capture"
 
-#: viewer/app.py:5679
+#: viewer/app.py:5695
 msgid "일괄 캡쳐 중…"
 msgstr "Batch capturing…"
 
-#: viewer/app.py:6465
+#: viewer/app.py:6483
 msgid "건설기준(KCSC) 즐겨찾기 관리"
 msgstr "Manage Construction Standards (KCSC) Favorites"
 
-#: viewer/app.py:6575
+#: viewer/app.py:6594
 msgid "특허 등록정보 즐겨찾기 관리"
 msgstr "Manage Patent Registration Favorites"
 
-#: viewer/app.py:6732
+#: viewer/app.py:6751
 msgid "암호화 PDF 저장"
 msgstr "Save Encrypted PDF"
 
-#: viewer/app.py:6732 viewer/print_controller.py:125
+#: viewer/app.py:6751 viewer/print_controller.py:125
 msgid "PDF 파일 (*.pdf)"
 msgstr "PDF Files (*.pdf)"
 
-#: viewer/app.py:7367
+#: viewer/app.py:7386
 msgid ""
 "화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
 "The display language will be applied after PolyPDF restarts."
@@ -924,55 +876,55 @@ msgstr ""
 "화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
 "The display language will be applied after PolyPDF restarts."
 
-#: viewer/app.py:7369
+#: viewer/app.py:7388
 msgid "지금 다시 시작 / Restart now"
 msgstr "지금 다시 시작 / Restart now"
 
-#: viewer/app.py:7370
+#: viewer/app.py:7389
 msgid "나중에 / Later"
 msgstr "나중에 / Later"
 
-#: viewer/app.py:7819
+#: viewer/app.py:7856
 msgid "기본값으로 저장(배포용)"
 msgstr "Save as Defaults (for distribution)"
 
-#: viewer/app.py:7820
+#: viewer/app.py:7857
 msgid "기본값 이름(배포 식별용):"
 msgstr "Defaults name (to identify the distribution):"
 
-#: viewer/app.py:7832
+#: viewer/app.py:7869
 msgid "기본값 저장 완료"
 msgstr "Defaults saved"
 
-#: viewer/app.py:7840
+#: viewer/app.py:7877
 msgid "공장 기본값"
 msgstr "Factory defaults"
 
-#: viewer/app.py:7842
+#: viewer/app.py:7879
 msgid "설정 초기화"
 msgstr "Reset Settings"
 
-#: viewer/app.py:7916
+#: viewer/app.py:7954
 msgid "현재 폴더를 즐겨찾기에 추가..."
 msgstr "Add Current Folder to Favorites..."
 
-#: viewer/app.py:7920
+#: viewer/app.py:7958
 msgid "현재 파일을 즐겨찾기에 추가..."
 msgstr "Add Current File to Favorites..."
 
-#: viewer/app.py:7924
+#: viewer/app.py:7962
 msgid "현재 검색어를 즐겨찾기에 추가..."
 msgstr "Add Current Search to Favorites..."
 
-#: viewer/app.py:7929
+#: viewer/app.py:7967
 msgid "즐겨찾기 관리..."
 msgstr "Manage Favorites..."
 
-#: viewer/app.py:8046
+#: viewer/app.py:8086
 msgid "현재 파일 즐겨찾기 추가"
 msgstr "Add Current File to Favorites"
 
-#: viewer/app.py:8146
+#: viewer/app.py:8186
 msgid ""
 "캡처 목록이 있습니다. PDF로 모아 저장할까요?\n"
 "(저장하지 않으면 목록은 사라집니다. 다음 실행은 빈 목록으로 시작합니다.)"
@@ -980,7 +932,7 @@ msgstr ""
 "There are captures in the list. Save them together as a PDF?\n"
 "(If you don't, the list is discarded. The next session starts with an empty list.)"
 
-#: viewer/app.py:3920 viewer/app.py:8148 viewer/edit_controller.py:793
+#: viewer/app.py:3936 viewer/app.py:8188 viewer/edit_controller.py:793
 #: viewer/widgets/encrypt_dialog.py:108
 #: viewer/widgets/line_text_settings_dialog.py:99
 #: viewer/widgets/toc_review_dialog.py:676
@@ -988,15 +940,15 @@ msgstr ""
 msgid "저장"
 msgstr "Save"
 
-#: viewer/app.py:8149
+#: viewer/app.py:8189
 msgid "저장 안 함"
 msgstr "Don't Save"
 
-#: viewer/app.py:8290 viewer/edit_controller.py:791
+#: viewer/app.py:8330 viewer/edit_controller.py:791
 msgid "편집 변경사항"
 msgstr "Unsaved Edits"
 
-#: viewer/app.py:8291
+#: viewer/app.py:8331
 msgid ""
 "편집모드에서 저장하지 않은 변경사항이 있습니다.\n"
 "종료하기 전에 어떻게 할까요?"
@@ -1004,11 +956,11 @@ msgstr ""
 "There are unsaved changes in edit mode.\n"
 "What would you like to do before exiting?"
 
-#: viewer/app.py:8293
+#: viewer/app.py:8333
 msgid "저장 후 종료"
 msgstr "Save and Exit"
 
-#: viewer/app.py:8294
+#: viewer/app.py:8334
 msgid "저장 안 하고 종료"
 msgstr "Exit Without Saving"
 
@@ -1020,7 +972,7 @@ msgstr "Screen quality"
 msgid "원본 화질"
 msgstr "Original quality"
 
-#: viewer/app.py:778 viewer/app.py:1725
+#: viewer/app.py:778 viewer/app.py:1730
 msgid "클립보드로 복사"
 msgstr "Copy to Clipboard"
 
@@ -1044,39 +996,87 @@ msgstr ""
 msgid "📋 클립보드로 복사"
 msgstr "📋 Copy to clipboard"
 
-#: viewer/app.py:1577 viewer/app.py:6406
+#: viewer/app.py:1578 viewer/app.py:6423
 msgid "건설기준(KCSC)"
 msgstr "Construction Standards (KCSC)"
 
-#: viewer/app.py:1578
+#: viewer/app.py:1579
 msgid "특허(등록정보)"
 msgstr "Patents (registration data)"
 
-#: viewer/app.py:1697
+#: viewer/app.py:1619
+msgid "단어장 생성 (OCR·어휘)..."
+msgstr "Build Vocabulary (OCR · words)..."
+
+#: viewer/app.py:1629
+msgid "단어장·책갈피 동시 생성..."
+msgstr "Build Vocabulary and Bookmarks Together..."
+
+#: viewer/app.py:1634
+msgid "📖 사전 및 용어집 관리"
+msgstr "📖 Dictionaries and Glossaries"
+
+#: viewer/app.py:1635
+msgid "단어장 관리 (출처·우선순위·폴더)..."
+msgstr "Manage Vocabulary (sources · priority · folders)..."
+
+#: viewer/app.py:1636
+msgid "용어집 가져오기 (PDF·CSV)..."
+msgstr "Import Glossary (PDF · CSV)..."
+
+#: viewer/app.py:1637
+msgid "사전 복원 (가져오기)..."
+msgstr "Restore Dictionary (import)..."
+
+#: viewer/app.py:1638
+msgid "용어집 CSV 양식 예제 저장..."
+msgstr "Save Sample Glossary CSV Template..."
+
+#: viewer/app.py:1639
+msgid "인터넷 사전 보강 (이어하기)..."
+msgstr "Enrich with Online Dictionaries (resume)..."
+
+#: viewer/app.py:1640
+msgid "사전 내보내기 (TBX·CSV)..."
+msgstr "Export Dictionary (TBX · CSV)..."
+
+#: viewer/app.py:1641
+msgid "사전 백업 (내보내기)..."
+msgstr "Back Up Dictionary (export)..."
+
+#: viewer/app.py:1642
+msgid "사전 정리 (HTML 마크업 제거)"
+msgstr "Clean Dictionary (remove HTML markup)"
+
+#: viewer/app.py:1643
+msgid "온용어 다시 분류 (용어집별·재조회)..."
+msgstr "Reclassify Onterm Entries (by glossary · re-query)..."
+
+#: viewer/app.py:1702
 msgid "1.0 이전에는 항상 베타(테스트) 버전을 받습니다."
 msgstr "Before 1.0, beta (test) versions are always received."
 
-#: viewer/app.py:1830
+#: viewer/app.py:1835
 msgid "단축키 저장됨"
 msgstr "Shortcuts saved"
 
-#: viewer/app.py:1839 viewer/app.py:2403 viewer/app.py:2407 viewer/app.py:2410
-#: viewer/app.py:3557 viewer/app.py:4547 viewer/app.py:5611 viewer/app.py:5649
-#: viewer/app.py:5957 viewer/app.py:6170 viewer/app.py:6173 viewer/app.py:6914
-#: viewer/app.py:8009 viewer/app.py:8033 viewer/app.py:8042 viewer/app.py:8061
-#: viewer/app.py:8064 viewer/edit_controller.py:509
+#: viewer/app.py:1844 viewer/app.py:2408 viewer/app.py:2412 viewer/app.py:2415
+#: viewer/app.py:3562 viewer/app.py:4563 viewer/app.py:5627 viewer/app.py:5665
+#: viewer/app.py:5973 viewer/app.py:6186 viewer/app.py:6189 viewer/app.py:6933
+#: viewer/app.py:8049 viewer/app.py:8073 viewer/app.py:8082 viewer/app.py:8101
+#: viewer/app.py:8104 viewer/edit_controller.py:509
 #: viewer/edit_controller.py:520 viewer/widgets/bookmark_tree.py:837
-#: viewer/widgets/bookmark_tree.py:2022 viewer/widgets/bookmark_tree.py:2387
-#: viewer/widgets/bookmark_tree.py:2410 viewer/widgets/bookmark_tree.py:2536
-#: viewer/widgets/bookmark_tree.py:2540 viewer/widgets/bookmark_tree.py:2611
-#: viewer/widgets/bookmark_tree.py:2767 viewer/widgets/bookmark_tree.py:2915
-#: viewer/widgets/bookmark_tree.py:2976 viewer/widgets/bookmark_tree.py:3018
-#: viewer/widgets/bookmark_tree.py:3028 viewer/widgets/bookmark_tree.py:3175
-#: viewer/widgets/bookmark_tree.py:3466 viewer/widgets/hyperlink_dialog.py:222
+#: viewer/widgets/bookmark_tree.py:2022 viewer/widgets/bookmark_tree.py:2390
+#: viewer/widgets/bookmark_tree.py:2413 viewer/widgets/bookmark_tree.py:2539
+#: viewer/widgets/bookmark_tree.py:2543 viewer/widgets/bookmark_tree.py:2614
+#: viewer/widgets/bookmark_tree.py:2770 viewer/widgets/bookmark_tree.py:2918
+#: viewer/widgets/bookmark_tree.py:2979 viewer/widgets/bookmark_tree.py:3021
+#: viewer/widgets/bookmark_tree.py:3031 viewer/widgets/bookmark_tree.py:3178
+#: viewer/widgets/bookmark_tree.py:3469 viewer/widgets/hyperlink_dialog.py:222
 msgid "안내"
 msgstr "Notice"
 
-#: viewer/app.py:1840
+#: viewer/app.py:1845
 msgid ""
 "개발 실행(파이썬)에서는 등록할 수 없습니다.\n"
 "빌드된 PolyPDF.exe 에서 실행해 주세요."
@@ -1084,15 +1084,15 @@ msgstr ""
 "This can't be registered when running from source (Python).\n"
 "Please run the built PolyPDF.exe."
 
-#: viewer/app.py:1850
+#: viewer/app.py:1855
 msgid "PDF 문서 (PolyPDF)"
 msgstr "PDF Document (PolyPDF)"
 
-#: viewer/app.py:1859
+#: viewer/app.py:1864
 msgid "등록 완료"
 msgstr "Registered"
 
-#: viewer/app.py:1860
+#: viewer/app.py:1865
 msgid ""
 "PolyPDF 를 PDF '연결 프로그램' 목록에 등록했습니다.\n"
 "\n"
@@ -1110,11 +1110,11 @@ msgstr ""
 "\n"
 "※ Windows security policy requires the user to confirm the default app."
 
-#: viewer/app.py:2292 viewer/widgets/image_to_pdf_dialog.py:92
+#: viewer/app.py:2297 viewer/widgets/image_to_pdf_dialog.py:92
 msgid "파일 추가"
 msgstr "Add Files"
 
-#: viewer/app.py:2293
+#: viewer/app.py:2298
 msgid ""
 "책갈피창에 저장하지 않은 편집이 있어 파일을 더하지 않았습니다.\n"
 "편집을 저장하거나 취소한 뒤 다시 놓아 주세요."
@@ -1122,67 +1122,67 @@ msgstr ""
 "The bookmarks panel has unsaved edits, so the files were not added.\n"
 "Save or discard the edits, then drop the files again."
 
-#: viewer/app.py:2322
+#: viewer/app.py:2327
 msgid "이미 목록에 있는 파일입니다."
 msgstr "The file is already in the list."
 
-#: viewer/app.py:2403
+#: viewer/app.py:2408
 msgid "입력 PDF를 지정하세요."
 msgstr "Specify the input PDF."
 
-#: viewer/app.py:2410
+#: viewer/app.py:2415
 msgid "출력 옵션을 최소 1개 선택하세요."
 msgstr "Select at least one output option."
 
-#: viewer/app.py:2481
+#: viewer/app.py:2486
 msgid "책갈피 생성 취소(검토 표에서 취소)"
 msgstr "Bookmark generation canceled (canceled in the review table)"
 
-#: viewer/app.py:2878
+#: viewer/app.py:2883
 msgid "PDF 를 먼저 여세요."
 msgstr "Open a PDF first."
 
-#: viewer/app.py:2887
+#: viewer/app.py:2892
 msgid "이 쪽은 스캔본이라 글자가 없습니다. [단어장 생성] 으로 이 문서를 읽으면 여기에 글이 나옵니다."
 msgstr "This page is a scan and has no text. Read this document with [Build Vocabulary] and the text will appear here."
 
-#: viewer/app.py:3108
+#: viewer/app.py:3113
 msgid "원래 글자층으로 되돌렸습니다."
 msgstr "Restored the original text layer."
 
-#: viewer/app.py:3129
+#: viewer/app.py:3134
 #, python-format
 msgid "이 설치본에는 %s OCR 자료가 없습니다."
 msgstr "This installation has no %s OCR data."
 
-#: viewer/app.py:3210
+#: viewer/app.py:3215
 #, python-format
 msgid "OCR 로 읽는 중… (%d쪽)"
 msgstr "Reading with OCR… (%d pages)"
 
-#: viewer/app.py:3219
+#: viewer/app.py:3224
 msgid "OCR 준비 중…"
 msgstr "Preparing OCR…"
 
-#: viewer/app.py:3220 viewer/widgets/ocr_options_dialog.py:32
+#: viewer/app.py:3225 viewer/widgets/ocr_options_dialog.py:32
 #: viewer/widgets/text_panel.py:229 viewer/widgets/text_panel.py:383
 msgid "OCR 다시 읽기"
 msgstr "Re-read with OCR"
 
-#: viewer/app.py:3266
+#: viewer/app.py:3271
 #, python-format
 msgid "OCR 을 다시 읽어 단어장을 새로 만들었습니다 — 낱말 %d개"
 msgstr "Re-read with OCR and rebuilt the vocabulary — %d words"
 
-#: viewer/app.py:3282
+#: viewer/app.py:3287
 msgid "OCR 이 이 쪽에서 글자를 찾지 못했습니다."
 msgstr "OCR found no text on this page."
 
-#: viewer/app.py:3324
+#: viewer/app.py:3329
 msgid "글자층을 쓰는 중입니다 — 끝난 뒤 다시 눌러 주세요."
 msgstr "The text layer is being written — please try again when it finishes."
 
-#: viewer/app.py:3341
+#: viewer/app.py:3346
 msgid ""
 "편집모드에서 저장하지 않은 쪽 편집·책갈피 편집이 있습니다.\n"
 "\n"
@@ -1192,7 +1192,7 @@ msgstr ""
 "\n"
 "Save (💾) or discard them first, then press [Apply to PDF] again."
 
-#: viewer/app.py:3355
+#: viewer/app.py:3360
 msgid ""
 "\n"
 "스캔 쪽의 **보이지 않는 글자층**을 텍스트 창의 글(고침 포함)로 다시 씁니다.\n"
@@ -1204,40 +1204,40 @@ msgstr ""
 "The page looks the same, and copy and search results will match the panel.\n"
 "The original is backed up."
 
-#: viewer/app.py:3396
+#: viewer/app.py:3401
 msgid "고친 쪽만"
 msgstr "Corrected pages only"
 
-#: viewer/app.py:3414
+#: viewer/app.py:3419
 msgid "PDF 에 반영을 중지했습니다 — 원본은 그대로입니다."
 msgstr "Stopped applying to PDF — the original is unchanged."
 
-#: viewer/app.py:3468
+#: viewer/app.py:3473
 #, python-brace-format
 msgid "{head}{v}쪽"
 msgstr "{head}{v}"
 
-#: viewer/app.py:3550 viewer/widgets/text_panel.py:243
+#: viewer/app.py:3555 viewer/widgets/text_panel.py:243
 msgid "Word 저장"
 msgstr "Save Word"
 
-#: viewer/app.py:3595
+#: viewer/app.py:3600
 msgid "단계"
 msgstr "Step"
 
-#: viewer/app.py:3636
+#: viewer/app.py:3643
 msgid "단어장·책갈피"
 msgstr "Vocabulary · Bookmarks"
 
-#: viewer/app.py:3636
+#: viewer/app.py:3643
 msgid "먼저 PDF를 여세요."
 msgstr "Open a PDF first."
 
-#: viewer/app.py:3667
+#: viewer/app.py:3676 viewer/app.py:3683
 msgid "문서 인식(OCR)"
 msgstr "Document Recognition (OCR)"
 
-#: viewer/app.py:3668
+#: viewer/app.py:3684
 msgid ""
 "읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
 "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"
@@ -1245,7 +1245,7 @@ msgstr ""
 "There is no readable text (scanned/image document).\n"
 "Run document recognition (OCR) to build the vocabulary and bookmarks together?"
 
-#: viewer/app.py:3765
+#: viewer/app.py:3781
 #, python-brace-format
 msgid ""
 "'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n"
@@ -1256,15 +1256,15 @@ msgstr ""
 "\n"
 "If it is overwritten while that window reads the file, that window may read the changed file as the old one, and the display may break or an error may occur."
 
-#: viewer/app.py:3771
+#: viewer/app.py:3787
 msgid "닫고 저장"
 msgstr "Close and Save"
 
-#: viewer/app.py:3871 viewer/workers.py:1160
+#: viewer/app.py:3887 viewer/workers.py:1160
 msgid "완료"
 msgstr "Done"
 
-#: viewer/app.py:3915
+#: viewer/app.py:3931
 #, python-brace-format
 msgid ""
 "원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n"
@@ -1285,340 +1285,340 @@ msgstr ""
 "\n"
 "If another program has the original open or it is read-only, close it or clear the setting and save again."
 
-#: viewer/app.py:3934 viewer/app.py:4099
+#: viewer/app.py:3950 viewer/app.py:4115
 msgid "최소 1쪽은 남겨야 합니다."
 msgstr "At least one page must remain."
 
-#: viewer/app.py:3956
+#: viewer/app.py:3972
 msgid "쪽 편집 저장을 취소했습니다 — 원본·편집은 그대로입니다."
 msgstr "Canceled saving page edits — the original and the edits are unchanged."
 
-#: viewer/app.py:3959 viewer/app.py:3978 viewer/app.py:4123
+#: viewer/app.py:3975 viewer/app.py:3994 viewer/app.py:4139
 msgid "페이지 편집 저장 실패"
 msgstr "Failed to save page edits"
 
-#: viewer/app.py:4014
+#: viewer/app.py:4030
 msgid "붙여넣기는 편집모드(✏)에서만 됩니다."
 msgstr "Paste works only in edit mode (✏)."
 
-#: viewer/app.py:2138 viewer/app.py:4047
+#: viewer/app.py:2143 viewer/app.py:4063
 msgid "쪽 추가는 편집모드(✏)에서만 됩니다."
 msgstr "Adding pages works only in edit mode (✏)."
 
-#: viewer/app.py:4064 viewer/print_controller.py:266
+#: viewer/app.py:4080 viewer/print_controller.py:266
 msgid "취소했습니다."
 msgstr "Canceled."
 
-#: viewer/app.py:4071
+#: viewer/app.py:4087
 msgid "읽을 수 있는 사진이 없습니다."
 msgstr "There are no readable photos."
 
-#: viewer/app.py:4096 viewer/app.py:4099
+#: viewer/app.py:4112 viewer/app.py:4115
 msgid "페이지 편집"
 msgstr "Page Edit"
 
-#: viewer/app.py:4096 viewer/widgets/bookmark_tree.py:3496
+#: viewer/app.py:4112 viewer/widgets/bookmark_tree.py:3499
 msgid "변경 사항이 없습니다."
 msgstr "There are no changes."
 
-#: viewer/app.py:4213
+#: viewer/app.py:4229
 msgid "병합을 취소했습니다."
 msgstr "Merge canceled."
 
-#: viewer/app.py:4216
+#: viewer/app.py:4232
 msgid "병합 실패"
 msgstr "Merge failed"
 
-#: viewer/app.py:3566 viewer/app.py:3613 viewer/app.py:4514
-#: viewer/widgets/bookmark_tree.py:1843 viewer/widgets/bookmark_tree.py:3064
-#: viewer/widgets/bookmark_tree.py:3242 viewer/widgets/bookmark_tree.py:3617
-#: viewer/widgets/bookmark_tree.py:3632
+#: viewer/app.py:3571 viewer/app.py:3618 viewer/app.py:4530
+#: viewer/widgets/bookmark_tree.py:1843 viewer/widgets/bookmark_tree.py:3067
+#: viewer/widgets/bookmark_tree.py:3245 viewer/widgets/bookmark_tree.py:3620
+#: viewer/widgets/bookmark_tree.py:3635
 msgid "(제목 없음)"
 msgstr "(Untitled)"
 
-#: viewer/app.py:4547 viewer/app.py:5957 viewer/app.py:6173
-#: viewer/edit_controller.py:509
+#: viewer/app.py:4563 viewer/app.py:5973 viewer/app.py:6189
+#: viewer/edit_controller.py:509 viewer/study_controller.py:882
 msgid "먼저 PDF를 표시하세요."
 msgstr "Display a PDF first."
 
-#: viewer/app.py:1721 viewer/app.py:4594 viewer/widgets/bookmark_tree.py:2063
+#: viewer/app.py:1726 viewer/app.py:4610 viewer/widgets/bookmark_tree.py:2063
 msgid "2단 보기"
 msgstr "Split View"
 
-#: viewer/app.py:4615 viewer/app.py:4719
+#: viewer/app.py:4631 viewer/app.py:4735
 msgid "사각형"
 msgstr "Rectangle"
 
-#: viewer/app.py:4615 viewer/app.py:4719
+#: viewer/app.py:4631 viewer/app.py:4735
 msgid "둥근 사각형"
 msgstr "Rounded Rectangle"
 
-#: viewer/app.py:4615 viewer/app.py:4719
+#: viewer/app.py:4631 viewer/app.py:4735
 msgid "원형"
 msgstr "Circle"
 
-#: viewer/app.py:4621
+#: viewer/app.py:4637
 msgid "사진 파일 삽입"
 msgstr "Insert Photo File"
 
-#: viewer/app.py:4632
+#: viewer/app.py:4648
 msgid "클립보드 삽입"
 msgstr "Insert from Clipboard"
 
-#: viewer/app.py:4641
+#: viewer/app.py:4657
 msgid "선과 텍스트 입력 설정…"
 msgstr "Line and Text Input Settings…"
 
-#: viewer/app.py:4663
+#: viewer/app.py:4679
 msgid "선택 글상자 삭제 (Del)"
 msgstr "Delete Selected Text Box (Del)"
 
-#: viewer/app.py:4684
+#: viewer/app.py:4700
 msgid "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."
 msgstr "Press the top-left corner of the block and drag to the bottom-right corner to copy the text in that area."
 
-#: viewer/app.py:4807 viewer/widgets/pointer_settings_dialog.py:26
+#: viewer/app.py:4823 viewer/widgets/pointer_settings_dialog.py:26
 msgid "색 선택"
 msgstr "Choose Color"
 
-#: viewer/app.py:4856 viewer/widgets/line_text_settings_dialog.py:151
+#: viewer/app.py:4872 viewer/widgets/line_text_settings_dialog.py:151
 msgid "왼쪽"
 msgstr "Left"
 
-#: viewer/app.py:4856 viewer/widgets/line_text_settings_dialog.py:151
+#: viewer/app.py:4872 viewer/widgets/line_text_settings_dialog.py:151
 msgid "가운데"
 msgstr "Center"
 
-#: viewer/app.py:4856 viewer/widgets/line_text_settings_dialog.py:151
+#: viewer/app.py:4872 viewer/widgets/line_text_settings_dialog.py:151
 msgid "오른쪽"
 msgstr "Right"
 
-#: viewer/app.py:4879
+#: viewer/app.py:4895
 msgid "선 끝모양"
 msgstr "Line End"
 
-#: viewer/app.py:5134
+#: viewer/app.py:5150
 msgid "(최근 폴더 없음)"
 msgstr "(No recent folders)"
 
-#: viewer/app.py:5158
+#: viewer/app.py:5174
 msgid "(최근 파일 없음)"
 msgstr "(No recent files)"
 
-#: viewer/app.py:5313
+#: viewer/app.py:5329
 msgid "태그 백업 실패 — 자동 부여를 건너뜀(§6)"
 msgstr "Tag backup failed — automatic tagging skipped (§6)"
 
-#: viewer/app.py:5347
+#: viewer/app.py:5363
 #, python-brace-format
 msgid "태그 자동 부여: {get}개 검토, {n_auto}개 파일에 부여"
 msgstr "Automatic tagging: {get} reviewed, tags added to {n_auto} files"
 
-#: viewer/app.py:5365
+#: viewer/app.py:5381
 msgid "태그 자동 부여"
 msgstr "Automatic Tagging"
 
-#: viewer/app.py:5368
+#: viewer/app.py:5384
 msgid "되돌리기"
 msgstr "Undo"
 
-#: viewer/app.py:5373 viewer/widgets/bookmark_tree.py:3007
+#: viewer/app.py:5389 viewer/widgets/bookmark_tree.py:3010
 #: viewer/widgets/main_view.py:1818 viewer/widgets/pen_settings_dialog.py:81
 #: viewer/widgets/pen_settings_dialog.py:158
 #: viewer/widgets/pointer_settings_dialog.py:60
-#: viewer/widgets/settings_dialog.py:631
+#: viewer/widgets/settings_dialog.py:633
 msgid "확인"
 msgstr "OK"
 
-#: viewer/app.py:5433
+#: viewer/app.py:5449
 msgid "직전 자동 부여를 되돌렸습니다"
 msgstr "Undid the last automatic tagging"
 
-#: viewer/app.py:5434
+#: viewer/app.py:5450
 msgid "되돌릴 백업이 없습니다"
 msgstr "There is no backup to undo"
 
-#: viewer/app.py:5455
+#: viewer/app.py:5471
 msgid "없는 파일 항목이 없습니다."
 msgstr "There are no entries for missing files."
 
-#: viewer/app.py:5548
+#: viewer/app.py:5564
 msgid "폴더를 먼저 여세요."
 msgstr "Open a folder first."
 
-#: viewer/app.py:5611 viewer/app.py:5649
+#: viewer/app.py:5627 viewer/app.py:5665
 msgid "검색 결과가 없습니다."
 msgstr "No search results."
 
-#: viewer/app.py:6170
+#: viewer/app.py:6186
 msgid "먼저 폴더(책갈피 목록)를 여세요."
 msgstr "Open a folder (bookmark list) first."
 
-#: viewer/app.py:6216
+#: viewer/app.py:6232
 msgid "링크 실행"
 msgstr "Open Link"
 
-#: viewer/app.py:6217
+#: viewer/app.py:6233
 msgid "이 페이지에 표시할 사진·동영상 링크가 없습니다."
 msgstr "This page has no photo or video links to show."
 
-#: viewer/app.py:6350
+#: viewer/app.py:6366
 msgid "법령·고시 검색"
 msgstr "Search Laws and Notices"
 
-#: viewer/app.py:6351
+#: viewer/app.py:6367
 msgid "설정 → '인터넷 사전'의 '법제처 OC'(국가법령정보 OPEN API 인증값, open.law.go.kr 에서 무료 신청)를 먼저 입력하세요."
 msgstr "First enter the 'MOLEG OC' (Korean National Law Information OPEN API key, free at open.law.go.kr) under Settings → 'Online Dictionaries'."
 
-#: viewer/app.py:6407
+#: viewer/app.py:6424
 msgid "설정 → '인터넷 사전'의 'KCSC 키'(국가건설기준센터 OPEN API 인증키, www.kcsc.re.kr/support/api 에서 무료 발급)를 먼저 입력하세요."
 msgstr "First enter the 'KCSC key' (Korea Construction Standards Center OPEN API key, free at www.kcsc.re.kr/support/api) under Settings → 'Online Dictionaries'."
 
-#: viewer/app.py:6491
+#: viewer/app.py:6509
 msgid "특허 검색(KIPRIS)"
 msgstr "Patent Search (KIPRIS)"
 
-#: viewer/app.py:6492
+#: viewer/app.py:6510
 msgid "설정 → '인터넷 사전'의 '특허(KIPRIS) 키'(KIPRIS Plus accessKey)를 먼저 입력하세요."
 msgstr "First enter the 'Patent (KIPRIS) key' (KIPRIS Plus accessKey) under Settings → 'Online Dictionaries'."
 
-#: viewer/app.py:6705
+#: viewer/app.py:6724
 msgid "암호화할 PDF를 먼저 여세요."
 msgstr "Open the PDF to encrypt first."
 
-#: viewer/app.py:6738
+#: viewer/app.py:6757
 msgid "원본과 다른 경로로 저장하세요."
 msgstr "Save to a different path than the original."
 
-#: viewer/app.py:6789
+#: viewer/app.py:6808
 msgid "이 문서는 복사(스크린샷) 권한이 없습니다."
 msgstr "This document does not allow copying (screenshots)."
 
-#: viewer/app.py:6914
+#: viewer/app.py:6933
 msgid "저장할 스크린샷이 없습니다."
 msgstr "There are no screenshots to save."
 
-#: viewer/app.py:7358 viewer/present_controller.py:192
+#: viewer/app.py:7377 viewer/present_controller.py:192
 msgid "설정 저장됨"
 msgstr "Settings saved"
 
-#: viewer/app.py:7820
+#: viewer/app.py:7857
 msgid "내 기본값"
 msgstr "My defaults"
 
-#: viewer/app.py:7938
+#: viewer/app.py:7976
 msgid "즐겨찾기 폴더"
 msgstr "Favorite Folders"
 
-#: viewer/app.py:7938
+#: viewer/app.py:7976
 msgid "즐겨찾기 파일"
 msgstr "Favorite Files"
 
-#: viewer/app.py:7938
+#: viewer/app.py:7976
 msgid "즐겨찾기 검색어"
 msgstr "Favorite Searches"
 
-#: viewer/app.py:7965
+#: viewer/app.py:8005
 msgid "법령·고시 즐겨찾기"
 msgstr "Law and Notice Favorites"
 
-#: viewer/app.py:7981
+#: viewer/app.py:8021
 msgid "건설기준(KCSC) 즐겨찾기"
 msgstr "Construction Standards (KCSC) Favorites"
 
-#: viewer/app.py:7997
+#: viewer/app.py:8037
 msgid "특허(KIPO) 즐겨찾기"
 msgstr "Patent (KIPO) Favorites"
 
-#: viewer/app.py:8009
+#: viewer/app.py:8049
 msgid "먼저 폴더를 여세요."
 msgstr "Open a folder first."
 
-#: viewer/app.py:8033
+#: viewer/app.py:8073
 msgid "먼저 파일을 여세요."
 msgstr "Open a file first."
 
-#: viewer/app.py:8042
+#: viewer/app.py:8082
 msgid "PDF 파일을 선택하세요."
 msgstr "Select a PDF file."
 
-#: viewer/app.py:8061
+#: viewer/app.py:8101
 msgid "검색어가 비어있습니다."
 msgstr "The search term is empty."
 
-#: viewer/app.py:8064
+#: viewer/app.py:8104
 msgid "검색은 폴더 컨텍스트에서만 등록됩니다."
 msgstr "Searches can only be added in a folder context."
 
-#: viewer/app.py:6266 viewer/app.py:8093 viewer/widgets/bookmark_tree.py:2775
-#: viewer/widgets/bookmark_tree.py:2793 viewer/widgets/bookmark_tree.py:2800
-#: viewer/widgets/bookmark_tree.py:2804 viewer/widgets/bookmark_tree.py:2864
-#: viewer/widgets/bookmark_tree.py:2908 viewer/widgets/bookmark_tree.py:3096
-#: viewer/widgets/bookmark_tree.py:3102 viewer/widgets/bookmark_tree.py:3470
+#: viewer/app.py:6282 viewer/app.py:8133 viewer/widgets/bookmark_tree.py:2778
+#: viewer/widgets/bookmark_tree.py:2796 viewer/widgets/bookmark_tree.py:2803
+#: viewer/widgets/bookmark_tree.py:2807 viewer/widgets/bookmark_tree.py:2867
+#: viewer/widgets/bookmark_tree.py:2911 viewer/widgets/bookmark_tree.py:3099
+#: viewer/widgets/bookmark_tree.py:3105 viewer/widgets/bookmark_tree.py:3473
 msgid "오류"
 msgstr "Error"
 
-#: viewer/app.py:1866
+#: viewer/app.py:1871
 msgid "등록 실패"
 msgstr "Registration failed"
 
-#: viewer/app.py:1912
+#: viewer/app.py:1917
 msgid "전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"
 msgstr "Global screen-capture shortcut released (works only while the app is active)"
 
-#: viewer/app.py:2494
+#: viewer/app.py:2499
 #, python-brace-format
 msgid "책갈피 {n}개 저장 중..."
 msgstr "Saving {n} bookmarks..."
 
-#: viewer/app.py:2506
+#: viewer/app.py:2511
 #, python-brace-format
 msgid "방법={get}"
 msgstr "method={get}"
 
-#: viewer/app.py:2506
+#: viewer/app.py:2511
 #, python-brace-format
 msgid "개수={get}"
 msgstr "count={get}"
 
-#: viewer/app.py:2513
+#: viewer/app.py:2518
 #, python-brace-format
 msgid "책갈피 생성 완료 — {join}"
 msgstr "Bookmarks generated — {join}"
 
-#: viewer/app.py:2533
+#: viewer/app.py:2538
 #, python-brace-format
 msgid "책갈피 생성 오류: {msg}"
 msgstr "Bookmark generation error: {msg}"
 
-#: viewer/app.py:2538
+#: viewer/app.py:2543
 #, python-brace-format
 msgid "책갈피 저장: {name}"
 msgstr "Bookmarks saved: {name}"
 
-#: viewer/app.py:2693 viewer/app.py:2749
+#: viewer/app.py:2698 viewer/app.py:2754
 msgid "목록을 조사하는 중입니다"
 msgstr "Checking the list"
 
-#: viewer/app.py:2694 viewer/app.py:2750
+#: viewer/app.py:2699 viewer/app.py:2755
 msgid "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. <b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> 한 번 조사한 파일은 다시 조사하지 않습니다."
 msgstr "Checking the markers shown in the file list (encryption · bookmarks). <b>Scrolling may pause briefly while this runs.</b> A file is checked only once."
 
-#: viewer/app.py:2945
+#: viewer/app.py:2950
 #, python-brace-format
 msgid "p.{page} · {n}줄 · 잡음 {noise}줄 숨김"
 msgstr "p.{page} · {n} lines · {noise} noise lines hidden"
 
-#: viewer/app.py:2948
+#: viewer/app.py:2953
 #, python-brace-format
 msgid "{v}옛 고침 {unmatched}개가 지금 줄과 맞지 않습니다"
 msgstr "{v}{unmatched} old corrections do not match the current lines"
 
-#: viewer/app.py:3162
+#: viewer/app.py:3167
 msgid "준비했습니다."
 msgstr "Ready."
 
-#: viewer/app.py:3191
+#: viewer/app.py:3196
 msgid ""
 "\n"
 "\n"
@@ -1628,185 +1628,194 @@ msgstr ""
 "\n"
 "Pages that already have text are skipped. Korean text on those pages is the PDF's original text — not what OCR read."
 
-#: viewer/app.py:3350
+#: viewer/app.py:3355
 #, python-brace-format
 msgid "반영할 고침: {page_list_text} ({n}쪽, {n_fix}줄)\n"
 msgstr "Corrections to apply: {page_list_text} ({n} pages, {n_fix} lines)\n"
 
-#: viewer/app.py:3354
+#: viewer/app.py:3359
 #, python-brace-format
 msgid "건너뛰는 쪽: {page_list_text} — 원래 글자가 있는 쪽이라 PDF 는 건드리지 않습니다.\n"
 msgstr "Pages skipped: {page_list_text} — they have original text, so the PDF is not changed.\n"
 
-#: viewer/app.py:3449
+#: viewer/app.py:3454
 #, python-brace-format
 msgid "글자층을 다시 쓴 쪽: {n}쪽 ({get}줄)"
 msgstr "Pages with the text layer rewritten: {n} ({get} lines)"
 
-#: viewer/app.py:3461
+#: viewer/app.py:3466
 #, python-brace-format
 msgid "텍스트층에 반영했습니다 — {name} · {n}쪽"
 msgstr "Applied to the text layer — {name} · {n} pages"
 
-#: viewer/app.py:3498
+#: viewer/app.py:3503
 #, python-brace-format
 msgid "책갈피 {n}개 추가 — 책갈피창 편집(✏)에서 저장(💾)해야 PDF 에 들어갑니다."
 msgstr "{n} bookmarks added — save (💾) in the bookmarks panel edit mode (✏) to put them in the PDF."
 
-#: viewer/app.py:3516 viewer/app.py:3525
+#: viewer/app.py:3521 viewer/app.py:3530
 #: viewer/widgets/ocr_options_dialog.py:41
 msgid "쪽 범위"
 msgstr "Page Range"
 
-#: viewer/app.py:3566
+#: viewer/app.py:3571
 #, python-brace-format
 msgid "책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다."
 msgstr "Bookmark added: {title}  (p.{page}) — press Save (💾) to apply it to the PDF."
 
-#: viewer/app.py:3613
+#: viewer/app.py:3618
 #, python-brace-format
 msgid "책갈피 추가됨: {title}  (p.{page_1based}) — 책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다."
 msgstr "Bookmark added: {title}  (p.{page_1based}) — save (💾) in the bookmarks panel edit mode (✏) to apply it to the PDF."
 
-#: viewer/app.py:3756
+# | msgid "" "읽을 텍스트가 없습니다(스캔/이미지 문서).\n" "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"
+#: viewer/app.py:3677
+msgid ""
+"읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
+"문서 인식(OCR)으로 읽을까요?"
+msgstr ""
+"There is no readable text (scanned/image document).\n"
+"Read it with OCR?"
+
+#: viewer/app.py:3772
 #, python-brace-format
 msgid "알 수 없는 요청: {op}"
 msgstr "Unknown request: {op}"
 
-#: viewer/app.py:3884
+#: viewer/app.py:3900
 #, python-brace-format
 msgid "원본에 놓는 중: {name}"
 msgstr "Placing on the original: {name}"
 
-#: viewer/app.py:3814 viewer/app.py:3843 viewer/app.py:3912
+#: viewer/app.py:3830 viewer/app.py:3859 viewer/app.py:3928
 #, python-brace-format
 msgid "새 이름으로 저장 중: {name}"
 msgstr "Saving with a new name: {name}"
 
-#: viewer/app.py:3959
+#: viewer/app.py:3975
 msgid "알 수 없는 오류"
 msgstr "Unknown error"
 
-#: viewer/app.py:3981
+#: viewer/app.py:3997
 #, python-brace-format
 msgid "페이지 편집 저장: {saved_n}쪽 → {name}"
 msgstr "Page edits saved: {saved_n} pages → {name}"
 
-#: viewer/app.py:4003
+#: viewer/app.py:4019
 #, python-brace-format
 msgid "썸네일 {n}쪽 복사됨 — 다른 PDF 썸네일에서 붙여넣기(Ctrl+V)"
 msgstr "Copied {n} thumbnail pages — paste (Ctrl+V) in another PDF's thumbnails"
 
-#: viewer/app.py:4021
+#: viewer/app.py:4037
 #, python-brace-format
 msgid "붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요."
 msgstr "Pasted {n} pages (unsaved) — press 💾 'Save' to apply."
 
-#: viewer/app.py:4086
+#: viewer/app.py:4102
 #, python-brace-format
 msgid "사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요."
 msgstr "Added {n} photo pages (unsaved) — press 💾 'Save' to apply."
 
-#: viewer/app.py:4127
+#: viewer/app.py:4143
 #, python-brace-format
 msgid "페이지 편집 저장: {n}쪽 → {name}"
 msgstr "Page edits saved: {n} pages → {name}"
 
-#: viewer/app.py:4186
+#: viewer/app.py:4202
 msgid "원본 덮어쓰기 확인"
 msgstr "Confirm Overwriting the Original"
 
-#: viewer/app.py:4218
+#: viewer/app.py:4234
 #, python-brace-format
 msgid "병합 완료 → {name}"
 msgstr "Merge complete → {name}"
 
-#: viewer/app.py:4430
+#: viewer/app.py:4446
 msgid "용량 줄여 저장 중…(오래 걸릴 수 있음)"
 msgstr "Saving with reduced size… (this may take a while)"
 
-#: viewer/app.py:4430 viewer/print_controller.py:392
+#: viewer/app.py:4446 viewer/print_controller.py:392
 msgid "저장 중…"
 msgstr "Saving…"
 
-#: viewer/app.py:4580
+#: viewer/app.py:4596
 #, python-brace-format
 msgid "현재 페이지 인쇄 (p.{page})"
 msgstr "Print Current Page (p.{page})"
 
-#: viewer/app.py:4584
+#: viewer/app.py:4600
 #, python-brace-format
 msgid "왼쪽 90° 회전 (p.{page})"
 msgstr "Rotate Left 90° (p.{page})"
 
-#: viewer/app.py:4585
+#: viewer/app.py:4601
 #, python-brace-format
 msgid "오른쪽 90° 회전 (p.{page})"
 msgstr "Rotate Right 90° (p.{page})"
 
-#: viewer/app.py:4592 viewer/widgets/bookmark_tree.py:2060
+#: viewer/app.py:4608 viewer/widgets/bookmark_tree.py:2060
 msgid "2창으로 복사"
 msgstr "Copy to Window 2"
 
-#: viewer/app.py:4592 viewer/widgets/bookmark_tree.py:2060
+#: viewer/app.py:4608 viewer/widgets/bookmark_tree.py:2060
 msgid "1창으로 복사"
 msgstr "Copy to Window 1"
 
-#: viewer/app.py:4643
+#: viewer/app.py:4659
 msgid "선택 사진 모양 변경"
 msgstr "Change Selected Photo Shape"
 
-#: viewer/app.py:4648
+#: viewer/app.py:4664
 msgid "선택 이미지 삭제 (Del)"
 msgstr "Delete Selected Image (Del)"
 
-#: viewer/app.py:4657
+#: viewer/app.py:4673
 msgid "선택 지시선 끝 모양"
 msgstr "Selected Callout End"
 
-#: viewer/app.py:4731
+#: viewer/app.py:4747
 #, python-brace-format
 msgid "{text} — 클릭하면 선택된 모양으로 삽입 (모양은 오른쪽 ▼)"
 msgstr "{text} — click to insert with the selected shape (shape: ▼ on the right)"
 
-#: viewer/app.py:4796
+#: viewer/app.py:4812
 msgid " 설정"
 msgstr " Settings"
 
-#: viewer/app.py:4796
+#: viewer/app.py:4812
 msgid " 기본 설정(신규)"
 msgstr " Defaults (new)"
 
-#: viewer/app.py:4658 viewer/app.py:4870
+#: viewer/app.py:4674 viewer/app.py:4886
 #: viewer/widgets/line_text_settings_dialog.py:23
 msgid "뾰족한 화살표"
 msgstr "Arrowhead"
 
-#: viewer/app.py:4658 viewer/app.py:4871
+#: viewer/app.py:4674 viewer/app.py:4887
 #: viewer/widgets/line_text_settings_dialog.py:23
 msgid "끝 원형"
 msgstr "Round end"
 
-#: viewer/app.py:4659 viewer/app.py:4872
+#: viewer/app.py:4675 viewer/app.py:4888
 msgid "일반 선"
 msgstr "Plain line"
 
-#: viewer/app.py:5214
+#: viewer/app.py:5230
 #, python-brace-format
 msgid "인덱싱 {done}/{total} - {name}"
 msgstr "Indexing {done}/{total} - {name}"
 
-#: viewer/app.py:5291
+#: viewer/app.py:5307
 #, python-brace-format
 msgid "태그 계산 오류: {msg}"
 msgstr "Tag calculation error: {msg}"
 
-#: viewer/app.py:5349
+#: viewer/app.py:5365
 #, python-brace-format
 msgid ", 이동 재연결 {n_moved}건"
 msgstr ", {n_moved} moved files relinked"
 
-#: viewer/app.py:5459
+#: viewer/app.py:5475
 #, python-brace-format
 msgid ""
 "디스크에 없는 파일의 태그 항목 {n}건을 지울까요?\n"
@@ -1815,21 +1824,21 @@ msgstr ""
 "Delete {n} tag entries for files that are not on disk?\n"
 "(If you plan to restore files from the Recycle Bin, don't delete them — the tags come back on restore.)"
 
-#: viewer/app.py:5550
+#: viewer/app.py:5566
 #, python-brace-format
 msgid "검색 중: {query!r}"
 msgstr "Searching: {query!r}"
 
-#: viewer/app.py:5578
+#: viewer/app.py:5594
 #, python-brace-format
 msgid "검색 완료: {n}개 페이지"
 msgstr "Search complete: {n} pages"
 
-#: viewer/app.py:5616
+#: viewer/app.py:5632
 msgid "openpyxl 필요"
 msgstr "openpyxl required"
 
-#: viewer/app.py:5617
+#: viewer/app.py:5633
 msgid ""
 "엑셀 내보내기에 openpyxl 패키지가 필요합니다.\n"
 "pip install openpyxl"
@@ -1837,29 +1846,29 @@ msgstr ""
 "Exporting to Excel requires the openpyxl package.\n"
 "pip install openpyxl"
 
-#: viewer/app.py:1713 viewer/app.py:1714 viewer/app.py:1715 viewer/app.py:1716
-#: viewer/app.py:5629
+#: viewer/app.py:1718 viewer/app.py:1719 viewer/app.py:1720 viewer/app.py:1721
+#: viewer/app.py:5645
 msgid "파일"
 msgstr "File"
 
-#: viewer/app.py:5629 viewer/widgets/search_panel.py:170
+#: viewer/app.py:5645 viewer/widgets/search_panel.py:170
 #: viewer/widgets/thumbs_list.py:97
 msgid "페이지"
 msgstr "Page"
 
-#: viewer/app.py:5629
+#: viewer/app.py:5645
 msgid "매치수"
 msgstr "Matches"
 
-#: viewer/app.py:5629
+#: viewer/app.py:5645
 msgid "스니펫"
 msgstr "Snippet"
 
-#: viewer/app.py:5637
+#: viewer/app.py:5653
 msgid "엑셀 저장 실패"
 msgstr "Failed to save Excel"
 
-#: viewer/app.py:5664
+#: viewer/app.py:5680
 #, python-brace-format
 msgid ""
 "검색 결과 {n} 페이지를 모두 스크린샷합니까?\n"
@@ -1868,31 +1877,31 @@ msgstr ""
 "Take screenshots of all {n} result pages?\n"
 "(This may take a while.)"
 
-#: viewer/app.py:5759
+#: viewer/app.py:5775
 #, python-brace-format
 msgid "로딩 중: {name}"
 msgstr "Loading: {name}"
 
-#: viewer/app.py:6266
+#: viewer/app.py:6282
 msgid "링크를 여는 중 문제가 발생했습니다."
 msgstr "A problem occurred while opening the link."
 
-#: viewer/app.py:6457
+#: viewer/app.py:6475
 #, python-brace-format
 msgid "건설기준 즐겨찾기 추가: {name}"
 msgstr "Added to construction standards favorites: {name}"
 
-#: viewer/app.py:6567
+#: viewer/app.py:6586
 #, python-brace-format
 msgid "특허 즐겨찾기 추가: {name}"
 msgstr "Added to patent favorites: {name}"
 
-#: viewer/app.py:6607
+#: viewer/app.py:6626
 #, python-brace-format
 msgid "법령 즐겨찾기 추가: {name}"
 msgstr "Added to law favorites: {name}"
 
-#: viewer/app.py:6783
+#: viewer/app.py:6802
 #, python-brace-format
 msgid ""
 "암호화 저장 완료:\n"
@@ -1901,24 +1910,24 @@ msgstr ""
 "Encrypted and saved:\n"
 "{out}"
 
-#: viewer/app.py:6899
+#: viewer/app.py:6918
 msgid "스크린샷 실패"
 msgstr "Screenshot failed"
 
-#: viewer/app.py:6942
+#: viewer/app.py:6961
 msgid "PDF 저장 실패"
 msgstr "Failed to save PDF"
 
-#: viewer/app.py:6977
+#: viewer/app.py:6996
 msgid "불러오기 실패"
 msgstr "Failed to load"
 
-#: viewer/app.py:7829 viewer/edit_controller.py:309
-#: viewer/widgets/bookmark_tree.py:3525
+#: viewer/app.py:7866 viewer/edit_controller.py:309
+#: viewer/widgets/bookmark_tree.py:3528
 msgid "저장 실패"
 msgstr "Save failed"
 
-#: viewer/app.py:7833
+#: viewer/app.py:7870
 #, python-brace-format
 msgid ""
 "현재 설정·스타일을 기본값으로 저장했습니다.\n"
@@ -1937,12 +1946,12 @@ msgstr ""
 "• 'Reset Settings' restores these defaults.\n"
 "• Personal and machine items such as favorites, recent folders, recent files, sessions and recording/ffmpeg paths are excluded."
 
-#: viewer/app.py:7839
+#: viewer/app.py:7876
 #, python-brace-format
 msgid "동봉된 기본값('{get}')"
 msgstr "Bundled defaults ('{get}')"
 
-#: viewer/app.py:7843
+#: viewer/app.py:7880
 #, python-brace-format
 msgid ""
 "설정과 스타일을 {src}으로 되돌립니다.\n"
@@ -1955,19 +1964,19 @@ msgstr ""
 "\n"
 "The program will restart to apply this. Continue?"
 
-#: viewer/app.py:7852
+#: viewer/app.py:7889
 msgid "초기화 실패"
 msgstr "Reset failed"
 
-#: viewer/app.py:7958
+#: viewer/app.py:7996
 msgid "(아직 등록된 즐겨찾기 없음)"
 msgstr "(No favorites yet)"
 
-#: viewer/app.py:8210
+#: viewer/app.py:8250
 msgid "녹화를 마무리하는 중…"
 msgstr "Finishing the recording…"
 
-#: viewer/app.py:321 viewer/app.py:7229 viewer/widgets/capture_settings.py:26
+#: viewer/app.py:321 viewer/app.py:7248 viewer/widgets/capture_settings.py:26
 #: viewer/widgets/capture_settings.py:43
 #, python-brace-format
 msgid "사용자{i}"
@@ -1987,15 +1996,15 @@ msgstr "Imported {n} images from the clipboard."
 msgid "이 문서는 복사 권한이 없습니다."
 msgstr "This document does not allow copying."
 
-#: viewer/app.py:1713 viewer/print_controller.py:452
+#: viewer/app.py:1718 viewer/print_controller.py:452
 msgid "폴더 열기"
 msgstr "Open Folder"
 
-#: viewer/app.py:1714 viewer/print_controller.py:451
+#: viewer/app.py:1719 viewer/print_controller.py:451
 msgid "파일 열기"
 msgstr "Open File"
 
-#: viewer/app.py:1715 viewer/print_controller.py:42
+#: viewer/app.py:1720 viewer/print_controller.py:42
 #: viewer/print_controller.py:82 viewer/print_controller.py:87
 #: viewer/print_controller.py:99 viewer/print_controller.py:312
 #: viewer/print_controller.py:316 viewer/print_controller.py:360
@@ -2006,138 +2015,138 @@ msgstr "Open File"
 msgid "인쇄"
 msgstr "Print"
 
-#: viewer/app.py:1717
+#: viewer/app.py:1722
 msgid "검색바 포커스"
 msgstr "Focus Search Bar"
 
-#: viewer/app.py:1717 viewer/app.py:1718 viewer/app.py:1719 viewer/app.py:1720
+#: viewer/app.py:1722 viewer/app.py:1723 viewer/app.py:1724 viewer/app.py:1725
 msgid "탐색"
 msgstr "Navigation"
 
-#: viewer/app.py:1718
+#: viewer/app.py:1723
 msgid "다음 매치"
 msgstr "Next Match"
 
-#: viewer/app.py:1719
+#: viewer/app.py:1724
 msgid "이전 매치"
 msgstr "Previous Match"
 
-#: viewer/app.py:1720
+#: viewer/app.py:1725
 msgid "옵션 메뉴(우클릭)"
 msgstr "Option Menu (right-click)"
 
-#: viewer/app.py:1723
+#: viewer/app.py:1728
 msgid "화면 캡처"
 msgstr "Screen Capture"
 
-#: viewer/app.py:1723 viewer/app.py:1724 viewer/app.py:1725
+#: viewer/app.py:1728 viewer/app.py:1729 viewer/app.py:1730
 msgid "캡처·저장"
 msgstr "Capture · Save"
 
-#: viewer/app.py:1726
+#: viewer/app.py:1731
 msgid "선 1 선택"
 msgstr "Select Line 1"
 
-#: viewer/app.py:1726 viewer/app.py:1727 viewer/app.py:1728 viewer/app.py:1729
-#: viewer/app.py:1730 viewer/app.py:1731 viewer/app.py:1732 viewer/app.py:1733
-#: viewer/app.py:1734
+#: viewer/app.py:1731 viewer/app.py:1732 viewer/app.py:1733 viewer/app.py:1734
+#: viewer/app.py:1735 viewer/app.py:1736 viewer/app.py:1737 viewer/app.py:1738
+#: viewer/app.py:1739
 msgid "선긋기(편집모드)"
 msgstr "Drawing (edit mode)"
 
-#: viewer/app.py:1727
+#: viewer/app.py:1732
 msgid "선 2 선택"
 msgstr "Select Line 2"
 
-#: viewer/app.py:1728
+#: viewer/app.py:1733
 msgid "선 3 선택"
 msgstr "Select Line 3"
 
-#: viewer/app.py:1729
+#: viewer/app.py:1734
 msgid "선 4 선택"
 msgstr "Select Line 4"
 
-#: viewer/app.py:1730
+#: viewer/app.py:1735
 msgid "선 5 선택"
 msgstr "Select Line 5"
 
-#: viewer/app.py:1731
+#: viewer/app.py:1736
 msgid "선 종류 전환(직선/하이라이트/자유)"
 msgstr "Switch Line Type (straight/highlight/freehand)"
 
-#: viewer/app.py:1732 viewer/widgets/main_view.py:3059
+#: viewer/app.py:1737 viewer/widgets/main_view.py:3059
 msgid "지우개(얇게)"
 msgstr "Eraser (thin)"
 
-#: viewer/app.py:1733 viewer/widgets/main_view.py:3060
+#: viewer/app.py:1738 viewer/widgets/main_view.py:3060
 msgid "지우개(두껍게)"
 msgstr "Eraser (thick)"
 
-#: viewer/app.py:1734
+#: viewer/app.py:1739
 msgid "현재 페이지 선 청소"
 msgstr "Clear Lines on Current Page"
 
-#: viewer/app.py:1735 viewer/widgets/shortcuts_dialog.py:34
+#: viewer/app.py:1740 viewer/widgets/shortcuts_dialog.py:34
 msgid "기타"
 msgstr "Other"
 
-#: viewer/app.py:1904
+#: viewer/app.py:1909
 msgid "전역 단축키 등록 실패"
 msgstr "Failed to register global shortcut"
 
-#: viewer/app.py:1991
+#: viewer/app.py:1996
 #, python-brace-format
 msgid "전역 캡처 저장({mode}): {name}"
 msgstr "Global capture saved ({mode}): {name}"
 
-#: viewer/app.py:2194 viewer/app.py:2407 viewer/app.py:3619
+#: viewer/app.py:2199 viewer/app.py:2412 viewer/app.py:3625
 #, python-brace-format
 msgid "PDF 파일이 아닙니다: {name}"
 msgstr "Not a PDF file: {name}"
 
-#: viewer/app.py:2221
+#: viewer/app.py:2226
 #, python-brace-format
 msgid "파일 로드: {pdf_path}"
 msgstr "File loaded: {pdf_path}"
 
-#: viewer/app.py:2264
+#: viewer/app.py:2269
 #, python-brace-format
 msgid "파일 {n}개 로드"
 msgstr "{n} files loaded"
 
-#: viewer/app.py:2319
+#: viewer/app.py:2324
 #, python-brace-format
 msgid "파일 {n}개를 목록에 더했습니다(모두 {n2}개)."
 msgstr "Added {n} files to the list ({n2} in total)."
 
-#: viewer/app.py:2437
+#: viewer/app.py:2442
 msgid "현재 PDF에 저장"
 msgstr "Save to Current PDF"
 
-#: viewer/app.py:2508
+#: viewer/app.py:2513
 #, python-brace-format
 msgid "오프셋={offset}"
 msgstr "offset={offset}"
 
-#: viewer/app.py:2701
+#: viewer/app.py:2706
 #, python-brace-format
 msgid "목록 조사 {done} / {total}{v}"
 msgstr "Checking list {done} / {total}{v}"
 
-#: viewer/app.py:2900
+#: viewer/app.py:2905
 #, python-brace-format
 msgid "p.{page} 읽는 중…"
 msgstr "Reading p.{page}…"
 
-#: viewer/app.py:3164
+#: viewer/app.py:3169
 msgid "받지 못했습니다."
 msgstr "Could not download."
 
-#: viewer/app.py:3252
+#: viewer/app.py:3257
 #, python-format
 msgid "단어장 갱신 실패: %s"
 msgstr "Failed to update vocabulary: %s"
 
-#: viewer/app.py:3420
+#: viewer/app.py:3425
 #, python-brace-format
 msgid ""
 "다시 쓸 쪽이 없었습니다.\n"
@@ -2148,37 +2157,37 @@ msgstr ""
 "\n"
 "{join}"
 
-#: viewer/app.py:3451
+#: viewer/app.py:3456
 #, python-brace-format
 msgid "고친 줄만 바꿔 끼운 쪽: {page_list_text}"
 msgstr "Pages where only corrected lines were replaced: {page_list_text}"
 
-#: viewer/app.py:3454
+#: viewer/app.py:3459
 #, python-brace-format
 msgid "다시 쓰지 않은 쪽: {join}"
 msgstr "Pages not rewritten: {join}"
 
-#: viewer/app.py:3456
+#: viewer/app.py:3461
 #, python-brace-format
 msgid "{unwritten}줄은 자리가 좁아 다시 적지 못했습니다."
 msgstr "{unwritten} lines could not be rewritten because there was not enough room."
 
-#: viewer/app.py:3458
+#: viewer/app.py:3463
 #, python-brace-format
 msgid "저장한 파일: {name}"
 msgstr "Saved file: {name}"
 
-#: viewer/app.py:3548
+#: viewer/app.py:3553
 #, python-brace-format
 msgid "Word 저장: {name} ({n}쪽)"
 msgstr "Word saved: {name} ({n} pages)"
 
-#: viewer/app.py:3550
+#: viewer/app.py:3555
 #, python-brace-format
 msgid "실패: {msg}"
 msgstr "Failed: {msg}"
 
-#: viewer/app.py:3558
+#: viewer/app.py:3563
 #, python-brace-format
 msgid ""
 "대상 PDF 가 메인 뷰어에 열려있어야 현재 페이지를 알 수 있습니다.\n"
@@ -2187,27 +2196,27 @@ msgstr ""
 "The target PDF must be open in the main viewer to know the current page.\n"
 "Open '{name}' in the tree first."
 
-#: viewer/app.py:3584
+#: viewer/app.py:3589
 #, python-brace-format
 msgid "현재 페이지 <b>p.{page}</b> 에 책갈피를 추가합니다."
 msgstr "Add a bookmark at the current page <b>p.{page}</b>."
 
-#: viewer/app.py:3592
+#: viewer/app.py:3597
 #, python-brace-format
 msgid "윗 책갈피와 같은 단계 (레벨 {base})"
 msgstr "Same level as the bookmark above (level {base})"
 
-#: viewer/app.py:3593
+#: viewer/app.py:3598
 #, python-brace-format
 msgid "윗 책갈피의 하위 (레벨 {base})"
 msgstr "Child of the bookmark above (level {base})"
 
-#: viewer/app.py:3738
+#: viewer/app.py:3754
 #, python-brace-format
 msgid "다른 PolyPDF 창이 '{name}' 을(를) 저장하는 동안 닫았습니다."
 msgstr "Closed while another PolyPDF window was saving '{name}'."
 
-#: viewer/app.py:3767
+#: viewer/app.py:3783
 #, python-brace-format
 msgid ""
 "{head}\n"
@@ -2220,7 +2229,7 @@ msgstr ""
 "That window has unsaved edits to this file, so it can't be closed.\n"
 "Save or revert the edits in that window and save again, or save with a new name."
 
-#: viewer/app.py:3770
+#: viewer/app.py:3786
 #, python-brace-format
 msgid ""
 "{head}\n"
@@ -2231,41 +2240,41 @@ msgstr ""
 "\n"
 "That window closes the file briefly while saving, then reopens it at the page it was showing."
 
-#: viewer/app.py:3839
+#: viewer/app.py:3855
 msgid "저장을 취소했습니다 — 원본은 그대로입니다."
 msgstr "Save canceled — the original is unchanged."
 
-#: viewer/app.py:3906
+#: viewer/app.py:3922
 #, python-brace-format
 msgid "원본에 쓰는 중: {name}"
 msgstr "Writing to the original: {name}"
 
-#: viewer/app.py:4038
+#: viewer/app.py:4054
 #, python-format
 msgid "사진을 쪽으로 넣지 못했습니다: %s"
 msgstr "Could not insert the photos as pages: %s"
 
-#: viewer/app.py:4067
+#: viewer/app.py:4083
 #, python-brace-format
 msgid "사진을 쪽으로 만들지 못했습니다: {err}"
 msgstr "Could not make the photos into pages: {err}"
 
-#: viewer/app.py:4598 viewer/widgets/thumbs_list.py:703
+#: viewer/app.py:4614 viewer/widgets/thumbs_list.py:703
 #, python-brace-format
 msgid "책갈피 추가 (p.{page})"
 msgstr "Add Bookmark (p.{page})"
 
-#: viewer/app.py:4600 viewer/widgets/thumbs_list.py:704
+#: viewer/app.py:4616 viewer/widgets/thumbs_list.py:704
 #, python-brace-format
 msgid "하이퍼링크 등록… (p.{page})"
 msgstr "Register Hyperlink… (p.{page})"
 
-#: viewer/app.py:5172
+#: viewer/app.py:5188
 #, python-brace-format
 msgid "파일이 없어 최근 파일에서 뺐습니다: {path_str}"
 msgstr "Removed from recent files because the file is missing: {path_str}"
 
-#: viewer/app.py:5367
+#: viewer/app.py:5383
 #, python-brace-format
 msgid ""
 "{get}개 파일을 살펴봤습니다.\n"
@@ -2282,59 +2291,59 @@ msgstr ""
 "\n"
 "Automatic tags are shown as ·# in the list and can be undone or deleted at any time from the Tools menu."
 
-#: viewer/app.py:5462
+#: viewer/app.py:5478
 #, python-brace-format
 msgid "{removed}건 정리"
 msgstr "Cleaned up {removed}"
 
-#: viewer/app.py:5492
+#: viewer/app.py:5508
 #, python-brace-format
 msgid "인덱싱: {name} ..."
 msgstr "Indexing: {name} ..."
 
-#: viewer/app.py:5635
+#: viewer/app.py:5651
 #, python-brace-format
 msgid "엑셀 저장: {out}"
 msgstr "Excel saved: {out}"
 
-#: viewer/app.py:5659
+#: viewer/app.py:5675
 #, python-brace-format
 msgid "스크린샷 한도를 {current_max} → {new_max} 로 자동 확장"
 msgstr "Screenshot limit expanded automatically: {current_max} → {new_max}"
 
-#: viewer/app.py:5767
+#: viewer/app.py:5783
 msgid "암호 입력이 취소되었습니다."
 msgstr "Password entry was canceled."
 
-#: viewer/app.py:5789
+#: viewer/app.py:5805
 #, python-brace-format
 msgid "로드 완료: {name}"
 msgstr "Loaded: {name}"
 
-#: viewer/app.py:5935
+#: viewer/app.py:5951
 #, python-brace-format
 msgid "{v} 파일: {name}"
 msgstr "{v} file: {name}"
 
-#: viewer/app.py:6250 viewer/app.py:6262
+#: viewer/app.py:6266 viewer/app.py:6278
 msgid "열 수 없음"
 msgstr "Cannot Open"
 
-#: viewer/app.py:6251
+#: viewer/app.py:6267
 msgid "파일이 없거나 보안 정책상 열 수 없습니다."
 msgstr "The file does not exist or cannot be opened due to security policy."
 
-#: viewer/app.py:6813
+#: viewer/app.py:6832
 #, python-brace-format
 msgid "스크린샷 {added}장 추가됨"
 msgstr "{added} screenshots added"
 
-#: viewer/app.py:6940
+#: viewer/app.py:6959
 #, python-brace-format
 msgid "PDF 저장: {saved}"
 msgstr "PDF saved: {saved}"
 
-#: viewer/app.py:6959
+#: viewer/app.py:6978
 #, python-brace-format
 msgid ""
 "저장했습니다:\n"
@@ -2347,11 +2356,11 @@ msgstr ""
 "\n"
 "Load it in this window?"
 
-#: viewer/app.py:7824
+#: viewer/app.py:7861
 msgid "기본값"
 msgstr "Defaults"
 
-#: viewer/app.py:8094
+#: viewer/app.py:8134
 #, python-brace-format
 msgid ""
 "대상을 찾을 수 없습니다:\n"
@@ -2360,11 +2369,11 @@ msgstr ""
 "Target not found:\n"
 "{get}"
 
-#: viewer/app.py:8196
+#: viewer/app.py:8236
 msgid "업그레이드"
 msgstr "Upgrade"
 
-#: viewer/app.py:8197
+#: viewer/app.py:8237
 msgid "업그레이드 시작에 실패했습니다. 그냥 종료합니다."
 msgstr "Failed to start the upgrade. Exiting without upgrading."
 
@@ -2377,41 +2386,41 @@ msgstr "Copied to clipboard: {clip_total} — paste with Win+V"
 msgid "복사할 텍스트가 없습니다."
 msgstr "There is no text to copy."
 
-#: viewer/app.py:2232 viewer/app.py:2342 viewer/app.py:5006 viewer/app.py:5039
-#: viewer/app.py:5087 viewer/app.py:5207 viewer/app.py:5496
+#: viewer/app.py:2237 viewer/app.py:2347 viewer/app.py:5022 viewer/app.py:5055
+#: viewer/app.py:5103 viewer/app.py:5223 viewer/app.py:5512
 #, python-brace-format
 msgid "인덱싱 오류: {e}"
 msgstr "Indexing error: {e}"
 
-#: viewer/app.py:3195
+#: viewer/app.py:3200
 #, python-brace-format
 msgid "이 설치본에는 다음 언어 자료가 없습니다: {join}. 있는 언어로만 읽습니다: {resolve_lang}{where}{extra}"
 msgstr "This installation has no data for these languages: {join}. Reading only with available languages: {resolve_lang}{where}{extra}"
 
-#: viewer/app.py:3216
+#: viewer/app.py:3221
 #, python-format
 msgid "OCR 실패: %s"
 msgstr "OCR failed: %s"
 
-#: viewer/app.py:3420
+#: viewer/app.py:3425
 msgid "스캔 쪽에 적을 글(우리 OCR·고침)이 없습니다."
 msgstr "Scanned pages have no text to write (our OCR or corrections)."
 
-#: viewer/app.py:3468
+#: viewer/app.py:3473
 #, python-brace-format
 msgid " 외 {n}"
 msgstr " and {n} more"
 
-#: viewer/app.py:3516
+#: viewer/app.py:3521
 #, python-brace-format
 msgid "내보낼 쪽 범위 (1~{n}), 예: 3-12"
 msgstr "Page range to export (1–{n}), e.g. 3-12"
 
-#: viewer/app.py:3525
+#: viewer/app.py:3530
 msgid "3-12 처럼 적어 주세요."
 msgstr "Enter a range like 3-12."
 
-#: viewer/app.py:4187
+#: viewer/app.py:4203
 #, python-brace-format
 msgid ""
 "저장하려는 이름이 병합 대상 원본 파일과 같습니다:\n"
@@ -2428,42 +2437,42 @@ msgstr ""
 "Overwrite this source file?\n"
 "(Press 'No' to save as a new file with (1) appended.)"
 
-#: viewer/app.py:4231
+#: viewer/app.py:4247
 #, python-brace-format
 msgid "병합 완료 → {name} (책갈피창에서 선택)"
 msgstr "Merge complete → {name} (selected in the bookmarks panel)"
 
-#: viewer/app.py:4607
+#: viewer/app.py:4623
 #, python-brace-format
 msgid "페이지 숨김 해제 (p.{page})"
 msgstr "Unhide Page (p.{page})"
 
-#: viewer/app.py:4609
+#: viewer/app.py:4625
 #, python-brace-format
 msgid "페이지 숨김 (p.{page})"
 msgstr "Hide Page (p.{page})"
 
-#: viewer/app.py:4985
+#: viewer/app.py:5001
 #, python-brace-format
 msgid "우측 폴더 로드: {folder}"
 msgstr "Right folder loaded: {folder}"
 
-#: viewer/app.py:4993
+#: viewer/app.py:5009
 #, python-brace-format
 msgid "폴더 로드: {folder}"
 msgstr "Folder loaded: {folder}"
 
-#: viewer/app.py:5283
+#: viewer/app.py:5299
 #, python-brace-format
 msgid "태그 계산 {d}/{t}"
 msgstr "Calculating tags {d}/{t}"
 
-#: viewer/app.py:5559
+#: viewer/app.py:5575
 #, python-brace-format
 msgid "검색 오류: {e}"
 msgstr "Search error: {e}"
 
-#: viewer/app.py:5693
+#: viewer/app.py:5709
 #, python-brace-format
 msgid ""
 "일괄 캡쳐 {i} / {n}\n"
@@ -2472,64 +2481,64 @@ msgstr ""
 "Batch capture {i} / {n}\n"
 "{name}"
 
-#: viewer/app.py:5696
+#: viewer/app.py:5712
 #, python-brace-format
 msgid "일괄 캡쳐 취소됨: {done} 장"
 msgstr "Batch capture canceled: {done} pages"
 
-#: viewer/app.py:5698
+#: viewer/app.py:5714
 #, python-brace-format
 msgid "일괄 캡쳐 완료: {done} 장"
 msgstr "Batch capture complete: {done} pages"
 
-#: viewer/app.py:5935 viewer/widgets/presentation.py:2083
+#: viewer/app.py:5951 viewer/widgets/presentation.py:2083
 msgid "다음"
 msgstr "Next"
 
-#: viewer/app.py:5935 viewer/widgets/presentation.py:2082
+#: viewer/app.py:5951 viewer/widgets/presentation.py:2082
 msgid "이전"
 msgstr "Previous"
 
-#: viewer/app.py:6446
+#: viewer/app.py:6464
 #, python-brace-format
 msgid "이미 건설기준 즐겨찾기에 있음: {name}"
 msgstr "Already in construction standards favorites: {name}"
 
-#: viewer/app.py:6558
+#: viewer/app.py:6577
 #, python-brace-format
 msgid "이미 특허 즐겨찾기에 있음: {name}"
 msgstr "Already in patent favorites: {name}"
 
-#: viewer/app.py:6592
+#: viewer/app.py:6611
 #, python-brace-format
 msgid "이미 법령 즐겨찾기에 있음: {name}"
 msgstr "Already in law favorites: {name}"
 
-#: viewer/app.py:6762 viewer/components.py:115 viewer/print_controller.py:135
+#: viewer/app.py:6781 viewer/components.py:115 viewer/print_controller.py:135
 #: viewer/print_controller.py:150 viewer/print_controller.py:170
 #, python-brace-format
 msgid "저장 실패: {e}"
 msgstr "Save failed: {e}"
 
-#: viewer/app.py:6770
+#: viewer/app.py:6789
 msgid "암호 기억"
 msgstr "Remember Password"
 
-#: viewer/app.py:6771
+#: viewer/app.py:6790
 msgid "방금 설정한 열기 암호를 이 PC·계정에 안전하게 기억할까요?"
 msgstr "Securely remember the open password you just set for this PC and account?"
 
-#: viewer/app.py:6881
+#: viewer/app.py:6900
 #, python-brace-format
 msgid "스크린샷 (좌/우): {name}, {name1}"
 msgstr "Screenshots (left/right): {name}, {name1}"
 
-#: viewer/app.py:6892
+#: viewer/app.py:6911
 #, python-brace-format
 msgid "스크린샷 저장: {name}"
 msgstr "Screenshot saved: {name}"
 
-#: viewer/app.py:7829
+#: viewer/app.py:7866
 #, python-brace-format
 msgid ""
 "기본값을 저장하지 못했습니다.\n"
@@ -2538,7 +2547,7 @@ msgstr ""
 "Could not save the defaults.\n"
 "{e}"
 
-#: viewer/app.py:7852
+#: viewer/app.py:7889
 #, python-brace-format
 msgid ""
 "설정 초기화에 실패했습니다.\n"
@@ -2547,12 +2556,12 @@ msgstr ""
 "Failed to reset settings.\n"
 "{e}"
 
-#: viewer/app.py:1901
+#: viewer/app.py:1906
 #, python-brace-format
 msgid "전역 화면캡처 단축키 등록됨: {key} (다른 프로그램 위에서도 작동)"
 msgstr "Global screen-capture shortcut registered: {key} (works on top of other programs)"
 
-#: viewer/app.py:1905
+#: viewer/app.py:1910
 #, python-brace-format
 msgid ""
 "'{key}' 를 전역 단축키로 등록하지 못했습니다.\n"
@@ -2563,7 +2572,7 @@ msgstr ""
 "Another program may already use the same combination.\n"
 "Change the 'Screen Capture' key to another combination in Keyboard Shortcuts and try again."
 
-#: viewer/app.py:2438
+#: viewer/app.py:2443
 #, python-brace-format
 msgid ""
 "이 PDF에는 기존 책갈피 {n}개가 있습니다.\n"
@@ -2578,12 +2587,12 @@ msgstr ""
 "\n"
 "Continue?"
 
-#: viewer/app.py:2925
+#: viewer/app.py:2930
 #, python-brace-format
 msgid "읽지 못했습니다: {msg}"
 msgstr "Could not read: {msg}"
 
-#: viewer/app.py:3186
+#: viewer/app.py:3191
 #, python-brace-format
 msgid ""
 "\n"
@@ -2594,17 +2603,17 @@ msgstr ""
 "\n"
 "Locations searched: {td}"
 
-#: viewer/app.py:3385
+#: viewer/app.py:3390
 #, python-brace-format
 msgid "실패: {m}"
 msgstr "Failed: {m}"
 
-#: viewer/app.py:4398
+#: viewer/app.py:4414
 #, python-brace-format
 msgid "병합 중: {get}"
 msgstr "Merging: {get}"
 
-#: viewer/app.py:4411
+#: viewer/app.py:4427
 msgid "사용자 스크린샷"
 msgstr "User Screenshots"
 
@@ -2613,27 +2622,27 @@ msgstr "User Screenshots"
 msgid "텍스트 복사됨 ({n}자)"
 msgstr "Text copied ({n} characters)"
 
-#: viewer/app.py:3435
+#: viewer/app.py:3440
 #, python-brace-format
 msgid "실패: {e}"
 msgstr "Failed: {e}"
 
-#: viewer/app.py:3751
+#: viewer/app.py:3767
 #, python-brace-format
 msgid "'{name}' 을(를) 다시 열었습니다(저장됨)."
 msgstr "Reopened '{name}' (saved)."
 
-#: viewer/app.py:7953
+#: viewer/app.py:7991
 #, python-brace-format
 msgid "{prefix}{get}  (없음)"
 msgstr "{prefix}{get}  (missing)"
 
-#: viewer/app.py:3454
+#: viewer/app.py:3459
 #, python-brace-format
 msgid "{p}쪽({r})"
 msgstr "p.{p} ({r})"
 
-#: viewer/app.py:3420
+#: viewer/app.py:3425
 #, python-brace-format
 msgid "· {p}쪽: {r}\n"
 msgstr "· p.{p}: {r}\n"
@@ -3179,6 +3188,77 @@ msgstr "Recording started"
 msgid "녹화 시작 실패: {e}"
 msgstr "Failed to start recording: {e}"
 
+#: viewer/study/ocr.py:180
+msgid "중국어(간체)"
+msgstr "Chinese (Simplified)"
+
+#: viewer/study/ocr.py:182
+#, python-brace-format
+msgid ""
+"{label} OCR 학습 데이터가 없습니다({join}).\n"
+"\n"
+"찾은 위치: {td}\n"
+"\n"
+"도구 → 구성요소 설치에서 OCR(Tesseract)을 다시 받으면 채워집니다. 설치본이 오래된 경우 프로그램을 최신 버전으로 올리면 함께 들어옵니다."
+msgstr ""
+"{label} OCR training data is missing ({join}).\n"
+"\n"
+"Location searched: {td}\n"
+"\n"
+"Download OCR (Tesseract) again from Tools → Install Components to restore it. If your installation is old, updating the program to the latest version brings it too."
+
+# | msgid "변경 사항이 없습니다."
+# | msgid "쪽이 없습니다."
+#: viewer/study/ocr.py:344
+msgid "받을 것이 없습니다."
+msgstr "Nothing to download."
+
+# | msgid "단어장 갱신 실패: %s"
+# | msgid "언어 자료 준비 실패: %s"
+#: viewer/study/ocr.py:388
+#, python-format
+msgid "언어 자료를 준비했습니다: %s%s위치: %s"
+msgstr "Language data is ready: %s%sLocation: %s"
+
+# | msgid " 기본 설정(신규)"
+# | msgid "(기본 설정)"
+#: viewer/study/ocr.py:182
+msgid "(미설정)"
+msgstr "(not set)"
+
+#: viewer/study/ocr.py:386
+#, python-format
+msgid "받지 못한 언어: %s. 인터넷 연결을 확인하거나 설치 프로그램으로 다시 설치하세요."
+msgstr "Could not download languages: %s. Check your internet connection or reinstall with the installer."
+
+# | msgid "폴더를 찾을 수 없습니다."
+#: viewer/study/ocr.py:349
+#, python-format
+msgid "폴더를 만들 수 없습니다: %s"
+msgstr "Cannot create folder: %s"
+
+#: viewer/study/ocr.py:389
+msgid "(이미 있음)"
+msgstr "(already present)"
+
+# | msgid "Tesseract 기여자"
+#: viewer/study/ocr.py:117
+#, python-brace-format
+msgid "pytesseract 미설치: {e}"
+msgstr "pytesseract is not installed: {e}"
+
+# | msgid "Tesseract 기여자"
+#: viewer/study/ocr.py:159
+#, python-brace-format
+msgid "tesseract 실행 불가: {e}"
+msgstr "Cannot run tesseract: {e}"
+
+# | msgid " 외 {n}"
+#: viewer/study/ocr_headings.py:192
+#, python-brace-format
+msgid "헤딩 {n}개"
+msgstr "{n} headings"
+
 #: viewer/study/translate_api.py:21
 msgid "Claude Opus 4.8 (최고 품질·1M)"
 msgstr "Claude Opus 4.8 (best quality · 1M)"
@@ -3190,6 +3270,64 @@ msgstr "Claude Sonnet 4.6 (balanced · lower cost)"
 #: viewer/study/translate_api.py:23
 msgid "Claude Haiku 4.5 (저가·간단)"
 msgstr "Claude Haiku 4.5 (low cost · simple)"
+
+# | msgid "PDF 폴더 선택"
+# | msgid "특허 PDF 저장 폴더 선택"
+#: viewer/study_controller.py:916
+msgid "mp3 저장 폴더 선택"
+msgstr "Choose mp3 Save Folder"
+
+#: viewer/study_controller.py:901
+msgid "mp3 분할 기준"
+msgstr "mp3 Split By"
+
+#: viewer/study_controller.py:901
+msgid "어느 위계의 책갈피로 나눌까요?"
+msgstr "Which bookmark level should the mp3 be split by?"
+
+# | msgid "💾 저장"
+# | msgid "📊 저장"
+#: viewer/study_controller.py:924
+msgid "이어서 저장"
+msgstr "Continue Saving"
+
+# | msgid "받지 못했습니다."
+# | msgid "패키지를 찾지 못했습니다."
+#: viewer/study_controller.py:953
+msgid "읽을 본문을 찾지 못했습니다."
+msgstr "No body text to read was found."
+
+# | msgid "폴더를 찾을 수 없습니다."
+# | msgid "ffmpeg 를 찾을 수 없습니다."
+#: viewer/study_controller.py:887
+msgid "PDF 문서를 찾을 수 없습니다."
+msgstr "PDF document not found."
+
+# | msgid "PDF 저장 실패"
+#: viewer/study_controller.py:968
+msgid "mp3 저장 실패"
+msgstr "mp3 Save Failed"
+
+#: viewer/study_controller.py:899
+#, python-brace-format
+msgid "{i}단계 책갈피 기준"
+msgstr "By level-{i} bookmarks"
+
+#: viewer/study_controller.py:925
+#, python-brace-format
+msgid ""
+"'{name}' 폴더에 mp3 가 있습니다.\n"
+"기존 폴더에 이어서 저장할까요?\n"
+"(예=이미 있는 파일은 건너뜀, 아니오=새 폴더)"
+msgstr ""
+"The '{name}' folder already has mp3 files.\n"
+"Continue saving into the existing folder?\n"
+"(Yes = skip existing files, No = new folder)"
+
+#: viewer/study_controller.py:971
+#, python-brace-format
+msgid "mp3 저장 완료: {get}/{get2} 구간 → {name}"
+msgstr "mp3 saved: {get}/{get2} sections → {name}"
 
 #: viewer/text_apply.py:207
 msgid "적을 줄이 없다"
@@ -3396,84 +3534,84 @@ msgid "암호화 설정 파일 - 제한 암호로 열음"
 msgstr "Encrypted file - opened with restriction password"
 
 #: viewer/widgets/bookmark_tree.py:1729 viewer/widgets/bookmark_tree.py:1737
-#: viewer/widgets/bookmark_tree.py:1744 viewer/widgets/bookmark_tree.py:2154
+#: viewer/widgets/bookmark_tree.py:1744 viewer/widgets/bookmark_tree.py:2155
 #: viewer/widgets/main_view.py:1810
 msgid "암호 입력"
 msgstr "Enter Password"
 
-#: viewer/widgets/bookmark_tree.py:2108
+#: viewer/widgets/bookmark_tree.py:2109
 msgid "파일·책갈피 이름 변경"
 msgstr "Rename File/Bookmark"
 
-#: viewer/widgets/bookmark_tree.py:2109
+#: viewer/widgets/bookmark_tree.py:2110
 msgid "파일·책갈피 삭제"
 msgstr "Delete File/Bookmark"
 
-#: viewer/widgets/bookmark_tree.py:2112
+#: viewer/widgets/bookmark_tree.py:2113
 msgid "책갈피 모두 펼치기"
 msgstr "Expand All Bookmarks"
 
-#: viewer/widgets/bookmark_tree.py:2116
+#: viewer/widgets/bookmark_tree.py:2117
 msgid "책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. 스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."
 msgstr "Expand the bookmarks of all files visible in the bookmarks panel. Files that appear when you scroll are expanded too (until 'Collapse All')."
 
-#: viewer/widgets/bookmark_tree.py:2118
+#: viewer/widgets/bookmark_tree.py:2119
 msgid "책갈피 모두 접기"
 msgstr "Collapse All Bookmarks"
 
-#: viewer/widgets/bookmark_tree.py:2174
+#: viewer/widgets/bookmark_tree.py:2177
 msgid "현재 폴더를 즐겨찾기에 추가"
 msgstr "Add Current Folder to Favorites"
 
-#: viewer/widgets/bookmark_tree.py:2733
+#: viewer/widgets/bookmark_tree.py:2736
 msgid "새 폴더 만들기..."
 msgstr "New Folder..."
 
-#: viewer/widgets/bookmark_tree.py:2736
+#: viewer/widgets/bookmark_tree.py:2739
 msgid "다른 폴더 선택..."
 msgstr "Choose Another Folder..."
 
-#: viewer/widgets/bookmark_tree.py:2770
+#: viewer/widgets/bookmark_tree.py:2773
 msgid "새 폴더 만들기"
 msgstr "New Folder"
 
-#: viewer/widgets/bookmark_tree.py:2795
+#: viewer/widgets/bookmark_tree.py:2798
 msgid "폴더 이름 변경"
 msgstr "Rename Folder"
 
-#: viewer/widgets/bookmark_tree.py:2795
+#: viewer/widgets/bookmark_tree.py:2798
 msgid "새 폴더 이름:"
 msgstr "New folder name:"
 
-#: viewer/widgets/bookmark_tree.py:2910
+#: viewer/widgets/bookmark_tree.py:2913
 msgid "이동"
 msgstr "Move"
 
-#: viewer/widgets/bookmark_tree.py:2910
+#: viewer/widgets/bookmark_tree.py:2913
 msgid "복사"
 msgstr "Copy"
 
-#: viewer/widgets/bookmark_tree.py:3047
+#: viewer/widgets/bookmark_tree.py:3050
 msgid "책갈피 편집"
 msgstr "Edit Bookmark"
 
-#: viewer/widgets/bookmark_tree.py:3052 viewer/widgets/twoup_dialog.py:174
+#: viewer/widgets/bookmark_tree.py:3055 viewer/widgets/twoup_dialog.py:174
 msgid "제목:"
 msgstr "Title:"
 
-#: viewer/widgets/bookmark_tree.py:3056
+#: viewer/widgets/bookmark_tree.py:3059
 msgid "페이지:"
 msgstr "Page:"
 
-#: viewer/widgets/bookmark_tree.py:3076
+#: viewer/widgets/bookmark_tree.py:3079
 msgid "파일명 변경"
 msgstr "Rename File"
 
-#: viewer/widgets/bookmark_tree.py:3081
+#: viewer/widgets/bookmark_tree.py:3084
 msgid "파일명 (.pdf 제외):"
 msgstr "File name (without .pdf):"
 
-#: viewer/widgets/bookmark_tree.py:3082
+#: viewer/widgets/bookmark_tree.py:3085
 msgid "<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. 메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"
 msgstr "<small>The file on disk is renamed too. If it is open in the main viewer, switch to another file briefly and try again.</small>"
 
@@ -3567,117 +3705,105 @@ msgstr "Cancel Automatic Tag"
 msgid "암호가 올바르지 않습니다."
 msgstr "Incorrect password."
 
-#: viewer/widgets/bookmark_tree.py:2022 viewer/widgets/bookmark_tree.py:3028
+#: viewer/widgets/bookmark_tree.py:2022 viewer/widgets/bookmark_tree.py:3031
 msgid "대상 PDF 파일을 알 수 없습니다."
 msgstr "The target PDF file is unknown."
 
-#: viewer/widgets/bookmark_tree.py:2085
+#: viewer/widgets/bookmark_tree.py:2086
 msgid "파일 폴더 열기"
 msgstr "Open File Location"
 
-#: viewer/widgets/bookmark_tree.py:2132
+#: viewer/widgets/bookmark_tree.py:2133
 msgid "이 폴더 안에 새 폴더..."
 msgstr "New Folder Inside This Folder..."
 
-#: viewer/widgets/bookmark_tree.py:2133
+#: viewer/widgets/bookmark_tree.py:2134
 msgid "폴더 이름 변경..."
 msgstr "Rename Folder..."
 
-#: viewer/widgets/bookmark_tree.py:2134 viewer/widgets/bookmark_tree.py:2876
+#: viewer/widgets/bookmark_tree.py:2135 viewer/widgets/bookmark_tree.py:2879
 msgid "폴더 삭제"
 msgstr "Delete Folder"
 
-#: viewer/widgets/bookmark_tree.py:2145
+#: viewer/widgets/bookmark_tree.py:2146
 msgid "책갈피 수정..."
 msgstr "Edit Bookmark..."
 
-#: viewer/widgets/bookmark_tree.py:2159
-msgid "단어장·책갈피 동시 생성"
-msgstr "Build Vocabulary and Bookmarks Together"
-
-#: viewer/widgets/bookmark_tree.py:2160
+#: viewer/widgets/bookmark_tree.py:2162
 msgid "해시태그 편집..."
 msgstr "Edit Hashtags..."
 
-#: viewer/widgets/bookmark_tree.py:2163
-msgid "번역..."
-msgstr "Translate..."
-
-#: viewer/widgets/bookmark_tree.py:2164
-msgid "번역 용어집 교정..."
-msgstr "Review Translation Glossary..."
-
-#: viewer/widgets/bookmark_tree.py:2175
+#: viewer/widgets/bookmark_tree.py:2178
 msgid "현재 파일을 즐겨찾기에 추가"
 msgstr "Add Current File to Favorites"
 
-#: viewer/widgets/bookmark_tree.py:2271
+#: viewer/widgets/bookmark_tree.py:2274
 msgid "편집 종료"
 msgstr "End Editing"
 
-#: viewer/widgets/bookmark_tree.py:2272
+#: viewer/widgets/bookmark_tree.py:2275
 msgid "수정한 내용이 있습니다. 저장할까요?"
 msgstr "There are changes. Save them?"
 
-#: viewer/widgets/bookmark_tree.py:2387 viewer/widgets/bookmark_tree.py:2410
-#: viewer/widgets/bookmark_tree.py:2536 viewer/widgets/bookmark_tree.py:3466
+#: viewer/widgets/bookmark_tree.py:2390 viewer/widgets/bookmark_tree.py:2413
+#: viewer/widgets/bookmark_tree.py:2539 viewer/widgets/bookmark_tree.py:3469
 msgid "편집할 PDF 파일을 트리에서 선택하세요."
 msgstr "Select the PDF file to edit in the tree."
 
-#: viewer/widgets/bookmark_tree.py:2540
+#: viewer/widgets/bookmark_tree.py:2543
 msgid "정렬할 책갈피를 선택하세요."
 msgstr "Select the bookmarks to sort."
 
-#: viewer/widgets/bookmark_tree.py:2611
+#: viewer/widgets/bookmark_tree.py:2614
 msgid "삭제할 항목이 없습니다."
 msgstr "There is nothing to delete."
 
-#: viewer/widgets/bookmark_tree.py:2626
+#: viewer/widgets/bookmark_tree.py:2629
 msgid "삭제 확인"
 msgstr "Confirm Delete"
 
-#: viewer/widgets/bookmark_tree.py:2767
+#: viewer/widgets/bookmark_tree.py:2770
 msgid "먼저 폴더를 열어 주세요."
 msgstr "Open a folder first."
 
-#: viewer/widgets/bookmark_tree.py:2775 viewer/widgets/bookmark_tree.py:2800
+#: viewer/widgets/bookmark_tree.py:2778 viewer/widgets/bookmark_tree.py:2803
 msgid "폴더 이름에 사용할 수 없는 글자가 있습니다."
 msgstr "The folder name contains characters that can't be used."
 
-#: viewer/widgets/bookmark_tree.py:2872
+#: viewer/widgets/bookmark_tree.py:2875
 msgid "삭제할 수 없음"
 msgstr "Cannot Delete"
 
-#: viewer/widgets/bookmark_tree.py:2891
+#: viewer/widgets/bookmark_tree.py:2894
 msgid "이동 대상 폴더"
 msgstr "Destination Folder for Move"
 
-#: viewer/widgets/bookmark_tree.py:2891
+#: viewer/widgets/bookmark_tree.py:2894
 msgid "복사 대상 폴더"
 msgstr "Destination Folder for Copy"
 
-#: viewer/widgets/bookmark_tree.py:2943
+#: viewer/widgets/bookmark_tree.py:2946
 #, python-brace-format
 msgid "{done}개 파일을 {dst} 로 {word}했습니다."
 msgstr "{word}: {done} files → {dst}"
 
-#: viewer/widgets/bookmark_tree.py:2976
+#: viewer/widgets/bookmark_tree.py:2979
 msgid "복사할 PDF 파일을 선택하세요."
 msgstr "Select the PDF files to copy."
 
-#: viewer/widgets/bookmark_tree.py:3007
+#: viewer/widgets/bookmark_tree.py:3010
 msgid "선택한 항목과 그 조상만 남기고 나머지를 삭제할까요?"
 msgstr "Keep only the selected items and their ancestors, and delete the rest?"
 
-#: viewer/widgets/bookmark_tree.py:3018
+#: viewer/widgets/bookmark_tree.py:3021
 msgid "편집할 항목 1개를 선택하세요."
 msgstr "Select one item to edit."
 
-#: viewer/widgets/bookmark_tree.py:3096
+#: viewer/widgets/bookmark_tree.py:3099
 msgid "파일명에 사용할 수 없는 글자가 있습니다."
 msgstr "The file name contains characters that can't be used."
 
-#: viewer/widgets/bookmark_tree.py:3176
+#: viewer/widgets/bookmark_tree.py:3179
 msgid "책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."
 msgstr "Select or expand the PDF file to add a bookmark to in the tree."
 
@@ -3717,20 +3843,32 @@ msgstr ""
 "'{name}'\n"
 "Enter the password (owner or user password):"
 
-#: viewer/widgets/bookmark_tree.py:2126
+#: viewer/widgets/bookmark_tree.py:2127
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
 msgstr "Arrange the selected bookmarks and their children in page order and match their level to the bookmark above"
 
-#: viewer/widgets/bookmark_tree.py:2580
+#: viewer/widgets/bookmark_tree.py:2161
+msgid "단어장·책갈피 동시 생성"
+msgstr "Build Vocabulary and Bookmarks Together"
+
+#: viewer/widgets/bookmark_tree.py:2166
+msgid "번역..."
+msgstr "Translate..."
+
+#: viewer/widgets/bookmark_tree.py:2167
+msgid "번역 용어집 교정..."
+msgstr "Review Translation Glossary..."
+
+#: viewer/widgets/bookmark_tree.py:2583
 #, python-brace-format
 msgid "페이지순 정렬: {n}개"
 msgstr "Sorted by page: {n}"
 
-#: viewer/widgets/bookmark_tree.py:2618
+#: viewer/widgets/bookmark_tree.py:2621
 msgid "send2trash 필요"
 msgstr "send2trash required"
 
-#: viewer/widgets/bookmark_tree.py:2619
+#: viewer/widgets/bookmark_tree.py:2622
 msgid ""
 "파일 삭제(휴지통)는 send2trash 모듈이 필요합니다.\n"
 "  pip install send2trash"
@@ -3738,42 +3876,42 @@ msgstr ""
 "Deleting files (Recycle Bin) requires the send2trash module.\n"
 "  pip install send2trash"
 
-#: viewer/widgets/bookmark_tree.py:2770
+#: viewer/widgets/bookmark_tree.py:2773
 #, python-brace-format
 msgid "{base} 아래에 만들 폴더 이름:"
 msgstr "Name of the folder to create under {base}:"
 
-#: viewer/widgets/bookmark_tree.py:2781
+#: viewer/widgets/bookmark_tree.py:2784
 msgid "폴더 만들기 실패"
 msgstr "Failed to create folder"
 
-#: viewer/widgets/bookmark_tree.py:2816
+#: viewer/widgets/bookmark_tree.py:2819
 msgid "이름 변경 실패"
 msgstr "Rename failed"
 
-#: viewer/widgets/bookmark_tree.py:2827
+#: viewer/widgets/bookmark_tree.py:2830
 #, python-brace-format
 msgid "폴더 이름 변경: {name} → {name1}"
 msgstr "Folder renamed: {name} → {name1}"
 
-#: viewer/widgets/bookmark_tree.py:2882
+#: viewer/widgets/bookmark_tree.py:2885
 msgid "삭제 실패"
 msgstr "Delete failed"
 
-#: viewer/widgets/bookmark_tree.py:2885
+#: viewer/widgets/bookmark_tree.py:2888
 #, python-brace-format
 msgid "폴더 삭제됨: {name}"
 msgstr "Folder deleted: {name}"
 
-#: viewer/widgets/bookmark_tree.py:2915
+#: viewer/widgets/bookmark_tree.py:2918
 msgid "이미 그 폴더에 있는 파일입니다."
 msgstr "The file is already in that folder."
 
-#: viewer/widgets/bookmark_tree.py:2918
+#: viewer/widgets/bookmark_tree.py:2921
 msgid "파일 이동"
 msgstr "Move Files"
 
-#: viewer/widgets/bookmark_tree.py:2945
+#: viewer/widgets/bookmark_tree.py:2948
 #, python-brace-format
 msgid ""
 "\n"
@@ -3782,30 +3920,30 @@ msgstr ""
 "\n"
 "Failed: {join}"
 
-#: viewer/widgets/bookmark_tree.py:2946
+#: viewer/widgets/bookmark_tree.py:2949
 #, python-brace-format
 msgid "파일 {done}개 {word}됨"
 msgstr "{word}: {done} files"
 
-#: viewer/widgets/bookmark_tree.py:2947
+#: viewer/widgets/bookmark_tree.py:2950
 #, python-brace-format
 msgid "{word} 완료"
 msgstr "{word} complete"
 
-#: viewer/widgets/bookmark_tree.py:3110
+#: viewer/widgets/bookmark_tree.py:3113
 msgid "변경 실패"
 msgstr "Rename failed"
 
-#: viewer/widgets/bookmark_tree.py:3169
+#: viewer/widgets/bookmark_tree.py:3172
 #, python-brace-format
 msgid "이름 변경: {name} → {name1}"
 msgstr "Renamed: {name} → {name1}"
 
-#: viewer/widgets/bookmark_tree.py:3496 viewer/widgets/bookmark_tree.py:3501
+#: viewer/widgets/bookmark_tree.py:3499 viewer/widgets/bookmark_tree.py:3504
 msgid "책갈피 저장"
 msgstr "Save Bookmarks"
 
-#: viewer/widgets/bookmark_tree.py:3502
+#: viewer/widgets/bookmark_tree.py:3505
 msgid ""
 "모든 책갈피가 제거되었습니다.\n"
 "기존 책갈피를 지운 PDF로 저장할까요?"
@@ -3828,26 +3966,17 @@ msgstr "File missing: {name}"
 msgid "선택 {n}개 파일 병합..."
 msgstr "Merge {n} Selected Files..."
 
-#: viewer/widgets/bookmark_tree.py:2070
-#, python-brace-format
-msgid "선택 {n}개 파일 번역..."
-msgstr "Translate {n} Selected Files..."
-
-#: viewer/widgets/bookmark_tree.py:2169
-msgid "이 PDF 의 번역 용어집이 없습니다(먼저 번역)."
-msgstr "This PDF has no translation glossary (translate it first)."
-
-#: viewer/widgets/bookmark_tree.py:2622
+#: viewer/widgets/bookmark_tree.py:2625
 #, python-brace-format
 msgid "PDF 파일 {n}개를 휴지통으로 보냅니다."
 msgstr "Move {n} PDF files to the Recycle Bin."
 
-#: viewer/widgets/bookmark_tree.py:2624
+#: viewer/widgets/bookmark_tree.py:2627
 #, python-brace-format
 msgid "책갈피 {n}개를 트리에서 제거합니다."
 msgstr "Remove {n} bookmarks from the tree."
 
-#: viewer/widgets/bookmark_tree.py:2626
+#: viewer/widgets/bookmark_tree.py:2629
 #, python-brace-format
 msgid ""
 "{join}\n"
@@ -3856,36 +3985,36 @@ msgstr ""
 "{join}\n"
 "Continue?"
 
-#: viewer/widgets/bookmark_tree.py:2653
+#: viewer/widgets/bookmark_tree.py:2656
 msgid "휴지통 이동 실패"
 msgstr "Failed to move to Recycle Bin"
 
-#: viewer/widgets/bookmark_tree.py:2656
+#: viewer/widgets/bookmark_tree.py:2659
 #, python-brace-format
 msgid "파일 {trashed}개 휴지통으로 이동됨"
 msgstr "Moved {trashed} files to the Recycle Bin"
 
-#: viewer/widgets/bookmark_tree.py:2793 viewer/widgets/bookmark_tree.py:2864
+#: viewer/widgets/bookmark_tree.py:2796 viewer/widgets/bookmark_tree.py:2867
 #, python-brace-format
 msgid "폴더가 없습니다: {folder}"
 msgstr "Folder does not exist: {folder}"
 
-#: viewer/widgets/bookmark_tree.py:2804
+#: viewer/widgets/bookmark_tree.py:2807
 #, python-brace-format
 msgid "같은 이름의 폴더가 이미 있습니다: {name}"
 msgstr "A folder with the same name already exists: {name}"
 
-#: viewer/widgets/bookmark_tree.py:2870
+#: viewer/widgets/bookmark_tree.py:2873
 #, python-brace-format
 msgid "{n_rest}개 이상"
 msgstr "{n_rest} or more"
 
-#: viewer/widgets/bookmark_tree.py:2870
+#: viewer/widgets/bookmark_tree.py:2873
 #, python-brace-format
 msgid "{n_rest}개"
 msgstr "{n_rest}"
 
-#: viewer/widgets/bookmark_tree.py:2873
+#: viewer/widgets/bookmark_tree.py:2876
 #, python-brace-format
 msgid ""
 "'{name}' 안에 파일이 {how_many} 있습니다.\n"
@@ -3898,7 +4027,7 @@ msgstr ""
 "Move the files to another folder or delete them first, then delete the folder.\n"
 "(Only empty folders are deleted so that data is not lost by mistake.)"
 
-#: viewer/widgets/bookmark_tree.py:2877
+#: viewer/widgets/bookmark_tree.py:2880
 #, python-brace-format
 msgid ""
 "빈 폴더를 삭제할까요?\n"
@@ -3909,17 +4038,17 @@ msgstr ""
 "\n"
 "{folder}"
 
-#: viewer/widgets/bookmark_tree.py:2908
+#: viewer/widgets/bookmark_tree.py:2911
 #, python-brace-format
 msgid "대상 폴더가 없습니다: {dst}"
 msgstr "Destination folder does not exist: {dst}"
 
-#: viewer/widgets/bookmark_tree.py:3102
+#: viewer/widgets/bookmark_tree.py:3105
 #, python-brace-format
 msgid "같은 이름의 파일이 이미 있습니다: {name}"
 msgstr "A file with the same name already exists: {name}"
 
-#: viewer/widgets/bookmark_tree.py:3470
+#: viewer/widgets/bookmark_tree.py:3473
 #, python-brace-format
 msgid "원본 PDF 없음: {src}"
 msgstr "Original PDF missing: {src}"
@@ -3933,27 +4062,36 @@ msgstr ""
 "Cannot open the file:\n"
 "{e}"
 
-#: viewer/widgets/bookmark_tree.py:2090
+#: viewer/widgets/bookmark_tree.py:2071
+#, python-brace-format
+msgid "선택 {n}개 파일 번역..."
+msgstr "Translate {n} Selected Files..."
+
+#: viewer/widgets/bookmark_tree.py:2091
 #, python-brace-format
 msgid "파일 복사 ({n}개)"
 msgstr "Copy Files ({n})"
 
-#: viewer/widgets/bookmark_tree.py:2091
+#: viewer/widgets/bookmark_tree.py:2092
 #, python-brace-format
 msgid "파일 이동 ({n}개)"
 msgstr "Move Files ({n})"
 
-#: viewer/widgets/bookmark_tree.py:2125
+#: viewer/widgets/bookmark_tree.py:2126
 #, python-brace-format
 msgid "선택 책갈피 {_n_bm}개 페이지순 정렬"
 msgstr "Sort {_n_bm} Selected Bookmarks by Page"
 
-#: viewer/widgets/bookmark_tree.py:2747
+#: viewer/widgets/bookmark_tree.py:2172
+msgid "이 PDF 의 번역 용어집이 없습니다(먼저 번역)."
+msgstr "This PDF has no translation glossary (translate it first)."
+
+#: viewer/widgets/bookmark_tree.py:2750
 #, python-brace-format
 msgid "📂 {name}  (선택한 폴더)"
 msgstr "📂 {name}  (selected folder)"
 
-#: viewer/widgets/bookmark_tree.py:2817
+#: viewer/widgets/bookmark_tree.py:2820
 #, python-brace-format
 msgid ""
 "{name}: {e}\n"
@@ -3962,7 +4100,7 @@ msgstr ""
 "{name}: {e}\n"
 "Another program may be holding a file in the folder."
 
-#: viewer/widgets/bookmark_tree.py:2919
+#: viewer/widgets/bookmark_tree.py:2922
 #, python-brace-format
 msgid ""
 "{n}개 파일을 아래 폴더로 이동할까요?\n"
@@ -3977,12 +4115,12 @@ msgstr ""
 "\n"
 "The files are actually moved on disk."
 
-#: viewer/widgets/bookmark_tree.py:2924
+#: viewer/widgets/bookmark_tree.py:2927
 #, python-brace-format
 msgid "{name}: 원본 없음"
 msgstr "{name}: original missing"
 
-#: viewer/widgets/bookmark_tree.py:3111
+#: viewer/widgets/bookmark_tree.py:3114
 #, python-brace-format
 msgid ""
 "파일 이름 변경 실패: {e}\n"
@@ -5071,7 +5209,7 @@ msgstr "◀ Page"
 msgid "쪽 ▶"
 msgstr "Page ▶"
 
-#: viewer/widgets/merge_dialog.py:91 viewer/widgets/merge_dialog.py:471
+#: viewer/widgets/merge_dialog.py:91 viewer/widgets/merge_dialog.py:472
 msgid "파일을 하나 고르면 여기에 미리 보입니다."
 msgstr "Select a file to preview it here."
 
@@ -5113,23 +5251,23 @@ msgstr "Add the Screenshots panel contents as one 'User screenshots' item"
 msgid "병합 후 책갈피와 단어장 자동 생성"
 msgstr "Auto-create bookmarks and vocabulary after merging"
 
-#: viewer/widgets/merge_dialog.py:306
+#: viewer/widgets/merge_dialog.py:307
 msgid "용량 줄이기 (같은 글꼴·이미지 정리 — 큰 파일은 저장이 오래 걸림)"
 msgstr "Reduce file size (dedupe fonts/images — large files take longer to save)"
 
-#: viewer/widgets/merge_dialog.py:313
+#: viewer/widgets/merge_dialog.py:314
 msgid "다단 생성 (쪽번호·목차·표지)"
 msgstr "Create N-up (page numbers, TOC, cover)"
 
-#: viewer/widgets/merge_dialog.py:315
+#: viewer/widgets/merge_dialog.py:316
 msgid "배치 설정…"
 msgstr "Layout Settings…"
 
-#: viewer/widgets/merge_dialog.py:322 viewer/widgets/merge_dialog.py:490
+#: viewer/widgets/merge_dialog.py:323 viewer/widgets/merge_dialog.py:491
 msgid "병합"
 msgstr "Merge"
 
-#: viewer/widgets/merge_dialog.py:330
+#: viewer/widgets/merge_dialog.py:331
 msgid ""
 "📄  여기에 PDF 파일을 끌어다 놓으세요\n"
 "(오른쪽 병합 목록에 추가됩니다)"
@@ -5155,7 +5293,7 @@ msgstr "All files in Bookmarks panel"
 msgid "병합 대상 (위→아래 순서)"
 msgstr "Merge list (top → bottom)"
 
-#: viewer/widgets/merge_dialog.py:490
+#: viewer/widgets/merge_dialog.py:491
 msgid "병합할 항목을 오른쪽에 추가하세요."
 msgstr "Add items to merge on the right."
 
@@ -5164,13 +5302,13 @@ msgid "암호가 걸린 문서라 미리 볼 수 없습니다."
 msgstr "Can't preview a password-protected document."
 
 # | msgid "Word 저장: {name} ({n}쪽)"
-#: viewer/widgets/merge_dialog.py:388
+#: viewer/widgets/merge_dialog.py:389
 #, python-brace-format
 msgid "🖼 {SHOTS_NAME} ({n}장)"
 msgstr "🖼 {SHOTS_NAME} ({n})"
 
 # | msgid "Word 저장: {name} ({n}쪽)"
-#: viewer/widgets/merge_dialog.py:426
+#: viewer/widgets/merge_dialog.py:427
 #, python-brace-format
 msgid "🖼 {name} ({n}장)"
 msgstr "🖼 {name} ({n})"
@@ -5185,7 +5323,7 @@ msgstr ""
 "Can't preview.\n"
 "{e}"
 
-#: viewer/widgets/merge_dialog.py:472
+#: viewer/widgets/merge_dialog.py:473
 #, python-brace-format
 msgid "{n}개를 골랐습니다 — 하나만 고르면 미리 보입니다."
 msgstr "{n} selected — select just one to preview."
@@ -6491,142 +6629,142 @@ msgstr "Browse…"
 msgid "특허 PDF 저장 폴더:"
 msgstr "Patent PDF folder:"
 
-#: viewer/widgets/settings_dialog.py:347
+#: viewer/widgets/settings_dialog.py:348
 msgid "번역 (Claude)"
 msgstr "Translation (Claude)"
 
-#: viewer/widgets/settings_dialog.py:350 viewer/widgets/translate_dialog.py:168
+#: viewer/widgets/settings_dialog.py:351 viewer/widgets/translate_dialog.py:168
 msgid "API 키"
 msgstr "API key"
 
-#: viewer/widgets/settings_dialog.py:351
+#: viewer/widgets/settings_dialog.py:352
 msgid "Claude 로그인 (구독·OAuth)"
 msgstr "Claude sign-in (subscription/OAuth)"
 
-#: viewer/widgets/settings_dialog.py:355
+#: viewer/widgets/settings_dialog.py:356
 msgid "인증 방식:"
 msgstr "Auth method:"
 
-#: viewer/widgets/settings_dialog.py:357
+#: viewer/widgets/settings_dialog.py:358
 msgid "sk-ant-… (로그인 모드면 비워둠)"
 msgstr "sk-ant-… (leave blank in sign-in mode)"
 
-#: viewer/widgets/settings_dialog.py:362
+#: viewer/widgets/settings_dialog.py:363
 msgid "Claude API 키:"
 msgstr "Claude API key:"
 
-#: viewer/widgets/settings_dialog.py:369
+#: viewer/widgets/settings_dialog.py:370
 msgid "번역 모델:"
 msgstr "Translation model:"
 
-#: viewer/widgets/settings_dialog.py:374 viewer/widgets/settings_dialog.py:613
-#: viewer/widgets/settings_dialog.py:615
+#: viewer/widgets/settings_dialog.py:375 viewer/widgets/settings_dialog.py:615
+#: viewer/widgets/settings_dialog.py:617
 msgid "Claude 로그인"
 msgstr "Claude Sign In"
 
-#: viewer/widgets/settings_dialog.py:375
+#: viewer/widgets/settings_dialog.py:376
 msgid "로그아웃"
 msgstr "Sign Out"
 
-#: viewer/widgets/settings_dialog.py:381
+#: viewer/widgets/settings_dialog.py:382
 msgid "구독 로그인:"
 msgstr "Subscription sign-in:"
 
 # | msgid "삭제 확인"
-#: viewer/widgets/settings_dialog.py:386
+#: viewer/widgets/settings_dialog.py:387
 msgid "연결 확인"
 msgstr "Test Connection"
 
-#: viewer/widgets/settings_dialog.py:387
+#: viewer/widgets/settings_dialog.py:388
 msgid "입력한 키/로그인으로 Claude 에 연결·인증되는지 확인(무료)"
 msgstr "Check that the entered key/sign-in connects and authenticates with Claude (free)"
 
-#: viewer/widgets/settings_dialog.py:391
+#: viewer/widgets/settings_dialog.py:392
 msgid "연결 확인:"
 msgstr "Connection test:"
 
-#: viewer/widgets/settings_dialog.py:394
+#: viewer/widgets/settings_dialog.py:395
 msgid "번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의"
 msgstr "I agree that paper text is sent to Anthropic (Claude) servers for translation"
 
-#: viewer/widgets/settings_dialog.py:398
+#: viewer/widgets/settings_dialog.py:399
 msgid "<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br><b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요).<br><b>주의</b>: 번역(Messages API)은 <b>API 크레딧</b>이 필요합니다 — Claude 구독(Pro/Max)은 API 사용에 적용되지 않으니, console.anthropic.com → Billing 에서 크레딧을 충전하세요. 민감 문서 전송에 주의.</small>"
 msgstr "<small><b>API key</b>: Issue it and set up billing at console.anthropic.com. Most reliable.<br><b>Claude sign-in</b>: Uses your subscription account without a console key — click the <b>[Claude Sign In]</b> button above to auto-install the Anthropic CLI if needed and <b>sign in via the browser</b> (no terminal needed).<br><b>Note</b>: Translation (Messages API) requires <b>API credits</b> — a Claude subscription (Pro/Max) doesn't cover API usage, so add credits at console.anthropic.com → Billing. Be careful when sending sensitive documents.</small>"
 
-#: viewer/widgets/settings_dialog.py:420
+#: viewer/widgets/settings_dialog.py:422
 msgid "API 키 표시 (체크 해제 시 *** 로 가림)"
 msgstr "Show API key (masked with *** when unchecked)"
 
-#: viewer/widgets/settings_dialog.py:434
+#: viewer/widgets/settings_dialog.py:436
 msgid "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
 msgstr "<small>Limit changes apply immediately. Lowering it removes the oldest items first.<br>When batch-capturing search results exceeds the limit, the limit is raised automatically.</small>"
 
-#: viewer/widgets/settings_dialog.py:457
+#: viewer/widgets/settings_dialog.py:459
 msgid "시작 시 열 폴더 선택"
 msgstr "Choose Folder to Open on Startup"
 
-#: viewer/widgets/settings_dialog.py:465
+#: viewer/widgets/settings_dialog.py:467
 msgid "시작 시 열 PDF 선택"
 msgstr "Choose PDF to Open on Startup"
 
-#: viewer/widgets/settings_dialog.py:481
+#: viewer/widgets/settings_dialog.py:483
 msgid "화면+음성 녹화 (발표 전체화면)"
 msgstr "Screen + Audio Recording (full-screen presentation)"
 
-#: viewer/widgets/settings_dialog.py:486
+#: viewer/widgets/settings_dialog.py:488
 msgid "비우면 현재 책갈피 폴더에 저장"
 msgstr "Leave blank to save in the current bookmark folder"
 
-#: viewer/widgets/settings_dialog.py:487
+#: viewer/widgets/settings_dialog.py:489
 msgid "찾기…"
 msgstr "Browse…"
 
-#: viewer/widgets/settings_dialog.py:495
+#: viewer/widgets/settings_dialog.py:497
 msgid "저장 위치:"
 msgstr "Save to:"
 
-#: viewer/widgets/settings_dialog.py:506
+#: viewer/widgets/settings_dialog.py:508
 msgid "오디오:"
 msgstr "Audio:"
 
-#: viewer/widgets/settings_dialog.py:512
+#: viewer/widgets/settings_dialog.py:514
 msgid "오디오 장치 새로고침"
 msgstr "Refresh audio devices"
 
-#: viewer/widgets/settings_dialog.py:513
+#: viewer/widgets/settings_dialog.py:515
 msgid "마이크 장치:"
 msgstr "Microphone:"
 
-#: viewer/widgets/settings_dialog.py:514
+#: viewer/widgets/settings_dialog.py:516
 msgid "시스템 장치:"
 msgstr "System audio:"
 
-#: viewer/widgets/settings_dialog.py:523
+#: viewer/widgets/settings_dialog.py:525
 msgid "녹화/재개 단축키:"
 msgstr "Record/Resume shortcut:"
 
-#: viewer/widgets/settings_dialog.py:524
+#: viewer/widgets/settings_dialog.py:526
 msgid "중지 단축키:"
 msgstr "Stop shortcut:"
 
-#: viewer/widgets/settings_dialog.py:526
+#: viewer/widgets/settings_dialog.py:528
 msgid "녹화 테스트 (3초)"
 msgstr "Test Recording (3 s)"
 
-#: viewer/widgets/settings_dialog.py:528
+#: viewer/widgets/settings_dialog.py:530
 msgid "<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"
 msgstr "<small>Codec fixed at H.264/AAC, 192 kbps, 30 fps, CQ23. System audio requires Stereo Mix or a virtual audio device.</small>"
 
-#: viewer/widgets/settings_dialog.py:535
+#: viewer/widgets/settings_dialog.py:537
 msgid "녹화 저장 폴더"
 msgstr "Recording save folder"
 
-#: viewer/widgets/settings_dialog.py:575
+#: viewer/widgets/settings_dialog.py:577
 msgid "녹화 테스트"
 msgstr "Recording Test"
 
 # | msgid "준비 중…"
-#: viewer/widgets/settings_dialog.py:643 viewer/widgets/settings_dialog.py:668
+#: viewer/widgets/settings_dialog.py:645 viewer/widgets/settings_dialog.py:670
 msgid "확인 중…"
 msgstr "Checking…"
 
@@ -6655,61 +6793,61 @@ msgstr "Select Patent PDF Save Folder"
 msgid "<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. 한국어 사전은 위 키 입력 시 사용.</small>"
 msgstr "<small>English Free Dictionary and Tatoeba examples work without a key. The Korean dictionary is used when the key above is entered.</small>"
 
-#: viewer/widgets/settings_dialog.py:498
+#: viewer/widgets/settings_dialog.py:500
 msgid "영상만(소리 없음)"
 msgstr "Video only (no audio)"
 
-#: viewer/widgets/settings_dialog.py:498
+#: viewer/widgets/settings_dialog.py:500
 msgid "마이크"
 msgstr "Microphone"
 
-#: viewer/widgets/settings_dialog.py:499
+#: viewer/widgets/settings_dialog.py:501
 msgid "시스템 소리"
 msgstr "System audio"
 
-#: viewer/widgets/settings_dialog.py:499
+#: viewer/widgets/settings_dialog.py:501
 msgid "마이크 + 시스템"
 msgstr "Microphone + system"
 
-#: viewer/widgets/settings_dialog.py:548
+#: viewer/widgets/settings_dialog.py:550
 msgid "오디오 장치"
 msgstr "Audio device"
 
-#: viewer/widgets/settings_dialog.py:549
+#: viewer/widgets/settings_dialog.py:551
 msgid "오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."
 msgstr "No audio input device found (check ffmpeg)."
 
-#: viewer/widgets/settings_dialog.py:595
+#: viewer/widgets/settings_dialog.py:597
 msgid "<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>"
 msgstr "<span style='color:#888'>Not installed — click [Claude Login]</span>"
 
-#: viewer/widgets/settings_dialog.py:613
+#: viewer/widgets/settings_dialog.py:615
 msgid "로그인되었습니다. 이제 번역을 사용할 수 있습니다."
 msgstr "Logged in. Translation is now available."
 
-#: viewer/widgets/settings_dialog.py:640
+#: viewer/widgets/settings_dialog.py:642
 msgid "<span style='color:#c00'>키 없음</span>"
 msgstr "<span style='color:#c00'>No key</span>"
 
-#: viewer/widgets/settings_dialog.py:679
+#: viewer/widgets/settings_dialog.py:681
 msgid "실패"
 msgstr "Failed"
 
 # | msgid "채움 없음"
-#: viewer/widgets/settings_dialog.py:592
+#: viewer/widgets/settings_dialog.py:594
 msgid "모듈 없음"
 msgstr "Module missing"
 
-#: viewer/widgets/settings_dialog.py:597
+#: viewer/widgets/settings_dialog.py:599
 msgid "<span style='color:#0a0'>로그인됨 ✓</span>"
 msgstr "<span style='color:#0a0'>Logged in ✓</span>"
 
-#: viewer/widgets/settings_dialog.py:599
+#: viewer/widgets/settings_dialog.py:601
 msgid "<span style='color:#c60'>로그인 필요</span>"
 msgstr "<span style='color:#c60'>Login required</span>"
 
 # | msgid "읽지 못했습니다: {msg}"
-#: viewer/widgets/settings_dialog.py:615
+#: viewer/widgets/settings_dialog.py:617
 #, python-brace-format
 msgid ""
 "로그인하지 못했습니다.\n"
@@ -6718,12 +6856,12 @@ msgstr ""
 "Login failed.\n"
 "{msg}"
 
-#: viewer/widgets/settings_dialog.py:677
+#: viewer/widgets/settings_dialog.py:679
 #, python-brace-format
 msgid "<span style='color:#0a0'>정상 ✓ (입력 토큰 {n}) — 번역은 API 크레딧 필요</span>"
 msgstr "<span style='color:#0a0'>OK ✓ (input tokens: {n}) — translation requires API credits</span>"
 
-#: viewer/widgets/settings_dialog.py:680
+#: viewer/widgets/settings_dialog.py:682
 #, python-brace-format
 msgid "<span style='color:#c00'>실패: {msg}</span>"
 msgstr "<span style='color:#c00'>Failed: {msg}</span>"

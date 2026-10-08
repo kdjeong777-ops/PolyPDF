@@ -1,7 +1,9 @@
-"""다국어 SOT §9 — 화면 문구 감싸기 범위 (Phase 3, 261008-24)
+"""다국어 SOT §9 — 화면 문구 감싸기 범위 (Phase 3, 261008-24 · Phase 4 에서 KOREA_ONLY, 261008-25)
 
-`viewer/` 의 한글 문자열이 `tr()`·`trp()`·`trn()`·`tr_noop()` 밖에 있으면 실패한다. 예외는 셋뿐이다.
-  - PENDING: 아직 감싸지 않은 모듈과 그 단계(한국 전용 Phase 4, 도움말 Phase 5, 업데이트 Phase 6)
+`viewer/` 의 한글 문자열이 `tr()`·`trp()`·`trn()`·`tr_noop()` 밖에 있으면 실패한다. 예외는 넷뿐이다.
+  - KOREA_ONLY: 한국어가 아니면 숨기는 기능의 모듈(§7) — 감싸지 않는다(사용자 결정 261008-25).
+    그 안에서도 모든 언어가 쓰는 코드는 SHARED 로 따로 검사한다(본문 mp3·OCR 엔진)
+  - PENDING: 아직 감싸지 않은 모듈과 그 단계(도움말 Phase 5, 업데이트 Phase 6)
   - DATA: 한국어 처리 자료·정규식이 본업인 모듈(태그 사전·목차 해석·글자층 추출·인덱스 SQL·언어 이름)
   - ALLOW: 감싸지 않기로 정한 값 — 파일·폴더 이름, 글꼴 이름, 사용자 데이터 기본 이름, 내부 키, 정규식
 그 밖에 문서 설명(docstring)·로그·예외 메시지·비교식·첨자는 보지 않는다(§6 '감싸지 않는 것').
@@ -16,13 +18,19 @@ SKIPF = {"debug", "info", "warning", "exception", "error", "critical", "print", 
          "ValueError", "KeyError", "Exception", "TypeError", "OSError", "PermissionError",
          "FileNotFoundError"}
 
+KOREA_ONLY = {
+    "viewer/study_controller.py", "viewer/widgets/study_panel.py",
+    "viewer/widgets/study_edit_dialog.py", "viewer/widgets/dict_manager_dialog.py",
+    "viewer/widgets/law_search_dialog.py", "viewer/widgets/kipo_search_dialog.py",
+    "viewer/widgets/kcsc_search_dialog.py", "viewer/side_panel_host.py", "viewer/study/",
+}
+# 한국 전용 모듈 안이지만 모든 언어가 쓰는 것 — 파일 전체 또는 함수 이름
+SHARED = {
+    "viewer/study/ocr.py": None,                 # OCR 엔진(텍스트 창·OCR 읽기·구성요소 설치)
+    "viewer/study/ocr_headings.py": None,        # 책갈피 자동 생성의 스캔본 헤딩
+    "viewer/study_controller.py": {"_on_main_mp3"},   # 본문 mp3 단추
+}
 PENDING = {
-    # Phase 4 — 한국 전용(§7): 한국어가 아닌 언어에서는 숨긴다
-    "viewer/study_controller.py": 4, "viewer/widgets/study_panel.py": 4,
-    "viewer/widgets/study_edit_dialog.py": 4, "viewer/widgets/dict_manager_dialog.py": 4,
-    "viewer/widgets/law_search_dialog.py": 4, "viewer/widgets/kipo_search_dialog.py": 4,
-    "viewer/widgets/kcsc_search_dialog.py": 4, "viewer/side_panel_host.py": 4,
-    "viewer/study/": 4,
     # Phase 5 — 도움말(언어별 리소스)
     "viewer/widgets/help_dialog.py": 5,
     # Phase 6 — 업데이트 창·받기
@@ -33,6 +41,7 @@ DATA = {
     "viewer/i18n.py", "viewer/_vendor/",
 }
 _FONTS = {"맑은 고딕", "굴림", "바탕", "돋움"}
+_REGEX = re.compile(r"\\[sdbwSDW]|\[[^\]]*가-힣|\(\?[:=!<]")   # \s·[가-힣]·(?: 가 들면 정규식
 ALLOW = {
     # 파일·폴더 이름(사용자 디스크에 남는 값 — 언어를 바꿔도 같아야 한다)
     "viewer/app.py": {"PolyPDF_특허", "_암호화.pdf", "클립보드.png", "화면캡처.png",
@@ -51,9 +60,7 @@ ALLOW = {
     "viewer/widgets/bookmark_tree.py": {"주제", "형식"},
     "viewer/widgets/main_view.py": {"본문", "쪽 맞춤", "2장 맞춤", "폭 맞춤", "수동 맞춤", "수동",
                                     "선 1", "선 2", "선 3", "선 4", "선 5"},
-    "viewer/widgets/read_aloud.py": {"전체", "[가-힣]", "[가-힣A-Za-z]", "[^0-9A-Za-z가-힣]",
-                                     "[0-9A-Za-z가-힣]+",
-                                     r"(?<=[.!?。])\s+|\n+|(?<=다\.)\s*|(?<=요\.)\s*"},
+    "viewer/widgets/read_aloud.py": {"전체"},                 # 읽기 구간 값(정규식은 _REGEX 가 거른다)
     "viewer/widgets/thumbs_list.py": {"한"},                  # 글자 폭을 재는 표본
     # 사용자 데이터 기본 이름(설정에 저장돼 사용자가 고친다). 발표 포인터·펜·캡처 크기 기본 이름은
     #   tr_noop + 보여 줄 때 tr(이름)이라 여기 없다(사용자가 고친 이름은 번역이 없어 그대로 보인다)
@@ -74,8 +81,12 @@ def chk(cond, msg, extra=""):
         fails.append(msg)
 
 
-def bare_korean(path):
+def bare_korean(path, funcs=None):
     t = ast.parse(open(path, encoding="utf-8").read())
+    if funcs:                                    # 그 함수들만 본다
+        t = ast.Module(body=[n for n in ast.walk(t)
+                             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in funcs],
+                       type_ignores=[])
     skip = set()
     for n in ast.walk(t):
         if isinstance(n, ast.Call):
@@ -105,12 +116,17 @@ for root, _d, files in os.walk(os.path.join(HERE, "viewer")):
         if not fn.endswith(".py"):
             continue
         rel = os.path.relpath(os.path.join(root, fn), HERE).replace("\\", "/")
+        funcs = None
+        if _under(rel, KOREA_ONLY):
+            if rel not in SHARED:
+                continue
+            funcs = SHARED[rel]
         if _under(rel, PENDING) or _under(rel, DATA):
             continue
         scanned += 1
         allow = ALLOW.get(rel, set())
-        for ln, s in bare_korean(os.path.join(HERE, rel)):
-            if s in _FONTS:
+        for ln, s in bare_korean(os.path.join(HERE, rel), funcs):
+            if s in _FONTS or _REGEX.search(s):        # 글꼴 이름·정규식(한국어 처리 자료)
                 continue
             if s in allow:
                 used.add((rel, s))
@@ -121,7 +137,7 @@ chk(scanned > 60, "A 검사한 모듈 수", str(scanned))
 chk(not bad, "A 감싸지 않은 한글 화면 문구가 없다(PENDING·DATA·ALLOW 제외)", "\n  " + "\n  ".join(bad[:30]))
 stale = sorted("%s %r" % (f, s) for f, ss in ALLOW.items() for s in ss if (f, s) not in used)
 chk(not stale, "B 허용 목록에 이제 없는 값이 남아 있지 않다(목록을 줄인다)", str(stale[:10]))
-missing = [k for k in list(PENDING) + sorted(DATA) + list(ALLOW)
+missing = [k for k in list(PENDING) + sorted(DATA) + list(ALLOW) + sorted(KOREA_ONLY) + list(SHARED)
            if not os.path.exists(os.path.join(HERE, k))]
 chk(not missing, "C 목록의 경로가 모두 있다", str(missing))
 

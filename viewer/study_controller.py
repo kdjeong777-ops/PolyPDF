@@ -19,6 +19,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import QMessageBox
 
 from viewer.workers import StudyBuildWorker, run_in_thread
+from viewer.i18n import tr, korea_only                   # 한국 전용 처리기 가드(§7) · 본문 mp3 는 모든 언어(§6)
 
 __all__ = ["StudyMixin"]
 
@@ -60,6 +61,7 @@ class StudyMixin:
                 pass
         return self._dict_store
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_dict_manager(self, checked: bool = False):
         """260621-70: 단어장 관리(출처 on/off·우선순위·폴더)."""
         from viewer.widgets.dict_manager_dialog import DictManagerDialog
@@ -135,6 +137,7 @@ class StudyMixin:
             return False
         return True
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_translate_pdf(self, checked: bool = False):
         """260621-P0: 현재 열린 PDF 번역(단일)."""
         if not self._study_pdf or not Path(self._study_pdf).exists():
@@ -142,6 +145,7 @@ class StudyMixin:
             return
         self._action_translate_file(str(self._study_pdf))
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_translate_file(self, path: str):
         """260621-P0: 단일 PDF 번역 — 앞부분 텍스트를 채워 PoC 다이얼로그를 연다.
         (책갈피 우클릭 '번역...' / 현재 PDF 번역에서 호출)"""
@@ -161,6 +165,7 @@ class StudyMixin:
         from viewer.widgets.translate_dialog import TranslatePocDialog
         TranslatePocDialog(self._prefs, self, initial_text=init, source_path=str(path)).exec()
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_edit_glossary(self, path: str):
         """260623: 그 PDF(원본/번역본)의 번역 용어집(사이드카)을 불러와 오역 용어 교정(→ 사용자 사전)."""
         if not path:
@@ -182,6 +187,7 @@ class StudyMixin:
         from viewer.widgets.glossary_edit_dialog import GlossaryEditDialog
         GlossaryEditDialog(gl, self._prefs, str(path), self).exec()
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_translate_files(self, preselected=None):
         """260621-P0: 여러 PDF 번역 — 병합형 선택 목록(좌 전체/우 대상, 추가·순서·삭제)."""
         if not self._translate_auth_ready_or_warn():
@@ -372,6 +378,7 @@ class StudyMixin:
                     pass
         return new
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_reclassify_onterm(self, checked: bool = False):
         """260615-20: 온용어 캐시 비우고 다시 분류(재조회) — 용어집(glossary)별로 재저장."""
         dic = self._study_get_dict()
@@ -872,12 +879,12 @@ class StudyMixin:
         view = view or self.main_view
         path = view.current_file()
         if not path or not str(path).lower().endswith(".pdf"):
-            QMessageBox.information(self, "mp3", "먼저 PDF를 표시하세요.")
+            QMessageBox.information(self, "mp3", tr("먼저 PDF를 표시하세요."))
             return
         try:
             doc = view._doc.doc
         except Exception:
-            QMessageBox.information(self, "mp3", "PDF 문서를 찾을 수 없습니다.")
+            QMessageBox.information(self, "mp3", tr("PDF 문서를 찾을 수 없습니다."))
             return
 
         # 책갈피 위계 선택(존재하는 깊이까지만)
@@ -889,9 +896,9 @@ class StudyMixin:
         level = 1
         if maxlv >= 1:
             from PyQt6.QtWidgets import QInputDialog
-            opts = [f"{i}단계 책갈피 기준" for i in range(1, maxlv + 1)]
+            opts = [tr('{i}단계 책갈피 기준').format(i=i) for i in range(1, maxlv + 1)]
             sel, ok = QInputDialog.getItem(
-                self, "mp3 분할 기준", "어느 위계의 책갈피로 나눌까요?",
+                self, tr("mp3 분할 기준"), tr("어느 위계의 책갈피로 나눌까요?"),
                 opts, 0, False)
             if not ok:
                 return
@@ -906,7 +913,7 @@ class StudyMixin:
         from PyQt6.QtWidgets import QFileDialog
         stem = Path(path).stem
         parent = QFileDialog.getExistingDirectory(
-            self, "mp3 저장 폴더 선택", str(Path(path).parent))
+            self, tr("mp3 저장 폴더 선택"), str(Path(path).parent))
         if not parent:
             return
         from viewer.study.mp3_export import unique_dir
@@ -914,9 +921,8 @@ class StudyMixin:
         resume = False
         if base.exists() and any(base.glob("*.mp3")):
             ret = QMessageBox.question(
-                self, "이어서 저장",
-                f"'{base.name}' 폴더에 mp3 가 있습니다.\n"
-                "기존 폴더에 이어서 저장할까요?\n(예=이미 있는 파일은 건너뜀, 아니오=새 폴더)")
+                self, tr("이어서 저장"),
+                tr("'{name}' 폴더에 mp3 가 있습니다.\n기존 폴더에 이어서 저장할까요?\n(예=이미 있는 파일은 건너뜀, 아니오=새 폴더)").format(name=base.name))
             if ret == QMessageBox.StandardButton.Yes:
                 out_dir, resume = base, True
             else:
@@ -944,7 +950,7 @@ class StudyMixin:
             jobs.append((str(out_dir / f"{nm}.mp3"),
                          str(out_dir / f"{nm}.lrc"), segs))
         if not jobs:
-            QMessageBox.information(self, "mp3", "읽을 본문을 찾지 못했습니다.")
+            QMessageBox.information(self, "mp3", tr("읽을 본문을 찾지 못했습니다."))
             return
 
         from viewer.workers import StudyMp3Worker
@@ -959,11 +965,10 @@ class StudyMixin:
         def on_fin(res):
             self.progress.setVisible(False)
             if res.get("error"):
-                QMessageBox.warning(self, "mp3 저장 실패", res["error"])
+                QMessageBox.warning(self, tr("mp3 저장 실패"), res["error"])
             else:
                 self.status.showMessage(
-                    f"mp3 저장 완료: {res.get('saved')}/{res.get('total')} 구간 → "
-                    f"{out_dir.name}", 6000)
+                    tr('mp3 저장 완료: {get}/{get2} 구간 → {name}').format(get=res.get('saved'), get2=res.get('total'), name=out_dir.name), 6000)
 
         worker.progress.connect(on_prog)
         worker.finished.connect(on_fin)
@@ -1248,6 +1253,7 @@ class StudyMixin:
         except Exception as e:
             self.status.showMessage(f"하이라이트 오류: {e}", 3000)
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_import_glossary(self, checked: bool = False):
         """260611-101(P3): 용어집(PDF/CSV) 가져오기 → 전문 용어사전 보강.
 
@@ -1311,6 +1317,7 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "용어집 가져오기", f"실패: {e}")
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_save_csv_sample(self, checked: bool = False):
         """260615-6: ⑦ 사용자 CSV 사전 양식 예제를 저장(헤더+예시 행)."""
         from PyQt6.QtWidgets import QFileDialog
@@ -1337,6 +1344,7 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "CSV 양식 예제", f"저장 실패: {e}")
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_sanitize_dict(self, checked: bool = False):
         """260615-17: 사전(dict.db)의 HTML 마크업(&#44;·<strong> 등) 일괄 제거."""
         try:
@@ -1348,6 +1356,7 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "사전 정리", f"실패: {e}")
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_backup_dict(self, checked: bool = False):
         """260615-15: 사전 백업 — dict.db + dict_images/ 를 zip 으로(여러 PC 이전·동기화)."""
         from PyQt6.QtWidgets import QFileDialog
@@ -1379,6 +1388,7 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "사전 백업", f"실패: {e}")
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_restore_dict(self, checked: bool = False):
         """260615-15: 사전 복원 — 백업 zip 의 dict.db + dict_images/ 로 교체(기존은 .bak)."""
         from PyQt6.QtWidgets import QFileDialog
@@ -1422,6 +1432,7 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "사전 복원", f"실패: {e}")
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_online_enrich(self, checked: bool = False):
         """260615-15: 인터넷 사전 보강(이어하기) — 재OCR 없이 현재 PDF 단어를 온라인 조회·캐시.
         중간에 끊겨도 online_fetched 로 이미 받은 단어는 건너뜀."""
@@ -1468,6 +1479,7 @@ class StudyMixin:
         worker.error.connect(lambda e: self.status.showMessage(f"인터넷 사전 보강 오류: {e}", 5000))
         run_in_thread(worker, self._study_threads)
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_export_dict(self, checked: bool = False):
         """260611-106(P7): 사전(사용자/기본) → TBX·CSV 내보내기(상호운용)."""
         from PyQt6.QtWidgets import QFileDialog, QInputDialog
@@ -1511,6 +1523,7 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "사전 내보내기", f"실패: {e}")
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_build_study(self, checked: bool = False, also_bookmarks: bool = False):
         """현재 PDF 를 OCR·어휘 분석해 study.db 생성 (백그라운드).
         also_bookmarks=True 면 같은 OCR 결과(study.db)를 재사용해 책갈피까지 동시 생성."""

@@ -10,7 +10,7 @@ v1.6.2: 각 PDF 파일 리프에 PDF 자체의 내부 책갈피(TOC)가 있으�
 from __future__ import annotations
 
 import json
-from viewer.i18n import tr, tr_noop  # 261008: 화면 문구(다국어 SOT §6)
+from viewer.i18n import tr, tr_noop, korea_only_visible  # 261008: 화면 문구(다국어 SOT §6·§7)
 from pathlib import Path
 from typing import Optional
 
@@ -2067,7 +2067,8 @@ class BookmarkTree(QWidget):
         act_translate_sel = None
         if sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
             act_merge = menu.addAction(tr('선택 {n}개 파일 병합...').format(n=len(sel_files)))
-            act_translate_sel = menu.addAction(tr('선택 {n}개 파일 번역...').format(n=len(sel_files)))  # 260621-P0
+            if korea_only_visible():                # 영→한 번역은 한국 전용(다국어 SOT §7)
+                act_translate_sel = menu.addAction(tr('선택 {n}개 파일 번역...').format(n=len(sel_files)))  # 260621-P0
             menu.addSeparator()
         # 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
         xfer_files = self._selected_file_nodes() if self._edit_mode else []
@@ -2155,21 +2156,23 @@ class BookmarkTree(QWidget):
                 menu.addSeparator()
             act_create = menu.addAction(tr("책갈피 생성"))
             # 260902-5: '책갈피 편집'(편집모드 진입) 삭제 — 편집 버튼과 중복이고 책갈피 수정과 혼동.
-            act_study = menu.addAction(tr("단어장 생성"))
-            act_study_bm = menu.addAction(tr("단어장·책갈피 동시 생성"))
+            if korea_only_visible():                # 단어장은 한국 전용(다국어 SOT §7)
+                act_study = menu.addAction(tr("단어장 생성"))
+                act_study_bm = menu.addAction(tr("단어장·책갈피 동시 생성"))
             act_tags = menu.addAction(tr("해시태그 편집..."))   # 260623: 파일 분류 태그
             # 260930-2 '일반뷰어용으로 저장' 은 261008-1 에 위쪽 저장 그룹으로 옮겼다.
             menu.addSeparator()
-            act_translate = menu.addAction(tr("번역..."))   # 260621-P0: 단일 파일 번역
-            act_edit_gloss = menu.addAction(tr("번역 용어집 교정..."))  # 260623: 오역 용어 수정
-            try:                                         # 용어집 사이드카 없으면 비활성화
-                from viewer.study.export_translation import resolve_glossary_sidecar
-                if not resolve_glossary_sidecar(item.data(0, self.DATA_FILE)):
-                    act_edit_gloss.setEnabled(False)
-                    act_edit_gloss.setToolTip(tr("이 PDF 의 번역 용어집이 없습니다(먼저 번역)."))
-            except Exception:
-                pass
-            menu.addSeparator()
+            if korea_only_visible():                    # 영→한 번역은 한국 전용(다국어 SOT §7)
+                act_translate = menu.addAction(tr("번역..."))   # 260621-P0: 단일 파일 번역
+                act_edit_gloss = menu.addAction(tr("번역 용어집 교정..."))  # 260623: 오역 용어 수정
+                try:                                     # 용어집 사이드카 없으면 비활성화
+                    from viewer.study.export_translation import resolve_glossary_sidecar
+                    if not resolve_glossary_sidecar(item.data(0, self.DATA_FILE)):
+                        act_edit_gloss.setEnabled(False)
+                        act_edit_gloss.setToolTip(tr("이 PDF 의 번역 용어집이 없습니다(먼저 번역)."))
+                except Exception:
+                    pass
+                menu.addSeparator()
         # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         act_fav_folder = menu.addAction(tr("현재 폴더를 즐겨찾기에 추가"))
         act_fav_file = menu.addAction(tr("현재 파일을 즐겨찾기에 추가")) if is_file else None
@@ -2224,9 +2227,9 @@ class BookmarkTree(QWidget):
             self.createBookmarksRequested.emit(item.data(0, self.DATA_FILE))
         elif act_bm_edit is not None and chosen == act_bm_edit:
             self._edit_item(item)                    # 책갈피 제목·페이지 편집 창
-        elif chosen == act_study:
+        elif act_study is not None and chosen == act_study:
             self.createStudyRequested.emit(item.data(0, self.DATA_FILE))
-        elif chosen == act_study_bm:
+        elif act_study_bm is not None and chosen == act_study_bm:
             self.createStudyBookmarksRequested.emit(item.data(0, self.DATA_FILE))
         elif chosen == act_fav_folder:
             self.favoriteRequested.emit()

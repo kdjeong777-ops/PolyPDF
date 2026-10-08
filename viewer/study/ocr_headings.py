@@ -19,6 +19,7 @@ import fitz
 
 from viewer._vendor.pdf_bookmarker.core import Bookmark, clean_title
 from viewer.study import ocr as _ocr
+from viewer.i18n import tr
 
 # ─── 헤딩 정규식 ──────────────────────────────────────────────────
 _EN_NUMWORD = (r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|"
@@ -188,7 +189,7 @@ def extract_ocr_bookmarks(
         bookmarks = _bookmarks_from_page_lines(
             page_lines, use_font_auto=use_font_auto, font_ratio=font_ratio)
         if progress:
-            progress(total, total, f"헤딩 {len(bookmarks)}개")
+            progress(total, total, tr('헤딩 {n}개').format(n=len(bookmarks)))
         return bookmarks
     finally:
         doc.close()
