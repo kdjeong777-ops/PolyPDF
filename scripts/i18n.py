@@ -1,13 +1,22 @@
 # -*- coding: utf-8 -*-
 """언어팩 도구 — 다국어(언어팩) SOT §3.5. Babel 은 개발·빌드 의존성만(실행 파일에 넣지 않는다).
 
-  python scripts/i18n.py compile      모든 resources/locale/<코드>/LC_MESSAGES/polypdf.po → .mo
-                                      (fuzzy·빈 번역은 빼고 — 그 문구는 대체 사슬로 보인다)
-  python scripts/i18n.py clean-pseudo 가짜 언어(qps_ploc) 폴더를 지운다 — resources/ 는 통째로 빌드에
-                                      실리므로 빌드 전에 부른다(SOT §3.7)
+  python scripts/i18n.py extract        viewer/·main.py 의 tr·trp·trn·tr_noop 키 → resources/locale/polypdf.pot
+  python scripts/i18n.py update         .pot 의 새 키를 모든 팩 .po 에 빈칸으로, 바뀐 원문은 비슷한 번역을 fuzzy 로,
+                                        사라진 키는 #~(obsolete)로
+  python scripts/i18n.py init <코드>    새 언어 팩(.po — Plural-Forms 는 CLDR 로 자동, pack.json 뼈대)
+  python scripts/i18n.py compile        모든 팩 .po → .mo (fuzzy·빈 번역은 빼고 — 그 문구는 대체 사슬로 보인다)
+  python scripts/i18n.py report         팩별 완성도·빈칸·fuzzy·자리표시 불일치
+  python scripts/i18n.py pseudo         가짜 언어 qps_ploc 를 .pot 에서 만들고 .mo 까지(개발·검사 전용, SOT §3.7)
+  python scripts/i18n.py clean-pseudo   가짜 언어 폴더를 지운다(build_ci.bat 가 빌드 전에 부른다)
 
-Phase 0 은 위 둘만. extract·update·init·report·pseudo·inno 는 Phase 0b(SOT §11).
+추출기는 우리 것(AST): `trn(text, n)` 은 인자 하나로 단·복수를 겸하고 `trp(문맥, 원문)` 은 문맥이 앞이라
+Babel 기본 키워드 규칙으로는 못 뽑는다. 키는 **문자열 리터럴**이어야 한다 — 아니면 추출 경고(SOT §6).
+`installer/languages.iss`(inno)는 Phase 6.
 """
+import ast
+import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -16,39 +25,280 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCALE = ROOT / "resources" / "locale"
 DOMAIN = "polypdf"
 PSEUDO = "qps_ploc"
+FUNCS = {"tr": "plain", "trp": "ctx", "trn": "plural", "tr_noop": "plain"}
+_PH = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 
 
-def compile_all() -> int:
+# ── 추출 ──────────────────────────────────────────────────────────────────
+def _func_name(node):
+    f = node.func
+    if isinstance(f, ast.Name):
+        return f.id
+    if isinstance(f, ast.Attribute):
+        return f.attr
+    return None
+
+
+def _lit(node):
+    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
+
+
+def extract_from(files, base: Path):
+    """[(msgid, ctx|None, plural:bool, 'path:line')], [경고] — 파일 순·줄 순."""
+    out, warns = [], []
+    for p in files:
+        try:
+            tree = ast.parse(Path(p).read_text(encoding="utf-8"))
+        except Exception as e:
+            warns.append("%s: 파싱 실패 %s" % (p, e))
+            continue
+        rel = Path(p).resolve().relative_to(base.resolve()).as_posix()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            kind = FUNCS.get(_func_name(node) or "")
+            if not kind or not node.args:
+                continue
+            loc = "%s:%d" % (rel, node.lineno)
+            if kind == "ctx":
+                if len(node.args) < 2:
+                    continue
+                ctx, text = _lit(node.args[0]), _lit(node.args[1])
+                if ctx is None or text is None:
+                    warns.append(loc + ": trp 의 문맥·원문이 문자열 리터럴이 아니다")
+                    continue
+                out.append((text, ctx, False, loc))
+            else:
+                text = _lit(node.args[0])
+                if text is None:
+                    warns.append(loc + ": %s 의 원문이 문자열 리터럴이 아니다(f-string·변수 금지, SOT §6)"
+                                 % _func_name(node))
+                    continue
+                out.append((text, None, kind == "plural", loc))
+    return out, warns
+
+
+def source_files(base: Path = ROOT):
+    files = [base / "main.py"] if (base / "main.py").is_file() else []
+    files += sorted(p for p in (base / "viewer").rglob("*.py")
+                    if "__pycache__" not in p.parts and "_vendor" not in p.parts)
+    return files
+
+
+def build_template(entries):
+    from babel.messages.catalog import Catalog
+    cat = Catalog(project="PolyPDF", domain=DOMAIN, charset="utf-8", copyright_holder="KDJ",
+                  msgid_bugs_address="https://github.com/kdjeong777-ops/PolyPDF/issues")
+    for text, ctx, plural, loc in entries:
+        path, line = loc.rsplit(":", 1)
+        mid = (text, text) if plural else text
+        m = cat.get(text, context=ctx)
+        if m is None:
+            cat.add(mid, context=ctx, locations=[(path, int(line))])
+        else:
+            m.locations.append((path, int(line)))
+            if plural and not m.pluralizable:          # 같은 원문을 단·복수로 둘 다 쓰면 복수 키로
+                m.id = mid
+    return cat
+
+
+_VOLATILE = (b'"POT-Creation-Date:', b'"PO-Revision-Date:')
+
+
+def _write_po(cat, path: Path, **kw) -> bool:
+    """내용이 바뀐 경우에만 쓴다 — 머리의 생성 시각만 다른 것은 변경으로 보지 않는다
+    (추출·병합을 돌릴 때마다 의미 없는 diff 가 생기지 않게). 썼으면 True."""
+    import io
+    from babel.messages.pofile import write_po
+    buf = io.BytesIO()
+    write_po(buf, cat, width=0, sort_by_file=False, **kw)
+    new = buf.getvalue()
+
+    def key(b):
+        return b"\n".join(l for l in b.splitlines() if not l.startswith(_VOLATILE))
+    if path.is_file() and key(path.read_bytes()) == key(new):
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(new)
+    return True
+
+
+def _read_po(path: Path, locale=None):
     from babel.messages.pofile import read_po
+    with open(path, "rb") as f:
+        return read_po(f, locale=locale)
+
+
+def extract(base: Path = ROOT, pot: Path = None):
+    entries, warns = extract_from(source_files(base), base)
+    cat = build_template(entries)
+    pot = pot or (base / "resources" / "locale" / (DOMAIN + ".pot"))
+    _write_po(cat, pot, omit_header=False, include_lineno=True)
+    return cat, warns
+
+
+# ── 팩 ────────────────────────────────────────────────────────────────────
+def packs(locale_dir: Path = LOCALE):
+    return sorted(p.parent.parent for p in locale_dir.glob("*/LC_MESSAGES/%s.po" % DOMAIN)
+                  if p.parts[-3] != PSEUDO)
+
+
+def update(locale_dir: Path = LOCALE, pot: Path = None):
+    """모든 팩 .po 를 .pot 에 맞춘다(Babel Catalog.update — 비슷한 원문은 fuzzy 로 번역을 살린다)."""
+    tmpl = _read_po(pot or locale_dir / (DOMAIN + ".pot"))
+    done = []
+    for d in packs(locale_dir):
+        po = d / "LC_MESSAGES" / (DOMAIN + ".po")
+        cat = _read_po(po, locale=d.name)
+        cat.update(tmpl, no_fuzzy_matching=False, update_header_comment=False)
+        _write_po(cat, po, ignore_obsolete=False, include_previous=True)
+        done.append(d.name)
+    return done
+
+
+def init(code: str, locale_dir: Path = LOCALE, pot: Path = None):
+    """새 언어: .po(Plural-Forms 는 CLDR 로) + pack.json 뼈대. 이미 있으면 건드리지 않는다."""
+    from babel import Locale
+    from babel.messages.catalog import Catalog
+    d = locale_dir / code
+    po = d / "LC_MESSAGES" / (DOMAIN + ".po")
+    if po.exists():
+        raise FileExistsError(po)
+    tmpl = _read_po(pot or locale_dir / (DOMAIN + ".pot"))
+    loc = Locale.parse(code)
+    cat = Catalog(locale=loc, project="PolyPDF", domain=DOMAIN, charset="utf-8")
+    cat.update(tmpl)
+    _write_po(cat, po)
+    meta = {"code": code, "name": loc.get_display_name(loc) or code,
+            "name_ko": Locale.parse("ko").languages.get(loc.language, code),
+            "fallback": [] if code == "en" else ["en"], "qt": "qtbase_" + loc.language,
+            "inno": "", "direction": "rtl" if loc.character_order == "right-to-left" else "ltr",
+            "status": "partial"}
+    (d / "pack.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return po
+
+
+def compile_all(locale_dir: Path = LOCALE, include_pseudo: bool = False, quiet: bool = False):
     from babel.messages.mofile import write_mo
     n = 0
-    for po in sorted(LOCALE.glob("*/LC_MESSAGES/%s.po" % DOMAIN)):
-        if po.parts[-3] == PSEUDO:
+    for po in sorted(locale_dir.glob("*/LC_MESSAGES/%s.po" % DOMAIN)):
+        if po.parts[-3] == PSEUDO and not include_pseudo:
             continue
-        with open(po, "rb") as f:
-            cat = read_po(f, locale=po.parts[-3])
-        mo = po.with_suffix(".mo")
-        with open(mo, "wb") as f:
+        cat = _read_po(po, locale=po.parts[-3] if po.parts[-3] != PSEUDO else None)
+        with open(po.with_suffix(".mo"), "wb") as f:
             write_mo(f, cat, use_fuzzy=False)
-        done = sum(1 for m in cat if m.id and m.string and not m.fuzzy
-                   and (all(m.string) if isinstance(m.string, (list, tuple)) else True))
-        total = sum(1 for m in cat if m.id)
-        print("compiled %s  (%d/%d)" % (mo.relative_to(ROOT), done, total))
+        if not quiet:
+            r = _report_cat(cat)
+            print("compiled %s  (%d/%d)" % (po.relative_to(locale_dir.parent.parent) if locale_dir == LOCALE
+                                            else po, r["translated"], r["total"]))
         n += 1
     return n
 
 
-def clean_pseudo() -> None:
-    p = LOCALE / PSEUDO
+def _placeholders(s):
+    return sorted(_PH.findall(s or ""))
+
+
+def _report_cat(cat):
+    total = translated = fuzzy = empty = 0
+    bad = []
+    for m in cat:
+        if not m.id:
+            continue
+        total += 1
+        ids = m.id if isinstance(m.id, (list, tuple)) else (m.id,)
+        strs = m.string if isinstance(m.string, (list, tuple)) else (m.string,)
+        if m.fuzzy:
+            fuzzy += 1
+        elif all(strs):
+            translated += 1
+        else:
+            empty += 1
+        want = _placeholders(ids[0])
+        for s in strs:
+            if s and _placeholders(s) != want:
+                bad.append(ids[0])
+                break
+    return {"total": total, "translated": translated, "fuzzy": fuzzy, "empty": empty,
+            "placeholder_mismatch": bad,
+            "percent": (100.0 * translated / total) if total else 100.0}
+
+
+def report(locale_dir: Path = LOCALE):
+    out = {}
+    for d in packs(locale_dir):
+        out[d.name] = _report_cat(_read_po(d / "LC_MESSAGES" / (DOMAIN + ".po"), locale=d.name))
+    return out
+
+
+# ── 가짜 언어 (SOT §3.7) ──────────────────────────────────────────────────
+_ACC = dict(zip("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                "àƀçđéƒĝĥîĵķĺɱñöþǫŕšŧûṽŵẋýžÀßÇĐÉƑĜĤÎĴĶĹṀÑÖÞǪŔŠŦÛṼŴẊÝŽ"))
+
+
+def pseudo_text(s: str) -> str:
+    """알아볼 수 있게 바꾸고 약 40% 늘린다. 자리표시 `{이름}`·단축키 `&` 는 그대로."""
+    parts = re.split(r"(\{[A-Za-z_][A-Za-z0-9_]*\}|&.)", s)
+    body = "".join(p if (_PH.fullmatch(p) or (p.startswith("&") and len(p) == 2))
+                   else "".join(_ACC.get(ch, ch) for ch in p) for p in parts)
+    pad = "~" * max(1, int(len(s) * 0.4))
+    return "[!! " + body + " " + pad + " !!]"
+
+
+def pseudo(locale_dir: Path = LOCALE, pot: Path = None):
+    from babel.messages.catalog import Catalog
+    tmpl = _read_po(pot or locale_dir / (DOMAIN + ".pot"))
+    cat = Catalog(project="PolyPDF", domain=DOMAIN, charset="utf-8")
+    for m in tmpl:
+        if not m.id:
+            continue
+        if isinstance(m.id, (list, tuple)):
+            cat.add(m.id, (pseudo_text(m.id[0]), pseudo_text(m.id[1])), context=m.context)
+        else:
+            cat.add(m.id, pseudo_text(m.id), context=m.context)
+    d = locale_dir / PSEUDO
+    _write_po(cat, d / "LC_MESSAGES" / (DOMAIN + ".po"))
+    (d / "pack.json").write_text(json.dumps({"code": PSEUDO, "name": "Pseudo", "fallback": [],
+                                             "status": "partial"}) + "\n", encoding="utf-8")
+    from babel.messages.mofile import write_mo
+    with open(d / "LC_MESSAGES" / (DOMAIN + ".mo"), "wb") as f:
+        write_mo(f, cat)
+    return d
+
+
+def clean_pseudo(locale_dir: Path = LOCALE) -> None:
+    p = locale_dir / PSEUDO
     if p.exists():
         shutil.rmtree(p, ignore_errors=True)
-        print("removed", p.relative_to(ROOT))
+        print("removed", p)
 
 
+# ── 명령줄 ────────────────────────────────────────────────────────────────
 def main(argv) -> int:
     cmd = argv[1] if len(argv) > 1 else ""
+    if cmd == "extract":
+        cat, warns = extract()
+        for w in warns:
+            print("경고:", w)
+        print("extracted %d keys → resources/locale/%s.pot" % (sum(1 for m in cat if m.id), DOMAIN))
+        return 1 if warns else 0
+    if cmd == "update":
+        print("updated:", ", ".join(update()) or "(팩 없음)")
+        return 0
+    if cmd == "init" and len(argv) > 2:
+        print("created", init(argv[2]))
+        return 0
     if cmd == "compile":
         compile_all()
+        return 0
+    if cmd == "report":
+        for code, r in report().items():
+            print("%-6s %5.1f%%  번역 %d / %d · fuzzy %d · 빈칸 %d · 자리표시 불일치 %d"
+                  % (code, r["percent"], r["translated"], r["total"], r["fuzzy"], r["empty"],
+                     len(r["placeholder_mismatch"])))
+        return 0
+    if cmd == "pseudo":
+        print("pseudo →", pseudo())
         return 0
     if cmd == "clean-pseudo":
         clean_pseudo()
@@ -58,4 +308,5 @@ def main(argv) -> int:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
     sys.exit(main(sys.argv))

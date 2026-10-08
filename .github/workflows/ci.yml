@@ -23,6 +23,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install babel==2.18.0      # 261008: 언어팩 검사(test_i18n_*) — 빌드 도구라 requirements 밖(다국어 SOT §3.5)
 
       - name: Run offscreen GUI tests
         env:
@@ -34,7 +35,8 @@ jobs:
             "test_image_geom","test_image_tools","test_image_annot",
             "test_panel_toolbar","test_capture","test_bookmark_panel","test_fullwidth",
             "test_present_draw","test_present_erase","test_present_options","test_present_split",
-            "test_close_edit_confirm"
+            "test_close_edit_confirm",
+            "test_i18n_core","test_i18n_packs"
           )
           $fail = 0
           foreach ($t in $tests) {
