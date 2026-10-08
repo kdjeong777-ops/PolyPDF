@@ -2422,22 +2422,29 @@ class BookmarkTree(QWidget):
         스크롤·폴더 펼침·목록 다시 읽기로 **새로 보이는 파일**도 그때 펼친다. '모두 접기' 는 상태를 끄고
         읽어 둔 파일의 책갈피를 접는다. 상태 중에 사용자가 접은 파일은 다시 펼치지 않는다.
 
-        파일 노드 자체는 펼친 채 둔다(1단 책갈피가 보이게) — 종전 규칙 그대로."""
+        '모두 펼치기' 는 파일 줄을 펼쳐 책갈피가 다 보이게 한다. **'모두 접기' 는 파일 줄까지 접어
+        책갈피가 하나도 보이지 않게** 한다(261008-7, 사용자 결정 — 종전 260908 '파일 줄은 접지 않는다' 를
+        바꿨다: 2단 이하만 접으니 1~2단짜리 파일이 많은 목록은 접어도 거의 그대로여서 '작동 안 한다' 고 보였다.
+        실측 62줄 → 56줄). 폴더 줄(트리 보기)은 책갈피가 아니라 건드리지 않는다."""
         self._expand_all_mode = bool(on)
         if on:
             self._apply_expand_mode()
             return
         self._expand_timer.stop()
         nodes = [n for n in self._iter_file_nodes()
-                 if n.data(0, self.DATA_TOC_LOADED) or n.data(0, self.DATA_ALL_EXPANDED)]
+                 if n.isExpanded() or n.data(0, self.DATA_TOC_LOADED) or n.data(0, self.DATA_ALL_EXPANDED)]
         self.tree.setUpdatesEnabled(False)
         try:
             with self._quiet_tree():
                 for n in nodes:
-                    was_open = n.isExpanded()        # 파일 줄 자체의 펼침은 그대로 둔다(접어 둔 파일을 열지 않게)
                     n.setData(0, self.DATA_ALL_EXPANDED, None)
-                    self._set_subtree_expanded(n, False)
-                    n.setExpanded(was_open)
+                    n.setExpanded(False)             # 먼저 접어 안쪽을 숨긴다 — 아래는 값만 바뀐다(한 번에)
+                    stack = [n.child(k) for k in range(n.childCount())]
+                    while stack:
+                        c = stack.pop()
+                        if c.isExpanded():
+                            c.setExpanded(False)
+                        stack.extend(c.child(k) for k in range(c.childCount()))
         finally:
             self.tree.setUpdatesEnabled(True)
 

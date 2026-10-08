@@ -120,7 +120,8 @@ try:
     kids = [fn.child(i) for i in range(fn.childCount())]
     chk(all(not k.isExpanded() for k in kids if k.childCount()),
         "⑤ 모두 접기 — 하위가 있는 책갈피가 다 접힌다")
-    chk(fn.isExpanded(), "⑤ 파일 노드는 접지 않는다(목록에서 사라지지 않게)")
+    # 261008-7(사용자 결정, 마스터 §4.7.3): 모두 접기는 **파일 줄까지** 접는다 — 종전 기대(파일 줄은 펼친 채)는 바뀌었다
+    chk(not fn.isExpanded(), "⑤ 모두 접기는 파일 줄까지 접는다(책갈피가 하나도 안 보이게)")
     bt._op_expand_all(True)
     chk(all(k.isExpanded() for k in kids if k.childCount()),
         "⑤ 모두 펼치기 — 다 펼쳐진다")

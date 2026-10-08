@@ -149,6 +149,14 @@ try:
         return True
     chk(not bt.is_expand_all_mode() and loaded and all(deep_closed(n) for n in loaded),
         "C 모두 접기 → 상태가 꺼지고 읽어 둔 파일의 책갈피가 접힌다")
+    # 261008-7(사용자 보고 '모두 접기가 작동 안 해', 결정 '파일 줄까지 접기'): 종전에는 파일 줄을 펼친 채 2단 이하만 접어
+    #   1~2단짜리 파일이 많으면 거의 그대로였다(62줄 → 56줄).
+    n_files = len(list(bt._iter_file_nodes()))
+    rows, r = 0, bt.tree.topLevelItem(0)
+    while r is not None:
+        rows += 1; r = bt.tree.itemBelow(r)
+    chk(not any(n.isExpanded() for n in bt._iter_file_nodes()) and rows == n_files,
+        "C ★ 파일 줄까지 접혀 목록에 파일만 남는다(종전: 1단 책갈피가 그대로 보였다)", f"rows={rows} files={n_files}")
     chk(worst[0] < 1000, "E 모두 접기도 1초 안", f"{worst[0]}ms")
     sb.setValue(sb.maximum() // 2); spin(500)
     chk(all(deep_closed(n) for n in bt._visible_file_items()), "C 꺼진 뒤 스크롤해도 펼치지 않는다")
