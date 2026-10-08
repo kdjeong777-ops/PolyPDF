@@ -14,6 +14,7 @@ import gettext
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -31,6 +32,9 @@ _log = logging.getLogger(__name__)
 _lang = KO
 _trans = gettext.NullTranslations()        # 한국어 = 원문 그대로
 _qt_translator = None                      # 설치한 QTranslator(가비지 수거 방지)
+_external = False                          # 외부 언어팩 사용(설정 `external_language_packs`, SOT §3.4 — 기본 꺼짐)
+_fallback_from = ""                        # 고른 언어의 팩이 없어 물러났으면 그 코드(상태줄에 한 번 알린다)
+_PH = re.compile(r"\{[^{}]*\}|%[sd]")      # 자리표시 — 번역과 원문의 집합이 같아야 한다(SOT §3.2)
 
 
 # ── 위치 ──────────────────────────────────────────────────────────────────
@@ -47,6 +51,60 @@ def pack_dir() -> Path:
     return base / "resources" / "locale"
 
 
+def external_dir() -> Path:
+    """외부 언어팩 폴더 `%APPDATA%\\LocalTools\\PolyPDF\\locale`(설정 폴더 아래, SOT §3.4). 앱 이름을 정한 뒤 부른다."""
+    try:
+        from viewer.settings_store import settings_dir
+        return Path(settings_dir()) / "locale"
+    except Exception:
+        return Path()
+
+
+def _pack_root(code: str) -> Path:
+    """그 언어의 팩 폴더 — 외부 팩을 켰고 쓸 수 있으면 외부(내장을 덮는다), 아니면 내장."""
+    if _external and code not in (KO, PSEUDO):
+        ext = external_dir() / code
+        if (ext / "pack.json").is_file():
+            if _valid_meta(_load_meta_file(ext / "pack.json"), code) and \
+                    _mo_ok(ext / "LC_MESSAGES" / (DOMAIN + ".mo")):
+                return ext
+            _log.warning("외부 언어팩이 올바르지 않아 무시(내장을 쓴다): %s", ext)
+    return pack_dir() / code
+
+
+def _mo_ok(mo: Path) -> bool:
+    """외부 팩의 .mo 가 있고 gettext 로 읽힌다(깨진 파일이면 그 팩을 쓰지 않는다)."""
+    key = str(mo)
+    if key not in _mo_checked:
+        try:
+            with open(mo, "rb") as f:
+                gettext.GNUTranslations(f)
+            _mo_checked[key] = True
+        except Exception:
+            _mo_checked[key] = False
+    return _mo_checked[key]
+
+
+_mo_checked = {}
+
+
+def _load_meta_file(f: Path):
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _valid_meta(meta, code: str) -> bool:
+    """pack.json 형식(SOT §3.2) — 사전·코드=폴더·이름·방향(ltr)·대체 사슬은 코드 목록."""
+    if not isinstance(meta, dict) or normalize(meta.get("code", "")) != code or not meta.get("name"):
+        return False
+    if str(meta.get("direction", "ltr")).lower() != "ltr":
+        return False
+    fb = meta.get("fallback", [])
+    return isinstance(fb, list) and all(isinstance(x, str) for x in fb)
+
+
 def normalize(code: str) -> str:
     """언어 코드를 gettext 꼴 `ll` / `ll_CC` 로(`ko-KR` → `ko_KR`, SOT §3.2)."""
     c = str(code or "").strip().replace("-", "_")
@@ -59,10 +117,9 @@ def normalize(code: str) -> str:
 def _read_meta(code: str):
     if code == KO:
         return dict(_KO_META)
-    f = pack_dir() / code / "pack.json"
-    try:
-        meta = json.loads(f.read_text(encoding="utf-8"))
-    except Exception:
+    f = _pack_root(code) / "pack.json"
+    meta = _load_meta_file(f)
+    if meta is None:
         return None
     if not isinstance(meta, dict) or normalize(meta.get("code", "")) != code or not meta.get("name"):
         _log.warning("언어팩 메타가 올바르지 않아 무시: %s", f)
@@ -78,10 +135,13 @@ def _read_meta(code: str):
 def available_languages() -> list:
     """고를 수 있는 언어 `[(코드, 자기 이름, 상태), …]` — 한국어 먼저, 나머지는 코드 순. 가짜 언어는 뺀다."""
     out = [(KO, _KO_META["name"], "complete")]
-    try:
-        dirs = sorted(d.name for d in pack_dir().iterdir() if d.is_dir())
-    except Exception:
-        dirs = []
+    names = set()
+    for root in ([pack_dir()] + ([external_dir()] if _external else [])):
+        try:
+            names |= {d.name for d in root.iterdir() if d.is_dir()}
+        except Exception:
+            pass
+    dirs = sorted(names)
     for code in dirs:
         if code in (KO, PSEUDO) or normalize(code) != code:
             continue
@@ -97,17 +157,46 @@ def tr(text: str) -> str:
     빈 글자는 그대로 — gettext 는 빈 키에 .mo 머리(메타데이터)를 돌려준다(`tr(변수)` 가 빈 값일 때)."""
     if not text:
         return text
-    return _trans.gettext(text)
+    return _safe(text, _trans.gettext(text))
 
 
 def trp(context: str, text: str) -> str:
     """문맥이 다른 같은 원문(msgctxt)."""
-    return _trans.pgettext(context, text)
+    return _safe(text, _trans.pgettext(context, text))
 
 
 def trn(text: str, n: int) -> str:
     """수에 따라 꼴이 바뀌는 문구 — 한국어 원문은 한 꼴이라 단·복수 키가 같다."""
-    return _trans.ngettext(text, text, int(n))
+    return _safe(text, _trans.ngettext(text, text, int(n)))
+
+
+def _safe(src: str, out: str) -> str:
+    """번역의 자리표시가 원문과 다르면 원문을 돌려준다 — 쓰는 곳의 `.format()` 이 KeyError 로
+    창을 깨지 않게(외부 언어팩·검사를 거치지 않은 팩, SOT §3.2·§3.4). 같으면 번역 그대로."""
+    if out is src or out == src:
+        return out
+    try:
+        ok = _ph_cache[(src, out)]
+    except KeyError:
+        ok = sorted(_PH.findall(src)) == sorted(_PH.findall(out))
+        if not ok:
+            _log.warning("번역의 자리표시가 원문과 달라 원문을 쓴다: %r", src[:60])
+        if len(_ph_cache) > 20000:
+            _ph_cache.clear()
+        _ph_cache[(src, out)] = ok
+    return out if ok else src
+
+
+_ph_cache = {}
+
+
+def fallback_from() -> str:
+    """고른 언어의 팩을 찾지 못해 물러났으면 그 코드(없으면 ""). 창이 상태줄에 한 번 알린다(SOT §3.4)."""
+    return _fallback_from
+
+
+def external_enabled() -> bool:
+    return _external
 
 
 def tr_noop(text: str) -> str:
@@ -165,7 +254,7 @@ def _translations_for(codes: list):
     """사슬의 `.mo` 들을 add_fallback 으로 잇는다. 하나도 없으면 NullTranslations."""
     head = None
     for c in codes:
-        mo = pack_dir() / c / "LC_MESSAGES" / (DOMAIN + ".mo")
+        mo = _pack_root(c) / "LC_MESSAGES" / (DOMAIN + ".mo")
         if not mo.is_file():
             _log.warning("언어팩 .mo 가 없다(빌드 때 만든다 — scripts/i18n.py compile): %s", mo)
             continue
@@ -256,13 +345,24 @@ def _install_qt(app, code: str, meta) -> None:
         _log.info("Qt 기본 번역 설치 실패: %s", e)
 
 
-def install(app=None, code: str = None) -> str:
+def install(app=None, code: str = None, external: bool = None) -> str:
     """언어를 정하고 번역을 설치한다. `POLYPDF_LANG` 이 있으면 그것이 먼저(SOT §3.6).
     고른 언어의 팩이 없으면 en → ko 로 물러난다(설정 값은 바꾸지 않는다, SOT §3.4). 정한 코드를 돌려준다."""
-    global _lang, _trans
+    global _lang, _trans, _external, _fallback_from
+    if external is None:                       # 설정 `external_language_packs`(SOT §3.4 — 기본 꺼짐)
+        try:
+            from viewer.settings_store import peek_pref
+            external = bool(peek_pref("external_language_packs"))
+        except Exception:
+            external = False
+    _external = bool(external)
+    _ph_cache.clear()
+    _mo_checked.clear()
     want = normalize(os.environ.get(ENV) or code or KO)
+    _fallback_from = ""
     if want != KO and want != PSEUDO and _read_meta(want) is None:
         _log.warning("언어팩이 없어 물러남: %s", want)
+        _fallback_from = want
         want = "en" if _read_meta("en") else KO
     _lang = want
     _trans = gettext.NullTranslations() if want == KO else _translations_for(_chain(want))

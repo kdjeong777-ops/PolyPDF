@@ -350,6 +350,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 상태바
         self.status = QStatusBar()
         self.setStatusBar(self.status)
+        # 261008-29(다국어 SOT §3.4): 고른 언어의 팩을 찾지 못해 물러났으면 한 번 알린다(설정 값은 그대로)
+        from viewer import i18n as _i18n_fb
+        if _i18n_fb.fallback_from():
+            QTimer.singleShot(1500, lambda c=_i18n_fb.fallback_from(): self.status.showMessage(
+                tr("'{code}' 언어팩을 찾지 못해 다른 언어로 표시합니다 (설정은 그대로입니다).").format(code=c), 10000))
         self.progress = QProgressBar()
         self.progress.setMaximumWidth(220)
         self.progress.setVisible(False)
@@ -7370,12 +7375,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         dlg = SettingsDialog(self._prefs, self, host=self)
         if dlg.exec() == dlg.DialogCode.Accepted:
             new_prefs = dlg.result_prefs()
-            _lang_before = str(self._prefs.get("language", "ko"))
+            _lang_before = (str(self._prefs.get("language", "ko")),
+                            bool(self._prefs.get("external_language_packs", False)))
             self._apply_prefs(new_prefs)
             # 즉시 settings.json 저장
             self._save_settings_now()
             self.status.showMessage(tr("설정 저장됨"), 3000)
-            if str(self._prefs.get("language", "ko")) != _lang_before:
+            if (str(self._prefs.get("language", "ko")),
+                    bool(self._prefs.get("external_language_packs", False))) != _lang_before:
                 self._offer_language_restart()
 
     def _offer_language_restart(self):
@@ -7527,6 +7534,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             "theme": str(prefs.get("theme", old.get("theme", "auto"))),
             # 261008(다국어 SOT §4): 화면 언어 — 허용목록이라 여기 없으면 조용히 사라진다.
             "language": str(prefs.get("language", old.get("language", "ko")) or "ko"),
+            # 261008-29(다국어 SOT §3.4): 외부 언어팩(기본 꺼짐, 다시 시작하면 적용)
+            "external_language_packs": bool(prefs.get("external_language_packs",
+                                                      old.get("external_language_packs", False))),
             # 260615-9(P11): 인터넷 사전(단어장)
             "online_dict_enabled": bool(prefs.get("online_dict_enabled",
                                                   old.get("online_dict_enabled", True))),

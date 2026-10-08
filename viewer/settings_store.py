@@ -27,7 +27,9 @@ PERSONAL_PREF_KEYS = {"recording_dir", "recording_mic", "recording_system",
                       "recording_test_ok",
                       # 261008(다국어 SOT §4): 화면 언어 — 배포 기본값에 넣지 않고(첫 실행 규칙을
                       #   따르게), 설정을 초기화해도 화면 언어는 그대로.
-                      "language"}
+                      "language",
+                      # 261008-29(다국어 SOT §3.4): 외부 언어팩 사용 — 이 PC 의 설정 폴더를 가리킨다
+                      "external_language_packs"}
 
 # 260628(보안감사): API 키 등 **비밀 값** — 마스터 SOT §8.2.0 의 3중 규칙 대상.
 #   ① 저장 시 DPAPI 암호화, ② 마이그레이션 백업에서 제거, ③ 배포용 기본값에서 제외.

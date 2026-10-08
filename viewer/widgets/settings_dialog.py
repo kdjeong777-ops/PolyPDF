@@ -292,6 +292,18 @@ class SettingsDialog(QDialog):
         _li = self.cmb_language.findData(_cur_lang)
         self.cmb_language.setCurrentIndex(_li if _li >= 0 else 0)
         tl.addRow(tr("언어 / Language:"), self.cmb_language)
+        # 261008-29(다국어 SOT §3.4, 사용자 결정): 외부 언어팩 — 기본 꺼짐. 켜면 다시 시작할 때
+        #   설정 폴더의 locale\<코드>\ 팩을 읽는다(같은 코드면 내장을 덮는다). 형식이 틀린 팩은 무시.
+        self.chk_ext_lang = QCheckBox(tr("외부 언어팩 사용 (다시 시작하면 적용)"))
+        self.chk_ext_lang.setToolTip(tr("설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. "
+                                        "같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."))
+        self.chk_ext_lang.setChecked(bool(self._prefs.get("external_language_packs", False)))
+        btn_ext = QPushButton(tr("폴더 열기"))
+        btn_ext.setToolTip(str(_i18n.external_dir()))
+        btn_ext.clicked.connect(self._open_external_lang_dir)
+        _row_ext = QHBoxLayout(); _row_ext.setContentsMargins(0, 0, 0, 0)
+        _row_ext.addWidget(self.chk_ext_lang); _row_ext.addWidget(btn_ext); _row_ext.addStretch(1)
+        tl.addRow("", _row_ext)
         layout.addWidget(grp_theme)
 
         # ── 인터넷 사전(단어장) ─────────────────────────── 260615-9(P11)
@@ -713,6 +725,7 @@ class SettingsDialog(QDialog):
             # 260606-13: 화면 스타일(테마)
             "theme": self.cmb_theme.currentData(),
             "language": self.cmb_language.currentData(),     # 261008(다국어 SOT §4)
+            "external_language_packs": self.chk_ext_lang.isChecked(),   # 261008-29(다국어 SOT §3.4)
             # 260615-9(P11): 인터넷 사전
             "online_dict_enabled": self.chk_online_dict.isChecked(),
             "stdict_key": self.ed_stdict_key.text().strip(),
@@ -727,3 +740,15 @@ class SettingsDialog(QDialog):
             "translate_model": self.cmb_translate_model.currentData(),
             "translate_consent": self.chk_translate_consent.isChecked(),
         }
+
+    def _open_external_lang_dir(self):
+        """외부 언어팩 폴더를 만들고(없으면) 탐색기로 연다(다국어 SOT §3.4)."""
+        from viewer import i18n as _i18n
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        d = _i18n.external_dir()
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(d)))
