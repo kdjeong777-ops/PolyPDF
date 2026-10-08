@@ -39,6 +39,10 @@ class _Status:
 
 class _Host(EditMixin):
     status = _Status()
+    # 260930-2(§4.7.13) 부터 꾸밈 저장이 사진도 굽는다(`_ensure_page_meta_store`) — 폴더가 없으면 사진 없음.
+    #   이 둘이 없으면 AttributeError 를 저장의 except 가 받아 파일이 안 생겼다(261008-1 전체 검사에서 발견).
+    _folder = None
+    _page_meta = None
 
 
 root = Path(tempfile.mkdtemp(prefix="polypdf_subset_"))

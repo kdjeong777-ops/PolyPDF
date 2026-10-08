@@ -274,7 +274,7 @@ class EditMixin:
         src = Path(file_path)
         from PyQt6.QtWidgets import QFileDialog
         out, _ = QFileDialog.getSaveFileName(
-            self, "일반뷰어용으로 저장 — 새 PDF로",
+            self, "저장(일반뷰어용) — 새 PDF로",
             str(src.with_name(src.stem + "_일반뷰어용.pdf")), "PDF (*.pdf)")
         if not out:
             return
@@ -283,7 +283,12 @@ class EditMixin:
             from PyQt6.QtGui import QColor
             doc = fitz.open(str(src))
             self._bake_drawings_into_doc(doc, norm)
-            self._bake_images_into_doc(doc, file_path)   # 260930-2(§4.7.13): 사진도
+            # 260930-2(§4.7.13): 사진도. 261008-1: 하이퍼링크 굽기처럼 감싼다 — 사진 쪽 실패
+            #   (꾸밈 저장소를 못 만드는 등)가 꾸밈·하이퍼링크 저장까지 통째로 막지 않게(사진만 빠진 파일).
+            try:
+                self._bake_images_into_doc(doc, file_path)
+            except Exception:
+                pass
             # 260615-3: ② 하이퍼링크도 함께 PDF 에 베이크(꾸밈 저장)
             if with_hyperlinks:
                 try:
@@ -296,7 +301,7 @@ class EditMixin:
             subset_fonts_safely(doc)
             doc.save(out, garbage=4, deflate=True)
             doc.close()
-            self.status.showMessage(f"일반뷰어용으로 저장: {Path(out).name}", 4000)
+            self.status.showMessage(f"저장(일반뷰어용): {Path(out).name}", 4000)
             QMessageBox.information(self, "저장 완료",
                                    f"꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. "
                                    f"다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다."
@@ -524,7 +529,7 @@ class EditMixin:
                     and str(tp._doc.path) == str(cur))
             if same and tp.is_page_dirty():
                 if QMessageBox.question(
-                        self, "일반뷰어용으로 저장",
+                        self, "저장(일반뷰어용)",
                         "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. "
                         "지금 구우면 그 편집은 빠집니다. 계속할까요?"
                 ) != QMessageBox.StandardButton.Yes:

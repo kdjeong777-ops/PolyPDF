@@ -333,6 +333,31 @@ class PdfIndex:
             self.conn.execute("DELETE FROM files WHERE id = ?", (fid,))
             self.conn.commit()
 
+    def rename_file(self, old_path: Path, new_path: Path) -> bool:
+        """261008-1(마스터 §4.7.14): 이름만 바뀐 파일 — 본문은 그대로이니 **경로만** 고친다.
+
+        다시 색인하면 그 사이 검색에서 빠지고, 새 색인 작업이 진행 중인 다른 색인(예: 방금 더한
+        파일들)을 취소한다(`_start_index_worker` 는 한 번에 하나). 목록 조사·표 캐시 키도 옮긴다.
+        새 경로에 옛 행이 남아 있으면(같은 이름을 지웠다 다시 쓴 경우) 그 행을 먼저 지운다.
+        색인에 없던 파일이면 False — 부른 쪽이 색인을 건다."""
+        row = self._find_file_row(old_path, "id")
+        if not row:
+            return False
+        from viewer.pathutil import norm_key
+        ok, nk = norm_key(str(old_path)), norm_key(str(new_path))
+        with self.conn:
+            stale = self.conn.execute(
+                "SELECT id FROM files WHERE path = ?", (str(new_path),)).fetchone()
+            if stale and stale["id"] != row["id"]:
+                self.conn.execute("DELETE FROM pages_fts WHERE file_id = ?", (stale["id"],))
+                self.conn.execute("DELETE FROM files WHERE id = ?", (stale["id"],))
+            self.conn.execute("UPDATE files SET path = ? WHERE id = ?", (str(new_path), row["id"]))
+            if ok != nk:
+                for tbl in ("probe_cache", "page_tables"):
+                    self.conn.execute(f"DELETE FROM {tbl} WHERE key = ?", (nk,))
+                    self.conn.execute(f"UPDATE {tbl} SET key = ? WHERE key = ?", (nk, ok))
+        return True
+
     def _pace(self):
         """응답성 SOT §4 ⑦ — 방금 일한 만큼 비례해 쉰다(폴더 전체가 한 박자를 공유)."""
         return _pacing.pace(self)

@@ -189,6 +189,16 @@ class HyperlinkStore:
         except Exception:
             return False
 
+    def rename_file(self, old_path, new_path) -> bool:
+        """261008-1(마스터 §4.7.14): 파일 이름이 바뀌면 그 파일의 링크를 새 키로 옮긴다.
+        키가 상대경로라 옮기지 않으면 링크가 옛 이름에 남아 **보이지 않게** 된다. 바뀌면 True."""
+        ko, kn = self._rel_key(old_path), self._rel_key(new_path)
+        links = self._data["links"]
+        if ko is None or kn is None or ko == kn or ko not in links:
+            return False
+        links[kn] = links.pop(ko)
+        return True
+
     # --- 조회/수정 ---
     def links_for(self, file_path, page0) -> list:
         key = self._rel_key(file_path)

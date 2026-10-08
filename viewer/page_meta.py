@@ -85,6 +85,16 @@ class PageMetaStore:
         files[key].setdefault("images", {})         # 260611-15: 삽입 이미지(주석)
         return files[key]
 
+    def rename_file(self, old_path, new_path) -> bool:
+        """261008-1(마스터 §4.7.14): 파일 이름이 바뀌면 그 파일의 메타(꾸밈·사진·크롭·숨김·회전)를
+        새 키로 옮긴다. 키가 상대경로라 옮기지 않으면 꾸밈이 옛 이름에 남아 **사라진 것처럼** 보인다."""
+        ko, kn = self._key(old_path), self._key(new_path)
+        files = self._data["files"]
+        if ko is None or kn is None or ko == kn or ko not in files:
+            return False
+        files[kn] = files.pop(ko)
+        return True
+
     # --- IO ---
     def _load(self):
         p = self._sidecar()

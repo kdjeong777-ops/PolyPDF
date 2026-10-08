@@ -132,15 +132,15 @@ try:
     s_app = inspect.getsource(appmod)
     i_file = s_app.find('m_file = bar.addMenu')
     seg_f = s_app[i_file:i_file + 2000]
-    for label in ("저장", "다른 이름으로 저장", "일반뷰어용으로 저장"):
+    for label in ("저장(PolyPDF용)", "다른 이름으로 저장", "저장(일반뷰어용)"):   # 261008-1 이름
         chk(label in seg_f, "⑦ 파일 메뉴에 '%s'" % label)
     chk("_force_save_as" in s_app,
         "⑦ '다른 이름으로' 는 💾 와 같은 길에 깃발만 세운다(저장 규칙 한 벌)")
     from viewer.widgets import bookmark_tree as bt
     s_bt = inspect.getsource(bt)
-    chk("flattenFileRequested" in s_bt and "일반뷰어용으로 저장" in s_bt,
+    chk("flattenFileRequested" in s_bt and "저장(일반뷰어용)" in s_bt,
         "⑦ 책갈피 우클릭에 저장 항목")
-    chk("self.flattenFileRequested.emit(item.data(0, self.DATA_FILE))" in s_bt,
+    chk("self.flattenFileRequested.emit(_dir_target)" in s_bt,   # 261008-1: 책갈피 행이면 그 파일
         "⑦ ★ **누른 그 파일**에 작용한다(사용자 결정)")
 
 except Exception:

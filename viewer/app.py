@@ -771,7 +771,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             paths = []
         if not paths:
-            QMessageBox.information(self, "클립보드 저장", "복사할 스크린샷이 없습니다.")
+            QMessageBox.information(self, "클립보드로 복사", "복사할 스크린샷이 없습니다.")
             return
         # 클립보드 히스토리 비우기(베스트 에포트) + 현재 클립보드 클리어
         try:
@@ -796,7 +796,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         def copy_next():
             if not self._clip_queue:
                 self.status.showMessage(
-                    f"클립보드 저장 완료: {self._clip_total}개 — Win+V 로 붙여넣기", 7000)
+                    f"클립보드로 복사 완료: {self._clip_total}개 — Win+V 로 붙여넣기", 7000)
                 return
             p = self._clip_queue.pop(0)
             try:
@@ -807,8 +807,56 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 pass
             QTimer.singleShot(350, copy_next)   # 간격 → 각각 히스토리 항목으로
 
-        self.status.showMessage("클립보드 저장 중...", 3000)
+        self.status.showMessage("클립보드로 복사 중...", 3000)
         copy_next()
+
+    CLIP_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff")
+
+    def _on_clipboard_import(self):
+        """261008-1(스크린샷 SOT §8.2, 사용자 요청): 클립보드의 그림을 스크린샷 목록에 카드로 넣는다.
+
+        받는 것은 둘이다(사용자 결정) — ① 캡처 도구 등으로 복사한 **그림 데이터**,
+        ② 탐색기에서 복사한 **그림 파일**(여러 개). 파일을 고르는 쪽이 먼저다: 탐색기 복사는
+        그림 데이터로 아이콘을 함께 싣는 경우가 있어, 그림부터 보면 파일 대신 아이콘이 들어간다.
+        카드는 캡처와 **같은 길**(`save_screenshot` → 임시 폴더 PNG)로 만든다 — 원본 파일을
+        가리키게 두면 그 파일을 옮기거나 지울 때 카드가 깨진다.
+        """
+        from PyQt6.QtGui import QImage, QPixmap
+        from viewer import screenshot as ss
+        md = QApplication.clipboard().mimeData()
+        items = []                                   # (QImage, 이름)
+        try:
+            if md is not None and md.hasUrls():
+                for u in md.urls():
+                    p = u.toLocalFile()
+                    if p and p.lower().endswith(self.CLIP_IMAGE_EXTS) and Path(p).is_file():
+                        img = QImage(p)
+                        if not img.isNull():
+                            items.append((img, Path(p).name))
+            if not items and md is not None and md.hasImage():
+                img = QApplication.clipboard().image()
+                if img is not None and not img.isNull():
+                    items.append((img, "클립보드.png"))
+        except Exception:
+            items = []
+        if not items:
+            QMessageBox.information(
+                self, "클립보드 가져오기",
+                "클립보드에 가져올 그림이 없습니다.\n"
+                "(캡처 도구로 복사한 그림이나 탐색기에서 복사한 그림 파일을 가져옵니다.)")
+            return
+        n = 0
+        for img, name in items:
+            try:
+                saved = ss.save_screenshot(QPixmap.fromImage(img), source_name=name)
+                self.shot_strip.add_item(str(saved), kind="image",
+                                         label=Path(saved).stem, prepend=False)
+                n += 1
+            except Exception:
+                continue
+        if n:
+            self._ensure_shots_visible()
+            self.status.showMessage(f"클립보드에서 그림 {n}개를 가져왔습니다.", 4000)
 
     def _do_capture(self, view):
         """캡쳐 버튼: 썸네일 다중선택→전체화면 multi, 아니면 현재 모드."""
@@ -1206,20 +1254,25 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.btn_save_pdf = QPushButton("💾 PDF 저장")
         self.btn_save_pdf.setToolTip("스크린샷 전체를 PDF로 (Ctrl+S)")
         self.btn_save_pdf.clicked.connect(self.action_save_screenshot_pdf)
-        # 260606-17: 클립보드 저장(전체 스크린샷을 순서대로 클립보드 히스토리에)
-        self.btn_clip = QPushButton(" 클립보드 저장")
+        # 260606-17: 클립보드로 복사(전체 스크린샷을 순서대로 클립보드 히스토리에)
+        #   261008-1(스크린샷 SOT §8, 사용자 요청): '클립보드 저장' → '클립보드로 복사' — 파일로
+        #   남는 것이 아니라 복사라서. 반대 방향 '클립보드 가져오기' 를 그 앞에 둔다.
+        self.btn_clip = QPushButton(" 클립보드로 복사")
         _cico = resource_path("icon_clipboard.png")
         if _cico:
             self.btn_clip.setIcon(QIcon(_cico))
         else:
-            self.btn_clip.setText("📋 클립보드 저장")
-        self.btn_clip.setToolTip("저장 후 'Win+v'로 여러 목록을 붙여넣으세요")
+            self.btn_clip.setText("📋 클립보드로 복사")
+        self.btn_clip.setToolTip("복사한 뒤 'Win+v'로 여러 목록을 붙여넣으세요")
         self.btn_clip.clicked.connect(self._on_clipboard_save)
+        self.btn_clip_in = QPushButton("📥 클립보드 가져오기")
+        self.btn_clip_in.setToolTip("클립보드의 그림(캡처·탐색기에서 복사한 그림 파일)을 스크린샷 목록에 넣습니다")
+        self.btn_clip_in.clicked.connect(self._on_clipboard_import)
 
         self.shot_strip = MiniStrip(
             "🖼 스크린샷", max_items=int(self._prefs.get("screenshot_max", 30)),
             draggable=True,
-            extra_widgets=[self.btn_clip, self.btn_save_pdf],
+            extra_widgets=[self.btn_clip_in, self.btn_clip, self.btn_save_pdf],
         )
 
         self.search_area = self._build_search_area()
@@ -1468,14 +1521,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260930-2(마스터 §4.7.13, 사용자 요청): 저장을 **파일 메뉴에도** 둔다.
         #   종전에는 책갈피창의 💾 단추 하나뿐이라 찾기 어려웠다.
         m_file.addSeparator()
-        a_save = QAction("저장", self)
+        # 261008-1(§4.7.13, 사용자 결정): 이름·순서를 책갈피창 우클릭 메뉴와 같게 맞춘다.
+        a_save_as = QAction("다른 이름으로 저장...", self)
+        a_save_as.setToolTip("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다.")
+        a_save_as.triggered.connect(self._action_save_as)
+        m_file.addAction(a_save_as)
+        a_save = QAction("저장(PolyPDF용)", self)
         a_save.setToolTip("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작).")
         a_save.triggered.connect(lambda: self.bookmark_tree._op_save())
         m_file.addAction(a_save)
-        a_save_as = QAction("다른 이름으로 저장 (_edited)...", self)
-        a_save_as.triggered.connect(self._action_save_as)
-        m_file.addAction(a_save_as)
-        a_flat = QAction("일반뷰어용으로 저장 (꾸밈·사진 굽기)...", self)
+        a_flat = QAction("저장(일반뷰어용)...", self)
         a_flat.setToolTip("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
@@ -1659,7 +1714,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             ("present",       ("발표보기", "F5", "보기")),
             ("capture",       ("화면 캡처", "Ctrl+Shift+S", "캡처·저장")),
             ("save_shots_pdf", ("스크린샷 PDF 저장", "Ctrl+S", "캡처·저장")),
-            ("clipboard_save", ("클립보드 저장", "Ctrl+Shift+C", "캡처·저장")),
+            ("clipboard_save", ("클립보드로 복사", "Ctrl+Shift+C", "캡처·저장")),
             ("draw_pen_1",    ("선 1 선택", "Ctrl+1", "선긋기(편집모드)")),
             ("draw_pen_2",    ("선 2 선택", "Ctrl+2", "선긋기(편집모드)")),
             ("draw_pen_3",    ("선 3 선택", "Ctrl+3", "선긋기(편집모드)")),
@@ -1937,6 +1992,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.bookmark_tree_right.bookmarkActivated.connect(self._on_bookmark_activated_right)
         # 260901-2: 하단 트리의 파일 복사/이동도 같은 처리(인덱스·메인뷰 갱신)
         self.bookmark_tree_right.filesRelocated.connect(self._on_files_relocated)
+        # 261008-1(§4.7.14): 아래 책갈피창의 이름 변경·삭제도 본문 핸들을 먼저 놓고 다시 연다
+        self.bookmark_tree_right.releaseFileRequested.connect(self._on_release_file)
+        self.bookmark_tree_right.fileOpCompleted.connect(self._on_file_op_completed)
         # 260618-25/27: 책갈피 우클릭 — 1단=‘2단 보기’, 2단=반대 창으로 복사
         self.bookmark_tree.set_pane_role(0)
         self.bookmark_tree_right.set_pane_role(1)
@@ -2053,8 +2111,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             lambda f: self._action_build_study_and_bookmarks(file_path=f))
         self.bookmark_tree.mergeFilesRequested.connect(self._on_merge_files)
         self.bookmark_tree.translateFileRequested.connect(self._action_translate_file)  # 260621-P0
-        self.bookmark_tree.flattenFileRequested.connect(          # 260930-2(§4.7.13)
-            lambda f: self._action_save_decorated_pdf(file_path=f))
+        # 260930-2·261008-1(§4.7.13): 책갈피창 우클릭 저장 — 아래(2창) 책갈피창에서도 같게
+        for _bt in (self.bookmark_tree, self.bookmark_tree_right):
+            _bt.flattenFileRequested.connect(
+                lambda f: self._action_save_decorated_pdf(file_path=f))
+            _bt.saveAsFileRequested.connect(
+                lambda f, b=_bt: self._action_save_as(bt=b, file_path=f))
         self.bookmark_tree.editGlossaryRequested.connect(self._action_edit_glossary)  # 260623
         self.bookmark_tree.translateFilesRequested.connect(self._action_translate_files)  # 260621-P0
         # 260606-22: 책갈피 편집모드 ↔ 썸네일 페이지 편집(삭제/이동) 동기화
@@ -2513,13 +2575,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """파일 시스템 작업 전 호출 — 같은 파일을 열고 있다면 핸들 해제."""
         self._released_state = None
         try:
-            tgt = Path(path).resolve()
-            files = [mv.current_file() for mv in self._mv]
-            if any(f and Path(f).resolve() == tgt for f in files):
-                page = self.main_view.current_page()
-                self._released_state = (str(path), int(page))
-                self._close_main_view_doc()
-                QApplication.processEvents()
+            # 261008-1(§4.7.14): 표준 비교 키 — `resolve()` 는 디스크를 탄다(응답성 SOT §4.4).
+            #   어느 창이 열고 있었는지도 적어 둔다 — 2단에서 아래 창 파일을 바꾸면 그 창에 다시 연다.
+            from viewer.pathutil import norm_key
+            tk = norm_key(str(path))
+            for i, mv in enumerate(self._mv):
+                f = mv.current_file()
+                if f and norm_key(str(f)) == tk:
+                    self._released_state = (str(path), int(mv.current_page()), i)
+                    self._close_main_view_doc()
+                    QApplication.processEvents()
+                    break
         except Exception:
             self._released_state = None
 
@@ -2534,10 +2600,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._released_state = None
         if not rel:
             return
-        _old, page = rel
+        _old, page, pane = (tuple(rel) + (None,))[:3]
         target = new if new else None        # 삭제면 None
         try:
             if target and Path(target).exists():
+                if (pane is not None and getattr(self, "_split_on", False)
+                        and pane != self._active_pane):
+                    self._set_active_pane(pane)          # 261008-1: 닫았던 그 창에 다시 연다
                 self._load_main(HistoryItem(target, int(page), "", "bookmark"))
         except Exception:
             pass
@@ -2697,22 +2766,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         pairs = [[old, new], ...] — old 가 "" 면 복사(원본 유지). 이동이면 옛 경로의
         검색 인덱스를 지우고 새 경로를 인덱싱하며, 메인 뷰어가 옮겨진 파일을 보고
         있었다면 새 경로로 다시 연다(핸들은 트리가 이미 풀어 둔 상태)."""
-        moved_from = [str(o) for o, _n in pairs if o]
+        # 261008-1(§4.7.14): 이동·이름 변경은 본문이 그대로다 → 색인은 **경로만** 고친다.
+        #   종전에는 옛 행을 지우고 새로 색인했다 — 그 사이 검색에서 빠지고, 새 색인 작업이 진행 중인
+        #   다른 색인(방금 더한 파일들)을 취소했다(한 번에 하나). 색인에 없던 파일만 새로 색인한다.
+        to_index = []
         try:
-            from viewer.indexer import Indexer
-            idx = Indexer(self._db_path)
+            # 261008-1: 종전 `Indexer` 는 **없는 이름**이라 ImportError 를 except 가 삼켜, 이동 뒤 옛 행이
+            #   한 번도 지워지지 않았다(검색에 옛 경로가 남았다). UI 스레드 연결은 기다리지 않는다(응답성 §4 ⑤) —
+            #   잠겨 있으면 아래에서 새로 색인하는 쪽으로 넘어간다.
+            from viewer.indexer import PdfIndex
+            idx = PdfIndex(self._db_path, busy_ms=PdfIndex.BUSY_MS_UI)
             try:
-                for old in moved_from:
-                    idx.remove_file(Path(old))
+                for old, new in pairs:
+                    if not old or not idx.rename_file(Path(old), Path(new)):
+                        to_index.append(new)
             finally:
                 idx.close()
         except Exception:
-            pass
-        for _old, new in pairs:                 # 새 경로는 검색에 다시 포함
+            to_index = [n for _o, n in pairs]
+        for new in to_index:                    # 새 경로는 검색에 다시 포함
             try:
                 self._index_single_file(Path(new))
             except Exception:
                 pass
+        # 261008-1(§4.7.14): 꾸밈·사진·하이퍼링크 사이드카 키(상대경로)도 새 이름으로
+        self._rehome_sidecars([(o, n) for o, n in pairs if o])
         # 메인 뷰어가 옮겨진 파일을 보고 있었으면 새 경로로 재로드
         try:
             from viewer.pathutil import norm_key            # SOT §7.0 표준 키
@@ -2727,6 +2805,34 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         self._refresh_search_scope()
+
+    def _rehome_sidecars(self, pairs):
+        """261008-1(마스터 §4.7.14): 옮기거나 이름을 바꾼 파일의 꾸밈·사진(`page_meta.json`)과
+        하이퍼링크(`hyperlinks.json`)를 새 키로 옮긴다. 키가 폴더 기준 상대경로라 옮기지 않으면
+        **사라진 것처럼** 보인다. 폴더 밖으로 나간 파일은 키를 만들 수 없어 그대로 둔다.
+
+        저장하지 않은 꾸밈이 있으면(`_edit_dirty`) 디스크에는 쓰지 않는다 — 메모리에서만 옮기고,
+        쓰는 것은 그 편집을 저장할 때다(이름 변경이 편집을 대신 저장하면 안 된다)."""
+        if not pairs:
+            return
+        for getter in (self._ensure_page_meta_store, self._ensure_hyperlink_store):
+            try:
+                st = getter()
+            except Exception:
+                st = None
+            if st is None or not hasattr(st, "rename_file"):
+                continue
+            changed = False
+            for old, new in pairs:
+                try:
+                    changed = st.rename_file(old, new) or changed
+                except Exception:
+                    pass
+            if changed and not getattr(self, "_edit_dirty", False):
+                try:
+                    st.save()
+                except Exception:
+                    pass
 
     # ===== 260908-2: 텍스트 창 (텍스트 창 SOT) =====================
     def _wire_text_panel(self):
@@ -3686,15 +3792,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     SAVE_REPLACE_TRIES = 4                          # 바꿔치기 재시도(약 0.6초) — 그 뒤는 제자리 덮어쓰기
 
-    def _action_save_as(self):
+    def _action_save_as(self, _checked=False, *, bt=None, file_path=None):
         """260930-2(§4.7.13): '다른 이름으로 저장' — 💾 와 **같은 길**에 Shift 만 세운 것.
 
         저장 순서·다른 창 확인·배경 파일 작업(마스터 §4.7.5·§4.7.8)을 그대로 타야 하므로
         저장 경로를 새로 만들지 않는다. 깃발은 한 번 쓰고 반드시 내린다.
+        261008-1: 책갈피창 우클릭이면 그 책갈피창(`bt`)의 **누른 파일**(`file_path`)에.
         """
+        bt = bt or self.bookmark_tree
         self._force_save_as = True
         try:
-            self.bookmark_tree._op_save()
+            bt._op_save(file_path=file_path)
         finally:
             self._force_save_as = False
 
@@ -6759,12 +6867,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception as e:
             QMessageBox.warning(self, "스크린샷 실패", str(e))
 
-    def action_save_screenshot_pdf(self):
+    def action_save_screenshot_pdf(self, _checked=False, *, ask_open: bool = True):
         """v1.6.2: 카드 메타 기반으로 원본 PDF 페이지를 통째로 복사 (export_pdf_from_meta).
 
         원본 PDF 정보가 있는 카드는 fitz `insert_pdf` 로 페이지를 그대로 복사 →
         페이지 크기·텍스트·벡터 100% 보존, 좌우 배경 확장 없음.
         원본 정보 없는 카드(외부 이미지 등)는 PNG 폴백.
+
+        261008-1(스크린샷 SOT §7, 사용자 요청): 저장한 뒤 **이 창에 불러올지** 묻는다.
+        `ask_open=False` 는 종료할 때의 저장(§9) — 곧 닫힐 창에 불러올 까닭이 없다.
+        `_checked` 는 단추 `clicked(bool)` 이 넣는 값을 받아 버리는 자리다.
         """
         meta = self.shot_strip.all_meta()
         if not meta:
@@ -6795,10 +6907,43 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 show_pageno=opts["show_pageno"],
             )
             self.status.showMessage(f"PDF 저장: {saved}", 4000)
-            return True                      # 260906-3: 종료 시 확인이 결과를 본다
         except Exception as e:
             QMessageBox.warning(self, "PDF 저장 실패", str(e))
             return False
+        if ask_open:
+            self._offer_open_saved_shot_pdf(str(saved))
+        return True                          # 260906-3: 종료 시 확인이 결과를 본다
+
+    def _offer_open_saved_shot_pdf(self, path: str):
+        """261008-1(스크린샷 SOT §7): 저장한 스크린샷 PDF 를 이 창에 불러올지 묻고, 그러면 연다.
+
+        여는 길은 병합 뒤와 **같다**(사용자 결정) — `_reveal_created_file`: 책갈피창 폴더 안이면
+        그 목록에서, 파일 모드면 그 목록에 더해 골라 연다. 그 밖이면 `add_pdfs`(끌어 놓기와 같은
+        규칙 — 보던 파일 + 저장한 파일 한 목록)로 더하고 본문에 연다.
+        """
+        if not path or not Path(path).exists():
+            return
+        if QMessageBox.question(
+                self, "스크린샷 PDF 저장",
+                f"저장했습니다:\n{Path(path).name}\n\n이 창에 불러올까요?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            if self._reveal_created_file(path):
+                return
+            self.add_pdfs([path])
+            bt = self.bookmark_tree
+            if any(str(Path(f)) == str(Path(path)) for f in bt.all_file_paths()):
+                bt.tree.blockSignals(True)
+                try:
+                    bt._select_top_file(path)
+                finally:
+                    bt.tree.blockSignals(False)
+                bt._pending_nav = None
+            self._load_main(HistoryItem(str(path), 0, "", "bookmark"))
+        except Exception as e:
+            QMessageBox.warning(self, "불러오기 실패", str(e))
 
     # ===== 설정 ========================================================
     # v1.6.2: 4단 기본값. 우측 패널 안쪽 세로 splitter 는 self.right_splitter.
@@ -7940,7 +8085,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if clicked is b_cancel:
             return False
         if clicked is b_save:
-            return bool(self.action_save_screenshot_pdf())
+            return bool(self.action_save_screenshot_pdf(ask_open=False))
         return True                          # 저장 안 함 → 그대로 종료
 
     def closeEvent(self, event):

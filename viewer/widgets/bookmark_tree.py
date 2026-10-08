@@ -182,7 +182,8 @@ class BookmarkTree(QWidget):
     createStudyBookmarksRequested = pyqtSignal(str)  # 260606-11: '단어장·책갈피 동시 생성'
     mergeFilesRequested = pyqtSignal(list)      # 260606-13: 선택 파일들 병합(경로 리스트)
     translateFileRequested = pyqtSignal(str)    # 260621-P0: 파일 우클릭 '번역'(단일)
-    flattenFileRequested = pyqtSignal(str)      # 260930-2(§4.7.13): 파일 우클릭 '일반뷰어용으로 저장'
+    flattenFileRequested = pyqtSignal(str)      # 260930-2(§4.7.13): 파일 우클릭 '저장(일반뷰어용)'
+    saveAsFileRequested = pyqtSignal(str)       # 261008-1(§4.7.13): 파일 우클릭 '다른 이름으로 저장'
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
@@ -1082,6 +1083,7 @@ class BookmarkTree(QWidget):
         p = Path(pdf_path)
         self._root_dir = p.parent
         self._single_file = p            # 260822: 파일 모드 → 폴더 모드 전환 기준
+        self._file_list = [p]            # 261008-1: 이전 여러 파일 목록이 남지 않게(§4.7.14)
         self._reload_fn = lambda pp=p: self.load_single_pdf(pp)   # 260611-9: 취소 재로드
         self._mode = "single"            # v1.6.19
         self._pdfs_flat = []
@@ -2061,9 +2063,38 @@ class BookmarkTree(QWidget):
             try:
                 self._add_transfer_submenu(menu, f"파일 복사 ({n}개)", xfer_files, False)
                 self._add_transfer_submenu(menu, f"파일 이동 ({n}개)", xfer_files, True)
-                menu.addSeparator()
             except Exception:
                 pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
+        # 261008-1(마스터 §4.7.13, 사용자 요청): 저장 셋을 파일 그룹의 '파일 이동' 아래로 모은다.
+        #   모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
+        act_save_as = act_save_poly = act_flatten = None
+        if _dir_target:
+            act_save_as = menu.addAction("다른 이름으로 저장...")
+            act_save_as.setToolTip("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다.")
+            act_save_poly = menu.addAction("저장(PolyPDF용)")
+            act_save_poly.setToolTip("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작).")
+            act_flatten = menu.addAction("저장(일반뷰어용)...")
+            act_flatten.setToolTip(
+                "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")
+        if _dir_target or xfer_files:
+            menu.addSeparator()
+        # 261008-1(사용자 요청): 이름 변경·삭제를 저장 그룹 바로 아래로, 그 아래 펼치기/접기/정렬.
+        act_rename = menu.addAction("파일·책갈피 이름 변경")
+        act_delete = menu.addAction("파일·책갈피 삭제")
+        menu.addSeparator()
+        # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
+        act_exp_all = menu.addAction("책갈피 모두 펼치기")
+        act_col_all = menu.addAction("책갈피 모두 접기")
+        act_sort_pg = None
+        if self._edit_mode:
+            _n_bm = len([it for it in self.tree.selectedItems()
+                         if it.data(0, self.DATA_PAGE) is not None
+                         and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)])
+            if _n_bm:
+                act_sort_pg = menu.addAction(f"선택 책갈피 {_n_bm}개 페이지순 정렬")
+                act_sort_pg.setToolTip("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 "
+                                       "레벨을 윗 책갈피에 맞춥니다")
+        menu.addSeparator()
         # 260901-3: 폴더 행 우클릭 — 폴더 이름 변경 / 삭제(빈 폴더만)
         act_fold_new = act_fold_ren = act_fold_del = None
         if self._edit_mode and self._is_folder_node(item):
@@ -2083,7 +2114,6 @@ class BookmarkTree(QWidget):
             act_bm_edit = menu.addAction("책갈피 수정...")
             menu.addSeparator()
         act_translate = None
-        act_flatten = None
         act_edit_gloss = None
         act_tags = None
         act_password = None
@@ -2097,12 +2127,7 @@ class BookmarkTree(QWidget):
             act_study = menu.addAction("단어장 생성")
             act_study_bm = menu.addAction("단어장·책갈피 동시 생성")
             act_tags = menu.addAction("해시태그 편집...")   # 260623: 파일 분류 태그
-            # 260930-2(마스터 §4.7.13, 사용자 요청): 저장을 이 메뉴에도. **누른 그 파일**에
-            #   작용한다 — '책갈피 생성'·'단어장 생성'·'번역' 과 같은 방식이라 일관된다.
-            menu.addSeparator()
-            act_flatten = menu.addAction("일반뷰어용으로 저장 (꾸밈·사진 굽기)...")
-            act_flatten.setToolTip(
-                "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")
+            # 260930-2 '일반뷰어용으로 저장' 은 261008-1 에 위쪽 저장 그룹으로 옮겼다.
             menu.addSeparator()
             act_translate = menu.addAction("번역...")   # 260621-P0: 단일 파일 번역
             act_edit_gloss = menu.addAction("번역 용어집 교정...")  # 260623: 오역 용어 수정
@@ -2114,25 +2139,9 @@ class BookmarkTree(QWidget):
             except Exception:
                 pass
             menu.addSeparator()
-        # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
-        act_exp_all = menu.addAction("책갈피 모두 펼치기")
-        act_col_all = menu.addAction("책갈피 모두 접기")
-        act_sort_pg = None
-        if self._edit_mode:
-            _n_bm = len([it for it in self.tree.selectedItems()
-                         if it.data(0, self.DATA_PAGE) is not None
-                         and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)])
-            if _n_bm:
-                act_sort_pg = menu.addAction(f"선택 책갈피 {_n_bm}개 페이지순 정렬")
-                act_sort_pg.setToolTip("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 "
-                                       "레벨을 윗 책갈피에 맞춥니다")
-        menu.addSeparator()
         # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         act_fav_folder = menu.addAction("현재 폴더를 즐겨찾기에 추가")
         act_fav_file = menu.addAction("현재 파일을 즐겨찾기에 추가") if is_file else None
-        menu.addSeparator()
-        act_rename = menu.addAction("이름 변경")
-        act_delete = menu.addAction("삭제")
         chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
         if act_open_dir is not None and chosen is act_open_dir:
             self._reveal_in_explorer(_dir_target)
@@ -2169,7 +2178,11 @@ class BookmarkTree(QWidget):
             # 'PDF번역' 창을 열고 이 파일을 우측(번역 대상)에 담는다
             self.translateFilesRequested.emit([item.data(0, self.DATA_FILE)])
         elif act_flatten is not None and chosen == act_flatten:      # 260930-2
-            self.flattenFileRequested.emit(item.data(0, self.DATA_FILE))
+            self.flattenFileRequested.emit(_dir_target)              # 261008-1: 책갈피 행이면 그 파일
+        elif act_save_as is not None and chosen == act_save_as:      # 261008-1
+            self.saveAsFileRequested.emit(_dir_target)
+        elif act_save_poly is not None and chosen == act_save_poly:  # 261008-1
+            self._op_save(file_path=_dir_target)
         elif act_edit_gloss is not None and chosen == act_edit_gloss:
             self.editGlossaryRequested.emit(item.data(0, self.DATA_FILE))
         elif act_tags is not None and chosen == act_tags:
@@ -3004,9 +3017,62 @@ class BookmarkTree(QWidget):
                 "다른 프로그램이 파일을 잡고 있을 수 있습니다.")
             self.fileOpCompleted.emit(str(old_path), str(old_path))   # revert → 원본 재로드
             return
-        it.setText(0, new_path.stem)
-        it.setData(0, self.DATA_FILE, str(new_path))
-        self.fileOpCompleted.emit(str(old_path), str(new_path))       # 재로드 (성공)
+        self._after_rename(it, old_path, new_path)
+
+    def _after_rename(self, it, old_path: Path, new_path: Path):
+        """261008-1(마스터 §4.7.14, 사용자 보고 '새로 추가한 PDF 여러 개를 연속으로 이름 변경하면
+        꺼질 때가 있다'): 디스크 이름을 바꾼 **뒤** 앱 상태를 새 이름에 맞춘다.
+
+        ① 행 — 대화상자와 `processEvents` 동안 목록이 다시 그려졌으면 `it` 는 이미 지워진
+           C++ 객체다. 그대로 `setText` 하면 RuntimeError 이고, Qt 슬롯 안의 처리 안 된 예외는
+           앱을 끝낸다(0xC0000409). → 살아 있는지 보고, 아니면 **경로로 다시 찾는다**.
+        ② 목록 캐시 — 폴더 모드 `_pdfs_flat`·정렬 통계, 파일 모드 `_file_list`·`_single_file`·
+           다시 읽기(`_reload_fn`, ↻·편집 취소가 부른다)가 옛 경로를 들고 있으면, 다음에 다시 그릴 때
+           새 이름 파일이 빠지고 없는 옛 파일이 행으로 돌아온다(그 행을 또 바꾸면 '파일 없음').
+        ③ 태그·색인·꾸밈 — 파일 이동·폴더 이름 변경과 **같은 길**(`_after_move` + `filesRelocated`).
+           종전에는 이름 변경만 이 길을 타지 않아 태그·검색·꾸밈이 옛 이름에 남았다.
+        """
+        from viewer.pathutil import norm_key
+        old_s, new_s = str(old_path), str(new_path)
+        try:
+            from PyQt6 import sip
+            alive = it is not None and not sip.isdeleted(it)
+        except Exception:
+            alive = it is not None
+        node = it if alive else self._file_node_for_path(old_s)
+        if node is not None:
+            node.setText(0, new_path.stem)
+            node.setData(0, self.DATA_FILE, new_s)
+            if node.toolTip(0) == old_s:
+                node.setToolTip(0, new_s)
+            # 책갈피(자식) 행도 그 파일을 가리킨다 — 다시 펼치지 않아도 새 경로로
+            stack = [node.child(i) for i in range(node.childCount())]
+            while stack:
+                ch = stack.pop()
+                if ch.data(0, self.DATA_FILE) == old_s:
+                    ch.setData(0, self.DATA_FILE, new_s)
+                stack.extend(ch.child(i) for i in range(ch.childCount()))
+        ok = norm_key(old_s)
+
+        def _swap(p):
+            return Path(new_s) if norm_key(str(p)) == ok else p
+        self._pdfs_flat = [_swap(p) for p in self._pdfs_flat]
+        if old_s in self._scan_stats:
+            self._scan_stats[new_s] = self._scan_stats.pop(old_s)
+        if getattr(self, "_file_list", None):
+            self._file_list = [_swap(p) for p in self._file_list]
+        if self._single_file is not None and norm_key(str(self._single_file)) == ok:
+            self._single_file = Path(new_s)
+        if self._mode == "single":
+            # 파일 모드 다시 읽기는 **지금 목록**을 쓴다(만들 때의 경로를 붙잡지 않는다)
+            if len(getattr(self, "_file_list", None) or []) > 1:
+                self._reload_fn = lambda: self.load_pdf_files(list(self._file_list))
+            elif self._single_file is not None:
+                self._reload_fn = lambda: self.load_single_pdf(self._single_file)
+        self._after_move(old_path, new_path)                          # 태그 승계
+        self.fileOpCompleted.emit(old_s, new_s)                       # 본문 다시 열기
+        self.filesRelocated.emit([[old_s, new_s]])                    # 색인·꾸밈·검색 범위
+        self.info.setText(f"이름 변경: {old_path.name} → {new_path.name}")
 
     # ---- v1.6.20 K5: 메인 페이지로 책갈피 추가 -------------------------
     def _op_add_main_bookmark(self):
@@ -3294,10 +3360,11 @@ class BookmarkTree(QWidget):
         self.tree.scrollToItem(items[0])
 
     # ---- 저장: 평탄화 → apply_bookmarks_to_pdf -------------------------
-    def _op_save(self):
+    def _op_save(self, file_path: str = None):
+        """💾 저장. `file_path` 를 주면 그 파일(261008-1: 책갈피창 우클릭 '저장(PolyPDF용)')."""
         # 260611-18(A4): 책갈피 변경이 없어도 개체/주석(page_meta) 변경이 있으면 저장.
         meta_dirty = bool(self._meta_is_dirty and self._meta_is_dirty())
-        target = self._target_file_item()
+        target = self._file_node_for_path(file_path) if file_path else self._target_file_item()
         if target is None or not target.data(0, self.DATA_FILE):
             if meta_dirty:
                 self._commit_meta()      # 개체만 삽입한 경우 — 트리 선택 없이도 저장
@@ -3312,9 +3379,18 @@ class BookmarkTree(QWidget):
         self._walk_collect(target, 0, bookmarks_raw)
         # 260606-13: 원본 PDF의 현재 책갈피(TOC)와 비교해 '실제 변경 여부'로 메시지 결정
         orig = self._read_orig_toc(src)
+        # 261008-1(§4.7.13): 아직 펼쳐 읽지 않은 파일은 트리에 책갈피가 **없을 뿐** 지운 것이 아니다.
+        #   우클릭 '저장(PolyPDF용)' 은 접힌 파일에서 흔히 눌린다 — 그대로 비교하면 '모든 책갈피가
+        #   제거되었습니다' 를 묻고, 예를 누르면 책갈피가 실제로 지워졌다. → 원본 책갈피 그대로 둔다.
+        if not target.data(0, self.DATA_TOC_LOADED) and not bookmarks_raw:
+            bookmarks_raw = list(orig)
         # 260821: 썸네일에서 페이지 삭제/이동이 있으면 앱이 페이지 재구성 + 책갈피 remap 으로 저장.
         #   (기존엔 페이지 편집이 이 저장 경로에 없어 '변경 사항이 없습니다'로 저장 안 되던 버그)
-        if self._page_edit_dirty and self._page_edit_dirty() and self._page_edit_save:
+        # 261008-1(마스터 §4.7.13): 쪽 편집은 **본문에 열린 파일**의 것이다. 우클릭은 선택만 바꾸고
+        #   본문은 그대로라(260902-3) 다른 파일을 눌러 저장하면 그 편집이 엉뚱한 파일에 들어갈 수
+        #   있었다 → 저장 대상이 본문 파일일 때만 쪽 편집 저장으로 간다(아니면 편집은 그대로 남는다).
+        if (self._page_edit_dirty and self._page_edit_dirty() and self._page_edit_save
+                and self._is_main_file(str(src))):
             self._page_edit_save(str(src), bookmarks_raw)
             self._dirty = False
             self._commit_meta()
@@ -3357,6 +3433,19 @@ class BookmarkTree(QWidget):
         self._dirty = False
         self.bookmarksEdited.emit(str(src), str(out))
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
+
+    def _is_main_file(self, path: str) -> bool:
+        """그 경로가 본문(쪽 썸네일)에 열린 파일인가. 본문을 알 수 없으면 True(종전 동작)."""
+        if not callable(self._current_file_getter):
+            return True
+        try:
+            cur = self._current_file_getter()
+        except Exception:
+            return True
+        if not cur:
+            return True
+        from viewer.pathutil import norm_key
+        return norm_key(str(cur)) == norm_key(str(path))
 
     def _commit_meta(self):
         """260611-18(A4): page_meta 미저장 변경을 디스크에 저장(+썸네일 반영)."""

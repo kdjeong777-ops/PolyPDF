@@ -98,6 +98,54 @@ def _study_selftest(pdf_path: str) -> None:
         w("SELFTEST EXC:\n" + traceback.format_exc())
 
 
+ERROR_LOG_NAME = "error.log"
+ERROR_LOG_MAX = 1_000_000          # 이보다 커지면 비우고 새로 적는다(설정 폴더를 불리지 않게)
+
+
+def _install_excepthook() -> None:
+    """261008-1(마스터 §14.7.3, 사용자 결정): 처리 안 된 Python 예외가 **앱을 끄지 않게**.
+
+    PyQt6 은 `sys.excepthook` 이 기본값이면 Qt 슬롯 안의 처리 안 된 예외에서 `qFatal` 을
+    부른다 → `Qt6Core.dll … 0xC0000409` 로 창이 그냥 사라진다. 같은 '꺼짐' 을 260915-3(채우기 틱),
+    260930-4(클립보드 사진), 261008-1(이름 변경)에 겪었다 — 원인은 매번 다른 한 줄이었다.
+    원인은 그때그때 고치되, 그 한 줄이 사용자의 작업 전체를 날리지 않도록 **기록하고 계속**한다.
+      - 기록: 설정 폴더 `error.log`(시각·예외·호출 경로). 다음 원인 찾기의 근거다.
+      - 알림: 열린 창의 상태줄에 한 줄. 대화상자는 띄우지 않는다(같은 예외가 연달아 나면 창이 쌓인다).
+    ※ 테스트는 저마다 `sys.excepthook` 을 바꿔 예외를 모은다 — 이것은 앱 진입점에서만 건다.
+    """
+    import traceback
+    import time
+
+    def _hook(etype, value, tb):
+        text = "".join(traceback.format_exception(etype, value, tb))
+        try:
+            sys.stderr.write(text)
+        except Exception:
+            pass
+        try:
+            from PyQt6.QtCore import QStandardPaths
+            d = Path(QStandardPaths.writableLocation(
+                QStandardPaths.StandardLocation.AppDataLocation))
+            d.mkdir(parents=True, exist_ok=True)
+            log = d / ERROR_LOG_NAME
+            mode = "w" if log.exists() and log.stat().st_size > ERROR_LOG_MAX else "a"
+            with open(log, mode, encoding="utf-8") as f:
+                f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')}\n{text}\n")
+        except Exception:
+            pass
+        try:
+            for w in QApplication.topLevelWidgets():
+                sb = getattr(w, "status", None)
+                if sb is not None and hasattr(sb, "showMessage") and w.isVisible():
+                    sb.showMessage(f"오류가 났지만 계속합니다: {etype.__name__}: {value} "
+                                   f"(설정 폴더 {ERROR_LOG_NAME})", 10000)
+                    break
+        except Exception:
+            pass
+
+    sys.excepthook = _hook
+
+
 def _make_splash(icon_path):
     """260606-28: 실행 즉시 화면 중앙에 뜨는 아이콘 스플래시.
 
@@ -218,6 +266,7 @@ def main():
         app.setWindowIcon(QIcon(_ico))    # v1.6.1 G1: 작업표시줄/타이틀바 아이콘
 
     _migrate_appdata()       # v1.6.15: 구 'Smart PDF Viewer' AppData 1회 이전
+    _install_excepthook()    # 261008-1(§14.7.3): 처리 안 된 예외로 창이 사라지지 않게(앱 이름 뒤 — 기록 폴더)
 
     # --- 여기서부터 무거운 로딩(스플래시가 보이는 동안 진행) ---
     import fitz                                  # v1.3.0 C: PyMuPDF AA 레벨
