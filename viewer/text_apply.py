@@ -210,8 +210,8 @@ def layer_rewrite_blocker(page, lines) -> str:
     except Exception:
         return "쪽 정보를 못 읽음"
     try:
-        for tr in page.get_texttrace():
-            if tr.get("type") != 3 and tr.get("chars"):
+        for span in page.get_texttrace():
+            if span.get("type") != 3 and span.get("chars"):
                 return "보이는 글자가 있다"
     except Exception:
         return "글자층을 못 읽음"

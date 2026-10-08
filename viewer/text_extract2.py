@@ -227,13 +227,13 @@ def _is_ocr_layer(page) -> bool:
     종이의 티를 글자로 잘못 읽은 것이 섞여 있어, 잡음 거르기는 **이런 쪽에만** 한다 —
     사람이 넣은 작은 글씨를 지우면 안 된다."""
     try:
-        tr = page.get_texttrace()
+        traces = page.get_texttrace()
     except Exception:
         return False
-    if not tr:
+    if not traces:
         return False
-    inv = sum(1 for sp in tr if sp.get("type") == 3)
-    return inv >= len(tr) * 0.9
+    inv = sum(1 for sp in traces if sp.get("type") == 3)
+    return inv >= len(traces) * 0.9
 
 
 def _line_items(page):

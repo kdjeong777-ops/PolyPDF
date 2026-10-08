@@ -8,7 +8,8 @@ D. report·compile — 완성도·자리표시 불일치, fuzzy 는 .mo 에서 �
 E. pseudo — 표시·늘림·자리표시 보존, POLYPDF_LANG=qps_ploc 로 실제 번역됨, 목록에는 없음
 F. 내장 팩 — pack.json 형식·코드=폴더·Plural-Forms·자리표시·대체 사슬·.pot 의 모든 키·complete 면 100%·en 존재
 G. .pot 가 코드와 같다(감싼 뒤 extract 를 잊지 않게) · 추출 경고 0
-H. 기준선(Phase 0b 완료 조건) — 가짜 언어로 띄운 실제 MainWindow 의 메뉴는 아직 감싸지 않아 표시 없는 한국어
+H. 메인 창(Phase 2 완료 조건) — 가짜 언어로 띄운 실제 MainWindow 의 메뉴(하위까지)·단추·글자표·콤보·입력 안내·
+   도움말 풍선에 표시 없는 한국어가 없다. 예외: 단어학습 패널(한국 전용 — Phase 4)·글꼴 이름(고유명사)
 I. 쓰기는 내용이 바뀔 때만(생성 시각만 다르면 그대로)
 """
 import os, sys, json, tempfile, shutil, importlib.util
@@ -168,16 +169,51 @@ try:
         chk(chain and chain[0] == d.name and len(chain) == len(set(chain)), "F %s 대체 사슬에 고리·중복 없음" % d.name, str(chain))
     chk(not (real / "qps_ploc").exists(), "F 가짜 언어 폴더가 저장소·빌드에 남아 있지 않다")
 
-    # ── H — 기준선 ──
+    # ── H — 메인 창 감싸기(Phase 2) ──
     T.pseudo(locale_dir=real)
     os.environ["POLYPDF_LANG"] = "qps_ploc"
     i18n.install(None, "ko")
     from viewer.app import MainWindow
     mw = MainWindow(); mw._skip_save_on_close = True
+    from PyQt6.QtWidgets import (QWidget, QAbstractButton, QLabel, QComboBox,
+                                 QLineEdit, QTabWidget)
+    from viewer.widgets.study_panel import StudyPanel
+    _FONTS = {"맑은 고딕", "굴림", "바탕", "돋움", "궁서"}
+    bare = []
+
+    def _see(t, where):
+        if t and t not in _FONTS and "[!!" not in t and any("가" <= ch <= "힣" for ch in t):
+            bare.append((where, t))
+
+    def _menu(m, path):
+        for a in m.actions():
+            _see(a.text(), path)
+            if a.menu():
+                _menu(a.menu(), path + ">" + a.text())
     titles = [a.text() for a in mw.menuBar().actions()]
-    has_ko = all(any("가" <= ch <= "힣" for ch in t) for t in titles if t)
-    chk(titles and has_ko and not any("[!!" in t for t in titles),
-        "H 기준선: 가짜 언어로 띄워도 메뉴는 아직 감싸지 않아 표시 없는 한국어", str(titles))
+    for a in mw.menuBar().actions():
+        _see(a.text(), "menubar")
+        if a.menu():
+            _menu(a.menu(), a.text())
+    studies = mw.findChildren(StudyPanel)
+    for w in mw.findChildren(QWidget):
+        if any(sp is w or sp.isAncestorOf(w) for sp in studies):
+            continue                                   # 한국 전용(§7) — Phase 4
+        nm = type(w).__name__
+        _see(w.toolTip(), nm + ".tip")
+        if isinstance(w, (QAbstractButton, QLabel)):
+            _see(w.text(), nm)
+        elif isinstance(w, QComboBox):
+            for i in range(w.count()):
+                _see(w.itemText(i), nm)
+        elif isinstance(w, QLineEdit):
+            _see(w.placeholderText(), nm)
+        elif isinstance(w, QTabWidget):
+            for i in range(w.count()):
+                _see(w.tabText(i), nm)
+    chk(titles and all("[!!" in t for t in titles if t),
+        "H 메뉴 막대가 모두 번역 표시(감쌈)", str(titles))
+    chk(not bare, "H 메인 창에 표시 없는 한국어가 없다(단어학습 패널·글꼴 이름 제외)", str(bare[:10]))
     os.environ.pop("POLYPDF_LANG")
     T.clean_pseudo(locale_dir=real)
     i18n.install(None, "ko")

@@ -9,6 +9,7 @@ v1.5.0:
 from __future__ import annotations
 
 from pathlib import Path
+from viewer.i18n import tr                   # 261008: 화면 문구(다국어 SOT §6)
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
@@ -230,7 +231,7 @@ class MiniStrip(QWidget):
 
         self.clear_btn = QPushButton("🗑")
         self.clear_btn.setFixedWidth(28)
-        self.clear_btn.setToolTip("전체 삭제")
+        self.clear_btn.setToolTip(tr("전체 삭제"))
         self.clear_btn.clicked.connect(self._on_clear_all)
         head.addWidget(self.clear_btn)
         layout.addWidget(self.head_widget)
@@ -507,8 +508,8 @@ class MiniStrip(QWidget):
         if self.list.count() == 0:
             return
         ret = QMessageBox.question(
-            self, "전체 삭제",
-            f"{self._title} 의 {self.list.count()}개 항목을 모두 지울까요?",
+            self, tr("전체 삭제"),
+            tr('{title} 의 {count}개 항목을 모두 지울까요?').format(title=self._title, count=self.list.count()),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -535,12 +536,12 @@ class MiniStrip(QWidget):
             sel = [item]
         menu = QMenu(self.list)
         if len(sel) > 1:
-            act = QAction(f"선택 {len(sel)}개 삭제", menu)
+            act = QAction(tr('선택 {n}개 삭제').format(n=len(sel)), menu)
             keys = [(it.data(self.DATA_PATH), int(it.data(self.DATA_PAGE) or 0))
                     for it in sel]
             act.triggered.connect(lambda: [self.remove_key(p, pg) for p, pg in keys])
         else:
-            act = QAction("삭제", menu)
+            act = QAction(tr("삭제"), menu)
             path = item.data(self.DATA_PATH)
             page = int(item.data(self.DATA_PAGE) or 0)
             act.triggered.connect(lambda: self.remove_key(path, page))

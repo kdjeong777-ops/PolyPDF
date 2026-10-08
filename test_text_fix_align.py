@@ -238,7 +238,7 @@ try:
     # 260913-6(SOT §5.4): 결과 알림은 `_on_text_layer_done` — 못 적은 줄은 **정보**로, 실패만 경고로
     dsrc = inspect.getsource(MainWindow._on_text_layer_done)
     asrc = inspect.getsource(MainWindow._on_text_apply_pdf)
-    chk("unwritten" in dsrc and 'QMessageBox.information(self, "PDF 에 반영", "\\n".join(notes))' in dsrc,
+    chk("unwritten" in dsrc and 'QMessageBox.information(self, tr("PDF 에 반영"), "\\n".join(notes))' in dsrc,
         "⑧ 알림을 '실패' 로 오해하지 않는다(못 적은 줄은 결과 알림에 함께)")
     chk("get_items" in asrc, "⑦ 앱이 사각형이 든 형태로 넘긴다")
     rsrc = inspect.getsource(MainWindow._on_text_rows)

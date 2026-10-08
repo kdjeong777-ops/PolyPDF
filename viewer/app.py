@@ -318,7 +318,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260606-17: 캡쳐 모드 상태(전체화면/지정/사용자크기1~5 + 복사크기)
         self._cap_mode = "full"
         self._cap_copy = "visible"
-        self._cap_sizes = [{"name": f"사용자{i+1}", "w": 300, "h": 200}
+        self._cap_sizes = [{"name": tr('사용자{i}').format(i=i + 1), "w": 300, "h": 200}
                            for i in range(5)]
         self._cap_menus = []
         from viewer.widgets.read_aloud import ReadAloud
@@ -374,7 +374,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._drawer.hide()
         self._drawer_open = False
         self._drawer_btn = _TB(central)
-        self._drawer_btn.setToolTip("검색·단어장·스크린샷 패널 펼치기/접기")
+        self._drawer_btn.setToolTip(tr("검색·단어장·스크린샷 패널 펼치기/접기"))
         self._drawer_btn.setText("‹")
         self._drawer_btn.clicked.connect(self._toggle_drawer)
         self._drawer_btn.hide()
@@ -544,7 +544,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         gl.addWidget(btn_read); gl.addWidget(btn_read_menu)
         # mp3(이 창 대상)
         mp3 = _TB(self)
-        mp3.setToolTip("이 창의 PDF를 책갈피 기준으로 나눠 mp3(+가사)로 저장")
+        mp3.setToolTip(tr("이 창의 PDF를 책갈피 기준으로 나눠 mp3(+가사)로 저장"))
         mp3.clicked.connect(lambda _=False, i=idx: self._on_main_mp3(view=self._mv[i]))
         mp3.setFixedHeight(H)
         try:
@@ -598,7 +598,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             b.setIcon(QIcon(ico))
         else:
             b.setText("📷")
-        b.setToolTip("이 창 캡처 (활성 창은 Ctrl+Shift+S)")
+        b.setToolTip(tr("이 창 캡처 (활성 창은 Ctrl+Shift+S)"))
         try:                                      # 260606-19: 캡쳐 글자 삭제·폭 최소
             b.setFixedSize(34, self._mv[idx].TOOLBAR_H)
         except Exception:
@@ -625,11 +625,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _capture_mode_label(self) -> str:
         m = self._cap_mode
         if m == "region":
-            return "지정"
+            return tr("지정")
         if m.startswith("user"):
             i = int(m[4:])
-            return self._cap_sizes[i]["name"] if 0 <= i < len(self._cap_sizes) else "전체"
-        return "전체"
+            return self._cap_sizes[i]["name"] if 0 <= i < len(self._cap_sizes) else tr("전체")
+        return tr("전체")
 
     def _rebuild_capture_menu(self, dd):
         from PyQt6.QtWidgets import QMenu
@@ -642,20 +642,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             a.setChecked(self._cap_mode == key)
             grp.addAction(a)
             a.triggered.connect(lambda _=False, k=key: self._set_cap_mode(k))
-        addmode("full", "전체")
-        addmode("region", "지정")
+        addmode("full", tr("전체"))
+        addmode("region", tr("지정"))
         for i in range(5):
             addmode(f"user{i}", self._cap_sizes[i]["name"])
         m.addSeparator()
-        cm = m.addMenu("캡쳐 화질 설정")
+        cm = m.addMenu(tr("캡쳐 화질 설정"))
         cg = QActionGroup(cm); cg.setExclusive(True)
-        for key, label in (("visible", "보이는 화질"), ("original", "원본 화질")):
+        for key, label in (("visible", tr("보이는 화질")), ("original", tr("원본 화질"))):
             a = cm.addAction(label); a.setCheckable(True)
             a.setChecked(self._cap_copy == key)
             cg.addAction(a)
             a.triggered.connect(lambda _=False, k=key: self._set_cap_copy(k))
         m.addSeparator()
-        a = m.addAction("사용자 크기 설정...")
+        a = m.addAction(tr("사용자 크기 설정..."))
         a.triggered.connect(self._edit_capture_sizes)
         dd.setMenu(m)
         dd.setText(self._capture_mode_label() + " ▾")
@@ -725,7 +725,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                      src_pdf=cur, src_page=int(pg), prepend=False)
             n += 1
         if n:
-            self.status.showMessage(f"{n}개 페이지 캡쳐", 4000)
+            self.status.showMessage(tr('{n}개 페이지 캡쳐').format(n=n), 4000)
             self._after_capture()
 
     def _capture_region(self, view, fixed_size):
@@ -746,7 +746,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             pass
         self.shot_strip.add_item(str(saved), kind="image",
                                  label=Path(name).stem, prepend=False)
-        self.status.showMessage("영역 캡쳐 저장", 4000)
+        self.status.showMessage(tr("영역 캡쳐 저장"), 4000)
         self._after_capture()
 
     def _after_capture(self):
@@ -775,7 +775,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             paths = []
         if not paths:
-            QMessageBox.information(self, "클립보드로 복사", "복사할 스크린샷이 없습니다.")
+            QMessageBox.information(self, tr("클립보드로 복사"), tr("복사할 스크린샷이 없습니다."))
             return
         # 클립보드 히스토리 비우기(베스트 에포트) + 현재 클립보드 클리어
         try:
@@ -800,7 +800,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         def copy_next():
             if not self._clip_queue:
                 self.status.showMessage(
-                    f"클립보드로 복사 완료: {self._clip_total}개 — Win+V 로 붙여넣기", 7000)
+                    tr('클립보드로 복사 완료: {clip_total}개 — Win+V 로 붙여넣기').format(clip_total=self._clip_total), 7000)
                 return
             p = self._clip_queue.pop(0)
             try:
@@ -811,7 +811,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 pass
             QTimer.singleShot(350, copy_next)   # 간격 → 각각 히스토리 항목으로
 
-        self.status.showMessage("클립보드로 복사 중...", 3000)
+        self.status.showMessage(tr("클립보드로 복사 중..."), 3000)
         copy_next()
 
     CLIP_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff")
@@ -845,9 +845,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             items = []
         if not items:
             QMessageBox.information(
-                self, "클립보드 가져오기",
-                "클립보드에 가져올 그림이 없습니다.\n"
-                "(캡처 도구로 복사한 그림이나 탐색기에서 복사한 그림 파일을 가져옵니다.)")
+                self, tr("클립보드 가져오기"),
+                tr("클립보드에 가져올 그림이 없습니다.\n"
+                "(캡처 도구로 복사한 그림이나 탐색기에서 복사한 그림 파일을 가져옵니다.)"))
             return
         n = 0
         for img, name in items:
@@ -860,7 +860,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 continue
         if n:
             self._ensure_shots_visible()
-            self.status.showMessage(f"클립보드에서 그림 {n}개를 가져왔습니다.", 4000)
+            self.status.showMessage(tr('클립보드에서 그림 {n}개를 가져왔습니다.').format(n=n), 4000)
 
     def _do_capture(self, view):
         """캡쳐 버튼: 썸네일 다중선택→전체화면 multi, 아니면 현재 모드."""
@@ -1216,8 +1216,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         mv.pageChanged.connect(lambda pg, i=idx: self._on_pane_page_changed(i, pg))
         mv.textCopied.connect(                                       # 260616-21 / 260618-1
             lambda n: self.status.showMessage(
-                "이 문서는 복사 권한이 없습니다." if n < 0
-                else (f"텍스트 복사됨 ({n}자)" if n else "복사할 텍스트가 없습니다."), 3000))
+                tr("이 문서는 복사 권한이 없습니다.") if n < 0
+                else (tr('텍스트 복사됨 ({n}자)').format(n=n) if n else tr("복사할 텍스트가 없습니다.")), 3000))
         mv.wordHovered.connect(
             lambda lemma, i=idx: (i == self._active_pane)
             and self._on_main_word_hovered(lemma))
@@ -1255,26 +1255,26 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _build_right_panel(self) -> QWidget:
         """v1.6.2: 우측 패널 = 검색 영역(상) + 스크린샷 스트립(하) 세로 분할."""
         # M7: 스크린샷 패널 헤더에 저장 버튼 (화면캡쳐 버튼은 260606-8: 각 메인뷰 툴바로)
-        self.btn_save_pdf = QPushButton("💾 PDF 저장")
-        self.btn_save_pdf.setToolTip("스크린샷 전체를 PDF로 (Ctrl+S)")
+        self.btn_save_pdf = QPushButton(tr("💾 PDF 저장"))
+        self.btn_save_pdf.setToolTip(tr("스크린샷 전체를 PDF로 (Ctrl+S)"))
         self.btn_save_pdf.clicked.connect(self.action_save_screenshot_pdf)
         # 260606-17: 클립보드로 복사(전체 스크린샷을 순서대로 클립보드 히스토리에)
         #   261008-1(스크린샷 SOT §8, 사용자 요청): '클립보드 저장' → '클립보드로 복사' — 파일로
         #   남는 것이 아니라 복사라서. 반대 방향 '클립보드 가져오기' 를 그 앞에 둔다.
-        self.btn_clip = QPushButton(" 클립보드로 복사")
+        self.btn_clip = QPushButton(tr(" 클립보드로 복사"))
         _cico = resource_path("icon_clipboard.png")
         if _cico:
             self.btn_clip.setIcon(QIcon(_cico))
         else:
-            self.btn_clip.setText("📋 클립보드로 복사")
-        self.btn_clip.setToolTip("복사한 뒤 'Win+v'로 여러 목록을 붙여넣으세요")
+            self.btn_clip.setText(tr("📋 클립보드로 복사"))
+        self.btn_clip.setToolTip(tr("복사한 뒤 'Win+v'로 여러 목록을 붙여넣으세요"))
         self.btn_clip.clicked.connect(self._on_clipboard_save)
-        self.btn_clip_in = QPushButton("📥 클립보드 가져오기")
-        self.btn_clip_in.setToolTip("클립보드의 그림(캡처·탐색기에서 복사한 그림 파일)을 스크린샷 목록에 넣습니다")
+        self.btn_clip_in = QPushButton(tr("📥 클립보드 가져오기"))
+        self.btn_clip_in.setToolTip(tr("클립보드의 그림(캡처·탐색기에서 복사한 그림 파일)을 스크린샷 목록에 넣습니다"))
         self.btn_clip_in.clicked.connect(self._on_clipboard_import)
 
         self.shot_strip = MiniStrip(
-            "🖼 스크린샷", max_items=int(self._prefs.get("screenshot_max", 30)),
+            tr("🖼 스크린샷"), max_items=int(self._prefs.get("screenshot_max", 30)),
             draggable=True,
             extra_widgets=[self.btn_clip_in, self.btn_clip, self.btn_save_pdf],
         )
@@ -1288,9 +1288,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260908-2(사용자 지시, 텍스트 창 SOT §2): 순서는 **텍스트 → 단어장 → 검색**
         from viewer.widgets.text_panel import TextPanel
         self.text_panel = TextPanel()
-        self.search_tabs.addTab(self.text_panel, "📄 텍스트")
-        self.search_tabs.addTab(self.study_panel, "📖 단어장")
-        self.search_tabs.addTab(self.search_area, "🔎 검색")
+        self.search_tabs.addTab(self.text_panel, tr("📄 텍스트"))
+        self.search_tabs.addTab(self.study_panel, tr("📖 단어장"))
+        self.search_tabs.addTab(self.search_area, tr("🔎 검색"))
 
         self.right_splitter = QSplitter(Qt.Orientation.Vertical)
         self.right_splitter.setHandleWidth(2)      # 260606-7: 분할 손잡이 폭 축소
@@ -1309,18 +1309,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         + (띄움) + [기능] PDF병합/책갈피·단어장 동시/책갈피 생성/단어장 생성/스크린샷 PDF 저장.
         내부 상태 토글(act_toggle_search/shot)은 유지하되 툴바엔 노출하지 않음."""
         from PyQt6.QtWidgets import QToolButton, QLabel, QSizePolicy, QLineEdit
-        self._panel_toolbar = QToolBar("패널", self)
+        self._panel_toolbar = QToolBar(tr("패널"), self)
         self._panel_toolbar.setMovable(False)
         self.addToolBar(self._panel_toolbar)
         self._panel_btns = []     # 260606-26: 테마 스타일 재적용 대상
 
         # 내부 가시성 상태(설정 메뉴·_sync_right_layout 가 사용; 툴바엔 미노출)
-        self.act_toggle_search = QAction("🔎 검색·단어", self)
+        self.act_toggle_search = QAction(tr("🔎 검색·단어"), self)
         self.act_toggle_search.setCheckable(True)
         self.act_toggle_search.setChecked(True)
         self.act_toggle_search.toggled.connect(
             lambda _=False: self._sync_right_layout())
-        self.act_toggle_shot = QAction("🖼 스크린샷", self)
+        self.act_toggle_shot = QAction(tr("🖼 스크린샷"), self)
         self.act_toggle_shot.setCheckable(True)
         self.act_toggle_shot.setChecked(True)
         self.act_toggle_shot.toggled.connect(
@@ -1350,37 +1350,37 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._panel_toolbar.addWidget(q)
 
         # 260606-27: 좌측 정렬 / 260618-18: '뷰어'→'보기', '기능'→'도구', 법령/고시 보기 그룹으로
-        lab("보기")
-        mk("1단", "검색·단어장·스크린샷 숨김 (단일 보기)", self._vm_single)
-        mk("2단", "2단 보기(쪽 맞춤)", self._vm_split)
+        lab(tr("보기"))
+        mk(tr("1단"), tr("검색·단어장·스크린샷 숨김 (단일 보기)"), self._vm_single)
+        mk(tr("2단"), tr("2단 보기(쪽 맞춤)"), self._vm_split)
         # 260910(사용자 지시): 우측 첫 탭인 '텍스트' 도 보기 그룹에 둔다 —
         #   탭 순서(텍스트/단어장/검색)와 같은 차례로 놓는다(텍스트 창 SOT §2).
-        mk("텍스트", "검색·단어장 창 보이기 · 텍스트 탭", self._vm_text)
-        mk("단어장", "검색·단어장 창 보이기 · 단어장 탭", self._vm_study)
-        mk("검색", "검색·단어장 창 보이기 · 검색 탭", self._vm_search)
-        self._btn_shot = mk("스크린샷", "검색·단어장 숨김 · 스크린샷 보이기", self._vm_shot)
-        self._btn_law = mk("법령/고시", "법제처 법령·고시 검색·본문 보기", self._action_law_search)  # 260618-18
-        self._btn_kcsc = mk("건설기준", "국가건설기준센터(KCSC) KDS·KCS 본문 보기", self._action_kcsc_search)  # 260618-37
-        self._btn_kipo = mk("특허", "특허청(KIPO) 특허 등록정보 조회", self._action_kipo_search)  # 260618-43
-        mk("발표보기", "발표 전체화면 보기 (F5)", self._open_presentation)  # 260609-15(E1)/260618-8
+        mk(tr("텍스트"), tr("검색·단어장 창 보이기 · 텍스트 탭"), self._vm_text)
+        mk(tr("단어장"), tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study)
+        mk(tr("검색"), tr("검색·단어장 창 보이기 · 검색 탭"), self._vm_search)
+        self._btn_shot = mk(tr("스크린샷"), tr("검색·단어장 숨김 · 스크린샷 보이기"), self._vm_shot)
+        self._btn_law = mk(tr("법령/고시"), tr("법제처 법령·고시 검색·본문 보기"), self._action_law_search)  # 260618-18
+        self._btn_kcsc = mk(tr("건설기준"), tr("국가건설기준센터(KCSC) KDS·KCS 본문 보기"), self._action_kcsc_search)  # 260618-37
+        self._btn_kipo = mk(tr("특허"), tr("특허청(KIPO) 특허 등록정보 조회"), self._action_kipo_search)  # 260618-43
+        mk(tr("발표보기"), tr("발표 전체화면 보기 (F5)"), self._open_presentation)  # 260609-15(E1)/260618-8
         # 보기 ↔ 도구 사이 띄움
         _sp = QWidget(); _sp.setFixedWidth(20)
         self._panel_toolbar.addWidget(_sp)
-        lab("도구")
+        lab(tr("도구"))
         # 260911-1(사용자 지시, 디자인 SOT §2.9·§2.9.1): 차례의 뜻은 **얼마나 자주 쓰는가** —
         #   읽기(OCR) → 그 결과로 만드는 것(단어장·책갈피) → 문서를 합치고 바꾸는 일
         #   → 어찌다 한 번 쓰는 일(암호화). `도구(&T)` 메뉴 첫 구역이 **같은 차례**다.
-        mk("OCR", "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)",
+        mk("OCR", tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"),
            self._action_ocr_read)
-        mk("단어장 생성", "파일 → 단어장 생성", self._action_build_study)
-        mk("책갈피 생성", "파일 → 책갈피 자동 생성", self.action_open_bookmarker)
-        self._btn_merge = mk("PDF병합", "파일 → PDF 병합", lambda: self._on_merge_files(None))
-        self._btn_img2pdf = mk("이미지→PDF", "이미지 파일 → PDF 변환",
+        mk(tr("단어장 생성"), tr("파일 → 단어장 생성"), self._action_build_study)
+        mk(tr("책갈피 생성"), tr("파일 → 책갈피 자동 생성"), self.action_open_bookmarker)
+        self._btn_merge = mk(tr("PDF병합"), tr("파일 → PDF 병합"), lambda: self._on_merge_files(None))
+        self._btn_img2pdf = mk(tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"),
                                lambda: self.action_image_to_pdf())  # 260825-13
-        self._btn_shot_pdf = mk("스크린샷 PDF 저장", "스크린샷 전체를 PDF로", self.action_save_screenshot_pdf)
-        mk("암호화", "현재 PDF에 암호·권한 설정(암호화 저장)", self.action_encrypt_pdf)
+        self._btn_shot_pdf = mk(tr("스크린샷 PDF 저장"), tr("스크린샷 전체를 PDF로"), self.action_save_screenshot_pdf)
+        mk(tr("암호화"), tr("현재 PDF에 암호·권한 설정(암호화 저장)"), self.action_encrypt_pdf)
         # `번역` 은 지시 목록에 없다 — 지우라는 뜻이 아니라 자리를 정하지 않은 것으로 읽어 맨 뒤에 둔다.
-        self._btn_tr = mk("번역", "PDF 번역 (목록 창)", lambda: self._action_translate_files())  # 260623
+        self._btn_tr = mk(tr("번역"), tr("PDF 번역 (목록 창)"), lambda: self._action_translate_files())  # 260623
 
         # 260616-3: 패널 툴바 오른쪽 끝에 검색 입력창(돋보기 + '검색').
         #   Enter 시 검색 실행 + 검색창(검색 탭)이 숨겨져 있으면 보이게 함.
@@ -1391,7 +1391,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #     스페이서·입력칸의 액션을 모두 보관해 함께 껐다 켠다.
         self._tb_search_spacer_act = self._panel_toolbar.addWidget(_rsp)
         self.toolbar_search = QLineEdit()
-        self.toolbar_search.setPlaceholderText("검색")
+        self.toolbar_search.setPlaceholderText(tr("검색"))
         self.toolbar_search.setClearButtonEnabled(True)
         self.toolbar_search.setFixedWidth(220)
         self.toolbar_search.setObjectName("toolbarSearch")
@@ -1512,13 +1512,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _build_menus(self):
         bar = self.menuBar()
-        m_file = bar.addMenu("파일(&F)")
-        a_open = self._sc_act_open = QAction("폴더 열기...", self)
+        m_file = bar.addMenu(tr("파일(&F)"))
+        a_open = self._sc_act_open = QAction(tr("폴더 열기..."), self)
         a_open.triggered.connect(self.action_open_folder)
         m_file.addAction(a_open)
 
         # v1.6.11 I1: 단일 PDF 열기
-        a_open_file = self._sc_act_open_file = QAction("파일 열기...", self)
+        a_open_file = self._sc_act_open_file = QAction(tr("파일 열기..."), self)
         a_open_file.triggered.connect(self.action_open_pdf)
         m_file.addAction(a_open_file)
 
@@ -1526,45 +1526,45 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   종전에는 책갈피창의 💾 단추 하나뿐이라 찾기 어려웠다.
         m_file.addSeparator()
         # 261008-1(§4.7.13, 사용자 결정): 이름·순서를 책갈피창 우클릭 메뉴와 같게 맞춘다.
-        a_save_as = QAction("다른 이름으로 저장...", self)
-        a_save_as.setToolTip("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다.")
+        a_save_as = QAction(tr("다른 이름으로 저장..."), self)
+        a_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
         a_save_as.triggered.connect(self._action_save_as)
         m_file.addAction(a_save_as)
-        a_save = QAction("저장(PolyPDF용)", self)
-        a_save.setToolTip("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작).")
+        a_save = QAction(tr("저장(PolyPDF용)"), self)
+        a_save.setToolTip(tr("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."))
         a_save.triggered.connect(lambda: self.bookmark_tree._op_save())
         m_file.addAction(a_save)
-        a_flat = QAction("저장(일반뷰어용)...", self)
-        a_flat.setToolTip("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")
+        a_flat = QAction(tr("저장(일반뷰어용)..."), self)
+        a_flat.setToolTip(tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
         m_file.addSeparator()
 
         # 260603-3: 인쇄
-        a_print = self._sc_act_print = QAction("인쇄...", self)
+        a_print = self._sc_act_print = QAction(tr("인쇄..."), self)
         a_print.triggered.connect(self.action_print)
         m_file.addAction(a_print)
 
         # 260603: 최근 폴더를 '책갈피 자동 생성' 위로 이동
         m_file.addSeparator()
-        self.menu_recent = QMenu("최근 폴더", self)
+        self.menu_recent = QMenu(tr("최근 폴더"), self)
         m_file.addMenu(self.menu_recent)
         # 261008-11(사용자 요청): 최근 폴더 밑에 최근 파일 — 파일 열기·여러 파일 열기로 연 PDF
-        self.menu_recent_files = QMenu("최근 파일", self)
+        self.menu_recent_files = QMenu(tr("최근 파일"), self)
         m_file.addMenu(self.menu_recent_files)
 
         # 260618-8: (구 '파일' 메뉴의 도구 항목들은 '도구' 메뉴 상부로 이동 — 아래 _build_tools_menu)
         m_file.addSeparator()
-        a_quit = self._sc_act_quit = QAction("종료", self)
+        a_quit = self._sc_act_quit = QAction(tr("종료"), self)
         a_quit.triggered.connect(self.close)
         m_file.addAction(a_quit)
 
         # v1.6.1 F1: 즐겨찾기 메뉴 (파일 ↔ 보기 사이)
-        self.menu_favorites = bar.addMenu("즐겨찾기(&V)")
+        self.menu_favorites = bar.addMenu(tr("즐겨찾기(&V)"))
         self._refresh_favorites_menu()
 
         # 260618-8: 보기 메뉴 — 패널 '뷰어' 버튼(1단/2단/검색/단어장/스크린샷/법령·고시/발표보기)과 동일 동작
-        m_view = bar.addMenu("보기(&B)")
+        m_view = bar.addMenu(tr("보기(&B)"))
         # 261008(다국어 SOT §5): 항목은 **고정 id** 로 찾는다 — 종전에는 화면 이름('법령/고시')이
         #   키라 번역하면 게이팅이 항목을 못 찾았다. 화면 이름은 tr() 로만 쓴다.
         self._view_acts = {}
@@ -1585,23 +1585,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         # 260825: 뷰어 옵션(우클릭) 메뉴를 단축키로 — 보기 메뉴에 노출(단축키 표시) + 설정 등록
         m_view.addSeparator()
-        self._sc_act_option_menu = QAction("옵션 메뉴 (현재 페이지)", self)
+        self._sc_act_option_menu = QAction(tr("옵션 메뉴 (현재 페이지)"), self)
         self._sc_act_option_menu.triggered.connect(self._show_viewer_option_menu)
         m_view.addAction(self._sc_act_option_menu)
 
         # 260606-8: 2분할 보기 상태 act (메뉴엔 표시 안 함 — 보기 메뉴/툴바로 제어, 상태 동기화용)
-        self.act_split = QAction("🗗 2단 보기", self)
+        self.act_split = QAction(tr("🗗 2단 보기"), self)
         self.act_split.setCheckable(True)
         self.act_split.setChecked(False)
         self.act_split.toggled.connect(self._toggle_split)
         # 260609-4 (D): 발표 보기 (F5) — 메뉴엔 '보기'로, 단축키 유지 위해 창에 등록
-        self.act_present = QAction("📽 발표 보기", self)
+        self.act_present = QAction(tr("📽 발표 보기"), self)
         self.act_present.setShortcut("F5")
         self.act_present.triggered.connect(self._open_presentation)
         self.addAction(self.act_present)           # 메뉴에 없어도 F5 동작 유지
 
         # 260618-16: '도구' 메뉴 — 기능별 6개 구역으로 재배열(섹션 헤더 + 항목)
-        m_tools = bar.addMenu("도구(&T)")
+        m_tools = bar.addMenu(tr("도구(&T)"))
 
         def _act(text, slot):
             a = QAction(text, self)
@@ -1611,78 +1611,78 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         # 🧰 도구 — 260911-1(사용자 지시): 패널 툴바 '도구' 그룹과 **같은 차례**.
         #   같은 것을 두 곳에서 다른 차례로 보여 주지 않는다(디자인 SOT §2.9.1).
-        m_tools.addSection("🧰 도구")
-        _act("OCR 로 읽기 (쪽 범위·언어·워터마크)...", self._action_ocr_read)
-        _act("단어장 생성 (OCR·어휘)...", self._action_build_study)
-        _act("책갈피 자동 생성...", self.action_open_bookmarker)
-        a_merge = self._sc_act_merge = _act("PDF 병합...", lambda: self._on_merge_files(None))
-        _act("이미지 → PDF 변환...", lambda: self.action_image_to_pdf())  # 260825-13
-        _act("스크린샷 PDF 저장...", self.action_save_screenshot_pdf)
-        _act("암호화 (암호·권한 설정)...", self.action_encrypt_pdf)
-        self._act_tr_files = _act("PDF번역", self._action_translate_files)
+        m_tools.addSection(tr("🧰 도구"))
+        _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read)
+        _act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study)
+        _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker)
+        a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None))
+        _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf())  # 260825-13
+        _act(tr("스크린샷 PDF 저장..."), self.action_save_screenshot_pdf)
+        _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf)
+        self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files)
 
         # 📄 그 밖의 PDF·생성 작업 — 옆의 두 구역이 한 항목씩만 남아 합쳤다.
-        m_tools.addSection("📄 그 밖의 PDF·생성 작업")
-        _act("단어장·책갈피 동시 생성...", self._action_build_study_and_bookmarks)
-        _act("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)...", self._action_save_decorated_pdf)
+        m_tools.addSection(tr("📄 그 밖의 PDF·생성 작업"))
+        _act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks)
+        _act(tr("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..."), self._action_save_decorated_pdf)
 
         # 📖 사전 및 용어집 관리
-        m_tools.addSection("📖 사전 및 용어집 관리")
-        _act("단어장 관리 (출처·우선순위·폴더)...", self._action_dict_manager)
-        _act("용어집 가져오기 (PDF·CSV)...", self._action_import_glossary)
-        _act("사전 복원 (가져오기)...", self._action_restore_dict)
-        _act("용어집 CSV 양식 예제 저장...", self._action_save_csv_sample)
-        _act("인터넷 사전 보강 (이어하기)...", self._action_online_enrich)
-        _act("사전 내보내기 (TBX·CSV)...", self._action_export_dict)
-        _act("사전 백업 (내보내기)...", self._action_backup_dict)
-        _act("사전 정리 (HTML 마크업 제거)", self._action_sanitize_dict)
-        _act("온용어 다시 분류 (용어집별·재조회)...", self._action_reclassify_onterm)
+        m_tools.addSection(tr("📖 사전 및 용어집 관리"))
+        _act(tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager)
+        _act(tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary)
+        _act(tr("사전 복원 (가져오기)..."), self._action_restore_dict)
+        _act(tr("용어집 CSV 양식 예제 저장..."), self._action_save_csv_sample)
+        _act(tr("인터넷 사전 보강 (이어하기)..."), self._action_online_enrich)
+        _act(tr("사전 내보내기 (TBX·CSV)..."), self._action_export_dict)
+        _act(tr("사전 백업 (내보내기)..."), self._action_backup_dict)
+        _act(tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict)
+        _act(tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)
 
         # 🔍 검색 및 데이터 구축
-        m_tools.addSection("🔍 검색 및 데이터 구축")
-        self._act_law = _act("법령·고시 검색 (법제처)...", self._action_law_search)
-        self._act_kcsc = _act("건설기준 (KCSC) 보기...", self._action_kcsc_search)
-        self._act_kipo = _act("특허 등록정보 (KIPO)...", self._action_kipo_search)
-        _act("인덱스 재구축", self.action_reindex)
+        m_tools.addSection(tr("🔍 검색 및 데이터 구축"))
+        self._act_law = _act(tr("법령·고시 검색 (법제처)..."), self._action_law_search)
+        self._act_kcsc = _act(tr("건설기준 (KCSC) 보기..."), self._action_kcsc_search)
+        self._act_kipo = _act(tr("특허 등록정보 (KIPO)..."), self._action_kipo_search)
+        _act(tr("인덱스 재구축"), self.action_reindex)
 
         # 🏷️ 태그·키워드 (260829 P2 — 태그 SOT §8.2·§8.5)
-        m_tools.addSection("🏷️ 태그 자동 부여")
-        _act("태그 다시 계산", lambda: self._start_autotag_scan(force=True))
-        _act("새 태그 후보 검토…", self._autotag_review_candidates)
-        _act("직전 자동 부여 되돌리기", self._autotag_undo)
-        _act("자동 태그 전체 삭제", self._autotag_clear_all)
-        _act("없는 파일 항목 정리…", self._autotag_prune_missing)
+        m_tools.addSection(tr("🏷️ 태그 자동 부여"))
+        _act(tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True))
+        _act(tr("새 태그 후보 검토…"), self._autotag_review_candidates)
+        _act(tr("직전 자동 부여 되돌리기"), self._autotag_undo)
+        _act(tr("자동 태그 전체 삭제"), self._autotag_clear_all)
+        _act(tr("없는 파일 항목 정리…"), self._autotag_prune_missing)
 
         # ⚙️ 프로그램 환경설정
-        m_tools.addSection("⚙️ 프로그램 환경설정")
-        _act("환경설정...", self.action_open_settings)        # 260618-18: 환경설정을 단축키 위로
-        _act("단축키 설정...", self._edit_shortcuts)
-        _act("현재 설정을 기본값으로 저장(배포용)…", self._save_current_as_default)
-        _act("설정 초기화(기본값으로 되돌리기)…", self._reset_to_defaults)
+        m_tools.addSection(tr("⚙️ 프로그램 환경설정"))
+        _act(tr("환경설정..."), self.action_open_settings)        # 260618-18: 환경설정을 단축키 위로
+        _act(tr("단축키 설정..."), self._edit_shortcuts)
+        _act(tr("현재 설정을 기본값으로 저장(배포용)…"), self._save_current_as_default)
+        _act(tr("설정 초기화(기본값으로 되돌리기)…"), self._reset_to_defaults)
 
         # 💻 시스템 연동 및 설치
-        m_tools.addSection("💻 시스템 연동 및 설치")
-        _act("Windows 기본 PDF 앱으로 등록…", self._register_pdf_handler)
-        _act("구성요소 설치(녹화·OCR)…", self._open_components_installer)
+        m_tools.addSection(tr("💻 시스템 연동 및 설치"))
+        _act(tr("Windows 기본 PDF 앱으로 등록…"), self._register_pdf_handler)
+        _act(tr("구성요소 설치(녹화·OCR)…"), self._open_components_installer)
 
-        m_help = bar.addMenu("도움말(&H)")
+        m_help = bar.addMenu(tr("도움말(&H)"))
         # v1.6.1 G2: 사용법
-        a_usage = QAction("사용법", self)
+        a_usage = QAction(tr("사용법"), self)
         a_usage.triggered.connect(self._show_usage)
         m_help.addAction(a_usage)
         # 260618-11: 업데이트 확인(GitHub Releases)
-        a_update = QAction("업데이트 확인…", self)
+        a_update = QAction(tr("업데이트 확인…"), self)
         a_update.triggered.connect(lambda: self._check_for_updates(manual=True))
         m_help.addAction(a_update)
         # 260618-24(C): 업데이트 자동 다운로드(미리 받아두기) 체크박스 — 기본 켜짐
-        a_autodl = QAction("업데이트 자동 다운로드", self)
+        a_autodl = QAction(tr("업데이트 자동 다운로드"), self)
         a_autodl.setCheckable(True)
         a_autodl.setChecked(bool(getattr(self, "_prefs", {}).get("auto_download_update", True)))
         a_autodl.toggled.connect(self._on_toggle_auto_download)
         m_help.addAction(a_autodl)
         self._act_auto_download = a_autodl
         # 260618-33: 베타(테스트) 업데이트 채널 — 켜면 -beta/-rc 등 프리릴리즈도 받음(기본 꺼짐=정식만)
-        a_beta = QAction("베타(테스트) 버전도 받기", self)
+        a_beta = QAction(tr("베타(테스트) 버전도 받기"), self)
         a_beta.setCheckable(True)
         # 260618-36: 1.0 이전(pre-stable)에는 빌드가 베타로만 나오므로 항상 베타 수신 → 체크·잠금.
         _pre10 = False
@@ -1694,12 +1694,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         a_beta.setChecked(_pre10 or str(getattr(self, "_prefs", {}).get("update_channel", "stable")).lower() == "beta")
         if _pre10:
             a_beta.setEnabled(False)
-            a_beta.setToolTip("1.0 이전에는 항상 베타(테스트) 버전을 받습니다.")
+            a_beta.setToolTip(tr("1.0 이전에는 항상 베타(테스트) 버전을 받습니다."))
         a_beta.toggled.connect(self._on_toggle_update_channel)
         m_help.addAction(a_beta)
         self._act_update_beta = a_beta
         m_help.addSeparator()
-        a_about = QAction("정보", self)
+        a_about = QAction(tr("정보"), self)
         a_about.triggered.connect(self._show_about)
         m_help.addAction(a_about)
 
@@ -1710,29 +1710,29 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from collections import OrderedDict
         # id → (라벨, 기본키, 그룹). 260611-3: 그룹화 + 선긋기/발표 단축키 신설·통일.
         self._sc_defs = OrderedDict([
-            ("open_folder",   ("폴더 열기", "Ctrl+O", "파일")),
-            ("open_file",     ("파일 열기", "Ctrl+Shift+O", "파일")),
-            ("print",         ("인쇄", "Ctrl+P", "파일")),
-            ("merge",         ("PDF 병합", "Ctrl+M", "파일")),
-            ("search_focus",  ("검색바 포커스", "Ctrl+F", "탐색")),
-            ("next_match",    ("다음 매치", "F3", "탐색")),
-            ("prev_match",    ("이전 매치", "Shift+F3", "탐색")),
-            ("option_menu",   ("옵션 메뉴(우클릭)", "Shift+F10", "탐색")),
-            ("toggle_split",  ("2단 보기", "Ctrl+Shift+2", "보기")),
-            ("present",       ("발표보기", "F5", "보기")),
-            ("capture",       ("화면 캡처", "Ctrl+Shift+S", "캡처·저장")),
-            ("save_shots_pdf", ("스크린샷 PDF 저장", "Ctrl+S", "캡처·저장")),
-            ("clipboard_save", ("클립보드로 복사", "Ctrl+Shift+C", "캡처·저장")),
-            ("draw_pen_1",    ("선 1 선택", "Ctrl+1", "선긋기(편집모드)")),
-            ("draw_pen_2",    ("선 2 선택", "Ctrl+2", "선긋기(편집모드)")),
-            ("draw_pen_3",    ("선 3 선택", "Ctrl+3", "선긋기(편집모드)")),
-            ("draw_pen_4",    ("선 4 선택", "Ctrl+4", "선긋기(편집모드)")),
-            ("draw_pen_5",    ("선 5 선택", "Ctrl+5", "선긋기(편집모드)")),
-            ("draw_mode",     ("선 종류 전환(직선/하이라이트/자유)", "Ctrl+`", "선긋기(편집모드)")),
-            ("draw_erase_thin",  ("지우개(얇게)", "Ctrl+E", "선긋기(편집모드)")),
-            ("draw_erase_thick", ("지우개(두껍게)", "Ctrl+Shift+E", "선긋기(편집모드)")),
-            ("draw_clear",    ("현재 페이지 선 청소", "Ctrl+Shift+Backspace", "선긋기(편집모드)")),
-            ("quit",          ("종료", "Ctrl+Q", "기타")),
+            ("open_folder",   (tr("폴더 열기"), "Ctrl+O", tr("파일"))),
+            ("open_file",     (tr("파일 열기"), "Ctrl+Shift+O", tr("파일"))),
+            ("print",         (tr("인쇄"), "Ctrl+P", tr("파일"))),
+            ("merge",         (tr("PDF 병합"), "Ctrl+M", tr("파일"))),
+            ("search_focus",  (tr("검색바 포커스"), "Ctrl+F", tr("탐색"))),
+            ("next_match",    (tr("다음 매치"), "F3", tr("탐색"))),
+            ("prev_match",    (tr("이전 매치"), "Shift+F3", tr("탐색"))),
+            ("option_menu",   (tr("옵션 메뉴(우클릭)"), "Shift+F10", tr("탐색"))),
+            ("toggle_split",  (tr("2단 보기"), "Ctrl+Shift+2", tr("보기"))),
+            ("present",       (tr("발표보기"), "F5", tr("보기"))),
+            ("capture",       (tr("화면 캡처"), "Ctrl+Shift+S", tr("캡처·저장"))),
+            ("save_shots_pdf", (tr("스크린샷 PDF 저장"), "Ctrl+S", tr("캡처·저장"))),
+            ("clipboard_save", (tr("클립보드로 복사"), "Ctrl+Shift+C", tr("캡처·저장"))),
+            ("draw_pen_1",    (tr("선 1 선택"), "Ctrl+1", tr("선긋기(편집모드)"))),
+            ("draw_pen_2",    (tr("선 2 선택"), "Ctrl+2", tr("선긋기(편집모드)"))),
+            ("draw_pen_3",    (tr("선 3 선택"), "Ctrl+3", tr("선긋기(편집모드)"))),
+            ("draw_pen_4",    (tr("선 4 선택"), "Ctrl+4", tr("선긋기(편집모드)"))),
+            ("draw_pen_5",    (tr("선 5 선택"), "Ctrl+5", tr("선긋기(편집모드)"))),
+            ("draw_mode",     (tr("선 종류 전환(직선/하이라이트/자유)"), "Ctrl+`", tr("선긋기(편집모드)"))),
+            ("draw_erase_thin",  (tr("지우개(얇게)"), "Ctrl+E", tr("선긋기(편집모드)"))),
+            ("draw_erase_thick", (tr("지우개(두껍게)"), "Ctrl+Shift+E", tr("선긋기(편집모드)"))),
+            ("draw_clear",    (tr("현재 페이지 선 청소"), "Ctrl+Shift+Backspace", tr("선긋기(편집모드)"))),
+            ("quit",          (tr("종료"), "Ctrl+Q", tr("기타"))),
         ])
         targets = {
             "open_folder": ("action", self._sc_act_open),
@@ -1827,7 +1827,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._save_settings_now()
             except Exception:
                 pass
-            self.status.showMessage("단축키 저장됨", 3000)
+            self.status.showMessage(tr("단축키 저장됨"), 3000)
 
     # ===== 260611-11: Windows 기본 PDF 앱 등록(연결 프로그램) ============
     def _register_pdf_handler(self):
@@ -1836,9 +1836,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         import sys as _sys, os as _os
         if not getattr(_sys, "frozen", False):
             QMessageBox.information(
-                self, "안내",
-                "개발 실행(파이썬)에서는 등록할 수 없습니다.\n"
-                "빌드된 PolyPDF.exe 에서 실행해 주세요.")
+                self, tr("안내"),
+                tr("개발 실행(파이썬)에서는 등록할 수 없습니다.\n"
+                "빌드된 PolyPDF.exe 에서 실행해 주세요."))
             return
         exe = _os.path.abspath(_sys.executable)
         try:
@@ -1847,7 +1847,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             def setk(path, name, val, typ=winreg.REG_SZ):
                 with winreg.CreateKey(winreg.HKEY_CURRENT_USER, path) as k:
                     winreg.SetValueEx(k, name, 0, typ, val)
-            setk(rf"Software\Classes\{prog}", "", "PDF 문서 (PolyPDF)")
+            setk(rf"Software\Classes\{prog}", "", tr("PDF 문서 (PolyPDF)"))
             setk(rf"Software\Classes\{prog}\DefaultIcon", "", f'"{exe}",0')
             setk(rf"Software\Classes\{prog}\shell\open\command", "", f'"{exe}" "%1"')
             setk(r"Software\Classes\.pdf\OpenWithProgids", prog, b"", winreg.REG_NONE)
@@ -1856,14 +1856,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                  "", f'"{exe}" "%1"')
             setk(rf"Software\Classes\Applications\{base}", "FriendlyAppName", "PolyPDF")
             QMessageBox.information(
-                self, "등록 완료",
-                "PolyPDF 를 PDF '연결 프로그램' 목록에 등록했습니다.\n\n"
+                self, tr("등록 완료"),
+                tr("PolyPDF 를 PDF '연결 프로그램' 목록에 등록했습니다.\n\n"
                 "■ 기본 앱으로 지정하려면(둘 중 하나):\n"
                 "  1) PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'\n"
                 "  2) Windows 설정 → 앱 → 기본 앱 → '.pdf' 에서 PolyPDF 선택\n\n"
-                "※ Windows 보안 정책상 기본 앱의 최종 지정은 사용자가 직접 확인해야 합니다.")
+                "※ Windows 보안 정책상 기본 앱의 최종 지정은 사용자가 직접 확인해야 합니다."))
         except Exception as e:
-            QMessageBox.warning(self, "등록 실패", str(e))
+            QMessageBox.warning(self, tr("등록 실패"), str(e))
 
     # ===== 260611-3(6): 화면 캡처 전역 단축키 ============================
     def _capture_key(self) -> str:
@@ -1898,20 +1898,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 key = self._capture_key()
                 if ok:
                     self.status.showMessage(
-                        f"전역 화면캡처 단축키 등록됨: {key} (다른 프로그램 위에서도 작동)", 5000)
+                        tr('전역 화면캡처 단축키 등록됨: {key} (다른 프로그램 위에서도 작동)').format(key=key), 5000)
                 else:
                     QMessageBox.warning(
-                        self, "전역 단축키 등록 실패",
-                        f"'{key}' 를 전역 단축키로 등록하지 못했습니다.\n"
-                        "다른 프로그램이 같은 조합을 이미 사용 중일 수 있습니다.\n"
-                        "단축키 설정에서 '화면 캡처' 키를 다른 조합으로 바꿔 다시 시도하세요.")
+                        self, tr("전역 단축키 등록 실패"),
+                        tr("'{key}' 를 전역 단축키로 등록하지 못했습니다.\n다른 프로그램이 같은 조합을 이미 사용 중일 수 있습니다.\n단축키 설정에서 '화면 캡처' 키를 다른 조합으로 바꿔 다시 시도하세요.").format(key=key))
         else:
             if hk is not None:
                 hk.unregister()
             if kind == "shortcut":
                 obj.setKey(QKeySequence(self._capture_key()))
             if notify:
-                self.status.showMessage("전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)", 4000)
+                self.status.showMessage(tr("전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"), 4000)
 
     def _foreground_is_self(self) -> bool:
         try:
@@ -1990,7 +1988,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._ensure_shots_visible()
             except Exception:
                 pass
-            self.status.showMessage(f"전역 캡처 저장({mode}): {Path(saved).name}", 3000)
+            self.status.showMessage(tr('전역 캡처 저장({mode}): {name}').format(mode=mode, name=Path(saved).name), 3000)
         except Exception:
             pass
 
@@ -2137,7 +2135,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.page_thumbs.pastePagesRequested.connect(self._on_paste_pages)
         self.page_thumbs.addImagePagesRequested.connect(self._on_add_image_pages)   # 260930-1
         self.page_thumbs.imageDropRefused.connect(lambda: self.status.showMessage(
-            '쪽 추가는 편집모드(✏)에서만 됩니다.', 4000))
+            tr('쪽 추가는 편집모드(✏)에서만 됩니다.'), 4000))
         self.page_thumbs._paste_available = (
             lambda: len(self._thumb_clip["pages"]) if self._thumb_clip else 0)
         # v1.6.21: 파일 작업 핸드셰이크 (메인이 열고 있는 파일도 작업 가능)
@@ -2176,14 +2174,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     # ===== 폴더 / 인덱스 =================================================
     def action_open_folder(self):
         last = str(self._folder) if self._folder else ""
-        folder = QFileDialog.getExistingDirectory(self, "PDF 폴더 선택", last)
+        folder = QFileDialog.getExistingDirectory(self, tr("PDF 폴더 선택"), last)
         if folder:
             self.open_folder(Path(folder))
 
     def action_open_pdf(self):
         """v1.6.11 I1: 단일 PDF 파일 열기."""
         start = str(self._folder) if self._folder else ""
-        fn, _ = QFileDialog.getOpenFileName(self, "PDF 파일 열기", start, "PDF (*.pdf)")
+        fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 파일 열기"), start, "PDF (*.pdf)")
         if fn:
             self.open_pdf(Path(fn))
 
@@ -2193,7 +2191,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         **활성 창에만** 로드 → 옆 창 내용 유지, 상단 책갈피 유지, 다른 폴더면 하단에 표시(#7)."""
         pdf_path = Path(pdf_path)
         if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
-            self.status.showMessage(f"PDF 파일이 아닙니다: {pdf_path.name}")
+            self.status.showMessage(tr('PDF 파일이 아닙니다: {name}').format(name=pdf_path.name))
             return
         self._touch_recent_files([pdf_path])
         if getattr(self, "_split_on", False):
@@ -2220,18 +2218,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._refresh_search_scope()        # 260616-3: 이 파일로만 검색 한정
             self.setWindowTitle(
                 f"PolyPDF  v{__version__}  —  {pdf_path.name}")
-            self.status.showMessage(f"파일 로드: {pdf_path}")
+            self.status.showMessage(tr('파일 로드: {pdf_path}').format(pdf_path=pdf_path))
         finally:
             QApplication.restoreOverrideCursor()
         self._load_main(HistoryItem(str(pdf_path), 0, "", "bookmark"))
         # 해당 파일만 인덱싱 (폴더 전체 인덱싱 회피)
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        self.status.showMessage("인덱싱 준비...")
+        self.status.showMessage(tr("인덱싱 준비..."))
         worker = IndexWorker(self._db_path, self._folder, single_file=pdf_path)
         worker.progress.connect(self._on_index_progress)
         worker.finished.connect(self._on_index_finished)
-        worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+        worker.error.connect(lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
         self._start_index_worker(worker)
 
     def open_pdfs(self, paths):
@@ -2263,7 +2261,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._refresh_search_scope()
             if split:
                 self._sync_right_pane_bookmark()
-            self.status.showMessage(f"파일 {len(shown)}개 로드", 4000)
+            self.status.showMessage(tr('파일 {n}개 로드').format(n=len(shown)), 4000)
         finally:
             QApplication.restoreOverrideCursor()
         self._load_main(HistoryItem(shown[0], 0, "", "bookmark"))
@@ -2291,9 +2289,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         mv = self._mv[tgt] if tgt < len(getattr(self, "_mv", [])) else self.main_view
         if getattr(bt, "_dirty", False):
             QMessageBox.information(
-                self, "파일 추가",
-                "책갈피창에 저장하지 않은 편집이 있어 파일을 더하지 않았습니다.\n"
-                "편집을 저장하거나 취소한 뒤 다시 놓아 주세요.")
+                self, tr("파일 추가"),
+                tr("책갈피창에 저장하지 않은 편집이 있어 파일을 더하지 않았습니다.\n"
+                "편집을 저장하거나 취소한 뒤 다시 놓아 주세요."))
             return
         cur = mv.current_file() if mv is not None else None
         cur = str(cur) if cur and str(cur).lower().endswith(".pdf") and Path(str(cur)).exists() else None
@@ -2318,10 +2316,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         n = len(bt.all_file_paths())
         if added:
             self._refresh_search_scope()
-            self.status.showMessage(f"파일 {len(added)}개를 목록에 더했습니다(모두 {n}개).", 5000)
+            self.status.showMessage(tr('파일 {n}개를 목록에 더했습니다(모두 {n2}개).').format(n=len(added), n2=n), 5000)
             self._index_files(added)
         else:
-            self.status.showMessage("이미 목록에 있는 파일입니다.", 4000)
+            self.status.showMessage(tr("이미 목록에 있는 파일입니다."), 4000)
 
     def _on_paths_dropped(self, idx: int, paths):
         """260915-5(§4.9.2): 책갈피창·본문·창에 놓은 것 — 폴더가 있으면 종전대로 폴더 열기,
@@ -2341,7 +2339,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             worker = IndexWorker(self._db_path, Path(files[0]).parent, files=[Path(f) for f in files])
             worker.progress.connect(self._on_index_progress)
             worker.finished.connect(self._on_index_finished)
-            worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+            worker.error.connect(lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
             self._start_index_worker(worker)
         except Exception:
             pass
@@ -2402,14 +2400,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         opts = dlg.result_options()
         if not opts["input_pdf"]:
-            QMessageBox.warning(self, "안내", "입력 PDF를 지정하세요.")
+            QMessageBox.warning(self, tr("안내"), tr("입력 PDF를 지정하세요."))
             return
         in_pdf = Path(opts["input_pdf"])
         if not in_pdf.exists() or in_pdf.suffix.lower() != ".pdf":
-            QMessageBox.warning(self, "안내", f"PDF 파일이 아닙니다: {in_pdf.name}")
+            QMessageBox.warning(self, tr("안내"), tr('PDF 파일이 아닙니다: {name}').format(name=in_pdf.name))
             return
         if not (opts["save_pdf"] or opts["save_txt"]):
-            QMessageBox.warning(self, "안내", "출력 옵션을 최소 1개 선택하세요.")
+            QMessageBox.warning(self, tr("안내"), tr("출력 옵션을 최소 1개 선택하세요."))
             return
 
         # prefs 기본값 갱신
@@ -2436,12 +2434,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 _toc = []
             if _toc:
                 if QMessageBox.question(
-                    self, "현재 PDF에 저장",
-                    f"이 PDF에는 기존 책갈피 {len(_toc)}개가 있습니다.\n"
-                    "현재 PDF에 저장하면 기존 책갈피는 모두 지워지고 "
-                    "새로 만든 책갈피로 대체됩니다.\n"
-                    "(되돌릴 수 없습니다. 원본을 보존하려면 '새 PDF로 저장'을 선택하세요.)\n\n"
-                    "계속할까요?"
+                    self, tr("현재 PDF에 저장"),
+                    tr("이 PDF에는 기존 책갈피 {n}개가 있습니다.\n현재 PDF에 저장하면 기존 책갈피는 모두 지워지고 새로 만든 책갈피로 대체됩니다.\n(되돌릴 수 없습니다. 원본을 보존하려면 '새 PDF로 저장'을 선택하세요.)\n\n계속할까요?").format(n=len(_toc))
                 ) != QMessageBox.StandardButton.Yes:
                     return
             cur = self.main_view.current_file() if self.main_view else None
@@ -2455,7 +2449,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        self.status.showMessage("책갈피 자동 생성 시작...")
+        self.status.showMessage(tr("책갈피 자동 생성 시작..."))
 
         self._bookmarker_opts = dict(opts)               # 260904-1: 검토 뒤 저장 단계에 재사용
         self._bookmarker_pdf = in_pdf
@@ -2484,7 +2478,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 pass
         dlg.previewPageRequested.connect(_pv)
         if dlg.exec() != dlg.DialogCode.Accepted:
-            self.status.showMessage("책갈피 생성 취소(검토 표에서 취소)", 4000)
+            self.status.showMessage(tr("책갈피 생성 취소(검토 표에서 취소)"), 4000)
             return
         bms = dlg.result_bookmarks()
         opts = dict(self._bookmarker_opts or {})
@@ -2497,7 +2491,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             except Exception:
                 pass
         self.progress.setVisible(True); self.progress.setRange(0, 0)
-        self.status.showMessage(f"책갈피 {len(bms)}개 저장 중...")
+        self.status.showMessage(tr('책갈피 {n}개 저장 중...').format(n=len(bms)))
         worker = BookmarkerWorker(in_pdf, opts)
         worker.progress.connect(lambda m: self.status.showMessage(m))
         worker.finished.connect(self._on_bookmarker_done)
@@ -2509,14 +2503,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if result.get("phase") == "review":                  # 260904-1
             self._on_bookmarker_review(result)
             return
-        parts = [f"방법={result.get('method')}", f"개수={result.get('count')}"]
+        parts = [tr('방법={get}').format(get=result.get('method')), tr('개수={get}').format(get=result.get('count'))]
         if result.get("offset") is not None:
-            parts.append(f"오프셋={result['offset']}")
+            parts.append(tr('오프셋={offset}').format(offset=result['offset']))
         if result.get("pdf_out"):
             parts.append(f"PDF: {Path(result['pdf_out']).name}")
         if result.get("txt_out"):
             parts.append(f"TXT: {Path(result['txt_out']).name}")
-        self.status.showMessage("책갈피 생성 완료 — " + " · ".join(parts), 8000)
+        self.status.showMessage(tr('책갈피 생성 완료 — {join}').format(join=' · '.join(parts)), 8000)
         # 260606-4: 자동 열기 옵션 폐지 → 항상 책갈피 새로고침(기존 목록 유지) + 메인 로드
         pdf_out = result.get("pdf_out")
         if pdf_out and Path(pdf_out).exists():
@@ -2536,12 +2530,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._load_main(HistoryItem(str(src), 0, "", "bookmark"))
         except Exception:
             pass
-        self.status.showMessage(f"책갈피 생성 오류: {msg}", 8000)
-        QMessageBox.warning(self, "책갈피 생성 실패", msg)
+        self.status.showMessage(tr('책갈피 생성 오류: {msg}').format(msg=msg), 8000)
+        QMessageBox.warning(self, tr("책갈피 생성 실패"), msg)
 
     def _on_bookmarks_edited(self, src: str, dst: str):
         """v1.6.18: 책갈피 편집 저장 완료 → 260606-4: 목록 유지하며 새로고침 + 메인 로드."""
-        self.status.showMessage(f"책갈피 저장: {Path(dst).name}", 6000)
+        self.status.showMessage(tr('책갈피 저장: {name}').format(name=Path(dst).name), 6000)
         try:
             self.bookmark_tree.add_or_refresh_file(dst, after=src)   # 260915-1(§4.7.5)
         except Exception:
@@ -2696,15 +2690,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 dlg = None
         if dlg is not None and self._probe_busy:
             try:
-                dlg.set_phase("목록을 조사하는 중입니다",
-                              "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
+                dlg.set_phase(tr("목록을 조사하는 중입니다"),
+                              tr("파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
                               "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
-                              "한 번 조사한 파일은 다시 조사하지 않습니다.")
+                              "한 번 조사한 파일은 다시 조사하지 않습니다."))
                 dlg.on_progress(done, total, name)
             except Exception:
                 pass
         if total > 0:
-            self.status.showMessage(f"목록 조사 {done} / {total}" + (f" — {name}" if name else ""),
+            self.status.showMessage(tr('목록 조사 {done} / {total}{v}').format(done=done, total=total, v=f' — {name}' if name else ''),
                                     4000)
 
     def _on_probe_finished(self):
@@ -2752,10 +2746,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             dlg = getattr(self, "_indexing_dialog", None)
             if dlg is not None:
                 try:
-                    dlg.set_phase("목록을 조사하는 중입니다",
-                                  "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
+                    dlg.set_phase(tr("목록을 조사하는 중입니다"),
+                                  tr("파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
                                   "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
-                                  "한 번 조사한 파일은 다시 조사하지 않습니다.")
+                                  "한 번 조사한 파일은 다시 조사하지 않습니다."))
                 except Exception:
                     pass
             return
@@ -2881,7 +2875,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not cur or not str(cur).lower().endswith(".pdf") or mv._doc is None:
-            tp.set_page("", 0, [], "PDF 를 먼저 여세요.")
+            tp.set_page("", 0, [], tr("PDF 를 먼저 여세요."))
             return
         page = mv.current_page()
         from viewer import text_extract2 as tx
@@ -2890,8 +2884,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not tx.has_text_layer(mv._doc.doc, page):
             ocr_text = self._ocr_page_text(cur, page)
             if not ocr_text:
-                note = ("이 쪽은 스캔본이라 글자가 없습니다. "
-                        "[단어장 생성] 으로 이 문서를 읽으면 여기에 글이 나옵니다.")
+                note = (tr("이 쪽은 스캔본이라 글자가 없습니다. "
+                        "[단어장 생성] 으로 이 문서를 읽으면 여기에 글이 나옵니다."))
         # 260908-3(감사): 추출을 **워커로** 옮긴다. 표 인식이 큰 문서의 첫 쪽에서 7.4초라
         #   메인에서 돌리면 쪽을 넘길 때마다 창이 멈췄다(응답성 SOT §4 ①②·§5 #1).
         from viewer.workers import TextPageWorker, run_in_thread
@@ -2903,7 +2897,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 pass
         self._text_token = getattr(self, "_text_token", 0) + 1
         tok = self._text_token
-        tp.set_busy(f"p.{page + 1} 읽는 중…" if not note else note)
+        tp.set_busy(tr('p.{page} 읽는 중…').format(page=page + 1) if not note else note)
         # 260908-5(응답성 SOT §4 ①): 인덱싱이 도는 동안에는 표 인식을 미룬다 —
         #   둘 다 GIL 을 오래 쥔다. 미룬 것은 인덱싱이 끝나면 다시 뽑는다.
         busy_idx = bool(getattr(self, "_index_workers", None))
@@ -2928,7 +2922,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         w.done.connect(lambda pg, rows, t, _w=w:
                        self._on_text_rows(cur, pg, rows, t, note,
                                           getattr(_w, "noise", 0)))
-        w.error.connect(lambda msg, t: tp.set_busy(f"읽지 못했습니다: {msg}")
+        w.error.connect(lambda msg, t: tp.set_busy(tr('읽지 못했습니다: {msg}').format(msg=msg))
                         if t == self._text_token else None)
         w.finished.connect(lambda: setattr(self, "_text_worker", None))
         run_in_thread(w, self._thread_keep)
@@ -2948,11 +2942,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         st_ = {}
         rows = self._text_store().apply_to_rows(path, page, rows, stats=st_)
         if noise and not note:   # 260908-6(SOT §3.5): 조용히 빼지 않는다
-            note = f"p.{page + 1} · {len(rows)}줄 · 잡음 {noise}줄 숨김"
+            note = tr('p.{page} · {n}줄 · 잡음 {noise}줄 숨김').format(page=page + 1, n=len(rows), noise=noise)
         # 260913-6(SOT §5.1.4): 원천이 바뀌어 겹침으로도 못 찾은 고침 — 조용히 숨기지 않는다
         if st_.get("unmatched") and not self._text_store().is_applied(path, page):
-            note = (note + " · " if note else "") + \
-                f"옛 고침 {st_['unmatched']}개가 지금 줄과 맞지 않습니다"
+            note = tr('{v}옛 고침 {unmatched}개가 지금 줄과 맞지 않습니다').format(v=note + ' · ' if note else '', unmatched=st_['unmatched'])
         tp.set_page(path, page, rows, note)
         tp.restore_highlights(self._text_store().get_highlights(path, page))
 
@@ -3112,7 +3105,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             forced = getattr(self, '_text_force_ocr', None) or set()
             self._text_force_ocr = {k for k in forced if k[0] != str(cur)}
             self._reload_text_panel()
-            self.status.showMessage('원래 글자층으로 되돌렸습니다.', 4000)
+            self.status.showMessage(tr('원래 글자층으로 되돌렸습니다.'), 4000)
             return
         lang = opts['lang'] or self._ocr_lang_for(cur)
         self._start_text_ocr(cur, opts['pages'], lang, opts['watermark'],
@@ -3128,18 +3121,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         (응답성 SOT §4 ①).
         """
         from PyQt6.QtWidgets import QProgressDialog
-        names = {'kor': '한국어', 'eng': '영어', 'jpn': '일본어'}
+        names = {'kor': tr('한국어'), 'eng': tr('영어'), 'jpn': tr('일본어')}
         label = ', '.join(names.get(c, c) for c in miss)
         box = QMessageBox(self)
-        box.setWindowTitle('OCR 언어 자료')
+        box.setWindowTitle(tr('OCR 언어 자료'))
         box.setIcon(QMessageBox.Icon.Question)
-        box.setText('이 설치본에는 %s OCR 자료가 없습니다.' % label)
+        box.setText(tr('이 설치본에는 %s OCR 자료가 없습니다.') % label)
         box.setInformativeText(
-            '지금 내려받으면(약 2MB) 다시 설치하지 않고 바로 쓸 수 있습니다.'
-            + chr(10) + '받은 자료는 쓰기 권한이 있는 사용자 폴더에 둡니다.')
-        b_get = box.addButton('지금 내려받기', QMessageBox.ButtonRole.AcceptRole)
-        b_skip = box.addButton('있는 언어로 진행', QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton('취소', QMessageBox.ButtonRole.RejectRole)
+            tr('지금 내려받으면(약 2MB) 다시 설치하지 않고 바로 쓸 수 있습니다.\n받은 자료는 쓰기 권한이 있는 사용자 폴더에 둡니다.'))
+        b_get = box.addButton(tr('지금 내려받기'), QMessageBox.ButtonRole.AcceptRole)
+        b_skip = box.addButton(tr('있는 언어로 진행'), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr('취소'), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(b_get)
         box.exec()
         clicked = box.clickedButton()
@@ -3149,8 +3141,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return False
 
         from viewer.workers import OcrLangRepairWorker, run_in_thread
-        dlg = QProgressDialog('OCR 언어 자료를 받는 중…', '중지', 0, 0, self)
-        dlg.setWindowTitle('OCR 언어 자료')
+        dlg = QProgressDialog(tr('OCR 언어 자료를 받는 중…'), tr('중지'), 0, 0, self)
+        dlg.setWindowTitle(tr('OCR 언어 자료'))
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
         dlg.setMinimumDuration(0)
         w = OcrLangRepairWorker(miss)
@@ -3167,9 +3159,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             QApplication.processEvents()
         self._lang_repair_worker = None
         if out.get('ok'):
-            QMessageBox.information(self, 'OCR 언어 자료', out.get('msg') or '준비했습니다.')
+            QMessageBox.information(self, tr('OCR 언어 자료'), out.get('msg') or tr('준비했습니다.'))
         elif out:
-            QMessageBox.warning(self, 'OCR 언어 자료', out.get('msg') or '받지 못했습니다.')
+            QMessageBox.warning(self, tr('OCR 언어 자료'), out.get('msg') or tr('받지 못했습니다.'))
         return True
 
     def _start_text_ocr(self, path, pages, lang, watermark, skip_text=True):
@@ -3191,18 +3183,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 try:
                     td = (_so.ensure_tesseract() or {}).get('tessdata') or ''
                     if td:
-                        where = '\n\n찾아본 위치: ' + td
+                        where = tr('\n\n찾아본 위치: {td}').format(td=td)
                 except Exception:
                     pass
                 extra = ''
                 if skip_text:
-                    extra = ('\n\n글자가 이미 있는 쪽은 건너뜁니다. 그런 쪽의 한글은 '
-                             'PDF 원본 글자라 그대로 보입니다 — OCR 이 읽은 것이 아닙니다.')
+                    extra = (tr('\n\n글자가 이미 있는 쪽은 건너뜁니다. 그런 쪽의 한글은 '
+                             'PDF 원본 글자라 그대로 보입니다 — OCR 이 읽은 것이 아닙니다.'))
                 QMessageBox.information(
                     self, 'OCR',
-                    '이 설치본에는 다음 언어 자료가 없습니다: ' + ', '.join(miss)
-                    + '. 있는 언어로만 읽습니다: ' + _so.resolve_lang(lang)
-                    + where + extra)
+                    tr('이 설치본에는 다음 언어 자료가 없습니다: {join}. 있는 언어로만 읽습니다: {resolve_lang}{where}{extra}').format(join=', '.join(miss), resolve_lang=_so.resolve_lang(lang), where=where, extra=extra))
 
         tp = self.text_panel
         prev = getattr(self, '_text_ocr_worker', None)
@@ -3217,17 +3207,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   워커는 계속 읽고 있었지만 화면·표시가 첫 쪽에서 멈춘 것처럼 보였다.
         self._ocr_token = getattr(self, '_ocr_token', 0) + 1
         tok = self._ocr_token
-        tp.set_busy('OCR 로 읽는 중… (%d쪽)' % len(pages))
+        tp.set_busy(tr('OCR 로 읽는 중… (%d쪽)') % len(pages))
         from viewer.workers import TextOcrPageWorker, run_in_thread
         w = TextOcrPageWorker(path, pages, lang=lang, db_path=None, token=tok,
                               drop_watermark=watermark, skip_text_pages=skip_text)
         self._text_ocr_worker = w
         w.done.connect(self._on_text_ocr_done)
-        w.error.connect(lambda msg, t: tp.set_busy('OCR 실패: %s' % msg)
+        w.error.connect(lambda msg, t: tp.set_busy(tr('OCR 실패: %s') % msg)
                         if t == getattr(self, '_ocr_token', 0) else None)
         if len(pages) > 1:
-            dlgp = QProgressDialog('OCR 준비 중…', '중지', 0, len(pages), self)
-            dlgp.setWindowTitle('OCR 다시 읽기')
+            dlgp = QProgressDialog(tr('OCR 준비 중…'), tr('중지'), 0, len(pages), self)
+            dlgp.setWindowTitle(tr('OCR 다시 읽기'))
             dlgp.setWindowModality(Qt.WindowModality.NonModal)
             dlgp.setMinimumDuration(400)
             dlgp.canceled.connect(w.request_cancel)
@@ -3259,7 +3249,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._vocab_worker = w
         w.done.connect(self._on_study_vocab_rebuilt)
         w.error.connect(lambda msg: self.status.showMessage(
-            '단어장 갱신 실패: %s' % msg, 6000))
+            tr('단어장 갱신 실패: %s') % msg, 6000))
         w.finished.connect(lambda: setattr(self, '_vocab_worker', None))
         run_in_thread(w, self._thread_keep)
 
@@ -3273,7 +3263,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         self.status.showMessage(
-            'OCR 을 다시 읽어 단어장을 새로 만들었습니다 — 낱말 %d개' % n, 6000)
+            tr('OCR 을 다시 읽어 단어장을 새로 만들었습니다 — 낱말 %d개') % n, 6000)
 
     def _on_text_ocr_done(self, page, words, dpi, token):
         """다시 읽은 쪽을 기억해 두고, 지금 보고 있는 쪽이면 새로 그린다."""
@@ -3289,7 +3279,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if int(page) != self.main_view.current_page():
             return                      # 다른 쪽은 저장만 — 화면은 건드리지 않는다
         if not words:
-            self.text_panel.set_busy('OCR 이 이 쪽에서 글자를 찾지 못했습니다.')
+            self.text_panel.set_busy(tr('OCR 이 이 쪽에서 글자를 찾지 못했습니다.'))
             return
         self._reload_text_panel()
 
@@ -3331,7 +3321,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not cur or mv._doc is None:
             return
         if getattr(self, "_text_layer_worker", None) is not None:
-            self.status.showMessage("글자층을 쓰는 중입니다 — 끝난 뒤 다시 눌러 주세요.", 4000)
+            self.status.showMessage(tr("글자층을 쓰는 중입니다 — 끝난 뒤 다시 눌러 주세요."), 4000)
             return
         page = mv.current_page()
         store = self._text_store()
@@ -3347,25 +3337,24 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         tree_dirty = in_edit and bool(getattr(self.bookmark_tree, "_dirty", False))
         if in_edit and (self._page_edits_dirty() or tree_dirty):
             QMessageBox.information(
-                self, "PDF 에 반영",
-                "편집모드에서 저장하지 않은 쪽 편집·책갈피 편집이 있습니다.\n\n"
-                "먼저 저장(💾)하거나 취소한 뒤 다시 [PDF 에 반영] 을 눌러 주세요.")
+                self, tr("PDF 에 반영"),
+                tr("편집모드에서 저장하지 않은 쪽 편집·책갈피 편집이 있습니다.\n\n"
+                "먼저 저장(💾)하거나 취소한 뒤 다시 [PDF 에 반영] 을 눌러 주세요."))
             return
         msg = ""
         if not in_edit:
             # 260913-4(SOT §5.2.1, 사용자 지시): 편집모드가 아니면 바꾼 뒤 저장한다고 알린다
-            msg += "PDF 본문을 고치므로 편집모드로 바꾼 뒤 저장합니다.\n\n"
+            msg += tr("PDF 본문을 고치므로 편집모드로 바꾼 뒤 저장합니다.\n\n")
         if todo:
             n_fix = sum(len(store.get_items(cur, p)) for p in todo)
-            msg += (f"반영할 고침: {self._page_list_text(todo)} ({len(todo)}쪽, {n_fix}줄)\n")
+            msg += (tr('반영할 고침: {page_list_text} ({n}쪽, {n_fix}줄)\n').format(page_list_text=self._page_list_text(todo), n=len(todo), n_fix=n_fix))
         else:
-            msg += "아직 반영하지 않은 고침은 없습니다.\n"
+            msg += tr("아직 반영하지 않은 고침은 없습니다.\n")
         if layer:
-            msg += (f"건너뛰는 쪽: {self._page_list_text(layer)} "
-                    "— 원래 글자가 있는 쪽이라 PDF 는 건드리지 않습니다.\n")
-        msg += ("\n스캔 쪽의 **보이지 않는 글자층**을 텍스트 창의 글(고침 포함)로 다시 씁니다.\n"
+            msg += (tr('건너뛰는 쪽: {page_list_text} — 원래 글자가 있는 쪽이라 PDF 는 건드리지 않습니다.\n').format(page_list_text=self._page_list_text(layer)))
+        msg += (tr("\n스캔 쪽의 **보이지 않는 글자층**을 텍스트 창의 글(고침 포함)로 다시 씁니다.\n"
                 "화면에 보이는 모양은 그대로이고 복사·검색 결과가 창과 같아집니다.\n"
-                "원본은 백업해 둡니다.").replace("**", "")
+                "원본은 백업해 둡니다.")).replace("**", "")
         scope = self._ask_layer_scope(msg, has_fixed=bool(todo))
         if scope not in ("fixed", "all"):
             return
@@ -3382,8 +3371,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         tok = self._text_layer_token
         w = TextLayerWorker(cur, todo, scope=scope, forced_pages=forced, token=tok)
         self._text_layer_worker = w
-        dlgp = QProgressDialog("글자층 준비 중…", "중지", 0, max(1, len(todo)), self)
-        dlgp.setWindowTitle("PDF 에 반영")
+        dlgp = QProgressDialog(tr("글자층 준비 중…"), tr("중지"), 0, max(1, len(todo)), self)
+        dlgp.setWindowTitle(tr("PDF 에 반영"))
         dlgp.setWindowModality(Qt.WindowModality.NonModal)
         dlgp.setMinimumDuration(400)
         dlgp.canceled.connect(w.request_cancel)
@@ -3393,7 +3382,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._text_layer_progress = dlgp
         w.done.connect(lambda tmp, st, t, _c=cur, _p=page:
                        self._on_text_layer_done(_c, _p, tmp, st, t))
-        w.error.connect(lambda m, t: QMessageBox.warning(self, "PDF 에 반영", f"실패: {m}")
+        w.error.connect(lambda m, t: QMessageBox.warning(self, tr("PDF 에 반영"), tr('실패: {m}').format(m=m))
                         if t == getattr(self, "_text_layer_token", 0) else None)
         w.finished.connect(lambda: setattr(self, "_text_layer_worker", None))
         run_in_thread(w, self._thread_keep)
@@ -3402,11 +3391,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """범위 고르기(SOT §5.4) → "fixed" / "all" / "" (취소). 검사가 바꿔 끼울 수 있게 따로 둔다."""
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("PDF 에 반영")
+        box.setWindowTitle(tr("PDF 에 반영"))
         box.setText(msg)
-        b_fix = box.addButton("고친 쪽만", QMessageBox.ButtonRole.AcceptRole) if has_fixed else None
-        b_all = box.addButton("스캔 쪽 전체", QMessageBox.ButtonRole.ActionRole)
-        b_no = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        b_fix = box.addButton(tr("고친 쪽만"), QMessageBox.ButtonRole.AcceptRole) if has_fixed else None
+        b_all = box.addButton(tr("스캔 쪽 전체"), QMessageBox.ButtonRole.ActionRole)
+        b_no = box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
         box.setEscapeButton(b_no)
         box.exec()
         c = box.clickedButton()
@@ -3422,15 +3411,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         stats = stats or {}
         if stats.get("cancelled"):
-            self.status.showMessage("PDF 에 반영을 중지했습니다 — 원본은 그대로입니다.", 5000)
+            self.status.showMessage(tr("PDF 에 반영을 중지했습니다 — 원본은 그대로입니다."), 5000)
             return
         if not tmp:
             why = stats.get("reasons") or {}
             QMessageBox.information(
-                self, "PDF 에 반영",
-                "다시 쓸 쪽이 없었습니다.\n\n"
-                + ("".join(f"· {p + 1}쪽: {r}\n" for p, r in sorted(why.items())[:8])
-                   or "스캔 쪽에 적을 글(우리 OCR·고침)이 없습니다."))
+                self, tr("PDF 에 반영"),
+                tr('다시 쓸 쪽이 없었습니다.\n\n{join}').format(join=''.join((tr('· {p}쪽: {r}\n').format(p=p + 1, r=r) for p, r in sorted(why.items())[:8])) or tr('스캔 쪽에 적을 글(우리 OCR·고침)이 없습니다.')))
             return
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
@@ -3445,7 +3432,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 if isinstance(e, SaveCancelled):    # 260915-2: 사용자가 취소 — 고침은 남는다
                     self.status.showMessage(str(e), 5000)
                 else:
-                    QMessageBox.warning(self, "PDF 에 반영", f"실패: {e}")
+                    QMessageBox.warning(self, tr("PDF 에 반영"), tr('실패: {e}').format(e=e))
                 self._reload_after_text_apply(cur, page)
                 return
         finally:
@@ -3459,27 +3446,26 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         for p in fallback:
             store.clear_page_fixes(cur, p)
         self._reload_after_text_apply(out, page, src=cur)
-        notes =[f"글자층을 다시 쓴 쪽: {len(rewritten)}쪽 ({int(stats.get('lines') or 0)}줄)"]
+        notes =[tr('글자층을 다시 쓴 쪽: {n}쪽 ({get}줄)').format(n=len(rewritten), get=int(stats.get('lines') or 0))]
         if fallback:
-            notes.append(f"고친 줄만 바꿔 끼운 쪽: {self._page_list_text(fallback)}")
+            notes.append(tr('고친 줄만 바꿔 끼운 쪽: {page_list_text}').format(page_list_text=self._page_list_text(fallback)))
         reasons = stats.get("reasons") or {}
         if reasons:
-            notes.append("다시 쓰지 않은 쪽: " + ", ".join(
-                f"{p + 1}쪽({r})" for p, r in sorted(reasons.items())[:6]))
+            notes.append(tr('다시 쓰지 않은 쪽: {join}').format(join=', '.join((tr('{p}쪽({r})').format(p=p + 1, r=r) for p, r in sorted(reasons.items())[:6]))))
         if int(stats.get("unwritten") or 0):
-            notes.append(f"{stats['unwritten']}줄은 자리가 좁아 다시 적지 못했습니다.")
+            notes.append(tr('{unwritten}줄은 자리가 좁아 다시 적지 못했습니다.').format(unwritten=stats['unwritten']))
         if Path(out).name != Path(cur).name:
-            notes.append(f"저장한 파일: {Path(out).name}")
-        QMessageBox.information(self, "PDF 에 반영", "\n".join(notes))
+            notes.append(tr('저장한 파일: {name}').format(name=Path(out).name))
+        QMessageBox.information(self, tr("PDF 에 반영"), "\n".join(notes))
         self.status.showMessage(
-            f"텍스트층에 반영했습니다 — {Path(out).name} · {len(rewritten) + len(fallback)}쪽", 6000)
+            tr('텍스트층에 반영했습니다 — {name} · {n}쪽').format(name=Path(out).name, n=len(rewritten) + len(fallback)), 6000)
 
     @staticmethod
     def _page_list_text(pages) -> str:
         """[0, 1, 4] → '1, 2, 5쪽' (많으면 앞 10개만)."""
         ps = sorted(int(p) + 1 for p in pages)
         head = ", ".join(str(p) for p in ps[:10])
-        return head + (f" 외 {len(ps) - 10}" if len(ps) > 10 else "") + "쪽"
+        return tr('{head}{v}쪽').format(head=head, v=tr(' 외 {n}').format(n=len(ps) - 10) if len(ps) > 10 else '')
 
     def _reload_after_text_apply(self, path, page: int, src=None):
         """반영 뒤 다시 읽기 — **보던 쪽으로**, 작업공간은 그대로(SOT §5.2).
@@ -3509,7 +3495,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.bookmark_tree.add_bookmark(cur, int(it["page"]), it["title"],
                                             int(it.get("level", 1)))
         self.status.showMessage(
-            f"책갈피 {len(items)}개 추가 — 책갈피창 편집(✏)에서 저장(💾)해야 PDF 에 들어갑니다.",
+            tr('책갈피 {n}개 추가 — 책갈피창 편집(✏)에서 저장(💾)해야 PDF 에 들어갑니다.').format(n=len(items)),
             7000)
 
     def _on_text_export_word(self, scope: str):
@@ -3527,7 +3513,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         else:
             from PyQt6.QtWidgets import QInputDialog
             txt, ok = QInputDialog.getText(
-                self, "쪽 범위", f"내보낼 쪽 범위 (1~{n}), 예: 3-12",
+                self, tr("쪽 범위"), tr('내보낼 쪽 범위 (1~{n}), 예: 3-12').format(n=n),
                 text=f"{page + 1}-{min(n, page + 10)}")
             if not ok:
                 return
@@ -3536,14 +3522,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 lo = max(1, int(a.strip() or 1)); hi = min(n, int((b or a).strip() or lo))
                 pages = list(range(lo - 1, hi))
             except Exception:
-                QMessageBox.warning(self, "쪽 범위", "3-12 처럼 적어 주세요.")
+                QMessageBox.warning(self, tr("쪽 범위"), tr("3-12 처럼 적어 주세요."))
                 return
         if not pages:
             return
         from PyQt6.QtWidgets import QFileDialog
         dst, _ = QFileDialog.getSaveFileName(
-            self, "Word 로 저장", str(Path(cur).with_suffix("")) + ".docx",
-            "Word 문서 (*.docx)")
+            self, tr("Word 로 저장"), str(Path(cur).with_suffix("")) + ".docx",
+            tr("Word 문서 (*.docx)"))
         if not dst:
             return
         from viewer.text_word import export_pages_to_docx
@@ -3559,18 +3545,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         finally:
             QApplication.restoreOverrideCursor()
         if ok:
-            self.status.showMessage(f"Word 저장: {Path(dst).name} ({len(pages)}쪽)", 6000)
+            self.status.showMessage(tr('Word 저장: {name} ({n}쪽)').format(name=Path(dst).name, n=len(pages)), 6000)
         else:
-            QMessageBox.warning(self, "Word 저장", f"실패: {msg}")
+            QMessageBox.warning(self, tr("Word 저장"), tr('실패: {msg}').format(msg=msg))
 
     def _on_add_bookmark_requested(self, target_file: str):
         """v1.6.20 K5: 메인 뷰어 현재 페이지로 책갈피 추가."""
         from PyQt6.QtWidgets import QInputDialog
         cur = self.main_view.current_file() if self.main_view else None
         if not cur or Path(cur).resolve() != Path(target_file).resolve():
-            QMessageBox.information(self, "안내",
-                "대상 PDF 가 메인 뷰어에 열려있어야 현재 페이지를 알 수 있습니다.\n"
-                f"먼저 트리에서 '{Path(target_file).name}' 를 열어 주세요.")
+            QMessageBox.information(self, tr("안내"),
+                tr("대상 PDF 가 메인 뷰어에 열려있어야 현재 페이지를 알 수 있습니다.\n먼저 트리에서 '{name}' 를 열어 주세요.").format(name=Path(target_file).name))
             return
         page = self.main_view.current_page() + 1  # 1-based
         title, level, ok = self._ask_bookmark(target_file, page)
@@ -3578,7 +3563,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         self.bookmark_tree.add_bookmark(target_file, page, title, level)
         self.status.showMessage(
-            f"책갈피 추가됨: {title or '(제목 없음)'}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다.",
+            tr('책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다.').format(title=title or tr('(제목 없음)'), page=page),
             6000)
 
     def _ask_bookmark(self, target_file: str, page: int):
@@ -3594,20 +3579,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             base, top = 1, 1
         dlg = QDialog(self)
-        dlg.setWindowTitle("책갈피 추가")
+        dlg.setWindowTitle(tr("책갈피 추가"))
         v = QVBoxLayout(dlg)
-        v.addWidget(QLabel(f"현재 페이지 <b>p.{page}</b> 에 책갈피를 추가합니다."))
+        v.addWidget(QLabel(tr('현재 페이지 <b>p.{page}</b> 에 책갈피를 추가합니다.').format(page=page)))
         form = QFormLayout()
         ed = QLineEdit()
-        ed.setPlaceholderText("책갈피 제목")
-        form.addRow("제목", ed)
+        ed.setPlaceholderText(tr("책갈피 제목"))
+        form.addRow(tr("제목"), ed)
         cmb = None
         if top > base:
             cmb = QComboBox()
-            cmb.addItem(f"윗 책갈피와 같은 단계 (레벨 {base})", 1)
-            cmb.addItem(f"윗 책갈피의 하위 (레벨 {base + 1})", 2)
+            cmb.addItem(tr('윗 책갈피와 같은 단계 (레벨 {base})').format(base=base), 1)
+            cmb.addItem(tr('윗 책갈피의 하위 (레벨 {base})').format(base=base + 1), 2)
             cmb.setCurrentIndex(0)                       # 기본 = 같은 단계
-            form.addRow("단계", cmb)
+            form.addRow(tr("단계"), cmb)
         v.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                               | QDialogButtonBox.StandardButton.Cancel)
@@ -3625,14 +3610,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         self.bookmark_tree.add_bookmark(cur, page_1based, title, level)
         self.status.showMessage(
-            f"책갈피 추가됨: {title or '(제목 없음)'}  (p.{page_1based}) — "
-            "책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다.", 6000)
+            tr('책갈피 추가됨: {title}  (p.{page_1based}) — 책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다.').format(title=title or tr('(제목 없음)'), page_1based=page_1based), 6000)
 
     def _on_create_study_requested(self, file_path: str):
         """260606-5: 책갈피창 파일 우클릭 '단어장 생성' → 해당 파일을 열고 빌드."""
         p = Path(file_path)
         if not p.exists() or p.suffix.lower() != ".pdf":
-            QMessageBox.information(self, "단어장", f"PDF 파일이 아닙니다: {p.name}")
+            QMessageBox.information(self, tr("단어장"), tr('PDF 파일이 아닙니다: {name}').format(name=p.name))
             return
         cur = self.main_view.current_file() if self.main_view else None
         try:
@@ -3649,7 +3633,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         cur = self.main_view.current_file() if self.main_view else None
         p = Path(file_path) if file_path else (Path(cur) if cur else None)
         if not p or not p.exists() or p.suffix.lower() != ".pdf":
-            QMessageBox.information(self, "단어장·책갈피", "먼저 PDF를 여세요.")
+            QMessageBox.information(self, tr("단어장·책갈피"), tr("먼저 PDF를 여세요."))
             return
         try:
             same = cur and Path(cur).resolve() == p.resolve()
@@ -3680,9 +3664,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if len(txt.strip()) >= 20:
                 return False                      # 텍스트 레이어로 읽기 가능
             ret = QMessageBox.question(
-                self, "문서 인식(OCR)",
-                "읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
-                "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?")
+                self, tr("문서 인식(OCR)"),
+                tr("읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
+                "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"))
             if ret == QMessageBox.StandardButton.Yes:
                 self._action_build_study_and_bookmarks(file_path=f)
                 return True
@@ -3751,7 +3735,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._close_main_view_doc()
             QApplication.processEvents()
             self.status.showMessage(
-                f"다른 PolyPDF 창이 '{Path(path).name}' 을(를) 저장하는 동안 닫았습니다.", 8000)
+                tr("다른 PolyPDF 창이 '{name}' 을(를) 저장하는 동안 닫았습니다.").format(name=Path(path).name), 8000)
             return {"ok": True, "page": pg}
         if op == "reload":
             st = getattr(self, "_peer_released", None)
@@ -3764,32 +3748,29 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                         if getattr(self, "_split_on", False):
                             self._set_active_pane(st["pane"])
                         self._load_main(HistoryItem(str(path), int(page or st["page"]), "", "bookmark"))
-                        self.status.showMessage(f"'{Path(path).name}' 을(를) 다시 열었습니다(저장됨).", 6000)
+                        self.status.showMessage(tr("'{name}' 을(를) 다시 열었습니다(저장됨).").format(name=Path(path).name), 6000)
                     except Exception:
                         pass
                 QTimer.singleShot(0, _reopen)          # 응답을 먼저 보내고 연다
             return {"ok": True}
-        return {"error": f"알 수 없는 요청: {op}"}
+        return {"error": tr('알 수 없는 요청: {op}').format(op=op)}
 
     def _ask_peer_release(self, name: str, holders: list) -> str:
         """다른 창이 열고 있을 때 묻는다 → "release" / "rename" / "cancel". 검사가 바꿔 끼울 수 있게 따로."""
         dirty = any(h.get("dirty") for h in holders)
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning if dirty else QMessageBox.Icon.Question)
-        box.setWindowTitle("다른 PolyPDF 창에서 열려 있음")
+        box.setWindowTitle(tr("다른 PolyPDF 창에서 열려 있음"))
         n = len(holders)
-        head = (f"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n\n"
-                "그 창이 파일을 읽는 동안 덮어쓰면, 그 창은 바뀐 파일을 옛 상태로 읽어 화면이 깨지거나 "
-                "오류가 날 수 있습니다.")
+        head = (tr("'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n\n그 창이 파일을 읽는 동안 덮어쓰면, 그 창은 바뀐 파일을 옛 상태로 읽어 화면이 깨지거나 오류가 날 수 있습니다.").format(name=name, n=n))
         if dirty:
-            box.setText(head + "\n\n그 창에 이 파일의 저장하지 않은 편집이 있어 닫을 수 없습니다.\n"
-                        "그 창에서 편집을 저장하거나 되돌린 뒤 다시 저장하거나, 새 이름으로 저장하세요.")
+            box.setText(tr('{head}\n\n그 창에 이 파일의 저장하지 않은 편집이 있어 닫을 수 없습니다.\n그 창에서 편집을 저장하거나 되돌린 뒤 다시 저장하거나, 새 이름으로 저장하세요.').format(head=head))
             b_rel = None
         else:
-            box.setText(head + "\n\n그 창에서 파일을 잠시 닫고 저장한 뒤, 그 창은 보던 쪽으로 다시 엽니다.")
-            b_rel = box.addButton("닫고 저장", QMessageBox.ButtonRole.AcceptRole)
-        b_new = box.addButton("새 이름으로 저장", QMessageBox.ButtonRole.ActionRole)
-        b_no = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+            box.setText(tr('{head}\n\n그 창에서 파일을 잠시 닫고 저장한 뒤, 그 창은 보던 쪽으로 다시 엽니다.').format(head=head))
+            b_rel = box.addButton(tr("닫고 저장"), QMessageBox.ButtonRole.AcceptRole)
+        b_new = box.addButton(tr("새 이름으로 저장"), QMessageBox.ButtonRole.ActionRole)
+        b_no = box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(b_rel or b_new)
         box.setEscapeButton(b_no)
         box.exec()
@@ -3830,7 +3811,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         src = _P(src); produced = _P(produced)
         dst, overwrite = self._edit_save_dst(src, shift)
         if not overwrite:
-            err = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), f"새 이름으로 저장 중: {dst.name}")
+            err = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), tr('새 이름으로 저장 중: {name}').format(name=dst.name))
             if err is not None:
                 raise err
             # 260915-2: 새 파일로 저장해도 썸네일의 편집 목록을 비운다 — 안 그러면 호출측이 새 파일을
@@ -3855,11 +3836,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     except Exception:
                         pass
                     from viewer.file_overwrite import SaveCancelled
-                    raise SaveCancelled("저장을 취소했습니다 — 원본은 그대로입니다.")
+                    raise SaveCancelled(tr("저장을 취소했습니다 — 원본은 그대로입니다."))
                 if choice == "rename":
                     fb, _ = self._edit_save_dst(src, True)
                     err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)),
-                                           f"새 이름으로 저장 중: {fb.name}")
+                                           tr('새 이름으로 저장 중: {name}').format(name=fb.name))
                     if err is not None:
                         raise err
                     self._close_main_view_doc()      # 위 Shift 저장과 같은 이유
@@ -3887,8 +3868,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 fn()
             except Exception as e:                   # noqa: BLE001
                 out["e"] = e
-            progress(1, 1, "완료")
-        res = self._run_merge_job(_job, "원본에 저장", cancellable=False)
+            progress(1, 1, tr("완료"))
+        res = self._run_merge_job(_job, tr("원본에 저장"), cancellable=False)
         if "e" in out:
             return out["e"]
         return None if res.get("ok") else RuntimeError(res.get("err") or "파일 작업 실패")
@@ -3900,7 +3881,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         import time as _t
         self._close_main_view_doc()                  # 원본 잠금 해제(뷰어·썸네일·표 찾기 핸들) — 메인에서
         QApplication.processEvents()
-        last = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), f"원본에 놓는 중: {dst.name}")
+        last = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), tr('원본에 놓는 중: {name}').format(name=dst.name))
         if last is None:
             return str(dst)
         # 260913-4: 참조 순환에 갇혀 아직 안 닫힌 핸들이 있으면 풀린다 — 실패 때만, Qt 객체가 섞일 수 있어 **메인에서**.
@@ -3922,24 +3903,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 except OSError:
                     pass
             overwrite_in_place(_p, _d)
-        last = self._file_op_bg(_retry_then_in_place, f"원본에 쓰는 중: {dst.name}") or None
+        last = self._file_op_bg(_retry_then_in_place, tr('원본에 쓰는 중: {name}').format(name=dst.name)) or None
         if last is None:
             return str(dst)
         # 그래도 안 되면(다른 프로그램이 쓰기를 막고 열었거나 읽기 전용) `_edited` 로 저장하고
         #   **알린다**. 알림은 호출측이 책갈피창을 갱신하고 새 파일로 옮긴 **뒤에** 뜨게 미룬다.
         fb, _ = self._edit_save_dst(src, True)
-        err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)), f"새 이름으로 저장 중: {fb.name}")
+        err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)), tr('새 이름으로 저장 중: {name}').format(name=fb.name))
         if err is not None:
             raise err
-        msg = (f"원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n\n"
-               f"저장한 파일: {fb.name}\n원본: {src.name}\n\n"
-               f"원인: {last}\n\n"
-               "다른 프로그램이 원본을 열고 있거나 읽기 전용이면, 닫거나 해제한 뒤 다시 저장해 주세요.")
+        msg = (tr('원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n\n저장한 파일: {name}\n원본: {name2}\n\n원인: {last}\n\n다른 프로그램이 원본을 열고 있거나 읽기 전용이면, 닫거나 해제한 뒤 다시 저장해 주세요.').format(name=fb.name, name2=src.name, last=last))
         from PyQt6.QtCore import QTimer
 
         def _warn():
             try:
-                QMessageBox.warning(self, "저장", msg)
+                QMessageBox.warning(self, tr("저장"), msg)
             except Exception:
                 pass
         QTimer.singleShot(0, _warn)
@@ -3953,7 +3931,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         pt = self.page_thumbs
         plan = pt.current_page_plan()          # ('own',idx) 또는 ('ext',src,page) 목록
         if not plan:
-            QMessageBox.warning(self, "페이지 편집 저장", "최소 1쪽은 남겨야 합니다.")
+            QMessageBox.warning(self, tr("페이지 편집 저장"), tr("최소 1쪽은 남겨야 합니다."))
             return
         src = _P(src_str)
         shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
@@ -3973,12 +3951,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress))
             except _peb.Cancelled:
                 raise MergeCancelled()
-        res = self._run_merge_job(_job, "쪽 편집 저장")
+        res = self._run_merge_job(_job, tr("쪽 편집 저장"))
         if res.get("cancelled"):
-            self.status.showMessage("쪽 편집 저장을 취소했습니다 — 원본·편집은 그대로입니다.", 5000)
+            self.status.showMessage(tr("쪽 편집 저장을 취소했습니다 — 원본·편집은 그대로입니다."), 5000)
             return
         if not res.get("ok"):
-            QMessageBox.warning(self, "페이지 편집 저장 실패", res.get("err") or "알 수 없는 오류")
+            QMessageBox.warning(self, tr("페이지 편집 저장 실패"), res.get("err") or tr("알 수 없는 오류"))
             return
         produced = _P(built["path"])
         saved_n = int(built.get("pages") or 0)
@@ -3997,10 +3975,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if isinstance(e, SaveCancelled):          # 260915-2: 사용자가 취소 — 편집은 그대로 남는다
                 self.status.showMessage(str(e), 5000)
                 return
-            QMessageBox.warning(self, "페이지 편집 저장 실패", str(e))
+            QMessageBox.warning(self, tr("페이지 편집 저장 실패"), str(e))
             return
         QApplication.restoreOverrideCursor()
-        self.status.showMessage(f"페이지 편집 저장: {saved_n}쪽 → {_P(final).name}", 6000)
+        self.status.showMessage(tr('페이지 편집 저장: {saved_n}쪽 → {name}').format(saved_n=saved_n, name=_P(final).name), 6000)
         try:
             # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
             self.bookmark_tree.add_or_refresh_file(final, after=str(src))
@@ -4022,7 +4000,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         self._thumb_clip = {"src": src, "pages": [int(p) for p in pages]}
         self.status.showMessage(
-            f"썸네일 {len(pages)}쪽 복사됨 — 다른 PDF 썸네일에서 붙여넣기(Ctrl+V)", 5000)
+            tr('썸네일 {n}쪽 복사됨 — 다른 PDF 썸네일에서 붙여넣기(Ctrl+V)').format(n=len(pages)), 5000)
 
     def _on_paste_pages(self, after_row: int):
         """260822: 복사한 페이지를 현재 PDF 썸네일의 기준 행 '뒤'에 **스테이징 삽입**(미저장).
@@ -4033,14 +4011,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not clip or not doc:
             return
         if not getattr(pt, "_edit_mode", False):      # 편집모드에서만 붙여넣기 허용
-            self.status.showMessage("붙여넣기는 편집모드(✏)에서만 됩니다.", 4000)
+            self.status.showMessage(tr("붙여넣기는 편집모드(✏)에서만 됩니다."), 4000)
             return
         src_pages = list(clip.get("pages") or [])
         if not src_pages:
             return
         n = pt.insert_external_pages(after_row, clip.get("src"), src_pages)
         self.status.showMessage(
-            f"붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요.", 6000)
+            tr('붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요.').format(n=n), 6000)
 
     def _on_add_image_pages(self, after_row: int, paths):
         """260930-1(마스터 §4.7.11): 사진을 **새 쪽**으로 기준 행 뒤에 스테이징 삽입(미저장).
@@ -4057,7 +4035,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception as e:                                # noqa: BLE001
             import traceback
             traceback.print_exc()
-            self.status.showMessage("사진을 쪽으로 넣지 못했습니다: %s" % e, 8000)
+            self.status.showMessage(tr("사진을 쪽으로 넣지 못했습니다: %s") % e, 8000)
 
     def _add_image_pages_impl(self, after_row: int, paths):
         pt = self.page_thumbs
@@ -4066,7 +4044,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not doc or not paths:
             return
         if not getattr(pt, "_edit_mode", False):
-            self.status.showMessage("쪽 추가는 편집모드(✏)에서만 됩니다.", 4000)
+            self.status.showMessage(tr("쪽 추가는 편집모드(✏)에서만 됩니다."), 4000)
             return
         from viewer.image_page import images_to_pdf, page_size_of
         size = page_size_of(str(doc.path))        # 문서 첫 쪽 크기(§4.7.11, 사용자 결정)
@@ -4081,16 +4059,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         def _job(prog):
             out["n"] = images_to_pdf(paths, tmp_pdf, page_size=size, progress=prog)
 
-        res = self._run_merge_job(_job, "사진을 쪽으로")
+        res = self._run_merge_job(_job, tr("사진을 쪽으로"))
         if res.get("cancelled"):
-            self.status.showMessage("취소했습니다.", 4000)
+            self.status.showMessage(tr("취소했습니다."), 4000)
             return
         if res.get("err"):
-            self.status.showMessage(f"사진을 쪽으로 만들지 못했습니다: {res['err']}", 6000)
+            self.status.showMessage(tr('사진을 쪽으로 만들지 못했습니다: {err}').format(err=res['err']), 6000)
             return
         n = int(out.get("n") or 0)
         if not n:
-            self.status.showMessage("읽을 수 있는 사진이 없습니다.", 4000)
+            self.status.showMessage(tr("읽을 수 있는 사진이 없습니다."), 4000)
             return
         pt.insert_external_pages(after_row, tmp_pdf, range(n))
         # 260930-2(사용자 보고 '삽입한 뒤 본화면이 안 보임', §4.7.12): 넣자마자 **첫 쪽을
@@ -4105,7 +4083,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         self.status.showMessage(
-            f"사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요.", 6000)
+            tr('사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요.').format(n=n), 6000)
 
     def _on_apply_page_edits(self):
         """260606-22: 썸네일에서 편집한 페이지 순서/삭제를 새 PDF로 저장."""
@@ -4115,14 +4093,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         src = Path(str(pt._doc.path))
         seq = pt.current_page_sequence()
         if not pt.is_page_dirty():
-            QMessageBox.information(self, "페이지 편집", "변경 사항이 없습니다.")
+            QMessageBox.information(self, tr("페이지 편집"), tr("변경 사항이 없습니다."))
             return
         if not seq:
-            QMessageBox.warning(self, "페이지 편집", "최소 1쪽은 남겨야 합니다.")
+            QMessageBox.warning(self, tr("페이지 편집"), tr("최소 1쪽은 남겨야 합니다."))
             return
         from PyQt6.QtWidgets import QFileDialog
         default = str(src.with_name(src.stem + "_pages.pdf"))
-        out, _ = QFileDialog.getSaveFileName(self, "페이지 편집 저장", default, "PDF (*.pdf)")
+        out, _ = QFileDialog.getSaveFileName(self, tr("페이지 편집 저장"), default, "PDF (*.pdf)")
         if not out:
             return
         if not out.lower().endswith(".pdf"):
@@ -4142,11 +4120,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 out_doc.close(); src_doc.close()
         except Exception as e:
             QApplication.restoreOverrideCursor()
-            QMessageBox.warning(self, "페이지 편집 저장 실패", str(e))
+            QMessageBox.warning(self, tr("페이지 편집 저장 실패"), str(e))
             return
         QApplication.restoreOverrideCursor()
         self.status.showMessage(
-            f"페이지 편집 저장: {len(seq)}쪽 → {Path(out).name}", 6000)
+            tr('페이지 편집 저장: {n}쪽 → {name}').format(n=len(seq), name=Path(out).name), 6000)
         try:
             self.bookmark_tree.add_or_refresh_file(out)
         except Exception:
@@ -4190,7 +4168,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                       else (Path(self._folder) / "merged.pdf" if self._folder else "merged.pdf"))
         # 260611-35: 덮어쓰기 확인은 직접 처리(기존 파일은 (1),(2)로 보존 / 원본과 같으면 재확인)
         out, _ = QFileDialog.getSaveFileName(
-            self, "병합 PDF 저장", default, "PDF (*.pdf)",
+            self, tr("병합 PDF 저장"), default, "PDF (*.pdf)",
             options=QFileDialog.Option.DontConfirmOverwrite)
         if not out:
             return
@@ -4205,9 +4183,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         out_res = str(Path(out).resolve())
         if out_res in src_paths:
             if QMessageBox.question(
-                self, "원본 덮어쓰기 확인",
-                f"저장하려는 이름이 병합 대상 원본 파일과 같습니다:\n\n{Path(out).name}\n\n"
-                "이 원본 파일을 덮어쓸까요?\n('아니오'를 누르면 (1)을 붙여 새 파일로 저장합니다.)",
+                self, tr("원본 덮어쓰기 확인"),
+                tr("저장하려는 이름이 병합 대상 원본 파일과 같습니다:\n\n{name}\n\n이 원본 파일을 덮어쓸까요?\n('아니오'를 누르면 (1)을 붙여 새 파일로 저장합니다.)").format(name=Path(out).name),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 out = self._unique_save_path(out)
@@ -4221,11 +4198,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                    build_twoup(items, _s, out,
                                gen_bookmarks_fn=self._gen_source_bookmarks,
                                progress=progress))
-            title = "PDF 병합(2단 배치)"
+            title = tr("PDF 병합(2단 배치)")
         else:
             compact = bool(getattr(dlg, "compact", lambda: False)())
             job = lambda progress: self._do_normal_merge(items, out, auto, progress, compact=compact)
-            title = "PDF 병합"
+            title = tr("PDF 병합")
         res = self._run_merge_job(job, title)
         if res.get("cancelled"):
             try:
@@ -4233,12 +4210,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     Path(out).unlink()
             except Exception:
                 pass
-            self.status.showMessage("병합을 취소했습니다.", 4000)
+            self.status.showMessage(tr("병합을 취소했습니다."), 4000)
             return
         if res.get("err"):
-            QMessageBox.warning(self, "병합 실패", res["err"])
+            QMessageBox.warning(self, tr("병합 실패"), res["err"])
             return
-        self.status.showMessage(f"병합 완료 → {Path(out).name}", 6000)
+        self.status.showMessage(tr('병합 완료 → {name}').format(name=Path(out).name), 6000)
         # 260611-34: 진행창이 사라진 다음 틱에 후처리(렌더·인덱싱·단어장) 실행 → 잔상/멈춤 방지
         from PyQt6.QtCore import QTimer
 
@@ -4251,7 +4228,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 if auto:
                     self._action_build_study()      # 백그라운드(확인창) — 새 파일이 열린 뒤
             if self._reveal_created_file(out, then=_after_shown):
-                self.status.showMessage(f"병합 완료 → {Path(out).name} (책갈피창에서 선택)", 6000)
+                self.status.showMessage(tr('병합 완료 → {name} (책갈피창에서 선택)').format(name=Path(out).name), 6000)
                 return
             try:
                 self.bookmark_tree.add_or_refresh_file(out)
@@ -4350,7 +4327,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         반환: {ok, err, cancelled}. `cancellable=False` 면 취소 버튼을 두지 않는다(도중에 멈추면
         안 되는 일 — 원본 제자리 쓰기, 260915-8)."""
         from PyQt6.QtWidgets import QProgressDialog
-        prog = QProgressDialog("준비 중…", "취소", 0, 100, self)
+        prog = QProgressDialog(tr("준비 중…"), tr("취소"), 0, 100, self)
         if not cancellable:
             prog.setCancelButton(None)
         prog.setWindowTitle(title)
@@ -4365,7 +4342,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   막대 애니메이션(|→||→|||→||)으로 '진행 중'을 계속 표시.
         #   (\ 는 한글 폰트에서 ₩ 로 보여 사용 안 함. 경과시간 표시 없음.)
         from PyQt6.QtCore import QTimer
-        st = {"lbl": "준비 중…", "d": 0, "t": 1, "k": 0}
+        st = {"lbl": tr("준비 중…"), "d": 0, "t": 1, "k": 0}
         _SPIN = ("|", "||", "|||", "||")
 
         def _render():
@@ -4418,7 +4395,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         total = max(1, len(items) + 1)
         try:
             for i, it in enumerate(items):
-                if progress(i, total, f"병합 중: {it.get('name', '')}") is False:
+                if progress(i, total, tr('병합 중: {get}').format(get=it.get('name', ''))) is False:
                     raise MergeCancelled()
                 if it.get("type") == "shots":
                     start = offset
@@ -4431,7 +4408,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                             offset += 1
                         except Exception:
                             continue
-                    merged_toc.append([1, it.get("name") or "사용자 스크린샷", start + 1])
+                    merged_toc.append([1, it.get("name") or tr("사용자 스크린샷"), start + 1])
                 else:
                     path = str(it["path"])
                     src = fitz.open(path)
@@ -4450,7 +4427,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                         offset += n
                     finally:
                         src.close()
-            progress(total, total, "용량 줄여 저장 중…(오래 걸릴 수 있음)" if compact else "저장 중…")
+            progress(total, total, tr("용량 줄여 저장 중…(오래 걸릴 수 있음)") if compact else tr("저장 중…"))
             if merged_toc:
                 try:
                     out_doc.set_toc(self._normalize_toc(merged_toc))
@@ -4534,7 +4511,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         prev = 0
         for entry in toc:
             lvl = max(1, int(entry[0]))
-            title = str(entry[1]) or "(제목 없음)"
+            title = str(entry[1]) or tr("(제목 없음)")
             pg = max(1, int(entry[2]))
             lvl = 1 if not out else min(lvl, prev + 1)
             out.append([lvl, title, pg])
@@ -4567,7 +4544,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """260606-4: 썸네일 우클릭 → 현재 PDF의 해당 페이지로 책갈피 추가."""
         cur = self.main_view.current_file() if self.main_view else None
         if not cur or not str(cur).lower().endswith(".pdf"):
-            QMessageBox.information(self, "안내", "먼저 PDF를 표시하세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 PDF를 표시하세요."))
             return
         self._prompt_add_bookmark(cur, int(page_index) + 1)
 
@@ -4596,52 +4573,52 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260618-1: 권한 없으면 비활성(복사 권한→복사·블럭, 인쇄 권한→현재 페이지 인쇄)
         can_copy = getattr(self, "_perm_can_copy", True)
         can_print = getattr(self, "_perm_can_print", True)
-        act_copy = menu.addAction("텍스트 복사")          # 선택 블럭(없으면 페이지)
+        act_copy = menu.addAction(tr("텍스트 복사"))          # 선택 블럭(없으면 페이지)
         act_copy.setEnabled(can_copy)
-        act_sel = menu.addAction("블럭설정 후 텍스트 복사")  # 블럭설정 포인터로
+        act_sel = menu.addAction(tr("블럭설정 후 텍스트 복사"))  # 블럭설정 포인터로
         act_sel.setEnabled(can_copy)
-        act_print1 = menu.addAction(f"현재 페이지 인쇄 (p.{page})")
+        act_print1 = menu.addAction(tr('현재 페이지 인쇄 (p.{page})').format(page=page))
         act_print1.setEnabled(can_print)
         # 260908-1(사용자 요청): 썸네일창과 같은 90° 회전을 **본문 우클릭에도** 둔다.
         #   썸네일을 열지 않고도 보고 있는 쪽을 바로 돌릴 수 있게. 대상은 현재 페이지.
-        act_rot_l = menu.addAction(f"왼쪽 90° 회전 (p.{page})")
-        act_rot_r = menu.addAction(f"오른쪽 90° 회전 (p.{page})")
+        act_rot_l = menu.addAction(tr('왼쪽 90° 회전 (p.{page})').format(page=page))
+        act_rot_r = menu.addAction(tr('오른쪽 90° 회전 (p.{page})').format(page=page))
         menu.addSeparator()
         # 260618-27: 1단=‘2단 보기’(진입), 2단=현재 창 기준 ‘반대 창으로 복사’.
         #   1창(좌,active 0)→‘2창으로 복사’, 2창(우,active 1)→‘1창으로 복사’.
         act_to_dual = act_copy_other = None
         if getattr(self, "_split_on", False):
             act_copy_other = menu.addAction(
-                "2창으로 복사" if self._active_pane == 0 else "1창으로 복사")
+                tr("2창으로 복사") if self._active_pane == 0 else tr("1창으로 복사"))
         else:
-            act_to_dual = menu.addAction("2단 보기")
+            act_to_dual = menu.addAction(tr("2단 보기"))
         # 260905(사용자 요청): '2단 보기' 바로 아래 — 우클릭에서 바로 전체화면 발표로
-        act_present = menu.addAction("발표보기")
+        act_present = menu.addAction(tr("발표보기"))
         menu.addSeparator()
-        act_add = menu.addAction(f"책갈피 추가 (p.{page})") if edit else None
+        act_add = menu.addAction(tr('책갈피 추가 (p.{page})').format(page=page)) if edit else None
         # 260609-11(C1): 하이퍼링크 등록은 편집모드에서만
-        act_hl = menu.addAction(f"하이퍼링크 등록… (p.{page})") if edit else None
+        act_hl = menu.addAction(tr('하이퍼링크 등록… (p.{page})').format(page=page)) if edit else None
         # 260609-14(D5): 편집모드 — 현재 페이지 숨김/해제
         act_hide = act_unhide = None
         if edit:
             st = self._ensure_page_meta_store()
             is_hidden = bool(st and st.is_hidden(cur, page - 1))
             if is_hidden:
-                act_unhide = menu.addAction(f"페이지 숨김 해제 (p.{page})")
+                act_unhide = menu.addAction(tr('페이지 숨김 해제 (p.{page})').format(page=page))
             else:
-                act_hide = menu.addAction(f"페이지 숨김 (p.{page})")
+                act_hide = menu.addAction(tr('페이지 숨김 (p.{page})').format(page=page))
         # 260611-78: 선/텍스트 통합 설정(아래 클립보드 삽입 밑에 배치)
         act_lt_cfg = None
         # 260611-15: 편집모드 — 이미지 삽입/모양/삭제
         act_img_del = None
         change_acts = {}
-        _shapes = (("rect", "사각형"), ("round", "둥근 사각형"), ("circle", "원형"))
+        _shapes = (("rect", tr("사각형")), ("round", tr("둥근 사각형")), ("circle", tr("원형")))
         if edit:
             menu.addSeparator()
             # 260611-73: 삽입 항목을 분할 컨트롤로 — 본문 클릭=현재 모양으로 즉시 삽입,
             #   오른쪽 ▼(옵션버튼=라디오) 클릭=삽입 모양 선택(툴버튼 MenuButtonPopup 과 동일 UX).
             self._add_insert_split(
-                menu, "사진 파일 삽입",
+                menu, tr("사진 파일 삽입"),
                 lambda: getattr(self, "_ins_file_shape", None)
                 or getattr(self.main_view, "_img_shape", "rect") or "rect",
                 lambda k: setattr(self, "_ins_file_shape", k),
@@ -4652,7 +4629,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                          #   (`main_view.add_image_from_pixmap`)이 한다 — 메뉴·Ctrl+V·드롭 동일.
                          self._insert_image_from_file()))
             self._add_insert_split(
-                menu, "클립보드 삽입",
+                menu, tr("클립보드 삽입"),
                 lambda: getattr(self, "_ins_paste_shape", None)
                 or getattr(self.main_view, "_img_shape", "rect") or "rect",
                 lambda k: setattr(self, "_ins_paste_shape", k),
@@ -4661,14 +4638,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                  or getattr(self.main_view, "_img_shape", "rect") or "rect"),
                          self.main_view.paste_image_from_clipboard()))
             # 260611-78: '클립보드 삽입' 아래 — 선긋기/글쓰기 통합 설정(탭)
-            act_lt_cfg = menu.addAction("선과 텍스트 입력 설정…")
+            act_lt_cfg = menu.addAction(tr("선과 텍스트 입력 설정…"))
             if self.main_view.has_selected_image():
-                m_chg = menu.addMenu("선택 사진 모양 변경")
+                m_chg = menu.addMenu(tr("선택 사진 모양 변경"))
                 for key, label in _shapes:
                     ca = m_chg.addAction(self._shape_icon(key), label)
                     ca.setCheckable(True)
                     change_acts[ca] = key
-                act_img_del = menu.addAction("선택 이미지 삭제 (Del)")
+                act_img_del = menu.addAction(tr("선택 이미지 삭제 (Del)"))
         # 260611-78: 선택된 글상자 — 끝모양(지시선)·삭제만 (스타일 편집은 '선과 텍스트 입력 설정')
         act_txt_del = None
         tip_acts = {}
@@ -4677,13 +4654,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if edit and sel is not None:
             menu.addSeparator()
             if sel_is_leader:
-                m_tip = menu.addMenu("선택 지시선 끝 모양")
-                for key, label in (("arrow", "뾰족한 화살표"), ("circle", "끝 원형"),
-                                   ("plain", "일반 선")):
+                m_tip = menu.addMenu(tr("선택 지시선 끝 모양"))
+                for key, label in (("arrow", tr("뾰족한 화살표")), ("circle", tr("끝 원형")),
+                                   ("plain", tr("일반 선"))):
                     ta = m_tip.addAction(label); ta.setCheckable(True)
                     ta.setChecked(sel.get("tip", "arrow") == key)
                     tip_acts[ta] = key
-            act_txt_del = menu.addAction("선택 글상자 삭제 (Del)")
+            act_txt_del = menu.addAction(tr("선택 글상자 삭제 (Del)"))
         if menu.isEmpty():
             return
         chosen = menu.exec(global_pos)
@@ -4704,7 +4681,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._cancel_draw_tools()          # 260907-3: 끄지 않으면 드래그가 선이 된다
             self.main_view.arm_text_selection()
             self.status.showMessage(
-                "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다.", 5000)
+                tr("블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."), 5000)
             return
         if chosen in (act_rot_l, act_rot_r):        # 260908-1
             self._rotate_pages([page - 1], -90 if chosen is act_rot_l else +90)
@@ -4739,7 +4716,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                      QToolButton, QMenu, QSizePolicy)
         from PyQt6.QtGui import QActionGroup
         from PyQt6.QtCore import Qt as _Qt, QTimer
-        _shapes = (("rect", "사각형"), ("round", "둥근 사각형"), ("circle", "원형"))
+        _shapes = (("rect", tr("사각형")), ("round", tr("둥근 사각형")), ("circle", tr("원형")))
         cur = get_shape()
         wa = QWidgetAction(menu)
         w = QWidget()
@@ -4751,11 +4728,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         main_btn.setIcon(self._shape_icon(cur))
         main_btn.setAutoRaise(True)
         main_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        main_btn.setToolTip(f"{text} — 클릭하면 선택된 모양으로 삽입 (모양은 오른쪽 ▼)")
+        main_btn.setToolTip(tr('{text} — 클릭하면 선택된 모양으로 삽입 (모양은 오른쪽 ▼)').format(text=text))
         arrow = QToolButton(w)
         arrow.setText("▼")
         arrow.setAutoRaise(True)
-        arrow.setToolTip("삽입 모양 선택")
+        arrow.setToolTip(tr("삽입 모양 선택"))
         arrow.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         sub = QMenu(arrow)
         grp = QActionGroup(sub); grp.setExclusive(True)
@@ -4815,8 +4792,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                      QColorDialog, QDialogButtonBox, QSpinBox, QLabel)
         from PyQt6.QtGui import QColor
         dlg = QDialog(self)
-        _t = "지시선 글쓰기 박스" if is_leader else "글쓰기 박스"
-        dlg.setWindowTitle(_t + (" 설정" if editing else " 기본 설정(신규)"))
+        _t = tr("지시선 글쓰기 박스") if is_leader else tr("글쓰기 박스")
+        dlg.setWindowTitle(_t + (tr(" 설정") if editing else tr(" 기본 설정(신규)")))
         form = QFormLayout()
         state = {"color": st.get("color") or "#111111", "bg": st.get("bg") or "#fff7c0"}
 
@@ -4827,23 +4804,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             btn.setText(c.name())
 
         def _pick(key, btn):
-            c = QColorDialog.getColor(QColor(state[key]), dlg, "색 선택")
+            c = QColorDialog.getColor(QColor(state[key]), dlg, tr("색 선택"))
             if c.isValid():
                 state[key] = c.name(); _swatch(btn, state[key])
 
         # 폰트 — 260913-7(마스터 §4.5.11): 맑은 고딕 하나, 선택 없이 표시만
         from viewer.pdf_font import TEXT_FAMILY
         lbl_font = QLabel(TEXT_FAMILY)
-        cb_bold = QCheckBox("굵게"); cb_bold.setChecked(bool(st.get("bold", False)))
-        cb_italic = QCheckBox("기울임"); cb_italic.setChecked(bool(st.get("italic", False)))
+        cb_bold = QCheckBox(tr("굵게")); cb_bold.setChecked(bool(st.get("bold", False)))
+        cb_italic = QCheckBox(tr("기울임")); cb_italic.setChecked(bool(st.get("italic", False)))
         row_f = QHBoxLayout(); row_f.addWidget(lbl_font, 1)
         row_f.addWidget(cb_bold); row_f.addWidget(cb_italic)
-        form.addRow("문자 폰트", self._wrap_row(row_f))
+        form.addRow(tr("문자 폰트"), self._wrap_row(row_f))
 
         # 글자색
         b_color = QPushButton(); _swatch(b_color, state["color"])
         b_color.clicked.connect(lambda: _pick("color", b_color))
-        form.addRow("문자 색상", b_color)
+        form.addRow(tr("문자 색상"), b_color)
 
         # 크기·자간 — 260907-1: 단위 pt(인쇄했을 때의 실제 크기). 종전 '페이지 대비 %' 는
         #   값을 봐도 결과를 가늠할 수 없었다. 옛 값은 A4 기준으로 1회 환산해 보여 준다.
@@ -4853,32 +4830,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         sp_size = QDoubleSpinBox(); sp_size.setRange(4.0, 200.0); sp_size.setSingleStep(1.0)
         sp_size.setDecimals(1); sp_size.setSuffix(" pt")
         sp_size.setValue(max(4.0, min(200.0, float(_spt))))
-        form.addRow("문자 크기", sp_size)
+        form.addRow(tr("문자 크기"), sp_size)
         sp_spacing = QDoubleSpinBox(); sp_spacing.setRange(-3.0, 30.0)
         sp_spacing.setSingleStep(0.5); sp_spacing.setDecimals(1); sp_spacing.setSuffix(" pt")
         sp_spacing.setValue(float(st.get("spacing_pt", 0.0) or 0.0))
-        sp_spacing.setToolTip("글자 사이 간격. 0 = 폰트 기본값")
-        form.addRow("글자 간격(자간)", sp_spacing)
+        sp_spacing.setToolTip(tr("글자 사이 간격. 0 = 폰트 기본값"))
+        form.addRow(tr("글자 간격(자간)"), sp_spacing)
 
         # 박스선 on/off (색·굵기·투명도는 색상버튼 스타일)
-        cb_boxline = QCheckBox("적용 (색·굵기·투명도는 색상버튼 스타일)")
+        cb_boxline = QCheckBox(tr("적용 (색·굵기·투명도는 색상버튼 스타일)"))
         cb_boxline.setChecked(bool(st.get("box_line", False)))
-        form.addRow("텍스트 박스선", cb_boxline)
+        form.addRow(tr("텍스트 박스선"), cb_boxline)
 
         # 배경색 + 투명도
-        cb_bg = QCheckBox("적용"); cb_bg.setChecked(st.get("bg") is not None)
+        cb_bg = QCheckBox(tr("적용")); cb_bg.setChecked(st.get("bg") is not None)
         b_bg = QPushButton(); _swatch(b_bg, state["bg"])
         b_bg.clicked.connect(lambda: _pick("bg", b_bg))
         sp_bga = QSpinBox(); sp_bga.setRange(0, 100); sp_bga.setSuffix(" %")
         sp_bga.setValue(int(st.get("bg_alpha", 100)))
         row_bg = QHBoxLayout(); row_bg.addWidget(cb_bg); row_bg.addWidget(b_bg, 1)
         row_bg.addWidget(sp_bga)
-        form.addRow("텍스트 박스 배경", self._wrap_row(row_bg))
+        form.addRow(tr("텍스트 박스 배경"), self._wrap_row(row_bg))
 
         # 정렬
-        cmb_align = QComboBox(); cmb_align.addItems(["왼쪽", "가운데", "오른쪽"])
+        cmb_align = QComboBox(); cmb_align.addItems([tr("왼쪽"), tr("가운데"), tr("오른쪽")])
         cmb_align.setCurrentIndex(int(st.get("align", 0)))
-        form.addRow("정렬", cmb_align)
+        form.addRow(tr("정렬"), cmb_align)
 
         # 지시선 끝 모양 — 아이콘 토글 버튼
         tip_state = {"v": st.get("tip", "arrow")}
@@ -4890,16 +4867,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 tip_state["v"] = v
                 for k, b in tip_btns.items():
                     b.setChecked(k == v)
-            for key, glyph, tipname in (("arrow", "→", "뾰족한 화살표"),
-                                        ("circle", "●", "끝 원형"),
-                                        ("plain", "—", "일반 선")):
+            for key, glyph, tipname in (("arrow", "→", tr("뾰족한 화살표")),
+                                        ("circle", "●", tr("끝 원형")),
+                                        ("plain", "—", tr("일반 선"))):
                 b = QPushButton(glyph); b.setCheckable(True); b.setFixedWidth(46)
                 b.setToolTip(tipname)
                 b.setChecked(tip_state["v"] == key)
                 b.clicked.connect(lambda _=False, v=key: _set_tip(v))
                 tip_btns[key] = b; row_tip.addWidget(b)
             row_tip.addStretch(1)
-            form.addRow("선 끝모양", self._wrap_row(row_tip))
+            form.addRow(tr("선 끝모양"), self._wrap_row(row_tip))
 
         lay = QVBoxLayout(dlg); lay.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
@@ -4962,8 +4939,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from PyQt6.QtWidgets import QFileDialog
         start = str(self._folder) if self._folder else ""
         fn, _ = QFileDialog.getOpenFileName(
-            self, "삽입할 이미지 선택", start,
-            "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)")
+            self, tr("삽입할 이미지 선택"), start,
+            tr("이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)"))
         if fn:
             self.main_view.add_image_from_file(fn)
 
@@ -5005,7 +4982,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 # 우측 창에 폴더 열기 — 좌측 창·상단 책갈피 보존, 하단에 로드
                 self._set_active_pane(1)
                 self._set_pane_folder(1, folder)      # 하단 트리 로드 + 표시 + 제목
-                self.status.showMessage(f"우측 폴더 로드: {folder}", 2500)
+                self.status.showMessage(tr('우측 폴더 로드: {folder}').format(folder=folder), 2500)
                 self._touch_recent_folder(str(folder))
                 rfolder = folder
             else:
@@ -5013,7 +4990,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._hyperlinks = None
                 self._page_meta = None
                 self._set_pane_folder(0, folder)      # 좌측/상단 트리 + 제목
-                self.status.showMessage(f"폴더 로드: {folder}")
+                self.status.showMessage(tr('폴더 로드: {folder}').format(folder=folder))
                 order_map = self._build_bookmark_order(folder / "bookmarks.json")
                 self.search_results.set_bookmark_order(order_map)
                 self._refresh_search_scope()
@@ -5026,7 +5003,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             worker = IndexWorker(self._db_path, rfolder)
             worker.progress.connect(self._on_index_progress)
             worker.finished.connect(self._on_index_finished)
-            worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+            worker.error.connect(lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
             self._start_index_worker(worker)
         except Exception:
             pass
@@ -5059,7 +5036,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     worker.progress.connect(self._on_index_progress)
                     worker.finished.connect(self._on_index_finished)
                     worker.error.connect(
-                        lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+                        lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
                     self._start_index_worker(worker)
                 except Exception:
                     pass
@@ -5107,7 +5084,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 w = IndexWorker(self._db_path, self._folder)
                 w.progress.connect(self._on_index_progress)
                 w.finished.connect(self._on_index_finished)
-                w.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+                w.error.connect(lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
                 self._start_index_worker(w)
         except Exception:
             pass
@@ -5154,7 +5131,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _refresh_recent_menu(self):
         self.menu_recent.clear()
         if not self._recent_folders:
-            a = QAction("(최근 폴더 없음)", self)
+            a = QAction(tr("(최근 폴더 없음)"), self)
             a.setEnabled(False)
             self.menu_recent.addAction(a)
             return
@@ -5178,7 +5155,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         m.clear()
         if not self._recent_files:
-            a = QAction("(최근 파일 없음)", self)
+            a = QAction(tr("(최근 파일 없음)"), self)
             a.setEnabled(False)
             m.addAction(a)
             return
@@ -5192,7 +5169,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not Path(path_str).is_file():
             self._recent_files = [p for p in self._recent_files if p != path_str]
             self._refresh_recent_files_menu()
-            self.status.showMessage(f"파일이 없어 최근 파일에서 뺐습니다: {path_str}", 5000)
+            self.status.showMessage(tr('파일이 없어 최근 파일에서 뺐습니다: {path_str}').format(path_str=path_str), 5000)
             return
         self.open_pdf(Path(path_str))
 
@@ -5223,22 +5200,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        self.status.showMessage("인덱싱 준비...")
+        self.status.showMessage(tr("인덱싱 준비..."))
         worker = IndexWorker(self._db_path, self._folder)
         worker.progress.connect(self._on_index_progress)
         worker.finished.connect(self._on_index_finished)
-        worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+        worker.error.connect(lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
         self._start_index_worker(worker)
 
     def _on_index_progress(self, done, total, name):
         if total > 0:
             self.progress.setRange(0, total)
             self.progress.setValue(done)
-        self.status.showMessage(f"인덱싱 {done}/{total} - {name}")
+        self.status.showMessage(tr('인덱싱 {done}/{total} - {name}').format(done=done, total=total, name=name))
 
     def _on_index_finished(self):
         self.progress.setVisible(False)
-        self.status.showMessage("인덱싱 완료", 3000)
+        self.status.showMessage(tr("인덱싱 완료"), 3000)
         # 260908-5: 인덱싱 때문에 미뤄 둔 표 인식을 이제 마저 한다(응답성 SOT §4 ①).
         if getattr(self, "_text_tables_deferred", False):
             self._text_tables_deferred = False
@@ -5303,7 +5280,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._autotag_worker = w
         self._set_probe_paused(True)              # 260906-8(응답성 SOT §4 ①)
         w.progress.connect(lambda d, t, n: self.status.showMessage(
-            f"태그 계산 {d}/{t}", 1500))
+            tr('태그 계산 {d}/{t}').format(d=d, t=t), 1500))
         w.finished.connect(self._on_autotag_finished)
         w.error.connect(self._on_autotag_error)
         run_in_thread(w, self._thread_keep)
@@ -5311,7 +5288,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _on_autotag_error(self, msg):
         self._autotag_worker = None
         self._set_probe_paused(False)             # 260906-8(응답성 SOT §4 ①)
-        self.status.showMessage(f"태그 계산 오류: {msg}", 4000)
+        self.status.showMessage(tr('태그 계산 오류: {msg}').format(msg=msg), 4000)
         self._autotag_maybe_rescan()
 
     def _autotag_maybe_rescan(self):
@@ -5333,7 +5310,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if store is None or not results:
             return
         if not store.backup():
-            self.status.showMessage("태그 백업 실패 — 자동 부여를 건너뜀(§6)", 5000)
+            self.status.showMessage(tr("태그 백업 실패 — 자동 부여를 건너뜀(§6)"), 5000)
             return
         n_auto = n_moved = 0
         with store.bulk():
@@ -5367,10 +5344,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.bookmark_tree.refresh_tag_labels()
         except Exception:
             pass
-        msg = (f"태그 자동 부여: {stats.get('total', 0)}개 검토, "
-               f"{n_auto}개 파일에 부여")
+        msg = (tr('태그 자동 부여: {get}개 검토, {n_auto}개 파일에 부여').format(get=stats.get('total', 0), n_auto=n_auto))
         if n_moved:
-            msg += f", 이동 재연결 {n_moved}건"
+            msg += tr(', 이동 재연결 {n_moved}건').format(n_moved=n_moved)
         self.status.showMessage(msg, 5000)
         self._autotag_first_summary(stats, n_auto)
         self._autotag_maybe_rescan()
@@ -5386,20 +5362,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             pass
         try:
             box = QMessageBox(self)
-            box.setWindowTitle("태그 자동 부여")
+            box.setWindowTitle(tr("태그 자동 부여"))
             box.setText(
-                f"{stats.get('total', 0)}개 파일을 살펴봤습니다.\n\n"
-                f"· {n_auto}개 파일에 태그를 붙였습니다"
-                f" (기존 태그 {stats.get('known_tags', 0)}종 사용)\n"
-                f"· 새 태그 후보 {stats.get('new_candidates', 0)}건은 붙이지 않았습니다\n\n"
-                "자동 태그는 목록에 ·# 로 표시되며, 도구 메뉴에서 언제든 "
-                "되돌리거나 전체 삭제할 수 있습니다.")
-            undo = box.addButton("되돌리기", QMessageBox.ButtonRole.DestructiveRole)
+                tr('{get}개 파일을 살펴봤습니다.\n\n· {n_auto}개 파일에 태그를 붙였습니다 (기존 태그 {get2}종 사용)\n· 새 태그 후보 {get3}건은 붙이지 않았습니다\n\n자동 태그는 목록에 ·# 로 표시되며, 도구 메뉴에서 언제든 되돌리거나 전체 삭제할 수 있습니다.').format(get=stats.get('total', 0), n_auto=n_auto, get2=stats.get('known_tags', 0), get3=stats.get('new_candidates', 0)))
+            undo = box.addButton(tr("되돌리기"), QMessageBox.ButtonRole.DestructiveRole)
             review = None
             if stats.get("new_candidates"):
-                review = box.addButton("새 태그 후보 검토…",
+                review = box.addButton(tr("새 태그 후보 검토…"),
                                        QMessageBox.ButtonRole.ActionRole)
-            box.addButton("확인", QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(tr("확인"), QMessageBox.ButtonRole.AcceptRole)
             box.exec()
             if box.clickedButton() is undo:
                 self._autotag_undo()
@@ -5459,8 +5430,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.bookmark_tree.refresh_tag_labels()
         except Exception:
             pass
-        self.status.showMessage("직전 자동 부여를 되돌렸습니다" if ok
-                                else "되돌릴 백업이 없습니다", 4000)
+        self.status.showMessage(tr("직전 자동 부여를 되돌렸습니다") if ok
+                                else tr("되돌릴 백업이 없습니다"), 4000)
 
     def _autotag_clear_all(self):
         """§8.5 자동 태그 전체 삭제 — manual 무손실."""
@@ -5472,7 +5443,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.bookmark_tree.refresh_tag_labels()
         except Exception:
             pass
-        self.status.showMessage("자동 태그를 전부 지웠습니다(수동 태그는 유지)", 4000)
+        self.status.showMessage(tr("자동 태그를 전부 지웠습니다(수동 태그는 유지)"), 4000)
 
     def _autotag_prune_missing(self):
         """§8.5·§6.1 없는 파일 항목 정리 — ★ 개수 확인 후에만(앱이 임의로 지우지 않는다)."""
@@ -5481,15 +5452,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         n = store.count_missing()
         if n == 0:
-            QMessageBox.information(self, "항목 정리", "없는 파일 항목이 없습니다.")
+            QMessageBox.information(self, tr("항목 정리"), tr("없는 파일 항목이 없습니다."))
             return
         r = QMessageBox.question(
-            self, "항목 정리",
-            f"디스크에 없는 파일의 태그 항목 {n}건을 지울까요?\n"
-            "(휴지통 복원 예정인 파일이 있다면 지우지 마세요 — 복원 시 태그가 살아납니다.)")
+            self, tr("항목 정리"),
+            tr('디스크에 없는 파일의 태그 항목 {n}건을 지울까요?\n(휴지통 복원 예정인 파일이 있다면 지우지 마세요 — 복원 시 태그가 살아납니다.)').format(n=n))
         if r == QMessageBox.StandardButton.Yes:
             removed = store.prune_missing()
-            self.status.showMessage(f"{removed}건 정리", 4000)
+            self.status.showMessage(tr('{removed}건 정리').format(removed=removed), 4000)
 
     def _open_saved_file(self, path, page: int = 0) -> None:
         """260915-10(응답성 SOT §4.4): 저장·생성한 PDF 를 **색인부터 걸고** 본문에 연다.
@@ -5519,11 +5489,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 return
             self.progress.setVisible(True)
             self.progress.setRange(0, 0)
-            self.status.showMessage(f"인덱싱: {p.name} ...")
+            self.status.showMessage(tr('인덱싱: {name} ...').format(name=p.name))
             worker = IndexWorker(self._db_path, p.parent, single_file=p)
             worker.progress.connect(self._on_index_progress)
             worker.finished.connect(self._on_index_finished)
-            worker.error.connect(lambda e: self.status.showMessage(f"인덱싱 오류: {e}"))
+            worker.error.connect(lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
             self._start_index_worker(worker)
         except Exception:
             pass
@@ -5575,9 +5545,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._open_content_find(query)
             return
         if not self._folder:
-            self.status.showMessage("폴더를 먼저 여세요.")
+            self.status.showMessage(tr("폴더를 먼저 여세요."))
             return
-        self.status.showMessage(f"검색 중: {query!r}")
+        self.status.showMessage(tr('검색 중: {query!r}').format(query=query))
         # 260828: 검색 범위(책갈피창 파일 목록)를 SQL 로 전달 — 영구(다중 폴더) 캐시에서
         #   LIMIT 이 다른 폴더 결과로 채워지지 않게. 없으면 전체.
         try:
@@ -5586,7 +5556,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             scope_paths = None
         worker = SearchWorker(self._db_path, query, paths=scope_paths)
         worker.finished.connect(self._on_search_finished)
-        worker.error.connect(lambda e: self.status.showMessage(f"검색 오류: {e}"))
+        worker.error.connect(lambda e: self.status.showMessage(tr('검색 오류: {e}').format(e=e)))
         run_in_thread(worker, self._thread_keep)
         self.main_view.set_query(query)
 
@@ -5605,7 +5575,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         self.search_results.set_results(query, results)
-        self.status.showMessage(f"검색 완료: {len(results)}개 페이지", 3000)
+        self.status.showMessage(tr('검색 완료: {n}개 페이지').format(n=len(results)), 3000)
         # 260827: 현재 파일의 현재 페이지 기준 '앞(이전 페이지)에서 가장 가까운' 결과를 선택·이동
         self._auto_select_search_result(results)
 
@@ -5638,33 +5608,33 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def action_export_search_excel(self):
         results = self.search_results.get_displayed_results()
         if not results:
-            QMessageBox.information(self, "안내", "검색 결과가 없습니다.")
+            QMessageBox.information(self, tr("안내"), tr("검색 결과가 없습니다."))
             return
         try:
             from openpyxl import Workbook
         except ImportError:
-            QMessageBox.warning(self, "openpyxl 필요",
-                "엑셀 내보내기에 openpyxl 패키지가 필요합니다.\npip install openpyxl")
+            QMessageBox.warning(self, tr("openpyxl 필요"),
+                tr("엑셀 내보내기에 openpyxl 패키지가 필요합니다.\npip install openpyxl"))
             return
         # M5: 파일명에 datetime 접두
         prefix = _dt.datetime.now().strftime("%y%m%d_%H%M_")
         default = f"{prefix}search_results.xlsx"
-        out, _ = QFileDialog.getSaveFileName(self, "엑셀로 저장", default, "Excel (*.xlsx)")
+        out, _ = QFileDialog.getSaveFileName(self, tr("엑셀로 저장"), default, "Excel (*.xlsx)")
         if not out:
             return
         try:
             wb = Workbook()
             ws = wb.active
-            ws.title = "검색결과"
-            ws.append(["파일", "페이지", "매치수", "스니펫"])
+            ws.title = tr("검색결과")
+            ws.append([tr("파일"), tr("페이지"), tr("매치수"), tr("스니펫")])
             for r in results:
                 ws.append([r.file_name, r.page_index + 1, r.match_count, r.snippet])
             for col, w in zip("ABCD", [40, 10, 10, 80]):
                 ws.column_dimensions[col].width = w
             wb.save(out)
-            self.status.showMessage(f"엑셀 저장: {out}", 4000)
+            self.status.showMessage(tr('엑셀 저장: {out}').format(out=out), 4000)
         except Exception as e:
-            QMessageBox.warning(self, "엑셀 저장 실패", str(e))
+            QMessageBox.warning(self, tr("엑셀 저장 실패"), str(e))
 
     def _on_search_screenshot_requested(self):
         """v1.6.1 S5 / v1.6.2: 검색결과 리스트의 모든 매치 페이지를 일괄 스크린샷.
@@ -5676,7 +5646,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """
         results = self.search_results.get_displayed_results()
         if not results:
-            QMessageBox.information(self, "안내", "검색 결과가 없습니다.")
+            QMessageBox.information(self, tr("안내"), tr("검색 결과가 없습니다."))
             return
 
         needed = self.shot_strip.list.count() + len(results)
@@ -5686,13 +5656,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._prefs["screenshot_max"] = int(new_max)
             self.shot_strip.set_max_items(new_max)
             self.status.showMessage(
-                f"스크린샷 한도를 {current_max} → {new_max} 로 자동 확장", 4000
+                tr('스크린샷 한도를 {current_max} → {new_max} 로 자동 확장').format(current_max=current_max, new_max=new_max), 4000
             )
 
         ret = QMessageBox.question(
-            self, "일괄 캡쳐",
-            f"검색 결과 {len(results)} 페이지를 모두 스크린샷합니까?\n"
-            "(시간이 걸릴 수 있습니다.)",
+            self, tr("일괄 캡쳐"),
+            tr('검색 결과 {n} 페이지를 모두 스크린샷합니까?\n(시간이 걸릴 수 있습니다.)').format(n=len(results)),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -5707,8 +5676,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from PyQt6.QtWidgets import QProgressDialog
         # v1.6.6: 결과를 만든 실제 검색어를 전달해야 형광펜(D2/C1)이 적용됨.
         q = self.search_results.current_query()
-        dlg = QProgressDialog("일괄 캡쳐 중…", "취소", 0, len(results), self)
-        dlg.setWindowTitle("일괄 캡쳐")
+        dlg = QProgressDialog(tr("일괄 캡쳐 중…"), tr("취소"), 0, len(results), self)
+        dlg.setWindowTitle(tr("일괄 캡쳐"))
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
         dlg.setMinimumDuration(400)       # 금방 끝나면 깜빡이지 않는다
         dlg.setAutoClose(True)
@@ -5721,12 +5690,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._load_main(item)
                 self.action_screenshot()
                 done = i
-                dlg.setLabelText(f"일괄 캡쳐 {i} / {len(results)}\n{Path(r.file_path).name}")
+                dlg.setLabelText(tr('일괄 캡쳐 {i} / {n}\n{name}').format(i=i, n=len(results), name=Path(r.file_path).name))
                 dlg.setValue(i)           # setValue 가 이벤트를 처리한다(취소 반응)
             if done < len(results):
-                self.status.showMessage(f"일괄 캡쳐 취소됨: {done} 장", 5000)
+                self.status.showMessage(tr('일괄 캡쳐 취소됨: {done} 장').format(done=done), 5000)
             else:
-                self.status.showMessage(f"일괄 캡쳐 완료: {done} 장", 5000)
+                self.status.showMessage(tr('일괄 캡쳐 완료: {done} 장').format(done=done), 5000)
         finally:
             dlg.close()
 
@@ -5787,7 +5756,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             pass
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
-        self.status.showMessage(f"로딩 중: {Path(item.file_path).name}")
+        self.status.showMessage(tr('로딩 중: {name}').format(name=Path(item.file_path).name))
         try:
             path = Path(item.file_path)
             if path.suffix.lower() == ".pdf":
@@ -5795,7 +5764,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     path, page_index=item.page_index or 0, query=item.query
                 )
                 if ok is False:                  # 260611-64: 암호 입력 취소 → 기존 화면 유지
-                    self.status.showMessage("암호 입력이 취소되었습니다.", 2500)
+                    self.status.showMessage(tr("암호 입력이 취소되었습니다."), 2500)
                     return
                 self.page_thumbs.load_document(path)
                 # 260902-6(사용자 보고): 이전 파일로 넘어가면 본문은 마지막 쪽인데 썸네일은
@@ -5817,7 +5786,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 except Exception:
                     pass
             self._current_main = item
-            self.status.showMessage(f"로드 완료: {path.name}", 2500)
+            self.status.showMessage(tr('로드 완료: {name}').format(name=path.name), 2500)
             self._update_title()                               # 260825: 현재 파일명 제목 반영
             self._refresh_page_hyperlinks(self._active_pane)   # 260609-3
             if path.suffix.lower() == ".pdf":
@@ -5963,7 +5932,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             page = 0 if direction > 0 else 10 ** 9   # 다음=첫장 / 이전=끝장(클램프)
             self._on_bookmark_activated(target, page)
             self.status.showMessage(
-                f"{'다음' if direction > 0 else '이전'} 파일: {Path(target).name}", 2000)
+                tr('{v} 파일: {name}').format(v=tr('다음') if direction > 0 else tr('이전'), name=Path(target).name), 2000)
         except Exception:
             pass
 
@@ -5985,7 +5954,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """현재 활성 창의 PDF·페이지를 전체화면 발표 창으로 연다(F5)."""
         cur = self.main_view.current_file() if self.main_view else None
         if not cur or not str(cur).lower().endswith(".pdf"):
-            QMessageBox.information(self, "안내", "먼저 PDF를 표시하세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 PDF를 표시하세요."))
             return
         # 260611-2: 편집모드면 '저장 여부 처리(저장/되돌리기/계속편집)' 후 곧바로 전체화면 실행.
         #   (기존: 처리만 하고 종료) — '계속 편집' 으로 취소되면 발표는 띄우지 않음.
@@ -6198,10 +6167,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """우클릭 '하이퍼링크 등록' → 다이얼로그. 닫은 뒤 저장·갱신."""
         st = self._ensure_hyperlink_store()
         if not st:
-            QMessageBox.information(self, "안내", "먼저 폴더(책갈피 목록)를 여세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 폴더(책갈피 목록)를 여세요."))
             return
         if not file_path or not str(file_path).lower().endswith(".pdf"):
-            QMessageBox.information(self, "안내", "먼저 PDF를 표시하세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 PDF를 표시하세요."))
             return
         from viewer.widgets.hyperlink_dialog import HyperlinkDialog
         dlg = HyperlinkDialog(st, file_path, page0, self._folder, self)
@@ -6244,8 +6213,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _show_media_overlay(self, items, idx=0):
         """260611-85: 전체화면 미디어 오버레이 표시(발표창 위, 없으면 메인 위)."""
         if not items:
-            QMessageBox.information(self, "링크 실행",
-                                    "이 페이지에 표시할 사진·동영상 링크가 없습니다.")
+            QMessageBox.information(self, tr("링크 실행"),
+                                    tr("이 페이지에 표시할 사진·동영상 링크가 없습니다."))
             return
         from viewer.widgets.media_overlay import MediaOverlay
         parent = self._present if getattr(self, "_present", None) is not None else self
@@ -6278,8 +6247,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if kind == "file":
                 abs_path = is_safe_to_open_file(self._folder, target)
                 if not abs_path:
-                    QMessageBox.warning(self, "열 수 없음",
-                                        "파일이 없거나 보안 정책상 열 수 없습니다.")
+                    QMessageBox.warning(self, tr("열 수 없음"),
+                                        tr("파일이 없거나 보안 정책상 열 수 없습니다."))
                     return
                 QDesktopServices.openUrl(QUrl.fromLocalFile(abs_path))
             elif kind == "url":
@@ -6290,11 +6259,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 allow = self._prefs.get("hyperlink_url_allowlist") or None
                 ok, u = validate_url(target, allow)
                 if not ok:
-                    QMessageBox.warning(self, "열 수 없음", u)
+                    QMessageBox.warning(self, tr("열 수 없음"), u)
                     return
                 QDesktopServices.openUrl(QUrl(u))
         except Exception:
-            QMessageBox.warning(self, "오류", "링크를 여는 중 문제가 발생했습니다.")
+            QMessageBox.warning(self, tr("오류"), tr("링크를 여는 중 문제가 발생했습니다."))
 
     def _on_search_result_activated(self, file_path: str, page_index: int, query: str):
         # 260616-4: 이미 같은 파일이 열려 있으면 재오픈(문서 open + 전체검색 +
@@ -6378,9 +6347,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         oc = (self._prefs.get("law_oc") or "").strip()
         if not oc:
             QMessageBox.information(
-                self, "법령·고시 검색",
-                "설정 → '인터넷 사전'의 '법제처 OC'(국가법령정보 OPEN API 인증값, "
-                "open.law.go.kr 에서 무료 신청)를 먼저 입력하세요.")
+                self, tr("법령·고시 검색"),
+                tr("설정 → '인터넷 사전'의 '법제처 OC'(국가법령정보 OPEN API 인증값, "
+                "open.law.go.kr 에서 무료 신청)를 먼저 입력하세요."))
         return oc
 
     def _action_law_search(self, checked: bool = False):
@@ -6434,9 +6403,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         key = (self._prefs.get("kcsc_key") or "").strip()
         if not key:
             QMessageBox.information(
-                self, "건설기준(KCSC)",
-                "설정 → '인터넷 사전'의 'KCSC 키'(국가건설기준센터 OPEN API 인증키, "
-                "www.kcsc.re.kr/support/api 에서 무료 발급)를 먼저 입력하세요.")
+                self, tr("건설기준(KCSC)"),
+                tr("설정 → '인터넷 사전'의 'KCSC 키'(국가건설기준센터 OPEN API 인증키, "
+                "www.kcsc.re.kr/support/api 에서 무료 발급)를 먼저 입력하세요."))
         return key
 
     def _action_kcsc_search(self, checked: bool = False):
@@ -6474,7 +6443,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         for f in self._kcsc_favorites:
             if str(f.get("code")) == code and (f.get("ctype") or "") == (row.get("ctype") or ""):
-                self.status.showMessage(f"이미 건설기준 즐겨찾기에 있음: {name}", 3000)
+                self.status.showMessage(tr('이미 건설기준 즐겨찾기에 있음: {name}').format(name=name), 3000)
                 return
         self._kcsc_favorites.append({
             "kind": "kcsc", "name": name, "code": code,
@@ -6485,7 +6454,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._save_settings_now()
         except Exception:
             pass
-        self.status.showMessage(f"건설기준 즐겨찾기 추가: {name}", 3000)
+        self.status.showMessage(tr('건설기준 즐겨찾기 추가: {name}').format(name=name), 3000)
 
     def _open_kcsc_favorite(self, fav: dict):
         self._open_kcsc(fav)
@@ -6493,7 +6462,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _manage_kcsc_favorites(self):
         from viewer.widgets.law_search_dialog import LawFavoritesManager
         dlg = LawFavoritesManager(self._kcsc_favorites, self)
-        dlg.setWindowTitle("건설기준(KCSC) 즐겨찾기 관리")
+        dlg.setWindowTitle(tr("건설기준(KCSC) 즐겨찾기 관리"))
         if dlg.exec():
             self._kcsc_favorites = dlg.result_favorites()
             try:
@@ -6519,16 +6488,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         key = (self._prefs.get("kipo_signkey") or "").strip()
         if not key:
             QMessageBox.information(
-                self, "특허 검색(KIPRIS)",
-                "설정 → '인터넷 사전'의 '특허(KIPRIS) 키'(KIPRIS Plus accessKey)를 "
-                "먼저 입력하세요.")
+                self, tr("특허 검색(KIPRIS)"),
+                tr("설정 → '인터넷 사전'의 '특허(KIPRIS) 키'(KIPRIS Plus accessKey)를 "
+                "먼저 입력하세요."))
         return key
 
     def _patent_save_dir(self) -> str:
         """260618-47: 특허(전자명세서) PDF 저장 폴더. 설정값 없으면 기본(문서\\PolyPDF_특허)."""
         d = (self._prefs.get("patent_save_dir") or "").strip()
         if not d:
-            d = str(Path.home() / "Documents" / "PolyPDF_특허")
+            d = str(Path.home() / "Documents" / "PolyPDF_특허")   # 폴더 이름 — 번역하지 않는다(언어마다 위치가 갈림)
         try:
             os.makedirs(d, exist_ok=True)
         except Exception:
@@ -6586,7 +6555,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         for f in self._kipo_favorites:
             if (f.get("appNo") or f.get("regNo") or f.get("name")) == key:
-                self.status.showMessage(f"이미 특허 즐겨찾기에 있음: {name or key}", 3000)
+                self.status.showMessage(tr('이미 특허 즐겨찾기에 있음: {name}').format(name=name or key), 3000)
                 return
         self._kipo_favorites.append({"kind": "kipo", "name": name, "appNo": appno,
                                      "regNo": regno, "item": dict(item)})
@@ -6595,7 +6564,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._save_settings_now()
         except Exception:
             pass
-        self.status.showMessage(f"특허 즐겨찾기 추가: {name or key}", 3000)
+        self.status.showMessage(tr('특허 즐겨찾기 추가: {name}').format(name=name or key), 3000)
 
     def _open_kipo_favorite(self, fav: dict):
         self._open_kipo(fav)
@@ -6603,7 +6572,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _manage_kipo_favorites(self):
         from viewer.widgets.law_search_dialog import LawFavoritesManager
         dlg = LawFavoritesManager(self._kipo_favorites, self)
-        dlg.setWindowTitle("특허 등록정보 즐겨찾기 관리")
+        dlg.setWindowTitle(tr("특허 등록정보 즐겨찾기 관리"))
         if dlg.exec():
             self._kipo_favorites = dlg.result_favorites()
             try:
@@ -6620,7 +6589,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         key = (name, row.get("target"))
         for f in self._law_favorites:
             if (f.get("name"), f.get("target")) == key:
-                self.status.showMessage(f"이미 법령 즐겨찾기에 있음: {name}", 3000)
+                self.status.showMessage(tr('이미 법령 즐겨찾기에 있음: {name}').format(name=name), 3000)
                 return
         self._law_favorites.append({
             "kind": "law",
@@ -6635,7 +6604,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         })
         self._refresh_favorites_menu()
         self._save_settings_now()
-        self.status.showMessage(f"법령 즐겨찾기 추가: {name}", 3000)
+        self.status.showMessage(tr('법령 즐겨찾기 추가: {name}').format(name=name), 3000)
 
     def _open_law_favorite(self, fav: dict):
         """260616-6/19: 법령 즐겨찾기 클릭 — 법령 패널을 열고 해당 본문 바로 표시."""
@@ -6733,7 +6702,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """260611-57: 현재 PDF에 암호·권한을 설정해 암호화 사본으로 저장."""
         cur = self.main_view.current_file()
         if not (cur and str(cur).lower().endswith(".pdf") and self.main_view._doc is not None):
-            QMessageBox.information(self, "암호화", "암호화할 PDF를 먼저 여세요.")
+            QMessageBox.information(self, tr("암호화"), tr("암호화할 PDF를 먼저 여세요."))
             return
         import fitz
         live = self.main_view._doc.doc
@@ -6760,13 +6729,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         args = dlg.result_args()
         from PyQt6.QtWidgets import QFileDialog
         default = str(Path(cur).with_name(Path(cur).stem + "_암호화.pdf"))
-        out, _ = QFileDialog.getSaveFileName(self, "암호화 PDF 저장", default, "PDF 파일 (*.pdf)")
+        out, _ = QFileDialog.getSaveFileName(self, tr("암호화 PDF 저장"), default, tr("PDF 파일 (*.pdf)"))
         if not out:
             return
         if not out.lower().endswith(".pdf"):
             out += ".pdf"
         if Path(out).resolve() == Path(cur).resolve():
-            QMessageBox.warning(self, "암호화", "원본과 다른 경로로 저장하세요.")
+            QMessageBox.warning(self, tr("암호화"), tr("원본과 다른 경로로 저장하세요."))
             return
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
@@ -6790,7 +6759,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             out_doc.close()
         except Exception as e:
             QApplication.restoreOverrideCursor()
-            QMessageBox.warning(self, "암호화", f"저장 실패: {e}")
+            QMessageBox.warning(self, tr("암호화"), tr('저장 실패: {e}').format(e=e))
             return
         QApplication.restoreOverrideCursor()
         # 방금 설정한 열기 암호를 새 파일에 대해 기억(선택)
@@ -6798,8 +6767,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             try:
                 from viewer import secure_store
                 if secure_store.available() and QMessageBox.question(
-                    self, "암호 기억",
-                    "방금 설정한 열기 암호를 이 PC·계정에 안전하게 기억할까요?"
+                    self, tr("암호 기억"),
+                    tr("방금 설정한 열기 암호를 이 PC·계정에 안전하게 기억할까요?")
                 ) == QMessageBox.StandardButton.Yes:
                     secure_store.remember_password(out, args["open_pw"])
             except Exception:
@@ -6811,13 +6780,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self.bookmark_tree.refresh()
         except Exception:
             pass
-        QMessageBox.information(self, "암호화", f"암호화 저장 완료:\n{out}")
+        QMessageBox.information(self, tr("암호화"), tr('암호화 저장 완료:\n{out}').format(out=out))
 
     def _on_thumb_screenshot_pages(self, pages):
         """260616-21: 썸네일 다중선택 → 선택 페이지를 스크린샷 스트립에 복사."""
         # 260618-1: 내용 복사(추출) 권한 없으면 차단
         if not getattr(self, "_perm_can_copy", True):
-            self.status.showMessage("이 문서는 복사(스크린샷) 권한이 없습니다.", 3000)
+            self.status.showMessage(tr("이 문서는 복사(스크린샷) 권한이 없습니다."), 3000)
             return
         cur = self._thumb_doc_path()
         pages = sorted({int(p) for p in (pages or []) if p is not None})
@@ -6841,7 +6810,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self._sync_right_layout()
             except Exception:
                 pass
-            self.status.showMessage(f"스크린샷 {added}장 추가됨", 3000)
+            self.status.showMessage(tr('스크린샷 {added}장 추가됨').format(added=added), 3000)
 
     def _ensure_shots_visible(self):
         """260603-3: 스크린샷 항목이 있으면 패널 자동 표시(기본은 숨김)."""
@@ -6909,7 +6878,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                         str(saved_r), kind="image", label=disp,
                         prepend=False,
                     )
-                self.status.showMessage(f"스크린샷 (좌/우): {saved_l.name}, {saved_r.name}", 4000)
+                self.status.showMessage(tr('스크린샷 (좌/우): {name}, {name1}').format(name=saved_l.name, name1=saved_r.name), 4000)
             else:
                 saved = ss.save_screenshot(pix, source_name=src_name)
                 self.shot_strip.add_item(
@@ -6920,14 +6889,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     src_query=cur_query,
                     prepend=False,
                 )
-                self.status.showMessage(f"스크린샷 저장: {saved.name}", 4000)
+                self.status.showMessage(tr('스크린샷 저장: {name}').format(name=saved.name), 4000)
             # 260606-19: 드로어에 있으면 슬라이드 표시(1.5초 자동 접기), 아니면 패널 표시
             if getattr(self, "_panel_in_drawer", False):
                 self._drawer_auto_show()
             else:
                 self._ensure_shots_visible()        # 캡처했으니 패널 표시
         except Exception as e:
-            QMessageBox.warning(self, "스크린샷 실패", str(e))
+            QMessageBox.warning(self, tr("스크린샷 실패"), str(e))
 
     def action_save_screenshot_pdf(self, _checked=False, *, ask_open: bool = True):
         """v1.6.2: 카드 메타 기반으로 원본 PDF 페이지를 통째로 복사 (export_pdf_from_meta).
@@ -6942,7 +6911,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """
         meta = self.shot_strip.all_meta()
         if not meta:
-            QMessageBox.information(self, "안내", "저장할 스크린샷이 없습니다.")
+            QMessageBox.information(self, tr("안내"), tr("저장할 스크린샷이 없습니다."))
             return False
         # v1.6.4 C1: 저장 옵션 대화상자 (검색어 형광펜 / 상단 파일명 / 하단 페이지번호)
         from viewer.widgets.screenshot_pdf_dialog import ScreenshotPdfDialog  # 260825: 지연 임포트
@@ -6958,7 +6927,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         prefix = _dt.datetime.now().strftime("%y%m%d_%H%M_")
         default = f"{prefix}screenshots.pdf"
-        out, _ = QFileDialog.getSaveFileName(self, "스크린샷 PDF 저장", default, "PDF (*.pdf)")
+        out, _ = QFileDialog.getSaveFileName(self, tr("스크린샷 PDF 저장"), default, "PDF (*.pdf)")
         if not out:
             return False
         try:
@@ -6968,9 +6937,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 show_filename=opts["show_filename"],
                 show_pageno=opts["show_pageno"],
             )
-            self.status.showMessage(f"PDF 저장: {saved}", 4000)
+            self.status.showMessage(tr('PDF 저장: {saved}').format(saved=saved), 4000)
         except Exception as e:
-            QMessageBox.warning(self, "PDF 저장 실패", str(e))
+            QMessageBox.warning(self, tr("PDF 저장 실패"), str(e))
             return False
         if ask_open:
             self._offer_open_saved_shot_pdf(str(saved))
@@ -6986,8 +6955,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not path or not Path(path).exists():
             return
         if QMessageBox.question(
-                self, "스크린샷 PDF 저장",
-                f"저장했습니다:\n{Path(path).name}\n\n이 창에 불러올까요?",
+                self, tr("스크린샷 PDF 저장"),
+                tr('저장했습니다:\n{name}\n\n이 창에 불러올까요?').format(name=Path(path).name),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes) != QMessageBox.StandardButton.Yes:
             return
@@ -7005,7 +6974,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 bt._pending_nav = None
             self._load_main(HistoryItem(str(path), 0, "", "bookmark"))
         except Exception as e:
-            QMessageBox.warning(self, "불러오기 실패", str(e))
+            QMessageBox.warning(self, tr("불러오기 실패"), str(e))
 
     # ===== 설정 ========================================================
     # v1.6.2: 4단 기본값. 우측 패널 안쪽 세로 splitter 는 self.right_splitter.
@@ -7386,7 +7355,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._apply_prefs(new_prefs)
             # 즉시 settings.json 저장
             self._save_settings_now()
-            self.status.showMessage("설정 저장됨", 3000)
+            self.status.showMessage(tr("설정 저장됨"), 3000)
             if str(self._prefs.get("language", "ko")) != _lang_before:
                 self._offer_language_restart()
 
@@ -7395,10 +7364,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Information)
         box.setWindowTitle("PolyPDF")
-        box.setText("화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
-                    "The display language will be applied after PolyPDF restarts.")
-        b_now = box.addButton("지금 다시 시작 / Restart now", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("나중에 / Later", QMessageBox.ButtonRole.RejectRole)
+        box.setText(tr("화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
+                    "The display language will be applied after PolyPDF restarts."))
+        b_now = box.addButton(tr("지금 다시 시작 / Restart now"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("나중에 / Later"), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(b_now)
         box.exec()
         if box.clickedButton() is b_now:
@@ -7847,37 +7816,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """260611-91: 현재 설정·스타일을 배포용 기본값(default_settings.json)으로 저장.
         즐겨찾기·최근폴더·세션·머신 경로 등 개인 항목은 제외된다."""
         from PyQt6.QtWidgets import QInputDialog
-        name, ok = QInputDialog.getText(self, "기본값으로 저장(배포용)",
-                                        "기본값 이름(배포 식별용):", text="내 기본값")
+        name, ok = QInputDialog.getText(self, tr("기본값으로 저장(배포용)"),
+                                        tr("기본값 이름(배포 식별용):"), text=tr("내 기본값"))
         if not ok:
             return
         data = settings_store.extract_distributable_defaults(
-            self._build_settings_payload(), (name or "기본값").strip())
+            self._build_settings_payload(), (name or tr("기본값")).strip())
         p = settings_store.default_profile_path()
         try:
             p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception as e:
-            QMessageBox.warning(self, "저장 실패", f"기본값을 저장하지 못했습니다.\n{e}")
+            QMessageBox.warning(self, tr("저장 실패"), tr('기본값을 저장하지 못했습니다.\n{e}').format(e=e))
             return
         QMessageBox.information(
-            self, "기본값 저장 완료",
-            "현재 설정·스타일을 기본값으로 저장했습니다.\n\n"
-            f"파일: {p}\n\n"
-            "• 이 파일을 프로그램 폴더에 함께 배포하면, 새 설치 시 이 설정으로 시작합니다.\n"
-            "• '설정 초기화'를 누르면 이 기본값으로 되돌아갑니다.\n"
-            "• 즐겨찾기·최근 폴더·최근 파일·세션·녹화/ffmpeg 경로 등 개인·머신 항목은 제외되었습니다.")
+            self, tr("기본값 저장 완료"),
+            tr("현재 설정·스타일을 기본값으로 저장했습니다.\n\n파일: {p}\n\n• 이 파일을 프로그램 폴더에 함께 배포하면, 새 설치 시 이 설정으로 시작합니다.\n• '설정 초기화'를 누르면 이 기본값으로 되돌아갑니다.\n• 즐겨찾기·최근 폴더·최근 파일·세션·녹화/ffmpeg 경로 등 개인·머신 항목은 제외되었습니다.").format(p=p))
 
     def _reset_to_defaults(self):
         """260611-91: 설정·스타일을 기본값(동봉 프로파일, 없으면 공장값)으로 초기화.
         개인·머신 항목(즐겨찾기·최근폴더·최근파일·세션·경로)은 유지. 적용 위해 재시작."""
         prof = settings_store.load_default_profile()
-        src = (f"동봉된 기본값('{prof.get('profile_name', '기본값')}')"
-               if prof else "공장 기본값")
+        src = (tr("동봉된 기본값('{get}')").format(get=prof.get('profile_name', '기본값'))
+               if prof else tr("공장 기본값"))
         ret = QMessageBox.question(
-            self, "설정 초기화",
-            f"설정과 스타일을 {src}으로 되돌립니다.\n"
-            "(즐겨찾기·최근 폴더·최근 파일·세션·녹화/ffmpeg 경로 등 개인 항목은 유지)\n\n"
-            "적용을 위해 프로그램이 다시 시작됩니다. 계속할까요?",
+            self, tr("설정 초기화"),
+            tr('설정과 스타일을 {src}으로 되돌립니다.\n(즐겨찾기·최근 폴더·최근 파일·세션·녹화/ffmpeg 경로 등 개인 항목은 유지)\n\n적용을 위해 프로그램이 다시 시작됩니다. 계속할까요?').format(src=src),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if ret != QMessageBox.StandardButton.Yes:
             return
@@ -7886,7 +7849,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             merged = settings_store.merge_reset(cur, prof)
             settings_store.save(merged, self.SETTINGS_FILE)
         except Exception as e:
-            QMessageBox.warning(self, "초기화 실패", f"설정 초기화에 실패했습니다.\n{e}")
+            QMessageBox.warning(self, tr("초기화 실패"), tr('설정 초기화에 실패했습니다.\n{e}').format(e=e))
             return
         self._skip_save_on_close = True       # 닫을 때 옛 메모리 상태로 덮어쓰지 않도록
         self._restart_app()
@@ -7950,20 +7913,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _refresh_favorites_menu(self):
         from PyQt6.QtGui import QAction
         self.menu_favorites.clear()
-        a_add_folder = QAction("현재 폴더를 즐겨찾기에 추가...", self)
+        a_add_folder = QAction(tr("현재 폴더를 즐겨찾기에 추가..."), self)
         a_add_folder.triggered.connect(self._add_current_folder_favorite)
         self.menu_favorites.addAction(a_add_folder)
 
-        a_add_file = QAction("현재 파일을 즐겨찾기에 추가...", self)
+        a_add_file = QAction(tr("현재 파일을 즐겨찾기에 추가..."), self)
         a_add_file.triggered.connect(self._add_current_file_favorite)
         self.menu_favorites.addAction(a_add_file)
 
-        a_add_search = QAction("현재 검색어를 즐겨찾기에 추가...", self)
+        a_add_search = QAction(tr("현재 검색어를 즐겨찾기에 추가..."), self)
         a_add_search.triggered.connect(self._add_current_search_favorite)
         self.menu_favorites.addAction(a_add_search)
 
         self.menu_favorites.addSeparator()
-        a_manage = QAction("즐겨찾기 관리...", self)
+        a_manage = QAction(tr("즐겨찾기 관리..."), self)
         a_manage.triggered.connect(self._open_favorites_manager)
         self.menu_favorites.addAction(a_manage)
 
@@ -7972,7 +7935,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             #   검색어는 그 밑에 따로(종전에는 셋이 등록 순서대로 섞여 있었다). 그룹 안은 등록 순서.
             #   종류 판정·순서·접두는 관리 창과 같은 정의(favorites_dialog.KIND_ORDER/fav_kind).
             from viewer.widgets.favorites_dialog import KIND_ORDER, KIND_PREFIX, fav_kind
-            titles = {"folder": "즐겨찾기 폴더", "file": "즐겨찾기 파일", "search": "즐겨찾기 검색어"}
+            titles = {"folder": tr("즐겨찾기 폴더"), "file": tr("즐겨찾기 파일"), "search": tr("즐겨찾기 검색어")}
             for kind in KIND_ORDER:
                 title, prefix = titles[kind], KIND_PREFIX[kind]
                 items = [f for f in self._favorites if fav_kind(f) == kind]
@@ -7987,19 +7950,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                     # 대상이 없으면(이동/삭제) 비활성화 표시
                     if self._fav_resolve(f) is None:
                         act.setEnabled(False)
-                        act.setText(prefix + f.get("name", "?") + "  (없음)")
+                        act.setText(tr('{prefix}{get}  (없음)').format(prefix=prefix, get=f.get('name', '?')))
                     else:
                         act.triggered.connect(lambda _checked=False, ff=f: self._open_favorite(ff))
                     self.menu_favorites.addAction(act)
         elif not self._law_favorites:
-            placeholder = QAction("(아직 등록된 즐겨찾기 없음)", self)
+            placeholder = QAction(tr("(아직 등록된 즐겨찾기 없음)"), self)
             placeholder.setEnabled(False)
             self.menu_favorites.addAction(placeholder)
 
         # 260616-6: 법령·고시 즐겨찾기는 항상 전체 즐겨찾기 '아래'에 별도 구역으로.
         if self._law_favorites:
             self.menu_favorites.addSeparator()
-            hdr = QAction("법령·고시 즐겨찾기", self)
+            hdr = QAction(tr("법령·고시 즐겨찾기"), self)
             hdr.setEnabled(False)
             self.menu_favorites.addAction(hdr)
             for f in self._law_favorites:
@@ -8015,7 +7978,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260618-40: 건설기준(KCSC) 즐겨찾기 — 법령·고시 아래 별도 구역
         if self._kcsc_favorites:
             self.menu_favorites.addSeparator()
-            hdr = QAction("건설기준(KCSC) 즐겨찾기", self)
+            hdr = QAction(tr("건설기준(KCSC) 즐겨찾기"), self)
             hdr.setEnabled(False)
             self.menu_favorites.addAction(hdr)
             for f in self._kcsc_favorites:
@@ -8031,11 +7994,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # 260618-43: 특허(KIPO) 등록정보 즐겨찾기 — 별도 구역
         if self._kipo_favorites:
             self.menu_favorites.addSeparator()
-            hdr = QAction("특허(KIPO) 즐겨찾기", self)
+            hdr = QAction(tr("특허(KIPO) 즐겨찾기"), self)
             hdr.setEnabled(False)
             self.menu_favorites.addAction(hdr)
             for f in self._kipo_favorites:
-                label = "📄 " + (f.get("name") or f.get("appNo") or f.get("regNo") or "특허")
+                label = "📄 " + (f.get("name") or f.get("appNo") or f.get("regNo") or tr("특허"))
                 act = QAction(label, self)
                 act.triggered.connect(
                     lambda _checked=False, ff=f: self._open_kipo_favorite(ff))
@@ -8043,7 +8006,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     def _add_current_folder_favorite(self):
         if not self._folder:
-            QMessageBox.information(self, "안내", "먼저 폴더를 여세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 폴더를 여세요."))
             return
         from viewer.widgets.favorites_dialog import AddFavoriteDialog, make_unique_name
         suggested = make_unique_name(self._folder.name, self._favorites)
@@ -8067,7 +8030,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """260611-65: 현재 뷰어에 표시 중인 파일을 즐겨찾기에 추가."""
         cur = self.main_view.current_file() if self.main_view else None
         if not cur:
-            QMessageBox.information(self, "안내", "먼저 파일을 여세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 파일을 여세요."))
             return
         self._add_file_favorite(str(cur))
 
@@ -8076,11 +8039,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         from viewer.widgets.favorites_dialog import AddFavoriteDialog, make_unique_name
         p = Path(file_path)
         if not (p.exists() and p.suffix.lower() == ".pdf"):
-            QMessageBox.information(self, "안내", "PDF 파일을 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("PDF 파일을 선택하세요."))
             return
         suggested = make_unique_name(p.stem, self._favorites)
         dlg = AddFavoriteDialog(suggested, "file", self)     # 261008-12: 종류 표시 '📄 파일'(종전 '📁 폴더')
-        dlg.setWindowTitle("현재 파일 즐겨찾기 추가")
+        dlg.setWindowTitle(tr("현재 파일 즐겨찾기 추가"))
         if dlg.exec() == dlg.DialogCode.Accepted and dlg.name():
             self._favorites.append({
                 "name": dlg.name(),
@@ -8095,10 +8058,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
     def _add_current_search_favorite(self):
         q = self.search_bar.current_query()
         if not q:
-            QMessageBox.information(self, "안내", "검색어가 비어있습니다.")
+            QMessageBox.information(self, tr("안내"), tr("검색어가 비어있습니다."))
             return
         if not self._folder:
-            QMessageBox.information(self, "안내", "검색은 폴더 컨텍스트에서만 등록됩니다.")
+            QMessageBox.information(self, tr("안내"), tr("검색은 폴더 컨텍스트에서만 등록됩니다."))
             return
         from viewer.widgets.favorites_dialog import AddFavoriteDialog, make_unique_name
         suggested = make_unique_name(q, self._favorites)
@@ -8127,8 +8090,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         절대경로가 없으면 실행파일 기준 상대경로로 재해석(이동식 디스크 드라이브 변경 대응)."""
         target = self._fav_resolve(fav)
         if target is None:
-            QMessageBox.warning(self, "오류",
-                                f"대상을 찾을 수 없습니다:\n{fav.get('file') or fav.get('folder')}")
+            QMessageBox.warning(self, tr("오류"),
+                                tr('대상을 찾을 수 없습니다:\n{get}').format(get=fav.get('file') or fav.get('folder')))
             self._refresh_favorites_menu()
             return
         kind = fav.get("kind", "folder")
@@ -8179,12 +8142,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return True
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("스크린샷")
-        box.setText("캡처 목록이 있습니다. PDF로 모아 저장할까요?"
-                    "\n(저장하지 않으면 목록은 사라집니다. 다음 실행은 빈 목록으로 시작합니다.)")
-        b_save = box.addButton("저장", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("저장 안 함", QMessageBox.ButtonRole.DestructiveRole)
-        b_cancel = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        box.setWindowTitle(tr("스크린샷"))
+        box.setText(tr("캡처 목록이 있습니다. PDF로 모아 저장할까요?"
+                    "\n(저장하지 않으면 목록은 사라집니다. 다음 실행은 빈 목록으로 시작합니다.)"))
+        b_save = box.addButton(tr("저장"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("저장 안 함"), QMessageBox.ButtonRole.DestructiveRole)
+        b_cancel = box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(b_save)
         box.exec()
         clicked = box.clickedButton()
@@ -8230,8 +8193,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if choice == "update":
                 if not self._begin_upgrade():
                     self._upgrade_requested = False
-                    QMessageBox.warning(self, "업그레이드",
-                                        "업그레이드 시작에 실패했습니다. 그냥 종료합니다.")
+                    QMessageBox.warning(self, tr("업그레이드"),
+                                        tr("업그레이드 시작에 실패했습니다. 그냥 종료합니다."))
             # "quit" → 그냥 종료(업그레이드 안 함)
 
         # 260628(발표 SOT §9): ★ 종료 전 **녹화 안전 종료**. 이 처리가 없으면 발표 녹화 중
@@ -8244,7 +8207,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._stop_rec_watch()          # 260628(B6): 의도된 종료 → 경고 안 띄움
             _r = getattr(self, "_rec", None)
             if _r is not None and _r.is_recording():
-                self.status.showMessage("녹화를 마무리하는 중…")
+                self.status.showMessage(tr("녹화를 마무리하는 중…"))
                 QApplication.processEvents()
                 _r.stop()                      # stdin 'q' → moov 정상 마감(최대 8초 대기)
                 self._rec = None
@@ -8324,12 +8287,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("편집 변경사항")
-        box.setText("편집모드에서 저장하지 않은 변경사항이 있습니다.\n"
-                    "종료하기 전에 어떻게 할까요?")
-        b_save = box.addButton("저장 후 종료", QMessageBox.ButtonRole.AcceptRole)
-        b_disc = box.addButton("저장 안 하고 종료", QMessageBox.ButtonRole.DestructiveRole)
-        b_cancel = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        box.setWindowTitle(tr("편집 변경사항"))
+        box.setText(tr("편집모드에서 저장하지 않은 변경사항이 있습니다.\n"
+                    "종료하기 전에 어떻게 할까요?"))
+        b_save = box.addButton(tr("저장 후 종료"), QMessageBox.ButtonRole.AcceptRole)
+        b_disc = box.addButton(tr("저장 안 하고 종료"), QMessageBox.ButtonRole.DestructiveRole)
+        b_cancel = box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(b_save)
         box.exec()
         c = box.clickedButton()

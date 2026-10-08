@@ -1209,12 +1209,12 @@ class StudyMixin:
         if not self._study_pdf:
             return
         # P4: 다단어 용어(spotted)면 캐시된 rects 로 바로 강조
-        tr = (self._page_term_rects or {}).get(lemma)
-        if tr:
+        term_rects = (self._page_term_rects or {}).get(lemma)
+        if term_rects:
             if self.main_view.current_page() != page:
                 self.main_view.go_to_page(page)
-            self.main_view.highlight_word_rects([r[:4] for r in tr])
-            self.status.showMessage(f"'{lemma}' {len(tr)}곳 표시", 2500)
+            self.main_view.highlight_word_rects([r[:4] for r in term_rects])
+            self.status.showMessage(f"'{lemma}' {len(term_rects)}곳 표시", 2500)
             return
         try:
             from viewer.study.study_store import file_key_for

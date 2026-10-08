@@ -10,7 +10,7 @@ v1.6.2: 각 PDF 파일 리프에 PDF 자체의 내부 책갈피(TOC)가 있으�
 from __future__ import annotations
 
 import json
-from viewer.i18n import tr_noop      # 261008: 목록 원문 표시(다국어 SOT §6)
+from viewer.i18n import tr, tr_noop  # 261008: 화면 문구(다국어 SOT §6)
 from pathlib import Path
 from typing import Optional
 
@@ -333,7 +333,7 @@ class BookmarkTree(QWidget):
         from PyQt6.QtWidgets import QHBoxLayout, QPushButton
         search_row = QHBoxLayout()
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("목록 명칭 검색...")
+        self.search_edit.setPlaceholderText(tr("목록 명칭 검색..."))
         self.search_edit.textChanged.connect(self._on_filter)
         search_row.addWidget(self.search_edit, 1)
 
@@ -341,7 +341,7 @@ class BookmarkTree(QWidget):
         from PyQt6.QtWidgets import QMenu
         self.btn_tag = QPushButton("#")
         self.btn_tag.setFixedWidth(28)
-        self.btn_tag.setToolTip("해시태그로 검색 — 등록된 태그 보기/선택")
+        self.btn_tag.setToolTip(tr("해시태그로 검색 — 등록된 태그 보기/선택"))
         self._tag_menu = QMenu(self)
         self._tag_menu.aboutToShow.connect(self._rebuild_tag_menu)
         self.btn_tag.setMenu(self._tag_menu)
@@ -357,27 +357,29 @@ class BookmarkTree(QWidget):
         # v1.6.19: 파일 정렬 콤보 + 260822: 파일/폴더 모드 전환 버튼(정렬 콤보 오른쪽)
         sort_row = QHBoxLayout()
         sort_row.setContentsMargins(0, 0, 0, 0)
-        sort_row.addWidget(QLabel("정렬:"))
+        sort_row.addWidget(QLabel(tr("정렬:")))
         self._sort_combo = QComboBox()
-        from viewer.i18n import tr
         for _k, _t in self.SORT_LABELS:                    # 보이는 글자 + 내부 키
             self._sort_combo.addItem(tr(_t), _k)
         self._sort_combo.setCurrentIndex(self._sort_combo.findData(self.SORT_MTIME))   # 초기 = 수정일순(내림차순)
-        self._sort_combo.setMaximumWidth(96)               # 폭 줄여 모드 버튼 자리 확보
+        # 폭 줄여 모드 버튼 자리 확보 — 다른 언어로 글자가 길면 그만큼만 넓힌다(261008 다국어)
+        _fm = self._sort_combo.fontMetrics()
+        _need = max(_fm.horizontalAdvance(tr(_t)) for _k, _t in self.SORT_LABELS) + 34
+        self._sort_combo.setMaximumWidth(max(96, _need))
         self._sort_combo.currentIndexChanged.connect(lambda _i: self._on_sort_changed(""))
         sort_row.addWidget(self._sort_combo)
-        self.btn_mode = QPushButton("📁 폴더")
-        self.btn_mode.setToolTip("파일 모드 ↔ 폴더 모드 전환\n"
+        self.btn_mode = QPushButton(tr("📁 폴더"))
+        self.btn_mode.setToolTip(tr("파일 모드 ↔ 폴더 모드 전환\n"
                                  "· 파일 모드: 현재 파일만 표시\n"
-                                 "· 폴더 모드: 그 폴더의 PDF 전체 표시")
+                                 "· 폴더 모드: 그 폴더의 PDF 전체 표시"))
         self.btn_mode.clicked.connect(self._toggle_view_mode)
         sort_row.addWidget(self.btn_mode, 1)
         layout.addLayout(sort_row)
 
         # v1.6.18: 책갈피 편집 툴바 (260606-4추가: 연필 아이콘 적용)
-        self.btn_edit = QPushButton(" 편집")
+        self.btn_edit = QPushButton(tr(" 편집"))
         self.btn_edit.setCheckable(True)
-        self.btn_edit.setToolTip("책갈피 편집 모드")
+        self.btn_edit.setToolTip(tr("책갈피 편집 모드"))
         # 260611-9: 편집 아이콘 — 비선택=파란 연필, 선택(편집 중)=붉은 연필
         from PyQt6.QtGui import QIcon
         from PyQt6.QtCore import QSize
@@ -396,30 +398,30 @@ class BookmarkTree(QWidget):
         # 260902-1(사용자 요청): 뷰어 모드에서도 목록 보기(트리/단일)를 바꿀 수 있게 —
         #   편집 버튼 오른쪽. 편집모드에서는 edit_ops 1행의 같은 버튼이 대신하므로 숨긴다.
         #   두 버튼의 라벨은 set_tree_view 가 함께 갱신한다.
-        self.btn_view_mode_v = QPushButton("트리" if self._view_tree else "단일")
+        self.btn_view_mode_v = QPushButton(tr("트리") if self._view_tree else tr("단일"))
         self.btn_view_mode_v.setFixedWidth(44)
-        self.btn_view_mode_v.setToolTip("목록 보기: 단일 ↔ 트리 (클릭마다 전환)")
+        self.btn_view_mode_v.setToolTip(tr("목록 보기: 단일 ↔ 트리 (클릭마다 전환)"))
         self.btn_view_mode_v.clicked.connect(self._toggle_tree_view)
         edit_row.addWidget(self.btn_view_mode_v)
         self.btn_refresh = QPushButton("↻")
         self.btn_refresh.setFixedWidth(30)
-        self.btn_refresh.setToolTip("책갈피 새로고침 (외부에서 파일이 추가/변경된 경우)")
+        self.btn_refresh.setToolTip(tr("책갈피 새로고침 (외부에서 파일이 추가/변경된 경우)"))
         self.btn_refresh.clicked.connect(self.refresh)
         edit_row.addWidget(self.btn_refresh)
         # 260611-9: 편집 ↔ 저장 사이에 '취소'(저장 전 수정 되돌리기). 편집모드에서만 표시.
-        self.btn_cancel = QPushButton(" 취소")
+        self.btn_cancel = QPushButton(tr(" 취소"))
         _cp = resource_path("icon_cancel.png")
         if _cp:
             self.btn_cancel.setIcon(QIcon(_cp)); self.btn_cancel.setIconSize(QSize(18, 18))
         else:
-            self.btn_cancel.setText("✖ 취소")
-        self.btn_cancel.setToolTip("편집 후 저장 전의 수정 사항을 모두 취소(되돌리기)")
+            self.btn_cancel.setText(tr("✖ 취소"))
+        self.btn_cancel.setToolTip(tr("편집 후 저장 전의 수정 사항을 모두 취소(되돌리기)"))
         self.btn_cancel.clicked.connect(self._op_cancel)
         self.btn_cancel.setVisible(False)
         edit_row.addWidget(self.btn_cancel)
         # 260611-8: 저장을 편집 오른쪽으로 — 편집/저장 모두 '파일 전체'를 대상으로 하므로 묶음.
         #   (단일/다중은 책갈피에만 작동 → ➕페이지 옆으로 이동)
-        self.btn_save = QPushButton(" 저장")
+        self.btn_save = QPushButton(tr(" 저장"))
         try:
             from PyQt6.QtGui import QIcon
             from PyQt6.QtCore import QSize
@@ -428,10 +430,10 @@ class BookmarkTree(QWidget):
             if _sp:
                 self.btn_save.setIcon(QIcon(_sp)); self.btn_save.setIconSize(QSize(18, 18))
             else:
-                self.btn_save.setText("💾 저장")
+                self.btn_save.setText(tr("💾 저장"))
         except Exception:
-            self.btn_save.setText("💾 저장")
-        self.btn_save.setToolTip("_edited.pdf 로 저장")
+            self.btn_save.setText(tr("💾 저장"))
+        self.btn_save.setToolTip(tr("_edited.pdf 로 저장"))
         self.btn_save.clicked.connect(self._op_save)
         self.btn_save.setVisible(False)
         edit_row.addWidget(self.btn_save)
@@ -467,11 +469,11 @@ class BookmarkTree(QWidget):
 
         # 260901-2: 단일/트리 보기 토글 — 라벨 = **현재 보기**(클릭마다 전환).
         #   단일: 하위 폴더와 무관하게 모든 PDF 를 한 위계로. 트리: 폴더 그룹 아래로 묶어 표시.
-        self.btn_view_mode = QPushButton("트리" if self._view_tree else "단일")
+        self.btn_view_mode = QPushButton(tr("트리") if self._view_tree else tr("단일"))
         self.btn_view_mode.setToolTip(
-            "목록 보기: 단일 ↔ 트리 (클릭마다 전환)\n"
+            tr("목록 보기: 단일 ↔ 트리 (클릭마다 전환)\n"
             "단일 = 하위 폴더 구분 없이 모든 PDF 를 한 위계로\n"
-            "트리 = 폴더명 아래에 그 폴더의 파일을 묶어서")
+            "트리 = 폴더명 아래에 그 폴더의 파일을 묶어서"))
         self.btn_view_mode.clicked.connect(self._toggle_tree_view)
         # 책갈피명 수정(단일 편집) — 첨부 아이콘
         self.btn_edit_single = QPushButton()
@@ -480,7 +482,7 @@ class BookmarkTree(QWidget):
             self.btn_edit_single.setIcon(_QIcon(_bep)); self.btn_edit_single.setIconSize(_QSize(18, 18))
         else:
             self.btn_edit_single.setText("✎")
-        self.btn_edit_single.setToolTip("책갈피명 수정 (단일 편집: 제목·페이지)")
+        self.btn_edit_single.setToolTip(tr("책갈피명 수정 (단일 편집: 제목·페이지)"))
         self.btn_edit_single.clicked.connect(self._op_edit_single)
 
         # 1행: [단일/트리] ◀ ▶ ▲ ▼ [책갈피명수정] — 전체 폭 균등 분배
@@ -490,18 +492,18 @@ class BookmarkTree(QWidget):
         #   ◀▶▲▼ 가 '책갈피' 조작임이 한눈에 읽히도록.
         for b in (self.btn_view_mode,
                   self.btn_edit_single,
-                  self._mk_btn("◀", "책갈피 내어쓰기 (상위로)", self._op_outdent),
-                  self._mk_btn("▶", "책갈피 들여쓰기 (하위로)", self._op_indent),
-                  self._mk_btn("▲", "책갈피 위로 이동 (같은 부모 안)", self._op_move_up),
-                  self._mk_btn("▼", "책갈피 아래로 이동 (같은 부모 안)", self._op_move_down)):
+                  self._mk_btn("◀", tr("책갈피 내어쓰기 (상위로)"), self._op_outdent),
+                  self._mk_btn("▶", tr("책갈피 들여쓰기 (하위로)"), self._op_indent),
+                  self._mk_btn("▲", tr("책갈피 위로 이동 (같은 부모 안)"), self._op_move_up),
+                  self._mk_btn("▼", tr("책갈피 아래로 이동 (같은 부모 안)"), self._op_move_down)):
             r1.addWidget(_expand(b), 1)
 
         # 2행: 🗑️삭제 ⭐선택만 📋복사 — 전체 폭 균등 분배
         row2 = QWidget()
         r2 = QHBoxLayout(row2); r2.setContentsMargins(0, 0, 0, 0); r2.setSpacing(3)
-        for b in (self._mk_btn("🗑️ 삭제", "선택 삭제", self._op_delete),
-                  self._mk_btn("⭐ 선택만", "선택만 남기고 나머지 삭제", self._op_keep_selected),
-                  self._mk_btn("📋 복사", "선택 파일을 다른 폴더로 복사", self._op_copy_to)):
+        for b in (self._mk_btn(tr("🗑️ 삭제"), tr("선택 삭제"), self._op_delete),
+                  self._mk_btn(tr("⭐ 선택만"), tr("선택만 남기고 나머지 삭제"), self._op_keep_selected),
+                  self._mk_btn(tr("📋 복사"), tr("선택 파일을 다른 폴더로 복사"), self._op_copy_to)):
             r2.addWidget(_expand(b), 1)
 
         eo.addWidget(row1)
@@ -570,8 +572,8 @@ class BookmarkTree(QWidget):
     def _op_cancel(self):
         """260611-9: 편집 후 저장 전의 모든 수정 사항 취소(되돌리기). 편집모드는 유지."""
         if QMessageBox.question(
-                self, "편집 취소",
-                "저장 전의 모든 수정 사항을 취소(되돌리기)할까요?",
+                self, tr("편집 취소"),
+                tr("저장 전의 모든 수정 사항을 취소(되돌리기)할까요?"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         ) != QMessageBox.StandardButton.Yes:
             return
@@ -613,7 +615,7 @@ class BookmarkTree(QWidget):
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
             except Exception as e:
-                self.info.setText(f"bookmarks.json 읽기 실패: {e}")
+                self.info.setText(tr('bookmarks.json 읽기 실패: {e}').format(e=e))
                 return False
             self._mode = "json"          # v1.6.19
             self._pdfs_flat = []
@@ -663,7 +665,7 @@ class BookmarkTree(QWidget):
         # 예산 초과 — 부분 결과는 버리고(중복·순서 뒤섞임 방지) 워커가 처음부터 다시 훑는다.
         self._pdfs_flat = []
         self._scan_stats = {}
-        self.info.setText("PDF 찾는 중...")
+        self.info.setText(tr("PDF 찾는 중..."))
         self._start_scan_worker(self._root_dir)
 
     def _start_scan_worker(self, folder: Path):
@@ -694,7 +696,7 @@ class BookmarkTree(QWidget):
                 return
             self._pdfs_flat.extend(paths)
             self._scan_stats.update(stats)
-            self.info.setText(f"{len(self._pdfs_flat)}개 PDF 찾는 중...")
+            self.info.setText(tr('{n}개 PDF 찾는 중...').format(n=len(self._pdfs_flat)))
         except RuntimeError:
             return
 
@@ -823,7 +825,7 @@ class BookmarkTree(QWidget):
         self._view_tree = on
         for b in (getattr(self, "btn_view_mode", None), getattr(self, "btn_view_mode_v", None)):
             if b is not None:
-                b.setText("트리" if on else "단일")
+                b.setText(tr("트리") if on else tr("단일"))
         if self._mode == "flat":
             cur = self._current_selected_file()
             # 260906-1: 행이 다 들어온 뒤에 선택을 되살린다(점진 채우기 — 즉시 부르면 없다).
@@ -832,9 +834,9 @@ class BookmarkTree(QWidget):
     def _toggle_tree_view(self):
         if self._mode != "flat":
             QMessageBox.information(
-                self, "안내",
-                "단일/트리 보기는 폴더를 연 목록에서만 동작합니다.\n"
-                "(bookmarks.json 이 있는 분할 폴더·단일 파일 보기는 그 구조를 그대로 유지합니다.)")
+                self, tr("안내"),
+                tr("단일/트리 보기는 폴더를 연 목록에서만 동작합니다.\n"
+                "(bookmarks.json 이 있는 분할 폴더·단일 파일 보기는 그 구조를 그대로 유지합니다.)"))
             return
         self.set_tree_view(not self._view_tree)
         # 260901-3: **사용자가 직접 바꾼 경우에만** 알린다(프로그램적 set_tree_view 는 조용히)
@@ -855,7 +857,7 @@ class BookmarkTree(QWidget):
         self._fill_after = after
         self.tree.clear()
         pdfs = self._sorted_flat()
-        self.info.setText(f"{len(pdfs)}개 PDF")   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
+        self.info.setText(tr('{n}개 PDF').format(n=len(pdfs)))   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
         self._fill_plan = self._build_fill_plan(pdfs)
         self._fill_pos = 0
         self._fill_folders = {}
@@ -1036,9 +1038,9 @@ class BookmarkTree(QWidget):
         if not hasattr(self, "btn_mode"):
             return
         if self._is_file_mode():
-            self.btn_mode.setText("📄 파일")   # 현재=파일, 클릭 시 폴더로
+            self.btn_mode.setText(tr("📄 파일"))   # 현재=파일, 클릭 시 폴더로
         else:
-            self.btn_mode.setText("📁 폴더")   # 현재=폴더, 클릭 시 파일로
+            self.btn_mode.setText(tr("📁 폴더"))   # 현재=폴더, 클릭 시 파일로
 
     def _current_selected_file(self):
         """트리에서 선택된 최상위 파일(없으면 앱 제공 현재 파일)."""
@@ -1065,7 +1067,7 @@ class BookmarkTree(QWidget):
             f = self._current_selected_file() or self._single_file
             folder = (f.parent if f else self._root_dir)
             if not folder or not Path(folder).exists():
-                self.info.setText("폴더를 찾을 수 없습니다.")
+                self.info.setText(tr("폴더를 찾을 수 없습니다."))
                 return
             self.load_folder(folder)
             if f:
@@ -1075,7 +1077,7 @@ class BookmarkTree(QWidget):
             # 폴더 → 파일: 선택(또는 현재 본문) 파일만 표시
             f = self._current_selected_file()
             if not f or not f.exists():
-                self.info.setText("파일 모드로 볼 파일을 먼저 선택하세요.")
+                self.info.setText(tr("파일 모드로 볼 파일을 먼저 선택하세요."))
                 return
             self.load_single_pdf(f)
             self.viewModeChanged.emit(False, str(f))
@@ -1115,7 +1117,7 @@ class BookmarkTree(QWidget):
         self._reset_probe_queue()
         self.tree.clear()
         if not p.exists():
-            self.info.setText(f"파일 없음: {p.name}")
+            self.info.setText(tr('파일 없음: {name}').format(name=p.name))
             return False
         item = QTreeWidgetItem([p.stem])      # .pdf 제거 (M2)
         item.setData(0, self.DATA_FILE, str(p))
@@ -1123,7 +1125,7 @@ class BookmarkTree(QWidget):
         self._decorate_file_node(item, p)      # 암호화 표식 + 책갈피 있으면 ▸
         self.tree.addTopLevelItem(item)
         item.setExpanded(False)
-        self.info.setText(f"{p.name} (단일 파일)")
+        self.info.setText(tr('{name} (단일 파일)').format(name=p.name))
         self._update_mode_button()
         # 260906-1: 파일 1개뿐이라 비용이 없다 — 표식(암호화·책갈피 ▸)을 바로 확정한다.
         self._ensure_probed(item, force=True)
@@ -1167,7 +1169,7 @@ class BookmarkTree(QWidget):
             item.setToolTip(0, str(p))
             self._decorate_file_node(item, p)
             self.tree.addTopLevelItem(item)
-        self.info.setText(f"{len(files)}개 파일 (파일 모드)")
+        self.info.setText(tr('{n}개 파일 (파일 모드)').format(n=len(files)))
         self._update_mode_button()
         self._queue_visible_probes()
         return [str(f) for f in files]
@@ -1322,8 +1324,8 @@ class BookmarkTree(QWidget):
         try:
             y = self._tags.get_year(path)
             kws = self._tags.get_keywords(path)
-            extra = [x for x in ([f"작성연도 {y}"] if y else [])
-                     + (["키워드: " + " · ".join(kws)] if kws else [])]
+            extra = [x for x in ([tr('작성연도 {y}').format(y=y)] if y else [])
+                     + ([tr('키워드: {join}').format(join=' · '.join(kws))] if kws else [])]
             if extra:
                 tip = path + "\n" + "\n".join(extra)
         except Exception:
@@ -1353,7 +1355,7 @@ class BookmarkTree(QWidget):
         self._tag_menu.clear()
         tags = self._tags.all_tags() if self._tags else []
         if not tags:
-            a = self._tag_menu.addAction("(등록된 해시태그 없음 — 파일 우클릭 → 해시태그 편집)")
+            a = self._tag_menu.addAction(tr("(등록된 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"))
             a.setEnabled(False)
             return
         from PyQt6.QtWidgets import (QCheckBox, QLabel as _QL, QScrollArea,
@@ -1362,7 +1364,7 @@ class BookmarkTree(QWidget):
             from viewer.auto_tag import axis_of
         except Exception:
             def axis_of(_t):
-                return "주제"
+                return tr("주제")
         counts = {}
         try:
             counts = self._tags.tag_counts()
@@ -1377,10 +1379,11 @@ class BookmarkTree(QWidget):
         groups = {"형식": [], "주제": []}
         for t in tags:
             groups[axis_of(t) if axis_of(t) in groups else "주제"].append(t)
-        for gname in ("형식", "주제"):
+        # 축 이름은 태그 데이터의 내부 값(한글)이다 — 키는 그대로, 머리글만 번역(다국어 SOT §5)
+        for gname in (tr_noop("형식"), tr_noop("주제")):
             if not groups[gname]:
                 continue
-            hd = _QL(f"<b>{gname}</b>")
+            hd = _QL("<b>%s</b>" % tr(gname))
             lay.addWidget(hd)
             for t in groups[gname]:
                 cb = QCheckBox(f"#{t}  ({counts.get(t, 0)})")
@@ -1398,9 +1401,9 @@ class BookmarkTree(QWidget):
         wa.setDefaultWidget(area)
         self._tag_menu.addAction(wa)
         self._tag_menu.addSeparator()
-        clr_tags = self._tag_menu.addAction("모두 해제")
+        clr_tags = self._tag_menu.addAction(tr("모두 해제"))
         clr_tags.triggered.connect(self._clear_tag_tokens)
-        clr = self._tag_menu.addAction("검색 비우기")
+        clr = self._tag_menu.addAction(tr("검색 비우기"))
         clr.triggered.connect(lambda: self.search_edit.clear())
         # 260829 P2(태그 SOT §8.5): 한 태그가 잘못 퍼졌을 때 그것만 회수
         auto_ts = []
@@ -1409,12 +1412,12 @@ class BookmarkTree(QWidget):
         except Exception:
             pass
         if auto_ts:
-            sub = self._tag_menu.addMenu("자동 부여 취소")
+            sub = self._tag_menu.addMenu(tr("자동 부여 취소"))
             for t in auto_ts[:30]:
                 act = sub.addAction("·#" + t)
                 act.triggered.connect(lambda _=False, tag=t: self._revoke_auto_tag(tag))
         if callable(getattr(self, "review_provider", None)):
-            rv = self._tag_menu.addAction("새 태그 후보 검토…")    # §8.5
+            rv = self._tag_menu.addAction(tr("새 태그 후보 검토…"))    # §8.5
             rv.triggered.connect(lambda: self.review_provider())
 
     def _revoke_auto_tag(self, tag: str):
@@ -1713,32 +1716,32 @@ class BookmarkTree(QWidget):
     def _enc_tooltip(auth) -> str:
         """260618-1: 암호화 파일 인증 상태별 툴팁."""
         if auth == "owner":
-            return "암호화 설정 파일 - 암호 열음"
+            return tr("암호화 설정 파일 - 암호 열음")
         if auth == "user":
-            return "암호화 설정 파일 - 제한 암호로 열음"
-        return "암호화 설정 파일"
+            return tr("암호화 설정 파일 - 제한 암호로 열음")
+        return tr("암호화 설정 파일")
 
     def _prompt_file_password(self, item: QTreeWidgetItem, path: str):
         """260618-1: 우클릭 '암호 입력' — 마스터/제한 무관 새 암호로 잠금 해제.
         성공 시 세션 저장 + 표식(색·툴팁) 갱신 + filePasswordEntered 발행."""
         from PyQt6.QtWidgets import QInputDialog, QLineEdit
         pw, ok = QInputDialog.getText(
-            self, "암호 입력",
-            f"'{Path(path).name}'\n암호를 입력하세요 (마스터/제한 암호 모두 가능):",
+            self, tr("암호 입력"),
+            tr("'{name}'\n암호를 입력하세요 (마스터/제한 암호 모두 가능):").format(name=Path(path).name),
             QLineEdit.EchoMode.Password)
         if not ok:
             return
         try:
             doc = fitz.open(path)
         except Exception as e:
-            QMessageBox.warning(self, "암호 입력", f"파일을 열 수 없습니다:\n{e}")
+            QMessageBox.warning(self, tr("암호 입력"), tr('파일을 열 수 없습니다:\n{e}').format(e=e))
             return
         try:
             lvl = doc.authenticate(pw or "")
         finally:
             doc.close()
         if not lvl:
-            QMessageBox.warning(self, "암호 입력", "암호가 올바르지 않습니다.")
+            QMessageBox.warning(self, tr("암호 입력"), tr("암호가 올바르지 않습니다."))
             return
         try:
             from viewer import secure_store
@@ -1837,7 +1840,7 @@ class BookmarkTree(QWidget):
                 levels.pop()
             if not stack:
                 stack = [item]; levels = [0]
-            child = QTreeWidgetItem([str(title).strip() or "(제목 없음)"])
+            child = QTreeWidgetItem([str(title).strip() or tr("(제목 없음)")])
             child.setData(0, self.DATA_FILE, file_path)
             # PyMuPDF TOC 페이지는 1-based, bookmarkActivated 는 0-based
             child.setData(0, self.DATA_PAGE, max(0, int(page) - 1))
@@ -2016,7 +2019,7 @@ class BookmarkTree(QWidget):
         if target is not None and target.data(0, self.DATA_FILE):
             self._edit_bookmark_node(item, target)
         else:
-            QMessageBox.information(self, "안내", "대상 PDF 파일을 알 수 없습니다.")
+            QMessageBox.information(self, tr("안내"), tr("대상 PDF 파일을 알 수 없습니다."))
 
     def _on_double_clicked(self, item: QTreeWidgetItem, _column: int = 0):
         if not self._edit_mode:
@@ -2054,17 +2057,17 @@ class BookmarkTree(QWidget):
         #   상단(1창)='2창으로 복사', 하단(2창)='1창으로 복사'.
         if self._split_on:
             act_split_view = menu.addAction(
-                "1창으로 복사" if self._pane_idx == 1 else "2창으로 복사")
+                tr("1창으로 복사") if self._pane_idx == 1 else tr("2창으로 복사"))
             _is_copy = True
         else:
-            act_split_view = menu.addAction("2단 보기")
+            act_split_view = menu.addAction(tr("2단 보기"))
             _is_copy = False
         menu.addSeparator()
         act_merge = None
         act_translate_sel = None
         if sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
-            act_merge = menu.addAction(f"선택 {len(sel_files)}개 파일 병합...")
-            act_translate_sel = menu.addAction(f"선택 {len(sel_files)}개 파일 번역...")  # 260621-P0
+            act_merge = menu.addAction(tr('선택 {n}개 파일 병합...').format(n=len(sel_files)))
+            act_translate_sel = menu.addAction(tr('선택 {n}개 파일 번역...').format(n=len(sel_files)))  # 260621-P0
             menu.addSeparator()
         # 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
         xfer_files = self._selected_file_nodes() if self._edit_mode else []
@@ -2079,56 +2082,56 @@ class BookmarkTree(QWidget):
         act_open_dir = None
         _dir_target = self._file_path_of(item)
         if _dir_target:
-            act_open_dir = menu.addAction("파일 폴더 열기")
+            act_open_dir = menu.addAction(tr("파일 폴더 열기"))
         if xfer_files:
             n = len(xfer_files)
             # 항목은 각자 triggered 로 처리 — 아래 chosen 분기와 겹치지 않는다.
             try:
-                self._add_transfer_submenu(menu, f"파일 복사 ({n}개)", xfer_files, False)
-                self._add_transfer_submenu(menu, f"파일 이동 ({n}개)", xfer_files, True)
+                self._add_transfer_submenu(menu, tr('파일 복사 ({n}개)').format(n=n), xfer_files, False)
+                self._add_transfer_submenu(menu, tr('파일 이동 ({n}개)').format(n=n), xfer_files, True)
             except Exception:
                 pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
         # 261008-1(마스터 §4.7.13, 사용자 요청): 저장 셋을 파일 그룹의 '파일 이동' 아래로 모은다.
         #   모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
         act_save_as = act_save_poly = act_flatten = None
         if _dir_target:
-            act_save_as = menu.addAction("다른 이름으로 저장...")
-            act_save_as.setToolTip("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다.")
-            act_save_poly = menu.addAction("저장(PolyPDF용)")
-            act_save_poly.setToolTip("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작).")
-            act_flatten = menu.addAction("저장(일반뷰어용)...")
+            act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
+            act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
+            act_save_poly = menu.addAction(tr("저장(PolyPDF용)"))
+            act_save_poly.setToolTip(tr("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."))
+            act_flatten = menu.addAction(tr("저장(일반뷰어용)..."))
             act_flatten.setToolTip(
-                "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")
+                tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
         if _dir_target or xfer_files:
             menu.addSeparator()
         # 261008-1(사용자 요청): 이름 변경·삭제를 저장 그룹 바로 아래로, 그 아래 펼치기/접기/정렬.
-        act_rename = menu.addAction("파일·책갈피 이름 변경")
-        act_delete = menu.addAction("파일·책갈피 삭제")
+        act_rename = menu.addAction(tr("파일·책갈피 이름 변경"))
+        act_delete = menu.addAction(tr("파일·책갈피 삭제"))
         menu.addSeparator()
         # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
-        act_exp_all = menu.addAction("책갈피 모두 펼치기")
+        act_exp_all = menu.addAction(tr("책갈피 모두 펼치기"))
         # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크로 보인다(보이는 파일이 계속 펼쳐진다)
         act_exp_all.setCheckable(True)
         act_exp_all.setChecked(self._expand_all_mode)
-        act_exp_all.setToolTip("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
-                               "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지).")
-        act_col_all = menu.addAction("책갈피 모두 접기")
+        act_exp_all.setToolTip(tr("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
+                               "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."))
+        act_col_all = menu.addAction(tr("책갈피 모두 접기"))
         act_sort_pg = None
         if self._edit_mode:
             _n_bm = len([it for it in self.tree.selectedItems()
                          if it.data(0, self.DATA_PAGE) is not None
                          and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)])
             if _n_bm:
-                act_sort_pg = menu.addAction(f"선택 책갈피 {_n_bm}개 페이지순 정렬")
-                act_sort_pg.setToolTip("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 "
-                                       "레벨을 윗 책갈피에 맞춥니다")
+                act_sort_pg = menu.addAction(tr('선택 책갈피 {_n_bm}개 페이지순 정렬').format(_n_bm=_n_bm))
+                act_sort_pg.setToolTip(tr("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 "
+                                       "레벨을 윗 책갈피에 맞춥니다"))
         menu.addSeparator()
         # 260901-3: 폴더 행 우클릭 — 폴더 이름 변경 / 삭제(빈 폴더만)
         act_fold_new = act_fold_ren = act_fold_del = None
         if self._edit_mode and self._is_folder_node(item):
-            act_fold_new = menu.addAction("이 폴더 안에 새 폴더...")
-            act_fold_ren = menu.addAction("폴더 이름 변경...")
-            act_fold_del = menu.addAction("폴더 삭제")
+            act_fold_new = menu.addAction(tr("이 폴더 안에 새 폴더..."))
+            act_fold_ren = menu.addAction(tr("폴더 이름 변경..."))
+            act_fold_del = menu.addAction(tr("폴더 삭제"))
             menu.addSeparator()
         # 260606-4: 파일(최상위) 노드면 (책갈피 생성, 책갈피 편집)도 제공
         is_file = self._is_file_node(item)
@@ -2139,7 +2142,7 @@ class BookmarkTree(QWidget):
         is_bookmark = (not is_file and not self._is_folder_node(item)
                        and bool(item.data(0, self.DATA_FILE)))
         if is_bookmark and self._edit_mode:
-            act_bm_edit = menu.addAction("책갈피 수정...")
+            act_bm_edit = menu.addAction(tr("책갈피 수정..."))
             menu.addSeparator()
         act_translate = None
         act_edit_gloss = None
@@ -2148,28 +2151,28 @@ class BookmarkTree(QWidget):
         if is_file:
             # 260618-1: 암호화 파일이면 '암호 입력'(마스터/제한 무관 새 암호)
             if item.data(0, self.DATA_ENCRYPTED):
-                act_password = menu.addAction("암호 입력")
+                act_password = menu.addAction(tr("암호 입력"))
                 menu.addSeparator()
-            act_create = menu.addAction("책갈피 생성")
+            act_create = menu.addAction(tr("책갈피 생성"))
             # 260902-5: '책갈피 편집'(편집모드 진입) 삭제 — 편집 버튼과 중복이고 책갈피 수정과 혼동.
-            act_study = menu.addAction("단어장 생성")
-            act_study_bm = menu.addAction("단어장·책갈피 동시 생성")
-            act_tags = menu.addAction("해시태그 편집...")   # 260623: 파일 분류 태그
+            act_study = menu.addAction(tr("단어장 생성"))
+            act_study_bm = menu.addAction(tr("단어장·책갈피 동시 생성"))
+            act_tags = menu.addAction(tr("해시태그 편집..."))   # 260623: 파일 분류 태그
             # 260930-2 '일반뷰어용으로 저장' 은 261008-1 에 위쪽 저장 그룹으로 옮겼다.
             menu.addSeparator()
-            act_translate = menu.addAction("번역...")   # 260621-P0: 단일 파일 번역
-            act_edit_gloss = menu.addAction("번역 용어집 교정...")  # 260623: 오역 용어 수정
+            act_translate = menu.addAction(tr("번역..."))   # 260621-P0: 단일 파일 번역
+            act_edit_gloss = menu.addAction(tr("번역 용어집 교정..."))  # 260623: 오역 용어 수정
             try:                                         # 용어집 사이드카 없으면 비활성화
                 from viewer.study.export_translation import resolve_glossary_sidecar
                 if not resolve_glossary_sidecar(item.data(0, self.DATA_FILE)):
                     act_edit_gloss.setEnabled(False)
-                    act_edit_gloss.setToolTip("이 PDF 의 번역 용어집이 없습니다(먼저 번역).")
+                    act_edit_gloss.setToolTip(tr("이 PDF 의 번역 용어집이 없습니다(먼저 번역)."))
             except Exception:
                 pass
             menu.addSeparator()
         # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
-        act_fav_folder = menu.addAction("현재 폴더를 즐겨찾기에 추가")
-        act_fav_file = menu.addAction("현재 파일을 즐겨찾기에 추가") if is_file else None
+        act_fav_folder = menu.addAction(tr("현재 폴더를 즐겨찾기에 추가"))
+        act_fav_file = menu.addAction(tr("현재 파일을 즐겨찾기에 추가")) if is_file else None
         chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
         if act_open_dir is not None and chosen is act_open_dir:
             self._reveal_in_explorer(_dir_target)
@@ -2265,8 +2268,8 @@ class BookmarkTree(QWidget):
         # 260606-4: 편집 모드를 끌 때 변경분이 있으면 저장 여부 확인
         if not on and self._edit_mode and self._dirty:
             ret = QMessageBox.question(
-                self, "편집 종료",
-                "수정한 내용이 있습니다. 저장할까요?",
+                self, tr("편집 종료"),
+                tr("수정한 내용이 있습니다. 저장할까요?"),
                 QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
                 | QMessageBox.StandardButton.Cancel)
             if ret == QMessageBox.StandardButton.Cancel:
@@ -2381,7 +2384,7 @@ class BookmarkTree(QWidget):
     def _op_indent(self):
         target = self._target_file_item()
         if target is None:
-            QMessageBox.information(self, "안내", "편집할 PDF 파일을 트리에서 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("편집할 PDF 파일을 트리에서 선택하세요."))
             return
         items = self._selected_editable(target)
         if not items:
@@ -2404,7 +2407,7 @@ class BookmarkTree(QWidget):
     def _op_outdent(self):
         target = self._target_file_item()
         if target is None:
-            QMessageBox.information(self, "안내", "편집할 PDF 파일을 트리에서 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("편집할 PDF 파일을 트리에서 선택하세요."))
             return
         items = self._selected_editable(target)
         if not items:
@@ -2530,11 +2533,11 @@ class BookmarkTree(QWidget):
         """
         target = self._target_file_item()
         if target is None:
-            QMessageBox.information(self, "안내", "편집할 PDF 파일을 트리에서 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("편집할 PDF 파일을 트리에서 선택하세요."))
             return
         roots = self._selected_editable(target)
         if not roots:
-            QMessageBox.information(self, "안내", "정렬할 책갈피를 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("정렬할 책갈피를 선택하세요."))
             return
         roots.sort(key=lambda it: _path_to(it, target))
         parent = roots[0].parent() or target
@@ -2574,7 +2577,7 @@ class BookmarkTree(QWidget):
                 parent.insertChild(min(at + k, parent.childCount()), it)
         self._restore_cursor(ordered)
         self._mark_dirty()
-        self.info.setText(f"페이지순 정렬: {len(ordered)}개")
+        self.info.setText(tr('페이지순 정렬: {n}개').format(n=len(ordered)))
 
     # ---- 삭제 / 선택만 남기기 ------------------------------------------
     def _on_del_key(self):
@@ -2605,22 +2608,22 @@ class BookmarkTree(QWidget):
                 bookmarks = []
 
         if not files and not bookmarks:
-            QMessageBox.information(self, "안내", "삭제할 항목이 없습니다.")
+            QMessageBox.information(self, tr("안내"), tr("삭제할 항목이 없습니다."))
             return
 
         # 확인 메시지 구성
         msg_parts = []
         if files:
             if not _HAS_TRASH:
-                QMessageBox.warning(self, "send2trash 필요",
-                    "파일 삭제(휴지통)는 send2trash 모듈이 필요합니다.\n"
-                    "  pip install send2trash")
+                QMessageBox.warning(self, tr("send2trash 필요"),
+                    tr("파일 삭제(휴지통)는 send2trash 모듈이 필요합니다.\n"
+                    "  pip install send2trash"))
                 return
-            msg_parts.append(f"PDF 파일 {len(files)}개를 휴지통으로 보냅니다.")
+            msg_parts.append(tr('PDF 파일 {n}개를 휴지통으로 보냅니다.').format(n=len(files)))
         if bookmarks:
-            msg_parts.append(f"책갈피 {len(bookmarks)}개를 트리에서 제거합니다.")
+            msg_parts.append(tr('책갈피 {n}개를 트리에서 제거합니다.').format(n=len(bookmarks)))
         if QMessageBox.question(
-            self, "삭제 확인", "\n".join(msg_parts) + "\n계속할까요?"
+            self, tr("삭제 확인"), tr('{join}\n계속할까요?').format(join='\n'.join(msg_parts))
         ) != QMessageBox.StandardButton.Yes:
             return
 
@@ -2647,10 +2650,10 @@ class BookmarkTree(QWidget):
                     self._pdfs_flat = [q for q in self._pdfs_flat if q != p]
                 self.fileOpCompleted.emit(str(p), "")        # 삭제 — 메인 비움 유지
             except Exception as e:
-                QMessageBox.warning(self, "휴지통 이동 실패", f"{p.name}: {e}")
+                QMessageBox.warning(self, tr("휴지통 이동 실패"), f"{p.name}: {e}")
                 self.fileOpCompleted.emit(str(p), str(p))    # revert → 원본 재로드
         if trashed:
-            self.info.setText(f"파일 {trashed}개 휴지통으로 이동됨")
+            self.info.setText(tr('파일 {trashed}개 휴지통으로 이동됨').format(trashed=trashed))
 
     def _take_node(self, it: QTreeWidgetItem):
         """260901-2: 트리에서 노드 제거 — 최상위/폴더 자식 어느 쪽이든.
@@ -2727,10 +2730,10 @@ class BookmarkTree(QWidget):
             a = sub.addAction(label)
             a.triggered.connect(lambda _=False, d=folder: self._transfer_files(paths, d, move))
 
-        a_new = sub.addAction("새 폴더 만들기...")     # ①
+        a_new = sub.addAction(tr("새 폴더 만들기..."))     # ①
         a_new.triggered.connect(
             lambda _=False: self._transfer_files(paths, self._ask_new_folder(base=src), move))
-        a_pick = sub.addAction("다른 폴더 선택...")    # ②
+        a_pick = sub.addAction(tr("다른 폴더 선택..."))    # ②
         a_pick.triggered.connect(
             lambda _=False: self._transfer_files(paths, self._ask_pick_folder(move, start=src),
                                                 move))
@@ -2741,7 +2744,7 @@ class BookmarkTree(QWidget):
         for it in picked:                      # ③ 선택된 폴더 행
             d = Path(it.toolTip(0))
             if str(d) not in seen:
-                seen.add(str(d)); add(f"📂 {d.name}  (선택한 폴더)", d)
+                seen.add(str(d)); add(tr('📂 {name}  (선택한 폴더)').format(name=d.name), d)
         subs = [d for d in self._subfolders() if str(d) not in seen]
         if subs:
             if seen:
@@ -2761,21 +2764,21 @@ class BookmarkTree(QWidget):
                 if self._is_folder_node(it):
                     base = Path(it.toolTip(0)); break
         if not base:
-            QMessageBox.information(self, "안내", "먼저 폴더를 열어 주세요.")
+            QMessageBox.information(self, tr("안내"), tr("먼저 폴더를 열어 주세요."))
             return None
         name, ok = QInputDialog.getText(
-            self, "새 폴더 만들기", f"{base} 아래에 만들 폴더 이름:")
+            self, tr("새 폴더 만들기"), tr('{base} 아래에 만들 폴더 이름:').format(base=base))
         name = (name or "").strip()
         if not ok or not name:
             return None
         if _INVALID_FILENAME_RE.search(name):
-            QMessageBox.warning(self, "오류", "폴더 이름에 사용할 수 없는 글자가 있습니다.")
+            QMessageBox.warning(self, tr("오류"), tr("폴더 이름에 사용할 수 없는 글자가 있습니다."))
             return None
         d = Path(base) / name
         try:
             d.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            QMessageBox.warning(self, "폴더 만들기 실패", f"{name}: {e}")
+            QMessageBox.warning(self, tr("폴더 만들기 실패"), f"{name}: {e}")
             return None
         return d
 
@@ -2787,18 +2790,18 @@ class BookmarkTree(QWidget):
         from PyQt6.QtWidgets import QInputDialog
         folder = Path(folder)
         if not folder.is_dir():
-            QMessageBox.warning(self, "오류", f"폴더가 없습니다: {folder}")
+            QMessageBox.warning(self, tr("오류"), tr('폴더가 없습니다: {folder}').format(folder=folder))
             return
-        name, ok = QInputDialog.getText(self, "폴더 이름 변경", "새 폴더 이름:", text=folder.name)
+        name, ok = QInputDialog.getText(self, tr("폴더 이름 변경"), tr("새 폴더 이름:"), text=folder.name)
         name = (name or "").strip()
         if not ok or not name or name == folder.name:
             return
         if _INVALID_FILENAME_RE.search(name):
-            QMessageBox.warning(self, "오류", "폴더 이름에 사용할 수 없는 글자가 있습니다.")
+            QMessageBox.warning(self, tr("오류"), tr("폴더 이름에 사용할 수 없는 글자가 있습니다."))
             return
         new = folder.with_name(name)
         if new.exists():
-            QMessageBox.warning(self, "오류", f"같은 이름의 폴더가 이미 있습니다: {name}")
+            QMessageBox.warning(self, tr("오류"), tr('같은 이름의 폴더가 이미 있습니다: {name}').format(name=name))
             return
         # 260906-9(응답성 SOT §6): `rglob` 금지 — 끝까지 돌아야 첫 결과가 나오고 취소가
         #   안 된다. 표준 수집기는 대소문자도 무시한다(`.PDF` 도 핸들 해제·태그 승계 대상).
@@ -2810,9 +2813,8 @@ class BookmarkTree(QWidget):
         try:
             folder.rename(new)
         except Exception as e:
-            QMessageBox.warning(self, "이름 변경 실패",
-                                f"{folder.name}: {e}\n다른 프로그램이 폴더 안 파일을 "
-                                "잡고 있을 수 있습니다.")
+            QMessageBox.warning(self, tr("이름 변경 실패"),
+                                tr('{name}: {e}\n다른 프로그램이 폴더 안 파일을 잡고 있을 수 있습니다.').format(name=folder.name, e=e))
             return
         pairs = []
         for old_p in inside:
@@ -2822,7 +2824,7 @@ class BookmarkTree(QWidget):
         self._sync_after_transfer(new)
         if pairs:
             self.filesRelocated.emit(pairs)   # 인덱스·메인뷰 갱신
-        self.info.setText(f"폴더 이름 변경: {folder.name} → {name}")
+        self.info.setText(tr('폴더 이름 변경: {name} → {name1}').format(name=folder.name, name1=name))
 
     EMPTY_CHECK_CAP = 200      # 260906-9: '비었는가' 판정에 훑는 항목 상한
 
@@ -2859,36 +2861,34 @@ class BookmarkTree(QWidget):
         안에 파일이 있으면 지우지 않는다(대량 유실 방지). 파일부터 옮기거나 지우게 안내한다."""
         folder = Path(folder)
         if not folder.is_dir():
-            QMessageBox.warning(self, "오류", f"폴더가 없습니다: {folder}")
+            QMessageBox.warning(self, tr("오류"), tr('폴더가 없습니다: {folder}').format(folder=folder))
             return
         # 260906-9(응답성 SOT §6): 종전 `rglob("*")` 은 **트리 전체를 끝까지** 훑었다.
         #   여기서 필요한 것은 '비었는가' 뿐이므로 상한까지만 세고 멈춘다.
         n_rest, capped = self._count_files(folder, cap=self.EMPTY_CHECK_CAP)
         if n_rest:
-            how_many = f"{n_rest}개 이상" if capped else f"{n_rest}개"
+            how_many = tr('{n_rest}개 이상').format(n_rest=n_rest) if capped else tr('{n_rest}개').format(n_rest=n_rest)
             QMessageBox.information(
-                self, "삭제할 수 없음",
-                f"'{folder.name}' 안에 파일이 {how_many} 있습니다.\n\n"
-                "먼저 파일을 다른 폴더로 옮기거나 삭제한 뒤 폴더를 지워 주세요.\n"
-                "(실수로 자료가 통째로 사라지지 않도록 빈 폴더만 삭제합니다.)")
+                self, tr("삭제할 수 없음"),
+                tr("'{name}' 안에 파일이 {how_many} 있습니다.\n\n먼저 파일을 다른 폴더로 옮기거나 삭제한 뒤 폴더를 지워 주세요.\n(실수로 자료가 통째로 사라지지 않도록 빈 폴더만 삭제합니다.)").format(name=folder.name, how_many=how_many))
             return
         if QMessageBox.question(
-                self, "폴더 삭제",
-                f"빈 폴더를 삭제할까요?\n\n{folder}") != QMessageBox.StandardButton.Yes:
+                self, tr("폴더 삭제"),
+                tr('빈 폴더를 삭제할까요?\n\n{folder}').format(folder=folder)) != QMessageBox.StandardButton.Yes:
             return
         try:
             shutil.rmtree(folder)             # 빈 폴더(하위 빈 폴더 포함)
         except Exception as e:
-            QMessageBox.warning(self, "삭제 실패", f"{folder.name}: {e}")
+            QMessageBox.warning(self, tr("삭제 실패"), f"{folder.name}: {e}")
             return
         self._sync_after_transfer(folder.parent)
-        self.info.setText(f"폴더 삭제됨: {folder.name}")
+        self.info.setText(tr('폴더 삭제됨: {name}').format(name=folder.name))
 
     def _ask_pick_folder(self, move: bool, start=None):
         """260901-4: 시작 위치 = 선택한 파일이 있는 세부 폴더(없으면 루트)."""
         base = start if start is not None else self._root_dir
         d = QFileDialog.getExistingDirectory(
-            self, "이동 대상 폴더" if move else "복사 대상 폴더",
+            self, tr("이동 대상 폴더") if move else tr("복사 대상 폴더"),
             str(base) if base else "")
         return Path(d) if d else None
 
@@ -2905,24 +2905,23 @@ class BookmarkTree(QWidget):
         if not paths:
             return
         if not dst.is_dir():
-            QMessageBox.warning(self, "오류", f"대상 폴더가 없습니다: {dst}")
+            QMessageBox.warning(self, tr("오류"), tr('대상 폴더가 없습니다: {dst}').format(dst=dst))
             return
-        word = "이동" if move else "복사"
+        word = tr("이동") if move else tr("복사")
         # 대상이 원본과 같은 폴더면 이동은 무의미(복사는 사본 생성이라 허용)
         if move:
             paths = [p for p in paths if p.parent.resolve() != dst.resolve()]
             if not paths:
-                QMessageBox.information(self, "안내", "이미 그 폴더에 있는 파일입니다.")
+                QMessageBox.information(self, tr("안내"), tr("이미 그 폴더에 있는 파일입니다."))
                 return
             if QMessageBox.question(
-                    self, "파일 이동",
-                    f"{len(paths)}개 파일을 아래 폴더로 이동할까요?\n\n{dst}\n\n"
-                    "디스크상 파일이 실제로 옮겨집니다.") != QMessageBox.StandardButton.Yes:
+                    self, tr("파일 이동"),
+                    tr('{n}개 파일을 아래 폴더로 이동할까요?\n\n{dst}\n\n디스크상 파일이 실제로 옮겨집니다.').format(n=len(paths), dst=dst)) != QMessageBox.StandardButton.Yes:
                 return
         done, pairs, errors = 0, [], []
         for src in paths:
             if not src.exists():
-                errors.append(f"{src.name}: 원본 없음")
+                errors.append(tr('{name}: 원본 없음').format(name=src.name))
                 continue
             target = _unique_path(dst / src.name)
             try:
@@ -2941,11 +2940,11 @@ class BookmarkTree(QWidget):
         if pairs:
             self._sync_after_transfer(dst)
             self.filesRelocated.emit(pairs)
-        msg = f"{done}개 파일을 {dst} 로 {word}했습니다."
+        msg = tr('{done}개 파일을 {dst} 로 {word}했습니다.').format(done=done, dst=dst, word=word)
         if errors:
-            msg += "\n실패: " + ", ".join(errors[:5])
-        self.info.setText(f"파일 {done}개 {word}됨")
-        QMessageBox.information(self, f"{word} 완료", msg)
+            msg += tr('\n실패: {join}').format(join=', '.join(errors[:5]))
+        self.info.setText(tr('파일 {done}개 {word}됨').format(done=done, word=word))
+        QMessageBox.information(self, tr('{word} 완료').format(word=word), msg)
 
     def _after_move(self, src: Path, dst: Path):
         """이동한 파일의 해시태그·키워드를 새 경로로 승계(태그 SOT §6.1)."""
@@ -2974,7 +2973,7 @@ class BookmarkTree(QWidget):
         260901-2: 대상 선택·실행은 우클릭 '파일 복사'와 같은 구현을 쓴다."""
         sel = self._selected_file_nodes()
         if not sel:
-            QMessageBox.information(self, "안내", "복사할 PDF 파일을 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("복사할 PDF 파일을 선택하세요."))
             return
         paths = [Path(it.data(0, self.DATA_FILE)) for it in sel]
         # 260901-4: 선택한 파일이 있는 세부 폴더에서 열기(우클릭 '다른 폴더 선택'과 동일)
@@ -3005,7 +3004,7 @@ class BookmarkTree(QWidget):
                 if id(ch) not in keep and not ch.data(0, self.DATA_IS_TOC_PLACEHOLDER):
                     node.takeChild(i)
         if QMessageBox.question(
-            self, "확인", "선택한 항목과 그 조상만 남기고 나머지를 삭제할까요?"
+            self, tr("확인"), tr("선택한 항목과 그 조상만 남기고 나머지를 삭제할까요?")
         ) != QMessageBox.StandardButton.Yes:
             return
         prune(target)
@@ -3016,7 +3015,7 @@ class BookmarkTree(QWidget):
         sel = [it for it in self.tree.selectedItems()
                if not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)]
         if len(sel) != 1:
-            QMessageBox.information(self, "안내", "편집할 항목 1개를 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("편집할 항목 1개를 선택하세요."))
             return
         it = sel[0]
         # v1.6.20: 최상위 파일 노드면 파일명 변경 다이얼로그
@@ -3026,7 +3025,7 @@ class BookmarkTree(QWidget):
         # 일반 책갈피 — 제목/페이지
         target = self._target_file_item() or _top_of(it)
         if target is None or not target.data(0, self.DATA_FILE):
-            QMessageBox.information(self, "안내", "대상 PDF 파일을 알 수 없습니다.")
+            QMessageBox.information(self, tr("안내"), tr("대상 PDF 파일을 알 수 없습니다."))
             return
         self._edit_bookmark_node(it, target)
 
@@ -3045,16 +3044,16 @@ class BookmarkTree(QWidget):
         cur_page = int(it.data(0, self.DATA_PAGE) or 0) + 1
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("책갈피 편집")
+        dlg.setWindowTitle(tr("책갈피 편집"))
         dlg.setMinimumWidth(560)                    # v1.6.20 K1
         f = QFormLayout(dlg)
         ed_title = QLineEdit(cur_title)
         ed_title.setMinimumWidth(460)               # v1.6.20 K1
-        f.addRow("제목:", ed_title)
+        f.addRow(tr("제목:"), ed_title)
         sp_page = QSpinBox()
         sp_page.setRange(1, max_page)
         sp_page.setValue(min(max_page, max(1, cur_page)))
-        f.addRow("페이지:", sp_page)
+        f.addRow(tr("페이지:"), sp_page)
         bb = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, dlg)
         bb.accepted.connect(dlg.accept)
@@ -3062,7 +3061,7 @@ class BookmarkTree(QWidget):
         f.addRow(bb)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        new_title = ed_title.text().strip() or "(제목 없음)"
+        new_title = ed_title.text().strip() or tr("(제목 없음)")
         new_page = int(sp_page.value())
         it.setText(0, f"{new_title}  (p.{new_page})")
         it.setData(0, self.DATA_PAGE, new_page - 1)
@@ -3074,14 +3073,14 @@ class BookmarkTree(QWidget):
         cur_stem = old_path.stem
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("파일명 변경")
+        dlg.setWindowTitle(tr("파일명 변경"))
         dlg.setMinimumWidth(560)
         f = QFormLayout(dlg)
         ed_name = QLineEdit(cur_stem)
         ed_name.setMinimumWidth(460)
-        f.addRow("파일명 (.pdf 제외):", ed_name)
-        hint = QLabel("<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. "
-                      "메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>")
+        f.addRow(tr("파일명 (.pdf 제외):"), ed_name)
+        hint = QLabel(tr("<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. "
+                      "메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"))
         hint.setStyleSheet("color:#666;"); hint.setWordWrap(True)
         f.addRow("", hint)
         bb = QDialogButtonBox(
@@ -3094,13 +3093,13 @@ class BookmarkTree(QWidget):
 
         new_stem = ed_name.text().strip()
         if not new_stem or _INVALID_FILENAME_RE.search(new_stem):
-            QMessageBox.warning(self, "오류", "파일명에 사용할 수 없는 글자가 있습니다.")
+            QMessageBox.warning(self, tr("오류"), tr("파일명에 사용할 수 없는 글자가 있습니다."))
             return
         new_path = old_path.with_name(new_stem + old_path.suffix)
         if new_path == old_path:
             return
         if new_path.exists():
-            QMessageBox.warning(self, "오류", f"같은 이름의 파일이 이미 있습니다: {new_path.name}")
+            QMessageBox.warning(self, tr("오류"), tr('같은 이름의 파일이 이미 있습니다: {name}').format(name=new_path.name))
             return
         # v1.6.21: 메인 뷰어가 같은 파일을 열고 있으면 잠시 닫도록 알림
         self.releaseFileRequested.emit(str(old_path))
@@ -3108,9 +3107,8 @@ class BookmarkTree(QWidget):
         try:
             old_path.rename(new_path)
         except Exception as e:
-            QMessageBox.warning(self, "변경 실패",
-                f"파일 이름 변경 실패: {e}\n"
-                "다른 프로그램이 파일을 잡고 있을 수 있습니다.")
+            QMessageBox.warning(self, tr("변경 실패"),
+                tr('파일 이름 변경 실패: {e}\n다른 프로그램이 파일을 잡고 있을 수 있습니다.').format(e=e))
             self.fileOpCompleted.emit(str(old_path), str(old_path))   # revert → 원본 재로드
             return
         self._after_rename(it, old_path, new_path)
@@ -3168,14 +3166,14 @@ class BookmarkTree(QWidget):
         self._after_move(old_path, new_path)                          # 태그 승계
         self.fileOpCompleted.emit(old_s, new_s)                       # 본문 다시 열기
         self.filesRelocated.emit([[old_s, new_s]])                    # 색인·꾸밈·검색 범위
-        self.info.setText(f"이름 변경: {old_path.name} → {new_path.name}")
+        self.info.setText(tr('이름 변경: {name} → {name1}').format(name=old_path.name, name1=new_path.name))
 
     # ---- v1.6.20 K5: 메인 페이지로 책갈피 추가 -------------------------
     def _op_add_main_bookmark(self):
         target = self._target_file_item()
         if target is None or not target.data(0, self.DATA_FILE):
-            QMessageBox.information(self, "안내",
-                "책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요.")
+            QMessageBox.information(self, tr("안내"),
+                tr("책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."))
             return
         # 앱에 대상 파일 알림 → 앱이 메인 뷰어 페이지/제목을 받아 add_bookmark 호출
         self.addBookmarkRequested.emit(target.data(0, self.DATA_FILE))
@@ -3241,7 +3239,7 @@ class BookmarkTree(QWidget):
         # placeholder 가 남아있으면 한 번 펼쳐서 lazy load 시키기
         if not target.data(0, self.DATA_TOC_LOADED):
             target.setExpanded(True)
-        title = (title or "").strip() or "(제목 없음)"
+        title = (title or "").strip() or tr("(제목 없음)")
         ch = QTreeWidgetItem([f"{title}  (p.{int(page_1based)})"])
         ch.setData(0, self.DATA_FILE, file_path)
         ch.setData(0, self.DATA_PAGE, max(0, int(page_1based) - 1))
@@ -3465,11 +3463,11 @@ class BookmarkTree(QWidget):
             if meta_dirty:
                 self._commit_meta()      # 개체만 삽입한 경우 — 트리 선택 없이도 저장
                 return
-            QMessageBox.information(self, "안내", "편집할 PDF 파일을 트리에서 선택하세요.")
+            QMessageBox.information(self, tr("안내"), tr("편집할 PDF 파일을 트리에서 선택하세요."))
             return
         src = Path(target.data(0, self.DATA_FILE))
         if not src.exists():
-            QMessageBox.warning(self, "오류", f"원본 PDF 없음: {src}")
+            QMessageBox.warning(self, tr("오류"), tr('원본 PDF 없음: {src}').format(src=src))
             return
         bookmarks_raw = []   # (title, page_1based, level)
         self._walk_collect(target, 0, bookmarks_raw)
@@ -3495,13 +3493,13 @@ class BookmarkTree(QWidget):
             self._dirty = False
             self._commit_meta()          # 개체/주석 등 page_meta 변경은 저장
             if not meta_dirty:
-                QMessageBox.information(self, "책갈피 저장", "변경 사항이 없습니다.")
+                QMessageBox.information(self, tr("책갈피 저장"), tr("변경 사항이 없습니다."))
             return
         if not bookmarks_raw:
             # 모든 책갈피 삭제(기존 대비 변경) → 책갈피 없는 PDF로 저장 확인
             if QMessageBox.question(
-                self, "책갈피 저장",
-                "모든 책갈피가 제거되었습니다.\n기존 책갈피를 지운 PDF로 저장할까요?"
+                self, tr("책갈피 저장"),
+                tr("모든 책갈피가 제거되었습니다.\n기존 책갈피를 지운 PDF로 저장할까요?")
             ) != QMessageBox.StandardButton.Yes:
                 return
         # 벤더링된 pdf_bookmarker 사용
@@ -3524,7 +3522,7 @@ class BookmarkTree(QWidget):
             from viewer.file_overwrite import SaveCancelled
             if isinstance(e, SaveCancelled):          # 260915-2: 사용자가 취소 — 편집은 그대로 남는다
                 return
-            QMessageBox.warning(self, "저장 실패", str(e))
+            QMessageBox.warning(self, tr("저장 실패"), str(e))
             return
         self._dirty = False
         self.bookmarksEdited.emit(str(src), str(out))
@@ -3616,7 +3614,7 @@ class BookmarkTree(QWidget):
             d = fitz.open(str(src))
             toc = d.get_toc(simple=True) or []      # [lvl, title, page(1based)]
             d.close()
-            return [((t or "").strip() or "(제목 없음)", int(pg), int(lv) - 1)
+            return [((t or "").strip() or tr("(제목 없음)"), int(pg), int(lv) - 1)
                     for (lv, t, pg) in toc]
         except Exception:
             return []
@@ -3631,7 +3629,7 @@ class BookmarkTree(QWidget):
                 # 파일이지만 페이지 없음 — 스킵
                 self._walk_collect(ch, level, out)
                 continue
-            title = _PAGE_BADGE_RE.sub("", ch.text(0)).rstrip() or "(제목 없음)"
+            title = _PAGE_BADGE_RE.sub("", ch.text(0)).rstrip() or tr("(제목 없음)")
             out.append((title, int(page) + 1, level))
             self._walk_collect(ch, level + 1, out)
 

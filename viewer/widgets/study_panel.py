@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import re
+from viewer.i18n import tr                   # 261008: 화면 문구(다국어 SOT §6)
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent
@@ -147,29 +148,29 @@ class StudyPanel(QWidget):
 
         # 260618-2: 상단 헤더 — 제목(좌) + 동작 버튼 5개(우상단)
         hdr = QHBoxLayout()
-        hdr.addWidget(QLabel("단어장"))
+        hdr.addWidget(QLabel(tr("단어장")))
         hdr.addStretch(1)
         self.btn_add = QPushButton("＋")
-        self.btn_add.setToolTip("새 용어 등록(사용자 사전)")
+        self.btn_add.setToolTip(tr("새 용어 등록(사용자 사전)"))
         self.btn_add.clicked.connect(self.addTermRequested.emit)
         from PyQt6.QtCore import QSize as _QSize
         self.btn_add.setFixedSize(_QSize(26, 26))
         self.btn_add.setStyleSheet("QPushButton{padding:0px;font-size:15px;font-weight:bold;}")
         hdr.addWidget(self.btn_add)
         self.btn_edit = QPushButton("✎")
-        self.btn_edit.setToolTip("선택 단어/용어 편집(한글뜻·영어뜻·예시·참고문헌, 삭제)")
+        self.btn_edit.setToolTip(tr("선택 단어/용어 편집(한글뜻·영어뜻·예시·참고문헌, 삭제)"))
         self.btn_edit.clicked.connect(self._edit_current)
         hdr.addWidget(self.btn_edit)
         self.btn_word = QPushButton("Word")
-        self.btn_word.setToolTip("전체 내용을 Word(.docx)로 저장")
+        self.btn_word.setToolTip(tr("전체 내용을 Word(.docx)로 저장"))
         self.btn_word.clicked.connect(self.exportRequested.emit)
         hdr.addWidget(self.btn_word)
         self.btn_mp3 = QPushButton("mp3")
-        self.btn_mp3.setToolTip("재생내용을 페이지별 mp3로 저장(폴더)")
+        self.btn_mp3.setToolTip(tr("재생내용을 페이지별 mp3로 저장(폴더)"))
         self.btn_mp3.clicked.connect(self.mp3Requested.emit)
         hdr.addWidget(self.btn_mp3)
-        self.btn_build = QPushButton("단어장 생성")
-        self.btn_build.setToolTip("이 PDF 를 OCR·분석해 단어장을 만듭니다 (1회).")
+        self.btn_build = QPushButton(tr("단어장 생성"))
+        self.btn_build.setToolTip(tr("이 PDF 를 OCR·분석해 단어장을 만듭니다 (1회)."))
         self.btn_build.clicked.connect(self.buildRequested.emit)
         hdr.addWidget(self.btn_build)
         # 260611-66: 동작 버튼을 메인 툴바 버튼과 동일 크기(높이 26·아이콘 24)로 통일
@@ -196,7 +197,7 @@ class StudyPanel(QWidget):
         flow = FlowLayout(self._ctrl_widget, spacing=4, center=False)
 
         # 종류
-        flow.addWidget(QLabel("종류"))
+        flow.addWidget(QLabel(tr("종류")))
         self._chk: dict[str, QCheckBox] = {}
         _default_on = {"초급": False, "중급": True, "고급": True,
                        "전문용어": True}                          # 초급 기본 해제
@@ -208,45 +209,45 @@ class StudyPanel(QWidget):
             self._chk[lv] = cb
 
         # 표시 토글 + 접기 + 출처 + 표시 필터 + 본문강조
-        flow.addWidget(QLabel("표시"))
-        self.chk_ko = QCheckBox("한글뜻"); self.chk_ko.setChecked(True)
-        self.chk_en = QCheckBox("영어뜻"); self.chk_en.setChecked(True)
-        self.chk_ex = QCheckBox("예시"); self.chk_ex.setChecked(True)
-        self.chk_ref = QCheckBox("참고문헌")     # 260611-102(P2): 출처 표시/숨김
+        flow.addWidget(QLabel(tr("표시")))
+        self.chk_ko = QCheckBox(tr("한글뜻")); self.chk_ko.setChecked(True)
+        self.chk_en = QCheckBox(tr("영어뜻")); self.chk_en.setChecked(True)
+        self.chk_ex = QCheckBox(tr("예시")); self.chk_ex.setChecked(True)
+        self.chk_ref = QCheckBox(tr("참고문헌"))     # 260611-102(P2): 출처 표시/숨김
         self.chk_ref.setChecked(True)
-        self.chk_ref.setToolTip("사전 뜻 끝에 출처(참고문헌)를 표시합니다.")
-        self.chk_img = QCheckBox("그림")          # 260615-8(P10): 단어 그림 표시
+        self.chk_ref.setToolTip(tr("사전 뜻 끝에 출처(참고문헌)를 표시합니다."))
+        self.chk_img = QCheckBox(tr("그림"))          # 260615-8(P10): 단어 그림 표시
         self.chk_img.setChecked(True)
-        self.chk_img.setToolTip("사전에 그림이 있으면 단어 옆에 표시합니다.")
+        self.chk_img.setToolTip(tr("사전에 그림이 있으면 단어 옆에 표시합니다."))
         for c in (self.chk_ko, self.chk_en, self.chk_ex, self.chk_ref, self.chk_img):
             c.stateChanged.connect(self._render)
             flow.addWidget(c)
-        self.btn_expand = QPushButton("접기")     # 260606-2: 표시 오른쪽으로 이동
+        self.btn_expand = QPushButton(tr("접기"))     # 260606-2: 표시 오른쪽으로 이동
         self.btn_expand.setMaximumWidth(48)
         self.btn_expand.clicked.connect(self._toggle_expand)
         flow.addWidget(self.btn_expand)
         # 260611-102(P2): 사전 출처 선택(일반/○○지침/사용자 …) on/off
         self.btn_src = QToolButton()
-        self.btn_src.setText("출처 ▾")
-        self.btn_src.setToolTip("표시할 사전 출처를 켜고 끕니다(기본/사용자 용어집).")
+        self.btn_src.setText(tr("출처 ▾"))
+        self.btn_src.setToolTip(tr("표시할 사전 출처를 켜고 끕니다(기본/사용자 용어집)."))
         self.btn_src.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.btn_src.setMenu(_StayOpenMenu(self.btn_src))   # 260615-23: 연속 토글
         flow.addWidget(self.btn_src)
         self.cmb_filter = QComboBox()        # 전체단어/선택단어/날짜/초기
-        self.cmb_filter.setToolTip("표시할 단어 집합: 전체/선택단어/날짜별/초기")
+        self.cmb_filter.setToolTip(tr("표시할 단어 집합: 전체/선택단어/날짜별/초기"))
         self._rebuild_filter([])
         self.cmb_filter.currentIndexChanged.connect(self._on_filter_changed)
         flow.addWidget(self.cmb_filter)
-        self.chk_hl = QCheckBox("본문강조")
-        self.chk_hl.setToolTip("이 페이지의 단어장 단어를 메인 뷰어에 옅게 강조합니다.")
+        self.chk_hl = QCheckBox(tr("본문강조"))
+        self.chk_hl.setToolTip(tr("이 페이지의 단어장 단어를 메인 뷰어에 옅게 강조합니다."))
         self.chk_hl.toggled.connect(self.autoHighlightChanged.emit)
         flow.addWidget(self.chk_hl)
 
         # 읽기 — ▶/■ 토글 + 재생구간 + 재생내용 + 선택시읽기
-        flow.addWidget(QLabel("읽기"))
+        flow.addWidget(QLabel(tr("읽기")))
         self.btn_play = QToolButton()
         self.btn_play.setText("▶")
-        self.btn_play.setToolTip("단어장 자동 읽기 시작/정지")
+        self.btn_play.setToolTip(tr("단어장 자동 읽기 시작/정지"))
         self.btn_play.setStyleSheet("QToolButton{color:#1565c0;font-size:15px;font-weight:bold;}")
         self.btn_play.clicked.connect(self._on_play_clicked)
         flow.addWidget(self.btn_play)
@@ -256,39 +257,39 @@ class StudyPanel(QWidget):
         flow.addWidget(self.btn_readmode)
         # 재생내용 풀다운(한글뜻/영어뜻/예시)
         self.btn_content = QToolButton()
-        self.btn_content.setText("재생내용 ▾")
+        self.btn_content.setText(tr("재생내용 ▾"))
         self.btn_content.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         cm = QMenu(self.btn_content)
-        self.act_play_ko = QAction("한글뜻", cm, checkable=True)
-        self.act_play_en = QAction("영어뜻", cm, checkable=True)
-        self.act_play_ex = QAction("예시", cm, checkable=True)
+        self.act_play_ko = QAction(tr("한글뜻"), cm, checkable=True)
+        self.act_play_en = QAction(tr("영어뜻"), cm, checkable=True)
+        self.act_play_ex = QAction(tr("예시"), cm, checkable=True)
         for a in (self.act_play_ko, self.act_play_en, self.act_play_ex):
             cm.addAction(a)
         self.btn_content.setMenu(cm)
         flow.addWidget(self.btn_content)
-        self.chk_speak_sel = QCheckBox("선택시읽기")
+        self.chk_speak_sel = QCheckBox(tr("선택시읽기"))
         self.chk_speak_sel.setChecked(True)
-        self.chk_speak_sel.setToolTip("단어 선택(목록/본문)시 그 단어를 읽습니다.")
+        self.chk_speak_sel.setToolTip(tr("단어 선택(목록/본문)시 그 단어를 읽습니다."))
         flow.addWidget(self.chk_speak_sel)
 
         # 정렬 — '선택단어로 저장(▲)' 버튼 왼쪽으로(260618-2)
-        flow.addWidget(QLabel("정렬"))
+        flow.addWidget(QLabel(tr("정렬")))
         self.sort_combo = QComboBox()
         self.sort_combo.addItems([SORT_ORDER, SORT_ALPHA, SORT_FREQ])
         self.sort_combo.currentIndexChanged.connect(self._render)
         flow.addWidget(self.sort_combo)
         self.btn_mark = QToolButton(); self.btn_mark.setText("▲")
-        self.btn_mark.setToolTip("선택단어로 저장")
+        self.btn_mark.setToolTip(tr("선택단어로 저장"))
         self.btn_mark.clicked.connect(self.markSelectedRequested.emit)
         flow.addWidget(self.btn_mark)
         self.btn_del = QToolButton(); self.btn_del.setText("▼")
-        self.btn_del.setToolTip("리스트에서 삭제(모든 페이지)")
+        self.btn_del.setToolTip(tr("리스트에서 삭제(모든 페이지)"))
         self.btn_del.clicked.connect(self.deleteWordRequested.emit)
         flow.addWidget(self.btn_del)
 
         root.addWidget(self._ctrl_widget)
 
-        self.lbl_status = QLabel("단어장이 없습니다. [단어장 생성] 을 누르세요.")
+        self.lbl_status = QLabel(tr("단어장이 없습니다. [단어장 생성] 을 누르세요."))
         self.lbl_status.setWordWrap(True)
         self.lbl_status.setStyleSheet("color:#666;")
         root.addWidget(self.lbl_status)
@@ -313,7 +314,7 @@ class StudyPanel(QWidget):
     # --- 재생구간 메뉴(구간 | 빠르기 | 성우) — 빠르기/성우는 본화면과 공유 ---
     def _make_readmode_button(self) -> QToolButton:
         btn = QToolButton()
-        btn.setText("재생구간 ▾")
+        btn.setText(tr("재생구간 ▾"))
         btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(btn)
         g = QActionGroup(menu); g.setExclusive(True)
@@ -323,15 +324,15 @@ class StudyPanel(QWidget):
             a.triggered.connect(lambda _c, v=label: self._set_read_mode(v))
             g.addAction(a); menu.addAction(a)
         menu.addSeparator()
-        rm = menu.addMenu("빠르기")
+        rm = menu.addMenu(tr("빠르기"))
         gr = QActionGroup(rm); gr.setExclusive(True)
         for label, rate in RATES:
             a = QAction(label, rm, checkable=True); a.setChecked(rate == 0)
             a.triggered.connect(lambda _c, r=rate: self.speedChanged.emit(r))
             gr.addAction(a); rm.addAction(a)
-        self._voice_menu = menu.addMenu("성우")
+        self._voice_menu = menu.addMenu(tr("성우"))
         self._voice_group = QActionGroup(self._voice_menu); self._voice_group.setExclusive(True)
-        a0 = QAction("자동(언어별)", self._voice_menu, checkable=True); a0.setChecked(True)
+        a0 = QAction(tr("자동(언어별)"), self._voice_menu, checkable=True); a0.setChecked(True)
         a0.triggered.connect(lambda: self.voiceChanged.emit(""))
         self._voice_group.addAction(a0); self._voice_menu.addAction(a0)
         btn.setMenu(menu)
@@ -354,7 +355,7 @@ class StudyPanel(QWidget):
 
     def set_building(self, on: bool) -> None:
         self.btn_build.setEnabled(not on)
-        self.btn_build.setText("⏳ 생성 중..." if on else "단어장 생성")
+        self.btn_build.setText(tr("⏳ 생성 중...") if on else tr("단어장 생성"))
 
     def set_page(self, page: int) -> None:
         self._page = page
@@ -432,7 +433,7 @@ class StudyPanel(QWidget):
         menu.clear()
         self._src_submenus = []          # 하위메뉴 참조 유지(GC 방지)
         if not sources:
-            a = menu.addAction("(사전 없음)"); a.setEnabled(False)
+            a = menu.addAction(tr("(사전 없음)")); a.setEnabled(False)
             return
 
         def _add(parent, s):
@@ -549,7 +550,7 @@ class StudyPanel(QWidget):
                 self.cmb_filter.setCurrentIndex(i)
         if "expanded" in d:
             self._expanded = bool(d["expanded"])
-            self.btn_expand.setText("접기" if self._expanded else "펼치기")
+            self.btn_expand.setText(tr("접기") if self._expanded else tr("펼치기"))
         self._render()
 
     def is_auto_highlight(self) -> bool:
@@ -614,9 +615,9 @@ class StudyPanel(QWidget):
         total = len(self._rows)
         if total == 0:
             self.lbl_status.setText(
-                f"p{self._page+1}: 표시할 단어가 없습니다. (미생성이면 [단어장 생성])")
+                tr('p{page}: 표시할 단어가 없습니다. (미생성이면 [단어장 생성])').format(page=self._page + 1))
         else:
-            self.lbl_status.setText(f"p{self._page+1}: {len(shown)}/{total} 단어")
+            self.lbl_status.setText(tr('p{page}: {n}/{total} 단어').format(page=self._page + 1, n=len(shown), total=total))
         show_ko, show_en, show_ex = (self.chk_ko.isChecked(),
                                      self.chk_en.isChecked(), self.chk_ex.isChecked())
         show_ref = self.chk_ref.isChecked()
@@ -666,7 +667,7 @@ class StudyPanel(QWidget):
                     _add_def(top, d)
             if show_ex:
                 for e in (r.get("examples") or []):
-                    txt = "예) " + _clean_markup(e["example"])
+                    txt = tr('예) {clean_markup}').format(clean_markup=_clean_markup(e['example']))
                     # 260615-10(P12): 참고문헌 토글 시 예문의 구분/출처명 표기
                     if show_ref and e.get("source") and e.get("source") != "book":
                         txt += f"  — {e['source']}"
@@ -679,10 +680,10 @@ class StudyPanel(QWidget):
         self._expanded = not self._expanded
         if self._expanded:
             self.tree.expandAll()
-            self.btn_expand.setText("접기")
+            self.btn_expand.setText(tr("접기"))
         else:
             self.tree.collapseAll()
-            self.btn_expand.setText("펼치기")
+            self.btn_expand.setText(tr("펼치기"))
 
     def _top_of(self, item) -> Optional[QTreeWidgetItem]:
         if item is None:

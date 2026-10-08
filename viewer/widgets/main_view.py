@@ -106,14 +106,15 @@ MV_DEFAULT_PENS = [
 #   실제 크기**이고 워드·한글과 같은 기준이라 예측이 된다.
 #   `size`(비율)는 **읽기 전용 하위호환**으로만 남는다 — 옛 자료를 열면 그 페이지의 pt 로
 #   1회 환산해 보이던 크기를 그대로 유지한다(`_text_qfont`).
+# 261008(다국어 SOT §5): 프리셋 이름은 **키**(획 데이터 style 에 저장) — 한글 그대로, 표시할 때만 tr()
 MV_TEXT_STYLES = [
-    ("본문", {"size_pt": 18.0, "color": "#111111", "bold": False, "italic": False,
+    (tr_noop("본문"), {"size_pt": 18.0, "color": "#111111", "bold": False, "italic": False,
               "bg": None, "border": None}),
-    ("제목", {"size_pt": 34.0, "color": "#0b3d91", "bold": True, "italic": False,
+    (tr_noop("제목"), {"size_pt": 34.0, "color": "#0b3d91", "bold": True, "italic": False,
               "bg": None, "border": None}),
-    ("메모", {"size_pt": 17.0, "color": "#5a4500", "bold": False, "italic": False,
+    (tr_noop("메모"), {"size_pt": 17.0, "color": "#5a4500", "bold": False, "italic": False,
               "bg": "#fff7c0", "border": "#d9c25a"}),
-    ("강조", {"size_pt": 20.0, "color": "#c0143c", "bold": True, "italic": False,
+    (tr_noop("강조"), {"size_pt": 20.0, "color": "#c0143c", "bold": True, "italic": False,
               "bg": "#ffe2e8", "border": "#c0143c"}),
 ]
 # 260907-1: 글자 크기·자간의 허용 범위(pt). 폰트엔진 폭주·크래시 방지 겸 UI 상한.
@@ -184,10 +185,10 @@ class _TextBoxBar(QWidget):
     적용 대상은 **그 박스의 글 전체**다. 글을 쓰는 중이거나 박스를 선택했을 때 보인다.
     디자인 근거: 화면 디자인 SOT §2 — 본문 위에 겹치는 도구는 작고 낮은 대비로."""
 
-    SIZE_BTNS = (("▲", "글자 크게 (+1pt)", 1.0, 0.0),
-                 ("▼", "글자 작게 (-1pt)", -1.0, 0.0))
-    SPACING_BTNS = (("◀", "자간 좁게 (-0.5pt)", 0.0, -0.5),
-                    ("▶", "자간 넓게 (+0.5pt)", 0.0, 0.5))
+    SIZE_BTNS = (("▲", tr_noop("글자 크게 (+1pt)"), 1.0, 0.0),
+                 ("▼", tr_noop("글자 작게 (-1pt)"), -1.0, 0.0))
+    SPACING_BTNS = (("◀", tr_noop("자간 좁게 (-0.5pt)"), 0.0, -0.5),
+                    ("▶", tr_noop("자간 넓게 (+0.5pt)"), 0.0, 0.5))
     # 옛 이름(한 덩이 시절) — 검사·외부 참조 호환
     BTNS = SIZE_BTNS + SPACING_BTNS
 
@@ -210,7 +211,7 @@ class _TextBoxBar(QWidget):
         for glyph, tip, ds, dsp in (buttons or self.BTNS):
             b = QToolButton(self)
             b.setText(glyph)
-            b.setToolTip(tip)
+            b.setToolTip(tr(tip))
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             b.setAutoRepeat(True)
             b.setAutoRepeatDelay(400)
@@ -1630,7 +1631,7 @@ class MainView(QWidget):
 
         # 260606-30: 빈 창(문서 없음) 안내 — 2단 보기에서 오른쪽 창이 비었을 때 중앙 표시
         # 260618-10: 뷰포트에 부모로 두어 좌/우·상/하 정확히 중앙에 오도록(프레임 오프셋 제거)
-        self._empty_label = QLabel("이 창을 선택 후\n책갈피를 선택하세요",
+        self._empty_label = QLabel(tr("이 창을 선택 후\n책갈피를 선택하세요"),
                                    self.view.viewport() or self.view)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_label.setStyleSheet(
@@ -1704,7 +1705,7 @@ class MainView(QWidget):
         self._shape_press_geom = None
         # 260611-74(Phase2): 글쓰기(텍스트 박스) + 지시선
         self._text_kind = "text"          # 'text'(글쓰기) | 'leader'(지시선)
-        self._text_style = "본문"          # 현재 적용 스타일 이름
+        self._text_style = tr("본문")          # 현재 적용 스타일 이름
         self._text_editor = None          # 인라인 QTextEdit(편집 중)
         self._text_edit_idx = -1          # 편집 중 _page_strokes 인덱스
         self._leader_drag = None          # {"origin":[fx,fy], "cur":QPoint} 지시선 끌기
@@ -1735,7 +1736,7 @@ class MainView(QWidget):
         self._rotations = {}
         # 260609-14(D5): 숨김 페이지 표시 — 페이지 우측 끝 회색 띠 '숨김'
         self._hidden_pages = set()
-        self._hidden_band = QLabel("숨\n김", self.view)
+        self._hidden_band = QLabel(tr("숨\n김"), self.view)
         self._hidden_band.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._hidden_band.setStyleSheet(
             "background:rgba(110,110,110,0.92);color:white;font-weight:bold;")
@@ -1806,15 +1807,15 @@ class MainView(QWidget):
         from viewer import secure_store
         name = _P(str(file_path)).name
         for _attempt in range(3):
-            dlg = QDialog(self); dlg.setWindowTitle("암호 입력")
+            dlg = QDialog(self); dlg.setWindowTitle(tr("암호 입력"))
             v = QVBoxLayout(dlg)
-            v.addWidget(QLabel(f"'{name}'\n암호가 설정된 PDF입니다. 암호를 입력하세요:"))
+            v.addWidget(QLabel(tr("'{name}'\n암호가 설정된 PDF입니다. 암호를 입력하세요:").format(name=name)))
             ed = QLineEdit(); ed.setEchoMode(QLineEdit.EchoMode.Password); v.addWidget(ed)
-            chk = QCheckBox("이 파일의 암호 기억 (이 PC·계정에서만)")
+            chk = QCheckBox(tr("이 파일의 암호 기억 (이 PC·계정에서만)"))
             chk.setChecked(secure_store.available()); chk.setEnabled(secure_store.available())
             v.addWidget(chk)
             row = QHBoxLayout(); row.addStretch(1)
-            ok_b = QPushButton("확인"); ca_b = QPushButton("취소")
+            ok_b = QPushButton(tr("확인")); ca_b = QPushButton(tr("취소"))
             ok_b.setDefault(True); row.addWidget(ok_b); row.addWidget(ca_b)
             v.addLayout(row)
             ok_b.clicked.connect(dlg.accept); ca_b.clicked.connect(dlg.reject)
@@ -1827,7 +1828,7 @@ class MainView(QWidget):
                 if chk.isChecked():
                     secure_store.remember_password(file_path, pw)
                 return True
-            QMessageBox.warning(self, "암호 오류", "암호가 올바르지 않습니다.")
+            QMessageBox.warning(self, tr("암호 오류"), tr("암호가 올바르지 않습니다."))
         return False
 
     def load_document(self, file_path, page_index: int = 0, query: str = "") -> bool:
@@ -3007,7 +3008,7 @@ class MainView(QWidget):
         self._draw_mode_btn = _DblTool()
         self._draw_mode_btn.setFixedSize(30, H)
         self._draw_mode_btn.setText(self._MODE_GLYPH[0])
-        self._draw_mode_btn.setToolTip("선긋기 — 클릭:선택/해제, 더블클릭:선 종류 변경")
+        self._draw_mode_btn.setToolTip(tr("선긋기 — 클릭:선택/해제, 더블클릭:선 종류 변경"))
         self._draw_mode_btn.singleClick.connect(self._toggle_line)
         self._draw_mode_btn.doubleClick.connect(self._cycle_draw_mode)
         hb.addWidget(self._draw_mode_btn)
@@ -3015,12 +3016,12 @@ class MainView(QWidget):
         from PyQt6.QtWidgets import QMenu as _QMenu
         self._shape_btn = _DblTool()
         self._shape_btn.setFixedSize(46, H)        # 글리프+풀다운 화살표가 다 보이게 폭 확보
-        self._shape_btn.setToolTip("도형 — 클릭:선택/해제, 더블클릭:종류 변경, ▾:채움")
+        self._shape_btn.setToolTip(tr("도형 — 클릭:선택/해제, 더블클릭:종류 변경, ▾:채움"))
         self._shape_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self._shape_btn.singleClick.connect(self._toggle_shape)
         self._shape_btn.doubleClick.connect(self._cycle_shape_kind)
         sm = _QMenu(self._shape_btn)
-        for key, label in (("none", "채움 없음"), ("semi", "반투명 채움"), ("full", "채움")):
+        for key, label in (("none", tr("채움 없음")), ("semi", tr("반투명 채움")), ("full", tr("채움"))):
             a = sm.addAction(label); a.setCheckable(True); a.setData(key)
             a.triggered.connect(lambda _=False, k=key: self._set_shape_fill(k))
         self._shape_menu = sm; self._shape_btn.setMenu(sm)
@@ -3030,7 +3031,7 @@ class MainView(QWidget):
         self._text_btn.setFixedSize(46, H)
         self._text_btn.setStyleSheet("QToolButton{font-size:15px;font-weight:bold;}")
         self._text_btn.setText(self._TEXT_GLYPH["text"])
-        self._text_btn.setToolTip("글쓰기 — 클릭:선택/해제, 더블클릭:글쓰기↔지시선, ▾:스타일")
+        self._text_btn.setToolTip(tr("글쓰기 — 클릭:선택/해제, 더블클릭:글쓰기↔지시선, ▾:스타일"))
         self._text_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self._text_btn.singleClick.connect(self._toggle_text)
         self._text_btn.doubleClick.connect(self._cycle_text_kind)
@@ -3043,7 +3044,7 @@ class MainView(QWidget):
         #   무엇을 하는 단추인지 글자보다 그림이 빨리 읽힌다(디자인 SOT §2).
         self._draw_select_btn = QPushButton(); self._draw_select_btn.setFixedSize(28, H)
         self._draw_select_btn.setCheckable(True)
-        self._draw_select_btn.setToolTip("개체 선택(이미지 이동·크기·삭제)")
+        self._draw_select_btn.setToolTip(tr("개체 선택(이미지 이동·크기·삭제)"))
         _sp = resource_path("icon_select_box.png")
         if _sp:
             self._draw_select_btn.setIcon(QIcon(_sp))
@@ -3055,8 +3056,8 @@ class MainView(QWidget):
         # 260611-1: 지우개 2종(얇게/두껍게)·청소 — 첨부 아이콘 사용(없으면 글리프 폴백)
         self._draw_erase_btns = []
         _ico_sz = QSize(H - 4, H - 4)
-        for k, t, fn, glyph in [(0, "지우개(얇게)", "icon_eraser_thin.png", "⌫"),
-                                (1, "지우개(두껍게)", "icon_eraser_thick.png", "⌦")]:
+        for k, t, fn, glyph in [(0, tr("지우개(얇게)"), "icon_eraser_thin.png", "⌫"),
+                                (1, tr("지우개(두껍게)"), "icon_eraser_thick.png", "⌦")]:
             b = QPushButton(); b.setFixedSize(28, H); b.setCheckable(True)
             b.setToolTip(t)
             _ip = resource_path(fn)
@@ -3066,23 +3067,23 @@ class MainView(QWidget):
                 b.setText(glyph)
             b.clicked.connect(lambda _=False, kk=k: self._on_draw_erase(kk))
             hb.addWidget(b); self._draw_erase_btns.append(b)
-        bclr = QPushButton(); bclr.setFixedSize(30, H); bclr.setToolTip("청소(현재 페이지 선긋기 지움)")
+        bclr = QPushButton(); bclr.setFixedSize(30, H); bclr.setToolTip(tr("청소(현재 페이지 선긋기 지움)"))
         # 260908-4: 빗자루 → **문서+지우개** 그림. 옆의 두 지우개와 한 벌로 읽힌다.
         _bp = resource_path("icon_eraser_page.png") or resource_path("icon_broom.png")
         if _bp:
             bclr.setIcon(QIcon(_bp)); bclr.setIconSize(_ico_sz)
         else:
-            bclr.setText("청소")
+            bclr.setText(tr("청소"))
         bclr.clicked.connect(self.clear_page_drawings)
         hb.addWidget(bclr)
         # 260611-80: 되돌리기 / 다시실행
         self._undo_btn = QPushButton("↶"); self._undo_btn.setFixedSize(28, H)
-        self._undo_btn.setToolTip("되돌리기 (Ctrl+Z)")
+        self._undo_btn.setToolTip(tr("되돌리기 (Ctrl+Z)"))
         self._undo_btn.clicked.connect(self.undo_strokes)
         self._undo_btn.setEnabled(False)
         hb.addWidget(self._undo_btn)
         self._redo_btn = QPushButton("↷"); self._redo_btn.setFixedSize(28, H)
-        self._redo_btn.setToolTip("다시실행 (Ctrl+Y)")
+        self._redo_btn.setToolTip(tr("다시실행 (Ctrl+Y)"))
         self._redo_btn.clicked.connect(self.redo_strokes)
         self._redo_btn.setEnabled(False)
         hb.addWidget(self._redo_btn)
@@ -3160,12 +3161,12 @@ class MainView(QWidget):
 
     # 260611-2: 선 종류 3단계 — 글리프/이름
     _MODE_GLYPH = ("─", "▬", "〜")
-    _MODE_NAME = ("직선", "하이라이트", "자유곡선")
+    _MODE_NAME = (tr_noop("직선"), tr_noop("하이라이트"), tr_noop("자유곡선"))   # 표시는 tr()
     # 260611-69/71: 도형 종류 순서. (261008-8: 글리프 대신 그린 아이콘 — _shape_kind_icon)
     _SHAPE_KIND_ORDER = ["rect", "round", "circle"]
     # 260611-74: 글쓰기 버튼 글리프 — 글쓰기=T, 지시선=T+지시(↘)
     _TEXT_GLYPH = {"text": "T", "leader": "T↘"}
-    _TEXT_NAME = {"text": "글쓰기", "leader": "지시선 글쓰기"}
+    _TEXT_NAME = {"text": tr_noop("글쓰기"), "leader": tr_noop("지시선 글쓰기")}   # 표시는 tr()
     # 클래스 기본값 — _build_ui→_update_text_button 이 __init__ 상태블록보다 먼저 호출됨
     _text_kind = "text"
     _text_style = "본문"
@@ -3330,7 +3331,7 @@ class MainView(QWidget):
         self._text_styles = [dict(s) for s in (styles or [])] or self._seed_text_styles()
         names = [s.get("name") for s in self._text_styles]
         if self._text_style not in names:
-            self._text_style = names[0] if names else "본문"
+            self._text_style = names[0] if names else tr("본문")
         self._rebuild_text_menu()
         self._set_text_style(self._text_style)   # 편집된 스타일 값을 기본값에 즉시 반영
 
@@ -3380,8 +3381,7 @@ class MainView(QWidget):
         self._text_btn.setText(self._TEXT_GLYPH.get(self._text_kind, "T"))
         self._text_btn.setStyleSheet(self._dbl_css(self._draw_kind == "text", font_px=15))
         self._text_btn.setToolTip(
-            f"{self._TEXT_NAME.get(self._text_kind,'글쓰기')} — 클릭:선택/해제, "
-            f"더블클릭:글쓰기↔지시선, ▾:스타일({self._text_style})")
+            tr('{get} — 클릭:선택/해제, 더블클릭:글쓰기↔지시선, ▾:스타일({text_style})').format(get=tr(self._TEXT_NAME.get(self._text_kind, self._TEXT_NAME["text"])), text_style=tr(self._text_style)))
         if hasattr(self, "_text_menu"):
             for a in self._text_menu.actions():
                 a.setChecked(a.data() == self._text_style)
@@ -3392,7 +3392,7 @@ class MainView(QWidget):
         if hasattr(self, "_draw_mode_btn"):
             self._draw_mode_btn.setText(self._MODE_GLYPH[self._draw_line_mode])
             self._draw_mode_btn.setToolTip(
-                f"선 종류: {self._MODE_NAME[self._draw_line_mode]} (클릭해 전환)")
+                tr('선 종류: {MODE_NAME} (클릭해 전환)').format(MODE_NAME=tr(self._MODE_NAME[self._draw_line_mode])))
 
     def _highlight_alpha(self):
         """260611-2: 하이라이트 전용 불투명도(%) — 옵션값 또는 기본 35."""
@@ -5488,7 +5488,7 @@ class MainView(QWidget):
 
     def _make_hl_button(self, ln):
         from PyQt6.QtWidgets import QPushButton as _QPB
-        name = str(ln.get("name", "")) or "링크"
+        name = str(ln.get("name", "")) or tr("링크")
         tag = _hyperlink_icon(ln)
         btn = _QPB(f"{tag} {name}", self._hl_overlay)
         btn.setToolTip(str(ln.get("target", "")))

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from viewer.i18n import tr                   # 261008: 화면 문구(다국어 SOT §6)
 from PyQt6.QtGui import QFont, QTextCharFormat, QColor, QTextCursor
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
                              QToolButton, QCheckBox, QTextEdit, QPushButton,
@@ -142,28 +143,28 @@ class TextPanel(QWidget):
         bar = QHBoxLayout()
         bar.setSpacing(3)
         self.cmb_style = QComboBox()
-        self.cmb_style.addItem("제목", "title")
-        self.cmb_style.addItem("내용", "body")
-        self.cmb_style.setToolTip("고른 줄의 스타일 / 아래 값이 적용될 스타일")
+        self.cmb_style.addItem(tr("제목"), "title")
+        self.cmb_style.addItem(tr("내용"), "body")
+        self.cmb_style.setToolTip(tr("고른 줄의 스타일 / 아래 값이 적용될 스타일"))
         self.cmb_style.currentIndexChanged.connect(self._on_style_pick)
-        bar.addWidget(QLabel("스타일"))
+        bar.addWidget(QLabel(tr("스타일")))
         bar.addWidget(self.cmb_style)
 
         self.cmb_font = QComboBox()
         self.cmb_font.addItems(_FONTS)
-        self.cmb_font.setToolTip("이 스타일의 글꼴")
+        self.cmb_font.setToolTip(tr("이 스타일의 글꼴"))
         self.cmb_font.currentTextChanged.connect(lambda t: self._set_style("family", t))
         bar.addWidget(self.cmb_font, 1)
 
         self.sp_size = QDoubleSpinBox()
         self.sp_size.setRange(6.0, 72.0); self.sp_size.setSingleStep(1.0)
         self.sp_size.setDecimals(0); self.sp_size.setSuffix(" pt")
-        self.sp_size.setToolTip("글자 크기")
+        self.sp_size.setToolTip(tr("글자 크기"))
         self.sp_size.valueChanged.connect(lambda x: self._set_style("size_pt", float(x)))
         bar.addWidget(self.sp_size)
 
         self.btn_bold = QToolButton(); self.btn_bold.setText("B")
-        self.btn_bold.setCheckable(True); self.btn_bold.setToolTip("굵게")
+        self.btn_bold.setCheckable(True); self.btn_bold.setToolTip(tr("굵게"))
         self.btn_bold.setStyleSheet("QToolButton{font-weight:bold;}")
         self.btn_bold.toggled.connect(lambda b: self._set_style("bold", bool(b)))
         bar.addWidget(self.btn_bold)
@@ -186,63 +187,63 @@ class TextPanel(QWidget):
         self.sp_sp.setRange(-2.0, 20.0); self.sp_sp.setSingleStep(0.5)
         self.sp_sp.setDecimals(1); self.sp_sp.setSuffix(" pt")
         self.sp_sp.valueChanged.connect(lambda x: self._set_style("spacing_pt", float(x)))
-        bar2.addWidget(_pair("자간", self.sp_sp))
+        bar2.addWidget(_pair(tr("자간"), self.sp_sp))
         self.sp_ls = QDoubleSpinBox()
         self.sp_ls.setRange(0.8, 3.0); self.sp_ls.setSingleStep(0.1)
-        self.sp_ls.setDecimals(1); self.sp_ls.setSuffix(" 배")
+        self.sp_ls.setDecimals(1); self.sp_ls.setSuffix(tr(" 배"))
         self.sp_ls.valueChanged.connect(lambda x: self._set_style("line_spacing", float(x)))
-        bar2.addWidget(_pair("줄간격", self.sp_ls))
-        self.cb_omit = QCheckBox("표 생략")
-        self.cb_omit.setToolTip("표 안 내용을 '[표 n열 × m행]' 한 줄로 줄입니다")
+        bar2.addWidget(_pair(tr("줄간격"), self.sp_ls))
+        self.cb_omit = QCheckBox(tr("표 생략"))
+        self.cb_omit.setToolTip(tr("표 안 내용을 '[표 n열 × m행]' 한 줄로 줄입니다"))
         self.cb_omit.toggled.connect(lambda _: self.reload())
         bar2.addWidget(self.cb_omit)
         # 260910(SOT §3.7, 사용자 요청): 끊긴 문장을 이어서 보여 준다.
-        self.cb_join = QCheckBox("문장 잇기")
+        self.cb_join = QCheckBox(tr("문장 잇기"))
         self.cb_join.setChecked(True)
-        self.cb_join.setToolTip("종이 때문에 아랫줄로 끊긴 문장을 이어서 보여 줍니다. "
-                                "제목·표 제목·표 칸은 잇지 않습니다.")
+        self.cb_join.setToolTip(tr("종이 때문에 아랫줄로 끊긴 문장을 이어서 보여 줍니다. "
+                                "제목·표 제목·표 칸은 잇지 않습니다."))
         self.cb_join.toggled.connect(lambda _: self.reload())
         bar2.addWidget(self.cb_join)
         v.addWidget(self.bar2_widget)
 
         self.bar3_widget = QWidget(self)
         bar3 = FlowLayout(self.bar3_widget, spacing=3, center=False)
-        self.btn_hl = QPushButton("하이라이트")
-        self.btn_hl.setToolTip("고른 글을 칠합니다")
+        self.btn_hl = QPushButton(tr("하이라이트"))
+        self.btn_hl.setToolTip(tr("고른 글을 칠합니다"))
         self.btn_hl.clicked.connect(self._on_highlight)
         # 260912-7(사용자 지시): 켜 두면 여기서 칠할 때 **본문에도** 같은 자리를 칠한다.
         #   본문 쪽 색은 그리기 도구의 **선 1**(입력 SOT §2.7) — 사용자가 펜 설정에서
         #   바꾸면 그 색을 따른다. 기본은 꺼짐: 본문에 자국을 남기는 일이라 묻지 않고
         #   하지 않는다.
-        self.cb_mark_pdf = QCheckBox("본문에도 표시")
+        self.cb_mark_pdf = QCheckBox(tr("본문에도 표시"))
         self.cb_mark_pdf.setToolTip(
-            "켜면 여기서 칠한 곳을 본문에도 칠합니다(그리기 도구의 선 1 색). "
-            "본문의 자국은 지우개로 지울 수 있습니다.")
-        self.btn_style_apply = QPushButton("스타일 적용")
-        self.btn_style_apply.setToolTip("고른 줄을 위에서 고른 스타일(제목/내용)로 바꿉니다")
+            tr("켜면 여기서 칠한 곳을 본문에도 칠합니다(그리기 도구의 선 1 색). "
+            "본문의 자국은 지우개로 지울 수 있습니다."))
+        self.btn_style_apply = QPushButton(tr("스타일 적용"))
+        self.btn_style_apply.setToolTip(tr("고른 줄을 위에서 고른 스타일(제목/내용)로 바꿉니다"))
         self.btn_style_apply.clicked.connect(self.apply_style_to_selection)
         bar3.addWidget(self.btn_style_apply)
         bar3.addWidget(self.cb_mark_pdf)
         # 260908-8(사용자 지시): **늘 보인다.** 종전에는 글자가 아예 없을 때만 나와서,
         #   OCR 이 잘못 읽은 쪽을 다시 읽힐 방법이 없었다.
-        self.btn_ocr = QPushButton("OCR 다시 읽기")
-        self.btn_ocr.setToolTip("이 쪽을 OCR 로 다시 읽습니다. 빈 공간의 잡음 글자는 같은 규칙으로 걸러집니다.")
+        self.btn_ocr = QPushButton(tr("OCR 다시 읽기"))
+        self.btn_ocr.setToolTip(tr("이 쪽을 OCR 로 다시 읽습니다. 빈 공간의 잡음 글자는 같은 규칙으로 걸러집니다."))
         self.btn_ocr.clicked.connect(self.ocrRequested.emit)
         bar3.addWidget(self.btn_ocr)
         bar3.addWidget(self.btn_hl)
-        self.btn_bm = QPushButton("책갈피로")
-        self.btn_bm.setToolTip("칠한 곳으로 책갈피를 만듭니다(저장은 책갈피창 💾)")
+        self.btn_bm = QPushButton(tr("책갈피로"))
+        self.btn_bm.setToolTip(tr("칠한 곳으로 책갈피를 만듭니다(저장은 책갈피창 💾)"))
         self.btn_bm.clicked.connect(self._on_make_bookmarks)
         bar3.addWidget(self.btn_bm)
-        self.btn_apply = QPushButton("PDF 에 반영")
-        self.btn_apply.setToolTip("고친 글을 OCR 텍스트층에 다시 적습니다(원본 백업)")
+        self.btn_apply = QPushButton(tr("PDF 에 반영"))
+        self.btn_apply.setToolTip(tr("고친 글을 OCR 텍스트층에 다시 적습니다(원본 백업)"))
         self.btn_apply.clicked.connect(self.applyToPdfRequested.emit)
         bar3.addWidget(self.btn_apply)
         self.btn_word = QToolButton()
-        self.btn_word.setText("Word 저장")
+        self.btn_word.setText(tr("Word 저장"))
         self.btn_word.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         m = QMenu(self.btn_word)
-        for key, label in (("page", "현재 쪽"), ("range", "쪽 범위…"), ("all", "문서 전체")):
+        for key, label in (("page", tr("현재 쪽")), ("range", tr("쪽 범위…")), ("all", tr("문서 전체"))):
             a = m.addAction(label)
             a.triggered.connect(lambda _=False, k=key: self.exportWordRequested.emit(k))
         self.btn_word.setMenu(m)
@@ -313,7 +314,7 @@ class TextPanel(QWidget):
                 self._rows[i]["style"] = key
                 n += 1
         self._apply_styles()
-        self.info.setText(f"{n}줄을 '{'제목' if key == 'title' else '내용'}' 으로 바꿨습니다.")
+        self.info.setText(tr("{n}줄을 '{v}' 으로 바꿨습니다.").format(n=n, v=tr('제목') if key == 'title' else tr('내용')))
 
     def _set_style(self, key, value):
         self._styles[self._cur_style_key()][key] = value
@@ -373,13 +374,13 @@ class TextPanel(QWidget):
         self._apply_styles()
         n_t = sum(1 for r in self._rows if r.get("style") == "title")
         n_tb = sum(1 for r in self._rows if r.get("kind") == "table")
-        msg = f"p.{self._page + 1} · {len(self._rows)}줄 (제목 {n_t}"
+        msg = tr('p.{page} · {n}줄 (제목 {n_t}').format(page=self._page + 1, n=len(self._rows), n_t=n_t)
         if n_tb:
-            msg += f" · 표 {n_tb}"
+            msg += tr(' · 표 {n_tb}').format(n_tb=n_tb)
         msg += ")"
         self.info.setText(note or msg)
         # 260908-8: 단추는 늘 보인다(위 참조). 글자가 아예 없을 때만 문구를 바꿔 안내한다.
-        self.btn_ocr.setText("OCR 로 읽기" if not self._rows else "OCR 다시 읽기")
+        self.btn_ocr.setText(tr("OCR 로 읽기") if not self._rows else tr("OCR 다시 읽기"))
 
     def set_busy(self, msg: str) -> None:
         """260908-3: 워커가 뽑는 동안 무엇을 하는지 알린다(응답성 SOT §4 ④)."""
@@ -516,7 +517,7 @@ class TextPanel(QWidget):
             self._loading = False
         self.lineEdited.emit(self._page, i, merged, a.get("orig") or "")
         self.lineFocused.emit(self._page, list(rects))
-        self.info.setText("두 줄을 합쳤습니다 — 반영하면 두 자리가 하나로 들어갑니다.")
+        self.info.setText(tr("두 줄을 합쳤습니다 — 반영하면 두 자리가 하나로 들어갑니다."))
         return True
 
     def _resync_blocks(self) -> None:
@@ -531,12 +532,12 @@ class TextPanel(QWidget):
                 self.edit.setTextCursor(QTextCursor(blk))
         finally:
             self._loading = False
-        self.info.setText("줄은 지우거나 새로 만들 수 없습니다 — 내용을 비우면 그 줄이 지워집니다.")
+        self.info.setText(tr("줄은 지우거나 새로 만들 수 없습니다 — 내용을 비우면 그 줄이 지워집니다."))
 
     def _on_highlight(self):
         cur = self.edit.textCursor()
         if not cur.hasSelection():
-            self.info.setText("칠할 글을 먼저 고르세요.")
+            self.info.setText(tr("칠할 글을 먼저 고르세요."))
             return
         fmt = QTextCharFormat()
         fmt.setBackground(QColor(HL_COLOR))
@@ -553,9 +554,9 @@ class TextPanel(QWidget):
             rects = self._rects_in_selection(cur)
             if rects:
                 self.highlightMarked.emit(self._page, rects)
-                self.info.setText("칠했습니다 — 본문에도 표시했습니다.")
+                self.info.setText(tr("칠했습니다 — 본문에도 표시했습니다."))
                 return
-        self.info.setText("칠했습니다. [책갈피로] 를 누르면 칠한 곳으로 책갈피를 만듭니다.")
+        self.info.setText(tr("칠했습니다. [책갈피로] 를 누르면 칠한 곳으로 책갈피를 만듭니다."))
 
     def _rects_in_selection(self, cur) -> list:
         """고른 구간이 걸친 **줄들의 PDF 자리** (입력 SOT §2.7).
@@ -606,7 +607,7 @@ class TextPanel(QWidget):
     def _on_make_bookmarks(self):
         picks = self.highlighted_lines()
         if not picks:
-            self.info.setText("먼저 [하이라이트] 로 글을 칠하세요.")
+            self.info.setText(tr("먼저 [하이라이트] 로 글을 칠하세요."))
             return
         items = []
         for p in picks:
@@ -617,4 +618,4 @@ class TextPanel(QWidget):
                           "level": 1 if p["style"] == "title" else 2})
         if items:
             self.bookmarkFromHighlight.emit(items)
-            self.info.setText(f"책갈피 {len(items)}개를 만들었습니다 — 책갈피창에서 💾 저장하세요.")
+            self.info.setText(tr('책갈피 {n}개를 만들었습니다 — 책갈피창에서 💾 저장하세요.').format(n=len(items)))

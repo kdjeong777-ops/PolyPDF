@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QSize, QTimer, QEvent, pyqtSignal
-from PyQt6.QtGui import QIcon, QImage, QPixmap, QPainter, QColor, QPen, QTransform
+from PyQt6.QtGui import QIcon, QImage, QPixmap, QPainter, QColor, QPen, QTransform, QFontMetrics
 from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer.pdf_doc import PdfDocument
+from viewer.i18n import tr          # 261008: 화면 문구(다국어 SOT §6)
 
 
 class PageThumbs(QWidget):
@@ -93,7 +94,7 @@ class PageThumbs(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self.title = QLabel("페이지")
+        self.title = QLabel(tr("페이지"))
         self.title.setStyleSheet("padding: 4px; font-weight: bold;")
         self.title.setWordWrap(True)
         # 3줄 고정 (글자 크기에 따라 약간 다름)
@@ -107,15 +108,30 @@ class PageThumbs(QWidget):
         self._filter = "all"
         self._filter_btns = {}
         fr = _QHB(); fr.setContentsMargins(2, 0, 2, 2); fr.setSpacing(2)
-        for key, label in [("all", "전체"), ("visible", "보임"),
-                           ("decorated", "꾸밈"), ("hidden", "숨김")]:
+        # 261008(다국어): 칸이 좁아(단추 하나 약 35px) 다른 언어는 짧게 쓰고, 뜻은 도움말로 알린다
+        for key, label, tip in [("all", tr("전체"), tr("모든 쪽")),
+                                ("visible", tr("보임"), tr("숨기지 않은 쪽")),
+                                ("decorated", tr("꾸밈"), tr("꾸밈(선·도형·글·사진)이 있는 쪽")),
+                                ("hidden", tr("숨김"), tr("숨긴 쪽"))]:
             b = _QPB(label); b.setCheckable(True); b.setChecked(key == "all")
+            b.setToolTip(tip)
             b.setFixedHeight(22)
+            b.setMinimumWidth(0)
             # 260610-1: 클릭해도 키보드 포커스를 뺏지 않게(뷰어 키 이동 유지)
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             b.clicked.connect(lambda _=False, k=key: self.set_filter(k))
             fr.addWidget(b)
             self._filter_btns[key] = b
+        # 패널 폭이 고정(150px)이라 단추 하나에 글자 약 27px — 다른 언어로 글자가 길면
+        #   네 단추의 글자 크기를 함께 줄여 잘리지 않게 한다(한국어는 그대로).
+        _room = (self._fixed_w - 10) // 4 - 8
+        _f = self._filter_btns["all"].font()
+        while _f.pointSizeF() > 6.5 and max(
+                QFontMetrics(_f).horizontalAdvance(b.text())
+                for b in self._filter_btns.values()) > _room:
+            _f.setPointSizeF(_f.pointSizeF() - 0.5)
+        for b in self._filter_btns.values():
+            b.setFont(_f)
         layout.addLayout(fr)
 
         self.list = QListWidget()
@@ -151,7 +167,7 @@ class PageThumbs(QWidget):
     def set_edit_mode(self, on: bool):
         self._edit_mode = bool(on)
         self.list.setToolTip(
-            "페이지 순서 변경: 마우스로 끌어 놓기 또는 Alt+↑/↓  ·  삭제: Delete  ·  이동: ↑/↓"
+            tr("페이지 순서 변경: 마우스로 끌어 놓기 또는 Alt+↑/↓  ·  삭제: Delete  ·  이동: ↑/↓")
             if on else "")
         if on:
             self.list.setMovement(QListWidget.Movement.Snap)
@@ -444,10 +460,10 @@ class PageThumbs(QWidget):
             p.drawRect(x0, 0, card_w - 1, card_h - 1)
             p.setPen(QColor("#ffffff"))
             p.drawText(QRect(x0, pix.height(), card_w, band),
-                       Qt.AlignmentFlag.AlignCenter, f"붙여넣기 p.{int(epg) + 1}")
+                       Qt.AlignmentFlag.AlignCenter, tr('붙여넣기 p.{epg}').format(epg=int(epg) + 1))
             p.end()
             item.setIcon(QIcon(bordered))
-            item.setToolTip(f"붙여넣기 대기: {Path(src).name} p.{int(epg) + 1}")
+            item.setToolTip(tr('붙여넣기 대기: {name} p.{epg}').format(name=Path(src).name, epg=int(epg) + 1))
         except Exception:
             pass
 
@@ -624,17 +640,17 @@ class PageThumbs(QWidget):
             sel_print = [int(page)]
         act_print = act_shot = None
         if self._doc is not None and sel_print:
-            act_print = menu.addAction(f"선택 페이지 인쇄 ({len(sel_print)}쪽)")
-            act_shot = menu.addAction(f"선택 페이지 스크린샷으로 복사 ({len(sel_print)}쪽)")
+            act_print = menu.addAction(tr('선택 페이지 인쇄 ({n}쪽)').format(n=len(sel_print)))
+            act_shot = menu.addAction(tr('선택 페이지 스크린샷으로 복사 ({n}쪽)').format(n=len(sel_print)))
             menu.addSeparator()
         # 260821: 선택 페이지 복사(항상) / 붙여넣기(편집모드만 — 붙여넣기는 수정 작업)
         act_copy = act_paste = None
         if self._doc is not None and sel_print:
-            act_copy = menu.addAction(f"선택 페이지 복사 ({len(sel_print)}쪽)")
+            act_copy = menu.addAction(tr('선택 페이지 복사 ({n}쪽)').format(n=len(sel_print)))
         _pcnt = self._paste_available() if self._paste_available else 0
         if self._doc is not None and self._edit_mode and _pcnt > 0:
-            _where = "맨 뒤" if item is None else f"p.{int(page) + 1} 뒤" if page is not None else "이 뒤"
-            act_paste = menu.addAction(f"붙여넣기 ({_pcnt}쪽) — {_where}")
+            _where = tr("맨 뒤") if item is None else tr('p.{page} 뒤').format(page=int(page) + 1) if page is not None else tr("이 뒤")
+            act_paste = menu.addAction(tr('붙여넣기 ({_pcnt}쪽) — {_where}').format(_pcnt=_pcnt, _where=_where))
         # 260930-1(§4.7.11): 클립보드 **그림**을 새 쪽으로. 쪽 붙여넣기(위)와 다른 일이라
         #   이름으로 가른다 — 본문 Ctrl+V 는 그 쪽 '위에' 사진을 붙인다(§0 260611-15).
         # 260930-3(사용자 보고 '기존에 요청했는데 안 들어가 있어'): 종전에는 **편집모드일
@@ -644,23 +660,22 @@ class PageThumbs(QWidget):
         act_img = None
         if self._doc is not None and self._clipboard_has_image():
             _r = self._img_ref_row(item)
-            _w = "맨 뒤" if _r < 0 else f"p.{_r + 1} 뒤"
+            _w = tr("맨 뒤") if _r < 0 else tr('p.{r} 뒤').format(r=_r + 1)
             # 260930-4(사용자 지시): 이름을 '클립보드 사진 새쪽 붙이기' 로.
             #   무엇을(클립보드 사진) 어디에(새 쪽) 넣는지가 이름에 다 들어간다.
             act_img = menu.addAction(
-                f"클립보드 사진 새쪽 붙이기 — {_w}"
-                + ("" if self._edit_mode else "  (편집모드 ✏ 에서)"))
+                tr('클립보드 사진 새쪽 붙이기 — {w}{v}').format(w=_w, v='' if self._edit_mode else tr('  (편집모드 ✏ 에서)')))
             act_img.setEnabled(bool(self._edit_mode))
         if act_copy or act_paste or act_img:
             menu.addSeparator()
         act_add = act_del = act_apply = None
         if self._edit_mode:
             n = len(self.list.selectedItems())
-            act_del = menu.addAction(f"삭제 ({n}쪽)" if n else "삭제")
+            act_del = menu.addAction(tr('삭제 ({n}쪽)').format(n=n) if n else tr("삭제"))
             act_del.setEnabled(n > 0)
             menu.addSeparator()
             if self.is_page_dirty():
-                act_apply = menu.addAction("변경 적용 — 새 PDF로 저장...")
+                act_apply = menu.addAction(tr("변경 적용 — 새 PDF로 저장..."))
             menu.addSeparator()
         act_hl = act_hide = act_unhide = act_hreset = None
         act_rot_l = act_rot_r = None
@@ -672,21 +687,21 @@ class PageThumbs(QWidget):
             if page is not None and not sel_pages:
                 sel_pages = [int(page)]
             if sel_pages:
-                act_hide = menu.addAction(f"숨김 ({len(sel_pages)}쪽)")
-                act_unhide = menu.addAction(f"숨김 해제 ({len(sel_pages)}쪽)")
+                act_hide = menu.addAction(tr('숨김 ({n}쪽)').format(n=len(sel_pages)))
+                act_unhide = menu.addAction(tr('숨김 해제 ({n}쪽)').format(n=len(sel_pages)))
             if self._hidden_pages:
-                act_hreset = menu.addAction("숨김 전체 해제")
+                act_hreset = menu.addAction(tr("숨김 전체 해제"))
             menu.addSeparator()
             # 260609-15(A1): 회전
             if sel_pages:
-                act_rot_l = menu.addAction(f"왼쪽 90° 회전 ({len(sel_pages)}쪽)")
-                act_rot_r = menu.addAction(f"오른쪽 90° 회전 ({len(sel_pages)}쪽)")
+                act_rot_l = menu.addAction(tr('왼쪽 90° 회전 ({n}쪽)').format(n=len(sel_pages)))
+                act_rot_r = menu.addAction(tr('오른쪽 90° 회전 ({n}쪽)').format(n=len(sel_pages)))
             else:
                 act_rot_l = act_rot_r = None
             menu.addSeparator()
         if self._edit_mode and page is not None:   # 책갈피·하이퍼링크는 편집모드만
-            act_add = menu.addAction(f"책갈피 추가 (p.{int(page) + 1})")
-            act_hl = menu.addAction(f"하이퍼링크 등록… (p.{int(page) + 1})")
+            act_add = menu.addAction(tr('책갈피 추가 (p.{page})').format(page=int(page) + 1))
+            act_hl = menu.addAction(tr('하이퍼링크 등록… (p.{page})').format(page=int(page) + 1))
         if menu.isEmpty():
             return
         chosen = menu.exec(self.list.viewport().mapToGlobal(pos))
@@ -968,7 +983,7 @@ class PageThumbs(QWidget):
                     p.rotate(90)
                     p.setPen(QColor("white"))
                     p.drawText(QRect(-pix.height() // 2, -bw // 2, pix.height(), bw),
-                               Qt.AlignmentFlag.AlignCenter, "숨김")
+                               Qt.AlignmentFlag.AlignCenter, tr("숨김"))
                     p.restore()
                 p.end()
                 item.setIcon(QIcon(bordered))

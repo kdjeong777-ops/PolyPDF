@@ -6,6 +6,8 @@ B. 화면 맞춤 — 내부 키, 옛 설정값('폭 맞춤' 등)을 읽을 때 �
 C. 인쇄 창 — 색상·인쇄 면·포함을 키로 판단(글자를 영어로 바꿔도 같은 결과), 다단을 켜면 인쇄 면이 키로 걸린다
 D. 보기 메뉴 — 항목을 고정 id 로 찾는다(글자를 바꿔도 API 키 게이팅이 듣는다)
 E. 책갈피창·검색창 정렬 — 키로 정렬(글자를 바꿔도 같은 순서)
+F. 함수 안에서 tr·trp·trn·tr_noop 이름을 import·대입하지 않는다 — 그러면 그 함수 전체에서 지역 변수가 되어
+   앞쪽의 tr(...) 이 UnboundLocalError(261008 2단계에서 실제로 앱이 시작되지 않았다, 다국어 SOT §3.1)
 """
 import os, sys, ast, re, json
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -61,6 +63,27 @@ try:
                     and n.func.attr in ("setCurrentText", "findText") and n.args and _has_hangul_lit(n.args[0])):
                 bad.append("%s:%d %s" % (rel, n.lineno, n.func.attr))
     chk(not bad, "A 화면 글자를 한글 리터럴과 비교·검색하는 곳이 없다", str(bad[:10]))
+
+    # ── F ──
+    NAMES = {"tr", "trp", "trn", "tr_noop"}
+    shadow = []
+    for p in sorted((HERE / "viewer").rglob("*.py")):
+        if "__pycache__" in p.parts or "_vendor" in p.parts:
+            continue
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        rel = p.relative_to(HERE).as_posix()
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue
+            for n in ast.walk(fn):
+                if isinstance(n, (ast.Import, ast.ImportFrom)):
+                    if any((a.asname or a.name) in NAMES for a in n.names):
+                        shadow.append("%s:%d import" % (rel, n.lineno))
+                elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store) and n.id in NAMES:
+                    shadow.append("%s:%d assign" % (rel, n.lineno))
+                elif isinstance(n, ast.arg) and n.arg in NAMES:
+                    shadow.append("%s:%d arg" % (rel, n.lineno))
+    chk(not shadow, "F 함수 안에서 tr 류 이름을 import·대입·인자로 쓰지 않는다(UnboundLocalError)", str(sorted(set(shadow))[:10]))
 
     from viewer.widgets.main_view import MainView as MV
     # ── B ──

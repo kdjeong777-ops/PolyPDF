@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import re
+from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
 from typing import Optional
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, Qt
@@ -159,11 +160,11 @@ class ReadAloud(QObject):
     def start(self):
         tts = self.mw._study_get_tts()
         if not tts.available():
-            self.mw.status.showMessage("음성(SAPI)을 사용할 수 없습니다.", 3000)
+            self.mw.status.showMessage(tr("음성(SAPI)을 사용할 수 없습니다."), 3000)
             return
         mv = self._v
         if mv.current_file() is None:
-            self.mw.status.showMessage("먼저 PDF 를 여세요.", 3000)
+            self.mw.status.showMessage(tr("먼저 PDF 를 여세요."), 3000)
             return
         start_page = mv.current_page()
         total = self._page_count()
@@ -479,7 +480,7 @@ class ReadAloud(QObject):
             if not ok:
                 try:
                     self.mw.status.showMessage(
-                        "음성 출력에 실패했습니다(SAPI 음성 확인). 다시 시도해 주세요.", 4000)
+                        tr("음성 출력에 실패했습니다(SAPI 음성 확인). 다시 시도해 주세요."), 4000)
                 except Exception:
                     pass
 
@@ -509,7 +510,7 @@ class ReadAloud(QObject):
         self._pi += 1
         if self._pi < len(self._pages):
             self.mw.status.showMessage(
-                f"읽는 중: {self._pages[self._pi]+1} 페이지", 2000)
+                tr('읽는 중: {pages} 페이지').format(pages=self._pages[self._pi] + 1), 2000)
             self._load_page()
         elif self.repeat:
             # 260911(SOT §1.1): 전체연속은 한 바퀴 뒤부터 **1쪽~끝**을 되풀이한다.
@@ -521,7 +522,7 @@ class ReadAloud(QObject):
             # 260911(사용자 지시, SOT §1.1): 다 읽었으면 멈추고 **시작한 쪽으로**
             #   돌아간다. '전체' 는 1쪽부터 읽으므로, 끝내고 그대로 두면 사용자가
             #   보던 자리를 잃는다.
-            self.mw.status.showMessage("읽기 완료", 3000)
+            self.mw.status.showMessage(tr("읽기 완료"), 3000)
             home = getattr(self, "_home_page", None)
             self.stop()
             if home is not None:
@@ -646,24 +647,25 @@ def make_read_buttons(controller: ReadAloud, parent=None):
     btn = QToolButton(parent)
     btn.setText("▶")
     btn.setStyleSheet("QToolButton{color:#1565c0;font-size:16px;font-weight:bold;}")
-    btn.setToolTip("본문 읽기/정지 (머리말·표·수식·그림 제외)")
+    btn.setToolTip(tr("본문 읽기/정지 (머리말·표·수식·그림 제외)"))
     btn.clicked.connect(controller.toggle)
 
     menu_btn = QToolButton(parent)
-    menu_btn.setText("재생구간 ▾")
-    menu_btn.setToolTip("재생 구간 / 빠르기 / 성우")
+    menu_btn.setText(tr("재생구간 ▾"))
+    menu_btn.setToolTip(tr("재생 구간 / 빠르기 / 성우"))
     menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     menu = QMenu(menu_btn)
     # 재생 구간
     g_mode = QActionGroup(menu); g_mode.setExclusive(True)
-    for label in ("1회", "연속", "전체", "전체연속"):
-        a = QAction(label, menu, checkable=True)
+    # 재생 구간 이름은 controller.mode 의 **값**(설정 read_aloud.mode 에 저장) — 값은 그대로, 표시만 tr()
+    for label in (tr_noop("1회"), tr_noop("연속"), tr_noop("전체"), tr_noop("전체연속")):
+        a = QAction(tr(label), menu, checkable=True)
         a.setChecked(controller.mode == label)
         a.triggered.connect(lambda _c, v=label: setattr(controller, "mode", v))
         g_mode.addAction(a); menu.addAction(a)
     menu.addSeparator()
     # 빠르기
-    rm = menu.addMenu("빠르기")
+    rm = menu.addMenu(tr("빠르기"))
     g_r = QActionGroup(rm); g_r.setExclusive(True)
     for label, rate in RATES:
         a = QAction(label, rm, checkable=True)
@@ -677,9 +679,9 @@ def make_read_buttons(controller: ReadAloud, parent=None):
     except Exception:
         pass
     if voices:
-        vm = menu.addMenu("성우")
+        vm = menu.addMenu(tr("성우"))
         g_v = QActionGroup(vm); g_v.setExclusive(True)
-        a0 = QAction("자동(언어별)", vm, checkable=True); a0.setChecked(True)
+        a0 = QAction(tr("자동(언어별)"), vm, checkable=True); a0.setChecked(True)
         a0.triggered.connect(lambda: controller.set_voice(None))
         g_v.addAction(a0); vm.addAction(a0)
         for name in voices:
@@ -689,7 +691,7 @@ def make_read_buttons(controller: ReadAloud, parent=None):
     menu_btn.setMenu(menu)
 
     def on_mode_text():
-        menu_btn.setText(controller.mode + " ▾")
+        menu_btn.setText(tr(controller.mode) + " ▾")     # 값(한글 키)은 그대로, 표시만 번역
     on_mode_text()
     for a in g_mode.actions():
         a.triggered.connect(lambda *_: on_mode_text())

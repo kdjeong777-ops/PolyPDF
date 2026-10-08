@@ -12,6 +12,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QIcon
 from viewer.resources_path import resource_path
+from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -43,19 +44,19 @@ class SearchBar(QWidget):
         layout.setContentsMargins(2, 2, 2, 2)
 
         self.edit = QLineEdit()
-        self.edit.setPlaceholderText("검색...  (Enter: 검색, Ctrl+F: 포커스)")
+        self.edit.setPlaceholderText(tr("검색...  (Enter: 검색, Ctrl+F: 포커스)"))
         self.edit.returnPressed.connect(self._emit_search)
         layout.addWidget(self.edit, 1)
 
         self.btn_prev = QPushButton("◀")
         self.btn_prev.setFixedWidth(28)
-        self.btn_prev.setToolTip("이전 매치 (Shift+F3)")
+        self.btn_prev.setToolTip(tr("이전 매치 (Shift+F3)"))
         self.btn_prev.clicked.connect(self.prevMatch.emit)
         layout.addWidget(self.btn_prev)
 
         self.btn_next = QPushButton("▶")
         self.btn_next.setFixedWidth(28)
-        self.btn_next.setToolTip("다음 매치 (F3)")
+        self.btn_next.setToolTip(tr("다음 매치 (F3)"))
         self.btn_next.clicked.connect(self.nextMatch.emit)
         layout.addWidget(self.btn_next)
 
@@ -66,7 +67,7 @@ class SearchBar(QWidget):
         # v1.6.1 F4: 즐겨찾기 추가 (검색바 오른쪽 끝)
         self.btn_fav = QPushButton("⭐")
         self.btn_fav.setFixedWidth(28)
-        self.btn_fav.setToolTip("현재 검색어를 즐겨찾기에 추가")
+        self.btn_fav.setToolTip(tr("현재 검색어를 즐겨찾기에 추가"))
         self.btn_fav.clicked.connect(self.favoriteRequested.emit)
         layout.addWidget(self.btn_fav)
 
@@ -90,9 +91,9 @@ class SearchBar(QWidget):
     def set_context_label(self, label: str = ""):
         """검색 대상 표시 — 우측창(건설기준/법령/특허) 활성 시 '○○ 내용 검색', 없으면 PDF 기본."""
         if label:
-            self.edit.setPlaceholderText(f"{label} 내용 검색...  (Ctrl+F)")
+            self.edit.setPlaceholderText(tr('{label} 내용 검색...  (Ctrl+F)').format(label=label))
         else:
-            self.edit.setPlaceholderText("검색...  (Enter: 검색, Ctrl+F: 포커스)")
+            self.edit.setPlaceholderText(tr("검색...  (Enter: 검색, Ctrl+F: 포커스)"))
 
     def current_query(self) -> str:
         return self.edit.text().strip()
@@ -128,14 +129,12 @@ class SearchResults(QWidget):
 
         head = QHBoxLayout()
         head.setContentsMargins(4, 0, 4, 0)
-        head.addWidget(QLabel("검색 결과"))
+        head.addWidget(QLabel(tr("검색 결과")))
         head.addStretch(1)
-        head.addWidget(QLabel("정렬"))
+        head.addWidget(QLabel(tr("정렬")))
         self.sort_combo = QComboBox()
         # 260827: '책갈피 순'(책갈피창 파일 정렬 + 페이지 순)을 기본으로.
-        from viewer.i18n import tr
         # 261008(다국어 SOT §5): 보이는 글자 + 내부 키 — 정렬은 키로 고른다
-        from viewer.i18n import tr_noop
         for _t, _k in ((tr_noop("책갈피 순"), "book"), (tr_noop("이름 순"), "name"),
                        (tr_noop("횟수 순"), "count")):
             self.sort_combo.addItem(tr(_t), _k)
@@ -144,31 +143,31 @@ class SearchResults(QWidget):
         head.addWidget(self.sort_combo)
 
         # v1.6.1 S3: excel.png + "저장"
-        self.btn_excel = QPushButton(" 저장")
+        self.btn_excel = QPushButton(tr(" 저장"))
         _ico = resource_path("excel.png")
         if _ico:
             self.btn_excel.setIcon(QIcon(_ico))
         else:
-            self.btn_excel.setText("📊 저장")
-        self.btn_excel.setToolTip("현재 결과를 엑셀(.xlsx)로 저장")
+            self.btn_excel.setText(tr("📊 저장"))
+        self.btn_excel.setToolTip(tr("현재 결과를 엑셀(.xlsx)로 저장"))
         self.btn_excel.clicked.connect(self.exportRequested.emit)
         head.addWidget(self.btn_excel)
 
         # v1.6.1 S4: screenshot.png + "캡쳐"
-        self.btn_shot_result = QPushButton(" 전체 캡쳐")
+        self.btn_shot_result = QPushButton(tr(" 전체 캡쳐"))
         _ico = resource_path("screenshot.png")
         if _ico:
             self.btn_shot_result.setIcon(QIcon(_ico))
         else:
-            self.btn_shot_result.setText("📷 전체 캡쳐")
-        self.btn_shot_result.setToolTip("검색결과의 모든 매치 페이지를 일괄 스크린샷 (v1.6.1 S5)")
+            self.btn_shot_result.setText(tr("📷 전체 캡쳐"))
+        self.btn_shot_result.setToolTip(tr("검색결과의 모든 매치 페이지를 일괄 스크린샷 (v1.6.1 S5)"))
         self.btn_shot_result.clicked.connect(self.screenshotForResultRequested.emit)
         head.addWidget(self.btn_shot_result)
 
         layout.addLayout(head)
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["내용", "페이지", "횟수"])
+        self.tree.setHeaderLabels([tr("내용"), tr("페이지"), tr("횟수")])
         self.tree.setColumnWidth(0, 240)
         self.tree.setColumnWidth(1, 50)
         self.tree.setColumnWidth(2, 40)

@@ -57,7 +57,7 @@ try:
     chk(order == [mw.btn_clip_in, mw.btn_clip, mw.btn_save_pdf], "A 순서: 가져오기 · 복사 · PDF 저장")
     from viewer import app as appmod
     import inspect
-    chk('("clipboard_save", ("클립보드로 복사"' in inspect.getsource(appmod), "A 단축키 목록 이름도 같다")
+    chk('("clipboard_save", (tr("클립보드로 복사")' in inspect.getsource(appmod), "A 단축키 목록 이름도 같다")
 
     # ── B. 클립보드 가져오기 ──────────────────────────────────────────
     cb = QApplication.clipboard()
