@@ -78,6 +78,27 @@ try:
     chk([pd.cmb_preset.itemText(i) for i in range(1, pd.cmb_preset.count())] == names(),
         "인쇄 창 스타일 목록도 바꾼 순서", str([pd.cmb_preset.itemText(i) for i in range(pd.cmb_preset.count())]))
     pd.done(0)
+
+    # ── E (261008-10): 긴 스타일 이름이 있어도 오른쪽 설정 칸이 잘리지 않는다 ──
+    #   종전에는 콤보가 가장 긴 이름만큼 넓어져 내용(498px)이 고정 폭(400)을 넘어 저장·삭제가 잘렸다.
+    from PyQt6.QtWidgets import QScrollArea, QWidget
+    mw._prefs["merge_presets"] = [{"name": "지침2단", "nup": 2},
+                                  {"name": "보고서 양면 긴쪽 4단 제본여백 넓게", "nup": 4}]
+    d3 = TwoUpSettingsDialog({}, None, preset_api=mw._merge_preset_api())
+    d3.show(); app.processEvents()
+    sc = d3.findChild(QScrollArea); vp = sc.viewport()
+    cut = [type(w).__name__ for w in sc.widget().findChildren(QWidget)
+           if w.isVisible() and w.mapTo(vp, w.rect().topRight()).x() >= vp.width()]
+    chk(not cut, "E 긴 스타일 이름이 있어도 오른쪽이 잘리지 않는다", str(cut[:6]))
+    w_long = sc.width()
+    d3.done(0)
+    mw._prefs["merge_presets"] = [{"name": "가", "nup": 2}]
+    d4 = TwoUpSettingsDialog({}, None, preset_api=mw._merge_preset_api())
+    d4.show(); app.processEvents()
+    w_short = d4.findChild(QScrollArea).width()
+    d4.done(0)
+    chk(w_long == w_short, "E 이름 길이로 설정 칸이 넓어지지 않는다(미리보기 유지)",
+        f"긴 이름 {w_long} / 짧은 이름 {w_short}")
     mw._prefs["merge_presets"] = []
 except Exception:
     import traceback

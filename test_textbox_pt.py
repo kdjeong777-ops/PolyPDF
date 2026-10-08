@@ -199,6 +199,64 @@ try:
         "⑥ 박스 안쪽은 글자 선택 그대로(이동 아님)")
     chk(mv._editor_pos_to_view(QPoint(0, 0)) is not None,
         "⑥ 입력칸 좌표 → 페이지 좌표 변환이 있다")
+
+    # ── ⑥-b 테두리를 잡아 끌면 글(입력칸)도 **같이** 움직인다 (261008-9) ──
+    #   종전에는 박스만 움직이고 입력칸은 다음 입력 때에야 따라왔다(사용자 보고).
+    #   실제 경로: 입력칸에 마우스 이벤트를 주입 → eventFilter → _shape_transform_move.
+    from PyQt6.QtCore import QPointF, QEvent as _QE, Qt as _Qt
+    from PyQt6.QtGui import QMouseEvent
+
+    def _drag_edge(dx, dy):
+        e = mv._text_editor
+        s = mv._page_strokes[mv._text_edit_idx]
+        cx, cy, hw, hh, _r = mv._shape_geom(s, pr)
+        ox = mv._draw_overlay.x(); oy = mv._draw_overlay.y()
+        vx, vy = cx - hw * 0.5, cy - hh + 2              # 위쪽 테두리 선(핸들 아님)
+
+        def send(tt, x, y, btns):
+            lp = QPointF(x + ox - e.x(), y + oy - e.y())  # 입력칸 로컬 좌표
+            ev = QMouseEvent(tt, lp, e.mapToGlobal(lp), _Qt.MouseButton.LeftButton,
+                             btns, _Qt.KeyboardModifier.NoModifier)
+            QApplication.sendEvent(e, ev)
+        L = _Qt.MouseButton.LeftButton
+        send(_QE.Type.MouseButtonPress, vx, vy, L)
+        send(_QE.Type.MouseMove, vx + dx, vy + dy, L)
+        send(_QE.Type.MouseButtonRelease, vx + dx, vy + dy, _Qt.MouseButton.NoButton)
+        app.processEvents()
+
+    def _ed_matches_box():
+        e = mv._text_editor
+        s = mv._page_strokes[mv._text_edit_idx]
+        fw = e.frameWidth()
+        bx = mv._draw_overlay.x() + pr.left() + min(s["rect"][0], s["rect"][2]) * pr.width()
+        by = mv._draw_overlay.y() + pr.top() + min(s["rect"][1], s["rect"][3]) * pr.height()
+        return abs(e.x() + fw - bx) <= 1.5 and abs(e.y() + fw - by) <= 1.5, \
+            f"입력칸({e.x() + fw},{e.y() + fw}) 박스({bx:.0f},{by:.0f})"
+
+    rc0 = list(st["rect"]); ex0, ey0 = ed.x(), ed.y()
+    _drag_edge(40, 30)
+    chk(abs((st["rect"][0] - rc0[0]) * pr.width() - 40) <= 2,
+        "⑥-b 테두리를 끌면 박스가 움직인다")
+    ok, info = _ed_matches_box()
+    chk(ok and (ed.x() - ex0, ed.y() - ey0) == (40, 30),
+        "⑥-b 끄는 동안 글(입력칸)도 같은 만큼 같이 움직인다", info)
+    mv._commit_text_editor()
+
+    # 지시선 박스: 옮긴 뒤 글을 더 써도 옛 자리로 되돌아가지 않는다
+    li = mv._new_leader([0.3, 0.5], [0.6, 0.6])
+    mv._stroke_selected = li
+    mv._begin_text_edit(li, pr); app.processEvents()
+    led = mv._text_editor
+    led.setPlainText("테스트"); app.processEvents()
+    _drag_edge(50, -20)
+    ok, info = _ed_matches_box()
+    chk(ok, "⑥-b 지시선 박스도 글이 같이 움직인다", info)
+    lrc = list(mv._page_strokes[li]["rect"])
+    led.setPlainText("테스트입니다"); app.processEvents()
+    lrc2 = mv._page_strokes[li]["rect"]
+    chk(abs(lrc2[0] - lrc[0]) < 1e-6 and abs(lrc2[3] - lrc[3]) < 1e-6,
+        "⑥-b 지시선 박스를 옮긴 뒤 글을 더 써도 옮긴 자리에 남는다",
+        f"좌하단 {lrc[0]:.3f},{lrc[3]:.3f} → {lrc2[0]:.3f},{lrc2[3]:.3f}")
     mv._commit_text_editor()
 
     # ── ⑦ 선(색상버튼)을 안 골라도 텍스트 박스가 만들어진다 (260907-2) ──

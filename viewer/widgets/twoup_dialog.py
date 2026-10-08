@@ -38,6 +38,11 @@ class TwoUpSettingsDialog(QDialog):
         srow = QHBoxLayout()
         srow.addWidget(QLabel("스타일:"))
         self.cmb_preset = QComboBox()
+        # 261008-10: 긴 스타일 이름이 콤보(=설정 칸 전체) 최소 폭을 키워 오른쪽이 잘렸다 →
+        #   이름 길이로 넓어지지 않게 한다(펼친 목록에는 전체 이름이 보인다).
+        self.cmb_preset.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_preset.setMinimumContentsLength(6)
         self._reload_presets()
         b_save = QPushButton("저장…"); b_save.clicked.connect(self._save_preset)
         b_del = QPushButton("삭제"); b_del.clicked.connect(self._delete_preset)
@@ -207,6 +212,11 @@ class TwoUpSettingsDialog(QDialog):
         cv.addWidget(b_sample)
 
         cv.addStretch(1)
+        # 261008-10(사용자 보고): 폭을 400 으로 못박아 두면 내용이 그보다 넓을 때(글꼴·스타일 이름)
+        #   오른쪽이 잘렸다(가로 스크롤도 꺼져 있다) → 최소 400, 내용이 넓으면 그 폭 + 세로 스크롤바.
+        need = (cfg.minimumSizeHint().width() + scroll.verticalScrollBar().sizeHint().width()
+                + 2 * scroll.frameWidth())
+        scroll.setFixedWidth(max(400, need))
         body.addWidget(scroll)
         root.addLayout(body, 1)
 

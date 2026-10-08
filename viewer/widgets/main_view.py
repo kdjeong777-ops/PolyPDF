@@ -4075,6 +4075,10 @@ class MainView(QWidget):
                           (cx + hw - pr.left()) / max(1, pr.width()),
                           (cy + hh - pr.top()) / max(1, pr.height())]
             st["rot"] = float(rot)
+            if st.get("leader") and st.get("box_anchor"):
+                # 261008-9: 지시선 글 시작점(박스 좌하단)도 따라간다 — 남겨 두면
+                #   다음 입력(_on_text_changed) 때 박스가 옛 자리로 되돌아간다.
+                st["box_anchor"] = [st["rect"][0], st["rect"][3]]
 
     def _shape_handle_points(self, st, pr):
         cx, cy, hw, hh, rot = self._shape_geom(st, pr)
@@ -4140,6 +4144,7 @@ class MainView(QWidget):
         if drag == "move":
             self._shape_set_geom(st, cx0 + (pos.x() - self._shape_press.x()),
                                  cy0 + (pos.y() - self._shape_press.y()), hw0, hh0, rot0, pr)
+            self._position_text_editor()      # 261008-9: 편집 중이면 글(입력칸)도 같이 움직인다
             self._draw_overlay.update(); return
         if drag == "rot":
             ang = (math.degrees(math.atan2(pos.y() - cy0, pos.x() - cx0)) + 90.0) % 360.0
