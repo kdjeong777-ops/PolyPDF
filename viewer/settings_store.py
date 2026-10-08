@@ -16,7 +16,7 @@ CONFIG_TOP_KEYS = ["preferences", "render_dpi", "fit_mode", "study_settings",
                    "read_aloud", "capture_mode", "capture_copy", "capture_sizes",
                    "panels_visible"]
 #   개인(세션) 최상위 키 — 기본값에서 제외, 초기화 시 유지:
-PERSONAL_TOP_KEYS = ["favorites", "law_favorites", "recent_folders",
+PERSONAL_TOP_KEYS = ["favorites", "law_favorites", "recent_folders", "recent_files",
                      "last_folder", "last_open", "last_main",
                      "screenshots", "screenshots_meta"]
 #   ★ 260906-6: `last_open`(시작 시 여는 대상·형태, 260906-3 신설)도 개인 항목이다 —

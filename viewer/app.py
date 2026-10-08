@@ -115,6 +115,7 @@ class _UpdateSignals(QObject):
 class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
+    MAX_RECENT_FILES = 10
 
     def __init__(self):
         super().__init__()
@@ -151,6 +152,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._search_scope = None           # 260616-3: 검색 한정 파일 집합(책갈피 목록). None=전체
         self._last_results: list = []
         self._recent_folders: list = []
+        self._recent_files: list = []         # 261008-11: 파일 메뉴 '최근 파일'
         self._pending_screenshot_after_load: bool = False
         self._current_shot_path = None        # v1.6.7 E1: 표시 중 스크린샷 카드 원본 path
         self._favorites: list = []
@@ -1545,6 +1547,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         m_file.addSeparator()
         self.menu_recent = QMenu("최근 폴더", self)
         m_file.addMenu(self.menu_recent)
+        # 261008-11(사용자 요청): 최근 폴더 밑에 최근 파일 — 파일 열기·여러 파일 열기로 연 PDF
+        self.menu_recent_files = QMenu("최근 파일", self)
+        m_file.addMenu(self.menu_recent_files)
 
         # 260618-8: (구 '파일' 메뉴의 도구 항목들은 '도구' 메뉴 상부로 이동 — 아래 _build_tools_menu)
         m_file.addSeparator()
@@ -2187,6 +2192,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
             self.status.showMessage(f"PDF 파일이 아닙니다: {pdf_path.name}")
             return
+        self._touch_recent_files([pdf_path])
         if getattr(self, "_split_on", False):
             # 2단: 활성 창에만 로드(다른 창·폴더·반대편 책갈피 보존).
             #   260618-23: 단독 파일을 '열기'(드롭/즐겨찾기/파일열기)한 것이므로 그 창의 폴더를
@@ -2235,6 +2241,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if files:
                 self.open_pdf(files[0])
             return
+        self._touch_recent_files(files)
         split = getattr(self, "_split_on", False)
         bt = (self.bookmark_tree_right if split and self._active_pane == 1 else self.bookmark_tree)
         self._cancel_active_indexing()
@@ -5153,6 +5160,39 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             act.triggered.connect(lambda _checked=False, pp=p: self.open_folder(Path(pp)))
             self.menu_recent.addAction(act)
 
+    def _touch_recent_files(self, paths):
+        """261008-11: 연 PDF 를 최근 파일 맨 위로(여러 개면 첫 파일이 맨 위). 같은 파일은 한 번만."""
+        from viewer.pathutil import norm_key
+        new = [str(p) for p in paths]
+        keys = {norm_key(p) for p in new}
+        rest = [p for p in self._recent_files if norm_key(p) not in keys]
+        self._recent_files = (new + rest)[: self.MAX_RECENT_FILES]
+        self._refresh_recent_files_menu()
+
+    def _refresh_recent_files_menu(self):
+        m = getattr(self, "menu_recent_files", None)
+        if m is None:
+            return
+        m.clear()
+        if not self._recent_files:
+            a = QAction("(최근 파일 없음)", self)
+            a.setEnabled(False)
+            m.addAction(a)
+            return
+        for p in self._recent_files:
+            act = QAction(p, self)
+            act.triggered.connect(lambda _checked=False, pp=p: self._open_recent_file(pp))
+            m.addAction(act)
+
+    def _open_recent_file(self, path_str: str):
+        """없어진 파일이면 목록에서 빼고 알린다(남겨 두면 누를 때마다 실패한다)."""
+        if not Path(path_str).is_file():
+            self._recent_files = [p for p in self._recent_files if p != path_str]
+            self._refresh_recent_files_menu()
+            self.status.showMessage(f"파일이 없어 최근 파일에서 뺐습니다: {path_str}", 5000)
+            return
+        self.open_pdf(Path(path_str))
+
     def _cancel_active_indexing(self):
         """260611-89: 진행 중인 모든 인덱싱 작업에 중단 요청(폴더/파일 전환 시)."""
         for w in list(self._index_workers):
@@ -7139,6 +7179,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         self._recent_folders = list(data.get("recent_folders", []))
         self._refresh_recent_menu()
+        self._recent_files = [str(p) for p in data.get("recent_files", []) if p]
+        self._refresh_recent_files_menu()
 
         dpi = int(data.get("render_dpi", 192))
         fit_mode = data.get("fit_mode", "쪽 맞춤")
@@ -7735,6 +7777,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             #   다음 실행에서 상위 폴더로 열어 버리면 열라고 하지 않은 폴더를 훑게 된다.
             "last_open": self._current_open_target(),
             "recent_folders": self._recent_folders,
+            "recent_files": self._recent_files,
             # 260906-3(사용자 결정): 스크린샷 목록은 **저장하지 않는다** — 시작은 항상 빈 목록이고,
             #   남겨 두면 지워진 캡처 경로만 설정 파일에 쌓인다. 종료 시 PDF 저장을 묻는다.
             "screenshots": [],
@@ -7789,18 +7832,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             f"파일: {p}\n\n"
             "• 이 파일을 프로그램 폴더에 함께 배포하면, 새 설치 시 이 설정으로 시작합니다.\n"
             "• '설정 초기화'를 누르면 이 기본값으로 되돌아갑니다.\n"
-            "• 즐겨찾기·최근 폴더·세션·녹화/ffmpeg 경로 등 개인·머신 항목은 제외되었습니다.")
+            "• 즐겨찾기·최근 폴더·최근 파일·세션·녹화/ffmpeg 경로 등 개인·머신 항목은 제외되었습니다.")
 
     def _reset_to_defaults(self):
         """260611-91: 설정·스타일을 기본값(동봉 프로파일, 없으면 공장값)으로 초기화.
-        개인·머신 항목(즐겨찾기·최근폴더·세션·경로)은 유지. 적용 위해 재시작."""
+        개인·머신 항목(즐겨찾기·최근폴더·최근파일·세션·경로)은 유지. 적용 위해 재시작."""
         prof = settings_store.load_default_profile()
         src = (f"동봉된 기본값('{prof.get('profile_name', '기본값')}')"
                if prof else "공장 기본값")
         ret = QMessageBox.question(
             self, "설정 초기화",
             f"설정과 스타일을 {src}으로 되돌립니다.\n"
-            "(즐겨찾기·최근 폴더·세션·녹화/ffmpeg 경로 등 개인 항목은 유지)\n\n"
+            "(즐겨찾기·최근 폴더·최근 파일·세션·녹화/ffmpeg 경로 등 개인 항목은 유지)\n\n"
             "적용을 위해 프로그램이 다시 시작됩니다. 계속할까요?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if ret != QMessageBox.StandardButton.Yes:
@@ -7892,18 +7935,29 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.menu_favorites.addAction(a_manage)
 
         if self._favorites:
-            self.menu_favorites.addSeparator()
-            for f in self._favorites:
-                kind = f.get("kind", "folder")
-                prefix = {"folder": "📁 ", "file": "📄 ", "search": "🔍 "}.get(kind, "📁 ")
-                act = QAction(prefix + f.get("name", "?"), self)
-                # 대상이 없으면(이동/삭제) 비활성화 표시
-                if self._fav_resolve(f) is None:
-                    act.setEnabled(False)
-                    act.setText(prefix + f.get("name", "?") + "  (없음)")
-                else:
-                    act.triggered.connect(lambda _checked=False, ff=f: self._open_favorite(ff))
-                self.menu_favorites.addAction(act)
+            # 261008-12(사용자 요청): 폴더·파일을 따로 묶는다 — 즐겨찾기 폴더 밑에 즐겨찾기 파일.
+            #   검색어는 그 밑에 따로(종전에는 셋이 등록 순서대로 섞여 있었다). 그룹 안은 등록 순서.
+            groups = (("folder", "즐겨찾기 폴더", "📁 "), ("file", "즐겨찾기 파일", "📄 "),
+                      ("search", "즐겨찾기 검색어", "🔍 "))
+            known = {g[0] for g in groups}
+            for kind, title, prefix in groups:
+                items = [f for f in self._favorites
+                         if (f.get("kind") if f.get("kind") in known else "folder") == kind]
+                if not items:
+                    continue
+                self.menu_favorites.addSeparator()
+                hdr = QAction(title, self)
+                hdr.setEnabled(False)
+                self.menu_favorites.addAction(hdr)
+                for f in items:
+                    act = QAction(prefix + f.get("name", "?"), self)
+                    # 대상이 없으면(이동/삭제) 비활성화 표시
+                    if self._fav_resolve(f) is None:
+                        act.setEnabled(False)
+                        act.setText(prefix + f.get("name", "?") + "  (없음)")
+                    else:
+                        act.triggered.connect(lambda _checked=False, ff=f: self._open_favorite(ff))
+                    self.menu_favorites.addAction(act)
         elif not self._law_favorites:
             placeholder = QAction("(아직 등록된 즐겨찾기 없음)", self)
             placeholder.setEnabled(False)
