@@ -3141,8 +3141,7 @@ class MainView(QWidget):
     # 260611-2: 선 종류 3단계 — 글리프/이름
     _MODE_GLYPH = ("─", "▬", "〜")
     _MODE_NAME = ("직선", "하이라이트", "자유곡선")
-    # 260611-69/71: 도형 글리프(크게 보이는 글자)
-    _SHAPE_GLYPH = {"rect": "▭", "round": "❒", "circle": "◯"}
+    # 260611-69/71: 도형 종류 순서. (261008-8: 글리프 대신 그린 아이콘 — _shape_kind_icon)
     _SHAPE_KIND_ORDER = ["rect", "round", "circle"]
     # 260611-74: 글쓰기 버튼 글리프 — 글쓰기=T, 지시선=T+지시(↘)
     _TEXT_GLYPH = {"text": "T", "leader": "T↘"}
@@ -3257,26 +3256,12 @@ class MainView(QWidget):
 
     @staticmethod
     def _shape_kind_icon(kind, on):
-        """261008: 도형 버튼 아이콘 — 폰트 글리프(▭❒◯)는 크기·모양이 제각각이라 직접 그린다.
-        직사각형·둥근 사각형은 같은 크기(모서리만 다름), 원은 같은 높이 기준. 글자색과 같은 색."""
-        from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor
-        from PyQt6.QtCore import QRectF
-        from viewer import theme as _theme
-        color = "#e6e6e6" if (not on and _theme.is_dark()) else "#202020"
-        dpr = 2.0
-        # 폭 28 중 왼쪽 18에만 그림 → 가운데 정렬돼도 도형이 왼쪽으로 5px 비켜 ▾ 영역과 띄워짐
-        pm = QPixmap(int(28 * dpr), int(18 * dpr)); pm.setDevicePixelRatio(dpr)
-        pm.fill(QColor(0, 0, 0, 0))
-        p = QPainter(pm); p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        p.setPen(QPen(QColor(color), 1.8)); p.setBrush(QColor(0, 0, 0, 0))
-        if kind == "circle":
-            p.drawEllipse(QRectF(1.9, 1.9, 14.2, 14.2))
-        elif kind == "round":
-            p.drawRoundedRect(QRectF(0.9, 3.4, 16.2, 11.2), 3.6, 3.6)
-        else:
-            p.drawRect(QRectF(0.9, 3.4, 16.2, 11.2))
-        p.end()
-        return QIcon(pm)
+        """261008: 도형 버튼 아이콘 — 폰트 글리프(▭❒◯)는 크기·모양이 제각각이라 그린 아이콘을 쓴다
+        (화면 디자인 SOT §4 `themed_icon` 표준). 활성(주황 바탕)이면 테마와 상관없이 어두운 색.
+        폭 28 중 왼쪽 18에만 그려(pad_right=10) 가운데 정렬돼도 ▾ 풀다운 영역과 띄워진다."""
+        from viewer.widgets.icons import themed_icon
+        name = {"round": "shape_round", "circle": "shape_circle"}.get(kind, "shape_rect")
+        return themed_icon(name, dark=(False if on else None), size=18, pad_right=10, dpr=2.0)
 
     def _update_shape_button(self):
         if not hasattr(self, "_shape_btn"):
@@ -4032,6 +4017,7 @@ class MainView(QWidget):
             st["rect"] = [rc[0] + dnx, rc[1] + dny, rc[2] + dnx, rc[3] + dny]
             if st.get("leader") and st.get("anchor"):
                 a = st["anchor"]; st["anchor"] = [a[0] + dnx, a[1] + dny]
+            self._sync_box_anchor(st)
         else:
             st["points"] = [[x + dnx, y + dny] for x, y in st.get("points", [])]
 
@@ -4075,10 +4061,19 @@ class MainView(QWidget):
                           (cx + hw - pr.left()) / max(1, pr.width()),
                           (cy + hh - pr.top()) / max(1, pr.height())]
             st["rot"] = float(rot)
-            if st.get("leader") and st.get("box_anchor"):
-                # 261008-9: 지시선 글 시작점(박스 좌하단)도 따라간다 — 남겨 두면
-                #   다음 입력(_on_text_changed) 때 박스가 옛 자리로 되돌아간다.
-                st["box_anchor"] = [st["rect"][0], st["rect"][3]]
+            self._sync_box_anchor(st)
+
+    @staticmethod
+    def _sync_box_anchor(st):
+        """261008-9: 지시선 글 시작점(`box_anchor` = 박스 좌하단)을 지금 rect 에 맞춘다.
+
+        입력 중 박스는 이 점을 고정하고 자란다(`_on_text_changed`). rect 만 바꾸고 이 점을
+        남겨 두면 **다음 입력 때 박스가 옛 자리로 되돌아간다** — rect 를 바꾸는 길
+        (핸들 변형 `_shape_set_geom`·글 맞춤 `_text_apply_size`·함께 이동/방향키
+        `_stroke_translate`)은 모두 이것을 부른다."""
+        if st.get("leader") and st.get("box_anchor"):
+            rc = st.get("rect", [0, 0, 0, 0])
+            st["box_anchor"] = [min(rc[0], rc[2]), max(rc[1], rc[3])]
 
     def _shape_handle_points(self, st, pr):
         cx, cy, hw, hh, rot = self._shape_geom(st, pr)
@@ -4441,6 +4436,7 @@ class MainView(QWidget):
         else:
             ny0, ny1 = y0, y0 + fh
         st["rect"] = [nx0, ny0, nx1, ny1]
+        self._sync_box_anchor(st)
 
     def _textbox_hit_index(self, pos, pr):
         """텍스트/지시선 박스 본문 적중 인덱스(위에 그린 것 우선). 없으면 -1."""

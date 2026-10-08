@@ -7,6 +7,8 @@
 A. 등록 순서가 섞여 있어도 '즐겨찾기 폴더' → '즐겨찾기 파일' → '즐겨찾기 검색어' 순 · 그룹 안은 등록 순서
 B. 그룹 제목은 눌리지 않는다 · 항목이 없는 그룹은 제목도 없다 · kind 없는 옛 항목은 폴더로
 C. 파일 그룹 항목을 누르면 그 파일이 열린다 · 없는 대상은 '(없음)' 으로 꺼진다
+D. 즐겨찾기 관리 창도 같은 묶음으로 보이고, 순서는 같은 종류 안에서만 바뀐다(드래그로 넘겨도 저장은 그룹 순서)
+E. 파일 즐겨찾기 등록 창의 종류가 '📄 파일' 로 보인다(종전 '📁 폴더')
 """
 import os, sys, faulthandler, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -75,6 +77,34 @@ try:
     app.processEvents()
     cur = mw.main_view.current_file()
     chk(cur and Path(str(cur)).name == "파일2.pdf", "C 파일 그룹 항목을 누르면 그 파일이 열린다", str(cur))
+
+    # ── D 관리 창도 메뉴와 같은 묶음 · 순서는 같은 종류 안에서만 ──
+    from viewer.widgets.favorites_dialog import FavoritesDialog, AddFavoriteDialog
+    mixed = [{"kind": "file", "name": "F1", "file": str(f1)}, {"kind": "folder", "name": "D1", "folder": str(d1)},
+             {"kind": "search", "name": "S1", "folder": str(d1), "query": "가"},
+             {"kind": "file", "name": "F2", "file": str(f2)}, {"name": "D2", "folder": str(d2)}]
+    dlg = FavoritesDialog(mixed)
+    rows = lambda: [dlg.list.item(i).text() for i in range(dlg.list.count())]
+    chk(rows() == ["📁 D1", "📁 D2", "📄 F1", "📄 F2", "🔍 S1"], "D 관리 창이 폴더 → 파일 → 검색어로 묶여 보인다", str(rows()))
+    dlg.list.setCurrentRow(1); dlg._move(+1)                      # 폴더 끝 → 파일로 넘기려 함
+    chk(rows()[1:3] == ["📁 D2", "📄 F1"], "D ↓ 는 그룹 경계를 넘지 않는다", str(rows()))
+    dlg.list.setCurrentRow(3); dlg._move(-1)                      # F2 를 F1 위로
+    chk(rows()[2:4] == ["📄 F2", "📄 F1"], "D 같은 종류 안에서는 옮겨진다", str(rows()))
+    it = dlg.list.takeItem(4); dlg.list.insertItem(0, it)         # 드래그로 검색어를 맨 위로 옮긴 것과 같다
+    chk([f["name"] for f in dlg.result_favorites()] == ["D1", "D2", "F2", "F1", "S1"],
+        "D 드래그로 그룹을 넘겨도 저장은 그룹 순서(그룹 안 순서는 유지)")
+    dlg.done(0)
+
+    # ── E 파일 즐겨찾기 등록 창의 종류 표시 (종전 '📁 폴더') — 실제 _add_file_favorite 경로 ──
+    from PyQt6.QtWidgets import QLabel
+    seen = []
+    orig_exec = AddFavoriteDialog.exec
+    AddFavoriteDialog.exec = lambda self: (seen.extend(l.text() for l in self.findChildren(QLabel)), 0)[1]
+    try:
+        mw._add_file_favorite(str(f1))
+    finally:
+        AddFavoriteDialog.exec = orig_exec
+    chk("종류: 📄 파일" in seen, "E 파일 즐겨찾기 등록 창이 '📄 파일' 로 보인다", str(seen))
 except Exception:
     import traceback
     traceback.print_exc()

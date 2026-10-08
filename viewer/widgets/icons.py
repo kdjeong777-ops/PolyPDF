@@ -117,22 +117,45 @@ def _file(p, c):
     p.drawLine(QPointF(9.6, 4.8), QPointF(12.2, 4.8))
 
 
+# 261008: 편집모드 도형 버튼(직사각형/둥근 사각형/원) — 폰트 글리프(▭❒◯)는 크기·모양이
+#   제각각이라(❒ 는 그림자 상자) 그린다. 직사각형·둥근 사각형은 같은 크기(모서리만 다름).
+def _shape_rect(p, c):
+    p.setPen(QPen(c, 1.6))
+    p.drawRect(QRectF(0.8, 3.0, 14.4, 10.0))
+
+
+def _shape_round(p, c):
+    p.setPen(QPen(c, 1.6))
+    p.drawRoundedRect(QRectF(0.8, 3.0, 14.4, 10.0), 3.2, 3.2)
+
+
+def _shape_circle(p, c):
+    p.setPen(QPen(c, 1.6))
+    p.drawEllipse(QPointF(8, 8), 6.3, 6.3)
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
     "chevron_left": _chevron_left, "chevron_right": _chevron_right,
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
     "folder": _folder, "file": _file,
+    "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
 }
 
 
-def themed_icon(name: str, dark: bool | None = None, size: int = 16) -> QIcon:
-    """이름으로 테마색 단색 아이콘 생성. 없는 이름이면 빈 아이콘."""
+def themed_icon(name: str, dark: bool | None = None, size: int = 16, *,
+                pad_right: int = 0, dpr: float = 1.0) -> QIcon:
+    """이름으로 테마색 단색 아이콘 생성. 없는 이름이면 빈 아이콘.
+
+    pad_right: 오른쪽에 둘 빈 폭(px) — 가운데 정렬 버튼에서 그림을 왼쪽으로 비킬 때
+    (도형 버튼이 ▾ 풀다운 영역과 붙지 않게). dpr: 고해상도 렌더 배율."""
     fn = _DRAW.get(name)
     if fn is None:
         return QIcon()
     c = QColor(fg_color(dark))
-    pm = QPixmap(size, size)
+    pm = QPixmap(int((size + pad_right) * dpr), int(size * dpr))
+    pm.setDevicePixelRatio(dpr)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
     try:

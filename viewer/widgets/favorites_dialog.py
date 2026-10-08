@@ -2,8 +2,8 @@
 
 데이터 모델: settings.json 의 'favorites' 키 — 항목 리스트.
 각 항목:
-    {"name": "표시명", "kind": "folder"|"search",
-     "folder": "...", "query": "...(검색용)"}
+    {"name": "표시명", "kind": "folder"|"file"|"search",
+     "folder": "...", "file": "...(파일용)", "query": "...(검색용)"}
 
 UI:
   - 즐겨찾기 관리 다이얼로그 (이름 변경 / 삭제 / 위/아래 이동 / 패널에 등록 안내)
@@ -20,6 +20,21 @@ from PyQt6.QtWidgets import (
     QPushButton, QLineEdit, QLabel, QMessageBox, QDialogButtonBox,
     QInputDialog,
 )
+
+
+# 261008-12: 즐겨찾기 메뉴와 같은 그룹 순서 — 폴더 → 파일 → 검색어(kind 가 없거나 모르면 폴더).
+KIND_ORDER = ("folder", "file", "search")
+KIND_PREFIX = {"folder": "📁 ", "file": "📄 ", "search": "🔍 "}
+
+
+def fav_kind(f: dict) -> str:
+    k = f.get("kind")
+    return k if k in KIND_ORDER else "folder"
+
+
+def group_by_kind(favs: list) -> list:
+    """종류 그룹 순서로 안정 정렬 — 그룹 안은 원래(등록·사용자가 정한) 순서 그대로."""
+    return sorted(favs, key=lambda f: KIND_ORDER.index(fav_kind(f)))
 
 
 def make_unique_name(base: str, existing: list) -> str:
@@ -46,11 +61,13 @@ class FavoritesDialog(QDialog):
         # 260611-107: 항목 dict 를 깊은 복사 — 다이얼로그 편집(이름변경 등)이 원본을
         #   바로 건드리지 않게 하여, 확인(OK) 시에만 정확히 반영(취소 시 원복).
         import copy as _copy
-        self._favs: List[dict] = [_copy.deepcopy(f) for f in favorites]
+        self._favs: List[dict] = group_by_kind([_copy.deepcopy(f) for f in favorites])
 
         layout = QVBoxLayout(self)
 
-        info = QLabel("드래그하거나 ↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정.")
+        # 261008-12: 메뉴처럼 폴더 → 파일 → 검색어로 묶어 보이고, 순서는 같은 종류 안에서 바꾼다.
+        info = QLabel("폴더 → 파일 → 검색어 순으로 묶여 있습니다. 같은 종류 안에서 드래그하거나\n"
+                      "↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정.")
         info.setStyleSheet("color:#666;")
         layout.addWidget(info)
 
@@ -88,9 +105,7 @@ class FavoritesDialog(QDialog):
         layout.addWidget(bb)
 
     def _append_to_list(self, f: dict):
-        kind = f.get("kind", "folder")
-        prefix = {"folder": "📁 ", "file": "📄 ", "search": "🔍 "}.get(kind, "📁 ")
-        it = QListWidgetItem(f"{prefix}{f.get('name', '?')}")
+        it = QListWidgetItem(f"{KIND_PREFIX[fav_kind(f)]}{f.get('name', '?')}")
         it.setData(Qt.ItemDataRole.UserRole, f)
         it.setToolTip(self._tip(f))
         self.list.addItem(it)
@@ -108,6 +123,8 @@ class FavoritesDialog(QDialog):
         if row < 0: return
         new_row = row + delta
         if new_row < 0 or new_row >= self.list.count(): return
+        kind_of = lambda r: fav_kind(self.list.item(r).data(Qt.ItemDataRole.UserRole) or {})
+        if kind_of(new_row) != kind_of(row): return      # 그룹 경계는 넘지 않는다
         item = self.list.takeItem(row)
         self.list.insertItem(new_row, item)
         self.list.setCurrentRow(new_row)
@@ -131,9 +148,7 @@ class FavoritesDialog(QDialog):
                                             "새 이름:", text=old_name)
         if ok and new_name.strip():
             f["name"] = new_name.strip()
-            kind = f.get("kind", "folder")
-            prefix = {"folder": "📁 ", "file": "📄 ", "search": "🔍 "}.get(kind, "📁 ")
-            item.setText(f"{prefix}{f['name']}")
+            item.setText(f"{KIND_PREFIX[fav_kind(f)]}{f['name']}")
             item.setData(Qt.ItemDataRole.UserRole, f)
             item.setToolTip(self._tip(f))
 
@@ -142,7 +157,7 @@ class FavoritesDialog(QDialog):
         for i in range(self.list.count()):
             f = self.list.item(i).data(Qt.ItemDataRole.UserRole) or {}
             out.append(f)
-        return out
+        return group_by_kind(out)      # 드래그로 그룹을 넘겼어도 저장은 그룹 순서로
 
 
 class AddFavoriteDialog(QDialog):
@@ -154,7 +169,8 @@ class AddFavoriteDialog(QDialog):
         self.setMinimumWidth(420)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(f"종류: {'📁 폴더' if kind == 'folder' else '🔍 검색'}"))
+        label = {"folder": "📁 폴더", "file": "📄 파일", "search": "🔍 검색"}.get(kind, "📁 폴더")
+        layout.addWidget(QLabel(f"종류: {label}"))
         layout.addWidget(QLabel("이름 (수정 가능):"))
         self.edit = QLineEdit(suggested_name)
         self.edit.selectAll()

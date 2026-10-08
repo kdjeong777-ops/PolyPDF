@@ -259,6 +259,25 @@ try:
         f"좌하단 {lrc[0]:.3f},{lrc[3]:.3f} → {lrc2[0]:.3f},{lrc2[3]:.3f}")
     mv._commit_text_editor()
 
+    # 방향키(선택 상태)로 옮긴 뒤 다시 편집해 글을 더 써도 옮긴 자리 — 실제 키 이벤트로.
+    #   방향키·함께 이동은 `_stroke_translate` 를 지나는데, 여기서 글 시작점을 놓치면 되돌아간다.
+    from PyQt6.QtGui import QKeyEvent
+    mv._stroke_selected = li
+    for _ in range(10):
+        QApplication.sendEvent(mv.view, QKeyEvent(_QE.Type.KeyPress, _Qt.Key.Key_Right,
+                                                  _Qt.KeyboardModifier.NoModifier))
+    app.processEvents()
+    krc = list(mv._page_strokes[li]["rect"])
+    chk(abs((krc[0] - lrc2[0]) * pr.width() - 30) <= 1.5, "⑥-b 방향키로 지시선 박스가 옮겨진다",
+        f"{(krc[0] - lrc2[0]) * pr.width():.1f}px")
+    mv._begin_text_edit(li, pr); app.processEvents()
+    mv._text_editor.setPlainText("테스트입니다 더"); app.processEvents()
+    krc2 = mv._page_strokes[li]["rect"]
+    chk(abs(krc2[0] - krc[0]) < 1e-6 and abs(krc2[3] - krc[3]) < 1e-6,
+        "⑥-b 방향키로 옮긴 뒤 글을 더 써도 옮긴 자리에 남는다",
+        f"좌하단 {krc[0]:.3f},{krc[3]:.3f} → {krc2[0]:.3f},{krc2[3]:.3f}")
+    mv._commit_text_editor()
+
     # ── ⑦ 선(색상버튼)을 안 골라도 텍스트 박스가 만들어진다 (260907-2) ──
     mv._draw_kind = "text"
     mv._pen_idx = None

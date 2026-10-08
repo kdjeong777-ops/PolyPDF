@@ -233,6 +233,17 @@ try:
     ui = _in.getsource(_MV._build_ui) if hasattr(_MV, "_build_ui") else ""
     chk("icon_eraser_page.png" in _in.getsource(_MV),
         "⑤ 청소 단추가 페이지 지우개 그림을 쓴다(옆 지우개들과 한 벌)")
+    # 261008-8(사용자 보고): 도형 버튼 — 글리프(▭❒◯)가 아니라 그린 단색 아이콘(themed_icon)
+    from viewer.widgets.icons import _DRAW as _ICON_DRAW
+    imgs = []
+    for k in ("rect", "round", "circle"):
+        chk(f"shape_{k}" in _ICON_DRAW, f"⑤ icons.py 에 shape_{k} 가 있다")
+        mv._shape_kind = k; mv._update_shape_button()
+        chk(mv._shape_btn.text() == "" and not mv._shape_btn.icon().isNull(),
+            f"⑤ 도형({k}) 버튼이 글리프가 아니라 그림이다", repr(mv._shape_btn.text()))
+        imgs.append(mv._shape_btn.icon().pixmap(28, 18).toImage())
+    chk(imgs[0] != imgs[1] and imgs[1] != imgs[2] and imgs[0] != imgs[2],
+        "⑤ 세 도형 아이콘이 서로 다르다")
 
     # ── ⑥ 숨긴 패널 손잡이는 스크롤바보다 좁다 (260908-4) ───────────────
     from PyQt6.QtWidgets import QStyle

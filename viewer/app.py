@@ -7937,12 +7937,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if self._favorites:
             # 261008-12(사용자 요청): 폴더·파일을 따로 묶는다 — 즐겨찾기 폴더 밑에 즐겨찾기 파일.
             #   검색어는 그 밑에 따로(종전에는 셋이 등록 순서대로 섞여 있었다). 그룹 안은 등록 순서.
-            groups = (("folder", "즐겨찾기 폴더", "📁 "), ("file", "즐겨찾기 파일", "📄 "),
-                      ("search", "즐겨찾기 검색어", "🔍 "))
-            known = {g[0] for g in groups}
-            for kind, title, prefix in groups:
-                items = [f for f in self._favorites
-                         if (f.get("kind") if f.get("kind") in known else "folder") == kind]
+            #   종류 판정·순서·접두는 관리 창과 같은 정의(favorites_dialog.KIND_ORDER/fav_kind).
+            from viewer.widgets.favorites_dialog import KIND_ORDER, KIND_PREFIX, fav_kind
+            titles = {"folder": "즐겨찾기 폴더", "file": "즐겨찾기 파일", "search": "즐겨찾기 검색어"}
+            for kind in KIND_ORDER:
+                title, prefix = titles[kind], KIND_PREFIX[kind]
+                items = [f for f in self._favorites if fav_kind(f) == kind]
                 if not items:
                     continue
                 self.menu_favorites.addSeparator()
@@ -8046,7 +8046,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             QMessageBox.information(self, "안내", "PDF 파일을 선택하세요.")
             return
         suggested = make_unique_name(p.stem, self._favorites)
-        dlg = AddFavoriteDialog(suggested, "folder", self)   # 이름 입력 재사용
+        dlg = AddFavoriteDialog(suggested, "file", self)     # 261008-12: 종류 표시 '📄 파일'(종전 '📁 폴더')
         dlg.setWindowTitle("현재 파일 즐겨찾기 추가")
         if dlg.exec() == dlg.DialogCode.Accepted and dlg.name():
             self._favorites.append({
