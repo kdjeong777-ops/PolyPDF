@@ -39,6 +39,7 @@ DEFAULT_TWOUP = {
     "gap_v": 16,                       # 행(세로) 간격(pt) — 6-up 등
     "crop_top": 0, "crop_bottom": 0, "crop_left": 0, "crop_right": 0,  # 원본 크롭(%)
     "duplex": False,                   # 양면(True)/단면(False) 인쇄
+    "duplex_side": "long",             # 261008-2: 양면일 때 넘기는 쪽 long(긴 쪽)|short(짧은 쪽) — 프린터 양면 설정과 같다
     "gutter": 0,                       # 제본용 여백(pt) — 단면=좌측, 양면=홀수 좌/짝수 우
     "facing_first": False,             # 260617-6: 맞쪽 인쇄 — 맨 앞 여백 페이지 1장 추가
     "doc_break": False,                # True면 문서마다 새 페이지(연속 채움 끔)
@@ -65,6 +66,20 @@ DEFAULT_TWOUP = {
     "divider_template": "",           # .docx (비우면 기본 생성)
     "divider_bg": "#eef2f7",          # 간지 배경색(여백색과 별도)
 }
+
+
+DUPLEX_CHOICES = (("단면", "none"), ("양면(긴 쪽)", "long"), ("양면(짧은 쪽)", "short"))
+
+
+def duplex_choice(s) -> str:
+    """261008-2(마스터 §11.10.1): 설정 → 'none' | 'long' | 'short'.
+
+    인쇄 창의 '단면/양면' 과 **같은 세 갈래**다. `duplex`(참/거짓)는 옛 스타일·제본 여백·
+    홀수 시작이 읽는 값이라 그대로 두고, 넘기는 쪽은 `duplex_side` 에 따로 둔다 —
+    옛 스타일의 `duplex: True` 는 `duplex_side` 가 없으므로 긴 쪽(프린터 기본)으로 읽힌다."""
+    if not bool((s or {}).get("duplex", False)):
+        return "none"
+    return "short" if str((s or {}).get("duplex_side", "long")) == "short" else "long"
 
 
 def merge_twoup_settings(s) -> dict:

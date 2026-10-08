@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 
-from viewer.twoup import merge_twoup_settings, PAGE_SIZES
+from viewer.twoup import merge_twoup_settings, PAGE_SIZES, DUPLEX_CHOICES, duplex_choice
 from viewer.widgets.merge_preview import MergePreviewWidget
 
 
@@ -73,9 +73,12 @@ class TwoUpSettingsDialog(QDialog):
         gf.addRow("채움 방식:", self.cmb_fit)
         self.chk_center = QCheckBox("가운데 정렬"); self.chk_center.setChecked(bool(s.get("center", True)))
         gf.addRow(self.chk_center)
+        # 261008-2(사용자 요청): '양면' 을 프린터 설정과 같은 '양면(긴 쪽)'·'양면(짧은 쪽)' 으로 나눈다.
+        #   인쇄 창에서 다단을 켜면 이 값이 프린터 '단면/양면' 에 그대로 걸린다(마스터 §11.10.1).
         self.cmb_duplex = QComboBox()
-        self.cmb_duplex.addItem("단면", False); self.cmb_duplex.addItem("양면", True)
-        self._set_combo(self.cmb_duplex, bool(s.get("duplex", False)))
+        for _t, _k in DUPLEX_CHOICES:
+            self.cmb_duplex.addItem(_t, _k)
+        self._set_combo(self.cmb_duplex, duplex_choice(s))
         gf.addRow("인쇄 면:", self.cmb_duplex)
         self.sp_gutter = self._sp(s.get("gutter", 0))
         gf.addRow("제본 여백:", self.sp_gutter)
@@ -264,7 +267,7 @@ class TwoUpSettingsDialog(QDialog):
                 cmb.setCurrentIndex(i); return
 
     def _update_doc_odd(self, *_):
-        on = self.chk_docbreak.isChecked() and bool(self.cmb_duplex.currentData())
+        on = self.chk_docbreak.isChecked() and self.cmb_duplex.currentData() != "none"
         self.chk_doc_odd.setVisible(on)
 
     def _save_samples(self, *_):
@@ -296,7 +299,8 @@ class TwoUpSettingsDialog(QDialog):
             "page_size": self.cmb_size.currentData(),
             "fit_mode": self.cmb_fit.currentData(),
             "center": self.chk_center.isChecked(),
-            "duplex": self.cmb_duplex.currentData(),
+            "duplex": self.cmb_duplex.currentData() != "none",
+            "duplex_side": "short" if self.cmb_duplex.currentData() == "short" else "long",
             "gutter": self.sp_gutter.value(),
             "facing_first": self.chk_facing.isChecked(),
             "doc_break": self.chk_docbreak.isChecked(),
@@ -419,7 +423,7 @@ class TwoUpSettingsDialog(QDialog):
         self._set_combo(self.cmb_nup, int(s.get("nup", 2)))
         self._set_combo(self.cmb_fit, s.get("fit_mode", "contain"))
         self.chk_center.setChecked(bool(s.get("center", True)))
-        self._set_combo(self.cmb_duplex, bool(s.get("duplex", False)))
+        self._set_combo(self.cmb_duplex, duplex_choice(s))
         self.sp_gutter.setValue(int(s.get("gutter", 0)))
         self.chk_facing.setChecked(bool(s.get("facing_first", False)))
         self.chk_docbreak.setChecked(bool(s.get("doc_break", False)))

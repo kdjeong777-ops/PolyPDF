@@ -169,20 +169,29 @@ class TextPanel(QWidget):
         bar.addWidget(self.btn_bold)
         v.addLayout(bar)
 
-        bar2 = QHBoxLayout()
-        bar2.setSpacing(3)
-        bar2.addWidget(QLabel("자간"))
+        # 261008-3(사용자 요청 — 스크린샷 창과 같게): 둘째·셋째 줄은 폭이 모자라면 **아래 줄로 흐른다**
+        #   (디자인 SOT §2.8.4). 종전 QHBoxLayout 은 단추를 눌러 '타일 적'·'R 다시 읽' 처럼 글자를 잘랐다.
+        #   첫째 줄은 글꼴 칸이 늘었다 줄었다 하며 맞추므로 그대로 둔다.
+        from viewer.widgets.flow_layout import FlowLayout
+        self.bar2_widget = QWidget(self)
+        bar2 = FlowLayout(self.bar2_widget, spacing=3, center=False)
+
+        def _pair(label, w):
+            """'자간 [값]' 처럼 이름과 칸은 한 덩어리 — 줄이 바뀌어도 떨어지지 않게."""
+            box = QWidget(self)
+            h = QHBoxLayout(box); h.setContentsMargins(0, 0, 0, 0); h.setSpacing(3)
+            h.addWidget(QLabel(label)); h.addWidget(w)
+            return box
         self.sp_sp = QDoubleSpinBox()
         self.sp_sp.setRange(-2.0, 20.0); self.sp_sp.setSingleStep(0.5)
         self.sp_sp.setDecimals(1); self.sp_sp.setSuffix(" pt")
         self.sp_sp.valueChanged.connect(lambda x: self._set_style("spacing_pt", float(x)))
-        bar2.addWidget(self.sp_sp)
-        bar2.addWidget(QLabel("줄간격"))
+        bar2.addWidget(_pair("자간", self.sp_sp))
         self.sp_ls = QDoubleSpinBox()
         self.sp_ls.setRange(0.8, 3.0); self.sp_ls.setSingleStep(0.1)
         self.sp_ls.setDecimals(1); self.sp_ls.setSuffix(" 배")
         self.sp_ls.valueChanged.connect(lambda x: self._set_style("line_spacing", float(x)))
-        bar2.addWidget(self.sp_ls)
+        bar2.addWidget(_pair("줄간격", self.sp_ls))
         self.cb_omit = QCheckBox("표 생략")
         self.cb_omit.setToolTip("표 안 내용을 '[표 n열 × m행]' 한 줄로 줄입니다")
         self.cb_omit.toggled.connect(lambda _: self.reload())
@@ -194,11 +203,10 @@ class TextPanel(QWidget):
                                 "제목·표 제목·표 칸은 잇지 않습니다.")
         self.cb_join.toggled.connect(lambda _: self.reload())
         bar2.addWidget(self.cb_join)
-        bar2.addStretch(1)
-        v.addLayout(bar2)
+        v.addWidget(self.bar2_widget)
 
-        bar3 = QHBoxLayout()
-        bar3.setSpacing(3)
+        self.bar3_widget = QWidget(self)
+        bar3 = FlowLayout(self.bar3_widget, spacing=3, center=False)
         self.btn_hl = QPushButton("하이라이트")
         self.btn_hl.setToolTip("고른 글을 칠합니다")
         self.btn_hl.clicked.connect(self._on_highlight)
@@ -239,8 +247,7 @@ class TextPanel(QWidget):
             a.triggered.connect(lambda _=False, k=key: self.exportWordRequested.emit(k))
         self.btn_word.setMenu(m)
         bar3.addWidget(self.btn_word)
-        bar3.addStretch(1)
-        v.addLayout(bar3)
+        v.addWidget(self.bar3_widget)
 
         self.info = QLabel("")
         self.info.setStyleSheet("color:#666;")

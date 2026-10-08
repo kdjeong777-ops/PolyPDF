@@ -210,13 +210,15 @@ class MiniStrip(QWidget):
         layout.setContentsMargins(2, 0, 2, 0)    # 260606-7: 상하 여백 최소화
         layout.setSpacing(1)
 
-        head = QHBoxLayout()
-        head.setContentsMargins(0, 0, 0, 0)
-        head.setSpacing(2)
+        # 261008-2(사용자 요청 '창폭이 좁으면 버튼이 잘리지 않게 아래로 흘러서'): 머리줄을
+        #   FlowLayout 으로 — 폭이 모자라면 다음 줄로 넘긴다(본문 툴바·단어장 컨트롤과 같은 방식,
+        #   디자인 SOT §2.8.4). 종전 QHBoxLayout 은 단추를 최소 폭 아래로 눌러 글자가 잘렸다.
+        from viewer.widgets.flow_layout import FlowLayout
+        self.head_widget = QWidget(self)
+        head = FlowLayout(self.head_widget, spacing=2, center=False)
         self.title_label = QLabel(self._title)
         self.title_label.setStyleSheet("font-weight: bold; padding: 0px 4px;")
         head.addWidget(self.title_label)
-        head.addStretch(1)
 
         # v1.5.0 M7: 외부에서 추가 위젯(스크린샷 캡처/저장 버튼) 삽입 가능
         for w in self._extra_widgets:
@@ -231,7 +233,7 @@ class MiniStrip(QWidget):
         self.clear_btn.setToolTip("전체 삭제")
         self.clear_btn.clicked.connect(self._on_clear_all)
         head.addWidget(self.clear_btn)
-        layout.addLayout(head)
+        layout.addWidget(self.head_widget)
 
         self.list = _DragOutList(self)
         self.list.setFlow(QListWidget.Flow.LeftToRight)
@@ -375,6 +377,7 @@ class MiniStrip(QWidget):
         펼침 모드(스크린샷만 보기)는 격자로 세로를 채워야 하므로 한도를 푼다.
         두 모드가 서로를 망가뜨리지 않게 **모드를 바꿀 때마다** 다시 정한다.
         """
+        self._expanded = bool(expanded)
         if expanded:
             self.setMaximumHeight(16777215)
             return
@@ -382,9 +385,25 @@ class MiniStrip(QWidget):
         if lay is None:
             return
         # 늘어나는 자리(addStretch)는 sizeHint 에 0 으로 잡히므로 그대로 내용 높이다.
+        # 261008-2: 머리줄이 FlowLayout 이라 **폭에 따라** 줄 수가 바뀐다. 상자 sizeHint 는 머리줄을
+        #   '가장 좁을 때'(항목마다 한 줄) 높이로 잡으므로, 그 몫을 빼고 **지금 폭**으로 잰 높이를 넣는다.
+        #   더하기만 하면 넓을 때 칸이 내용보다 커져 §2.8.2('위에 떠 있다')가 되살아난다.
         h = lay.sizeHint().height()
+        hw = getattr(self, "head_widget", None)
+        if hw is not None and self.width() > 0:
+            m0 = lay.contentsMargins()
+            w = max(1, self.width() - m0.left() - m0.right())
+            h += hw.layout().heightForWidth(w) - hw.sizeHint().height()
         m = lay.contentsMargins()
-        self.setMaximumHeight(max(1, h + m.top() + m.bottom()))
+        new_max = max(1, h + m.top() + m.bottom())
+        if self.maximumHeight() != new_max:
+            self.setMaximumHeight(new_max)
+
+    def resizeEvent(self, e):
+        """261008-2: 폭이 바뀌면 머리줄 줄 수가 바뀔 수 있다 — 접힌 모드의 높이 한도를 다시 잰다."""
+        super().resizeEvent(e)
+        if e.oldSize().width() != e.size().width() and not getattr(self, "_expanded", False):
+            self._fit_height(False)
 
     def _renumber(self):
         """260606-17: 썸네일 아래에 표시순서 번호를 갱신."""

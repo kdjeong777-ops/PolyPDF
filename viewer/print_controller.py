@@ -41,10 +41,15 @@ class PrintMixin:
             QMessageBox.information(self, "인쇄", "인쇄할 문서가 없습니다.")
             return
         from viewer.widgets.print_dialog import PrintScopeDialog
+        try:
+            thumb_pages = self.page_thumbs.selected_pages()   # 261008-2: 다단 미리보기가 같은 범위를
+        except Exception:
+            thumb_pages = []
         dlg = PrintScopeDialog(max(pc, 1), cur_page, n_thumb, n_shot, self,
                                preset_api=self._merge_preset_api(),
                                sample=(str(cur) if is_pdf else None),
-                               n_files_sel=n_files)
+                               n_files_sel=n_files,
+                               thumb_pages=thumb_pages, file_paths=sel_files)
         if not dlg.exec():
             return
         spec = dlg.result_spec()
