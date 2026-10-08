@@ -141,12 +141,20 @@ sg = merge_twoup_settings({"nup": 2, "gutter": 30, "duplex": False,
                            "margin_left": 10, "margin_right": 10})
 owg, ohg, bg = _grid_layout(prP, sg, 1)
 chk(abs(bg[0].x0 - 40) < 1, "단면 제본 여백: 좌측 +gutter", f"{bg[0].x0:.1f}")
-sd = merge_twoup_settings({"nup": 2, "gutter": 30, "duplex": True,
+# 261008-5(마스터 §11.10.1): 양면은 **종이를 넘기는 축** — 2-up 은 가로 시트라
+#   짧은 쪽 = 좌우(홀수 좌·짝수 우), 긴 쪽 = 위아래(홀수 위·짝수 아래). 종전 기대(양면=항상 좌우)는 바뀌었다.
+sd = merge_twoup_settings({"nup": 2, "gutter": 30, "duplex": True, "duplex_side": "short",
                            "margin_left": 10, "margin_right": 10})
 _o1, _h1, b_odd = _grid_layout(prP, sd, 1)
 ow_e, _h2, b_even = _grid_layout(prP, sd, 2)
-chk(abs(b_odd[0].x0 - 40) < 1, "양면 홀수 시트: 좌측 제본")
-chk(abs(b_even[-1].x1 - (ow_e - 40)) < 1, "양면 짝수 시트: 우측 제본")
+chk(abs(b_odd[0].x0 - 40) < 1, "양면(짧은 쪽, 가로 시트) 홀수 시트: 좌측 제본")
+chk(abs(b_even[-1].x1 - (ow_e - 40)) < 1, "양면(짧은 쪽, 가로 시트) 짝수 시트: 우측 제본")
+sl = merge_twoup_settings({"nup": 2, "gutter": 30, "duplex": True, "duplex_side": "long",
+                           "margin_top": 10, "margin_bottom": 10, "margin_left": 10, "margin_right": 10})
+_o3, _h3, l_odd = _grid_layout(prP, sl, 1)
+_o4, oh_e, l_even = _grid_layout(prP, sl, 2)
+chk(abs(l_odd[0].y0 - 40) < 1 and abs(l_odd[0].x0 - 10) < 1, "양면(긴 쪽, 가로 시트) 홀수 시트: 위 제본", f"{l_odd[0]}")
+chk(abs(l_even[0].y0 - 10) < 1 and l_even[0].y1 < l_odd[0].y1 + 1, "양면(긴 쪽, 가로 시트) 짝수 시트: 아래 제본", f"{l_even[0]}")
 
 # 연속 채움 vs doc_break (1쪽 + 3쪽)
 tmpc = Path(tempfile.mkdtemp(prefix="polypdf_cont_"))

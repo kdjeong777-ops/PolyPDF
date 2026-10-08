@@ -209,6 +209,7 @@ class BookmarkTree(QWidget):
     DATA_BASELABEL = Qt.ItemDataRole.UserRole + 7    # 260623: 해시태그 접미 적용 전 원본 라벨
     DATA_IS_FOLDER = Qt.ItemDataRole.UserRole + 8    # 260901-2: 트리 보기의 폴더 그룹 행
     DATA_PROBED = Qt.ItemDataRole.UserRole + 9       # 260906-1: 표식 검사 큐에 넣은 행
+    DATA_ALL_EXPANDED = Qt.ItemDataRole.UserRole + 10  # 261008-6: '모두 펼치기' 를 이 파일에 적용함
 
     # 260906-1(응답성 SOT §4.1 '폴더 열기 3단 규칙'):
     SCAN_BUDGET_MS = 150     # 메인 스레드에서 목록을 훑어 볼 예산. 넘기면 워커로 넘긴다.
@@ -218,6 +219,8 @@ class BookmarkTree(QWidget):
     FILL_INTERVAL_MS = 10    # ★ 0 금지 — Windows WM_TIMER 가 굶는다(§5)
     PROBE_INTERVAL_MS = 20   # 표식 검사 '모으기' 지연 — 스크롤마다 워커를 띄우지 않기 위해
     PROBE_SCAN_DELAY_MS = 80  # 260906-4: 보이는 행 걷기 지연(스크롤 중에는 걷지 않는다)
+    EXPAND_SLICE_MS = 30      # 261008-6: '모두 펼치기' 한 틱의 시간 상한(최소 파일 하나는 처리)
+    EXPAND_INTERVAL_MS = 10   # 다음 틱까지(0 금지 — 응답성 SOT §5)
 
     # 260901-2: 폴더 그룹 행 색 — 디자인 SOT §2.5(테마 무관, 밝은 노랑+어두운 글자)
     FOLDER_ROW_BG = "#fdf3c0"
@@ -274,6 +277,13 @@ class BookmarkTree(QWidget):
         self._probe_scan_timer.setInterval(self.PROBE_SCAN_DELAY_MS)
         self._probe_scan_timer.timeout.connect(self._queue_visible_probes)
         self._in_visible_scan = False            # 재진입 방지(걷는 도중 신호가 다시 온다)
+        # 261008-6(마스터 §4.7.3, 사용자 지시): '모두 펼치기' 상태 — 켜져 있는 동안 **보이는 파일**의
+        #   책갈피를 펼친다. 목록 전체를 한꺼번에 읽으면 수 초~수십 초 선다(실측 157개 11.8초).
+        self._expand_all_mode = False
+        self._expand_timer = QTimer(self)
+        self._expand_timer.setSingleShot(True)
+        self._expand_timer.setInterval(self.EXPAND_INTERVAL_MS)
+        self._expand_timer.timeout.connect(self._apply_expand_mode)
         # 260906-1: 폴더 스캔(워커) 상태 — 늦게 오는 이전 폴더 결과는 토큰으로 거른다.
         self._scan_worker = None
         self._scan_token = 0
@@ -1516,6 +1526,7 @@ class BookmarkTree(QWidget):
             self._probe_scan_timer.start()      # 이미 대기 중이면 시각만 미뤄진다
         except Exception:
             pass
+        self._schedule_expand_mode()            # 261008-6: 새로 보이는 파일도 펼친다
 
     def _queue_visible_probes(self):
         """보이는 파일 행 중 아직 검사하지 않은 것만 큐에 넣는다(응답성 SOT §4).
@@ -1529,6 +1540,7 @@ class BookmarkTree(QWidget):
             self._queue_visible_probes_inner()
         finally:
             self._in_visible_scan = False
+        self._schedule_expand_mode()            # 261008-6: 목록이 새로 채워지면(채우기·다시 읽기) 다시 건다
 
     def _queue_visible_probes_inner(self):
         added = False
@@ -2084,6 +2096,11 @@ class BookmarkTree(QWidget):
         menu.addSeparator()
         # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
         act_exp_all = menu.addAction("책갈피 모두 펼치기")
+        # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크로 보인다(보이는 파일이 계속 펼쳐진다)
+        act_exp_all.setCheckable(True)
+        act_exp_all.setChecked(self._expand_all_mode)
+        act_exp_all.setToolTip("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
+                               "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지).")
         act_col_all = menu.addAction("책갈피 모두 접기")
         act_sort_pg = None
         if self._edit_mode:
@@ -2397,29 +2414,90 @@ class BookmarkTree(QWidget):
 
     # ---- 260908-1(사용자 요청): 모두 펼치기 / 모두 접기 ------------------
     def _op_expand_all(self, on: bool):
-        """이 파일(없으면 트리 전체)의 책갈피를 모두 펼치거나 접는다.
+        """'모두 펼치기' / '모두 접기' — **파일 안의 책갈피**를 펼치거나 접는다(마스터 §4.7.3).
 
-        깊은 목차를 한 번에 훑거나 한 번에 정리하려는 조작이라 **파일 노드 자체는
-        접지 않는다** — 접으면 목록에서 사라져 다시 찾아야 한다."""
-        target = self._target_file_item()
+        261008-6(사용자 지시): 대상은 **책갈피 창에 보이는 파일들**이다. 목록 전체를 한꺼번에 읽으면
+        멈춘다 — 실측 다운로드 폴더 PDF 157개 책갈피 읽기 11.8초(한 파일 최대 1.6초). 그래서
+        '모두 펼치기' 는 **상태**로 켜 두고, 보이는 파일만 시간을 나눠(`EXPAND_SLICE_MS`) 펼친다.
+        스크롤·폴더 펼침·목록 다시 읽기로 **새로 보이는 파일**도 그때 펼친다. '모두 접기' 는 상태를 끄고
+        읽어 둔 파일의 책갈피를 접는다. 상태 중에 사용자가 접은 파일은 다시 펼치지 않는다.
 
-        def walk(node):
-            for i in range(node.childCount()):
-                c = node.child(i)
+        파일 노드 자체는 펼친 채 둔다(1단 책갈피가 보이게) — 종전 규칙 그대로."""
+        self._expand_all_mode = bool(on)
+        if on:
+            self._apply_expand_mode()
+            return
+        self._expand_timer.stop()
+        nodes = [n for n in self._iter_file_nodes()
+                 if n.data(0, self.DATA_TOC_LOADED) or n.data(0, self.DATA_ALL_EXPANDED)]
+        self.tree.setUpdatesEnabled(False)
+        try:
+            with self._quiet_tree():
+                for n in nodes:
+                    was_open = n.isExpanded()        # 파일 줄 자체의 펼침은 그대로 둔다(접어 둔 파일을 열지 않게)
+                    n.setData(0, self.DATA_ALL_EXPANDED, None)
+                    self._set_subtree_expanded(n, False)
+                    n.setExpanded(was_open)
+        finally:
+            self.tree.setUpdatesEnabled(True)
+
+    def _set_subtree_expanded(self, node, on: bool) -> None:
+        """node 아래 책갈피를 모두 펼치거나 접는다 — **한 번에**(응답성 SOT §4.4).
+
+        보이는 행을 하나씩 `setExpanded` 하면 그때마다 보기가 행 목록을 다시 짜 **제곱으로** 느려진다
+        (실측 책갈피 4,500개 15.6초 — Windows 가 '응답 없음' 으로 닫았다, 사용자 보고 261008-6).
+        node 를 잠깐 접어 안쪽 행을 숨기고(숨은 행의 펼침 표시는 값만 바뀐다) 다 정한 뒤 한 번만 펼친다.
+        호출하는 쪽이 `_quiet_tree()` 와 `setUpdatesEnabled(False)` 로 감싼다."""
+        def walk(n):
+            for k in range(n.childCount()):
+                c = n.child(k)
                 if c.data(0, self.DATA_IS_TOC_PLACEHOLDER):
                     continue
                 c.setExpanded(on)
                 walk(c)
+        node.setExpanded(False)
+        walk(node)
+        node.setExpanded(True)
 
-        with self._quiet_tree():
-            if target is not None:
-                target.setExpanded(True)
-                walk(target)
-            else:
-                for i in range(self.tree.topLevelItemCount()):
-                    top = self.tree.topLevelItem(i)
-                    top.setExpanded(True)
-                    walk(top)
+    def _schedule_expand_mode(self) -> None:
+        if getattr(self, "_expand_all_mode", False) and not self._expand_timer.isActive():
+            self._expand_timer.start()
+
+    def _apply_expand_mode(self) -> None:
+        """'모두 펼치기' 상태에서 **지금 보이는** 파일 중 아직 펼치지 않은 것을 펼친다(시간 나눠서).
+
+        책갈피를 아직 읽지 않은 파일은 먼저 읽는다(`_on_item_expanded` — 손으로 펼칠 때와 같은 길).
+        한 틱은 `EXPAND_SLICE_MS` 안에서 끝내되 최소 한 파일은 처리하고, 남으면 다음 틱으로 넘긴다.
+        펼치면 보이는 파일이 바뀌므로(책갈피가 화면을 채운다) 틱마다 보이는 행을 다시 센다."""
+        if not self._expand_all_mode:
+            return
+        import time as _t
+        t0 = _t.perf_counter()
+        while True:
+            it = next((x for x in self._visible_file_items()
+                       if not x.data(0, self.DATA_ALL_EXPANDED)), None)
+            if it is None:
+                return                               # 보이는 파일은 다 펼쳤다 — 스크롤 등을 기다린다
+            if (_t.perf_counter() - t0) * 1000.0 >= self.EXPAND_SLICE_MS:
+                self._expand_timer.start()           # 남은 것은 다음 틱에(그 사이 화면·입력이 돈다)
+                return
+            it.setData(0, self.DATA_ALL_EXPANDED, True)
+            if not it.data(0, self.DATA_TOC_LOADED):
+                try:
+                    self._on_item_expanded(it)       # 책갈피 읽기(placeholder → 실제 책갈피)
+                except Exception:
+                    pass
+            if it.childCount():
+                self.tree.setUpdatesEnabled(False)
+                try:
+                    with self._quiet_tree():
+                        self._set_subtree_expanded(it, True)
+                finally:
+                    self.tree.setUpdatesEnabled(True)
+            # 펼친 만큼 보이는 행이 바뀐다 — 다음 바퀴에서 다시 센다
+
+    def is_expand_all_mode(self) -> bool:
+        return bool(self._expand_all_mode)
 
     # ---- 260908-1(사용자 요청): 선택 책갈피를 페이지순으로 정렬 ----------
     def _op_sort_by_page(self):

@@ -40,7 +40,7 @@ DEFAULT_TWOUP = {
     "crop_top": 0, "crop_bottom": 0, "crop_left": 0, "crop_right": 0,  # 원본 크롭(%)
     "duplex": False,                   # 양면(True)/단면(False) 인쇄
     "duplex_side": "long",             # 261008-2: 양면일 때 넘기는 쪽 long(긴 쪽)|short(짧은 쪽) — 프린터 양면 설정과 같다
-    "gutter": 0,                       # 제본용 여백(pt) — 단면=좌측, 양면=홀수 좌/짝수 우
+    "gutter": 0,                       # 제본용 여백(pt) — 단면=좌측, 양면=넘기는 축(gutter_edge, 261008-5)
     "facing_first": False,             # 260617-6: 맞쪽 인쇄 — 맨 앞 여백 페이지 1장 추가
     "doc_break": False,                # True면 문서마다 새 페이지(연속 채움 끔)
     "doc_start_odd": False,            # 260611-48: 양면+doc_break일 때 새 문서를 홀수 페이지에서 시작
@@ -269,18 +269,49 @@ def _grid_dims(p0, s):
     return 1, 2, short, long_                      # 세로 용지, 상하
 
 
+def gutter_edge(s, ow, oh, sheet_no=1) -> str:
+    """261008-5(마스터 §11.10.1, 사용자 결정 '양면 제본 여백은 종이 넘기는 방향으로'): 제본 여백을 둘 가장자리.
+
+    제본(묶는) 가장자리는 **종이를 넘기는 축**이다 — 프린터의 '양면(긴 쪽)' 은 긴 변을 축으로,
+    '양면(짧은 쪽)' 은 짧은 변을 축으로 넘긴다. 시트 방향과 합치면:
+
+      | 시트 | 긴 쪽 | 짧은 쪽 |
+      | 세로 | 좌우(책)        | 위아래(메모장) |
+      | 가로 | 위아래(메모장)  | 좌우(책)       |
+
+    좌우 묶음은 홀수 시트 왼쪽·짝수 시트 오른쪽(뒷면은 묶인 쪽이 오른쪽에 온다),
+    위아래 묶음은 홀수 시트 위·짝수 시트 아래(위로 넘기면 뒷면의 아래가 묶인 쪽에 온다).
+    단면은 종전대로 왼쪽. 종전에는 양면이면 넘기는 쪽과 상관없이 좌우였다 — 2-up(가로 시트) +
+    '양면(긴 쪽)' 이면 실제 묶음(위)과 여백(좌우)이 어긋났다.
+    반환 'left' | 'right' | 'top' | 'bottom'."""
+    choice = duplex_choice(s)
+    if choice == "none":
+        return "left"
+    landscape = float(ow) > float(oh)
+    side_lr = (choice == "long") != landscape     # 세로+긴 쪽 / 가로+짧은 쪽 → 좌우
+    odd = int(sheet_no) % 2 == 1
+    if side_lr:
+        return "left" if odd else "right"
+    return "top" if odd else "bottom"
+
+
 def _grid_layout(p0, s, sheet_no=1):
     """반환: (ow, oh, [cell rects]) — cols×rows 격자, 열=gap·행=gap_v 간격, 가운데 정렬.
-    제본 여백(gutter): 단면=좌측, 양면=홀수 시트 좌·짝수 시트 우에 추가."""
+    제본 여백(gutter)은 `gutter_edge` 가 정한 가장자리에 더한다(마스터 §11.10.1)."""
     cols, rows, ow, oh = _grid_dims(p0, s)
     mt = float(s.get("margin_top", 36)); mb = float(s.get("margin_bottom", 48))
     ml = float(s.get("margin_left", 28)); mr = float(s.get("margin_right", 28))
     gutter = max(0.0, float(s.get("gutter", 0)))
     if gutter:
-        if bool(s.get("duplex", False)) and int(sheet_no) % 2 == 0:
-            mr += gutter                 # 양면 짝수 시트 → 우측 제본 여백
+        edge = gutter_edge(s, ow, oh, sheet_no)
+        if edge == "left":
+            ml += gutter
+        elif edge == "right":
+            mr += gutter
+        elif edge == "top":
+            mt += gutter
         else:
-            ml += gutter                 # 단면 또는 양면 홀수 시트 → 좌측
+            mb += gutter
     gh = float(s.get("gap", 16)); gv = float(s.get("gap_v", 16))
     footer_h = float(s.get("footer_size", 11)) + 10.0
     avail_w = ow - ml - mr - gh * (cols - 1)

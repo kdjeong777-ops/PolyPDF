@@ -91,6 +91,9 @@ class TwoUpSettingsDialog(QDialog):
         self._set_combo(self.cmb_duplex, duplex_choice(s))
         gf.addRow("인쇄 면:", self.cmb_duplex)
         self.sp_gutter = self._sp(s.get("gutter", 0))
+        # 261008-5(마스터 §11.10.1): 양면이면 종이를 넘기는 축 쪽에 — 시트 방향과 긴/짧은 쪽으로 정해진다
+        self.sp_gutter.setToolTip("단면: 왼쪽.\n양면: 종이를 넘기는 쪽(묶는 가장자리)에 — "
+                                  "좌우로 넘기면 홀수 왼쪽·짝수 오른쪽, 위로 넘기면 홀수 위·짝수 아래.")
         gf.addRow("제본 여백:", self.sp_gutter)
         # 260617-6: 맞쪽 인쇄 — 맨 앞에 여백 페이지 1장 추가(여백색 적용)
         self.chk_facing = QCheckBox("맞쪽 인쇄 (맨 앞 여백 페이지 1장 추가)")
