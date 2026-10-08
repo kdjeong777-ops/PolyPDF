@@ -37,7 +37,7 @@ mw._prefs["cross_file_nav"] = True
 #   물음 자체는 `test_input_cross_file.py` 가 따로 본다.
 mw._ask_cross_file = lambda *_a, **_k: True
 bt = mw.bookmark_tree; bt.load_folder(root); app.processEvents()
-try: bt._sort_combo.setCurrentText(bt.SORT_NAME)
+try: bt.set_sort_mode(bt.SORT_NAME)
 except Exception: pass
 bt.btn_edit.setChecked(False); app.processEvents()
 pt = mw.page_thumbs; mv = mw.main_view

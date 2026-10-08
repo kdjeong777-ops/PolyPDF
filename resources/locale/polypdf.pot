@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-08 21:22+0900\n"
+"POT-Creation-Date: 2026-10-08 21:32+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,4 +16,112 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+#: viewer/app.py:1572
+msgid "1단"
+msgstr ""
+
+#: viewer/app.py:1572
+msgid "2단"
+msgstr ""
+
+#: viewer/app.py:1573
+msgid "텍스트"
+msgstr ""
+
+#: viewer/app.py:1574
+msgid "단어장"
+msgstr ""
+
+#: viewer/app.py:1574
+msgid "검색"
+msgstr ""
+
+#: viewer/app.py:1575
+msgid "스크린샷"
+msgstr ""
+
+#: viewer/app.py:1576
+msgid "법령/고시"
+msgstr ""
+
+#: viewer/app.py:1577
+msgid "건설기준(KCSC)"
+msgstr ""
+
+#: viewer/app.py:1578
+msgid "특허(등록정보)"
+msgstr ""
+
+#: viewer/app.py:1579
+msgid "발표보기"
+msgstr ""
+
+#: viewer/twoup.py:72
+msgid "단면"
+msgstr ""
+
+#: viewer/twoup.py:72
+msgid "양면(긴 쪽)"
+msgstr ""
+
+#: viewer/twoup.py:72
+msgid "양면(짧은 쪽)"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py:236 viewer/widgets/search_panel.py:139
+msgid "책갈피 순"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py:236 viewer/widgets/search_panel.py:139
+msgid "이름 순"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py:237
+msgid "수정일 순"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py:237
+msgid "크기 순"
+msgstr ""
+
+#: viewer/widgets/main_view.py:1485
+msgid "쪽 맞춤"
+msgstr ""
+
+#: viewer/widgets/main_view.py:1485
+msgid "2장 맞춤"
+msgstr ""
+
+#: viewer/widgets/main_view.py:1486
+msgid "폭 맞춤"
+msgstr ""
+
+#: viewer/widgets/main_view.py:1486
+msgid "수동 맞춤"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py:186
+msgid "프린터 기본"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py:186 viewer/widgets/print_dialog.py:457
+msgid "컬러"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py:186 viewer/widgets/print_dialog.py:457
+msgid "흑백"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py:198
+msgid "문서 + 주석·꾸미기"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py:198
+msgid "문서만"
+msgstr ""
+
+#: viewer/widgets/search_panel.py:140
+msgid "횟수 순"
+msgstr ""
 

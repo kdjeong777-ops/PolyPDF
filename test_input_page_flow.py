@@ -50,7 +50,7 @@ def make(mode="page", anim=True, fit=MainView.FIT_PAGE, page=5):
     m.set_page_flip_anim(anim)
     m.set_page_scroll_mode(mode)
     m.load_document(PDF, page)
-    m.cmb_fit.setCurrentText(fit)
+    m.cmb_fit.setCurrentIndex(m.cmb_fit.findData(fit))
     pump()
     m._pages = []
     m.pageChanged.connect(m._pages.append)
@@ -192,7 +192,7 @@ chk(abs(after - before) <= 1.0, "⑤ 누른 자리는 그 쪽 좌표로 그대�
     "%.1f → %.1f" % (before, after))
 
 # ── ⑥ 뒤로 가면 **지금 쪽의** 아래끝 (막대의 끝이 아니라) ─────────────────────
-c.cmb_fit.setCurrentText(MainView.FIT_WIDTH)          # 폭 맞춤 — 쪽이 화면보다 길다
+c.cmb_fit.setCurrentIndex(c.cmb_fit.findData(MainView.FIT_WIDTH))          # 폭 맞춤 — 쪽이 화면보다 길다
 pump()
 c.go_to_page(8)
 c._on_page_step(-1)
@@ -203,10 +203,10 @@ chk(c.current_page() == 7 and sb.value() == hi and hi < sb.maximum(),
 chk(c._page_span() != (sb.minimum(), sb.maximum()), "⑥ 이어 보기의 쪽 범위는 막대 범위와 다르다")
 
 # ── ⑦ 2쪽 보기는 한 쪽씩, 끄면 옆 쪽이 사라진다 ─────────────────────────────
-c.cmb_fit.setCurrentText(MainView.FIT_PAGE_TWO)
+c.cmb_fit.setCurrentIndex(c.cmb_fit.findData(MainView.FIT_PAGE_TWO))
 pump()
 chk(c.scene.sceneRect().top() == 0 and not c._cont_next, "⑦ 2쪽 보기에는 옆 쪽을 붙이지 않는다")
-c.cmb_fit.setCurrentText(MainView.FIT_PAGE)
+c.cmb_fit.setCurrentIndex(c.cmb_fit.findData(MainView.FIT_PAGE))
 pump()
 chk(c._cont_next, "⑦ 쪽 맞춤으로 돌아오면 다시 붙인다")
 c.set_page_scroll_mode("page")

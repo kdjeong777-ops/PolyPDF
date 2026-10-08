@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 import fitz
+from viewer.i18n import tr_noop   # 261008: 목록 원문 표시 — 쓰는 곳에서 tr()(다국어 SOT §6)
 
 
 class MergeCancelled(Exception):
@@ -68,7 +69,7 @@ DEFAULT_TWOUP = {
 }
 
 
-DUPLEX_CHOICES = (("단면", "none"), ("양면(긴 쪽)", "long"), ("양면(짧은 쪽)", "short"))
+DUPLEX_CHOICES = ((tr_noop("단면"), "none"), (tr_noop("양면(긴 쪽)"), "long"), (tr_noop("양면(짧은 쪽)"), "short"))
 
 
 def duplex_choice(s) -> str:

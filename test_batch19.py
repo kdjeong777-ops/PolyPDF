@@ -14,9 +14,10 @@ from viewer.app import MainWindow
 mw = MainWindow()
 mv = mw._mv[0]
 
-ck("2장 맞춤", mv.FIT_PAGE_TWO == "2장 맞춤", mv.FIT_PAGE_TWO)
+# 261008(다국어 SOT §5): 맞춤 모드는 내부 키, 화면 이름은 FIT_LABELS — 이름을 본다
+ck("2장 맞춤", mv.FIT_LABELS[mv.FIT_PAGE_TWO] == "2장 맞춤", mv.FIT_LABELS[mv.FIT_PAGE_TWO])
 # 260628-2: v2.27.0(260618-16)에서 맞춤 콤보 '수동' → '수동 맞춤' 으로 개명됨
-ck("수동 맞춤", mv.FIT_NONE == "수동 맞춤", mv.FIT_NONE)
+ck("수동 맞춤", mv.FIT_LABELS[mv.FIT_NONE] == "수동 맞춤", mv.FIT_LABELS[mv.FIT_NONE])
 ck("캡쳐 버튼 글자 삭제·폭<=36", mw.btn_capture.text() == "" and mw.btn_capture.maximumWidth() <= 36)
 ck("읽기메뉴 폭 78", mw.btn_read_menu.maximumWidth() == 78)
 from viewer.widgets.capture_settings import CaptureSizesDialog

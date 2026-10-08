@@ -71,8 +71,14 @@ def extract_from(files, base: Path):
             else:
                 text = _lit(node.args[0])
                 if text is None:
-                    warns.append(loc + ": %s 의 원문이 문자열 리터럴이 아니다(f-string·변수 금지, SOT §6)"
-                                 % _func_name(node))
+                    # 변수(`tr(_t)`)는 허용 — 그 원문은 목록에서 tr_noop() 으로 표시해 뽑힌다(SOT §6).
+                    #   f-string·이어 붙이기·.format() 결과처럼 **키가 매번 달라지는 것**만 막는다.
+                    a0 = node.args[0]
+                    if isinstance(a0, (ast.JoinedStr, ast.BinOp)) or (
+                            isinstance(a0, ast.Call) and isinstance(a0.func, ast.Attribute)
+                            and a0.func.attr == "format"):
+                        warns.append(loc + ": %s 의 원문이 f-string·이어 붙이기·format 결과다(키가 달라진다, SOT §6)"
+                                     % _func_name(node))
                     continue
                 out.append((text, None, kind == "plural", loc))
     return out, warns

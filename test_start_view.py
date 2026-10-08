@@ -61,8 +61,8 @@ try:
     check("오른쪽 창 숨김", not mw._mv[1].isVisible())
     check("맞춤 = 쪽 맞춤(저장값 '폭 맞춤' 을 덮어씀)",
           mv._fit_mode == mv.FIT_PAGE, repr(mv._fit_mode))
-    check("보기 콤보 표시도 동기화", mv.cmb_fit.currentText() == mv.FIT_PAGE,
-          repr(mv.cmb_fit.currentText()))
+    check("보기 콤보 표시도 동기화", mv.cmb_fit.currentData() == mv.FIT_PAGE,
+          repr(mv.cmb_fit.currentData()))
 
     # 패널 툴바 '1단' 버튼과 같은 상태여야 한다(별도 로직 중복 금지)
     mw.act_toggle_search.setChecked(True)

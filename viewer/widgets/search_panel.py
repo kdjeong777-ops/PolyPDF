@@ -133,7 +133,12 @@ class SearchResults(QWidget):
         head.addWidget(QLabel("정렬"))
         self.sort_combo = QComboBox()
         # 260827: '책갈피 순'(책갈피창 파일 정렬 + 페이지 순)을 기본으로.
-        self.sort_combo.addItems(["책갈피 순", "이름 순", "횟수 순"])
+        from viewer.i18n import tr
+        # 261008(다국어 SOT §5): 보이는 글자 + 내부 키 — 정렬은 키로 고른다
+        from viewer.i18n import tr_noop
+        for _t, _k in ((tr_noop("책갈피 순"), "book"), (tr_noop("이름 순"), "name"),
+                       (tr_noop("횟수 순"), "count")):
+            self.sort_combo.addItem(tr(_t), _k)
         self.sort_combo.setCurrentIndex(0)
         self.sort_combo.currentIndexChanged.connect(lambda _: self._render_results())
         head.addWidget(self.sort_combo)
@@ -203,11 +208,11 @@ class SearchResults(QWidget):
 
     def _sorted_groups(self, groups: dict):
         import os
-        sort_key = self.sort_combo.currentText()
-        if sort_key == "횟수 순":
+        sort_key = self.sort_combo.currentData()
+        if sort_key == "count":
             return sorted(groups.items(),
                           key=lambda kv: -sum(r.match_count for r in kv[1]))
-        if sort_key == "이름 순":
+        if sort_key == "name":
             return sorted(groups.items(),
                           key=lambda kv: os.path.basename(kv[0]).lower())
         # 책갈피 순(기본): 책갈피창 파일 순서(order_map). 없으면 이름순 폴백.

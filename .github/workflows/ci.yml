@@ -36,7 +36,7 @@ jobs:
             "test_panel_toolbar","test_capture","test_bookmark_panel","test_fullwidth",
             "test_present_draw","test_present_erase","test_present_options","test_present_split",
             "test_close_edit_confirm",
-            "test_i18n_core","test_i18n_packs"
+            "test_i18n_core","test_i18n_packs","test_i18n_keys"
           )
           $fail = 0
           foreach ($t in $tests) {

@@ -45,6 +45,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer import side_panel_host as _sp
+from viewer.i18n import tr                               # 261008: 화면 문구(다국어 SOT §6)
 from viewer.edit_controller import EditMixin
 from viewer.present_controller import PresentMixin
 from viewer.print_controller import PrintMixin
@@ -1564,22 +1565,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         # 260618-8: 보기 메뉴 — 패널 '뷰어' 버튼(1단/2단/검색/단어장/스크린샷/법령·고시/발표보기)과 동일 동작
         m_view = bar.addMenu("보기(&B)")
-        for _label, _slot in (
-                ("1단", self._vm_single), ("2단", self._vm_split),
-                ("텍스트", self._vm_text),
-                ("단어장", self._vm_study), ("검색", self._vm_search),
-                ("스크린샷", self._vm_shot),
-                ("법령/고시", self._action_law_search),
-                ("건설기준(KCSC)", self._action_kcsc_search),
-                ("특허(등록정보)", self._action_kipo_search),
-                ("발표보기", self._open_presentation)):
+        # 261008(다국어 SOT §5): 항목은 **고정 id** 로 찾는다 — 종전에는 화면 이름('법령/고시')이
+        #   키라 번역하면 게이팅이 항목을 못 찾았다. 화면 이름은 tr() 로만 쓴다.
+        self._view_acts = {}
+        for _id, _label, _slot in (
+                ("single", tr("1단"), self._vm_single), ("split", tr("2단"), self._vm_split),
+                ("text", tr("텍스트"), self._vm_text),
+                ("study", tr("단어장"), self._vm_study), ("search", tr("검색"), self._vm_search),
+                ("shot", tr("스크린샷"), self._vm_shot),
+                ("law", tr("법령/고시"), self._action_law_search),
+                ("kcsc", tr("건설기준(KCSC)"), self._action_kcsc_search),
+                ("kipo", tr("특허(등록정보)"), self._action_kipo_search),
+                ("present", tr("발표보기"), self._open_presentation)):
             _a = QAction(_label, self)
+            _a.setObjectName("view_" + _id)
             _a.triggered.connect(lambda _checked=False, s=_slot: s())
             m_view.addAction(_a)
-            # 260621-P3: API 키 게이팅용 — 보기 메뉴의 외부 API 항목 저장
-            if not hasattr(self, "_view_acts"):
-                self._view_acts = {}
-            self._view_acts[_label] = _a
+            self._view_acts[_id] = _a           # 260621-P3: API 키 게이팅용
 
         # 260825: 뷰어 옵션(우클릭) 메뉴를 단축키로 — 보기 메뉴에 노출(단축키 표시) + 설정 등록
         m_view.addSeparator()
@@ -7195,7 +7197,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._refresh_recent_files_menu()
 
         dpi = int(data.get("render_dpi", 192))
-        fit_mode = data.get("fit_mode", "쪽 맞춤")
+        fit_mode = data.get("fit_mode", "page")     # 261008: 내부 키(옛 '쪽 맞춤' 은 set_fit_mode 가 바꾼다)
         for mv in self._mv:                       # 260606-8: 두 창 모두 적용
             mv.set_base_dpi(dpi)
             if hasattr(mv, "set_fit_mode"):
@@ -7624,15 +7626,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         # 법령·고시
         _btn("_btn_law", has_law)
-        _act_en(va.get("법령/고시"), has_law)
+        _act_en(va.get("law"), has_law)
         _act_en(getattr(self, "_act_law", None), has_law)
         # 건설기준(KCSC)
         _btn("_btn_kcsc", has_kcsc)
-        _act_en(va.get("건설기준(KCSC)"), has_kcsc)
+        _act_en(va.get("kcsc"), has_kcsc)
         _act_en(getattr(self, "_act_kcsc", None), has_kcsc)
         # 특허(KIPO)
         _btn("_btn_kipo", has_kipo)
-        _act_en(va.get("특허(등록정보)"), has_kipo)
+        _act_en(va.get("kipo"), has_kipo)
         _act_en(getattr(self, "_act_kipo", None), has_kipo)
         # 번역(Claude) — 툴바 'PDF번역' 버튼 + 메뉴
         _btn("_btn_tr", has_tr)

@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 
 from viewer.pdf_doc import PdfDocument
 from viewer.resources_path import resource_path
+from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
 
 
 def _hyperlink_icon(ln: dict) -> str:
@@ -1473,10 +1474,34 @@ class MainView(QWidget):
     _DOC_U = 1000                                # v1.6.8 F1: doc_scroll 페이지당 단위
 
     TOOLBAR_H = 26               # 260606-14: 툴바 위젯 통일 높이
-    FIT_PAGE = "쪽 맞춤"
-    FIT_PAGE_TWO = "2장 맞춤"     # v1.5.0 M3 (260606-19: 명칭 단축)
-    FIT_WIDTH = "폭 맞춤"
-    FIT_NONE = "수동 맞춤"
+    # 261008(다국어 SOT §5): 맞춤 모드는 **내부 키**다 — 화면 이름(`FIT_LABELS`)과 나눈다.
+    #   종전에는 '쪽 맞춤' 같은 화면 문구가 곧 값이라 설정 파일(`fit_mode`)에도 그대로 저장됐다.
+    #   옛 값은 `normalize_fit` 가 읽을 때 바꾼다.
+    FIT_PAGE = "page"
+    FIT_PAGE_TWO = "two"          # v1.5.0 M3 (260606-19: 명칭 '2장 맞춤')
+    FIT_WIDTH = "width"
+    FIT_NONE = "none"
+    FIT_ORDER = (FIT_PAGE, FIT_PAGE_TWO, FIT_WIDTH, FIT_NONE)
+    FIT_LABELS = {FIT_PAGE: tr_noop("쪽 맞춤"), FIT_PAGE_TWO: tr_noop("2장 맞춤"),
+                  FIT_WIDTH: tr_noop("폭 맞춤"), FIT_NONE: tr_noop("수동 맞춤")}
+    _FIT_LEGACY = {"쪽 맞춤": FIT_PAGE, "2장 맞춤": FIT_PAGE_TWO, "폭 맞춤": FIT_WIDTH,
+                   "수동 맞춤": FIT_NONE, "수동": FIT_NONE}
+
+    @classmethod
+    def normalize_fit(cls, value, default=None):
+        """내부 키 또는 옛 화면 문구('쪽 맞춤' 등) → 내부 키. 모르면 default(없으면 FIT_PAGE)."""
+        v = str(value or "")
+        if v in cls.FIT_ORDER:
+            return v
+        return cls._FIT_LEGACY.get(v, default or cls.FIT_PAGE)
+
+    def _show_fit(self, mode):
+        """콤보 표시만 바꾼다(신호 없이) — 화면 글자가 아니라 내부 키로 고른다."""
+        i = self.cmb_fit.findData(mode)
+        if i >= 0:
+            self.cmb_fit.blockSignals(True)
+            self.cmb_fit.setCurrentIndex(i)
+            self.cmb_fit.blockSignals(False)
 
     # 260914-1(입력 SOT §2.10): 이어 보기 — 값의 원본은 여기다
     CONT_GAP_PX = 12             # 붙인 쪽 사이 간격
@@ -1565,7 +1590,8 @@ class MainView(QWidget):
         self.lbl_page_total.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # 260606-9: 보기 콤보 폭 최소화(내용에 맞춤)
         self.cmb_fit = QComboBox()
-        self.cmb_fit.addItems([self.FIT_PAGE, self.FIT_PAGE_TWO, self.FIT_WIDTH, self.FIT_NONE])
+        for _k in self.FIT_ORDER:                 # 261008: 보이는 글자 + 내부 키(다국어 SOT §5)
+            self.cmb_fit.addItem(tr(self.FIT_LABELS[_k]), _k)
         self.cmb_fit.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.cmb_fit.setMaximumWidth(86)
         self.cmb_fit.setFixedHeight(H)
@@ -1737,7 +1763,7 @@ class MainView(QWidget):
 
         # 시그널
         self.view.fitPageRequested.connect(                       # 260618-16: 더블클릭=쪽 맞춤
-            lambda: self.cmb_fit.setCurrentText(self.FIT_PAGE))
+            lambda: self.cmb_fit.setCurrentIndex(self.cmb_fit.findData(self.FIT_PAGE)))
         self.btn_prev_page.clicked.connect(lambda: self._on_step_clicked(-1))
         self.btn_next_page.clicked.connect(lambda: self._on_step_clicked(+1))
         self.spin_page.editingFinished.connect(self._on_spin_edited)
@@ -1745,7 +1771,8 @@ class MainView(QWidget):
         vsb = self.view.verticalScrollBar()
         vsb.valueChanged.connect(self._on_view_scrolled)
         vsb.rangeChanged.connect(lambda *_: self._on_view_scrolled())
-        self.cmb_fit.currentTextChanged.connect(self._set_fit_mode)
+        self.cmb_fit.currentIndexChanged.connect(
+            lambda _i: self._set_fit_mode(self.cmb_fit.currentData()))
         self.btn_zoom_in.clicked.connect(lambda: self._zoom_by(1.15))
         self.btn_zoom_out.clicked.connect(lambda: self._zoom_by(1 / 1.15))
 
@@ -1831,9 +1858,7 @@ class MainView(QWidget):
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.doc_scroll.setVisible(True)
         # v1.6.9 G1: 콤보를 PDF fit 으로 복귀 (이미지에서 돌아온 경우)
-        self.cmb_fit.blockSignals(True)
-        self.cmb_fit.setCurrentText(self._fit_mode)
-        self.cmb_fit.blockSignals(False)
+        self._show_fit(self._fit_mode)
 
         self.spin_page.setMaximum(max(1, self._doc.page_count))
         self.lbl_page_total.setText(f"/ {self._doc.page_count}")
@@ -1871,9 +1896,7 @@ class MainView(QWidget):
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # 콤보를 이미지 전용 fit 으로 표시 (기본 쪽맞춤)
-        self.cmb_fit.blockSignals(True)
-        self.cmb_fit.setCurrentText(self._img_fit)
-        self.cmb_fit.blockSignals(False)
+        self._show_fit(self._img_fit)
         self._apply_image_fit()
 
         self.spin_page.setMaximum(1)
@@ -2376,13 +2399,12 @@ class MainView(QWidget):
                 pass
 
     def set_fit_mode(self, mode: str):
-        """settings 복원 등 외부에서 fit 모드 변경 (PDF 기준)."""
-        if mode in (self.FIT_PAGE, self.FIT_PAGE_TWO, self.FIT_WIDTH, self.FIT_NONE):
+        """settings 복원 등 외부에서 fit 모드 변경 (PDF 기준). 옛 화면 문구 값도 받는다."""
+        mode = self.normalize_fit(mode, default="")
+        if mode in self.FIT_ORDER:
             self._fit_mode = mode
             if not self._is_image:
-                self.cmb_fit.blockSignals(True)
-                self.cmb_fit.setCurrentText(mode)
-                self.cmb_fit.blockSignals(False)
+                self._show_fit(mode)
                 self._render_current()
 
     def set_base_dpi(self, dpi: int):
@@ -2655,9 +2677,7 @@ class MainView(QWidget):
 
     def _zoom_by(self, factor: float):
         # 사용자 비율로 전환
-        self.cmb_fit.blockSignals(True)
-        self.cmb_fit.setCurrentText(self.FIT_NONE)
-        self.cmb_fit.blockSignals(False)
+        self._show_fit(self.FIT_NONE)
         if self._is_image:                       # v1.6.9 G1: 이미지 증분 줌
             self._img_fit = self.FIT_NONE
             self.view.scale(factor, factor)

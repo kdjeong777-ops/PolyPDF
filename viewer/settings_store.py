@@ -189,8 +189,10 @@ def _migrate_v3_to_v4(d: dict) -> dict:
         "search_history": True,
         "screenshots": True,
     })
-    d.setdefault("fit_mode", "쪽 맞춤")  # "쪽 맞춤" — 유니코드 이스케이프
-    d["fit_mode"] = d.get("fit_mode") or "쪽 맞춤"
+    # 261008(다국어 SOT §5): 맞춤 모드는 내부 키('page' 등). 옛 화면 문구 값('쪽 맞춤')은
+    #   MainView.normalize_fit 가 읽을 때 바꾼다 — 여기서는 비었을 때의 기본값만.
+    d.setdefault("fit_mode", "page")
+    d["fit_mode"] = d.get("fit_mode") or "page"
     # 옛 history 항목에 page_index 가 없으면 0
     hist = d.get("history", {})
     for stack in ("bookmark", "search"):
@@ -323,7 +325,7 @@ def load(name: str = "settings.json") -> dict:
             "schema_version": CURRENT_SCHEMA,
             "recent_folders": [],
             "render_dpi": 192,
-            "fit_mode": "쪽 맞춤",
+            "fit_mode": "page",
             "panels_visible": {
                 "search_results": True, "screenshots": True,
             },
@@ -346,7 +348,7 @@ def load(name: str = "settings.json") -> dict:
             "schema_version": CURRENT_SCHEMA,
             "recent_folders": [],
             "render_dpi": 192,
-            "fit_mode": "쪽 맞춤",
+            "fit_mode": "page",
             "screenshots_meta": [],
         }
     # 260611-90: 프로그램 업데이트로 스키마가 올라가면, 마이그레이션 전 원본을 1회 백업.

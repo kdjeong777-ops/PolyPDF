@@ -10,6 +10,7 @@ v1.6.2: 각 PDF 파일 리프에 PDF 자체의 내부 책갈피(TOC)가 있으�
 from __future__ import annotations
 
 import json
+from viewer.i18n import tr_noop      # 261008: 목록 원문 표시(다국어 SOT §6)
 from pathlib import Path
 from typing import Optional
 
@@ -227,10 +228,19 @@ class BookmarkTree(QWidget):
     FOLDER_ROW_FG = "#1a1a1a"
     TREE_INDENT = 12        # 260902-1: 계층 들여쓰기(px) — 디자인 SOT §2.8
 
-    SORT_BOOK = "책갈피 순"
-    SORT_NAME = "이름 순"
-    SORT_MTIME = "수정일 순"
-    SORT_SIZE = "크기 순"
+    # 261008(다국어 SOT §5): 정렬은 내부 키 — 화면 이름(SORT_LABELS)과 나눈다(종전엔 '이름 순' 이 곧 값).
+    SORT_BOOK = "book"
+    SORT_NAME = "name"
+    SORT_MTIME = "mtime"
+    SORT_SIZE = "size"
+    SORT_LABELS = ((SORT_BOOK, tr_noop("책갈피 순")), (SORT_NAME, tr_noop("이름 순")),
+                   (SORT_MTIME, tr_noop("수정일 순")), (SORT_SIZE, tr_noop("크기 순")))
+
+    def set_sort_mode(self, key: str) -> None:
+        """정렬을 내부 키로 고른다(콤보 신호로 재렌더)."""
+        i = self._sort_combo.findData(key)
+        if i >= 0:
+            self._sort_combo.setCurrentIndex(i)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -349,11 +359,12 @@ class BookmarkTree(QWidget):
         sort_row.setContentsMargins(0, 0, 0, 0)
         sort_row.addWidget(QLabel("정렬:"))
         self._sort_combo = QComboBox()
-        self._sort_combo.addItems([self.SORT_BOOK, self.SORT_NAME,
-                                   self.SORT_MTIME, self.SORT_SIZE])
-        self._sort_combo.setCurrentText(self.SORT_MTIME)   # 초기 정렬 = 수정일순(내림차순)
+        from viewer.i18n import tr
+        for _k, _t in self.SORT_LABELS:                    # 보이는 글자 + 내부 키
+            self._sort_combo.addItem(tr(_t), _k)
+        self._sort_combo.setCurrentIndex(self._sort_combo.findData(self.SORT_MTIME))   # 초기 = 수정일순(내림차순)
         self._sort_combo.setMaximumWidth(96)               # 폭 줄여 모드 버튼 자리 확보
-        self._sort_combo.currentTextChanged.connect(self._on_sort_changed)
+        self._sort_combo.currentIndexChanged.connect(lambda _i: self._on_sort_changed(""))
         sort_row.addWidget(self._sort_combo)
         self.btn_mode = QPushButton("📁 폴더")
         self.btn_mode.setToolTip("파일 모드 ↔ 폴더 모드 전환\n"
@@ -984,7 +995,7 @@ class BookmarkTree(QWidget):
         item.setToolTip(0, str(folder))
 
     def _sorted_flat(self) -> list:
-        mode = self._sort_combo.currentText() if hasattr(self, "_sort_combo") else self.SORT_BOOK
+        mode = self._sort_combo.currentData() if hasattr(self, "_sort_combo") else self.SORT_BOOK
         lst = list(self._pdfs_flat)
         if mode == self.SORT_NAME or mode == self.SORT_BOOK:
             # JSON 없는 평탄 모드에서 '책갈피 순'은 의미가 없으므로 이름 순 폴백

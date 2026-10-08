@@ -103,7 +103,7 @@ try:
     first = opened["n"]
     chk(first > 0, "③ 처음에는 모르는 파일을 연다", f"{first}개")
 
-    bt._sort_combo.setCurrentText(bt.SORT_NAME); settle(bt)
+    bt.set_sort_mode(bt.SORT_NAME); settle(bt)
     chk(opened["n"] == first, "③ 정렬을 바꿔도 다시 열지 않는다",
         f"누적 {opened['n']}")
 

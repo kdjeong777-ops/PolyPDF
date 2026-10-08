@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer.widgets.nup_preset import NupPresetMixin   # 260628: 다단 프리셋 공통(SOT §11.10)
+from viewer.i18n import tr                              # 261008: 화면 문구(다국어 SOT §6)
 
 
 class PrintScopeDialog(NupPresetMixin, QDialog):
@@ -181,16 +182,21 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         form.addRow("인쇄 크기", sw)
 
         self.cmb_color = QComboBox()
-        self.cmb_color.addItems(["프린터 기본", "컬러", "흑백"])
+        # 261008(다국어 SOT §5): 보이는 글자 + 내부 키 — 동작은 키로 고른다(화면 글자로 분기하지 않는다)
+        for _t, _k in ((tr("프린터 기본"), "default"), (tr("컬러"), "color"), (tr("흑백"), "gray")):
+            self.cmb_color.addItem(_t, _k)
         form.addRow("색상", self.cmb_color)
 
         self.cmb_duplex = QComboBox()
-        self.cmb_duplex.addItems(["단면", "양면(긴 쪽)", "양면(짧은 쪽)"])
+        from viewer.twoup import DUPLEX_CHOICES       # 다단 설정 창과 같은 키(none|long|short)
+        for _t, _k in DUPLEX_CHOICES:
+            self.cmb_duplex.addItem(tr(_t), _k)
         self.cmb_duplex.setCurrentIndex(0)      # 기본 단면
         form.addRow("단면/양면", self.cmb_duplex)
 
         self.cmb_include = QComboBox()
-        self.cmb_include.addItems(["문서 + 주석·꾸미기", "문서만"])
+        for _t, _k in ((tr("문서 + 주석·꾸미기"), "all"), (tr("문서만"), "doc")):
+            self.cmb_include.addItem(_t, _k)
         form.addRow("포함", self.cmb_include)
 
         self.sp_copies = QSpinBox(); self.sp_copies.setRange(1, 99); self.sp_copies.setValue(1)
@@ -330,9 +336,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         if on:
             if self._duplex_before_nup is None:
                 self._duplex_before_nup = self.cmb_duplex.currentIndex()
-            label = {"none": "단면", "long": "양면(긴 쪽)", "short": "양면(짧은 쪽)"}[
-                duplex_choice(self.nup_settings())]
-            i = self.cmb_duplex.findText(label)
+            i = self.cmb_duplex.findData(duplex_choice(self.nup_settings()))
             if i >= 0:
                 self.cmb_duplex.setCurrentIndex(i)
             self.cmb_duplex.setEnabled(False)
@@ -437,7 +441,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
             cont = ppix.scaled(dw, dh, Qt.AspectRatioMode.KeepAspectRatio,
                                Qt.TransformationMode.SmoothTransformation)
         # 흑백 미리보기
-        if self.cmb_color.currentText() == "흑백":
+        if self.cmb_color.currentData() == "gray":
             cont = QPixmap.fromImage(
                 cont.toImage().convertToFormat(QImage.Format.Format_Grayscale8))
         canvas = QPixmap(cw, ch); canvas.fill(QColor("#ffffff"))
@@ -450,7 +454,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self.preview_cap.setText(
             ("다단 · " if nup else "")
             + f"용지: {self.cmb_paper.currentText()} · {orient} · {self.cmb_size.currentText()}"
-            + (f" · {'흑백' if self.cmb_color.currentText()=='흑백' else '컬러'}")
+            + " · " + (tr("흑백") if self.cmb_color.currentData() == "gray" else tr("컬러"))
             + f" · {self.cmb_duplex.currentText()}")
 
     def _render_preview_pixmap(self, page_index: int):
@@ -504,23 +508,23 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
 
     def color_mode(self):
         from PyQt6.QtPrintSupport import QPrinter
-        t = self.cmb_color.currentText()
-        if t == "컬러":
+        t = self.cmb_color.currentData()
+        if t == "color":
             return QPrinter.ColorMode.Color
-        if t == "흑백":
+        if t == "gray":
             return QPrinter.ColorMode.GrayScale
         return None
 
     def duplex_mode(self):
         from PyQt6.QtPrintSupport import QPrinter
         return {
-            "단면": QPrinter.DuplexMode.DuplexNone,
-            "양면(긴 쪽)": QPrinter.DuplexMode.DuplexLongSide,
-            "양면(짧은 쪽)": QPrinter.DuplexMode.DuplexShortSide,
-        }.get(self.cmb_duplex.currentText())
+            "none": QPrinter.DuplexMode.DuplexNone,
+            "long": QPrinter.DuplexMode.DuplexLongSide,
+            "short": QPrinter.DuplexMode.DuplexShortSide,
+        }.get(self.cmb_duplex.currentData())
 
     def include_decorations(self) -> bool:
-        return self.cmb_include.currentText() != "문서만"
+        return self.cmb_include.currentData() != "doc"
 
     def auto_orient(self) -> bool:
         return self.chk_auto_orient.isChecked()
