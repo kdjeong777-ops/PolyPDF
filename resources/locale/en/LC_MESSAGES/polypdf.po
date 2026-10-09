@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-09 12:23+0900\n"
+"POT-Creation-Date: 2026-10-09 12:48+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8650,6 +8650,11 @@ msgstr "Choose the language for PolyPDF."
 msgctxt "installer"
 msgid "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 맨 위 '언어 / Language' 에서 바꿀 수 있습니다(다시 시작)."
 msgstr "This can differ from the language of this setup wizard. You can change it later in the 'Language' group at the top of Tools → Settings (restart required)."
+
+#: installer/installer_text.py
+msgctxt "installer"
+msgid "파일을 추출하여 설치하는 중..."
+msgstr "Extracting and installing files..."
 
 #: installer/installer_text.py
 msgctxt "installer"

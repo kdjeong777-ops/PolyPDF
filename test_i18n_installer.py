@@ -1,7 +1,7 @@
 """다국어 SOT §10 — 설치 프로그램·업데이트 도우미 (Phase 6, 261008-27)
 
 A. `scripts/i18n.py inno` 가 내장 팩으로 installer/languages.iss 를 만든다 — 마법사 언어([Languages]·마침 안내),
-   언어마다 [CustomMessages] 전부, PolyPDF 언어마다 사용 안내 [Files]·[Icons], [Code] 가 쓰는 목록(#define 셋, 같은 길이)
+   언어마다 [CustomMessages] 전부, PolyPDF 언어마다 사용 안내 [Files]·[Icons], [Code] 가 쓰는 목록(#define 셋, 같은 길이) · Inno 표준 메시지 덮어쓰기 [Messages](installer_text.WIZARD, 261009-12)
 B. 영어 마법사 문구·영어 안내 파일·영어 시작 메뉴 이름에 한글이 없다 · 생성은 멱등(내용이 같으면 쓰지 않는다)
 C. PolyPDF.iss 는 문구를 직접 쓰지 않는다(주석 밖 한글 없음) · 쓰는 {cm:…}/CustomMessage('…') 가 모두 있고 남는 키가 없다 ·
    언어 페이지·업그레이드 언어(§10.2 순서)·/APPLANG·InstallLanguage 레지스트리·제거 프로그램 없음(§10.3) 처리가 있다
@@ -42,9 +42,18 @@ try:
     chk('Name: "korean"; MessagesFile: "compiler:Languages\\Korean.isl"; InfoAfterFile: "guide_ko.txt"' in text
         and 'Name: "en"; MessagesFile: "compiler:Default.isl"; InfoAfterFile: "guide_en.txt"' in text,
         "A [Languages] 한국어·영어 마법사와 마침 안내")
+    def _section(name):
+        m = re.search(r"^\[%s\]\n(.*?)(?=^\[|\Z)" % name, text, re.M | re.S)
+        return m.group(1) if m else ""
+    wizard = table.get("WIZARD", {})
     for w in ("korean", "en"):
-        keys = set(re.findall(r"^%s\.(\w+)=" % re.escape(w), text, re.M))
+        keys = set(re.findall(r"^%s\.(\w+)=" % re.escape(w), _section("CustomMessages"), re.M))
         chk(keys == set(msgs), "A %s 마법사 문구가 빠짐없이" % w, str(set(msgs) ^ keys))
+        # 261009-12: Inno 표준 메시지 덮어쓰기(installer_text.WIZARD) → [Messages]
+        wkeys = set(re.findall(r"^%s\.(\w+)=" % re.escape(w), _section("Messages"), re.M))
+        chk(wizard and wkeys == set(wizard), "A %s 표준 마법사 메시지 덮어쓰기([Messages])" % w, str(set(wizard) ^ wkeys))
+    chk("korean.StatusExtractFiles=파일을 추출하여 설치하는 중..." in text,
+        "A 설치 진행 문구 '파일을 추출하여 설치하는 중...'(261009-12, 사용자 지시)")
     defs = dict(re.findall(r'^#define (AppLang\w+) "([^"]*)"', text, re.M))
     codes = defs.get("AppLangCodes", "").split(",")
     chk(codes[:2] == ["ko", "en"] and len(set(len(v.split(",")) for v in defs.values())) == 1 and len(defs) == 3,

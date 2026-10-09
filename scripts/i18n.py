@@ -416,6 +416,14 @@ def inno(locale_dir: Path = LOCALE, out: Path = None, installer_dir: Path = None
         t = _translator(c, locale_dir)
         for k, text in msgs.items():
             L.append("%s.%s=%s" % (w, k, _inno_value(t(text))))
+    # Inno 표준 마법사 메시지 덮어쓰기(installer_text.WIZARD, 261009-12)
+    wizard = table.get("WIZARD", {})
+    if wizard:
+        L += ["", "[Messages]"]
+        for c, w, _f in wiz:
+            t = _translator(c, locale_dir)
+            for k, text in wizard.items():
+                L.append("%s.%s=%s" % (w, k, _inno_value(t(text))))
     L += ["", "[Files]"]
     for c, _n, _w, _f in langs:
         name = _translator(c, locale_dir)(app["GuideFile"])

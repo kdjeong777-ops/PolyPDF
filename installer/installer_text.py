@@ -35,6 +35,13 @@ MESSAGES = {
     "LangPageSub": trp("installer", "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 맨 위 '언어 / Language' 에서 바꿀 수 있습니다(다시 시작)."),
 }
 
+# WIZARD: Inno 표준 마법사 메시지(`Korean.isl`·`Default.isl`)를 덮어쓰는 것 → `[Messages]`(마법사 언어별).
+#   키는 Inno 메시지 이름 그대로. 261009-12(사용자 지시): 설치 진행 중 '파일 추출 중...' 은 설치하는 단계인데
+#   추출만 하는 것처럼 읽혔다.
+WIZARD = {
+    "StatusExtractFiles": trp("installer", "파일을 추출하여 설치하는 중..."),
+}
+
 APP_LANG = {
     "GuideFile": trp("installer", "사용안내(API키).txt"),
     "GuideIcon": trp("installer", "사용 안내 (API 키)"),
