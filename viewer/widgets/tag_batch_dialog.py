@@ -28,7 +28,7 @@ class CandidateReviewDialog(QDialog):
         self._data = load_candidates(candidates_path)
         v = QVBoxLayout(self)
         v.addWidget(QLabel(
-            tr("자동으로 붙이지 않고 모아 둔 새 태그 후보입니다(태그 SOT §5.4-5).\n"
+            tr("자동으로 붙이지 않고 모아 둔 새 태그 후보입니다.\n"
             "채택하면 근거 파일에 ·자동 태그로 붙고, 이후 계산부터 기존 태그로 쓰입니다.")))
         area = QScrollArea()
         area.setWidgetResizable(True)

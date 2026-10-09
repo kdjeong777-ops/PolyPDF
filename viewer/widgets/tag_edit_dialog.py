@@ -104,7 +104,7 @@ class TagEditDialog(QDialog):
                 v.addWidget(self._chip_row(ex, _CHIP_BLUE, tr("기존 태그 제안")))
             if nw:
                 v.addWidget(QLabel(tr("제안 — 새 태그 후보(클릭 = 수동 채택):")))
-                v.addWidget(self._chip_row(nw, _CHIP_NEW, tr("새 태그 후보(§5.4-5 — 자동으로는 붙지 않음)")))
+                v.addWidget(self._chip_row(nw, _CHIP_NEW, tr("새 태그 후보(자동으로는 붙지 않음)")))
 
         v.addWidget(QLabel(tr("기존 태그(클릭하면 추가):")))
         wrap = QWidget()

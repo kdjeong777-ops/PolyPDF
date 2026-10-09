@@ -160,7 +160,7 @@ class SearchResults(QWidget):
             self.btn_shot_result.setIcon(QIcon(_ico))
         else:
             self.btn_shot_result.setText(tr("📷 전체 캡쳐"))
-        self.btn_shot_result.setToolTip(tr("검색결과의 모든 매치 페이지를 일괄 스크린샷 (v1.6.1 S5)"))
+        self.btn_shot_result.setToolTip(tr("검색결과의 모든 매치 페이지를 일괄 스크린샷"))
         self.btn_shot_result.clicked.connect(self.screenshotForResultRequested.emit)
         head.addWidget(self.btn_shot_result)
 

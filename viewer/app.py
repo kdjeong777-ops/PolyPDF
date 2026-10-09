@@ -5331,7 +5331,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         if store is None or not results:
             return
         if not store.backup():
-            self.status.showMessage(tr("태그 백업 실패 — 자동 부여를 건너뜀(§6)"), 5000)
+            self.status.showMessage(tr("태그 백업 실패 — 자동 부여를 건너뜀"), 5000)
             return
         n_auto = n_moved = 0
         with store.bulk():

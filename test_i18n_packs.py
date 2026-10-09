@@ -12,7 +12,7 @@ H. 메인 창(Phase 2 완료 조건) — 가짜 언어로 띄운 실제 MainWind
    도움말 풍선에 표시 없는 한국어가 없다. 예외: 단어학습 패널(한국 전용 — Phase 4)·글꼴 이름(고유명사)
 I. 쓰기는 내용이 바뀔 때만(생성 시각만 다르면 그대로)
 """
-import os, sys, json, tempfile, shutil, importlib.util
+import os, sys, re, json, tempfile, shutil, importlib.util
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ.pop("POLYPDF_LANG", None)
 sys.stdout.reconfigure(encoding="utf-8")
@@ -144,6 +144,8 @@ try:
 
     # ── F·G — 내장 팩 ──
     real = HERE / "resources" / "locale"
+    # 언어를 바꾼 직후에도 읽히게 일부러 두 언어로 쓴 원문(다국어 SOT §4 재시작 안내·설정 이름표)
+    _BILINGUAL = ("The display language will be applied", "/ Restart now", "/ Later", "/ Language:")
     importlib.reload(i18n)
     cat_real, warns_real = T.extract_from(T.source_files(HERE), HERE)
     chk(not warns_real, "G 코드의 추출 경고 0(키는 문자열 리터럴)", str(warns_real[:5]))
@@ -167,6 +169,21 @@ try:
             chk(r["translated"] == r["total"] and r["fuzzy"] == 0, "F %s complete 면 100%%·fuzzy 0" % d.name)
         chain = i18n._chain(d.name)
         chk(chain and chain[0] == d.name and len(chain) == len(set(chain)), "F %s 대체 사슬에 고리·중복 없음" % d.name, str(chain))
+        # 261009(영어번역 재검토 F2): 번역문에 한글이 남으면 안 된다 — 허용은 셋뿐.
+        #   ① 언어를 바꾼 직후 읽히도록 일부러 두 언어로 쓴 안내(원문에 영어가 함께 있다)
+        #   ② 원문에 든 정규식 예시 '제1장' ③ 실제 파일 이름 접미 `_번역`(한국 전용 번역 기능의 산출물)
+        leak = []
+        for m in cat:
+            if not m.id:
+                continue
+            mid = m.id if isinstance(m.id, str) else m.id[0]
+            s = " / ".join(m.string) if isinstance(m.string, (list, tuple)) else (m.string or "")
+            if any(k in mid for k in _BILINGUAL):
+                continue                                         # ① 원문 자체가 두 언어
+            s = s.replace("'제1장'", "").replace("_번역", "")    # ② ③
+            if re.search(r"[가-힣]", s):
+                leak.append(mid[:30])
+        chk(not leak, "F %s 번역문에 한글이 남지 않았다(허용: 두 언어 안내·'제1장'·_번역)" % d.name, str(leak[:5]))
     chk(not (real / "qps_ploc").exists(), "F 가짜 언어 폴더가 저장소·빌드에 남아 있지 않다")
 
     # ── H — 메인 창 감싸기(Phase 2) ──

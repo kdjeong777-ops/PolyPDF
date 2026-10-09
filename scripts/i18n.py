@@ -120,6 +120,7 @@ def _write_po(cat, path: Path, **kw) -> bool:
     import io
     from babel.messages.pofile import write_po
     buf = io.BytesIO()
+    kw.setdefault("include_lineno", False)   # 261009(재검토 F3): 위치는 파일만 — 코드 몇 줄만 바뀌어도 diff 가 수천 줄 나던 것
     write_po(buf, cat, width=0, sort_by_file=False, **kw)
     new = buf.getvalue()
 
@@ -142,7 +143,7 @@ def extract(base: Path = ROOT, pot: Path = None):
     entries, warns = extract_from(source_files(base), base)
     cat = build_template(entries)
     pot = pot or (base / "resources" / "locale" / (DOMAIN + ".pot"))
-    _write_po(cat, pot, omit_header=False, include_lineno=True)
+    _write_po(cat, pot, omit_header=False)
     return cat, warns
 
 
