@@ -20,7 +20,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
     def __init__(self, page_count: int, cur_page: int,
                  n_thumb_sel: int, n_shot_sel: int, parent=None,
                  preset_api=None, sample=None, n_files_sel: int = 0,
-                 thumb_pages=None, file_paths=None):
+                 thumb_pages=None, file_paths=None, bake_src=None):
         super().__init__(parent)
         self.setWindowTitle(tr("인쇄"))
         self.resize(800, 600)
@@ -28,6 +28,10 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self._cur_page = cur_page
         self._preset_api = preset_api
         self._sample = sample
+        # 261009-1(마스터 §4.7.13): 미리보기도 **구운 원천**을 봐야 '미리보기 = 인쇄' 다.
+        #   정책은 본창이 갖고(`_baked_src`), 창은 '문서 + 주석·꾸미기' 일 때만 한 번 묻는다.
+        self._bake_src = bake_src
+        self._baked_cache = {}
         self._nup_settings = {"make_cover": False, "make_toc": False}
         self._to_pdf = False
         self._preview_page = cur_page          # 미리보기 현재 페이지
@@ -286,6 +290,26 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         return ([{"type": "pdf", "path": sub_pdf, "name": _P(self._sample).stem}]   # `_build_nup_pdf` 와 같은 이름
                 if sub_pdf else None)
 
+    def _baked_sample(self) -> str:
+        """미리보기가 읽을 원천 — '문서 + 주석·꾸미기' 면 구운 사본(한 번 굽고 캐시)."""
+        src = str(self._sample or "")
+        if not src or self._bake_src is None:
+            return src
+        try:
+            if not self.include_decorations():
+                return src
+        except Exception:
+            return src
+        hit = self._baked_cache.get(src)
+        if hit:
+            return hit
+        try:
+            out = str(self._bake_src(src, True))
+        except Exception:
+            out = src
+        self._baked_cache[src] = out
+        return out
+
     def _nup_sub_pdf(self, pages):
         """범위의 쪽만 담은 임시 PDF(같은 범위면 다시 만들지 않는다)."""
         key = tuple(pages)
@@ -296,7 +320,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
             if self._nup_tmpdir is None:
                 self._nup_tmpdir = tempfile.mkdtemp(prefix="polypdf_printprev_")
             out = os.path.join(self._nup_tmpdir, f"sub{len(self._nup_sub)}.pdf")
-            sd = fitz.open(str(self._sample)); td = fitz.open()
+            sd = fitz.open(self._baked_sample()); td = fitz.open()
             try:
                 for p in pages:
                     td.insert_pdf(sd, from_page=p, to_page=p)
@@ -458,7 +482,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         try:
             import fitz
             from PyQt6.QtGui import QImage, QPixmap
-            doc = fitz.open(self._sample)
+            doc = fitz.open(self._baked_sample())
             try:
                 if page_index >= doc.page_count:
                     page_index = 0

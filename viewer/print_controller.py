@@ -12,6 +12,7 @@ app.py 분할 2단계(§11.11). 담당: 인쇄 대화상자·범위 처리(`acti
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -50,7 +51,8 @@ class PrintMixin:
                                preset_api=self._merge_preset_api(),
                                sample=(str(cur) if is_pdf else None),
                                n_files_sel=n_files,
-                               thumb_pages=thumb_pages, file_paths=sel_files)
+                               thumb_pages=thumb_pages, file_paths=sel_files,
+                               bake_src=self._baked_src)   # 261009-1(§4.7.13)
         if not dlg.exec():
             return
         spec = dlg.result_spec()
@@ -98,8 +100,11 @@ class PrintMixin:
         if not pages:
             QMessageBox.information(self, tr("인쇄"), tr("인쇄할 페이지가 없습니다."))
             return
+        # 261009-1(§4.7.13): **쪽을 뽑기 전에** 원천을 한 번 굽는다 — 아래 네 갈래
+        #   (다단/낱쪽 × 인쇄/PDF로)가 모두 이 `src` 하나를 쓴다.
+        src = self._baked_src(cur, dlg.include_decorations())
         if dlg.nup_enabled():               # 260611-37/54: 다단 인쇄(표지만, 목차 제외)
-            out_nup = self._build_nup_pdf(cur, pages, dlg.nup_settings())
+            out_nup = self._build_nup_pdf(src, pages, dlg.nup_settings())
             if not out_nup:
                 return
             if to_pdf:
@@ -114,11 +119,11 @@ class PrintMixin:
             return
         if to_pdf:
             dst = self._save_pdf_dialog(tr('{stem}_인쇄.pdf').format(stem=Path(cur).stem))
-            if dst and self._export_pages_pdf(cur, pages, dst):
+            if dst and self._export_pages_pdf(src, pages, dst):
                 self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
                 self._after_pdf_created(dst)
             return
-        self._print_pdf_pages(cur, pages)
+        self._print_pdf_pages(src, pages)
 
     def _save_pdf_dialog(self, default_name):
         from PyQt6.QtWidgets import QFileDialog
@@ -317,6 +322,83 @@ class PrintMixin:
             return None
         return out_nup
 
+    # ===== 261009-1(마스터 §4.7.13): 인쇄·내보내기는 **원천을 한 번 굽고** 시작한다 =====
+    def _has_bakeables(self, path) -> bool:
+        """이 파일에 구울 것(꾸밈·사진·하이퍼링크)이 있나. 실측 0.56ms — 없으면 여기서 끝낸다."""
+        try:
+            st = self._ensure_page_meta_store()
+            if st and (st.pages_with_images(path) or st.pages_with_drawings(path)):
+                return True
+        except Exception:
+            pass
+        try:
+            hl = self._ensure_hyperlink_store()
+            if hl and hl.pages_with_links(path):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _baked_src(self, path, include_decorations: bool = True) -> str:
+        """꾸밈·사진·하이퍼링크를 구운 **임시 PDF 경로**. 구울 것이 없으면 원본 경로 그대로.
+
+        ★ 쪽을 뽑거나 다단으로 묶기 **전에** 부른다 — 다단은 쪽을 축소·재배치하므로,
+        composed 시트에 원본 쪽 좌표로 구우면 자리가 어긋난다. 원천에 구워 두면 꾸밈·사진이
+        쪽 내용이라 축소에 저절로 따라간다(§4.7.13).
+
+        종전에는 `_print_pdf_pages` 안에서 구웠는데, 그러면 **원본을 받은 호출만** 맞고
+        임시 PDF 를 받은 호출(다단·여러 파일)은 조용히 빈손이 됐다 — 열 갈래 중 둘만
+        동작하던 까닭이다. 이제 굽기는 여기 하나뿐이고 부르는 쪽이 구운 원천을 넘긴다.
+
+        실측: 1000쪽·사진 5장 0.27초 — 응답성 통과 조건(1초) 안이라 워커를 두지 않는다.
+        """
+        src = str(path)
+        if not include_decorations or not src.lower().endswith(".pdf"):
+            return src
+        if not self._has_bakeables(src):
+            return src                       # 보통 문서 — 비용 0
+        cache = getattr(self, "_baked_cache", None)
+        if cache is None:
+            cache = self._baked_cache = {}
+        try:
+            key = (src, os.path.getmtime(src))
+        except Exception:
+            key = (src, 0)
+        hit = cache.get(key)
+        if hit and os.path.exists(hit):
+            return hit
+        import fitz
+        try:
+            doc = fitz.open(src)
+        except Exception:
+            return src
+        try:
+            try:
+                self._bake_drawings_into_doc(doc, self._decorations_norm_for(src))
+            except Exception:
+                pass
+            try:
+                self._bake_images_into_doc(doc, src)
+            except Exception:
+                pass
+            try:
+                self._bake_hyperlinks_into_doc(doc, src)
+            except Exception:
+                pass
+            tmpdir = self._mk_print_tmpdir("polypdf_bake_")
+            out = str(tmpdir / (Path(src).stem + "_baked.pdf"))
+            # deflate 를 빼면 그림이 날것으로 들어가 수십 배가 된다(260930-1 실측, §4.7.11).
+            doc.save(out, deflate=True)
+        except Exception:
+            return src                       # 굽지 못해도 인쇄 자체는 되게
+        finally:
+            try:
+                doc.close()
+            except Exception:
+                pass
+        cache[key] = out
+        return out
+
     def _mk_print_tmpdir(self, prefix):
         """260825-6: 인쇄용 임시 폴더 생성 + 앱 종료 시 자동 정리(atexit) 등록."""
         import tempfile, atexit, shutil
@@ -412,8 +494,12 @@ class PrintMixin:
             return
         default_stem = (tr("{stem}_외{n}건").format(stem=Path(files[0]).stem, n=len(files) - 1)
                         if len(files) > 1 else Path(files[0]).stem)
+        # 261009-1(§4.7.13): 묶거나 다단으로 만들기 **전에 파일마다** 굽는다.
+        #   이름은 원본에서 딴다(구운 임시 파일 이름이 새어 나가지 않게).
+        _inc = dlg.include_decorations()
+        baked = [(f, self._baked_src(f, _inc)) for f in files]
         if dlg.nup_enabled():
-            items = [{"type": "pdf", "path": f, "name": Path(f).stem} for f in files]
+            items = [{"type": "pdf", "path": b, "name": Path(f).stem} for f, b in baked]
             out_nup = self._build_nup_pdf_items(items, dlg.nup_settings())
             if not out_nup:
                 return
@@ -427,7 +513,7 @@ class PrintMixin:
             nd = fitz.open(out_nup); npages = list(range(nd.page_count)); nd.close()
             self._print_pdf_pages(out_nup, npages)
             return
-        combined = self._combine_pdfs_temp(files)
+        combined = self._combine_pdfs_temp([b for _f, b in baked])
         if not combined:
             QMessageBox.information(self, tr("인쇄"), tr("인쇄할 페이지가 없습니다."))
             return
@@ -636,7 +722,8 @@ class PrintMixin:
         if not cur or not pages:
             return
         self._print_opts = None      # 260827: 썸네일 직접 인쇄는 시스템 인쇄창(QPrintDialog) 사용
-        self._print_pdf_pages(cur, pages)
+        # 261009-1(§4.7.13): 여기도 구운 원천으로 — 인쇄 창을 거치지 않으므로 꾸밈을 포함한다.
+        self._print_pdf_pages(self._baked_src(cur, True), pages)
 
     def _print_pdf_pages(self, pdf_path, pages: list) -> None:
         # 260618-1: 현재 문서 인쇄 권한 없으면 차단
@@ -646,16 +733,10 @@ class PrintMixin:
         import fitz
         from PyQt6.QtGui import QImage
         from PyQt6.QtGui import QPageLayout
+        # 261009-1(§4.7.13): **여기서 굽지 않는다.** 굽기를 이 안에 두면 '원본을 받은 호출'
+        #   만 맞고 임시 PDF 를 받은 호출(다단·여러 파일)은 조용히 빈손이 된다 — 열 갈래 중
+        #   둘만 동작하던 까닭이다. 부르는 쪽이 `_baked_src()` 로 **구운 원천**을 넘긴다.
         doc = fitz.open(pdf_path)
-        # 260615-3/260827: 인쇄에 꾸밈(선·도형·글)+하이퍼링크 포함 — '문서만' 이면 생략
-        opts = getattr(self, "_print_opts", None) or {}
-        if opts.get("include_decorations", True):
-            try:
-                self._bake_drawings_into_doc(doc, self._decorations_norm_for(pdf_path))
-                self._bake_images_into_doc(doc, pdf_path)   # 260930-2(§4.7.13): 사진도
-                self._bake_hyperlinks_into_doc(doc, pdf_path)
-            except Exception:
-                pass
 
         def draw(painter, target, i):
             page = doc.load_page(pages[i])

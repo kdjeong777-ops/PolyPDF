@@ -107,13 +107,15 @@ try:
     import inspect
     from viewer import print_controller as pc
     src_pr = inspect.getsource(pc)
-    # 굽는 자리를 기준으로 본다(옵션 이름은 대화상자에도 나와 첫 등장이 다른 곳이다).
-    i_bake = src_pr.find("_bake_drawings_into_doc(doc")
-    seg = src_pr[max(0, i_bake - 400):i_bake + 400]
-    chk("_bake_images_into_doc" in seg,
-        "⑤ 인쇄가 꾸밈을 굽는 **그 자리에서** 사진도 굽는다")
+    # 261009-1(§4.7.13): 굽기가 `_print_pdf_pages` 안에서 **원천 만들기**(`_baked_src`)로
+    #   옮겨 갔다 — 그래야 다단·여러 파일·PDF로 인쇄까지 같이 굽힌다. 경로별로 실제 결과에
+    #   사진이 들어가는지는 `test_print_bake_paths.py` 가 센다. 여기서는 자리만 확인한다.
+    i_bake = src_pr.find("def _baked_src")
+    seg = src_pr[i_bake:i_bake + 2500]
+    chk(i_bake > 0 and "_bake_images_into_doc" in seg,
+        "⑤ 인쇄 원천 만들기(`_baked_src`)가 사진도 굽는다")
     chk("include_decorations" in seg,
-        "⑤ '문서만' 이면 굽지 않는다(같은 조건 안에 있다)")
+        "⑤ '문서만' 이면 굽지 않는다(같은 함수가 받는다)")
 
     # ── ⑥ 사진만 있어도 저장이 막히지 않는다 ───────────────────────
     from viewer import edit_controller as ec
