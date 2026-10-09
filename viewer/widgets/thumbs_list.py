@@ -57,6 +57,9 @@ class PageThumbs(QWidget):
         self._hidden_pages = set()           # 260609-14(D5): 숨김 페이지
         self._rotations = {}                 # 260609-15(A1): {page0: deg}
         self._decorated = set()              # 260609-21(J4): 꾸밈(하이퍼링크/선긋기) 페이지
+        # 261009-21(응답성 SOT §4 ⑥·§12): 아이콘을 **이미 그린** 항목 — 다시 그릴 때 전 항목(598쪽이면 598번)이 아니라 이것만 비운다.
+        #   PyQt 는 C++ 호출마다 GIL 을 내려놓아, 다른 스레드가 바쁘면 호출마다 GIL 을 되찾느라 기다린다(598번 × 수 ms = 1.51초, 빌드본 T3).
+        self._iconed = {}                    # id(항목) → 항목(QListWidgetItem 은 해시가 안 돼 집합에 못 넣는다 — 참조를 쥐어 id 재사용도 막는다)
         self._img_resolver = None            # 260611-18(A5): page0->[삽입 이미지 dict] (썸네일 베이킹)
         self._paste_available = None         # 260821: () -> int (붙여넣기 대기 쪽수; app 이 주입)
         self._ext_docs = {}                  # 260822: 붙여넣기 스테이징 — {src_path: PdfDocument} 렌더 캐시
@@ -463,6 +466,7 @@ class PageThumbs(QWidget):
                        Qt.AlignmentFlag.AlignCenter, tr('붙여넣기 p.{epg}').format(epg=int(epg) + 1))
             p.end()
             item.setIcon(QIcon(bordered))
+            self._iconed[id(item)] = item
             item.setToolTip(tr('붙여넣기 대기: {name} p.{epg}').format(name=Path(src).name, epg=int(epg) + 1))
         except Exception:
             pass
@@ -797,6 +801,7 @@ class PageThumbs(QWidget):
         self._ext_docs = {}
         self._drop_staged_temps()                   # 260930-1(§4.7.11): 사진 임시 파일도 함께
         self.list.clear()
+        self._iconed = {}
         self._doc_path = None
         self._doc_mtime = None
 
@@ -826,6 +831,7 @@ class PageThumbs(QWidget):
         self._ext_docs = {}
         self._drop_staged_temps()                   # 260930-1(§4.7.11): 사진 임시 파일도 함께
         self.list.clear()
+        self._iconed = {}
 
         if not path.exists() or path.suffix.lower() != ".pdf":
             self.title.setText(self._format_title(path.name))
@@ -987,6 +993,7 @@ class PageThumbs(QWidget):
                     p.restore()
                 p.end()
                 item.setIcon(QIcon(bordered))
+                self._iconed[id(item)] = item
                 # 260611-12: 실제 카드 높이로 셀 높이 보정(가로/세로 페이지별 간격 적정)
                 desired_h = bordered.height() + self.ITEM_MARGIN
                 if item.sizeHint().height() != desired_h:
@@ -995,14 +1002,20 @@ class PageThumbs(QWidget):
                 pass
 
     def set_hidden_pages(self, pages):
-        """260609-14(D5): 숨김 페이지 집합 갱신 → 아이콘 재렌더."""
-        self._hidden_pages = set(int(p) for p in (pages or set()))
-        self._rerender_all()
+        """260609-14(D5): 숨김 페이지 집합 갱신 → **바뀐 쪽만** 아이콘 재렌더(261009-21)."""
+        new = set(int(p) for p in (pages or set()))
+        changed = new ^ self._hidden_pages
+        self._hidden_pages = new
+        if changed:
+            self._rerender_all(changed)
 
     def set_rotations(self, rotations):
-        """260609-15(A1): {page0: deg} 회전 갱신 → 아이콘 재렌더."""
-        self._rotations = {int(k): int(v) % 360 for k, v in (rotations or {}).items()}
-        self._rerender_all()
+        """260609-15(A1): {page0: deg} 회전 갱신 → **바뀐 쪽만** 아이콘 재렌더(261009-21)."""
+        new = {int(k): int(v) % 360 for k, v in (rotations or {}).items()}
+        changed = {k for k in set(new) | set(self._rotations) if new.get(k, 0) != self._rotations.get(k, 0)}
+        self._rotations = new
+        if changed:
+            self._rerender_all(changed)
 
     def set_image_resolver(self, fn):
         """260611-18(A5): page0->[이미지 dict] 해석기. 썸네일에 개체를 베이킹."""
@@ -1054,9 +1067,12 @@ class PageThumbs(QWidget):
             painter.restore()
 
     def set_decorated_pages(self, pages):
-        """260609-21(J4): 꾸밈(하이퍼링크/선긋기) 페이지 집합 → 색·필터 갱신."""
-        self._decorated = set(int(p) for p in (pages or set()))
-        self._rerender_all()
+        """260609-21(J4): 꾸밈(하이퍼링크/선긋기) 페이지 집합 → 색·필터 갱신(**바뀐 쪽만** 재렌더, 261009-21)."""
+        new = set(int(p) for p in (pages or set()))
+        changed = new ^ self._decorated
+        self._decorated = new
+        if changed:
+            self._rerender_all(changed)
         if self._filter == "decorated":
             self._apply_filter()
 
@@ -1103,9 +1119,24 @@ class PageThumbs(QWidget):
                     self.pageActivated.emit(int(pg))
         self._render_timer.start()
 
-    def _rerender_all(self):
-        for i in range(self.list.count()):
-            self.list.item(i).setIcon(QIcon())   # 캐시 비우고 다시 렌더
+    def _rerender_all(self, pages=None):
+        """아이콘을 비우고 다시 그리게 한다 — **이미 그린 항목만**(`_iconed`), `pages` 를 주면 그 쪽만.
+
+        261009-21(응답성 SOT §4 ⑥): 종전에는 모든 항목(598쪽이면 598번)에 `setIcon(QIcon())` 을 불렀다. 한 번은 1ms 남짓이지만
+        PyQt 는 C++ 호출마다 GIL 을 내려놓아, 다른 스레드가 바쁘면(동결 import 해제 등) 호출마다 GIL 을 되찾느라 기다린다 —
+        문서를 처음 열 때 숨김·회전·꾸밈이 세 번 불러 메인이 1.51초 섰다(빌드본 시험 T3, 바쁜 스레드로 0.009→0.224초 재현).
+        아직 그리지 않은 항목은 비울 것이 없다 — 보이는 것만 그리므로 대개 수십 개다."""
+        keep = {}
+        for k, it in self._iconed.items():
+            try:
+                pg = it.data(Qt.ItemDataRole.UserRole)
+                if pages is None or (isinstance(pg, int) and pg in pages):
+                    it.setIcon(QIcon())
+                else:
+                    keep[k] = it
+            except RuntimeError:             # 목록에서 빠진 항목(C++ 객체가 지워짐)
+                pass
+        self._iconed = keep
         self._render_timer.start()
 
     def _on_activated(self, item: QListWidgetItem):

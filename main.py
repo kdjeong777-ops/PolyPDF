@@ -56,6 +56,29 @@ def _profile() -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "", os.environ.get("POLYPDF_PROFILE", ""))[:32]
 
 
+def _setup_portable() -> str:
+    """261009-22(마스터 §14.9): exe 옆에 `PolyPDF.portable` 이 있으면 모든 데이터를 `<exe 폴더>\\Data` 에 둔다(휴대용).
+    설정·색인·사전·스크린샷(`settings_store._DIR_OVERRIDE`), 창 위치 등 QSettings(레지스트리 대신 INI), 도구 자료(`local_data_dir`).
+    폴더에 쓸 수 없으면(Program Files 등) %APPDATA% 로 물러서고 안내 문구를 돌려준다(창이 뜬 뒤 상태줄에)."""
+    base = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) \
+        else Path(os.path.abspath(__file__)).parent
+    try:
+        from viewer import settings_store
+        if not (base / settings_store.PORTABLE_MARKER).exists():
+            return ""
+        d = settings_store.portable_dir(base, _profile())
+        if d is None:
+            return "portable-readonly"
+        settings_store._DIR_OVERRIDE = str(d)
+        settings_store.PORTABLE = True
+        from PyQt6.QtCore import QSettings
+        QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, str(d))
+        return "portable"
+    except Exception:
+        return ""
+
+
 def _migrate_appdata() -> None:
     """v1.6.15: 프로그램명 변경(Smart PDF Viewer→PolyPDF)으로 AppData 경로가
     바뀌므로, 기존 settings.json/index.db/스크린샷을 신 폴더로 1회 복사.
@@ -65,6 +88,12 @@ def _migrate_appdata() -> None:
     """
     if _profile():
         return                       # 261009-19: 시험 프로필은 옛 폴더를 끌어오지 않는다
+    try:
+        from viewer import settings_store as _ss
+        if _ss.PORTABLE:
+            return                   # 261009-22: 휴대용은 PC 의 옛 폴더를 끌어오지 않는다
+    except Exception:
+        pass
     try:
         from PyQt6.QtCore import QStandardPaths
         new_dir = Path(QStandardPaths.writableLocation(
@@ -162,10 +191,8 @@ def _install_excepthook() -> None:
         except Exception:
             pass
         try:
-            from PyQt6.QtCore import QStandardPaths
-            d = Path(QStandardPaths.writableLocation(
-                QStandardPaths.StandardLocation.AppDataLocation))
-            d.mkdir(parents=True, exist_ok=True)
+            from viewer.settings_store import settings_dir   # 261009-22: 휴대용 모드도 같은 길
+            d = settings_dir()
             log = d / ERROR_LOG_NAME
             mode = "w" if log.exists() and log.stat().st_size > ERROR_LOG_MAX else "a"
             with open(log, mode, encoding="utf-8") as f:
@@ -269,6 +296,7 @@ def main():
     except Exception:
         pass
     app = QApplication(sys.argv)
+    _portable_note = _setup_portable()   # 261009-22(마스터 §14.9): 넘기기 통로 이름(open_gather)을 정하기 **전에**
 
     # 260915-3(마스터 §4.9, 사용자 지시): 탐색기에서 PDF 여러 개를 골라 열면 Windows 가 파일마다
     #   따로 실행한다 → 먼저 뜬 실행(대표)에게 파일을 넘기고 이 실행은 창 없이 끝난다.
@@ -322,6 +350,18 @@ def main():
     #   4.4초 선 뒤에야 요청한 파일을 열었다(설치본 실측). 이벤트 루프가 돌기 전이라 복원보다 앞선다.
     win._startup_has_args = bool(pdf_args)
     win.show()
+    # 261009-22(마스터 §14.9): 휴대용 모드 안내 — 쓸 수 없는 폴더라 물러섰으면 그 까닭을
+    if _portable_note:
+        try:
+            from viewer.i18n import tr
+            from viewer import settings_store as _ss
+            if _portable_note == "portable":
+                win.status.showMessage(tr("휴대용 모드 — 설정·색인을 이 폴더에 저장합니다: {path}").format(
+                    path=_ss.settings_dir()), 8000)
+            else:
+                win.status.showMessage(tr("이 폴더에 쓸 수 없어 휴대용 모드를 쓰지 못합니다 — 설정은 사용자 폴더에 저장합니다."), 15000)
+        except Exception:
+            pass
     if splash is not None:
         _fade_out_splash(app, splash, win)
     # 260611-11: 인자로 받은 PDF 열기 — '연결 프로그램/기본 PDF 뷰어'로 더블클릭/Open with 지원.

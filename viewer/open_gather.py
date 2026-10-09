@@ -39,7 +39,16 @@ def _base() -> str:
     # 검사는 이름을 바꿔 실제로 쓰는 PolyPDF 와 부딪히지 않게 한다
     #   261009-19: 시험 프로필(`POLYPDF_PROFILE`, main.py)도 — 시험 실행이 사용자 창에 PDF 를 넘기지 않게
     prof = "".join(c for c in os.environ.get("POLYPDF_PROFILE", "") if c.isalnum() or c in "-_")[:32]
-    return os.environ.get("POLYPDF_OPEN_GATHER_NAME") or f"polypdf-open-{_user()}" + (f"-{prof}" if prof else "")
+    # 261009-22(마스터 §14.9): 휴대용 모드는 설치본과 PDF 를 주고받지 않는다 — 폴더마다 다른 통로
+    port = ""
+    try:
+        from viewer import settings_store as _ss
+        if _ss.PORTABLE and _ss._DIR_OVERRIDE:
+            import hashlib
+            port = "-p" + hashlib.sha1(str(_ss._DIR_OVERRIDE).lower().encode("utf-8")).hexdigest()[:8]
+    except Exception:
+        pass
+    return os.environ.get("POLYPDF_OPEN_GATHER_NAME") or f"polypdf-open-{_user()}" + (f"-{prof}" if prof else "") + port
 
 
 def server_name() -> str:

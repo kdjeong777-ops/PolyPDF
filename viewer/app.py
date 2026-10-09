@@ -69,10 +69,9 @@ from viewer.resources_path import resource_path
 
 
 def _data_dir() -> Path:
-    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
-    p = Path(base)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    """index.db 등 데이터 폴더 = 설정 폴더(261009-22: 휴대용 모드·자식 프로세스가 같은 곳을 쓰게 한 길로 — 종전에도 같은 경로)."""
+    from viewer.settings_store import settings_dir
+    return settings_dir()
 
 
 class _MergeThread(QThread):

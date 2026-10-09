@@ -24,9 +24,8 @@ _CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
 def managed_dir() -> Path:
-    base = os.environ.get("LOCALAPPDATA") or str(Path.home())
-    d = Path(base) / "PolyPDF" / "bin"
-    return d
+    from viewer.settings_store import local_data_dir   # 261009-22: 휴대용이면 데이터 폴더 안(마스터 §14.9)
+    return local_data_dir() / "bin"
 
 
 def _exe_name() -> str:

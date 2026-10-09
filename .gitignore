@@ -90,3 +90,8 @@ build/
 resources/locale/**/*.mo
 resources/locale/qps_ploc/
 installer/languages.iss
+
+# 261009-22: 휴대용 모드 표식·데이터 폴더(검사·개발 실행이 만든다 — 추적하지 않는다)
+PolyPDF.portable
+Data/
+Data-*/

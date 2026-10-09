@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 19:25+0900\n"
+"POT-Creation-Date: 2026-10-09 23:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,6 +16,15 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+#: main.py
+msgid "이 폴더에 쓸 수 없어 휴대용 모드를 쓰지 못합니다 — 설정은 사용자 폴더에 저장합니다."
+msgstr ""
+
+#: main.py
+#, python-brace-format
+msgid "휴대용 모드 — 설정·색인을 이 폴더에 저장합니다: {path}"
+msgstr ""
 
 #: viewer/about.py
 msgid "Jeremy Singer-Vine 외"

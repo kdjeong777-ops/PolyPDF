@@ -81,6 +81,9 @@ Root: HKLM; Subkey: "Software\{#MyAppName}\Capabilities\FileAssociations"; Value
 Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "Software\{#MyAppName}\Capabilities"; Flags: uninsdeletevalue
 
 [Run]
+; 261009-21: 아이콘 캐시 새로 고침 — 업그레이드 뒤 바로가기 아이콘이 흰색으로 남았다(사용자 보고).
+;   설치한 사용자 권한으로·창 없이·기다리지 않음. 없으면(옛 Windows) 건너뜀.
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runasoriginaluser runhidden nowait skipifdoesntexist
 ; 설치 직후 실행(선택)
 Filename: "{app}\{#MyAppExe}"; Description: "{cm:RunApp}"; Flags: nowait postinstall skipifsilent
 ; PDF 기본 앱 체크 시 — Windows '기본 앱' 설정 열기(사용자가 .pdf → PolyPDF 선택)

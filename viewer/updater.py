@@ -160,7 +160,8 @@ def _to_info(rel):
     #   update zip 은 안 바뀌는 무거운 부분(ffmpeg·tesseract·모델)을 제외 → 기존 설치분 보존.
     def _score(a):
         n = str(a.get("name") or "").lower()
-        return (1 if "update" in n else 0, 1 if "win" in n else 0)
+        # 261009-22(마스터 §14.9): 휴대용 zip(맨 위 PolyPDF\ 폴더 + 표식)은 업데이트 자산이 아니다
+        return (0 if "portable" in n else 1, 1 if "update" in n else 0, 1 if "win" in n else 0)
     pick = max(zips, key=_score) if zips else None
     asset_url = pick.get("browser_download_url") if pick else None
     asset_name = str(pick.get("name") or "") if pick else ""

@@ -209,6 +209,9 @@ REM 260603: build\ 정리 — build\PolyPDF\PolyPDF.exe(불완전 부트로더, 
 REM   실제 실행 파일은 dist\PolyPDF\PolyPDF.exe 하나뿐이 되도록.
 if exist "build" rmdir /s /q "build"
 
+REM 261009-21: exe 수정 시각을 빌드 시각으로. PyInstaller 는 부트로더 파일의 날짜를 그대로 둬 모든 빌드의 exe 가 같은 시각이다 -
+REM   업그레이드 뒤 Windows 아이콘 캐시가 같은 경로+같은 시각이라 설치 중에 잡은 빈(흰) 아이콘을 계속 썼다(사용자 보고).
+powershell -NoProfile -Command "(Get-Item 'dist\PolyPDF\PolyPDF.exe').LastWriteTime = Get-Date"
 echo.
 echo ============================================================
 echo   BUILD SUCCESS !

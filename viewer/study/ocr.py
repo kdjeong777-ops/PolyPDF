@@ -246,8 +246,8 @@ def user_tessdata_dir() -> Path:
     over = os.environ.get("POLYPDF_TESSDATA_DIR")
     if over:
         return Path(over)
-    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-    return Path(base) / "PolyPDF" / "tessdata"
+    from viewer.settings_store import local_data_dir   # 261009-22: 휴대용이면 데이터 폴더 안(마스터 §14.9)
+    return local_data_dir() / "tessdata"
 
 
 def _langs_in(d) -> set:

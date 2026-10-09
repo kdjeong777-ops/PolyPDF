@@ -21,8 +21,8 @@ from PyQt6.QtWidgets import QWidget
 
 
 def _temp_dir() -> Path:
-    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
-    p = Path(base) / "screenshots"
+    from viewer.settings_store import settings_dir     # 261009-22: 휴대용 모드도 같은 길(종전에도 같은 경로)
+    p = settings_dir() / "screenshots"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
