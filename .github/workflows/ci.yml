@@ -30,13 +30,17 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           PYTHONUNBUFFERED: "1"
         run: |
+          # 261009-9(다국어 SOT §3.5·§9): .mo 는 커밋하지 않는 빌드 산출물 — 실제 번역을 읽는 검사(switch·outputs·external·installer) 전에 만든다
+          python scripts/i18n.py compile
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $tests = @(
             "test_draw_paint","test_draw_unify","test_main_draw_v2","test_pen45",
             "test_image_geom","test_image_tools","test_image_annot",
             "test_panel_toolbar","test_capture","test_bookmark_panel","test_fullwidth",
             "test_present_draw","test_present_erase","test_present_options","test_present_split",
             "test_close_edit_confirm",
-            "test_i18n_core","test_i18n_packs","test_i18n_keys"
+            "test_i18n_core","test_i18n_packs","test_i18n_keys",
+            "test_i18n_coverage","test_i18n_switch","test_i18n_outputs","test_i18n_external","test_i18n_installer"
           )
           $fail = 0
           foreach ($t in $tests) {

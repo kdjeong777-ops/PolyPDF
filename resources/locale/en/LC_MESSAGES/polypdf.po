@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-09 10:20+0900\n"
+"POT-Creation-Date: 2026-10-09 11:05+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -7038,6 +7038,28 @@ msgstr "Recording Test"
 #: viewer/widgets/settings_dialog.py
 msgid "확인 중…"
 msgstr "Checking…"
+
+#: viewer/widgets/settings_dialog.py
+msgid "외부 언어팩 사용"
+msgstr "Use external language packs"
+
+#: viewer/widgets/settings_dialog.py
+msgid ""
+"외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
+"프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
+"믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n"
+"\n"
+"켤까요?"
+msgstr ""
+"External language packs are translations that were not tested with the release.
+"
+"They cannot change the program, but they can change what buttons and messages say.
+"
+"Only use language packs from a source you trust.
+"
+"
+"
+"Turn them on?"
 
 #: viewer/widgets/settings_dialog.py
 msgid "연결 확인 ping"

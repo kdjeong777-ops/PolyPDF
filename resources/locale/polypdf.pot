@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 10:20+0900\n"
+"POT-Creation-Date: 2026-10-09 11:05+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -6561,6 +6561,19 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "확인 중…"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "외부 언어팩 사용"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid ""
+"외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
+"프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
+"믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n"
+"\n"
+"켤까요?"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

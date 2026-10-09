@@ -250,6 +250,16 @@ def resource_chain() -> list:
     return out + [KO]
 
 
+def _warn_if_stale(mo: Path) -> None:
+    """`.mo` 가 옆의 `.po` 보다 오래되면 경고 한 줄(SOT §3.4 — 개발 실행에서 고친 번역이 안 보이는 원인)."""
+    po = mo.with_suffix(".po")
+    try:
+        if po.is_file() and po.stat().st_mtime > mo.stat().st_mtime:
+            _log.warning("언어팩 .mo 가 .po 보다 오래됐다(scripts/i18n.py compile): %s", mo)
+    except OSError:
+        pass
+
+
 def _translations_for(codes: list):
     """사슬의 `.mo` 들을 add_fallback 으로 잇는다. 하나도 없으면 NullTranslations."""
     head = None
@@ -264,6 +274,7 @@ def _translations_for(codes: list):
         except Exception as e:
             _log.warning("언어팩 .mo 를 읽지 못함 %s: %s", mo, e)
             continue
+        _warn_if_stale(mo)
         if head is None:
             head = t
         else:

@@ -298,6 +298,7 @@ class SettingsDialog(QDialog):
         self.chk_ext_lang.setToolTip(tr("설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. "
                                         "같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."))
         self.chk_ext_lang.setChecked(bool(self._prefs.get("external_language_packs", False)))
+        self.chk_ext_lang.toggled.connect(self._on_ext_lang_toggled)   # 처음 값을 넣은 뒤 — 켤 때만 확인
         btn_ext = QPushButton(tr("폴더 열기"))
         btn_ext.setToolTip(str(_i18n.external_dir()))
         btn_ext.clicked.connect(self._open_external_lang_dir)
@@ -740,6 +741,21 @@ class SettingsDialog(QDialog):
             "translate_model": self.cmb_translate_model.currentData(),
             "translate_consent": self.chk_translate_consent.isChecked(),
         }
+
+    def _on_ext_lang_toggled(self, on: bool):
+        """외부 언어팩을 켤 때 한 번 확인한다(다국어 SOT §13 '외부 팩의 신뢰' — 팩은 코드를 실행하지 못하지만
+        단추·안내 문구를 바꿔 사용자를 속일 수는 있다). 끌 때는 묻지 않는다."""
+        if not on:
+            return
+        ans = QMessageBox.question(
+            self, tr("외부 언어팩 사용"),
+            tr("외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
+               "프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
+               "믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n\n켤까요?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if ans != QMessageBox.StandardButton.Yes:
+            self.chk_ext_lang.setChecked(False)
 
     def _open_external_lang_dir(self):
         """외부 언어팩 폴더를 만들고(없으면) 탐색기로 연다(다국어 SOT §3.4)."""

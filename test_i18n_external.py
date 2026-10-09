@@ -11,6 +11,8 @@ E. 번역의 자리표시가 원문과 다르면 원문을 쓴다(쓰는 곳의 
 F. 고른 언어의 팩이 없으면 물러나고(fallback_from), 설정 값은 바꾸지 않으며, 실제 창이 상태줄에 한 번 알린다
 G. 설정 창의 체크박스·결과·허용목록(_apply_prefs)·개인 항목(PERSONAL_PREF_KEYS)
 H. 깨진 외부 팩을 고른 채 실제 MainWindow 가 뜬다
+G2. 체크박스를 켤 때만 확인 창(아니요면 다시 꺼짐), 끌 때·창을 열 때는 묻지 않는다(261009-9, SOT §13)
+I. `.mo` 가 옆 `.po` 보다 오래되면 경고 한 줄, 번역은 그대로(261009-9, SOT §3.4)
 """
 import os, sys, json, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -154,7 +156,46 @@ try:
     mw._apply_prefs(rp)
     chk(mw._prefs.get("external_language_packs") is False, "G 허용목록(_apply_prefs)이 키를 지킨다")
     chk("external_language_packs" in settings_store.PERSONAL_PREF_KEYS, "G 개인 항목(배포 기본값에 넣지 않는다)")
+    # G2(261009-9, SOT §13 '외부 팩의 신뢰'): 켤 때만 확인 창 — 아니요면 다시 꺼진다
+    from viewer.widgets import settings_dialog as _sd
+    from PyQt6.QtWidgets import QMessageBox
+    asked, answer = [], [QMessageBox.StandardButton.No]
+    _orig_q = _sd.QMessageBox.question
+    _sd.QMessageBox.question = staticmethod(lambda *a, **k: (asked.append(a[1]), answer[0])[1])
+    try:
+        d.chk_ext_lang.click()                                   # 꺼짐 → 켬(실제 클릭 신호)
+        chk(len(asked) == 1 and not d.chk_ext_lang.isChecked(), "G2 켤 때 묻고, 아니요면 다시 꺼진다", str(asked))
+        answer[0] = QMessageBox.StandardButton.Yes
+        d.chk_ext_lang.click()
+        chk(len(asked) == 2 and d.chk_ext_lang.isChecked(), "G2 예면 켜진 채")
+        d.chk_ext_lang.click()                                   # 끌 때는 묻지 않는다
+        chk(len(asked) == 2 and not d.chk_ext_lang.isChecked(), "G2 끌 때는 묻지 않는다")
+        d2 = SettingsDialog(dict(mw._prefs, external_language_packs=True), parent=mw, host=mw)
+        chk(len(asked) == 2 and d2.chk_ext_lang.isChecked(), "G2 이미 켜진 설정으로 창을 열 때는 묻지 않는다")
+        d2.close()
+    finally:
+        _sd.QMessageBox.question = _orig_q
     d.close(); mw.close()
+
+    # ── I ── (261009-9, SOT §3.4) .mo 가 .po 보다 오래되면 경고 한 줄
+    import logging, time as _t
+    pack("jc", {"저장": "保存"})
+    po = EXT / "jc" / "LC_MESSAGES" / "polypdf.po"
+    seen = []
+    h = logging.Handler(); h.emit = lambda r: seen.append(r.getMessage())
+    logging.getLogger("viewer.i18n").addHandler(h)
+    try:
+        po.write_text("", encoding="utf-8")
+        mo_t = (EXT / "jc" / "LC_MESSAGES" / "polypdf.mo").stat().st_mtime
+        os.utime(po, (mo_t - 60, mo_t - 60))
+        i18n.install(None, "jc", external=True)
+        chk(not any("오래" in m for m in seen), "I .po 가 더 오래면 경고 없음", str(seen))
+        os.utime(po, (mo_t + 60, mo_t + 60))
+        i18n.install(None, "jc", external=True)
+        chk(any("오래" in m and "jc" in m for m in seen), "I .po 가 더 새로우면 경고", str(seen))
+        chk(i18n.tr("저장") == "保存", "I 경고만 하고 그 .mo 는 그대로 쓴다")
+    finally:
+        logging.getLogger("viewer.i18n").removeHandler(h)
 
     # ── H ──
     pack("xg", {"저장": "ok"}, mo="garbage")
