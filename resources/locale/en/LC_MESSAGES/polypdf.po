@@ -1039,7 +1039,7 @@ msgstr "Reclassify Onterm Entries (by glossary · re-query)..."
 
 #: viewer/app.py
 msgid "1.0 이전에는 항상 베타(테스트) 버전을 받습니다."
-msgstr "Before 1.0, beta (test) versions are always received."
+msgstr "Until 1.0, you always receive beta (test) versions."
 
 #: viewer/app.py
 msgid "단축키 저장됨"
@@ -1048,7 +1048,7 @@ msgstr "Shortcuts saved"
 #: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/hyperlink_dialog.py
 msgid "안내"
-msgstr "Notice"
+msgstr "Information"
 
 #: viewer/app.py
 msgid ""
@@ -1078,11 +1078,11 @@ msgid ""
 msgstr ""
 "PolyPDF was added to the PDF 'Open with' list.\n"
 "\n"
-"■ To make it the default app (either way):\n"
+"■ To make it the default app (either of these):\n"
 "  1) Right-click a PDF file → 'Open with' → 'Choose another app' → PolyPDF → 'Always'\n"
 "  2) Windows Settings → Apps → Default apps → choose PolyPDF for '.pdf'\n"
 "\n"
-"※ Windows security policy requires the user to confirm the default app."
+"※ Windows security policy requires you to confirm the default app yourself."
 
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
@@ -1346,7 +1346,7 @@ msgstr "Delete Selected Text Box (Del)"
 
 #: viewer/app.py
 msgid "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."
-msgstr "Press the top-left corner of the block and drag to the bottom-right corner to copy the text in that area."
+msgstr "Click the top-left corner of the block and drag to the bottom-right corner to copy the text in that area."
 
 #: viewer/app.py viewer/widgets/pointer_settings_dialog.py
 msgid "색 선택"
@@ -1518,7 +1518,7 @@ msgstr "The search term is empty."
 
 #: viewer/app.py
 msgid "검색은 폴더 컨텍스트에서만 등록됩니다."
-msgstr "Searches can only be added in a folder context."
+msgstr "Searches can only be added while a folder is open."
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "오류"
@@ -2367,7 +2367,7 @@ msgstr "OCR failed: %s"
 
 #: viewer/app.py
 msgid "스캔 쪽에 적을 글(우리 OCR·고침)이 없습니다."
-msgstr "Scanned pages have no text to write (our OCR or corrections)."
+msgstr "Scanned pages have no text to write (from OCR or corrections)."
 
 #: viewer/app.py
 #, python-brace-format
@@ -2937,7 +2937,7 @@ msgstr "Test timed out (recording did not end properly)."
 #: viewer/present_controller.py
 #, python-brace-format
 msgid "테스트 성공 — 화면{v} 정상 녹화됩니다."
-msgstr "Test passed — screen{v} recorded correctly."
+msgstr "Test passed — screen{v} recording works."
 
 # | msgid "로딩 중: {name}"
 #: viewer/present_controller.py
@@ -4467,7 +4467,7 @@ msgstr "Extraction mode"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "자동 (목차 있으면 TOC, 없으면 폰트)"
-msgstr "Auto (TOC, else font)"
+msgstr "Auto (TOC if found, otherwise font)"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "TOC 강제"
@@ -4511,7 +4511,7 @@ msgstr "TOC pages:"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "저장 전에 책갈피 표를 검토한다 (실제 쪽과 대조·수정·삭제·추가)"
-msgstr "Review the bookmark table before saving"
+msgstr "Review the bookmark table before saving (check against actual pages, edit, delete, add)"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "<small>스캔본처럼 목차를 못 알아보는 책은 목차 쪽을 직접 적어 주세요. 검토 표에서는 오프셋(목차 쪽→실제 쪽)을 추천받고, 행마다 실제 쪽을 미리보기로 확인해 고칠 수 있습니다.</small>"
@@ -6389,7 +6389,7 @@ msgstr "Copies"
 
 #: viewer/widgets/print_dialog.py
 msgid "자동 가운데 정렬(작을 때) — 해제 시 좌상 맞춤"
-msgstr "Auto-center (when smaller) — off aligns top-left"
+msgstr "Auto-center (when smaller) — when off, aligns top-left"
 
 #: viewer/widgets/print_dialog.py
 msgid "페이지 방향 자동(가로/세로)"
@@ -7518,7 +7518,7 @@ msgstr "Style"
 
 #: viewer/widgets/text_panel.py
 msgid "자간"
-msgstr "Spacing"
+msgstr "Letter spacing"
 
 #: viewer/widgets/text_panel.py
 msgid "줄간격"
@@ -8763,7 +8763,7 @@ msgstr "No page to display"
 #: viewer/widgets/view_settings_dialog.py
 #, python-brace-format
 msgid "{join}쪽"
-msgstr "Page {join}"
+msgstr "p.{join}"
 
 #: viewer/workers.py
 msgid "내려받기를 멈췄습니다."
