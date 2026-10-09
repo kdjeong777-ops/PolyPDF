@@ -156,14 +156,29 @@ jobs:
           if (Test-Path $setup) { echo "setup=$setup" >> $env:GITHUB_OUTPUT; echo "installer built: $setup" }
           else { echo "installer NOT built" }
 
-      - name: Upload build artifact (always)
+      # 261009-18(마스터 §14.5 U19): 산출물을 셋으로 나눈다 — 한 묶음(1GB)이면 설치 시험에 설치 프로그램(350MB)만 필요해도
+      #   전부 받아야 했다(가정 Wi-Fi 0.5MB/s 로 40분). scripts/release_test.py 가 -setup(설치 시험)·-full(빌드 시험)만 받는다.
+      - name: Upload artifact — installer
+        if: steps.inst.outputs.setup != ''
         uses: actions/upload-artifact@v7
         with:
-          name: PolyPDF-${{ github.ref_name }}
-          path: |
-            ${{ steps.pkg.outputs.full }}
-            ${{ steps.pkg.outputs.upd }}
-            ${{ steps.inst.outputs.setup }}
+          name: PolyPDF-${{ github.ref_name }}-setup
+          path: ${{ steps.inst.outputs.setup }}
+          compression-level: 0
+
+      - name: Upload artifact — full zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: PolyPDF-${{ github.ref_name }}-full
+          path: ${{ steps.pkg.outputs.full }}
+          compression-level: 0
+
+      - name: Upload artifact — update zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: PolyPDF-${{ github.ref_name }}-update
+          path: ${{ steps.pkg.outputs.upd }}
+          compression-level: 0
 
       - name: Create or update GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
