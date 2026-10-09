@@ -32,7 +32,7 @@ def mend_ocr_hyphens_en(text: str) -> str:
     """OCR 줄바꿈이 공백이 된 'com- puter' 류 복원 (영어). 빈도로 안전 판정:
     왼쪽 조각이 드물고(zipf<2.5) 결합형이 흔하면(zipf≥3) 결합. 'well- being' 등은 보존."""
     try:
-        from wordfreq import zipf_frequency
+        from viewer.study.wordfreq_fast import zipf_frequency
     except Exception:
         return text
 
@@ -229,7 +229,7 @@ def level_ko(lemma: str) -> tuple[str, Optional[float]]:
         return "고급", None          # 상위 흔한 단어 목록에 없음 = 희귀 = 고급
     # 등급목록 미동봉(개발 폴백)
     try:
-        from wordfreq import zipf_frequency
+        from viewer.study.wordfreq_fast import zipf_frequency
         z = zipf_frequency(base, "ko")
         return band(z), z
     except Exception:
@@ -351,7 +351,7 @@ def build_vocab(store, file_key: str, lang: str = "eng",
             level, z = level_ko(lemma)
             has_syn = False
         else:
-            from wordfreq import zipf_frequency
+            from viewer.study.wordfreq_fast import zipf_frequency
             z = zipf_frequency(lemma, "en")
             syns = _wn_synsets(lemma)
             has_syn = bool(syns)

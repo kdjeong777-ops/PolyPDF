@@ -363,9 +363,12 @@ class BookmarkTree(QWidget):
             self._sort_combo.addItem(tr(_t), _k)
         self._sort_combo.setCurrentIndex(self._sort_combo.findData(self.SORT_MTIME))   # 초기 = 수정일순(내림차순)
         # 폭 줄여 모드 버튼 자리 확보 — 다른 언어로 글자가 길면 그만큼만 넓힌다(261008 다국어)
-        _fm = self._sort_combo.fontMetrics()
-        _need = max(_fm.horizontalAdvance(tr(_t)) for _k, _t in self.SORT_LABELS) + 34
-        self._sort_combo.setMaximumWidth(max(96, _need))
+        # 261009-14(디자인 SOT §2.8.4): 종전 '글자 폭 + 34px' 는 화살표·여백에 모자라 실제 화면(배율 150%)에서
+        #   '수정일 순' 이 '수정일' 로 잘렸다 — 콤보 자신의 크기 계산(가장 긴 항목 + 화살표)을 쓴다.
+        self._sort_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        _need = self._sort_combo.sizeHint().width()
+        self._sort_combo.setMinimumWidth(_need)
+        self._sort_combo.setMaximumWidth(_need)
         self._sort_combo.currentIndexChanged.connect(lambda _i: self._on_sort_changed(""))
         sort_row.addWidget(self._sort_combo)
         self.btn_mode = QPushButton(tr("📁 폴더"))
@@ -391,15 +394,20 @@ class BookmarkTree(QWidget):
         self.btn_edit.setIconSize(QSize(18, 18))
         self._update_edit_icon()
         self.btn_edit.toggled.connect(self.set_edit_mode)
-        edit_row = QHBoxLayout()
-        edit_row.setContentsMargins(0, 0, 0, 0)
+        # 261009-14(디자인 SOT §2.8.4 '단추 줄은 FlowLayout'): 한 줄 고정이라 패널이 좁으면 단추를 글자 폭 아래로
+        #   눌러 영어 'Cancel' 이 'Cance' 로 잘렸다 — 좁으면 아래 줄로 흐른다.
+        from viewer.widgets.flow_layout import FlowLayout as _Flow
+        self._edit_row_w = QWidget()
+        edit_row = _Flow(self._edit_row_w, spacing=3, center=False)
         edit_row.addWidget(self.btn_edit)
         # 260611-61: 새로고침(↻) — 편집모드가 아닐 때만 노출. 외부에서 파일 추가 시 트리 갱신.
         # 260902-1(사용자 요청): 뷰어 모드에서도 목록 보기(트리/단일)를 바꿀 수 있게 —
         #   편집 버튼 오른쪽. 편집모드에서는 edit_ops 1행의 같은 버튼이 대신하므로 숨긴다.
         #   두 버튼의 라벨은 set_tree_view 가 함께 갱신한다.
         self.btn_view_mode_v = QPushButton(tr("트리") if self._view_tree else tr("단일"))
-        self.btn_view_mode_v.setFixedWidth(44)
+        _fmv0 = self.btn_view_mode_v.fontMetrics()      # 261009-14: 언어마다 '단일/트리' 글자 폭 이상
+        self.btn_view_mode_v.setFixedWidth(max(44, max(_fmv0.horizontalAdvance(tr("트리")),
+                                                       _fmv0.horizontalAdvance(tr("단일"))) + 14))
         self.btn_view_mode_v.setToolTip(tr("목록 보기: 단일 ↔ 트리 (클릭마다 전환)"))
         self.btn_view_mode_v.clicked.connect(self._toggle_tree_view)
         edit_row.addWidget(self.btn_view_mode_v)
@@ -433,17 +441,10 @@ class BookmarkTree(QWidget):
                 self.btn_save.setText(tr("💾 저장"))
         except Exception:
             self.btn_save.setText(tr("💾 저장"))
-        self.btn_save.setToolTip(tr("_edited.pdf 로 저장"))
+        self.btn_save.setToolTip(tr("저장(PolyPDF용) — 책갈피·쪽 편집은 원본 PDF 에, 꾸밈은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다. 다른 뷰어에서도 보이게 하려면 저장(일반뷰어용)."))
         self.btn_save.clicked.connect(self._op_save)
         self.btn_save.setVisible(False)
         edit_row.addWidget(self.btn_save)
-        edit_row.addStretch(1)
-        # 260611-73: 편집모드에서 편집/취소/저장을 전체 폭으로 균등 분배 → 아래 [다중]행·[삭제]행과
-        #   동일한 폭으로 정렬. 비편집모드에서는 편집+↻만 왼쪽 정렬(나머지 stretch).
-        from PyQt6.QtWidgets import QSizePolicy as _QSP0
-        for _b in (self.btn_edit, self.btn_cancel, self.btn_save):
-            _b.setSizePolicy(_QSP0.Policy.Expanding, _QSP0.Policy.Fixed)
-            _b.setMinimumWidth(0)
         self._edit_row = edit_row
         self._apply_edit_row_stretch(False)
         # 260901-2: '다중/단일' 토글 폐지 — 선택은 **항상 다중 가능**(ExtendedSelection)으로 통일.
@@ -497,20 +498,29 @@ class BookmarkTree(QWidget):
                   self._mk_btn("▲", tr("책갈피 위로 이동 (같은 부모 안)"), self._op_move_up),
                   self._mk_btn("▼", tr("책갈피 아래로 이동 (같은 부모 안)"), self._op_move_down)):
             r1.addWidget(_expand(b), 1)
+        # 261009-14: 균등 분배라도 '단일/트리' 글자는 다 들어가게(좁은 패널에서 '트리' 가 1~3px 잘렸다)
+        _fmv = self.btn_view_mode.fontMetrics()
+        self.btn_view_mode.setMinimumWidth(max(_fmv.horizontalAdvance(tr("트리")),
+                                               _fmv.horizontalAdvance(tr("단일"))) + 12)
 
         # 2행: 🗑️삭제 ⭐선택만 📋복사 — 전체 폭 균등 분배
         row2 = QWidget()
-        r2 = QHBoxLayout(row2); r2.setContentsMargins(0, 0, 0, 0); r2.setSpacing(3)
+        # 261009-14(디자인 SOT §2.8.4): 균등 분배 한 줄은 좁은 패널에서 'Keep Selected' 를 'Keep Selec' 로 잘랐다 — 흐르는 줄로
+        r2 = _Flow(row2, spacing=3, center=False)
         for b in (self._mk_btn(tr("🗑️ 삭제"), tr("선택 삭제"), self._op_delete),
                   self._mk_btn(tr("⭐ 선택만"), tr("선택만 남기고 나머지 삭제"), self._op_keep_selected),
                   self._mk_btn(tr("📋 복사"), tr("선택 파일을 다른 폴더로 복사"), self._op_copy_to)):
-            r2.addWidget(_expand(b), 1)
+            r2.addWidget(b)
 
         eo.addWidget(row1)
-        eo.addWidget(row2)
+        # row2(흐르는 줄)는 edit_ops 안이 아니라 패널 레이아웃에 **바로** 둔다 — 한 겹 안에 넣으면 줄이 바뀐 높이가
+        #   바깥까지 전해지지 않아 둘째 줄 단추가 트리에 가렸다(261009-14). edit_ops 와 함께 보이고 숨는다.
+        self._edit_ops_row2 = row2
         self.edit_ops.setVisible(False)
-        layout.addLayout(edit_row)
+        row2.setVisible(False)
+        layout.addWidget(self._edit_row_w)
         layout.addWidget(self.edit_ops)
+        layout.addWidget(row2)
 
         self.tree = _EditableTree()
         self.tree.setHeaderHidden(True)
@@ -2099,7 +2109,7 @@ class BookmarkTree(QWidget):
             act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
             act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
             act_save_poly = menu.addAction(tr("저장(PolyPDF용)"))
-            act_save_poly.setToolTip(tr("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."))
+            act_save_poly.setToolTip(tr("책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."))
             act_flatten = menu.addAction(tr("저장(일반뷰어용)..."))
             act_flatten.setToolTip(
                 tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
@@ -2247,8 +2257,8 @@ class BookmarkTree(QWidget):
         on=True  → 편집·취소·저장 균등(전체 폭, 아래 행들과 동일),
         on=False → 편집+↻만 왼쪽 정렬(뒤쪽 stretch)."""
         r = getattr(self, "_edit_row", None)
-        if r is None:
-            return
+        if r is None or not hasattr(r, "setStretchFactor"):
+            return                    # 261009-14: FlowLayout 은 단추를 글자 폭으로 두고 좁으면 줄을 바꾼다
         # 260902-1: 인덱스 고정(0/2/3/4)이던 것을 위젯 기준으로 — 행에 버튼(트리/단일)을
         #   끼워 넣자 번호가 밀려 취소/저장 대신 엉뚱한 항목이 늘어나던 것을 방지.
         for b in (self.btn_edit, self.btn_cancel, self.btn_save):
@@ -2288,6 +2298,7 @@ class BookmarkTree(QWidget):
         if on:
             self._dirty = False
         self.edit_ops.setVisible(on)
+        self._edit_ops_row2.setVisible(on)
         self.btn_save.setVisible(on)          # 260611-8: 저장은 편집모드에서만
         self.btn_cancel.setVisible(on)        # 260611-9: 취소도 편집모드에서만
         self.btn_refresh.setVisible(not on)   # 260611-61: 새로고침은 비편집모드에서만

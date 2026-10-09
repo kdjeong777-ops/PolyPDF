@@ -295,6 +295,10 @@ def main():
     from viewer.app import MainWindow
 
     win = MainWindow()
+    # 261009-14(응답성 SOT §4.2·§12): 인자로 받은 PDF 가 있으면 지난 세션을 복원하지 않는다. 복원이 인자 열기보다 먼저
+    #   줄을 서서 '이미 연 것이 있으면 덮지 않는다' 가드가 작동하지 않았다 — 지난 폴더(다운로드)를 메인에서 훑느라
+    #   4.4초 선 뒤에야 요청한 파일을 열었다(설치본 실측). 이벤트 루프가 돌기 전이라 복원보다 앞선다.
+    win._startup_has_args = bool(pdf_args)
     win.show()
     if splash is not None:
         _fade_out_splash(app, splash, win)

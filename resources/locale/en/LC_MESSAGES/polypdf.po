@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-09 12:48+0900\n"
+"POT-Creation-Date: 2026-10-09 14:39+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -387,8 +387,8 @@ msgid "저장(PolyPDF용)"
 msgstr "Save (for PolyPDF)"
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."
-msgstr "Apply bookmarks, annotations and page edits to the original PDF (same as 💾)."
+msgid "책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
+msgstr "Writes bookmarks and page edits into the original PDF, and keeps annotations (lines, shapes, text, photos, hyperlinks) next to it in page_meta.json and hyperlinks.json — shown in PolyPDF (same as 💾)."
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "저장(일반뷰어용)..."
@@ -809,6 +809,10 @@ msgstr "Select Image to Insert"
 #: viewer/app.py
 msgid "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)"
 msgstr "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)"
+
+#: viewer/app.py
+msgid "검색 색인이 손상되어 새로 만듭니다. 끝나면 다시 검색해 주세요."
+msgstr "The search index is damaged and is being rebuilt. Please search again when it finishes."
 
 #: viewer/app.py
 msgid "인덱싱 완료"
@@ -1374,6 +1378,10 @@ msgstr "(No recent folders)"
 #: viewer/app.py
 msgid "(최근 파일 없음)"
 msgstr "(No recent files)"
+
+#: viewer/app.py
+msgid "검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스 재구축' 을 해 주세요."
+msgstr "The search index could not be repaired. Restart PolyPDF, then use 'Tools → Rebuild Index'."
 
 #: viewer/app.py
 msgid "태그 백업 실패 — 자동 부여를 건너뜀"
@@ -3692,8 +3700,8 @@ msgid " 저장"
 msgstr " Save"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "_edited.pdf 로 저장"
-msgstr "Save as _edited.pdf"
+msgid "저장(PolyPDF용) — 책갈피·쪽 편집은 원본 PDF 에, 꾸밈은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다. 다른 뷰어에서도 보이게 하려면 저장(일반뷰어용)."
+msgstr "Save (for PolyPDF) — bookmarks and page edits go into the original PDF; annotations are kept next to it in page_meta.json and hyperlinks.json. To show them in other viewers, use Save (for other viewers)."
 
 #: viewer/widgets/bookmark_tree.py
 msgid ""
@@ -8687,4 +8695,10 @@ msgstr "Getting Started"
 
 #~ msgid "검색·단어장·스크린샷 숨김 (단일 보기)"
 #~ msgstr "Hide Search · Vocabulary · Screenshots (single view)"
+
+#~ msgid "책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."
+#~ msgstr "Apply bookmarks, annotations and page edits to the original PDF (same as 💾)."
+
+#~ msgid "_edited.pdf 로 저장"
+#~ msgstr "Save as _edited.pdf"
 

@@ -41,7 +41,8 @@ jobs:
             "test_close_edit_confirm",
             "test_i18n_core","test_i18n_packs","test_i18n_keys",
             "test_i18n_coverage","test_i18n_switch","test_i18n_outputs","test_i18n_external","test_i18n_installer",
-            "test_i18n_settings_layout"
+            "test_i18n_settings_layout","test_i18n_panel_layout",
+            "test_index_corrupt_recover","test_startup_open_arg","test_present_decorations"
           )
           $fail = 0
           foreach ($t in $tests) {

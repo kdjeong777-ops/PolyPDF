@@ -1310,7 +1310,11 @@ def _ko_wants_space(a, b, ctx: int = 8) -> bool:
             if k is None and not _KIWI["bad"]:
                 try:
                     from kiwipiepy import Kiwi
-                    k = _KIWI["obj"] = Kiwi()
+                    # 261009-14(응답성 SOT §12): 기본·오타·복합 사전을 싣지 않는다 — 띄어쓰기(`space`)만 쓰므로.
+                    #   기본 설정은 첫 `space()` 가 모델을 짓느라 **GIL 을 1.7초 쥐어** 창이 섰다(설치본 실측).
+                    #   사전 없이 0.46초. 실제 한글 PDF 5종 1,506곳에서 판정 99.9% 같다(다른 2곳: 이름 사이·단위).
+                    k = _KIWI["obj"] = Kiwi(load_default_dict=False, load_typo_dict=False,
+                                            load_multi_dict=False)
                 except Exception:
                     _KIWI["bad"] = True
         if k is None:

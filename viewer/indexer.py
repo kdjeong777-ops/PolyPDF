@@ -69,14 +69,27 @@ class PdfIndex:
     BUSY_MS_UI = _dbutil.BUSY_MS_UI     # UI 스레드: 기다리지 않는다(못 읽으면 '모름')
     BUSY_MS_BG = _dbutil.BUSY_MS_BG     # 워커: 얼마든 기다려도 좋다
 
-    def __init__(self, db_path: str | Path, busy_ms: int = BUSY_MS_BG):
+    def __init__(self, db_path: str | Path, busy_ms: int = BUSY_MS_BG, verify: bool = False):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.migrated = False
         self.busy_ms = int(busy_ms)
+        # 261009-14(응답성 SOT §4 ⑤ 손상 복구): 손상 표식이 있으면 열기 전에 새로 만든다 —
+        #   쿼리 도중에야 드러나는 손상('malformed')은 여는 순간에는 잡히지 않는다(설치본 실측).
+        #   다른 연결이 파일을 쥐고 있어 지우지 못하면 표식을 남겨 두고 다음 열기에서 다시 한다.
+        mark = self._corrupt_mark(self.db_path)
+        if mark.exists() and self._remove_db_files(self.db_path):
+            try:
+                mark.unlink()
+            except OSError:
+                pass
+            self.migrated = True
         try:
             self.conn = _dbutil.connect(self.db_path, self.busy_ms)
             self._init_schema()
+            # 사용자가 '인덱스 재구축' 을 고르면 배경에서 무결성까지 본다(큰 색인은 수 초 — 워커 전용)
+            if verify and self.conn.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
+                raise sqlite3.DatabaseError("database disk image is malformed (quick_check)")
         except sqlite3.DatabaseError as e:
             # 260827: index.db 손상(malformed) → 파일 삭제 후 새로 생성(캐시라 안전).
             #   다음 인덱싱이 다시 채운다. PdfIndex 생성이 실패해 검색/인덱싱이 통째로
@@ -91,17 +104,39 @@ class PdfIndex:
 
     _is_corrupt_error = staticmethod(_dbutil.is_corrupt_error)
 
+    @staticmethod
+    def _corrupt_mark(db_path) -> Path:
+        return Path(str(db_path) + ".corrupt")
+
+    @classmethod
+    def mark_corrupt(cls, db_path) -> None:
+        """261009-14: 쿼리 도중 손상을 만난 쪽이 부른다 — 다음에 여는 연결이 새로 만든다."""
+        try:
+            cls._corrupt_mark(db_path).write_text("1", encoding="utf-8")
+        except OSError:
+            pass
+
+    @staticmethod
+    def _remove_db_files(db_path) -> bool:
+        """본파일과 짝 파일(-wal·-shm·-journal)을 지운다. 본파일을 못 지우면 False(다른 연결이 쥐고 있다)."""
+        import os as _os
+        ok = True
+        for suf in ("", "-wal", "-shm", "-journal"):
+            try:
+                _os.remove(str(db_path) + suf)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                ok = ok and suf != ""
+        return ok
+
     def _recreate_corrupt_db(self):
         try:
             self.conn.close()
         except Exception:
             pass
-        import os as _os
-        for suf in ("", "-wal", "-shm", "-journal"):
-            try:
-                _os.remove(str(self.db_path) + suf)
-            except OSError:
-                pass
+        if not self._remove_db_files(self.db_path):
+            self.mark_corrupt(self.db_path)      # 지금은 못 지운다 — 다음 열기에서(261009-14)
         self.conn = _dbutil.connect(self.db_path, self.busy_ms)
         self._init_schema()
         self.migrated = True
@@ -362,9 +397,25 @@ class PdfIndex:
         """응답성 SOT §4 ⑦ — 방금 일한 만큼 비례해 쉰다(폴더 전체가 한 박자를 공유)."""
         return _pacing.pace(self)
 
+    PREFETCH_CHUNK = 4 * 1024 * 1024
+
+    def _prefetch(self, file_path: Path) -> None:
+        """261009-14(응답성 SOT §4 ③·§12): 파일을 **파이썬 `read()` 로 한 번 훑어** OS 캐시에 올린다(내용은 버린다).
+
+        PyMuPDF 는 C 호출 동안 GIL 을 놓지 않는다 — 디스크를 기다리는 동안에도(찬 파일·백신 검사). 그래서 색인이
+        `fz_open_file`·`fz_load_outline` 에서 디스크를 기다리면 메인이 함께 섰다(설치본 빈 색인 1,124개에서 1.0~2.75초 9회).
+        파이썬의 `read()` 는 기다리는 동안 GIL 을 놓으므로, 먼저 훑어 두면 뒤의 `fitz.open` 은 캐시에서 금방 읽는다."""
+        try:
+            with open(file_path, "rb", buffering=0) as f:
+                while f.read(self.PREFETCH_CHUNK):
+                    pass
+        except OSError:
+            pass
+
     def index_file(self, file_path: Path):
         """단일 PDF 인덱싱(또는 재인덱싱)."""
         self.remove_file(file_path)
+        self._prefetch(file_path)
         try:
             doc = fitz.open(file_path)
         except Exception:

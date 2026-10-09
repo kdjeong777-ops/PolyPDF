@@ -475,7 +475,22 @@ class SettingsDialog(QDialog):
         self._outer.addWidget(btns)
 
         self._on_restore_toggled(self.rb_start_last.isChecked())
+        # 261009-14(디자인 SOT §2.14): 콤보는 **가장 긴 항목**만큼 넓어진다 — 실제 PC 의 녹화 장치 이름
+        #   ('마이크 배열(Realtek(R) Audio)' 등)이 창 전체를 밀어 설치본 화면에서만 가로 스크롤이 생겼다
+        #   (오프스크린·검사 PC 는 장치가 없어 재현되지 않았다). 폭은 레이아웃이 정하고 콤보는 최소 길이만 요구한다.
+        from PyQt6.QtWidgets import QComboBox as _QCb2
+        for _cb in self.findChildren(_QCb2):
+            _cb.setSizeAdjustPolicy(_QCb2.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            _cb.setMinimumContentsLength(14)
         self._fit_width_to_content()
+        self._fitted_on_show = False
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        # 처음 보일 때 한 번 더 — 스타일·글꼴이 실제 화면 것으로 입혀진 뒤의 크기로(261009-14)
+        if not getattr(self, "_fitted_on_show", True):
+            self._fitted_on_show = True
+            self._fit_width_to_content()
 
     def _fit_width_to_content(self):
         """261009-10(디자인 SOT §2.14): 세로로 긴 설정 창에 **가로 스크롤바가 생기지 않게** 폭을 내용에 맞춘다.

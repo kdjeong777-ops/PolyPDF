@@ -6,6 +6,7 @@ A. '언어 / Language' 묶음이 설정 창 **맨 위**(첫 묶음)이고 언어
 B. 내장 팩 **모든 언어**(ko + 팩)에서 기본 크기로 열었을 때 **가로 스크롤바가 없다** — 종전에는 긴 체크박스 글자 하나가
    내용 폭을 652px(영어 758px)로 벌려 480px 창에서 모든 언어가 가로로 밀렸다.
 C. 한국어 기본 폭은 종전 그대로(480) — 언어가 길면 그만큼만 넓어진다.
+D(261009-14). 녹화 장치 이름이 길어도(실제 PC) 가로 스크롤이 생기지 않는다 — B 를 긴 장치 이름을 넣은 채로 본다.
 
 실제 글꼴로 재야 폭이 맞다 — 오프스크린 플랫폼에 Windows 글꼴 폴더를 준다(없으면 Qt 기본 글꼴로 잰다).
 """
@@ -44,6 +45,10 @@ try:
         i18n.install(None, code)
         mw = MainWindow(); mw._skip_save_on_close = True
         d = SettingsDialog(dict(mw._prefs), parent=mw, host=mw)
+        # 261009-14: 실제 PC 처럼 녹화 장치 이름이 길게 들어 있어도(설치본 화면에서만 가로 스크롤이 났다)
+        _long = "마이크 배열(Realtek(R) Audio) — Intel® 스마트 사운드 기술 디지털 마이크용 장치 이름이 긴 경우"
+        for _cb in (d.cmb_mic, d.cmb_sys):
+            _cb.addItem(_long); _cb.setEditText(_long)
         d.show(); app.processEvents()
         sc = d.findChild(QScrollArea); content = sc.widget()
         groups = [g for g in content.findChildren(QGroupBox) if g.parent() is content and g.isVisibleTo(d)]

@@ -18,10 +18,12 @@ class IndexWorker(QObject):
     error = pyqtSignal(str)
 
     def __init__(self, db_path: Path, folder: Path,
-                 single_file: Optional[Path] = None, files: Optional[list] = None):
+                 single_file: Optional[Path] = None, files: Optional[list] = None,
+                 verify: bool = False):
         super().__init__()
         self.db_path = db_path
         self.folder = folder
+        self.verify = verify                # 261009-14: '인덱스 재구축' — 무결성까지 보고 깨졌으면 새로
         self.single_file = single_file      # v1.6.11: 지정 시 이 파일만 인덱싱
         # 260915-3(§4.9): 파일 모드로 여러 파일을 열면 그 파일들만(한 작업 안에서 차례로 —
         #   작업을 여럿 띄우면 `_start_index_worker` 가 앞 작업을 취소한다)
@@ -35,7 +37,7 @@ class IndexWorker(QObject):
         try:
             if self._cancel:
                 return
-            idx = PdfIndex(self.db_path)
+            idx = PdfIndex(self.db_path, verify=self.verify)
             try:
                 targets = self.files or ([Path(self.single_file)] if self.single_file is not None else None)
                 if targets is not None:

@@ -421,9 +421,13 @@ class PresentationWindow(QWidget):
                  crop_resolver=None, hidden_resolver=None, rotation_resolver=None,
                  pens=None, pen_active: int = 0, pen_keys=None, rec_keys=None,
                  pen_straight: bool = True, eraser_widths=None,
-                 line_mode: int = 0, highlight_alpha: int = 35, timer_cfg=None):
+                 line_mode: int = 0, highlight_alpha: int = 35, timer_cfg=None,
+                 render_source=None):
         super().__init__(parent)
-        self._doc = PdfDocument(str(file_path))
+        # 261009-14(발표 SOT §2, 사용자 지시): 본문에 그린 선·도형·글·사진이 발표에도 보이게 — 그릴 원천은 꾸밈을
+        #   구운 사본(`render_source`, 인쇄와 같은 굽기 마스터 §4.7.13), 크롭·숨김·회전·하이퍼링크의 열쇠는 원본 경로.
+        self._render_source = render_source
+        self._doc = PdfDocument(str(self._render_path(file_path)))
         self._path = Path(str(file_path))
         self._page = max(0, min(self._doc.page_count - 1, int(page0)))
         self._numbuf = ""
@@ -1187,6 +1191,16 @@ class PresentationWindow(QWidget):
                 return 0
         return 0
 
+    def _render_path(self, path):
+        """그릴 PDF — 꾸밈을 구운 사본이 있으면 그것(없거나 실패하면 원본)."""
+        fn = getattr(self, "_render_source", None)
+        if fn is not None:
+            try:
+                return fn(str(path)) or str(path)
+            except Exception:
+                pass
+        return str(path)
+
     def _render_pixmap(self, dpi, page=None):
         p = self._page if page is None else int(page)
         rp = self._doc.render(p, dpi=dpi)
@@ -1616,7 +1630,7 @@ class PresentationWindow(QWidget):
             self._doc.close()
         except Exception:
             pass
-        self._doc = PdfDocument(str(path))
+        self._doc = PdfDocument(str(self._render_path(path)))
         self._path = Path(str(path))
         self.setWindowTitle(tr('발표 — {name}').format(name=self._path.name))
         self._strokes = {}            # 260609-25(I4): 파일 바뀌면 화면 선 초기화(파일별 적용)

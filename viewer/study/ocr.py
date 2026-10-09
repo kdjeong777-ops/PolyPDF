@@ -194,7 +194,7 @@ def _latin_quality(text: str) -> float:
         return 0.0
     sample = toks[:400]
     try:
-        from wordfreq import zipf_frequency
+        from viewer.study.wordfreq_fast import zipf_frequency   # 261009-14: 설치본 import 1.9초 회피
         hit = sum(1 for t in sample if zipf_frequency(t, "en") >= 2.0)
         return hit / len(sample)
     except Exception:
@@ -204,16 +204,19 @@ def _latin_quality(text: str) -> float:
 
 
 def _image_coverage(page: "fitz.Page") -> float:
-    """페이지 면적 대비 이미지가 덮는 비율(0~1). 전면 스캔 감지용."""
+    """페이지 면적 대비 이미지가 덮는 비율(0~1). 전면 스캔 감지용.
+
+    261009-14(응답성 SOT §12): `get_image_rects()` 는 그림 위치를 찾느라 **쪽의 모든 그림 MD5** 를 계산한다 —
+    텍스트 창이 쪽마다 메인 스레드에서 부르는 길이라 스캔·큰 그림 쪽에서 1.9~2.8초 섰다(설치본 실측).
+    위치만 필요하므로 해시 없는 `get_image_info(hashes=False)` 의 bbox 를 쓴다(표본 4종 11쪽에서 값 동일, 100배 이상 빠름)."""
     try:
+        import fitz
         total = float(page.rect.width * page.rect.height) or 1.0
         area = 0.0
-        for img in page.get_images(full=True):
-            try:
-                for r in page.get_image_rects(img[0]):
-                    area += abs(r.width * r.height)
-            except Exception:
-                continue
+        for info in page.get_image_info(hashes=False, xrefs=False):
+            r = fitz.Rect(info["bbox"]) & page.rect
+            if not r.is_empty:
+                area += abs(r.width * r.height)
         return min(area / total, 1.0)
     except Exception:
         return 0.0

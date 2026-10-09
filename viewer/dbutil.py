@@ -86,5 +86,7 @@ def connect(db_path, busy_ms: int = BUSY_MS_BG,
 def is_corrupt_error(e: Exception) -> bool:
     """'손상' 인가 — 잠금·권한 등 일시적 실패와 구분한다(§4 ⑤ 마지막 규칙)."""
     msg = str(e).lower()
+    # 261009-14: 데이터 쪽이 깨지면 'malformed' 대신 글자 복원 실패로도 드러난다(색인·사전은 UTF-8 만 쓴다)
     return ("malformed" in msg or "not a database" in msg
-            or "file is encrypted" in msg or "corrupt" in msg)
+            or "file is encrypted" in msg or "corrupt" in msg
+            or "could not decode to utf-8" in msg)

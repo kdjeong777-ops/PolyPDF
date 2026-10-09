@@ -1537,7 +1537,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         a_save_as.triggered.connect(self._action_save_as)
         m_file.addAction(a_save_as)
         a_save = QAction(tr("저장(PolyPDF용)"), self)
-        a_save.setToolTip(tr("책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."))
+        a_save.setToolTip(tr("책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."))
         a_save.triggered.connect(lambda: self.bookmark_tree._op_save())
         m_file.addAction(a_save)
         a_flat = QAction(tr("저장(일반뷰어용)..."), self)
@@ -5194,6 +5194,35 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         self.open_pdf(Path(path_str))
 
+    def _close_probe_idx(self):
+        """목록 조사용으로 열어 둔 색인 연결을 닫는다(손상 복구·재구축 전에)."""
+        idx = getattr(self, "_probe_idx", None)
+        self._probe_idx = None
+        if idx is not None:
+            try:
+                idx.close()
+            except Exception:
+                pass
+
+    def _on_index_db_error(self, e) -> None:
+        """261009-14: 색인 작업·검색 오류 중 **손상**이면 스스로 복구한다 — 종전에는 상태줄에 영어 오류만
+        잠깐 남고 검색이 계속 비었다. 표식을 남기고(다음 연결이 새로 만든다) 재구축을 건다. 한 번만."""
+        from viewer import dbutil
+        from viewer.indexer import PdfIndex
+        if not dbutil.is_corrupt_error(Exception(str(e))) or getattr(self, "_index_recovering", False):
+            return
+        # 파일을 못 지우는 상황에서 '오류 → 복구 → 오류' 가 되풀이되지 않게 실행당 두 번까지
+        self._index_recover_count = getattr(self, "_index_recover_count", 0) + 1
+        if self._index_recover_count > 2:
+            self.status.showMessage(tr("검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스 재구축' 을 해 주세요."), 15000)
+            return
+        self._index_recovering = True
+        self.status.showMessage(tr("검색 색인이 손상되어 새로 만듭니다. 끝나면 다시 검색해 주세요."), 10000)
+        self._close_probe_idx()
+        self._cancel_active_indexing()
+        PdfIndex.mark_corrupt(self._db_path)
+        QTimer.singleShot(300, lambda: self.action_reindex(verify=False))
+
     def _cancel_active_indexing(self):
         """260611-89: 진행 중인 모든 인덱싱 작업에 중단 요청(폴더/파일 전환 시)."""
         for w in list(self._index_workers):
@@ -5213,16 +5242,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             if w in self._index_workers:
                 self._index_workers.remove(w)
         worker.finished.connect(_done)
+        worker.error.connect(self._on_index_db_error)  # 261009-14: 색인 손상이면 스스로 복구
         self._attach_indexing_dialog(worker)          # 260902-6: 폴더 인덱싱 진행 창
         run_in_thread(worker, self._thread_keep)
 
-    def action_reindex(self):
+    def action_reindex(self, verify: bool = True):
+        """'도구 → 인덱스 재구축'. 261009-14(응답성 SOT §4 ⑤): 같은 DB 에 다시 넣기만 하면 **손상된 색인은
+        고쳐지지 않았다**(설치본 실측) — 워커가 무결성을 보고 깨졌으면 새로 만든다. UI 가 쥔 연결을 먼저 놓는다
+        (Windows 는 열린 파일을 지우지 못한다)."""
         if not self._folder:
             return
+        self._close_probe_idx()
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
         self.status.showMessage(tr("인덱싱 준비..."))
-        worker = IndexWorker(self._db_path, self._folder)
+        worker = IndexWorker(self._db_path, self._folder, verify=verify)
         worker.progress.connect(self._on_index_progress)
         worker.finished.connect(self._on_index_finished)
         worker.error.connect(lambda e: self.status.showMessage(tr('인덱싱 오류: {e}').format(e=e)))
@@ -5235,6 +5269,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self.status.showMessage(tr('인덱싱 {done}/{total} - {name}').format(done=done, total=total, name=name))
 
     def _on_index_finished(self):
+        self._index_recovering = False
         self.progress.setVisible(False)
         self.status.showMessage(tr("인덱싱 완료"), 3000)
         # 260908-5: 인덱싱 때문에 미뤄 둔 표 인식을 이제 마저 한다(응답성 SOT §4 ①).
@@ -5578,6 +5613,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         worker = SearchWorker(self._db_path, query, paths=scope_paths)
         worker.finished.connect(self._on_search_finished)
         worker.error.connect(lambda e: self.status.showMessage(tr('검색 오류: {e}').format(e=e)))
+        worker.error.connect(self._on_index_db_error)       # 261009-14: 손상이면 복구(위 메시지를 덮는다)
         run_in_thread(worker, self._thread_keep)
         self.main_view.set_query(query)
 
@@ -6012,7 +6048,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                                            eraser_widths=self._draw_eraser_widths(),   # 260611-2: 공유
                                            line_mode=int(self._prefs.get("draw_line_mode", 0)),   # 260611-4
                                            highlight_alpha=self._draw_highlight_alpha(),
-                                           timer_cfg=self._prefs.get("presentation_timer"))  # 260611-19
+                                           timer_cfg=self._prefs.get("presentation_timer"),  # 260611-19
+                                           # 261009-14(사용자 지시): 본문 꾸밈(선·도형·글·사진)을 구운 사본으로 그린다 — 하이퍼링크는 발표 단추로
+                                           render_source=lambda p: self._baked_src(p, include_links=False))
         self._present.splitModeChanged.connect(self._on_present_split_changed)
         self._present.dualModeChanged.connect(self._on_present_dual_changed)    # 260905
         self._present.facingChanged.connect(self._on_present_facing_changed)    # 260905
@@ -7239,6 +7277,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return                        # 아무것도 열지 않는다
         self._session_data = data
         QTimer.singleShot(0, self._restore_session_deferred)
+        QTimer.singleShot(2500, self._warm_up_wordfreq)   # 261009-14: 첫 문서 열기의 wordfreq 불러오기를 미리
 
     def _restore_capture_prefs(self, data: dict) -> None:
         """260606-17: 캡쳐 모드/복사크기/사용자 크기 복원 — 파일을 열지 않으므로 시작 동작과 무관."""
@@ -7289,6 +7328,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             kind = "file" if p.is_file() else "folder"
         return (p, kind)
 
+    def _warm_up_wordfreq(self):
+        """261009-14(응답성 SOT §4.4 감사표): wordfreq(OCR 판정의 영어 사전)를 **배경 스레드**에서 한 번 불러 둔다.
+        문서를 처음 열 때 메인 스레드가 import·첫 사전 읽기를 치르던 것(설치본 1.9초)을 없앤다 — 한 번, 짧다(≈0.2초)."""
+        try:
+            import threading
+            from viewer.study.wordfreq_fast import warm_up
+            threading.Thread(target=warm_up, name="wordfreq-warmup", daemon=True).start()
+        except Exception:
+            pass
+
     def _restore_session_deferred(self):
         """260906-1: 이벤트 루프 진입 후(=창이 보인 뒤) 실행되는 시작 대상 열기.
 
@@ -7298,6 +7347,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         """
         data = getattr(self, "_session_data", None) or {}
         self._session_data = None
+        # 261009-14: 명령줄로 PDF 를 받았으면 그것만 연다 — 지난 폴더를 훑지 않는다(main.py 가 표시)
+        if getattr(self, "_startup_has_args", False):
+            return
         # 미뤄 둔 사이에 이미 무언가를 열었으면(명령줄 인자 PDF·드롭·사용자 조작) 덮지 않는다.
         #   동기 복원 때는 있을 수 없던 경합이라 명시적으로 막는다. 창에 문서가 떠 있는지도
         #   함께 본다 — `_load_main` 을 거치지 않고 뷰에 직접 띄운 경우까지 덮으면 안 된다.

@@ -339,7 +339,25 @@ class PrintMixin:
             pass
         return False
 
-    def _baked_src(self, path, include_decorations: bool = True) -> str:
+    def _bake_signature(self, path) -> str:
+        """261009-14: 구울 내용의 지문 — 꾸밈은 PDF 옆 사이드카에 있어 **PDF 수정 시각이 그대로**다. 종전 캐시 키
+        (경로, 수정 시각)는 선을 더 그려도 옛 구운 파일을 돌려줄 수 있었다(발표 보기가 이 캐시를 쓰며 드러남)."""
+        import hashlib
+        h = hashlib.sha1()
+        try:
+            h.update(repr(sorted(self._decorations_norm_for(path).items())).encode("utf-8", "replace"))
+            st = self._ensure_page_meta_store()
+            if st:
+                for p in sorted(st.pages_with_images(path)):
+                    h.update(repr((p, st.get_images(path, p))).encode("utf-8", "replace"))
+            hl = self._ensure_hyperlink_store()
+            if hl:
+                h.update(repr(sorted(hl.pages_with_links(path))).encode("utf-8", "replace"))
+        except Exception:
+            pass
+        return h.hexdigest()
+
+    def _baked_src(self, path, include_decorations: bool = True, include_links: bool = True) -> str:
         """꾸밈·사진·하이퍼링크를 구운 **임시 PDF 경로**. 구울 것이 없으면 원본 경로 그대로.
 
         ★ 쪽을 뽑거나 다단으로 묶기 **전에** 부른다 — 다단은 쪽을 축소·재배치하므로,
@@ -361,9 +379,9 @@ class PrintMixin:
         if cache is None:
             cache = self._baked_cache = {}
         try:
-            key = (src, os.path.getmtime(src))
+            key = (src, os.path.getmtime(src), bool(include_links), self._bake_signature(src))
         except Exception:
-            key = (src, 0)
+            key = (src, 0, bool(include_links), self._bake_signature(src))
         hit = cache.get(key)
         if hit and os.path.exists(hit):
             return hit
@@ -381,10 +399,11 @@ class PrintMixin:
                 self._bake_images_into_doc(doc, src)
             except Exception:
                 pass
-            try:
-                self._bake_hyperlinks_into_doc(doc, src)
-            except Exception:
-                pass
+            if include_links:            # 발표 보기는 하이퍼링크를 자기 단추로 보이므로 굽지 않는다(261009-14)
+                try:
+                    self._bake_hyperlinks_into_doc(doc, src)
+                except Exception:
+                    pass
             tmpdir = self._mk_print_tmpdir("polypdf_bake_")
             out = str(tmpdir / (Path(src).stem + "_baked.pdf"))
             # deflate 를 빼면 그림이 날것으로 들어가 수십 배가 된다(260930-1 실측, §4.7.11).

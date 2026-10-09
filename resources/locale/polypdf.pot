@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 12:48+0900\n"
+"POT-Creation-Date: 2026-10-09 14:39+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -388,7 +388,7 @@ msgid "저장(PolyPDF용)"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피·꾸밈·쪽 편집을 원본 PDF 에 반영합니다(💾 와 같은 동작)."
+msgid "책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
 msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
@@ -805,6 +805,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)"
+msgstr ""
+
+#: viewer/app.py
+msgid "검색 색인이 손상되어 새로 만듭니다. 끝나면 다시 검색해 주세요."
 msgstr ""
 
 #: viewer/app.py
@@ -1331,6 +1335,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "(최근 파일 없음)"
+msgstr ""
+
+#: viewer/app.py
+msgid "검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스 재구축' 을 해 주세요."
 msgstr ""
 
 #: viewer/app.py
@@ -3513,7 +3521,7 @@ msgid " 저장"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "_edited.pdf 로 저장"
+msgid "저장(PolyPDF용) — 책갈피·쪽 편집은 원본 PDF 에, 꾸밈은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다. 다른 뷰어에서도 보이게 하려면 저장(일반뷰어용)."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
