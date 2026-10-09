@@ -103,7 +103,7 @@ print("GAP", round(g["worst"], 3), r1, r2)
     out = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-300:]
     parts = out.split()
     gap = float(parts[1]) if parts and parts[0] == "GAP" else 99.0
-    chk(gap < 1.0, "D 한국어 띄어쓰기 첫 호출이 다른 스레드를 1초 넘게 막지 않는다(종전 1.7초)", out)
+    chk(gap < 0.3, "D 한국어 띄어쓰기 첫 호출이 다른 스레드를 막지 않는다(종전 1.7초 → 사전 없이 0.46 → 261009-16 자식 프로세스)", out)
     chk(len(parts) == 4 and parts[2] == "True", "D 판정은 그대로(어절 경계는 띄운다)", out)
 
     # ── E: 색인은 PyMuPDF 에 넘기기 전에 파일을 파이썬 read() 로 먼저 훑는다(디스크 대기 동안 GIL 을 놓게) ──

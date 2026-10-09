@@ -444,6 +444,24 @@ function Get-PolyPdfProcs {
     return @($out)
 }
 
+function Get-KiwiHelperIds {
+    # 261009-16(응답성 SOT §4 ③): 한국어 띄어쓰기 도우미(`PolyPDF.exe --kiwi-space-server`, 창 없음).
+    #   제 부모 창이 끝나면 스스로 끝난다 — **창으로 세지 않고**, 기다리기는 함께 한다(도우미도 `_internal` 을 잠근다).
+    $ids = @()
+    try {
+        foreach ($c in (Get-CimInstance Win32_Process -Filter "Name='PolyPDF.exe'" -ErrorAction SilentlyContinue)) {
+            if ([string]$c.CommandLine -like '*--kiwi-space-server*') { $ids += [int]$c.ProcessId }
+        }
+    } catch {}
+    return @($ids)
+}
+
+function Get-PolyPdfWindows {
+    # 사용자에게 보여 줄 '다른 PolyPDF 창' — 도우미를 뺀다.
+    $k = Get-KiwiHelperIds
+    return @(Get-PolyPdfProcs | Where-Object { $k -notcontains $_.Id })
+}
+
 if (-not $Elevated) {
     # 1) 기존 프로그램 종료 대기 — 요청한 창(oldPid) + **동시에 열려 있는 다른 PolyPDF 창 전부**
     #    (260628/U1: 종전에는 oldPid 하나만 기다려, 다른 창이 열려 있으면 그 창이 _internal\*.pyd
@@ -485,30 +503,37 @@ if (-not $Elevated) {
     }
 
     # 1.2) 다른 창: **정상 종료 요청 먼저**(U2) — 각 창에서 저장 확인창이 정상 동작하게.
+    #   261009-16: 기다리기는 **모든** PolyPDF 프로세스로, 보여 주는 수·닫기 요청은 창만(띄어쓰기 도우미 제외).
     $others = Get-PolyPdfProcs
     if ($others.Count -gt 0) {
-        $lbl.Text = ($T.closing_others -f $others.Count)
+        $wins = Get-PolyPdfWindows
+        if ($wins.Count -gt 0) { $lbl.Text = ($T.closing_others -f $wins.Count) } else { $lbl.Text = $T.waiting_others_plain }
         [System.Windows.Forms.Application]::DoEvents()
-        foreach ($p in $others) { try { $p.CloseMainWindow() | Out-Null } catch {} }
+        foreach ($p in $wins) { try { $p.CloseMainWindow() | Out-Null } catch {} }
         for ($i=0; $i -lt 120; $i++) {          # 최대 60초 대기(저장 여부 응답 시간 포함)
             $others = Get-PolyPdfProcs
             if ($others.Count -eq 0) { break }
-            $lbl.Text = ($T.waiting_others -f $others.Count)
+            $n = (Get-PolyPdfWindows).Count
+            if ($n -gt 0) { $lbl.Text = ($T.waiting_others -f $n) } else { $lbl.Text = $T.waiting_others_plain }
             Start-Sleep -Milliseconds 500
             [System.Windows.Forms.Application]::DoEvents()
         }
     }
     # 1.3) 그래도 남으면 **강제 종료 여부를 사용자에게 질문**(U2 — 묻지 않고 Kill 금지).
+    #   261009-16: 도우미만 남았으면 묻지 않는다 — 사용자 자료가 없는 창 없는 프로세스다.
     $others = Get-PolyPdfProcs
     if ($others.Count -gt 0) {
-        $ans = [System.Windows.Forms.MessageBox]::Show(
-            ($T.others_left -f $others.Count),
-            $T.title_update, [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Warning)
-        if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) {
-            $form.Close()
-            Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
-            exit
+        $wins = Get-PolyPdfWindows
+        if ($wins.Count -gt 0) {
+            $ans = [System.Windows.Forms.MessageBox]::Show(
+                ($T.others_left -f $wins.Count),
+                $T.title_update, [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning)
+            if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) {
+                $form.Close()
+                Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+                exit
+            }
         }
         $lbl.Text = $T.closing_left; [System.Windows.Forms.Application]::DoEvents()
         foreach ($p in (Get-PolyPdfProcs)) { try { $p.Kill() } catch {} }

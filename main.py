@@ -27,6 +27,13 @@ def _ensure_module_search_path() -> None:
 
 _ensure_module_search_path()
 
+# 261009-16(응답성 SOT §4 ③): 한국어 띄어쓰기(kiwi) 자식 프로세스로 불렸으면 — PyQt 를 싣기 **전에** 여기서 끝낸다.
+#   kiwi 를 짓는 1.2초 동안 GIL 을 쥐어 창이 섰다. 다른 프로세스면 GIL 을 나누지 않는다(`viewer/kiwi_space.py`).
+if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--kiwi-space-server":
+    from viewer.kiwi_space import serve
+    serve(sys.argv[2])
+    os._exit(0)
+
 # 260606-28: 무거운 import(fitz/viewer.app→kiwipiepy·study 등)는 스플래시 표시 후로
 # 미뤄 클릭 즉시 중앙 아이콘이 뜨도록 함. 여기선 가벼운 PyQt 만 선로딩.
 from PyQt6.QtCore import Qt

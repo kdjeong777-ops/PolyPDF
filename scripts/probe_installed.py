@@ -7,6 +7,8 @@
     붙잡힌 시간 그대로다. 1초 넘으면 지연으로 세고(SOT §5 판정 < 1초) 그때 `py-spy dump` 스택을 남긴다.
     Windows '응답 없음'(`IsHungAppWindow`)은 5초가 지나야 참이라 1~4초 정지를 놓친다 — 함께 기록만 한다.
   - 메모리(작업 집합·최대 작업 집합·전용 바이트)와 CPU 사용률(1초 간격)
+  - 261009-16: 한국어 띄어쓰기 **도우미 자식 프로세스**(`--kiwi-space-server`, 응답성 SOT §4 ③)의 메모리를 따로 재고,
+    창을 닫은 뒤 도우미가 남지 않았는지 본다(본 프로세스 값만 보면 kiwi 메모리가 빠진다)
   - 정해진 시간이 지나면 창에 WM_CLOSE 로 정상 종료(안 닫히면 강제)
 
 대상을 여는 길은 사용자가 쓰는 길 그대로다:
@@ -58,6 +60,42 @@ def _cpu_time(h):
         f = lambda t: (t.dwHighDateTime << 32 | t.dwLowDateTime) / 1e7
         return f(k) + f(u)
     return 0.0
+
+
+class PE32(ctypes.Structure):
+    _fields_ = [("dwSize", wt.DWORD), ("cntUsage", wt.DWORD), ("th32ProcessID", wt.DWORD),
+                ("th32DefaultHeapID", ctypes.c_size_t), ("th32ModuleID", wt.DWORD), ("cntThreads", wt.DWORD),
+                ("th32ParentProcessID", wt.DWORD), ("pcPriClassBase", ctypes.c_long), ("dwFlags", wt.DWORD),
+                ("szExeFile", ctypes.c_wchar * 260)]
+
+
+def _children(pid):
+    """pid 의 자식 프로세스 id — 띄어쓰기 도우미를 찾는다(PolyPDF 가 띄우는 자식은 그것뿐)."""
+    out = []
+    snap = k32.CreateToolhelp32Snapshot(0x2, 0)
+    if snap in (0, -1, 0xFFFFFFFF, 0xFFFFFFFFFFFFFFFF):
+        return out
+    try:
+        e = PE32(); e.dwSize = ctypes.sizeof(PE32)
+        ok = k32.Process32FirstW(snap, ctypes.byref(e))
+        while ok:
+            if e.th32ParentProcessID == pid and e.szExeFile.lower() == "polypdf.exe":
+                out.append(e.th32ProcessID)
+            ok = k32.Process32NextW(snap, ctypes.byref(e))
+    finally:
+        k32.CloseHandle(snap)
+    return out
+
+
+def _alive(pid):
+    h = k32.OpenProcess(0x1000, False, pid)
+    if not h:
+        return False
+    try:
+        code = wt.DWORD()
+        return bool(k32.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == 259   # STILL_ACTIVE
+    finally:
+        k32.CloseHandle(h)
 
 
 def _windows_of(pid):
@@ -124,6 +162,7 @@ def run(name, target, seconds, out):
     last_cpu, last_t = _cpu_time(h), time.perf_counter()
     next_sample = last_t + 1.0
     hwnd = None
+    helpers = set()
     try:
         while time.perf_counter() - t0 < seconds:
             if proc.poll() is not None:
@@ -161,6 +200,13 @@ def run(name, target, seconds, out):
                 last_cpu, last_t = cpu, now
                 s = {"t": round(now - t0, 1), "cpu_pct": round(pct, 1)}
                 s.update({k: round(v, 1) for k, v in _mem(h).items()})
+                for cp in _children(proc.pid):          # 261009-16: 띄어쓰기 도우미
+                    helpers.add(cp)
+                    hc = k32.OpenProcess(PROCESS_QUERY, False, cp)
+                    if hc:
+                        m = _mem(hc); k32.CloseHandle(hc)
+                        if m:
+                            s["helper_ws_mb"] = round(m["ws_mb"], 1); s["helper_private_mb"] = round(m["private_mb"], 1)
                 rec["samples"].append(s)
                 next_sample = now + 1.0
             time.sleep(0.25)
@@ -177,16 +223,23 @@ def run(name, target, seconds, out):
                 proc.kill(); rec["close_sec"] = None; rec["exit"] = "닫히지 않아 강제 종료"
     finally:
         k32.CloseHandle(h)
+    if helpers:                                     # 261009-16: 닫은 뒤 도우미가 남았나(파이프가 닫히면 스스로 끝난다)
+        t_h = time.perf_counter()
+        while time.perf_counter() - t_h < 5 and any(_alive(x) for x in helpers):
+            time.sleep(0.2)
+        rec["helper_left"] = sum(1 for x in helpers if _alive(x))
     sm = rec["samples"]
     rec["peak_ws_mb"] = max((s.get("peak_ws_mb", 0) for s in sm), default=None)
     rec["max_private_mb"] = max((s.get("private_mb", 0) for s in sm), default=None)
+    rec["helper_max_ws_mb"] = max((s.get("helper_ws_mb", 0) for s in sm), default=0)
     busy = [s["t"] for s in sm if s["cpu_pct"] > 5]
     rec["cpu_busy_until"] = busy[-1] if busy else None
     rec["max_hang_sec"] = max((x["sec"] for x in rec["hangs"]), default=0)
     (out / ("%s.json" % name)).write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
-    print("%-14s 창 %5ss · 열림 %5ss · 1초+ 지연 %d회(최장 %ss) · 최대 작업집합 %sMB · 전용 %sMB · CPU 바쁨~%ss · 닫기 %ss %s"
+    print("%-14s 창 %5ss · 열림 %5ss · 1초+ 지연 %d회(최장 %ss) · 최대 작업집합 %sMB · 전용 %sMB · 도우미 %sMB(남음 %s) · CPU 바쁨~%ss · 닫기 %ss %s"
           % (name, rec["t_window"], rec["t_loaded"], len(rec["hangs"]), rec["max_hang_sec"], round(rec["peak_ws_mb"] or 0),
-             round(rec["max_private_mb"] or 0), rec["cpu_busy_until"], rec.get("close_sec"), rec["exit"] or ""))
+             round(rec["max_private_mb"] or 0), round(rec["helper_max_ws_mb"] or 0), rec.get("helper_left", "-"),
+             rec["cpu_busy_until"], rec.get("close_sec"), rec["exit"] or ""))
     return rec
 
 

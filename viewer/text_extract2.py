@@ -1281,7 +1281,44 @@ _KIWI = {"obj": None, "bad": False}
 # 260916-1: 만드는 데 1.5초 걸린다(한 번뿐). 텍스트 창 워커와 읽어 주기가 동시에
 #   들어오면 둘 다 만들어 3초를 쓰므로 **만드는 동안만** 잠근다. `space()` 는 잠그지
 #   않는다 — kiwi 는 여러 갈래로 부르는 것을 견디고, 여기서 잠그면 워커가 줄 선다.
+# 261009-16: 이 프로세스의 kiwi 는 **자식 프로세스를 못 띄운 기기의 물러설 길**이다(`viewer.kiwi_space`).
 _KIWI_LOCK = _th.Lock()
+
+
+def _local_kiwi():
+    """이 프로세스에서 kiwi 를 짓는다 — GIL 을 1.2초 쥐므로 자식을 못 띄웠을 때만, 워커에서만."""
+    if _KIWI["bad"]:
+        return None
+    k = _KIWI["obj"]
+    if k is None:
+        with _KIWI_LOCK:
+            k = _KIWI["obj"]
+            if k is None and not _KIWI["bad"]:
+                try:
+                    from viewer.kiwi_space import make_kiwi      # 자식과 같은 설정(한 곳에서)
+                    k = _KIWI["obj"] = make_kiwi()
+                except Exception:
+                    _KIWI["bad"] = True
+    return k
+
+
+def _kiwi_space(probe: str):
+    """kiwi 띄어쓰기 — 자식 프로세스에 묻는다(261009-16, 응답성 SOT §4 ③). 못 물으면 None.
+
+    자식이 아직 준비 중이면 UI 스레드는 기다리지 않고 None(기하 규칙으로), 워커는 기다린다.
+    자식을 못 띄운 기기에서는 종전대로 이 프로세스에서 — 단 UI 스레드에서는 짓지 않는다."""
+    from viewer import kiwi_space as _ks
+    out = _ks.space(probe)
+    if out is not None or not _ks.failed() or _ks.on_ui_thread():
+        return out
+    k = _local_kiwi()
+    if k is None:
+        return None
+    try:
+        return k.space(probe)
+    except Exception:
+        _KIWI["bad"] = True
+        return None
 
 
 def _ko_wants_space(a, b, ctx: int = 8) -> bool:
@@ -1297,28 +1334,14 @@ def _ko_wants_space(a, b, ctx: int = 8) -> bool:
 
     실측(표본 1,011곳, `image_to_string` 의 맞는 띄어쓰기를 정답으로):
     종전 규칙 70.5% → **95.6%**. 문서별 성격심리 69.5→95.6 · 심리검사 70.7→96.5 ·
-    아스팔트지침 74.4→93.2. 값이 0.23 ms/곳이라 쪽마다 수십 번 물어도 눈에 띄지 않는다.
+    아스팔트지침 74.4→93.2. 값이 0.23 ms/곳(자식 프로세스 왕복 0.34 ms, 261009-16)이라 쪽마다 수십 번 물어도 눈에 띄지 않는다.
 
     kiwi 를 못 불러오면 **False** 를 주어 부르는 쪽이 기하 규칙으로 돌아가게 한다.
+    261009-16: kiwi 는 자식 프로세스에 있다(`_kiwi_space`) — 이 프로세스의 GIL 을 쥐지 않는다.
+    `_KIWI["bad"]` 는 종전대로 'kiwi 를 못 쓴다' 다(물러설 길까지 실패했거나 검사가 그렇게 둔 것).
     """
     if _KIWI["bad"]:
         return False
-    k = _KIWI["obj"]
-    if k is None:
-        with _KIWI_LOCK:
-            k = _KIWI["obj"]
-            if k is None and not _KIWI["bad"]:
-                try:
-                    from kiwipiepy import Kiwi
-                    # 261009-14(응답성 SOT §12): 기본·오타·복합 사전을 싣지 않는다 — 띄어쓰기(`space`)만 쓰므로.
-                    #   기본 설정은 첫 `space()` 가 모델을 짓느라 **GIL 을 1.7초 쥐어** 창이 섰다(설치본 실측).
-                    #   사전 없이 0.46초. 실제 한글 PDF 5종 1,506곳에서 판정 99.9% 같다(다른 2곳: 이름 사이·단위).
-                    k = _KIWI["obj"] = Kiwi(load_default_dict=False, load_typo_dict=False,
-                                            load_multi_dict=False)
-                except Exception:
-                    _KIWI["bad"] = True
-        if k is None:
-            return False
     ta, tb = a[max(0, len(a) - ctx):], b[:ctx]
     i = ta.rfind(' ')
     head, tail = (ta[:i + 1], ta[i + 1:]) if i >= 0 else ('', ta)
@@ -1326,10 +1349,8 @@ def _ko_wants_space(a, b, ctx: int = 8) -> bool:
     nxt, rest = (tb[:j], tb[j:]) if j >= 0 else (tb, '')
     probe = head + tail + nxt + rest
     at = len((head + tail).replace(' ', ''))      # 빈칸을 뺀 글자 수로 센다
-    try:
-        out = k.space(probe)
-    except Exception:
-        _KIWI["bad"] = True
+    out = _kiwi_space(probe)
+    if out is None:
         return False
     n = 0
     for x, ch in enumerate(out):

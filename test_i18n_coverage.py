@@ -34,6 +34,7 @@ PENDING = {
 }
 DATA = {
     "viewer/auto_tag.py", "viewer/toc_parse.py", "viewer/text_extract2.py", "viewer/indexer.py",
+    "viewer/kiwi_space.py",                      # 261009-16: 띄어쓰기 도우미 — 한글은 kiwi 에 넘기는 글(데이터)
     "viewer/i18n.py", "viewer/_vendor/",
 }
 _FONTS = {"맑은 고딕", "굴림", "바탕", "돋움"}

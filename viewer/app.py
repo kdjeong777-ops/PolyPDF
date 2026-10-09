@@ -123,6 +123,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         super().__init__()
         self.setWindowTitle(f"PolyPDF  v{__version__}")
         self.resize(1700, 980)
+        # 261009-16(응답성 SOT §4 ③·§4.4): 한국어 띄어쓰기(kiwi)는 자식 프로세스에 — 이 스레드는 그 준비를 기다리지 않는다.
+        #   261009-17: 자식은 **처음 물을 때** 띄운다(약 300MB — 한글 본문을 안 보는 실행에서 쓰지 않게, CLAUDE.md '자원 최소').
+        from viewer import kiwi_space as _kiwi_space
+        _kiwi_space.set_ui_thread()
 
         # v1.6.2: 히스토리 패널/모델 제거
         self._current_main: Optional[HistoryItem] = None
