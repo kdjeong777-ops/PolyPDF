@@ -7752,8 +7752,7 @@ msgid "선택 파일을 오른쪽(번역 대상)으로"
 msgstr ""
 
 #: viewer/widgets/translate_files_dialog.py:251
-#, python-brace-format
-msgid "각 PDF 옆에 '{이름}_번역.docx/.pdf' 로 저장됩니다 (서지→요약→전문→용어집, PDF 책갈피)."
+msgid "각 PDF 옆에 '<이름>_번역.docx/.pdf' 로 저장됩니다 (서지→요약→전문→용어집, PDF 책갈피)."
 msgstr ""
 
 #: viewer/widgets/translate_files_dialog.py:262

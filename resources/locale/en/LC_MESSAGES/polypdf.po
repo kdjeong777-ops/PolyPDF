@@ -317,7 +317,7 @@ msgstr "Build Vocabulary"
 
 #: viewer/app.py:1380
 msgid "파일 → 단어장 생성"
-msgstr "File → Build vocabulary"
+msgstr "File → Build Vocabulary"
 
 #: viewer/app.py:1381 viewer/widgets/bookmark_tree.py:2157
 msgid "책갈피 생성"
@@ -325,7 +325,7 @@ msgstr "Build Bookmarks"
 
 #: viewer/app.py:1381
 msgid "파일 → 책갈피 자동 생성"
-msgstr "File → Generate bookmarks automatically"
+msgstr "File → Generate Bookmarks Automatically"
 
 #: viewer/app.py:1382
 msgid "PDF병합"
@@ -404,7 +404,7 @@ msgstr "Save (for other viewers)..."
 
 #: viewer/app.py:1544 viewer/widgets/bookmark_tree.py:2105
 msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."
-msgstr "Bake annotations and inserted photos into the page content so other programs show them too."
+msgstr "Flatten annotations and inserted photos into the page content so other programs show them too."
 
 #: viewer/app.py:1550
 msgid "인쇄..."
@@ -708,7 +708,7 @@ msgstr "Title"
 
 #: viewer/app.py:3784
 msgid "다른 PolyPDF 창에서 열려 있음"
-msgstr "Open in Another PolyPDF Window"
+msgstr "File Is Open in Another PolyPDF Window"
 
 #: viewer/app.py:3793
 msgid "새 이름으로 저장"
@@ -1285,7 +1285,7 @@ msgstr ""
 "\n"
 "Reason: {last}\n"
 "\n"
-"If another program has the original open or it is read-only, close it or clear the setting and save again."
+"If another program has the original open or it is read-only, close it or remove the read-only attribute, then save again."
 
 #: viewer/app.py:3955 viewer/app.py:4120
 msgid "최소 1쪽은 남겨야 합니다."
@@ -2276,7 +2276,7 @@ msgstr "Add Bookmark (p.{page})"
 #: viewer/app.py:4621 viewer/widgets/thumbs_list.py:704
 #, python-brace-format
 msgid "하이퍼링크 등록… (p.{page})"
-msgstr "Register Hyperlink… (p.{page})"
+msgstr "Add Hyperlink… (p.{page})"
 
 #: viewer/app.py:5193
 #, python-brace-format
@@ -3772,7 +3772,7 @@ msgid ""
 "최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 "The update could not be completed. {n} file(s) could not be replaced (possibly a permission problem).\n"
-"'Run as administrator' the latest installer (PolyPDF-Setup-*.exe)."
+"Run the latest installer (PolyPDF-Setup-*.exe) as administrator."
 
 #: viewer/widgets/bookmark_tree.py:1722
 msgid "암호화 설정 파일"
@@ -3889,7 +3889,7 @@ msgstr "Encrypted file - opened with password"
 
 #: viewer/widgets/bookmark_tree.py:1721
 msgid "암호화 설정 파일 - 제한 암호로 열음"
-msgstr "Encrypted file - opened with restriction password"
+msgstr "Encrypted file - opened with user password (restricted)"
 
 #: viewer/widgets/bookmark_tree.py:1729 viewer/widgets/bookmark_tree.py:1737
 #: viewer/widgets/bookmark_tree.py:1744 viewer/widgets/bookmark_tree.py:2155
@@ -4505,7 +4505,7 @@ msgstr "Keywords: {join}"
 # | msgid "책갈피 자동 생성..."
 #: viewer/widgets/bookmarker_dialog.py:39
 msgid "책갈피 자동 생성"
-msgstr "Auto-Generate Bookmarks"
+msgstr "Generate Bookmarks Automatically"
 
 #: viewer/widgets/bookmarker_dialog.py:54
 msgid "입력"
@@ -5039,7 +5039,7 @@ msgstr "The user guide file could not be found."
 # | msgid "저장(PolyPDF용)"
 #: viewer/widgets/help_dialog.py:29
 msgid "PolyPDF — 사용법"
-msgstr "PolyPDF — Help"
+msgstr "PolyPDF — User Guide"
 
 #: viewer/widgets/hyperlink_dialog.py:37
 msgid "⬇  파일을 여기에 놓으세요  ⬇"
@@ -5304,7 +5304,7 @@ msgstr "Eraser size (px)"
 # | msgid "선 끝모양"
 #: viewer/widgets/line_text_settings_dialog.py:161
 msgid "지시선 끝모양"
-msgstr "Leader line end style"
+msgstr "Callout end style"
 
 #: viewer/widgets/line_text_settings_dialog.py:51
 msgid ""
@@ -7110,7 +7110,7 @@ msgstr "Microphone:"
 
 #: viewer/widgets/settings_dialog.py:528
 msgid "시스템 장치:"
-msgstr "System audio:"
+msgstr "System device:"
 
 #: viewer/widgets/settings_dialog.py:537
 msgid "녹화/재개 단축키:"
@@ -7192,11 +7192,11 @@ msgstr "No audio input device found (check ffmpeg)."
 
 #: viewer/widgets/settings_dialog.py:609
 msgid "<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>"
-msgstr "<span style='color:#888'>Not installed — click [Claude Login]</span>"
+msgstr "<span style='color:#888'>Not installed — click [Claude Sign In]</span>"
 
 #: viewer/widgets/settings_dialog.py:627
 msgid "로그인되었습니다. 이제 번역을 사용할 수 있습니다."
-msgstr "Logged in. Translation is now available."
+msgstr "Signed in. Translation is now available."
 
 #: viewer/widgets/settings_dialog.py:654
 msgid "<span style='color:#c00'>키 없음</span>"
@@ -7213,11 +7213,11 @@ msgstr "Module missing"
 
 #: viewer/widgets/settings_dialog.py:611
 msgid "<span style='color:#0a0'>로그인됨 ✓</span>"
-msgstr "<span style='color:#0a0'>Logged in ✓</span>"
+msgstr "<span style='color:#0a0'>Signed in ✓</span>"
 
 #: viewer/widgets/settings_dialog.py:613
 msgid "<span style='color:#c60'>로그인 필요</span>"
-msgstr "<span style='color:#c60'>Login required</span>"
+msgstr "<span style='color:#c60'>Sign-in required</span>"
 
 # | msgid "읽지 못했습니다: {msg}"
 #: viewer/widgets/settings_dialog.py:629
@@ -7226,7 +7226,7 @@ msgid ""
 "로그인하지 못했습니다.\n"
 "{msg}"
 msgstr ""
-"Login failed.\n"
+"Sign-in failed.\n"
 "{msg}"
 
 #: viewer/widgets/settings_dialog.py:691
@@ -7980,7 +7980,7 @@ msgstr "Review Bookmarks — "
 #: viewer/widgets/toc_review_dialog.py:105
 #, python-brace-format
 msgid "<b>{v} 항목 {n}개</b> — 실제 쪽과 대조해 고친 뒤 [저장]하면 PDF 책갈피로 씁니다. 행을 고르면 오른쪽에 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다."
-msgstr "<b>{n} {v} entries</b> — Check them against the actual pages, fix them, then click [Save] to write them as PDF bookmarks. Select a row to see its page on the right. If you edit an actual page cell directly, that row is kept even when the offset is reapplied."
+msgstr "<b>{n} entries {v}</b> — Check them against the actual pages, fix them, then click [Save] to write them as PDF bookmarks. Select a row to see its page on the right. If you edit an actual page cell directly, that row is kept even when the offset is reapplied."
 
 #: viewer/widgets/toc_review_dialog.py:531
 #, python-brace-format
@@ -8022,7 +8022,7 @@ msgstr "{off:+d}  (confidence {conf:.0%})"
 #: viewer/widgets/toc_review_dialog.py:322
 #, python-brace-format
 msgid "쪽 순서 정렬로 {v} — 원문과 대조하세요"
-msgstr "{v} by page sort — check against the original"
+msgstr "{v} by page-order sort — check against the original"
 
 # | msgid "삭제 ({n}쪽)"
 #: viewer/widgets/toc_review_dialog.py:411
@@ -8043,11 +8043,11 @@ msgstr "Moved rows or fixed page numbers in {n} rows (TOC page cells in blue)."
 
 #: viewer/widgets/toc_review_dialog.py:322
 msgid "번호를 고친 행"
-msgstr "Renumbered rows"
+msgstr "Row renumbered"
 
 #: viewer/widgets/toc_review_dialog.py:322
 msgid "옮긴 행"
-msgstr "Moved rows"
+msgstr "Row moved"
 
 # | msgid "실패: {e}"
 #: viewer/widgets/toc_review_dialog.py:650
@@ -8084,7 +8084,7 @@ msgstr "Translate PDF (Beta · Claude)"
 
 #: viewer/widgets/translate_dialog.py:165
 msgid "Claude 로그인(구독)"
-msgstr "Claude Login (Subscription)"
+msgstr "Claude Sign In (Subscription)"
 
 #: viewer/widgets/translate_dialog.py:170
 msgid "준비됨"
@@ -8194,7 +8194,7 @@ msgstr "Creating Word/PDF documents…"
 
 #: viewer/widgets/translate_dialog.py:234
 msgid "Claude 로그인(구독) 모드 — 터미널에서 'claude' 또는 'ant auth login' 으로 로그인되어 있어야 합니다. '예상 토큰·비용'으로 연결을 확인하세요."
-msgstr "Claude Login (subscription) mode — you must be logged in from a terminal with 'claude' or 'ant auth login'. Use 'Estimate Tokens/Cost' to check the connection."
+msgstr "Claude Sign In (subscription) mode — you must be signed in from a terminal with 'claude' or 'ant auth login'. Use 'Estimate Tokens/Cost' to check the connection."
 
 #: viewer/widgets/translate_dialog.py:262
 #, python-brace-format
@@ -8235,7 +8235,7 @@ msgstr "<b>Model:</b> {label} &nbsp;|&nbsp; <b>Auth:</b> {authtxt} ({status}) &n
 
 #: viewer/widgets/translate_dialog.py:237
 msgid "설정 → '번역(Claude)' 에서 API 키를 입력하거나 인증 방식을 'Claude 로그인(구독)'으로 바꾸세요."
-msgstr "Enter an API key in Settings → 'Translation (Claude)', or change the auth method to 'Claude Login (Subscription)'."
+msgstr "Enter an API key in Settings → 'Translation (Claude)', or change the auth method to 'Claude Sign In (Subscription)'."
 
 # | msgid "저장 실패: {e}"
 #: viewer/widgets/translate_dialog.py:257
@@ -8282,9 +8282,8 @@ msgid "선택 파일을 오른쪽(번역 대상)으로"
 msgstr "Move selected files to the right (translation queue)"
 
 #: viewer/widgets/translate_files_dialog.py:251
-#, python-brace-format
-msgid "각 PDF 옆에 '{이름}_번역.docx/.pdf' 로 저장됩니다 (서지→요약→전문→용어집, PDF 책갈피)."
-msgstr "Saved next to each PDF as '{이름}_번역.docx/.pdf' (bibliography → summary → full text → glossary, with PDF bookmarks)."
+msgid "각 PDF 옆에 '<이름>_번역.docx/.pdf' 로 저장됩니다 (서지→요약→전문→용어집, PDF 책갈피)."
+msgstr "Saved next to each PDF as '<name>_번역.docx/.pdf' (bibliography → summary → full text → glossary, with PDF bookmarks)."
 
 #: viewer/widgets/translate_files_dialog.py:262
 msgid "📄 여기에 PDF 를 끌어다 놓으세요 (번역 목록에 추가)"
@@ -8308,7 +8307,7 @@ msgstr "Translation module (anthropic) is missing. Use the latest release."
 
 #: viewer/widgets/translate_files_dialog.py:383
 msgid "설정 → '번역(Claude)' 에서 API 키를 입력하거나 인증 방식을 'Claude 로그인'으로 바꾸세요."
-msgstr "Enter an API key in Settings → 'Translation (Claude)', or change the auth method to 'Claude Login'."
+msgstr "Enter an API key in Settings → 'Translation (Claude)', or change the auth method to 'Claude Sign In'."
 
 #: viewer/widgets/translate_files_dialog.py:71
 msgid "본문 텍스트 추출 실패(스캔본일 수 있음)"
@@ -8396,7 +8395,7 @@ msgstr "2 pages (2-up)"
 
 #: viewer/widgets/twoup_dialog.py:79
 msgid "4장 (4-up, 2열×2행)"
-msgstr "4 pages (4-up, 2×2)"
+msgstr "4 pages (4-up, 2 cols × 2 rows)"
 
 #: viewer/widgets/twoup_dialog.py:80
 msgid "6장 (6-up, 2열×3행)"
@@ -8718,12 +8717,12 @@ msgstr "The update file is <b>downloaded first</b>, then all open PolyPDF window
 # | msgid "업그레이드"
 #: viewer/widgets/update_dialog.py:115
 msgid "업그레이드 후 종료"
-msgstr "Upgrade and Quit"
+msgstr "Upgrade and Exit"
 
 # | msgid "편집 종료"
 #: viewer/widgets/update_dialog.py:115
 msgid "그냥 종료"
-msgstr "Just Quit"
+msgstr "Just Exit"
 
 #: viewer/widgets/update_dialog.py:118
 msgid "나중에"

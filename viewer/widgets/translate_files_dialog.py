@@ -248,7 +248,7 @@ class TranslateFilesDialog(QDialog):
         run_row.addWidget(self.btn_close)
         v.addLayout(run_row)
 
-        self.info = QLabel(tr("각 PDF 옆에 '{이름}_번역.docx/.pdf' 로 저장됩니다 "
+        self.info = QLabel(tr("각 PDF 옆에 '<이름>_번역.docx/.pdf' 로 저장됩니다 "
                            "(서지→요약→전문→용어집, PDF 책갈피)."))
         self.info.setStyleSheet("color:#555;")
         self.info.setWordWrap(True)
