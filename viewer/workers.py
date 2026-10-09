@@ -33,9 +33,24 @@ class IndexWorker(QObject):
     def request_cancel(self):
         self._cancel = True
 
+    def _run_in_child(self) -> bool:
+        """자식 프로세스로 일감을 넘긴다 — 했으면 True, 못 띄웠으면 False. 자식이 보낸 오류는 그대로 올린다(손상 복구가 받는다)."""
+        from viewer import index_proc
+        from viewer.settings_store import settings_dir
+        targets = self.files or ([Path(self.single_file)] if self.single_file is not None else None)
+        job = {"db": str(self.db_path), "folder": (str(self.folder) if self.folder is not None else None),
+               "files": [str(p) for p in targets] if targets is not None else None,
+               "verify": bool(self.verify), "settings_dir": str(settings_dir())}
+        r = index_proc.run_job(job, lambda d, t, n: self.progress.emit(d, t, n), lambda: self._cancel)
+        return r is not None
+
     def run(self):
         try:
             if self._cancel:
+                return
+            # 261009-19(응답성 SOT §4 ③): 자식 프로세스에서 — GIL 을 나누지 않아 쉬지 않고(점유율 상한 없이) 색인한다.
+            #   못 띄우면(None) 아래 종전 길(이 프로세스의 배경 스레드)로.
+            if self._run_in_child():
                 return
             idx = PdfIndex(self.db_path, verify=self.verify)
             try:

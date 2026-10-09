@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 14:39+0900\n"
+"POT-Creation-Date: 2026-10-09 19:25+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2699,6 +2699,15 @@ msgstr ""
 #: viewer/hyperlinks.py
 #, python-brace-format
 msgid "허용되지 않은 형식입니다(.{ext}). 문서·이미지·동영상 등 작업 파일만 등록할 수 있습니다."
+msgstr ""
+
+#: viewer/index_proc.py
+msgid "색인 프로세스와의 연결이 끊겼습니다."
+msgstr ""
+
+#: viewer/index_proc.py
+#, python-brace-format
+msgid "색인 프로세스가 예기치 않게 끝났습니다(코드 {code})."
 msgstr ""
 
 #: viewer/page_edit_build.py

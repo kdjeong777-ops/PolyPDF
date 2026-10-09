@@ -33,6 +33,11 @@ if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--kiwi-spac
     from viewer.kiwi_space import serve
     serve(sys.argv[2])
     os._exit(0)
+# 261009-19(응답성 SOT §4 ③): 색인 자식 프로세스 — 같은 까닭(PyMuPDF 의 C 호출이 GIL 을 쥔다). 창은 띄우지 않는다.
+if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--index-server":
+    from viewer.index_proc import serve as _index_serve
+    _index_serve(sys.argv[2])
+    os._exit(0)
 
 # 260606-28: 무거운 import(fitz/viewer.app→kiwipiepy·study 등)는 스플래시 표시 후로
 # 미뤄 클릭 즉시 중앙 아이콘이 뜨도록 함. 여기선 가벼운 PyQt 만 선로딩.
@@ -43,6 +48,14 @@ from PyQt6.QtWidgets import QApplication
 from viewer.resources_path import resource_path
 
 
+def _profile() -> str:
+    """261009-19(마스터 §14.2.1·§14.5 U19): `POLYPDF_PROFILE=test` 면 앱 이름이 `PolyPDF-test` — 설정·색인·창 기록·QSettings 가
+    **사용자 실제 폴더와 갈린다**. 시험 도구가 실제 설정을 백업·복원·삭제하다 사용자 색인을 지운 일이 있었다
+    (Claude 앱 셸은 설정 폴더 복사본을 보는데 삭제는 실제 폴더에 닿았다). 영문·숫자·`-_` 만, 32자까지."""
+    import re
+    return re.sub(r"[^A-Za-z0-9_-]", "", os.environ.get("POLYPDF_PROFILE", ""))[:32]
+
+
 def _migrate_appdata() -> None:
     """v1.6.15: 프로그램명 변경(Smart PDF Viewer→PolyPDF)으로 AppData 경로가
     바뀌므로, 기존 settings.json/index.db/스크린샷을 신 폴더로 1회 복사.
@@ -50,6 +63,8 @@ def _migrate_appdata() -> None:
     setApplicationName 호출 이후에만 정확한 신 경로를 얻을 수 있음.
     구 폴더는 보존(삭제 안 함). 실패해도 앱은 계속.
     """
+    if _profile():
+        return                       # 261009-19: 시험 프로필은 옛 폴더를 끌어오지 않는다
     try:
         from PyQt6.QtCore import QStandardPaths
         new_dir = Path(QStandardPaths.writableLocation(
@@ -284,7 +299,7 @@ def main():
         splash = None
 
     # 스플래시가 뜬 뒤 나머지 초기 설정(모두 가벼움)
-    app.setApplicationName("PolyPDF")
+    app.setApplicationName("PolyPDF" + ("-" + _profile() if _profile() else ""))   # 261009-19: 시험 프로필은 다른 폴더
     app.setOrganizationName("LocalTools")
     if _ico:
         app.setWindowIcon(QIcon(_ico))    # v1.6.1 G1: 작업표시줄/타이틀바 아이콘

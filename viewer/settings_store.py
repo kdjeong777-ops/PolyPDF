@@ -84,7 +84,12 @@ def _strip_secrets(data: dict) -> dict:
     return out
 
 
+_DIR_OVERRIDE = None     # 261009-19: 색인 자식 프로세스(Qt 앱 이름이 없다)가 부모의 설정 폴더를 그대로 쓰게
+
+
 def settings_dir() -> Path:
+    if _DIR_OVERRIDE is not None:
+        return Path(_DIR_OVERRIDE)
     base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
     p = Path(base)
     p.mkdir(parents=True, exist_ok=True)

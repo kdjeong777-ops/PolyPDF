@@ -15,20 +15,28 @@
   - PDF 파일: 명령줄 인자(탐색기에서 '연결 프로그램' 으로 여는 것과 같다)
   - 폴더: 환경설정 '시작 시 동작 — 지정한 폴더·파일 열기'(settings.json `startup_mode=path`)
 
-★ 설치본은 **사용자 실제 설정 폴더**(%APPDATA%\\LocalTools\\PolyPDF)를 쓴다(마스터 §14.2.1).
-  이 스크립트는 `--backup` 으로 설정·색인을 통째로 백업하고 `--restore` 로 되돌린다 — 측정 전후에 꼭 쓴다.
+★ 261009-19: 시험 실행은 **시험 프로필**(`POLYPDF_PROFILE=test` → `%APPDATA%\\LocalTools\\PolyPDF-test`)로 띄운다 —
+  사용자 실제 설정 폴더(`PolyPDF`)는 **읽기만**(`--seed` 로 시험 프로필에 복사) 하고 백업·복원·삭제하지 않는다.
+  종전에는 실제 폴더를 백업·복원·`--clear-index` 했는데, Claude 앱 셸은 그 폴더의 **복사본**을 보면서 삭제는 실제 폴더에
+  닿아 사용자 색인(index.db)이 지워졌다(그 뒤 첫 색인이 처음부터 — 마스터 §14.2.1).
 
 사용:
-  python scripts/probe_installed.py --backup  DIR
-  python scripts/probe_installed.py --clear-index                       (빈 색인 — 최악 조건 §7.5)
+  python scripts/probe_installed.py --seed                              (실제 설정을 시험 프로필로 복사 — 처음 한 번)
+  python scripts/probe_installed.py --backup  DIR                       (시험 프로필 백업)
+  python scripts/probe_installed.py --clear-index                       (시험 프로필의 빈 색인 — 최악 조건 §7.5)
   python scripts/probe_installed.py --run NAME --target PATH --seconds 90 --out DIR
   python scripts/probe_installed.py --restore DIR
+  python scripts/probe_installed.py --drop                              (시험 프로필 지우기)
 """
-import argparse, ctypes, ctypes.wintypes as wt, json, os, shutil, subprocess, sys, time
+import argparse, ctypes, ctypes.wintypes as wt, json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
 
 EXE = Path(os.environ.get("POLYPDF_EXE", r"C:\Program Files\PolyPDF\PolyPDF.exe"))
-CFG = Path(os.environ["APPDATA"]) / "LocalTools" / "PolyPDF"
+PROFILE = os.environ.get("POLYPDF_TEST_PROFILE", "test")
+REAL = Path(os.environ["APPDATA"]) / "LocalTools" / "PolyPDF"          # 사용자 실제 설정 — 읽기만
+CFG = Path(os.environ["APPDATA"]) / "LocalTools" / ("PolyPDF-" + PROFILE)   # 시험 프로필 — 여기만 쓰고 지운다
+if not PROFILE or CFG.resolve() == REAL.resolve():
+    raise SystemExit("시험 프로필이 실제 설정 폴더와 같다 — 쓰지 않는다")
 # 백업에서 빼는 것: 받아 둔 업데이트 zip(300MB)·실행 중 인스턴스 표식
 SKIP = {"PolyPDF-update.zip", "instances"}
 INDEX = ("index.db", "index.db-wal", "index.db-shm")
@@ -145,6 +153,7 @@ def _set_startup(target):
 
 
 def run(name, target, seconds, out):
+    check_profile_support(EXE)
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     target = Path(target)
     args = [str(EXE)]
@@ -153,7 +162,7 @@ def run(name, target, seconds, out):
     else:
         _set_startup(target)
     t0 = time.perf_counter()
-    proc = subprocess.Popen(args)
+    proc = subprocess.Popen(args, env=dict(os.environ, POLYPDF_PROFILE=PROFILE))   # 261009-19: 시험 프로필로
     PROCESS_QUERY = 0x1000 | 0x0010   # QUERY_LIMITED_INFORMATION | VM_READ
     h = k32.OpenProcess(PROCESS_QUERY, False, proc.pid)
     rec = {"name": name, "target": str(target), "kind": "file" if target.is_file() else "folder",
@@ -228,6 +237,14 @@ def run(name, target, seconds, out):
         while time.perf_counter() - t_h < 5 and any(_alive(x) for x in helpers):
             time.sleep(0.2)
         rec["helper_left"] = sum(1 for x in helpers if _alive(x))
+    # 261009-19: 그 시간 안에 색인을 마친 파일 수(시험 프로필의 index.db) — 첫 색인 속도를 견준다
+    try:
+        import sqlite3
+        c = sqlite3.connect(str(CFG / "index.db"))
+        rec["indexed_files"] = c.execute("select count(*) from files where page_count >= 0").fetchone()[0]
+        c.close()
+    except Exception:
+        rec["indexed_files"] = None
     sm = rec["samples"]
     rec["peak_ws_mb"] = max((s.get("peak_ws_mb", 0) for s in sm), default=None)
     rec["max_private_mb"] = max((s.get("private_mb", 0) for s in sm), default=None)
@@ -236,11 +253,47 @@ def run(name, target, seconds, out):
     rec["cpu_busy_until"] = busy[-1] if busy else None
     rec["max_hang_sec"] = max((x["sec"] for x in rec["hangs"]), default=0)
     (out / ("%s.json" % name)).write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
-    print("%-14s 창 %5ss · 열림 %5ss · 1초+ 지연 %d회(최장 %ss) · 최대 작업집합 %sMB · 전용 %sMB · 도우미 %sMB(남음 %s) · CPU 바쁨~%ss · 닫기 %ss %s"
+    print("%-14s 창 %5ss · 열림 %5ss · 1초+ 지연 %d회(최장 %ss) · 최대 작업집합 %sMB · 전용 %sMB · 도우미 %sMB(남음 %s) · 색인 %s개 · CPU 바쁨~%ss · 닫기 %ss %s"
           % (name, rec["t_window"], rec["t_loaded"], len(rec["hangs"]), rec["max_hang_sec"], round(rec["peak_ws_mb"] or 0),
              round(rec["max_private_mb"] or 0), round(rec["helper_max_ws_mb"] or 0), rec.get("helper_left", "-"),
-             rec["cpu_busy_until"], rec.get("close_sec"), rec["exit"] or ""))
+             rec.get("indexed_files"), rec["cpu_busy_until"], rec.get("close_sec"), rec["exit"] or ""))
     return rec
+
+
+MIN_PROFILE_VERSION = (0, 45, 0, 221)   # 시험 프로필(POLYPDF_PROFILE)을 아는 첫 버전 — 그 전 exe 는 실제 폴더를 쓴다
+
+
+def _ver_tuple(v: str):
+    m = re.match(r"(\d+)\.(\d+)\.(\d+)(?:-[a-z]+\.(\d+))?", v or "")
+    return tuple(int(x or 0) for x in m.groups()) if m else (0, 0, 0, 0)
+
+
+def exe_version(exe) -> str:
+    f = Path(exe).parent / "_internal" / "viewer" / "__init__.py"
+    try:
+        return re.search(r'__version__\s*=\s*"([^"]+)"', f.read_text(encoding="utf-8")).group(1)
+    except Exception:
+        return ""
+
+
+def check_profile_support(exe):
+    """시험 프로필을 모르는 옛 exe 는 띄우지 않는다 — 띄우면 사용자 실제 설정을 쓰고 바꾼다(261009-19)."""
+    v = exe_version(exe)
+    if _ver_tuple(v) < MIN_PROFILE_VERSION:
+        raise SystemExit("이 exe(%s)는 시험 프로필을 모른다 — 0.45.0-beta.221 이상만 잰다(실제 설정 보호)" % (v or "?"))
+
+
+def seed():
+    """실제 설정을 **읽어서** 시험 프로필로 복사한다(받아 둔 업데이트·창 기록 제외). 시험 프로필이 있으면 지우고 새로."""
+    drop()
+    shutil.copytree(REAL, CFG, ignore=lambda d, names: [n for n in names if n in SKIP and Path(d) == REAL])
+    print("시험 프로필 ←", REAL, "→", CFG)
+
+
+def drop():
+    if CFG.exists():
+        shutil.rmtree(CFG)
+        print("시험 프로필 지움:", CFG)
 
 
 def backup(dst):
@@ -280,10 +333,15 @@ if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("--backup"); ap.add_argument("--restore"); ap.add_argument("--clear-index", action="store_true")
+    ap.add_argument("--seed", action="store_true"); ap.add_argument("--drop", action="store_true")
     ap.add_argument("--run"); ap.add_argument("--target"); ap.add_argument("--seconds", type=float, default=60)
     ap.add_argument("--out", default=".")
     a = ap.parse_args()
-    if a.backup:
+    if a.seed:
+        seed()
+    elif a.drop:
+        drop()
+    elif a.backup:
         backup(a.backup)
     elif a.restore:
         restore(a.restore)

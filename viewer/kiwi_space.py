@@ -111,6 +111,8 @@ def _boot() -> None:
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         _state["proc"] = proc
+        from viewer.child_job import attach
+        attach(proc)                  # 261009-19: 부모가 어떻게 끝나든 도우미도 끝난다
         threading.Thread(target=_watch, args=(proc,), name="kiwi-space-watch", daemon=True).start()
         conn = listener.accept()
         msg = conn.recv()             # 자식이 kiwi 를 다 지을 때까지 — GIL 을 놓고 기다린다

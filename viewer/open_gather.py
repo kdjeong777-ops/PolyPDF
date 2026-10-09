@@ -37,7 +37,9 @@ def _user() -> str:
 
 def _base() -> str:
     # 검사는 이름을 바꿔 실제로 쓰는 PolyPDF 와 부딪히지 않게 한다
-    return os.environ.get("POLYPDF_OPEN_GATHER_NAME") or f"polypdf-open-{_user()}"
+    #   261009-19: 시험 프로필(`POLYPDF_PROFILE`, main.py)도 — 시험 실행이 사용자 창에 PDF 를 넘기지 않게
+    prof = "".join(c for c in os.environ.get("POLYPDF_PROFILE", "") if c.isalnum() or c in "-_")[:32]
+    return os.environ.get("POLYPDF_OPEN_GATHER_NAME") or f"polypdf-open-{_user()}" + (f"-{prof}" if prof else "")
 
 
 def server_name() -> str:

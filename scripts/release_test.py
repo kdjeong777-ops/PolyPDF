@@ -10,15 +10,16 @@
 
 두 시험은 **같은 측정 묶음**을 쓴다 — `probe_installed.py`(응답성 SOT §7.4)로 대상마다 창·열림 시간, 1초+ 정지,
 메모리(본 + 띄어쓰기 도우미), 닫기·도우미 남음을 잰다. 대상 목록은 업무 파일 이름이 들어 있어 **공개 저장소 밖**
-(`<작업 폴더>\\release_test_suite.json`)에 둔다. 설정 폴더는 시험 전에 백업하고 **끝나면 반드시 되돌린다**
-(되돌리지 못한 채 끊긴 시험이 있으면 새 시험을 시작하지 않는다).
+(`<작업 폴더>\\release_test_suite.json`)에 둔다. 시험 실행은 **시험 프로필**(`POLYPDF_PROFILE=test`)로 띄워
+사용자 실제 설정은 읽기만 하고(복사해서 씀), 끝나면 시험 프로필을 지운다(261009-19 — 종전에는 실제 폴더를 백업·복원하다
+사용자 색인을 지웠다). 지우지 못한 채 끊긴 시험이 있으면 새 시험을 시작하지 않는다.
 
 사용:
   python scripts/release_test.py build   --source local [--rebuild] [--cases T1,T4]
   python scripts/release_test.py build   --source ci    [--run-id N]
   python scripts/release_test.py install --source ci    [--run-id N] [--no-suite]
   python scripts/release_test.py install --source local
-  python scripts/release_test.py restore <결과 폴더>       (끊긴 시험의 설정 되돌리기)
+  python scripts/release_test.py restore <결과 폴더>       (끊긴 시험의 시험 프로필 지우기)
 결과: `<작업 폴더>\\_review\\<build|install>_<버전>_<시각>\\` — summary.md·runs\\·setup.log. 판정에 따라 종료 코드 0/1.
 """
 from __future__ import annotations
@@ -82,10 +83,8 @@ def check_no_pending():
 
 
 def restore_dir(out: Path):
-    bk = out / "cfg_backup"
-    if not bk.exists():
-        raise SystemExit("백업이 없다: %s" % bk)
-    probe.restore(bk)
+    """시험 프로필(`PolyPDF-test`)을 지운다 — 사용자 실제 설정은 처음부터 건드리지 않는다(261009-19)."""
+    probe.drop()
     (out / PENDING).unlink(missing_ok=True)
 
 
@@ -230,9 +229,11 @@ def load_suite(only):
 def run_suite(exe: Path, out: Path, only, rec: dict):
     base, cases = load_suite(only)
     probe.EXE = exe
-    bk = out / "cfg_backup"
+    # 261009-19: 실제 설정은 **읽어서** 시험 프로필로 복사만 — 대상마다 그 복사본(cfg_seed)으로 되돌린다
+    probe.seed()
+    bk = out / "cfg_seed"
     probe.backup(bk)
-    (out / PENDING).write_text("설정 백업: %s\n" % bk, encoding="utf-8")
+    (out / PENDING).write_text("시험 프로필: %s\n" % probe.CFG, encoding="utf-8")
     try:
         for c in cases:
             probe.restore(bk)
@@ -245,7 +246,7 @@ def run_suite(exe: Path, out: Path, only, rec: dict):
             r = probe.run(c["name"], target, int(c.get("seconds", 60)), out / "runs")
             rec["runs"].append({k: r.get(k) for k in ("name", "t_window", "t_loaded", "max_hang_sec", "peak_ws_mb",
                                                       "max_private_mb", "helper_max_ws_mb", "helper_left",
-                                                      "close_sec", "exit")} | {"hangs": len(r["hangs"])})
+                                                      "close_sec", "exit", "indexed_files")} | {"hangs": len(r["hangs"])})
             if r["max_hang_sec"] >= 1.0:
                 rec["fail"].append("%s 1초+ 정지 %d회(최장 %ss)" % (c["name"], len(r["hangs"]), r["max_hang_sec"]))
             if r.get("helper_left"):
@@ -265,12 +266,12 @@ def write_summary(out: Path, rec: dict):
                  % (i["setup"], i["exit"], i["sec"], b["display_version"] or "-", i["display_version"],
                     b["app_version"] or "-", i["app_version"]))
     if rec["runs"]:
-        L += ["", "| 대상 | 창 | 열림 | 1초+ 정지 | 최장 | 최대 작업 집합 | 도우미 | 도우미 남음 | 닫기 |",
-              "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+        L += ["", "| 대상 | 창 | 열림 | 1초+ 정지 | 최장 | 최대 작업 집합 | 도우미 | 도우미 남음 | 색인한 파일 | 닫기 |",
+              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
         for r in rec["runs"]:
-            L.append("| %s | %ss | %ss | %d | %ss | %sMB | %sMB | %s | %ss |" % (
+            L.append("| %s | %ss | %ss | %d | %ss | %sMB | %sMB | %s | %s | %ss |" % (
                 r["name"], r["t_window"], r["t_loaded"], r["hangs"], r["max_hang_sec"], round(r["peak_ws_mb"] or 0),
-                round(r["helper_max_ws_mb"] or 0), r.get("helper_left", "-"), r["close_sec"]))
+                round(r["helper_max_ws_mb"] or 0), r.get("helper_left", "-"), r.get("indexed_files"), r["close_sec"]))
     L += ["", "**판정: %s**" % ("통과" if not rec["fail"] else "실패")] + ["- " + f for f in rec["fail"]]
     (out / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     (out / "result.json").write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
