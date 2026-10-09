@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 11:05+0900\n"
+"POT-Creation-Date: 2026-10-09 11:51+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -6248,6 +6248,22 @@ msgid "브라우저에서 로그인 완료를 기다리는 중…"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "언어 / Language"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "화면 언어:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "외부 언어팩 사용 (다시 시작하면 적용)"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. 같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "시작 시 동작"
 msgstr ""
 
@@ -6280,7 +6296,15 @@ msgid "복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "파일 해시태그·키워드 자동 부여 (인덱싱 후 백그라운드 — 자동 태그는 ·# 로 구분, 도구 메뉴에서 되돌리기 가능)"
+msgid "<small>캡처 목록은 항상 빈 상태로 시작합니다. 종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "파일 해시태그·키워드 자동 부여"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "<small>인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, 도구 메뉴에서 되돌릴 수 있습니다.</small>"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -6356,18 +6380,6 @@ msgid "테마:"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "언어 / Language:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "외부 언어팩 사용 (다시 시작하면 적용)"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. 같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
 msgid "인터넷 사전 (단어장)"
 msgstr ""
 
@@ -6425,6 +6437,10 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "특허 PDF 저장 폴더:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. 한국어 사전은 위 키 입력 시 사용.</small>"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -6581,10 +6597,6 @@ msgid "연결 확인 ping"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "<small>캡처 목록은 항상 빈 상태로 시작합니다. 종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
 msgid "PolyPDF 시작 모드:"
 msgstr ""
 
@@ -6594,10 +6606,6 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "특허 PDF 저장 폴더 선택"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. 한국어 사전은 위 키 입력 시 사용.</small>"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -8375,7 +8383,7 @@ msgstr ""
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 → 화면 스타일에서 바꿀 수 있습니다(다시 시작)."
+msgid "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 맨 위 '언어 / Language' 에서 바꿀 수 있습니다(다시 시작)."
 msgstr ""
 
 #: installer/installer_text.py

@@ -124,6 +124,35 @@ class SettingsDialog(QDialog):
         self._scroll = _scroll          # 260611-25: 녹화 설정으로 스크롤 이동용
         layout = QVBoxLayout(_content)
 
+        # ── 언어 / Language ── 261009-10(다국어 SOT §4, 사용자 결정): 창 **맨 위** 따로 묶음.
+        #   종전에는 '화면 스타일' 안(스크롤 약 900px 아래)이라 찾지 못했다. 묶음 이름을 두 언어로 적어
+        #   어느 언어 화면에서도 읽힌다.
+        grp_lang = QGroupBox(tr("언어 / Language"))
+        ll = QFormLayout(grp_lang)
+        # 261008(다국어 SOT §4): 화면 언어 — 항목은 언어팩에서(자기 언어 이름), 재시작 뒤 적용.
+        from viewer import i18n as _i18n
+        self.cmb_language = QComboBox()
+        for _code, _name, _status in _i18n.available_languages():
+            self.cmb_language.addItem(_name if _status == "complete" else _name + " (β)", _code)
+        _cur_lang = str(self._prefs.get("language") or _i18n.language())
+        _li = self.cmb_language.findData(_cur_lang)
+        self.cmb_language.setCurrentIndex(_li if _li >= 0 else 0)
+        ll.addRow(tr("화면 언어:"), self.cmb_language)
+        # 261008-29(다국어 SOT §3.4, 사용자 결정): 외부 언어팩 — 기본 꺼짐. 켜면 다시 시작할 때
+        #   설정 폴더의 locale\<코드>\ 팩을 읽는다(같은 코드면 내장을 덮는다). 형식이 틀린 팩은 무시.
+        self.chk_ext_lang = QCheckBox(tr("외부 언어팩 사용 (다시 시작하면 적용)"))
+        self.chk_ext_lang.setToolTip(tr("설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. "
+                                        "같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."))
+        self.chk_ext_lang.setChecked(bool(self._prefs.get("external_language_packs", False)))
+        self.chk_ext_lang.toggled.connect(self._on_ext_lang_toggled)   # 처음 값을 넣은 뒤 — 켤 때만 확인
+        btn_ext = QPushButton(tr("폴더 열기"))
+        btn_ext.setToolTip(str(_i18n.external_dir()))
+        btn_ext.clicked.connect(self._open_external_lang_dir)
+        _row_ext = QHBoxLayout(); _row_ext.setContentsMargins(0, 0, 0, 0)
+        _row_ext.addWidget(self.chk_ext_lang); _row_ext.addWidget(btn_ext); _row_ext.addStretch(1)
+        ll.addRow(_row_ext)                  # 이름 칸 없이 두 칸 폭 — 영어 글자가 길다(디자인 SOT §2.14)
+        layout.addWidget(grp_lang)
+
         # ── 시작 시 동작 ─────────────────────────────────
         grp_start = QGroupBox(tr("시작 시 동작"))
         gl = QVBoxLayout(grp_start)
@@ -164,16 +193,21 @@ class SettingsDialog(QDialog):
 
         # 260906-3(사용자 결정): 스크린샷 복원 항목 삭제 — 시작은 **항상 빈 목록**이고,
         #   종료할 때 목록이 있으면 PDF로 저장할지 묻는다(스크린샷 SOT).
-        gl.addWidget(QLabel(tr("<small>캡처 목록은 항상 빈 상태로 시작합니다. "
-                            "종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>")))
+        _info_cap = QLabel(tr("<small>캡처 목록은 항상 빈 상태로 시작합니다. "
+                              "종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>"))
+        _info_cap.setWordWrap(True)          # 261009-10(디자인 SOT §2.14): 가로 스크롤을 만들지 않게
+        gl.addWidget(_info_cap)
 
         # 260830(태그 SOT §3.5, 사용자 결정): 태그 자동 부여는 옵트인 — 기본 꺼짐.
-        self.chk_auto_tag = QCheckBox(
-            tr("파일 해시태그·키워드 자동 부여 (인덱싱 후 백그라운드 — 자동 태그는 ·# 로 구분, "
-            "도구 메뉴에서 되돌리기 가능)")
-        )
+        # 261009-10(디자인 SOT §2.14): 체크박스 글자는 줄바꿈이 안 돼 긴 설명이 창을 652px(영어 758px)로
+        #   벌렸다 — 이름만 두고 설명은 아래 작은 글씨(줄바꿈)로.
+        self.chk_auto_tag = QCheckBox(tr("파일 해시태그·키워드 자동 부여"))
         self.chk_auto_tag.setChecked(bool(self._prefs.get("auto_tag_enabled", False)))
         gl.addWidget(self.chk_auto_tag)
+        _info_tag = QLabel(tr("<small>인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, "
+                              "도구 메뉴에서 되돌릴 수 있습니다.</small>"))
+        _info_tag.setStyleSheet("color:#666;"); _info_tag.setWordWrap(True)
+        gl.addWidget(_info_tag)
 
         # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
         mrow = QHBoxLayout()
@@ -282,29 +316,6 @@ class SettingsDialog(QDialog):
                   if cur in [v for v, _ in THEME_LABELS] else 0)
         self.cmb_theme.setCurrentIndex(idx)
         tl.addRow(tr("테마:"), self.cmb_theme)
-        # 261008(다국어 SOT §4): 화면 언어 — 항목은 언어팩에서(자기 언어 이름), 재시작 뒤 적용.
-        #   이름표를 두 언어로 적어 어느 언어 화면에서도 읽힌다.
-        from viewer import i18n as _i18n
-        self.cmb_language = QComboBox()
-        for _code, _name, _status in _i18n.available_languages():
-            self.cmb_language.addItem(_name if _status == "complete" else _name + " (β)", _code)
-        _cur_lang = str(self._prefs.get("language") or _i18n.language())
-        _li = self.cmb_language.findData(_cur_lang)
-        self.cmb_language.setCurrentIndex(_li if _li >= 0 else 0)
-        tl.addRow(tr("언어 / Language:"), self.cmb_language)
-        # 261008-29(다국어 SOT §3.4, 사용자 결정): 외부 언어팩 — 기본 꺼짐. 켜면 다시 시작할 때
-        #   설정 폴더의 locale\<코드>\ 팩을 읽는다(같은 코드면 내장을 덮는다). 형식이 틀린 팩은 무시.
-        self.chk_ext_lang = QCheckBox(tr("외부 언어팩 사용 (다시 시작하면 적용)"))
-        self.chk_ext_lang.setToolTip(tr("설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. "
-                                        "같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."))
-        self.chk_ext_lang.setChecked(bool(self._prefs.get("external_language_packs", False)))
-        self.chk_ext_lang.toggled.connect(self._on_ext_lang_toggled)   # 처음 값을 넣은 뒤 — 켤 때만 확인
-        btn_ext = QPushButton(tr("폴더 열기"))
-        btn_ext.setToolTip(str(_i18n.external_dir()))
-        btn_ext.clicked.connect(self._open_external_lang_dir)
-        _row_ext = QHBoxLayout(); _row_ext.setContentsMargins(0, 0, 0, 0)
-        _row_ext.addWidget(self.chk_ext_lang); _row_ext.addWidget(btn_ext); _row_ext.addStretch(1)
-        tl.addRow("", _row_ext)
         layout.addWidget(grp_theme)
 
         # ── 인터넷 사전(단어장) ─────────────────────────── 260615-9(P11)
@@ -344,8 +355,10 @@ class SettingsDialog(QDialog):
         _pbtn.clicked.connect(_pick_dir)
         _ph.addWidget(self.ed_patent_dir, 1); _ph.addWidget(_pbtn)
         ol.addRow(tr("특허 PDF 저장 폴더:"), _pw)
-        ol.addRow(QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
-                         "한국어 사전은 위 키 입력 시 사용.</small>")))
+        _info_od = QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
+                             "한국어 사전은 위 키 입력 시 사용.</small>"))
+        _info_od.setWordWrap(True)           # 261009-10(디자인 SOT §2.14)
+        ol.addRow(_info_od)
         layout.addWidget(grp_od)
         grp_od.setVisible(korea_only_visible())      # 한국 사전·법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
 
@@ -462,6 +475,19 @@ class SettingsDialog(QDialog):
         self._outer.addWidget(btns)
 
         self._on_restore_toggled(self.rb_start_last.isChecked())
+        self._fit_width_to_content()
+
+    def _fit_width_to_content(self):
+        """261009-10(디자인 SOT §2.14): 세로로 긴 설정 창에 **가로 스크롤바가 생기지 않게** 폭을 내용에 맞춘다.
+        기본 480 은 그대로 두고(한국어는 종전과 같다), 언어에 따라 내용 최소 폭이 더 넓으면 그만큼만 넓힌다.
+        영어는 체크박스 글자가 길어 내용이 453px 인데 보이는 폭이 442px 이라 가로로 밀렸다."""
+        sc = self._scroll
+        m = self._outer.contentsMargins()
+        need = (sc.widget().minimumSizeHint().width() + sc.verticalScrollBar().sizeHint().width()
+                + 2 * sc.frameWidth() + m.left() + m.right())
+        self.setMinimumWidth(max(440, need))
+        if self.width() < need:
+            self.resize(need, self.height())
 
     def _on_restore_toggled(self, on: bool):
         """'마지막에 열었던 …' 일 때만 '마지막 페이지' 항목이 뜻을 가진다."""

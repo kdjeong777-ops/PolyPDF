@@ -32,7 +32,7 @@ MESSAGES = {
                                         "제어판에서 기존 PolyPDF 를 수동 제거한 뒤 다시 설치해 주세요."),
     "LangPageTitle": trp("installer", "PolyPDF 언어 / Language"),   # 한국어 마법사에서도 영어 사용자가 알아보게
     "LangPageDesc": trp("installer", "PolyPDF 화면에 쓸 언어를 고르세요."),
-    "LangPageSub": trp("installer", "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 → 화면 스타일에서 바꿀 수 있습니다(다시 시작)."),
+    "LangPageSub": trp("installer", "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 맨 위 '언어 / Language' 에서 바꿀 수 있습니다(다시 시작)."),
 }
 
 APP_LANG = {

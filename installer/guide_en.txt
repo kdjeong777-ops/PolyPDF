@@ -14,7 +14,7 @@ If you checked 'Set PolyPDF as the default PDF app' during setup, the Windows
 
 [ Language ]
 Menus, dialogs and help follow the language you chose during setup.
-You can change it later in Tools → Settings → Appearance (applied after a restart).
+You can change it later in the 'Language' group at the top of Tools → Settings (applied after a restart).
 
 [ Updates ]
 Help → 'Check for Updates'. If a new version is available, it shows what changed,

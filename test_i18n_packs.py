@@ -11,6 +11,8 @@ G. .pot 가 코드와 같다(감싼 뒤 extract 를 잊지 않게) · 추출 경
 H. 메인 창(Phase 2 완료 조건) — 가짜 언어로 띄운 실제 MainWindow 의 메뉴(하위까지)·단추·글자표·콤보·입력 안내·
    도움말 풍선에 표시 없는 한국어가 없다. 예외: 단어학습 패널(한국 전용 — Phase 4)·글꼴 이름(고유명사)
 I. 쓰기는 내용이 바뀔 때만(생성 시각만 다르면 그대로)
+J. 작업 세션 자동 번역(261009-10) — todo(빈칸·fuzzy·이전 원문)·fill(한글·자리표시·& 검사)·고쳤다 되돌리면 확정 그대로·
+   '# | msgid' 주석이 쌓이지 않음·Stop 훅(막기·통과·한 번만)
 """
 import os, sys, re, json, tempfile, shutil, importlib.util
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -142,10 +144,45 @@ try:
     T.extract(base=src)
     chk((loc / "polypdf.pot").read_bytes() == before, "I 내용이 같으면 다시 쓰지 않는다(생성 시각만 다른 diff 없음)")
 
+    # ── J — 작업 세션 자동 번역: todo·fill·되돌림·Stop 훅 (SOT §12.3, 261009-10) ──
+    items = T.todo(locale_dir=loc, langs=["en"])
+    ids = {i["id"] for i in items}
+    chk({"저장하기", "새 문구"} <= ids, "J todo — 빈칸·fuzzy 를 모은다", str(ids))
+    fz = [i for i in items if i["id"] == "저장하기"]
+    chk(fz and fz[0].get("suggest") == "Save" and fz[0].get("previous") == "저장",
+        "J todo — fuzzy 는 지금 번역·이전 원문을 함께(Babel 이 #| 를 주석으로 읽는 것을 바로잡음)", str(fz))
+    done, errs = T.fill([{"lang": "en", "ctx": None, "id": "저장하기", "str": "Save it"},
+                         {"lang": "en", "ctx": None, "id": "새 문구", "str": "새 phrase {x}"},
+                         {"lang": "en", "ctx": "메뉴", "id": "열기", "str": "&Open"}], locale_dir=loc)
+    chk(done == 1 and len(errs) == 2, "J fill — 검사를 통과한 것만 넣는다", str((done, errs)))
+    why = " ".join(e[2] for e in errs)
+    chk("한글" in why and "자리표시" in why and "단축키" in why, "J fill — 한글 남음·자리표시·& 수를 거부", why)
+    chk(T._accels("파일(&F)") == 1 and T._accels("Spacing & Crop") == 0 and T._accels("a &amp; b") == 0
+        and T._accels("R&&D") == 0, "J 단축키 & — 글자 앞 & 만 센다('A & B'·&amp;·&& 는 아님)")
+    m = T._read_po(en_path, locale="en").get("저장하기")
+    chk(m.string == "Save it" and not m.fuzzy, "J fill 뒤 fuzzy 해제", str((m.string, m.fuzzy)))
+    chk("# | msg" not in en_path.read_text(encoding="utf-8"), "J 이전 원문(#|)이 일반 주석 '# | msgid' 로 쌓이지 않는다")
+    a_src = (src / "viewer" / "a.py").read_text(encoding="utf-8")
+    (src / "viewer" / "a.py").write_text(a_src.replace("'저장하기'", "'저장하기 시험'"), encoding="utf-8")
+    T.extract(base=src); T.update(locale_dir=loc)
+    (src / "viewer" / "a.py").write_text(a_src, encoding="utf-8")
+    T.extract(base=src); T.update(locale_dir=loc)
+    m = T._read_po(en_path, locale="en").get("저장하기")
+    chk(m.string == "Save it" and not m.fuzzy, "J 원문을 고쳤다 되돌리면 확정 번역 그대로(fuzzy 아님)", str((m.string, m.fuzzy)))
+    _sync = T.sync
+    try:
+        T.sync = lambda base=None: ([], [])
+        chk(T.hook_stop('{"stop_hook_active": false}') == "", "J hook-stop — 할 일이 없으면 통과")
+        T.sync = lambda base=None: ([], [{"lang": "en", "ctx": None, "id": "새 문구", "files": []}])
+        out = json.loads(T.hook_stop('{"stop_hook_active": false}') or "{}")
+        chk(out.get("decision") == "block" and "fill" in out.get("reason", ""), "J hook-stop — 빈칸이 있으면 막고 할 일을 알린다", str(out))
+        chk(T.hook_stop('{"stop_hook_active": true}') == "", "J hook-stop — 한 번 막힌 뒤에는 다시 막지 않는다(무한 반복 방지)")
+    finally:
+        T.sync = _sync
+
     # ── F·G — 내장 팩 ──
     real = HERE / "resources" / "locale"
     # 언어를 바꾼 직후에도 읽히게 일부러 두 언어로 쓴 원문(다국어 SOT §4 재시작 안내·설정 이름표)
-    _BILINGUAL = ("The display language will be applied", "/ Restart now", "/ Later", "/ Language:")
     importlib.reload(i18n)
     cat_real, warns_real = T.extract_from(T.source_files(HERE), HERE)
     chk(not warns_real, "G 코드의 추출 경고 0(키는 문자열 리터럴)", str(warns_real[:5]))
@@ -178,10 +215,7 @@ try:
                 continue
             mid = m.id if isinstance(m.id, str) else m.id[0]
             s = " / ".join(m.string) if isinstance(m.string, (list, tuple)) else (m.string or "")
-            if any(k in mid for k in _BILINGUAL):
-                continue                                         # ① 원문 자체가 두 언어
-            s = s.replace("'제1장'", "").replace("_번역", "")    # ② ③
-            if re.search(r"[가-힣]", s):
+            if T.hangul_leak(mid, s):                            # 규칙은 scripts/i18n.py 한 곳(fill 도 같은 것)
                 leak.append(mid[:30])
         chk(not leak, "F %s 번역문에 한글이 남지 않았다(허용: 두 언어 안내·'제1장'·_번역)" % d.name, str(leak[:5]))
     chk(not (real / "qps_ploc").exists(), "F 가짜 언어 폴더가 저장소·빌드에 남아 있지 않다")

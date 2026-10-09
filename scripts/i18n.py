@@ -11,6 +11,12 @@
   python scripts/i18n.py clean-pseudo   가짜 언어 폴더를 지운다(build_ci.bat 가 빌드 전에 부른다)
   python scripts/i18n.py inno           내장 팩·번역으로 installer/languages.iss 를 만든다(build_ci.bat — SOT §10)
 
+  작업 세션 자동 번역(SOT §12.3) — 화면 문구를 고친 세션이 번역까지 넣는다:
+  python scripts/i18n.py sync           extract + update, 번역 빈칸·fuzzy 수
+  python scripts/i18n.py todo [--lang en] [--json 파일]   번역할 항목(JSON — 원문·문맥·나온 파일·fuzzy 면 이전 번역)
+  python scripts/i18n.py fill <파일>    todo 항목에 "str" 을 채운 JSON 을 검사(자리표시·한글·& 수)하고 넣은 뒤 compile
+  python scripts/i18n.py hook-stop      Claude Code Stop 훅 — 빈칸이 남으면 턴 끝내기를 막고 할 일을 알린다
+
 추출기는 우리 것(AST): `trn(text, n)` 은 인자 하나로 단·복수를 겸하고 `trp(문맥, 원문)` 은 문맥이 앞이라
 Babel 기본 키워드 규칙으로는 못 뽑는다. 키는 **문자열 리터럴**이어야 한다 — 아니면 추출 경고(SOT §6).
 설치 프로그램 문구는 `installer/installer_text.py` 에서 `msgctxt "installer"` 로 뽑는다.
@@ -136,7 +142,35 @@ def _write_po(cat, path: Path, **kw) -> bool:
 def _read_po(path: Path, locale=None):
     from babel.messages.pofile import read_po
     with open(path, "rb") as f:
-        return read_po(f, locale=locale)
+        cat = read_po(f, locale=locale)
+    _fix_previous(cat)
+    return cat
+
+
+def _fix_previous(cat) -> None:
+    """261009-10: Babel(2.18) read_po 는 `#| msgid "…"`(fuzzy 의 이전 원문)를 previous_id 가 아니라 **일반 주석**
+    `| msgid "…"` 으로 읽는다 — 다시 쓰면 `# | msgid` 로 쌓이고(저장소에 337줄), fuzzy 항목은 이전 원문을 잃는다.
+    읽은 직후 바로잡는다: fuzzy 면 previous_id 로 옮기고, 확정 항목이면 지운다(낡은 정보)."""
+    from babel.messages.pofile import unescape
+    for m in list(cat) + list(cat.obsolete.values()):
+        prev, cur, keep = [], None, []
+        for c in m.user_comments:
+            s = c.strip()
+            if s.startswith("| msgid ") or s.startswith("| msgid_plural ") or s.startswith("| msgctxt "):
+                kind, _sp, q = s[2:].partition(" ")
+                cur = kind
+                if kind == "msgid":
+                    prev.append(unescape(q))
+            elif s.startswith('| "') and cur:
+                if cur == "msgid" and prev:
+                    prev[-1] += unescape(s[2:])
+            else:
+                cur = None
+                keep.append(c)
+        if len(keep) != len(m.user_comments):
+            m.user_comments = keep
+            if m.fuzzy and prev and not m.previous_id:
+                m.previous_id = prev[:1]
 
 
 def extract(base: Path = ROOT, pot: Path = None):
@@ -160,7 +194,27 @@ def update(locale_dir: Path = LOCALE, pot: Path = None):
     for d in packs(locale_dir):
         po = d / "LC_MESSAGES" / (DOMAIN + ".po")
         cat = _read_po(po, locale=d.name)
+        # 261009-10: 같은 원문이 사라졌다 되돌아오면(고쳤다가 되돌림) Babel 은 비슷한 다른 키에서 fuzzy 로 채운다 —
+        #   번역 그대로인데도 '검토 필요' 가 되어 Stop 훅이 막는다. 병합 전의 확정 번역(지난 obsolete 포함)이 있으면 그것으로.
+        #   fuzzy 로 옮겨진 항목은 원래 키(previous_id)의 번역을 그대로 들고 있다 — Babel 이 옛 항목을 obsolete 에
+        #   남기지 않고 가져가 버리므로, 그 번역도 원래 키의 확정 번역으로 본다(확정 번역이 있으면 그쪽이 먼저).
+        known, carried = {}, {}
+        for m in list(cat) + list(cat.obsolete.values()):
+            strs = m.string if isinstance(m.string, (list, tuple)) else (m.string,)
+            if not m.id or not all(strs):
+                continue
+            if not m.fuzzy:
+                known[(_mid(m), m.context)] = m.string
+            elif m.previous_id:
+                carried.setdefault((m.previous_id[0], m.context), m.string)
+        for k, v in carried.items():
+            known.setdefault(k, v)
         cat.update(tmpl, no_fuzzy_matching=False, update_header_comment=False)
+        for m in cat:
+            if m.id and m.fuzzy and (_mid(m), m.context) in known:
+                m.string = known[(_mid(m), m.context)]
+                m.flags.discard("fuzzy")
+                m.previous_id = []
         _write_po(cat, po, ignore_obsolete=False, include_previous=True)
         done.append(d.name)
     return done
@@ -384,6 +438,142 @@ def inno(locale_dir: Path = LOCALE, out: Path = None, installer_dir: Path = None
 
 
 
+# ── 번역 할 일·채우기 — 작업 세션 자동 번역 (SOT §12.3, 261009-10) ─────────────
+# 화면 문구를 바꾼 세션이 그 자리에서 번역까지 넣는다: `sync`(추출·병합) → `todo`(빈칸·fuzzy 목록) →
+# 세션이 용어표(SOT §12.2)대로 번역 → `fill`(검사하고 넣기 + compile). Claude Code Stop 훅(`hook-stop`)이
+# 빈칸이 남은 채 턴을 끝내지 못하게 한다. API·비밀값은 쓰지 않는다.
+
+# 번역문에 한글이 남아도 되는 경우(test_i18n_packs F 와 같은 규칙 — 여기 한 곳):
+#   ① 언어를 바꾼 직후 읽히도록 일부러 두 언어로 쓴 안내(원문에 영어가 함께 있다)
+#   ② 원문에 든 정규식 예시 '제1장' ③ 실제 파일 이름 접미 `_번역`(한국 전용 번역 기능의 산출물)
+BILINGUAL = ("The display language will be applied", "/ Restart now", "/ Later", "/ Language")
+_HANGUL = re.compile(r"[가-힣]")
+_ENTITY = re.compile(r"&(?:[A-Za-z]+|#\d+);")
+
+
+def hangul_leak(mid: str, s: str) -> bool:
+    if any(k in mid for k in BILINGUAL):
+        return False
+    return bool(_HANGUL.search((s or "").replace("'제1장'", "").replace("_번역", "")))
+
+
+def _accels(s: str) -> int:
+    """단축키 표시 `&` 의 수 — 바로 뒤에 글자가 오는 것만(`&&`·HTML 개체 `&amp;`·영어 'A & B' 는 빼고)."""
+    return len(re.findall(r"&(?=[^\s&])", _ENTITY.sub("", (s or "").replace("&&", ""))))
+
+
+def check_translation(mid: str, s: str) -> list:
+    """번역문 하나의 문제 목록(빈 목록이면 통과). 자리표시·한글·단축키 `&` 수."""
+    if not s:
+        return ["빈 번역"]
+    bad = []
+    if _placeholders(s) != _placeholders(mid):
+        bad.append("자리표시가 원문과 다르다 %s ≠ %s" % (_placeholders(s), _placeholders(mid)))
+    if hangul_leak(mid, s):
+        bad.append("번역문에 한글이 남았다")
+    if _accels(mid) != _accels(s):
+        bad.append("단축키 & 수가 원문과 다르다(%d ≠ %d)" % (_accels(s), _accels(mid)))
+    return bad
+
+
+def _mid(m):
+    return m.id if isinstance(m.id, str) else m.id[0]
+
+
+def todo(locale_dir: Path = LOCALE, langs=None) -> list:
+    """번역이 비었거나 fuzzy 인 항목 — 세션이 번역할 목록. fuzzy 는 지금 번역(suggest)과 바뀌기 전 원문(previous)을 함께."""
+    out = []
+    for d in packs(locale_dir):
+        if langs and d.name not in langs:
+            continue
+        cat = _read_po(d / "LC_MESSAGES" / (DOMAIN + ".po"), locale=d.name)
+        for m in cat:
+            if not m.id:
+                continue
+            strs = m.string if isinstance(m.string, (list, tuple)) else (m.string,)
+            if not m.fuzzy and all(strs):
+                continue
+            item = {"lang": d.name, "ctx": m.context, "id": _mid(m),
+                    "files": sorted({f for f, _l in m.locations})}
+            if isinstance(m.id, (list, tuple)):
+                item["nplurals"] = cat.num_plurals
+            if m.fuzzy:
+                item["suggest"] = list(strs) if isinstance(m.id, (list, tuple)) else strs[0]
+                if m.previous_id:
+                    item["previous"] = m.previous_id[0]
+            out.append(item)
+    return out
+
+
+def fill(items, locale_dir: Path = LOCALE):
+    """`todo` 항목에 `str`(복수형이면 목록)을 채운 것을 .po 에 넣는다. 검사를 통과한 것만 넣고 fuzzy 를 지운다.
+    반환 (넣은 수, [(lang, id, 문제), …])."""
+    by_lang = {}
+    for it in items:
+        by_lang.setdefault(it["lang"], []).append(it)
+    done, errs = 0, []
+    for lang, its in by_lang.items():
+        po = locale_dir / lang / "LC_MESSAGES" / (DOMAIN + ".po")
+        if not po.is_file():
+            errs.extend((lang, it["id"][:40], "팩 없음") for it in its)
+            continue
+        cat = _read_po(po, locale=lang)
+        index = {(_mid(m), m.context): m for m in cat if m.id}
+        for it in its:
+            m = index.get((it["id"], it.get("ctx")))
+            val = it.get("str")
+            if m is None:
+                errs.append((lang, it["id"][:40], "원문이 .po 에 없다(sync 를 먼저)"))
+                continue
+            plural = isinstance(m.id, (list, tuple))
+            vals = list(val) if plural and isinstance(val, (list, tuple)) else [val]
+            if plural and len(vals) != cat.num_plurals:
+                errs.append((lang, it["id"][:40], "복수형 %d개가 필요하다" % cat.num_plurals))
+                continue
+            bad = [p for v in vals for p in check_translation(it["id"], v or "")]
+            if bad:
+                errs.append((lang, it["id"][:40], "; ".join(sorted(set(bad)))))
+                continue
+            m.string = tuple(vals) if plural else vals[0]
+            m.flags.discard("fuzzy")
+            m.previous_id = []
+            done += 1
+        _write_po(cat, po, ignore_obsolete=False, include_previous=True)
+    return done, errs
+
+
+def sync(base: Path = ROOT):
+    """추출 + 병합 + 할 일 목록 — 화면 문구를 고친 뒤 한 번."""
+    _cat, warns = extract(base)
+    update(base / "resources" / "locale")
+    return warns, todo(base / "resources" / "locale")
+
+
+def hook_stop(stdin_text: str, base: Path = ROOT) -> str:
+    """Claude Code Stop 훅 — 번역 빈칸·추출 경고가 남았으면 턴을 끝내지 못하게(block) 이유를 돌려준다.
+    이미 한 번 막힌 뒤(stop_hook_active)에는 다시 막지 않는다(무한 반복 방지 — 남은 것은 CI 가 잡는다).
+    통과면 빈 문자열."""
+    try:
+        data = json.loads(stdin_text or "{}")
+    except ValueError:
+        data = {}
+    if data.get("stop_hook_active"):
+        return ""
+    warns, items = sync(base)
+    if not warns and not items:
+        return ""
+    lines = []
+    if warns:
+        lines.append("추출 경고 %d건(tr 원문이 문자열 리터럴이 아님 — 다국어 SOT §6): %s" % (len(warns), "; ".join(map(str, warns[:3]))))
+    if items:
+        langs = sorted({i["lang"] for i in items})
+        lines.append("언어팩 번역 빈칸·fuzzy %d건(%s). public 에서 `python scripts/i18n.py todo --json <파일>` 로 목록을 받아 "
+                     "각 항목에 \"str\" 을 채우고 `python scripts/i18n.py fill <파일>` 로 넣으세요. 용어는 다국어 SOT §12.2 용어표, "
+                     "문구 규칙은 §6(자리표시 {이름} 그대로·단축키 & 하나·한글 남기지 않기). 처음 5개: %s"
+                     % (len(items), ", ".join(langs), " | ".join(i["id"][:30].replace("\n", " ") for i in items[:5])))
+    return json.dumps({"decision": "block", "reason": "\n".join(lines)}, ensure_ascii=False)
+
+
 # ── 명령줄 ────────────────────────────────────────────────────────────────
 def main(argv) -> int:
     cmd = argv[1] if len(argv) > 1 else ""
@@ -416,6 +606,37 @@ def main(argv) -> int:
         return 0
     if cmd == "inno":
         print("inno →", inno())
+        return 0
+    if cmd == "sync":
+        warns, items = sync()
+        for w in warns:
+            print("경고:", w)
+        print("번역 빈칸·fuzzy %d건" % len(items) + (" — `todo --json <파일>` → 채우기 → `fill <파일>`" if items else ""))
+        return 1 if warns else 0
+    if cmd == "todo":
+        langs = argv[argv.index("--lang") + 1].split(",") if "--lang" in argv else None
+        items = todo(langs=langs)
+        if "--json" in argv:
+            Path(argv[argv.index("--json") + 1]).write_text(
+                json.dumps(items, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+            print("번역할 항목 %d건 → %s" % (len(items), argv[argv.index("--json") + 1]))
+        else:
+            print(json.dumps(items, ensure_ascii=False, indent=1))
+        return 0
+    if cmd == "fill" and len(argv) > 2:
+        items = json.loads(Path(argv[2]).read_text(encoding="utf-8"))
+        done, errs = fill([i for i in items if i.get("str")])
+        for lang, mid, why in errs:
+            print("거부 [%s] %s — %s" % (lang, mid.replace("\n", " "), why))
+        compile_all(quiet=True)
+        left = len(todo())
+        print("넣음 %d · 거부 %d · 남은 빈칸·fuzzy %d (compile 함)" % (done, len(errs), left))
+        return 1 if errs or left else 0
+    if cmd == "hook-stop":
+        # 훅 입력 JSON 은 UTF-8 — Windows 기본(cp949)으로 읽으면 한글이 든 입력에서 깨진다
+        out = hook_stop(sys.stdin.buffer.read().decode("utf-8", "replace"))
+        if out:
+            print(out)
         return 0
     print(__doc__)
     return 2
