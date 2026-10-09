@@ -379,7 +379,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._drawer.hide()
         self._drawer_open = False
         self._drawer_btn = _TB(central)
-        self._drawer_btn.setToolTip(tr("검색·단어장·스크린샷 패널 펼치기/접기"))
+        self._drawer_btn.setToolTip(tr("오른쪽 패널 펼치기/접기"))
         self._drawer_btn.setText("‹")
         self._drawer_btn.clicked.connect(self._toggle_drawer)
         self._drawer_btn.hide()
@@ -1356,14 +1356,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
         # 260606-27: 좌측 정렬 / 260618-18: '뷰어'→'보기', '기능'→'도구', 법령/고시 보기 그룹으로
         lab(tr("보기"))
-        mk(tr("1단"), tr("검색·단어장·스크린샷 숨김 (단일 보기)"), self._vm_single)
+        mk(tr("1단"), tr("오른쪽 패널 숨김 (단일 보기)"), self._vm_single)
         mk(tr("2단"), tr("2단 보기(쪽 맞춤)"), self._vm_split)
         # 260910(사용자 지시): 우측 첫 탭인 '텍스트' 도 보기 그룹에 둔다 —
         #   탭 순서(텍스트/단어장/검색)와 같은 차례로 놓는다(텍스트 창 SOT §2).
-        mk(tr("텍스트"), tr("검색·단어장 창 보이기 · 텍스트 탭"), self._vm_text)
+        mk(tr("텍스트"), tr("오른쪽 패널 보이기 · 텍스트 탭"), self._vm_text)
         self._btn_vm_study = mk(tr("단어장"), tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study)
-        mk(tr("검색"), tr("검색·단어장 창 보이기 · 검색 탭"), self._vm_search)
-        self._btn_shot = mk(tr("스크린샷"), tr("검색·단어장 숨김 · 스크린샷 보이기"), self._vm_shot)
+        mk(tr("검색"), tr("오른쪽 패널 보이기 · 검색 탭"), self._vm_search)
+        self._btn_shot = mk(tr("스크린샷"), tr("오른쪽 위 탭 숨김 · 스크린샷 보이기"), self._vm_shot)
         self._btn_law = mk(tr("법령/고시"), tr("법제처 법령·고시 검색·본문 보기"), self._action_law_search)  # 260618-18
         self._btn_kcsc = mk(tr("건설기준"), tr("국가건설기준센터(KCSC) KDS·KCS 본문 보기"), self._action_kcsc_search)  # 260618-37
         self._btn_kipo = mk(tr("특허"), tr("특허청(KIPO) 특허 등록정보 조회"), self._action_kipo_search)  # 260618-43
@@ -1377,9 +1377,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   → 어찌다 한 번 쓰는 일(암호화). `도구(&T)` 메뉴 첫 구역이 **같은 차례**다.
         mk("OCR", tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"),
            self._action_ocr_read)
-        self._btn_build_study = mk(tr("단어장 생성"), tr("파일 → 단어장 생성"), self._action_build_study)
-        mk(tr("책갈피 생성"), tr("파일 → 책갈피 자동 생성"), self.action_open_bookmarker)
-        self._btn_merge = mk(tr("PDF병합"), tr("파일 → PDF 병합"), lambda: self._on_merge_files(None))
+        self._btn_build_study = mk(tr("단어장 생성"), tr("도구 → 단어장 생성"), self._action_build_study)
+        mk(tr("책갈피 생성"), tr("도구 → 책갈피 자동 생성"), self.action_open_bookmarker)
+        self._btn_merge = mk(tr("PDF병합"), tr("도구 → PDF 병합"), lambda: self._on_merge_files(None))
         self._btn_img2pdf = mk(tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"),
                                lambda: self.action_image_to_pdf())  # 260825-13
         self._btn_shot_pdf = mk(tr("스크린샷 PDF 저장"), tr("스크린샷 전체를 PDF로"), self.action_save_screenshot_pdf)

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-09 11:51+0900\n"
+"POT-Creation-Date: 2026-10-09 12:23+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -135,8 +135,8 @@ msgid "전체"
 msgstr "All"
 
 #: viewer/app.py
-msgid "검색·단어장·스크린샷 패널 펼치기/접기"
-msgstr "Expand/collapse the Search · Vocabulary · Screenshot panel"
+msgid "오른쪽 패널 펼치기/접기"
+msgstr "Expand/collapse the right panel"
 
 #: viewer/app.py
 msgid "이 창의 PDF를 책갈피 기준으로 나눠 mp3(+가사)로 저장"
@@ -223,8 +223,8 @@ msgid "1단"
 msgstr "Single"
 
 #: viewer/app.py
-msgid "검색·단어장·스크린샷 숨김 (단일 보기)"
-msgstr "Hide Search · Vocabulary · Screenshots (single view)"
+msgid "오른쪽 패널 숨김 (단일 보기)"
+msgstr "Hide the right panel (single view)"
 
 #: viewer/app.py
 msgid "2단"
@@ -239,8 +239,8 @@ msgid "텍스트"
 msgstr "Text"
 
 #: viewer/app.py
-msgid "검색·단어장 창 보이기 · 텍스트 탭"
-msgstr "Show Search · Vocabulary panel · Text tab"
+msgid "오른쪽 패널 보이기 · 텍스트 탭"
+msgstr "Show the right panel · Text tab"
 
 #: viewer/app.py viewer/widgets/study_panel.py
 msgid "단어장"
@@ -255,16 +255,16 @@ msgid "검색"
 msgstr "Search"
 
 #: viewer/app.py
-msgid "검색·단어장 창 보이기 · 검색 탭"
-msgstr "Show Search · Vocabulary panel · Search tab"
+msgid "오른쪽 패널 보이기 · 검색 탭"
+msgstr "Show the right panel · Search tab"
 
 #: viewer/app.py
 msgid "스크린샷"
 msgstr "Screenshots"
 
 #: viewer/app.py
-msgid "검색·단어장 숨김 · 스크린샷 보이기"
-msgstr "Hide Search · Vocabulary · show Screenshots"
+msgid "오른쪽 위 탭 숨김 · 스크린샷 보이기"
+msgstr "Hide the upper tabs · show Screenshots"
 
 #: viewer/app.py
 msgid "법령/고시"
@@ -311,24 +311,24 @@ msgid "단어장 생성"
 msgstr "Build Vocabulary"
 
 #: viewer/app.py
-msgid "파일 → 단어장 생성"
-msgstr "File → Build Vocabulary"
+msgid "도구 → 단어장 생성"
+msgstr "Tools → Build Vocabulary"
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "책갈피 생성"
 msgstr "Build Bookmarks"
 
 #: viewer/app.py
-msgid "파일 → 책갈피 자동 생성"
-msgstr "File → Generate Bookmarks Automatically"
+msgid "도구 → 책갈피 자동 생성"
+msgstr "Tools → Generate Bookmarks Automatically"
 
 #: viewer/app.py
 msgid "PDF병합"
 msgstr "Merge PDFs"
 
 #: viewer/app.py
-msgid "파일 → PDF 병합"
-msgstr "File → Merge PDFs"
+msgid "도구 → PDF 병합"
+msgstr "Tools → Merge PDFs"
 
 #: viewer/app.py
 msgid "이미지→PDF"
@@ -8676,4 +8676,10 @@ msgstr "Getting Started"
 
 #~ msgid "파일 해시태그·키워드 자동 부여 (인덱싱 후 백그라운드 — 자동 태그는 ·# 로 구분, 도구 메뉴에서 되돌리기 가능)"
 #~ msgstr "Auto-assign file hashtags/keywords (in background after indexing — auto tags are marked ·#, can be undone from the Tools menu)"
+
+#~ msgid "검색·단어장·스크린샷 패널 펼치기/접기"
+#~ msgstr "Expand/collapse the Search · Vocabulary · Screenshot panel"
+
+#~ msgid "검색·단어장·스크린샷 숨김 (단일 보기)"
+#~ msgstr "Hide Search · Vocabulary · Screenshots (single view)"
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 11:51+0900\n"
+"POT-Creation-Date: 2026-10-09 12:23+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -136,7 +136,7 @@ msgid "전체"
 msgstr ""
 
 #: viewer/app.py
-msgid "검색·단어장·스크린샷 패널 펼치기/접기"
+msgid "오른쪽 패널 펼치기/접기"
 msgstr ""
 
 #: viewer/app.py
@@ -224,7 +224,7 @@ msgid "1단"
 msgstr ""
 
 #: viewer/app.py
-msgid "검색·단어장·스크린샷 숨김 (단일 보기)"
+msgid "오른쪽 패널 숨김 (단일 보기)"
 msgstr ""
 
 #: viewer/app.py
@@ -240,7 +240,7 @@ msgid "텍스트"
 msgstr ""
 
 #: viewer/app.py
-msgid "검색·단어장 창 보이기 · 텍스트 탭"
+msgid "오른쪽 패널 보이기 · 텍스트 탭"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/study_panel.py
@@ -256,7 +256,7 @@ msgid "검색"
 msgstr ""
 
 #: viewer/app.py
-msgid "검색·단어장 창 보이기 · 검색 탭"
+msgid "오른쪽 패널 보이기 · 검색 탭"
 msgstr ""
 
 #: viewer/app.py
@@ -264,7 +264,7 @@ msgid "스크린샷"
 msgstr ""
 
 #: viewer/app.py
-msgid "검색·단어장 숨김 · 스크린샷 보이기"
+msgid "오른쪽 위 탭 숨김 · 스크린샷 보이기"
 msgstr ""
 
 #: viewer/app.py
@@ -312,7 +312,7 @@ msgid "단어장 생성"
 msgstr ""
 
 #: viewer/app.py
-msgid "파일 → 단어장 생성"
+msgid "도구 → 단어장 생성"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
@@ -320,7 +320,7 @@ msgid "책갈피 생성"
 msgstr ""
 
 #: viewer/app.py
-msgid "파일 → 책갈피 자동 생성"
+msgid "도구 → 책갈피 자동 생성"
 msgstr ""
 
 #: viewer/app.py
@@ -328,7 +328,7 @@ msgid "PDF병합"
 msgstr ""
 
 #: viewer/app.py
-msgid "파일 → PDF 병합"
+msgid "도구 → PDF 병합"
 msgstr ""
 
 #: viewer/app.py

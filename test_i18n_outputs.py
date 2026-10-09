@@ -7,6 +7,8 @@ B. 영어 도움말에는 한글이 없고 숨긴 한국 전용 기능(§7: 단�
 C. 다단의 기본 목차 쪽 제목은 만드는 때의 화면 언어(ko '목차', en 'Contents')
 D. 저장 창에 제안하는 기본 파일 이름은 화면 언어를 따르고, 번역된 이름에 Windows 가 막는 글자가 없다
 E. 실제 사용법 창이 그 언어의 도움말을 보여 준다
+F. 도움말이 실제 기능과 같다(261009-11) — app.py 기본 단축키가 두 도움말 표에 모두 · 낡은 경로·없어진 설정 없음 ·
+   영어 도움말의 메뉴·옵션 이름이 실제 영어 화면과 같음 · 한국어 도움말이 새 기능 절을 갖춤
 """
 import os, sys, re, json, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -113,6 +115,30 @@ try:
     chk(b is not None and "Using PolyPDF" in b.toPlainText(), "E 영어 사용법 창이 영어 도움말을 보여 준다")
     chk(dlg.windowTitle() == i18n.tr("PolyPDF — 사용법") and not H.search(dlg.windowTitle()), "E 창 제목도 영어")
     dlg.close()
+
+    # ── F — 도움말이 실제 기능과 어긋나지 않게 (261009-11) ──
+    # 종전 도움말은 '2분할 보기 Ctrl+2'(실제 2단 보기는 Ctrl+Shift+2, Ctrl+2 는 선 2)·'메뉴 → 설정 → 환경설정'(실제 도구 메뉴)처럼
+    # 코드가 바뀐 뒤 낡아 있었다. 단축키 표의 기본 키는 app.py `_sc_defs` 에서 읽어 두 도움말에 모두 있는지 본다.
+    src = (Path(HERE) / "viewer" / "app.py").read_text(encoding="utf-8")
+    defs = re.findall(r'\("(\w+)",\s*\(tr\("[^"]+"\), "([^"]+)"', src)
+    chk(len(defs) >= 15, "F app.py 에서 기본 단축키 표를 읽었다", str(len(defs)))
+    for code, html in (("ko", ko_html), ("en", en_html)):
+        miss = [k for sid, k in defs
+                if k not in html and not (sid.startswith("draw_pen_") and "Ctrl+1" in html and "Ctrl+5" in html)]
+        chk(not miss, "F [%s] 도움말 단축키 표에 기본 단축키가 모두 있다" % code, str(miss))
+    chk("Ctrl+2</td>" not in ko_html and "Ctrl+2</td>" not in en_html, "F 2단 보기를 Ctrl+2 로 적지 않는다(Ctrl+2 는 선 2)")
+    for stale in ("메뉴 → 설정 → 환경설정", "설정 → 단축키 설정", "파일 → 책갈피 자동 생성", "스크린샷 리스트 시작 시 복원"):
+        chk(stale not in ko_html, "F ko 도움말에 낡은 경로·없어진 설정이 없다: %s" % stale)
+    chk("Restore the screenshot list on startup" not in en_html, "F en 도움말에 없어진 설정이 없다")
+    i18n.install(None, "en")
+    for ko_name in ("도구", "환경설정...", "인덱스 재구축", "구성요소 설치(녹화·OCR)…", "Windows 기본 PDF 앱으로 등록…",
+                    "현재 검색어를 즐겨찾기에 추가...", "즐겨찾기 관리...", "선과 텍스트 입력 설정…", "2단 보기",
+                    "저장(일반뷰어용)...", "PDF로 인쇄", "다단 인쇄", "OCR 로 읽기", "해시태그 편집...", "녹화 테스트 (3초)",
+                    "업데이트 자동 다운로드", "베타(테스트) 버전도 받기", "계속 편집"):
+        en_name = i18n.tr(ko_name).replace("...", "").replace("…", "")
+        chk(en_name in en_html, "F en 도움말의 이름이 실제 영어 화면과 같다: %s" % en_name)
+    ko_sec = len(re.findall(r"<h3>", ko_html))
+    chk(ko_sec >= 17, "F ko 도움말이 편집·쪽 편집·인쇄·텍스트 창·발표·태그 절을 갖는다", str(ko_sec))
 except Exception:
     import traceback
     traceback.print_exc()
