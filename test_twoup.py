@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """260611-29: 2단 축소 배치 — 임포지션·쪽번호·책갈피 재매핑·목차/표지(fitz 폴백)."""
-import os, sys, tempfile
+import os, sys, io, tempfile
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -395,6 +395,49 @@ _p, _w, _h, _c, tot_prev = compose_preview(itemsN, {"nup": 2, "make_cover": True
                                                     "make_toc": True, "make_divider": True}, 0)
 chk(tot_prev == 6, "미리보기 = 표지1+목차1+(간지+내용)×2 = 6쪽", str(tot_prev))
 clear_preview_cache()
+
+# ── 261009-8: 맞쪽 인쇄(facing_first) — 맨 앞 빈 쪽 ────────────────────────────
+# ① 책갈피가 **정확히 한 장** 밀린다  ② MuPDF 가 조용하다(xref 오류가 없다)
+# 종전에는 빈 쪽을 끼운 뒤 `get_toc` → `set_toc(pg + 1)` 로 '보정' 했는데,
+# PyMuPDF 의 책갈피 목적지는 쪽 '참조'(`/Dest [6 0 R /XYZ …]`)라 쪽을 끼우면
+# `get_toc` 가 **이미 밀린 번호**를 돌려준다 → 두 번 밀려 한 장 어긋났다.
+# 게다가 같은 문서에 `set_toc` 를 두 번 부르면 옛 목차 객체가 매달린 참조로 남아
+# `save(garbage=4)` 가 `cannot find object in xref` 를 찍었다(실측).
+tmpF = Path(tempfile.mkdtemp(prefix="polypdf_face_"))
+dF = fitz.open()
+for i in range(4):
+    dF.new_page(width=595, height=842).insert_text((40, 80), f"p{i+1}")
+dF.save(str(tmpF / "F.pdf")); dF.close()
+itemsF = [{"type": "pdf", "path": str(tmpF / "F.pdf"), "name": "F"}]
+sF = {"nup": 2, "make_cover": False, "make_toc": False}
+
+outF0 = str(tmpF / "plain.pdf")
+twoup.build_twoup(itemsF, dict(sF), outF0)
+
+# ② MuPDF 메시지를 가로채고(PyMuPDF 1.27 은 기본 **stdout**) 맞쪽으로 빌드
+msg = io.StringIO()
+has_cap = hasattr(fitz, "set_messages")
+if has_cap:
+    fitz.set_messages(stream=msg)
+outF1 = str(tmpF / "facing.pdf")
+try:
+    twoup.build_twoup(itemsF, dict(sF, facing_first=True), outF1)
+finally:
+    if has_cap:
+        fitz.set_messages(stream=sys.stdout)
+noise = [l for l in msg.getvalue().splitlines() if l.strip()]
+
+d0 = fitz.open(outF0); t0 = d0.get_toc(simple=True); n0 = d0.page_count; d0.close()
+d1 = fitz.open(outF1); t1 = d1.get_toc(simple=True); n1 = d1.page_count
+blank = d1[0].get_text("text").strip(); d1.close()
+chk(n1 == n0 + 1 and blank == "", "맞쪽: 맨 앞에 빈 쪽 1장", f"{n0}→{n1}")
+chk(len(t1) == len(t0) and t1 == [[lv, ti, pg + 1] for lv, ti, pg in t0],
+    "★ 맞쪽: 책갈피가 **정확히 한 장** 밀린다(두 번 밀리지 않는다)",
+    f"{t0} → {t1}")
+if has_cap:
+    chk(not noise, "★ 맞쪽: MuPDF 가 조용하다(xref 오류 없음)", " | ".join(noise[:4]))
+else:
+    print("SKIP - MuPDF 메시지 가로채기(set_messages) 없는 PyMuPDF")
 
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")

@@ -1436,25 +1436,31 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
                 toc_doc.close()
             except Exception:
                 pass
-        # 260617-6: 맞쪽 인쇄 — 맨 앞에 여백(빈) 페이지 1장 추가(여백색). TOC 1쪽 보정.
+        # 260617-6: 맞쪽 인쇄 — 맨 앞에 여백(빈) 페이지 1장 추가(여백색).
+        # 261009-8(§4.7.13): **책갈피는 손대지 않는다.** 종전에는 끼운 뒤 `get_toc` →
+        #   `set_toc([… pg + 1 …])` 로 '보정' 했는데 두 가지가 어긋났다(실측).
+        #   ① 책갈피 목적지는 쪽 **참조**(`/Dest [6 0 R /XYZ …]`)다. 쪽을 끼우면
+        #      `get_toc` 가 **이미 밀린 번호**를 돌려주므로 `pg + 1` 은 두 번 미는 것이었다
+        #      (4쪽→2시트, 맞쪽: 책갈피가 2쪽이어야 하는데 3쪽을 가리켰다).
+        #   ② 같은 문서에 `set_toc` 를 **두 번** 부르면 옛 목차 객체가 매달린 참조로 남아
+        #      `save(garbage=4)` 가 `cannot find object in xref (N 0 R)` 를 찍었다.
+        #      set_toc 두 번만으로 재현된다 — 쪽 끼우기와는 무관한 PyMuPDF 거동이다.
+        #   → 위 §7 의 `set_toc` 한 번으로 끝내면 둘 다 사라진다. **다시 넣지 말 것.**
         _lk_shift = 0        # 261009-7: 앞에 끼운 쪽 수 — 링크 쪽 번호를 그만큼 밀어야 한다
         if bool(s.get("facing_first", False)) and final.page_count > 0:
             try:
                 r0 = final[0].rect
                 final.new_page(pno=0, width=r0.width, height=r0.height)
+                _lk_shift = 1    # ★ 쪽이 실제로 들어간 **바로 뒤**에 — 아래에서 터져도 어긋나지 않게
                 _draw_sheet_bg(final[0], s)
                 page_infos.insert(0, {"kind": "blank", "cells": None})
-                t = final.get_toc(simple=True)
-                if t:
-                    final.set_toc([[lv, ti, pg + 1] for lv, ti, pg in t])
-                _lk_shift = 1
             except Exception:
                 pass
 
         # 261009-7(§4.7.13): 하이퍼링크를 옮긴다 — **쪽을 끼우는 일이 모두 끝난 뒤.**
-        #   위 `new_page(pno=0)` 은 쪽 번호를 하나씩 미는데, 바로 위에서 목차를 `pg + 1` 로
-        #   보정하는 것이 그 증거다(PyMuPDF 가 기존 참조를 고쳐 주지 않는다). 링크를 먼저
-        #   넣으면 GOTO 가 가리키는 쪽이 한 장 어긋난다.
+        #   `apply` 는 조립 때 적어 둔 **시트 번호**로 GOTO 를 새로 넣는다. 그 번호는 빈 쪽을
+        #   끼우기 전에 센 것이라 `shift` 만큼 밀어야 한다(이미 있는 책갈피와 달리 '참조' 가
+        #   아니라 번호를 지금 쓰기 때문이다 — 261009-8). 링크를 먼저 넣으면 한 장 어긋난다.
         try:
             _lk_ok, _lk_drop = link_plan.apply(final, shift=_lk_shift)
             if log and (_lk_ok or _lk_drop):
