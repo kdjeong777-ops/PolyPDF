@@ -2185,15 +2185,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         # (이미지 모드 ◀▶·페이지입력은 _wire_pane_signals 에서 연결)
 
     # ===== 폴더 / 인덱스 =================================================
+    def _dialog_start_dir(self) -> str:
+        """열기 대화상자의 처음 자리 — 지금 폴더, 없으면 **문서 폴더**(261010-2, 휴대용 판 시험: 처음 실행에서 빈 값이면
+        작업 폴더가 쓰여 Windows 시스템 폴더(System32) 가 열렸다)."""
+        if self._folder:
+            return str(self._folder)
+        from PyQt6.QtCore import QStandardPaths as _QSP
+        return _QSP.writableLocation(_QSP.StandardLocation.DocumentsLocation) or str(Path.home())
+
     def action_open_folder(self):
-        last = str(self._folder) if self._folder else ""
+        last = self._dialog_start_dir()
         folder = QFileDialog.getExistingDirectory(self, tr("PDF 폴더 선택"), last)
         if folder:
             self.open_folder(Path(folder))
 
     def action_open_pdf(self):
         """v1.6.11 I1: 단일 PDF 파일 열기."""
-        start = str(self._folder) if self._folder else ""
+        start = self._dialog_start_dir()
         fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 파일 열기"), start, "PDF (*.pdf)")
         if fn:
             self.open_pdf(Path(fn))

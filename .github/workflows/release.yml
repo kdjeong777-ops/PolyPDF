@@ -128,11 +128,10 @@ jobs:
           if (Test-Path $pst) { Remove-Item $pst -Recurse -Force }
           New-Item -ItemType Directory $pst | Out-Null
           Copy-Item "dist\PolyPDF" "$pst\PolyPDF" -Recurse
+          # 261010-2: 표식 글은 ASCII 만 — 한글 줄이 CI 에서 깨졌다(릴리스 portable zip 을 내려받아 실측). 한글 안내는 README.
           @("PolyPDF portable mode marker.",
             "If this file exists next to PolyPDF.exe, settings and the search index are stored in the Data folder here.",
-            "Delete it to use the user folder (%APPDATA%) instead.",
-            "",
-            "이 파일이 PolyPDF.exe 옆에 있으면 설정·색인을 이 폴더의 Data 에 저장합니다(휴대용). 지우면 사용자 폴더를 씁니다.") |
+            "Delete it to use the user folder (%APPDATA%) instead.") |
             Out-File -FilePath "$pst\PolyPDF\PolyPDF.portable" -Encoding utf8
           Compress-Archive -Path "$pst\PolyPDF" -DestinationPath $port -Force
           # 260628(보안 A): 자동 업데이트 무결성 검증용 SHA-256 자산.
