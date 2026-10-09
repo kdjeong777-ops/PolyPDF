@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-09 09:12+0900\n"
+"POT-Creation-Date: 2026-10-09 10:20+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3426,6 +3426,11 @@ msgstr "N-up complete: {pages} pages total"
 #: viewer/twoup.py
 msgid "항목"
 msgstr "Item"
+
+#: viewer/twoup.py
+#, python-brace-format
+msgid "하이퍼링크 {ok}개 옮김 (옮기지 못함 {drop}개)"
+msgstr "{ok} hyperlinks carried over ({drop} could not be)"
 
 # | msgid "베타(테스트) 버전도 받기"
 #: viewer/update_controller.py

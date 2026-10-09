@@ -354,9 +354,99 @@ def _cover_clip(clip, box):
     return fitz.Rect(clip.x0, clip.y0 + dy, clip.x1, clip.y1 - dy)
 
 
-def _place_page(page, src, pno, box, s):
+class _LinkPlan:
+    """261009-7: 다단 합성에서 원본 하이퍼링크를 옮긴다 (마스터 §4.7.13).
+
+    `show_pdf_page` 는 쪽 내용을 Form XObject 로 **그리기만** 해 링크·주석을 옮기지 않는다
+    (실측: URI 4 → 0, GOTO 1 → 0). 그래서 쪽을 놓을 때마다 '원본 → 시트' 변환을 적어 두고
+    조립이 끝난 뒤 한 번에 다시 넣는다. **두 패스여야 하는 까닭은 GOTO 다** — 가는 쪽이
+    어느 시트의 어느 칸에 놓였는지 알아야 하는데, 그 쪽은 아직 놓이지 않았을 수 있다.
+    """
+
+    def __init__(self):
+        self._placed = {}      # (key, 원본쪽) -> (시트쪽, clip, target)
+        self._pending = []     # (시트쪽, key, 원본쪽, 원본 링크)
+
+    def record(self, page, src, pno, key, clip, target):
+        """쪽 하나를 칸에 놓았다 — 그 변환과 그 쪽의 링크를 적어 둔다."""
+        self._placed[(key, pno)] = (page.number, fitz.Rect(clip), fitz.Rect(target))
+        try:
+            links = src[pno].get_links()
+        except Exception:
+            links = []
+        for lk in links:
+            self._pending.append((page.number, key, pno, lk))
+
+    @staticmethod
+    def _map_rect(r, clip, target):
+        """원본 쪽 좌표 → 시트 좌표. 잘린 영역(clip) 밖은 버리고, 걸친 것은 자른다."""
+        if r is None:
+            return None
+        r = fitz.Rect(r) & clip
+        if r.is_empty:
+            return None
+        sx = (target.width / clip.width) if clip.width else 0.0
+        sy = (target.height / clip.height) if clip.height else 0.0
+        return fitz.Rect(target.x0 + (r.x0 - clip.x0) * sx,
+                         target.y0 + (r.y0 - clip.y0) * sy,
+                         target.x0 + (r.x1 - clip.x0) * sx,
+                         target.y0 + (r.y1 - clip.y0) * sy)
+
+    def apply(self, doc, shift=0):
+        """조립이 끝난 문서에 링크를 넣는다. 반환: (넣은 수, 옮기지 못한 수).
+
+        `shift` — 적어 둔 뒤에 **맨 앞에 끼운 쪽 수**(맞쪽 인쇄의 여백 쪽). 그만큼 밀어야
+        링크가 제 쪽에 붙고 GOTO 가 제 쪽을 가리킨다.
+        """
+        n_ok = n_drop = 0
+        for out_pno, key, pno, lk in self._pending:
+            where = self._placed.get((key, pno))
+            if where is None:
+                n_drop += 1
+                continue
+            out_pno += shift
+            if not (0 <= out_pno < doc.page_count):
+                n_drop += 1
+                continue
+            _p, clip, target = where
+            r = self._map_rect(lk.get("from"), clip, target)
+            if r is None:                      # 크롭·cover 로 잘려 나간 자리
+                n_drop += 1
+                continue
+            kind = lk.get("kind")
+            new = {"kind": kind, "from": r}
+            if kind == fitz.LINK_URI:
+                new["uri"] = lk.get("uri") or ""
+            elif kind == fitz.LINK_GOTO:
+                tgt = self._placed.get((key, lk.get("page")))
+                if tgt is None:                # 가는 쪽이 이 묶음에 없다(범위 밖)
+                    n_drop += 1
+                    continue
+                t_pno, t_clip, t_target = tgt
+                p = lk.get("to") or fitz.Point(0, 0)
+                pr = self._map_rect(fitz.Rect(p.x, p.y, p.x + 1, p.y + 1), t_clip, t_target)
+                new["page"] = t_pno + shift
+                new["to"] = (fitz.Point(pr.x0, pr.y0) if pr is not None
+                             else fitz.Point(t_target.x0, t_target.y0))
+            elif kind in (fitz.LINK_LAUNCH, fitz.LINK_GOTOR):
+                for f in ("file", "page", "to"):
+                    if lk.get(f) is not None:
+                        new[f] = lk[f]
+            else:                              # 이름 목적지 등 — 옮길 근거가 없다
+                n_drop += 1
+                continue
+            try:
+                doc[out_pno].insert_link(new)
+                n_ok += 1
+            except Exception:
+                n_drop += 1
+        return n_ok, n_drop
+
+
+def _place_page(page, src, pno, box, s, plan=None, key=None):
     """260611-46: 채움 방식(fit_mode)에 따라 원본 쪽을 셀(box)에 삽입.
-    contain=비율 유지·여백 / cover=비율 유지·가장자리 잘라 꽉 채움 / stretch=비율 무시."""
+    contain=비율 유지·여백 / cover=비율 유지·가장자리 잘라 꽉 채움 / stretch=비율 무시.
+    261009-7: `plan` 을 주면 그 쪽의 하이퍼링크를 옮기도록 변환을 적어 둔다(§4.7.13)."""
     clip = _crop_clip(src[pno].rect, s)
     mode = s.get("fit_mode", "contain")
     if mode == "cover":
@@ -372,19 +462,31 @@ def _place_page(page, src, pno, box, s):
             page.draw_rect(tgt, color=None, fill=(1, 1, 1))
         except Exception:
             pass
+    used = None          # 261009-7: 실제로 **성공한** (clip, 목표) — 링크를 그 변환으로 옮긴다
     try:
         if mode == "cover":
-            page.show_pdf_page(box, src, pno, clip=_cover_clip(clip, box))
+            cc = _cover_clip(clip, box)
+            page.show_pdf_page(box, src, pno, clip=cc)
+            used = (cc, box)
         elif mode == "stretch":
             # keep_proportion=False 라야 셀에 꽉 차게 비율을 늘림(기본 True면 비율 유지·가운데)
             page.show_pdf_page(box, src, pno, clip=clip, keep_proportion=False)
+            used = (clip, box)
         else:
             page.show_pdf_page(tgt, src, pno, clip=clip)
+            used = (clip, tgt)
     except Exception:
         try:
-            page.show_pdf_page(_fit_rect(box, clip.width, clip.height), src, pno)
+            fb = _fit_rect(box, clip.width, clip.height)
+            page.show_pdf_page(fb, src, pno)
+            used = (src[pno].rect, fb)
         except Exception:
             pass
+    if plan is not None and used is not None:
+        try:
+            plan.record(page, src, pno, key, used[0], used[1])
+        except Exception:
+            pass          # 링크를 못 옮겨도 다단 자체는 막지 않는다
 
 
 def _impose_item(out_doc, src, s, content_sheet, on_sheet=None):
@@ -1140,7 +1242,7 @@ def _merge_body_plan(slabs, file_blocks, s, front_pages):
     return body_plan, slab_phys, toc_entries
 
 
-def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=None):
+def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=None, log=None):
     """표지+목차+(파일별 간지)+본문을 한 문서로 조립.
     번호: 표지=없음, 목차=로마자(i…), 본문=아라비아(1…, 간지·빈페이지는 카운트하되 숨김).
     양면+홀수시작: 각 문서(간지 포함)를 홀수 페이지에서 시작하도록 빈 페이지 삽입.
@@ -1229,6 +1331,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         # 5) 조립
         final = fitz.open()
         page_infos = []
+        link_plan = _LinkPlan()          # 261009-7: 원본 하이퍼링크를 시트로 옮긴다(§4.7.13)
         if cover_doc:
             final.insert_pdf(cover_doc)
             page_infos += [{"kind": "cover", "cells": None}] * cover_pages
@@ -1269,7 +1372,8 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
                 final.insert_pdf(dd, from_page=0, to_page=0)
                 page_infos.append({"kind": "divider", "cells": None})
             else:  # content
-                cells = _render_content_sheet(final, slabs[d["slab"]]["chunk"], s, d["phys"], _doc)
+                cells = _render_content_sheet(final, slabs[d["slab"]]["chunk"], s, d["phys"],
+                                              _doc, plan=link_plan)
                 page_infos.append({"kind": "content", "cells": cells})
             _tk(tr("배치 중…"))
 
@@ -1333,6 +1437,7 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
             except Exception:
                 pass
         # 260617-6: 맞쪽 인쇄 — 맨 앞에 여백(빈) 페이지 1장 추가(여백색). TOC 1쪽 보정.
+        _lk_shift = 0        # 261009-7: 앞에 끼운 쪽 수 — 링크 쪽 번호를 그만큼 밀어야 한다
         if bool(s.get("facing_first", False)) and final.page_count > 0:
             try:
                 r0 = final[0].rect
@@ -1342,8 +1447,21 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
                 t = final.get_toc(simple=True)
                 if t:
                     final.set_toc([[lv, ti, pg + 1] for lv, ti, pg in t])
+                _lk_shift = 1
             except Exception:
                 pass
+
+        # 261009-7(§4.7.13): 하이퍼링크를 옮긴다 — **쪽을 끼우는 일이 모두 끝난 뒤.**
+        #   위 `new_page(pno=0)` 은 쪽 번호를 하나씩 미는데, 바로 위에서 목차를 `pg + 1` 로
+        #   보정하는 것이 그 증거다(PyMuPDF 가 기존 참조를 고쳐 주지 않는다). 링크를 먼저
+        #   넣으면 GOTO 가 가리키는 쪽이 한 장 어긋난다.
+        try:
+            _lk_ok, _lk_drop = link_plan.apply(final, shift=_lk_shift)
+            if log and (_lk_ok or _lk_drop):
+                log(tr('하이퍼링크 {ok}개 옮김 (옮기지 못함 {drop}개)').format(
+                    ok=_lk_ok, drop=_lk_drop))
+        except Exception:
+            pass          # 링크를 못 옮겨도 다단 자체는 막지 않는다
         return final, page_infos
     finally:
         for dch, cached in opened.values():
@@ -1367,8 +1485,9 @@ def _make_toc_doc(entries, w, h, s, fast, tmpdir, seq):
     return _fitz_toc_doc(entries, w, h)
 
 
-def _render_content_sheet(out_doc, chunk, s, phys_no, doc_fn):
-    """내용 시트 1장 생성(방향·격자·채움·여백색·격자선). 셀 박스 목록 반환."""
+def _render_content_sheet(out_doc, chunk, s, phys_no, doc_fn, plan=None):
+    """내용 시트 1장 생성(방향·격자·채움·여백색·격자선). 셀 박스 목록 반환.
+    261009-7: `plan`(= `_LinkPlan`)을 주면 하이퍼링크를 옮기도록 변환을 적어 둔다."""
     first = next((c for c in chunk if c is not None), None)
     if first is not None:
         ref = doc_fn(first[0])[first[1]].rect
@@ -1382,7 +1501,8 @@ def _render_content_sheet(out_doc, chunk, s, phys_no, doc_fn):
             continue
         it, pno = cell; d = doc_fn(it)
         if pno < d.page_count:
-            _place_page(pg, d, pno, boxes[slot], s)
+            # key 는 `_doc` 의 캐시 키와 같게 id() — 항목이 dict 라 해시할 수 없다
+            _place_page(pg, d, pno, boxes[slot], s, plan=plan, key=id(it))
     _draw_grid_lines(pg, boxes, s)
     return [(b.x0, b.y0, b.x1, b.y1) for b in boxes]
 
@@ -1414,7 +1534,7 @@ def build_twoup(items, settings, out_path, gen_bookmarks_fn=None, log=None, prog
             raise MergeCancelled()
 
     final, _infos = _assemble(items, s, fast=False, gen_bookmarks_fn=gen_bookmarks_fn,
-                              tick=_tick, tmpdir=tmpdir)
+                              tick=_tick, tmpdir=tmpdir, log=log)
     _tick(tr("최종 저장 중…"))
     # 260913-5(마스터 SOT §4.5.10 ①): 표지·목차·간지의 fitz 폴백(_kr_text)과 쪽번호 글꼴 지정
     #   (_draw_footer)은 fontfile= 로 글꼴 **전체**를 넣는다(2파일 병합 7.48MB → 0.39MB).

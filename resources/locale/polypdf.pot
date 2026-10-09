@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 09:12+0900\n"
+"POT-Creation-Date: 2026-10-09 10:20+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3205,6 +3205,11 @@ msgstr ""
 
 #: viewer/twoup.py
 msgid "항목"
+msgstr ""
+
+#: viewer/twoup.py
+#, python-brace-format
+msgid "하이퍼링크 {ok}개 옮김 (옮기지 못함 {drop}개)"
 msgstr ""
 
 #: viewer/update_controller.py
