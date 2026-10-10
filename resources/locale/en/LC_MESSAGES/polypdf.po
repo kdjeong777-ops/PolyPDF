@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 14:53+0000\n"
+"POT-Creation-Date: 2026-10-10 15:01+0000\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -7639,16 +7639,16 @@ msgid "서명 그림"
 msgstr "Signature image"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "겉모양 글자"
-msgstr "Appearance text"
-
-#: viewer/widgets/sign_dialogs.py
 msgid "날짜"
 msgstr "Date"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "사유"
 msgstr "Reason"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "겉모양 글자"
+msgstr "Appearance text"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "예: 승인, 검토 완료"
@@ -7661,6 +7661,14 @@ msgstr "Reason (optional)"
 #: viewer/widgets/sign_dialogs.py
 msgid "장소(선택)"
 msgstr "Location (optional)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "미리보기 만드는 중…"
+msgstr "Making preview…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "겉모양 미리보기"
+msgstr "Appearance preview"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "디지털 ID 비밀번호(붙여넣기 가능)"
@@ -7751,6 +7759,10 @@ msgid "전자서명"
 msgstr "Digital Signature"
 
 #: viewer/widgets/sign_dialogs.py
+msgid "실제 서명과 같은 그리기 — 날짜는 서명하는 때의 시각으로 바뀝니다."
+msgstr "Drawn the same way as the real signature — the date becomes the time of signing."
+
+#: viewer/widgets/sign_dialogs.py
 msgid "신뢰 해제"
 msgstr "Stop Trusting"
 
@@ -7788,6 +7800,10 @@ msgstr "Password for {name} — it is checked, then locked with Windows Hello."
 #, python-brace-format
 msgid "'{name}' 을 지우면 이 ID 로 다시 서명할 수 없습니다. 이미 서명한 문서는 그대로 유효합니다."
 msgstr "If you delete '{name}', you can no longer sign with this ID. Documents already signed stay valid."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "겉모양에 쓸 한글 글꼴이 없습니다 — 서명 그림을 고르거나 겉모양 글자를 끄세요."
+msgstr "No font is available for the appearance text — choose a signature image or turn off the appearance text."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "양식 채우기·서명 추가"
@@ -7898,6 +7914,11 @@ msgstr "This certificate is not meant for document signing."
 #, python-brace-format
 msgid "가져오지 못했습니다: {e}"
 msgstr "Could not import: {e}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "미리보기를 만들지 못했습니다({e})."
+msgstr "Could not make the preview ({e})."
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format

@@ -10,6 +10,7 @@ C. Windows Hello 보관(가짜 키) — 보관·꺼내기·지우기, 취소, ID
 D. 실제 MainWindow — 도구 메뉴 '🔏 전자서명' 구역·크롭 오른쪽 단추, 단추 → 본문 끌기 → 서명 창 → 현재 파일에 서명 → 다시 열면 검증 띠
 E. 저장 가드(§4) — 서명된 파일에 `_finalize_save`: 새 파일로 / 취소 / 덮어쓰기, 서명 자체 저장은 묻지 않는다
 G. 대화상자 — 디지털 ID 창·서명 그림 창·서명 패널
+H. 서명 창 겉모양 미리보기 — 끈 상자 비율·배경에서·바꾸면 다시(S8)
 F. 비밀번호가 설정·ID 목록·Hello 보관 파일 어디에도 평문으로 없다(§6.4)
 """
 import os, sys, tempfile, shutil, time, json
@@ -288,6 +289,32 @@ try:
         mw.main_view.sign_band.state)
     if os.environ.get("POLYPDF_SHOT"):
         mw.grab().save(os.environ["POLYPDF_SHOT"])
+
+    # ── H. 서명 창 겉모양 미리보기(S8) — 실제 서명과 같은 그리기, 배경에서, 바꾸면 다시 ──
+    from PIL import Image as _I
+    _RealSign = sdlg.SignDialog.__mro__[1] if sdlg.SignDialog.__name__ == "_FakeSignDialog" else sdlg.SignDialog
+    sd = _RealSign(mw, hello_ok=False, file_name="x.pdf", box_size=(200.0, 75.0))
+
+    def _wait_pv(prev_key=None, sec=8.0):
+        t0 = time.time()
+        while time.time() - t0 < sec:
+            spin(0.05)
+            pm = sd.preview.pixmap()
+            if pm is not None and not pm.isNull() and pm.cacheKey() != prev_key and not sd._pv_threads and not sd._pv_timer.isActive():
+                return pm
+        return None
+    pm1 = _wait_pv()
+    def _dark(pm):
+        q = pm.toImage().convertToFormat(pm.toImage().Format.Format_RGB888)
+        b = bytes(q.constBits().asarray(q.sizeInBytes()))
+        return sum(1 for i in range(0, len(b), 3) if b[i] < 128) if b else 0
+    chk(pm1 is not None and abs(pm1.width() / max(1, pm1.height()) - 200 / 75) < 0.1 and _dark(pm1) > 50,
+        "H1 미리보기 — 끈 상자 비율로 그려지고 글자가 보인다(배경에서)", str(pm1.size() if pm1 else None))
+    sd.chk_reason.setChecked(True); sd.ed_reason.setText("검토 완료")
+    pm2 = _wait_pv(pm1.cacheKey() if pm1 else None)
+    chk(pm2 is not None and _dark(pm2) > _dark(pm1 or pm2), "H2 사유를 켜고 넣으면 다시 그린다(글자가 늘어남)",
+        "%s → %s" % (_dark(pm1) if pm1 else None, _dark(pm2) if pm2 else None))
+    sd.stop_preview(); sd.close()
     QMessageBox.exec = orig_exec
 except Exception:
     import traceback

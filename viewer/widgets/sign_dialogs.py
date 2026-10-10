@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import os
 
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QImage, QPainter, QPixmap, QColor
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QGroupBox,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSlider,
     QSpinBox, QVBoxLayout,
 )
@@ -537,10 +537,31 @@ class DigitalIdDialog(QDialog):
 # 서명 창 — SOT §3.3
 # ---------------------------------------------------------------------------
 
-class SignDialog(QDialog):
-    """디지털 ID·그림·겉모양 글자·사유·비밀번호(또는 Windows Hello) → [서명] / [다른 이름으로 서명…]."""
+class _PreviewThread(QThread):
+    """겉모양 미리보기 — 배경(0.2~0.4초, 보안 SOT §10). (세대, PNG 바이트 | 오류 글)."""
+    done = pyqtSignal(int, object)
 
-    def __init__(self, parent=None, hello_ok: bool = False, file_name: str = ""):
+    def __init__(self, gen, args, parent=None):
+        super().__init__(parent)
+        self._gen, self._args = gen, args
+
+    def run(self):
+        try:
+            from viewer import sign_core
+            self.done.emit(self._gen, sign_core.preview_png(*self._args))
+        except Exception as e:                    # noqa: BLE001
+            self.done.emit(self._gen, getattr(e, "reason", "") or type(e).__name__)
+
+
+class SignDialog(QDialog):
+    """디지털 ID·그림·겉모양 글자·사유·비밀번호(또는 Windows Hello) → [서명] / [다른 이름으로 서명…].
+    끈 상자 크기 그대로 실제 겉모양을 미리 보인다(보안 SOT §3.3)."""
+
+    PREVIEW_DELAY_MS = 250
+    PREVIEW_MAX = (360, 150)
+    PREVIEW_DPI = 110
+
+    def __init__(self, parent=None, hello_ok: bool = False, file_name: str = "", box_size=(142.0, 57.0)):
         super().__init__(parent)
         from viewer import sign_hello, sign_store
         self.setWindowTitle(tr("전자서명 — {name}").format(name=file_name) if file_name else tr("전자서명"))
@@ -566,8 +587,11 @@ class SignDialog(QDialog):
             self.cmb_img.setCurrentIndex(j)
         form.addRow(tr("서명 그림"), self.cmb_img)
         ap = d.get("appearance") or {}
-        g = QGroupBox(tr("겉모양 글자"))
+        # 줄 하나짜리 묶음 — QGroupBox 는 줄바꿈 라벨이 있는 창에서 높이를 못 받아 빈 막대로 눌렸다(화면 확인)
+        from PyQt6.QtWidgets import QWidget
+        g = QWidget()
         gl = QHBoxLayout(g)
+        gl.setContentsMargins(0, 0, 0, 0)
         self.chk_name = QCheckBox(tr("이름"))
         self.chk_date = QCheckBox(tr("날짜"))
         self.chk_reason = QCheckBox(tr("사유"))
@@ -577,12 +601,28 @@ class SignDialog(QDialog):
         for c in (self.chk_name, self.chk_date, self.chk_reason):
             gl.addWidget(c)
         gl.addStretch(1)
-        form.addRow(g)
+        form.addRow(tr("겉모양 글자"), g)
         self.ed_reason = QLineEdit(d.get("last_reason", ""))
         self.ed_reason.setPlaceholderText(tr("예: 승인, 검토 완료"))
         self.ed_loc = QLineEdit(d.get("last_location", ""))
         form.addRow(tr("사유(선택)"), self.ed_reason)
         form.addRow(tr("장소(선택)"), self.ed_loc)
+        # 겉모양 미리보기 — 끈 상자 비율, 실제 서명과 같은 그리기(배경)
+        self._box = (float(box_size[0]), float(box_size[1]))
+        self.preview = QLabel(tr("미리보기 만드는 중…"))
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview.setStyleSheet("QLabel{border:1px solid #c8c8c8;background:#f3f3f3;}")
+        # 높이는 처음부터 그림 크기로 — 그림이 온 뒤 늘리면 창이 따라 크지 않아 아래가 잘렸다(화면 확인)
+        px_w, px_h = self._box[0] * self.PREVIEW_DPI / 72.0, self._box[1] * self.PREVIEW_DPI / 72.0
+        k = min(1.0, self.PREVIEW_MAX[0] / px_w, self.PREVIEW_MAX[1] / px_h)
+        self.preview.setFixedHeight(int(px_h * k) + 6)
+        form.addRow(tr("겉모양 미리보기"), self.preview)
+        self._pv_gen = 0
+        self._pv_threads = []
+        self._pv_timer = QTimer(self)
+        self._pv_timer.setSingleShot(True)
+        self._pv_timer.setInterval(self.PREVIEW_DELAY_MS)
+        self._pv_timer.timeout.connect(self._render_preview)
         self.ed_pw = QLineEdit()
         self.ed_pw.setEchoMode(QLineEdit.EchoMode.Password)
         self.ed_pw.setPlaceholderText(tr("디지털 ID 비밀번호(붙여넣기 가능)"))
@@ -611,9 +651,80 @@ class SignDialog(QDialog):
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
         self.cmb_id.currentIndexChanged.connect(lambda _i: self._sync())
+        for sig in (self.cmb_id.currentIndexChanged, self.cmb_img.currentIndexChanged):
+            sig.connect(lambda _i: self._pv_timer.start())
+        for c in (self.chk_name, self.chk_date, self.chk_reason):
+            c.toggled.connect(lambda _on: self._pv_timer.start())
+        self.ed_reason.textChanged.connect(lambda _t: self._pv_timer.start())
         self._has_hello = sign_hello.has
         self._sync()
         self.resize(480, 0)
+        self._pv_timer.start()
+
+    # ---- 겉모양 미리보기 ----
+    def _render_preview(self):
+        from viewer import sign_core, sign_store
+        e = sign_store.get_id(self.fp()) or {}
+        app = sign_core.Appearance(image_path=sign_store.image_path(self.image_name()),
+                                   show_name=self.chk_name.isChecked(), show_date=self.chk_date.isChecked(),
+                                   show_reason=self.chk_reason.isChecked(), font_path=sign_core.default_font())
+        self._pv_gen += 1
+        th = _PreviewThread(self._pv_gen, (app, sign_core.signer_label(e.get("name", ""), e.get("email", "")),
+                                           self.ed_reason.text(), self._box[0], self._box[1], self.PREVIEW_DPI), self)
+        th.done.connect(self._on_preview)
+        self._pv_threads.append(th)
+
+        def _gone(t=th):
+            try:
+                self._pv_threads.remove(t)
+            except ValueError:
+                pass
+            t.deleteLater()
+        th.finished.connect(_gone)
+        th.start()
+
+    def _on_preview(self, gen, res):
+        if gen != self._pv_gen:
+            return                                   # 그 사이 다시 바꿨다 — 옛 결과는 버린다
+        if isinstance(res, (bytes, bytearray)):
+            pm = QPixmap()
+            pm.loadFromData(bytes(res), "PNG")
+            mw, mh = self.PREVIEW_MAX
+            if pm.width() > mw or pm.height() > mh:
+                pm = pm.scaled(mw, mh, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.preview.setPixmap(pm)
+            self.preview.setToolTip(tr("실제 서명과 같은 그리기 — 날짜는 서명하는 때의 시각으로 바뀝니다."))
+        else:
+            self.preview.setPixmap(QPixmap())
+            self.preview.setText(tr("겉모양에 쓸 한글 글꼴이 없습니다 — 서명 그림을 고르거나 겉모양 글자를 끄세요.")
+                                 if res == "no_font" else tr("미리보기를 만들지 못했습니다({e}).").format(e=res))
+
+    def _fit_height(self):
+        """디자인 SOT §2.15 — 줄바꿈 라벨이 있는 최상위 창은 지금 폭에서 필요한 높이를 스스로 받지 못한다."""
+        lay = self.layout()
+        if lay is not None and lay.hasHeightForWidth():
+            need = lay.totalHeightForWidth(self.width())
+            if need > self.height():
+                self.setMinimumHeight(need)
+                self.resize(self.width(), need)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        QTimer.singleShot(0, self._fit_height)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        QTimer.singleShot(0, self._fit_height)
+
+    def stop_preview(self):
+        """그리는 중인 스레드를 기다린다 — 창이 먼저 지워지면 QThread 가 살아 있는 채 파괴된다."""
+        self._pv_timer.stop()
+        for t in list(self._pv_threads):
+            t.wait(3000)
+
+    def done(self, r):
+        self.stop_preview()
+        super().done(r)
 
     def fp(self) -> str:
         return str(self.cmb_id.currentData() or "")

@@ -191,7 +191,13 @@ class SignMixin:
         r = self._sign_box_fit(page, r)
         from viewer.widgets.sign_dialogs import SignDialog
         hello_ok = self._sign_hello_ready()
-        dlg = SignDialog(self, hello_ok=hello_ok, file_name=Path(cur).name)
+        dlg = SignDialog(self, hello_ok=hello_ok, file_name=Path(cur).name, box_size=(r.width, r.height))
+        try:
+            self._sign_dialog_loop(cur, pidx, r, dlg, mv)
+        finally:
+            dlg.stop_preview()
+
+    def _sign_dialog_loop(self, cur, pidx, r, dlg, mv):
         while True:
             dlg.save_as = dlg.use_hello = False
             dlg.ed_pw.clear()                    # 틀린 비밀번호를 다시 보이지 않는다

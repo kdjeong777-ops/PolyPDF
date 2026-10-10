@@ -421,6 +421,38 @@ def _stamp_style(app: Appearance, signer_name: str, reason: str):
     return stamp.TextStampStyle(**kw)
 
 
+def preview_png(app: "Appearance", signer_text: str, reason: str, width_pt: float, height_pt: float,
+                dpi: int = 110) -> bytes:
+    """서명 겉모양 미리보기 PNG — **서명과 같은 그리기**(`_stamp_style` → pyHanko `create_stamp`)를 흰 쪽에 찍는다
+    (보안 SOT §3.3). 0.2~0.4초(글꼴 부분집합) — 배경 스레드에서 부른다. 그릴 수 없으면 SignError(no_font)."""
+    import fitz
+    from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+    from pyhanko.pdf_utils.layout import BoxConstraints
+    w = max(8.0, float(width_pt))
+    h = max(8.0, float(height_pt))
+    d = fitz.open()
+    pg = d.new_page(width=w, height=h)
+    pg.draw_rect(pg.rect, color=None, fill=(1, 1, 1))     # 내용이 있어야 pyHanko 가 찍는다(/Contents 없으면 실패, 실측)
+    data = d.tobytes()
+    d.close()
+    style = _stamp_style(app, signer_text, reason)
+    wr = IncrementalPdfFileWriter(io.BytesIO(data))
+    stamp = style.create_stamp(wr, BoxConstraints(width=w, height=h), {"signer": signer_text})
+    stamp.apply(0, 0, 0)
+    out = io.BytesIO()
+    wr.write(out)
+    pd = fitz.open("pdf", out.getvalue())
+    try:
+        return pd[0].get_pixmap(dpi=dpi).tobytes("png")
+    finally:
+        pd.close()
+
+
+def signer_label(name: str, email: str = "") -> str:
+    """겉모양의 이름 칸 — pyHanko 가 인증서에서 쓰는 꼴과 같게 `이름 <이메일>`."""
+    return f"{name} <{email}>" if email else name
+
+
 def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int, box_pdf,
              appearance: Appearance | None = None, reason: str = "", location: str = "",
              doc_password: str = "") -> str:
