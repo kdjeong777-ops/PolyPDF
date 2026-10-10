@@ -719,6 +719,28 @@ if ($fail -eq 0) {
         $ie = Join-Path $env:WINDIR 'System32\ie4uinit.exe'
         if (Test-Path $ie) { Start-Process -FilePath $ie -ArgumentList '-show' -WindowStyle Hidden }
     } catch {}
+    # 261010-15(마스터 §14.5): 설치 정보(제어판 '프로그램 추가/제거')의 버전도 새 판으로 — 앱 안 업데이트는 파일만 바꿔
+    #   설치 정보가 옛 판으로 남았다(설치 시험: 설치 정보 beta.223 · 앱 파일 beta.228). 판 번호는 **방금 깐 파일**에서 읽고,
+    #   설치 위치가 같은 항목만 고친다(휴대용 판은 항목이 없어 건드리지 않는다).
+    try {
+        $vf = Join-Path $install '_internal\viewer\__init__.py'
+        $m = [regex]::Match([IO.File]::ReadAllText($vf), '__version__\s*=\s*"([^"]+)"')
+        if ($m.Success) {
+            $nv = $m.Groups[1].Value
+            $want = [IO.Path]::GetFullPath($install).TrimEnd('\')
+            foreach ($root in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+                                'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')) {
+                foreach ($k in (Get-ChildItem $root -ErrorAction SilentlyContinue)) {
+                    $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+                    if ($p -and $p.DisplayName -like 'PolyPDF*' -and $p.InstallLocation -and
+                        ([IO.Path]::GetFullPath($p.InstallLocation).TrimEnd('\') -ieq $want)) {
+                        Set-ItemProperty -LiteralPath $k.PSPath -Name DisplayVersion -Value $nv -ErrorAction SilentlyContinue
+                        Set-ItemProperty -LiteralPath $k.PSPath -Name DisplayName -Value ('PolyPDF v' + $nv) -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+        }
+    } catch {}
     $bar.Value = 100; $lbl.Text = $T.done
     [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 700
 } elseif ($fail -gt 0) {

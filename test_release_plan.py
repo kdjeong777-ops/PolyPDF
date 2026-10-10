@@ -71,5 +71,22 @@ chk(any(x.startswith("T1 창") for x in r) and any(x.startswith("T1 색인한 �
 chk(not any(x.startswith("T1 작업 집합") for x in r), "F 작업 집합 +7% 는 아니다", r)
 chk(not any(x.startswith("T2") for x in r), "F 절대 하한 아래(0.3초·5개)는 잡음으로 본다", r)
 
+# G. 261010-15: 비교는 같은 종류(build|install) 시험끼리 — 설치본을 빌드본과 견주면 '회귀 의심' 이 과했다
+import json, tempfile
+from pathlib import Path
+_old = rt.BASELINE
+try:
+    rt.BASELINE = Path(tempfile.mkdtemp()) / "baseline.json"
+    rt.save_baseline({"commit": "a", "version": "1", "mode": "build", "source": "local"}, Path("build_1"))
+    rt.save_baseline({"commit": "b", "version": "2", "mode": "install", "source": "ci"}, Path("install_2"))
+    bl = rt.load_baseline()
+    chk(rt.compare_base(bl, "build") == "build_1" and rt.compare_base(bl, "install") == "install_2",
+        "G 종류마다 마지막 통과 결과를 따로 둔다", str(bl.get("results")))
+    chk(bl["commit"] == "b", "G 기준점 커밋은 마지막 통과(종류 무관)")
+    chk(rt.compare_base({"mode": "build", "result": "build_0"}, "install") is None,
+        "G 옛 기준점(종류별 기록 없음)은 다른 종류와 견주지 않는다")
+finally:
+    rt.BASELINE = _old
+
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)

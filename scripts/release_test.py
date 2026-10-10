@@ -473,10 +473,25 @@ def compare(rec: dict, base_rec: dict) -> list:
 
 
 def save_baseline(rec: dict, out: Path):
+    # 261010-15(릴리스 SOT §3.2): 비교용 결과는 **시험 종류마다** 따로 둔다(`results`) — 설치본은 빌드본보다 창이 늦게 뜨고
+    #   색인 수도 캐시에 따라 달라, 설치 시험을 빌드 시험 결과와 견주면 '회귀 의심' 이 과하게 나왔다(beta.229 6건).
+    prev = load_baseline() or {}
+    results = dict(prev.get("results") or {})
+    results[rec["mode"]] = out.name
     BASELINE.write_text(json.dumps({"commit": rec["commit"], "version": rec["version"], "mode": rec["mode"],
-                                    "source": rec["source"], "result": out.name,
+                                    "source": rec["source"], "result": out.name, "results": results,
                                     "date": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False, indent=1),
                         encoding="utf-8")
+
+
+def compare_base(bl, mode: str):
+    """같은 종류(build|install) 시험의 마지막 통과 결과 폴더 이름 — 없으면 None(견주지 않는다)."""
+    if not bl:
+        return None
+    res = (bl.get("results") or {}).get(mode)
+    if res:
+        return res
+    return bl.get("result") if bl.get("mode") == mode else None
 
 
 # ── 측정 묶음 ────────────────────────────────────────────────────
@@ -600,13 +615,16 @@ def main():
         rec["fail"].append(str(e))
         rec.setdefault("exe", "-")
     bl = load_baseline()
-    if bl and rec["runs"]:
+    cmp_dir = compare_base(bl, a.mode)
+    if cmp_dir and rec["runs"]:
         try:
-            base_rec = json.loads((REVIEW / bl["result"] / "result.json").read_text(encoding="utf-8"))
-            rec["baseline"], rec["baseline_version"] = bl["result"], bl.get("version")
+            base_rec = json.loads((REVIEW / cmp_dir / "result.json").read_text(encoding="utf-8"))
+            rec["baseline"], rec["baseline_version"] = cmp_dir, base_rec.get("version")
             rec["regress"] = compare(rec, base_rec)
         except Exception as e:
             say("기준점 결과를 읽지 못했다:", e)
+    elif rec["runs"]:
+        say("견줄 같은 종류(%s) 시험 결과가 아직 없다 — 이번 결과가 다음 비교 기준이 된다" % a.mode)
     write_summary(out, rec)
     # 묶음 전체를 돌려 통과했을 때만 기준점을 옮긴다(일부 대상·설치만 확인은 기준이 못 된다)
     full = not a.cases and not (a.mode == "install" and a.no_suite)
