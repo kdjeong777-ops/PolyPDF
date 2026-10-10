@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-10 15:01+0000\n"
+"POT-Creation-Date: 2026-10-10 15:09+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -770,6 +770,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "블럭설정 후 텍스트 복사"
+msgstr ""
+
+#: viewer/app.py
+msgid "여기에 서명…"
 msgstr ""
 
 #: viewer/app.py

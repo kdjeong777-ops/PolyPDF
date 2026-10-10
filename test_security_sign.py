@@ -11,6 +11,7 @@ D. 실제 MainWindow — 도구 메뉴 '🔏 전자서명' 구역·크롭 오른
 E. 저장 가드(§4) — 서명된 파일에 `_finalize_save`: 새 파일로 / 취소 / 덮어쓰기, 서명 자체 저장은 묻지 않는다
 G. 대화상자 — 디지털 ID 창·서명 그림 창·서명 패널
 H. 서명 창 겉모양 미리보기 — 끈 상자 비율·배경에서·바꾸면 다시(S8)
+I. 본문 우클릭 '여기에 서명…' — 실제 메뉴 처리기, 누른 자리에 기본 크기(S6)
 F. 비밀번호가 설정·ID 목록·Hello 보관 파일 어디에도 평문으로 없다(§6.4)
 """
 import os, sys, tempfile, shutil, time, json
@@ -315,6 +316,38 @@ try:
     chk(pm2 is not None and _dark(pm2) > _dark(pm1 or pm2), "H2 사유를 켜고 넣으면 다시 그린다(글자가 늘어남)",
         "%s → %s" % (_dark(pm1) if pm1 else None, _dark(pm2) if pm2 else None))
     sd.stop_preview(); sd.close()
+
+    # ── I. 본문 우클릭 '여기에 서명…'(S6) — 실제 메뉴 처리기로, 누른 자리가 가운데인 기본 크기 ──
+    from PyQt6.QtWidgets import QMenu
+    here = root / "우클릭.pdf"
+    shutil.copy(src, here)
+    mw.open_pdfs([str(here)]); spin(0.8)
+    mv = mw.main_view
+    mv.go_to_page(0); spin(0.3)
+    z = mv._zoom or 1.0
+    want_pt = (200.0, 300.0)                          # 쪽 좌표(pt)
+    gpos = mv.view.viewport().mapToGlobal(mv.view.mapFromScene(want_pt[0] * z, want_pt[1] * z))
+    _orig_menu_exec = QMenu.exec
+    labels_seen = []
+
+    def _pick_sign_here(self, *a, **k):
+        labels_seen.extend(x.text() for x in self.actions())
+        return next((x for x in self.actions() if x.text() == "여기에 서명…"), None)
+    QMenu.exec = _pick_sign_here
+    picked["text"] = "그림 없이"
+    try:
+        mw._on_viewer_context_menu(gpos); spin(1.5)
+    finally:
+        QMenu.exec = _orig_menu_exec
+    chk("여기에 서명…" in labels_seen, "I1 본문 우클릭 메뉴에 '여기에 서명…'", str(labels_seen[:8]))
+    dh = fitz.open(str(here))
+    ws = [w.rect for w in dh[0].widgets()]
+    dh.close()
+    cx = (ws[0].x0 + ws[0].x1) / 2 if ws else -1
+    cy = (ws[0].y0 + ws[0].y1) / 2 if ws else -1
+    chk(sc.is_signed_file(here) and abs(cx - want_pt[0]) < 3 and abs(cy - want_pt[1]) < 3
+        and abs(ws[0].width - 50 / 25.4 * 72) < 1,
+        "I2 끌기 없이 누른 자리를 가운데로 기본 크기(폭 50mm) 서명", str(ws))
     QMessageBox.exec = orig_exec
 except Exception:
     import traceback

@@ -82,8 +82,9 @@ class SignMixin:
         dlg.exec()
         return dlg.saved_name
 
-    def action_sign_pdf(self):
-        """도구 '서명' — 사전 점검 뒤 본문에서 자리를 끌게 한다(SOT §3)."""
+    def action_sign_pdf(self, at_scene=None):
+        """도구 '서명' — 사전 점검 뒤 본문에서 자리를 끌게 한다(SOT §3).
+        `at_scene`(scene 점, 본문 우클릭 '여기에 서명…')이면 끌지 않고 그 자리에 기본 크기로 바로 서명 창(S6)."""
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not (cur and str(cur).lower().endswith(".pdf") and getattr(mv, "_doc", None) is not None):
@@ -114,6 +115,10 @@ class SignMixin:
             elif c is not b_skip:
                 return
         self._sign_pending = str(cur)
+        if at_scene is not None:
+            from PyQt6.QtCore import QRectF
+            self._on_sign_region(QRectF(at_scene, at_scene), view=mv)     # 크기 0 = 클릭 → 기본 크기(_sign_box_fit)
+            return
         mv.view.arm_block_select(True, purpose="sign")
         self.status.showMessage(tr("서명할 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."), 8000)
 

@@ -4780,6 +4780,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   썸네일을 열지 않고도 보고 있는 쪽을 바로 돌릴 수 있게. 대상은 현재 페이지.
         act_rot_l = menu.addAction(tr('왼쪽 90° 회전 (p.{page})').format(page=page))
         act_rot_r = menu.addAction(tr('오른쪽 90° 회전 (p.{page})').format(page=page))
+        # 261010-26(보안 SOT §3·S6): 누른 자리에 기본 크기로 바로 서명 창
+        act_sign_here = menu.addAction(tr("여기에 서명…"))
         menu.addSeparator()
         # 260618-27: 1단=‘2단 보기’(진입), 2단=현재 창 기준 ‘반대 창으로 복사’.
         #   1창(좌,active 0)→‘2창으로 복사’, 2창(우,active 1)→‘1창으로 복사’.
@@ -4879,6 +4881,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.main_view.arm_text_selection()
             self.status.showMessage(
                 tr("블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."), 5000)
+            return
+        if chosen is act_sign_here:
+            try:
+                mv = self.main_view
+                vp = mv.view.viewport().mapFromGlobal(global_pos)
+                self.action_sign_pdf(at_scene=mv.view.mapToScene(vp))
+            except Exception:
+                pass
             return
         if chosen in (act_rot_l, act_rot_r):        # 260908-1
             self._rotate_pages([page - 1], -90 if chosen is act_rot_l else +90)
