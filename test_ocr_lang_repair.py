@@ -56,8 +56,17 @@ print("=== (2)(3) 어느 tessdata 를 쓰나 ===")
 from viewer.study import ocr as so
 chk(hasattr(so, "user_tessdata_dir"), "(3) 쓰기 권한 폴더를 안다")
 chk(hasattr(so, "repair_langs"), "(4) 고치는 길이 있다")
-chk("LOCALAPPDATA" in inspect.getsource(so.user_tessdata_dir),
-    "(3) 사용자 폴더는 LOCALAPPDATA 아래다")
+# 261010-4: 소스 글자가 아니라 실제 돌려주는 경로로 본다 — beta.222 에서 `local_data_dir()` 를 거치게 바뀌자
+#   (휴대용이면 데이터 폴더 안, 마스터 §14.9) 소스에 'LOCALAPPDATA' 가 없어져 동작은 같은데 이 검사만 실패했다.
+from viewer import settings_store as _ss
+_old = _ss.PORTABLE
+_ss.PORTABLE = False
+try:
+    _la = Path(os.environ.get("LOCALAPPDATA") or str(Path.home()))
+    _ut = so.user_tessdata_dir()
+    chk(_ut == _la / "PolyPDF" / "tessdata", "(3) 사용자 폴더는 LOCALAPPDATA 아래다", _ut)
+finally:
+    _ss.PORTABLE = _old
 
 tmp = Path(tempfile.mkdtemp(prefix="polypdf_td_"))
 try:

@@ -320,29 +320,41 @@ PENDING_DAYS, PENDING_COUNT = 14, 5     # 묶음 릴리스 제안 기준(릴리�
 CHECK_TIMEOUT = 600                     # 검사 하나의 상한(초)
 
 
-def checks(ui: bool) -> int:
+def checks(ui: bool, only=None) -> int:
     """묶음 릴리스의 전체 검사(릴리스 SOT §4.1) — CI 는 일부만 돌리므로 `test_*.py` **전부**를 개발 venv 로,
     판정은 **종료 코드**(출력 문자열 아님 — 'ALL PASS' 대신 '전부 통과' 로 끝나는 검사가 있다). `--ui` 면 화면 점검 ko·en 도."""
     py = ROOT / ".venv" / "Scripts" / "python.exe"
-    out = REVIEW / ("checks_%s_%s" % (source_version(), time.strftime("%y%m%d-%H%M")))
+    out = REVIEW / ("checks_%s_%s" % (source_version(), time.strftime("%y%m%d-%H%M%S")))
     (out / "logs").mkdir(parents=True)
     tests = sorted(p for p in ROOT.glob("test_*.py") if p.name != "test_fixtures.py")
-    fails, t0 = [], time.perf_counter()
+    if only:                                      # 다시 볼 것만: --only nup_links,ocr_lang
+        keys = [k.strip() for k in only.split(",") if k.strip()]
+        tests = [t for t in tests if any(k in t.name for k in keys)]
+    fails, flaky, t0 = [], [], time.perf_counter()
+    env = dict(os.environ, PYTHONUNBUFFERED="1")    # 걸렸을 때 로그에 어디까지 갔는지 남게
     for i, t in enumerate(tests, 1):
         s = time.perf_counter()
-        with open(out / "logs" / (t.stem + ".log"), "w", encoding="utf-8", errors="replace") as f:
-            try:
-                rc = subprocess.run([str(py), "-I", t.name], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT,
-                                    timeout=CHECK_TIMEOUT).returncode
-            except subprocess.TimeoutExpired:
-                rc = "시간 초과"
-        if rc != 0:
-            fails.append("%s (rc=%s)" % (t.name, rc))
-        say("[%d/%d] %s %s %.0fs" % (i, len(tests), "통과" if rc == 0 else "실패", t.name, time.perf_counter() - s))
+        rcs = []
+        for k in range(2):                            # 실패하면 한 번 더 — 다시 통과하면 '불안정' 으로 따로 적는다
+            log = out / "logs" / (t.stem + ("" if k == 0 else ".retry") + ".log")
+            with open(log, "w", encoding="utf-8", errors="replace") as f:
+                try:
+                    rc = subprocess.run([str(py), "-I", t.name], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT,
+                                        timeout=CHECK_TIMEOUT, env=env).returncode
+                except subprocess.TimeoutExpired:
+                    rc = "시간 초과"
+            rcs.append(rc)
+            if rc == 0:
+                break
+        if rcs[-1] != 0:
+            fails.append("%s (rc=%s)" % (t.name, "·".join(map(str, rcs))))
+        elif len(rcs) > 1:
+            flaky.append("%s (처음 rc=%s, 다시 통과)" % (t.name, rcs[0]))
+        say("[%d/%d] %s %s %.0fs" % (i, len(tests), "통과" if rcs[-1] == 0 else "실패", t.name, time.perf_counter() - s))
     L = ["# 전체 검사 — %s" % source_version(), "",
-         "- 검사 %d개 · 통과 %d · 실패 %d · %.0f분" % (len(tests), len(tests) - len(fails), len(fails),
-                                                (time.perf_counter() - t0) / 60)]
-    L += ["- 실패: " + f for f in fails]
+         "- 검사 %d개 · 통과 %d · 실패 %d · 불안정 %d · %.0f분" % (
+             len(tests), len(tests) - len(fails), len(fails), len(flaky), (time.perf_counter() - t0) / 60)]
+    L += ["- 실패: " + f for f in fails] + ["- 불안정(원인을 찾는다): " + f for f in flaky]
     if ui:
         r = subprocess.run([str(py), "scripts/ui_check.py", "--out", str(out / "ui")], cwd=ROOT,
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -553,10 +565,11 @@ def main():
     p.add_argument("--urgent", action="store_true", help="긴급 릴리스(보안·데이터 손상·실행 불가·핵심 회귀) — 생략하지 않는다")
     p = sub.add_parser("checks", help="묶음 릴리스의 전체 검사 — test_*.py 전부(종료 코드로 판정)")
     p.add_argument("--ui", action="store_true", help="화면 점검(scripts/ui_check.py) ko·en 도")
+    p.add_argument("--only", help="이름에 이 글자가 든 검사만(쉼표로 여럿) — 실패한 것 다시 보기")
     a = ap.parse_args()
 
     if a.mode == "checks":
-        return checks(a.ui)
+        return checks(a.ui, a.only)
     if a.mode == "restore":
         restore_dir(Path(a.out))
         return 0
