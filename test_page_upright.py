@@ -70,7 +70,7 @@ try:
     for offset in (False, True):
         for crop in (False, True):
             for prot, vrot in ((90, 0), (0, 90), (90, 90), (180, 0), (0, 270), (270, 180)):
-                f = tmp / "a.pdf"
+                f = tmp / f"a_{int(offset)}{int(crop)}_{prot}_{vrot}.pdf"   # Windows: 앞 판의 d 가 열려 있어 같은 이름은 덮어쓰지 못한다
                 mk(f, offset, crop, prot)
                 d = fitz.open(str(f)); p = d[0]
                 p.set_rotation((prot + vrot) % 360)

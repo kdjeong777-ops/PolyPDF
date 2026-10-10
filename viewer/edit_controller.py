@@ -349,8 +349,15 @@ class EditMixin:
                 QMessageBox.warning(self, tr("저장 실패"), str(e))
             return
         # 구운 꾸밈·사진은 이제 PDF 안에 있다 — 옆 파일에서 비워 두 번 그려지지 않게. 저장 전 크롭도 끝.
+        #   서명 가드에서 [새 파일로] 를 골랐으면 원본은 그대로라 원본의 꾸밈·회전·크롭도 그대로 둔다(261011-1).
+        same = True
         try:
-            st = self._ensure_page_meta_store()
+            import os as _os
+            same = _os.path.normcase(_os.path.abspath(str(final))) == _os.path.normcase(_os.path.abspath(str(src)))
+        except Exception:
+            pass
+        try:
+            st = self._ensure_page_meta_store() if same else None
             if st is not None:
                 st.clear_drawings(str(src)); st.clear_images(str(src))
                 st.clear_rotation(str(src))          # 261010-24: 보기 회전도 PDF 로 들어갔다 — 두 번 돌지 않게
@@ -358,8 +365,9 @@ class EditMixin:
         except Exception:
             pass
         try:
-            from viewer import page_crop as _pc
-            _pc.clear_pending(src)
+            if same:
+                from viewer import page_crop as _pc
+                _pc.clear_pending(src)
         except Exception:
             pass
         if getattr(self, "_edit_snap", None) is not None:

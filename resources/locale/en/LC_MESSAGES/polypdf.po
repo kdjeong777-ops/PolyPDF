@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 16:11+0000\n"
+"POT-Creation-Date: 2026-10-11 01:45+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1604,6 +1604,10 @@ msgid "화면캡처.png"
 msgstr "Screen capture.png"
 
 #: viewer/app.py
+msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
+msgstr "Save cancelled — the signed original is unchanged."
+
+#: viewer/app.py
 #, python-brace-format
 msgid "책갈피 {n}개 저장 중..."
 msgstr "Saving {n} bookmarks..."
@@ -1717,10 +1721,6 @@ msgstr ""
 #, python-brace-format
 msgid "알 수 없는 요청: {op}"
 msgstr "Unknown request: {op}"
-
-#: viewer/app.py
-msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
-msgstr "Save cancelled — the signed original is unchanged."
 
 #: viewer/app.py
 #, python-brace-format
@@ -3492,6 +3492,10 @@ msgstr "Empty signature field created: {name}"
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "Windows Hello 확인"
 msgstr "Windows Hello Verification"
+
+#: viewer/sign_controller.py
+msgid "인증서 준비 중"
+msgstr "Preparing certificate"
 
 #: viewer/sign_controller.py
 msgid "서명 중"

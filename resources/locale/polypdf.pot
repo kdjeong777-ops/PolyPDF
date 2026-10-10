@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-10 16:11+0000\n"
+"POT-Creation-Date: 2026-10-11 01:45+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1562,6 +1562,10 @@ msgid "화면캡처.png"
 msgstr ""
 
 #: viewer/app.py
+msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/app.py
 #, python-brace-format
 msgid "책갈피 {n}개 저장 중..."
 msgstr ""
@@ -1669,10 +1673,6 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "알 수 없는 요청: {op}"
-msgstr ""
-
-#: viewer/app.py
-msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
 msgstr ""
 
 #: viewer/app.py
@@ -3343,6 +3343,10 @@ msgstr ""
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "Windows Hello 확인"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "인증서 준비 중"
 msgstr ""
 
 #: viewer/sign_controller.py

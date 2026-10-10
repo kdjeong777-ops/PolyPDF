@@ -78,7 +78,7 @@ def _cert_info(cert) -> IdInfo:
                   org=_get(NameOID.ORGANIZATION_NAME), not_after=na.strftime("%Y-%m-%d"))
 
 
-def _pfx_bytes(key, cert, friendly: str, password: str) -> bytes:
+def _pfx_bytes(key, cert, friendly: str, password: str, cas=None) -> bytes:
     """PBES2 + AES-256-CBC + PBKDF2-SHA256 으로 잠근 PKCS#12 (SOT §3.2 — 3DES/RC2 금지)."""
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.serialization import pkcs12
@@ -87,7 +87,7 @@ def _pfx_bytes(key, cert, friendly: str, password: str) -> bytes:
            .key_cert_algorithm(pkcs12.PBES.PBESv2SHA256AndAES256CBC)
            .hmac_hash(hashes.SHA256())
            .build(password.encode("utf-8")))
-    return pkcs12.serialize_key_and_certificates((friendly or "PolyPDF").encode("utf-8"), key, cert, None, enc)
+    return pkcs12.serialize_key_and_certificates((friendly or "PolyPDF").encode("utf-8"), key, cert, list(cas) if cas else None, enc)
 
 
 def create_id(name: str, password: str, *, email: str = "", org: str = "",
@@ -157,8 +157,9 @@ def check_pfx(data: bytes, password: str) -> IdInfo:
 def normalize_pfx(data: bytes, password: str) -> tuple[bytes, IdInfo]:
     """가져온 `.pfx` 를 우리 형식(PBES2-AES256)으로 다시 잠근다 — 같은 비밀번호(SOT §3.2)."""
     info = check_pfx(data, password)
-    key, cert, _extra = load_pfx(data, password)
-    return _pfx_bytes(key, cert, info.name, password), info
+    key, cert, extra = load_pfx(data, password)
+    # 기관이 준 중간 인증서는 남긴다 — 버리면 서명에 체인이 빠져 Acrobat 이 '신원 미확인' 으로 본다(261011-1)
+    return _pfx_bytes(key, cert, info.name, password, cas=extra), info
 
 
 def pfx_info(data: bytes, password: str) -> IdInfo:

@@ -35,7 +35,22 @@ def load() -> dict:
     p = root() / INDEX
     data = _empty()
     try:
-        raw = json.loads(p.read_text(encoding="utf-8"))
+        text = None
+        for i in range(5):
+            try:
+                text = p.read_text(encoding="utf-8")
+                break
+            except FileNotFoundError:
+                raise
+            except OSError:
+                # 다른 창·백신이 잠깐 잡은 것 — '깨진 목록' 이 아니다(261011-1). 끝내 못 읽으면 표시해
+                #   save() 가 빈 목록으로 덮어쓰지 않게 한다(ID·신뢰 목록이 날아갔다).
+                if i == 4:
+                    data["_unreadable"] = True
+                    return data
+                import time
+                time.sleep(0.05)
+        raw = json.loads(text)
         if isinstance(raw, dict):
             for k, v in raw.items():
                 if k in data and isinstance(v, type(data[k])):
@@ -53,6 +68,8 @@ def load() -> dict:
 
 def save(data: dict) -> None:
     """원자적 쓰기(임시 파일 + os.replace) — 마스터 §7.2 암호 기억과 같은 규칙."""
+    if data.get("_unreadable"):
+        raise OSError("signing.json 을 읽지 못했습니다 — 목록을 지키려고 쓰지 않습니다")
     p = root() / INDEX
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

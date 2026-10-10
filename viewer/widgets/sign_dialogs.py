@@ -601,10 +601,13 @@ class DigitalIdDialog(QDialog):
             found = self._run(sign_npki.find, tr("공동인증서 찾는 중"))
         except Exception:
             found = []
-        dlg = NpkiDialog(self, found)
-        if dlg.exec() != QDialog.DialogCode.Accepted or dlg.chosen is None:
-            return
-        c, pw = dlg.chosen, dlg.password()
+        dlg = NpkiDialog(self, found, runner=self._run)
+        try:
+            if dlg.exec() != QDialog.DialogCode.Accepted or dlg.chosen is None:
+                return
+            c, pw = dlg.chosen, dlg.password()
+        finally:
+            dlg.deleteLater()        # 비밀번호 칸을 남겨 두지 않는다(SOT §6.4, 261011-1)
         try:
             pfx, info = self._run(lambda: sign_npki.to_pfx(c.cert_path, c.key_path, pw), tr("공동인증서 확인 중"))
         except sign_core.WrongPassword:
@@ -705,8 +708,9 @@ _WHY = {"expired": tr_noop("만료"), "not_yet": tr_noop("유효 전"), "bad_usa
 class NpkiDialog(QDialog):
     """공동인증서 고르기 — 찾은 목록 + [폴더 고르기…] + 인증서 비밀번호(보안 SOT §3.8)."""
 
-    def __init__(self, parent=None, found=()):
+    def __init__(self, parent=None, found=(), runner=None):
         super().__init__(parent)
+        self._run = runner or (lambda fn, _t: fn())
         self.setWindowTitle(tr("공동인증서 가져오기"))
         self.chosen = None
         v = QVBoxLayout(self)
@@ -764,7 +768,10 @@ class NpkiDialog(QDialog):
         d = QFileDialog.getExistingDirectory(self, tr("signCert.der 가 있는 폴더"))
         if not d:
             return
-        got = sign_npki.find([d])
+        try:
+            got = self._run(lambda: sign_npki.find([d]), tr("공동인증서 찾는 중"))   # 폴더 훑기는 배경(SOT §10)
+        except Exception:
+            got = []
         if not got:
             QMessageBox.information(self, self.windowTitle(), tr("이 폴더(와 그 아래 기관·USER 폴더)에서 signCert.der·signPri.key 짝을 찾지 못했습니다."))
             return

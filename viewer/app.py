@@ -2457,6 +2457,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
 
+        # 261011-1(보안 SOT §4): 이 길은 워커가 원본을 직접 바꿔 `_finalize_save` 를 거치지 않는다 —
+        #   서명된 PDF 면 같은 가드로 묻는다. [새 파일로] 는 이 실행만 '_bookmarked.pdf' 로(저장한 선택값은 그대로).
+        if opts.get("overwrite") and opts.get("save_pdf"):
+            g = self._sign_guard(in_pdf)
+            if g == "cancel":
+                self.status.showMessage(tr("저장을 취소했습니다 — 서명한 원본은 그대로입니다."), 5000)
+                return
+            if g == "new":
+                opts = dict(opts, overwrite=False)
+
         # 260606-4: '현재 PDF에 저장'이고 그 파일이 메인에 열려있으면 핸들 해제(덮어쓰기 가능)
         if opts.get("overwrite"):
             # 안전장치: 기존 책갈피가 있으면 '모두 대체됨'을 경고·확인

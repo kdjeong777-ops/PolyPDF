@@ -18,6 +18,7 @@ O. 3단계 빈 서명 칸 — 만들기·찾기·채우기(인증 문서 포함)
 P. 3단계 공동인증서 — 같은 형식으로 만든 가짜 signCert.der/signPri.key 풀기·거부·가져와 서명(§3.8)
 Q. 3단계 Windows 인증서 저장소 — 가짜 저장소로 목록·참조 보관·키 없이 서명·취소·사라짐(§3.9)
 F. 비밀번호가 설정·ID 목록·Hello 보관 파일 어디에도 평문으로 없다(§6.4)
+R. 검토 보완(261011-1) — 책갈피 '현재 PDF에 저장' 도 서명 가드·signing.json 잠김은 깨진 목록이 아니다·.pfx 체인 유지·읽기 전용 폴더 임시 파일
 """
 import os, sys, tempfile, shutil, time, json
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -933,7 +934,86 @@ try:
         "Q5 저장소 ID 로 서명 — 비밀번호 칸 끔·'Windows 가 PIN' 안내, 현재 파일에 유효", str((_WinDlg.seen, rw.worst)))
     sdlg.SignDialog = _RealSign
     os.environ.pop(ws.FAKE_ENV, None)
+
+    # ── R. 검토 보완(261011-1) ─────────────────────────────────
+    # R1·R2 책갈피 자동 생성 '현재 PDF에 저장' 은 워커가 원본을 바꿔 _finalize_save 를 거치지 않는다 — 같은 가드
+    import viewer.widgets.bookmarker_dialog as _bmd
+    import viewer.app as _vapp
+    r_doc = root / "R_서명됨.pdf"
+    shutil.copy(signed, r_doc)
+    started = []
+
+    class _FakeBm(QDialog):
+        def __init__(self, *a, **k):
+            super().__init__()
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def result_options(self):
+            return {"input_pdf": str(r_doc), "save_pdf": True, "save_txt": False, "overwrite": True,
+                    "mode": "auto", "review": False}
+    _RealBm, _RealW, _RealRun = _bmd.BookmarkerDialog, _vapp.BookmarkerWorker, _vapp.run_in_thread
+    _bmd.BookmarkerDialog = _FakeBm
+    _vapp.BookmarkerWorker = lambda pdf, opts: started.append(dict(opts)) or _RealW(pdf, opts)
+    _vapp.run_in_thread = lambda *a, **k: None
+    picked["text"] = "취소"
+    mw.action_open_bookmarker()
+    chk(not started and sc.is_signed_file(r_doc), "R1 서명된 PDF 에 책갈피 '현재 PDF에 저장' → 묻고, 취소면 시작하지 않는다", str(started))
+    picked["text"] = "새 파일로"
+    mw.action_open_bookmarker()
+    chk(len(started) == 1 and started[0].get("overwrite") is False and mw._prefs.get("bookmarker_overwrite") is True,
+        "R2 [새 파일로] → 이 실행만 새 PDF(_bookmarked), 저장한 선택값은 그대로", str(started))
+    _bmd.BookmarkerDialog, _vapp.BookmarkerWorker, _vapp.run_in_thread = _RealBm, _RealW, _RealRun
     QMessageBox.exec = orig_exec
+
+    # R3 signing.json 을 잠깐 못 읽어도(다른 창·백신) '깨진 목록' 으로 옮기거나 빈 목록으로 덮어쓰지 않는다
+    idx = st.root() / st.INDEX
+    before = idx.read_bytes()
+    _rt = Path.read_text
+
+    def _locked(self, *a, **k):
+        if self.name == st.INDEX:
+            raise PermissionError(13, "locked")
+        return _rt(self, *a, **k)
+    Path.read_text = _locked
+    try:
+        dd_ = st.load()
+        try:
+            st.save(dd_); wrote = True
+        except OSError:
+            wrote = False
+    finally:
+        Path.read_text = _rt
+    chk(dd_.get("_unreadable") and not wrote and idx.read_bytes() == before and not idx.with_suffix(".broken.json").exists()
+        and st.load().get("ids"), "R3 signing.json 을 못 읽으면 표시만 — 옮기지도 덮어쓰지도 않는다")
+
+    # R4 기관 .pfx 의 중간 인증서(체인)는 가져와도 남는다 — 버리면 Acrobat 이 '신원 미확인'
+    import datetime as _dt
+    from cryptography import x509 as _x
+    from cryptography.x509.oid import NameOID as _N
+    from cryptography.hazmat.primitives import hashes as _h, serialization as _ser
+    from cryptography.hazmat.primitives.serialization import pkcs12 as _p12
+    from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+    _ca_k = _rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    _ee_k = _rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    _now = _dt.datetime.now(_dt.timezone.utc)
+    _cn = lambda n: _x.Name([_x.NameAttribute(_N.COMMON_NAME, n)])
+    _ca = (_x.CertificateBuilder().subject_name(_cn("Test CA")).issuer_name(_cn("Test CA")).public_key(_ca_k.public_key())
+           .serial_number(1).not_valid_before(_now - _dt.timedelta(days=1)).not_valid_after(_now + _dt.timedelta(days=99))
+           .add_extension(_x.BasicConstraints(ca=True, path_length=None), critical=True).sign(_ca_k, _h.SHA256()))
+    _ee = (_x.CertificateBuilder().subject_name(_cn("기관 발급")).issuer_name(_cn("Test CA")).public_key(_ee_k.public_key())
+           .serial_number(2).not_valid_before(_now - _dt.timedelta(days=1)).not_valid_after(_now + _dt.timedelta(days=99))
+           .sign(_ca_k, _h.SHA256()))
+    _raw = _p12.serialize_key_and_certificates(b"x", _ee_k, _ee, [_ca], _ser.BestAvailableEncryption(PW.encode()))
+    _norm, _inf = sc.normalize_pfx(_raw, PW)
+    _k2, _c2, _extra2 = sc.load_pfx(_norm, PW)
+    chk(len(_extra2) == 1 and _extra2[0].subject == _ca.subject, "R4 가져온 .pfx 의 중간 인증서를 남긴다", str(len(_extra2)))
+
+    # R5 원본 폴더에 임시 파일을 못 만들면(읽기 전용) 시스템 임시 폴더로 — 슬롯 예외로 끝나지 않는다
+    _t = mw._sign_tmp(str(tmp / "없는폴더" / "a.pdf"))
+    chk(Path(_t).exists() and Path(_t).parent != tmp / "없는폴더", "R5 원본 폴더에 못 쓰면 임시 파일은 시스템 임시 폴더", _t)
+    os.remove(_t)
 except Exception:
     import traceback
     traceback.print_exc()

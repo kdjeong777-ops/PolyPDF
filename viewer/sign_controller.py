@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -79,7 +80,11 @@ class SignMixin:
     # ---- 메뉴 동작 -----------------------------------------------------------
     def action_digital_ids(self):
         from viewer.widgets.sign_dialogs import DigitalIdDialog
-        DigitalIdDialog(self, runner=self._sign_bg, hello_ok=self._sign_hello_ready()).exec()
+        dlg = DigitalIdDialog(self, runner=self._sign_bg, hello_ok=self._sign_hello_ready())
+        try:
+            dlg.exec()
+        finally:
+            dlg.deleteLater()        # 안의 비밀번호 칸까지 — 창마다 남겨 두지 않는다(SOT §6.4, 261011-1)
 
     def action_sign_image(self) -> str:
         from viewer.widgets.sign_dialogs import SignImageDialog
@@ -239,6 +244,8 @@ class SignMixin:
             self._sign_dialog_loop(cur, pidx, r, dlg, mv)
         finally:
             dlg.stop_preview()
+            dlg.ed_pw.clear()        # 입력한 비밀번호는 서명이 끝나면 버린다(SOT §6.4, 261011-1)
+            dlg.deleteLater()
 
     # ---- 빈 서명 칸 — SOT §3.7 -----------------------------------------------
     def _sign_choose_field(self, empties, certified: int):
@@ -329,8 +336,7 @@ class SignMixin:
         name, lock, certs = fdlg.name(), fdlg.chk_lock.isChecked(), ([fdlg.cert_der] if fdlg.cert_der else [])
         box = sign_core.page_box_to_pdf(doc[pidx], r)
         doc_pw, remembered = self._sign_doc_password(cur, doc)
-        fd, tmp = tempfile.mkstemp(suffix=".polypdf-sign", prefix="~", dir=str(Path(cur).parent))
-        os.close(fd)
+        tmp = self._sign_tmp(cur)
         try:
             got = self._sign_bg(lambda: sign_core.add_empty_field(cur, tmp, page_index=pidx, box_pdf=box,
                                                                   name=name, doc_password=doc_pw,
@@ -439,7 +445,9 @@ class SignMixin:
             # Windows 인증서 저장소(SOT §3.9) — 키는 Windows 안에, PIN 은 Windows 가 묻는다
             from viewer import sign_winstore
             try:
-                signer = sign_winstore.make_signer(entry.get("thumb", ""), hwnd=int(self.winId()))
+                # 저장소 훑기·pyHanko 첫 import 가 있어 배경에서(SOT §10, 261011-1)
+                thumb, hwnd = entry.get("thumb", ""), int(self.winId())
+                signer = self._sign_bg(lambda: sign_winstore.make_signer(thumb, hwnd=hwnd), tr("인증서 준비 중"))
             except sign_winstore.StoreError as e:
                 QMessageBox.warning(self, tr("서명"), self._sign_store_msg(e))
                 return "fail"
@@ -484,9 +492,7 @@ class SignMixin:
         app = dlg.appearance()
         tsa = dlg.tsa_url()
         doc_pw, remembered = self._sign_doc_password(cur, doc)
-        # 같은 폴더(바꿔치기가 원자적이게), `.pdf` 로 끝나지 않게(목록·색인에 안 뜬다 — 마스터 §4.7.5 백업과 같은 규칙)
-        fd, tmp = tempfile.mkstemp(suffix=".polypdf-sign", prefix="~", dir=str(Path(cur).parent))
-        os.close(fd)
+        tmp = self._sign_tmp(cur)
         reason, loc = dlg.ed_reason.text(), dlg.ed_loc.text()
         try:
             self._sign_bg(lambda: sign_core.sign_pdf(cur, tmp, pfx, pw, targets=targets or None, appearance=app,
@@ -568,6 +574,21 @@ class SignMixin:
             pass
 
     @staticmethod
+    def _sign_tmp(cur: str) -> str:
+        """서명 결과 임시 파일 — 원본과 같은 폴더(바꿔치기가 원자적이게), `.pdf` 로 끝나지 않게(목록·색인에 안 뜬다 —
+        마스터 §4.7.5 백업과 같은 규칙). 그 폴더에 쓸 수 없으면(읽기 전용 공유 폴더 등) 시스템 임시 폴더 —
+        '다른 이름으로 서명' 은 그래도 된다(261011-1)."""
+        for d in (str(Path(cur).parent), None):
+            try:
+                fd, tmp = tempfile.mkstemp(suffix=".polypdf-sign", prefix="~", dir=d)
+                os.close(fd)
+                return tmp
+            except OSError:
+                if d is None:
+                    raise
+        raise OSError(cur)
+
+    @staticmethod
     def _sign_unlink(p):
         try:
             os.remove(p)
@@ -586,7 +607,8 @@ class SignMixin:
             if not out.lower().endswith(".pdf"):
                 out += ".pdf"
             if os.path.normcase(os.path.abspath(out)) != os.path.normcase(os.path.abspath(cur)):
-                err = self._file_op_bg(lambda: os.replace(tmp, out), tr("저장 중: {name}").format(name=Path(out).name))
+                err = self._file_op_bg(lambda: shutil.move(tmp, out),   # 다른 드라이브여도(os.replace 는 WinError 17, 261011-1)
+                                        tr("저장 중: {name}").format(name=Path(out).name))
                 if err is not None:
                     self._sign_unlink(tmp)
                     QMessageBox.warning(self, tr("서명"), tr("저장하지 못했습니다: {e}").format(e=err))
