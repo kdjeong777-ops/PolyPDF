@@ -793,6 +793,92 @@ class NpkiDialog(QDialog):
         self.accept()
 
 
+class SigFieldDialog(QDialog):
+    """빈 서명 칸 설정 — 이름 · 서명할 사람(누구나 / 인증서로 지정) · 서명하면 모든 칸 잠금(보안 SOT §3.7)."""
+
+    def __init__(self, parent=None, default_name: str = "Signature1", used=()):
+        super().__init__(parent)
+        self.setWindowTitle(tr("빈 서명 칸"))
+        self._used = set(used)
+        self.cert_der = b""
+        v = QVBoxLayout(self)
+        form = QFormLayout()
+        self.ed_name = QLineEdit(default_name)
+        self.ed_name.setPlaceholderText(tr("예: 검토자, 승인자"))
+        form.addRow(tr("칸 이름"), self.ed_name)
+        from PyQt6.QtWidgets import QWidget
+        row = QWidget()
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(0, 0, 0, 0)
+        self.cmb_who = QComboBox()
+        self.cmb_who.addItem(tr("누구나"), "any")
+        self.cmb_who.addItem(tr("인증서로 지정…"), "cert")
+        self.lab_who = QLabel("")
+        rl.addWidget(self.cmb_who)
+        rl.addWidget(self.lab_who, 1)
+        form.addRow(tr("서명할 사람"), row)
+        self.chk_lock = QCheckBox(tr("이 칸에 서명하면 문서의 모든 칸을 잠금"))
+        self.chk_lock.setToolTip(tr("잠긴 뒤에는 양식 채우기와 다른 서명 칸 서명도 '변경' 이 됩니다 — 마지막 서명 칸에 쓰세요."))
+        form.addRow(tr("잠금"), self.chk_lock)
+        v.addLayout(form)
+        note = QLabel(tr("잠금은 마지막 서명 칸에 쓰세요 — 잠긴 뒤에는 다른 칸에 서명할 수 없습니다. "
+                         "서명할 사람은 그 사람이 보낸 공개 인증서(.cer)로 정합니다."))
+        note.setWordWrap(True)
+        v.addWidget(note)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self._ok)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.cmb_who.activated.connect(self._who)
+        self.resize(460, 0)
+
+    def _who(self, _i=0):
+        if self.cmb_who.currentData() != "cert":
+            self.cert_der = b""
+            self.lab_who.setText("")
+            return
+        fn, _ = QFileDialog.getOpenFileName(self, tr("서명할 사람의 공개 인증서"), "", tr("인증서 (*.cer *.crt *.der *.pem)"))
+        if not self.load_cert(fn):
+            self.cmb_who.setCurrentIndex(0)
+            self.lab_who.setText("")
+
+    def load_cert(self, fn: str) -> bool:
+        """인증서 파일을 읽어 지정한다(DER·PEM). 못 읽으면 False."""
+        if not fn:
+            return False
+        try:
+            from cryptography import x509
+            from cryptography.hazmat.primitives import serialization
+            raw = open(fn, "rb").read()
+            try:
+                c = x509.load_der_x509_certificate(raw)
+            except ValueError:
+                c = x509.load_pem_x509_certificate(raw)
+            from viewer import sign_core
+            self.cert_der = c.public_bytes(serialization.Encoding.DER)
+            self.lab_who.setText(sign_core._cert_info(c).name)
+            self.cmb_who.setCurrentIndex(1)
+            return True
+        except Exception:
+            QMessageBox.warning(self, self.windowTitle(), tr("인증서 파일을 읽지 못했습니다."))
+            return False
+
+    def name(self) -> str:
+        return self.ed_name.text().strip()
+
+    def _ok(self):
+        if not self.name():
+            QMessageBox.information(self, self.windowTitle(), tr("칸 이름을 넣으세요."))
+            return
+        if self.name() in self._used:
+            QMessageBox.information(self, self.windowTitle(), tr("같은 이름의 서명 칸이 이미 있습니다: {name}").format(name=self.name()))
+            return
+        if self.cmb_who.currentData() == "cert" and not self.cert_der:
+            QMessageBox.information(self, self.windowTitle(), tr("서명할 사람의 인증서를 고르세요."))
+            return
+        self.accept()
+
+
 class StoreCertDialog(QDialog):
     """Windows 인증서 저장소('개인')에서 개인 키가 딸린 인증서 고르기(보안 SOT §3.9)."""
 
@@ -873,7 +959,8 @@ class SignDialog(QDialog):
     PREVIEW_DPI = 110
 
     def __init__(self, parent=None, hello_ok: bool = False, file_name: str = "", box_size=(142.0, 57.0),
-                 page_count: int = 1, current_page: int = 0, can_certify: bool = True, field_name: str = ""):
+                 page_count: int = 1, current_page: int = 0, can_certify: bool = True, field_name: str = "",
+                 field_signers=(), field_lock: bool = False):
         super().__init__(parent)
         from viewer import sign_hello, sign_store
         self.setWindowTitle(tr("전자서명 — {name}").format(name=file_name) if file_name else tr("전자서명"))
@@ -886,6 +973,10 @@ class SignDialog(QDialog):
         form = QFormLayout()
         if self.field_name:
             form.addRow(tr("서명 칸"), QLabel(tr("{name} (p.{page})").format(name=self.field_name, page=int(current_page) + 1)))
+            if field_signers:
+                form.addRow(tr("서명할 사람"), QLabel(", ".join(field_signers)))
+            if field_lock:
+                form.addRow(tr("잠금"), QLabel(tr("서명하면 문서의 모든 칸이 잠깁니다")))
         self.cmb_id = QComboBox()
         for e in d["ids"]:
             self.cmb_id.addItem(f"{e.get('name', '')}" + (f" <{e['email']}>" if e.get("email") else ""), e.get("fp"))

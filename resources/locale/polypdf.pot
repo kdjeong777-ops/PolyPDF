@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-10 15:56+0000\n"
+"POT-Creation-Date: 2026-10-10 16:11+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3178,14 +3178,6 @@ msgid "빈 서명 칸 자리를 본문에서 끌어 정하세요(클릭만 하�
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "빈 서명 칸"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "칸 이름 — 서명할 사람이 알아보게(예: 검토자, 승인자)"
-msgstr ""
-
-#: viewer/sign_controller.py
 msgid "Windows 인증서 저장소에서 이 인증서를 찾지 못했습니다 — 스마트카드·USB 토큰을 꽂았는지 확인하세요."
 msgstr ""
 
@@ -3251,6 +3243,10 @@ msgstr ""
 
 #: viewer/sign_controller.py
 msgid "새 자리 끌기"
+msgstr ""
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "빈 서명 칸"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3389,6 +3385,11 @@ msgstr ""
 
 #: viewer/sign_controller.py
 #, python-brace-format
+msgid "이 칸은 지정된 사람의 인증서로만 서명할 수 있습니다: {names}"
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
 msgid ""
 "회전된 쪽이 있어 서명할 수 없습니다: p.{pages}\n"
 "'저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
@@ -3406,6 +3407,10 @@ msgstr ""
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "서명을 확인하지 못했습니다({e})."
+msgstr ""
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "인증서 파일을 읽지 못했습니다."
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3439,6 +3444,10 @@ msgstr ""
 msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."
 msgstr ""
 
+#: viewer/sign_controller.py
+msgid "고른 디지털 ID 는 이 칸에 서명할 사람으로 지정된 인증서가 아닙니다."
+msgstr ""
+
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."
 msgstr ""
@@ -3462,12 +3471,17 @@ msgstr ""
 msgid "저장 중: {name}"
 msgstr ""
 
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "이 칸에 서명하면 문서의 모든 칸이 잠겨 남은 빈 서명 칸 {n}개에 더 서명할 수 없습니다. 계속할까요?"
+msgstr ""
+
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "저장하지 못했습니다: {e}"
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "같은 이름의 서명 칸이 이미 있습니다: {name}"
 msgstr ""
@@ -7589,6 +7603,50 @@ msgid "signCert.der 가 있는 폴더"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "예: 검토자, 승인자"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "칸 이름"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "누구나"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서로 지정…"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명할 사람"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 칸에 서명하면 문서의 모든 칸을 잠금"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잠긴 뒤에는 양식 채우기와 다른 서명 칸 서명도 '변경' 이 됩니다 — 마지막 서명 칸에 쓰세요."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잠금"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잠금은 마지막 서명 칸에 쓰세요 — 잠긴 뒤에는 다른 칸에 서명할 수 없습니다. 서명할 사람은 그 사람이 보낸 공개 인증서(.cer)로 정합니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명할 사람의 공개 인증서"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 (*.cer *.crt *.der *.pem)"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "Windows 인증서 저장소"
 msgstr ""
 
@@ -7801,10 +7859,6 @@ msgid "개인 키와 인증서가 짝이 맞지 않습니다(signCert.der·signP
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "인증서 파일을 읽지 못했습니다."
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "{name} — {issuer} · ~{until}"
 msgstr ""
@@ -7815,6 +7869,14 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "가져올 인증서를 고르세요."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "칸 이름을 넣으세요."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명할 사람의 인증서를 고르세요."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -8036,6 +8098,10 @@ msgstr ""
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "전자서명 — {name}"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명하면 문서의 모든 칸이 잠깁니다"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py

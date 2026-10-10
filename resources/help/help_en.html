@@ -213,7 +213,8 @@
     <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default). The signature image window also offers <b>Draw by Hand…</b>.</li>
   <li><b>Empty signature fields</b>: <b>Tools → Create Empty Signature Field...</b> lets you drag a place on the page and name it (e.g. Approver); the recipient then signs in that field.
     A document with empty fields shows 'empty signature field' in the band above the page, and the signature button offers <b>Sign in an empty field</b> (dragging inside a field or right-clicking in it also signs that field).
-    A document certified by its author can be signed only in its empty fields.</li>
+    A document certified by its author can be signed only in its empty fields.
+    When creating a field you can designate the <b>signer</b> by that person's public certificate (.cer), and <b>Lock all fields in the document when this field is signed</b> prevents any further change or signature after that signature (use it on the last signature field).</li>
   <li><b>Password</b>: on a PC with Windows Hello (fingerprint · PIN) the password is locked with Windows Hello when you create the ID, and signing only asks
     for Windows Hello. Without Windows Hello, keep the password in a password manager such as Google Password Manager and paste it (Ctrl+V).
     PolyPDF never stores the password in plain text.</li>

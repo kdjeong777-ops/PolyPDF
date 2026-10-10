@@ -652,6 +652,19 @@ try:
     from PyQt6.QtWidgets import QInputDialog
     _orig_gt, _orig_gi = QInputDialog.getText, QInputDialog.getItem
     QInputDialog.getText = staticmethod(lambda *a, **k: ("승인자", True))
+
+    class _FieldSet(sdlg.SigFieldDialog):
+        want = {"name": "승인자", "lock": False, "cert": ""}
+
+        def exec(self):
+            self.ed_name.setText(_FieldSet.want["name"])
+            self.chk_lock.setChecked(_FieldSet.want["lock"])
+            if _FieldSet.want["cert"]:
+                self.load_cert(_FieldSet.want["cert"])
+            self._ok()
+            return self.result()
+    _orig_sfd = sdlg.SigFieldDialog
+    sdlg.SigFieldDialog = _FieldSet
     fd_path = root / "빈칸.pdf"
     shutil.copy(blank, fd_path)
     mw.open_pdfs([str(fd_path)]); spin(0.8)
@@ -716,6 +729,62 @@ try:
     mw.action_sign_pdf(); spin(0.2)
     chk(seen_buttons and not any("새 자리 끌기" in b for b in seen_buttons[0]) and any("빈 칸에 서명" in b for b in seen_buttons[0]),
         "O9 인증 문서는 빈 칸에만 — '새 자리 끌기' 없음", str(seen_buttons[:1]))
+    # 잠금·서명할 사람(261010-31, §3.7)
+    pB_, iB_ = sc.create_id("Bob", PW)
+    cerA, cerB = tmp / "hong.cer", tmp / "bob.cer"
+    cerA.write_bytes(sc.cert_der(pfx, PW)); cerB.write_bytes(sc.cert_der(pB_, PW))
+    l1, l2 = tmp / "l1.pdf", tmp / "l2.pdf"
+    sc.add_empty_field(str(blank), str(l1), page_index=0, box_pdf=(100, 100, 300, 160), name="대표", lock=True,
+                       signer_certs=[cerA.read_bytes()])
+    sc.add_empty_field(str(l1), str(l2), page_index=0, box_pdf=(100, 300, 300, 360), name="실무")
+    _d = fitz.open(str(l2)); efl = {f.name: f for f in sc.empty_fields(_d)}; _d.close()
+    chk(efl["대표"].lock and efl["대표"].signer_fps == (info.fp,) and efl["대표"].signer_names == ("홍길동",)
+        and not efl["실무"].lock and not efl["실무"].signer_fps,
+        "O10 칸의 잠금·서명할 사람을 찾기가 읽는다", str(efl["대표"]))
+    try:
+        sc.sign_pdf(str(l2), str(tmp / "x.pdf"), pB_, PW, field="대표", appearance=ap2)
+        lerr = "signed"
+    except sc.SignError as e:
+        lerr = e.reason
+    l3, l4 = tmp / "l3.pdf", tmp / "l4.pdf"
+    sc.sign_pdf(str(l2), str(l3), pfx, PW, field="대표", appearance=ap2)
+    one = [(x.field, x.state) for x in sc.verify_pdf(str(l3), [info.fp]).sigs]
+    sc.sign_pdf(str(l3), str(l4), pB_, PW, field="실무", appearance=ap2)
+    two = [(x.field, x.state) for x in sc.verify_pdf(str(l4), [info.fp, iB_.fp]).sigs]
+    chk(lerr == "wrong_signer" and one == [("대표", sc.OK_TRUSTED)] and two == [("대표", sc.MODIFIED), ("실무", sc.OK_TRUSTED)],
+        "O11 지정한 사람만 서명(다른 ID 는 wrong_signer) · 잠금 칸 서명 뒤 다른 칸 서명은 '변경됨'", str((lerr, one, two)))
+    # 실제 흐름 — 칸 설정 창(서명할 사람 Bob·잠금) → 기본 ID(홍길동)로 채우려 하면 서명 전에 막는다
+    _FieldSet.want = {"name": "대표", "lock": True, "cert": str(cerB)}
+    lk = root / "잠금칸.pdf"
+    shutil.copy(blank, lk)
+    mw.open_pdfs([str(lk)]); spin(0.8)
+    mv = mw.main_view; mv.go_to_page(0); spin(0.3)
+    mw.action_sign_field()
+    z = mv._zoom or 1.0
+    mv.signRegionSelected.emit(QRectF(100 * z, 100 * z, 200 * z, 60 * z)); spin(1.2)
+    _d = fitz.open(str(lk)); efk = sc.empty_fields(_d); _d.close()
+    chk(len(efk) == 1 and efk[0].lock and efk[0].signer_names == ("Bob",),
+        "O12 칸 설정 창 — 서명할 사람(.cer)·잠금이 칸에 들어간다", str(efk))
+    infos = []
+    QMessageBox.information = staticmethod(lambda *a, **k: infos.append(a[2] if len(a) > 2 else ""))
+
+    class _OnceDlg(_RealSign):
+        n = 0
+
+        def exec(self):
+            _OnceDlg.n += 1
+            if _OnceDlg.n > 1:
+                return QDialog.DialogCode.Rejected
+            self.ed_pw.setText(PW); self._sign()
+            return QDialog.DialogCode.Accepted
+    sdlg.SignDialog = _OnceDlg
+    picked["text"] = "빈 칸에 서명"
+    mw.main_view.sign_band.btn.click(); spin(1.0)
+    chk(any("Bob" in t for t in infos) and not sc.is_signed_file(lk),
+        "O13 지정된 사람이 아닌 ID 로 채우면 서명 전에 막는다(파일은 그대로)", str(infos[-1:]))
+    QMessageBox.information = staticmethod(lambda *a, **k: None)
+    sdlg.SigFieldDialog = _orig_sfd
+    sdlg.SignDialog = _RealSign
     QInputDialog.getText, QInputDialog.getItem = _orig_gt, _orig_gi
 
     # ── P. 3단계 공동인증서(§3.8) ─────────────────────────────────

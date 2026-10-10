@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 15:56+0000\n"
+"POT-Creation-Date: 2026-10-10 16:11+0000\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3326,14 +3326,6 @@ msgid "빈 서명 칸 자리를 본문에서 끌어 정하세요(클릭만 하�
 msgstr "Drag on the page to place the empty signature field (a single click uses the default size)."
 
 #: viewer/sign_controller.py
-msgid "빈 서명 칸"
-msgstr "Empty signature field"
-
-#: viewer/sign_controller.py
-msgid "칸 이름 — 서명할 사람이 알아보게(예: 검토자, 승인자)"
-msgstr "Field name — so the signer can recognize it (e.g. Reviewer, Approver)"
-
-#: viewer/sign_controller.py
 msgid "Windows 인증서 저장소에서 이 인증서를 찾지 못했습니다 — 스마트카드·USB 토큰을 꽂았는지 확인하세요."
 msgstr "This certificate was not found in the Windows certificate store — check that the smart card or USB token is inserted."
 
@@ -3400,6 +3392,10 @@ msgstr "This document is certified, so you can only sign in an empty field, not 
 #: viewer/sign_controller.py
 msgid "새 자리 끌기"
 msgstr "Drag a new place"
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "빈 서명 칸"
+msgstr "Empty signature field"
 
 #: viewer/sign_controller.py
 msgid "서명 칸을 만들 PDF를 먼저 여세요."
@@ -3535,6 +3531,11 @@ msgstr "Could not retrieve the password stored with Windows Hello. Enter the pas
 msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
 msgstr "The digital ID file was not found. Import it again in the Digital IDs window."
 
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "이 칸은 지정된 사람의 인증서로만 서명할 수 있습니다: {names}"
+msgstr "This field can be signed only with the certificate of the designated person: {names}"
+
 # | 세운 뒤 서명하세요."
 #: viewer/sign_controller.py
 #, python-brace-format
@@ -3558,6 +3559,10 @@ msgstr "'{name}' has a digital signature. Overwriting this file will invalidate 
 #, python-brace-format
 msgid "서명을 확인하지 못했습니다({e})."
 msgstr "Could not verify the signature ({e})."
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "인증서 파일을 읽지 못했습니다."
+msgstr "Could not read the certificate file."
 
 #: viewer/sign_controller.py
 msgid "작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."
@@ -3590,6 +3595,10 @@ msgstr "Signing ({n} pages)"
 msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."
 msgstr "The author certified this document — adding a new signature field would be a change the certification does not allow. If the document has empty signature fields, you can sign only in those."
 
+#: viewer/sign_controller.py
+msgid "고른 디지털 ID 는 이 칸에 서명할 사람으로 지정된 인증서가 아닙니다."
+msgstr "The selected digital ID is not the certificate designated to sign this field."
+
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."
 msgstr "A document that already has signatures cannot be certified (certification must be the first signature)."
@@ -3613,12 +3622,17 @@ msgstr "{stem}_signed.pdf"
 msgid "저장 중: {name}"
 msgstr "Saving: {name}"
 
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "이 칸에 서명하면 문서의 모든 칸이 잠겨 남은 빈 서명 칸 {n}개에 더 서명할 수 없습니다. 계속할까요?"
+msgstr "Signing this field locks all fields in the document, so the remaining {n} empty signature field(s) can no longer be signed. Continue?"
+
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "저장하지 못했습니다: {e}"
 msgstr "Could not save: {e}"
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "같은 이름의 서명 칸이 이미 있습니다: {name}"
 msgstr "A signature field with the same name already exists: {name}"
@@ -7851,6 +7865,50 @@ msgid "signCert.der 가 있는 폴더"
 msgstr "Folder containing signCert.der"
 
 #: viewer/widgets/sign_dialogs.py
+msgid "예: 검토자, 승인자"
+msgstr "e.g. Reviewer, Approver"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "칸 이름"
+msgstr "Field name"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "누구나"
+msgstr "Anyone"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서로 지정…"
+msgstr "Designate by certificate…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명할 사람"
+msgstr "Signer"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 칸에 서명하면 문서의 모든 칸을 잠금"
+msgstr "Lock all fields in the document when this field is signed"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잠긴 뒤에는 양식 채우기와 다른 서명 칸 서명도 '변경' 이 됩니다 — 마지막 서명 칸에 쓰세요."
+msgstr "After locking, filling forms and signing other signature fields also count as 'changes' — use it on the last signature field."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잠금"
+msgstr "Lock"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잠금은 마지막 서명 칸에 쓰세요 — 잠긴 뒤에는 다른 칸에 서명할 수 없습니다. 서명할 사람은 그 사람이 보낸 공개 인증서(.cer)로 정합니다."
+msgstr "Use the lock on the last signature field — once locked, no other field can be signed. The signer is designated with the public certificate (.cer) that person sent you."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명할 사람의 공개 인증서"
+msgstr "Signer's public certificate"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 (*.cer *.crt *.der *.pem)"
+msgstr "Certificates (*.cer *.crt *.der *.pem)"
+
+#: viewer/widgets/sign_dialogs.py
 msgid "Windows 인증서 저장소"
 msgstr "Windows Certificate Store"
 
@@ -8063,10 +8121,6 @@ msgid "개인 키와 인증서가 짝이 맞지 않습니다(signCert.der·signP
 msgstr "The private key and certificate do not match (check that signCert.der and signPri.key come from the same folder)."
 
 #: viewer/widgets/sign_dialogs.py
-msgid "인증서 파일을 읽지 못했습니다."
-msgstr "Could not read the certificate file."
-
-#: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "{name} — {issuer} · ~{until}"
 msgstr "{name} — {issuer} · until {until}"
@@ -8078,6 +8132,14 @@ msgstr "No signCert.der/signPri.key pair was found in this folder (or in its iss
 #: viewer/widgets/sign_dialogs.py
 msgid "가져올 인증서를 고르세요."
 msgstr "Choose a certificate to import."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "칸 이름을 넣으세요."
+msgstr "Enter a field name."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명할 사람의 인증서를 고르세요."
+msgstr "Choose the signer's certificate."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "  · 스마트카드"
@@ -8299,6 +8361,10 @@ msgstr "Fingerprint (SHA-1): {fp}"
 #, python-brace-format
 msgid "전자서명 — {name}"
 msgstr "Digital Signature — {name}"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명하면 문서의 모든 칸이 잠깁니다"
+msgstr "Signing locks all fields in the document"
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
@@ -10128,4 +10194,7 @@ msgstr "Getting Started"
 
 #~ msgid "크롭: {n}쪽 → {name}"
 #~ msgstr "Cropped: {n} page(s) → {name}"
+
+#~ msgid "칸 이름 — 서명할 사람이 알아보게(예: 검토자, 승인자)"
+#~ msgstr "Field name — so the signer can recognize it (e.g. Reviewer, Approver)"
 

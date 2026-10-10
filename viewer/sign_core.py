@@ -579,6 +579,8 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
         if isinstance(e, StoreError):
             raise                                # 저장소 취소·사라짐은 화면이 따로 다룬다(SOT §3.9)
         nm_ = type(e).__name__
+        if nm_ == "UnacceptableSignerError":
+            raise SignError("wrong_signer", str(e)[:200]) from None     # 칸의 '서명할 사람' 이 아니다(SOT §3.7)
         if stamper is not None and ("Timestamp" in nm_ or "timestamp" in str(e).lower()
                                     or nm_ in ("ClientConnectorError", "TimeoutError", "ClientError")):
             raise SignError("tsa_failed", nm_ + ": " + str(e)[:200]) from None
@@ -618,6 +620,39 @@ class EmptyField:
     name: str
     page: int                   # 0부터
     rect: tuple                 # 쪽 좌표(fitz, 왼쪽 위 원점) x0, y0, x1, y1
+    lock: bool = False          # 서명하면 칸을 잠근다(FieldMDP /Lock, SOT §3.7)
+    signer_fps: tuple = ()      # 서명할 사람 인증서 SHA-256 지문(시드 값 /SV /Cert /Subject) — 비면 누구나
+    signer_names: tuple = ()
+
+
+def _field_extras(doc, xref):
+    """빈 칸 위젯의 잠금·서명할 사람 — fitz xref 로 읽는다(합친 칸/위젯, 아니면 부모)."""
+    import re
+    lock, fps, names = False, [], []
+    for base in (xref, None):
+        if base is None:
+            t, v = doc.xref_get_key(xref, "Parent")
+            if t != "xref":
+                break
+            base = int(v.split()[0])
+        try:
+            if doc.xref_get_key(base, "Lock")[0] != "null":
+                lock = True
+            t, v = doc.xref_get_key(base, "SV/Cert/Subject")
+            if t == "array" and not fps:
+                ders = [bytes.fromhex(h) for h in re.findall(r"<([0-9A-Fa-f\s]+)>", v)]
+                ders += [doc.xref_stream(int(m)) for m in re.findall(r"(\d+) 0 R", v)]
+                for der in ders:
+                    try:
+                        from cryptography import x509
+                        c = x509.load_der_x509_certificate(der)
+                        fps.append(cert_fingerprint(der))
+                        names.append(_cert_info(c).name)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    return lock, tuple(fps), tuple(names)
 
 
 def empty_fields(doc) -> list:
@@ -631,7 +666,9 @@ def empty_fields(doc) -> list:
             for w in page.widgets(types=[fitz.PDF_WIDGET_TYPE_SIGNATURE]) or []:
                 if not getattr(w, "is_signed", False):
                     r = w.rect
-                    out.append(EmptyField(str(w.field_name or ""), page.number, (r.x0, r.y0, r.x1, r.y1)))
+                    lock, fps, names = _field_extras(doc, w.xref)
+                    out.append(EmptyField(str(w.field_name or ""), page.number, (r.x0, r.y0, r.x1, r.y1),
+                                          lock, fps, names))
         return out
     except Exception:
         return []
@@ -667,9 +704,12 @@ def field_at(fields_, page: int, x: float, y: float):
     return None
 
 
-def add_empty_field(src, dst, *, page_index: int, box_pdf, name: str = "", doc_password: str = "") -> str:
+def add_empty_field(src, dst, *, page_index: int, box_pdf, name: str = "", doc_password: str = "",
+                    lock: bool = False, signer_certs=()) -> str:
     """빈 서명 칸 하나를 **증분으로** 덧붙여 `dst` 에 쓴다(SOT §3.7). 반환: 칸 이름.
-    인증 문서(P 무엇이든)는 거부 — 칸을 더하는 것이 허용 변경이 아니다(§3.6). 이름이 겹치면 `field_exists`."""
+    인증 문서(P 무엇이든)는 거부 — 칸을 더하는 것이 허용 변경이 아니다(§3.6). 이름이 겹치면 `field_exists`.
+    `lock` 이면 서명하면 **모든 칸**을 잠근다(FieldMDP All — Include/Exclude 는 쓰지 않는다, SOT §3.7 실측).
+    `signer_certs`(DER 목록)면 그 인증서로만 서명하게 한다(시드 값 /SV /Cert /Subject, 필수)."""
     from pyhanko.sign import fields
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     with open(src, "rb") as f:
@@ -698,9 +738,22 @@ def add_empty_field(src, dst, *, page_index: int, box_pdf, name: str = "", doc_p
             raise SignError("field_exists", name)
     else:
         name = _next_field_names(w.prev, 1)[0]
+    kw = {}
+    if lock:
+        kw["field_mdp_spec"] = fields.FieldMDPSpec(fields.FieldMDPAction.ALL)
+    if signer_certs:
+        from asn1crypto import x509 as ax
+        try:
+            subs = [ax.Certificate.load(bytes(d)) for d in signer_certs]
+            for c in subs:
+                c.native                                   # 깨진 인증서는 여기서 걸린다
+        except Exception:
+            raise SignError("bad_cert") from None
+        kw["seed_value_dict"] = fields.SigSeedValueSpec(cert=fields.SigCertConstraints(
+            subjects=subs, flags=fields.SigCertConstraintFlags.SUBJECT))
     try:
         fields.append_signature_field(w, fields.SigFieldSpec(sig_field_name=name, on_page=int(page_index),
-                                                             box=tuple(float(v) for v in box_pdf)))
+                                                             box=tuple(float(v) for v in box_pdf), **kw))
         buf = io.BytesIO()
         w.write(buf)
     except SignError:

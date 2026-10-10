@@ -42,6 +42,11 @@ class _SignVerifyThread(QThread):
         self.done.emit(path, mtime, rep)
 
 
+def _sc_empty(mv):
+    from viewer import sign_core
+    return sign_core.empty_fields(mv._doc.doc)
+
+
 class SignMixin:
     # ---- 배경 실행 -----------------------------------------------------------
     def _sign_bg(self, fn, title: str):
@@ -225,7 +230,11 @@ class SignMixin:
         dlg = SignDialog(self, hello_ok=hello_ok, file_name=Path(cur).name, box_size=(r.width, r.height),
                          page_count=mv._doc.doc.page_count, current_page=pidx,
                          can_certify=not _sc.doc_is_signed(mv._doc.doc),
-                         field_name=field.name if field is not None else "")
+                         field_name=field.name if field is not None else "",
+                         field_signers=field.signer_names if field is not None else (),
+                         field_lock=bool(field is not None and field.lock))
+        dlg.field_signer_fps = tuple(field.signer_fps) if field is not None else ()
+        dlg._field_signer_names = tuple(field.signer_names) if field is not None else ()
         try:
             self._sign_dialog_loop(cur, pidx, r, dlg, mv)
         finally:
@@ -269,6 +278,12 @@ class SignMixin:
         if page.rotation or mv._rotations.get(field.page, 0):
             QMessageBox.information(self, tr("서명"), tr("이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없습니다(서명이 누워 들어갑니다). '저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."))
             return
+        if field.lock:
+            others = [f for f in _sc_empty(mv) if f.name != field.name]
+            if others and QMessageBox.question(
+                    self, tr("서명"), tr("이 칸에 서명하면 문서의 모든 칸이 잠겨 남은 빈 서명 칸 {n}개에 더 서명할 수 없습니다. 계속할까요?").format(n=len(others))
+            ) != QMessageBox.StandardButton.Yes:
+                return
         if int(mv.current_page()) != field.page:
             try:
                 mv.go_to_page(field.page)
@@ -295,28 +310,36 @@ class SignMixin:
         self.status.showMessage(tr("빈 서명 칸 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."), 8000)
 
     def _sigfield_make(self, cur: str, pidx: int, r, mv):
-        from PyQt6.QtWidgets import QInputDialog
         from viewer import sign_core
+        from viewer.widgets import sign_dialogs
         doc = mv._doc.doc
         used = {f.name for f in sign_core.empty_fields(doc)}
+        try:
+            for page in doc:
+                for w in page.widgets() or []:
+                    used.add(str(w.field_name or ""))
+        except Exception:
+            pass
         k = 1
         while f"Signature{k}" in used:
             k += 1
-        name, ok = QInputDialog.getText(self, tr("빈 서명 칸"), tr("칸 이름 — 서명할 사람이 알아보게(예: 검토자, 승인자)"),
-                                        text=f"Signature{k}")
-        if not ok:
+        fdlg = sign_dialogs.SigFieldDialog(self, default_name=f"Signature{k}", used=used)
+        if fdlg.exec() != fdlg.DialogCode.Accepted:
             return
+        name, lock, certs = fdlg.name(), fdlg.chk_lock.isChecked(), ([fdlg.cert_der] if fdlg.cert_der else [])
         box = sign_core.page_box_to_pdf(doc[pidx], r)
         doc_pw, remembered = self._sign_doc_password(cur, doc)
         fd, tmp = tempfile.mkstemp(suffix=".polypdf-sign", prefix="~", dir=str(Path(cur).parent))
         os.close(fd)
         try:
             got = self._sign_bg(lambda: sign_core.add_empty_field(cur, tmp, page_index=pidx, box_pdf=box,
-                                                                  name=name, doc_password=doc_pw),
+                                                                  name=name, doc_password=doc_pw,
+                                                                  lock=lock, signer_certs=certs),
                                 tr("빈 서명 칸 만드는 중"))
         except sign_core.SignError as e:
             self._sign_unlink(tmp)
             msg = {"field_exists": tr("같은 이름의 서명 칸이 이미 있습니다: {name}").format(name=e.detail),
+                   "bad_cert": tr("인증서 파일을 읽지 못했습니다."),
                    "certified": tr("작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."),
                    "certified_new_field": tr("작성자가 인증한 문서입니다 — 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다."),
                    "need_doc_password": tr("암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."),
@@ -428,6 +451,12 @@ class SignMixin:
                 return "fail"
         doc = (mv or self.main_view)._doc.doc     # 자리를 끈 그 창(2단이면 오른쪽일 수 있다)
         field = getattr(dlg, "field_name", "") or ""
+        want = tuple(getattr(dlg, "field_signer_fps", ()) or ())
+        if field and want and fp not in want:
+            # 칸의 '서명할 사람' 이 아니다 — 서명 전에 막는다(SOT §3.7)
+            QMessageBox.information(self, tr("서명"), tr("이 칸은 지정된 사람의 인증서로만 서명할 수 있습니다: {names}").format(
+                names=", ".join(getattr(dlg, "_field_signer_names", ()) or ()) or "?"))
+            return "retry"
         # 2단계(SOT §3.6): 여러 쪽 — 같은 자리(쪽 좌표)에, 쪽 밖이면 쪽 안으로. 회전 쪽은 막는다.
         # 3단계(SOT §3.7): 빈 칸 채우기는 그 칸 하나(쪽 고르기 끔)
         pages = [pidx] if field else dlg.pages()
@@ -473,6 +502,7 @@ class SignMixin:
             self._sign_unlink(tmp)
             msg = {"certified": tr("작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."),
                    "certified_new_field": tr("작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."),
+                   "wrong_signer": tr("고른 디지털 ID 는 이 칸에 서명할 사람으로 지정된 인증서가 아닙니다."),
                    "no_field": tr("빈 서명 칸을 찾지 못했습니다(이미 서명됐거나 지워졌습니다): {name}").format(name=e.detail),
                    "certify_not_first": tr("이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."),
                    "certify_one_page": tr("'인증 — 변경 금지' 는 한 쪽에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."),
