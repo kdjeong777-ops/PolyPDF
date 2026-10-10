@@ -3866,6 +3866,27 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._force_save_as = False
 
     def _finalize_save(self, src, produced, shift=None) -> str:
+        """원본 덮어쓰기 저장의 단일 길(마스터 §4.7.5). 261010-28(보안 SOT §7.2·S11): 암호 PDF 의 기억·세션 암호를
+        저장한 파일로 옮긴다 — 키가 SHA-256(경로+크기)라 크기가 바뀌면 다시 열 때 암호를 또 물었다."""
+        pw, remembered = None, False
+        try:
+            from viewer import secure_store
+            pw = secure_store.recall_any(src)               # 원본 크기 키 — 바꿔치기 **전에** 읽는다
+            remembered = bool(pw) and bool(secure_store.recall_password(src))
+        except Exception:
+            pass
+        final = self._finalize_save_place(src, produced, shift)
+        if pw:
+            try:
+                from viewer import secure_store
+                secure_store.set_session(final, pw)
+                if remembered:
+                    secure_store.remember_password(final, pw)
+            except Exception:
+                pass
+        return final
+
+    def _finalize_save_place(self, src, produced, shift=None) -> str:
         """260822: 편집 저장 산출물(produced 임시 PDF)을 목적지에 배치.
         기본=원본 덮어쓰기(열린 핸들 닫고 교체), Shift+저장=`_edited`(충돌 시 (k)).
         최종 경로(str) 반환. 로드·책갈피창 갱신은 호출측이 수행(§4.7.5)."""

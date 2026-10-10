@@ -12,7 +12,7 @@ E. 저장 가드(§4) — 서명된 파일에 `_finalize_save`: 새 파일로 / 
 G. 대화상자 — 디지털 ID 창·서명 그림 창·서명 패널
 H. 서명 창 겉모양 미리보기 — 끈 상자 비율·배경에서·바꾸면 다시(S8)
 I. 본문 우클릭 '여기에 서명…' — 실제 메뉴 처리기, 누른 자리에 기본 크기(S6)
-J. 책갈피창 서명 표식(S1) · K. 서명 문서 암호화 안내(S9) · L. 제거·업데이트가 signing 을 지우지 않음(S3) · M. 서명 뒤 암호 옮기기(§7.2)
+J. 책갈피창 서명 표식(S1) · K. 서명 문서 암호화 안내(S9) · L. 제거·업데이트가 signing 을 지우지 않음(S3) · M. 서명·저장 뒤 암호 옮기기(§7.2·S11)
 F. 비밀번호가 설정·ID 목록·Hello 보관 파일 어디에도 평문으로 없다(§6.4)
 """
 import os, sys, tempfile, shutil, time, json
@@ -418,6 +418,18 @@ try:
     before = _ss.recall_any(epath)
     SignMixin._sign_carry_password(str(epath), "usr-pw", False)
     chk(before is None and _ss.recall_any(epath) == "usr-pw", "M1 크기가 바뀐 서명 파일에도 세션 암호가 따라온다", str(before))
+    # M2(S11): 서명 밖의 저장도 — 실제 `_finalize_save` 로 크기가 다른 판을 덮어써도 암호가 따라온다
+    e2 = root / "암호2.pdf"
+    shutil.copy(enc, e2)
+    _ss.set_session(e2, "usr-pw")
+    prod = root / "~prod_enc.tmp"
+    shutil.copy(enc, prod)
+    with open(prod, "ab") as fh:
+        fh.write(b"\n%different size\n")
+    picked["text"] = ""
+    out_e2 = mw._finalize_save(str(e2), str(prod))
+    chk(Path(out_e2) == e2 and e2.stat().st_size != enc.stat().st_size and _ss.recall_any(e2) == "usr-pw",
+        "M2 `_finalize_save` 로 크기가 바뀐 암호 PDF 도 다시 열 때 암호를 묻지 않는다(세션 암호가 따라온다)")
     QMessageBox.exec = orig_exec
 except Exception:
     import traceback
