@@ -145,6 +145,7 @@ OWNER_RULES = [
     (("test_input_", "test_wheel_"), "입력 장치"),
     (("test_theme_", "test_design_", "test_draw_tools"), "화면 디자인"),
     (("test_i18n_",), "다국어(언어팩)"),
+    (("test_release_",), "릴리스"),
 ]
 
 
@@ -169,6 +170,7 @@ if HAVE_SOT:
         "응답성": "응답성 작업 계획서.md",
         "입력 장치": "입력 장치 작업 계획서.md",
         "다국어(언어팩)": "다국어(언어팩) 작업 계획서.md",
+        "릴리스": "릴리스 작업 계획서.md",
     }
     for owner, sot_name in NAMED.items():
         txt = SOTS.get(sot_name, "")

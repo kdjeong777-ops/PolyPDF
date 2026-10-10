@@ -14,7 +14,13 @@
 사용자 실제 설정은 읽기만 하고(복사해서 씀), 끝나면 시험 프로필을 지운다(261009-19 — 종전에는 실제 폴더를 백업·복원하다
 사용자 색인을 지웠다). 지우지 못한 채 끊긴 시험이 있으면 새 시험을 시작하지 않는다.
 
+무엇을 돌릴지는 먼저 `plan` 으로 정한다(릴리스 SOT, 261010-4) — 기준점(마지막으로 통과한 시험, `_review\\baseline.json`)
+부터의 diff 로 등급(설치 시험 / 빌드 시험 / 생략 후보)과 이번 변경에 맞춘 확인 항목을 낸다. 시험 결과는 기준점 결과와
+자동으로 견줘 20% 넘게 나빠진 값을 '회귀 의심' 으로 적는다(판정은 바꾸지 않는다).
+
 사용:
+  python scripts/release_test.py plan    [--base v0.45.0-beta.223] [--urgent]
+  python scripts/release_test.py checks  [--ui]                 (묶음 릴리스: test_*.py 전부 + 화면 점검)
   python scripts/release_test.py build   --source local [--rebuild] [--cases T1,T4]
   python scripts/release_test.py build   --source ci    [--run-id N]
   python scripts/release_test.py install --source ci    [--run-id N] [--no-suite]
@@ -213,6 +219,246 @@ def exe_for_install(a, out: Path, rec: dict) -> Path:
     return exe
 
 
+# ── 시험 계획 — 등급 판정(릴리스 SOT §3·§4, 261010-4) ─────────────
+# 판정 경로의 **정확한 목록은 여기 한 곳**이 소유한다 — SOT 는 까닭과 영역만 적고 이 상수를 가리킨다.
+INSTALL_PATHS = ("installer/", "build_ci.bat", "scripts/i18n.py", ".github/workflows/release.yml", "viewer/updater.py")
+BUILD_PATHS = ("main.py", "requirements.txt", "viewer/workers.py", "viewer/index_proc.py", "viewer/kiwi_space.py",
+               "viewer/child_job.py", "viewer/indexer.py", "viewer/settings_store.py", "viewer/open_gather.py",
+               "viewer/widgets/thumbs_list.py")
+# 바뀐 줄에 이것이 있으면 배경 작업·프로세스·DB 잠금을 건드린 것이다(응답성 SOT — 판정은 실측)
+BUILD_TOKENS = re.compile(r"QThread|QTimer|threading|multiprocessing|subprocess|ThreadPool|sqlite3\.connect|processEvents")
+# app.py 는 거의 모든 변경이 지나가므로 파일이 아니라 **시작·종료 함수**를 건드렸는지로 가른다
+APP_FUNCS = re.compile(r"def (__init__|closeEvent|_startup_\w+|_start_index_worker)\b")
+NO_BUILD = re.compile(r"(\.md$|^test_[^/]+\.py$|^resources/locale/|^\.gitignore$|^LICENSE)")
+SMALL_LINES = 40                    # 코드 바뀐 줄이 이보다 적고 파일 3개 이하면 '미미' 후보
+SAVE_TOKENS = re.compile(r"_finalize_save|_file_op_bg|os\.replace|_open_saved_file")
+FOCUS = [   # (경로 앞부분, 볼 것, 측정 대상) — 상시 점검 목록(릴리스 SOT §5)에서 그 경로에 해당하는 것
+    (("viewer/indexer.py", "viewer/index_proc.py", "viewer/workers.py"),
+     "색인 — T5·T6 '색인한 파일' 수를 기준점과 견준다", "T5,T6"),
+    (("viewer/kiwi_space.py", "viewer/text_extract2.py"), "한글 띄어쓰기 도우미 — 한글 대상의 정지·도우미 남음", "T1,T2,T3"),
+    (("viewer/widgets/thumbs_list.py", "viewer/page_meta.py", "viewer/hyperlinks.py", "viewer/pdf_doc.py"),
+     "큰 문서 첫 열기 — T3 정지", "T3"),
+    (("viewer/settings_store.py", "viewer/open_gather.py", "main.py"),
+     "데이터 위치 — 끝난 뒤 실제 설정 폴더를 탐색기로, 휴대용 경로를 바꿨으면 zip 을 풀어 실행(마스터 §14.9)", None),
+    (("viewer/child_job.py",), "자식 프로세스 — 모든 대상 '도우미 남음' 0", None),
+    (("installer/", "build_ci.bat", "scripts/i18n.py"),
+     "설치 결과 — 종료 코드·버전·언어 유지(다국어 SOT §10.5), 작업 표시줄 아이콘은 사용자에게 확인", None),
+    (("viewer/updater.py",), "앱 안 업데이트 — 이 시험으로는 못 본다(못 한 것으로 적는다)", None),
+    ((".github/workflows/release.yml",), "릴리스 자산 — 태그 뒤 자산 목록·설치 프로그램·휴대용 zip", None),
+]
+
+
+def classify(changes: list, diff_text: str) -> dict:
+    """changes = [(상태, 경로, 바뀐 줄 수)], diff_text = `git diff -U0`(파이썬 함수 머리 포함).
+    돌려줌: level(install|build|skip), reasons, focus, code_lines. **skip 은 후보** — 사용자에게 묻는다(릴리스 SOT §3.1)."""
+    paths = [p for _, p, _ in changes]
+    reasons, focus = [], []
+    inst = [p for p in paths if p.startswith(INSTALL_PATHS)]
+    if inst:
+        reasons.append("설치 관련 파일: " + ", ".join(inst))
+    code = [(s, p, n) for s, p, n in changes if not NO_BUILD.search(p)]
+    code_lines = sum(n for _, _, n in code)
+    must = [p for p in paths if p.startswith(BUILD_PATHS)]
+    if must:
+        reasons.append("빌드 시험 필수 경로: " + ", ".join(must))
+    new = [p for s, p, _ in code if s.startswith("A") and p.endswith(".py")]
+    if new:
+        reasons.append("새 모듈: " + ", ".join(new))
+    if any(p in ("requirements.txt",) for p in paths):
+        reasons.append("의존 패키지 변경")
+    cur, tok_files, app_hit = None, set(), False
+    for line in diff_text.splitlines():
+        if line.startswith("+++ "):
+            cur = line[6:] if line.startswith("+++ b/") else None
+        elif line.startswith("@@") and cur == "viewer/app.py" and APP_FUNCS.search(line):
+            app_hit = True
+        elif cur and line[:1] in "+-" and not line.startswith(("+++", "---")) and not NO_BUILD.search(cur):
+            if BUILD_TOKENS.search(line):
+                tok_files.add(cur)
+            if SAVE_TOKENS.search(line):
+                focus.append(("원본 덮어쓰기 저장 — 실제 PDF 로 저장·다시 열기(마스터 §4.7.5)", None))
+    if app_hit:
+        reasons.append("app.py 시작·종료 함수")
+    if tok_files:
+        reasons.append("배경 작업·프로세스·DB 잠금 줄: " + ", ".join(sorted(tok_files)))
+    for prefixes, what, cases in FOCUS:
+        if any(p.startswith(prefixes) for p in paths):
+            focus.append((what, cases))
+    if inst:
+        level = "install"
+    elif reasons or code_lines >= SMALL_LINES or len(code) > 3:
+        level = "build"
+        if not reasons:
+            reasons.append("코드 %d줄·%d개 파일 — 미미한 변경이 아니다" % (code_lines, len(code)))
+    elif code:
+        level, reasons = "skip", ["코드 %d줄·%d개 파일, 필수 경로·새 모듈·배경 작업 줄 없음" % (code_lines, len(code))]
+    else:
+        level, reasons = "skip", ["코드 변경 없음(문서·검사·번역문만)"]
+    seen, uniq = set(), []
+    for f in focus:
+        if f[0] not in seen:
+            seen.add(f[0])
+            uniq.append(f)
+    return {"level": level, "reasons": reasons, "focus": uniq, "code_lines": code_lines, "code_files": len(code)}
+
+
+BASELINE = REVIEW / "baseline.json"
+
+
+def load_baseline():
+    try:
+        return json.loads(BASELINE.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def git(*args) -> str:
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8").stdout
+
+
+PENDING_DAYS, PENDING_COUNT = 14, 5     # 묶음 릴리스 제안 기준(릴리스 SOT §2.2)
+CHECK_TIMEOUT = 600                     # 검사 하나의 상한(초)
+
+
+def checks(ui: bool) -> int:
+    """묶음 릴리스의 전체 검사(릴리스 SOT §4.1) — CI 는 일부만 돌리므로 `test_*.py` **전부**를 개발 venv 로,
+    판정은 **종료 코드**(출력 문자열 아님 — 'ALL PASS' 대신 '전부 통과' 로 끝나는 검사가 있다). `--ui` 면 화면 점검 ko·en 도."""
+    py = ROOT / ".venv" / "Scripts" / "python.exe"
+    out = REVIEW / ("checks_%s_%s" % (source_version(), time.strftime("%y%m%d-%H%M")))
+    (out / "logs").mkdir(parents=True)
+    tests = sorted(p for p in ROOT.glob("test_*.py") if p.name != "test_fixtures.py")
+    fails, t0 = [], time.perf_counter()
+    for i, t in enumerate(tests, 1):
+        s = time.perf_counter()
+        with open(out / "logs" / (t.stem + ".log"), "w", encoding="utf-8", errors="replace") as f:
+            try:
+                rc = subprocess.run([str(py), "-I", t.name], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT,
+                                    timeout=CHECK_TIMEOUT).returncode
+            except subprocess.TimeoutExpired:
+                rc = "시간 초과"
+        if rc != 0:
+            fails.append("%s (rc=%s)" % (t.name, rc))
+        say("[%d/%d] %s %s %.0fs" % (i, len(tests), "통과" if rc == 0 else "실패", t.name, time.perf_counter() - s))
+    L = ["# 전체 검사 — %s" % source_version(), "",
+         "- 검사 %d개 · 통과 %d · 실패 %d · %.0f분" % (len(tests), len(tests) - len(fails), len(fails),
+                                                (time.perf_counter() - t0) / 60)]
+    L += ["- 실패: " + f for f in fails]
+    if ui:
+        r = subprocess.run([str(py), "scripts/ui_check.py", "--out", str(out / "ui")], cwd=ROOT,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        L.append("- 화면 점검(ko·en): 종료 코드 %s — `%s`" % (r.returncode, out / "ui" / "summary.md"))
+        if r.returncode != 0:
+            fails.append("ui_check")
+    L += ["", "**판정: %s**" % ("통과" if not fails else "실패")]
+    (out / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    say("\n".join(L) + "\n결과: %s" % out)
+    return 0 if not fails else 1
+
+
+def unreleased() -> dict:
+    """마지막 릴리스 태그 뒤에 쌓인 코드 커밋(docs·test 제외) — 묶음 릴리스를 제안할 때가 됐나."""
+    tag = git("describe", "--tags", "--abbrev=0", "--match", "v*").strip()
+    if not tag:
+        return {"tag": "", "count": 0, "days": 0}
+    rows = [l.split("\t", 1) for l in git("log", "--format=%ct\t%s", tag + "..HEAD").splitlines() if "\t" in l]
+    code = [(int(t), s) for t, s in rows if not re.match(r"(docs|test|chore)(\(|:)", s)]
+    days = (time.time() - min(t for t, _ in code)) / 86400 if code else 0
+    return {"tag": tag, "count": len(code), "days": int(days)}
+
+
+def plan(base_arg, urgent=False) -> int:
+    bl = load_baseline()
+    base = base_arg or (bl or {}).get("commit")
+    if not base:
+        raise SystemExit("기준점이 없다 — --base <커밋|태그> 로 주거나 시험을 한 번 통과시켜 %s 를 만든다" % BASELINE)
+    ns = [l.split("\t") for l in git("diff", "--name-status", base + "..HEAD").splitlines() if l]
+    nums = {}
+    for l in git("diff", "--numstat", base + "..HEAD").splitlines():
+        a, d, p = l.split("\t", 2)
+        nums[p] = (int(a) if a.isdigit() else 0) + (int(d) if d.isdigit() else 0)
+    changes = [(r[0], r[-1], nums.get(r[-1], 0)) for r in ns]
+    attrs = REVIEW / ".plan_attrs"
+    REVIEW.mkdir(exist_ok=True)
+    attrs.write_text("*.py diff=python\n", encoding="utf-8")      # 함수 머리(@@ … def x)를 얻으려고
+    diff = git("-c", "core.attributesFile=" + str(attrs), "diff", "-U0", base + "..HEAD")
+    c = classify(changes, diff)
+    if urgent and c["level"] == "skip":    # 긴급 릴리스는 생략하지 않는다(릴리스 SOT §2.1)
+        c["level"] = "build"
+        c["reasons"].append("긴급 릴리스 — 생략 후보라도 빌드 시험")
+    u = unreleased()
+    dirty = [l for l in git("status", "--porcelain", "--untracked-files=no").splitlines() if l]
+    name = {"install": "설치 시험", "build": "빌드 시험", "skip": "생략 후보 — 사용자에게 묻는다"}[c["level"]]
+    cmd = {"install": "python scripts\\release_test.py install --source ci",
+           "build": "python scripts\\release_test.py build --source local --rebuild", "skip": "(CI tests 성공만 확인)"}
+    L = ["# 시험 계획 — %s" % source_version(), "",
+         "- 기준점: `%s`%s" % (base[:9] if re.fullmatch(r"[0-9a-f]{10,}", base) else base, (" (%s, %s 통과)" % (bl.get("version"), bl.get("mode")) if bl and not base_arg else "")),
+         "- 릴리스 종류: %s" % ("**긴급**" if urgent else "묶음"),
+         "- **등급: %s** — `%s`" % (name, cmd[c["level"]])]
+    L += ["  - " + r for r in c["reasons"]]
+    if u["tag"]:
+        due = u["count"] >= PENDING_COUNT or (u["count"] and u["days"] >= PENDING_DAYS)
+        L.append("- 마지막 릴리스 `%s` 뒤 코드 커밋 %d건, 가장 오래된 것 %d일%s" % (
+            u["tag"], u["count"], u["days"], " — **묶음 릴리스를 제안할 때**" if due else ""))
+    if dirty:
+        L.append("- ⚠ 커밋하지 않은 변경 %d개 — 판정은 커밋된 것만 본다" % len(dirty))
+    L += ["", "## 기준점 이후 커밋", ""] + ["- " + l for l in git("log", "--oneline", base + "..HEAD").splitlines()]
+    L += ["", "## 이번 변경과 관련된 항목", ""]
+    L += ["- %s%s" % (w, " — `--cases %s`" % k if k else "") for w, k in c["focus"]] or ["- (경로로 고른 항목 없음 — 마스터 §0 행을 보고 손 확인 단계를 더한다)"]
+    if not urgent:
+        L += ["", "## 묶음 릴리스 — 최대 범위(릴리스 SOT §4.1)", "",
+              "- 전체 검사: `python scripts\\release_test.py checks --ui` (CI 가 돌리지 않는 것까지 `test_*.py` 전부 + 화면 점검 ko·en)",
+              "- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)",
+              "- 기능 점검표(릴리스 SOT §4.2) — 시험 프로필로 띄운 빌드본에서 주요 기능을 차례로"]
+        if c["level"] == "skip":
+            L.append("- 쌓인 변경이 미미하다 — 측정 묶음·기능 점검표를 건너뛸지 사용자에게 묻는다(전체 검사는 한다)")
+    L += ["", "## 상시 항목", ""]
+    if c["level"] == "skip":
+        L.append("- 측정 묶음을 돌리지 않는다 — 정지·자식 남음·색인 속도는 이번 판에서 보지 않는다(못 한 것)")
+    else:
+        L += ["- 측정 묶음 전체: 대상마다 1초+ 정지 0 · 닫은 뒤 도우미 0 · 정상 종료",
+              "- 기준점 결과와 자동 비교(창·열림 시간, 메모리, 색인한 파일 수 — 20% 넘게 나빠지면 '회귀 의심')",
+              "- 끝난 뒤 실제 설정 폴더(`%APPDATA%\\LocalTools\\PolyPDF`)를 탐색기로 확인"]
+    L += ["", "## 못 하는 것", "", "- 앱 안 업데이트(그 버전에서 다음 버전으로 올릴 때 처음 돈다)"]
+    if c["level"] != "install":
+        L.append("- 설치 프로그램(이번 판은 설치 관련 변경이 없다)")
+    txt = "\n".join(L) + "\n"
+    out = REVIEW / ("plan_%s_%s.md" % (source_version(), time.strftime("%y%m%d-%H%M")))
+    out.write_text(txt, encoding="utf-8")
+    say(txt + "\n계획: %s" % out)
+    return 0
+
+
+# ── 기준점 결과와 견주기(릴리스 SOT §4, 261010-4) — 판정은 바꾸지 않고 '회귀 의심' 만 적는다 ──
+REGRESS = (   # (키, 이름, 나빠지는 쪽 +1=커짐, 절대 하한)
+    ("t_window", "창", 1, 0.5), ("t_loaded", "열림", 1, 0.5), ("peak_ws_mb", "작업 집합", 1, 50),
+    ("helper_max_ws_mb", "도우미", 1, 50), ("indexed_files", "색인한 파일", -1, 20),
+)
+
+
+def compare(rec: dict, base_rec: dict) -> list:
+    old = {r["name"]: r for r in base_rec.get("runs", [])}
+    rows = []
+    for r in rec["runs"]:
+        o = old.get(r["name"])
+        if not o:
+            continue
+        for k, label, sign, floor in REGRESS:
+            a, b = o.get(k), r.get(k)
+            if not isinstance(a, (int, float)) or not isinstance(b, (int, float)) or not a:
+                continue
+            worse = (b - a) * sign
+            if worse > floor and worse / abs(a) > 0.20:
+                rows.append("%s %s: %s → %s (%+.0f%%)" % (r["name"], label, a, b, (b - a) / abs(a) * 100))
+    return rows
+
+
+def save_baseline(rec: dict, out: Path):
+    BASELINE.write_text(json.dumps({"commit": rec["commit"], "version": rec["version"], "mode": rec["mode"],
+                                    "source": rec["source"], "result": out.name,
+                                    "date": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+
+
 # ── 측정 묶음 ────────────────────────────────────────────────────
 def load_suite(only):
     if not SUITE.exists():
@@ -272,6 +518,10 @@ def write_summary(out: Path, rec: dict):
             L.append("| %s | %ss | %ss | %d | %ss | %sMB | %sMB | %s | %s | %ss |" % (
                 r["name"], r["t_window"], r["t_loaded"], r["hangs"], r["max_hang_sec"], round(r["peak_ws_mb"] or 0),
                 round(r["helper_max_ws_mb"] or 0), r.get("helper_left", "-"), r.get("indexed_files"), r["close_sec"]))
+    if rec.get("baseline"):
+        L += ["", "기준점 `%s`(%s) 과 견줌: %s" % (rec["baseline"], rec.get("baseline_version", "?"),
+                                              "회귀 의심 없음" if not rec.get("regress") else "**회귀 의심 %d건**" % len(rec["regress"]))]
+        L += ["- " + x for x in rec.get("regress", [])]
     L += ["", "**판정: %s**" % ("통과" if not rec["fail"] else "실패")] + ["- " + f for f in rec["fail"]]
     (out / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     (out / "result.json").write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -298,11 +548,20 @@ def main():
             p.add_argument("--no-suite", action="store_true", help="설치·버전 확인만")
     p = sub.add_parser("restore")
     p.add_argument("out")
+    p = sub.add_parser("plan", help="기준점부터의 변경으로 시험 등급·확인 항목을 정한다(릴리스 SOT §3·§4)")
+    p.add_argument("--base", help="기준점 커밋·태그(기본: 마지막으로 통과한 시험, _review/baseline.json)")
+    p.add_argument("--urgent", action="store_true", help="긴급 릴리스(보안·데이터 손상·실행 불가·핵심 회귀) — 생략하지 않는다")
+    p = sub.add_parser("checks", help="묶음 릴리스의 전체 검사 — test_*.py 전부(종료 코드로 판정)")
+    p.add_argument("--ui", action="store_true", help="화면 점검(scripts/ui_check.py) ko·en 도")
     a = ap.parse_args()
 
+    if a.mode == "checks":
+        return checks(a.ui)
     if a.mode == "restore":
         restore_dir(Path(a.out))
         return 0
+    if a.mode == "plan":
+        return plan(a.base, a.urgent)
     check_no_pending()
     ver = source_version()
     out = REVIEW / ("%s_%s_%s" % (a.mode, ver, time.strftime("%y%m%d-%H%M")))
@@ -319,7 +578,20 @@ def main():
     except SystemExit as e:
         rec["fail"].append(str(e))
         rec.setdefault("exe", "-")
+    bl = load_baseline()
+    if bl and rec["runs"]:
+        try:
+            base_rec = json.loads((REVIEW / bl["result"] / "result.json").read_text(encoding="utf-8"))
+            rec["baseline"], rec["baseline_version"] = bl["result"], bl.get("version")
+            rec["regress"] = compare(rec, base_rec)
+        except Exception as e:
+            say("기준점 결과를 읽지 못했다:", e)
     write_summary(out, rec)
+    # 묶음 전체를 돌려 통과했을 때만 기준점을 옮긴다(일부 대상·설치만 확인은 기준이 못 된다)
+    full = not a.cases and not (a.mode == "install" and a.no_suite)
+    if not rec["fail"] and full and rec["runs"]:
+        save_baseline(rec, out)
+        say("기준점 갱신:", BASELINE)
     return 0 if not rec["fail"] else 1
 
 
