@@ -44,8 +44,7 @@ chk(bt.tree.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
     "① 편집모드 — ExtendedSelection(항상 다중)")
 
 # ── ② 보기 전환 버튼(같은 자리 = edit_ops 1행 첫 버튼) ─────────────────
-row1 = bt.edit_ops.layout().itemAt(0).widget()
-first = row1.layout().itemAt(0).widget()
+first = bt.edit_ops.layout().itemAt(0).widget()      # 261010-6: edit_ops 가 곧 1행(흐르는 줄)
 chk(first is bt.btn_view_mode, "② 보기 전환 버튼이 1행 첫 자리(옛 토글 위치)")
 # 260901-2(사용자 지정): **트리가 기본**
 chk(bt.is_tree_view() and bt.btn_view_mode.text() == "트리", "② 기본 보기 = 트리")
@@ -282,7 +281,7 @@ chk(not ft.icon(0).isNull(), "⑨ 파일 행 앞 문서 아이콘")
 ft.setExpanded(True); app.processEvents()
 bms = [ft.child(i) for i in range(ft.childCount())]
 chk(all(b.icon(0).isNull() for b in bms), "⑨ 책갈피 행에는 아이콘 없음(구분)")
-r1 = bt.edit_ops.layout().itemAt(0).widget().layout()
+r1 = bt.edit_ops.layout()
 order = [r1.itemAt(i).widget() for i in range(r1.count())]
 chk(order[0] is bt.btn_view_mode and order[1] is bt.btn_edit_single,
     "⑨ 1행 = [트리][책갈피명 수정][◀][▶][▲][▼]", f"{[w.text() for w in order]}")

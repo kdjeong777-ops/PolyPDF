@@ -467,6 +467,7 @@ def run_one(lang: str, out_root: Path, only=None):
         capture("line_text", lambda: via_exec(mw._open_line_text_settings))
         capture("ocr_options", lambda: via_exec(mw._on_text_need_ocr))
         capture("bookmarker", lambda: via_exec(mw.action_open_bookmarker))
+        capture("crop", lambda: via_exec(lambda: mw._open_crop_dialog()))     # 261010-7(마스터 §4.7.15)
 
         pump(0.5)
 

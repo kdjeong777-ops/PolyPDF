@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-09 23:04+0900\n"
+"POT-Creation-Date: 2026-10-10 11:11+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -139,7 +139,8 @@ msgstr "Email"
 msgid "버전 v{version}"
 msgstr "Version v{version}"
 
-#: viewer/app.py viewer/widgets/read_aloud.py viewer/widgets/thumbs_list.py
+#: viewer/app.py viewer/widgets/crop_dialog.py viewer/widgets/read_aloud.py
+#: viewer/widgets/thumbs_list.py
 msgid "전체"
 msgstr "All"
 
@@ -640,8 +641,9 @@ msgid "있는 언어로 진행"
 msgstr "Continue with Available Languages"
 
 #: viewer/app.py viewer/present_controller.py viewer/update_controller.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
-#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
+#: viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/update_dialog.py
 msgid "취소"
 msgstr "Cancel"
@@ -714,6 +716,24 @@ msgstr "Save to Original"
 #: viewer/app.py
 msgid "쪽 편집 저장"
 msgstr "Save Page Edits"
+
+#: viewer/app.py viewer/widgets/merge_preview.py
+msgid "크롭"
+msgstr "Crop"
+
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/toc_review_dialog.py
+msgid "저장"
+msgstr "Save"
+
+#: viewer/app.py viewer/widgets/crop_dialog.py
+msgid "크롭 해제"
+msgstr "Remove Crop"
+
+#: viewer/app.py viewer/widgets/crop_dialog.py
+msgid "쪽 크롭"
+msgstr "Crop Pages"
 
 #: viewer/app.py
 msgid "사진을 쪽으로"
@@ -797,7 +817,8 @@ msgstr "Apply (color, weight and opacity follow the color button style)"
 msgid "텍스트 박스선"
 msgstr "Text Box Border"
 
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
 #: viewer/widgets/view_settings_dialog.py
 msgid "적용"
 msgstr "Apply"
@@ -930,12 +951,6 @@ msgid ""
 msgstr ""
 "There are captures in the list. Save them together as a PDF?\n"
 "(If you don't, the list is discarded. The next session starts with an empty list.)"
-
-#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/toc_review_dialog.py
-msgid "저장"
-msgstr "Save"
 
 #: viewer/app.py
 msgid "저장 안 함"
@@ -1284,6 +1299,18 @@ msgid "페이지 편집 저장 실패"
 msgstr "Failed to save page edits"
 
 #: viewer/app.py
+msgid "크롭할 PDF 가 열려 있지 않습니다."
+msgstr "No PDF is open to crop."
+
+#: viewer/app.py
+msgid "썸네일에서 바꾼 쪽 순서·삭제·끼워 둔 쪽을 먼저 저장하거나 되돌린 뒤 크롭하세요."
+msgstr "Save or undo the page order, deletions and inserted pages changed in the thumbnails before cropping."
+
+#: viewer/app.py
+msgid "크롭을 취소했습니다 — 원본은 그대로입니다."
+msgstr "Crop cancelled — the original is unchanged."
+
+#: viewer/app.py
 msgid "붙여넣기는 편집모드(✏)에서만 됩니다."
 msgstr "Paste works only in edit mode (✏)."
 
@@ -1364,7 +1391,8 @@ msgstr "Click the top-left corner of the block and drag to the bottom-right corn
 msgid "색 선택"
 msgstr "Choose Color"
 
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
 msgid "왼쪽"
 msgstr "Left"
 
@@ -1372,7 +1400,8 @@ msgstr "Left"
 msgid "가운데"
 msgstr "Center"
 
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
 msgid "오른쪽"
 msgstr "Right"
 
@@ -2216,6 +2245,21 @@ msgstr "Save canceled — the original is unchanged."
 #, python-brace-format
 msgid "원본에 쓰는 중: {name}"
 msgstr "Writing to the original: {name}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "고른 {n}쪽의 크롭을 해제해 원래 쪽 크기로 되돌릴까요?"
+msgstr "Remove the crop from the {n} selected page(s) and restore the original page size?"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "크롭 해제: {n}쪽 → {name}"
+msgstr "Crop removed: {n} page(s) → {name}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "크롭: {n}쪽 → {name}"
+msgstr "Cropped: {n} page(s) → {name}"
 
 #: viewer/app.py
 #, python-format
@@ -4418,12 +4462,20 @@ msgid "스캔/이미지 (OCR)"
 msgstr "Scanned/Image (OCR)"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "큰 글자도 헤딩으로 포함 (정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄)"
-msgstr "Include large text as headings (lines larger than body text, beyond regex 'CHAPTER 1'/'제1장')"
+msgid "큰 글자도 헤딩으로 포함"
+msgstr "Include large text as headings"
 
 #: viewer/widgets/bookmarker_dialog.py
+msgid "정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄도 헤딩으로 봅니다"
+msgstr "Also treats lines larger than body text as headings, beyond the 'CHAPTER 1' pattern"
+
+# | 페이지만 처리하며 페이지가 많으면 다소 시간이 걸립니다.</small>"
+# | 글자도 헤딩으로 포함' 을 켜면 이 정규식 외에 본문보다 큰 줄도 헤딩으로 봅니다. 스캔 페이지만 처리하며 페이지가 많으면 다소
+# 시간이
+# | 걸립니다.</small>"
+#: viewer/widgets/bookmarker_dialog.py
 msgid "<small>스캔된 책의 'CHAPTER 1'·'제1장' 등을 Tesseract OCR로 인식해 책갈피를 만듭니다. 스캔 페이지만 처리하며 페이지가 많으면 다소 시간이 걸립니다.</small>"
-msgstr "<small>Recognizes 'CHAPTER 1', '제1장', etc. in scanned books with Tesseract OCR to create bookmarks. Only scanned pages are processed; many pages may take a while.</small>"
+msgstr "<small>Recognizes chapter headings such as 'CHAPTER 1' in scanned books with Tesseract OCR to create bookmarks. Only scanned pages are processed; many pages may take a while.</small>"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "목차(차례) 쪽 지정 — 자동 탐지가 놓칠 때"
@@ -4446,9 +4498,15 @@ msgid "목차 쪽:"
 msgstr "TOC pages:"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "저장 전에 책갈피 표를 검토한다 (실제 쪽과 대조·수정·삭제·추가)"
-msgstr "Review the bookmark table before saving (check against actual pages, edit, delete, add)"
+msgid "저장 전에 책갈피 표를 검토한다"
+msgstr "Review the bookmark table before saving"
 
+#: viewer/widgets/bookmarker_dialog.py
+msgid "검토 표에서 실제 쪽과 대조해 고치거나 지우고 더할 수 있습니다"
+msgstr "In the review table you can check rows against the actual pages and edit, delete or add them"
+
+# | 추천받고, 행마다 실제 쪽을 미리보기로 확인해 고칠 수 있습니다.</small>"
+# | 지우고 더할 수 있고, 오프셋(목차 쪽→실제 쪽)을 추천받고, 행마다 실제 쪽을 미리보기로 확인할 수 있습니다.</small>"
 #: viewer/widgets/bookmarker_dialog.py
 msgid "<small>스캔본처럼 목차를 못 알아보는 책은 목차 쪽을 직접 적어 주세요. 검토 표에서는 오프셋(목차 쪽→실제 쪽)을 추천받고, 행마다 실제 쪽을 미리보기로 확인해 고칠 수 있습니다.</small>"
 msgstr "<small>If the TOC isn't detected (e.g. scans), enter its pages. The review table suggests an offset (TOC page → actual page) and lets you check each row's page in the preview.</small>"
@@ -4466,12 +4524,12 @@ msgid " 페이지"
 msgstr " pages"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "오프셋:"
-msgstr "Offset:"
-
-#: viewer/widgets/bookmarker_dialog.py
 msgid "<small>0 = 추천 후보 1순위 사용. TOC 모드에서만 의미.</small>"
 msgstr "<small>0 = use top suggested candidate. Applies to TOC mode only.</small>"
+
+#: viewer/widgets/bookmarker_dialog.py
+msgid "오프셋:"
+msgstr "Offset:"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "출력"
@@ -4575,6 +4633,149 @@ msgstr "Body"
 #, python-brace-format
 msgid "{lbl} 내용 검색"
 msgstr "Search {lbl} content"
+
+#: viewer/widgets/crop_dialog.py
+msgid "세로긴 쪽"
+msgstr "Portrait pages"
+
+#: viewer/widgets/crop_dialog.py
+msgid "가로긴 쪽"
+msgstr "Landscape pages"
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽 (Ctrl·Shift 로 여럿 고르기)"
+msgstr "Pages (Ctrl/Shift to select several)"
+
+#: viewer/widgets/crop_dialog.py
+msgid "겹쳐 보기"
+msgstr "Overlay"
+
+#: viewer/widgets/crop_dialog.py
+msgid "적용할 쪽 가운데 지금 쪽과 같은 방향의 쪽을 겹쳐 그립니다(최대 40쪽) — 어느 쪽 내용도 잘리지 않게 고를 때"
+msgstr "Overlays the target pages with the same orientation as this page (up to 40) — so no page loses content"
+
+#: viewer/widgets/crop_dialog.py
+msgid "적용할 쪽"
+msgstr "Apply to"
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽 범위:"
+msgstr "Page range:"
+
+#: viewer/widgets/crop_dialog.py
+msgid "예: 1-5, 8"
+msgstr "e.g. 1-5, 8"
+
+#: viewer/widgets/crop_dialog.py
+msgid "왼쪽에서 고른 쪽"
+msgstr "Pages selected on the left"
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/text_panel.py
+msgid "현재 쪽"
+msgstr "Current page"
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/text_panel.py
+msgid "스타일"
+msgstr "Style"
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽 방향에 맞는 스타일 자동 적용"
+msgstr "Apply style by page orientation"
+
+#: viewer/widgets/crop_dialog.py
+msgid "세로긴 쪽 →"
+msgstr "Portrait →"
+
+#: viewer/widgets/crop_dialog.py
+msgid "가로긴 쪽 →"
+msgstr "Landscape →"
+
+#: viewer/widgets/crop_dialog.py
+msgid "편집할 스타일:"
+msgstr "Style to edit:"
+
+#: viewer/widgets/crop_dialog.py
+msgid "스타일 추가"
+msgstr "Add Style"
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/twoup_dialog.py
+msgid "스타일 삭제"
+msgstr "Delete Style"
+
+#: viewer/widgets/crop_dialog.py
+msgid "지금 스타일을 복사해 새 스타일을 만듭니다"
+msgstr "Creates a new style from a copy of the current one"
+
+#: viewer/widgets/crop_dialog.py
+msgid "여백 (%)"
+msgstr "Margins (%)"
+
+#: viewer/widgets/crop_dialog.py
+msgid "흰 여백 자동 감지"
+msgstr "Detect white margins"
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽마다 내용의 경계를 찾아 자릅니다 — 위 칸은 경계 바깥으로 남길 여백이 됩니다"
+msgstr "Crops each page to its content — the values above become the margin kept outside the content"
+
+#: viewer/widgets/crop_dialog.py
+msgid "홀짝 좌우 대칭"
+msgstr "Mirror on even pages"
+
+#: viewer/widgets/crop_dialog.py
+msgid "짝수 쪽에서는 왼쪽·오른쪽 여백을 바꿔 적용합니다(제본 안쪽·바깥쪽)"
+msgstr "Swaps the left and right margins on even pages (inner and outer binding side)"
+
+#: viewer/widgets/crop_dialog.py
+msgid "0 으로"
+msgstr "Set to 0"
+
+#: viewer/widgets/crop_dialog.py
+msgid "적용할 쪽을 원래 쪽 크기로 되돌립니다"
+msgstr "Restores the target pages to their original size"
+
+#: viewer/widgets/crop_dialog.py
+msgid "내용이 없어 자르지 않습니다"
+msgstr "No content — not cropped"
+
+#: viewer/widgets/crop_dialog.py
+msgid "새 스타일 이름:"
+msgstr "New style name:"
+
+#: viewer/widgets/crop_dialog.py
+msgid "위"
+msgstr "Top"
+
+#: viewer/widgets/crop_dialog.py
+msgid "아래"
+msgstr "Bottom"
+
+#: viewer/widgets/crop_dialog.py
+msgid "남길 여백 (%)"
+msgstr "Margin to keep (%)"
+
+#: viewer/widgets/crop_dialog.py
+msgid "같은 이름의 스타일이 있습니다."
+msgstr "A style with this name already exists."
+
+#: viewer/widgets/crop_dialog.py
+msgid "이미 크롭된 쪽"
+msgstr "Already cropped"
+
+#: viewer/widgets/crop_dialog.py
+#, python-brace-format
+msgid "대상 {n}쪽"
+msgstr "{n} page(s)"
+
+#: viewer/widgets/crop_dialog.py
+#, python-brace-format
+msgid "겹쳐 보기: 남은 {n}쪽"
+msgstr "Overlay: {n} page(s) left"
+
+#: viewer/widgets/crop_dialog.py
+#, python-brace-format
+msgid "대상 {n}쪽의 크롭을 해제해 원래 쪽 크기로 되돌릴까요?"
+msgstr "Remove the crop from {n} page(s) and restore the original page size?"
 
 #: viewer/widgets/encrypt_dialog.py
 msgid "인쇄 제한(금지)"
@@ -5223,6 +5424,10 @@ msgid "자간 넓게 (+0.5pt)"
 msgstr "Wider spacing (+0.5pt)"
 
 #: viewer/widgets/main_view.py
+msgid "쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF 에 저장"
+msgstr "Crop pages — trim margins with portrait/landscape styles and save to the PDF"
+
+#: viewer/widgets/main_view.py
 msgid ""
 "이 창을 선택 후\n"
 "책갈피를 선택하세요"
@@ -5464,10 +5669,6 @@ msgstr "{n} selected — select just one to preview."
 #: viewer/widgets/merge_preview.py
 msgid "여백"
 msgstr "Margin"
-
-#: viewer/widgets/merge_preview.py
-msgid "크롭"
-msgstr "Crop"
 
 #: viewer/widgets/merge_preview.py viewer/widgets/thumbs_list.py
 msgid "숨김"
@@ -7307,20 +7508,12 @@ msgid "칠했습니다. [책갈피로] 를 누르면 칠한 곳으로 책갈피�
 msgstr "Highlighted. Press [To bookmarks] to make bookmarks from the highlights."
 
 #: viewer/widgets/text_panel.py
-msgid "스타일"
-msgstr "Style"
-
-#: viewer/widgets/text_panel.py
 msgid "자간"
 msgstr "Letter spacing"
 
 #: viewer/widgets/text_panel.py
 msgid "줄간격"
 msgstr "Line spacing"
-
-#: viewer/widgets/text_panel.py
-msgid "현재 쪽"
-msgstr "Current page"
 
 #: viewer/widgets/text_panel.py
 msgid "쪽 범위…"
@@ -7434,6 +7627,16 @@ msgstr "Copy Selected Pages to Screenshots ({n})"
 #, python-brace-format
 msgid "선택 페이지 복사 ({n}쪽)"
 msgstr "Copy Selected Pages ({n})"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "크롭… ({n}쪽)"
+msgstr "Crop… ({n} page(s))"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "크롭 해제 ({n}쪽)"
+msgstr "Remove Crop ({n} page(s))"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
@@ -8280,10 +8483,6 @@ msgid "양식 파일 없음"
 msgstr "Template File Missing"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "스타일 삭제"
-msgstr "Delete Style"
-
-#: viewer/widgets/twoup_dialog.py
 #, python-brace-format
 msgid ""
 "{n}개 양식을 저장했습니다:\n"
@@ -8719,4 +8918,7 @@ msgstr "Getting Started"
 
 #~ msgid "_edited.pdf 로 저장"
 #~ msgstr "Save as _edited.pdf"
+
+#~ msgid "큰 글자도 헤딩으로 포함 (정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄)"
+#~ msgstr "Include large text as headings (lines larger than body text, beyond regex 'CHAPTER 1'/'제1장')"
 

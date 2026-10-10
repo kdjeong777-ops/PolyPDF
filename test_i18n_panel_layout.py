@@ -69,6 +69,29 @@ try:
         hidden = [b.text().strip() for b in bt.findChildren(QPushButton)
                   if b.isVisible() and b.text().strip() and b.mapTo(bt, b.rect().bottomLeft()).y() > tree_top]
         chk(not hidden, "B [%s] 줄이 바뀐 단추가 트리에 가리지 않는다" % code, str(hidden))
+        # C(261010-6, 화면 점검): 머리의 단추·콤보끼리 겹치지 않는다 — 정렬 줄('수정일 순' ↔ '📁 폴더')과
+        #   편집 1행('트리' ↔ 책갈피명 수정)이 한 줄 고정이라 좁은 패널에서 서로 덮었다.
+        from PyQt6.QtWidgets import QComboBox
+        heads = [w for w in bt.findChildren((QPushButton, QComboBox))
+                 if w.isVisible() and not bt.tree.isAncestorOf(w)]
+        rects = [(w, w.geometry().translated(w.parentWidget().mapTo(bt, w.parentWidget().rect().topLeft())))
+                 for w in heads]
+        over = ["%s↔%s" % (a.text() if hasattr(a, "text") and not isinstance(a, QComboBox) else a.currentText(),
+                           b.text() if not isinstance(b, QComboBox) else b.currentText())
+                for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:] if ra.intersected(rb).width() > 1
+                and ra.intersected(rb).height() > 1]
+        chk(not over, "C [%s] 좁은 책갈피창 머리의 단추·콤보가 서로 겹치지 않는다" % code, str(over))
+        # 뷰어 모드(편집 아님)의 정렬 줄도
+        bt.set_edit_mode(False)
+        for _ in range(30):
+            app.processEvents(); time.sleep(0.01)
+        heads = [w for w in bt.findChildren((QPushButton, QComboBox))
+                 if w.isVisible() and not bt.tree.isAncestorOf(w)]
+        rects = [(w, w.geometry().translated(w.parentWidget().mapTo(bt, w.parentWidget().rect().topLeft())))
+                 for w in heads]
+        over = [i for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:]
+                if ra.intersected(rb).width() > 1 and ra.intersected(rb).height() > 1]
+        chk(not over, "C [%s] 뷰어 모드에서도 겹치지 않는다" % code, str(len(over)))
         mw.close(); app.processEvents()
 except Exception:
     import traceback

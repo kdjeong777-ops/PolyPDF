@@ -1242,6 +1242,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             lambda p, i=idx: (i == self._active_pane) and self._on_image_goto(p))
         mv.fileBoundaryRequested.connect(
             lambda d, i=idx: self._on_file_boundary(d, i))
+        mv.cropRequested.connect(lambda i=idx: self._open_crop_dialog(view=self._mv[i]))   # 261010-7(§4.7.15)
         mv.hyperlinkActivated.connect(
             lambda link, i=idx: (i == self._active_pane) and self._launch_hyperlink(link))
         mv.drawModeChanged.connect(self._on_main_draw_mode_changed)   # 260611-4: 공유 동기
@@ -2052,6 +2053,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 self.main_view.current_file() if self.main_view else None, int(pg)))
         self.page_thumbs.setPagesHidden.connect(self._set_pages_hidden)  # 260609-14(D5)
         self.page_thumbs.rotatePages.connect(self._rotate_pages)         # 260609-15(A1)
+        self.page_thumbs.cropPagesRequested.connect(lambda pages: self._open_crop_dialog(pages=pages))  # 261010-7
+        self.page_thumbs.uncropPagesRequested.connect(self._uncrop_pages)                               # 261010-7
         self.page_thumbs.printPagesRequested.connect(self._on_thumb_print_pages)        # 260616-21
         self.page_thumbs.screenshotPagesRequested.connect(self._on_thumb_screenshot_pages)
         # 260606-8: 두 메인 창의 시그널을 활성 창 기준으로 라우팅
@@ -4015,6 +4018,117 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
             self.bookmark_tree.add_or_refresh_file(final, after=str(src))
             self._open_saved_file(final)            # 색인 먼저 걸고 연다 — 260915-10
+        except Exception:
+            pass
+
+    # ===== 261010-7(마스터 §4.7.15): 쪽 크롭 — PDF 의 CropBox =====================
+    def _crop_target(self, view=None):
+        """크롭할 문서(경로·지금 쪽). 썸네일 쪽 편집이 저장 전이면 None(먼저 저장하라고 알린다)."""
+        mv = view or self.main_view
+        path = mv.current_file() if mv is not None else None
+        if not path:
+            self.status.showMessage(tr("크롭할 PDF 가 열려 있지 않습니다."), 4000)
+            return None
+        pt = self.page_thumbs
+        doc = getattr(pt, "_doc", None)
+        if doc is not None and str(doc.path) == str(path) and pt.is_page_dirty():
+            QMessageBox.information(self, tr("쪽 크롭"),
+                                    tr("썸네일에서 바꾼 쪽 순서·삭제·끼워 둔 쪽을 먼저 저장하거나 되돌린 뒤 크롭하세요."))
+            return None
+        return str(path), int(mv.current_page() or 0)
+
+    def _open_crop_dialog(self, pages=None, view=None):
+        tgt = self._crop_target(view)
+        if tgt is None:
+            return
+        path, cur = tgt
+        from PyQt6.QtWidgets import QDialog
+        from viewer.widgets.crop_dialog import CropDialog
+        dlg = CropDialog(path, current_page=(pages[0] if pages else cur), selected_pages=pages,
+                         styles=self._prefs.get("crop_styles"), auto=self._prefs.get("crop_auto"),
+                         chosen_id=self._prefs.get("crop_style_last") or "portrait", parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        plan = dlg.result_plan()
+        shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        self._prefs["crop_styles"] = plan["styles"]
+        self._prefs["crop_auto"] = plan["auto"]
+        self._prefs["crop_style_last"] = plan["chosen_id"]
+        try:
+            self._save_settings_now()
+        except Exception:
+            pass
+        self._apply_crop(path, plan, cur, shift)
+
+    def _uncrop_pages(self, pages):
+        tgt = self._crop_target()
+        if tgt is None or not pages:
+            return
+        path, cur = tgt
+        if QMessageBox.question(self, tr("크롭 해제"),
+                                tr("고른 {n}쪽의 크롭을 해제해 원래 쪽 크기로 되돌릴까요?").format(n=len(pages)))                 != QMessageBox.StandardButton.Yes:
+            return
+        shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        self._apply_crop(path, {"reset": True, "pages": list(pages)}, cur, shift)
+
+    def _apply_crop(self, path, plan, cur_page=0, shift=False):
+        """크롭 계산·임시 PDF 는 배경(응답성 SOT §4.4) → 원본에 놓기 `_finalize_save`(§4.7.5) → 다시 열기."""
+        from pathlib import Path as _P
+        import os as _os
+        from viewer import page_crop as _pc
+        from viewer.twoup import MergeCancelled
+        src = _P(path)
+        tmp = src.with_name(src.stem + "_crop_tmp.pdf")
+        built = {}
+        labels = {"crop": tr("크롭"), "save": tr("저장")}
+
+        def _job(progress):
+            import fitz
+            def _prog(d, t, phase):
+                return progress(d, t, labels.get(phase, phase))
+            try:
+                by = None
+                if not plan.get("reset"):
+                    doc = fitz.open(str(src))
+                    try:
+                        by = _pc.assign_styles(doc, plan["pages"], _pc.load_styles(plan["styles"]),
+                                               plan["auto"], plan["chosen_id"])
+                    finally:
+                        doc.close()
+                built.update(_pc.build(src, tmp, plan["pages"], by, bool(plan.get("reset")), _prog))
+            except _pc.Cancelled:
+                raise MergeCancelled()
+        title = tr("크롭 해제") if plan.get("reset") else tr("쪽 크롭")
+        res = self._run_merge_job(_job, title)
+        if res.get("cancelled"):
+            self.status.showMessage(tr("크롭을 취소했습니다 — 원본은 그대로입니다."), 5000)
+            return
+        if not res.get("ok"):
+            QMessageBox.warning(self, title, res.get("err") or tr("알 수 없는 오류"))
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        try:
+            final = self._finalize_save(src, _P(built["path"]), shift)
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            try:
+                if tmp.exists():
+                    _os.remove(str(tmp))
+            except Exception:
+                pass
+            from viewer.file_overwrite import SaveCancelled
+            if isinstance(e, SaveCancelled):
+                self.status.showMessage(str(e), 5000)
+                return
+            QMessageBox.warning(self, title, str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        n = int(built.get("changed") or 0)
+        self.status.showMessage((tr('크롭 해제: {n}쪽 → {name}') if plan.get("reset") else tr('크롭: {n}쪽 → {name}'))
+                                .format(n=n, name=_P(final).name), 6000)
+        try:
+            self.bookmark_tree.add_or_refresh_file(final, after=str(src))
+            self._open_saved_file(final, page=int(cur_page or 0))
         except Exception:
             pass
 

@@ -134,6 +134,16 @@ def _shape_circle(p, c):
     p.drawEllipse(QPointF(8, 8), 6.3, 6.3)
 
 
+def _crop(p, c):
+    """261010-7: 크롭 — 네모(왼·위 변) + 대각선 + 오른쪽 아래 재단 표시(오른 변·아래 변이 모서리 밖으로 나간다)."""
+    p.setPen(QPen(c, 1.6))
+    p.drawLine(QPointF(3, 1.5), QPointF(3, 12))       # 왼 변
+    p.drawLine(QPointF(3, 3), QPointF(13, 3))         # 위 변
+    p.drawLine(QPointF(13, 3), QPointF(13, 14.5))     # 오른 변 — 아래로 나간다
+    p.drawLine(QPointF(1.5, 13), QPointF(14.5, 13))   # 아래 변 — 오른쪽으로 나간다
+    p.drawLine(QPointF(3, 13), QPointF(13, 3))        # 대각선
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
@@ -141,6 +151,7 @@ _DRAW = {
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
+    "crop": _crop,
 }
 
 

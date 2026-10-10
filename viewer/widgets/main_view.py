@@ -1469,6 +1469,7 @@ class MainView(QWidget):
     imageStepRequested = pyqtSignal(int)         # v1.6.4 C2: 이미지 모드 ◀▶ (±1)
     imageGotoRequested = pyqtSignal(int)         # v1.6.8 F2: 이미지 모드 페이지번호 입력 (0-based)
     fileBoundaryRequested = pyqtSignal(int)      # 260609-2: 마지막/첫 페이지 경계에서 다음/이전 파일 (±1)
+    cropRequested = pyqtSignal()                 # 261010-7(마스터 §4.7.15): 툴바 크롭 단추
     hyperlinkActivated = pyqtSignal(object)      # 260609-3: 페이지 하이퍼링크 버튼 클릭(link dict)
     drawModeChanged = pyqtSignal(int)            # 260611-4: 선 종류 순환(0/1/2) — 공유 동기
 
@@ -1599,6 +1600,12 @@ class MainView(QWidget):
         # 260606-3: -, + 줌 버튼 폭 좁게·동일 높이
         self.btn_zoom_in = QPushButton("+"); self.btn_zoom_in.setFixedSize(24, H)
         self.btn_zoom_out = QPushButton("−"); self.btn_zoom_out.setFixedSize(24, H)
+        # 261010-7(마스터 §4.7.15): '+' 오른쪽 크롭 단추 — 그림은 테마 단색 아이콘(첨부 그림)
+        from viewer.widgets.icons import themed_icon as _ti
+        self.btn_crop = QPushButton(); self.btn_crop.setFixedSize(28, H)
+        self.btn_crop.setIcon(_ti("crop", size=16))
+        self.btn_crop.setToolTip(tr("쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF 에 저장"))
+        self.btn_crop.clicked.connect(self.cropRequested.emit)
 
         bar.addWidget(self.btn_prev_page)
         bar.addWidget(self.spin_page)
@@ -1610,6 +1617,7 @@ class MainView(QWidget):
         bar.addWidget(self.cmb_fit)
         bar.addWidget(self.btn_zoom_out)
         bar.addWidget(self.btn_zoom_in)
+        bar.addWidget(self.btn_crop)
         # 260609-22(J3): 편집모드 전용 선긋기 도구 모음
         self._draw_bar = self._build_draw_bar(H)
         bar.addWidget(self._draw_bar)
@@ -3028,8 +3036,10 @@ class MainView(QWidget):
         hb.addWidget(self._shape_btn)
         # 260611-74(Phase2): 글쓰기 버튼 — 클릭=선택/해제, 더블클릭=글쓰기↔지시선, ▾=스타일
         self._text_btn = _DblTool()
-        self._text_btn.setFixedSize(46, H)
-        self._text_btn.setStyleSheet("QToolButton{font-size:15px;font-weight:bold;}")
+        # 261010-8(디자인 SOT §2.10): 폭 46 → 38. 'T↘' 의 왼쪽 빈자리가 10px 이라 줄이고, 글자는 단추 전체가 아니라
+        #   ▾ 칸(구분선·삼각형)을 뺀 칸의 가운데에 오게 오른쪽 안쪽 여백을 준다 — 실측 'T↘' 좌우 2·2px, 'T' 9·8px.
+        self._text_btn.setFixedSize(self.TEXT_BTN_W, H)
+        self._text_btn.setStyleSheet("QToolButton{font-size:15px;font-weight:bold;%s}" % self.TEXT_BTN_PAD)
         self._text_btn.setText(self._TEXT_GLYPH["text"])
         self._text_btn.setToolTip(tr("글쓰기 — 클릭:선택/해제, 더블클릭:글쓰기↔지시선, ▾:스타일"))
         self._text_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
@@ -3166,6 +3176,8 @@ class MainView(QWidget):
     _SHAPE_KIND_ORDER = ["rect", "round", "circle"]
     # 260611-74: 글쓰기 버튼 글리프 — 글쓰기=T, 지시선=T+지시(↘)
     _TEXT_GLYPH = {"text": "T", "leader": "T↘"}
+    TEXT_BTN_W = 38                          # 261010-8(디자인 SOT §2.10): 글쓰기 단추 폭
+    TEXT_BTN_PAD = "padding-right:8px;"      # 글자를 ▾ 칸을 뺀 칸의 가운데로
     _TEXT_NAME = {"text": tr_noop("글쓰기"), "leader": tr_noop("지시선 글쓰기")}   # 표시는 tr()
     # 클래스 기본값 — _build_ui→_update_text_button 이 __init__ 상태블록보다 먼저 호출됨
     _text_kind = "text"
@@ -3379,7 +3391,8 @@ class MainView(QWidget):
         if not hasattr(self, "_text_btn"):
             return
         self._text_btn.setText(self._TEXT_GLYPH.get(self._text_kind, "T"))
-        self._text_btn.setStyleSheet(self._dbl_css(self._draw_kind == "text", font_px=15))
+        _css = self._dbl_css(self._draw_kind == "text", font_px=15)
+        self._text_btn.setStyleSheet(_css[:-1] + self.TEXT_BTN_PAD + "}")   # 글자를 ▾ 칸을 뺀 칸 가운데로(§2.10)
         self._text_btn.setToolTip(
             tr('{get} — 클릭:선택/해제, 더블클릭:글쓰기↔지시선, ▾:스타일({text_style})').format(get=tr(self._TEXT_NAME.get(self._text_kind, self._TEXT_NAME["text"])), text_style=tr(self._text_style)))
         if hasattr(self, "_text_menu"):

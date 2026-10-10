@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-09 23:04+0900\n"
+"POT-Creation-Date: 2026-10-10 11:11+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -140,7 +140,8 @@ msgstr ""
 msgid "버전 v{version}"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/read_aloud.py viewer/widgets/thumbs_list.py
+#: viewer/app.py viewer/widgets/crop_dialog.py viewer/widgets/read_aloud.py
+#: viewer/widgets/thumbs_list.py
 msgid "전체"
 msgstr ""
 
@@ -639,8 +640,9 @@ msgid "있는 언어로 진행"
 msgstr ""
 
 #: viewer/app.py viewer/present_controller.py viewer/update_controller.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
-#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
+#: viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/update_dialog.py
 msgid "취소"
 msgstr ""
@@ -710,6 +712,24 @@ msgstr ""
 
 #: viewer/app.py
 msgid "쪽 편집 저장"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/merge_preview.py
+msgid "크롭"
+msgstr ""
+
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/toc_review_dialog.py
+msgid "저장"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/crop_dialog.py
+msgid "크롭 해제"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/crop_dialog.py
+msgid "쪽 크롭"
 msgstr ""
 
 #: viewer/app.py
@@ -794,7 +814,8 @@ msgstr ""
 msgid "텍스트 박스선"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
 #: viewer/widgets/view_settings_dialog.py
 msgid "적용"
 msgstr ""
@@ -922,12 +943,6 @@ msgstr ""
 msgid ""
 "캡처 목록이 있습니다. PDF로 모아 저장할까요?\n"
 "(저장하지 않으면 목록은 사라집니다. 다음 실행은 빈 목록으로 시작합니다.)"
-msgstr ""
-
-#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/toc_review_dialog.py
-msgid "저장"
 msgstr ""
 
 #: viewer/app.py
@@ -1242,6 +1257,18 @@ msgid "페이지 편집 저장 실패"
 msgstr ""
 
 #: viewer/app.py
+msgid "크롭할 PDF 가 열려 있지 않습니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "썸네일에서 바꾼 쪽 순서·삭제·끼워 둔 쪽을 먼저 저장하거나 되돌린 뒤 크롭하세요."
+msgstr ""
+
+#: viewer/app.py
+msgid "크롭을 취소했습니다 — 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/app.py
 msgid "붙여넣기는 편집모드(✏)에서만 됩니다."
 msgstr ""
 
@@ -1322,7 +1349,8 @@ msgstr ""
 msgid "색 선택"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
 msgid "왼쪽"
 msgstr ""
 
@@ -1330,7 +1358,8 @@ msgstr ""
 msgid "가운데"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
 msgid "오른쪽"
 msgstr ""
 
@@ -2137,6 +2166,21 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "원본에 쓰는 중: {name}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "고른 {n}쪽의 크롭을 해제해 원래 쪽 크기로 되돌릴까요?"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "크롭 해제: {n}쪽 → {name}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "크롭: {n}쪽 → {name}"
 msgstr ""
 
 #: viewer/app.py
@@ -4206,7 +4250,11 @@ msgid "스캔/이미지 (OCR)"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "큰 글자도 헤딩으로 포함 (정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄)"
+msgid "큰 글자도 헤딩으로 포함"
+msgstr ""
+
+#: viewer/widgets/bookmarker_dialog.py
+msgid "정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄도 헤딩으로 봅니다"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
@@ -4234,7 +4282,11 @@ msgid "목차 쪽:"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "저장 전에 책갈피 표를 검토한다 (실제 쪽과 대조·수정·삭제·추가)"
+msgid "저장 전에 책갈피 표를 검토한다"
+msgstr ""
+
+#: viewer/widgets/bookmarker_dialog.py
+msgid "검토 표에서 실제 쪽과 대조해 고치거나 지우고 더할 수 있습니다"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
@@ -4254,11 +4306,11 @@ msgid " 페이지"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "오프셋:"
+msgid "<small>0 = 추천 후보 1순위 사용. TOC 모드에서만 의미.</small>"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "<small>0 = 추천 후보 1순위 사용. TOC 모드에서만 의미.</small>"
+msgid "오프셋:"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py
@@ -4362,6 +4414,149 @@ msgstr ""
 #: viewer/widgets/content_find_overlay.py
 #, python-brace-format
 msgid "{lbl} 내용 검색"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "세로긴 쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "가로긴 쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽 (Ctrl·Shift 로 여럿 고르기)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "겹쳐 보기"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "적용할 쪽 가운데 지금 쪽과 같은 방향의 쪽을 겹쳐 그립니다(최대 40쪽) — 어느 쪽 내용도 잘리지 않게 고를 때"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "적용할 쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽 범위:"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "예: 1-5, 8"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "왼쪽에서 고른 쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/text_panel.py
+msgid "현재 쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/text_panel.py
+msgid "스타일"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽 방향에 맞는 스타일 자동 적용"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "세로긴 쪽 →"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "가로긴 쪽 →"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "편집할 스타일:"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "스타일 추가"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/twoup_dialog.py
+msgid "스타일 삭제"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "지금 스타일을 복사해 새 스타일을 만듭니다"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "여백 (%)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "흰 여백 자동 감지"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "쪽마다 내용의 경계를 찾아 자릅니다 — 위 칸은 경계 바깥으로 남길 여백이 됩니다"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "홀짝 좌우 대칭"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "짝수 쪽에서는 왼쪽·오른쪽 여백을 바꿔 적용합니다(제본 안쪽·바깥쪽)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "0 으로"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "적용할 쪽을 원래 쪽 크기로 되돌립니다"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "내용이 없어 자르지 않습니다"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "새 스타일 이름:"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "위"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "아래"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "남길 여백 (%)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "같은 이름의 스타일이 있습니다."
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "이미 크롭된 쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+#, python-brace-format
+msgid "대상 {n}쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+#, python-brace-format
+msgid "겹쳐 보기: 남은 {n}쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+#, python-brace-format
+msgid "대상 {n}쪽의 크롭을 해제해 원래 쪽 크기로 되돌릴까요?"
 msgstr ""
 
 #: viewer/widgets/encrypt_dialog.py
@@ -5005,6 +5200,10 @@ msgid "자간 넓게 (+0.5pt)"
 msgstr ""
 
 #: viewer/widgets/main_view.py
+msgid "쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF 에 저장"
+msgstr ""
+
+#: viewer/widgets/main_view.py
 msgid ""
 "이 창을 선택 후\n"
 "책갈피를 선택하세요"
@@ -5230,10 +5429,6 @@ msgstr ""
 
 #: viewer/widgets/merge_preview.py
 msgid "여백"
-msgstr ""
-
-#: viewer/widgets/merge_preview.py
-msgid "크롭"
 msgstr ""
 
 #: viewer/widgets/merge_preview.py viewer/widgets/thumbs_list.py
@@ -7063,19 +7258,11 @@ msgid "칠했습니다. [책갈피로] 를 누르면 칠한 곳으로 책갈피�
 msgstr ""
 
 #: viewer/widgets/text_panel.py
-msgid "스타일"
-msgstr ""
-
-#: viewer/widgets/text_panel.py
 msgid "자간"
 msgstr ""
 
 #: viewer/widgets/text_panel.py
 msgid "줄간격"
-msgstr ""
-
-#: viewer/widgets/text_panel.py
-msgid "현재 쪽"
 msgstr ""
 
 #: viewer/widgets/text_panel.py
@@ -7189,6 +7376,16 @@ msgstr ""
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
 msgid "선택 페이지 복사 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "크롭… ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "크롭 해제 ({n}쪽)"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
@@ -8024,10 +8221,6 @@ msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
 msgid "양식 파일 없음"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
-msgid "스타일 삭제"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py

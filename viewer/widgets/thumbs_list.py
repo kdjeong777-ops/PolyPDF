@@ -37,6 +37,8 @@ class PageThumbs(QWidget):
     copyPagesRequested = pyqtSignal(object)        # 260821: 선택 썸네일 복사(이 문서 0-based)
     pastePagesRequested = pyqtSignal(int)          # 260821: 붙여넣기(기준 표시행 뒤에 삽입)
     pageOrderChanged = pyqtSignal()                # 260915-1: 쪽 이동·삭제·끌어 놓기·붙여넣기(미저장 순서 변경)
+    cropPagesRequested = pyqtSignal(object)        # 261010-7(§4.7.15): 고른 쪽으로 크롭 창
+    uncropPagesRequested = pyqtSignal(object)      # 261010-7(§4.7.15): 고른 쪽 크롭 해제
     addImagePagesRequested = pyqtSignal(int, object)  # 260930-1(§4.7.11): (기준행, [그림경로…]) 새 쪽으로
     imageDropRefused = pyqtSignal()                # 260930-1(§4.7.11): 편집모드가 아니라 받지 않았다
     # 260930-2(마스터 §4.7.12): 스테이징 쪽(붙여넣기·사진)은 **문서에 없는 쪽**이라 쪽 번호가 없다.
@@ -651,6 +653,11 @@ class PageThumbs(QWidget):
         act_copy = act_paste = None
         if self._doc is not None and sel_print:
             act_copy = menu.addAction(tr('선택 페이지 복사 ({n}쪽)').format(n=len(sel_print)))
+        # 261010-7(마스터 §4.7.15): 크롭 — PDF 를 바로 저장하는 일이라 편집 모드와 무관하게(저장 확인은 앱이)
+        act_crop = act_uncrop = None
+        if self._doc is not None and sel_print:
+            act_crop = menu.addAction(tr('크롭… ({n}쪽)').format(n=len(sel_print)))
+            act_uncrop = menu.addAction(tr('크롭 해제 ({n}쪽)').format(n=len(sel_print)))
         _pcnt = self._paste_available() if self._paste_available else 0
         if self._doc is not None and self._edit_mode and _pcnt > 0:
             _where = tr("맨 뒤") if item is None else tr('p.{page} 뒤').format(page=int(page) + 1) if page is not None else tr("이 뒤")
@@ -717,6 +724,10 @@ class PageThumbs(QWidget):
             self.screenshotPagesRequested.emit(sel_print); return
         if chosen is not None and chosen == act_copy:     # 260821
             self.copyPagesRequested.emit(sel_print); return
+        if chosen is not None and chosen == act_crop:     # 261010-7
+            self.cropPagesRequested.emit(sel_print); return
+        if chosen is not None and chosen == act_uncrop:
+            self.uncropPagesRequested.emit(sel_print); return
         if chosen is not None and chosen == act_paste:
             self.pastePagesRequested.emit(self.list.row(item) if item is not None
                                           else self.list.count() - 1)

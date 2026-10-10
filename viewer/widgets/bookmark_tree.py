@@ -355,8 +355,11 @@ class BookmarkTree(QWidget):
             self._tags = None
 
         # v1.6.19: 파일 정렬 콤보 + 260822: 파일/폴더 모드 전환 버튼(정렬 콤보 오른쪽)
-        sort_row = QHBoxLayout()
-        sort_row.setContentsMargins(0, 0, 0, 0)
+        # 261010-6(디자인 SOT §2.8.5, 화면 점검): 한 줄 고정이면 좁은 패널에서 콤보가 단추를 덮었다(ko 5px·en 12px) —
+        #   흐르는 줄로, 패널 레이아웃에 바로 둔다(§2.8.5 — 한 겹 안이면 바뀐 높이가 바깥에 전해지지 않는다).
+        from viewer.widgets.flow_layout import FlowLayout as _Flow
+        self._sort_row_w = QWidget()
+        sort_row = _Flow(self._sort_row_w, spacing=4, center=False)
         sort_row.addWidget(QLabel(tr("정렬:")))
         self._sort_combo = QComboBox()
         for _k, _t in self.SORT_LABELS:                    # 보이는 글자 + 내부 키
@@ -376,8 +379,8 @@ class BookmarkTree(QWidget):
                                  "· 파일 모드: 현재 파일만 표시\n"
                                  "· 폴더 모드: 그 폴더의 PDF 전체 표시"))
         self.btn_mode.clicked.connect(self._toggle_view_mode)
-        sort_row.addWidget(self.btn_mode, 1)
-        layout.addLayout(sort_row)
+        sort_row.addWidget(self.btn_mode)
+        layout.addWidget(self._sort_row_w)
 
         # v1.6.18: 책갈피 편집 툴바 (260606-4추가: 연필 아이콘 적용)
         self.btn_edit = QPushButton(tr(" 편집"))
@@ -453,20 +456,10 @@ class BookmarkTree(QWidget):
         #   버튼(단일/트리)을 둔다.
         self._multi_sel = True
 
-        # 260611-18(C1·C2): 편집 보조 버튼을 2줄로 — 각 줄을 패널 전체 폭(편집/취소/저장 줄과
-        #   동일)으로 채워 정렬. 1행 [다중] ◀ ▶ ▲ ▼ [책갈피명수정] / 2행 🗑️ ⭐선택만 📋복사.
-        from PyQt6.QtWidgets import QSizePolicy, QVBoxLayout as _QVBox
+        # 260611-18(C1·C2): 편집 보조 버튼을 2줄로 — 1행 [트리] [책갈피명수정] ◀ ▶ ▲ ▼ / 2행 🗑️ ⭐선택만 📋복사.
+        #   두 줄 모두 흐르는 줄(디자인 SOT §2.8.5) — 좁으면 아래로 넘어간다(종전 1행 '전체 폭 균등'은 261010-6 에 폐지).
         from PyQt6.QtGui import QIcon as _QIcon
         from PyQt6.QtCore import QSize as _QSize
-
-        def _expand(b):
-            b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            b.setMinimumWidth(0)
-            return b
-
-        self.edit_ops = QWidget()
-        eo = _QVBox(self.edit_ops)
-        eo.setContentsMargins(0, 0, 0, 0); eo.setSpacing(3)
 
         # 260901-2: 단일/트리 보기 토글 — 라벨 = **현재 보기**(클릭마다 전환).
         #   단일: 하위 폴더와 무관하게 모든 PDF 를 한 위계로. 트리: 폴더 그룹 아래로 묶어 표시.
@@ -486,9 +479,12 @@ class BookmarkTree(QWidget):
         self.btn_edit_single.setToolTip(tr("책갈피명 수정 (단일 편집: 제목·페이지)"))
         self.btn_edit_single.clicked.connect(self._op_edit_single)
 
-        # 1행: [단일/트리] ◀ ▶ ▲ ▼ [책갈피명수정] — 전체 폭 균등 분배
+        # 1행: [단일/트리] [책갈피명수정] ◀ ▶ ▲ ▼
+        # 261010-6(디자인 SOT §2.8.5, 화면 점검): 종전 '전체 폭 균등 분배' 한 줄은 좁은 패널에서 단추의 최소 폭 합이
+        #   패널보다 커져 '트리' 를 옆 단추가 덮었다(ko 6px·en 15px) — 2행·편집 줄처럼 흐르는 줄로.
         row1 = QWidget()
-        r1 = QHBoxLayout(row1); r1.setContentsMargins(0, 0, 0, 0); r1.setSpacing(3)
+        r1 = _Flow(row1, spacing=3, center=False)
+        self.edit_ops = row1            # 편집 조작 1행 = edit_ops(편집 모드에서만 보인다)
         # 260902-5(사용자 요청): 책갈피명 수정을 트리 버튼 바로 오른쪽으로 — 뒤따르는
         #   ◀▶▲▼ 가 '책갈피' 조작임이 한눈에 읽히도록.
         for b in (self.btn_view_mode,
@@ -497,7 +493,10 @@ class BookmarkTree(QWidget):
                   self._mk_btn("▶", tr("책갈피 들여쓰기 (하위로)"), self._op_indent),
                   self._mk_btn("▲", tr("책갈피 위로 이동 (같은 부모 안)"), self._op_move_up),
                   self._mk_btn("▼", tr("책갈피 아래로 이동 (같은 부모 안)"), self._op_move_down)):
-            r1.addWidget(_expand(b), 1)
+            if b is not self.btn_view_mode:
+                # 글자 하나·아이콘뿐인 단추 — 기본 단추 최소 폭(약 75px)이면 흐르는 줄에서 한 줄에 둘만 들어갔다
+                b.setFixedWidth(max(30, b.fontMetrics().horizontalAdvance(b.text()) + 16))
+            r1.addWidget(b)
         # 261009-14: 균등 분배라도 '단일/트리' 글자는 다 들어가게(좁은 패널에서 '트리' 가 1~3px 잘렸다)
         _fmv = self.btn_view_mode.fontMetrics()
         self.btn_view_mode.setMinimumWidth(max(_fmv.horizontalAdvance(tr("트리")),
@@ -512,9 +511,8 @@ class BookmarkTree(QWidget):
                   self._mk_btn(tr("📋 복사"), tr("선택 파일을 다른 폴더로 복사"), self._op_copy_to)):
             r2.addWidget(b)
 
-        eo.addWidget(row1)
-        # row2(흐르는 줄)는 edit_ops 안이 아니라 패널 레이아웃에 **바로** 둔다 — 한 겹 안에 넣으면 줄이 바뀐 높이가
-        #   바깥까지 전해지지 않아 둘째 줄 단추가 트리에 가렸다(261009-14). edit_ops 와 함께 보이고 숨는다.
+        # 흐르는 줄(row1=edit_ops·row2)은 다른 위젯 안이 아니라 패널 레이아웃에 **바로** 둔다 — 한 겹 안에 넣으면 줄이
+        #   바뀐 높이가 바깥까지 전해지지 않아 둘째 줄 단추가 트리에 가렸다(261009-14). row2 는 edit_ops 와 함께 보이고 숨는다.
         self._edit_ops_row2 = row2
         self.edit_ops.setVisible(False)
         row2.setVisible(False)

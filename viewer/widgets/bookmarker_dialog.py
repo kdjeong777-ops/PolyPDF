@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QRadioButton,
     QButtonGroup,
@@ -22,12 +23,12 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QFileDialog,
+    QWidget,
     QDialogButtonBox,
 )
 
 from viewer import bookmarker_bridge as bridge
 from viewer.i18n import tr
-from viewer.widgets.flow_layout import FlowLayout
 
 
 class BookmarkerDialog(QDialog):
@@ -90,22 +91,26 @@ class BookmarkerDialog(QDialog):
         grp_mode = QGroupBox(tr("추출 모드"))
         self.grp_mode = grp_mode
         mv = QVBoxLayout(grp_mode)
-        ml = FlowLayout(spacing=10, center=False)      # 다른 언어로 길어지면 줄바꿈(다국어 SOT §6 폭)
+        # 261010-6(디자인 SOT §2.15): 종전 흐르는 줄은 둘째 줄로 넘어가도 창이 그 높이를 주지 않아 '스캔/이미지 (OCR)' 가
+        #   아래 체크박스와 겹쳤다 — 2×2 격자로 줄 수를 정해 둔다(가장 긴 '자동 (…)' 도 한 칸에 들어간다).
+        ml = QGridLayout()
+        ml.setHorizontalSpacing(10)
         self.rb_auto = QRadioButton(tr("자동 (목차 있으면 TOC, 없으면 폰트)"))
         self.rb_toc = QRadioButton(tr("TOC 강제"))
         self.rb_font = QRadioButton(tr("폰트 강제"))
         self.rb_ocr = QRadioButton(tr("스캔/이미지 (OCR)"))
         self.bg_mode = QButtonGroup(self)
-        for rb in (self.rb_auto, self.rb_toc, self.rb_font, self.rb_ocr):
+        for i, rb in enumerate((self.rb_auto, self.rb_toc, self.rb_font, self.rb_ocr)):
             self.bg_mode.addButton(rb)
-            ml.addWidget(rb)
+            ml.addWidget(rb, i // 2, i % 2)
+        ml.setColumnStretch(2, 1)
         mode = (p.get("bookmarker_mode") or "auto").lower()
         {"toc": self.rb_toc, "font": self.rb_font,
          "ocr": self.rb_ocr}.get(mode, self.rb_auto).setChecked(True)
         mv.addLayout(ml)
-        # OCR 모드 보조 옵션
-        self.chk_ocr_fontauto = QCheckBox(
-            tr("큰 글자도 헤딩으로 포함 (정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄)"))
+        # OCR 모드 보조 옵션 — 체크박스 글자는 줄바꿈이 안 되므로 이름만, 풀이는 아래 작은 글씨(디자인 SOT §2.14)
+        self.chk_ocr_fontauto = QCheckBox(tr("큰 글자도 헤딩으로 포함"))
+        self.chk_ocr_fontauto.setToolTip(tr("정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄도 헤딩으로 봅니다"))
         self.chk_ocr_fontauto.setChecked(bool(p.get("bookmarker_ocr_font_auto", True)))
         mv.addWidget(self.chk_ocr_fontauto)
         self.lbl_ocr_hint = QLabel(
@@ -131,29 +136,33 @@ class BookmarkerDialog(QDialog):
         row_toc.addWidget(self.edit_toc_pages, 1)
         row_toc.addWidget(self.btn_detect_toc)
         ft.addRow(tr("목차 쪽:"), row_toc)
-        self.chk_review = QCheckBox(tr("저장 전에 책갈피 표를 검토한다 (실제 쪽과 대조·수정·삭제·추가)"))
+        self.chk_review = QCheckBox(tr("저장 전에 책갈피 표를 검토한다"))
+        self.chk_review.setToolTip(tr("검토 표에서 실제 쪽과 대조해 고치거나 지우고 더할 수 있습니다"))
         self.chk_review.setChecked(bool(p.get("bookmarker_review", True)))
-        ft.addRow("", self.chk_review)
+        ft.addRow(self.chk_review)                     # 이름 칸 없이 두 칸 폭(디자인 SOT §2.14)
         hint_toc = QLabel(tr("<small>스캔본처럼 목차를 못 알아보는 책은 목차 쪽을 직접 적어 주세요. "
                           "검토 표에서는 오프셋(목차 쪽→실제 쪽)을 추천받고, 행마다 실제 쪽을 미리보기로 확인해 고칠 수 있습니다.</small>"))
         hint_toc.setStyleSheet("color:#888;"); hint_toc.setWordWrap(True)
-        ft.addRow("", hint_toc)
-        layout.addWidget(grp_toc)
+        ft.addRow(hint_toc)
 
         # ── 오프셋 (TOC 모드) ──────────────────────────────────────
-        grp_off = QGroupBox(tr("TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)"))
-        self.grp_off = grp_off
-        fo = QFormLayout(grp_off)
+        # 261010-6(디자인 SOT §2.15): 따로 있던 'TOC 오프셋' 묶음을 목차 묶음의 한 줄로 — 겹침을 풀며 늘어난 높이를 되찾아
+        #   작은 화면(1366×768)에 들어가게. 묶음 제목은 칸의 툴팁, 풀이는 칸 옆 작은 글씨.
         self.spin_offset = QSpinBox()
+        self.spin_offset.setToolTip(tr("TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)"))
         self.spin_offset.setRange(-100, 200)
         self.spin_offset.setValue(0)
         self.spin_offset.setSpecialValueText(tr("자동"))     # 0 표시 시 '자동'
         self.spin_offset.setSuffix(tr(" 페이지"))
-        fo.addRow(tr("오프셋:"), self.spin_offset)
         hint = QLabel(tr("<small>0 = 추천 후보 1순위 사용. TOC 모드에서만 의미.</small>"))
         hint.setStyleSheet("color:#888;")
-        fo.addRow("", hint)
-        layout.addWidget(grp_off)
+        self.grp_off = QWidget()                       # 기존 책갈피 수정이면 함께 꺼진다(_sync_exist_mode)
+        ro = QHBoxLayout(self.grp_off)
+        ro.setContentsMargins(0, 0, 0, 0)
+        ro.addWidget(self.spin_offset)
+        ro.addWidget(hint, 1)
+        ft.addRow(tr("오프셋:"), self.grp_off)
+        layout.addWidget(grp_toc)
 
         # ── 출력 ───────────────────────────────────────────────────
         grp_out = QGroupBox(tr("출력"))
@@ -219,6 +228,9 @@ class BookmarkerDialog(QDialog):
         self._sync_ocr_enabled()
         self._sync_outdir_enabled()
 
+        # 261010-6(디자인 SOT §2.15): 최상위 창은 줄바꿈 높이(heightForWidth)를 스스로 맞추지 않는다 — 보일 때·폭이 바뀔 때 맞춘다
+        self._fit_pending = False
+
         # v1.6.16: 모듈 경로 변경 시 동적 재확인 (300ms 디바운스)
         self._recheck_timer = QTimer(self)
         self._recheck_timer.setSingleShot(True)
@@ -233,6 +245,34 @@ class BookmarkerDialog(QDialog):
         # 초기 1회 확인
         self._recheck_module()
         self._recheck_existing()
+
+    # --- 261010-6: 줄바꿈 높이 맞추기(디자인 SOT §2.15) -----------------
+    def _fit_height(self):
+        """지금 폭에서 레이아웃이 필요한 높이를 최소 높이로 — 모자라면 창을 그만큼 키운다."""
+        self._fit_pending = False
+        lay = self.layout()
+        if lay is None:
+            return
+        lay.activate()
+        need = lay.totalHeightForWidth(self.width()) if lay.hasHeightForWidth() else lay.totalSizeHint().height()
+        if need > 0 and need != self.minimumHeight():
+            self.setMinimumHeight(need)
+            if self.height() < need:
+                self.resize(self.width(), need)
+
+    def _schedule_fit(self):
+        if not self._fit_pending:
+            self._fit_pending = True
+            QTimer.singleShot(0, self._fit_height)
+
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        self._fit_height()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        if ev.oldSize().width() != ev.size().width():
+            self._schedule_fit()
 
     # --- 260904-10: 기존 책갈피 ---------------------------------------
     def _recheck_existing(self):
@@ -251,6 +291,8 @@ class BookmarkerDialog(QDialog):
             self.lbl_exist.setText(
                 tr('이 PDF에는 이미 책갈피 <b>{n}개</b>가 있습니다. 어떻게 할지 고르세요.').format(n=n))
         self._sync_exist_mode()
+        if self.isVisible():
+            self._schedule_fit()                       # 묶음이 나타나거나 사라지면 높이가 바뀐다
 
     def _sync_exist_mode(self):
         """'기존 책갈피 수정'이면 추출(모드·목차 쪽·오프셋)은 쓰지 않으므로 비활성."""
@@ -275,6 +317,8 @@ class BookmarkerDialog(QDialog):
         )
         self.warn.setStyleSheet("color:#a33; padding:6px; background:#fff4f4;")
         self.warn.setVisible(True)
+        if self.isVisible():
+            self._schedule_fit()
 
     # --- helpers ----------------------------------------------------
     def _browse_input(self):
