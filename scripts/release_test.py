@@ -114,7 +114,19 @@ def ci_download(run_id: str, kind: str, dest: Path) -> Path:
     name = "PolyPDF-main-%s" % kind
     dest.mkdir(parents=True, exist_ok=True)
     t = time.perf_counter()
-    gh("run", "download", run_id, "-R", REPO, "-n", name, "-D", str(dest))
+    # 261010-17: 가정 Wi-Fi 에서 350MB 를 받다 연결이 끊겨(wsarecv: forcibly closed) 시험이 시작도 못 했다 — 3번까지 다시 받는다
+    for attempt in range(3):
+        try:
+            gh("run", "download", run_id, "-R", REPO, "-n", name, "-D", str(dest))
+            break
+        except SystemExit as e:
+            for f in dest.rglob("*"):
+                if f.is_file():
+                    f.unlink(missing_ok=True)
+            if attempt == 2:
+                raise
+            say("받기 실패(%d/3) — 다시 받는다: %s" % (attempt + 1, str(e).splitlines()[-1][:120]))
+            time.sleep(10)
     files = [p for p in dest.rglob("*") if p.is_file()]
     say("받음: %s (%d개, %.0fMB, %.0f초)" % (name, len(files), sum(p.stat().st_size for p in files) / 2**20,
                                           time.perf_counter() - t))
