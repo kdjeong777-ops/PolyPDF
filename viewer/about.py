@@ -42,6 +42,18 @@ OSS = (
     ("lameenc · LAME", "LGPL", tr_noop("Chris Cooper · LAME 프로젝트"), ("lameenc",)),
     ("pywin32", "PSF License", tr_noop("Mark Hammond 외"), ("pywin32",)),
     ("Anthropic Python SDK", "MIT", "Anthropic", ("anthropic",)),
+    # 261010-21: 전자서명(보안 SOT §8)
+    ("pyHanko · pyhanko-certvalidator", "MIT", "Matthias Valvekens", ("pyHanko",)),
+    ("cryptography", "Apache 2.0 / BSD-3-Clause", "Python Cryptographic Authority", ("cryptography",)),
+    ("asn1crypto · oscrypto", "MIT", "Will Bond", ()),
+    ("fontTools", "MIT", "fontTools contributors", ()),
+    ("uharfbuzz · HarfBuzz", "Apache 2.0 / MIT", "HarfBuzz contributors", ()),
+    ("lxml", "BSD-3-Clause", "lxml contributors", ()),
+    ("aiohttp", "Apache 2.0", "aiohttp contributors", ()),
+    ("PyWinRT", "MIT", "PyWinRT contributors", ("winrt-runtime", "winrt-Windows.Foundation",
+                                                "winrt-Windows.Security.Credentials",
+                                                "winrt-Windows.Security.Cryptography",
+                                                "winrt-Windows.Storage.Streams")),
 )
 
 

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 16:49+0900\n"
+"POT-Creation-Date: 2026-10-10 14:15+0000\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -130,7 +130,7 @@ msgstr "This program is distributed under the terms of {license}. Under these te
 msgid "이 프로그램의 저작권은 개발자에게 있습니다."
 msgstr "This program is copyrighted by its developer."
 
-#: viewer/about.py
+#: viewer/about.py viewer/widgets/sign_dialogs.py
 msgid "이메일"
 msgstr "Email"
 
@@ -481,6 +481,22 @@ msgid "PDF번역"
 msgstr "Translate PDF"
 
 #: viewer/app.py
+msgid "🔏 전자서명"
+msgstr "🔏 Digital Signature"
+
+#: viewer/app.py
+msgid "서명..."
+msgstr "Sign..."
+
+#: viewer/app.py
+msgid "디지털 ID..."
+msgstr "Digital IDs..."
+
+#: viewer/app.py
+msgid "서명 그림..."
+msgstr "Signature Image..."
+
+#: viewer/app.py
 msgid "📄 그 밖의 PDF·생성 작업"
 msgstr "📄 Other PDF and Generation Tasks"
 
@@ -641,10 +657,12 @@ msgid "있는 언어로 진행"
 msgstr "Continue with Available Languages"
 
 #: viewer/app.py viewer/edit_controller.py viewer/present_controller.py
-#: viewer/update_controller.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
-#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
-#: viewer/widgets/pointer_settings_dialog.py viewer/widgets/update_dialog.py
+#: viewer/sign_controller.py viewer/update_controller.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
+#: viewer/widgets/pen_settings_dialog.py
+#: viewer/widgets/pointer_settings_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/update_dialog.py
 msgid "취소"
 msgstr "Cancel"
 
@@ -874,7 +892,7 @@ msgstr "Manage Patent Registration Favorites"
 msgid "암호화 PDF 저장"
 msgstr "Save Encrypted PDF"
 
-#: viewer/app.py viewer/print_controller.py
+#: viewer/app.py viewer/print_controller.py viewer/sign_controller.py
 msgid "PDF 파일 (*.pdf)"
 msgstr "PDF Files (*.pdf)"
 
@@ -1257,7 +1275,7 @@ msgstr ""
 msgid "닫고 저장"
 msgstr "Close and Save"
 
-#: viewer/app.py viewer/workers.py
+#: viewer/app.py viewer/sign_controller.py viewer/workers.py
 msgid "완료"
 msgstr "Done"
 
@@ -1689,6 +1707,10 @@ msgstr ""
 #, python-brace-format
 msgid "알 수 없는 요청: {op}"
 msgstr "Unknown request: {op}"
+
+#: viewer/app.py
+msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
+msgstr "Save cancelled — the signed original is unchanged."
 
 #: viewer/app.py
 #, python-brace-format
@@ -3242,6 +3264,201 @@ msgstr "Recording started"
 msgid "녹화 시작 실패: {e}"
 msgstr "Failed to start recording: {e}"
 
+#: viewer/sign_controller.py
+msgid "서명할 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."
+msgstr "Drag on the page to place the signature (a single click uses the default size)."
+
+#: viewer/sign_controller.py
+msgid "서명 확인 중…"
+msgstr "Checking signature…"
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "서명"
+msgstr "Sign"
+
+#: viewer/sign_controller.py
+msgid "서명할 PDF를 먼저 여세요."
+msgstr "Open the PDF to sign first."
+
+#: viewer/sign_controller.py
+msgid "서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 만들까요?"
+msgstr "There is no signature image. Create one from a photo of your signature on paper?"
+
+#: viewer/sign_controller.py
+msgid "서명 그림 만들기…"
+msgstr "Create Signature Image…"
+
+#: viewer/sign_controller.py
+msgid "그림 없이"
+msgstr "Without Image"
+
+#: viewer/sign_controller.py
+msgid "저장하지 않은 편집(쪽·크롭·책갈피·꾸밈)이 있습니다. 먼저 저장해야 서명할 수 있습니다 — 서명은 디스크에 있는 판에 합니다."
+msgstr "There are unsaved edits (pages, crop, bookmarks, annotations). Save them first — the signature applies to the version on disk."
+
+#: viewer/sign_controller.py
+msgid "이 파일에는 PolyPDF 가 따로 든 꾸밈·사진·하이퍼링크가 있습니다. 이것들은 서명에 들어가지 않고 다른 뷰어에서 보이지 않습니다."
+msgstr "This file has annotations, images or hyperlinks that PolyPDF keeps separately. They are not covered by the signature and are not visible in other viewers."
+
+#: viewer/sign_controller.py
+msgid "서명에 넣으려면 먼저 '저장(일반뷰어용)' 으로 현재 파일에 구운 뒤 다시 서명하세요."
+msgstr "To include them, first flatten them into the current file with 'Save (for other viewers)', then sign again."
+
+#: viewer/sign_controller.py
+msgid "일반뷰어용으로 먼저 저장…"
+msgstr "Save for Other Viewers First…"
+
+#: viewer/sign_controller.py
+msgid "그대로 서명"
+msgstr "Sign Anyway"
+
+#: viewer/sign_controller.py
+msgid "2쪽 보기에서는 자리를 정할 수 없습니다. 1쪽 보기로 바꾼 뒤 다시 서명하세요."
+msgstr "You cannot place a signature in two-page view. Switch to single-page view and sign again."
+
+#: viewer/sign_controller.py
+msgid "보기 회전을 한 쪽에는 서명할 수 없습니다. 회전을 되돌린 뒤 서명하세요."
+msgstr "You cannot sign a page whose view is rotated. Undo the rotation and sign again."
+
+#: viewer/sign_controller.py
+msgid "이 쪽은 PDF 안에서 회전되어 있어 아직 서명할 수 없습니다. 다른 쪽에 서명하세요."
+msgstr "This page is rotated inside the PDF and cannot be signed yet. Sign another page."
+
+#: viewer/sign_controller.py
+msgid "서명 중"
+msgstr "Signing"
+
+#: viewer/sign_controller.py
+msgid "다른 이름으로 서명"
+msgstr "Sign As"
+
+#: viewer/sign_controller.py
+msgid "서명된 문서"
+msgstr "Signed Document"
+
+#: viewer/sign_controller.py
+msgid "새 파일로 저장하면 서명한 원본은 그대로 유효합니다."
+msgstr "If you save to a new file, the signed original stays valid."
+
+#: viewer/sign_controller.py
+msgid "새 파일로 저장(권장)"
+msgstr "Save to New File (Recommended)"
+
+#: viewer/sign_controller.py
+msgid "서명을 무효로 하고 덮어쓰기"
+msgstr "Overwrite and Invalidate Signature"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명자 {names} · 유효 · 신뢰함"
+msgstr "Signed by {names} · Valid · Trusted"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명자 {names} · 유효 · 신원 미확인(신뢰 목록에 없음)"
+msgstr "Signed by {names} · Valid · Identity unknown (not in trusted list)"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명자 {names} · 서명 뒤 문서가 변경됨"
+msgstr "Signed by {names} · Document changed after signing"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명자 {names} · 서명 무효 — 서명한 내용이 바뀌었거나 확인할 수 없습니다"
+msgstr "Signed by {names} · Signature invalid — the signed content changed or cannot be verified"
+
+#: viewer/sign_controller.py
+msgid "Windows Hello 확인 중"
+msgstr "Checking Windows Hello"
+
+#: viewer/sign_controller.py
+msgid "디지털 ID 가 없습니다. 지금 만들까요?"
+msgstr "You have no digital ID. Create one now?"
+
+#: viewer/sign_controller.py
+msgid "이 문서는 서명 권한이 없습니다. 권한 암호로 연 뒤 서명하세요(책갈피창 우클릭 → 암호 입력)."
+msgstr "This document does not allow signing. Open it with the owner password, then sign (Bookmarks panel right-click → Enter Password)."
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 확인"
+msgstr "Windows Hello Verification"
+
+#: viewer/sign_controller.py
+msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
+msgstr "The digital ID file was not found. Import it again in the Digital IDs window."
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "비밀번호가 맞지 않습니다."
+msgstr "The password is incorrect."
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "Windows Hello"
+msgstr "Windows Hello"
+
+#: viewer/sign_controller.py
+msgid "이 비밀번호를 Windows Hello 로 다시 보관할까요?"
+msgstr "Store this password with Windows Hello again?"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명했습니다: {name}"
+msgstr "Signed: {name}"
+
+#: viewer/sign_controller.py
+msgid "Windows Hello 를 취소했습니다 — 비밀번호를 넣어 서명할 수 있습니다."
+msgstr "Windows Hello was cancelled — you can sign by entering the password."
+
+#: viewer/sign_controller.py
+msgid "Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. 비밀번호를 넣어 서명하세요 — 서명한 뒤 다시 보관할지 묻습니다."
+msgstr "Could not retrieve the password stored with Windows Hello. Enter the password to sign — you will be asked whether to store it again afterwards."
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "'{name}' 에는 전자서명이 있습니다. 이 파일에 덮어쓰면 서명이 무효가 됩니다."
+msgstr "'{name}' has a digital signature. Overwriting this file will invalidate the signature."
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "서명을 확인하지 못했습니다({e})."
+msgstr "Could not verify the signature ({e})."
+
+#: viewer/sign_controller.py
+msgid "작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."
+msgstr "The author locked this document against changes after signing — no signature can be added."
+
+#: viewer/sign_controller.py
+msgid "암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."
+msgstr "The document password is unknown. Open it with the owner password, then sign."
+
+#: viewer/sign_controller.py
+msgid "이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."
+msgstr "This PDF cannot be signed as is (damaged file structure). Save it with PolyPDF first (Save As) and sign that file."
+
+#: viewer/sign_controller.py
+msgid "겉모양 글자에 쓸 한글 글꼴이 없습니다. 서명 그림을 고르거나 겉모양 글자를 끄세요."
+msgstr "No font is available for the appearance text. Choose a signature image or turn off the appearance text."
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명하지 못했습니다: {e}"
+msgstr "Could not sign: {e}"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "{stem}_서명.pdf"
+msgstr "{stem}_signed.pdf"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "저장 중: {name}"
+msgstr "Saving: {name}"
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "저장하지 못했습니다: {e}"
+msgstr "Could not save: {e}"
+
 #: viewer/study/ocr.py
 msgid "중국어(간체)"
 msgstr "Chinese (Simplified)"
@@ -4559,6 +4776,7 @@ msgid "TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)"
 msgstr "TOC offset (adjust printed TOC page → actual page)"
 
 #: viewer/widgets/bookmarker_dialog.py viewer/widgets/ocr_options_dialog.py
+#: viewer/widgets/sign_dialogs.py
 msgid "자동"
 msgstr "Auto"
 
@@ -4640,7 +4858,7 @@ msgstr "Custom Size Settings"
 msgid "캡쳐 박스의 사용자 크기 5개 (이름·가로·세로 픽셀)"
 msgstr "5 custom capture box sizes (name, width, height in pixels)"
 
-#: viewer/widgets/capture_settings.py
+#: viewer/widgets/capture_settings.py viewer/widgets/sign_dialogs.py
 msgid "이름"
 msgstr "Name"
 
@@ -5466,9 +5684,17 @@ msgstr "Tighter spacing (-0.5pt)"
 msgid "자간 넓게 (+0.5pt)"
 msgstr "Wider spacing (+0.5pt)"
 
+#: viewer/widgets/main_view.py viewer/widgets/sign_dialogs.py
+msgid "서명 패널"
+msgstr "Signatures"
+
 #: viewer/widgets/main_view.py
 msgid "쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF 에 저장"
 msgstr "Crop pages — trim margins with portrait/landscape styles and save to the PDF"
+
+#: viewer/widgets/main_view.py
+msgid "전자서명 — 서명 그림과 디지털 ID 로 이 PDF 에 서명"
+msgstr "Digital signature — sign this PDF with your signature image and digital ID"
 
 #: viewer/widgets/main_view.py
 msgid ""
@@ -5936,7 +6162,7 @@ msgstr "Pointer {i}"
 msgid "사용자 포인터 {i}"
 msgstr "Custom pointer {i}"
 
-#: viewer/widgets/pres_timer.py
+#: viewer/widgets/pres_timer.py viewer/widgets/sign_dialogs.py
 msgid "없음"
 msgstr "None"
 
@@ -7217,6 +7443,444 @@ msgstr "Restore Defaults"
 #: viewer/widgets/shortcuts_dialog.py
 msgid "기능별 단축키를 클릭해 새 키 조합을 입력하세요 (그룹별 정리)."
 msgstr "Click a function's shortcut and press a new key combination (grouped by category)."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 PC 에서는 Windows Hello 를 쓸 수 없습니다. 비밀번호를 Google 비밀번호 관리자에 저장해 두고 복사해 붙여넣을 수 있습니다(Ctrl+V). 붙여넣은 비밀번호는 Windows 클립보드 기록(Win+V)에 남을 수 있습니다."
+msgstr "Windows Hello is not available on this PC. You can keep the password in Google Password Manager and copy and paste it (Ctrl+V). A pasted password may remain in the Windows clipboard history (Win+V)."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "Google 비밀번호 관리자 열기"
+msgstr "Open Google Password Manager"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "기본 브라우저로 passwords.google.com 을 엽니다 — PolyPDF 는 아무 값도 넘기지 않습니다."
+msgstr "Opens passwords.google.com in your default browser — PolyPDF sends nothing."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 그림 만들기"
+msgstr "Create Signature Image"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "그림 불러오기…"
+msgstr "Load Image…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "클립보드에서"
+msgstr "From Clipboard"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "종이에 한 서명을 찍은 사진이나 투명 PNG 를 불러오세요."
+msgstr "Load a photo of your signature on paper or a transparent PNG."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "배경 지우기"
+msgstr "Remove background"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잉크 색"
+msgstr "Ink color"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "기본"
+msgstr "Default"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 그림 불러오기"
+msgstr "Load Signature Image"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "그림 (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff)"
+msgstr "Images (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "새 디지털 ID"
+msgstr "New Digital ID"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "년"
+msgstr " years"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이름(필수)"
+msgstr "Name (required)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "조직"
+msgstr "Organization"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "유효기간"
+msgstr "Valid for"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "비밀번호"
+msgstr "Password"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "비밀번호 확인"
+msgstr "Confirm password"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 로 비밀번호 보관(서명할 때 지문·PIN 으로 확인)"
+msgstr "Store the password with Windows Hello (confirm with fingerprint or PIN when signing)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "직접 만든 디지털 ID 는 받는 사람의 PDF 뷰어에서 '신원 알 수 없음' 으로 보입니다. 받는 사람이 공개 인증서(.cer)를 신뢰 등록하면 '유효' 로 보입니다. 문서가 바뀌었는지는 신뢰 등록 없이도 드러납니다."
+msgstr "A self-created digital ID shows as 'identity unknown' in the recipient's PDF viewer. It shows as 'valid' once the recipient trusts your public certificate (.cer). Changes to the document are detected even without trusting it."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID"
+msgstr "Digital IDs"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "새로 만들기…"
+msgstr "New…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "가져오기…"
+msgstr "Import…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "백업 내보내기…"
+msgstr "Export Backup…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "공개 인증서 내보내기…"
+msgstr "Export Public Certificate…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "기본으로"
+msgstr "Set as Default"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 보관"
+msgstr "Store with Windows Hello"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "지우기…"
+msgstr "Delete…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 를 만들었습니다. '백업 내보내기' 로 .pfx 를 안전한 곳에 백업해 두세요 — 이 PC 가 고장 나면 같은 ID 로 다시 서명할 수 없습니다."
+msgstr "Digital ID created. Back up the .pfx to a safe place with 'Export Backup' — if this PC fails you cannot sign with the same ID again."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 가져오기"
+msgstr "Import Digital ID"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID (*.pfx *.p12)"
+msgstr "Digital ID (*.pfx *.p12)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 백업"
+msgstr "Back Up Digital ID"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID (*.pfx)"
+msgstr "Digital ID (*.pfx)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "백업했습니다(비밀번호는 같습니다)."
+msgstr "Backed up (the password is the same)."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "공개 인증서 내보내기"
+msgstr "Export Public Certificate"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 (*.cer)"
+msgstr "Certificate (*.cer)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "받는 사람이 이 .cer 를 PDF 뷰어(Acrobat: 서명 패널 → 인증서 → 신뢰할 수 있는 인증서에 추가)에 등록하면 서명이 '유효' 로 보입니다."
+msgstr "When the recipient adds this .cer to their PDF viewer (Acrobat: Signature panel → Certificate → Add to Trusted Certificates), the signature shows as 'valid'."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 지우기"
+msgstr "Delete Digital ID"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "백업 후 지우기…"
+msgstr "Back Up and Delete…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "지우기"
+msgstr "Delete"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "(그림 없음)"
+msgstr "(no image)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 그림"
+msgstr "Signature image"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "겉모양 글자"
+msgstr "Appearance text"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "날짜"
+msgstr "Date"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "사유"
+msgstr "Reason"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "예: 승인, 검토 완료"
+msgstr "e.g. Approved, Reviewed"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "사유(선택)"
+msgstr "Reason (optional)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "장소(선택)"
+msgstr "Location (optional)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 비밀번호(붙여넣기 가능)"
+msgstr "Digital ID password (paste allowed)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 로 서명"
+msgstr "Sign with Windows Hello"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명은 현재 파일에 덧붙여 저장됩니다. 서명 뒤 PolyPDF 에서 이 파일을 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
+msgstr "The signature is appended to the current file. Saving this file again in PolyPDF would break the signature, so you will be asked to save to a new file instead."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "다른 이름으로 서명…"
+msgstr "Sign As…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "✅ 유효 · 신뢰함"
+msgstr "✅ Valid · Trusted"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "⚠ 유효 · 신원 미확인"
+msgstr "⚠ Valid · Identity unknown"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "⚠ 서명 뒤 변경됨"
+msgstr "⚠ Changed after signing"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "❌ 무효"
+msgstr "❌ Invalid"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 인증서 신뢰"
+msgstr "Trust This Certificate"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "원래 색"
+msgstr "Original"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "검정"
+msgstr "Black"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "파랑"
+msgstr "Blue"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "클립보드에 그림이 없습니다."
+msgstr "There is no image on the clipboard."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "잉크가 보이지 않습니다 — '자동' 을 끄고 배경 지우기 값을 조정하세요."
+msgstr "No ink is visible — turn off 'Auto' and adjust the background removal."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이름을 넣으세요."
+msgstr "Enter a name."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "비밀번호를 넣으세요."
+msgstr "Enter the password."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "두 비밀번호가 다릅니다."
+msgstr "The passwords do not match."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 만드는 중"
+msgstr "Creating digital ID"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 확인 중"
+msgstr "Checking digital ID"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 읽는 중"
+msgstr "Reading certificate"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "비밀번호 확인 중"
+msgstr "Checking password"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "전자서명"
+msgstr "Digital Signature"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "신뢰 해제"
+msgstr "Stop Trusting"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "괜찮음"
+msgstr "Good"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "비밀번호가 약합니다. .pfx 파일이 새어 나가면 쉽게 풀릴 수 있습니다. 그대로 만들까요?"
+msgstr "The password is weak. If the .pfx file leaks it can be cracked easily. Create anyway?"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 보관 해제"
+msgstr "Remove Windows Hello Storage"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "{name} 의 비밀번호"
+msgstr "Password for {name}"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "비밀번호가 맞지 않거나 디지털 ID 파일이 아닙니다."
+msgstr "The password is incorrect or this is not a digital ID file."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 디지털 ID 의 비밀번호를 Windows Hello 로 보관할까요?"
+msgstr "Store this digital ID password with Windows Hello?"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "{name} 의 비밀번호 — 맞는지 확인한 뒤 Windows Hello 로 잠가 둡니다."
+msgstr "Password for {name} — it is checked, then locked with Windows Hello."
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "'{name}' 을 지우면 이 ID 로 다시 서명할 수 없습니다. 이미 서명한 문서는 그대로 유효합니다."
+msgstr "If you delete '{name}', you can no longer sign with this ID. Documents already signed stay valid."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "양식 채우기·서명 추가"
+msgstr "Form filling / added signatures"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "주석"
+msgstr "Comments"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "내용 변경"
+msgstr "Content changes"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "서명자: {v}"
+msgstr "Signer: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "이메일: {v}"
+msgstr "Email: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "조직: {v}"
+msgstr "Organization: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "서명 시각: {v} (서명한 PC 의 시계 기준)"
+msgstr "Signed at: {v} (by the signing PC's clock)"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "사유: {v}"
+msgstr "Reason: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "장소: {v}"
+msgstr "Location: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "인증서 지문(SHA-256): {v}"
+msgstr "Certificate fingerprint (SHA-256): {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "인증서 유효기간: ~{v}"
+msgstr "Certificate valid until: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "서명 뒤 덧붙은 변경: {v}"
+msgstr "Changes added after signing: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "{mark}{name}{mail} — ~{until}{hello}"
+msgstr "{mark}{name}{mail} — until {until}{hello}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "지문(SHA-256): {fp}"
+msgstr "Fingerprint (SHA-256): {fp}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "전자서명 — {name}"
+msgstr "Digital Signature — {name}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "오류: {v}"
+msgstr "Error: {v}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "그림을 열지 못했습니다: {e}"
+msgstr "Could not open the image: {e}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "약함 — {n}자 이상, 글자·숫자·기호를 섞으세요"
+msgstr "Weak — use {n}+ characters mixing letters, digits and symbols"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "Windows Hello 로 보관하지 못했습니다({e}). 서명할 때 비밀번호를 입력합니다."
+msgstr "Could not store with Windows Hello ({e}). You will enter the password when signing."
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "디지털 ID 를 만들지 못했습니다: {e}"
+msgstr "Could not create the digital ID: {e}"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "개인 키가 없는 인증서입니다 — 서명에 쓸 수 없습니다."
+msgstr "This certificate has no private key — it cannot be used for signing."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "문서 서명 용도가 아닌 인증서입니다."
+msgstr "This certificate is not meant for document signing."
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "가져오지 못했습니다: {e}"
+msgstr "Could not import: {e}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "'{name}' 의 인증서(지문 {fp}…)를 신뢰할까요? 그 사람에게서 받은 인증서인지 지문을 확인한 뒤에만 신뢰하세요."
+msgstr "Trust the certificate of '{name}' (fingerprint {fp}…)? Only trust it after confirming the fingerprint with that person."
 
 #: viewer/widgets/strip.py
 msgid "전체 삭제"

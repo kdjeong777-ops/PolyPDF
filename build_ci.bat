@@ -160,6 +160,8 @@ REM 261008-27(다국어 SOT §10.1): 설치 프로그램 언어 목록·마법�
 python scripts\i18n.py inno
 if errorlevel 1 ( echo [ERROR] installer\languages.iss 생성 실패. & exit /b 1 )
 
+REM 261010-21(보안 SOT §8): 전자서명 — pyHanko·certvalidator 는 데이터 파일(기본 글꼴·스키마)까지, winrt 는 하위 모듈 전부
+REM   (Windows Hello). 모두 viewer 밖이라 수동 등재. 처음 서명·검증할 때 배경에서 import 한다(시작 시간 영향 없음).
 python -m PyInstaller ^
     --name "PolyPDF" ^
     --windowed ^
@@ -201,6 +203,10 @@ python -m PyInstaller ^
     --hidden-import openpyxl ^
     --hidden-import openpyxl.cell._writer ^
     --hidden-import send2trash ^
+    --collect-all pyhanko ^
+    --collect-all pyhanko_certvalidator ^
+    --collect-submodules winrt ^
+    --hidden-import cryptography ^
     --noconfirm ^
     main.py
 if errorlevel 1 ( echo [ERROR] PyInstaller build failed. & exit /b 1 )
