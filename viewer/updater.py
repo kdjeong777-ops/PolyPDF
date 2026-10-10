@@ -713,6 +713,12 @@ if ($fail -gt 0 -and $denied -and -not $Elevated -and -not $isAdmin) {
 }
 
 if ($fail -eq 0) {
+    # 261010-14(마스터 §14.5): 아이콘 캐시 새로 고침 — 앱 안 업데이트로 exe 를 바꾸면 작업 표시줄·바로가기에
+    #   빈 페이지 아이콘이 남았다(설치 프로그램은 끝에 같은 일을 한다, PolyPDF.iss [Run]).
+    try {
+        $ie = Join-Path $env:WINDIR 'System32\ie4uinit.exe'
+        if (Test-Path $ie) { Start-Process -FilePath $ie -ArgumentList '-show' -WindowStyle Hidden }
+    } catch {}
     $bar.Value = 100; $lbl.Text = $T.done
     [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 700
 } elseif ($fail -gt 0) {

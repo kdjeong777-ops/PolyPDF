@@ -160,6 +160,10 @@ class CropDialog(QDialog):
         self.setWindowTitle(tr("쪽 크롭"))
         self.resize(1080, 700)
         self._doc = fitz.open(str(path))          # 미리보기 전용 사본 핸들 — 저장하지 않는다
+        try:
+            pc.apply_pending(self._doc, path)     # 261010-13: 저장 전 크롭도 '이미 크롭된 쪽' 으로 보이게
+        except Exception:
+            pass
         self._n = self._doc.page_count
         self._full = set()                         # CropBox 를 쪽 전체로 넓힌 쪽(미리보기용)
         self._cropped = {}

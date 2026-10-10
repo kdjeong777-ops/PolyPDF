@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 11:11+0900\n"
+"POT-Creation-Date: 2026-10-10 16:49+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -640,10 +640,10 @@ msgstr "Download Now"
 msgid "있는 언어로 진행"
 msgstr "Continue with Available Languages"
 
-#: viewer/app.py viewer/present_controller.py viewer/update_controller.py
-#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/pen_settings_dialog.py
+#: viewer/app.py viewer/edit_controller.py viewer/present_controller.py
+#: viewer/update_controller.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
+#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/update_dialog.py
 msgid "취소"
 msgstr "Cancel"
@@ -716,16 +716,6 @@ msgstr "Save to Original"
 #: viewer/app.py
 msgid "쪽 편집 저장"
 msgstr "Save Page Edits"
-
-#: viewer/app.py viewer/widgets/merge_preview.py
-msgid "크롭"
-msgstr "Crop"
-
-#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/toc_review_dialog.py
-msgid "저장"
-msgstr "Save"
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
 msgid "크롭 해제"
@@ -951,6 +941,12 @@ msgid ""
 msgstr ""
 "There are captures in the list. Save them together as a PDF?\n"
 "(If you don't, the list is discarded. The next session starts with an empty list.)"
+
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/toc_review_dialog.py
+msgid "저장"
+msgstr "Save"
 
 #: viewer/app.py
 msgid "저장 안 함"
@@ -1307,8 +1303,8 @@ msgid "썸네일에서 바꾼 쪽 순서·삭제·끼워 둔 쪽을 먼저 저�
 msgstr "Save or undo the page order, deletions and inserted pages changed in the thumbnails before cropping."
 
 #: viewer/app.py
-msgid "크롭을 취소했습니다 — 원본은 그대로입니다."
-msgstr "Crop cancelled — the original is unchanged."
+msgid "크롭을 취소했습니다."
+msgstr "Crop cancelled."
 
 #: viewer/app.py
 msgid "붙여넣기는 편집모드(✏)에서만 됩니다."
@@ -2253,13 +2249,13 @@ msgstr "Remove the crop from the {n} selected page(s) and restore the original p
 
 #: viewer/app.py
 #, python-brace-format
-msgid "크롭 해제: {n}쪽 → {name}"
-msgstr "Crop removed: {n} page(s) → {name}"
+msgid "크롭 해제 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
+msgstr "Crop removed from {n} page(s) — press [Save] to write it to the PDF (Cancel undoes it)."
 
 #: viewer/app.py
 #, python-brace-format
-msgid "크롭: {n}쪽 → {name}"
-msgstr "Cropped: {n} page(s) → {name}"
+msgid "크롭 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
+msgstr "Cropped {n} page(s) — press [Save] to write it to the PDF (Cancel undoes it)."
 
 #: viewer/app.py
 #, python-format
@@ -2439,6 +2435,10 @@ msgstr "Page range to export (1–{n}), e.g. 3-12"
 #: viewer/app.py
 msgid "3-12 처럼 적어 주세요."
 msgstr "Enter a range like 3-12."
+
+#: viewer/app.py viewer/widgets/merge_preview.py
+msgid "크롭"
+msgstr "Crop"
 
 #: viewer/app.py
 #, python-brace-format
@@ -2727,8 +2727,28 @@ msgid "선긋기를 본화면에 적용했습니다."
 msgstr "Lines applied to the main view."
 
 #: viewer/edit_controller.py
-msgid "저장(일반뷰어용) — 새 PDF로"
-msgstr "Save for Other Viewers — New PDF"
+msgid "저장(일반뷰어용)"
+msgstr "Save for Other Viewers"
+
+#: viewer/edit_controller.py
+msgid ""
+"꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
+"어디에 저장할까요?"
+msgstr ""
+"Decorations and pictures are baked into the pages, and content outside the crop is actually removed (cannot be undone).\n"
+"Where do you want to save?"
+
+#: viewer/edit_controller.py
+msgid "현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), 하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."
+msgstr "Saving to the current file moves decorations and pictures into the PDF (they are removed from PolyPDF decorations); hyperlinks stay as PolyPDF hyperlinks. Save as a new file if other viewers need the hyperlinks too."
+
+#: viewer/edit_controller.py
+msgid "새 파일로 저장…"
+msgstr "Save as New File…"
+
+#: viewer/edit_controller.py
+msgid "현재 파일에 저장"
+msgstr "Save to Current File"
 
 #: viewer/edit_controller.py
 msgid "되돌리기(저장 안 함)"
@@ -2739,12 +2759,16 @@ msgid "계속 편집"
 msgstr "Keep Editing"
 
 #: viewer/edit_controller.py
+msgid "저장(일반뷰어용) — 새 PDF로"
+msgstr "Save for Other Viewers — New PDF"
+
+#: viewer/edit_controller.py
 msgid "저장 완료"
 msgstr "Saved"
 
 #: viewer/edit_controller.py
-msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크가 없습니다."
-msgstr "This file has no annotations (lines, shapes, text), photos, or hyperlinks to flatten."
+msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭이 없습니다."
+msgstr "This file has no decorations (lines, shapes, text), pictures, hyperlinks or crop to bake."
 
 #: viewer/edit_controller.py
 msgid "편집 내용을 저장했습니다."
@@ -2779,24 +2803,20 @@ msgstr "Saved for other viewers: {name}"
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid ""
-"꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n"
-"{out}"
-msgstr ""
-"Saved a PDF with annotations, photos, and hyperlinks flattened. It looks the same in other apps, and text can still be searched and copied.\n"
-"{out}"
+msgid "저장(일반뷰어용) — 현재 파일에: {name}"
+msgstr "Saved for other viewers — current file: {name}"
 
 #: viewer/edit_controller.py viewer/widgets/main_view.py
 msgid "링크"
 msgstr "Link"
 
 #: viewer/edit_controller.py
-msgid "저장(일반뷰어용)"
-msgstr "Save for Other Viewers"
-
-#: viewer/edit_controller.py
 msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 지금 구우면 그 편집은 빠집니다. 계속할까요?"
 msgstr "There are unsaved page edits (order, deletions, inserted pages). Flattening now will leave them out. Continue?"
+
+#: viewer/edit_controller.py
+msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 먼저 저장하거나 되돌린 뒤 현재 파일에 저장하세요."
+msgstr "There are unsaved page edits (order, deletions, inserted pages). Save or undo them first, then save to the current file."
 
 #: viewer/edit_controller.py
 msgid "다른 파일로 이동하기 전에 어떻게 할까요?"
@@ -2808,8 +2828,31 @@ msgstr "What would you like to do before leaving Edit mode?"
 
 #: viewer/edit_controller.py
 #, python-brace-format
+msgid ""
+"꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n"
+"{out}"
+msgstr ""
+"Saved a PDF with annotations, photos, and hyperlinks flattened. It looks the same in other apps, and text can still be searched and copied.\n"
+"{out}"
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid " · 크롭 {n}쪽 바깥을 지움"
+msgstr " · removed content outside the crop on {n} page(s)"
+
+#: viewer/edit_controller.py
+#, python-brace-format
 msgid "{stem}_일반뷰어용.pdf"
 msgstr "{stem}_for_other_viewers.pdf"
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid ""
+"\n"
+"크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다."
+msgstr ""
+"\n"
+"On {n} cropped page(s), content outside the crop was removed and the page size reduced."
 
 #: viewer/hyperlinks.py
 msgid "기준 폴더가 없습니다. 폴더를 먼저 여세요."
@@ -8921,4 +8964,13 @@ msgstr "Getting Started"
 
 #~ msgid "큰 글자도 헤딩으로 포함 (정규식 'CHAPTER 1'·'제1장' 외에 본문보다 큰 줄)"
 #~ msgstr "Include large text as headings (lines larger than body text, beyond regex 'CHAPTER 1'/'제1장')"
+
+#~ msgid "크롭을 취소했습니다 — 원본은 그대로입니다."
+#~ msgstr "Crop cancelled — the original is unchanged."
+
+#~ msgid "크롭 해제: {n}쪽 → {name}"
+#~ msgstr "Crop removed: {n} page(s) → {name}"
+
+#~ msgid "크롭: {n}쪽 → {name}"
+#~ msgstr "Cropped: {n} page(s) → {name}"
 

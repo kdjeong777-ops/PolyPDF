@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-10 11:11+0900\n"
+"POT-Creation-Date: 2026-10-10 16:49+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -639,10 +639,10 @@ msgstr ""
 msgid "있는 언어로 진행"
 msgstr ""
 
-#: viewer/app.py viewer/present_controller.py viewer/update_controller.py
-#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/pen_settings_dialog.py
+#: viewer/app.py viewer/edit_controller.py viewer/present_controller.py
+#: viewer/update_controller.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
+#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/update_dialog.py
 msgid "취소"
 msgstr ""
@@ -712,16 +712,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "쪽 편집 저장"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/merge_preview.py
-msgid "크롭"
-msgstr ""
-
-#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/toc_review_dialog.py
-msgid "저장"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
@@ -943,6 +933,12 @@ msgstr ""
 msgid ""
 "캡처 목록이 있습니다. PDF로 모아 저장할까요?\n"
 "(저장하지 않으면 목록은 사라집니다. 다음 실행은 빈 목록으로 시작합니다.)"
+msgstr ""
+
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/toc_review_dialog.py
+msgid "저장"
 msgstr ""
 
 #: viewer/app.py
@@ -1265,7 +1261,7 @@ msgid "썸네일에서 바꾼 쪽 순서·삭제·끼워 둔 쪽을 먼저 저�
 msgstr ""
 
 #: viewer/app.py
-msgid "크롭을 취소했습니다 — 원본은 그대로입니다."
+msgid "크롭을 취소했습니다."
 msgstr ""
 
 #: viewer/app.py
@@ -2175,12 +2171,12 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
-msgid "크롭 해제: {n}쪽 → {name}"
+msgid "크롭 해제 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
 msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
-msgid "크롭: {n}쪽 → {name}"
+msgid "크롭 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
 msgstr ""
 
 #: viewer/app.py
@@ -2348,6 +2344,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "3-12 처럼 적어 주세요."
+msgstr ""
+
+#: viewer/app.py viewer/widgets/merge_preview.py
+msgid "크롭"
 msgstr ""
 
 #: viewer/app.py
@@ -2614,7 +2614,25 @@ msgid "선긋기를 본화면에 적용했습니다."
 msgstr ""
 
 #: viewer/edit_controller.py
-msgid "저장(일반뷰어용) — 새 PDF로"
+msgid "저장(일반뷰어용)"
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid ""
+"꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
+"어디에 저장할까요?"
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid "현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), 하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid "새 파일로 저장…"
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid "현재 파일에 저장"
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -2626,11 +2644,15 @@ msgid "계속 편집"
 msgstr ""
 
 #: viewer/edit_controller.py
+msgid "저장(일반뷰어용) — 새 PDF로"
+msgstr ""
+
+#: viewer/edit_controller.py
 msgid "저장 완료"
 msgstr ""
 
 #: viewer/edit_controller.py
-msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크가 없습니다."
+msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭이 없습니다."
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -2662,9 +2684,7 @@ msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid ""
-"꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n"
-"{out}"
+msgid "저장(일반뷰어용) — 현재 파일에: {name}"
 msgstr ""
 
 #: viewer/edit_controller.py viewer/widgets/main_view.py
@@ -2672,11 +2692,11 @@ msgid "링크"
 msgstr ""
 
 #: viewer/edit_controller.py
-msgid "저장(일반뷰어용)"
+msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 지금 구우면 그 편집은 빠집니다. 계속할까요?"
 msgstr ""
 
 #: viewer/edit_controller.py
-msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 지금 구우면 그 편집은 빠집니다. 계속할까요?"
+msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 먼저 저장하거나 되돌린 뒤 현재 파일에 저장하세요."
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -2689,7 +2709,26 @@ msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
+msgid ""
+"꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n"
+"{out}"
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid " · 크롭 {n}쪽 바깥을 지움"
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
 msgid "{stem}_일반뷰어용.pdf"
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid ""
+"\n"
+"크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다."
 msgstr ""
 
 #: viewer/hyperlinks.py

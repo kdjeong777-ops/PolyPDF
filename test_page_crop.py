@@ -5,8 +5,9 @@ A. 계산: 회전 0·90·180·270 × MediaBox 원점 0/0 아님 — '보이는 �
    (PyMuPDF `set_cropbox` 는 원점이 0 이 아닌 쪽에서 어긋났다 — 수정 전 방식으로는 실패)
 B. 흰 여백 자동 감지 · 홀짝 좌우 대칭 · 크롭 해제 · 이미 잘렸는지
 C. 범위 해석 · 스타일 자동 배정(가로긴/세로긴) · 설정 스타일 읽기(기본 2개 늘 앞, 지울 수 없음)
-D. 실제 MainWindow — 툴바 '+' 오른쪽 크롭 단추와 썸네일 메뉴 신호가 크롭 창을 거쳐 **원본 PDF 에 저장**하고
-   다시 연다. 크롭 해제도. 크롭 창은 exec 만 바꿔 끼운다(값은 실제 위젯으로 고른다)
+D. 실제 MainWindow — 툴바 크롭 단추 → '적용' 은 저장 전 크롭(원본 그대로·본문은 잘린 모양·편집 모드) → [저장] 이 원본에
+E. 썸네일 메뉴 '크롭…'·'크롭 해제', [취소] 로 저장 전 크롭 되돌리기
+F. 일반뷰어용 — 새 파일·현재 파일 모두 크롭 바깥을 실제로 지우고 쪽 크기를 줄인다(261010-13)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -109,7 +110,7 @@ chk([a[i]["id"] for i in (0, 1, 2)] == ["user1", "landscape", "landscape"],
 a = pc.assign_styles(dm, [0, 1, 2], styles, {"on": False}, "user1")
 chk({a[i]["id"] for i in (0, 1, 2)} == {"user1"}, "C 자동 끄면 고른 스타일 하나")
 
-# ── D: 실제 앱 ────────────────────────────────────────────────────
+# ── D: 실제 앱 — '적용' 은 저장 전 크롭, '저장' 이 원본에(261010-13) ──────────────
 root = Path(tempfile.mkdtemp(prefix="polypdf_crop_"))
 errs = []
 sys.excepthook = lambda t, v, tb: errs.append("%s: %s" % (t.__name__, v))
@@ -123,12 +124,14 @@ try:
     for i in range(4):
         w, h = (842, 595) if i == 2 else (595, 842)
         pg = dd.new_page(width=w, height=h)
-        pg.insert_text((80, 120), "Page %d" % (i + 1), fontsize=18)
+        pg.insert_text((80, 40), "OUTTOP%d" % (i + 1), fontsize=12)
+        pg.insert_text((80, 300), "Page %d" % (i + 1), fontsize=18)
     dd.save(str(src)); dd.close()
     from viewer.app import MainWindow
     from viewer.widgets import crop_dialog as cd
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.resize(1300, 850); mw.show(); spin(0.3)
+    mw.open_folder(root); spin(0.8)
     mw.open_pdfs([src]); spin(1.0)
     mv = mw.main_view
     chk(mv.current_file() and Path(mv.current_file()).name == "mixed.pdf", "D 준비 — 본문에 열림", str(mv.current_file()))
@@ -148,27 +151,72 @@ try:
         dlg._accept_crop()
         return QDialog.DialogCode.Accepted
     cd.CropDialog.exec = fake_exec
-    mv.btn_crop.click(); spin(1.5)
-    out = fitz.open(str(src))
-    hs = [round(out[i].rect.height) for i in range(4)]
-    out.close()
-    chk(hs == [round(842 * 0.9), round(842 * 0.9), 595, round(842 * 0.9)],
-        "D 툴바 단추 → 전체에 자동 적용, 세로긴 쪽만 위 10% 잘려 **원본에** 저장(가로긴 쪽은 0%)", str(hs))
-    chk(mw._prefs.get("crop_styles") and mw._prefs["crop_styles"][0]["margins"][0] == 10.0, "D 스타일 값이 설정에 남는다")
-    spin(0.5)
-    chk(mw.main_view.current_file() and Path(mw.main_view.current_file()).name == "mixed.pdf", "D 저장 뒤 다시 열림")
 
-    # 썸네일 메뉴 → 고른 쪽만
+    def disk_heights():
+        o = fitz.open(str(src)); hs = [round(o[i].rect.height) for i in range(o.page_count)]; o.close()
+        return hs
+    mv.btn_crop.click(); spin(1.5)
+    chk(disk_heights() == [842, 842, 595, 842], "D '적용' 만으로는 원본이 바뀌지 않는다(저장 전 크롭)", str(disk_heights()))
+    chk(round(mw.main_view._doc.doc[0].rect.height) == round(842 * 0.9), "D 본문은 잘린 모양으로 보인다",
+        str(mw.main_view._doc.doc[0].rect))
+    chk(mw.bookmark_tree.is_edit_mode() and mw._page_edits_dirty(), "D 편집 모드로 들어가고 미저장 변경으로 잡힌다")
+    chk(mw._prefs.get("crop_styles") and mw._prefs["crop_styles"][0]["margins"][0] == 10.0, "D 스타일 값이 설정에 남는다")
+    # 편집 모드 '저장'(실제 단추) → 원본에
+    sel = [n for n in mw.bookmark_tree._iter_file_nodes() if Path(str(n.data(0, mw.bookmark_tree.DATA_FILE))).name == "mixed.pdf"]
+    if sel:
+        mw.bookmark_tree.tree.setCurrentItem(sel[0])
+    mw.bookmark_tree.btn_save.click(); spin(1.5)
+    chk(disk_heights() == [round(842 * 0.9), round(842 * 0.9), 595, round(842 * 0.9)],
+        "D [저장] → 세로긴 쪽만 위 10% 잘려 원본에(가로긴 쪽은 0%)", str(disk_heights()))
+    chk(not pc.has_pending(src) and not mw._page_edits_dirty(), "D 저장 뒤 저장 전 크롭 없음")
+
+    # 썸네일 메뉴 → 고른 쪽만, 그리고 '취소' 로 되돌리기
     mw.page_thumbs.cropPagesRequested.emit([1]); spin(1.5)
-    chk(seen.get("sel") and seen.get("pages") == [1], "D 썸네일 메뉴 → 창은 '고른 쪽' 으로 열린다", str(seen))
+    chk(seen.get("sel") and seen.get("pages") == [1], "E 썸네일 메뉴 → 창은 '고른 쪽' 으로 열린다", str(seen))
     mw.page_thumbs.uncropPagesRequested.emit([0, 1]); spin(1.5)
-    out = fitz.open(str(src))
-    hs = [round(out[i].rect.height) for i in range(4)]
-    cropped = [pc.is_cropped(out[i]) for i in range(4)]
-    out.close()
-    chk(hs[:2] == [842, 842] and hs[3] == round(842 * 0.9) and cropped == [False, False, False, True],
-        "D 썸네일 '크롭 해제' → 고른 쪽만 원래 크기", str((hs, cropped)))
-    chk(not warns and not errs, "D 경고·예외 없음", str(warns[:2] + errs[:2]))
+    chk(pc.has_pending(src) and round(mw.main_view._doc.doc[0].rect.height) == 842, "E 크롭 해제도 저장 전 — 본문은 원래 크기")
+    mw.bookmark_tree.btn_cancel.click(); spin(1.2)
+    chk(not pc.has_pending(src) and round(mw.main_view._doc.doc[0].rect.height) == round(842 * 0.9),
+        "E [취소] → 저장 전 크롭을 버리고 디스크 상태로", str(mw.main_view._doc.doc[0].rect))
+    chk(disk_heights()[0] == round(842 * 0.9), "E 취소는 원본을 바꾸지 않는다")
+
+    # 일반뷰어용 — 새 파일: 크롭 바깥 실제로 지움
+    from PyQt6.QtWidgets import QFileDialog
+    out_new = root / "flat.pdf"
+    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(out_new), "PDF (*.pdf)"))
+    choose = {"label": None}
+    _orig_exec = QMessageBox.exec
+
+    def box_exec(box):
+        for b in box.buttons():
+            if b.text() == choose["label"]:
+                box._clicked = b
+                b.click()
+                return 0
+        return _orig_exec(box)
+    QMessageBox.exec = box_exec
+    from viewer.i18n import tr as _tr
+    choose["label"] = _tr("새 파일로 저장…")
+    mw._action_save_decorated_pdf(); spin(0.5)
+    o = fitz.open(str(out_new))
+    p0 = o[0]
+    pc.set_crop(p0, [p0.mediabox.x0, p0.mediabox.y0, p0.mediabox.x1, p0.mediabox.y1])
+    chk(out_new.exists() and "OUTTOP1" not in o[0].get_text() and "Page 1" in o[0].get_text(),
+        "F 일반뷰어용 새 파일 — 크롭 바깥 글자가 실제로 없다(쪽을 넓혀도)", repr(o[0].get_text()[:60]))
+    chk(round(o[0].mediabox.height) == round(842 * 0.9), "F 쪽 크기(MediaBox)가 크롭 크기", str(o[0].mediabox))
+    o.close()
+    chk(disk_heights()[0] == round(842 * 0.9), "F 새 파일로 저장하면 원본은 그대로")
+    # 일반뷰어용 — 현재 파일에
+    choose["label"] = _tr("현재 파일에 저장")
+    mw._action_save_decorated_pdf(); spin(1.5)
+    o = fitz.open(str(src))
+    p0 = o[0]
+    pc.set_crop(p0, [p0.mediabox.x0, p0.mediabox.y0, p0.mediabox.x1, p0.mediabox.y1])
+    chk("OUTTOP1" not in p0.get_text() and round(p0.mediabox.height) == round(842 * 0.9),
+        "F 일반뷰어용 현재 파일 — 원본에서 바깥을 지우고 쪽 크기를 줄인다", repr(p0.get_text()[:40]))
+    o.close()
+    QMessageBox.exec = _orig_exec
+    chk(not warns and not errs, "D~F 경고·예외 없음", str(warns[:2] + errs[:2]))
     mw.close(); spin(0.2)
 except Exception:
     import traceback

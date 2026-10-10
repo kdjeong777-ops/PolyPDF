@@ -271,18 +271,28 @@ class EditMixin:
                     norm[int(p)] = dr
         return norm
 
-    def _apply_drawings_to_pdf(self, norm, file_path, *, with_hyperlinks: bool = True):
+    def _apply_drawings_to_pdf(self, norm, file_path, *, with_hyperlinks: bool = True, overwrite: bool = False):
+        """일반뷰어용 PDF — 꾸밈·사진(·하이퍼링크)을 굽고 **크롭 바깥은 실제로 지운다**(261010-13, 마스터 §4.7.13·§4.7.15).
+
+        overwrite=False: 새 파일로(묻는다) — 하이퍼링크도 굽는다.
+        overwrite=True : 현재 파일에(`_finalize_save`) — 꾸밈·사진은 PDF 에 들어가므로 옆 파일(page_meta.json)에서 비우고
+                         (두 번 그려지지 않게), 하이퍼링크는 굽지 않고 PolyPDF 하이퍼링크로 남긴다(사용자 결정 —
+                         PolyPDF 본문은 PDF 자체 링크를 누를 수 없다)."""
         src = Path(file_path)
-        from PyQt6.QtWidgets import QFileDialog
-        out, _ = QFileDialog.getSaveFileName(
-            self, tr("저장(일반뷰어용) — 새 PDF로"),
-            str(src.with_name(tr('{stem}_일반뷰어용.pdf').format(stem=src.stem))), "PDF (*.pdf)")
-        if not out:
-            return
+        if overwrite:
+            out = str(src.with_name(src.stem + "_flat_tmp.pdf"))
+        else:
+            from PyQt6.QtWidgets import QFileDialog
+            out, _ = QFileDialog.getSaveFileName(
+                self, tr("저장(일반뷰어용) — 새 PDF로"),
+                str(src.with_name(tr('{stem}_일반뷰어용.pdf').format(stem=src.stem))), "PDF (*.pdf)")
+            if not out:
+                return
         try:
             import fitz
-            from PyQt6.QtGui import QColor
+            from viewer import page_crop as _pc
             doc = fitz.open(str(src))
+            _pc.apply_pending(doc, src)            # 저장 전 크롭도 함께
             self._bake_drawings_into_doc(doc, norm)
             # 260930-2(§4.7.13): 사진도. 261008-1: 하이퍼링크 굽기처럼 감싼다 — 사진 쪽 실패
             #   (꾸밈 저장소를 못 만드는 등)가 꾸밈·하이퍼링크 저장까지 통째로 막지 않게(사진만 빠진 파일).
@@ -291,9 +301,16 @@ class EditMixin:
             except Exception:
                 pass
             # 260615-3: ② 하이퍼링크도 함께 PDF 에 베이크(꾸밈 저장)
-            if with_hyperlinks:
+            if with_hyperlinks and not overwrite:
                 try:
                     self._bake_hyperlinks_into_doc(doc, file_path)
+                except Exception:
+                    pass
+            # 261010-13: 크롭 바깥을 실제로 지운다 — 쪽 크기도 크롭 크기로(되돌릴 수 없다, 원본은 새 파일이면 그대로)
+            cut = 0
+            for i in range(doc.page_count):
+                try:
+                    cut += 1 if _pc.cut_outside(doc[i]) else 0
                 except Exception:
                     pass
             # 260913-3(SOT §4.5.10): 글쓰기 굽기는 fontfile= 로 글꼴 **전체**(맑은 고딕 13MB)를
@@ -302,11 +319,53 @@ class EditMixin:
             subset_fonts_safely(doc)
             doc.save(out, garbage=4, deflate=True)
             doc.close()
-            self.status.showMessage(tr('저장(일반뷰어용): {name}').format(name=Path(out).name), 4000)
-            QMessageBox.information(self, tr("저장 완료"),
-                                   tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out)))
         except Exception as e:
             QMessageBox.warning(self, tr("저장 실패"), str(e))
+            return
+        if not overwrite:
+            self.status.showMessage(tr('저장(일반뷰어용): {name}').format(name=Path(out).name), 4000)
+            QMessageBox.information(self, tr("저장 완료"),
+                                   tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out))
+                                   + (tr("\n크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다.").format(n=cut) if cut else ""))
+            return
+        try:
+            final = self._finalize_save(src, Path(out), False)
+        except Exception as e:
+            try:
+                if Path(out).exists():
+                    Path(out).unlink()
+            except Exception:
+                pass
+            from viewer.file_overwrite import SaveCancelled
+            if not isinstance(e, SaveCancelled):
+                QMessageBox.warning(self, tr("저장 실패"), str(e))
+            return
+        # 구운 꾸밈·사진은 이제 PDF 안에 있다 — 옆 파일에서 비워 두 번 그려지지 않게. 저장 전 크롭도 끝.
+        try:
+            st = self._ensure_page_meta_store()
+            if st is not None:
+                st.clear_drawings(str(src)); st.clear_images(str(src)); st.save()
+        except Exception:
+            pass
+        try:
+            from viewer import page_crop as _pc
+            _pc.clear_pending(src)
+        except Exception:
+            pass
+        if getattr(self, "_edit_snap", None) is not None:
+            self._edit_snap = None
+            self._edit_dirty = False
+            try:
+                self._snapshot_edit()
+            except Exception:
+                pass
+        page = self.main_view.current_page() if self.main_view else 0
+        try:
+            self._open_saved_file(final, page)
+        except Exception:
+            pass
+        self.status.showMessage(tr('저장(일반뷰어용) — 현재 파일에: {name}').format(name=Path(final).name)
+                                + (tr(" · 크롭 {n}쪽 바깥을 지움").format(n=cut) if cut else ""), 6000)
 
     def _bake_text_stroke(self, fitz, QColor, page, stk, pw, ph):
         """260611-74/76: 텍스트 박스/지시선 굽기 — 배경(투명도)·박스선·지시선(색상버튼 스타일)·텍스트."""
@@ -515,10 +574,21 @@ class EditMixin:
         # 260930-2: **사진만 있어도** 구울 것이 있다 — 종전에는 여기서 돌아서 버렸다.
         st_im = self._ensure_page_meta_store()
         has_img = bool(st_im and st_im.pages_with_images(cur))
-        if not norm and not has_hl and not has_img:
+        # 261010-13(§4.7.15): 크롭(저장 전 포함)만 있어도 일반뷰어용 저장을 한다 — 바깥 내용을 실제로 지운다
+        has_crop = False
+        try:
+            from viewer import page_crop as _pc
+            has_crop = _pc.has_pending(cur)
+            if not has_crop:
+                import fitz
+                with fitz.open(str(cur)) as _d:
+                    has_crop = any(_pc.is_cropped(_d[i]) for i in range(_d.page_count))
+        except Exception:
+            pass
+        if not norm and not has_hl and not has_img and not has_crop:
             QMessageBox.information(
                 self, tr("안내"),
-                tr("이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크가 없습니다."))
+                tr("이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭이 없습니다."))
             return
         # 260930-2: 아직 저장하지 않은 쪽 편집이 있으면 알린다 — 구운 파일은 **원본 쪽**
         #   기준이라 그 편집이 빠진다.
@@ -535,7 +605,32 @@ class EditMixin:
                     return
         except Exception:
             pass
-        self._apply_drawings_to_pdf(norm, cur, with_hyperlinks=True)
+        # 261010-13(사용자 지시): 새 파일로 할지 현재 파일에 덮어쓸지 묻는다
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("저장(일반뷰어용)"))
+        box.setText(tr("꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n어디에 저장할까요?"))
+        box.setInformativeText(tr("현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), "
+                                  "하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."))
+        b_new = box.addButton(tr("새 파일로 저장…"), QMessageBox.ButtonRole.AcceptRole)
+        b_cur = box.addButton(tr("현재 파일에 저장"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_new)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is b_cur:
+            try:
+                tp = self.page_thumbs
+                if (getattr(tp, "_doc", None) is not None and str(tp._doc.path) == str(cur)
+                        and tp.is_page_dirty()):
+                    QMessageBox.information(self, tr("저장(일반뷰어용)"),
+                                            tr("저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 먼저 저장하거나 되돌린 뒤 현재 파일에 저장하세요."))
+                    return
+            except Exception:
+                pass
+            self._apply_drawings_to_pdf(norm, cur, with_hyperlinks=True, overwrite=True)
+        elif clicked is b_new:
+            self._apply_drawings_to_pdf(norm, cur, with_hyperlinks=True)
 
     def _ensure_page_meta_store(self):
         from viewer.page_meta import PageMetaStore
@@ -766,6 +861,12 @@ class EditMixin:
             self._snapshot_edit()        # 되돌린 상태를 새 기준으로
         except Exception:
             pass
+        try:                             # 261010-13(§4.7.15): 저장 전 크롭도 되돌린다
+            cur = self.main_view.current_file() if self.main_view else None
+            if cur:
+                self._discard_crop(cur)
+        except Exception:
+            pass
         try:
             self.status.showMessage(tr("편집 수정 사항을 취소(되돌리기)했습니다."), 3000)
         except Exception:
@@ -806,16 +907,26 @@ class EditMixin:
             self._snapshot_edit()
         else:
             # 종료 시 미저장 변경 처리
-            if self._edit_snap is not None and self._edit_dirty:
+            # 261010-13(§4.7.15): 저장 전 크롭도 미저장 변경이다 — 저장하면 쪽 편집 저장 길로 원본에, 버리면 되돌린다
+            from viewer import page_crop as _pc
+            _cur = self.main_view.current_file() if self.main_view else None
+            crop_dirty = bool(_cur and _pc.has_pending(_cur))
+            if (self._edit_snap is not None and self._edit_dirty) or crop_dirty:
                 choice = self._confirm_edit_save(switching=False)
                 if choice == "cancel":
                     # 편집 유지 — 버튼 다시 켜기(정상 toggled 로 모든 핸들러 복원)
                     self.bookmark_tree.btn_edit.setChecked(True)
                     return
                 if choice == "save":
-                    self._commit_edit()
+                    if self._edit_snap is not None and self._edit_dirty:
+                        self._commit_edit()
+                    if crop_dirty:
+                        self._save_page_edits_for(_cur)
                 else:
-                    self._restore_edit()
+                    if self._edit_snap is not None and self._edit_dirty:
+                        self._restore_edit()
+                    if crop_dirty:
+                        self._discard_crop(_cur)
             self._edit_snap = None
             self._edit_dirty = False
         for mv in self._mv:

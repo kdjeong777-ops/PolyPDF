@@ -2666,7 +2666,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._page_edit_save(str(cur_file), raw)
 
     def _discard_page_edits(self, cur_file: str):
-        """260902-6: 페이지 편집을 버린다 — 썸네일을 디스크 상태로 다시 읽는다."""
+        """260902-6: 페이지 편집을 버린다 — 썸네일을 디스크 상태로 다시 읽는다.
+        261010-13: 저장 전 크롭도 버린다(다른 파일로 옮겨 가는 중이라 다시 열지는 않는다)."""
+        try:
+            from viewer import page_crop as _pc
+            _pc.clear_pending(cur_file)
+        except Exception:
+            pass
         try:
             self.page_thumbs.clear_document()
             self.page_thumbs.load_document(cur_file)
@@ -3731,7 +3737,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             pass
 
     def _page_edits_dirty(self) -> bool:
-        """260821: 썸네일 페이지 삭제/이동 미저장 여부(💾 저장 통합용)."""
+        """260821: 썸네일 페이지 삭제/이동 미저장 여부(💾 저장 통합용).
+        261010-13(§4.7.15): 본문 파일의 **저장 전 크롭**도 — 같은 저장 길로 원본에 들어간다."""
+        try:
+            from viewer import page_crop as _pc
+            cur = self.main_view.current_file() if self.main_view else None
+            if cur and _pc.has_pending(cur):
+                return True
+        except Exception:
+            pass
         try:
             pt = self.page_thumbs
             return bool(getattr(pt, "_doc", None)) and pt.is_page_dirty()
@@ -3989,10 +4003,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         built = {}
         raw_bm = list(bookmarks_raw or [])
         plan = list(plan)
+        from viewer import page_crop as _pcr
+        crops = _pcr.pending(src)                  # 261010-13: 저장 전 크롭도 같은 파일에
 
         def _job(progress):
             try:
-                built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress))
+                built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress, crops=crops))
             except _peb.Cancelled:
                 raise MergeCancelled()
         res = self._run_merge_job(_job, tr("쪽 편집 저장"))
@@ -4022,6 +4038,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             QMessageBox.warning(self, tr("페이지 편집 저장 실패"), str(e))
             return
         QApplication.restoreOverrideCursor()
+        _pcr.clear_pending(src)                    # 썼으니 덧입히기 끝(새 이름이면 원본은 그대로 남는다)
         self.status.showMessage(tr('페이지 편집 저장: {saved_n}쪽 → {name}').format(saved_n=saved_n, name=_P(final).name), 6000)
         try:
             # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
@@ -4081,65 +4098,68 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         self._apply_crop(path, {"reset": True, "pages": list(pages)}, cur, shift)
 
     def _apply_crop(self, path, plan, cur_page=0, shift=False):
-        """크롭 계산·임시 PDF 는 배경(응답성 SOT §4.4) → 원본에 놓기 `_finalize_save`(§4.7.5) → 다시 열기."""
+        """261010-13(마스터 §4.7.15, 사용자 결정): '적용' 은 **저장 전 크롭**이다 — 파일은 그대로, 본문·썸네일만 잘린 모양.
+        편집 모드 '저장' 이 쪽 편집 저장 길로 원본에 쓴다(`_page_edit_save` → `page_edit_build.build(crops=)`).
+        쪽마다 여백 계산(흰 여백 감지는 쪽을 그린다)은 배경(응답성 SOT §4.4), 끝나면 편집 모드로 들어가 다시 연다."""
         from pathlib import Path as _P
-        import os as _os
         from viewer import page_crop as _pc
         from viewer.twoup import MergeCancelled
         src = _P(path)
-        tmp = src.with_name(src.stem + "_crop_tmp.pdf")
-        built = {}
-        labels = {"crop": tr("크롭"), "save": tr("저장")}
+        got = {}
 
         def _job(progress):
             import fitz
-            def _prog(d, t, phase):
-                return progress(d, t, labels.get(phase, phase))
+            if plan.get("reset"):
+                got.update({int(pg): None for pg in plan["pages"]})
+                return
+            doc = fitz.open(str(src))
             try:
-                by = None
-                if not plan.get("reset"):
-                    doc = fitz.open(str(src))
-                    try:
-                        by = _pc.assign_styles(doc, plan["pages"], _pc.load_styles(plan["styles"]),
-                                               plan["auto"], plan["chosen_id"])
-                    finally:
-                        doc.close()
-                built.update(_pc.build(src, tmp, plan["pages"], by, bool(plan.get("reset")), _prog))
-            except _pc.Cancelled:
-                raise MergeCancelled()
+                by = _pc.assign_styles(doc, plan["pages"], _pc.load_styles(plan["styles"]),
+                                       plan["auto"], plan["chosen_id"])
+                total = max(1, len(plan["pages"]))
+                for k, pg in enumerate(plan["pages"]):
+                    if progress(k, total, tr("크롭")) is False:
+                        raise MergeCancelled()
+                    got.update(_pc.compute_margins(doc, [pg], by))
+            finally:
+                doc.close()
         title = tr("크롭 해제") if plan.get("reset") else tr("쪽 크롭")
         res = self._run_merge_job(_job, title)
         if res.get("cancelled"):
-            self.status.showMessage(tr("크롭을 취소했습니다 — 원본은 그대로입니다."), 5000)
+            self.status.showMessage(tr("크롭을 취소했습니다."), 4000)
             return
         if not res.get("ok"):
             QMessageBox.warning(self, title, res.get("err") or tr("알 수 없는 오류"))
             return
-        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
+        _pc.set_pending(src, got)
         try:
-            final = self._finalize_save(src, _P(built["path"]), shift)
-        except Exception as e:
-            QApplication.restoreOverrideCursor()
-            try:
-                if tmp.exists():
-                    _os.remove(str(tmp))
-            except Exception:
-                pass
-            from viewer.file_overwrite import SaveCancelled
-            if isinstance(e, SaveCancelled):
-                self.status.showMessage(str(e), 5000)
-                return
-            QMessageBox.warning(self, title, str(e))
-            return
-        QApplication.restoreOverrideCursor()
-        n = int(built.get("changed") or 0)
-        self.status.showMessage((tr('크롭 해제: {n}쪽 → {name}') if plan.get("reset") else tr('크롭: {n}쪽 → {name}'))
-                                .format(n=n, name=_P(final).name), 6000)
-        try:
-            self.bookmark_tree.add_or_refresh_file(final, after=str(src))
-            self._open_saved_file(final, page=int(cur_page or 0))
+            if not self.bookmark_tree.is_edit_mode():
+                self.bookmark_tree.btn_edit.setChecked(True)      # 저장·취소 단추가 보이게
         except Exception:
             pass
+        self._crop_reload(src, cur_page)
+        self.status.showMessage((tr("크롭 해제 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다).")
+                                 if plan.get("reset") else
+                                 tr("크롭 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."))
+                                .format(n=len(got)), 8000)
+
+    def _crop_reload(self, path, page=None):
+        """저장 전 크롭이 바뀐 뒤 본문·썸네일을 다시 연다 — `PdfDocument` 가 열 때 덧입힌다."""
+        try:
+            mv = self.main_view
+            pg = mv.current_page() if (page is None and mv is not None) else int(page or 0)
+            self._load_main(HistoryItem(str(path), int(pg or 0), "", "bookmark"))
+        except Exception:
+            pass
+
+    def _discard_crop(self, path) -> bool:
+        """저장 전 크롭을 버리고 다시 연다. 버린 것이 있으면 True."""
+        from viewer import page_crop as _pc
+        if not _pc.has_pending(path):
+            return False
+        _pc.clear_pending(path)
+        self._crop_reload(path)
+        return True
 
     def _on_copy_pages(self, pages):
         """260821: 현재 PDF 썸네일에서 선택한 페이지(0-based)를 복사(다른 PDF 로 붙여넣기용)."""

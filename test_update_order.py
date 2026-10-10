@@ -135,6 +135,11 @@ try:
     # ── F ──
     ps = updater._PS_INSTALLER
     chk(ps.index("# 1.5) 다운로드") < ps.index("# 1.2) 다른 창"), "F 설치 도우미의 예비 받기가 다른 창 닫기보다 앞")
+    # 261010-14: 앱 안 업데이트 뒤 작업 표시줄 아이콘이 빈 페이지로 — 성공했을 때 아이콘 캐시를 새로 고친 뒤 다시 띄운다
+    ok_at = ps.find("if ($fail -eq 0) {")
+    chk(ok_at >= 0 and ok_at < ps.find("ie4uinit.exe") < ps.find("# 3) 재실행"),
+        "F 업데이트 성공 뒤 아이콘 캐시 새로 고침(ie4uinit -show)이 재실행보다 앞")
+    chk("'-show'" in ps, "F ie4uinit 에 -show")
 
     # ── G ──
     here = os.path.dirname(os.path.abspath(__file__))

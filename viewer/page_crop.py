@@ -270,3 +270,100 @@ def build(src, out, pages, styles_by_page: dict | None, reset: bool = False, pro
         raise
     doc.close()
     return {"path": str(out), "changed": changed}
+
+
+# ── 저장 전 크롭(261010-13, 마스터 §4.7.15) ─────────────────────────────
+# '적용' 은 파일을 바꾸지 않고 여기에만 적는다 — 본문·썸네일·발표는 `PdfDocument` 가 열 때 덧입혀 잘린 모양으로 보이고,
+# 편집 모드 '저장' 이 쪽 편집 저장(`page_edit_build.build(crops=)`)으로 원본에 쓴다. 값은 쪽(원본 번호) → 보이는 방향 여백 %
+# (자동 감지·홀짝 대칭까지 계산한 값), None 은 '크롭 해제'. 경로는 `_pkey` 로 맞춘다.
+_PENDING = {}
+_VERSION = {}
+
+
+def _pkey(path) -> str:
+    import os
+    return os.path.normcase(os.path.abspath(str(path)))
+
+
+def set_pending(path, margins_by_page: dict) -> None:
+    k = _pkey(path)
+    cur = _PENDING.setdefault(k, {})
+    for p, m in margins_by_page.items():
+        cur[int(p)] = None if m is None else [float(v) for v in m]
+    _VERSION[k] = _VERSION.get(k, 0) + 1
+
+
+def pending(path) -> dict:
+    return dict(_PENDING.get(_pkey(path), {}))
+
+
+def has_pending(path) -> bool:
+    return bool(path) and bool(_PENDING.get(_pkey(path)))
+
+
+def clear_pending(path) -> None:
+    k = _pkey(path)
+    if _PENDING.pop(k, None) is not None:
+        _VERSION[k] = _VERSION.get(k, 0) + 1
+
+
+def version(path) -> int:
+    return _VERSION.get(_pkey(path), 0)
+
+
+def apply_margins(page, m) -> None:
+    """여백(보이는 방향 %) 하나를 이 쪽에 — None 이면 크롭 해제."""
+    if m is None:
+        reset_crop(page)
+    else:
+        set_crop(page, crop_box(page, m))
+
+
+def apply_pending(doc, path) -> int:
+    """열린 문서(저장하지 않을 것)에 저장 전 크롭을 덧입힌다. 덧입힌 쪽 수."""
+    n = 0
+    for p, m in pending(path).items():
+        if 0 <= p < doc.page_count:
+            apply_margins(doc[p], m)
+            n += 1
+    return n
+
+
+def cut_outside(page) -> bool:
+    """CropBox 바깥 내용을 **실제로 지운다**(일반뷰어용 저장, 되돌릴 수 없음) — 바깥 네 띠를 가림 처리하고
+    MediaBox 를 CropBox 로. 잘리지 않은 쪽이면 False. 회전은 잠시 0 으로 두고 회전 전 좌표에서 지운다."""
+    import fitz
+    doc = page.parent
+    mb, cb = _native_box(page, "MediaBox"), _native_box(page, "CropBox")
+    if not mb or not cb:
+        return False
+    cb = _clip(cb, mb)
+    if all(abs(a - b) < 0.5 for a, b in zip(cb, mb)):
+        return False
+    rot = page.rotation
+    page.set_rotation(0)
+    set_crop(page, mb)
+    page = doc[page.number]
+    W, H = mb[2] - mb[0], mb[3] - mb[1]
+    x0, x1 = cb[0] - mb[0], cb[2] - mb[0]
+    y0, y1 = mb[3] - cb[3], mb[3] - cb[1]          # 본래 좌표(왼쪽 아래) → PyMuPDF(왼쪽 위)
+    for r in (fitz.Rect(0, 0, W, y0), fitz.Rect(0, y1, W, H), fitz.Rect(0, y0, x0, y1), fitz.Rect(x1, y0, W, y1)):
+        if r.width > 0.5 and r.height > 0.5:
+            page.add_redact_annot(r)
+    page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS,
+                          graphics=fitz.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED)
+    doc.xref_set_key(page.xref, "MediaBox", "[%g %g %g %g]" % tuple(cb))
+    set_crop(page, cb)
+    page.set_rotation(rot)
+    return True
+
+
+def compute_margins(doc, pages, styles_by_page: dict) -> dict:
+    """{쪽: 보이는 방향 여백 % 또는 None(자동 감지에서 내용 없음 — 그 쪽은 건드리지 않는다)} — 배경에서 부른다."""
+    out = {}
+    for p in pages:
+        if 0 <= p < doc.page_count:
+            m = margins_for(doc[p], p, styles_by_page[p])
+            if m is not None:
+                out[p] = m
+    return out
