@@ -13,6 +13,7 @@ G. 대화상자 — 디지털 ID 창·서명 그림 창·서명 패널
 H. 서명 창 겉모양 미리보기 — 끈 상자 비율·배경에서·바꾸면 다시(S8)
 I. 본문 우클릭 '여기에 서명…' — 실제 메뉴 처리기, 누른 자리에 기본 크기(S6)
 J. 책갈피창 서명 표식(S1) · K. 서명 문서 암호화 안내(S9) · L. 제거·업데이트가 signing 을 지우지 않음(S3) · M. 서명·저장 뒤 암호 옮기기(§7.2·S11)
+N. 2단계 — 여러 쪽·인증·타임스탬프·글자 배치·서명 시점 판·손으로 그리기(§3.6)
 F. 비밀번호가 설정·ID 목록·Hello 보관 파일 어디에도 평문으로 없다(§6.4)
 """
 import os, sys, tempfile, shutil, time, json
@@ -430,6 +431,120 @@ try:
     out_e2 = mw._finalize_save(str(e2), str(prod))
     chk(Path(out_e2) == e2 and e2.stat().st_size != enc.stat().st_size and _ss.recall_any(e2) == "usr-pw",
         "M2 `_finalize_save` 로 크기가 바뀐 암호 PDF 도 다시 열 때 암호를 묻지 않는다(세션 암호가 따라온다)")
+
+    # ── N. 2단계(보안 SOT §3.6) ─────────────────────────────────────────
+    import datetime as _dt, io as _io
+    from cryptography import x509 as _x
+    from cryptography.x509.oid import NameOID as _N, ExtendedKeyUsageOID as _E
+    from cryptography.hazmat.primitives import hashes as _h, serialization as _ser
+    from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+    from asn1crypto import x509 as _ax, keys as _ak
+    from pyhanko.sign.timestamps.dummy_client import DummyTimeStamper
+    _tk = _rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    _tn = _x.Name([_x.NameAttribute(_N.COMMON_NAME, "Test TSA")])
+    _now = _dt.datetime.now(_dt.timezone.utc)
+    _tc = (_x.CertificateBuilder().subject_name(_tn).issuer_name(_tn).public_key(_tk.public_key()).serial_number(7)
+           .not_valid_before(_now - _dt.timedelta(days=1)).not_valid_after(_now + _dt.timedelta(days=30))
+           .add_extension(_x.ExtendedKeyUsage([_E.TIME_STAMPING]), critical=True).sign(_tk, _h.SHA256()))
+    tsa = DummyTimeStamper(tsa_cert=_ax.Certificate.load(_tc.public_bytes(_ser.Encoding.DER)),
+                           tsa_key=_ak.PrivateKeyInfo.load(_tk.private_bytes(_ser.Encoding.DER, _ser.PrivateFormat.PKCS8,
+                                                                             _ser.NoEncryption())))
+    three = tmp / "three.pdf"
+    _d3 = fitz.open(); [_d3.new_page() for _ in range(3)]; _d3.save(str(three)); _d3.close()
+    ap2 = sc.Appearance(font_path=font_path(), image_path=st.image_path("기본"))
+    tg = [(i, (50, 50, 250, 120)) for i in range(3)]
+    m2 = tmp / "m2.pdf"
+    names = sc.sign_pdf(str(three), str(m2), pfx, PW, targets=tg, appearance=ap2, certify=2, tsa=tsa)
+    rr = sc.verify_pdf(str(m2), [info.fp])
+    chk(names == ["Signature1", "Signature2", "Signature3"] and [x.state for x in rr.sigs] == [sc.OK_TRUSTED] * 3
+        and rr.sigs[0].certify == 2 and rr.sigs[1].certify == 0,
+        "N1 여러 쪽 + 인증(양식·서명 허용) — 칸을 먼저 만들어 세 서명 모두 유효, 첫 서명만 인증",
+        str([(x.field, x.state, x.certify, x.modification) for x in rr.sigs]))
+    chk(all(x.ts_time and x.ts_name == "Test TSA" for x in rr.sigs), "N2 타임스탬프 기관 시각·이름이 검증에 나온다")
+    errs = {}
+    for label, kw, srcf in (("one_page", dict(targets=tg, certify=1), three),
+                            ("new_field", dict(page_index=0, box_pdf=(300, 300, 400, 350)), m2),
+                            ("not_first", dict(page_index=0, box_pdf=(300, 300, 400, 350), certify=2), signed)):
+        try:
+            sc.sign_pdf(str(srcf), str(tmp / "x.pdf"), pfx, PW, appearance=ap2, **kw)
+            errs[label] = "signed"
+        except sc.SignError as e:
+            errs[label] = e.reason
+    c1 = tmp / "c1.pdf"
+    sc.sign_pdf(str(three), str(c1), pfx, PW, page_index=0, box_pdf=(50, 50, 250, 120), appearance=ap2, certify=1)
+    try:
+        sc.sign_pdf(str(c1), str(tmp / "x.pdf"), pfx, PW, page_index=1, box_pdf=(50, 50, 250, 120), appearance=ap2)
+        errs["p1"] = "signed"
+    except sc.SignError as e:
+        errs["p1"] = e.reason
+    chk(errs == {"one_page": "certify_one_page", "new_field": "certified_new_field", "not_first": "certify_not_first",
+                 "p1": "certified"},
+        "N3 막는 경우 — 변경 금지는 한 쪽만·인증 문서에 새 칸 거부·인증은 첫 서명만·변경 금지 인증 뒤 서명 거부", str(errs))
+    try:
+        sc.sign_pdf(str(three), str(tmp / "x.pdf"), pfx, PW, page_index=0, box_pdf=(50, 50, 250, 120), appearance=ap2,
+                    tsa="http://127.0.0.1:9/tsa")
+        chk(False, "N4 기관에 닿지 않으면 서명하지 않는다(tsa_failed)")
+    except sc.SignError as e:
+        chk(e.reason == "tsa_failed",
+            "N4 기관에 닿지 않으면 서명하지 않는다(tsa_failed)", e.reason)
+    # 글자 배치 — 미리보기가 배치마다 다르다(같은 그리기를 서명도 쓴다)
+    pv = {lay: sc.preview_png(sc.Appearance(font_path=font_path(), image_path=st.image_path("기본"), layout=lay),
+                              "홍길동", "", 200, 75) for lay in sc.LAYOUTS}
+    chk(len(set(pv.values())) == 3, "N5 글자 배치 셋(겹쳐·그림 왼쪽·그림 위)이 서로 다르게 그려진다")
+    rev = sc.signed_revision_bytes(str(m2), "Signature1")
+    rv = tmp / "rev.pdf"; rv.write_bytes(rev)
+    rr2 = sc.verify_pdf(str(rv), [info.fp])
+    chk(m2.read_bytes().startswith(rev) and [(x.field, x.state) for x in rr2.sigs] == [("Signature1", sc.OK_TRUSTED)],
+        "N6 서명 시점 판 — 그 서명까지 자른 앞부분, 그 판에서는 그 서명 하나만·변경 없음")
+    # 서명 패널 [서명 시점 판 저장…] — 실제 단추로
+    opened_rev = []
+    out_rev = root / "m2_서명시점.pdf"
+    QFileDialog_ = __import__("PyQt6.QtWidgets", fromlist=["QFileDialog"]).QFileDialog
+    _orig_gs = QFileDialog_.getSaveFileName
+    QFileDialog_.getSaveFileName = staticmethod(lambda *a, **k: (str(out_rev), "PDF (*.pdf)"))
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+    pan2 = sdlg.SignPanelDialog(mw, sc.verify_pdf(str(m2), [info.fp]), path=str(m2), open_cb=opened_rev.append)
+    pan2.lst.setCurrentRow(1)
+    detail = pan2.detail.text()
+    pan2.b_rev.click(); spin(0.2)
+    QFileDialog_.getSaveFileName = _orig_gs
+    chk(out_rev.exists() and opened_rev == [str(out_rev)] and len(sc.verify_pdf(str(out_rev), [info.fp]).sigs) == 2
+        and "타임스탬프" in detail and "승인 서명" in detail,
+        "N7 패널 — 종류·타임스탬프 줄, [서명 시점 판 저장…] 이 그 판을 저장하고 연다", detail[:80])
+    pan2.close()
+    # 손으로 그리기 — 실제 마우스 끌기로
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtCore import QPoint, Qt as _Qt
+    dd_ = sdlg._DrawDialog(mw); dd_.show(); spin(0.1)
+    pad = dd_.pad
+    QTest.mousePress(pad, _Qt.MouseButton.LeftButton, pos=QPoint(40, 150))
+    for x in range(40, 560, 20):
+        QTest.mouseMove(pad, QPoint(x, 150 - (x // 8) % 60))
+    QTest.mouseRelease(pad, _Qt.MouseButton.LeftButton, pos=QPoint(560, 120))
+    drawn = dd_.pil_image()
+    imd2 = sdlg.SignImageDialog(mw); imd2.set_source(drawn)
+    chk(pad.strokes == 1 and sc.ink_bbox(drawn) is not None and imd2._btn_save.isEnabled(),
+        "N8 손으로 그리기 — 그린 획이 투명 바탕 그림이 되고 서명 그림으로 저장할 수 있다")
+    dd_.close(); imd2.close()
+    # 여러 쪽 — 실제 서명 흐름(서명 창 '모든 쪽' + 인증 2)
+    mp = root / "여러쪽.pdf"
+    shutil.copy(three, mp)
+    mw.open_pdfs([str(mp)]); spin(0.8)
+    mv = mw.main_view; mv.go_to_page(0); spin(0.3)
+
+    class _MultiDlg(_RealSign):
+        def exec(self):
+            self.cmb_pages.setCurrentIndex(self.cmb_pages.findData("all"))
+            self.cmb_kind.setCurrentIndex(self.cmb_kind.findData(2))
+            self.ed_pw.setText(PW); self._sign()
+            return QDialog.DialogCode.Accepted
+    sdlg.SignDialog = _MultiDlg
+    picked["text"] = "그림 없이"
+    z = mv._zoom or 1.0
+    mw.action_sign_pdf(); mv.signRegionSelected.emit(QRectF(80 * z, 80 * z, 200 * z, 70 * z)); spin(2.0)
+    rm = sc.verify_pdf(str(mp), st.trusted())
+    chk(len(rm.sigs) == 3 and rm.worst == sc.OK_TRUSTED and rm.sigs[0].certify == 2,
+        "N9 서명 창 '모든 쪽'·인증 — 실제 흐름으로 세 쪽 모두 서명, 첫 서명 인증", str([(x.state, x.certify) for x in rm.sigs]))
     QMessageBox.exec = orig_exec
 except Exception:
     import traceback

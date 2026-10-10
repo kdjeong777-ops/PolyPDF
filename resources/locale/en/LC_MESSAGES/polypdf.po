@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 15:18+0000\n"
+"POT-Creation-Date: 2026-10-10 15:35+0000\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -897,6 +897,7 @@ msgid "암호화 PDF 저장"
 msgstr "Save Encrypted PDF"
 
 #: viewer/app.py viewer/print_controller.py viewer/sign_controller.py
+#: viewer/widgets/sign_dialogs.py
 msgid "PDF 파일 (*.pdf)"
 msgstr "PDF Files (*.pdf)"
 
@@ -1686,6 +1687,7 @@ msgid "책갈피 {n}개 추가 — 책갈피창 편집(✏)에서 저장(💾)�
 msgstr "{n} bookmarks added — save (💾) in the bookmarks panel edit mode (✏) to put them in the PDF."
 
 #: viewer/app.py viewer/widgets/ocr_options_dialog.py
+#: viewer/widgets/sign_dialogs.py
 msgid "쪽 범위"
 msgstr "Page Range"
 
@@ -3359,8 +3361,12 @@ msgid "이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없�
 msgstr "This page is rotated inside the PDF and cannot be signed as is (the signature would lie on its side). Set the page upright with 'Save (for other viewers)', then sign."
 
 #: viewer/sign_controller.py
-msgid "서명 중"
-msgstr "Signing"
+msgid "쪽 범위를 읽지 못했습니다. 예: 1-3, 5"
+msgstr "Could not read the page range. Example: 1-3, 5"
+
+#: viewer/sign_controller.py
+msgid "'인증 — 변경 금지' 는 한 쪽에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."
+msgstr "'Certify — no changes' can only be used on one page (each following signature would also be a change)."
 
 #: viewer/sign_controller.py
 msgid "다른 이름으로 서명"
@@ -3422,6 +3428,10 @@ msgstr "Windows Hello Verification"
 msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
 msgstr "The digital ID file was not found. Import it again in the Digital IDs window."
 
+#: viewer/sign_controller.py
+msgid "서명 중"
+msgstr "Signing"
+
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "비밀번호가 맞지 않습니다."
 msgstr "The password is incorrect."
@@ -3447,6 +3457,16 @@ msgstr "Windows Hello was cancelled — you can sign by entering the password."
 msgid "Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. 비밀번호를 넣어 서명하세요 — 서명한 뒤 다시 보관할지 묻습니다."
 msgstr "Could not retrieve the password stored with Windows Hello. Enter the password to sign — you will be asked whether to store it again afterwards."
 
+# | 세운 뒤 서명하세요."
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid ""
+"회전된 쪽이 있어 서명할 수 없습니다: p.{pages}\n"
+"'저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
+msgstr ""
+"Some pages are rotated and cannot be signed: p.{pages}\n"
+"Set them upright with 'Save (for other viewers)', then sign."
+
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid "'{name}' 에는 전자서명이 있습니다. 이 파일에 덮어쓰면 서명이 무효가 됩니다."
@@ -3458,8 +3478,26 @@ msgid "서명을 확인하지 못했습니다({e})."
 msgstr "Could not verify the signature ({e})."
 
 #: viewer/sign_controller.py
+#, python-brace-format
+msgid "{n}쪽에 서명합니다 — 쪽마다 서명이 하나씩 들어가 시간이 걸리고 파일이 커집니다. 계속할까요?"
+msgstr "Signing {n} pages — each page gets its own signature, which takes time and makes the file larger. Continue?"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명 중 ({n}쪽)"
+msgstr "Signing ({n} pages)"
+
+#: viewer/sign_controller.py
 msgid "작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."
 msgstr "The author locked this document against changes after signing — no signature can be added."
+
+#: viewer/sign_controller.py
+msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 이 문서에는 서명할 수 없습니다."
+msgstr "The author certified this document — adding a new signature field would be a change the certification does not allow. This document cannot be signed."
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."
+msgstr "A document that already has signatures cannot be certified (certification must be the first signature)."
 
 #: viewer/sign_controller.py
 msgid "암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."
@@ -3492,6 +3530,15 @@ msgstr "Saving: {name}"
 #, python-brace-format
 msgid "저장하지 못했습니다: {e}"
 msgstr "Could not save: {e}"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid ""
+"타임스탬프 기관에서 시각을 받지 못해 서명하지 않았습니다. 주소·인터넷을 확인하거나 타임스탬프를 끄고 서명하세요.\n"
+"({d})"
+msgstr ""
+"Not signed — no time was received from the timestamp authority. Check the address and internet connection, or turn the timestamp off and sign.\n"
+"({d})"
 
 #: viewer/study/ocr.py
 msgid "중국어(간체)"
@@ -7495,6 +7542,14 @@ msgid "기본 브라우저로 passwords.google.com 을 엽니다 — PolyPDF 는
 msgstr "Opens passwords.google.com in your default browser — PolyPDF sends nothing."
 
 #: viewer/widgets/sign_dialogs.py
+msgid "손으로 그리기"
+msgstr "Draw by Hand"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "지우기"
+msgstr "Delete"
+
+#: viewer/widgets/sign_dialogs.py
 msgid "서명 그림 만들기"
 msgstr "Create Signature Image"
 
@@ -7507,8 +7562,12 @@ msgid "클립보드에서"
 msgstr "From Clipboard"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "종이에 한 서명을 찍은 사진이나 투명 PNG 를 불러오세요."
-msgstr "Load a photo of your signature on paper or a transparent PNG."
+msgid "손으로 그리기…"
+msgstr "Draw by Hand…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "종이에 한 서명을 찍은 사진이나 투명 PNG 를 불러오거나, 손으로 그리세요."
+msgstr "Load a photo of your signature on paper or a transparent PNG, or draw it by hand."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "배경 지우기"
@@ -7643,10 +7702,6 @@ msgid "백업 후 지우기…"
 msgstr "Back Up and Delete…"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "지우기"
-msgstr "Delete"
-
-#: viewer/widgets/sign_dialogs.py
 msgid "(그림 없음)"
 msgstr "(no image)"
 
@@ -7667,6 +7722,10 @@ msgid "겉모양 글자"
 msgstr "Appearance text"
 
 #: viewer/widgets/sign_dialogs.py
+msgid "글자 배치"
+msgstr "Text layout"
+
+#: viewer/widgets/sign_dialogs.py
 msgid "예: 승인, 검토 완료"
 msgstr "e.g. Approved, Reviewed"
 
@@ -7677,6 +7736,34 @@ msgstr "Reason (optional)"
 #: viewer/widgets/sign_dialogs.py
 msgid "장소(선택)"
 msgstr "Location (optional)"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "승인 서명"
+msgstr "Approval signature"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 종류"
+msgstr "Signature type"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "예: 1-3, 5"
+msgstr "e.g. 1-3, 5"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "쪽"
+msgstr "Pages"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "타임스탬프 기관(TSA) 시각 넣기"
+msgstr "Add timestamp authority (TSA) time"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "타임스탬프 기관 주소 — 서명할 때 인터넷이 필요합니다."
+msgstr "Timestamp authority address — signing needs an internet connection."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "타임스탬프"
+msgstr "Timestamp"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "미리보기 만드는 중…"
@@ -7721,6 +7808,22 @@ msgstr "❌ Invalid"
 #: viewer/widgets/sign_dialogs.py
 msgid "이 인증서 신뢰"
 msgstr "Trust This Certificate"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 시점 판 저장…"
+msgstr "Save Signed Version…"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 서명이 덮는 판 — 서명할 때의 파일 그대로를 새 PDF 로 저장합니다."
+msgstr "The version this signature covers — saves the file exactly as it was when signed, as a new PDF."
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 시점 판 저장"
+msgstr "Save Signed Version"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "마우스나 펜으로 서명을 그리세요."
+msgstr "Draw your signature with the mouse or a pen."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "원래 색"
@@ -7775,12 +7878,44 @@ msgid "전자서명"
 msgstr "Digital Signature"
 
 #: viewer/widgets/sign_dialogs.py
+msgid "그림 위에 겹쳐"
+msgstr "Over the image"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "그림 왼쪽·글자 오른쪽"
+msgstr "Image left, text right"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "그림 위·글자 아래"
+msgstr "Image above, text below"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증 — 변경 금지"
+msgstr "Certify — no changes"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증 — 양식 채우기·서명 허용"
+msgstr "Certify — form filling and signing allowed"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증 — 주석·양식·서명 허용"
+msgstr "Certify — comments, forms and signing allowed"
+
+#: viewer/widgets/sign_dialogs.py
 msgid "실제 서명과 같은 그리기 — 날짜는 서명하는 때의 시각으로 바뀝니다."
 msgstr "Drawn the same way as the real signature — the date becomes the time of signing."
 
 #: viewer/widgets/sign_dialogs.py
+msgid "타임스탬프: 없음"
+msgstr "Timestamp: none"
+
+#: viewer/widgets/sign_dialogs.py
 msgid "신뢰 해제"
 msgstr "Stop Trusting"
+
+#: viewer/widgets/sign_dialogs.py
+msgid "원본과 다른 이름으로 저장하세요."
+msgstr "Save with a name different from the original."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "괜찮음"
@@ -7818,6 +7953,16 @@ msgid "'{name}' 을 지우면 이 ID 로 다시 서명할 수 없습니다. 이�
 msgstr "If you delete '{name}', you can no longer sign with this ID. Documents already signed stay valid."
 
 #: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "이 쪽만 (p.{n})"
+msgstr "This page (p.{n})"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "모든 쪽 ({n}쪽)"
+msgstr "All pages ({n})"
+
+#: viewer/widgets/sign_dialogs.py
 msgid "겉모양에 쓸 한글 글꼴이 없습니다 — 서명 그림을 고르거나 겉모양 글자를 끄세요."
 msgstr "No font is available for the appearance text — choose a signature image or turn off the appearance text."
 
@@ -7832,6 +7977,11 @@ msgstr "Comments"
 #: viewer/widgets/sign_dialogs.py
 msgid "내용 변경"
 msgstr "Content changes"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "서명 종류: {v}"
+msgstr "Signature type: {v}"
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
@@ -7880,6 +8030,11 @@ msgstr "Changes added after signing: {v}"
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
+msgid "{stem}_서명시점_{field}.pdf"
+msgstr "{stem}_signed_version_{field}.pdf"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
 msgid "{mark}{name}{mail} — ~{until}{hello}"
 msgstr "{mark}{name}{mail} — until {until}{hello}"
 
@@ -7892,6 +8047,11 @@ msgstr "Fingerprint (SHA-256): {fp}"
 #, python-brace-format
 msgid "전자서명 — {name}"
 msgstr "Digital Signature — {name}"
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "타임스탬프: {v} (기관: {n})"
+msgstr "Timestamp: {v} (authority: {n})"
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
@@ -7935,6 +8095,15 @@ msgstr "Could not import: {e}"
 #, python-brace-format
 msgid "미리보기를 만들지 못했습니다({e})."
 msgstr "Could not make the preview ({e})."
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid ""
+"서명 시점 판을 저장했습니다. 지금 열까요?\n"
+"{name}"
+msgstr ""
+"The signed version was saved. Open it now?\n"
+"{name}"
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format

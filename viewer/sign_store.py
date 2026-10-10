@@ -26,8 +26,9 @@ def root() -> Path:
 
 def _empty() -> dict:
     return {"ids": [], "default_id": "", "images": [], "default_image": "",
-            "appearance": {"show_name": True, "show_date": True, "show_reason": False},
-            "last_reason": "", "last_location": "", "trusted": []}
+            "appearance": {"show_name": True, "show_date": True, "show_reason": False, "layout": "overlay"},
+            "last_reason": "", "last_location": "", "trusted": [],
+            "tsa_on": False, "tsa_url": ""}                 # 2단계(보안 SOT §3.6): 타임스탬프 — 끄는 것이 기본
 
 
 def load() -> dict:

@@ -73,6 +73,78 @@ def _qimage_to_pil(q: QImage):
 # 서명 그림 — SOT §3.1
 # ---------------------------------------------------------------------------
 
+class _DrawPad(QLabel):
+    """손으로 그리기 칸(보안 SOT §3.6) — 투명 바탕 위에 마우스·펜으로 그린다(굵기 4)."""
+    W, H, PEN = 600, 220, 4
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(self.W, self.H)
+        self.setStyleSheet("QLabel{background:#ffffff;border:1px solid #c8c8c8;}")
+        self.clear()
+        self._last = None
+
+    def clear(self):
+        self.img = QImage(self.W, self.H, QImage.Format.Format_ARGB32_Premultiplied)
+        self.img.fill(0)
+        self.strokes = 0
+        self.update()
+
+    def _line(self, a, b):
+        from PyQt6.QtGui import QPen
+        p = QPainter(self.img)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setPen(QPen(QColor(10, 10, 40), self.PEN, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                      Qt.PenJoinStyle.RoundJoin))
+        p.drawLine(a, b)
+        p.end()
+        self.update()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._last = e.position()
+            self._line(self._last, self._last)
+            self.strokes += 1
+
+    def mouseMoveEvent(self, e):
+        if self._last is not None:
+            pos = e.position()
+            self._line(self._last, pos)
+            self._last = pos
+
+    def mouseReleaseEvent(self, e):
+        self._last = None
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        p = QPainter(self)
+        p.drawImage(0, 0, self.img)
+        p.end()
+
+
+class _DrawDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("손으로 그리기"))
+        v = QVBoxLayout(self)
+        v.addWidget(QLabel(tr("마우스나 펜으로 서명을 그리세요.")))
+        self.pad = _DrawPad(self)
+        v.addWidget(self.pad)
+        row = QHBoxLayout()
+        b_clear = QPushButton(tr("지우기"))
+        b_clear.clicked.connect(self.pad.clear)
+        row.addWidget(b_clear)
+        row.addStretch(1)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        row.addWidget(bb)
+        v.addLayout(row)
+
+    def pil_image(self):
+        return _qimage_to_pil(self.pad.img)
+
+
 class SignImageDialog(QDialog):
     """불러오기 → 배경 지우기(자동 임계값) → 잉크 색 → 자르기 → 이름 붙여 저장."""
 
@@ -86,13 +158,16 @@ class SignImageDialog(QDialog):
         row = QHBoxLayout()
         b_open = QPushButton(tr("그림 불러오기…"))
         b_clip = QPushButton(tr("클립보드에서"))
+        b_draw = QPushButton(tr("손으로 그리기…"))
         b_open.clicked.connect(self._open_file)
         b_clip.clicked.connect(self._from_clipboard)
+        b_draw.clicked.connect(self._draw)
         row.addWidget(b_open)
         row.addWidget(b_clip)
+        row.addWidget(b_draw)
         row.addStretch(1)
         v.addLayout(row)
-        self.preview = QLabel(tr("종이에 한 서명을 찍은 사진이나 투명 PNG 를 불러오세요."))
+        self.preview = QLabel(tr("종이에 한 서명을 찍은 사진이나 투명 PNG 를 불러오거나, 손으로 그리세요."))
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(420, 180)
         self.preview.setStyleSheet("QLabel{border:1px solid #c8c8c8;}")
@@ -151,6 +226,12 @@ class SignImageDialog(QDialog):
             QMessageBox.warning(self, tr("서명 그림"), tr("그림을 열지 못했습니다: {e}").format(e=type(e).__name__))
             return
         self.set_source(img)
+
+    def _draw(self):
+        dlg = _DrawDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted or not dlg.pad.strokes:
+            return
+        self.set_source(dlg.pil_image())
 
     def _from_clipboard(self):
         q = QApplication.clipboard().image()
@@ -561,7 +642,8 @@ class SignDialog(QDialog):
     PREVIEW_MAX = (360, 150)
     PREVIEW_DPI = 110
 
-    def __init__(self, parent=None, hello_ok: bool = False, file_name: str = "", box_size=(142.0, 57.0)):
+    def __init__(self, parent=None, hello_ok: bool = False, file_name: str = "", box_size=(142.0, 57.0),
+                 page_count: int = 1, current_page: int = 0, can_certify: bool = True):
         super().__init__(parent)
         from viewer import sign_hello, sign_store
         self.setWindowTitle(tr("전자서명 — {name}").format(name=file_name) if file_name else tr("전자서명"))
@@ -602,11 +684,60 @@ class SignDialog(QDialog):
             gl.addWidget(c)
         gl.addStretch(1)
         form.addRow(tr("겉모양 글자"), g)
+        # 2단계(보안 SOT §3.6): 글자 배치
+        self.cmb_layout = QComboBox()
+        for key, label in (("overlay", tr("그림 위에 겹쳐")), ("image_left", tr("그림 왼쪽·글자 오른쪽")),
+                           ("image_top", tr("그림 위·글자 아래"))):
+            self.cmb_layout.addItem(label, key)
+        k_l = self.cmb_layout.findData(ap.get("layout", "overlay"))
+        self.cmb_layout.setCurrentIndex(max(0, k_l))
+        form.addRow(tr("글자 배치"), self.cmb_layout)
         self.ed_reason = QLineEdit(d.get("last_reason", ""))
         self.ed_reason.setPlaceholderText(tr("예: 승인, 검토 완료"))
         self.ed_loc = QLineEdit(d.get("last_location", ""))
         form.addRow(tr("사유(선택)"), self.ed_reason)
         form.addRow(tr("장소(선택)"), self.ed_loc)
+        # 2단계(보안 SOT §3.6): 서명 종류 — 인증은 문서의 첫 서명일 때만
+        self.cmb_kind = QComboBox()
+        self.cmb_kind.addItem(tr("승인 서명"), 0)
+        if can_certify:
+            self.cmb_kind.addItem(tr("인증 — 변경 금지"), 1)
+            self.cmb_kind.addItem(tr("인증 — 양식 채우기·서명 허용"), 2)
+            self.cmb_kind.addItem(tr("인증 — 주석·양식·서명 허용"), 3)
+        else:
+            self.cmb_kind.setToolTip(tr("이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."))
+        form.addRow(tr("서명 종류"), self.cmb_kind)
+        # 여러 쪽 — 이 쪽만 / 모든 쪽 / 쪽 범위
+        self._page_count = max(1, int(page_count))
+        self._current_page = int(current_page)
+        pr = QWidget()
+        pl = QHBoxLayout(pr)
+        pl.setContentsMargins(0, 0, 0, 0)
+        self.cmb_pages = QComboBox()
+        self.cmb_pages.addItem(tr("이 쪽만 (p.{n})").format(n=self._current_page + 1), "this")
+        self.cmb_pages.addItem(tr("모든 쪽 ({n}쪽)").format(n=self._page_count), "all")
+        self.cmb_pages.addItem(tr("쪽 범위"), "range")
+        self.ed_pages = QLineEdit()
+        self.ed_pages.setPlaceholderText(tr("예: 1-3, 5"))
+        self.ed_pages.setEnabled(False)
+        pl.addWidget(self.cmb_pages)
+        pl.addWidget(self.ed_pages, 1)
+        self.cmb_pages.currentIndexChanged.connect(lambda _i: self.ed_pages.setEnabled(self.cmb_pages.currentData() == "range"))
+        form.addRow(tr("쪽"), pr)
+        # 타임스탬프 기관 — 끄는 것이 기본, 주소는 사용자가
+        tr_ = QWidget()
+        tl = QHBoxLayout(tr_)
+        tl.setContentsMargins(0, 0, 0, 0)
+        self.chk_tsa = QCheckBox(tr("타임스탬프 기관(TSA) 시각 넣기"))
+        self.ed_tsa = QLineEdit(d.get("tsa_url", ""))
+        self.ed_tsa.setPlaceholderText("http://…")
+        self.ed_tsa.setToolTip(tr("타임스탬프 기관 주소 — 서명할 때 인터넷이 필요합니다."))
+        self.chk_tsa.setChecked(bool(d.get("tsa_on", False)))
+        self.ed_tsa.setEnabled(self.chk_tsa.isChecked())
+        self.chk_tsa.toggled.connect(self.ed_tsa.setEnabled)
+        tl.addWidget(self.chk_tsa)
+        tl.addWidget(self.ed_tsa, 1)
+        form.addRow(tr("타임스탬프"), tr_)
         # 겉모양 미리보기 — 끈 상자 비율, 실제 서명과 같은 그리기(배경)
         self._box = (float(box_size[0]), float(box_size[1]))
         self.preview = QLabel(tr("미리보기 만드는 중…"))
@@ -656,6 +787,7 @@ class SignDialog(QDialog):
         for c in (self.chk_name, self.chk_date, self.chk_reason):
             c.toggled.connect(lambda _on: self._pv_timer.start())
         self.ed_reason.textChanged.connect(lambda _t: self._pv_timer.start())
+        self.cmb_layout.currentIndexChanged.connect(lambda _i: self._pv_timer.start())
         self._has_hello = sign_hello.has
         self._sync()
         self.resize(480, 0)
@@ -665,9 +797,7 @@ class SignDialog(QDialog):
     def _render_preview(self):
         from viewer import sign_core, sign_store
         e = sign_store.get_id(self.fp()) or {}
-        app = sign_core.Appearance(image_path=sign_store.image_path(self.image_name()),
-                                   show_name=self.chk_name.isChecked(), show_date=self.chk_date.isChecked(),
-                                   show_reason=self.chk_reason.isChecked(), font_path=sign_core.default_font())
+        app = self.appearance()
         self._pv_gen += 1
         th = _PreviewThread(self._pv_gen, (app, sign_core.signer_label(e.get("name", ""), e.get("email", "")),
                                            self.ed_reason.text(), self._box[0], self._box[1], self.PREVIEW_DPI), self)
@@ -726,6 +856,34 @@ class SignDialog(QDialog):
         self.stop_preview()
         super().done(r)
 
+    def appearance(self):
+        """지금 고른 겉모양(서명·미리보기 공용)."""
+        from viewer import sign_core, sign_store
+        return sign_core.Appearance(image_path=sign_store.image_path(self.image_name()),
+                                    show_name=self.chk_name.isChecked(), show_date=self.chk_date.isChecked(),
+                                    show_reason=self.chk_reason.isChecked(), font_path=sign_core.default_font(),
+                                    layout=str(self.cmb_layout.currentData() or "overlay"))
+
+    def certify(self) -> int:
+        return int(self.cmb_kind.currentData() or 0)
+
+    def tsa_url(self) -> str:
+        return self.ed_tsa.text().strip() if self.chk_tsa.isChecked() else ""
+
+    def pages(self):
+        """서명할 쪽(0부터) 목록. 쪽 범위를 못 읽으면 None."""
+        mode = self.cmb_pages.currentData()
+        if mode == "all":
+            return list(range(self._page_count))
+        if mode == "range":
+            from viewer.page_crop import parse_range
+            try:
+                got = parse_range(self.ed_pages.text(), self._page_count)
+            except Exception:
+                got = []
+            return sorted(set(got)) or None
+        return [self._current_page]
+
     def fp(self) -> str:
         return str(self.cmb_id.currentData() or "")
 
@@ -751,7 +909,10 @@ class SignDialog(QDialog):
         from viewer import sign_store
         d = sign_store.load()
         d["appearance"] = {"show_name": self.chk_name.isChecked(), "show_date": self.chk_date.isChecked(),
-                           "show_reason": self.chk_reason.isChecked()}
+                           "show_reason": self.chk_reason.isChecked(),
+                           "layout": str(self.cmb_layout.currentData() or "overlay")}
+        d["tsa_on"] = self.chk_tsa.isChecked()
+        d["tsa_url"] = self.ed_tsa.text().strip()
         d["last_reason"] = self.ed_reason.text()
         d["last_location"] = self.ed_loc.text()
         if self.fp():
@@ -789,11 +950,13 @@ class SignPanelDialog(QDialog):
 
     STATE_TEXT = {}
 
-    def __init__(self, parent=None, report=None):
+    def __init__(self, parent=None, report=None, path: str = "", open_cb=None):
         super().__init__(parent)
         from viewer import sign_core as sc
         self.setWindowTitle(tr("서명 패널"))
         self._rep = report
+        self._path = str(path or "")
+        self._open_cb = open_cb
         self.trust_changed = False
         st_text = {sc.OK_TRUSTED: tr("✅ 유효 · 신뢰함"), sc.OK_UNKNOWN: tr("⚠ 유효 · 신원 미확인"),
                    sc.MODIFIED: tr("⚠ 서명 뒤 변경됨"), sc.INVALID: tr("❌ 무효")}
@@ -812,6 +975,12 @@ class SignPanelDialog(QDialog):
         self.b_trust = QPushButton(tr("이 인증서 신뢰"))
         self.b_trust.clicked.connect(self._trust)
         row.addWidget(self.b_trust)
+        # 2단계(보안 SOT §3.6): 서명할 때의 파일 그대로
+        self.b_rev = QPushButton(tr("서명 시점 판 저장…"))
+        self.b_rev.setToolTip(tr("이 서명이 덮는 판 — 서명할 때의 파일 그대로를 새 PDF 로 저장합니다."))
+        self.b_rev.clicked.connect(self._save_revision)
+        self.b_rev.setEnabled(bool(self._path))
+        row.addWidget(self.b_rev)
         row.addStretch(1)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         bb.rejected.connect(self.reject)
@@ -835,11 +1004,16 @@ class SignPanelDialog(QDialog):
             return
         mod = {"none": tr("없음"), "form": tr("양식 채우기·서명 추가"), "annot": tr("주석"),
                "other": tr("내용 변경")}.get(s.modification, s.modification)
+        kind = {0: tr("승인 서명"), 1: tr("인증 — 변경 금지"), 2: tr("인증 — 양식 채우기·서명 허용"),
+                3: tr("인증 — 주석·양식·서명 허용")}.get(int(getattr(s, "certify", 0) or 0), tr("승인 서명"))
         lines = [
+            tr("서명 종류: {v}").format(v=kind),
             tr("서명자: {v}").format(v=s.signer),
             tr("이메일: {v}").format(v=s.email or "—"),
             tr("조직: {v}").format(v=s.org or "—"),
             tr("서명 시각: {v} (서명한 PC 의 시계 기준)").format(v=s.time or "—"),
+            (tr("타임스탬프: {v} (기관: {n})").format(v=s.ts_time, n=s.ts_name or "—") if getattr(s, "ts_time", "")
+             else tr("타임스탬프: 없음")),
             tr("사유: {v}").format(v=s.reason or "—"),
             tr("장소: {v}").format(v=s.location or "—"),
             tr("인증서 지문(SHA-256): {v}").format(v=s.fp),
@@ -853,6 +1027,37 @@ class SignPanelDialog(QDialog):
         trusted = s.fp.lower() in {x.lower() for x in sign_store.trusted()}
         self.b_trust.setText(tr("신뢰 해제") if trusted else tr("이 인증서 신뢰"))
         self.b_trust.setEnabled(bool(s.fp))
+
+    def _save_revision(self):
+        """그 서명의 `/ByteRange` 끝까지 — 서명할 때의 파일 그대로를 새 PDF 로(SOT §3.6)."""
+        s = self._cur()
+        if s is None or not self._path:
+            return
+        from viewer import sign_core
+        stem = os.path.splitext(os.path.basename(self._path))[0]
+        default = os.path.join(os.path.dirname(self._path),
+                               tr("{stem}_서명시점_{field}.pdf").format(stem=stem, field=s.field))
+        fn, _ = QFileDialog.getSaveFileName(self, tr("서명 시점 판 저장"), default, tr("PDF 파일 (*.pdf)"))
+        if not fn:
+            return
+        if not fn.lower().endswith(".pdf"):
+            fn += ".pdf"
+        if os.path.normcase(os.path.abspath(fn)) == os.path.normcase(os.path.abspath(self._path)):
+            QMessageBox.warning(self, self.windowTitle(), tr("원본과 다른 이름으로 저장하세요."))
+            return
+        try:
+            data = sign_core.signed_revision_bytes(self._path, s.field)
+            with open(fn, "wb") as f:
+                f.write(data)
+        except Exception as e:                    # noqa: BLE001
+            QMessageBox.warning(self, self.windowTitle(), tr("저장하지 못했습니다: {e}").format(e=type(e).__name__))
+            return
+        self.saved_revision = fn
+        if self._open_cb is not None and QMessageBox.question(
+                self, self.windowTitle(), tr("서명 시점 판을 저장했습니다. 지금 열까요?\n{name}").format(name=os.path.basename(fn))
+        ) == QMessageBox.StandardButton.Yes:
+            self.accept()
+            self._open_cb(fn)
 
     def _trust(self):
         s = self._cur()

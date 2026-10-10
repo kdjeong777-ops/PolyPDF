@@ -196,7 +196,10 @@ class SignMixin:
         r = self._sign_box_fit(page, r)
         from viewer.widgets.sign_dialogs import SignDialog
         hello_ok = self._sign_hello_ready()
-        dlg = SignDialog(self, hello_ok=hello_ok, file_name=Path(cur).name, box_size=(r.width, r.height))
+        from viewer import sign_core as _sc
+        dlg = SignDialog(self, hello_ok=hello_ok, file_name=Path(cur).name, box_size=(r.width, r.height),
+                         page_count=mv._doc.doc.page_count, current_page=pidx,
+                         can_certify=not _sc.doc_is_signed(mv._doc.doc))
         try:
             self._sign_dialog_loop(cur, pidx, r, dlg, mv)
         finally:
@@ -264,11 +267,30 @@ class SignMixin:
             QMessageBox.warning(self, tr("서명"), tr("디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."))
             return "fail"
         doc = (mv or self.main_view)._doc.doc     # 자리를 끈 그 창(2단이면 오른쪽일 수 있다)
-        box = sign_core.page_box_to_pdf(doc[pidx], rect)
-        app = sign_core.Appearance(image_path=sign_store.image_path(dlg.image_name()),
-                                   show_name=dlg.chk_name.isChecked(), show_date=dlg.chk_date.isChecked(),
-                                   show_reason=dlg.chk_reason.isChecked(),
-                                   font_path=sign_core.default_font())
+        # 2단계(SOT §3.6): 여러 쪽 — 같은 자리(쪽 좌표)에, 쪽 밖이면 쪽 안으로. 회전 쪽은 막는다.
+        pages = dlg.pages()
+        if not pages:
+            QMessageBox.information(self, tr("서명"), tr("쪽 범위를 읽지 못했습니다. 예: 1-3, 5"))
+            return "retry"
+        certify = dlg.certify()
+        if certify == 1 and len(pages) > 1:
+            QMessageBox.information(self, tr("서명"), tr("'인증 — 변경 금지' 는 한 쪽에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."))
+            return "retry"
+        rotated = [p + 1 for p in pages
+                   if doc[p].rotation or (mv or self.main_view)._rotations.get(p, 0)]
+        if rotated:
+            QMessageBox.information(self, tr("서명"), tr("회전된 쪽이 있어 서명할 수 없습니다: p.{pages}\n'저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요.").format(
+                pages=", ".join(str(x) for x in rotated[:20])))
+            return "retry"
+        if len(pages) > 30 and QMessageBox.question(
+                self, tr("서명"), tr("{n}쪽에 서명합니다 — 쪽마다 서명이 하나씩 들어가 시간이 걸리고 파일이 커집니다. 계속할까요?").format(n=len(pages))
+        ) != QMessageBox.StandardButton.Yes:
+            return "retry"
+        targets = []
+        for p in pages:
+            targets.append((p, sign_core.page_box_to_pdf(doc[p], self._sign_box_fit(doc[p], rect))))
+        app = dlg.appearance()
+        tsa = dlg.tsa_url()
         doc_pw = ""
         remembered = False
         try:
@@ -283,9 +305,10 @@ class SignMixin:
         os.close(fd)
         reason, loc = dlg.ed_reason.text(), dlg.ed_loc.text()
         try:
-            self._sign_bg(lambda: sign_core.sign_pdf(cur, tmp, pfx, pw, page_index=pidx, box_pdf=box, appearance=app,
-                                                     reason=reason, location=loc, doc_password=doc_pw),
-                          tr("서명 중"))
+            self._sign_bg(lambda: sign_core.sign_pdf(cur, tmp, pfx, pw, targets=targets, appearance=app,
+                                                     reason=reason, location=loc, doc_password=doc_pw,
+                                                     certify=certify, tsa=tsa or None),
+                          tr("서명 중") if len(targets) == 1 else tr("서명 중 ({n}쪽)").format(n=len(targets)))
         except sign_core.WrongPassword:
             self._sign_unlink(tmp)
             QMessageBox.warning(self, tr("서명"), tr("비밀번호가 맞지 않습니다."))
@@ -293,6 +316,10 @@ class SignMixin:
         except sign_core.SignError as e:
             self._sign_unlink(tmp)
             msg = {"certified": tr("작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."),
+                   "certified_new_field": tr("작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 이 문서에는 서명할 수 없습니다."),
+                   "certify_not_first": tr("이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."),
+                   "certify_one_page": tr("'인증 — 변경 금지' 는 한 쪽에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."),
+                   "tsa_failed": tr("타임스탬프 기관에서 시각을 받지 못해 서명하지 않았습니다. 주소·인터넷을 확인하거나 타임스탬프를 끄고 서명하세요.\n({d})").format(d=e.detail[:120]),
                    "need_doc_password": tr("암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."),
                    "unreadable": tr("이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."),
                    "no_font": tr("겉모양 글자에 쓸 한글 글꼴이 없습니다. 서명 그림을 고르거나 겉모양 글자를 끄세요.")
@@ -495,7 +522,15 @@ class SignMixin:
         if rep is None:
             return
         from viewer.widgets.sign_dialogs import SignPanelDialog
-        dlg = SignPanelDialog(self, rep)
+        cur = str(mv.current_file() or "")
+
+        def _open_rev(path, _src=cur):
+            try:
+                self.bookmark_tree.add_or_refresh_file(path, after=_src)
+            except Exception:
+                pass
+            self._open_saved_file(path)
+        dlg = SignPanelDialog(self, rep, path=cur, open_cb=_open_rev)
         dlg.exec()
         if dlg.trust_changed:
             mv._sign_report_key = None

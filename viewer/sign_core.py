@@ -347,6 +347,11 @@ class Appearance:
     show_date: bool = True
     show_reason: bool = False
     font_path: str = ""             # 겉모양 글자 글꼴(맑은 고딕 — pdf_font.text_font_file)
+    layout: str = "overlay"         # 2단계(SOT §3.6): overlay(그림 위에 겹쳐) | image_left | image_top
+
+
+LAYOUTS = ("overlay", "image_left", "image_top")
+CERTIFY_LEVELS = (0, 1, 2, 3)        # 0 = 승인 서명, 1·2·3 = DocMDP P (SOT §3.6)
 
 
 _FALLBACK_FONTS = ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
@@ -381,21 +386,8 @@ def page_box_to_pdf(page, rect) -> tuple[float, float, float, float]:
     return (q.x0, q.y0, q.x1, q.y1)
 
 
-def _next_field_name(reader) -> str:
-    used = set()
-    try:
-        from pyhanko.sign.fields import enumerate_sig_fields
-        for name, _v, _ref in enumerate_sig_fields(reader, filled_status=None):
-            used.add(str(name))
-    except Exception:
-        pass
-    n = 1
-    while f"Signature{n}" in used:
-        n += 1
-    return f"Signature{n}"
-
-
-def _stamp_style(app: Appearance, signer_name: str, reason: str):
+def _stamp_style(app: Appearance, signer_name: str, reason: str, box_w: float = 0.0, box_h: float = 0.0):
+    """서명 겉모양 스타일. `box_w`·`box_h`(pt)는 글자 배치(SOT §3.6)가 상자를 나눌 때 쓴다."""
     from pyhanko import stamp
     from pyhanko.pdf_utils.images import PdfImage
     bg = None
@@ -428,7 +420,27 @@ def _stamp_style(app: Appearance, signer_name: str, reason: str):
         kw["text_box_style"] = text_style
     if bg is not None:
         kw.update(background=bg, background_opacity=1)
+        kw.update(_layout_kw(app.layout, box_w, box_h))
     return stamp.TextStampStyle(**kw)
+
+
+def _layout_kw(layout: str, box_w: float, box_h: float) -> dict:
+    """글자 배치(SOT §3.6) — 그림 왼쪽·글자 오른쪽(반반) / 그림 위 60%·글자 아래 40%. 겹쳐는 pyHanko 기본."""
+    if layout not in ("image_left", "image_top") or box_w <= 0 or box_h <= 0:
+        return {}
+    from pyhanko.pdf_utils.layout import AxisAlignment, InnerScaling, Margins, SimpleBoxLayoutRule
+    if layout == "image_left":
+        half = box_w / 2.0
+        bg = SimpleBoxLayoutRule(x_align=AxisAlignment.ALIGN_MIN, y_align=AxisAlignment.ALIGN_MID,
+                                 margins=Margins(0, half, 0, 0), inner_content_scaling=InnerScaling.SHRINK_TO_FIT)
+        tx = SimpleBoxLayoutRule(x_align=AxisAlignment.ALIGN_MIN, y_align=AxisAlignment.ALIGN_MID,
+                                 margins=Margins(half + 2, 2, 0, 0))
+    else:
+        bg = SimpleBoxLayoutRule(x_align=AxisAlignment.ALIGN_MID, y_align=AxisAlignment.ALIGN_MAX,
+                                 margins=Margins(0, 0, 0, box_h * 0.4), inner_content_scaling=InnerScaling.SHRINK_TO_FIT)
+        tx = SimpleBoxLayoutRule(x_align=AxisAlignment.ALIGN_MID, y_align=AxisAlignment.ALIGN_MID,
+                                 margins=Margins(0, 0, box_h * 0.6, 0))
+    return {"background_layout": bg, "inner_content_layout": tx}
 
 
 def preview_png(app: "Appearance", signer_text: str, reason: str, width_pt: float, height_pt: float,
@@ -445,7 +457,7 @@ def preview_png(app: "Appearance", signer_text: str, reason: str, width_pt: floa
     pg.draw_rect(pg.rect, color=None, fill=(1, 1, 1))     # 내용이 있어야 pyHanko 가 찍는다(/Contents 없으면 실패, 실측)
     data = d.tobytes()
     d.close()
-    style = _stamp_style(app, signer_text, reason)
+    style = _stamp_style(app, signer_text, reason, w, h)
     wr = IncrementalPdfFileWriter(io.BytesIO(data))
     stamp = style.create_stamp(wr, BoxConstraints(width=w, height=h), {"signer": signer_text})
     stamp.apply(0, 0, 0)
@@ -463,53 +475,139 @@ def signer_label(name: str, email: str = "") -> str:
     return f"{name} <{email}>" if email else name
 
 
-def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int, box_pdf,
+def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pdf=None,
              appearance: Appearance | None = None, reason: str = "", location: str = "",
-             doc_password: str = "") -> str:
-    """`src` 를 **증분 저장**으로 서명해 `dst` 에 쓴다(원본 바이트 + 덧붙인 서명, SOT §1·§3.3). 필드 이름 반환.
+             doc_password: str = "", targets=None, certify: int = 0, tsa=None):
+    """`src` 를 **증분 저장**으로 서명해 `dst` 에 쓴다(원본 바이트 + 덧붙인 서명, SOT §1·§3.3).
 
-    `box_pdf` 는 PDF 사용자 공간 (x0, y0, x1, y1) — `page_box_to_pdf` 로 만든다.
-    암호 문서는 `doc_password` 로 연다(같은 암호화를 유지한 채 덧붙인다, SOT §3.5)."""
+    - `box_pdf` 는 PDF 사용자 공간 (x0, y0, x1, y1) — `page_box_to_pdf` 로 만든다.
+    - `targets=[(쪽, 상자), …]` 면 여러 쪽(SOT §3.6) — **모든 서명 칸을 첫 서명 전에 한 판에 만들고** 차례로 채운다
+      (서명마다 칸을 더하면 인증 뒤 '허용 안 된 변경' 이 된다, 실측). 쪽마다 별도 승인 서명, 인증은 첫 쪽만.
+    - `certify` 0 = 승인, 1·2·3 = DocMDP P. 문서의 첫 서명일 때만. P=1 은 한 쪽만.
+    - `tsa` 는 타임스탬프 기관 주소(str) 또는 pyHanko TimeStamper(검사용). 받지 못하면 SignError(tsa_failed).
+    - 암호 문서는 `doc_password` 로 연다(같은 암호화를 유지한 채 덧붙인다, SOT §3.5).
+    반환: `targets` 를 주면 칸 이름 목록, 아니면 칸 이름 하나."""
     from pyhanko.sign import signers, fields
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+    single = targets is None
+    if single:
+        targets = [(int(page_index), box_pdf)]
+    targets = [(int(p), tuple(float(v) for v in b)) for p, b in targets]
+    certify = int(certify or 0)
+    if certify not in CERTIFY_LEVELS:
+        raise ValueError("certify")
+    if certify == 1 and len(targets) > 1:
+        raise SignError("certify_one_page")
     key, cert, extra = load_pfx(pfx, password)
     signer = _simple_signer(key, cert, extra)
     app = appearance or Appearance()
     info = _cert_info(cert)
+    stamper = None
+    if tsa:
+        if isinstance(tsa, str):
+            from pyhanko.sign import timestamps
+            stamper = timestamps.HTTPTimeStamper(tsa.strip(), timeout=20)
+        else:
+            stamper = tsa
     # 메모리로 읽고 곧 닫는다 — 배경 스레드가 원본 핸들을 오래 쥐면 Windows 에서 저장 바꿔치기가 거부된다(마스터 §4.7.5)
     with open(src, "rb") as f:
         data = f.read()
-    try:
-        w = IncrementalPdfFileWriter(io.BytesIO(data), strict=False)
-    except Exception as e:                       # noqa: BLE001 — 손상된 xref 등
-        raise SignError("unreadable", type(e).__name__) from None
-    if w.prev.encrypted:
-        if not doc_password:
-            raise SignError("need_doc_password")
+
+    def _writer(buf):
         try:
-            w.encrypt(doc_password)
-        except Exception:
-            raise SignError("need_doc_password") from None
-        _fix_direct_encrypt(w)
-    if _certified_no_changes(w.prev):
+            w_ = IncrementalPdfFileWriter(io.BytesIO(buf), strict=False)
+        except Exception as e:                   # noqa: BLE001 — 손상된 xref 등
+            raise SignError("unreadable", type(e).__name__) from None
+        if w_.prev.encrypted:
+            if not doc_password:
+                raise SignError("need_doc_password")
+            try:
+                w_.encrypt(doc_password)
+            except Exception:
+                raise SignError("need_doc_password") from None
+            _fix_direct_encrypt(w_)
+        return w_
+
+    w = _writer(data)
+    level = _certification_level(w.prev)
+    if level == 1:
         raise SignError("certified")
-    name = _next_field_name(w.prev)
-    meta = signers.PdfSignatureMetadata(field_name=name, reason=reason or None, location=location or None,
-                                        subfilter=fields.SigSeedSubFilter.PADES, md_algorithm="sha256")
-    style = _stamp_style(app, info.name, reason)
-    ps = signers.PdfSigner(meta, signer=signer, stamp_style=style,
-                           new_field_spec=fields.SigFieldSpec(sig_field_name=name, on_page=int(page_index),
-                                                              box=tuple(float(v) for v in box_pdf)))
-    out = io.BytesIO()
+    if level in (2, 3):
+        raise SignError("certified_new_field")      # 새 서명 칸을 더하는 것은 허용 변경이 아니다(SOT §3.6)
+    if certify and _has_signatures(w.prev):
+        raise SignError("certify_not_first")
+    names = _next_field_names(w.prev, len(targets))
+    for nm, (pg, bx) in zip(names, targets):
+        fields.append_signature_field(w, fields.SigFieldSpec(sig_field_name=nm, on_page=pg, box=bx))
+    out = b""
     try:
-        ps.sign_pdf(w, output=out)
+        for i, (nm, (pg, bx)) in enumerate(zip(names, targets)):
+            if i:
+                w = _writer(out)
+            cert_now = certify if i == 0 else 0
+            meta = signers.PdfSignatureMetadata(
+                field_name=nm, reason=reason or None, location=location or None,
+                subfilter=fields.SigSeedSubFilter.PADES, md_algorithm="sha256",
+                certify=bool(cert_now),
+                docmdp_permissions=_mdp(cert_now) if cert_now else fields.MDPPerm.FILL_FORMS)
+            style = _stamp_style(app, info.name, reason, bx[2] - bx[0], bx[3] - bx[1])
+            ps = signers.PdfSigner(meta, signer=signer, stamp_style=style, timestamper=stamper)
+            buf = io.BytesIO()
+            ps.sign_pdf(w, output=buf)
+            out = buf.getvalue()
     except SignError:
         raise
     except Exception as e:                       # noqa: BLE001
-        raise SignError("sign_failed", type(e).__name__ + ": " + str(e)[:200]) from None
+        nm_ = type(e).__name__
+        if stamper is not None and ("Timestamp" in nm_ or "timestamp" in str(e).lower()
+                                    or nm_ in ("ClientConnectorError", "TimeoutError", "ClientError")):
+            raise SignError("tsa_failed", nm_ + ": " + str(e)[:200]) from None
+        raise SignError("sign_failed", nm_ + ": " + str(e)[:200]) from None
     with open(str(dst), "wb") as f:
-        f.write(out.getvalue())
-    return name
+        f.write(out)
+    return names[0] if single else names
+
+
+def _mdp(level: int):
+    from pyhanko.sign.fields import MDPPerm
+    return {1: MDPPerm.NO_CHANGES, 2: MDPPerm.FILL_FORMS, 3: MDPPerm.ANNOTATE}[int(level)]
+
+
+def _has_signatures(reader) -> bool:
+    try:
+        return bool(list(reader.embedded_signatures))
+    except Exception:
+        return False
+
+
+def _next_field_names(reader, n: int) -> list:
+    used = set()
+    try:
+        from pyhanko.sign.fields import enumerate_sig_fields
+        for name, _v, _ref in enumerate_sig_fields(reader, filled_status=None):
+            used.add(str(name))
+    except Exception:
+        pass
+    out, k = [], 1
+    while len(out) < n:
+        nm = f"Signature{k}"
+        if nm not in used:
+            out.append(nm)
+        k += 1
+    return out
+
+
+def signed_revision_bytes(path, field: str) -> bytes:
+    """그 서명이 덮는 판 — `/ByteRange` 끝까지 자른 **서명할 때의 파일 그대로**(SOT §3.6 서명 시점 판)."""
+    from pyhanko.pdf_utils.reader import PdfFileReader
+    with open(path, "rb") as fh:
+        data = fh.read()
+    r = PdfFileReader(io.BytesIO(data), strict=False)
+    for es in r.embedded_signatures:
+        if str(es.field_name) == str(field):
+            br = list(es.sig_object["/ByteRange"])
+            return data[: int(br[2]) + int(br[3])]
+    raise KeyError(field)
 
 
 def _fix_direct_encrypt(w) -> None:
@@ -544,22 +642,30 @@ def _simple_signer(key, cert, extra):
                                 cert_registry=store)
 
 
+def _certification_level(reader) -> int:
+    """인증 서명의 DocMDP P(1·2·3), 없으면 0 — SOT §3.5·§3.6."""
+    # pyHanko 사전의 .get() 은 간접 객체를 풀지 않는다(실측 — /DocMDP 가 IndirectObject 로 나와 늘 0 이었다) — [] 로 읽는다
+    try:
+        root = reader.root
+        if "/Perms" not in root:
+            return 0
+        perms = root["/Perms"]
+        if "/DocMDP" not in perms:
+            return 0
+        dmdp = perms["/DocMDP"]
+        refs = dmdp["/Reference"] if "/Reference" in dmdp else []
+        for ref in refs:
+            if "/TransformParams" in ref:
+                tp = ref["/TransformParams"]
+                return int(tp["/P"]) if "/P" in tp else 2
+        return 2
+    except Exception:
+        return 0
+
+
 def _certified_no_changes(reader) -> bool:
     """이미 '변경 금지'(DocMDP P=1) 인증 서명이 있나 — SOT §3.5."""
-    try:
-        perms = reader.root.get("/Perms")
-        if perms is None:
-            return False
-        dmdp = perms.get("/DocMDP")
-        if dmdp is None:
-            return False
-        for ref in dmdp.get("/Reference", []) or []:
-            tp = ref.get("/TransformParams")
-            if tp is not None and int(tp.get("/P", 2)) == 1:
-                return True
-    except Exception:
-        return False
-    return False
+    return _certification_level(reader) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -585,6 +691,9 @@ class SigResult:
     covers_whole: bool = False
     modification: str = ""           # none | form | annot | other
     detail: str = ""
+    certify: int = 0                 # 0 = 승인 서명, 1·2·3 = 인증(DocMDP P) — SOT §3.6
+    ts_time: str = ""                # 타임스탬프 기관 시각(있으면)
+    ts_name: str = ""                # 타임스탬프 기관 이름(인증서 CN)
 
 
 @dataclass
@@ -656,8 +765,24 @@ def verify_pdf(path, trusted_fps=(), doc_password: str = "") -> VerifyReport:
                 ml_name = getattr(ml, "name", "") if ml is not None else ""
                 res.modification = {"NONE": "none", "LTA_UPDATES": "none", "FORM_FILLING": "form",
                                     "ANNOTATIONS": "annot", "OTHER": "other"}.get(ml_name, "other")
+                try:
+                    lvl = getattr(es, "docmdp_level", None)
+                    res.certify = int(getattr(lvl, "value", 0) or 0) if lvl is not None else 0
+                except Exception:
+                    res.certify = 0
+                tsv = getattr(st, "timestamp_validity", None)
+                if tsv is not None:
+                    try:
+                        res.ts_time = tsv.timestamp.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+                        res.ts_name = str(tsv.signing_cert.subject.native.get("common_name", "") or "")
+                    except Exception:
+                        pass
+                docmdp_ok = getattr(st, "docmdp_ok", None)
                 if not (st.intact and st.valid):
                     res.state = INVALID
+                elif docmdp_ok is False:
+                    # 인증 서명이 허용하지 않은 변경(또는 그 뒤 새 서명 칸) — pyHanko 판정(SOT §5)
+                    res.state = MODIFIED
                 elif not res.covers_whole and res.modification not in ("none", "form"):
                     # 뒤에 덧붙은 것이 서명·양식 채우기뿐이면 허용된 변경이다(Acrobat 과 같다) — 그 밖은 '변경됨'
                     res.state = MODIFIED

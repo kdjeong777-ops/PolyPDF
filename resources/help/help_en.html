@@ -206,11 +206,14 @@
     (a single click uses the default size). <b>Right-click → Sign Here…</b> on the page opens the signing window right away with the default size at that spot. In the signing window choose the digital ID, signature image and appearance text (name · date · reason),
     then <b>Sign with Windows Hello</b> or enter the password and press <b>Sign</b>. The signature is appended to the <b>current file</b>
     (<b>Sign As…</b> saves a new one). You cannot sign in two-page view; set rotated pages upright first with 'Save (for other viewers)', then sign.</li>
+  <li><b>More choices in the signing window</b>: <b>Signature type</b> — approval signature (default) or certification (no changes / form filling and signing allowed / comments, forms and signing allowed; only as the document's first signature) ·
+    <b>Text layout</b> — over the image / image left, text right / image above, text below · <b>Pages</b> — this page / all pages / page range (one signature per page) ·
+    <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default). The signature image window also offers <b>Draw by Hand…</b>.</li>
   <li><b>Password</b>: on a PC with Windows Hello (fingerprint · PIN) the password is locked with Windows Hello when you create the ID, and signing only asks
     for Windows Hello. Without Windows Hello, keep the password in a password manager such as Google Password Manager and paste it (Ctrl+V).
     PolyPDF never stores the password in plain text.</li>
   <li><b>Checking signatures</b>: a signed document shows a band above the page — ✅ Valid · Trusted / ⚠ Valid · Identity unknown / ⚠ Changed after signing / ❌ Invalid.
-    <b>Signatures</b> shows the signer, time and certificate fingerprint; <b>Trust This Certificate</b> adds it (only after confirming the fingerprint with that person).</li>
+    <b>Signatures</b> shows the signer, time and certificate fingerprint; <b>Trust This Certificate</b> adds it (only after confirming the fingerprint with that person). <b>Save Signed Version…</b> saves the file exactly as it was when that signature was made.</li>
   <li><b>Saving after signing</b>: saving the file again in PolyPDF (bookmarks, page edits, crop and so on) breaks the signature, so you are asked to <b>save to a new file</b>.
     To include annotations or photos, flatten them first with 'Save (for other viewers)' and then sign — PolyPDF annotations are not covered by the signature.</li>
   <li><b>Good to know</b>: a self-created digital ID shows as 'identity unknown' in the recipient's PDF viewer until they trust your public certificate (.cer).
