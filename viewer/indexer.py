@@ -193,10 +193,19 @@ class PdfIndex:
                 mtime REAL NOT NULL,
                 encrypted INTEGER NOT NULL,
                 has_toc INTEGER,           -- NULL = 잠겨서 모름
-                auth TEXT
+                auth TEXT,
+                signed INTEGER             -- 261010-27(보안 SOT §4): NULL = 모름(열이 없던 옛 행)
             );
             """
         )
+        # 261010-27: 옛 index.db 에는 signed 열이 없다 — 더한다(값은 NULL → 다음 조사 때 채움)
+        try:
+            cols = {r[1] for r in self.conn.execute("PRAGMA table_info(probe_cache)").fetchall()}
+            if "signed" not in cols:
+                self.conn.execute("ALTER TABLE probe_cache ADD COLUMN signed INTEGER")
+                self.conn.commit()
+        except Exception:
+            pass
 
         # 260908-5(성능): 표 인식 결과의 **영구 캐시**. pdfplumber 의 표 찾기는 쪽당
         #   150ms~7초로 비싸고, 같은 문서를 다시 열면 처음부터 다시 판다. 크기·수정시각이
@@ -257,13 +266,14 @@ class PdfIndex:
 
     # --- 260906-4: 목록 조사(표식) 캐시 -------------------------------------
     def probe_get(self, file_path, size: int, mtime: float):
-        """저장해 둔 (암호화, 책갈피유무, 인증상태). 모르거나 파일이 바뀌었으면 None.
+        """저장해 둔 (암호화, 책갈피유무, 인증상태, 서명). 모르거나 파일이 바뀌었으면 None.
+        서명 열이 비어 있으면(옛 행) 모르는 것으로 본다 — 한 번 다시 조사한다(261010-27).
 
         `size`/`mtime` 는 **호출측이 지금 디스크에서 본 값** — 기록과 다르면 내용이
         바뀐 것이므로 쓰지 않는다(재인덱싱 판정과 같은 기준)."""
         from viewer.pathutil import norm_key
         row = self.conn.execute(
-            "SELECT size, mtime, encrypted, has_toc, auth FROM probe_cache WHERE key=?",
+            "SELECT size, mtime, encrypted, has_toc, auth, signed FROM probe_cache WHERE key=?",
             (norm_key(file_path),)).fetchone()
         if row is None:
             return None
@@ -272,18 +282,20 @@ class PdfIndex:
                 return None
         except Exception:
             return None
+        if row["signed"] is None:
+            return None
         has_toc = None if row["has_toc"] is None else bool(row["has_toc"])
-        return (bool(row["encrypted"]), has_toc, row["auth"])
+        return (bool(row["encrypted"]), has_toc, row["auth"], bool(row["signed"]))
 
     def probe_set(self, file_path, size: int, mtime: float,
-                  enc: bool, has_toc, auth) -> None:
+                  enc: bool, has_toc, auth, signed: bool = False) -> None:
         """조사 결과 기록(같은 파일은 덮어쓴다). 인덱싱 여부와 무관하게 남는다."""
         from viewer.pathutil import norm_key
         self.conn.execute(
-            "INSERT OR REPLACE INTO probe_cache(key, size, mtime, encrypted, has_toc, auth)"
-            " VALUES(?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO probe_cache(key, size, mtime, encrypted, has_toc, auth, signed)"
+            " VALUES(?, ?, ?, ?, ?, ?, ?)",
             (norm_key(file_path), int(size), float(mtime), 1 if enc else 0,
-             None if has_toc is None else (1 if has_toc else 0), auth))
+             None if has_toc is None else (1 if has_toc else 0), auth, 1 if signed else 0))
         self.conn.commit()
 
     # --- 260908-5: 표 인식 캐시 -------------------------------------------
@@ -476,8 +488,10 @@ class PdfIndex:
                                   (doc.page_count, file_id))
             # 조사 캐시도 같이 채운다 — 목록이 이 파일을 다시 열지 않게(260906-4).
             try:
+                from viewer.sign_core import probe_signed      # 261010-27(보안 SOT §4): 서명 표식도 같이
                 self.probe_set(file_path, int(_st.st_size), _st.st_mtime,
-                               _enc, (None if _enc else _toc), "locked" if _enc else None)
+                               _enc, (None if _enc else _toc), "locked" if _enc else None,
+                               probe_signed(doc))
             except Exception:
                 pass
         finally:

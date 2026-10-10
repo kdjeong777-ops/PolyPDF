@@ -18,6 +18,7 @@ from PyQt6.QtGui import (
     QTransform,
 )
 from PyQt6.QtWidgets import (
+    QFrame,
     QGraphicsScene,
     QGraphicsView,
     QGraphicsPixmapItem,
@@ -921,6 +922,7 @@ class _PdfGraphicsView(QGraphicsView):
         self._press_scene = None            # 260617-3: 좌드래그 시작(PDF 좌표)
         self._dragging = False
         self._block_armed = False           # 260617-5: 사각형 블럭 선택 1회 무장
+        self._block_purpose = "copy"        # 261010-21(보안 SOT §3.3): "copy" | "sign" — 같은 러버밴드로 서명 자리
         self._brb = None                    # 블럭 러버밴드
         self._brb_origin = None
         try:
@@ -936,10 +938,12 @@ class _PdfGraphicsView(QGraphicsView):
         (펜/도형/지우개/선택 도구가 활성일 때만 드래그가 그리기·이동으로 소비됨.)"""
         return getattr(self._owner, "_draw_tool", None) is None
 
-    def arm_block_select(self, on: bool = True):
+    def arm_block_select(self, on: bool = True, purpose: str = "copy"):
         """260617-5: '블럭설정 후 텍스트 복사' — 다음 좌드래그를 사각형 블럭 선택으로(1회).
-        좌상→우하 드래그 영역의 텍스트를 복사. 십자 포인터."""
+        좌상→우하 드래그 영역의 텍스트를 복사. 십자 포인터.
+        261010-21(보안 SOT §3.3): `purpose="sign"` 이면 복사 대신 서명 자리로 넘긴다(클릭만 해도 된다)."""
         self._block_armed = bool(on)
+        self._block_purpose = purpose if on else "copy"
         if self._owner is not None:
             self._owner.clear_text_selection()
         self.viewport().setCursor(
@@ -1055,7 +1059,18 @@ class _PdfGraphicsView(QGraphicsView):
             rect = self._brb.geometry()
             self._brb.hide()
             self._block_armed = False
+            purpose, self._block_purpose = self._block_purpose, "copy"
             self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
+            if purpose == "sign":
+                # 서명 자리 — 끌지 않고 클릭만 했으면 그 점(크기 0)을 넘기고 앱이 기본 크기로 놓는다
+                try:
+                    if self._owner is not None:
+                        tl = self.mapToScene(rect.topLeft())
+                        br = self.mapToScene(rect.bottomRight())
+                        self._owner.signRegionSelected.emit(QRectF(tl, br).normalized())
+                except Exception:
+                    pass
+                return
             try:
                 if rect.width() > 3 and rect.height() > 3 and self._owner is not None:
                     tl = self.mapToScene(rect.topLeft())
@@ -1457,6 +1472,44 @@ class _PageSlide(QWidget):
         p.end()
 
 
+class _SignBand(QFrame):
+    """서명 검증 띠(보안 SOT §5) — 상태 넷을 한 줄로. 색은 디자인 SOT §2.16(테마 무관 밝은 바탕 + 어두운 글자)."""
+    panelRequested = pyqtSignal()
+    COLORS = {"checking": "#f3f3f3", "trusted": "#e8f5e9", "unknown": "#fff8e1",
+              "modified": "#fff8e1", "invalid": "#fdecea", "empty": "#e3f2fd"}
+    ICONS = {"checking": "…", "trusted": "✅", "unknown": "⚠", "modified": "⚠", "invalid": "❌", "empty": "✍"}
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(8, 2, 4, 2)
+        self.label = QLabel("")
+        self.label.setWordWrap(False)
+        self.btn = QPushButton(tr("서명 패널"))
+        self.btn.clicked.connect(self.panelRequested.emit)
+        lay.addWidget(self.label, 1)
+        lay.addWidget(self.btn)
+        self.state = ""
+        self.hide()
+
+    def show_state(self, state: str, text: str) -> None:
+        self.state = state
+        bg = self.COLORS.get(state, "#f3f3f3")
+        self.setStyleSheet(f"_SignBand{{background:{bg};border-bottom:1px solid #c8c8c8;}}"
+                           f"QLabel{{color:#1a1a1a;background:transparent;}}")
+        self.label.setText(f"{self.ICONS.get(state, '')}  {text}")
+        self.setToolTip(text)
+        self.btn.setVisible(state != "checking")
+        # 빈 서명 칸만 있으면(보안 SOT §3.7) 단추가 곧 서명 진입 — 같은 시그널, 앱이 상태로 가른다
+        self.btn.setText(tr("서명") if state == "empty" else tr("서명 패널"))
+        self.show()
+
+    def clear(self) -> None:
+        self.state = ""
+        self.hide()
+
+
 class MainView(QWidget):
     """1:1 직접 렌더링 메인 뷰어 (v1.4.2)."""
     pageChanged = pyqtSignal(int)
@@ -1470,6 +1523,9 @@ class MainView(QWidget):
     imageGotoRequested = pyqtSignal(int)         # v1.6.8 F2: 이미지 모드 페이지번호 입력 (0-based)
     fileBoundaryRequested = pyqtSignal(int)      # 260609-2: 마지막/첫 페이지 경계에서 다음/이전 파일 (±1)
     cropRequested = pyqtSignal()                 # 261010-7(마스터 §4.7.15): 툴바 크롭 단추
+    signRequested = pyqtSignal()                 # 261010-22(보안 SOT §3): 툴바 전자서명 단추
+    signRegionSelected = pyqtSignal(object)      # 261010-21(보안 SOT §3.3): 서명 자리(scene QRectF)
+    signPanelRequested = pyqtSignal()            # 261010-21(보안 SOT §5): 검증 띠의 [서명 패널]
     hyperlinkActivated = pyqtSignal(object)      # 260609-3: 페이지 하이퍼링크 버튼 클릭(link dict)
     drawModeChanged = pyqtSignal(int)            # 260611-4: 선 종류 순환(0/1/2) — 공유 동기
 
@@ -1606,6 +1662,11 @@ class MainView(QWidget):
         self.btn_crop.setIcon(_ti("crop", size=16))
         self.btn_crop.setToolTip(tr("쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF 에 저장"))
         self.btn_crop.clicked.connect(self.cropRequested.emit)
+        # 261010-22(보안 SOT §3, 사용자 지시): 크롭 오른쪽 전자서명 단추 — 도구 메뉴 '서명...' 과 같은 일
+        self.btn_sign = QPushButton(); self.btn_sign.setFixedSize(28, H)
+        self.btn_sign.setIcon(_ti("sign", size=16))
+        self.btn_sign.setToolTip(tr("전자서명 — 서명 그림과 디지털 ID 로 이 PDF 에 서명"))
+        self.btn_sign.clicked.connect(self.signRequested.emit)
 
         bar.addWidget(self.btn_prev_page)
         bar.addWidget(self.spin_page)
@@ -1618,6 +1679,7 @@ class MainView(QWidget):
         bar.addWidget(self.btn_zoom_out)
         bar.addWidget(self.btn_zoom_in)
         bar.addWidget(self.btn_crop)
+        bar.addWidget(self.btn_sign)
         # 260609-22(J3): 편집모드 전용 선긋기 도구 모음
         self._draw_bar = self._build_draw_bar(H)
         bar.addWidget(self._draw_bar)
@@ -1766,6 +1828,10 @@ class MainView(QWidget):
         view_row.setSpacing(0)
         view_row.addWidget(self.view, 1)
         view_row.addWidget(self.doc_scroll)
+        # 261010-21(보안 SOT §5): 서명 검증 띠 — 서명된 문서에서만 보인다(본문 위 한 줄)
+        self.sign_band = _SignBand(self)
+        self.sign_band.panelRequested.connect(self.signPanelRequested.emit)
+        layout.addWidget(self.sign_band)
         layout.addLayout(view_row, 1)
 
         self._page_item: Optional[QGraphicsPixmapItem] = None

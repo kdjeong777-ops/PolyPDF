@@ -51,6 +51,7 @@ from viewer.present_controller import PresentMixin
 from viewer.print_controller import PrintMixin
 from viewer.study_controller import StudyMixin
 from viewer.update_controller import UpdateMixin
+from viewer.sign_controller import SignMixin
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -113,7 +114,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -1243,6 +1244,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         mv.fileBoundaryRequested.connect(
             lambda d, i=idx: self._on_file_boundary(d, i))
         mv.cropRequested.connect(lambda i=idx: self._open_crop_dialog(view=self._mv[i]))   # 261010-7(§4.7.15)
+        mv.signRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_pdf()))      # 보안 SOT §3
+        mv.signRegionSelected.connect(lambda r, i=idx: self._on_sign_region(r, view=self._mv[i]))  # 보안 SOT §3.3
+        mv.signPanelRequested.connect(lambda i=idx: self._on_sign_panel(view=self._mv[i]))         # 보안 SOT §5
         mv.hyperlinkActivated.connect(
             lambda link, i=idx: (i == self._active_pane) and self._launch_hyperlink(link))
         mv.drawModeChanged.connect(self._on_main_draw_mode_changed)   # 260611-4: 공유 동기
@@ -1632,6 +1636,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         _act(tr("스크린샷 PDF 저장..."), self.action_save_screenshot_pdf)
         _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf)
         self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files)
+
+        # 🔏 전자서명 — 보안 SOT §3(261010-21). 위 구역은 사용자가 정한 패널 차례와 짝이라 따로 둔다.
+        m_tools.addSection(tr("🔏 전자서명"))
+        _act(tr("서명..."), self.action_sign_pdf)
+        _act(tr("빈 서명 칸 만들기..."), self.action_sign_field)
+        _act(tr("디지털 ID..."), self.action_digital_ids)
+        _act(tr("서명 그림..."), self.action_sign_image)
 
         # 📄 그 밖의 PDF·생성 작업 — 옆의 두 구역이 한 항목씩만 남아 합쳤다.
         m_tools.addSection(tr("📄 그 밖의 PDF·생성 작업"))
@@ -2681,7 +2692,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
 
     # ── 260902-6: 폴더 인덱싱 진행 창(검색 SOT §4.4) ─────────────────────
     def _probe_info_cached(self, path: str, size: int, mtime: float):
-        """260906-4: 인덱스에 적어 둔 목록 조사 값 → (enc, has_toc, auth) 또는 None.
+        """260906-4: 인덱스에 적어 둔 목록 조사 값 → (enc, has_toc, auth, signed) 또는 None(서명 261010-27).
 
         읽기 전용 조회 하나라 비용이 거의 없다(파일을 열지 않는다). 연결은 한 번 만들어
         재사용하고, 실패하면 조용히 None — 캐시가 없을 뿐 동작은 그대로다."""
@@ -3856,6 +3867,27 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self._force_save_as = False
 
     def _finalize_save(self, src, produced, shift=None) -> str:
+        """원본 덮어쓰기 저장의 단일 길(마스터 §4.7.5). 261010-28(보안 SOT §7.2·S11): 암호 PDF 의 기억·세션 암호를
+        저장한 파일로 옮긴다 — 키가 SHA-256(경로+크기)라 크기가 바뀌면 다시 열 때 암호를 또 물었다."""
+        pw, remembered = None, False
+        try:
+            from viewer import secure_store
+            pw = secure_store.recall_any(src)               # 원본 크기 키 — 바꿔치기 **전에** 읽는다
+            remembered = bool(pw) and bool(secure_store.recall_password(src))
+        except Exception:
+            pass
+        final = self._finalize_save_place(src, produced, shift)
+        if pw:
+            try:
+                from viewer import secure_store
+                secure_store.set_session(final, pw)
+                if remembered:
+                    secure_store.remember_password(final, pw)
+            except Exception:
+                pass
+        return final
+
+    def _finalize_save_place(self, src, produced, shift=None) -> str:
         """260822: 편집 저장 산출물(produced 임시 PDF)을 목적지에 배치.
         기본=원본 덮어쓰기(열린 핸들 닫고 교체), Shift+저장=`_edited`(충돌 시 (k)).
         최종 경로(str) 반환. 로드·책갈피창 갱신은 호출측이 수행(§4.7.5)."""
@@ -3868,6 +3900,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                 QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         src = _P(src); produced = _P(produced)
         dst, overwrite = self._edit_save_dst(src, shift)
+        if overwrite:
+            # 보안 SOT §4: 서명된 PDF 에 덮어쓰면 서명이 깨진다 — 가드는 이 한 곳(서명 자체의 저장은 건너뛴다)
+            g = self._sign_guard(dst)
+            if g == "cancel":
+                try:
+                    produced.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                from viewer.file_overwrite import SaveCancelled
+                raise SaveCancelled(tr("저장을 취소했습니다 — 서명한 원본은 그대로입니다."))
+            if g == "new":
+                dst, overwrite = self._edit_save_dst(src, True)
         if not overwrite:
             err = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), tr('새 이름으로 저장 중: {name}').format(name=dst.name))
             if err is not None:
@@ -4758,6 +4802,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         #   썸네일을 열지 않고도 보고 있는 쪽을 바로 돌릴 수 있게. 대상은 현재 페이지.
         act_rot_l = menu.addAction(tr('왼쪽 90° 회전 (p.{page})').format(page=page))
         act_rot_r = menu.addAction(tr('오른쪽 90° 회전 (p.{page})').format(page=page))
+        # 261010-26(보안 SOT §3·S6): 누른 자리에 기본 크기로 바로 서명 창
+        act_sign_here = menu.addAction(tr("여기에 서명…"))
         menu.addSeparator()
         # 260618-27: 1단=‘2단 보기’(진입), 2단=현재 창 기준 ‘반대 창으로 복사’.
         #   1창(좌,active 0)→‘2창으로 복사’, 2창(우,active 1)→‘1창으로 복사’.
@@ -4857,6 +4903,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             self.main_view.arm_text_selection()
             self.status.showMessage(
                 tr("블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."), 5000)
+            return
+        if chosen is act_sign_here:
+            try:
+                mv = self.main_view
+                vp = mv.view.viewport().mapFromGlobal(global_pos)
+                self.action_sign_pdf(at_scene=mv.view.mapToScene(vp))
+            except Exception:
+                pass
             return
         if chosen in (act_rot_l, act_rot_r):        # 260908-1
             self._rotate_pages([page - 1], -90 if chosen is act_rot_l else +90)
@@ -6009,6 +6063,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
                         and mv._current_page not in set(mv._nav_pages)):
                     mv.go_to_page(mv._current_page)
             self._apply_doc_permissions()              # 260618-1: 권한 기반 UI 활성/비활성
+            self._sign_on_doc_loaded()                 # 보안 SOT §5: 서명된 문서면 배경 검증 → 띠
             # 260618-23: 책갈피 트리(상=좌/하=우) 표시/숨김만 갱신. **폴더는 바꾸지 않음** —
             #   상단 트리에서 하위폴더 파일을 클릭해도 그 창의 폴더(=열었던 폴더)는 유지.
             #   폴더 변경은 '폴더/파일 열기'(open_folder/open_pdf)에서만 일어남.
@@ -6922,6 +6977,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
             return
         import fitz
         live = self.main_view._doc.doc
+        # 261010-27(보안 SOT §4·S9): 암호화는 새 파일로 다시 쓰므로 그 파일의 서명은 무효가 된다(원본 서명은 그대로)
+        try:
+            from viewer.sign_core import doc_is_signed
+            if doc_is_signed(live) and QMessageBox.question(
+                    self, tr("암호화"),
+                    tr("이 문서에는 전자서명이 있습니다. 암호화한 새 파일에서는 서명이 무효가 됩니다(원본 파일의 서명은 그대로 유효합니다).\n"
+                       "서명을 지키려면 암호화를 먼저 하고 서명은 나중에 하세요. 그래도 암호화할까요?")
+            ) != QMessageBox.StandardButton.Yes:
+                return
+        except Exception:
+            pass
         from viewer.widgets.encrypt_dialog import EncryptDialog
         dlg = EncryptDialog(self, file_name=Path(cur).name)
         # 이미 암호화된 문서면 기존 암호·수준·권한 프리필 + 제한 상태면 잠금

@@ -211,6 +211,7 @@ class BookmarkTree(QWidget):
     DATA_IS_FOLDER = Qt.ItemDataRole.UserRole + 8    # 260901-2: 트리 보기의 폴더 그룹 행
     DATA_PROBED = Qt.ItemDataRole.UserRole + 9       # 260906-1: 표식 검사 큐에 넣은 행
     DATA_ALL_EXPANDED = Qt.ItemDataRole.UserRole + 10  # 261008-6: '모두 펼치기' 를 이 파일에 적용함
+    DATA_SIGNED = Qt.ItemDataRole.UserRole + 11      # 261010-27(보안 SOT §4): 전자서명 있음 — 아이콘 `sign`
 
     # 260906-1(응답성 SOT §4.1 '폴더 열기 3단 규칙'):
     SCAN_BUDGET_MS = 150     # 메인 스레드에서 목록을 훑어 볼 예산. 넘기면 워커로 넘긴다.
@@ -1267,7 +1268,7 @@ class BookmarkTree(QWidget):
 
     # --- v1.6.2: PDF 내부 TOC -------------------------------------------
     def _probe_pdf(self, pdf_path):
-        """260611-57/260618-1: (암호화여부, 책갈피보유, 인증상태) 반환. 결과 캐시(경로+크기+mtime).
+        """260611-57/260618-1: (암호화여부, 책갈피보유, 인증상태, 서명) 반환(서명 261010-27). 결과 캐시(경로+크기+mtime).
         암호화+미인증이면 저장된 암호로 해제 시도, 실패하면 책갈피여부 None(미상).
         인증상태: None(암호화 아님) / "owner"(전체 권한) / "user"(제한 암호) / "locked"(미인증)."""
         p = Path(pdf_path)
@@ -1280,7 +1281,7 @@ class BookmarkTree(QWidget):
             cache = self._probe_cache = {}
         if key in cache:
             return cache[key]
-        enc = False; has_toc = False; auth = None
+        enc = False; has_toc = False; auth = None; signed = False
         try:
             doc = fitz.open(str(p))
             try:
@@ -1301,11 +1302,13 @@ class BookmarkTree(QWidget):
                         has_toc = None          # 미상(잠김)
                 else:
                     has_toc = bool(doc.get_toc())
+                from viewer.sign_core import probe_signed      # 261010-27(보안 SOT §4)
+                signed = probe_signed(doc)
             finally:
                 doc.close()
         except Exception:
-            enc = False; has_toc = False; auth = None
-        cache[key] = (enc, has_toc, auth)
+            enc = False; has_toc = False; auth = None; signed = False
+        cache[key] = (enc, has_toc, auth, signed)
         return cache[key]
 
     def _decorate_file_node(self, item: QTreeWidgetItem, pdf_path: Path):
@@ -1589,7 +1592,7 @@ class BookmarkTree(QWidget):
             self._probe_timer.start()
 
     def _known_probe(self, path: str):
-        """이 파일의 조사 결과를 이미 아는가 → (enc, has_toc, auth) 또는 None.
+        """이 파일의 조사 결과를 이미 아는가 → (enc, has_toc, auth, signed) 또는 None.
 
         260906-4: ① 이번 실행에서 본 것(`_probe_cache`), ② 인덱스에 적어 둔 것
         (`probe_provider` — 인덱싱 때 같이 기록된다). 둘 다 파일 크기·수정시각이
@@ -1617,13 +1620,15 @@ class BookmarkTree(QWidget):
         return None
 
     def _apply_probe(self, item, path: str, res: tuple) -> None:
-        """조사 결과를 행에 반영(암호화 표식 · 책갈피 펼침 표시)."""
-        enc, has_toc, auth = res
+        """조사 결과를 행에 반영(암호화 표식 · 서명 아이콘 · 책갈피 펼침 표시)."""
+        enc, has_toc, auth = res[0], res[1], res[2]
+        signed = bool(res[3]) if len(res) > 3 else False
         try:
             if enc:
                 item.setData(0, self.DATA_ENCRYPTED, True)
                 item.setData(0, self.DATA_AUTH, auth)
                 item.setToolTip(0, self._enc_tooltip(auth))
+            self._mark_signed(item, signed)
             if has_toc and item.childCount() == 0:
                 self._attach_toc_placeholder(item, Path(path))
         except RuntimeError:
@@ -1644,11 +1649,12 @@ class BookmarkTree(QWidget):
             if not path or not str(path).lower().endswith(".pdf"):
                 return
             item.setData(0, self.DATA_PROBED, True)
-            enc, has_toc, auth = self._probe_pdf(Path(path))
+            enc, has_toc, auth, signed = self._probe_pdf(Path(path))
             if enc:
                 item.setData(0, self.DATA_ENCRYPTED, True)
                 item.setData(0, self.DATA_AUTH, auth)
                 item.setToolTip(0, self._enc_tooltip(auth))
+            self._mark_signed(item, signed)
             if has_toc and item.childCount() == 0:
                 self._attach_toc_placeholder(item, Path(path))
         except Exception:
@@ -1699,7 +1705,7 @@ class BookmarkTree(QWidget):
             cache = getattr(self, "_probe_cache", None)
             if cache is None:
                 cache = self._probe_cache = {}
-            res = (r["enc"], r["has_toc"], r["auth"])
+            res = (r["enc"], r["has_toc"], r["auth"], bool(r.get("signed", False)))
             cache[(r["path"], r["size"], r["mtime"])] = res
             for item in self._probe_pending.pop(r["path"], []):
                 self._apply_probe(item, r["path"], res)
@@ -1768,11 +1774,12 @@ class BookmarkTree(QWidget):
             for k in [k for k in cache if k[0] == str(Path(path))]:
                 cache.pop(k, None)
         try:
-            enc, _has, auth = self._probe_pdf(Path(path))
+            enc, _has, auth, signed = self._probe_pdf(Path(path))
             if enc:
                 item.setData(0, self.DATA_ENCRYPTED, True)
                 item.setData(0, self.DATA_AUTH, auth)
                 item.setToolTip(0, self._enc_tooltip(auth))
+            self._mark_signed(item, signed)
         except Exception:
             pass
         try:
@@ -1874,10 +1881,38 @@ class BookmarkTree(QWidget):
             return QIcon()
 
     def refresh_icons(self):
-        """260902-5: 테마 전환 후 파일 행 아이콘 재적용(폴더 행은 테마 무관이라 그대로)."""
+        """260902-5: 테마 전환 후 파일 행 아이콘 재적용(폴더 행은 테마 무관이라 그대로).
+        261010-27: 서명된 파일은 `sign` 아이콘을 지킨다."""
         ico = self._leaf_icon()
+        sig = self._signed_icon()
         for it in self._iter_file_nodes():
-            it.setIcon(0, ico)
+            it.setIcon(0, sig if it.data(0, self.DATA_SIGNED) else ico)
+
+    def _signed_icon(self):
+        try:
+            from viewer.widgets.icons import themed_icon
+            return themed_icon("sign")
+        except Exception:
+            return self._leaf_icon()
+
+    SIGNED_TIP = tr_noop("전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다.")
+
+    def _mark_signed(self, item, signed: bool) -> None:
+        """261010-27(보안 SOT §4): 서명된 파일 행 — 아이콘 `sign`, 툴팁 한 줄(암호화 툴팁 뒤)."""
+        try:
+            was = bool(item.data(0, self.DATA_SIGNED))
+            if bool(signed) == was:
+                return
+            item.setData(0, self.DATA_SIGNED, bool(signed))
+            item.setIcon(0, self._signed_icon() if signed else self._leaf_icon())
+            tip = item.toolTip(0) or ""
+            line = tr(self.SIGNED_TIP)
+            if signed and line not in tip:
+                item.setToolTip(0, (tip + "\n" + line) if tip else line)
+            elif not signed and line in tip:
+                item.setToolTip(0, tip.replace("\n" + line, "").replace(line, ""))
+        except RuntimeError:
+            pass
 
     def _dir_icon(self):
         from PyQt6.QtGui import QIcon

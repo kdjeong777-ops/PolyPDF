@@ -144,6 +144,17 @@ def _crop(p, c):
     p.drawLine(QPointF(3, 13), QPointF(13, 3))        # 대각선
 
 
+def _sign(p, c):
+    """261010-22(보안 SOT §3): 전자서명 — 아래 서명 줄 + 비스듬한 펜 + 줄 위 짧은 획."""
+    p.setPen(QPen(c, 1.6))
+    p.drawLine(QPointF(1.5, 14.5), QPointF(14.5, 14.5))   # 서명 줄
+    p.drawLine(QPointF(7, 10), QPointF(13.5, 3.5))        # 펜대
+    p.drawLine(QPointF(5.5, 11.5), QPointF(7, 10))        # 펜촉
+    p.drawLine(QPointF(9.5, 6.5), QPointF(11.5, 8.5))     # 펜 손잡이 경계
+    p.drawLine(QPointF(1.5, 12), QPointF(3.5, 10))        # 서명 획
+    p.drawLine(QPointF(3.5, 10), QPointF(4.5, 12))
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
@@ -151,7 +162,7 @@ _DRAW = {
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
-    "crop": _crop,
+    "crop": _crop, "sign": _sign,
 }
 
 
