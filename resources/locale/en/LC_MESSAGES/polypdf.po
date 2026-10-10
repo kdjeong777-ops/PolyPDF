@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 14:15+0000\n"
+"POT-Creation-Date: 2026-10-10 14:53+0000\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2753,14 +2753,6 @@ msgid "저장(일반뷰어용)"
 msgstr "Save for Other Viewers"
 
 #: viewer/edit_controller.py
-msgid ""
-"꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
-"어디에 저장할까요?"
-msgstr ""
-"Decorations and pictures are baked into the pages, and content outside the crop is actually removed (cannot be undone).\n"
-"Where do you want to save?"
-
-#: viewer/edit_controller.py
 msgid "현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), 하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."
 msgstr "Saving to the current file moves decorations and pictures into the PDF (they are removed from PolyPDF decorations); hyperlinks stay as PolyPDF hyperlinks. Save as a new file if other viewers need the hyperlinks too."
 
@@ -2789,8 +2781,16 @@ msgid "저장 완료"
 msgstr "Saved"
 
 #: viewer/edit_controller.py
-msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭이 없습니다."
-msgstr "This file has no decorations (lines, shapes, text), pictures, hyperlinks or crop to bake."
+msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭·회전이 없습니다."
+msgstr "This file has no annotations (lines, shapes, text), images, hyperlinks, crop or rotation to flatten."
+
+#: viewer/edit_controller.py
+msgid ""
+"꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
+"어디에 저장할까요?"
+msgstr ""
+"Decorations and pictures are baked into the pages, and content outside the crop is actually removed (cannot be undone).\n"
+"Where do you want to save?"
 
 #: viewer/edit_controller.py
 msgid "편집 내용을 저장했습니다."
@@ -2810,6 +2810,14 @@ msgstr ""
 "({n} pages)"
 
 #: viewer/edit_controller.py
+msgid ""
+"\n"
+"돌린 쪽은 보이는 모양 그대로 바로 세웁니다 — 그러려고 PDF 안의 주석·양식도 쪽 내용으로 굽습니다."
+msgstr ""
+"\n"
+"Rotated pages are set upright exactly as they look — to do so, the PDF's own comments and form fields are also flattened into the page content."
+
+#: viewer/edit_controller.py
 #, python-brace-format
 msgid ""
 "저장하지 않은 편집 변경사항이 있습니다.\n"
@@ -2822,11 +2830,6 @@ msgstr ""
 #, python-brace-format
 msgid "저장(일반뷰어용): {name}"
 msgstr "Saved for other viewers: {name}"
-
-#: viewer/edit_controller.py
-#, python-brace-format
-msgid "저장(일반뷰어용) — 현재 파일에: {name}"
-msgstr "Saved for other viewers — current file: {name}"
 
 #: viewer/edit_controller.py viewer/widgets/main_view.py
 msgid "링크"
@@ -2850,6 +2853,21 @@ msgstr "What would you like to do before leaving Edit mode?"
 
 #: viewer/edit_controller.py
 #, python-brace-format
+msgid "저장(일반뷰어용) — 현재 파일에: {name}"
+msgstr "Saved for other viewers — current file: {name}"
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid " · {n}쪽 바로 세움"
+msgstr " · {n} page(s) set upright"
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid "{stem}_일반뷰어용.pdf"
+msgstr "{stem}_for_other_viewers.pdf"
+
+#: viewer/edit_controller.py
+#, python-brace-format
 msgid ""
 "꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n"
 "{out}"
@@ -2859,13 +2877,17 @@ msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid " · 크롭 {n}쪽 바깥을 지움"
-msgstr " · removed content outside the crop on {n} page(s)"
+msgid ""
+"\n"
+"돌린 {n}쪽은 보이는 모양 그대로 바로 세웠습니다."
+msgstr ""
+"\n"
+"{n} rotated page(s) were set upright exactly as they looked."
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid "{stem}_일반뷰어용.pdf"
-msgstr "{stem}_for_other_viewers.pdf"
+msgid " · 크롭 {n}쪽 바깥을 지움"
+msgstr " · removed content outside the crop on {n} page(s)"
 
 #: viewer/edit_controller.py
 #, python-brace-format
@@ -3317,12 +3339,12 @@ msgid "2쪽 보기에서는 자리를 정할 수 없습니다. 1쪽 보기로 �
 msgstr "You cannot place a signature in two-page view. Switch to single-page view and sign again."
 
 #: viewer/sign_controller.py
-msgid "보기 회전을 한 쪽에는 서명할 수 없습니다. 회전을 되돌린 뒤 서명하세요."
-msgstr "You cannot sign a page whose view is rotated. Undo the rotation and sign again."
+msgid "보기 회전을 한 쪽에는 그대로 서명할 수 없습니다. 회전을 되돌리거나, '저장(일반뷰어용)' 으로 회전을 넣어 쪽을 바로 세운 뒤 서명하세요."
+msgstr "A page rotated in the view cannot be signed as is. Undo the rotation, or use 'Save (for other viewers)' to apply the rotation and set the page upright, then sign."
 
 #: viewer/sign_controller.py
-msgid "이 쪽은 PDF 안에서 회전되어 있어 아직 서명할 수 없습니다. 다른 쪽에 서명하세요."
-msgstr "This page is rotated inside the PDF and cannot be signed yet. Sign another page."
+msgid "이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없습니다(서명이 누워 들어갑니다). '저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
+msgstr "This page is rotated inside the PDF and cannot be signed as is (the signature would lie on its side). Set the page upright with 'Save (for other viewers)', then sign."
 
 #: viewer/sign_controller.py
 msgid "서명 중"

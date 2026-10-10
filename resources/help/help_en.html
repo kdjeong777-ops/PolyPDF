@@ -167,7 +167,7 @@
     Hyperlinks are kept in N-up printing and exports.</li>
   <li><b>Saving</b>: <b>Save (for PolyPDF)</b> (💾) = bookmarks and page edits go into the original PDF; annotations (lines, shapes, text, photos, hyperlinks) are kept next to it in <code>page_meta.json</code> and <code>hyperlinks.json</code> (shown in PolyPDF) ·
     <b>Save As...</b> · <b>Save (for other viewers)...</b> = a new file (<code>_for_other_viewers.pdf</code>) with annotations, photos and hyperlinks
-    flattened into the page so other PDF viewers show them (text stays searchable). There is also Tools → <b>Save PDF Annotations</b>.</li>
+    flattened into the page so other PDF viewers show them (text stays searchable). Rotated pages are <b>set upright exactly as they look</b> (the PDF's own comments and form fields are flattened too). There is also Tools → <b>Save PDF Annotations</b>.</li>
   <li>If <b>another PolyPDF window</b> has the file open when you save, you are asked <b>Close and Save / Save with New Name / Cancel</b>.</li>
 </ul>
 
@@ -205,7 +205,7 @@
   <li><b>Signing</b>: press the digital signature button to the right of Crop (or Tools → Sign...) and drag on the page where the signature goes
     (a single click uses the default size). In the signing window choose the digital ID, signature image and appearance text (name · date · reason),
     then <b>Sign with Windows Hello</b> or enter the password and press <b>Sign</b>. The signature is appended to the <b>current file</b>
-    (<b>Sign As…</b> saves a new one). Pages in two-page view or rotated pages cannot be signed.</li>
+    (<b>Sign As…</b> saves a new one). You cannot sign in two-page view; set rotated pages upright first with 'Save (for other viewers)', then sign.</li>
   <li><b>Password</b>: on a PC with Windows Hello (fingerprint · PIN) the password is locked with Windows Hello when you create the ID, and signing only asks
     for Windows Hello. Without Windows Hello, keep the password in a password manager such as Google Password Manager and paste it (Ctrl+V).
     PolyPDF never stores the password in plain text.</li>

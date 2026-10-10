@@ -313,6 +313,13 @@ class EditMixin:
                     cut += 1 if _pc.cut_outside(doc[i]) else 0
                 except Exception:
                     pass
+            # 261010-24(§4.7.13): 보기 회전을 넣고 쪽을 바로 세운다(/Rotate 0) — 굽기·크롭 뒤 **마지막에**.
+            #   회전할 쪽이 있으면 PDF 주석·양식을 먼저 내용으로 굽고(사용자 결정), 링크는 옮겨 다시 넣는다.
+            from viewer.page_upright import make_upright
+            up_doc, upright = make_upright(doc, self._rotations_for(str(src)))
+            if up_doc is not doc:
+                doc.close()
+                doc = up_doc
             # 260913-3(SOT §4.5.10): 글쓰기 굽기는 fontfile= 로 글꼴 **전체**(맑은 고딕 13MB)를
             #   넣는다 → 쓴 글자만 남겨 저장. 실패해도 저장은 한다(PyMuPDF 1.23 은 fontTools 필요).
             from viewer.pdf_font import subset_fonts_safely
@@ -326,7 +333,8 @@ class EditMixin:
             self.status.showMessage(tr('저장(일반뷰어용): {name}').format(name=Path(out).name), 4000)
             QMessageBox.information(self, tr("저장 완료"),
                                    tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out))
-                                   + (tr("\n크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다.").format(n=cut) if cut else ""))
+                                   + (tr("\n크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다.").format(n=cut) if cut else "")
+                                   + (tr("\n돌린 {n}쪽은 보이는 모양 그대로 바로 세웠습니다.").format(n=upright) if upright else ""))
             return
         try:
             final = self._finalize_save(src, Path(out), False)
@@ -344,7 +352,9 @@ class EditMixin:
         try:
             st = self._ensure_page_meta_store()
             if st is not None:
-                st.clear_drawings(str(src)); st.clear_images(str(src)); st.save()
+                st.clear_drawings(str(src)); st.clear_images(str(src))
+                st.clear_rotation(str(src))          # 261010-24: 보기 회전도 PDF 로 들어갔다 — 두 번 돌지 않게
+                st.save()
         except Exception:
             pass
         try:
@@ -365,7 +375,8 @@ class EditMixin:
         except Exception:
             pass
         self.status.showMessage(tr('저장(일반뷰어용) — 현재 파일에: {name}').format(name=Path(final).name)
-                                + (tr(" · 크롭 {n}쪽 바깥을 지움").format(n=cut) if cut else ""), 6000)
+                                + (tr(" · 크롭 {n}쪽 바깥을 지움").format(n=cut) if cut else "")
+                                + (tr(" · {n}쪽 바로 세움").format(n=upright) if upright else ""), 6000)
 
     def _bake_text_stroke(self, fitz, QColor, page, stk, pw, ph):
         """260611-74/76: 텍스트 박스/지시선 굽기 — 배경(투명도)·박스선·지시선(색상버튼 스타일)·텍스트."""
@@ -585,10 +596,19 @@ class EditMixin:
                     has_crop = any(_pc.is_cropped(_d[i]) for i in range(_d.page_count))
         except Exception:
             pass
-        if not norm and not has_hl and not has_img and not has_crop:
+        # 261010-24(§4.7.13): 돌릴 쪽(보기 회전·PDF /Rotate)만 있어도 저장한다 — 바로 세워 다른 뷰어·서명에 맞춘다
+        has_rot = False
+        try:
+            from viewer.page_upright import targets as _up_targets
+            import fitz
+            with fitz.open(str(cur)) as _d:
+                has_rot = bool(_up_targets(_d, self._rotations_for(str(cur))))
+        except Exception:
+            pass
+        if not norm and not has_hl and not has_img and not has_crop and not has_rot:
             QMessageBox.information(
                 self, tr("안내"),
-                tr("이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭이 없습니다."))
+                tr("이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭·회전이 없습니다."))
             return
         # 260930-2: 아직 저장하지 않은 쪽 편집이 있으면 알린다 — 구운 파일은 **원본 쪽**
         #   기준이라 그 편집이 빠진다.
@@ -609,7 +629,8 @@ class EditMixin:
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
         box.setWindowTitle(tr("저장(일반뷰어용)"))
-        box.setText(tr("꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n어디에 저장할까요?"))
+        box.setText(tr("꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n어디에 저장할까요?")
+                    + (tr("\n돌린 쪽은 보이는 모양 그대로 바로 세웁니다 — 그러려고 PDF 안의 주석·양식도 쪽 내용으로 굽습니다.") if has_rot else ""))
         box.setInformativeText(tr("현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), "
                                   "하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."))
         b_new = box.addButton(tr("새 파일로 저장…"), QMessageBox.ButtonRole.AcceptRole)

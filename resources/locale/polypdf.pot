@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-10 14:15+0000\n"
+"POT-Creation-Date: 2026-10-10 14:53+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2640,12 +2640,6 @@ msgid "저장(일반뷰어용)"
 msgstr ""
 
 #: viewer/edit_controller.py
-msgid ""
-"꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
-"어디에 저장할까요?"
-msgstr ""
-
-#: viewer/edit_controller.py
 msgid "현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), 하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."
 msgstr ""
 
@@ -2674,7 +2668,13 @@ msgid "저장 완료"
 msgstr ""
 
 #: viewer/edit_controller.py
-msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭이 없습니다."
+msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭·회전이 없습니다."
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid ""
+"꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
+"어디에 저장할까요?"
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -2693,6 +2693,12 @@ msgid ""
 msgstr ""
 
 #: viewer/edit_controller.py
+msgid ""
+"\n"
+"돌린 쪽은 보이는 모양 그대로 바로 세웁니다 — 그러려고 PDF 안의 주석·양식도 쪽 내용으로 굽습니다."
+msgstr ""
+
+#: viewer/edit_controller.py
 #, python-brace-format
 msgid ""
 "저장하지 않은 편집 변경사항이 있습니다.\n"
@@ -2702,11 +2708,6 @@ msgstr ""
 #: viewer/edit_controller.py
 #, python-brace-format
 msgid "저장(일반뷰어용): {name}"
-msgstr ""
-
-#: viewer/edit_controller.py
-#, python-brace-format
-msgid "저장(일반뷰어용) — 현재 파일에: {name}"
 msgstr ""
 
 #: viewer/edit_controller.py viewer/widgets/main_view.py
@@ -2731,6 +2732,21 @@ msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
+msgid "저장(일반뷰어용) — 현재 파일에: {name}"
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid " · {n}쪽 바로 세움"
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid "{stem}_일반뷰어용.pdf"
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
 msgid ""
 "꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n"
 "{out}"
@@ -2738,12 +2754,14 @@ msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid " · 크롭 {n}쪽 바깥을 지움"
+msgid ""
+"\n"
+"돌린 {n}쪽은 보이는 모양 그대로 바로 세웠습니다."
 msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid "{stem}_일반뷰어용.pdf"
+msgid " · 크롭 {n}쪽 바깥을 지움"
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -3175,11 +3193,11 @@ msgid "2쪽 보기에서는 자리를 정할 수 없습니다. 1쪽 보기로 �
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "보기 회전을 한 쪽에는 서명할 수 없습니다. 회전을 되돌린 뒤 서명하세요."
+msgid "보기 회전을 한 쪽에는 그대로 서명할 수 없습니다. 회전을 되돌리거나, '저장(일반뷰어용)' 으로 회전을 넣어 쪽을 바로 세운 뒤 서명하세요."
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "이 쪽은 PDF 안에서 회전되어 있어 아직 서명할 수 없습니다. 다른 쪽에 서명하세요."
+msgid "이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없습니다(서명이 누워 들어갑니다). '저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
 msgstr ""
 
 #: viewer/sign_controller.py

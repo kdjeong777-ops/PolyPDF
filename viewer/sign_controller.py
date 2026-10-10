@@ -179,12 +179,12 @@ class SignMixin:
             return
         pidx = int(mv.current_page())
         if mv._rotations.get(pidx, 0):
-            QMessageBox.information(self, tr("서명"), tr("보기 회전을 한 쪽에는 서명할 수 없습니다. 회전을 되돌린 뒤 서명하세요."))
+            QMessageBox.information(self, tr("서명"), tr("보기 회전을 한 쪽에는 그대로 서명할 수 없습니다. 회전을 되돌리거나, '저장(일반뷰어용)' 으로 회전을 넣어 쪽을 바로 세운 뒤 서명하세요."))
             return
         page = mv._doc.doc[pidx]
         if page.rotation:
-            # SOT §3.3·§11 ② — 회전된 쪽의 겉모양은 실측 전이라 틀린 모양을 넣지 않는다
-            QMessageBox.information(self, tr("서명"), tr("이 쪽은 PDF 안에서 회전되어 있어 아직 서명할 수 없습니다. 다른 쪽에 서명하세요."))
+            # SOT §3.3 — 회전된 쪽은 겉모양이 누워 들어간다. 일반뷰어용 저장이 바로 세운다(마스터 §4.7.13)
+            QMessageBox.information(self, tr("서명"), tr("이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없습니다(서명이 누워 들어갑니다). '저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."))
             return
         z = mv._zoom or 1.0
         r = fitz.Rect(scene_rect.left() / z, scene_rect.top() / z, scene_rect.right() / z, scene_rect.bottom() / z)
