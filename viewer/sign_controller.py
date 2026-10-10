@@ -270,10 +270,12 @@ class SignMixin:
                                    show_reason=dlg.chk_reason.isChecked(),
                                    font_path=sign_core.default_font())
         doc_pw = ""
+        remembered = False
         try:
             if getattr(doc, "is_encrypted", False) or str((doc.metadata or {}).get("encryption") or ""):
                 from viewer import secure_store
                 doc_pw = secure_store.recall_any(cur) or ""
+                remembered = bool(secure_store.recall_password(cur))
         except Exception:
             pass
         # 같은 폴더(바꿔치기가 원자적이게), `.pdf` 로 끝나지 않게(목록·색인에 안 뜬다 — 마스터 §4.7.5 백업과 같은 규칙)
@@ -314,6 +316,8 @@ class SignMixin:
         final = self._sign_place(cur, tmp, dlg.save_as)
         if not final:
             return "fail"
+        if doc_pw:
+            self._sign_carry_password(final, doc_pw, remembered)
         try:
             self.bookmark_tree.add_or_refresh_file(final, after=str(cur))
             self._open_saved_file(final, pidx)
@@ -321,6 +325,18 @@ class SignMixin:
             pass
         self.status.showMessage(tr("서명했습니다: {name}").format(name=Path(final).name), 6000)
         return "ok"
+
+    @staticmethod
+    def _sign_carry_password(final: str, doc_pw: str, remembered: bool) -> None:
+        """암호 문서에 서명하면 파일 크기가 늘어 암호 기억 키(경로+크기, 보안 SOT §7.2)가 바뀐다 —
+        세션 암호(와 기억해 둔 암호)를 서명한 파일로 옮겨, 다시 열 때 암호를 또 묻지 않게(261010-27)."""
+        try:
+            from viewer import secure_store
+            secure_store.set_session(final, doc_pw)
+            if remembered:
+                secure_store.remember_password(final, doc_pw)
+        except Exception:
+            pass
 
     @staticmethod
     def _sign_unlink(p):

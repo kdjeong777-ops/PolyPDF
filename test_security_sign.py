@@ -12,6 +12,7 @@ E. 저장 가드(§4) — 서명된 파일에 `_finalize_save`: 새 파일로 / 
 G. 대화상자 — 디지털 ID 창·서명 그림 창·서명 패널
 H. 서명 창 겉모양 미리보기 — 끈 상자 비율·배경에서·바꾸면 다시(S8)
 I. 본문 우클릭 '여기에 서명…' — 실제 메뉴 처리기, 누른 자리에 기본 크기(S6)
+J. 책갈피창 서명 표식(S1) · K. 서명 문서 암호화 안내(S9) · L. 제거·업데이트가 signing 을 지우지 않음(S3) · M. 서명 뒤 암호 옮기기(§7.2)
 F. 비밀번호가 설정·ID 목록·Hello 보관 파일 어디에도 평문으로 없다(§6.4)
 """
 import os, sys, tempfile, shutil, time, json
@@ -348,6 +349,75 @@ try:
     chk(sc.is_signed_file(here) and abs(cx - want_pt[0]) < 3 and abs(cy - want_pt[1]) < 3
         and abs(ws[0].width - 50 / 25.4 * 72) < 1,
         "I2 끌기 없이 누른 자리를 가운데로 기본 크기(폭 50mm) 서명", str(ws))
+
+    # ── J. 책갈피창 서명 표식(S1) — probe_cache.signed, 옛 index.db 에 열 더하기, 파일 행 아이콘·툴팁 ──
+    import sqlite3
+    from viewer.indexer import PdfIndex
+    old_db = tmp / "old_index.db"
+    con = sqlite3.connect(str(old_db))
+    con.execute("CREATE TABLE probe_cache(key TEXT PRIMARY KEY, size INTEGER NOT NULL, mtime REAL NOT NULL,"
+                " encrypted INTEGER NOT NULL, has_toc INTEGER, auth TEXT)")
+    con.commit(); con.close()
+    ix = PdfIndex(old_db)
+    cols = {r[1] for r in ix.conn.execute("PRAGMA table_info(probe_cache)").fetchall()}
+    chk("signed" in cols, "J1 옛 index.db 의 probe_cache 에 signed 열을 더한다", str(cols))
+    ix.index_file(two)
+    st2 = two.stat()
+    got = ix.probe_get(two, st2.st_size, st2.st_mtime)
+    chk(got is not None and got[3] is True, "J2 인덱싱이 서명 표식도 함께 적는다", str(got))
+    ix.close()
+    bt = mw.bookmark_tree
+    signed_item = plain_item = None
+    for it in bt._iter_file_nodes():
+        f = str(it.data(0, bt.DATA_FILE) or "")
+        if f.endswith("우클릭.pdf"):
+            signed_item = it
+        elif f.endswith("shot.pdf") is False and f.endswith("계약서.pdf"):
+            plain_item = it
+    if signed_item is not None:
+        bt._probe_cache = {}
+        bt._ensure_probed(signed_item, force=True)
+    chk(signed_item is not None and bool(signed_item.data(0, bt.DATA_SIGNED))
+        and "전자서명" in (signed_item.toolTip(0) or "")
+        and signed_item.icon(0).pixmap(16, 16).toImage() == bt._signed_icon().pixmap(16, 16).toImage(),
+        "J3 서명된 파일 행 — 표식·`sign` 아이콘·툴팁", signed_item.toolTip(0) if signed_item else "없음")
+    bt.refresh_icons()
+    chk(signed_item is not None and signed_item.icon(0).pixmap(16, 16).toImage() == bt._signed_icon().pixmap(16, 16).toImage(),
+        "J4 테마를 바꿔 아이콘을 다시 칠해도 서명 아이콘을 지킨다")
+
+    # ── K. 서명된 문서 암호화(S9) — 먼저 알리고, '아니요' 면 암호화 창을 열지 않는다 ──
+    import viewer.widgets.encrypt_dialog as _ed
+    asked, opened = [], []
+    QMessageBox.question = staticmethod(lambda *a, **k: (asked.append(a[2] if len(a) > 2 else ""), QMessageBox.StandardButton.No)[1])
+    _orig_ed_exec = _ed.EncryptDialog.exec
+    _ed.EncryptDialog.exec = lambda self: (opened.append(1), 0)[1]
+    mw._open_saved_file(str(here)); spin(0.6)
+    mw.action_encrypt_pdf()
+    _ed.EncryptDialog.exec = _orig_ed_exec
+    chk(any("서명" in m for m in asked) and not opened, "K1 서명된 문서를 암호화하려 하면 먼저 묻고, '아니요' 면 멈춘다", str(asked[-1:]))
+
+    # ── L. 제거·업데이트가 signing\ 을 지우지 않는다(S3) — 정적 확인 ──
+    iss = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "installer", "PolyPDF.iss"), encoding="utf-8").read()
+    ud = iss.split("[UninstallDelete]", 1)[1].split("\n[", 1)[0]
+    ud_lines = [x.strip() for x in ud.splitlines() if x.strip() and not x.strip().startswith(";")]
+    chk(ud_lines == ['Type: filesandordirs; Name: "{app}"'], "L1 제거 프로그램은 설치 폴더만 지운다(설정 폴더 signing\\ 은 남는다)", str(ud_lines))
+    upd = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer", "updater.py"), encoding="utf-8").read()
+    chk("StartsWith('_internal\\'" in upd, "L2 앱 안 업데이트 정리는 _internal\\ 아래만(휴대용 Data\\ 는 건드리지 않는다)")
+    from viewer.settings_store import settings_dir, app_base_dir
+    chk(str(st.root()).startswith(str(settings_dir())) and not str(st.root()).startswith(str(app_base_dir())),
+        "L3 서명 자료는 설정 폴더 아래(프로그램 폴더 밖)", str(st.root()))
+
+    # ── M. 암호 문서 서명 뒤 암호를 서명한 파일로 옮긴다(크기가 바뀌어 기억 키가 바뀜, §7.2) ──
+    from viewer import secure_store as _ss
+    from viewer.sign_controller import SignMixin
+    epath = root / "암호.pdf"
+    shutil.copy(enc, epath)
+    _ss.set_session(epath, "usr-pw")
+    with open(epath, "ab") as fh:
+        fh.write(b"\n%grow\n")                       # 서명처럼 크기가 는다
+    before = _ss.recall_any(epath)
+    SignMixin._sign_carry_password(str(epath), "usr-pw", False)
+    chk(before is None and _ss.recall_any(epath) == "usr-pw", "M1 크기가 바뀐 서명 파일에도 세션 암호가 따라온다", str(before))
     QMessageBox.exec = orig_exec
 except Exception:
     import traceback

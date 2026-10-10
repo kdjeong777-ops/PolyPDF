@@ -83,7 +83,13 @@ try:
         "① 모르는 파일은 None")
     idx.probe_set(files[0], st.st_size, st.st_mtime, False, True, None)
     got = idx.probe_get(files[0], st.st_size, st.st_mtime)
-    chk(got == (False, True, None), "① 적은 값을 그대로 돌려준다", str(got))
+    chk(got == (False, True, None, False), "① 적은 값을 그대로 돌려준다(서명 열 포함 — 261010-27)", str(got))
+    # 261010-27(보안 SOT §4): 서명 열이 없던 옛 행(NULL)은 '모름' — 한 번 다시 조사하게 None
+    idx.conn.execute("UPDATE probe_cache SET signed=NULL"); idx.conn.commit()
+    chk(idx.probe_get(files[0], st.st_size, st.st_mtime) is None, "① 서명 열이 빈 옛 행은 모르는 것으로(다시 조사)")
+    idx.probe_set(files[0], st.st_size, st.st_mtime, False, True, None, True)
+    chk(idx.probe_get(files[0], st.st_size, st.st_mtime) == (False, True, None, True), "① 서명됨도 적고 돌려준다")
+    idx.probe_set(files[0], st.st_size, st.st_mtime, False, True, None)
     chk(idx.probe_get(files[0], st.st_size + 1, st.st_mtime) is None,
         "① 크기가 다르면 무효(파일이 바뀐 것)")
     chk(idx.probe_get(files[0], st.st_size, st.st_mtime + 100) is None,

@@ -141,7 +141,7 @@ class ProbeWorker(QObject):
     보이는 행만 검사하도록 줄여도(260906-1) 큰 파일 하나면 멈춤은 그대로여서,
     검사 자체를 메인 밖으로 뺀다. 결과는 파일 1건마다 `result` 로 보낸다.
     """
-    result = pyqtSignal(dict)      # {path, size, mtime, enc, has_toc, auth}
+    result = pyqtSignal(dict)      # {path, size, mtime, enc, has_toc, auth, signed}
     finished = pyqtSignal()
 
     # 260906-5(응답성 SOT §4 '배경 작업 여섯 가지 의무'):
@@ -187,7 +187,7 @@ class ProbeWorker(QObject):
             if size > self.MAX_MB * 1024 * 1024:
                 # ③ 큰 파일은 배경에서 건너뛴다 — 펼치거나 우클릭할 때 그 자리에서 연다.
                 continue
-            enc, has_toc, auth = False, False, None
+            enc, has_toc, auth, signed = False, False, None, False
             try:
                 doc = fitz.open(path)
                 try:
@@ -208,19 +208,21 @@ class ProbeWorker(QObject):
                             has_toc = None          # 미상(잠김)
                     else:
                         has_toc = bool(doc.get_toc())
+                    from viewer.sign_core import probe_signed       # 261010-27(보안 SOT §4)
+                    signed = probe_signed(doc)
                 finally:
                     doc.close()
             except Exception:
-                enc, has_toc, auth = False, False, None
+                enc, has_toc, auth, signed = False, False, None, False
             if self._cancel:
                 break
             if idx is not None:
                 try:
-                    idx.probe_set(path, size, mtime, enc, has_toc, auth)
+                    idx.probe_set(path, size, mtime, enc, has_toc, auth, signed)
                 except Exception:
                     pass
             self.result.emit({"path": path, "size": size, "mtime": mtime,
-                              "enc": enc, "has_toc": has_toc, "auth": auth})
+                              "enc": enc, "has_toc": has_toc, "auth": auth, "signed": signed})
             _pacing.pace(self)                # ②·⑦ 메인에 GIL 조각을 넘긴다(점유율 조절)
 
 

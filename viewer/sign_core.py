@@ -200,6 +200,16 @@ def doc_is_signed(doc) -> bool:
     return False
 
 
+def probe_signed(doc) -> bool:
+    """목록 조사용(보안 SOT §4 책갈피창 표시) — 열린 문서가 잠겨 있으면 SigFlags 만으로 '서명됐을 수 있다'."""
+    try:
+        if getattr(doc, "needs_pass", False) and getattr(doc, "is_encrypted", False):
+            return doc.get_sigflags() >= 1
+    except Exception:
+        return False
+    return doc_is_signed(doc)
+
+
 _SIGNED_CACHE: dict = {}
 
 

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 15:09+0000\n"
+"POT-Creation-Date: 2026-10-10 15:18+0000\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2368,6 +2368,14 @@ msgid "파일이 없거나 보안 정책상 열 수 없습니다."
 msgstr "The file does not exist or cannot be opened due to security policy."
 
 #: viewer/app.py
+msgid ""
+"이 문서에는 전자서명이 있습니다. 암호화한 새 파일에서는 서명이 무효가 됩니다(원본 파일의 서명은 그대로 유효합니다).\n"
+"서명을 지키려면 암호화를 먼저 하고 서명은 나중에 하세요. 그래도 암호화할까요?"
+msgstr ""
+"This document has a digital signature. In the new encrypted file the signature will be invalid (the original file's signature stays valid).\n"
+"To keep a signature valid, encrypt first and sign afterwards. Encrypt anyway?"
+
+#: viewer/app.py
 #, python-brace-format
 msgid "{stem}_암호화.pdf"
 msgstr "{stem}_encrypted.pdf"
@@ -3976,6 +3984,10 @@ msgid ""
 msgstr ""
 "The update could not be completed. {n} file(s) could not be replaced (possibly a permission problem).\n"
 "Run the latest installer (PolyPDF-Setup-*.exe) as administrator."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다."
+msgstr "Digitally signed — open it to see the verification result in the band above the page."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "암호화 설정 파일"

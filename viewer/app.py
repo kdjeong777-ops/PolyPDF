@@ -2691,7 +2691,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     # ── 260902-6: 폴더 인덱싱 진행 창(검색 SOT §4.4) ─────────────────────
     def _probe_info_cached(self, path: str, size: int, mtime: float):
-        """260906-4: 인덱스에 적어 둔 목록 조사 값 → (enc, has_toc, auth) 또는 None.
+        """260906-4: 인덱스에 적어 둔 목록 조사 값 → (enc, has_toc, auth, signed) 또는 None(서명 261010-27).
 
         읽기 전용 조회 하나라 비용이 거의 없다(파일을 열지 않는다). 연결은 한 번 만들어
         재사용하고, 실패하면 조용히 None — 캐시가 없을 뿐 동작은 그대로다."""
@@ -6955,6 +6955,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         import fitz
         live = self.main_view._doc.doc
+        # 261010-27(보안 SOT §4·S9): 암호화는 새 파일로 다시 쓰므로 그 파일의 서명은 무효가 된다(원본 서명은 그대로)
+        try:
+            from viewer.sign_core import doc_is_signed
+            if doc_is_signed(live) and QMessageBox.question(
+                    self, tr("암호화"),
+                    tr("이 문서에는 전자서명이 있습니다. 암호화한 새 파일에서는 서명이 무효가 됩니다(원본 파일의 서명은 그대로 유효합니다).\n"
+                       "서명을 지키려면 암호화를 먼저 하고 서명은 나중에 하세요. 그래도 암호화할까요?")
+            ) != QMessageBox.StandardButton.Yes:
+                return
+        except Exception:
+            pass
         from viewer.widgets.encrypt_dialog import EncryptDialog
         dlg = EncryptDialog(self, file_name=Path(cur).name)
         # 이미 암호화된 문서면 기존 암호·수준·권한 프리필 + 제한 상태면 잠금
