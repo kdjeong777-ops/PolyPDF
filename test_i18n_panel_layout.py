@@ -81,6 +81,32 @@ try:
                 for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:] if ra.intersected(rb).width() > 1
                 and ra.intersected(rb).height() > 1]
         chk(not over, "C [%s] 좁은 책갈피창 머리의 단추·콤보가 서로 겹치지 않는다" % code, str(over))
+        # D(261010-9, 사용자 지시): 좁은 패널에서 [파일][편집] / [취소][저장] 두 줄, ◀▶▲▼ 는 한 줄.
+        #   패널이 조금 넓으면 [트리][책갈피명 수정][◀▶▲▼] 한 줄. 줄은 단추의 세로 가운데로 가른다.
+        cy = lambda w: w.mapTo(bt, w.rect().center()).y()
+        arrows = bt._arrow_group.findChildren(QPushButton)
+        chk(cy(bt.btn_mode) == cy(bt.btn_edit) and cy(bt.btn_cancel) == cy(bt.btn_save)
+            and cy(bt.btn_cancel) > cy(bt.btn_edit),
+            "D [%s] 좁은 패널(170) — [파일][편집] / [취소][저장] 두 줄" % code,
+            str([(b.text().strip(), cy(b)) for b in (bt.btn_mode, bt.btn_edit, bt.btn_cancel, bt.btn_save)]))
+        chk(len(arrows) == 4 and len({cy(b) for b in arrows}) == 1, "D [%s] ◀▶▲▼ 가 한 줄" % code,
+            str([cy(b) for b in arrows]))
+        if sp is not None:
+            sp.setSizes([230] + sizes[1:n])
+            t0 = time.time()
+            while time.time() - t0 < 0.4:
+                app.processEvents(); time.sleep(0.01)
+            row = {cy(bt.btn_view_mode), cy(bt.btn_edit_single), cy(arrows[0])}
+            need = bt.btn_view_mode.width() + bt.btn_edit_single.width() + bt._arrow_group.width() + 6
+            if need <= bt.edit_ops.width():      # '가능하면 한 줄' — 폭이 되면 반드시 한 줄
+                chk(len(row) == 1, "D [%s] 넓힌 패널 — 폭이 되면 [트리][책갈피명 수정][◀▶▲▼] 한 줄" % code,
+                    "패널 %d, %s" % (bt.width(), sorted(row)))
+            else:
+                print("  (info) [%s] 한 줄에 %dpx 필요, 줄 폭 %d — 묶음째 다음 줄" % (code, need, bt.edit_ops.width()))
+            chk(len({cy(b) for b in arrows}) == 1, "D [%s] 넓힌 패널에서도 ◀▶▲▼ 한 줄" % code)
+            sp.setSizes(sizes[:n])
+            for _ in range(20):
+                app.processEvents(); time.sleep(0.01)
         # 뷰어 모드(편집 아님)의 정렬 줄도
         bt.set_edit_mode(False)
         for _ in range(30):

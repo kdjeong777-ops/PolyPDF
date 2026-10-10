@@ -379,7 +379,8 @@ class BookmarkTree(QWidget):
                                  "· 파일 모드: 현재 파일만 표시\n"
                                  "· 폴더 모드: 그 폴더의 PDF 전체 표시"))
         self.btn_mode.clicked.connect(self._toggle_view_mode)
-        sort_row.addWidget(self.btn_mode)
+        # 261010-9(디자인 SOT §2.8.5, 사용자 지시): '📁 폴더/📄 파일' 은 정렬 줄이 아니라 아래 편집 줄 맨 앞 —
+        #   정렬 줄에 두면 좁은 패널에서 혼자 한 줄을 차지했다. 편집 줄에서는 [파일][편집] / [취소][저장] 두 줄로 흐른다.
         layout.addWidget(self._sort_row_w)
 
         # v1.6.18: 책갈피 편집 툴바 (260606-4추가: 연필 아이콘 적용)
@@ -402,6 +403,7 @@ class BookmarkTree(QWidget):
         from viewer.widgets.flow_layout import FlowLayout as _Flow
         self._edit_row_w = QWidget()
         edit_row = _Flow(self._edit_row_w, spacing=3, center=False)
+        edit_row.addWidget(self.btn_mode)
         edit_row.addWidget(self.btn_edit)
         # 260611-61: 새로고침(↻) — 편집모드가 아닐 때만 노출. 외부에서 파일 추가 시 트리 갱신.
         # 260902-1(사용자 요청): 뷰어 모드에서도 목록 보기(트리/단일)를 바꿀 수 있게 —
@@ -487,20 +489,24 @@ class BookmarkTree(QWidget):
         self.edit_ops = row1            # 편집 조작 1행 = edit_ops(편집 모드에서만 보인다)
         # 260902-5(사용자 요청): 책갈피명 수정을 트리 버튼 바로 오른쪽으로 — 뒤따르는
         #   ◀▶▲▼ 가 '책갈피' 조작임이 한눈에 읽히도록.
-        for b in (self.btn_view_mode,
-                  self.btn_edit_single,
-                  self._mk_btn("◀", tr("책갈피 내어쓰기 (상위로)"), self._op_outdent),
+        # 261010-9(디자인 SOT §2.8.5, 사용자 지시): ◀▶▲▼ 는 **한 묶음**(줄이 갈라지지 않게), 단추는 좁게 —
+        #   [트리][책갈피명 수정][◀▶▲▼] 가 패널 폭이 되면 한 줄, 모자라면 묶음째 다음 줄로.
+        _fmv = self.btn_view_mode.fontMetrics()
+        self.btn_view_mode.setFixedWidth(max(36, max(_fmv.horizontalAdvance(tr("트리")),
+                                                     _fmv.horizontalAdvance(tr("단일"))) + 14))
+        self.btn_edit_single.setFixedWidth(28)
+        r1.addWidget(self.btn_view_mode)
+        r1.addWidget(self.btn_edit_single)
+        self._arrow_group = QWidget()
+        _ag = QHBoxLayout(self._arrow_group)
+        _ag.setContentsMargins(0, 0, 0, 0); _ag.setSpacing(2)
+        for b in (self._mk_btn("◀", tr("책갈피 내어쓰기 (상위로)"), self._op_outdent),
                   self._mk_btn("▶", tr("책갈피 들여쓰기 (하위로)"), self._op_indent),
                   self._mk_btn("▲", tr("책갈피 위로 이동 (같은 부모 안)"), self._op_move_up),
                   self._mk_btn("▼", tr("책갈피 아래로 이동 (같은 부모 안)"), self._op_move_down)):
-            if b is not self.btn_view_mode:
-                # 글자 하나·아이콘뿐인 단추 — 기본 단추 최소 폭(약 75px)이면 흐르는 줄에서 한 줄에 둘만 들어갔다
-                b.setFixedWidth(max(30, b.fontMetrics().horizontalAdvance(b.text()) + 16))
-            r1.addWidget(b)
-        # 261009-14: 균등 분배라도 '단일/트리' 글자는 다 들어가게(좁은 패널에서 '트리' 가 1~3px 잘렸다)
-        _fmv = self.btn_view_mode.fontMetrics()
-        self.btn_view_mode.setMinimumWidth(max(_fmv.horizontalAdvance(tr("트리")),
-                                               _fmv.horizontalAdvance(tr("단일"))) + 12)
+            b.setFixedWidth(max(24, b.fontMetrics().horizontalAdvance(b.text()) + 12))   # 줌 단추와 같은 24
+            _ag.addWidget(b)
+        r1.addWidget(self._arrow_group)
 
         # 2행: 🗑️삭제 ⭐선택만 📋복사 — 전체 폭 균등 분배
         row2 = QWidget()

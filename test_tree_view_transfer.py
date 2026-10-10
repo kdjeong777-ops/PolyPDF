@@ -284,7 +284,10 @@ chk(all(b.icon(0).isNull() for b in bms), "⑨ 책갈피 행에는 아이콘 없
 r1 = bt.edit_ops.layout()
 order = [r1.itemAt(i).widget() for i in range(r1.count())]
 chk(order[0] is bt.btn_view_mode and order[1] is bt.btn_edit_single,
-    "⑨ 1행 = [트리][책갈피명 수정][◀][▶][▲][▼]", f"{[w.text() for w in order]}")
+    "⑨ 1행 = [트리][책갈피명 수정][◀▶▲▼ 묶음]", f"{[getattr(w, 'text', lambda: type(w).__name__)() for w in order]}")
+from PyQt6.QtWidgets import QPushButton as _QPB
+chk([b.text() for b in bt._arrow_group.findChildren(_QPB)] == ["◀", "▶", "▲", "▼"],
+    "⑨ 화살표 묶음 = ◀ ▶ ▲ ▼ (261010-9 — 줄이 갈라지지 않게 한 묶음)")
 
 # 우클릭 메뉴 라벨(편집모드): 파일엔 '책갈피 편집' 없음 / 책갈피엔 '책갈피 수정...'
 captured = {}
