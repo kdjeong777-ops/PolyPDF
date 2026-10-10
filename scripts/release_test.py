@@ -398,6 +398,14 @@ def plan(base_arg, urgent=False) -> int:
         c["level"] = "build"
         c["reasons"].append("긴급 릴리스 — 생략 후보라도 빌드 시험")
     u = unreleased()
+    # 261010-10(릴리스 SOT §3.2): 릴리스에는 **마지막 릴리스 뒤 전부**가 나간다 — 그 사이 설치 관련 변경이 있었다면
+    #   기준점(마지막 시험) 뒤에 없더라도 설치 시험. 빌드 시험 이상이 기준점 뒤에 통과했으면 빌드 쪽은 기준점으로 충분하다.
+    if u["tag"] and c["level"] != "install":
+        since = [l.split("	")[-1] for l in git("diff", "--name-status", u["tag"] + "..HEAD").splitlines() if l]
+        inst = [p for p in since if p.startswith(INSTALL_PATHS)]
+        if inst:
+            c["level"] = "install"
+            c["reasons"].append("마지막 릴리스 %s 뒤 설치 관련 변경: %s" % (u["tag"], ", ".join(inst)))
     dirty = [l for l in git("status", "--porcelain", "--untracked-files=no").splitlines() if l]
     name = {"install": "설치 시험", "build": "빌드 시험", "skip": "생략 후보 — 사용자에게 묻는다"}[c["level"]]
     cmd = {"install": "python scripts\\release_test.py install --source ci",

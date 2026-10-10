@@ -2992,42 +2992,51 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, Q
         except Exception:
             return ([], 0)
 
+    def _study_read(self, fn, default):
+        """261010-11(응답성 SOT §4 ⑤): 메인 스레드의 study.db 읽기는 **연결 하나를 다시 쓴다**.
+        종전에는 쪽을 그릴 때마다 `StudyStore()` 를 2~3번 새로 열었는데, 열 때마다 스키마 스크립트
+        (`CREATE … IF NOT EXISTS` — 쓰기 트랜잭션)와 PRAGMA 가 돌아 스캔본에서 OCR 워커가 같은 DB 에
+        쓰는 동안 잠금·GIL 을 기다렸다(빌드 시험 T2 HM.pdf 첫 쪽 1.21초, `dbutil.tune`).
+        메인 스레드가 아니면 종전처럼 새로 연다(sqlite 연결은 만든 스레드에서만 쓴다). 실패하면 연결을 버린다."""
+        import threading as _th
+        from viewer.study.study_store import StudyStore
+        from viewer import dbutil as _db
+        if _th.current_thread() is not _th.main_thread():
+            try:
+                st = StudyStore(busy_ms=_db.BUSY_MS_UI)
+                try:
+                    return fn(st)
+                finally:
+                    st.close()
+            except Exception:
+                return default
+        try:
+            st = getattr(self, "_study_ui_store", None)
+            if st is None:
+                st = StudyStore(busy_ms=_db.BUSY_MS_UI)
+                self._study_ui_store = st
+            return fn(st)
+        except Exception:
+            try:
+                self._study_ui_store.close()
+            except Exception:
+                pass
+            self._study_ui_store = None
+            return default
+
     def _ocr_page_words(self, path, page: int):
         """study.db 에 저장된 OCR 낱말 상자(단어장 SOT 소유). 없으면 빈 목록."""
-        try:
-            from viewer.study.study_store import StudyStore, file_key_for
-            from viewer import dbutil as _db
-            st = StudyStore(busy_ms=_db.BUSY_MS_UI)
-            try:
-                return st.get_page_words(file_key_for(str(path)), int(page))
-            finally:
-                st.close()
-        except Exception:
-            return []
+        from viewer.study.study_store import file_key_for
+        return self._study_read(lambda st: st.get_page_words(file_key_for(str(path)), int(page)), [])
 
     def _ocr_page_dpi(self, path, page: int) -> int:
-        try:
-            from viewer.study.study_store import StudyStore, file_key_for
-            from viewer import dbutil as _db
-            st = StudyStore(busy_ms=_db.BUSY_MS_UI)
-            try:
-                return int(st.get_page_dpi(file_key_for(str(path)), int(page)) or 0)
-            finally:
-                st.close()
-        except Exception:
-            return 0
+        from viewer.study.study_store import file_key_for
+        return self._study_read(lambda st: int(st.get_page_dpi(file_key_for(str(path)), int(page)) or 0), 0)
+
     def _ocr_page_text(self, path, page: int) -> str:
         """study.db 에 저장된 OCR 결과(단어장 SOT 소유). 없으면 빈 문자열."""
-        try:
-            from viewer.study.study_store import StudyStore, file_key_for
-            from viewer import dbutil as _db
-            st = StudyStore(busy_ms=_db.BUSY_MS_UI)     # 260908-3(응답성 §4 ⑤)
-            try:
-                return st.get_page_text(file_key_for(path), int(page)) or ""
-            finally:
-                st.close()
-        except Exception:
-            return ""
+        from viewer.study.study_store import file_key_for
+        return self._study_read(lambda st: st.get_page_text(file_key_for(path), int(page)) or "", "")
 
     def _on_text_line_focused(self, page, rects):
         """텍스트 창에서 줄을 고르거나 고쳤다 → **본문에서 그 자리를 강조**(사용자 요청)."""
