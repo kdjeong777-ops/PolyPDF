@@ -162,6 +162,7 @@ if errorlevel 1 ( echo [ERROR] installer\languages.iss 생성 실패. & exit /b 
 
 REM 261010-21(보안 SOT §8): 전자서명 — pyHanko·certvalidator 는 데이터 파일(기본 글꼴·스키마)까지, winrt 는 하위 모듈 전부
 REM   (Windows Hello). 모두 viewer 밖이라 수동 등재. 처음 서명·검증할 때 배경에서 import 한다(시작 시간 영향 없음).
+REM 261010-30(보안 SOT §3.8): 공동인증서 SEED — cryptography 의 decrepit 묶음은 함수 안에서 가져오므로 따로 적는다
 python -m PyInstaller ^
     --name "PolyPDF" ^
     --windowed ^
@@ -207,6 +208,7 @@ python -m PyInstaller ^
     --collect-all pyhanko_certvalidator ^
     --collect-submodules winrt ^
     --hidden-import cryptography ^
+    --hidden-import cryptography.hazmat.decrepit.ciphers.algorithms ^
     --noconfirm ^
     main.py
 if errorlevel 1 ( echo [ERROR] PyInstaller build failed. & exit /b 1 )

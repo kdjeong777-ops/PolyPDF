@@ -201,7 +201,9 @@
     (Original · Black · Blue), and it is cropped to the signature and saved under a name. An image on the clipboard works too.</li>
   <li><b>Digital IDs...</b>: create a new digital ID (name · email · validity · password) or import an existing .pfx/.p12.
     After creating one, use <b>Export Backup</b> to keep the .pfx somewhere safe — if the PC fails you cannot sign with the same ID again.
-    Give the <b>public certificate</b> (.cer, Export Public Certificate) to the people who receive your documents.</li>
+    Give the <b>public certificate</b> (.cer, Export Public Certificate) to the people who receive your documents.
+    <b>Import Korean Certificate (NPKI)…</b> finds Korean certificates in NPKI folders on the PC or a USB drive and imports one with its certificate password (the original folder is unchanged; the password stays the same).
+    <b>From Windows Certificate Store…</b> uses a certificate held by Windows (including smart cards and USB tokens) without copying the key — Windows may ask for a PIN when you sign.</li>
   <li><b>Signing</b>: press the digital signature button to the right of Crop (or Tools → Sign...) and drag on the page where the signature goes
     (a single click uses the default size). <b>Right-click → Sign Here…</b> on the page opens the signing window right away with the default size at that spot. In the signing window choose the digital ID, signature image and appearance text (name · date · reason),
     then <b>Sign with Windows Hello</b> or enter the password and press <b>Sign</b>. The signature is appended to the <b>current file</b>
@@ -209,6 +211,9 @@
   <li><b>More choices in the signing window</b>: <b>Signature type</b> — approval signature (default) or certification (no changes / form filling and signing allowed / comments, forms and signing allowed; only as the document's first signature) ·
     <b>Text layout</b> — over the image / image left, text right / image above, text below · <b>Pages</b> — this page / all pages / page range (one signature per page) ·
     <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default). The signature image window also offers <b>Draw by Hand…</b>.</li>
+  <li><b>Empty signature fields</b>: <b>Tools → Create Empty Signature Field...</b> lets you drag a place on the page and name it (e.g. Approver); the recipient then signs in that field.
+    A document with empty fields shows 'empty signature field' in the band above the page, and the signature button offers <b>Sign in an empty field</b> (dragging inside a field or right-clicking in it also signs that field).
+    A document certified by its author can be signed only in its empty fields.</li>
   <li><b>Password</b>: on a PC with Windows Hello (fingerprint · PIN) the password is locked with Windows Hello when you create the ID, and signing only asks
     for Windows Hello. Without Windows Hello, keep the password in a password manager such as Google Password Manager and paste it (Ctrl+V).
     PolyPDF never stores the password in plain text.</li>
@@ -218,7 +223,7 @@
     To include annotations or photos, flatten them first with 'Save (for other viewers)' and then sign — PolyPDF annotations are not covered by the signature.</li>
   <li><b>Good to know</b>: a self-created digital ID shows as 'identity unknown' in the recipient's PDF viewer until they trust your public certificate (.cer).
     Changes after signing are detected even without trusting it. The signing time comes from the signing PC's clock.
-    Where a specific certificate is required, a self-created ID cannot replace it.</li>
+    Where a specific certificate is required, a self-created ID cannot replace it — import that certificate and sign with it.</li>
 </ul>
 
 <h3>11. Text pane · OCR</h3>

@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QVBoxLayout,
 )
 
-from viewer.i18n import tr
+from viewer.i18n import tr, tr_noop
 
 GOOGLE_PM_URL = "https://passwords.google.com"      # SOT §6.3 — 주소만 연다, 아무 값도 넘기지 않는다
 
@@ -397,6 +397,18 @@ class DigitalIdDialog(QDialog):
             grid2.addWidget(b)
         grid2.addStretch(1)
         v.addLayout(grid2)
+        # 3단계(보안 SOT §3.8·§3.9): 공동인증서 · Windows 인증서 저장소
+        grid3 = QHBoxLayout()
+        self.b_npki = QPushButton(tr("공동인증서 가져오기…"))
+        self.b_store = QPushButton(tr("Windows 인증서 저장소에서…"))
+        from viewer import sign_winstore
+        self.b_store.setVisible(sign_winstore.available())
+        grid3.addWidget(self.b_npki)
+        grid3.addWidget(self.b_store)
+        grid3.addStretch(1)
+        v.addLayout(grid3)
+        self.b_npki.clicked.connect(self._import_npki)
+        self.b_store.clicked.connect(self._import_store)
         self.b_hello.setVisible(self._hello_ok)
         if not self._hello_ok:
             v.addWidget(google_hint_label())
@@ -428,6 +440,10 @@ class DigitalIdDialog(QDialog):
         for e in d["ids"]:
             mark = "★ " if e.get("fp") == d.get("default_id") else "   "
             hello = "  · Windows Hello" if e.get("hello") else ""
+            if e.get("kind") == "win":
+                hello += tr("  · Windows 저장소")
+            elif e.get("source") == "npki":
+                hello += tr("  · 공동인증서")
             mail = f" <{e['email']}>" if e.get("email") else ""
             it = QListWidgetItem(tr("{mark}{name}{mail} — ~{until}{hello}").format(
                 mark=mark, name=e.get("name", ""), mail=mail, until=e.get("not_after", ""), hello=hello))
@@ -448,6 +464,11 @@ class DigitalIdDialog(QDialog):
         has = bool(self._fp())
         for b in (self.b_bak, self.b_cer, self.b_def, self.b_hello, self.b_del):
             b.setEnabled(has)
+        if has:
+            from viewer import sign_store
+            win = (sign_store.get_id(self._fp()) or {}).get("kind") == "win"
+            self.b_bak.setEnabled(not win)           # 키가 Windows 안에 있다(SOT §3.9)
+            self.b_hello.setEnabled(not win)
         if has and self._hello_ok:
             from viewer import sign_store
             e = sign_store.get_id(self._fp()) or {}
@@ -536,14 +557,21 @@ class DigitalIdDialog(QDialog):
         from viewer import sign_core, sign_store
         fp = self._fp()
         e = sign_store.get_id(fp) or {}
-        pw = self._password_for(fp)
-        if pw is None:
-            return
-        try:
-            der = self._run(lambda: sign_core.cert_der(sign_store.read_pfx(fp), pw), tr("인증서 읽는 중"))
-        except sign_core.WrongPassword:
-            QMessageBox.warning(self, self.windowTitle(), tr("비밀번호가 맞지 않습니다."))
-            return
+        if e.get("kind") == "win":
+            try:
+                der = sign_store.abspath(e["cert"]).read_bytes()
+            except Exception as ex:
+                QMessageBox.warning(self, self.windowTitle(), tr("인증서를 읽지 못했습니다: {e}").format(e=type(ex).__name__))
+                return
+        else:
+            pw = self._password_for(fp)
+            if pw is None:
+                return
+            try:
+                der = self._run(lambda: sign_core.cert_der(sign_store.read_pfx(fp), pw), tr("인증서 읽는 중"))
+            except sign_core.WrongPassword:
+                QMessageBox.warning(self, self.windowTitle(), tr("비밀번호가 맞지 않습니다."))
+                return
         fn, _ = QFileDialog.getSaveFileName(self, tr("공개 인증서 내보내기"), f"{e.get('name', 'id')}.cer", tr("인증서 (*.cer)"))
         if not fn:
             return
@@ -565,6 +593,53 @@ class DigitalIdDialog(QDialog):
             except Exception:
                 pass
         return _ask_password(self, self.windowTitle(), tr("{name} 의 비밀번호").format(name=e.get("name", "")))
+
+    def _import_npki(self):
+        """공동인증서 — 찾은 목록에서 고르고 비밀번호로 풀어 우리 형식으로 복사(SOT §3.8)."""
+        from viewer import sign_core, sign_npki, sign_store
+        try:
+            found = self._run(sign_npki.find, tr("공동인증서 찾는 중"))
+        except Exception:
+            found = []
+        dlg = NpkiDialog(self, found)
+        if dlg.exec() != QDialog.DialogCode.Accepted or dlg.chosen is None:
+            return
+        c, pw = dlg.chosen, dlg.password()
+        try:
+            pfx, info = self._run(lambda: sign_npki.to_pfx(c.cert_path, c.key_path, pw), tr("공동인증서 확인 중"))
+        except sign_core.WrongPassword:
+            QMessageBox.warning(self, self.windowTitle(), tr("인증서 비밀번호가 맞지 않습니다."))
+            return
+        except sign_core.SignError as e:
+            QMessageBox.warning(self, self.windowTitle(), npki_error_text(e))
+            return
+        except Exception as e:
+            QMessageBox.warning(self, self.windowTitle(), tr("가져오지 못했습니다: {e}").format(e=type(e).__name__))
+            return
+        sign_store.add_id(pfx, info, source="npki")
+        if self._hello_ok and QMessageBox.question(
+                self, self.windowTitle(), tr("이 디지털 ID 의 비밀번호를 Windows Hello 로 보관할까요?")
+        ) == QMessageBox.StandardButton.Yes:
+            self._store_hello(info.fp, pw)
+        self.refresh(info.fp)
+        QMessageBox.information(self, self.windowTitle(),
+                                tr("공동인증서를 가져왔습니다(원래 인증서 폴더는 그대로입니다). 받는 쪽 PDF 뷰어에 발급기관 인증서가 "
+                                   "신뢰 등록돼 있지 않으면 서명이 '신원 미확인' 으로 보일 수 있습니다."))
+
+    def _import_store(self):
+        """Windows 인증서 저장소 — 키는 복사하지 않고 참조만(SOT §3.9)."""
+        from viewer import sign_store, sign_winstore
+        try:
+            certs = self._run(sign_winstore.list_certs, tr("인증서 저장소 읽는 중"))
+        except Exception as e:
+            QMessageBox.warning(self, self.windowTitle(), tr("Windows 인증서 저장소를 읽지 못했습니다: {e}").format(
+                e=getattr(e, "detail", "") or type(e).__name__))
+            return
+        dlg = StoreCertDialog(self, certs)
+        if dlg.exec() != QDialog.DialogCode.Accepted or dlg.chosen is None:
+            return
+        sign_store.add_win_id(dlg.chosen)
+        self.refresh(dlg.chosen.fp)
 
     def _set_default(self):
         from viewer import sign_store
@@ -614,6 +689,161 @@ class DigitalIdDialog(QDialog):
         self.refresh()
 
 
+def npki_error_text(e) -> str:
+    return {"expired": tr("만료된 인증서입니다 — 서명해도 검증에서 무효가 됩니다."),
+            "not_yet": tr("아직 유효기간이 시작되지 않은 인증서입니다."),
+            "bad_usage": tr("문서 서명 용도가 아닌 인증서입니다."),
+            "key_mismatch": tr("개인 키와 인증서가 짝이 맞지 않습니다(signCert.der·signPri.key 가 같은 폴더의 것인지 확인하세요)."),
+            "unsupported_cipher": tr("이 인증서의 개인 키 암호 방식은 지원하지 않습니다({oid}).").format(oid=getattr(e, "detail", "")),
+            "unreadable": tr("인증서 파일을 읽지 못했습니다.")}.get(getattr(e, "reason", ""), str(e))
+
+
+_WHY = {"expired": tr_noop("만료"), "not_yet": tr_noop("유효 전"), "bad_usage": tr_noop("서명 용도 아님"),
+        "unreadable": tr_noop("읽을 수 없음")}
+
+
+class NpkiDialog(QDialog):
+    """공동인증서 고르기 — 찾은 목록 + [폴더 고르기…] + 인증서 비밀번호(보안 SOT §3.8)."""
+
+    def __init__(self, parent=None, found=()):
+        super().__init__(parent)
+        self.setWindowTitle(tr("공동인증서 가져오기"))
+        self.chosen = None
+        v = QVBoxLayout(self)
+        lab = QLabel(tr("가져올 인증서를 고르세요. 원래 인증서 폴더는 건드리지 않고 PolyPDF 디지털 ID 로 복사합니다."))
+        lab.setWordWrap(True)
+        v.addWidget(lab)
+        self.lst = QListWidget()
+        v.addWidget(self.lst, 1)
+        self._items = []
+        for c in found:
+            self._add(c)
+        if not self._items:
+            self.lst.addItem(QListWidgetItem(tr("(찾은 공동인증서가 없습니다 — [폴더 고르기…] 로 signCert.der 가 있는 폴더를 고르세요)")))
+            self.lst.item(0).setFlags(Qt.ItemFlag.NoItemFlags)
+        r = QHBoxLayout()
+        b_dir = QPushButton(tr("폴더 고르기…"))
+        b_dir.clicked.connect(self._pick_dir)
+        r.addWidget(b_dir)
+        r.addStretch(1)
+        v.addLayout(r)
+        form = QFormLayout()
+        self.ed_pw = QLineEdit()
+        self.ed_pw.setEchoMode(QLineEdit.EchoMode.Password)
+        self.ed_pw.setPlaceholderText(tr("인증서 비밀번호"))
+        form.addRow(tr("비밀번호"), self.ed_pw)
+        v.addLayout(form)
+        note = QLabel(tr("가져온 디지털 ID 의 비밀번호는 인증서 비밀번호와 같습니다."))
+        note.setWordWrap(True)
+        v.addWidget(note)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self._ok)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.resize(560, 380)
+        for i in range(self.lst.count()):
+            if self.lst.item(i).flags() & Qt.ItemFlag.ItemIsEnabled:
+                self.lst.setCurrentRow(i)
+                break
+
+    def _add(self, c):
+        why = tr(_WHY.get(c.why, c.why)) if c.why else ""
+        text = tr("{name} — {issuer} · ~{until}").format(name=c.name, issuer=c.issuer or "?", until=c.not_after or "?")
+        if why:
+            text += f"  ({why})"
+        it = QListWidgetItem(text)
+        it.setToolTip(c.folder)
+        if not c.usable:
+            it.setFlags(Qt.ItemFlag.NoItemFlags)       # 흐리게, 고를 수 없게
+        self.lst.addItem(it)
+        self._items.append((it, c))
+        return it
+
+    def _pick_dir(self):
+        from viewer import sign_npki
+        d = QFileDialog.getExistingDirectory(self, tr("signCert.der 가 있는 폴더"))
+        if not d:
+            return
+        got = sign_npki.find([d])
+        if not got:
+            QMessageBox.information(self, self.windowTitle(), tr("이 폴더(와 그 아래 기관·USER 폴더)에서 signCert.der·signPri.key 짝을 찾지 못했습니다."))
+            return
+        if self._items == [] and self.lst.count() == 1:
+            self.lst.clear()
+        first = None
+        for c in got:
+            it = self._add(c)
+            first = first or (it if c.usable else None)
+        if first is not None:
+            self.lst.setCurrentItem(first)
+
+    def password(self) -> str:
+        return self.ed_pw.text()
+
+    def _ok(self):
+        it = self.lst.currentItem()
+        c = next((c for i, c in self._items if i is it), None)
+        if c is None or not c.usable:
+            QMessageBox.information(self, self.windowTitle(), tr("가져올 인증서를 고르세요."))
+            return
+        if not self.ed_pw.text():
+            QMessageBox.information(self, self.windowTitle(), tr("비밀번호를 넣으세요."))
+            return
+        self.chosen = c
+        self.accept()
+
+
+class StoreCertDialog(QDialog):
+    """Windows 인증서 저장소('개인')에서 개인 키가 딸린 인증서 고르기(보안 SOT §3.9)."""
+
+    def __init__(self, parent=None, certs=()):
+        super().__init__(parent)
+        self.setWindowTitle(tr("Windows 인증서 저장소"))
+        self.chosen = None
+        v = QVBoxLayout(self)
+        lab = QLabel(tr("서명에 쓸 인증서를 고르세요. 키는 복사하지 않습니다 — 서명할 때 Windows 가 PIN·확인을 물을 수 있습니다."))
+        lab.setWordWrap(True)
+        v.addWidget(lab)
+        self.lst = QListWidget()
+        v.addWidget(self.lst, 1)
+        self._items = []
+        for c in certs:
+            text = tr("{name} — {issuer} · ~{until}").format(name=c.name, issuer=c.issuer or "?", until=c.not_after or "?")
+            if c.hardware:
+                text += tr("  · 스마트카드")
+            if c.why:
+                text += f"  ({tr(_WHY.get(c.why, c.why))})"
+            it = QListWidgetItem(text)
+            it.setToolTip(tr("지문(SHA-1): {fp}").format(fp=c.thumb))
+            if not c.usable:
+                it.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.lst.addItem(it)
+            self._items.append((it, c))
+        if not self._items:
+            it = QListWidgetItem(tr("(개인 키가 딸린 인증서가 없습니다)"))
+            it.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.lst.addItem(it)
+        else:
+            for it, c in self._items:
+                if c.usable:
+                    self.lst.setCurrentItem(it)
+                    break
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self._ok)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.resize(560, 340)
+
+    def _ok(self):
+        it = self.lst.currentItem()
+        c = next((c for i, c in self._items if i is it), None)
+        if c is None or not c.usable:
+            QMessageBox.information(self, self.windowTitle(), tr("인증서를 고르세요."))
+            return
+        self.chosen = c
+        self.accept()
+
+
 # ---------------------------------------------------------------------------
 # 서명 창 — SOT §3.3
 # ---------------------------------------------------------------------------
@@ -643,16 +873,19 @@ class SignDialog(QDialog):
     PREVIEW_DPI = 110
 
     def __init__(self, parent=None, hello_ok: bool = False, file_name: str = "", box_size=(142.0, 57.0),
-                 page_count: int = 1, current_page: int = 0, can_certify: bool = True):
+                 page_count: int = 1, current_page: int = 0, can_certify: bool = True, field_name: str = ""):
         super().__init__(parent)
         from viewer import sign_hello, sign_store
         self.setWindowTitle(tr("전자서명 — {name}").format(name=file_name) if file_name else tr("전자서명"))
         self._hello_ok = bool(hello_ok)
         self.save_as = False
         self.use_hello = False
+        self.field_name = str(field_name or "")      # 3단계(보안 SOT §3.7): 빈 서명 칸 채우기
         d = sign_store.load()
         v = QVBoxLayout(self)
         form = QFormLayout()
+        if self.field_name:
+            form.addRow(tr("서명 칸"), QLabel(tr("{name} (p.{page})").format(name=self.field_name, page=int(current_page) + 1)))
         self.cmb_id = QComboBox()
         for e in d["ids"]:
             self.cmb_id.addItem(f"{e.get('name', '')}" + (f" <{e['email']}>" if e.get("email") else ""), e.get("fp"))
@@ -723,6 +956,9 @@ class SignDialog(QDialog):
         pl.addWidget(self.cmb_pages)
         pl.addWidget(self.ed_pages, 1)
         self.cmb_pages.currentIndexChanged.connect(lambda _i: self.ed_pages.setEnabled(self.cmb_pages.currentData() == "range"))
+        if self.field_name:
+            self.cmb_pages.setEnabled(False)          # 빈 칸 채우기는 그 칸 하나
+            self.cmb_pages.setToolTip(tr("빈 서명 칸 하나에 서명합니다."))
         form.addRow(tr("쪽"), pr)
         # 타임스탬프 기관 — 끄는 것이 기본, 주소는 사용자가
         tr_ = QWidget()
@@ -770,6 +1006,9 @@ class SignDialog(QDialog):
         self._google_row.addWidget(self._g_btn)
         self._google_row.addStretch(1)
         v.addLayout(self._google_row)
+        self._win_note = QLabel(tr("Windows 인증서 저장소의 키로 서명합니다 — 비밀번호 대신 Windows 가 PIN·확인을 물을 수 있습니다."))
+        self._win_note.setWordWrap(True)
+        v.addWidget(self._win_note)
         note = QLabel(tr("서명은 현재 파일에 덧붙여 저장됩니다. 서명 뒤 PolyPDF 에서 이 파일을 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."))
         note.setWordWrap(True)
         v.addWidget(note)
@@ -895,11 +1134,18 @@ class SignDialog(QDialog):
         e = sign_store.get_id(self.fp()) or {}
         return bool(self._hello_ok and e.get("hello") and self._has_hello(self.fp()))
 
+    def _id_win(self) -> bool:
+        from viewer import sign_store
+        return (sign_store.get_id(self.fp()) or {}).get("kind") == "win"
+
     def _sync(self):
-        h = self._id_hello()
+        win = self._id_win()
+        h = self._id_hello() and not win
         self.btn_hello.setVisible(h)
-        self._g_lab.setVisible(not self._hello_ok)
-        self._g_btn.setVisible(not self._hello_ok)
+        self._g_lab.setVisible(not self._hello_ok and not win)
+        self._g_btn.setVisible(not self._hello_ok and not win)
+        self.ed_pw.setEnabled(not win)
+        self._win_note.setVisible(win)
         self.b_sign.setDefault(not h)
 
     def password(self) -> str:
@@ -928,7 +1174,7 @@ class SignDialog(QDialog):
     def _sign(self):
         if not self.fp():
             return
-        if not self.ed_pw.text():
+        if not self.ed_pw.text() and not self._id_win():
             QMessageBox.information(self, self.windowTitle(), tr("비밀번호를 넣으세요."))
             return
         self.use_hello = False

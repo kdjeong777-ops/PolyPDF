@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-10 15:35+0000\n"
+"POT-Creation-Date: 2026-10-10 15:56+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -487,6 +487,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "서명..."
+msgstr ""
+
+#: viewer/app.py
+msgid "빈 서명 칸 만들기..."
 msgstr ""
 
 #: viewer/app.py
@@ -3156,12 +3160,41 @@ msgstr ""
 msgid "서명할 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."
 msgstr ""
 
-#: viewer/sign_controller.py
-msgid "서명 확인 중…"
+#: viewer/sign_controller.py viewer/widgets/main_view.py
+#: viewer/widgets/sign_dialogs.py
+msgid "서명"
 msgstr ""
 
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
-msgid "서명"
+#: viewer/sign_controller.py
+msgid "빈 칸에 서명"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "서명할 칸"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "빈 서명 칸 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "빈 서명 칸"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "칸 이름 — 서명할 사람이 알아보게(예: 검토자, 승인자)"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "Windows 인증서 저장소에서 이 인증서를 찾지 못했습니다 — 스마트카드·USB 토큰을 꽂았는지 확인하세요."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "이 인증서의 개인 키를 쓸 수 없습니다(개인 키가 없거나 CNG 키가 아닙니다)."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "서명 확인 중…"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3213,11 +3246,36 @@ msgid "이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없�
 msgstr ""
 
 #: viewer/sign_controller.py
+msgid "인증된 문서라 새 자리에는 서명할 수 없고 빈 칸에만 서명할 수 있습니다."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "새 자리 끌기"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "서명 칸을 만들 PDF를 먼저 여세요."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "작성자가 인증한 문서입니다 — 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "빈 서명 칸 만드는 중"
+msgstr ""
+
+#: viewer/sign_controller.py
 msgid "쪽 범위를 읽지 못했습니다. 예: 1-3, 5"
 msgstr ""
 
 #: viewer/sign_controller.py
 msgid "'인증 — 변경 금지' 는 한 쪽에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "Windows 인증서 저장소로 서명하지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3272,12 +3330,23 @@ msgstr ""
 msgid "이 문서는 서명 권한이 없습니다. 권한 암호로 연 뒤 서명하세요(책갈피창 우클릭 → 암호 입력)."
 msgstr ""
 
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
-msgid "Windows Hello 확인"
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "이 문서에 빈 서명 칸이 {n}개 있습니다."
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
+#, python-brace-format
+msgid "{name} — p.{page}"
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "빈 서명 칸을 만들었습니다: {name}"
+msgstr ""
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 확인"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3302,6 +3371,11 @@ msgid "서명했습니다: {name}"
 msgstr ""
 
 #: viewer/sign_controller.py
+#, python-brace-format
+msgid " · 빈 서명 칸 {n}개"
+msgstr ""
+
+#: viewer/sign_controller.py
 msgid "Windows Hello 를 취소했습니다 — 비밀번호를 넣어 서명할 수 있습니다."
 msgstr ""
 
@@ -3310,10 +3384,18 @@ msgid "Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. �
 msgstr ""
 
 #: viewer/sign_controller.py
+msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
+msgstr ""
+
+#: viewer/sign_controller.py
 #, python-brace-format
 msgid ""
 "회전된 쪽이 있어 서명할 수 없습니다: p.{pages}\n"
 "'저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "Windows 가 물은 PIN·확인을 취소했습니다."
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3327,6 +3409,23 @@ msgid "서명을 확인하지 못했습니다({e})."
 msgstr ""
 
 #: viewer/sign_controller.py
+msgid "작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "서명 칸을 만들지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/sign_controller.py
 #, python-brace-format
 msgid "{n}쪽에 서명합니다 — 쪽마다 서명이 하나씩 들어가 시간이 걸리고 파일이 커집니다. 계속할까요?"
 msgstr ""
@@ -3337,23 +3436,11 @@ msgid "서명 중 ({n}쪽)"
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 이 문서에는 서명할 수 없습니다."
+msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."
 msgstr ""
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3378,6 +3465,16 @@ msgstr ""
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "저장하지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "같은 이름의 서명 칸이 이미 있습니다: {name}"
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "빈 서명 칸을 찾지 못했습니다(이미 서명됐거나 지워졌습니다): {name}"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -7268,6 +7365,22 @@ msgid "기능별 단축키를 클릭해 새 키 조합을 입력하세요 (그�
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "만료"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "유효 전"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 용도 아님"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "읽을 수 없음"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "이 PC 에서는 Windows Hello 를 쓸 수 없습니다. 비밀번호를 Google 비밀번호 관리자에 저장해 두고 복사해 붙여넣을 수 있습니다(Ctrl+V). 붙여넣은 비밀번호는 Windows 클립보드 기록(Win+V)에 남을 수 있습니다."
 msgstr ""
 
@@ -7396,6 +7509,14 @@ msgid "지우기…"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "공동인증서 가져오기…"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "Windows 인증서 저장소에서…"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "디지털 ID 를 만들었습니다. '백업 내보내기' 로 .pfx 를 안전한 곳에 백업해 두세요 — 이 PC 가 고장 나면 같은 ID 로 다시 서명할 수 없습니다."
 msgstr ""
 
@@ -7432,11 +7553,47 @@ msgid "받는 사람이 이 .cer 를 PDF 뷰어(Acrobat: 서명 패널 → 인�
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "공동인증서를 가져왔습니다(원래 인증서 폴더는 그대로입니다). 받는 쪽 PDF 뷰어에 발급기관 인증서가 신뢰 등록돼 있지 않으면 서명이 '신원 미확인' 으로 보일 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "디지털 ID 지우기"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "백업 후 지우기…"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "공동인증서 가져오기"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "가져올 인증서를 고르세요. 원래 인증서 폴더는 건드리지 않고 PolyPDF 디지털 ID 로 복사합니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "폴더 고르기…"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 비밀번호"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "가져온 디지털 ID 의 비밀번호는 인증서 비밀번호와 같습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "signCert.der 가 있는 폴더"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "Windows 인증서 저장소"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명에 쓸 인증서를 고르세요. 키는 복사하지 않습니다 — 서명할 때 Windows 가 PIN·확인을 물을 수 있습니다."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7520,6 +7677,10 @@ msgid "Windows Hello 로 서명"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "Windows 인증서 저장소의 키로 서명합니다 — 비밀번호 대신 Windows 가 PIN·확인을 물을 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "서명은 현재 파일에 덧붙여 저장됩니다. 서명 뒤 PolyPDF 에서 이 파일을 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
 msgstr ""
 
@@ -7596,6 +7757,10 @@ msgid "두 비밀번호가 다릅니다."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "  · Windows 저장소"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "디지털 ID 만드는 중"
 msgstr ""
 
@@ -7604,7 +7769,15 @@ msgid "디지털 ID 확인 중"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "인증서 읽는 중"
+msgid "공동인증서 찾는 중"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "공동인증서 확인 중"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 저장소 읽는 중"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7612,7 +7785,56 @@ msgid "비밀번호 확인 중"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "만료된 인증서입니다 — 서명해도 검증에서 무효가 됩니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "아직 유효기간이 시작되지 않은 인증서입니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "문서 서명 용도가 아닌 인증서입니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "개인 키와 인증서가 짝이 맞지 않습니다(signCert.der·signPri.key 가 같은 폴더의 것인지 확인하세요)."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 파일을 읽지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "{name} — {issuer} · ~{until}"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 폴더(와 그 아래 기관·USER 폴더)에서 signCert.der·signPri.key 짝을 찾지 못했습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "가져올 인증서를 고르세요."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "  · 스마트카드"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "(개인 키가 딸린 인증서가 없습니다)"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서를 고르세요."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "전자서명"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 칸"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7640,6 +7862,10 @@ msgid "인증 — 주석·양식·서명 허용"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "빈 서명 칸 하나에 서명합니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "실제 서명과 같은 그리기 — 날짜는 서명하는 때의 시각으로 바뀝니다."
 msgstr ""
 
@@ -7664,6 +7890,10 @@ msgid "비밀번호가 약합니다. .pfx 파일이 새어 나가면 쉽게 풀�
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "  · 공동인증서"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "Windows Hello 보관 해제"
 msgstr ""
 
@@ -7681,6 +7911,14 @@ msgid "이 디지털 ID 의 비밀번호를 Windows Hello 로 보관할까요?"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "인증서 읽는 중"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "인증서 비밀번호가 맞지 않습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "{name} 의 비밀번호 — 맞는지 확인한 뒤 Windows Hello 로 잠가 둡니다."
 msgstr ""
@@ -7688,6 +7926,10 @@ msgstr ""
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "'{name}' 을 지우면 이 ID 로 다시 서명할 수 없습니다. 이미 서명한 문서는 그대로 유효합니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "(찾은 공동인증서가 없습니다 — [폴더 고르기…] 로 signCert.der 가 있는 폴더를 고르세요)"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7783,6 +8025,16 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
+msgid "이 인증서의 개인 키 암호 방식은 지원하지 않습니다({oid})."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "지문(SHA-1): {fp}"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
 msgid "전자서명 — {name}"
 msgstr ""
 
@@ -7821,12 +8073,18 @@ msgid "개인 키가 없는 인증서입니다 — 서명에 쓸 수 없습니�
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "문서 서명 용도가 아닌 인증서입니다."
+#, python-brace-format
+msgid "가져오지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
-msgid "가져오지 못했습니다: {e}"
+msgid "Windows 인증서 저장소를 읽지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "{name} (p.{page})"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7844,6 +8102,11 @@ msgstr ""
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "'{name}' 의 인증서(지문 {fp}…)를 신뢰할까요? 그 사람에게서 받은 인증서인지 지문을 확인한 뒤에만 신뢰하세요."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "인증서를 읽지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/widgets/strip.py

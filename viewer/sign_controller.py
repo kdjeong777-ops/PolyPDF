@@ -114,7 +114,18 @@ class SignMixin:
                 self.action_sign_image()
             elif c is not b_skip:
                 return
+        # 3단계(SOT §3.7): 빈 서명 칸이 있으면 먼저 묻는다 — 끌기·우클릭은 _on_sign_region 이 칸 안인지 본다
+        from viewer import sign_core as _sc
+        empties = _sc.empty_fields(mv._doc.doc)
+        if at_scene is None and empties:
+            choice = self._sign_choose_field(empties, _sc.doc_certify_level(mv._doc.doc))
+            if choice is None:
+                return
+            if choice != "new":
+                self._sign_fill_field(str(cur), choice, mv)
+                return
         self._sign_pending = str(cur)
+        self._sign_pending_mode = "sign"
         if at_scene is not None:
             from PyQt6.QtCore import QRectF
             self._on_sign_region(QRectF(at_scene, at_scene), view=mv)     # 크기 0 = 클릭 → 기본 크기(_sign_box_fit)
@@ -174,7 +185,9 @@ class SignMixin:
     # ---- 자리 → 서명 ---------------------------------------------------------
     def _on_sign_region(self, scene_rect, view=None):
         cur = getattr(self, "_sign_pending", None)
+        mode = getattr(self, "_sign_pending_mode", "sign")
         self._sign_pending = None
+        self._sign_pending_mode = "sign"
         mv = view or self.main_view
         if not cur or mv is None or str(mv.current_file() or "") != cur:
             return
@@ -193,17 +206,150 @@ class SignMixin:
             return
         z = mv._zoom or 1.0
         r = fitz.Rect(scene_rect.left() / z, scene_rect.top() / z, scene_rect.right() / z, scene_rect.bottom() / z)
-        r = self._sign_box_fit(page, r)
-        from viewer.widgets.sign_dialogs import SignDialog
-        hello_ok = self._sign_hello_ready()
         from viewer import sign_core as _sc
+        if mode == "sigfield":
+            self._sigfield_make(cur, pidx, self._sign_box_fit(page, r), mv)
+            return
+        # 끌기·우클릭의 가운데가 빈 서명 칸 안이면 그 칸을 채운다(SOT §3.7)
+        hit = _sc.field_at(_sc.empty_fields(mv._doc.doc), pidx, (r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
+        if hit is not None:
+            self._sign_fill_field(cur, hit, mv)
+            return
+        r = self._sign_box_fit(page, r)
+        self._sign_open_dialog(cur, pidx, r, mv)
+
+    def _sign_open_dialog(self, cur, pidx, r, mv, field=None):
+        from viewer.widgets.sign_dialogs import SignDialog
+        from viewer import sign_core as _sc
+        hello_ok = self._sign_hello_ready()
         dlg = SignDialog(self, hello_ok=hello_ok, file_name=Path(cur).name, box_size=(r.width, r.height),
                          page_count=mv._doc.doc.page_count, current_page=pidx,
-                         can_certify=not _sc.doc_is_signed(mv._doc.doc))
+                         can_certify=not _sc.doc_is_signed(mv._doc.doc),
+                         field_name=field.name if field is not None else "")
         try:
             self._sign_dialog_loop(cur, pidx, r, dlg, mv)
         finally:
             dlg.stop_preview()
+
+    # ---- 빈 서명 칸 — SOT §3.7 -----------------------------------------------
+    def _sign_choose_field(self, empties, certified: int):
+        """빈 칸이 있을 때 [빈 칸에 서명] / [새 자리 끌기] / 취소. 반환: EmptyField | "new" | None."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("서명"))
+        box.setText(tr("이 문서에 빈 서명 칸이 {n}개 있습니다.").format(n=len(empties)))
+        if certified:
+            box.setInformativeText(tr("인증된 문서라 새 자리에는 서명할 수 없고 빈 칸에만 서명할 수 있습니다."))
+        b_fill = box.addButton(tr("빈 칸에 서명"), QMessageBox.ButtonRole.AcceptRole)
+        b_new = None if certified else box.addButton(tr("새 자리 끌기"), QMessageBox.ButtonRole.ActionRole)
+        box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_fill)
+        box.exec()
+        c = box.clickedButton()
+        if b_new is not None and c is b_new:
+            return "new"
+        if c is not b_fill:
+            return None
+        if len(empties) == 1:
+            return empties[0]
+        from PyQt6.QtWidgets import QInputDialog
+        labels = [tr("{name} — p.{page}").format(name=f.name, page=f.page + 1) for f in empties]
+        got, ok = QInputDialog.getItem(self, tr("서명"), tr("서명할 칸"), labels, 0, False)
+        if not ok:
+            return None
+        return empties[labels.index(got)]
+
+    def _sign_fill_field(self, cur: str, field, mv):
+        """빈 칸 하나를 채운다 — 그 쪽으로 가서 칸 크기 그대로 서명 창(SOT §3.7)."""
+        import fitz
+        if mv.is_two_page_mode():
+            QMessageBox.information(self, tr("서명"), tr("2쪽 보기에서는 자리를 정할 수 없습니다. 1쪽 보기로 바꾼 뒤 다시 서명하세요."))
+            return
+        page = mv._doc.doc[field.page]
+        if page.rotation or mv._rotations.get(field.page, 0):
+            QMessageBox.information(self, tr("서명"), tr("이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없습니다(서명이 누워 들어갑니다). '저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."))
+            return
+        if int(mv.current_page()) != field.page:
+            try:
+                mv.go_to_page(field.page)
+            except Exception:
+                pass
+        self._sign_open_dialog(cur, field.page, fitz.Rect(*field.rect), mv, field=field)
+
+    def action_sign_field(self):
+        """도구 '빈 서명 칸 만들기' — 사전 점검 뒤 본문에서 칸 자리를 끈다(SOT §3.7)."""
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if not (cur and str(cur).lower().endswith(".pdf") and getattr(mv, "_doc", None) is not None):
+            QMessageBox.information(self, tr("빈 서명 칸"), tr("서명 칸을 만들 PDF를 먼저 여세요."))
+            return
+        from viewer import sign_core as _sc
+        if _sc.doc_certify_level(mv._doc.doc):
+            QMessageBox.information(self, tr("빈 서명 칸"), tr("작성자가 인증한 문서입니다 — 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다."))
+            return
+        if not self._sign_preflight(str(cur)):
+            return
+        self._sign_pending = str(cur)
+        self._sign_pending_mode = "sigfield"
+        mv.view.arm_block_select(True, purpose="sign")
+        self.status.showMessage(tr("빈 서명 칸 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."), 8000)
+
+    def _sigfield_make(self, cur: str, pidx: int, r, mv):
+        from PyQt6.QtWidgets import QInputDialog
+        from viewer import sign_core
+        doc = mv._doc.doc
+        used = {f.name for f in sign_core.empty_fields(doc)}
+        k = 1
+        while f"Signature{k}" in used:
+            k += 1
+        name, ok = QInputDialog.getText(self, tr("빈 서명 칸"), tr("칸 이름 — 서명할 사람이 알아보게(예: 검토자, 승인자)"),
+                                        text=f"Signature{k}")
+        if not ok:
+            return
+        box = sign_core.page_box_to_pdf(doc[pidx], r)
+        doc_pw, remembered = self._sign_doc_password(cur, doc)
+        fd, tmp = tempfile.mkstemp(suffix=".polypdf-sign", prefix="~", dir=str(Path(cur).parent))
+        os.close(fd)
+        try:
+            got = self._sign_bg(lambda: sign_core.add_empty_field(cur, tmp, page_index=pidx, box_pdf=box,
+                                                                  name=name, doc_password=doc_pw),
+                                tr("빈 서명 칸 만드는 중"))
+        except sign_core.SignError as e:
+            self._sign_unlink(tmp)
+            msg = {"field_exists": tr("같은 이름의 서명 칸이 이미 있습니다: {name}").format(name=e.detail),
+                   "certified": tr("작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."),
+                   "certified_new_field": tr("작성자가 인증한 문서입니다 — 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다."),
+                   "need_doc_password": tr("암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."),
+                   "unreadable": tr("이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요.")
+                   }.get(e.reason, tr("서명 칸을 만들지 못했습니다: {e}").format(e=e.detail or e.reason))
+            QMessageBox.warning(self, tr("빈 서명 칸"), msg)
+            return
+        except Exception as e:                   # noqa: BLE001
+            self._sign_unlink(tmp)
+            QMessageBox.warning(self, tr("빈 서명 칸"), tr("서명 칸을 만들지 못했습니다: {e}").format(e=type(e).__name__))
+            return
+        final = self._sign_place(cur, tmp, False)
+        if not final:
+            return
+        if doc_pw:
+            self._sign_carry_password(final, doc_pw, remembered)
+        try:
+            self.bookmark_tree.add_or_refresh_file(final, after=str(cur))
+            self._open_saved_file(final, pidx)
+        except Exception:
+            pass
+        self.status.showMessage(tr("빈 서명 칸을 만들었습니다: {name}").format(name=got), 6000)
+
+    @staticmethod
+    def _sign_doc_password(cur, doc):
+        """암호 문서면 (세션·기억 암호, 기억해 둔 것인지) — 서명은 같은 암호화를 유지해 덧붙인다(SOT §3.5)."""
+        try:
+            if getattr(doc, "is_encrypted", False) or str((doc.metadata or {}).get("encryption") or ""):
+                from viewer import secure_store
+                return secure_store.recall_any(cur) or "", bool(secure_store.recall_password(cur))
+        except Exception:
+            pass
+        return "", False
 
     def _sign_dialog_loop(self, cur, pidx, r, dlg, mv):
         while True:
@@ -244,6 +390,9 @@ class SignMixin:
     def _sign_password(self, dlg):
         """1순위 Windows Hello, 안 되면 칸에 넣은 비밀번호(SOT §6). None = 다시 서명 창으로."""
         fp = dlg.fp()
+        from viewer import sign_store
+        if (sign_store.get_id(fp) or {}).get("kind") == "win":
+            return ""                            # Windows 저장소 — 비밀번호 대신 Windows 가 PIN 을 묻는다(SOT §3.9)
         if dlg.use_hello:
             from viewer import sign_hello
             try:
@@ -261,14 +410,27 @@ class SignMixin:
         """배경에서 서명 → 저장 → 다시 열기. 반환 'ok' | 'retry' | 'fail'."""
         from viewer import sign_core, sign_store
         fp = dlg.fp()
-        try:
-            pfx = sign_store.read_pfx(fp)
-        except Exception:
-            QMessageBox.warning(self, tr("서명"), tr("디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."))
-            return "fail"
+        entry = sign_store.get_id(fp) or {}
+        pfx, signer = b"", None
+        if entry.get("kind") == "win":
+            # Windows 인증서 저장소(SOT §3.9) — 키는 Windows 안에, PIN 은 Windows 가 묻는다
+            from viewer import sign_winstore
+            try:
+                signer = sign_winstore.make_signer(entry.get("thumb", ""), hwnd=int(self.winId()))
+            except sign_winstore.StoreError as e:
+                QMessageBox.warning(self, tr("서명"), self._sign_store_msg(e))
+                return "fail"
+        else:
+            try:
+                pfx = sign_store.read_pfx(fp)
+            except Exception:
+                QMessageBox.warning(self, tr("서명"), tr("디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."))
+                return "fail"
         doc = (mv or self.main_view)._doc.doc     # 자리를 끈 그 창(2단이면 오른쪽일 수 있다)
+        field = getattr(dlg, "field_name", "") or ""
         # 2단계(SOT §3.6): 여러 쪽 — 같은 자리(쪽 좌표)에, 쪽 밖이면 쪽 안으로. 회전 쪽은 막는다.
-        pages = dlg.pages()
+        # 3단계(SOT §3.7): 빈 칸 채우기는 그 칸 하나(쪽 고르기 끔)
+        pages = [pidx] if field else dlg.pages()
         if not pages:
             QMessageBox.information(self, tr("서명"), tr("쪽 범위를 읽지 못했습니다. 예: 1-3, 5"))
             return "retry"
@@ -287,28 +449,22 @@ class SignMixin:
         ) != QMessageBox.StandardButton.Yes:
             return "retry"
         targets = []
-        for p in pages:
-            targets.append((p, sign_core.page_box_to_pdf(doc[p], self._sign_box_fit(doc[p], rect))))
+        if not field:
+            for p in pages:
+                targets.append((p, sign_core.page_box_to_pdf(doc[p], self._sign_box_fit(doc[p], rect))))
         app = dlg.appearance()
         tsa = dlg.tsa_url()
-        doc_pw = ""
-        remembered = False
-        try:
-            if getattr(doc, "is_encrypted", False) or str((doc.metadata or {}).get("encryption") or ""):
-                from viewer import secure_store
-                doc_pw = secure_store.recall_any(cur) or ""
-                remembered = bool(secure_store.recall_password(cur))
-        except Exception:
-            pass
+        doc_pw, remembered = self._sign_doc_password(cur, doc)
         # 같은 폴더(바꿔치기가 원자적이게), `.pdf` 로 끝나지 않게(목록·색인에 안 뜬다 — 마스터 §4.7.5 백업과 같은 규칙)
         fd, tmp = tempfile.mkstemp(suffix=".polypdf-sign", prefix="~", dir=str(Path(cur).parent))
         os.close(fd)
         reason, loc = dlg.ed_reason.text(), dlg.ed_loc.text()
         try:
-            self._sign_bg(lambda: sign_core.sign_pdf(cur, tmp, pfx, pw, targets=targets, appearance=app,
+            self._sign_bg(lambda: sign_core.sign_pdf(cur, tmp, pfx, pw, targets=targets or None, appearance=app,
                                                      reason=reason, location=loc, doc_password=doc_pw,
-                                                     certify=certify, tsa=tsa or None),
-                          tr("서명 중") if len(targets) == 1 else tr("서명 중 ({n}쪽)").format(n=len(targets)))
+                                                     certify=certify, tsa=tsa or None, field=field,
+                                                     signer=signer),
+                          tr("서명 중") if len(targets) <= 1 else tr("서명 중 ({n}쪽)").format(n=len(targets)))
         except sign_core.WrongPassword:
             self._sign_unlink(tmp)
             QMessageBox.warning(self, tr("서명"), tr("비밀번호가 맞지 않습니다."))
@@ -316,7 +472,8 @@ class SignMixin:
         except sign_core.SignError as e:
             self._sign_unlink(tmp)
             msg = {"certified": tr("작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."),
-                   "certified_new_field": tr("작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 이 문서에는 서명할 수 없습니다."),
+                   "certified_new_field": tr("작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."),
+                   "no_field": tr("빈 서명 칸을 찾지 못했습니다(이미 서명됐거나 지워졌습니다): {name}").format(name=e.detail),
                    "certify_not_first": tr("이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."),
                    "certify_one_page": tr("'인증 — 변경 금지' 는 한 쪽에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."),
                    "tsa_failed": tr("타임스탬프 기관에서 시각을 받지 못해 서명하지 않았습니다. 주소·인터넷을 확인하거나 타임스탬프를 끄고 서명하세요.\n({d})").format(d=e.detail[:120]),
@@ -328,6 +485,13 @@ class SignMixin:
             return "fail"
         except Exception as e:                   # noqa: BLE001
             self._sign_unlink(tmp)
+            from viewer import sign_winstore
+            if isinstance(e, sign_winstore.StoreCancelled):
+                self.status.showMessage(tr("Windows 가 물은 PIN·확인을 취소했습니다."), 6000)
+                return "retry"
+            if isinstance(e, sign_winstore.StoreError):
+                QMessageBox.warning(self, tr("서명"), self._sign_store_msg(e))
+                return "fail"
             QMessageBox.warning(self, tr("서명"), tr("서명하지 못했습니다: {e}").format(e=type(e).__name__))
             return "fail"
         # Hello 보관을 다시 하자고 했으면(꺼내기 실패) 지금 맞은 비밀번호로
@@ -352,6 +516,14 @@ class SignMixin:
             pass
         self.status.showMessage(tr("서명했습니다: {name}").format(name=Path(final).name), 6000)
         return "ok"
+
+    @staticmethod
+    def _sign_store_msg(e) -> str:
+        if getattr(e, "reason", "") == "not_found":
+            return tr("Windows 인증서 저장소에서 이 인증서를 찾지 못했습니다 — 스마트카드·USB 토큰을 꽂았는지 확인하세요.")
+        if getattr(e, "reason", "") == "no_key":
+            return tr("이 인증서의 개인 키를 쓸 수 없습니다(개인 키가 없거나 CNG 키가 아닙니다).")
+        return tr("Windows 인증서 저장소로 서명하지 못했습니다: {e}").format(e=getattr(e, "detail", "") or str(e))
 
     @staticmethod
     def _sign_carry_password(final: str, doc_pw: str, remembered: bool) -> None:
@@ -457,9 +629,13 @@ class SignMixin:
         cur = mv.current_file()
         doc = getattr(getattr(mv, "_doc", None), "doc", None)
         from viewer import sign_core
+        mv._sign_empty = len(sign_core.empty_fields(doc)) if (cur and doc is not None) else 0
         if not (cur and doc is not None and sign_core.doc_is_signed(doc)):
-            band.clear()
             mv._sign_report = None
+            if mv._sign_empty:
+                band.show_state("empty", tr("이 문서에 빈 서명 칸이 {n}개 있습니다.").format(n=mv._sign_empty))
+            else:
+                band.clear()
             return
         try:
             mtime = os.stat(cur).st_mtime_ns
@@ -514,10 +690,20 @@ class SignMixin:
                 sc.OK_UNKNOWN: tr("서명자 {names} · 유효 · 신원 미확인(신뢰 목록에 없음)"),
                 sc.MODIFIED: tr("서명자 {names} · 서명 뒤 문서가 변경됨"),
                 sc.INVALID: tr("서명자 {names} · 서명 무효 — 서명한 내용이 바뀌었거나 확인할 수 없습니다")}[worst]
-        band.show_state(worst, text.format(names=names))
+        text = text.format(names=names)
+        if getattr(mv, "_sign_empty", 0):
+            text += tr(" · 빈 서명 칸 {n}개").format(n=mv._sign_empty)
+        band.show_state(worst, text)
 
     def _on_sign_panel(self, view=None):
         mv = view or self.main_view
+        if getattr(getattr(mv, "sign_band", None), "state", "") == "empty":
+            try:
+                self._set_active_pane(self._mv.index(mv))
+            except Exception:
+                pass
+            self.action_sign_pdf()                   # 빈 칸만 있는 띠의 [서명] (SOT §3.7)
+            return
         rep = getattr(mv, "_sign_report", None)
         if rep is None:
             return

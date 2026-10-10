@@ -21,7 +21,7 @@ pywin32>=306             # 260603: 음성 읽기(Windows SAPI, win32com) — Win
 anthropic>=0.40          # 260621-P0: PDF 번역·요약(Claude API)
 # 261010-21: 전자서명(보안 SOT §8) — pyHanko(MIT, PAdES 증분 서명·검증) + 겉모양 한글 글꼴(opentype: fontTools·uharfbuzz)
 pyHanko[opentype]>=0.29
-cryptography>=42        # 디지털 ID(RSA 3072·자체 서명 인증서·PBES2-AES256 .pfx), Hello 보관(HKDF·AES-GCM)
+cryptography>=43        # 디지털 ID(RSA 3072·자체 서명 인증서·PBES2-AES256 .pfx), Hello 보관(HKDF·AES-GCM), 공동인증서 SEED(decrepit, 보안 SOT §3.8)
 # Windows Hello 로 인증서 비밀번호 잠가 보관(보안 SOT §6.1) — Windows 전용
 winrt-runtime>=2.0 ; sys_platform == "win32"
 winrt-Windows.Foundation>=2.0 ; sys_platform == "win32"

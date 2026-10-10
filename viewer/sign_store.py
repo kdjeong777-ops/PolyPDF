@@ -65,8 +65,9 @@ def abspath(rel: str) -> Path:
 
 # ---- 디지털 ID ---------------------------------------------------------------
 
-def add_id(pfx: bytes, info) -> dict:
-    """`.pfx` 를 `ids\\<지문16>.pfx` 로 두고 목록에 넣는다. 이미 있으면 파일만 새로 쓴다."""
+def add_id(pfx: bytes, info, source: str = "") -> dict:
+    """`.pfx` 를 `ids\\<지문16>.pfx` 로 두고 목록에 넣는다. 이미 있으면 파일만 새로 쓴다.
+    `source="npki"` 면 공동인증서에서 가져온 것(SOT §3.8 — 목록 표시용)."""
     d = load()
     rel = f"ids/{info.fp[:16]}.pfx"
     path = abspath(rel)
@@ -79,6 +80,10 @@ def add_id(pfx: bytes, info) -> dict:
         entry = {"fp": info.fp}
         d["ids"].append(entry)
     entry.update(name=info.name, email=info.email, org=info.org, not_after=info.not_after, file=rel)
+    entry.pop("kind", None)
+    entry.pop("thumb", None)
+    if source:
+        entry["source"] = source
     entry.setdefault("hello", False)
     if not d["default_id"]:
         d["default_id"] = info.fp
@@ -89,13 +94,38 @@ def add_id(pfx: bytes, info) -> dict:
     return entry
 
 
+def add_win_id(sc) -> dict:
+    """Windows 인증서 저장소 인증서를 **참조**로 넣는다(SOT §3.9) — 키는 두지 않고 공개 인증서 `.cer` 만."""
+    d = load()
+    rel = f"ids/{sc.fp[:16]}.cer"
+    path = abspath(rel)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(sc.der)
+    os.replace(tmp, path)
+    entry = next((e for e in d["ids"] if e.get("fp") == sc.fp), None)
+    if entry is None:
+        entry = {"fp": sc.fp}
+        d["ids"].append(entry)
+    entry.pop("file", None)
+    entry.pop("source", None)
+    entry.update(name=sc.name, email=sc.email, org=sc.org, not_after=sc.not_after, kind="win",
+                 thumb=sc.thumb, cert=rel, hello=False)
+    if not d["default_id"]:
+        d["default_id"] = sc.fp
+    if sc.fp not in d["trusted"]:
+        d["trusted"].append(sc.fp)
+    save(d)
+    return entry
+
+
 def get_id(fp: str) -> dict | None:
     return next((e for e in load()["ids"] if e.get("fp") == fp), None)
 
 
 def read_pfx(fp: str) -> bytes:
     e = get_id(fp)
-    if e is None:
+    if e is None or e.get("kind") == "win":
         raise FileNotFoundError(fp)
     return abspath(e["file"]).read_bytes()
 
@@ -113,10 +143,12 @@ def remove_id(fp: str) -> None:
     d = load()
     e = next((x for x in d["ids"] if x.get("fp") == fp), None)
     if e is not None:
-        try:
-            abspath(e["file"]).unlink(missing_ok=True)
-        except Exception:
-            pass
+        for k in ("file", "cert"):
+            try:
+                if e.get(k):
+                    abspath(e[k]).unlink(missing_ok=True)
+            except Exception:
+                pass
         d["ids"] = [x for x in d["ids"] if x.get("fp") != fp]
         if d["default_id"] == fp:
             d["default_id"] = d["ids"][0]["fp"] if d["ids"] else ""

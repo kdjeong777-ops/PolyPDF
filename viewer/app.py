@@ -1640,6 +1640,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 🔏 전자서명 — 보안 SOT §3(261010-21). 위 구역은 사용자가 정한 패널 차례와 짝이라 따로 둔다.
         m_tools.addSection(tr("🔏 전자서명"))
         _act(tr("서명..."), self.action_sign_pdf)
+        _act(tr("빈 서명 칸 만들기..."), self.action_sign_field)
         _act(tr("디지털 ID..."), self.action_digital_ids)
         _act(tr("서명 그림..."), self.action_sign_image)
 

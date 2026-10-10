@@ -477,7 +477,7 @@ def signer_label(name: str, email: str = "") -> str:
 
 def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pdf=None,
              appearance: Appearance | None = None, reason: str = "", location: str = "",
-             doc_password: str = "", targets=None, certify: int = 0, tsa=None):
+             doc_password: str = "", targets=None, certify: int = 0, tsa=None, field: str = "", signer=None):
     """`src` 를 **증분 저장**으로 서명해 `dst` 에 쓴다(원본 바이트 + 덧붙인 서명, SOT §1·§3.3).
 
     - `box_pdf` 는 PDF 사용자 공간 (x0, y0, x1, y1) — `page_box_to_pdf` 로 만든다.
@@ -486,22 +486,31 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
     - `certify` 0 = 승인, 1·2·3 = DocMDP P. 문서의 첫 서명일 때만. P=1 은 한 쪽만.
     - `tsa` 는 타임스탬프 기관 주소(str) 또는 pyHanko TimeStamper(검사용). 받지 못하면 SignError(tsa_failed).
     - 암호 문서는 `doc_password` 로 연다(같은 암호화를 유지한 채 덧붙인다, SOT §3.5).
+    - `field` 면 **이미 있는 빈 서명 칸**을 채운다(SOT §3.7) — 칸을 만들지 않으므로 인증(P=2·3) 문서에도 된다.
+    - `signer` 면 `pfx`·`password` 대신 그 pyHanko Signer(Windows 저장소 키, SOT §3.9).
     반환: `targets` 를 주면 칸 이름 목록, 아니면 칸 이름 하나."""
     from pyhanko.sign import signers, fields
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     single = targets is None
-    if single:
-        targets = [(int(page_index), box_pdf)]
-    targets = [(int(p), tuple(float(v) for v in b)) for p, b in targets]
+    field = str(field or "")
     certify = int(certify or 0)
     if certify not in CERTIFY_LEVELS:
         raise ValueError("certify")
-    if certify == 1 and len(targets) > 1:
-        raise SignError("certify_one_page")
-    key, cert, extra = load_pfx(pfx, password)
-    signer = _simple_signer(key, cert, extra)
+    if field:
+        targets = []
+    else:
+        if single:
+            targets = [(int(page_index), box_pdf)]
+        targets = [(int(p), tuple(float(v) for v in b)) for p, b in targets]
+        if certify == 1 and len(targets) > 1:
+            raise SignError("certify_one_page")
+    if signer is None:
+        key, cert, extra = load_pfx(pfx, password)
+        signer = _simple_signer(key, cert, extra)
+        info = _cert_info(cert)
+    else:
+        info = _cert_info(_asn1_to_crypto(signer.signing_cert))
     app = appearance or Appearance()
-    info = _cert_info(cert)
     stamper = None
     if tsa:
         if isinstance(tsa, str):
@@ -532,13 +541,21 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
     level = _certification_level(w.prev)
     if level == 1:
         raise SignError("certified")
-    if level in (2, 3):
+    if level in (2, 3) and not field:
         raise SignError("certified_new_field")      # 새 서명 칸을 더하는 것은 허용 변경이 아니다(SOT §3.6)
     if certify and _has_signatures(w.prev):
         raise SignError("certify_not_first")
-    names = _next_field_names(w.prev, len(targets))
-    for nm, (pg, bx) in zip(names, targets):
-        fields.append_signature_field(w, fields.SigFieldSpec(sig_field_name=nm, on_page=pg, box=bx))
+    if field:
+        # 빈 칸 채우기(SOT §3.7) — 칸이 있고 비어 있어야 한다. 겉모양 크기는 그 칸의 /Rect
+        size = _empty_field_size(w.prev, field)
+        if size is None:
+            raise SignError("no_field", field)
+        names = [field]
+        targets = [(-1, (0.0, 0.0) + size)]
+    else:
+        names = _next_field_names(w.prev, len(targets))
+        for nm, (pg, bx) in zip(names, targets):
+            fields.append_signature_field(w, fields.SigFieldSpec(sig_field_name=nm, on_page=pg, box=bx))
     out = b""
     try:
         for i, (nm, (pg, bx)) in enumerate(zip(names, targets)):
@@ -558,6 +575,9 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
     except SignError:
         raise
     except Exception as e:                       # noqa: BLE001
+        from viewer.sign_winstore import StoreError
+        if isinstance(e, StoreError):
+            raise                                # 저장소 취소·사라짐은 화면이 따로 다룬다(SOT §3.9)
         nm_ = type(e).__name__
         if stamper is not None and ("Timestamp" in nm_ or "timestamp" in str(e).lower()
                                     or nm_ in ("ClientConnectorError", "TimeoutError", "ClientError")):
@@ -566,6 +586,130 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
     with open(str(dst), "wb") as f:
         f.write(out)
     return names[0] if single else names
+
+
+def _asn1_to_crypto(acert):
+    from cryptography import x509
+    return x509.load_der_x509_certificate(acert.dump())
+
+
+def _empty_field_size(reader, name: str):
+    """빈 서명 칸 `name` 의 겉모양 크기 (폭, 높이) — 없거나 이미 서명됐으면 None."""
+    from pyhanko.sign.fields import enumerate_sig_fields
+    for nm, val, ref in enumerate_sig_fields(reader, filled_status=None):
+        if str(nm) != name:
+            continue
+        if val is not None:
+            return None
+        fld = ref.get_object()
+        widget = fld
+        if "/Rect" not in fld and "/Kids" in fld:
+            widget = fld["/Kids"][0].get_object()
+        try:
+            r = [float(x) for x in widget["/Rect"]]
+            return (abs(r[2] - r[0]), abs(r[3] - r[1]))
+        except Exception:
+            return (0.0, 0.0)
+    return None
+
+
+@dataclass
+class EmptyField:
+    name: str
+    page: int                   # 0부터
+    rect: tuple                 # 쪽 좌표(fitz, 왼쪽 위 원점) x0, y0, x1, y1
+
+
+def empty_fields(doc) -> list:
+    """열린 fitz 문서의 **빈 서명 칸**(SOT §3.7). 양식 문서일 때만 쪽을 돈다 — 보통 문서는 바로 빈 목록(§10)."""
+    try:
+        if not doc.is_form_pdf:
+            return []
+        import fitz
+        out = []
+        for page in doc:
+            for w in page.widgets(types=[fitz.PDF_WIDGET_TYPE_SIGNATURE]) or []:
+                if not getattr(w, "is_signed", False):
+                    r = w.rect
+                    out.append(EmptyField(str(w.field_name or ""), page.number, (r.x0, r.y0, r.x1, r.y1)))
+        return out
+    except Exception:
+        return []
+
+
+def doc_certify_level(doc) -> int:
+    """열린 fitz 문서의 인증 서명 DocMDP P(1·2·3), 없으면 0 — 화면 판정용(서명 자체는 `_certification_level` 이 다시 본다)."""
+    import re
+    try:
+        cat = doc.pdf_catalog()
+        t, v = doc.xref_get_key(cat, "Perms/DocMDP")
+        if t != "xref":
+            return 0
+        sx = int(v.split()[0])
+        t, v = doc.xref_get_key(sx, "Reference")
+        if t == "null":
+            return 2
+        text = v
+        for m in re.finditer(r"(\d+) 0 R", v):
+            text += doc.xref_object(int(m.group(1)), compressed=True)
+        m = re.search(r"/TransformParams.*?/P\s*(\d)", text, re.S)
+        return int(m.group(1)) if m else 2
+    except Exception:
+        return 0
+
+
+def field_at(fields_, page: int, x: float, y: float):
+    """쪽 좌표 (x, y) 를 품은 빈 칸 — 없으면 None(SOT §3.7 '끌기·우클릭의 가운데가 빈 칸 안이면')."""
+    for f in fields_:
+        x0, y0, x1, y1 = f.rect
+        if f.page == page and x0 <= x <= x1 and y0 <= y <= y1:
+            return f
+    return None
+
+
+def add_empty_field(src, dst, *, page_index: int, box_pdf, name: str = "", doc_password: str = "") -> str:
+    """빈 서명 칸 하나를 **증분으로** 덧붙여 `dst` 에 쓴다(SOT §3.7). 반환: 칸 이름.
+    인증 문서(P 무엇이든)는 거부 — 칸을 더하는 것이 허용 변경이 아니다(§3.6). 이름이 겹치면 `field_exists`."""
+    from pyhanko.sign import fields
+    from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+    with open(src, "rb") as f:
+        data = f.read()
+    try:
+        w = IncrementalPdfFileWriter(io.BytesIO(data), strict=False)
+    except Exception as e:                       # noqa: BLE001
+        raise SignError("unreadable", type(e).__name__) from None
+    if w.prev.encrypted:
+        if not doc_password:
+            raise SignError("need_doc_password")
+        try:
+            w.encrypt(doc_password)
+        except Exception:
+            raise SignError("need_doc_password") from None
+        _fix_direct_encrypt(w)
+    level = _certification_level(w.prev)
+    if level == 1:
+        raise SignError("certified")
+    if level:
+        raise SignError("certified_new_field")
+    name = (name or "").strip()
+    if name:
+        from pyhanko.sign.fields import enumerate_sig_fields
+        if any(str(n) == name for n, _v, _r in enumerate_sig_fields(w.prev, filled_status=None)):
+            raise SignError("field_exists", name)
+    else:
+        name = _next_field_names(w.prev, 1)[0]
+    try:
+        fields.append_signature_field(w, fields.SigFieldSpec(sig_field_name=name, on_page=int(page_index),
+                                                             box=tuple(float(v) for v in box_pdf)))
+        buf = io.BytesIO()
+        w.write(buf)
+    except SignError:
+        raise
+    except Exception as e:                       # noqa: BLE001
+        raise SignError("sign_failed", type(e).__name__ + ": " + str(e)[:200]) from None
+    with open(str(dst), "wb") as f:
+        f.write(buf.getvalue())
+    return name
 
 
 def _mdp(level: int):

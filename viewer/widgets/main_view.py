@@ -1476,8 +1476,8 @@ class _SignBand(QFrame):
     """서명 검증 띠(보안 SOT §5) — 상태 넷을 한 줄로. 색은 디자인 SOT §2.16(테마 무관 밝은 바탕 + 어두운 글자)."""
     panelRequested = pyqtSignal()
     COLORS = {"checking": "#f3f3f3", "trusted": "#e8f5e9", "unknown": "#fff8e1",
-              "modified": "#fff8e1", "invalid": "#fdecea"}
-    ICONS = {"checking": "…", "trusted": "✅", "unknown": "⚠", "modified": "⚠", "invalid": "❌"}
+              "modified": "#fff8e1", "invalid": "#fdecea", "empty": "#e3f2fd"}
+    ICONS = {"checking": "…", "trusted": "✅", "unknown": "⚠", "modified": "⚠", "invalid": "❌", "empty": "✍"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1501,6 +1501,8 @@ class _SignBand(QFrame):
         self.label.setText(f"{self.ICONS.get(state, '')}  {text}")
         self.setToolTip(text)
         self.btn.setVisible(state != "checking")
+        # 빈 서명 칸만 있으면(보안 SOT §3.7) 단추가 곧 서명 진입 — 같은 시그널, 앱이 상태로 가른다
+        self.btn.setText(tr("서명") if state == "empty" else tr("서명 패널"))
         self.show()
 
     def clear(self) -> None:
