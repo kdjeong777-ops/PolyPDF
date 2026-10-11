@@ -44,8 +44,10 @@ chk(bt.tree.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
     "① 편집모드 — ExtendedSelection(항상 다중)")
 
 # ── ② 보기 전환 버튼(같은 자리 = edit_ops 1행 첫 버튼) ─────────────────
-first = bt.edit_ops.layout().itemAt(0).widget()      # 261010-6: edit_ops 가 곧 1행(흐르는 줄)
-chk(first is bt.btn_view_mode, "② 보기 전환 버튼이 1행 첫 자리(옛 토글 위치)")
+# 261011-4(디자인 SOT §2.8.5): 보기 전환 단추는 하나 — 보기 줄의 [파일] 바로 오른쪽(종전 편집 1행 첫 자리)
+vr = bt._view_row_w.layout()
+chk(vr.itemAt(0).widget() is bt.btn_mode and vr.itemAt(1).widget() is bt.btn_view_mode is bt.btn_view_mode_v,
+    "② 보기 전환 단추는 하나, [파일] 바로 오른쪽")
 # 260901-2(사용자 지정): **트리가 기본**
 chk(bt.is_tree_view() and bt.btn_view_mode.text() == "트리", "② 기본 보기 = 트리")
 
@@ -244,15 +246,13 @@ chk(bt.tree.currentItem() is bms[1], "⑦ 같은 페이지 책갈피 2개 — �
 chk(bt.tree.indentation() == bt.TREE_INDENT == 12, "⑦ 들여쓰기 12px(디자인 §2.8)")
 from PyQt6.QtCore import Qt as _Qt
 chk(bt.tree.textElideMode() == _Qt.TextElideMode.ElideNone, "⑦ 긴 이름 '…' 자르지 않음(가로 스크롤)")
-# 뷰어 모드 버튼: 편집 오른쪽, 편집모드에서 숨김, 라벨 동기
-row = bt._edit_row
-idx_edit = next(i for i in range(row.count()) if row.itemAt(i).widget() is bt.btn_edit)
-chk(row.itemAt(idx_edit + 1).widget() is bt.btn_view_mode_v, "⑦ 뷰어 모드 트리/단일 버튼이 편집 바로 오른쪽")
+# 261011-4: 트리/단일 단추는 보기·편집 모드 모두 보이고, 라벨·아이콘이 지금 보기를 따른다
 chk(not bt.btn_view_mode_v.isHidden(), "⑦ 뷰어 모드에서 보임")
-bt.set_edit_mode(True); chk(bt.btn_view_mode_v.isHidden(), "⑦ 편집모드에서는 숨김(edit_ops 버튼이 대신)")
+bt.set_edit_mode(True); chk(not bt.btn_view_mode_v.isHidden(), "⑦ 편집모드에서도 보임(단추 하나)")
 bt.set_edit_mode(False)
+ico_tree = bt.btn_view_mode_v.icon().cacheKey()
 bt.set_tree_view(False)
-chk(bt.btn_view_mode_v.text() == "단일" == bt.btn_view_mode.text(), "⑦ 두 버튼 라벨 동기")
+chk(bt.btn_view_mode_v.text() == "단일" and bt.btn_view_mode_v.icon().cacheKey() != ico_tree, "⑦ 단일 — 라벨·아이콘이 바뀐다")
 bt.set_tree_view(True)
 # 하위 폴더 나열이 파일을 훑지 않음(폴더만·상한)
 chk(all(d.is_dir() for d in bt._subfolders()) and len(bt._subfolders()) <= 200,
@@ -283,8 +283,8 @@ bms = [ft.child(i) for i in range(ft.childCount())]
 chk(all(b.icon(0).isNull() for b in bms), "⑨ 책갈피 행에는 아이콘 없음(구분)")
 r1 = bt.edit_ops.layout()
 order = [r1.itemAt(i).widget() for i in range(r1.count())]
-chk(order[0] is bt.btn_view_mode and order[1] is bt.btn_edit_single,
-    "⑨ 1행 = [트리][책갈피명 수정][◀▶▲▼ 묶음]", f"{[getattr(w, 'text', lambda: type(w).__name__)() for w in order]}")
+chk(order[0] is bt.btn_edit_single and order[1] is bt._arrow_group,
+    "⑨ 책갈피 조작 줄 = [책갈피명 수정][◀▶▲▼ 묶음](261011-4)", f"{[getattr(w, 'text', lambda: type(w).__name__)() for w in order]}")
 from PyQt6.QtWidgets import QPushButton as _QPB
 chk([b.text() for b in bt._arrow_group.findChildren(_QPB)] == ["◀", "▶", "▲", "▼"],
     "⑨ 화살표 묶음 = ◀ ▶ ▲ ▼ (261010-9 — 줄이 갈라지지 않게 한 묶음)")
@@ -318,6 +318,29 @@ chk(bt.tree.currentItem() is bms[1] and bms[1].isSelected() and bms[2].isSelecte
 bt._op_outdent(); app.processEvents()
 chk(bt.tree.currentItem() in (bms[1], bms[2]) and bms[1].isSelected() and bms[2].isSelected(),
     "⑨ ◀ 내어쓰기 후 커서·다중 선택 유지")
+
+# ── ⑩ 261011-4(마스터 §4.7.17): '⭐ 선택만' 단추는 없고 Shift + 삭제가 그 일을 한다 ──────
+from PyQt6.QtWidgets import QPushButton as _QPB2
+chk(not any("선택만" in b.text() for b in bt.findChildren(_QPB2)), "⑩ '선택만' 단추는 없앴다")
+bt._op_outdent(); app.processEvents()                 # 위에서 들여쓴 것을 펴 둔다(셋 모두 파일 바로 아래)
+kids = [ft.child(i) for i in range(ft.childCount())]
+asked = []
+QMessageBox.question = staticmethod(lambda *a, **k: (asked.append(a[2] if len(a) > 2 else ""), QMessageBox.StandardButton.No)[1])
+bt.tree.clearSelection(); bt.tree.setCurrentItem(kids[0]); kids[0].setSelected(True)
+bt._op_delete(keep_mode=True); app.processEvents()
+chk(asked and "Shift" in asked[-1] and ft.childCount() == len(kids),
+    "⑩ Shift + 삭제(책갈피) — 확인 창을 띄우고 [아니요] 면 그대로", str((asked[-1:], ft.childCount())))
+QMessageBox.question = staticmethod(lambda *a, **k: (asked.append(a[2] if len(a) > 2 else ""), QMessageBox.StandardButton.Yes)[1])
+bt._op_delete(keep_mode=True); app.processEvents()
+left = [ft.child(i).text(0) for i in range(ft.childCount())]
+chk(left == [kids[0].text(0)], "⑩ Shift + 삭제 [예] — 고른 책갈피만 남는다", str(left))
+chk(bt._dirty, "⑩ 저장 전 변경으로 표시([취소] 로 되돌릴 수 있다)")
+bt.tree.clearSelection(); bt.tree.setCurrentItem(ft); ft.setSelected(True)
+n_before = len(asked)
+QMessageBox.question = staticmethod(lambda *a, **k: (asked.append(a[2] if len(a) > 2 else ""), QMessageBox.StandardButton.No)[1])
+bt._op_delete(keep_mode=True); app.processEvents()
+chk(len(asked) > n_before and "휴지통" in asked[-1], "⑩ Shift + 삭제라도 파일 행이면 보통 삭제(휴지통) 확인", str(asked[-1:]))
+QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
 bt.set_edit_mode(False)
 
 bt.close()

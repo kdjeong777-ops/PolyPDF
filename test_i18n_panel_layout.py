@@ -81,29 +81,43 @@ try:
                 for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:] if ra.intersected(rb).width() > 1
                 and ra.intersected(rb).height() > 1]
         chk(not over, "C [%s] 좁은 책갈피창 머리의 단추·콤보가 서로 겹치지 않는다" % code, str(over))
-        # D(261010-9, 사용자 지시): 좁은 패널에서 [파일][편집] / [취소][저장] 두 줄, ◀▶▲▼ 는 한 줄.
-        #   패널이 조금 넓으면 [트리][책갈피명 수정][◀▶▲▼] 한 줄. 줄은 단추의 세로 가운데로 가른다.
+        # D(261011-4, 사용자 지시 — 디자인 SOT §2.8.5): 머리 배열 정렬 / [파일][트리] / [편집][취소][저장] / [삭제][복사] /
+        #   [책갈피명 수정][◀▶▲▼], ◀▶▲▼ 는 한 줄, 그리고 **모든 줄의 오른쪽 끝 = 검색 줄 오른쪽 끝**(좁은·넓은 패널)
         cy = lambda w: w.mapTo(bt, w.rect().center()).y()
+        top = lambda w: w.mapTo(bt, w.rect().topLeft()).y()
         arrows = bt._arrow_group.findChildren(QPushButton)
-        chk(cy(bt.btn_mode) == cy(bt.btn_edit) and cy(bt.btn_cancel) == cy(bt.btn_save)
-            and cy(bt.btn_cancel) > cy(bt.btn_edit),
-            "D [%s] 좁은 패널(170) — [파일][편집] / [취소][저장] 두 줄" % code,
-            str([(b.text().strip(), cy(b)) for b in (bt.btn_mode, bt.btn_edit, bt.btn_cancel, bt.btn_save)]))
-        chk(len(arrows) == 4 and len({cy(b) for b in arrows}) == 1, "D [%s] ◀▶▲▼ 가 한 줄" % code,
-            str([cy(b) for b in arrows]))
+
+        def right_edges():
+            """보이는 머리 위젯을 줄(세로 가운데)로 묶어 줄마다 오른쪽 끝 — {줄 y: 오른쪽 x}."""
+            heads = [w for w in bt.findChildren((QPushButton, QComboBox))
+                     if w.isVisible() and not bt.tree.isAncestorOf(w)]
+            out = {}
+            for w in heads:
+                r = w.mapTo(bt, w.rect().topRight()).x()
+                y = cy(w)
+                k = next((k for k in out if abs(k - y) <= 4), y)
+                out[k] = max(out.get(k, 0), r)
+            return out
+
+        def layout_checks(tag):
+            chk(top(bt._sort_combo) < top(bt.btn_mode) < top(bt.btn_edit) < top(bt.btn_delete) < top(bt.btn_edit_single),
+                "D [%s] %s — 줄 순서: 정렬 / 파일·트리 / 편집 / 삭제·복사 / 책갈피 조작" % (code, tag),
+                str([(n, top(w)) for n, w in (("정렬", bt._sort_combo), ("파일", bt.btn_mode), ("편집", bt.btn_edit),
+                                               ("삭제", bt.btn_delete), ("책갈피명", bt.btn_edit_single))]))
+            chk(cy(bt.btn_mode) == cy(bt.btn_view_mode_v), "D [%s] %s — [파일][트리] 한 줄(트리는 파일 오른쪽)" % (code, tag))
+            chk(not bt.btn_view_mode_v.icon().isNull(), "D [%s] %s — 트리/단일 단추에 아이콘" % (code, tag))
+            chk(len(arrows) == 4 and len({cy(b) for b in arrows}) == 1, "D [%s] %s — ◀▶▲▼ 가 한 줄" % (code, tag),
+                str([cy(b) for b in arrows]))
+            edge = bt.btn_tag.mapTo(bt, bt.btn_tag.rect().topRight()).x()
+            bad = {y: r for y, r in right_edges().items() if abs(r - edge) > 1}
+            chk(not bad, "D [%s] %s — 모든 줄의 오른쪽 끝이 검색 줄과 같다(%d)" % (code, tag, edge), str(bad))
+        layout_checks("좁은 패널(170)")
         if sp is not None:
-            sp.setSizes([230] + sizes[1:n])
+            sp.setSizes([260] + sizes[1:n])
             t0 = time.time()
             while time.time() - t0 < 0.4:
                 app.processEvents(); time.sleep(0.01)
-            row = {cy(bt.btn_view_mode), cy(bt.btn_edit_single), cy(arrows[0])}
-            need = bt.btn_view_mode.width() + bt.btn_edit_single.width() + bt._arrow_group.width() + 6
-            if need <= bt.edit_ops.width():      # '가능하면 한 줄' — 폭이 되면 반드시 한 줄
-                chk(len(row) == 1, "D [%s] 넓힌 패널 — 폭이 되면 [트리][책갈피명 수정][◀▶▲▼] 한 줄" % code,
-                    "패널 %d, %s" % (bt.width(), sorted(row)))
-            else:
-                print("  (info) [%s] 한 줄에 %dpx 필요, 줄 폭 %d — 묶음째 다음 줄" % (code, need, bt.edit_ops.width()))
-            chk(len({cy(b) for b in arrows}) == 1, "D [%s] 넓힌 패널에서도 ◀▶▲▼ 한 줄" % code)
+            layout_checks("넓힌 패널(260)")
             sp.setSizes(sizes[:n])
             for _ in range(20):
                 app.processEvents(); time.sleep(0.01)
@@ -118,6 +132,10 @@ try:
         over = [i for i, (a, ra) in enumerate(rects) for b, rb in rects[i + 1:]
                 if ra.intersected(rb).width() > 1 and ra.intersected(rb).height() > 1]
         chk(not over, "C [%s] 뷰어 모드에서도 겹치지 않는다" % code, str(len(over)))
+        edge = bt.btn_tag.mapTo(bt, bt.btn_tag.rect().topRight()).x()
+        bad = {y: r for y, r in right_edges().items() if abs(r - edge) > 1}
+        chk(not bad and bt.btn_refresh.isVisible() and cy(bt.btn_refresh) == cy(bt._sort_combo),
+            "D [%s] 뷰어 모드 — ↻ 는 정렬 오른쪽, 모든 줄 오른쪽 끝이 같다" % code, str(bad))
         mw.close(); app.processEvents()
 except Exception:
     import traceback

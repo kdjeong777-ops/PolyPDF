@@ -7,13 +7,16 @@ from PyQt6.QtWidgets import QLayout, QLayoutItem, QSizePolicy
 
 
 class FlowLayout(QLayout):
-    def __init__(self, parent=None, margin=0, spacing=4, center=True):
+    def __init__(self, parent=None, margin=0, spacing=4, center=True, justify=False):
         super().__init__(parent)
         if parent is not None:
             self.setContentsMargins(QMargins(margin, margin, margin, margin))
         self.setSpacing(spacing)
         self._items: list[QLayoutItem] = []
         self._center = center        # 260618-2: False=각 줄 좌측 정렬(컨트롤 패널용)
+        # 261011-4(디자인 SOT §2.8.5): True 면 줄마다 남는 폭을 늘어날 수 있는 항목에 나눠 **오른쪽 끝을 맞춘다**
+        #   (무게 = 위젯 속성 `flow_weight`, 기본 1). 늘지 않는 것: QLabel, 폭을 고정한 위젯(최대 폭 = 지금 폭)
+        self._justify = justify
 
     def __del__(self):
         while self._items:
@@ -75,6 +78,23 @@ class FlowLayout(QLayout):
         size += QSize(m.left() + m.right(), m.top() + m.bottom())
         return size
 
+    @staticmethod
+    def _weight(item) -> int:
+        w = item.widget()
+        try:
+            v = int(w.property("flow_weight") or 1) if w is not None else 1
+        except Exception:
+            v = 1
+        return max(1, v)
+
+    @staticmethod
+    def _can_grow(item) -> bool:
+        from PyQt6.QtWidgets import QLabel
+        w = item.widget()
+        if w is None or isinstance(w, QLabel) or w.isHidden():
+            return False
+        return w.maximumWidth() > item.sizeHint().width()
+
     def _do_layout(self, rect: QRect, test_only: bool) -> int:
         # 260606-18: 각 줄을 '가로 중앙' + '세로 중앙' 정렬(2-pass).
         m = self.contentsMargins()
@@ -89,6 +109,8 @@ class FlowLayout(QLayout):
         cw = 0
         ch = 0
         for item in self._items:
+            if item.isEmpty():
+                continue                 # 261011-4: 숨긴 단추는 자리(간격)도 차지하지 않는다 — 오른쪽 끝이 어긋났다
             s = item.sizeHint()
             w, h = s.width(), s.height()
             nextw = w if not cur else cw + sp + w
@@ -102,16 +124,26 @@ class FlowLayout(QLayout):
         if cur:
             lines.append((cur, cw, ch))
 
-        # 2) 각 줄 배치 (center=True 면 가로 중앙, False 면 좌측 정렬)
+        # 2) 각 줄 배치 (center=True 면 가로 중앙, False 면 좌측 정렬, justify 면 오른쪽 끝까지 늘린다)
         y = rect.y() + m.top()
         for idx, (items, lw, lh) in enumerate(lines):
             if not test_only:
-                ox = left + (max(0, (avail - lw) // 2) if self._center else 0)
+                extra = {}
+                if self._justify and avail > lw:
+                    grow = [(it, self._weight(it)) for it in items if self._can_grow(it)]
+                    tot = sum(w for _, w in grow)
+                    left_over = avail - lw
+                    for k, (it, w) in enumerate(grow):
+                        add = left_over if k == len(grow) - 1 else (avail - lw) * w // tot
+                        extra[id(it)] = add
+                        left_over -= add
+                ox = left + (max(0, (avail - lw) // 2) if (self._center and not extra) else 0)
                 for it in items:
                     s = it.sizeHint()
+                    sw = s.width() + extra.get(id(it), 0)
                     oy = y + max(0, (lh - s.height()) // 2)
-                    it.setGeometry(QRect(QPoint(ox, oy), s))
-                    ox += s.width() + sp
+                    it.setGeometry(QRect(QPoint(ox, oy), QSize(sw, s.height())))
+                    ox += sw + sp
             y += lh + (sp if idx < len(lines) - 1 else 0)
 
         return y - rect.y() + m.bottom()

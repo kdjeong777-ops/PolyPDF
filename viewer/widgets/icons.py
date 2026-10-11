@@ -155,6 +155,25 @@ def _sign(p, c):
     p.drawLine(QPointF(3.5, 10), QPointF(4.5, 12))
 
 
+def _view_tree(p, c):
+    """261011-4(디자인 SOT §2.8.5): 책갈피창 '트리' 보기 — 위 마디에서 세로 줄이 내려가 두 가지로 갈린다."""
+    p.setPen(QPen(c, 1.5))
+    p.drawRect(QRectF(2.5, 2.2, 4.0, 3.2))                 # 윗 마디(폴더)
+    p.drawLine(QPointF(4.5, 5.4), QPointF(4.5, 12.0))      # 줄기
+    p.drawLine(QPointF(4.5, 8.0), QPointF(8.0, 8.0))       # 가지 1
+    p.drawLine(QPointF(4.5, 12.0), QPointF(8.0, 12.0))     # 가지 2
+    p.drawLine(QPointF(9.5, 8.0), QPointF(13.8, 8.0))      # 아래 항목 1
+    p.drawLine(QPointF(9.5, 12.0), QPointF(13.8, 12.0))    # 아래 항목 2
+
+
+def _view_single(p, c):
+    """261011-4(디자인 SOT §2.8.5): 책갈피창 '단일' 보기 — 같은 높이의 줄 넷(점 + 줄)."""
+    p.setPen(QPen(c, 1.5))
+    for y in (3.0, 6.3, 9.6, 12.9):
+        p.drawPoint(QPointF(3.0, y))
+        p.drawLine(QPointF(5.5, y), QPointF(13.8, y))
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
@@ -163,6 +182,7 @@ _DRAW = {
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
     "crop": _crop, "sign": _sign,
+    "view_tree": _view_tree, "view_single": _view_single,
 }
 
 

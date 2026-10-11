@@ -34,7 +34,8 @@ check("보기 전환(단일/트리) 버튼 존재", hasattr(bt, "btn_view_mode")
 check("편집 조작 컨테이너 존재", hasattr(bt, "edit_ops"))
 check("비편집시 편집 조작(보기 전환 포함) 숨김", bt.edit_ops.isHidden())
 # 휴지통 아이콘 색상(이모지 변형선택자 포함)
-trash = [b for b in bt.findChildren(type(bt.btn_edit)) if "🗑" in b.text()]
+from PyQt6.QtWidgets import QPushButton as _QPB   # 261011-4: btn_edit 은 _SlimButton(QPushButton 의 하위)
+trash = [b for b in bt.findChildren(_QPB) if "🗑" in b.text()]
 check("휴지통 아이콘 컬러 이모지(🗑️)", any("️" in b.text() for b in trash),
       f"texts={[b.text() for b in trash]}")
 

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-11 08:56+0900\n"
+"POT-Creation-Date: 2026-10-11 10:38+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1458,7 +1458,7 @@ msgstr "Automatic Tagging"
 msgid "되돌리기"
 msgstr "Undo"
 
-#: viewer/app.py viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
+#: viewer/app.py viewer/widgets/main_view.py
 #: viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/settings_dialog.py
 msgid "확인"
@@ -4182,6 +4182,10 @@ msgstr "Search list names..."
 msgid "해시태그로 검색 — 등록된 태그 보기/선택"
 msgstr "Search by hashtag — view/select registered tags"
 
+#: viewer/widgets/bookmark_tree.py
+msgid "책갈피 새로고침 (외부에서 파일이 추가/변경된 경우)"
+msgstr "Refresh bookmarks (when files were added/changed outside)"
+
 #: viewer/widgets/bookmark_tree.py viewer/widgets/favorites_dialog.py
 msgid "📁 폴더"
 msgstr "📁 Folder"
@@ -4197,20 +4201,22 @@ msgstr ""
 "· Folder mode: show all PDFs in that folder"
 
 #: viewer/widgets/bookmark_tree.py
+msgid ""
+"목록 보기: 단일 ↔ 트리 (클릭마다 전환)\n"
+"단일 = 하위 폴더 구분 없이 모든 PDF 를 한 위계로\n"
+"트리 = 폴더명 아래에 그 폴더의 파일을 묶어서"
+msgstr ""
+"List view: single ↔ tree (toggles on each click)\n"
+"Single = all PDFs at one level regardless of subfolders\n"
+"Tree = files grouped under their folder name"
+
+#: viewer/widgets/bookmark_tree.py
 msgid " 편집"
 msgstr " Edit"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피 편집 모드"
 msgstr "Bookmark edit mode"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "목록 보기: 단일 ↔ 트리 (클릭마다 전환)"
-msgstr "List view: single ↔ tree (toggles on each click)"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "책갈피 새로고침 (외부에서 파일이 추가/변경된 경우)"
-msgstr "Refresh bookmarks (when files were added/changed outside)"
 
 #: viewer/widgets/bookmark_tree.py
 msgid " 취소"
@@ -4229,14 +4235,16 @@ msgid "저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸�
 msgstr "Save — bookmarks, page edits, rotation and crop go into the original PDF; annotations, hyperlinks and tags are also put into the PDF so other viewers show them. To bake them or remove content outside a crop, use 'Flatten and Export'."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "🗑️ 삭제"
+msgstr "🗑️ Delete"
+
+#: viewer/widgets/bookmark_tree.py
 msgid ""
-"목록 보기: 단일 ↔ 트리 (클릭마다 전환)\n"
-"단일 = 하위 폴더 구분 없이 모든 PDF 를 한 위계로\n"
-"트리 = 폴더명 아래에 그 폴더의 파일을 묶어서"
+"선택 삭제 (책갈피=트리에서 제거 · 파일=휴지통)\n"
+"Shift 를 누르고 누르면: 선택한 책갈피만 남기고 그 파일의 나머지 책갈피 삭제"
 msgstr ""
-"List view: single ↔ tree (toggles on each click)\n"
-"Single = all PDFs at one level regardless of subfolders\n"
-"Tree = files grouped under their folder name"
+"Delete selected (bookmark = remove from tree · file = Recycle Bin)\n"
+"With Shift: keep only the selected bookmarks and delete the file's other bookmarks"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피명 수정 (단일 편집: 제목·페이지)"
@@ -4367,6 +4375,18 @@ msgid "✖ 취소"
 msgstr "✖ Cancel"
 
 #: viewer/widgets/bookmark_tree.py
+msgid "💾 저장"
+msgstr "💾 Save"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "📋 복사"
+msgstr "📋 Copy"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "선택 파일을 다른 폴더로 복사"
+msgstr "Copy selected files to another folder"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "책갈피 내어쓰기 (상위로)"
 msgstr "Outdent bookmark (move up a level)"
 
@@ -4381,30 +4401,6 @@ msgstr "Move bookmark up (within the same parent)"
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피 아래로 이동 (같은 부모 안)"
 msgstr "Move bookmark down (within the same parent)"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "🗑️ 삭제"
-msgstr "🗑️ Delete"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "선택 삭제"
-msgstr "Delete selected"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "⭐ 선택만"
-msgstr "⭐ Keep Selected"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "선택만 남기고 나머지 삭제"
-msgstr "Keep only the selection and delete the rest"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "📋 복사"
-msgstr "📋 Copy"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "선택 파일을 다른 폴더로 복사"
-msgstr "Copy selected files to another folder"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "편집 취소"
@@ -4532,8 +4528,12 @@ msgid "복사할 PDF 파일을 선택하세요."
 msgstr "Select the PDF files to copy."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "선택한 항목과 그 조상만 남기고 나머지를 삭제할까요?"
-msgstr "Keep only the selected items and their ancestors, and delete the rest?"
+msgid "지울 책갈피가 없습니다 — 이미 선택한 책갈피만 있습니다."
+msgstr "No bookmarks to delete — only the selected bookmarks are there."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "선택한 책갈피만 남기기"
+msgstr "Keep Only Selected Bookmarks"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "편집할 항목 1개를 선택하세요."
@@ -4546,10 +4546,6 @@ msgstr "The file name contains characters that can't be used."
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."
 msgstr "Select or expand the PDF file to add a bookmark to in the tree."
-
-#: viewer/widgets/bookmark_tree.py
-msgid "💾 저장"
-msgstr "💾 Save"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -4782,6 +4778,15 @@ msgstr ""
 #, python-brace-format
 msgid "대상 폴더가 없습니다: {dst}"
 msgstr "Destination folder does not exist: {dst}"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid ""
+"Shift + 삭제 — 선택한 책갈피 {k}개(와 그 상위)만 남기고 이 파일의 나머지 책갈피 {d}개를 지웁니다.\n"
+"저장하기 전에는 [취소] 로 되돌릴 수 있습니다. 계속할까요?"
+msgstr ""
+"Shift + Delete — keep only the {k} selected bookmark(s) (and their parents) and delete the other {d} bookmark(s) of this file.\n"
+"You can undo it with [Cancel] until you save. Continue?"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -10296,4 +10301,19 @@ msgstr "Getting Started"
 
 #~ msgid "저장(PolyPDF용) — 책갈피·쪽 편집은 원본 PDF 에, 꾸밈은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다. 다른 뷰어에서도 보이게 하려면 저장(일반뷰어용)."
 #~ msgstr "Save (for PolyPDF) — bookmarks and page edits go into the original PDF; annotations are kept next to it in page_meta.json and hyperlinks.json. To show them in other viewers, use Save (for other viewers)."
+
+#~ msgid "목록 보기: 단일 ↔ 트리 (클릭마다 전환)"
+#~ msgstr "List view: single ↔ tree (toggles on each click)"
+
+#~ msgid "선택 삭제"
+#~ msgstr "Delete selected"
+
+#~ msgid "⭐ 선택만"
+#~ msgstr "⭐ Keep Selected"
+
+#~ msgid "선택만 남기고 나머지 삭제"
+#~ msgstr "Keep only the selection and delete the rest"
+
+#~ msgid "선택한 항목과 그 조상만 남기고 나머지를 삭제할까요?"
+#~ msgstr "Keep only the selected items and their ancestors, and delete the rest?"
 
