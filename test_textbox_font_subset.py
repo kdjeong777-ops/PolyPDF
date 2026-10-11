@@ -43,6 +43,25 @@ class _Host(EditMixin):
     #   이 둘이 없으면 AttributeError 를 저장의 except 가 받아 파일이 안 생겼다(261008-1 전체 검사에서 발견).
     _folder = None
     _page_meta = None
+    # 261011-2(§4.7.16): 평탄화 내보내기는 배경 작업·서명 재서명 길을 거친다 — 검사에서는 그 자리에서 돌린다
+    from viewer.sign_controller import SignMixin as _SM
+    _resign_prepare, _resign_apply = _SM._resign_prepare, _SM._resign_apply
+    _resign_mark, _resign_take = staticmethod(_SM._resign_mark), staticmethod(_SM._resign_take)
+    _sign_unlink = staticmethod(_SM._sign_unlink)
+
+    def _run_merge_job(self, job, title, cancellable=True):
+        try:
+            job(lambda *a: True)
+            return {"ok": True}
+        except Exception as e:                   # noqa: BLE001
+            return {"ok": False, "err": str(e)}
+
+    def _file_op_bg(self, fn, label):
+        try:
+            fn()
+            return None
+        except Exception as e:                   # noqa: BLE001
+            return e
 
 
 root = Path(tempfile.mkdtemp(prefix="polypdf_subset_"))
@@ -113,7 +132,7 @@ chk(os.path.exists(p) and not _warned and "검색어" in snapshot(p)[1][0],
     "④ subset_fonts 가 실패해도 저장된다")
 
 src_code = Path(__file__).with_name("viewer").joinpath("edit_controller.py").read_text("utf-8")
-chk(src_code.index("subset_fonts_safely(doc)") < src_code.index("doc.save(out, garbage=4"),
+chk(src_code.index("subset_fonts_safely(doc)") < src_code.index("doc.save(tmp, garbage=4"),
     "⑤ 저장 **직전**에 부분집합을 만든다")
 
 # ⑥ 260913-5(§4.5.10 ②): 저장한 파일에 **새 글자로 다시** 꾸밈 저장. insert_font 는 같은 이름의
@@ -144,18 +163,12 @@ chk(s_re[0] == s_full[0], "⑥ 다시 저장한 렌더 픽셀 = 글꼴 전체로
 chk(s_re[0][0] != s_a[0][0], "⑥ 새 글이 실제로 그려졌다(첫 저장과 픽셀이 다르다)")
 chk(os.path.getsize(re_real) < os.path.getsize(re_full) / 5, "⑥ 다시 저장해도 작다",
     f"({os.path.getsize(re_full):,} → {os.path.getsize(re_real):,} B)")
+# 261011-2(§4.7.16): 꾸밈은 이제 **보이는 크기 임시 쪽**에 그려 XObject 로 얹는다 — 새 글꼴은 그 XObject 의 자기
+#   리소스에 들어가 원본 쪽의 부분집합 krfont 와 이름이 부딪히지 않는다(종전 함정이 이 길에서는 생기지 않는다).
+#   위 ⑥ 세 줄(새 글·옛 글 추출, 픽셀 = 글꼴 전체, 새 글이 그려짐)이 그대로 지킨다.
 with fitz.open(re_real) as _d:
-    _names = sorted(f[4] for f in _d[0].get_fonts() if f[4].startswith("krfont"))
-chk(_names == ["krfont", "krfont2"], "⑥ 부분집합이 된 krfont 는 비켜 간다", str(_names))
-
-# 검사가 함정을 실제로 잡는지 — 비켜 가기를 끄면 새 글이 사라져야 한다
-_fresh = _pf.fresh_font_name
-_pf.fresh_font_name = lambda page, base: base
-try:
-    _, re_bad = rebake("bad")
-finally:
-    _pf.fresh_font_name = _fresh
-chk(NEW not in snapshot(re_bad)[1][0], "⑥ (대조) 이름을 그대로 쓰면 새 글이 사라진다 — 함정 재현")
+    _xo = [x for x in _d[0].get_xobjects()]
+chk(len(_xo) >= 2, "⑥ 두 번 구운 꾸밈은 서로 다른 XObject(각자 글꼴 리소스)", str(len(_xo)))
 
 print("ALL PASS" if not fails else f"FAIL {len(fails)}: {fails}")
 sys.stdout.flush()

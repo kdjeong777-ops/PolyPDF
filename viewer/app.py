@@ -133,6 +133,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._folder: Optional[Path] = None
         self._hyperlinks = None              # 260609-3: 폴더별 HyperlinkStore
         self._page_meta = None               # 260609-14: 폴더별 PageMetaStore(크롭·숨김)
+        # 261011-2(§4.7.16): 저장 전 회전(page_meta rotation)을 `PdfDocument` 가 `/Rotate` 에 덧입히게 알려 준다
+        from viewer import page_rotate as _pr
+        _pr.set_provider(lambda p: self._rotations_for(p))
         self._edit_snap = None               # 260609-23(J2): 편집모드 진입 시 스냅샷
         self._edit_dirty = False             # 260609-23(J2): 미저장 변경 여부
         self._db_path = _data_dir() / "index.db"
@@ -1544,12 +1547,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
         a_save_as.triggered.connect(self._action_save_as)
         m_file.addAction(a_save_as)
-        a_save = QAction(tr("저장(PolyPDF용)"), self)
-        a_save.setToolTip(tr("책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."))
+        # 261011-2(§4.7.16): '저장(PolyPDF용)' → '저장' — 다른 뷰어에서도 보이게 PDF 에 사본을 넣는다
+        a_save = QAction(tr("저장"), self)
+        a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
         a_save.triggered.connect(lambda: self.bookmark_tree._op_save())
         m_file.addAction(a_save)
-        a_flat = QAction(tr("저장(일반뷰어용)..."), self)
-        a_flat.setToolTip(tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
+        a_flat = QAction(tr("평탄화해서 내보내기..."), self)     # 261011-2: 옛 '저장(일반뷰어용)...' — 새 파일로만
+        a_flat.setToolTip(tr("꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."))
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
         m_file.addSeparator()
@@ -2130,6 +2134,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
         self.bookmark_tree.set_page_edit_hooks(self._page_edits_dirty, self._page_edit_save,
                                                self._finalize_save)
+        self.bookmark_tree._after_save = self._mirror_to_pdf     # 261011-2(§4.7.16): 저장 뒤 다른 뷰어용 사본
         # 260822: 폴더 모드 → 파일 모드 전환 시 대상 = 현재 본문 파일
         self.bookmark_tree.set_current_file_getter(
             lambda: (self.main_view.current_file() if self.main_view else None))
@@ -3765,6 +3770,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             cur = self.main_view.current_file() if self.main_view else None
             if cur and _pc.has_pending(cur):
                 return True
+            from viewer import page_rotate as _pr       # 261011-2(§4.7.16): 저장 전 회전도 같은 저장 길로
+            if cur and _pr.has_pending(cur):
+                return True
         except Exception:
             pass
         try:
@@ -4059,10 +4067,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         plan = list(plan)
         from viewer import page_crop as _pcr
         crops = _pcr.pending(src)                  # 261010-13: 저장 전 크롭도 같은 파일에
+        from viewer import page_rotate as _prt
+        rots = _prt.pending(src)                   # 261011-2(§4.7.16): 저장 전 회전도 — 쪽 `/Rotate` 로
 
         def _job(progress):
             try:
-                built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress, crops=crops))
+                built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress, crops=crops, rotations=rots))
             except _peb.Cancelled:
                 raise MergeCancelled()
         res = self._run_merge_job(_job, tr("쪽 편집 저장"))
@@ -4093,6 +4103,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         QApplication.restoreOverrideCursor()
         _pcr.clear_pending(src)                    # 썼으니 덧입히기 끝(새 이름이면 원본은 그대로 남는다)
+        if rots:                                   # 261011-2: 회전도 PDF 에 들어갔다 — 두 번 돌지 않게 비운다
+            try:
+                st = self._ensure_page_meta_store()
+                if st is not None:
+                    st.clear_rotation(str(src)); st.save()
+                _prt.bump(src)
+            except Exception:
+                pass
         self.status.showMessage(tr('페이지 편집 저장: {saved_n}쪽 → {name}').format(saved_n=saved_n, name=_P(final).name), 6000)
         try:
             # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
@@ -4100,6 +4118,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._open_saved_file(final)            # 색인 먼저 걸고 연다 — 260915-10
         except Exception:
             pass
+        self._mirror_to_pdf(final)                 # 261011-2(§4.7.16): 쪽·회전이 바뀌었으니 사본도 다시
 
     # ===== 261010-7(마스터 §4.7.15): 쪽 크롭 — PDF 의 CropBox =====================
     def _crop_target(self, view=None):
@@ -4212,6 +4231,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not _pc.has_pending(path):
             return False
         _pc.clear_pending(path)
+        from viewer import page_rotate as _pr       # 261011-2: 되돌린 회전도 함께 맞춘다(캐시 판)
+        _pr.bump(path)
         self._crop_reload(path)
         return True
 

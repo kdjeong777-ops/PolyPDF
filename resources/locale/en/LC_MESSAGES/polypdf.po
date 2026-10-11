@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-11 01:45+0900\n"
+"POT-Creation-Date: 2026-10-11 08:56+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -392,21 +392,24 @@ msgstr "Save As..."
 msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."
 msgstr "Save bookmarks, annotations and page edits to <original>_edited.pdf."
 
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "저장(PolyPDF용)"
-msgstr "Save (for PolyPDF)"
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/toc_review_dialog.py
+msgid "저장"
+msgstr "Save"
+
+# | page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
+#: viewer/app.py
+msgid "책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."
+msgstr "Bookmarks, page edits, rotation and crop go into the original PDF; annotations (lines, shapes, text, photos), hyperlinks and tags are also put into the PDF so other viewers show them — you can keep editing in PolyPDF (same as 💾)."
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
-msgstr "Writes bookmarks and page edits into the original PDF, and keeps annotations (lines, shapes, text, photos, hyperlinks) next to it in page_meta.json and hyperlinks.json — shown in PolyPDF (same as 💾)."
+msgid "평탄화해서 내보내기..."
+msgstr "Flatten and Export..."
 
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "저장(일반뷰어용)..."
-msgstr "Save (for other viewers)..."
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."
-msgstr "Flatten annotations and inserted photos into the page content so other programs show them too."
+#: viewer/app.py
+msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."
+msgstr "Exports a new PDF with annotations, photos and hyperlinks baked into the page and content outside the crop really removed (the original is untouched). Signed documents are signed again at the same places."
 
 #: viewer/app.py
 msgid "인쇄..."
@@ -660,11 +663,10 @@ msgstr "Download Now"
 msgid "있는 언어로 진행"
 msgstr "Continue with Available Languages"
 
-#: viewer/app.py viewer/edit_controller.py viewer/present_controller.py
-#: viewer/sign_controller.py viewer/update_controller.py
-#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/pen_settings_dialog.py
+#: viewer/app.py viewer/present_controller.py viewer/sign_controller.py
+#: viewer/update_controller.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
+#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/update_dialog.py
 msgid "취소"
@@ -968,12 +970,6 @@ msgid ""
 msgstr ""
 "There are captures in the list. Save them together as a PDF?\n"
 "(If you don't, the list is discarded. The next session starts with an empty list.)"
-
-#: viewer/app.py viewer/edit_controller.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/toc_review_dialog.py
-msgid "저장"
-msgstr "Save"
 
 #: viewer/app.py
 msgid "저장 안 함"
@@ -1284,7 +1280,8 @@ msgstr ""
 msgid "닫고 저장"
 msgstr "Close and Save"
 
-#: viewer/app.py viewer/sign_controller.py viewer/workers.py
+#: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
+#: viewer/workers.py
 msgid "완료"
 msgstr "Done"
 
@@ -1732,7 +1729,7 @@ msgstr "Placing on the original: {name}"
 msgid "새 이름으로 저장 중: {name}"
 msgstr "Saving with a new name: {name}"
 
-#: viewer/app.py
+#: viewer/app.py viewer/edit_controller.py
 msgid "알 수 없는 오류"
 msgstr "Unknown error"
 
@@ -2767,20 +2764,12 @@ msgid "선긋기를 본화면에 적용했습니다."
 msgstr "Lines applied to the main view."
 
 #: viewer/edit_controller.py
-msgid "저장(일반뷰어용)"
-msgstr "Save for Other Viewers"
+msgid "평탄화해서 내보내기 — 새 PDF로"
+msgstr "Flatten and Export — New PDF"
 
-#: viewer/edit_controller.py
-msgid "현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), 하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."
-msgstr "Saving to the current file moves decorations and pictures into the PDF (they are removed from PolyPDF decorations); hyperlinks stay as PolyPDF hyperlinks. Save as a new file if other viewers need the hyperlinks too."
-
-#: viewer/edit_controller.py
-msgid "새 파일로 저장…"
-msgstr "Save as New File…"
-
-#: viewer/edit_controller.py
-msgid "현재 파일에 저장"
-msgstr "Save to Current File"
+#: viewer/edit_controller.py viewer/sign_controller.py
+msgid "평탄화해서 내보내기"
+msgstr "Flatten and Export"
 
 #: viewer/edit_controller.py
 msgid "되돌리기(저장 안 함)"
@@ -2791,24 +2780,33 @@ msgid "계속 편집"
 msgstr "Keep Editing"
 
 #: viewer/edit_controller.py
-msgid "저장(일반뷰어용) — 새 PDF로"
-msgstr "Save for Other Viewers — New PDF"
+msgid "원본과 다른 이름으로 내보내세요 — 원본은 PolyPDF 에서 계속 고칠 수 있게 그대로 둡니다."
+msgstr "Export under a different name — the original stays as it is so you can keep editing it in PolyPDF."
 
 #: viewer/edit_controller.py
-msgid "저장 완료"
-msgstr "Saved"
+msgid "크롭 바깥 지우는 중"
+msgstr "Removing content outside the crop"
+
+#: viewer/edit_controller.py
+msgid "글꼴 줄이는 중"
+msgstr "Reducing fonts"
+
+#: viewer/edit_controller.py viewer/page_edit_build.py
+#: viewer/sign_controller.py
+msgid "저장 중"
+msgstr "Saving"
 
 #: viewer/edit_controller.py
 msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·크롭·회전이 없습니다."
 msgstr "This file has no annotations (lines, shapes, text), images, hyperlinks, crop or rotation to flatten."
 
 #: viewer/edit_controller.py
-msgid ""
-"꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
-"어디에 저장할까요?"
-msgstr ""
-"Decorations and pictures are baked into the pages, and content outside the crop is actually removed (cannot be undone).\n"
-"Where do you want to save?"
+msgid "서명된 문서라 다른 뷰어용 사본(꾸밈·링크·태그)은 넣지 않았습니다 — 평탄화해서 내보내기를 쓰세요."
+msgstr "This document is signed, so the copy for other viewers (annotations, links, tags) was not added — use Flatten and Export."
+
+#: viewer/edit_controller.py
+msgid "편집 권한이 없는 암호 문서라 다른 뷰어용 사본은 넣지 않았습니다."
+msgstr "This encrypted document has no edit permission, so the copy for other viewers was not added."
 
 #: viewer/edit_controller.py
 msgid "편집 내용을 저장했습니다."
@@ -2819,6 +2817,10 @@ msgid "편집 수정 사항을 취소(되돌리기)했습니다."
 msgstr "Edits discarded (reverted)."
 
 #: viewer/edit_controller.py
+msgid "회전 — [저장] 을 누르면 PDF 에 들어가 다른 뷰어에서도 바로 보입니다."
+msgstr "Rotated — press [Save] to put it into the PDF so other viewers show it upright too."
+
+#: viewer/edit_controller.py
 #, python-brace-format
 msgid ""
 "전체화면에서 그린 선을 적용할까요?\n"
@@ -2827,13 +2829,15 @@ msgstr ""
 "Apply the lines drawn in full screen?\n"
 "({n} pages)"
 
+#: viewer/edit_controller.py viewer/sign_controller.py
+#, python-brace-format
+msgid "저장 중: {name}"
+msgstr "Saving: {name}"
+
 #: viewer/edit_controller.py
-msgid ""
-"\n"
-"돌린 쪽은 보이는 모양 그대로 바로 세웁니다 — 그러려고 PDF 안의 주석·양식도 쪽 내용으로 굽습니다."
-msgstr ""
-"\n"
-"Rotated pages are set upright exactly as they look — to do so, the PDF's own comments and form fields are also flattened into the page content."
+#, python-brace-format
+msgid "평탄화해서 내보냈습니다: {name}"
+msgstr "Flattened and exported: {name}"
 
 #: viewer/edit_controller.py
 #, python-brace-format
@@ -2844,11 +2848,6 @@ msgstr ""
 "You have unsaved edits.\n"
 "{v}"
 
-#: viewer/edit_controller.py
-#, python-brace-format
-msgid "저장(일반뷰어용): {name}"
-msgstr "Saved for other viewers: {name}"
-
 #: viewer/edit_controller.py viewer/widgets/main_view.py
 msgid "링크"
 msgstr "Link"
@@ -2856,10 +2855,6 @@ msgstr "Link"
 #: viewer/edit_controller.py
 msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 지금 구우면 그 편집은 빠집니다. 계속할까요?"
 msgstr "There are unsaved page edits (order, deletions, inserted pages). Flattening now will leave them out. Continue?"
-
-#: viewer/edit_controller.py
-msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 먼저 저장하거나 되돌린 뒤 현재 파일에 저장하세요."
-msgstr "There are unsaved page edits (order, deletions, inserted pages). Save or undo them first, then save to the current file."
 
 #: viewer/edit_controller.py
 msgid "다른 파일로 이동하기 전에 어떻게 할까요?"
@@ -2871,18 +2866,17 @@ msgstr "What would you like to do before leaving Edit mode?"
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid "저장(일반뷰어용) — 현재 파일에: {name}"
-msgstr "Saved for other viewers — current file: {name}"
+msgid "{stem}_평탄화.pdf"
+msgstr "{stem}_flattened.pdf"
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid " · {n}쪽 바로 세움"
-msgstr " · {n} page(s) set upright"
-
-#: viewer/edit_controller.py
-#, python-brace-format
-msgid "{stem}_일반뷰어용.pdf"
-msgstr "{stem}_for_other_viewers.pdf"
+msgid ""
+"\n"
+"서명 {n}개는 넣지 못했습니다(다른 사람의 서명·취소·크롭 바깥)."
+msgstr ""
+"\n"
+"{n} signature(s) could not be included (someone else's signature, cancelled, or outside the crop)."
 
 #: viewer/edit_controller.py
 #, python-brace-format
@@ -2897,15 +2891,10 @@ msgstr ""
 #, python-brace-format
 msgid ""
 "\n"
-"돌린 {n}쪽은 보이는 모양 그대로 바로 세웠습니다."
+"서명 {n}개를 같은 자리에 다시 했습니다(서명 시각은 지금)."
 msgstr ""
 "\n"
-"{n} rotated page(s) were set upright exactly as they looked."
-
-#: viewer/edit_controller.py
-#, python-brace-format
-msgid " · 크롭 {n}쪽 바깥을 지움"
-msgstr " · removed content outside the crop on {n} page(s)"
+"{n} signature(s) were signed again at the same places (signing time is now)."
 
 #: viewer/edit_controller.py
 #, python-brace-format
@@ -2990,10 +2979,6 @@ msgstr "The indexing process ended unexpectedly (code {code})."
 #: viewer/page_edit_build.py
 msgid "원본에 놓을 준비"
 msgstr "Preparing to place in original"
-
-#: viewer/page_edit_build.py
-msgid "저장 중"
-msgstr "Saving"
 
 #: viewer/page_edit_build.py
 msgid "쪽 복사 중"
@@ -3354,20 +3339,16 @@ msgid "그림 없이"
 msgstr "Without Image"
 
 #: viewer/sign_controller.py
-msgid "저장하지 않은 편집(쪽·크롭·책갈피·꾸밈)이 있습니다. 먼저 저장해야 서명할 수 있습니다 — 서명은 디스크에 있는 판에 합니다."
-msgstr "There are unsaved edits (pages, crop, bookmarks, annotations). Save them first — the signature applies to the version on disk."
+msgid "저장하지 않은 편집이나 PDF 에 아직 들어가지 않은 꾸밈·사진·하이퍼링크가 있습니다. 서명은 디스크에 있는 판에 하므로 그대로면 서명에 들어가지 않습니다."
+msgstr "There are unsaved edits, or annotations, photos or hyperlinks not yet in the PDF. Signing applies to the version on disk, so they will not be covered by the signature as is."
 
 #: viewer/sign_controller.py
-msgid "이 파일에는 PolyPDF 가 따로 든 꾸밈·사진·하이퍼링크가 있습니다. 이것들은 서명에 들어가지 않고 다른 뷰어에서 보이지 않습니다."
-msgstr "This file has annotations, images or hyperlinks that PolyPDF keeps separately. They are not covered by the signature and are not visible in other viewers."
+msgid "저장하면 다른 뷰어에서도 보이게 PDF 에 들어간 뒤 그 판에 서명합니다."
+msgstr "Saving puts them into the PDF so other viewers show them, then signs that version."
 
 #: viewer/sign_controller.py
-msgid "서명에 넣으려면 먼저 '저장(일반뷰어용)' 으로 현재 파일에 구운 뒤 다시 서명하세요."
-msgstr "To include them, first flatten them into the current file with 'Save (for other viewers)', then sign again."
-
-#: viewer/sign_controller.py
-msgid "일반뷰어용으로 먼저 저장…"
-msgstr "Save for Other Viewers First…"
+msgid "저장하고 서명"
+msgstr "Save and Sign"
 
 #: viewer/sign_controller.py
 msgid "그대로 서명"
@@ -3376,14 +3357,6 @@ msgstr "Sign Anyway"
 #: viewer/sign_controller.py
 msgid "2쪽 보기에서는 자리를 정할 수 없습니다. 1쪽 보기로 바꾼 뒤 다시 서명하세요."
 msgstr "You cannot place a signature in two-page view. Switch to single-page view and sign again."
-
-#: viewer/sign_controller.py
-msgid "보기 회전을 한 쪽에는 그대로 서명할 수 없습니다. 회전을 되돌리거나, '저장(일반뷰어용)' 으로 회전을 넣어 쪽을 바로 세운 뒤 서명하세요."
-msgstr "A page rotated in the view cannot be signed as is. Undo the rotation, or use 'Save (for other viewers)' to apply the rotation and set the page upright, then sign."
-
-#: viewer/sign_controller.py
-msgid "이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없습니다(서명이 누워 들어갑니다). '저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
-msgstr "This page is rotated inside the PDF and cannot be signed as is (the signature would lie on its side). Set the page upright with 'Save (for other viewers)', then sign."
 
 #: viewer/sign_controller.py
 msgid "인증된 문서라 새 자리에는 서명할 수 없고 빈 칸에만 서명할 수 있습니다."
@@ -3441,6 +3414,18 @@ msgstr "Save to New File (Recommended)"
 #: viewer/sign_controller.py
 msgid "서명을 무효로 하고 덮어쓰기"
 msgstr "Overwrite and Invalidate Signature"
+
+#: viewer/sign_controller.py
+msgid "서명 확인 중"
+msgstr "Checking signatures"
+
+#: viewer/sign_controller.py viewer/widgets/presentation.py
+msgid "계속"
+msgstr "Continue"
+
+#: viewer/sign_controller.py
+msgid "다시 서명"
+msgstr "Sign Again"
 
 #: viewer/sign_controller.py
 #, python-brace-format
@@ -3518,10 +3503,18 @@ msgstr "Store this password with Windows Hello again?"
 msgid "서명했습니다: {name}"
 msgstr "Signed: {name}"
 
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 확인 중"
+msgstr "Checking digital ID"
+
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid " · 빈 서명 칸 {n}개"
 msgstr " · {n} empty signature field(s)"
+
+#: viewer/sign_controller.py
+msgid "저장하지 못해 서명을 멈췄습니다."
+msgstr "Could not save, so signing was stopped."
 
 #: viewer/sign_controller.py
 msgid "Windows Hello 를 취소했습니다 — 비밀번호를 넣어 서명할 수 있습니다."
@@ -3540,16 +3533,6 @@ msgstr "The digital ID file was not found. Import it again in the Digital IDs wi
 msgid "이 칸은 지정된 사람의 인증서로만 서명할 수 있습니다: {names}"
 msgstr "This field can be signed only with the certificate of the designated person: {names}"
 
-# | 세운 뒤 서명하세요."
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid ""
-"회전된 쪽이 있어 서명할 수 없습니다: p.{pages}\n"
-"'저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
-msgstr ""
-"Some pages are rotated and cannot be signed: p.{pages}\n"
-"Set them upright with 'Save (for other viewers)', then sign."
-
 #: viewer/sign_controller.py
 msgid "Windows 가 물은 PIN·확인을 취소했습니다."
 msgstr "The PIN or confirmation requested by Windows was cancelled."
@@ -3558,6 +3541,16 @@ msgstr "The PIN or confirmation requested by Windows was cancelled."
 #, python-brace-format
 msgid "'{name}' 에는 전자서명이 있습니다. 이 파일에 덮어쓰면 서명이 무효가 됩니다."
 msgstr "'{name}' has a digital signature. Overwriting this file will invalidate the signature."
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "이 문서에는 전자서명 {n}개가 있습니다. 평탄화하면 파일을 새로 쓰므로 서명을 그대로 둘 수 없습니다."
+msgstr "This document has {n} digital signature(s). Flattening rewrites the file, so the signatures cannot be kept as they are."
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "'{name}' 디지털 ID 의 비밀번호 — 취소하면 이 ID 의 서명은 빼고 내보냅니다."
+msgstr "Password for the digital ID '{name}' — cancel to export without this ID's signatures."
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
@@ -3623,8 +3616,13 @@ msgstr "{stem}_signed.pdf"
 
 #: viewer/sign_controller.py
 #, python-brace-format
-msgid "저장 중: {name}"
-msgstr "Saving: {name}"
+msgid "다른 사람의 서명 {k}개는 내보낸 파일에 남지 않습니다."
+msgstr "{k} signature(s) by other people will not be in the exported file."
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "다시 서명 중 ({n}개)"
+msgstr "Signing again ({n})"
 
 #: viewer/sign_controller.py
 #, python-brace-format
@@ -3635,6 +3633,11 @@ msgstr "Signing this field locks all fields in the document, so the remaining {n
 #, python-brace-format
 msgid "저장하지 못했습니다: {e}"
 msgstr "Could not save: {e}"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "내 디지털 ID 로 한 {m}개는 내보낸 파일의 같은 자리에 다시 서명합니다(서명 시각은 지금, 겉모양은 지금 서명 설정).\n"
+msgstr "The {m} signature(s) made with your digital ID will be signed again at the same places in the exported file (signing time is now; the appearance uses your current signature settings).\n"
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
@@ -4222,8 +4225,8 @@ msgid " 저장"
 msgstr " Save"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "저장(PolyPDF용) — 책갈피·쪽 편집은 원본 PDF 에, 꾸밈은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다. 다른 뷰어에서도 보이게 하려면 저장(일반뷰어용)."
-msgstr "Save (for PolyPDF) — bookmarks and page edits go into the original PDF; annotations are kept next to it in page_meta.json and hyperlinks.json. To show them in other viewers, use Save (for other viewers)."
+msgid "저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."
+msgstr "Save — bookmarks, page edits, rotation and crop go into the original PDF; annotations, hyperlinks and tags are also put into the PDF so other viewers show them. To bake them or remove content outside a crop, use 'Flatten and Export'."
 
 #: viewer/widgets/bookmark_tree.py
 msgid ""
@@ -4442,6 +4445,14 @@ msgstr "The target PDF file is unknown."
 #: viewer/widgets/bookmark_tree.py
 msgid "파일 폴더 열기"
 msgstr "Open File Location"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
+msgstr "Writes bookmarks and page edits into the original PDF, and keeps annotations (lines, shapes, text, photos, hyperlinks) next to it in page_meta.json and hyperlinks.json — shown in PolyPDF (same as 💾)."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."
+msgstr "Flatten annotations and inserted photos into the page content so other programs show them too."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "이 폴더 안에 새 폴더..."
@@ -6781,10 +6792,6 @@ msgid "끄기"
 msgstr "Turn Off"
 
 #: viewer/widgets/presentation.py
-msgid "계속"
-msgstr "Continue"
-
-#: viewer/widgets/presentation.py
 msgid "전체화면 종료"
 msgstr "Exit Full Screen"
 
@@ -8087,10 +8094,6 @@ msgstr "  · Windows store"
 #: viewer/widgets/sign_dialogs.py
 msgid "디지털 ID 만드는 중"
 msgstr "Creating digital ID"
-
-#: viewer/widgets/sign_dialogs.py
-msgid "디지털 ID 확인 중"
-msgstr "Checking digital ID"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "공동인증서 찾는 중"
@@ -10201,4 +10204,96 @@ msgstr "Getting Started"
 
 #~ msgid "칸 이름 — 서명할 사람이 알아보게(예: 검토자, 승인자)"
 #~ msgstr "Field name — so the signer can recognize it (e.g. Reviewer, Approver)"
+
+#~ msgid "저장(PolyPDF용)"
+#~ msgstr "Save (for PolyPDF)"
+
+#~ msgid "저장(일반뷰어용)..."
+#~ msgstr "Save (for other viewers)..."
+
+#~ msgid "저장(일반뷰어용)"
+#~ msgstr "Save for Other Viewers"
+
+#~ msgid "현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), 하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."
+#~ msgstr "Saving to the current file moves decorations and pictures into the PDF (they are removed from PolyPDF decorations); hyperlinks stay as PolyPDF hyperlinks. Save as a new file if other viewers need the hyperlinks too."
+
+#~ msgid "새 파일로 저장…"
+#~ msgstr "Save as New File…"
+
+#~ msgid "현재 파일에 저장"
+#~ msgstr "Save to Current File"
+
+#~ msgid "저장(일반뷰어용) — 새 PDF로"
+#~ msgstr "Save for Other Viewers — New PDF"
+
+#~ msgid "저장 완료"
+#~ msgstr "Saved"
+
+#~ msgid ""
+#~ "꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n"
+#~ "어디에 저장할까요?"
+#~ msgstr ""
+#~ "Decorations and pictures are baked into the pages, and content outside the crop is actually removed (cannot be undone).\n"
+#~ "Where do you want to save?"
+
+#~ msgid ""
+#~ "\n"
+#~ "돌린 쪽은 보이는 모양 그대로 바로 세웁니다 — 그러려고 PDF 안의 주석·양식도 쪽 내용으로 굽습니다."
+#~ msgstr ""
+#~ "\n"
+#~ "Rotated pages are set upright exactly as they look — to do so, the PDF's own comments and form fields are also flattened into the page content."
+
+#~ msgid "저장(일반뷰어용): {name}"
+#~ msgstr "Saved for other viewers: {name}"
+
+#~ msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 먼저 저장하거나 되돌린 뒤 현재 파일에 저장하세요."
+#~ msgstr "There are unsaved page edits (order, deletions, inserted pages). Save or undo them first, then save to the current file."
+
+#~ msgid "저장(일반뷰어용) — 현재 파일에: {name}"
+#~ msgstr "Saved for other viewers — current file: {name}"
+
+#~ msgid " · {n}쪽 바로 세움"
+#~ msgstr " · {n} page(s) set upright"
+
+#~ msgid "{stem}_일반뷰어용.pdf"
+#~ msgstr "{stem}_for_other_viewers.pdf"
+
+#~ msgid ""
+#~ "\n"
+#~ "돌린 {n}쪽은 보이는 모양 그대로 바로 세웠습니다."
+#~ msgstr ""
+#~ "\n"
+#~ "{n} rotated page(s) were set upright exactly as they looked."
+
+#~ msgid " · 크롭 {n}쪽 바깥을 지움"
+#~ msgstr " · removed content outside the crop on {n} page(s)"
+
+#~ msgid "저장하지 않은 편집(쪽·크롭·책갈피·꾸밈)이 있습니다. 먼저 저장해야 서명할 수 있습니다 — 서명은 디스크에 있는 판에 합니다."
+#~ msgstr "There are unsaved edits (pages, crop, bookmarks, annotations). Save them first — the signature applies to the version on disk."
+
+#~ msgid "이 파일에는 PolyPDF 가 따로 든 꾸밈·사진·하이퍼링크가 있습니다. 이것들은 서명에 들어가지 않고 다른 뷰어에서 보이지 않습니다."
+#~ msgstr "This file has annotations, images or hyperlinks that PolyPDF keeps separately. They are not covered by the signature and are not visible in other viewers."
+
+#~ msgid "서명에 넣으려면 먼저 '저장(일반뷰어용)' 으로 현재 파일에 구운 뒤 다시 서명하세요."
+#~ msgstr "To include them, first flatten them into the current file with 'Save (for other viewers)', then sign again."
+
+#~ msgid "일반뷰어용으로 먼저 저장…"
+#~ msgstr "Save for Other Viewers First…"
+
+#~ msgid "보기 회전을 한 쪽에는 그대로 서명할 수 없습니다. 회전을 되돌리거나, '저장(일반뷰어용)' 으로 회전을 넣어 쪽을 바로 세운 뒤 서명하세요."
+#~ msgstr "A page rotated in the view cannot be signed as is. Undo the rotation, or use 'Save (for other viewers)' to apply the rotation and set the page upright, then sign."
+
+#~ msgid "이 쪽은 PDF 안에서 회전되어 있어 그대로 서명할 수 없습니다(서명이 누워 들어갑니다). '저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
+#~ msgstr "This page is rotated inside the PDF and cannot be signed as is (the signature would lie on its side). Set the page upright with 'Save (for other viewers)', then sign."
+
+# | 세운 뒤 서명하세요."
+#~ msgid ""
+#~ "회전된 쪽이 있어 서명할 수 없습니다: p.{pages}\n"
+#~ "'저장(일반뷰어용)' 으로 쪽을 바로 세운 뒤 서명하세요."
+#~ msgstr ""
+#~ "Some pages are rotated and cannot be signed: p.{pages}\n"
+#~ "Set them upright with 'Save (for other viewers)', then sign."
+
+#~ msgid "저장(PolyPDF용) — 책갈피·쪽 편집은 원본 PDF 에, 꾸밈은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다. 다른 뷰어에서도 보이게 하려면 저장(일반뷰어용)."
+#~ msgstr "Save (for PolyPDF) — bookmarks and page edits go into the original PDF; annotations are kept next to it in page_meta.json and hyperlinks.json. To show them in other viewers, use Save (for other viewers)."
 

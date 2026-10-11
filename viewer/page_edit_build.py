@@ -67,7 +67,7 @@ def apply_toc(doc, bms) -> int:
     return len(toc)
 
 
-def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None) -> dict:
+def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, rotations=None) -> dict:
     """새 PDF 를 만들고 {"path": 만든 임시 파일, "pages": 쪽수, "calls": insert_pdf 호출 수} 를 돌려준다.
 
     `progress(done, total, label) -> bool` 이 False 면 `Cancelled` (임시 파일은 지운다).
@@ -107,6 +107,12 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None) 
                     outc += 1
             if outc == 0:
                 raise RuntimeError("저장할 페이지가 없습니다.")
+            if rotations:
+                # 261011-2(§4.7.16): 저장 전 회전 → 새 순서의 그 쪽 `/Rotate` — 크롭보다 먼저(크롭 여백은 보이는 방향 기준)
+                from viewer import page_rotate as _pr
+                for sp, dg in rotations.items():
+                    if int(sp) in ownpos:
+                        _pr.rotate_page(odoc[ownpos[int(sp)]], dg)
             if crops:
                 from viewer import page_crop as _pc
                 for sp, m in crops.items():

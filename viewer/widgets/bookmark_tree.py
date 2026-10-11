@@ -183,7 +183,7 @@ class BookmarkTree(QWidget):
     createStudyBookmarksRequested = pyqtSignal(str)  # 260606-11: '단어장·책갈피 동시 생성'
     mergeFilesRequested = pyqtSignal(list)      # 260606-13: 선택 파일들 병합(경로 리스트)
     translateFileRequested = pyqtSignal(str)    # 260621-P0: 파일 우클릭 '번역'(단일)
-    flattenFileRequested = pyqtSignal(str)      # 260930-2(§4.7.13): 파일 우클릭 '저장(일반뷰어용)'
+    flattenFileRequested = pyqtSignal(str)      # 260930-2(§4.7.13): 파일 우클릭 '평탄화해서 내보내기'(261011-2 이름)
     saveAsFileRequested = pyqtSignal(str)       # 261008-1(§4.7.13): 파일 우클릭 '다른 이름으로 저장'
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
@@ -264,6 +264,7 @@ class BookmarkTree(QWidget):
         self._page_edit_dirty = None                 # 260821: () -> bool (썸네일 페이지 삭제/이동)
         self._page_edit_save = None                  # 260821: (src, bookmarks_raw) -> None (앱 재구성 저장)
         self._finalize_save = None                   # 260822: (src, produced) -> final_path (덮어쓰기/_edited)
+        self._after_save = None                      # 261011-2(§4.7.16): (path) -> bool — 다른 뷰어용 사본을 PDF 에
         # 260611-61: 네비게이션 합치기 — 선택 클릭이 click+currentChanged 로 2번 발화하는 것을
         #   1회로 합치고, 트리 선택 하이라이트가 먼저 그려진 뒤(지연) 이동/암호창이 뜨게 함.
         self._pending_nav = None
@@ -447,7 +448,7 @@ class BookmarkTree(QWidget):
                 self.btn_save.setText(tr("💾 저장"))
         except Exception:
             self.btn_save.setText(tr("💾 저장"))
-        self.btn_save.setToolTip(tr("저장(PolyPDF용) — 책갈피·쪽 편집은 원본 PDF 에, 꾸밈은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다. 다른 뷰어에서도 보이게 하려면 저장(일반뷰어용)."))
+        self.btn_save.setToolTip(tr("저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."))
         self.btn_save.clicked.connect(self._op_save)
         self.btn_save.setVisible(False)
         edit_row.addWidget(self.btn_save)
@@ -2147,9 +2148,9 @@ class BookmarkTree(QWidget):
         if _dir_target:
             act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
             act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
-            act_save_poly = menu.addAction(tr("저장(PolyPDF용)"))
+            act_save_poly = menu.addAction(tr("저장"))
             act_save_poly.setToolTip(tr("책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."))
-            act_flatten = menu.addAction(tr("저장(일반뷰어용)..."))
+            act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
             act_flatten.setToolTip(
                 tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
         if _dir_target or xfer_files:
@@ -3545,7 +3546,8 @@ class BookmarkTree(QWidget):
         if bookmarks_raw == orig:
             self._dirty = False
             self._commit_meta()          # 개체/주석 등 page_meta 변경은 저장
-            if not meta_dirty:
+            mirrored = self._run_after_save(str(src))
+            if not meta_dirty and not mirrored:
                 QMessageBox.information(self, tr("책갈피 저장"), tr("변경 사항이 없습니다."))
             return
         if not bookmarks_raw:
@@ -3580,6 +3582,16 @@ class BookmarkTree(QWidget):
         self._dirty = False
         self.bookmarksEdited.emit(str(src), str(out))
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
+        self._run_after_save(str(out))
+
+    def _run_after_save(self, path: str) -> bool:
+        """261011-2(§4.7.16): 저장 뒤 꾸밈·하이퍼링크·태그 사본을 PDF 에(다른 뷰어에 보이게). 넣었으면 True."""
+        if self._after_save is None:
+            return False
+        try:
+            return bool(self._after_save(path))
+        except Exception:
+            return False
 
     def _is_main_file(self, path: str) -> bool:
         """그 경로가 본문(쪽 썸네일)에 열린 파일인가. 본문을 알 수 없으면 True(종전 동작)."""

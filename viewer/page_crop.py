@@ -330,7 +330,7 @@ def apply_pending(doc, path) -> int:
 
 
 def cut_outside(page) -> bool:
-    """CropBox 바깥 내용을 **실제로 지운다**(일반뷰어용 저장, 되돌릴 수 없음) — 바깥 네 띠를 가림 처리하고
+    """CropBox 바깥 내용을 **실제로 지운다**(평탄화해서 내보내기, 되돌릴 수 없음) — 바깥 네 띠를 가림 처리하고
     MediaBox 를 CropBox 로. 잘리지 않은 쪽이면 False. 회전은 잠시 0 으로 두고 회전 전 좌표에서 지운다."""
     import fitz
     doc = page.parent

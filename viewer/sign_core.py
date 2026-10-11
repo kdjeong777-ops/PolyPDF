@@ -376,11 +376,15 @@ def default_font() -> str:
 
 
 def page_box_to_pdf(page, rect) -> tuple[float, float, float, float]:
-    """fitz 쪽 좌표(왼쪽 위 원점, 회전 전) 사각형 → PDF 사용자 공간(왼쪽 아래 원점) 상자.
+    """보이는 쪽 좌표(fitz, 왼쪽 위 원점 — 회전 적용 뒤) 사각형 → PDF 사용자 공간(왼쪽 아래 원점) 상자.
 
+    회전한 쪽은 `derotation_matrix` 로 회전 전 좌표로 돌린 뒤(261011-2, SOT §3.3) — 회전 0 이면 그대로.
     MediaBox 원점이 0 이 아닌 쪽도 맞도록 `transformation_matrix` 의 역행렬을 쓴다(마스터 §4.7.15 와 같은 함정)."""
     import fitz
     r = fitz.Rect(rect)
+    if int(page.rotation) % 360:
+        r = r * page.derotation_matrix
+        r.normalize()
     m = ~page.transformation_matrix
     q = r * m
     q.normalize()
@@ -539,6 +543,7 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
         return w_
 
     w = _writer(data)
+    rots = _page_rotations(data, doc_password)     # 회전한 쪽은 겉모양을 반대로 돌려 넣는다(SOT §3.3, 261011-2)
     level = _certification_level(w.prev)
     if level == 1:
         raise SignError("certified")
@@ -552,7 +557,7 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
         if size is None:
             raise SignError("no_field", field)
         names = [field]
-        targets = [(-1, (0.0, 0.0) + size)]
+        targets = [(_field_page(data, doc_password, field), (0.0, 0.0) + size)]
     else:
         names = _next_field_names(w.prev, len(targets))
         for nm, (pg, bx) in zip(names, targets):
@@ -568,7 +573,11 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
                 subfilter=fields.SigSeedSubFilter.PADES, md_algorithm="sha256",
                 certify=bool(cert_now),
                 docmdp_permissions=_mdp(cert_now) if cert_now else fields.MDPPerm.FILL_FORMS)
-            style = _stamp_style(app, info.name, reason, bx[2] - bx[0], bx[3] - bx[1])
+            rot = rots[pg] if 0 <= pg < len(rots) else 0
+            bw, bh = bx[2] - bx[0], bx[3] - bx[1]
+            if rot in (90, 270):
+                bw, bh = bh, bw                    # 글자 배치는 보이는 방향의 폭·높이로
+            style = _rotate_style(_stamp_style(app, info.name, reason, bw, bh), rot)
             ps = signers.PdfSigner(meta, signer=signer, stamp_style=style, timestamper=stamper)
             buf = io.BytesIO()
             ps.sign_pdf(w, output=buf)
@@ -589,6 +598,73 @@ def sign_pdf(src, dst, pfx: bytes, password: str, *, page_index: int = 0, box_pd
     with open(str(dst), "wb") as f:
         f.write(out)
     return names[0] if single else names
+
+
+def _page_rotations(data: bytes, doc_password: str = "") -> list:
+    """쪽마다 `/Rotate`(0·90·180·270). 읽지 못하면 빈 목록(= 회전 없음)."""
+    try:
+        import fitz
+        d = fitz.open("pdf", data)
+        if d.needs_pass:
+            d.authenticate(doc_password or "")
+        out = [int(p.rotation) % 360 for p in d]
+        d.close()
+        return out
+    except Exception:
+        return []
+
+
+def _field_page(data: bytes, doc_password: str, name: str) -> int:
+    """서명 칸 `name` 이 있는 쪽(0부터), 모르면 -1."""
+    try:
+        import fitz
+        d = fitz.open("pdf", data)
+        if d.needs_pass:
+            d.authenticate(doc_password or "")
+        for page in d:
+            for w in page.widgets() or []:
+                if w.field_name == name:
+                    n = page.number
+                    d.close()
+                    return n
+        d.close()
+    except Exception:
+        pass
+    return -1
+
+
+_ROT_MATRIX = {90: (0, 1, -1, 0), 180: (-1, 0, 0, -1), 270: (0, -1, 1, 0)}
+
+
+def _rotate_style(style, rot: int):
+    """회전한 쪽(`/Rotate`)용 스탬프 스타일 — 겉모양 그림(form XObject)에 쪽 회전만큼 **반대로 돌리는 `/Matrix`** 를 넣고,
+    90·270 이면 상자의 폭·높이를 바꿔 글자를 배치한다(SOT §3.3, 261011-2). 실측: 90·180·270 × MuPDF·pdfium 모두
+    끈 상자 안에 바로 선다. pyHanko `NoRotate` 깃발은 자리가 벗어나 쓰지 않는다."""
+    rot = int(rot or 0) % 360
+    if rot not in _ROT_MATRIX:
+        return style
+    import dataclasses
+    from pyhanko.pdf_utils import generic
+    from pyhanko.pdf_utils.layout import BoxConstraints
+    m = _ROT_MATRIX[rot]
+    base = type(style)
+
+    class _Rotated(base):
+        def create_stamp(self, writer, box, text_params):
+            if rot in (90, 270) and box is not None:
+                box = BoxConstraints(width=box.height, height=box.width)
+            st = super().create_stamp(writer, box, text_params)
+            fx = st.as_form_xobject
+
+            def _as_fx():
+                o = fx()
+                o["/Matrix"] = generic.ArrayObject([generic.FloatObject(v) for v in m]
+                                                   + [generic.FloatObject(0), generic.FloatObject(0)])
+                return o
+            st.as_form_xobject = _as_fx
+            return st
+    _Rotated.__name__ = base.__name__
+    return _Rotated(**{f.name: getattr(style, f.name) for f in dataclasses.fields(style)})
 
 
 def _asn1_to_crypto(acert):

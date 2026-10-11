@@ -23,7 +23,7 @@
   <li><b>Bookmarks panel (left)</b>: click to load the file in the main viewer. Expand a file
     node (▸) to see the PDF's own bookmarks (TOC). Along the top: the <b>Search list names</b> box · <b>#</b> (hashtags, §13) ·
     <b>Sort</b> (§7) · <b>📁 Folder</b> (file mode ↔ folder mode) · <b>Tree</b> (single ↔ tree) · <b>↻</b> (refresh after files change outside).</li>
-  <li><b>Right-click</b> a file or bookmark: Open File Location · Save As · Save (for PolyPDF) · Save (for other viewers) ·
+  <li><b>Right-click</b> a file or bookmark: Open File Location · Save As · Save · Flatten and Export ·
     Rename File/Bookmark · Delete File/Bookmark · Build Bookmarks · Edit Hashtags · add to Favorites, and so on.
     In edit mode there are also Copy Files / Move Files, new folder / rename / delete folder, and merging several files.</li>
   <li><b>Expand All Bookmarks</b> (right-click): expands the bookmarks of every file
@@ -165,9 +165,11 @@
   <li><b>Add Hyperlink…</b> (right-click the page or a thumbnail): give it a label and either a <b>file</b> (a document, image, video etc. in the
     bookmark folder) or an <b>external link (URL)</b> (https, allowed domains). It shows as a blue button on the page. Executables are blocked.
     Hyperlinks are kept in N-up printing and exports.</li>
-  <li><b>Saving</b>: <b>Save (for PolyPDF)</b> (💾) = bookmarks and page edits go into the original PDF; annotations (lines, shapes, text, photos, hyperlinks) are kept next to it in <code>page_meta.json</code> and <code>hyperlinks.json</code> (shown in PolyPDF) ·
-    <b>Save As...</b> · <b>Save (for other viewers)...</b> = a new file (<code>_for_other_viewers.pdf</code>) with annotations, photos and hyperlinks
-    flattened into the page so other PDF viewers show them (text stays searchable). Rotated pages are <b>set upright exactly as they look</b> (the PDF's own comments and form fields are flattened too). There is also Tools → <b>Save PDF Annotations</b>.</li>
+  <li><b>Save</b> (💾) = bookmarks, page edits, rotation and crop go into the original PDF, and annotations (lines, shapes, text, photos), hyperlinks and tags
+    are also put into the PDF <b>so other PDF viewers show them</b> (a 'PolyPDF' layer you can hide in another viewer's layer panel). Keep editing in PolyPDF and save again. Signed documents do not get the annotation copy ·
+    <b>Save As...</b> · <b>Flatten and Export...</b> = a <b>new file</b> (<code>_flattened.pdf</code>) with annotations, photos and hyperlinks
+    baked into the page and the content outside a crop really removed (text stays searchable; the original is untouched). Use it for programs that ignore annotations, for submissions, or to remove cropped-out content.
+    Signed documents are <b>signed again</b> at the same places (your digital ID is confirmed — cancel and that signature is left out).</li>
   <li>If <b>another PolyPDF window</b> has the file open when you save, you are asked <b>Close and Save / Save with New Name / Cancel</b>.</li>
 </ul>
 
@@ -207,7 +209,7 @@
   <li><b>Signing</b>: press the digital signature button to the right of Crop (or Tools → Sign...) and drag on the page where the signature goes
     (a single click uses the default size). <b>Right-click → Sign Here…</b> on the page opens the signing window right away with the default size at that spot. In the signing window choose the digital ID, signature image and appearance text (name · date · reason),
     then <b>Sign with Windows Hello</b> or enter the password and press <b>Sign</b>. The signature is appended to the <b>current file</b>
-    (<b>Sign As…</b> saves a new one). You cannot sign in two-page view; set rotated pages upright first with 'Save (for other viewers)', then sign.</li>
+    (<b>Sign As…</b> saves a new one). You cannot sign in two-page view. Rotated pages are signed in the text direction.</li>
   <li><b>More choices in the signing window</b>: <b>Signature type</b> — approval signature (default) or certification (no changes / form filling and signing allowed / comments, forms and signing allowed; only as the document's first signature) ·
     <b>Text layout</b> — over the image / image left, text right / image above, text below · <b>Pages</b> — this page / all pages / page range (one signature per page) ·
     <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default). The signature image window also offers <b>Draw by Hand…</b>.</li>
@@ -221,7 +223,7 @@
   <li><b>Checking signatures</b>: a signed document shows a band above the page — ✅ Valid · Trusted / ⚠ Valid · Identity unknown / ⚠ Changed after signing / ❌ Invalid.
     <b>Signatures</b> shows the signer, time and certificate fingerprint; <b>Trust This Certificate</b> adds it (only after confirming the fingerprint with that person). <b>Save Signed Version…</b> saves the file exactly as it was when that signature was made.</li>
   <li><b>Saving after signing</b>: saving the file again in PolyPDF (bookmarks, page edits, crop and so on) breaks the signature, so you are asked to <b>save to a new file</b>.
-    To include annotations or photos, flatten them first with 'Save (for other viewers)' and then sign — PolyPDF annotations are not covered by the signature.</li>
+    If there are unsaved edits or annotations not yet in the PDF, you are asked <b>[Save and Sign]</b> — only the saved version is covered by the signature.</li>
   <li><b>Good to know</b>: a self-created digital ID shows as 'identity unknown' in the recipient's PDF viewer until they trust your public certificate (.cer).
     Changes after signing are detected even without trusting it. The signing time comes from the signing PC's clock.
     Where a specific certificate is required, a self-created ID cannot replace it — import that certificate and sign with it.</li>

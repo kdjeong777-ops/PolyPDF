@@ -375,13 +375,14 @@ class PrintMixin:
             return src
         if not self._has_bakeables(src):
             return src                       # 보통 문서 — 비용 0
+        from viewer import page_rotate as _prv       # 261011-2: 저장 전 회전이 바뀌면 다시 굽는다
         cache = getattr(self, "_baked_cache", None)
         if cache is None:
             cache = self._baked_cache = {}
         try:
-            key = (src, os.path.getmtime(src), bool(include_links), self._bake_signature(src))
+            key = (src, os.path.getmtime(src), bool(include_links), self._bake_signature(src), _prv.version(src))
         except Exception:
-            key = (src, 0, bool(include_links), self._bake_signature(src))
+            key = (src, 0, bool(include_links), self._bake_signature(src), _prv.version(src))
         hit = cache.get(key)
         if hit and os.path.exists(hit):
             return hit
@@ -391,19 +392,18 @@ class PrintMixin:
         except Exception:
             return src
         try:
+            # 261011-2(§4.7.16): 보이는 자리 그대로(회전한 쪽도) — 저장 전 회전·저장 사본 레이어도 맞춘다
             try:
-                self._bake_drawings_into_doc(doc, self._decorations_norm_for(src))
+                from viewer import page_rotate as _pr, pdf_mirror as _pm
+                _pr.apply_pending(doc, src)
+                _pm.remove_layer(doc)
             except Exception:
                 pass
             try:
-                self._bake_images_into_doc(doc, src)
+                # 발표 보기는 하이퍼링크를 자기 단추로 보이므로 굽지 않는다(261009-14)
+                self._bake_decorations(doc, src, links=include_links)
             except Exception:
                 pass
-            if include_links:            # 발표 보기는 하이퍼링크를 자기 단추로 보이므로 굽지 않는다(261009-14)
-                try:
-                    self._bake_hyperlinks_into_doc(doc, src)
-                except Exception:
-                    pass
             tmpdir = self._mk_print_tmpdir("polypdf_bake_")
             out = str(tmpdir / (Path(src).stem + "_baked.pdf"))
             # deflate 를 빼면 그림이 날것으로 들어가 수십 배가 된다(260930-1 실측, §4.7.11).

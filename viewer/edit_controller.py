@@ -271,120 +271,83 @@ class EditMixin:
                     norm[int(p)] = dr
         return norm
 
-    def _apply_drawings_to_pdf(self, norm, file_path, *, with_hyperlinks: bool = True, overwrite: bool = False):
-        """일반뷰어용 PDF — 꾸밈·사진(·하이퍼링크)을 굽고 **크롭 바깥은 실제로 지운다**(261010-13, 마스터 §4.7.13·§4.7.15).
+    def _apply_drawings_to_pdf(self, norm, file_path, *, with_hyperlinks: bool = True):
+        """평탄화해서 내보내기(옛 '저장(일반뷰어용)') — **새 파일로만** (261011-2, 마스터 §4.7.16 '저장 메뉴').
 
-        overwrite=False: 새 파일로(묻는다) — 하이퍼링크도 굽는다.
-        overwrite=True : 현재 파일에(`_finalize_save`) — 꾸밈·사진은 PDF 에 들어가므로 옆 파일(page_meta.json)에서 비우고
-                         (두 번 그려지지 않게), 하이퍼링크는 굽지 않고 PolyPDF 하이퍼링크로 남긴다(사용자 결정 —
-                         PolyPDF 본문은 PDF 자체 링크를 누를 수 없다)."""
+        꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고(보이는 자리 그대로 — `_bake_decorations`), 크롭 바깥을 실제로 지우고(§4.7.15),
+        저장 전 회전을 `/Rotate` 에 넣고, '저장' 사본(레이어·링크)은 지운다. 정리(`garbage=4`)·글꼴 줄이기.
+        서명된 원본은 내용만 굽고 같은 자리에 자동으로 다시 서명한다(보안 SOT §4.1 — `_resign_*`).
+        굽기 그림(Qt)은 메인, 크롭 지우기·글꼴·저장·서명은 배경(응답성 SOT §4.4)."""
+        import os as _os
         src = Path(file_path)
-        if overwrite:
-            out = str(src.with_name(src.stem + "_flat_tmp.pdf"))
-        else:
-            from PyQt6.QtWidgets import QFileDialog
-            out, _ = QFileDialog.getSaveFileName(
-                self, tr("저장(일반뷰어용) — 새 PDF로"),
-                str(src.with_name(tr('{stem}_일반뷰어용.pdf').format(stem=src.stem))), "PDF (*.pdf)")
-            if not out:
-                return
+        from PyQt6.QtWidgets import QFileDialog
+        out, _ = QFileDialog.getSaveFileName(
+            self, tr("평탄화해서 내보내기 — 새 PDF로"),
+            str(src.with_name(tr('{stem}_평탄화.pdf').format(stem=src.stem))), "PDF (*.pdf)")
+        if not out:
+            return
+        if not out.lower().endswith(".pdf"):
+            out += ".pdf"
+        if _os.path.normcase(_os.path.abspath(out)) == _os.path.normcase(_os.path.abspath(str(src))):
+            QMessageBox.information(self, tr("평탄화해서 내보내기"),
+                                    tr("원본과 다른 이름으로 내보내세요 — 원본은 PolyPDF 에서 계속 고칠 수 있게 그대로 둡니다."))
+            return
+        plan = self._resign_prepare(str(src))          # 서명된 원본: 확인·키 열기(보안 SOT §4.1). None = 취소
+        if plan is None:
+            return
+        import fitz
+        from viewer import page_crop as _pc, page_rotate as _pr, pdf_mirror as _pm
         try:
-            import fitz
-            from viewer import page_crop as _pc
             doc = fitz.open(str(src))
-            _pc.apply_pending(doc, src)            # 저장 전 크롭도 함께
-            self._bake_drawings_into_doc(doc, norm)
-            # 260930-2(§4.7.13): 사진도. 261008-1: 하이퍼링크 굽기처럼 감싼다 — 사진 쪽 실패
-            #   (꾸밈 저장소를 못 만드는 등)가 꾸밈·하이퍼링크 저장까지 통째로 막지 않게(사진만 빠진 파일).
-            try:
-                self._bake_images_into_doc(doc, file_path)
-            except Exception:
-                pass
-            # 260615-3: ② 하이퍼링크도 함께 PDF 에 베이크(꾸밈 저장)
-            if with_hyperlinks and not overwrite:
-                try:
-                    self._bake_hyperlinks_into_doc(doc, file_path)
-                except Exception:
-                    pass
-            # 261010-13: 크롭 바깥을 실제로 지운다 — 쪽 크기도 크롭 크기로(되돌릴 수 없다, 원본은 새 파일이면 그대로)
+            _pr.apply_pending(doc, src)                # 저장 전 회전 → /Rotate (바로 세우지 않는다, 261011-2)
+            _pc.apply_pending(doc, src)                # 저장 전 크롭
+            _pm.remove_layer(doc)                      # '저장' 사본은 지운다 — 구운 것과 두 번 보이지 않게
+            _pm.remove_links(doc)
+            self._resign_mark(doc, plan)               # 서명 칸은 굽지 않는다 — 자리만 표식으로
+            self._bake_decorations(doc, file_path, norm=norm, links=with_hyperlinks)
+        except Exception as e:
+            QMessageBox.warning(self, tr("저장 실패"), str(e))
+            return
+        tmp = str(Path(out).with_name("~" + Path(out).stem + ".polypdf-tmp"))
+        got = {}
+
+        def _job(progress):
+            progress(0, 3, tr("크롭 바깥 지우는 중"))
             cut = 0
             for i in range(doc.page_count):
                 try:
                     cut += 1 if _pc.cut_outside(doc[i]) else 0
                 except Exception:
                     pass
-            # 261010-24(§4.7.13): 보기 회전을 넣고 쪽을 바로 세운다(/Rotate 0) — 굽기·크롭 뒤 **마지막에**.
-            #   회전할 쪽이 있으면 PDF 주석·양식을 먼저 내용으로 굽고(사용자 결정), 링크는 옮겨 다시 넣는다.
-            from viewer.page_upright import make_upright
-            up_doc, upright = make_upright(doc, self._rotations_for(str(src)))
-            if up_doc is not doc:
-                doc.close()
-                doc = up_doc
+            got["cut"] = cut
+            got["boxes"] = self._resign_take(doc, plan)
             # 260913-3(SOT §4.5.10): 글쓰기 굽기는 fontfile= 로 글꼴 **전체**(맑은 고딕 13MB)를
             #   넣는다 → 쓴 글자만 남겨 저장. 실패해도 저장은 한다(PyMuPDF 1.23 은 fontTools 필요).
+            progress(1, 3, tr("글꼴 줄이는 중"))
             from viewer.pdf_font import subset_fonts_safely
             subset_fonts_safely(doc)
-            doc.save(out, garbage=4, deflate=True)
-            doc.close()
-        except Exception as e:
-            QMessageBox.warning(self, tr("저장 실패"), str(e))
+            progress(2, 3, tr("저장 중"))
+            doc.save(tmp, garbage=4, deflate=True)
+            progress(3, 3, tr("완료"))
+        res = self._run_merge_job(_job, tr("평탄화해서 내보내기"), cancellable=False)
+        doc.close()
+        if not res.get("ok"):
+            self._sign_unlink(tmp)
+            QMessageBox.warning(self, tr("저장 실패"), res.get("err") or tr("알 수 없는 오류"))
             return
-        if not overwrite:
-            self.status.showMessage(tr('저장(일반뷰어용): {name}').format(name=Path(out).name), 4000)
-            QMessageBox.information(self, tr("저장 완료"),
-                                   tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out))
-                                   + (tr("\n크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다.").format(n=cut) if cut else "")
-                                   + (tr("\n돌린 {n}쪽은 보이는 모양 그대로 바로 세웠습니다.").format(n=upright) if upright else ""))
+        signed, lost = self._resign_apply(tmp, plan, got.get("boxes") or {})
+        err = self._file_op_bg(lambda: _os.replace(tmp, out), tr("저장 중: {name}").format(name=Path(out).name))
+        if err is not None:
+            self._sign_unlink(tmp)
+            QMessageBox.warning(self, tr("저장 실패"), str(err))
             return
-        try:
-            final = self._finalize_save(src, Path(out), False)
-        except Exception as e:
-            try:
-                if Path(out).exists():
-                    Path(out).unlink()
-            except Exception:
-                pass
-            from viewer.file_overwrite import SaveCancelled
-            if not isinstance(e, SaveCancelled):
-                QMessageBox.warning(self, tr("저장 실패"), str(e))
-            return
-        # 구운 꾸밈·사진은 이제 PDF 안에 있다 — 옆 파일에서 비워 두 번 그려지지 않게. 저장 전 크롭도 끝.
-        #   서명 가드에서 [새 파일로] 를 골랐으면 원본은 그대로라 원본의 꾸밈·회전·크롭도 그대로 둔다(261011-1).
-        same = True
-        try:
-            import os as _os
-            same = _os.path.normcase(_os.path.abspath(str(final))) == _os.path.normcase(_os.path.abspath(str(src)))
-        except Exception:
-            pass
-        try:
-            st = self._ensure_page_meta_store() if same else None
-            if st is not None:
-                st.clear_drawings(str(src)); st.clear_images(str(src))
-                st.clear_rotation(str(src))          # 261010-24: 보기 회전도 PDF 로 들어갔다 — 두 번 돌지 않게
-                st.save()
-        except Exception:
-            pass
-        try:
-            if same:
-                from viewer import page_crop as _pc
-                _pc.clear_pending(src)
-        except Exception:
-            pass
-        if getattr(self, "_edit_snap", None) is not None:
-            self._edit_snap = None
-            self._edit_dirty = False
-            try:
-                self._snapshot_edit()
-            except Exception:
-                pass
-        page = self.main_view.current_page() if self.main_view else 0
-        try:
-            self._open_saved_file(final, page)
-        except Exception:
-            pass
-        self.status.showMessage(tr('저장(일반뷰어용) — 현재 파일에: {name}').format(name=Path(final).name)
-                                + (tr(" · 크롭 {n}쪽 바깥을 지움").format(n=cut) if cut else "")
-                                + (tr(" · {n}쪽 바로 세움").format(n=upright) if upright else ""), 6000)
+        cut = int(got.get("cut") or 0)
+        self.status.showMessage(tr('평탄화해서 내보냈습니다: {name}').format(name=Path(out).name), 4000)
+        QMessageBox.information(self, tr("평탄화해서 내보내기"),
+                                tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out))
+                                + (tr("\n크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다.").format(n=cut) if cut else "")
+                                + (tr("\n서명 {n}개를 같은 자리에 다시 했습니다(서명 시각은 지금).").format(n=signed) if signed else "")
+                                + (tr("\n서명 {n}개는 넣지 못했습니다(다른 사람의 서명·취소·크롭 바깥).").format(n=lost) if lost else ""))
 
     def _bake_text_stroke(self, fitz, QColor, page, stk, pw, ph):
         """260611-74/76: 텍스트 박스/지시선 굽기 — 배경(투명도)·박스선·지시선(색상버튼 스타일)·텍스트."""
@@ -525,10 +488,15 @@ class EditMixin:
         except Exception:
             return text
 
-    def _bake_hyperlinks_into_doc(self, doc, cur):
+    def _bake_hyperlinks_into_doc(self, doc, cur, links_into=None, kinds=None):
         """260615-3: 등록 하이퍼링크를 열린 doc 에 라벨 버튼+링크 주석으로 삽입.
-        외부 리더에서도 클릭 동작(파일=Launch, URL=URI)."""
+        외부 리더에서도 클릭 동작(파일=Launch, URL=URI).
+
+        261011-2(§4.7.16): `links_into` 를 주면 `doc` 은 **보이는 크기 임시 문서**(단추를 그린다)이고 링크 주석은
+        `links_into` 의 같은 쪽에 **회전 전 좌표**로 넣는다(`insert_link` 는 회전 전 좌표를 받는다, 실측).
+        `kinds` 를 주면 그 종류만(사본은 url·pdf)."""
         import fitz
+        from viewer import pdf_mirror as _pm
         st = self._ensure_hyperlink_store()
         if not st:
             return
@@ -540,7 +508,11 @@ class EditMixin:
                 continue
             page = doc[p0]
             pw = page.rect.width
-            links = st.links_for(cur, p0)
+            links = [ln for ln in st.links_for(cur, p0) if kinds is None or self._hl_kind(ln) in kinds]
+            if not links:
+                continue
+            lp = links_into[p0] if links_into is not None else page
+            before = _pm.link_xrefs(lp) if links_into is not None else set()
             items = []
             for ln in links:
                 label = str(ln.get("name", "") or tr("링크"))
@@ -563,17 +535,64 @@ class EditMixin:
                                    width=0.5, radius=0.2)
                     page.insert_textbox(rect, label, fontsize=fs,
                                         color=(1, 1, 1), align=fitz.TEXT_ALIGN_CENTER)
+                    lr = _pm.to_unrotated(lp, rect) if links_into is not None else rect
                     if ln.get("kind") == "url":
-                        page.insert_link({"kind": fitz.LINK_URI, "from": rect,
-                                          "uri": str(ln.get("target", ""))})
+                        lp.insert_link({"kind": fitz.LINK_URI, "from": lr,
+                                        "uri": str(ln.get("target", ""))})
+                    elif self._hl_kind(ln) == "pdf" and kinds is not None:
+                        # 사본(§4.7.16)은 폴더 안 PDF 만 — 이 PDF 기준 상대 경로(폴더째 옮겨도 맞게)
+                        import os as _os
+                        tgt = str(ln.get("target", ""))
+                        if not _os.path.isabs(tgt):
+                            tgt = _os.path.join(str(getattr(st, "base", "") or ""), tgt)
+                        try:
+                            tgt = _os.path.relpath(tgt, str(Path(cur).parent))
+                        except ValueError:
+                            pass
+                        lp.insert_link({"kind": fitz.LINK_GOTOR, "from": lr, "page": 0,
+                                        "file": tgt.replace("\\", "/")})
                     else:
-                        page.insert_link({"kind": fitz.LINK_LAUNCH, "from": rect,
-                                          "file": str(ln.get("target", ""))})
+                        lp.insert_link({"kind": fitz.LINK_LAUNCH, "from": lr,
+                                        "file": str(ln.get("target", ""))})
                     x += w + gap
                 y += btn_h + 4
+            if links_into is not None:
+                _pm.tag_links(lp, before)
+
+    @staticmethod
+    def _hl_kind(ln) -> str:
+        """하이퍼링크 종류 — url / pdf(폴더 안 PDF) / file(그 밖의 파일)."""
+        if ln.get("kind") == "url":
+            return "url"
+        return "pdf" if str(ln.get("target", "")).lower().endswith(".pdf") else "file"
+
+    def _bake_decorations(self, doc, path, *, norm=None, links=False, link_kinds=None, oc=0) -> int:
+        """261011-2(§4.7.16): 꾸밈·사진(·하이퍼링크 단추)을 `doc` 에 보이는 자리 그대로 얹는다. 얹은 쪽 수.
+
+        그 쪽의 **보이는 크기** 빈 쪽에 지금 굽기 그대로 그린 뒤 회전에 맞춰 얹는다(`pdf_mirror.place`) — 종전에는
+        `/Rotate` 쪽에 보이는 좌표를 그대로 그려 꾸밈이 어긋났다(PyMuPDF 는 회전 전 좌표로 그린다, 실측).
+        `oc` 를 주면 그 레이어에 묶는다(저장 사본), 0 이면 쪽 내용(평탄화·인쇄)."""
+        from viewer import pdf_mirror as _pm
+        norm = self._decorations_norm_for(path) if norm is None else norm
+        ov = _pm.overlay_doc(doc)
+        try:
+            self._bake_drawings_into_doc(ov, norm or {})
+            try:
+                self._bake_images_into_doc(ov, path)
+            except Exception:
+                pass
+            if links:
+                try:
+                    self._bake_hyperlinks_into_doc(ov, path, links_into=doc, kinds=link_kinds)
+                except Exception:
+                    pass
+            return _pm.place(doc, ov, oc=oc)
+        finally:
+            ov.close()
 
     def _action_save_decorated_pdf(self, checked: bool = False, file_path=None):
-        """일반뷰어용으로 저장 — 꾸밈·사진·하이퍼링크를 **쪽 내용으로 구워** 새 PDF 로.
+        """평탄화해서 내보내기(옛 '저장(일반뷰어용)') — 꾸밈·사진·하이퍼링크를 **쪽 내용으로 구워** 새 PDF 로.
+        261011-2(§4.7.16): 새 파일로만 — '저장' 이 이미 다른 뷰어에 보이는 사본을 현재 파일에 넣는다.
 
         260615-3 '(PDF 꾸밈 저장)' 을 260930-2(마스터 §4.7.13, 사용자 요청)에 이름과 범위를
         넓혔다. PolyPDF 가 따로 들고 있던 꾸밈·삽입 사진은 **다른 프로그램에서는 보이지
@@ -593,7 +612,7 @@ class EditMixin:
         # 260930-2: **사진만 있어도** 구울 것이 있다 — 종전에는 여기서 돌아서 버렸다.
         st_im = self._ensure_page_meta_store()
         has_img = bool(st_im and st_im.pages_with_images(cur))
-        # 261010-13(§4.7.15): 크롭(저장 전 포함)만 있어도 일반뷰어용 저장을 한다 — 바깥 내용을 실제로 지운다
+        # 261010-13(§4.7.15): 크롭(저장 전 포함)만 있어도 평탄화해서 내보낸다 — 바깥 내용을 실제로 지운다
         has_crop = False
         try:
             from viewer import page_crop as _pc
@@ -604,15 +623,9 @@ class EditMixin:
                     has_crop = any(_pc.is_cropped(_d[i]) for i in range(_d.page_count))
         except Exception:
             pass
-        # 261010-24(§4.7.13): 돌릴 쪽(보기 회전·PDF /Rotate)만 있어도 저장한다 — 바로 세워 다른 뷰어·서명에 맞춘다
-        has_rot = False
-        try:
-            from viewer.page_upright import targets as _up_targets
-            import fitz
-            with fitz.open(str(cur)) as _d:
-                has_rot = bool(_up_targets(_d, self._rotations_for(str(cur))))
-        except Exception:
-            pass
+        # 261011-2(§4.7.16): 저장 전 회전만 있어도 내보낸다(`/Rotate` 로). PDF `/Rotate` 는 이미 다른 뷰어에 보인다
+        from viewer import page_rotate as _pr
+        has_rot = _pr.has_pending(cur)
         if not norm and not has_hl and not has_img and not has_crop and not has_rot:
             QMessageBox.information(
                 self, tr("안내"),
@@ -626,40 +639,163 @@ class EditMixin:
                     and str(tp._doc.path) == str(cur))
             if same and tp.is_page_dirty():
                 if QMessageBox.question(
-                        self, tr("저장(일반뷰어용)"),
+                        self, tr("평탄화해서 내보내기"),
                         tr("저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. "
                         "지금 구우면 그 편집은 빠집니다. 계속할까요?")
                 ) != QMessageBox.StandardButton.Yes:
                     return
         except Exception:
             pass
-        # 261010-13(사용자 지시): 새 파일로 할지 현재 파일에 덮어쓸지 묻는다
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle(tr("저장(일반뷰어용)"))
-        box.setText(tr("꾸밈·사진을 쪽 내용으로 굽고, 크롭한 쪽은 바깥 내용을 실제로 지웁니다(되돌릴 수 없음).\n어디에 저장할까요?")
-                    + (tr("\n돌린 쪽은 보이는 모양 그대로 바로 세웁니다 — 그러려고 PDF 안의 주석·양식도 쪽 내용으로 굽습니다.") if has_rot else ""))
-        box.setInformativeText(tr("현재 파일에 저장하면 꾸밈·사진은 PDF 안으로 옮겨지고(PolyPDF 꾸밈에서는 지워짐), "
-                                  "하이퍼링크는 PolyPDF 하이퍼링크로 남습니다. 다른 뷰어에서도 하이퍼링크가 필요하면 새 파일로 저장하세요."))
-        b_new = box.addButton(tr("새 파일로 저장…"), QMessageBox.ButtonRole.AcceptRole)
-        b_cur = box.addButton(tr("현재 파일에 저장"), QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(b_new)
-        box.exec()
-        clicked = box.clickedButton()
-        if clicked is b_cur:
+        self._apply_drawings_to_pdf(norm, cur, with_hyperlinks=True)
+
+    # ===== 261011-2(마스터 §4.7.16): '저장' 이 다른 뷰어용 사본을 PDF 에 ============
+    def _mirror_payload(self, path) -> dict:
+        """옆 파일에 있는 이 파일의 꾸밈·사진·하이퍼링크(url·pdf)·태그 — 사본의 원본."""
+        path = str(path)
+        out = {"v": 1, "deco": {}, "img": {}, "link": {}, "tags": []}
+        try:
+            out["deco"] = {str(k): v for k, v in (self._decorations_norm_for(path) or {}).items() if v}
+        except Exception:
+            pass
+        st_im = self._ensure_page_meta_store()
+        if st_im:
+            for p in sorted(st_im.pages_with_images(path)):
+                im = st_im.get_images(path, p)
+                if im:
+                    out["img"][str(p)] = im
+        st_hl = self._ensure_hyperlink_store()
+        if st_hl:
+            for p in sorted(st_hl.pages_with_links(path)):
+                ls = [ln for ln in st_hl.links_for(path, p) if self._hl_kind(ln) in ("url", "pdf")]
+                if ls:
+                    out["link"][str(p)] = ls
+        try:
+            out["tags"] = list(self.bookmark_tree._tags.get(path) or []) if self.bookmark_tree._tags else []
+        except Exception:
+            pass
+        return out
+
+    def _mirror_open(self, path):
+        """사본을 읽고 쓸 수 있게 연 문서, 또는 (None, 까닭) — 'signed' | 'locked' | 'error'."""
+        import fitz
+        try:
+            d = fitz.open(str(path))
+        except Exception:
+            return None, "error"
+        if d.needs_pass:
+            from viewer import secure_store
+            pw = secure_store.recall_any(str(path))
+            if not (pw and d.authenticate(pw)):
+                d.close()
+                return None, "locked"
+        try:
+            perm = int(getattr(d, "permissions", -1))
+            if perm != -1 and not (perm & fitz.PDF_PERM_MODIFY):
+                d.close()
+                return None, "locked"
+        except Exception:
+            pass
+        from viewer import sign_core
+        if sign_core.doc_is_signed(d):
+            d.close()
+            return None, "signed"
+        return d, ""
+
+    def _mirror_state(self, path):
+        """(해야 하나, 까닭, 지문). 까닭: '' | 'signed' | 'locked' | 'error'."""
+        from viewer import pdf_mirror as _pm
+        if not str(path).lower().endswith(".pdf") or not Path(str(path)).exists():
+            return False, "error", ""
+        payload = self._mirror_payload(path)
+        has = bool(payload["deco"] or payload["img"] or payload["link"] or payload["tags"])
+        d, why = self._mirror_open(path)
+        if d is None:
+            return False, why if has else "", ""
+        try:
+            old = _pm.stored_hash(d)
+            if not has and not old:
+                return False, "", ""
+            h = _pm.fingerprint(dict(payload, geom=_pm.geometry(d)))
+            return h != old, "", h
+        finally:
+            d.close()
+
+    def _mirror_needed(self, path) -> bool:
+        try:
+            return bool(self._mirror_state(path)[0])
+        except Exception:
+            return False
+
+    def _mirror_to_pdf(self, path, page=None) -> bool:
+        """사본이 낡았으면 원본 사본 + **증분 저장**으로 임시 파일을 만들어 `_finalize_save` 로 놓는다. 넣었으면 True.
+        Qt 굽기(임시 쪽 그리기)는 메인, 파일 복사·저장은 배경(응답성 SOT §4.4)."""
+        import os as _os
+        import shutil as _sh
+        from viewer import pdf_mirror as _pm
+        try:
+            need, why, h = self._mirror_state(path)
+        except Exception:
+            return False
+        if why == "signed":
+            self.status.showMessage(tr("서명된 문서라 다른 뷰어용 사본(꾸밈·링크·태그)은 넣지 않았습니다 — 평탄화해서 내보내기를 쓰세요."), 8000)
+            return False
+        if why == "locked":
+            self.status.showMessage(tr("편집 권한이 없는 암호 문서라 다른 뷰어용 사본은 넣지 않았습니다."), 8000)
+            return False
+        if not need:
+            return False
+        src = Path(str(path))
+        tmp = src.with_name("~" + src.stem + ".polypdf-tmp")
+        err = self._file_op_bg(lambda: _sh.copyfile(str(src), str(tmp)), tr("저장 중: {name}").format(name=src.name))
+        if err is not None:
+            self._sign_unlink(str(tmp))
+            return False
+        doc = None
+        try:
+            import fitz
+            doc = fitz.open(str(tmp))
+            if doc.needs_pass:
+                from viewer import secure_store
+                doc.authenticate(secure_store.recall_any(str(src)) or "")
+            payload = self._mirror_payload(src)
+            _pm.remove_layer(doc)
+            _pm.remove_links(doc)
+            if payload["deco"] or payload["img"] or payload["link"]:
+                oc = _pm.ensure_layer(doc)
+                self._bake_decorations(doc, str(src), links=bool(payload["link"]), link_kinds=("url", "pdf"), oc=oc)
+            if payload["tags"]:
+                _pm.set_keywords(doc, ", ".join(str(t) for t in payload["tags"]))
+            _pm.store_hash(doc, _pm.fingerprint(dict(payload, geom=_pm.geometry(doc))))
+        except Exception:
+            if doc is not None:
+                doc.close()
+            self._sign_unlink(str(tmp))
+            return False
+        res = self._run_merge_job(lambda progress: (progress(0, 1, tr("저장 중")), doc.saveIncr(), progress(1, 1, tr("완료"))),
+                                  tr("저장"), cancellable=False)
+        doc.close()
+        if not res.get("ok"):
+            self._sign_unlink(str(tmp))
+            return False
+        # `_finalize_save` 가 본문 문서를 닫는다 — 본문이 이 파일이었는지는 **그 전에** 본다
+        mv = self.main_view
+        was_open = bool(mv is not None and mv.current_file()
+                        and _os.path.normcase(str(mv.current_file())) == _os.path.normcase(str(src)))
+        cur_page = mv.current_page() if (was_open and page is None) else (page or 0)
+        try:
+            final = self._finalize_save(str(src), str(tmp), False)
+        except Exception as e:
+            self._sign_unlink(str(tmp))
+            from viewer.file_overwrite import SaveCancelled
+            if not isinstance(e, SaveCancelled):
+                QMessageBox.warning(self, tr("저장 실패"), str(e))
+            return False
+        if was_open:
             try:
-                tp = self.page_thumbs
-                if (getattr(tp, "_doc", None) is not None and str(tp._doc.path) == str(cur)
-                        and tp.is_page_dirty()):
-                    QMessageBox.information(self, tr("저장(일반뷰어용)"),
-                                            tr("저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 먼저 저장하거나 되돌린 뒤 현재 파일에 저장하세요."))
-                    return
+                self._open_saved_file(final, cur_page)
             except Exception:
                 pass
-            self._apply_drawings_to_pdf(norm, cur, with_hyperlinks=True, overwrite=True)
-        elif clicked is b_new:
-            self._apply_drawings_to_pdf(norm, cur, with_hyperlinks=True)
+        return True
 
     def _ensure_page_meta_store(self):
         from viewer.page_meta import PageMetaStore
@@ -681,8 +817,8 @@ class EditMixin:
         return st.hidden_pages(path) if st else set()
 
     def _rotation_for(self, path, page0):
-        st = self._ensure_page_meta_store()
-        return st.get_rotation(path, page0) if st else 0
+        """발표 보기의 화면 회전 — 261011-2(§4.7.16)부터 0: 회전은 `PdfDocument` 가 문서 `/Rotate` 에 덧입혀 그린다."""
+        return 0
 
     # ===== 260609-22(J3): 본화면 선긋기 =================================
     def _drawings_for(self, path, page0):
@@ -893,7 +1029,8 @@ class EditMixin:
         try:                             # 261010-13(§4.7.15): 저장 전 크롭도 되돌린다
             cur = self.main_view.current_file() if self.main_view else None
             if cur:
-                self._discard_crop(cur)
+                if not self._discard_crop(cur):
+                    self._reload_rotation(cur)   # 261011-2: 되돌린 회전(page_meta)을 문서 `/Rotate` 에도
         except Exception:
             pass
         try:
@@ -939,7 +1076,8 @@ class EditMixin:
             # 261010-13(§4.7.15): 저장 전 크롭도 미저장 변경이다 — 저장하면 쪽 편집 저장 길로 원본에, 버리면 되돌린다
             from viewer import page_crop as _pc
             _cur = self.main_view.current_file() if self.main_view else None
-            crop_dirty = bool(_cur and _pc.has_pending(_cur))
+            from viewer import page_rotate as _pr       # 261011-2(§4.7.16): 저장 전 회전도 같은 미저장 변경
+            crop_dirty = bool(_cur and (_pc.has_pending(_cur) or _pr.has_pending(_cur)))
             if (self._edit_snap is not None and self._edit_dirty) or crop_dirty:
                 choice = self._confirm_edit_save(switching=False)
                 if choice == "cancel":
@@ -955,7 +1093,8 @@ class EditMixin:
                     if self._edit_snap is not None and self._edit_dirty:
                         self._restore_edit()
                     if crop_dirty:
-                        self._discard_crop(_cur)
+                        if not self._discard_crop(_cur):
+                            self._reload_rotation(_cur)
             self._edit_snap = None
             self._edit_dirty = False
         for mv in self._mv:
@@ -964,6 +1103,13 @@ class EditMixin:
                 mv.set_draw_mode(bool(on))
             except Exception:
                 pass
+
+    def _reload_rotation(self, path):
+        """261011-2(§4.7.16): page_meta 회전이 바뀐 뒤(되돌리기) 문서를 다시 열어 `/Rotate` 덧입히기를 맞춘다."""
+        from viewer import page_rotate as _pr
+        _pr.bump(path)
+        self._crop_reload(path)
+        self._refresh_hidden_ui(path)
 
     def _rotations_for(self, path):
         st = self._ensure_page_meta_store()
@@ -979,7 +1125,13 @@ class EditMixin:
             return
         st.rotate_pages(cur, pages, delta)
         self._persist_meta(st)           # 260609-23(J2)
+        # 261011-2(§4.7.16): 회전은 쪽 `/Rotate` — 열린 문서에 덧입혀 다시 연다(저장 전 크롭과 같은 길). 💾 저장이 PDF 에 넣는다
+        from viewer import page_rotate as _pr
+        _pr.bump(cur)
+        self._crop_reload(cur)
         self._refresh_hidden_ui(cur)
+        if _pr.has_pending(cur):
+            self.status.showMessage(tr("회전 — [저장] 을 누르면 PDF 에 들어가 다른 뷰어에서도 바로 보입니다."), 6000)
 
     def _set_pages_hidden(self, pages, hidden: bool):
         """260609-14(D5): 페이지 숨김/해제 — 저장 + 썸네일·뷰어·발표 갱신."""
@@ -1057,7 +1209,7 @@ class EditMixin:
 
     def _refresh_hidden_ui(self, file_path):
         hidden = self._hidden_for(file_path)
-        rots = self._rotations_for(file_path)              # 260609-15(A1)
+        rots = {}                 # 261011-2(§4.7.16): 회전은 문서 `/Rotate` 로 그린다 — 화면 픽스맵 돌리기(보기 회전)는 쓰지 않는다
         deco = self._decorated_for(file_path)              # 260609-21(J4)
         try:
             self.page_thumbs.set_hidden_pages(hidden)

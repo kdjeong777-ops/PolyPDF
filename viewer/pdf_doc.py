@@ -93,6 +93,20 @@ class PdfDocument:
             self._cache_tag = str(self.path)
         # 261010-13(마스터 §4.7.15): 저장 전 크롭을 덧입힌다(파일은 그대로) — 본문·썸네일·발표가 잘린 모양으로 보인다.
         #   캐시 태그에 크롭 판을 넣어 덧입히기 전 픽셀을 다시 쓰지 않게.
+        # 261011-2(§4.7.16): '저장' 이 넣은 'PolyPDF' 레이어는 끈다(메모리에서만) — 옆 파일 꾸밈과 두 번 그려지지 않게
+        try:
+            from viewer import pdf_mirror as _pm
+            _pm.hide_for_view(self.doc)
+        except Exception:
+            pass
+        # 261011-2(§4.7.16): 저장 전 회전도 `/Rotate` 에 덧입힌다 — **크롭보다 먼저**(크롭 여백은 보이는 방향 기준이다)
+        try:
+            from viewer import page_rotate as _pr
+            if _pr.has_pending(self.path):
+                _pr.apply_pending(self.doc, self.path)
+            self._cache_tag += "|rot%d" % _pr.version(self.path)
+        except Exception:
+            pass
         try:
             from viewer import page_crop as _pc
             if _pc.has_pending(self.path):

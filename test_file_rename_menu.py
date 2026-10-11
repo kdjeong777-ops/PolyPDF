@@ -187,18 +187,19 @@ try:
     bt._on_tree_context_menu(pos)
     t = [x for x in seen.get("texts", []) if x]
     want_order = ["파일 폴더 열기", "파일 복사 (1개)", "파일 이동 (1개)", "다른 이름으로 저장...",
-                  "저장(PolyPDF용)", "저장(일반뷰어용)...", "파일·책갈피 이름 변경", "파일·책갈피 삭제",
+                  "저장", "평탄화해서 내보내기...", "파일·책갈피 이름 변경", "파일·책갈피 삭제",
                   "책갈피 모두 펼치기", "책갈피 모두 접기"]
     pos_of = [t.index(w) if w in t else -1 for w in want_order]
     chk(-1 not in pos_of and pos_of == sorted(pos_of), "D 메뉴 순서(사용자 지시)", str(t))
     raw = seen.get("texts", [])
     try:
-        i_fl, i_rn, i_ex = raw.index("저장(일반뷰어용)..."), raw.index("파일·책갈피 이름 변경"), raw.index("책갈피 모두 펼치기")
+        i_fl, i_rn, i_ex = raw.index("평탄화해서 내보내기..."), raw.index("파일·책갈피 이름 변경"), raw.index("책갈피 모두 펼치기")
         chk(raw[i_fl + 1] == "" and raw[i_rn + 2] == "" and i_ex == i_rn + 3,
             "D 저장 그룹 / 이름 변경·삭제 그룹 / 펼치기 그룹이 구분선으로 나뉜다", str(raw))
     except ValueError:
         chk(False, "D 그룹 구분", str(raw))
-    chk("이름 변경" not in t and "삭제" not in t and "일반뷰어용으로 저장 (꾸밈·사진 굽기)..." not in t,
+    chk("이름 변경" not in t and "삭제" not in t and "일반뷰어용으로 저장 (꾸밈·사진 굽기)..." not in t
+        and "저장(일반뷰어용)..." not in t and "저장(PolyPDF용)" not in t,
         "D 옛 이름·옛 자리 항목이 남지 않는다", str(t))
 
     # 저장 셋은 **누른 파일**에
@@ -211,7 +212,7 @@ try:
     called = []
     real_op_save = bt._op_save
     bt._op_save = lambda file_path=None: called.append(file_path)
-    for pick in ("다른 이름으로 저장...", "저장(PolyPDF용)", "저장(일반뷰어용)..."):
+    for pick in ("다른 이름으로 저장...", "저장", "평탄화해서 내보내기..."):
         seen["pick"] = pick
         bt._on_tree_context_menu(bt.tree.visualItemRect(f1).center())
     bt._op_save = real_op_save
@@ -251,7 +252,7 @@ try:
 
     # 파일 메뉴 이름도 같다(사용자 결정)
     labels = [a.text() for a in mw.menuBar().actions()[0].menu().actions()]
-    chk(all(x in labels for x in ("다른 이름으로 저장...", "저장(PolyPDF용)", "저장(일반뷰어용)...")),
+    chk(all(x in labels for x in ("다른 이름으로 저장...", "저장", "평탄화해서 내보내기...")),
         "D 파일 메뉴도 같은 이름", str(labels))
 
     # ── E. 전역 예외 안전망 ─────────────────────────────────────────

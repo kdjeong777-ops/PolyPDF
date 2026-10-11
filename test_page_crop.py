@@ -7,7 +7,7 @@ B. 흰 여백 자동 감지 · 홀짝 좌우 대칭 · 크롭 해제 · 이미 �
 C. 범위 해석 · 스타일 자동 배정(가로긴/세로긴) · 설정 스타일 읽기(기본 2개 늘 앞, 지울 수 없음)
 D. 실제 MainWindow — 툴바 크롭 단추 → '적용' 은 저장 전 크롭(원본 그대로·본문은 잘린 모양·편집 모드) → [저장] 이 원본에
 E. 썸네일 메뉴 '크롭…'·'크롭 해제', [취소] 로 저장 전 크롭 되돌리기
-F. 일반뷰어용 — 새 파일·현재 파일 모두 크롭 바깥을 실제로 지우고 쪽 크기를 줄인다(261010-13)
+F. 평탄화해서 내보내기 — 새 파일로만(261011-2), 크롭 바깥을 실제로 지우고 쪽 크기를 줄인다(261010-13)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -180,7 +180,7 @@ try:
         "E [취소] → 저장 전 크롭을 버리고 디스크 상태로", str(mw.main_view._doc.doc[0].rect))
     chk(disk_heights()[0] == round(842 * 0.9), "E 취소는 원본을 바꾸지 않는다")
 
-    # 일반뷰어용 — 새 파일: 크롭 바깥 실제로 지움
+    # 평탄화해서 내보내기 — 새 파일: 크롭 바깥 실제로 지움
     from PyQt6.QtWidgets import QFileDialog
     out_new = root / "flat.pdf"
     QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(out_new), "PDF (*.pdf)"))
@@ -196,25 +196,21 @@ try:
         return _orig_exec(box)
     QMessageBox.exec = box_exec
     from viewer.i18n import tr as _tr
-    choose["label"] = _tr("새 파일로 저장…")
-    mw._action_save_decorated_pdf(); spin(0.5)
+    mw._action_save_decorated_pdf(); spin(0.5)      # 261011-2: 묻지 않고 새 파일로
     o = fitz.open(str(out_new))
     p0 = o[0]
     pc.set_crop(p0, [p0.mediabox.x0, p0.mediabox.y0, p0.mediabox.x1, p0.mediabox.y1])
     chk(out_new.exists() and "OUTTOP1" not in o[0].get_text() and "Page 1" in o[0].get_text(),
-        "F 일반뷰어용 새 파일 — 크롭 바깥 글자가 실제로 없다(쪽을 넓혀도)", repr(o[0].get_text()[:60]))
+        "F 평탄화 새 파일 — 크롭 바깥 글자가 실제로 없다(쪽을 넓혀도)", repr(o[0].get_text()[:60]))
     chk(round(o[0].mediabox.height) == round(842 * 0.9), "F 쪽 크기(MediaBox)가 크롭 크기", str(o[0].mediabox))
     o.close()
     chk(disk_heights()[0] == round(842 * 0.9), "F 새 파일로 저장하면 원본은 그대로")
-    # 일반뷰어용 — 현재 파일에
-    choose["label"] = _tr("현재 파일에 저장")
-    mw._action_save_decorated_pdf(); spin(1.5)
-    o = fitz.open(str(src))
-    p0 = o[0]
-    pc.set_crop(p0, [p0.mediabox.x0, p0.mediabox.y0, p0.mediabox.x1, p0.mediabox.y1])
-    chk("OUTTOP1" not in p0.get_text() and round(p0.mediabox.height) == round(842 * 0.9),
-        "F 일반뷰어용 현재 파일 — 원본에서 바깥을 지우고 쪽 크기를 줄인다", repr(p0.get_text()[:40]))
-    o.close()
+    # 261011-2(§4.7.16): 현재 파일에 굽기는 없앴다 — 같은 이름을 고르면 막고 원본은 그대로
+    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(src), "PDF (*.pdf)"))
+    mw._action_save_decorated_pdf(); spin(0.5)
+    with fitz.open(str(src)) as o:
+        chk("OUTTOP1" in "".join(p.get_text() for p in o) or o[0].mediabox.height > round(842 * 0.9) - 1,
+            "F 원본과 같은 이름으로는 내보내지 않는다(원본 그대로)")
     QMessageBox.exec = _orig_exec
     chk(not warns and not errs, "D~F 경고·예외 없음", str(warns[:2] + errs[:2]))
     mw.close(); spin(0.2)

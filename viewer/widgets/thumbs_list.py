@@ -826,10 +826,18 @@ class PageThumbs(QWidget):
         #   (책갈피 선택 시 활성창 동기화와 _load_main 이 같은 파일을 두 번 로드하던 문제)
         # 260901: 목록이 비었으면 가드하지 않는다 — 상태만 남고 항목이 없는 조합에서는
         #   '이미 로드됨'이 거짓이므로, 무조건 재채움이 맞다(2차 안전망).
+        # 261011-2(§4.7.16): 저장 전 크롭·회전이 바뀌었으면 같은 파일이라도 다시 연다(`PdfDocument` 가 열 때 덧입힌다)
+        try:
+            from viewer import page_crop as _pc, page_rotate as _pr
+            ver = (_pc.version(path), _pr.version(path))
+        except Exception:
+            ver = None
         if (self._doc is not None and getattr(self, "_doc_path", None) == str(path)
                 and getattr(self, "_doc_mtime", None) == mt
+                and getattr(self, "_doc_ver", None) == ver
                 and self.list.count() > 0):
             return
+        self._doc_ver = ver
         if self._doc is not None:
             self._doc.close()
             self._doc = None

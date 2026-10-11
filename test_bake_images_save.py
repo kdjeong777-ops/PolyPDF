@@ -112,7 +112,7 @@ try:
     #   사진이 들어가는지는 `test_print_bake_paths.py` 가 센다. 여기서는 자리만 확인한다.
     i_bake = src_pr.find("def _baked_src")
     seg = src_pr[i_bake:i_bake + 2500]
-    chk(i_bake > 0 and "_bake_images_into_doc" in seg,
+    chk(i_bake > 0 and "_bake_decorations" in seg,       # 261011-2: 꾸밈·사진 굽기는 `_bake_decorations` 하나
         "⑤ 인쇄 원천 만들기(`_baked_src`)가 사진도 굽는다")
     chk("include_decorations" in seg,
         "⑤ '문서만' 이면 굽지 않는다(같은 함수가 받는다)")
@@ -125,7 +125,8 @@ try:
     chk("file_path" in inspect.signature(ec.EditMixin._action_save_decorated_pdf).parameters,
         "⑥ 다른 파일에도 걸 수 있다(책갈피 우클릭용)")
     s_apply = inspect.getsource(ec.EditMixin._apply_drawings_to_pdf)
-    chk("_bake_images_into_doc" in s_apply, "⑥ 일반뷰어용 저장이 사진을 굽는다")
+    s_deco = inspect.getsource(ec.EditMixin._bake_decorations)          # 261011-2: 굽기는 한 도우미로
+    chk("_bake_decorations" in s_apply and "_bake_images_into_doc" in s_deco, "⑥ 평탄화 내보내기가 사진을 굽는다")
     chk("garbage=4" in s_apply and "deflate=True" in s_apply,
         "⑥ 저장 옵션은 관례대로(마스터 §4.5.10)")
 
@@ -134,13 +135,13 @@ try:
     s_app = inspect.getsource(appmod)
     i_file = s_app.find('m_file = bar.addMenu')
     seg_f = s_app[i_file:i_file + 2000]
-    for label in ("저장(PolyPDF용)", "다른 이름으로 저장", "저장(일반뷰어용)"):   # 261008-1 이름
+    for label in ('tr("저장")', "다른 이름으로 저장", "평탄화해서 내보내기"):   # 261011-2 이름(§4.7.16)
         chk(label in seg_f, "⑦ 파일 메뉴에 '%s'" % label)
     chk("_force_save_as" in s_app,
         "⑦ '다른 이름으로' 는 💾 와 같은 길에 깃발만 세운다(저장 규칙 한 벌)")
     from viewer.widgets import bookmark_tree as bt
     s_bt = inspect.getsource(bt)
-    chk("flattenFileRequested" in s_bt and "저장(일반뷰어용)" in s_bt,
+    chk("flattenFileRequested" in s_bt and "평탄화해서 내보내기" in s_bt,
         "⑦ 책갈피 우클릭에 저장 항목")
     chk("self.flattenFileRequested.emit(_dir_target)" in s_bt,   # 261008-1: 책갈피 행이면 그 파일
         "⑦ ★ **누른 그 파일**에 작용한다(사용자 결정)")
