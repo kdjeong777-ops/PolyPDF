@@ -175,9 +175,11 @@ try:
     for i in range(2):
         p = d.new_page(width=595, height=842); p.insert_text((72, 100), f"COPY{i}", fontsize=20)
     d[1].set_rotation(90)
+    d.set_metadata({"keywords": "Author1; 저자키워드"})          # 원래(저자) 키워드 — 지켜야 한다(261011-5)
     d.save(str(dsrc)); d.close()
     mw.open_pdfs([str(dsrc)]); spin(1.0)
-    ms.set_drawings(str(dsrc), 0, [dict(RED)]); ms.set_drawings(str(dsrc), 1, [dict(RED)]); ms.save()
+    TB = {"text_box": True, "rect": [0.1, 0.6, 0.8, 0.66], "text": "LAYERONLYWORD", "size_pt": 14}
+    ms.set_drawings(str(dsrc), 0, [dict(RED), TB]); ms.set_drawings(str(dsrc), 1, [dict(RED)]); ms.save()
     hs = mw._ensure_hyperlink_store()
     hs.add_url_link(str(dsrc), 0, "영상", "https://www.youtube.com/watch?v=x"); hs.save()
     if mw.bookmark_tree._tags:
@@ -190,8 +192,19 @@ try:
         links = [l for l in f2[0].get_links() if str(l.get("uri", "")).startswith("https://www.youtube.com")]
         chk(bool(links) and f2.xref_get_key(links[0]["xref"], "NM")[1] == pm.LINK_NM,
             "D2 하이퍼링크 사본(링크 주석, /NM 표시)", str(links[:1]))
-        chk("도로" in (f1.metadata or {}).get("keywords", "") or not mw.bookmark_tree._tags,
-            "D3 태그가 /Keywords 에", str((f1.metadata or {}).get("keywords")))
+        kw = (f1.metadata or {}).get("keywords", "")
+        chk(("도로" in kw or not mw.bookmark_tree._tags) and "Author1" in kw and "저자키워드" in kw,
+            "D3 태그가 /Keywords 에 — 원래 저자 키워드도 남는다", kw)
+        chk(pm.author_keywords(f1) == "Author1; 저자키워드",
+            "D3 원래 키워드는 따로 남아 자동 태그가 PolyPDF 태그를 저자 키워드로 다시 읽지 않는다(되먹임 없음)", pm.author_keywords(f1))
+    from viewer import text_extract2 as _te
+    _txt = " ".join(t for _p, t in (_te.clean_page_texts(str(dsrc), [0]) or []))
+    import viewer.indexer as _ix
+    with fitz.open(str(dsrc)) as f1:
+        raw = f1[0].get_text()
+        pm.hide_for_view(f1); hid = f1[0].get_text()
+    chk("LAYERONLYWORD" in raw and "LAYERONLYWORD" not in hid and "COPY0" in _txt and "LAYERONLYWORD" not in _txt,
+        "D3b 레이어 글상자 글은 텍스트 추출(색인·텍스트 창)에서 빠진다", repr(_txt[:80]))
     chk(near(pdfium_red(dsrc, 0), (0.05, 0.05, 0.30, 0.12), 0.04) and near(pdfium_red(dsrc, 1), (0.05, 0.05, 0.30, 0.12), 0.04),
         "D4 다른 뷰어(pdfium)에 꾸밈이 보이는 자리 그대로(회전 쪽 포함)", str((pdfium_red(dsrc, 0), pdfium_red(dsrc, 1))))
     from viewer.pdf_doc import PdfDocument

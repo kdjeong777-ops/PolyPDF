@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-11 10:38+0900\n"
+"POT-Creation-Date: 2026-10-11 12:21+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -399,7 +399,7 @@ msgid "저장"
 msgstr "Save"
 
 # | page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."
 msgstr "Bookmarks, page edits, rotation and crop go into the original PDF; annotations (lines, shapes, text, photos), hyperlinks and tags are also put into the PDF so other viewers show them — you can keep editing in PolyPDF (same as 💾)."
 
@@ -409,7 +409,7 @@ msgstr "Flatten and Export..."
 
 #: viewer/app.py
 msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."
-msgstr "Exports a new PDF with annotations, photos and hyperlinks baked into the page and content outside the crop really removed (the original is untouched). Signed documents are signed again at the same places."
+msgstr "Exports a new PDF with annotations, photos and hyperlinks flattened into the page and content outside the crop really removed (the original is untouched). Signed documents are signed again at the same places."
 
 #: viewer/app.py
 msgid "인쇄..."
@@ -4232,7 +4232,7 @@ msgstr " Save"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."
-msgstr "Save — bookmarks, page edits, rotation and crop go into the original PDF; annotations, hyperlinks and tags are also put into the PDF so other viewers show them. To bake them or remove content outside a crop, use 'Flatten and Export'."
+msgstr "Save — bookmarks, page edits, rotation and crop go into the original PDF; annotations, hyperlinks and tags are also put into the PDF so other viewers show them. To flatten them or remove content outside a crop, use 'Flatten and Export'."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "🗑️ 삭제"
@@ -4441,10 +4441,6 @@ msgstr "The target PDF file is unknown."
 #: viewer/widgets/bookmark_tree.py
 msgid "파일 폴더 열기"
 msgstr "Open File Location"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
-msgstr "Writes bookmarks and page edits into the original PDF, and keeps annotations (lines, shapes, text, photos, hyperlinks) next to it in page_meta.json and hyperlinks.json — shown in PolyPDF (same as 💾)."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."
@@ -10316,4 +10312,7 @@ msgstr "Getting Started"
 
 #~ msgid "선택한 항목과 그 조상만 남기고 나머지를 삭제할까요?"
 #~ msgstr "Keep only the selected items and their ancestors, and delete the rest?"
+
+#~ msgid "책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
+#~ msgstr "Writes bookmarks and page edits into the original PDF, and keeps annotations (lines, shapes, text, photos, hyperlinks) next to it in page_meta.json and hyperlinks.json — shown in PolyPDF (same as 💾)."
 

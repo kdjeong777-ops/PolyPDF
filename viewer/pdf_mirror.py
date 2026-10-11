@@ -268,3 +268,51 @@ def take_marks(doc) -> dict:
         if len(keep) != len(refs):
             doc.xref_set_key(page.xref, "Annots", "[" + " ".join(f"{x} 0 R" for x in keep) + "]")
     return out
+
+
+# ── 태그 → /Keywords (저자 키워드는 지킨다, 261011-5) ─────────────────────
+AUTHOR_KW = "PolyPDFAuthorKeywords"
+
+
+def _split_kw(s) -> list:
+    return [w.strip() for w in re.split(r"[;,\n]+", str(s or "")) if w.strip()]
+
+
+def author_keywords(doc) -> str:
+    """원래(저자·다른 프로그램) 키워드 — '저장' 이 `/Keywords` 를 쓰기 전 값을 `/PolyPDFAuthorKeywords` 에 남겨 둔다.
+    자동 태그가 PolyPDF 가 쓴 태그를 저자 키워드로 다시 읽어 굳히지 않게(되먹임) 이것을 읽는다."""
+    try:
+        x = _info_xref(doc)
+        if x:
+            t, v = doc.xref_get_key(x, AUTHOR_KW)
+            if t == "string":
+                return v
+            if stored_hash(doc):
+                return ""                       # PolyPDF 가 쓴 /Keywords 뿐(원래 키워드가 없었다)
+    except Exception:
+        pass
+    return str((doc.metadata or {}).get("keywords") or "")
+
+
+def set_tag_keywords(doc, tags) -> bool:
+    """`/Keywords` = 원래 키워드 + PolyPDF 태그(겹침 없이). 처음 쓸 때 원래 키워드를 `/PolyPDFAuthorKeywords` 에 남긴다.
+    태그가 없고 쓴 적도 없으면 건드리지 않는다. 바꿨으면 True."""
+    import fitz
+    tags = [str(t).strip() for t in (tags or []) if str(t).strip()]
+    x = _info_xref(doc)
+    t, v = doc.xref_get_key(x, AUTHOR_KW) if x else ("null", "")
+    if t == "string":
+        orig = v
+    else:
+        if not tags:
+            return False
+        orig = "" if stored_hash(doc) else str((doc.metadata or {}).get("keywords") or "")
+        x = _info_xref(doc, create=True)
+        doc.xref_set_key(x, AUTHOR_KW, fitz.get_pdf_str(orig))
+    out, seen = [], set()
+    for w in _split_kw(orig) + tags:
+        if w.lower() not in seen:
+            seen.add(w.lower())
+            out.append(w)
+    set_keywords(doc, ", ".join(out))
+    return True

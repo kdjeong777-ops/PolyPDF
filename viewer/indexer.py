@@ -432,6 +432,12 @@ class PdfIndex:
             doc = fitz.open(file_path)
         except Exception:
             return  # 손상된 파일은 건너뜀
+        # 261011-5(마스터 §4.7.16): '저장' 이 넣은 'PolyPDF' 레이어(꾸밈 글상자 글)는 추출에서 뺀다 — 본문 화면처럼
+        try:
+            from viewer import pdf_mirror as _pm
+            _pm.hide_for_view(doc)
+        except Exception:
+            pass
         try:
             # 260906-4: 어차피 연 김에 목록 조사 값(암호화·내부 책갈피)도 같이 기록한다 —
             #   책갈피창이 같은 파일을 다시 열지 않아도 되게(응답성 SOT §4).

@@ -460,7 +460,7 @@ class SignMixin:
             QMessageBox.information(self, tr("서명"), tr("이 칸은 지정된 사람의 인증서로만 서명할 수 있습니다: {names}").format(
                 names=", ".join(getattr(dlg, "_field_signer_names", ()) or ()) or "?"))
             return "retry"
-        # 2단계(SOT §3.6): 여러 쪽 — 같은 자리(쪽 좌표)에, 쪽 밖이면 쪽 안으로. 회전 쪽은 막는다.
+        # 2단계(SOT §3.6): 여러 쪽 — 같은 자리(쪽 좌표)에, 쪽 밖이면 쪽 안으로. 회전 쪽도 겉모양을 돌려 넣어 서명(261011-2).
         # 3단계(SOT §3.7): 빈 칸 채우기는 그 칸 하나(쪽 고르기 끔)
         pages = [pidx] if field else dlg.pages()
         if not pages:

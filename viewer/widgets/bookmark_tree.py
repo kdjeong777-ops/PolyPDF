@@ -2157,7 +2157,7 @@ class BookmarkTree(QWidget):
             act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
             act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
             act_save_poly = menu.addAction(tr("저장"))
-            act_save_poly.setToolTip(tr("책갈피·쪽 편집은 원본 PDF 에 반영하고, 꾸밈(선·도형·글·사진·하이퍼링크)은 PDF 옆 page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."))
+            act_save_poly.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
             act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
             act_flatten.setToolTip(
                 tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
@@ -3537,7 +3537,7 @@ class BookmarkTree(QWidget):
 
     # ---- 저장: 평탄화 → apply_bookmarks_to_pdf -------------------------
     def _op_save(self, file_path: str = None):
-        """💾 저장. `file_path` 를 주면 그 파일(261008-1: 책갈피창 우클릭 '저장(PolyPDF용)')."""
+        """💾 저장. `file_path` 를 주면 그 파일(261008-1: 책갈피창 우클릭 '저장' — 옛 '저장(PolyPDF용)')."""
         # 260611-18(A4): 책갈피 변경이 없어도 개체/주석(page_meta) 변경이 있으면 저장.
         meta_dirty = bool(self._meta_is_dirty and self._meta_is_dirty())
         target = self._file_node_for_path(file_path) if file_path else self._target_file_item()
@@ -3556,7 +3556,7 @@ class BookmarkTree(QWidget):
         # 260606-13: 원본 PDF의 현재 책갈피(TOC)와 비교해 '실제 변경 여부'로 메시지 결정
         orig = self._read_orig_toc(src)
         # 261008-1(§4.7.13): 아직 펼쳐 읽지 않은 파일은 트리에 책갈피가 **없을 뿐** 지운 것이 아니다.
-        #   우클릭 '저장(PolyPDF용)' 은 접힌 파일에서 흔히 눌린다 — 그대로 비교하면 '모든 책갈피가
+        #   우클릭 '저장' 은 접힌 파일에서 흔히 눌린다 — 그대로 비교하면 '모든 책갈피가
         #   제거되었습니다' 를 묻고, 예를 누르면 책갈피가 실제로 지워졌다. → 원본 책갈피 그대로 둔다.
         if not target.data(0, self.DATA_TOC_LOADED) and not bookmarks_raw:
             bookmarks_raw = list(orig)

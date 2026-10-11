@@ -194,6 +194,12 @@ def _layout_metrics(path, page_texts) -> tuple:
         try:
             n = d.page_count
             meta = dict(d.metadata or {})
+            # 261011-5(태그 SOT §9.2-6): '저장' 이 /Keywords 에 넣은 PolyPDF 태그를 저자 키워드로 다시 읽지 않는다(되먹임)
+            try:
+                from viewer import pdf_mirror as _pm
+                meta["keywords"] = _pm.author_keywords(d)
+            except Exception:
+                pass
             toc = [t[1] for t in (d.get_toc() or [])][:80]
             step = max(1, n // TUNING["LAYOUT_SAMPLE"])
             idxs = list(range(0, n, step))[:TUNING["LAYOUT_SAMPLE"]]

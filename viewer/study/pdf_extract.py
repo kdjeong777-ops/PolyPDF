@@ -115,6 +115,12 @@ def extract_clean_debug(path, max_chars: int = 0, exclude_regions=None,
         doc = fitz.open(str(path))
     except Exception as e:
         return "", {"error": f"{type(e).__name__}: {e}", **info}
+    # 261011-5(마스터 §4.7.16): '저장' 이 넣은 'PolyPDF' 레이어(꾸밈 글상자 글)는 추출에서 뺀다 — 본문 화면처럼
+    try:
+        from viewer import pdf_mirror as _pm
+        _pm.hide_for_view(doc)
+    except Exception:
+        pass
     n = doc.page_count
     info["pages"] = n
 

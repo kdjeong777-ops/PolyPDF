@@ -4187,6 +4187,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 return
             doc = fitz.open(str(src))
             try:
+                # 261011-5(§4.7.15·§4.7.16): 저장 전 회전을 먼저 — 여백·가로/세로 판정은 회전 뒤 보이는 방향 기준
+                from viewer import page_rotate as _prc
+                _prc.apply_pending(doc, src)
                 by = _pc.assign_styles(doc, plan["pages"], _pc.load_styles(plan["styles"]),
                                        plan["auto"], plan["chosen_id"])
                 total = max(1, len(plan["pages"]))

@@ -1989,6 +1989,12 @@ def display_rows(pdf_path, page: int, *, ocr_lookup=None, words_lookup=None) -> 
         doc = fitz.open(str(pdf_path))
     except Exception:
         return []
+    # 261011-5(마스터 §4.7.16): '저장' 이 넣은 'PolyPDF' 레이어(꾸밈 글상자 글)는 추출에서 뺀다 — 본문 화면처럼
+    try:
+        from viewer import pdf_mirror as _pm
+        _pm.hide_for_view(doc)
+    except Exception:
+        pass
     try:
         pno = int(page)
         if pno < 0 or pno >= doc.page_count:
@@ -2050,6 +2056,12 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
         doc = fitz.open(str(pdf_path))
     except Exception:
         return []
+    # 261011-5(마스터 §4.7.16): '저장' 이 넣은 'PolyPDF' 레이어(꾸밈 글상자 글)는 추출에서 뺀다 — 본문 화면처럼
+    try:
+        from viewer import pdf_mirror as _pm
+        _pm.hide_for_view(doc)
+    except Exception:
+        pass
     try:
         from viewer.text_fix_store import store as _fix_store
         fixes = _fix_store()

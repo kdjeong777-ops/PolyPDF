@@ -763,8 +763,7 @@ class EditMixin:
             if payload["deco"] or payload["img"] or payload["link"]:
                 oc = _pm.ensure_layer(doc)
                 self._bake_decorations(doc, str(src), links=bool(payload["link"]), link_kinds=("url", "pdf"), oc=oc)
-            if payload["tags"]:
-                _pm.set_keywords(doc, ", ".join(str(t) for t in payload["tags"]))
+            _pm.set_tag_keywords(doc, payload["tags"])      # 원래 키워드 + 태그(원래 것은 따로 남긴다, 261011-5)
             _pm.store_hash(doc, _pm.fingerprint(dict(payload, geom=_pm.geometry(doc))))
         except Exception:
             if doc is not None:

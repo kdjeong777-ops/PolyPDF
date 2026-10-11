@@ -161,6 +161,12 @@ class CropDialog(QDialog):
         self.resize(1080, 700)
         self._doc = fitz.open(str(path))          # 미리보기 전용 사본 핸들 — 저장하지 않는다
         try:
+            # 261011-5(마스터 §4.7.15·§4.7.16): 저장 전 회전을 **먼저** — 여백(위·아래·왼·오른쪽)은 회전 뒤 보이는 방향 기준이다
+            from viewer import page_rotate as _pr
+            _pr.apply_pending(self._doc, path)
+        except Exception:
+            pass
+        try:
             pc.apply_pending(self._doc, path)     # 261010-13: 저장 전 크롭도 '이미 크롭된 쪽' 으로 보이게
         except Exception:
             pass

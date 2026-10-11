@@ -73,6 +73,12 @@ try:
     chk(hits and all(q.rect.contains(h * q.rotation_matrix) for h in hits),
         "A7 회전한 쪽에서도 글자 찾기(보이는 쪽 안 좌표로 옮겨진다)", str(hits))
 
+    # A8 261011-5: 크롭 창은 저장 전 회전을 먼저 덧입힌다 — 여백(위·아래·왼·오른)은 회전 뒤 보이는 방향 기준
+    from viewer.widgets.crop_dialog import CropDialog
+    cd = CropDialog(str(doc_path), current_page=1)
+    chk(cd._doc[1].rotation == 90, "A8 크롭 창도 저장 전 회전을 반영한다", str(cd._doc[1].rotation))
+    cd.close()
+
     # ── B ──
     mw.bookmark_tree._op_save(str(doc_path)); spin(1.5)
     with fitz.open(str(doc_path)) as f:
