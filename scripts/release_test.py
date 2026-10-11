@@ -440,6 +440,8 @@ def plan(base_arg, urgent=False) -> int:
         L += ["", "## 묶음 릴리스 — 최대 범위(릴리스 SOT §4.1)", "",
               "- 전체 검사: `python scripts\\release_test.py checks --ui` (CI 가 돌리지 않는 것까지 `test_*.py` 전부 + 화면 점검 ko·en)",
               "- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)",
+              "- 부하 시험: `python scripts\\load_test.py` — 큰 폴더 색인 중 테마·정렬·보기·편집·쪽 넘기기 정지 < 1초, 테마 왕복 누수 없음(261011-7)",
+              "- 다크 화면 점검: `python scripts\\ui_check.py --theme dark --out <폴더>` — 아이콘·글자가 보이는지 눈으로(261011-6)",
               "- 기능 점검표(릴리스 SOT §4.2) — 시험 프로필로 띄운 빌드본에서 주요 기능을 차례로"]
         if c["level"] == "skip":
             L.append("- 쌓인 변경이 미미하다 — 측정 묶음·기능 점검표를 건너뛸지 사용자에게 묻는다(전체 검사는 한다)")
