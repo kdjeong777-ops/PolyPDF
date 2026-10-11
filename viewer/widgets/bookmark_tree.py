@@ -1894,8 +1894,20 @@ class BookmarkTree(QWidget):
         261010-27: 서명된 파일은 `sign` 아이콘을 지킨다."""
         ico = self._leaf_icon()
         sig = self._signed_icon()
-        for it in self._iter_file_nodes():
-            it.setIcon(0, sig if it.data(0, self.DATA_SIGNED) else ico)
+        # 261011-7(응답성 SOT §4·⑥): 열 폭이 '내용에 맞춤'(ResizeToContents)이라 아이콘 하나를 바꿀 때마다 트리가 모든 행을
+        #   다시 재서 열 폭을 셈했다 — 행 수의 제곱. 파일 3,060개에서 47초 '응답 없음'(설치 시험 T6, 색인 중 다크 전환).
+        #   바꾸는 동안만 맞춤·화면 갱신을 멈추고 끝난 뒤 한 번 잰다(실측 0.1초 미만).
+        from PyQt6.QtWidgets import QHeaderView as _QHV
+        hdr = self.tree.header()
+        mode = hdr.sectionResizeMode(0)
+        hdr.setSectionResizeMode(0, _QHV.ResizeMode.Interactive)
+        self.tree.setUpdatesEnabled(False)
+        try:
+            for it in self._iter_file_nodes():
+                it.setIcon(0, sig if it.data(0, self.DATA_SIGNED) else ico)
+        finally:
+            self.tree.setUpdatesEnabled(True)
+            hdr.setSectionResizeMode(0, mode)
 
     def _signed_icon(self):
         try:

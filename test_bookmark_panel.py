@@ -110,6 +110,18 @@ bt.select_for_page(r"C:\x\A.pdf", 4)   # 동기화 시도
 chk(len(bt.tree.selectedItems()) == 2, "동기화가 다중 선택을 깨지 않음(보존)",
     f"sel={len(bt.tree.selectedItems())}")
 
+# 261011-7(응답성 SOT §4·⑥): 테마 바꾸기의 파일 행 아이콘 다시 그리기는 행이 많아도 1초 안 —
+#   열 폭 '내용에 맞춤' 때문에 행마다 전체를 다시 재 3,060개에서 47초 '응답 없음'(설치 시험 T6, 색인 중 다크 전환)
+import time as _time
+bt.show()
+for i in range(1500):
+    it = QTreeWidgetItem(["file_%04d" % i])
+    it.setData(0, bt.DATA_FILE, "C:/x/file_%04d.pdf" % i)
+    bt.tree.addTopLevelItem(it)
+app.processEvents()
+_t = _time.perf_counter(); bt.refresh_icons(); app.processEvents(); _dt = _time.perf_counter() - _t
+chk(_dt < 1.0, "파일 행 1500개 아이콘 다시 그리기 1초 안(테마 전환)", "%.2fs" % _dt)
+
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 sys.stdout.flush()
