@@ -22,11 +22,26 @@ bg = mw._mv[0].scene.backgroundBrush().color()
 check("메인뷰 배경 어두움", bg.lightness() < 60, f"L={bg.lightness()}")
 check("드로어 다크 스타일", "2d2d30" in mw._drawer.styleSheet().lower())
 
+# 261011-6(디자인 SOT §2.5): 창보다 테마가 나중에 적용돼도 테마 단색 아이콘·안내 글자가 다크 색이다
+def _icon_lightness(btn):
+    img = btn.icon().pixmap(16, 16).toImage()
+    ls = [QColor(img.pixel(x, y)).lightness() for x in range(16) for y in range(16) if QColor.fromRgba(img.pixel(x, y)).alpha() > 128]
+    return max(ls) if ls else -1
+mv0 = mw._mv[0]
+check("다크 — 크롭 단추 아이콘이 밝은 색", _icon_lightness(mv0.btn_crop) > 180, f"L={_icon_lightness(mv0.btn_crop)}")
+check("다크 — 전자서명 단추 아이콘이 밝은 색", _icon_lightness(mv0.btn_sign) > 180, f"L={_icon_lightness(mv0.btn_sign)}")
+check("다크 — 책갈피창 트리/단일 아이콘이 밝은 색", _icon_lightness(mw.bookmark_tree.btn_view_mode_v) > 180,
+      f"L={_icon_lightness(mw.bookmark_tree.btn_view_mode_v)}")
+from PyQt6.QtGui import QPalette
+ph = app.palette().color(QPalette.ColorRole.PlaceholderText); base = app.palette().color(QPalette.ColorRole.Base)
+check("다크 — 입력란 안내 글자가 바탕과 구분된다", ph.lightness() - base.lightness() > 80, f"ph={ph.lightness()} base={base.lightness()}")
+
 # 라이트 적용 → 배경 흰색
 mw.apply_theme("light")
 bg2 = mw._mv[0].scene.backgroundBrush().color()
 check("라이트 배경 밝음", bg2.lightness() > 200, f"L={bg2.lightness()}")
 check("theme.is_dark False", not theme.is_dark())
+check("라이트 — 크롭 단추 아이콘이 진한 색", 0 <= _icon_lightness(mv0.btn_crop) < 120, f"L={_icon_lightness(mv0.btn_crop)}")
 
 # 썸네일 카드 다크: 배경 어두운 픽스맵
 theme.set_dark(True)

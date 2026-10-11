@@ -8028,6 +8028,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         p.setColor(QPalette.ColorRole.ButtonText, txt)
         p.setColor(QPalette.ColorRole.ToolTipBase, base)
         p.setColor(QPalette.ColorRole.ToolTipText, txt)
+        # 261011-6(디자인 SOT §2.5): 안내 글자 — 빠져 있어 Qt 기본값(바탕과 거의 같은 색)이 들어가 안 보였다
+        p.setColor(QPalette.ColorRole.PlaceholderText, QColor(150, 150, 150))
         p.setColor(QPalette.ColorRole.Highlight, hl)
         p.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
         p.setColor(QPalette.ColorRole.Link, QColor(90, 160, 255))
@@ -8040,6 +8042,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _apply_theme_widgets(self, dark: bool):
         """260606-14: 팔레트로 안 잡히는 곳(메인뷰 배경·드로어·썸네일 카드)에 테마 반영."""
+        # 261011-6(디자인 SOT §2.5): 본문 도구 줄의 테마 단색 아이콘(크롭·전자서명)도 — 창보다 테마가 나중에 적용된다
+        for _mv in getattr(self, "_mv", []) or []:
+            try:
+                _mv.refresh_theme_icons(dark)
+            except Exception:
+                pass
         # 260902-5: 책갈피 트리 파일 아이콘(테마 단색) 재적용
         for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
             try:

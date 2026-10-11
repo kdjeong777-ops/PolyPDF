@@ -56,7 +56,7 @@ BILINGUAL_OK = ("/ Language", "Language / ", "Restart now", "Later")
 # ════════════════════════════════════════════════════════════════════════
 #  하위 프로세스: 한 언어 실행
 # ════════════════════════════════════════════════════════════════════════
-def run_one(lang: str, out_root: Path, only=None):
+def run_one(lang: str, out_root: Path, only=None, theme: str = "light"):
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     if os.path.isdir(r"C:\Windows\Fonts"):
         os.environ["QT_QPA_FONTDIR"] = r"C:\Windows\Fonts"     # 실제 글꼴 폭으로 잰다
@@ -400,6 +400,7 @@ def run_one(lang: str, out_root: Path, only=None):
         mw = MainWindow()
         mw._skip_save_on_close = True
         mw.resize(1400, 900)
+        mw.apply_theme(theme)               # 261011-6: --theme dark 로 다크 모드 화면도 찍는다(디자인 SOT §2.5)
         mw.show()
         pump(1.0)
         record("main_nodoc", mw, note="크기 1400x900 은 스크립트가 정한 값")
@@ -568,18 +569,19 @@ def main():
     ap.add_argument("--lang", choices=LANGS)
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--only", default="", help="쉼표로 구분한 창 이름만 (예: settings,print)")
+    ap.add_argument("--theme", choices=("light", "dark"), default="light", help="화면 스타일(261011-6) — dark 면 다크 모드로 찍는다")
     a = ap.parse_args()
     out_root = Path(a.out)
     out_root.mkdir(parents=True, exist_ok=True)
     if a.lang:
-        run_one(a.lang, out_root, [x for x in a.only.split(",") if x] or None)   # 안에서 os._exit
+        run_one(a.lang, out_root, [x for x in a.only.split(",") if x] or None, a.theme)   # 안에서 os._exit
     # 언어마다 하위 프로세스 — 창은 만들 때 언어를 읽는다
     code = 0
     for lang in LANGS:
         print("=== %s ===" % lang, flush=True)
         env = dict(os.environ, PYTHONIOENCODING="utf-8")
         r = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--lang", lang, "--out", str(out_root),
-                            "--only", a.only],
+                            "--only", a.only, "--theme", a.theme],
                            cwd=str(PUBLIC), env=env)
         code = code or r.returncode
     write_summary(out_root)

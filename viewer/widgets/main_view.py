@@ -3059,6 +3059,14 @@ class MainView(QWidget):
         self._hidden_pages = set(int(p) for p in (pages or set()))
         self._update_hidden_band()
 
+    def refresh_theme_icons(self, dark=None) -> None:
+        """261011-6(디자인 SOT §2.5·§4): 테마 단색 아이콘(크롭·전자서명 단추)을 지금 테마 색으로 다시 그린다.
+        창을 만든 **뒤에** 테마가 적용돼 다크 모드에서도 라이트 색(#444)이 남아 거의 안 보였다."""
+        from viewer.widgets.icons import themed_icon as _ti
+        for b, name in ((getattr(self, "btn_crop", None), "crop"), (getattr(self, "btn_sign", None), "sign")):
+            if b is not None:
+                b.setIcon(_ti(name, dark=dark, size=16))
+
     def set_rotations(self, rotations):
         """260609-15(A1): {page0: deg} — 현재 페이지 회전 반영."""
         self._rotations = {int(k): int(v) % 360 for k, v in (rotations or {}).items()}
