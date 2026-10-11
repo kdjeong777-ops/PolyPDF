@@ -542,6 +542,8 @@ if (-not $Elevated) {
     }
 
     # 1.7) 설치 폴더가 쓰기 불가(예: Program Files)면 UAC로 자체 승격해서 적용
+    # 261011-3(§14.5 U20): 승격 PowerShell 은 Start-Process 에도 -WindowStyle Hidden — 인자로만 주면 콘솔을 만든 뒤에
+    #   숨겨 파란 콘솔이 잠깐 보였다. Start-Process 쪽은 처음부터 숨긴 창으로 만든다(ShellExecute nShow).
     # 260902-2: 루트만 검사하면 놓친다 — 옛 설치본(0.43 등)은 루트는 쓸 수 있는데 `_internal`
     #   아래 일부 폴더(setuptools 등)가 관리자 소유라, 압축 해제 중 '액세스 거부'로 실패했다.
     #   → `_internal` 과 그 안의 첫 하위 폴더 몇 개까지 같이 검사한다.
@@ -560,7 +562,7 @@ if (-not $Elevated) {
     if ($needElevate -and -not $isAdmin) {
         $lbl.Text = $T.elevating; [System.Windows.Forms.Application]::DoEvents()
         try {
-            Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+            Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList @(
                 '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden',
                 '-File', $PSCommandPath, '-Elevated') | Out-Null
             # 승격 인스턴스가 압축 해제·재실행·정리(.ps1 삭제)를 담당. 이 인스턴스는 종료.
@@ -702,7 +704,7 @@ if ($fail -gt 0 -and $denied -and -not $Elevated -and -not $isAdmin) {
     $lbl.Text = $T.reelevate
     [System.Windows.Forms.Application]::DoEvents()
     try {
-        Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+        Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList @(
             '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden',
             '-File', $PSCommandPath, '-Elevated') | Out-Null
         $form.Close(); exit

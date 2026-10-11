@@ -13,7 +13,7 @@ E. 종료할 때 '업그레이드 후 종료' 도 받은 뒤에 설치 도우미
 F. 설치 도우미 스크립트: 예비 받기(1.5)가 다른 창 닫기(1.2)보다 앞
 G. 릴리스 설명 스크립트가 커밋 메시지로 설명을 만든다
 """
-import os, sys, faulthandler, tempfile, subprocess
+import os, re, sys, faulthandler, tempfile, subprocess
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -140,6 +140,10 @@ try:
     chk(ok_at >= 0 and ok_at < ps.find("ie4uinit.exe") < ps.find("# 3) 재실행"),
         "F 업데이트 성공 뒤 아이콘 캐시 새로 고침(ie4uinit -show)이 재실행보다 앞")
     chk("'-show'" in ps, "F ie4uinit 에 -show")
+    # 261011-3(§14.5 U20): 승격 PowerShell 은 처음부터 숨긴 창 — 파란 콘솔이 잠깐 보이지 않게
+    runas = [ln for ln in ps.splitlines() if "Start-Process powershell.exe" in ln]
+    chk(len(runas) == 2 and all("-Verb RunAs" in r and "-WindowStyle Hidden" in r for r in runas),
+        "F 승격 PowerShell 두 곳 모두 Start-Process -WindowStyle Hidden(콘솔 깜빡임 없음)", str(runas))
 
     # ── G ──
     here = os.path.dirname(os.path.abspath(__file__))
