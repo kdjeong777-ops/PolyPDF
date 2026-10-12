@@ -130,7 +130,9 @@ mw._on_bookmark_activated(files[1], 0); app.processEvents()
 mv.go_to_page(2); app.processEvents()
 tp._filter_btns["all"].click(); app.processEvents()
 fw = QApplication.focusWidget()
-print("  (info) 필터 클릭 후 focusWidget =", type(fw).__name__ if fw else None)
+print("  (info) 필터 클릭 후 focusWidget =", type(fw).__name__ if fw else None,
+      (fw.text() if hasattr(fw, "text") else ""), type(fw.parent()).__name__ if fw is not None and fw.parent() else "",
+      "active=", QApplication.activeWindow() is mw)
 # 실제 사용자처럼 '현재 포커스 위젯'에 키를 보냄
 target = fw or mv.view
 kev = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Down, Qt.KeyboardModifier.NoModifier)

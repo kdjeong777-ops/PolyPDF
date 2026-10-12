@@ -32,6 +32,10 @@ class IndexingDialog(QDialog):
                             | Qt.WindowType.CustomizeWindowHint
                             | Qt.WindowType.WindowCloseButtonHint)
         self.setModal(False)
+        # 261012-8(검색 SOT §4.5): 늦게 혼자 뜨는 안내 창이다 — 뜰 때 **창 활성·키보드 포커스를 가져가지 않는다**.
+        #   종전에는 0.4초 뒤 뜨면서 활성 창이 돼, 본문에서 치던 ↓·PageDown 이 이 창의 단추로 갔다
+        #   (test_boundary_e2e 의 간헐 실패 원인 — 10/10 부터). 단추는 마우스로 그대로 누른다.
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setMinimumWidth(420)
         self._hidden_by_user = False
         self._finished = False
@@ -62,6 +66,7 @@ class IndexingDialog(QDialog):
         self.btn_hide.setToolTip(tr("창을 닫고 상태바 메시지로만 진행 상황을 봅니다(인덱싱은 계속)"))
         # 디자인 §2.7: Enter 가 버튼을 누르지 않게
         self.btn_hide.setAutoDefault(False); self.btn_hide.setDefault(False)
+        self.btn_hide.setFocusPolicy(Qt.FocusPolicy.NoFocus)      # 261012-8: 포커스를 빼앗지 않는다
         self.btn_hide.clicked.connect(self.hide_to_status)
         row.addWidget(self.btn_hide)
         lay.addLayout(row)
@@ -80,8 +85,16 @@ class IndexingDialog(QDialog):
     def _show_if_running(self):
         if self._finished or self._hidden_by_user:
             return
+        from PyQt6.QtWidgets import QApplication
+        prev = QApplication.activeWindow()
+        fw = QApplication.focusWidget()
         self.show()
         self.raise_()
+        # 261012-8: 플랫폼이 WA_ShowWithoutActivating 을 따르지 않아도 하던 창·포커스를 되돌린다
+        if prev is not None and prev is not self:
+            prev.activateWindow()
+            if fw is not None:
+                fw.setFocus()
 
     def hide_to_status(self):
         """[아래로 숨기기] — 창만 닫고 상태바에 맡긴다."""

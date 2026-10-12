@@ -95,10 +95,17 @@ bt.btn_edit.setChecked(False); app.processEvents()
 
 # ── ④ 인덱싱 진행 창 ───────────────────────────────────────────────────────
 from viewer.widgets.indexing_dialog import IndexingDialog
+mw.raise_(); mw.activateWindow(); QTest.qWait(100)
+mw.main_view.view.setFocus(); app.processEvents()
+_was_active = QApplication.activeWindow() is mw
 dlg = IndexingDialog(mw, "표본폴더"); dlg.start()
 chk(not dlg.isVisible(), "④ 시작 직후엔 보이지 않음(짧은 인덱싱 깜빡임 방지)")
 QTest.qWait(IndexingDialog.SHOW_DELAY_MS + 200); app.processEvents()
 chk(dlg.isVisible(), "④ 지연 뒤 아직 진행 중이면 표시")
+_fw = QApplication.focusWidget()
+chk(_was_active and QApplication.activeWindow() is mw and _fw is mw.main_view.view,
+    "④ 261012-8: 떠도 창 활성·키보드 포커스를 가져가지 않는다(본문 ↓ 가 그대로)",
+    "%s / %s" % (type(QApplication.activeWindow()).__name__, type(_fw).__name__ if _fw else None))
 dlg.on_progress(3, 10, "x.pdf"); app.processEvents()
 chk(dlg.bar.maximum() == 10 and dlg.bar.value() == 3 and "x.pdf" in dlg.lbl_file.text(), "④ 진행률·파일명 갱신")
 chk("느려질 수 있으니" in dlg.lbl_hint.text() and "끝난 뒤에 작업" in dlg.lbl_hint.text(),
