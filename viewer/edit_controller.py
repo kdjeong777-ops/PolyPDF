@@ -828,6 +828,7 @@ class EditMixin:
         st = self._ensure_page_meta_store()
         if not st:
             return
+        self._hist_record(path, "drawings", page0, st.get_drawings(path, page0), list(strokes))
         st.set_drawings(path, page0, strokes)
         self._persist_meta(st)               # 260609-23(J2): 편집모드면 보류
         self._refresh_hidden_ui(path)        # 꾸밈 갱신(썸네일 색·필터)
@@ -851,9 +852,121 @@ class EditMixin:
         st = self._ensure_page_meta_store()
         if not st:
             return
+        self._hist_record(path, "images", page0, st.get_images(path, page0), list(images))
         st.set_images(path, page0, images)
         self._persist_meta(st)
         self._refresh_hidden_ui(path)        # 꾸밈 갱신(이미지 있는 페이지도 꾸밈)
+
+    # ===== 261012-7(마스터 §4.6.8): 편집 모드 되돌리기/다시실행 — 파일마다 하나의 기록 =====
+    #   종전 기록은 MainView 안에 **쪽마다** 선·글상자만 있었다(쪽을 넘기면 사라지고 사진은 빠졌다).
+    #   꾸밈이 저장되는 두 곳(_set_drawings·_set_images)에서 바뀌기 전·후를 적고, 같은 이벤트 안의 변경은
+    #   한 단계로 묶는다(다음 이벤트에서 닫는다). 2단계에서 책갈피·쪽 편집 등을 같은 기록에 더한다.
+    def _edit_history(self):
+        h = getattr(self, "_edit_hist", None)
+        if h is None:
+            from viewer.edit_history import EditHistory
+            h = self._edit_hist = EditHistory()
+        return h
+
+    @staticmethod
+    def _hist_key(path) -> str:
+        import os
+        return os.path.normcase(os.path.abspath(str(path)))
+
+    def _hist_record(self, path, kind, page0, before, after) -> None:
+        if getattr(self, "_hist_applying", False) or not self._in_edit():
+            return
+        h = self._edit_history()
+        if h.record(self._hist_key(path), kind, int(page0), list(before or []), list(after or [])):
+            if not getattr(self, "_hist_close_pending", False):
+                self._hist_close_pending = True
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(0, self._hist_close)
+            self._hist_buttons()
+
+    def _hist_close(self) -> None:
+        self._hist_close_pending = False
+        self._edit_history().close()
+        self._hist_buttons()
+
+    def _hist_cur_key(self):
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        return self._hist_key(cur) if cur else ""
+
+    def edit_can_undo(self) -> bool:
+        k = self._hist_cur_key()
+        return bool(k) and self._in_edit() and self._edit_history().can_undo(k)
+
+    def edit_can_redo(self) -> bool:
+        k = self._hist_cur_key()
+        return bool(k) and self._in_edit() and self._edit_history().can_redo(k)
+
+    def _hist_buttons(self) -> None:
+        for mv in getattr(self, "_mv", []) or []:
+            try:
+                mv._update_undo_buttons()
+            except Exception:
+                pass
+
+    def action_edit_undo(self) -> bool:
+        return self._hist_step(True)
+
+    def action_edit_redo(self) -> bool:
+        return self._hist_step(False)
+
+    def _hist_step(self, undo: bool) -> bool:
+        """한 단계를 되돌리거나 다시 한다 — 그 변경이 있는 쪽으로 가서 보인다."""
+        if not self._in_edit():
+            return False
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if not cur:
+            return False
+        try:
+            mv._commit_text_editor()             # 쓰던 글상자를 먼저 확정(그것도 한 단계)
+        except Exception:
+            pass
+        h = self._edit_history()
+        h.close()
+        self._hist_close_pending = False
+        changes = h.undo(self._hist_key(cur)) if undo else h.redo(self._hist_key(cur))
+        if not changes:
+            self._hist_buttons()
+            return False
+        st = self._ensure_page_meta_store()
+        self._hist_applying = True
+        try:
+            for kind, page, value in changes:
+                if kind == "drawings":
+                    st.set_drawings(str(cur), page, value)
+                elif kind == "images":
+                    st.set_images(str(cur), page, value)
+            self._persist_meta(st)
+        finally:
+            self._hist_applying = False
+        target = changes[0][1]
+        for v in getattr(self, "_mv", []) or []:
+            try:
+                if str(v.current_file() or "") != str(cur):
+                    continue
+                v._stroke_selected = -1
+                v._img_selected = -1
+                v._multi_clear()
+                if v is mv and int(v.current_page()) != int(target):
+                    v.go_to_page(int(target))     # 바뀐 쪽을 보인다(쪽을 넘긴 뒤에도 되돌린다)
+                else:
+                    v._load_page_strokes()
+                    v._load_page_images()
+                if v._draw_overlay is not None:
+                    v._draw_overlay.update()
+            except Exception:
+                pass
+        self._refresh_hidden_ui(str(cur))
+        self._hist_buttons()
+        self.status.showMessage(tr("되돌렸습니다(p.{p}).").format(p=target + 1) if undo
+                                else tr("다시 했습니다(p.{p}).").format(p=target + 1), 3000)
+        return True
 
     # ===== 260611-2: 본문·발표 공유 선긋기 설정 =========================
     def _draw_pens(self):
@@ -878,6 +991,8 @@ class EditMixin:
             self._draw_highlight_alpha(),
             self._drawings_for, self._set_drawings)
         mv.set_image_config(self._images_for, self._set_images)   # 260611-15
+        mv.set_undo_handlers(self.action_edit_undo, self.action_edit_redo,
+                             self.edit_can_undo, self.edit_can_redo)   # 261012-7(§4.6.8)
         try:
             mv.set_text_styles(self._text_styles())               # 260611-78
         except Exception:
@@ -971,6 +1086,7 @@ class EditMixin:
 
     def _restore_edit(self):
         import copy
+        self._edit_history().clear()             # 261012-7: 되돌린 기준이 바뀌었다
         snap = self._edit_snap or {}
         pm = self._page_meta
         hl = self._hyperlinks
@@ -1068,6 +1184,7 @@ class EditMixin:
         return "cancel"
 
     def _on_edit_mode_toggled(self, on: bool):
+        self._edit_history().clear()             # 261012-7(§4.6.8): 기록은 편집 모드 한 번 동안
         if on:
             self._snapshot_edit()
         else:

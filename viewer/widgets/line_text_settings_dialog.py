@@ -44,6 +44,41 @@ class LineTextSettingsDialog(QDialog):
                               | QDialogButtonBox.StandardButton.Cancel)
         bb.accepted.connect(self.accept); bb.rejected.connect(self.reject)
         v.addWidget(bb)
+        self._tabs = tabs
+        self._text_tab_index = 1
+
+    # 261012-6(마스터 §4.5.0, 사용자 지시): 글쓰기 탭에서 고친 값은 [저장] 을 눌러야 스타일에 들어간다 —
+    #   [확인] 이 그것을 말없이 버렸다. 저장하지 않은 고침이 있으면 [확인] 때 묻는다.
+    def _editor_snapshot(self):
+        return self._editor_to_style(self._ed_name.text().strip())
+
+    def _mark_text_clean(self):
+        self._text_base = self._editor_snapshot()
+
+    def text_unsaved(self) -> bool:
+        """글쓰기 탭 편집기에 [저장] 하지 않은 고침이 있나(마지막으로 불러오거나 저장한 상태와 다르면)."""
+        return self._editor_snapshot() != getattr(self, "_text_base", None)
+
+    def accept(self):
+        if self.text_unsaved():
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(tr("스타일 저장"))
+            box.setText(tr("글쓰기 스타일을 고친 뒤 [저장] 하지 않았습니다. 저장하지 않으면 고친 내용은 적용되지 않습니다."))
+            b_save = box.addButton(tr("저장하고 닫기"), QMessageBox.ButtonRole.AcceptRole)
+            b_drop = box.addButton(tr("저장하지 않고 닫기"), QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(b_save)
+            box.exec()
+            c = box.clickedButton()
+            if c is b_save:
+                if not self._style_save():
+                    self._tabs.setCurrentIndex(self._text_tab_index)
+                    return                       # 이름이 없거나 덮어쓰기를 거절 — 창에 남는다
+            elif c is not b_drop:
+                self._tabs.setCurrentIndex(self._text_tab_index)
+                return
+        super().accept()
 
     # ---------------- 선긋기 탭 ----------------
     def _build_line_tab(self, pens, eraser_widths, highlight_alpha):
@@ -164,6 +199,7 @@ class LineTextSettingsDialog(QDialog):
         self._refresh_list()
         if self._styles:
             self._lst.setCurrentRow(0)
+        self._mark_text_clean()
         return w
 
     def _set_tip(self, key):
@@ -210,26 +246,30 @@ class LineTextSettingsDialog(QDialog):
     def _on_pick_style(self, row):
         if 0 <= row < len(self._styles):
             self._load_style(self._styles[row])
+            self._mark_text_clean()
 
     def _style_save(self):
         name = self._ed_name.text().strip()
         if not name:
-            QMessageBox.information(self, tr("스타일 저장"), tr("스타일 이름을 입력하세요.")); return
+            QMessageBox.information(self, tr("스타일 저장"), tr("스타일 이름을 입력하세요.")); return False
         existing = next((i for i, s in enumerate(self._styles) if s.get("name") == name), -1)
         if existing >= 0:
             if QMessageBox.question(
                     self, tr("스타일 덮어쓰기"),
                     tr("이미 '{name}' 스타일이 있습니다. 덮어쓸까요?").format(name=name)) \
                     != QMessageBox.StandardButton.Yes:
-                return
+                return False
             self._styles[existing] = self._editor_to_style(name)
             self._refresh_list(); self._lst.setCurrentRow(existing)
-            return
+            self._mark_text_clean()
+            return True
         if len(self._styles) >= MAX_STYLES:
             QMessageBox.warning(self, tr("스타일 저장"),
-                                tr('스타일은 최대 {MAX_STYLES}개까지 저장할 수 있습니다.').format(MAX_STYLES=MAX_STYLES)); return
+                                tr('스타일은 최대 {MAX_STYLES}개까지 저장할 수 있습니다.').format(MAX_STYLES=MAX_STYLES)); return False
         self._styles.append(self._editor_to_style(name))
         self._refresh_list(); self._lst.setCurrentRow(len(self._styles) - 1)
+        self._mark_text_clean()
+        return True
 
     def _style_delete(self):
         row = self._lst.currentRow()

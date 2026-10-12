@@ -1766,6 +1766,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("draw_erase_thin",  (tr("지우개(얇게)"), "Ctrl+E", tr("선긋기(편집모드)"))),
             ("draw_erase_thick", (tr("지우개(두껍게)"), "Ctrl+Shift+E", tr("선긋기(편집모드)"))),
             ("draw_clear",    (tr("현재 페이지 선 청소"), "Ctrl+Shift+Backspace", tr("선긋기(편집모드)"))),
+            ("edit_undo",     (tr("되돌리기"), "Ctrl+Z", tr("선긋기(편집모드)"))),
+            ("edit_redo",     (tr("다시실행"), "Ctrl+Y", tr("선긋기(편집모드)"))),
             ("quit",          (tr("종료"), "Ctrl+Q", tr("기타"))),
         ])
         targets = {
@@ -1792,6 +1794,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "draw_erase_thin": ("func", lambda: self._draw_sc_erase(0)),
             "draw_erase_thick": ("func", lambda: self._draw_sc_erase(1)),
             "draw_clear": ("func", self._draw_sc_clear),
+            "edit_undo": ("func", self.action_edit_undo),          # 261012-7: 창 어디서나(편집 모드)
+            "edit_redo": ("func", self.action_edit_redo),
         }
         self._sc_objs = {}
         overrides = (getattr(self, "_prefs", {}) or {}).get("shortcuts", {})

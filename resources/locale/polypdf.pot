@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-12 17:37+0900\n"
+"POT-Creation-Date: 2026-10-12 18:43+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -676,8 +676,9 @@ msgstr ""
 #: viewer/app.py viewer/present_controller.py viewer/sign_controller.py
 #: viewer/sign_draft_controller.py viewer/update_controller.py
 #: viewer/widgets/bookmark_tree.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
-#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
+#: viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/update_dialog.py
 msgid "취소"
@@ -2074,6 +2075,10 @@ msgstr ""
 msgid "현재 페이지 선 청소"
 msgstr ""
 
+#: viewer/app.py
+msgid "다시실행"
+msgstr ""
+
 #: viewer/app.py viewer/widgets/shortcuts_dialog.py
 msgid "기타"
 msgstr ""
@@ -2768,6 +2773,16 @@ msgstr ""
 
 #: viewer/edit_controller.py
 msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 지금 구우면 그 편집은 빠집니다. 계속할까요?"
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid "되돌렸습니다(p.{p})."
+msgstr ""
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid "다시 했습니다(p.{p})."
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -5804,6 +5819,22 @@ msgstr ""
 msgid "지시선 끝모양"
 msgstr ""
 
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/twoup_dialog.py
+msgid "스타일 저장"
+msgstr ""
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "글쓰기 스타일을 고친 뒤 [저장] 하지 않았습니다. 저장하지 않으면 고친 내용은 적용되지 않습니다."
+msgstr ""
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "저장하고 닫기"
+msgstr ""
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "저장하지 않고 닫기"
+msgstr ""
+
 #: viewer/widgets/line_text_settings_dialog.py
 msgid ""
 "편집모드 본문/발표에서 왼쪽 드래그로 선을 긋습니다(설정 공유).\n"
@@ -5832,10 +5863,6 @@ msgstr ""
 
 #: viewer/widgets/line_text_settings_dialog.py
 msgid "불투명도:"
-msgstr ""
-
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/twoup_dialog.py
-msgid "스타일 저장"
 msgstr ""
 
 #: viewer/widgets/line_text_settings_dialog.py

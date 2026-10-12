@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-12 17:37+0900\n"
+"POT-Creation-Date: 2026-10-12 18:43+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -678,8 +678,9 @@ msgstr "Continue with Available Languages"
 #: viewer/app.py viewer/present_controller.py viewer/sign_controller.py
 #: viewer/sign_draft_controller.py viewer/update_controller.py
 #: viewer/widgets/bookmark_tree.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
-#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
+#: viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/update_dialog.py
 msgid "취소"
@@ -2141,6 +2142,10 @@ msgstr "Eraser (thick)"
 msgid "현재 페이지 선 청소"
 msgstr "Clear Lines on Current Page"
 
+#: viewer/app.py
+msgid "다시실행"
+msgstr "Redo"
+
 #: viewer/app.py viewer/widgets/shortcuts_dialog.py
 msgid "기타"
 msgstr "Other"
@@ -2889,6 +2894,16 @@ msgstr "Link"
 #: viewer/edit_controller.py
 msgid "저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. 지금 구우면 그 편집은 빠집니다. 계속할까요?"
 msgstr "There are unsaved page edits (order, deletions, inserted pages). Flattening now will leave them out. Continue?"
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid "되돌렸습니다(p.{p})."
+msgstr "Undone (p.{p})."
+
+#: viewer/edit_controller.py
+#, python-brace-format
+msgid "다시 했습니다(p.{p})."
+msgstr "Redone (p.{p})."
 
 #: viewer/edit_controller.py
 msgid "다른 파일로 이동하기 전에 어떻게 할까요?"
@@ -6039,6 +6054,22 @@ msgstr "Eraser size (px)"
 msgid "지시선 끝모양"
 msgstr "Callout end style"
 
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/twoup_dialog.py
+msgid "스타일 저장"
+msgstr "Save Style"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "글쓰기 스타일을 고친 뒤 [저장] 하지 않았습니다. 저장하지 않으면 고친 내용은 적용되지 않습니다."
+msgstr "You changed the text style but did not press [Save]. Unless you save, the changes are not applied."
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "저장하고 닫기"
+msgstr "Save and Close"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "저장하지 않고 닫기"
+msgstr "Close Without Saving"
+
 #: viewer/widgets/line_text_settings_dialog.py
 msgid ""
 "편집모드 본문/발표에서 왼쪽 드래그로 선을 긋습니다(설정 공유).\n"
@@ -6070,10 +6101,6 @@ msgstr "Name:"
 #: viewer/widgets/line_text_settings_dialog.py
 msgid "불투명도:"
 msgstr "Opacity:"
-
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/twoup_dialog.py
-msgid "스타일 저장"
-msgstr "Save Style"
 
 #: viewer/widgets/line_text_settings_dialog.py
 msgid "스타일 이름을 입력하세요."

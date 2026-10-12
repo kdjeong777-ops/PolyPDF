@@ -3815,8 +3815,17 @@ class MainView(QWidget):
     def can_redo(self):
         return bool(self._redo_stack)
 
+    def set_undo_handlers(self, undo, redo, can_undo, can_redo):
+        """261012-7(마스터 §4.6.8): 되돌리기/다시실행은 앱의 편집 기록(파일 단위, 쪽·사진 포함)으로.
+        처리기가 없으면(발표·검사의 단독 MainView) 종전 쪽 단위 선 기록."""
+        self._undo_h = (undo, redo, can_undo, can_redo)
+        self._update_undo_buttons()
+
     def undo_strokes(self):
         import copy
+        h = getattr(self, "_undo_h", None)
+        if h is not None:
+            return h[0]()
         if not self._undo_stack:
             return False
         self._commit_text_editor()
@@ -3836,6 +3845,9 @@ class MainView(QWidget):
 
     def redo_strokes(self):
         import copy
+        h = getattr(self, "_undo_h", None)
+        if h is not None:
+            return h[1]()
         if not self._redo_stack:
             return False
         self._commit_text_editor()
@@ -3854,10 +3866,16 @@ class MainView(QWidget):
         return True
 
     def _update_undo_buttons(self):
+        h = getattr(self, "_undo_h", None)
+        try:
+            can_u = h[2]() if h is not None else bool(self._undo_stack)
+            can_r = h[3]() if h is not None else bool(self._redo_stack)
+        except Exception:
+            can_u = can_r = False
         if hasattr(self, "_undo_btn"):
-            self._undo_btn.setEnabled(bool(self._undo_stack))
+            self._undo_btn.setEnabled(bool(can_u))
         if hasattr(self, "_redo_btn"):
-            self._redo_btn.setEnabled(bool(self._redo_stack))
+            self._redo_btn.setEnabled(bool(can_r))
 
     def _erase_strokes_near(self, norm_pt):
         """260611-2: 선 '중간'도 지워지도록 점이 아닌 선분(세그먼트) 거리로 판정.
