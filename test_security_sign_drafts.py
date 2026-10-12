@@ -154,7 +154,16 @@ try:
     mw._on_sign_region(QRectF(300 * mv._zoom, 500 * mv._zoom, 450 * mv._zoom, 560 * mv._zoom), view=mv)
     mw._sign_pending = str(doc_path); mw._sign_pending_mode = "image"
     mw._on_sign_region(QRectF(100 * mv._zoom, 600 * mv._zoom, 200 * mv._zoom, 640 * mv._zoom), view=mv)
-    spin(1.5)                                            # 미리보기(배경)
+    # 미리보기(배경) — 고정 시간이 아니라 그림이 들어올 때까지(최대 10초). 처음 그릴 때 pyHanko 를 불러와
+    #   기계가 바쁘면 1.5초를 넘긴다(261012 묶음 검사에서 두 번 실패 — 마스터 §14.7.2 의 17)
+    for _ in range(200):
+        spin(0.05)
+        _l = mv.sign_draft_layer
+        _ds = sdr.drafts(doc_path)
+        if _l is not None and len(_l.boxes) == 3 and all(
+                (_b := _l.box_for(d["id"])) is not None and _b.d.get("pix") is not None and not _b.d["pix"].isNull()
+                for d in _ds if d["kind"] == "sign"):
+            break
     lay = mv.sign_draft_layer
     ds = sdr.drafts(doc_path)
     chk(len(ds) == 3 and len(lay.boxes) == 3 and sum(1 for x in ds if x["kind"] == "image") == 1,
