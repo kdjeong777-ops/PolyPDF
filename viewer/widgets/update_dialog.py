@@ -22,6 +22,16 @@ from viewer.i18n import tr, trn, resource_chain
 _FULL_CL = re.compile(r"\*\*Full Changelog\*\*:\s*(\S+)")
 # scripts/release_notes.py 의 절 머리(언어마다) — 버전 제목 밑에 큰 제목이 반복되지 않게 뺀다
 _NOTES_HEAD = re.compile(r"^#{1,6}\s*(바뀐 내용|What's changed)\s*$", re.M)
+_CODE_OR_URL = re.compile(r"(`[^`\n]*`|https?://\S+)")
+
+
+def escape_underscores(text: str) -> str:
+    """릴리스 설명 글의 `_` 를 글자 그대로 — 마크다운이 `_review/load_<버전>_` 을 기울임으로 읽어 밑줄이 사라졌다
+    (261012-5, 사용자 지시). 코드 표기(`…`)와 주소(URL) 안은 건드리지 않는다(주소가 깨진다)."""
+    parts = _CODE_OR_URL.split(text or "")
+    return "".join(pt if i % 2 else pt.replace("_", r"\_") for i, pt in enumerate(parts))
+
+
 _LANG_MARK = re.compile(r"^<!--\s*lang:([A-Za-z_\-]+)\s*-->\s*$", re.M)
 _COMPARE = re.compile(r"^\*\*(전체 비교|Full comparison)\*\*:", re.M)
 
@@ -62,6 +72,7 @@ def changes_markdown(changes: list, chain=None) -> str:
         body, ko_only = pick_notes(c.get("notes") or "", chain)
         body = _FULL_CL.sub(lambda m: "**%s**: %s" % (tr("전체 비교"), m.group(1)), body.strip())
         body = _NOTES_HEAD.sub("", body).strip()
+        body = escape_underscores(body)
         only_link = (not body) or all(
             (not ln.strip()) or _COMPARE.match(ln.strip()) for ln in body.splitlines())
         if only_link:

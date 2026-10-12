@@ -183,6 +183,15 @@ try:
     chk("옛 설명" in md_old and "한국어로만" in md_old, "H 표시 없는 옛 설명은 한국어로만 있다는 안내와 함께")
     md_ko = changes_markdown([{"version": "1.0.1", "notes": out2}], chain=["ko"])
     chk("저장이 됩니다" in md_ko and "Saving" not in md_ko and "한국어로만" not in md_ko, "H 한국어 화면은 한국어 절")
+    # I — 261012-5: 글의 `_` 가 기울임으로 먹히지 않는다(보이는 글로 확인 — 실제 창이 쓰는 QTextBrowser.setMarkdown)
+    from PyQt6.QtWidgets import QTextBrowser
+    notes_u = ("<!-- lang:ko -->\n## 바뀐 내용\n\n- **검사** 결과 _review/load_<버전>_<시각>/summary.md\n"
+               "    - `a_b_c` 와 https://example.com/x_y_z\n")
+    tb = QTextBrowser()
+    tb.setMarkdown(changes_markdown([{"version": "1.0.2", "notes": notes_u}], chain=["ko"]))
+    shown = tb.toPlainText()
+    chk("_review/load_<버전>_<시각>/summary.md" in shown and "a_b_c" in shown and "https://example.com/x_y_z" in shown
+        and "\\_" not in shown, "I 밑줄(_)은 글자 그대로 보인다 — 코드 표기·주소도 그대로", repr(shown[-120:]))
 except Exception:
     import traceback
     traceback.print_exc()
