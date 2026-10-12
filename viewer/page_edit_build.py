@@ -67,12 +67,14 @@ def apply_toc(doc, bms) -> int:
     return len(toc)
 
 
-def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, rotations=None) -> dict:
+def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, rotations=None, alias=None) -> dict:
     """새 PDF 를 만들고 {"path": 만든 임시 파일, "pages": 쪽수, "calls": insert_pdf 호출 수} 를 돌려준다.
 
     `progress(done, total, label) -> bool` 이 False 면 `Cancelled` (임시 파일은 지운다).
     책갈피는 남은 원본 쪽만 새 번호로 옮기고 지운 쪽 책갈피는 버린다(종전과 같다).
-    `crops` = 저장 전 크롭 {원본 쪽: 보이는 방향 여백 % 또는 None(해제)} — 새 순서의 그 쪽에 CropBox 로(261010-13, §4.7.15)."""
+    `crops` = 저장 전 크롭 {원본 쪽: 보이는 방향 여백 % 또는 None(해제)} — 새 순서의 그 쪽에 CropBox 로(261010-13, §4.7.15).
+    `alias` = {(붙여넣기 경로, 쪽): 원본 쪽} — 쪽 나누기 조각(§4.7.15)처럼 원본 쪽을 **대신하는** 붙인 쪽. 그 원본 쪽의
+    책갈피만 그 자리로 옮긴다(크롭·회전은 조각에 이미 들어 있어 건드리지 않는다, 261012-2)."""
     import fitz
     src, recon, book_tmp = Path(src), Path(recon), Path(book_tmp)
 
@@ -86,6 +88,8 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, 
         ext = {}
         odoc = fitz.open()
         ownpos, outc, calls = {}, 0, 0
+        bmpos = {}                                  # alias — 책갈피만 따라가는 자리
+        alias = {(str(k[0]), int(k[1])): int(v) for k, v in (alias or {}).items()}
         try:
             for key, a, b, owns in runs(plan, str(src)):
                 tick(outc, total, tr("쪽 복사 중"))
@@ -104,6 +108,8 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, 
                 for pg in range(a2, b2 + 1):
                     if key is None:
                         ownpos[pg] = outc
+                    elif (key, pg) in alias and alias[(key, pg)] not in bmpos:
+                        bmpos[alias[(key, pg)]] = outc
                     outc += 1
             if outc == 0:
                 raise RuntimeError("저장할 페이지가 없습니다.")
@@ -119,7 +125,9 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, 
                     if int(sp) in ownpos:
                         _pc.apply_margins(odoc[ownpos[int(sp)]], m)
             # 책갈피: 지운 쪽 것은 버리고 남은 원본 쪽은 새 번호로 — 저장 **전에** 같은 문서에(한 번에 쓴다)
-            bms = [(t, ownpos[p1 - 1] + 1, lv) for (t, p1, lv) in (bookmarks_raw or []) if (p1 - 1) in ownpos]
+            posmap = dict(bmpos)                          # 나눈 쪽 → 첫 조각, 남은 원본 쪽이 있으면 그쪽이 먼저
+            posmap.update(ownpos)
+            bms = [(t, posmap[p1 - 1] + 1, lv) for (t, p1, lv) in (bookmarks_raw or []) if (p1 - 1) in posmap]
             if bms:
                 apply_toc(odoc, bms)
             tick(outc, total, tr("저장 중"))

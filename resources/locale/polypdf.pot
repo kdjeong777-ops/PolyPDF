@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-11 12:21+0900\n"
+"POT-Creation-Date: 2026-10-12 17:37+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -492,6 +492,18 @@ msgid "서명..."
 msgstr ""
 
 #: viewer/app.py
+msgid "그림만 넣기..."
+msgstr ""
+
+#: viewer/app.py
+msgid "서명 확정..."
+msgstr ""
+
+#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/main_view.py
+msgid "서명 편집"
+msgstr ""
+
+#: viewer/app.py
 msgid "빈 서명 칸 만들기..."
 msgstr ""
 
@@ -662,7 +674,8 @@ msgid "있는 언어로 진행"
 msgstr ""
 
 #: viewer/app.py viewer/present_controller.py viewer/sign_controller.py
-#: viewer/update_controller.py viewer/widgets/crop_dialog.py
+#: viewer/sign_draft_controller.py viewer/update_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/encrypt_dialog.py viewer/widgets/main_view.py
 #: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/sign_dialogs.py
@@ -739,10 +752,6 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
 msgid "크롭 해제"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/crop_dialog.py
-msgid "쪽 크롭"
 msgstr ""
 
 #: viewer/app.py
@@ -898,7 +907,7 @@ msgstr ""
 msgid "암호화 PDF 저장"
 msgstr ""
 
-#: viewer/app.py viewer/print_controller.py viewer/sign_controller.py
+#: viewer/app.py viewer/print_controller.py viewer/sign_draft_controller.py
 #: viewer/widgets/sign_dialogs.py
 msgid "PDF 파일 (*.pdf)"
 msgstr ""
@@ -1279,8 +1288,16 @@ msgstr ""
 msgid "크롭할 PDF 가 열려 있지 않습니다."
 msgstr ""
 
+#: viewer/app.py viewer/widgets/crop_dialog.py
+msgid "쪽 크롭"
+msgstr ""
+
 #: viewer/app.py
 msgid "썸네일에서 바꾼 쪽 순서·삭제·끼워 둔 쪽을 먼저 저장하거나 되돌린 뒤 크롭하세요."
+msgstr ""
+
+#: viewer/app.py viewer/page_split.py viewer/widgets/crop_dialog.py
+msgid "쪽 나누기"
 msgstr ""
 
 #: viewer/app.py
@@ -1350,6 +1367,14 @@ msgstr ""
 
 #: viewer/app.py
 msgid "클립보드 삽입"
+msgstr ""
+
+#: viewer/app.py
+msgid "복사 (Ctrl+C)"
+msgstr ""
+
+#: viewer/app.py
+msgid "붙여넣기 (Ctrl+V)"
 msgstr ""
 
 #: viewer/app.py
@@ -1688,6 +1713,15 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "페이지 편집 저장: {saved_n}쪽 → {name}"
+msgstr ""
+
+#: viewer/app.py
+msgid "쪽 나누기는 본문에 연 PDF 에서만 됩니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "쪽 나누기 {n}쪽 → {m}쪽(미저장) — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
 msgstr ""
 
 #: viewer/app.py
@@ -2711,7 +2745,7 @@ msgid ""
 "({n}개 페이지)"
 msgstr ""
 
-#: viewer/edit_controller.py viewer/sign_controller.py
+#: viewer/edit_controller.py viewer/sign_draft_controller.py
 #, python-brace-format
 msgid "저장 중: {name}"
 msgstr ""
@@ -3142,12 +3176,8 @@ msgstr ""
 msgid "녹화 시작 실패: {e}"
 msgstr ""
 
-#: viewer/sign_controller.py
-msgid "서명할 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."
-msgstr ""
-
-#: viewer/sign_controller.py viewer/widgets/main_view.py
-#: viewer/widgets/sign_dialogs.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+#: viewer/widgets/main_view.py
 msgid "서명"
 msgstr ""
 
@@ -3175,20 +3205,16 @@ msgstr ""
 msgid "서명 확인 중…"
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "서명할 PDF를 먼저 여세요."
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 만들까요?"
+msgid "서명할 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "서명 그림 만들기…"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "그림 없이"
+msgid "그림을 넣을 자리를 본문에서 끌어 정하세요(클릭만 하면 기본 크기)."
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3209,6 +3235,10 @@ msgstr ""
 
 #: viewer/sign_controller.py
 msgid "2쪽 보기에서는 자리를 정할 수 없습니다. 1쪽 보기로 바꾼 뒤 다시 서명하세요."
+msgstr ""
+
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+msgid "작성자가 인증한 문서입니다 — 새 자리에는 서명할 수 없고 빈 서명 칸에만 서명할 수 있습니다."
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3236,20 +3266,8 @@ msgid "빈 서명 칸 만드는 중"
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "쪽 범위를 읽지 못했습니다. 예: 1-3, 5"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "'인증 — 변경 금지' 는 한 쪽에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."
-msgstr ""
-
-#: viewer/sign_controller.py
 #, python-brace-format
 msgid "Windows 인증서 저장소로 서명하지 못했습니다: {e}"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "다른 이름으로 서명"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3268,7 +3286,7 @@ msgstr ""
 msgid "서명을 무효로 하고 덮어쓰기"
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "서명 확인 중"
 msgstr ""
 
@@ -3305,7 +3323,15 @@ msgid "Windows Hello 확인 중"
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "디지털 ID 가 없습니다. 지금 만들까요?"
+msgid "서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 만들까요?"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "서명 그림 만들기…"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "그림 없이"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3327,33 +3353,9 @@ msgstr ""
 msgid "빈 서명 칸을 만들었습니다: {name}"
 msgstr ""
 
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+#: viewer/widgets/sign_dialogs.py
 msgid "Windows Hello 확인"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "인증서 준비 중"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "서명 중"
-msgstr ""
-
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
-msgid "비밀번호가 맞지 않습니다."
-msgstr ""
-
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
-msgid "Windows Hello"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "이 비밀번호를 Windows Hello 로 다시 보관할까요?"
-msgstr ""
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "서명했습니다: {name}"
 msgstr ""
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
@@ -3365,8 +3367,25 @@ msgstr ""
 msgid " · 빈 서명 칸 {n}개"
 msgstr ""
 
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+msgid "그림만 넣기"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "서명 그림이 없습니다. 지금 만들까요?"
+msgstr ""
+
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+msgid "디지털 ID 가 없습니다. 지금 만들까요?"
+msgstr ""
+
 #: viewer/sign_controller.py
 msgid "저장하지 못해 서명을 멈췄습니다."
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "이 빈 서명 칸에는 이미 서명 자리가 있습니다: {name}"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3375,19 +3394,6 @@ msgstr ""
 
 #: viewer/sign_controller.py
 msgid "Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. 비밀번호를 넣어 서명하세요 — 서명한 뒤 다시 보관할지 묻습니다."
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
-msgstr ""
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "이 칸은 지정된 사람의 인증서로만 서명할 수 있습니다: {names}"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "Windows 가 물은 PIN·확인을 취소했습니다."
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3405,6 +3411,15 @@ msgstr ""
 msgid "'{name}' 디지털 ID 의 비밀번호 — 취소하면 이 ID 의 서명은 빼고 내보냅니다."
 msgstr ""
 
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+#: viewer/widgets/sign_dialogs.py
+msgid "비밀번호가 맞지 않습니다."
+msgstr ""
+
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+msgid "인증서 준비 중"
+msgstr ""
+
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "서명을 확인하지 못했습니다({e})."
@@ -3414,57 +3429,21 @@ msgstr ""
 msgid "인증서 파일을 읽지 못했습니다."
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."
 msgstr ""
 
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid "서명 칸을 만들지 못했습니다: {e}"
-msgstr ""
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "{n}쪽에 서명합니다 — 쪽마다 서명이 하나씩 들어가 시간이 걸리고 파일이 커집니다. 계속할까요?"
-msgstr ""
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "서명 중 ({n}쪽)"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "고른 디지털 ID 는 이 칸에 서명할 사람으로 지정된 인증서가 아닙니다."
-msgstr ""
-
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
-msgid "이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "겉모양 글자에 쓸 한글 글꼴이 없습니다. 서명 그림을 고르거나 겉모양 글자를 끄세요."
-msgstr ""
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "서명하지 못했습니다: {e}"
-msgstr ""
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "{stem}_서명.pdf"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -3482,7 +3461,8 @@ msgstr ""
 msgid "이 칸에 서명하면 문서의 모든 칸이 잠겨 남은 빈 서명 칸 {n}개에 더 서명할 수 없습니다. 계속할까요?"
 msgstr ""
 
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+#: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "저장하지 못했습니다: {e}"
 msgstr ""
@@ -3497,16 +3477,245 @@ msgstr ""
 msgid "같은 이름의 서명 칸이 이미 있습니다: {name}"
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_draft_controller.py
+msgid "서명을 자리로 되돌려 옮기기·크기·지우기를 한 뒤 다시 확정합니다. 다시 확정할 때까지 이 파일은 그대로입니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "서명 자리를 놓았습니다 — 옮기거나 크기를 바꾼 뒤 [서명 확정…] 을 누르세요."
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "전자서명"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "그림만(전자서명 아님)"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/study_panel.py
+msgid "그림"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "다른 쪽에도 놓기…"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "지우기"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "다른 쪽에도 놓기"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "_서명"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "서명 자리"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "이 파일의 서명 자리를 모두 지울까요?"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "쪽 범위를 읽지 못했습니다. 예: 1-3, 5"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "서명 확정"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "이 파일에 서명 자리가 없습니다. 도구 → 서명... 으로 자리를 먼저 놓으세요."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "작성자가 인증한 문서에는 그림을 넣을 수 없습니다(인증이 허용하지 않는 변경)."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "전자서명 {a}개 · 그림만 {b}개 (p.{pages})"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "다른 이름으로 저장"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "서명된 PDF를 먼저 여세요."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "이 문서에는 전자서명이 없습니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "고칠 수 있는 내 서명이 없습니다(내 디지털 ID 로 한 서명만 고칠 수 있습니다)."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "다른 사람의 서명이 뒤에 있어 고칠 수 없습니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "이 파일의 서명 기록이 없어 서명 자리만 되살립니다 — 확정 때 넣은 '그림만' 은 바탕에 남습니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "쪽 범위(예: 1-3, 5) — 비우면 모든 쪽({n}쪽)"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "그림 {n}개를 넣은 새 파일을 만듭니다(전자서명은 넣지 않습니다). 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "이 문서의 기존 전자서명은 그림을 넣은 새 파일에서 '서명 후 변경됨' 이 됩니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "'인증 — 변경 금지' 는 서명 하나에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "서명 중"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "Windows Hello"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "이 비밀번호를 Windows Hello 로 다시 보관할까요?"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "고른 디지털 ID 는 이 칸에 서명할 사람으로 지정된 인증서가 아닙니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "이미 서명이 있는 문서에는 인증 서명을 할 수 없습니다(인증은 첫 서명만)."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "겉모양 글자에 쓸 한글 글꼴이 없습니다. 서명 그림을 고르거나 겉모양 글자를 끄세요."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "서명하지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "원본 파일에는 서명을 저장하지 않습니다 — 다른 이름을 고르세요."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "바꾸기"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "다른 이름으로…"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "서명 자리를 되살렸습니다 — 고친 뒤 [서명 확정…] 을 누르면 '{name}' 을 바꿉니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "서명하면 문서의 모든 칸이 잠깁니다"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "Windows 가 물은 PIN·확인을 취소했습니다."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "서명했습니다: {name}"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "그림을 넣었습니다: {name}"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "{n}쪽에 서명 자리를 놓습니다 — 확정하면 쪽마다 서명이 하나씩 들어가 시간이 걸리고 파일이 커집니다. 계속할까요?"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
 #, python-brace-format
 msgid "빈 서명 칸을 찾지 못했습니다(이미 서명됐거나 지워졌습니다): {name}"
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "서명 칸: {name} (p.{page})"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "서명 중 ({n}개)"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
 #, python-brace-format
 msgid ""
 "타임스탬프 기관에서 시각을 받지 못해 서명하지 않았습니다. 주소·인터넷을 확인하거나 타임스탬프를 끄고 서명하세요.\n"
 "({d})"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "'{name}' 이(가) 이미 있습니다 — 바꿀까요?"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "서명을 읽지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "{stem}_서명전.pdf"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "서명할 사람: {names}"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "이 칸은 지정된 사람의 인증서로만 서명할 수 있습니다: {names}"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "{stem}_서명전 ({n}).pdf"
+msgstr ""
+
+#: viewer/sign_drafts.py viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "{stem}_서명.pdf"
 msgstr ""
 
 #: viewer/study/ocr.py
@@ -4213,6 +4422,22 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "저장 전의 모든 수정 사항을 취소(되돌리기)할까요?"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "책갈피 새로고침"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "저장하지 않은 책갈피 수정이 있습니다. 새로 고치면 다시 읽은 내용으로 바뀝니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "저장 후 새로고침"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "버리고 새로고침"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4971,6 +5196,26 @@ msgid "0 으로"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py
+msgid "세로 나눔선(왼쪽에서)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "가로 나눔선(위에서)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "오른쪽 조각부터"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "오른쪽에서 왼쪽으로 펼치는 책 — 좌우로 나눈 조각을 오른쪽부터 차례로"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "크롭한 뒤 남은 영역을 나눔선으로 나눕니다. 미리보기의 파란 선을 끌어 미세 조정하세요. 나눈 쪽은 [저장] 을 눌러야 PDF 에 들어갑니다."
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
 msgid "적용할 쪽을 원래 쪽 크기로 되돌립니다"
 msgstr ""
 
@@ -4991,7 +5236,27 @@ msgid "아래"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py
+msgid "나누지 않음"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "좌우 2쪽(세로 가운데)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "위아래 2쪽(가로 가운데)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "4쪽(가로·세로 가운데)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
 msgid "남길 여백 (%)"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+msgid "나누기"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py
@@ -5005,6 +5270,11 @@ msgstr ""
 #: viewer/widgets/crop_dialog.py
 #, python-brace-format
 msgid "대상 {n}쪽"
+msgstr ""
+
+#: viewer/widgets/crop_dialog.py
+#, python-brace-format
+msgid "한 변 최대 {a}% — 마주 보는 두 변의 합은 {b}% 까지"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py
@@ -5659,6 +5929,10 @@ msgstr ""
 
 #: viewer/widgets/main_view.py viewer/widgets/sign_dialogs.py
 msgid "서명 패널"
+msgstr ""
+
+#: viewer/widgets/main_view.py
+msgid "내 서명을 자리로 되돌려 옮기기·크기·지우기 뒤 다시 확정합니다."
 msgstr ""
 
 #: viewer/widgets/main_view.py
@@ -7423,10 +7697,6 @@ msgid "손으로 그리기"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "지우기"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
 msgid "서명 그림 만들기"
 msgstr ""
 
@@ -7715,10 +7985,6 @@ msgid "예: 1-3, 5"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "쪽"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
 msgid "타임스탬프 기관(TSA) 시각 넣기"
 msgstr ""
 
@@ -7748,14 +8014,6 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "Windows 인증서 저장소의 키로 서명합니다 — 비밀번호 대신 Windows 가 PIN·확인을 물을 수 있습니다."
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "서명은 현재 파일에 덧붙여 저장됩니다. 서명 뒤 PolyPDF 에서 이 파일을 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "다른 이름으로 서명…"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7900,11 +8158,11 @@ msgid "인증서를 고르세요."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "전자서명"
+msgid "서명 칸"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "서명 칸"
+msgid "그림 위·글자 아래"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7913,10 +8171,6 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "그림 왼쪽·글자 오른쪽"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "그림 위·글자 아래"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -7933,6 +8187,10 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "빈 서명 칸 하나에 서명합니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "쪽"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -8010,6 +8268,11 @@ msgstr ""
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "모든 쪽 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "서명한 결과는 새 파일 '{name}' 로 저장되고 원본은 그대로입니다. 서명한 파일을 PolyPDF 에서 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -8109,10 +8372,6 @@ msgid "전자서명 — {name}"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "서명하면 문서의 모든 칸이 잠깁니다"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "타임스탬프: {v} (기관: {n})"
 msgstr ""
@@ -8183,6 +8442,36 @@ msgstr ""
 msgid "인증서를 읽지 못했습니다: {e}"
 msgstr ""
 
+#: viewer/widgets/sign_draft_layer.py
+msgid "서명 확정…"
+msgstr ""
+
+#: viewer/widgets/sign_draft_layer.py
+msgid "모두 지우기"
+msgstr ""
+
+#: viewer/widgets/sign_draft_layer.py
+msgid "서명 자리 — 끌어 옮기기 · 오른쪽 아래 모서리로 크기 · Delete 로 지우기 · 우클릭 메뉴"
+msgstr ""
+
+#: viewer/widgets/sign_draft_layer.py
+msgid "빈 서명 칸의 서명 자리 — Delete 로 지우기 · 우클릭 메뉴"
+msgstr ""
+
+#: viewer/widgets/sign_draft_layer.py
+msgid "그림만"
+msgstr ""
+
+#: viewer/widgets/sign_draft_layer.py
+#, python-brace-format
+msgid "✍  서명 자리 {n}개(전자서명 {a} · 그림만 {b}) — 끌어 옮기기 · 모서리로 크기 · Delete 로 지우기"
+msgstr ""
+
+#: viewer/widgets/sign_draft_layer.py
+#, python-brace-format
+msgid " · 확정하면 '{name}' 을 바꿉니다"
+msgstr ""
+
 #: viewer/widgets/strip.py
 msgid "전체 삭제"
 msgstr ""
@@ -8235,10 +8524,6 @@ msgstr ""
 
 #: viewer/widgets/study_panel.py
 msgid "사전 뜻 끝에 출처(참고문헌)를 표시합니다."
-msgstr ""
-
-#: viewer/widgets/study_panel.py
-msgid "그림"
 msgstr ""
 
 #: viewer/widgets/study_panel.py

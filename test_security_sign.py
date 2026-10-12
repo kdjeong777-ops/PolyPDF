@@ -7,7 +7,8 @@ A. 핵심 — 디지털 ID 만들기(PBES2-AES256 .pfx)·틀린 비밀번호·�
    / MediaBox 원점이 0 이 아닌 쪽에 끈 자리 그대로 / 서명 판정(열린 문서·파일)
 B. 서명 그림 — 종이 사진에서 배경 지우기·잉크 경계 자르기, 투명 PNG 는 그대로
 C. Windows Hello 보관(가짜 키) — 보관·꺼내기·지우기, 취소, ID 지우면 보관값도
-D. 실제 MainWindow — 도구 메뉴 '🔏 전자서명' 구역·크롭 오른쪽 단추, 단추 → 본문 끌기 → 서명 창 → 현재 파일에 서명 → 다시 열면 검증 띠
+D. 실제 MainWindow — 도구 메뉴 '🔏 전자서명' 구역·크롭 오른쪽 단추, 단추 → 본문 끌기 → 서명 자리 → [서명 확정] 창 → '<이름>_서명.pdf' → 검증 띠
+   (261012-1: 서명 자리·확정·편집 자체는 test_security_sign_drafts.py)
 E. 저장 가드(§4) — 서명된 파일에 `_finalize_save`: 새 파일로 / 취소 / 덮어쓰기, 서명 자체 저장은 묻지 않는다
 G. 대화상자 — 디지털 ID 창·서명 그림 창·서명 패널
 H. 서명 창 겉모양 미리보기 — 끈 상자 비율·배경에서·바꾸면 다시(S8)
@@ -53,6 +54,20 @@ def spin(sec=0.3):
 
 def font_path():
     return sc.default_font()
+
+
+def confirm(mw, picked=None, wait=1.5):
+    """261012-1(보안 SOT §3.10): 놓은 서명 자리를 [서명 확정] → 결과 파일(`<이름>_서명.pdf`) 경로."""
+    from viewer import sign_drafts as _sd
+    cur = str(mw.main_view.current_file())
+    out = _sd.out_of(cur) or _sd.default_out(cur)
+    keep = picked.get("text") if picked is not None else None
+    if picked is not None:
+        picked["text"] = "바꾸기"                     # 이미 있으면 [바꾸기]
+    mw.action_sign_confirm(); spin(wait)
+    if picked is not None:
+        picked["text"] = keep
+    return Path(out)
 
 
 def make_npki(folder, password, scheme="seed_sha1", days=365, key=None, cert_key=None, prf="sha256"):
@@ -282,10 +297,12 @@ try:
     mv.go_to_page(0); spin(0.3)
     z = mv._zoom or 1.0
     mv.signRegionSelected.emit(QRectF(100 * z, 400 * z, 300 * z, 470 * z))
-    spin(1.5)
-    chk(sc.is_signed_file(doc_path), "D4 서명 창(Windows Hello) → 현재 파일에 서명됐다")
-    rep = sc.verify_pdf(str(doc_path), st.trusted())
-    chk(rep.worst == sc.OK_TRUSTED, "D5 현재 파일 서명 유효·신뢰함(내 ID)", str(rep))
+    spin(0.5)
+    chk(not sc.is_signed_file(doc_path), "D4a 끌면 서명 자리만 — 아직 서명하지 않는다")
+    sgn = confirm(mw, picked)
+    chk(sc.is_signed_file(sgn) and not sc.is_signed_file(doc_path), "D4 [서명 확정](Windows Hello) → '계약서_서명.pdf' 에 서명·원본 그대로", str(sgn))
+    rep = sc.verify_pdf(str(sgn), st.trusted())
+    chk(rep.worst == sc.OK_TRUSTED, "D5 서명 파일 유효·신뢰함(내 ID)", str(rep))
     for _ in range(100):
         spin(0.05)
         if mv.sign_band.state not in ("", "checking"):
@@ -301,18 +318,18 @@ try:
         dd = fitz.open(str(src)); dd.save(str(p)); dd.close()
         return p
     picked["text"] = "새 파일로"
-    out1 = mw._finalize_save(str(doc_path), str(produced()))
-    chk(Path(out1) != doc_path and Path(out1).exists() and sc.verify_pdf(str(doc_path), st.trusted()).worst == sc.OK_TRUSTED,
+    out1 = mw._finalize_save(str(sgn), str(produced()))
+    chk(Path(out1) != sgn and Path(out1).exists() and sc.verify_pdf(str(sgn), st.trusted()).worst == sc.OK_TRUSTED,
         "E1 서명된 파일에 저장 → '새 파일로' 면 원본 서명은 그대로", out1)
     picked["text"] = "취소"
     pr = produced()
     try:
-        mw._finalize_save(str(doc_path), str(pr)); chk(False, "E2 취소 → SaveCancelled")
+        mw._finalize_save(str(sgn), str(pr)); chk(False, "E2 취소 → SaveCancelled")
     except SaveCancelled:
-        chk(sc.is_signed_file(doc_path) and not pr.exists(), "E2 취소 → SaveCancelled, 원본·임시 정리")
+        chk(sc.is_signed_file(sgn) and not pr.exists(), "E2 취소 → SaveCancelled, 원본·임시 정리")
     picked["text"] = "덮어쓰기"
-    out3 = mw._finalize_save(str(doc_path), str(produced()))
-    chk(Path(out3) == doc_path and not sc.is_signed_file(doc_path), "E3 '서명을 무효로 하고 덮어쓰기' 를 고르면 덮어쓴다")
+    out3 = mw._finalize_save(str(sgn), str(produced()))
+    chk(Path(out3) == sgn and not sc.is_signed_file(sgn), "E3 '서명을 무효로 하고 덮어쓰기' 를 고르면 덮어쓴다")
     picked["text"] = ""
     out4 = mw._finalize_save(str(doc_path), str(produced()))
     chk(Path(out4) == doc_path, "E4 서명 없는 파일은 묻지 않고 덮어쓴다")
@@ -327,12 +344,13 @@ try:
     mv = mw.main_view
     z = mv._zoom or 1.0
     mv.signRegionSelected.emit(QRectF(150 * z, 500 * z, 1, 1))    # 클릭만 — 기본 크기
-    spin(1.5)
-    dd = fitz.open(str(doc_path))
+    spin(0.5)
+    sgn = confirm(mw, picked)
+    dd = fitz.open(str(sgn))
     ws = [w.rect for w in dd[0].widgets()]
     dd.close()
-    chk(sc.is_signed_file(doc_path) and ws and abs(ws[0].width - sc_w) < 1 if (sc_w := 50 / 25.4 * 72) else False,
-        "E5 비밀번호를 넣어 서명(Hello 없는 PC) · 클릭만 하면 폭 50mm", str(ws))
+    chk(sc.is_signed_file(sgn) and ws and abs(ws[0].width - sc_w) < 1 if (sc_w := 50 / 25.4 * 72) else False,
+        "E5 비밀번호를 넣어 서명(Hello 없는 PC) · 클릭만 하면 그림 폭 50mm", str(ws))
 
     # ── G. 대화상자가 실제로 뜨고 일한다 ───────────────────────────
     idd = sdlg.DigitalIdDialog(mw, runner=mw._sign_bg, hello_ok=True)
@@ -377,12 +395,15 @@ try:
         q = pm.toImage().convertToFormat(pm.toImage().Format.Format_RGB888)
         b = bytes(q.constBits().asarray(q.sizeInBytes()))
         return sum(1 for i in range(0, len(b), 3) if b[i] < 128) if b else 0
-    chk(pm1 is not None and abs(pm1.width() / max(1, pm1.height()) - 200 / 75) < 0.1 and _dark(pm1) > 50,
-        "H1 미리보기 — 끈 상자 비율로 그려지고 글자가 보인다(배경에서)", str(pm1.size() if pm1 else None))
+    _e0 = st.get_id(sd.fp()) or {}
+    _tw, _th = sc.stamp_size(sd.appearance(), sc.signer_label(_e0.get("name", ""), _e0.get("email", "")), "", 200.0, 75.0)
+    chk(pm1 is not None and abs(pm1.width() / max(1, pm1.height()) - _tw / _th) < 0.1 and _dark(pm1) > 50,
+        "H1 미리보기 — 그림 상자 + 아래 글자 줄 비율로 그려지고 글자가 보인다(배경에서)", str((pm1.size() if pm1 else None, _tw, _th)))
     sd.chk_reason.setChecked(True); sd.ed_reason.setText("검토 완료")
     pm2 = _wait_pv(pm1.cacheKey() if pm1 else None)
-    chk(pm2 is not None and _dark(pm2) > _dark(pm1 or pm2), "H2 사유를 켜고 넣으면 다시 그린다(글자가 늘어남)",
-        "%s → %s" % (_dark(pm1) if pm1 else None, _dark(pm2) if pm2 else None))
+    chk(pm2 is not None and pm1 is not None and pm2.height() / pm2.width() > pm1.height() / pm1.width(),
+        "H2 사유를 켜고 넣으면 다시 그린다(글자 줄이 늘어 아래로 길어짐)",
+        "%s → %s" % (pm1.size() if pm1 else None, pm2.size() if pm2 else None))
     sd.stop_preview(); sd.close()
 
     # ── I. 본문 우클릭 '여기에 서명…'(S6) — 실제 메뉴 처리기로, 누른 자리가 가운데인 기본 크기 ──
@@ -404,18 +425,19 @@ try:
     QMenu.exec = _pick_sign_here
     picked["text"] = "그림 없이"
     try:
-        mw._on_viewer_context_menu(gpos); spin(1.5)
+        mw._on_viewer_context_menu(gpos); spin(0.5)
     finally:
         QMenu.exec = _orig_menu_exec
     chk("여기에 서명…" in labels_seen, "I1 본문 우클릭 메뉴에 '여기에 서명…'", str(labels_seen[:8]))
+    here_plain, here = here, confirm(mw, picked)
     dh = fitz.open(str(here))
     ws = [w.rect for w in dh[0].widgets()]
     dh.close()
     cx = (ws[0].x0 + ws[0].x1) / 2 if ws else -1
     cy = (ws[0].y0 + ws[0].y1) / 2 if ws else -1
-    chk(sc.is_signed_file(here) and abs(cx - want_pt[0]) < 3 and abs(cy - want_pt[1]) < 3
+    chk(sc.is_signed_file(here) and abs(cx - want_pt[0]) < 3 and ws[0].y0 < want_pt[1] < ws[0].y1
         and abs(ws[0].width - 50 / 25.4 * 72) < 1,
-        "I2 끌기 없이 누른 자리를 가운데로 기본 크기(폭 50mm) 서명", str(ws))
+        "I2 끌기 없이 누른 자리를 가운데로 기본 크기(그림 폭 50mm) 서명", str(ws))
 
     # ── J. 책갈피창 서명 표식(S1) — probe_cache.signed, 옛 index.db 에 열 더하기, 파일 행 아이콘·툴팁 ──
     import sqlite3
@@ -437,7 +459,7 @@ try:
     signed_item = plain_item = None
     for it in bt._iter_file_nodes():
         f = str(it.data(0, bt.DATA_FILE) or "")
-        if f.endswith("우클릭.pdf"):
+        if f.endswith("우클릭_서명.pdf"):
             signed_item = it
         elif f.endswith("shot.pdf") is False and f.endswith("계약서.pdf"):
             plain_item = it
@@ -600,17 +622,24 @@ try:
 
     class _MultiDlg(_RealSign):
         def exec(self):
-            self.cmb_pages.setCurrentIndex(self.cmb_pages.findData("all"))
             self.cmb_kind.setCurrentIndex(self.cmb_kind.findData(2))
             self.ed_pw.setText(PW); self._sign()
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _MultiDlg
     picked["text"] = "그림 없이"
     z = mv._zoom or 1.0
-    mw.action_sign_pdf(); mv.signRegionSelected.emit(QRectF(80 * z, 80 * z, 200 * z, 70 * z)); spin(2.0)
-    rm = sc.verify_pdf(str(mp), st.trusted())
-    chk(len(rm.sigs) == 3 and rm.worst == sc.OK_TRUSTED and rm.sigs[0].certify == 2,
-        "N9 서명 창 '모든 쪽'·인증 — 실제 흐름으로 세 쪽 모두 서명, 첫 서명 인증", str([(x.state, x.certify) for x in rm.sigs]))
+    mw.action_sign_pdf(); mv.signRegionSelected.emit(QRectF(80 * z, 80 * z, 200 * z, 70 * z)); spin(0.5)
+    from PyQt6.QtWidgets import QInputDialog as _QID
+    from viewer import sign_drafts as _sdr
+    _gt0 = _QID.getText
+    _QID.getText = staticmethod(lambda *a, **k: ("", True))            # 비우면 모든 쪽
+    mw._sign_draft_copy(mv, str(mp), _sdr.drafts(mp)[0])
+    _QID.getText = _gt0
+    n_dr = len(_sdr.drafts(mp))
+    mp_out = confirm(mw, picked, wait=2.5)
+    rm = sc.verify_pdf(str(mp_out), st.trusted())
+    chk(n_dr == 3 and len(rm.sigs) == 3 and rm.worst == sc.OK_TRUSTED and rm.sigs[0].certify == 2,
+        "N9 서명 자리 '다른 쪽에도 놓기'(모든 쪽)·인증 — 세 쪽 모두 서명, 첫 서명 인증", str((n_dr, [(x.state, x.certify) for x in rm.sigs])))
 
     # ── O. 3단계 빈 서명 칸(§3.7) ────────────────────────────────
     sdlg.SignDialog = _RealSign
@@ -691,18 +720,20 @@ try:
         got = []
 
         def exec(self):
-            _FieldDlg.got.append((self.field_name, self.cmb_pages.isEnabled()))
+            import re as _re
+            _FieldDlg.got.append((",".join(_re.findall(r"서명 칸: (\S+)", self.summary)), self.cmb_pages.isVisibleTo(self)))
             self.ed_pw.setText(PW); self._sign()
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _FieldDlg
     QMessageBox.exec = lambda self: (seen_buttons.append([b.text() for b in self.buttons()]),
                                      setattr(self, "_pick", next((b for b in self.buttons() if picked.get("text") and picked["text"] in b.text()), None)), 0)[2]
     picked["text"] = "빈 칸에 서명"
-    mv.sign_band.btn.click(); spin(1.5)
-    _d = fitz.open(str(fd_path)); ef = sc.empty_fields(_d); _d.close()
-    rf = sc.verify_pdf(str(fd_path), st.trusted())
+    mv.sign_band.btn.click(); spin(0.5)
+    fd_out = confirm(mw, picked)
+    _d = fitz.open(str(fd_out)); ef = sc.empty_fields(_d); _d.close()
+    rf = sc.verify_pdf(str(fd_out), st.trusted())
     chk(_FieldDlg.got == [("승인자", False)] and not ef and [(x.field, x.state) for x in rf.sigs] == [("승인자", sc.OK_TRUSTED)],
-        "O7 띠 [서명] → '빈 칸에 서명' → 서명 창(칸 이름·쪽 고르기 끔) → 그 칸이 채워지고 유효", str(_FieldDlg.got))
+        "O7 띠 [서명] → '빈 칸에 서명' → 칸 자리 → [서명 확정](칸 이름·쪽 고르기 없음) → 그 칸이 채워지고 유효", str(_FieldDlg.got))
     # 칸이 둘 — '새 자리 끌기' 를 골라도 끈 자리의 가운데가 칸 안이면 그 칸을 채운다
     two_f = root / "두칸.pdf"
     _t1 = tmp / "t1.pdf"
@@ -717,8 +748,9 @@ try:
     mw.action_sign_pdf()
     z = mv._zoom or 1.0
     cx, cy = (f_eul.rect[0] + f_eul.rect[2]) / 2, (f_eul.rect[1] + f_eul.rect[3]) / 2
-    mv.signRegionSelected.emit(QRectF(cx * z, cy * z, 1, 1)); spin(1.5)
-    _d = fitz.open(str(two_f)); left = [f.name for f in sc.empty_fields(_d)]; _d.close()
+    mv.signRegionSelected.emit(QRectF(cx * z, cy * z, 1, 1)); spin(0.5)
+    two_out = confirm(mw, picked)
+    _d = fitz.open(str(two_out)); left = [f.name for f in sc.empty_fields(_d)]; _d.close()
     chk(_FieldDlg.got == [("을", False)] and left == ["갑"] and any("새 자리 끌기" in b for b in seen_buttons[0]),
         "O8 끈 자리의 가운데가 빈 칸 안이면 그 칸('을')을 채운다", str((_FieldDlg.got, left)))
     # 인증 문서 — '새 자리 끌기' 단추가 없다
@@ -780,8 +812,9 @@ try:
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _OnceDlg
     picked["text"] = "빈 칸에 서명"
-    mw.main_view.sign_band.btn.click(); spin(1.0)
-    chk(any("Bob" in t for t in infos) and not sc.is_signed_file(lk),
+    mw.main_view.sign_band.btn.click(); spin(0.5)
+    lk_out = confirm(mw, picked, wait=1.0)
+    chk(any("Bob" in t for t in infos) and not sc.is_signed_file(lk) and not lk_out.exists(),
         "O13 지정된 사람이 아닌 ID 로 채우면 서명 전에 막는다(파일은 그대로)", str(infos[-1:]))
     QMessageBox.information = staticmethod(lambda *a, **k: None)
     sdlg.SigFieldDialog = _orig_sfd
@@ -928,10 +961,10 @@ try:
     sdlg.SignDialog = _WinDlg
     picked["text"] = "그림 없이"
     z = mv._zoom or 1.0
-    mw.action_sign_pdf(); mv.signRegionSelected.emit(QRectF(80 * z, 80 * z, 200 * z, 70 * z)); spin(1.5)
-    rw = sc.verify_pdf(str(ws_doc), st.trusted())
+    mw.action_sign_pdf(); mv.signRegionSelected.emit(QRectF(80 * z, 80 * z, 200 * z, 70 * z)); spin(0.5)
+    rw = sc.verify_pdf(str(confirm(mw, picked)), st.trusted())
     chk(_WinDlg.seen[:1] == [(False, True)] and rw.worst == sc.OK_TRUSTED and rw.sigs[0].signer == "저장소 RSA",
-        "Q5 저장소 ID 로 서명 — 비밀번호 칸 끔·'Windows 가 PIN' 안내, 현재 파일에 유효", str((_WinDlg.seen, rw.worst)))
+        "Q5 저장소 ID 로 서명 — 비밀번호 칸 끔·'Windows 가 PIN' 안내, 서명 파일 유효", str((_WinDlg.seen, rw.worst)))
     sdlg.SignDialog = _RealSign
     os.environ.pop(ws.FAKE_ENV, None)
 

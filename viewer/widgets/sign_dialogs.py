@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QImage, QPainter, QPixmap, QColor
@@ -958,8 +959,8 @@ class _PreviewThread(QThread):
 
 
 class SignDialog(QDialog):
-    """디지털 ID·그림·겉모양 글자·사유·비밀번호(또는 Windows Hello) → [서명] / [다른 이름으로 서명…].
-    끈 상자 크기 그대로 실제 겉모양을 미리 보인다(보안 SOT §3.3)."""
+    """서명 확정 창 — 디지털 ID·그림·겉모양 글자·사유·비밀번호(또는 Windows Hello) → [서명 확정] / [다른 이름으로…].
+    첫 서명 자리 크기(그림 상자 + 아래 글자 줄)로 실제 겉모양을 미리 보인다(보안 SOT §3.3·§3.10)."""
 
     PREVIEW_DELAY_MS = 250
     PREVIEW_MAX = (360, 150)
@@ -967,7 +968,8 @@ class SignDialog(QDialog):
 
     def __init__(self, parent=None, hello_ok: bool = False, file_name: str = "", box_size=(142.0, 57.0),
                  page_count: int = 1, current_page: int = 0, can_certify: bool = True, field_name: str = "",
-                 field_signers=(), field_lock: bool = False):
+                 field_signers=(), field_lock: bool = False, summary: str = "", out_name: str = "",
+                 box_is_field: bool = False):
         super().__init__(parent)
         from viewer import sign_hello, sign_store
         self.setWindowTitle(tr("전자서명 — {name}").format(name=file_name) if file_name else tr("전자서명"))
@@ -975,8 +977,14 @@ class SignDialog(QDialog):
         self.save_as = False
         self.use_hello = False
         self.field_name = str(field_name or "")      # 3단계(보안 SOT §3.7): 빈 서명 칸 채우기
+        self.summary = str(summary or "")
+        self._box_is_field = bool(box_is_field or self.field_name)   # 칸 크기 그대로(글자 줄을 덧붙이지 않는다)
         d = sign_store.load()
         v = QVBoxLayout(self)
+        if summary:
+            lab = QLabel(summary)                  # 261012-1(보안 SOT §3.10): 확정할 자리 요약
+            lab.setWordWrap(True)
+            v.addWidget(lab)
         form = QFormLayout()
         if self.field_name:
             form.addRow(tr("서명 칸"), QLabel(tr("{name} (p.{page})").format(name=self.field_name, page=int(current_page) + 1)))
@@ -1017,10 +1025,11 @@ class SignDialog(QDialog):
         form.addRow(tr("겉모양 글자"), g)
         # 2단계(보안 SOT §3.6): 글자 배치
         self.cmb_layout = QComboBox()
-        for key, label in (("overlay", tr("그림 위에 겹쳐")), ("image_left", tr("그림 왼쪽·글자 오른쪽")),
-                           ("image_top", tr("그림 위·글자 아래"))):
+        for key, label in (("image_top", tr("그림 위·글자 아래")), ("overlay", tr("그림 위에 겹쳐")),
+                           ("image_left", tr("그림 왼쪽·글자 오른쪽"))):
             self.cmb_layout.addItem(label, key)
-        k_l = self.cmb_layout.findData(ap.get("layout", "overlay"))
+        from viewer import sign_core as _sc
+        k_l = self.cmb_layout.findData(ap.get("layout") or _sc.LAYOUT_DEFAULT)
         self.cmb_layout.setCurrentIndex(max(0, k_l))
         form.addRow(tr("글자 배치"), self.cmb_layout)
         self.ed_reason = QLineEdit(d.get("last_reason", ""))
@@ -1057,7 +1066,11 @@ class SignDialog(QDialog):
         if self.field_name:
             self.cmb_pages.setEnabled(False)          # 빈 칸 채우기는 그 칸 하나
             self.cmb_pages.setToolTip(tr("빈 서명 칸 하나에 서명합니다."))
-        form.addRow(tr("쪽"), pr)
+        if summary:
+            pr.setParent(self)                   # 261012-1: 여러 쪽은 서명 자리 '다른 쪽에도 놓기…'(보안 SOT §3.6)
+            pr.hide()
+        else:
+            form.addRow(tr("쪽"), pr)
         # 타임스탬프 기관 — 끄는 것이 기본, 주소는 사용자가
         tr_ = QWidget()
         tl = QHBoxLayout(tr_)
@@ -1078,7 +1091,8 @@ class SignDialog(QDialog):
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setStyleSheet("QLabel{border:1px solid #c8c8c8;background:#f3f3f3;}")
         # 높이는 처음부터 그림 크기로 — 그림이 온 뒤 늘리면 창이 따라 크지 않아 아래가 잘렸다(화면 확인)
-        px_w, px_h = self._box[0] * self.PREVIEW_DPI / 72.0, self._box[1] * self.PREVIEW_DPI / 72.0
+        px_w = self._box[0] * self.PREVIEW_DPI / 72.0
+        px_h = (self._box[1] + (0 if self._box_is_field else 40.0)) * self.PREVIEW_DPI / 72.0   # 아래 글자 줄 몫
         k = min(1.0, self.PREVIEW_MAX[0] / px_w, self.PREVIEW_MAX[1] / px_h)
         self.preview.setFixedHeight(int(px_h * k) + 6)
         form.addRow(tr("겉모양 미리보기"), self.preview)
@@ -1107,12 +1121,13 @@ class SignDialog(QDialog):
         self._win_note = QLabel(tr("Windows 인증서 저장소의 키로 서명합니다 — 비밀번호 대신 Windows 가 PIN·확인을 물을 수 있습니다."))
         self._win_note.setWordWrap(True)
         v.addWidget(self._win_note)
-        note = QLabel(tr("서명은 현재 파일에 덧붙여 저장됩니다. 서명 뒤 PolyPDF 에서 이 파일을 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."))
+        note = QLabel(tr("서명한 결과는 새 파일 '{name}' 로 저장되고 원본은 그대로입니다. 서명한 파일을 PolyPDF 에서 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다.").format(
+            name=out_name or tr("{stem}_서명.pdf").format(stem=Path(file_name).stem if file_name else "")))
         note.setWordWrap(True)
         v.addWidget(note)
         bb = QDialogButtonBox()
-        self.b_sign = bb.addButton(tr("서명"), QDialogButtonBox.ButtonRole.AcceptRole)
-        self.b_saveas = bb.addButton(tr("다른 이름으로 서명…"), QDialogButtonBox.ButtonRole.ActionRole)
+        self.b_sign = bb.addButton(tr("서명 확정"), QDialogButtonBox.ButtonRole.AcceptRole)
+        self.b_saveas = bb.addButton(tr("다른 이름으로…"), QDialogButtonBox.ButtonRole.ActionRole)
         bb.addButton(QDialogButtonBox.StandardButton.Cancel)
         self.b_sign.clicked.connect(self._sign)
         self.b_saveas.clicked.connect(self._sign_as)
@@ -1136,8 +1151,11 @@ class SignDialog(QDialog):
         e = sign_store.get_id(self.fp()) or {}
         app = self.appearance()
         self._pv_gen += 1
-        th = _PreviewThread(self._pv_gen, (app, sign_core.signer_label(e.get("name", ""), e.get("email", "")),
-                                           self.ed_reason.text(), self._box[0], self._box[1], self.PREVIEW_DPI), self)
+        label = sign_core.signer_label(e.get("name", ""), e.get("email", ""))
+        w, h = self._box
+        if not self._box_is_field:
+            w, h = sign_core.stamp_size(app, label, self.ed_reason.text(), w, h)    # 그림 상자 + 아래 글자 줄(§3.6)
+        th = _PreviewThread(self._pv_gen, (app, label, self.ed_reason.text(), w, h, self.PREVIEW_DPI), self)
         th.done.connect(self._on_preview)
         self._pv_threads.append(th)
 
@@ -1199,7 +1217,7 @@ class SignDialog(QDialog):
         return sign_core.Appearance(image_path=sign_store.image_path(self.image_name()),
                                     show_name=self.chk_name.isChecked(), show_date=self.chk_date.isChecked(),
                                     show_reason=self.chk_reason.isChecked(), font_path=sign_core.default_font(),
-                                    layout=str(self.cmb_layout.currentData() or "overlay"))
+                                    layout=str(self.cmb_layout.currentData() or sign_core.LAYOUT_DEFAULT))
 
     def certify(self) -> int:
         return int(self.cmb_kind.currentData() or 0)
@@ -1254,7 +1272,7 @@ class SignDialog(QDialog):
         d = sign_store.load()
         d["appearance"] = {"show_name": self.chk_name.isChecked(), "show_date": self.chk_date.isChecked(),
                            "show_reason": self.chk_reason.isChecked(),
-                           "layout": str(self.cmb_layout.currentData() or "overlay")}
+                           "layout": str(self.cmb_layout.currentData() or "image_top")}
         d["tsa_on"] = self.chk_tsa.isChecked()
         d["tsa_url"] = self.ed_tsa.text().strip()
         d["last_reason"] = self.ed_reason.text()

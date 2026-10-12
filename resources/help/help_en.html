@@ -22,7 +22,7 @@
 <ul>
   <li><b>Bookmarks panel (left)</b>: click to load the file in the main viewer. Expand a file
     node (▸) to see the PDF's own bookmarks (TOC). Along the top: the <b>Search list names</b> box · <b>#</b> (hashtags, §13) ·
-    <b>Sort</b> (§7) · <b>📁 Folder</b> (file mode ↔ folder mode) · <b>Tree</b> (single ↔ tree) · <b>↻</b> (refresh after files change outside).</li>
+    <b>Sort</b> (§7) · <b>📁 Folder</b> (file mode ↔ folder mode) · <b>Tree</b> (single ↔ tree) · <b>↻</b> (refresh after files change outside — also in edit mode; asks first if there are unsaved changes).</li>
   <li><b>Right-click</b> a file or bookmark: Open File Location · Save As · Save · Flatten and Export ·
     Rename File/Bookmark · Delete File/Bookmark · Build Bookmarks · Edit Hashtags · add to Favorites, and so on.
     In edit mode there are also Copy Files / Move Files, new folder / rename / delete folder, and merging several files.</li>
@@ -158,6 +158,8 @@
     <b>Select objects</b> (move · resize · delete; drag a box to select several) · <b>Eraser</b> (thin Ctrl+E / thick Ctrl+Shift+E) ·
     <b>Clear</b> (all lines on this page, Ctrl+Shift+Backspace) · <b>↶ Undo</b> (Ctrl+Z) / <b>↷ Redo</b> (Ctrl+Y).</li>
   <li>While typing, ▲▼ change the font size and ◀▶ the letter spacing. Move a selected object with the arrow keys (Shift = 1px); Del deletes it.</li>
+  <li><b>Copy and paste</b>: Ctrl+C → Ctrl+V copies selected text boxes, lines, shapes and photos (several selected with a box, too) — slightly offset on the same page, at the same place on another page or file.
+    Right-click 'Copy' / 'Paste' pastes where you clicked. <b>Drag with Shift held</b> to move a copy and leave the original.</li>
   <li>Right-click the page → <b>Line and Text Input Settings…</b>: set pens 1–5, highlight opacity and eraser size, and text styles (font · size · colour ·
     letter spacing · box line · background · alignment · callout end), and save them.</li>
   <li><b>Photos</b>: right-click 'Insert Photo File' · 'Insert from Clipboard' (▼ Rectangle / Rounded Rectangle / Circle), Ctrl+V, or drop an image file.
@@ -179,6 +181,9 @@
   <li><b>Rotate</b>: right-click rotate left/right 90°. <b>Hide</b>: 'Hide / Unhide / Unhide All' (a hidden page shows a 'Hidden' band on the right).</li>
   <li><b>Adding pages</b>: 'Copy Selected Pages' (Ctrl+C) → 'Paste' (Ctrl+V, also into another PDF) · 'Paste Clipboard Photo as New Page' ·
     drop image files or screenshot cards onto the thumbnails.</li>
+  <li><b>Crop and split pages</b> (crop button to the right of '+' on the page toolbar): margins up to 95% per side (opposite sides together up to 95%).
+    <b>Split Pages</b> — 2 pages left/right, 2 pages top/bottom or 4 pages: the area left after cropping is split at the split lines (centre by default; drag the blue lines in the preview to adjust), turning one page into 2 or 4.
+    'Right part first' is for books read right to left. Split pages show at once in the thumbnails and the main view and go into the original only when you press 💾 Save (Cancel reverts).</li>
   <li>Page edits are applied with 💾 Save or 'Apply Changes — Save as New PDF...'.</li>
 </ul>
 
@@ -206,12 +211,18 @@
     Give the <b>public certificate</b> (.cer, Export Public Certificate) to the people who receive your documents.
     <b>Import Korean Certificate (NPKI)…</b> finds Korean certificates in NPKI folders on the PC or a USB drive and imports one with its certificate password (the original folder is unchanged; the password stays the same).
     <b>From Windows Certificate Store…</b> uses a certificate held by Windows (including smart cards and USB tokens) without copying the key — Windows may ask for a PIN when you sign.</li>
-  <li><b>Signing</b>: press the digital signature button to the right of Crop (or Tools → Sign...) and drag on the page where the signature goes
-    (a single click uses the default size). <b>Right-click → Sign Here…</b> on the page opens the signing window right away with the default size at that spot. In the signing window choose the digital ID, signature image and appearance text (name · date · reason),
-    then <b>Sign with Windows Hello</b> or enter the password and press <b>Sign</b>. The signature is appended to the <b>current file</b>
-    (<b>Sign As…</b> saves a new one). You cannot sign in two-page view. Rotated pages are signed in the text direction.</li>
+  <li><b>Signing — place, then confirm once</b>: press the digital signature button to the right of Crop (or Tools → Sign...) and drag on the page where the signature image goes
+    (a single click uses the default size). <b>Right-click → Sign Here…</b> places one with the default size at that spot.
+    Dragging does not sign yet — it makes a <b>signature place</b> (dashed box): drag it to move, use the bottom-right corner to resize (keeps the image ratio; hold Shift for free), press Delete to remove. You can put several on one page.
+    Its right-click menu offers 'Image only (not a digital signature)' and 'Place on Other Pages…'. Drawing tools of edit mode are turned off when you press the signature button.
+    When done, press <b>Confirm Signatures…</b> in the band above the page, choose the digital ID, signature image and appearance text (name · date · reason),
+    then <b>Sign with Windows Hello</b> or enter the password and press <b>Confirm Signatures</b>. All places are signed at once into a <b>new file 'name_signed.pdf'</b>; the original stays unchanged.
+    You cannot place signatures in two-page view. Rotated pages are signed in the text direction.</li>
+  <li><b>Changing a signature</b>: a signed file shows <b>Edit Signatures</b> in the band above the page (for signatures made with your digital ID). It turns the signatures back into places — move, resize or delete them, then <b>Confirm Signatures…</b> replaces that signed file.
+    It is not possible when someone else's signature comes after yours.</li>
+  <li><b>Image only</b>: <b>Tools → Insert Image Only...</b> puts only a registered signature image, without a digital signature (the image has no signature effect). Placing and confirming work as for signatures.</li>
   <li><b>More choices in the signing window</b>: <b>Signature type</b> — approval signature (default) or certification (no changes / form filling and signing allowed / comments, forms and signing allowed; only as the document's first signature) ·
-    <b>Text layout</b> — over the image / image left, text right / image above, text below · <b>Pages</b> — this page / all pages / page range (one signature per page) ·
+    <b>Text layout</b> — image above, text below (default — the image fills the dragged box, the text goes below it and wraps so it is never cut off) / over the image / image left, text right ·
     <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default). The signature image window also offers <b>Draw by Hand…</b>.</li>
   <li><b>Empty signature fields</b>: <b>Tools → Create Empty Signature Field...</b> lets you drag a place on the page and name it (e.g. Approver); the recipient then signs in that field.
     A document with empty fields shows 'empty signature field' in the band above the page, and the signature button offers <b>Sign in an empty field</b> (dragging inside a field or right-clicking in it also signs that field).

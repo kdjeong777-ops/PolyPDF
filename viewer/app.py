@@ -1250,6 +1250,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv.signRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_pdf()))      # 보안 SOT §3
         mv.signRegionSelected.connect(lambda r, i=idx: self._on_sign_region(r, view=self._mv[i]))  # 보안 SOT §3.3
         mv.signPanelRequested.connect(lambda i=idx: self._on_sign_panel(view=self._mv[i]))         # 보안 SOT §5
+        mv.signEditRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_edit()))   # 보안 SOT §3.10
+        self._sign_drafts_attach(mv, idx)                                                         # 보안 SOT §3.10 서명 자리
         mv.hyperlinkActivated.connect(
             lambda link, i=idx: (i == self._active_pane) and self._launch_hyperlink(link))
         mv.drawModeChanged.connect(self._on_main_draw_mode_changed)   # 260611-4: 공유 동기
@@ -1644,6 +1646,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 🔏 전자서명 — 보안 SOT §3(261010-21). 위 구역은 사용자가 정한 패널 차례와 짝이라 따로 둔다.
         m_tools.addSection(tr("🔏 전자서명"))
         _act(tr("서명..."), self.action_sign_pdf)
+        _act(tr("그림만 넣기..."), self.action_sign_image_only)       # 보안 SOT §3.11
+        _act(tr("서명 확정..."), self.action_sign_confirm)           # 보안 SOT §3.10
+        _act(tr("서명 편집"), self.action_sign_edit)
         _act(tr("빈 서명 칸 만들기..."), self.action_sign_field)
         _act(tr("디지털 ID..."), self.action_digital_ids)
         _act(tr("서명 그림..."), self.action_sign_image)
@@ -2851,6 +2856,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         # 261008-1(§4.7.14): 꾸밈·사진·하이퍼링크 사이드카 키(상대경로)도 새 이름으로
         self._rehome_sidecars([(o, n) for o, n in pairs if o])
+        try:
+            from viewer import sign_drafts             # 보안 SOT §3.10 — 서명 자리 기록도 새 경로로
+            sign_drafts.relocate([(o, n) for o, n in pairs if o])
+        except Exception:
+            pass
         # 메인 뷰어가 옮겨진 파일을 보고 있었으면 새 경로로 재로드
         try:
             from viewer.pathutil import norm_key            # SOT §7.0 표준 키
@@ -4069,10 +4079,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         crops = _pcr.pending(src)                  # 261010-13: 저장 전 크롭도 같은 파일에
         from viewer import page_rotate as _prt
         rots = _prt.pending(src)                   # 261011-2(§4.7.16): 저장 전 회전도 — 쪽 `/Rotate` 로
+        try:
+            alias = pt.split_alias()               # 261012-2(§4.7.15): 나눈 쪽의 책갈피는 첫 조각으로
+        except Exception:
+            alias = {}
 
         def _job(progress):
             try:
-                built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress, crops=crops, rotations=rots))
+                built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress, crops=crops, rotations=rots,
+                                        alias=alias))
             except _peb.Cancelled:
                 raise MergeCancelled()
         res = self._run_merge_job(_job, tr("쪽 편집 저장"))
@@ -4199,13 +4214,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     got.update(_pc.compute_margins(doc, [pg], by))
             finally:
                 doc.close()
-        title = tr("크롭 해제") if plan.get("reset") else tr("쪽 크롭")
+        # 261012-2(§4.7.15 '쪽 나누기'): 나누기면 크롭 여백을 구한 뒤 조각 PDF 를 같은 배경 작업에서 만든다
+        from viewer import page_split as _ps
+        spec = _ps.norm_spec(plan.get("split"))
+        split_on = (not plan.get("reset")) and spec["mode"] != _ps.NONE
+        split_tmp, split_got = "", {}
+        if split_on:
+            pt = self.page_thumbs
+            if getattr(pt, "_doc", None) is None or str(pt._doc.path) != str(src):
+                self.status.showMessage(tr("쪽 나누기는 본문에 연 PDF 에서만 됩니다."), 5000)
+                return
+            split_tmp = pt.staged_temp_path(".pdf")
+            _job0 = _job
+
+            def _job(progress):
+                _job0(progress)
+                split_got.update(_ps.build_parts(src, list(plan["pages"]), dict(got), spec, split_tmp, progress=progress))
+        title = tr("크롭 해제") if plan.get("reset") else (tr("쪽 나누기") if split_on else tr("쪽 크롭"))
         res = self._run_merge_job(_job, title)
         if res.get("cancelled"):
             self.status.showMessage(tr("크롭을 취소했습니다."), 4000)
             return
         if not res.get("ok"):
             QMessageBox.warning(self, title, res.get("err") or tr("알 수 없는 오류"))
+            return
+        if split_on:
+            self._apply_split(src, split_tmp, split_got)
             return
         _pc.set_pending(src, got)
         try:
@@ -4218,6 +4252,27 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                  if plan.get("reset") else
                                  tr("크롭 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."))
                                 .format(n=len(got)), 8000)
+
+    def _apply_split(self, src, tmp_pdf: str, parts_by_page: dict):
+        """261012-2(§4.7.15 '쪽 나누기'): 조각을 썸네일 스테이징 쪽으로 — 저장 전 편집(사용자 결정).
+        크롭 여백은 조각에 이미 들어 있어 저장 전 크롭에는 적지 않는다. [저장] = 쪽 편집 저장, [취소] = 쪽 편집 되돌리기."""
+        pt = self.page_thumbs
+        try:
+            if not self.bookmark_tree.is_edit_mode():
+                self.bookmark_tree.btn_edit.setChecked(True)      # 저장·취소 단추가 보이게(썸네일도 편집 모드)
+        except Exception:
+            pass
+        first = pt.stage_split(tmp_pdf, parts_by_page)
+        n_parts = sum(len(v) for v in parts_by_page.values())
+        try:
+            self._push_nav_filter()
+            if first >= 0:
+                pt.select_page(first)
+                self.main_view.go_to_page(first)
+        except Exception:
+            pass
+        self.status.showMessage(tr("쪽 나누기 {n}쪽 → {m}쪽(미저장) — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다).")
+                                .format(n=len(parts_by_page), m=n_parts), 8000)
 
     def _crop_reload(self, path, page=None):
         """저장 전 크롭이 바뀐 뒤 본문·썸네일을 다시 연다 — `PdfDocument` 가 열 때 덧입힌다."""
@@ -4864,6 +4919,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 act_hide = menu.addAction(tr('페이지 숨김 (p.{page})').format(page=page))
         # 260611-78: 선/텍스트 통합 설정(아래 클립보드 삽입 밑에 배치)
         act_lt_cfg = None
+        act_deco_copy = act_deco_paste = deco_at = None
         # 260611-15: 편집모드 — 이미지 삽입/모양/삭제
         act_img_del = None
         change_acts = {}
@@ -4892,6 +4948,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                  getattr(self, "_ins_paste_shape", None)
                                  or getattr(self.main_view, "_img_shape", "rect") or "rect"),
                          self.main_view.paste_image_from_clipboard()))
+            # 261012-4(§4.6.7, 사용자 지시): 꾸밈 개체 복사·붙여넣기 — 붙여넣기는 누른 자리에
+            deco_at = self.main_view.deco_point_at(global_pos)
+            act_deco_copy = menu.addAction(tr("복사 (Ctrl+C)"))
+            act_deco_copy.setEnabled(self.main_view.has_deco_selection())
+            act_deco_paste = menu.addAction(tr("붙여넣기 (Ctrl+V)"))
+            act_deco_paste.setEnabled(self.main_view.can_paste_decorations() and deco_at is not None)
             # 260611-78: '클립보드 삽입' 아래 — 선긋기/글쓰기 통합 설정(탭)
             act_lt_cfg = menu.addAction(tr("선과 텍스트 입력 설정…"))
             if self.main_view.has_selected_image():
@@ -4953,6 +5015,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._print_pdf_pages(cur, [page - 1]); return
         if chosen is not None and chosen == act_lt_cfg:
             self._open_line_text_settings(); return
+        if chosen is not None and chosen == act_deco_copy:
+            self.main_view.copy_decorations(); return
+        if chosen is not None and chosen == act_deco_paste:
+            self.main_view.paste_decorations(at_norm=deco_at); return
         if chosen in tip_acts:
             self.main_view.set_leader_tip(tip_acts[chosen]); return
         if chosen == act_txt_del:

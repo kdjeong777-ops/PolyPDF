@@ -401,7 +401,8 @@ class BookmarkTree(QWidget):
         self._sort_combo.setMinimumWidth(self._sort_combo.sizeHint().width())
         self._sort_combo.currentIndexChanged.connect(lambda _i: self._on_sort_changed(""))
         sort_row.addWidget(self._sort_combo)
-        # 260611-61: 새로고침(↻) — 편집모드가 아닐 때만 노출. 외부에서 파일 추가 시 트리 갱신. 261011-4: 정렬 오른쪽(사용자 결정)
+        # 260611-61: 새로고침(↻) — 외부에서 파일 추가 시 트리 갱신. 261011-4: 정렬 오른쪽(사용자 결정)
+        #   261012-3(사용자 지시): 편집 모드에서도 보인다 — 저장 안 한 수정이 있으면 먼저 묻는다(refresh)
         self.btn_refresh = QPushButton("↻")
         self.btn_refresh.setFixedWidth(30)
         self.btn_refresh.setToolTip(tr("책갈피 새로고침 (외부에서 파일이 추가/변경된 경우)"))
@@ -614,11 +615,29 @@ class BookmarkTree(QWidget):
 
     def refresh(self):
         """260611-61: 현재 로드 소스를 다시 읽어 트리 갱신(외부에서 파일 추가/변경 시).
-        편집 중이면 무시(되돌림 방지)."""
-        if self._edit_mode:
-            return
+        261012-3(사용자 지시): 편집 모드에서도 된다 — 다시 읽으면 저장 안 한 책갈피 수정이 사라지므로
+        수정이 있으면 [저장 후 새로고침] / [버리고 새로고침] / 취소 를 묻는다. 편집 모드는 그대로 둔다."""
+        if self._edit_mode and self._dirty:
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(tr("책갈피 새로고침"))
+            box.setText(tr("저장하지 않은 책갈피 수정이 있습니다. 새로 고치면 다시 읽은 내용으로 바뀝니다."))
+            b_save = box.addButton(tr("저장 후 새로고침"), QMessageBox.ButtonRole.AcceptRole)
+            b_drop = box.addButton(tr("버리고 새로고침"), QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(b_save)
+            box.exec()
+            c = box.clickedButton()
+            if c is b_save:
+                self._op_save()
+                if self._dirty:                  # 저장하지 못했다 — 다시 읽지 않는다
+                    return
+            elif c is not b_drop:
+                return
         if callable(self._reload_fn):
             self._reload_fn()
+            if self._edit_mode:
+                self._dirty = False
 
     def load_folder(self, folder: str | Path) -> bool:
         """folder 안의 bookmarks.json 을 우선 사용. 없으면 PDF 파일 목록을 트리로.
@@ -2361,7 +2380,7 @@ class BookmarkTree(QWidget):
         self._edit_ops_row2.setVisible(on)
         self.btn_save.setVisible(on)          # 260611-8: 저장은 편집모드에서만
         self.btn_cancel.setVisible(on)        # 260611-9: 취소도 편집모드에서만
-        self.btn_refresh.setVisible(not on)   # 260611-61: 새로고침은 비편집모드에서만
+        # 261012-3(사용자 지시): ↻ 는 편집 모드에서도 보인다(종전 260611-61 은 비편집모드에서만)
         self._apply_edit_row_stretch(on)      # 260611-73: 편집모드=3버튼 전체폭 균등
         self.btn_edit.blockSignals(True)
         self.btn_edit.setChecked(on)

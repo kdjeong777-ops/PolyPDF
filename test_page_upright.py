@@ -153,9 +153,11 @@ try:
     mw.action_sign_pdf(); spin(0.3)
     mv = mw.main_view
     z = mv._zoom or 1.0
-    mv.signRegionSelected.emit(QRectF(300 * z, 400 * z, 520 * z, 480 * z)); spin(2.0)
+    mv.signRegionSelected.emit(QRectF(300 * z, 400 * z, 520 * z, 480 * z)); spin(0.5)
+    mw.action_sign_confirm(); spin(2.0)                  # 261012-1(보안 SOT §3.10): 자리 → [서명 확정] → 별도 파일
     sdlg.SignDialog = _Real
     QMessageBox.exec = orig_exec
+    src_plain, src = src, src.with_name(src.stem + "_서명.pdf")
     rep = sc.verify_pdf(str(src), st.trusted())
     chk(not any("회전" in m for m in told) and rep.sigs and rep.worst == sc.OK_TRUSTED,
         "C1 회전한 쪽에도 막지 않고 서명 — 유효·신뢰함", str((told[-1:], rep.worst)))

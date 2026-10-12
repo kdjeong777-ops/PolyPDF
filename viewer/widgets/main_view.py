@@ -1314,6 +1314,9 @@ class _PdfGraphicsView(QGraphicsView):
         if (ownr is not None and getattr(ownr, "_img_edit", False)
                 and (event.modifiers() & Qt.KeyboardModifier.ControlModifier)
                 and k == Qt.Key.Key_V):
+            # 261012-4(§4.6.7): 마지막에 복사한 것이 PolyPDF 꾸밈이면 그것을, 아니면 클립보드 그림
+            if ownr.can_paste_decorations() and ownr.paste_decorations():
+                event.accept(); return
             if ownr.paste_image_from_clipboard():
                 event.accept(); return
         # 260611-80: 편집모드 되돌리기(Ctrl+Z) / 다시실행(Ctrl+Y, Ctrl+Shift+Z)
@@ -1475,6 +1478,7 @@ class _PageSlide(QWidget):
 class _SignBand(QFrame):
     """서명 검증 띠(보안 SOT §5) — 상태 넷을 한 줄로. 색은 디자인 SOT §2.16(테마 무관 밝은 바탕 + 어두운 글자)."""
     panelRequested = pyqtSignal()
+    editRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): [서명 편집] — 내 서명이 있을 때만 보인다
     COLORS = {"checking": "#f3f3f3", "trusted": "#e8f5e9", "unknown": "#fff8e1",
               "modified": "#fff8e1", "invalid": "#fdecea", "empty": "#e3f2fd"}
     ICONS = {"checking": "…", "trusted": "✅", "unknown": "⚠", "modified": "⚠", "invalid": "❌", "empty": "✍"}
@@ -1488,7 +1492,12 @@ class _SignBand(QFrame):
         self.label.setWordWrap(False)
         self.btn = QPushButton(tr("서명 패널"))
         self.btn.clicked.connect(self.panelRequested.emit)
+        self.btn_edit = QPushButton(tr("서명 편집"))
+        self.btn_edit.setToolTip(tr("내 서명을 자리로 되돌려 옮기기·크기·지우기 뒤 다시 확정합니다."))
+        self.btn_edit.clicked.connect(self.editRequested.emit)
+        self.btn_edit.hide()
         lay.addWidget(self.label, 1)
+        lay.addWidget(self.btn_edit)
         lay.addWidget(self.btn)
         self.state = ""
         self.hide()
@@ -1505,8 +1514,12 @@ class _SignBand(QFrame):
         self.btn.setText(tr("서명") if state == "empty" else tr("서명 패널"))
         self.show()
 
+    def set_editable(self, on: bool) -> None:
+        self.btn_edit.setVisible(bool(on))
+
     def clear(self) -> None:
         self.state = ""
+        self.btn_edit.hide()
         self.hide()
 
 
@@ -1526,6 +1539,7 @@ class MainView(QWidget):
     signRequested = pyqtSignal()                 # 261010-22(보안 SOT §3): 툴바 전자서명 단추
     signRegionSelected = pyqtSignal(object)      # 261010-21(보안 SOT §3.3): 서명 자리(scene QRectF)
     signPanelRequested = pyqtSignal()            # 261010-21(보안 SOT §5): 검증 띠의 [서명 패널]
+    signEditRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): 검증 띠의 [서명 편집]
     hyperlinkActivated = pyqtSignal(object)      # 260609-3: 페이지 하이퍼링크 버튼 클릭(link dict)
     drawModeChanged = pyqtSignal(int)            # 260611-4: 선 종류 순환(0/1/2) — 공유 동기
 
@@ -1831,7 +1845,13 @@ class MainView(QWidget):
         # 261010-21(보안 SOT §5): 서명 검증 띠 — 서명된 문서에서만 보인다(본문 위 한 줄)
         self.sign_band = _SignBand(self)
         self.sign_band.panelRequested.connect(self.signPanelRequested.emit)
+        self.sign_band.editRequested.connect(self.signEditRequested.emit)
         layout.addWidget(self.sign_band)
+        # 261012-1(보안 SOT §3.10): 서명 자리 띠 — 확정 안 한 서명 자리가 있을 때만. 자리 위젯은 앱이 붙인다(sign_draft_layer)
+        from viewer.widgets.sign_draft_layer import SignDraftBand
+        self.sign_draft_band = SignDraftBand(self)
+        layout.addWidget(self.sign_draft_band)
+        self.sign_draft_layer = None
         layout.addLayout(view_row, 1)
 
         self._page_item: Optional[QGraphicsPixmapItem] = None
@@ -2108,6 +2128,9 @@ class MainView(QWidget):
         from PyQt6.QtWidgets import QApplication
         if not self._doc:
             return 0
+        # 261012-4(§4.6.7): 편집 모드에서 꾸밈을 골랐으면 글이 아니라 그 개체를 복사(글상자를 쓰는 중이면 그 글)
+        if self._text_editor is None and self.has_deco_selection():
+            return self.copy_decorations()
         if not self._copy_allowed:           # 260618-1: 복사 권한 없음
             self.textCopied.emit(-1); return 0
         txt = self._sel_text if (self._sel_text and self._sel_text.strip()) \
@@ -2634,9 +2657,24 @@ class MainView(QWidget):
         hi = max(lo, min(vsb.maximum(), hi))
         return lo, hi
 
+    def _render_scaled_any(self, page_index: int, physical_scale: float):
+        """쪽 그림(RGB888) — 끼운 쪽(스테이징, §4.7.12)이면 그 원본 PDF 쪽에서 직접, 아니면 전역 렌더 캐시(§19.11).
+
+        261012-2: 전역 렌더 캐시(`render_scaled`)는 **이 문서의 쪽 번호만** 안다 — 합성 번호를 넘기면
+        `page not in document` 로 예외가 나고 호출부가 삼켜, 끼운 쪽이 본문에 그려지지 않았다(쪽 나누기 미리보기에서 드러남)."""
+        if self._is_staged(page_index):
+            page = self._page_for(page_index)
+            if page is None:
+                raise ValueError("staged page not available")
+            q = max(0.1, min(20.0, float(physical_scale)))
+            pix = page.get_pixmap(matrix=fitz.Matrix(q, q), alpha=False, colorspace=fitz.csRGB)
+            from viewer.pdf_doc import RenderedPage
+            return RenderedPage(width=pix.width, height=pix.height, samples=pix.samples, page_rect=tuple(page.rect))
+        return self._doc.render_scaled(page_index, physical_scale)
+
     def _page_pixmap(self, page_index: int, zoom: float, dpr: float) -> QPixmap:
-        """옆 쪽 그림 — 지금 쪽과 같은 배율·회전. 캐시(§19.11)를 거친다."""
-        rp = self._doc.render_scaled(page_index, zoom * dpr)
+        """옆 쪽 그림 — 지금 쪽과 같은 배율·회전. 캐시(§19.11)를 거친다(끼운 쪽은 직접)."""
+        rp = self._render_scaled_any(page_index, zoom * dpr)
         img = QImage(rp.samples, rp.width, rp.height, rp.width * 3,
                      QImage.Format.Format_RGB888).copy()
         pix = QPixmap.fromImage(img)
@@ -2823,7 +2861,7 @@ class MainView(QWidget):
         physical_scale = zoom * dpr
         # 260829(§19.11 P-A): 전역 렌더 캐시 경유 — 같은 페이지·배율 재방문은 재렌더 없음.
         #   캐시 버퍼는 LRU 회수될 수 있으므로 .copy() 로 수명 분리(필수).
-        rp = self._doc.render_scaled(self._current_page, physical_scale)
+        rp = self._render_scaled_any(self._current_page, physical_scale)   # 끼운 쪽도(261012-2)
         img = QImage(
             rp.samples, rp.width, rp.height, rp.width * 3,
             QImage.Format.Format_RGB888,
@@ -4128,6 +4166,178 @@ class MainView(QWidget):
         else:
             st["points"] = [[x + dnx, y + dny] for x, y in st.get("points", [])]
 
+    # ===== 261012-4(마스터 §4.6.7, 사용자 지시): 꾸밈 개체 복사·붙여넣기·Shift 끌어 복사 =====
+    #   고른 선·도형·글상자·사진을 Ctrl+C·우클릭 '복사' 로 담고 Ctrl+V·우클릭 '붙여넣기' 로 붙인다(다른 쪽·다른 파일도).
+    #   담은 것은 앱 안(`_deco_clip`)에 두고, 시스템 클립보드에는 표식(DECO_MIME)만 — 그 뒤 다른 프로그램에서 그림을
+    #   복사하면 표식이 사라져 Ctrl+V 는 종전대로 그림 붙여넣기다(마지막에 복사한 것이 붙는다).
+    DECO_MIME = "application/x-polypdf-deco"
+    PASTE_STEP = 0.02                          # Ctrl+V 는 원래 자리에서 쪽 폭·높이의 2% 비켜(같은 쪽일 때)
+    _deco_clip = None                          # {"strokes": [...], "images": [...], "key": (파일, 쪽), "token": str}
+
+    def _deco_selection(self):
+        """지금 고른 꾸밈 — (선/도형/글상자 인덱스, 사진 인덱스). 범위 선택이 있으면 그것, 없으면 단일 선택."""
+        ms = [i for i in (getattr(self, "_multi_strokes", None) or []) if 0 <= i < len(self._page_strokes)]
+        mi = [i for i in (getattr(self, "_multi_images", None) or []) if 0 <= i < len(self._img_objects)]
+        if not ms and not mi:
+            if 0 <= self._stroke_selected < len(self._page_strokes):
+                ms = [self._stroke_selected]
+            if 0 <= self._img_selected < len(self._img_objects):
+                mi = [self._img_selected]
+        return ms, mi
+
+    def has_deco_selection(self) -> bool:
+        if not self._img_edit or self._is_image:
+            return False
+        ms, mi = self._deco_selection()
+        return bool(ms or mi)
+
+    @staticmethod
+    def _img_clone(o) -> dict:
+        return {"pix": o.get("pix"), "data": o.get("data"), "rect": list(o.get("rect", [0, 0, 0, 0])),
+                "shape": o.get("shape", "rect"), "alpha": int(o.get("alpha", 100)), "rot": float(o.get("rot", 0.0))}
+
+    def copy_decorations(self) -> int:
+        """고른 꾸밈을 담는다. 담은 개수."""
+        import copy
+        import uuid
+        from PyQt6.QtCore import QByteArray, QMimeData
+        from PyQt6.QtWidgets import QApplication
+        if not self._img_edit or self._is_image:
+            return 0
+        self._commit_text_editor()
+        ms, mi = self._deco_selection()
+        if not (ms or mi):
+            return 0
+        token = uuid.uuid4().hex
+        MainView._deco_clip = {"strokes": [copy.deepcopy(self._page_strokes[i]) for i in ms],
+                               "images": [self._img_clone(self._img_objects[i]) for i in mi],
+                               "key": (str(self.current_file() or ""), int(self._current_page)), "token": token}
+        md = QMimeData()
+        md.setData(self.DECO_MIME, QByteArray(token.encode("ascii")))
+        try:
+            QApplication.clipboard().setMimeData(md)
+        except Exception:
+            pass
+        return len(ms) + len(mi)
+
+    def can_paste_decorations(self) -> bool:
+        from PyQt6.QtWidgets import QApplication
+        clip = MainView._deco_clip
+        if not (clip and self._img_edit and not self._is_image and self._doc is not None):
+            return False
+        try:
+            md = QApplication.clipboard().mimeData()
+            return bool(md is not None and md.hasFormat(self.DECO_MIME)
+                        and bytes(md.data(self.DECO_MIME)).decode("ascii", "ignore") == clip["token"])
+        except Exception:
+            return False
+
+    def _deco_bbox_norm(self, strokes, images, pr):
+        """개체들의 바깥 사각형(정규화) (x0, y0) — 붙일 자리 맞추기용. 못 구하면 None."""
+        xs, ys = [], []
+        for st in strokes:
+            bb = self._stroke_bbox_view_any(st, pr)
+            if bb is not None:
+                xs.append((bb.left() - pr.left()) / max(1.0, pr.width()))
+                ys.append((bb.top() - pr.top()) / max(1.0, pr.height()))
+        for o in images:
+            rc = o.get("rect", [0, 0, 0, 0])
+            xs.append(rc[0])
+            ys.append(rc[1])
+        return (min(xs), min(ys)) if xs else None
+
+    def _deco_add(self, strokes, images, dx: float, dy: float) -> None:
+        """복사본을 더하고 그것들을 고른다(하나면 단일 선택 — 크기·회전 핸들을 그대로 쓰도록, §4.6.3)."""
+        import copy
+        s0, i0 = len(self._page_strokes), len(self._img_objects)
+        for st in strokes:
+            self._page_strokes.append(copy.deepcopy(st))
+            self._stroke_translate(len(self._page_strokes) - 1, dx, dy)
+        for o in images:
+            c = self._img_clone(o)
+            c["rect"][0] += dx
+            c["rect"][1] += dy
+            self._img_objects.append(c)
+        new_s = list(range(s0, len(self._page_strokes)))
+        new_i = list(range(i0, len(self._img_objects)))
+        self._multi_clear()
+        self._stroke_selected = -1
+        self._img_selected = -1
+        if len(new_s) + len(new_i) == 1:
+            if new_s:
+                self._stroke_selected = new_s[0]
+            else:
+                self._img_selected = new_i[0]
+        else:
+            self._multi_strokes, self._multi_images = new_s, new_i
+        if strokes:
+            self._save_page_strokes()
+        if images:
+            self._save_page_images()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+
+    def paste_decorations(self, at_norm=None) -> int:
+        """담아 둔 꾸밈을 이 쪽에 붙인다. `at_norm`(정규화 점, 우클릭 자리)이면 묶음의 왼쪽 위를 거기에,
+        아니면 같은 쪽은 조금 비켜·다른 쪽은 같은 자리에. 붙인 개수."""
+        clip = MainView._deco_clip
+        if not self.can_paste_decorations():
+            return 0
+        pr = self._page_view_rect()
+        if pr is None or pr.width() <= 0:
+            return 0
+        self._commit_text_editor()
+        strokes, images = clip["strokes"], clip["images"]
+        if at_norm is not None:
+            tl = self._deco_bbox_norm(strokes, images, pr)
+            dx, dy = (at_norm[0] - tl[0], at_norm[1] - tl[1]) if tl is not None else (0.0, 0.0)
+        elif clip.get("key") == (str(self.current_file() or ""), int(self._current_page)):
+            dx = dy = self.PASTE_STEP
+            self._deco_shift_clip(clip, dx, dy)          # 다시 붙이면 또 비켜 — 담은 것도 한 칸 옮겨 둔다
+        else:
+            dx = dy = 0.0
+        self._deco_add(strokes, images, dx, dy)
+        return len(strokes) + len(images)
+
+    def _deco_shift_clip(self, clip, dx, dy) -> None:
+        """같은 쪽에 거듭 Ctrl+V 하면 겹치지 않게 담아 둔 것도 한 칸씩 옮긴다(`_stroke_translate` 를 그대로 쓰려고 잠시 바꿔 낀다)."""
+        import copy
+        keep_s = self._page_strokes
+        try:
+            self._page_strokes = [copy.deepcopy(s) for s in clip["strokes"]]
+            for k in range(len(self._page_strokes)):
+                self._stroke_translate(k, dx, dy)
+            clip["strokes"] = self._page_strokes
+        finally:
+            self._page_strokes = keep_s
+        clip["images"] = [dict(self._img_clone(o), rect=[o["rect"][0] + dx, o["rect"][1] + dy] + list(o["rect"][2:]))
+                          for o in clip["images"]]
+
+    def deco_point_at(self, global_pos):
+        """우클릭 자리(정규화 점). 고른 꾸밈이 없으면 그 자리의 개체를 고른다(우클릭 '복사' 가 그것을 가리키게). 쪽 밖이면 None."""
+        pr = self._page_view_rect()
+        if pr is None or pr.width() <= 0 or not self._img_edit:
+            return None
+        vp = self.view.viewport().mapFromGlobal(global_pos)
+        if not self.has_deco_selection():
+            idx, _h = self._img_hit(vp, pr)
+            if idx >= 0:
+                self._img_selected = idx
+            else:
+                si = self._stroke_hit_index(vp, pr)
+                if si >= 0:
+                    self._stroke_selected = si
+            if self._draw_overlay is not None:
+                self._draw_overlay.update()
+        return ((vp.x() - pr.left()) / pr.width(), (vp.y() - pr.top()) / pr.height())
+
+    def _deco_dup_in_place(self, strokes_idx, images_idx) -> None:
+        """Shift + 끌기 — 원본은 두고 그 자리에 복사본을 만들어 고른다(끄는 것은 복사본)."""
+        strokes = [self._page_strokes[i] for i in strokes_idx if 0 <= i < len(self._page_strokes)]
+        images = [self._img_objects[i] for i in images_idx if 0 <= i < len(self._img_objects)]
+        if strokes or images:
+            self._deco_add(strokes, images, 0.0, 0.0)
+
     def _stroke_delete_selected(self):
         if 0 <= self._stroke_selected < len(self._page_strokes):
             self._page_strokes.pop(self._stroke_selected)
@@ -4878,6 +5088,8 @@ class MainView(QWidget):
             # 1) 활성 텍스트/지시선 박스의 핸들 → 변형(이동/크기/회전)
             if self._selected_textbox() is not None:
                 h = self._shape_handle_at(pos, pr)
+                if h == "move" and (ev.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+                    self._deco_dup_in_place([self._stroke_selected], [])     # 261012-4(§4.6.7)
                 if h is not None:
                     self._shape_transform_press(pos, pr, h)
                     self.view.setFocus(); return True
@@ -5371,7 +5583,13 @@ class MainView(QWidget):
                         except Exception:
                             pass
                         idx, _h = self._img_hit(pos, pr)
-                        if idx >= 0:
+                        shift_dup = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                        if (idx >= 0 and shift_dup and _h in (None, "move")
+                                and not (is_select and self._has_multi() and self._multi_hit(pos, pr))):
+                            # 261012-4(§4.6.7): Shift + 끌기 = 원본은 두고 복사본을 옮긴다
+                            self._deco_dup_in_place([], [idx])
+                            idx, _h = self._img_hit(pos, pr)
+                        if idx >= 0 and not (is_select and self._has_multi() and self._multi_hit(pos, pr)):
                             self._img_mouse_press(pos, pr)   # 선택 + 이동/리사이즈 시작
                             self.view.setFocus()
                             return True                       # 이미지 우선 → 소비
@@ -5390,12 +5608,17 @@ class MainView(QWidget):
                         if is_select:
                             # 260907-5: 이미 범위로 고른 것 위를 누르면 **함께 이동**
                             if self._has_multi() and self._multi_hit(pos, pr):
+                                if shift_dup:                # 261012-4: Shift = 고른 것들의 복사본을 옮긴다
+                                    self._deco_dup_in_place(list(self._multi_strokes), list(self._multi_images))
                                 self._multi_drag = {"last": pos}
                                 self.view.setFocus(); return True
                             # 260611-70: 그린 선/도형을 클릭하면 선택+이동 시작
                             si = self._stroke_hit_index(pos, pr)
                             if si >= 0:
                                 self._multi_clear()
+                                if shift_dup:                # 261012-4: Shift = 복사본을 옮긴다
+                                    self._deco_dup_in_place([si], [])
+                                    si = self._stroke_selected
                                 self._stroke_selected = si
                                 self._stroke_drag = {"last": pos}
                                 self.view.setFocus(); ov.repaint()  # 260611-79: 선택 즉시 표시
@@ -5642,6 +5865,9 @@ class MainView(QWidget):
     def _position_hl_overlay(self):
         # 페이지 위치/크기 변동 시 재배치(폭 변하면 줄바꿈도 갱신)
         self._relayout_hl()
+        lay = getattr(self, "sign_draft_layer", None)
+        if lay is not None:
+            lay.reposition()                  # 261012-1(보안 SOT §3.10): 서명 자리도 쪽을 따라간다
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

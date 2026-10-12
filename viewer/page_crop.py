@@ -12,7 +12,8 @@ from pathlib import Path
 
 import fitz
 
-CROP_MAX = 45.0                 # 한 변 최대 %(양쪽 합이 100 을 넘지 않게)
+CROP_MAX = 95.0                 # 한 변 최대 %(261012-2 사용자 지시 — 종전 45 는 50% 넘게 자를 수 없었다)
+CROP_KEEP_MIN = 5.0             # 마주 보는 두 변을 자르고도 남는 폭·높이 최소 %(위+아래, 왼+오른 ≤ 95)
 PORTRAIT, LANDSCAPE = "portrait", "landscape"
 BUILTIN_IDS = (PORTRAIT, LANDSCAPE)
 WHITE = 245                     # 흰 여백 감지 — 이보다 어두우면 내용
@@ -30,10 +31,24 @@ def default_styles() -> list:
             {"id": LANDSCAPE, "name": "", "margins": [0.0, 0.0, 0.0, 0.0], "auto": False, "mirror": False}]
 
 
+def clamp_margins(m, keep: int | None = None) -> list:
+    """[위,아래,왼,오른] % — 한 변 0~CROP_MAX, 마주 보는 두 변의 합 ≤ 100 − CROP_KEEP_MIN(§4.7.15, 261012-2).
+    합이 넘치면 `keep`(지금 끄는 변 0~3)은 두고 맞은편을 줄인다. `keep` 이 없으면 아래·오른쪽을 줄인다."""
+    m = [max(0.0, min(CROP_MAX, float(v or 0))) for v in (list(m) + [0.0] * 4)[:4]]
+    lim = 100.0 - CROP_KEEP_MIN
+    for a, b in ((0, 1), (2, 3)):
+        if m[a] + m[b] > lim:
+            if keep == b:
+                m[a] = max(0.0, lim - m[b])
+            else:
+                m[b] = max(0.0, lim - m[a])
+    return m
+
+
 def norm_style(st: dict) -> dict:
     m = list(st.get("margins") or [0, 0, 0, 0])[:4] + [0.0] * 4
     return {"id": str(st.get("id") or ""), "name": str(st.get("name") or ""),
-            "margins": [max(0.0, min(CROP_MAX, float(v or 0))) for v in m[:4]],
+            "margins": clamp_margins(m[:4]),
             "auto": bool(st.get("auto")), "mirror": bool(st.get("mirror"))}
 
 
@@ -156,11 +171,13 @@ def _to_unrotated(margins, rotation):
     return [t, b, l, r]
 
 
-def crop_box(page, margins_pct) -> list:
-    """보이는 방향 여백(%) → PDF 본래 좌표 CropBox [x0,y0,x1,y1]."""
+def crop_box(page, margins_pct, clamp: bool = True) -> list:
+    """보이는 방향 여백(%) → PDF 본래 좌표 CropBox [x0,y0,x1,y1].
+    `clamp=False` 는 쪽 나누기 조각(page_split) — 조각 여백은 한 변이 95% 를 넘을 수 있다(합은 100 미만)."""
     mb = _native_box(page, "MediaBox") or [page.mediabox.x0, page.mediabox.y0,
                                            page.mediabox.x1, page.mediabox.y1]
-    ut, ub, ul, ur = (max(0.0, min(CROP_MAX, float(v))) / 100.0 for v in _to_unrotated(margins_pct, page.rotation))
+    mm = clamp_margins(margins_pct) if clamp else [max(0.0, float(v)) for v in margins_pct]
+    ut, ub, ul, ur = (v / 100.0 for v in _to_unrotated(mm, page.rotation))
     w, h = mb[2] - mb[0], mb[3] - mb[1]
     return [mb[0] + ul * w, mb[1] + ub * h, mb[2] - ur * w, mb[3] - ut * h]
 
@@ -211,7 +228,7 @@ def margins_for(page, page_index: int, style: dict) -> list | None:
         m = [max(0.0, d[i] - m[i]) for i in range(4)]
     if st["mirror"] and (page_index + 1) % 2 == 0:
         m[2], m[3] = m[3], m[2]
-    return [max(0.0, min(CROP_MAX, v)) for v in m]
+    return clamp_margins(m)
 
 
 def assign_styles(doc, pages, styles, auto: dict, chosen_id: str) -> dict:

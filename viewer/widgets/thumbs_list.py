@@ -69,6 +69,7 @@ class PageThumbs(QWidget):
         #   하므로 여기서 들고 있다가 문서를 닫거나 목록을 비울 때 지운다.
         self._staged_tmp = []                # [임시 파일 경로]
         self._staged_seq = 0                 # 260930-2: 스테이징 쪽에 주는 일련번호(안정적)
+        self._split_alias = {}               # 261012-2(§4.7.15): (조각 PDF, 쪽) → 나눈 원본 쪽 — 책갈피용
         self._staged_dir = None              # 이 문서의 임시 폴더(TemporaryDirectory)
         # 260606-28/29: 폭 치수(_build_ui 가 참조하므로 먼저 계산).
         #   폭 고정(리사이즈 불가) — 더 넓혀도 할 일이 없고, 번호가 하단으로 가며
@@ -298,6 +299,7 @@ class PageThumbs(QWidget):
     def _drop_staged_temps(self):
         """사진으로 만든 임시 파일을 지운다(문서 닫기·목록 비우기와 같은 자리)."""
         self._staged_tmp = []
+        self._split_alias = {}
         d, self._staged_dir = self._staged_dir, None
         if d is not None:
             try:
@@ -415,6 +417,35 @@ class PageThumbs(QWidget):
         self._apply_filter()
         self._render_timer.start()
         return len(pages)
+
+    def stage_split(self, tmp_pdf: str, parts_by_page: dict) -> int:
+        """261012-2(마스터 §4.7.15 '쪽 나누기'): 나눈 원본 쪽 자리에 조각들을 스테이징 쪽으로 끼우고 원본 쪽은 뺀다.
+        [저장] 은 쪽 편집 저장 길(§4.7.9)로, [취소] 는 쪽 편집 되돌리기로 — 따로 길을 만들지 않는다. 첫 조각의 합성 번호(없으면 -1)."""
+        first = -1
+        for pg in sorted(int(p) for p in parts_by_page):
+            idx = [int(k) for k in parts_by_page[pg]]
+            row = self.row_of_page(pg)
+            if row < 0 or not idx:
+                continue
+            self.insert_external_pages(row, tmp_pdf, idx)
+            self.list.takeItem(row)
+            self._split_alias[(str(tmp_pdf), idx[0])] = pg
+            if first < 0:
+                v = self.list.item(row).data(Qt.ItemDataRole.UserRole)
+                if isinstance(v, (tuple, list)) and len(v) >= 3:
+                    first = self.STAGED_BASE + int(v[2])
+        self._apply_filter()
+        self._schedule_order_changed()
+        return first
+
+    def split_alias(self) -> dict:
+        """저장 재구성에 넘길 alias — 지금 목록에 남은 조각만(§4.7.9 `page_edit_build.build(alias=)`)."""
+        live = set()
+        for i in range(self.list.count()):
+            v = self.list.item(i).data(Qt.ItemDataRole.UserRole)
+            if isinstance(v, (tuple, list)) and len(v) >= 2:
+                live.add((str(v[0]), int(v[1])))
+        return {k: v for k, v in self._split_alias.items() if k in live}
 
     def _ext_doc(self, src: str):
         """붙여넣기 원본 렌더용 PdfDocument(캐시). 실패 시 None."""

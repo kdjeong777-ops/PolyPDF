@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 INDEX = "signing.json"
+APPEARANCE_REV = 2      # 2 = 기본 글자 배치가 '그림 위·글자 아래'(261012-1) — 옛 목록은 한 번 바꾼다(보안 SOT §9)
 
 
 def root() -> Path:
@@ -26,7 +27,8 @@ def root() -> Path:
 
 def _empty() -> dict:
     return {"ids": [], "default_id": "", "images": [], "default_image": "",
-            "appearance": {"show_name": True, "show_date": True, "show_reason": False, "layout": "overlay"},
+            "appearance": {"show_name": True, "show_date": True, "show_reason": False, "layout": "image_top"},
+            "appearance_rev": APPEARANCE_REV,
             "last_reason": "", "last_location": "", "trusted": [],
             "tsa_on": False, "tsa_url": ""}                 # 2단계(보안 SOT §3.6): 타임스탬프 — 끄는 것이 기본
 
@@ -55,6 +57,10 @@ def load() -> dict:
             for k, v in raw.items():
                 if k in data and isinstance(v, type(data[k])):
                     data[k] = v
+            if int(raw.get("appearance_rev", 0) or 0) < APPEARANCE_REV:
+                # 사용자 지시(261012-1) '기본값을 그림 위·글자 아래로' — 옛 기본(겹쳐)이 저장돼 있어 기본만 바꾸면 안 바뀐다
+                data["appearance"] = dict(data["appearance"], layout="image_top")
+                data["appearance_rev"] = APPEARANCE_REV
     except FileNotFoundError:
         pass
     except Exception:

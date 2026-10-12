@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer import page_crop as pc
+from viewer import page_split as ps
 from viewer.i18n import tr
 
 PT_PER_MM = 72.0 / 25.4
@@ -43,6 +44,7 @@ def _qimage(pix) -> QImage:
 class CropCanvas(QWidget):
     """쪽 전체 그림 위에 잘릴 곳을 어둡게. 편집 가능하면 네 변을 끌어 여백(%)을 바꾼다."""
     marginsDragged = pyqtSignal(object)        # [위,아래,왼,오른] %
+    splitDragged = pyqtSignal(float, float)    # 261012-2: 나눔선 위치(크롭 영역 안 %, 세로선 x · 가로선 y)
 
     GRAB = 7
 
@@ -55,6 +57,11 @@ class CropCanvas(QWidget):
         self._editable = True
         self._drag = None
         self._note = ""
+        self._split = ("none", 50.0, 50.0)
+
+    def set_split(self, mode, x, y):
+        self._split = (str(mode or "none"), float(x), float(y))
+        self.update()
 
     def set_image(self, img, note=""):
         self._img = img
@@ -97,6 +104,17 @@ class CropCanvas(QWidget):
             pen.setStyle(Qt.PenStyle.DashLine)
         p.setPen(pen)
         p.drawRect(c)
+        mode, sx, sy = self._split
+        if mode != "none":                       # 261012-2: 나눔선(파랑 점선) — 끌어 옮긴다
+            sp = QPen(QColor("#1565c0"), 2)
+            sp.setStyle(Qt.PenStyle.DashLine)
+            p.setPen(sp)
+            if mode in ("v", "4"):
+                x = c.left() + c.width() * sx / 100.0
+                p.drawLine(int(x), int(c.top()), int(x), int(c.bottom()))
+            if mode in ("h", "4"):
+                y = c.top() + c.height() * sy / 100.0
+                p.drawLine(int(c.left()), int(y), int(c.right()), int(y))
         if self._note:
             p.setPen(QColor("#e53935"))
             p.drawText(QRectF(r.left(), r.bottom() - 22, r.width(), 20), Qt.AlignmentFlag.AlignCenter, self._note)
@@ -104,10 +122,17 @@ class CropCanvas(QWidget):
 
     def _hit(self, pos):
         r = self._img_rect()
-        if r.isNull() or not self._editable:
+        if r.isNull():
             return None
         c = self._crop_rect(r)
         x, y, g = pos.x(), pos.y(), self.GRAB
+        mode, sx, sy = self._split
+        if mode in ("v", "4") and c.top() <= y <= c.bottom() and abs(x - (c.left() + c.width() * sx / 100.0)) <= g:
+            return "sx"
+        if mode in ("h", "4") and c.left() <= x <= c.right() and abs(y - (c.top() + c.height() * sy / 100.0)) <= g:
+            return "sy"
+        if not self._editable:
+            return None
         inside_v = c.top() - g <= y <= c.bottom() + g
         inside_h = c.left() - g <= x <= c.right() + g
         if inside_h and abs(y - c.top()) <= g:
@@ -127,11 +152,24 @@ class CropCanvas(QWidget):
         pos = ev.position()
         if self._drag is None:
             h = self._hit(pos)
-            self.setCursor(Qt.CursorShape.SizeVerCursor if h in (0, 1) else
-                           Qt.CursorShape.SizeHorCursor if h in (2, 3) else Qt.CursorShape.ArrowCursor)
+            self.setCursor(Qt.CursorShape.SizeVerCursor if h in (0, 1, "sy") else
+                           Qt.CursorShape.SizeHorCursor if h in (2, 3, "sx") else Qt.CursorShape.ArrowCursor)
             return
         r = self._img_rect()
         if r.isNull():
+            return
+        if self._drag in ("sx", "sy"):
+            c = self._crop_rect(r)
+            mode, sx, sy = self._split
+            if self._drag == "sx" and c.width() > 0:
+                sx = (pos.x() - c.left()) / c.width() * 100.0
+            elif c.height() > 0:
+                sy = (pos.y() - c.top()) / c.height() * 100.0
+            sx = round(max(ps.POS_MIN, min(ps.POS_MAX, sx)), 1)
+            sy = round(max(ps.POS_MIN, min(ps.POS_MAX, sy)), 1)
+            self._split = (mode, sx, sy)
+            self.update()
+            self.splitDragged.emit(sx, sy)
             return
         m = list(self._m)
         if self._drag == 0:
@@ -142,7 +180,7 @@ class CropCanvas(QWidget):
             m[2] = (pos.x() - r.left()) / r.width() * 100
         else:
             m[3] = (r.right() - pos.x()) / r.width() * 100
-        m = [round(max(0.0, min(pc.CROP_MAX, v)), 1) for v in m]
+        m = [round(v, 1) for v in pc.clamp_margins(m, keep=self._drag)]   # 261012-2: 한 변 95%·마주 보는 두 변 합 95%
         self._m = m
         self.update()
         self.marginsDragged.emit(m)
@@ -274,6 +312,8 @@ class CropDialog(QDialog):
         self.spins, self.mm = [], []
         for i, name in enumerate((tr("위"), tr("아래"), tr("왼쪽"), tr("오른쪽"))):
             sp = QDoubleSpinBox(); sp.setRange(0.0, pc.CROP_MAX); sp.setDecimals(1); sp.setSingleStep(0.5)
+            sp.setToolTip(tr("한 변 최대 {a}% — 마주 보는 두 변의 합은 {b}% 까지").format(
+                a=int(pc.CROP_MAX), b=int(100 - pc.CROP_KEEP_MIN)))
             sp.setSuffix(" %")
             lab = QLabel(); lab.setStyleSheet("color:#888;")
             gm.addWidget(QLabel(name), i, 0); gm.addWidget(sp, i, 1); gm.addWidget(lab, i, 2)
@@ -287,6 +327,33 @@ class CropDialog(QDialog):
         gm.addWidget(self.chk_mirror, 5, 0, 1, 3)
         gm.addWidget(self.btn_zero, 6, 0, 1, 1)
         sv.addWidget(g_m)
+
+        # 261012-2(마스터 §4.7.15 '쪽 나누기'): 크롭한 뒤 남은 영역을 2쪽·4쪽으로
+        g_sp = QGroupBox(tr("쪽 나누기"))
+        fsp = QFormLayout(g_sp)
+        self.cmb_split = QComboBox()
+        for key, label in ((ps.NONE, tr("나누지 않음")), (ps.VERTICAL, tr("좌우 2쪽(세로 가운데)")),
+                           (ps.HORIZONTAL, tr("위아래 2쪽(가로 가운데)")), (ps.QUAD, tr("4쪽(가로·세로 가운데)"))):
+            self.cmb_split.addItem(label, key)
+        self.cmb_split.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_split.setMinimumContentsLength(8)
+        fsp.addRow(self.cmb_split)
+        self.spin_sx = QDoubleSpinBox()
+        self.spin_sy = QDoubleSpinBox()
+        for sp_ in (self.spin_sx, self.spin_sy):
+            sp_.setRange(ps.POS_MIN, ps.POS_MAX); sp_.setDecimals(1); sp_.setSingleStep(0.5); sp_.setValue(50.0)
+            sp_.setSuffix(" %")
+        fsp.addRow(tr("세로 나눔선(왼쪽에서)"), self.spin_sx)
+        fsp.addRow(tr("가로 나눔선(위에서)"), self.spin_sy)
+        self.chk_rtl = QCheckBox(tr("오른쪽 조각부터"))
+        self.chk_rtl.setToolTip(tr("오른쪽에서 왼쪽으로 펼치는 책 — 좌우로 나눈 조각을 오른쪽부터 차례로"))
+        fsp.addRow(self.chk_rtl)
+        self.lbl_split = QLabel(tr("크롭한 뒤 남은 영역을 나눔선으로 나눕니다. 미리보기의 파란 선을 끌어 미세 조정하세요. "
+                                   "나눈 쪽은 [저장] 을 눌러야 PDF 에 들어갑니다."))
+        self.lbl_split.setWordWrap(True)
+        self.lbl_split.setStyleSheet("color:#888;")
+        fsp.addRow(self.lbl_split)
+        sv.addWidget(g_sp)
         sv.addStretch(1)
         sa = QScrollArea(); sa.setWidgetResizable(True); sa.setFrameShape(QFrame.Shape.NoFrame)
         sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)   # 디자인 SOT §2.14 — 세로 스크롤만
@@ -338,9 +405,15 @@ class CropDialog(QDialog):
         self.chk_mirror.toggled.connect(lambda _on: self._controls_changed())
         self.btn_zero.clicked.connect(self._zero)
         self.canvas.marginsDragged.connect(self._on_drag)
+        self.canvas.splitDragged.connect(self._on_split_drag)
+        self.cmb_split.currentIndexChanged.connect(lambda _i: self._split_changed())
+        self.spin_sx.valueChanged.connect(lambda _v: self._split_changed())
+        self.spin_sy.valueChanged.connect(lambda _v: self._split_changed())
+        self.chk_rtl.toggled.connect(lambda _on: self._split_changed())
         self.chk_overlay.toggled.connect(lambda _on: self._refresh_preview())
 
         self._auto_toggled(self.chk_auto.isChecked())
+        self._split_changed()
         self._goto(self._cur, force=True)
         self._scope_changed()
         self._thumb_timer.start()
@@ -485,7 +558,7 @@ class CropDialog(QDialog):
         n = len(self.target_pages())
         self.lbl_count.setText(tr("대상 {n}쪽").format(n=n))
         self.btn_ok.setEnabled(n > 0)
-        self.btn_reset.setEnabled(n > 0)
+        self.btn_reset.setEnabled(n > 0 and self.cmb_split.currentData() == ps.NONE)   # 나누기 중에는 해제 없음
         if self.chk_overlay.isChecked():
             self._refresh_preview()
 
@@ -513,8 +586,35 @@ class CropDialog(QDialog):
             pass
         self._refresh_preview()
 
+    def _split_spec(self) -> dict:
+        return ps.norm_spec({"mode": self.cmb_split.currentData(), "x": self.spin_sx.value(),
+                             "y": self.spin_sy.value(), "rtl": self.chk_rtl.isChecked()})
+
+    def _split_changed(self):
+        s = self._split_spec()
+        self.spin_sx.setEnabled(s["mode"] in (ps.VERTICAL, ps.QUAD))
+        self.spin_sy.setEnabled(s["mode"] in (ps.HORIZONTAL, ps.QUAD))
+        self.chk_rtl.setEnabled(s["mode"] in (ps.VERTICAL, ps.QUAD))
+        self.btn_ok.setText(tr("나누기") if s["mode"] != ps.NONE else tr("적용"))
+        self.btn_reset.setEnabled(s["mode"] == ps.NONE and len(self.target_pages()) > 0)
+        self.canvas.set_split(s["mode"], s["x"], s["y"])
+
+    def _on_split_drag(self, x, y):
+        for sp_, v in ((self.spin_sx, x), (self.spin_sy, y)):
+            sp_.blockSignals(True)
+            sp_.setValue(v)
+            sp_.blockSignals(False)
+
     def _controls_changed(self):
         st = self._style()
+        sender = self.sender()
+        keep = self.spins.index(sender) if sender in self.spins else None
+        m = pc.clamp_margins([sp.value() for sp in self.spins], keep=keep)     # 마주 보는 두 변 합 ≤ 95%(261012-2)
+        for k, sp in enumerate(self.spins):
+            if abs(sp.value() - m[k]) > 0.05:
+                sp.blockSignals(True)
+                sp.setValue(round(m[k], 1))
+                sp.blockSignals(False)
         st["margins"] = [round(sp.value(), 1) for sp in self.spins]
         st["auto"] = self.chk_detect.isChecked()
         st["mirror"] = self.chk_mirror.isChecked()
@@ -586,7 +686,8 @@ class CropDialog(QDialog):
     def result_plan(self) -> dict:
         return {"reset": self._reset, "pages": self.target_pages(),
                 "styles": [dict(s) for s in self._styles], "auto": dict(self._auto),
-                "chosen_id": self.cmb_style.currentData()}
+                "chosen_id": self.cmb_style.currentData(),
+                "split": self._split_spec() if not self._reset else ps.norm_spec(None)}
 
     def done(self, r):
         self._ov_timer.stop(); self._thumb_timer.stop()
