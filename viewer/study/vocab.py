@@ -1,12 +1,9 @@
 """어휘 빌드 — 표제어화·난이도·뜻·예문 (계획서 P2).
 
 ocr_page 텍스트(study.db) → 표제어 → vocab/vocab_page/vocab_def/vocab_example.
-P0 검증 반영(§14.3): 줄바꿈 하이픈 복원·반복 머리말 제거·잡음(의성어/미수록) 필터.
-
-난이도(zipf 밴딩, §3.3): zipf≥4.5 초급 / 3.0~4.5 중급 / <3.0 고급.
-  - 영어: wordfreq(en) + WordNet 뜻·예문 (P0 완전 검증).
-  - 한국어: wordfreq(ko)는 MeCab 필요(§15.2) → 우선 '등급별 어휘목록'(방안 A) 사용,
-            없으면 wordfreq 시도, 둘 다 불가면 level='미정'. 뜻은 사전 없음(본문 예문만).
+규칙은 단어학습 SOT §15(어휘 운영 규칙) — 표제어·잡음 거르개 §15.1, 난이도 §15.2, 뜻 §15.3.
+  - 영어: WordNet 표제어·뜻·예문 + wordfreq(en) zipf ≥4.5 초급 / 3.0~4.5 중급 / <3.0 고급.
+  - 한국어: kiwipiepy 내용어, 난이도는 `ko_levels.csv`(없으면 고급), 뜻은 kengdic(`ko_en_dict.csv`).
 """
 from __future__ import annotations
 
@@ -243,7 +240,7 @@ KO_DROP_ONCE_OOV = True     # 사전에 없고 문서에 한 번뿐이면 뺀다
 
 
 def is_noise_ko(lemma: str, oov: bool, freq: int) -> bool:
-    """한국어 표제어로 쓸 수 없는 것인가 (단어학습 SOT §17.5).
+    """한국어 표제어로 쓸 수 없는 것인가 (단어학습 SOT §15.1).
 
     **실측으로 고른 규칙**(배합설계 6쪽, 손으로 분류한 잡음 12 · 진짜 8):
 
@@ -273,7 +270,7 @@ def tokens_ko(text: str) -> list[tuple[str, str]]:
         if t.tag in _KO_CONTENT and len(t.form) >= 2:
             lemma = t.form + ("다" if t.tag in ("VV", "VA") else "")
             if getattr(t, "oov", None):
-                _KO_OOV.add(lemma)      # 260910: 잡음 거르개(§17.5)가 쓴다
+                _KO_OOV.add(lemma)      # 260910: 잡음 거르개(단어학습 SOT §15.1)가 쓴다
             out.append((lemma, t.tag))
     return out
 
@@ -345,7 +342,7 @@ def build_vocab(store, file_key: str, lang: str = "eng",
     kept = set()
     for lemma, freq in book_freq.items():
         if ko:
-            # 260910(§17.5): 영어처럼 한국어도 거른다 — 종전엔 길이만 봤다
+            # 260910(단어학습 SOT §15.1): 영어처럼 한국어도 거른다 — 종전엔 길이만 봤다
             if is_noise_ko(lemma, lemma in _KO_OOV, int(freq)):
                 continue
             level, z = level_ko(lemma)

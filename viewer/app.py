@@ -1300,7 +1300,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         self.search_area = self._build_search_area()
 
-        # 단어장 패널을 검색결과와 '탭'으로 합류 (계획 §10-5: 가로 4단 유지 — splitter 자식 수 불변)
+        # 단어장 패널을 검색결과와 '탭'으로 합류 (단어학습 SOT §5: 가로 4단 유지 — splitter 자식 수 불변)
         self.study_panel = StudyPanel()
         self.search_tabs = QTabWidget()
         self.search_tabs.setDocumentMode(True)     # 260606-7: 탭 프레임/여백 축소

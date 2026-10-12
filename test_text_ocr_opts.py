@@ -379,7 +379,7 @@ try:
     bs = inspect.getsource(StudyBuildWorker.run)
     chk('clean_page_texts' in bs, '⑮ 단어장 생성도 정제된 글을 쓴다')
 
-    # ── ⑯ 한국어 표제어 거르개 (단어학습 SOT §17.5) ──────────────
+    # ── ⑯ 한국어 표제어 거르개 (단어학습 SOT §15.1) ──────────────
     from viewer.study import vocab as _v
     chk(hasattr(_v, 'is_noise_ko'), '⑯ 한국어에도 거르개가 있다(종전엔 영어만)')
     chk(_v.is_noise_ko('끼미', True, 1) is True,
