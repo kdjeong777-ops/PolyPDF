@@ -882,7 +882,7 @@ class _PdfGraphicsView(QGraphicsView):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # 260910-5(마스터 SOT §19.1): 쪽 경계에서 넘기기 전에 확인하는 '의도'.
+        # 260910-5(마스터 SOT §19.12): 쪽 경계에서 넘기기 전에 확인하는 '의도'.
         #   여기(__init__)에 둔다 — 휠은 마우스를 움직이지 않아도 들어온다.
         self._edge_dir = 0                    # 닿아 있는 경계(+1 아래끝 / -1 위끝)
         self._edge_ms = 0.0                   # 그 경계에 닿은 시각(ms)
@@ -897,7 +897,7 @@ class _PdfGraphicsView(QGraphicsView):
         self._flip_dir = 0                    # 그때 넘긴 방향
         self._need_new_gesture = False        # 트랙패드: 넘긴 뒤 손을 새로 얹어야 다음 쪽
         self._ts_off = None                   # (처리 시각 − 이벤트 시각) 중 가장 작았던 값
-        # 260910-6(마스터 SOT §19.1.3): 1회성 설정은 여기 — 종전에는 이 네 줄이
+        # 260910-6(마스터 SOT §19.12.3): 1회성 설정은 여기 — 종전에는 이 네 줄이
         #   mouseMoveEvent 맨 끝에 있어 **마우스가 움직일 때마다** 실행됐다.
         #   실측상 정책 값은 load_document/load_image 와 같아 증상은 없었으나,
         #   _image_mode 는 실제로 덮어써졌고(첫 이동에 True→False) 생성 직후에는
@@ -1201,7 +1201,7 @@ class _PdfGraphicsView(QGraphicsView):
 
         # 일반 휠: 쪽 안에서는 그냥 스크롤, 끝에 닿으면 **한 박자 쉰 뒤** 쪽 이동.
         # 260910-5(사용자 보고 "페이지 끝에서 순식간에 넘어가 이어진 내용인지 모르겠다",
-        #   마스터 SOT §19.1): 종전에는 끝에 닿은 **바로 다음 칸**이 곧 쪽 넘김이라,
+        #   마스터 SOT §19.12): 종전에는 끝에 닿은 **바로 다음 칸**이 곧 쪽 넘김이라,
         #   관성 휠·고해상도 휠이 한 번 튕기면 멈춘 줄도 모르는 사이 넘어갔다.
         #   이제 ① 처음 닿은 칸은 넘기지 않고 ② 그 뒤에도 **머문 시간과 굴린 양을
         #   둘 다** 넘겨야 넘어간다. 하나만 보면 천천히 굴리는 사람이 못 넘기거나
@@ -1679,7 +1679,7 @@ class MainView(QWidget):
         # 261010-22(보안 SOT §3, 사용자 지시): 크롭 오른쪽 전자서명 단추 — 도구 메뉴 '서명...' 과 같은 일
         self.btn_sign = QPushButton(); self.btn_sign.setFixedSize(28, H)
         self.btn_sign.setIcon(_ti("sign", size=16))
-        self.btn_sign.setToolTip(tr("전자서명 — 서명 그림과 디지털 ID 로 이 PDF 에 서명"))
+        self.btn_sign.setToolTip(tr("전자서명 — 서명 자리를 두고 확정하면 서명한 새 파일(원본은 그대로)"))
         self.btn_sign.clicked.connect(self.signRequested.emit)
 
         bar.addWidget(self.btn_prev_page)
@@ -1694,6 +1694,10 @@ class MainView(QWidget):
         bar.addWidget(self.btn_zoom_in)
         bar.addWidget(self.btn_crop)
         bar.addWidget(self.btn_sign)
+        # 261012-11(사용자 지시): 크롭·서명 단추는 **편집 모드에서만** 보인다(set_draw_mode). 도구 메뉴·썸네일 메뉴·
+        #   본문 우클릭 '여기에 서명…' 은 그대로.
+        self.btn_crop.setVisible(False)
+        self.btn_sign.setVisible(False)
         # 260609-22(J3): 편집모드 전용 선긋기 도구 모음
         self._draw_bar = self._build_draw_bar(H)
         bar.addWidget(self._draw_bar)
@@ -2345,7 +2349,7 @@ class MainView(QWidget):
     def go_to_page(self, page_index: int, at_bottom: bool = False):
         """그 쪽으로 간다. `at_bottom` 이면 **그 쪽의 아래끝**에서 시작한다.
 
-        260910-5(사용자 보고, 마스터 SOT §19.1): 위로 굴려 이전 쪽으로 갈 때 종전에는
+        260910-5(사용자 보고, 마스터 SOT §19.12): 위로 굴려 이전 쪽으로 갈 때 종전에는
         늘 맨 위로 갔다 — 그 쪽의 아래 전체를 건너뛰는 셈이라, 사용자가 "건너뛴
         내용인지 인지하기 어렵다" 고 한 바로 그 자리다. 뒤로 가는 사람은 방금 지나온
         글을 다시 보려는 것이므로 아래끝이 이어지는 자리다.
@@ -2616,7 +2620,7 @@ class MainView(QWidget):
         if nxt is None:
             self.fileBoundaryRequested.emit(+1 if delta > 0 else -1)
             return
-        # 260910-5(SOT §19.1.2 규칙 1): 뒤로 넘기면 그 쪽의 **아래끝**에서 시작한다.
+        # 260910-5(마스터 SOT §19.12.2 규칙 1): 뒤로 넘기면 그 쪽의 **아래끝**에서 시작한다.
         # 260914-1(입력 SOT §2.9): 한 쪽 넘김은 애니메이션을 거친다(켜져 있으면).
         self._flip_to(nxt, 1 if delta > 0 else -1, at_bottom=(delta < 0))
 
@@ -3234,6 +3238,8 @@ class MainView(QWidget):
     def set_draw_mode(self, on):
         """편집모드 진입/이탈 — 선긋기 도구 모음 표시·도구 해제."""
         self._draw_bar.setVisible(bool(on))
+        self.btn_crop.setVisible(bool(on))       # 261012-11: 크롭·서명 단추는 편집 모드에서만
+        self.btn_sign.setVisible(bool(on))
         if not on:
             # 260907-6: 편집모드를 나가면 **도구 없음**(텍스트 선택)으로 돌아간다.
             self._pen_idx = None; self._draw_kind = None; self._shape_kind = "rect"
@@ -4330,6 +4336,46 @@ class MainView(QWidget):
             self._page_strokes = keep_s
         clip["images"] = [dict(self._img_clone(o), rect=[o["rect"][0] + dx, o["rect"][1] + dy] + list(o["rect"][2:]))
                           for o in clip["images"]]
+
+    def deco_menu_target(self, global_pos):
+        """261012-11(마스터 §4.6.9): 우클릭 — 개체 위면 그것을 고르고(이미 고른 묶음 안이면 그대로), 고른 꾸밈의 종류를 돌려준다.
+        'multi' | 'image' | 'text' | 'leader' | 'line' | None(고른 것 없음 — 보통 메뉴)."""
+        pr = self._page_view_rect()
+        if pr is None or pr.width() <= 0 or not self._img_edit or self._is_image:
+            return None
+        vp = self.view.viewport().mapFromGlobal(global_pos)
+        idx, _h = self._img_hit(vp, pr)
+        si = self._stroke_hit_index(vp, pr) if idx < 0 else -1
+        in_multi = self._has_multi() and self._multi_hit(vp, pr)
+        if not in_multi:
+            if idx >= 0 and idx != self._img_selected:
+                self._multi_clear(); self._stroke_selected = -1; self._img_selected = idx
+            elif si >= 0 and si != self._stroke_selected:
+                self._multi_clear(); self._img_selected = -1; self._stroke_selected = si
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+        ms, mi = self._deco_selection()
+        if len(ms) + len(mi) > 1:
+            return "multi"
+        if mi:
+            return "image"
+        if ms:
+            st = self._page_strokes[ms[0]]
+            if st.get("leader"):
+                return "leader"
+            if st.get("text_box"):
+                return "text"
+            return "line"
+        return None
+
+    def delete_deco_selection(self) -> None:
+        """고른 꾸밈을 지운다(단일·범위 모두)."""
+        if self._has_multi():
+            self._multi_delete()
+        elif 0 <= self._img_selected < len(self._img_objects):
+            self._img_delete_selected()
+        elif 0 <= self._stroke_selected < len(self._page_strokes):
+            self._stroke_delete_selected()
 
     def deco_point_at(self, global_pos):
         """우클릭 자리(정규화 점). 고른 꾸밈이 없으면 그 자리의 개체를 고른다(우클릭 '복사' 가 그것을 가리키게). 쪽 밖이면 None."""

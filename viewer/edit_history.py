@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """편집 모드 되돌리기/다시실행 기록 (261012-7, 마스터 §4.6.8) — Qt 없음.
 
-파일마다 하나의 기록. 한 단계(그룹)는 한 사용자 동작이 바꾼 것들 — 같은 이벤트 안에서 연달아 들어온 변경
-(예: 범위 선택 지우기 = 선 저장 + 사진 저장)을 앱이 `close()` 로 묶는다. 변경 하나 = (종류, 쪽, 전, 후).
-1단계는 꾸밈(`drawings`·`images`)만, 2단계에서 책갈피·쪽 편집 등 종류를 더한다(같은 꼴).
+기록 키(앱은 편집 한 번 동안 'session' 하나)마다 단계 목록. 한 단계(그룹)는 한 사용자 동작이 바꾼 것들 — 같은 이벤트 안에서
+연달아 들어온 변경(예: 범위 선택 지우기 = 선 저장 + 사진 저장)을 앱이 `close()` 로 묶는다. 변경 하나 = (종류, 대상, 전, 후) —
+대상은 (파일, 쪽)·파일·(책갈피창, 파일) 등 같음 비교만 되면 무엇이든. 종류는 앱이 정한다(§4.6.8 표).
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class EditHistory:
                 changes[i] = (k, p, b, copy.deepcopy(after))
                 break
         else:
-            changes.append((kind, int(page), copy.deepcopy(before), copy.deepcopy(after)))
+            changes.append((kind, page, copy.deepcopy(before), copy.deepcopy(after)))
         self._redo.pop(key, None)            # 새 편집 — 다시실행 기록은 버린다
         return True
 

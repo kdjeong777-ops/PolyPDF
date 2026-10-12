@@ -123,7 +123,7 @@ def _windows_of(pid):
 
 
 def _main_window(pid):
-    """메인 창 = 제목에 버전이 있는 창('PolyPDF  v0.45…'). 인덱싱 진행 창('PolyPDF — 폴더 준비')도
+    """메인 창 = 제목에 버전이 있는 창('PolyPDF  v0.45…'). 인덱싱 진행 창('PolyPDF — 인덱싱'·'— 목록 조사')도
     'PolyPDF' 로 시작하므로 그것을 잡으면 열림 판정·WM_CLOSE 가 엉뚱한 창으로 간다(261009-13 T6 에서 겪음)."""
     wins = _windows_of(pid)
     for hwnd, title in wins:

@@ -22,6 +22,49 @@ from viewer.pdf_doc import PdfDocument
 from viewer.i18n import tr          # 261008: 화면 문구(다국어 SOT §6)
 
 
+PAGES_MIME = "application/x-polypdf-pages"     # 261012-12(마스터 §4.7.18): 끄는 썸네일 — {"src": 파일, "pages": [[파일, 쪽], …]}
+
+
+def pages_from_mime(md):
+    """끄는 썸네일 자료 → (원본 파일, [(파일, 쪽), …]). 아니면 None."""
+    import json
+    try:
+        if md is None or not md.hasFormat(PAGES_MIME):
+            return None
+        d = json.loads(bytes(md.data(PAGES_MIME)).decode("utf-8"))
+        return str(d.get("src") or ""), [(str(a), int(b)) for a, b in d.get("pages") or []]
+    except Exception:
+        return None
+
+
+class _ThumbListWidget(QListWidget):
+    """썸네일 목록 — 끌기 자료에 '어느 파일의 몇 쪽' 을 함께 싣는다(261012-12). 같은 파일 안에서는 종전처럼 순서 바꾸기."""
+
+    def __init__(self, owner):
+        super().__init__()
+        self._owner = owner
+
+    def mimeData(self, items):
+        import json
+        from PyQt6.QtCore import QByteArray
+        md = super().mimeData(items)
+        doc = getattr(self._owner, "_doc", None)
+        if md is not None and doc is not None:
+            pages = []
+            for it in sorted(items, key=lambda x: self.row(x)):
+                v = it.data(Qt.ItemDataRole.UserRole)
+                if isinstance(v, int):
+                    pages.append([str(doc.path), v])
+                elif isinstance(v, (list, tuple)) and len(v) >= 2:
+                    pages.append([str(v[0]), int(v[1])])          # 끼운 쪽은 그 원본에서
+            if pages:
+                md.setData(PAGES_MIME, QByteArray(json.dumps({"src": str(doc.path), "pages": pages}).encode("utf-8")))
+        return md
+
+    def supportedDropActions(self):
+        return Qt.DropAction.MoveAction | Qt.DropAction.CopyAction
+
+
 class PageThumbs(QWidget):
     """전체 페이지 썸네일 세로 리스트."""
     pageActivated = pyqtSignal(int)
@@ -41,6 +84,7 @@ class PageThumbs(QWidget):
     uncropPagesRequested = pyqtSignal(object)      # 261010-7(§4.7.15): 고른 쪽 크롭 해제
     addImagePagesRequested = pyqtSignal(int, object)  # 260930-1(§4.7.11): (기준행, [그림경로…]) 새 쪽으로
     imageDropRefused = pyqtSignal()                # 260930-1(§4.7.11): 편집모드가 아니라 받지 않았다
+    pagesDropped = pyqtSignal(int, object)         # 261012-12(§4.7.18): (기준행, [(파일, 쪽)…]) 다른 파일 썸네일을 끌어 놓음
     # 260930-2(마스터 §4.7.12): 스테이징 쪽(붙여넣기·사진)은 **문서에 없는 쪽**이라 쪽 번호가 없다.
     #   본문에 보여 주려면 번호가 있어야 해서, 쪽 수를 넘는 자리에 **합성 번호**를 준다.
     #   `STAGED_BASE + 일련번호` — 어떤 문서의 쪽 수보다도 크므로 자체 쪽과 겹치지 않는다.
@@ -140,7 +184,7 @@ class PageThumbs(QWidget):
             b.setFont(_f)
         layout.addLayout(fr)
 
-        self.list = QListWidget()
+        self.list = _ThumbListWidget(self)       # 261012-12: 끌기 자료에 쪽 정보(다른 파일로 복사)
         # 260606-26/29: 번호 띠 포함 + 가운데 정렬용으로 아이콘 폭을 뷰포트 가용폭으로
         self.list.setIconSize(QSize(self._icon_w,
                                     self._thumb_size.height() + self.NUM_BAND))
@@ -389,6 +433,26 @@ class PageThumbs(QWidget):
         cur = self.list.currentRow()
         return cur if cur >= 0 else self.list.count() - 1
 
+    def _drop_mark(self, pos) -> None:
+        """끌어 오는 동안 놓일 자리(이 썸네일 **아래**)를 고른 것처럼 보이고, 가장자리면 저절로 스크롤한다. None 이면 지운다."""
+        if pos is None:
+            return
+        try:
+            it = self.list.itemAt(pos)
+            row = self.list.row(it) if it is not None else self.list.count() - 1
+            if 0 <= row < self.list.count():
+                self.list.blockSignals(True)
+                self.list.setCurrentRow(row)       # 표시만 — 본문은 움직이지 않는다
+                self.list.blockSignals(False)
+            h = self.list.viewport().height()
+            sb = self.list.verticalScrollBar()
+            if pos.y() < 24:
+                sb.setValue(sb.value() - 1)
+            elif pos.y() > h - 24:
+                sb.setValue(sb.value() + 1)
+        except Exception:
+            pass
+
     def _drop_row(self, pos) -> int:
         """떨어뜨린 자리의 기준 행 — 빈 곳이면 맨 뒤(§4.7.11)."""
         it = self.list.itemAt(pos)
@@ -437,6 +501,39 @@ class PageThumbs(QWidget):
         self._apply_filter()
         self._schedule_order_changed()
         return first
+
+    # 261012-10(마스터 §4.6.8 2단계): 쪽 편집 되돌리기 — 목록 모양(쪽 번호·끼운 쪽)을 떠 두고 되살린다
+    def plan_values(self) -> tuple:
+        """지금 목록의 항목 값들(자체 쪽 번호 int · 끼운 쪽 (경로, 쪽, 일련번호)) — 비교·되살리기용."""
+        out = []
+        for i in range(self.list.count()):
+            v = self.list.item(i).data(Qt.ItemDataRole.UserRole)
+            out.append(tuple(v) if isinstance(v, (list, tuple)) else v)
+        return tuple(out)
+
+    def restore_plan(self, values) -> None:
+        """목록을 `values` 차례로 — 있던 항목(그린 썸네일)은 다시 쓰고, 없어진 것만 새로 만든다."""
+        pool = {}
+        while self.list.count():
+            it = self.list.takeItem(0)
+            v = it.data(Qt.ItemDataRole.UserRole)
+            pool.setdefault(tuple(v) if isinstance(v, (list, tuple)) else v, []).append(it)
+        try:
+            default_h = self._thumb_size.height() + self.NUM_BAND + self.ITEM_MARGIN
+        except Exception:
+            default_h = 160
+        for v in values:
+            got = pool.get(v)
+            if got:
+                it = got.pop(0)
+            else:
+                it = QListWidgetItem("")
+                it.setData(Qt.ItemDataRole.UserRole, v)
+                it.setSizeHint(QSize(self._icon_w, default_h))
+            self.list.addItem(it)
+        self._apply_filter()
+        self._render_timer.start()
+        self._schedule_order_changed()
 
     def split_alias(self) -> dict:
         """저장 재구성에 넘길 alias — 지금 목록에 남은 조각만(§4.7.9 `page_edit_build.build(alias=)`)."""
@@ -551,8 +648,30 @@ class PageThumbs(QWidget):
         #   목록은 `InternalMove`(쪽 순서 바꾸기)라 Qt 는 바깥에서 온 끌기를 거들떠보지
         #   않는다 — 그래서 Qt 보다 **먼저** 여기서 받는다. 그림이 아닐 때는 False 를 주어
         #   종전 동작(제 안에서 옮기기)을 그대로 둔다.
+        if obj is self.list.viewport() and event.type() == QEvent.Type.DragLeave:
+            self._drop_mark(None)
         if obj is self.list.viewport() and event.type() in (
                 QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+            # 261012-12(마스터 §4.7.18): **다른 파일**의 썸네일을 끌어 오면 그 쪽들을 복사해 끼운다(Ctrl+C·V 와 같은 끼운 쪽).
+            #   같은 파일이면 종전대로 순서 바꾸기(Qt InternalMove). 받을 때는 늘 **복사** — 옮기기면 Qt 가 보낸 쪽 행을 지운다.
+            got = pages_from_mime(event.mimeData())
+            doc = self._doc
+            if got is not None and doc is not None and got[0] != str(doc.path):
+                if not self._edit_mode:
+                    event.ignore()
+                    if event.type() == QEvent.Type.Drop:
+                        self.imageDropRefused.emit()
+                    return True
+                if event.possibleActions() & Qt.DropAction.CopyAction:
+                    event.setDropAction(Qt.DropAction.CopyAction)
+                event.accept()
+                pos = event.position().toPoint()
+                if event.type() == QEvent.Type.Drop:
+                    self._drop_mark(None)
+                    self.pagesDropped.emit(self._drop_row(pos), list(got[1]))
+                else:
+                    self._drop_mark(pos)
+                return True
             try:
                 paths = self._image_paths_from_mime(event.mimeData())
             except Exception:

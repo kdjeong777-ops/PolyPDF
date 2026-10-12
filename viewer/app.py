@@ -916,6 +916,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                        if getattr(self.page_thumbs, "_doc", None) else None)
                 if cur != str(f):
                     self.page_thumbs.load_document(f)
+                    self._hist_pages_baseline()            # 261012-10(§4.6.8): 쪽 편집 되돌리기 기준
                 self.page_thumbs.select_page(mv.current_page())
                 self._study_pdf = Path(f)
                 if self.search_tabs.currentWidget() is self.study_panel:
@@ -1766,8 +1767,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("draw_erase_thin",  (tr("지우개(얇게)"), "Ctrl+E", tr("선긋기(편집모드)"))),
             ("draw_erase_thick", (tr("지우개(두껍게)"), "Ctrl+Shift+E", tr("선긋기(편집모드)"))),
             ("draw_clear",    (tr("현재 페이지 선 청소"), "Ctrl+Shift+Backspace", tr("선긋기(편집모드)"))),
-            ("edit_undo",     (tr("되돌리기"), "Ctrl+Z", tr("선긋기(편집모드)"))),
-            ("edit_redo",     (tr("다시실행"), "Ctrl+Y", tr("선긋기(편집모드)"))),
+            ("edit_undo",     (tr("되돌리기"), "Ctrl+Z", tr("편집모드"))),
+            ("edit_redo",     (tr("다시실행"), "Ctrl+Y", tr("편집모드"))),
             ("quit",          (tr("종료"), "Ctrl+Q", tr("기타"))),
         ])
         targets = {
@@ -2169,12 +2170,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260606-22: 책갈피 편집모드 ↔ 썸네일 페이지 편집(삭제/이동) 동기화
         self.bookmark_tree.btn_edit.toggled.connect(self.page_thumbs.set_edit_mode)
         self.bookmark_tree.btn_edit.toggled.connect(self._on_edit_mode_toggled)  # 260609-22(J3)
+        # 261012-10(§4.6.8): 책갈피 고침도 편집 되돌리기 기록에 — 두 책갈피창 모두
+        for _i, _bt in enumerate((self.bookmark_tree, getattr(self, "bookmark_tree_right", None))):
+            if _bt is not None:
+                _bt.bookmarksUndoable.connect(lambda path, b, a, i=_i: self._hist_note("bookmarks", (i, path), b, a))
         self.page_thumbs.applyPageEditsRequested.connect(self._on_apply_page_edits)
         # 260821: 썸네일 복사/붙여넣기(다른 PDF 로도)
         self._thumb_clip = None       # {"src": path, "pages": [0-based idx...]}
         self.page_thumbs.copyPagesRequested.connect(self._on_copy_pages)
         self.page_thumbs.pastePagesRequested.connect(self._on_paste_pages)
         self.page_thumbs.addImagePagesRequested.connect(self._on_add_image_pages)   # 260930-1
+        # 261012-12(마스터 §4.7.18): 썸네일 끌어 다른 파일로 복사 — 책갈피창에 머물면 그 파일을 열고, 썸네일에 놓으면 끼운다
+        self.page_thumbs.pagesDropped.connect(self._on_pages_dropped)
+        for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+            if _bt is not None:
+                _bt.dragHoverOpen.connect(self._on_drag_hover_open)
         self.page_thumbs.imageDropRefused.connect(lambda: self.status.showMessage(
             tr('쪽 추가는 편집모드(✏)에서만 됩니다.'), 4000))
         self.page_thumbs._paste_available = (
@@ -2711,6 +2721,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         try:
             self.page_thumbs.clear_document()
             self.page_thumbs.load_document(cur_file)
+            self._hist_pages_baseline()            # 261012-10(§4.6.8): 쪽 편집 되돌리기 기준
         except Exception:
             pass
 
@@ -2758,7 +2769,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 dlg.set_phase(tr("목록을 조사하는 중입니다"),
                               tr("파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
                               "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
-                              "한 번 조사한 파일은 다시 조사하지 않습니다."))
+                              "한 번 조사한 파일은 다시 조사하지 않습니다."),
+                              tr("PolyPDF — 목록 조사"))
                 dlg.on_progress(done, total, name)
             except Exception:
                 pass
@@ -2814,7 +2826,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     dlg.set_phase(tr("목록을 조사하는 중입니다"),
                                   tr("파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
                                   "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
-                                  "한 번 조사한 파일은 다시 조사하지 않습니다."))
+                                  "한 번 조사한 파일은 다시 조사하지 않습니다."),
+                                  tr("PolyPDF — 목록 조사"))
                 except Exception:
                     pass
             return
@@ -2853,6 +2866,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 idx.close()
         except Exception:
             to_index = [n for _o, n in pairs]
+        # 261012-13(검색 SOT §3): 색인이 도는 중(방금 연 폴더)이면 **끝난 뒤에** 색인한다 — 새 작업을 바로 걸면
+        #   진행 중인 폴더 색인을 취소해(한 번에 하나) 나머지 파일이 검색에서 빠졌다(열자마자 이름 변경, 실측).
+        if to_index and getattr(self, "_index_workers", None):
+            self._index_after = list(getattr(self, "_index_after", []) or []) + [str(n) for n in to_index]
+            to_index = []
         for new in to_index:                    # 새 경로는 검색에 다시 포함
             try:
                 self._index_single_file(Path(new))
@@ -3767,6 +3785,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _on_thumb_order_changed(self):
         """260915-1(§4.7.7): 썸네일 쪽 순서가 바뀜(미저장) — 본문 넘김 순서를 맞추고, 본문에 떠 있는
         쪽이 지워졌으면 옮긴 순서의 가까운 쪽으로 간다."""
+        if not getattr(self, "_hist_applying", False):
+            self._hist_pages_changed()             # 261012-10(§4.6.8): 쪽 편집 되돌리기 기록
         self._push_nav_filter()
         try:
             mv = self.main_view
@@ -3882,7 +3902,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return "rename"
         return "cancel"
 
-    SAVE_REPLACE_TRIES = 4                          # 바꿔치기 재시도(약 0.6초) — 그 뒤는 제자리 덮어쓰기
+    SAVE_REPLACE_TRIES = 4                          # 바꿔치기 재시도(0.15초 × 3 = 약 0.45초) — 그 뒤는 제자리 덮어쓰기
 
     def _action_save_as(self, _checked=False, *, bt=None, file_path=None):
         """260930-2(§4.7.13): '다른 이름으로 저장' — 💾 와 **같은 길**에 Shift 만 세운 것.
@@ -4245,12 +4265,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if split_on:
             self._apply_split(src, split_tmp, split_got)
             return
+        _crop_before = {int(k): v for k, v in _pc.pending(src).items()}
         _pc.set_pending(src, got)
         try:
             if not self.bookmark_tree.is_edit_mode():
                 self.bookmark_tree.btn_edit.setChecked(True)      # 저장·취소 단추가 보이게
         except Exception:
             pass
+        self._hist_note("crop", str(src), _crop_before, {int(k): v for k, v in _pc.pending(src).items()})   # 261012-10
         self._crop_reload(src, cur_page)
         self.status.showMessage((tr("크롭 해제 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다).")
                                  if plan.get("reset") else
@@ -4331,6 +4353,64 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         n = pt.insert_external_pages(after_row, clip.get("src"), src_pages)
         self.status.showMessage(
             tr('붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요.').format(n=n), 6000)
+
+    def _on_drag_hover_open(self, path: str, page: int) -> None:
+        """261012-12(§4.7.18): 끌고 있는 채 책갈피창의 파일·책갈피에 머묾 — 그 파일의 그 쪽을 본문·썸네일에.
+        끌기 중에는 확인 창을 띄울 수 없다 — 저장 안 한 편집이 있으면 다른 파일을 열지 않고 알린다."""
+        try:
+            if not path or not str(path).lower().endswith(".pdf") or not Path(path).exists():
+                return
+            mv = self.main_view
+            cur = mv.current_file() if mv else None
+            if not (cur and os.path.normcase(str(cur)) == os.path.normcase(str(path))):
+                dirty = bool(getattr(self, "_edit_dirty", False) or self._page_edits_dirty())
+                if self._in_edit() and dirty:
+                    self.status.showMessage(tr("저장하지 않은 편집이 있어 다른 파일을 열지 않았습니다 — 먼저 저장하세요."), 5000)
+                    return
+                self._load_main(HistoryItem(str(path), int(page), "", "bookmark"))
+            else:
+                mv.go_to_page(int(page))
+            pt = self.page_thumbs
+            pt.select_page(int(page))
+            row = pt.row_of_page(int(page))
+            if row >= 0:
+                pt.list.scrollToItem(pt.list.item(row))
+        except Exception:                                     # 슬롯 — 끌기 중 예외로 앱이 끝나지 않게
+            import traceback
+            traceback.print_exc()
+
+    def _on_pages_dropped(self, after_row: int, items) -> None:
+        """261012-12(§4.7.18): 다른 파일의 썸네일(여럿)을 끌어 놓음 — 그 썸네일 아래에 끼운 쪽으로 복사(Ctrl+V 와 같다, 미저장)."""
+        try:
+            pt = self.page_thumbs
+            if getattr(pt, "_doc", None) is None or not items:
+                return
+            if not getattr(pt, "_edit_mode", False):
+                self.status.showMessage(tr("붙여넣기는 편집모드(✏)에서만 됩니다."), 4000)
+                return
+            row, n, first = int(after_row), 0, None
+            groups = []
+            for src, pg in items:
+                if groups and groups[-1][0] == src:
+                    groups[-1][1].append(int(pg))
+                else:
+                    groups.append([src, [int(pg)]])
+            for src, pages in groups:
+                k = pt.insert_external_pages(row, src, pages)
+                if first is None and k:
+                    first = row + 1
+                row += k
+                n += k
+            self._push_nav_filter()
+            if first is not None and 0 <= first < pt.list.count():
+                v = pt.list.item(first).data(Qt.ItemDataRole.UserRole)
+                if isinstance(v, (tuple, list)) and len(v) >= 3:
+                    pt.select_page(pt.STAGED_BASE + int(v[2]))
+                    self.main_view.go_to_page(pt.STAGED_BASE + int(v[2]))
+            self.status.showMessage(tr("끌어 놓기 {n}쪽 복사(미저장) — 💾 ‘저장’을 눌러 반영하세요.").format(n=n), 6000)
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     def _on_add_image_pages(self, after_row: int, paths):
         """260930-1(마스터 §4.7.11): 사진을 **새 쪽**으로 기준 행 뒤에 스테이징 삽입(미저장).
@@ -4880,6 +4960,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         page = self.main_view.current_page() + 1
         from PyQt6.QtWidgets import QMenu
         edit = self.bookmark_tree.is_edit_mode()
+        # 261012-11(마스터 §4.6.9, 사용자 지시): 꾸밈이 골라져 있거나 개체 위를 우클릭하면 **그 개체의 옵션만**
+        if edit:
+            kind = self.main_view.deco_menu_target(global_pos)
+            if kind:
+                self._deco_context_menu(global_pos, kind)
+                return
         menu = QMenu(self)
         # 260617-2: 텍스트 복사(블럭/페이지)·블럭설정·현재 페이지 인쇄(편집모드 무관)
         # 260618-1: 권한 없으면 비활성(복사 권한→복사·블럭, 인쇄 권한→현재 페이지 인쇄)
@@ -5039,6 +5125,53 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.main_view.set_image_shape(change_acts[chosen])   # 선택 개체 모양 변경
         elif chosen is not None and chosen == act_img_del:
             self.main_view._img_delete_selected()
+
+    def _deco_context_menu(self, global_pos, kind: str) -> None:
+        """고른 꾸밈의 메뉴 — 복사·붙여넣기·(종류별)·삭제·설정. 설정 창은 글상자면 '글쓰기', 선·도형이면 '선긋기' 탭으로."""
+        from PyQt6.QtWidgets import QMenu
+        mv = self.main_view
+        at = mv.deco_point_at(global_pos)
+        menu = QMenu(self)
+        a_copy = menu.addAction(tr("복사 (Ctrl+C)"))
+        a_paste = menu.addAction(tr("붙여넣기 (Ctrl+V)"))
+        a_paste.setEnabled(mv.can_paste_decorations() and at is not None)
+        menu.addSeparator()
+        tip_acts, shape_acts = {}, {}
+        if kind == "leader":
+            sel = mv.selected_text_stroke() or {}
+            m_tip = menu.addMenu(tr("선택 지시선 끝 모양"))
+            for key, label in (("arrow", tr("뾰족한 화살표")), ("circle", tr("끝 원형")), ("plain", tr("일반 선"))):
+                ta = m_tip.addAction(label); ta.setCheckable(True)
+                ta.setChecked(sel.get("tip", "arrow") == key)
+                tip_acts[ta] = key
+        if kind == "image":
+            m_chg = menu.addMenu(tr("선택 사진 모양 변경"))
+            for key, label in (("rect", tr("사각형")), ("round", tr("둥근 사각형")), ("circle", tr("원형"))):
+                ca = m_chg.addAction(self._shape_icon(key), label)
+                ca.setCheckable(True)
+                shape_acts[ca] = key
+        a_del = menu.addAction({"text": tr("선택 글상자 삭제 (Del)"), "leader": tr("선택 글상자 삭제 (Del)"),
+                                "image": tr("선택 이미지 삭제 (Del)"), "line": tr("선택 개체 삭제 (Del)"),
+                                "multi": tr("고른 개체 삭제 (Del)")}[kind])
+        a_cfg = None
+        if kind in ("text", "leader", "line"):
+            menu.addSeparator()
+            a_cfg = menu.addAction(tr("선과 텍스트 입력 설정…"))
+        chosen = menu.exec(global_pos)
+        if chosen is None:
+            return
+        if chosen is a_copy:
+            mv.copy_decorations()
+        elif chosen is a_paste:
+            mv.paste_decorations(at_norm=at)
+        elif chosen in tip_acts:
+            mv.set_leader_tip(tip_acts[chosen])
+        elif chosen in shape_acts:
+            mv.set_image_shape(shape_acts[chosen])
+        elif chosen is a_del:
+            mv.delete_deco_selection()
+        elif a_cfg is not None and chosen is a_cfg:
+            self._open_line_text_settings(tab="text" if kind in ("text", "leader") else "line")
 
     def _add_insert_split(self, menu, text, get_shape, set_shape, do_insert):
         """260611-73: 컨텍스트 메뉴 안의 분할(삽입) 항목.
@@ -5553,6 +5686,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         def _done(w=worker):
             if w in self._index_workers:
                 self._index_workers.remove(w)
+                # 261012-13: 색인 중에 미뤄 둔 파일(이름 변경·이동)을 이제 한 작업으로
+                pend = [p for p in dict.fromkeys(getattr(self, "_index_after", []) or []) if Path(p).exists()]
+                self._index_after = []
+                if len(pend) == 1 and not self._index_workers:
+                    self._index_single_file(Path(pend[0]))        # 하나면 창 없이(검색 SOT §4.4)
+                elif pend and not self._index_workers:
+                    self._index_files(pend)
         worker.finished.connect(_done)
         worker.error.connect(self._on_index_db_error)  # 261009-14: 색인 손상이면 스스로 복구
         self._attach_indexing_dialog(worker)          # 260902-6: 폴더 인덱싱 진행 창
@@ -6136,6 +6276,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     self.status.showMessage(tr("암호 입력이 취소되었습니다."), 2500)
                     return
                 self.page_thumbs.load_document(path)
+                self._hist_pages_baseline()            # 261012-10(§4.6.8): 쪽 편집 되돌리기 기준
                 # 260902-6(사용자 보고): 이전 파일로 넘어가면 본문은 마지막 쪽인데 썸네일은
                 #   맨 위(row -1)에 머물렀다 — load_document 의 pageChanged 가 썸네일 재로드
                 #   **전에** 나가 select_page 가 옛 문서에 떨어져 무시된 것. 재로드 뒤 다시 맞춘다.
@@ -6545,9 +6686,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.information(self, tr("안내"), tr("먼저 PDF를 표시하세요."))
             return
         from viewer.widgets.hyperlink_dialog import HyperlinkDialog
+        _before = self._hist_links_get(file_path)
         dlg = HyperlinkDialog(st, file_path, page0, self._folder, self)
         dlg.exec()
         self._persist_meta(st)           # 260609-23(J2): 편집모드면 보류
+        self._hist_note("links", str(file_path), _before, self._hist_links_get(file_path))   # 261012-10(§4.6.8)
         self._refresh_page_hyperlinks(self._active_pane)
         self._refresh_hidden_ui(str(file_path))      # 260609-21(J4): 꾸밈 갱신
 

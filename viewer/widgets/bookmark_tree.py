@@ -199,6 +199,8 @@ class BookmarkTree(QWidget):
     addFileFavoriteRequested = pyqtSignal(str)  # 260615-4: ⑫ 특정 파일을 즐겨찾기 등록
     bookmarksEdited = pyqtSignal(str, str)   # v1.6.18: (src_pdf, edited_pdf) 저장 완료
     editCancelled = pyqtSignal()             # 260611-9: 편집 취소(저장 전 수정 되돌리기)
+    dragHoverOpen = pyqtSignal(str, int)       # 261012-12(마스터 §4.7.18): 썸네일·스크린샷을 끌고 파일·책갈피 위에 머묾 → (파일, 쪽)
+    bookmarksUndoable = pyqtSignal(str, object, object)  # 261012-10(§4.6.8): (파일, 전, 후) — 편집 되돌리기 기록
     addBookmarkRequested = pyqtSignal(str)   # v1.6.20: 대상 파일 경로 — 앱이 페이지/제목 받아옴
     createBookmarksRequested = pyqtSignal(str)  # 260606-4: 파일 우클릭 '책갈피 생성'(자동생성 다이얼로그)
     createStudyRequested = pyqtSignal(str)      # 260606-5: 파일 우클릭 '단어장 생성'
@@ -536,6 +538,14 @@ class BookmarkTree(QWidget):
         self.tree.itemClicked.connect(self._on_activated)
         # 260611-60: 선택만 바뀌어도(키보드 ↑↓ 등) 해당 파일·페이지로 이동
         self.tree.currentItemChanged.connect(self._on_current_changed)
+        # 261012-12(마스터 §4.7.18): 썸네일·스크린샷을 끌고 파일·책갈피 위에 머물면 그 파일을 본문·썸네일에 연다
+        self._drag_hover_item = None
+        self._drag_hover_timer = QTimer(self)
+        self._drag_hover_timer.setSingleShot(True)
+        self._drag_hover_timer.setInterval(self.DRAG_HOVER_MS)
+        self._drag_hover_timer.timeout.connect(self._drag_hover_fire)
+        self.tree.viewport().installEventFilter(self)
+        self.tree.itemPressed.connect(lambda it, _c=0: self._bm_cache_unit(it))   # 261012-10: 누를 때도 기준
         # 260606-4: 더블클릭=편집 창, 우클릭=컨텍스트 메뉴, 드롭=변경됨 표시
         self.tree.itemDoubleClicked.connect(self._on_double_clicked)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -652,6 +662,7 @@ class BookmarkTree(QWidget):
         self._cancel_fill()
         self._reset_probe_queue()
         self.tree.clear()
+        self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
 
         json_path = self._root_dir / "bookmarks.json"
         if json_path.exists():
@@ -899,6 +910,7 @@ class BookmarkTree(QWidget):
         self._cancel_fill()
         self._fill_after = after
         self.tree.clear()
+        self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
         pdfs = self._sorted_flat()
         self.info.setText(tr('{n}개 PDF').format(n=len(pdfs)))   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
         self._fill_plan = self._build_fill_plan(pdfs)
@@ -1159,6 +1171,7 @@ class BookmarkTree(QWidget):
         self._cancel_fill()
         self._reset_probe_queue()
         self.tree.clear()
+        self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
         if not p.exists():
             self.info.setText(tr('파일 없음: {name}').format(name=p.name))
             return False
@@ -1205,6 +1218,7 @@ class BookmarkTree(QWidget):
         self._cancel_fill()
         self._reset_probe_queue()
         self.tree.clear()
+        self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
         for p in files:
             item = QTreeWidgetItem([p.stem])
             item.setData(0, self.DATA_FILE, str(p))
@@ -2079,6 +2093,7 @@ class BookmarkTree(QWidget):
         편집모드의 Ctrl/Shift 다중선택 제스처와 프로그램적 선택(blockSignals)은 제외."""
         if cur is None:
             return
+        self._bm_cache_unit(cur)             # 261012-10: 고치기 전 모양(되돌리기 기준)
         from PyQt6.QtWidgets import QApplication
         mods = QApplication.keyboardModifiers()
         # 260825-5: Ctrl/Shift 다중선택 제스처는 이동 제외(보기·편집 공통).
@@ -2090,12 +2105,178 @@ class BookmarkTree(QWidget):
             self._emit_nav(path, cur.data(0, self.DATA_PAGE) or 0)
 
     # ---- 260606-4: 더블클릭 편집 / 우클릭 메뉴 / 변경 추적 ----------------
+    DRAG_HOVER_MS = 600
+
+    @staticmethod
+    def _is_page_drag(md) -> bool:
+        """끄는 것이 썸네일 쪽이거나 그림 파일(스크린샷 카드)인가 — 책갈피 끌기(제 항목)와 가른다."""
+        if md is None:
+            return False
+        if md.hasFormat("application/x-polypdf-pages"):
+            return True
+        if md.hasUrls():
+            from viewer.image_page import is_image_path
+            return any(u.isLocalFile() and is_image_path(u.toLocalFile()) for u in md.urls())
+        return False
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj is self.tree.viewport() and event.type() in (
+                QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop, QEvent.Type.DragLeave):
+            if event.type() == QEvent.Type.DragLeave:
+                self._drag_hover_timer.stop()
+                self._drag_hover_item = None
+                return False
+            if not self._is_page_drag(event.mimeData()):
+                return False                     # 책갈피 옮기기 등 — 종전대로
+            if event.type() == QEvent.Type.Drop:
+                self._drag_hover_timer.stop()
+                event.ignore()                   # 책갈피창에는 놓지 않는다 — 썸네일에 놓는다
+                return True
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()                       # 계속 움직임을 받으려고(놓기는 위에서 거절)
+            it = self.tree.itemAt(event.position().toPoint())
+            if it is not None and it.data(0, self.DATA_FILE) and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+                if it is not self._drag_hover_item:
+                    self._drag_hover_item = it
+                    self._drag_hover_timer.start()
+            else:
+                self._drag_hover_item = None
+                self._drag_hover_timer.stop()
+            return True
+        return super().eventFilter(obj, event)
+
+    def _drag_hover_fire(self) -> None:
+        it = self._drag_hover_item
+        if it is None:
+            return
+        try:
+            path = str(it.data(0, self.DATA_FILE) or "")
+            pg = it.data(0, self.DATA_PAGE)
+            self.dragHoverOpen.emit(path, int(pg) if pg is not None else 0)
+        except RuntimeError:
+            pass                                 # 그 사이 목록이 다시 그려졌다
+
     def _mark_dirty(self):
         self._dirty = True
+        self._bm_record()                    # 261012-10(§4.6.8)
 
     def _on_tree_dropped(self):
         if self._edit_mode:
             self._dirty = True
+            self._bm_record()
+
+    # ===== 261012-10(마스터 §4.6.8 2단계): 책갈피 편집 되돌리기 — 파일 단위 스냅숏 =====
+    #   책갈피 고침(추가·삭제·이름·레벨·이동·정렬·끌어 놓기)은 모두 `_mark_dirty`/`_on_tree_dropped` 로 끝난다.
+    #   바뀌기 전 모양은 그 파일 행을 처음 고를 때(누름·현재 항목 바뀜·편집 모드 켬) 떠 두고, 고친 뒤 앞뒤를
+    #   `bookmarksUndoable(파일, 전, 후)` 로 앱에 넘긴다 — 앱의 편집 기록이 되돌릴 때 `restore_bookmarks` 를 부른다.
+    def _bm_unit(self, item):
+        """그 항목이 속한 '파일 행' — 같은 파일 경로를 가진 가장 위 조상(폴더·json 모드 모두). 없으면 None."""
+        if item is None:
+            return None
+        path = item.data(0, self.DATA_FILE)
+        if not path:
+            return None
+        unit = item
+        p = item.parent()
+        while p is not None and p.data(0, self.DATA_FILE) == path:
+            unit = p
+            p = p.parent()
+        return unit
+
+    def _bm_find_unit(self, path):
+        for it in self._iter_file_nodes():
+            if str(it.data(0, self.DATA_FILE) or "") == str(path):
+                return self._bm_unit(it)
+        return None
+
+    def _bm_snapshot(self, unit):
+        """(비교용 서명, 자식들을 Qt 직렬화한 바이트). 서명은 글·쪽·깊이 — 같으면 바뀐 것이 없다.
+        바이트로 두는 까닭: 기록이 값을 깊은 복사하는데 Qt 항목 객체는 복사되지 않는다. 항목의 모든 역할(글·쪽·아이콘·색)이 담긴다."""
+        from PyQt6.QtCore import QByteArray, QDataStream, QIODevice
+        sig = []
+        ba = QByteArray()
+        ds = QDataStream(ba, QIODevice.OpenModeFlag.WriteOnly)
+
+        def walk(node, depth):
+            ds.writeInt32(node.childCount())
+            for i in range(node.childCount()):
+                ch = node.child(i)
+                sig.append((ch.text(0), ch.data(0, self.DATA_PAGE), depth,
+                            bool(ch.data(0, self.DATA_IS_TOC_PLACEHOLDER))))
+                ch.write(ds)
+                walk(ch, depth + 1)
+        walk(unit, 0)
+        return (tuple(sig), bytes(ba))
+
+    @staticmethod
+    def _bm_items_from(data: bytes) -> list:
+        from PyQt6.QtCore import QByteArray, QDataStream, QIODevice
+        ds = QDataStream(QByteArray(data), QIODevice.OpenModeFlag.ReadOnly)
+
+        def read_children(parent):
+            out = []
+            for _ in range(ds.readInt32()):
+                it = QTreeWidgetItem()
+                it.read(ds)
+                for c in read_children(it):
+                    it.addChild(c)
+                out.append(it)
+            return out
+        return read_children(None)
+
+    def _bm_cache_unit(self, item) -> None:
+        if not self._edit_mode:
+            return
+        unit = self._bm_unit(item)
+        if unit is None:
+            return
+        cache = self.__dict__.setdefault("_bm_cache", {})
+        key = str(unit.data(0, self.DATA_FILE))
+        if key not in cache:
+            cache[key] = self._bm_snapshot(unit)
+
+    def _bm_record(self) -> None:
+        """고친 뒤 — 지금 항목의 파일 행 앞뒤를 앱에 넘기고 기준을 새로 잡는다."""
+        if getattr(self, "_bm_restoring", False):
+            return
+        unit = self._bm_unit(self.tree.currentItem())
+        if unit is None:
+            return
+        cache = self.__dict__.setdefault("_bm_cache", {})
+        key = str(unit.data(0, self.DATA_FILE))
+        after = self._bm_snapshot(unit)
+        before = cache.get(key)
+        cache[key] = after
+        if before is not None and before[0] != after[0]:
+            self.bookmarksUndoable.emit(key, before, after)
+
+    def bm_reset_history(self) -> None:
+        """기준을 비운다 — 다시 읽기·편집 모드 켬/끔·취소 때."""
+        self.__dict__["_bm_cache"] = {}
+        if self._edit_mode:
+            self._bm_cache_unit(self.tree.currentItem())
+
+    def restore_bookmarks(self, path, snap) -> bool:
+        """되돌리기·다시실행 — 그 파일 행의 자식을 스냅숏으로 바꾼다(파일 행은 그대로)."""
+        unit = self._bm_find_unit(path)
+        if unit is None or snap is None:
+            return False
+        self._bm_restoring = True
+        try:
+            self.tree.blockSignals(True)
+            unit.takeChildren()
+            for c in self._bm_items_from(snap[1]):
+                unit.addChild(c)
+            unit.setExpanded(True)
+            self.tree.setCurrentItem(unit)
+        finally:
+            self.tree.blockSignals(False)
+            self._bm_restoring = False
+        self.__dict__.setdefault("_bm_cache", {})[str(path)] = snap
+        self._dirty = True
+        return True
+
 
     def _edit_item(self, item: Optional[QTreeWidgetItem]):
         """항목 종류에 맞는 편집 창(파일명 / 책갈피 제목·페이지)."""
@@ -2374,6 +2555,7 @@ class BookmarkTree(QWidget):
                 self._op_save()
             self._dirty = False
         self._edit_mode = on
+        self.bm_reset_history()              # 261012-10: 되돌리기 기준은 편집 모드 한 번 동안
         if on:
             self._dirty = False
         self.edit_ops.setVisible(on)

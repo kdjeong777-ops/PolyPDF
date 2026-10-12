@@ -11,6 +11,7 @@ B. 연속 이름 변경 뒤 ↻(다시 읽기)·정렬 변경에도 새 이름�
 C. 색인은 경로만 고친다(다시 색인하지 않는다) · 꾸밈(page_meta)·하이퍼링크가 새 이름을 따라간다
 D. 우클릭 메뉴 순서 · 저장 셋이 **누른 파일**에 · 본문이 아닌 파일 저장은 본문 쪽 편집을 가져가지 않는다
 E. 전역 예외 안전망 — 슬롯 예외가 앱을 끄지 않고 error.log 에 남는다
+F. 폴더 색인이 도는 중의 이름 변경이 그 색인을 취소하지 않고, 끝난 뒤 이어서 색인한다(261012-13)
 """
 import os, sys, tempfile, shutil, faulthandler
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -254,6 +255,49 @@ try:
     labels = [a.text() for a in mw.menuBar().actions()[0].menu().actions()]
     chk(all(x in labels for x in ("다른 이름으로 저장...", "저장", "평탄화해서 내보내기...")),
         "D 파일 메뉴도 같은 이름", str(labels))
+
+    # ── F. 폴더 색인이 도는 중의 이름 변경(261012-13) ──────────────────────
+    # 종전: 색인에 아직 없는 파일을 바꾸면 그 파일만 색인하는 새 작업이 진행 중인 폴더 색인을 취소했다
+    #   (한 번에 하나) → 나머지 파일이 검색에서 빠졌다. 이제는 끝난 뒤에 이어서 색인한다.
+    from PyQt6.QtCore import QObject, pyqtSignal
+    import viewer.app as appmod
+
+    class _FakeWorker(QObject):
+        finished = pyqtSignal()
+        error = pyqtSignal(str)
+        progress = pyqtSignal(int, int, str)
+
+        def __init__(self):
+            super().__init__()
+            self.cancelled = False
+
+        def request_cancel(self):
+            self.cancelled = True
+
+    started_f = []
+    real_rit = appmod.run_in_thread
+    appmod.run_in_thread = lambda w, keep: started_f.append(w)
+    mw._attach_indexing_dialog = lambda w: None
+    try:
+        fake = _FakeWorker()
+        mw._start_index_worker(fake)
+        started_f.clear()
+        fresh = fo / "S.pdf"; make_pdf(fresh, "S")
+        moved = fo / "S_새.pdf"; fresh.rename(moved)
+        mw._on_files_relocated([[str(fresh), str(moved)]])
+        chk(not fake.cancelled and not started_f,
+            "F 색인 중 이름 변경이 진행 중인 폴더 색인을 취소하지 않는다(종전: 취소 → 나머지 파일이 검색에서 빠짐)",
+            f"cancelled={fake.cancelled} started={len(started_f)}")
+        fake.finished.emit(); spin(2)
+        got = [str(f) for w in started_f for f in (getattr(w, "files", None) or [])]
+        got += [str(w.single_file) for w in started_f if getattr(w, "single_file", None)]
+        chk(len(started_f) == 1 and any(Path(g) == moved for g in got),
+            "F 폴더 색인이 끝나면 미뤄 둔 파일을 이어서 색인한다", f"{len(started_f)} {got}")
+        chk(getattr(started_f[0], "single_file", None) is not None if started_f else False,
+            "F 미룬 파일이 하나면 단일 파일 색인 — 진행 창 없이(검색 SOT §4.4)")
+    finally:
+        appmod.run_in_thread = real_rit
+        mw._index_workers = []
 
     # ── E. 전역 예외 안전망 ─────────────────────────────────────────
     sys.excepthook = old_hook

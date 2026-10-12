@@ -342,7 +342,7 @@ def checks(ui: bool, only=None) -> int:
     if only:                                      # 다시 볼 것만: --only nup_links,ocr_lang
         keys = [k.strip() for k in only.split(",") if k.strip()]
         tests = [t for t in tests if any(k in t.name for k in keys)]
-    fails, flaky, t0 = [], [], time.perf_counter()
+    fails, flaky, t0, durs = [], [], time.perf_counter(), {}
     env = dict(os.environ, PYTHONUNBUFFERED="1")    # 걸렸을 때 로그에 어디까지 갔는지 남게
     for i, t in enumerate(tests, 1):
         s = time.perf_counter()
@@ -356,17 +356,22 @@ def checks(ui: bool, only=None) -> int:
                 except subprocess.TimeoutExpired:
                     rc = "시간 초과"
             rcs.append(rc)
-            if rc == 0:
+            if rc == 0 or rc == "시간 초과":          # 261012-13: 멈춘 검사(모달 등)는 다시 돌려도 또 멈춘다 — 10분을 두 번 쓰지 않는다
                 break
         if rcs[-1] != 0:
             fails.append("%s (rc=%s)" % (t.name, "·".join(map(str, rcs))))
         elif len(rcs) > 1:
             flaky.append("%s (처음 rc=%s, 다시 통과)" % (t.name, rcs[0]))
-        say("[%d/%d] %s %s %.0fs" % (i, len(tests), "통과" if rcs[-1] == 0 else "실패", t.name, time.perf_counter() - s))
+        durs[t.name] = round(time.perf_counter() - s, 1)
+        say("[%d/%d] %s %s %.0fs" % (i, len(tests), "통과" if rcs[-1] == 0 else "실패", t.name, durs[t.name]))
     L = ["# 전체 검사 — %s" % source_version(), "",
          "- 검사 %d개 · 통과 %d · 실패 %d · 불안정 %d · %.0f분" % (
              len(tests), len(tests) - len(fails), len(fails), len(flaky), (time.perf_counter() - t0) / 60)]
     L += ["- 실패: " + f for f in fails] + ["- 불안정(원인을 찾는다): " + f for f in flaky]
+    # 261012-13(릴리스 SOT §4.1): 오래 걸린 검사 — 과한 검사·멈춤 후보를 다음 검토에서 고른다(durations.json 에 전부)
+    slow = sorted(durs.items(), key=lambda kv: -kv[1])[:10]
+    L += ["- 오래 걸린 검사: " + " · ".join("%s %.0fs" % kv for kv in slow)]
+    (out / "durations.json").write_text(json.dumps(durs, ensure_ascii=False, indent=1), encoding="utf-8")
     if ui:
         r = subprocess.run([str(py), "scripts/ui_check.py", "--out", str(out / "ui")], cwd=ROOT,
                            capture_output=True, text=True, encoding="utf-8", errors="replace")

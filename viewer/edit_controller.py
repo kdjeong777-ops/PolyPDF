@@ -857,10 +857,13 @@ class EditMixin:
         self._persist_meta(st)
         self._refresh_hidden_ui(path)        # 꾸밈 갱신(이미지 있는 페이지도 꾸밈)
 
-    # ===== 261012-7(마스터 §4.6.8): 편집 모드 되돌리기/다시실행 — 파일마다 하나의 기록 =====
-    #   종전 기록은 MainView 안에 **쪽마다** 선·글상자만 있었다(쪽을 넘기면 사라지고 사진은 빠졌다).
-    #   꾸밈이 저장되는 두 곳(_set_drawings·_set_images)에서 바뀌기 전·후를 적고, 같은 이벤트 안의 변경은
-    #   한 단계로 묶는다(다음 이벤트에서 닫는다). 2단계에서 책갈피·쪽 편집 등을 같은 기록에 더한다.
+    # ===== 261012-7·10(마스터 §4.6.8): 편집 모드 되돌리기/다시실행 — 편집 한 번 동안 하나의 기록 =====
+    #   1단계(261012-7): 꾸밈 — `_set_drawings`·`_set_images` 에서 바뀌기 전·후를 적는다.
+    #   2단계(261012-10): 책갈피(`bookmarksUndoable`) · 썸네일 쪽 편집(`pageOrderChanged`) · 쪽 숨김·회전(`meta`) ·
+    #   하이퍼링크(`links`) · 저장 전 크롭(`crop`) 을 같은 기록에. 기록은 **시간순 하나**(파일을 넘나들어도 차례대로),
+    #   변경마다 대상(파일·쪽)을 함께 적는다. 같은 이벤트 안의 변경은 한 단계(다음 이벤트에서 닫는다).
+    _HIST_KEY = "session"
+
     def _edit_history(self):
         h = getattr(self, "_edit_hist", None)
         if h is None:
@@ -873,34 +876,33 @@ class EditMixin:
         import os
         return os.path.normcase(os.path.abspath(str(path)))
 
-    def _hist_record(self, path, kind, page0, before, after) -> None:
+    def _hist_note(self, kind, target, before, after) -> None:
+        """변경 하나를 기록에 — 되돌리는 동안·편집 모드 밖은 적지 않는다."""
         if getattr(self, "_hist_applying", False) or not self._in_edit():
             return
+        path = target[0] if (isinstance(target, tuple) and target and isinstance(target[0], str)) else             (target[1] if isinstance(target, tuple) else target)
+        self.__dict__.setdefault("_edit_files", set()).add(str(path))   # [취소] 가 되돌릴 파일
         h = self._edit_history()
-        if h.record(self._hist_key(path), kind, int(page0), list(before or []), list(after or [])):
+        if h.record(self._HIST_KEY, kind, target, before, after):
             if not getattr(self, "_hist_close_pending", False):
                 self._hist_close_pending = True
                 from PyQt6.QtCore import QTimer
                 QTimer.singleShot(0, self._hist_close)
             self._hist_buttons()
 
+    def _hist_record(self, path, kind, page0, before, after) -> None:
+        self._hist_note(kind, (str(path), int(page0)), list(before or []), list(after or []))
+
     def _hist_close(self) -> None:
         self._hist_close_pending = False
         self._edit_history().close()
         self._hist_buttons()
 
-    def _hist_cur_key(self):
-        mv = self.main_view
-        cur = mv.current_file() if mv else None
-        return self._hist_key(cur) if cur else ""
-
     def edit_can_undo(self) -> bool:
-        k = self._hist_cur_key()
-        return bool(k) and self._in_edit() and self._edit_history().can_undo(k)
+        return self._in_edit() and self._edit_history().can_undo(self._HIST_KEY)
 
     def edit_can_redo(self) -> bool:
-        k = self._hist_cur_key()
-        return bool(k) and self._in_edit() and self._edit_history().can_redo(k)
+        return self._in_edit() and self._edit_history().can_redo(self._HIST_KEY)
 
     def _hist_buttons(self) -> None:
         for mv in getattr(self, "_mv", []) or []:
@@ -909,6 +911,103 @@ class EditMixin:
             except Exception:
                 pass
 
+    def _hist_reset(self) -> None:
+        """기록과 기준을 비운다 — 편집 모드를 켜고 끌 때·[취소] 때."""
+        self._edit_history().clear()
+        self._hist_pages = None
+        for bt in (getattr(self, "bookmark_tree", None), getattr(self, "bookmark_tree_right", None)):
+            try:
+                if bt is not None:
+                    bt.bm_reset_history()
+            except Exception:
+                pass
+        self._hist_pages_baseline()
+        self._hist_buttons()
+
+    # ---- 종류별 값 읽기·넣기 ----
+    def _hist_meta_get(self, path) -> dict:
+        st = self._ensure_page_meta_store()
+        if not st:
+            return {}
+        key = st._key(path)
+        fr = st._data["files"].get(key) if key else None
+        return {"hidden": sorted(int(p) for p in (fr or {}).get("hidden", [])),
+                "rotation": {str(k): int(v) for k, v in ((fr or {}).get("rotation") or {}).items()}}
+
+    def _hist_meta_set(self, path, v) -> bool:
+        """숨김·회전을 넣는다. 회전이 바뀌었으면 True(문서를 다시 열어야 한다)."""
+        st = self._ensure_page_meta_store()
+        key = st._key(path) if st else None
+        if key is None:
+            return False
+        fr = st._file(key, create=True)
+        rot_changed = dict(fr.get("rotation") or {}) != dict(v.get("rotation") or {})
+        fr["hidden"] = list(v.get("hidden") or [])
+        fr["rotation"] = dict(v.get("rotation") or {})
+        self._persist_meta(st)
+        return rot_changed
+
+    def _hist_links_get(self, path) -> dict:
+        import copy
+        hl = self._ensure_hyperlink_store()
+        key = hl._rel_key(path) if hl else None
+        return copy.deepcopy(hl._data["links"].get(key, {})) if key else {}
+
+    def _hist_links_set(self, path, v) -> None:
+        import copy
+        hl = self._ensure_hyperlink_store()
+        key = hl._rel_key(path) if hl else None
+        if key is None:
+            return
+        if v:
+            hl._data["links"][key] = copy.deepcopy(v)
+        else:
+            hl._data["links"].pop(key, None)
+        self._persist_meta(hl)
+
+    def _hist_pages_baseline(self) -> None:
+        pt = getattr(self, "page_thumbs", None)
+        doc = getattr(pt, "_doc", None) if pt is not None else None
+        self._hist_pages = (str(doc.path), pt.plan_values()) if doc is not None else None
+
+    def _hist_pages_changed(self) -> None:
+        """썸네일 쪽 순서가 바뀜 — 기준과 다르면 한 단계(같은 파일일 때만, 다른 파일이면 기준만)."""
+        pt = self.page_thumbs
+        doc = getattr(pt, "_doc", None)
+        if doc is None:
+            return
+        cur = (str(doc.path), pt.plan_values())
+        base = getattr(self, "_hist_pages", None)
+        if base is not None and base[0] == cur[0] and base[1] != cur[1]:
+            self._hist_note("pages", cur[0], base[1], cur[1])
+        self._hist_pages = cur
+
+    def _keep_pages_reload(self, path, fn) -> None:
+        """다시 열기(저장 전 회전·크롭 덧입히기)가 저장 안 한 쪽 편집을 버리지 않게 — 목록 모양을 떠 두고 되살린다.
+        261012-10: 종전에는 쪽을 옮긴 뒤 회전하면 옮긴 것이 말없이 사라졌다(재현 확인)."""
+        pt = self.page_thumbs
+        keep = None
+        try:
+            if getattr(pt, "_doc", None) is not None and str(pt._doc.path) == str(path) and pt.is_page_dirty():
+                keep = pt.plan_values()
+        except Exception:
+            keep = None
+        fn()
+        if keep is not None:
+            try:
+                if getattr(pt, "_doc", None) is not None and str(pt._doc.path) == str(path) \
+                        and sorted(v for v in keep if isinstance(v, int)) and pt.plan_values() != keep:
+                    self._hist_applying = True
+                    try:
+                        pt.restore_plan(keep)
+                    finally:
+                        self._hist_applying = False
+                    self._hist_pages = (str(path), keep)
+                    self._push_nav_filter()
+            except Exception:
+                pass
+
+    # ---- 되돌리기·다시실행 ----
     def action_edit_undo(self) -> bool:
         return self._hist_step(True)
 
@@ -916,45 +1015,80 @@ class EditMixin:
         return self._hist_step(False)
 
     def _hist_step(self, undo: bool) -> bool:
-        """한 단계를 되돌리거나 다시 한다 — 그 변경이 있는 쪽으로 가서 보인다."""
+        """한 단계를 되돌리거나 다시 한다 — 꾸밈이면 그 쪽으로 가서 보인다."""
         if not self._in_edit():
             return False
         mv = self.main_view
-        cur = mv.current_file() if mv else None
-        if not cur:
-            return False
         try:
-            mv._commit_text_editor()             # 쓰던 글상자를 먼저 확정(그것도 한 단계)
+            if mv is not None:
+                mv._commit_text_editor()         # 쓰던 글상자를 먼저 확정(그것도 한 단계)
         except Exception:
             pass
         h = self._edit_history()
         h.close()
         self._hist_close_pending = False
-        changes = h.undo(self._hist_key(cur)) if undo else h.redo(self._hist_key(cur))
+        changes = h.undo(self._HIST_KEY) if undo else h.redo(self._HIST_KEY)
         if not changes:
             self._hist_buttons()
             return False
         st = self._ensure_page_meta_store()
+        touched, reload_paths, goto = set(), set(), None
         self._hist_applying = True
         try:
-            for kind, page, value in changes:
-                if kind == "drawings":
-                    st.set_drawings(str(cur), page, value)
-                elif kind == "images":
-                    st.set_images(str(cur), page, value)
-            self._persist_meta(st)
+            for kind, target, value in changes:
+                if kind in ("drawings", "images"):
+                    path, page = target
+                    (st.set_drawings if kind == "drawings" else st.set_images)(path, page, value)
+                    self._persist_meta(st)
+                    touched.add(path)
+                    goto = goto or (path, page)
+                elif kind == "meta":
+                    if self._hist_meta_set(target, value):
+                        reload_paths.add(target)
+                    touched.add(target)
+                elif kind == "links":
+                    self._hist_links_set(target, value)
+                    touched.add(target)
+                elif kind == "crop":
+                    from viewer import page_crop as _pc
+                    _pc.clear_pending(target)
+                    if value:
+                        _pc.set_pending(target, {int(k): v for k, v in value.items()})
+                    reload_paths.add(target)
+                elif kind == "pages":
+                    pt = self.page_thumbs
+                    if getattr(pt, "_doc", None) is not None and str(pt._doc.path) == str(target):
+                        pt.restore_plan(value)
+                        self._hist_pages = (str(target), tuple(value))
+                        self._push_nav_filter()
+                elif kind == "bookmarks":
+                    tree_i, path = target
+                    bt = self.bookmark_tree if tree_i == 0 else getattr(self, "bookmark_tree_right", None)
+                    if bt is not None:
+                        bt.restore_bookmarks(path, value)
         finally:
             self._hist_applying = False
-        target = changes[0][1]
+        for path in reload_paths:
+            try:
+                from viewer import page_rotate as _pr
+                _pr.bump(path)
+                self._hist_applying = True
+                try:
+                    self._keep_pages_reload(path, lambda p=path: self._crop_reload(p))
+                finally:
+                    self._hist_applying = False
+            except Exception:
+                pass
         for v in getattr(self, "_mv", []) or []:
             try:
-                if str(v.current_file() or "") != str(cur):
+                if str(v.current_file() or "") not in touched:
                     continue
                 v._stroke_selected = -1
                 v._img_selected = -1
                 v._multi_clear()
-                if v is mv and int(v.current_page()) != int(target):
-                    v.go_to_page(int(target))     # 바뀐 쪽을 보인다(쪽을 넘긴 뒤에도 되돌린다)
+                if goto is not None and v is mv and str(goto[0]) == str(v.current_file()) \
+                        and int(v.current_page()) != int(goto[1]):
+                    v.go_to_page(int(goto[1]))   # 바뀐 쪽을 보인다(쪽을 넘긴 뒤에도 되돌린다)
                 else:
                     v._load_page_strokes()
                     v._load_page_images()
@@ -962,10 +1096,19 @@ class EditMixin:
                     v._draw_overlay.update()
             except Exception:
                 pass
-        self._refresh_hidden_ui(str(cur))
+        for path in touched:
+            try:
+                self._refresh_hidden_ui(str(path))
+            except Exception:
+                pass
+        try:
+            self._refresh_page_hyperlinks(self._active_pane)
+        except Exception:
+            pass
         self._hist_buttons()
-        self.status.showMessage(tr("되돌렸습니다(p.{p}).").format(p=target + 1) if undo
-                                else tr("다시 했습니다(p.{p}).").format(p=target + 1), 3000)
+        what = {"drawings": tr("꾸밈"), "images": tr("꾸밈"), "meta": tr("숨김·회전"), "links": tr("하이퍼링크"),
+                "crop": tr("크롭"), "pages": tr("쪽 편집"), "bookmarks": tr("책갈피")}.get(changes[0][0], "")
+        self.status.showMessage((tr("되돌렸습니다: {what}") if undo else tr("다시 했습니다: {what}")).format(what=what), 3000)
         return True
 
     # ===== 260611-2: 본문·발표 공유 선긋기 설정 =========================
@@ -1038,11 +1181,16 @@ class EditMixin:
                 styles = []
         return styles
 
-    def _open_line_text_settings(self):
-        """260611-78: '선과 텍스트 입력 설정' — 선긋기 + 글쓰기(사용자 스타일) 통합 설정."""
+    def _open_line_text_settings(self, tab=None):
+        """260611-78: '선과 텍스트 입력 설정' — 선긋기 + 글쓰기(사용자 스타일) 통합 설정.
+        261012-11: `tab`='text' 면 글쓰기 탭으로 연다(글상자 우클릭), 'line' 이면 선긋기 탭."""
         from viewer.widgets.line_text_settings_dialog import LineTextSettingsDialog
         dlg = LineTextSettingsDialog(self._draw_pens(), self._draw_eraser_widths(),
                                      self._draw_highlight_alpha(), self._text_styles(), self)
+        if tab == "text":
+            dlg._tabs.setCurrentIndex(dlg._text_tab_index)
+        elif tab == "line":
+            dlg._tabs.setCurrentIndex(0)
         if dlg.exec():
             self._prefs["draw_pens"] = dlg.result_pens()
             self._prefs["draw_eraser_widths"] = dlg.result_eraser_widths()
@@ -1076,6 +1224,7 @@ class EditMixin:
         import copy
         if self._edit_snap is not None:
             return                       # 이미 세션 진행 중(계속 편집 등)
+        self._edit_files = set()         # 261012-10: 이 기준 뒤에 고친 파일
         self._edit_dirty = False
         pm = self._ensure_page_meta_store()
         hl = self._ensure_hyperlink_store()
@@ -1086,14 +1235,34 @@ class EditMixin:
 
     def _restore_edit(self):
         import copy
-        self._edit_history().clear()             # 261012-7: 되돌린 기준이 바뀌었다
         snap = self._edit_snap or {}
         pm = self._page_meta
         hl = self._hyperlinks
+        # 261012-10(§4.6.8): **본문에 열린 파일만** 되돌린다. 종전에는 폴더 사이드카 전체를 스냅숏으로 바꿔,
+        #   같은 폴더 다른 파일(그동안 즉시 저장된 발표 크롭 등 포함)까지 되돌아갔다(재현 확인).
+        open_files = [str(v.current_file()) for v in (getattr(self, "_mv", None) or [self.main_view])
+                      if v is not None and v.current_file()]
+        open_files += sorted(getattr(self, "_edit_files", set()) or ())       # 이번 편집에서 고친 파일(2단 보기 등)
         if pm is not None and snap.get("pm") is not None:
-            pm._data = copy.deepcopy(snap["pm"])
+            old = snap["pm"].get("files", {})
+            for f in open_files:
+                k = pm._key(f)
+                if not k:
+                    continue
+                if k in old:
+                    pm._data["files"][k] = copy.deepcopy(old[k])
+                else:
+                    pm._data["files"].pop(k, None)
         if hl is not None and snap.get("hl") is not None:
-            hl._data = copy.deepcopy(snap["hl"])
+            old = snap["hl"].get("links", {})
+            for f in open_files:
+                k = hl._rel_key(f)
+                if not k:
+                    continue
+                if k in old:
+                    hl._data["links"][k] = copy.deepcopy(old[k])
+                else:
+                    hl._data["links"].pop(k, None)
         self._refresh_all_meta_ui()
 
     def _commit_edit(self):
@@ -1141,6 +1310,7 @@ class EditMixin:
             self._snapshot_edit()        # 되돌린 상태를 새 기준으로
         except Exception:
             pass
+        self._hist_reset()               # 261012-10(§4.6.8): [취소] 뒤에는 되돌릴 것이 없다
         try:                             # 261010-13(§4.7.15): 저장 전 크롭도 되돌린다
             cur = self.main_view.current_file() if self.main_view else None
             if cur:
@@ -1184,7 +1354,14 @@ class EditMixin:
         return "cancel"
 
     def _on_edit_mode_toggled(self, on: bool):
-        self._edit_history().clear()             # 261012-7(§4.6.8): 기록은 편집 모드 한 번 동안
+        # 261012-10: 책갈피창이 자기 확인 창에서 '취소' 를 골라 편집 모드에 남았으면(단추를 신호 없이 되켬)
+        #   여기서 또 묻거나 그리기를 끄지 않는다 — 종전에는 확인 창이 두 번 뜨고 썸네일·그리기만 편집을 끝냈다.
+        if not on and self.bookmark_tree.is_edit_mode():
+            try:
+                self.page_thumbs.set_edit_mode(True)
+            except Exception:
+                pass
+            return
         if on:
             self._snapshot_edit()
         else:
@@ -1219,6 +1396,7 @@ class EditMixin:
                 mv.set_draw_mode(bool(on))
             except Exception:
                 pass
+        self._hist_reset()                       # 261012-7·10(§4.6.8): 기록은 편집 모드 한 번 동안
 
     def _reload_rotation(self, path):
         """261011-2(§4.7.16): page_meta 회전이 바뀐 뒤(되돌리기) 문서를 다시 열어 `/Rotate` 덧입히기를 맞춘다."""
@@ -1239,12 +1417,14 @@ class EditMixin:
         st = self._ensure_page_meta_store()
         if not st:
             return
+        _before = self._hist_meta_get(cur)
         st.rotate_pages(cur, pages, delta)
         self._persist_meta(st)           # 260609-23(J2)
+        self._hist_note("meta", str(cur), _before, self._hist_meta_get(cur))     # 261012-10(§4.6.8)
         # 261011-2(§4.7.16): 회전은 쪽 `/Rotate` — 열린 문서에 덧입혀 다시 연다(저장 전 크롭과 같은 길). 💾 저장이 PDF 에 넣는다
         from viewer import page_rotate as _pr
         _pr.bump(cur)
-        self._crop_reload(cur)
+        self._keep_pages_reload(cur, lambda: self._crop_reload(cur))   # 261012-10: 저장 안 한 쪽 편집을 버리지 않는다
         self._refresh_hidden_ui(cur)
         if _pr.has_pending(cur):
             self.status.showMessage(tr("회전 — [저장] 을 누르면 PDF 에 들어가 다른 뷰어에서도 바로 보입니다."), 6000)
@@ -1257,8 +1437,10 @@ class EditMixin:
         st = self._ensure_page_meta_store()
         if not st:
             return
+        _before = self._hist_meta_get(cur)
         st.set_hidden(cur, pages, hidden)
         self._persist_meta(st)           # 260609-23(J2): 편집모드면 보류
+        self._hist_note("meta", str(cur), _before, self._hist_meta_get(cur))     # 261012-10(§4.6.8)
         self._refresh_hidden_ui(cur)
 
     def _reset_hidden(self):
@@ -1266,8 +1448,10 @@ class EditMixin:
         if not cur:
             return
         st = self._ensure_page_meta_store()
+        _before = self._hist_meta_get(cur) if st else None
         if st and st.clear_hidden(cur):
             self._persist_meta(st)       # 260609-23(J2)
+            self._hist_note("meta", str(cur), _before, self._hist_meta_get(cur))  # 261012-10
             self._refresh_hidden_ui(cur)
 
     def _push_nav_filter(self):

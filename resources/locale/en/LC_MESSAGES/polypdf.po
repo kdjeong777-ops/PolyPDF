@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-12 18:43+0900\n"
+"POT-Creation-Date: 2026-10-12 22:22+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -796,6 +796,14 @@ msgid "여기에 서명…"
 msgstr "Sign Here…"
 
 #: viewer/app.py
+msgid "복사 (Ctrl+C)"
+msgstr "Copy (Ctrl+C)"
+
+#: viewer/app.py
+msgid "붙여넣기 (Ctrl+V)"
+msgstr "Paste (Ctrl+V)"
+
+#: viewer/app.py
 msgid "삽입 모양 선택"
 msgstr "Choose Insert Shape"
 
@@ -1414,14 +1422,6 @@ msgid "클립보드 삽입"
 msgstr "Insert from Clipboard"
 
 #: viewer/app.py
-msgid "복사 (Ctrl+C)"
-msgstr "Copy (Ctrl+C)"
-
-#: viewer/app.py
-msgid "붙여넣기 (Ctrl+V)"
-msgstr "Paste (Ctrl+V)"
-
-#: viewer/app.py
 msgid "선과 텍스트 입력 설정…"
 msgstr "Line and Text Input Settings…"
 
@@ -1432,6 +1432,14 @@ msgstr "Delete Selected Text Box (Del)"
 #: viewer/app.py
 msgid "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."
 msgstr "Click the top-left corner of the block and drag to the bottom-right corner to copy the text in that area."
+
+#: viewer/app.py
+msgid "선택 지시선 끝 모양"
+msgstr "Selected Callout End"
+
+#: viewer/app.py
+msgid "선택 사진 모양 변경"
+msgstr "Change Selected Photo Shape"
 
 #: viewer/app.py viewer/widgets/pointer_settings_dialog.py
 msgid "색 선택"
@@ -1669,6 +1677,10 @@ msgid "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하�
 msgstr "Checking the markers shown in the file list (encryption · bookmarks). <b>Scrolling may pause briefly while this runs.</b> A file is checked only once."
 
 #: viewer/app.py
+msgid "PolyPDF — 목록 조사"
+msgstr "PolyPDF — Checking the list"
+
+#: viewer/app.py
 #, python-brace-format
 msgid "p.{page} · {n}줄 · 잡음 {noise}줄 숨김"
 msgstr "p.{page} · {n} lines · {noise} noise lines hidden"
@@ -1834,16 +1846,28 @@ msgid "1창으로 복사"
 msgstr "Copy to Window 1"
 
 #: viewer/app.py
-msgid "선택 사진 모양 변경"
-msgstr "Change Selected Photo Shape"
-
-#: viewer/app.py
 msgid "선택 이미지 삭제 (Del)"
 msgstr "Delete Selected Image (Del)"
 
+#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+msgid "뾰족한 화살표"
+msgstr "Arrowhead"
+
+#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+msgid "끝 원형"
+msgstr "Round end"
+
 #: viewer/app.py
-msgid "선택 지시선 끝 모양"
-msgstr "Selected Callout End"
+msgid "일반 선"
+msgstr "Plain line"
+
+#: viewer/app.py
+msgid "선택 개체 삭제 (Del)"
+msgstr "Delete Selected Object (Del)"
+
+#: viewer/app.py
+msgid "고른 개체 삭제 (Del)"
+msgstr "Delete Selected Objects (Del)"
 
 #: viewer/app.py
 #, python-brace-format
@@ -1857,18 +1881,6 @@ msgstr " Settings"
 #: viewer/app.py
 msgid " 기본 설정(신규)"
 msgstr " Defaults (new)"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "뾰족한 화살표"
-msgstr "Arrowhead"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "끝 원형"
-msgstr "Round end"
-
-#: viewer/app.py
-msgid "일반 선"
-msgstr "Plain line"
 
 #: viewer/app.py
 #, python-brace-format
@@ -2143,6 +2155,10 @@ msgid "현재 페이지 선 청소"
 msgstr "Clear Lines on Current Page"
 
 #: viewer/app.py
+msgid "편집모드"
+msgstr "Edit mode"
+
+#: viewer/app.py
 msgid "다시실행"
 msgstr "Redo"
 
@@ -2324,6 +2340,16 @@ msgstr "Crop removed from {n} page(s) — press [Save] to write it to the PDF (C
 #, python-brace-format
 msgid "크롭 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
 msgstr "Cropped {n} page(s) — press [Save] to write it to the PDF (Cancel undoes it)."
+
+# | 주세요."
+#: viewer/app.py
+msgid "저장하지 않은 편집이 있어 다른 파일을 열지 않았습니다 — 먼저 저장하세요."
+msgstr "Another file was not opened because there are unsaved edits — save first."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "끌어 놓기 {n}쪽 복사(미저장) — 💾 ‘저장’을 눌러 반영하세요."
+msgstr "Dropped {n} page(s) as copies (unsaved) — press 💾 ‘Save’ to apply."
 
 #: viewer/app.py
 #, python-format
@@ -2512,7 +2538,7 @@ msgstr "Page range to export (1–{n}), e.g. 3-12"
 msgid "3-12 처럼 적어 주세요."
 msgstr "Enter a range like 3-12."
 
-#: viewer/app.py viewer/widgets/merge_preview.py
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/merge_preview.py
 msgid "크롭"
 msgstr "Crop"
 
@@ -2878,6 +2904,26 @@ msgstr "Saving: {name}"
 msgid "평탄화해서 내보냈습니다: {name}"
 msgstr "Flattened and exported: {name}"
 
+#: viewer/edit_controller.py viewer/widgets/thumbs_list.py
+msgid "꾸밈"
+msgstr "Marked"
+
+#: viewer/edit_controller.py
+msgid "숨김·회전"
+msgstr "Hide/rotation"
+
+#: viewer/edit_controller.py viewer/widgets/settings_dialog.py
+msgid "하이퍼링크"
+msgstr "Hyperlinks"
+
+#: viewer/edit_controller.py
+msgid "쪽 편집"
+msgstr "Page edits"
+
+#: viewer/edit_controller.py
+msgid "책갈피"
+msgstr "Bookmarks"
+
 #: viewer/edit_controller.py
 #, python-brace-format
 msgid ""
@@ -2897,13 +2943,13 @@ msgstr "There are unsaved page edits (order, deletions, inserted pages). Flatten
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid "되돌렸습니다(p.{p})."
-msgstr "Undone (p.{p})."
+msgid "되돌렸습니다: {what}"
+msgstr "Undone: {what}"
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid "다시 했습니다(p.{p})."
-msgstr "Redone (p.{p})."
+msgid "다시 했습니다: {what}"
+msgstr "Redone: {what}"
 
 #: viewer/edit_controller.py
 msgid "다른 파일로 이동하기 전에 어떻게 할까요?"
@@ -5993,8 +6039,8 @@ msgid "미리보기를 불러올 수 없습니다."
 msgstr "Cannot load preview."
 
 #: viewer/widgets/indexing_dialog.py
-msgid "PolyPDF — 폴더 준비"
-msgstr "PolyPDF — Preparing Folder"
+msgid "PolyPDF — 인덱싱"
+msgstr "PolyPDF — Indexing"
 
 #: viewer/widgets/indexing_dialog.py
 msgid "준비 중..."
@@ -6014,8 +6060,8 @@ msgstr "Close this window and follow progress in the status bar (indexing contin
 
 #: viewer/widgets/indexing_dialog.py
 #, python-brace-format
-msgid "<b>폴더를 준비하는 중입니다</b>{v}"
-msgstr "<b>Preparing folder</b>{v}"
+msgid "<b>인덱싱하는 중입니다</b>{v}"
+msgstr "<b>Indexing</b>{v}"
 
 #: viewer/widgets/indexing_dialog.py
 #, python-brace-format
@@ -6206,8 +6252,8 @@ msgid "쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF
 msgstr "Crop pages — trim margins with portrait/landscape styles and save to the PDF"
 
 #: viewer/widgets/main_view.py
-msgid "전자서명 — 서명 그림과 디지털 ID 로 이 PDF 에 서명"
-msgstr "Digital signature — sign this PDF with your signature image and digital ID"
+msgid "전자서명 — 서명 자리를 두고 확정하면 서명한 새 파일(원본은 그대로)"
+msgstr "Digital signature — place signature fields, then confirm to save a signed new file (the original stays as is)"
 
 #: viewer/widgets/main_view.py
 msgid ""
@@ -7606,10 +7652,6 @@ msgstr "Page-turn animation (slide up/down in single-page mode)"
 #: viewer/widgets/settings_dialog.py
 msgid "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). 2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
 msgstr "<small>Continuous view shows the previous/next pages above and below the current one, and the page at the center of the screen becomes the current page (the text panel follows it). Two-page view and screenshot view are single-page.</small>"
-
-#: viewer/widgets/settings_dialog.py
-msgid "하이퍼링크"
-msgstr "Hyperlinks"
 
 #: viewer/widgets/settings_dialog.py
 msgid "페이지 내 버튼 상단 오프셋:"
@@ -9157,10 +9199,6 @@ msgid "숨기지 않은 쪽"
 msgstr "Pages that are not hidden"
 
 #: viewer/widgets/thumbs_list.py
-msgid "꾸밈"
-msgstr "Marked"
-
-#: viewer/widgets/thumbs_list.py
 msgid "꾸밈(선·도형·글·사진)이 있는 쪽"
 msgstr "Pages with marks (lines, shapes, text, photos)"
 
@@ -10631,4 +10669,16 @@ msgstr "Getting Started"
 
 #~ msgid "다른 이름으로 서명"
 #~ msgstr "Sign As"
+
+#~ msgid "되돌렸습니다(p.{p})."
+#~ msgstr "Undone (p.{p})."
+
+#~ msgid "다시 했습니다(p.{p})."
+#~ msgstr "Redone (p.{p})."
+
+#~ msgid "전자서명 — 서명 그림과 디지털 ID 로 이 PDF 에 서명"
+#~ msgstr "Digital signature — sign this PDF with your signature image and digital ID"
+
+#~ msgid "PolyPDF — 폴더 준비"
+#~ msgstr "PolyPDF — Preparing Folder"
 

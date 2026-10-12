@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-12 18:43+0900\n"
+"POT-Creation-Date: 2026-10-12 22:22+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -792,6 +792,14 @@ msgid "여기에 서명…"
 msgstr ""
 
 #: viewer/app.py
+msgid "복사 (Ctrl+C)"
+msgstr ""
+
+#: viewer/app.py
+msgid "붙여넣기 (Ctrl+V)"
+msgstr ""
+
+#: viewer/app.py
 msgid "삽입 모양 선택"
 msgstr ""
 
@@ -1371,14 +1379,6 @@ msgid "클립보드 삽입"
 msgstr ""
 
 #: viewer/app.py
-msgid "복사 (Ctrl+C)"
-msgstr ""
-
-#: viewer/app.py
-msgid "붙여넣기 (Ctrl+V)"
-msgstr ""
-
-#: viewer/app.py
 msgid "선과 텍스트 입력 설정…"
 msgstr ""
 
@@ -1388,6 +1388,14 @@ msgstr ""
 
 #: viewer/app.py
 msgid "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "선택 지시선 끝 모양"
+msgstr ""
+
+#: viewer/app.py
+msgid "선택 사진 모양 변경"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/pointer_settings_dialog.py
@@ -1626,6 +1634,10 @@ msgid "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하�
 msgstr ""
 
 #: viewer/app.py
+msgid "PolyPDF — 목록 조사"
+msgstr ""
+
+#: viewer/app.py
 #, python-brace-format
 msgid "p.{page} · {n}줄 · 잡음 {noise}줄 숨김"
 msgstr ""
@@ -1786,15 +1798,27 @@ msgid "1창으로 복사"
 msgstr ""
 
 #: viewer/app.py
-msgid "선택 사진 모양 변경"
-msgstr ""
-
-#: viewer/app.py
 msgid "선택 이미지 삭제 (Del)"
 msgstr ""
 
+#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+msgid "뾰족한 화살표"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
+msgid "끝 원형"
+msgstr ""
+
 #: viewer/app.py
-msgid "선택 지시선 끝 모양"
+msgid "일반 선"
+msgstr ""
+
+#: viewer/app.py
+msgid "선택 개체 삭제 (Del)"
+msgstr ""
+
+#: viewer/app.py
+msgid "고른 개체 삭제 (Del)"
 msgstr ""
 
 #: viewer/app.py
@@ -1808,18 +1832,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid " 기본 설정(신규)"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "뾰족한 화살표"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "끝 원형"
-msgstr ""
-
-#: viewer/app.py
-msgid "일반 선"
 msgstr ""
 
 #: viewer/app.py
@@ -2076,6 +2088,10 @@ msgid "현재 페이지 선 청소"
 msgstr ""
 
 #: viewer/app.py
+msgid "편집모드"
+msgstr ""
+
+#: viewer/app.py
 msgid "다시실행"
 msgstr ""
 
@@ -2244,6 +2260,15 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "크롭 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
+msgstr ""
+
+#: viewer/app.py
+msgid "저장하지 않은 편집이 있어 다른 파일을 열지 않았습니다 — 먼저 저장하세요."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "끌어 놓기 {n}쪽 복사(미저장) — 💾 ‘저장’을 눌러 반영하세요."
 msgstr ""
 
 #: viewer/app.py
@@ -2419,7 +2444,7 @@ msgstr ""
 msgid "3-12 처럼 적어 주세요."
 msgstr ""
 
-#: viewer/app.py viewer/widgets/merge_preview.py
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/merge_preview.py
 msgid "크롭"
 msgstr ""
 
@@ -2760,6 +2785,26 @@ msgstr ""
 msgid "평탄화해서 내보냈습니다: {name}"
 msgstr ""
 
+#: viewer/edit_controller.py viewer/widgets/thumbs_list.py
+msgid "꾸밈"
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid "숨김·회전"
+msgstr ""
+
+#: viewer/edit_controller.py viewer/widgets/settings_dialog.py
+msgid "하이퍼링크"
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid "쪽 편집"
+msgstr ""
+
+#: viewer/edit_controller.py
+msgid "책갈피"
+msgstr ""
+
 #: viewer/edit_controller.py
 #, python-brace-format
 msgid ""
@@ -2777,12 +2822,12 @@ msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid "되돌렸습니다(p.{p})."
+msgid "되돌렸습니다: {what}"
 msgstr ""
 
 #: viewer/edit_controller.py
 #, python-brace-format
-msgid "다시 했습니다(p.{p})."
+msgid "다시 했습니다: {what}"
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -5758,7 +5803,7 @@ msgid "미리보기를 불러올 수 없습니다."
 msgstr ""
 
 #: viewer/widgets/indexing_dialog.py
-msgid "PolyPDF — 폴더 준비"
+msgid "PolyPDF — 인덱싱"
 msgstr ""
 
 #: viewer/widgets/indexing_dialog.py
@@ -5779,7 +5824,7 @@ msgstr ""
 
 #: viewer/widgets/indexing_dialog.py
 #, python-brace-format
-msgid "<b>폴더를 준비하는 중입니다</b>{v}"
+msgid "<b>인덱싱하는 중입니다</b>{v}"
 msgstr ""
 
 #: viewer/widgets/indexing_dialog.py
@@ -5967,7 +6012,7 @@ msgid "쪽 크롭 — 가로긴·세로긴 쪽 스타일로 여백을 잘라 PDF
 msgstr ""
 
 #: viewer/widgets/main_view.py
-msgid "전자서명 — 서명 그림과 디지털 ID 로 이 PDF 에 서명"
+msgid "전자서명 — 서명 자리를 두고 확정하면 서명한 새 파일(원본은 그대로)"
 msgstr ""
 
 #: viewer/widgets/main_view.py
@@ -7345,10 +7390,6 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). 2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "하이퍼링크"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -8886,10 +8927,6 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 msgid "숨기지 않은 쪽"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-msgid "꾸밈"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py

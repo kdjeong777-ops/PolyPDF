@@ -13,26 +13,9 @@ import hashlib
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from viewer.i18n import tr
-
-
-class _DraftPreviewThread(QThread):
-    """서명 자리 미리보기 — `sign_core.preview_png`(0.2~0.4초)를 배경에서. (캐시 키, PNG | 오류 글)."""
-    done = pyqtSignal(object, object)
-
-    def __init__(self, key, args, parent=None):
-        super().__init__(parent)
-        self._key, self._args = key, args
-
-    def run(self):
-        try:
-            from viewer import sign_core
-            self.done.emit(self._key, sign_core.preview_png(*self._args))
-        except Exception as e:                    # noqa: BLE001
-            self.done.emit(self._key, getattr(e, "reason", "") or type(e).__name__)
 
 
 def _sha(data: bytes) -> str:
@@ -111,15 +94,16 @@ class SignDraftMixin:
             busy = self._sign_pv_busy = {}
         if key in busy:
             return
-        th = _DraftPreviewThread(key, args, self)
-        busy[key] = th
-        th.done.connect(self._sign_preview_done)
+        # 261012-16(응답성 SOT §4.3): 서명 자리 미리보기 — 워커 + `run_in_thread`
+        from viewer.workers import SignPreviewWorker, run_in_thread
+        w = SignPreviewWorker(key, args)
+        busy[key] = True
 
-        def _gone(t=th, k=key):
+        def _got(k, res):
             busy.pop(k, None)
-            t.deleteLater()
-        th.finished.connect(_gone)
-        th.start()
+            self._sign_preview_done(k, res)
+        w.done.connect(_got)
+        run_in_thread(w, self._thread_keep)
 
     def _sign_preview_done(self, key, res) -> None:
         from PyQt6.QtGui import QPixmap

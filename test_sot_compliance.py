@@ -130,7 +130,7 @@ print(NL + "=== 마스터 §14.7.1 — 검사 색인(이름 규칙으로 소유�
 OWNER_RULES = [
     (("test_text_",), "텍스트 창"),
     (("test_study_", "test_vocab_", "test_ocr_", "test_dict_"), "단어장/단어학습"),
-    (("test_present_", "test_pres_"), "발표"),
+    (("test_pres", "test_recording_rotate"), "발표"),
     (("test_tag_", "test_auto_tag"), "파일 태그·키워드"),
     (("test_search_", "test_index_", "test_db_lock", "test_nav_save_index",
       "test_probe_cache"), "검색창"),
@@ -141,11 +141,12 @@ OWNER_RULES = [
     (("test_img2pdf", "test_image_pdf"), "이미지 PDF 변환"),
     (("test_media_", "test_tts_", "test_record_"), "영상 및 음성"),
     (("test_folder_scan", "test_ui_stall", "test_perf_", "test_prefs_allowlist",
-      "test_tool_cancel", "test_startup_open", "test_sot_"), "응답성"),
+      "test_tool_cancel", "test_startup_open", "test_kiwi_", "test_sot_"), "응답성"),
     (("test_input_", "test_wheel_"), "입력 장치"),
     (("test_theme_", "test_design_", "test_draw_tools"), "화면 디자인"),
     (("test_i18n_",), "다국어(언어팩)"),
     (("test_release_",), "릴리스"),
+    (("test_security_",), "문서 보안"),
 ]
 
 
@@ -164,6 +165,13 @@ print("     " + " / ".join("%s %d" % (k, len(v)) for k, v in sorted(buckets.item
 if HAVE_SOT:
     idx = SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", "")
     chk("### 14.7.1" in idx, "§14.7.1 검사 색인이 마스터에 있다")
+    # 261012-13: 표에만 줄을 넣고 위 OWNER_RULES 를 잊은 적이 있다(`test_kiwi_`·`test_security_`) — 두 벌이 같은지 본다
+    s1471 = idx[idx.find("### 14.7.1"):]
+    s1471 = s1471[:s1471.find("**그 밖의 전부**")]
+    doc_pfx = set(re.findall(r"`(test_[a-z0-9_]*)`", s1471))
+    code_pfx = {x for pf, _ in OWNER_RULES for x in pf}
+    chk(doc_pfx == code_pfx, "§14.7.1 표의 접두 = OWNER_RULES",
+        "표만 %s / 코드만 %s" % (sorted(doc_pfx - code_pfx), sorted(code_pfx - doc_pfx)))
     # 모듈 SOT 가 소유한 검사는 그 SOT 의 §검증 표에도 이름이 있어야 한다
     NAMED = {
         "텍스트 창": "텍스트 창 작업 계획서.md",
@@ -171,11 +179,25 @@ if HAVE_SOT:
         "입력 장치": "입력 장치 작업 계획서.md",
         "다국어(언어팩)": "다국어(언어팩) 작업 계획서.md",
         "릴리스": "릴리스 작업 계획서.md",
+        "문서 보안": "문서 보안(암호·전자서명) 작업 계획서.md",
+        "화면 디자인": "화면 디자인 작업 계획서.md",
+        "검색창": "검색창 작업 계획서.md",
+        "스크린샷": "스크린샷 작업 계획서.md",
+        "발표": "발표(전체화면) 작업 계획서.md",
+        "법령·고시": "법령·고시 작업 계획서.md",
+        "PDF 번역·요약": "PDF 번역·요약 작업 계획서.md",
+        "이미지 PDF 변환": "이미지 PDF 변환 작업 계획서.md",
+        "영상 및 음성": "영상 및 음성 작업 계획서.md",
+        "파일 태그·키워드": "파일 태그·키워드 작업 계획서.md",
     }
     for owner, sot_name in NAMED.items():
         txt = SOTS.get(sot_name, "")
-        miss = [n for n in buckets.get(owner, []) if n not in txt]
+        miss = [n for n in buckets.get(owner, []) if n not in txt and n[:-3] not in txt]
         chk(not miss, "%s 소유 검사가 그 SOT §검증 표에 있다" % owner, str(miss))
+    # 마스터 소유(접두에 안 걸린 것)는 마스터 본문(§0 밖) 어딘가에 이름이 있어야 한다 — 261012-13 점검에서 37개가 아무 데도 없었다
+    mbody = re.sub(r"^## 0\..*?(?=^## [1-9])", "", idx, flags=re.S | re.M)
+    miss = [n for n in buckets.get("마스터", []) if n not in mbody and n[:-3] not in mbody]
+    chk(not miss, "마스터 소유 검사가 마스터 본문에 있다(없으면 §14.7.1 '그 밖의 마스터 검사' 표에)", "%d개 %s" % (len(miss), miss[:40]))
 
     # 260913-9(§14.7.1): SOT 본문에는 검사 항목 수를 적지 않는다 — 숫자는 곧 낡는다. §0 이력만 예외.
     def _body(txt):

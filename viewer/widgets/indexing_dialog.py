@@ -15,8 +15,67 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QDialog, QLabel, QProgressBar, QPushButton,
-                             QVBoxLayout, QHBoxLayout)
+                             QVBoxLayout, QHBoxLayout, QSizePolicy)
 from viewer.i18n import tr
+
+
+class _FileNameLabel(QLabel):
+    """지금 읽는 파일 이름 — **늘 두 줄 높이**(261012-15, 사용자 보고, 검색 SOT §4.4).
+
+    종전에는 줄바꿈 글상자라 이름 길이에 따라 1~3줄로 바뀌며 창 높이가 변했고, 그 위의 진행 막대가
+    파일마다 위아래로 흔들렸다. 이제 높이는 두 줄로 고정하고, 넘치면 마지막 줄의 **가운데**를 '…' 로
+    줄인다(끝의 `.pdf` 가 보이게). 빈칸 없는 긴 이름도 글자 단위로 나눠 창 폭을 넓히지 않는다. 전체 이름은 툴팁."""
+    LINES = 2
+
+    def __init__(self, text=""):
+        super().__init__()
+        self._full = ""
+        self.setWordWrap(False)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(1)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.setText(text)
+
+    def _fix_height(self):
+        m = self.contentsMargins()
+        self.setFixedHeight(self.fontMetrics().lineSpacing() * self.LINES + m.top() + m.bottom() + 2)
+
+    def setText(self, text):                       # noqa: N802 (Qt 이름)
+        self._full = str(text or "")
+        self.setToolTip(self._full if len(self._full) > 40 else "")
+        self._fix_height()
+        self._relayout()
+
+    def text_full(self) -> str:
+        return self._full
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self._relayout()
+
+    def changeEvent(self, ev):
+        super().changeEvent(ev)
+        from PyQt6.QtCore import QEvent
+        if ev.type() == QEvent.Type.FontChange:
+            self._fix_height()
+            self._relayout()
+
+    def _relayout(self):
+        fm = self.fontMetrics()
+        w = max(40, self.contentsRect().width() - 2)
+        rest, lines = self._full, []
+        while rest and len(lines) < self.LINES - 1 and fm.horizontalAdvance(rest) > w:
+            k = len(rest)
+            while k > 1 and fm.horizontalAdvance(rest[:k]) > w:
+                k -= 1
+            sp = rest.rfind(" ", 0, k)              # 낱말 사이에서 끊을 수 있으면 거기서
+            if sp > k // 2:
+                k = sp + 1
+            lines.append(rest[:k].rstrip())
+            rest = rest[k:]
+        if rest:
+            lines.append(fm.elidedText(rest, Qt.TextElideMode.ElideMiddle, w))
+        QLabel.setText(self, "\n".join(lines))
 
 
 class IndexingDialog(QDialog):
@@ -26,13 +85,15 @@ class IndexingDialog(QDialog):
 
     def __init__(self, parent=None, folder_name: str = ""):
         super().__init__(parent)
-        self.setWindowTitle(tr("PolyPDF — 폴더 준비"))   # 260906-5: 인덱싱+목록 조사 공용
+        # 261012-15(사용자 지시): '폴더 준비' 는 폴더를 만드는 것으로 읽혔다 — 지금 하는 일을 쓴다.
+        #   같은 창이 목록 조사 단계도 보이므로 그때는 set_phase 가 제목을 바꾼다.
+        self.setWindowTitle(tr("PolyPDF — 인덱싱"))
         # 도구 창: 메인 위에 머물되 모달 아님. 닫기(✕)는 '아래로 숨기기'와 같다.
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowTitleHint
                             | Qt.WindowType.CustomizeWindowHint
                             | Qt.WindowType.WindowCloseButtonHint)
         self.setModal(False)
-        # 261012-8(검색 SOT §4.5): 늦게 혼자 뜨는 안내 창이다 — 뜰 때 **창 활성·키보드 포커스를 가져가지 않는다**.
+        # 261012-8(검색 SOT §4.4): 늦게 혼자 뜨는 안내 창이다 — 뜰 때 **창 활성·키보드 포커스를 가져가지 않는다**.
         #   종전에는 0.4초 뒤 뜨면서 활성 창이 돼, 본문에서 치던 ↓·PageDown 이 이 창의 단추로 갔다
         #   (test_boundary_e2e 의 간헐 실패 원인 — 10/10 부터). 단추는 마우스로 그대로 누른다.
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
@@ -42,16 +103,16 @@ class IndexingDialog(QDialog):
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 14, 16, 12); lay.setSpacing(8)
-        self.lbl_title = QLabel(tr('<b>폴더를 준비하는 중입니다</b>{v}').format(v=f' — {folder_name}' if folder_name else ''))
+        self._folder_name = folder_name
+        self.lbl_title = QLabel(tr('<b>인덱싱하는 중입니다</b>{v}').format(v=f' — {folder_name}' if folder_name else ''))
         self.lbl_title.setWordWrap(True)
         lay.addWidget(self.lbl_title)
         self.bar = QProgressBar()
         self.bar.setRange(0, 0)                       # 총량을 알기 전엔 '바쁨' 표시
         self.bar.setTextVisible(True)
         lay.addWidget(self.bar)
-        self.lbl_file = QLabel(tr("준비 중..."))
+        self.lbl_file = _FileNameLabel(tr("준비 중..."))     # 261012-15: 두 줄 고정 — 막대가 흔들리지 않게
         self.lbl_file.setStyleSheet("color:#666;")
-        self.lbl_file.setWordWrap(True)
         lay.addWidget(self.lbl_file)
         self.lbl_hint = QLabel(
             tr("인덱싱은 PDF 본문을 읽어 검색·태그를 준비하는 작업입니다. "
@@ -107,14 +168,17 @@ class IndexingDialog(QDialog):
         ev.ignore()
 
     # ── 단계 전환 ─────────────────────────────────────────────────────
-    def set_phase(self, title: str, hint: str = "") -> None:
+    def set_phase(self, title: str, hint: str = "", window_title: str = "") -> None:
         """260906-4: 같은 창으로 다음 단계를 보여 준다(인덱싱 → 목록 조사).
 
         창을 닫았다 새로 띄우면 깜빡이고, 닫힌 채 작업만 계속되면 사용자는 '아무 것도
         안 하는데 느리다'로 본다(260906 보고). 제목·안내만 바꾸고 창은 그대로 둔다."""
         if self._finished:
             return
-        self.lbl_title.setText(f"<b>{title}</b>")
+        v = f" — {self._folder_name}" if self._folder_name else ""
+        self.lbl_title.setText(f"<b>{title}</b>{v}")
+        if window_title:
+            self.setWindowTitle(window_title)
         if hint:
             self.lbl_hint.setText(hint)
         self.bar.setRange(0, 0)                 # 새 단계의 총량을 받기 전까지 '바쁨'

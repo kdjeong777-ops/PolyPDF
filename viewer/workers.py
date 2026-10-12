@@ -144,7 +144,7 @@ class ProbeWorker(QObject):
     result = pyqtSignal(dict)      # {path, size, mtime, enc, has_toc, auth, signed}
     finished = pyqtSignal()
 
-    # 260906-5(응답성 SOT §4 '배경 작업 여섯 가지 의무'):
+    # 260906-5(응답성 SOT §4 '배경 작업 의무'):
     YIELD_S = 0.005        # ② 파일마다 GIL 양보 — 없으면 메인이 굶어 '응답 없음'
     MAX_MB = 40            # ③ 이보다 큰 파일은 배경에서 열지 않는다(여는 데만 수 초)
 
@@ -1220,6 +1220,48 @@ def run_in_thread(worker: QObject, parent_keep: list) -> QThread:
     th.finished.connect(_prune)
     th.start()
     return th
+
+
+class SignVerifyWorker(QObject):
+    """261012-16(응답성 SOT §4.3·보안 SOT §10): 서명 검증 — 파일을 연다. `run_in_thread` 로 돌린다.
+    결과는 `done(경로, mtime, 보고서)`. 종전 `_SignVerifyThread(QThread)` 직접 상속을 옮겼다."""
+    done = pyqtSignal(str, object, object)
+    finished = pyqtSignal()
+
+    def __init__(self, path, mtime, trusted, doc_pw):
+        super().__init__()
+        self._a = (path, mtime, trusted, doc_pw)
+
+    def run(self):
+        path, mtime, trusted, doc_pw = self._a
+        try:
+            from viewer import sign_core
+            rep = sign_core.verify_pdf(path, trusted, doc_pw)
+        except Exception as e:                   # noqa: BLE001
+            from viewer.sign_core import VerifyReport
+            rep = VerifyReport(error=type(e).__name__)
+        self.done.emit(path, mtime, rep)
+        self.finished.emit()
+
+
+class SignPreviewWorker(QObject):
+    """261012-16: 서명 겉모양 미리보기 — `sign_core.preview_png`(0.2~0.4초). 서명 창·서명 자리 공용.
+    결과는 `done(키, PNG 바이트 | 오류 글)` — 키는 부르는 쪽 것(세대 번호·캐시 키)을 그대로 돌려준다."""
+    done = pyqtSignal(object, object)
+    finished = pyqtSignal()
+
+    def __init__(self, key, args):
+        super().__init__()
+        self._key, self._args = key, args
+
+    def run(self):
+        try:
+            from viewer import sign_core
+            res = sign_core.preview_png(*self._args)
+        except Exception as e:                    # noqa: BLE001
+            res = getattr(e, "reason", "") or type(e).__name__
+        self.done.emit(self._key, res)
+        self.finished.emit()
 
 
 class OnlineDictFetchWorker(QThread):

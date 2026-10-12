@@ -942,22 +942,6 @@ class StoreCertDialog(QDialog):
 # 서명 창 — SOT §3.3
 # ---------------------------------------------------------------------------
 
-class _PreviewThread(QThread):
-    """겉모양 미리보기 — 배경(0.2~0.4초, 보안 SOT §10). (세대, PNG 바이트 | 오류 글)."""
-    done = pyqtSignal(int, object)
-
-    def __init__(self, gen, args, parent=None):
-        super().__init__(parent)
-        self._gen, self._args = gen, args
-
-    def run(self):
-        try:
-            from viewer import sign_core
-            self.done.emit(self._gen, sign_core.preview_png(*self._args))
-        except Exception as e:                    # noqa: BLE001
-            self.done.emit(self._gen, getattr(e, "reason", "") or type(e).__name__)
-
-
 class SignDialog(QDialog):
     """서명 확정 창 — 디지털 ID·그림·겉모양 글자·사유·비밀번호(또는 Windows Hello) → [서명 확정] / [다른 이름으로…].
     첫 서명 자리 크기(그림 상자 + 아래 글자 줄)로 실제 겉모양을 미리 보인다(보안 SOT §3.3·§3.10)."""
@@ -1155,18 +1139,11 @@ class SignDialog(QDialog):
         w, h = self._box
         if not self._box_is_field:
             w, h = sign_core.stamp_size(app, label, self.ed_reason.text(), w, h)    # 그림 상자 + 아래 글자 줄(§3.6)
-        th = _PreviewThread(self._pv_gen, (app, label, self.ed_reason.text(), w, h, self.PREVIEW_DPI), self)
-        th.done.connect(self._on_preview)
-        self._pv_threads.append(th)
-
-        def _gone(t=th):
-            try:
-                self._pv_threads.remove(t)
-            except ValueError:
-                pass
-            t.deleteLater()
-        th.finished.connect(_gone)
-        th.start()
+        # 261012-16(응답성 SOT §4.3): 워커 + `run_in_thread` — `_pv_threads` 는 keep 목록(끝나면 저절로 빠진다)
+        from viewer.workers import SignPreviewWorker, run_in_thread
+        wk = SignPreviewWorker(self._pv_gen, (app, label, self.ed_reason.text(), w, h, self.PREVIEW_DPI))
+        wk.done.connect(self._on_preview)
+        run_in_thread(wk, self._pv_threads)
 
     def _on_preview(self, gen, res):
         if gen != self._pv_gen:
@@ -1204,8 +1181,13 @@ class SignDialog(QDialog):
     def stop_preview(self):
         """그리는 중인 스레드를 기다린다 — 창이 먼저 지워지면 QThread 가 살아 있는 채 파괴된다."""
         self._pv_timer.stop()
+        from PyQt6.QtCore import QThread
         for t in list(self._pv_threads):
-            t.wait(3000)
+            if isinstance(t, QThread):
+                try:
+                    t.wait(3000)
+                except RuntimeError:              # 끝나 이미 지워진 스레드
+                    pass
 
     def done(self, r):
         self.stop_preview()

@@ -14,7 +14,6 @@ import os
 import tempfile
 from pathlib import Path
 
-from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from viewer.i18n import tr
@@ -22,25 +21,6 @@ from viewer.sign_draft_controller import SignDraftMixin
 
 SIGN_DEFAULT_WIDTH_PT = 50 / 25.4 * 72      # 클릭만 했을 때 서명 상자 폭 50mm (SOT §3.3)
 SIGN_MIN_SIDE_PT = 12                       # 이보다 작게 끌면 클릭으로 본다
-
-
-class _SignVerifyThread(QThread):
-    """서명 검증 — 배경(SOT §10). 결과는 (경로, mtime, 보고서)."""
-    done = pyqtSignal(str, object, object)
-
-    def __init__(self, path, mtime, trusted, doc_pw, parent=None):
-        super().__init__(parent)
-        self._a = (path, mtime, trusted, doc_pw)
-
-    def run(self):
-        path, mtime, trusted, doc_pw = self._a
-        try:
-            from viewer import sign_core
-            rep = sign_core.verify_pdf(path, trusted, doc_pw)
-        except Exception as e:                   # noqa: BLE001
-            from viewer.sign_core import VerifyReport
-            rep = VerifyReport(error=type(e).__name__)
-        self.done.emit(path, mtime, rep)
 
 
 def _sc_empty(mv):
@@ -721,22 +701,11 @@ class SignMixin(SignDraftMixin):
                 doc_pw = secure_store.recall_any(cur) or ""
         except Exception:
             pass
-        th = _SignVerifyThread(str(cur), mtime, sign_store.trusted(), doc_pw, self)
-        th.done.connect(lambda p, m, rep, _mv=mv: self._sign_verified(_mv, p, m, rep))
-        # 끝난 스레드는 목록에서 빼고 지운다 — deleteLater 만 걸고 목록에 남기면 다음 판정 때 지워진 객체를 만진다(실측)
-        threads = getattr(self, "_sign_threads", None)
-        if threads is None:
-            threads = self._sign_threads = []
-        threads.append(th)
-
-        def _gone(t=th, lst=threads):
-            try:
-                lst.remove(t)
-            except ValueError:
-                pass
-            t.deleteLater()
-        th.finished.connect(_gone)
-        th.start()
+        # 261012-16(응답성 SOT §4.3): 워커 + `run_in_thread` — 끝나면 스스로 정리된다(keep 목록에서도 빠진다)
+        from viewer.workers import SignVerifyWorker, run_in_thread
+        w = SignVerifyWorker(str(cur), mtime, sign_store.trusted(), doc_pw)
+        w.done.connect(lambda p, m, rep, _mv=mv: self._sign_verified(_mv, p, m, rep))
+        run_in_thread(w, self._thread_keep)
 
     def _sign_verified(self, mv, path, mtime, rep):
         if str(mv.current_file() or "") != path:
