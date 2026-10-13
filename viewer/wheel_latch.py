@@ -16,6 +16,7 @@ from PyQt6.QtCore import QObject, QEvent, Qt
 from PyQt6.QtWidgets import QAbstractScrollArea, QWidget
 
 LATCH_MS = 300      # 휠이 이만큼 멈추면 묶음을 푼다 — 관성 휠의 칸 사이(수십 ms)보다 넉넉히 길다
+MAX_HOLD_MS = 800   # 다른 창의 휠을 처음 버린 뒤 이보다 오래는 막지 않는다 — 새 창에서 계속 굴리는 사람이 멈춰야만 풀리지 않게
 
 
 def pane_of(w):
@@ -31,11 +32,13 @@ def pane_of(w):
 class WheelLatch(QObject):
     """`QApplication` 에 거는 이벤트 필터. 휠 하나를 받은 창 밖으로 새지 않게 한다."""
 
-    def __init__(self, parent=None, latch_ms: int = LATCH_MS):
+    def __init__(self, parent=None, latch_ms: int = LATCH_MS, max_hold_ms: int = MAX_HOLD_MS):
         super().__init__(parent)
         self.latch_ms = float(latch_ms)
+        self.max_hold_ms = float(max_hold_ms)
         self._pane = None
         self._last = 0.0
+        self._hold_since = None     # 다른 창의 휠을 처음 버린 시각
         self.dropped = 0            # 검사용 — 버린 이벤트 수
 
     def eventFilter(self, obj, event):
@@ -46,14 +49,19 @@ class WheelLatch(QObject):
             now = time.monotonic() * 1000.0
             if (pane is not self._pane and self._pane is not None
                     and now - self._last < self.latch_ms
-                    and event.phase() != Qt.ScrollPhase.ScrollBegin):
+                    and event.phase() != Qt.ScrollPhase.ScrollBegin
+                    and (self._hold_since is None or now - self._hold_since < self.max_hold_ms)):
                 # 앞 창에서 굴리던 휠이 마우스를 따라 넘어왔다 — 버린다. 시각은 늘린다:
-                #   휠이 이어지는 동안은 계속 묶고, **멈춰야** 풀린다(긴 관성의 꼬리도 막는다).
+                #   휠이 이어지는 동안은 계속 묶는다(긴 관성의 꼬리도 막는다). 다만 처음 버린 뒤
+                #   `MAX_HOLD_MS` 가 지나면 푼다 — 새 창에서 일부러 계속 굴리는 사람을 멈출 때까지 막지 않게.
                 self.dropped += 1
                 self._last = now
+                if self._hold_since is None:
+                    self._hold_since = now
                 return True
             self._pane = pane
             self._last = now
+            self._hold_since = None
         except Exception:
             pass
         return False

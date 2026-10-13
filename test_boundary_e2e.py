@@ -67,6 +67,11 @@ chk(not mw.page_thumbs._edit_mode, "썸네일 뷰어모드(편집 아님)")
 
 def wheel(view, dy):
     """실제 휠 이벤트를 뷰포트에 전달."""
+    # 261014-1(입력 SOT §2.11): 사람이 창을 옮겨 **새로** 굴린 것으로 친다 — 앞 창 휠의 묶음을 비운다
+    #   (wheel_cross 가 넘김 잠금을 비우는 것과 같은 까닭. 실제로 기다리면 검사가 느려진다).
+    lat = getattr(globals().get("mw"), "_wheel_latch", None)
+    if lat is not None:
+        lat._pane = None
     vp = view.viewport()
     pos = QPointF(vp.width() / 2, vp.height() / 2)
     ev = QWheelEvent(pos, view.mapToGlobal(QPoint(int(pos.x()), int(pos.y()))).toPointF()

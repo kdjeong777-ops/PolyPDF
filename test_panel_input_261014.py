@@ -144,6 +144,19 @@ try:
     wheel(te.viewport())
     wheel(mv.view.viewport(), phase=Qt.ScrollPhase.ScrollBegin)
     chk(sb.value() > v1, "트랙패드에서 손가락을 새로 얹으면(ScrollBegin) 바로 받는다", "%d→%d" % (v1, sb.value()))
+    # 새 창에서 일부러 계속 굴리면 MAX_HOLD_MS 뒤에는 받는다(멈출 때까지 막지 않는다)
+    from viewer.wheel_latch import MAX_HOLD_MS
+    QTest.qWait(400)
+    wheel(te.viewport())
+    v3 = sb.value()
+    t_end = time.monotonic() + (MAX_HOLD_MS + 400) / 1000.0
+    moved_at = None
+    while time.monotonic() < t_end:
+        wheel(mv.view.viewport()); app.processEvents()
+        if sb.value() > v3 and moved_at is None:
+            moved_at = time.monotonic()
+        QTest.qWait(60)                               # 60ms 마다 한 칸 — 묶음(300ms)보다 촘촘하다
+    chk(moved_at is not None, "새 창에서 계속 굴리면 오래 막지 않는다(MAX_HOLD_MS 뒤 받는다)")
     # 대조: 묶음을 빼면 같은 입력이 본문을 움직인다(이 검사가 무엇을 막는지)
     QTest.qWait(400)
     app.removeEventFilter(mw._wheel_latch)
