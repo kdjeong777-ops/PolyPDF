@@ -640,8 +640,35 @@ class PageThumbs(QWidget):
         self._render_timer.start()
 
     def _delete_selected(self):
-        for it in self.list.selectedItems():
+        """쪽 지우기(Delete·우클릭 '삭제'). 261014-1(마스터 §4.7.7, 사용자 요청): 지운 뒤에는 **남은 쪽 중
+        바로 위**(목록 순서)로 간다 — 맨 위를 지웠으면 새 첫 쪽. 종전에는 본문이 지운 쪽 **번호 다음**으로
+        건너뛰어(`go_to_page` 의 스냅은 쪽 번호 기준), 쪽을 옮긴 뒤에는 엉뚱한 쪽이 열렸다."""
+        items = self.list.selectedItems()
+        if not items:
+            return
+        top = min(self.list.row(it) for it in items)
+        gone = {id(it) for it in items}
+        land = None
+        for i in range(top - 1, -1, -1):                 # 위로 — 지우지 않은, 보이는 쪽
+            it = self.list.item(i)
+            if id(it) not in gone and not it.isHidden():
+                land = it; break
+        if land is None:
+            for i in range(top, self.list.count()):      # 위에 없으면 아래 첫 쪽
+                it = self.list.item(i)
+                if id(it) not in gone and not it.isHidden():
+                    land = it; break
+        for it in items:
             self.list.takeItem(self.list.row(it))
+        if land is None:
+            return
+        self.list.blockSignals(True)
+        try:
+            self.list.setCurrentRow(self.list.row(land))   # select_page 와 같은 방식(선택도 이 한 장)
+        finally:
+            self.list.blockSignals(False)
+        self.list.scrollToItem(land)
+        self._on_activated(land)
 
     def eventFilter(self, obj, event):
         # 260930-1(마스터 §4.7.11): 그림을 끌어다 놓으면 **새 쪽**으로 더한다.
@@ -765,9 +792,8 @@ class PageThumbs(QWidget):
                     else:
                         self.list.setCurrentRow(nxt)
                         self.list.scrollToItem(self.list.item(nxt))
-                        pg = self.list.item(nxt).data(Qt.ItemDataRole.UserRole)
-                        if pg is not None:
-                            self.pageActivated.emit(int(pg))
+                        # 261014-1: 끼워 둔 쪽(값이 튜플)도 본문으로 — 종전 `int(튜플)` 은 예외로 멈췄다
+                        self._on_activated(self.list.item(nxt))
                     return True
         return super().eventFilter(obj, event)
 

@@ -833,6 +833,13 @@ class BookmarkTree(QWidget):
         if d and os.path.isdir(d):
             QDesktopServices.openUrl(QUrl.fromLocalFile(d))
 
+    def _open_folder_in_explorer(self, folder) -> None:
+        """261014-1: 폴더 행의 '파일 탐색기 열기' — 그 폴더 자체를 연다."""
+        from PyQt6.QtCore import QUrl
+        from PyQt6.QtGui import QDesktopServices
+        if folder and Path(folder).is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+
     def _file_path_of(self, it) -> str:
         """임의 행 → 그 행이 속한 **파일 경로**. 없으면 빈 문자열.
 
@@ -947,12 +954,53 @@ class BookmarkTree(QWidget):
             else:
                 parts = ()          # 루트 자신 또는 루트 밖(방어) — 루트 직속으로
             groups.setdefault(parts, []).append(pdf)
+        if self._sort_combo.currentData() == self.SORT_MTIME:
+            return self._mtime_fill_plan(groups)
         plan: list = []
         for parts in sorted((k for k in groups if k), key=lambda t: [x.lower() for x in t]):
             for pdf in groups[parts]:
                 plan.append((parts, pdf))
         for pdf in groups.get((), []):            # 루트 직속 파일은 폴더 그룹 아래에
             plan.append((None, pdf))
+        return plan
+
+    def _mtime_fill_plan(self, groups: dict) -> list:
+        """261014-1(사용자 요청): 트리 보기 + '수정일 순' — 폴더를 위로 모으지 않고 **같은 층의
+        폴더와 파일을 함께** 수정일 내림차순으로 늘어놓는다(폴더·파일·폴더 순도 가능).
+
+        폴더의 수정일 = 그 아래(하위 폴더 포함) PDF 중 **가장 최근 수정일**. 폴더 자체의 mtime 은
+        안의 파일을 고쳐도 바뀌지 않아(Windows) '최근에 손댄 폴더' 를 나타내지 못한다.
+        값은 스캔 때 받은 `_scan_stats` 를 쓴다 — 디스크를 다시 읽지 않는다(응답성 SOT §4).
+        폴더 행은 첫 자손 파일이 들어올 때 만들어지므로(`_fill_folder_item`), 깊이 우선으로
+        내놓으면 각 층의 순서가 이 정렬 그대로 된다."""
+        tree: dict = {"files": [], "dirs": {}}
+        for parts, lst in groups.items():
+            node = tree
+            for x in parts:
+                node = node["dirs"].setdefault(x, {"files": [], "dirs": {}})
+            node["files"].extend(lst)
+
+        def newest(node) -> float:
+            m = max((self._sort_stat(p)[1] for p in node["files"]), default=0.0)
+            for sub in node["dirs"].values():
+                m = max(m, newest(sub))
+            node["m"] = m
+            return m
+
+        newest(tree)
+        plan: list = []
+
+        def walk(node, parts: tuple):
+            rows = [(self._sort_stat(p)[1], 0, p) for p in node["files"]]
+            rows += [(sub["m"], 1, name) for name, sub in node["dirs"].items()]
+            rows.sort(key=lambda r: r[0], reverse=True)       # 안정 정렬 — 같은 시각이면 들어온 순
+            for _m, is_dir, v in rows:
+                if is_dir:
+                    walk(node["dirs"][v], parts + (v,))
+                else:
+                    plan.append((parts or None, v))
+
+        walk(tree, ())
         return plan
 
     def _fill_folder_item(self, parts: tuple) -> QTreeWidgetItem:
@@ -2323,16 +2371,6 @@ class BookmarkTree(QWidget):
             sel_files = []
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
-        # 260618-27: 1단=‘2단 보기’(진입), 2단=이 창 기준 반대 창으로 복사
-        #   상단(1창)='2창으로 복사', 하단(2창)='1창으로 복사'.
-        if self._split_on:
-            act_split_view = menu.addAction(
-                tr("1창으로 복사") if self._pane_idx == 1 else tr("2창으로 복사"))
-            _is_copy = True
-        else:
-            act_split_view = menu.addAction(tr("2단 보기"))
-            _is_copy = False
-        menu.addSeparator()
         act_merge = None
         act_translate_sel = None
         if sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
@@ -2347,13 +2385,24 @@ class BookmarkTree(QWidget):
             xfer_files = ([f] if f is not None
                           else (list(self._iter_folder_files(item))
                                 if self._is_folder_node(item) else []))
-        # 260910-8(사용자 요청): '파일 폴더 열기' 를 '파일 복사' **바로 위**에 둔다.
-        #   책갈피에서 고른 파일이 실제로 어디 있는지 탐색기로 바로 열어 본다.
-        #   편집모드가 아니어도 쓸 수 있어야 하므로 `xfer_files` 와 따로 구한다.
+        # 261014-1(마스터 §4.7.13, 사용자 요청) 메뉴 순서 — 파일 그룹:
+        #   파일 탐색기 열기 · 새 폴더 만들기 · 파일 복사 · 파일 이동 · 이름 변경 · 삭제
+        #   ─ 저장 그룹: 저장 · 다른 이름으로 저장 · 평탄화해서 내보내기
+        #   ─ 보기 그룹: 2단 보기 · 책갈피 모두 펼치기 · 모두 접기 (· 페이지순 정렬)
+        # '파일 탐색기 열기'(260910-8 '파일 폴더 열기') 는 편집모드가 아니어도 쓴다 — `xfer_files` 와 따로.
         act_open_dir = None
         _dir_target = self._file_path_of(item)
+        _folder_row = Path(item.toolTip(0)) if self._is_folder_node(item) else None
         if _dir_target:
-            act_open_dir = menu.addAction(tr("파일 폴더 열기"))
+            act_open_dir = menu.addAction(tr("파일 탐색기 열기"))
+        elif _folder_row is not None:
+            act_open_dir = menu.addAction(tr("파일 탐색기 열기"))
+        # 새 폴더의 자리: 폴더 행이면 그 안, 파일·책갈피 행이면 그 파일이 든 폴더, 아니면 열린 폴더.
+        _new_base = (_folder_row if _folder_row is not None
+                     else (Path(_dir_target).parent if _dir_target else self._root_dir))
+        act_fold_new = None
+        if _new_base and self._mode == "flat":
+            act_fold_new = menu.addAction(tr("새 폴더 만들기..."))
         if xfer_files:
             n = len(xfer_files)
             # 항목은 각자 triggered 로 처리 — 아래 chosen 분기와 겹치지 않는다.
@@ -2362,23 +2411,29 @@ class BookmarkTree(QWidget):
                 self._add_transfer_submenu(menu, tr('파일 이동 ({n}개)').format(n=n), xfer_files, True)
             except Exception:
                 pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
-        # 261008-1(마스터 §4.7.13, 사용자 요청): 저장 셋을 파일 그룹의 '파일 이동' 아래로 모은다.
-        #   모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
-        act_save_as = act_save_poly = act_flatten = None
-        if _dir_target:
-            act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
-            act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
-            act_save_poly = menu.addAction(tr("저장"))
-            act_save_poly.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
-            act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
-            act_flatten.setToolTip(
-                tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
-        if _dir_target or xfer_files:
-            menu.addSeparator()
-        # 261008-1(사용자 요청): 이름 변경·삭제를 저장 그룹 바로 아래로, 그 아래 펼치기/접기/정렬.
         act_rename = menu.addAction(tr("파일·책갈피 이름 변경"))
         act_delete = menu.addAction(tr("파일·책갈피 삭제"))
         menu.addSeparator()
+        # 저장 셋 — 모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
+        act_save_as = act_save_poly = act_flatten = None
+        if _dir_target:
+            act_save_poly = menu.addAction(tr("저장"))
+            act_save_poly.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
+            act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
+            act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
+            act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
+            act_flatten.setToolTip(
+                tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
+            menu.addSeparator()
+        # 260618-27: 1단=‘2단 보기’(진입), 2단=이 창 기준 반대 창으로 복사
+        #   상단(1창)='2창으로 복사', 하단(2창)='1창으로 복사'.
+        if self._split_on:
+            act_split_view = menu.addAction(
+                tr("1창으로 복사") if self._pane_idx == 1 else tr("2창으로 복사"))
+            _is_copy = True
+        else:
+            act_split_view = menu.addAction(tr("2단 보기"))
+            _is_copy = False
         # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
         act_exp_all = menu.addAction(tr("책갈피 모두 펼치기"))
         # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크로 보인다(보이는 파일이 계속 펼쳐진다)
@@ -2398,9 +2453,9 @@ class BookmarkTree(QWidget):
                                        "레벨을 윗 책갈피에 맞춥니다"))
         menu.addSeparator()
         # 260901-3: 폴더 행 우클릭 — 폴더 이름 변경 / 삭제(빈 폴더만)
-        act_fold_new = act_fold_ren = act_fold_del = None
+        # 261014-1: '이 폴더 안에 새 폴더...' 는 위 '새 폴더 만들기' 와 같은 일이라 합쳤다.
+        act_fold_ren = act_fold_del = None
         if self._edit_mode and self._is_folder_node(item):
-            act_fold_new = menu.addAction(tr("이 폴더 안에 새 폴더..."))
             act_fold_ren = menu.addAction(tr("폴더 이름 변경..."))
             act_fold_del = menu.addAction(tr("폴더 삭제"))
             menu.addSeparator()
@@ -2448,7 +2503,17 @@ class BookmarkTree(QWidget):
         act_fav_file = menu.addAction(tr("현재 파일을 즐겨찾기에 추가")) if is_file else None
         chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
         if act_open_dir is not None and chosen is act_open_dir:
-            self._reveal_in_explorer(_dir_target)
+            if _dir_target:
+                self._reveal_in_explorer(_dir_target)
+            else:
+                self._open_folder_in_explorer(_folder_row)
+            return
+        if act_fold_new is not None and chosen is act_fold_new:
+            d = self._ask_new_folder(base=_new_base)
+            if d is not None:
+                # 다시 훑지 않는다 — 빈 폴더는 트리에 행이 없다(PDF 가 든 폴더만 보인다) — 만든 것을 글로 알린다.
+                self.info.setText(tr('새 폴더: {name} — 파일 복사·이동의 대상으로 고를 수 있습니다.')
+                                  .format(name=d.name))
             return
         if chosen is None:
             return
@@ -2464,12 +2529,9 @@ class BookmarkTree(QWidget):
             else:
                 self.splitViewRequested.emit(True)
             return
-        if act_fold_new is not None and chosen in (act_fold_new, act_fold_ren, act_fold_del):
+        if act_fold_ren is not None and chosen in (act_fold_ren, act_fold_del):
             folder = Path(item.toolTip(0))          # 폴더 행은 툴팁에 실제 경로를 담는다
-            if chosen == act_fold_new:
-                if self._ask_new_folder(base=folder):
-                    self._sync_after_transfer(folder)
-            elif chosen == act_fold_ren:
+            if chosen == act_fold_ren:
                 self._rename_folder(folder)
             else:
                 self._delete_folder(folder)

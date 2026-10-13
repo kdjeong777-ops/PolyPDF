@@ -127,6 +127,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   261009-17: 자식은 **처음 물을 때** 띄운다(약 300MB — 한글 본문을 안 보는 실행에서 쓰지 않게, CLAUDE.md '자원 최소').
         from viewer import kiwi_space as _kiwi_space
         _kiwi_space.set_ui_thread()
+        # 261014-1(입력 SOT §2.11): 휠은 시작한 창에서만 — 텍스트 창에서 굴리던 남은 휠이 본문으로 새지 않게
+        from viewer.wheel_latch import WheelLatch
+        self._wheel_latch = WheelLatch(self)
+        QApplication.instance().installEventFilter(self._wheel_latch)
 
         # v1.6.2: 히스토리 패널/모델 제거
         self._current_main: Optional[HistoryItem] = None
@@ -3783,8 +3787,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return False
 
     def _on_thumb_order_changed(self):
-        """260915-1(§4.7.7): 썸네일 쪽 순서가 바뀜(미저장) — 본문 넘김 순서를 맞추고, 본문에 떠 있는
-        쪽이 지워졌으면 옮긴 순서의 가까운 쪽으로 간다."""
+        """260915-1(§4.7.7): 썸네일 쪽 순서가 바뀜(미저장) — 본문 넘김 순서를 맞추고 썸네일 강조를 본문 쪽에.
+        지운 뒤 어느 쪽으로 갈지는 지우는 쪽(`PageThumbs._delete_selected` — 목록의 바로 위, 261014-1)이 정한다."""
         if not getattr(self, "_hist_applying", False):
             self._hist_pages_changed()             # 261012-10(§4.6.8): 쪽 편집 되돌리기 기록
         self._push_nav_filter()
@@ -3928,7 +3932,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             remembered = bool(pw) and bool(secure_store.recall_password(src))
         except Exception:
             pass
+        keep_page = self._page_to_keep(src)                 # 261014-1(§4.7.5): 바꿔치기가 본문을 닫기 **전에**
         final = self._finalize_save_place(src, produced, shift)
+        self._save_keep_page = (os.path.normcase(str(final)), keep_page) if keep_page is not None else None
         if pw:
             try:
                 from viewer import secure_store
@@ -3938,6 +3944,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception:
                 pass
         return final
+
+    def _page_to_keep(self, src):
+        """261014-1(마스터 §4.7.5, 사용자 요청 '저장 시 현재 페이지에서 이동하지 않게'): 본문이 `src` 를 보고 있으면 그 쪽.
+        끼워 둔(스테이징) 쪽은 저장 뒤 번호가 달라 여기서 넘기지 않는다 — 쪽 편집 저장은 새 번호를 직접 준다."""
+        try:
+            mv = self.main_view
+            cur = mv.current_file() if mv is not None else None
+            if not cur or os.path.normcase(str(cur)) != os.path.normcase(str(src)):
+                return None
+            pg = int(mv.current_page())
+            return None if self.page_thumbs.is_staged_page(pg) else pg
+        except Exception:
+            return None
 
     def _finalize_save_place(self, src, produced, shift=None) -> str:
         """260822: 편집 저장 산출물(produced 임시 PDF)을 목적지에 배치.
@@ -4114,6 +4133,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                         alias=alias))
             except _peb.Cancelled:
                 raise MergeCancelled()
+        # 261014-1(§4.7.5): 저장 뒤에도 **보던 쪽**에 남는다 — 새 파일에서 그 쪽은 썸네일 순서의 자리다.
+        try:
+            _nav = pt.current_nav_ids()
+            new_page = _nav.index(int(self.main_view.current_page()))
+        except Exception:
+            new_page = 0
         res = self._run_merge_job(_job, tr("쪽 편집 저장"))
         if res.get("cancelled"):
             self.status.showMessage(tr("쪽 편집 저장을 취소했습니다 — 원본·편집은 그대로입니다."), 5000)
@@ -4154,7 +4179,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         try:
             # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
             self.bookmark_tree.add_or_refresh_file(final, after=str(src))
-            self._open_saved_file(final)            # 색인 먼저 걸고 연다 — 260915-10
+            self._open_saved_file(final, new_page)  # 색인 먼저 걸고 연다 — 260915-10
         except Exception:
             pass
         self._mirror_to_pdf(final)                 # 261011-2(§4.7.16): 쪽·회전이 바뀌었으니 사본도 다시
@@ -5969,7 +5994,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             removed = store.prune_missing()
             self.status.showMessage(tr('{removed}건 정리').format(removed=removed), 4000)
 
-    def _open_saved_file(self, path, page: int = 0) -> None:
+    def _open_saved_file(self, path, page=None) -> None:
         """260915-10(응답성 SOT §4.4): 저장·생성한 PDF 를 **색인부터 걸고** 본문에 연다.
 
         순서가 요점이다. 파일을 열면 텍스트 창이 곧바로 그 쪽을 뽑는데, 이때 색인이 돌고 있어야
@@ -5978,11 +6003,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         GIL 을 다퉜다 — 다시 열기 0.1→0.4초, 그 뒤 0.25~0.33초씩 끊겼다(실측).
 
         또 `add_or_refresh_file` 이 새 노드를 고르면 트리가 **그 파일 열기를 예약**한다(`_emit_nav`) —
-        여기서 직접 여니 예약은 지운다. 종전에는 책갈피 편집 저장 뒤 같은 파일을 **두 번** 열었다."""
+        여기서 직접 여니 예약은 지운다. 종전에는 책갈피 편집 저장 뒤 같은 파일을 **두 번** 열었다.
+
+        261014-1(§4.7.5): `page` 를 주지 않으면 `_finalize_save` 가 기억한 **저장 전 쪽**으로 연다 —
+        종전에는 늘 1쪽으로 돌아갔다(사용자 보고 '저장 시 현재 페이지에서 이동하지 않도록')."""
         try:
             self.bookmark_tree._pending_nav = None
         except Exception:
             pass
+        kept, self._save_keep_page = getattr(self, "_save_keep_page", None), None
+        if page is None:
+            page = kept[1] if (kept and kept[0] == os.path.normcase(str(path))) else 0
         self._index_single_file(Path(path))
         try:
             self._load_main(HistoryItem(str(path), int(page or 0), "", "bookmark"))

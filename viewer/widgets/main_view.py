@@ -127,6 +127,29 @@ MV_TEXT_STYLE_MAP = {n: s for n, s in MV_TEXT_STYLES}
 MV_LEADER_TIPS = ("arrow", "circle", "plain")
 
 
+def focus_widgets_in_layout(layout) -> list:
+    """261014-1(입력 SOT §3.1): 레이아웃 **차례대로** Tab 으로 갈 수 있는 위젯들.
+
+    스스로 포커스를 받지 않는 묶음 위젯(그리기 도구 줄 등)은 그 안의 레이아웃으로 내려간다.
+    숨은 위젯도 넣는다 — 보일 때 차례가 맞으면 되고, Qt 는 Tab 때 숨은 것을 건너뛴다."""
+    out = []
+    if layout is None:
+        return out
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        if item is None:
+            continue
+        w = item.widget()
+        if w is not None:
+            if w.focusPolicy() & Qt.FocusPolicy.TabFocus:
+                out.append(w)
+            else:
+                out.extend(focus_widgets_in_layout(w.layout()))
+        elif item.layout() is not None:
+            out.extend(focus_widgets_in_layout(item.layout()))
+    return out
+
+
 def _perf_ms() -> float:
     """단조 시계(ms). 260910-5: 경계에 머문 시간을 재는 데만 쓴다.
 
@@ -1890,6 +1913,7 @@ class MainView(QWidget):
         # 260912-7(입력 SOT §2.6, 사용자 지시): 본문을 고르면 텍스트 창이 걸어 둔
         #   강조는 역할을 다했다 — 그것만 지운다.
         self.view.viewActivated.connect(self._drop_panel_highlight)
+        self._sync_toolbar_tab_order()          # 261014-1(입력 SOT §3.1)
 
     def set_hover_words(self, items) -> None:
         """단어장 단어 호버 영역 설정. items=[(x0,y0,x1,y1,lemma)] (PDF point)."""
@@ -1944,6 +1968,10 @@ class MainView(QWidget):
         if self._doc is not None:
             self._doc.close()
         self._close_staged_doc()      # 260930-4: 끼운 쪽 원본도 놓는다(임시 파일 잠금 방지)
+        # 261014-1(마스터 §4.7.5·§4.7.7): 넘김 목록은 **옛 문서의 것**이다 — 새 문서로 들고 가면 첫 쪽 이동이
+        #   옛 목록으로 스냅됐다(쪽 편집 저장 뒤 다시 열면 엉뚱한 쪽). 앱이 새 문서의 필터를 다시 넣는다.
+        self._nav_pages = None
+        self._nav_pos = {}
         self._doc = newdoc
         self._is_image = False               # v1.6.4 C2: PDF 모드
         self._update_empty_label()           # 260606-30: 문서 로드 → 안내 숨김
@@ -2041,8 +2069,21 @@ class MainView(QWidget):
         idx = self._toolbar.indexOf(self.btn_next_page)
         if idx < 0:
             self._toolbar.addWidget(btn)
+        else:
+            self._toolbar.insertWidget(idx + 1, btn)
+        self._sync_toolbar_tab_order()
+
+    def _sync_toolbar_tab_order(self):
+        """261014-1(입력 SOT §3.1): Tab 차례 = 페이지 바에 **보이는 차례**(왼쪽→오른쪽) → 본문.
+
+        종전에는 만든 차례를 따라, 나중에 › 옆에 끼운 단추(캡처·읽기·mp3)가 줄 끝의 그리기
+        도구와 본문 **뒤**에 왔다 — Tab 이 오른쪽 끝까지 갔다가 왼쪽으로 되돌아 뛰었다."""
+        order = focus_widgets_in_layout(self._toolbar)
+        if not order:
             return
-        self._toolbar.insertWidget(idx + 1, btn)
+        order.append(self.view)
+        for a, b in zip(order, order[1:]):
+            QWidget.setTabOrder(a, b)
 
     def current_file(self):
         return str(self._doc.path) if self._doc else None

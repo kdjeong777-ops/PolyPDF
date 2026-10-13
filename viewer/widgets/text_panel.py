@@ -47,6 +47,9 @@ class _LockedLinesEdit(QTextEdit):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self._merge_cb = None      # 260910-11: 패널이 '줄 합치기' 를 맡는다
+        # 261014-1(입력 SOT §3.1): Tab 은 **다음 칸으로**. 종전에는 탭 문자가 줄에 들어가([PDF 에 반영] 하면
+        #   PDF 글자에도 들어갔다) Tab 으로 이 창을 빠져나갈 수 없었다.
+        self.setTabChangesFocus(True)
 
     def keyPressEvent(self, e):
         k = e.key()

@@ -187,19 +187,21 @@ try:
     pos = bt.tree.visualItemRect(f0).center()
     bt._on_tree_context_menu(pos)
     t = [x for x in seen.get("texts", []) if x]
-    want_order = ["파일 폴더 열기", "파일 복사 (1개)", "파일 이동 (1개)", "다른 이름으로 저장...",
-                  "저장", "평탄화해서 내보내기...", "파일·책갈피 이름 변경", "파일·책갈피 삭제",
-                  "책갈피 모두 펼치기", "책갈피 모두 접기"]
+    # 261014-1(사용자 요청): 파일 그룹(탐색기·새 폴더·복사·이동·이름 변경·삭제) / 저장 그룹 / 보기 그룹(2단 보기·펼치기)
+    want_order = ["파일 탐색기 열기", "새 폴더 만들기...", "파일 복사 (1개)", "파일 이동 (1개)",
+                  "파일·책갈피 이름 변경", "파일·책갈피 삭제", "저장", "다른 이름으로 저장...",
+                  "평탄화해서 내보내기...", "2단 보기", "책갈피 모두 펼치기", "책갈피 모두 접기"]
     pos_of = [t.index(w) if w in t else -1 for w in want_order]
     chk(-1 not in pos_of and pos_of == sorted(pos_of), "D 메뉴 순서(사용자 지시)", str(t))
     raw = seen.get("texts", [])
     try:
-        i_fl, i_rn, i_ex = raw.index("평탄화해서 내보내기..."), raw.index("파일·책갈피 이름 변경"), raw.index("책갈피 모두 펼치기")
-        chk(raw[i_fl + 1] == "" and raw[i_rn + 2] == "" and i_ex == i_rn + 3,
-            "D 저장 그룹 / 이름 변경·삭제 그룹 / 펼치기 그룹이 구분선으로 나뉜다", str(raw))
+        i_rn, i_sv, i_fl, i_2 = (raw.index("파일·책갈피 이름 변경"), raw.index("저장"),
+                                 raw.index("평탄화해서 내보내기..."), raw.index("2단 보기"))
+        chk(raw[i_rn + 2] == "" and i_sv == i_rn + 3 and raw[i_fl + 1] == "" and i_2 == i_fl + 2,
+            "D 파일 그룹 / 저장 그룹 / 보기 그룹이 구분선으로 나뉜다", str(raw))
     except ValueError:
         chk(False, "D 그룹 구분", str(raw))
-    chk("이름 변경" not in t and "삭제" not in t and "일반뷰어용으로 저장 (꾸밈·사진 굽기)..." not in t
+    chk("이름 변경" not in t and "삭제" not in t and "파일 폴더 열기" not in t and "일반뷰어용으로 저장 (꾸밈·사진 굽기)..." not in t
         and "저장(일반뷰어용)..." not in t and "저장(PolyPDF용)" not in t,
         "D 옛 이름·옛 자리 항목이 남지 않는다", str(t))
 
