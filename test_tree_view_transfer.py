@@ -59,6 +59,9 @@ chk(bt.tree.topLevelItemCount() == 6, "③ 단일 보기 — 6개 파일이 한 
 chk(len(list(bt._iter_file_nodes())) == 6, "③ _iter_file_nodes 6개(단일)")
 
 # ── ③ 트리 보기 복귀 ──────────────────────────────────────────────────
+# 261014-1(디자인 SOT §2.8): '폴더 먼저' 는 수정일 순이 아닐 때의 규칙이다(기본 정렬 = 수정일 순은 폴더·파일을 섞는다,
+#   그쪽은 test_panel_input_261014.py) — 이 절은 이름 순으로 본다.
+bt.set_sort_mode(bt.SORT_NAME); app.processEvents()
 bt._toggle_tree_view(); app.processEvents()
 chk(bt.is_tree_view() and bt.btn_view_mode.text() == "트리", "③ 트리 보기 전환·라벨")
 
