@@ -54,6 +54,7 @@ from viewer.update_controller import UpdateMixin
 from viewer.sign_controller import SignMixin
 from viewer.convert_controller import ConvertMixin   # 261014-11(형식 변환 SOT §2)
 from viewer.ocr_batch_controller import OcrBatchMixin   # 261014-16(텍스트 창 SOT §5.5)
+from viewer.compress_controller import CompressMixin    # 261014-21(마스터 §4.7.19)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -116,7 +117,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -2193,6 +2194,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _bt in (self.bookmark_tree, self.bookmark_tree_right):
             _bt.convertFilesRequested.connect(lambda files, k: self.action_convert(files=files, fmt=k))
             _bt.ocrLayerFilesRequested.connect(self.action_ocr_batch)   # 261014-16(텍스트 창 SOT §5.5)
+            _bt.compressFilesRequested.connect(self.action_compress)    # 261014-21(마스터 §4.7.19)
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(
                 files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,

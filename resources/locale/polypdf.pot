@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 15:15+0900\n"
+"POT-Creation-Date: 2026-10-14 15:26+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2732,6 +2732,50 @@ msgstr ""
 msgid "압축 해제 실패: {e}"
 msgstr ""
 
+#: viewer/compress_controller.py
+msgid "PDF 압축"
+msgstr ""
+
+#: viewer/compress_controller.py
+msgid "그림만 줄이고 글자는 그대로입니다. 원본은 그대로 둡니다."
+msgstr ""
+
+#: viewer/compress_controller.py
+msgid "압축할 PDF 가 없습니다."
+msgstr ""
+
+#: viewer/compress_controller.py
+msgid "중지했습니다 — 만들던 파일은 지웠습니다."
+msgstr ""
+
+#: viewer/compress_controller.py
+#, python-brace-format
+msgid "{name} 을(를) 압축해 새 파일로 저장합니다."
+msgstr ""
+
+#: viewer/compress_controller.py
+#, python-brace-format
+msgid "PDF {n}개를 압축해 새 파일로 저장합니다."
+msgstr ""
+
+#: viewer/compress_controller.py viewer/ocr_batch_controller.py
+msgid "건너뛴 파일:"
+msgstr ""
+
+#: viewer/compress_controller.py viewer/ocr_batch_controller.py
+msgid "실패:"
+msgstr ""
+
+#: viewer/compress_controller.py
+#, python-brace-format
+msgid "· {name}: {a} → {b} ({p}% 줄임)"
+msgstr ""
+
+#: viewer/compress_controller.py
+#, python-brace-format
+msgid "압축한 파일: {n}개"
+msgstr ""
+
 #: viewer/convert/__init__.py
 msgid "Word (편집 가능)"
 msgstr ""
@@ -3116,14 +3160,6 @@ msgid "글자층을 넣은 파일: {n}개 · {p}쪽 (새로 읽은 쪽 {o}쪽)"
 msgstr ""
 
 #: viewer/ocr_batch_controller.py
-msgid "건너뛴 파일:"
-msgstr ""
-
-#: viewer/ocr_batch_controller.py
-msgid "실패:"
-msgstr ""
-
-#: viewer/ocr_batch_controller.py
 msgid "다른 이름으로 저장된 파일:"
 msgstr ""
 
@@ -3143,6 +3179,39 @@ msgstr ""
 
 #: viewer/page_edit_build.py
 msgid "쪽 복사 중"
+msgstr ""
+
+#: viewer/pdf_compress.py
+msgid "서명된 PDF — 사본에서 서명이 깨집니다"
+msgstr ""
+
+#: viewer/pdf_compress.py
+msgid "암호 PDF — 사본이 암호 없이 저장됩니다"
+msgstr ""
+
+#: viewer/pdf_compress.py
+msgid "더 줄일 것이 없습니다"
+msgstr ""
+
+#: viewer/pdf_compress.py
+msgid "약 — 그림 200 dpi"
+msgstr ""
+
+#: viewer/pdf_compress.py
+msgid "보통 — 그림 150 dpi"
+msgstr ""
+
+#: viewer/pdf_compress.py
+msgid "강 — 그림 100 dpi"
+msgstr ""
+
+#: viewer/pdf_compress.py
+msgid "압축 파일을 만들지 못했습니다"
+msgstr ""
+
+#: viewer/pdf_compress.py
+#, python-brace-format
+msgid "{stem}_압축"
 msgstr ""
 
 #: viewer/present_controller.py
@@ -4527,6 +4596,10 @@ msgstr ""
 msgid "글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자층을 원본 PDF 에 넣습니다 — 다른 프로그램에서도 검색·복사가 됩니다(처음 한 번 백업을 남깁니다)."
 msgstr ""
 
+#: viewer/widgets/bookmark_tree.py
+msgid "그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로."
+msgstr ""
+
 #: viewer/widgets/bookmark_tree.py viewer/widgets/convert_dialog.py
 msgid "형식"
 msgstr ""
@@ -4701,6 +4774,10 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "OCR 글자층 넣기..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "PDF 압축..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4975,6 +5052,11 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "OCR 글자층 넣기 ({n}개 파일)..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "PDF 압축 ({n}개 파일)..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

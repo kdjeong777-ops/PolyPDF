@@ -211,6 +211,7 @@ class BookmarkTree(QWidget):
     saveAsFileRequested = pyqtSignal(str)       # 261008-1(§4.7.13): 파일 우클릭 '다른 이름으로 저장'
     convertFilesRequested = pyqtSignal(object, str)  # 261014-11(형식 변환 SOT §2.1): ([파일], 형식 키)
     ocrLayerFilesRequested = pyqtSignal(object)      # 261014-16(텍스트 창 SOT §5.5): [파일] — OCR 글자층 일괄
+    compressFilesRequested = pyqtSignal(object)      # 261014-21(마스터 §4.7.19): [파일] — PDF 압축
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
@@ -868,6 +869,18 @@ class BookmarkTree(QWidget):
                         "다른 프로그램에서도 검색·복사가 됩니다(처음 한 번 백업을 남깁니다)."))
         a.triggered.connect(lambda _=False, fs=list(files): QTimer.singleShot(
             0, lambda: self.ocrLayerFilesRequested.emit(fs)))
+        return True
+
+    def _add_compress_action(self, menu, files) -> bool:
+        """'PDF 압축...' — 그림만 줄여 새 파일 `<이름>_압축.pdf`(마스터 §4.7.19). 창은 메뉴가 닫힌 뒤에."""
+        files = [f for f in (files or []) if f]
+        if not files:
+            return False
+        a = menu.addAction(tr("PDF 압축...") if len(files) == 1
+                           else tr('PDF 압축 ({n}개 파일)...').format(n=len(files)))
+        a.setToolTip(tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로."))
+        a.triggered.connect(lambda _=False, fs=list(files): QTimer.singleShot(
+            0, lambda: self.compressFilesRequested.emit(fs)))
         return True
 
     def _selected_file_nodes(self) -> list:
@@ -2456,11 +2469,13 @@ class BookmarkTree(QWidget):
             except Exception:
                 _conv_files = [_dir_target]
             self._add_ocr_layer_action(menu, _conv_files)
+            self._add_compress_action(menu, _conv_files)
             menu.addSeparator()
         elif _folder_row is not None:
             # 261014-16(텍스트 창 SOT §5.5): 폴더 행 — 그 아래 파일 전체에 OCR 글자층
             _ff = [str(f.data(0, self.DATA_FILE)) for f in self._iter_folder_files(item)]
             if _ff and self._add_ocr_layer_action(menu, _ff):
+                self._add_compress_action(menu, _ff)
                 menu.addSeparator()
         # 260618-27: 1단=‘2단 보기’(진입), 2단=이 창 기준 반대 창으로 복사
         #   상단(1창)='2창으로 복사', 하단(2창)='1창으로 복사'.

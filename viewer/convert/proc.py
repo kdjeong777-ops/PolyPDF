@@ -126,6 +126,19 @@ def serve(address: str) -> None:
     except (EOFError, OSError):
         return
     try:
+        if job.get("kind") == "compress":            # 261014-21(마스터 §4.7.19): PDF 압축 — 같은 자식 틀
+            from viewer.pdf_compress import compress_file
+            conn.send(("progress", 0, 1, os.path.basename(job["src"])))
+            try:
+                compress_file(job["src"], job["dst"], job.get("level", "mid"))
+            except Exception:
+                try:
+                    os.remove(job["dst"])
+                except Exception:
+                    pass
+                raise
+            conn.send(("done",))
+            return
         import logging
         logging.disable(logging.CRITICAL)             # pdf2docx 의 쪽마다 로그 — 자식은 창도 콘솔도 없다
         from viewer._vendor.pdf2docx import Converter
