@@ -394,3 +394,39 @@ def edge_plan(per_page: dict) -> dict:
             allc = by_parity[0] + by_parity[1]
             plan[where]["BOTH"] = sample[allc.most_common(1)[0][0]]
     return plan
+
+
+# ---- 모양 그대로의 줄 묶음(HWPX·PPTX 공용, 형식 변환 SOT §1) ------------------------------
+GAP_SPACES_MAX = 60        # 나란한 줄 사이를 벌리는 빈칸 수 상한
+
+
+def bands(lines) -> list:
+    """같은 높이에 나란히 놓인 줄을 한 묶음으로(2단·칸 맞춤). 위에서 아래 차례."""
+    pos = sorted((b for b in lines if b.get("rect")), key=lambda b: ((b["rect"][1] + b["rect"][3]) / 2, b["rect"][0]))
+    bands = []
+    for b in pos:
+        cy = (b["rect"][1] + b["rect"][3]) / 2
+        if bands:
+            last = bands[-1]
+            lcy = (last[0]["rect"][1] + last[0]["rect"][3]) / 2
+            tol = 0.4 * min(b["size"], last[0]["size"])
+            if abs(cy - lcy) <= tol and all(b["rect"][0] >= q["rect"][2] - 1 or b["rect"][2] <= q["rect"][0] + 1 for q in last):
+                last.append(b)
+                continue
+        bands.append([b])
+    for band in bands:
+        band.sort(key=lambda q: q["rect"][0])
+    return bands
+
+
+def band_text(band):
+    """묶음 → (글, 왼쪽 x, 원본 너비, 크기, 굵음, 세리프). 사이 빈 곳은 빈칸으로."""
+    size = max(q["size"] for q in band)
+    serif = band[0]["serif"]
+    text = band[0]["text"]
+    for prev, q in zip(band, band[1:]):
+        gap = q["rect"][0] - prev["rect"][2]
+        sp = measure(" ", size, serif) or size * 0.3
+        text += " " * max(1, min(GAP_SPACES_MAX, int(round(gap / max(0.5, sp))))) + q["text"]
+    bold = sum(len(q["text"]) for q in band if q["bold"]) * 2 >= sum(len(q["text"]) for q in band)
+    return text, band[0]["rect"][0], band[-1]["rect"][2] - band[0]["rect"][0], size, bold, serif

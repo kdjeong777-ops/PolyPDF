@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 14:21+0900\n"
+"POT-Creation-Date: 2026-10-14 14:37+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2864,6 +2864,10 @@ msgstr "Hangul HWPX (editable)"
 #: viewer/convert/__init__.py
 msgid "한글 HWPX (모양 그대로)"
 msgstr "Hangul HWPX (keep appearance)"
+
+#: viewer/convert/__init__.py
+msgid "PowerPoint (모양 그대로)"
+msgstr "PowerPoint (keep appearance)"
 
 #: viewer/convert/__init__.py
 msgid "Excel (표)"

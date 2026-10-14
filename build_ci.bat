@@ -181,6 +181,7 @@ python -m PyInstaller ^
     --collect-all kiwipiepy_model ^
     --collect-all docx ^
     --collect-all hwpx ^
+    --collect-all pptx ^
     --collect-all lameenc ^
     --collect-submodules viewer ^
     --add-data "resources;resources" ^

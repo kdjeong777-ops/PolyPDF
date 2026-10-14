@@ -153,7 +153,9 @@ class PdfIndex:
     # --- 스키마 ------------------------------------------------------------
 
     # 260825: FTS 토크나이저 스키마 버전. 2=trigram(파괴적, 폐기), 3=trigram(내용 보존 복사).
-    SCHEMA_VERSION = 3
+    # 261014-19: 4 = 표 캐시(`page_tables`)를 한 번 비운다 — 공유 pdfplumber 문서를 여러 스레드가 동시에 써
+    #   깨진 표가 저장돼 있을 수 있다(텍스트 창 SOT §3 규칙 8). 캐시라 지워도 안전하다(다시 판다).
+    SCHEMA_VERSION = 4
     YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(응답성 SOT §4 ②)
     # 260908-5(응답성 SOT §4 ⑦): 간격이 아니라 **점유율**로 조절한다.
     #   5ms 간격만으로는 쪽 하나가 무거울 때 배경이 벽시계를 거의 다 쓴다 —
@@ -259,6 +261,11 @@ class PdfIndex:
                     self.migrated = True
             except Exception:
                 pass
+            if uv < 4:
+                try:
+                    self.conn.execute("DELETE FROM page_tables")
+                except Exception:
+                    pass
             self.conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
         self.conn.commit()
 

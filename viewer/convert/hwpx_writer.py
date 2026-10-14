@@ -20,7 +20,6 @@ LINE_PCT = 100             # 모양 그대로의 줄 간격(%) — 줄 높이 = 
 SPACING_MIN, SPACING_MAX = -50, 50      # 한글 자간 범위(%)
 HWP_WIDTH_K = 1.055        # 한글이 그리는 너비 ÷ 같은 글꼴 파일로 잰 너비(실측 261014-15: 바탕 영문 1.060·한글 1.047, 맑은 고딕 1.057·1.042)
 ANCHOR_PT = 1.0            # 띄운 그림·표를 붙든 문단(쪽의 첫 문단)의 글자 크기 — 줄 높이를 거의 차지하지 않게
-GAP_SPACES_MAX = 60        # 나란한 줄 사이를 벌리는 빈칸 수 상한
 
 
 def _u(pt: float) -> int:
@@ -293,38 +292,6 @@ def _float(el, x_pt: float, y_pt: float) -> None:
             break
 
 
-def _bands(lines) -> list:
-    """같은 높이에 나란히 놓인 줄을 한 묶음으로(2단·칸 맞춤). 위에서 아래 차례."""
-    pos = sorted((b for b in lines if b.get("rect")), key=lambda b: ((b["rect"][1] + b["rect"][3]) / 2, b["rect"][0]))
-    bands = []
-    for b in pos:
-        cy = (b["rect"][1] + b["rect"][3]) / 2
-        if bands:
-            last = bands[-1]
-            lcy = (last[0]["rect"][1] + last[0]["rect"][3]) / 2
-            tol = 0.4 * min(b["size"], last[0]["size"])
-            if abs(cy - lcy) <= tol and all(b["rect"][0] >= q["rect"][2] - 1 or b["rect"][2] <= q["rect"][0] + 1 for q in last):
-                last.append(b)
-                continue
-        bands.append([b])
-    for band in bands:
-        band.sort(key=lambda q: q["rect"][0])
-    return bands
-
-
-def _band_text(band):
-    """묶음 → (글, 왼쪽 x, 원본 너비, 크기, 굵음, 세리프). 사이 빈 곳은 빈칸으로."""
-    size = max(q["size"] for q in band)
-    serif = band[0]["serif"]
-    text = band[0]["text"]
-    for prev, q in zip(band, band[1:]):
-        gap = q["rect"][0] - prev["rect"][2]
-        sp = layout.measure(" ", size, serif) or size * 0.3
-        text += " " * max(1, min(GAP_SPACES_MAX, int(round(gap / max(0.5, sp))))) + q["text"]
-    bold = sum(len(q["text"]) for q in band if q["bold"]) * 2 >= sum(len(q["text"]) for q in band)
-    return text, band[0]["rect"][0], band[-1]["rect"][2] - band[0]["rect"][0], size, bold, serif
-
-
 def _spacing(text: str, width: float, size: float, serif: bool) -> int:
     """원본 줄 너비에 맞춘 자간(%). 한글의 자간은 **그 줄 제 너비의 %** 로 든다(자간 −10 → 너비 0.90배, 영문·한글 같음)
     — (원본 너비 ÷ 한글이 그릴 너비 − 1) × 100. 한글이 그릴 너비 = 그 글꼴로 잰 너비 × `HWP_WIDTH_K`. 못 재면 0."""
@@ -407,8 +374,8 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
                                    char_pr_id_ref=anchor_run)
                 _fill_table(t, rows)
                 _float(t.element, x0, y0)
-        for band in _bands([b for b in blocks if b["kind"] == "line"]):
-            text, x0, width, size, bold, serif = _band_text(band)
+        for band in layout.bands([b for b in blocks if b["kind"] == "line"]):
+            text, x0, width, size, bold, serif = layout.band_text(band)
             lh = size * LINE_PCT / 100.0
             cy = sum((q["rect"][1] + q["rect"][3]) / 2 for q in band) / len(band)
             top = cy - lh / 2

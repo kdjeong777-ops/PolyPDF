@@ -1112,6 +1112,10 @@ _PLUMB = {"key": None, "pdf": None}
 #   `_edited.pdf` 로 빠지던 원인이었다(실측: gc 를 돌리면 풀렸다).
 import threading as _threading
 _PLUMB_LOCK = _threading.RLock()
+# 261014-19(SOT §3 규칙 8): **읽기**는 한 번에 한 스레드 — 여닫기 잠금(`_PLUMB_LOCK`)과 따로 둔다. 메인이 부르는
+#   `close_cache()` 가 배경의 긴 표 찾기(쪽당 최대 수 초)를 기다리며 서지 않게, 읽는 중이면 닫기를 읽는 쪽에 넘긴다.
+_PLUMB_USE = _threading.Lock()
+_PLUMB_PENDING = []        # 읽는 중이라 못 닫은 핸들 — 읽던 스레드가 끝나고 닫는다
 _TCACHE = {}          # (파일키, 쪽) -> [(bbox, rows)]
 _TCACHE_MAX = 64
 
@@ -1137,15 +1141,31 @@ def _plumber(pdf_path):
 
 
 def close_cache() -> None:
-    """열어 둔 핸들·표 결과를 놓는다. 파일을 지우거나 덮어쓰기 전에 부른다."""
+    """열어 둔 핸들·표 결과를 놓는다. 파일을 지우거나 덮어쓰기 전에 부른다.
+    배경이 그 핸들로 읽는 중이면 기다리지 않고 읽는 쪽이 끝난 뒤 닫는다(SOT §3 규칙 8)."""
     with _PLUMB_LOCK:
         pdf = _PLUMB.get("pdf")
         _PLUMB["pdf"] = None
         _PLUMB["key"] = None
         _TCACHE.clear()
-    if pdf is not None:
+    if pdf is None:
+        return
+    if _PLUMB_USE.acquire(blocking=False):
         try:
             pdf.close()
+        except Exception:
+            pass
+        finally:
+            _PLUMB_USE.release()
+    else:
+        _PLUMB_PENDING.append(pdf)
+
+
+def _close_pending() -> None:
+    """`_PLUMB_USE` 를 쥔 스레드가 부른다 — 읽는 동안 미뤄 둔 닫기."""
+    while _PLUMB_PENDING:
+        try:
+            _PLUMB_PENDING.pop().close()
         except Exception:
             pass
 
@@ -1178,20 +1198,32 @@ def _tables(pdf_path, page_index: int, *, cached_only: bool = False, plumber=Non
         return []
     out = []
     failed = False
+    # 261014-19(SOT §3 규칙 8): 공유 핸들은 **한 번에 한 스레드만** 읽는다 — 텍스트 창과 앞뒤 쪽 미리 읽기가 같은 pdfminer
+    #   문서를 동시에 읽으면 표가 조용히 깨졌다(실측 60번 중 51~60번 틀림, 예외 없이). 자기 문서(`plumber=`)는 잠그지 않는다.
+    import contextlib
+    guard = _PLUMB_USE if plumber is None else contextlib.nullcontext()
     try:
-        pg = _plumber_page(pdf, pdf_path, int(page_index))
-        if pg is not None:
-            for t in pg.find_tables():
-                rows = t.extract() or []
-                if rows:
-                    out.append((tuple(t.bbox), rows))
-            try:
-                pg.flush_cache()            # 쪽마다 붙잡는 메모리를 놓는다
-            except Exception:
-                pass
+        with guard:
+            pg = _plumber_page(pdf, pdf_path, int(page_index))
+            if pg is not None:
+                for t in pg.find_tables():
+                    rows = t.extract() or []
+                    if rows:
+                        out.append((tuple(t.bbox), rows))
+                try:
+                    pg.flush_cache()            # 쪽마다 붙잡는 메모리를 놓는다
+                except Exception:
+                    pass
+            if plumber is None:
+                _close_pending()
     except Exception:
         out = []
         failed = True
+        if plumber is None and _PLUMB_USE.acquire(blocking=False):
+            try:
+                _close_pending()
+            finally:
+                _PLUMB_USE.release()
     if failed:
         # 261014-12(SOT §3 규칙 6): 예외(핸들이 닫힘 등)는 '표 없음' 이 아니다 — 캐시·page_tables 에 남기지 않는다.
         #   종전에는 [] 를 영구 저장해 파일이 바뀌기 전까지 그 쪽 표가 사라졌다.
