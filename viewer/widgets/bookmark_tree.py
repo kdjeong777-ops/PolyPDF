@@ -209,6 +209,7 @@ class BookmarkTree(QWidget):
     translateFileRequested = pyqtSignal(str)    # 260621-P0: 파일 우클릭 '번역'(단일)
     flattenFileRequested = pyqtSignal(str)      # 260930-2(§4.7.13): 파일 우클릭 '평탄화해서 내보내기'(261011-2 이름)
     saveAsFileRequested = pyqtSignal(str)       # 261008-1(§4.7.13): 파일 우클릭 '다른 이름으로 저장'
+    convertFilesRequested = pyqtSignal(object, str)  # 261014-11(형식 변환 SOT §2.1): ([파일], 형식 키)
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
@@ -2425,6 +2426,21 @@ class BookmarkTree(QWidget):
             act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
             act_flatten.setToolTip(
                 tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
+            # 261014-11(형식 변환 SOT §2.1): 저장 그룹 아래 '변환 ▸' — 여러 파일을 골랐으면 그 파일들 일괄
+            try:
+                from viewer import convert as _cv
+                _conv_files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
+                if _dir_target not in _conv_files:
+                    _conv_files = [_dir_target]
+                _cm = menu.addMenu(tr("변환") if len(_conv_files) == 1
+                                   else tr('변환 ({n}개 파일)').format(n=len(_conv_files)))
+                for _f in _cv.ready_formats():
+                    _a = _cm.addAction(tr(_f.label))
+                    # 변환 창은 메뉴가 닫힌 뒤에(§4.7.11 '메뉴 안에서 모달 창')
+                    _a.triggered.connect(lambda _=False, k=_f.key, fs=list(_conv_files): QTimer.singleShot(
+                        0, lambda: self.convertFilesRequested.emit(fs, k)))
+            except Exception:
+                pass
             menu.addSeparator()
         # 260618-27: 1단=‘2단 보기’(진입), 2단=이 창 기준 반대 창으로 복사
         #   상단(1창)='2창으로 복사', 하단(2창)='1창으로 복사'.

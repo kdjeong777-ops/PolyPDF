@@ -52,6 +52,7 @@ from viewer.print_controller import PrintMixin
 from viewer.study_controller import StudyMixin
 from viewer.update_controller import UpdateMixin
 from viewer.sign_controller import SignMixin
+from viewer.convert_controller import ConvertMixin   # 261014-11(형식 변환 SOT §2)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -114,7 +115,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -1401,6 +1402,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._btn_build_study = mk(tr("단어장 생성"), tr("도구 → 단어장 생성"), self._action_build_study)
         mk(tr("책갈피 생성"), tr("도구 → 책갈피 자동 생성"), self.action_open_bookmarker)
         self._btn_merge = mk(tr("PDF병합"), tr("도구 → PDF 병합"), lambda: self._on_merge_files(None))
+        # 261014-11(형식 변환 SOT §2.1, 사용자 결정): 누르면 변환 창 — 형식은 창에서 고른다
+        self._btn_convert = mk(tr("변환"), tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"), lambda: self.action_convert())
         self._btn_img2pdf = mk(tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"),
                                lambda: self.action_image_to_pdf())  # 260825-13
         self._btn_shot_pdf = mk(tr("스크린샷 PDF 저장"), tr("스크린샷 전체를 PDF로"), self.action_save_screenshot_pdf)
@@ -1566,6 +1569,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_flat.setToolTip(tr("꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."))
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
+        # 261014-11(형식 변환 SOT §2.1): 내보내기 ▸ 형식 — 본문에 열린 파일
+        self.menu_export = self.convert_format_menu(self, tr("내보내기"), lambda k: self.action_convert(fmt=k))
+        m_file.addMenu(self.menu_export)
         m_file.addSeparator()
 
         # 260603-3: 인쇄
@@ -1646,6 +1652,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._ko_only_acts.append(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study))
         _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker)
         a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None))
+        _act(tr("변환..."), lambda: self.action_convert())     # 261014-11(디자인 SOT §2.9.1 — 패널과 같은 차례)
         _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf())  # 260825-13
         _act(tr("스크린샷 PDF 저장..."), self.action_save_screenshot_pdf)
         _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf)
@@ -2174,6 +2181,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.saveAsFileRequested.connect(
                 lambda f, b=_bt: self._action_save_as(bt=b, file_path=f))
         self.bookmark_tree.editGlossaryRequested.connect(self._action_edit_glossary)  # 260623
+        # 261014-11(형식 변환 SOT §2.1): 책갈피창 우클릭 '변환 ▸'(여러 파일이면 일괄) · 썸네일 '선택한 쪽 변환 ▸'
+        for _bt in (self.bookmark_tree, self.bookmark_tree_right):
+            _bt.convertFilesRequested.connect(lambda files, k: self.action_convert(files=files, fmt=k))
+        self.page_thumbs.convertPagesRequested.connect(
+            lambda pages, k: self.action_convert(
+                files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,
+                fmt=k, pages=pages))
         self.bookmark_tree.translateFilesRequested.connect(self._action_translate_files)  # 260621-P0
         # 260606-22: 책갈피 편집모드 ↔ 썸네일 페이지 편집(삭제/이동) 동기화
         self.bookmark_tree.btn_edit.toggled.connect(self.page_thumbs.set_edit_mode)

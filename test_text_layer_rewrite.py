@@ -116,9 +116,11 @@ try:
         "① 텍스트 창은 본문과 **같은 규칙**(종전: 다시 읽힌 쪽만 우리 OCR)")
     # 261014-5(텍스트 창 SOT §7): Word 저장은 배경 스레드라 메인 전용 `_view_ocr_words` 대신 **같은 판단 함수**를 직접 부른다
     #   (`[OCR 다시 읽기]` 한 쪽은 `forced_pages` 로 넘긴다).
-    jsrc = inspect.getsource(text_word.export_docx_job)
+    #   261014-11: 문서·OCR 판단은 형식 변환과 같은 `PageSource` 가 맡는다(길 하나).
+    from viewer.convert.source import PageSource
+    jsrc = inspect.getsource(text_word.export_docx_job) + inspect.getsource(PageSource.ocr_words)
     chk("words_lookup" in inspect.getsource(text_word.export_pages_to_docx)
-        and "pick_ocr_words" in jsrc and "forced=" in jsrc
+        and "PageSource" in jsrc and "pick_ocr_words" in jsrc and "forced=" in jsrc
         and "forced_pages=forced" in inspect.getsource(MainWindow._on_text_export_word),
         "① Word 저장도 같은 원천")
 

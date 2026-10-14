@@ -40,15 +40,16 @@ def norm_key(p) -> str:
         return str(p)
 
 
-def unique_path(target) -> Path:
+def unique_path(target, first: int = 1) -> Path:
     """`target` 이 이미 있으면 'name (1).ext', 'name (2).ext' … 로 회피(Windows 방식).
 
+    `first` 는 처음 붙일 번호 — 형식 변환은 2부터(형식 변환 SOT §2.3, 261014-11 사용자 결정).
     반환은 항상 `Path`. 문자열이 필요하면 호출측에서 `str()`."""
     t = Path(target)
     if not t.exists():
         return t
     parent, stem, suffix = t.parent, t.stem, t.suffix
-    i = 1
+    i = int(first)
     while True:
         cand = parent / f"{stem} ({i}){suffix}"
         if not cand.exists():

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 10:38+0900\n"
+"POT-Creation-Date: 2026-10-14 11:31+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -245,7 +245,7 @@ msgstr ""
 msgid "2단 보기(쪽 맞춤)"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/convert/__init__.py
 msgid "텍스트"
 msgstr ""
 
@@ -341,6 +341,15 @@ msgstr ""
 msgid "도구 → PDF 병합"
 msgstr ""
 
+#: viewer/app.py viewer/convert_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/convert_dialog.py
+msgid "변환"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
+msgstr ""
+
 #: viewer/app.py
 msgid "이미지→PDF"
 msgstr ""
@@ -412,6 +421,10 @@ msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥�
 msgstr ""
 
 #: viewer/app.py
+msgid "내보내기"
+msgstr ""
+
+#: viewer/app.py
 msgid "인쇄..."
 msgstr ""
 
@@ -465,6 +478,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "PDF 병합..."
+msgstr ""
+
+#: viewer/app.py
+msgid "변환..."
 msgstr ""
 
 #: viewer/app.py
@@ -1691,8 +1708,8 @@ msgstr ""
 msgid "책갈피 {n}개 추가 — 책갈피창 편집(✏)에서 저장(💾)해야 PDF 에 들어갑니다."
 msgstr ""
 
-#: viewer/app.py viewer/widgets/ocr_options_dialog.py
-#: viewer/widgets/sign_dialogs.py
+#: viewer/app.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/ocr_options_dialog.py viewer/widgets/sign_dialogs.py
 msgid "쪽 범위"
 msgstr ""
 
@@ -2692,6 +2709,70 @@ msgstr ""
 #: viewer/components.py
 #, python-brace-format
 msgid "압축 해제 실패: {e}"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "Word (편집 가능)"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "Word (모양 그대로)"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "한글 HWPX (편집 가능)"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "한글 HWPX (모양 그대로)"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "Excel (표)"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "이미지 (PNG)"
+msgstr ""
+
+#: viewer/convert_controller.py
+msgid "변환할 PDF 를 먼저 여세요."
+msgstr ""
+
+#: viewer/convert_controller.py
+msgid "변환을 취소했습니다 — 만들던 파일은 지웠습니다."
+msgstr ""
+
+#: viewer/convert_controller.py
+msgid "썸네일에서 바꾼 쪽 순서·삭제·끼운 쪽을 먼저 저장한 뒤 변환하세요."
+msgstr ""
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "변환했습니다: {name}"
+msgstr ""
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "변환: {path}"
+msgstr ""
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "{name}: {why}"
+msgstr ""
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "변환 {ok}개 · 실패 {bad}개"
+msgstr ""
+
+#: viewer/convert_controller.py
+msgid "폴더를 열까요?"
+msgstr ""
+
+#: viewer/convert_controller.py
+msgid "표가 없습니다"
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -4336,7 +4417,7 @@ msgstr ""
 msgid "PDF 찾는 중..."
 msgstr ""
 
-#: viewer/widgets/bookmark_tree.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/convert_dialog.py
 msgid "형식"
 msgstr ""
 
@@ -4949,6 +5030,11 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "변환 ({n}개 파일)"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "옮기는 중: {name}"
 msgstr ""
 
@@ -5176,6 +5262,42 @@ msgstr ""
 #: viewer/widgets/content_find_overlay.py
 #, python-brace-format
 msgid "{lbl} 내용 검색"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+msgid "범위"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py viewer/widgets/text_panel.py
+msgid "문서 전체"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+msgid "예: 3-12 또는 1,4,7-9"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+msgid "형식을 고르세요."
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "대상: {name}"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "대상: {n}개 파일"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "고른 쪽 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "쪽 범위는 1~{n} 안에서 3-12 처럼 적어 주세요."
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py
@@ -8897,10 +9019,6 @@ msgid "쪽 범위…"
 msgstr ""
 
 #: viewer/widgets/text_panel.py
-msgid "문서 전체"
-msgstr ""
-
-#: viewer/widgets/text_panel.py
 #, python-brace-format
 msgid "p.{page} · {n}줄 (제목 {n_t}"
 msgstr ""
@@ -9024,6 +9142,11 @@ msgstr ""
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
 msgid "클립보드 사진 새쪽 붙이기 — {w}{v}"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "선택한 쪽 변환 ({n}쪽)"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py

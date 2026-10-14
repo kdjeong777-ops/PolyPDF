@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 10:38+0900\n"
+"POT-Creation-Date: 2026-10-14 11:31+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -244,7 +244,7 @@ msgstr "Split"
 msgid "2단 보기(쪽 맞춤)"
 msgstr "Split view (fit page)"
 
-#: viewer/app.py
+#: viewer/app.py viewer/convert/__init__.py
 msgid "텍스트"
 msgstr "Text"
 
@@ -340,6 +340,15 @@ msgstr "Merge PDFs"
 msgid "도구 → PDF 병합"
 msgstr "Tools → Merge PDFs"
 
+#: viewer/app.py viewer/convert_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/convert_dialog.py
+msgid "변환"
+msgstr "Convert"
+
+#: viewer/app.py
+msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
+msgstr "Convert the PDF to Word, Hangul, Excel, images or text"
+
 #: viewer/app.py
 msgid "이미지→PDF"
 msgstr "Images→PDF"
@@ -412,6 +421,10 @@ msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥�
 msgstr "Exports a new PDF with annotations, photos and hyperlinks flattened into the page and content outside the crop really removed (the original is untouched). Signed documents are signed again at the same places."
 
 #: viewer/app.py
+msgid "내보내기"
+msgstr "Export"
+
+#: viewer/app.py
 msgid "인쇄..."
 msgstr "Print..."
 
@@ -466,6 +479,10 @@ msgstr "Generate Bookmarks Automatically..."
 #: viewer/app.py
 msgid "PDF 병합..."
 msgstr "Merge PDFs..."
+
+#: viewer/app.py
+msgid "변환..."
+msgstr "Convert..."
 
 #: viewer/app.py
 msgid "이미지 → PDF 변환..."
@@ -1737,8 +1754,8 @@ msgstr "Applied to the text layer — {name} · {n} pages"
 msgid "책갈피 {n}개 추가 — 책갈피창 편집(✏)에서 저장(💾)해야 PDF 에 들어갑니다."
 msgstr "{n} bookmarks added — save (💾) in the bookmarks panel edit mode (✏) to put them in the PDF."
 
-#: viewer/app.py viewer/widgets/ocr_options_dialog.py
-#: viewer/widgets/sign_dialogs.py
+#: viewer/app.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/ocr_options_dialog.py viewer/widgets/sign_dialogs.py
 msgid "쪽 범위"
 msgstr "Page Range"
 
@@ -2810,6 +2827,70 @@ msgstr "tesseract.zip asset not found in the release."
 #, python-brace-format
 msgid "압축 해제 실패: {e}"
 msgstr "Extraction failed: {e}"
+
+#: viewer/convert/__init__.py
+msgid "Word (편집 가능)"
+msgstr "Word (editable)"
+
+#: viewer/convert/__init__.py
+msgid "Word (모양 그대로)"
+msgstr "Word (keep appearance)"
+
+#: viewer/convert/__init__.py
+msgid "한글 HWPX (편집 가능)"
+msgstr "Hangul HWPX (editable)"
+
+#: viewer/convert/__init__.py
+msgid "한글 HWPX (모양 그대로)"
+msgstr "Hangul HWPX (keep appearance)"
+
+#: viewer/convert/__init__.py
+msgid "Excel (표)"
+msgstr "Excel (tables)"
+
+#: viewer/convert/__init__.py
+msgid "이미지 (PNG)"
+msgstr "Images (PNG)"
+
+#: viewer/convert_controller.py
+msgid "변환할 PDF 를 먼저 여세요."
+msgstr "Open a PDF to convert first."
+
+#: viewer/convert_controller.py
+msgid "변환을 취소했습니다 — 만들던 파일은 지웠습니다."
+msgstr "Conversion cancelled — the partly written file was removed."
+
+#: viewer/convert_controller.py
+msgid "썸네일에서 바꾼 쪽 순서·삭제·끼운 쪽을 먼저 저장한 뒤 변환하세요."
+msgstr "Save the page order, deletions and inserted pages from the thumbnails first, then convert."
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "변환했습니다: {name}"
+msgstr "Converted: {name}"
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "변환: {path}"
+msgstr "Converted: {path}"
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "{name}: {why}"
+msgstr "{name}: {why}"
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "변환 {ok}개 · 실패 {bad}개"
+msgstr "Converted {ok} · failed {bad}"
+
+#: viewer/convert_controller.py
+msgid "폴더를 열까요?"
+msgstr "Open the folder?"
+
+#: viewer/convert_controller.py
+msgid "표가 없습니다"
+msgstr "No tables found"
 
 #: viewer/edit_controller.py
 msgid "선긋기 적용"
@@ -4532,7 +4613,7 @@ msgstr "Edit bookmark name (single edit: title · page)"
 msgid "PDF 찾는 중..."
 msgstr "Finding PDFs..."
 
-#: viewer/widgets/bookmark_tree.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/convert_dialog.py
 msgid "형식"
 msgstr "Format"
 
@@ -5177,6 +5258,11 @@ msgstr "Failed to read bookmarks.json: {e}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "변환 ({n}개 파일)"
+msgstr "Convert ({n} files)"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "옮기는 중: {name}"
 msgstr "Moving: {name}"
 
@@ -5411,6 +5497,42 @@ msgstr "Body"
 #, python-brace-format
 msgid "{lbl} 내용 검색"
 msgstr "Search {lbl} content"
+
+#: viewer/widgets/convert_dialog.py
+msgid "범위"
+msgstr "Range"
+
+#: viewer/widgets/convert_dialog.py viewer/widgets/text_panel.py
+msgid "문서 전체"
+msgstr "Whole document"
+
+#: viewer/widgets/convert_dialog.py
+msgid "예: 3-12 또는 1,4,7-9"
+msgstr "e.g. 3-12 or 1,4,7-9"
+
+#: viewer/widgets/convert_dialog.py
+msgid "형식을 고르세요."
+msgstr "Choose a format."
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "대상: {name}"
+msgstr "File: {name}"
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "대상: {n}개 파일"
+msgstr "Files: {n}"
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "고른 쪽 ({n}쪽)"
+msgstr "Selected pages ({n})"
+
+#: viewer/widgets/convert_dialog.py
+#, python-brace-format
+msgid "쪽 범위는 1~{n} 안에서 3-12 처럼 적어 주세요."
+msgstr "Enter a page range within 1–{n}, such as 3-12."
 
 #: viewer/widgets/crop_dialog.py
 msgid "세로긴 쪽"
@@ -9166,10 +9288,6 @@ msgid "쪽 범위…"
 msgstr "Page range…"
 
 #: viewer/widgets/text_panel.py
-msgid "문서 전체"
-msgstr "Whole document"
-
-#: viewer/widgets/text_panel.py
 #, python-brace-format
 msgid "p.{page} · {n}줄 (제목 {n_t}"
 msgstr "p.{page} · {n} lines (headings {n_t}"
@@ -9294,6 +9412,11 @@ msgstr "after p.{r}"
 #, python-brace-format
 msgid "클립보드 사진 새쪽 붙이기 — {w}{v}"
 msgstr "Paste Clipboard Photo as New Page — {w}{v}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "선택한 쪽 변환 ({n}쪽)"
+msgstr "Convert selected pages ({n})"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format

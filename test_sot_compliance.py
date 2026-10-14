@@ -147,6 +147,7 @@ OWNER_RULES = [
     (("test_i18n_",), "다국어(언어팩)"),
     (("test_release_",), "릴리스"),
     (("test_security_",), "문서 보안"),
+    (("test_convert_",), "형식 변환"),
 ]
 
 
@@ -189,6 +190,7 @@ if HAVE_SOT:
         "이미지 PDF 변환": "이미지 PDF 변환 작업 계획서.md",
         "영상 및 음성": "영상 및 음성 작업 계획서.md",
         "파일 태그·키워드": "파일 태그·키워드 작업 계획서.md",
+        "형식 변환": "형식 변환 작업 계획서.md",
     }
     for owner, sot_name in NAMED.items():
         txt = SOTS.get(sot_name, "")

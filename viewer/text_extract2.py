@@ -1105,7 +1105,7 @@ def close_cache() -> None:
             pass
 
 
-def _tables(pdf_path, page_index: int, *, cached_only: bool = False):
+def _tables(pdf_path, page_index: int, *, cached_only: bool = False, plumber=None):
     """[(bbox, rows)] — pdfplumber 로 찾은 표. 없거나 실패하면 빈 목록.
 
     260908-5: 캐시를 **두 겹**으로 본다. ① 이번 실행의 메모리(`_TCACHE`), ② index.db 의
@@ -1126,10 +1126,13 @@ def _tables(pdf_path, page_index: int, *, cached_only: bool = False):
         #   둘 다 GIL 을 오래 쥐어 겹치면 창이 굼떠진다. 인덱싱이 끝나면 다시 부른다.
         #   결과를 캐시에 넣지 않는 것이 요점이다(다음 호출이 제대로 파도록).
         return []
-    pdf = _plumber(pdf_path)
+    # 261014-12(SOT §3 규칙 6): 여러 쪽을 이어 읽는 배경 작업은 자기 pdfplumber 문서를 준다 — 공유 핸들은
+    #   다른 스레드의 `close_cache()` 로 언제든 닫힌다.
+    pdf = plumber if plumber is not None else _plumber(pdf_path)
     if pdf is None:
         return []
     out = []
+    failed = False
     try:
         if page_index < len(pdf.pages):
             pg = pdf.pages[page_index]
@@ -1143,6 +1146,11 @@ def _tables(pdf_path, page_index: int, *, cached_only: bool = False):
                 pass
     except Exception:
         out = []
+        failed = True
+    if failed:
+        # 261014-12(SOT §3 규칙 6): 예외(핸들이 닫힘 등)는 '표 없음' 이 아니다 — 캐시·page_tables 에 남기지 않는다.
+        #   종전에는 [] 를 영구 저장해 파일이 바뀌기 전까지 그 쪽 표가 사라졌다.
+        return []
     if len(_TCACHE) > _TCACHE_MAX:
         _TCACHE.clear()
     _TCACHE[ck] = out

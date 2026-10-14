@@ -81,6 +81,7 @@ class PageThumbs(QWidget):
     pastePagesRequested = pyqtSignal(int)          # 260821: 붙여넣기(기준 표시행 뒤에 삽입)
     pageOrderChanged = pyqtSignal()                # 260915-1: 쪽 이동·삭제·끌어 놓기·붙여넣기(미저장 순서 변경)
     cropPagesRequested = pyqtSignal(object)        # 261010-7(§4.7.15): 고른 쪽으로 크롭 창
+    convertPagesRequested = pyqtSignal(object, str)  # 261014-11(형식 변환 SOT §2.1): (고른 쪽 0-based, 형식 키)
     uncropPagesRequested = pyqtSignal(object)      # 261010-7(§4.7.15): 고른 쪽 크롭 해제
     addImagePagesRequested = pyqtSignal(int, object)  # 260930-1(§4.7.11): (기준행, [그림경로…]) 새 쪽으로
     imageDropRefused = pyqtSignal()                # 260930-1(§4.7.11): 편집모드가 아니라 받지 않았다
@@ -830,6 +831,17 @@ class PageThumbs(QWidget):
         if self._doc is not None and sel_print:
             act_copy = menu.addAction(tr('선택 페이지 복사 ({n}쪽)').format(n=len(sel_print)))
         # 261010-7(마스터 §4.7.15): 크롭 — PDF 를 바로 저장하는 일이라 편집 모드와 무관하게(저장 확인은 앱이)
+        # 261014-11(형식 변환 SOT §2.1·§2.2): '선택한 쪽 변환 ▸' — 저장 전 쪽 편집이 있으면 앱이 먼저 저장하라고 알린다
+        if self._doc is not None and sel_print:
+            try:
+                from viewer import convert as _cv
+                _cm = menu.addMenu(tr('선택한 쪽 변환 ({n}쪽)').format(n=len(sel_print)))
+                for _f in _cv.ready_formats():
+                    _a = _cm.addAction(tr(_f.label))
+                    _a.triggered.connect(lambda _=False, k=_f.key, ps=list(sel_print): QTimer.singleShot(
+                        0, lambda: self.convertPagesRequested.emit(ps, k)))
+            except Exception:
+                pass
         act_crop = act_uncrop = None
         if self._doc is not None and sel_print:
             act_crop = menu.addAction(tr('크롭… ({n}쪽)').format(n=len(sel_print)))
