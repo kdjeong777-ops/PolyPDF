@@ -65,17 +65,24 @@ try:
     import viewer.text_word as tw
     real = tw.export_pages_to_docx
 
+    import inspect as _insp
+    _has_prog = "progress" in _insp.signature(real).parameters   # 수정 전 코드에도 같은 조건으로 돌게
+
     def spy(*a, **k):
         threads.append(threading.current_thread() is threading.main_thread())
+        if not _has_prog:
+            time.sleep(0.15 * len(a[2]))                 # 쪽마다 쉬는 것과 같은 시간을 한 번에
+            return real(*a, **k)
         prog = k.get("progress")
 
         def slow(i, n, lbl):                         # 쪽마다 조금 쉬어 메인 루프가 도는지 볼 시간을 만든다
-            time.sleep(0.05)
+            time.sleep(0.15)
             return prog(i, n, lbl) if prog else True
         k["progress"] = slow
         return real(*a, **k)
     tw.export_pages_to_docx = spy
     hb = QTimer(); hb.timeout.connect(lambda: beats.append(time.monotonic())); hb.start(20)
+    spin(5)                                           # 저장 **전** 박동을 쌓는다 — 없으면 메인이 선 구간이 틈으로 안 잡힌다
 
     dst = root / "out.docx"
     QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(dst), ""))
