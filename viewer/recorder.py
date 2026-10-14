@@ -21,6 +21,18 @@ from viewer.i18n import tr
 CREATE_NO_WINDOW = 0x08000000
 
 
+FFMPEG_MIN_BYTES = 5 * 1024 * 1024   # 이보다 작은 ffmpeg.exe 는 진짜가 아니다(choco shim 392 KB, 진짜 정적 빌드 ~100 MB)
+
+
+def real_ffmpeg(path) -> bool:
+    """진짜 ffmpeg 인가 — 261014-31: CI 배포본에 choco **shim**(다른 경로를 가리키는 작은 실행 파일)이 들어가 녹화가
+    `Cannot find file at '..\\lib\\ffmpeg\\…'` 로 바로 끝났다. 크기로 거른다(실행해 보면 메인이 선다 — 응답성 SOT §6)."""
+    try:
+        return bool(path) and os.path.isfile(path) and os.path.getsize(path) >= FFMPEG_MIN_BYTES
+    except OSError:
+        return False
+
+
 def find_ffmpeg(configured: str = "") -> str:
     cands = []
     if configured:
@@ -40,10 +52,10 @@ def find_ffmpeg(configured: str = "") -> str:
     except Exception:
         pass
     for c in cands:
-        if c and os.path.isfile(c):
+        if real_ffmpeg(c):
             return c
     w = shutil.which("ffmpeg")
-    return w or ""
+    return w if real_ffmpeg(w) else ""
 
 
 def _list_devices_text(ffmpeg: str) -> str:

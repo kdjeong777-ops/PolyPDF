@@ -30,12 +30,29 @@ jobs:
           pip install pyinstaller pillow
 
       # --- 선택: 전체 기능(OCR/녹화)용 바이너리 동봉. 실패해도 핵심 뷰어는 빌드됨 ---
-      - name: Stage ffmpeg (recording) — optional
+      # 261014-31: 종전에는 `Get-Command ffmpeg` 가 돌려준 **choco shim**(392 KB — ..\lib\ffmpeg\… 를 가리키는 작은 실행 파일)을
+      #   복사해, CI 로 만든 모든 배포본의 녹화가 `Cannot find file at '..\lib\ffmpeg\…'` 로 즉시 끝났다(설치 시험 뒤 녹화 시험에서 발견).
+      #   이제 우리 `components` 릴리스의 진짜 ffmpeg.exe(마스터 §14.5 U16)를 먼저, 안 되면 choco 의 실제 파일을 쓰고, 실행되는지 확인한다.
+      - name: Stage ffmpeg (recording)
         continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          choco install ffmpeg -y --no-progress
-          $ff = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
-          if ($ff) { Copy-Item $ff ".\ffmpeg.exe" -Force; echo "ffmpeg staged" }
+          gh release download components -R $env:GITHUB_REPOSITORY -p ffmpeg.exe -D .\_ff --clobber
+          if (Test-Path .\_ff\ffmpeg.exe) { Copy-Item .\_ff\ffmpeg.exe .\ffmpeg.exe -Force; Remove-Item .\_ff -Recurse -Force }
+          if (-not (Test-Path .\ffmpeg.exe)) {
+            choco install ffmpeg -y --no-progress
+            $real = Get-ChildItem "C:\ProgramData\chocolatey\lib\ffmpeg" -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue |
+                    Sort-Object Length -Descending | Select-Object -First 1
+            if ($real) { Copy-Item $real.FullName .\ffmpeg.exe -Force }
+          }
+          if (Test-Path .\ffmpeg.exe) {
+            & .\ffmpeg.exe -hide_banner -version | Select-Object -First 1
+            if ($LASTEXITCODE -ne 0 -or (Get-Item .\ffmpeg.exe).Length -lt 5MB) {
+              Remove-Item .\ffmpeg.exe -Force; echo "::warning::ffmpeg 가 실행되지 않아 넣지 않는다(녹화는 구성요소 설치로)"
+            } else { echo "ffmpeg staged: $((Get-Item .\ffmpeg.exe).Length) bytes" }
+          }
 
       # 260910(사용자 보고 "빌드된 것에 kor 이 없어 한국어 OCR 이 안 된다", 단어학습 SOT §14.13)
       #   `tesseract/` 는 .gitignore 라 체크아웃에 없다 → CI 가 **스스로 마련해야** 한다.
