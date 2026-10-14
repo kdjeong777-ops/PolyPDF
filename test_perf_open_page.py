@@ -110,6 +110,10 @@ print("GAP", round(g["worst"], 3), r1, r2)
     import tempfile, shutil as _sh
     from viewer.indexer import PdfIndex
     _td = tempfile.mkdtemp(prefix="polypdf_pref_")
+    from pathlib import Path as _P
+    # 261014-4: 표본은 기록을 켜기 **전에** 만든다 — 캐시가 없으면(검사마다 새 임시 폴더, 마스터 §14.8.1) 표본을 만드는
+    #   `fitz.open` 이 맨 앞에 기록돼 E 가 늘 실패했다(종전에는 사용자 임시 폴더의 캐시가 가렸다).
+    src = _P(fx.text_pdf())
     order = []
     ix = PdfIndex(os.path.join(_td, "index.db"))
     _orig_pref = PdfIndex._prefetch if hasattr(PdfIndex, "_prefetch") else None
@@ -124,8 +128,6 @@ print("GAP", round(g["worst"], 3), r1, r2)
             order.append(("fitz.open", str(a[0]) if a else ""))
             return _orig_open(*a, **k)
         fitz.open = _open
-        from pathlib import Path as _P
-        src = _P(fx.text_pdf())
         ix.index_file(src)
     finally:
         fitz.open = _orig_open
