@@ -274,7 +274,8 @@ def export_pdf_from_meta(meta_list: Iterable[dict], out_pdf: str | Path,
                 # v1.6.7 E2: 원본 PDF 명 우선(확장자·날짜 접두 없음).
                 # 없으면 PNG stem 에서 'YYMMDD_HHMM_' 캡처 시각 접두 제거.
                 if src_pdf:
-                    top = Path(str(src_pdf)).stem
+                    # 261014-7: 구운 사본을 받았으면 원래 이름(`src_name`)으로 — '…_baked' 가 찍히지 않게
+                    top = Path(str(meta.get("src_name") or src_pdf)).stem
                 else:
                     top = re.sub(r"^\d{6}_\d{4}_", "",
                                  Path(png_path or "screenshot").stem)

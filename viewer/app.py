@@ -7503,6 +7503,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         out, _ = QFileDialog.getSaveFileName(self, tr("스크린샷 PDF 저장"), default, "PDF (*.pdf)")
         if not out:
             return False
+        # 261014-7(스크린샷 SOT §7): 원본 쪽은 **인쇄와 같은 굽기**를 거친 원천에서 — 저장 전 꾸밈·사진·하이퍼링크도 나온다.
+        #   종전에는 원본을 그대로 복사해 저장 전 꾸밈이 빠졌다. 구울 것이 없으면 원본 그대로(비용 0).
+        baked = {}
+        meta = [dict(m) for m in meta]
+        for m in meta:
+            sp = m.get("src_pdf")
+            if sp:
+                if sp not in baked:
+                    try:
+                        baked[sp] = self._baked_src(sp, True)
+                    except Exception:
+                        baked[sp] = sp
+                m["src_name"] = sp                     # 머리말 파일 이름은 원래 이름으로
+                m["src_pdf"] = baked[sp]
         try:
             saved = ss.export_pdf_from_meta(
                 meta, out,
