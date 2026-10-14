@@ -11,6 +11,7 @@ B. UI 스레드는 자식의 준비를 기다리지 않는다(곧바로 기하 �
 C. 부모가 `os._exit` 로 끝나면 자식도 끝난다(남지 않는다)
 D. 자식을 못 띄우면 워커는 종전대로 이 프로세스의 kiwi 로 판정한다(품질 유지), UI 스레드는 짓지 않는다
 E. 다른 스레드가 묻는 중이면 UI 스레드는 `UI_WAIT_S`(0.2초)만 기다리고 이번만 기하 규칙으로 물러선다
+F. (261014-6, 응답성 SOT §9.2) `IDLE_EXIT_S` 동안 묻지 않으면 자식이 끝나고(실패로 치지 않는다), 다음 질의에 다시 떠서 답한다
 """
 import os, sys, time, subprocess
 sys.stdout.reconfigure(encoding="utf-8")
@@ -88,8 +89,28 @@ def case_e():
     print("RESULT", "|".join([str(int(ks.ready())), str(round(dt, 3)), str(int(r)), str(int(r2))]))
 
 
+def case_f():
+    from viewer import kiwi_space as ks
+    ks.IDLE_EXIT_S, ks.IDLE_POLL_S = 1.0, 0.2          # 5분 대신 1초 — 같은 길을 빨리 돈다
+    first = ks.space("한글띄어쓰기시험입니다")          # 이 스레드는 UI 가 아니다 — 준비를 기다린다
+    proc = ks._state["proc"]
+    end = time.monotonic() + 10
+    while ks._state["conn"] is not None and time.monotonic() < end:
+        time.sleep(0.1)
+    retired = ks._state["conn"] is None and ks._state.get("retired") is proc
+    try:
+        proc.wait(timeout=10)
+        exited = proc.poll() is not None
+    except Exception:
+        exited = False
+    again = ks.space("한글띄어쓰기시험입니다")          # 다시 띄워 답한다
+    print("RESULT", "|".join([str(int(bool(first))), str(int(retired)), str(int(exited)),
+                              str(int(again == first)), str(int(ks.failed())),
+                              str(int(ks._state["proc"] is not None and ks._state["proc"] is not proc))]))
+
+
 if len(sys.argv) > 2 and sys.argv[1] == "--case":
-    {"a": case_a, "b": case_b, "c": case_c, "d": case_d, "e": case_e}[sys.argv[2]]()
+    {"a": case_a, "b": case_b, "c": case_c, "d": case_d, "e": case_e, "f": case_f}[sys.argv[2]]()
     sys.stdout.flush()
     os._exit(0)
 
@@ -150,6 +171,14 @@ chk(len(p) == 4 and p[0] == "1", "E 실행됨(자식 준비)", out + err)
 if len(p) == 4:
     chk(float(p[1]) < 0.5, "E 다른 스레드가 묻는 중이면 UI 스레드는 0.2초만 기다리고 물러선다", out)
     chk(p[2] == "0" and p[3] == "1", "E 그때만 기하 규칙, 다음에는 다시 kiwi", out)
+
+out, err = run("f")
+p = out.split("|")
+chk(len(p) == 6 and p[0] == "1", "F 실행됨(첫 질의 답)", out + err)
+if len(p) == 6:
+    chk(p[1] == "1" and p[2] == "1", "F 쉬는 시간이 지나면 자식이 끝난다(상주 메모리 회수)", out)
+    chk(p[3] == "1" and p[5] == "1", "F 다음 질의에 새 자식을 띄워 같은 답을 준다", out)
+    chk(p[4] == "0", "F 쉬어서 끝낸 것은 실패로 치지 않는다(다시 띄울 수 있다)", out)
 
 print("\n=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for m in fails:

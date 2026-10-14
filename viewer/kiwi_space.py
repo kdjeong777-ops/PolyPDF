@@ -11,6 +11,8 @@ kiwi 는 만들 때(0.74초)와 첫 `space()`(0.48초)에 **GIL 을 쥔다** —
 - **UI 스레드**(`set_ui_thread`)는 준비가 안 됐으면 기다리지 않고 None — 부르는 쪽이 기하 규칙으로 물러선다.
   워커는 준비를 `READY_WAIT_S` 까지 기다린다(결과가 시작 시점에 따라 갈리지 않게).
 - 자식은 부모 쪽 파이프가 닫히면(부모 종료·`os._exit`) 스스로 끝난다.
+- 261014-6(응답성 SOT §9.2 '쉬는 보조 프로세스 0'): `IDLE_EXIT_S` 동안 묻지 않으면 부모가 파이프를 닫아 끝낸다(약 260MB 회수).
+  다음 질의에 다시 띄운다(실측 1.2초, 배경). 쉬어서 끝낸 것은 실패가 아니다 — `failed()` 는 그대로 거짓.
 - 자식을 못 띄운 기기면 `failed()` 가 참 — 부르는 쪽이 종전대로 이 프로세스에서 kiwi 를 쓴다(워커에서만).
 """
 from __future__ import annotations
@@ -25,11 +27,13 @@ KEY_ENV = "POLYPDF_KIWI_KEY"
 READY_WAIT_S = 20.0      # 워커가 자식의 준비를 기다리는 한도(설치본 찬 시작 + 백신 검사 여유)
 CALL_TIMEOUT_S = 5.0     # 한 번 묻는 데 이보다 오래면 자식이 멈춘 것으로 본다
 UI_WAIT_S = 0.2          # UI 스레드가 잠금·답을 기다리는 한도 — 넘으면 이번만 물러선다(창이 서지 않게, 응답성 SOT §2)
+IDLE_EXIT_S = 300.0      # 이만큼 묻지 않으면 자식을 끝낸다 — 다시 띄우는 비용(1.2초, 배경)보다 상주 메모리(≈260MB)가 크다
+IDLE_POLL_S = 30.0       # 쉬는 시간을 보는 간격
 
 _start_lock = threading.Lock()
 _io_lock = threading.Lock()      # 보내고-받기 한 쌍을 묶는다(여러 스레드가 함께 부른다)
 _ready = threading.Event()       # 준비됐거나 실패했으면 켜진다 — `_state["bad"]` 로 가른다
-_state = {"started": False, "bad": False, "conn": None, "proc": None}
+_state = {"started": False, "bad": False, "conn": None, "proc": None, "last": 0.0, "retired": None}
 _ui_ident = None
 
 
@@ -90,13 +94,51 @@ def _fail() -> None:
 
 
 def _watch(proc) -> None:
-    """자식이 준비 전에 끝나면 실패로 — `Listener.accept()` 에는 시간 한도가 없다."""
+    """자식이 준비 전에 끝나면 실패로 — `Listener.accept()` 에는 시간 한도가 없다.
+    261014-6: 쉬어서 우리가 끝낸 자식(`retired`)이거나 이미 다음 자식으로 바뀌었으면 실패가 아니다."""
     try:
         proc.wait()
     except Exception:
         pass
+    if _state.get("retired") is proc or _state.get("proc") is not proc:
+        return
     if not _ready.is_set() or _state["conn"] is None:
         _fail()
+
+
+def _retire() -> bool:
+    """쉬는 자식을 끝낸다(파이프를 닫으면 자식이 스스로 끝난다). 묻는 중이면 손대지 않는다. 끝냈으면 True."""
+    if not _io_lock.acquire(blocking=False):
+        return False
+    try:
+        with _start_lock:
+            conn, proc = _state["conn"], _state["proc"]
+            if conn is None:
+                return False
+            _state["retired"] = proc
+            _state["conn"] = None
+            _state["proc"] = None
+            _ready.clear()
+            _state["started"] = False       # 다음 질의가 다시 띄운다
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return True
+    finally:
+        _io_lock.release()
+
+
+def _idle_loop(proc) -> None:
+    """이 자식이 살아 있는 동안 쉬는 시간을 본다 — `IDLE_EXIT_S` 넘게 묻지 않았으면 끝낸다."""
+    import time
+    while _state.get("proc") is proc and not _state["bad"]:
+        time.sleep(IDLE_POLL_S)
+        if _state.get("proc") is not proc or _state["conn"] is None:
+            return
+        if time.monotonic() - _state["last"] >= IDLE_EXIT_S:
+            if _retire():
+                return
 
 
 def _boot() -> None:
@@ -122,8 +164,11 @@ def _boot() -> None:
             pass
         if msg != "ready":
             raise RuntimeError(str(msg))
+        import time
         _state["conn"] = conn
+        _state["last"] = time.monotonic()
         _ready.set()
+        threading.Thread(target=_idle_loop, args=(proc,), name="kiwi-space-idle", daemon=True).start()
     except Exception:
         _fail()
 
@@ -146,6 +191,8 @@ def space(text: str):
         if conn is None:
             return None
         try:
+            import time
+            _state["last"] = time.monotonic()
             conn.send(text)
             if not conn.poll(CALL_TIMEOUT_S):
                 raise TimeoutError("kiwi-space")
