@@ -326,6 +326,16 @@ for name, txt in LIVE.items():
             mism.append("%s: %s=%s%s (코드 %s)" % (name[:8], cname, val, unit, sorted(consts[cname])))
 chk(not mism, "G1 SOT 의 `상수 = 값`·`값(상수)` 이 코드와 같다", str(mism[:8]))
 
+# 261014-9: 코드 블록(```) 안의 `상수 = 값` 도 — 마스터 §7.5 의 `CURRENT_SCHEMA = 9` 가 코드 11 과 어긋난 채 남아 있었다
+mism2 = []
+for name, txt in LIVE.items():
+    for blk in re.findall(r"```[a-z]*\n(.*?)```", body(txt), re.S):
+        for m in re.finditer(r"^\s*([A-Z][A-Z0-9_]{2,})\s*=\s*(-?[0-9][0-9_]*(?:\.[0-9]+)?)\s*(?:#|$)", blk, re.M):
+            cname, val = m.group(1), float(m.group(2).replace("_", ""))
+            if cname in consts and not any(abs(val - c) < 1e-9 for c in consts[cname]):
+                mism2.append("%s: %s=%s (코드 %s)" % (name[:8], cname, m.group(2), sorted(consts[cname])))
+chk(not mism2, "G1b SOT 코드 블록의 `상수 = 값` 이 코드와 같다", str(mism2[:8]))
+
 ss = read(ROOT / "viewer" / "settings_store.py")
 m = re.search(r"SECRET_PREF_KEYS\s*=\s*\{([^}]*)\}", ss)
 code_keys = set(re.findall(r'"([a-z_]+)"', m.group(1))) if m else set()
