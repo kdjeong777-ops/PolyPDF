@@ -53,4 +53,10 @@ def write_png(ps, pages, dst: Path, tick) -> None:
     tick(len(pages), len(pages), "")
 
 
-WRITERS = {"xlsx": write_xlsx, "txt": write_txt, "png": write_png}
+def write_docx_edit(ps, pages, dst: Path, tick) -> None:
+    """Word(편집 가능) — pdf2docx 를 **보조 프로세스**에서(§4.1)."""
+    from viewer.convert.proc import convert_docx_edit
+    convert_docx_edit(ps, pages, dst, tick)
+
+
+WRITERS = {"xlsx": write_xlsx, "txt": write_txt, "png": write_png, "docx_edit": write_docx_edit}

@@ -267,7 +267,7 @@ def rewrite_page_layer(fitz, page, lines, fontfile, font=None) -> int:
 
 
 def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
-                    progress=None, cancelled=None) -> tuple:
+                    progress=None, cancelled=None, out=None) -> tuple:
     """고른 쪽들의 보이지 않는 글자층을 다시 써 **임시 파일**을 만든다 (SOT §5.4).
 
     원본 덮어쓰기는 부르는 쪽(메인)이 한다 — 핸들을 쥔 곳이 메인이다.
@@ -280,7 +280,8 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
     src = Path(src)
     stats = {"rewritten": [], "fallback": [], "skipped": [], "lines": 0,
              "unwritten": 0, "cancelled": False, "reasons": {}}
-    tmp = src.with_name(src.stem + "_textlayer_tmp.pdf")
+    # 261014-13(형식 변환 SOT §4.1): `out` 을 주면 그 자리에 — 변환은 임시 폴더에 만든다(원본 옆에 흔적을 남기지 않는다)
+    tmp = Path(out) if out else src.with_name(src.stem + "_textlayer_tmp.pdf")
     ff = _korean_font_file()
     font = None
     doc = fitz.open(str(src))

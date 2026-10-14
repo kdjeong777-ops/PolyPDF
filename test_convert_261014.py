@@ -164,7 +164,8 @@ try:
     chk((root / "B.txt").exists() and (root / "A (5).txt").exists(), "H 일괄 — 파일마다 결과")
 
     # ── I. 메뉴 넷 ────────────────────────────────────────────────
-    chk([x.text() for x in mw.menu_export.actions()] == ["Excel (표)", "텍스트", "이미지 (PNG)"],
+    want_fmt = [f.label for f in convert.ready_formats()]          # 다 만든 형식이 늘면 함께 는다
+    chk([x.text() for x in mw.menu_export.actions()] == want_fmt,
         "I 파일 메뉴 '내보내기' — 다 만든 형식만")
     chk(mw._btn_convert.text() == "변환", "I 도구 막대 '변환' 단추")
     menus = []
@@ -185,9 +186,9 @@ try:
     finally:
         QMenu.exec = _orig
     tree_sub = [s for t, s in (menus[0] if menus else []) if t == "변환"]
-    chk(tree_sub and tree_sub[0] == ["Excel (표)", "텍스트", "이미지 (PNG)"], "I 책갈피창 우클릭 '변환 ▸'", str(menus[:1]))
+    chk(tree_sub and tree_sub[0] == want_fmt, "I 책갈피창 우클릭 '변환 ▸'", str(menus[:1]))
     th_sub = [s for t, s in (menus[1] if len(menus) > 1 else []) if t.startswith("선택한 쪽 변환")]
-    chk(th_sub and th_sub[0] == ["Excel (표)", "텍스트", "이미지 (PNG)"], "I 썸네일 우클릭 '선택한 쪽 변환 ▸'",
+    chk(th_sub and th_sub[0] == want_fmt, "I 썸네일 우클릭 '선택한 쪽 변환 ▸'",
         str(menus[1:2]))
 finally:
     try:

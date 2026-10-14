@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 11:31+0900\n"
+"POT-Creation-Date: 2026-10-14 11:43+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2735,6 +2735,14 @@ msgstr ""
 msgid "이미지 (PNG)"
 msgstr ""
 
+#: viewer/convert/proc.py
+msgid "변환 프로세스를 띄우지 못했습니다"
+msgstr ""
+
+#: viewer/convert/proc.py
+msgid "Word 파일을 만들지 못했습니다"
+msgstr ""
+
 #: viewer/convert_controller.py
 msgid "변환할 PDF 를 먼저 여세요."
 msgstr ""
@@ -3024,6 +3032,16 @@ msgstr ""
 
 #: viewer/index_proc.py
 msgid "색인 프로세스와의 연결이 끊겼습니다."
+msgstr ""
+
+#: viewer/index_proc.py
+#, python-brace-format
+msgid "{what} 프로세스와의 연결이 끊겼습니다."
+msgstr ""
+
+#: viewer/index_proc.py
+#, python-brace-format
+msgid "{what} 프로세스가 예기치 않게 끝났습니다(코드 {code})."
 msgstr ""
 
 #: viewer/index_proc.py

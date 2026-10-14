@@ -35,7 +35,7 @@ class Format:
 
 
 FORMATS = (
-    Format("docx_edit", tr_noop("Word (편집 가능)"), ".docx", False),
+    Format("docx_edit", tr_noop("Word (편집 가능)"), ".docx", True),
     Format("docx_shape", tr_noop("Word (모양 그대로)"), ".docx", False),
     Format("hwpx_edit", tr_noop("한글 HWPX (편집 가능)"), ".hwpx", False),
     Format("hwpx_shape", tr_noop("한글 HWPX (모양 그대로)"), ".hwpx", False),

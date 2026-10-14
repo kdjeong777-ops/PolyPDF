@@ -31,27 +31,30 @@ BELOW_NORMAL = 0x00004000    # BELOW_NORMAL_PRIORITY_CLASS — 창(보통 우선
 ENABLED = True               # 검사가 이 프로세스 경로를 볼 때 끈다
 
 
-def _command(address: str) -> list:
+def _command(address: str, server_arg: str = SERVER_ARG) -> list:
     if getattr(sys, "frozen", False):
-        return [sys.executable, SERVER_ARG, address]
+        return [sys.executable, server_arg, address]
     main_py = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py")
-    return [sys.executable, main_py, SERVER_ARG, address]
+    return [sys.executable, main_py, server_arg, address]
 
 
-def run_job(job: dict, on_progress, should_cancel):
+def run_job(job: dict, on_progress, should_cancel, *, server_arg: str = SERVER_ARG, key_env: str = KEY_ENV,
+            what: str = None):
     """일감 하나를 자식에서. 끝나면 True, 자식을 못 띄우면 None, 자식이 오류를 보내면 RuntimeError.
 
-    job = {"db": str, "folder": str|None, "files": [str]|None, "verify": bool, "settings_dir": str}"""
-    if not ENABLED:
+    job = {"db": str, "folder": str|None, "files": [str]|None, "verify": bool, "settings_dir": str}
+    261014-13(형식 변환 SOT §4.1): 같은 틀을 형식 변환 자식(`--convert-server`)도 쓴다 — `server_arg`·`key_env`·`what`(오류 문구의
+    일 이름)만 바꾼다. 기본값은 색인 그대로다."""
+    if not ENABLED and server_arg == SERVER_ARG:
         return None
     try:
         from multiprocessing.connection import Listener
         key = os.urandom(16)
         listener = Listener(family="AF_PIPE", authkey=key)
         env = dict(os.environ)
-        env[KEY_ENV] = key.hex()
+        env[key_env] = key.hex()
         proc = subprocess.Popen(
-            _command(listener.address), env=env,
+            _command(listener.address, server_arg), env=env,
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | BELOW_NORMAL)
     except Exception:
@@ -103,11 +106,16 @@ def run_job(job: dict, on_progress, should_cancel):
                 elif kind == "error":
                     raise RuntimeError(msg[1])
             elif proc.poll() is not None:
-                raise RuntimeError(tr("색인 프로세스가 예기치 않게 끝났습니다(코드 {code}).").format(code=proc.returncode))
+                if server_arg == SERVER_ARG:
+                    raise RuntimeError(tr("색인 프로세스가 예기치 않게 끝났습니다(코드 {code}).").format(code=proc.returncode))
+                raise RuntimeError(tr("{what} 프로세스가 예기치 않게 끝났습니다(코드 {code}).").format(
+                    what=what or server_arg, code=proc.returncode))
     except (EOFError, OSError):
         if should_cancel():
             return True
-        raise RuntimeError(tr("색인 프로세스와의 연결이 끊겼습니다."))
+        if server_arg == SERVER_ARG:
+            raise RuntimeError(tr("색인 프로세스와의 연결이 끊겼습니다."))
+        raise RuntimeError(tr("{what} 프로세스와의 연결이 끊겼습니다.").format(what=what or server_arg))
     finally:
         try:
             conn.close()

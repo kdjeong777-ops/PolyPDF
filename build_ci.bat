@@ -91,7 +91,7 @@ if errorlevel 1 ( echo [ERROR] main.py 가 컴파일되지 않습니다. & exit 
 for %%f in (viewer\app.py viewer\history.py viewer\indexer.py viewer\pdf_doc.py ^
             viewer\screenshot.py viewer\settings_store.py viewer\workers.py ^
             viewer\resources_path.py viewer\bookmarker_bridge.py ^
-            viewer\_vendor\__init__.py viewer\_vendor\pdf_bookmarker\__init__.py ^
+            viewer\_vendor\__init__.py viewer\_vendor\pdf_bookmarker\__init__.py viewer\_vendor\pdf2docx\converter.py ^
             viewer\widgets\bookmark_tree.py viewer\widgets\favorites_dialog.py ^
             viewer\widgets\help_dialog.py viewer\widgets\main_view.py ^
             viewer\widgets\search_panel.py viewer\widgets\settings_dialog.py ^
