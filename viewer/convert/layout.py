@@ -16,6 +16,8 @@ FIGURE_DPI = 200        # 선 그림·그대로 못 쓰는 그림을 그릴 때
 FIG_MIN_PT = 36         # 선 그림으로 보는 가장 작은 가로·세로
 FIG_MIN_PATHS = 4       # 선 조각이 이만큼은 있어야 그림(글 상자 테두리·밑줄은 그림이 아니다)
 FIG_MAX_TEXT = 0.5      # 영역 안 글 면적이 이 비율 이상이면 글 상자다
+FIG_TEXT_LINES = 2      # 영역 너비의 FIG_LINE_FRAC 넘는 긴 글 줄이 이만큼 있으면 글 상자다(테두리 친 문단 — 261014-30 표본 시험)
+FIG_LINE_FRAC = 0.5
 BG_MIN_AREA = 0.8       # 쪽의 이만큼을 덮는 그림은 바탕(스캔 쪽 그림·장식) — 넣지 않는다
 IMG_MIN_PT = 4          # 이보다 작은 그림은 장식
 
@@ -97,8 +99,13 @@ def _figures(page, tables, lines) -> list:
         n = sum(1 for pr in paths if pr is not None and _inside((pr.x0, pr.y0, pr.x1, pr.y1), r))
         if n < FIG_MIN_PATHS:
             continue
-        txt = sum(_area(ln["rect"]) for ln in lines if ln.get("rect") and _inside(ln["rect"], r))
+        inside = [ln for ln in lines if ln.get("rect") and _inside(ln["rect"], r)]
+        txt = sum(_area(ln["rect"]) for ln in inside)
         if txt >= FIG_MAX_TEXT * a:
+            continue
+        # 테두리·바탕을 친 문단 — 글 줄은 가늘어 면적 비율로는 못 가린다(실제 지침 PDF 에서 본문이 그림으로 들어갔다)
+        long_lines = sum(1 for ln in inside if (ln["rect"][2] - ln["rect"][0]) >= FIG_LINE_FRAC * (r[2] - r[0]))
+        if long_lines >= FIG_TEXT_LINES:
             continue
         out.append(r)
     return out
@@ -189,6 +196,107 @@ def _split_pieces(text, rect, spans) -> list:
     return out
 
 
+TABLE_PT_DEFAULT = 9.0     # 표 안 글 크기를 못 잴 때
+COL_LINE_TOL = 2.0         # 같은 세로선으로 보는 x 차(pt)
+
+
+def h_spans(rows) -> list:
+    """행마다 가로로 합칠 칸 `[(행, 시작 열, 끝 열)]` — pdfplumber 는 합친 칸의 나머지를 `None` 으로 준다(빈 칸은 `''`).
+    내용 칸 바로 뒤에 이어지는 `None` 을 그 칸에 합친다(세로 합침과 갈리지 않을 때는 가로로 본다 — 글이 좁은 한 칸에 몰려
+    표가 원본보다 길어졌다, 261014-30 표본 시험)."""
+    out = []
+    for ri, r in enumerate(rows):
+        ci = 0
+        while ci < len(r):
+            if r[ci] is not None:
+                cj = ci
+                while cj + 1 < len(r) and r[cj + 1] is None:
+                    cj += 1
+                if cj > ci:
+                    out.append((ri, ci, cj))
+                ci = cj + 1
+            else:
+                ci += 1
+    return out
+
+
+def _row_heights(page, rect, nrows: int) -> list | None:
+    """표 행 높이(pt) — 원본 가로선 자리로. 선 수가 행 수와 맞지 않으면 None(종전대로 고르게).
+    고르게 나누면 내용이 많은 행(예: 첫 행 54 pt)이 제 몫보다 커져 표 전체가 원본보다 길어졌다(261014-30 표본 시험)."""
+    x0, y0, x1, y1 = rect
+    if nrows < 1 or y1 <= y0:
+        return None
+    ys = []
+    try:
+        for d in page.get_drawings():
+            r = d["rect"]
+            if r.height < 2 and r.width > 5 and y0 + COL_LINE_TOL < r.y0 < y1 - COL_LINE_TOL \
+                    and r.x0 >= x0 - COL_LINE_TOL and r.x1 <= x1 + COL_LINE_TOL:
+                ys.append(r.y0)
+    except Exception:
+        return None
+    cuts = []
+    for y in sorted(ys):
+        if not cuts or y - cuts[-1] > COL_LINE_TOL:
+            cuts.append(y)
+    if len(cuts) != nrows - 1:
+        return None
+    edges = [y0] + cuts + [y1]
+    return [b - a for a, b in zip(edges, edges[1:])]
+
+
+def _col_widths(page, rect, rows) -> list | None:
+    """표 열 너비(pt) — 원본 세로선 자리로, 없으면 열마다 가장 긴 글 너비의 비율로. 같은 너비로 나누면 긴 글 열이 좁아져
+    줄이 더 꺾이고 표가 원본보다 길어져 쪽을 넘었다(261014-30 표본 시험 — 점검표)."""
+    nc = max((len(r) for r in rows), default=0)
+    x0, y0, x1, y1 = rect
+    if nc < 1 or x1 <= x0:
+        return None
+    xs = []
+    try:
+        for d in page.get_drawings():
+            r = d["rect"]
+            if r.width < 2 and r.height > 5 and x0 + COL_LINE_TOL < r.x0 < x1 - COL_LINE_TOL \
+                    and r.y0 >= y0 - COL_LINE_TOL and r.y1 <= y1 + COL_LINE_TOL:
+                xs.append(r.x0)
+    except Exception:
+        xs = []
+    cuts = []
+    for x in sorted(xs):
+        if not cuts or x - cuts[-1] > COL_LINE_TOL:
+            cuts.append(x)
+    if len(cuts) == nc - 1:
+        edges = [x0] + cuts + [x1]
+        return [b - a for a, b in zip(edges, edges[1:])]
+    # 세로선이 맞지 않으면 글 너비 비율(긴 글은 줄을 꺾으니 가장 긴 낱말과 칸 글 너비의 사이)
+    need = []
+    for ci in range(nc):
+        best = 0.0
+        for r in rows:
+            t = str(r[ci] or "") if ci < len(r) else ""
+            for part in t.split("\n"):
+                best = max(best, min(measure(part, 9.0, True) or len(part) * 4.5, (x1 - x0) * 0.6))
+        need.append(max(best, 12.0))
+    tot = sum(need)
+    return [(x1 - x0) * v / tot for v in need]
+
+
+def _size_in(page, rect) -> float:
+    """영역 안 글의 가운데 크기(pt) — 표 칸 글을 원본 크기로 써야 표가 원본보다 커져 쪽을 넘지 않는다(261014-30 표본 시험)."""
+    import statistics
+    sizes = []
+    try:
+        for b in page.get_text("dict", clip=rect).get("blocks", []):
+            for ln in b.get("lines", []) or []:
+                for sp in ln.get("spans", []) or []:
+                    if str(sp.get("text", "")).strip():
+                        sizes.append(float(sp.get("size") or 0))
+    except Exception:
+        pass
+    sizes = [x for x in sizes if x > 0]
+    return round(statistics.median(sizes) * 2) / 2 if sizes else TABLE_PT_DEFAULT
+
+
 def page_blocks(ps, pg, *, join: bool, edges=None) -> list:
     """쪽 하나의 블록 목록(읽는 차례). 형식 변환 SOT §1·§3.
     `edges` 에 list 를 주면 머리말·꼬리말 줄(§1.1 — 본문 블록에는 없다)을 굵기·세리프를 붙여 채운다."""
@@ -221,7 +329,10 @@ def page_blocks(ps, pg, *, join: bool, edges=None) -> list:
     figs = _figures(page, tables, lines)
     if figs:
         lines = [ln for ln in lines if not (ln["rect"] and any(_inside(ln["rect"], f) for f in figs))]
-    objs = [{"kind": "table", "rect": tuple(b), "rows": [list(x) for x in rows_ if x]} for b, rows_ in tables]
+    objs = [{"kind": "table", "rect": tuple(b), "rows": [list(x) for x in rows_ if x], "size": _size_in(page, tuple(b)),
+             "cols": _col_widths(page, tuple(b), [list(x) for x in rows_ if x]),
+             "heights": _row_heights(page, tuple(b), len([x for x in rows_ if x]))}
+            for b, rows_ in tables]
     objs = [o for o in objs if o["rows"]]
     for f in figs:
         try:
@@ -341,6 +452,9 @@ def number_only(text: str, token: str | None = None):
     return "-" if (m.group(1) or m.group(2)) else ""
 
 
+EDGE_PARITY_MIN = 0.8      # 홀·짝 머리말·꼬리말로 나누는 데 필요한, 그 쪽들 가운데 같은 틀의 비율
+
+
 def edge_plan(per_page: dict) -> dict:
     """쪽별 머리말·꼬리말 줄 `{쪽: [줄]}` → 문서 하나의 틀(편집 가능용, §1.1).
 
@@ -387,7 +501,11 @@ def edge_plan(per_page: dict) -> dict:
         tops = {k: c.most_common(1)[0][0] for k, c in by_parity.items() if c}
         if not tops:
             continue
-        if len(tops) == 2 and tops[0] != tops[1]:
+        # 홀·짝이 '정말' 다른가 — 쪽마다 틀이 바뀌는 묶은 문서(표본 시험 S4: 문서 셋을 이은 PDF)에서 우연히 갈린 것을
+        #   홀·짝으로 읽어 머리말이 쪽마다 엇갈렸다(261014-30). 홀·짝 각각 그 틀이 EDGE_PARITY_MIN 이상·두 쪽 이상일 때만
+        steady = all(sum(c.values()) >= 2 and c[tops[k]] >= EDGE_PARITY_MIN * sum(c.values())
+                     for k, c in by_parity.items() if c)
+        if len(tops) == 2 and tops[0] != tops[1] and steady:
             plan[where]["EVEN"] = sample[tops[0]]
             plan[where]["ODD"] = sample[tops[1]]
         else:
@@ -398,6 +516,7 @@ def edge_plan(per_page: dict) -> dict:
 
 # ---- 모양 그대로의 줄 묶음(HWPX·PPTX 공용, 형식 변환 SOT §1) ------------------------------
 GAP_SPACES_MAX = 60        # 나란한 줄 사이를 벌리는 빈칸 수 상한
+BAND_OVERLAP = 0.3         # 나란한 줄로 묶는 세로 겹침(낮은 줄 높이에 대한 비율)
 
 
 def bands(lines) -> list:
@@ -410,7 +529,12 @@ def bands(lines) -> list:
             last = bands[-1]
             lcy = (last[0]["rect"][1] + last[0]["rect"][3]) / 2
             tol = 0.4 * min(b["size"], last[0]["size"])
-            if abs(cy - lcy) <= tol and all(b["rect"][0] >= q["rect"][2] - 1 or b["rect"][2] <= q["rect"][0] + 1 for q in last):
+            # 261014-30(표본 시험 — 2단 논문): 단마다 줄 높이가 몇 pt 어긋나면 가운데 차로는 못 묶어 따로 쌓였고, 줄마다 한 줄씩 밀려
+            #   쪽이 넘쳤다. 세로 범위가 BAND_OVERLAP 이상 겹치고 가로로 떨어져 있으면 같은 묶음이다(같은 단의 위아래 줄은 겹치지 않는다)
+            f = last[0]["rect"]
+            ov = min(f[3], b["rect"][3]) - max(f[1], b["rect"][1])
+            hmin = max(0.1, min(f[3] - f[1], b["rect"][3] - b["rect"][1]))
+            if (abs(cy - lcy) <= tol or ov >= BAND_OVERLAP * hmin) and all(b["rect"][0] >= q["rect"][2] - 1 or b["rect"][2] <= q["rect"][0] + 1 for q in last):
                 last.append(b)
                 continue
         bands.append([b])
@@ -422,6 +546,9 @@ def bands(lines) -> list:
 def band_text(band):
     """묶음 → (글, 왼쪽 x, 원본 너비, 크기, 굵음, 세리프). 사이 빈 곳은 빈칸으로."""
     size = max(q["size"] for q in band)
+    # 글자 크기가 제 줄 상자보다 크면(스캔 표지의 OCR 잡음 — 상자 173 pt 에 크기 221 pt) 상자 높이로 — 줄 높이가 커져 아래 줄을
+    #   밀고 한글이 새 쪽으로 넘겼다(261014-30 표본 시험). 보통 줄은 상자가 크기의 1.2~1.4배라 바뀌지 않는다.
+    size = min(size, max(q["rect"][3] - q["rect"][1] for q in band))
     serif = band[0]["serif"]
     text = band[0]["text"]
     for prev, q in zip(band, band[1:]):

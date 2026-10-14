@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from viewer.i18n import tr, tr_noop
+
 
 def write_xlsx(ps, pages, dst: Path, tick) -> None:
     """표마다 시트 하나(`p<쪽>_<번째>`). 표가 하나도 없으면 파일을 만들지 않는다(§2.3)."""
@@ -80,10 +82,22 @@ def write_pptx_shape(ps, pages, dst: Path, tick) -> None:
     _w(ps, pages, dst, tick)
 
 
+WORD_IMAGES_ONLY = tr_noop("Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요")
+WORD_TEXT_MIN = 0.05       # 원본 글 대비 결과 글이 이보다 적으면 Word 가 쪽을 그림으로 바꾼 것으로 본다
+
+
 def write_docx_word(ps, pages, dst: Path, tick) -> None:
-    """Word(Microsoft Word 사용) — §4.4."""
+    """Word(Microsoft Word 사용) — §4.4. Word 는 다시 흘리기가 어려운 PDF(번역 덧입힌 글 등)를 **쪽 그림으로만** 바꾸기도 한다 —
+    원본에 글이 있는데 결과에 글이 거의 없으면 파일을 지우고 다른 방식을 알린다(261014-30 표본 시험: 고칠 수 없는 파일을 '변환했습니다' 로 냈다)."""
     from viewer.convert.word_com import convert_word
     convert_word(ps, pages, dst, tick)
+    src_n = sum(len("".join(ps.doc.load_page(int(p)).get_text().split())) for p in pages)
+    if src_n >= 50:
+        import docx
+        d = docx.Document(str(dst))
+        got = "".join(p.text for p in d.paragraphs) + "".join(c.text for t in d.tables for r in t.rows for c in r.cells)
+        if len("".join(got.split())) < WORD_TEXT_MIN * src_n:
+            raise RuntimeError(tr(WORD_IMAGES_ONLY))
 
 
 WRITERS = {"xlsx": write_xlsx, "txt": write_txt, "png": write_png, "docx_edit": write_docx_edit,

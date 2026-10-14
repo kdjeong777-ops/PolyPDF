@@ -22,6 +22,7 @@ REDACT_PATTERNS = (
 KIND_AREA = tr_noop("영역")
 KIND_SEARCH = tr_noop("검색어")
 FILL = (0, 0, 0)
+TEXT_BAND = (0.42, 0.58)   # 글을 빼는 띠 — 자리 높이에 대한 위·아래(옆 줄 글자 상자와 겹치지 않는 가운데)
 
 
 class Refused(Exception):
@@ -84,6 +85,26 @@ def _ocr_hits(lines, matcher):
     return hits
 
 
+def _text_in(page, r) -> str:
+    """사각형 안의 글 — 글자 **가운데**가 안에 든 것만(261014-30 표본 시험). `get_textbox` 는 1 pt 만 겹친 윗줄 글자까지 넣어
+    목록에 옆 줄이 보이고, 지운 뒤 확인이 '남은 글' 로 잘못 알렸다(지우기는 MuPDF 가 글자 가운데로 정해 바르게 됐다)."""
+    import fitz
+    rr = fitz.Rect(r)
+    out = []
+    try:
+        d = page.get_text("rawdict")
+    except Exception:
+        return ""
+    for b in d.get("blocks", []):
+        for ln in b.get("lines", []) or []:
+            for sp in ln.get("spans", []) or []:
+                for c in sp.get("chars", []) or []:
+                    x0, y0, x1, y1 = c["bbox"]
+                    if rr.contains(fitz.Point((x0 + x1) / 2, (y0 + y1) / 2)):
+                        out.append(c.get("c", ""))
+    return "".join(out).strip()
+
+
 def find_marks(path, keys=(), custom: str = "", custom_regex: bool = False, tick=None) -> list:
     """가릴 자리 `[{page, rect, kind, text}]`. `tick(했음, 전체, 글)` 이 예외를 던지면 멈춘다."""
     import fitz
@@ -114,7 +135,7 @@ def find_marks(path, keys=(), custom: str = "", custom_regex: bool = False, tick
                 for lab, m in matchers:
                     for r in match_rects(page, m):
                         out.append({"page": pg, "rect": tuple(r), "kind": lab,
-                                    "text": page.get_textbox(r).strip()})
+                                    "text": _text_in(page, r)})
             elif st is not None:
                 try:
                     words = st.get_page_words(fkey, pg) or []
@@ -153,11 +174,19 @@ def apply(path, marks, *, scrub: bool = True, tick=None) -> tuple:
             if tick:
                 tick(i, len(pages) + 1, f"p.{pg + 1}")
             page = doc.load_page(pg)
+            # ① 글 빼기는 자리의 가운데 띠만(TEXT_BAND) — MuPDF 는 글자 상자가 조금이라도 겹치면 지운다. 글자 상자는 글꼴 높이
+            #   전체라 윗줄·아랫줄과 몇 pt 겹치고, 자리 전체로 지우면 **고르지 않은 옆 줄 글이 지워졌다**(261014-30 표본 시험).
+            for r in by_page[pg]:
+                h = r.height
+                page.add_redact_annot(fitz.Rect(r.x0, r.y0 + TEXT_BAND[0] * h, r.x1, r.y0 + TEXT_BAND[1] * h), fill=False)
+            page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
+                                  text=fitz.PDF_REDACT_TEXT_REMOVE)
+            # ② 그림 화소·선·검은 칠은 자리 전체로(글은 이미 뺐다)
             for r in by_page[pg]:
                 page.add_redact_annot(r, fill=FILL)
             page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS,
                                   graphics=fitz.PDF_REDACT_LINE_ART_REMOVE_IF_TOUCHED,
-                                  text=fitz.PDF_REDACT_TEXT_REMOVE)
+                                  text=fitz.PDF_REDACT_TEXT_NONE)
         if scrub:
             # 숨은 글(hidden_text)은 지우지 않는다 — 스캔 문서의 OCR 글자층 전체가 사라진다. 링크·양식 값도 그대로
             doc.scrub(attached_files=True, clean_pages=True, embedded_files=True, hidden_text=False, javascript=True,
@@ -173,8 +202,7 @@ def apply(path, marks, *, scrub: bool = True, tick=None) -> tuple:
     chk = fitz.open(str(dst))
     try:
         for m in marks:
-            r = fitz.Rect(m["rect"])
-            got = chk.load_page(int(m["page"])).get_textbox(r + (1, 1, -1, -1)).strip()
+            got = _text_in(chk.load_page(int(m["page"])), m["rect"])
             if got:
                 left.append((int(m["page"]), got))
     finally:

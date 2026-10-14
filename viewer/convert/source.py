@@ -9,6 +9,17 @@
 """
 from __future__ import annotations
 
+import re
+
+
+_XML_BAD = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
+
+
+def xml_safe(text: str) -> str:
+    """XML(docx·hwpx·pptx·xlsx)에 넣을 수 없는 제어 문자 → `�`(알 수 없는 글자 표시). 글꼴이 대시 등을 제어 문자로
+    대응시킨 PDF 에서 Word 쓰기가 실패했다(261014-30 표본 시험 — 2단 논문의 `25\x0130 °C`). 무엇이었는지 알 수 없어 지우지 않고 표시한다."""
+    return _XML_BAD.sub("\ufffd", text) if text else text
+
 
 class PageSource:
     """`with PageSource(경로, fixes=…, forced_pages=…) as src:` — 끝나면 문서·연결을 닫는다."""
@@ -97,7 +108,16 @@ class PageSource:
         rows = tx.page_lines(self.doc, self.path, int(pg), tables=(tables or self.tables_mode),
                              ocr_text=ocr, ocr_words=ws or None, ocr_dpi=int(dpi or 0),
                              join_lines=join, ocr_peer_words=peers or None, edges_out=edges)
-        return self.fix_rows(pg, rows)
+        for e in edges or ():
+            if "text" in e:
+                e["text"] = xml_safe(e["text"])
+            if e.get("pieces"):
+                e["pieces"] = [(a, b, xml_safe(t)) for a, b, t in e["pieces"]]
+        rows = self.fix_rows(pg, rows)
+        for r in rows:
+            if isinstance(r.get("text"), str):
+                r["text"] = xml_safe(r["text"])
+        return rows
 
     def tables(self, pg) -> list:
         """`[(영역, 행 목록)]` — index.db `page_tables` 캐시를 먼저 본다(검색 SOT). 스캔 쪽은 보통 없다."""
@@ -112,4 +132,5 @@ class PageSource:
                 self._plumb = pdfplumber.open(self.path, password=pw)
             except Exception:
                 return []
-        return tx._tables(self.path, int(pg), plumber=self._plumb)
+        return [(bb, [[xml_safe(c) if isinstance(c, str) else c for c in (row or [])] for row in rows])
+                for bb, rows in tx._tables(self.path, int(pg), plumber=self._plumb)]

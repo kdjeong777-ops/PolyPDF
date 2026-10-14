@@ -240,15 +240,16 @@ class ImagesExtractor:
         Returns:
             list: A list of potential svg region: (external_bbox, inner_bboxes:list).
         """
-        import cv2 as cv
+        import numpy as np
 
-        # clip page and convert to opencv image
+        # POLYPDF 고침 7: opencv 없이 — 쪽 그림을 회색으로(opencv 와 같은 가중치) 바꿔 253 넘는 밝기는 0, 나머지는 255
         pixmap = self.clip_page_to_pixmap(rm_image=True, zoom=1.0)
-        src = self._pixmap_to_cv_image(pixmap)
-
-        # gray and binary
-        gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
-        _, binary = cv.threshold(gray, 253, 255, cv.THRESH_BINARY_INV)
+        a = np.frombuffer(pixmap.samples, np.uint8).reshape(pixmap.height, pixmap.width, pixmap.n)
+        if pixmap.n >= 3:
+            gray = (0.299 * a[:, :, 0] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 2]).round()
+        else:
+            gray = a[:, :, 0].astype(float)
+        binary = np.where(gray > 253, 0, 255).astype(np.uint8)
 
         # external bbox: split images with recursive xy cut
         external_bboxes = recursive_xy_cut(
@@ -263,9 +264,11 @@ class ImagesExtractor:
         # combined external and inner contours
         groups = list(zip(external_bboxes, grouped_inner_bboxes))
 
-        # plot detected images for debug
+        # plot detected images for debug — POLYPDF 고침 7: opencv 가 있을 때만(앱은 쓰지 않는다)
         debug = False
         if debug:
+            import cv2 as cv
+            src = self._pixmap_to_cv_image(pixmap)
             # plot projection profile for each sub-image
             for i, (x0, y0, x1, y1) in enumerate(external_bboxes):
                 arr = xy_project_profile(src[y0:y1, x0:x1, :], binary[y0:y1, x0:x1])

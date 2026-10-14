@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 17:22+0900\n"
+"POT-Creation-Date: 2026-10-14 17:57+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2836,6 +2836,10 @@ msgstr ""
 
 #: viewer/convert/proc.py
 msgid "Word 파일을 만들지 못했습니다"
+msgstr ""
+
+#: viewer/convert/writers.py
+msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요"
 msgstr ""
 
 #: viewer/convert_controller.py viewer/widgets/bookmark_tree.py

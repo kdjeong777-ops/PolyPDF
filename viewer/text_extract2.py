@@ -1170,7 +1170,21 @@ def _close_pending() -> None:
             pass
 
 
+TABLE_MIN_COLS = 2      # 열이 이보다 적으면 표가 아니다(SOT §3 규칙 9, 261014-30)
+
+
+def _real_tables(found) -> list:
+    """열이 `TABLE_MIN_COLS` 보다 적은(표 구조가 1열인) '표' 를 뺀다 — 2단 논문의 단 하나·테두리 친 문단이 1열 표로 잡혀
+    본문이 표 칸에 들어갔다(표본 시험). 캐시(`_TCACHE`·`page_tables`)에 든 옛 결과에도 같이 건다.
+    **글이 든 열** 로 세지 않는다 — 왼쪽 칸이 그림(지도)이고 오른쪽 칸만 글인 2열 표가 빠져 그 글이 그림으로 들어갔다(같은 표본 시험)."""
+    return [(bbox, rows) for bbox, rows in (found or []) if max((len(r or []) for r in rows), default=0) >= TABLE_MIN_COLS]
+
+
 def _tables(pdf_path, page_index: int, *, cached_only: bool = False, plumber=None):
+    return _real_tables(_tables_raw(pdf_path, page_index, cached_only=cached_only, plumber=plumber))
+
+
+def _tables_raw(pdf_path, page_index: int, *, cached_only: bool = False, plumber=None):
     """[(bbox, rows)] — pdfplumber 로 찾은 표. 없거나 실패하면 빈 목록.
 
     260908-5: 캐시를 **두 겹**으로 본다. ① 이번 실행의 메모리(`_TCACHE`), ② index.db 의

@@ -1,6 +1,7 @@
 from collections import deque
 import numpy as np
-# POLYPDF 고침 1: `import cv2` 를 쓰는 함수(inner_contours) 안으로 — 그 함수는 죽은 코드라 opencv 없이 불러진다
+# POLYPDF 고침 1·7: opencv 를 쓰지 않는다 — `inner_contours` 는 numpy 로 연결 성분을 묶어 opencv `findContours(RETR_TREE)` 의
+#   0~2층(겉 윤곽·구멍·구멍 안 윤곽)과 같은 것을 낸다(고침 7, 261014-30 — 대각선·곡선이 있는 쪽에서 실제로 불렸다)
 
 
 # -------------------------------------------------------------------------------------------
@@ -286,8 +287,69 @@ def _split_projection_profile(arr_values:np.array, min_value:float, min_gap:floa
     return arr_start, arr_end
 
 
+def _label(mask: np.ndarray, conn8: bool):
+    """POLYPDF 고침 7: 연결 성분 — 행마다 연속 구간(run)을 찾아 위 행의 겹치는 구간과 잇는다(union-find).
+    `conn8` 이면 대각으로 닿아도 잇는다(opencv 가 윤곽을 찾는 전경과 같다), 아니면 상하좌우만(구멍 — 배경).
+    반환: (성분 번호 배열 — 0 은 없음, 성분 수)."""
+    h, w = mask.shape
+    parent = []
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    m = mask.astype(np.int8)
+    prev, allruns = [], []
+    for y in range(h):
+        d = np.diff(np.concatenate(([0], m[y], [0])))
+        starts = np.flatnonzero(d == 1).tolist()
+        ends = np.flatnonzero(d == -1).tolist()
+        cur, j = [], 0
+        for s, e in zip(starts, ends):
+            rid = len(parent)
+            parent.append(rid)
+            lo, hi = (s - 1, e + 1) if conn8 else (s, e)
+            while j < len(prev) and prev[j][1] <= lo:
+                j += 1
+            k = j
+            while k < len(prev) and prev[k][0] < hi:
+                a, b = find(rid), find(prev[k][2])
+                if a != b:
+                    parent[max(a, b)] = min(a, b)
+                k += 1
+            cur.append((s, e, rid))
+            allruns.append((y, s, e, rid))
+        prev = cur
+    labels = np.zeros((h, w), np.int32)
+    roots = {}
+    for y, s, e, rid in allruns:
+        labels[y, s:e] = roots.setdefault(find(rid), len(roots) + 1)
+    return labels, len(roots)
+
+
+def _bboxes(labels: np.ndarray, n: int) -> dict:
+    """성분마다 (x0, y0, x1, y1) — opencv `boundingRect` 처럼 끝을 포함한 폭(+1)."""
+    ys, xs = np.nonzero(labels)
+    lab = labels[ys, xs]
+    out = {}
+    if n == 0:
+        return out
+    x0 = np.full(n + 1, 1 << 30); y0 = np.full(n + 1, 1 << 30); x1 = np.full(n + 1, -1); y1 = np.full(n + 1, -1)
+    np.minimum.at(x0, lab, xs); np.minimum.at(y0, lab, ys)
+    np.maximum.at(x1, lab, xs); np.maximum.at(y1, lab, ys)
+    for i in range(1, n + 1):
+        if x1[i] >= 0:
+            out[i] = (int(x0[i]), int(y0[i]), int(x1[i]) + 1, int(y1[i]) + 1)
+    return out
+
+
 def inner_contours(img_binary:np.array, bbox:tuple, min_w:float, min_h:float):
     '''Inner contours of current region, especially level 2 contours of the default opencv tree hirerachy.
+
+    POLYPDF 고침 7: opencv 없이 — 전경 성분(8방향)·배경 성분(4방향)과 둘이 맞닿은 관계로 층을 매긴다.
+    0층 = 바깥 배경에 닿은 전경(표 테두리), 1층 = 0층에 닿은 구멍(칸), 2층 = 1층 구멍 안의 전경(칸 안 내용).
+    아래 고르는 규칙(1층 안의 1층 · 2층)은 원본 그대로다.
 
     Args:
         img_binary (np.array): Binarized image with interesting region (255) and empty region (0).
@@ -298,37 +360,36 @@ def inner_contours(img_binary:np.array, bbox:tuple, min_w:float, min_h:float):
     Returns:
         list: A list of bbox-es of inner contours.
     '''
-    import cv2 as cv  # POLYPDF 고침 1
-    
-    # find both external and inner contours of current region
     x0, y0, x1, y1 = bbox
     arr = np.zeros(img_binary.shape, dtype=np.uint8)
     arr[y0:y1, x0:x1] = img_binary[y0:y1, x0:x1]
-    contours, hierarchy = cv.findContours(arr, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    fg = arr > 0
+    F, nf = _label(fg, True)
+    B, nb = _label(~fg, False)
+    outer = set(np.unique(np.concatenate([B[0, :], B[-1, :], B[:, 0], B[:, -1]])).tolist()) - {0}
+    # 전경-배경이 맞닿은 짝(상하좌우)
+    codes = []
+    for fa, ba in ((F[:, :-1], B[:, 1:]), (F[:, 1:], B[:, :-1]), (F[:-1, :], B[1:, :]), (F[1:, :], B[:-1, :])):
+        m = (fa > 0) & (ba > 0)
+        codes.append(fa[m].astype(np.int64) * (nb + 1) + ba[m])
+    pairs = np.unique(np.concatenate(codes)) if codes else np.zeros(0, np.int64)
+    f_of = pairs // (nb + 1)
+    b_of = pairs % (nb + 1)
+    level_0 = set(f_of[np.isin(b_of, list(outer))].tolist())
+    level_1 = set(b_of[np.isin(f_of, list(level_0))].tolist()) - outer
+    level_2 = set(f_of[np.isin(b_of, list(level_1))].tolist()) - level_0
+    fb, bb = _bboxes(F, nf), _bboxes(B, nb)
 
-    # check first three level contours:    
-    # * level-0, i.e. table bbox
-    # * level-1, i.e. cell bbox
-    # * level-2, i.e. region within cell
-    # NOTE: only one dimension, i.e. the second, to be decided, so the
-    # return value of np.where is a len==1 tuple
-    level_0 = np.where(hierarchy[0,:,3]==-1)[0]    
-    level_1 = np.where(np.isin(hierarchy[0,:,3], level_0))[0]    
-    level_2 = np.where(np.isin(hierarchy[0,:,3], level_1))[0]
-
-    # In general, we focus on only level 2, but considering edge case: level 2 contours 
-    # might be counted as level 1 incorrectly, e.g. test/samples/demo-table-close-underline.pdf. 
-    # So, get first the concerned level 1 contours, i.e. those contained by other level 1 contour.
     def contains(bbox1, bbox2):
         x0, y0, x1, y1 = bbox1
         u0, v0, u1, v1 = bbox2
         return u0>=x0 and v0>=y0 and u1<=x1 and v1<=y1
 
     level_1_bbox_list, res_level_1, res = [], [], []
-    for i in level_1:
-        x, y, w, h = cv.boundingRect(contours[i])
-        if w<min_w or h<min_h: continue
-        level_1_bbox_list.append((x, y, x+w, y+h))
+    for i in sorted(level_1):
+        bx = bb[i]
+        if bx[2] - bx[0] < min_w or bx[3] - bx[1] < min_h: continue
+        level_1_bbox_list.append(bx)
 
     for bbox1 in level_1_bbox_list:
         for bbox2 in level_1_bbox_list:
@@ -337,19 +398,17 @@ def inner_contours(img_binary:np.array, bbox:tuple, min_w:float, min_h:float):
                 res_level_1.append(bbox2)
                 res.append(bbox2)
 
-    # now level 2: with contours contained in `res_level_1` excluded
     def contained_in_concerned_level_1(bbox):
         for level_1_bbox in res_level_1:
             if contains(level_1_bbox, bbox): return True
         return False
 
-    for i in level_2:
-        x, y, w, h = cv.boundingRect(contours[i])
-        level_2_bbox = (x, y, x+w, y+h)
-        if w<min_w or h<min_h: continue
-        if contained_in_concerned_level_1(level_2_bbox): continue
-        res.append(level_2_bbox)
-    
+    for i in sorted(level_2):
+        bx = fb[i]
+        if bx[2] - bx[0] < min_w or bx[3] - bx[1] < min_h: continue
+        if contained_in_concerned_level_1(bx): continue
+        res.append(bx)
+
     return res
 
 

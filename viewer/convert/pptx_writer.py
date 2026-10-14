@@ -13,7 +13,7 @@ from viewer.convert import layout
 
 EMU_PER_PT = 12700
 SPC_MIN, SPC_MAX = -400, 1000       # 글자 간격(1/100 pt) 범위 — 너무 좁히거나 벌리지 않게
-TABLE_FONT_PT = 10                  # 표 칸 글 크기
+TABLE_FONT_PT = 10                  # 표 칸 글 크기 — 원본 크기를 못 잴 때만(`layout._size_in`)
 BOX_SLACK_PT = 2                    # 글상자 너비 여유 — 재는 값과 그리는 값의 작은 차로 줄이 넘어가지 않게
 
 
@@ -74,10 +74,15 @@ def _table(slide, place, b) -> None:
     gf = slide.shapes.add_table(nr, nc, Emu(_emu(left + x0 * scale)), Emu(_emu(top + y0 * scale)),
                                 Emu(_emu((x1 - x0) * scale)), Emu(_emu((y1 - y0) * scale)))
     tbl = gf.table
+    cols = b.get("cols")
+    if cols and len(cols) == nc:                         # 원본 열 너비(261014-30)
+        for ci, cw in enumerate(cols):
+            tbl.columns[ci].width = Emu(_emu(cw * scale))
     tbl.first_row = False
     tbl.horz_banding = False
     for ri in range(nr):
-        tbl.rows[ri].height = Emu(_emu((y1 - y0) * scale / nr))
+        hs = b.get("heights")
+        tbl.rows[ri].height = Emu(_emu((hs[ri] if hs and len(hs) == nr else (y1 - y0) / nr) * scale))   # 원본 행 높이(261014-30)
         for ci in range(nc):
             cell = tbl.cell(ri, ci)
             val = rows[ri][ci] if ci < len(rows[ri]) else None
@@ -87,9 +92,14 @@ def _table(slide, place, b) -> None:
             cell.margin_top = cell.margin_bottom = Emu(_emu(1))
             for para in cell.text_frame.paragraphs:
                 for r in para.runs:
-                    r.font.size = Pt(TABLE_FONT_PT * scale)
+                    r.font.size = Pt(float(b.get("size") or TABLE_FONT_PT) * scale)   # 원본 표 글 크기(261014-30)
                     r.font.color.rgb = RGBColor(0, 0, 0)
             _cell_border(cell)
+    for ri, c0, c1 in layout.h_spans(rows):                # 합친 칸(261014-30)
+        try:
+            tbl.cell(ri, c0).merge(tbl.cell(ri, c1))
+        except Exception:
+            pass
 
 
 def _cell_border(cell) -> None:

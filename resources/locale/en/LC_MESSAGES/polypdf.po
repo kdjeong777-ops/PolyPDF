@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 17:22+0900\n"
+"POT-Creation-Date: 2026-10-14 17:57+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2957,6 +2957,10 @@ msgstr "Could not start the conversion process"
 #: viewer/convert/proc.py
 msgid "Word 파일을 만들지 못했습니다"
 msgstr "Could not create the Word file"
+
+#: viewer/convert/writers.py
+msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요"
+msgstr "Word turned the text of this PDF into pictures only — use 'Word (editable)' or 'Word (keep appearance)'"
 
 #: viewer/convert_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py

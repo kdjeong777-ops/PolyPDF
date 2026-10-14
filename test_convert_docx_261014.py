@@ -167,6 +167,40 @@ try:
     ncell = sum(len(t.rows) * len(t.columns) for t in tdoc.tables)
     chk(ntab >= 1 and ncell >= 400 and calls["n"] <= ntab,
         "G 큰 표는 칸 목록을 표마다 한 번만 만든다(고침 6)", f"tables={ntab} cells={ncell} builds={calls['n']}")
+
+    # ── H. 대각선·곡선이 있는 쪽 — 벡터 그림 찾기가 opencv 없이(고침 7, 261014-30 표본 시험에서 실제 업무 PDF 로 났다) ──
+    import sys as _sys
+    _sys.modules["cv2"] = None                                   # opencv 가 없는 기계(배포본)와 같게 — import 하면 실패
+    try:
+        vec = root / "V.pdf"
+        d = fitz.open(); pg = d.new_page()
+        sh = pg.new_shape()
+        for k in range(4):                                       # 표(가로·세로 선)
+            sh.draw_line((72, 100 + 40 * k), (372, 100 + 40 * k))
+        for x in (72, 222, 372):
+            sh.draw_line((x, 100), (x, 220))
+        sh.draw_line((72, 100), (222, 140))                      # 머리 칸 대각선
+        sh.draw_circle((300, 400), 40)                           # 곡선 그림
+        sh.finish(color=(0, 0, 0), width=1); sh.commit()
+        pg.insert_text((80, 160), "Diagonal header cell", fontsize=10)
+        pg.insert_text((80, 500), "Body text below the drawing.", fontsize=11)
+        d.save(str(vec)); d.close()
+        logging.disable(logging.CRITICAL)
+        cv = Converter(str(vec)); cv.convert(str(root / "V.docx")); cv.close()
+        vt = " ".join(p.text for p in Document(str(root / "V.docx")).paragraphs)
+        chk("Body text below the drawing." in vt, "H 대각선·곡선이 있는 쪽도 opencv 없이 변환된다(고침 7)", vt[:200])
+        from viewer._vendor.pdf2docx.common.algorithm import inner_contours
+        import numpy as _np
+        img = _np.zeros((200, 300), _np.uint8)
+        img[20, 20:221] = 255; img[180, 20:221] = 255; img[20:181, 20] = 255; img[20:181, 220] = 255
+        img[100, 20:221] = 255; img[20:181, 120] = 255; img[130:150, 150:190] = 255
+        chk(inner_contours(img, (0, 0, 300, 200), 5, 5) == [(150, 130, 190, 150)],
+            "H 칸 안 내용은 opencv RETR_TREE 2층처럼 찾는다", str(inner_contours(img, (0, 0, 300, 200), 5, 5)))
+    except Exception as e:
+        chk(False, "H 대각선·곡선이 있는 쪽도 opencv 없이 변환된다(고침 7)", repr(e))
+    finally:
+        _sys.modules.pop("cv2", None)
+        logging.disable(logging.NOTSET)
 finally:
     index_proc.run_job = _real_run if "_real_run" in dir() else index_proc.run_job
     shutil.rmtree(root, ignore_errors=True)

@@ -240,14 +240,22 @@ class _Styles:
                 return e
         return None
 
-    def para(self, left_pt: float, prev_pt: float) -> str:
-        key = (_u0(left_pt) // 50 * 50, _u0(prev_pt) // 10 * 10)
+    def cell_para(self) -> str:
+        """표 칸 문단 — 줄 간격은 본문과 같고(`LINE_PCT`), 칸 너비에서 **줄을 꺾는다**(본문의 SQUEEZE 와 다르다, 261014-30)."""
+        return self.para(0, 0, wrap=True)
+
+    def para(self, left_pt: float, prev_pt: float, wrap: bool = False) -> str:
+        key = (_u0(left_pt) // 50 * 50, _u0(prev_pt) // 10 * 10, bool(wrap))
         if key not in self._para:
             # 바탕을 복제해 직접 붙인다 — python-hwpx 의 `ensure_paragraph_format` 은 만들 때마다 있는 것 전부와
             # 구조를 비교해(같은 것 되쓰기) 줄이 많은 문서에서 O(n²)이다(실측 10쪽 4.3초). 같은 값은 위 사전이 되쓴다.
             from copy import deepcopy
             el = deepcopy(self._base_el)
             self.hdr._apply_paragraph_margins(el, {"left": key[0], "prev": key[1]})
+            if wrap:
+                for e in el.iter():
+                    if e.tag.endswith("}breakSetting"):
+                        e.set("lineWrap", "BREAK")
             # 번호는 그때마다 '지금 가장 큰 번호 + 1' — 사이에 python-hwpx 가 머리말·꼬리말 문단 서식을 더하면
             # 미리 잡아 둔 번호와 겹친다(261014-15 한글 대조: 본문 줄이 머리말 서식(오른쪽·160%)을 받았다)
             if len(self._parent) != self._seen:
@@ -272,6 +280,70 @@ class _Styles:
                 size=key[0], letter_spacing=key[1], bold=key[2],
                 font=layout.SERIF_FACE if key[3] else layout.SANS_FACE)
         return self._run[key]
+
+
+def _edge_zone_lines(blocks, heads, foots, pw, ph) -> list:
+    """머리말·꼬리말 자리 안에 남은 본문 줄을 그 머리말·꼬리말로 옮긴다(같은 높이면 같은 줄의 조각으로).
+    261014-30 표본 시험: 꼬리말의 쪽 번호(`i`)만 꼬리말로 잡히고 같은 줄의 문서 이름은 본문으로 남아, 본문 영역 아래라 한글이
+    새 쪽으로 넘겼다(10쪽 → 11쪽). 머리말·꼬리말을 찾는 규칙은 텍스트 창 SOT §3.5.2 그대로 두고, 쪽 배치에서만 받는다."""
+    zones = []
+    if heads:
+        zones.append((heads, "head", -1e9, max(e["rect"][3] for e in heads) + 1))
+    if foots:
+        zones.append((foots, "foot", min(e["rect"][1] for e in foots) - 1, 1e9))
+    if not zones:
+        return blocks
+    keep = []
+    for b in blocks:
+        r = b.get("rect")
+        moved = False
+        if b["kind"] == "line" and r:
+            for group, where, lo, hi in zones:
+                if (where == "foot" and r[1] >= lo) or (where == "head" and r[3] <= hi):
+                    piece = (r[0], r[2], b["text"])
+                    mate = next((e for e in group if min(e["rect"][3], r[3]) - max(e["rect"][1], r[1]) > 0), None)
+                    if mate is not None:
+                        mate["pieces"] = sorted(list(mate["pieces"]) + [piece], key=lambda q: q[0])
+                        er = mate["rect"]
+                        mate["rect"] = (min(er[0], r[0]), min(er[1], r[1]), max(er[2], r[2]), max(er[3], r[3]))
+                    else:
+                        group.append({"where": where, "rect": tuple(r), "pieces": [piece], "text": b["text"],
+                                      "size": b["size"], "bold": b["bold"], "serif": b["serif"], "pw": pw, "ph": ph})
+                    moved = True
+                    break
+        if not moved:
+            keep.append(b)
+    return keep
+
+
+BODY_SAFETY_PT = 2.0       # 본문 영역 아래 끝에서 남기는 여유(pt)
+CELL_PAD_PT = 1.0         # 모양 그대로 표 칸 안 여백(좌우) — 기본(1.8 mm)이면 칸이 넓어지고 줄이 더 꺾여 표가 길어졌다
+
+
+def _shape_cells(t, char_pr, para_pr=None) -> None:
+    """모양 그대로 표 — 칸 글을 원본 크기로, 줄 간격을 본문과 같게(`LINE_PCT`, 기본 문단 서식은 160%), 칸 여백을 작게
+    (261014-30 표본 시험: 큰 표가 원본보다 길어져 쪽을 넘었다)."""
+    pad = _u0(CELL_PAD_PT)
+    seen = set()
+    for ri in range(t.row_count):
+        for ci in range(t.column_count):
+            try:
+                cell = t.cell(ri, ci)
+            except Exception:
+                continue
+            if cell.element in seen:                       # 합친 칸은 한 번만(요소 자체로 — lxml 프록시의 id 는 다시 쓰일 수 있다)
+                continue
+            seen.add(cell.element)
+            try:
+                cell.set_margins(left=pad, right=pad, top=0, bottom=0)
+            except Exception:
+                pass
+            for p in cell.paragraphs:
+                if para_pr is not None:
+                    p.element.set("paraPrIDRef", str(para_pr))
+                for r in p.element:
+                    if r.tag.endswith("}run"):
+                        r.set("charPrIDRef", str(char_pr))
 
 
 def _float(el, x_pt: float, y_pt: float) -> None:
@@ -322,12 +394,14 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
         right = max(0.0, w - max((r[2] for r in xs), default=w) - 1)
         heads = [e for e in edges if e["where"] == "head"]
         foots = [e for e in edges if e["where"] == "foot"]
+        blocks = _edge_zone_lines(blocks, heads, foots, w, h)
         top = max(0.0, min((e["rect"][1] for e in heads), default=0.0) - 1)
         hlen = (max(e["rect"][3] for e in heads) - top + 1) if heads else 0.0
         bottom = max(0.0, h - max((e["rect"][3] for e in foots), default=h) - 1)
         flen = (max(e["rect"][3] for e in foots) - min(e["rect"][1] for e in foots) + 2) if foots else 0.0
         doc.page.set_margins(left=_u0(left), right=_u0(right), top=_u0(top), bottom=_u0(bottom),
                              header=_u0(hlen), footer=_u0(flen), gutter=0, section=sec)
+        body_bottom = h - bottom - flen - BODY_SAFETY_PT      # 본문 영역 아래 끝 — 넘는 줄은 한글이 새 쪽으로 보낸다
         for kind, lines in (("head", heads), ("foot", foots)):
             # 쪽 번호뿐인 줄 → 한글 '쪽 번호 매기기' + 그 쪽 번호로 새 번호(§1.1). 나머지는 그 쪽 글 그대로
             nums = [ln for ln in lines if len(ln["pieces"]) == 1 and layout.number_only(ln["pieces"][0][2]) is not None]
@@ -373,12 +447,32 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
                 t = head.add_table(len(rows), max(len(r) for r in rows), width=_u(x1 - x0), height=_u(y1 - y0),
                                    char_pr_id_ref=anchor_run)
                 _fill_table(t, rows)
+                if b.get("cols") and len(b["cols"]) == t.column_count:
+                    try:
+                        t.set_column_widths([_u(c) for c in b["cols"]])      # 원본 열 너비(261014-30)
+                    except Exception:
+                        pass
+                if b.get("heights") and len(b["heights"]) == t.row_count:   # 원본 행 높이(261014-30) — 한글이 내용만큼 늘린다
+                    for ri, rh in enumerate(b["heights"]):
+                        for ci in range(t.column_count):
+                            try:
+                                t.cell(ri, ci).set_size(height=_u(rh))
+                            except Exception:
+                                pass
+                for ri, c0, c1 in layout.h_spans(rows):             # 합친 칸(261014-30)
+                    try:
+                        t.merge_cells(ri, c0, ri, c1)
+                    except Exception:
+                        pass
+                _shape_cells(t, st.run(float(b.get("size") or layout.TABLE_PT_DEFAULT), 0, False, True), st.cell_para())
                 _float(t.element, x0, y0)
         for band in layout.bands([b for b in blocks if b["kind"] == "line"]):
             text, x0, width, size, bold, serif = layout.band_text(band)
             lh = size * LINE_PCT / 100.0
             cy = sum((q["rect"][1] + q["rect"][3]) / 2 for q in band) / len(band)
             top = cy - lh / 2
+            # 본문 영역 아래 끝을 넘지 않게 — 꼬리말 바로 위 줄이 반올림·첫 문단 높이로 1~2 pt 넘쳐 쪽이 늘었다(261014-30 표본 시험)
+            top = min(top, body_bottom - lh)
             prev = max(0.0, top - cur)
             cur = max(cur, top) + lh
             doc.add_paragraph(text, section=sec, para_pr_id_ref=st.para(x0 - left, prev),
