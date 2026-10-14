@@ -14,7 +14,24 @@ _CUR = QColor("#ff9632")     # 현재 매치(주황)
 _ALL = QColor("#fff34d")     # 전체 매치(노랑)
 
 
+_MODE = {"v": None}          # 261014-18(검색창 SOT §4.1): 메인 검색바의 (대소문자, 정규식) — `set_mode`
+
+
+def set_mode(mode) -> None:
+    """메인 검색바의 일치 규칙을 따른다 — 다음 `search` 가 매치를 다시 계산한다."""
+    _MODE["v"] = tuple(mode) if mode and any(mode) else None
+
+
 def _find_all(viewer, query):
+    mode = _MODE["v"]
+    if mode:
+        # §4.1 — 같은 `Matcher`. 본문 글(toPlainText)의 글자 자리 = 문서 커서 자리(문단 사이 한 글자)
+        from viewer.search_match import Matcher
+        try:
+            m = Matcher(query, case=mode[0], regex=mode[1])
+        except Exception:
+            return []
+        return list(m.spans(viewer.toPlainText()))
     doc = viewer.document()
     out = []
     cur = QTextCursor(doc)
@@ -62,8 +79,9 @@ def search(viewer, query, backward, state):
         state.clear()
         return (0, 0)
     rev = viewer.document().revision()
-    if query != state.get("query") or rev != state.get("rev"):
+    if query != state.get("query") or rev != state.get("rev") or _MODE["v"] != state.get("mode"):
         state["query"] = query
+        state["mode"] = _MODE["v"]
         state["rev"] = rev
         state["positions"] = _find_all(viewer, query)
         state["idx"] = 0 if state["positions"] else -1

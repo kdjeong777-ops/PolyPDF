@@ -32,6 +32,21 @@ class RenderedPage:
     is_rgba: bool = False     # True 면 4채널, False 면 3채널
 
 
+def page_hits(page, query: str, mode=None) -> list:
+    """쪽 하나에서 질의가 맞은 사각형 — 검색 강조의 한 길(검색창 SOT §4.1, 261014-18).
+    `mode` 가 없거나 둘 다 꺼짐 → `search_for`(종전), 아니면 `search_match.match_rects`. 틀린 정규식이면 빈 목록."""
+    if not query:
+        return []
+    if not mode or not any(mode):
+        return list(page.search_for(query))
+    from viewer.search_match import Matcher, match_rects
+    try:
+        m = Matcher(query, case=mode[0], regex=mode[1])
+    except Exception:
+        return []
+    return match_rects(page, m)
+
+
 @dataclass
 class SearchHit:
     page_index: int
@@ -144,21 +159,22 @@ class PdfDocument:
         for i in range(self.doc.page_count):
             yield i, self.doc.load_page(i).get_text("text")
 
-    def search(self, query: str) -> list:
+    def search(self, query: str, mode=None) -> list:
+        """쪽마다 맞은 자리. `mode=(대소문자, 정규식)` 이면 `search_match`(검색창 SOT §4.1), 아니면 `search_for`."""
         if not query:
             return []
         hits: list = []
         for i in range(self.doc.page_count):
             page = self.doc.load_page(i)
-            rects = page.search_for(query)
+            rects = page_hits(page, query, mode)
             if rects:
                 hits.append(SearchHit(page_index=i, rects=list(rects)))
         return hits
 
-    def search_page(self, page_index: int, query: str) -> list:
+    def search_page(self, page_index: int, query: str, mode=None) -> list:
         if not query:
             return []
-        return list(self.doc.load_page(page_index).search_for(query))
+        return list(page_hits(self.doc.load_page(page_index), query, mode))
 
     def render(
         self,

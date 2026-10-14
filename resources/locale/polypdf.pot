@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 13:59+0900\n"
+"POT-Creation-Date: 2026-10-14 14:21+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -158,7 +158,7 @@ msgid "이 창 캡처 (활성 창은 Ctrl+Shift+S)"
 msgstr ""
 
 #: viewer/app.py
-msgid "지정"
+msgid "영역 캡처"
 msgstr ""
 
 #: viewer/app.py
@@ -2665,6 +2665,11 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/merge_dialog.py
 msgid "사용자 스크린샷"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "정규식이 틀렸습니다: {e}"
 msgstr ""
 
 #: viewer/app.py
@@ -7424,15 +7429,24 @@ msgid "읽는 중: {pages} 페이지"
 msgstr ""
 
 #: viewer/widgets/region_capture.py
-msgid "좌클릭=좌상단 지정"
+msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · 오른쪽 클릭 = 다시 고르기 · Esc = 취소"
 msgstr ""
 
 #: viewer/widgets/region_capture.py
-msgid "Enter/더블클릭=캡쳐, 드래그=이동/크기조절, Esc=취소"
+msgid "끌어서 영역 고르기(클릭 두 번도 됩니다) · Esc·오른쪽 클릭 = 취소"
 msgstr ""
 
 #: viewer/widgets/region_capture.py
-msgid "    사이즈 설정 후 더블클릭하여 캡쳐하세요"
+msgid "놓거나 한 번 더 클릭하면 영역이 정해집니다 · Esc·오른쪽 클릭 = 취소"
+msgstr ""
+
+#: viewer/widgets/region_capture.py
+msgid " · Enter = 지난 영역"
+msgstr ""
+
+#: viewer/widgets/region_capture.py
+#, python-brace-format
+msgid "클릭 = {w}×{h} 상자 놓기 · Esc·오른쪽 클릭 = 취소"
 msgstr ""
 
 #: viewer/widgets/screenshot_pdf_dialog.py
@@ -7461,6 +7475,15 @@ msgstr ""
 
 #: viewer/widgets/search_panel.py
 msgid "검색...  (Enter: 검색, Ctrl+F: 포커스)"
+msgstr ""
+
+#: viewer/widgets/search_panel.py
+msgid "대소문자 구분"
+msgstr ""
+
+#: viewer/widgets/search_panel.py
+#, python-brace-format
+msgid "정규식 — 예: \\d{4}-\\d{2} (날짜), 표\\s*\\d+ (표 번호)"
 msgstr ""
 
 #: viewer/widgets/search_panel.py

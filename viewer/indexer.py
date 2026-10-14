@@ -558,7 +558,7 @@ class PdfIndex:
 
     # --- 검색 --------------------------------------------------------------
 
-    def search(self, query: str, limit: int = 1000, paths: list | None = None) -> list:
+    def search(self, query: str, limit: int = 1000, paths: list | None = None, mode=None) -> list:
         """부분일치(substring) 검색. 페이지 단위 결과를 SearchResult 리스트로 반환.
 
         260616-3: FTS5 MATCH(토큰 단위)는 한글 합성어를 분리하지 못해
@@ -568,6 +568,9 @@ class PdfIndex:
         q = query.strip()
         if not q:
             return []
+        if mode and any(mode):
+            # 261014-18(검색창 SOT §4.1): 대소문자·정규식 — 색인 형식은 그대로, 후보를 추린 뒤 `Matcher` 로 거른다
+            return self._search_matcher(q, limit, paths, mode)
         # LIKE 와일드카드(%, _, \) 이스케이프 후 부분일치 패턴 구성
         esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{esc}%"
@@ -612,6 +615,51 @@ class PdfIndex:
                 )
             )
         return results
+
+    def _search_matcher(self, q: str, limit: int, paths, mode) -> list:
+        """§4.1 — LIKE 힌트가 있으면 그것으로 후보를 추리고, 없으면 범위 안 쪽을 모두 훑어 `Matcher` 로 거른다."""
+        from viewer.search_match import Matcher
+        m = Matcher(q, case=mode[0], regex=mode[1])          # 틀린 정규식은 re.error 로 올린다(부르는 쪽이 알린다)
+        hint = m.like_hint()
+        args: list = []
+        where = []
+        if hint:
+            esc = hint.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where.append("p.text LIKE ? ESCAPE '\\'")
+            args.append(f"%{esc}%")
+        if paths:
+            from viewer.pathutil import norm_key
+            keys = sorted({norm_key(p) for p in paths})
+            where.append("lower(replace(f.path,'/','\\')) IN (%s)" % ",".join("?" for _ in keys))   # §7.0 키와 같은 문자열
+            args.extend(keys)
+        sql = ("SELECT f.path AS path, p.page_index AS page_index, p.text AS text "
+               "FROM pages_fts AS p JOIN files AS f ON f.id = p.file_id"
+               + (" WHERE " + " AND ".join(where) if where else "")
+               + " ORDER BY f.path, p.page_index")
+        results: list = []
+        for row in self.conn.execute(sql, args):
+            text = row["text"] or ""
+            cnt = m.count(text)
+            if not cnt:
+                continue
+            results.append(SearchResult(file_path=row["path"], file_name=Path(row["path"]).name,
+                                        page_index=row["page_index"], match_count=cnt,
+                                        snippet=self._snippet_by(text, m)))
+            if len(results) >= limit:
+                break
+        return results
+
+    @staticmethod
+    def _snippet_by(text: str, m, ctx: int = 16) -> str:
+        """§4.1 — `Matcher` 의 첫 일치 둘레 ±ctx 글자, 일치를 `<...>` 로(`_make_snippet` 과 같은 모양)."""
+        flat = re.sub(r"\s+", " ", text).strip()
+        sp = m.first(flat)
+        if sp is None:
+            return flat[:40]
+        i, j = sp
+        start, end = max(0, i - ctx), min(len(flat), j + ctx)
+        return (("..." if start > 0 else "") + flat[start:i] + "<" + flat[i:j] + ">"
+                + flat[j:end] + ("..." if end < len(flat) else ""))
 
     @staticmethod
     def _make_snippet(text: str, q: str, ctx: int = 16) -> str:

@@ -646,7 +646,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _capture_mode_label(self) -> str:
         m = self._cap_mode
         if m == "region":
-            return tr("지정")
+            return tr("영역 캡처")          # 261014-18(스크린샷 SOT §3.1, 사용자 결정) — 옛 '지정'
         if m.startswith("user"):
             i = int(m[4:])
             return self._cap_sizes[i]["name"] if 0 <= i < len(self._cap_sizes) else tr("전체")
@@ -664,7 +664,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             grp.addAction(a)
             a.triggered.connect(lambda _=False, k=key: self._set_cap_mode(k))
         addmode("full", tr("전체"))
-        addmode("region", tr("지정"))
+        addmode("region", tr("영역 캡처"))
         for i in range(5):
             addmode(f"user{i}", self._cap_sizes[i]["name"])
         m.addSeparator()
@@ -750,12 +750,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._after_capture()
 
     def _capture_region(self, view, fixed_size):
-        """'지정'/'사용자 크기' 영역 캡쳐 오버레이 실행."""
+        """'영역 캡처'/'사용자 크기' 오버레이 실행(스크린샷 SOT §3.1). 영역 캡처는 지난 영역을 기억한다."""
         from viewer.widgets.region_capture import RegionCaptureOverlay
         mode = "fixed" if fixed_size else "region"
         ov = RegionCaptureOverlay(mode=mode, fixed_size=fixed_size,
-                                  copy_mode=self._cap_copy, parent=self)
+                                  copy_mode=self._cap_copy, parent=self,
+                                  last_region=getattr(self, "_cap_last_region", None))
         pm = ov.grab()
+        if ov.region_out:
+            self._cap_last_region = ov.region_out
         if pm is None or pm.isNull():
             return
         cur = view.current_file()
@@ -2013,8 +2016,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             copy = getattr(self, "_cap_copy", "visible")   # 260611-15: 기존 화질 선택도 반영
             if mode == "region":
                 from viewer.widgets.region_capture import RegionCaptureOverlay
-                pm = RegionCaptureOverlay(mode="region", copy_mode=copy,
-                                          parent=self).grab()
+                _ov = RegionCaptureOverlay(mode="region", copy_mode=copy, parent=self,
+                                           last_region=getattr(self, "_cap_last_region", None))
+                pm = _ov.grab()
+                if _ov.region_out:
+                    self._cap_last_region = _ov.region_out
             elif isinstance(mode, str) and mode.startswith("user"):
                 from viewer.widgets.region_capture import RegionCaptureOverlay
                 try:
@@ -2149,6 +2155,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.search_bar.screenshotPdfSaveRequested.connect(self.action_save_screenshot_pdf)
         # v1.6.1 F4: 즐겨찾기 추가 시그널
         self.search_bar.favoriteRequested.connect(self._add_current_search_favorite)
+        self.search_bar.modeChanged.connect(self._on_search_mode_changed)   # 261014-18(검색창 SOT §4.1)
         self.bookmark_tree.favoriteRequested.connect(self._add_current_folder_favorite)
         self.bookmark_tree.addFileFavoriteRequested.connect(self._add_file_favorite)  # ⑫
         # v1.6.18: 책갈피 편집 저장 완료 → 새 _edited.pdf 자동 로드
@@ -6132,12 +6139,30 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def action_search(self, query: str):
         # 260708: 우측 패널(건설기준/법령/특허) 열려 있으면 슬라이드 오버레이로만 그 본문 검색
         if self._content_panel is not None:
+            try:
+                from viewer.widgets import content_find as _cf
+                _cf.set_mode(self.search_bar.mode())          # 261014-18(검색창 SOT §4.1·§12)
+            except Exception:
+                pass
             self._content_query = query
             self._open_content_find(query)
             return
         if not self._folder:
             self.status.showMessage(tr("폴더를 먼저 여세요."))
             return
+        # 261014-18(검색창 SOT §4.1): 대소문자·정규식 — 틀린 정규식이면 검색하지 않고 알린다
+        mode = self.search_bar.mode()
+        if mode and mode[1]:
+            import re as _re
+            try:
+                _re.compile(query)
+            except _re.error as e:
+                self.search_bar.set_invalid(str(e))
+                self.status.showMessage(tr('정규식이 틀렸습니다: {e}').format(e=e), 8000)
+                return
+        self.search_bar.set_invalid("")
+        for _mv in self._mv:
+            _mv.set_search_mode(mode)
         self.status.showMessage(tr('검색 중: {query!r}').format(query=query))
         # 260828: 검색 범위(책갈피창 파일 목록)를 SQL 로 전달 — 영구(다중 폴더) 캐시에서
         #   LIMIT 이 다른 폴더 결과로 채워지지 않게. 없으면 전체.
@@ -6145,12 +6170,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             scope_paths = self.bookmark_tree.all_file_paths() or None
         except Exception:
             scope_paths = None
-        worker = SearchWorker(self._db_path, query, paths=scope_paths)
+        worker = SearchWorker(self._db_path, query, paths=scope_paths, mode=mode)
         worker.finished.connect(self._on_search_finished)
         worker.error.connect(lambda e: self.status.showMessage(tr('검색 오류: {e}').format(e=e)))
         worker.error.connect(self._on_index_db_error)       # 261009-14: 손상이면 복구(위 메시지를 덮는다)
         run_in_thread(worker, self._thread_keep)
         self.main_view.set_query(query)
+
+    def _on_search_mode_changed(self) -> None:
+        """Aa·.* 를 바꾸면 검색어가 있을 때 다시 검색한다(검색창 SOT §9)."""
+        q = self.search_bar.current_query()
+        if q:
+            self.action_search(q)
+        else:
+            self.search_bar.set_invalid("")
 
     def _on_search_finished(self, query: str, results: list):
         # 260616-3: 검색 결과를 현재 책갈피 목록(파일)으로 한정.
@@ -6893,7 +6926,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 and meta.get("src_query")):
             try:
                 disp = str(ss.render_page_png(
-                    meta["src_pdf"], int(meta["src_page"]), meta["src_query"]))
+                    meta["src_pdf"], int(meta["src_page"]), meta["src_query"], mode=meta.get("src_mode")))
             except Exception:
                 disp = path
         # v1.6.7 E1: 표시는 임시 PNG 일 수 있으므로, ◀▶/순번 조회용으로
@@ -7455,6 +7488,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         is_pdf = bool(cur and cur.lower().endswith(".pdf"))
         cur_page = view.current_page() if is_pdf else None
         cur_query = view.current_query() if is_pdf else None   # v1.6.4 C3
+        cur_mode = getattr(view, "_search_mode", None) if cur_query else None   # 261014-18(검색창 SOT §4.1)
 
         try:
             if view.is_two_page_mode():
@@ -7473,7 +7507,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     thumb_pdf_path=cur if is_pdf else None,
                     src_pdf=cur if is_pdf else None,
                     src_page=left_page,
-                    src_query=cur_query,
+                    src_query=cur_query, src_mode=cur_mode,
                     prepend=False,
                 )
                 # 우측 페이지가 존재할 때만 (홀수 페이지 끝일 수도 있음)
@@ -7482,7 +7516,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                         str(saved_r), kind="image", label=disp,
                         thumb_pdf_path=cur,
                         src_pdf=cur, src_page=right_page,
-                        src_query=cur_query,
+                        src_query=cur_query, src_mode=cur_mode,
                         prepend=False,
                     )
                 else:
@@ -7498,7 +7532,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     thumb_pdf_path=cur if is_pdf else None,
                     src_pdf=cur if is_pdf else None,
                     src_page=cur_page,
-                    src_query=cur_query,
+                    src_query=cur_query, src_mode=cur_mode,
                     prepend=False,
                 )
                 self.status.showMessage(tr('스크린샷 저장: {name}').format(name=saved.name), 4000)
@@ -7847,6 +7881,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260606-17: 캡쳐 모드/복사크기/사용자 크기 복원 — 파일을 열지 않으므로 시작 동작과 무관."""
         try:
             self._cap_mode = str(data.get("capture_mode", "full"))
+            self.search_bar.set_mode(bool(data.get("search_case")), bool(data.get("search_regex")))
+            _lr = data.get("capture_last_region")
+            self._cap_last_region = list(_lr) if isinstance(_lr, (list, tuple)) and len(_lr) == 5 else None
             self._cap_copy = str(data.get("capture_copy", "visible"))
             cs = data.get("capture_sizes")
             if isinstance(cs, list) and cs:
@@ -8464,6 +8501,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "capture_mode": getattr(self, "_cap_mode", "full"),
             "capture_copy": getattr(self, "_cap_copy", "visible"),
             "capture_sizes": getattr(self, "_cap_sizes", []),
+            # 261014-18: 검색 토글(검색창 SOT §4.1)·영역 캡처 지난 영역(스크린샷 SOT §3.1)
+            "search_case": self.search_bar.btn_case.isChecked(),
+            "search_regex": self.search_bar.btn_regex.isChecked(),
+            "capture_last_region": getattr(self, "_cap_last_region", None),
             # 260908-2: 텍스트 창의 최신 스타일 값을 담아 둔다(다음 실행에 그대로)
             "preferences": self._text_prefs_snapshot(),
             "favorites": self._favorites,
@@ -8747,6 +8788,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "folder": str(self._folder),
                 "rel": self._fav_rel(self._folder),
                 "query": q,
+                # 261014-18(검색창 SOT §4.1): 토글 값도 함께 — 열 때 되살린다
+                "case": self.search_bar.btn_case.isChecked(),
+                "regex": self.search_bar.btn_regex.isChecked(),
             })
             self._refresh_favorites_menu()
             self._save_settings_now()
@@ -8802,6 +8846,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             q = fav.get("query", "")
             if q:
                 self.search_bar.edit.setText(q)
+                self.search_bar.set_mode(bool(fav.get("case")), bool(fav.get("regex")))
                 self.action_search(q)
 
     def _confirm_close_screenshots(self) -> bool:

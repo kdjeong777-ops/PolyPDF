@@ -14,11 +14,11 @@ CURRENT_SCHEMA = 11
 #   설정 키(이 항목들만 기본값에 포함/초기화 대상):
 CONFIG_TOP_KEYS = ["preferences", "render_dpi", "fit_mode", "study_settings",
                    "read_aloud", "capture_mode", "capture_copy", "capture_sizes",
-                   "panels_visible"]
+                   "panels_visible", "search_case", "search_regex"]
 #   개인(세션) 최상위 키 — 기본값에서 제외, 초기화 시 유지:
 PERSONAL_TOP_KEYS = ["favorites", "law_favorites", "recent_folders", "recent_files",
                      "last_folder", "last_open", "last_main",
-                     "screenshots", "screenshots_meta"]
+                     "screenshots", "screenshots_meta", "capture_last_region"]
 #   ★ 260906-6: `last_open`(시작 시 여는 대상·형태, 260906-3 신설)도 개인 항목이다 —
 #     빠져 있으면 '기본값으로 초기화' 가 마지막으로 보던 대상을 지운다.
 #   머신 종속 환경설정(경로 등) — 기본값에서 제외, 초기화 시 유지:

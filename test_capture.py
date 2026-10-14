@@ -18,7 +18,7 @@ mw._set_cap_mode("full")
 check("캡쳐모드 full", mw._cap_mode == "full")
 check("드롭다운 라벨 전체", "전체" in mw._cap_menus[0].text())
 mw._set_cap_mode("region")
-check("지정 모드 라벨", "지정" in mw._cap_menus[0].text())
+check("영역 캡처 모드 라벨(261014-18 '지정' 에서 이름 변경)", "영역 캡처" in mw._cap_menus[0].text())
 mw._cap_sizes[0]["name"] = "와이드"
 mw._set_cap_mode("user0")
 check("사용자크기 라벨=이름", "와이드" in mw._cap_menus[0].text(), mw._cap_menus[0].text())

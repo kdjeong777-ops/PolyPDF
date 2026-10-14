@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 13:59+0900\n"
+"POT-Creation-Date: 2026-10-14 14:21+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -157,8 +157,8 @@ msgid "이 창 캡처 (활성 창은 Ctrl+Shift+S)"
 msgstr "Capture this window (active window: Ctrl+Shift+S)"
 
 #: viewer/app.py
-msgid "지정"
-msgstr "Region"
+msgid "영역 캡처"
+msgstr "Region capture"
 
 #: viewer/app.py
 msgid "캡쳐 화질 설정"
@@ -2783,6 +2783,11 @@ msgstr "Merging: {get}"
 #: viewer/app.py viewer/widgets/merge_dialog.py
 msgid "사용자 스크린샷"
 msgstr "User Screenshots"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "정규식이 틀렸습니다: {e}"
+msgstr "Invalid regular expression: {e}"
 
 #: viewer/app.py
 #, python-brace-format
@@ -7685,16 +7690,25 @@ msgid "읽는 중: {pages} 페이지"
 msgstr "Reading: page {pages}"
 
 #: viewer/widgets/region_capture.py
-msgid "좌클릭=좌상단 지정"
-msgstr "Left-click = set top-left"
+msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · 오른쪽 클릭 = 다시 고르기 · Esc = 취소"
+msgstr "Enter/double-click = capture · drag = move/resize · arrows = 1px (Shift 10px, Ctrl resize) · right-click = pick again · Esc = cancel"
 
 #: viewer/widgets/region_capture.py
-msgid "Enter/더블클릭=캡쳐, 드래그=이동/크기조절, Esc=취소"
-msgstr "Enter/double-click = capture, drag = move/resize, Esc = cancel"
+msgid "끌어서 영역 고르기(클릭 두 번도 됩니다) · Esc·오른쪽 클릭 = 취소"
+msgstr "Drag to select a region (two clicks also work) · Esc/right-click = cancel"
 
 #: viewer/widgets/region_capture.py
-msgid "    사이즈 설정 후 더블클릭하여 캡쳐하세요"
-msgstr "    Set the size, then double-click to capture"
+msgid "놓거나 한 번 더 클릭하면 영역이 정해집니다 · Esc·오른쪽 클릭 = 취소"
+msgstr "Release or click once more to set the region · Esc/right-click = cancel"
+
+#: viewer/widgets/region_capture.py
+msgid " · Enter = 지난 영역"
+msgstr " · Enter = last region"
+
+#: viewer/widgets/region_capture.py
+#, python-brace-format
+msgid "클릭 = {w}×{h} 상자 놓기 · Esc·오른쪽 클릭 = 취소"
+msgstr "Click = place a {w}×{h} box · Esc/right-click = cancel"
 
 #: viewer/widgets/screenshot_pdf_dialog.py
 msgid "스크린샷 PDF 저장 옵션"
@@ -7723,6 +7737,15 @@ msgstr "Show page number at bottom (screenshot list order)"
 #: viewer/widgets/search_panel.py
 msgid "검색...  (Enter: 검색, Ctrl+F: 포커스)"
 msgstr "Search...  (Enter: search, Ctrl+F: focus)"
+
+#: viewer/widgets/search_panel.py
+msgid "대소문자 구분"
+msgstr "Match case"
+
+#: viewer/widgets/search_panel.py
+#, python-brace-format
+msgid "정규식 — 예: \\d{4}-\\d{2} (날짜), 표\\s*\\d+ (표 번호)"
+msgstr "Regular expression — e.g. \\d{4}-\\d{2} (dates), Table\\s*\\d+ (table numbers)"
 
 #: viewer/widgets/search_panel.py
 msgid "이전 매치 (Shift+F3)"
@@ -10949,4 +10972,16 @@ msgstr "Getting Started"
 
 #~ msgid "이 폴더 안에 새 폴더..."
 #~ msgstr "New Folder Inside This Folder..."
+
+#~ msgid "지정"
+#~ msgstr "Region"
+
+#~ msgid "좌클릭=좌상단 지정"
+#~ msgstr "Left-click = set top-left"
+
+#~ msgid "Enter/더블클릭=캡쳐, 드래그=이동/크기조절, Esc=취소"
+#~ msgstr "Enter/double-click = capture, drag = move/resize, Esc = cancel"
+
+#~ msgid "    사이즈 설정 후 더블클릭하여 캡쳐하세요"
+#~ msgstr "    Set the size, then double-click to capture"
 

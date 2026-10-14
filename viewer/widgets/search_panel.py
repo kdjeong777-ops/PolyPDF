@@ -34,6 +34,7 @@ class SearchBar(QWidget):
     screenshotPdfSaveRequested = pyqtSignal()
     queryCleared = pyqtSignal()
     favoriteRequested = pyqtSignal()      # v1.6.1 F4
+    modeChanged = pyqtSignal()            # 261014-18(검색창 SOT §4.1): Aa·.* 토글
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,6 +48,21 @@ class SearchBar(QWidget):
         self.edit.setPlaceholderText(tr("검색...  (Enter: 검색, Ctrl+F: 포커스)"))
         self.edit.returnPressed.connect(self._emit_search)
         layout.addWidget(self.edit, 1)
+
+        # 261014-18(검색창 SOT §4.1, 사용자 결정): 대소문자 구분·정규식 토글 — 일치 규칙은 search_match 한 곳
+        from PyQt6.QtWidgets import QToolButton
+        self.btn_case = QToolButton()
+        self.btn_case.setText("Aa")
+        self.btn_case.setCheckable(True)
+        self.btn_case.setToolTip(tr("대소문자 구분"))
+        self.btn_regex = QToolButton()
+        self.btn_regex.setText(".*")
+        self.btn_regex.setCheckable(True)
+        self.btn_regex.setToolTip(tr("정규식 — 예: \\d{4}-\\d{2} (날짜), 표\\s*\\d+ (표 번호)"))
+        for b in (self.btn_case, self.btn_regex):
+            b.setFixedWidth(28)
+            b.toggled.connect(lambda _=False: self.modeChanged.emit())
+            layout.addWidget(b)
 
         self.btn_prev = QPushButton("◀")
         self.btn_prev.setFixedWidth(28)
@@ -80,6 +96,22 @@ class SearchBar(QWidget):
             self.queryCleared.emit()
         else:
             self.searchRequested.emit(text)
+
+    def mode(self):
+        """`(대소문자, 정규식)` 또는 None(둘 다 꺼짐 — 종전 검색)."""
+        from viewer.search_match import mode_of
+        return mode_of(self.btn_case.isChecked(), self.btn_regex.isChecked())
+
+    def set_mode(self, case: bool, regex: bool) -> None:
+        for b, v in ((self.btn_case, case), (self.btn_regex, regex)):
+            b.blockSignals(True)
+            b.setChecked(bool(v))
+            b.blockSignals(False)
+
+    def set_invalid(self, why: str = "") -> None:
+        """틀린 정규식 — 검색칸을 붉게(빈 글이면 되돌린다)."""
+        self.edit.setStyleSheet("QLineEdit { border: 1px solid #d33; }" if why else "")
+        self.edit.setToolTip(why)
 
     def set_match_position(self, current: int, total: int):
         self.match_label.setText(f"{current} / {total}")

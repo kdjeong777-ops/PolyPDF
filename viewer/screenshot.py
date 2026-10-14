@@ -78,7 +78,7 @@ def save_screenshot(pixmap: QPixmap, *, source_name: str,
 def render_page_png(src_pdf: str | Path, src_page: int,
                     query: str | None = None,
                     dpi: int = 150,
-                    folder: Path | None = None) -> Path:
+                    folder: Path | None = None, mode=None) -> Path:
     """v1.6.5 D2: 원본 PDF 페이지를 형광펜 포함 재렌더 → PNG 경로 반환.
 
     파일명이 (src_pdf stem, page, query 해시, dpi) 로 결정적이라
@@ -86,7 +86,9 @@ def render_page_png(src_pdf: str | Path, src_page: int,
     """
     folder = Path(folder) if folder else _temp_dir()
     q = query or ""
-    qhash = hashlib.md5(q.encode("utf-8")).hexdigest()[:8] if q else "noq"
+    # 261014-18(검색창 SOT §4.1): 대소문자·정규식이면 그 값도 이름에 — 같은 글자 다른 규칙이 섞이지 않게
+    qkey = q + ("|%d%d" % (bool(mode[0]), bool(mode[1])) if mode and any(mode) else "")
+    qhash = hashlib.md5(qkey.encode("utf-8")).hexdigest()[:8] if q else "noq"
     stem = safe_stem(Path(str(src_pdf)).stem)
     target = folder / f"_hl_{stem}_{int(src_page)}_{qhash}_{int(dpi)}.png"
     if target.exists():
@@ -96,7 +98,8 @@ def render_page_png(src_pdf: str | Path, src_page: int,
         pno = max(0, min(doc.page_count - 1, int(src_page)))
         page = doc.load_page(pno)
         if q:
-            for r in page.search_for(q):
+            from viewer.pdf_doc import page_hits
+            for r in page_hits(page, q, mode):
                 page.add_highlight_annot(r)
         zoom = max(0.5, float(dpi) / 72.0)
         pm = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
@@ -236,7 +239,8 @@ def export_pdf_from_meta(meta_list: Iterable[dict], out_pdf: str | Path,
                     if show_query:
                         page = src_doc.load_page(pno)
                         if src_query:
-                            for r in page.search_for(src_query):
+                            from viewer.pdf_doc import page_hits
+                            for r in page_hits(page, src_query, meta.get("src_mode")):
                                 page.add_highlight_annot(r)
                         zoom = max(0.5, render_dpi / 72.0)
                         pm = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom),

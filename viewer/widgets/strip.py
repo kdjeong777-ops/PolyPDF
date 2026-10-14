@@ -190,6 +190,7 @@ class MiniStrip(QWidget):
     DATA_SRC_PDF  = Qt.ItemDataRole.UserRole + 3   # v1.6.2: 원본 PDF 절대경로 (str, optional)
     DATA_SRC_PAGE = Qt.ItemDataRole.UserRole + 4   # v1.6.2: 원본 PDF 페이지 (0-based int, optional)
     DATA_QUERY    = Qt.ItemDataRole.UserRole + 5   # v1.6.4: 캡처 당시 검색어 (str, optional)
+    DATA_QMODE    = Qt.ItemDataRole.UserRole + 7   # 261014-18: 그 검색어의 (대소문자, 정규식) — 검색창 SOT §4.1
     DATA_LABEL    = Qt.ItemDataRole.UserRole + 6   # 260606-14: 카드 라벨(테마 변경 재렌더용)
 
     CARD_W = 110
@@ -281,7 +282,7 @@ class MiniStrip(QWidget):
                  src_pdf: Optional[str] = None,           # v1.6.2: 원본 PDF (PDF 저장 시 1:1 재렌더)
                  src_page: Optional[int] = None,          # v1.6.2: 원본 PDF 페이지 (0-based)
                  src_query: Optional[str] = None,         # v1.6.4: 캡처 당시 검색어 (형광펜 재렌더)
-                 prepend: bool = True):
+                 prepend: bool = True, src_mode=None):
         if not label:
             label = Path(file_path).stem
 
@@ -312,6 +313,8 @@ class MiniStrip(QWidget):
             item.setData(self.DATA_SRC_PAGE, int(src_page if src_page is not None else 0))
         if src_query:
             item.setData(self.DATA_QUERY, str(src_query))
+            if src_mode:
+                item.setData(self.DATA_QMODE, [bool(v) for v in src_mode])
         # v1.5.0 툴팁: 파일명(stem) + 페이지
         tip = Path(file_path).stem
         if kind == "pdf":
@@ -470,6 +473,7 @@ class MiniStrip(QWidget):
                 "src_pdf": it.data(self.DATA_SRC_PDF),
                 "src_page": it.data(self.DATA_SRC_PAGE),
                 "src_query": it.data(self.DATA_QUERY),
+                "src_mode": it.data(self.DATA_QMODE),
             })
         return out
 

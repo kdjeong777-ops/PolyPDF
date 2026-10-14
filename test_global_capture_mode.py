@@ -18,8 +18,9 @@ import viewer.widgets.region_capture as rc
 
 captured = {}
 class FakeOverlay:
-    def __init__(self, mode="region", fixed_size=None, copy_mode="visible", parent=None):
+    def __init__(self, mode="region", fixed_size=None, copy_mode="visible", parent=None, last_region=None):
         captured["mode"] = mode; captured["fixed"] = fixed_size; captured["copy"] = copy_mode
+        self.region_out = None              # 261014-18(스크린샷 SOT §3.1): 지난 영역
     def grab(self):
         pm = QPixmap(60, 40); pm.fill(); return pm
 rc.RegionCaptureOverlay = FakeOverlay
@@ -41,8 +42,8 @@ def fire(mode):
 # 1) 지정(region) 모드 → RegionCaptureOverlay(mode='region', visible) 사용 + 저장
 b, a = fire("region")
 chk(captured.get("mode") == "region" and captured.get("copy") == "visible",
-    "전역 '지정' 모드 → region 오버레이(보이는 크기)", str(captured))
-chk(a == b + 1, "지정 캡처 1장 저장")
+    "전역 '영역 캡처' 모드 → region 오버레이(보이는 크기)", str(captured))
+chk(a == b + 1, "영역 캡처 1장 저장")
 
 # 2) 사용자 크기(user0) 모드 → fixed + 지정 크기
 mw._cap_sizes = [{"name": "사용자1", "w": 321, "h": 222}]

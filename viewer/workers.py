@@ -866,17 +866,18 @@ class SearchWorker(QObject):
     finished = pyqtSignal(str, list)   # query, results
     error = pyqtSignal(str)
 
-    def __init__(self, db_path: Path, query: str, paths: list | None = None):
+    def __init__(self, db_path: Path, query: str, paths: list | None = None, mode=None):
         super().__init__()
         self.db_path = db_path
         self.query = query
         self.paths = paths                 # 260828: 검색 범위 파일 목록(None=전체)
+        self.mode = mode                   # 261014-18(검색창 SOT §4.1): (대소문자, 정규식) 또는 None
 
     def run(self):
         try:
             idx = PdfIndex(self.db_path)
             try:
-                res = idx.search(self.query, paths=self.paths)
+                res = idx.search(self.query, paths=self.paths, mode=self.mode)
             finally:
                 idx.close()
             self.finished.emit(self.query, res)

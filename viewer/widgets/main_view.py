@@ -35,7 +35,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
 )
 
-from viewer.pdf_doc import PdfDocument
+from viewer.pdf_doc import PdfDocument, page_hits
 from viewer.resources_path import resource_path
 from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
 
@@ -1616,6 +1616,7 @@ class MainView(QWidget):
         self._zoom = 1.5
         self._fit_mode = self.FIT_PAGE
         self._query = ""
+        self._search_mode = None   # 261014-18(검색창 SOT §4.1): (대소문자, 정규식) 또는 None — `set_search_mode`
         self._matches: list = []
         self._page_words: list = []     # 260617-3: 현재 페이지 단어 박스(PDF 좌표)
         self._sel_items: list = []      # 선택 하이라이트 QGraphicsRectItem
@@ -1976,7 +1977,7 @@ class MainView(QWidget):
         self._is_image = False               # v1.6.4 C2: PDF 모드
         self._update_empty_label()           # 260606-30: 문서 로드 → 안내 숨김
         self._query = query or ""
-        self._matches = self._doc.search(self._query) if self._query else []
+        self._matches = self._doc.search(self._query, self._search_mode) if self._query else []
         self._current_match = 0 if self._matches else -1
 
         # v1.6.8 F1: 메인 PDF 는 내장 세로바 숨김, doc_scroll(문서 진행률) 표시.
@@ -2500,9 +2501,13 @@ class MainView(QWidget):
         else:
             self.go_to_page(v)
 
+    def set_search_mode(self, mode) -> None:
+        """검색 일치 규칙(검색창 SOT §4.1) — 다음 `set_query`·`load_document(query=)` 부터 쓴다."""
+        self._search_mode = tuple(mode) if mode and any(mode) else None
+
     def set_query(self, query: str):
         self._query = query or ""
-        self._matches = self._doc.search(self._query) if (self._doc and self._query) else []
+        self._matches = self._doc.search(self._query, self._search_mode) if (self._doc and self._query) else []
         self._current_match = 0 if self._matches else -1
         self._render_current()
         self._update_match_counter()
@@ -2930,7 +2935,7 @@ class MainView(QWidget):
 
         # 하이라이트: PDF pt → 논리 px (= zoom 배). 회전 시 좌표 불일치 → 생략.
         if self._query and not rot:
-            rects = page_obj.search_for(self._query)
+            rects = page_hits(page_obj, self._query, self._search_mode)
             current_local = self._page_local_match_index()
             for i, r in enumerate(rects):
                 r = self._disp_search_rect(page_obj, r)   # 260611-99: /Rotate 보정
@@ -3092,7 +3097,7 @@ class MainView(QWidget):
         # 하이라이트 (현재 페이지 = 좌측)
         if self._query:
             for pg, off_pt_x in [(page_left, 0.0)]:
-                rects = pg.search_for(self._query)
+                rects = page_hits(pg, self._query, self._search_mode)
                 for r in rects:
                     r = self._disp_search_rect(pg, r)        # 260611-99: /Rotate 보정
                     rect = QRectF((r.x0 + off_pt_x) * zoom, r.y0 * zoom,
@@ -3103,7 +3108,7 @@ class MainView(QWidget):
                     self.scene.addItem(item)
             if page_right:
                 off_x = pdf_w_l + gap_pt
-                rects = page_right.search_for(self._query)
+                rects = page_hits(page_right, self._query, self._search_mode)
                 for r in rects:
                     r = self._disp_search_rect(page_right, r)  # 260611-99: /Rotate 보정
                     rect = QRectF((r.x0 + off_x) * zoom, r.y0 * zoom,
@@ -6021,7 +6026,7 @@ class MainView(QWidget):
             return
         try:
             page_obj = self._page_for(self._current_page)
-            rects = page_obj.search_for(self._query)
+            rects = page_hits(page_obj, self._query, self._search_mode)
             if not rects or li >= len(rects):
                 return
             r = self._disp_search_rect(page_obj, rects[li])   # /Rotate 보정
@@ -6038,7 +6043,7 @@ class MainView(QWidget):
             return
         if (query or "") != self._query:
             self._query = query or ""
-            self._matches = self._doc.search(self._query) if self._query else []
+            self._matches = self._doc.search(self._query, self._search_mode) if self._query else []
             self._current_match = 0 if self._matches else -1
         if self._matches:
             gi = self._first_global_match_index(page_index)
