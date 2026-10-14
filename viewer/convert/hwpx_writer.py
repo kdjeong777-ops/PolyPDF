@@ -18,6 +18,7 @@ EDIT_PAGE_W_PT = 595       # 편집 가능의 기본 쪽(A4) 너비
 EDIT_TEXT_W_PT = 425       # 기본 쪽(A4, 좌우 여백 30 mm)의 글 너비 — 편집 가능의 그림을 이 너비에 맞춘다
 LINE_PCT = 100             # 모양 그대로의 줄 간격(%) — 줄 높이 = 글자 크기 × LINE_PCT / 100
 SPACING_MIN, SPACING_MAX = -50, 50      # 한글 자간 범위(%)
+HWP_WIDTH_K = 1.055        # 한글이 그리는 너비 ÷ 같은 글꼴 파일로 잰 너비(실측 261014-15: 바탕 영문 1.060·한글 1.047, 맑은 고딕 1.057·1.042)
 ANCHOR_PT = 1.0            # 띄운 그림·표를 붙든 문단(쪽의 첫 문단)의 글자 크기 — 줄 높이를 거의 차지하지 않게
 GAP_SPACES_MAX = 60        # 나란한 줄 사이를 벌리는 빈칸 수 상한
 
@@ -230,6 +231,7 @@ class _Styles:
         self._base_el = el
         self._parent = self.hdr._para_properties_element(create=True)
         self._next = 1 + max((int(e.get("id")) for e in self._parent if str(e.get("id", "")).isdigit()), default=0)
+        self._seen = len(self._parent)
         self._para = {}
         self._run = {}
 
@@ -247,8 +249,14 @@ class _Styles:
             from copy import deepcopy
             el = deepcopy(self._base_el)
             self.hdr._apply_paragraph_margins(el, {"left": key[0], "prev": key[1]})
+            # 번호는 그때마다 '지금 가장 큰 번호 + 1' — 사이에 python-hwpx 가 머리말·꼬리말 문단 서식을 더하면
+            # 미리 잡아 둔 번호와 겹친다(261014-15 한글 대조: 본문 줄이 머리말 서식(오른쪽·160%)을 받았다)
+            if len(self._parent) != self._seen:
+                self._next = max(self._next, 1 + max((int(e.get("id")) for e in self._parent
+                                                      if str(e.get("id", "")).isdigit()), default=0))
             pid = str(self._next)
             self._next += 1
+            self._seen = len(self._parent) + 1
             el.set("id", pid)
             self._parent.append(el)
             self._para[key] = pid
@@ -318,12 +326,12 @@ def _band_text(band):
 
 
 def _spacing(text: str, width: float, size: float, serif: bool) -> int:
-    """원본 줄 너비에 맞춘 자간(%) — (원본 너비 − 잰 너비) ÷ 글자 수 ÷ 크기. 못 재면 0."""
-    n = len(text)
+    """원본 줄 너비에 맞춘 자간(%). 한글의 자간은 **그 줄 제 너비의 %** 로 든다(자간 −10 → 너비 0.90배, 영문·한글 같음)
+    — (원본 너비 ÷ 한글이 그릴 너비 − 1) × 100. 한글이 그릴 너비 = 그 글꼴로 잰 너비 × `HWP_WIDTH_K`. 못 재면 0."""
     m = layout.measure(text, size, serif)
-    if m is None or n < 2 or width <= 0:
+    if m is None or len(text) < 2 or width <= 0 or m <= 0:
         return 0
-    sp = (width - m) / n / size * 100.0
+    sp = (width / (m * HWP_WIDTH_K) - 1.0) * 100.0
     return int(max(SPACING_MIN, min(SPACING_MAX, round(sp))))
 
 
@@ -367,8 +375,9 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
                     doc.page.restart_page_number(head_p, number=n)
                 except Exception:
                     pass
-                _page_num_ctrl(head_p, ("TOP_" if kind == "head" else "BOTTOM_") + align, side,
-                               st.run(ln["size"], 0, ln["bold"], ln["serif"]))
+                # 런 글자 모양은 아래에서 붙든 문단과 같이 아주 작게 — 번호는 한글이 '쪽 번호 매기기' 모양으로 그린다
+                #   (번호 크기로 두면 그 문단 줄 높이가 커져 본문이 10 pt 밀렸다 — 261014-15 한글 대조)
+                _page_num_ctrl(head_p, ("TOP_" if kind == "head" else "BOTTOM_") + align, side)
                 lines = [x for x in lines if x not in nums]
             content = _hf_content_at(lines, left, w - right)
             if content:
@@ -377,7 +386,7 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
         head = sec.paragraphs[0]
         head.element.set("paraPrIDRef", str(anchor_para))
         for r in head.element:
-            if r.tag.endswith("}run") and not any(e.tag.endswith("}pageNum") for e in r.iter()):
+            if r.tag.endswith("}run"):
                 r.set("charPrIDRef", str(anchor_run))
         cur = top + hlen + ANCHOR_PT * LINE_PCT / 100.0       # 본문은 위 여백 + 머리말 아래에서 시작한다
         for b in blocks:

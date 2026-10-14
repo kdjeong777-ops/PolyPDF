@@ -265,6 +265,10 @@ try:
     vals = dict(re.findall(r'(\w+)="(\d+)"', m0))
     chk(int(vals["header"]) > 0 and int(vals["footer"]) > 0 and abs(int(vals["top"]) - 2952) < 200,
         "E HWPX 모양 그대로 — 위 여백·머리말 길이 = 원본 머리말 자리", m0)
+    hdr2 = zipfile.ZipFile(str(esh)).read("Contents/header.xml").decode("utf-8")
+    pids = re.findall(r'<hh:paraPr [^>]*?\sid="(\d+)"', hdr2)       # \s — snapToGrid="1" 의 id="1" 을 잡지 않게
+    chk(len(pids) == len(set(pids)), "E HWPX 모양 그대로 — 문단 서식 번호가 겹치지 않는다(머리말 서식과 본문 서식)",
+        str(sorted(p for p in set(pids) if pids.count(p) > 1)))
     b0 = re.sub(r"<hp:(header|footer) .*?</hp:\1>", "", xs2[0], flags=re.S)
     chk("Asphalt Design Guide" not in b0, "E HWPX 모양 그대로 — 본문에는 머리말 글이 없다")
 finally:
