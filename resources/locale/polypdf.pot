@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 09:29+0900\n"
+"POT-Creation-Date: 2026-10-14 10:38+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1225,6 +1225,15 @@ msgstr ""
 msgid "{head}{v}쪽"
 msgstr ""
 
+#: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
+#: viewer/workers.py
+msgid "완료"
+msgstr ""
+
+#: viewer/app.py
+msgid "Word 저장을 취소했습니다."
+msgstr ""
+
 #: viewer/app.py viewer/widgets/text_panel.py
 msgid "Word 저장"
 msgstr ""
@@ -1261,11 +1270,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "닫고 저장"
-msgstr ""
-
-#: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
-#: viewer/workers.py
-msgid "완료"
 msgstr ""
 
 #: viewer/app.py
@@ -1692,6 +1696,10 @@ msgstr ""
 msgid "쪽 범위"
 msgstr ""
 
+#: viewer/app.py viewer/edit_controller.py
+msgid "알 수 없는 오류"
+msgstr ""
+
 #: viewer/app.py
 #, python-brace-format
 msgid "책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다."
@@ -1721,10 +1729,6 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "새 이름으로 저장 중: {name}"
-msgstr ""
-
-#: viewer/app.py viewer/edit_controller.py
-msgid "알 수 없는 오류"
 msgstr ""
 
 #: viewer/app.py

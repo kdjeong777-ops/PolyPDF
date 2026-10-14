@@ -3637,18 +3637,27 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             tr("Word 문서 (*.docx)"))
         if not dst:
             return
-        from viewer.text_word import export_pages_to_docx
+        # 261014-5(텍스트 창 SOT §7, 응답성 SOT §4): 배경 스레드 + 진행창(취소) — 종전에는 메인이 바쁨 커서로 멈춰 있었다.
+        from viewer.text_word import export_docx_job, snapshot_fixes
+        from viewer.twoup import MergeCancelled
         tp = self.text_panel
-        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
-        try:
-            ok, msg = export_pages_to_docx(
-                cur, mv._doc.doc, pages, dst, tp.styles(),
-                omit_tables=tp.omit_tables(),
-                fix_rows=lambda pg, rows: self._text_store().apply_to_rows(cur, pg, rows),
-                words_lookup=lambda pg: self._view_ocr_words(cur, pg),
-                ocr_lookup=lambda pg: self._ocr_page_text(cur, pg))
-        finally:
-            QApplication.restoreOverrideCursor()
+        styles, omit = tp.styles(), tp.omit_tables()
+        fixes = snapshot_fixes()
+        forced = {int(p) for (f, p) in (getattr(self, "_text_force_ocr", None) or set()) if str(f) == str(cur)}
+        out = {}
+
+        def _job(progress):
+            ok_, msg_ = export_docx_job(cur, pages, dst, styles, omit_tables=omit, fixes=fixes,
+                                        forced_pages=forced, progress=progress)
+            if not ok_ and not msg_:
+                raise MergeCancelled()
+            out["r"] = (ok_, msg_)
+            progress(len(pages), len(pages), tr("완료"))
+        res = self._run_merge_job(_job, tr("Word 로 저장"))
+        if res.get("cancelled"):
+            self.status.showMessage(tr("Word 저장을 취소했습니다."), 4000)
+            return
+        ok, msg = out.get("r") or (False, res.get("err") or tr("알 수 없는 오류"))
         if ok:
             self.status.showMessage(tr('Word 저장: {name} ({n}쪽)').format(name=Path(dst).name, n=len(pages)), 6000)
         else:

@@ -32,8 +32,11 @@ def _apply_run(run, st):
 
 def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
                          omit_tables: bool = False,
-                         fix_rows=None, ocr_lookup=None, words_lookup=None) -> tuple:
-    """쪽 목록을 docx 로. 반환 (성공여부, 메시지)."""
+                         fix_rows=None, ocr_lookup=None, words_lookup=None,
+                         progress=None) -> tuple:
+    """쪽 목록을 docx 로. 반환 (성공여부, 메시지).
+
+    `progress(했음, 전체, 글) -> bool` 이 False 를 주면 멈추고 `(False, "")` 를 돌려준다(취소 — 파일을 쓰지 않는다)."""
     try:
         from docx import Document
         from docx.shared import Pt
@@ -43,7 +46,9 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
 
     out = Document()
     try:
-        for pg in pages:
+        for i, pg in enumerate(pages):
+            if progress is not None and progress(i, len(pages), f"p.{pg + 1}") is False:
+                return False, ""
             ocr = ""
             if not tx.has_text_layer(doc_fitz, pg):
                 ocr = (ocr_lookup(pg) if ocr_lookup else "") or ""
@@ -83,3 +88,66 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
         return True, ""
     except Exception as e:                       # noqa: BLE001
         return False, str(e)
+
+
+def export_docx_job(pdf_path, pages, dst, styles, *, omit_tables: bool = False,
+                    fixes=None, forced_pages=(), progress=None) -> tuple:
+    """261014-5(텍스트 창 SOT §7, 응답성 SOT §4): Word 저장을 **배경 스레드에서** — 문서·study.db 연결을 이 스레드에서 따로 연다.
+
+    종전에는 메인 스레드가 바쁨 커서만 띄우고 돌아, '문서 전체' 는 쪽마다 표 인식까지 하느라 수 초~수 분 창이 멈췄다.
+    PyMuPDF 문서와 sqlite 연결은 만든 스레드에서만 쓴다(응답성 SOT §4 ⑤) — 메인의 본문 문서·`_study_read` 연결을 쓰지 않는다.
+    `fixes` 는 고침 저장소의 **사본**(메인이 떠서 준다 — 내보내는 동안 사용자가 고쳐도 섞이지 않게).
+    `forced_pages` 는 [OCR 다시 읽기] 한 쪽(그 쪽은 글자층이 있어도 우리 OCR 을 쓴다, SOT §3.1)."""
+    import fitz
+    from viewer import text_extract2 as tx
+    doc = fitz.open(str(pdf_path))
+    st = None
+    try:
+        if doc.needs_pass:
+            from viewer import secure_store
+            doc.authenticate(secure_store.recall_any(str(pdf_path)) or "")
+        try:
+            from viewer.study.study_store import StudyStore, file_key_for
+            from viewer import dbutil
+            st = StudyStore(busy_ms=dbutil.BUSY_MS_UI)
+            key = file_key_for(str(pdf_path))
+        except Exception:
+            st = None
+            key = None
+
+        def _text(pg):
+            try:
+                return (st.get_page_text(key, int(pg)) or "") if st else ""
+            except Exception:
+                return ""
+
+        def _words(pg):
+            if st is None:
+                return ([], 0)
+            forced = int(pg) in set(forced_pages or ())
+            return tx.pick_ocr_words(
+                doc, int(pg),
+                lambda k: (st.get_page_words(key, int(k)), int(st.get_page_dpi(key, int(k)) or 0)),
+                forced=forced)
+
+        fix = (lambda pg, rows: fixes.apply_to_rows(str(pdf_path), pg, rows)) if fixes is not None else None
+        return export_pages_to_docx(str(pdf_path), doc, list(pages), dst, styles, omit_tables=omit_tables,
+                                    fix_rows=fix, ocr_lookup=_text, words_lookup=_words, progress=progress)
+    finally:
+        if st is not None:
+            try:
+                st.close()
+            except Exception:
+                pass
+        doc.close()
+
+
+def snapshot_fixes():
+    """고침 저장소의 사본(배경 내보내기용) — 메인 스레드에서 부른다."""
+    import copy
+    from viewer.text_fix_store import TextFixStore, store
+    src = store()
+    snap = TextFixStore.__new__(TextFixStore)
+    snap.path = src.path
+    snap._data = copy.deepcopy(src._data)
+    return snap

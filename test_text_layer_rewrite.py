@@ -114,8 +114,12 @@ try:
     chk("pick_ocr_words" in vsrc, "① 앱의 판단도 그 함수를 거친다(_view_ocr_words)")
     chk("_view_ocr_words(cur, page)" in rsrc and "in forced else" not in rsrc,
         "① 텍스트 창은 본문과 **같은 규칙**(종전: 다시 읽힌 쪽만 우리 OCR)")
+    # 261014-5(텍스트 창 SOT §7): Word 저장은 배경 스레드라 메인 전용 `_view_ocr_words` 대신 **같은 판단 함수**를 직접 부른다
+    #   (`[OCR 다시 읽기]` 한 쪽은 `forced_pages` 로 넘긴다).
+    jsrc = inspect.getsource(text_word.export_docx_job)
     chk("words_lookup" in inspect.getsource(text_word.export_pages_to_docx)
-        and "_view_ocr_words(cur, pg)" in inspect.getsource(MainWindow._on_text_export_word),
+        and "pick_ocr_words" in jsrc and "forced=" in jsrc
+        and "forced_pages=forced" in inspect.getsource(MainWindow._on_text_export_word),
         "① Word 저장도 같은 원천")
 
     # ── ② 원천이 바뀌어도 옛 고침을 겹침으로 찾는다 ────────────────────────

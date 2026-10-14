@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 09:29+0900\n"
+"POT-Creation-Date: 2026-10-14 10:38+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1255,6 +1255,15 @@ msgstr "Stopped applying to PDF — the original is unchanged."
 msgid "{head}{v}쪽"
 msgstr "{head}{v}"
 
+#: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
+#: viewer/workers.py
+msgid "완료"
+msgstr "Done"
+
+#: viewer/app.py
+msgid "Word 저장을 취소했습니다."
+msgstr "Word export cancelled."
+
 #: viewer/app.py viewer/widgets/text_panel.py
 msgid "Word 저장"
 msgstr "Save Word"
@@ -1297,11 +1306,6 @@ msgstr ""
 #: viewer/app.py
 msgid "닫고 저장"
 msgstr "Close and Save"
-
-#: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
-#: viewer/workers.py
-msgid "완료"
-msgstr "Done"
 
 #: viewer/app.py
 msgid "원본에 저장"
@@ -1738,6 +1742,10 @@ msgstr "{n} bookmarks added — save (💾) in the bookmarks panel edit mode (�
 msgid "쪽 범위"
 msgstr "Page Range"
 
+#: viewer/app.py viewer/edit_controller.py
+msgid "알 수 없는 오류"
+msgstr "Unknown error"
+
 #: viewer/app.py
 #, python-brace-format
 msgid "책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다."
@@ -1770,10 +1778,6 @@ msgstr "Placing on the original: {name}"
 #, python-brace-format
 msgid "새 이름으로 저장 중: {name}"
 msgstr "Saving with a new name: {name}"
-
-#: viewer/app.py viewer/edit_controller.py
-msgid "알 수 없는 오류"
-msgstr "Unknown error"
 
 #: viewer/app.py
 #, python-brace-format
