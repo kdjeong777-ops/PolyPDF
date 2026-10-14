@@ -80,6 +80,12 @@ def write_pptx_shape(ps, pages, dst: Path, tick) -> None:
     _w(ps, pages, dst, tick)
 
 
+def write_docx_word(ps, pages, dst: Path, tick) -> None:
+    """Word(Microsoft Word 사용) — §4.4."""
+    from viewer.convert.word_com import convert_word
+    convert_word(ps, pages, dst, tick)
+
+
 WRITERS = {"xlsx": write_xlsx, "txt": write_txt, "png": write_png, "docx_edit": write_docx_edit,
            "docx_shape": write_docx_shape, "hwpx_edit": write_hwpx_edit, "hwpx_shape": write_hwpx_shape,
-           "pptx_shape": write_pptx_shape}
+           "pptx_shape": write_pptx_shape, "docx_word": write_docx_word}

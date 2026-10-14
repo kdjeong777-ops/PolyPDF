@@ -40,6 +40,7 @@ FORMATS = (
     Format("hwpx_edit", tr_noop("한글 HWPX (편집 가능)"), ".hwpx", True),
     Format("hwpx_shape", tr_noop("한글 HWPX (모양 그대로)"), ".hwpx", True),
     Format("pptx_shape", tr_noop("PowerPoint (모양 그대로)"), ".pptx", True),     # 261014-19(§1)
+    Format("docx_word", tr_noop("Word (Microsoft Word 사용)"), ".docx", True),    # 261014-20(§4.4) — Word 가 있을 때만
     Format("xlsx", tr_noop("Excel (표)"), ".xlsx", True),
     Format("txt", tr_noop("텍스트"), ".txt", True),
     Format("png", tr_noop("이미지 (PNG)"), "", True),
@@ -47,7 +48,8 @@ FORMATS = (
 
 
 def ready_formats() -> list:
-    return [f for f in FORMATS if f.ready]
+    from viewer.convert.word_com import word_installed
+    return [f for f in FORMATS if f.ready and (f.key != "docx_word" or word_installed())]
 
 
 def fmt(key: str) -> Format:
