@@ -1179,8 +1179,8 @@ def _tables(pdf_path, page_index: int, *, cached_only: bool = False, plumber=Non
     out = []
     failed = False
     try:
-        if page_index < len(pdf.pages):
-            pg = pdf.pages[page_index]
+        pg = _plumber_page(pdf, pdf_path, int(page_index))
+        if pg is not None:
             for t in pg.find_tables():
                 rows = t.extract() or []
                 if rows:
@@ -1201,6 +1201,39 @@ def _tables(pdf_path, page_index: int, *, cached_only: bool = False, plumber=Non
     _TCACHE[ck] = out
     _db_put(pdf_path, page_index, out)
     return out
+
+
+_INHERIT = ("Resources", "MediaBox", "CropBox", "Rotate")
+
+
+def _plumber_page(pdf, pdf_path, k: int):
+    """pdfplumber 쪽 하나(SOT §3 규칙 7, 261014-17). `pdf.pages` 는 쪽 하나를 봐도 문서 전체 쪽 목록을 순수 파이썬으로 만든다 —
+    아직 만들지 않았으면 PyMuPDF 로 그 쪽 객체 번호를 찾아 그 쪽만 만든다. 안 되면 종전 길. 없는 쪽이면 None."""
+    if "_pages" not in getattr(pdf, "__dict__", {}):
+        try:
+            import fitz
+            from pdfminer.pdfpage import PDFPage
+            from pdfminer.pdftypes import dict_value
+            from pdfplumber.page import Page
+            d = fitz.open(str(pdf_path))
+            try:
+                if d.needs_pass or not (0 <= k < d.page_count):
+                    raise ValueError("fallback")
+                xref = d.page_xref(k)
+            finally:
+                d.close()
+            attrs = dict(dict_value(pdf.doc.getobj(xref)))
+            parent, hops = attrs.get("Parent"), 0
+            while parent is not None and hops < 64:          # 물려받는 값은 부모에서(PDF 32000 7.7.3.4)
+                pd = dict_value(parent)
+                for key in _INHERIT:
+                    if key not in attrs and key in pd:
+                        attrs[key] = pd[key]
+                parent, hops = pd.get("Parent"), hops + 1
+            return Page(pdf, PDFPage(pdf.doc, xref, attrs, None), page_number=k + 1, initial_doctop=0)
+        except Exception:
+            pass
+    return pdf.pages[k] if 0 <= k < len(pdf.pages) else None
 
 
 # 260908-5: 표 결과의 **영구 캐시**(index.db `page_tables`). 앱이 db 경로를 준다.

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 13:43+0900\n"
+"POT-Creation-Date: 2026-10-14 13:59+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -763,6 +763,10 @@ msgstr "File Is Open in Another PolyPDF Window"
 #: viewer/app.py
 msgid "새 이름으로 저장"
 msgstr "Save with New Name"
+
+#: viewer/app.py
+msgid "다른 PolyPDF 창"
+msgstr "Other PolyPDF windows"
 
 #: viewer/app.py
 msgid "쪽 편집 저장"
@@ -1787,6 +1791,14 @@ msgid "알 수 없는 요청: {op}"
 msgstr "Unknown request: {op}"
 
 #: viewer/app.py
+msgid "다른 PolyPDF 창 확인 중…"
+msgstr "Checking other PolyPDF windows…"
+
+#: viewer/app.py
+msgid "다른 PolyPDF 창에 다시 열게 하는 중…"
+msgstr "Asking other PolyPDF windows to reopen the file…"
+
+#: viewer/app.py
 #, python-brace-format
 msgid "원본에 놓는 중: {name}"
 msgstr "Placing on the original: {name}"
@@ -2345,6 +2357,10 @@ msgstr ""
 #: viewer/app.py
 msgid "저장을 취소했습니다 — 원본은 그대로입니다."
 msgstr "Save canceled — the original is unchanged."
+
+#: viewer/app.py
+msgid "다른 PolyPDF 창이 파일을 놓기를 기다리는 중…"
+msgstr "Waiting for other PolyPDF windows to release the file…"
 
 #: viewer/app.py
 #, python-brace-format

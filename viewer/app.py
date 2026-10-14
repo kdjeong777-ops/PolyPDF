@@ -4038,10 +4038,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         link = getattr(self, "_instance_link", None)
         released = []
         if link is not None:
-            try:
-                holders = link.holders(dst)
-            except Exception:
-                holders = []
+            holders = self._peer_bg(lambda: link.holders(dst), tr("다른 PolyPDF 창 확인 중…")) or []
             if holders:
                 choice = self._ask_peer_release(dst.name, holders)
                 if choice == "cancel":
@@ -4059,15 +4056,29 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                         raise err
                     self._close_main_view_doc()      # 위 Shift 저장과 같은 이유
                     return str(fb)
-                released = link.release(holders, dst)
+                released = self._peer_bg(lambda: link.release(holders, dst),
+                                          tr("다른 PolyPDF 창이 파일을 놓기를 기다리는 중…")) or []
         try:
             return self._place_over_original(src, produced, dst)
         finally:
             if released:
-                try:
-                    link.reload(released, dst)
-                except Exception:
-                    pass
+                self._peer_bg(lambda: link.reload(released, dst), tr("다른 PolyPDF 창에 다시 열게 하는 중…"))
+
+    def _peer_bg(self, fn, label: str):
+        """261014-17(응답성 SOT §4.4, 마스터 §4.7.8): 다른 PolyPDF 창에 묻고 기다리는 일을 **배경 스레드**에서 — 멈춘 창 하나가
+        연결 0.3초·응답 3초를 붙들어 메인이 섰다. 요청마다 소켓은 그 스레드에서 새로 만든다(`InstanceLink._request`).
+        결과(실패면 None). 진행창은 0.3초가 넘을 때만 보인다."""
+        out = {}
+
+        def _job(progress):
+            progress(0, 1, label)
+            try:
+                out["v"] = fn()
+            except Exception:                        # noqa: BLE001 — 확인 실패는 '다른 창 없음' 과 같게
+                out["v"] = None
+            progress(1, 1, tr("완료"))
+        self._run_merge_job(_job, tr("다른 PolyPDF 창"), cancellable=False)
+        return out.get("v")
 
     def _file_op_bg(self, fn, label: str, title: str = None):
         """260915-9(응답성 SOT §4.4): 파일 옮기기·덮어쓰기를 **배경 스레드 + 진행창**에서. 실패면 그 예외, 성공이면 None.
