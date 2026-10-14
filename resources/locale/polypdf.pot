@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 04:27+0900\n"
+"POT-Creation-Date: 2026-10-14 09:29+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -744,10 +744,6 @@ msgid "새 이름으로 저장"
 msgstr ""
 
 #: viewer/app.py
-msgid "원본에 저장"
-msgstr ""
-
-#: viewer/app.py
 msgid "쪽 편집 저장"
 msgstr ""
 
@@ -1127,6 +1123,10 @@ msgid ""
 "※ Windows 보안 정책상 기본 앱의 최종 지정은 사용자가 직접 확인해야 합니다."
 msgstr ""
 
+#: viewer/app.py
+msgid "파일 작업"
+msgstr ""
+
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
 msgstr ""
@@ -1266,6 +1266,10 @@ msgstr ""
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
 #: viewer/workers.py
 msgid "완료"
+msgstr ""
+
+#: viewer/app.py
+msgid "원본에 저장"
 msgstr ""
 
 #: viewer/app.py
@@ -4587,6 +4591,10 @@ msgid "폴더 이름에 사용할 수 없는 글자가 있습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "이름 변경 실패"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "삭제할 수 없음"
 msgstr ""
 
@@ -4621,6 +4629,10 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "파일명에 사용할 수 없는 글자가 있습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "변경 실패"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4698,7 +4710,8 @@ msgid "폴더 만들기 실패"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "이름 변경 실패"
+#, python-brace-format
+msgid "이름 바꾸는 중: {name}"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4738,10 +4751,6 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "{word} 완료"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-msgid "변경 실패"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4812,6 +4821,13 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid ""
+"{name}: {e}\n"
+"다른 프로그램이 폴더 안 파일을 잡고 있을 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "{n_rest}개 이상"
 msgstr ""
 
@@ -4852,6 +4868,13 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "같은 이름의 파일이 이미 있습니다: {name}"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid ""
+"파일 이름 변경 실패: {e}\n"
+"다른 프로그램이 파일을 잡고 있을 수 있습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4903,13 +4926,6 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid ""
-"{name}: {e}\n"
-"다른 프로그램이 폴더 안 파일을 잡고 있을 수 있습니다."
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid ""
 "{n}개 파일을 아래 폴더로 이동할까요?\n"
 "\n"
 "{dst}\n"
@@ -4924,14 +4940,12 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid ""
-"파일 이름 변경 실패: {e}\n"
-"다른 프로그램이 파일을 잡고 있을 수 있습니다."
+msgid "bookmarks.json 읽기 실패: {e}"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "bookmarks.json 읽기 실패: {e}"
+msgid "옮기는 중: {name}"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

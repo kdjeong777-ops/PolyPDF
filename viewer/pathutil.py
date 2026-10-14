@@ -105,3 +105,39 @@ def iter_pdfs(folder, should_cancel=None, stats=None):
                         continue          # 개별 항목 접근 실패는 건너뛴다
         except (PermissionError, OSError):
             continue                      # 못 여는 폴더는 건너뛰고 나머지를 계속
+
+
+RENAME_WAIT_S = 4.0     # 이만큼은 '잠깐 잡힌 것' 으로 보고 다시 시도한다 — 색인이 한 파일을 읽는 시간보다 넉넉히
+RENAME_STEP_S = 0.15
+
+
+def _is_sharing_violation(e: OSError) -> bool:
+    """Windows 공유 위반(32 = 다른 프로세스가 사용 중, 5 = 접근 거부 — 백신·색인이 막 연 때 함께 나온다)."""
+    return getattr(e, "winerror", None) in (32, 5)
+
+
+def rename_when_free(src, dst, move: bool = False, wait_s: float = RENAME_WAIT_S) -> None:
+    """261014-4(마스터 §4.7.14): 파일·폴더 이름 바꾸기/옮기기 — 잠깐 잡혀 있으면 **기다렸다가 다시** 한다.
+
+    Windows 는 누가 파일을 열고 있으면(같은 프로세스의 MuPDF 도) 이름을 못 바꾼다(`WinError 32`). 폴더를 열면 배경 색인
+    (자식 프로세스)이 파일을 하나씩 짧게 열기 때문에, 그 순간 이름 바꾸기가 실패했다 — 부하가 클수록 자주. 공유 위반만
+    `wait_s` 동안 다시 시도하고, 그 밖의 오류와 끝내 안 풀린 경우는 그대로 올린다. **메인 스레드에서 부르지 않는다**(기다린다).
+
+    `move` 면 다른 드라이브로의 이동만 `shutil.move`(복사 후 지우기)로 — 같은 드라이브는 늘 이름 바꾸기다. `shutil.move` 를
+    먼저 부르면 원본이 잠겨 있을 때 **복사는 되고 지우기는 실패해 두 벌**이 남는다.
+    """
+    import shutil
+    import time
+    src, dst = str(src), str(dst)
+    deadline = time.monotonic() + max(0.0, wait_s)
+    while True:
+        try:
+            os.rename(src, dst)
+            return
+        except OSError as e:
+            if move and getattr(e, "winerror", None) == 17:      # 다른 드라이브 — 복사 후 지우기
+                shutil.move(src, dst)
+                return
+            if not _is_sharing_violation(e) or time.monotonic() >= deadline:
+                raise
+        time.sleep(RENAME_STEP_S)

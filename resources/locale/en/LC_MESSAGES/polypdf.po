@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 04:27+0900\n"
+"POT-Creation-Date: 2026-10-14 09:29+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -748,10 +748,6 @@ msgid "새 이름으로 저장"
 msgstr "Save with New Name"
 
 #: viewer/app.py
-msgid "원본에 저장"
-msgstr "Save to Original"
-
-#: viewer/app.py
 msgid "쪽 편집 저장"
 msgstr "Save Page Edits"
 
@@ -1148,6 +1144,10 @@ msgstr ""
 "\n"
 "※ Windows security policy requires you to confirm the default app yourself."
 
+#: viewer/app.py
+msgid "파일 작업"
+msgstr "File Operation"
+
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
 msgstr "Add Files"
@@ -1302,6 +1302,10 @@ msgstr "Close and Save"
 #: viewer/workers.py
 msgid "완료"
 msgstr "Done"
+
+#: viewer/app.py
+msgid "원본에 저장"
+msgstr "Save to Original"
 
 #: viewer/app.py
 #, python-brace-format
@@ -4785,6 +4789,10 @@ msgid "폴더 이름에 사용할 수 없는 글자가 있습니다."
 msgstr "The folder name contains characters that can't be used."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "이름 변경 실패"
+msgstr "Rename failed"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "삭제할 수 없음"
 msgstr "Cannot Delete"
 
@@ -4820,6 +4828,10 @@ msgstr "Select one item to edit."
 #: viewer/widgets/bookmark_tree.py
 msgid "파일명에 사용할 수 없는 글자가 있습니다."
 msgstr "The file name contains characters that can't be used."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "변경 실패"
+msgstr "Rename failed"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."
@@ -4900,8 +4912,9 @@ msgid "폴더 만들기 실패"
 msgstr "Failed to create folder"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "이름 변경 실패"
-msgstr "Rename failed"
+#, python-brace-format
+msgid "이름 바꾸는 중: {name}"
+msgstr "Renaming: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -4943,10 +4956,6 @@ msgstr "{word}: {done} files"
 #, python-brace-format
 msgid "{word} 완료"
 msgstr "{word} complete"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "변경 실패"
-msgstr "Rename failed"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -5020,6 +5029,15 @@ msgstr "A folder with the same name already exists: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid ""
+"{name}: {e}\n"
+"다른 프로그램이 폴더 안 파일을 잡고 있을 수 있습니다."
+msgstr ""
+"{name}: {e}\n"
+"Another program may be holding a file in the folder."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "{n_rest}개 이상"
 msgstr "{n_rest} or more"
 
@@ -5073,6 +5091,15 @@ msgstr "A file with the same name already exists: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid ""
+"파일 이름 변경 실패: {e}\n"
+"다른 프로그램이 파일을 잡고 있을 수 있습니다."
+msgstr ""
+"Failed to rename the file: {e}\n"
+"Another program may be holding the file."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "원본 PDF 없음: {src}"
 msgstr "Original PDF missing: {src}"
 
@@ -5122,15 +5149,6 @@ msgstr "📂 {name}  (selected folder)"
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid ""
-"{name}: {e}\n"
-"다른 프로그램이 폴더 안 파일을 잡고 있을 수 있습니다."
-msgstr ""
-"{name}: {e}\n"
-"Another program may be holding a file in the folder."
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid ""
 "{n}개 파일을 아래 폴더로 이동할까요?\n"
 "\n"
 "{dst}\n"
@@ -5150,17 +5168,13 @@ msgstr "{name}: original missing"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid ""
-"파일 이름 변경 실패: {e}\n"
-"다른 프로그램이 파일을 잡고 있을 수 있습니다."
-msgstr ""
-"Failed to rename the file: {e}\n"
-"Another program may be holding the file."
+msgid "bookmarks.json 읽기 실패: {e}"
+msgstr "Failed to read bookmarks.json: {e}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "bookmarks.json 읽기 실패: {e}"
-msgstr "Failed to read bookmarks.json: {e}"
+msgid "옮기는 중: {name}"
+msgstr "Moving: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format

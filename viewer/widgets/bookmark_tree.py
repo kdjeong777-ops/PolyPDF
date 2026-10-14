@@ -289,6 +289,7 @@ class BookmarkTree(QWidget):
         self._page_edit_save = None                  # 260821: (src, bookmarks_raw) -> None (앱 재구성 저장)
         self._finalize_save = None                   # 260822: (src, produced) -> final_path (덮어쓰기/_edited)
         self._after_save = None                      # 261011-2(§4.7.16): (path) -> bool — 다른 뷰어용 사본을 PDF 에
+        self._file_op = None                         # 261014-4(§4.7.14): (fn, label) -> 예외|None — 배경 파일 작업(앱의 `_file_op_bg`)
         # 260611-61: 네비게이션 합치기 — 선택 클릭이 click+currentChanged 로 2번 발화하는 것을
         #   1회로 합치고, 트리 선택 하이라이트가 먼저 그려진 뒤(지연) 이동/암호창이 뜨게 함.
         self._pending_nav = None
@@ -3069,17 +3070,20 @@ class BookmarkTree(QWidget):
         paths = [Path(it.data(0, self.DATA_FILE)) for it in file_items]
         src = self._source_folder_of(paths)
 
+        # 261014-4(§4.7.14): 옮기기는 진행창(중첩 루프)을 연다 — 메뉴가 **닫힌 뒤에** 돌린다(§4.7.11 '메뉴 안에서 모달 창').
+        def later(fn):
+            return lambda _=False: QTimer.singleShot(0, fn)
+
         def add(label, folder):
             a = sub.addAction(label)
-            a.triggered.connect(lambda _=False, d=folder: self._transfer_files(paths, d, move))
+            a.triggered.connect(later(lambda d=folder: self._transfer_files(paths, d, move)))
 
         a_new = sub.addAction(tr("새 폴더 만들기..."))     # ①
         a_new.triggered.connect(
-            lambda _=False: self._transfer_files(paths, self._ask_new_folder(base=src), move))
+            later(lambda: self._transfer_files(paths, self._ask_new_folder(base=src), move)))
         a_pick = sub.addAction(tr("다른 폴더 선택..."))    # ②
         a_pick.triggered.connect(
-            lambda _=False: self._transfer_files(paths, self._ask_pick_folder(move, start=src),
-                                                move))
+            later(lambda: self._transfer_files(paths, self._ask_pick_folder(move, start=src), move)))
         sub.addSeparator()
 
         picked = [it for it in self.tree.selectedItems() if self._is_folder_node(it)]
@@ -3153,9 +3157,8 @@ class BookmarkTree(QWidget):
         for p in inside:                      # 열려 있으면 핸들 해제(v1.6.21 규약)
             self.releaseFileRequested.emit(str(p))
         QApplication.processEvents()
-        try:
-            folder.rename(new)
-        except Exception as e:
+        e = self._rename_bg(folder, new, tr('이름 바꾸는 중: {name}').format(name=folder.name))
+        if e is not None:
             QMessageBox.warning(self, tr("이름 변경 실패"),
                                 tr('{name}: {e}\n다른 프로그램이 폴더 안 파일을 잡고 있을 수 있습니다.').format(name=folder.name, e=e))
             return
@@ -3271,7 +3274,9 @@ class BookmarkTree(QWidget):
                 if move:
                     self.releaseFileRequested.emit(str(src))   # v1.6.21 핸들 해제 규약
                     QApplication.processEvents()
-                    shutil.move(str(src), str(target))
+                    err = self._rename_bg(src, target, tr('옮기는 중: {name}').format(name=src.name), move=True)
+                    if err is not None:
+                        raise err
                     self._after_move(src, target)
                     pairs.append([str(src), str(target)])
                 else:
@@ -3461,14 +3466,25 @@ class BookmarkTree(QWidget):
         # v1.6.21: 메인 뷰어가 같은 파일을 열고 있으면 잠시 닫도록 알림
         self.releaseFileRequested.emit(str(old_path))
         QApplication.processEvents()
-        try:
-            old_path.rename(new_path)
-        except Exception as e:
+        e = self._rename_bg(old_path, new_path, tr('이름 바꾸는 중: {name}').format(name=old_path.name))
+        if e is not None:
             QMessageBox.warning(self, tr("변경 실패"),
                 tr('파일 이름 변경 실패: {e}\n다른 프로그램이 파일을 잡고 있을 수 있습니다.').format(e=e))
             self.fileOpCompleted.emit(str(old_path), str(old_path))   # revert → 원본 재로드
             return
         self._after_rename(it, old_path, new_path)
+
+    def _rename_bg(self, src, dst, label: str, move: bool = False):
+        """261014-4(마스터 §4.7.14): 이름 바꾸기·옮기기를 **배경에서**, 잠깐 잡혀 있으면 기다렸다 다시(`rename_when_free`).
+        실패면 그 예외, 성공이면 None. 앱이 실행기를 안 넣었으면(단독 위젯·검사) 기다리지 않고 한 번만 — 메인을 세우지 않게."""
+        from viewer.pathutil import rename_when_free
+        if self._file_op is None:
+            try:
+                rename_when_free(src, dst, move=move, wait_s=0)
+                return None
+            except Exception as e:                      # noqa: BLE001
+                return e
+        return self._file_op(lambda: rename_when_free(src, dst, move=move), label)
 
     def _after_rename(self, it, old_path: Path, new_path: Path):
         """261008-1(마스터 §4.7.14, 사용자 보고 '새로 추가한 PDF 여러 개를 연속으로 이름 변경하면

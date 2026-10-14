@@ -2146,6 +2146,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # v1.6.18: 책갈피 편집 저장 완료 → 새 _edited.pdf 자동 로드
         self.bookmark_tree.bookmarksEdited.connect(self._on_bookmarks_edited)
         # 260611-18(A4): '저장' 버튼이 page_meta(개체/주석 등)도 디스크에 저장하도록 훅 주입
+        self.bookmark_tree._file_op = lambda fn, label: self._file_op_bg(fn, label, tr("파일 작업"))   # 261014-4(§4.7.14): 이름 바꾸기·옮기기는 배경에서, 잠깐 잡혀 있으면 다시
         self.bookmark_tree.set_meta_hooks(lambda: bool(self._edit_dirty),
                                           self._save_meta_from_button)
         # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
@@ -4031,7 +4032,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 except Exception:
                     pass
 
-    def _file_op_bg(self, fn, label: str):
+    def _file_op_bg(self, fn, label: str, title: str = None):
         """260915-9(응답성 SOT §4.4): 파일 옮기기·덮어쓰기를 **배경 스레드 + 진행창**에서. 실패면 그 예외, 성공이면 None.
 
         `os.replace` 도 메인에서 부르지 않는다 — 방금 쓴 큰 파일은 실시간 백신 검사가 끝날 때까지 이름 바꾸기가
@@ -4045,7 +4046,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception as e:                   # noqa: BLE001
                 out["e"] = e
             progress(1, 1, tr("완료"))
-        res = self._run_merge_job(_job, tr("원본에 저장"), cancellable=False)
+        res = self._run_merge_job(_job, title or tr("원본에 저장"), cancellable=False)
         if "e" in out:
             return out["e"]
         return None if res.get("ok") else RuntimeError(res.get("err") or "파일 작업 실패")

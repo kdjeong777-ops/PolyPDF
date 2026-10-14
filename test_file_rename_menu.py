@@ -41,6 +41,15 @@ def spin(n=10, ms=20):
         app.processEvents(); QTest.qWait(ms)
 
 
+def wait_index_idle(mw, timeout_s=60):
+    """261014-4: 배경 색인이 끝날 때까지 — 종전 5초 상한은 바쁜 기계(전체 검사)에서 모자라 C·F 가 가끔 실패했다(불안정)."""
+    import time as _t
+    end = _t.monotonic() + timeout_s
+    while mw._index_workers and _t.monotonic() < end:
+        spin(1, 50)
+    return not mw._index_workers
+
+
 def make_pdf(p, tag, pages=4):
     d = fitz.open()
     for i in range(pages):
@@ -127,11 +136,7 @@ try:
     # ── C. 색인·꾸밈·하이퍼링크 ────────────────────────────────────────
     from viewer.indexer import PdfIndex
     target = sorted(fo.glob("*.pdf"))[0]
-    # 색인이 끝나기를 기다린다
-    for _ in range(100):
-        if not mw._index_workers:
-            break
-        spin(1, 50)
+    chk(wait_index_idle(mw), "준비 — 폴더 색인이 끝났다")
     idx = PdfIndex(mw._db_path)
     try:
         had = idx._find_file_row(target, "id")
@@ -276,6 +281,7 @@ try:
         def request_cancel(self):
             self.cancelled = True
 
+    chk(wait_index_idle(mw), "준비 — 앞 단계의 색인이 끝났다(진짜 작업이 가짜 작업 순서에 섞이지 않게)")
     started_f = []
     real_rit = appmod.run_in_thread
     appmod.run_in_thread = lambda w, keep: started_f.append(w)
