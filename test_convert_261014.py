@@ -165,9 +165,9 @@ try:
 
     # ── I. 메뉴 넷 ────────────────────────────────────────────────
     want_fmt = [f.label for f in convert.ready_formats()]          # 다 만든 형식이 늘면 함께 는다
-    chk([x.text() for x in mw.menu_export.actions()] == want_fmt,
-        "I 파일 메뉴 '내보내기' — 다 만든 형식만")
-    chk(mw._btn_convert.text() == "변환", "I 도구 막대 '변환' 단추")
+    chk(mw.act_export.text() == "변환하여 내보내기..." and mw.act_export.menu() is None,
+        "I 파일 메뉴 '변환하여 내보내기...' — 하위 메뉴 없이 창(261014-28)")
+    chk(mw._btn_convert.text() == "변환하여 내보내기", "I 도구 막대 '변환하여 내보내기' 단추")
     menus = []
     _orig = QMenu.exec
 

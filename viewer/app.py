@@ -1405,11 +1405,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._btn_build_study = mk(tr("단어장 생성"), tr("도구 → 단어장 생성"), self._action_build_study)
         mk(tr("책갈피 생성"), tr("도구 → 책갈피 자동 생성"), self.action_open_bookmarker)
         self._btn_merge = mk(tr("PDF병합"), tr("도구 → PDF 병합"), lambda: self._on_merge_files(None))
-        # 261014-11(형식 변환 SOT §2.1, 사용자 결정): 누르면 변환 창 — 형식은 창에서 고른다
-        self._btn_convert = mk(tr("변환"), tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"), lambda: self.action_convert())
         self._btn_img2pdf = mk(tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"),
                                lambda: self.action_image_to_pdf())  # 260825-13
-        self._btn_shot_pdf = mk(tr("스크린샷 PDF 저장"), tr("스크린샷 전체를 PDF로"), self.action_save_screenshot_pdf)
+        # 261014-11(형식 변환 SOT §2.1, 사용자 결정): 누르면 변환 창 — 형식은 창에서 고른다
+        # 261014-28(사용자 지시, 디자인 SOT §2.9): '변환하여 내보내기' 로, '이미지→PDF' 오른쪽. '스크린샷 PDF 저장' 단추는 뺐다(스크린샷 창에서)
+        self._btn_convert = mk(tr("변환하여 내보내기"), tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"), lambda: self.action_convert())
         mk(tr("암호화"), tr("현재 PDF에 암호·권한 설정(암호화 저장)"), self.action_encrypt_pdf)
         # `번역` 은 지시 목록에 없다 — 지우라는 뜻이 아니라 자리를 정하지 않은 것으로 읽어 맨 뒤에 둔다.
         self._btn_tr = mk(tr("번역"), tr("PDF 번역 (목록 창)"), lambda: self._action_translate_files())  # 260623
@@ -1572,9 +1572,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_flat.setToolTip(tr("꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."))
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
-        # 261014-11(형식 변환 SOT §2.1): 내보내기 ▸ 형식 — 본문에 열린 파일
-        self.menu_export = self.convert_format_menu(self, tr("내보내기"), lambda k: self.action_convert(fmt=k))
-        m_file.addMenu(self.menu_export)
+        # 261014-28(형식 변환 SOT §2.1, 사용자 지시): 하위 메뉴 없이 누르면 변환 창 — 본문에 열린 파일
+        self.act_export = QAction(tr("변환하여 내보내기..."), self)
+        self.act_export.triggered.connect(lambda: self.action_convert())
+        m_file.addAction(self.act_export)
         m_file.addSeparator()
 
         # 260603-3: 인쇄
@@ -1655,9 +1656,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._ko_only_acts.append(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study))
         _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker)
         a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None))
-        _act(tr("변환..."), lambda: self.action_convert())     # 261014-11(디자인 SOT §2.9.1 — 패널과 같은 차례)
         _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf())  # 260825-13
-        _act(tr("스크린샷 PDF 저장..."), self.action_save_screenshot_pdf)
         _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf)
         self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files)
 
@@ -6496,8 +6495,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._open_mode_applied = True
         except Exception:
             pass
-        # 스크린샷·스크린샷 PDF — 내용 복사(추출) 권한 기준
-        for b in (getattr(self, "_btn_shot", None), getattr(self, "_btn_shot_pdf", None)):
+        # 스크린샷 — 내용 복사(추출) 권한 기준
+        for b in (getattr(self, "_btn_shot", None),):
             if b is not None:
                 try:
                     b.setEnabled(can_copy)
@@ -8279,23 +8278,29 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         def _act_en(a, on):
             if a is not None:
                 a.setVisible(vis)       # 한국어가 아니면 숨김(§7)
-                a.setEnabled(vis and on)    # 메뉴 항목은 활성/비활성
+                a.setEnabled(vis and on)    # 키와 무관한 항목(단어장) — 언어로만
+
+        def _act_vis(a, on):
+            # 261014-28(사용자 지시, 마스터 §11.12): 메뉴 항목(도구·보기)은 키가 없으면 숨긴다(비활성으로 두지 않는다)
+            if a is not None:
+                a.setVisible(vis and on)
+                a.setEnabled(vis and on)
 
         # 법령·고시
         _btn("_btn_law", vis and has_law)
-        _act_en(va.get("law"), has_law)
-        _act_en(getattr(self, "_act_law", None), has_law)
+        _act_vis(va.get("law"), has_law)
+        _act_vis(getattr(self, "_act_law", None), has_law)
         # 건설기준(KCSC)
         _btn("_btn_kcsc", vis and has_kcsc)
-        _act_en(va.get("kcsc"), has_kcsc)
-        _act_en(getattr(self, "_act_kcsc", None), has_kcsc)
+        _act_vis(va.get("kcsc"), has_kcsc)
+        _act_vis(getattr(self, "_act_kcsc", None), has_kcsc)
         # 특허(KIPO)
         _btn("_btn_kipo", vis and has_kipo)
-        _act_en(va.get("kipo"), has_kipo)
-        _act_en(getattr(self, "_act_kipo", None), has_kipo)
+        _act_vis(va.get("kipo"), has_kipo)
+        _act_vis(getattr(self, "_act_kipo", None), has_kipo)
         # 번역(Claude) — 툴바 'PDF번역' 버튼 + 메뉴(영→한이라 한국 전용, 사용자 결정 261008-25)
         _btn("_btn_tr", vis and has_tr)
-        _act_en(getattr(self, "_act_tr_files", None), has_tr)
+        _act_vis(getattr(self, "_act_tr_files", None), has_tr)
         # 영어단어 학습(단어장) — 툴바 단추 2개·보기 메뉴·도구 메뉴·우측 탭(키와 무관)
         _btn("_btn_vm_study", vis)
         _btn("_btn_build_study", vis)

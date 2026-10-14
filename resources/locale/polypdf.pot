@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 16:04+0900\n"
+"POT-Creation-Date: 2026-10-14 17:22+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -341,15 +341,6 @@ msgstr ""
 msgid "도구 → PDF 병합"
 msgstr ""
 
-#: viewer/app.py viewer/convert_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/convert_dialog.py
-msgid "변환"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
-msgstr ""
-
 #: viewer/app.py
 msgid "이미지→PDF"
 msgstr ""
@@ -359,11 +350,11 @@ msgid "이미지 파일 → PDF 변환"
 msgstr ""
 
 #: viewer/app.py
-msgid "스크린샷 PDF 저장"
+msgid "변환하여 내보내기"
 msgstr ""
 
 #: viewer/app.py
-msgid "스크린샷 전체를 PDF로"
+msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/encrypt_dialog.py
@@ -421,7 +412,7 @@ msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥�
 msgstr ""
 
 #: viewer/app.py
-msgid "내보내기"
+msgid "변환하여 내보내기..."
 msgstr ""
 
 #: viewer/app.py
@@ -481,15 +472,7 @@ msgid "PDF 병합..."
 msgstr ""
 
 #: viewer/app.py
-msgid "변환..."
-msgstr ""
-
-#: viewer/app.py
 msgid "이미지 → PDF 변환..."
-msgstr ""
-
-#: viewer/app.py
-msgid "스크린샷 PDF 저장..."
 msgstr ""
 
 #: viewer/app.py
@@ -936,6 +919,10 @@ msgstr ""
 #: viewer/app.py viewer/print_controller.py viewer/sign_draft_controller.py
 #: viewer/widgets/sign_dialogs.py
 msgid "PDF 파일 (*.pdf)"
+msgstr ""
+
+#: viewer/app.py
+msgid "스크린샷 PDF 저장"
 msgstr ""
 
 #: viewer/app.py
@@ -2849,6 +2836,11 @@ msgstr ""
 
 #: viewer/convert/proc.py
 msgid "Word 파일을 만들지 못했습니다"
+msgstr ""
+
+#: viewer/convert_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/convert_dialog.py
+msgid "변환"
 msgstr ""
 
 #: viewer/convert_controller.py

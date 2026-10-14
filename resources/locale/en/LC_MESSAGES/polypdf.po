@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 16:04+0900\n"
+"POT-Creation-Date: 2026-10-14 17:22+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -340,15 +340,6 @@ msgstr "Merge PDFs"
 msgid "도구 → PDF 병합"
 msgstr "Tools → Merge PDFs"
 
-#: viewer/app.py viewer/convert_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/convert_dialog.py
-msgid "변환"
-msgstr "Convert"
-
-#: viewer/app.py
-msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
-msgstr "Convert the PDF to Word, Hangul, Excel, images or text"
-
 #: viewer/app.py
 msgid "이미지→PDF"
 msgstr "Images→PDF"
@@ -358,12 +349,12 @@ msgid "이미지 파일 → PDF 변환"
 msgstr "Convert image files → PDF"
 
 #: viewer/app.py
-msgid "스크린샷 PDF 저장"
-msgstr "Save Screenshot PDF"
+msgid "변환하여 내보내기"
+msgstr "Convert and export"
 
 #: viewer/app.py
-msgid "스크린샷 전체를 PDF로"
-msgstr "All screenshots to PDF"
+msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
+msgstr "Convert the PDF to Word, Hangul, Excel, images or text"
 
 #: viewer/app.py viewer/widgets/encrypt_dialog.py
 msgid "암호화"
@@ -421,8 +412,8 @@ msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥�
 msgstr "Exports a new PDF with annotations, photos and hyperlinks flattened into the page and content outside the crop really removed (the original is untouched). Signed documents are signed again at the same places."
 
 #: viewer/app.py
-msgid "내보내기"
-msgstr "Export"
+msgid "변환하여 내보내기..."
+msgstr "Convert and export..."
 
 #: viewer/app.py
 msgid "인쇄..."
@@ -481,16 +472,8 @@ msgid "PDF 병합..."
 msgstr "Merge PDFs..."
 
 #: viewer/app.py
-msgid "변환..."
-msgstr "Convert..."
-
-#: viewer/app.py
 msgid "이미지 → PDF 변환..."
 msgstr "Convert Images → PDF..."
-
-#: viewer/app.py
-msgid "스크린샷 PDF 저장..."
-msgstr "Save Screenshot PDF..."
 
 #: viewer/app.py
 msgid "암호화 (암호·권한 설정)..."
@@ -941,6 +924,10 @@ msgstr "Save Encrypted PDF"
 #: viewer/widgets/sign_dialogs.py
 msgid "PDF 파일 (*.pdf)"
 msgstr "PDF Files (*.pdf)"
+
+#: viewer/app.py
+msgid "스크린샷 PDF 저장"
+msgstr "Save Screenshot PDF"
 
 #: viewer/app.py
 msgid ""
@@ -2970,6 +2957,11 @@ msgstr "Could not start the conversion process"
 #: viewer/convert/proc.py
 msgid "Word 파일을 만들지 못했습니다"
 msgstr "Could not create the Word file"
+
+#: viewer/convert_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/convert_dialog.py
+msgid "변환"
+msgstr "Convert"
 
 #: viewer/convert_controller.py
 msgid "변환할 PDF 를 먼저 여세요."
@@ -11237,4 +11229,13 @@ msgstr "Getting Started"
 
 #~ msgid "    사이즈 설정 후 더블클릭하여 캡쳐하세요"
 #~ msgstr "    Set the size, then double-click to capture"
+
+#~ msgid "스크린샷 전체를 PDF로"
+#~ msgstr "All screenshots to PDF"
+
+#~ msgid "변환..."
+#~ msgstr "Convert..."
+
+#~ msgid "스크린샷 PDF 저장..."
+#~ msgstr "Save Screenshot PDF..."
 
