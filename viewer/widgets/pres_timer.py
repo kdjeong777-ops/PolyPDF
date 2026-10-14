@@ -97,7 +97,9 @@ class ToneEngine:
         if spec is None:
             return None
         if self._dir is None:
-            self._dir = tempfile.mkdtemp(prefix="polypdf_tone_")
+            # 261014-3(마스터 §14.8.1): 고정 폴더 하나를 다시 쓴다 — 종전 `mkdtemp` 는 실행마다 새 폴더를 남겼다
+            self._dir = os.path.join(tempfile.gettempdir(), "polypdf_tone")
+            os.makedirs(self._dir, exist_ok=True)
         path = os.path.join(self._dir, sound + ".wav")
         if os.path.exists(path):
             return path

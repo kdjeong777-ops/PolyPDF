@@ -1539,6 +1539,15 @@ def build_twoup(items, settings, out_path, gen_bookmarks_fn=None, log=None, prog
         if progress is not None and progress(min(done[0], total_units), total_units, label) is False:
             raise MergeCancelled()
 
+    try:
+        return _build_twoup_in(items, s, out_path, tmpdir, gen_bookmarks_fn, log, _tick)
+    finally:
+        # 261014-3(마스터 §14.8.1): 표지·목차·간지 임시 파일 — 종전에는 지우지 않아 병합·다단마다 폴더가 하나씩 쌓였다
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _build_twoup_in(items, s, out_path, tmpdir, gen_bookmarks_fn, log, _tick):
     final, _infos = _assemble(items, s, fast=False, gen_bookmarks_fn=gen_bookmarks_fn,
                               tick=_tick, tmpdir=tmpdir, log=log)
     _tick(tr("최종 저장 중…"))

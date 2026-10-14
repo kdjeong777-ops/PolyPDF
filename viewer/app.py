@@ -246,6 +246,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._update_right_panel_visibility()   # 260606-10: 패널 비면 메인 전체 폭
         # 260825: 검색 색인이 비어 있으면(트라이그램 마이그레이션 잔재 등) 자동 재인덱싱
         QTimer.singleShot(1200, self._startup_index_check)
+        # 261014-3(마스터 §14.8.1): 지난 실행들이 남긴 앱 임시 폴더를 치운다 — `os._exit` 종료라 끝날 때는 못 지운다
+        from viewer import temp_sweep as _ts
+        QTimer.singleShot(8000, _ts.sweep_in_background)
 
         # 260618-11: 업데이트 — 스레드 결과를 메인 스레드로 전달하는 시그널 홀더
         self._update_sig = _UpdateSignals()

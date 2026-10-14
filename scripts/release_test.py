@@ -34,6 +34,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -349,12 +350,19 @@ def checks(ui: bool, only=None) -> int:
         rcs = []
         for k in range(2):                            # 실패하면 한 번 더 — 다시 통과하면 '불안정' 으로 따로 적는다
             log = out / "logs" / (t.stem + ("" if k == 0 else ".retry") + ".log")
+            # 261014-3(마스터 §14.8.1): 검사마다 제 임시 폴더(TEMP·TMP)를 주고 끝나면 통째로 지운다 — 검사가
+            #   `os._exit` 로 정리 전에 끝나도 남지 않는다(사용자 임시 폴더에 18,869개·16.5GB 가 쌓였었다).
+            ttmp = out / "tmp" / ("t%03d" % i)
+            ttmp.mkdir(parents=True, exist_ok=True)
+            # TMPDIR 가 먼저다 — 파이썬 `tempfile` 은 TMPDIR → TEMP → TMP 차례로 본다(이 기계는 TMPDIR 이 시스템에 잡혀 있다)
+            tenv = dict(env, TMPDIR=str(ttmp), TEMP=str(ttmp), TMP=str(ttmp))
             with open(log, "w", encoding="utf-8", errors="replace") as f:
                 try:
                     rc = subprocess.run([str(py), "-I", t.name], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT,
-                                        timeout=CHECK_TIMEOUT, env=env).returncode
+                                        timeout=CHECK_TIMEOUT, env=tenv).returncode
                 except subprocess.TimeoutExpired:
                     rc = "시간 초과"
+            shutil.rmtree(ttmp, ignore_errors=True)
             rcs.append(rc)
             if rc == 0 or rc == "시간 초과":          # 261012-13: 멈춘 검사(모달 등)는 다시 돌려도 또 멈춘다 — 10분을 두 번 쓰지 않는다
                 break
