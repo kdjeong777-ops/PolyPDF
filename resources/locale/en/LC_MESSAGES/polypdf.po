@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 11:43+0900\n"
+"POT-Creation-Date: 2026-10-14 13:43+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3178,6 +3178,65 @@ msgstr "The {what} process ended unexpectedly (code {code})."
 msgid "색인 프로세스가 예기치 않게 끝났습니다(코드 {code})."
 msgstr "The indexing process ended unexpectedly (code {code})."
 
+#: viewer/ocr_batch.py
+msgid "서명된 PDF — 덮어쓰면 서명이 깨집니다"
+msgstr "Signed PDF — overwriting would break the signature"
+
+#: viewer/ocr_batch.py
+msgid "암호가 걸린 PDF"
+msgstr "Password-protected PDF"
+
+#: viewer/ocr_batch.py
+msgid "모든 쪽에 글자층이 이미 있습니다"
+msgstr "Every page already has a text layer"
+
+#: viewer/ocr_batch.py
+msgid "OCR 로 읽은 글이 없습니다"
+msgstr "OCR found no text"
+
+#: viewer/ocr_batch.py
+msgid "열 수 없는 PDF"
+msgstr "Cannot open the PDF"
+
+#: viewer/ocr_batch_controller.py viewer/widgets/ocr_batch_dialog.py
+msgid "OCR 글자층 넣기"
+msgstr "Add OCR text layer"
+
+#: viewer/ocr_batch_controller.py
+msgid "넣을 PDF 가 없습니다."
+msgstr "There is no PDF to process."
+
+#: viewer/ocr_batch_controller.py
+msgid "원본에 넣는 중…"
+msgstr "Writing to the originals…"
+
+#: viewer/ocr_batch_controller.py
+#, python-brace-format
+msgid "글자층을 넣은 파일: {n}개 · {p}쪽 (새로 읽은 쪽 {o}쪽)"
+msgstr "Files with a text layer added: {n} · {p} pages ({o} pages newly read)"
+
+#: viewer/ocr_batch_controller.py
+msgid "건너뛴 파일:"
+msgstr "Skipped files:"
+
+#: viewer/ocr_batch_controller.py
+msgid "실패:"
+msgstr "Failed:"
+
+#: viewer/ocr_batch_controller.py
+msgid "다른 이름으로 저장된 파일:"
+msgstr "Saved under a different name:"
+
+#: viewer/ocr_batch_controller.py
+#, python-brace-format
+msgid "OCR 글자층: {n}개 파일 · {p}쪽"
+msgstr "OCR text layer: {n} files · {p} pages"
+
+#: viewer/ocr_batch_controller.py
+#, python-brace-format
+msgid "중지했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 남아 다음에 다시 읽지 않습니다)."
+msgstr "Stopped — {k} files were not touched (pages already read are kept and will not be read again)."
+
 #: viewer/page_edit_build.py
 msgid "원본에 놓을 준비"
 msgstr "Preparing to place in original"
@@ -4631,6 +4690,10 @@ msgstr "Edit bookmark name (single edit: title · page)"
 msgid "PDF 찾는 중..."
 msgstr "Finding PDFs..."
 
+#: viewer/widgets/bookmark_tree.py
+msgid "글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자층을 원본 PDF 에 넣습니다 — 다른 프로그램에서도 검색·복사가 됩니다(처음 한 번 백업을 남깁니다)."
+msgstr "Reads scanned pages without a text layer with OCR and adds an invisible text layer to the original PDF — other programs can then search and copy the text (a backup is kept the first time)."
+
 #: viewer/widgets/bookmark_tree.py viewer/widgets/convert_dialog.py
 msgid "형식"
 msgstr "Format"
@@ -4802,6 +4865,10 @@ msgstr "Save and Refresh"
 #: viewer/widgets/bookmark_tree.py
 msgid "버리고 새로고침"
 msgstr "Discard and Refresh"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "OCR 글자층 넣기..."
+msgstr "Add OCR text layer..."
 
 #: viewer/widgets/bookmark_tree.py
 msgid ""
@@ -5081,6 +5148,11 @@ msgstr ""
 #, python-brace-format
 msgid "{n}개 PDF 찾는 중..."
 msgstr "Finding {n} PDFs..."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "OCR 글자층 넣기 ({n}개 파일)..."
+msgstr "Add OCR text layer ({n} files)..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -6745,6 +6817,28 @@ msgstr "Right"
 msgid "(기본 설정)"
 msgstr "(Default)"
 
+#: viewer/widgets/ocr_batch_dialog.py
+msgid "원본 PDF 에 덮어쓰고, 처음 한 번 원본 옆에 백업(.textfix.bak.pdf)을 남깁니다. 이미 읽은 쪽은 다시 읽지 않습니다. 서명된 PDF·암호 PDF 는 건너뜁니다."
+msgstr "Overwrites the original PDF and keeps a backup (.textfix.bak.pdf) next to it the first time. Pages already read are not read again. Signed and password-protected PDFs are skipped."
+
+#: viewer/widgets/ocr_batch_dialog.py viewer/widgets/ocr_options_dialog.py
+msgid "뒷배경 워터마크는 읽지 않기"
+msgstr "Ignore background watermarks"
+
+#: viewer/widgets/ocr_batch_dialog.py viewer/widgets/ocr_options_dialog.py
+msgid "언어"
+msgstr "Language"
+
+#: viewer/widgets/ocr_batch_dialog.py
+#, python-brace-format
+msgid "{name} 의 글자층 없는 쪽을 OCR 로 읽어 보이지 않는 글자층을 넣습니다."
+msgstr "Reads the pages of {name} that have no text layer with OCR and adds an invisible text layer."
+
+#: viewer/widgets/ocr_batch_dialog.py
+#, python-brace-format
+msgid "PDF {n}개의 글자층 없는 쪽을 OCR 로 읽어 보이지 않는 글자층을 넣습니다."
+msgstr "Reads the pages without a text layer in {n} PDFs with OCR and adds an invisible text layer."
+
 #: viewer/widgets/ocr_options_dialog.py
 msgid "한글 + 영문 (권장)"
 msgstr "Korean + English (recommended)"
@@ -6756,10 +6850,6 @@ msgstr "Korean only"
 #: viewer/widgets/ocr_options_dialog.py
 msgid "영문만"
 msgstr "English only"
-
-#: viewer/widgets/ocr_options_dialog.py
-msgid "뒷배경 워터마크는 읽지 않기"
-msgstr "Ignore background watermarks"
 
 #: viewer/widgets/ocr_options_dialog.py
 msgid "본문 뒤에 연하게 깔린 글씨를 지우고 읽습니다. 연한 진짜 글자(회색 캡션 등)도 함께 사라질 수 있습니다."
@@ -6784,10 +6874,6 @@ msgstr "Clears this document's 'View as OCR' flag."
 #: viewer/widgets/ocr_options_dialog.py
 msgid "어디를 다시 읽을까요?"
 msgstr "Which pages should be re-read?"
-
-#: viewer/widgets/ocr_options_dialog.py
-msgid "언어"
-msgstr "Language"
 
 #: viewer/widgets/ocr_options_dialog.py
 msgid "한 쪽만 읽습니다. 몇 초 걸립니다."

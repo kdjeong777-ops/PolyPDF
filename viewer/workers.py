@@ -503,7 +503,6 @@ class TextLayerWorker(QObject):
     def run(self):
         store = None
         try:
-            from viewer import text_extract2 as tx
             from viewer import text_apply as ta
             from viewer.text_fix_store import store as fix_store
             try:
@@ -539,17 +538,7 @@ class TextLayerWorker(QObject):
                     _pacing.pace(self)
                 pages = sorted(have)
 
-            def pick(doc, p):
-                return tx.pick_ocr_words(doc, p, look, forced=(p in self.forced))
-
-            def rows_for(doc, p):
-                ws, dpi = pick(doc, p)
-                peers = (tx._peer_words(lambda k: pick(doc, k), p, doc.page_count)
-                         if ws else None)
-                return tx.page_lines(doc, self.doc_path, p, tables="off", join_lines=False,
-                                     ocr_words=ws or None, ocr_dpi=dpi,
-                                     ocr_peer_words=peers)
-
+            rows_for = ta.layer_rows_for(self.doc_path, look, self.forced)   # §5.4 원천 — 일괄(§5.5)과 같은 것
             fs = fix_store()
 
             def tick(k, total, p):

@@ -21,6 +21,8 @@ APP_TEMP_PREFIXES = (
     "polypdf_img2pdf_", "polypdf_nupprint_", "polypdf_bake_", "polypdf_nupfiles_", "polypdf_multi_",  # 인쇄(종료 때 지운다)
     "polypdf_upd_",          # 업데이트 내려받기
     "polypdf_tone_",         # 발표 시간 알림음(261014-3 전 — 지금은 고정 폴더 `polypdf_tone` 하나를 다시 쓴다)
+    "polypdf_conv_",         # 형식 변환 — 스캔 쪽 사본·머리말 가린 사본(끝나면 지운다, 형식 변환 SOT §4.1)
+    "polypdf_ocrb_",         # OCR 글자층 일괄 — 파일마다 임시 PDF(원본에 놓으면 비어 지운다, 텍스트 창 SOT §5.5)
 )
 STALE_HOURS = 24
 

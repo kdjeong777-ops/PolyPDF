@@ -266,8 +266,27 @@ def rewrite_page_layer(fitz, page, lines, fontfile, font=None) -> int:
     return n
 
 
+def layer_rows_for(doc_path, look, forced=()):
+    """글자층 다시 쓰기의 원천(SOT §5.4 1단계) — `rows_for(doc, 쪽)` 를 돌려준다. [PDF 에 반영](`TextLayerWorker`)과
+    OCR 글자층 일괄(§5.5)이 같은 것을 쓴다. `look(쪽) -> (낱말상자, dpi)` 는 study.db 를 읽는 쪽이 준다."""
+    from viewer import text_extract2 as tx
+    forced = {int(p) for p in (forced or ())}
+
+    def pick(doc, p):
+        return tx.pick_ocr_words(doc, p, look, forced=(p in forced))
+
+    def rows_for(doc, p):
+        ws, dpi = pick(doc, p)
+        peers = (tx._peer_words(lambda k: pick(doc, k), p, doc.page_count)
+                 if ws else None)
+        return tx.page_lines(doc, str(doc_path), p, tables="off", join_lines=False,
+                             ocr_words=ws or None, ocr_dpi=dpi,
+                             ocr_peer_words=peers)
+    return rows_for
+
+
 def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
-                    progress=None, cancelled=None, out=None) -> tuple:
+                    progress=None, cancelled=None, out=None, backup=None) -> tuple:
     """고른 쪽들의 보이지 않는 글자층을 다시 써 **임시 파일**을 만든다 (SOT §5.4).
 
     원본 덮어쓰기는 부르는 쪽(메인)이 한다 — 핸들을 쥔 곳이 메인이다.
@@ -275,7 +294,9 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
       `fixes_for(쪽, 줄목록) -> 줄목록` 고침 얹기(`TextFixStore.apply_to_rows`)
       `items_for(쪽) -> 고침목록`       물러설 길(줄 바꿔 끼우기)에 쓸 고침
     반환 `(임시 파일, 통계)` — 통계 `{rewritten, fallback, skipped, lines, unwritten, cancelled}`.
-    중지되거나 바꾼 쪽이 없으면 임시 파일을 지우고 `""`."""
+    중지되거나 바꾼 쪽이 없으면 임시 파일을 지우고 `""`.
+    `backup` — 원본 옆 `.textfix.bak.pdf`(처음 한 번). 기본은 `out` 이 없을 때만(원본에 덮어쓸 반영) —
+    임시 사본만 만드는 변환은 원본 옆에 아무것도 남기지 않는다(SOT §5.4 '백업', 261014-16)."""
     import fitz
     src = Path(src)
     stats = {"rewritten": [], "fallback": [], "skipped": [], "lines": 0,
@@ -322,13 +343,14 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
         doc.save(str(tmp), garbage=3, deflate=True)
     finally:
         doc.close()
-    try:
-        bak = src.with_name(src.name + BACKUP_SUFFIX)
-        if not bak.exists():
-            import shutil
-            shutil.copy2(str(src), str(bak))
-    except Exception:
-        pass
+    if backup if backup is not None else not out:
+        try:
+            bak = src.with_name(src.name + BACKUP_SUFFIX)
+            if not bak.exists():
+                import shutil
+                shutil.copy2(str(src), str(bak))
+        except Exception:
+            pass
     return str(tmp), stats
 
 

@@ -142,7 +142,8 @@ try:
     asrc = inspect.getsource(MainWindow._start_text_ocr)
     chk("QProgressDialog" in asrc and "request_cancel" in asrc,
         "⑤ 여러 쪽이면 진행창 + 취소")
-    chk("missing_langs" in asrc, "② 빠진 언어를 사용자에게 알린다")
+    lsrc = inspect.getsource(MainWindow._ensure_ocr_langs)          # 261014-16: 일괄과 함께 쓰는 확인으로 옮겼다
+    chk("_ensure_ocr_langs" in asrc and "missing_langs" in lsrc, "② 빠진 언어를 사용자에게 알린다")
     dsrc = inspect.getsource(MainWindow._on_text_ocr_done)
     chk("current_page()" in dsrc,
         "⑤ 다른 쪽 결과는 저장만 하고 화면을 건드리지 않는다")

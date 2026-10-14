@@ -110,6 +110,8 @@ try:
         chk("SCANNED OCR SENTENCE" in body or "SCANNED" in body, "D 스캔 쪽은 우리 OCR 결과가 글로", body[-200:])
     left = {p.name for p in Path(tempfile.gettempdir()).glob("polypdf_conv_*")} - tmp_before
     chk(not left and not list(root.glob("*_textlayer_tmp.pdf")), "D 임시 사본을 남기지 않는다(원본 옆·임시 폴더)", str(left))
+    chk(not list(root.glob("*.textfix.bak.pdf")), "D 원본 옆에 백업도 남기지 않는다(원본을 바꾸지 않는 사본 — 텍스트 창 SOT §5.4)",
+        str([p.name for p in root.iterdir()]))
     chk(calls.count("--convert-server") == 1, "E 변환은 보조 프로세스(--convert-server)에서(나머지는 같은 때 돈 색인)", str(calls))
     chk("viewer._vendor.pdf2docx" not in sys.modules and "cv2" not in sys.modules,
         "E 이 프로세스에는 pdf2docx·opencv 가 실리지 않는다")

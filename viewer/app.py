@@ -53,6 +53,7 @@ from viewer.study_controller import StudyMixin
 from viewer.update_controller import UpdateMixin
 from viewer.sign_controller import SignMixin
 from viewer.convert_controller import ConvertMixin   # 261014-11(형식 변환 SOT §2)
+from viewer.ocr_batch_controller import OcrBatchMixin   # 261014-16(텍스트 창 SOT §5.5)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -115,7 +116,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -2184,6 +2185,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261014-11(형식 변환 SOT §2.1): 책갈피창 우클릭 '변환 ▸'(여러 파일이면 일괄) · 썸네일 '선택한 쪽 변환 ▸'
         for _bt in (self.bookmark_tree, self.bookmark_tree_right):
             _bt.convertFilesRequested.connect(lambda files, k: self.action_convert(files=files, fmt=k))
+            _bt.ocrLayerFilesRequested.connect(self.action_ocr_batch)   # 261014-16(텍스트 창 SOT §5.5)
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(
                 files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,
@@ -3283,9 +3285,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.warning(self, tr('OCR 언어 자료'), out.get('msg') or tr('받지 못했습니다.'))
         return True
 
-    def _start_text_ocr(self, path, pages, lang, watermark, skip_text=True):
-        """OCR 워커를 띄운다. 여러 쪽이면 진행창(취소 가능)을 붙인다."""
-        from PyQt6.QtWidgets import QProgressDialog
+    def _ensure_ocr_langs(self, lang, skip_text=True) -> bool:
+        """OCR 언어 자료가 없으면 알리고 고칠 길을 준다 — 계속하면 True([OCR 다시 읽기]·OCR 글자층 일괄 공용)."""
         from viewer.study import ocr as _so
         miss = _so.missing_langs(lang)
         if miss:        # 조용히 다른 언어로 읽지 않는다(단어학습 SOT §14.8)
@@ -3295,7 +3296,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             #   업데이트해 둔 설치본에는 닿지 않는다. 받은 자료는 쓰기 권한이 있는
             #   사용자 폴더에 둔다 — Program Files 는 관리자 권한이 필요하다.
             if not self._offer_ocr_lang_repair(miss, lang):
-                return          # 사용자가 그만뒀다
+                return False    # 사용자가 그만뒀다
             miss = _so.missing_langs(lang)
             if miss:
                 where = ''
@@ -3312,6 +3313,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 QMessageBox.information(
                     self, 'OCR',
                     tr('이 설치본에는 다음 언어 자료가 없습니다: {join}. 있는 언어로만 읽습니다: {resolve_lang}{where}{extra}').format(join=', '.join(miss), resolve_lang=_so.resolve_lang(lang), where=where, extra=extra))
+
+        return True
+
+    def _start_text_ocr(self, path, pages, lang, watermark, skip_text=True):
+        """OCR 워커를 띄운다. 여러 쪽이면 진행창(취소 가능)을 붙인다."""
+        from PyQt6.QtWidgets import QProgressDialog
+        if not self._ensure_ocr_langs(lang, skip_text):
+            return          # 사용자가 그만뒀다
 
         tp = self.text_panel
         prev = getattr(self, '_text_ocr_worker', None)
@@ -3556,14 +3565,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 return
         finally:
             QApplication.restoreOverrideCursor()
-        store = self._text_store()
-        rewritten = list(stats.get("rewritten") or [])
-        fallback = list(stats.get("fallback") or [])
-        # 다시 쓴 쪽은 결과가 '원천 + 고침' 이라 고침을 **남기고 표시만** 한다(§5.1.4).
-        store.mark_applied(cur, [p for p in rewritten if store.get_items(cur, p)])
-        # 물러선 길(줄 바꿔 끼우기)은 되풀이하면 겹쳐 적힌다 — 종전대로 고침을 비운다(§5.2).
-        for p in fallback:
-            store.clear_page_fixes(cur, p)
+        rewritten, fallback = self._mark_layer_written(cur, stats)
         self._reload_after_text_apply(out, page, src=cur)
         notes =[tr('글자층을 다시 쓴 쪽: {n}쪽 ({get}줄)').format(n=len(rewritten), get=int(stats.get('lines') or 0))]
         if fallback:
@@ -3578,6 +3580,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         QMessageBox.information(self, tr("PDF 에 반영"), "\n".join(notes))
         self.status.showMessage(
             tr('텍스트층에 반영했습니다 — {name} · {n}쪽').format(name=Path(out).name, n=len(rewritten) + len(fallback)), 6000)
+
+    def _mark_layer_written(self, cur, stats):
+        """글자층을 쓴 뒤 고침 표시(텍스트 창 SOT §5.4) — [PDF 에 반영]·OCR 글자층 일괄(§5.5) 공용. (다시 쓴 쪽, 물러선 쪽)."""
+        store = self._text_store()
+        rewritten = list(stats.get("rewritten") or [])
+        fallback = list(stats.get("fallback") or [])
+        # 다시 쓴 쪽은 결과가 '원천 + 고침' 이라 고침을 **남기고 표시만** 한다(§5.1.4).
+        store.mark_applied(cur, [p for p in rewritten if store.get_items(cur, p)])
+        # 물러선 길(줄 바꿔 끼우기)은 되풀이하면 겹쳐 적힌다 — 종전대로 고침을 비운다(§5.2).
+        for p in fallback:
+            store.clear_page_fixes(cur, p)
+        return rewritten, fallback
 
     @staticmethod
     def _page_list_text(pages) -> str:
