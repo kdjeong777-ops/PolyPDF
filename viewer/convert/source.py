@@ -86,13 +86,14 @@ class PageSource:
         except Exception:
             return rows
 
-    def lines(self, pg, *, tables: str | None = None) -> list:
-        """쪽 줄 목록(고침 반영) — 텍스트 창이 보이는 것과 같다."""
+    def lines(self, pg, *, tables: str | None = None, join: bool = True) -> list:
+        """쪽 줄 목록(고침 반영) — 텍스트 창이 보이는 것과 같다. `join=False` 는 원본 줄(형식 변환 '모양 그대로')."""
         from viewer import text_extract2 as tx
         ocr = "" if tx.has_text_layer(self.doc, int(pg)) else self.ocr_text(pg)
         ws, dpi = self.ocr_words(pg)
         rows = tx.page_lines(self.doc, self.path, int(pg), tables=(tables or self.tables_mode),
-                             ocr_text=ocr, ocr_words=ws or None, ocr_dpi=int(dpi or 0))
+                             ocr_text=ocr, ocr_words=ws or None, ocr_dpi=int(dpi or 0),
+                             join_lines=join)
         return self.fix_rows(pg, rows)
 
     def tables(self, pg) -> list:

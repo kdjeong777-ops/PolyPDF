@@ -57,6 +57,9 @@ ALLOW = {
                                     "선 1", "선 2", "선 3", "선 4", "선 5"},
     "viewer/widgets/read_aloud.py": {"전체"},                 # 읽기 구간 값(정규식은 _REGEX 가 거른다)
     "viewer/widgets/thumbs_list.py": {"한"},                  # 글자 폭을 재는 표본
+    # 261014-14 형식 변환(형식 변환 SOT §1): 만든 문서 안의 키·원본 글꼴 이름 짐작
+    "viewer/convert/hwpx_writer.py": {"개요 1"},              # 한글 기본 스타일 이름(문서 안의 키)
+    "viewer/convert/layout.py": {"명조", "고딕"},              # PDF 글꼴 이름에서 세리프 여부를 짐작하는 조각
     # 사용자 데이터 기본 이름(설정에 저장돼 사용자가 고친다). 발표 포인터·펜·캡처 크기 기본 이름은
     #   tr_noop + 보여 줄 때 tr(이름)이라 여기 없다(사용자가 고친 이름은 번역이 없어 그대로 보인다)
     "viewer/widgets/nup_preset.py": {"(이름없음)"},

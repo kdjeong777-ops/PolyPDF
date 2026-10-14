@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Word(편집 가능) — pdf2docx 를 보조 프로세스에서 (형식 변환 SOT §4.1, 261014-13).
+"""Word(모양 그대로) — pdf2docx 를 보조 프로세스에서 (형식 변환 SOT §4.1, 261014-13; 방식 이름은 261014-14).
 
 pdf2docx 는 순수 파이썬이라 느리고(GIL 을 오래 쥔다) 메모리가 크다. 그래서 색인과 **같은 자식 프로세스 틀**
 (`index_proc.run_job` — 파이프·진행·취소·작업 개체·낮은 우선순위)로 `PolyPDF.exe --convert-server` 를 띄운다.
@@ -35,7 +35,7 @@ def _layered_copy(ps, pages, tick) -> str | None:
     return tmp or None
 
 
-def convert_docx_edit(ps, pages, dst: Path, tick) -> None:
+def convert_docx(ps, pages, dst: Path, tick) -> None:
     """부모 쪽 — 배경 스레드에서 부른다. `tick` 이 `Cancelled` 를 던지면 자식을 멈추고 결과를 지운다(부르는 쪽이)."""
     from viewer import index_proc
     from viewer.convert import Cancelled

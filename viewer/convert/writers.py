@@ -54,9 +54,26 @@ def write_png(ps, pages, dst: Path, tick) -> None:
 
 
 def write_docx_edit(ps, pages, dst: Path, tick) -> None:
-    """Word(편집 가능) — pdf2docx 를 **보조 프로세스**에서(§4.1)."""
-    from viewer.convert.proc import convert_docx_edit
-    convert_docx_edit(ps, pages, dst, tick)
+    """Word(편집 가능) — 이은 문단·표·그림을 python-docx 로(§1)."""
+    from viewer.convert.docx_writer import write_docx_edit as _w
+    _w(ps, pages, dst, tick)
 
 
-WRITERS = {"xlsx": write_xlsx, "txt": write_txt, "png": write_png, "docx_edit": write_docx_edit}
+def write_docx_shape(ps, pages, dst: Path, tick) -> None:
+    """Word(모양 그대로) — pdf2docx 를 **보조 프로세스**에서(§4.1)."""
+    from viewer.convert.proc import convert_docx
+    convert_docx(ps, pages, dst, tick)
+
+
+def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:
+    from viewer.convert.hwpx_writer import write_hwpx_edit as _w
+    _w(ps, pages, dst, tick)
+
+
+def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
+    from viewer.convert.hwpx_writer import write_hwpx_shape as _w
+    _w(ps, pages, dst, tick)
+
+
+WRITERS = {"xlsx": write_xlsx, "txt": write_txt, "png": write_png, "docx_edit": write_docx_edit,
+           "docx_shape": write_docx_shape, "hwpx_edit": write_hwpx_edit, "hwpx_shape": write_hwpx_shape}

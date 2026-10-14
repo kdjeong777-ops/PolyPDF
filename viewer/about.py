@@ -31,6 +31,7 @@ OSS = (
     ("python-docx", "MIT", tr_noop("Steve Canny 외"), ("python-docx",)),
     # 261014-13(형식 변환 SOT §4.1): 0.5.13 을 가져와 고쳐 넣었다(viewer/_vendor/pdf2docx — POLYPDF_PATCHES.md)
     ("pdf2docx 0.5.13", "MIT", "Artifex Software", ()),
+    ("python-hwpx", "Apache 2.0", "python-hwpx Maintainers", ("python-hwpx",)),
     ("Send2Trash", "BSD-3-Clause", tr_noop("Andrew Senetar 외"), ("send2trash",)),
     ("SQLite", "Public Domain", "", ()),
     ("Tesseract OCR", "Apache 2.0", tr_noop("Tesseract 기여자"), ()),

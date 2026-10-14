@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""261014-13: Word(편집 가능) — 가져와 고친 pdf2docx 를 보조 프로세스에서 (형식 변환 SOT §4.1, 개선 로드맵 P2-3).
+"""261014-13: Word(모양 그대로 — 261014-14 에 방식 이름을 바꿈) — 가져와 고친 pdf2docx 를 보조 프로세스에서 (형식 변환 SOT §4.1, 개선 로드맵 P2-3).
 
-실제 처리기(`action_convert(fmt="docx_edit")`)로:
+실제 처리기(`action_convert(fmt="docx_shape")`)로:
 A. docx 에 제목·문단 글이 들어간다
 B. 선 그은 표가 Word **표**로 나온다(칸 글 그대로)
 C. 그림이 들어간다 — 회전해 넣은 그림도(고침 2: opencv 대신 Pillow)
@@ -94,7 +94,7 @@ try:
     mw.open_folder(root); spin(15)
     mw._load_main(HistoryItem(str(src), 0, "", "bookmark")); spin(10)
     tmp_before = {p.name for p in Path(tempfile.gettempdir()).glob("polypdf_conv_*")}
-    ok = mw.action_convert(fmt="docx_edit"); spin(3)
+    ok = mw.action_convert(fmt="docx_shape"); spin(3)
     out = root / "W.docx"
     chk(ok and out.exists(), "준비 — Word 파일이 같은 폴더·같은 이름으로", str(infos[-1:]))
     if out.exists():
@@ -121,7 +121,7 @@ try:
         seen.append(label)
         return len(seen) < 2                     # 자식이 첫 진행을 보낸 뒤 취소
     try:
-        convert.run(str(src), "docx_edit", pages=[0, 1], progress=cancel_soon)
+        convert.run(str(src), "docx_shape", pages=[0, 1], progress=cancel_soon)
         cancelled = False
     except convert.Cancelled:
         cancelled = True

@@ -16,6 +16,7 @@ nltk>=3.8                # WordNet 뜻·예문 + 영어 표제어화
 kiwipiepy>=0.17          # 한국어 형태소·표제어 (P0 검증: 3.14 동작)
 kiwipiepy_model>=0.21    # ★ kiwipiepy 한국어 모델(별도 103MB) — 빌드 동봉 필수(없으면 Kiwi() 크래시)
 python-docx>=1.1         # 260603: 단어학습 Word(.docx) 내보내기
+python-hwpx==6.6.0       # 261014-14: 한글 HWPX 변환(형식 변환 SOT §4.2 — 고정 판, Apache-2.0, 의존성 lxml)
 lameenc>=1.7              # 260606: 재생내용 mp3 저장(libmp3lame 내장)
 pywin32>=306             # 260603: 음성 읽기(Windows SAPI, win32com) — Windows 전용
 anthropic>=0.40          # 260621-P0: PDF 번역·요약(Claude API)

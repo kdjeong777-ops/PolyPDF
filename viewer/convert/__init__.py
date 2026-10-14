@@ -36,9 +36,9 @@ class Format:
 
 FORMATS = (
     Format("docx_edit", tr_noop("Word (편집 가능)"), ".docx", True),
-    Format("docx_shape", tr_noop("Word (모양 그대로)"), ".docx", False),
-    Format("hwpx_edit", tr_noop("한글 HWPX (편집 가능)"), ".hwpx", False),
-    Format("hwpx_shape", tr_noop("한글 HWPX (모양 그대로)"), ".hwpx", False),
+    Format("docx_shape", tr_noop("Word (모양 그대로)"), ".docx", True),
+    Format("hwpx_edit", tr_noop("한글 HWPX (편집 가능)"), ".hwpx", True),
+    Format("hwpx_shape", tr_noop("한글 HWPX (모양 그대로)"), ".hwpx", True),
     Format("xlsx", tr_noop("Excel (표)"), ".xlsx", True),
     Format("txt", tr_noop("텍스트"), ".txt", True),
     Format("png", tr_noop("이미지 (PNG)"), "", True),

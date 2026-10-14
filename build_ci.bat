@@ -180,6 +180,7 @@ python -m PyInstaller ^
     --collect-all kiwipiepy ^
     --collect-all kiwipiepy_model ^
     --collect-all docx ^
+    --collect-all hwpx ^
     --collect-all lameenc ^
     --collect-submodules viewer ^
     --add-data "resources;resources" ^
