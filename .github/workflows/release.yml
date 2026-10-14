@@ -51,6 +51,27 @@ jobs:
             echo "tesseract staged"
           }
 
+      # 261014-30: choco 서버가 응답하지 않으면(커뮤니티 피드 오류로 두 번 연달아 실패) 우리 `components` 릴리스의
+      #   tesseract.zip(앱의 구성요소 설치와 같은 묶음, 마스터 §14.5 U16)으로 마련한다.
+      - name: Stage Tesseract — fallback (components release)
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $have = @(".\\tesseract\\tesseract.exe", ".\\tesseract\\Library\\bin\\tesseract.exe") | Where-Object { Test-Path $_ }
+          if ($have) { echo "tesseract already staged"; exit 0 }
+          gh release download components -R $env:GITHUB_REPOSITORY -p tesseract.zip -D .\_comp --clobber
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $z = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path ".\_comp\tesseract.zip"))
+          $rooted = ($z.Entries | Where-Object { $_.FullName.Trim() } | ForEach-Object { $_.FullName.Replace('\','/') } |
+                     Where-Object { -not $_.StartsWith("tesseract/") } | Measure-Object).Count -eq 0
+          $z.Dispose()
+          $dest = if ($rooted) { "." } else { ".\\tesseract" }
+          Expand-Archive ".\_comp\tesseract.zip" -DestinationPath $dest -Force
+          Remove-Item .\_comp -Recurse -Force
+          echo "tesseract staged from components release (rooted=$rooted)"
+
       - name: Stage Korean tessdata (kor, osd, eng)
         continue-on-error: true
         run: |
