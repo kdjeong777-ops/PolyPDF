@@ -16,8 +16,8 @@ import json
 import os
 import tempfile
 import zipfile
-import urllib.request
 from pathlib import Path
+# urllib.request 는 쓰는 함수에서 싣는다(261014-26, 마스터 §5 시작 import)
 
 from viewer.updater import install_dir, valid_repo, DEFAULT_REPO, _UA
 from viewer.i18n import tr
@@ -32,6 +32,7 @@ def repo_or_default(repo: str = "") -> str:
 
 def _assets(repo: str, timeout: float = 8.0) -> dict:
     """{자산이름: 다운로드URL}. components 태그 우선, 없으면 latest. 실패 시 {}."""
+    import urllib.request
     out: dict = {}
     for tag in (COMPONENTS_TAG, "latest"):
         api = (f"https://api.github.com/repos/{repo}/releases/latest" if tag == "latest"
@@ -55,6 +56,7 @@ def _assets(repo: str, timeout: float = 8.0) -> dict:
 
 def _download(url: str, progress=None, timeout: float = 60.0):
     """URL → 바이트(메모리). progress(done,total)->False 면 취소. 실패/취소 None."""
+    import urllib.request
     req = urllib.request.Request(url, headers={"User-Agent": _UA})
     buf = io.BytesIO()
     try:

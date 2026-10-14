@@ -32,10 +32,12 @@ for a in mw._panel_toolbar.actions():
     w = mw._panel_toolbar.widgetForAction(a)
     if isinstance(w, QToolButton):
         btns.append(w.text())
-TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "PDF병합",
+# 261014-11(디자인 SOT §2.9): 'PDF병합' 바로 뒤 '변환'(형식 변환 SOT §2.1)
+TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "PDF병합", "변환",
          "이미지→PDF", "스크린샷 PDF 저장", "암호화", "번역"]
-chk(btns[-8:] == TOOLS, "① 패널 '도구' 8개가 지시한 차례다", str(btns[-8:]))
-chk(btns.index("OCR") == len(btns) - 8, "① 도구는 보기 뒤에 모여 있다", str(btns))
+N = len(TOOLS)
+chk(btns[-N:] == TOOLS, "① 패널 '도구' %d개가 지시한 차례다" % N, str(btns[-N:]))
+chk(btns.index("OCR") == len(btns) - N, "① 도구는 보기 뒤에 모여 있다", str(btns))
 
 # ── 도구(&T) 메뉴 첫 구역 ─────────────────────────
 menu = None
@@ -58,12 +60,13 @@ MENU = ["OCR 로 읽기 (쪽 범위·언어·워터마크)...",
         "단어장 생성 (OCR·어휘)...",
         "책갈피 자동 생성...",
         "PDF 병합...",
+        "변환...",
         "이미지 → PDF 변환...",
         "스크린샷 PDF 저장...",
         "암호화 (암호·권한 설정)...",
         "PDF번역"]
 chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다", str(head))
-chk(len(head) == len(TOOLS), "② 개수도 같다(8)", "%d" % len(head))
+chk(len(head) == len(TOOLS), "② 개수도 같다(%d)" % N, "%d" % len(head))
 
 # ── 짝이 실제로 같은 일을 하는가 ────────────────────
 all_items = [t for t in items if t]

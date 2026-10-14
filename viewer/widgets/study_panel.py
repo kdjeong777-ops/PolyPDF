@@ -338,8 +338,21 @@ class StudyPanel(QWidget):
         btn.setMenu(menu)
         return btn
 
-    def set_voices(self, names: list) -> None:
-        """성우 목록 채움(빠르기/성우는 본화면과 공유)."""
+    def set_voices(self, names) -> None:
+        """성우 목록 채움(빠르기/성우는 본화면과 공유). `names` 가 함수면 '성우' 메뉴를 처음 열 때 불러 채운다
+        (261014-26 — 성우 목록은 SAPI(COM)를 띄워야 해서 창을 만들 때 부르지 않는다)."""
+        if callable(names):
+            src = {"fn": names}
+
+            def _fill():
+                fn = src.pop("fn", None)
+                if fn is not None:
+                    try:
+                        self.set_voices(list(fn() or []))
+                    except Exception:
+                        pass
+            self._voice_menu.aboutToShow.connect(_fill)
+            return
         for n in names:
             a = QAction(n, self._voice_menu, checkable=True)
             a.triggered.connect(lambda _c, nm=n: self.voiceChanged.emit(nm))

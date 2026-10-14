@@ -77,7 +77,8 @@ chk("tessdata" in src, "(2) 보는 폴더는 ensure_tesseract 가 고른 그 폴
 print()
 print("=== (2b) 안내문이 스스로를 증명한다 ===")
 from viewer.app import MainWindow
-w = inspect.getsource(MainWindow._start_text_ocr)
+# 261014-16: 언어 확인은 OCR 글자층 일괄과 함께 쓰는 `_ensure_ocr_langs` 로 옮겼다 — 둘을 함께 본다
+w = inspect.getsource(MainWindow._start_text_ocr) + inspect.getsource(MainWindow._ensure_ocr_langs)
 chk("찾아본 위치" in w, "(2b) 어디를 찾아봤는지 적는다")
 chk("OCR 이 읽은 것이 아닙니다" in w,
     "(2b) 보이는 한글이 OCR 결과가 아님을 알린다 — 이번 오해의 원인")

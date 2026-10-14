@@ -92,6 +92,10 @@ class PageThumbs(QWidget):
     STAGED_BASE = 1000000
 
     THUMB_DPI = 48
+    # 261014-24(마스터 §19.11 P-B): 화면 밖 아이콘 비우기 — 그린 아이콘이 이보다 많으면 보이는 곳 ± ICON_KEEP_SCREENS 화면 밖을 비운다.
+    #   아이콘 한 장 ≈ 0.2MB(카드 120×180 ARGB) — 598쪽을 끝까지 내리면 상한 없이 ~130MB 가 쌓였다.
+    ICON_KEEP_MAX = 150
+    ICON_KEEP_SCREENS = 3
     NUM_BAND = 18           # 260606-26: 썸네일 하단 페이지번호 띠 높이
     ITEM_MARGIN = 6         # 260611-12: 카드 위아래 여백(세로 간격) — 종횡비별 셀 높이에 가산
 
@@ -1207,6 +1211,32 @@ class PageThumbs(QWidget):
                     item.setSizeHint(QSize(self.list.iconSize().width(), desired_h))
             except Exception:
                 pass
+        self._drop_far_icons(deadline)
+
+    def _drop_far_icons(self, deadline=None) -> int:
+        """그린 아이콘이 `ICON_KEEP_MAX` 를 넘으면 보이는 곳 ± `ICON_KEEP_SCREENS` 화면 밖 아이콘을 비운다(돌아오면 다시 그린다).
+        셀 높이(`sizeHint`)는 그대로 둬 스크롤 위치가 흔들리지 않는다. 시간으로 끊는다(응답성 SOT §4 ⑥) — 남으면 다음 틱에."""
+        if len(self._iconed) <= self.ICON_KEEP_MAX:
+            return 0
+        import time as _time
+        vr = self.list.viewport().rect()
+        h = vr.height() * self.ICON_KEEP_SCREENS
+        keep_rect = vr.adjusted(0, -h, 0, h)
+        dropped = 0
+        for k, it in list(self._iconed.items()):
+            if deadline is not None and _time.monotonic() >= deadline:
+                if not self._render_timer.isActive():
+                    self._render_timer.start()
+                break
+            try:
+                if self.list.visualItemRect(it).intersects(keep_rect):
+                    continue
+                it.setIcon(QIcon())
+            except RuntimeError:             # 목록에서 빠진 항목
+                pass
+            self._iconed.pop(k, None)
+            dropped += 1
+        return dropped
 
     def set_hidden_pages(self, pages):
         """260609-14(D5): 숨김 페이지 집합 갱신 → **바뀐 쪽만** 아이콘 재렌더(261009-21)."""

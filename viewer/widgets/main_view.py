@@ -1617,6 +1617,7 @@ class MainView(QWidget):
         self._fit_mode = self.FIT_PAGE
         self._query = ""
         self._search_mode = None   # 261014-18(검색창 SOT §4.1): (대소문자, 정규식) 또는 None — `set_search_mode`
+        self._marks = {}           # 261014-23(마스터 §4.11): {파일 키: {쪽: [(사각형 pt, (r,g,b,a))]}} — 문서 비교 칠하기
         self._matches: list = []
         self._page_words: list = []     # 260617-3: 현재 페이지 단어 박스(PDF 좌표)
         self._sel_items: list = []      # 선택 하이라이트 QGraphicsRectItem
@@ -2501,6 +2502,29 @@ class MainView(QWidget):
         else:
             self.go_to_page(v)
 
+    def set_marks(self, file_path, marks) -> None:
+        """그 파일의 쪽마다 칠할 사각형(마스터 §4.11 문서 비교) — 검색 강조와 따로. `marks=None` 이면 지운다."""
+        from viewer.pathutil import norm_key
+        key = norm_key(str(file_path)) if file_path else None
+        if key is None:
+            self._marks = {}
+        elif marks:
+            self._marks[key] = {int(k): list(v) for k, v in marks.items()}
+        else:
+            self._marks.pop(key, None)
+        if self._doc is not None:
+            self._render_current()
+
+    def _marks_for_page(self, page_index: int) -> list:
+        if not self._marks:
+            return []
+        try:
+            from viewer.pathutil import norm_key
+            cur = self.current_file()
+            return (self._marks.get(norm_key(str(cur))) or {}).get(int(page_index), []) if cur else []
+        except Exception:
+            return []
+
     def set_search_mode(self, mode) -> None:
         """검색 일치 규칙(검색창 SOT §4.1) — 다음 `set_query`·`load_document(query=)` 부터 쓴다."""
         self._search_mode = tuple(mode) if mode and any(mode) else None
@@ -2947,6 +2971,17 @@ class MainView(QWidget):
                 item.setBrush(QBrush(color))
                 item.setPen(pen)
                 self.scene.addItem(item)
+
+        # 261014-23(마스터 §4.11): 문서 비교 칠하기 — 그 파일·그 쪽일 때만
+        for rr, rgba in self._marks_for_page(self._current_page):
+            try:
+                r = self._disp_search_rect(page_obj, fitz.Rect(rr))
+                item = QGraphicsRectItem(QRectF(r.x0 * zoom, r.y0 * zoom, (r.x1 - r.x0) * zoom, (r.y1 - r.y0) * zoom))
+                item.setBrush(QBrush(QColor(*rgba)))
+                item.setPen(QPen(Qt.PenStyle.NoPen))
+                self.scene.addItem(item)
+            except Exception:
+                pass
 
         # 항상 1:1 로 표시 (Qt 스케일 transform 없음)
         self.view.resetTransform()

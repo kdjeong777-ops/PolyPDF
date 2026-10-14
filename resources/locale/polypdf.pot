@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 15:26+0900\n"
+"POT-Creation-Date: 2026-10-14 16:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -131,7 +131,7 @@ msgstr ""
 msgid "이 프로그램의 저작권은 개발자에게 있습니다."
 msgstr ""
 
-#: viewer/about.py viewer/widgets/sign_dialogs.py
+#: viewer/about.py viewer/redact.py viewer/widgets/sign_dialogs.py
 msgid "이메일"
 msgstr ""
 
@@ -2715,6 +2715,41 @@ msgstr ""
 msgid "'{PKG_NAME}' 가 namespace package 로 로드됨 — 잘못된 경로일 가능성. 패키지의 부모(=__init__.py 가 들어있는 폴더의 상위)를 지정하세요."
 msgstr ""
 
+#: viewer/compare.py
+msgid "바뀜"
+msgstr ""
+
+#: viewer/compare.py
+msgid "지움"
+msgstr ""
+
+#: viewer/compare.py
+msgid "넣음"
+msgstr ""
+
+#: viewer/compare_controller.py viewer/print_controller.py
+#: viewer/update_controller.py viewer/widgets/glossary_edit_dialog.py
+#: viewer/widgets/hyperlink_dialog.py viewer/widgets/translate_dialog.py
+#: viewer/widgets/translate_files_dialog.py
+msgid "닫기"
+msgstr ""
+
+#: viewer/compare_controller.py
+msgid "문서 비교"
+msgstr ""
+
+#: viewer/compare_controller.py
+msgid "두 문서의 글이 같습니다."
+msgstr ""
+
+#: viewer/compare_controller.py
+#, python-brace-format
+msgid ""
+"왼쪽(옛판): {a}\n"
+"오른쪽(새판): {b}\n"
+"바뀐 곳 {n}곳 — 누르면 두 창이 그 쪽으로 갑니다."
+msgstr ""
+
 #: viewer/components.py
 msgid "릴리스에서 ffmpeg.exe 자산을 찾지 못했습니다."
 msgstr ""
@@ -3104,6 +3139,10 @@ msgid "허용되지 않은 형식입니다(.{ext}). 문서·이미지·동영상
 msgstr ""
 
 #: viewer/index_proc.py
+msgid "색인 프로세스가 메모리 상한을 계속 넘습니다."
+msgstr ""
+
+#: viewer/index_proc.py
 msgid "색인 프로세스와의 연결이 끊겼습니다."
 msgstr ""
 
@@ -3390,12 +3429,6 @@ msgstr ""
 msgid "PDF 생성 완료"
 msgstr ""
 
-#: viewer/print_controller.py viewer/update_controller.py
-#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
-#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
-msgid "닫기"
-msgstr ""
-
 #: viewer/print_controller.py
 msgid "프린터를 열 수 없습니다."
 msgstr ""
@@ -3498,6 +3531,60 @@ msgstr ""
 #: viewer/recorder.py
 #, python-brace-format
 msgid "녹화 시작 실패: {e}"
+msgstr ""
+
+#: viewer/redact.py
+msgid "영역"
+msgstr ""
+
+#: viewer/redact.py
+msgid "검색어"
+msgstr ""
+
+#: viewer/redact.py
+msgid "암호 PDF 입니다 — 사본이 암호 없이 저장되므로 암호를 풀고 다시 하세요"
+msgstr ""
+
+#: viewer/redact.py
+msgid "주민등록번호"
+msgstr ""
+
+#: viewer/redact.py
+msgid "전화번호"
+msgstr ""
+
+#: viewer/redact.py
+msgid "카드번호"
+msgstr ""
+
+#: viewer/redact.py
+msgid "사업자등록번호"
+msgstr ""
+
+#: viewer/redact.py
+#, python-brace-format
+msgid "{stem}_가림"
+msgstr ""
+
+#: viewer/redact_controller.py viewer/widgets/redact_dialog.py
+msgid "가림(개인정보 지우기)"
+msgstr ""
+
+#: viewer/redact_controller.py
+msgid "원본은 그대로입니다."
+msgstr ""
+
+#: viewer/redact_controller.py
+msgid "원본은 서명된 문서입니다 — 새 파일의 서명은 효력이 없습니다."
+msgstr ""
+
+#: viewer/redact_controller.py
+#, python-brace-format
+msgid "가린 자리 {n}곳 — 새 파일: {name}"
+msgstr ""
+
+#: viewer/redact_controller.py
+msgid "주의: 아래 자리에 글이 남았습니다 — 새 파일을 확인하세요."
 msgstr ""
 
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
@@ -4815,6 +4902,14 @@ msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에�
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "가림(개인정보 지우기)..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "폴더 이름 변경..."
 msgstr ""
 
@@ -4943,6 +5038,14 @@ msgstr ""
 msgid ""
 "'{name}'\n"
 "암호를 입력하세요 (마스터/제한 암호 모두 가능):"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "두 파일 비교..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -7516,6 +7619,63 @@ msgstr ""
 #: viewer/widgets/read_aloud.py
 #, python-brace-format
 msgid "읽는 중: {pages} 페이지"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "검색어(이름 등)"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "정규식"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "찾기"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "고른 것 빼기"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "모두 빼기"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "문서 정보·숨은 데이터도 지우기"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "작성자·제목 등 문서 정보, XMP, 첨부 파일, 자바스크립트, 썸네일을 지웁니다."
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "가린 자리의 글·그림은 실제로 지워집니다. 결과는 새 파일 <이름>_가림.pdf 로 저장하고 원본은 그대로 둡니다."
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "가려서 저장"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "쪽 그림 위를 끌어 가릴 영역을 고르세요."
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "찾아 가리기"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "가릴 자리"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+msgid "가릴 자리 찾기"
+msgstr ""
+
+#: viewer/widgets/redact_dialog.py
+#, python-brace-format
+msgid "찾은 자리 {n}곳"
 msgstr ""
 
 #: viewer/widgets/region_capture.py

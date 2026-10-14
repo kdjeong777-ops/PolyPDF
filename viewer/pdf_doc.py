@@ -184,8 +184,9 @@ class PdfDocument:
         scale: float = 1.0,
         rgba: bool = False,            # v1.3.1: 기본 RGB(종이 흰색 보존). 알파는 호출자 명시 시만
         dpi: int | None = None,        # 1.2.x 호환
+        cache: bool = True,
     ) -> RenderedPage:
-        """페이지를 픽스맵으로 렌더링."""
+        """페이지를 픽스맵으로 렌더링. `cache=False` 면 전역 캐시를 읽지도 쓰지도 않는다(썸네일 — §19.11 P-B)."""
         if dpi is not None:
             effective_dpi = int(dpi)
         else:
@@ -193,7 +194,7 @@ class PdfDocument:
         effective_dpi = max(72, min(600, effective_dpi))   # 안전 범위
 
         key = RenderKey(self._cache_tag, page_index, effective_dpi, rgba)   # 260829: mtime 포함 태그
-        cached = self.cache.get(key)
+        cached = self.cache.get(key) if cache else None
         if cached is not None:
             return cached
 
@@ -207,7 +208,8 @@ class PdfDocument:
             page_rect=tuple(page.rect),
             is_rgba=bool(rgba),
         )
-        self.cache.put(key, result)
+        if cache:
+            self.cache.put(key, result)
         return result
 
     def render_scaled(self, page_index: int, physical_scale: float) -> RenderedPage:
@@ -233,8 +235,9 @@ class PdfDocument:
         return result
 
     def render_thumbnail(self, page_index: int, dpi: int = 48) -> RenderedPage:
-        """저해상도 썸네일 (RGB888, 알파 없음)."""
-        return self.render(page_index, dpi=dpi, rgba=False)
+        """저해상도 썸네일 (RGB888, 알파 없음). 전역 캐시를 쓰지 않는다 — 부르는 쪽이 아이콘으로 들고 있어
+        캐시에 또 두면 같은 그림이 두 벌이 되고, 쪽 수만큼 본문 렌더를 밀어낸다(§19.11 P-B, 261014-24)."""
+        return self.render(page_index, dpi=dpi, rgba=False, cache=False)
 
     def points_to_pixels(self, rect, dpi: int) -> tuple:
         s = dpi / 72

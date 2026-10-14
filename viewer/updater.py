@@ -18,8 +18,8 @@ import re
 import sys
 import tempfile
 import subprocess
-import urllib.request
 from pathlib import Path
+# urllib.request 는 쓰는 함수에서 싣는다 — 시작 때 약 0.05초(261014-26, 마스터 §5 시작 import)
 
 from viewer.i18n import tr                      # 설치 도우미 문구(다국어 SOT §10.4)
 
@@ -106,6 +106,7 @@ def valid_repo(repo: str) -> bool:
 
 
 def _get_json(url: str, timeout: float):
+    import urllib.request
     req = urllib.request.Request(
         url, headers={"Accept": "application/vnd.github+json", "User-Agent": _UA})
     try:
@@ -204,6 +205,7 @@ def fetch_manifest(info: dict, timeout: float = 20.0) -> str:
     없거나 실패하면 `""` — 그러면 설치 도우미가 **정리를 통째로 건너뛴다**(안전 실패).
     목록은 반드시 **full 빌드 기준**이어야 한다. update zip 기준으로 만들면 무거운 자산
     (ffmpeg·tesseract 등)이 목록에 없어 지워진다."""
+    import urllib.request
     url = str((info or {}).get("manifest_url") or "")
     if not url or not is_trusted_asset_url(url):
         return ""
@@ -225,6 +227,7 @@ def fetch_expected_sha256(info: dict, timeout: float = 10.0) -> str:
     """릴리스의 `<자산명>.sha256` 을 읽어 기대 해시(소문자 hex) 반환. 없으면 ''.
 
     파일 형식은 `sha256sum` 관례(`<hex>  <파일명>`)와 hex 단독 모두 허용."""
+    import urllib.request
     url = (info or {}).get("sha_url") or ""
     if not url or not is_trusted_asset_url(url):
         return ""
@@ -329,6 +332,7 @@ def download_asset(url: str, progress=None, timeout: float = 30.0, expect_sha256
 
     260628(A): ① **신뢰 호스트(GitHub)만** 허용, ② `expect_sha256` 이 주어지면
     받은 파일의 SHA-256 을 검증하고 **불일치 시 삭제 후 None**(변조·손상 차단)."""
+    import urllib.request
     if not url:
         return None
     if not is_trusted_asset_url(url):

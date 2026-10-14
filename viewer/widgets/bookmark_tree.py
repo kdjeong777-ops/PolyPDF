@@ -44,12 +44,13 @@ from PyQt6.QtWidgets import (
 
 
 # v1.6.20: 휴지통 이동 — 미설치 환경에서도 import 자체는 깨지지 않게 보호
-try:
-    from send2trash import send2trash as _send2trash
-    _HAS_TRASH = True
-except Exception:
-    _send2trash = None
-    _HAS_TRASH = False
+# 261014-26(마스터 §5 시작 import): 지울 때 처음 싣는다 — 시작 때 싣으면 약 0.12초(send2trash.win)
+def _trash_fn():
+    try:
+        from send2trash import send2trash
+        return send2trash
+    except Exception:
+        return None
 
 
 # 파일명 무효 문자 (Windows 기준)
@@ -212,7 +213,9 @@ class BookmarkTree(QWidget):
     convertFilesRequested = pyqtSignal(object, str)  # 261014-11(형식 변환 SOT §2.1): ([파일], 형식 키)
     ocrLayerFilesRequested = pyqtSignal(object)      # 261014-16(텍스트 창 SOT §5.5): [파일] — OCR 글자층 일괄
     compressFilesRequested = pyqtSignal(object)      # 261014-21(마스터 §4.7.19): [파일] — PDF 압축
+    redactFileRequested = pyqtSignal(str)            # 261014-22(보안 SOT §14): 파일 — 가림(개인정보 지우기)
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
+    compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
@@ -2406,6 +2409,12 @@ class BookmarkTree(QWidget):
             act_merge = menu.addAction(tr('선택 {n}개 파일 병합...').format(n=len(sel_files)))
             if korea_only_visible():                # 영→한 번역은 한국 전용(다국어 SOT §7)
                 act_translate_sel = menu.addAction(tr('선택 {n}개 파일 번역...').format(n=len(sel_files)))  # 260621-P0
+            if len(sel_files) == 2:                 # 261014-23(마스터 §4.11): 꼭 두 개일 때
+                _cf = [str(it.data(0, self.DATA_FILE)) for it in sel_files]
+                _ca = menu.addAction(tr("두 파일 비교..."))
+                _ca.setToolTip(tr("두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."))
+                _ca.triggered.connect(lambda _=False, a=_cf[0], b=_cf[1]: QTimer.singleShot(
+                    0, lambda: self.compareFilesRequested.emit(a, b)))
             menu.addSeparator()
         # 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
         xfer_files = self._selected_file_nodes() if self._edit_mode else []
@@ -2470,6 +2479,10 @@ class BookmarkTree(QWidget):
                 _conv_files = [_dir_target]
             self._add_ocr_layer_action(menu, _conv_files)
             self._add_compress_action(menu, _conv_files)
+            _ra = menu.addAction(tr("가림(개인정보 지우기)..."))
+            _ra.setToolTip(tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."))
+            _ra.triggered.connect(lambda _=False, f=_dir_target: QTimer.singleShot(
+                0, lambda: self.redactFileRequested.emit(str(f))))
             menu.addSeparator()
         elif _folder_row is not None:
             # 261014-16(텍스트 창 SOT §5.5): 폴더 행 — 그 아래 파일 전체에 OCR 글자층
@@ -3009,7 +3022,8 @@ class BookmarkTree(QWidget):
         # 확인 메시지 구성
         msg_parts = []
         if files:
-            if not _HAS_TRASH:
+            _send2trash = _trash_fn()
+            if _send2trash is None:
                 QMessageBox.warning(self, tr("send2trash 필요"),
                     tr("파일 삭제(휴지통)는 send2trash 모듈이 필요합니다.\n"
                     "  pip install send2trash"))

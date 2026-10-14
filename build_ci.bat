@@ -215,6 +215,11 @@ python -m PyInstaller ^
     main.py
 if errorlevel 1 ( echo [ERROR] PyInstaller build failed. & exit /b 1 )
 
+REM 261014-27(마스터 §14.5 U23): 쓰지 않는 Qt 모듈(Quick·QML·3D·Designer…)·wordfreq 다른 언어 사전을 뺀다(약 160MB).
+REM   남은 모든 .dll/.pyd 의 가져오기가 풀리는지 확인 — 못 풀리면 빌드 실패.
+python scripts\prune_dist.py dist\PolyPDF
+if errorlevel 1 ( echo [ERROR] prune_dist: 뺀 DLL 을 부르는 파일이 남았습니다. & exit /b 1 )
+
 REM 260603: build\ 정리 — build\PolyPDF\PolyPDF.exe(불완전 부트로더, python DLL 누락) 오실행 방지.
 REM   실제 실행 파일은 dist\PolyPDF\PolyPDF.exe 하나뿐이 되도록.
 if exist "build" rmdir /s /q "build"

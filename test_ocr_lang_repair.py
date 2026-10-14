@@ -118,7 +118,8 @@ finally:
 print()
 print("=== (5) 창이 고칠 길을 준다 ===")
 from viewer.app import MainWindow
-w = inspect.getsource(MainWindow._start_text_ocr)
+# 261014-16: 언어 확인은 OCR 글자층 일괄과 함께 쓰는 `_ensure_ocr_langs` 로 옮겼다 — 둘을 함께 본다
+w = inspect.getsource(MainWindow._start_text_ocr) + inspect.getsource(MainWindow._ensure_ocr_langs)
 chk("_offer_ocr_lang_repair" in w, "(5) 알리기 전에 고칠지 먼저 묻는다")
 o = inspect.getsource(MainWindow._offer_ocr_lang_repair)
 chk("지금 내려받기" in o, "(5) 받을 수 있다")

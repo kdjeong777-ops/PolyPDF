@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 15:26+0900\n"
+"POT-Creation-Date: 2026-10-14 16:04+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -130,7 +130,7 @@ msgstr "This program is distributed under the terms of {license}. Under these te
 msgid "이 프로그램의 저작권은 개발자에게 있습니다."
 msgstr "This program is copyrighted by its developer."
 
-#: viewer/about.py viewer/widgets/sign_dialogs.py
+#: viewer/about.py viewer/redact.py viewer/widgets/sign_dialogs.py
 msgid "이메일"
 msgstr "Email"
 
@@ -2832,6 +2832,44 @@ msgstr "Package not found."
 msgid "'{PKG_NAME}' 가 namespace package 로 로드됨 — 잘못된 경로일 가능성. 패키지의 부모(=__init__.py 가 들어있는 폴더의 상위)를 지정하세요."
 msgstr "'{PKG_NAME}' was loaded as a namespace package — the path may be wrong. Specify the package's parent (the folder above the one containing __init__.py)."
 
+#: viewer/compare.py
+msgid "바뀜"
+msgstr "Changed"
+
+#: viewer/compare.py
+msgid "지움"
+msgstr "Deleted"
+
+#: viewer/compare.py
+msgid "넣음"
+msgstr "Inserted"
+
+#: viewer/compare_controller.py viewer/print_controller.py
+#: viewer/update_controller.py viewer/widgets/glossary_edit_dialog.py
+#: viewer/widgets/hyperlink_dialog.py viewer/widgets/translate_dialog.py
+#: viewer/widgets/translate_files_dialog.py
+msgid "닫기"
+msgstr "Close"
+
+#: viewer/compare_controller.py
+msgid "문서 비교"
+msgstr "Compare documents"
+
+#: viewer/compare_controller.py
+msgid "두 문서의 글이 같습니다."
+msgstr "The two documents have the same text."
+
+#: viewer/compare_controller.py
+#, python-brace-format
+msgid ""
+"왼쪽(옛판): {a}\n"
+"오른쪽(새판): {b}\n"
+"바뀐 곳 {n}곳 — 누르면 두 창이 그 쪽으로 갑니다."
+msgstr ""
+"Left (older): {a}\n"
+"Right (newer): {b}\n"
+"{n} changes — click one to move both panes to it."
+
 #: viewer/components.py
 msgid "릴리스에서 ffmpeg.exe 자산을 찾지 못했습니다."
 msgstr "ffmpeg.exe asset not found in the release."
@@ -3233,6 +3271,10 @@ msgid "허용되지 않은 형식입니다(.{ext}). 문서·이미지·동영상
 msgstr "File type not allowed (.{ext}). Only work files such as documents, images, and videos can be added."
 
 #: viewer/index_proc.py
+msgid "색인 프로세스가 메모리 상한을 계속 넘습니다."
+msgstr "The indexing process keeps exceeding its memory limit."
+
+#: viewer/index_proc.py
 msgid "색인 프로세스와의 연결이 끊겼습니다."
 msgstr "Lost connection to the indexing process."
 
@@ -3534,12 +3576,6 @@ msgstr "No PDF files selected."
 msgid "PDF 생성 완료"
 msgstr "PDF Created"
 
-#: viewer/print_controller.py viewer/update_controller.py
-#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
-#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
-msgid "닫기"
-msgstr "Close"
-
 #: viewer/print_controller.py
 msgid "프린터를 열 수 없습니다."
 msgstr "Cannot open the printer."
@@ -3647,6 +3683,60 @@ msgstr "Recording started"
 #, python-brace-format
 msgid "녹화 시작 실패: {e}"
 msgstr "Failed to start recording: {e}"
+
+#: viewer/redact.py
+msgid "영역"
+msgstr "Area"
+
+#: viewer/redact.py
+msgid "검색어"
+msgstr "Search term"
+
+#: viewer/redact.py
+msgid "암호 PDF 입니다 — 사본이 암호 없이 저장되므로 암호를 풀고 다시 하세요"
+msgstr "This PDF is password-protected — the copy would be saved without a password, so remove the password and try again"
+
+#: viewer/redact.py
+msgid "주민등록번호"
+msgstr "Resident registration number"
+
+#: viewer/redact.py
+msgid "전화번호"
+msgstr "Phone number"
+
+#: viewer/redact.py
+msgid "카드번호"
+msgstr "Card number"
+
+#: viewer/redact.py
+msgid "사업자등록번호"
+msgstr "Business registration number"
+
+#: viewer/redact.py
+#, python-brace-format
+msgid "{stem}_가림"
+msgstr "{stem}_redacted"
+
+#: viewer/redact_controller.py viewer/widgets/redact_dialog.py
+msgid "가림(개인정보 지우기)"
+msgstr "Redact (remove personal data)"
+
+#: viewer/redact_controller.py
+msgid "원본은 그대로입니다."
+msgstr "The original is unchanged."
+
+#: viewer/redact_controller.py
+msgid "원본은 서명된 문서입니다 — 새 파일의 서명은 효력이 없습니다."
+msgstr "The original is a signed document — signatures in the new file are not valid."
+
+#: viewer/redact_controller.py
+#, python-brace-format
+msgid "가린 자리 {n}곳 — 새 파일: {name}"
+msgstr "{n} places redacted — new file: {name}"
+
+#: viewer/redact_controller.py
+msgid "주의: 아래 자리에 글이 남았습니다 — 새 파일을 확인하세요."
+msgstr "Warning: text remains in the places below — check the new file."
 
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
 #: viewer/widgets/main_view.py
@@ -5013,6 +5103,14 @@ msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에�
 msgstr "Flatten annotations and inserted photos into the page content so other programs show them too."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "가림(개인정보 지우기)..."
+msgstr "Redact (remove personal data)..."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."
+msgstr "Makes a new file with the chosen areas and personal data such as ID and phone numbers actually removed (the original stays)."
+
+#: viewer/widgets/bookmark_tree.py
 msgid "폴더 이름 변경..."
 msgstr "Rename Folder..."
 
@@ -5144,6 +5242,14 @@ msgid ""
 msgstr ""
 "'{name}'\n"
 "Enter the password (owner or user password):"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "두 파일 비교..."
+msgstr "Compare two files..."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
+msgstr "Shows the changes between two PDFs side by side in split view (older = the file modified earlier)."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
@@ -7778,6 +7884,63 @@ msgstr "Speech output failed (check the SAPI voice). Please try again."
 #, python-brace-format
 msgid "읽는 중: {pages} 페이지"
 msgstr "Reading: page {pages}"
+
+#: viewer/widgets/redact_dialog.py
+msgid "검색어(이름 등)"
+msgstr "Search term (names etc.)"
+
+#: viewer/widgets/redact_dialog.py
+msgid "정규식"
+msgstr "Regex"
+
+#: viewer/widgets/redact_dialog.py
+msgid "찾기"
+msgstr "Find"
+
+#: viewer/widgets/redact_dialog.py
+msgid "고른 것 빼기"
+msgstr "Remove selected"
+
+#: viewer/widgets/redact_dialog.py
+msgid "모두 빼기"
+msgstr "Remove all"
+
+#: viewer/widgets/redact_dialog.py
+msgid "문서 정보·숨은 데이터도 지우기"
+msgstr "Also remove document info and hidden data"
+
+#: viewer/widgets/redact_dialog.py
+msgid "작성자·제목 등 문서 정보, XMP, 첨부 파일, 자바스크립트, 썸네일을 지웁니다."
+msgstr "Removes document info such as author and title, XMP, attachments, JavaScript and thumbnails."
+
+#: viewer/widgets/redact_dialog.py
+msgid "가린 자리의 글·그림은 실제로 지워집니다. 결과는 새 파일 <이름>_가림.pdf 로 저장하고 원본은 그대로 둡니다."
+msgstr "Text and images in redacted places are actually removed. The result is saved as a new file <name>_redacted.pdf and the original is kept."
+
+#: viewer/widgets/redact_dialog.py
+msgid "가려서 저장"
+msgstr "Redact and save"
+
+#: viewer/widgets/redact_dialog.py
+msgid "쪽 그림 위를 끌어 가릴 영역을 고르세요."
+msgstr "Drag on the page to choose areas to redact."
+
+#: viewer/widgets/redact_dialog.py
+msgid "찾아 가리기"
+msgstr "Find and redact"
+
+#: viewer/widgets/redact_dialog.py
+msgid "가릴 자리"
+msgstr "Places to redact"
+
+#: viewer/widgets/redact_dialog.py
+msgid "가릴 자리 찾기"
+msgstr "Finding places to redact"
+
+#: viewer/widgets/redact_dialog.py
+#, python-brace-format
+msgid "찾은 자리 {n}곳"
+msgstr "{n} places found"
 
 #: viewer/widgets/region_capture.py
 msgid "Enter·더블클릭 = 캡처 · 끌기 = 옮기기·크기 · 화살표 = 1px(Shift 10px, Ctrl 크기) · 오른쪽 클릭 = 다시 고르기 · Esc = 취소"

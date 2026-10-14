@@ -202,8 +202,11 @@ try:
     try:
         i_rn, i_sv, i_fl, i_2 = (raw.index("파일·책갈피 이름 변경"), raw.index("저장"),
                                  raw.index("평탄화해서 내보내기..."), raw.index("2단 보기"))
-        # 261014-11: 저장 그룹 끝에 '변환 ▸'(형식 변환 SOT §2.1)
-        chk(raw[i_rn + 2] == "" and i_sv == i_rn + 3 and raw[i_fl + 1] == "변환" and raw[i_fl + 2] == "" and i_2 == i_fl + 3,
+        # 261014-11: 저장 그룹 끝에 '변환 ▸'(형식 변환 SOT §2.1), 261014-16·21·22: 그 뒤 OCR 글자층·압축·가림(마스터 §4.7.13)
+        extras = ["변환", "OCR 글자층 넣기...", "PDF 압축...", "가림(개인정보 지우기)..."]
+        i_end = i_fl + 1 + len(extras)
+        chk(raw[i_rn + 2] == "" and i_sv == i_rn + 3 and raw[i_fl + 1:i_end] == extras and raw[i_end] == ""
+            and i_2 == i_end + 1,
             "D 파일 그룹 / 저장 그룹 / 보기 그룹이 구분선으로 나뉜다", str(raw))
     except ValueError:
         chk(False, "D 그룹 구분", str(raw))

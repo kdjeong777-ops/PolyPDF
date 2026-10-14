@@ -666,13 +666,21 @@ def make_read_buttons(controller: ReadAloud, parent=None):
         a.setChecked(rate == 0)
         a.triggered.connect(lambda _c, r=rate: controller.set_rate(r))
         g_r.addAction(a); rm.addAction(a)
-    # 성우
-    voices = []
-    try:
-        voices = controller.mw._study_get_tts().voice_names()
-    except Exception:
-        pass
-    if voices:
+    # 성우 — 메뉴를 처음 열 때 채운다(261014-26, 마스터 §5 시작 import): 성우 목록은 SAPI(COM)를 띄워야 해서
+    #   창을 만들 때 부르면 win32com 싣기·COM 생성이 시작 시간에 들어간다(두 창 단추라 두 번).
+    built = {"v": False}
+
+    def build_voices():
+        if built["v"]:
+            return
+        built["v"] = True
+        voices = []
+        try:
+            voices = controller.mw._study_get_tts().voice_names()
+        except Exception:
+            pass
+        if not voices:
+            return
         vm = menu.addMenu(tr("성우"))
         g_v = QActionGroup(vm); g_v.setExclusive(True)
         a0 = QAction(tr("자동(언어별)"), vm, checkable=True); a0.setChecked(True)
@@ -682,6 +690,7 @@ def make_read_buttons(controller: ReadAloud, parent=None):
             a = QAction(name, vm, checkable=True)
             a.triggered.connect(lambda _c, n=name: controller.set_voice(n))
             g_v.addAction(a); vm.addAction(a)
+    menu.aboutToShow.connect(build_voices)
     menu_btn.setMenu(menu)
 
     def on_mode_text():
