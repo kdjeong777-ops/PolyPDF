@@ -40,6 +40,14 @@ def convert_docx(ps, pages, dst: Path, tick) -> None:
     from viewer import index_proc
     from viewer.convert import Cancelled
     src = _layered_copy(ps, pages, tick) or ps.path
+    # 머리말·꼬리말(§1.1): 사본에서 그 글을 지우고 변환한 뒤 Word 머리글·바닥글 기능으로 다시 넣는다
+    from viewer.convert import layout
+    per_page = {}
+    for k, pg in enumerate(pages):
+        tick(0, 1, "p.%d" % (int(pg) + 1))
+        per_page[int(pg)] = layout.page_edges(ps, pg)
+    if any(per_page.values()):
+        src = _without_edges(src, ps.path, per_page)
     state = {"cancel": False, "err": None}
 
     def on_progress(done, total, label):
@@ -61,6 +69,51 @@ def convert_docx(ps, pages, dst: Path, tick) -> None:
         raise RuntimeError(tr("변환 프로세스를 띄우지 못했습니다"))
     if not Path(dst).exists():
         raise RuntimeError(tr("Word 파일을 만들지 못했습니다"))
+    if any(per_page.values()):
+        _put_header_footer(dst, layout.edge_plan(per_page), per_page)
+
+
+def _without_edges(src: str, orig: str, per_page: dict) -> str:
+    """머리말·꼬리말 글을 지운 임시 사본(그림·선은 그대로). `src` 가 이미 임시 사본이면 그것을 고친다."""
+    import fitz
+    if src == orig:
+        out = Path(tempfile.mkdtemp(prefix="polypdf_conv_")) / "noedge.pdf"
+    else:
+        out = Path(src).with_name("noedge.pdf")
+    doc = fitz.open(src)
+    try:
+        if doc.needs_pass:
+            from viewer import secure_store
+            doc.authenticate(secure_store.recall_any(orig) or "")
+        for pg, edges in per_page.items():
+            if not edges:
+                continue
+            page = doc.load_page(int(pg))
+            for e in edges:
+                page.add_redact_annot(fitz.Rect(e["rect"]) + (-0.5, -0.5, 0.5, 0.5))
+            page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE)
+        doc.save(str(out))
+    finally:
+        doc.close()
+    return str(out)
+
+
+def _put_header_footer(dst, plan, per_page) -> None:
+    """pdf2docx 가 만든 docx 의 첫 구역에 머리글·바닥글(뒤 구역은 앞을 따른다). 머리글 자리는 원본 머리말 자리."""
+    from docx import Document
+    from viewer.convert.docx_writer import _header_footer, set_hf_distance
+    out = Document(str(dst))
+    secs = out.sections
+    if not secs:
+        return
+    sec = secs[0]
+    _header_footer(out, sec, plan)
+    for k, s2 in enumerate(secs):
+        if k:                                  # 뒤 구역은 첫 구역을 따른다(구역 개체는 꺼낼 때마다 새것 — 번호로 가른다)
+            s2.header.is_linked_to_previous = True
+            s2.footer.is_linked_to_previous = True
+        set_hf_distance(s2, per_page)
+    out.save(str(dst))
 
 
 def serve(address: str) -> None:

@@ -8,6 +8,7 @@ C. 그림이 들어간다 — 회전해 넣은 그림도(고침 2: opencv 대신
 D. 스캔 쪽(글자층 없음)은 우리 OCR 결과가 글로 들어간다(임시 사본 — 원본 옆·임시 폴더에 흔적이 남지 않는다)
 E. 변환은 **보조 프로세스**에서 — 이 프로세스에는 pdf2docx 가 실리지 않는다(opencv 도)
 F. 취소하면 docx 를 지운다(고침 3)
+G. 큰 표(합친 칸 포함)를 만들 때 python-docx 칸 목록을 표마다 한 번만 만든다(고침 6 — 칸마다 새로 만들어 한 쪽이 몇 분 걸렸다)
 """
 import os, sys, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -126,6 +127,44 @@ try:
     except convert.Cancelled:
         cancelled = True
     chk(cancelled and not (root / "W (2).docx").exists(), "F 취소하면 docx 를 지운다", str(seen[:3]))
+
+    # ── G. 큰 표 — 칸 목록을 표마다 한 번(고침 6) ─────────────────────────
+    big = root / "T.pdf"
+    d = fitz.open()
+    pg_ = d.new_page(width=842, height=595)
+    n, cw, rh, x0, y0 = 24, 30, 18, 40, 40
+    for r in range(n + 1):
+        pg_.draw_line((x0, y0 + r * rh), (x0 + n * cw, y0 + r * rh))
+    for c in range(n + 1):
+        if c in (3, 4):                       # 세로선을 몇 개 빼 칸을 합치게 한다
+            pg_.draw_line((x0 + c * cw, y0), (x0 + c * cw, y0 + 5 * rh))
+            continue
+        pg_.draw_line((x0 + c * cw, y0), (x0 + c * cw, y0 + n * rh))
+    for r in range(n):
+        for c in range(n):
+            pg_.insert_text((x0 + c * cw + 3, y0 + r * rh + 12), f"{r}.{c}", fontsize=6)
+    d.save(str(big)); d.close()
+    import docx.table as dt
+    from viewer._vendor.pdf2docx import Converter
+    calls = {"n": 0}
+    _real_cells = dt.Table._cells
+
+    def _count(self):
+        calls["n"] += 1
+        return _real_cells.fget(self)
+    dt.Table._cells = property(_count)
+    try:
+        import logging
+        logging.disable(logging.CRITICAL)
+        cv = Converter(str(big)); cv.convert(str(root / "T.docx")); cv.close()
+    finally:
+        dt.Table._cells = _real_cells
+        logging.disable(logging.NOTSET)
+    tdoc = Document(str(root / "T.docx"))
+    ntab = sum(1 for e in tdoc.element.body.iter() if e.tag.endswith("}tbl"))      # 칸 안의 표까지
+    ncell = sum(len(t.rows) * len(t.columns) for t in tdoc.tables)
+    chk(ntab >= 1 and ncell >= 400 and calls["n"] <= ntab,
+        "G 큰 표는 칸 목록을 표마다 한 번만 만든다(고침 6)", f"tables={ntab} cells={ncell} builds={calls['n']}")
 finally:
     index_proc.run_job = _real_run if "_real_run" in dir() else index_proc.run_job
     shutil.rmtree(root, ignore_errors=True)

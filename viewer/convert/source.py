@@ -86,14 +86,17 @@ class PageSource:
         except Exception:
             return rows
 
-    def lines(self, pg, *, tables: str | None = None, join: bool = True) -> list:
-        """쪽 줄 목록(고침 반영) — 텍스트 창이 보이는 것과 같다. `join=False` 는 원본 줄(형식 변환 '모양 그대로')."""
+    def lines(self, pg, *, tables: str | None = None, join: bool = True, edges=None) -> list:
+        """쪽 줄 목록(고침 반영) — 텍스트 창이 보이는 것과 같다. `join=False` 는 원본 줄(형식 변환 '모양 그대로').
+        `edges` 에 list 를 주면 텍스트 창이 버리는 머리말·꼬리말 줄을 채운다(텍스트 창 SOT §3.5.2, 형식 변환 SOT §1.1)."""
         from viewer import text_extract2 as tx
         ocr = "" if tx.has_text_layer(self.doc, int(pg)) else self.ocr_text(pg)
         ws, dpi = self.ocr_words(pg)
+        # 옆 쪽 OCR 낱말 — 스캔 쪽의 꼬리말 되풀이 판정(텍스트 창과 같게, 261014-15)
+        peers = tx._peer_words(self.ocr_words, int(pg), self.page_count) if ws else None
         rows = tx.page_lines(self.doc, self.path, int(pg), tables=(tables or self.tables_mode),
                              ocr_text=ocr, ocr_words=ws or None, ocr_dpi=int(dpi or 0),
-                             join_lines=join)
+                             join_lines=join, ocr_peer_words=peers or None, edges_out=edges)
         return self.fix_rows(pg, rows)
 
     def tables(self, pg) -> list:

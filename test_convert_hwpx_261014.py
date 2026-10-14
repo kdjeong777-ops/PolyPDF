@@ -7,6 +7,8 @@ B. HWPX 편집 가능(실제 처리기 `action_convert`) — 개요 1, 문단, �
 C. HWPX 모양 그대로 — 쪽마다 구역(쪽 크기 = PDF 쪽), 원본 줄마다 문단, 왼쪽 여백 = 줄의 x, 위 간격, 글자 크기·굵기, 자간,
    나란한 줄은 한 문단에 빈칸으로, 그림·표는 종이 기준 원본 자리에 띄움, 바탕 그림은 뺌
 D. 만든 HWPX 를 python-hwpx 로 다시 열 수 있다(한글에서 여는 확인은 사용자 PC — 형식 변환 SOT §7)
+E. 머리말·꼬리말(261014-15, §1.1) — Word·HWPX 의 머리말·꼬리말 기능으로, 쪽 번호는 필드(원본 번호부터), 자리는 원본대로,
+   본문에는 남지 않는다. Word 모양 그대로(pdf2docx)도.
 """
 import os, sys, tempfile, shutil, zipfile, re
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -169,9 +171,11 @@ try:
         str([t for t in lines if not ps_[t]]))
     pp = {t: para_pr(re.search(r'paraPrIDRef="(\d+)"', ps_[t]).group(1)) for t in lines if ps_[t]}
     cp = {t: char_pr(re.search(r'charPrIDRef="(\d+)"', ps_[t]).group(1)) for t in lines if ps_[t]}
-    chk(margin(pp.get("Indented second line.", ""), "left") == 9000 and margin(pp.get("Body text before the table.", ""), "left") == 7200,
-        "C 왼쪽 여백 = 원본 줄의 x(들여쓰기)",
-        f'{margin(pp.get("Indented second line.", ""), "left")} {margin(pp.get("Body text before the table.", ""), "left")}')
+    page_left = int(re.search(r'<hp:margin [^>]*left="(\d+)"', xs[0]).group(1))       # 쪽 왼쪽 여백 = 원본 글 영역 왼쪽
+    xi = page_left + (margin(pp.get("Indented second line.", ""), "left") or 0)
+    xb = page_left + (margin(pp.get("Body text before the table.", ""), "left") or 0)
+    chk(abs(xi - 9000) <= 60 and abs(xb - 7200) <= 60 and xi - xb == 1800,
+        "C 쪽 왼쪽 여백 + 문단 왼쪽 여백 = 원본 줄의 x(들여쓰기)", f"{page_left} {xi} {xb}")
     t_prev = margin(pp.get("Mixture Design Title", ""), "prev") or 0
     a_prev = margin(pp.get("Body text after the table.", ""), "prev") or 0
     chk(5000 < t_prev < 7000 and a_prev > 4000, "C 위 간격 = 원본 줄 자리(표가 띄워져도 표 높이만큼 비운다)", f"{t_prev} {a_prev}")
@@ -200,6 +204,69 @@ try:
     except Exception:
         reopened = False
     chk(reopened, "D 모양 그대로 HWPX 도 다시 열 수 있다")
+
+    # ── E. 머리말·꼬리말(§1.1) — 머리말·꼬리말 기능으로, 쪽 번호는 필드 ─────────────
+    hf = root / "F.pdf"
+    d = fitz.open()
+    for i in range(4):
+        pg_ = d.new_page(width=595, height=842)
+        pg_.insert_text((400, 40), f"Asphalt Design Guide p.{i + 11}", fontsize=9, fontname="tiro")   # 글 + 번호
+        for k in range(20):
+            pg_.insert_text((72, 100 + k * 16), f"Body line {k} on page {i + 1} explains the method.", fontsize=11, fontname="tiro")
+        pg_.insert_text((285, 815), f"- {i + 11} -", fontsize=9, fontname="tiro")
+    d.save(str(hf)); d.close()
+    # Word 편집 가능
+    ew = convert.run(str(hf), "docx_edit")
+    wd = Document(str(ew)); s0 = wd.sections[0]
+    body_t = " ".join(p.text for p in wd.paragraphs)
+    chk([p.text for p in s0.header.paragraphs] == ["Asphalt Design Guide p.1"] and "PAGE" in s0.header._element.xml,
+        "E Word 머리글에 머리말 글(글 안 번호도 PAGE 필드)", str([p.text for p in s0.header.paragraphs]))
+    fx = s0.footer._element.xml
+    chk("PAGE" in fx and "- " in "".join(p.text for p in s0.footer.paragraphs), "E Word 바닥글 쪽 번호는 PAGE 필드", fx[-300:])
+    chk('w:start="11"' in s0._sectPr.xml, "E 쪽 번호는 원본 번호(11)부터")
+    chk("Asphalt Design Guide" not in body_t and "- 12 -" not in body_t, "E 본문에는 머리말·꼬리말 글이 없다")
+    chk(abs(s0.header_distance.pt - 30.5) < 2 and abs(s0.footer_distance.pt - 24.5) < 2,
+        "E 머리글·바닥글 자리 = 원본 자리", f"{s0.header_distance.pt} {s0.footer_distance.pt}")
+    hp = s0.header.paragraphs[0].paragraph_format.left_indent
+    chk(hp is not None and abs(hp.pt - (400 - 56.7)) < 3, "E 머리말 가로 자리(들여쓰기)도 원본대로", str(hp.pt if hp else None))
+    # Word 모양 그대로(pdf2docx) — 머리말·꼬리말을 지운 사본을 변환하고 머리글·바닥글로
+    es = convert.run(str(hf), "docx_shape")
+    wd2 = Document(str(es))
+    body2 = " ".join(p.text for p in wd2.paragraphs)
+    chk([p.text for p in wd2.sections[0].header.paragraphs] == ["Asphalt Design Guide p.1"]
+        and "PAGE" in wd2.sections[0].footer._element.xml, "E Word 모양 그대로도 머리글·바닥글(쪽 번호 필드)")
+    chk("Asphalt Design Guide" not in body2 and "- 12 -" not in body2, "E pdf2docx 본문에 머리말·꼬리말이 남지 않는다", body2[:100])
+    chk(all(s.header.is_linked_to_previous for s in list(wd2.sections)[1:]) and not wd2.sections[0].header.is_linked_to_previous,
+        "E 뒤 구역은 첫 구역 머리글을 따른다")
+    # HWPX 편집 가능
+    eh = convert.run(str(hf), "hwpx_edit")
+    x = "".join(section_xml(eh))
+    hdr_ = re.search(r"<hp:header .*?</hp:header>", x, re.S)
+    ftr_ = re.search(r"<hp:footer .*?</hp:footer>", x, re.S)
+    chk(hdr_ and "Asphalt Design Guide" in hdr_.group(0), "E HWPX 머리말 기능에 머리말 글")
+    chk(hdr_ and 'numType="PAGE"' in hdr_.group(0) and 'pos="NONE"' in hdr_.group(0),
+        "E HWPX 머리말 글 안 번호는 번호 필드(쪽 번호 위치 표시는 끔 — 두 번 그리지 않는다)")
+    pnums = re.findall(r'<hp:pageNum [^>]*pos="(?!NONE)[^"]*"[^>]*>', re.sub(r"<hp:(header|footer) .*?</hp:\1>", "", x, flags=re.S))
+    chk(len(pnums) == 1 and 'pos="BOTTOM_CENTER"' in pnums[0] and 'sideChar="-"' in pnums[0],
+        "E HWPX 번호뿐인 꼬리말(- 12 -)은 한글 '쪽 번호 매기기'(아래 가운데, 줄표)로", str(pnums))
+    chk(not ftr_ or "- " not in re.sub(r"<[^>]+>", "", ftr_.group(0)),
+        "E HWPX 번호뿐인 꼬리말을 꼬리말 글로 또 넣지 않는다")
+    chk('<hp:newNum num="11" numType="PAGE"' in x, "E HWPX 쪽 번호는 원본 번호(11)부터")
+    body_x = re.sub(r"<hp:(header|footer) .*?</hp:\1>", "", x, flags=re.S)
+    chk("Asphalt Design Guide" not in body_x and "- 12 -" not in body_x, "E HWPX 본문에는 머리말·꼬리말 글이 없다")
+    # HWPX 모양 그대로 — 쪽마다 그 쪽 글 그대로, 머리말·꼬리말 영역 = 원본 자리
+    esh = convert.run(str(hf), "hwpx_shape")
+    xs2 = section_xml(esh)
+    chk(len(xs2) == 4 and all(f'<hp:newNum num="{i + 11}" numType="PAGE"' in xs2[i]
+                              and re.search(r'<hp:pageNum [^>]*pos="BOTTOM_CENTER"[^>]*sideChar="-"', xs2[i]) for i in range(4)),
+        "E HWPX 모양 그대로 — 쪽마다 '쪽 번호 매기기' + 그 쪽 번호로 새 번호")
+    chk(all(f"Asphalt Design Guide p.{i + 11}" in xs2[i] for i in range(4)), "E HWPX 모양 그대로 — 쪽마다 그 쪽 머리말 글")
+    m0 = re.search(r'<hp:margin [^>]*>', xs2[0]).group(0)
+    vals = dict(re.findall(r'(\w+)="(\d+)"', m0))
+    chk(int(vals["header"]) > 0 and int(vals["footer"]) > 0 and abs(int(vals["top"]) - 2952) < 200,
+        "E HWPX 모양 그대로 — 위 여백·머리말 길이 = 원본 머리말 자리", m0)
+    b0 = re.sub(r"<hp:(header|footer) .*?</hp:\1>", "", xs2[0], flags=re.S)
+    chk("Asphalt Design Guide" not in b0, "E HWPX 모양 그대로 — 본문에는 머리말 글이 없다")
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

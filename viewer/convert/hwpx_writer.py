@@ -14,6 +14,7 @@ from viewer.convert import layout
 
 HWPUNIT_PER_PT = 100
 TITLE_STYLE = "개요 1"     # 한글 기본 스타일 이름(문서 안의 스타일 키 — 화면 문구가 아니다)
+EDIT_PAGE_W_PT = 595       # 편집 가능의 기본 쪽(A4) 너비
 EDIT_TEXT_W_PT = 425       # 기본 쪽(A4, 좌우 여백 30 mm)의 글 너비 — 편집 가능의 그림을 이 너비에 맞춘다
 LINE_PCT = 100             # 모양 그대로의 줄 간격(%) — 줄 높이 = 글자 크기 × LINE_PCT / 100
 SPACING_MIN, SPACING_MAX = -50, 50      # 한글 자간 범위(%)
@@ -60,10 +61,12 @@ def _fill_table(t, rows) -> None:
 def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:
     from hwpx import HwpxDocument
     doc = HwpxDocument.new()
+    per_page = {}
     for i, pg in enumerate(pages):
         tick(i, len(pages), f"p.{pg + 1}")
         first_on_page = i > 0
-        for b in layout.page_blocks(ps, pg, join=True):
+        edges = per_page.setdefault(pg, [])
+        for b in layout.page_blocks(ps, pg, join=True, edges=edges):
             brk = {"pageBreak": "1"} if first_on_page else {}
             if b["kind"] == "line":
                 if b.get("style") == "title":
@@ -91,8 +94,118 @@ def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:
             first_on_page = False
         if first_on_page:                       # 빈 쪽이어도 쪽은 나눈다
             doc.add_paragraph("", pageBreak="1")
+    _edit_header_footer(doc, layout.edge_plan(per_page))
     tick(len(pages), len(pages), "")
     doc.save_to_path(str(dst))
+
+
+def _hf_content(lines) -> list:
+    """머리말·꼬리말 줄 → python-hwpx 내용 명세. 쪽 번호 자리(`NUM_TOKEN`)는 쪽 번호 필드로(§1.1)."""
+    out = []
+    for ln in lines:
+        left = (EDIT_PAGE_W_PT - EDIT_TEXT_W_PT) / 2
+        text, align, _ind = layout.compose(ln, EDIT_PAGE_W_PT, left, left + EDIT_TEXT_W_PT, spaces=True)
+        face = layout.SERIF_FACE if ln["serif"] else layout.SANS_FACE
+        kids = []
+        parts = text.split(layout.NUM_TOKEN)
+        for k, part in enumerate(parts):
+            if part:
+                kids.append({"type": "run", "text": part, "size": round(ln["size"] * 2) / 2,
+                             "bold": bool(ln["bold"]), "font": face})
+            if k < len(parts) - 1:
+                # 쪽 번호 '자리 표시'(pageNum)는 끈다 — 켜 두면 한글이 쪽 아래에 번호를 또 그린다. 글 안의 번호(autoNum)만
+                kids.append({"page_number": "page", "position": "NONE"})
+        if kids:
+            out.append({"align": align, "children": kids})
+    return out
+
+
+def _hf_content_at(lines, left: float, right: float) -> list:
+    """모양 그대로 — 그 쪽의 머리말·꼬리말 글 그대로(쪽 번호도 원본 글), 맞춤은 그 쪽 글 영역 기준."""
+    out = []
+    for ln in lines:
+        text, align, _ind = layout.compose(ln, float(ln.get("pw") or right), left, right, spaces=True)
+        face = layout.SERIF_FACE if ln["serif"] else layout.SANS_FACE
+        if text.strip():
+            out.append({"align": align, "children": [{"type": "run", "text": text, "size": round(ln["size"] * 2) / 2,
+                                                       "bold": bool(ln["bold"]), "font": face}]})
+    return out
+
+
+_HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
+
+
+def _page_num_ctrl(paragraph, pos: str, side: str, char_pr="0") -> None:
+    """한글 '쪽 번호 매기기'(`hp:pageNum`)를 문단에 넣는다 — 그 쪽부터 뒤 쪽까지 `pos` 자리에 번호를 그린다(§1.1)."""
+    p = paragraph.element if hasattr(paragraph, "element") else paragraph
+    run = p.makeelement(_HP + "run", {"charPrIDRef": str(char_pr)})   # 번호 글자 모양 = 원본 번호 줄
+    ctrl = run.makeelement(_HP + "ctrl", {})
+    ctrl.append(ctrl.makeelement(_HP + "pageNum", {"pos": pos, "formatType": "DIGIT", "sideChar": side}))
+    run.append(ctrl)
+    p.append(run)
+
+
+def _num_pos(where: str, lines_by_kind: dict) -> tuple | None:
+    """쪽 번호뿐인 줄들 → (한글 쪽 번호 자리, 양옆 글자). 홀수 쪽 오른쪽·짝수 쪽 왼쪽이면 바깥쪽(OUTSIDE)."""
+    found = {}
+    for kind, lines in lines_by_kind.items():
+        for ln in lines:
+            side = layout.number_only(ln["pieces"][0][2], layout.NUM_TOKEN) if len(ln["pieces"]) == 1 else None
+            if side is not None:
+                left = (EDIT_PAGE_W_PT - EDIT_TEXT_W_PT) / 2
+                _t, align, _i = layout.compose(ln, EDIT_PAGE_W_PT, left, left + EDIT_TEXT_W_PT)
+                found[kind] = (align, side, ln)
+    if not found:
+        return None
+    vert = "TOP" if where == "head" else "BOTTOM"
+    odd, even = found.get("ODD"), found.get("EVEN")
+    if odd and even and odd[0] != even[0] and "CENTER" not in (odd[0], even[0]):
+        return ("OUTSIDE_" if odd[0] == "RIGHT" else "INSIDE_") + vert, odd[1], odd[2]
+    align, side, ln = found.get("BOTH") or odd or even
+    return vert + "_" + align, side, ln
+
+
+def _edit_header_footer(doc, plan) -> None:
+    """편집 가능 — 문서 하나에 머리말·꼬리말(쪽 번호는 필드, 홀·짝이 다르면 따로).
+    쪽 번호뿐인 줄은 머리말·꼬리말 글이 아니라 한글 '쪽 번호 매기기' 로(§1.1)."""
+    put = {"head": doc.page.set_header, "foot": doc.page.set_footer}
+    for where in ("head", "foot"):
+        pn = _num_pos(where, plan[where])
+        if pn is not None:
+            pos, side, ln = pn
+            cp = doc.styles.ensure_run(size=round(ln["size"] * 2) / 2, bold=bool(ln["bold"]),
+                                       font=layout.SERIF_FACE if ln["serif"] else layout.SANS_FACE)
+            _page_num_ctrl(doc.sections[0].paragraphs[0], pos, side, cp)
+        for kind, lines in plan[where].items():
+            if pn is not None:
+                lines = [ln for ln in lines if not (len(ln["pieces"]) == 1 and layout.number_only(
+                    ln["pieces"][0][2], layout.NUM_TOKEN) is not None)]
+            content = _hf_content(lines)
+            if content:
+                put[where](content=content, page_type=kind)
+    start = plan.get("start")
+    if start and int(start) > 1:
+        try:
+            doc.page.restart_page_number(doc.sections[0].paragraphs[0], number=int(start))
+        except Exception:
+            pass
+    _num_runs_like_text(doc)
+
+
+def _num_runs_like_text(doc) -> None:
+    """쪽 번호 필드가 든 런의 글자 모양을 옆 글 런과 같게 — python-hwpx 는 기본 모양(10 pt)으로 넣는다."""
+    for sec in doc.sections:
+        for p in sec.element.iter():
+            if not p.tag.endswith("}p"):
+                continue
+            runs = [r for r in p if r.tag.endswith("}run")]
+            text_cp = next((r.get("charPrIDRef") for r in runs if any(c.tag.endswith("}t") for c in r)), None)
+            if text_cp is None:
+                continue
+            for r in runs:
+                if any(e.tag.endswith("}autoNum") or e.tag.endswith("}pageNum") for e in r.iter()):
+                    r.set("charPrIDRef", text_cp)
+        sec.mark_dirty()
 
 
 # ---- 모양 그대로(배치 쓰기) ---------------------------------------------------
@@ -226,15 +339,47 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
         w, h = page.rect.width, page.rect.height
         sec = doc.sections[0] if i == 0 else doc.add_section()
         doc.page.set_size(width=_u(w), height=_u(h), section=sec)
-        doc.page.set_margins(left=0, right=0, top=0, bottom=0, header=0, footer=0, gutter=0, section=sec)
+        edges = []
+        blocks = layout.page_blocks(ps, pg, join=False, edges=edges)
+        # 쪽 여백 = 원본 글 영역(§1.1). 머리말·꼬리말이 있으면 그 자리가 머리말·꼬리말 영역이다
+        xs = [b["rect"] for b in blocks if b["kind"] == "line" and b.get("rect")] + [e["rect"] for e in edges]
+        left = max(0.0, min((r[0] for r in xs), default=0.0) - 1)
+        right = max(0.0, w - max((r[2] for r in xs), default=w) - 1)
+        heads = [e for e in edges if e["where"] == "head"]
+        foots = [e for e in edges if e["where"] == "foot"]
+        top = max(0.0, min((e["rect"][1] for e in heads), default=0.0) - 1)
+        hlen = (max(e["rect"][3] for e in heads) - top + 1) if heads else 0.0
+        bottom = max(0.0, h - max((e["rect"][3] for e in foots), default=h) - 1)
+        flen = (max(e["rect"][3] for e in foots) - min(e["rect"][1] for e in foots) + 2) if foots else 0.0
+        doc.page.set_margins(left=_u0(left), right=_u0(right), top=_u0(top), bottom=_u0(bottom),
+                             header=_u0(hlen), footer=_u0(flen), gutter=0, section=sec)
+        for kind, lines in (("head", heads), ("foot", foots)):
+            # 쪽 번호뿐인 줄 → 한글 '쪽 번호 매기기' + 그 쪽 번호로 새 번호(§1.1). 나머지는 그 쪽 글 그대로
+            nums = [ln for ln in lines if len(ln["pieces"]) == 1 and layout.number_only(ln["pieces"][0][2]) is not None]
+            if nums:
+                ln = nums[0]
+                _t, align, _i = layout.compose(ln, w, left, w - right)
+                side = layout.number_only(ln["pieces"][0][2])
+                import re as _re
+                n = int(_re.search(r"\d+", ln["pieces"][0][2]).group(0))
+                head_p = sec.paragraphs[0]
+                try:
+                    doc.page.restart_page_number(head_p, number=n)
+                except Exception:
+                    pass
+                _page_num_ctrl(head_p, ("TOP_" if kind == "head" else "BOTTOM_") + align, side,
+                               st.run(ln["size"], 0, ln["bold"], ln["serif"]))
+                lines = [x for x in lines if x not in nums]
+            content = _hf_content_at(lines, left, w - right)
+            if content:
+                (doc.page.set_header if kind == "head" else doc.page.set_footer)(content=content, section=sec)
         # 구역의 첫 문단(구역 설정을 든 것)이 그림·표를 붙든다 — 글자를 아주 작게 해 줄 높이를 거의 차지하지 않게
         head = sec.paragraphs[0]
         head.element.set("paraPrIDRef", str(anchor_para))
         for r in head.element:
-            if r.tag.endswith("}run"):
+            if r.tag.endswith("}run") and not any(e.tag.endswith("}pageNum") for e in r.iter()):
                 r.set("charPrIDRef", str(anchor_run))
-        cur = ANCHOR_PT * LINE_PCT / 100.0
-        blocks = layout.page_blocks(ps, pg, join=False)
+        cur = top + hlen + ANCHOR_PT * LINE_PCT / 100.0       # 본문은 위 여백 + 머리말 아래에서 시작한다
         for b in blocks:
             if b["kind"] == "image":
                 got = _pic(doc, b)
@@ -260,7 +405,7 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
             top = cy - lh / 2
             prev = max(0.0, top - cur)
             cur = max(cur, top) + lh
-            doc.add_paragraph(text, section=sec, para_pr_id_ref=st.para(x0, prev),
+            doc.add_paragraph(text, section=sec, para_pr_id_ref=st.para(x0 - left, prev),
                               char_pr_id_ref=st.run(size, _spacing(text, width, size, serif), bold, serif))
         for b in blocks:                           # 자리 없는 줄(좌표 없는 OCR) — 뒤에 이어서
             if b["kind"] == "line" and not b.get("rect"):

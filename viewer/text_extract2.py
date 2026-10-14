@@ -236,7 +236,7 @@ def _is_ocr_layer(page) -> bool:
     return inv >= len(traces) * 0.9
 
 
-def _line_items(page):
+def _line_items(page, edges_out=None):
     """PyMuPDF 줄 → [(rect, 글, 대표크기)] — 빈 줄 제외, 블록 읽기 순서.
 
     260908-6(SOT §3.5): 보이지 않는 OCR 층인 쪽에서는 **글자라고 볼 수 없이 작은 줄**을
@@ -301,7 +301,16 @@ def _line_items(page):
     #   (실측: `낡쥰~ | Fracture and Damage…`). 판정은 **쪽 전체**를 보고 한다 —
     #   띠는 블록을 가로질러 흩어져 있어 블록마다 따로 보면 못 찾는다.
     _all = [f for _bb, lns in blocks for f in lns]
-    _keep, _dropped = drop_edge_frags(_all, page)
+    if edges_out is None:
+        _keep, _dropped = drop_edge_frags(_all, page)
+    else:
+        # 261014-15(§3.5.2, 형식 변환 SOT §1.1): 버리는 머리말·꼬리말을 따로 돌려준다 — 판정은 같고 나눠 부를 뿐이다
+        _k1, _d1 = drop_edge_frags(_all, page, edge=False)
+        _keep, _d2 = drop_edge_frags(_k1, page, side=False)
+        _dropped = _d1 + _d2
+        if _d2:
+            _ok2 = {id(f) for f in _keep}
+            edges_out.extend(edge_rows([f for f in _k1 if id(f) not in _ok2], page))
     if _dropped:
         _ok = {id(f) for f in _keep}
         _nb = []
@@ -405,6 +414,42 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
     if len(drop) >= len(frags):
         return frags, 0
     return [f for i, f in enumerate(frags) if i not in drop], len(drop)
+
+
+def edge_rows(frags, page) -> list:
+    """버린 머리말·꼬리말 조각 → 줄 `{text, rect, size, where, pieces}` (261014-15, 형식 변환 SOT §1.1).
+
+    같은 높이의 조각을 한 줄로 모으고, 줄 안에서 크게 떨어진 조각(왼쪽 제목·오른쪽 쪽 번호)은 `pieces` 에
+    자리째 남긴다. `where` 는 쪽의 위 절반이면 "head", 아니면 "foot"."""
+    try:
+        ph = float(page.rect.height)
+    except Exception:
+        ph = 0.0
+    items = []
+    for r, t, sz in sorted(frags, key=lambda f: ((f[0][1] + f[0][3]) / 2, f[0][0])):
+        cy = (r[1] + r[3]) / 2
+        for it in items:
+            if abs(it["cy"] - cy) <= max(2.0, 0.5 * (r[3] - r[1])):
+                it["parts"].append((r, str(t).replace(" | ", "  "), sz))
+                break
+        else:
+            items.append({"cy": cy, "parts": [(r, str(t).replace(" | ", "  "), sz)]})
+    out = []
+    for it in items:
+        parts = sorted(it["parts"], key=lambda q: q[0][0])
+        size = max(float(q[2] or 0) for q in parts) or (parts[0][0][3] - parts[0][0][1]) / 1.25
+        pieces = []
+        for r, t, _sz in parts:
+            if pieces and r[0] - pieces[-1][1] <= size * 1.5:      # 이어진 조각 — 빈칸 하나로
+                x0, _x1, tt = pieces[-1]
+                pieces[-1] = (x0, r[2], tt + " " + t.strip())
+            else:
+                pieces.append((r[0], r[2], t.strip()))
+        rect = (min(q[0][0] for q in parts), min(q[0][1] for q in parts),
+                max(q[0][2] for q in parts), max(q[0][3] for q in parts))
+        out.append({"text": "  ".join(p[2] for p in pieces), "rect": rect, "size": size,
+                    "where": "head" if (not ph or it["cy"] < ph / 2) else "foot", "pieces": pieces})
+    return out
 
 
 def _norm_edge(t: str) -> str:
@@ -1654,8 +1699,11 @@ def _classify(items):
 def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
                ocr_text: str = "", tables_cached_only: bool = False,
                ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True,
-               ocr_peer_words=None) -> list:
+               ocr_peer_words=None, edges_out=None) -> list:
     """쪽 하나의 줄 목록(SOT §3). `tables` = "lines"(기본) / "omit" / "off".
+
+    `edges_out` 에 list 를 주면 §3.5.2 로 버린 머리말·꼬리말 줄(`edge_rows`)을 거기 채운다 — 형식 변환이 머리말·꼬리말
+    기능으로 넣는 데 쓴다(형식 변환 SOT §1.1). 주지 않으면 지금과 똑같다.
 
     `ocr_text` 는 텍스트층이 쓸 만하지 않을 때 쓰는 OCR 결과(단어장 SOT 의 study.db).
     """
@@ -1666,21 +1714,24 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
     if ocr_words:
         # 260908-8: [OCR 다시 읽기] 로 새로 읽은 쪽.
         # 260913-4(§3.5.2): 옆 쪽 OCR 낱말 — 꼬리말 되풀이를 알아보는 데 쓴다
+        _ocr_edges = [] if edges_out is not None else None
         rows = lines_from_words(ocr_words, dpi=ocr_dpi, page=page,
-                                peer_words=ocr_peer_words)
+                                peer_words=ocr_peer_words, edges_out=_ocr_edges)
         if rows:
             _NOISE["n"] = 0
             if join_lines:
                 rows = join_sentences(rows)
             if not has_text_layer(doc, page_index):
+                if edges_out is not None:
+                    edges_out.extend(_ocr_edges)
                 return rows                     # 스캔 쪽 — OCR 이 전부다
             # 260909-2(SOT §3.1.3): 글자층이 있는 쪽은 **갈아 끼우지 않고 합친다**.
             #   글자층이 정확하고, 그림 속 글만 OCR 로 채운다.
             base = page_lines(doc, pdf_path, page_index, tables=tables,
                               tables_cached_only=tables_cached_only,
-                              join_lines=join_lines)
+                              join_lines=join_lines, edges_out=edges_out)
             return merge_layer_and_ocr(base, rows)
-    items = _line_items(page)
+    items = _line_items(page, edges_out)
     noise = last_noise_count()
 
     if not items:                       # 텍스트층 없음 → OCR 폴백(좌표 없음)
@@ -1725,7 +1776,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
     return rows_out
 
 
-def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None) -> list:
+def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None, edges_out=None) -> list:
     """OCR 낱말 상자 → **줄 목록**(SOT §3.1·§3.6, 260908-8).
 
     종전 OCR 폴백은 저장된 본문을 줄바꿈으로 쪼개기만 해서 **좌표가 없었다** —
@@ -1767,8 +1818,12 @@ def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None) -> list
     items = [it for it in items if not _noise.is_symbol_only(it[1])]
     # 머리말·꼬리말은 **줄을 이은 뒤** 줄 단위로 — 낱말 하나는 옆 쪽 꼬리말 한 줄과 같을 수 없다.
     if page is not None and items:
+        _before = items
         items, _n = drop_edge_frags(items, page, side=False,
                                     peers=peer_texts_from_words(peer_words))
+        if edges_out is not None and _n:
+            _ok = {id(f) for f in items}
+            edges_out.extend(edge_rows([f for f in _before if id(f) not in _ok], page))
     styles = _classify(items)
     return [{'text': t, 'style': st, 'rect': r, 'kind': 'text', 'size': sz}
             for (r, t, sz), st in zip(items, styles)]

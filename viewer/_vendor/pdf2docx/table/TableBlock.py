@@ -166,9 +166,34 @@ class TableBlock(Block):
         Args:
             table (Table): ``python-docx`` table instance.
         '''
+        # POLYPDF 고침 6: python-docx `table.cell()` 은 부를 때마다 표 전체 칸 목록을 새로 만든다 —
+        # 칸마다 여러 번 부르니 큰 표에서 몇 분씩 걸렸다. 칸 목록을 **처음 한 번** 만들어 끝까지 쓴다.
+        # 합친 뒤에도 다시 만들지 않는다 — 아직 안 다룬 칸의 격자 자리는 그대로이고, 합쳐져 빠진 칸에 쓰는
+        # 테두리·여백은 버려진다(다시 만들면 그것이 주 칸에 덧쓰인다). Word 로 찍은 화면이 픽셀까지 같고 더 빠르다.
+        table = _CachedTable(table)
         # set left indent
         docx.indent_table(table, self.left_space)
 
         # set format and contents row by row
         for idx_row in range(len(table.rows)):
             self._rows[idx_row].make_docx(table, idx_row)
+
+
+class _CachedTable:
+    """python-docx Table 대리 — `cell()`·`_cells` 를 한 번 계산해 되쓴다(POLYPDF 고침 6). 나머지는 원래 표로."""
+
+    def __init__(self, table):
+        self._polypdf_table = table
+        self._polypdf_cells = None
+
+    def __getattr__(self, name):
+        return getattr(self._polypdf_table, name)
+
+    @property
+    def _cells(self):
+        if self._polypdf_cells is None:
+            self._polypdf_cells = self._polypdf_table._cells
+        return self._polypdf_cells
+
+    def cell(self, row_idx, col_idx):
+        return self._cells[col_idx + row_idx * self._polypdf_table._column_count]

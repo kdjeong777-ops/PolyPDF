@@ -189,15 +189,22 @@ def _split_pieces(text, rect, spans) -> list:
     return out
 
 
-def page_blocks(ps, pg, *, join: bool) -> list:
-    """쪽 하나의 블록 목록(읽는 차례). 형식 변환 SOT §1·§3."""
+def page_blocks(ps, pg, *, join: bool, edges=None) -> list:
+    """쪽 하나의 블록 목록(읽는 차례). 형식 변환 SOT §1·§3.
+    `edges` 에 list 를 주면 머리말·꼬리말 줄(§1.1 — 본문 블록에는 없다)을 굵기·세리프를 붙여 채운다."""
     page = ps.doc.load_page(int(pg))
-    rows = ps.lines(pg, tables="omit", join=join)
+    raw_edges = [] if edges is not None else None
+    rows = ps.lines(pg, tables="omit", join=join, edges=raw_edges)
     tables = ps.tables(pg)
     spans = _span_styles(page)
     serif_n = sum(k for _b, _bo, se, k, _t in spans if se)
     all_n = sum(k for _b, _bo, _se, k, _t in spans)
     default_serif = (serif_n * 2 >= all_n) if all_n else True
+    for e in raw_edges or ():
+        e = dict(e)
+        e["bold"], e["serif"] = _style_of([tuple(e["rect"])], spans, default_serif)
+        e["pw"], e["ph"] = float(page.rect.width), float(page.rect.height)
+        edges.append(e)
     lines = []
     for r in rows:
         text = r.get("text", "")
@@ -268,3 +275,122 @@ def measure(text: str, size: float, serif: bool):
         return float(f.text_length(text, fontsize=size))
     except Exception:
         return None
+
+
+# ---- 머리말·꼬리말(§1.1) -----------------------------------------------------
+def page_edges(ps, pg) -> list:
+    """쪽 하나의 머리말·꼬리말 줄만(굵기·세리프·쪽 너비 붙임) — 블록이 필요 없는 Word 모양 그대로(§4.1)가 쓴다."""
+    page = ps.doc.load_page(int(pg))
+    raw = []
+    ps.lines(pg, tables="off", join=False, edges=raw)
+    if not raw:
+        return []
+    spans = _span_styles(page)
+    all_n = sum(k for _b, _bo, _se, k, _t in spans)
+    default_serif = (sum(k for _b, _bo, se, k, _t in spans if se) * 2 >= all_n) if all_n else True
+    out = []
+    for e in raw:
+        e = dict(e)
+        e["bold"], e["serif"] = _style_of([tuple(e["rect"])], spans, default_serif)
+        e["pw"], e["ph"] = float(page.rect.width), float(page.rect.height)
+        out.append(e)
+    return out
+
+
+NUM_TOKEN = "\x00#\x00"        # 틀 안의 쪽 번호 자리(쓰기에서 쪽 번호 필드로 바꾼다)
+
+
+EDGE_SNAP = 0.06        # 글 영역 너비의 이 비율 안이면 가운데·오른쪽 끝에 맞춘 것으로 본다
+
+
+def compose(ln, tpw: float, left: float, right: float, *, spaces: bool = False) -> tuple:
+    """머리말·꼬리말 한 줄 → (글, 맞춤, 들여쓰기 pt) — 대상 문서의 쪽 너비 `tpw`, 글 영역 [left, right] 에 맞춘다(§1.1).
+
+    원본 자리를 쪽 너비 비율로 옮겨, 가운데면 CENTER, 오른쪽 끝이면 RIGHT, 그 밖은 LEFT + 들여쓰기.
+    조각이 둘 이상이면 LEFT 에 사이를 빈칸으로 벌린다. `spaces=True` 면 들여쓰기도 빈칸으로(문단 들여쓰기를 줄 수 없는 곳)."""
+    pieces, size, serif = ln["pieces"], ln["size"], ln["serif"]
+    k = tpw / max(1.0, float(ln.get("pw") or tpw))
+    w = max(1.0, right - left)
+    sp = measure(" ", size, serif) or size * 0.3
+    x0, x1 = pieces[0][0] * k, pieces[-1][1] * k
+    if len(pieces) == 1:
+        text = pieces[0][2]
+        if abs((x0 + x1) / 2 - (left + right) / 2) <= w * EDGE_SNAP:
+            return text, "CENTER", 0.0
+        if abs(x1 - right) <= w * EDGE_SNAP:
+            return text, "RIGHT", 0.0
+    else:
+        text = pieces[0][2]
+        for prev, cur in zip(pieces, pieces[1:]):
+            gap = (cur[0] - prev[1]) * k
+            text += " " * max(1, min(200, int(round(gap / max(0.5, sp))))) + cur[2]
+    indent = max(0.0, x0 - left)
+    if spaces and indent > 0:
+        return " " * min(200, int(round(indent / max(0.5, sp)))) + text, "LEFT", 0.0
+    return text, "LEFT", indent
+
+
+def number_only(text: str, token: str | None = None):
+    """줄이 쪽 번호뿐인가(`12`·`- 12 -`·`—12—`) → 양옆 글자(`"-"` 또는 `""`), 아니면 None (§1.1 — 한글 '쪽 번호 매기기' 로).
+    `token` 을 주면 숫자 대신 그 자리 표시(`NUM_TOKEN`)를 찾는다."""
+    import re
+    num = re.escape(token) if token else r"\d{1,5}"
+    m = re.match(r"^\s*([-–—]?)\s*" + num + r"\s*([-–—]?)\s*$", str(text or ""))
+    if not m:
+        return None
+    return "-" if (m.group(1) or m.group(2)) else ""
+
+
+def edge_plan(per_page: dict) -> dict:
+    """쪽별 머리말·꼬리말 줄 `{쪽: [줄]}` → 문서 하나의 틀(편집 가능용, §1.1).
+
+    - 쪽 번호: 줄 안 숫자 중 '쪽 번호 − 쪽 위치' 가 두 쪽 이상에서 같은 것 → `NUM_TOKEN`(쓰기에서 쪽 번호 필드).
+    - 틀은 쪽 번호를 바꾼 글로 견주어 가장 흔한 것. 홀·짝 쪽(인쇄 번호 기준)의 틀이 다르면 따로 둔다.
+    반환 `{"head"|"foot": {"BOTH"|"ODD"|"EVEN": [줄]}, "start": 첫 쪽의 인쇄 번호 또는 None}`.
+    쪽 번호뿐인 줄은 `number_only(…, NUM_TOKEN)` 으로 가린다 — 한글은 그 줄을 '쪽 번호 매기기' 로 넣는다."""
+    import re
+    from collections import Counter
+    votes = Counter()
+    for pg, lines in per_page.items():
+        for ln in lines:
+            for n in set(re.findall(r"\d+", ln["text"])):
+                if len(n) <= 5:
+                    votes[int(n) - int(pg)] += 1
+    off = None
+    if votes:
+        o, c = votes.most_common(1)[0]
+        if c >= 2:
+            off = o
+    plan = {"head": {}, "foot": {}, "start": None}
+    if off is not None and per_page:
+        plan["start"] = min(per_page) + off
+
+    def templ(pg, ln):
+        pieces = []
+        for x0, x1, t in ln["pieces"]:
+            if off is not None:
+                t = re.sub(r"(?<!\d)%d(?!\d)" % (int(pg) + off), NUM_TOKEN, t, count=1)
+            pieces.append((x0, x1, t))
+        return dict(ln, pieces=pieces)
+
+    for where in ("head", "foot"):
+        by_parity = {0: Counter(), 1: Counter()}
+        sample = {}
+        for pg, lines in sorted(per_page.items()):
+            mine = [templ(pg, ln) for ln in lines if ln["where"] == where]
+            if not mine:
+                continue
+            key = tuple(" ".join(p[2] for p in ln["pieces"]) for ln in mine)
+            num = (int(pg) + (off or 0)) % 2
+            by_parity[num][key] += 1
+            sample.setdefault(key, mine)
+        tops = {k: c.most_common(1)[0][0] for k, c in by_parity.items() if c}
+        if not tops:
+            continue
+        if len(tops) == 2 and tops[0] != tops[1]:
+            plan[where]["EVEN"] = sample[tops[0]]
+            plan[where]["ODD"] = sample[tops[1]]
+        else:
+            allc = by_parity[0] + by_parity[1]
+            plan[where]["BOTH"] = sample[allc.most_common(1)[0][0]]
+    return plan
