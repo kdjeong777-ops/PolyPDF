@@ -820,6 +820,19 @@ class PageThumbs(QWidget):
                     return True
         return super().eventFilter(obj, event)
 
+    def select_only_row(self, row: int) -> None:
+        """261016-3(마스터 §4.7.7): 이 행 **하나만** 고른다(다른 선택은 지운다) — 붙여넣은 뒤."""
+        if not (0 <= row < self.list.count()):
+            return
+        self.list.blockSignals(True)
+        try:
+            self.list.clearSelection()
+            self.list.setCurrentRow(row)
+            self.list.item(row).setSelected(True)
+        finally:
+            self.list.blockSignals(False)
+        self.list.scrollToItem(self.list.item(row))
+
     def _copy_items(self, items) -> list:
         """261016-2(마스터 §4.7.20): 고른 썸네일 → 복사할 `[(파일, 쪽)…]`(목록 차례). 끼운 쪽은 그 원본 파일·쪽."""
         doc = self._doc
@@ -833,6 +846,11 @@ class PageThumbs(QWidget):
             elif isinstance(v, (tuple, list)) and len(v) >= 2:
                 out.append((str(v[0]), int(v[1])))
         return out
+
+    def _need_save_first(self) -> None:
+        """261016-3: 붙여넣은 쪽에는 파일의 쪽 번호로 하는 일을 할 수 없다 — 까닭을 알린다(앱의 같은 이름 함수와 같은 문구)."""
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.information(self, "PolyPDF", tr("붙여넣은 쪽은 아직 파일에 없습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
 
     def _next_visible_row(self, row: int, step: int):
         """260610-1: row 에서 step(±1) 방향 첫 '보이는'(필터 통과) 행. 없으면 None."""
@@ -876,7 +894,6 @@ class PageThumbs(QWidget):
         # ① 쪽 — 인쇄·복사·스크린샷으로 복사는 편집모드 무관(260616-21·260821)
         if has_sel:
             act_print = menu.addAction(tr('인쇄 ({n}쪽)…').format(n=n_sel) + _ns)
-            act_print.setEnabled(not staged_sel)
             act_copy = menu.addAction(tr('복사 ({n}쪽)').format(n=n_sel))
         if self._doc is not None:
             _pcnt = self._paste_available() if self._paste_available else 0
@@ -885,7 +902,6 @@ class PageThumbs(QWidget):
             act_paste.setEnabled(bool(self._edit_mode and _pcnt > 0))
         if has_sel:
             act_shot = menu.addAction(tr('스크린샷으로 복사 ({n}쪽)').format(n=n_sel) + _ns)
-            act_shot.setEnabled(not staged_sel)
         if self._doc is not None:
             # 261016-1: 스크린샷 스트립의 컷(그림)들을 새 쪽으로 — 스트립을 끌어 놓기(§4.7.11)와 같은 길.
             #   261016-2(사용자 결정): 스트립에서 고른 컷, 없으면 전부(`_shot_paths` 가 고른다)
@@ -914,17 +930,14 @@ class PageThumbs(QWidget):
         if sel_pages or (self._edit_mode and staged_sel):
             act_rot_l = menu.addAction(tr('왼쪽 90° 회전 ({n}쪽)').format(n=_nsel) + _ns)
             act_rot_r = menu.addAction(tr('오른쪽 90° 회전 ({n}쪽)').format(n=_nsel) + _ns)
-            act_rot_l.setEnabled(not staged_sel); act_rot_r.setEnabled(not staged_sel)
             menu.addSeparator()
         # ③ 크롭(261010-7 — PDF 를 바로 저장하는 일이라 편집 모드와 무관, 저장 확인은 앱이) · 숨김(260609-14 D5, 편집모드)
         if has_sel:
             act_crop = menu.addAction(tr('크롭… ({n}쪽)').format(n=_nsel) + _ns)
             act_uncrop = menu.addAction(tr('크롭 해제 ({n}쪽)').format(n=_nsel) + _ns)
-            act_crop.setEnabled(not staged_sel); act_uncrop.setEnabled(not staged_sel)
         if sel_pages or (self._edit_mode and staged_sel):
             act_hide = menu.addAction(tr('숨김 ({n}쪽)').format(n=_nsel) + _ns)
             act_unhide = menu.addAction(tr('숨김 해제 ({n}쪽)').format(n=_nsel) + _ns)
-            act_hide.setEnabled(not staged_sel); act_unhide.setEnabled(not staged_sel)
         if self._edit_mode and self._hidden_pages:
             act_hreset = menu.addAction(tr("숨김 전체 해제"))
         menu.addSeparator()
@@ -933,18 +946,19 @@ class PageThumbs(QWidget):
             _pl = (own_page + 1) if own_page is not None else (self.list.row(item) + 1)
             act_add = menu.addAction(tr('책갈피 추가 (p.{page})').format(page=_pl) + ('' if own_page is not None else tr('  (저장 후)')))
             act_hl = menu.addAction(tr('하이퍼링크 등록… (p.{page})').format(page=_pl) + ('' if own_page is not None else tr('  (저장 후)')))
-            act_add.setEnabled(own_page is not None); act_hl.setEnabled(own_page is not None)
             menu.addSeparator()
         # ⑤ 261014-11(형식 변환 SOT §2.1·§2.2): '선택한 쪽 변환 ▸' — 저장 전 쪽 편집이 있으면 앱이 먼저 저장하라고 알린다
         if has_sel:
             try:
                 from viewer import convert as _cv
                 _cm = menu.addMenu(tr('선택한 쪽 변환 ({n}쪽)').format(n=_nsel) + _ns)
-                _cm.setEnabled(not staged_sel)
                 for _f in _cv.ready_formats():
                     _a = _cm.addAction(tr(_f.label))
-                    _a.triggered.connect(lambda _=False, k=_f.key, ps=list(sel_print): QTimer.singleShot(
-                        0, lambda: self.convertPagesRequested.emit(ps, k)))
+                    if staged_sel:
+                        _a.triggered.connect(lambda _=False: QTimer.singleShot(0, self._need_save_first))
+                    else:
+                        _a.triggered.connect(lambda _=False, k=_f.key, ps=list(sel_print): QTimer.singleShot(
+                            0, lambda: self.convertPagesRequested.emit(ps, k)))
             except Exception:
                 pass
         if self._edit_mode and self.is_page_dirty():
@@ -954,6 +968,14 @@ class PageThumbs(QWidget):
             return
         chosen = menu.exec(self.list.viewport().mapToGlobal(pos))
         if chosen is None:
+            return
+        # 261016-3(사용자 지시): 붙여넣은 쪽(저장 전)이 섞였으면 파일의 쪽 번호로 하는 일은 하지 않고 까닭을 알린다
+        _blocked = {a for a in (act_print, act_shot, act_rot_l, act_rot_r, act_crop, act_uncrop,
+                                act_hide, act_unhide) if a is not None} if staged_sel else set()
+        if own_page is None and page is not None:
+            _blocked |= {a for a in (act_add, act_hl) if a is not None}
+        if chosen in _blocked:
+            QTimer.singleShot(0, self._need_save_first)
             return
         if chosen == act_print:                     # 260616-21
             self.printPagesRequested.emit(sel_print); return

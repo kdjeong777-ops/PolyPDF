@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-16 21:23+0900\n"
+"POT-Creation-Date: 2026-10-16 21:54+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -483,88 +483,16 @@ msgstr ""
 msgid "PDF번역"
 msgstr ""
 
-#: viewer/app.py
-msgid "🔏 전자서명"
+#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "전자서명"
 msgstr ""
 
 #: viewer/app.py
-msgid "서명..."
-msgstr ""
-
-#: viewer/app.py
-msgid "그림만 넣기..."
-msgstr ""
-
-#: viewer/app.py
-msgid "서명 확정..."
-msgstr ""
-
-#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/main_view.py
-msgid "서명 편집"
-msgstr ""
-
-#: viewer/app.py
-msgid "빈 서명 칸 만들기..."
-msgstr ""
-
-#: viewer/app.py
-msgid "디지털 ID..."
-msgstr ""
-
-#: viewer/app.py
-msgid "서명 그림..."
-msgstr ""
-
-#: viewer/app.py
-msgid "📄 그 밖의 PDF·생성 작업"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "🔍 검색 및 데이터 구축"
-msgstr ""
-
-#: viewer/app.py
-msgid "법령·고시 검색 (법제처)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "건설기준 (KCSC) 보기..."
-msgstr ""
-
-#: viewer/app.py
-msgid "특허 등록정보 (KIPO)..."
+msgid "태그 자동 부여"
 msgstr ""
 
 #: viewer/app.py
 msgid "인덱스 재구축"
-msgstr ""
-
-#: viewer/app.py
-msgid "🏷️ 태그 자동 부여"
-msgstr ""
-
-#: viewer/app.py
-msgid "태그 다시 계산"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "새 태그 후보 검토…"
-msgstr ""
-
-#: viewer/app.py
-msgid "직전 자동 부여 되돌리기"
-msgstr ""
-
-#: viewer/app.py
-msgid "자동 태그 전체 삭제"
-msgstr ""
-
-#: viewer/app.py
-msgid "없는 파일 항목 정리…"
 msgstr ""
 
 #: viewer/app.py
@@ -580,11 +508,7 @@ msgid "단축키 설정..."
 msgstr ""
 
 #: viewer/app.py
-msgid "현재 설정을 기본값으로 저장(배포용)…"
-msgstr ""
-
-#: viewer/app.py
-msgid "설정 초기화(기본값으로 되돌리기)…"
+msgid "사전 및 용어집 관리"
 msgstr ""
 
 #: viewer/app.py
@@ -783,10 +707,6 @@ msgstr ""
 msgid "  (저장 후)"
 msgstr ""
 
-#: viewer/app.py
-msgid "인쇄…"
-msgstr ""
-
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "복사"
 msgstr ""
@@ -801,6 +721,12 @@ msgstr ""
 
 #: viewer/app.py
 msgid "여기에 서명…"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/thumbs_list.py
+msgid ""
+"붙여넣은 쪽은 아직 파일에 없습니다.\n"
+"💾 '저장' 한 뒤에 다시 해 주세요."
 msgstr ""
 
 #: viewer/app.py
@@ -1067,46 +993,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "단어장·책갈피 동시 생성..."
-msgstr ""
-
-#: viewer/app.py
-msgid "📖 사전 및 용어집 관리"
-msgstr ""
-
-#: viewer/app.py
-msgid "단어장 관리 (출처·우선순위·폴더)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "용어집 가져오기 (PDF·CSV)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "사전 복원 (가져오기)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "용어집 CSV 양식 예제 저장..."
-msgstr ""
-
-#: viewer/app.py
-msgid "인터넷 사전 보강 (이어하기)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "사전 내보내기 (TBX·CSV)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "사전 백업 (내보내기)..."
-msgstr ""
-
-#: viewer/app.py
-msgid "사전 정리 (HTML 마크업 제거)"
-msgstr ""
-
-#: viewer/app.py
-msgid "온용어 다시 분류 (용어집별·재조회)..."
 msgstr ""
 
 #: viewer/app.py
@@ -1386,6 +1272,10 @@ msgstr ""
 msgid "먼저 PDF를 표시하세요."
 msgstr ""
 
+#: viewer/app.py
+msgid "인쇄…"
+msgstr ""
+
 #: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "붙여넣기"
 msgstr ""
@@ -1408,6 +1298,24 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "2단 보기"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "왼쪽 90° 회전 (p.{page})"
+msgstr ""
+
+#: viewer/app.py
+msgid "왼쪽 90° 회전 (붙여넣은 쪽)"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "오른쪽 90° 회전 (p.{page})"
+msgstr ""
+
+#: viewer/app.py
+msgid "오른쪽 90° 회전 (붙여넣은 쪽)"
 msgstr ""
 
 #: viewer/app.py
@@ -1483,10 +1391,6 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "태그 자동 부여: {get}개 검토, {n_auto}개 파일에 부여"
-msgstr ""
-
-#: viewer/app.py
-msgid "태그 자동 부여"
 msgstr ""
 
 #: viewer/app.py
@@ -1621,6 +1525,90 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "오류"
+msgstr ""
+
+#: viewer/app.py
+msgid "서명..."
+msgstr ""
+
+#: viewer/app.py
+msgid "그림만 넣기..."
+msgstr ""
+
+#: viewer/app.py
+msgid "서명 확정..."
+msgstr ""
+
+#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/main_view.py
+msgid "서명 편집"
+msgstr ""
+
+#: viewer/app.py
+msgid "빈 서명 칸 만들기..."
+msgstr ""
+
+#: viewer/app.py
+msgid "디지털 ID..."
+msgstr ""
+
+#: viewer/app.py
+msgid "서명 그림..."
+msgstr ""
+
+#: viewer/app.py
+msgid "태그 다시 계산"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "새 태그 후보 검토…"
+msgstr ""
+
+#: viewer/app.py
+msgid "직전 자동 부여 되돌리기"
+msgstr ""
+
+#: viewer/app.py
+msgid "자동 태그 전체 삭제"
+msgstr ""
+
+#: viewer/app.py
+msgid "없는 파일 항목 정리…"
+msgstr ""
+
+#: viewer/app.py
+msgid "단어장 관리 (출처·우선순위·폴더)..."
+msgstr ""
+
+#: viewer/app.py
+msgid "용어집 가져오기 (PDF·CSV)..."
+msgstr ""
+
+#: viewer/app.py
+msgid "사전 복원 (가져오기)..."
+msgstr ""
+
+#: viewer/app.py
+msgid "용어집 CSV 양식 예제 저장..."
+msgstr ""
+
+#: viewer/app.py
+msgid "인터넷 사전 보강 (이어하기)..."
+msgstr ""
+
+#: viewer/app.py
+msgid "사전 내보내기 (TBX·CSV)..."
+msgstr ""
+
+#: viewer/app.py
+msgid "사전 백업 (내보내기)..."
+msgstr ""
+
+#: viewer/app.py
+msgid "사전 정리 (HTML 마크업 제거)"
+msgstr ""
+
+#: viewer/app.py
+msgid "온용어 다시 분류 (용어집별·재조회)..."
 msgstr ""
 
 #: viewer/app.py
@@ -1837,6 +1825,42 @@ msgstr ""
 #: viewer/widgets/toc_review_dialog.py viewer/widgets/translate_files_dialog.py
 #: viewer/widgets/twoup_dialog.py
 msgid "삭제"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "숨김 (p.{page})"
+msgstr ""
+
+#: viewer/app.py
+msgid "숨김 (붙여넣은 쪽)"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "숨김 해제 (p.{page})"
+msgstr ""
+
+#: viewer/app.py
+msgid "숨김 해제 (붙여넣은 쪽)"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "책갈피 추가 (p.{page})"
+msgstr ""
+
+#: viewer/app.py
+msgid "책갈피 추가 (붙여넣은 쪽)"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "하이퍼링크 등록… (p.{page})"
+msgstr ""
+
+#: viewer/app.py
+msgid "하이퍼링크 등록… (붙여넣은 쪽)"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/line_text_settings_dialog.py
@@ -2333,16 +2357,6 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
-msgid "왼쪽 90° 회전 (p.{page})"
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
-msgid "오른쪽 90° 회전 (p.{page})"
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
 msgid "파일이 없어 최근 파일에서 뺐습니다: {path_str}"
 msgstr ""
 
@@ -2522,26 +2536,6 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "삭제 (p.{page})"
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
-msgid "숨김 (p.{page})"
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
-msgid "숨김 해제 (p.{page})"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "책갈피 추가 (p.{page})"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "하이퍼링크 등록… (p.{page})"
 msgstr ""
 
 #: viewer/app.py
@@ -3935,10 +3929,6 @@ msgstr ""
 
 #: viewer/sign_draft_controller.py
 msgid "서명 자리를 놓았습니다 — 옮기거나 크기를 바꾼 뒤 [서명 확정…] 을 누르세요."
-msgstr ""
-
-#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
-msgid "전자서명"
 msgstr ""
 
 #: viewer/sign_draft_controller.py
@@ -8193,6 +8183,14 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "특허 PDF 저장 폴더 선택"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "현재 설정을 기본값으로 저장(배포용)…"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "설정 초기화(기본값으로 되돌리기)…"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

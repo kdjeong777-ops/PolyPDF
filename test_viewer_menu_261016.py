@@ -128,6 +128,18 @@ try:
     plan = pt.current_page_plan()
     chk(plan[:3] == [("own", 0), ("own", 1), ("ext", str(a), 1)], "C2 '붙여넣기' — 지금 쪽(2쪽) 아래 끼운 쪽", str(plan))
     chk(pt.is_staged_page(mv.current_page()), "C3 붙인 쪽으로 간다", str(mv.current_page()))
+    sel_rows = sorted(pt.list.row(it) for it in pt.list.selectedItems())
+    chk(sel_rows == [2], "C4 붙인 마지막 쪽 하나만 골라져 있다(261016-3, 앞뒤 썸네일 안 골라짐)", str(sel_rows))
+    # 지금 쪽이 붙여넣은 쪽 — 이상한 번호 없이 '붙여넣은 쪽', 누르면 저장 뒤에 하라고 알린다
+    msgs = []
+    QMessageBox.information = staticmethod(lambda *a_, **k: msgs.append(a_[2] if len(a_) > 2 else ""))
+    seen.clear(); pick["t"] = "왼쪽 90°"
+    mw._on_viewer_context_menu(g); spin(0.2)
+    L = labels(seen[-1])
+    chk(not any("100000" in t for t in L) and "왼쪽 90° 회전 (붙여넣은 쪽)  (저장 후)" in L,
+        "C5 붙여넣은 쪽 — 합성 번호 대신 '(붙여넣은 쪽)'", str([t for t in L if "회전" in t or "숨김" in t]))
+    chk(msgs and "저장" in msgs[-1], "C6 누르면 '저장한 뒤 다시' 를 알린다(아무 일 없이 끝나지 않는다)", str(msgs))
+    pick["t"] = None
     mv.go_to_page(0); spin(0.3)
 
     # D — 클립보드 붙여넣기: 쪽 → 그림 / 글 → 글쓰기 박스
@@ -151,8 +163,12 @@ try:
     chk(m.get("복사 (1쪽)") is True and m.get("삭제 (1쪽)") is True and m.get("저장") is True,
         "E2 복사·삭제·저장은 된다", str(list(m)[:10]))
     off = [t for t in m if t.endswith("(저장 후)")]
-    chk(len(off) >= 6 and not any(m[t] for t in off) and any(t.startswith("왼쪽 90°") for t in off),
-        "E3 쪽 번호로 일하는 항목은 끈 채로 '(저장 후)'", str(off))
+    chk(len(off) >= 6 and all(m[t] for t in off) and any(t.startswith("왼쪽 90°") for t in off),
+        "E3 쪽 번호로 일하는 항목은 '(저장 후)' — 켜 두고(261016-3)", str(off))
+    msgs.clear(); pick["t"] = "왼쪽 90°"
+    pt._on_list_menu(pt.list.visualItemRect(pt.list.item(r_st)).center()); spin(0.3)
+    chk(msgs and "저장" in msgs[-1], "E3b 누르면 '저장한 뒤 다시' 를 알린다", str(msgs))
+    pick["t"] = None
     pick["t"] = "복사"
     pt._on_list_menu(pt.list.visualItemRect(pt.list.item(r_st)).center()); spin(0.1)
     chk(mw._thumb_clip["items"] == [(str(a), 1)], "E4 끼운 쪽 복사 = 그 원본 파일·쪽", str(mw._thumb_clip))

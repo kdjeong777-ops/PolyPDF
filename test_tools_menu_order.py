@@ -59,11 +59,32 @@ head = rest[:rest.index(None)] if None in rest else rest
 MENU = ["OCR 로 읽기 (쪽 범위·언어·워터마크)...",
         "단어장 생성 (OCR·어휘)...",
         "책갈피 자동 생성...",
+        "단어장·책갈피 동시 생성...",          # 261016-3(§2.9.1 예외 둘째): 파생 항목은 원 항목 바로 아래
         "PDF 병합...",
         "이미지 → PDF 변환...",
         "암호화 (암호·권한 설정)...",
-        "PDF번역"]
-chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다(§2.9.1 예외 — 변환은 파일 메뉴)", str(head))
+        "PDF번역",
+        "전자서명", "태그 자동 부여", "인덱스 재구축"]   # 261016-3: 하위 메뉴 둘 + 인덱스 재구축, 도구 구역 안에 이어서
+chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다(§2.9.1 예외 — 변환은 파일 메뉴, 동시 생성은 책갈피 아래)", str(head))
+subs = {a.text(): [x.text() for x in a.menu().actions()] for a in menu.actions() if a.menu()}
+chk(subs.get("전자서명", [])[:1] == ["서명..."] and len(subs.get("전자서명", [])) == 7
+    and subs.get("태그 자동 부여", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 및 용어집 관리", [])) == 9,
+    "② 전자서명·태그 자동 부여·사전 및 용어집 관리는 하위 메뉴(▸)", str(subs))
+sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
+chk(sec_titles == ["🧰 도구", "⚙️ 프로그램 환경설정", "💻 시스템 연동 및 설치"], "② 구역은 셋(검색 및 데이터 구축·그 밖의·전자서명 구역 없음)", str(sec_titles))
+env = items[items.index("환경설정..."):] if "환경설정..." in items else []
+chk(env[:3] == ["환경설정...", "단축키 설정...", "사전 및 용어집 관리"], "② 환경설정 · 단축키 설정 · 사전 및 용어집 관리 ▸", str(env[:4]))
+chk(not any(t and ("기본값으로 저장" in t or t.startswith("설정 초기화")) for t in items),
+    "② 기본값 저장·설정 초기화는 도구 메뉴에서 뺐다(환경설정 창 맨 아래)")
+from viewer.widgets.settings_dialog import SettingsDialog
+_dlg = SettingsDialog(mw._prefs, mw, host=mw)
+_dlg.show(); app.processEvents()                 # 배치가 잡혀야 위치를 잴 수 있다
+chk(_dlg.btn_save_default.text() == "현재 설정을 기본값으로 저장(배포용)…"
+    and _dlg.btn_reset_default.text() == "설정 초기화(기본값으로 되돌리기)…"
+    and _dlg.btn_save_default.mapTo(_dlg, _dlg.btn_save_default.rect().topLeft()).y()
+    < _dlg.btn_reset_default.mapTo(_dlg, _dlg.btn_reset_default.rect().topLeft()).y(),
+    "② 환경설정 창 맨 아래 — 기본값 저장(배포용) 아래 설정 초기화")
+_dlg.close(); _dlg.deleteLater()
 chk(not any(t and t.startswith("변환") for t in items), "② 도구 메뉴에 변환 항목이 없다(파일 메뉴에 있으므로)", str(items))
 m_file = next(a.menu() for a in mw.menuBar().actions() if a.text().startswith("파일"))
 fa = [a for a in m_file.actions() if a.text() == "변환하여 내보내기..."]
@@ -77,9 +98,10 @@ chk(opened == [{}], "② 누르면 변환 창이 바로(형식 없이)", str(ope
 
 # ── 261014-28(마스터 §11.12): 키가 없으면 도구 메뉴의 API 항목은 숨긴다 ─────
 from viewer.i18n import korea_only_visible
-api_acts = [mw._act_law, mw._act_kcsc, mw._act_kipo, mw._act_tr_files]
+chk(mw._act_law is None and mw._act_kcsc is None and mw._act_kipo is None, "⑥ 도구 메뉴에 법령·건설기준·특허 없음(보기 메뉴에만, 261016-3)")
+api_acts = [mw._act_tr_files]
 mw._gate_api_dependent_ui({})
-chk(not any(a.isVisible() for a in api_acts), "⑥ 키가 없으면 도구 메뉴의 법령·건설기준·특허·번역은 숨긴다",
+chk(not any(a.isVisible() for a in api_acts), "⑥ 키가 없으면 도구 메뉴의 번역은 숨긴다",
     str([(a.text(), a.isVisible()) for a in api_acts]))
 mw._gate_api_dependent_ui({"law_oc": "x", "kcsc_key": "x", "kipo_signkey": "x", "anthropic_api_key": "x"})
 chk(all(a.isVisible() and a.isEnabled() for a in api_acts) == korea_only_visible(), "⑥ 키를 넣으면 보이고 켜진다")
@@ -97,12 +119,9 @@ for name in ("OCR 로 읽기 (쪽 범위·언어·워터마크)...",
              "암호화 (암호·권한 설정)..."):
     chk(name in all_items, "③ 예전 메뉴에는 없던 항목이 들어왔다: %s" % name)
 
-# 예전 구역 제목은 사라졌고, 남은 두 항목은 한 구역으로
-titles = [a.text() for a in (menu.actions() if menu else []) if a.isSeparator() and a.text()]
-chk(not any("번역 (Claude)" in t for t in titles), "④ 예전 '번역 (Claude)' 구역은 없었다", str(titles))
-chk("단어장·책갈피 동시 생성..." in all_items
-    and "PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..." in all_items,
-    "④ 남은 두 항목은 그대로 있다")
+# 261016-3: 'PDF 꾸밈 저장' 은 뺐다(파일 메뉴 '평탄화해서 내보내기...' 와 같은 함수)
+chk("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..." not in all_items, "④ 'PDF 꾸밈 저장' 은 도구 메뉴에 없다")
+chk(any(a.text() == "평탄화해서 내보내기..." for a in m_file.actions()), "④ 같은 기능은 파일 메뉴 '평탄화해서 내보내기...'")
 
 # ── 단축키·권한이 잡는 손잡이이 살아 있는가 ───────────────
 chk(getattr(mw, "_sc_act_merge", None) is not None, "⑤ PDF 병합 손잡이(_sc_act_merge) 유지")

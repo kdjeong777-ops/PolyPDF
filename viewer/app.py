@@ -1655,61 +1655,57 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._ko_only_acts = []
         self._ko_only_acts.append(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study))
         _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker)
+        # 261016-3(디자인 SOT §2.9.1 예외, 사용자 지시): 패널 단추가 없는 파생 항목은 그 원 항목 바로 아래
+        self._ko_only_acts.append(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks))
         a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None))
         _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf())  # 260825-13
         _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf)
         self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files)
 
-        # 🔏 전자서명 — 보안 SOT §3(261010-21). 위 구역은 사용자가 정한 패널 차례와 짝이라 따로 둔다.
-        m_tools.addSection(tr("🔏 전자서명"))
-        _act(tr("서명..."), self.action_sign_pdf)
-        _act(tr("그림만 넣기..."), self.action_sign_image_only)       # 보안 SOT §3.11
-        _act(tr("서명 확정..."), self.action_sign_confirm)           # 보안 SOT §3.10
-        _act(tr("서명 편집"), self.action_sign_edit)
-        _act(tr("빈 서명 칸 만들기..."), self.action_sign_field)
-        _act(tr("디지털 ID..."), self.action_digital_ids)
-        _act(tr("서명 그림..."), self.action_sign_image)
-
-        # 📄 그 밖의 PDF·생성 작업 — 옆의 두 구역이 한 항목씩만 남아 합쳤다.
-        m_tools.addSection(tr("📄 그 밖의 PDF·생성 작업"))
-        self._ko_only_acts.append(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks))
-        _act(tr("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..."), self._action_save_decorated_pdf)
-
-        # 📖 사전 및 용어집 관리
-        # 사전·용어집은 단어장과 영→한 번역이 쓴다 — 구역 통째로 한국 전용(사용자 결정 261008-25)
-        self._ko_only_acts.append(m_tools.addSection(tr("📖 사전 및 용어집 관리")))
-        for _t, _s in ((tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
-                       (tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary),
-                       (tr("사전 복원 (가져오기)..."), self._action_restore_dict),
-                       (tr("용어집 CSV 양식 예제 저장..."), self._action_save_csv_sample),
-                       (tr("인터넷 사전 보강 (이어하기)..."), self._action_online_enrich),
-                       (tr("사전 내보내기 (TBX·CSV)..."), self._action_export_dict),
-                       (tr("사전 백업 (내보내기)..."), self._action_backup_dict),
-                       (tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict),
-                       (tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)):
-            self._ko_only_acts.append(_act(_t, _s))
-
-        # 🔍 검색 및 데이터 구축
-        m_tools.addSection(tr("🔍 검색 및 데이터 구축"))
-        self._act_law = _act(tr("법령·고시 검색 (법제처)..."), self._action_law_search)
-        self._act_kcsc = _act(tr("건설기준 (KCSC) 보기..."), self._action_kcsc_search)
-        self._act_kipo = _act(tr("특허 등록정보 (KIPO)..."), self._action_kipo_search)
+        def _sub(title, items):
+            """누르면 옆에 펼쳐지는 하위 메뉴 하나(261016-3, 사용자 지시) — 종전 구역 제목 + 항목들을 한 줄로."""
+            sm = m_tools.addMenu(title)
+            for _t, _s in items:
+                _a = QAction(_t, self)
+                _a.triggered.connect(_s)
+                sm.addAction(_a)
+            return sm
+        # 261016-3(사용자 지시): 전자서명·태그 자동 부여는 하위 메뉴로, 인덱스 재구축은 그 아래 — 도구 구역 안에 이어서.
+        #   'PDF 꾸밈 저장' 은 파일 메뉴 '평탄화해서 내보내기...' 와 같은 함수라 뺐다. '검색 및 데이터 구축' 구역(법령·건설기준·특허)은
+        #   보기 메뉴에 같은 항목이 있어 뺐다.
+        _sub(tr("전자서명"), (                          # 보안 SOT §3(261010-21)
+            (tr("서명..."), self.action_sign_pdf),
+            (tr("그림만 넣기..."), self.action_sign_image_only),       # 보안 SOT §3.11
+            (tr("서명 확정..."), self.action_sign_confirm),           # 보안 SOT §3.10
+            (tr("서명 편집"), self.action_sign_edit),
+            (tr("빈 서명 칸 만들기..."), self.action_sign_field),
+            (tr("디지털 ID..."), self.action_digital_ids),
+            (tr("서명 그림..."), self.action_sign_image)))
+        _sub(tr("태그 자동 부여"), (                     # 태그 SOT §8.2·§8.5(260829 P2)
+            (tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True)),
+            (tr("새 태그 후보 검토…"), self._autotag_review_candidates),
+            (tr("직전 자동 부여 되돌리기"), self._autotag_undo),
+            (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
+            (tr("없는 파일 항목 정리…"), self._autotag_prune_missing)))
         _act(tr("인덱스 재구축"), self.action_reindex)
+        self._act_law = self._act_kcsc = self._act_kipo = None    # 보기 메뉴(`_view_acts`)에만 — 게이팅은 None 을 건너뛴다
 
-        # 🏷️ 태그·키워드 (260829 P2 — 태그 SOT §8.2·§8.5)
-        m_tools.addSection(tr("🏷️ 태그 자동 부여"))
-        _act(tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True))
-        _act(tr("새 태그 후보 검토…"), self._autotag_review_candidates)
-        _act(tr("직전 자동 부여 되돌리기"), self._autotag_undo)
-        _act(tr("자동 태그 전체 삭제"), self._autotag_clear_all)
-        _act(tr("없는 파일 항목 정리…"), self._autotag_prune_missing)
-
-        # ⚙️ 프로그램 환경설정
+        # ⚙️ 프로그램 환경설정 — '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
         m_tools.addSection(tr("⚙️ 프로그램 환경설정"))
         _act(tr("환경설정..."), self.action_open_settings)        # 260618-18: 환경설정을 단축키 위로
         _act(tr("단축키 설정..."), self._edit_shortcuts)
-        _act(tr("현재 설정을 기본값으로 저장(배포용)…"), self._save_current_as_default)
-        _act(tr("설정 초기화(기본값으로 되돌리기)…"), self._reset_to_defaults)
+        # 📖 사전 및 용어집 관리 — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25). 261016-3: 하위 메뉴로 단축키 설정 아래
+        _dict = _sub(tr("사전 및 용어집 관리"), (
+            (tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
+            (tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary),
+            (tr("사전 복원 (가져오기)..."), self._action_restore_dict),
+            (tr("용어집 CSV 양식 예제 저장..."), self._action_save_csv_sample),
+            (tr("인터넷 사전 보강 (이어하기)..."), self._action_online_enrich),
+            (tr("사전 내보내기 (TBX·CSV)..."), self._action_export_dict),
+            (tr("사전 백업 (내보내기)..."), self._action_backup_dict),
+            (tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict),
+            (tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)))
+        self._ko_only_acts.append(_dict.menuAction())
 
         # 💻 시스템 연동 및 설치
         m_tools.addSection(tr("💻 시스템 연동 및 설치"))
@@ -4486,12 +4482,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             row += k
             n += k
         self._push_nav_filter()
-        if first is not None and 0 <= first < pt.list.count():
-            v = pt.list.item(first).data(Qt.ItemDataRole.UserRole)
-            if isinstance(v, (tuple, list)) and len(v) >= 3:
-                pt.select_page(pt.STAGED_BASE + int(v[2]))
-                self.main_view.go_to_page(pt.STAGED_BASE + int(v[2]))
+        if first is not None and n:
+            self._select_pasted(first + n - 1)      # 261016-3(사용자 지시): 붙인 **마지막** 쪽만 고른다
         return n
+
+    def _select_pasted(self, row: int) -> None:
+        """261016-3(마스터 §4.7.7, 사용자 지시): 붙여넣은 뒤 썸네일은 **붙인 마지막 쪽 하나만** 고르고 본문도 그 쪽으로.
+        종전 `select_page` 는 고른 것이 여럿이면 선택을 지우지 않아(260618-9) 앞뒤 썸네일이 함께 골라져 있었다."""
+        pt = self.page_thumbs
+        if not (0 <= row < pt.list.count()):
+            return
+        v = pt.list.item(row).data(Qt.ItemDataRole.UserRole)
+        pt.select_only_row(row)
+        if isinstance(v, (tuple, list)) and len(v) >= 3:
+            self.main_view.go_to_page(pt.STAGED_BASE + int(v[2]))
+        elif isinstance(v, int):
+            self.main_view.go_to_page(int(v))
 
     def _on_paste_pages(self, after_row: int):
         """260822: 복사한 페이지를 현재 PDF 썸네일의 기준 행 '뒤'에 **스테이징 삽입**(미저장).
@@ -4627,11 +4633,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   본문에 보여 준다** — 넣은 것이 맞는지 바로 확인할 수 있어야 한다.
         try:
             self._push_nav_filter()               # 넘김 목록에 새 쪽을 먼저 넣고
-            row = max(0, min(int(after_row) + 1, pt.list.count() - 1))
-            v = pt.list.item(row).data(Qt.ItemDataRole.UserRole)
-            if isinstance(v, (tuple, list)) and len(v) >= 3:
-                pt.select_page(pt.STAGED_BASE + int(v[2]))
-                self.main_view.go_to_page(pt.STAGED_BASE + int(v[2]))
+            # 261016-3(사용자 지시): 붙인 **마지막** 쪽만 고르고 그 쪽으로
+            self._select_pasted(max(0, min(int(after_row) + n, pt.list.count() - 1)))
         except Exception:
             pass
         self.status.showMessage(
@@ -5136,6 +5139,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         pidx = page - 1
         staged = bool(pt.is_staged_page(pidx))
         _ns = tr('  (저장 후)') if staged else ''
+        # 261016-3(사용자 보고 'p.10000008 같은 이상한 숫자'): 붙여넣은 쪽(저장 전)은 합성 번호를 보이지 않고 '붙여넣은 쪽' 으로.
+        #   파일의 쪽 번호로 일하는 항목은 켜 두고, 누르면 '저장한 뒤에 하라' 고 알린다(아무 일도 안 일어나면 고장으로 보인다).
+
+        def _pl(label, staged_text):
+            return label.format(page=page) if not staged else staged_text + _ns
+        need_save = {"print", "rot_l", "rot_r", "hide", "unhide", "bm", "hl"} if staged else set()
         can_copy = getattr(self, "_perm_can_copy", True)
         can_print = getattr(self, "_perm_can_print", True)
         A = {}                                              # 이름 → 항목(고른 뒤 가르기)
@@ -5144,7 +5153,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             A[key] = menu.addAction(text)
             A[key].setEnabled(bool(enabled))
             return A[key]
-        add("print", tr("인쇄…"), can_print and not staged)
+        add("print", tr("인쇄…") + _ns, can_print)
         add("copy_page", tr("복사"))                         # 개체를 고르지 않았을 때 = 지금 쪽(사용자 결정)
         add("copy_text", tr("텍스트 복사"), can_copy)          # 선택 블럭(없으면 페이지)
         add("sel_text", tr("블럭설정 후 텍스트 복사"), can_copy)
@@ -5192,20 +5201,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         add("present", tr("발표보기"))                     # 260905: F5 와 같은 경로
         menu.addSeparator()
         # ③ 회전(260908-1 — 편집모드 무관, 종전 그대로) · 서명(261010-26)
-        add("rot_l", tr('왼쪽 90° 회전 (p.{page})').format(page=page) + _ns, not staged)
-        add("rot_r", tr('오른쪽 90° 회전 (p.{page})').format(page=page) + _ns, not staged)
+        add("rot_l", _pl(tr('왼쪽 90° 회전 (p.{page})'), tr("왼쪽 90° 회전 (붙여넣은 쪽)")))
+        add("rot_r", _pl(tr('오른쪽 90° 회전 (p.{page})'), tr("오른쪽 90° 회전 (붙여넣은 쪽)")))
         add("sign", tr("여기에 서명…"))
         if edit:
             menu.addSeparator()
             # ④ 숨김(260609-14 D5) — 둘 다 보이고 지금 상태에 맞는 쪽만 켠다
             st = self._ensure_page_meta_store()
             is_hidden = bool(st and not staged and st.is_hidden(cur, pidx))
-            add("hide", tr('숨김 (p.{page})').format(page=page) + _ns, not staged and not is_hidden)
-            add("unhide", tr('숨김 해제 (p.{page})').format(page=page) + _ns, not staged and is_hidden)
+            add("hide", _pl(tr('숨김 (p.{page})'), tr("숨김 (붙여넣은 쪽)")), staged or not is_hidden)
+            add("unhide", _pl(tr('숨김 해제 (p.{page})'), tr("숨김 해제 (붙여넣은 쪽)")), staged or is_hidden)
             menu.addSeparator()
             # ⑤ 책갈피·하이퍼링크(260606-4·260609-3)
-            add("bm", tr('책갈피 추가 (p.{page})').format(page=page) + _ns, not staged)
-            add("hl", tr('하이퍼링크 등록… (p.{page})').format(page=page) + _ns, not staged)
+            add("bm", _pl(tr('책갈피 추가 (p.{page})'), tr("책갈피 추가 (붙여넣은 쪽)")))
+            add("hl", _pl(tr('하이퍼링크 등록… (p.{page})'), tr("하이퍼링크 등록… (붙여넣은 쪽)")))
             menu.addSeparator()
             # ⑥ 입력 설정 — 같은 창(종전 '선과 텍스트 입력 설정…')의 선긋기·글쓰기 탭
             add("cfg_line", tr("도형 입력 설정…"))
@@ -5215,6 +5224,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         key = next((k for k, v in A.items() if v is chosen), None)
         if key is None:
+            return
+        if key in need_save:
+            self._need_save_first()
             return
         mv = self.main_view
         if key == "print":
@@ -5275,6 +5287,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._open_line_text_settings(tab="line")
         elif key == "cfg_text":
             self._open_line_text_settings(tab="text")
+
+    def _need_save_first(self) -> None:
+        """261016-3(마스터 §4.7.7·§4.7.20, 사용자 지시): 붙여넣은 쪽(저장 전)에는 파일의 쪽 번호로 하는 일을 할 수 없다 — 까닭을 알린다."""
+        QMessageBox.information(self, "PolyPDF", tr("붙여넣은 쪽은 아직 파일에 없습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
 
     def _paste_clipboard_on_page(self) -> bool:
         """261016-2(마스터 §4.7.20): 본문 '클립보드 붙여넣기' — 마지막에 복사한 것이 쪽이면 그 첫 쪽을 **그림**으로,

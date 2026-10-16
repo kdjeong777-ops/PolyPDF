@@ -465,6 +465,22 @@ class SettingsDialog(QDialog):
         info.setStyleSheet("color:#666;")
         layout.addWidget(info)
 
+        # 261016-3(사용자 지시): 도구 메뉴에 있던 두 항목을 **환경설정 창 맨 아래**로 — 기본값 저장(배포용) 아래 설정 초기화.
+        #   둘 다 지금 **저장된** 설정을 다룬다(이 창에서 고친 것은 [확인] 뒤에 들어간다). 초기화는 다시 시작하므로 창을 닫고 한다.
+        if host is not None:
+            from PyQt6.QtWidgets import QPushButton as _QPb
+            from PyQt6.QtCore import QTimer as _QT
+            _row_def = QHBoxLayout()
+            self.btn_save_default = _QPb(tr("현재 설정을 기본값으로 저장(배포용)…"))
+            self.btn_save_default.clicked.connect(lambda: host._save_current_as_default())
+            self.btn_reset_default = _QPb(tr("설정 초기화(기본값으로 되돌리기)…"))
+            self.btn_reset_default.clicked.connect(lambda: (self.reject(), _QT.singleShot(0, host._reset_to_defaults)))
+            _col_def = QVBoxLayout()
+            _col_def.addWidget(self.btn_save_default)
+            _col_def.addWidget(self.btn_reset_default)
+            _row_def.addLayout(_col_def); _row_def.addStretch(1)
+            layout.addLayout(_row_def)
+
         # ── 버튼(스크롤 밖, 항상 보이게) ────────────────────
         btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,

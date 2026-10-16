@@ -73,11 +73,11 @@ try:
 
     def menu_state(mw):
         va = mw._view_acts
-        acts = [va["study"], va["law"], va["kcsc"], va["kipo"], mw._act_law, mw._act_kcsc,
-                mw._act_kipo, mw._act_tr_files] + list(mw._ko_only_acts)
+        # 261016-3(디자인 SOT §2.9.1): 도구 메뉴의 법령·건설기준·특허는 뺐다(보기 메뉴에만), 사전 관리는 하위 메뉴 한 줄
+        acts = [va["study"], va["law"], va["kcsc"], va["kipo"], mw._act_tr_files] + list(mw._ko_only_acts)
         return acts, [a.text() for a in acts if a.isVisible() or a.isEnabled()]
     acts, bad = menu_state(mw)
-    chk(len(acts) >= 19, "B 한국 전용 메뉴 항목을 모두 잡았다", str(len(acts)))
+    chk(len(acts) >= 8, "B 한국 전용 메뉴 항목을 모두 잡았다", str(len(acts)))
     chk(not bad, "B en 메뉴 항목이 숨김·비활성", str(bad))
 
     mw._gate_api_dependent_ui(dict(mw._prefs, **KEYS))           # 키를 넣고 설정 확인한 것과 같다

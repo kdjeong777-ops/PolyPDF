@@ -7,7 +7,7 @@ A. 핵심 — 디지털 ID 만들기(PBES2-AES256 .pfx)·틀린 비밀번호·�
    / MediaBox 원점이 0 이 아닌 쪽에 끈 자리 그대로 / 서명 판정(열린 문서·파일)
 B. 서명 그림 — 종이 사진에서 배경 지우기·잉크 경계 자르기, 투명 PNG 는 그대로
 C. Windows Hello 보관(가짜 키) — 보관·꺼내기·지우기, 취소, ID 지우면 보관값도
-D. 실제 MainWindow — 도구 메뉴 '🔏 전자서명' 구역·크롭 오른쪽 단추, 단추 → 본문 끌기 → 서명 자리 → [서명 확정] 창 → '<이름>_서명.pdf' → 검증 띠
+D. 실제 MainWindow — 도구 메뉴 '전자서명 ▸'·크롭 오른쪽 단추, 단추 → 본문 끌기 → 서명 자리 → [서명 확정] 창 → '<이름>_서명.pdf' → 검증 띠
    (261012-1: 서명 자리·확정·편집 자체는 test_security_sign_drafts.py)
 E. 저장 가드(§4) — 서명된 파일에 `_finalize_save`: 새 파일로 / 취소 / 덮어쓰기, 서명 자체 저장은 묻지 않는다
 G. 대화상자 — 디지털 ID 창·서명 그림 창·서명 패널
@@ -265,8 +265,10 @@ try:
     labels = []
     for act in mw.menuBar().actions():
         if act.text().startswith("도구"):
-            labels = [a.text() for a in act.menu().actions()]
-    chk("🔏 전자서명" in labels and "서명..." in labels and "디지털 ID..." in labels, "D1 도구 메뉴에 '🔏 전자서명' 구역", str(labels[-6:]))
+            # 261016-3(디자인 SOT §2.9.1): '전자서명 ▸' 하위 메뉴
+            sub = next((a.menu() for a in act.menu().actions() if a.text() == "전자서명" and a.menu()), None)
+            labels = [a.text() for a in sub.actions()] if sub else []
+    chk("서명..." in labels and "디지털 ID..." in labels, "D1 도구 메뉴에 '전자서명 ▸' 하위 메뉴", str(labels))
     chk(not mv.sign_band.isVisible(), "D2 서명 없는 문서에는 검증 띠가 없다")
 
     picked = {}
@@ -702,7 +704,9 @@ try:
     labels = []
     for act in mw.menuBar().actions():
         if act.text().startswith("도구"):
-            labels = [a.text() for a in act.menu().actions()]
+            # 261016-3(디자인 SOT §2.9.1): '전자서명 ▸' 하위 메뉴 안
+            sub = next((a.menu() for a in act.menu().actions() if a.text() == "전자서명" and a.menu()), None)
+            labels = [a.text() for a in sub.actions()] if sub else []
     mw.action_sign_field()
     armed = getattr(mv.view, "_block_purpose", "") == "sign" and mv.view._block_armed
     z = mv._zoom or 1.0
