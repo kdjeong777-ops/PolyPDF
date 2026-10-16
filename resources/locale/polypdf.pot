@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-16 21:54+0900\n"
+"POT-Creation-Date: 2026-10-16 22:02+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -349,20 +349,20 @@ msgstr ""
 msgid "이미지 파일 → PDF 변환"
 msgstr ""
 
-#: viewer/app.py
-msgid "변환하여 내보내기"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
-msgstr ""
-
 #: viewer/app.py viewer/widgets/encrypt_dialog.py
 msgid "암호화"
 msgstr ""
 
 #: viewer/app.py
 msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
+msgstr ""
+
+#: viewer/app.py
+msgid "변환하여 내보내기"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
 msgstr ""
 
 #: viewer/app.py
