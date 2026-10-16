@@ -113,6 +113,7 @@ class PageThumbs(QWidget):
         self._iconed = {}                    # id(항목) → 항목(QListWidgetItem 은 해시가 안 돼 집합에 못 넣는다 — 참조를 쥐어 id 재사용도 막는다)
         self._img_resolver = None            # 260611-18(A5): page0->[삽입 이미지 dict] (썸네일 베이킹)
         self._paste_available = None         # 260821: () -> int (붙여넣기 대기 쪽수; app 이 주입)
+        self._shot_paths = None              # 261016-1: () -> [그림 경로] (스크린샷 스트립의 컷; app 이 주입)
         self._ext_docs = {}                  # 260822: 붙여넣기 스테이징 — {src_path: PdfDocument} 렌더 캐시
         # 260930-1(마스터 §4.7.11): 사진으로 만든 1쪽 PDF·임시 PNG — 저장할 때까지 살아 있어야
         #   하므로 여기서 들고 있다가 문서를 닫거나 목록을 비울 때 지운다.
@@ -685,7 +686,7 @@ class PageThumbs(QWidget):
         if obj is self.list.viewport() and event.type() in (
                 QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
             # 261012-12(마스터 §4.7.18): **다른 파일**의 썸네일을 끌어 오면 그 쪽들을 복사해 끼운다(Ctrl+C·V 와 같은 끼운 쪽).
-            #   같은 파일이면 종전대로 순서 바꾸기(Qt InternalMove). 받을 때는 늘 **복사** — 옮기기면 Qt 가 보낸 쪽 행을 지운다.
+            #   같은 파일이면 종전대로 순서 바꾸기(Qt InternalMove). 받을 때는 늘 **복사** — 옮기기면 Qt 가 보낸 쪽 행을 지운다(놓을 때는 아래 261016-1).
             got = pages_from_mime(event.mimeData())
             doc = self._doc
             if got is not None and doc is not None and got[0] != str(doc.path):
@@ -701,6 +702,12 @@ class PageThumbs(QWidget):
                 if event.type() == QEvent.Type.Drop:
                     self._drop_mark(None)
                     self.pagesDropped.emit(self._drop_row(pos), list(got[1]))
+                    # ★ 261016-1(사용자 보고 '끌어 놓으면 일부만 붙는다'): 결과를 **옮기기로 돌려주지 않는다.**
+                    #   이 목록은 끌기의 출발지이자 도착지다(책갈피창에 머무는 사이 그 파일로 바뀐다). 편집 모드의
+                    #   끌기는 `InternalMove` 라 복사를 내놓지 않아 위의 복사 선택이 안 먹고, 끌기가 옮기기로 끝나면
+                    #   Qt(`QAbstractItemView.startDrag`)가 놓인 곳이 제 뷰포트일 때 **그 순간 골라져 있는 행을 지운다** —
+                    #   놓은 뒤 골라 두는 첫 끼운 쪽이 지워졌다. 받아 들인 채 '할 일 없음' 으로 돌려준다(끼우기는 위에서 끝났다).
+                    event.setDropAction(Qt.DropAction.IgnoreAction)
                 else:
                     self._drop_mark(pos)
                 return True
@@ -819,24 +826,83 @@ class PageThumbs(QWidget):
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
         page = item.data(Qt.ItemDataRole.UserRole) if item else None
-        # 260616-21: 선택 페이지 인쇄 / 스크린샷으로 복사 (편집모드 무관, 항상)
+        # 261016-1(마스터 §4.7.7 '썸네일 우클릭 메뉴', 사용자 지시): 차례와 이름 —
+        #   ① 인쇄 · 복사 · 붙여넣기 · 스크린샷으로 복사 · 스크린샷 붙여넣기 · 클립보드 붙여넣기 · 삭제
+        #   ② 왼쪽·오른쪽 90° 회전  ③ 크롭 · 크롭 해제 · 숨김 · 숨김 해제(· 숨김 전체 해제)
+        #   ④ 책갈피 추가 · 하이퍼링크 등록  ⑤ 선택한 쪽 변환 ▸ · 변경 적용
+        #   붙여넣기 셋은 붙일 것이 없거나 편집모드가 아니면 **끈 채로** 보인다(안 보이면 없는 것이다 — §4.7.11).
         sel_print = sorted({int(it.data(Qt.ItemDataRole.UserRole))
                             for it in self.list.selectedItems()
                             if it.data(Qt.ItemDataRole.UserRole) is not None})
         if page is not None and not sel_print:
             sel_print = [int(page)]
-        act_print = act_shot = None
-        if self._doc is not None and sel_print:
-            act_print = menu.addAction(tr('선택 페이지 인쇄 ({n}쪽)').format(n=len(sel_print)))
-            act_shot = menu.addAction(tr('선택 페이지 스크린샷으로 복사 ({n}쪽)').format(n=len(sel_print)))
+        has_sel = self._doc is not None and bool(sel_print)
+        _v = '' if self._edit_mode else tr('  (편집모드 ✏ 에서)')
+        _r = self._img_ref_row(item)
+        _w = tr("맨 뒤") if _r < 0 else tr('p.{r} 뒤').format(r=_r + 1)
+        act_print = act_shot = act_copy = act_paste = act_shot_paste = act_img = act_del = None
+        # ① 쪽 — 인쇄·복사·스크린샷으로 복사는 편집모드 무관(260616-21·260821)
+        if has_sel:
+            act_print = menu.addAction(tr('인쇄 ({n}쪽)').format(n=len(sel_print)))
+            act_copy = menu.addAction(tr('복사 ({n}쪽)').format(n=len(sel_print)))
+        if self._doc is not None:
+            _pcnt = self._paste_available() if self._paste_available else 0
+            _where = (tr("맨 뒤") if item is None else tr('p.{page} 뒤').format(page=int(page) + 1)
+                      if page is not None else tr("이 뒤"))
+            act_paste = menu.addAction(tr('붙여넣기 ({_pcnt}쪽) — {_where}').format(_pcnt=_pcnt, _where=_where)
+                                       + _v if _pcnt > 0 else tr("붙여넣기"))
+            act_paste.setEnabled(bool(self._edit_mode and _pcnt > 0))
+        if has_sel:
+            act_shot = menu.addAction(tr('스크린샷으로 복사 ({n}쪽)').format(n=len(sel_print)))
+        if self._doc is not None:
+            # 261016-1: 스크린샷 스트립의 컷(그림)들을 새 쪽으로 — 스트립을 끌어 놓기(§4.7.11)와 같은 길
+            _shots = self._shot_paths() if self._shot_paths else []
+            act_shot_paste = menu.addAction(
+                tr('스크린샷 붙여넣기 ({n}쪽) — {w}').format(n=len(_shots), w=_w) + _v if _shots
+                else tr("스크린샷 붙여넣기"))
+            act_shot_paste.setEnabled(bool(self._edit_mode and _shots))
+            # 260930-1(§4.7.11): 클립보드 **그림**을 새 쪽으로 — 쪽 붙여넣기와 다른 일이라 이름으로 가른다
+            #   (본문 Ctrl+V 는 그 쪽 '위에' 사진을 붙인다, §0 260611-15). 260930-4 '클립보드 사진 새쪽 붙이기' → 261016-1 개명.
+            _has_img = self._clipboard_has_image()
+            act_img = menu.addAction(tr('클립보드 붙여넣기 — {w}{v}').format(w=_w, v=_v) if _has_img
+                                     else tr("클립보드 붙여넣기"))
+            act_img.setEnabled(bool(self._edit_mode and _has_img))
+        if self._edit_mode:
+            n = len(self.list.selectedItems())
+            act_del = menu.addAction(tr('삭제 ({n}쪽)').format(n=n) if n else tr("삭제"))
+            act_del.setEnabled(n > 0)
+        menu.addSeparator()
+        act_hl = act_hide = act_unhide = act_hreset = act_add = act_apply = None
+        act_rot_l = act_rot_r = act_crop = act_uncrop = None
+        sel_pages = []
+        if self._edit_mode:
+            sel_pages = sorted({int(it.data(Qt.ItemDataRole.UserRole))
+                                for it in self.list.selectedItems()
+                                if it.data(Qt.ItemDataRole.UserRole) is not None})
+            if page is not None and not sel_pages:
+                sel_pages = [int(page)]
+        # ② 회전(260609-15 A1, 편집모드)
+        if sel_pages:
+            act_rot_l = menu.addAction(tr('왼쪽 90° 회전 ({n}쪽)').format(n=len(sel_pages)))
+            act_rot_r = menu.addAction(tr('오른쪽 90° 회전 ({n}쪽)').format(n=len(sel_pages)))
             menu.addSeparator()
-        # 260821: 선택 페이지 복사(항상) / 붙여넣기(편집모드만 — 붙여넣기는 수정 작업)
-        act_copy = act_paste = None
-        if self._doc is not None and sel_print:
-            act_copy = menu.addAction(tr('선택 페이지 복사 ({n}쪽)').format(n=len(sel_print)))
-        # 261010-7(마스터 §4.7.15): 크롭 — PDF 를 바로 저장하는 일이라 편집 모드와 무관하게(저장 확인은 앱이)
-        # 261014-11(형식 변환 SOT §2.1·§2.2): '선택한 쪽 변환 ▸' — 저장 전 쪽 편집이 있으면 앱이 먼저 저장하라고 알린다
-        if self._doc is not None and sel_print:
+        # ③ 크롭(261010-7 — PDF 를 바로 저장하는 일이라 편집 모드와 무관, 저장 확인은 앱이) · 숨김(260609-14 D5, 편집모드)
+        if has_sel:
+            act_crop = menu.addAction(tr('크롭… ({n}쪽)').format(n=len(sel_print)))
+            act_uncrop = menu.addAction(tr('크롭 해제 ({n}쪽)').format(n=len(sel_print)))
+        if sel_pages:
+            act_hide = menu.addAction(tr('숨김 ({n}쪽)').format(n=len(sel_pages)))
+            act_unhide = menu.addAction(tr('숨김 해제 ({n}쪽)').format(n=len(sel_pages)))
+        if self._edit_mode and self._hidden_pages:
+            act_hreset = menu.addAction(tr("숨김 전체 해제"))
+        menu.addSeparator()
+        # ④ 책갈피·하이퍼링크(편집모드)
+        if self._edit_mode and page is not None:
+            act_add = menu.addAction(tr('책갈피 추가 (p.{page})').format(page=int(page) + 1))
+            act_hl = menu.addAction(tr('하이퍼링크 등록… (p.{page})').format(page=int(page) + 1))
+            menu.addSeparator()
+        # ⑤ 261014-11(형식 변환 SOT §2.1·§2.2): '선택한 쪽 변환 ▸' — 저장 전 쪽 편집이 있으면 앱이 먼저 저장하라고 알린다
+        if has_sel:
             try:
                 from viewer import convert as _cv
                 _cm = menu.addMenu(tr('선택한 쪽 변환 ({n}쪽)').format(n=len(sel_print)))
@@ -846,66 +912,10 @@ class PageThumbs(QWidget):
                         0, lambda: self.convertPagesRequested.emit(ps, k)))
             except Exception:
                 pass
-        act_crop = act_uncrop = None
-        if self._doc is not None and sel_print:
-            act_crop = menu.addAction(tr('크롭… ({n}쪽)').format(n=len(sel_print)))
-            act_uncrop = menu.addAction(tr('크롭 해제 ({n}쪽)').format(n=len(sel_print)))
-        _pcnt = self._paste_available() if self._paste_available else 0
-        if self._doc is not None and self._edit_mode and _pcnt > 0:
-            _where = tr("맨 뒤") if item is None else tr('p.{page} 뒤').format(page=int(page) + 1) if page is not None else tr("이 뒤")
-            act_paste = menu.addAction(tr('붙여넣기 ({_pcnt}쪽) — {_where}').format(_pcnt=_pcnt, _where=_where))
-        # 260930-1(§4.7.11): 클립보드 **그림**을 새 쪽으로. 쪽 붙여넣기(위)와 다른 일이라
-        #   이름으로 가른다 — 본문 Ctrl+V 는 그 쪽 '위에' 사진을 붙인다(§0 260611-15).
-        # 260930-3(사용자 보고 '기존에 요청했는데 안 들어가 있어'): 종전에는 **편집모드일
-        #   때만** 항목을 보여 줘, 편집모드가 아니면 메뉴에 아예 없어서 기능이 빠진 것처럼
-        #   보였다. 이제 클립보드에 그림이 있으면 **늘 보여 주고**, 편집모드가 아니면
-        #   **끈 채로 까닭을 이름에 적는다**(§4.7.11).
-        act_img = None
-        if self._doc is not None and self._clipboard_has_image():
-            _r = self._img_ref_row(item)
-            _w = tr("맨 뒤") if _r < 0 else tr('p.{r} 뒤').format(r=_r + 1)
-            # 260930-4(사용자 지시): 이름을 '클립보드 사진 새쪽 붙이기' 로.
-            #   무엇을(클립보드 사진) 어디에(새 쪽) 넣는지가 이름에 다 들어간다.
-            act_img = menu.addAction(
-                tr('클립보드 사진 새쪽 붙이기 — {w}{v}').format(w=_w, v='' if self._edit_mode else tr('  (편집모드 ✏ 에서)')))
-            act_img.setEnabled(bool(self._edit_mode))
-        if act_copy or act_paste or act_img:
-            menu.addSeparator()
-        act_add = act_del = act_apply = None
-        if self._edit_mode:
-            n = len(self.list.selectedItems())
-            act_del = menu.addAction(tr('삭제 ({n}쪽)').format(n=n) if n else tr("삭제"))
-            act_del.setEnabled(n > 0)
-            menu.addSeparator()
-            if self.is_page_dirty():
-                act_apply = menu.addAction(tr("변경 적용 — 새 PDF로 저장..."))
-            menu.addSeparator()
-        act_hl = act_hide = act_unhide = act_hreset = None
-        act_rot_l = act_rot_r = None
-        # 260609-14(D5): 편집모드 — 선택 페이지 숨김/해제
-        if self._edit_mode:
-            sel_pages = sorted({int(it.data(Qt.ItemDataRole.UserRole))
-                                for it in self.list.selectedItems()
-                                if it.data(Qt.ItemDataRole.UserRole) is not None})
-            if page is not None and not sel_pages:
-                sel_pages = [int(page)]
-            if sel_pages:
-                act_hide = menu.addAction(tr('숨김 ({n}쪽)').format(n=len(sel_pages)))
-                act_unhide = menu.addAction(tr('숨김 해제 ({n}쪽)').format(n=len(sel_pages)))
-            if self._hidden_pages:
-                act_hreset = menu.addAction(tr("숨김 전체 해제"))
-            menu.addSeparator()
-            # 260609-15(A1): 회전
-            if sel_pages:
-                act_rot_l = menu.addAction(tr('왼쪽 90° 회전 ({n}쪽)').format(n=len(sel_pages)))
-                act_rot_r = menu.addAction(tr('오른쪽 90° 회전 ({n}쪽)').format(n=len(sel_pages)))
-            else:
-                act_rot_l = act_rot_r = None
-            menu.addSeparator()
-        if self._edit_mode and page is not None:   # 책갈피·하이퍼링크는 편집모드만
-            act_add = menu.addAction(tr('책갈피 추가 (p.{page})').format(page=int(page) + 1))
-            act_hl = menu.addAction(tr('하이퍼링크 등록… (p.{page})').format(page=int(page) + 1))
-        if menu.isEmpty():
+        if self._edit_mode and self.is_page_dirty():
+            act_apply = menu.addAction(tr("변경 적용 — 새 PDF로 저장..."))
+        # 빈 그룹이 남긴 구분선은 Qt 가 겹치거나 끝에 있으면 그리지 않는다(QMenu separatorsCollapsible)
+        if self._doc is None or menu.isEmpty():
             return
         chosen = menu.exec(self.list.viewport().mapToGlobal(pos))
         if chosen is None:
@@ -923,6 +933,11 @@ class PageThumbs(QWidget):
         if chosen is not None and chosen == act_paste:
             self.pastePagesRequested.emit(self.list.row(item) if item is not None
                                           else self.list.count() - 1)
+            return
+        if chosen is not None and chosen == act_shot_paste:   # 261016-1 — 메뉴가 닫힌 뒤에(아래 260930-4 와 같은 까닭)
+            _row, _p = self._img_ref_row(item), list(self._shot_paths() if self._shot_paths else [])
+            if _p:
+                QTimer.singleShot(0, lambda r=_row, p=_p: self.addImagePagesRequested.emit(r, p))
             return
         if chosen is not None and chosen == act_img:          # 260930-1(§4.7.11)
             png = self._clipboard_image_to_temp()

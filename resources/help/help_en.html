@@ -98,7 +98,7 @@
     <b>Capture quality</b> (as shown / original quality).
     In Keyboard Shortcuts you can make screen capture a <b>global shortcut</b> (works over other programs).</li>
   <li>Select <b>several thumbnails</b> and capture to save each page full screen <b>in one go</b>
-    (the thumbnail right-click 'Copy Selected Pages to Screenshots' does the same).</li>
+    (the thumbnail right-click 'Copy to Screenshots' does the same).</li>
   <li>Each screenshot card shows its <b>order number</b> underneath (updated when you reorder or delete). Drag cards to reorder;
     right-click 'Delete' (or 'Delete n selected') · <b>🗑</b> Delete All.
     In edit mode, drop a card onto the thumbnails to insert it as a <b>new page</b>.</li>
@@ -181,7 +181,7 @@
 <ul>
   <li><b>Order</b>: drag a thumbnail, or Alt+↑/↓. <b>Delete</b>: the Delete key or right-click 'Delete'.</li>
   <li><b>Rotate</b>: right-click rotate left/right 90°. <b>Hide</b>: 'Hide / Unhide / Unhide All' (a hidden page shows a 'Hidden' band on the right).</li>
-  <li><b>Adding pages</b>: 'Copy Selected Pages' (Ctrl+C) → 'Paste' (Ctrl+V, also into another PDF) · 'Paste Clipboard Photo as New Page' ·
+  <li><b>Adding pages</b>: 'Copy' (Ctrl+C) → 'Paste' (Ctrl+V, also into another PDF) · 'Paste Screenshots' (all screenshot cards as new pages) · 'Paste from Clipboard' ·
     drop image files or screenshot cards onto the thumbnails.</li>
   <li><b>Crop and split pages</b> (crop button to the right of '+' on the page toolbar): margins up to 95% per side (opposite sides together up to 95%).
     <b>Split Pages</b> — 2 pages left/right, 2 pages top/bottom or 4 pages: the area left after cropping is split at the split lines (centre by default; drag the blue lines in the preview to adjust), turning one page into 2 or 4.
@@ -253,12 +253,12 @@
   <li><b>Read with OCR</b> (OCR toolbar button · Tools menu · text pane): reads the text of scanned PDFs — current page / page range / whole document, language,
     'Ignore background watermarks', 'Skip pages that already have text'. <b>Apply to PDF</b> writes the text layer into the PDF (the original is backed up).
     Get the OCR engine from <b>Tools → Install Components (recording · OCR)…</b>.</li>
-  <li><b>Add OCR text layer</b> (select several files or a folder row in the bookmark panel and right-click): reads the scanned pages without a text layer
+  <li><b>Create OCR text layer</b> (select several files or a folder row in the bookmark panel and right-click): reads the scanned pages without a text layer
     in all selected PDFs with OCR at once and adds an invisible text layer to the originals — other programs can then search and copy the text.
     A backup is kept next to the original the first time, pages already read are not read again, and signed or password-protected PDFs are skipped.</li>
-  <li><b>Compress PDF</b> (bookmark panel right-click — several files or a folder row too): lowers only image resolution and quality
+  <li><b>Reduce size and export</b> (bookmark panel right-click — several files or a folder row too): lowers only image resolution and quality
     (light 200 · medium 150 · strong 100 dpi) and saves a smaller new file <code>&lt;name&gt;_compressed.pdf</code>. Text and the original stay as they are; no file is made unless it shrinks by more than 5%.</li>
-  <li><b>Redact (remove personal data)</b> (bookmark panel right-click): in the redaction window, drag on the page to choose areas, or find resident registration,
+  <li><b>Remove personal data and save separately</b> (bookmark panel right-click): in the redaction window, drag on the page to choose areas, or find resident registration,
     phone, email, card and business numbers or a search term (scanned pages use the OCR results). A new file <code>&lt;name&gt;_redacted.pdf</code> is made
     with the text and images in those places <b>actually removed</b>, and hidden data such as document info and attachments is removed too. The original stays.</li>
   <li><b>Compare two files</b> (select two files in the bookmark panel and right-click): split view shows the older file (modified earlier) on the left and the newer on the right,

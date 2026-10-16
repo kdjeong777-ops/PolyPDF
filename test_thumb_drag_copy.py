@@ -154,7 +154,9 @@ try:
     ed = QDropEvent(QPointF(r1), acts, md, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     QApplication.sendEvent(lv, ed); spin(0.4)
     plan = pt.current_page_plan()
-    chk(plan[:4] == [("own", 0), ("own", 1), ("ext", str(a), 0), ("ext", str(a), 1)] and ed.dropAction() == Qt.DropAction.CopyAction,
+    # 261016-1: 놓은 결과는 옮기기가 아니다(옮기기면 Qt 가 고른 행을 지운다 — test_thumb_drag_real_261016.py)
+    chk(plan[:4] == [("own", 0), ("own", 1), ("ext", str(a), 0), ("ext", str(a), 1)] and ed.isAccepted()
+        and ed.dropAction() != Qt.DropAction.MoveAction,
         "D2 놓으면 2쪽 아래에 a.pdf 의 두 쪽이 끼운 쪽으로(복사)", str(plan[:5]))
     chk(fitz.open(str(b)).page_count == 4 and fitz.open(str(a)).page_count == 4, "D3 저장 전 — 두 원본 파일은 그대로")
     sel = [n for n in bt._iter_file_nodes() if Path(str(n.data(0, bt.DATA_FILE))).name == "b.pdf"]

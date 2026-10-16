@@ -2221,6 +2221,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             tr('쪽 추가는 편집모드(✏)에서만 됩니다.'), 4000))
         self.page_thumbs._paste_available = (
             lambda: len(self._thumb_clip["pages"]) if self._thumb_clip else 0)
+        self.page_thumbs._shot_paths = self._shot_image_paths   # 261016-1: 썸네일 우클릭 '스크린샷 붙여넣기'
         # v1.6.21: 파일 작업 핸드셰이크 (메인이 열고 있는 파일도 작업 가능)
         self.bookmark_tree.releaseFileRequested.connect(self._on_release_file)
         self.bookmark_tree.fileOpCompleted.connect(self._on_file_op_completed)
@@ -4438,6 +4439,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         n = pt.insert_external_pages(after_row, clip.get("src"), src_pages)
         self.status.showMessage(
             tr('붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요.').format(n=n), 6000)
+
+    def _shot_image_paths(self) -> list:
+        """261016-1(마스터 §4.7.11): 스크린샷 스트립의 컷 중 **그림 파일**만, 스트립 차례대로 — '스크린샷 붙여넣기' 가 새 쪽으로."""
+        try:
+            from viewer.image_page import is_image_path
+            return [str(p) for p in self.shot_strip.all_paths()
+                    if p and is_image_path(str(p)) and Path(str(p)).exists()]
+        except Exception:
+            return []
 
     def _on_drag_hover_open(self, path: str, page: int) -> None:
         """261012-12(§4.7.18): 끌고 있는 채 책갈피창의 파일·책갈피에 머묾 — 그 파일의 그 쪽을 본문·썸네일에.

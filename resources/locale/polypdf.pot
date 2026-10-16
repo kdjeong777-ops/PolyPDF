@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-14 17:57+0900\n"
+"POT-Creation-Date: 2026-10-16 13:08+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2842,8 +2842,7 @@ msgstr ""
 msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요"
 msgstr ""
 
-#: viewer/convert_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/convert_dialog.py
+#: viewer/convert_controller.py viewer/widgets/convert_dialog.py
 msgid "변환"
 msgstr ""
 
@@ -4856,11 +4855,11 @@ msgid "버리고 새로고침"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "OCR 글자층 넣기..."
+msgid "OCR로 글자층 생성..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "PDF 압축..."
+msgid "용량 줄여 내보내기..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4898,7 +4897,11 @@ msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에�
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "가림(개인정보 지우기)..."
+msgid "Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "개인정보 지우고 별도 저장..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -5045,6 +5048,10 @@ msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛�
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "변환해서 내보내기..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
 msgstr ""
 
@@ -5150,12 +5157,12 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "OCR 글자층 넣기 ({n}개 파일)..."
+msgid "OCR로 글자층 생성 ({n}개 파일)..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "PDF 압축 ({n}개 파일)..."
+msgid "용량 줄여 내보내기 ({n}개 파일)..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -5291,6 +5298,11 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "변환해서 내보내기 ({n}개 파일)..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "선택 책갈피 {_n_bm}개 페이지순 정렬"
 msgstr ""
 
@@ -5326,11 +5338,6 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "bookmarks.json 읽기 실패: {e}"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "변환 ({n}개 파일)"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -6977,7 +6984,7 @@ msgstr ""
 msgid "그림 첨부…"
 msgstr ""
 
-#: viewer/widgets/pres_timer.py
+#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "클립보드 붙여넣기"
 msgstr ""
 
@@ -7137,7 +7144,7 @@ msgstr ""
 msgid "첨부됨 ✓"
 msgstr ""
 
-#: viewer/widgets/pres_timer.py
+#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "붙여넣기"
 msgstr ""
 
@@ -9444,6 +9451,14 @@ msgid "책갈피 {n}개를 만들었습니다 — 책갈피창에서 💾 저장
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
+msgid "  (편집모드 ✏ 에서)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+msgid "맨 뒤"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
 msgid "모든 쪽"
 msgstr ""
 
@@ -9468,11 +9483,7 @@ msgid "페이지 순서 변경: 마우스로 끌어 놓기 또는 Alt+↑/↓  �
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
-msgid "맨 뒤"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-msgid "이 뒤"
+msgid "숨김 전체 해제"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
@@ -9480,7 +9491,16 @@ msgid "변경 적용 — 새 PDF로 저장..."
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
-msgid "숨김 전체 해제"
+#, python-brace-format
+msgid "p.{r} 뒤"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+msgid "이 뒤"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+msgid "스크린샷 붙여넣기"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
@@ -9495,17 +9515,27 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "선택 페이지 인쇄 ({n}쪽)"
+msgid "인쇄 ({n}쪽)"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "선택 페이지 스크린샷으로 복사 ({n}쪽)"
+msgid "복사 ({n}쪽)"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "선택 페이지 복사 ({n}쪽)"
+msgid "스크린샷으로 복사 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "왼쪽 90° 회전 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "오른쪽 90° 회전 ({n}쪽)"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
@@ -9520,40 +9550,6 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "p.{r} 뒤"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "클립보드 사진 새쪽 붙이기 — {w}{v}"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "선택한 쪽 변환 ({n}쪽)"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "p.{page} 뒤"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-msgid "  (편집모드 ✏ 에서)"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "삭제 ({n}쪽)"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
 msgid "숨김 ({n}쪽)"
 msgstr ""
 
@@ -9564,12 +9560,32 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "왼쪽 90° 회전 ({n}쪽)"
+msgid "p.{page} 뒤"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "오른쪽 90° 회전 ({n}쪽)"
+msgid "클립보드 붙여넣기 — {w}{v}"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "삭제 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "선택한 쪽 변환 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "스크린샷 붙여넣기 ({n}쪽) — {w}"
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py

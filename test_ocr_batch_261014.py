@@ -8,7 +8,7 @@ C. 글자층이 있는 PDF·서명된 PDF 는 건너뛰고(원본 그대로) 알
 D. 원본 옆 백업(.textfix.bak.pdf)은 넣은 파일마다 한 번
 E. OCR 은 배경 스레드에서(메인이 아니다), 임시 폴더를 남기지 않는다
 F. 중지 — 하던 파일 원본은 그대로, 읽은 쪽은 study.db 에 남고 임시 폴더는 없다
-G. 책갈피창 폴더 행 우클릭에 'OCR 글자층 넣기 (N개 파일)...' 이 있다
+G. 책갈피창 폴더 행 우클릭에 'OCR로 글자층 생성 (N개 파일)...' 이 있다
 """
 import os, sys, tempfile, shutil, threading, hashlib
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -116,8 +116,8 @@ try:
     ff = [str(f.data(0, bt.DATA_FILE)) for f in bt._iter_folder_files(folder)] if folder is not None else []
     bt._add_ocr_layer_action(m, ff)
     labels = [x.text() for x in m.actions()]
-    chk(folder is not None and any("OCR 글자층 넣기 (4개 파일)" in x for x in labels),
-        "G 폴더 행 — 'OCR 글자층 넣기 (4개 파일)...'", str(labels))
+    chk(folder is not None and any("OCR로 글자층 생성 (4개 파일)" in x for x in labels),
+        "G 폴더 행 — 'OCR로 글자층 생성 (4개 파일)...'(261016-1 개명)", str(labels))
 
     # ── 실행: 책갈피창 신호로(실제 연결) ─────────────────────────────
     bt.ocrLayerFilesRequested.emit([str(a), str(b), str(t), str(s)]); spin(5)

@@ -862,12 +862,12 @@ class BookmarkTree(QWidget):
             return ""
 
     def _add_ocr_layer_action(self, menu, files) -> bool:
-        """'OCR 글자층 넣기...' — 스캔 PDF 에 우리 OCR 로 보이지 않는 글자층(텍스트 창 SOT §5.5). 창은 메뉴가 닫힌 뒤에."""
+        """'OCR로 글자층 생성...'(261016-1 개명, 옛 'OCR 글자층 넣기...') — 스캔 PDF 에 우리 OCR 로 보이지 않는 글자층(텍스트 창 SOT §5.5). 창은 메뉴가 닫힌 뒤에."""
         files = [f for f in (files or []) if f]
         if not files:
             return False
-        a = menu.addAction(tr("OCR 글자층 넣기...") if len(files) == 1
-                           else tr('OCR 글자층 넣기 ({n}개 파일)...').format(n=len(files)))
+        a = menu.addAction(tr("OCR로 글자층 생성...") if len(files) == 1
+                           else tr('OCR로 글자층 생성 ({n}개 파일)...').format(n=len(files)))
         a.setToolTip(tr("글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자층을 원본 PDF 에 넣습니다 — "
                         "다른 프로그램에서도 검색·복사가 됩니다(처음 한 번 백업을 남깁니다)."))
         a.triggered.connect(lambda _=False, fs=list(files): QTimer.singleShot(
@@ -875,12 +875,12 @@ class BookmarkTree(QWidget):
         return True
 
     def _add_compress_action(self, menu, files) -> bool:
-        """'PDF 압축...' — 그림만 줄여 새 파일 `<이름>_압축.pdf`(마스터 §4.7.19). 창은 메뉴가 닫힌 뒤에."""
+        """'용량 줄여 내보내기...'(261016-1 개명, 옛 'PDF 압축...') — 그림만 줄여 새 파일 `<이름>_압축.pdf`(마스터 §4.7.19). 창은 메뉴가 닫힌 뒤에."""
         files = [f for f in (files or []) if f]
         if not files:
             return False
-        a = menu.addAction(tr("PDF 압축...") if len(files) == 1
-                           else tr('PDF 압축 ({n}개 파일)...').format(n=len(files)))
+        a = menu.addAction(tr("용량 줄여 내보내기...") if len(files) == 1
+                           else tr('용량 줄여 내보내기 ({n}개 파일)...').format(n=len(files)))
         a.setToolTip(tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로."))
         a.triggered.connect(lambda _=False, fs=list(files): QTimer.singleShot(
             0, lambda: self.compressFilesRequested.emit(fs)))
@@ -2462,24 +2462,19 @@ class BookmarkTree(QWidget):
             act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
             act_flatten.setToolTip(
                 tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
-            # 261014-11(형식 변환 SOT §2.1): 저장 그룹 아래 '변환 ▸' — 여러 파일을 골랐으면 그 파일들 일괄
-            try:
-                from viewer import convert as _cv
-                _conv_files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
-                if _dir_target not in _conv_files:
-                    _conv_files = [_dir_target]
-                _cm = menu.addMenu(tr("변환") if len(_conv_files) == 1
-                                   else tr('변환 ({n}개 파일)').format(n=len(_conv_files)))
-                for _f in _cv.ready_formats():
-                    _a = _cm.addAction(tr(_f.label))
-                    # 변환 창은 메뉴가 닫힌 뒤에(§4.7.11 '메뉴 안에서 모달 창')
-                    _a.triggered.connect(lambda _=False, k=_f.key, fs=list(_conv_files): QTimer.singleShot(
-                        0, lambda: self.convertFilesRequested.emit(fs, k)))
-            except Exception:
+            # 261014-11(형식 변환 SOT §2.1) → 261016-1(사용자 지시): '변환해서 내보내기...' — 형식 하위 메뉴 없이 변환 창에서 고른다
+            #   (파일 메뉴 '변환하여 내보내기...' 와 같은 창). 여러 파일을 골랐으면 그 파일들 일괄.
+            _conv_files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
+            if _dir_target not in _conv_files:
                 _conv_files = [_dir_target]
-            self._add_ocr_layer_action(menu, _conv_files)
+            _ca = menu.addAction(tr("변환해서 내보내기...") if len(_conv_files) == 1
+                                 else tr('변환해서 내보내기 ({n}개 파일)...').format(n=len(_conv_files)))
+            _ca.setToolTip(tr("Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다."))
+            # 변환 창은 메뉴가 닫힌 뒤에(§4.7.11 '메뉴 안에서 모달 창')
+            _ca.triggered.connect(lambda _=False, fs=list(_conv_files): QTimer.singleShot(
+                0, lambda: self.convertFilesRequested.emit(fs, "")))
             self._add_compress_action(menu, _conv_files)
-            _ra = menu.addAction(tr("가림(개인정보 지우기)..."))
+            _ra = menu.addAction(tr("개인정보 지우고 별도 저장..."))
             _ra.setToolTip(tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."))
             _ra.triggered.connect(lambda _=False, f=_dir_target: QTimer.singleShot(
                 0, lambda: self.redactFileRequested.emit(str(f))))
@@ -2535,6 +2530,9 @@ class BookmarkTree(QWidget):
         if is_bookmark and self._edit_mode:
             act_bm_edit = menu.addAction(tr("책갈피 수정..."))
             menu.addSeparator()
+        if is_bookmark and _dir_target:                 # 261016-1: 책갈피 행에는 '책갈피 생성' 이 없다 — 같은 자리에
+            if self._add_ocr_layer_action(menu, _conv_files):
+                menu.addSeparator()
         act_translate = None
         act_edit_gloss = None
         act_tags = None
@@ -2545,6 +2543,8 @@ class BookmarkTree(QWidget):
                 act_password = menu.addAction(tr("암호 입력"))
                 menu.addSeparator()
             act_create = menu.addAction(tr("책갈피 생성"))
+            # 261016-1(사용자 지시): 'OCR로 글자층 생성...' 은 '책갈피 생성' 아래 — 저장 그룹과 같은 고르기(여러 파일이면 일괄)
+            self._add_ocr_layer_action(menu, _conv_files if _dir_target else [])
             # 260902-5: '책갈피 편집'(편집모드 진입) 삭제 — 편집 버튼과 중복이고 책갈피 수정과 혼동.
             if korea_only_visible():                # 단어장은 한국 전용(다국어 SOT §7)
                 act_study = menu.addAction(tr("단어장 생성"))

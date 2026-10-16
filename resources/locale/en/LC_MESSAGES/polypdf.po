@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 17:57+0900\n"
+"POT-Creation-Date: 2026-10-16 13:08+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2962,8 +2962,7 @@ msgstr "Could not create the Word file"
 msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요"
 msgstr "Word turned the text of this PDF into pictures only — use 'Word (editable)' or 'Word (keep appearance)'"
 
-#: viewer/convert_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/convert_dialog.py
+#: viewer/convert_controller.py viewer/widgets/convert_dialog.py
 msgid "변환"
 msgstr "Convert"
 
@@ -5055,12 +5054,12 @@ msgid "버리고 새로고침"
 msgstr "Discard and Refresh"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "OCR 글자층 넣기..."
-msgstr "Add OCR text layer..."
+msgid "OCR로 글자층 생성..."
+msgstr "Create OCR text layer..."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "PDF 압축..."
-msgstr "Compress PDF..."
+msgid "용량 줄여 내보내기..."
+msgstr "Reduce size and export..."
 
 #: viewer/widgets/bookmark_tree.py
 msgid ""
@@ -5099,8 +5098,12 @@ msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에�
 msgstr "Flatten annotations and inserted photos into the page content so other programs show them too."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "가림(개인정보 지우기)..."
-msgstr "Redact (remove personal data)..."
+msgid "Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다."
+msgstr "Makes a new Word, Hangul, Excel, PowerPoint, image or text file — choose the format in the conversion window."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "개인정보 지우고 별도 저장..."
+msgstr "Remove personal data and save separately..."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."
@@ -5248,6 +5251,10 @@ msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛�
 msgstr "Shows the changes between two PDFs side by side in split view (older = the file modified earlier)."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "변환해서 내보내기..."
+msgstr "Convert and export..."
+
+#: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
 msgstr "Arrange the selected bookmarks and their children in page order and match their level to the bookmark above"
 
@@ -5359,13 +5366,13 @@ msgstr "Finding {n} PDFs..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "OCR 글자층 넣기 ({n}개 파일)..."
-msgstr "Add OCR text layer ({n} files)..."
+msgid "OCR로 글자층 생성 ({n}개 파일)..."
+msgstr "Create OCR text layer ({n} files)..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "PDF 압축 ({n}개 파일)..."
-msgstr "Compress PDF ({n} files)..."
+msgid "용량 줄여 내보내기 ({n}개 파일)..."
+msgstr "Reduce size and export ({n} files)..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -5517,6 +5524,11 @@ msgstr "Move Files ({n})"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "변환해서 내보내기 ({n}개 파일)..."
+msgstr "Convert and export ({n} files)..."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "선택 책갈피 {_n_bm}개 페이지순 정렬"
 msgstr "Sort {_n_bm} Selected Bookmarks by Page"
 
@@ -5558,11 +5570,6 @@ msgstr "{name}: original missing"
 #, python-brace-format
 msgid "bookmarks.json 읽기 실패: {e}"
 msgstr "Failed to read bookmarks.json: {e}"
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "변환 ({n}개 파일)"
-msgstr "Convert ({n} files)"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -7239,7 +7246,7 @@ msgstr "Rounded rectangle"
 msgid "그림 첨부…"
 msgstr "Attach Image…"
 
-#: viewer/widgets/pres_timer.py
+#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "클립보드 붙여넣기"
 msgstr "Paste from Clipboard"
 
@@ -7399,7 +7406,7 @@ msgstr "Advance alarms (up to 7 rows) — Start = time before end (min:sec), Int
 msgid "첨부됨 ✓"
 msgstr "Attached ✓"
 
-#: viewer/widgets/pres_timer.py
+#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "붙여넣기"
 msgstr "Paste"
 
@@ -9716,6 +9723,14 @@ msgid "책갈피 {n}개를 만들었습니다 — 책갈피창에서 💾 저장
 msgstr "Made {n} bookmarks — save with 💾 in the bookmarks panel."
 
 #: viewer/widgets/thumbs_list.py
+msgid "  (편집모드 ✏ 에서)"
+msgstr "  (in edit mode ✏)"
+
+#: viewer/widgets/thumbs_list.py
+msgid "맨 뒤"
+msgstr "at the end"
+
+#: viewer/widgets/thumbs_list.py
 msgid "모든 쪽"
 msgstr "All pages"
 
@@ -9740,20 +9755,25 @@ msgid "페이지 순서 변경: 마우스로 끌어 놓기 또는 Alt+↑/↓  �
 msgstr "Reorder pages: drag and drop or Alt+↑/↓  ·  Delete: Delete  ·  Move: ↑/↓"
 
 #: viewer/widgets/thumbs_list.py
-msgid "맨 뒤"
-msgstr "at the end"
-
-#: viewer/widgets/thumbs_list.py
-msgid "이 뒤"
-msgstr "after this"
+msgid "숨김 전체 해제"
+msgstr "Unhide All"
 
 #: viewer/widgets/thumbs_list.py
 msgid "변경 적용 — 새 PDF로 저장..."
 msgstr "Apply Changes — Save as New PDF..."
 
 #: viewer/widgets/thumbs_list.py
-msgid "숨김 전체 해제"
-msgstr "Unhide All"
+#, python-brace-format
+msgid "p.{r} 뒤"
+msgstr "after p.{r}"
+
+#: viewer/widgets/thumbs_list.py
+msgid "이 뒤"
+msgstr "after this"
+
+#: viewer/widgets/thumbs_list.py
+msgid "스크린샷 붙여넣기"
+msgstr "Paste Screenshots"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
@@ -9767,18 +9787,28 @@ msgstr "Waiting to paste: {name} p.{epg}"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "선택 페이지 인쇄 ({n}쪽)"
-msgstr "Print Selected Pages ({n})"
+msgid "인쇄 ({n}쪽)"
+msgstr "Print ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "선택 페이지 스크린샷으로 복사 ({n}쪽)"
-msgstr "Copy Selected Pages to Screenshots ({n})"
+msgid "복사 ({n}쪽)"
+msgstr "Copy ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "선택 페이지 복사 ({n}쪽)"
-msgstr "Copy Selected Pages ({n})"
+msgid "스크린샷으로 복사 ({n}쪽)"
+msgstr "Copy to Screenshots ({n} pages)"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "왼쪽 90° 회전 ({n}쪽)"
+msgstr "Rotate Left 90° ({n} pages)"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "오른쪽 90° 회전 ({n}쪽)"
+msgstr "Rotate Right 90° ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
@@ -9792,40 +9822,6 @@ msgstr "Remove Crop ({n} page(s))"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
-msgstr "Paste ({_pcnt} pages) — {_where}"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "p.{r} 뒤"
-msgstr "after p.{r}"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "클립보드 사진 새쪽 붙이기 — {w}{v}"
-msgstr "Paste Clipboard Photo as New Page — {w}{v}"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "선택한 쪽 변환 ({n}쪽)"
-msgstr "Convert selected pages ({n})"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "p.{page} 뒤"
-msgstr "after p.{page}"
-
-#: viewer/widgets/thumbs_list.py
-msgid "  (편집모드 ✏ 에서)"
-msgstr "  (in edit mode ✏)"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "삭제 ({n}쪽)"
-msgstr "Delete ({n} pages)"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
 msgid "숨김 ({n}쪽)"
 msgstr "Hide ({n} pages)"
 
@@ -9836,13 +9832,33 @@ msgstr "Unhide ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "왼쪽 90° 회전 ({n}쪽)"
-msgstr "Rotate Left 90° ({n} pages)"
+msgid "p.{page} 뒤"
+msgstr "after p.{page}"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "오른쪽 90° 회전 ({n}쪽)"
-msgstr "Rotate Right 90° ({n} pages)"
+msgid "클립보드 붙여넣기 — {w}{v}"
+msgstr "Paste from Clipboard — {w}{v}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "삭제 ({n}쪽)"
+msgstr "Delete ({n} pages)"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "선택한 쪽 변환 ({n}쪽)"
+msgstr "Convert selected pages ({n})"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
+msgstr "Paste ({_pcnt} pages) — {_where}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "스크린샷 붙여넣기 ({n}쪽) — {w}"
+msgstr "Paste Screenshots ({n} pages) — {w}"
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "오프셋 적용"
@@ -11242,4 +11258,16 @@ msgstr "Getting Started"
 
 #~ msgid "스크린샷 PDF 저장..."
 #~ msgstr "Save Screenshot PDF..."
+
+#~ msgid "PDF 압축..."
+#~ msgstr "Compress PDF..."
+
+#~ msgid "PDF 압축 ({n}개 파일)..."
+#~ msgstr "Compress PDF ({n} files)..."
+
+#~ msgid "선택 페이지 인쇄 ({n}쪽)"
+#~ msgstr "Print Selected Pages ({n})"
+
+#~ msgid "선택 페이지 복사 ({n}쪽)"
+#~ msgstr "Copy Selected Pages ({n})"
 

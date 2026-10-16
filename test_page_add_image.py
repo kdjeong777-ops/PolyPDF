@@ -280,7 +280,7 @@ try:
 
     for on in (True, False):
         items = _menu_labels(on)
-        hit = [(t, e) for t, e in items if "클립보드 사진 새쪽 붙이기" in t]
+        hit = [(t, e) for t, e in items if t.startswith("클립보드 붙여넣기")]     # 261016-1 개명
         chk(bool(hit), "⑮ 편집모드 %s — 항목이 **보인다**" % ("켬" if on else "끔"),
             hit[0][0] if hit else items)
         if hit:
