@@ -32,9 +32,9 @@ for a in mw._panel_toolbar.actions():
     w = mw._panel_toolbar.widgetForAction(a)
     if isinstance(w, QToolButton):
         btns.append(w.text())
-# 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261016-4(디자인 SOT §2.9, 사용자 지시): '변환하여 내보내기' 는 '암호화' 오른쪽
+# 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261016-4(디자인 SOT §2.9, 사용자 지시): '변환해서 내보내기' 는 '암호화' 오른쪽
 TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "PDF병합",
-         "이미지→PDF", "암호화", "변환하여 내보내기", "번역"]
+         "이미지→PDF", "암호화", "변환해서 내보내기", "번역"]
 N = len(TOOLS)
 chk(btns[-N:] == TOOLS, "① 패널 '도구' %d개가 지시한 차례다" % N, str(btns[-N:]))
 chk(btns.index("OCR") == len(btns) - N, "① 도구는 보기 뒤에 모여 있다", str(btns))
@@ -87,8 +87,8 @@ chk(_dlg.btn_save_default.text() == "현재 설정을 기본값으로 저장(배
 _dlg.close(); _dlg.deleteLater()
 chk(not any(t and t.startswith("변환") for t in items), "② 도구 메뉴에 변환 항목이 없다(파일 메뉴에 있으므로)", str(items))
 m_file = next(a.menu() for a in mw.menuBar().actions() if a.text().startswith("파일"))
-fa = [a for a in m_file.actions() if a.text() == "변환하여 내보내기..."]
-chk(len(fa) == 1 and fa[0].menu() is None, "② 파일 메뉴 '변환하여 내보내기...' — 하위 메뉴 없음",
+fa = [a for a in m_file.actions() if a.text() == "변환해서 내보내기..."]
+chk(len(fa) == 1 and fa[0].menu() is None, "② 파일 메뉴 '변환해서 내보내기...' — 하위 메뉴 없음",
     str([a.text() for a in m_file.actions()]))
 chk(not any(a.text() == "내보내기" for a in m_file.actions()), "② 옛 '내보내기 ▸' 는 없다")
 opened = []

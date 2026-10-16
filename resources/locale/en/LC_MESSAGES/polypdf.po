@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-16 22:02+0900\n"
+"POT-Creation-Date: 2026-10-16 22:21+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -357,7 +357,7 @@ msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
 msgstr "Set password and permissions on the current PDF (save encrypted)"
 
 #: viewer/app.py
-msgid "변환하여 내보내기"
+msgid "변환해서 내보내기"
 msgstr "Convert and export"
 
 #: viewer/app.py
@@ -411,8 +411,8 @@ msgstr "Flatten and Export..."
 msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."
 msgstr "Exports a new PDF with annotations, photos and hyperlinks flattened into the page and content outside the crop really removed (the original is untouched). Signed documents are signed again at the same places."
 
-#: viewer/app.py
-msgid "변환하여 내보내기..."
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "변환해서 내보내기..."
 msgstr "Convert and export..."
 
 #: viewer/app.py
@@ -5283,10 +5283,6 @@ msgstr "Compare two files..."
 #: viewer/widgets/bookmark_tree.py
 msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
 msgstr "Shows the changes between two PDFs side by side in split view (older = the file modified earlier)."
-
-#: viewer/widgets/bookmark_tree.py
-msgid "변환해서 내보내기..."
-msgstr "Convert and export..."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
@@ -11339,4 +11335,10 @@ msgstr "Getting Started"
 
 #~ msgid "숨김 해제 (p.{page})"
 #~ msgstr "Unhide (p.{page})"
+
+#~ msgid "변환하여 내보내기"
+#~ msgstr "Convert and export"
+
+#~ msgid "변환하여 내보내기..."
+#~ msgstr "Convert and export..."
 

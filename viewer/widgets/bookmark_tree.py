@@ -2463,7 +2463,7 @@ class BookmarkTree(QWidget):
             act_flatten.setToolTip(
                 tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
             # 261014-11(형식 변환 SOT §2.1) → 261016-1(사용자 지시): '변환해서 내보내기...' — 형식 하위 메뉴 없이 변환 창에서 고른다
-            #   (파일 메뉴 '변환하여 내보내기...' 와 같은 창). 여러 파일을 골랐으면 그 파일들 일괄.
+            #   (파일 메뉴와 같은 이름·같은 창, 261016-6). 여러 파일을 골랐으면 그 파일들 일괄.
             _conv_files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
             if _dir_target not in _conv_files:
                 _conv_files = [_dir_target]

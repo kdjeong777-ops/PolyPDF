@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-16 22:02+0900\n"
+"POT-Creation-Date: 2026-10-16 22:21+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -358,7 +358,7 @@ msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
 msgstr ""
 
 #: viewer/app.py
-msgid "변환하여 내보내기"
+msgid "변환해서 내보내기"
 msgstr ""
 
 #: viewer/app.py
@@ -411,8 +411,8 @@ msgstr ""
 msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."
 msgstr ""
 
-#: viewer/app.py
-msgid "변환하여 내보내기..."
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "변환해서 내보내기..."
 msgstr ""
 
 #: viewer/app.py
@@ -5077,10 +5077,6 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-msgid "변환해서 내보내기..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

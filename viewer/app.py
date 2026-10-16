@@ -1409,8 +1409,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                lambda: self.action_image_to_pdf())  # 260825-13
         mk(tr("암호화"), tr("현재 PDF에 암호·권한 설정(암호화 저장)"), self.action_encrypt_pdf)
         # 261014-11(형식 변환 SOT §2.1, 사용자 결정): 누르면 변환 창 — 형식은 창에서 고른다
-        # 261014-28: 이름 '변환하여 내보내기'('스크린샷 PDF 저장' 단추는 뺐다). 261016-4(사용자 지시, 디자인 SOT §2.9): '암호화' 오른쪽
-        self._btn_convert = mk(tr("변환하여 내보내기"), tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"), lambda: self.action_convert())
+        # 261014-28 → 261016-6: 이름 '변환해서 내보내기'(책갈피창과 같게, '스크린샷 PDF 저장' 단추는 뺐다). 261016-4(사용자 지시, 디자인 SOT §2.9): '암호화' 오른쪽
+        self._btn_convert = mk(tr("변환해서 내보내기"), tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"), lambda: self.action_convert())
         # `번역` 은 지시 목록에 없다 — 지우라는 뜻이 아니라 자리를 정하지 않은 것으로 읽어 맨 뒤에 둔다.
         self._btn_tr = mk(tr("번역"), tr("PDF 번역 (목록 창)"), lambda: self._action_translate_files())  # 260623
 
@@ -1573,7 +1573,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
         # 261014-28(형식 변환 SOT §2.1, 사용자 지시): 하위 메뉴 없이 누르면 변환 창 — 본문에 열린 파일
-        self.act_export = QAction(tr("변환하여 내보내기..."), self)
+        self.act_export = QAction(tr("변환해서 내보내기..."), self)
         self.act_export.triggered.connect(lambda: self.action_convert())
         m_file.addAction(self.act_export)
         m_file.addSeparator()
