@@ -254,9 +254,10 @@ class PdfIndex:
         #   needs_reindex 가 계속 False → 검색 0 이던 상태 → files 비워 재인덱싱 유도.
         if uv < self.SCHEMA_VERSION:
             try:
-                fts_n = self.conn.execute("SELECT count(*) FROM pages_fts").fetchone()[0]
-                files_n = self.conn.execute("SELECT count(*) FROM files").fetchone()[0]
-                if fts_n == 0 and files_n > 0:
+                # 261016-8: 0 인지만 본다 — count(*) 는 색인 전체를 읽는다(`is_empty`)
+                fts_empty = self.is_empty()
+                files_any = self.conn.execute("SELECT 1 FROM files LIMIT 1").fetchone() is not None
+                if fts_empty and files_any:
                     self.conn.execute("DELETE FROM files")
                     self.migrated = True
             except Exception:
@@ -712,6 +713,11 @@ class PdfIndex:
             return [r[0] or "" for r in cur]
         except Exception:
             return []
+
+    def is_empty(self) -> bool:
+        """색인에 글이 하나도 없는가. 261016-8(응답성 SOT §4, 설치 시험 T1 6.86초 정지): `count(*)` 는 FTS 색인 **전체를** 읽는다 —
+        파일 2천여 개 색인을 설치 직후(디스크·백신 캐시가 차가울 때) 메인 스레드에서 세다 창이 6.9초 섰다. 비었는지는 한 행으로 안다."""
+        return self.conn.execute("SELECT 1 FROM pages_fts LIMIT 1").fetchone() is None
 
     def close(self):
         try:

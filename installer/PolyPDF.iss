@@ -61,9 +61,10 @@ Name: "pdfdefault"; Description: "{cm:PdfDefault}"; GroupDescription: "{cm:FileA
 Source: "{#DistDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"
+; 261016-7(마스터 §14.2): 앱이 정하는 작업 표시줄 앱 ID(main.py APP_USER_MODEL_ID)와 같게 — 바로가기로 띄운 창·고정 단추가 한 단추로 묶인다
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.PolyPDF"
 Name: "{group}\{cm:UninstallIcon}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.PolyPDF"; Tasks: desktopicon
 
 [Registry]
 ; ── 261008-27: PolyPDF 언어 — 앱이 처음 켜질 때 이 값으로 초기 설정한다(다국어 SOT §4·§10.1). 제거 때 지운다 ──

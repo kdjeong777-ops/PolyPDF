@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-16 22:21+0900\n"
+"POT-Creation-Date: 2026-10-16 22:55+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -357,20 +357,20 @@ msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
 msgstr "Set password and permissions on the current PDF (save encrypted)"
 
 #: viewer/app.py
-msgid "변환해서 내보내기"
-msgstr "Convert and export"
-
-#: viewer/app.py
-msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
-msgstr "Convert the PDF to Word, Hangul, Excel, images or text"
-
-#: viewer/app.py
 msgid "번역"
 msgstr "Translate"
 
 #: viewer/app.py
 msgid "PDF 번역 (목록 창)"
 msgstr "Translate PDF (list window)"
+
+#: viewer/app.py
+msgid "변환해서 내보내기"
+msgstr "Convert and export"
+
+#: viewer/app.py
+msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
+msgstr "Convert the PDF to Word, Hangul, Excel, images or text"
 
 #: viewer/app.py
 msgid "파일(&F)"

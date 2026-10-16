@@ -34,7 +34,7 @@ for a in mw._panel_toolbar.actions():
         btns.append(w.text())
 # 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261016-4(디자인 SOT §2.9, 사용자 지시): '변환해서 내보내기' 는 '암호화' 오른쪽
 TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "PDF병합",
-         "이미지→PDF", "암호화", "변환해서 내보내기", "번역"]
+         "이미지→PDF", "암호화", "번역", "변환해서 내보내기"]
 N = len(TOOLS)
 chk(btns[-N:] == TOOLS, "① 패널 '도구' %d개가 지시한 차례다" % N, str(btns[-N:]))
 chk(btns.index("OCR") == len(btns) - N, "① 도구는 보기 뒤에 모여 있다", str(btns))

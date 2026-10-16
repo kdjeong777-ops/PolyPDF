@@ -61,6 +61,28 @@ def _profile() -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "", os.environ.get("POLYPDF_PROFILE", ""))[:32]
 
 
+APP_USER_MODEL_ID = "LocalTools.PolyPDF"
+
+
+def _set_app_user_model_id() -> str:
+    """261016-7(마스터 §14.2, 사용자 보고 '업데이트 뒤 작업 표시줄에 흰 백지'): 작업 표시줄 앱 ID 를 정한다 — **창을 만들기 전에**.
+
+    ID 가 없으면 작업 표시줄은 창에 건 아이콘 대신 **exe 아이콘을 Windows 아이콘 캐시에서** 찾는다. 업데이트는 '제거 → 설치' 라
+    exe 가 잠시 없는 사이 캐시가 빈 아이콘을 잡으면 흰 백지가 남았다(설치 끝 `ie4uinit -show`·exe 시각 바꾸기로는 Windows 11 에서
+    되풀이). ID 를 주면 작업 표시줄이 **창 아이콘**(앱에 든 icon.png)을 쓴다. 시작 메뉴 바로가기도 같은 ID(설치 프로그램 [Icons]).
+    시험 프로필은 다른 ID — 시험 창이 사용자 창과 한 단추로 묶이지 않게. 정한 ID(실패하면 '')."""
+    aid = APP_USER_MODEL_ID + ("." + _profile() if _profile() else "")
+    if sys.platform != "win32":
+        return ""
+    try:
+        import ctypes
+        if ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(ctypes.c_wchar_p(aid)) != 0:
+            return ""
+        return aid
+    except Exception:
+        return ""
+
+
 def _setup_portable() -> str:
     """261009-22(마스터 §14.9): exe 옆에 `PolyPDF.portable` 이 있으면 모든 데이터를 `<exe 폴더>\\Data` 에 둔다(휴대용).
     설정·색인·사전·스크린샷(`settings_store._DIR_OVERRIDE`), 창 위치 등 QSettings(레지스트리 대신 INI), 도구 자료(`local_data_dir`).
@@ -300,6 +322,7 @@ def main():
         )
     except Exception:
         pass
+    _set_app_user_model_id()             # 261016-7: 창(스플래시 포함)을 만들기 전에 — 작업 표시줄이 창 아이콘을 쓰게
     app = QApplication(sys.argv)
     _portable_note = _setup_portable()   # 261009-22(마스터 §14.9): 넘기기 통로 이름(open_gather)을 정하기 **전에**
 
