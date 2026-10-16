@@ -20,7 +20,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
     def __init__(self, page_count: int, cur_page: int,
                  n_thumb_sel: int, n_shot_sel: int, parent=None,
                  preset_api=None, sample=None, n_files_sel: int = 0,
-                 thumb_pages=None, file_paths=None, bake_src=None):
+                 thumb_pages=None, file_paths=None, bake_src=None, preset_scope=None):
         super().__init__(parent)
         self.setWindowTitle(tr("인쇄"))
         self.resize(800, 600)
@@ -83,6 +83,11 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         if n_files_sel >= 2:
             self.rb_files.setChecked(True)
         elif n_thumb_sel >= 2:
+            self.rb_thumb.setChecked(True)
+        # 261016-2(마스터 §4.7.7·§4.7.20): 썸네일·본문 우클릭 '인쇄…' 에서 연 창은 그 범위가 기본
+        if preset_scope == "current":
+            self.rb_cur.setChecked(True)
+        elif preset_scope == "thumb" and self.rb_thumb.isEnabled():
             self.rb_thumb.setChecked(True)
 
         nrow = QHBoxLayout()

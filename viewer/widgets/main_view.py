@@ -4708,6 +4708,29 @@ class MainView(QWidget):
         self._page_strokes.append(st)
         return len(self._page_strokes) - 1
 
+    def add_text_box_from_text(self, text: str) -> bool:
+        """261016-2(마스터 §4.7.20): 클립보드 글을 **글쓰기 박스**로 지금 쪽 가운데에 — 기본 글쓰기 스타일, 크기는 글 길이에 맞춰 어림."""
+        text = (text or "").strip("\r\n")
+        if not text.strip() or not self._img_edit or self._is_image or self._doc is None:
+            return False
+        try:
+            self._commit_text_editor()
+            self.set_draw_tool(("select", None))
+        except Exception:
+            pass
+        lines = text.splitlines() or [text]
+        w = max(0.12, min(0.8, 0.012 * max(len(ln) for ln in lines)))
+        h = max(0.04, min(0.8, 0.025 * len(lines)))
+        i = self._new_text_box((0.5 - w / 2, 0.5 - h / 2))
+        st = self._page_strokes[i]
+        st["text"] = text
+        st["rect"] = [0.5 - w / 2, 0.5 - h / 2, 0.5 + w / 2, 0.5 + h / 2]
+        self._stroke_selected = i
+        self._save_page_strokes()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+        return True
+
     def _new_leader(self, box_anchor, tip_anchor, hl_rects=None):
         """260611-76/77: box_anchor=글 시작점(=박스 하단-좌측), tip_anchor=화살표 끝,
         hl_rects=지시선이 가리키는(드래그로 지나간) 문자 하이라이트 정규화 사각형들."""

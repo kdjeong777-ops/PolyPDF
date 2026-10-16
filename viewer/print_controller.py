@@ -26,7 +26,8 @@ __all__ = ["PrintMixin"]
 class PrintMixin:
     """MainWindow 에 믹스인되는 인쇄·PDF 내보내기 메서드 모음."""
 
-    def action_print(self):
+    def action_print(self, preset_scope=None):
+        """인쇄 창. 261016-2(마스터 §4.7.7·§4.7.20): 썸네일·본문 우클릭 '인쇄…' 도 이 창 — `preset_scope`('current'|'thumb')가 범위 기본값."""
         cur = self.main_view.current_file()
         is_pdf = bool(cur and str(cur).lower().endswith(".pdf"))
         pc = (self.main_view._doc.page_count
@@ -52,7 +53,8 @@ class PrintMixin:
                                sample=(str(cur) if is_pdf else None),
                                n_files_sel=n_files,
                                thumb_pages=thumb_pages, file_paths=sel_files,
-                               bake_src=self._baked_src)   # 261009-1(§4.7.13)
+                               bake_src=self._baked_src,   # 261009-1(§4.7.13)
+                               preset_scope=preset_scope)
         if not dlg.exec():
             return
         spec = dlg.result_spec()
@@ -735,14 +737,12 @@ class PrintMixin:
         return p
 
     def _on_thumb_print_pages(self, pages):
-        """260616-21: 썸네일 다중선택 → 선택 페이지 인쇄."""
-        cur = self._thumb_doc_path()
+        """260616-21: 썸네일 우클릭 '인쇄'. 261016-2(마스터 §4.7.7, 사용자 지시): 곧바로 찍지 않고 파일 메뉴와 같은
+        **인쇄 창**을 연다 — 고른 썸네일이 둘 이상이면 '선택한 썸네일 페이지', 아니면 '현재 페이지' 가 기본."""
         pages = sorted({int(p) for p in (pages or []) if p is not None})
-        if not cur or not pages:
+        if not pages:
             return
-        self._print_opts = None      # 260827: 썸네일 직접 인쇄는 시스템 인쇄창(QPrintDialog) 사용
-        # 261009-1(§4.7.13): 여기도 구운 원천으로 — 인쇄 창을 거치지 않으므로 꾸밈을 포함한다.
-        self._print_pdf_pages(self._baked_src(cur, True), pages)
+        self.action_print(preset_scope="thumb" if len(pages) >= 2 else "current")
 
     def _print_pdf_pages(self, pdf_path, pages: list) -> None:
         # 260618-1: 현재 문서 인쇄 권한 없으면 차단

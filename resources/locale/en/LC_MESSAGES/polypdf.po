@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-16 13:08+0900\n"
+"POT-Creation-Date: 2026-10-16 21:23+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -394,7 +394,7 @@ msgstr "Save bookmarks, annotations and page edits to <original>_edited.pdf."
 
 #: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/toc_review_dialog.py
+#: viewer/widgets/thumbs_list.py viewer/widgets/toc_review_dialog.py
 msgid "저장"
 msgstr "Save"
 
@@ -783,6 +783,18 @@ msgstr "Merge PDFs"
 msgid "준비 중…"
 msgstr "Preparing…"
 
+#: viewer/app.py viewer/widgets/thumbs_list.py
+msgid "  (저장 후)"
+msgstr "  (after saving)"
+
+#: viewer/app.py
+msgid "인쇄…"
+msgstr "Print…"
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "복사"
+msgstr "Copy"
+
 #: viewer/app.py
 msgid "텍스트 복사"
 msgstr "Copy Text"
@@ -794,6 +806,10 @@ msgstr "Copy Text After Selecting a Block"
 #: viewer/app.py
 msgid "여기에 서명…"
 msgstr "Sign Here…"
+
+#: viewer/app.py
+msgid "클립보드에 붙일 그림·글·쪽이 없습니다."
+msgstr "There is no picture, text or page on the clipboard to paste."
 
 #: viewer/app.py
 msgid "복사 (Ctrl+C)"
@@ -1413,9 +1429,49 @@ msgstr "(Untitled)"
 msgid "먼저 PDF를 표시하세요."
 msgstr "Display a PDF first."
 
+#: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
+msgid "붙여넣기"
+msgstr "Paste"
+
+#: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
+msgid "클립보드 붙여넣기"
+msgstr "Paste from Clipboard"
+
+#: viewer/app.py
+msgid "사진 붙여넣기"
+msgstr "Paste Photo"
+
+#: viewer/app.py
+msgid "1단 보기"
+msgstr "Single View"
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "옆 창에 열기"
+msgstr "Open in Other Pane"
+
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "2단 보기"
 msgstr "Split View"
+
+#: viewer/app.py
+msgid "도형 입력 설정…"
+msgstr "Shape Input Settings…"
+
+#: viewer/app.py
+msgid "글쓰기 입력 설정…"
+msgstr "Text Input Settings…"
+
+#: viewer/app.py
+msgid "선택 지시선 끝 모양"
+msgstr "Selected Callout End"
+
+#: viewer/app.py
+msgid "선택 사진 모양 변경"
+msgstr "Change Selected Photo Shape"
+
+#: viewer/app.py
+msgid "선과 텍스트 입력 설정…"
+msgstr "Line and Text Input Settings…"
 
 #: viewer/app.py
 msgid "사각형"
@@ -1428,34 +1484,6 @@ msgstr "Rounded Rectangle"
 #: viewer/app.py
 msgid "원형"
 msgstr "Circle"
-
-#: viewer/app.py
-msgid "사진 파일 삽입"
-msgstr "Insert Photo File"
-
-#: viewer/app.py
-msgid "클립보드 삽입"
-msgstr "Insert from Clipboard"
-
-#: viewer/app.py
-msgid "선과 텍스트 입력 설정…"
-msgstr "Line and Text Input Settings…"
-
-#: viewer/app.py
-msgid "선택 글상자 삭제 (Del)"
-msgstr "Delete Selected Text Box (Del)"
-
-#: viewer/app.py
-msgid "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."
-msgstr "Click the top-left corner of the block and drag to the bottom-right corner to copy the text in that area."
-
-#: viewer/app.py
-msgid "선택 지시선 끝 모양"
-msgstr "Selected Callout End"
-
-#: viewer/app.py
-msgid "선택 사진 모양 변경"
-msgstr "Change Selected Photo Shape"
 
 #: viewer/app.py viewer/widgets/pointer_settings_dialog.py
 msgid "색 선택"
@@ -1846,32 +1874,18 @@ msgstr "Saving with reduced size… (this may take a while)"
 msgid "저장 중…"
 msgstr "Saving…"
 
-#: viewer/app.py
-#, python-brace-format
-msgid "현재 페이지 인쇄 (p.{page})"
-msgstr "Print Current Page (p.{page})"
+#: viewer/app.py viewer/widgets/thumbs_list.py
+msgid "스크린샷 붙여넣기"
+msgstr "Paste Screenshots"
 
-#: viewer/app.py
-#, python-brace-format
-msgid "왼쪽 90° 회전 (p.{page})"
-msgstr "Rotate Left 90° (p.{page})"
-
-#: viewer/app.py
-#, python-brace-format
-msgid "오른쪽 90° 회전 (p.{page})"
-msgstr "Rotate Right 90° (p.{page})"
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "2창으로 복사"
-msgstr "Copy to Window 2"
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "1창으로 복사"
-msgstr "Copy to Window 1"
-
-#: viewer/app.py
-msgid "선택 이미지 삭제 (Del)"
-msgstr "Delete Selected Image (Del)"
+#: viewer/app.py viewer/widgets/favorites_dialog.py
+#: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
+#: viewer/widgets/strip.py viewer/widgets/thumbs_list.py
+#: viewer/widgets/toc_review_dialog.py viewer/widgets/translate_files_dialog.py
+#: viewer/widgets/twoup_dialog.py
+msgid "삭제"
+msgstr "Delete"
 
 #: viewer/app.py viewer/widgets/line_text_settings_dialog.py
 msgid "뾰족한 화살표"
@@ -1884,6 +1898,14 @@ msgstr "Round end"
 #: viewer/app.py
 msgid "일반 선"
 msgstr "Plain line"
+
+#: viewer/app.py
+msgid "선택 글상자 삭제 (Del)"
+msgstr "Delete Selected Text Box (Del)"
+
+#: viewer/app.py
+msgid "선택 이미지 삭제 (Del)"
+msgstr "Delete Selected Image (Del)"
 
 #: viewer/app.py
 msgid "선택 개체 삭제 (Del)"
@@ -2389,15 +2411,15 @@ msgstr "Could not insert the photos as pages: %s"
 msgid "사진을 쪽으로 만들지 못했습니다: {err}"
 msgstr "Could not make the photos into pages: {err}"
 
-#: viewer/app.py viewer/widgets/thumbs_list.py
+#: viewer/app.py
 #, python-brace-format
-msgid "책갈피 추가 (p.{page})"
-msgstr "Add Bookmark (p.{page})"
+msgid "왼쪽 90° 회전 (p.{page})"
+msgstr "Rotate Left 90° (p.{page})"
 
-#: viewer/app.py viewer/widgets/thumbs_list.py
+#: viewer/app.py
 #, python-brace-format
-msgid "하이퍼링크 등록… (p.{page})"
-msgstr "Add Hyperlink… (p.{page})"
+msgid "오른쪽 90° 회전 (p.{page})"
+msgstr "Rotate Right 90° (p.{page})"
 
 #: viewer/app.py
 #, python-brace-format
@@ -2594,13 +2616,37 @@ msgstr "Merge complete → {name} (selected in the bookmarks panel)"
 
 #: viewer/app.py
 #, python-brace-format
-msgid "페이지 숨김 해제 (p.{page})"
-msgstr "Unhide Page (p.{page})"
+msgid "스크린샷 붙여넣기 ({n}장)"
+msgstr "Paste Screenshots ({n})"
 
 #: viewer/app.py
 #, python-brace-format
-msgid "페이지 숨김 (p.{page})"
-msgstr "Hide Page (p.{page})"
+msgid "삭제 (p.{page})"
+msgstr "Delete (p.{page})"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "숨김 (p.{page})"
+msgstr "Hide (p.{page})"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "숨김 해제 (p.{page})"
+msgstr "Unhide (p.{page})"
+
+#: viewer/app.py viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "책갈피 추가 (p.{page})"
+msgstr "Add Bookmark (p.{page})"
+
+#: viewer/app.py viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "하이퍼링크 등록… (p.{page})"
+msgstr "Add Hyperlink… (p.{page})"
+
+#: viewer/app.py
+msgid "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."
+msgstr "Click the top-left corner of the block and drag to the bottom-right corner to copy the text in that area."
 
 #: viewer/app.py
 #, python-brace-format
@@ -4958,10 +5004,6 @@ msgid "이동"
 msgstr "Move"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "복사"
-msgstr "Copy"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "책갈피 편집"
 msgstr "Edit Bookmark"
 
@@ -6153,15 +6195,6 @@ msgstr "↑ Up"
 msgid "↓ 아래로"
 msgstr "↓ Down"
 
-#: viewer/widgets/favorites_dialog.py viewer/widgets/hyperlink_dialog.py
-#: viewer/widgets/image_to_pdf_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/strip.py viewer/widgets/thumbs_list.py
-#: viewer/widgets/toc_review_dialog.py viewer/widgets/translate_files_dialog.py
-#: viewer/widgets/twoup_dialog.py
-msgid "삭제"
-msgstr "Delete"
-
 #: viewer/widgets/favorites_dialog.py
 msgid "이름 변경"
 msgstr "Rename"
@@ -7246,10 +7279,6 @@ msgstr "Rounded rectangle"
 msgid "그림 첨부…"
 msgstr "Attach Image…"
 
-#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
-msgid "클립보드 붙여넣기"
-msgstr "Paste from Clipboard"
-
 #: viewer/widgets/pres_timer.py
 msgid "그림 제거"
 msgstr "Remove Image"
@@ -7405,10 +7434,6 @@ msgstr "Advance alarms (up to 7 rows) — Start = time before end (min:sec), Int
 #: viewer/widgets/pres_timer.py
 msgid "첨부됨 ✓"
 msgstr "Attached ✓"
-
-#: viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
-msgid "붙여넣기"
-msgstr "Paste"
 
 #: viewer/widgets/pres_timer.py
 msgid "클립보드에 이미지가 없습니다."
@@ -9768,14 +9793,6 @@ msgid "p.{r} 뒤"
 msgstr "after p.{r}"
 
 #: viewer/widgets/thumbs_list.py
-msgid "이 뒤"
-msgstr "after this"
-
-#: viewer/widgets/thumbs_list.py
-msgid "스크린샷 붙여넣기"
-msgstr "Paste Screenshots"
-
-#: viewer/widgets/thumbs_list.py
 #, python-brace-format
 msgid "붙여넣기 p.{epg}"
 msgstr "Paste p.{epg}"
@@ -9787,18 +9804,28 @@ msgstr "Waiting to paste: {name} p.{epg}"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "인쇄 ({n}쪽)"
-msgstr "Print ({n} pages)"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
 msgid "복사 ({n}쪽)"
 msgstr "Copy ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
+msgid "인쇄 ({n}쪽)…"
+msgstr "Print ({n} pages)…"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
 msgid "스크린샷으로 복사 ({n}쪽)"
 msgstr "Copy to Screenshots ({n} pages)"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "클립보드 붙여넣기 — {w}{v}"
+msgstr "Paste from Clipboard — {w}{v}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "삭제 ({n}쪽)"
+msgstr "Delete ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
@@ -9832,26 +9859,6 @@ msgstr "Unhide ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "p.{page} 뒤"
-msgstr "after p.{page}"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "클립보드 붙여넣기 — {w}{v}"
-msgstr "Paste from Clipboard — {w}{v}"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "삭제 ({n}쪽)"
-msgstr "Delete ({n} pages)"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "선택한 쪽 변환 ({n}쪽)"
-msgstr "Convert selected pages ({n})"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
 msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
 msgstr "Paste ({_pcnt} pages) — {_where}"
 
@@ -9859,6 +9866,11 @@ msgstr "Paste ({_pcnt} pages) — {_where}"
 #, python-brace-format
 msgid "스크린샷 붙여넣기 ({n}쪽) — {w}"
 msgstr "Paste Screenshots ({n} pages) — {w}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "선택한 쪽 변환 ({n}쪽)"
+msgstr "Convert selected pages ({n})"
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "오프셋 적용"
@@ -11270,4 +11282,25 @@ msgstr "Getting Started"
 
 #~ msgid "선택 페이지 복사 ({n}쪽)"
 #~ msgstr "Copy Selected Pages ({n})"
+
+#~ msgid "사진 파일 삽입"
+#~ msgstr "Insert Photo File"
+
+#~ msgid "클립보드 삽입"
+#~ msgstr "Insert from Clipboard"
+
+#~ msgid "현재 페이지 인쇄 (p.{page})"
+#~ msgstr "Print Current Page (p.{page})"
+
+#~ msgid "2창으로 복사"
+#~ msgstr "Copy to Window 2"
+
+#~ msgid "1창으로 복사"
+#~ msgstr "Copy to Window 1"
+
+#~ msgid "이 뒤"
+#~ msgstr "after this"
+
+#~ msgid "p.{page} 뒤"
+#~ msgstr "after p.{page}"
 

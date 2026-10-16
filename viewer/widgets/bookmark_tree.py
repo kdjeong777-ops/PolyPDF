@@ -2488,8 +2488,8 @@ class BookmarkTree(QWidget):
         # 260618-27: 1단=‘2단 보기’(진입), 2단=이 창 기준 반대 창으로 복사
         #   상단(1창)='2창으로 복사', 하단(2창)='1창으로 복사'.
         if self._split_on:
-            act_split_view = menu.addAction(
-                tr("1창으로 복사") if self._pane_idx == 1 else tr("2창으로 복사"))
+            # 261016-2(마스터 §4.7.20, 사용자 지시): 이름 '옆 창에 열기'(옛 '1창으로 복사'·'2창으로 복사', 기능 같음)
+            act_split_view = menu.addAction(tr("옆 창에 열기"))
             _is_copy = True
         else:
             act_split_view = menu.addAction(tr("2단 보기"))

@@ -121,10 +121,10 @@ try:
     QMenu.exec = _menu_exec
     g = vp.mapToGlobal(mv._norm_to_view(0.25, 0.13, pr))
     mw._on_viewer_context_menu(g); spin(0.1)
-    chk("복사 (Ctrl+C)" in labels and "붙여넣기 (Ctrl+V)" in labels and mv._deco_clip
+    chk("복사 (Ctrl+C)" in labels and mv._deco_clip
         and mv._deco_clip["strokes"] and mv._deco_clip["strokes"][0]["text"] == "COPYME",
         "C1 우클릭 '복사' — 누른 자리의 글상자를 골라 담는다", str(labels[-4:]))
-    picked["t"] = "붙여넣기 (Ctrl+V)"
+    picked["t"] = "붙여넣기 (Ctrl+V)"   # 개체가 골라져 있어 개체 메뉴(§4.6.9)가 뜬다
     n0 = len(mv._page_strokes)
     g2 = vp.mapToGlobal(mv._norm_to_view(0.50, 0.60, pr))
     mw._on_viewer_context_menu(g2); spin(0.1)

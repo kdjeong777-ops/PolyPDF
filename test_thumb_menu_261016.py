@@ -116,8 +116,8 @@ try:
     pt._on_list_menu(r1); spin(0.1)
     m = seen[-1]
     L = labels(m)
-    want = ["인쇄 (1쪽)", "복사 (1쪽)", "붙여넣기", "스크린샷으로 복사 (1쪽)", "스크린샷 붙여넣기", "클립보드 붙여넣기",
-            "삭제 (1쪽)", "-",
+    want = ["인쇄 (1쪽)…", "복사 (1쪽)", "붙여넣기", "스크린샷으로 복사 (1쪽)", "스크린샷 붙여넣기", "클립보드 붙여넣기",
+            "삭제 (1쪽)", "저장", "-",                                  # 261016-2: '인쇄…' 는 인쇄 창, '삭제' 아래 '저장'
             "왼쪽 90° 회전 (1쪽)", "오른쪽 90° 회전 (1쪽)", "-",
             "크롭… (1쪽)", "크롭 해제 (1쪽)", "숨김 (1쪽)", "숨김 해제 (1쪽)", "-",
             "책갈피 추가 (p.2)", "하이퍼링크 등록… (p.2)", "-"]
@@ -128,14 +128,14 @@ try:
         "B3 붙일 것이 없으면 붙여넣기 셋은 **보이되 꺼져** 있다", str(en))
 
     # C — 붙일 것이 있으면 켜진다
-    mw._thumb_clip = {"src": str(b), "pages": [0, 1]}
+    mw._on_copy_pages([(str(b), 0), (str(b), 1)])      # 261016-2: 쪽 복사는 클립보드에 표식도 남긴다
     shots = []
     for i, col in enumerate(("red", "green")):
         img = QImage(200, 120, QImage.Format.Format_RGB32); img.fill(QColor(col))
         sp = root / ("shot%d.png" % i); img.save(str(sp)); shots.append(str(sp))
         mw.shot_strip.add_item(str(sp), kind="image", prepend=False)
     clip = QImage(100, 80, QImage.Format.Format_RGB32); clip.fill(QColor("blue"))
-    QApplication.clipboard().setImage(clip)
+    QApplication.clipboard().setImage(clip)          # 그림이 '마지막 복사' 가 되어도 쪽 목록은 남는다
     pt._on_list_menu(r1); spin(0.1)
     en = {t: e for t, e, _s in seen[-1]}
     chk(en.get("붙여넣기 (2쪽) — p.2 뒤") is True and en.get("스크린샷 붙여넣기 (2쪽) — p.2 뒤") is True
