@@ -237,6 +237,15 @@ try:
         and mw._mv[1].current_page() == 2 and mw._mv[1]._doc is not None,
         "H3 ★ 1창에서 저장해도 2창은 b.pdf 3쪽 그대로(사용자 보고)",
         str((mw._mv[1].current_file(), mw._mv[1].current_page())))
+    # H3b — 261016-5(§4.7.8): 다른 PolyPDF 창이 b.pdf 를 저장하느라 이 창에 '놓기'·'다시 열기' 를 보낼 때도 1창은 그대로
+    mw._set_active_pane(0); spin(0.3)
+    r1 = mw._on_instance_request("release", str(b)); spin(0.3)
+    r2 = mw._on_instance_request("reload", str(b)); spin(2.0)
+    chk(r1.get("ok") and r2.get("ok") and Path(str(mw._mv[0].current_file())).name == "a.pdf"
+        and mw._mv[0]._doc is not None and Path(str(mw._mv[1].current_file())).name == "b.pdf"
+        and mw._active_pane == 0,
+        "H3b 다른 창이 저장(놓기·다시 열기)해도 1창 a.pdf 그대로·활성 창 그대로",
+        str((mw._mv[0].current_file(), mw._mv[1].current_file(), mw._active_pane)))
     mw._set_active_pane(1); spin(0.5)
     mw._view_single_keep(1); spin(1.0)
     chk(not mw._split_on and Path(str(mw._mv[0].current_file())).name == "b.pdf",

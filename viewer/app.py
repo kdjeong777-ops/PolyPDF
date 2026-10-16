@@ -1399,7 +1399,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         lab(tr("도구"))
         # 260911-1(사용자 지시, 디자인 SOT §2.9·§2.9.1): 차례의 뜻은 **얼마나 자주 쓰는가** —
         #   읽기(OCR) → 그 결과로 만드는 것(단어장·책갈피) → 문서를 합치고 바꾸는 일
-        #   → 어찌다 한 번 쓰는 일(암호화). `도구(&T)` 메뉴 첫 구역이 **같은 차례**다.
+        #   → 어쩌다 한 번 쓰는 일(암호화). `도구(&T)` 메뉴 첫 구역이 **같은 차례**다(예외: 변환은 파일 메뉴, 동시 생성은 메뉴에만 — 디자인 SOT §2.9.1).
         mk("OCR", tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"),
            self._action_ocr_read)
         self._btn_build_study = mk(tr("단어장 생성"), tr("도구 → 단어장 생성"), self._action_build_study)
@@ -1638,7 +1638,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.act_present.triggered.connect(self._open_presentation)
         self.addAction(self.act_present)           # 메뉴에 없어도 F5 동작 유지
 
-        # 260618-16: '도구' 메뉴 — 기능별 6개 구역으로 재배열(섹션 헤더 + 항목)
+        # 260618-16 → 261016-3: '도구' 메뉴 — 구역 셋(🧰 도구 · ⚙️ 프로그램 환경설정 · 💻 시스템 연동), 묶음은 하위 메뉴(디자인 SOT §2.9.1)
         m_tools = bar.addMenu(tr("도구(&T)"))
 
         def _act(text, slot):
@@ -2183,7 +2183,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.saveAsFileRequested.connect(
                 lambda f, b=_bt: self._action_save_as(bt=b, file_path=f))
         self.bookmark_tree.editGlossaryRequested.connect(self._action_edit_glossary)  # 260623
-        # 261014-11(형식 변환 SOT §2.1): 책갈피창 우클릭 '변환 ▸'(여러 파일이면 일괄) · 썸네일 '선택한 쪽 변환 ▸'
+        # 261014-11(형식 변환 SOT §2.1): 책갈피창 우클릭 '변환해서 내보내기...'(261016-1, 여러 파일이면 일괄) · 썸네일 '선택한 쪽 변환 ▸'
         for _bt in (self.bookmark_tree, self.bookmark_tree_right):
             _bt.convertFilesRequested.connect(lambda files, k: self.action_convert(files=files, fmt=k))
             _bt.ocrLayerFilesRequested.connect(self.action_ocr_batch)   # 261014-16(텍스트 창 SOT §5.5)
@@ -3793,7 +3793,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_build_study_and_bookmarks(self, checked: bool = False, file_path: str = None):
-        """260606-11: 단어장·책갈피 동시 생성(OCR 1회 공유). 파일 메뉴/트리 우클릭/읽기 제안에서."""
+        """260606-11: 단어장·책갈피 동시 생성(OCR 1회 공유). 도구 메뉴/트리 우클릭/읽기 제안에서."""
         cur = self.main_view.current_file() if self.main_view else None
         p = Path(file_path) if file_path else (Path(cur) if cur else None)
         if not p or not p.exists() or p.suffix.lower() != ".pdf":
@@ -3917,7 +3917,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 return {"ok": False, "dirty": True}
             i, mv = next(((i, mv) for i, mv in panes if i == self._active_pane), panes[0])
             pg = int(mv.current_page())
-            self._peer_released = {"path": str(path), "pane": i, "page": pg}
+            self._peer_released = {"path": str(path), "pane": i, "page": pg, "active": self._active_pane}
             self._close_main_view_doc()
             QApplication.processEvents()
             self.status.showMessage(
@@ -3934,6 +3934,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                         if getattr(self, "_split_on", False):
                             self._set_active_pane(st["pane"])
                         self._load_main(HistoryItem(str(path), int(page or st["page"]), "", "bookmark"))
+                        # 261016-5(마스터 §4.7.8·§4.7.20, SOT 점검): `release` 가 두 창을 다 비웠다 — 다른 창도 되살리고 활성 창을 되돌린다
+                        self._restore_other_panes()
+                        if getattr(self, "_split_on", False) and st.get("active") in (0, 1):
+                            self._set_active_pane(st["active"])
                         self.status.showMessage(tr("'{name}' 을(를) 다시 열었습니다(저장됨).").format(name=Path(path).name), 6000)
                     except Exception:
                         pass
@@ -5133,7 +5137,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   ① 인쇄… · 복사 · 텍스트 복사 · 블럭설정 후 텍스트 복사 · 붙여넣기 · 스크린샷 붙여넣기 · 클립보드 붙여넣기 ▼ · 사진 붙여넣기 ▼ · 삭제 · 저장
         #   ② 2단 보기(2단이면 1단 보기 · 옆 창에 열기) · 발표보기  ③ 회전 · 여기에 서명…  ④ 숨김 · 숨김 해제
         #   ⑤ 책갈피 추가 · 하이퍼링크 등록  ⑥ 도형 입력 설정… · 글쓰기 입력 설정…
-        #   편집모드가 아니면 같은 차례에서 편집 항목만 빠진다. 끼운 쪽(저장 전)이면 쪽 번호로 일하는 항목은 끈 채로 '(저장 후)'.
+        #   편집모드가 아니면 같은 차례에서 편집 항목만 빠진다. 끼운 쪽(저장 전)이면 쪽 번호로 일하는 항목은 '(저장 후)' 를 붙이고, 누르면 `_need_save_first` 로 알린다(261016-3).
         menu = QMenu(self)
         pt = self.page_thumbs
         pidx = page - 1
@@ -8405,7 +8409,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
 
     def _gate_api_dependent_ui(self, prefs: dict):
-        """260621-P3: 외부 API 키가 없으면 관련 툴바 버튼은 숨기고 메뉴 항목은 비활성화.
+        """260621-P3: 외부 API 키가 없으면 관련 툴바 버튼과 메뉴 항목(보기 메뉴·도구 'PDF번역')을 숨긴다(261014-28).
         키가 입력되면 다시 보이게/활성화. (법령·고시/건설기준/특허/번역)
         261008(다국어 SOT §7): **한국 전용 숨김도 여기서 함께** — 따로 두면 설정 확인 때 서로를 되돌린다.
         보임 = 한국어, 켜짐 = 보임 그리고 키 있음. 한국어가 아니면 메뉴 항목도 숨긴다(비활성으로 두지 않는다)."""

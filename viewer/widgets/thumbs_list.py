@@ -78,7 +78,7 @@ class PageThumbs(QWidget):
     fileBoundaryRequested = pyqtSignal(int)    # 260610-1: 목록 끝 휠/↑↓ → 이전(-1)/다음(+1) 파일
     printPagesRequested = pyqtSignal(object)       # 260616-21 → 261016-2: '인쇄' — 인쇄 창을 연다(고른 쪽 0-based list)
     saveRequested = pyqtSignal()                   # 261016-2(마스터 §4.7.7): '저장' — 💾 와 같은 함수
-    screenshotPagesRequested = pyqtSignal(object)  # 260616-21: 선택 페이지 스크린샷으로 복사
+    screenshotPagesRequested = pyqtSignal(object)  # 260616-21: '스크린샷으로 복사'(261016-1 개명)
     copyPagesRequested = pyqtSignal(object)        # 260821: 선택 썸네일 복사(이 문서 0-based)
     pastePagesRequested = pyqtSignal(int)          # 260821: 붙여넣기(기준 표시행 뒤에 삽입)
     pageOrderChanged = pyqtSignal()                # 260915-1: 쪽 이동·삭제·끌어 놓기·붙여넣기(미저장 순서 변경)
@@ -875,7 +875,7 @@ class PageThumbs(QWidget):
         #   ④ 책갈피 추가 · 하이퍼링크 등록  ⑤ 선택한 쪽 변환 ▸ · 변경 적용
         #   붙여넣기 셋은 붙일 것이 없거나 편집모드가 아니면 **끈 채로** 보인다(안 보이면 없는 것이다 — §4.7.11).
         # 261016-2(사용자 지시): 끼운 쪽(저장 전, 값이 튜플)이 섞여도 메뉴가 뜬다 — 종전 `int(튜플)` 예외로 아예 안 떴다.
-        #   파일의 쪽 번호로 일하는 항목은 끼운 쪽이 섞이면 끈 채로 '(저장 후)'.
+        #   파일의 쪽 번호로 일하는 항목은 끼운 쪽이 섞이면 '(저장 후)' 를 붙이고, 누르면 `_need_save_first` 로 알린다(261016-3).
         sel_items = list(self.list.selectedItems())
         if item is not None and not sel_items:
             sel_items = [item]
