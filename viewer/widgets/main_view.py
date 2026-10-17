@@ -1400,7 +1400,9 @@ class _PdfGraphicsView(QGraphicsView):
                 ownr._save_page_strokes(); ownr._draw_overlay.update()
                 event.accept(); return
         # 261017-1(입력 SOT §3, 사용자 지시·결정): 편집모드에서 고른 개체가 없으면 Del 은 **지금 쪽을 지운다**(우클릭 '삭제' 와 같은 쪽 편집)
+        #   261017-15: 그림 파일 보기(`_is_image`)는 쪽이 없다 — 제외
         if (k == Qt.Key.Key_Delete and ownr is not None and getattr(ownr, "_img_edit", False)
+                and not getattr(ownr, "_is_image", False)
                 and not ownr.has_deco_selection() and getattr(ownr, "_text_editor", None) is None):
             ownr.pageDeleteRequested.emit()
             event.accept()

@@ -186,6 +186,32 @@ def recall_any(path):
     return get_session(path) or recall_password(path)
 
 
+def relocate(old, new) -> bool:
+    """261017-15(마스터 §4.7.14): 이름 바꾸기·옮기기 뒤 기억·세션 암호를 새 경로 키로. 키가 경로+크기라 그대로 두면
+    다시 열 때 암호를 또 묻는다. 옛 파일은 이미 없으니 옛 키는 **새 파일 크기**로 만든다(내용은 같다). 옮겼으면 True."""
+    try:
+        size = int(os.stat(new).st_size)
+    except Exception:
+        return False
+    ko = hashlib.sha256(f"{os.path.abspath(str(old))}|{size}".encode("utf-8")).hexdigest()
+    kn = _key(new)
+    if ko == kn:
+        return False
+    moved = False
+    if ko in _SESSION:
+        _SESSION[kn] = _SESSION.pop(ko)
+        moved = True
+    try:
+        data = _load()
+        if ko in data:
+            data[kn] = data.pop(ko)
+            _save(data)
+            moved = True
+    except Exception:
+        pass
+    return moved
+
+
 def forget_password(path) -> None:
     _SESSION.pop(_key(path), None)
     try:

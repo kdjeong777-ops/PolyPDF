@@ -211,6 +211,16 @@ class HyperlinkStore:
         links[kn] = links.pop(ko)
         return True
 
+    def copy_file(self, src_path, dst_path) -> bool:
+        """261017-15(마스터 §4.7.9): 쪽이 그대로인 채 새 이름으로 저장했으면 링크를 새 파일 키에 복사(원본 것은 둔다)."""
+        import copy
+        ks, kd = self._rel_key(src_path), self._rel_key(dst_path)
+        links = self._data["links"]
+        if ks is None or kd is None or ks == kd or ks not in links:
+            return False
+        links[kd] = copy.deepcopy(links[ks])
+        return True
+
     def remap_pages(self, src_path, dst_path, old_keys) -> bool:
         """261017-1(마스터 §4.7.9): 쪽 편집 저장 뒤 링크를 새 쪽 번호로 — `old_keys[i]` 는 새 쪽 i 의 옛 키(자체 쪽 번호·끼운 쪽 합성 번호·None).
         새 이름으로 저장했으면 새 파일 키로 옮기고 원본은 그대로 둔다. 바뀌면 True."""

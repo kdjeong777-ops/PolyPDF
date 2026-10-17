@@ -898,8 +898,10 @@ class PageThumbs(QWidget):
             act_copy = menu.addAction(self._kt(tr('복사 ({n}쪽)').format(n=n_sel), "Ctrl+C"))   # 썸네일 Ctrl+C 와 같다
         if self._doc is not None:
             _pcnt = self._paste_available() if self._paste_available else 0
+            # 261017-15(디자인 SOT §2.9.2): Ctrl+V 는 **마지막에 복사한 것** — 그림이 더 나중이면 그림을 붙이니 그때는 키를 보이지 않는다
+            _img_last = bool(self._clip_kind and self._clip_kind() == "image" and self._clipboard_has_image())
             act_paste = menu.addAction(self._kt(tr('붙여넣기 ({_pcnt}쪽) — {_where}').format(_pcnt=_pcnt, _where=_w)
-                                                + _v if _pcnt > 0 else tr("붙여넣기"), "Ctrl+V"))   # 썸네일 Ctrl+V(마지막 복사)
+                                                + _v if _pcnt > 0 else tr("붙여넣기"), "" if _img_last else "Ctrl+V"))
             act_paste.setEnabled(bool(self._edit_mode and _pcnt > 0))
         if has_sel:
             act_shot = menu.addAction(tr('스크린샷으로 복사 ({n}쪽)').format(n=n_sel) + _ns)

@@ -324,6 +324,17 @@ def clear_pending(path) -> None:
         _VERSION[k] = _VERSION.get(k, 0) + 1
 
 
+def relocate(old, new) -> bool:
+    """261017-15(마스터 §4.7.14): 이름 바꾸기·옮기기 뒤 저장 전 크롭을 새 경로로 — 안 옮기면 옛 이름에 남아 사라진 것처럼 보인다."""
+    ko, kn = _pkey(old), _pkey(new)
+    if ko == kn or ko not in _PENDING:
+        return False
+    _PENDING[kn] = _PENDING.pop(ko)
+    _VERSION[kn] = _VERSION.get(kn, 0) + 1
+    _VERSION[ko] = _VERSION.get(ko, 0) + 1
+    return True
+
+
 def version(path) -> int:
     return _VERSION.get(_pkey(path), 0)
 

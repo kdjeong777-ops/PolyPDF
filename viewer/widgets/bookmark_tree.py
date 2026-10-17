@@ -295,7 +295,9 @@ class BookmarkTree(QWidget):
         self._page_edit_dirty = None                 # 260821: () -> bool (썸네일 페이지 삭제/이동)
         self._page_edit_save = None                  # 260821: (src, bookmarks_raw) -> None (앱 재구성 저장)
         self._finalize_save = None                   # 260822: (src, produced) -> final_path (덮어쓰기/_edited)
-        self._after_save = None                      # 261011-2(§4.7.16): (path) -> bool — 다른 뷰어용 사본을 PDF 에
+        self._after_save = None                      # 261011-2(§4.7.16): (path, reopen=) -> bool — 다른 뷰어용 사본을 PDF 에
+        self._is_save_as = lambda: False             # 261017-15(§4.7.13): 앱의 '다른 이름으로 저장' 깃발
+        self._carry_meta = None                      # 261017-15(§4.7.9): (src, final) — 새 이름이면 꾸밈·숨김·링크를 새 파일 키로
         self._file_op = None                         # 261014-4(§4.7.14): (fn, label) -> 예외|None — 배경 파일 작업(앱의 `_file_op_bg`)
         # 260611-61: 네비게이션 합치기 — 선택 클릭이 click+currentChanged 로 2번 발화하는 것을
         #   1회로 합치고, 트리 선택 하이라이트가 먼저 그려진 뒤(지연) 이동/암호창이 뜨게 함.
@@ -3927,14 +3929,17 @@ class BookmarkTree(QWidget):
             self._dirty = False
             self._commit_meta()
             return
-        if bookmarks_raw == orig:
+        # 261017-15(§4.7.13, 점검): '다른 이름으로 저장' 이면 책갈피가 그대로여도 새 파일을 만든다(아래 길) —
+        #   종전엔 이 가지에서 사본을 원본에 넣고 끝나 **원본을 덮어썼다**
+        save_as = bool(self._is_save_as())
+        if bookmarks_raw == orig and not save_as:
             self._dirty = False
             self._commit_meta()          # 개체/주석 등 page_meta 변경은 저장
             mirrored = self._run_after_save(str(src))
             if not meta_dirty and not mirrored:
                 QMessageBox.information(self, tr("책갈피 저장"), tr("변경 사항이 없습니다."))
             return
-        if not bookmarks_raw:
+        if not bookmarks_raw and orig:
             # 모든 책갈피 삭제(기존 대비 변경) → 책갈피 없는 PDF로 저장 확인
             if QMessageBox.question(
                 self, tr("책갈피 저장"),
@@ -3964,16 +3969,24 @@ class BookmarkTree(QWidget):
             QMessageBox.warning(self, tr("저장 실패"), str(e))
             return
         self._dirty = False
-        self.bookmarksEdited.emit(str(src), str(out))
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
-        self._run_after_save(str(out))
+        # 261017-15(§4.7.9, 점검): 새 이름이면 꾸밈·숨김·링크를 새 파일 키로, 사본은 **다시 열기 전에** 넣고(reopen=False)
+        #   여는 것은 bookmarksEdited 한 번 — 종전엔 사본이 한 번 더 열어 두 번 깜빡였고, 새 파일엔 꾸밈이 없었다
+        if self._carry_meta is not None and str(out) != str(src):
+            try:
+                self._carry_meta(str(src), str(out))
+            except Exception:
+                pass
+        self._run_after_save(str(out), reopen=False)
+        self.bookmarksEdited.emit(str(src), str(out))
 
-    def _run_after_save(self, path: str) -> bool:
-        """261011-2(§4.7.16): 저장 뒤 꾸밈·하이퍼링크·태그 사본을 PDF 에(다른 뷰어에 보이게). 넣었으면 True."""
+    def _run_after_save(self, path: str, reopen: bool = True) -> bool:
+        """261011-2(§4.7.16): 저장 뒤 꾸밈·하이퍼링크·태그 사본을 PDF 에(다른 뷰어에 보이게). 넣었으면 True.
+        `reopen=False` 는 부른 쪽이 곧 다시 열 때(261017-15)."""
         if self._after_save is None:
             return False
         try:
-            return bool(self._after_save(path))
+            return bool(self._after_save(path, reopen=reopen))
         except Exception:
             return False
 

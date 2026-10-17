@@ -107,6 +107,17 @@ class PageMetaStore:
         files[kn] = files.pop(ko)
         return True
 
+    def copy_file(self, src_path, dst_path) -> bool:
+        """261017-15(마스터 §4.7.9): 쪽이 그대로인 채 **새 이름으로** 저장했으면(책갈피·꾸밈만 바꾼 '다른 이름으로 저장')
+        메타를 새 파일 키에 복사한다 — 원본 파일은 그대로 있으니 원본 메타도 둔다. 같은 키면 False."""
+        import copy
+        ks, kd = self._key(src_path), self._key(dst_path)
+        files = self._data["files"]
+        if ks is None or kd is None or ks == kd or ks not in files:
+            return False
+        files[kd] = copy.deepcopy(files[ks])
+        return True
+
     def remap_pages(self, src_path, dst_path, old_keys, staged_min: int = 1000000) -> bool:
         """261017-1(마스터 §4.7.9, 사용자 보고 '붙여넣은 쪽 꾸밈이 저장하면 사라짐'): 쪽 편집 저장 뒤 꾸밈·사진·숨김·쪽 크롭을 **새 쪽 번호로** 옮긴다.
 

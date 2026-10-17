@@ -1626,6 +1626,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _a.triggered.connect(lambda _checked=False, s=_slot: s())
             m_view.addAction(_a)
             self._view_acts[_id] = _a           # 260621-P3: API 키 게이팅용
+        # 261017-15(디자인 SOT §2.9.2): 1단↔2단 키는 지금 상태의 **반대** 항목에만 — 메뉴를 열 때 맞춘다
+        m_view.aboutToShow.connect(self._refresh_menu_key_hints)
 
         # 260825: 뷰어 옵션(우클릭) 메뉴를 단축키로 — 보기 메뉴에 노출(단축키 표시) + 설정 등록
         m_view.addSeparator()
@@ -1879,13 +1881,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _refresh_menu_key_hints(self) -> None:
         """메뉴 막대에서 단축키가 다른 곳(창·QShortcut)에 걸린 항목 — Qt 가 저절로 보이지 않는 것만."""
         va = getattr(self, "_view_acts", {}) or {}
-        for vid, sid in (("single", "toggle_split"), ("split", "toggle_split"), ("present", "present")):
+        # 261017-15(점검): toggle_split 은 **바꾸는** 키라 지금 상태와 같은 항목에 붙이면 다른 일을 한다 — 반대 항목에만
+        split_on = bool(getattr(self, "act_split", None) is not None and self.act_split.isChecked())
+        for vid, sid in (("single", "toggle_split" if split_on else ""), ("split", "" if split_on else "toggle_split"),
+                         ("present", "present")):
             a = va.get(vid)
             if a is None:
                 continue
             base = a.property("base_text") or a.text().split("\t")[0]
             a.setProperty("base_text", base)
-            a.setText(self._kt(base, sid))
+            a.setText(self._kt(base, sid) if sid else base)
 
     def _draw_pen_keys(self):
         """260611-3: 발표창에 넘길 펜1~5 단축키(본문과 동일 키 공유)."""
@@ -2091,6 +2096,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261008-1(§4.7.14): 아래 책갈피창의 이름 변경·삭제도 본문 핸들을 먼저 놓고 다시 연다
         self.bookmark_tree_right.releaseFileRequested.connect(self._on_release_file)
         self.bookmark_tree_right.fileOpCompleted.connect(self._on_file_op_completed)
+        # 261017-15(§4.7.13): 아래 책갈피창의 책갈피 저장도 다시 연다(종전엔 연결이 없어 저장 뒤 본문이 비었다)
+        self.bookmark_tree_right.bookmarksEdited.connect(
+            lambda s, d: self._on_bookmarks_edited(s, d, bt=self.bookmark_tree_right))
         # 260618-25/27: 책갈피 우클릭 — 1단=‘2단 보기’, 2단=반대 창으로 복사
         self.bookmark_tree.set_pane_role(0)
         self.bookmark_tree_right.set_pane_role(1)
@@ -2191,16 +2199,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # v1.6.18: 책갈피 편집 저장 완료 → 새 _edited.pdf 자동 로드
         self.bookmark_tree.bookmarksEdited.connect(self._on_bookmarks_edited)
         # 260611-18(A4): '저장' 버튼이 page_meta(개체/주석 등)도 디스크에 저장하도록 훅 주입
-        self.bookmark_tree._file_op = lambda fn, label: self._file_op_bg(fn, label, tr("파일 작업"))   # 261014-4(§4.7.14): 이름 바꾸기·옮기기는 배경에서, 잠깐 잡혀 있으면 다시
-        self.bookmark_tree.set_meta_hooks(lambda: bool(self._edit_dirty),
-                                          self._save_meta_from_button)
-        # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
-        self.bookmark_tree.set_page_edit_hooks(self._page_edits_dirty, self._page_edit_save,
-                                               self._finalize_save)
-        self.bookmark_tree._after_save = self._mirror_to_pdf     # 261011-2(§4.7.16): 저장 뒤 다른 뷰어용 사본
-        # 260822: 폴더 모드 → 파일 모드 전환 시 대상 = 현재 본문 파일
-        self.bookmark_tree.set_current_file_getter(
-            lambda: (self.main_view.current_file() if self.main_view else None))
+        # 261017-15(§4.7.13, 점검): 저장·파일 작업 훅은 **두 책갈피창 모두**에 — 종전엔 위 창에만 걸려 아래(2창) 창의 저장이
+        #   메인에서 `os.replace` 로 무조건 `_edited` 를 만들고 다른 창 확인·꾸밈 저장·사본을 건너뛰었다(§4.7.5·§4.7.8·§4.7.14 우회)
+        for _bt in (self.bookmark_tree, self.bookmark_tree_right):
+            _bt._file_op = lambda fn, label: self._file_op_bg(fn, label, tr("파일 작업"))   # 261014-4(§4.7.14): 이름 바꾸기·옮기기는 배경에서, 잠깐 잡혀 있으면 다시
+            _bt.set_meta_hooks(lambda: bool(self._edit_dirty),
+                               self._save_meta_from_button)
+            # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
+            #   쪽 편집은 본문(활성 창) 파일일 때만 — 책갈피창이 `_is_main_file` 로 가른다
+            _bt.set_page_edit_hooks(self._page_edits_dirty, self._page_edit_save,
+                                    self._finalize_save)
+            _bt._after_save = self._mirror_to_pdf     # 261011-2(§4.7.16): 저장 뒤 다른 뷰어용 사본
+            _bt._is_save_as = lambda: bool(getattr(self, "_force_save_as", False))
+            _bt._carry_meta = lambda s, d: self._remap_page_keys(s, d, None)
+            # 260822: 폴더 모드 → 파일 모드 전환 시 대상 = 현재 본문 파일
+            _bt.set_current_file_getter(
+                lambda: (self.main_view.current_file() if self.main_view else None))
         # 260611-9: 편집 취소 → 숨김/회전/선긋기/하이퍼링크도 스냅샷으로 되돌리기
         self.bookmark_tree.editCancelled.connect(self._on_edit_cancelled)
         # v1.6.20 K5: 메인 페이지로 책갈피 추가
@@ -2673,13 +2687,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.status.showMessage(tr('책갈피 생성 오류: {msg}').format(msg=msg), 8000)
         QMessageBox.warning(self, tr("책갈피 생성 실패"), msg)
 
-    def _on_bookmarks_edited(self, src: str, dst: str):
-        """v1.6.18: 책갈피 편집 저장 완료 → 260606-4: 목록 유지하며 새로고침 + 메인 로드."""
+    def _on_bookmarks_edited(self, src: str, dst: str, bt=None):
+        """v1.6.18: 책갈피 편집 저장 완료 → 260606-4: 목록 유지하며 새로고침 + 메인 로드.
+        261017-15(§4.7.13): 아래(2창) 책갈피창에서 저장했으면 그 창 목록·2창에."""
+        bt = bt or self.bookmark_tree
         self.status.showMessage(tr('책갈피 저장: {name}').format(name=Path(dst).name), 6000)
         try:
-            self.bookmark_tree.add_or_refresh_file(dst, after=src)   # 260915-1(§4.7.5)
+            bt.add_or_refresh_file(dst, after=src)   # 260915-1(§4.7.5)
         except Exception:
             pass
+        if bt is self.bookmark_tree_right and len(self._mv) > 1 and self.act_split.isChecked():
+            self._set_active_pane(1)
         self._open_saved_file(dst)                  # 색인(검색 포함) 먼저 걸고 연다 — 260915-10
 
     # --- v1.6.21: 파일 작업 핸드셰이크 ----------------------------------
@@ -2967,6 +2985,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             sign_drafts.relocate([(o, n) for o, n in pairs if o])
         except Exception:
             pass
+        # 261017-15(§4.7.14, 점검): 기억 암호(경로+크기 키)와 저장 전 크롭(경로 키)도 새 이름으로
+        for old, new in pairs:
+            if not old:
+                continue
+            try:
+                from viewer import secure_store, page_crop
+                secure_store.relocate(old, new)
+                page_crop.relocate(old, new)
+            except Exception:
+                pass
         # 메인 뷰어가 옮겨진 파일을 보고 있었으면 새 경로로 재로드
         try:
             from viewer.pathutil import norm_key            # SOT §7.0 표준 키
@@ -4223,7 +4251,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.warning(self, tr("페이지 편집 저장"), tr("최소 1쪽은 남겨야 합니다."))
             return
         src = _P(src_str)
-        shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        # 261017-15(§4.7.13, 점검): 메뉴 '다른 이름으로 저장' 깃발도 본다 — 종전엔 키보드 Shift 만 봐 원본을 덮어썼다
+        shift = bool(getattr(self, "_force_save_as", False)) or bool(
+            QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         recon = src.with_name(src.stem + "_recon_tmp.pdf")
         book_tmp = src.with_name(src.stem + "_book_tmp.pdf")
         # 260915-9(§4.7.9, 응답성 SOT §4.4): 쪽 재구성·저장·책갈피 다시 쓰기는 **배경 스레드 + 진행창**에서
@@ -4303,6 +4333,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         self.status.showMessage(tr('페이지 편집 저장: {saved_n}쪽 → {name}').format(saved_n=saved_n, name=_P(final).name), 6000)
         self._remap_page_keys(str(src), str(final), meta_keys)   # 261017-1: 꾸밈·숨김·링크를 새 쪽 번호로
+        self._remap_closed_pane_pages(str(src), str(final), meta_keys)
         # 261011-2(§4.7.16): 쪽·회전이 바뀌었으니 사본도 다시 — 261017-1: **다시 열기 전에**(종전엔 두 번 열어 본문이 두 번 깜빡였다)
         self._mirror_to_pdf(final, reopen=False)
         try:
@@ -4312,18 +4343,38 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
 
+    def _remap_closed_pane_pages(self, src, final, meta_keys) -> None:
+        """261017-15(마스터 §4.7.20, 점검): 2단에서 다른 창이 **같은 파일**을 보고 있었고 제자리에 저장했으면, 그 창이 다시 열 쪽을
+        새 쪽 번호로 — 종전엔 저장 전 번호로 열어 쪽을 지우거나 옮긴 뒤 엉뚱한 쪽을 보였다."""
+        from viewer.pathutil import norm_key
+        rec = getattr(self, "_closed_panes", None) or {}
+        if not rec or norm_key(str(src)) != norm_key(str(final)):
+            return
+        n = len(meta_keys)
+        for i, (f, pg) in list(rec.items()):
+            if norm_key(str(f)) != norm_key(str(src)):
+                continue
+            try:
+                new = meta_keys.index(int(pg))
+            except ValueError:                          # 그 쪽을 지웠다 — 가까운 남은 쪽
+                new = min(int(pg), max(0, n - 1))
+            rec[i] = (f, new)
+
     def _remap_page_keys(self, src, final, meta_keys) -> None:
         """261017-1(마스터 §4.7.9, 사용자 보고 '붙여넣은 쪽 꾸밈이 저장하면 사라짐'): 쪽 편집 저장 뒤 꾸밈·사진·숨김(page_meta)과
-        하이퍼링크를 새 쪽 번호로 옮기고 디스크에 쓴다. 끼운 쪽(합성 번호)도 자기 자리의 실제 쪽 번호가 된다."""
+        하이퍼링크를 새 쪽 번호로 옮기고 디스크에 쓴다. 끼운 쪽(합성 번호)도 자기 자리의 실제 쪽 번호가 된다.
+        261017-15: `meta_keys=None` 은 쪽이 그대로인 저장(책갈피·꾸밈만) — 새 이름이면 새 파일 키에 **복사**만 한다."""
         try:
             st = self._ensure_page_meta_store()
-            if st is not None and st.remap_pages(src, final, meta_keys, staged_min=self.page_thumbs.STAGED_BASE):
+            if st is not None and (st.copy_file(src, final) if meta_keys is None
+                                   else st.remap_pages(src, final, meta_keys, staged_min=self.page_thumbs.STAGED_BASE)):
                 st.save()
         except Exception:
             pass
         try:
             hl = self._ensure_hyperlink_store()
-            if hl is not None and hl.remap_pages(src, final, meta_keys):
+            if hl is not None and (hl.copy_file(src, final) if meta_keys is None
+                                   else hl.remap_pages(src, final, meta_keys)):
                 hl.save()
         except Exception:
             pass
@@ -4538,9 +4589,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return None
 
     def _stage_page_items(self, after_row: int, items) -> int:
-        """`[(파일, 쪽)…]` 을 기준 행 뒤에 끼운 쪽으로(미저장) — 같은 원본이 이어지면 한 번에. 붙인 첫 쪽으로 간다. 붙인 쪽 수."""
+        """`[(파일, 쪽)…]` 을 기준 행 뒤에 끼운 쪽으로(미저장) — 같은 원본이 이어지면 한 번에. 원래 썸네일(기준 행)을 고른다(261017-1). 붙인 쪽 수."""
         pt = self.page_thumbs
-        row, n, first = int(after_row), 0, None
+        row, n = int(after_row), 0
         groups = []
         for src, pg in items:
             if groups and groups[-1][0] == src:
@@ -4549,8 +4600,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 groups.append([src, [int(pg)]])
         for src, pages in groups:
             k = pt.insert_external_pages(row, src, pages)
-            if first is None and k:
-                first = row + 1
             row += k
             n += k
         self._push_nav_filter()
@@ -4574,7 +4623,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _on_paste_pages(self, after_row: int):
         """260822: 복사한 페이지를 현재 PDF 썸네일의 기준 행 '뒤'에 **스테이징 삽입**(미저장).
         자동 저장하지 않고 상태만 기억 → 💾 '저장'을 눌러야 실제 파일로 반영(편집모드만).
-        261016-2: 붙인 첫 쪽으로 간다(끌어 놓기와 같은 `_stage_page_items`)."""
+        261016-2: 끌어 놓기와 같은 `_stage_page_items` — 261017-1 부터 원래 썸네일을 고르고 본문도 그 쪽."""
         clip = self._thumb_clip
         pt = self.page_thumbs
         doc = getattr(pt, "_doc", None)
@@ -8311,6 +8360,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             #   조용히 사라진다(§8.2 함정) — `test_prefs_allowlist.py` 가 지킨다.
             "text_panel_styles": dict(prefs.get("text_panel_styles",
                                                 old.get("text_panel_styles", {})) or {}),
+            # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
+            #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
+            "vprinter": prefs.get("vprinter", old.get("vprinter")),
+            "crop_styles": prefs.get("crop_styles", old.get("crop_styles")),
+            "crop_auto": prefs.get("crop_auto", old.get("crop_auto")),
+            "crop_style_last": prefs.get("crop_style_last", old.get("crop_style_last")),
+            "presentation_timer": prefs.get("presentation_timer", old.get("presentation_timer")),   # 발표 시간 설정(발표 SOT)
+            "text_styles": prefs.get("text_styles", old.get("text_styles")),                       # 글쓰기 입력 스타일
             # 260912-7(§2.7): 허용목록에 빠지면 조용히 사라진다(마스터 §14.2 의 교훈)
             "text_hl_mark_pdf": bool(prefs.get("text_hl_mark_pdf",
                                                old.get("text_hl_mark_pdf", False))),

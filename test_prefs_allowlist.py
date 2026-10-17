@@ -78,6 +78,36 @@ try:
     for k in ("startup_mode", "startup_path", "open_edit_mode",
               "start_view_single", "auto_tag_enabled"):
         chk(k in saved, f"③ '{k}' 가 저장된다(과거 유실 이력)", "")
+
+    # ── ④ 환경설정 창이 **모르는** 키도 남는다(261017-15, 점검) ─────────────
+    #   기능이 스스로 `self._prefs["키"] = …` 로 넣는 값(가상 프린터·크롭 스타일 …)은 환경설정 창 [확인]·다시 시작의
+    #   `_apply_prefs` 를 지나도 남아야 한다. 종전 검사는 ①(창이 내보내는 키)만 봐 이것을 못 잡았다.
+    root = os.path.dirname(os.path.abspath(__file__))
+    own = set()
+    for dp, _dn, fns in os.walk(os.path.join(root, "viewer")):
+        for fn in fns:
+            if fn.endswith(".py"):
+                t = io.open(os.path.join(dp, fn), encoding="utf-8").read()
+                own |= set(re.findall(r'self\._prefs\["([a-z0-9_]+)"\]\s*=(?!=)', t))
+    own.add("vprinter")                                 # `self._prefs[PREF_KEY] = …`(vprinter_controller)
+    own -= set(KEYS)
+    probe4 = {}
+    for k in sorted(own):
+        cur = mw._prefs.get(k)                          # 값 모양은 지금 값을 따른다(①과 같게 — 형 변환하는 키가 있다)
+        if cur is None or isinstance(cur, dict):
+            probe4[k] = {"_probe": k}
+        elif isinstance(cur, list):
+            probe4[k] = ["_probe"]
+        elif isinstance(cur, bool):
+            probe4[k] = not cur
+        elif isinstance(cur, (int, float)):
+            probe4[k] = type(cur)(cur) + 1
+        else:
+            probe4[k] = str(cur) + "_x"
+        mw._prefs[k] = probe4[k]
+    mw._apply_prefs({})                                 # 창이 이 키들을 모르는 경우
+    lost4 = sorted(k for k in own if mw._prefs.get(k) != probe4[k])
+    chk(not lost4, "④ 기능이 넣은 설정 키가 _apply_prefs 를 지나도 남는다", f"{len(own)}개 중 유실 {lost4}")
 finally:
     if ORIG is None:
         if SPATH.exists():
