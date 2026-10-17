@@ -105,9 +105,10 @@ class VPrinterDialog(QDialog):
         b.clicked.connect(self._browse)
         drow.addWidget(b)
         g.addLayout(drow)
-        self.chk_skip = QCheckBox(tr("저장 창 없이 바로 저장(마지막 선택으로)"))
-        self.chk_skip.setChecked(bool(self._prefs.get("skip")))
-        g.addWidget(self.chk_skip)
+        self.chk_gray = QCheckBox(tr("흑백으로 저장"))
+        self.chk_gray.setChecked(self._prefs.get("color") == "gray")
+        g.addWidget(self.chk_gray)
+        g.addWidget(QLabel(tr("저장 창 없이 바로 저장하고 엽니다. 쪽 범위·여러 쪽 모아 찍기는 인쇄하는 프로그램의 인쇄 창에서 고르세요.")))
         v.addWidget(gb)
         v.addStretch(1)
         close = QPushButton(tr("닫기"))
@@ -126,7 +127,8 @@ class VPrinterDialog(QDialog):
     def result_prefs(self) -> dict:
         p = dict(self._prefs)
         p.update({"kind": "default" if self.rb_default.isChecked() else "original",
-                  "default_dir": self.ed_dir.text().strip(), "skip": self.chk_skip.isChecked()})
+                  "default_dir": self.ed_dir.text().strip(), "color": "gray" if self.chk_gray.isChecked() else "color"})
+        p.pop("skip", None)
         return p
 
     # ── 배경 일 ─────────────────────────────────────────────────────────

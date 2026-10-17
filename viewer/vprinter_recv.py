@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 
+from viewer.i18n import tr
 from viewer.vprinter import TASK_PREFIX, spool_root
 
 _NO_WINDOW = 0x08000000
@@ -71,7 +72,7 @@ def safe_stem(name: str) -> str:
     s = _BAD.sub("_", name or "").strip().strip(".")
     s = re.sub(r"\.{2,}", ".", s)
     if not s or s.upper() in _RESERVED:
-        from viewer.i18n import tr                # 제안하는 파일 이름은 만드는 때의 언어로(다국어 SOT §8)
+        # 제안하는 파일 이름은 만드는 때의 언어로(다국어 SOT §8)
         s = tr("인쇄_{stamp}").format(stamp=time.strftime("%Y%m%d_%H%M%S"))
     return s[:150]
 
@@ -244,6 +245,21 @@ def is_landscape(ps_path: str) -> bool:
         return False
 
 
+# 261017-14: PowerPoint 가 OpenType(CFF) 글꼴(예: S-Core Dream)을 쓰면 PScript5 는 그 글꼴을 Font 로 정의(definefont)하고
+#   composefont 뒤 `T0AddCFFMtx2` 에서 같은 이름을 **CIDFont** 로 찾아 `/Metrics2`(세로쓰기 너비)에 넣는다. Adobe 해석기는 그렇게
+#   찾아지지만 Ghostscript 는 undefinedresource 로 변환이 통째로 실패했다. → CIDFont 로 못 찾고 같은 이름의 Font 가 있을 때만
+#   `/Metrics2` 하나를 가진 대리 사전을 돌려준다(글자 모양은 composefont 가 Font 로 이미 묶었다 — 세로쓰기 너비만 잃는다).
+_PS_PROLOG = (
+    "/PolyPDF_M2 64 dict def "
+    "/findresource { dup /CIDFont eq "
+    "{ 1 index /CIDFont resourcestatus { pop pop //findresource exec } "
+    "{ 1 index /Font resourcestatus { pop pop pop "
+    "//PolyPDF_M2 1 index known not { //PolyPDF_M2 1 index 2 dict dup /Metrics2 32 dict put put } if "
+    "//PolyPDF_M2 exch get } { //findresource exec } ifelse } ifelse } "
+    "{ //findresource exec } ifelse } bind def"
+)
+
+
 def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs: str | None = None) -> None:
     """PS → PDF(사용자 권한). 가로면 쪽을 바로 세우고 회전 표시를 없앤다. 제목을 문서 이름으로. 실패하면 예외."""
     gs = gs or gs_exe()
@@ -254,7 +270,7 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
             "-dAutoRotatePages=/None", "-dEmbedAllFonts=true", "-dSubsetFonts=true"]
     if gray:
         args += ["-sColorConversionStrategy=Gray", "-dProcessColorModel=/DeviceGray"]
-    args += ["-sOutputFile=" + tmp, ps_path]
+    args += ["-sOutputFile=" + tmp, "-c", _PS_PROLOG, "-f", ps_path]
     env = dict(os.environ)
     env["GS_LIB"] = ""                      # 다른 Ghostscript 설치의 설정을 읽지 않게
     r = subprocess.run(args, capture_output=True, creationflags=_NO_WINDOW, env=env, timeout=600)

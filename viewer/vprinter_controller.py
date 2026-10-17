@@ -2,8 +2,8 @@
 
 - 창이 뜨면(`_vprinter_start`) 인쇄 받기 통로(`open_gather` 를 다른 이름으로)를 열고, 배경에서 사용자별 예약 작업을 맞추고,
   쌓인 PS 가 있으면 처리한다. 인쇄 뒤 예약 작업이 `PolyPDF.exe --printed` 를 띄우면 그 실행은 이 통로에 알리고 끝난다.
-- 한 건씩: 변환(배경, `_run_merge_job`) → 저장 창(인쇄 창 저장 모드, `PrintScopeDialog(save_target=…)`) →
-  범위·다단·흑백 적용 → 저장(배경, 같은 이름이면 (1)(2)) → 연다.
+- 한 건씩: 변환(배경, `_run_merge_job`) → 도구 메뉴 설정(폴더·흑백)대로 저장(배경, 같은 이름이면 (1)(2)) → 연다.
+  저장 창은 띄우지 않는다(261017-14 사용자 지시 — 인쇄 창으로 열지 않고 그냥 연다).
 - 여는 곳: 저장 폴더를 이 창이 보고 있으면 그 목록을 다시 읽고 연다, 아무것도 안 열려 있으면 여기서 연다, 아니면 새 PolyPDF 창.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ from viewer.i18n import tr
 
 __all__ = ["VPrinterMixin", "print_server_name", "print_lock_path"]
 
-PREF_KEY = "vprinter"                        # {"kind": original|default|custom, "default_dir", "skip", "color"}
+PREF_KEY = "vprinter"                        # {"kind": original|default, "default_dir", "color": color|gray}
 
 
 def print_server_name() -> str:
@@ -132,8 +132,8 @@ class VPrinterMixin:
     def _vprinter_prefs(self) -> dict:
         p = dict((getattr(self, "_prefs", {}) or {}).get(PREF_KEY) or {})
         p.setdefault("kind", "original")
-        p.setdefault("skip", False)
         p.setdefault("color", "color")
+        p.pop("skip", None)                      # 저장 창이 없어져 쓰지 않는다(261017-14)
         return p
 
     def _vprinter_one(self, ps: str):
@@ -157,60 +157,20 @@ class VPrinterMixin:
             shutil.rmtree(tmpdir, ignore_errors=True)
             return                                   # PS 는 남긴다 — 다음에 다시(잃지 않게)
         plan = box["plan"]
-        import fitz
-        d = fitz.open(conv)
-        pc = d.page_count
-        d.close()
-        nup, pages, color, choice = None, list(range(pc)), pref["color"], None
-        if not pref["skip"]:
-            from viewer.widgets.print_dialog import PrintScopeDialog
-            tgt = dict(plan, skip=False, color=pref["color"])
-            dlg = PrintScopeDialog(pc, 0, 0, 0, self, preset_api=self._merge_preset_api(), sample=conv,
-                                   save_target=tgt)
-            if not dlg.exec():
-                self._vprinter_discard(ps, tmpdir)  # 취소 = 인쇄 취소(SOT §4.8)
-                return
-            choice = dlg.save_choice()
-            spec = dlg.result_spec()
-            if spec["mode"] == "current":
-                pages = [0]
-            elif spec["mode"] == "range":
-                pages = [p for p in range(spec["from"], spec["to"] + 1) if 0 <= p < pc]
-            if dlg.nup_enabled():
-                nup = dlg.nup_settings()
-            color = choice["color"]
-        else:
-            choice = {"folder": plan["folder"], "kind": pref["kind"], "name": plan["name"], "skip": True, "color": color}
-        folder = choice["folder"] or plan["default_dir"]
-        # 범위·다단·흑백 — 바꾼 것이 없으면 받은 PDF 를 그대로(다시 그리지 않는다)
-        src = conv
-        if nup:
-            out = self._build_nup_pdf(src, pages, nup)
-            if not out:
-                self._vprinter_discard(None, tmpdir)
-                return
-            src = out
-        elif pages != list(range(pc)):
-            sub = str(tmpdir / "pages.pdf")
-            sd, td = fitz.open(src), fitz.open()
-            try:
-                for p in pages:
-                    td.insert_pdf(sd, from_page=p, to_page=p)
-                td.save(sub)
-            finally:
-                sd.close()
-                td.close()
-            src = sub
+        # 261017-14 사용자 지시: 저장 창(인쇄 창 저장 모드) 없이 — 도구 메뉴 설정(폴더 종류·기본 폴더·흑백)대로 바로 저장하고 연다.
+        #   쪽 범위·다단은 인쇄한 프로그램의 인쇄 창에서 고른다(받은 PDF 를 그대로 둔다).
+        folder = plan["folder"] or plan["default_dir"]
+        color = pref["color"]
         box2 = {}
 
         def save_job(progress):
             progress(0, 1, tr("저장하는 중…"))
             os.makedirs(folder, exist_ok=True)
-            final = R.unique_pdf_path(folder, choice["name"])
+            final = R.unique_pdf_path(folder, plan["name"])
             if color == "gray":
-                R.to_gray(src, final)
+                R.to_gray(conv, final)
             else:
-                shutil.copyfile(src, final)
+                shutil.copyfile(conv, final)
             box2["final"] = final
             progress(1, 1, tr("완료"))
 
@@ -219,17 +179,6 @@ class VPrinterMixin:
             QMessageBox.warning(self, tr("PolyPDF 프린터"), tr("저장하지 못했습니다: {err}").format(err=res.get("err") or "?"))
             shutil.rmtree(tmpdir, ignore_errors=True)
             return
-        # 선택 기억(다음 저장의 기본)
-        p = self._vprinter_prefs()
-        p.update({"kind": choice["kind"] if choice["kind"] != "custom" else p["kind"], "skip": bool(choice["skip"]),
-                  "color": color})
-        if choice["kind"] == "custom":
-            p["default_dir"] = folder
-        try:
-            self._prefs[PREF_KEY] = p
-            self._save_settings_now()
-        except Exception:
-            pass
         self._vprinter_discard(ps, tmpdir)
         self.status.showMessage(tr("PolyPDF 프린터 — 저장: {path}").format(path=box2["final"]), 6000)
         self._vprinter_open(box2["final"])
