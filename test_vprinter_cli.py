@@ -68,6 +68,11 @@ chk(s["OutputPath"] == vp.spool_root() and d["Overwrite"] == 0 and d["PipeData"]
 chk(all(ord(c) < 128 for c in vp.PRINTER_NAME + vp.PORT_NAME + vp.MONITOR_NAME + vp.TASK_PREFIX),
     "C6 시스템 이름은 영문(언어에 따라 바뀌지 않게)")
 
+print("\n=== C'. 기록 함수 이름을 지역 변수가 가리지 않는다 ===")
+# 261017 설치 시험: install() 안의 지역 변수 'info' 가 기록 함수 info() 를 가려 UnboundLocalError 로 설치가 실패했다
+for fn in (vp.install, vp.remove, vp.run_cli, vp.state):
+    chk("info" not in fn.__code__.co_varnames, "C7 %s 에 지역 변수 'info' 가 없다" % fn.__name__)
+
 print("\n=== D. 즉석 컴파일 없음 ===")
 import re
 src = read("viewer/vprinter.py")
@@ -105,6 +110,14 @@ chk(os.path.exists(os.path.join(ROOT, "printer", "monitor_src", "LICENSE.txt")) 
 ppd = open(os.path.join(ROOT, "printer", "POLYPDF.PPD"), "rb").read()
 chk(all(b < 128 for b in ppd) and b"*ColorDevice: True" in ppd and b'*ImageableArea A4/A4: "0 0 595 842"' in ppd,
     "E6 PPD — ASCII, 컬러, 여백 0")
+
+print("\n=== G. 표준 출력 없는 실행(설치본과 같게) ===")
+# 261017 설치 시험: 창 전용 설치본은 sys.stdout 이 None — `--vprinter` 끝의 flush 가 예외를 내 오류 창이 설치 프로그램을 3분 붙들었다
+#   pythonw 로 띄워도 부모의 표준 출력을 물려받아 재현되지 않는다 — 자식 안에서 sys.stdout 을 None 으로 두고 main.py 를 돌린다
+code = ("import sys, runpy; sys.stdout = None; sys.argv = ['main.py', '--vprinter', 'check']; "
+        "runpy.run_path(%r, run_name='__main__')" % os.path.join(ROOT, "main.py"))
+r = subprocess.run([sys.executable, "-c", code], capture_output=True, timeout=120, cwd=ROOT)
+chk(r.returncode == 0, "G1 표준 출력이 없어도 `--vprinter check` 가 0 으로 끝난다", "rc=%s %s" % (r.returncode, r.stderr[-200:]))
 
 print("\n=== F. main.py ===")
 m = read("main.py")

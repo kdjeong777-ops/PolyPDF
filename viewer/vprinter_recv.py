@@ -39,16 +39,15 @@ def user_spool_dir() -> str:
 
 
 def pending_jobs() -> list:
-    """받은 PS — 오래된 것부터. 아직 쓰는 중인 파일(1초 안에 바뀐 것)은 뺀다."""
+    """받은 PS — 오래된 것부터. 모니터는 파일을 **닫은 뒤에** 인쇄 후 명령을 부르므로(원본 `port.cpp` EndJob) 방금 쓴 파일도 다 쓴 것이다.
+    261017 손 확인: 종전에는 1초 안에 바뀐 파일을 건너뛰어 알림이 오자마자 본 첫 인쇄를 놓쳤다."""
     out = []
-    now = time.time()
     for p in glob.glob(os.path.join(user_spool_dir(), "*.ps")):
         try:
-            if now - os.path.getmtime(p) >= 1.0:
-                out.append(p)
+            out.append((os.path.getmtime(p), p))
         except OSError:
             pass
-    return sorted(out, key=os.path.getmtime)
+    return [p for _t, p in sorted(out)]
 
 
 def job_title(ps_path: str) -> str:

@@ -410,10 +410,10 @@ def install(src: str | None = None) -> int:
     else:
         h = win32print.OpenPrinter(PRINTER_NAME, {"DesiredAccess": win32print.PRINTER_ALL_ACCESS})
         try:
-            info = win32print.GetPrinter(h, 2)
-            if info["pDriverName"] != DRIVER_NAME or info["pPortName"] != PORT_NAME:
-                info["pDriverName"], info["pPortName"] = DRIVER_NAME, PORT_NAME
-                win32print.SetPrinter(h, 2, info, 0)
+            pinfo = win32print.GetPrinter(h, 2)        # 'info' 는 기록 함수 이름 — 지역 변수로 쓰면 함수 전체가 깨진다(261017)
+            if pinfo["pDriverName"] != DRIVER_NAME or pinfo["pPortName"] != PORT_NAME:
+                pinfo["pDriverName"], pinfo["pPortName"] = DRIVER_NAME, PORT_NAME
+                win32print.SetPrinter(h, 2, pinfo, 0)
                 info("install", "프린터 고침")
         finally:
             win32print.ClosePrinter(h)
@@ -502,7 +502,10 @@ def run_cli(argv: list) -> int:
     src = argv[argv.index("--source") + 1] if "--source" in argv[:-1] else None
     try:
         if action == "check":
-            print(json.dumps(state(), ensure_ascii=False))
+            if sys.stdout is not None:              # 설치본(창 전용)은 표준 출력이 없다 — 상태는 기록에 남긴다
+                print(json.dumps(state(), ensure_ascii=False))
+            else:
+                info("check", json.dumps(state(), ensure_ascii=False))
             return EXIT_OK
         if action in ("install", "remove") and not _is_admin():
             info(action, "관리자 아님")

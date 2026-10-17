@@ -47,7 +47,8 @@ if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--convert-s
 if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--vprinter":
     from viewer.vprinter import run_cli as _vprinter_cli
     _rc = _vprinter_cli(sys.argv[2:])
-    sys.stdout.flush()
+    if sys.stdout is not None:                  # 설치본(창 전용)에는 표준 출력이 없다 — flush 가 예외를 내면 오류 창이 설치 프로그램을 붙든다(261017)
+        sys.stdout.flush()
     os._exit(_rc)
 
 # 260606-28: 무거운 import(fitz/viewer.app→kiwipiepy·study 등)는 스플래시 표시 후로
