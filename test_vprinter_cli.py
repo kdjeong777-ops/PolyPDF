@@ -7,6 +7,8 @@ B. 관리자가 아니면 install·remove 는 실패(1)로 끝나고 아무것�
 C. 포트 설정 — 사용자별 폴더(%u)·문서 이름(%t)·PostScript, 인쇄 후 명령은 사용자별 예약 작업(P0 ②)
 D. 스풀러 API 를 즉석 컴파일로 부르지 않는다 — PowerShell Add-Type 의 임시 DLL 을 알약이 잡았다(261017)
 E. 들여온 포트 모니터 원본이 우리 이름으로 고쳐져 있다(monitor_src/POLYPDF_PATCHES.md)
+G. 표준 출력이 없는 설치본에서도 `--vprinter` 가 끝난다
+H. 제거 — 프린터 핸들이 남았거나(3001·3008) DLL 만 지워진 뒤(3000)에도 등록이 남지 않는다(가짜 스풀러)
 F. main.py 는 `--vprinter` 를 PyQt 를 싣기 전에 처리한다(창 없이 빨리 끝나게)
 """
 import ctypes
@@ -118,6 +120,72 @@ code = ("import sys, runpy; sys.stdout = None; sys.argv = ['main.py', '--vprinte
         "runpy.run_path(%r, run_name='__main__')" % os.path.join(ROOT, "main.py"))
 r = subprocess.run([sys.executable, "-c", code], capture_output=True, timeout=120, cwd=ROOT)
 chk(r.returncode == 0, "G1 표준 출력이 없어도 `--vprinter check` 가 0 으로 끝난다", "rc=%s %s" % (r.returncode, r.stderr[-200:]))
+
+print("\n=== H. 제거 — '사용 중'·남은 등록 키(가짜 스풀러) ===")
+# 261017 설치 시험: PowerPoint 가 프린터 핸들을 쥔 채 제거하자 드라이버(3001)·모니터(3008)가 '사용 중' 으로 남았고,
+#   DLL 만 지워진 뒤 다시 제거하면 모니터 해제가 3000(알 수 없는 모니터)으로 실패해 등록 키가 계속 남았다
+import tempfile
+import winreg
+import win32print
+import pywintypes
+
+
+def fake_remove(held, dll_present):
+    tmp = tempfile.mkdtemp()
+    S = {"held": held, "driver": True, "mon": True, "restart": 0}
+    dll = os.path.join(tmp, vp.MONITOR_DLL)
+    if dll_present:
+        open(dll, "wb").close()
+
+    def del_driver(*a):
+        if S["held"]:
+            raise pywintypes.error(3001, "DeletePrinterDriverEx", "in use")
+        S["driver"] = False
+
+    def del_monitor():
+        if not os.path.exists(dll):
+            return 3000                                             # 스풀러가 DLL 없이는 모니터를 싣지 못한다
+        if S["held"]:
+            return 3008
+        S["mon"] = False
+        return 0
+
+    def restart():
+        S["restart"] += 1
+        S["held"] = False                                           # 스풀러가 다시 서면 대기 삭제가 끝난다
+
+    def del_key(root, path):
+        if path == vp.MON_KEY:
+            S["mon"] = False
+    saved = {n: getattr(vp, n) for n in ("_printers", "_driver_exists", "_delete_monitor", "_restart_spooler", "_reg_exists",
+                                         "_sys32", "driver_dir", "_delete_tasks", "spool_root", "state", "info")}
+    saved_w = (win32print.DeletePrinterDriverEx, winreg.DeleteKey)
+    try:
+        vp._printers = lambda: []
+        vp._driver_exists = lambda: S["driver"]
+        vp._delete_monitor = del_monitor
+        vp._restart_spooler = restart
+        vp._reg_exists = lambda p: S["mon"] if p == vp.MON_KEY else False
+        vp._sys32 = lambda: tmp
+        vp.driver_dir = lambda: tmp
+        vp._delete_tasks = lambda: None
+        vp.spool_root = lambda: os.path.join(tmp, "spool")
+        vp.state = lambda: {"printer": False, "driver": S["driver"], "monitor": S["mon"], "dll": os.path.exists(dll)}
+        vp.info = lambda *a: None
+        win32print.DeletePrinterDriverEx = del_driver
+        winreg.DeleteKey = del_key
+        rc = vp.remove()
+    finally:
+        for n, f in saved.items():
+            setattr(vp, n, f)
+        win32print.DeletePrinterDriverEx, winreg.DeleteKey = saved_w
+    return rc, S
+
+
+rc, S = fake_remove(held=True, dll_present=True)
+chk(rc == vp.EXIT_OK and not S["driver"] and not S["mon"], "H1 핸들이 남아 있어도 스풀러를 다시 시작해 드라이버·모니터를 지운다", str(S))
+rc, S = fake_remove(held=False, dll_present=False)
+chk(rc == vp.EXIT_OK and not S["mon"], "H2 DLL 이 이미 없으면(3000) 남은 모니터 등록 키를 직접 지운다", str(S))
 
 print("\n=== F. main.py ===")
 m = read("main.py")

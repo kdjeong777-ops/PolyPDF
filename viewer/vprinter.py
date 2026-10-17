@@ -459,12 +459,21 @@ def remove(keep: bool = False) -> int:
         finally:
             win32print.ClosePrinter(h)
         info("remove", "프린터 지움")
-    if _driver_exists():
+    # 261017 설치 시험: 인쇄한 프로그램(PowerPoint)이 아직 프린터 핸들을 쥐고 있으면 프린터 삭제가 '대기' 로 남아
+    #   드라이버 지우기(3001)·모니터 해제(3008)가 '사용 중' 으로 실패했다 → 스풀러를 다시 시작해 대기 삭제를 끝낸 뒤 다시 한다.
+    def _del_driver():
         try:
             win32print.DeletePrinterDriverEx(None, ENV, DRIVER_NAME, 0x1, 0)   # DPD_DELETE_UNUSED_FILES
-        except Exception as ex:
-            info("remove", "드라이버 지우기: %s" % ex)
-        info("remove", "드라이버 지움")
+            return 0
+        except Exception as ex:                                    # pywintypes.error(3001, …)
+            return ex.args[0] if ex.args and isinstance(ex.args[0], int) else 1
+    if _driver_exists():
+        e = _del_driver()
+        if e:
+            info("remove", "드라이버 지우기 %d — 스풀러 다시 시작 뒤 다시" % e)
+            _restart_spooler()
+            e = _del_driver() if _driver_exists() else 0
+        info("remove", "드라이버 지움" if not e else "드라이버 못 지움 %d" % e)
     try:                                                            # 드라이버를 지워도 PPD 는 남는다(P0 ⑤)
         os.remove(os.path.join(driver_dir(), "3", PPD_NAME))
     except OSError:
@@ -475,7 +484,19 @@ def remove(keep: bool = False) -> int:
             winreg.DeleteKey(winreg.HKEY_LOCAL_MACHINE, MON_KEY + "\\" + PORT_NAME)
         except OSError:
             pass
-        info("remove", "모니터 등록 해제 %d" % _delete_monitor())
+        e = _delete_monitor()
+        if e:
+            info("remove", "모니터 등록 해제 %d — 스풀러 다시 시작 뒤 다시" % e)
+            _restart_spooler()
+            e = _delete_monitor() if _reg_exists(MON_KEY) else 0
+        if e and _reg_exists(MON_KEY) and not os.path.exists(os.path.join(_sys32(), MONITOR_DLL)):
+            # 3000(알 수 없는 모니터): DLL 이 이미 없어 스풀러가 모니터를 싣지 못했다 — 등록 키만 남은 상태라 키를 직접 지운다
+            try:
+                winreg.DeleteKey(winreg.HKEY_LOCAL_MACHINE, MON_KEY)
+                e = 0
+            except OSError as ex:
+                info("remove", "모니터 키 못 지움: %s" % ex)
+        info("remove", "모니터 등록 해제 %d" % e)
     dll = os.path.join(_sys32(), MONITOR_DLL)
     if os.path.exists(dll):
         _restart_spooler()                                          # 물고 있던 DLL 을 놓게(P0 ⑤)
