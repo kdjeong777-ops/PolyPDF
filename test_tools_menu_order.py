@@ -74,6 +74,11 @@ sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
 chk(sec_titles == ["🧰 도구", "⚙️ 프로그램 환경설정", "💻 시스템 연동 및 설치"], "② 구역은 셋(검색 및 데이터 구축·그 밖의·전자서명 구역 없음)", str(sec_titles))
 env = items[items.index("환경설정..."):] if "환경설정..." in items else []
 chk(env[:3] == ["환경설정...", "단축키 설정...", "사전 및 용어집 관리"], "② 환경설정 · 단축키 설정 · 사전 및 용어집 관리 ▸", str(env[:4]))
+# 261017-19(디자인 SOT §2.9.1): 마지막 구역 '💻 시스템 연동 및 설치' 의 항목 차례(가상 프린터 SOT §4.6)
+_sys_i = next((i for i, a in enumerate(menu.actions()) if a.isSeparator() and a.text() == "💻 시스템 연동 및 설치"), None)
+sys_items = [a.text() for a in menu.actions()[_sys_i + 1:] if not a.isSeparator()] if _sys_i is not None else []
+chk(sys_items == ["Windows 기본 PDF 앱으로 등록…", "구성요소 설치(녹화·OCR)…", "가상 프린터(PolyPDF) 설치·제거…"],
+    "② '시스템 연동 및 설치' 구역 — PDF 앱 등록 · 구성요소 설치 · 가상 프린터", str(sys_items))
 chk(not any(t and ("기본값으로 저장" in t or t.startswith("설정 초기화")) for t in items),
     "② 기본값 저장·설정 초기화는 도구 메뉴에서 뺐다(환경설정 창 맨 아래)")
 from viewer.widgets.settings_dialog import SettingsDialog

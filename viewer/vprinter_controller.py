@@ -4,7 +4,8 @@
   쌓인 PS 가 있으면 처리한다. 인쇄 뒤 예약 작업이 `PolyPDF.exe --printed` 를 띄우면 그 실행은 이 통로에 알리고 끝난다.
 - 한 건씩: 변환(배경, `_run_merge_job`) → 도구 메뉴 설정(폴더·흑백)대로 저장(배경, 같은 이름이면 (1)(2)) → 연다.
   저장 창은 띄우지 않는다(261017-14 사용자 지시 — 인쇄 창으로 열지 않고 그냥 연다).
-- 여는 곳: 저장 폴더를 이 창이 보고 있으면 그 목록을 다시 읽고 연다, 아무것도 안 열려 있으면 여기서 연다, 아니면 새 PolyPDF 창.
+- 여는 곳: 저장 폴더를 이 창이 보고 있으면 그 목록에 더하고(`add_or_refresh_file`) `_open_saved_file` 로 연다, 아무것도 안 열려 있으면 여기서 연다,
+  아니면 새 PolyPDF 창.
 """
 from __future__ import annotations
 
@@ -93,7 +94,9 @@ class VPrinterMixin:
     # ── 도구 메뉴(SOT §4.6) ─────────────────────────────────────────────
     def _open_vprinter_dialog(self):
         from viewer.widgets.vprinter_dialog import VPrinterDialog
-        dlg = VPrinterDialog(self, self._vprinter_prefs())
+        if not hasattr(self, "_vp_keep"):
+            self._vp_keep = []
+        dlg = VPrinterDialog(self, self._vprinter_prefs(), keep=self._vp_keep)   # 배경 일은 창보다 오래 사는 목록에(261017-19)
         dlg.exec()
         try:
             self._prefs[PREF_KEY] = dlg.result_prefs()

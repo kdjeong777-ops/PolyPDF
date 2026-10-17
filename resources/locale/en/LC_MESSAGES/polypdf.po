@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-17 18:47+0900\n"
+"POT-Creation-Date: 2026-10-17 19:24+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4843,8 +4843,8 @@ msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
 msgstr "Could not convert the printed document to PDF: {err}"
 
 #: viewer/vprinter_recv.py
-msgid "변환 도구(Ghostscript)가 없습니다 — '가상 프린터' 창에서 '수리' 하세요."
-msgstr "The conversion tool (Ghostscript) is missing — use 'Repair' in the 'Virtual printer' window."
+msgid "변환 도구(Ghostscript)가 없습니다 — PolyPDF 를 다시 설치하세요(수리로는 되살아나지 않습니다)."
+msgstr "The conversion tool (Ghostscript) is missing — reinstall PolyPDF ('Repair' cannot restore it)."
 
 #: viewer/vprinter_recv.py
 #, python-brace-format
@@ -11009,6 +11009,10 @@ msgstr "Not available because Windows Protected Print Mode is on."
 #: viewer/widgets/vprinter_dialog.py
 msgid "Windows 의 PostScript 드라이버가 없어 쓸 수 없습니다."
 msgstr "Not available because the Windows PostScript driver is missing."
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "휴대용 판에서는 쓸 수 없습니다 — 설치판 PolyPDF 에서 설치하세요."
+msgstr "Not available in the portable version — install it from the installed PolyPDF."
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "일부만 설치됨 — '수리' 를 누르세요."

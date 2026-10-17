@@ -26,6 +26,10 @@ python main.py            # 개발 실행 (또는 .\run.bat)
 - Tesseract: portable 설치본을 `tesseract\` 로 (`tesseract.exe` + `tessdata\`)
 - NLTK: `python -m nltk.downloader -d nltk_data wordnet omw-1.4`
 
+가상 프린터 동봉물 `printer\bin`(포트 모니터 `polypdfmon.dll`·Ghostscript `gs\`)은 **CI 만 만듭니다**
+(`release.yml` 의 'Build printer port monitor'·'Stage Ghostscript' — 원본은 `printer\monitor_src`, Ghostscript 는 Artifex `gs10080` 릴리스).
+로컬 빌드에는 없으므로 그 빌드로는 가상 프린터를 설치할 수 없습니다.
+
 ## 설정 저장 위치 (업데이트해도 유지)
 사용자 설정은 **프로그램 폴더가 아니라 사용자 프로필**에 저장되어, 프로그램을 교체(업데이트)해도
 유지됩니다.

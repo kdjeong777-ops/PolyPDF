@@ -260,7 +260,7 @@ FOCUS = [   # (경로 앞부분, 볼 것, 측정 대상) — 상시 점검 목�
      "설치 결과 — 종료 코드·버전·언어 유지(다국어 SOT §10.5), 작업 표시줄 아이콘은 사용자에게 확인", None),
     (("viewer/updater.py",), "앱 안 업데이트 — 이 시험으로는 못 본다(못 한 것으로 적는다)", None),
     ((".github/workflows/release.yml",), "릴리스 자산 — 태그 뒤 자산 목록·설치 프로그램·휴대용 zip", None),
-    (("viewer/vprinter.py", "viewer/vprinter_recv.py", "viewer/vprinter_controller.py", "printer/"),
+    (("viewer/vprinter.py", "viewer/vprinter_recv.py", "viewer/vprinter_controller.py", "viewer/widgets/vprinter_dialog.py", "printer/"),
      "가상 프린터 — `scripts\\vprinter_check.py install <설치 파일>`·`e2e`(앱 코드만이면 `compare`·`e2e --dev`, 가상 프린터 SOT §6.4)", None),
 ]
 

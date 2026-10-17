@@ -1,6 +1,6 @@
 """261017(가상 프린터 SOT §4.6): 도구 메뉴 '가상 프린터(PolyPDF) 설치·제거…' 창.
 
-- 상태(`--vprinter check`)는 배경에서 읽는다(스풀러 조회). 설치·수리·제거는 **같은 설치 도구**를 UAC 로 승격해
+- 상태는 설치 도구와 같은 판정(`vprinter.state()`)을 배경에서 읽는다(스풀러 조회). 설치·수리·제거는 **같은 설치 도구**를 UAC 로 승격해
   숨긴 창으로 돌리고, 끝날 때까지 배경에서 기다린다(응답성 SOT §4 — 창이 멈추지 않는다).
 - 받은 문서 저장 설정 셋: 저장 폴더 기본(원래 파일 폴더/기본 저장 폴더), 기본 저장 폴더, 흑백으로 저장(§4.3·§4.8 — 저장 창은 없다).
 """
@@ -71,11 +71,13 @@ class _Job(QObject):
 
 
 class VPrinterDialog(QDialog):
-    def __init__(self, parent=None, prefs: dict | None = None):
+    def __init__(self, parent=None, prefs: dict | None = None, keep: list | None = None):
         super().__init__(parent)
         self.setWindowTitle(tr("가상 프린터 (PolyPDF)"))
         self.resize(560, 360)
-        self._keep = []
+        # 261017-19(SOT §4.6, 점검): 배경 일(상태 읽기·UAC 대기 최대 3분)은 **창보다 오래 사는 목록**(앱의 `_vp_keep`)에 둔다 —
+        #   창의 목록이면 대기 중 [닫기] 뒤 `deleteLater` 로 창과 함께 사라져 아직 도는 QThread 가 지워졌다(앱 종료 위험)
+        self._keep = keep if keep is not None else []
         self._prefs = dict(prefs or {})
         v = QVBoxLayout(self)
         v.addWidget(QLabel(tr("다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저장하고 PolyPDF 에서 엽니다.")))
@@ -155,6 +157,13 @@ class VPrinterDialog(QDialog):
                "x86": tr("32비트 Windows 에서는 쓸 수 없습니다."),
                "wpp": tr("'보호된 인쇄 모드' 가 켜져 있어 쓸 수 없습니다."),
                "no-pscript": tr("Windows 의 PostScript 드라이버가 없어 쓸 수 없습니다.")}.get(st.get("support"))
+        if not why:
+            try:
+                from viewer import settings_store
+                if getattr(settings_store, "PORTABLE", False):   # 261017-19(SOT §7): 예약 작업을 만들 수 없어 인쇄해도 열리지 않는다
+                    why = tr("휴대용 판에서는 쓸 수 없습니다 — 설치판 PolyPDF 에서 설치하세요.")
+            except Exception:
+                pass
         if why:
             self.lbl_state.setText(why)
             self.btn_install.setEnabled(False)

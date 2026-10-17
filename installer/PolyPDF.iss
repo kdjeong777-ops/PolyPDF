@@ -87,7 +87,7 @@ Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueN
 ; 261009-21: 아이콘 캐시 새로 고침 — 업그레이드 뒤 바로가기 아이콘이 흰색으로 남았다(사용자 보고).
 ;   설치한 사용자 권한으로·창 없이·기다리지 않음. 없으면(옛 Windows) 건너뜀.
 Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runasoriginaluser runhidden nowait skipifdoesntexist
-; 261017(가상 프린터 SOT §4.5): 설치 도구는 앱과 같은 것(viewer/vprinter.py). 이미 있으면 고치기만, 실패해도 설치는 성공으로 끝난다(앱이 알린다)
+; 261017(가상 프린터 SOT §4.5): 설치 도구는 앱과 같은 것(viewer/vprinter.py). 이미 있으면 고치기만, 실패해도 설치는 성공으로 끝난다(기록 printer.log, 상태는 도구 메뉴 창 — 다음 실행 알림은 계획)
 Filename: "{app}\{#MyAppExe}"; Parameters: "--vprinter install"; StatusMsg: "{cm:VPrinterInstalling}"; Flags: runhidden waituntilterminated; Tasks: vprinter
 ; 설치 직후 실행(선택)
 Filename: "{app}\{#MyAppExe}"; Description: "{cm:RunApp}"; Flags: nowait postinstall skipifsilent

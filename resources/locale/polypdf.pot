@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-17 18:47+0900\n"
+"POT-Creation-Date: 2026-10-17 19:24+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4650,7 +4650,7 @@ msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
 msgstr ""
 
 #: viewer/vprinter_recv.py
-msgid "변환 도구(Ghostscript)가 없습니다 — '가상 프린터' 창에서 '수리' 하세요."
+msgid "변환 도구(Ghostscript)가 없습니다 — PolyPDF 를 다시 설치하세요(수리로는 되살아나지 않습니다)."
 msgstr ""
 
 #: viewer/vprinter_recv.py
@@ -10715,6 +10715,10 @@ msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "Windows 의 PostScript 드라이버가 없어 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "휴대용 판에서는 쓸 수 없습니다 — 설치판 PolyPDF 에서 설치하세요."
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py

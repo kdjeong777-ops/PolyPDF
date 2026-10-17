@@ -1,6 +1,6 @@
 """261017(가상 프린터 SOT §4.2·§4.5): 가상 프린터 'PolyPDF' 설치·제거·상태.
 
-설치 프로그램(`PolyPDF.iss` 의 [Run]·[UninstallRun])과 도구 메뉴가 **같은 이 모듈**을 쓴다 —
+설치 프로그램(`PolyPDF.iss` 의 [Run]·`CurUninstallStepChanged`)과 도구 메뉴가 **같은 이 모듈**을 쓴다 —
 `PolyPDF.exe --vprinter install|remove|check` (설치·제거는 관리자, 상태는 일반 권한).
 
 - 스풀러 API 는 ctypes·pywin32 로 **직접** 부른다. 종전 PowerShell 판(`printer.ps1`)은 C# 을 임시 폴더에 즉석 컴파일했는데,
