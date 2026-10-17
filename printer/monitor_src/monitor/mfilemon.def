@@ -1,0 +1,4 @@
+LIBRARY polypdfmon
+
+EXPORTS
+	InitializePrintMonitor2

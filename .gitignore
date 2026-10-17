@@ -24,6 +24,9 @@ ffmpeg.exe
 ffmpeg*.zip
 tesseract/
 nltk_data/
+# 261017(가상 프린터 SOT §4.2): 포트 모니터 빌드 결과·Ghostscript 동봉본 — CI 가 만든다
+printer/bin/
+printer/obj/
 # 릴리스/구성요소 산출물(저장소엔 넣지 않음 — 릴리스 자산으로만 업로드)
 tesseract.zip
 PolyPDF-*.zip

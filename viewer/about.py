@@ -45,6 +45,9 @@ OSS = (
     (tr_noop("kengdic 한영사전"), "CC BY-SA 3.0", "kengdic contributors (garfieldnate/kengdic)", ()),
     ("FFmpeg", "GPL v3", tr_noop("FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"), ()),
     ("lameenc · LAME", "LGPL", tr_noop("Chris Cooper · LAME 프로젝트"), ("lameenc",)),
+    # 261017(가상 프린터 SOT §4.2): 가상 프린터 — 포트 모니터(원본을 고쳐 우리 이름으로 빌드)·PS→PDF 변환기
+    ("MFILEMON 1.6.1", "GPL v3", tr_noop("Lorenzo Monti — 고쳐 빌드한 포트 모니터(printer/monitor_src)"), ()),
+    ("Ghostscript 10.08.0", "AGPL v3", tr_noop("Artifex Software — 별도 실행 파일(가상 프린터 PS→PDF)"), ()),
     ("pywin32", "PSF License", tr_noop("Mark Hammond 외"), ("pywin32",)),
     ("Anthropic Python SDK", "MIT", "Anthropic", ("anthropic",)),
     # 261010-21: 전자서명(보안 SOT §8)

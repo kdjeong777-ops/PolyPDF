@@ -79,6 +79,14 @@ msgid "Chris Cooper · LAME 프로젝트"
 msgstr ""
 
 #: viewer/about.py
+msgid "Lorenzo Monti — 고쳐 빌드한 포트 모니터(printer/monitor_src)"
+msgstr ""
+
+#: viewer/about.py
+msgid "Artifex Software — 별도 실행 파일(가상 프린터 PS→PDF)"
+msgstr ""
+
+#: viewer/about.py
 msgid "Mark Hammond 외"
 msgstr ""
 

@@ -123,6 +123,39 @@ jobs:
         continue-on-error: true
         run: python -m nltk.downloader -d nltk_data wordnet omw-1.4
 
+      # 261017(가상 프린터 SOT §4.2·§5 P1): 포트 모니터 — 들여온 MFILEMON 1.6.1 원본(printer\monitor_src)을 우리 이름으로 MSVC 빌드.
+      #   실패해도 뷰어는 빌드된다(그 배포본은 가상 프린터를 설치하지 못하고 메뉴가 까닭을 알린다).
+      - name: Build printer port monitor (MSVC)
+        continue-on-error: true
+        shell: cmd
+        run: |
+          for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSDIR=%%i"
+          call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat"
+          call printer\build_monitor.bat
+
+      # 261017(가상 프린터 SOT §4.2): PS→PDF 변환기 Ghostscript — 고정 판·SHA256 을 확인하고 실행 파일·DLL 둘만 싣는다(AGPL, Licenses.txt).
+      - name: Stage Ghostscript (virtual printer)
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GS_TAG: gs10080
+          GS_FILE: gs10080w64.exe
+          GS_SHA256: 52a91b8bf09298788d7a57b9206127026c23eacd75405f0a131e26dc381dce50
+        run: |
+          gh release download $env:GS_TAG -R ArtifexSoftware/ghostpdl-downloads -p $env:GS_FILE -D .\_gs --clobber
+          $h = (Get-FileHash ".\_gs\$env:GS_FILE" -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne $env:GS_SHA256) { throw "Ghostscript SHA256 이 다르다: $h" }
+          Start-Process ".\_gs\$env:GS_FILE" -ArgumentList '/S', '/D=C:\gs' -Wait
+          New-Item -ItemType Directory -Force .\printer\bin\gs | Out-Null
+          Copy-Item C:\gs\bin\gswin64c.exe, C:\gs\bin\gsdll64.dll .\printer\bin\gs\ -Force
+          & .\printer\bin\gs\gswin64c.exe -v
+          # 두 파일만으로 변환되는지 — 설치 폴더(C:\gs\lib 등)를 보지 못하게 GS_LIB 를 없는 곳으로
+          $env:GS_LIB = 'C:\nonexistent'
+          & .\printer\bin\gs\gswin64c.exe -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -sOutputFile=.\_gs\smoke.pdf -c "/Helvetica findfont 24 scalefont setfont 72 720 moveto (PolyPDF) show showpage"
+          if (-not (Test-Path .\_gs\smoke.pdf) -or (Get-Item .\_gs\smoke.pdf).Length -lt 500) { Remove-Item .\printer\bin\gs -Recurse -Force; throw "Ghostscript 두 파일만으로는 변환되지 않는다" }
+          Get-ChildItem .\printer\bin -Recurse -File | Select-Object FullName, Length
+
       - name: Build (PyInstaller via build_ci.bat)
         run: cmd /c build_ci.bat
 

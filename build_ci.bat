@@ -142,6 +142,11 @@ set NLTK_ARG=
 if exist "nltk_data"                    set NLTK_ARG=--add-data "nltk_data;nltk_data"
 set FFMPEG_ARG=
 if exist "ffmpeg.exe"                   set FFMPEG_ARG=--add-binary "ffmpeg.exe;."
+REM 261017(가상 프린터 SOT §4.2): 가상 프린터 — PPD 는 늘, 포트 모니터 DLL·Ghostscript 는 CI 가 printer\bin 에 만들었을 때만
+REM   (이 PC 처럼 MSVC 가 없으면 printer\bin 이 없다 → 그 빌드는 가상 프린터를 설치하지 못하고 메뉴가 까닭을 알린다)
+set PRINTER_ARG=--add-data "printer\POLYPDF.PPD;printer"
+if exist "printer\bin\polypdfmon.dll"   set PRINTER_ARG=--add-data "printer\POLYPDF.PPD;printer" --add-data "printer\bin;printer\bin"
+if not exist "printer\bin\polypdfmon.dll" echo     ^^! printer\bin\polypdfmon.dll 없음 — 이 빌드는 가상 프린터를 설치하지 못한다.
 
 REM v1.6.2 빌드 에러 수정: viewer 패키지를 표준 import 경로에 노출.
 REM   - `--paths "."` 만으로는 PyInstaller modulegraph 만 인지하고,
@@ -187,6 +192,7 @@ python -m PyInstaller ^
     --add-data "resources;resources" ^
     --add-data "viewer;viewer" ^
     %FFMPEG_ARG% ^
+    %PRINTER_ARG% ^
     %TESS_ARG% ^
     %NLTK_ARG% ^
     %ICON_ARG% ^

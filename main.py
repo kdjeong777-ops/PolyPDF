@@ -43,6 +43,12 @@ if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--convert-s
     from viewer.convert.proc import serve as _convert_serve
     _convert_serve(sys.argv[2])
     os._exit(0)
+# 261017(가상 프린터 SOT §4.5): 가상 프린터 설치·제거·상태 — 설치 프로그램과 도구 메뉴가 부른다. 창은 띄우지 않는다.
+if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--vprinter":
+    from viewer.vprinter import run_cli as _vprinter_cli
+    _rc = _vprinter_cli(sys.argv[2:])
+    sys.stdout.flush()
+    os._exit(_rc)
 
 # 260606-28: 무거운 import(fitz/viewer.app→kiwipiepy·study 등)는 스플래시 표시 후로
 # 미뤄 클릭 즉시 중앙 아이콘이 뜨도록 함. 여기선 가벼운 PyQt 만 선로딩.
