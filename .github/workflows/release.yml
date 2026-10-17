@@ -158,7 +158,9 @@ jobs:
           & .\printer\bin\gs\gswin64c.exe --version
           # 두 파일만으로 변환되는지 — 다른 Ghostscript 설정을 읽지 않게 GS_LIB 를 없는 곳으로
           $env:GS_LIB = 'C:\nonexistent'
-          & .\printer\bin\gs\gswin64c.exe -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -sOutputFile=.\_gs\smoke.pdf -c "/Helvetica findfont 24 scalefont setfont 72 720 moveto (PolyPDF) show showpage"
+          #   출력 인자는 따옴표로 묶은 전체 경로 — `-sOutputFile=.\…` 은 PowerShell 이 '.' 에서 둘로 쪼개 Ghostscript 가 출력 파일을 받지 못했다(261017)
+          $smoke = Join-Path $PWD '_gs\smoke.pdf'
+          & .\printer\bin\gs\gswin64c.exe -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite "-sOutputFile=$smoke" -c "/Helvetica findfont 24 scalefont setfont 72 720 moveto (PolyPDF) show showpage"
           if (-not (Test-Path .\_gs\smoke.pdf) -or (Get-Item .\_gs\smoke.pdf).Length -lt 500) { Remove-Item .\printer\bin\gs -Recurse -Force; throw "Ghostscript 두 파일만으로는 변환되지 않는다" }
           Get-ChildItem .\printer\bin -Recurse -File | Select-Object FullName, Length
 

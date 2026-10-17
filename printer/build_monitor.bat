@@ -20,5 +20,7 @@ cl /nologo /O2 /MT /EHsc /W3 /LD /DUNICODE /D_UNICODE /DWIN64 /D_WIN64 /DNDEBUG 
 if errorlevel 1 ( popd & echo [ERROR] cl failed & exit /b 1 )
 popd
 if not exist "%BIN%\polypdfmon.dll" ( echo [ERROR] polypdfmon.dll not produced & exit /b 1 )
+REM import library / export file are build leftovers - keep them out of the bundle
+del /q "%BIN%\polypdfmon.lib" "%BIN%\polypdfmon.exp" 2>nul
 echo polypdfmon.dll built
 exit /b 0
