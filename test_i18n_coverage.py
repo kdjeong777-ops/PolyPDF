@@ -47,6 +47,7 @@ ALLOW = {
     "viewer/app.py": {"PolyPDF_특허",                         # 특허(한국 전용) 저장 폴더
                       "기본값"},                                # 배포 기본값 프로필 이름
     "viewer/instance_link.py": {"응답 없음"},                 # 창 사이 통신 오류 값(로그)
+    "viewer/vprinter_recv.py": {"PolyPDF 인쇄"},              # 261017 가상 프린터 기본 저장 폴더 이름(사용자 디스크의 자리)
     "viewer/settings_store.py": {"기본값"},
     "viewer/text_word.py": {"python-docx 없음: "},            # 예외 메시지
     # 장치 이름 짐작(실제 장치 이름과 맞춰 본다)

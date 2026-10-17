@@ -16,6 +16,9 @@ MESSAGES = {
     "AdditionalTasks": trp("installer", "추가 작업:"),
     "PdfDefault": trp("installer", "PolyPDF 를 PDF 기본 앱으로 설정 (설치 후 Windows 설정에서 한 번 선택 필요)"),
     "FileAssoc": trp("installer", "파일 연결:"),
+    # 261017(가상 프린터 SOT §4.5): 설치 작업 항목·진행 문구
+    "VPrinter": trp("installer", "가상 프린터 'PolyPDF' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"),
+    "VPrinterInstalling": trp("installer", "가상 프린터 'PolyPDF' 를 설치하는 중..."),
     "ProgIdDesc": trp("installer", "PDF 문서 (PolyPDF)"),
     "AppDesc": trp("installer", "PDF 뷰어·편집·책갈피·검색·단어장"),
     "RunApp": trp("installer", "PolyPDF 실행"),

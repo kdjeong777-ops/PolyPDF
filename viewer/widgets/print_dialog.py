@@ -20,7 +20,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
     def __init__(self, page_count: int, cur_page: int,
                  n_thumb_sel: int, n_shot_sel: int, parent=None,
                  preset_api=None, sample=None, n_files_sel: int = 0,
-                 thumb_pages=None, file_paths=None, bake_src=None, preset_scope=None):
+                 thumb_pages=None, file_paths=None, bake_src=None, preset_scope=None, save_target=None):
         super().__init__(parent)
         self.setWindowTitle(tr("인쇄"))
         self.resize(800, 600)
@@ -150,12 +150,102 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self.sp_scale.valueChanged.connect(self._update_preview)
         self.cmb_color.currentIndexChanged.connect(self._update_preview)
         self.sp_to.valueChanged.connect(self._sync_preview_to_scope)   # 261008-2: 다단은 범위 끝도 본다
+        self._save_target = None
+        if save_target is not None:          # 261017(가상 프린터 SOT §4.8): 받은 PDF 저장 창
+            self._setup_save_mode(root, bb, save_target)
         self._sync_preview_to_scope()        # 260827: 미리보기를 '인쇄되는 첫 페이지'로
 
     # ----- 프린터/옵션 -----
+    # ----- 261017(가상 프린터 SOT §4.8): 가상 프린터로 받은 PDF 를 저장하는 창 -----
+    def _setup_save_mode(self, root, bb, t: dict):
+        """같은 인쇄 창을 'PDF 로 저장' 모드로 — 범위·다단·컬러/흑백·미리보기는 그대로, 종이에만 뜻이 있는 항목은 숨긴다.
+        `t`: name·orig_dir·default_dir·folder·reason·skip(다음부터 창 없이)."""
+        import os as _os
+        from PyQt6.QtWidgets import QLineEdit
+        self._save_target = dict(t)
+        self._save_custom = ""
+        self.setWindowTitle(tr("PolyPDF 프린터 — PDF 저장"))
+        for rb in (self.rb_thumb, self.rb_files, self.rb_shot):
+            rb.setVisible(False)
+        self.rb_all.setChecked(True)
+        for w in (self.cmb_printer, self.cmb_paper, self._size_row, self.cmb_duplex, self.cmb_include,
+                  self.sp_copies, self.chk_center, self.chk_auto_orient):
+            self._pform.setRowVisible(w, False)
+        self.cmb_paper.setCurrentIndex(0)                    # 자동(페이지 크기) — 미리보기가 쪽 그대로
+        self._pgroup.setTitle(tr("옵션"))
+        self.cmb_color.removeItem(self.cmb_color.findData("default"))   # '프린터 기본' 은 뜻이 없다
+        self.cmb_color.setCurrentIndex(max(0, self.cmb_color.findData(t.get("color") or "color")))
+        gb = QGroupBox(tr("저장"))
+        v = QVBoxLayout(gb)
+        self._sv_grp = QButtonGroup(self)
+        why = {"notfound": tr("원래 파일을 찾지 못함"), "temp": tr("원래 파일이 임시 폴더에 있음"),
+               "readonly": tr("원래 폴더에 쓸 수 없음")}.get(t.get("reason") or "", "")
+        self.rb_sv_orig = QRadioButton(tr("원래 파일이 있는 폴더: {path}").format(path=t.get("orig_dir") or why))
+        self.rb_sv_orig.setEnabled(bool(t.get("orig_dir")))
+        self.rb_sv_default = QRadioButton(tr("기본 저장 폴더: {path}").format(path=t.get("default_dir", "")))
+        row = QHBoxLayout()
+        self.rb_sv_custom = QRadioButton(tr("다른 폴더"))
+        self.btn_sv_browse = QPushButton(tr("찾아보기…"))
+        self.btn_sv_browse.clicked.connect(self._save_browse)
+        row.addWidget(self.rb_sv_custom); row.addWidget(self.btn_sv_browse); row.addStretch(1)
+        for rb in (self.rb_sv_orig, self.rb_sv_default, self.rb_sv_custom):
+            self._sv_grp.addButton(rb)
+            rb.toggled.connect(self._save_update_path)
+        v.addWidget(self.rb_sv_orig); v.addWidget(self.rb_sv_default); v.addLayout(row)
+        nrow = QHBoxLayout()
+        nrow.addWidget(QLabel(tr("파일 이름")))
+        self.ed_sv_name = QLineEdit(t.get("name", ""))
+        self.ed_sv_name.textChanged.connect(self._save_update_path)
+        nrow.addWidget(self.ed_sv_name, 1); nrow.addWidget(QLabel(".pdf"))
+        v.addLayout(nrow)
+        self.lbl_sv_path = QLabel("")
+        self.lbl_sv_path.setWordWrap(True)
+        self.lbl_sv_path.setStyleSheet("color:#555555;")
+        v.addWidget(self.lbl_sv_path)
+        self.chk_sv_skip = QCheckBox(tr("다음부터 이 창 없이 바로 저장"))
+        self.chk_sv_skip.setChecked(bool(t.get("skip")))
+        v.addWidget(self.chk_sv_skip)
+        root.insertWidget(root.count() - 1, gb)
+        use_orig = bool(t.get("orig_dir")) and _os.path.normcase(t.get("folder", "")) == _os.path.normcase(t.get("orig_dir", ""))
+        (self.rb_sv_orig if use_orig else self.rb_sv_default).setChecked(True)
+        bb.button(QDialogButtonBox.StandardButton.Ok).setText(tr("저장"))
+        self.btn_pdf.setVisible(False)
+        self._save_update_path()
+
+    def _save_browse(self):
+        from PyQt6.QtWidgets import QFileDialog
+        d = QFileDialog.getExistingDirectory(self, tr("저장할 폴더"), self._save_folder() or "")
+        if d:
+            self._save_custom = d
+            self.rb_sv_custom.setText(tr("다른 폴더: {path}").format(path=d))
+            self.rb_sv_custom.setChecked(True)
+            self._save_update_path()
+
+    def _save_folder(self) -> str:
+        t = self._save_target or {}
+        if self.rb_sv_orig.isChecked():
+            return t.get("orig_dir", "")
+        if self.rb_sv_custom.isChecked():
+            return self._save_custom or t.get("default_dir", "")
+        return t.get("default_dir", "")
+
+    def _save_update_path(self, *_):
+        from viewer.vprinter_recv import unique_pdf_path
+        folder = self._save_folder()
+        name = self.ed_sv_name.text().strip() or (self._save_target or {}).get("name", "")
+        self.lbl_sv_path.setText(unique_pdf_path(folder, name) if folder else "")
+
+    def save_choice(self) -> dict:
+        """저장 모드의 결과 — {folder, kind('original'|'default'|'custom'), name, skip, color}."""
+        kind = "original" if self.rb_sv_orig.isChecked() else "custom" if self.rb_sv_custom.isChecked() else "default"
+        return {"folder": self._save_folder(), "kind": kind,
+                "name": self.ed_sv_name.text().strip() or (self._save_target or {}).get("name", ""),
+                "skip": self.chk_sv_skip.isChecked(), "color": self.cmb_color.currentData() or "color"}
+
     def _build_printer_group(self) -> QGroupBox:
         gb = QGroupBox(tr("프린터 · 옵션"))
         form = QFormLayout(gb)
+        self._pform, self._pgroup = form, gb        # 261017: 저장 모드가 종이 전용 줄을 숨긴다
         self.cmb_printer = QComboBox()
         try:
             from PyQt6.QtPrintSupport import QPrinterInfo
@@ -188,6 +278,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self.cmb_size.currentIndexChanged.connect(
             lambda i: self.sp_scale.setEnabled(i == 2))
         sw = QWidget(); sw.setLayout(srow)
+        self._size_row = sw
         form.addRow(tr("인쇄 크기"), sw)
 
         self.cmb_color = QComboBox()
@@ -568,7 +659,7 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
         self.accept()
 
     def to_pdf(self) -> bool:
-        return self._to_pdf
+        return self._to_pdf or self._save_target is not None
 
 
     def nup_settings(self) -> dict:

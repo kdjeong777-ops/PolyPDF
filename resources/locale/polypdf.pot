@@ -10785,3 +10785,197 @@ msgctxt "installer"
 msgid "사용 안내 (API 키)"
 msgstr ""
 
+#: viewer/app.py
+msgid "가상 프린터(PolyPDF) 설치·제거…"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+msgid "PolyPDF 프린터"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+msgid "받은 문서를 PDF 로 바꾸는 중…"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+msgid "저장하는 중…"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+#, python-brace-format
+msgid "PolyPDF 프린터 — 저장: {path}"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+#, python-brace-format
+msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+#, python-brace-format
+msgid "저장하지 못했습니다: {err}"
+msgstr ""
+
+#: viewer/vprinter_recv.py
+#, python-brace-format
+msgid "인쇄_{stamp}"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "PolyPDF 프린터 — PDF 저장"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "옵션"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "다른 폴더"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "다음부터 이 창 없이 바로 저장"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "저장할 폴더"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "파일 이름"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "원래 파일을 찾지 못함"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "원래 파일이 임시 폴더에 있음"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "원래 폴더에 쓸 수 없음"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+#, python-brace-format
+msgid "원래 파일이 있는 폴더: {path}"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+#, python-brace-format
+msgid "기본 저장 폴더: {path}"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+#, python-brace-format
+msgid "다른 폴더: {path}"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "가상 프린터 (PolyPDF)"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "상태 확인 중…"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "설치"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "제거"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "받은 문서 저장"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "원래 파일이 있는 폴더(찾지 못하면 기본 저장 폴더)"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "기본 저장 폴더"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "저장 창 없이 바로 저장(마지막 선택으로)"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "관리자 권한으로 진행하는 중… (Windows 확인 창이 뜨면 '예')"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "완료했습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "이 PC 에서는 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "이 배포본에는 가상 프린터 구성요소가 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저장하고 PolyPDF 에서 엽니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "설치됨 ✓ — 프린터 'PolyPDF'"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "수리"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "ARM64 Windows 에서는 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "32비트 Windows 에서는 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "'보호된 인쇄 모드' 가 켜져 있어 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "Windows 의 PostScript 드라이버가 없어 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "일부만 설치됨 — '수리' 를 누르세요."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "설치되지 않음"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "개발 실행에는 포트 모니터(printer\\bin)가 없습니다 — 빌드된 PolyPDF 에서 설치하세요."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+#, python-brace-format
+msgid "실패했습니다(코드 {rc}) — 기록: {log}"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+#, python-brace-format
+msgid "상태를 읽지 못했습니다: {err}"
+msgstr ""
+
+#: installer/installer_text.py
+msgctxt "installer"
+msgid "가상 프린터 'PolyPDF' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"
+msgstr ""
+
+#: installer/installer_text.py
+msgctxt "installer"
+msgid "가상 프린터 'PolyPDF' 를 설치하는 중..."
+msgstr ""

@@ -56,6 +56,8 @@ Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:Add
 ; PDF 기본 앱 — Windows 10/11 은 보안상 설치 프로그램이 강제 지정 불가.
 ;   체크 시: 연결 등록(아래 [Registry]) + 설치 후 'Windows 기본 앱' 설정을 열어 사용자가 확정.
 Name: "pdfdefault"; Description: "{cm:PdfDefault}"; GroupDescription: "{cm:FileAssoc}"; Flags: unchecked
+; 261017(가상 프린터 SOT §4.5·§8 D2): 가상 프린터 — 기본 켬. 업그레이드는 지난번 선택을 따른다(Inno 기본)
+Name: "vprinter"; Description: "{cm:VPrinter}"; GroupDescription: "{cm:AdditionalTasks}"
 
 [Files]
 Source: "{#DistDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
@@ -85,6 +87,8 @@ Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueN
 ; 261009-21: 아이콘 캐시 새로 고침 — 업그레이드 뒤 바로가기 아이콘이 흰색으로 남았다(사용자 보고).
 ;   설치한 사용자 권한으로·창 없이·기다리지 않음. 없으면(옛 Windows) 건너뜀.
 Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runasoriginaluser runhidden nowait skipifdoesntexist
+; 261017(가상 프린터 SOT §4.5): 설치 도구는 앱과 같은 것(viewer/vprinter.py). 이미 있으면 고치기만, 실패해도 설치는 성공으로 끝난다(앱이 알린다)
+Filename: "{app}\{#MyAppExe}"; Parameters: "--vprinter install"; StatusMsg: "{cm:VPrinterInstalling}"; Flags: runhidden waituntilterminated; Tasks: vprinter
 ; 설치 직후 실행(선택)
 Filename: "{app}\{#MyAppExe}"; Description: "{cm:RunApp}"; Flags: nowait postinstall skipifsilent
 ; PDF 기본 앱 체크 시 — Windows '기본 앱' 설정 열기(사용자가 .pdf → PolyPDF 선택)
@@ -418,7 +422,9 @@ begin
     Exit;
   end;
 
-  if not Exec(uninstExe, '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES', '',
+  { 261017(가상 프린터 SOT §4.5): 업그레이드 — 옛 제거 프로그램이 가상 프린터를 지우지 않게 /KEEPPRINTER
+    (지웠다 만들면 기본 프린터 지정이 풀리고 스풀러가 다시 시작된다. 이 인자를 모르는 옛 판은 프린터를 만들지 않았다) }
+  if not Exec(uninstExe, '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /KEEPPRINTER', '',
               SW_HIDE, ewWaitUntilTerminated, rc) then
   begin
     Result := CustomMessage('UninstallFailed');
@@ -433,4 +439,14 @@ begin
     i := i + 1;
   end;
   Sleep(500);
+end;
+
+{ 261017(가상 프린터 SOT §4.5): 제거 — 사용자가 직접 지울 때만 가상 프린터도 지운다. 업그레이드는 새 설치 프로그램이
+  /KEEPPRINTER 를 붙여 부르므로 그대로 둔다. 파일을 지우기 전(usUninstall)에 앱의 설치 도구로(설치와 같은 길). }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  rc: Integer;
+begin
+  if (CurUninstallStep = usUninstall) and (Pos('/KEEPPRINTER', Uppercase(GetCmdTail())) = 0) then
+    Exec(ExpandConstant('{app}\{#MyAppExe}'), '--vprinter remove', '', SW_HIDE, ewWaitUntilTerminated, rc);
 end;

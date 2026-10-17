@@ -347,6 +347,18 @@ def main():
                     os._exit(0)
         except Exception:
             gather = None
+    # 261017(가상 프린터 SOT §4.4): 인쇄 뒤 예약 작업이 띄운 실행 — 켜진 창이 받기 통로를 열어 두었으면 알리고 창 없이 끝난다.
+    #   없으면 이 실행이 창이 되어 받은 문서를 처리한다(지난 세션은 복원하지 않는다).
+    printed = "--printed" in sys.argv[1:]
+    if printed:
+        try:
+            from viewer.open_gather import hand_off
+            from viewer.vprinter_controller import print_server_name
+            from viewer.vprinter_recv import user_spool_dir
+            if hand_off([user_spool_dir()], name=print_server_name(), claim_wait_ms=300):
+                os._exit(0)
+        except Exception:
+            pass
 
     # 260606-29: ★ QApplication 직후 — 무엇보다 먼저 스플래시(앱이름/아이콘/마이그레이션
     #            보다 앞). repaint() 로 동기 즉시 페인트 → 체감 지연 최소화.
@@ -382,8 +394,14 @@ def main():
     # 261009-14(응답성 SOT §4.2·§12): 인자로 받은 PDF 가 있으면 지난 세션을 복원하지 않는다. 복원이 인자 열기보다 먼저
     #   줄을 서서 '이미 연 것이 있으면 덮지 않는다' 가드가 작동하지 않았다 — 지난 폴더(다운로드)를 메인에서 훑느라
     #   4.4초 선 뒤에야 요청한 파일을 열었다(설치본 실측). 이벤트 루프가 돌기 전이라 복원보다 앞선다.
-    win._startup_has_args = bool(pdf_args)
+    win._startup_has_args = bool(pdf_args) or printed
     win.show()
+    # 261017(가상 프린터 SOT §4.4): 인쇄 받기 — 창이 뜬 뒤에(시작을 늦추지 않게). --printed 로 떴으면 곧바로
+    try:
+        from PyQt6.QtCore import QTimer as _QT
+        _QT.singleShot(300 if printed else 2500, win._vprinter_start)
+    except Exception:
+        pass
     # 261009-22(마스터 §14.9): 휴대용 모드 안내 — 쓸 수 없는 폴더라 물러섰으면 그 까닭을
     if _portable_note:
         try:

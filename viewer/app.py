@@ -57,6 +57,7 @@ from viewer.ocr_batch_controller import OcrBatchMixin   # 261014-16(텍스트 �
 from viewer.compress_controller import CompressMixin    # 261014-21(마스터 §4.7.19)
 from viewer.redact_controller import RedactMixin        # 261014-22(보안 SOT §14)
 from viewer.compare_controller import CompareMixin      # 261014-23(마스터 §4.11)
+from viewer.vprinter_controller import VPrinterMixin    # 261017(가상 프린터 SOT §4.4)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -119,7 +120,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -1711,6 +1712,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         m_tools.addSection(tr("💻 시스템 연동 및 설치"))
         _act(tr("Windows 기본 PDF 앱으로 등록…"), self._register_pdf_handler)
         _act(tr("구성요소 설치(녹화·OCR)…"), self._open_components_installer)
+        _act(tr("가상 프린터(PolyPDF) 설치·제거…"), self._open_vprinter_dialog)   # 261017(가상 프린터 SOT §4.6)
 
         m_help = bar.addMenu(tr("도움말(&H)"))
         # v1.6.1 G2: 사용법
