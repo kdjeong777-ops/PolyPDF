@@ -4,7 +4,8 @@ Windows·PowerPoint 가 있는 기계에서 개발 코드(`viewer/vprinter_recv.
 
   python scripts/vprinter_check.py compare             시험 문서를 만들어 PolyPDF 드라이버로 파일 인쇄 → 변환 → PowerPoint 'PDF로 내보내기' 와 대조
   python scripts/vprinter_check.py ps <PS 파일…>         받은 PS 를 변환해 방향·빈 글자 확인(기본: <작업 폴더>/_samples/vprinter/*.ps)
-  python scripts/vprinter_check.py e2e                 시험 문서를 'PolyPDF' 로 실제 인쇄 → 저장된 PDF·열린 창·빈 스풀 폴더 확인(설치본)
+  python scripts/vprinter_check.py e2e [--dev]         시험 문서를 'PolyPDF' 로 실제 인쇄 → 저장된 PDF·열린 창·빈 스풀 폴더 확인
+                                                       (--dev: 개발 코드 창이 받는다 — 코드만 고쳤을 때 설치본을 다시 받지 않는다)
   python scripts/vprinter_check.py install <설치 파일>   조용히 설치(UAC) → 설치 기록의 프린터 단계·상태·기본 프린터 확인
 
 결과: `<작업 폴더>/_review/vprinter_<시각>/summary.md`·`compare.png`. 판정은 종료 코드(0 통과·1 실패).
@@ -307,6 +308,31 @@ def polypdf_windows() -> list:
     return [t for t in titles if t.startswith("PolyPDF")]
 
 
+def dev_receiver(rep: Report):
+    """`--dev`: 개발 코드 창(`python main.py`)을 먼저 띄워 인쇄 받기 통로를 잡게 한다 — 설치본의 `--printed` 가 이 창에 넘긴다
+    (통로 이름이 같다, 마스터 §14.2.1). 설치본을 다시 받지 않고 고친 코드를 실제 인쇄 흐름으로 확인한다(SOT §6.4)."""
+    if any(t for t in polypdf_windows()):
+        rep.check(False, "열린 PolyPDF 창 없음(개발 창이 받기 통로를 잡으려면)", ", ".join(polypdf_windows())[:200])
+        return None
+    p = subprocess.Popen([sys.executable, str(ROOT / "main.py")], cwd=str(ROOT))
+    for _ in range(80):
+        if polypdf_windows():
+            break
+        time.sleep(0.5)
+    time.sleep(5)                                          # 창이 뜬 뒤 받기 통로를 잡는다(--printed 없는 실행은 2.5초 뒤)
+    rep.check(bool(polypdf_windows()), "개발 코드 창이 떴다(받는 창)")
+    return p
+
+
+def close_windows(match):
+    import win32con
+    import win32gui
+    hs = []
+    win32gui.EnumWindows(lambda h, _: hs.append(h) if win32gui.IsWindowVisible(h) and match(win32gui.GetWindowText(h)) else None, None)
+    for h in hs:
+        win32gui.PostMessage(h, win32con.WM_CLOSE, 0, 0)
+
+
 def cmd_e2e(args) -> int:
     import win32com.client
     from viewer import vprinter_recv as R
@@ -314,6 +340,9 @@ def cmd_e2e(args) -> int:
     rep = Report(out)
     fam, _ = cff_family("S-CoreDream-6")
     name = "가상프린터 자동 시험"
+    dev = dev_receiver(rep) if args.dev else None
+    if args.dev and dev is None:
+        return rep.write("e2e")
     start = time.time()
 
     def run():
@@ -352,6 +381,8 @@ def cmd_e2e(args) -> int:
             page_checks(rep, "%d쪽" % (n + 1), d[n])
     left = R.pending_jobs()
     rep.check(not left, "스풀 폴더가 비었다", ", ".join(Path(p).name for p in left[:3]))
+    if dev is not None:                                    # 시작 때 창이 없었다 — 지금 있는 PolyPDF 창은 이 시험이 띄운 것
+        close_windows(lambda t: t.startswith("PolyPDF"))
     return rep.write("e2e")
 
 
@@ -400,7 +431,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("compare")
     p = sub.add_parser("ps"); p.add_argument("files", nargs="*")
-    sub.add_parser("e2e")
+    p = sub.add_parser("e2e"); p.add_argument("--dev", action="store_true", help="개발 코드 창이 받는다(설치본을 다시 받지 않음)")
     p = sub.add_parser("install"); p.add_argument("setup")
     a = ap.parse_args()
     return {"compare": cmd_compare, "ps": cmd_ps, "e2e": cmd_e2e, "install": cmd_install}[a.cmd](a)
