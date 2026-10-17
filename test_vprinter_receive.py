@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """261017(가상 프린터 SOT §4.3·§4.4·§4.8): 가상 프린터로 받은 문서의 저장·여는 흐름(창 쪽). 창 흐름의 Ghostscript 변환은 가짜로 바꾼다.
 
-G. Ghostscript 변환 — PScript5 가 OpenType(CFF) 글꼴을 CIDFont 로 찾는 PS 도 바뀐다(261017-14, Ghostscript 가 있을 때)
+G. Ghostscript 변환 — PScript5 가 OpenType(CFF) 글꼴을 CIDFont 로 찾는 PS 도 바뀐다(261017-14), 이름 기반 CFF 의 SID 글자표(261017-16)
+O. 쪽 방향 — 글 방향으로 바로 세운다('한 장에 2쪽' 을 다시 눕히지 않는다, 261017-16)
 B. 저장 창 없이 바로 저장(261017-14) — 원래 파일 폴더에 원래 이름으로, 같은 이름이면 '이름 (1).pdf' (사용자 결정 261017-6) · 받은 PS 는 지운다 · 흑백 설정
 C. 원래 파일이 없으면 기본 저장 폴더 · 이름 다듬기(프로그램 이름·'[읽기 전용]' 떼기, 못 쓰는 글자)
 D. 여는 곳 — 저장 폴더를 이 창이 보고 있으면 목록 다시 읽기 + 본문, 다른 폴더면 새 창
@@ -69,6 +70,60 @@ else:
         err = repr(ex)[:200]
     ok = out_cff.is_file()
     chk(ok and "CFF ok" in fitz.open(str(out_cff))[0].get_text(), "G2 convert() 는 CIDFont 로 찾는 CFF 글꼴 PS 도 바꾼다", err)
+    # 261017-16 실제 인쇄: 이름 기반 CFF 글꼴은 코드 = 글리프 이름의 CFF 문자열 번호(SID) — 표가 없으면 제목·띠 글이 빈 글자로 그려졌다.
+    #   Helvetica 사본을 그런 글꼴처럼 묶고(코드 391·392·600 → /A·/B·/C) 앞머리 표로 그려지는지·글이 추출되는지 본다
+    from viewer.vprinter_recv import _CFF_COMPOSE, _PS_PROLOG
+    pro = root / "cff_pro.ps"
+    pro.write_text("/PolyPDF_CFFMAP << /TESTAA+Fake << 391 /A 392 /B 600 /C >> >> def\n"
+                   "/PolyPDF_CFFG2U << /TESTAA+Fake << /A 65 /B 66 /C 67 >> >> def\n" + _CFF_COMPOSE + _PS_PROLOG + "\n", encoding="latin-1")
+    sid_ps = root / "sid.ps"
+    sid_ps.write_bytes(b"%!PS\n/Helvetica findfont dup length dict begin { 1 index /FID ne { def } { pop pop } ifelse } forall\n"
+                       b"/FontName /TESTAA+Fake def currentdict end /TESTAA+Fake exch definefont pop\n"
+                       b"/FakeH /WinCharSetFFFF-H [/TESTAA+Fake] composefont pop\n"
+                       b"/TESTAA+Fake /CIDFont findresource /Metrics2 get begin 391 [0 -1000 500 0] def end\n"
+                       b"/FakeH findfont 40 scalefont setfont 72 700 moveto <0187018802580187> show showpage\n")
+    r4 = subprocess.run([gs, "-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-sDEVICE=pdfwrite", "-sOutputFile=" + str(root / "sid.pdf"),
+                         str(pro), str(sid_ps)], capture_output=True, timeout=120)
+    t4 = fitz.open(str(root / "sid.pdf"))[0].get_text().strip() if r4.returncode == 0 else r4.stderr[-200:]
+    chk(t4 == "ABCA", "G3 SID 표로 묶은 CFF 글꼴의 글자가 그려지고 글로 추출된다(빈 글자 아님)", repr(t4))
+    # 표 만들기 — 이름 기반 CFF OTF 를 fontTools 로 만들어 설치 폴더처럼 두고, PScript5 꼴 PS 에서 표를 만든다
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.t2CharStringPen import T2CharStringPen
+    fdir = root / "fonts"; fdir.mkdir()
+    names = [".notdef", "_1", "_2", "_3"]
+    fb = FontBuilder(1000, isTTF=False)
+    fb.setupGlyphOrder(names)
+    fb.setupCharacterMap({0xC81C: "_2", 0xC548: "_3"})          # 제·안
+    cs = {}
+    for n in names:
+        pen = T2CharStringPen(500, None); pen.moveTo((0, 0)); pen.lineTo((400, 0)); pen.lineTo((400, 600)); pen.closePath()
+        cs[n] = pen.getCharString()
+    fb.setupCFF("PolyTest-Bold", {"FullName": "PolyTest Bold"}, cs, {})
+    fb.setupHorizontalMetrics({n: (500, 0) for n in names}); fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "PolyTest", "styleName": "Bold", "psName": "PolyTest-Bold"})
+    fb.setupOS2(); fb.setupPost(); fb.save(str(fdir / "polytest.otf"))
+    gps = root / "cff_doc.ps"
+    gps.write_bytes(b"%!FontType1\n14 dict begin\n/FontName /QWERTY+PolyTest-Bold def\ncurrentdict end\n"
+                    b"/_2 5 -| 00 |-\n/_3 5 -| 00 |-\n/QWERTY+PolyTest-BoldH /WinCharSetFFFF-H [/QWERTY+PolyTest-Bold] composefont pop\n")
+    prol = R.cff_prolog(str(gps), dirs=[str(fdir)])
+    chk("/QWERTY+PolyTest-Bold << 392 /_2 393 /_3 >>" in prol and "/_2 51228" in prol and "/_1" not in prol,
+        "G4 PS 의 이름 기반 CFF 글꼴을 설치된 OTF 에서 찾아 SID→이름·이름→유니코드 표를 만든다(온 글리프만)", prol[:300])
+
+print("\n=== O. 쪽 방향 ===")
+# 261017-16 실제 인쇄: '한 장에 2쪽' 은 머리가 Landscape 여도 종이가 이미 바로 서 있다 — 머리만 보고 돌려 눕혔다
+od = fitz.open()
+p_up = od.new_page(width=595, height=842); p_up.insert_text((72, 100), "upright text 가나다", fontname="helv")
+p_side = od.new_page(width=595, height=842); p_side.insert_text((300, 100), "sideways text here", fontname="helv", rotate=90)
+p_down = od.new_page(width=595, height=842); p_down.insert_text((300, 700), "sideways other way", fontname="helv", rotate=270)
+od.new_page(width=595, height=842)                                   # 글 없는 쪽
+rots = R.upright_pages(od, True, 2)
+chk(rots[0] == 0, "O1 글이 가로인 쪽은 머리가 Landscape·2쪽 모아 찍기여도 돌리지 않는다", str(rots))
+for i, rr in ((1, rots[1]), (2, rots[2])):
+    pg = od[i]; pg.set_rotation(rr); pg.remove_rotation() if rr else None
+    chk(R.text_rotation(od[i]) == 0, "O2 옆으로 누운 글의 쪽은 글이 가로가 되게 돌린다(쪽 %d → %d°)" % (i + 1, rr), str(rots))
+chk(rots[3] == 0, "O3 글 없는 쪽은 문서의 다수 결정을 따른다", str(rots))
+e = fitz.open(); e.new_page(width=595, height=842)
+chk(R.upright_pages(e, True, 1) == [90] and R.upright_pages(e, True, 2) == [0], "O4 문서에 글이 없으면 머리 규칙(가로·1쪽씩일 때만 90°)")
 
 print("\n=== C. 이름 다듬기 ===")
 chk(R.clean_title("Microsoft PowerPoint - 계획.pptx [읽기 전용]") == "계획.pptx", "C1 프로그램 이름·[읽기 전용] 떼기")

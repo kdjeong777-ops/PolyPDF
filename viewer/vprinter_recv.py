@@ -245,6 +245,190 @@ def is_landscape(ps_path: str) -> bool:
         return False
 
 
+def nup_count(ps_path: str) -> int:
+    """PScript5 '한 장에 여러 쪽' — 첫 쪽 설정의 `<각> <테> <w> <h> <nx> <ny> definenup` 의 nx×ny(없으면 1)."""
+    try:
+        with open(ps_path, "rb") as f:
+            data = f.read(4 * 1024 * 1024)
+    except OSError:
+        return 1
+    i = data.find(b"%%BeginPageSetup")
+    m = re.search(rb"(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+definenup", data[i:i + 4000] if i >= 0 else b"")
+    return int(m.group(5)) * int(m.group(6)) if m else 1
+
+
+_DIR_ROT = {(1, 0): 0, (0, 1): 270, (0, -1): 90, (-1, 0): 180}
+
+
+def text_rotation(page) -> int | None:
+    """쪽의 글 줄 방향(글자 수로 가중)으로 바로 세울 회전(시계 방향 0·90·180·270). 글이 없으면 None.
+    아래로 흐르는 글(0,1)은 270°, 위로(0,-1)는 90°, 거꾸로(-1,0)는 180°(가상 프린터 SOT §4.1, 261017-16)."""
+    votes = {}
+    for b in page.get_text("dict").get("blocks", []):
+        for ln in b.get("lines", []):
+            n = sum(len(s.get("text", "").strip()) for s in ln.get("spans", []))
+            key = tuple(int(round(v)) for v in ln.get("dir", (1, 0)))
+            if n and key in _DIR_ROT:
+                votes[_DIR_ROT[key]] = votes.get(_DIR_ROT[key], 0) + n
+    return max(votes, key=votes.get) if votes else None
+
+
+def upright_pages(doc, landscape: bool, nup: int) -> list:
+    """쪽마다 바로 세울 회전. 글 방향이 우선, 글이 없는 쪽은 문서의 다수 결정, 문서 전체에 글이 없으면
+    머리 규칙(가로이고 1쪽씩일 때만 90°) — 머리만 보면 '한 장에 2쪽' 을 다시 눕혔다(261017-16)."""
+    rots = [text_rotation(pg) for pg in doc]
+    known = [r for r in rots if r is not None]
+    if known:
+        fallback = max(set(known), key=known.count)
+    else:
+        fallback = 90 if landscape and nup == 1 else 0
+    return [fallback if r is None else r for r in rots]
+
+
+# ── 이름 기반 CFF 글꼴(261017-16, 가상 프린터 SOT §4.1) ─────────────────────
+# PScript5 는 OpenType(CFF, 이름 기반) 글꼴을 `%!FontType1` 글로 보내고 composefont(CMap WinCharSetFFFF-H = 코드 그대로)로 묶는데,
+# 코드는 그 글리프 이름의 CFF 문자열 번호(SID)다. Ghostscript 는 이 대응을 몰라 빈 글자를 그렸다 → 설치된 OTF 에서 SID → 이름 표를 만든다.
+_CFF_RE = re.compile(rb"%!FontType1\b.{0,4000}?/FontName /(\S+) def", re.S)
+_GLYPH_RE = re.compile(rb"^/(\S+) \d+ -\|", re.M)
+
+
+def _font_dirs() -> list:
+    out = [os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")]
+    la = os.environ.get("LOCALAPPDATA")
+    if la:
+        out.append(os.path.join(la, "Microsoft", "Windows", "Fonts"))
+    return out
+
+
+def find_otf(ps_name: str, dirs=None):
+    """PostScript 이름(name ID 6)이 같은 설치된 .otf(CFF) 경로. 없으면 None."""
+    try:
+        from fontTools.ttLib import TTFont
+    except Exception:
+        return None
+    for d in dirs or _font_dirs():
+        for p in glob.glob(os.path.join(d, "*.otf")):
+            try:
+                f = TTFont(p, lazy=True, fontNumber=0)
+                nm = f["name"].getDebugName(6)
+                ok = nm == ps_name and "CFF " in f
+                f.close()
+            except Exception:
+                continue
+            if ok:
+                return p
+    return None
+
+
+def cff_tables(otf_path: str, wanted=None):
+    """이름 기반 CFF 의 ({SID: 글리프 이름}, {글리프 이름: 유니코드}). `wanted`(이름 집합)가 있으면 그 글리프만.
+    CID 기반이면 빈 표 — PScript5 가 진짜 CIDFont 로 보내 Ghostscript 가 그대로 읽는다."""
+    from fontTools.ttLib import TTFont
+    f = TTFont(otf_path, lazy=True)
+    try:
+        cff = f["CFF "].cff
+        top = cff.topDictIndex[0]
+        if hasattr(top, "ROS"):
+            return {}, {}
+        strings = cff.strings
+        sids, uni = {}, {}
+        for name in top.charset:
+            if wanted is not None and name not in wanted:
+                continue
+            sids[strings.getSID(name)] = name
+        for cp, name in (f.getBestCmap() or {}).items():
+            if name in sids.values() and name not in uni:
+                uni[name] = cp
+        return sids, uni
+    finally:
+        f.close()
+
+
+def _ps_name(s: str) -> str:
+    """PS 이름을 앞머리에 그대로 쓸 수 있게(이름 글자만)."""
+    return re.sub(r"[^A-Za-z0-9_.+\-]", "", s)
+
+
+def cff_prolog(ps_path: str, dirs=None) -> str:
+    """PS 에 이름 기반 CFF 글꼴이 있으면 `/PolyPDF_CFFMAP << /<글꼴> << SID /이름 … >> … >> def` 와
+    `/PolyPDF_CFFG2U << /<글꼴> << /이름 유니코드 … >> … >> def`(글 추출용)를 돌려준다(없으면 '')."""
+    try:
+        with open(ps_path, "rb") as f:
+            data = f.read()
+    except OSError:
+        return ""
+    fonts = {}
+    for m in _CFF_RE.finditer(data):
+        full = m.group(1).decode("latin-1")
+        if (b"[/" + m.group(1) + b"] composefont") in data:
+            fonts[full] = full.split("+", 1)[-1]
+    if not fonts:
+        return ""
+    wanted = {g.decode("latin-1") for g in _GLYPH_RE.findall(data)}
+    maps, g2us = [], []
+    for full, base in fonts.items():
+        otf = find_otf(base, dirs)
+        if not otf:
+            continue
+        sids, uni = cff_tables(otf, wanted)
+        if sids:
+            fn = _ps_name(full)
+            maps.append("/%s << %s >>" % (fn, " ".join("%d /%s" % (s, _ps_name(n)) for s, n in sorted(sids.items()))))
+            g2us.append("/%s << %s >>" % (fn, " ".join("/%s %d" % (_ps_name(n), cp) for n, cp in sorted(uni.items()))))
+    if not maps:
+        return ""
+    return "/PolyPDF_CFFMAP << %s >> def\n/PolyPDF_CFFG2U << %s >> def\n" % (" ".join(maps), " ".join(g2us))
+
+
+# 이름 기반 CFF 글꼴을 composefont 로 묶을 때(CMap WinCharSetFFFF-H, 글꼴 하나) 표가 있으면 FMapType 2(8/8) 복합 글꼴로 만든다 —
+# 코드의 윗 바이트로 하위 글꼴(같은 CharStrings·Private 를 쓰는 사본, Encoding 만 다름)을 고르고 아랫 바이트로 글리프 이름을 고른다.
+# 0번 하위 글꼴은 모두 .notdef(표에 없는 코드가 엉뚱한 글자로 그려지지 않게).
+_CFF_COMPOSE = r"""
+/PolyPDF_CFFMAP where { pop } { /PolyPDF_CFFMAP 0 dict def /PolyPDF_CFFG2U 0 dict def } ifelse
+/PolyPDF_T 16 dict def PolyPDF_T /seq 0 put
+/PolyPDF_sub {
+  //PolyPDF_T /enc 3 -1 roll put
+  dup length 2 add dict begin
+    { 1 index /FID eq { pop pop } { def } ifelse } forall
+    /Encoding //PolyPDF_T /enc get def
+    /FontInfo currentdict /FontInfo known { FontInfo dup length 1 add dict copy } { 1 dict } ifelse
+      dup /GlyphNames2Unicode //PolyPDF_T /g2u get put def
+  currentdict end
+  (PPCFF___________) dup length string copy dup 5 11 getinterval //PolyPDF_T /seq get exch cvs pop cvn
+  //PolyPDF_T /seq 2 copy get 1 add put
+  exch definefont
+} bind def
+/composefont {
+  dup length 1 eq 2 index /WinCharSetFFFF-H eq and
+  { dup 0 get dup type /nametype eq { //PolyPDF_CFFMAP exch known } { pop false } ifelse } { false } ifelse
+  { //PolyPDF_T begin
+      0 get /fn exch def pop /nm exch def
+      /g2u //PolyPDF_CFFG2U fn known { //PolyPDF_CFFG2U fn get } { 0 dict } ifelse def
+      /base fn /Font findresource def
+      /encs 256 array def
+      //PolyPDF_CFFMAP fn get {
+        exch dup -8 bitshift encs 1 index get null eq
+        { encs 1 index 256 array 0 1 255 { 1 index exch /.notdef put } for put } if
+        encs exch get exch 255 and 3 -1 roll put
+      } forall
+      /e0 256 array def /idx 1 def
+      /fdep [ base 256 array 0 1 255 { 1 index exch /.notdef put } for //PolyPDF_sub exec
+        0 1 255 { /hi exch def
+          encs hi get null ne
+          { e0 hi idx put /idx idx 1 add def base encs hi get //PolyPDF_sub exec }
+          { e0 hi 0 put } ifelse
+        } for ] def
+      10 dict begin
+        /FontType 0 def /FMapType 2 def /FontMatrix [1 0 0 1 0 0] def /WMode 0 def
+        /Encoding e0 def /FDepVector fdep def /FontName nm def
+      currentdict end
+      nm exch definefont
+    end }
+  { //composefont exec } ifelse
+} bind def
+"""
+
+
 # 261017-14: PowerPoint 가 OpenType(CFF) 글꼴(예: S-Core Dream)을 쓰면 PScript5 는 그 글꼴을 Font 로 정의(definefont)하고
 #   composefont 뒤 `T0AddCFFMtx2` 에서 같은 이름을 **CIDFont** 로 찾아 `/Metrics2`(세로쓰기 너비)에 넣는다. Adobe 해석기는 그렇게
 #   찾아지지만 Ghostscript 는 undefinedresource 로 변환이 통째로 실패했다. → CIDFont 로 못 찾고 같은 이름의 Font 가 있을 때만
@@ -261,28 +445,36 @@ _PS_PROLOG = (
 
 
 def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs: str | None = None) -> None:
-    """PS → PDF(사용자 권한). 가로면 쪽을 바로 세우고 회전 표시를 없앤다. 제목을 문서 이름으로. 실패하면 예외."""
+    """PS → PDF(사용자 권한). 쪽을 글 방향으로 바로 세우고 회전 표시를 없앤다. 제목을 문서 이름으로. 실패하면 예외."""
     gs = gs or gs_exe()
     if not gs:
         raise FileNotFoundError("Ghostscript(printer\\bin\\gs) 없음")
     tmp = out_pdf + ".gs.pdf"
+    prolog = out_pdf + ".prolog.ps"           # 글자표가 길어 명령 줄(-c)에 넣지 않고 파일로
+    with open(prolog, "w", encoding="latin-1", errors="replace") as f:
+        f.write(cff_prolog(ps_path) + _CFF_COMPOSE + _PS_PROLOG + "\n")
     args = [gs, "-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.7",
             "-dAutoRotatePages=/None", "-dEmbedAllFonts=true", "-dSubsetFonts=true"]
     if gray:
         args += ["-sColorConversionStrategy=Gray", "-dProcessColorModel=/DeviceGray"]
-    args += ["-sOutputFile=" + tmp, "-c", _PS_PROLOG, "-f", ps_path]
+    args += ["-sOutputFile=" + tmp, prolog, ps_path]
     env = dict(os.environ)
     env["GS_LIB"] = ""                      # 다른 Ghostscript 설치의 설정을 읽지 않게
-    r = subprocess.run(args, capture_output=True, creationflags=_NO_WINDOW, env=env, timeout=600)
+    try:
+        r = subprocess.run(args, capture_output=True, creationflags=_NO_WINDOW, env=env, timeout=600)
+    finally:
+        try:
+            os.remove(prolog)
+        except OSError:
+            pass
     if r.returncode != 0 or not os.path.isfile(tmp):
         raise RuntimeError("Ghostscript %d: %s" % (r.returncode, (r.stderr or r.stdout or b"")[-400:].decode("utf-8", "replace")))
     import fitz
-    land = is_landscape(ps_path)
     d = fitz.open(tmp)
     try:
-        for pg in d:
-            if land and pg.rect.width < pg.rect.height:
-                pg.set_rotation((pg.rotation + 90) % 360)
+        for pg, rot in zip(d, upright_pages(d, is_landscape(ps_path), nup_count(ps_path))):
+            if rot:
+                pg.set_rotation((pg.rotation + rot) % 360)
             if pg.rotation:
                 pg.remove_rotation()           # 보이는 방향 그대로 놓는다(알PDF 의 회전 표시 흠 — SOT §3.10)
         meta = dict(d.metadata or {})
