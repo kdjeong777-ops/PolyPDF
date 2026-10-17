@@ -552,7 +552,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         H = mv.TOOLBAR_H
         btn_read, btn_read_menu = make_read_buttons(self.read_aloud, self)
         btn_read.setFixedSize(26, H)
-        btn_read_menu.setFixedSize(78, H)         # 260606-19: 폭 최소(전체연속 ▾)
+        btn_read_menu.setFixedHeight(H)           # 261017-1(디자인 SOT §2.10): 폭은 글자에 맞춤 — 캡쳐 모드 드롭다운과 같게
         btn_read_menu.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         try:
             btn_read.clicked.disconnect()        # 기본 controller.toggle 해제
@@ -633,6 +633,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _make_capture_dropdown(self, idx: int):
         from PyQt6.QtWidgets import QToolButton
         dd = QToolButton(self)
+        dd._pane_idx = idx                        # 261017-1: 모드를 고르면 이 창을 캡처한다
         dd.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         dd.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         try:
@@ -662,7 +663,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             a = m.addAction(label); a.setCheckable(True)
             a.setChecked(self._cap_mode == key)
             grp.addAction(a)
-            a.triggered.connect(lambda _=False, k=key: self._set_cap_mode(k))
+            a.triggered.connect(lambda _=False, k=key, i=getattr(dd, "_pane_idx", None): self._set_cap_mode(k, capture_pane=i))
         addmode("full", tr("전체"))
         addmode("region", tr("영역 캡처"))
         for i in range(5):
@@ -685,13 +686,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for dd in getattr(self, "_cap_menus", []):
             self._rebuild_capture_menu(dd)
 
-    def _set_cap_mode(self, k):
+    def _set_cap_mode(self, k, capture_pane=None):
         self._cap_mode = k
         self._refresh_capture_labels()
         try:
             self._save_settings_now()
         except Exception:
             pass
+        # 261017-1(디자인 SOT §2.10, 사용자 지시): 모드를 고르면 곧바로 그 창을 캡처 — 캡쳐 단추를 누른 것과 같다(메뉴가 닫힌 뒤에)
+        if capture_pane in (0, 1) and capture_pane < len(self._mv):
+            QTimer.singleShot(0, lambda i=capture_pane: (self._set_active_pane(i), self._do_capture(self._mv[i])))
 
     def _set_cap_copy(self, k):
         self._cap_copy = k
@@ -1261,6 +1265,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             lambda d, i=idx: self._on_file_boundary(d, i))
         mv.cropRequested.connect(lambda i=idx: self._open_crop_dialog(view=self._mv[i]))   # 261010-7(§4.7.15)
         mv.signRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_pdf()))      # 보안 SOT §3
+        mv.pageDeleteRequested.connect(lambda i=idx: (self._set_active_pane(i), self._delete_current_page()))   # 261017-1(입력 SOT §3)
         mv.signRegionSelected.connect(lambda r, i=idx: self._on_sign_region(r, view=self._mv[i]))  # 보안 SOT §3.3
         mv.signPanelRequested.connect(lambda i=idx: self._on_sign_panel(view=self._mv[i]))         # 보안 SOT §5
         mv.signEditRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_edit()))   # 보안 SOT §3.10
@@ -1626,7 +1631,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         m_view.addSeparator()
         self._sc_act_option_menu = QAction(tr("옵션 메뉴 (현재 페이지)"), self)
         self._sc_act_option_menu.triggered.connect(self._show_viewer_option_menu)
-        m_view.addAction(self._sc_act_option_menu)
+        # 261017-1(사용자 지시): 보기 메뉴에서는 뺀다 — 단축키(Shift+F10, 설정 option_menu)는 창에 걸어 그대로 쓴다
+        self.addAction(self._sc_act_option_menu)
 
         # 260606-8: 2분할 보기 상태 act (메뉴엔 표시 안 함 — 보기 메뉴/툴바로 제어, 상태 동기화용)
         self.act_split = QAction(tr("🗗 2단 보기"), self)
@@ -1824,6 +1830,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 sh = QShortcut(seq, self)
                 sh.activated.connect(ref)
                 self._sc_objs[sid] = ("shortcut", sh)
+        self._refresh_menu_key_hints()           # 261017-1(디자인 SOT §2.9.2)
 
     # 260611-3: 선긋기 단축키 — 편집모드의 활성 메인뷰에 적용
     def _draw_sc_pen(self, idx):
@@ -1852,6 +1859,33 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 obj.setShortcut(ks)
             elif kind == "shortcut":
                 obj.setKey(ks)
+        self._refresh_menu_key_hints()
+
+    # ===== 261017-1(디자인 SOT §2.9.2, 사용자 지시): 메뉴 오른쪽 칸에 단축키 =====
+    def _sc_key(self, sid) -> str:
+        """단축키 설정(`_sc_defs` + 사용자 바꿈)의 지금 키 — 화면 표기. 없으면 ''."""
+        d = getattr(self, "_sc_defs", {}).get(sid)
+        if not d:
+            return ""
+        seq = ((getattr(self, "_prefs", None) or {}).get("shortcuts", {}) or {}).get(sid, d[1])
+        return QKeySequence(seq).toString(QKeySequence.SequenceFormat.NativeText)
+
+    def _kt(self, text: str, key: str) -> str:
+        """메뉴 항목 글 + 오른쪽 단축키 칸(`\\t`). `key` 는 단축키 id(설정을 따른다) 또는 고정 키('Del'·'Ctrl+C').
+        **그 키가 같은 일을 할 때만** 부른다(디자인 SOT §2.9.2)."""
+        k = self._sc_key(key) if key in getattr(self, "_sc_defs", {}) else (key or "")
+        return text + "\t" + k if k else text
+
+    def _refresh_menu_key_hints(self) -> None:
+        """메뉴 막대에서 단축키가 다른 곳(창·QShortcut)에 걸린 항목 — Qt 가 저절로 보이지 않는 것만."""
+        va = getattr(self, "_view_acts", {}) or {}
+        for vid, sid in (("single", "toggle_split"), ("split", "toggle_split"), ("present", "present")):
+            a = va.get(vid)
+            if a is None:
+                continue
+            base = a.property("base_text") or a.text().split("\t")[0]
+            a.setProperty("base_text", base)
+            a.setText(self._kt(base, sid))
 
     def _draw_pen_keys(self):
         """260611-3: 발표창에 넘길 펜1~5 단축키(본문과 동일 키 공유)."""
@@ -2221,6 +2255,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             lambda: len(self._thumb_clip["pages"]) if self._thumb_clip else 0)
         self.page_thumbs._shot_paths = self._shot_image_paths   # 261016-1: 썸네일 우클릭 '스크린샷 붙여넣기'
         self.page_thumbs._clip_kind = self._clipboard_kind      # 261016-2(마스터 §4.7.20): 마지막에 복사한 것
+        self.page_thumbs._kt = self._kt                         # 261017-1(디자인 SOT §2.9.2): 메뉴 오른쪽 단축키 칸
+        for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+            if _bt is not None:
+                _bt._kt = self._kt
         self.page_thumbs.saveRequested.connect(self._save_current_file)   # 261016-2: 썸네일 '저장'
         # v1.6.21: 파일 작업 핸드셰이크 (메인이 열고 있는 파일도 작업 가능)
         self.bookmark_tree.releaseFileRequested.connect(self._on_release_file)
@@ -4204,6 +4242,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             alias = pt.split_alias()               # 261012-2(§4.7.15): 나눈 쪽의 책갈피는 첫 조각으로
         except Exception:
             alias = {}
+        # 261017-1(§4.7.9, 사용자 보고): 새 쪽 i 의 옛 키(자체 쪽 = 쪽 번호, 끼운 쪽 = 합성 번호) — 저장 뒤 꾸밈·숨김·링크를 옮긴다
+        meta_keys = []
+        for _i in range(pt.list.count()):
+            _v = pt.list.item(_i).data(Qt.ItemDataRole.UserRole)
+            if isinstance(_v, int):
+                meta_keys.append(int(_v))
+            elif isinstance(_v, (tuple, list)) and len(_v) >= 3:
+                meta_keys.append(pt.STAGED_BASE + int(_v[2]))
+            else:
+                meta_keys.append(None)
 
         def _job(progress):
             try:
@@ -4254,13 +4302,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception:
                 pass
         self.status.showMessage(tr('페이지 편집 저장: {saved_n}쪽 → {name}').format(saved_n=saved_n, name=_P(final).name), 6000)
+        self._remap_page_keys(str(src), str(final), meta_keys)   # 261017-1: 꾸밈·숨김·링크를 새 쪽 번호로
+        # 261011-2(§4.7.16): 쪽·회전이 바뀌었으니 사본도 다시 — 261017-1: **다시 열기 전에**(종전엔 두 번 열어 본문이 두 번 깜빡였다)
+        self._mirror_to_pdf(final, reopen=False)
         try:
             # 260915-1(§4.7.5): 새 이름으로 저장됐으면 원본 아래에 넣고 그 파일로 옮긴다
             self.bookmark_tree.add_or_refresh_file(final, after=str(src))
             self._open_saved_file(final, new_page)  # 색인 먼저 걸고 연다 — 260915-10
         except Exception:
             pass
-        self._mirror_to_pdf(final)                 # 261011-2(§4.7.16): 쪽·회전이 바뀌었으니 사본도 다시
+
+    def _remap_page_keys(self, src, final, meta_keys) -> None:
+        """261017-1(마스터 §4.7.9, 사용자 보고 '붙여넣은 쪽 꾸밈이 저장하면 사라짐'): 쪽 편집 저장 뒤 꾸밈·사진·숨김(page_meta)과
+        하이퍼링크를 새 쪽 번호로 옮기고 디스크에 쓴다. 끼운 쪽(합성 번호)도 자기 자리의 실제 쪽 번호가 된다."""
+        try:
+            st = self._ensure_page_meta_store()
+            if st is not None and st.remap_pages(src, final, meta_keys, staged_min=self.page_thumbs.STAGED_BASE):
+                st.save()
+        except Exception:
+            pass
+        try:
+            hl = self._ensure_hyperlink_store()
+            if hl is not None and hl.remap_pages(src, final, meta_keys):
+                hl.save()
+        except Exception:
+            pass
 
     # ===== 261010-7(마스터 §4.7.15): 쪽 크롭 — PDF 의 CropBox =====================
     def _crop_target(self, view=None):
@@ -4488,13 +4554,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             row += k
             n += k
         self._push_nav_filter()
-        if first is not None and n:
-            self._select_pasted(first + n - 1)      # 261016-3(사용자 지시): 붙인 **마지막** 쪽만 고른다
+        if n:
+            self._select_pasted(int(after_row))     # 261017-1(사용자 지시): **원래 썸네일**만 고르고 본문도 그 쪽
         return n
 
     def _select_pasted(self, row: int) -> None:
-        """261016-3(마스터 §4.7.7, 사용자 지시): 붙여넣은 뒤 썸네일은 **붙인 마지막 쪽 하나만** 고르고 본문도 그 쪽으로.
-        종전 `select_page` 는 고른 것이 여럿이면 선택을 지우지 않아(260618-9) 앞뒤 썸네일이 함께 골라져 있었다."""
+        """261016-3 → 261017-1(마스터 §4.7.7, 사용자 지시): 붙여넣은 뒤 썸네일은 **원래 썸네일(붙인 자리의 기준 행) 하나만** 고르고
+        본문도 그 쪽을 보인다(1단·2단 같음). 종전 `select_page` 는 고른 것이 여럿이면 선택을 지우지 않아(260618-9) 원래·붙인 썸네일이 함께 골라졌다."""
         pt = self.page_thumbs
         if not (0 <= row < pt.list.count()):
             return
@@ -4639,8 +4705,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   본문에 보여 준다** — 넣은 것이 맞는지 바로 확인할 수 있어야 한다.
         try:
             self._push_nav_filter()               # 넘김 목록에 새 쪽을 먼저 넣고
-            # 261016-3(사용자 지시): 붙인 **마지막** 쪽만 고르고 그 쪽으로
-            self._select_pasted(max(0, min(int(after_row) + n, pt.list.count() - 1)))
+            # 261017-1(사용자 지시): **원래 썸네일**만 고르고 본문도 그 쪽
+            self._select_pasted(int(after_row))
         except Exception:
             pass
         self.status.showMessage(
@@ -5159,7 +5225,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             A[key] = menu.addAction(text)
             A[key].setEnabled(bool(enabled))
             return A[key]
-        add("print", tr("인쇄…") + _ns, can_print)
+        add("print", self._kt(tr("인쇄…") + _ns, "print"), can_print)   # 261017-1: 단축키 칸(디자인 SOT §2.9.2)
         add("copy_page", tr("복사"))                         # 개체를 고르지 않았을 때 = 지금 쪽(사용자 결정)
         add("copy_text", tr("텍스트 복사"), can_copy)          # 선택 블럭(없으면 페이지)
         add("sel_text", tr("블럭설정 후 텍스트 복사"), can_copy)
@@ -5195,16 +5261,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                  or getattr(self.main_view, "_img_shape", "rect") or "rect"),
                          # 260907-3: 도구 끄기·개체선택 전환은 공통 삽입 지점(`main_view.add_image_from_pixmap`)
                          self._insert_image_from_file()))
-            add("delete", tr('삭제 (p.{page})').format(page=page) if not staged else tr("삭제"))
+            add("delete", self._kt(tr('삭제 (p.{page})').format(page=page) if not staged else tr("삭제"), "Del"))   # 261017-1: 본문 Del 과 같다
             add("save", tr("저장"))
         menu.addSeparator()
         # ② 보기
         if getattr(self, "_split_on", False):
-            add("single", tr("1단 보기"))
+            add("single", self._kt(tr("1단 보기"), "toggle_split"))
             add("other", tr("옆 창에 열기"))               # 옛 '1창으로 복사'·'2창으로 복사'
         else:
-            add("dual", tr("2단 보기"))
-        add("present", tr("발표보기"))                     # 260905: F5 와 같은 경로
+            add("dual", self._kt(tr("2단 보기"), "toggle_split"))
+        add("present", self._kt(tr("발표보기"), "present"))   # 260905: F5 와 같은 경로
         menu.addSeparator()
         # ③ 회전(260908-1 — 편집모드 무관, 종전 그대로) · 서명(261010-26)
         add("rot_l", _pl(tr('왼쪽 90° 회전 (p.{page})'), tr("왼쪽 90° 회전 (붙여넣은 쪽)")))
@@ -5258,11 +5324,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             for f in self._shot_image_paths():
                 mv.add_image_from_file(f)
         elif key == "delete":
-            r = pt.row_of_page(pidx)
-            if r >= 0:
-                pt.list.clearSelection()
-                pt.list.item(r).setSelected(True)
-                pt._delete_selected()
+            self._delete_current_page()
         elif key == "save":
             QTimer.singleShot(0, self._save_current_file)   # 저장은 모달 진행창을 연다 — 메뉴가 닫힌 뒤에
         elif key == "dual":
@@ -5293,6 +5355,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._open_line_text_settings(tab="line")
         elif key == "cfg_text":
             self._open_line_text_settings(tab="text")
+
+    def _delete_current_page(self, mv=None) -> None:
+        """본문 우클릭 '삭제'·본문 Del(261017-1, 입력 SOT §3) — 지금 쪽을 썸네일 쪽 편집으로 지운다(미저장). 편집모드에서만."""
+        if not self.bookmark_tree.is_edit_mode():
+            return
+        if mv is not None and mv is not self.main_view:
+            return                                      # 활성 창의 썸네일만 그 창 문서다
+        pt = self.page_thumbs
+        r = pt.row_of_page(int(self.main_view.current_page()))
+        if r >= 0:
+            pt.list.clearSelection()
+            pt.list.item(r).setSelected(True)
+            pt._delete_selected()
 
     def _need_save_first(self) -> None:
         """261016-3(마스터 §4.7.7·§4.7.20, 사용자 지시): 붙여넣은 쪽(저장 전)에는 파일의 쪽 번호로 하는 일을 할 수 없다 — 까닭을 알린다."""
@@ -5344,8 +5419,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv = self.main_view
         at = mv.deco_point_at(global_pos)
         menu = QMenu(self)
-        a_copy = menu.addAction(tr("복사 (Ctrl+C)"))
-        a_paste = menu.addAction(tr("붙여넣기 (Ctrl+V)"))
+        a_copy = menu.addAction(self._kt(tr("복사"), "Ctrl+C"))          # 261017-1(디자인 SOT §2.9.2): 키는 오른쪽 칸
+        a_paste = menu.addAction(self._kt(tr("붙여넣기"), "Ctrl+V"))
         a_paste.setEnabled(mv.can_paste_decorations() and at is not None)
         menu.addSeparator()
         tip_acts, shape_acts = {}, {}
@@ -5362,9 +5437,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 ca = m_chg.addAction(self._shape_icon(key), label)
                 ca.setCheckable(True)
                 shape_acts[ca] = key
-        a_del = menu.addAction({"text": tr("선택 글상자 삭제 (Del)"), "leader": tr("선택 글상자 삭제 (Del)"),
-                                "image": tr("선택 이미지 삭제 (Del)"), "line": tr("선택 개체 삭제 (Del)"),
-                                "multi": tr("고른 개체 삭제 (Del)")}[kind])
+        a_del = menu.addAction(self._kt({"text": tr("선택 글상자 삭제"), "leader": tr("선택 글상자 삭제"),
+                                         "image": tr("선택 이미지 삭제"), "line": tr("선택 개체 삭제"),
+                                         "multi": tr("고른 개체 삭제")}[kind], "Del"))
         a_cfg = None
         if kind in ("text", "leader", "line"):
             menu.addSeparator()

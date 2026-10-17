@@ -78,8 +78,9 @@ H = mv.TOOLBAR_H
 check(f"‹ 폭 24 (실측 {mv.btn_prev_page.width()})", mv.btn_prev_page.width() == 24)
 check(f"+ 줌 폭 24 (실측 {mv.btn_zoom_in.width()})", mv.btn_zoom_in.width() == 24)
 check(f"읽기 ▶ 폭 26 (실측 {mw.btn_read.width()})", mw.btn_read.width() == 26)
-check(f"읽기메뉴 폭 78 고정 (실측 {mw.btn_read_menu.minimumWidth()}~{mw.btn_read_menu.maximumWidth()})",
-      mw.btn_read_menu.minimumWidth() == 78 and mw.btn_read_menu.maximumWidth() == 78)
+# 261017-1(디자인 SOT §2.10, 사용자 지시): 읽기메뉴 폭은 78 고정이 아니라 글자에 맞춤(캡쳐 모드 드롭다운과 같게) — 높이만 고정
+check(f"읽기메뉴 폭은 글자에 맞춤·높이만 고정 (실측 {mw.btn_read_menu.minimumWidth()}~{mw.btn_read_menu.maximumWidth()})",
+      mw.btn_read_menu.maximumWidth() > 1000 and mw.btn_read_menu.width() >= mw.btn_read_menu.sizeHint().width() - 1)
 check(f"툴바 버튼 높이 = TOOLBAR_H({H}) 통일",
       mv.btn_prev_page.height() == H and mv.btn_zoom_in.height() == H
       and mw.btn_read.height() == H and mw.btn_read_menu.height() == H)

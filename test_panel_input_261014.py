@@ -85,7 +85,7 @@ try:
     menus = []
 
     def fake_exec(self, *a, **k):
-        menus.append(["-" if x.isSeparator() else x.text() for x in self.actions()])
+        menus.append(["-" if x.isSeparator() else x.text().split("\t")[0] for x in self.actions()])  # 261017-1: 메뉴 글의 '\t' 뒤는 단축키 칸(디자인 SOT §2.9.2) — 이름만 본다
         return None
     _orig_exec = QMenu.exec
     QMenu.exec = fake_exec

@@ -107,6 +107,35 @@ class PageMetaStore:
         files[kn] = files.pop(ko)
         return True
 
+    def remap_pages(self, src_path, dst_path, old_keys, staged_min: int = 1000000) -> bool:
+        """261017-1(마스터 §4.7.9, 사용자 보고 '붙여넣은 쪽 꾸밈이 저장하면 사라짐'): 쪽 편집 저장 뒤 꾸밈·사진·숨김·쪽 크롭을 **새 쪽 번호로** 옮긴다.
+
+        `old_keys[i]` = 새 파일 쪽 i 의 옛 키 — 자체 쪽은 쪽 번호, 끼운 쪽은 합성 번호(`staged_min` 이상), 모르면 None.
+        같은 파일(덮어쓰기)이면 그 자리에서 바꾸고, 새 이름이면 새 파일 키로 옮긴 뒤 원본에서는 끼운 쪽 키만 지운다(원본 파일은 그대로다)."""
+        ks, kd = self._key(src_path), self._key(dst_path)
+        files = self._data["files"]
+        fr = files.get(ks) if ks else None
+        if not fr or kd is None:
+            return False
+
+        def _moved(section):
+            old = fr.get(section) or {}
+            return {str(i): old[str(int(k))] for i, k in enumerate(old_keys)
+                    if k is not None and old.get(str(int(k)))}
+        drawings, images, crops = _moved("drawings"), _moved("images"), _moved("crop_pages")
+        hid = {int(p) for p in fr.get("hidden", [])}
+        hidden = [i for i, k in enumerate(old_keys) if k is not None and int(k) in hid]
+        if ks == kd:
+            target = fr
+        else:
+            target = self._file(kd, create=True)
+            for section in ("drawings", "images"):
+                for p in [p for p in (fr.get(section) or {}) if int(p) >= staged_min]:
+                    fr[section].pop(p, None)
+        target["drawings"], target["images"], target["crop_pages"] = drawings, images, crops
+        target["hidden"] = sorted(hidden)
+        return True
+
     # --- IO ---
     def _load(self):
         p = self._sidecar()

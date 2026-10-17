@@ -46,7 +46,7 @@ def _text(x):
     from PyQt6.QtWidgets import QWidgetAction, QToolButton
     if isinstance(x, QWidgetAction) and x.defaultWidget() is not None:     # 분할 항목(▼ 모양 고르기)
         return x.defaultWidget().findChildren(QToolButton)[0].text()
-    return x.text()
+    return x.text().split("\t")[0]          # 261017-1: '\t' 뒤는 단축키 칸
 
 
 def fake_exec(self, *a, **k):
@@ -127,9 +127,11 @@ try:
     mw._on_viewer_context_menu(g); spin(0.5)
     plan = pt.current_page_plan()
     chk(plan[:3] == [("own", 0), ("own", 1), ("ext", str(a), 1)], "C2 '붙여넣기' — 지금 쪽(2쪽) 아래 끼운 쪽", str(plan))
-    chk(pt.is_staged_page(mv.current_page()), "C3 붙인 쪽으로 간다", str(mv.current_page()))
+    chk(mv.current_page() == 1, "C3 본문은 원래 쪽(2쪽) 그대로(261017-1)", str(mv.current_page()))
     sel_rows = sorted(pt.list.row(it) for it in pt.list.selectedItems())
-    chk(sel_rows == [2], "C4 붙인 마지막 쪽 하나만 골라져 있다(261016-3, 앞뒤 썸네일 안 골라짐)", str(sel_rows))
+    chk(sel_rows == [1], "C4 원래 썸네일 하나만 골라져 있다(261017-1, 붙인 썸네일은 안 골라짐)", str(sel_rows))
+    _v2 = pt.list.item(2).data(Qt.ItemDataRole.UserRole)
+    mv.go_to_page(pt.STAGED_BASE + int(_v2[2])); spin(0.3)                 # 아래 C5 는 붙여넣은 쪽에서
     # 지금 쪽이 붙여넣은 쪽 — 이상한 번호 없이 '붙여넣은 쪽', 누르면 저장 뒤에 하라고 알린다
     msgs = []
     QMessageBox.information = staticmethod(lambda *a_, **k: msgs.append(a_[2] if len(a_) > 2 else ""))
@@ -187,6 +189,9 @@ try:
     v1 = pt.list.item(1).data(Qt.ItemDataRole.UserRole)
     chk(pt.list.count() == n0 + 1 and isinstance(v1, tuple) and str(v1[0]) != str(a),
         "F1 클립보드 그림이 더 나중이면 그림을 새 쪽으로(고른 썸네일 아래)", str(v1))
+    chk(sorted(pt.list.row(it) for it in pt.list.selectedItems()) == [0] and not pt.is_staged_page(mv.current_page()),
+        "F1b 붙인 뒤 원래 썸네일만 골라져 있고 본문도 원래 쪽(261017-1)",
+        str((sorted(pt.list.row(it) for it in pt.list.selectedItems()), mv.current_page())))
     mw._on_copy_pages([(str(b), 3)])
     pt.list.clearSelection(); pt.list.item(0).setSelected(True)
     ctrl_v()

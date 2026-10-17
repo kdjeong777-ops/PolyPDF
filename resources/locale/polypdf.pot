@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-16 22:55+0900\n"
+"POT-Creation-Date: 2026-10-17 10:57+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -403,7 +403,8 @@ msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/thumbs_list.py viewer/widgets/toc_review_dialog.py
+#: viewer/widgets/print_dialog.py viewer/widgets/thumbs_list.py
+#: viewer/widgets/toc_review_dialog.py
 msgid "저장"
 msgstr ""
 
@@ -529,6 +530,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "구성요소 설치(녹화·OCR)…"
+msgstr ""
+
+#: viewer/app.py
+msgid "가상 프린터(PolyPDF) 설치·제거…"
 msgstr ""
 
 #: viewer/app.py
@@ -739,14 +744,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "클립보드에 붙일 그림·글·쪽이 없습니다."
-msgstr ""
-
-#: viewer/app.py
-msgid "복사 (Ctrl+C)"
-msgstr ""
-
-#: viewer/app.py
-msgid "붙여넣기 (Ctrl+V)"
 msgstr ""
 
 #: viewer/app.py
@@ -1144,7 +1141,7 @@ msgid "{head}{v}쪽"
 msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
-#: viewer/workers.py
+#: viewer/vprinter_controller.py viewer/workers.py
 msgid "완료"
 msgstr ""
 
@@ -1247,7 +1244,7 @@ msgstr ""
 msgid "쪽 추가는 편집모드(✏)에서만 됩니다."
 msgstr ""
 
-#: viewer/app.py viewer/print_controller.py
+#: viewer/app.py viewer/print_controller.py viewer/widgets/vprinter_dialog.py
 msgid "취소했습니다."
 msgstr ""
 
@@ -1280,10 +1277,6 @@ msgstr ""
 msgid "먼저 PDF를 표시하세요."
 msgstr ""
 
-#: viewer/app.py
-msgid "인쇄…"
-msgstr ""
-
 #: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "붙여넣기"
 msgstr ""
@@ -1296,16 +1289,8 @@ msgstr ""
 msgid "사진 붙여넣기"
 msgstr ""
 
-#: viewer/app.py
-msgid "1단 보기"
-msgstr ""
-
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "옆 창에 열기"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "2단 보기"
 msgstr ""
 
 #: viewer/app.py
@@ -1822,17 +1807,20 @@ msgstr ""
 msgid "저장 중…"
 msgstr ""
 
+#: viewer/app.py
+msgid "인쇄…"
+msgstr ""
+
 #: viewer/app.py viewer/widgets/thumbs_list.py
 msgid "스크린샷 붙여넣기"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/favorites_dialog.py
-#: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/strip.py viewer/widgets/thumbs_list.py
-#: viewer/widgets/toc_review_dialog.py viewer/widgets/translate_files_dialog.py
-#: viewer/widgets/twoup_dialog.py
-msgid "삭제"
+#: viewer/app.py
+msgid "1단 보기"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "2단 보기"
 msgstr ""
 
 #: viewer/app.py
@@ -1881,22 +1869,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "일반 선"
-msgstr ""
-
-#: viewer/app.py
-msgid "선택 글상자 삭제 (Del)"
-msgstr ""
-
-#: viewer/app.py
-msgid "선택 이미지 삭제 (Del)"
-msgstr ""
-
-#: viewer/app.py
-msgid "선택 개체 삭제 (Del)"
-msgstr ""
-
-#: viewer/app.py
-msgid "고른 개체 삭제 (Del)"
 msgstr ""
 
 #: viewer/app.py
@@ -2363,6 +2335,31 @@ msgstr ""
 msgid "사진을 쪽으로 만들지 못했습니다: {err}"
 msgstr ""
 
+#: viewer/app.py viewer/widgets/favorites_dialog.py
+#: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
+#: viewer/widgets/strip.py viewer/widgets/thumbs_list.py
+#: viewer/widgets/toc_review_dialog.py viewer/widgets/translate_files_dialog.py
+#: viewer/widgets/twoup_dialog.py
+msgid "삭제"
+msgstr ""
+
+#: viewer/app.py
+msgid "선택 글상자 삭제"
+msgstr ""
+
+#: viewer/app.py
+msgid "선택 이미지 삭제"
+msgstr ""
+
+#: viewer/app.py
+msgid "선택 개체 삭제"
+msgstr ""
+
+#: viewer/app.py
+msgid "고른 개체 삭제"
+msgstr ""
+
 #: viewer/app.py
 #, python-brace-format
 msgid "파일이 없어 최근 파일에서 뺐습니다: {path_str}"
@@ -2542,11 +2539,6 @@ msgid "스크린샷 붙여넣기 ({n}장)"
 msgstr ""
 
 #: viewer/app.py
-#, python-brace-format
-msgid "삭제 (p.{page})"
-msgstr ""
-
-#: viewer/app.py
 msgid "블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."
 msgstr ""
 
@@ -2704,6 +2696,11 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
+msgid "삭제 (p.{page})"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
 msgid "정규식이 틀렸습니다: {e}"
 msgstr ""
 
@@ -2765,7 +2762,7 @@ msgstr ""
 #: viewer/compare_controller.py viewer/print_controller.py
 #: viewer/update_controller.py viewer/widgets/glossary_edit_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/translate_dialog.py
-#: viewer/widgets/translate_files_dialog.py
+#: viewer/widgets/translate_files_dialog.py viewer/widgets/vprinter_dialog.py
 msgid "닫기"
 msgstr ""
 
@@ -4622,6 +4619,38 @@ msgid ""
 "최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 
+#: viewer/vprinter_controller.py
+msgid "PolyPDF 프린터"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+msgid "받은 문서를 PDF 로 바꾸는 중…"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+msgid "저장하는 중…"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+#, python-brace-format
+msgid "PolyPDF 프린터 — 저장: {path}"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+#, python-brace-format
+msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
+msgstr ""
+
+#: viewer/vprinter_controller.py
+#, python-brace-format
+msgid "저장하지 못했습니다: {err}"
+msgstr ""
+
+#: viewer/vprinter_recv.py
+#, python-brace-format
+msgid "인쇄_{stamp}"
+msgstr ""
+
 #: viewer/widgets/bookmark_tree.py
 msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다."
 msgstr ""
@@ -4756,10 +4785,6 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "파일·책갈피 이름 변경"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-msgid "파일·책갈피 삭제"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -4930,6 +4955,10 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "파일 탐색기 열기"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "파일·책갈피 삭제"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -7421,6 +7450,31 @@ msgid "다단 인쇄"
 msgstr ""
 
 #: viewer/widgets/print_dialog.py
+msgid "PolyPDF 프린터 — PDF 저장"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "옵션"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "다른 폴더"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/vprinter_dialog.py
+msgid "찾아보기…"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "다음부터 이 창 없이 바로 저장"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "저장할 폴더"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
 msgid "프린터 · 옵션"
 msgstr ""
 
@@ -7486,6 +7540,10 @@ msgstr ""
 
 #: viewer/widgets/print_dialog.py
 msgid "<b>미리보기</b>"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "파일 이름"
 msgstr ""
 
 #: viewer/widgets/print_dialog.py
@@ -7558,8 +7616,35 @@ msgid "스크린샷(선택 {n_shot_sel}개, 없으면 전체)"
 msgstr ""
 
 #: viewer/widgets/print_dialog.py
+msgid "원래 파일을 찾지 못함"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "원래 파일이 임시 폴더에 있음"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+msgid "원래 폴더에 쓸 수 없음"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+#, python-brace-format
+msgid "원래 파일이 있는 폴더: {path}"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+#, python-brace-format
+msgid "기본 저장 폴더: {path}"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
 #, python-brace-format
 msgid "{v}용지: {currentText} · {orient} · {currentText2} · {v2} · {currentText3}"
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
+#, python-brace-format
+msgid "다른 폴더: {path}"
 msgstr ""
 
 #: viewer/widgets/print_dialog.py
@@ -8010,10 +8095,6 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "비우면 문서\\PolyPDF_특허"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "찾아보기…"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -9539,22 +9620,12 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "인쇄 ({n}쪽)…"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
 msgid "스크린샷으로 복사 ({n}쪽)"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
 msgid "클립보드 붙여넣기 — {w}{v}"
-msgstr ""
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "삭제 ({n}쪽)"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
@@ -9589,7 +9660,7 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
+msgid "인쇄 ({n}쪽)…"
 msgstr ""
 
 #: viewer/widgets/thumbs_list.py
@@ -9599,7 +9670,17 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
+msgid "삭제 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
 msgid "선택한 쪽 변환 ({n}쪽)"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "붙여넣기 ({_pcnt}쪽) — {_where}"
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py
@@ -10592,6 +10673,104 @@ msgstr ""
 msgid "{join}쪽"
 msgstr ""
 
+#: viewer/widgets/vprinter_dialog.py
+msgid "가상 프린터 (PolyPDF)"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "상태 확인 중…"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "설치"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "제거"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "받은 문서 저장"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "원래 파일이 있는 폴더(찾지 못하면 기본 저장 폴더)"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "기본 저장 폴더"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "저장 창 없이 바로 저장(마지막 선택으로)"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "관리자 권한으로 진행하는 중… (Windows 확인 창이 뜨면 '예')"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "완료했습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "이 PC 에서는 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "이 배포본에는 가상 프린터 구성요소가 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저장하고 PolyPDF 에서 엽니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "설치됨 ✓ — 프린터 'PolyPDF'"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "수리"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "ARM64 Windows 에서는 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "32비트 Windows 에서는 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "'보호된 인쇄 모드' 가 켜져 있어 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "Windows 의 PostScript 드라이버가 없어 쓸 수 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "일부만 설치됨 — '수리' 를 누르세요."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "설치되지 않음"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "개발 실행에는 포트 모니터(printer\\bin)가 없습니다 — 빌드된 PolyPDF 에서 설치하세요."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+#, python-brace-format
+msgid "실패했습니다(코드 {rc}) — 기록: {log}"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+#, python-brace-format
+msgid "상태를 읽지 못했습니다: {err}"
+msgstr ""
+
 #: viewer/workers.py
 msgid "내려받기를 멈췄습니다."
 msgstr ""
@@ -10686,6 +10865,16 @@ msgstr ""
 #: installer/installer_text.py
 msgctxt "installer"
 msgid "파일 연결:"
+msgstr ""
+
+#: installer/installer_text.py
+msgctxt "installer"
+msgid "가상 프린터 'PolyPDF' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"
+msgstr ""
+
+#: installer/installer_text.py
+msgctxt "installer"
+msgid "가상 프린터 'PolyPDF' 를 설치하는 중..."
 msgstr ""
 
 #: installer/installer_text.py
@@ -10785,197 +10974,3 @@ msgctxt "installer"
 msgid "사용 안내 (API 키)"
 msgstr ""
 
-#: viewer/app.py
-msgid "가상 프린터(PolyPDF) 설치·제거…"
-msgstr ""
-
-#: viewer/vprinter_controller.py
-msgid "PolyPDF 프린터"
-msgstr ""
-
-#: viewer/vprinter_controller.py
-msgid "받은 문서를 PDF 로 바꾸는 중…"
-msgstr ""
-
-#: viewer/vprinter_controller.py
-msgid "저장하는 중…"
-msgstr ""
-
-#: viewer/vprinter_controller.py
-#, python-brace-format
-msgid "PolyPDF 프린터 — 저장: {path}"
-msgstr ""
-
-#: viewer/vprinter_controller.py
-#, python-brace-format
-msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
-msgstr ""
-
-#: viewer/vprinter_controller.py
-#, python-brace-format
-msgid "저장하지 못했습니다: {err}"
-msgstr ""
-
-#: viewer/vprinter_recv.py
-#, python-brace-format
-msgid "인쇄_{stamp}"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "PolyPDF 프린터 — PDF 저장"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "옵션"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "다른 폴더"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "다음부터 이 창 없이 바로 저장"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "저장할 폴더"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "파일 이름"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "원래 파일을 찾지 못함"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "원래 파일이 임시 폴더에 있음"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "원래 폴더에 쓸 수 없음"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-#, python-brace-format
-msgid "원래 파일이 있는 폴더: {path}"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-#, python-brace-format
-msgid "기본 저장 폴더: {path}"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-#, python-brace-format
-msgid "다른 폴더: {path}"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "가상 프린터 (PolyPDF)"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "상태 확인 중…"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "설치"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "제거"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "받은 문서 저장"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "원래 파일이 있는 폴더(찾지 못하면 기본 저장 폴더)"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "기본 저장 폴더"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "저장 창 없이 바로 저장(마지막 선택으로)"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "관리자 권한으로 진행하는 중… (Windows 확인 창이 뜨면 '예')"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "완료했습니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "이 PC 에서는 쓸 수 없습니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "이 배포본에는 가상 프린터 구성요소가 없습니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저장하고 PolyPDF 에서 엽니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "설치됨 ✓ — 프린터 'PolyPDF'"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "수리"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "ARM64 Windows 에서는 쓸 수 없습니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "32비트 Windows 에서는 쓸 수 없습니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "'보호된 인쇄 모드' 가 켜져 있어 쓸 수 없습니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "Windows 의 PostScript 드라이버가 없어 쓸 수 없습니다."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "일부만 설치됨 — '수리' 를 누르세요."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "설치되지 않음"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-msgid "개발 실행에는 포트 모니터(printer\\bin)가 없습니다 — 빌드된 PolyPDF 에서 설치하세요."
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-#, python-brace-format
-msgid "실패했습니다(코드 {rc}) — 기록: {log}"
-msgstr ""
-
-#: viewer/widgets/vprinter_dialog.py
-#, python-brace-format
-msgid "상태를 읽지 못했습니다: {err}"
-msgstr ""
-
-#: installer/installer_text.py
-msgctxt "installer"
-msgid "가상 프린터 'PolyPDF' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"
-msgstr ""
-
-#: installer/installer_text.py
-msgctxt "installer"
-msgid "가상 프린터 'PolyPDF' 를 설치하는 중..."
-msgstr ""

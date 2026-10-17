@@ -1399,6 +1399,12 @@ class _PdfGraphicsView(QGraphicsView):
                 ownr._stroke_translate(ownr._stroke_selected, dnx, dny)
                 ownr._save_page_strokes(); ownr._draw_overlay.update()
                 event.accept(); return
+        # 261017-1(입력 SOT §3, 사용자 지시·결정): 편집모드에서 고른 개체가 없으면 Del 은 **지금 쪽을 지운다**(우클릭 '삭제' 와 같은 쪽 편집)
+        if (k == Qt.Key.Key_Delete and ownr is not None and getattr(ownr, "_img_edit", False)
+                and not ownr.has_deco_selection() and getattr(ownr, "_text_editor", None) is None):
+            ownr.pageDeleteRequested.emit()
+            event.accept()
+            return
         # 260912-4(입력 SOT §3): PageUp/PageDown 은 **늘 쪽 단위**다.
         if k == Qt.Key.Key_PageDown:
             self.pageStep.emit(+1)
@@ -1560,6 +1566,7 @@ class MainView(QWidget):
     fileBoundaryRequested = pyqtSignal(int)      # 260609-2: 마지막/첫 페이지 경계에서 다음/이전 파일 (±1)
     cropRequested = pyqtSignal()                 # 261010-7(마스터 §4.7.15): 툴바 크롭 단추
     signRequested = pyqtSignal()                 # 261010-22(보안 SOT §3): 툴바 전자서명 단추
+    pageDeleteRequested = pyqtSignal()           # 261017-1(입력 SOT §3): 편집모드·고른 개체 없음에서 Del — 지금 쪽 삭제
     signRegionSelected = pyqtSignal(object)      # 261010-21(보안 SOT §3.3): 서명 자리(scene QRectF)
     signPanelRequested = pyqtSignal()            # 261010-21(보안 SOT §5): 검증 띠의 [서명 패널]
     signEditRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): 검증 띠의 [서명 편집]

@@ -211,6 +211,24 @@ class HyperlinkStore:
         links[kn] = links.pop(ko)
         return True
 
+    def remap_pages(self, src_path, dst_path, old_keys) -> bool:
+        """261017-1(마스터 §4.7.9): 쪽 편집 저장 뒤 링크를 새 쪽 번호로 — `old_keys[i]` 는 새 쪽 i 의 옛 키(자체 쪽 번호·끼운 쪽 합성 번호·None).
+        새 이름으로 저장했으면 새 파일 키로 옮기고 원본은 그대로 둔다. 바뀌면 True."""
+        ks, kd = self._rel_key(src_path), self._rel_key(dst_path)
+        links = self._data["links"]
+        old = links.get(ks) if ks else None
+        if not old or kd is None:
+            return False
+        new = {}
+        for i, k in enumerate(old_keys):
+            if k is not None and old.get(str(int(k))):
+                new[str(i)] = list(old[str(int(k))])
+        if new:
+            links[kd] = new
+        elif kd in links and ks == kd:
+            links.pop(kd)
+        return True
+
     # --- 조회/수정 ---
     def links_for(self, file_path, page0) -> list:
         key = self._rel_key(file_path)

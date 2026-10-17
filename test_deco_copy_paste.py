@@ -111,20 +111,20 @@ try:
     mv.go_to_page(0); spin(0.3)
     pr = mv._page_view_rect()
     mv._multi_clear(); mv._stroke_selected = -1; mv._img_selected = -1
-    picked = {"t": "복사 (Ctrl+C)"}
+    picked = {"t": "복사"}  # 261017-1: 메뉴 글의 '\t' 뒤는 단축키 칸(디자인 SOT §2.9.2) — 이름만 본다
     labels = []
     _orig_exec = QMenu.exec
 
     def _menu_exec(self, *a, **k):
-        labels.extend(x.text() for x in self.actions())
-        return next((x for x in self.actions() if x.text() == picked["t"]), None)
+        labels.extend(x.text().split("\t")[0] for x in self.actions())
+        return next((x for x in self.actions() if x.text().split("\t")[0] == picked["t"]), None)
     QMenu.exec = _menu_exec
     g = vp.mapToGlobal(mv._norm_to_view(0.25, 0.13, pr))
     mw._on_viewer_context_menu(g); spin(0.1)
-    chk("복사 (Ctrl+C)" in labels and mv._deco_clip
+    chk("복사" in labels and mv._deco_clip
         and mv._deco_clip["strokes"] and mv._deco_clip["strokes"][0]["text"] == "COPYME",
         "C1 우클릭 '복사' — 누른 자리의 글상자를 골라 담는다", str(labels[-4:]))
-    picked["t"] = "붙여넣기 (Ctrl+V)"   # 개체가 골라져 있어 개체 메뉴(§4.6.9)가 뜬다
+    picked["t"] = "붙여넣기"   # 개체가 골라져 있어 개체 메뉴(§4.6.9)가 뜬다
     n0 = len(mv._page_strokes)
     g2 = vp.mapToGlobal(mv._norm_to_view(0.50, 0.60, pr))
     mw._on_viewer_context_menu(g2); spin(0.1)

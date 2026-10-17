@@ -726,7 +726,7 @@ class EditMixin:
         except Exception:
             return False
 
-    def _mirror_to_pdf(self, path, page=None) -> bool:
+    def _mirror_to_pdf(self, path, page=None, reopen=True) -> bool:
         """사본이 낡았으면 원본 사본 + **증분 저장**으로 임시 파일을 만들어 `_finalize_save` 로 놓는다. 넣었으면 True.
         Qt 굽기(임시 쪽 그리기)는 메인, 파일 복사·저장은 배경(응답성 SOT §4.4)."""
         import os as _os
@@ -789,7 +789,7 @@ class EditMixin:
             if not isinstance(e, SaveCancelled):
                 QMessageBox.warning(self, tr("저장 실패"), str(e))
             return False
-        if was_open:
+        if was_open and reopen:                         # 261017-1: 쪽 편집 저장은 사본을 넣은 뒤 한 번만 연다(§4.7.9)
             try:
                 self._open_saved_file(final, cur_page)
             except Exception:

@@ -117,6 +117,7 @@ class PageThumbs(QWidget):
         self._paste_available = None         # 260821: () -> int (붙여넣기 대기 쪽수; app 이 주입)
         self._shot_paths = None              # 261016-1: () -> [그림 경로] (스크린샷 스트립의 컷; app 이 주입)
         self._clip_kind = None               # 261016-2(마스터 §4.7.20): () -> 'pages'|'deco'|'image'|'text'|None (마지막 복사; app 이 주입)
+        self._kt = lambda text, key: text    # 261017-1(디자인 SOT §2.9.2): (글, 단축키) -> 메뉴 글(오른쪽 단축키 칸; app 이 주입)
         self._ext_docs = {}                  # 260822: 붙여넣기 스테이징 — {src_path: PdfDocument} 렌더 캐시
         # 260930-1(마스터 §4.7.11): 사진으로 만든 1쪽 PDF·임시 PNG — 저장할 때까지 살아 있어야
         #   하므로 여기서 들고 있다가 문서를 닫거나 목록을 비울 때 지운다.
@@ -893,12 +894,12 @@ class PageThumbs(QWidget):
         act_print = act_shot = act_copy = act_paste = act_shot_paste = act_img = act_del = act_save = None
         # ① 쪽 — 인쇄·복사·스크린샷으로 복사는 편집모드 무관(260616-21·260821)
         if has_sel:
-            act_print = menu.addAction(tr('인쇄 ({n}쪽)…').format(n=n_sel) + _ns)
-            act_copy = menu.addAction(tr('복사 ({n}쪽)').format(n=n_sel))
+            act_print = menu.addAction(self._kt(tr('인쇄 ({n}쪽)…').format(n=n_sel) + _ns, "print"))
+            act_copy = menu.addAction(self._kt(tr('복사 ({n}쪽)').format(n=n_sel), "Ctrl+C"))   # 썸네일 Ctrl+C 와 같다
         if self._doc is not None:
             _pcnt = self._paste_available() if self._paste_available else 0
-            act_paste = menu.addAction(tr('붙여넣기 ({_pcnt}쪽) — {_where}').format(_pcnt=_pcnt, _where=_w)
-                                       + _v if _pcnt > 0 else tr("붙여넣기"))
+            act_paste = menu.addAction(self._kt(tr('붙여넣기 ({_pcnt}쪽) — {_where}').format(_pcnt=_pcnt, _where=_w)
+                                                + _v if _pcnt > 0 else tr("붙여넣기"), "Ctrl+V"))   # 썸네일 Ctrl+V(마지막 복사)
             act_paste.setEnabled(bool(self._edit_mode and _pcnt > 0))
         if has_sel:
             act_shot = menu.addAction(tr('스크린샷으로 복사 ({n}쪽)').format(n=n_sel) + _ns)
@@ -918,7 +919,7 @@ class PageThumbs(QWidget):
             act_img.setEnabled(bool(self._edit_mode and _has_img))
         if self._edit_mode:
             n = len(self.list.selectedItems())
-            act_del = menu.addAction(tr('삭제 ({n}쪽)').format(n=n) if n else tr("삭제"))
+            act_del = menu.addAction(self._kt(tr('삭제 ({n}쪽)').format(n=n) if n else tr("삭제"), "Del"))
             act_del.setEnabled(n > 0)
             act_save = menu.addAction(tr("저장"))      # 261016-2(사용자 지시): '삭제' 아래 — 💾 와 같은 함수
         menu.addSeparator()

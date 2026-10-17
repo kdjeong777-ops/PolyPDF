@@ -71,8 +71,8 @@ try:
     pick = {"t": None}
 
     def _mexec(self, *a_, **k):
-        seen.append([x.text() for x in self.actions()])
-        return next((x for x in self.actions() if pick["t"] and x.text() == pick["t"]), None)
+        seen.append([x.text().split("\t")[0] for x in self.actions()])  # 261017-1: 메뉴 글의 '\t' 뒤는 단축키 칸(디자인 SOT §2.9.2) — 이름만 본다
+        return next((x for x in self.actions() if pick["t"] and x.text().split("\t")[0] == pick["t"]), None)
     _orig_mexec = QMenu.exec
     QMenu.exec = _mexec
     g = mv.view.viewport().mapToGlobal(mv._norm_to_view(0.25, 0.13, pr))
@@ -83,7 +83,7 @@ try:
     pick["t"] = "선과 텍스트 입력 설정…"
     mw._on_viewer_context_menu(g); spin(0.1)
     labels = seen[-1] if seen else []
-    chk(mv._stroke_selected == 0 and "복사 (Ctrl+C)" in labels and "선택 글상자 삭제 (Del)" in labels
+    chk(mv._stroke_selected == 0 and "복사" in labels and "선택 글상자 삭제" in labels
         and "텍스트 복사" not in labels and "발표보기" not in labels and "여기에 서명…" not in labels,
         "B1 글상자 우클릭 → 그 옵션만(텍스트 복사·발표·서명 등 없음)", str(labels))
     chk(tabs.get("i") == 1, "B2 '선과 텍스트 입력 설정…' 은 글쓰기 탭으로 연다", str(tabs))
@@ -96,7 +96,7 @@ try:
     g = mv.view.viewport().mapToGlobal(mv._norm_to_view(rc[0] + rc[2] / 2, rc[1] + rc[3] / 2, pr))
     mw._on_viewer_context_menu(g); spin(0.1)
     labels = seen[-1] if seen else []
-    chk("선택 사진 모양 변경" in labels and "선택 이미지 삭제 (Del)" in labels and "선과 텍스트 입력 설정…" not in labels,
+    chk("선택 사진 모양 변경" in labels and "선택 이미지 삭제" in labels and "선과 텍스트 입력 설정…" not in labels,
         "B3 사진 우클릭 → 사진 옵션", str(labels))
     mv._img_objects = []; mv._save_page_images(); mv._img_selected = -1
     mv._multi_clear(); mv._stroke_selected = -1

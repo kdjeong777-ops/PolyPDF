@@ -276,6 +276,7 @@ class BookmarkTree(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._root_dir: Optional[Path] = None
+        self._kt = lambda text, key: text           # 261017-1(디자인 SOT §2.9.2): 메뉴 오른쪽 단축키 칸(app 이 주입)
         self._edit_mode: bool = False               # v1.6.18
         self._split_on: bool = False                # 260618-25: 우클릭 1단/2단 라벨용
         self._pane_idx: int = 0                      # 260618-27: 0=상단(1창)/1=하단(2창)
@@ -2450,7 +2451,7 @@ class BookmarkTree(QWidget):
             except Exception:
                 pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
         act_rename = menu.addAction(tr("파일·책갈피 이름 변경"))
-        act_delete = menu.addAction(tr("파일·책갈피 삭제"))
+        act_delete = menu.addAction(self._kt(tr("파일·책갈피 삭제"), "Del"))   # 261017-1(디자인 SOT §2.9.2): 책갈피창 Del 과 같다
         menu.addSeparator()
         # 저장 셋 — 모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
         act_save_as = act_save_poly = act_flatten = None

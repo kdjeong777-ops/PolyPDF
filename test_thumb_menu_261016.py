@@ -41,7 +41,7 @@ seen, pick = [], {"t": None, "trigger": False}
 
 
 def fake_exec(self, *a, **k):
-    seen.append([("-", True, False) if x.isSeparator() else (x.text(), x.isEnabled(), x.menu() is not None)
+    seen.append([("-", True, False) if x.isSeparator() else (x.text().split("\t")[0], x.isEnabled(), x.menu() is not None)
                  for x in self.actions()])
     hit = next((x for x in self.actions() if pick["t"] and x.text().startswith(pick["t"])), None)
     if hit is not None and pick["trigger"]:

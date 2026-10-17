@@ -180,10 +180,10 @@ try:
     seen = {}
 
     def fake_menu_exec(menu, *a, **k):
-        seen["texts"] = [x.text() for x in menu.actions()]
+        seen["texts"] = [x.text().split("\t")[0] for x in menu.actions()]  # 261017-1: 메뉴 글의 '\t' 뒤는 단축키 칸(디자인 SOT §2.9.2) — 이름만 본다
         want = seen.get("pick")
         for x in menu.actions():
-            if want and x.text() == want:
+            if want and x.text().split("\t")[0] == want:
                 return x
         return None
     QMenu.exec = fake_menu_exec
