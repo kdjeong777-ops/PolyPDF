@@ -11,7 +11,7 @@ PolyPDF 가상 프린터의 포트 모니터로 쓰려고 아래만 바꿨다(�
 | `monitor/mfilemon.def` | `LIBRARY polypdfmon` | DLL 이름 `polypdfmon.dll` |
 | `monitor/log.cpp` | 기록 파일 `polypdfmon.log` | 같은 까닭 |
 | `monitor/monitor.cpp` | 설정 화면 DLL 이름 `polypdfmonui.dll`(동봉하지 않음) | 다른 프로그램의 `mfilemonui.dll` 을 불러오지 않게. 포트 설정은 레지스트리로만 한다 |
-| `monitor/portlist.cpp` | `POLYPDF_NO_RUNAS` 일 때 '다른 계정으로 실행'(계정·비밀번호, OpenSSL 암호화)을 빼고 비밀번호 칸을 비워 둔다 | 비밀번호를 저장하지 않는다. 인쇄 후 명령은 스풀러 계정으로만 돌고, 사용자 화면의 일은 사용자 예약 작업이 한다(가상 프린터 SOT §4.1). OpenSSL 없이 빌드된다 |
+| `monitor/portlist.cpp` | `POLYPDF_NO_RUNAS` 일 때 '다른 계정으로 실행'(계정·비밀번호, OpenSSL 암호화 — 생성자의 `RAND_poll` 포함)을 빼고 비밀번호 칸을 비워 둔다 | 비밀번호를 저장하지 않는다. 인쇄 후 명령은 스풀러 계정으로만 돌고, 사용자 화면의 일은 사용자 예약 작업이 한다(가상 프린터 SOT §4.1). OpenSSL 없이 빌드된다 |
 | `monitor/resource.rc` | 파일 설명·내부 이름·원래 파일 이름·제품 이름에 PolyPDF 판임을 적음(저작권 표기는 그대로) | 고친 판임을 드러낸다(GPL 제5조) |
 
 빌드: `printer\build_monitor.bat`(MSVC x64, `POLYPDF_NO_RUNAS` 정의) — CI(`release.yml`)가 부른다.

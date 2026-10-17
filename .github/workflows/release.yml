@@ -127,6 +127,7 @@ jobs:
       #   실패해도 뷰어는 빌드된다(그 배포본은 가상 프린터를 설치하지 못하고 메뉴가 까닭을 알린다).
       - name: Build printer port monitor (MSVC)
         continue-on-error: true
+        timeout-minutes: 10
         shell: cmd
         run: |
           for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSDIR=%%i"
@@ -136,6 +137,7 @@ jobs:
       # 261017(가상 프린터 SOT §4.2): PS→PDF 변환기 Ghostscript — 고정 판·SHA256 을 확인하고 실행 파일·DLL 둘만 싣는다(AGPL, Licenses.txt).
       - name: Stage Ghostscript (virtual printer)
         continue-on-error: true
+        timeout-minutes: 10
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -146,15 +148,27 @@ jobs:
           gh release download $env:GS_TAG -R ArtifexSoftware/ghostpdl-downloads -p $env:GS_FILE -D .\_gs --clobber
           $h = (Get-FileHash ".\_gs\$env:GS_FILE" -Algorithm SHA256).Hash.ToLower()
           if ($h -ne $env:GS_SHA256) { throw "Ghostscript SHA256 이 다르다: $h" }
-          Start-Process ".\_gs\$env:GS_FILE" -ArgumentList '/S', '/D=C:\gs' -Wait
+          # 261017: 설치 프로그램을 돌리지 않고 7-Zip 으로 풀기만 한다 — 첫 실행에서 설치(Start-Process -Wait)가 한 시간 넘게 끝나지 않았다
+          7z x ".\_gs\$env:GS_FILE" -o".\_gs\x" -y | Out-Null
+          $exe = Get-ChildItem .\_gs\x -Recurse -Filter gswin64c.exe | Select-Object -First 1
+          $dll = Get-ChildItem .\_gs\x -Recurse -Filter gsdll64.dll | Select-Object -First 1
+          if (-not $exe -or -not $dll) { throw "풀린 Ghostscript 에 gswin64c.exe·gsdll64.dll 이 없다" }
           New-Item -ItemType Directory -Force .\printer\bin\gs | Out-Null
-          Copy-Item C:\gs\bin\gswin64c.exe, C:\gs\bin\gsdll64.dll .\printer\bin\gs\ -Force
-          & .\printer\bin\gs\gswin64c.exe -v
-          # 두 파일만으로 변환되는지 — 설치 폴더(C:\gs\lib 등)를 보지 못하게 GS_LIB 를 없는 곳으로
+          Copy-Item $exe.FullName, $dll.FullName .\printer\bin\gs\ -Force
+          & .\printer\bin\gs\gswin64c.exe --version
+          # 두 파일만으로 변환되는지 — 다른 Ghostscript 설정을 읽지 않게 GS_LIB 를 없는 곳으로
           $env:GS_LIB = 'C:\nonexistent'
           & .\printer\bin\gs\gswin64c.exe -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -sOutputFile=.\_gs\smoke.pdf -c "/Helvetica findfont 24 scalefont setfont 72 720 moveto (PolyPDF) show showpage"
           if (-not (Test-Path .\_gs\smoke.pdf) -or (Get-Item .\_gs\smoke.pdf).Length -lt 500) { Remove-Item .\printer\bin\gs -Recurse -Force; throw "Ghostscript 두 파일만으로는 변환되지 않는다" }
           Get-ChildItem .\printer\bin -Recurse -File | Select-Object FullName, Length
+
+      # 실패해도 넘어가는 두 단계의 결과를 드러낸다(첫 실행에서 모니터 빌드 실패가 '성공' 으로 보였다)
+      - name: Report virtual printer bundle
+        shell: pwsh
+        run: |
+          foreach ($f in 'printer\bin\polypdfmon.dll', 'printer\bin\gs\gswin64c.exe', 'printer\bin\gs\gsdll64.dll') {
+            if (Test-Path $f) { echo "OK $f $((Get-Item $f).Length)" } else { echo "::warning::가상 프린터 구성요소 없음: $f" }
+          }
 
       - name: Build (PyInstaller via build_ci.bat)
         run: cmd /c build_ci.bat

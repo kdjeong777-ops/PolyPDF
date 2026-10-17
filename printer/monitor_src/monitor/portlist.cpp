@@ -57,7 +57,9 @@ CPortList::CPortList(LPCWSTR szPortMonitorName, LPCWSTR szPortDesc)
 	wcscpy_s(m_szMonitorName, LENGTHOF(m_szMonitorName), szPortMonitorName);
 	wcscpy_s(m_szPortDesc, LENGTHOF(m_szPortDesc), szPortDesc);
 	m_pFirstPortRec = NULL;
+#ifndef POLYPDF_NO_RUNAS
 	RAND_poll();
+#endif
 }
 
 //-------------------------------------------------------------------------------------

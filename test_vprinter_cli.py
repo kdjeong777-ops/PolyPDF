@@ -79,9 +79,26 @@ chk(not os.path.exists(os.path.join(ROOT, "printer", "printer.ps1")), "D2 즉석
 print("\n=== E. 포트 모니터 원본 ===")
 chk('L"PolyPDF Port Monitor"' in read("printer/monitor_src/common/defs.cpp"), "E1 모니터 이름이 PolyPDF")
 chk("LIBRARY polypdfmon" in read("printer/monitor_src/monitor/mfilemon.def"), "E2 DLL 이름 polypdfmon")
-pl = read("printer/monitor_src/monitor/portlist.cpp")
-chk(pl.count("POLYPDF_NO_RUNAS") == 3 and "#ifndef POLYPDF_NO_RUNAS\n#include <openssl" in pl.replace("\r\n", "\n"),
-    "E3 '다른 계정으로 실행'(비밀번호·OpenSSL)을 뺀다")
+pl = read("printer/monitor_src/monitor/portlist.cpp").replace("\r\n", "\n")
+# POLYPDF_NO_RUNAS 로 전처리했을 때 남는 줄에 OpenSSL 이 없어야 한다 — 생성자의 RAND_poll 을 놓쳐 CI 빌드가 실패했다(261017)
+kept, stack = [], []
+for l in pl.split("\n"):
+    s = l.strip()
+    if s.startswith("#ifndef POLYPDF_NO_RUNAS"):
+        stack.append("skip"); continue
+    if s.startswith("#ifdef POLYPDF_NO_RUNAS"):
+        stack.append("keep"); continue
+    if s.startswith("#if"):
+        stack.append("other"); continue
+    if s.startswith("#else") and stack and stack[-1] in ("skip", "keep"):
+        stack[-1] = "keep" if stack[-1] == "skip" else "skip"; continue
+    if s.startswith("#endif") and stack:
+        stack.pop(); continue
+    if "skip" not in stack:
+        kept.append(l)
+import re as _re
+left = [l.strip() for l in kept if _re.search(r"\b(RAND_\w+|EVP_\w+)|openssl", l)]
+chk(not left, "E3 '다른 계정으로 실행'(비밀번호·OpenSSL)을 뺀다 — 전처리 뒤 OpenSSL 없음", str(left[:3]))
 chk("/DPOLYPDF_NO_RUNAS" in read("printer/build_monitor.bat"), "E4 빌드가 POLYPDF_NO_RUNAS 로 한다")
 chk(os.path.exists(os.path.join(ROOT, "printer", "monitor_src", "LICENSE.txt")) and
     os.path.exists(os.path.join(ROOT, "printer", "monitor_src", "POLYPDF_PATCHES.md")), "E5 라이선스 원문·고친 곳 기록이 있다")
