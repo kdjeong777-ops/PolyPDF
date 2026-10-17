@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-17 10:57+0900\n"
+"POT-Creation-Date: 2026-10-17 14:00+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2852,6 +2852,10 @@ msgid "Word (모양 그대로)"
 msgstr ""
 
 #: viewer/convert/__init__.py
+msgid "Word (Microsoft Word 사용)"
+msgstr ""
+
+#: viewer/convert/__init__.py
 msgid "한글 HWPX (편집 가능)"
 msgstr ""
 
@@ -2861,10 +2865,6 @@ msgstr ""
 
 #: viewer/convert/__init__.py
 msgid "PowerPoint (모양 그대로)"
-msgstr ""
-
-#: viewer/convert/__init__.py
-msgid "Word (Microsoft Word 사용)"
 msgstr ""
 
 #: viewer/convert/__init__.py
