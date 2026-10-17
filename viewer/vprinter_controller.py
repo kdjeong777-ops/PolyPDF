@@ -54,14 +54,15 @@ class _StartWorker(QObject):
         self.finished.emit(out)
 
 
+PRINTERS_KEY = "SYSTEM\\CurrentControlSet\\Control\\Print\\Printers\\"
+
+
 def _printer_installed() -> bool:
+    """프린터가 있는가 — **레지스트리로**(261017-19, 응답성 SOT §4.4). 종전 `win32print.EnumPrinters` 는 스풀러에 묻는 동안
+    GIL 을 놓지 않아, 설치 직후(스풀러가 막 다시 시작해 느릴 때) 배경 스레드에서 불러도 창이 섰다(beta.289 설치 시험 T1 5.3초).
+    로컬 프린터는 스풀러가 이 키에 적는다 — 창이 뜰 때마다 도는 길이라 스풀러를 깨우지 않는다."""
     from viewer import vprinter
-    try:
-        import win32print
-        names = [p[2] for p in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL)]
-        return vprinter.PRINTER_NAME in names
-    except Exception:
-        return False
+    return vprinter._reg_exists(PRINTERS_KEY + vprinter.PRINTER_NAME)
 
 
 class VPrinterMixin:

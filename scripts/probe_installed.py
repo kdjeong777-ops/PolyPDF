@@ -304,6 +304,20 @@ def backup(dst):
     print("백업 →", dst)
 
 
+def _remove_retry(p, tries=20, wait=0.5):
+    """261017-19: 앞 대상이 막 끝나 색인 자식이 `index.db-shm` 을 늦게 놓거나 백신이 잡고 있으면 WinError 32 —
+    잠깐 기다려 다시(beta.289 설치 시험에서 T5 뒤 T6 시작 전 실제로 멈췄다). 끝내 못 지우면 그 오류를 그대로 낸다."""
+    import time
+    for i in range(tries):
+        try:
+            shutil.rmtree(p) if p.is_dir() else p.unlink()
+            return
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            time.sleep(wait)
+
+
 def restore(src):
     """백업에 있던 파일은 되돌리고, 시험 중 새로 생긴 파일(SKIP 제외)은 지운다."""
     src = Path(src)
@@ -311,7 +325,7 @@ def restore(src):
         if p.name in SKIP:
             continue
         if not (src / p.name).exists():
-            shutil.rmtree(p) if p.is_dir() else p.unlink()
+            _remove_retry(p)
     for p in src.iterdir():
         d = CFG / p.name
         if p.is_dir():
