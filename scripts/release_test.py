@@ -326,7 +326,8 @@ def load_baseline():
 
 
 def git(*args) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8").stdout
+    # 261017: 들여온 C 원본(printer/monitor_src)처럼 UTF-8 이 아닌 바이트가 diff 에 섞이면 읽기 스레드가 죽어 stdout 이 None 이 됐다
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
 
 
 PENDING_DAYS, PENDING_COUNT = 14, 5     # 묶음 릴리스 제안 기준(릴리스 SOT §2.2)
