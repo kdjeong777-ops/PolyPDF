@@ -160,8 +160,25 @@ PD.PrintScopeDialog.exec = lambda self: dialogs.append(1) or 0      # 종전 판
 opened, newwin = [], []
 mw._vprinter_new_window = lambda p: newwin.append(p)
 mw._load_main = lambda item: opened.append(item.file if hasattr(item, "file") else str(item))
-refreshed = []
+refreshed, added, saved_open = [], [], []
 mw.bookmark_tree.refresh = lambda: refreshed.append(1)
+mw.bookmark_tree.add_or_refresh_file = lambda p, after=None: added.append(p)
+mw._open_saved_file = lambda p, page=None: saved_open.append(p)
+# 261017-18 점검: 임시 폴더 만들기·PS 지우기가 메인 스레드에서 돌았다 — 어느 스레드에서 부르는지 적는다
+import threading
+_mk = tempfile.mkdtemp
+_rm = os.remove
+fileops_main = []
+tempfile.mkdtemp = lambda *a, **k: (fileops_main.append(("mkdtemp", threading.current_thread() is threading.main_thread())), _mk(*a, **k))[1]
+
+
+def _rm_spy(p, *a, **k):
+    if str(p).endswith(".ps"):
+        fileops_main.append(("remove", threading.current_thread() is threading.main_thread()))
+    return _rm(p, *a, **k)
+
+
+os.remove = _rm_spy
 old = time.time() - 10
 for name in ("3-0001 Microsoft PowerPoint - 계획.pptx.ps", "4-0001 Microsoft PowerPoint - 계획.pptx.ps", "5-0001 웹 페이지 제목.ps"):
     p = spool / name; p.write_bytes(b"%!PS"); os.utime(p, (old, old))
@@ -173,7 +190,10 @@ chk((orig_dir / "계획.pdf").is_file() and (orig_dir / "계획 (1).pdf").is_fil
 chk((dflt / "웹 페이지 제목.pdf").is_file(), "B2 원래 파일이 없는 문서는 기본 저장 폴더에", str(list(dflt.glob("*")) if dflt.exists() else "없음"))
 chk(not list(spool.glob("*.ps")), "B3 받은 PS 는 지운다")
 d = fitz.open(str(orig_dir / "계획.pdf")); chk(d.page_count == 2, "B4 받은 PDF 를 그대로(쪽 수)"); d.close()
-chk(len(refreshed) == 2 and any("계획" in str(o) for o in opened), "D1 같은 폴더 → 목록 다시 읽고 본문에", "%s %s" % (refreshed, opened))
+chk(not refreshed and len(added) == 2 and len(saved_open) == 2 and all("계획" in s for s in saved_open),
+    "D1 같은 폴더 → 그 파일만 목록에 더하고 _open_saved_file 로 연다(폴더 전체 다시 읽기 없음, 261017-18)",
+    "refresh %d · add %s · open %s" % (len(refreshed), added, saved_open))
+chk(fileops_main and not any(m for _, m in fileops_main), "D3 임시 폴더 만들기·PS 지우기는 배경 스레드에서(261017-18)", str(fileops_main))
 chk(len(newwin) == 1 and newwin[0].endswith("웹 페이지 제목.pdf"), "D2 다른 폴더 → 새 창", str(newwin))
 # 261017 손 확인: 모니터는 파일을 닫자마자 알린다 — 방금 쓴 파일도 처리해야 한다(종전엔 1초 안 된 파일을 건너뛰어 첫 인쇄를 놓쳤다)
 fresh = spool / "8-0001 Microsoft PowerPoint - 계획.pptx.ps"; fresh.write_bytes(b"%!PS")
@@ -187,6 +207,41 @@ chk(len(grays) == 1 and grays[0].endswith("계획 (3).pdf"), "B6 도구 메뉴�
 p = spool / "9-0001 실패 문서.ps"; p.write_bytes(b"%!PS"); os.utime(p, (old, old))
 mw._vprinter_receive()
 chk(p.exists() and msgs, "E1 변환 실패면 PS 를 남기고 알린다", str(msgs[-1:] if msgs else ""))
+# 261017-18 점검: 실패한 PS 를 알림마다 다시 시도해 경고가 되풀이됐다 — 이 창에서는 한 번만
+n_msgs, n_conv = len(msgs), len(conv_calls)
+mw._vprinter_receive(); mw._vprinter_receive()
+chk(len(msgs) == n_msgs and len(conv_calls) == n_conv and p.exists(), "E2 실패한 PS 는 이 창에서 다시 시도·경고하지 않는다(지우지도 않는다)",
+    "경고 %d→%d · 변환 %d→%d" % (n_msgs, len(msgs), n_conv, len(conv_calls)))
+tempfile.mkdtemp, os.remove = _mk, _rm
+
+print("\n=== T. 예약 작업은 설치본 창만 ===")
+# 261017-18 점검: 개발 main.py·휴대용·시험 프로필 창이 사용자의 예약 작업을 자기 쪽으로 바꿨다(e2e --dev 때 실제로)
+import viewer.vprinter_controller as VC
+ens = []
+_ens, _inst = R.ensure_task, VC._printer_installed
+R.ensure_task = lambda: ens.append(1) or True
+VC._printer_installed = lambda: True
+outs = []
+w = VC._StartWorker(); w.finished.connect(outs.append); w.run()
+chk(not ens and not R.task_owner(), "T1 개발 실행(빌드된 exe 아님)은 예약 작업을 바꾸지 않는다", str(outs))
+sys.frozen = True
+try:
+    os.environ["POLYPDF_PROFILE"] = "test"
+    w.run()
+    chk(not ens, "T2 시험 프로필 창도 바꾸지 않는다")
+    os.environ.pop("POLYPDF_PROFILE", None)
+    import viewer.settings_store as SS
+    _port = getattr(SS, "PORTABLE", False)
+    SS.PORTABLE = True
+    w.run()
+    chk(not ens, "T3 휴대용도 바꾸지 않는다")
+    SS.PORTABLE = False
+    w.run()
+    chk(len(ens) == 1, "T4 설치본(빌드된 exe·휴대용 아님·시험 프로필 아님)만 맞춘다", str(ens))
+    SS.PORTABLE = _port
+finally:
+    del sys.frozen
+    R.ensure_task, VC._printer_installed = _ens, _inst
 print("\n=== F. 도구 메뉴 ===")
 from PyQt6.QtGui import QAction
 texts = [a.text() for a in mw.findChildren(QAction)]
@@ -205,6 +260,9 @@ vd._show_state({"support": "ok", "monitor": True, "dll": True, "port": True, "dr
 chk(vd.btn_install.text() == "수리" and vd.btn_remove.isEnabled(), "F3 설치됨 — 수리·제거")
 vd._show_state({"support": "arm64", "printer": False, "monitor": False})
 chk(not vd.btn_install.isEnabled() and "ARM64" in vd.lbl_state.text(), "F4 쓸 수 없는 PC 는 까닭을 보이고 설치하지 않는다")
+vd._done("install", VD.STILL_RUNNING)
+chk("진행 중" in vd.lbl_state.text() and "실패" not in vd.lbl_state.text(),
+    "F6 관리자 실행을 기다리는 시간이 넘으면 '실패' 가 아니라 '아직 진행 중'(261017-18)", vd.lbl_state.text())
 vd.chk_gray.setChecked(True)
 rp = vd.result_prefs()
 chk(rp["kind"] == "default" and rp["color"] == "gray" and "skip" not in rp and rp["default_dir"] == str(dflt),

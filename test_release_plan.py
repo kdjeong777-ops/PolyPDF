@@ -30,6 +30,10 @@ c = rt.classify([("M", "installer/PolyPDF.iss", 3)], diff("installer/PolyPDF.iss
 chk(c["level"] == "install", "A 설치 프로그램을 바꾸면 설치 시험", c)
 c = rt.classify([("M", ".github/workflows/release.yml", 2)], "")
 chk(c["level"] == "install", "A 릴리스 워크플로도 설치 시험", c)
+# 261017-18 점검: 가상 프린터 설치 도구·동봉 파일은 설치 끝에 설치 프로그램이 부른다 — 빌드 시험으로 판정하던 빈칸
+for p in ("viewer/vprinter.py", "printer/POLYPDF.PPD", "printer/monitor_src/monitor/portlist.cpp"):
+    c = rt.classify([("M", p, 2)], diff(p, "+x"))
+    chk(c["level"] == "install", "A 가상 프린터 설치 경로(%s)도 설치 시험" % p, c)
 
 # B. 문서·검사·번역문만 → 생략 후보
 c = rt.classify([("M", "README.md", 10), ("M", "test_foo.py", 50), ("M", "resources/locale/en/LC_MESSAGES/polypdf.po", 8)], "")

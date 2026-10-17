@@ -187,6 +187,35 @@ chk(rc == vp.EXIT_OK and not S["driver"] and not S["mon"], "H1 핸들이 남아 
 rc, S = fake_remove(held=False, dll_present=False)
 chk(rc == vp.EXIT_OK and not S["mon"], "H2 DLL 이 이미 없으면(3000) 남은 모니터 등록 키를 직접 지운다", str(S))
 
+print("\n=== I. 모니터 DLL 바꾸기 — 스풀러를 멈춘 채 두지 않는다 ===")
+# 261017-18 점검: 멈춤 → 1.5초 → 복사 → 시작 에 try/finally 가 없어 복사가 실패하면 스풀러가 멈춘 채 남았다(PC 전체 인쇄 정지)
+import win32serviceutil
+calls = []
+saved_ws = {n: getattr(win32serviceutil, n) for n in ("StopService", "StartService", "QueryServiceStatus")}
+_copy2 = vp.shutil.copy2
+state_ = {"s": 4}
+try:
+    win32serviceutil.StopService = lambda name: (calls.append("stop"), state_.update(s=1))
+    win32serviceutil.StartService = lambda name: (calls.append("start"), state_.update(s=4))
+    win32serviceutil.QueryServiceStatus = lambda name: (0x10, state_["s"], 0, 0, 0, 0, 0)
+
+    def bad_copy(a, b):
+        calls.append("copy:" + ("stopped" if state_["s"] == 1 else "running"))
+        raise PermissionError("물려 있음")
+    vp.shutil.copy2 = bad_copy
+    vp.info = lambda *a: None
+    try:
+        vp._replace_dll("a.dll", "b.dll")
+        raised = False
+    except PermissionError:
+        raised = True
+    chk(raised and calls[-1] == "start" and "copy:stopped" in calls,
+        "I1 복사가 실패해도 스풀러를 다시 시작하고, 멈춘 뒤에 복사한다", str(calls))
+finally:
+    for n, f in saved_ws.items():
+        setattr(win32serviceutil, n, f)
+    vp.shutil.copy2 = _copy2
+
 print("\n=== F. main.py ===")
 m = read("main.py")
 chk(0 <= m.find('"--vprinter"') < m.find("from PyQt6"), "F1 `--vprinter` 를 PyQt 전에 처리")

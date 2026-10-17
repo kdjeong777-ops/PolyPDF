@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-17 15:51+0900\n"
+"POT-Creation-Date: 2026-10-17 18:47+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1060,10 +1060,6 @@ msgstr ""
 "\n"
 "※ Windows security policy requires you to confirm the default app yourself."
 
-#: viewer/app.py
-msgid "파일 작업"
-msgstr "File Operation"
-
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
 msgstr "Add Files"
@@ -1659,6 +1655,10 @@ msgstr "Global screen-capture shortcut released (works only while the app is act
 #: viewer/app.py
 msgid "화면캡처.png"
 msgstr "Screen capture.png"
+
+#: viewer/app.py
+msgid "파일 작업"
+msgstr "File Operation"
 
 #: viewer/app.py
 msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
@@ -4824,24 +4824,37 @@ msgid "저장하는 중…"
 msgstr "Saving…"
 
 #: viewer/vprinter_controller.py
+msgid "받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPDF 를 켤 때 다시 바꿔 봅니다."
+msgstr "The received print file was kept — PolyPDF will try converting it again the next time it starts."
+
+#: viewer/vprinter_controller.py
 #, python-brace-format
 msgid "PolyPDF 프린터 — 저장: {path}"
 msgstr "PolyPDF Printer — saved: {path}"
 
 #: viewer/vprinter_controller.py
 #, python-brace-format
-msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
-msgstr "Could not convert the printed document to PDF: {err}"
+msgid "저장하지 못했습니다: {err}"
+msgstr "Could not save: {err}"
 
 #: viewer/vprinter_controller.py
 #, python-brace-format
-msgid "저장하지 못했습니다: {err}"
-msgstr "Could not save: {err}"
+msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
+msgstr "Could not convert the printed document to PDF: {err}"
+
+#: viewer/vprinter_recv.py
+msgid "변환 도구(Ghostscript)가 없습니다 — '가상 프린터' 창에서 '수리' 하세요."
+msgstr "The conversion tool (Ghostscript) is missing — use 'Repair' in the 'Virtual printer' window."
 
 #: viewer/vprinter_recv.py
 #, python-brace-format
 msgid "인쇄_{stamp}"
 msgstr "Print_{stamp}"
+
+#: viewer/vprinter_recv.py
+#, python-brace-format
+msgid "변환 도구 오류(코드 {rc})"
+msgstr "Conversion tool error (code {rc})"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입니다."
@@ -10952,6 +10965,10 @@ msgstr "Running as administrator… (choose 'Yes' if Windows asks)"
 #: viewer/widgets/vprinter_dialog.py
 msgid "완료했습니다."
 msgstr "Done."
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "아직 진행 중입니다 — 잠시 뒤 이 창을 다시 열어 상태를 보세요."
+msgstr "Still in progress — reopen this window in a moment to check the status."
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "이 PC 에서는 쓸 수 없습니다."

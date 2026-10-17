@@ -448,7 +448,7 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
     """PS → PDF(사용자 권한). 쪽을 글 방향으로 바로 세우고 회전 표시를 없앤다. 제목을 문서 이름으로. 실패하면 예외."""
     gs = gs or gs_exe()
     if not gs:
-        raise FileNotFoundError("Ghostscript(printer\\bin\\gs) 없음")
+        raise FileNotFoundError(tr("변환 도구(Ghostscript)가 없습니다 — '가상 프린터' 창에서 '수리' 하세요."))
     tmp = out_pdf + ".gs.pdf"
     prolog = out_pdf + ".prolog.ps"           # 글자표가 길어 명령 줄(-c)에 넣지 않고 파일로
     with open(prolog, "w", encoding="latin-1", errors="replace") as f:
@@ -468,7 +468,9 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
         except OSError:
             pass
     if r.returncode != 0 or not os.path.isfile(tmp):
-        raise RuntimeError("Ghostscript %d: %s" % (r.returncode, (r.stderr or r.stdout or b"")[-400:].decode("utf-8", "replace")))
+        # 경고 창에는 번역한 앞부분과 Ghostscript 의 마지막 줄만(원문 전체는 영어 기술 문구라 짧게)
+        detail = (r.stderr or r.stdout or b"").decode("utf-8", "replace").strip().splitlines()
+        raise RuntimeError(tr("변환 도구 오류(코드 {rc})").format(rc=r.returncode) + (": " + detail[-1][:200] if detail else ""))
     import fitz
     d = fitz.open(tmp)
     try:
@@ -491,17 +493,17 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
 
 
 def to_gray(src_pdf: str, out_pdf: str, gs: str | None = None) -> None:
-    """저장 창에서 흑백을 고르면 — 벡터 그대로 회색조로(Ghostscript)."""
+    """도구 메뉴의 '흑백으로 저장' 이면 — 벡터 그대로 회색조로(Ghostscript)."""
     gs = gs or gs_exe()
     if not gs:
-        raise FileNotFoundError("Ghostscript 없음")
+        raise FileNotFoundError(tr("변환 도구(Ghostscript)가 없습니다 — '가상 프린터' 창에서 '수리' 하세요."))
     env = dict(os.environ)
     env["GS_LIB"] = ""
     r = subprocess.run([gs, "-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-sDEVICE=pdfwrite", "-dAutoRotatePages=/None",
                         "-sColorConversionStrategy=Gray", "-dProcessColorModel=/DeviceGray",
                         "-sOutputFile=" + out_pdf, src_pdf], capture_output=True, creationflags=_NO_WINDOW, env=env, timeout=600)
     if r.returncode != 0 or not os.path.isfile(out_pdf):
-        raise RuntimeError("Ghostscript %d" % r.returncode)
+        raise RuntimeError(tr("변환 도구 오류(코드 {rc})").format(rc=r.returncode))
 
 
 # ── 사용자별 예약 작업 ─────────────────────────────────────────────────
@@ -546,8 +548,20 @@ def task_command():
     return (unescape(c.group(1)) if c else "", unescape(a.group(1)) if a else "")
 
 
+def task_owner() -> bool:
+    """예약 작업을 맞춰도 되는 실행인가 — **설치본**(빌드된 exe · 휴대용 아님 · 시험 프로필 아님)만(SOT §4.4, 261017-18 점검:
+    종전에는 개발 main.py·휴대용·시험 프로필 창이 사용자의 예약 작업을 자기 쪽으로 바꿨다)."""
+    if not getattr(sys, "frozen", False) or os.environ.get("POLYPDF_PROFILE"):
+        return False
+    try:
+        from viewer import settings_store
+        return not getattr(settings_store, "PORTABLE", False)
+    except Exception:
+        return False
+
+
 def ensure_task() -> bool:
-    """사용자별 예약 작업을 지금 실행 파일로 맞춘다(없거나 다르면 만든다). 바꿨으면 True."""
+    """사용자별 예약 작업을 지금 실행 파일로 맞춘다(없거나 다르면 만든다). 바꿨으면 True. 부르는 쪽이 `task_owner()` 를 먼저 본다."""
     exe, args = launch_command()
     cur = task_command()
     if cur and os.path.normcase(cur[0]) == os.path.normcase(exe) and cur[1] == args:

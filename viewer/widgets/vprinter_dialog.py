@@ -2,7 +2,7 @@
 
 - 상태(`--vprinter check`)는 배경에서 읽는다(스풀러 조회). 설치·수리·제거는 **같은 설치 도구**를 UAC 로 승격해
   숨긴 창으로 돌리고, 끝날 때까지 배경에서 기다린다(응답성 SOT §4 — 창이 멈추지 않는다).
-- 받은 문서 저장 설정 셋: 저장 폴더 기본(원래 파일 폴더/기본 저장 폴더), 기본 저장 폴더, 저장 창 없이 바로 저장(§4.3·§4.8).
+- 받은 문서 저장 설정 셋: 저장 폴더 기본(원래 파일 폴더/기본 저장 폴더), 기본 저장 폴더, 흑백으로 저장(§4.3·§4.8 — 저장 창은 없다).
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QFileDialog, QGro
 from viewer.i18n import tr
 
 ERROR_CANCELLED = 1223                      # UAC 에서 '아니요'
+STILL_RUNNING = -2                          # 기다리는 시간이 넘음 — 설치 도구는 아직 돌고 있다
 
 
 def vprinter_command(action: str) -> tuple:
@@ -39,8 +40,13 @@ def run_elevated(action: str, timeout_ms: int = 180000) -> int:
     except Exception as e:                               # noqa: BLE001 — UAC 취소는 pywintypes.error(1223)
         return getattr(e, "winerror", None) or (e.args[0] if e.args else 1)
     h = info["hProcess"]
-    win32event.WaitForSingleObject(h, timeout_ms)
-    return win32process.GetExitCodeProcess(h)
+    try:
+        # 261017-18 점검: 기다리는 시간이 넘으면 종료 코드는 259(STILL_ACTIVE) — '실패' 가 아니라 '아직 진행 중'
+        if win32event.WaitForSingleObject(h, timeout_ms) == win32event.WAIT_TIMEOUT:
+            return STILL_RUNNING
+        return win32process.GetExitCodeProcess(h)
+    finally:
+        h.Close()
 
 
 def read_state() -> dict:
@@ -180,6 +186,7 @@ class VPrinterDialog(QDialog):
 
     def _done(self, action, rc):
         msg = {0: tr("완료했습니다."), ERROR_CANCELLED: tr("취소했습니다."),
+               STILL_RUNNING: tr("아직 진행 중입니다 — 잠시 뒤 이 창을 다시 열어 상태를 보세요."),
                2: tr("이 PC 에서는 쓸 수 없습니다."), 3: tr("이 배포본에는 가상 프린터 구성요소가 없습니다.")}
         self._last_msg = msg.get(rc if isinstance(rc, int) else -1,
                                  tr("실패했습니다(코드 {rc}) — 기록: {log}").format(

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-17 15:51+0900\n"
+"POT-Creation-Date: 2026-10-17 18:47+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1037,10 +1037,6 @@ msgid ""
 "※ Windows 보안 정책상 기본 앱의 최종 지정은 사용자가 직접 확인해야 합니다."
 msgstr ""
 
-#: viewer/app.py
-msgid "파일 작업"
-msgstr ""
-
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
 msgstr ""
@@ -1613,6 +1609,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "화면캡처.png"
+msgstr ""
+
+#: viewer/app.py
+msgid "파일 작업"
 msgstr ""
 
 #: viewer/app.py
@@ -4631,13 +4631,12 @@ msgid "저장하는 중…"
 msgstr ""
 
 #: viewer/vprinter_controller.py
-#, python-brace-format
-msgid "PolyPDF 프린터 — 저장: {path}"
+msgid "받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPDF 를 켤 때 다시 바꿔 봅니다."
 msgstr ""
 
 #: viewer/vprinter_controller.py
 #, python-brace-format
-msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
+msgid "PolyPDF 프린터 — 저장: {path}"
 msgstr ""
 
 #: viewer/vprinter_controller.py
@@ -4645,9 +4644,23 @@ msgstr ""
 msgid "저장하지 못했습니다: {err}"
 msgstr ""
 
+#: viewer/vprinter_controller.py
+#, python-brace-format
+msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
+msgstr ""
+
+#: viewer/vprinter_recv.py
+msgid "변환 도구(Ghostscript)가 없습니다 — '가상 프린터' 창에서 '수리' 하세요."
+msgstr ""
+
 #: viewer/vprinter_recv.py
 #, python-brace-format
 msgid "인쇄_{stamp}"
+msgstr ""
+
+#: viewer/vprinter_recv.py
+#, python-brace-format
+msgid "변환 도구 오류(코드 {rc})"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -10658,6 +10671,10 @@ msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "완료했습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "아직 진행 중입니다 — 잠시 뒤 이 창을 다시 열어 상태를 보세요."
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py

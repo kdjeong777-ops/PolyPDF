@@ -37,7 +37,7 @@ def print_lock_path() -> str:
 
 
 class _StartWorker(QObject):
-    """창이 뜬 뒤 한 번 — 프린터가 설치됐으면 예약 작업을 맞추고, 쌓인 PS 수를 센다(스풀러·schtasks 조회라 배경)."""
+    """창이 뜬 뒤 한 번 — 프린터가 설치됐고 **설치본 창이면** 예약 작업을 맞추고, 쌓인 PS 수를 센다(스풀러·schtasks 조회라 배경)."""
     finished = pyqtSignal(dict)
 
     def run(self):
@@ -45,7 +45,7 @@ class _StartWorker(QObject):
         try:
             from viewer import vprinter_recv
             out["installed"] = _printer_installed()
-            if out["installed"]:
+            if out["installed"] and vprinter_recv.task_owner():      # 개발·휴대용·시험 프로필 창은 바꾸지 않는다(SOT §4.4)
                 out["task"] = vprinter_recv.ensure_task()
             out["pending"] = len(vprinter_recv.pending_jobs())
         except Exception as e:                       # noqa: BLE001
@@ -68,7 +68,7 @@ class VPrinterMixin:
 
     def _vprinter_start(self):
         self._vp_busy = False
-        self._vp_again = False
+        self._vp_failed = set()                    # 이 창에서 변환에 실패한 PS — 다시 시도하지 않는다(경고 되풀이 방지, 261017-18)
         self._vp_keep = []
         try:
             from viewer.open_gather import OpenGather
@@ -100,6 +100,7 @@ class VPrinterMixin:
             self._save_settings_now()
         except Exception:
             pass
+        dlg.deleteLater()                          # 열 때마다 창이 쌓이지 않게(261017-18)
         try:                                       # 방금 설치했으면 예약 작업을 맞춘다(배경)
             from viewer.workers import run_in_thread
             w = _StartWorker()
@@ -110,17 +111,17 @@ class VPrinterMixin:
 
     # ── 받기 ───────────────────────────────────────────────────────────
     def _vprinter_receive(self):
-        """스풀 폴더의 PS 를 하나씩 저장한다. 처리 중에 또 오면 끝난 뒤 다시 본다."""
+        """스풀 폴더의 PS 를 하나씩 저장한다. 처리 중에 또 오면 끝난 뒤 다시 본다(한 건이 끝날 때마다 폴더를 다시 읽는다).
+        이 창에서 변환에 실패한 PS 는 건너뛴다 — 지우지 않고 다음 실행 때 한 번 더(SOT §4.3, 261017-18)."""
         if getattr(self, "_vp_busy", False):
-            self._vp_again = True
             return
         self._vp_busy = True
+        failed = getattr(self, "_vp_failed", set())
         try:
             from viewer import vprinter_recv as R
             seen = set()
             while True:
-                self._vp_again = False
-                jobs = [p for p in R.pending_jobs() if p not in seen]
+                jobs = [p for p in R.pending_jobs() if p not in seen and p not in failed]
                 if not jobs:
                     break
                 for ps in jobs:
@@ -139,24 +140,31 @@ class VPrinterMixin:
     def _vprinter_one(self, ps: str):
         from viewer import vprinter_recv as R
         pref = self._vprinter_prefs()
-        tmpdir = Path(tempfile.mkdtemp(prefix="polypdf_vprint_"))
-        conv = str(tmpdir / "printed.pdf")
         box = {}
 
+        # 261017-18 점검: 임시 폴더 만들기·지우기·PS 지우기도 배경 일 안에서 — 메인 스레드는 파일을 만지지 않는다(응답성 SOT §4)
         def job(progress):
             progress(0, 2, tr("받은 문서를 PDF 로 바꾸는 중…"))
-            plan = R.plan_save(ps, "original" if pref["kind"] != "default" else "default", pref.get("default_dir", ""))
-            box["plan"] = plan
-            R.convert(ps, conv, title=os.path.splitext(R.clean_title(plan["title"]))[0] or plan["name"])
+            tmpdir = tempfile.mkdtemp(prefix="polypdf_vprint_")
+            box["tmp"] = tmpdir
+            try:
+                plan = R.plan_save(ps, "original" if pref["kind"] != "default" else "default", pref.get("default_dir", ""))
+                conv = os.path.join(tmpdir, "printed.pdf")
+                R.convert(ps, conv, title=os.path.splitext(R.clean_title(plan["title"]))[0] or plan["name"])
+                box["plan"], box["conv"] = plan, conv
+            except Exception:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                raise
             progress(2, 2, tr("완료"))
 
         res = self._run_merge_job(job, tr("PolyPDF 프린터"), cancellable=False)
-        if res.get("err") or "plan" not in box or not os.path.isfile(conv):
+        if res.get("err") or "conv" not in box:
+            self._vp_failed = getattr(self, "_vp_failed", set()) | {ps}
             QMessageBox.warning(self, tr("PolyPDF 프린터"),
-                                tr("받은 문서를 PDF 로 바꾸지 못했습니다: {err}").format(err=res.get("err") or "?"))
-            shutil.rmtree(tmpdir, ignore_errors=True)
-            return                                   # PS 는 남긴다 — 다음에 다시(잃지 않게)
-        plan = box["plan"]
+                                tr("받은 문서를 PDF 로 바꾸지 못했습니다: {err}").format(err=res.get("err") or "?") + "\n\n"
+                                + tr("받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPDF 를 켤 때 다시 바꿔 봅니다."))
+            return                                   # PS 는 남긴다(잃지 않게), 이 창에서는 다시 시도하지 않는다
+        plan, conv = box["plan"], box["conv"]
         # 261017-14 사용자 지시: 저장 창(인쇄 창 저장 모드) 없이 — 도구 메뉴 설정(폴더 종류·기본 폴더·흑백)대로 바로 저장하고 연다.
         #   쪽 범위·다단은 인쇄한 프로그램의 인쇄 창에서 고른다(받은 PDF 를 그대로 둔다).
         folder = plan["folder"] or plan["default_dir"]
@@ -165,44 +173,42 @@ class VPrinterMixin:
 
         def save_job(progress):
             progress(0, 1, tr("저장하는 중…"))
-            os.makedirs(folder, exist_ok=True)
-            final = R.unique_pdf_path(folder, plan["name"])
-            if color == "gray":
-                R.to_gray(conv, final)
-            else:
-                shutil.copyfile(conv, final)
-            box2["final"] = final
+            try:
+                os.makedirs(folder, exist_ok=True)
+                final = R.unique_pdf_path(folder, plan["name"])
+                if color == "gray":
+                    R.to_gray(conv, final)
+                else:
+                    shutil.copyfile(conv, final)
+                box2["final"] = final
+                try:
+                    os.remove(ps)
+                except OSError:
+                    pass
+            finally:
+                shutil.rmtree(box["tmp"], ignore_errors=True)
             progress(1, 1, tr("완료"))
 
         res = self._run_merge_job(save_job, tr("PolyPDF 프린터"), cancellable=False)
         if res.get("err") or "final" not in box2:
+            self._vp_failed = getattr(self, "_vp_failed", set()) | {ps}
             QMessageBox.warning(self, tr("PolyPDF 프린터"), tr("저장하지 못했습니다: {err}").format(err=res.get("err") or "?"))
-            shutil.rmtree(tmpdir, ignore_errors=True)
             return
-        self._vprinter_discard(ps, tmpdir)
         self.status.showMessage(tr("PolyPDF 프린터 — 저장: {path}").format(path=box2["final"]), 6000)
         self._vprinter_open(box2["final"])
 
-    def _vprinter_discard(self, ps, tmpdir):
-        if ps:
-            try:
-                os.remove(ps)
-            except OSError:
-                pass
-        if tmpdir:
-            shutil.rmtree(tmpdir, ignore_errors=True)
-
     # ── 여는 곳(SOT §4.4) ─────────────────────────────────────────────
     def _vprinter_open(self, path: str):
-        from viewer.history import HistoryItem
         folder = os.path.normcase(os.path.dirname(os.path.abspath(path)))
         mine = getattr(self, "_folder", None)
         same = bool(mine) and os.path.normcase(os.path.abspath(str(mine))) == folder
         nothing_open = not mine and not self.main_view.current_file()
         try:
             if same:
-                self.bookmark_tree.refresh()
-                self._load_main(HistoryItem(str(path), 0, "", "bookmark"))
+                # 261017-18 점검: 폴더 전체를 다시 읽지 않고(`refresh` 는 메인에서 전부·편집 중이면 질문 창) 그 파일만 더하고,
+                #   색인부터 거는 '저장 뒤 여는 길' 하나로(CLAUDE.md `_open_saved_file`)
+                self.bookmark_tree.add_or_refresh_file(str(path))
+                self._open_saved_file(str(path), 0)
             elif nothing_open:
                 self.open_pdf(Path(path))
             else:

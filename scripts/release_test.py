@@ -234,7 +234,9 @@ def exe_for_install(a, out: Path, rec: dict) -> Path:
 
 # ── 시험 계획 — 등급 판정(릴리스 SOT §3·§4, 261010-4) ─────────────
 # 판정 경로의 **정확한 목록은 여기 한 곳**이 소유한다 — SOT 는 까닭과 영역만 적고 이 상수를 가리킨다.
-INSTALL_PATHS = ("installer/", "build_ci.bat", "scripts/i18n.py", ".github/workflows/release.yml", "viewer/updater.py")
+# 261017-18: 가상 프린터 설치 도구(viewer/vprinter.py — 설치 끝에 설치 프로그램이 부른다)·동봉 파일(printer/)도 설치 경로다
+INSTALL_PATHS = ("installer/", "build_ci.bat", "scripts/i18n.py", ".github/workflows/release.yml", "viewer/updater.py",
+                 "viewer/vprinter.py", "printer/")
 BUILD_PATHS = ("main.py", "requirements.txt", "viewer/workers.py", "viewer/index_proc.py", "viewer/kiwi_space.py",
                "viewer/child_job.py", "viewer/indexer.py", "viewer/settings_store.py", "viewer/open_gather.py",
                "viewer/widgets/thumbs_list.py")
@@ -258,6 +260,8 @@ FOCUS = [   # (경로 앞부분, 볼 것, 측정 대상) — 상시 점검 목�
      "설치 결과 — 종료 코드·버전·언어 유지(다국어 SOT §10.5), 작업 표시줄 아이콘은 사용자에게 확인", None),
     (("viewer/updater.py",), "앱 안 업데이트 — 이 시험으로는 못 본다(못 한 것으로 적는다)", None),
     ((".github/workflows/release.yml",), "릴리스 자산 — 태그 뒤 자산 목록·설치 프로그램·휴대용 zip", None),
+    (("viewer/vprinter.py", "viewer/vprinter_recv.py", "viewer/vprinter_controller.py", "printer/"),
+     "가상 프린터 — `scripts\\vprinter_check.py install <설치 파일>`·`e2e`(앱 코드만이면 `compare`·`e2e --dev`, 가상 프린터 SOT §6.4)", None),
 ]
 
 

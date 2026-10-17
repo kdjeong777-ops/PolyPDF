@@ -277,6 +277,28 @@ def _restart_spooler() -> None:
     time.sleep(1.5)
 
 
+def _replace_dll(src: str, dst: str) -> None:
+    """등록된 모니터의 DLL 을 새 판으로 — 스풀러를 멈추고 **멈춤(STOPPED)을 기다린 뒤** 복사하고, 복사가 실패해도
+    **반드시 다시 시작**한다(261017-18 점검: 종전에는 복사가 실패하면 스풀러가 멈춘 채 남아 PC 전체 인쇄가 멈출 수 있었다)."""
+    import win32serviceutil
+    try:
+        win32serviceutil.StopService("Spooler")
+        for _ in range(40):                                      # SERVICE_STOPPED = 1, 최대 20초
+            if win32serviceutil.QueryServiceStatus("Spooler")[1] == 1:
+                break
+            time.sleep(0.5)
+        shutil.copy2(src, dst)
+    finally:
+        try:
+            win32serviceutil.StartService("Spooler")
+        except Exception as ex:                                  # 이미 돌고 있으면(1056) 그대로
+            info("install", "스풀러 시작: %s" % ex)
+        for _ in range(30):
+            if win32serviceutil.QueryServiceStatus("Spooler")[1] == 4:   # SERVICE_RUNNING
+                break
+            time.sleep(0.5)
+
+
 def _set_spool_acl() -> None:
     root = spool_root()
     os.makedirs(root, exist_ok=True)
@@ -338,12 +360,7 @@ def install(src: str | None = None) -> int:
     registered = _reg_exists(MON_KEY)
     if not (os.path.exists(dll_dst) and _sha(dll_dst) == _sha(dll_src)):
         if registered:
-            import win32serviceutil
-            win32serviceutil.StopService("Spooler")
-            time.sleep(1.5)
-            shutil.copy2(dll_src, dll_dst)
-            win32serviceutil.StartService("Spooler")
-            time.sleep(2)
+            _replace_dll(dll_src, dll_dst)
             info("install", "모니터 DLL 새 판으로")
         else:
             shutil.copy2(dll_src, dll_dst)
@@ -504,7 +521,9 @@ def remove(keep: bool = False) -> int:
             os.remove(dll)
             info("remove", "모니터 DLL 지움")
         except OSError as ex:
-            info("remove", "모니터 DLL 못 지움: %s" % ex)
+            # 그래도 물려 있으면 재부팅 때 지우기 예약(SOT §4.5, 261017-18) — MOVEFILE_DELAY_UNTIL_REBOOT
+            ok = ctypes.windll.kernel32.MoveFileExW(dll, None, 0x4)
+            info("remove", "모니터 DLL 못 지움: %s — 재부팅 때 지우기 예약 %s" % (ex, "됨" if ok else "실패"))
     for p in glob.glob(os.path.join(_sys32(), "polypdfmon*.log")):
         try:
             os.remove(p)
