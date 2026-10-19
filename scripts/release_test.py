@@ -235,9 +235,10 @@ def exe_for_install(a, out: Path, rec: dict) -> Path:
 # ── 시험 계획 — 등급 판정(릴리스 SOT §3·§4, 261010-4) ─────────────
 # 판정 경로의 **정확한 목록은 여기 한 곳**이 소유한다 — SOT 는 까닭과 영역만 적고 이 상수를 가리킨다.
 # 261017-18: 가상 프린터 설치 도구(viewer/vprinter.py — 설치 끝에 설치 프로그램이 부른다)·동봉 파일(printer/)도 설치 경로다
+# 261020-2(긴급): requirements.txt 도 — 이 PC 빌드는 이 PC 의 패키지를 쓰므로 CI 가 받는 판(beta.293 의 PyMuPDF 2.0)을 못 본다
 INSTALL_PATHS = ("installer/", "build_ci.bat", "scripts/i18n.py", ".github/workflows/release.yml", "viewer/updater.py",
-                 "viewer/vprinter.py", "printer/")
-BUILD_PATHS = ("main.py", "requirements.txt", "viewer/workers.py", "viewer/index_proc.py", "viewer/kiwi_space.py",
+                 "viewer/vprinter.py", "printer/", "requirements.txt")
+BUILD_PATHS = ("main.py", "viewer/workers.py", "viewer/index_proc.py", "viewer/kiwi_space.py",
                "viewer/child_job.py", "viewer/indexer.py", "viewer/settings_store.py", "viewer/open_gather.py",
                "viewer/widgets/thumbs_list.py")
 # 바뀐 줄에 이것이 있으면 배경 작업·프로세스·DB 잠금을 건드린 것이다(응답성 SOT — 판정은 실측)

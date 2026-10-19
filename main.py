@@ -50,6 +50,27 @@ if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--vprinter"
     if sys.stdout is not None:                  # 설치본(창 전용)에는 표준 출력이 없다 — flush 가 예외를 내면 오류 창이 설치 프로그램을 붙든다(261017)
         sys.stdout.flush()
     os._exit(_rc)
+# 261020-2(긴급, 릴리스 SOT §5): 빌드본 자가 시험 — 시작 때 싣는 모듈을 그대로 싣고 PDF 하나를 만들어 본 뒤 결과를 파일에 적는다.
+#   CI 가 빌드 직후 돌려 '설치본이 시작하자마자 꺼짐'(PyMuPDF 2.0 의 빠진 모델 파일, beta.293)을 릴리스 전에 잡는다. 창은 띄우지 않는다.
+if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--selftest":
+    _out = sys.argv[2]
+    try:
+        import fitz as _fz
+        _d = _fz.open()
+        _d.new_page().insert_text((72, 72), "selftest")
+        _txt = _d[0].get_text()
+        _d.close()
+        from PyQt6.QtWidgets import QApplication as _QA       # noqa: F401
+        import viewer.app as _va                              # noqa: F401 — 창 코드가 끄는 모듈 전부
+        from viewer import __version__ as _ver
+        with open(_out, "w", encoding="utf-8") as _f:
+            _f.write("ok %s pymupdf %s %s\n" % (_ver, _fz.VersionBind, "text" if "selftest" in _txt else "notext"))
+        os._exit(0)
+    except BaseException:
+        import traceback as _tb
+        with open(_out, "w", encoding="utf-8") as _f:
+            _f.write("fail\n" + _tb.format_exc())
+        os._exit(1)
 
 # 260606-28: 무거운 import(fitz/viewer.app→kiwipiepy·study 등)는 스플래시 표시 후로
 # 미뤄 클릭 즉시 중앙 아이콘이 뜨도록 함. 여기선 가벼운 PyQt 만 선로딩.

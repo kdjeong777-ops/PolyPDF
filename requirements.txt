@@ -1,5 +1,7 @@
 PyQt6>=6.5.0
-PyMuPDF>=1.23.0
+# 261020-2(긴급): 고정 판 — PyMuPDF 2.0 은 pymupdf-layout·onnxruntime 을 끌고 와 import 때 레이아웃 모델 파일을 읽는데,
+#   빌드 묶음에 그 파일이 없어 beta.293 설치본이 시작하자마자 꺼졌다. 올릴 때는 빌드본 --selftest 로 확인(릴리스 SOT §5).
+PyMuPDF==1.28.2
 openpyxl>=3.1.0
 # Pillow: PyInstaller 가 EXE 아이콘으로 PNG → ICO 변환할 때 필요 (v1.6.2 빌드 에러 수정)
 Pillow>=10.0.0
