@@ -94,6 +94,12 @@ class StudyMixin:
                 pass
             return res
         UserTermsDialog(dic, _edit, parent=self).exec()
+        # 261019-5(점검): 목록 창의 [삭제] 도 단어장 패널에 보이게 — 닫을 때 한 번 다시 그린다
+        self._spot_terms_cache = None
+        try:
+            self._refresh_study_panel(self.main_view.current_page())
+        except Exception:
+            pass
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_dict_manager(self, checked: bool = False):
@@ -1695,8 +1701,13 @@ class StudyMixin:
             finally:
                 doc.close()
             bms = extract_headings_from_store(store, fk, total, use_font_auto=False)
+            tree = bt or self.bookmark_tree
+            # 261019-2(점검): OCR 이 도는 몇 분 사이에 편집 모드를 껐을 수 있다 — 넣기 직전에 다시 본다(마스터 §4.7.0)
+            if bms and (not tree.has_file(str(path), warn=True)
+                        or not tree.ensure_edit_mode(tr("단어장·책갈피 동시 생성"))):
+                return 0
             for b in bms:
-                (bt or self.bookmark_tree).add_bookmark(str(path), b.page, b.title)
+                tree.add_bookmark(str(path), b.page, b.title)
             if bms:
                 self.status.showMessage(
                     f"책갈피 {len(bms)}개 추가됨 — 책갈피창 편집(✏)에서 저장(💾)하면 PDF에 반영", 7000)

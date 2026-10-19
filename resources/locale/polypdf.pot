@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-19 22:11+0900\n"
+"POT-Creation-Date: 2026-10-19 22:50+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1172,10 +1172,6 @@ msgstr ""
 msgid "{head}{v}쪽"
 msgstr ""
 
-#: viewer/app.py
-msgid "책갈피 만들기"
-msgstr ""
-
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
 #: viewer/vprinter_controller.py viewer/workers.py
 msgid "완료"
@@ -1745,6 +1741,10 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "텍스트층에 반영했습니다 — {name} · {n}쪽"
+msgstr ""
+
+#: viewer/app.py
+msgid "책갈피 만들기"
 msgstr ""
 
 #: viewer/app.py
@@ -3079,7 +3079,7 @@ msgstr ""
 msgid "쪽 편집"
 msgstr ""
 
-#: viewer/edit_controller.py
+#: viewer/edit_controller.py viewer/widgets/bookmark_tree.py
 msgid "책갈피"
 msgstr ""
 
@@ -5524,6 +5524,11 @@ msgstr ""
 msgid ""
 "파일 이름 변경 실패: {e}\n"
 "다른 프로그램이 파일을 잡고 있을 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "이 책갈피창에 '{name}' 이(가) 없어 책갈피를 넣을 수 없습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

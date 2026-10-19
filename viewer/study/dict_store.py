@@ -185,6 +185,9 @@ class DictStore:
                 " AND IFNULL(x.norm_en,'')=IFNULL(m.norm_en,'') AND IFNULL(x.def_ko,'')=IFNULL(m.def_ko,'')"
                 " AND IFNULL(x.def_en,'')=IFNULL(m.def_en,''))",       # 옛 백업 복원 때 겹치지 않게
                 (USER_SOURCE_ID,))
+            # 두 파일이 WAL 이면 한 트랜잭션도 파일끼리 원자적이지 않다 — 옮긴 것을 **먼저 확정**하고 지운다
+            #   (사이에 끊기면 다음에 다시 옮기되 위 겹침 검사가 막는다 — 사용자 뜻을 잃지 않는다)
+            self.conn.commit()
             self.conn.execute("DELETE FROM main.dict_entry WHERE source_id=?", (USER_SOURCE_ID,))
         self.conn.executescript(f"""
             CREATE TEMP VIEW IF NOT EXISTS dict_entry AS

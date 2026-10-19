@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-19 22:11+0900\n"
+"POT-Creation-Date: 2026-10-19 22:50+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1204,10 +1204,6 @@ msgstr "Stopped applying to PDF — the original is unchanged."
 msgid "{head}{v}쪽"
 msgstr "{head}{v}"
 
-#: viewer/app.py
-msgid "책갈피 만들기"
-msgstr "Make Bookmarks"
-
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
 #: viewer/vprinter_controller.py viewer/workers.py
 msgid "완료"
@@ -1794,6 +1790,10 @@ msgstr "Pages with the text layer rewritten: {n} ({get} lines)"
 #, python-brace-format
 msgid "텍스트층에 반영했습니다 — {name} · {n}쪽"
 msgstr "Applied to the text layer — {name} · {n} pages"
+
+#: viewer/app.py
+msgid "책갈피 만들기"
+msgstr "Make Bookmarks"
 
 #: viewer/app.py
 #, python-brace-format
@@ -3196,7 +3196,7 @@ msgstr "Hyperlinks"
 msgid "쪽 편집"
 msgstr "Page edits"
 
-#: viewer/edit_controller.py
+#: viewer/edit_controller.py viewer/widgets/bookmark_tree.py
 msgid "책갈피"
 msgstr "Bookmarks"
 
@@ -5750,6 +5750,11 @@ msgid ""
 msgstr ""
 "Failed to rename the file: {e}\n"
 "Another program may be holding the file."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "이 책갈피창에 '{name}' 이(가) 없어 책갈피를 넣을 수 없습니다."
+msgstr "'{name}' is not in this bookmark pane, so the bookmark cannot be added here."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format

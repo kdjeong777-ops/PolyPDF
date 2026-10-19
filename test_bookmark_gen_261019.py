@@ -442,6 +442,91 @@ st.close()
 chk(_q and "OCR" in _q[-1] and not left and not bt.is_edit_mode(),
     "N1 편집 끝 — 저장 안 한 OCR 도 묻고, '저장 안 함' 이면 버린다", f"{_q[-1:]} left={left}")
 
+# ── O. 261019 점검 지적 — 편집 끝 저장 실패·↻ 버리기·없는 파일·정렬 자리·검색 비용 ─────────────
+QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Save)
+bt.btn_edit.setChecked(True); app.processEvents()
+bt._dirty = True
+bt._op_save = lambda *a, **k: None                  # 저장 실패·취소(저장 안 됨이 그대로 남는다)
+bt.btn_edit.setChecked(False); app.processEvents()
+chk(bt.is_edit_mode() and bt._dirty, "O1 편집 끝 [저장] 이 실패하면 편집 모드·저장 안 됨이 남는다",
+    f"edit={bt.is_edit_mode()} dirty={bt._dirty}")
+del bt._op_save
+_rev = []
+bt.bookmarksReverted.connect(lambda: _rev.append(1))
+_real_exec = QMessageBox.exec
+def _drop_exec(box):
+    for b in box.buttons():
+        if box.buttonRole(b) == QMessageBox.ButtonRole.DestructiveRole:
+            b.click()
+    return 0
+QMessageBox.exec = _drop_exec
+bt.refresh(); app.processEvents()
+QMessageBox.exec = _real_exec
+chk(_rev == [1] and not bt._dirty, "O2 ↻ '버리고 새로고침' 도 따라간 창을 되돌린다(bookmarksReverted)", f"{_rev}")
+bt.btn_edit.setChecked(False); app.processEvents()
+
+_infos, _asked_t = [], []
+QMessageBox.information = staticmethod(lambda *a, **k: _infos.append(a[2] if len(a) > 2 else ""))
+_o_ask = mw._ask_bookmark
+mw._ask_bookmark = lambda *a, **k: (_asked_t.append(1), ("x", 1, True))[1]
+lt.show(); mw._split_on = True; mw._active_pane = 1
+lt.load_pdf_files([str(pdf)]); app.processEvents()
+mw._prompt_add_bookmark(str(a_only), 2); app.processEvents()
+chk(_infos and "a_only.pdf" in _infos[-1] and not _asked_t,
+    "O3 활성 창 책갈피창에 그 파일이 없으면 넣지 않고 알린다('추가됨' 이 아니라)", f"{_infos[-1:]} asked={_asked_t}")
+mw._ask_bookmark = _o_ask
+QMessageBox.information = staticmethod(lambda *a, **k: None)
+mw._active_pane = 0
+
+# O4. 트리 보기 + 수정일 순 — 새 파일이 든 폴더가 그 수정일 자리로, 옮긴 행의 선택·현재 항목은 그대로
+fold2 = root / "treesort"; (fold2 / "sub").mkdir(parents=True)
+shutil.copy(txt, fold2 / "sub" / "s_old.pdf"); shutil.copy(txt, fold2 / "r_mid.pdf")
+_t = _time.time() - 9000; os.utime(fold2 / "sub" / "s_old.pdf", (_t, _t))
+_t = _time.time() - 4000; os.utime(fold2 / "r_mid.pdf", (_t, _t))
+lt.set_tree_view(True)
+lt.load_folder(str(fold2))
+for _ in range(100):
+    app.processEvents(); QTest.qWait(30)
+    if lt.tree.topLevelItemCount() >= 2:
+        break
+lt.set_sort_mode(lt.SORT_MTIME); app.processEvents(); QTest.qWait(200)
+def _top(tree):
+    out = []
+    for i in range(tree.tree.topLevelItemCount()):
+        it = tree.tree.topLevelItem(i)
+        out.append(Path(it.data(0, tree.DATA_FILE)).name if it.data(0, tree.DATA_FILE) else it.text(0))
+    return out
+t_before = _top(lt)
+r_row = lt._file_node_for_path(str(fold2 / "r_mid.pdf"))
+lt.tree.setCurrentItem(r_row); r_row.setSelected(True)
+s_new = fold2 / "sub" / "s_new.pdf"; shutil.copy(txt, s_new)
+lt.add_or_refresh_file(str(s_new), after=str(fold2 / "sub" / "s_old.pdf")); app.processEvents()
+t_after = _top(lt)
+chk(t_before[0] == "r_mid.pdf" and t_after[-1] == "r_mid.pdf" and "sub" in t_after[0],
+    "O4 트리 보기 + 수정일 순 — 새 파일이 든 폴더가 맨 위로(폴더와 파일을 함께 견준다)", f"{t_before} → {t_after}")
+sub_row = lt.tree.topLevelItem(0)
+def _cur_name(tree):
+    c = tree.tree.currentItem()
+    return Path(c.data(0, tree.DATA_FILE)).name if c is not None and c.data(0, tree.DATA_FILE) else None
+chk(sub_row.childCount() and Path(sub_row.child(0).data(0, lt.DATA_FILE)).name == "s_new.pdf"
+    and _cur_name(lt) == "s_new.pdf" and lt.tree.currentItem().isSelected(),
+    "O5 폴더 안에서도 새 파일이 맨 위, 폴더 행을 옮겨도 고른 새 파일(현재·선택)은 그대로",
+    f"{[sub_row.child(i).text(0) for i in range(sub_row.childCount())]} cur={_cur_name(lt)}")
+lt.set_tree_view(False)
+
+# O6. 문서 안 검색 — search_for 가 찾은 쪽은 빈칸 없는 쪽 글을 만들지 않는다(쪽마다 get_text 한 번 더 들지 않게)
+from viewer.pdf_doc import PdfDocument
+_pd = PdfDocument(str(pdf))
+_w = next(w[4] for w in _pd.doc.load_page(0).get_text("words") if len(w[4]) >= 3)
+_no_hit = sum(1 for i in range(_pd.page_count) if not _pd.doc.load_page(i).search_for(_w))
+_calls = []
+_real_flat = _pd._flat_page
+_pd._flat_page = lambda i, page=None: (_calls.append(i), _real_flat(i, page))[1]
+_hits = _pd.search(_w)
+chk(_hits and len(_calls) == _no_hit, "O6 문서 안 검색 — 못 찾은 쪽만 빈칸 없는 글을 만든다",
+    f"calls={len(_calls)} no_hit={_no_hit} pages={_pd.page_count}")
+_pd.close()
+
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 sys.stdout.flush()

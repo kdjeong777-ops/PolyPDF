@@ -248,11 +248,18 @@ class JobsMixin:
         for k in keys:
             cache.pop(k, None)
         self._on_pending_scanned(cache)
-        for pth in (reindex if index_now else []):     # 배경 색인(그 파일만) — 종료 때는 표시만(다음 실행이 다시 읽는다)
-            try:
-                self._index_single_file(pth)
-            except Exception:
-                pass
+        # 배경 색인(그 파일들만) — 종료 때는 표시만(다음 실행이 다시 읽는다). 파일마다 따로 걸면 앞 작업·진행 중인
+        #   폴더 색인을 서로 취소하므로(한 번에 하나), 색인 중이면 끝난 뒤에, 아니면 한 작업으로(검색창 SOT §3 — 이름 변경과 같은 길)
+        todo = [str(p) for p in (reindex if index_now else [])]
+        try:
+            if todo and getattr(self, "_index_workers", None):
+                self._index_after = list(getattr(self, "_index_after", []) or []) + todo
+            elif len(todo) == 1:
+                self._index_single_file(Path(todo[0]))
+            elif todo:
+                self._index_files(todo)
+        except Exception:
+            pass
         if any(done.values()):
             try:
                 self._refresh_study_panel(self.main_view.current_page())

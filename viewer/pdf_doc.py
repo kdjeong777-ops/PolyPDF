@@ -235,7 +235,11 @@ class PdfDocument:
         hits: list = []
         for i in range(self.doc.page_count):
             page = self.doc.load_page(i)
-            rects = page_hits(page, query, mode, flat_txt=self._flat_page(i, page))
+            if not mode or not any(mode):
+                # 빈칸 없는 쪽 글은 search_for 가 못 찾았을 때만 만든다 — 쪽마다 get_text 를 한 번 더 하지 않게(응답성 SOT §4 ⑥)
+                rects = list(page.search_for(query)) or flat_hits(page, query, None, self._flat_page(i, page))
+            else:
+                rects = page_hits(page, query, mode)
             if rects:
                 hits.append(SearchHit(page_index=i, rects=list(rects)))
         return hits

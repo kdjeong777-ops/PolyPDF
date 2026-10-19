@@ -683,6 +683,8 @@ class BookmarkTree(QWidget):
                     return
             elif c is not b_drop:
                 return
+            else:
+                self.bookmarksReverted.emit()    # 261019-3(점검): 버린 고침을 따라간 다른 책갈피창도 되돌린다
         if callable(self._reload_fn):
             self._reload_fn()
             if self._edit_mode:
@@ -2314,7 +2316,7 @@ class BookmarkTree(QWidget):
                 for c in self._bm_items_from(snap[1]):
                     mine.addChild(c)
                 mine.setData(0, self.DATA_TOC_LOADED, True)
-                mine.setExpanded(expanded or True)
+                mine.setExpanded(expanded)       # 따라간 창의 펼침은 그대로(접어 둔 파일을 펼치지 않는다)
             self.__dict__.setdefault("_bm_cache", {})[str(mine.data(0, self.DATA_FILE))] = snap
             self.__dict__.setdefault("_mirror_paths", set()).add(str(mine.data(0, self.DATA_FILE)))
         finally:
@@ -2324,10 +2326,11 @@ class BookmarkTree(QWidget):
     def reload_mirrored(self, paths=None) -> None:
         """따라간 파일(또는 `paths`)의 책갈피를 디스크에서 다시 읽는다 — 고친 창이 저장·취소한 뒤."""
         want = set(self.__dict__.get("_mirror_paths", set())) if paths is None else {str(p) for p in paths}
-        for p in want:
-            unit = self._unit_for_path(p)
-            if unit is not None:
-                self._refresh_file_toc(unit)
+        with self._quiet_tree():                 # 261019-3(점검): 현재 항목이 떼어져도 이 창 본문이 움직이지 않게
+            for p in want:
+                unit = self._unit_for_path(p)
+                if unit is not None:
+                    self._refresh_file_toc(unit)
         if paths is None:
             self.__dict__["_mirror_paths"] = set()
         else:
@@ -2791,6 +2794,11 @@ class BookmarkTree(QWidget):
             if ret == QMessageBox.StandardButton.Save:
                 if self._dirty:
                     self._op_save()                  # 책갈피 저장이 OCR·단어장도 확정한다
+                    if self._dirty:                  # 261019-6(점검): 저장이 실패·취소됐으면 편집 모드 유지(고침을 잃지 않게)
+                        self.btn_edit.blockSignals(True)
+                        self.btn_edit.setChecked(True)
+                        self.btn_edit.blockSignals(False)
+                        return
                 elif pend:
                     self._commit_study(pend)
             else:
@@ -3780,6 +3788,15 @@ class BookmarkTree(QWidget):
                 return top
         return None
 
+    def has_file(self, file_path: str, warn: bool = False) -> bool:
+        """261019-3(점검): 이 책갈피창에 그 파일 행이 있나 — 없으면 넣을 곳이 없다(2단에서 다른 창에만 있는 파일).
+        `warn` 이면 없을 때 알린다(종전에는 아무 일 없이 '추가됨' 만 떴다)."""
+        ok = self._file_node_for_path(file_path) is not None
+        if not ok and warn:
+            QMessageBox.information(self, tr("책갈피"), tr("이 책갈피창에 '{name}' 이(가) 없어 책갈피를 넣을 수 없습니다.")
+                                    .format(name=Path(file_path).name))
+        return ok
+
     def add_bookmark(self, file_path: str, page_1based: int, title: str,
                      level: int = None) -> None:
         """v1.6.20 K5: 책갈피 추가 (저장 시 PDF 에 반영).
@@ -3924,13 +3941,18 @@ class BookmarkTree(QWidget):
         파일 행 하나를 **지금 정렬 기준**(이름·수정일·크기)에 맞는 자리로 옮긴다 — 목록 전체를 다시 그리지 않는다
         (펼침·선택·저장 안 한 책갈피가 그대로). '책갈피 순'이면 종전대로(원본 바로 아래·맨 끝). 같은 부모 안의 파일 행끼리만 견준다."""
         mode = self._sort_combo.currentData() if hasattr(self, "_sort_combo") else self.SORT_BOOK
+        flat = getattr(self, "_mode", "") == "flat"
         if mode == self.SORT_BOOK:
-            return
+            if not flat:
+                return                                # bookmarks.json 순서가 곧 '책갈피 순' — 원본 바로 아래
+            mode = self.SORT_NAME                     # 261019-7(점검): 평탄 목록의 '책갈피 순' 은 이름 순으로 보인다(`_sorted_flat`)
         try:
             st = _stat(fp)
             self._scan_stats[str(fp)] = (st.st_size, st.st_mtime)   # 새 값으로(정렬 키 캐시)
         except Exception:
             pass
+        # 트리 보기 + 수정일 순은 같은 층의 폴더와 파일을 섞어 늘어놓는다(`_mtime_fill_plan`) — 폴더도 견준다
+        mixed = mode == self.SORT_MTIME and bool(getattr(self, "_view_tree", False))
 
         def key(path):
             p = Path(path)
@@ -3938,28 +3960,72 @@ class BookmarkTree(QWidget):
                 return (p.stem.lower(),)
             sz, mt = self._sort_stat(p)
             return (-(mt if mode == self.SORT_MTIME else sz),)
+
+        def newest(folder) -> float:
+            m = 0.0
+            for i in range(folder.childCount()):
+                c = folder.child(i)
+                if self._is_file_node(c):
+                    m = max(m, self._sort_stat(Path(c.data(0, self.DATA_FILE)))[1])
+                elif c.data(0, self.DATA_IS_FOLDER):
+                    m = max(m, newest(c))
+            return m
+
+        def row_key(it):
+            if self._is_file_node(it):
+                d = it.data(0, self.DATA_FILE)
+                return key(d) if d else None
+            if mixed and it.data(0, self.DATA_IS_FOLDER):
+                return (-newest(it),)
+            return None
+
+        self._move_row_to(item, row_key(item), row_key)
+        if mixed:                                     # 새 파일이 들어간 폴더들도 새 수정일 자리로
+            p = item.parent()
+            while p is not None and p.data(0, self.DATA_IS_FOLDER):
+                self._move_row_to(p, row_key(p), row_key)
+                p = p.parent()
+
+    def _move_row_to(self, item, mine, row_key) -> None:
+        """같은 부모 안에서 `row_key` 가 있는 행끼리 견주어 `mine` 자리로 옮긴다 — 선택·현재 항목·하위 펼침은 그대로."""
+        if mine is None:
+            return
         par = item.parent()
         n = par.childCount() if par is not None else self.tree.topLevelItemCount()
         at = (lambda i: par.child(i)) if par is not None else self.tree.topLevelItem
-        mine = key(fp)
         cur = par.indexOfChild(item) if par is not None else self.tree.indexOfTopLevelItem(item)
         target = None
+        ranked = []
         for i in range(n):
             it = at(i)
-            if it is item or not self._is_file_node(it):
+            if it is item:
                 continue
-            d = it.data(0, self.DATA_FILE)
-            if d and key(d) > mine:
+            k = row_key(it)
+            if k is None:
+                continue
+            ranked.append(i)
+            if target is None and k > mine:
                 target = i
-                break
-        if target is None:                            # 모든 파일보다 뒤 — 마지막 파일 행 다음
-            idx = [i for i in range(n) if at(i) is not item and self._is_file_node(at(i))]
-            target = (idx[-1] + 1) if idx else n
+        if target is None:                            # 모두보다 뒤 — 견준 마지막 행 다음
+            target = (ranked[-1] + 1) if ranked else n
         if target > cur:
             target -= 1                               # 빼낸 뒤 위치
         if target == cur:
             return
+        # 떼었다 붙이면 Qt 가 선택·현재 항목·하위 펼침을 잊는다 — 떠 두었다가 되살린다
+        opened = []
+
+        def walk(node):
+            for i in range(node.childCount()):
+                c = node.child(i)
+                if c.isExpanded():
+                    opened.append(c)
+                walk(c)
+        walk(item)
+        from PyQt6.QtCore import QItemSelectionModel
         expanded = item.isExpanded()
+        cur_item = self.tree.currentItem()
+        selected = [it for it in self.tree.selectedItems()]
         with self._quiet_tree():
             if par is not None:
                 par.takeChild(cur)
@@ -3968,6 +4034,12 @@ class BookmarkTree(QWidget):
                 self.tree.takeTopLevelItem(cur)
                 self.tree.insertTopLevelItem(target, item)
             item.setExpanded(expanded)
+            for c in opened:
+                c.setExpanded(True)
+            if cur_item is not None:
+                self.tree.setCurrentItem(cur_item, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
+            for it in selected:
+                it.setSelected(True)
 
     # ---- 260606-9: 활성 창 위치에 해당하는 책갈피 선택·스크롤 -------------
     def select_for_page(self, file_path: str, page0: int):

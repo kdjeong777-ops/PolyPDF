@@ -3766,7 +3766,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not cur or not items:
             return
         bt = self._bm_tree_for_pane()                     # 261019-3: 활성 창의 책갈피창
-        if not bt.ensure_edit_mode(tr("책갈피 만들기")):     # 261019-2(마스터 §4.7.0)
+        if not bt.has_file(cur, warn=True) or not bt.ensure_edit_mode(tr("책갈피 만들기")):     # 261019-2(마스터 §4.7.0)
             return
         for it in items:
             bt.add_bookmark(cur, int(it["page"]), it["title"], int(it.get("level", 1)))
@@ -3883,7 +3883,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _prompt_add_bookmark(self, cur: str, page_1based: int):
         """제목 입력 → 트리 대상 파일에 책갈피 추가(저장은 편집모드 💾). 261019-3: 활성 창의 책갈피창에."""
         bt = self._bm_tree_for_pane()
-        if not bt.ensure_edit_mode(tr("책갈피 추가")):     # 261019-2(마스터 §4.7.0)
+        if not bt.has_file(cur, warn=True) or not bt.ensure_edit_mode(tr("책갈피 추가")):     # 261019-2(마스터 §4.7.0)
             return
         title, level, ok = self._ask_bookmark(cur, page_1based, bt=bt)   # 260908-1: 레벨 포함
         if not ok:
