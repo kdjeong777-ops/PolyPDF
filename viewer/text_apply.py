@@ -231,6 +231,9 @@ def rewrite_page_layer(fitz, page, lines, fontfile, font=None) -> int:
         links = [dict(l) for l in page.get_links()]
     except Exception:
         links = []
+    # 글꼴 이름은 **지우기 전에** 고른다(마스터 §4.5.10 ②) — PyMuPDF 1.28 은 쪽 글자를 모두 지울 때 쪽 자원의 옛 `krfix`(부분집합)도
+    #   떼어, 지운 뒤에 고르면 같은 이름이 나와 새 글자가 부분집합 글꼴로 적혔다(글리프 없음, 261020-2)
+    fname = fresh_font_name(page, "krfix")
     page.add_redact_annot(page.rect)
     try:
         page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE,
@@ -245,7 +248,6 @@ def rewrite_page_layer(fitz, page, lines, fontfile, font=None) -> int:
         except Exception:
             pass
     font = font or fitz.Font(fontfile=fontfile)
-    fname = fresh_font_name(page, "krfix")       # 마스터 §4.5.10 ②
     n = 0
     for (x0, y0, x1, y1), text in lines:
         h, w = y1 - y0, x1 - x0

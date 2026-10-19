@@ -17,6 +17,7 @@ COMPRESS_LEVELS = {"low": (200, 85), "mid": (150, 75), "high": (100, 60)}
 LEVEL_LABELS = {"low": tr_noop("약 — 그림 200 dpi"), "mid": tr_noop("보통 — 그림 150 dpi"), "high": tr_noop("강 — 그림 100 dpi")}
 THRESHOLD_K = 1.3
 MIN_GAIN = 0.05            # 이보다 덜 줄었으면 새 파일을 남기지 않는다(글자만 있는 작은 PDF 도 몇 바이트는 준다)
+MIN_SAVED = 4096           # 261020-2: 줄어든 양도 이만큼은 돼야 — PyMuPDF 1.28 은 글자뿐인 798바이트 PDF 를 41바이트(5.1%) 줄여 쓸모없는 사본을 남겼다
 
 SKIP_SIGNED = tr_noop("서명된 PDF — 사본에서 서명이 깨집니다")
 SKIP_ENCRYPTED = tr_noop("암호 PDF — 사본이 암호 없이 저장됩니다")
@@ -90,7 +91,7 @@ def run(src, level: str, tick) -> tuple:
         _rm(dst)
         raise RuntimeError(tr("압축 파일을 만들지 못했습니다"))
     a, b = os.path.getsize(src), os.path.getsize(dst)
-    if b > a * (1.0 - MIN_GAIN):
+    if b > a * (1.0 - MIN_GAIN) or a - b < MIN_SAVED:
         _rm(dst)
         raise Skipped(SKIP_NOT_SMALLER)
     tick(1, 1, Path(src).name)
