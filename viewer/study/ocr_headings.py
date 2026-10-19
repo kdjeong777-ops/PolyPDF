@@ -109,21 +109,26 @@ def _canonical_title(text: str) -> str:
 
 
 def _group_lines(words: list[dict]) -> list[dict]:
-    """OCR 단어(bbox, 픽셀)들을 줄 단위로 묶어 [{text,h,x0,x1,y0}] 반환."""
+    """OCR 단어(bbox, 픽셀)들을 줄 단위로 묶어 [{text,h,x0,x1,y0}] 반환.
+
+    261019-1(사용자 보고 — 책갈피가 '이상한 위치의 글자'로 만들어짐): 줄 높이는 낱말 상자 높이의
+    **중앙값**이다. 종전에는 최댓값이라 본문 줄에 키 큰 낱말 상자 하나(받침·괄호·잡티가 붙은 상자)만
+    있어도 그 줄이 '큰 글자 = 제목' 으로 뽑혔다."""
     ws = sorted(words, key=lambda w: (w["y0"], w["x0"]))
     lines: list[dict] = []
     for w in ws:
         h = w["y1"] - w["y0"]
-        if lines and abs(w["y0"] - lines[-1]["y0"]) <= max(4.0, 0.6 * lines[-1]["h"]):
+        if lines and abs(w["y0"] - lines[-1]["y0"]) <= max(4.0, 0.6 * lines[-1]["h0"]):
             ln = lines[-1]
             ln["words"].append(w)
-            ln["h"] = max(ln["h"], h)
             ln["x1"] = max(ln["x1"], w["x1"])
         else:
-            lines.append({"y0": w["y0"], "h": h, "x0": w["x0"],
+            lines.append({"y0": w["y0"], "h0": h, "x0": w["x0"],
                           "x1": w["x1"], "words": [w]})
     for ln in lines:
         ln["words"].sort(key=lambda w: w["x0"])
+        ln["h"] = median([w["y1"] - w["y0"] for w in ln["words"]])
+        ln["x0"] = ln["words"][0]["x0"]
         ln["text"] = " ".join(w["surface"] for w in ln["words"]).strip()
     return lines
 
@@ -151,13 +156,20 @@ def extract_ocr_bookmarks(
     scanned_only: bool = True,
     progress: Optional[Callable[[int, int, str], None]] = None,
     should_cancel: Optional[Callable[[], bool]] = None,
+    pages=None,
 ) -> list[Bookmark]:
     """스캔 PDF를 OCR해 헤딩 책갈피 리스트를 만든다.
 
     dpi: 헤딩은 크고 드물어 150이면 충분(속도↑). font_ratio: 본문 높이 대비 헤딩 배수.
     use_font_auto: 정규식 외에 '본문보다 큰 줄'도 헤딩으로. scanned_only: 이미지 페이지만.
+    pages(261019-1): `study.ocr_pages.OcrPages` — 주면 **저장된 OCR 을 먼저 쓰고**, 새로 읽은 쪽은
+    텍스트 창과 같은 형식으로 남긴다(dpi·lang 인자는 쓰지 않는다). 중지하면 그때까지 읽은 쪽의 결과를 돌려준다.
     """
     _ocr.ensure_tesseract()      # 미가용 시 ocr_image 단계에서 RuntimeError
+    if pages is not None:
+        return _extract_with_pages(pages, use_font_auto=use_font_auto, font_ratio=font_ratio,
+                                   scanned_only=scanned_only, progress=progress,
+                                   should_cancel=should_cancel)
     doc = fitz.open(str(pdf_path))
     try:
         total = doc.page_count
@@ -195,6 +207,52 @@ def extract_ocr_bookmarks(
         doc.close()
 
 
+def _extract_with_pages(op, *, use_font_auto, font_ratio, scanned_only, progress, should_cancel) -> list:
+    total = op.page_count
+    page_lines: dict = {}
+    for pi in range(total):
+        if should_cancel and should_cancel():
+            break
+        pno = pi + 1
+        if scanned_only and not op.is_scan(pno):
+            continue
+        if progress:
+            how = tr("저장된 OCR") if op.has_cached(pno) else "OCR"
+            progress(pi, total, f"{how} {pno}/{total}p")
+        try:
+            words, _dpi = op.words(pno)
+        except Exception:
+            continue
+        lines = _group_lines(words)
+        lines = [ln for ln in lines if not _is_pagenum_or_noise(ln["text"])]
+        if lines:
+            page_lines[pi] = lines
+    bookmarks = _bookmarks_from_page_lines(page_lines, use_font_auto=use_font_auto, font_ratio=font_ratio)
+    if progress:
+        progress(total, total, tr('헤딩 {n}개').format(n=len(bookmarks)))
+    return bookmarks
+
+
+# 261019-1: 십진 번호 제목('1. 서론', '1.1 연구의 배경', '2.1.1 개요') — 짧은 줄만, 문장은 제외
+_DEC_HEADING = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+(?=[가-힣A-Za-z(])")
+_SENTENCE_END = re.compile(r"다\s*[\.。]?$|[\.。,;:]$")       # '개요'·'요약' 은 제목이다 — 문장 끝만
+
+
+def numbered_level(text: str, h: float, body_h: float) -> Optional[int]:
+    """번호 제목이면 레벨(1. → 0, 1.1 → 1 …), 아니면 None.
+    한 단계 번호('1.')는 본문 목록과 헷갈리므로 **본문보다 큰 줄**(1.15배)일 때만 받는다."""
+    m = _DEC_HEADING.match(text or "")
+    if not m:
+        return None
+    rest = text[m.end():].strip()
+    if not rest or len(rest) > 40 or len(rest.split()) > 8 or _SENTENCE_END.search(rest):
+        return None
+    depth = m.group(1).count(".") + 1
+    if depth == 1 and h < body_h * 1.15:
+        return None
+    return min(5, depth - 1)
+
+
 def _bookmarks_from_page_lines(page_lines: dict, *, use_font_auto: bool = True,
                                font_ratio: float = 1.5) -> list:
     """페이지별 줄목록(text·h)에서 헤딩 책갈피 추출(렌더/OCR 무관 — 공용 코어)."""
@@ -225,12 +283,22 @@ def _bookmarks_from_page_lines(page_lines: dict, *, use_font_auto: bool = True,
                 continue
             lvl = regex_level(text)
             from_regex = lvl is not None
+            if lvl is None:
+                lvl = numbered_level(text, ln["h"], body_h)     # 261019-1
             if lvl is None and use_font_auto:
                 if ln["h"] >= big_h and ln["h"] >= page_max_h * 0.92:
                     lvl = 0
             if lvl is None:
                 continue
-            title = _canonical_title(text) if from_regex else clean_title(text)
+            if from_regex:
+                title = _canonical_title(text)
+            else:                                   # 261019-1: 글자 간격으로 이어 '연 구 의 배 경' → '연구의 배경'
+                try:
+                    joined = _ocr._join_words_by_gap(list(ln["words"])).strip()
+                except Exception:
+                    joined = text
+                title = clean_title(joined or text)
+                title = re.sub(r"^(\d{1,2}(?:\.\d{1,2}){0,3}\.?)(?=[가-힣A-Za-z(])", r"\1 ", title)   # '1.1연구' → '1.1 연구'
             if not title or title in page_done:
                 continue
             page_done.add(title)

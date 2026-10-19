@@ -973,7 +973,8 @@ try:
     os.environ.pop(ws.FAKE_ENV, None)
 
     # ── R. 검토 보완(261011-1) ─────────────────────────────────
-    # R1·R2 책갈피 자동 생성 '현재 PDF에 저장' 은 워커가 원본을 바꿔 _finalize_save 를 거치지 않는다 — 같은 가드
+    # R1·R2 (261019-1 바뀜, 마스터 §4.4.2): 책갈피 자동 생성은 **PDF 를 쓰지 않는다** — 결과는 책갈피창에 '저장 안 됨',
+    #   서명 가드는 [저장] 이 지나는 `_finalize_save` 한 곳(보안 SOT §4)이라 생성 단계에서는 묻지 않는다
     import viewer.widgets.bookmarker_dialog as _bmd
     import viewer.app as _vapp
     r_doc = root / "R_서명됨.pdf"
@@ -988,19 +989,18 @@ try:
             return QDialog.DialogCode.Accepted
 
         def result_options(self):
-            return {"input_pdf": str(r_doc), "save_pdf": True, "save_txt": False, "overwrite": True,
-                    "mode": "auto", "review": False}
+            return {"input_pdf": str(r_doc), "save_txt": False, "mode": "auto", "review": False}
     _RealBm, _RealW, _RealRun = _bmd.BookmarkerDialog, _vapp.BookmarkerWorker, _vapp.run_in_thread
     _bmd.BookmarkerDialog = _FakeBm
     _vapp.BookmarkerWorker = lambda pdf, opts: started.append(dict(opts)) or _RealW(pdf, opts)
     _vapp.run_in_thread = lambda *a, **k: None
     picked["text"] = "취소"
     mw.action_open_bookmarker()
-    chk(not started and sc.is_signed_file(r_doc), "R1 서명된 PDF 에 책갈피 '현재 PDF에 저장' → 묻고, 취소면 시작하지 않는다", str(started))
-    picked["text"] = "새 파일로"
-    mw.action_open_bookmarker()
-    chk(len(started) == 1 and started[0].get("overwrite") is False and mw._prefs.get("bookmarker_overwrite") is True,
-        "R2 [새 파일로] → 이 실행만 새 PDF(_bookmarked), 저장한 선택값은 그대로", str(started))
+    chk(len(started) == 1 and "overwrite" not in started[0] and sc.is_signed_file(r_doc),
+        "R1 서명된 PDF 도 책갈피 생성은 바로 시작(PDF 를 쓰지 않으므로 묻지 않는다), 원본 서명 그대로", str(started))
+    mw._bookmarker_end()
+    chk(mw._bookmarker_worker is None and "bookmarker" not in dict(mw._jobs_list()),
+        "R2 끝나면 작업 창 목록에서 빠진다")
     _bmd.BookmarkerDialog, _vapp.BookmarkerWorker, _vapp.run_in_thread = _RealBm, _RealW, _RealRun
     QMessageBox.exec = orig_exec
 

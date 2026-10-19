@@ -390,6 +390,15 @@ def main():
     except Exception:
         pass
     from viewer.app import MainWindow
+    # 261019-1(단어학습 SOT §14.21, 사용자 지시): OCR·단어장은 [저장]할 때만 study.db 에 — 그 전에는 이 창의
+    #   보류 저장소. 지난 실행이 저장하지 않고 남긴 보류 파일은 지운다(배경 — 파일 지우기는 백신에 붙들릴 수 있다).
+    try:
+        import threading
+        from viewer.study import study_store as _ss
+        _ss.enable_pending(True)
+        threading.Thread(target=_ss.cleanup_stale_pending, daemon=True).start()
+    except Exception:
+        pass
 
     win = MainWindow()
     # 261009-14(응답성 SOT §4.2·§12): 인자로 받은 PDF 가 있으면 지난 세션을 복원하지 않는다. 복원이 인자 열기보다 먼저

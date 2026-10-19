@@ -102,7 +102,7 @@ class TocReviewDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 10); root.setSpacing(6)
         head = QLabel(
-            tr('<b>{v} 항목 {n}개</b> — 실제 쪽과 대조해 고친 뒤 [저장]하면 PDF 책갈피로 씁니다. 행을 고르면 오른쪽에 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다.').format(v=tr('목차 쪽 {join} 에서 읽은').format(join=', '.join(map(str, self.toc_pages))) if self.toc_pages else tr('추출한'), n=len(self._rows)))
+            tr('<b>{v} 항목 {n}개</b> — 실제 쪽과 대조해 고친 뒤 [확인]하면 책갈피창에 넣습니다(PDF 에는 책갈피창 [저장] 때 씁니다). 행을 고르면 오른쪽에 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다.').format(v=tr('목차 쪽 {join} 에서 읽은').format(join=', '.join(map(str, self.toc_pages))) if self.toc_pages else tr('추출한'), n=len(self._rows)))
         head.setWordWrap(True)
         root.addWidget(head)
 
@@ -167,7 +167,8 @@ class TocReviewDialog(QDialog):
         ops = QHBoxLayout()
         for label, tip, slot in (
                 (tr("행 추가"), tr("현재 행 아래에 새 항목"), lambda: self._add_row("below")),
-                (tr("삭제"), tr("선택 행 삭제"), self._del_rows),
+                (tr("제목 수정"), tr("현재 행의 제목을 고칩니다(더블 클릭·F2 와 같음)"), self._edit_title),
+                (tr("삭제"), tr("선택 행 삭제(Del)"), self._del_rows),
                 ("▲", tr("위로"), lambda: self._move(-1)),
                 ("▼", tr("아래로"), lambda: self._move(+1)),
                 ("◀", tr("레벨 올리기(상위)"), lambda: self._level(-1)),
@@ -179,6 +180,11 @@ class TocReviewDialog(QDialog):
             ops.addWidget(b)
         ops.addStretch(1)
         ll.addLayout(ops)
+        # 261019-1(사용자 지시): Del = 선택 행 삭제. 표 자체에 포커스가 있을 때만(제목을 고치는 중이면 글자 지우기)
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        self._sc_del = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.table)
+        self._sc_del.setContext(Qt.ShortcutContext.WidgetShortcut)
+        self._sc_del.activated.connect(self._del_rows)
         split.addWidget(left)
 
         right = QWidget(); rl = QVBoxLayout(right); rl.setContentsMargins(6, 0, 0, 0)
@@ -232,8 +238,9 @@ class TocReviewDialog(QDialog):
         root.addWidget(split, 1)
 
         # ── 버튼 ────────────────────────────────────────────────────
+        # 261019-1(마스터 §4.4.2): 이 창은 PDF 를 쓰지 않는다 — [확인] 은 책갈피창에 '저장 안 됨' 으로 넣는다
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self)
-        bb.button(QDialogButtonBox.StandardButton.Save).setText(tr("저장(책갈피 쓰기)"))
+        bb.button(QDialogButtonBox.StandardButton.Save).setText(tr("확인(책갈피창에 넣기)"))
         for b in bb.buttons():
             b.setAutoDefault(False); b.setDefault(False)
         bb.accepted.connect(self._accept); bb.rejected.connect(self.reject)
@@ -463,8 +470,20 @@ class TocReviewDialog(QDialog):
         return sorted({i.row() for i in self.table.selectedIndexes()})
 
     def _del_rows(self):
-        for r in reversed(self._sel_rows()):
+        rows = self._sel_rows()
+        for r in reversed(rows):
             self.table.removeRow(r)
+        if rows and self.table.rowCount():           # 지운 자리의 다음 행으로 — Del 을 이어 누를 수 있게
+            self.table.setCurrentCell(min(rows[0], self.table.rowCount() - 1), COL_TITLE)
+
+    def _edit_title(self):
+        """[제목 수정] (261019-1): 현재 행의 제목 셀을 편집 상태로."""
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        self.table.setCurrentCell(row, COL_TITLE)
+        self.table.setFocus()
+        self.table.editItem(self.table.item(row, COL_TITLE))
 
     def _move(self, d: int):
         rows = self._sel_rows()
@@ -520,7 +539,26 @@ class TocReviewDialog(QDialog):
         self._show_preview(self.table.currentRow())
 
     def _verify(self):
-        res = toc_parse.verify_rows(self.pdf_path, self.rows())
+        # 261019-1(마스터 §4.4.3 V1): 스캔 쪽은 저장된 OCR 글로 대조 — 새로 읽지는 않는다(run_ocr=False)
+        op = None
+        try:
+            from viewer.study.ocr_pages import OcrPages
+            from viewer.study.study_store import StudyStore
+            from viewer import dbutil as _db
+            op = OcrPages(self.pdf_path, store=StudyStore(busy_ms=_db.BUSY_MS_UI), run_ocr=False)
+        except Exception:
+            op = None
+        try:
+            page_text = (lambda pg: op.text(pg) if op.is_scan(pg) else None) if op is not None else None
+            res = toc_parse.verify_rows(self.pdf_path, self.rows(), page_text=page_text)
+        finally:
+            if op is not None:
+                st = op.store
+                op.close()
+                try:
+                    st.close()
+                except Exception:
+                    pass
         self.table.blockSignals(True)
         n_ok = 0
         for i in range(self.table.rowCount()):
@@ -673,9 +711,9 @@ class TocReviewDialog(QDialog):
         bms = self.result_bookmarks()
         bad = [i + 1 for i, r in enumerate(self.rows()) if not r.get("page")]
         if not bms:
-            QMessageBox.warning(self, tr("저장"), tr("저장할 항목이 없습니다(실제 쪽이 비어 있음).")); return
+            QMessageBox.warning(self, tr("확인"), tr("넣을 항목이 없습니다(실제 쪽이 비어 있음).")); return
         if bad and QMessageBox.question(
-                self, tr("저장"), tr('실제 쪽이 비어 있는 행 {n}개(예: {bad})는 제외됩니다. 계속할까요?').format(n=len(bad), bad=bad[:5])
+                self, tr("확인"), tr('실제 쪽이 비어 있는 행 {n}개(예: {bad})는 제외됩니다. 계속할까요?').format(n=len(bad), bad=bad[:5])
         ) != QMessageBox.StandardButton.Yes:
             return
         self.accept()

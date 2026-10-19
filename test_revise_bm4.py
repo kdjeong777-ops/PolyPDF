@@ -94,14 +94,15 @@ check("리스트 컨텍스트메뉴 정책", pt.list.contextMenuPolicy()
 from viewer.widgets.bookmarker_dialog import BookmarkerDialog
 from pathlib import Path
 dlg = BookmarkerDialog(default_pdf=Path(PDF))
-check("새/현재 저장 라디오 존재", hasattr(dlg, "rb_save_new") and hasattr(dlg, "rb_save_over"))
-check("기본=새 PDF로 저장", dlg.rb_save_new.isChecked())
-dlg.rb_save_over.setChecked(True)
-check("현재 저장 선택시 출력폴더 비활성", not dlg.edit_outdir.isEnabled()
+# 261019-1(마스터 §4.4.2): 저장 위치 선택은 없앴다 — 결과는 책갈피창에 '저장 안 됨' 으로, PDF 는 [저장] 때
+check("새/현재 저장 라디오 없음", not hasattr(dlg, "rb_save_new") and not hasattr(dlg, "rb_save_over"))
+dlg.chk_txt.setChecked(False)
+check(".txt 를 안 고르면 출력폴더 비활성", not dlg.edit_outdir.isEnabled()
       and not dlg.btn_browse_out.isEnabled())
+dlg.chk_txt.setChecked(True)
+check(".txt 를 고르면 출력폴더 활성", dlg.edit_outdir.isEnabled())
 opts = dlg.result_options()
-check("result_options overwrite=True", opts.get("overwrite") is True)
-check("result_options save_pdf=True", opts.get("save_pdf") is True)
+check("result_options 에 PDF 쓰기 선택 없음", "overwrite" not in opts and "save_pdf" not in opts)
 
 # ---------- _pdf_is_scanned / auto→ocr ----------
 from viewer.workers import _pdf_is_scanned

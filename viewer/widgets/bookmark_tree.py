@@ -357,6 +357,17 @@ class BookmarkTree(QWidget):
         self._page_edit_save = save_fn
         self._finalize_save = finalize_fn
 
+    def set_study_hooks(self, commit_fn):
+        """261019-1(단어학습 SOT §14.21): [저장] 이 그 파일의 저장 안 한 OCR·단어장도 확정한다(앱이 주입)."""
+        self._study_commit = commit_fn
+
+    def _commit_study(self, path) -> bool:
+        fn = getattr(self, "_study_commit", None)
+        try:
+            return bool(fn(str(path))) if callable(fn) else False
+        except Exception:
+            return False
+
     def set_merge_allowed(self, allowed: bool):
         """260618-1: 현재 문서 권한에 따라 병합 메뉴 허용 여부(앱이 주입)."""
         self._merge_allowed = bool(allowed)
@@ -2452,7 +2463,7 @@ class BookmarkTree(QWidget):
                 self._add_transfer_submenu(menu, tr('파일 이동 ({n}개)').format(n=n), xfer_files, True)
             except Exception:
                 pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
-        act_rename = menu.addAction(tr("파일·책갈피 이름 변경"))
+        act_rename = menu.addAction(self._kt(tr("파일·책갈피 이름 변경"), "rename_item"))   # 261019-1: 단축키 설정(기본 F2)
         act_delete = menu.addAction(self._kt(tr("파일·책갈피 삭제"), "Del"))   # 261017-1(디자인 SOT §2.9.2): 책갈피창 Del 과 같다
         menu.addSeparator()
         # 저장 셋 — 모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
@@ -3705,6 +3716,40 @@ class BookmarkTree(QWidget):
         self.tree.scrollToItem(ch)
         self._mark_dirty()
 
+    def replace_file_bookmarks(self, file_path: str, bookmarks: list) -> bool:
+        """261019-1(마스터 §4.4.2): 그 파일 행의 책갈피를 통째로 바꾼다 — **저장 안 됨**(PDF 는 [저장] 때).
+        `bookmarks` = [(제목, 쪽 1-based, 레벨 0-based)]. 바꾸기 전 모양은 되돌리기 기준으로 남는다
+        (편집 모드일 때 — 부르는 쪽이 먼저 켠다). 파일 행이 없으면 목록에 더한다."""
+        target = self._file_node_for_path(file_path)
+        if target is None:
+            self.add_or_refresh_file(file_path)
+            target = self._file_node_for_path(file_path)
+            if target is None:
+                return False
+        if not target.data(0, self.DATA_TOC_LOADED):
+            self._on_item_expanded(target)         # 지금 책갈피를 읽어 둔다 — 되돌리기 '전' 모양
+        self.tree.setCurrentItem(target)
+        self._bm_cache_unit(target)
+        with self._quiet_tree():
+            target.takeChildren()
+            stack, levels = [target], [-1]
+            for title, page, level in bookmarks:
+                lv = max(0, int(level))
+                while len(levels) > 1 and levels[-1] >= lv:
+                    stack.pop(); levels.pop()
+                ch = QTreeWidgetItem([str(title).strip() or tr("(제목 없음)")])
+                ch.setData(0, self.DATA_FILE, str(target.data(0, self.DATA_FILE)))
+                ch.setData(0, self.DATA_PAGE, max(0, int(page) - 1))
+                ch.setData(0, self.DATA_TOC_LOADED, True)
+                stack[-1].addChild(ch)
+                stack.append(ch); levels.append(lv)
+            target.setData(0, self.DATA_TOC_LOADED, True)
+            target.setExpanded(True)
+        self.tree.setCurrentItem(target)
+        self.tree.scrollToItem(target)
+        self._mark_dirty()
+        return True
+
     # ---- 260606-4: 책갈피 생성/편집 완료 후 새로고침(목록 유지) ----------
     def _refresh_file_toc(self, item: QTreeWidgetItem):
         """파일 노드의 내부 책갈피(TOC) 자식을 디스크에서 다시 읽어 갱신."""
@@ -3928,6 +3973,7 @@ class BookmarkTree(QWidget):
             self._page_edit_save(str(src), bookmarks_raw)
             self._dirty = False
             self._commit_meta()
+            self._commit_study(src)              # 261019-1: 저장 안 한 OCR·단어장도 함께 확정
             return
         # 261017-15(§4.7.13, 점검): '다른 이름으로 저장' 이면 책갈피가 그대로여도 새 파일을 만든다(아래 길) —
         #   종전엔 이 가지에서 사본을 원본에 넣고 끝나 **원본을 덮어썼다**
@@ -3936,7 +3982,10 @@ class BookmarkTree(QWidget):
             self._dirty = False
             self._commit_meta()          # 개체/주석 등 page_meta 변경은 저장
             mirrored = self._run_after_save(str(src))
-            if not meta_dirty and not mirrored:
+            studied = self._commit_study(src)    # 261019-1: 책갈피는 그대로여도 OCR·단어장은 확정
+            if studied:
+                QMessageBox.information(self, tr("저장"), tr("저장하지 않았던 OCR·단어장 결과를 저장했습니다."))
+            elif not meta_dirty and not mirrored:
                 QMessageBox.information(self, tr("책갈피 저장"), tr("변경 사항이 없습니다."))
             return
         if not bookmarks_raw and orig:
@@ -3955,7 +4004,17 @@ class BookmarkTree(QWidget):
             bms = [pb.Bookmark(title=t, page=p, level=l) for (t, p, l) in bookmarks_raw]
             # 260822: 임시로 생성 후 목적지 배치(기본=원본 덮어쓰기, Shift=_edited(충돌 시 (k)))
             tmp = src.with_name(src.stem + "_book_savetmp.pdf")
-            out = bridge.apply_to_pdf(src, tmp, bms)
+            # 261019-1(응답성 SOT §4.4): pypdf 로 파일 전체를 다시 쓰는 일이라 배경에서(앱의 `_file_op_bg`) —
+            #   책갈피 자동 생성 결과도 이제 이 [저장] 으로 쓰여 큰 문서가 흔해졌다
+            if self._file_op is not None:
+                _res = {}
+                _e = self._file_op(lambda: _res.update(out=bridge.apply_to_pdf(src, tmp, bms)),
+                                   tr("책갈피 쓰는 중…"))
+                if _e is not None:
+                    raise _e
+                out = _res["out"]
+            else:
+                out = bridge.apply_to_pdf(src, tmp, bms)
             if self._finalize_save is not None:
                 out = self._finalize_save(str(src), str(out))
             else:
@@ -3970,6 +4029,7 @@ class BookmarkTree(QWidget):
             return
         self._dirty = False
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
+        self._commit_study(src)          # 261019-1: 저장 안 한 OCR·단어장도 함께 확정
         # 261017-15(§4.7.9, 점검): 새 이름이면 꾸밈·숨김·링크를 새 파일 키로, 사본은 **다시 열기 전에** 넣고(reopen=False)
         #   여는 것은 bookmarksEdited 한 번 — 종전엔 사본이 한 번 더 열어 두 번 깜빡였고, 새 파일엔 꾸밈이 없었다
         if self._carry_meta is not None and str(out) != str(src):

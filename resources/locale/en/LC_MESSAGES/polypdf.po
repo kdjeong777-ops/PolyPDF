@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-17 19:24+0900\n"
+"POT-Creation-Date: 2026-10-19 21:08+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -151,6 +151,10 @@ msgstr "Version v{version}"
 #: viewer/widgets/thumbs_list.py
 msgid "전체"
 msgstr "All"
+
+#: viewer/app.py
+msgid "책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다."
+msgstr "Bookmark generation stopped. The PDF was not changed."
 
 #: viewer/app.py
 msgid "오른쪽 패널 펼치기/접기"
@@ -400,9 +404,9 @@ msgstr "Save As..."
 msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."
 msgstr "Save bookmarks, annotations and page edits to <original>_edited.pdf."
 
-#: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/thumbs_list.py viewer/widgets/toc_review_dialog.py
+#: viewer/app.py viewer/edit_controller.py viewer/jobs_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/thumbs_list.py
 msgid "저장"
 msgstr "Save"
 
@@ -576,6 +580,18 @@ msgid "책갈피 자동 생성 시작..."
 msgstr "Starting automatic bookmark generation..."
 
 #: viewer/app.py
+msgid "책갈피 생성 중지"
+msgstr "Bookmark Generation Stopped"
+
+#: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
+#: viewer/print_controller.py viewer/update_controller.py
+#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
+#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
+#: viewer/widgets/vprinter_dialog.py
+msgid "닫기"
+msgstr "Close"
+
+#: viewer/app.py
 msgid "책갈피 생성 실패"
 msgstr "Bookmark generation failed"
 
@@ -611,8 +627,9 @@ msgstr "Download Now"
 msgid "있는 언어로 진행"
 msgstr "Continue with Available Languages"
 
-#: viewer/app.py viewer/present_controller.py viewer/sign_controller.py
-#: viewer/sign_draft_controller.py viewer/update_controller.py
+#: viewer/app.py viewer/jobs_controller.py viewer/present_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+#: viewer/study_controller.py viewer/update_controller.py
 #: viewer/widgets/bookmark_tree.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
 #: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
@@ -626,7 +643,7 @@ msgstr "Cancel"
 msgid "OCR 언어 자료를 받는 중…"
 msgstr "Downloading OCR language data…"
 
-#: viewer/app.py
+#: viewer/app.py viewer/jobs_controller.py
 msgid "중지"
 msgstr "Stop"
 
@@ -957,11 +974,11 @@ msgstr ""
 "There are unsaved changes in edit mode.\n"
 "What would you like to do before exiting?"
 
-#: viewer/app.py
+#: viewer/app.py viewer/jobs_controller.py
 msgid "저장 후 종료"
 msgstr "Save and Exit"
 
-#: viewer/app.py
+#: viewer/app.py viewer/jobs_controller.py
 msgid "저장 안 하고 종료"
 msgstr "Exit Without Saving"
 
@@ -1080,13 +1097,33 @@ msgstr "The file is already in the list."
 msgid "입력 PDF를 지정하세요."
 msgstr "Specify the input PDF."
 
-#: viewer/app.py
-msgid "출력 옵션을 최소 1개 선택하세요."
-msgstr "Select at least one output option."
+#: viewer/app.py viewer/widgets/bookmarker_dialog.py
+msgid "책갈피 자동 생성"
+msgstr "Generate Bookmarks Automatically"
 
 #: viewer/app.py
-msgid "책갈피 생성 취소(검토 표에서 취소)"
-msgstr "Bookmark generation canceled (canceled in the review table)"
+msgid "책갈피를 만드는 중입니다. 끝나거나 중지한 뒤 다시 시도하세요."
+msgstr "Bookmarks are being generated. Try again after it finishes or is stopped."
+
+#: viewer/app.py
+msgid "책갈피 생성 취소(검토 표에서 취소) — PDF 는 그대로입니다"
+msgstr "Bookmark generation canceled (canceled in the review table) — the PDF is unchanged"
+
+#: viewer/app.py
+msgid "넣을 책갈피가 없습니다."
+msgstr "There are no bookmarks to add."
+
+#: viewer/app.py
+msgid "책갈피창에서 이 파일을 찾지 못했습니다."
+msgstr "This file was not found in the Bookmarks panel."
+
+#: viewer/app.py
+msgid "찾은 것으로 검토 표 열기"
+msgstr "Open Review Table with Results So Far"
+
+#: viewer/app.py
+msgid "OCR 결과도 버리기"
+msgstr "Discard OCR Results Too"
 
 #: viewer/app.py
 msgid "PDF 를 먼저 여세요."
@@ -1433,6 +1470,7 @@ msgstr "Undo"
 #: viewer/app.py viewer/widgets/main_view.py
 #: viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/toc_review_dialog.py
 msgid "확인"
 msgstr "OK"
 
@@ -1661,28 +1699,27 @@ msgid "파일 작업"
 msgstr "File Operation"
 
 #: viewer/app.py
-msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
-msgstr "Save cancelled — the signed original is unchanged."
+#, python-brace-format
+msgid "책갈피 생성 — {name}"
+msgstr "Bookmark generation — {name}"
+
+#: viewer/app.py viewer/workers.py
+msgid "책갈피 텍스트 저장 중..."
+msgstr "Saving bookmark text..."
 
 #: viewer/app.py
 #, python-brace-format
-msgid "책갈피 {n}개 저장 중..."
-msgstr "Saving {n} bookmarks..."
+msgid "책갈피 {n}개"
+msgstr "{n} bookmark(s)"
 
 #: viewer/app.py
 #, python-brace-format
-msgid "방법={get}"
-msgstr "method={get}"
+msgid "{what} — 책갈피창에서 확인한 뒤 [저장]을 누르면 PDF 에 씁니다"
+msgstr "{what} — check them in the Bookmarks panel, then press [Save] to write them to the PDF"
 
 #: viewer/app.py
-#, python-brace-format
-msgid "개수={get}"
-msgstr "count={get}"
-
-#: viewer/app.py
-#, python-brace-format
-msgid "책갈피 생성 완료 — {join}"
-msgstr "Bookmarks generated — {join}"
+msgid "이번에 OCR 한 결과를 버렸습니다."
+msgstr "Discarded the OCR results from this run."
 
 #: viewer/app.py
 #, python-brace-format
@@ -1786,6 +1823,10 @@ msgstr ""
 #, python-brace-format
 msgid "알 수 없는 요청: {op}"
 msgstr "Unknown request: {op}"
+
+#: viewer/app.py
+msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
+msgstr "Save cancelled — the signed original is unchanged."
 
 #: viewer/app.py
 msgid "다른 PolyPDF 창 확인 중…"
@@ -2157,6 +2198,14 @@ msgstr "Previous Match"
 msgid "옵션 메뉴(우클릭)"
 msgstr "Option Menu (right-click)"
 
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "파일·책갈피 이름 변경"
+msgstr "Rename File/Bookmark"
+
+#: viewer/app.py
+msgid "책갈피창"
+msgstr "Bookmarks panel"
+
 #: viewer/app.py
 msgid "화면 캡처"
 msgstr "Screen Capture"
@@ -2247,13 +2296,19 @@ msgid "파일 {n}개를 목록에 더했습니다(모두 {n2}개)."
 msgstr "Added {n} files to the list ({n2} in total)."
 
 #: viewer/app.py
-msgid "현재 PDF에 저장"
-msgstr "Save to Current PDF"
+#, python-brace-format
+msgid "OCR 새로 {ran}쪽 · 저장된 OCR {reused}쪽"
+msgstr "OCR new {ran} page(s) · stored OCR {reused} page(s)"
 
 #: viewer/app.py
 #, python-brace-format
-msgid "오프셋={offset}"
-msgstr "offset={offset}"
+msgid "지금까지 찾은 항목 {n}개가 있습니다."
+msgstr "{n} item(s) were found so far."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "새로 OCR 한 {n}쪽은 저장하지 않은 상태로 남아, 다시 만들면 그 쪽은 건너뜁니다."
+msgstr "The {n} newly OCR'd page(s) stay unsaved; generating again skips those pages."
 
 #: viewer/app.py
 #, python-brace-format
@@ -2769,21 +2824,6 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
-msgid ""
-"이 PDF에는 기존 책갈피 {n}개가 있습니다.\n"
-"현재 PDF에 저장하면 기존 책갈피는 모두 지워지고 새로 만든 책갈피로 대체됩니다.\n"
-"(되돌릴 수 없습니다. 원본을 보존하려면 '새 PDF로 저장'을 선택하세요.)\n"
-"\n"
-"계속할까요?"
-msgstr ""
-"This PDF has {n} existing bookmarks.\n"
-"If you save to the current PDF, all existing bookmarks are removed and replaced with the new ones.\n"
-"(This cannot be undone. To keep the original, choose 'Save as New PDF'.)\n"
-"\n"
-"Continue?"
-
-#: viewer/app.py
-#, python-brace-format
 msgid "읽지 못했습니다: {msg}"
 msgstr "Could not read: {msg}"
 
@@ -2876,13 +2916,6 @@ msgstr "Deleted"
 #: viewer/compare.py
 msgid "넣음"
 msgstr "Inserted"
-
-#: viewer/compare_controller.py viewer/print_controller.py
-#: viewer/update_controller.py viewer/widgets/glossary_edit_dialog.py
-#: viewer/widgets/hyperlink_dialog.py viewer/widgets/translate_dialog.py
-#: viewer/widgets/translate_files_dialog.py viewer/widgets/vprinter_dialog.py
-msgid "닫기"
-msgstr "Close"
 
 #: viewer/compare_controller.py
 msgid "문서 비교"
@@ -3334,6 +3367,107 @@ msgstr "The {what} process ended unexpectedly (code {code})."
 msgid "색인 프로세스가 예기치 않게 끝났습니다(코드 {code})."
 msgstr "The indexing process ended unexpectedly (code {code})."
 
+#: viewer/jobs_controller.py
+msgid "작업"
+msgstr "Tasks"
+
+#: viewer/jobs_controller.py
+msgid "중지할 수 있는 작업이 없습니다."
+msgstr "There are no tasks that can be stopped."
+
+#: viewer/jobs_controller.py
+msgid "<small>중지하면 지금 쪽(또는 파일)을 마친 뒤 멈춥니다. 읽은 OCR 은 저장 안 한 상태로 남아 같은 작업을 다시 시작하면 이어서 합니다.</small>"
+msgstr "<small>Stopping finishes the current page (or file) first. OCR already read stays unsaved, and starting the same task again continues from there.</small>"
+
+#: viewer/jobs_controller.py
+msgid "💾 저장 안 한 OCR"
+msgstr "💾 Unsaved OCR"
+
+#: viewer/jobs_controller.py
+msgid "OCR·단어장 결과가 아직 저장되지 않았습니다 — 눌러서 저장하거나 버립니다"
+msgstr "OCR and vocabulary results are not saved yet — click to save or discard them"
+
+#: viewer/jobs_controller.py
+msgid "저장 안 한 OCR·단어장"
+msgstr "Unsaved OCR and Vocabulary"
+
+#: viewer/jobs_controller.py
+msgid "버리기"
+msgstr "Discard"
+
+#: viewer/jobs_controller.py
+msgid "눌러서 진행 중인 작업 보기·중지"
+msgstr "Click to view or stop running tasks"
+
+#: viewer/jobs_controller.py
+msgid "OCR·단어장 결과 저장 중…"
+msgstr "Saving OCR and vocabulary results…"
+
+#: viewer/jobs_controller.py
+msgid "OCR·단어장 결과 버리는 중…"
+msgstr "Discarding OCR and vocabulary results…"
+
+#: viewer/jobs_controller.py
+msgid "OCR·단어장 결과를 저장했습니다."
+msgstr "Saved the OCR and vocabulary results."
+
+#: viewer/jobs_controller.py
+msgid "저장 안 한 OCR 확인 중…"
+msgstr "Checking for unsaved OCR…"
+
+#: viewer/jobs_controller.py
+msgid "멈추는 중…"
+msgstr "Stopping…"
+
+#: viewer/jobs_controller.py
+#, python-brace-format
+msgid "'{label}' 를 멈추는 중 — 지금 쪽을 마치면 멈춥니다"
+msgstr "Stopping '{label}' — it stops after the current page"
+
+#: viewer/jobs_controller.py
+#, python-brace-format
+msgid ""
+"아직 저장하지 않은 OCR·단어장 결과가 있습니다.\n"
+"\n"
+"{list}"
+msgstr ""
+"There are OCR and vocabulary results that are not saved yet.\n"
+"\n"
+"{list}"
+
+#: viewer/jobs_controller.py
+#, python-brace-format
+msgid ""
+"저장하지 않은 OCR·단어장 결과가 있습니다. 종료하기 전에 어떻게 할까요?\n"
+"\n"
+"{list}"
+msgstr ""
+"There are unsaved OCR and vocabulary results. What would you like to do before exiting?\n"
+"\n"
+"{list}"
+
+#: viewer/jobs_controller.py
+msgid "저장하지 않은 OCR·단어장 결과를 버릴까요? (되돌릴 수 없습니다)"
+msgstr "Discard the unsaved OCR and vocabulary results? (This cannot be undone)"
+
+#: viewer/jobs_controller.py
+msgid "저장하지 않은 OCR·단어장 결과를 버렸습니다."
+msgstr "Discarded the unsaved OCR and vocabulary results."
+
+#: viewer/jobs_controller.py
+#, python-brace-format
+msgid "OCR {n}쪽"
+msgstr "OCR {n} page(s)"
+
+#: viewer/jobs_controller.py
+#, python-brace-format
+msgid "단어 {n}개"
+msgstr "{n} word(s)"
+
+#: viewer/jobs_controller.py
+msgid "지운 결과"
+msgstr "cleared results"
+
 #: viewer/ocr_batch.py
 msgid "서명된 PDF — 덮어쓰면 서명이 깨집니다"
 msgstr "Signed PDF — overwriting would break the signature"
@@ -3382,8 +3516,8 @@ msgstr "OCR text layer: {n} files · {p} pages"
 
 #: viewer/ocr_batch_controller.py
 #, python-brace-format
-msgid "중지했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 남아 다음에 다시 읽지 않습니다)."
-msgstr "Stopped — {k} files were not touched (pages already read are kept and will not be read again)."
+msgid "중지했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 이 실행 동안 남아 다시 읽지 않습니다 — 남기려면 상태 표시줄 '저장 안 한 OCR' 에서 저장)."
+msgstr "Stopped — {k} file(s) were left untouched (pages already read are kept for this session and not read again — to keep them, save from 'Unsaved OCR' in the status bar)."
 
 #: viewer/page_edit_build.py
 msgid "원본에 놓을 준비"
@@ -4376,6 +4510,10 @@ msgid "tesseract 실행 불가: {e}"
 msgstr "Cannot run tesseract: {e}"
 
 #: viewer/study/ocr_headings.py
+msgid "저장된 OCR"
+msgstr "Stored OCR"
+
+#: viewer/study/ocr_headings.py
 #, python-brace-format
 msgid "헤딩 {n}개"
 msgstr "{n} headings"
@@ -4413,6 +4551,14 @@ msgid "읽을 본문을 찾지 못했습니다."
 msgstr "No body text to read was found."
 
 #: viewer/study_controller.py
+msgid "이어서"
+msgstr "Continue"
+
+#: viewer/study_controller.py
+msgid "처음부터"
+msgstr "Start Over"
+
+#: viewer/study_controller.py
 msgid "PDF 문서를 찾을 수 없습니다."
 msgstr "PDF document not found."
 
@@ -4438,8 +4584,18 @@ msgstr ""
 
 #: viewer/study_controller.py
 #, python-brace-format
+msgid "'{name}' 은(는) {n}쪽까지 읽다 멈췄습니다. 이어서 할까요?"
+msgstr "Reading '{name}' stopped after {n} page(s). Continue from there?"
+
+#: viewer/study_controller.py
+#, python-brace-format
 msgid "mp3 저장 완료: {get}/{get2} 구간 → {name}"
 msgstr "mp3 saved: {get}/{get2} sections → {name}"
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "{what} 중지 — 읽은 {n}쪽은 저장하지 않은 상태로 남아, 다시 시작하면 이어서 합니다."
+msgstr "{what} stopped — the {n} page(s) read stay unsaved, and starting again continues from there."
 
 #: viewer/text_apply.py
 msgid "적을 줄이 없다"
@@ -4997,10 +5153,6 @@ msgid "암호 입력"
 msgstr "Enter Password"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "파일·책갈피 이름 변경"
-msgstr "Rename File/Bookmark"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "책갈피 모두 펼치기"
 msgstr "Expand All Bookmarks"
 
@@ -5427,6 +5579,10 @@ msgid "이름 변경: {name} → {name1}"
 msgstr "Renamed: {name} → {name1}"
 
 #: viewer/widgets/bookmark_tree.py
+msgid "저장하지 않았던 OCR·단어장 결과를 저장했습니다."
+msgstr "Saved the OCR and vocabulary results that were not saved."
+
+#: viewer/widgets/bookmark_tree.py
 msgid "책갈피 저장"
 msgstr "Save Bookmarks"
 
@@ -5437,6 +5593,10 @@ msgid ""
 msgstr ""
 "All bookmarks have been removed.\n"
 "Save the PDF with its bookmarks removed?"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "책갈피 쓰는 중…"
+msgstr "Writing bookmarks…"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -5666,10 +5826,6 @@ msgid "키워드: {join}"
 msgstr "Keywords: {join}"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "책갈피 자동 생성"
-msgstr "Generate Bookmarks Automatically"
-
-#: viewer/widgets/bookmarker_dialog.py
 msgid "입력"
 msgstr "Input"
 
@@ -5750,8 +5906,8 @@ msgid "목차 쪽:"
 msgstr "TOC pages:"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "저장 전에 책갈피 표를 검토한다"
-msgstr "Review the bookmark table before saving"
+msgid "책갈피창에 넣기 전에 표로 검토한다"
+msgstr "Review in a table before adding to the Bookmarks panel"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "검토 표에서 실제 쪽과 대조해 고치거나 지우고 더할 수 있습니다"
@@ -5789,12 +5945,8 @@ msgid "출력"
 msgstr "Output"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "새 PDF로 저장"
-msgstr "Save as new PDF"
-
-#: viewer/widgets/bookmarker_dialog.py
-msgid "현재 PDF에 저장 (덮어쓰기)"
-msgstr "Save to current PDF (overwrite)"
+msgid "만든 책갈피는 책갈피창의 그 파일에 <b>저장하지 않은 상태</b>로 들어갑니다. 확인한 뒤 [저장]을 눌러야 PDF 에 씁니다."
+msgstr "Generated bookmarks go into that file in the Bookmarks panel <b>unsaved</b>. Check them, then press [Save] to write them to the PDF."
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "알PDF용 책갈피 텍스트(.txt) 저장"
@@ -5805,20 +5957,12 @@ msgid "(비우면 PDF 파일과 같은 폴더)"
 msgstr "(leave blank for the PDF's folder)"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "<small>완료 후 책갈피 목록이 자동 새로고침됩니다(기존 파일 목록은 그대로 유지).</small>"
-msgstr "<small>The bookmark list refreshes automatically when done (existing file list is kept).</small>"
-
-#: viewer/widgets/bookmarker_dialog.py
 msgid "PDF 선택"
 msgstr "Select PDF"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "출력 폴더"
 msgstr "Output Folder"
-
-#: viewer/widgets/bookmarker_dialog.py
-msgid "PDF 저장:"
-msgstr "Save PDF:"
 
 #: viewer/widgets/bookmarker_dialog.py
 msgid "출력 폴더:"
@@ -5829,8 +5973,8 @@ msgid "먼저 PDF 파일을 지정하세요"
 msgstr "Specify a PDF file first"
 
 #: viewer/widgets/bookmarker_dialog.py
-msgid "자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)"
-msgstr "Auto-detect failed — enter the TOC pages manually (e.g., 6-11)"
+msgid "못 찾음 — 스캔본은 비워 두면 만들 때 OCR 로 찾습니다(또는 직접 입력, 예: 6-11)"
+msgstr "Not found — for scanned books leave this empty and OCR finds it while building (or type it, e.g. 6-11)"
 
 #: viewer/widgets/bookmarker_dialog.py
 #, python-brace-format
@@ -9974,8 +10118,8 @@ msgid "미리보기 중인 쪽을 현재 행의 실제 쪽으로 기록(수동)"
 msgstr "Records the previewed page as the current row's actual page (manual)"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "저장(책갈피 쓰기)"
-msgstr "Save (Write Bookmarks)"
+msgid "확인(책갈피창에 넣기)"
+msgstr "OK (Add to Bookmarks Panel)"
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "위에 책갈피 추가"
@@ -10026,8 +10170,16 @@ msgid "현재 행 아래에 새 항목"
 msgstr "New entry below the current row"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "선택 행 삭제"
-msgstr "Delete Selected Rows"
+msgid "제목 수정"
+msgstr "Edit Title"
+
+#: viewer/widgets/toc_review_dialog.py
+msgid "현재 행의 제목을 고칩니다(더블 클릭·F2 와 같음)"
+msgstr "Edit the title of the current row (same as double-click or F2)"
+
+#: viewer/widgets/toc_review_dialog.py
+msgid "선택 행 삭제(Del)"
+msgstr "Delete selected rows (Del)"
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "위로"
@@ -10070,8 +10222,8 @@ msgid "쪽 순서가 이미 맞습니다."
 msgstr "Pages are already in order."
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "저장할 항목이 없습니다(실제 쪽이 비어 있음)."
-msgstr "Nothing to save (actual pages are empty)."
+msgid "넣을 항목이 없습니다(실제 쪽이 비어 있음)."
+msgstr "Nothing to add (actual pages are empty)."
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "기존 책갈피 수정 — "
@@ -10081,10 +10233,11 @@ msgstr "Edit Existing Bookmarks — "
 msgid "책갈피 검토 — "
 msgstr "Review Bookmarks — "
 
+# | 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다."
 #: viewer/widgets/toc_review_dialog.py
 #, python-brace-format
-msgid "<b>{v} 항목 {n}개</b> — 실제 쪽과 대조해 고친 뒤 [저장]하면 PDF 책갈피로 씁니다. 행을 고르면 오른쪽에 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다."
-msgstr "<b>{n} entries {v}</b> — Check them against the actual pages, fix them, then click [Save] to write them as PDF bookmarks. Select a row to see its page on the right. If you edit an actual page cell directly, that row is kept even when the offset is reapplied."
+msgid "<b>{v} 항목 {n}개</b> — 실제 쪽과 대조해 고친 뒤 [확인]하면 책갈피창에 넣습니다(PDF 에는 책갈피창 [저장] 때 씁니다). 행을 고르면 오른쪽에 그 쪽이 보입니다. 실제 쪽 셀을 직접 고치면 그 행은 오프셋을 다시 적용해도 유지됩니다."
+msgstr "<b>{n} entries {v}</b> — Check them against the actual pages, fix them, then click [OK] to add them to the Bookmarks panel (they are written to the PDF when you press [Save] there). Select a row to see its page on the right. If you edit an actual page cell directly, that row is kept even when the offset is reapplied."
 
 #: viewer/widgets/toc_review_dialog.py
 #, python-brace-format
@@ -10428,6 +10581,16 @@ msgstr "[{i}/{total}] {name}: extracting and translating text…"
 #: viewer/widgets/translate_files_dialog.py
 msgid "번역 실패"
 msgstr "Translation failed"
+
+#: viewer/widgets/translate_files_dialog.py
+#, python-brace-format
+msgid "PDF 번역 — {n}개 파일"
+msgstr "PDF translation — {n} file(s)"
+
+#: viewer/widgets/translate_files_dialog.py
+#, python-brace-format
+msgid "중지: {ok}개 저장. 남은 {n}개 파일은 오른쪽 목록에 있습니다 — [번역 실행]으로 이어서 합니다."
+msgstr "Stopped: {ok} saved. The remaining {n} file(s) are in the right list — press [Translate] to continue."
 
 #: viewer/widgets/translate_files_dialog.py
 #, python-brace-format
@@ -11037,8 +11200,8 @@ msgid "상태를 읽지 못했습니다: {err}"
 msgstr "Could not read the status: {err}"
 
 #: viewer/workers.py
-msgid "내려받기를 멈췄습니다."
-msgstr "Download stopped."
+msgid "목차 쪽 찾는 중..."
+msgstr "Finding table of contents pages..."
 
 #: viewer/workers.py
 msgid "스캔 이미지 감지 — OCR 모드로 추출"
@@ -11053,12 +11216,12 @@ msgid "책갈피 추출 중..."
 msgstr "Extracting bookmarks..."
 
 #: viewer/workers.py
-msgid "PDF에 책갈피 임베드 중..."
-msgstr "Embedding bookmarks in PDF..."
+msgid "내려받기를 멈췄습니다."
+msgstr "Download stopped."
 
 #: viewer/workers.py
-msgid "책갈피 텍스트 저장 중..."
-msgstr "Saving bookmark text..."
+msgid "오프셋(목차 쪽 → 실제 쪽) 추정 중..."
+msgstr "Estimating offset (TOC page → actual page)..."
 
 #: viewer/workers.py
 msgid "어휘 분석 중..."
@@ -11070,18 +11233,14 @@ msgid "언어 자료 준비 실패: %s"
 msgstr "Failed to prepare language data: %s"
 
 #: viewer/workers.py
-msgid "오프셋(목차 쪽 → 실제 쪽) 추정 중..."
-msgstr "Estimating offset (TOC page → actual page)..."
+#, python-brace-format
+msgid "목차 쪽 {toc_pages}~{toc_pages2} 읽는 중..."
+msgstr "Reading TOC pages {toc_pages}–{toc_pages2}..."
 
 #: viewer/workers.py
 #, python-brace-format
 msgid "재개: {done0}/{total} 완료됨"
 msgstr "Resuming: {done0}/{total} done"
-
-#: viewer/workers.py
-#, python-brace-format
-msgid "목차 쪽 {toc_pages}~{toc_pages2} 읽는 중..."
-msgstr "Reading TOC pages {toc_pages}–{toc_pages2}..."
 
 #: viewer/workers.py
 #, python-brace-format
@@ -11564,4 +11723,59 @@ msgstr "Getting Started"
 
 #~ msgid "저장 창 없이 바로 저장(마지막 선택으로)"
 #~ msgstr "Save directly without the save window (using the last choices)"
+
+#~ msgid "출력 옵션을 최소 1개 선택하세요."
+#~ msgstr "Select at least one output option."
+
+#~ msgid "책갈피 {n}개 저장 중..."
+#~ msgstr "Saving {n} bookmarks..."
+
+#~ msgid "방법={get}"
+#~ msgstr "method={get}"
+
+#~ msgid "개수={get}"
+#~ msgstr "count={get}"
+
+#~ msgid "책갈피 생성 완료 — {join}"
+#~ msgstr "Bookmarks generated — {join}"
+
+#~ msgid "현재 PDF에 저장"
+#~ msgstr "Save to Current PDF"
+
+#~ msgid "오프셋={offset}"
+#~ msgstr "offset={offset}"
+
+#~ msgid ""
+#~ "이 PDF에는 기존 책갈피 {n}개가 있습니다.\n"
+#~ "현재 PDF에 저장하면 기존 책갈피는 모두 지워지고 새로 만든 책갈피로 대체됩니다.\n"
+#~ "(되돌릴 수 없습니다. 원본을 보존하려면 '새 PDF로 저장'을 선택하세요.)\n"
+#~ "\n"
+#~ "계속할까요?"
+#~ msgstr ""
+#~ "This PDF has {n} existing bookmarks.\n"
+#~ "If you save to the current PDF, all existing bookmarks are removed and replaced with the new ones.\n"
+#~ "(This cannot be undone. To keep the original, choose 'Save as New PDF'.)\n"
+#~ "\n"
+#~ "Continue?"
+
+#~ msgid "새 PDF로 저장"
+#~ msgstr "Save as new PDF"
+
+#~ msgid "현재 PDF에 저장 (덮어쓰기)"
+#~ msgstr "Save to current PDF (overwrite)"
+
+#~ msgid "<small>완료 후 책갈피 목록이 자동 새로고침됩니다(기존 파일 목록은 그대로 유지).</small>"
+#~ msgstr "<small>The bookmark list refreshes automatically when done (existing file list is kept).</small>"
+
+#~ msgid "PDF 저장:"
+#~ msgstr "Save PDF:"
+
+#~ msgid "PDF에 책갈피 임베드 중..."
+#~ msgstr "Embedding bookmarks in PDF..."
+
+#~ msgid "저장 전에 책갈피 표를 검토한다"
+#~ msgstr "Review the bookmark table before saving"
+
+#~ msgid "자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)"
+#~ msgstr "Auto-detect failed — enter the TOC pages manually (e.g., 6-11)"
 

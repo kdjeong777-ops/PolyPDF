@@ -82,6 +82,7 @@ class OcrBatchMixin:
                 rewritten, fallback = self._mark_layer_written(src, r.get("stats") or {})
                 pages += len(rewritten) + len(fallback)
                 done.append((src, out))
+                self.study_commit_for(src)            # 261019-1: 원본에 넣었으면(=저장) 읽은 OCR 도 확정
             except SaveCancelled as e:
                 skipped.append((src, str(e)))
             except Exception as e:                       # noqa: BLE001
@@ -97,7 +98,7 @@ class OcrBatchMixin:
                 pass
         lines = [tr('글자층을 넣은 파일: {n}개 · {p}쪽 (새로 읽은 쪽 {o}쪽)').format(n=len(done), p=pages, o=ocred)]
         if cancelled:
-            lines.append(tr('중지했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 남아 다음에 다시 읽지 않습니다).').format(
+            lines.append(tr('중지했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 이 실행 동안 남아 다시 읽지 않습니다 — 남기려면 상태 표시줄 \'저장 안 한 OCR\' 에서 저장).').format(
                 k=max(0, n_files - len(results))))
         if skipped:
             lines.append(tr("건너뛴 파일:") + "".join("\n· %s — %s" % (Path(s).name, w) for s, w in skipped[:10]))
@@ -108,4 +109,5 @@ class OcrBatchMixin:
             lines.append(tr("다른 이름으로 저장된 파일:") + "".join("\n· %s" % Path(o).name for _s, o in renamed[:10]))
         QMessageBox.information(self, tr("OCR 글자층 넣기"), "\n\n".join(lines))
         self.status.showMessage(tr('OCR 글자층: {n}개 파일 · {p}쪽').format(n=len(done), p=pages), 8000)
+        self._pending_refresh()
         return bool(done)

@@ -637,13 +637,17 @@ class TextPageWorker(QObject):
 
 
 class BookmarkerWorker(QObject):
-    """v1.6.16: 외부 pdf_bookmarker 호출. extract → (옵션) embed PDF / write txt.
+    """v1.6.16: 책갈피 추출. 261019-1(마스터 §4.4.2): **PDF 에 쓰지 않는다** — 결과는 앱이 책갈피창에
+    '저장 안 됨' 으로 넣고, 사용자가 [저장]하면 표준 저장(`_finalize_save`)이 원본에 쓴다.
 
     opts:
-      input_pdf, mode("auto"|"toc"|"font"), offset(int|None),
-      save_pdf(bool), save_txt(bool), out_dir(str).
-    결과: {count, method, offset, pdf_out (Path|None), txt_out (Path|None)}.
+      input_pdf, mode("auto"|"toc"|"font"|"ocr"|"existing"), offset(int|None), review(bool),
+      save_txt(bool, 사용자가 고른 .txt 내보내기), out_dir(str).
+    결과: {"phase": "review", rows, ...} 또는
+          {"phase": "done", bookmarks: [(제목, 쪽 1-based, 레벨 0-based)], count, method, offset, txt_out}.
+    중지(`request_cancel`)하면 {"phase": "cancelled", "rows": [...]} — 지금까지 찾은 것(검토 표로 열 수 있다).
     """
+    YIELD_S = 0.005          # 응답성 SOT §4 ②⑦ — 새로 OCR 하는 쪽마다 `pacing.pace`
     progress = pyqtSignal(str)
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
@@ -667,18 +671,6 @@ class BookmarkerWorker(QObject):
 
             mode = self.opts.get("mode", "auto")
             res = {}
-            # ── 260904-1(§4.4): 검토 표에서 확정한 책갈피 — 추출 없이 바로 저장 ──
-            pre = self.opts.get("bookmarks")
-            if pre:
-                import pdf_bookmarker as _pb
-                bookmarks = [_pb.Bookmark(title=str(t_), page=int(p_), level=int(l_))
-                             for (t_, p_, l_) in pre if str(t_).strip() and int(p_) > 0]
-                method = self.opts.get("method") or "review"
-                mode = "review"
-                if not bookmarks:
-                    raise RuntimeError("저장할 책갈피가 없습니다.")
-                self._write_and_finish(bridge, bookmarks, method, res, mode)
-                return
             # ── 260904-10(§4.4): 기존 책갈피 수정 — 지금 PDF 의 목차를 그대로 표로 ──
             if mode == "existing":
                 from viewer import toc_parse as _tp
@@ -694,168 +686,143 @@ class BookmarkerWorker(QObject):
                              for (t_, p_, l_) in _tp.to_bookmarks(rows)]
                 self._write_and_finish(bridge, bookmarks, "existing", res, "review")
                 return
-            # ── 260904-1(§4.4): 목차 쪽 지정 → 관대한 파서(toc_parse) 로 표 생성 ──
-            #   사용자가 쪽을 지정했거나, auto/toc 에서 탐지된 목차 쪽이 있으면 이 경로.
-            #   (내장 파서는 점선 리더 형식만 알아 OCR 텍스트층 스캔본에서 0건이었다.)
-            toc_pages = list(self.opts.get("toc_pages") or [])
-            if mode in ("auto", "toc") and not toc_pages:
-                try:
-                    from viewer import toc_parse as _tp
-                    toc_pages = _tp.find_toc_pages(self.input_pdf)     # 260904-2: 관대한 탐지
-                except Exception:
-                    toc_pages = []
-            if toc_pages and mode in ("auto", "toc"):
-                from viewer import toc_parse
-                self.progress.emit(tr('목차 쪽 {toc_pages}~{toc_pages2} 읽는 중...').format(toc_pages=toc_pages[0], toc_pages2=toc_pages[-1]))
-                rows = toc_parse.parse_toc_pages(self.input_pdf, toc_pages)
-                if rows:
-                    self.progress.emit(tr("오프셋(목차 쪽 → 실제 쪽) 추정 중..."))
-                    cands = toc_parse.suggest_offsets(self.input_pdf, rows, toc_pages)
-                    off = self.opts.get("offset")
-                    if off is None:
-                        off = cands[0][0] if cands else 0
-                    if self.opts.get("review"):
-                        # 검토 단계: 표만 돌려주고 끝. 앱이 검토 창을 띄운 뒤 bookmarks 로 재호출.
-                        self.finished.emit({"phase": "review", "method": "toc",
-                                            "rows": rows, "candidates": cands, "offset": int(off),
-                                            "toc_pages": toc_pages})
-                        return
-                    import fitz
-                    _d = fitz.open(str(self.input_pdf)); _n = _d.page_count; _d.close()
-                    toc_parse.apply_offset(rows, int(off), _n, keep_manual=False)
-                    import pdf_bookmarker as _pb
-                    bookmarks = [_pb.Bookmark(title=t_, page=p_, level=l_)
-                                 for (t_, p_, l_) in toc_parse.to_bookmarks(rows)]
-                    res = {"offset": int(off)}
-                    self._write_and_finish(bridge, bookmarks, "toc", res, "toc")
-                    return
-                elif mode == "toc":
-                    raise RuntimeError("지정한 목차 쪽에서 항목을 읽지 못했습니다. 쪽 범위를 확인하세요.")
-                # auto 인데 항목이 없으면 종전 경로(폰트/OCR)로 계속
-            # 260606-4: '자동'인데 스캔 이미지 PDF면 OCR 모드로 자동 전환
-            if mode == "auto" and _pdf_is_scanned(self.input_pdf):
-                self.progress.emit(tr("스캔 이미지 감지 — OCR 모드로 추출"))
-                mode = "ocr"
-            if mode == "ocr":
-                # 스캔/이미지 PDF → OCR로 'CHAPTER 1' 등 헤딩 인식
-                from viewer.study.ocr_headings import extract_ocr_bookmarks
-                self.progress.emit(tr("OCR 헤딩 인식 중..."))
-                bookmarks = extract_ocr_bookmarks(
-                    self.input_pdf,
-                    use_font_auto=bool(self.opts.get("ocr_font_auto", True)),
-                    progress=lambda d, t, m: self.progress.emit(m),
-                    should_cancel=lambda: self._cancel,
-                )
-                method = "ocr"
-            else:
-                self.progress.emit(tr("책갈피 추출 중..."))
-                res = bridge.extract_auto(
-                    self.input_pdf,
-                    mode=mode,
-                    offset=self.opts.get("offset"),
-                )
-                bookmarks = res["bookmarks"]
-                method = res["method"]
-            if self._cancel:
-                raise RuntimeError("사용자가 취소했습니다.")
-            # 260606-4(추가): 같은 페이지 다중 책갈피 → 헤딩(제목명/숫자)만 남김
+            # ── 261019-1(마스터 §4.4.2): 스캔 쪽 OCR 은 공급자 하나로 — 저장된 OCR 을 먼저 쓰고,
+            #   새로 읽은 쪽은 텍스트 창과 같은 형식으로 보류 저장소에 남긴다(텍스트 창에 바로 보인다).
+            self._op = None
             try:
-                from viewer.study.ocr_headings import prefer_heading_per_page
-                bookmarks = prefer_heading_per_page(bookmarks)
+                from viewer.study.ocr_pages import OcrPages
+                self._op = OcrPages(self.input_pdf, should_cancel=lambda: self._cancel,
+                                    progress=lambda m: self.progress.emit(m),
+                                    pace=lambda: _pacing.pace(self))
             except Exception:
-                pass
-            if not bookmarks:
-                raise RuntimeError("추출된 책갈피가 없습니다.")
-            # 260904-1: 폰트/OCR 결과도 검토 표를 거칠 수 있다(오프셋 없음 — 실제 쪽 그대로)
-            if self.opts.get("review"):
-                rows = [{"title": b.title, "toc_page": None, "page": int(b.page),
-                         "level": int(b.level), "src": method} for b in bookmarks]
-                self.finished.emit({"phase": "review", "method": method, "rows": rows,
-                                    "candidates": [], "offset": 0, "toc_pages": []})
-                return
-            self._write_and_finish(bridge, bookmarks, method, res, mode)
+                self._op = None
+            try:
+                self._run_extract(bridge, mode, res)
+            finally:
+                if self._op is not None:
+                    self._op.close()
         except Exception as e:
             self.error.emit(str(e))
 
-    def _overwrite_in_place(self, bridge, bookmarks) -> Path:
-        """260905(§4.4.6.2): 원본을 제자리에서 교체.
+    def _stats(self) -> dict:
+        op = getattr(self, "_op", None)
+        return {"ocr_ran": int(getattr(op, "ran", 0) or 0), "ocr_reused": int(getattr(op, "reused", 0) or 0)}
 
-        ★ 임시 파일은 **반드시 원본과 같은 폴더**에 만든다 — 다른 볼륨이면 `os.replace`
-        가 원자적이지 않아 실패 시 원본이 남는다는 보장이 깨진다.
-        ★ 어떤 경로로 끝나든 임시 파일을 지운다 — 남으면 그 폴더의 책갈피 트리·검색
-        인덱스에 **쓰레기 PDF 로 잡힌다**(실측으로 확인한 종전 결함).
-        ★ 다른 곳에서 그 PDF 를 열고 있으면 교체가 `PermissionError` 로 실패한다.
-        짧게 재시도한 뒤에도 안 되면 **무엇을 해야 하는지 적힌 오류**를 낸다."""
-        import os as _os
-        import time as _time
-        tmp = self.input_pdf.with_name(self.input_pdf.stem + ".bm_tmp.pdf")
+    def _cancelled(self, rows=None, method: str = "") -> None:
+        """중지 — 지금까지 읽은 것(있으면)을 돌려준다. 앱이 '검토 표로 열기 / 버리기' 를 묻는다."""
+        self.finished.emit(dict({"phase": "cancelled", "method": method, "rows": list(rows or [])},
+                                **self._stats()))
+
+    def _run_extract(self, bridge, mode, res):
+        op = self._op
+        # ── 260904-1(§4.4): 목차 쪽 지정 → 관대한 파서(toc_parse) 로 표 생성 ──
+        #   사용자가 쪽을 지정했거나, auto/toc 에서 탐지된 목차 쪽이 있으면 이 경로.
+        #   (내장 파서는 점선 리더 형식만 알아 OCR 텍스트층 스캔본에서 0건이었다.)
+        toc_pages = list(self.opts.get("toc_pages") or [])
+        if mode in ("auto", "toc") and not toc_pages:
+            self.progress.emit(tr("목차 쪽 찾는 중..."))
+            try:
+                from viewer import toc_parse as _tp
+                toc_pages = _tp.find_toc_pages(self.input_pdf, ocr=op)   # 260904-2·261019-1: 스캔 쪽도
+            except Exception:
+                toc_pages = []
+        if self._cancel:
+            self._cancelled(); return
+        if toc_pages and mode in ("auto", "toc"):
+            from viewer import toc_parse
+            self.progress.emit(tr('목차 쪽 {toc_pages}~{toc_pages2} 읽는 중...').format(toc_pages=toc_pages[0], toc_pages2=toc_pages[-1]))
+            rows = toc_parse.parse_toc_pages(self.input_pdf, toc_pages, ocr=op)
+            if self._cancel:
+                self._cancelled(rows, "toc"); return
+            if rows:
+                self.progress.emit(tr("오프셋(목차 쪽 → 실제 쪽) 추정 중..."))
+                page_text = None
+                if op is not None:
+                    page_text = (lambda pg: op.text(pg, run=False) if op.is_scan(pg) else None)
+                cands = toc_parse.suggest_offsets(self.input_pdf, rows, toc_pages, page_text=page_text)
+                off = self.opts.get("offset")
+                if off is None:
+                    off = cands[0][0] if cands else 0
+                if self.opts.get("review"):
+                    # 검토 단계: 표만 돌려주고 끝. 앱이 검토 창을 띄운 뒤 결과를 책갈피창에 넣는다.
+                    self.finished.emit(dict({"phase": "review", "method": "toc",
+                                             "rows": rows, "candidates": cands, "offset": int(off),
+                                             "toc_pages": toc_pages}, **self._stats()))
+                    return
+                import fitz
+                _d = fitz.open(str(self.input_pdf)); _n = _d.page_count; _d.close()
+                toc_parse.apply_offset(rows, int(off), _n, keep_manual=False)
+                import pdf_bookmarker as _pb
+                bookmarks = [_pb.Bookmark(title=t_, page=p_, level=l_)
+                             for (t_, p_, l_) in toc_parse.to_bookmarks(rows)]
+                res = {"offset": int(off)}
+                self._write_and_finish(bridge, bookmarks, "toc", res, "toc")
+                return
+            elif mode == "toc":
+                raise RuntimeError("지정한 목차 쪽에서 항목을 읽지 못했습니다. 쪽 범위를 확인하세요.")
+            # auto 인데 항목이 없으면 종전 경로(폰트/OCR)로 계속
+        # 260606-4: '자동'인데 스캔 이미지 PDF면 OCR 모드로 자동 전환
+        if mode == "auto" and _pdf_is_scanned(self.input_pdf):
+            self.progress.emit(tr("스캔 이미지 감지 — OCR 모드로 추출"))
+            mode = "ocr"
+        if mode == "ocr":
+            # 스캔/이미지 PDF → OCR로 'CHAPTER 1'·'1.1 제목' 등 헤딩 인식
+            from viewer.study.ocr_headings import extract_ocr_bookmarks
+            self.progress.emit(tr("OCR 헤딩 인식 중..."))
+            bookmarks = extract_ocr_bookmarks(
+                self.input_pdf,
+                use_font_auto=bool(self.opts.get("ocr_font_auto", True)),
+                progress=lambda d, t, m: self.progress.emit(m),
+                should_cancel=lambda: self._cancel,
+                pages=op,
+            )
+            method = "ocr"
+        else:
+            self.progress.emit(tr("책갈피 추출 중..."))
+            res = bridge.extract_auto(
+                self.input_pdf,
+                mode=mode,
+                offset=self.opts.get("offset"),
+            )
+            bookmarks = res["bookmarks"]
+            method = res["method"]
+        # 260606-4(추가): 같은 페이지 다중 책갈피 → 헤딩(제목명/숫자)만 남김
         try:
-            if tmp.exists():          # 지난 실패의 잔재
-                tmp.unlink()
+            from viewer.study.ocr_headings import prefer_heading_per_page
+            bookmarks = prefer_heading_per_page(bookmarks)
         except Exception:
             pass
-        try:
-            bridge.apply_to_pdf(self.input_pdf, tmp, bookmarks)
-            last = None
-            for i in range(4):        # 인덱싱·백신의 짧은 점유는 기다리면 풀린다
-                try:
-                    _os.replace(tmp, self.input_pdf)
-                    return self.input_pdf
-                except PermissionError as e:
-                    last = e
-                    _time.sleep(0.15)
-            # 260915-1(§4.7.5): 앱 안의 배경 스레드가 읽는 중이면 바꿔치기만 막힌다 — 제자리로 덮어쓴다
-            try:
-                from viewer.file_overwrite import overwrite_in_place
-                overwrite_in_place(tmp, self.input_pdf)
-                return self.input_pdf
-            except Exception as e:     # noqa: BLE001
-                last = e
-            raise RuntimeError(
-                f"'{self.input_pdf.name}' 을(를) 다른 프로그램이 열고 있어 덮어쓸 수 없습니다.\n"
-                "그 PDF 를 연 창(다른 PDF 뷰어 등)을 닫고 다시 시도하거나, "
-                "'새 PDF로 저장'을 선택하세요.\n"
-                f"(원본은 그대로 있습니다 — {last})"
-            )
-        finally:
-            try:
-                if tmp.exists():
-                    tmp.unlink()
-            except Exception:
-                pass
+        rows = [{"title": b.title, "toc_page": None, "page": int(b.page),
+                 "level": int(b.level), "src": method} for b in bookmarks]
+        if self._cancel:
+            self._cancelled(rows, method); return
+        if not bookmarks:
+            raise RuntimeError("추출된 책갈피가 없습니다.")
+        # 260904-1: 폰트/OCR 결과도 검토 표를 거칠 수 있다(오프셋 없음 — 실제 쪽 그대로)
+        if self.opts.get("review"):
+            self.finished.emit(dict({"phase": "review", "method": method, "rows": rows,
+                                     "candidates": [], "offset": 0, "toc_pages": []}, **self._stats()))
+            return
+        self._write_and_finish(bridge, bookmarks, method, res, mode)
 
     def _write_and_finish(self, bridge, bookmarks, method, res, mode):
-        """260904-1: 추출/검토 결과를 PDF·txt 로 쓰고 finished 발신(종전 저장 꼬리를 분리)."""
+        """추출/검토 결과를 돌려준다 — **PDF 는 쓰지 않는다**(261019-1, 마스터 §4.4.2).
+        .txt 는 사용자가 고른 내보내기라 여기서 쓴다."""
         try:
-            out_dir = Path(self.opts.get("out_dir") or self.input_pdf.parent)
-            out_dir.mkdir(parents=True, exist_ok=True)
-            stem = self.input_pdf.stem
-
-            pdf_out = None
-            if self.opts.get("save_pdf", True):
-                self.progress.emit(tr("PDF에 책갈피 임베드 중..."))
-                if self.opts.get("overwrite"):
-                    # 260606-4 / 260905(§4.4.6.2): 현재 PDF에 저장 — 임시 파일로 쓰고 교체.
-                    pdf_out = self._overwrite_in_place(bridge, bookmarks)
-                else:
-                    pdf_out = bridge.apply_to_pdf(
-                        self.input_pdf,
-                        out_dir / f"{stem}_bookmarked.pdf",
-                        bookmarks,
-                    )
-
             txt_out = None
             if self.opts.get("save_txt", False):
+                out_dir = Path(self.opts.get("out_dir") or self.input_pdf.parent)
+                out_dir.mkdir(parents=True, exist_ok=True)
                 self.progress.emit(tr("책갈피 텍스트 저장 중..."))
-                txt_out = bridge.write_txt(bookmarks, out_dir / f"{stem}_bookmarks.txt")
-
+                txt_out = bridge.write_txt(bookmarks, out_dir / f"{self.input_pdf.stem}_bookmarks.txt")
             self.finished.emit({
                 "phase": "done",
+                "bookmarks": [(str(b.title), int(b.page), int(b.level)) for b in bookmarks],
                 "count": len(bookmarks),
                 "method": method,
                 "offset": (None if mode in ("ocr", "review") else res.get("offset")),
-                "pdf_out": str(pdf_out) if pdf_out else None,
                 "txt_out": str(txt_out) if txt_out else None,
+                **self._stats(),
             })
         except Exception as e:
             self.error.emit(str(e))

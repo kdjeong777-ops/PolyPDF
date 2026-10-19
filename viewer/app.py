@@ -58,6 +58,7 @@ from viewer.compress_controller import CompressMixin    # 261014-21(마스터 §
 from viewer.redact_controller import RedactMixin        # 261014-22(보안 SOT §14)
 from viewer.compare_controller import CompareMixin      # 261014-23(마스터 §4.11)
 from viewer.vprinter_controller import VPrinterMixin    # 261017(가상 프린터 SOT §4.4)
+from viewer.jobs_controller import JobsMixin            # 261019-1(응답성 SOT §4.6): 작업 창·저장 안 한 OCR
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -120,7 +121,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -375,6 +376,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.progress.setMaximumWidth(220)
         self.progress.setVisible(False)
         self.status.addPermanentWidget(self.progress)
+        self._jobs_init()                    # 261019-1: 진행 바 누르면 작업 창 + 저장 안 한 OCR 단추
 
         self.setCentralWidget(central)
         self._central = central
@@ -1775,6 +1777,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("next_match",    (tr("다음 매치"), "F3", tr("탐색"))),
             ("prev_match",    (tr("이전 매치"), "Shift+F3", tr("탐색"))),
             ("option_menu",   (tr("옵션 메뉴(우클릭)"), "Shift+F10", tr("탐색"))),
+            ("rename_item",   (tr("파일·책갈피 이름 변경"), "F2", tr("책갈피창"))),
             ("toggle_split",  (tr("2단 보기"), "Ctrl+Shift+2", tr("보기"))),
             ("present",       (tr("발표보기"), "F5", tr("보기"))),
             ("capture",       (tr("화면 캡처"), "Ctrl+Shift+S", tr("캡처·저장"))),
@@ -1807,6 +1810,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "capture": ("func", lambda: self._do_capture(self.main_view)),
             "save_shots_pdf": ("func", self.action_save_screenshot_pdf),
             "clipboard_save": ("func", self._on_clipboard_save),
+            "rename_item": ("func", self._sc_rename_item),
             "toggle_split": ("func", lambda: self.act_split.toggle()),
             "draw_pen_1": ("func", lambda: self._draw_sc_pen(0)),
             "draw_pen_2": ("func", lambda: self._draw_sc_pen(1)),
@@ -1833,6 +1837,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 sh.activated.connect(ref)
                 self._sc_objs[sid] = ("shortcut", sh)
         self._refresh_menu_key_hints()           # 261017-1(디자인 SOT §2.9.2)
+
+    def _sc_rename_item(self):
+        """261019-1(사용자 지시): 이름 변경 단축키(기본 F2) — **포커스가 책갈피창 목록에 있을 때만**,
+        우클릭 '파일·책갈피 이름 변경' 과 같은 일(지금 행). 다른 곳에서는 아무 일도 하지 않는다."""
+        fw = QApplication.focusWidget()
+        for bt in (getattr(self, "bookmark_tree", None), getattr(self, "bookmark_tree_right", None)):
+            tw = getattr(bt, "tree", None)
+            if tw is not None and fw is not None and (fw is tw or tw.isAncestorOf(fw)):
+                bt._edit_item(tw.currentItem())
+                return
 
     # 260611-3: 선긋기 단축키 — 편집모드의 활성 메인뷰에 적용
     def _draw_sc_pen(self, idx):
@@ -2205,6 +2219,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt._file_op = lambda fn, label: self._file_op_bg(fn, label, tr("파일 작업"))   # 261014-4(§4.7.14): 이름 바꾸기·옮기기는 배경에서, 잠깐 잡혀 있으면 다시
             _bt.set_meta_hooks(lambda: bool(self._edit_dirty),
                                self._save_meta_from_button)
+            _bt.set_study_hooks(self.study_commit_for)   # 261019-1
             # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
             #   쪽 편집은 본문(활성 창) 파일일 때만 — 책갈피창이 `_is_main_file` 로 가른다
             _bt.set_page_edit_hooks(self._page_edits_dirty, self._page_edit_save,
@@ -2550,71 +2565,51 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not in_pdf.exists() or in_pdf.suffix.lower() != ".pdf":
             QMessageBox.warning(self, tr("안내"), tr('PDF 파일이 아닙니다: {name}').format(name=in_pdf.name))
             return
-        if not (opts["save_pdf"] or opts["save_txt"]):
-            QMessageBox.warning(self, tr("안내"), tr("출력 옵션을 최소 1개 선택하세요."))
-            return
-
         # prefs 기본값 갱신
         self._prefs["bookmarker_mode"] = opts.get("mode", "auto")
         self._prefs["bookmarker_ocr_font_auto"] = bool(opts.get("ocr_font_auto", True))
-        self._prefs["bookmarker_save_pdf"] = bool(opts["save_pdf"])
-        self._prefs["bookmarker_overwrite"] = bool(opts.get("overwrite"))
         self._prefs["bookmarker_save_txt"] = bool(opts["save_txt"])
         self._prefs["bookmarker_review"] = bool(opts.get("review", True))    # 260904-1
         try:
             self._save_settings_now()
         except Exception:
             pass
+        # 261019-1(마스터 §4.4.2, 사용자 지시): **PDF 를 쓰지 않는다** — 결과는 책갈피창에 '저장 안 됨' 으로 넣고
+        #   [저장] 이 표준 저장(`_finalize_save`: 서명 가드·다른 창·바꿔치기)으로 쓴다. 그래서 본문 문서를 닫지 않는다
+        #   (종전 '현재 PDF에 저장' 은 추출 전에 본문을 닫아, 검토 표를 취소하면 본문·썸네일이 빈 채로 남았다).
+        self._start_bookmarker(in_pdf, opts)
 
-        # 261011-1(보안 SOT §4): 이 길은 워커가 원본을 직접 바꿔 `_finalize_save` 를 거치지 않는다 —
-        #   서명된 PDF 면 같은 가드로 묻는다. [새 파일로] 는 이 실행만 '_bookmarked.pdf' 로(저장한 선택값은 그대로).
-        if opts.get("overwrite") and opts.get("save_pdf"):
-            g = self._sign_guard(in_pdf)
-            if g == "cancel":
-                self.status.showMessage(tr("저장을 취소했습니다 — 서명한 원본은 그대로입니다."), 5000)
-                return
-            if g == "new":
-                opts = dict(opts, overwrite=False)
-
-        # 260606-4: '현재 PDF에 저장'이고 그 파일이 메인에 열려있으면 핸들 해제(덮어쓰기 가능)
-        if opts.get("overwrite"):
-            # 안전장치: 기존 책갈피가 있으면 '모두 대체됨'을 경고·확인
-            try:
-                import fitz
-                _d = fitz.open(str(in_pdf))
-                _toc = _d.get_toc() or []
-                _d.close()
-            except Exception:
-                _toc = []
-            if _toc:
-                if QMessageBox.question(
-                    self, tr("현재 PDF에 저장"),
-                    tr("이 PDF에는 기존 책갈피 {n}개가 있습니다.\n현재 PDF에 저장하면 기존 책갈피는 모두 지워지고 새로 만든 책갈피로 대체됩니다.\n(되돌릴 수 없습니다. 원본을 보존하려면 '새 PDF로 저장'을 선택하세요.)\n\n계속할까요?").format(n=len(_toc))
-                ) != QMessageBox.StandardButton.Yes:
-                    return
-            cur = self.main_view.current_file() if self.main_view else None
-            try:
-                same = cur and Path(cur).resolve() == in_pdf.resolve()
-            except Exception:
-                same = False
-            if same:
-                self._close_main_view_doc()
-                QApplication.processEvents()
-
+    def _start_bookmarker(self, in_pdf: Path, opts: dict):
+        if getattr(self, "_bookmarker_worker", None) is not None:
+            QMessageBox.information(self, tr("책갈피 자동 생성"),
+                                    tr("책갈피를 만드는 중입니다. 끝나거나 중지한 뒤 다시 시도하세요."))
+            return
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
         self.status.showMessage(tr("책갈피 자동 생성 시작..."))
-
-        self._bookmarker_opts = dict(opts)               # 260904-1: 검토 뒤 저장 단계에 재사용
+        self._bookmarker_opts = dict(opts)
         self._bookmarker_pdf = in_pdf
         worker = BookmarkerWorker(in_pdf, opts)
-        worker.progress.connect(lambda m: self.status.showMessage(m))
+        self._bookmarker_worker = worker
+        self.job_add("bookmarker", tr("책갈피 생성 — {name}").format(name=in_pdf.name), worker.request_cancel)
+
+        def _prog(m):
+            self.status.showMessage(m)
+            self.job_progress("bookmarker", m)
+        worker.progress.connect(_prog)
         worker.finished.connect(self._on_bookmarker_done)
         worker.error.connect(self._on_bookmarker_error)
-        run_in_thread(worker, self._thread_keep)
+        th = run_in_thread(worker, self._thread_keep)
+        if th is not None:
+            worker.error.connect(th.quit)             # 오류는 finished 를 내지 않는다 — 스레드가 남지 않게
+
+    def _bookmarker_end(self):
+        self._bookmarker_worker = None
+        self.progress.setVisible(False)
+        self.job_done("bookmarker")
 
     def _on_bookmarker_review(self, result: dict):
-        """260904-1(§4.4): 검토 단계 — 표를 띄워 고치게 하고, [저장]이면 확정 목록으로 재호출."""
+        """260904-1(§4.4): 검토 단계 — 표를 띄워 고치게 하고, [확인]이면 책갈피창에 넣는다(261019-1)."""
         from viewer.widgets.toc_review_dialog import TocReviewDialog
         in_pdf = Path(self._bookmarker_pdf)
         dlg = TocReviewDialog(in_pdf, result.get("rows") or [],
@@ -2632,58 +2627,93 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         dlg.previewPageRequested.connect(_pv)
         if dlg.exec() != dlg.DialogCode.Accepted:
-            self.status.showMessage(tr("책갈피 생성 취소(검토 표에서 취소)"), 4000)
+            self.status.showMessage(tr("책갈피 생성 취소(검토 표에서 취소) — PDF 는 그대로입니다"), 5000)
             return
-        bms = dlg.result_bookmarks()
-        opts = dict(self._bookmarker_opts or {})
-        opts.update({"bookmarks": bms, "review": False, "method": result.get("method") or "toc"})
-        if opts.get("overwrite"):
-            try:
-                cur = self.main_view.current_file() if self.main_view else None
-                if cur and Path(cur).resolve() == in_pdf.resolve():
-                    self._close_main_view_doc(); QApplication.processEvents()
-            except Exception:
-                pass
-        self.progress.setVisible(True); self.progress.setRange(0, 0)
-        self.status.showMessage(tr('책갈피 {n}개 저장 중...').format(n=len(bms)))
-        worker = BookmarkerWorker(in_pdf, opts)
-        worker.progress.connect(lambda m: self.status.showMessage(m))
-        worker.finished.connect(self._on_bookmarker_done)
-        worker.error.connect(self._on_bookmarker_error)
-        run_in_thread(worker, self._thread_keep)
+        self._bookmarks_into_tree(in_pdf, dlg.result_bookmarks(), result)
 
-    def _on_bookmarker_done(self, result: dict):
-        self.progress.setVisible(False)
-        if result.get("phase") == "review":                  # 260904-1
-            self._on_bookmarker_review(result)
+    def _bookmarks_into_tree(self, in_pdf: Path, bms: list, result: dict):
+        """261019-1(마스터 §4.4.2): 만든 책갈피를 책갈피창의 그 파일에 **저장 안 됨** 으로 넣는다.
+        편집 모드를 켜서 [저장]·[취소] 가 보이게 하고, [저장] 이 PDF 에 쓴다(되돌리기 기록에도 남는다)."""
+        bt = self.bookmark_tree
+        if not bms:
+            QMessageBox.information(self, tr("책갈피 자동 생성"), tr("넣을 책갈피가 없습니다."))
             return
-        parts = [tr('방법={get}').format(get=result.get('method')), tr('개수={get}').format(get=result.get('count'))]
-        if result.get("offset") is not None:
-            parts.append(tr('오프셋={offset}').format(offset=result['offset']))
-        if result.get("pdf_out"):
-            parts.append(f"PDF: {Path(result['pdf_out']).name}")
+        if not bt.is_edit_mode():
+            bt.btn_edit.setChecked(True)             # 편집 모드 — 앱의 편집 시작 처리까지 함께 돈다
+        if not bt.replace_file_bookmarks(str(in_pdf), bms):
+            QMessageBox.warning(self, tr("책갈피 자동 생성"), tr("책갈피창에서 이 파일을 찾지 못했습니다."))
+            return
+        opts = dict(getattr(self, "_bookmarker_opts", None) or {})
+        if opts.get("save_txt") and not result.get("txt_out"):
+            # 검토 표를 거치면 워커는 .txt 에 닿지 않는다 — 고른 내보내기는 확정한 목록으로 여기서(배경, 응답성 SOT §4.4)
+            out_dir = Path(opts.get("out_dir") or in_pdf.parent)
+            txt = out_dir / f"{in_pdf.stem}_bookmarks.txt"
+
+            def _write_txt():
+                from viewer import bookmarker_bridge as _br
+                import pdf_bookmarker as _pb
+                out_dir.mkdir(parents=True, exist_ok=True)
+                _br.write_txt([_pb.Bookmark(title=str(t), page=int(p), level=int(lv)) for t, p, lv in bms], txt)
+            if self._file_op_bg(_write_txt, tr("책갈피 텍스트 저장 중...")) is None:
+                result = dict(result, txt_out=str(txt))
+        parts = [tr('책갈피 {n}개').format(n=len(bms))]
+        if result.get("ocr_ran") or result.get("ocr_reused"):
+            parts.append(tr("OCR 새로 {ran}쪽 · 저장된 OCR {reused}쪽").format(
+                ran=int(result.get("ocr_ran") or 0), reused=int(result.get("ocr_reused") or 0)))
         if result.get("txt_out"):
             parts.append(f"TXT: {Path(result['txt_out']).name}")
-        self.status.showMessage(tr('책갈피 생성 완료 — {join}').format(join=' · '.join(parts)), 8000)
-        # 260606-4: 자동 열기 옵션 폐지 → 항상 책갈피 새로고침(기존 목록 유지) + 메인 로드
-        pdf_out = result.get("pdf_out")
-        if pdf_out and Path(pdf_out).exists():
-            try:
-                self.bookmark_tree.add_or_refresh_file(pdf_out)
-            except Exception:
-                pass
-            self._open_saved_file(pdf_out)          # 색인(검색 포함) 먼저 걸고 연다 — 260915-10
-
-    def _on_bookmarker_error(self, msg: str):
-        self.progress.setVisible(False)
-        # 260905(§4.4.6.2): '현재 PDF에 저장'은 쓰기 직전에 본문 문서를 닫는다. 되살리는
-        #   경로가 성공 분기에만 있어, 실패하면 본문이 빈 채로 남았다 → 여기서 다시 연다.
-        try:
-            src = getattr(self, "_bookmarker_pdf", None)
-            if src and Path(src).exists() and self._current_main is None:
-                self._load_main(HistoryItem(str(src), 0, "", "bookmark"))
+        self.status.showMessage(tr("{what} — 책갈피창에서 확인한 뒤 [저장]을 누르면 PDF 에 씁니다").format(
+            what=" · ".join(parts)), 10000)
+        self._pending_refresh()
+        try:                                          # 새로 읽은 OCR 이 텍스트 창에 바로 보이게
+            if self.main_view and self.main_view.current_file() and \
+                    Path(self.main_view.current_file()).resolve() == in_pdf.resolve():
+                self._reload_text_panel()
         except Exception:
             pass
+
+    def _on_bookmarker_done(self, result: dict):
+        self._bookmarker_end()
+        phase = result.get("phase")
+        if phase == "review":                        # 260904-1
+            self._on_bookmarker_review(result)
+            return
+        if phase == "cancelled":                     # 261019-1: 중지 — 지금까지 찾은 것으로 검토 / 버리기
+            self._on_bookmarker_cancelled(result)
+            return
+        self._bookmarks_into_tree(Path(self._bookmarker_pdf), result.get("bookmarks") or [], result)
+
+    def _on_bookmarker_cancelled(self, result: dict):
+        rows = result.get("rows") or []
+        in_pdf = Path(self._bookmarker_pdf)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("책갈피 생성 중지"))
+        ran = int(result.get("ocr_ran") or 0)
+        txt = tr("책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다.")
+        if rows:
+            txt += "\n" + tr("지금까지 찾은 항목 {n}개가 있습니다.").format(n=len(rows))
+        if ran:
+            txt += "\n" + tr("새로 OCR 한 {n}쪽은 저장하지 않은 상태로 남아, 다시 만들면 그 쪽은 건너뜁니다.").format(n=ran)
+        box.setText(txt)
+        b_review = box.addButton(tr("찾은 것으로 검토 표 열기"), QMessageBox.ButtonRole.AcceptRole) if rows else None
+        b_drop_ocr = box.addButton(tr("OCR 결과도 버리기"), QMessageBox.ButtonRole.DestructiveRole) if ran else None
+        b_close = box.addButton(tr("닫기"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_review or b_close)
+        box.exec()
+        c = box.clickedButton()
+        if b_review is not None and c is b_review:
+            r = dict(result)
+            r["phase"] = "review"
+            r.setdefault("candidates", []); r.setdefault("offset", 0); r.setdefault("toc_pages", [])
+            self._on_bookmarker_review(r)
+        elif b_drop_ocr is not None and c is b_drop_ocr:
+            from viewer.study.study_store import file_key_for
+            self._pending_apply([file_key_for(str(in_pdf))], False, quiet=True)   # 배경(응답성 SOT §4 ⑤)
+            self.status.showMessage(tr("이번에 OCR 한 결과를 버렸습니다."), 5000)
+
+    def _on_bookmarker_error(self, msg: str):
+        self._bookmarker_end()
         self.status.showMessage(tr('책갈피 생성 오류: {msg}').format(msg=msg), 8000)
         QMessageBox.warning(self, tr("책갈피 생성 실패"), msg)
 
@@ -3447,6 +3477,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   쪽마다가 아니라 문서 한 번이고, OCR 이 끝난 뒤라야 겹치지 않는다(응답성 §4 ①).
         w.finished.connect(lambda _p=path, _l=lang: self._rebuild_study_vocab(_p, _l))
         w.finished.connect(lambda: setattr(self, '_text_ocr_worker', None))
+        w.finished.connect(self._pending_refresh)     # 261019-1: 읽은 글은 [저장] 전까지 보류 — 단추로 알린다
         run_in_thread(w, self._thread_keep)
 
     def _rebuild_study_vocab(self, path, lang):
@@ -3654,6 +3685,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         finally:
             QApplication.restoreOverrideCursor()
         rewritten, fallback = self._mark_layer_written(cur, stats)
+        self.study_commit_for(cur)                   # 261019-1: PDF 에 반영(=저장)했으면 읽은 OCR 도 확정
         self._reload_after_text_apply(out, page, src=cur)
         notes =[tr('글자층을 다시 쓴 쪽: {n}쪽 ({get}줄)').format(n=len(rewritten), get=int(stats.get('lines') or 0))]
         if fallback:
@@ -9177,6 +9209,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def closeEvent(self, event):
         # 260611-17: 편집모드에서 X(종료) 시 저장/저장 안 함/취소 선택
         if not self._confirm_close_edit():
+            event.ignore()
+            return
+        # 261019-1(단어학습 SOT §14.21): 저장하지 않은 OCR·단어장 — 저장/버림/취소
+        if not self._confirm_close_pending():
             event.ignore()
             return
 

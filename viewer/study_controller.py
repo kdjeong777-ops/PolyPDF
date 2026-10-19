@@ -1539,8 +1539,25 @@ class StudyMixin:
         from viewer.study.study_store import file_key_for
         store = self._study_get_store()
         fkey = file_key_for(path)
-        already = store.vocab_count(fkey) > 0 or len(store.done_pages(fkey)) > 0
-        if already:
+        done_n = len(store.done_pages(fkey))
+        already = store.vocab_count(fkey) > 0 or done_n > 0
+        # 261019-1(응답성 SOT §4.6): 어휘 없이 OCR 쪽만 있으면 **중지했던 것** — 이어서 할지 묻는다
+        #   (종전에는 '다시 만들기'로만 물어 읽은 쪽을 지우고 처음부터 했다).
+        if already and store.vocab_count(fkey) == 0:
+            box = QMessageBox(self)
+            box.setWindowTitle(what)
+            box.setText(tr("'{name}' 은(는) {n}쪽까지 읽다 멈췄습니다. 이어서 할까요?").format(name=path.name, n=done_n))
+            b_resume = box.addButton(tr("이어서"), QMessageBox.ButtonRole.AcceptRole)
+            b_new = box.addButton(tr("처음부터"), QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(b_resume)
+            box.exec()
+            c = box.clickedButton()
+            if c is b_new:
+                store.clear_file(fkey)
+            elif c is not b_resume:
+                return
+        elif already:
             msg = (f"'{path.name}' 의 단어장이 이미 있습니다.\n"
                    f"기존 내용을 삭제하고 다시 만들까요?\n(감지 언어: {lang}){extra}")
             if QMessageBox.question(self, what + " — 다시 만들기", msg) \
@@ -1561,16 +1578,24 @@ class StudyMixin:
                          "onterm_key")}
         worker = StudyBuildWorker(path, lang=lang, online_prefs=online_prefs)
         self._study_worker = worker
+        jid = "study_build"
+        self.job_add(jid, f"{what} — {path.name}", worker.request_cancel)      # 261019-1: 작업 창에서 중지
 
         def on_prog(done, total, m):
             if total:
                 self.progress.setRange(0, total)
                 self.progress.setValue(done)
             self.status.showMessage(f"{what}: {m} ({done}/{total})")
+            self.job_progress(jid, f"{m} ({done}/{total})")
 
         def on_done(summary):
             self.study_panel.set_building(False)
             self.progress.setVisible(False)
+            self.job_done(jid)
+            if summary.get("cancelled") and not summary.get("error"):
+                self.status.showMessage(tr("{what} 중지 — 읽은 {n}쪽은 저장하지 않은 상태로 남아, 다시 시작하면 이어서 합니다.")
+                                        .format(what=what, n=summary.get("done") or 0), 8000)
+                return
             if summary.get("error"):
                 # 260908-1: Tesseract 의 영어 원문 오류를 그대로 보여 주면 사용자가
                 #   무엇을 해야 하는지 알 수 없다. 학습 데이터가 없는 것이면 그렇게 말한다.
@@ -1601,6 +1626,7 @@ class StudyMixin:
         worker.progress.connect(on_prog)
         worker.finished.connect(on_done)
         worker.error.connect(lambda e: self.status.showMessage(f"단어장 오류: {e}", 5000))
+        worker.error.connect(lambda _e: self.job_done(jid))
         run_in_thread(worker, self._study_threads)
 
     def _build_bookmarks_from_study(self, path) -> int:

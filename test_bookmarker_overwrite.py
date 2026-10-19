@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """260905(§4.4.6.1·§4.4.6.2): 책갈피 자동 생성 —
-모듈 안내는 실패 때만 / 모듈 경로 칸 제거 / '현재 PDF에 저장' 덮어쓰기 안전 규칙."""
+모듈 안내는 실패 때만 / 모듈 경로 칸 제거 / 261019-1: 워커는 PDF 를 쓰지 않는다(종전 덮어쓰기 규칙 대체)."""
 import os, sys, tempfile
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
@@ -52,64 +52,23 @@ chk(not dlg2._ok_btn.isEnabled(), "로드 실패면 확인 버튼 비활성")
 bridge.recheck, bridge.get_status = _orig_recheck, _orig_status
 dlg.close(); dlg2.close()
 
-# --- 2) 덮어쓰기: 정상 / 점유 중 / 임시 파일 정리 ---
+# --- 2) 261019-1(마스터 §4.4.2): 워커는 PDF 를 쓰지 않는다 — 종전 '현재 PDF에 저장' 덮어쓰기 길은 없앴다 ---
+#   (원본에 쓰는 것은 책갈피창 [저장] → `_finalize_save` 하나 — 잠김·서명·다른 창 규칙은 그 길이 소유한다)
 from viewer.workers import BookmarkerWorker
-import pdf_bookmarker as pb
-bms = [("1장", 1, 0), ("1.1 절", 2, 1), ("2장", 4, 0)]
-w = BookmarkerWorker(src, {"bookmarks": bms, "review": False, "overwrite": True,
-                           "save_pdf": True, "save_txt": False, "method": "toc"})
+w = BookmarkerWorker(src, {"mode": "existing", "review": False, "save_txt": False})
 done, err = [], []
 w.finished.connect(lambda r: done.append(r))
 w.error.connect(lambda m: err.append(m))
 w.run()
-chk(not err and done and done[0]["count"] == 3, "덮어쓰기 정상 저장", str(err or done))
+chk(not err and done and done[0].get("phase") == "done" and done[0].get("bookmarks") == [("old", 1, 0)],
+    "워커는 책갈피 목록만 돌려준다", str(err or done))
 got = fitz.open(str(src)); toc = got.get_toc(); got.close()
-chk([t[1] for t in toc] == ["1장", "1.1 절", "2장"], "원본에 새 책갈피 반영", str(toc))
-chk(not (src.with_name(src.stem + ".bm_tmp.pdf")).exists(), "임시 파일 남지 않음")
-
-# 260915-1(§4.4.6.2 B): 앱 안의 읽기 핸들(fitz)은 이제 막지 못한다 — 제자리로 덮어쓴다
-held = fitz.open(str(src))
-w1 = BookmarkerWorker(src, {"bookmarks": bms, "review": False, "overwrite": True,
-                            "save_pdf": True, "save_txt": False})
-done1, err1 = [], []
-w1.finished.connect(lambda r: done1.append(r))
-w1.error.connect(lambda m: err1.append(m))
-w1.run()
-held.close()
-chk(not err1 and done1, "앱 안에서 읽는 핸들이 있어도 덮어쓴다(제자리)", str(err1))
-
-# 다른 프로그램이 **쓰기를 막고** 연 상태 → 정직한 오류 + 임시 파일 정리 + 원본 보존
-import ctypes
-_k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-_k32.CreateFileW.restype = ctypes.c_void_p
-_h = _k32.CreateFileW(str(src), 0x80000000, 0x1, None, 3, 0x80, None)   # GENERIC_READ, SHARE_READ 만
-w2 = BookmarkerWorker(src, {"bookmarks": [("바뀐제목", 1, 0)], "review": False,
-                            "overwrite": True, "save_pdf": True, "save_txt": False})
-done2, err2 = [], []
-w2.finished.connect(lambda r: done2.append(r))
-w2.error.connect(lambda m: err2.append(m))
-w2.run()
-_k32.CloseHandle(ctypes.c_void_p(_h))
-chk(bool(err2), "점유 중이면 오류로 알림", str(err2))
-if err2:
-    chk("다른 프로그램이 열고 있어" in err2[0] and "새 PDF로 저장" in err2[0],
-        "오류 문구가 원인·조치를 알려 줌", err2[0].splitlines()[0])
-    chk("원본은 그대로" in err2[0], "원본이 보존됨을 알림")
-chk(not (src.with_name(src.stem + ".bm_tmp.pdf")).exists(),
-    "실패해도 임시 파일 남지 않음")
-got = fitz.open(str(src)); toc2 = got.get_toc(); got.close()
-chk([t[1] for t in toc2] == ["1장", "1.1 절", "2장"], "실패 시 원본 그대로", str(toc2))
-
-# 지난 실패의 잔재가 있어도 정상 진행
-stale = src.with_name(src.stem + ".bm_tmp.pdf")
-stale.write_bytes(b"garbage")
-w3 = BookmarkerWorker(src, {"bookmarks": bms, "review": False, "overwrite": True,
-                            "save_pdf": True, "save_txt": False})
-done3, err3 = [], []
-w3.finished.connect(lambda r: done3.append(r))
-w3.error.connect(lambda m: err3.append(m))
-w3.run()
-chk(not err3 and not stale.exists(), "남아 있던 임시 파일을 정리하고 진행", str(err3))
+chk([t[1] for t in toc] == ["old"], "원본 PDF 는 그대로", str(toc))
+chk(not list(tmp.glob("*.bm_tmp.pdf")) and not list(tmp.glob("*_bookmarked.pdf")), "임시·새 PDF 를 만들지 않는다")
+import inspect
+import viewer.workers as _vw
+chk(not hasattr(BookmarkerWorker, "_overwrite_in_place") and "apply_to_pdf" not in inspect.getsource(BookmarkerWorker),
+    "워커에 PDF 쓰기 코드가 없다")
 
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")

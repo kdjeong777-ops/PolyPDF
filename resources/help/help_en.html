@@ -129,9 +129,14 @@
     'CHAPTER 1' in scanned books, with an option to include large text as headings.</li>
   <li>If several bookmarks land on the same page, only <b>chapter titles (CHAPTER 1) and numbers (1, 1.1)</b>
     are kept and the noise is removed.</li>
-  <li>Output: <b>save as new PDF</b> or <b>save to current PDF</b> (overwrite — you are warned if it already has
-    bookmarks). A bookmark <b>.txt</b> for ALPDF can also be saved. When done, the bookmark list
-    <b>refreshes automatically</b> (the existing file list is kept), and new PDFs in the same folder are added.</li>
+  <li>Scanned books too: it <b>finds the table of contents pages</b> (first 15 pages) and follows them. Pages already
+    OCR'd (Text panel 'Read Again with OCR') are <b>not read again</b>, and newly read pages <b>show in the Text panel right away</b>.</li>
+  <li>Result: nothing is written to the PDF yet — the bookmarks go into that file in the Bookmarks panel <b>unsaved</b> (edit mode);
+    check them and press <b>[Save]</b> to write them to the PDF. A bookmark <b>.txt</b> for ALPDF is created right away if you choose it.</li>
+  <li>Review table: <b>Del</b> = delete selected rows, <b>[Edit Title]</b> = edit the current row's title, <b>[OK]</b> = put them in the Bookmarks panel.</li>
+  <li>If it takes long, <b>click the progress bar</b> in the status bar and press <b>[Stop]</b> in the Tasks window. Pages already read are kept,
+    so building again continues; the stop window lets you open the review table with what was found so far or discard the OCR results too.</li>
+  <li>OCR results are <b>kept only when saved</b> — use the status bar '💾 Unsaved OCR' button, the Bookmarks panel [Save], or the prompt on exit.</li>
 </ul>
 
 <h3>6. Editing bookmarks (the [Edit] button above the bookmark panel)</h3>
@@ -302,6 +307,7 @@
 <tr><td>Ctrl+F</td><td>Focus the search bar</td></tr>
 <tr><td>F3 / Shift+F3</td><td>Next / previous match (across files)</td></tr>
 <tr><td>Shift+F10</td><td>Option menu (page right-click)</td></tr>
+<tr><td>F2</td><td>Rename file or bookmark (in the bookmark pane list)</td></tr>
 <tr><td>Ctrl+Shift+2</td><td>Split view</td></tr>
 <tr><td>F5</td><td>Presentation</td></tr>
 <tr><td>PgDn PgUp ↓ ↑ Space</td><td>Move pages / move through the list in the screenshot view</td></tr>

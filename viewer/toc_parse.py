@@ -94,6 +94,93 @@ def parse_line(text: str) -> list[dict]:
     return out
 
 
+# ── 261019-1: 십진 번호 목차 ────────────────────────────────────────────
+_DEC_HEAD = re.compile(r"^\(?(?P<num>\d{1,3}(?:\s?\.\s?\d{1,2}){0,3})\.?(?=\s|[가-힣A-Za-z(<\[]|$)\s*")
+
+
+def _dec_parts(title: str) -> Optional[list[int]]:
+    m = _DEC_HEAD.match(title or "")
+    if not m:
+        return None
+    return [int(x) for x in re.split(r"\s?\.\s?", m.group("num")) if x]
+
+
+def _is_successor(prev: Optional[list[int]], cur: list[int]) -> bool:
+    """cur 가 prev 다음에 올 수 있는 번호인가(같은 깊이 +1, 한 단계 아래 .1, 위로 올라가며 +1).
+    OCR 이 한 줄을 통째로 놓쳤을 수 있어 한 칸 건너뛴 것(+2, 아래 .2)도 받는다."""
+    if not cur or any(x <= 0 for x in cur) or len(cur) > 4:
+        return False
+    if prev is None:
+        return cur[0] <= 2 and all(x <= 2 for x in cur[1:])
+    if cur[:-1] == prev and cur[-1] in (1, 2):
+        return True
+    for d in range(len(prev), 0, -1):
+        if cur[:-1] == prev[:d - 1] and cur[-1] - prev[d - 1] in (1, 2):
+            return True
+    return False
+
+
+# OCR 이 줄 머리 번호를 영문 대문자로 읽은 것: 'QA 포장상태'(2.4), 'DAL 기능적'(2.4.1), 'A5.1'(4.5.1), 'AQ)'
+_GARBLED_NUM = re.compile(r"^(?:[A-Z][A-Za-z]{0,3}[\)\]\}]?|[A-Z][\d\.]{1,5}[\)\]]?)\s+(?=.*[가-힣])")
+
+
+def _splits(digits: str, maxp: int = 4) -> list[list[int]]:
+    """'411' → [[4,1,1],[41,1],[4,11],[411]] — 숫자열을 1~2자리 조각으로 나누는 모든 방법."""
+    if not digits:
+        return [[]]
+    out = []
+    for k in (1, 2):
+        if len(digits) >= k and digits[0] != "0":
+            for rest in _splits(digits[k:], maxp - 1):
+                if len(rest) + 1 <= maxp:
+                    out.append([int(digits[:k])] + rest)
+    return out
+
+
+def fix_decimal_numbers(rows: list[dict]) -> bool:
+    """십진 번호 목차면 OCR 이 떨어뜨린 점을 되살린다('411'→'4.1.1', '21.3'→'2.1.3', '43'→'4.3').
+    근거는 **바로 앞 번호의 다음 번호**인가 하나뿐 — 그렇게 읽히는 나눔이 하나도 없으면 그대로 둔다.
+    점 있는 다단 번호(1.1)가 둘 이상일 때만 십진 목차로 본다. 십진 목차면 True."""
+    multi = sum(1 for r in rows if len(_dec_parts(r.get("title", "")) or []) >= 2)
+    if multi < 2:
+        return False
+    prev = None
+    for r in rows:
+        t = r.get("title", "")
+        m = _DEC_HEAD.match(t)
+        if not m:
+            g = _GARBLED_NUM.match(t)
+            if g:                              # 번호 자리의 잡글자는 떼어 낸다 — 번호는 fill_decimal_gaps 가 채운다
+                t = t[g.end():].strip()
+                g2 = _GARBLED_NUM.match(t)     # 'OB AS 범위' 처럼 두 낱말로 깨진 것까지
+                if g2:
+                    t = t[g2.end():].strip()
+                r["title"] = t
+                r["num_fixed"] = True
+            continue
+        cur = _dec_parts(t)
+        if _is_successor(prev, cur):
+            prev = cur; continue
+        digits = re.sub(r"\D", "", m.group("num"))
+        cand = [c for c in _splits(digits) if _is_successor(prev, c)]
+        if cand:
+            best = min(cand, key=lambda c: (abs(len(c) - len(cur)), len(c)))
+            r["title"] = ".".join(map(str, best)) + ("." if len(best) == 1 else "") + " " + t[m.end():].strip()
+            r["num_fixed"] = True
+            prev = best
+        # 어느 나눔도 다음 번호가 아니면 그대로 두고, 기준(prev)도 바꾸지 않는다 — 잘못 읽은 번호가
+        #   뒤 번호를 끌고 가지 않게(실측: '45.2' 를 기준으로 삼아 '4.5.3' 을 '45.3' 으로 고쳤다)
+    return True
+
+
+def decimal_level(title: str) -> int:
+    """십진 번호의 깊이 → 레벨(1. → 0, 1.1 → 1, 1.1.1 → 2). 번호가 없으면 -1."""
+    parts = _dec_parts(title)
+    if not parts:
+        return -1
+    return min(5, len(parts) - 1)
+
+
 def infer_level(title: str) -> int:
     s = title.strip()
     if _CHAPTER.match(s):
@@ -116,8 +203,11 @@ def _levels_from_x(xs: list[float]) -> list[int]:
     return lv
 
 
-def _page_lines(pdf_path, pages: Iterable[int]) -> list[tuple[int, float, str]]:
-    """(쪽, x0, 줄) 목록 — pdfplumber 줄 묶음. 텍스트층이 비면 OCR 폴백."""
+def _page_lines(pdf_path, pages: Iterable[int], ocr=None) -> list[tuple[int, float, str]]:
+    """(쪽, x0, 줄) 목록 — pdfplumber 줄 묶음. 텍스트층이 비면 OCR 폴백.
+
+    261019-1: `ocr`(`study.ocr_pages.OcrPages`)를 주면 **스캔 쪽**(덧씌운 OCR 층 포함)은 그 공급자의
+    목차 판독(`toc_lines` — 저장된 OCR 재사용 + 흩어진 글 판독)으로 읽는다."""
     out = []
     try:
         import pdfplumber
@@ -126,13 +216,17 @@ def _page_lines(pdf_path, pages: Iterable[int]) -> list[tuple[int, float, str]]:
             for pno in pages:
                 if pno < 1 or pno > len(pdf.pages):
                     continue
-                lines = _T._group_lines_by_y(pdf.pages[pno - 1])
-                if not lines:
-                    lines = _ocr_lines(pdf_path, pno)
+                if ocr is not None and ocr.is_scan(pno):
+                    lines = ocr.toc_lines(pno)
+                else:
+                    lines = _T._group_lines_by_y(pdf.pages[pno - 1])
+                    if not lines:
+                        lines = ocr.toc_lines(pno) if ocr is not None else _ocr_lines(pdf_path, pno)
                 out.extend((pno, x0, t) for x0, t in lines)
     except Exception:
         for pno in pages:
-            out.extend((pno, x0, t) for x0, t in _ocr_lines(pdf_path, pno))
+            src = ocr.toc_lines(pno) if ocr is not None else _ocr_lines(pdf_path, pno)
+            out.extend((pno, x0, t) for x0, t in src)
     return out
 
 
@@ -152,18 +246,23 @@ def _ocr_lines(pdf_path, pno: int) -> list[tuple[float, str]]:
         return []
 
 
-def parse_toc_pages(pdf_path, pages: Iterable[int]) -> list[dict]:
+def parse_toc_pages(pdf_path, pages: Iterable[int], ocr=None) -> list[dict]:
     """지정한 목차 쪽들 → 행 목록(순서 유지). 쪽번호 없는 장 제목은 첫 하위 쪽을 상속."""
     rows = []
-    for pno, x0, text in _page_lines(pdf_path, list(pages)):
+    for pno, x0, text in _page_lines(pdf_path, list(pages), ocr=ocr):
         for it in parse_line(text):
             it["src"] = f"p{pno}"
             it["x0"] = x0
             rows.append(it)
+    # 261019-1: 십진 번호 목차(1. / 1.1 / 1.1.1) — OCR 이 떨어뜨린 점을 앞뒤 번호로 되살리고(411→4.1.1),
+    #   깊이로 레벨을 정한다. 장 번호 'N.' 은 레벨 0. (번호 체계가 없으면 아무것도 바꾸지 않는다)
+    decimal = fix_decimal_numbers(rows)
     # 레벨: 번호 패턴 우선, 나머지는 x 좌표 클러스터
     unresolved = []
     for i, r in enumerate(rows):
-        lv = infer_level(r["title"])
+        lv = decimal_level(r["title"]) if decimal else -1
+        if lv < 0:
+            lv = infer_level(r["title"])
         if lv >= 0:
             r["level"] = lv
         else:
@@ -225,8 +324,41 @@ def parse_toc_pages(pdf_path, pages: Iterable[int]) -> list[dict]:
     #   번호가 아예 없는 차례는 손대지 않는다 — [번호 채우기] 버튼은 형식 변경·전체 채움용으로 남는다.
     # 260904-8: 목차 쪽이 중간에 줄어드는 행(두 단 배치를 OCR 이 섞어 읽음·숫자 누락)을 바로잡는다 — 번호 복원보다 먼저
     sort_by_toc_page(rows)
-    renumber_rows(rows, evidence_only=True)
+    if decimal:
+        fill_decimal_gaps(rows)            # 261019-1: 번호를 통째로 잃은 행(2.1.1 과 2.1.3 사이) → 2.1.2
+    else:
+        renumber_rows(rows, evidence_only=True)
     return rows
+
+
+def fill_decimal_gaps(rows: list[dict]) -> int:
+    """십진 목차에서 번호가 없는 행에, 앞 번호의 같은 깊이 다음 번호를 붙인다 — **뒤 번호가 그것의 다음일 때만**.
+    깊이는 그 행의 레벨(x 위치로 정한 것)을 따른다. 붙인 수."""
+    n = 0
+    for i, r in enumerate(rows):
+        if _dec_parts(r.get("title", "")):
+            continue
+        prev = next((_dec_parts(rows[k]["title"]) for k in range(i - 1, -1, -1)
+                     if _dec_parts(rows[k]["title"])), None)
+        nxt = next((_dec_parts(rows[k]["title"]) for k in range(i + 1, len(rows))
+                    if _dec_parts(rows[k]["title"])), None)
+        if not prev:
+            continue
+        depth = int(r.get("level", 0)) + 1
+        if depth <= 1:
+            continue                       # 번호 없는 장 급(참고문헌·부록)은 원래 번호가 없다
+        if depth <= len(prev):
+            cand = prev[:depth - 1] + [prev[depth - 1] + 1]
+        elif depth == len(prev) + 1:
+            cand = prev + [1]
+        else:
+            continue
+        if nxt is not None and not _is_successor(cand, nxt):
+            continue
+        r["title"] = ".".join(map(str, cand)) + ("." if len(cand) == 1 else "") + " " + r["title"].strip()
+        r["num_fixed"] = True
+        n += 1
+    return n
 
 
 # ── 260904-8: 목차 쪽 순서 ──────────────────────────────────────────────
@@ -403,13 +535,19 @@ def renumber_siblings_from(rows: list[dict], row: int, *, style: Optional[str] =
 _TOC_HEADER = re.compile(r"(목\s*차|차\s*[례려레]|contents|table\s+of\s+contents)", re.I)
 
 
-def find_toc_pages(pdf_path, scan_first_n: int = 40, min_entries: int = 4, gap: int = 1) -> list[int]:
+def find_toc_pages(pdf_path, scan_first_n: int = 40, min_entries: int = 4, gap: int = 1,
+                   ocr=None, ocr_first_n: int = 15) -> list[int]:
     """목차로 보이는 쪽(1-based) 목록 — 관대한 파서(`parse_line`) 기준 (260904-2).
 
     내장 `find_toc_pages` 는 점선 리더·머리글 정규식만 보고 **연속이 끊기면 즉시 중단**해,
     표본(차례 6~11쪽)에서 7쪽 머리글이 '차려'로 깨지고 줄이 `제목 / 12` 형식이라 **6쪽만** 잡았다.
     여기서는 ① 상단 6줄에 머리글(차례/차려/목차/contents) 또는 ② 항목으로 읽히는 줄이
-    `min_entries` 이상이면 목차 쪽으로 보고, 첫 목차 쪽 이후 `gap` 쪽까지 비어도 이어 본다."""
+    `min_entries` 이상이면 목차 쪽으로 보고, 첫 목차 쪽 이후 `gap` 쪽까지 비어도 이어 본다.
+
+    261019-1(사용자 보고 — 1996 보고서 4~6쪽 목차를 못 찾음): `ocr` 공급자를 주면 **스캔 쪽도 처음부터** 읽는다
+    (종전에는 목차 쪽을 하나 찾은 **뒤에만** OCR 해, 전부 그림인 PDF 는 영영 못 찾았다). 스캔 쪽은 앞 `ocr_first_n`
+    쪽까지만 본다. OCR 이 점선 리더 탓에 쪽 번호를 놓쳐도 잡히게 **번호 구조**(줄 머리가 1. / 1.1 / 2.1.1 인 줄이
+    6개 이상이고 절반 이상)도 목차 근거로 친다. 읽은 쪽은 저장된 OCR 로 남아 다음 단계·텍스트 창이 다시 쓴다."""
     found, last_hit = [], None
     try:
         import pdfplumber
@@ -418,12 +556,21 @@ def find_toc_pages(pdf_path, scan_first_n: int = 40, min_entries: int = 4, gap: 
             n = min(scan_first_n, len(pdf.pages))
             for i in range(n):
                 pno = i + 1
-                lines = [t_ for _x, t_ in _T._group_lines_by_y(pdf.pages[i])]
-                if not lines:
-                    lines = [t_ for _x, t_ in _ocr_lines(pdf_path, pno)] if found else []
+                if ocr is not None and ocr.should_cancel():
+                    break
+                if ocr is not None and ocr.is_scan(pno):
+                    if pno > ocr_first_n and not found:
+                        break                               # 앞쪽에 목차가 없으면 더 읽지 않는다(쪽당 수 초)
+                    lines = [t_ for _x, t_ in ocr.lines(pno)]
+                else:
+                    lines = [t_ for _x, t_ in _T._group_lines_by_y(pdf.pages[i])]
+                    if not lines:
+                        lines = [t_ for _x, t_ in _ocr_lines(pdf_path, pno)] if found else []
                 header = any(_TOC_HEADER.search(ln) for ln in lines[:6])
                 entries = sum(len(parse_line(ln)) for ln in lines)
-                is_toc = header or entries >= min_entries
+                numbered = sum(1 for ln in lines if _DEC_HEAD.match(ln.strip()) and len(ln.strip()) <= 60)
+                structured = numbered >= 6 and numbered * 2 >= len(lines)
+                is_toc = header or entries >= min_entries or structured
                 if is_toc:
                     found.append(pno); last_hit = pno
                 elif found and last_hit is not None and pno - last_hit > gap:
@@ -477,7 +624,7 @@ def _title_needle(title: str, head_chars: int = 10) -> str:
 
 
 def suggest_offsets(pdf_path, rows: list[dict], toc_pages: list[int],
-                    *, window: int = 120, probes: int = 60) -> list[tuple[int, float]]:
+                    *, window: int = 120, probes: int = 60, page_text=None) -> list[tuple[int, float]]:
     """(실제 쪽 − 목차 쪽) 오프셋 후보 [(offset, confidence)] — 신뢰도 내림차순.
 
     내장 추정기는 제목 **전체** 일치를 요구해 OCR 텍스트층(잡글자)에서 무너졌다(표본:
@@ -499,7 +646,13 @@ def suggest_offsets(pdf_path, rows: list[dict], toc_pages: list[int],
             cache = {}
             def page_norm(pg):
                 if pg not in cache:
-                    cache[pg] = _norm(doc.load_page(pg - 1).get_text() or "")
+                    t = doc.load_page(pg - 1).get_text() or ""
+                    if page_text is not None:          # 261019-1: 스캔 쪽은 저장된 OCR 글
+                        try:
+                            t = page_text(pg) or t
+                        except Exception:
+                            pass
+                    cache[pg] = _norm(t)
                 return cache[pg]
             for r in cand:
                 needle = _title_needle(r["title"])
@@ -536,7 +689,7 @@ def _norm(s: str) -> str:
     return re.sub(r"[\s\W_]+", "", s or "").lower()
 
 
-def verify_rows(pdf_path, rows: list[dict], *, head_chars: int = 10) -> dict:
+def verify_rows(pdf_path, rows: list[dict], *, head_chars: int = 10, page_text=None) -> dict:
     """행별로 '실제 쪽에 제목이 있는가' 검사 → {index: True/False}. 비교용(저장에 영향 없음).
 
     제목 앞부분(head_chars 자)만 공백·기호 제거 후 그 쪽 텍스트에서 찾는다 — OCR 텍스트층의
@@ -552,7 +705,13 @@ def verify_rows(pdf_path, rows: list[dict], *, head_chars: int = 10) -> dict:
                 if not pg or not (1 <= pg <= doc.page_count):
                     res[i] = False; continue
                 if pg not in cache:
-                    cache[pg] = _norm(doc.load_page(pg - 1).get_text() or "")
+                    t = doc.load_page(pg - 1).get_text() or ""
+                    if page_text is not None:          # 261019-1: 스캔 쪽은 저장된 OCR 글
+                        try:
+                            t = page_text(pg) or t
+                        except Exception:
+                            pass
+                    cache[pg] = _norm(t)
                 needle = _title_needle(r["title"], head_chars)     # 오프셋 추정과 같은 규칙
                 res[i] = bool(needle) and needle in cache[pg]
         finally:

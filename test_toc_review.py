@@ -291,13 +291,15 @@ chk(got.get("phase") == "review" and len(got.get("rows", [])) == 8 and got.get("
     "④ 워커 검토 단계 — rows·offset 반환, 파일은 쓰지 않음", f"phase={got.get('phase')} err={got.get('err')}")
 chk(not (root / "book_bookmarked.pdf").exists(), "④ 검토 단계에서는 저장 없음")
 got.clear()
-w2 = BookmarkerWorker(pdf, {**opts, "review": False, "bookmarks": out, "method": "toc"})
+# 261019-1(마스터 §4.4.2): 검토 없이 끝나도 워커는 **PDF 를 쓰지 않고** 책갈피 목록만 돌려준다
+w2 = BookmarkerWorker(pdf, {**opts, "review": False})
 w2.finished.connect(lambda r: got.update(r)); w2.error.connect(lambda e: got.update(err=e)); w2.run()
-outp = root / "book_bookmarked.pdf"
-chk(got.get("phase") == "done" and got.get("count") == 8 and outp.exists(),
-    "④ 확정 저장 — 검토 결과 8개를 PDF 에 씀", f"{got}")
-_do = fitz.open(str(outp)); tocs = _do.get_toc(); _do.close()   # Windows: 핸들 닫아야 삭제 가능
-chk(len(tocs) == 8 and tocs[0][2] == 5 and tocs[1][2] == 11, "④ 저장된 책갈피 = 검토 표(수동 쪽 반영)", f"{tocs[:2]}")
+bms2 = got.get("bookmarks") or []
+chk(got.get("phase") == "done" and got.get("count") == 8 and len(bms2) == 8 and bms2[0][1] == 4,
+    "④ 검토 없이 끝 — 책갈피 8개(오프셋 3 적용)를 돌려준다", f"{got.get('phase')} {bms2[:2]}")
+_d4 = fitz.open(str(pdf)); _toc4 = _d4.get_toc(); _d4.close()   # Windows: 핸들 닫아야 뒤에서 덮어쓸 수 있다
+chk(not list(root.glob("*_bookmarked.pdf")) and not _toc4,
+    "④ 워커는 어떤 PDF 도 쓰지 않는다(새 파일·원본 모두)")
 # 목차 쪽 미지정 + toc 모드 + 탐지 실패 → 정직한 오류
 got.clear()
 w3 = BookmarkerWorker(pdf, {**opts, "toc_pages": [1], "review": True})   # 표지 쪽만 지정 → 항목 없음
@@ -313,29 +315,44 @@ bd._detect_toc_pages(); app.processEvents()
 chk(bd.edit_toc_pages.text() == "2-3", "⑤ [자동 탐지] → '2-3'(관대한 탐지·표기)", f"'{bd.edit_toc_pages.text()}'")
 bd.close()
 
-# ── ⑥ 앱 연동: 검토 단계 → 창 → [저장] → 확정 저장 워커 ──────────────────
+# ── ⑥ 앱 연동: 검토 단계 → 창 → [확인] → 책갈피창(저장 안 됨) → [저장] ──────────────────
 from viewer.app import MainWindow
 import viewer.app as _appmod
 from viewer.widgets import toc_review_dialog as _trd
 mw = MainWindow(); mw.show(); app.processEvents()
-mw._bookmarker_pdf = pdf
 out6 = root / "out6"; out6.mkdir()
+import shutil
+pdf6 = out6 / "book6.pdf"                    # 원본(book.pdf)은 ⑦ 이 '책갈피 없음' 으로 쓴다 — 사본으로
+shutil.copy(pdf, pdf6)
+mw._bookmarker_pdf = pdf6
 mw._bookmarker_opts = {**opts, "review": True, "out_dir": str(out6)}
 review = {"phase": "review", "method": "toc", "rows": T.parse_toc_pages(pdf, [2]),
           "candidates": cands, "offset": 3, "toc_pages": [2, 3]}
-# 취소 → 저장 없음
+# 취소 → 저장 없음, 책갈피창도 그대로
 _trd.TocReviewDialog.exec = lambda self: self.DialogCode.Rejected
 mw._on_bookmarker_done(dict(review)); app.processEvents()
-chk(not list(out6.glob("*.pdf")), "⑥ 검토 창에서 취소 → 파일 쓰지 않음")
-# 저장 → 워커를 동기 실행하도록 run_in_thread 대체
+chk([x.name for x in out6.glob("*.pdf")] == ["book6.pdf"] and not mw.bookmark_tree._dirty, "⑥ 검토 창에서 취소 → 파일 쓰지 않음·책갈피창 그대로")
+# 확인 → 책갈피창의 그 파일에 '저장 안 됨' 으로(261019-1) — PDF 는 그대로
 _trd.TocReviewDialog.exec = lambda self: self.DialogCode.Accepted
-_appmod.run_in_thread = lambda w, keep=None: w.run()
-mw._on_bookmarker_done(dict(review)); app.processEvents(); QTest.qWait(200); app.processEvents()
-outs = list(out6.glob("*.pdf"))
-_d6 = fitz.open(str(outs[0])) if outs else None; n6 = len(_d6.get_toc()) if _d6 else 0
-if _d6: _d6.close()
-chk(len(outs) >= 1 and n6 == 8,
-    "⑥ 검토 창 [저장] → 확정 저장 워커 → 책갈피 8개 PDF", f"{[o.name for o in outs]}")
+mw._on_bookmarker_done(dict(review)); app.processEvents(); QTest.qWait(100); app.processEvents()
+bt6 = mw.bookmark_tree
+node6 = bt6._file_node_for_path(str(pdf6))
+def _count(n):
+    return sum(1 + _count(n.child(i)) for i in range(n.childCount()))
+_d6 = fitz.open(str(pdf6)); n_disk = len(_d6.get_toc()); _d6.close()
+chk(node6 is not None and _count(node6) == 8 and bt6._dirty and bt6.is_edit_mode() and n_disk == 0
+    and [x.name for x in out6.glob("*.pdf")] == ["book6.pdf"],
+    "⑥ 검토 창 [확인] → 책갈피창에 8개(저장 안 됨·편집 모드), PDF 는 그대로",
+    f"tree={_count(node6) if node6 else None} dirty={bt6._dirty} edit={bt6.is_edit_mode()} disk={n_disk}")
+raw6 = []
+bt6._walk_collect(node6, 0, raw6)
+chk([(t, pg, lv) for t, pg, lv in raw6][:3] == [(b[0], b[1], b[2]) for b in T.to_bookmarks(
+        [dict(r, page=r["toc_page"] + 3) for r in review["rows"]])][:3],
+    "⑥ 책갈피창 항목 = 검토 표(제목·쪽·레벨)", f"{raw6[:3]}")
+# [저장] → 표준 저장 길(_finalize_save)로 원본에
+bt6._op_save(str(pdf6)); app.processEvents(); QTest.qWait(300); app.processEvents()
+_d6 = fitz.open(str(pdf6)); n_disk2 = len(_d6.get_toc()); _d6.close()
+chk(n_disk2 == 8 and not bt6._dirty, "⑥ 책갈피창 [저장] → 원본 PDF 에 8개", f"disk={n_disk2} dirty={bt6._dirty}")
 
 # ── ⑦ 기존 책갈피 수정 경로 (260904-10) ──────────────────────────────────
 pdfe = root / "hasbm.pdf"
@@ -380,15 +397,11 @@ chk(got.get("phase") == "review" and got.get("method") == "existing" and len(got
     and not (root / "hasbm_bookmarked.pdf").exists(),
     "⑦ 워커 existing — 기존 3행을 검토 단계로, 파일은 쓰지 않음", f"{got.get('err')}")
 got.clear()
-we2 = BookmarkerWorker(pdfe, {**opts_e, "review": False,
-                              "bookmarks": [("고친 제목", 2, 0), ("Chapter 2", 4, 0)], "method": "existing"})
+we2 = BookmarkerWorker(pdfe, {**opts_e, "review": False})
 we2.finished.connect(lambda r: got.update(r)); we2.error.connect(lambda e: got.update(err=e)); we2.run()
-oute = root / "hasbm_bookmarked.pdf"
-_de = fitz.open(str(oute)) if oute.exists() else None
-toce = _de.get_toc() if _de else []
-if _de: _de.close()
-chk(got.get("phase") == "done" and len(toce) == 2 and toce[0][1] == "고친 제목" and toce[0][2] == 2,
-    "⑦ 수정한 표 → 저장(기존 책갈피 대체)", f"{toce}")
+chk(got.get("phase") == "done" and [b[0] for b in got.get("bookmarks") or []] == ["Chapter 1", "Section 1.1", "Chapter 2"]
+    and not (root / "hasbm_bookmarked.pdf").exists(),
+    "⑦ 검토 없이 existing → 기존 3개를 돌려주고 파일은 쓰지 않음", f"{got.get('bookmarks')}")
 # 검토 창 제목
 dlge = TocReviewDialog(pdfe, rows_x, offset=0, candidates=[], method="existing", toc_pages=[])
 chk("기존 책갈피 수정" in dlge.windowTitle() and not dlge.grp_offset.isVisibleTo(dlge)

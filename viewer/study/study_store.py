@@ -3,6 +3,13 @@
 저장 위치: settings_store.settings_dir() / 'study.db' (= %APPDATA%\\LocalTools\\PolyPDF).
 file_key = 파일 절대경로의 sha1(앞 16자) — 동일 파일 재오픈 시 캐시 적중.
 재개(resume): ocr_page PK(file_key,page) 로 이미 처리한 페이지를 스킵.
+
+261019-1(단어학습 SOT §14.21, 사용자 지시 'OCR·책갈피·단어장은 [저장]하지 않으면 저장되지 않게'):
+**보류 저장소**. `enable_pending(True)`(앱이 켠다) 뒤에는 OCR 쪽·어휘가 study.db 가 아니라 이 프로세스의
+보류 DB(`study_pending_<pid>.db`)에 쓰인다. 읽기는 같은 이름의 TEMP VIEW 가 '보류 ▶ 저장본' 순으로 겹쳐
+보여 주므로 텍스트 창·단어장·책갈피 생성은 저장 전에도 그 결과를 그대로 쓴다(이어하기 포함).
+[저장]이면 `commit_pending(file_key)` 가 study.db 로 옮기고, 저장하지 않고 끝내면 `discard_pending` 으로 버린다.
+뜻·예문(`vocab_def`·`vocab_example`)은 파일과 무관한 사전 캐시라 보류하지 않는다.
 """
 from __future__ import annotations
 
@@ -15,10 +22,62 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 
+_KEY_PATHS: dict = {}          # file_key → 경로(보류 목록을 사람이 읽게 — 이 프로세스에서 본 것)
+
+
 def file_key_for(path: str | Path) -> str:
     """파일 절대경로 기반 안정 키."""
     p = str(Path(path).resolve()).lower()
-    return hashlib.sha1(p.encode("utf-8")).hexdigest()[:16]
+    k = hashlib.sha1(p.encode("utf-8")).hexdigest()[:16]
+    _KEY_PATHS.setdefault(k, str(path))
+    return k
+
+
+def path_for_key(file_key: str) -> str:
+    return _KEY_PATHS.get(file_key, "")
+
+
+# ── 261019-1: 보류 저장소 ─────────────────────────────────────────────
+_PENDING = {"on": False, "path": None}
+_PENDING_TABLES = ("ocr_page", "ocr_word", "vocab", "vocab_page", "study_meta")
+
+
+def pending_db_path() -> Path:
+    if _PENDING["path"] is None:
+        import os
+        _PENDING["path"] = default_db_path().parent / "pending" / f"study_pending_{os.getpid()}.db"
+    return Path(_PENDING["path"])
+
+
+def enable_pending(on: bool = True, path=None) -> None:
+    """보류 저장 켜기(앱 시작 때). `path` 는 시험용."""
+    _PENDING["on"] = bool(on)
+    if path is not None:
+        _PENDING["path"] = Path(path)
+
+
+def pending_enabled() -> bool:
+    return bool(_PENDING["on"])
+
+
+def cleanup_stale_pending() -> int:
+    """끝난(또는 죽은) 프로세스가 남긴 보류 DB 를 지운다 — 저장하지 않은 결과는 버리는 것이 규칙.
+    다른 PolyPDF 창이 쓰고 있는 파일은 열려 있어 지워지지 않는다(그대로 둔다). 지운 수."""
+    import os
+    d = pending_db_path().parent
+    mine = pending_db_path().name
+    n = 0
+    try:
+        for f in d.glob("study_pending_*.db*"):
+            if f.name.startswith(mine):
+                continue
+            try:
+                os.remove(f); n += 1
+            except OSError:
+                pass
+    except Exception:
+        pass
+    return n
 
 
 def default_db_path() -> Path:
@@ -40,6 +99,129 @@ class StudyStore:
         self.db_path = Path(db_path) if db_path else default_db_path()
         self.conn = _dbutil.connect(self.db_path, busy_ms)
         self._init_schema()
+        self._pend = False
+        if pending_enabled():
+            try:
+                self._attach_pending()
+                self._pend = True
+            except Exception:
+                self._pend = False             # 못 붙이면 종전대로(바로 저장) — 동작은 잃지 않는다
+
+    # --- 261019-1: 보류 저장소 ---------------------------------------------
+    def _attach_pending(self) -> None:
+        pp = pending_db_path()
+        pp.parent.mkdir(parents=True, exist_ok=True)
+        self.conn.execute("ATTACH DATABASE ? AS p", (str(pp),))
+        try:
+            self.conn.execute("PRAGMA p.journal_mode = WAL")
+        except Exception:
+            pass
+        self.conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS p.ocr_page(
+                file_key TEXT, page INTEGER, text TEXT, dpi INTEGER,
+                engine TEXT, source TEXT, conf REAL, done_at TEXT,
+                PRIMARY KEY(file_key, page));
+            CREATE TABLE IF NOT EXISTS p.ocr_word(
+                file_key TEXT, page INTEGER, lemma TEXT, surface TEXT, lang TEXT,
+                x0 REAL, y0 REAL, x1 REAL, y1 REAL, conf REAL);
+            CREATE INDEX IF NOT EXISTS p.ix_pword_page ON ocr_word(file_key, page);
+            CREATE TABLE IF NOT EXISTS p.vocab(
+                file_key TEXT, lemma TEXT, lang TEXT, level TEXT,
+                zipf REAL, freq_in_book INTEGER,
+                PRIMARY KEY(file_key, lemma, lang));
+            CREATE TABLE IF NOT EXISTS p.vocab_page(
+                file_key TEXT, page INTEGER, lemma TEXT, lang TEXT, count INTEGER,
+                pos INTEGER DEFAULT 0,
+                PRIMARY KEY(file_key, page, lemma, lang));
+            CREATE INDEX IF NOT EXISTS p.ix_pvpage ON vocab_page(file_key, page);
+            CREATE TABLE IF NOT EXISTS p.study_meta(
+                file_key TEXT PRIMARY KEY, path TEXT, page_count INTEGER,
+                lang TEXT, updated_at TEXT);
+            -- 이 파일의 어휘는 보류 쪽이 통째로 대신한다(다시 만들기)
+            CREATE TABLE IF NOT EXISTS p.vocab_files(file_key TEXT PRIMARY KEY);
+            -- 이 파일의 저장본은 지운 것으로 본다('단어장 다시 만들기')
+            CREATE TABLE IF NOT EXISTS p.cleared(file_key TEXT PRIMARY KEY);
+            """)
+        # 읽기는 TEMP VIEW(이름이 같아 main 표를 가린다) — 보류 ▶ 저장본
+        hide_main = "m.file_key NOT IN (SELECT file_key FROM p.cleared)"
+        self.conn.executescript(f"""
+            CREATE TEMP VIEW IF NOT EXISTS ocr_page AS
+              SELECT * FROM p.ocr_page UNION ALL
+              SELECT m.* FROM main.ocr_page m WHERE {hide_main} AND NOT EXISTS
+                (SELECT 1 FROM p.ocr_page q WHERE q.file_key=m.file_key AND q.page=m.page);
+            CREATE TEMP VIEW IF NOT EXISTS ocr_word AS
+              SELECT * FROM p.ocr_word UNION ALL
+              SELECT m.* FROM main.ocr_word m WHERE {hide_main} AND NOT EXISTS
+                (SELECT 1 FROM p.ocr_page q WHERE q.file_key=m.file_key AND q.page=m.page);
+            CREATE TEMP VIEW IF NOT EXISTS vocab AS
+              SELECT * FROM p.vocab UNION ALL
+              SELECT m.* FROM main.vocab m WHERE {hide_main}
+                AND m.file_key NOT IN (SELECT file_key FROM p.vocab_files);
+            CREATE TEMP VIEW IF NOT EXISTS vocab_page AS
+              SELECT * FROM p.vocab_page UNION ALL
+              SELECT m.* FROM main.vocab_page m WHERE {hide_main}
+                AND m.file_key NOT IN (SELECT file_key FROM p.vocab_files);
+            CREATE TEMP VIEW IF NOT EXISTS study_meta AS
+              SELECT * FROM p.study_meta UNION ALL
+              SELECT m.* FROM main.study_meta m WHERE NOT EXISTS
+                (SELECT 1 FROM p.study_meta q WHERE q.file_key=m.file_key);
+            """)
+        self.conn.commit()
+
+    def _w(self, table: str) -> str:
+        """쓰기 대상 표 이름 — 보류 중이면 p.표."""
+        return f"p.{table}" if self._pend else f"main.{table}"
+
+    def pending_keys(self) -> list:
+        """보류 중인 결과가 있는 file_key 목록."""
+        if not self._pend:
+            return []
+        keys = set()
+        for t in ("ocr_page", "vocab", "vocab_page", "vocab_files", "cleared"):
+            keys.update(r[0] for r in self.conn.execute(f"SELECT DISTINCT file_key FROM p.{t}"))
+        return sorted(keys)
+
+    def pending_summary(self, file_key: str) -> dict:
+        """{'pages': OCR 쪽 수, 'vocab': 어휘 수} — 확인 창 문구용."""
+        if not self._pend:
+            return {"pages": 0, "vocab": 0}
+        pg = self.conn.execute("SELECT COUNT(*) FROM p.ocr_page WHERE file_key=?", (file_key,)).fetchone()[0]
+        vc = self.conn.execute("SELECT COUNT(*) FROM p.vocab WHERE file_key=?", (file_key,)).fetchone()[0]
+        return {"pages": int(pg), "vocab": int(vc)}
+
+    def commit_pending(self, file_key: str) -> bool:
+        """[저장] — 그 파일의 보류 결과를 study.db 로 옮기고 보류에서 지운다. 옮긴 것이 있으면 True."""
+        if not self._pend or file_key not in self.pending_keys():
+            return False
+        c = self.conn
+        k = (file_key,)
+        with c:
+            if c.execute("SELECT 1 FROM p.cleared WHERE file_key=?", k).fetchone():
+                for t in ("ocr_page", "ocr_word", "vocab", "vocab_page"):
+                    c.execute(f"DELETE FROM main.{t} WHERE file_key=?", k)
+            c.execute("DELETE FROM main.ocr_word WHERE file_key=? AND page IN"
+                      " (SELECT page FROM p.ocr_page WHERE file_key=?)", (file_key, file_key))
+            c.execute("INSERT OR REPLACE INTO main.ocr_page SELECT * FROM p.ocr_page WHERE file_key=?", k)
+            c.execute("INSERT INTO main.ocr_word SELECT * FROM p.ocr_word WHERE file_key=?", k)
+            if c.execute("SELECT 1 FROM p.vocab_files WHERE file_key=?", k).fetchone():
+                c.execute("DELETE FROM main.vocab WHERE file_key=?", k)
+                c.execute("DELETE FROM main.vocab_page WHERE file_key=?", k)
+            c.execute("INSERT OR REPLACE INTO main.vocab SELECT * FROM p.vocab WHERE file_key=?", k)
+            c.execute("INSERT OR REPLACE INTO main.vocab_page SELECT * FROM p.vocab_page WHERE file_key=?", k)
+            c.execute("INSERT OR REPLACE INTO main.study_meta SELECT * FROM p.study_meta WHERE file_key=?", k)
+            self._drop_pending(file_key)
+        return True
+
+    def discard_pending(self, file_key: str) -> None:
+        """저장하지 않음 — 그 파일의 보류 결과를 버린다(저장본은 그대로)."""
+        if self._pend:
+            with self.conn:
+                self._drop_pending(file_key)
+
+    def _drop_pending(self, file_key: str) -> None:
+        for t in _PENDING_TABLES + ("vocab_files", "cleared"):
+            self.conn.execute(f"DELETE FROM p.{t} WHERE file_key=?", (file_key,))
 
     def _init_schema(self) -> None:
         self.conn.executescript(
@@ -103,16 +285,16 @@ class StudyStore:
                   words: Iterable[dict], lang: str) -> None:
         """한 페이지의 OCR 결과(텍스트+단어좌표)를 트랜잭션으로 저장. 재저장 시 교체."""
         cur = self.conn.cursor()
-        cur.execute("DELETE FROM ocr_page WHERE file_key=? AND page=?", (file_key, page))
-        cur.execute("DELETE FROM ocr_word WHERE file_key=? AND page=?", (file_key, page))
+        cur.execute(f"DELETE FROM {self._w('ocr_page')} WHERE file_key=? AND page=?", (file_key, page))
+        cur.execute(f"DELETE FROM {self._w('ocr_word')} WHERE file_key=? AND page=?", (file_key, page))
         cur.execute(
-            "INSERT INTO ocr_page(file_key,page,text,dpi,engine,source,conf,done_at)"
+            f"INSERT INTO {self._w('ocr_page')}(file_key,page,text,dpi,engine,source,conf,done_at)"
             " VALUES(?,?,?,?,?,?,?,?)",
             (file_key, page, text, dpi, engine, source, conf,
              time.strftime("%Y-%m-%dT%H:%M:%S")),
         )
         cur.executemany(
-            "INSERT INTO ocr_word(file_key,page,lemma,surface,lang,x0,y0,x1,y1,conf)"
+            f"INSERT INTO {self._w('ocr_word')}(file_key,page,lemma,surface,lang,x0,y0,x1,y1,conf)"
             " VALUES(?,?,?,?,?,?,?,?,?,?)",
             [(file_key, page, w.get("lemma", ""), w["surface"], lang,
               w["x0"], w["y0"], w["x1"], w["y1"], w.get("conf", 0.0))
@@ -122,7 +304,7 @@ class StudyStore:
 
     def set_meta(self, file_key: str, path: str, page_count: int, lang: str) -> None:
         self.conn.execute(
-            "INSERT INTO study_meta(file_key,path,page_count,lang,updated_at)"
+            f"INSERT INTO {self._w('study_meta')}(file_key,path,page_count,lang,updated_at)"
             " VALUES(?,?,?,?,?) ON CONFLICT(file_key) DO UPDATE SET"
             " path=excluded.path, page_count=excluded.page_count,"
             " lang=excluded.lang, updated_at=excluded.updated_at",
@@ -167,18 +349,25 @@ class StudyStore:
     # --- 어휘(P2) ----------------------------------------------------------
     def clear_vocab(self, file_key: str) -> None:
         for tbl in ("vocab", "vocab_page"):
-            self.conn.execute(f"DELETE FROM {tbl} WHERE file_key=?", (file_key,))
+            self.conn.execute(f"DELETE FROM {self._w(tbl)} WHERE file_key=?", (file_key,))
+        if self._pend:                     # 저장본 어휘는 가린다(저장할 때 바뀐다)
+            self.conn.execute("INSERT OR IGNORE INTO p.vocab_files(file_key) VALUES(?)", (file_key,))
         self.conn.commit()
 
     def clear_file(self, file_key: str) -> None:
         """260615-6: 해당 파일의 OCR·어휘 캐시 전체 삭제 → '단어장 다시 만들기'용."""
         for tbl in ("ocr_page", "ocr_word", "vocab", "vocab_page"):
-            self.conn.execute(f"DELETE FROM {tbl} WHERE file_key=?", (file_key,))
+            self.conn.execute(f"DELETE FROM {self._w(tbl)} WHERE file_key=?", (file_key,))
+        if self._pend:                     # 저장본은 [저장]할 때 지운다 — 그 전까지는 가리기만
+            self.conn.execute("INSERT OR IGNORE INTO p.cleared(file_key) VALUES(?)", (file_key,))
+            self.conn.execute("INSERT OR IGNORE INTO p.vocab_files(file_key) VALUES(?)", (file_key,))
         self.conn.commit()
 
     def save_vocab(self, file_key: str, rows: Iterable[dict]) -> None:
+        if self._pend:
+            self.conn.execute("INSERT OR IGNORE INTO p.vocab_files(file_key) VALUES(?)", (file_key,))
         self.conn.executemany(
-            "INSERT OR REPLACE INTO vocab(file_key,lemma,lang,level,zipf,freq_in_book)"
+            f"INSERT OR REPLACE INTO {self._w('vocab')}(file_key,lemma,lang,level,zipf,freq_in_book)"
             " VALUES(?,?,?,?,?,?)",
             [(file_key, r["lemma"], r["lang"], r["level"], r.get("zipf"),
               r.get("freq_in_book", 0)) for r in rows])
@@ -186,7 +375,7 @@ class StudyStore:
 
     def save_page_lemmas(self, file_key: str, rows: Iterable[dict]) -> None:
         self.conn.executemany(
-            "INSERT OR REPLACE INTO vocab_page(file_key,page,lemma,lang,count,pos)"
+            f"INSERT OR REPLACE INTO {self._w('vocab_page')}(file_key,page,lemma,lang,count,pos)"
             " VALUES(?,?,?,?,?,?)",
             [(file_key, r["page"], r["lemma"], r["lang"], r.get("count", 1),
               r.get("pos", 0)) for r in rows])

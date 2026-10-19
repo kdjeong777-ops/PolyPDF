@@ -136,7 +136,7 @@ class BookmarkerDialog(QDialog):
         row_toc.addWidget(self.edit_toc_pages, 1)
         row_toc.addWidget(self.btn_detect_toc)
         ft.addRow(tr("목차 쪽:"), row_toc)
-        self.chk_review = QCheckBox(tr("저장 전에 책갈피 표를 검토한다"))
+        self.chk_review = QCheckBox(tr("책갈피창에 넣기 전에 표로 검토한다"))
         self.chk_review.setToolTip(tr("검토 표에서 실제 쪽과 대조해 고치거나 지우고 더할 수 있습니다"))
         self.chk_review.setChecked(bool(p.get("bookmarker_review", True)))
         ft.addRow(self.chk_review)                     # 이름 칸 없이 두 칸 폭(디자인 SOT §2.14)
@@ -168,21 +168,13 @@ class BookmarkerDialog(QDialog):
         grp_out = QGroupBox(tr("출력"))
         ol = QVBoxLayout(grp_out)
 
-        # 260606-4: 새 PDF로 저장 / 현재 PDF에 저장 선택
-        self.rb_save_new = QRadioButton(tr("새 PDF로 저장"))
-        self.rb_save_over = QRadioButton(tr("현재 PDF에 저장 (덮어쓰기)"))
-        self.bg_save = QButtonGroup(self)
-        self.bg_save.addButton(self.rb_save_new)
-        self.bg_save.addButton(self.rb_save_over)
-        (self.rb_save_over if p.get("bookmarker_overwrite")
-         else self.rb_save_new).setChecked(True)
-        row_save = QHBoxLayout()
-        row_save.addWidget(QLabel(tr("PDF 저장:")))
-        row_save.addWidget(self.rb_save_new)
-        row_save.addWidget(self.rb_save_over)
-        row_save.addStretch(1)
-        ol.addLayout(row_save)
-        self.rb_save_over.toggled.connect(self._sync_outdir_enabled)
+        # 261019-1(마스터 §4.4.2, 사용자 지시 '저장하지 않으면 자동 저장 안 됨'): 만든 책갈피는 PDF 에 바로
+        #   쓰지 않는다 — 책갈피창의 그 파일에 '저장 안 됨' 으로 넣고, [저장](💾)을 눌러야 원본에 쓴다
+        #   (종전 '새 PDF로 저장 / 현재 PDF에 저장' 선택은 없앴다 — 새 이름은 '다른 이름으로 저장...').
+        lbl_where = QLabel(tr("만든 책갈피는 책갈피창의 그 파일에 <b>저장하지 않은 상태</b>로 들어갑니다. "
+                              "확인한 뒤 [저장]을 눌러야 PDF 에 씁니다."))
+        lbl_where.setWordWrap(True)
+        ol.addWidget(lbl_where)
 
         self.chk_txt = QCheckBox(tr("알PDF용 책갈피 텍스트(.txt) 저장"))
         self.chk_txt.setChecked(bool(p.get("bookmarker_save_txt", False)))
@@ -202,13 +194,6 @@ class BookmarkerDialog(QDialog):
         row_out.addWidget(self.btn_browse_out)
         ol.addLayout(row_out)
 
-        # 260606-4: '자동 열기' 체크 제거 — 완료 시 항상 책갈피 새로고침(목록 유지)
-        hint_out = QLabel(tr("<small>완료 후 책갈피 목록이 자동 새로고침됩니다"
-                          "(기존 파일 목록은 그대로 유지).</small>"))
-        hint_out.setStyleSheet("color:#888;")
-        hint_out.setWordWrap(True)
-        ol.addWidget(hint_out)
-
         layout.addWidget(grp_out)
 
         # ── 버튼 ───────────────────────────────────────────────────
@@ -226,6 +211,7 @@ class BookmarkerDialog(QDialog):
         self.rb_ocr.toggled.connect(self._sync_offset_enabled)
         self._sync_offset_enabled()
         self._sync_ocr_enabled()
+        self.chk_txt.toggled.connect(self._sync_outdir_enabled)
         self._sync_outdir_enabled()
 
         # 261010-6(디자인 SOT §2.15): 최상위 창은 줄바꿈 높이(heightForWidth)를 스스로 맞추지 않는다 — 보일 때·폭이 바뀔 때 맞춘다
@@ -346,10 +332,10 @@ class BookmarkerDialog(QDialog):
         self.lbl_ocr_hint.setEnabled(on)
 
     def _sync_outdir_enabled(self):
-        # 260606-4: '현재 PDF에 저장'이면 출력 폴더는 의미 없음 → 비활성
-        over = self.rb_save_over.isChecked()
-        self.edit_outdir.setEnabled(not over)
-        self.btn_browse_out.setEnabled(not over)
+        # 261019-1: 출력 폴더는 .txt 에만 쓰인다
+        on = self.chk_txt.isChecked()
+        self.edit_outdir.setEnabled(on)
+        self.btn_browse_out.setEnabled(on)
 
     def _mode(self) -> str:
         if self.rb_toc.isChecked():
@@ -375,7 +361,8 @@ class BookmarkerDialog(QDialog):
             self.edit_toc_pages.setText(toc_parse.format_page_spec(pages))
         else:
             self.edit_toc_pages.setText("")
-            self.edit_toc_pages.setPlaceholderText(tr("자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)"))
+            # 261019-1(마스터 §4.4.2 ①): 이 단추는 글자층만 본다(창을 세우지 않게 OCR 하지 않는다) — 스캔본은 워커가 찾는다
+            self.edit_toc_pages.setPlaceholderText(tr("못 찾음 — 스캔본은 비워 두면 만들 때 OCR 로 찾습니다(또는 직접 입력, 예: 6-11)"))
 
     def toc_pages(self) -> list:
         """입력한 목차 쪽 목록(1-based). 비면 []."""
@@ -400,8 +387,6 @@ class BookmarkerDialog(QDialog):
             "ocr_font_auto": self.chk_ocr_fontauto.isChecked(),
             "offset": (None if self.spin_offset.value() == 0
                        else int(self.spin_offset.value())),
-            "save_pdf": True,
-            "overwrite": self.rb_save_over.isChecked(),
             "save_txt": self.chk_txt.isChecked(),
             "out_dir": self.edit_outdir.text().strip(),
         }
