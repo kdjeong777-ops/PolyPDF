@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-19 21:08+0900\n"
+"POT-Creation-Date: 2026-10-19 22:11+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1093,10 +1093,6 @@ msgstr ""
 msgid "이미 목록에 있는 파일입니다."
 msgstr "The file is already in the list."
 
-#: viewer/app.py
-msgid "입력 PDF를 지정하세요."
-msgstr "Specify the input PDF."
-
 #: viewer/app.py viewer/widgets/bookmarker_dialog.py
 msgid "책갈피 자동 생성"
 msgstr "Generate Bookmarks Automatically"
@@ -1104,6 +1100,10 @@ msgstr "Generate Bookmarks Automatically"
 #: viewer/app.py
 msgid "책갈피를 만드는 중입니다. 끝나거나 중지한 뒤 다시 시도하세요."
 msgstr "Bookmarks are being generated. Try again after it finishes or is stopped."
+
+#: viewer/app.py
+msgid "입력 PDF를 지정하세요."
+msgstr "Specify the input PDF."
 
 #: viewer/app.py
 msgid "책갈피 생성 취소(검토 표에서 취소) — PDF 는 그대로입니다"
@@ -1203,6 +1203,10 @@ msgstr "Stopped applying to PDF — the original is unchanged."
 #, python-brace-format
 msgid "{head}{v}쪽"
 msgstr "{head}{v}"
+
+#: viewer/app.py
+msgid "책갈피 만들기"
+msgstr "Make Bookmarks"
 
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
 #: viewer/vprinter_controller.py viewer/workers.py
@@ -1651,6 +1655,10 @@ msgid "단어장 관리 (출처·우선순위·폴더)..."
 msgstr "Manage Vocabulary (sources · priority · folders)..."
 
 #: viewer/app.py
+msgid "사용자 뜻 편집..."
+msgstr "Edit My Definitions..."
+
+#: viewer/app.py
 msgid "용어집 가져오기 (PDF·CSV)..."
 msgstr "Import Glossary (PDF · CSV)..."
 
@@ -1800,11 +1808,6 @@ msgstr "Page Range"
 #: viewer/app.py viewer/edit_controller.py
 msgid "알 수 없는 오류"
 msgstr "Unknown error"
-
-#: viewer/app.py
-#, python-brace-format
-msgid "책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다."
-msgstr "Bookmark added: {title}  (p.{page}) — press Save (💾) to apply it to the PDF."
 
 #: viewer/app.py
 #, python-brace-format
@@ -2369,15 +2372,6 @@ msgstr "Word saved: {name} ({n} pages)"
 #, python-brace-format
 msgid "실패: {msg}"
 msgstr "Failed: {msg}"
-
-#: viewer/app.py
-#, python-brace-format
-msgid ""
-"대상 PDF 가 메인 뷰어에 열려있어야 현재 페이지를 알 수 있습니다.\n"
-"먼저 트리에서 '{name}' 를 열어 주세요."
-msgstr ""
-"The target PDF must be open in the main viewer to know the current page.\n"
-"Open '{name}' in the tree first."
 
 #: viewer/app.py
 #, python-brace-format
@@ -3396,6 +3390,10 @@ msgid "버리기"
 msgstr "Discard"
 
 #: viewer/jobs_controller.py
+msgid "저장 안 한 OCR 확인 중…"
+msgstr "Checking for unsaved OCR…"
+
+#: viewer/jobs_controller.py
 msgid "눌러서 진행 중인 작업 보기·중지"
 msgstr "Click to view or stop running tasks"
 
@@ -3410,10 +3408,6 @@ msgstr "Discarding OCR and vocabulary results…"
 #: viewer/jobs_controller.py
 msgid "OCR·단어장 결과를 저장했습니다."
 msgstr "Saved the OCR and vocabulary results."
-
-#: viewer/jobs_controller.py
-msgid "저장 안 한 OCR 확인 중…"
-msgstr "Checking for unsaved OCR…"
 
 #: viewer/jobs_controller.py
 msgid "멈추는 중…"
@@ -4566,6 +4560,10 @@ msgstr "PDF document not found."
 msgid "mp3 저장 실패"
 msgstr "mp3 Save Failed"
 
+#: viewer/study_controller.py viewer/widgets/bookmark_tree.py
+msgid "단어장·책갈피 동시 생성"
+msgstr "Build Vocabulary and Bookmarks Together"
+
 #: viewer/study_controller.py
 #, python-brace-format
 msgid "{i}단계 책갈피 기준"
@@ -5153,6 +5151,10 @@ msgid "암호 입력"
 msgstr "Enter Password"
 
 #: viewer/widgets/bookmark_tree.py
+msgid "책갈피는 편집 모드에서만 바꿀 수 있습니다."
+msgstr "Bookmarks can only be changed in edit mode."
+
+#: viewer/widgets/bookmark_tree.py
 msgid "책갈피 모두 펼치기"
 msgstr "Expand All Bookmarks"
 
@@ -5317,6 +5319,14 @@ msgid "암호가 올바르지 않습니다."
 msgstr "Incorrect password."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "편집 모드"
+msgstr "Edit Mode"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "책갈피 이름 변경"
+msgstr "Rename Bookmark"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "대상 PDF 파일을 알 수 없습니다."
 msgstr "The target PDF file is unknown."
 
@@ -5365,12 +5375,16 @@ msgid "현재 파일을 즐겨찾기에 추가"
 msgstr "Add Current File to Favorites"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "편집 종료"
-msgstr "End Editing"
+msgid "수정한 내용(저장하지 않은 OCR·단어장 포함)이 있습니다. 저장할까요?"
+msgstr "There are changes (including unsaved OCR and vocabulary results). Save them?"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "수정한 내용이 있습니다. 저장할까요?"
 msgstr "There are changes. Save them?"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "편집 종료"
+msgstr "End Editing"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "편집할 PDF 파일을 트리에서 선택하세요."
@@ -5442,10 +5456,6 @@ msgid "변경 실패"
 msgstr "Rename failed"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."
-msgstr "Select or expand the PDF file to add a bookmark to in the tree."
-
-#: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "{n}개 PDF"
 msgstr "{n} PDFs"
@@ -5478,6 +5488,15 @@ msgstr ""
 "Enter the password (owner or user password):"
 
 #: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "'{what}' 은(는) 편집 모드에서만 할 수 있습니다."
+msgstr "'{what}' is available only in edit mode."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "편집 모드를 켜고 계속할까요?"
+msgstr "Turn on edit mode and continue?"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "두 파일 비교..."
 msgstr "Compare two files..."
 
@@ -5488,10 +5507,6 @@ msgstr "Shows the changes between two PDFs side by side in split view (older = t
 #: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
 msgstr "Arrange the selected bookmarks and their children in page order and match their level to the bookmark above"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "단어장·책갈피 동시 생성"
-msgstr "Build Vocabulary and Bookmarks Together"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "번역..."
@@ -5505,6 +5520,10 @@ msgstr "Review Translation Glossary..."
 #, python-brace-format
 msgid "페이지순 정렬: {n}개"
 msgstr "Sorted by page: {n}"
+
+#: viewer/widgets/bookmark_tree.py viewer/widgets/toc_review_dialog.py
+msgid "책갈피 삭제"
+msgstr "Delete Bookmark"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "send2trash 필요"
@@ -10202,10 +10221,6 @@ msgid "목차 쪽이 중간에 줄어들지 않도록 — 자릿수가 빠진 �
 msgstr "Keeps TOC pages from decreasing midway — fixes pages with missing digits (20→120) and moves out-of-order rows into place (table/figure lists handled separately). Changed rows have a blue TOC page cell"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "책갈피 삭제"
-msgstr "Delete Bookmark"
-
-#: viewer/widgets/toc_review_dialog.py
 msgid "이 쪽에 책갈피 추가 — '내용 보기'에서만"
 msgstr "Add a bookmark on this page — only in 'View Content'"
 
@@ -11778,4 +11793,17 @@ msgstr "Getting Started"
 
 #~ msgid "자동 탐지 실패 — 목차 쪽을 직접 입력하세요(예: 6-11)"
 #~ msgstr "Auto-detect failed — enter the TOC pages manually (e.g., 6-11)"
+
+#~ msgid "책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다."
+#~ msgstr "Bookmark added: {title}  (p.{page}) — press Save (💾) to apply it to the PDF."
+
+#~ msgid ""
+#~ "대상 PDF 가 메인 뷰어에 열려있어야 현재 페이지를 알 수 있습니다.\n"
+#~ "먼저 트리에서 '{name}' 를 열어 주세요."
+#~ msgstr ""
+#~ "The target PDF must be open in the main viewer to know the current page.\n"
+#~ "Open '{name}' in the tree first."
+
+#~ msgid "책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."
+#~ msgstr "Select or expand the PDF file to add a bookmark to in the tree."
 

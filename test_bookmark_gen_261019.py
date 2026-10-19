@@ -268,6 +268,180 @@ dv._verify(); app.processEvents()
 chk(dv.verify_marks() == ["ok", "ng"], "C9 제목 대조 — 저장된 OCR 이 있는 스캔 쪽은 ✓, 없는 쪽은 ✗", f"{dv.verify_marks()}")
 dv.close()
 
+# ── J. 261019-2: 책갈피를 바꾸는 일은 편집 모드에서만 — 아니면 켤지 묻는다 ──────────
+_answer = {"v": QMessageBox.StandardButton.No}
+_asked = []
+QMessageBox.question = staticmethod(lambda *a, **k: (_asked.append(a[2] if len(a) > 2 else ""), _answer["v"])[1])
+bt._dirty = False
+bt.btn_edit.setChecked(False); app.processEvents()
+node = bt._file_node_for_path(str(pdf))
+if not node.data(0, bt.DATA_TOC_LOADED):
+    bt._on_item_expanded(node)
+bm = node.child(0)
+_edits = []
+_orig_ebn = bt._edit_bookmark_node
+bt._edit_bookmark_node = lambda it, tg: _edits.append(it)
+_files = []
+_orig_efn = bt._edit_file_node
+bt._edit_file_node = lambda it: _files.append(it)
+bt._edit_item(bm); app.processEvents()
+chk(not _edits and not bt.is_edit_mode() and _asked and "편집 모드" in _asked[-1],
+    "J1 보기 모드에서 책갈피 이름 변경 → 묻고, 아니오면 아무것도 안 함", f"{_asked[-1:]}")
+bt._edit_item(node); app.processEvents()
+chk(_files == [node] and not bt.is_edit_mode(), "J2 파일 이름 변경은 보기 모드에서도 그대로(묻지 않음)")
+n_before = node.childCount()
+bt.tree.clearSelection(); bm.setSelected(True); bt.tree.setCurrentItem(bm)
+bt._op_delete(keep_mode=False); app.processEvents()
+chk(node.childCount() == n_before and not bt.is_edit_mode(), "J3 보기 모드 책갈피 삭제 → 아니오면 그대로")
+_dlgs = []
+_bmd.BookmarkerDialog = lambda *a, **k: _dlgs.append(1) or _RealBm(*a, **k)
+mw.action_open_bookmarker(); app.processEvents()
+chk(not _dlgs, "J4 보기 모드 책갈피 자동 생성 → 아니오면 창도 열지 않음")
+_asks = []
+_orig_ask = mw._ask_bookmark
+mw._ask_bookmark = lambda *a, **k: (_asks.append(1), ("새 책갈피", 1, True))[1]
+mw._prompt_add_bookmark(str(pdf), 2); app.processEvents()
+chk(not _asks and node.childCount() == n_before, "J5 보기 모드 책갈피 추가 → 아니오면 제목도 묻지 않음")
+# 예 → 편집 모드를 켜고 이어서 한다
+_answer["v"] = QMessageBox.StandardButton.Yes
+bt._edit_item(bm); app.processEvents()
+chk(_edits == [bm] and bt.is_edit_mode(), "J6 예 → 편집 모드를 켜고 그 일을 이어서", f"edit={bt.is_edit_mode()}")
+bt.btn_edit.setChecked(False); app.processEvents()
+mw._prompt_add_bookmark(str(pdf), 2); app.processEvents()
+chk(_asks == [1] and bt.is_edit_mode() and bt._dirty, "J7 책갈피 추가도 예 → 편집 모드 + 추가(저장 안 됨)")
+bt._edit_bookmark_node, bt._edit_file_node, mw._ask_bookmark = _orig_ebn, _orig_efn, _orig_ask
+_bmd.BookmarkerDialog = _RealBm
+
+# ── K. 261019-3: 2단 — 만든 책갈피는 그 책갈피창에, 같은 파일이면 두 창 모두 ────────────
+_answer["v"] = QMessageBox.StandardButton.Yes
+bt._dirty = False                              # J 의 추가는 버린 셈 — 끌 때 묻지 않게(묻는 창은 J·N 이 따로 본다)
+bt.btn_edit.setChecked(False); app.processEvents()
+rt = mw.bookmark_tree_right
+b_only = root / "b_only.pdf"; shutil.copy(txt, b_only)
+a_only = root / "a_only.pdf"; shutil.copy(txt, a_only)
+bt.load_pdf_files([str(pdf), str(a_only)]); rt.load_pdf_files([str(pdf), str(b_only)]); app.processEvents()
+rt.show(); mw._split_on = True; mw._active_pane = 1
+mw._folder_right = root                       # 실제 2단처럼 — 비어 있으면 앱이 아래 창을 위 창 폴더로 다시 싣는다
+chk(mw._bm_tree_for_pane() is rt and mw._bm_tree_for_pane(0) is bt, "K1 활성 창이 2창이면 아래 책갈피창")
+def _kids(tree, path):
+    u = tree._unit_for_path(str(path))
+    if u is None:
+        return None
+    if not u.data(0, tree.DATA_TOC_LOADED):
+        tree._on_item_expanded(u)
+    return [u.child(i).text(0) for i in range(u.childCount())]
+# 2창 전용 파일에 책갈피 추가(활성 창 2) → 아래 창에만
+mw._ask_bookmark = lambda *a, **k: ("아래만", 1, True)
+mw._prompt_add_bookmark(str(b_only), 3); app.processEvents()
+chk(rt.is_edit_mode() and any("아래만" in t for t in (_kids(rt, b_only) or [])) and bt._unit_for_path(str(b_only)) is None,
+    "K2 2창에서 만든 책갈피는 아래 책갈피창에만(위 창에는 그 파일도 없음)")
+# 같은 파일(pdf)에 위 창에서 만들면 아래 창도 같다
+mw._active_pane = 0
+mw._prompt_add_bookmark(str(pdf), 2); app.processEvents()
+ka, kb = _kids(bt, pdf), _kids(rt, pdf)
+chk(ka is not None and ka == kb and any("아래만" in t for t in ka),
+    "K3 같은 파일이면 위 창에서 만든 책갈피가 아래 창에도", f"{ka} / {kb}")
+# 자동 생성 결과도 시작한 창에 — 아래 창에서 시작, 같은 파일이면 위 창도 따라감
+mw._bookmarker_bt = rt
+mw._bookmarks_into_tree(pdf, [("자동1", 1, 0), ("자동2", 2, 0)], {})
+app.processEvents()
+chk(_kids(rt, pdf) == ["자동1", "자동2"] and _kids(bt, pdf) == ["자동1", "자동2"],
+    "K4 아래 창에서 만든 자동 생성 결과 → 같은 파일인 위 창도 같다", f"rt={_kids(rt, pdf)} bt={_kids(bt, pdf)}")
+mw._bookmarks_into_tree(b_only, [("B자동", 1, 0)], {}); app.processEvents()
+chk(_kids(rt, b_only) == ["B자동"] and bt._unit_for_path(str(b_only)) is None and _kids(bt, a_only) is not None,
+    "K5 다른 파일이면 시작한 창에만")
+# 고친 창이 고침을 버리면 따라간 창은 디스크로 되돌린다
+_d = fitz.open(str(pdf)); n_disk = len([t for t in _d.get_toc() if t[0] == 1]); _d.close()
+rt.bookmarksReverted.emit(); app.processEvents()
+chk(len(_kids(bt, pdf) or []) == n_disk, "K6 2창이 고침을 버리면 1창의 같은 파일은 디스크 책갈피로", f"{_kids(bt, pdf)}")
+mw._split_on = False; mw._active_pane = 0; rt.hide()
+mw._ask_bookmark = _orig_ask
+
+# ── L. 261019-7: '수정일 순' 에서 새로 만든 파일은 새로 고치지 않아도 맨 위 ─────────────
+import time as _time
+fold = root / "sortdir"; fold.mkdir()
+for nm in ("a_old.pdf", "b_mid.pdf"):
+    shutil.copy(txt, fold / nm)
+    _t = _time.time() - (3000 if nm.startswith("a") else 1000)
+    os.utime(fold / nm, (_t, _t))
+lt = mw.bookmark_tree_right
+lt.load_folder(str(fold))
+for _ in range(100):
+    app.processEvents(); QTest.qWait(30)
+    if lt.tree.topLevelItemCount() >= 2:
+        break
+lt.set_sort_mode(lt.SORT_MTIME); app.processEvents(); QTest.qWait(100)
+def _order(tree):
+    return [Path(tree.tree.topLevelItem(i).data(0, tree.DATA_FILE) or "").name for i in range(tree.tree.topLevelItemCount())]
+before = _order(lt)
+newf = fold / "c_new.pdf"; shutil.copy(txt, newf)
+lt.add_or_refresh_file(str(newf), after=str(fold / "a_old.pdf")); app.processEvents()
+after = _order(lt)
+chk(before == ["b_mid.pdf", "a_old.pdf"] and after[0] == "c_new.pdf",
+    "L1 수정일 순 — 새로 만든 파일이 바로 맨 위(원본 아래·맨 끝이 아니라)", f"{before} → {after}")
+_t = _time.time() - 5000
+os.utime(newf, (_t, _t))
+lt.add_or_refresh_file(str(newf)); app.processEvents()
+chk(_order(lt)[-1] == "c_new.pdf", "L2 다시 읽은 파일도 바뀐 수정일 자리로", f"{_order(lt)}")
+lt.set_sort_mode(lt.SORT_NAME); app.processEvents(); QTest.qWait(100)
+newf2 = fold / "aa_new.pdf"; shutil.copy(txt, newf2)
+lt.add_or_refresh_file(str(newf2)); app.processEvents()
+chk(_order(lt)[:2] == ["a_old.pdf", "aa_new.pdf"], "L3 이름 순이면 이름 자리로", f"{_order(lt)}")
+
+# ── M. 261019-5: 사용자 뜻은 user_dict.db 에 따로, 가장 먼저 ─────────────────────────
+from viewer.study import dict_store as ds
+dd = root / "dictdir"; dd.mkdir()
+dic = ds.DictStore(dd / "dict.db")
+dic.add_source("base1", "기본", kind="base", priority=50)
+dic.add_entry(source_id="base1", term_ko="포장", def_ko="기본 뜻")
+uid = dic.add_entry(source_id=ds.USER_SOURCE_ID, term_ko="포장", def_ko="사용자 뜻")
+chk(uid >= ds.USER_ID_BASE and (dd / "user_dict.db").exists(), "M1 사용자 뜻은 user_dict.db 에(번호로 구분)", f"{uid}")
+chk(dic.best("포장")["def_ko"] == "사용자 뜻", "M2 같은 표제어면 사용자 뜻이 가장 먼저")
+chk(dic.conn.execute("SELECT count(*) FROM main.dict_entry WHERE source_id='user'").fetchone()[0] == 0,
+    "M3 dict.db 에는 사용자 항목이 없다")
+chk([e["def_ko"] for e in dic.user_entries()] == ["사용자 뜻"] and dic.user_entries("없음") == [],
+    "M4 사용자 뜻만 불러온다(찾기 포함)")
+dic.update_entry(uid, def_ko="고친 뜻")
+chk(dic.best("포장")["def_ko"] == "고친 뜻", "M5 사용자 뜻 고치기")
+dic.close()
+# 옛 dict.db(사용자 항목이 안에 있음) → 열 때 옮기고, 두 번 열어도 겹치지 않는다
+c = sqlite3.connect(dd / "dict.db")
+c.execute("INSERT INTO dict_entry(source_id,term_ko,norm_ko,def_ko,enabled) VALUES('user','도로','도로','옛 사용자 뜻',1)")
+c.execute("INSERT INTO dict_entry(source_id,term_ko,norm_ko,def_ko,def_en,norm_en,enabled) VALUES('user','포장','포장','고친 뜻','','',1)")
+c.commit(); c.close()
+dic = ds.DictStore(dd / "dict.db")
+terms = sorted(e["term_ko"] for e in dic.user_entries())
+chk(terms == ["도로", "포장"], "M6 옛 사용자 항목을 옮기되 같은 것은 겹치지 않는다", f"{terms}")
+dic.delete_entry(uid)
+chk([e["term_ko"] for e in dic.user_entries()] == ["도로"] and dic.best("포장")["def_ko"] == "기본 뜻",
+    "M7 사용자 뜻을 지우면 사전 뜻이 다시 보인다")
+dic.close()
+
+# ── N. 261019-6: 편집 모드를 끌 때 저장 안 한 OCR 도 같은 창에서 묻는다(편집 모드 [저장] 기준) ──
+bt._dirty = False
+QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Save)
+bt.btn_edit.setChecked(False); app.processEvents(); QTest.qWait(100)
+st = ss.StudyStore()
+for _k in st.pending_keys():
+    st.discard_pending(_k)
+st.save_page(ss.file_key_for(str(pdf)), 1, "보류 OCR", dpi=300, engine="t", source="ocr", conf=1, words=[], lang="kor")
+st.close()
+mw._pending_refresh()
+for _ in range(50):
+    app.processEvents(); QTest.qWait(30)
+    if mw.study_pending_for(str(pdf)):
+        break
+bt.btn_edit.setChecked(True); app.processEvents()
+bt.tree.setCurrentItem(bt._file_node_for_path(str(pdf)))
+_q = []
+QMessageBox.question = staticmethod(lambda *a, **k: (_q.append(a[2] if len(a) > 2 else ""), QMessageBox.StandardButton.Discard)[1])
+bt.btn_edit.setChecked(False); app.processEvents(); QTest.qWait(100)
+st = ss.StudyStore()
+left = ss.file_key_for(str(pdf)) in st.pending_keys()
+st.close()
+chk(_q and "OCR" in _q[-1] and not left and not bt.is_edit_mode(),
+    "N1 편집 끝 — 저장 안 한 OCR 도 묻고, '저장 안 함' 이면 버린다", f"{_q[-1:]} left={left}")
+
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 sys.stdout.flush()

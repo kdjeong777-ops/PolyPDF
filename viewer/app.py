@@ -1708,6 +1708,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 📖 사전 및 용어집 관리 — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25). 261016-3: 하위 메뉴로 단축키 설정 아래
         _dict = _sub(tr("사전 및 용어집 관리"), (
             (tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
+            (tr("사용자 뜻 편집..."), self._action_user_terms),          # 261019-5(단어장 SOT §4.1)
             (tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary),
             (tr("사전 복원 (가져오기)..."), self._action_restore_dict),
             (tr("용어집 CSV 양식 예제 저장..."), self._action_save_csv_sample),
@@ -2219,7 +2220,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt._file_op = lambda fn, label: self._file_op_bg(fn, label, tr("파일 작업"))   # 261014-4(§4.7.14): 이름 바꾸기·옮기기는 배경에서, 잠깐 잡혀 있으면 다시
             _bt.set_meta_hooks(lambda: bool(self._edit_dirty),
                                self._save_meta_from_button)
-            _bt.set_study_hooks(self.study_commit_for)   # 261019-1
+            _bt.set_study_hooks(self.study_commit_for, self.study_pending_for, self.study_discard_for)   # 261019-1·6
             # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
             #   쪽 편집은 본문(활성 창) 파일일 때만 — 책갈피창이 `_is_main_file` 로 가른다
             _bt.set_page_edit_hooks(self._page_edits_dirty, self._page_edit_save,
@@ -2233,12 +2234,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260611-9: 편집 취소 → 숨김/회전/선긋기/하이퍼링크도 스냅샷으로 되돌리기
         self.bookmark_tree.editCancelled.connect(self._on_edit_cancelled)
         # v1.6.20 K5: 메인 페이지로 책갈피 추가
-        self.bookmark_tree.addBookmarkRequested.connect(self._on_add_bookmark_requested)
-        self.bookmark_tree.createBookmarksRequested.connect(
-            lambda f: self.action_open_bookmarker(default_file=f))
+        # 261019-3(마스터 §4.7.21, 사용자 지시): 두 책갈피창 모두 — 만든 책갈피는 **그 창**에, 같은 파일이면 다른 창도 따라간다
+        for _bt in (self.bookmark_tree, self.bookmark_tree_right):
+            _other = self.bookmark_tree_right if _bt is self.bookmark_tree else self.bookmark_tree
+            _bt.createBookmarksRequested.connect(
+                lambda f, b=_bt: self.action_open_bookmarker(default_file=f, bt=b))
+            _bt.createStudyBookmarksRequested.connect(
+                lambda f, b=_bt: self._action_build_study_and_bookmarks(file_path=f, bt=b))
+            _bt.bookmarksChanged.connect(lambda p, b=_bt, o=_other: o.mirror_file_from(b, p))
+            _bt.bookmarksReverted.connect(lambda o=_other: o.reload_mirrored())
         self.bookmark_tree.createStudyRequested.connect(self._on_create_study_requested)
-        self.bookmark_tree.createStudyBookmarksRequested.connect(
-            lambda f: self._action_build_study_and_bookmarks(file_path=f))
         self.bookmark_tree.mergeFilesRequested.connect(self._on_merge_files)
         self.bookmark_tree.translateFileRequested.connect(self._action_translate_file)  # 260621-P0
         # 260930-2·261008-1(§4.7.13): 책갈피창 우클릭 저장 — 아래(2창) 책갈피창에서도 같게
@@ -2545,9 +2550,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         event.ignore()
 
     # --- v1.6.16: 책갈피 자동 생성 (외부 pdf_bookmarker) ----------------
-    def action_open_bookmarker(self, checked: bool = False, default_file: str = None):
-        """파일 → 책갈피 자동 생성... 메뉴 핸들러. default_file=트리 우클릭 등 지정 입력."""
+    def action_open_bookmarker(self, checked: bool = False, default_file: str = None, bt=None):
+        """파일 → 책갈피 자동 생성... 메뉴 핸들러. default_file=트리 우클릭 등 지정 입력.
+        261019-3(마스터 §4.7.21): `bt` = 우클릭한 책갈피창(없으면 활성 창의 것) — 결과는 그 창에 넣는다."""
         from viewer.widgets.bookmarker_dialog import BookmarkerDialog
+        if getattr(self, "_bookmarker_worker", None) is not None:      # 도는 중이면 결과 창을 바꾸지 않는다
+            QMessageBox.information(self, tr("책갈피 자동 생성"),
+                                    tr("책갈피를 만드는 중입니다. 끝나거나 중지한 뒤 다시 시도하세요."))
+            return
+        bt = bt or self._bm_tree_for_pane()
+        # 261019-2(마스터 §4.7.0, 사용자 지시): 책갈피를 만드는 일은 편집 모드에서만 — 아니면 켤지 묻는다
+        if not bt.ensure_edit_mode(tr("책갈피 자동 생성")):
+            return
+        self._bookmarker_bt = bt
         # 지정 파일 > 현재 메인 PDF 를 입력 기본값으로
         if default_file and str(default_file).lower().endswith(".pdf"):
             default_pdf = Path(default_file)
@@ -2634,7 +2649,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _bookmarks_into_tree(self, in_pdf: Path, bms: list, result: dict):
         """261019-1(마스터 §4.4.2): 만든 책갈피를 책갈피창의 그 파일에 **저장 안 됨** 으로 넣는다.
         편집 모드를 켜서 [저장]·[취소] 가 보이게 하고, [저장] 이 PDF 에 쓴다(되돌리기 기록에도 남는다)."""
-        bt = self.bookmark_tree
+        bt = getattr(self, "_bookmarker_bt", None) or self.bookmark_tree     # 261019-3: 시작한 책갈피창
         if not bms:
             QMessageBox.information(self, tr("책갈피 자동 생성"), tr("넣을 책갈피가 없습니다."))
             return
@@ -2724,6 +2739,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.status.showMessage(tr('책갈피 저장: {name}').format(name=Path(dst).name), 6000)
         try:
             bt.add_or_refresh_file(dst, after=src)   # 260915-1(§4.7.5)
+        except Exception:
+            pass
+        # 261019-3(§4.7.21): 같은 파일을 보는 다른 책갈피창도 디스크(저장한 것)로 다시 읽는다
+        other = self.bookmark_tree_right if bt is self.bookmark_tree else self.bookmark_tree
+        try:
+            other.reload_mirrored([src, dst])
         except Exception:
             pass
         if bt is self.bookmark_tree_right and len(self._mv) > 1 and self.act_split.isChecked():
@@ -3744,9 +3765,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         cur = self.main_view.current_file() if self.main_view else None
         if not cur or not items:
             return
+        bt = self._bm_tree_for_pane()                     # 261019-3: 활성 창의 책갈피창
+        if not bt.ensure_edit_mode(tr("책갈피 만들기")):     # 261019-2(마스터 §4.7.0)
+            return
         for it in items:
-            self.bookmark_tree.add_bookmark(cur, int(it["page"]), it["title"],
-                                            int(it.get("level", 1)))
+            bt.add_bookmark(cur, int(it["page"]), it["title"], int(it.get("level", 1)))
         self.status.showMessage(
             tr('책갈피 {n}개 추가 — 책갈피창 편집(✏)에서 저장(💾)해야 PDF 에 들어갑니다.').format(n=len(items)),
             7000)
@@ -3811,24 +3834,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         else:
             QMessageBox.warning(self, tr("Word 저장"), tr('실패: {msg}').format(msg=msg))
 
-    def _on_add_bookmark_requested(self, target_file: str):
-        """v1.6.20 K5: 메인 뷰어 현재 페이지로 책갈피 추가."""
-        from PyQt6.QtWidgets import QInputDialog
-        cur = self.main_view.current_file() if self.main_view else None
-        if not cur or Path(cur).resolve() != Path(target_file).resolve():
-            QMessageBox.information(self, tr("안내"),
-                tr("대상 PDF 가 메인 뷰어에 열려있어야 현재 페이지를 알 수 있습니다.\n먼저 트리에서 '{name}' 를 열어 주세요.").format(name=Path(target_file).name))
-            return
-        page = self.main_view.current_page() + 1  # 1-based
-        title, level, ok = self._ask_bookmark(target_file, page)
-        if not ok:
-            return
-        self.bookmark_tree.add_bookmark(target_file, page, title, level)
-        self.status.showMessage(
-            tr('책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다.').format(title=title or tr('(제목 없음)'), page=page),
-            6000)
+    def _bm_tree_for_pane(self, pane=None):
+        """261019-3(마스터 §4.7.21): 그 창(없으면 활성 창)의 책갈피창 — 2단에서 아래 책갈피창이 보일 때만 2창 것."""
+        split = bool(getattr(self, "_split_on", False))
+        p = getattr(self, "_active_pane", 0) if pane is None else pane
+        rt = getattr(self, "bookmark_tree_right", None)
+        if split and p == 1 and rt is not None and not rt.isHidden():
+            return rt
+        return self.bookmark_tree
 
-    def _ask_bookmark(self, target_file: str, page: int):
+    def _ask_bookmark(self, target_file: str, page: int, bt=None):
         """260908-1(사용자 요청): 책갈피 제목 **+ 레벨**을 함께 묻는다 → (제목, 레벨, 확인).
 
         레벨 기본값은 **바로 위(고른) 책갈피와 같은 레벨**이다 — 목차를 이어 쓰는 것이
@@ -3837,7 +3852,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit,
                                      QComboBox, QDialogButtonBox, QLabel)
         try:
-            base, top = self.bookmark_tree.suggest_add_level(target_file)
+            base, top = (bt or self.bookmark_tree).suggest_add_level(target_file)
         except Exception:
             base, top = 1, 1
         dlg = QDialog(self)
@@ -3866,11 +3881,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return ed.text(), (cmb.currentData() if cmb is not None else 1), True
 
     def _prompt_add_bookmark(self, cur: str, page_1based: int):
-        """제목 입력 → 트리 대상 파일에 책갈피 추가(저장은 편집모드 💾)."""
-        title, level, ok = self._ask_bookmark(cur, page_1based)   # 260908-1: 레벨 포함
+        """제목 입력 → 트리 대상 파일에 책갈피 추가(저장은 편집모드 💾). 261019-3: 활성 창의 책갈피창에."""
+        bt = self._bm_tree_for_pane()
+        if not bt.ensure_edit_mode(tr("책갈피 추가")):     # 261019-2(마스터 §4.7.0)
+            return
+        title, level, ok = self._ask_bookmark(cur, page_1based, bt=bt)   # 260908-1: 레벨 포함
         if not ok:
             return
-        self.bookmark_tree.add_bookmark(cur, page_1based, title, level)
+        bt.add_bookmark(cur, page_1based, title, level)
         self.status.showMessage(
             tr('책갈피 추가됨: {title}  (p.{page_1based}) — 책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다.').format(title=title or tr('(제목 없음)'), page_1based=page_1based), 6000)
 
@@ -3892,8 +3910,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._action_build_study()
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
-    def _action_build_study_and_bookmarks(self, checked: bool = False, file_path: str = None):
-        """260606-11: 단어장·책갈피 동시 생성(OCR 1회 공유). 도구 메뉴/트리 우클릭/읽기 제안에서."""
+    def _action_build_study_and_bookmarks(self, checked: bool = False, file_path: str = None, bt=None):
+        """260606-11: 단어장·책갈피 동시 생성(OCR 1회 공유). 도구 메뉴/트리 우클릭/읽기 제안에서.
+        261019-3: `bt` = 우클릭한 책갈피창(없으면 활성 창의 책갈피창) — 책갈피는 그 창에."""
+        self._study_bm_tree = bt
         cur = self.main_view.current_file() if self.main_view else None
         p = Path(file_path) if file_path else (Path(cur) if cur else None)
         if not p or not p.exists() or p.suffix.lower() != ".pdf":

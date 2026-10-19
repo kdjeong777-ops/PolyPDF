@@ -6,6 +6,11 @@
 
 저장 위치: settings_store.settings_dir()/'dict.db' (= %APPDATA%\\LocalTools\\PolyPDF).
 study.db 재생성과 무관하게 보존(사용자/기본 사전은 영구 자산).
+
+261019-5(단어장 SOT §4, 사용자 지시 '사용자 뜻은 별도로 저장하여 가장 우선'): **사용자 단어장(출처 `user`)의 항목은
+별도 파일 `user_dict.db`** 에 둔다(ATTACH `u`). 기본 사전 다시 싣기·사전 복원·dict.db 손상 재생성과 상관없이 남는다.
+읽기는 TEMP VIEW `dict_entry`(= dict.db 항목 + 사용자 항목)로 겹쳐 보여 조회 코드는 그대로이고, 순위는 종전대로 사용자 ▶ 사전 ▶ 자동.
+사용자 항목 번호는 `USER_ID_BASE` 부터 — 번호만 보고 어느 파일인지 안다(쓰기 경로 고르기).
 """
 from __future__ import annotations
 
@@ -19,6 +24,9 @@ from typing import Iterable, Optional
 
 SCHEMA_VERSION = 7
 USER_SOURCE_ID = "user"
+USER_ID_BASE = 1_000_000_000          # 261019-5: user_dict.db 항목 번호의 시작(dict.db 번호와 겹치지 않게)
+_ENTRY_COLS = ("entry_id,source_id,term_ko,term_en,norm_ko,norm_en,def_ko,def_en,examples,"
+               "reference,level,hanja,image,image_ref,enabled,updated_at")
 ONLINE_SOURCE_ID = "online"
 
 _NORM_RE = re.compile(r"[^0-9a-z가-힣]")
@@ -53,6 +61,7 @@ class DictStore:
         self.db_path = Path(db_path) if db_path else default_db_path()
         self.conn = _dbutil.connect(self.db_path, busy_ms)
         self._init_schema()
+        self._attach_user()                  # 261019-5: 사용자 항목은 user_dict.db
         self._ensure_default_sources()
         self._migrate_user_words()
         # 260615-17: 기존 캐시의 HTML 마크업(&#44;·<strong> 등) 1회 일괄 정리
@@ -145,6 +154,64 @@ class DictStore:
         self._meta_set_silent("schema_version", str(SCHEMA_VERSION))
         self.conn.commit()
 
+    # --- 261019-5: 사용자 항목 = user_dict.db ----------------------------------
+    @property
+    def user_db_path(self) -> Path:
+        return self.db_path.parent / "user_dict.db"
+
+    def _attach_user(self) -> None:
+        self.conn.execute("ATTACH DATABASE ? AS u", (str(self.user_db_path),))
+        try:
+            self.conn.execute("PRAGMA u.journal_mode = WAL")
+        except Exception:
+            pass
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS u.dict_entry(
+                entry_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_id  TEXT, term_ko TEXT, term_en TEXT, norm_ko TEXT, norm_en TEXT,
+                def_ko TEXT, def_en TEXT, examples TEXT, reference TEXT, level TEXT, hanja TEXT,
+                image TEXT DEFAULT '', image_ref TEXT DEFAULT '', enabled INTEGER DEFAULT 1, updated_at TEXT);
+            CREATE INDEX IF NOT EXISTS u.ix_uentry_normko ON dict_entry(norm_ko);
+            CREATE INDEX IF NOT EXISTS u.ix_uentry_normen ON dict_entry(norm_en);
+            """)
+        if not self.conn.execute("SELECT 1 FROM u.sqlite_sequence WHERE name='dict_entry'").fetchone():
+            self.conn.execute("INSERT INTO u.sqlite_sequence(name, seq) VALUES('dict_entry', ?)", (USER_ID_BASE,))
+        # 한 번만: dict.db 에 있던 사용자 항목을 옮긴다(번호는 새로 — 항목 번호를 밖에 적어 두는 곳은 없다)
+        if self.conn.execute("SELECT 1 FROM main.dict_entry WHERE source_id=? LIMIT 1", (USER_SOURCE_ID,)).fetchone():
+            cols = _ENTRY_COLS.replace("entry_id,", "")
+            self.conn.execute(
+                f"INSERT INTO u.dict_entry({cols}) SELECT {cols} FROM main.dict_entry m WHERE m.source_id=?"
+                " AND NOT EXISTS (SELECT 1 FROM u.dict_entry x WHERE IFNULL(x.norm_ko,'')=IFNULL(m.norm_ko,'')"
+                " AND IFNULL(x.norm_en,'')=IFNULL(m.norm_en,'') AND IFNULL(x.def_ko,'')=IFNULL(m.def_ko,'')"
+                " AND IFNULL(x.def_en,'')=IFNULL(m.def_en,''))",       # 옛 백업 복원 때 겹치지 않게
+                (USER_SOURCE_ID,))
+            self.conn.execute("DELETE FROM main.dict_entry WHERE source_id=?", (USER_SOURCE_ID,))
+        self.conn.executescript(f"""
+            CREATE TEMP VIEW IF NOT EXISTS dict_entry AS
+              SELECT {_ENTRY_COLS} FROM main.dict_entry UNION ALL SELECT {_ENTRY_COLS} FROM u.dict_entry;
+            """)
+        self.conn.commit()
+
+    @staticmethod
+    def _t_src(source_id) -> str:
+        """쓰기 대상 표 — 사용자 출처면 u, 아니면 main."""
+        return "u.dict_entry" if source_id == USER_SOURCE_ID else "main.dict_entry"
+
+    @staticmethod
+    def _t_id(entry_id) -> str:
+        return "u.dict_entry" if int(entry_id) >= USER_ID_BASE else "main.dict_entry"
+
+    def user_entries(self, query: str = "") -> list[dict]:
+        """사용자 뜻만 — 편집 창 '사용자 뜻' 목록(261019-5). query 가 있으면 표제어 부분일치."""
+        sql = f"SELECT {_ENTRY_COLS} FROM u.dict_entry WHERE enabled=1"
+        args: list = []
+        nk = normalize_key(query)
+        if nk:
+            sql += " AND (norm_ko LIKE ? OR norm_en LIKE ?)"
+            args += [f"%{nk}%", f"%{nk}%"]
+        sql += " ORDER BY COALESCE(NULLIF(term_ko,''), term_en)"
+        return [dict(r) for r in self.conn.execute(sql, args)]
+
     def _meta_set_silent(self, key: str, value: str) -> None:
         self.conn.execute(
             "INSERT INTO dict_meta(key,value) VALUES(?,?) "
@@ -197,7 +264,7 @@ class DictStore:
 
         기본 사전을 계속 보강할 때 같은 출처를 다시 적재해도 **중복이 생기지 않음**.
         사용자(user) 출처·다른 base 출처는 영향 없음."""
-        self.conn.execute("DELETE FROM dict_entry WHERE source_id=?", (source_id,))
+        self.conn.execute(f"DELETE FROM {self._t_src(source_id)} WHERE source_id=?", (source_id,))
         self.conn.commit()
         return self.add_entries(source_id, rows)
 
@@ -245,7 +312,7 @@ class DictStore:
         """출처와 그 항목 모두 삭제(사용자 출처는 보호)."""
         if source_id == USER_SOURCE_ID:
             return
-        self.conn.execute("DELETE FROM dict_entry WHERE source_id=?", (source_id,))
+        self.conn.execute(f"DELETE FROM {self._t_src(source_id)} WHERE source_id=?", (source_id,))
         self.conn.execute("DELETE FROM dict_source WHERE source_id=?", (source_id,))
         self.conn.commit()
 
@@ -256,7 +323,7 @@ class DictStore:
                   reference: str = "", level: str = "", hanja: str = "",
                   image: str = "", image_ref: str = "") -> int:
         cur = self.conn.execute(
-            "INSERT INTO dict_entry"
+            f"INSERT INTO {self._t_src(source_id)}"
             "(source_id,term_ko,term_en,norm_ko,norm_en,def_ko,def_en,examples,"
             " reference,level,hanja,image,image_ref,enabled,updated_at)"
             " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)",
@@ -277,7 +344,7 @@ class DictStore:
             return 0
         nen = normalize_key(en)
         self.conn.execute(
-            "DELETE FROM dict_entry WHERE source_id=? AND norm_en=?",
+            "DELETE FROM u.dict_entry WHERE source_id=? AND norm_en=?",
             (USER_SOURCE_ID, nen))
         self.conn.commit()
         return self.add_entry(source_id=USER_SOURCE_ID, term_en=en, term_ko=ko, def_ko=def_ko)
@@ -291,7 +358,7 @@ class DictStore:
                  r.get("image", ""), r.get("image_ref", ""), _now())
                 for r in rows]
         self.conn.executemany(
-            "INSERT INTO dict_entry"
+            f"INSERT INTO {self._t_src(source_id)}"
             "(source_id,term_ko,term_en,norm_ko,norm_en,def_ko,def_en,examples,"
             " reference,level,hanja,image,image_ref,enabled,updated_at)"
             " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)", data)
@@ -315,7 +382,7 @@ class DictStore:
             return
         sets.append("updated_at=?"); args.append(_now())
         args.append(entry_id)
-        self.conn.execute(f"UPDATE dict_entry SET {','.join(sets)} WHERE entry_id=?", args)
+        self.conn.execute(f"UPDATE {self._t_id(entry_id)} SET {','.join(sets)} WHERE entry_id=?", args)
         self.conn.commit()
 
     def get_entry(self, entry_id: int) -> Optional[dict]:
@@ -324,10 +391,11 @@ class DictStore:
         return dict(r) if r else None
 
     def delete_entry(self, entry_id: int, *, hard: bool = False) -> None:
+        t = self._t_id(entry_id)
         if hard:
-            self.conn.execute("DELETE FROM dict_entry WHERE entry_id=?", (entry_id,))
+            self.conn.execute(f"DELETE FROM {t} WHERE entry_id=?", (entry_id,))
         else:
-            self.conn.execute("UPDATE dict_entry SET enabled=0, updated_at=? "
+            self.conn.execute(f"UPDATE {t} SET enabled=0, updated_at=? "
                               "WHERE entry_id=?", (_now(), entry_id))
         self.conn.commit()
 
@@ -433,7 +501,7 @@ class DictStore:
             else:
                 nm, tb = ONLINE_PROVIDERS[sid]
                 self.ensure_online_provider(sid, nm, tb)
-            self.conn.execute("UPDATE dict_entry SET source_id=? WHERE entry_id=?",
+            self.conn.execute("UPDATE main.dict_entry SET source_id=? WHERE entry_id=?",
                               (sid, r["entry_id"]))
             moved += 1
         self.conn.commit()
@@ -468,7 +536,7 @@ class DictStore:
         n = 0
         for nk in norms:
             self.conn.execute(
-                "DELETE FROM dict_entry WHERE (norm_ko=? OR norm_en=?)"
+                "DELETE FROM main.dict_entry WHERE (norm_ko=? OR norm_en=?)"
                 " AND source_id LIKE 'online_%'", (nk, nk))
             self.conn.execute("DELETE FROM online_fetched WHERE norm=?", (nk,))
             n += 1
@@ -552,7 +620,7 @@ class DictStore:
             if (nk, ne, nex) != ((r["def_ko"] or ""), (r["def_en"] or ""),
                                  (r["examples"] or "")):
                 self.conn.execute(
-                    "UPDATE dict_entry SET def_ko=?,def_en=?,examples=? WHERE entry_id=?",
+                    f"UPDATE {self._t_id(r['entry_id'])} SET def_ko=?,def_en=?,examples=? WHERE entry_id=?",
                     (nk, ne, nex, r["entry_id"]))
                 n += 1
         for r in self.conn.execute("SELECT id,example FROM dict_example").fetchall():

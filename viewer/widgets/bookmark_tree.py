@@ -202,7 +202,8 @@ class BookmarkTree(QWidget):
     editCancelled = pyqtSignal()             # 260611-9: 편집 취소(저장 전 수정 되돌리기)
     dragHoverOpen = pyqtSignal(str, int)       # 261012-12(마스터 §4.7.18): 썸네일·스크린샷을 끌고 파일·책갈피 위에 머묾 → (파일, 쪽)
     bookmarksUndoable = pyqtSignal(str, object, object)  # 261012-10(§4.6.8): (파일, 전, 후) — 편집 되돌리기 기록
-    addBookmarkRequested = pyqtSignal(str)   # v1.6.20: 대상 파일 경로 — 앱이 페이지/제목 받아옴
+    bookmarksChanged = pyqtSignal(str)       # 261019-3(마스터 §4.7.21): 그 파일의 책갈피를 이 창에서 바꿨다 — 다른 책갈피창이 같은 파일이면 따라간다
+    bookmarksReverted = pyqtSignal()         # 261019-3: 저장 전 고침을 버렸다(취소·편집 끝 '저장 안 함') — 따라간 창은 디스크로 되돌린다
     createBookmarksRequested = pyqtSignal(str)  # 260606-4: 파일 우클릭 '책갈피 생성'(자동생성 다이얼로그)
     createStudyRequested = pyqtSignal(str)      # 260606-5: 파일 우클릭 '단어장 생성'
     createStudyBookmarksRequested = pyqtSignal(str)  # 260606-11: '단어장·책갈피 동시 생성'
@@ -357,9 +358,25 @@ class BookmarkTree(QWidget):
         self._page_edit_save = save_fn
         self._finalize_save = finalize_fn
 
-    def set_study_hooks(self, commit_fn):
-        """261019-1(단어학습 SOT §14.21): [저장] 이 그 파일의 저장 안 한 OCR·단어장도 확정한다(앱이 주입)."""
+    def set_study_hooks(self, commit_fn, pending_fn=None, discard_fn=None):
+        """261019-1(단어학습 SOT §14.21): [저장] 이 그 파일의 저장 안 한 OCR·단어장도 확정한다(앱이 주입).
+        261019-6(사용자 지시 '편집모드에서 저장하는 것을 기준'): 편집 모드를 끌 때 그 파일의 저장 안 한 OCR·단어장도
+        책갈피 고침과 **같은 확인 창**으로 묻는다 — `pending_fn(경로)`·`discard_fn(경로)`."""
         self._study_commit = commit_fn
+        self._study_pending_fn = pending_fn
+        self._study_discard_fn = discard_fn
+
+    def _study_pending_path(self):
+        """편집 대상 파일에 저장 안 한 OCR·단어장이 있으면 그 경로, 없으면 None."""
+        fn = getattr(self, "_study_pending_fn", None)
+        if not callable(fn):
+            return None
+        try:
+            t = self._target_file_item()
+            p = t.data(0, self.DATA_FILE) if t is not None else None
+            return p if p and fn(str(p)) else None
+        except Exception:
+            return None
 
     def _commit_study(self, path) -> bool:
         fn = getattr(self, "_study_commit", None)
@@ -641,6 +658,7 @@ class BookmarkTree(QWidget):
         self._dirty = False
         self._sync_selection_mode()
         self.editCancelled.emit()        # app: 숨김/회전/선긋기/하이퍼링크 스냅샷 복원
+        self.bookmarksReverted.emit()
 
     # --- 로드 -------------------------------------------------------------
 
@@ -2254,11 +2272,66 @@ class BookmarkTree(QWidget):
     def _mark_dirty(self):
         self._dirty = True
         self._bm_record()                    # 261012-10(§4.6.8)
+        self._emit_changed()
 
     def _on_tree_dropped(self):
         if self._edit_mode:
             self._dirty = True
             self._bm_record()
+            self._emit_changed()
+
+    # ===== 261019-3(마스터 §4.7.21, 사용자 지시): 2단 보기 — 같은 파일이면 두 책갈피창이 같은 책갈피 =====
+    def _emit_changed(self, item=None) -> None:
+        if getattr(self, "_mirroring", False):
+            return
+        unit = self._bm_unit(item if item is not None else self.tree.currentItem())
+        if unit is not None and unit.data(0, self.DATA_FILE):
+            self.bookmarksChanged.emit(str(unit.data(0, self.DATA_FILE)))
+
+    def _unit_for_path(self, path):
+        """그 경로(표준 비교 키)의 파일 행 — 없으면 None."""
+        from viewer.pathutil import norm_key
+        k = norm_key(str(path))
+        for it in self._iter_file_nodes():
+            d = it.data(0, self.DATA_FILE)
+            if d and norm_key(str(d)) == k:
+                return self._bm_unit(it)
+        return None
+
+    def mirror_file_from(self, other, path) -> bool:
+        """다른 책갈피창(`other`)의 그 파일 책갈피를 이 창의 같은 파일 행에 그대로 옮긴다. 이 창에 그 파일이 없으면 아무것도 안 한다.
+        이 창의 저장 안 됨 표시(`_dirty`)는 바꾸지 않는다 — 고친 창이 저장·취소를 맡고, 끝나면 이 창은 디스크로 다시 읽는다."""
+        mine = self._unit_for_path(path)
+        src = other._unit_for_path(path) if other is not None else None
+        if mine is None or src is None or mine is src:
+            return False
+        snap = other._bm_snapshot(src)
+        self._mirroring = True
+        try:
+            with self._quiet_tree():
+                expanded = mine.isExpanded()
+                mine.takeChildren()
+                for c in self._bm_items_from(snap[1]):
+                    mine.addChild(c)
+                mine.setData(0, self.DATA_TOC_LOADED, True)
+                mine.setExpanded(expanded or True)
+            self.__dict__.setdefault("_bm_cache", {})[str(mine.data(0, self.DATA_FILE))] = snap
+            self.__dict__.setdefault("_mirror_paths", set()).add(str(mine.data(0, self.DATA_FILE)))
+        finally:
+            self._mirroring = False
+        return True
+
+    def reload_mirrored(self, paths=None) -> None:
+        """따라간 파일(또는 `paths`)의 책갈피를 디스크에서 다시 읽는다 — 고친 창이 저장·취소한 뒤."""
+        want = set(self.__dict__.get("_mirror_paths", set())) if paths is None else {str(p) for p in paths}
+        for p in want:
+            unit = self._unit_for_path(p)
+            if unit is not None:
+                self._refresh_file_toc(unit)
+        if paths is None:
+            self.__dict__["_mirror_paths"] = set()
+        else:
+            self.__dict__.setdefault("_mirror_paths", set()).difference_update(want)
 
     # ===== 261012-10(마스터 §4.6.8 2단계): 책갈피 편집 되돌리기 — 파일 단위 스냅숏 =====
     #   책갈피 고침(추가·삭제·이름·레벨·이동·정렬·끌어 놓기)은 모두 `_mark_dirty`/`_on_tree_dropped` 로 끝난다.
@@ -2306,7 +2379,10 @@ class BookmarkTree(QWidget):
     @staticmethod
     def _bm_items_from(data: bytes) -> list:
         from PyQt6.QtCore import QByteArray, QDataStream, QIODevice
-        ds = QDataStream(QByteArray(data), QIODevice.OpenModeFlag.ReadOnly)
+        # 261019-3: 바이트 배열을 변수에 붙들어 둔다 — `QDataStream(QByteArray(data))` 처럼 임시로 넘기면 파이썬이 곧바로
+        #   지워, 스트림이 해제된 메모리를 읽었다(뒤쪽 항목 제목이 비거나 프로그램이 죽음 — 2단 따라가기 시험에서 8번에 1~2번).
+        buf = QByteArray(data)
+        ds = QDataStream(buf, QIODevice.OpenModeFlag.ReadOnly)
 
         def read_children(parent):
             out = []
@@ -2369,15 +2445,33 @@ class BookmarkTree(QWidget):
             self._bm_restoring = False
         self.__dict__.setdefault("_bm_cache", {})[str(path)] = snap
         self._dirty = True
+        self._emit_changed(unit)                 # 261019-3: 되돌리기도 같은 파일의 다른 책갈피창에
         return True
 
 
+    def ensure_edit_mode(self, what: str = "") -> bool:
+        """261019-2(마스터 §4.7.0, 사용자 지시): **책갈피를 바꾸는 일은 편집 모드에서만**. 보기 모드면 켤지 묻고,
+        예면 편집 모드를 켠 뒤 True(부른 쪽이 그 일을 이어서 한다), 아니오면 False(아무것도 바꾸지 않는다).
+        종전에는 보기 모드에서도 책갈피가 바뀌어 '저장 안 됨' 인데 [저장] 단추가 숨어 있었다."""
+        if self._edit_mode:
+            return True
+        head = (tr("'{what}' 은(는) 편집 모드에서만 할 수 있습니다.").format(what=what) if what
+                else tr("책갈피는 편집 모드에서만 바꿀 수 있습니다."))
+        if QMessageBox.question(self, tr("편집 모드"), head + "\n" + tr("편집 모드를 켜고 계속할까요?")) \
+                != QMessageBox.StandardButton.Yes:
+            return False
+        self.btn_edit.setChecked(True)               # 사용자가 ✏ 를 누른 것과 같은 길(앱의 편집 시작 처리 포함)
+        return bool(self._edit_mode)
+
     def _edit_item(self, item: Optional[QTreeWidgetItem]):
-        """항목 종류에 맞는 편집 창(파일명 / 책갈피 제목·페이지)."""
+        """항목 종류에 맞는 편집 창(파일명 / 책갈피 제목·페이지).
+        파일 이름 변경은 디스크 일이라 언제나, 책갈피는 편집 모드에서만(261019-2 `ensure_edit_mode`)."""
         if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
             return
         if self._is_file_node(item):
             self._edit_file_node(item)
+            return
+        if not self.ensure_edit_mode(tr("책갈피 이름 변경")):
             return
         target = self._target_file_item() or _top_of(item)
         if target is not None and target.data(0, self.DATA_FILE):
@@ -2679,10 +2773,13 @@ class BookmarkTree(QWidget):
     def set_edit_mode(self, on: bool):
         on = bool(on)
         # 260606-4: 편집 모드를 끌 때 변경분이 있으면 저장 여부 확인
-        if not on and self._edit_mode and self._dirty:
+        # 261019-6: 그 파일의 저장 안 한 OCR·단어장도 같은 창에서(편집 모드 [저장] 이 기준)
+        pend = self._study_pending_path() if (not on and self._edit_mode) else None
+        if not on and self._edit_mode and (self._dirty or pend):
+            msg = (tr("수정한 내용(저장하지 않은 OCR·단어장 포함)이 있습니다. 저장할까요?") if pend
+                   else tr("수정한 내용이 있습니다. 저장할까요?"))
             ret = QMessageBox.question(
-                self, tr("편집 종료"),
-                tr("수정한 내용이 있습니다. 저장할까요?"),
+                self, tr("편집 종료"), msg,
                 QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
                 | QMessageBox.StandardButton.Cancel)
             if ret == QMessageBox.StandardButton.Cancel:
@@ -2692,7 +2789,23 @@ class BookmarkTree(QWidget):
                 self.btn_edit.blockSignals(False)
                 return
             if ret == QMessageBox.StandardButton.Save:
-                self._op_save()
+                if self._dirty:
+                    self._op_save()                  # 책갈피 저장이 OCR·단어장도 확정한다
+                elif pend:
+                    self._commit_study(pend)
+            else:
+                if self._dirty:
+                    if self._reload_fn is not None:  # 261019-3(점검): 고친 창도 디스크 책갈피로 되돌린다
+                        try:
+                            self._reload_fn()
+                        except Exception:
+                            pass
+                    self.bookmarksReverted.emit()    # 버린 고침을 따라간 다른 책갈피창도 되돌린다
+                if pend and callable(getattr(self, "_study_discard_fn", None)):
+                    try:
+                        self._study_discard_fn(str(pend))
+                    except Exception:
+                        pass
             self._dirty = False
         self._edit_mode = on
         self.bm_reset_history()              # 261012-10: 되돌리기 기준은 편집 모드 한 번 동안
@@ -3006,6 +3119,10 @@ class BookmarkTree(QWidget):
         sel = [it for it in self.tree.selectedItems()
                if not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)]
         if not sel:
+            return
+        # 261019-2: 책갈피를 지우는 것은 편집 모드에서만 — 파일 삭제(휴지통)는 언제나
+        if any(not (self._is_file_node(it) or self._is_folder_node(it)) for it in sel) \
+                and not self.ensure_edit_mode(tr("책갈피 삭제")):
             return
         if keep_mode is None:
             keep_mode = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
@@ -3619,16 +3736,6 @@ class BookmarkTree(QWidget):
         self.filesRelocated.emit([[old_s, new_s]])                    # 색인·꾸밈·검색 범위
         self.info.setText(tr('이름 변경: {name} → {name1}').format(name=old_path.name, name1=new_path.name))
 
-    # ---- v1.6.20 K5: 메인 페이지로 책갈피 추가 -------------------------
-    def _op_add_main_bookmark(self):
-        target = self._target_file_item()
-        if target is None or not target.data(0, self.DATA_FILE):
-            QMessageBox.information(self, tr("안내"),
-                tr("책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."))
-            return
-        # 앱에 대상 파일 알림 → 앱이 메인 뷰어 페이지/제목을 받아 add_bookmark 호출
-        self.addBookmarkRequested.emit(target.data(0, self.DATA_FILE))
-
     def suggest_add_level(self, file_path: str = "") -> tuple:
         """260908-1(사용자 요청): 새 책갈피의 **기본 레벨**과 고를 수 있는 최대 레벨.
 
@@ -3783,6 +3890,7 @@ class BookmarkTree(QWidget):
             dk = norm_key(d)
             if dk == fk:
                 self._refresh_file_toc(top)
+                self._place_by_sort(top, fp)          # 261019-7: 저장으로 수정일·크기가 바뀌었으면 자리도
                 self.tree.setCurrentItem(top)
                 self.tree.scrollToItem(top)
                 return
@@ -3806,9 +3914,60 @@ class BookmarkTree(QWidget):
             self.tree.addTopLevelItem(item)
         if self._mode == "flat" and fp not in self._pdfs_flat:
             self._pdfs_flat.append(fp)
+        self._place_by_sort(item, fp)                # 261019-7: 고른 정렬대로 제자리에(새로 고침 없이)
         item.setExpanded(True)
         self.tree.setCurrentItem(item)
         self.tree.scrollToItem(item)
+
+    def _place_by_sort(self, item, fp) -> None:
+        """261019-7(마스터 §4.7.22, 사용자 보고 '수정일로 정렬 시 새로 만든 파일이 맨 뒤로 가고 새로 고쳐야 앞으로 온다'):
+        파일 행 하나를 **지금 정렬 기준**(이름·수정일·크기)에 맞는 자리로 옮긴다 — 목록 전체를 다시 그리지 않는다
+        (펼침·선택·저장 안 한 책갈피가 그대로). '책갈피 순'이면 종전대로(원본 바로 아래·맨 끝). 같은 부모 안의 파일 행끼리만 견준다."""
+        mode = self._sort_combo.currentData() if hasattr(self, "_sort_combo") else self.SORT_BOOK
+        if mode == self.SORT_BOOK:
+            return
+        try:
+            st = _stat(fp)
+            self._scan_stats[str(fp)] = (st.st_size, st.st_mtime)   # 새 값으로(정렬 키 캐시)
+        except Exception:
+            pass
+
+        def key(path):
+            p = Path(path)
+            if mode == self.SORT_NAME:
+                return (p.stem.lower(),)
+            sz, mt = self._sort_stat(p)
+            return (-(mt if mode == self.SORT_MTIME else sz),)
+        par = item.parent()
+        n = par.childCount() if par is not None else self.tree.topLevelItemCount()
+        at = (lambda i: par.child(i)) if par is not None else self.tree.topLevelItem
+        mine = key(fp)
+        cur = par.indexOfChild(item) if par is not None else self.tree.indexOfTopLevelItem(item)
+        target = None
+        for i in range(n):
+            it = at(i)
+            if it is item or not self._is_file_node(it):
+                continue
+            d = it.data(0, self.DATA_FILE)
+            if d and key(d) > mine:
+                target = i
+                break
+        if target is None:                            # 모든 파일보다 뒤 — 마지막 파일 행 다음
+            idx = [i for i in range(n) if at(i) is not item and self._is_file_node(at(i))]
+            target = (idx[-1] + 1) if idx else n
+        if target > cur:
+            target -= 1                               # 빼낸 뒤 위치
+        if target == cur:
+            return
+        expanded = item.isExpanded()
+        with self._quiet_tree():
+            if par is not None:
+                par.takeChild(cur)
+                par.insertChild(target, item)
+            else:
+                self.tree.takeTopLevelItem(cur)
+                self.tree.insertTopLevelItem(target, item)
+            item.setExpanded(expanded)
 
     # ---- 260606-9: 활성 창 위치에 해당하는 책갈피 선택·스크롤 -------------
     def select_for_page(self, file_path: str, page0: int):
@@ -3973,7 +4132,9 @@ class BookmarkTree(QWidget):
             self._page_edit_save(str(src), bookmarks_raw)
             self._dirty = False
             self._commit_meta()
-            self._commit_study(src)              # 261019-1: 저장 안 한 OCR·단어장도 함께 확정
+            # 261019-1: 저장 안 한 OCR·단어장도 함께 확정 — 저장이 끝난 **뒤**(확정은 배경 작업이라 이벤트를 돌린다:
+            #   저장이 미뤄 둔 안내 창이 저장 도중에 뜨지 않게)
+            QTimer.singleShot(0, lambda s=src: self._commit_study(s))
             return
         # 261017-15(§4.7.13, 점검): '다른 이름으로 저장' 이면 책갈피가 그대로여도 새 파일을 만든다(아래 길) —
         #   종전엔 이 가지에서 사본을 원본에 넣고 끝나 **원본을 덮어썼다**
@@ -4029,7 +4190,7 @@ class BookmarkTree(QWidget):
             return
         self._dirty = False
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
-        self._commit_study(src)          # 261019-1: 저장 안 한 OCR·단어장도 함께 확정
+        QTimer.singleShot(0, lambda s=src: self._commit_study(s))   # 261019-1: OCR·단어장 확정은 저장이 끝난 뒤(위와 같은 까닭)
         # 261017-15(§4.7.9, 점검): 새 이름이면 꾸밈·숨김·링크를 새 파일 키로, 사본은 **다시 열기 전에** 넣고(reopen=False)
         #   여는 것은 bookmarksEdited 한 번 — 종전엔 사본이 한 번 더 열어 두 번 깜빡였고, 새 파일엔 꾸밈이 없었다
         if self._carry_meta is not None and str(out) != str(src):

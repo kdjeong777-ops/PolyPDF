@@ -195,6 +195,7 @@ try:
 
     # ── C. 부득이 새 파일 — 다른 프로그램이 쓰기를 막고 연 원본 ─────────────────
     msgs.clear()
+    bt.set_sort_mode(bt.SORT_BOOK); spin(4)   # 261019-7: '원본 바로 아래' 는 책갈피 순 규칙(다른 정렬은 그 정렬 자리)
     open_and_edit()
     bnode = node_of(src)
     bnode.setExpanded(True); spin(5)

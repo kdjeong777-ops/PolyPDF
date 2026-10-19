@@ -40,6 +40,21 @@ SELECT EXISTS(SELECT 1 FROM pragma_compile_options WHERE compile_options = 'ENAB
 """
 
 
+_WS = re.compile(r"\s+")
+
+
+def flat_text(s: str) -> str:
+    """261019-4(검색창 SOT §3.1): 빈칸·줄바꿈을 모두 뺀 글 — 색인과 질의를 같은 모양으로 맞춘다.
+    글자층은 줄 끝마다 줄바꿈이 들어 있어(문단 안에서도) '아스팔트 포장' 이 '아스팔트\n포장' 으로 남는다."""
+    return _WS.sub("", s or "")
+
+
+def flat_pattern(q: str):
+    """질의 글자 사이에 빈칸·줄바꿈이 얼마든 있어도 맞는 정규식 — 개수·미리보기용(색인 비교와 같은 뜻)."""
+    qf = flat_text(q)
+    return re.compile(r"\s*".join(re.escape(c) for c in qf), re.IGNORECASE) if qf else None
+
+
 def _apply_text_fixes(file_path, page: int, text: str) -> str:
     """260908-3: 텍스트 창 교정을 색인 본문에 반영(텍스트 창 SOT §5.3).
 
@@ -155,7 +170,10 @@ class PdfIndex:
     # 260825: FTS 토크나이저 스키마 버전. 2=trigram(파괴적, 폐기), 3=trigram(내용 보존 복사).
     # 261014-19: 4 = 표 캐시(`page_tables`)를 한 번 비운다 — 공유 pdfplumber 문서를 여러 스레드가 동시에 써
     #   깨진 표가 저장돼 있을 수 있다(텍스트 창 SOT §3 규칙 8). 캐시라 지워도 안전하다(다시 판다).
-    SCHEMA_VERSION = 4
+    # 261019-4(검색창 SOT §3.1): 5 = 새 표 `pages2`(빈칸 없는 `flat` 에 트라이그램, 원문 `text` 는 보관만).
+    #   옛 `pages_fts` 는 지우지 않는다 — 파일마다 다시 색인될 때 옮겨 간다(`size=-1` 표식, 배경 색인).
+    #   그동안 검색은 두 표를 함께 본다(검색이 비는 구간 없음 — §3 '파괴적 재생성 금지').
+    SCHEMA_VERSION = 5
     YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(응답성 SOT §4 ②)
     # 260908-5(응답성 SOT §4 ⑦): 간격이 아니라 **점유율**로 조절한다.
     #   5ms 간격만으로는 쪽 하나가 무거울 때 배경이 벽시계를 거의 다 쓴다 —
@@ -165,6 +183,8 @@ class PdfIndex:
     PAGES_PENDING = -1       # 260906-6: '본문을 아직 다 적지 못했다' 표식
     _FTS_TRIGRAM = ("CREATE VIRTUAL TABLE {name} USING fts5("
                     "text, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')")
+    _FTS_FLAT = ("CREATE VIRTUAL TABLE IF NOT EXISTS pages2 USING fts5("
+                 "flat, text UNINDEXED, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')")
 
     def _init_schema(self):
         self.migrated = False
@@ -250,6 +270,8 @@ class PdfIndex:
             self.conn.execute("ALTER TABLE pages_fts_new RENAME TO pages_fts")
             self.migrated = True
 
+        self.conn.execute(self._FTS_FLAT)                  # 261019-4
+
         # 일관성: 색인이 비었는데 files 기록만 남아있으면(구 파괴적 마이그레이션 잔재 등)
         #   needs_reindex 가 계속 False → 검색 0 이던 상태 → files 비워 재인덱싱 유도.
         if uv < self.SCHEMA_VERSION:
@@ -265,6 +287,12 @@ class PdfIndex:
             if uv < 4:
                 try:
                     self.conn.execute("DELETE FROM page_tables")
+                except Exception:
+                    pass
+            if uv < 5:
+                # 261019-4: 옛 표의 파일은 다음 배경 색인 때 새 표로 다시 읽는다(옛 글은 그때까지 그대로 검색된다)
+                try:
+                    self.conn.execute("UPDATE files SET size = -1")
                 except Exception:
                     pass
             self.conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
@@ -385,8 +413,19 @@ class PdfIndex:
         if row:
             fid = row["id"]
             self.conn.execute("DELETE FROM pages_fts WHERE file_id = ?", (fid,))
+            self.conn.execute("DELETE FROM pages2 WHERE file_id = ?", (fid,))
             self.conn.execute("DELETE FROM files WHERE id = ?", (fid,))
             self.conn.commit()
+
+    def invalidate(self, file_path) -> bool:
+        """261019-4: 이 파일을 다음 색인 때 다시 읽게 표시한다(내용은 그대로 — 검색은 계속 된다).
+        OCR 결과를 [저장]해 스캔 쪽 글이 바뀌었을 때 부른다(파일 자체는 그대로라 mtime·size 로는 모른다)."""
+        row = self._find_file_row(file_path, "id")
+        if not row:
+            return False
+        with self.conn:
+            self.conn.execute("UPDATE files SET size = -1 WHERE id = ?", (row["id"],))
+        return True
 
     def rename_file(self, old_path: Path, new_path: Path) -> bool:
         """261008-1(마스터 §4.7.14): 이름만 바뀐 파일 — 본문은 그대로이니 **경로만** 고친다.
@@ -405,6 +444,7 @@ class PdfIndex:
                 "SELECT id FROM files WHERE path = ?", (str(new_path),)).fetchone()
             if stale and stale["id"] != row["id"]:
                 self.conn.execute("DELETE FROM pages_fts WHERE file_id = ?", (stale["id"],))
+                self.conn.execute("DELETE FROM pages2 WHERE file_id = ?", (stale["id"],))
                 self.conn.execute("DELETE FROM files WHERE id = ?", (stale["id"],))
             self.conn.execute("UPDATE files SET path = ? WHERE id = ?", (str(new_path), row["id"]))
             if ok != nk:
@@ -431,6 +471,34 @@ class PdfIndex:
                     pass
         except OSError:
             pass
+
+    def _study_for(self, file_path):
+        """(study.db 읽기 연결, file_key) — study.db 는 색인과 같은 폴더(설정 폴더)에 있다. 없으면 (None, None).
+        **저장한 것만**(main 표) 읽는다 — [저장] 전 OCR 은 보류 저장소에 있고 색인하지 않는다(단어학습 SOT §14.21)."""
+        sp = self.db_path.parent / "study.db"
+        if not sp.exists():
+            return None, None
+        try:
+            if getattr(self, "_study_conn", None) is None:
+                self._study_conn = _dbutil.connect(sp, self.busy_ms, readonly=True)
+            from viewer.study.study_store import file_key_for
+            return self._study_conn, file_key_for(file_path)
+        except Exception:
+            return None, None
+
+    @staticmethod
+    def _scan_text(page, text, study, fkey, i) -> str:
+        """스캔 쪽이면 저장한 우리 OCR 글, 아니면 글자층 그대로. 글자가 충분하고 그림이 없으면 판정도 건너뛴다(값싸게)."""
+        try:
+            if len((text or "").strip()) >= 30 and not page.get_images():
+                return text
+            from viewer.study.ocr import decide_source
+            if decide_source(page)[0] != "ocr":
+                return text
+            row = study.execute("SELECT text FROM ocr_page WHERE file_key=? AND page=?", (fkey, i)).fetchone()
+            return (row[0] if row and row[0] else text)
+        except Exception:
+            return text
 
     def index_file(self, file_path: Path):
         """단일 PDF 인덱싱(또는 재인덱싱)."""
@@ -472,20 +540,26 @@ class PdfIndex:
                     return
                 with self.conn:
                     self.conn.executemany(
-                        "INSERT INTO pages_fts(text, file_id, page_index) VALUES(?, ?, ?)",
+                        "INSERT INTO pages2(flat, text, file_id, page_index) VALUES(?, ?, ?, ?)",
                         rows)
                 rows.clear()
 
+            # 261019-4(검색창 SOT §3.2): 스캔 쪽은 **저장한 우리 OCR** 을 색인한다 — 텍스트 창과 같은 원천 규칙
+            #   (쓸 만한 글자층 = 글자층, 스캔·스캐너 OCR 층만 있는 쪽 = 우리 OCR 이 있으면 그것)
+            study, fkey = self._study_for(file_path)
             for i in range(doc.page_count):
                 try:
-                    text = doc.load_page(i).get_text("text")
+                    page = doc.load_page(i)
+                    text = page.get_text("text")
+                    if study is not None:
+                        text = self._scan_text(page, text, study, fkey, i)
                 except Exception:
                     text = ""
                 # 260908-3(감사, 검색창 SOT §3 · 텍스트 창 SOT §5.3): 텍스트 창에서
                 #   고친 글을 **색인에도** 넣는다. 안 그러면 화면·복사는 고쳐졌는데
                 #   검색만 옛 글자로 남아, 찾은 것이 안 찾아지는 일이 생긴다.
                 text = _apply_text_fixes(file_path, i, text)
-                rows.append((text, file_id, i))
+                rows.append((flat_text(text), text, file_id, i))
                 # 260906-5(응답성 SOT §4 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
                 #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.
                 if (i & 0x1F) == 0x1F:
@@ -579,15 +653,18 @@ class PdfIndex:
         if mode and any(mode):
             # 261014-18(검색창 SOT §4.1): 대소문자·정규식 — 색인 형식은 그대로, 후보를 추린 뒤 `Matcher` 로 거른다
             return self._search_matcher(q, limit, paths, mode)
-        # LIKE 와일드카드(%, _, \) 이스케이프 후 부분일치 패턴 구성
+        # 261019-4(검색창 SOT §4): **빈칸·줄바꿈을 무시**한다 — 새 표는 `flat` 으로, 옛 표(아직 옮기지 않은 파일)는 원문으로
+        qf = flat_text(q)
         esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{esc}%"
+        escf = qf.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like_f = f"%{escf}%"
         # 260825: trigram FTS — `p.text LIKE ?`(컬럼 직접, lower() 미사용)면 3자↑ 질의는
         #   트라이그램 색인을 사용해 빠름(대소문자 무시=토크나이저 기본). 함수로 감싸면 색인
         #   최적화가 깨지므로 lower() 를 쓰지 않는다(LIKE 자체가 대소문자 무시).
         # 260828: 영구(다중 폴더) 캐시에서 검색 범위를 SQL 로 한정 — LIMIT 이
         #   다른 폴더 결과로 채워지지 않게. paths=None 이면 전체.
-        args: list = [like]
+        args: list = [like_f, like]
         scope_sql = ""
         if paths:
             # 260628: 표준 키(pathutil.norm_key)로 통일. ★ 아래 SQL 변환
@@ -599,17 +676,19 @@ class PdfIndex:
             args.extend(keys)
         args.append(limit)
         sql = f"""
-            SELECT f.path AS path, p.page_index AS page_index, p.text AS text
-            FROM pages_fts AS p
-            JOIN files AS f ON f.id = p.file_id
-            WHERE p.text LIKE ? ESCAPE '\\'{scope_sql}
-            ORDER BY f.path, p.page_index
+            SELECT f.path AS path, x.page_index AS page_index, x.text AS text
+            FROM (SELECT file_id, page_index, text FROM pages2 WHERE flat LIKE ? ESCAPE '\\'
+                  UNION ALL
+                  SELECT file_id, page_index, text FROM pages_fts WHERE text LIKE ? ESCAPE '\\') AS x
+            JOIN files AS f ON f.id = x.file_id
+            WHERE 1=1{scope_sql}
+            ORDER BY f.path, x.page_index
             LIMIT ?
         """
         cur = self.conn.execute(sql, args)
 
         results: list = []
-        pat = re.compile(re.escape(q), re.IGNORECASE)
+        pat = flat_pattern(q) or re.compile(re.escape(q), re.IGNORECASE)
         for row in cur:
             text = row["text"] or ""
             cnt = len(pat.findall(text)) or 1
@@ -619,7 +698,7 @@ class PdfIndex:
                     file_name=Path(row["path"]).name,
                     page_index=row["page_index"],
                     match_count=cnt,
-                    snippet=self._make_snippet(text, q),
+                    snippet=self._snippet_flat(text, pat),
                 )
             )
         return results
@@ -631,19 +710,24 @@ class PdfIndex:
         hint = m.like_hint()
         args: list = []
         where = []
+        w2, w1 = "", ""
         if hint:
             esc = hint.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            where.append("p.text LIKE ? ESCAPE '\\'")
-            args.append(f"%{esc}%")
+            hf = flat_text(hint)
+            escf = hf.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            w2, w1 = " WHERE flat LIKE ? ESCAPE '\\'", " WHERE text LIKE ? ESCAPE '\\'"
+            args.extend([f"%{escf}%", f"%{esc}%"])
         if paths:
             from viewer.pathutil import norm_key
             keys = sorted({norm_key(p) for p in paths})
             where.append("lower(replace(f.path,'/','\\')) IN (%s)" % ",".join("?" for _ in keys))   # §7.0 키와 같은 문자열
             args.extend(keys)
-        sql = ("SELECT f.path AS path, p.page_index AS page_index, p.text AS text "
-               "FROM pages_fts AS p JOIN files AS f ON f.id = p.file_id"
+        # 261019-4: 새 표(pages2)와 아직 옮기지 않은 옛 표를 함께 본다
+        sql = ("SELECT f.path AS path, x.page_index AS page_index, x.text AS text FROM ("
+               "SELECT file_id, page_index, text FROM pages2" + w2 + " UNION ALL "
+               "SELECT file_id, page_index, text FROM pages_fts" + w1 + ") AS x JOIN files AS f ON f.id = x.file_id"
                + (" WHERE " + " AND ".join(where) if where else "")
-               + " ORDER BY f.path, p.page_index")
+               + " ORDER BY f.path, x.page_index")
         results: list = []
         for row in self.conn.execute(sql, args):
             text = row["text"] or ""
@@ -670,6 +754,18 @@ class PdfIndex:
                 + flat[j:end] + ("..." if end < len(flat) else ""))
 
     @staticmethod
+    def _snippet_flat(text: str, pat, ctx: int = 16) -> str:
+        """261019-4: 빈칸 무시 일치의 미리보기 — 줄바꿈을 빈칸 하나로 바꾼 글에서 같은 정규식으로 찾는다."""
+        flat = re.sub(r"\s+", " ", text).strip()
+        m = pat.search(flat)
+        if not m:
+            return flat[:40]
+        i, j = m.span()
+        start, end = max(0, i - ctx), min(len(flat), j + ctx)
+        return (("..." if start > 0 else "") + flat[start:i] + "<" + flat[i:j] + ">"
+                + flat[j:end] + ("..." if end < len(flat) else ""))
+
+    @staticmethod
     def _make_snippet(text: str, q: str, ctx: int = 16) -> str:
         """첫 매치 주변 ±ctx 글자로 스니펫 구성. 매치를 <...> 로 감싼다
         (SearchResults 가 < > → [ ] 로 치환해 표시)."""
@@ -688,9 +784,10 @@ class PdfIndex:
     def _page_text(self, path: str, page_index: int) -> str:
         cur = self.conn.execute(
             """
-            SELECT p.text FROM pages_fts AS p
-            JOIN files AS f ON f.id = p.file_id
-            WHERE f.path = ? AND p.page_index = ?
+            SELECT x.text FROM (SELECT file_id, page_index, text FROM pages2
+                                UNION ALL SELECT file_id, page_index, text FROM pages_fts) AS x
+            JOIN files AS f ON f.id = x.file_id
+            WHERE f.path = ? AND x.page_index = ?
             """,
             (path, page_index),
         )
@@ -708,8 +805,9 @@ class PdfIndex:
             if not row:
                 return []
             cur = self.conn.execute(
-                "SELECT text FROM pages_fts WHERE file_id=? ORDER BY page_index",
-                (row["id"],))
+                "SELECT text, page_index FROM pages2 WHERE file_id=? UNION ALL "
+                "SELECT text, page_index FROM pages_fts WHERE file_id=? ORDER BY 2",
+                (row["id"], row["id"]))
             return [r[0] or "" for r in cur]
         except Exception:
             return []
@@ -717,10 +815,16 @@ class PdfIndex:
     def is_empty(self) -> bool:
         """색인에 글이 하나도 없는가. 261016-8(응답성 SOT §4, 설치 시험 T1 6.86초 정지): `count(*)` 는 FTS 색인 **전체를** 읽는다 —
         파일 2천여 개 색인을 설치 직후(디스크·백신 캐시가 차가울 때) 메인 스레드에서 세다 창이 6.9초 섰다. 비었는지는 한 행으로 안다."""
-        return self.conn.execute("SELECT 1 FROM pages_fts LIMIT 1").fetchone() is None
+        return (self.conn.execute("SELECT 1 FROM pages2 LIMIT 1").fetchone() is None
+                and self.conn.execute("SELECT 1 FROM pages_fts LIMIT 1").fetchone() is None)
 
     def close(self):
         try:
             self.conn.close()
+        except Exception:
+            pass
+        try:
+            if getattr(self, "_study_conn", None) is not None:
+                self._study_conn.close()
         except Exception:
             pass

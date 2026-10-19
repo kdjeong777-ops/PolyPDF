@@ -32,13 +32,82 @@ class RenderedPage:
     is_rgba: bool = False     # True 면 4채널, False 면 3채널
 
 
-def page_hits(page, query: str, mode=None) -> list:
+def _flat_char_rects(chars, qf: str) -> list:
+    """[(글자, (x0,y0,x1,y1))] 에서 빈칸을 뺀 글자열로 `qf` 를 찾아 줄마다 묶은 사각형."""
+    s = "".join(c for c, _b in chars).lower()
+    out = []
+    start = s.find(qf)
+    while start >= 0 and qf:
+        boxes = [b for _c, b in chars[start:start + len(qf)]]
+        cur = None
+        for b in boxes:
+            if cur is not None and abs((b[1] + b[3]) / 2 - (cur[1] + cur[3]) / 2) <= max(2.0, (cur[3] - cur[1]) * 0.6):
+                cur = [min(cur[0], b[0]), min(cur[1], b[1]), max(cur[2], b[2]), max(cur[3], b[3])]
+            else:
+                if cur is not None:
+                    out.append(fitz.Rect(*cur))
+                cur = list(b)
+        if cur is not None:
+            out.append(fitz.Rect(*cur))
+        start = s.find(qf, start + len(qf))
+    return out
+
+
+def flat_hits(page, query: str, ocr=None, flat_txt=None) -> list:
+    """261019-4(검색창 SOT §8): 빈칸·줄바꿈을 무시하고 맞은 자리 — 색인 비교(`indexer.flat_text`)와 같은 뜻.
+    `search_for` 가 못 찾을 때만 부른다(질의와 본문의 띄어쓰기가 다를 때 · 스캔 쪽). 값싼 미리 거르기(쪽 글에 있나)를 먼저 한다.
+    `ocr()` → (낱말[픽셀@dpi], dpi): 글자층이 없는 쪽은 저장된 우리 OCR 낱말로 자리를 찾는다."""
+    import re as _re
+    qf = _re.sub(r"\s+", "", query or "").lower()
+    if not qf:
+        return []
+    if flat_txt is None:                          # 문서 전체 검색은 쪽 글을 기억해 둔 것을 준다(PdfDoc._flat_page)
+        try:
+            flat_txt = _re.sub(r"\s+", "", page.get_text("text") or "").lower()
+        except Exception:
+            flat_txt = ""
+    if qf in flat_txt:
+        chars = []
+        try:
+            for b in page.get_text("rawdict").get("blocks", []):
+                for ln in b.get("lines", []):
+                    for sp in ln.get("spans", []):
+                        for ch in sp.get("chars", []):
+                            c = ch.get("c", "")
+                            if c and not c.isspace():
+                                chars.append((c.lower() if len(c.lower()) == 1 else c, tuple(ch["bbox"])))
+        except Exception:
+            chars = []
+        return _flat_char_rects(chars, qf)
+    if ocr is not None:
+        try:
+            words, dpi = ocr()
+        except Exception:
+            words, dpi = [], 0
+        if words:
+            k = 72.0 / float(dpi) if dpi else 1.0
+            chars = []
+            for w in sorted(words, key=lambda w: (round(float(w["y0"]) / max(1.0, float(w["y1"]) - float(w["y0"]))), float(w["x0"]))):
+                sfc = _re.sub(r"\s+", "", str(w.get("surface", "")))
+                if not sfc:
+                    continue
+                x0, y0, x1, y1 = (float(w["x0"]) * k, float(w["y0"]) * k, float(w["x1"]) * k, float(w["y1"]) * k)
+                step = (x1 - x0) / len(sfc)
+                for j, c in enumerate(sfc):          # 낱말 상자를 글자 수로 고르게 나눈다(대략의 자리)
+                    chars.append((c.lower() if len(c.lower()) == 1 else c, (x0 + j * step, y0, x0 + (j + 1) * step, y1)))
+            return _flat_char_rects(chars, qf)
+    return []
+
+
+def page_hits(page, query: str, mode=None, ocr=None, flat_txt=None) -> list:
     """쪽 하나에서 질의가 맞은 사각형 — 검색 강조의 한 길(검색창 SOT §4.1, 261014-18).
-    `mode` 가 없거나 둘 다 꺼짐 → `search_for`(종전), 아니면 `search_match.match_rects`. 틀린 정규식이면 빈 목록."""
+    `mode` 가 없거나 둘 다 꺼짐 → `search_for`(종전) — 못 찾으면 빈칸 무시(`flat_hits`, 261019-4), 아니면 `search_match.match_rects`.
+    틀린 정규식이면 빈 목록."""
     if not query:
         return []
     if not mode or not any(mode):
-        return list(page.search_for(query))
+        hits = list(page.search_for(query))
+        return hits or flat_hits(page, query, ocr, flat_txt)
     from viewer.search_match import Matcher, match_rects
     try:
         m = Matcher(query, case=mode[0], regex=mode[1])
@@ -166,10 +235,22 @@ class PdfDocument:
         hits: list = []
         for i in range(self.doc.page_count):
             page = self.doc.load_page(i)
-            rects = page_hits(page, query, mode)
+            rects = page_hits(page, query, mode, flat_txt=self._flat_page(i, page))
             if rects:
                 hits.append(SearchHit(page_index=i, rects=list(rects)))
         return hits
+
+    def _flat_page(self, i: int, page=None) -> str:
+        """261019-4: 쪽 글의 빈칸 없는 소문자 꼴 — 문서를 연 동안 기억한다(빈칸 무시 검색의 값싼 미리 거르기)."""
+        cache = self.__dict__.setdefault("_flat_cache", {})
+        if i not in cache:
+            import re as _re
+            try:
+                pg = page if page is not None else self.doc.load_page(i)
+                cache[i] = _re.sub(r"\s+", "", pg.get_text("text") or "").lower()
+            except Exception:
+                cache[i] = ""
+        return cache[i]
 
     def search_page(self, page_index: int, query: str, mode=None) -> list:
         if not query:

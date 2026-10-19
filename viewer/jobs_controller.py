@@ -188,6 +188,18 @@ class JobsMixin:
         except Exception:
             pass
 
+    def study_pending_for(self, path) -> bool:
+        """그 파일에 저장 안 한 OCR·단어장이 있나 — 배경에서 세어 둔 목록으로(메인에서 DB 를 열지 않는다)."""
+        from viewer.study.study_store import file_key_for
+        try:
+            return file_key_for(str(path)) in self._pending_cache_get()
+        except Exception:
+            return False
+
+    def study_discard_for(self, path) -> None:
+        from viewer.study.study_store import file_key_for
+        self._pending_apply([file_key_for(str(path))], False, quiet=True)
+
     def study_commit_for(self, path) -> bool:
         """그 파일의 보류 OCR·단어장을 확정한다(책갈피창 [저장]·PDF 에 반영·OCR 글자층이 부른다).
         배경에서 옮긴다. 보류가 있었으면 True — 목록을 아직 세지 못했으면 일단 옮겨 보고 결과로 답한다."""
@@ -196,12 +208,13 @@ class JobsMixin:
         ok = self._pending_apply([k], True, quiet=True)
         return bool(ok.get(k))
 
-    def _pending_apply(self, keys, commit: bool, quiet: bool = False) -> dict:
+    def _pending_apply(self, keys, commit: bool, quiet: bool = False, index_now: bool = True) -> dict:
         """확정(commit) 또는 버림 — 배경. {key: 옮긴 것이 있었나}."""
         done = {}
+        reindex = []
 
         def _fn():
-            from viewer.study.study_store import StudyStore
+            from viewer.study.study_store import StudyStore, path_for_key
             st = StudyStore()
             try:
                 have = set(st.pending_keys())
@@ -210,10 +223,24 @@ class JobsMixin:
                     if k in have:
                         if commit:
                             st.commit_pending(k)
+                            if path_for_key(k):
+                                reindex.append(path_for_key(k))
                         else:
                             st.discard_pending(k)
             finally:
                 st.close()
+            # 261019-4(검색창 SOT §3.2): 저장한 OCR 은 스캔 쪽 검색 원천이다 — 그 파일을 다시 색인하게 표시
+            if reindex and getattr(self, "_db_path", None):
+                try:
+                    from viewer.indexer import PdfIndex
+                    ix = PdfIndex(self._db_path)
+                    try:
+                        for pth in reindex:
+                            ix.invalidate(pth)
+                    finally:
+                        ix.close()
+                except Exception:
+                    pass
         e = self._file_op_bg(_fn, tr("OCR·단어장 결과 저장 중…") if commit else tr("OCR·단어장 결과 버리는 중…"))
         if e is not None and not quiet:
             QMessageBox.warning(self, tr("저장"), str(e))
@@ -221,6 +248,11 @@ class JobsMixin:
         for k in keys:
             cache.pop(k, None)
         self._on_pending_scanned(cache)
+        for pth in (reindex if index_now else []):     # 배경 색인(그 파일만) — 종료 때는 표시만(다음 실행이 다시 읽는다)
+            try:
+                self._index_single_file(pth)
+            except Exception:
+                pass
         if any(done.values()):
             try:
                 self._refresh_study_panel(self.main_view.current_page())
@@ -269,11 +301,11 @@ class JobsMixin:
 
     def _confirm_close_pending(self) -> bool:
         """종료 전 — 보류 결과가 있으면 저장/저장 안 함/취소. True=종료 진행.
-        목록은 배경에서 센 것을 쓰되, 아직 한 번도 세지 못했으면 지금 배경에서 센다(놓치면 말없이 버려진다)."""
-        if getattr(self, "_pending_cache", None) is None:
-            got = {}
-            self._file_op_bg(lambda: got.update(_pending_scan_now()), tr("저장 안 한 OCR 확인 중…"))
-            self._pending_cache = got
+        목록은 그 자리에서 배경으로 다시 센다(놓치면 말없이 버려진다)."""
+        # 261019-4(점검): 종료 때는 **늘 다시 센다** — 미리 센 목록은 방금 끝난 OCR·도는 작업의 결과를 빠뜨릴 수 있다
+        got = {}
+        self._file_op_bg(lambda: got.update(_pending_scan_now()), tr("저장 안 한 OCR 확인 중…"))
+        self._pending_cache = got
         cache = self._pending_cache_get()
         if not cache:
             return True
@@ -290,7 +322,7 @@ class JobsMixin:
         c = box.clickedButton()
         if c is b_cancel or c is None:
             return False
-        self._pending_apply(list(cache), c is b_save)
+        self._pending_apply(list(cache), c is b_save, index_now=False)
         return True
 
 

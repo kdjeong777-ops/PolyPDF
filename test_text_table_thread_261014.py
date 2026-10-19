@@ -83,7 +83,7 @@ try:
     n = ix.conn.execute("SELECT count(*) FROM page_tables").fetchone()[0]
     uv = ix.conn.execute("PRAGMA user_version").fetchone()[0]
     ix.close()
-    chk(n == 0 and uv == 4, "B 스키마 3 → 4 에서 표 캐시를 한 번 비운다", f"rows={n} uv={uv}")
+    chk(n == 0 and uv == PdfIndex.SCHEMA_VERSION, "B 스키마 3 → 4 에서 표 캐시를 한 번 비운다", f"rows={n} uv={uv}")
     ix = PdfIndex(db)
     ix.tables_set(str(src), 0, 1, 1.0, [[[0, 0, 1, 1], [["y"]]]])
     ix.close()

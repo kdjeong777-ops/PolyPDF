@@ -2968,7 +2968,7 @@ class MainView(QWidget):
 
         # 하이라이트: PDF pt → 논리 px (= zoom 배). 회전 시 좌표 불일치 → 생략.
         if self._query and not rot:
-            rects = page_hits(page_obj, self._query, self._search_mode)
+            rects = page_hits(page_obj, self._query, self._search_mode, ocr=self._ocr_for(self._current_page))
             current_local = self._page_local_match_index()
             for i, r in enumerate(rects):
                 r = self._disp_search_rect(page_obj, r)   # 260611-99: /Rotate 보정
@@ -3141,7 +3141,7 @@ class MainView(QWidget):
         # 하이라이트 (현재 페이지 = 좌측)
         if self._query:
             for pg, off_pt_x in [(page_left, 0.0)]:
-                rects = page_hits(pg, self._query, self._search_mode)
+                rects = page_hits(pg, self._query, self._search_mode, ocr=self._ocr_for(self._current_page))
                 for r in rects:
                     r = self._disp_search_rect(pg, r)        # 260611-99: /Rotate 보정
                     rect = QRectF((r.x0 + off_pt_x) * zoom, r.y0 * zoom,
@@ -3152,7 +3152,7 @@ class MainView(QWidget):
                     self.scene.addItem(item)
             if page_right:
                 off_x = pdf_w_l + gap_pt
-                rects = page_hits(page_right, self._query, self._search_mode)
+                rects = page_hits(page_right, self._query, self._search_mode, ocr=self._ocr_for(self._current_page + 1))
                 for r in rects:
                     r = self._disp_search_rect(page_right, r)  # 260611-99: /Rotate 보정
                     rect = QRectF((r.x0 + off_x) * zoom, r.y0 * zoom,
@@ -3646,6 +3646,15 @@ class MainView(QWidget):
     def _hl_default_h(self):
         """260611-1: 줄 탐지 실패 시 폴백 띠 높이(정규화) — 페이지 높이의 소량."""
         return 0.018
+
+    def _ocr_for(self, page_index: int):
+        """261019-4(검색창 SOT §8): 검색 강조가 글자층 없는 쪽에서 쓸 **저장된 우리 OCR 낱말** — 늦게 부르는 함수로 준다
+        (글자층에서 찾으면 부르지 않는다)."""
+        fn = getattr(self, "_ocr_words_provider", None)
+        path = self.current_file()
+        if fn is None or not path:
+            return None
+        return lambda: fn(path, int(page_index))
 
     def set_ocr_words_provider(self, fn):
         """앱이 `(경로, 쪽) -> (낱말목록, dpi)` 를 넣어 준다 (입력 SOT §2.8)."""
@@ -6093,7 +6102,7 @@ class MainView(QWidget):
             return
         try:
             page_obj = self._page_for(self._current_page)
-            rects = page_hits(page_obj, self._query, self._search_mode)
+            rects = page_hits(page_obj, self._query, self._search_mode, ocr=self._ocr_for(self._current_page))
             if not rects or li >= len(rects):
                 return
             r = self._disp_search_rect(page_obj, rects[li])   # /Rotate 보정

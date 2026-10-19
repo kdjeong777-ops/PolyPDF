@@ -57,7 +57,8 @@ def counts(db):
     c = sqlite3.connect(db)
     try:
         return (c.execute("select count(*) from files where page_count>=0").fetchone()[0],
-                c.execute("select count(*) from pages_fts").fetchone()[0])
+                c.execute("select count(*) from pages_fts").fetchone()[0]
+                + c.execute("select count(*) from pages2").fetchone()[0])   # 261019-4: 새 표
     finally:
         c.close()
 
@@ -101,7 +102,7 @@ try:
     chk(counts(db1) == counts(db2) and counts(db1)[1] > 0, "A 결과(파일·쪽)는 이 프로세스에서 한 것과 같다",
         "%r vs %r" % (counts(db1), counts(db2)))
     c = sqlite3.connect(db1)
-    hit = c.execute("select count(*) from pages_fts where text like ?", ("%고친낱말XYZ%",)).fetchone()[0]; c.close()
+    hit = c.execute("select count(*) from pages2 where flat like ?", ("%고친낱말XYZ%",)).fetchone()[0]; c.close()   # 261019-4: 새 표(UNINDEXED text 의 LIKE 는 FTS5 가 0 을 준다 — 앱처럼 flat 으로)
     chk(hit >= 1, "B 텍스트 창에서 고친 글이 자식의 색인에도 들어간다", "orig=%r" % orig)
 
     # ── C: 취소 ──

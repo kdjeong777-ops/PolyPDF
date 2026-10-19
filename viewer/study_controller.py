@@ -62,6 +62,40 @@ class StudyMixin:
         return self._dict_store
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
+    def _action_user_terms(self, checked: bool = False):
+        """261019-5(단어장 SOT §4.1): 사용자 뜻만 불러 고치기·지우기·더하기."""
+        from viewer.widgets.user_terms_dialog import UserTermsDialog
+        dic = self._study_get_dict()
+
+        def _edit(entry: dict):
+            from viewer.widgets.study_edit_dialog import StudyEditDialog
+            from viewer.study.dict_store import USER_SOURCE_ID
+            eid = entry.get("entry_id")
+            dlg = StudyEditDialog(entry, related_provider=self._dict_related, online_provider=None,
+                                  allow_delete=(eid is not None),
+                                  title=("사용자 뜻 — " + (entry.get("term_ko") or entry.get("term_en") or ""))
+                                  if eid else "사용자 뜻 추가", parent=self)
+            if not dlg.exec():
+                return None
+            if dlg.is_deleted() and eid is not None:
+                dic.delete_entry(int(eid))
+                res = "deleted"
+            else:
+                v = dlg.values()
+                if eid is not None:
+                    dic.update_entry(int(eid), **v)
+                else:
+                    dic.add_entry(source_id=USER_SOURCE_ID, **v)
+                res = "saved"
+            self._spot_terms_cache = None
+            try:
+                self._refresh_study_panel(self.main_view.current_page())
+            except Exception:
+                pass
+            return res
+        UserTermsDialog(dic, _edit, parent=self).exec()
+
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_dict_manager(self, checked: bool = False):
         """260621-70: 단어장 관리(출처 on/off·우선순위·폴더)."""
         from viewer.widgets.dict_manager_dialog import DictManagerDialog
@@ -1379,6 +1413,9 @@ class StudyMixin:
             with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
                 if dbp.exists():
                     z.write(str(dbp), "dict.db")
+                udb = dbp.parent / "user_dict.db"          # 261019-5: 사용자 뜻은 따로 — 함께 담는다
+                if udb.exists():
+                    z.write(str(udb), "user_dict.db")
                 for f in imgs.glob("*"):
                     if f.is_file():
                         z.write(str(f), f"dict_images/{f.name}")
@@ -1415,10 +1452,18 @@ class StudyMixin:
             imgs = dict_images_dir()
             if dbp.exists():
                 shutil.copyfile(str(dbp), str(dbp) + ".bak")
+            udb = dbp.parent / "user_dict.db"
             with zipfile.ZipFile(fn, "r") as z:
                 names = z.namelist()
                 if "dict.db" in names:
                     with z.open("dict.db") as src, open(dbp, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                # 261019-5: 사용자 뜻 파일이 든 백업이면 그것으로(기존은 .bak). 옛 백업(dict.db 안의 사용자 항목)은
+                #   다음에 열 때 지금 사용자 뜻에 **겹치지 않게 더해진다**(DictStore._attach_user)
+                if "user_dict.db" in names:
+                    if udb.exists():
+                        shutil.copyfile(str(udb), str(udb) + ".bak")
+                    with z.open("user_dict.db") as src, open(udb, "wb") as dst:
                         shutil.copyfileobj(src, dst)
                 for nm in names:
                     if nm.startswith("dict_images/") and not nm.endswith("/"):
@@ -1531,6 +1576,12 @@ class StudyMixin:
             QMessageBox.information(self, "단어장", "먼저 PDF 를 여세요.")
             return
         path = Path(self._study_pdf)
+        # 261019-3(마스터 §4.7.21): 책갈피는 우클릭한(없으면 활성 창의) 책갈피창에
+        bm_tree = getattr(self, "_study_bm_tree", None) or self._bm_tree_for_pane()
+        self._study_bm_tree = None
+        # 261019-2(마스터 §4.7.0): 책갈피까지 만들면 편집 모드에서만 — 아니면 켤지 묻는다
+        if also_bookmarks and not bm_tree.ensure_edit_mode(tr("단어장·책갈피 동시 생성")):
+            return
         lang = self._detect_study_lang(path)
         what = "단어장·책갈피 동시 생성" if also_bookmarks else "단어장 생성"
         extra = ("\n(OCR 1회로 단어장과 책갈피를 함께 만듭니다 — 따로 만드는 것보다 빠릅니다.)"
@@ -1614,7 +1665,7 @@ class StudyMixin:
             v = (summary.get("vocab") or {}).get("vocab", 0)
             nb = 0
             if also_bookmarks:
-                nb = self._build_bookmarks_from_study(path)   # 재OCR 없이 책갈피
+                nb = self._build_bookmarks_from_study(path, bt=bm_tree)   # 재OCR 없이 책갈피(261019-3: 그 책갈피창에)
             self.search_tabs.setCurrentWidget(self.study_panel)
             self._refresh_study_panel(self.main_view.current_page())
             tail = f", 책갈피 {nb}개" if also_bookmarks else ""
@@ -1629,7 +1680,7 @@ class StudyMixin:
         worker.error.connect(lambda _e: self.job_done(jid))
         run_in_thread(worker, self._study_threads)
 
-    def _build_bookmarks_from_study(self, path) -> int:
+    def _build_bookmarks_from_study(self, path, bt=None) -> int:
         """260606-11(시간단축): 방금 만든 study.db 의 OCR 단어좌표를 재사용해
         책갈피(헤딩)를 추출 → 책갈피 트리에 추가(재OCR 없음). 추가 개수 반환."""
         try:
@@ -1645,7 +1696,7 @@ class StudyMixin:
                 doc.close()
             bms = extract_headings_from_store(store, fk, total, use_font_auto=False)
             for b in bms:
-                self.bookmark_tree.add_bookmark(str(path), b.page, b.title)
+                (bt or self.bookmark_tree).add_bookmark(str(path), b.page, b.title)
             if bms:
                 self.status.showMessage(
                     f"책갈피 {len(bms)}개 추가됨 — 책갈피창 편집(✏)에서 저장(💾)하면 PDF에 반영", 7000)

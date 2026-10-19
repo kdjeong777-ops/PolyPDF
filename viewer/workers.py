@@ -1287,6 +1287,17 @@ class AutoTagWorker(QObject):
             con = _db.connect(p, _db.BUSY_MS_BG, row_factory=False, readonly=True)
             try:
                 m = {}
+                # 261019-5: 사용자 뜻(user_dict.db)이 먼저 — 같은 영문 표제어면 사용자 대역이 이긴다
+                up = p.parent / "user_dict.db"
+                if up.exists():
+                    ucon = _db.connect(up, _db.BUSY_MS_BG, row_factory=False, readonly=True)
+                    try:
+                        for ne, tk in ucon.execute(
+                                "SELECT norm_en, term_ko FROM dict_entry "
+                                "WHERE enabled=1 AND norm_en<>'' AND term_ko<>''"):
+                            m.setdefault(ne.lower(), tk)
+                    finally:
+                        ucon.close()
                 for ne, tk in con.execute(
                         "SELECT norm_en, term_ko FROM dict_entry "
                         "WHERE enabled=1 AND norm_en<>'' AND term_ko<>''"):

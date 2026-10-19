@@ -81,6 +81,8 @@
 <ul>
   <li>Type in the search bar at the top right and press Enter. Matches are highlighted in the text.
     Next to the search box, <b>Aa</b> = match case and <b>.*</b> = regular expression (e.g. <code>\d{4}-\d{2}</code>) — the result list, highlights and F3 all follow the same rule.</li>
+  <li>Search <b>ignores spaces and line breaks</b> — it finds words split at the end of a line or typed with different spacing.
+    For scanned PDFs, it searches the OCR text once you <b>save</b> it (that file is indexed again after saving).</li>
   <li>Sort results: <b>Bookmarks</b> / <b>Name</b> / <b>Matches</b>.</li>
   <li><b>F3 / Shift+F3</b> or the search bar's <b>▶ / ◀</b>: next / previous match.
     After the last match in a file, it jumps to the first match of the next file in the results.</li>
@@ -144,7 +146,9 @@
   <li>Turning <b>Edit</b> (pencil icon) on shows <b>Cancel</b> (undo every change since the last save) · <b>Save</b> and two rows of edit buttons.
     While editing, clicking a bookmark <b>moves the main viewer there</b>, and <b>double-clicking</b>
     opens the edit window. <b>Right-click</b> an item → Rename File/Bookmark / Delete File/Bookmark / Edit Bookmark... /
-    Sort Selected Bookmarks by Page.</li>
+    Sort Selected Bookmarks by Page.
+    Changing bookmarks (rename, delete, add, build automatically) works <b>only in edit mode</b> — in view mode you are asked whether to turn edit mode on (renaming or deleting files works any time).
+    In split view, new bookmarks go into <b>that bookmark panel</b>; if both panels show the same file, <b>both</b> change.</li>
   <li><b>◀ / ▶</b>: outdent / indent. <b>▲ / ▼</b>: move up / down. You can also drag with the mouse.</li>
   <li><b>🗑️ Delete</b> (bookmark = remove from tree · file = Recycle Bin), <b>Shift + 🗑️ Delete</b> (keep only the selected bookmarks and delete the file's others, after confirming),
     <b>📋 Copy</b> (copy the selected files to another folder), <b>💾 Save</b> (&lt;original&gt;_edited.pdf).

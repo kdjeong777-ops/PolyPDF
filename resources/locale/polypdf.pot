@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-19 21:08+0900\n"
+"POT-Creation-Date: 2026-10-19 22:11+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1068,16 +1068,16 @@ msgstr ""
 msgid "이미 목록에 있는 파일입니다."
 msgstr ""
 
-#: viewer/app.py
-msgid "입력 PDF를 지정하세요."
-msgstr ""
-
 #: viewer/app.py viewer/widgets/bookmarker_dialog.py
 msgid "책갈피 자동 생성"
 msgstr ""
 
 #: viewer/app.py
 msgid "책갈피를 만드는 중입니다. 끝나거나 중지한 뒤 다시 시도하세요."
+msgstr ""
+
+#: viewer/app.py
+msgid "입력 PDF를 지정하세요."
 msgstr ""
 
 #: viewer/app.py
@@ -1170,6 +1170,10 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "{head}{v}쪽"
+msgstr ""
+
+#: viewer/app.py
+msgid "책갈피 만들기"
 msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py viewer/sign_controller.py
@@ -1606,6 +1610,10 @@ msgid "단어장 관리 (출처·우선순위·폴더)..."
 msgstr ""
 
 #: viewer/app.py
+msgid "사용자 뜻 편집..."
+msgstr ""
+
+#: viewer/app.py
 msgid "용어집 가져오기 (PDF·CSV)..."
 msgstr ""
 
@@ -1751,11 +1759,6 @@ msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py
 msgid "알 수 없는 오류"
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
-msgid "책갈피 추가됨: {title}  (p.{page}) — 저장(💾)을 눌러야 PDF 에 반영됩니다."
 msgstr ""
 
 #: viewer/app.py
@@ -2296,13 +2299,6 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "실패: {msg}"
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
-msgid ""
-"대상 PDF 가 메인 뷰어에 열려있어야 현재 페이지를 알 수 있습니다.\n"
-"먼저 트리에서 '{name}' 를 열어 주세요."
 msgstr ""
 
 #: viewer/app.py
@@ -3267,6 +3263,10 @@ msgid "버리기"
 msgstr ""
 
 #: viewer/jobs_controller.py
+msgid "저장 안 한 OCR 확인 중…"
+msgstr ""
+
+#: viewer/jobs_controller.py
 msgid "눌러서 진행 중인 작업 보기·중지"
 msgstr ""
 
@@ -3280,10 +3280,6 @@ msgstr ""
 
 #: viewer/jobs_controller.py
 msgid "OCR·단어장 결과를 저장했습니다."
-msgstr ""
-
-#: viewer/jobs_controller.py
-msgid "저장 안 한 OCR 확인 중…"
 msgstr ""
 
 #: viewer/jobs_controller.py
@@ -4405,6 +4401,10 @@ msgstr ""
 msgid "mp3 저장 실패"
 msgstr ""
 
+#: viewer/study_controller.py viewer/widgets/bookmark_tree.py
+msgid "단어장·책갈피 동시 생성"
+msgstr ""
+
 #: viewer/study_controller.py
 #, python-brace-format
 msgid "{i}단계 책갈피 기준"
@@ -4951,6 +4951,10 @@ msgid "암호 입력"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "책갈피는 편집 모드에서만 바꿀 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "책갈피 모두 펼치기"
 msgstr ""
 
@@ -5113,6 +5117,14 @@ msgid "암호가 올바르지 않습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "편집 모드"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "책갈피 이름 변경"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "대상 PDF 파일을 알 수 없습니다."
 msgstr ""
 
@@ -5161,11 +5173,15 @@ msgid "현재 파일을 즐겨찾기에 추가"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "편집 종료"
+msgid "수정한 내용(저장하지 않은 OCR·단어장 포함)이 있습니다. 저장할까요?"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "수정한 내용이 있습니다. 저장할까요?"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "편집 종료"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -5238,10 +5254,6 @@ msgid "변경 실패"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "책갈피를 추가할 PDF 파일을 트리에서 선택하거나 펼치세요."
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "{n}개 PDF"
 msgstr ""
@@ -5272,6 +5284,15 @@ msgid ""
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "'{what}' 은(는) 편집 모드에서만 할 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "편집 모드를 켜고 계속할까요?"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "두 파일 비교..."
 msgstr ""
 
@@ -5281,10 +5302,6 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-msgid "단어장·책갈피 동시 생성"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -5298,6 +5315,10 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "페이지순 정렬: {n}개"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py viewer/widgets/toc_review_dialog.py
+msgid "책갈피 삭제"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -9924,10 +9945,6 @@ msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "목차 쪽이 중간에 줄어들지 않도록 — 자릿수가 빠진 쪽은 고치고(20→120), 순서 밖 행은 제자리로 옮깁니다(표·그림 목록은 따로). 바뀐 행은 목차 쪽 셀이 파란색"
-msgstr ""
-
-#: viewer/widgets/toc_review_dialog.py
-msgid "책갈피 삭제"
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py

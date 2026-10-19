@@ -68,7 +68,7 @@ MENU = ["OCR 로 읽기 (쪽 범위·언어·워터마크)...",
 chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다(§2.9.1 예외 — 변환은 파일 메뉴, 동시 생성은 책갈피 아래)", str(head))
 subs = {a.text(): [x.text() for x in a.menu().actions()] for a in menu.actions() if a.menu()}
 chk(subs.get("전자서명", [])[:1] == ["서명..."] and len(subs.get("전자서명", [])) == 7
-    and subs.get("태그 자동 부여", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 및 용어집 관리", [])) == 9,
+    and subs.get("태그 자동 부여", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 및 용어집 관리", [])) == 10,   # 261019-5: '사용자 뜻 편집' 더함
     "② 전자서명·태그 자동 부여·사전 및 용어집 관리는 하위 메뉴(▸)", str(subs))
 sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
 chk(sec_titles == ["🧰 도구", "⚙️ 프로그램 환경설정", "💻 시스템 연동 및 설치"], "② 구역은 셋(검색 및 데이터 구축·그 밖의·전자서명 구역 없음)", str(sec_titles))

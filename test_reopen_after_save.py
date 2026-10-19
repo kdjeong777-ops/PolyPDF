@@ -72,6 +72,7 @@ try:
     def counting_resolve(self, *a, **k):
         calls[0] += 1
         return real_resolve(self, *a, **k)
+    bt.set_sort_mode(bt.SORT_BOOK); spin(4)   # 261019-7: '원본 바로 아래' 는 책갈피 순 규칙(다른 정렬은 그 정렬 자리)
     n_before = len(list(bt._iter_file_nodes()))
     variant = str(doc_p).replace("\\", "/").upper()
     pathlib.Path.resolve = counting_resolve

@@ -61,7 +61,8 @@ class DictManagerDialog(QDialog):
 
         row2 = QHBoxLayout()
         for txt, fn in (("폴더 열기", self._open_folder), ("새로고침", self._refresh_folder),
-                        ("양식 CSV", self._write_sample), ("가져오기…", self._import)):
+                        ("양식 CSV", self._write_sample), ("가져오기…", self._import),
+                        ("사용자 뜻 편집…", self._user_terms)):          # 261019-5
             b = QPushButton(txt); b.clicked.connect(fn); row2.addWidget(b)
         row2.addStretch(1)
         self.btn_close = QPushButton("닫기")
@@ -186,6 +187,12 @@ class DictManagerDialog(QDialog):
     def _import(self):
         if self._host is not None and hasattr(self._host, "_action_import_glossary"):
             self._host._action_import_glossary()
+            self._reload()
+            self.changed.emit()
+
+    def _user_terms(self):
+        if self._host is not None and hasattr(self._host, "_action_user_terms"):
+            self._host._action_user_terms()
             self._reload()
             self.changed.emit()
 
