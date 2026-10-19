@@ -547,11 +547,20 @@ class PdfIndex:
             # 261019-4(검색창 SOT §3.2): 스캔 쪽은 **저장한 우리 OCR** 을 색인한다 — 텍스트 창과 같은 원천 규칙
             #   (쓸 만한 글자층 = 글자층, 스캔·스캐너 OCR 층만 있는 쪽 = 우리 OCR 이 있으면 그것)
             study, fkey = self._study_for(file_path)
+            # 저장한 OCR 이 있는 쪽만 스캔 판정을 한다 — 판정(`decide_source`)은 글 추출·그림 점유율·숨은 글자층을
+            #   다시 보는 무거운 일이라, 쪽마다 하면 첫 색인이 3~10배 느려졌다(빌드 시험 T5·T6 실측, 261019 점검)
+            ocr_pages = set()
+            if study is not None:
+                try:
+                    ocr_pages = {r[0] for r in study.execute(
+                        "SELECT page FROM ocr_page WHERE file_key=?", (fkey,))}
+                except Exception:
+                    ocr_pages = set()
             for i in range(doc.page_count):
                 try:
                     page = doc.load_page(i)
                     text = page.get_text("text")
-                    if study is not None:
+                    if i in ocr_pages:
                         text = self._scan_text(page, text, study, fkey, i)
                 except Exception:
                     text = ""

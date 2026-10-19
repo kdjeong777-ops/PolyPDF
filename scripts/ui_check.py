@@ -467,7 +467,18 @@ def run_one(lang: str, out_root: Path, only=None, theme: str = "light"):
         capture("hyperlink", _hyper)
         capture("line_text", lambda: via_exec(mw._open_line_text_settings))
         capture("ocr_options", lambda: via_exec(mw._on_text_need_ocr))
-        capture("bookmarker", lambda: via_exec(mw.action_open_bookmarker))
+        def _bookmarker():
+            # 261019-2(마스터 §4.7.0): 책갈피 자동 생성은 편집 모드에서만 — 켜고 찍은 뒤 끈다
+            bt = mw.bookmark_tree
+            bt.btn_edit.setChecked(True)
+            pump(0.3)
+            try:
+                return via_exec(mw.action_open_bookmarker)
+            finally:
+                bt._dirty = False
+                bt.btn_edit.setChecked(False)
+                pump(0.3)
+        capture("bookmarker", _bookmarker)
         capture("crop", lambda: via_exec(lambda: mw._open_crop_dialog()))     # 261010-7(마스터 §4.7.15)
 
         pump(0.5)

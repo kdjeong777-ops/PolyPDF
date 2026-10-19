@@ -59,6 +59,16 @@ r4 = ix.search("우리OCR")
 chk(len(r4) == 1 and Path(r4[0].file_path).name == "scan.pdf" and r4[0].page_index == 0,
     "B1 스캔 쪽은 저장한 우리 OCR 글로 찾는다", f"{[(r.file_name, r.page_index) for r in r4]}")
 chk(flat_text("a b\nc\td") == "abcd", "A5 flat_text 는 모든 빈칸을 뺀다")
+# B2. 저장한 OCR 이 없는 쪽은 스캔 판정을 하지 않는다 — 쪽마다 하면 첫 색인이 몇 배 느려졌다(빌드 시험 T5·T6)
+import viewer.study.ocr as _ocr
+_calls = []
+_real_ds = _ocr.decide_source
+_ocr.decide_source = lambda page: (_calls.append(page.number), _real_ds(page))[1]
+scan2 = root / "scan_noocr.pdf"; shutil.copy(scan_src, scan2)
+ix.index_file(scan2)
+ix.index_file(scan_pdf)
+_ocr.decide_source = _real_ds
+chk(_calls == [0], "B2 스캔 판정은 저장한 OCR 이 있는 쪽에만(그 밖의 쪽·파일은 건너뛴다)", f"{_calls[:10]} …{len(_calls)}")
 ix.close()
 
 # C. 옛 색인 — pages_fts 에만 있는 파일도 검색되고, 다시 색인 표시가 붙는다
