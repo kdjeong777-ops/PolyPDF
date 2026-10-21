@@ -10,15 +10,19 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 
-from viewer.twoup import merge_twoup_settings, PAGE_SIZES, DUPLEX_CHOICES, duplex_choice
+from viewer.twoup import (merge_twoup_settings, single_file_settings, PAGE_SIZES, DUPLEX_CHOICES,
+                          duplex_choice)
 from viewer.widgets.merge_preview import MergePreviewWidget
 from viewer.i18n import tr
 
 
 class TwoUpSettingsDialog(QDialog):
-    def __init__(self, settings=None, parent=None, preset_api=None, sample=None):
+    def __init__(self, settings=None, parent=None, preset_api=None, sample=None, single=False):
         super().__init__(parent)
-        self.setWindowTitle(tr("다단 생성 설정"))
+        # 261021-3(마스터 §11.10.2): `single=True` = 도구 '다단 생성'(파일 하나) — 여러 파일 항목(간지·문서마다 새 쪽·
+        #   홀수 시작)은 숨긴다. 숨긴 칸도 값은 지녀 이 창에서 스타일을 저장해도 병합용 설정이 지워지지 않는다.
+        self._single = bool(single)
+        self.setWindowTitle(tr("다단 생성") if self._single else tr("다단 생성 설정"))
         self.resize(1020, 740)
         self._preset_api = preset_api or {}
         self._sample = sample
@@ -27,7 +31,7 @@ class TwoUpSettingsDialog(QDialog):
 
         # ── 본문: 좌=미리보기(여백/간격/크롭) | 우=용지/배치·쪽번호·표지·목차 ──
         body = QHBoxLayout()
-        self.preview = MergePreviewWidget(s, sample)
+        self.preview = MergePreviewWidget(self._preview_view(s), sample)
         body.addWidget(self.preview, 2)
 
         cfg = QWidget(); cv = QVBoxLayout(cfg)
@@ -75,6 +79,7 @@ class TwoUpSettingsDialog(QDialog):
         self._set_combo(self.cmb_size, s.get("page_size", "A4"))
         gf.addRow(tr("용지 크기:"), self.cmb_size)
         self.cmb_nup = QComboBox()
+        self.cmb_nup.addItem(tr("1장 (1-up)"), 1)            # 261021-3(§11.10.2): 1단 — 쪽 하나를 용지 하나에
         self.cmb_nup.addItem(tr("2장 (2-up)"), 2)
         self.cmb_nup.addItem(tr("4장 (4-up, 2열×2행)"), 4)   # 260617-6
         self.cmb_nup.addItem(tr("6장 (6-up, 2열×3행)"), 6)
@@ -183,7 +188,8 @@ class TwoUpSettingsDialog(QDialog):
         # 목차
         grp_t = QGroupBox(tr("목차"))
         tf = QFormLayout(grp_t)
-        self.chk_toc = QCheckBox(tr("목차 만들기")); self.chk_toc.setChecked(bool(s.get("make_toc", True)))
+        self.chk_toc = QCheckBox(tr("목차 만들기 (책갈피 1단계)") if self._single else tr("목차 만들기"))
+        self.chk_toc.setChecked(bool(s.get("make_toc", True)))
         tf.addRow(self.chk_toc)
         self.ed_toc_tpl = QLineEdit(s.get("toc_template", ""))
         self.ed_toc_tpl.setPlaceholderText(tr("비우면 기본 양식"))
@@ -206,11 +212,16 @@ class TwoUpSettingsDialog(QDialog):
         self.bt_div_bg = self._color_btn(s.get("divider_bg", "#eef2f7"))
         df.addRow(tr("간지 배경색:"), self.bt_div_bg)
         cv.addWidget(grp_d)
+        self.grp_divider = grp_d
 
         # Word 양식 샘플 다운로드
-        b_sample = QPushButton(tr("표지·목차·간지 Word 양식 샘플 저장…"))
+        b_sample = QPushButton(tr("표지·목차 Word 양식 샘플 저장…") if self._single
+                               else tr("표지·목차·간지 Word 양식 샘플 저장…"))
         b_sample.clicked.connect(self._save_samples)
         cv.addWidget(b_sample)
+        if self._single:                    # 261021-3: 여러 파일 병합 항목은 숨긴다(값은 그대로)
+            for w in (grp_d, self.chk_docbreak, self.chk_doc_odd):
+                w.setVisible(False)
 
         cv.addStretch(1)
         # 261008-10(사용자 보고): 폭을 400 으로 못박아 두면 내용이 그보다 넓을 때(글꼴·스타일 이름)
@@ -292,7 +303,11 @@ class TwoUpSettingsDialog(QDialog):
 
     def _update_doc_odd(self, *_):
         on = self.chk_docbreak.isChecked() and self.cmb_duplex.currentData() != "none"
-        self.chk_doc_odd.setVisible(on)
+        self.chk_doc_odd.setVisible(on and not self._single)
+
+    def _preview_view(self, s):
+        """미리보기에 넘길 설정 — 파일 하나 모드면 실제로 만들 값(`single_file_settings`)으로 그린다."""
+        return single_file_settings(s) if self._single else s
 
     def _save_samples(self, *_):
         from pathlib import Path as _P
@@ -357,7 +372,7 @@ class TwoUpSettingsDialog(QDialog):
         }
 
     def _sync_preview(self, *_):
-        self.preview.set_base(self._base_settings())
+        self.preview.set_base(self._preview_view(self._base_settings()))
 
     # ── 프리셋 ──
     def _reload_presets(self):

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-21 18:29+0900\n"
+"POT-Creation-Date: 2026-10-21 20:35+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -485,6 +485,10 @@ msgid "PDF 병합..."
 msgstr "Merge PDFs..."
 
 #: viewer/app.py
+msgid "다단 생성..."
+msgstr "Create N-up PDF..."
+
+#: viewer/app.py
 msgid "이미지 → PDF 변환..."
 msgstr "Convert Images → PDF..."
 
@@ -736,6 +740,14 @@ msgstr "Merge PDFs (N-up layout)"
 #: viewer/app.py viewer/widgets/merge_dialog.py
 msgid "PDF 병합"
 msgstr "Merge PDFs"
+
+#: viewer/app.py
+msgid "다단 PDF 저장"
+msgstr "Save N-up PDF"
+
+#: viewer/app.py viewer/widgets/twoup_dialog.py
+msgid "다단 생성"
+msgstr "Create N-up PDF"
 
 #: viewer/app.py viewer/widgets/settings_dialog.py
 msgid "준비 중…"
@@ -1331,6 +1343,10 @@ msgid "읽을 수 있는 사진이 없습니다."
 msgstr "There are no readable photos."
 
 #: viewer/app.py
+msgid "새 페이지 1쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요."
+msgstr "Added 1 new page (unsaved) — press 💾 'Save' to apply."
+
+#: viewer/app.py
 msgid "페이지 편집"
 msgstr "Page Edit"
 
@@ -1346,14 +1362,30 @@ msgstr "Merge canceled."
 msgid "병합 실패"
 msgstr "Merge failed"
 
+#: viewer/app.py viewer/edit_controller.py viewer/study_controller.py
+msgid "먼저 PDF를 표시하세요."
+msgstr "Display a PDF first."
+
+#: viewer/app.py
+msgid ""
+"저장하지 않은 편집이 있습니다.\n"
+"💾 '저장' 한 뒤에 다시 해 주세요."
+msgstr ""
+"There are unsaved edits.\n"
+"Press 💾 'Save' first, then try again."
+
+#: viewer/app.py
+msgid "다단 생성을 취소했습니다."
+msgstr "N-up PDF creation cancelled."
+
+#: viewer/app.py
+msgid "다단 생성 실패"
+msgstr "N-up PDF Creation Failed"
+
 #: viewer/app.py viewer/page_edit_build.py viewer/twoup.py
 #: viewer/widgets/bookmark_tree.py
 msgid "(제목 없음)"
 msgstr "(Untitled)"
-
-#: viewer/app.py viewer/edit_controller.py viewer/study_controller.py
-msgid "먼저 PDF를 표시하세요."
-msgstr "Display a PDF first."
 
 #: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "붙여넣기"
@@ -1880,6 +1912,10 @@ msgid "사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하
 msgstr "Added {n} photo pages (unsaved) — press 💾 'Save' to apply."
 
 #: viewer/app.py
+msgid "새 페이지를 만들지 못했습니다."
+msgstr "Could not create the new page."
+
+#: viewer/app.py
 #, python-brace-format
 msgid "페이지 편집 저장: {n}쪽 → {name}"
 msgstr "Page edits saved: {n} pages → {name}"
@@ -1892,6 +1928,11 @@ msgstr "Confirm Overwriting the Original"
 #, python-brace-format
 msgid "병합 완료 → {name}"
 msgstr "Merge complete → {name}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "다단 생성 완료 → {name}"
+msgstr "N-up PDF created → {name}"
 
 #: viewer/app.py
 msgid "용량 줄여 저장 중…(오래 걸릴 수 있음)"
@@ -2465,6 +2506,11 @@ msgstr "Could not insert the photos as pages: %s"
 #, python-brace-format
 msgid "사진을 쪽으로 만들지 못했습니다: {err}"
 msgstr "Could not make the photos into pages: {err}"
+
+#: viewer/app.py
+#, python-format
+msgid "새 페이지를 만들지 못했습니다: %s"
+msgstr "Could not create the new page: %s"
 
 #: viewer/app.py viewer/widgets/favorites_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
@@ -7818,6 +7864,22 @@ msgid "전체화면 보기 취소"
 msgstr "Cancel Full Screen"
 
 #: viewer/widgets/presentation.py
+msgid "🖥 다른 화면"
+msgstr "🖥 Other Screen"
+
+#: viewer/widgets/presentation.py
+msgid "🖥 본화면"
+msgstr "🖥 Main Screen"
+
+#: viewer/widgets/presentation.py
+msgid "발표 창을 다른 모니터로 옮기기 / 뷰어가 있는 모니터로 되돌리기"
+msgstr "Move the presentation to another monitor / back to the viewer's monitor"
+
+#: viewer/widgets/presentation.py
+msgid "모니터가 하나뿐입니다"
+msgstr "Only one monitor is connected"
+
+#: viewer/widgets/presentation.py
 msgid "중앙겹침"
 msgstr "Center Overlap"
 
@@ -10068,6 +10130,11 @@ msgstr "Waiting to paste: {name} p.{epg}"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
+msgid "새 페이지 넣기 — {w}{v}"
+msgstr "Insert New Page — {w}{v}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
 msgid "복사 ({n}쪽)"
 msgstr "Copy ({n} pages)"
 
@@ -10683,10 +10750,6 @@ msgid "저장 실패: {name__}: {e}"
 msgstr "Save failed: {name__}: {e}"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "다단 생성 설정"
-msgstr "N-up Settings"
-
-#: viewer/widgets/twoup_dialog.py
 msgid "저장…"
 msgstr "Save…"
 
@@ -10705,6 +10768,10 @@ msgstr "Paper / Layout"
 #: viewer/widgets/twoup_dialog.py
 msgid "용지 크기:"
 msgstr "Paper size:"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "1장 (1-up)"
+msgstr "1 page (1-up)"
 
 #: viewer/widgets/twoup_dialog.py
 msgid "2장 (2-up)"
@@ -10875,10 +10942,6 @@ msgid "표지 Word 양식:"
 msgstr "Cover Word template:"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "목차 만들기"
-msgstr "Create table of contents"
-
-#: viewer/widgets/twoup_dialog.py
 msgid "목차 Word 양식:"
 msgstr "TOC Word template:"
 
@@ -10899,10 +10962,6 @@ msgid "간지 배경색:"
 msgstr "Divider background color:"
 
 #: viewer/widgets/twoup_dialog.py
-msgid "표지·목차·간지 Word 양식 샘플 저장…"
-msgstr "Save Sample Cover/TOC/Divider Word Templates…"
-
-#: viewer/widgets/twoup_dialog.py
 msgid "Word 양식 선택"
 msgstr "Select Word Template"
 
@@ -10913,6 +10972,10 @@ msgstr "Select Folder for Sample Word Templates"
 #: viewer/widgets/twoup_dialog.py
 msgid "스타일 이름:"
 msgstr "Style name:"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "다단 생성 설정"
+msgstr "N-up Settings"
 
 #: viewer/widgets/twoup_dialog.py
 msgid "표시 안함"
@@ -10929,6 +10992,22 @@ msgstr "Bottom center"
 #: viewer/widgets/twoup_dialog.py
 msgid "우하단"
 msgstr "Bottom right"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "목차 만들기 (책갈피 1단계)"
+msgstr "Create table of contents (top-level bookmarks)"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "목차 만들기"
+msgstr "Create table of contents"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "표지·목차 Word 양식 샘플 저장…"
+msgstr "Save Sample Cover/TOC Word Templates…"
+
+#: viewer/widgets/twoup_dialog.py
+msgid "표지·목차·간지 Word 양식 샘플 저장…"
+msgstr "Save Sample Cover/TOC/Divider Word Templates…"
 
 #: viewer/widgets/twoup_dialog.py
 msgid "샘플 저장"

@@ -86,6 +86,7 @@ class PageThumbs(QWidget):
     convertPagesRequested = pyqtSignal(object, str)  # 261014-11(형식 변환 SOT §2.1): (고른 쪽 0-based, 형식 키)
     uncropPagesRequested = pyqtSignal(object)      # 261010-7(§4.7.15): 고른 쪽 크롭 해제
     addImagePagesRequested = pyqtSignal(int, object)  # 260930-1(§4.7.11): (기준행, [그림경로…]) 새 쪽으로
+    addBlankPageRequested = pyqtSignal(int)        # 261021-3(§4.7.11): '새 페이지 넣기' — 기준행 아래 흰 쪽
     imageDropRefused = pyqtSignal()                # 260930-1(§4.7.11): 편집모드가 아니라 받지 않았다
     pagesDropped = pyqtSignal(int, object)         # 261012-12(§4.7.18): (기준행, [(파일, 쪽)…]) 다른 파일 썸네일을 끌어 놓음
     # 260930-2(마스터 §4.7.12): 스테이징 쪽(붙여넣기·사진)은 **문서에 없는 쪽**이라 쪽 번호가 없다.
@@ -442,6 +443,27 @@ class PageThumbs(QWidget):
             return max(rows)
         cur = self.list.currentRow()
         return cur if cur >= 0 else self.list.count() - 1
+
+    def page_size_at_row(self, row: int):
+        """261021-3(§4.7.11 '새 페이지 넣기'): 그 썸네일 쪽의 **보이는 크기** `(폭, 높이)` pt. 못 구하면 None.
+        자체 쪽은 지금 문서의 쪽(저장 전 크롭·회전을 덧입힌 크기), 끼운 쪽은 그 원본 PDF 의 쪽."""
+        if self._doc is None or not (0 <= int(row) < self.list.count()):
+            return None
+        v = self.list.item(int(row)).data(Qt.ItemDataRole.UserRole)
+        try:
+            if isinstance(v, int):
+                r = self._doc.doc.load_page(int(v)).rect
+            elif isinstance(v, (tuple, list)) and len(v) >= 2:
+                d = self._ext_doc(str(v[0]))
+                if not d:
+                    return None
+                r = d.doc.load_page(int(v[1])).rect
+            else:
+                return None
+        except Exception:
+            return None
+        w, h = float(r.width), float(r.height)
+        return (w, h) if w > 0 and h > 0 else None
 
     def _drop_mark(self, pos) -> None:
         """끌어 오는 동안 놓일 자리(이 썸네일 **아래**)를 고른 것처럼 보이고, 가장자리면 저절로 스크롤한다. None 이면 지운다."""
@@ -871,7 +893,7 @@ class PageThumbs(QWidget):
         menu = QMenu(self)
         page = item.data(Qt.ItemDataRole.UserRole) if item else None
         # 261016-1(마스터 §4.7.7 '썸네일 우클릭 메뉴', 사용자 지시): 차례와 이름 —
-        #   ① 인쇄 · 복사 · 붙여넣기 · 스크린샷으로 복사 · 스크린샷 붙여넣기 · 클립보드 붙여넣기 · 삭제
+        #   ① 인쇄 · 복사 · 붙여넣기 · 스크린샷으로 복사 · 스크린샷 붙여넣기 · 클립보드 붙여넣기 · 새 페이지 넣기(261021-3) · 삭제
         #   ② 왼쪽·오른쪽 90° 회전  ③ 크롭 · 크롭 해제 · 숨김 · 숨김 해제(· 숨김 전체 해제)
         #   ④ 책갈피 추가 · 하이퍼링크 등록  ⑤ 선택한 쪽 변환 ▸ · 변경 적용
         #   붙여넣기 셋은 붙일 것이 없거나 편집모드가 아니면 **끈 채로** 보인다(안 보이면 없는 것이다 — §4.7.11).
@@ -891,7 +913,7 @@ class PageThumbs(QWidget):
         _r = self._img_ref_row(item)
         _w = tr("맨 뒤") if _r < 0 else tr('p.{r} 뒤').format(r=_r + 1)
         n_sel = len(sel_items)
-        act_print = act_shot = act_copy = act_paste = act_shot_paste = act_img = act_del = act_save = None
+        act_print = act_shot = act_copy = act_paste = act_shot_paste = act_img = act_blank = act_del = act_save = None
         # ① 쪽 — 인쇄·복사·스크린샷으로 복사는 편집모드 무관(260616-21·260821)
         if has_sel:
             act_print = menu.addAction(self._kt(tr('인쇄 ({n}쪽)…').format(n=n_sel) + _ns, "print"))
@@ -919,6 +941,9 @@ class PageThumbs(QWidget):
             act_img = menu.addAction(tr('클립보드 붙여넣기 — {w}{v}').format(w=_w, v=_v) if _has_img
                                      else tr("클립보드 붙여넣기"))
             act_img.setEnabled(bool(self._edit_mode and _has_img))
+            # 261021-3(§4.7.11, 사용자 지시): 기준 썸네일 쪽 크기의 흰 쪽을 그 아래에 — 클립보드 붙여넣기 바로 아래
+            act_blank = menu.addAction(tr('새 페이지 넣기 — {w}{v}').format(w=_w, v=_v))
+            act_blank.setEnabled(bool(self._edit_mode))
         if self._edit_mode:
             n = len(self.list.selectedItems())
             act_del = menu.addAction(self._kt(tr('삭제 ({n}쪽)').format(n=n) if n else tr("삭제"), "Del"))
@@ -1011,6 +1036,9 @@ class PageThumbs(QWidget):
                 _row, _p = self._img_ref_row(item), [png]
                 QTimer.singleShot(
                     0, lambda r=_row, p=_p: self.addImagePagesRequested.emit(r, p))
+            return
+        if chosen is not None and chosen == act_blank:        # 261021-3 — 메뉴가 닫힌 뒤에(위와 같은 까닭)
+            QTimer.singleShot(0, lambda r=self._img_ref_row(item): self.addBlankPageRequested.emit(r))
             return
         if chosen == act_del:
             self._delete_selected()

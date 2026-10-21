@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-21 18:29+0900\n"
+"POT-Creation-Date: 2026-10-21 20:35+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -485,6 +485,10 @@ msgid "PDF 병합..."
 msgstr ""
 
 #: viewer/app.py
+msgid "다단 생성..."
+msgstr ""
+
+#: viewer/app.py
 msgid "이미지 → PDF 변환..."
 msgstr ""
 
@@ -731,6 +735,14 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/merge_dialog.py
 msgid "PDF 병합"
+msgstr ""
+
+#: viewer/app.py
+msgid "다단 PDF 저장"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/twoup_dialog.py
+msgid "다단 생성"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/settings_dialog.py
@@ -1286,6 +1298,10 @@ msgid "읽을 수 있는 사진이 없습니다."
 msgstr ""
 
 #: viewer/app.py
+msgid "새 페이지 1쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요."
+msgstr ""
+
+#: viewer/app.py
 msgid "페이지 편집"
 msgstr ""
 
@@ -1301,13 +1317,27 @@ msgstr ""
 msgid "병합 실패"
 msgstr ""
 
+#: viewer/app.py viewer/edit_controller.py viewer/study_controller.py
+msgid "먼저 PDF를 표시하세요."
+msgstr ""
+
+#: viewer/app.py
+msgid ""
+"저장하지 않은 편집이 있습니다.\n"
+"💾 '저장' 한 뒤에 다시 해 주세요."
+msgstr ""
+
+#: viewer/app.py
+msgid "다단 생성을 취소했습니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "다단 생성 실패"
+msgstr ""
+
 #: viewer/app.py viewer/page_edit_build.py viewer/twoup.py
 #: viewer/widgets/bookmark_tree.py
 msgid "(제목 없음)"
-msgstr ""
-
-#: viewer/app.py viewer/edit_controller.py viewer/study_controller.py
-msgid "먼저 PDF를 표시하세요."
 msgstr ""
 
 #: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
@@ -1830,6 +1860,10 @@ msgid "사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하
 msgstr ""
 
 #: viewer/app.py
+msgid "새 페이지를 만들지 못했습니다."
+msgstr ""
+
+#: viewer/app.py
 #, python-brace-format
 msgid "페이지 편집 저장: {n}쪽 → {name}"
 msgstr ""
@@ -1841,6 +1875,11 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "병합 완료 → {name}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "다단 생성 완료 → {name}"
 msgstr ""
 
 #: viewer/app.py
@@ -2384,6 +2423,11 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "사진을 쪽으로 만들지 못했습니다: {err}"
+msgstr ""
+
+#: viewer/app.py
+#, python-format
+msgid "새 페이지를 만들지 못했습니다: %s"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/favorites_dialog.py
@@ -7555,6 +7599,22 @@ msgid "전체화면 보기 취소"
 msgstr ""
 
 #: viewer/widgets/presentation.py
+msgid "🖥 다른 화면"
+msgstr ""
+
+#: viewer/widgets/presentation.py
+msgid "🖥 본화면"
+msgstr ""
+
+#: viewer/widgets/presentation.py
+msgid "발표 창을 다른 모니터로 옮기기 / 뷰어가 있는 모니터로 되돌리기"
+msgstr ""
+
+#: viewer/widgets/presentation.py
+msgid "모니터가 하나뿐입니다"
+msgstr ""
+
+#: viewer/widgets/presentation.py
 msgid "중앙겹침"
 msgstr ""
 
@@ -9795,6 +9855,11 @@ msgstr ""
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
+msgid "새 페이지 넣기 — {w}{v}"
+msgstr ""
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
 msgid "복사 ({n}쪽)"
 msgstr ""
 
@@ -10402,10 +10467,6 @@ msgid "저장 실패: {name__}: {e}"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "다단 생성 설정"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
 msgid "저장…"
 msgstr ""
 
@@ -10423,6 +10484,10 @@ msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
 msgid "용지 크기:"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+msgid "1장 (1-up)"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
@@ -10592,10 +10657,6 @@ msgid "표지 Word 양식:"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "목차 만들기"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
 msgid "목차 Word 양식:"
 msgstr ""
 
@@ -10616,10 +10677,6 @@ msgid "간지 배경색:"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
-msgid "표지·목차·간지 Word 양식 샘플 저장…"
-msgstr ""
-
-#: viewer/widgets/twoup_dialog.py
 msgid "Word 양식 선택"
 msgstr ""
 
@@ -10629,6 +10686,10 @@ msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
 msgid "스타일 이름:"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+msgid "다단 생성 설정"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
@@ -10645,6 +10706,22 @@ msgstr ""
 
 #: viewer/widgets/twoup_dialog.py
 msgid "우하단"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+msgid "목차 만들기 (책갈피 1단계)"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+msgid "목차 만들기"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+msgid "표지·목차 Word 양식 샘플 저장…"
+msgstr ""
+
+#: viewer/widgets/twoup_dialog.py
+msgid "표지·목차·간지 Word 양식 샘플 저장…"
 msgstr ""
 
 #: viewer/widgets/twoup_dialog.py

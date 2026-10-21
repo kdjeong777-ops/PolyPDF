@@ -218,6 +218,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260905(발표 SOT §4.1): 좌우 2쪽 보기·맞쪽(영속)
             "presentation_dual": False,
             "presentation_facing": False,
+            "presentation_other_screen": False,     # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면'
             # 260609-16(F3): 발표 펜(빈 값이면 모듈 기본)·활성·단축키
             "presentation_pens": [],
             "presentation_pen_active": 0,
@@ -1695,6 +1696,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261016-3(디자인 SOT §2.9.1 예외, 사용자 지시): 패널 단추가 없는 파생 항목은 그 원 항목 바로 아래
         self._ko_only_acts.append(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks))
         a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None))
+        _act(tr("다단 생성..."), self.action_nup_create)   # 261021-3(마스터 §11.10.2, 디자인 SOT §2.9.1 예외 둘째)
         _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf())  # 260825-13
         _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf)
         self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files)
@@ -2304,6 +2306,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.page_thumbs.copyPagesRequested.connect(self._on_copy_pages)
         self.page_thumbs.pastePagesRequested.connect(self._on_paste_pages)
         self.page_thumbs.addImagePagesRequested.connect(self._on_add_image_pages)   # 260930-1
+        self.page_thumbs.addBlankPageRequested.connect(self._on_add_blank_page)     # 261021-3
         # 261012-12(마스터 §4.7.18): 썸네일 끌어 다른 파일로 복사 — 책갈피창에 머물면 그 파일을 열고, 썸네일에 놓으면 끼운다
         self.page_thumbs.pagesDropped.connect(self._on_pages_dropped)
         for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
@@ -4841,6 +4844,33 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.status.showMessage(
             tr('사진 {n}쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요.').format(n=n), 6000)
 
+    def _on_add_blank_page(self, after_row: int):
+        """261021-3(마스터 §4.7.11 '새 페이지 넣기', 사용자 지시): 기준 썸네일 쪽 크기의 **흰 쪽**을 그 아래에 끼운다(미저장).
+        사진 새 쪽과 같은 길(1쪽 임시 PDF → `insert_external_pages`)이라 꾸밈·저장(`_finalize_save`)이 그대로 돈다.
+        넣은 뒤에는 **새 흰 쪽**을 고르고 본문에 보인다(§4.7.7 예외, 사용자 결정) — 바로 사진·꾸밈을 넣으려고 만드는 쪽이다."""
+        try:                                                  # 슬롯 — 예외로 앱이 끝나지 않게(260930-4)
+            pt = self.page_thumbs
+            doc = getattr(pt, "_doc", None)
+            if not doc:
+                return
+            if not getattr(pt, "_edit_mode", False):
+                self.status.showMessage(tr("쪽 추가는 편집모드(✏)에서만 됩니다."), 4000)
+                return
+            from viewer.image_page import blank_page_pdf, page_size_of
+            size = pt.page_size_at_row(int(after_row)) or page_size_of(str(doc.path))
+            tmp_pdf = pt.staged_temp_path(".pdf")
+            if not size or not blank_page_pdf(tmp_pdf, size[0], size[1]):
+                self.status.showMessage(tr("새 페이지를 만들지 못했습니다."), 5000)
+                return
+            pt.insert_external_pages(int(after_row), tmp_pdf, [0])
+            self._push_nav_filter()
+            self._select_pasted(max(0, int(after_row) + 1))   # 새 흰 쪽(기준 행 바로 아래)
+            self.status.showMessage(tr("새 페이지 1쪽 추가(미저장) — 💾 ‘저장’을 눌러 반영하세요."), 6000)
+        except Exception as e:                                # noqa: BLE001
+            import traceback
+            traceback.print_exc()
+            self.status.showMessage(tr("새 페이지를 만들지 못했습니다: %s") % e, 8000)
+
     def _on_apply_page_edits(self):
         """260606-22: 썸네일에서 편집한 페이지 순서/삭제를 새 PDF로 저장."""
         pt = self.page_thumbs
@@ -4996,6 +5026,63 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260825-5: 생성 종료 후 '파일 열기(별도 새 창·기본)/폴더 열기' 선택
             self._after_pdf_created(out)
         QTimer.singleShot(0, _post_merge)
+
+    def action_nup_create(self):
+        """261021-3(마스터 §11.10.2, 사용자 지시): 도구 '다단 생성' — 본문에 열린 PDF **하나**를 다단(1-up 포함)으로 새 파일에.
+        설정 창은 병합과 같은 `TwoUpSettingsDialog`(`single=True` — 여러 파일 항목 숨김), 엔진도 같은 `build_twoup`."""
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur or not str(cur).lower().endswith(".pdf") or not Path(str(cur)).exists():
+            QMessageBox.information(self, tr("다단 생성"), tr("먼저 PDF를 표시하세요."))
+            return
+        src = Path(str(cur))
+        if self._page_edits_dirty() or bool(getattr(self, "_edit_dirty", False)):
+            QMessageBox.information(self, tr("다단 생성"),
+                                    tr("저장하지 않은 편집이 있습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
+            return
+        from PyQt6.QtWidgets import QDialog, QFileDialog
+        from viewer.widgets.twoup_dialog import TwoUpSettingsDialog
+        from viewer.twoup import build_twoup, single_file_settings
+        dlg = TwoUpSettingsDialog({"make_cover": False, "make_toc": False}, self,
+                                  preset_api=self._merge_preset_api(), sample=str(src), single=True)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        settings = single_file_settings(dlg.get_settings())
+        out, _ = QFileDialog.getSaveFileName(
+            self, tr("다단 PDF 저장"), str(src.with_name(src.stem + "_nup.pdf")), "PDF (*.pdf)",
+            options=QFileDialog.Option.DontConfirmOverwrite)
+        if not out:
+            return
+        if not out.lower().endswith(".pdf"):
+            out += ".pdf"
+        if Path(out).exists():                     # 원본 이름 포함 — 덮어쓰지 않고 (1),(2)로 보존
+            out = self._unique_save_path(out)
+        items = [{"type": "pdf", "path": str(src), "name": src.stem}]
+        res = self._run_merge_job(lambda progress: build_twoup(items, settings, out,
+                                                               gen_bookmarks_fn=self._gen_source_bookmarks,
+                                                               progress=progress), tr("다단 생성"))
+        if res.get("cancelled"):
+            try:
+                if Path(out).exists():
+                    Path(out).unlink()
+            except Exception:
+                pass
+            self.status.showMessage(tr("다단 생성을 취소했습니다."), 4000)
+            return
+        if res.get("err"):
+            QMessageBox.warning(self, tr("다단 생성 실패"), res["err"])
+            return
+        self.status.showMessage(tr('다단 생성 완료 → {name}').format(name=Path(out).name), 6000)
+
+        def _post():
+            # 병합과 같은 길(§4.8.3) — 책갈피창 폴더 안이면 다시 읽고 골라 연다, 아니면 원본 아래에 넣고 연다
+            if self._reveal_created_file(out, then=lambda: self._index_single_file(out)):
+                return
+            try:
+                self.bookmark_tree.add_or_refresh_file(out, after=str(src))
+            except Exception:
+                pass
+            self._open_saved_file(out, 0)          # 색인 먼저 걸고 연다 — 260915-10
+        QTimer.singleShot(0, _post)
 
     def _reveal_created_file(self, path, then=None) -> bool:
         """260915-2(§4.8.3): 새로 만든 PDF 가 **책갈피창 폴더 안**(하위 폴더 포함)이면 폴더를 다시 읽고
@@ -6984,7 +7071,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                            highlight_alpha=self._draw_highlight_alpha(),
                                            timer_cfg=self._prefs.get("presentation_timer"),  # 260611-19
                                            # 261009-14(사용자 지시): 본문 꾸밈(선·도형·글·사진)을 구운 사본으로 그린다 — 하이퍼링크는 발표 단추로
-                                           render_source=lambda p: self._baked_src(p, include_links=False))
+                                           render_source=lambda p: self._baked_src(p, include_links=False),
+                                           # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' 기억
+                                           other_screen=bool(self._prefs.get("presentation_other_screen", False)))
+        self._present.otherScreenChanged.connect(self._on_present_other_screen)
         self._present.splitModeChanged.connect(self._on_present_split_changed)
         self._present.dualModeChanged.connect(self._on_present_dual_changed)    # 260905
         self._present.facingChanged.connect(self._on_present_facing_changed)    # 260905
@@ -7026,6 +7116,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _on_present_facing_changed(self, on: bool):
         self._prefs["presentation_facing"] = bool(on)
+        self._save_settings_now()
+
+    def _on_present_other_screen(self, on: bool):
+        """261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' — 다음 발표도 그 화면에서."""
+        self._prefs["presentation_other_screen"] = bool(on)
         self._save_settings_now()
 
     def _on_pres_timer_cfg(self, cfg):
@@ -8122,6 +8217,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._prefs.setdefault("presentation_overlap_pct", 10)    # 260609-6
         self._prefs.setdefault("presentation_dual", False)        # 260905(§4.1)
         self._prefs.setdefault("presentation_facing", False)      # 260905(§4.1)
+        self._prefs.setdefault("presentation_other_screen", False)  # 261021-3(발표 SOT §6.1)
         self._prefs.setdefault("presentation_pens", [])           # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_active", 0)      # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_keys", [])       # 260609-16(F3)
@@ -8523,6 +8619,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "presentation_dual", old.get("presentation_dual", False))),
             "presentation_facing": bool(prefs.get(
                 "presentation_facing", old.get("presentation_facing", False))),
+            "presentation_other_screen": bool(prefs.get(            # 261021-3(발표 SOT §6.1)
+                "presentation_other_screen", old.get("presentation_other_screen", False))),
             # 260609-16(F3): 발표 펜
             "presentation_pens": list(prefs.get(
                 "presentation_pens", old.get("presentation_pens", []))),

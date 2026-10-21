@@ -66,7 +66,13 @@ DEFAULT_TWOUP = {
     "make_divider": False,            # 각 파일 앞에 파일명 기반 간지 추가
     "divider_template": "",           # .docx (비우면 기본 생성)
     "divider_bg": "#eef2f7",          # 간지 배경색(여백색과 별도)
+    # 261021-3(마스터 §11.10.2): 도구 '다단 생성'(파일 하나) — 목차는 책갈피 1단계, 책갈피는 파일 이름 단계 없이.
+    #   스타일에는 저장하지 않는다(부르는 쪽이 `single_file_settings` 로 씌운다).
+    "single_file": False,
 }
+
+# 261021-3(§11.10.2): 파일 하나 다단 생성에서 끄는 '여러 파일 병합' 항목
+MULTI_FILE_KEYS = ("make_divider", "doc_break", "doc_start_odd")
 
 
 DUPLEX_CHOICES = ((tr_noop("단면"), "none"), (tr_noop("양면(긴 쪽)"), "long"), (tr_noop("양면(짧은 쪽)"), "short"))
@@ -92,6 +98,48 @@ def merge_twoup_settings(s) -> dict:
                 out["cover"].update(v)
             else:
                 out[k] = v
+    return out
+
+
+def single_file_settings(s) -> dict:
+    """261021-3(마스터 §11.10.2): 도구 '다단 생성' 의 설정 — `single_file` 을 켜고 여러 파일 항목(간지·문서마다 새 쪽·홀수 시작)은 끈다."""
+    out = merge_twoup_settings(s)
+    out["single_file"] = True
+    for k in MULTI_FILE_KEYS:
+        out[k] = False
+    return out
+
+
+def _item_toc(it, doc, gen_bookmarks_fn=None):
+    """그 항목의 책갈피 `[(단계, 제목, 쪽 1-based)…]` — 내장 책갈피, 없으면 `gen_bookmarks_fn`(스크린샷 묶음 제외)."""
+    try:
+        emb = doc.get_toc(simple=True) or []
+    except Exception:
+        emb = []
+    if not emb and gen_bookmarks_fn is not None and isinstance(it, dict) and it.get("type") != "shots":
+        try:
+            emb = [(int(lv) + 1, t, p) for (t, p, lv) in gen_bookmarks_fn(str(it["path"]), doc)]
+        except Exception:
+            emb = []
+    return emb
+
+
+def _single_toc_entries(emb, it, page_to_slab, body_plan):
+    """261021-3(§11.10.2, 사용자 결정): 파일 하나 다단의 목차 = 원본 책갈피 **1단계** `(제목, 본문 번호)`.
+    번호는 그 쪽이 든 시트의 본문(아라비아) 번호 — `_merge_body_plan` 의 셈과 같다."""
+    ara, cnt = {}, 0
+    for d in body_plan:
+        if d["kind"] in ("divider", "blank", "content"):
+            cnt += 1
+        if d.get("slab") is not None:
+            ara.setdefault(d["slab"], cnt)
+    out = []
+    for lvl, title, pno in emb or []:
+        if int(lvl) != 1:
+            continue
+        slab = page_to_slab.get((id(it), max(1, int(pno)) - 1))
+        if slab is not None and slab in ara:
+            out.append((str(title) or tr("(제목 없음)"), ara[slab]))
     return out
 
 
@@ -264,6 +312,8 @@ def _grid_dims(p0, s):
         return 2, 3, short, long_                 # 세로 용지 2×3
     if nup >= 4:
         return 2, 2, short, long_                 # 260617-6: 세로 용지 2×2(4-up)
+    if nup <= 1:                                  # 261021-3(§11.10.2): 1-up — 원본 방향대로 한 장에 하나
+        return (1, 1, short, long_) if portrait_src else (1, 1, long_, short)
     # 2-up
     if portrait_src:
         return 2, 1, long_, short                 # 가로 용지, 좌우
@@ -671,6 +721,13 @@ def _build_preview_state(items, s):
     slabs, file_blocks, _p2s = _merge_slabs(items, s, _item_pagecount)
     if not slabs:
         raise RuntimeError("배치할 내용이 없습니다.")
+    single = bool(s.get("single_file", False)) and len(file_blocks) == 1     # 261021-3(§11.10.2)
+    emb = []
+    if single and bool(s.get("make_toc", True)):
+        try:
+            emb = _item_toc(file_blocks[0]["it"], _open_item_cached(file_blocks[0]["it"])[0])
+        except Exception:
+            emb = []
     fw = fh = None
     for sl in slabs:
         if sl["kind"] == "content":
@@ -691,12 +748,16 @@ def _build_preview_state(items, s):
     cover_doc = _fitz_cover_doc(s.get("cover", {}), fw, fh) if make_cover else None
     cover_pages = cover_doc.page_count if cover_doc else 0
     names = [fb["name"] for fb in file_blocks]
+    if single:
+        names = [str(t) for (lv, t, _p) in emb if int(lv) == 1] or names
     toc_doc = None; toc_pages = 0
     if make_toc:
         toc_doc = _fitz_toc_doc([(n, "") for n in names], fw, fh)
         toc_pages = toc_doc.page_count
     front_pages = cover_pages + toc_pages
     body_plan, _slab_phys, toc_entries = _merge_body_plan(slabs, file_blocks, s, front_pages)
+    if single:
+        toc_entries = _single_toc_entries(emb, file_blocks[0]["it"], _p2s, body_plan) or toc_entries
     if make_toc:
         try:
             toc_doc.close()
@@ -1310,6 +1371,12 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         cover_pages = cover_doc.page_count if cover_doc else 0
 
         names = [fb["name"] for fb in file_blocks]
+        # 261021-3(§11.10.2): 파일 하나 다단은 목차·책갈피를 원본 책갈피로 — 미리 한 번 읽어 둔다
+        single = bool(s.get("single_file", False)) and len(file_blocks) == 1
+        embs = {id(fb["it"]): _item_toc(fb["it"], _doc(fb["it"]), gen_bookmarks_fn) for fb in file_blocks}
+        if single:
+            _top = [str(t) for (lv, t, _p) in embs[id(file_blocks[0]["it"])] if int(lv) == 1]
+            names = _top or names                   # 책갈피가 없으면 종전대로 파일 이름 한 줄
         toc_pages = 0
         if make_toc:
             _tk(tr("목차 생성 중…"))
@@ -1319,6 +1386,9 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
 
         # 3) 본문 번호/물리위치/빈페이지 계획
         body_plan, slab_phys, toc_entries = _merge_body_plan(slabs, file_blocks, s, front_pages)
+        if single:
+            _fb = file_blocks[0]
+            toc_entries = _single_toc_entries(embs[id(_fb["it"])], _fb["it"], page_to_slab, body_plan) or toc_entries
 
         # 4) 목차 재생성(실제 번호) — 쪽 수 동일
         if make_toc:
@@ -1392,24 +1462,13 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         # 7) 책갈피
         bm = []
         for fb in file_blocks:
-            bm.append((1, fb["name"], fb.get("start_phys") or (front_pages + 1)))
+            if not single:              # 261021-3: 파일 하나 다단은 파일 이름 단계 없이 원본 단계 그대로
+                bm.append((1, fb["name"], fb.get("start_phys") or (front_pages + 1)))
             it = fb["it"]
-            emb = []
-            try:
-                emb = _doc(it).get_toc(simple=True) or []
-            except Exception:
-                emb = []
-            if not emb and gen_bookmarks_fn is not None and isinstance(it, dict) \
-                    and it.get("type") != "shots":
-                try:
-                    emb = [(int(lv) + 1, t, p) for (t, p, lv)
-                           in gen_bookmarks_fn(str(it["path"]), _doc(it))]
-                except Exception:
-                    emb = []
-            for lvl, title, pno in emb:
+            for lvl, title, pno in embs.get(id(it)) or []:
                 slab = page_to_slab.get((id(it), max(1, int(pno)) - 1))
                 if slab is not None and slab in slab_phys:
-                    bm.append((max(2, int(lvl) + 1), title, slab_phys[slab]))
+                    bm.append((int(lvl) if single else max(2, int(lvl) + 1), title, slab_phys[slab]))
         toc_out = []; prev = 0
         for lvl, title, phys in bm:
             lv = 1 if not toc_out else min(max(1, int(lvl)), prev + 1)

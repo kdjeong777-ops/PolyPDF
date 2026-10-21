@@ -68,6 +68,25 @@ def page_size_of(pdf_path, page_index: int = 0):
             pass
 
 
+def blank_page_pdf(out_pdf, width: float, height: float) -> bool:
+    """261021-3(§4.7.11 '새 페이지 넣기'): `폭×높이` pt 의 **흰 쪽 하나**짜리 PDF. 만들었으면 True.
+
+    흰색으로 칠한다 — 칠하지 않은 쪽은 보는 프로그램에 따라 투명으로 다뤄질 수 있다. 글은 넣지 않는다.
+    """
+    import fitz
+    w, h = float(width), float(height)
+    if w <= 0 or h <= 0:
+        return False
+    doc = fitz.open()
+    try:
+        page = doc.new_page(width=w, height=h)
+        page.draw_rect(page.rect, color=None, fill=(1, 1, 1), width=0)
+        doc.save(str(out_pdf), deflate=True, garbage=4)
+        return True
+    finally:
+        doc.close()
+
+
 def images_to_pdf(image_paths, out_pdf, page_size=None, progress=None) -> int:
     """그림들을 **한 장에 한 쪽씩** 담은 PDF 로 저장한다. 넣은 쪽 수를 준다.
 

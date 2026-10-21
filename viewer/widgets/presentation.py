@@ -411,6 +411,7 @@ class PresentationWindow(QWidget):
     fileChanged = pyqtSignal(str)               # 260611-23: 발표 중 파일 전환(새 파일 경로)
     viewSettingsRequested = pyqtSignal()        # 260611-25: '보기 설정…'(상단띠+크롭)
     overlapChanged = pyqtSignal(int)            # 260611-26: 중앙겹침(%) 변경(메뉴 입력박스)
+    otherScreenChanged = pyqtSignal(bool)       # 261021-3(발표 SOT §6.1): 본화면(거짓)/다른 화면(참) — 영속
 
     def __init__(self, file_path, page0: int = 0, parent=None,
                  pointers=None, pointer_active: int = 0,
@@ -422,7 +423,7 @@ class PresentationWindow(QWidget):
                  pens=None, pen_active: int = 0, pen_keys=None, rec_keys=None,
                  pen_straight: bool = True, eraser_widths=None,
                  line_mode: int = 0, highlight_alpha: int = 35, timer_cfg=None,
-                 render_source=None):
+                 render_source=None, other_screen: bool = False):
         super().__init__(parent)
         # 261009-14(발표 SOT §2, 사용자 지시): 본문에 그린 선·도형·글·사진이 발표에도 보이게 — 그릴 원천은 꾸밈을
         #   구운 사본(`render_source`, 인쇄와 같은 굽기 마스터 §4.7.13), 크롭·숨김·회전·하이퍼링크의 열쇠는 원본 경로.
@@ -519,6 +520,10 @@ class PresentationWindow(QWidget):
         # 260615-2: ⑦ 화면 채움(비율 변경) / ⑧ 표시 모니터 선택
         self._fill_screen = False           # True=비율 무시하고 화면 꽉 채움(늘림)
         self._target_screen = None          # 표시할 QScreen(None=기본/현재)
+        # 261021-3(발표 SOT §6.1): 띠 맨 오른쪽 '본화면/다른 화면' — 기억한 값이면 다른 화면에서 연다
+        self._other_screen = bool(other_screen)
+        if self._other_screen and self._other_target() is not None:
+            self._target_screen = self._other_target()
 
         # 260609-9: 부모가 있어도 독립 최상위 창이어야 showFullScreen 이 동작.
         #           (부모 위젯의 자식이면 전체화면이 뜨지 않음)
@@ -780,6 +785,13 @@ class PresentationWindow(QWidget):
         self._tb_close.setStyleSheet(nav_css)
         self._tb_close.clicked.connect(self.close)   # D2: 전체모드 종료
         row1.addWidget(self._tb_close)
+        # 261021-3(발표 SOT §6.1, 사용자 지시): 맨 오른쪽 — 발표 창을 본화면(뷰어가 있는 모니터) ↔ 다른 화면으로
+        self._tb_screen = QPushButton()
+        self._tb_screen.setStyleSheet(nav_css + "QPushButton:disabled{color:#777;background:rgba(255,255,255,0.05);}")
+        self._tb_screen.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tb_screen.clicked.connect(lambda: self.set_other_screen(not self._other_screen))
+        row1.addWidget(self._tb_screen)
+        self._update_screen_button()
         outer.addLayout(row1)
         self._update_pen_buttons()
 
@@ -1108,6 +1120,45 @@ class PresentationWindow(QWidget):
         self.raise_(); self.activateWindow()
         self.setFocus(Qt.FocusReason.OtherFocusReason)
         self._position_topbar(); self._render()
+
+    # --- 261021-3(발표 SOT §6.1): 본화면 / 다른 화면 ---
+    def _home_screen(self):
+        """본화면 = 뷰어(메인 창)가 있는 모니터. 부모가 없으면 기본 모니터."""
+        from PyQt6.QtWidgets import QApplication
+        p = self.parent()
+        try:
+            scr = p.window().screen() if p is not None else None
+        except Exception:
+            scr = None
+        return scr or QApplication.primaryScreen()
+
+    def _other_target(self):
+        """다른 화면 = 본화면이 아닌 **첫 모니터**(사용자 결정). 모니터가 하나면 None."""
+        from PyQt6.QtWidgets import QApplication
+        home = self._home_screen()
+        return next((s for s in QApplication.screens() if s is not home), None)
+
+    def set_other_screen(self, on: bool, emit: bool = True) -> None:
+        """발표 창을 다른 화면(참)/본화면(거짓)으로 옮기고 기억한다(`otherScreenChanged`). 다른 모니터가 없으면 그대로."""
+        other = self._other_target()
+        if other is None:
+            self._update_screen_button()
+            return
+        self._other_screen = bool(on)
+        self.set_target_screen(other if self._other_screen else self._home_screen())
+        self._update_screen_button()
+        if emit:
+            self.otherScreenChanged.emit(self._other_screen)
+
+    def _update_screen_button(self) -> None:
+        b = getattr(self, "_tb_screen", None)
+        if b is None:
+            return
+        has_other = self._other_target() is not None
+        b.setText(tr("🖥 다른 화면") if (self._other_screen and has_other) else tr("🖥 본화면"))
+        b.setEnabled(has_other)
+        b.setToolTip(tr("발표 창을 다른 모니터로 옮기기 / 뷰어가 있는 모니터로 되돌리기") if has_other
+                     else tr("모니터가 하나뿐입니다"))
 
     def show_presentation(self):
         # 260609-9: 최상위 창으로 전체화면 표시 + 포커스(키 입력 수신)
@@ -2216,6 +2267,10 @@ class PresentationWindow(QWidget):
         elif scr_acts and chosen in [a for a, _ in scr_acts]:
             sc = next(s for a, s in scr_acts if a is chosen)
             self.set_target_screen(sc)
+            # 261021-3(발표 SOT §6.1): 띠 단추·기억도 같은 상태로 — 본화면이면 거짓, 아니면 참
+            self._other_screen = sc is not self._home_screen()
+            self._update_screen_button()
+            self.otherScreenChanged.emit(self._other_screen)
         elif chosen == act_tm_hide:
             self._timer_hidden = not self._timer_hidden
             self.update()
