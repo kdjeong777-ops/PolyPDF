@@ -662,6 +662,26 @@ class BookmarkTree(QWidget):
 
     # --- 로드 -------------------------------------------------------------
 
+    def set_font_scale(self, s) -> None:
+        """261021-5(입력 SOT §3.2): 목록 글자 배율(Ctrl++/−/0). 굵게 따로 잡은 폴더 행도 함께."""
+        from PyQt6.QtGui import QFont
+        from PyQt6.QtWidgets import QTreeWidgetItemIterator
+        from viewer import view_scale
+        if getattr(self, "_font_base_pt", None) is None:
+            from PyQt6.QtGui import QFontInfo
+            self._font_base_pt = self.tree.font().pointSizeF()
+            if self._font_base_pt <= 0:                   # 픽셀로 잡힌 글꼴
+                self._font_base_pt = QFontInfo(self.tree.font()).pointSizeF() or 9.0
+        f = QFont(self.tree.font())
+        f.setPointSizeF(self._font_base_pt * view_scale.clamp(s))
+        self.tree.setFont(f)
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value() is not None:
+            item = it.value()
+            if item.data(0, self.DATA_IS_FOLDER):
+                bf = QFont(f); bf.setBold(True); item.setFont(0, bf)
+            it += 1
+
     def refresh(self):
         """260611-61: 현재 로드 소스를 다시 읽어 트리 갱신(외부에서 파일 추가/변경 시).
         261012-3(사용자 지시): 편집 모드에서도 된다 — 다시 읽으면 저장 안 한 책갈피 수정이 사라지므로
@@ -1156,7 +1176,7 @@ class BookmarkTree(QWidget):
         item.setData(0, self.DATA_PAGE, None)
         item.setBackground(0, QBrush(QColor(self.FOLDER_ROW_BG)))
         item.setForeground(0, QBrush(QColor(self.FOLDER_ROW_FG)))
-        f = QFont(item.font(0)); f.setBold(True); item.setFont(0, f)
+        f = QFont(self.tree.font()); f.setBold(True); item.setFont(0, f)   # 261021-5: 목록 글자 배율을 따른다
         try:
             from viewer.widgets.icons import themed_icon
             # 배경이 테마 무관 밝은 노랑 → 아이콘 전경도 라이트로 강제(디자인 §2.5 각주)

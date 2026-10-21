@@ -8,7 +8,7 @@ from typing import Any, Optional
 from PyQt6.QtCore import QStandardPaths
 
 
-CURRENT_SCHEMA = 11
+CURRENT_SCHEMA = 12
 
 # 260611-91: 배포용 기본값 프로파일 — '설정/스타일'만 담고 개인·머신 항목은 제외.
 #   설정 키(이 항목들만 기본값에 포함/초기화 대상):
@@ -327,6 +327,18 @@ def _migrate_v10_to_v11(d: dict) -> dict:
     return d
 
 
+def _migrate_v11_to_v12(d: dict) -> dict:
+    """261021-5(마스터 §8.2, 입력 SOT §3.2): 파일 '저장' 이 Ctrl+S 를 갖는다 — 스크린샷 PDF 저장은 Ctrl+Alt+S.
+
+    단축키 설정 창은 [확인] 때 모든 키를 저장하므로 옛 기본값 Ctrl+S 가 남아 있으면 새 저장과 겹친다
+    (Qt 는 겹친 키를 둘 다 듣지 않는다). 값이 정확히 옛 기본값일 때만 옮긴다. idempotent."""
+    sc = (d.get("preferences") or {}).get("shortcuts")
+    if isinstance(sc, dict) and str(sc.get("save_shots_pdf", "")).replace(" ", "").lower() == "ctrl+s":
+        sc["save_shots_pdf"] = "Ctrl+Alt+S"
+    d["schema_version"] = 12
+    return d
+
+
 def _migrate(d: dict) -> dict:
     v = d.get("schema_version", 1)
     if v < 2:
@@ -349,6 +361,8 @@ def _migrate(d: dict) -> dict:
         d = _migrate_v9_to_v10(d)
     if v < 11:
         d = _migrate_v10_to_v11(d)
+    if v < 12:
+        d = _migrate_v11_to_v12(d)
     return d
 
 

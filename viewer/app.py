@@ -381,6 +381,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.status.addPermanentWidget(self.progress)
         self._lite_init()                    # 261021-1(응답성 SOT §4.7): 가벼운 넘김 표시
         self._jobs_init()                    # 261019-1: 진행 바 누르면 작업 창 + 저장 안 한 OCR 단추
+        self._build_zoom_buttons()           # 261021-5(입력 SOT §3.2): 맨 오른쪽 + 0 −
 
         self.setCentralWidget(central)
         self._central = central
@@ -1581,6 +1582,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.widgets.center_bars import center_menubar
         self._menubar_center = center_menubar(bar)    # 261021-2(디자인 SOT §2.9.3): 메뉴를 창 가운데에
         m_file = bar.addMenu(tr("파일(&F)"))
+        # 261021-5(입력 SOT §3.2, 사용자 지시): 크롬식 — 새 창 Ctrl+N. 키는 항목에 걸어 Qt 가 오른쪽 칸을 채운다(디자인 SOT §2.9.2)
+        a_new_win = self._sc_act_new_window = QAction(tr("새 창"), self)
+        a_new_win.triggered.connect(self.action_new_window)
+        m_file.addAction(a_new_win)
+        m_file.addSeparator()
         a_open = self._sc_act_open = QAction(tr("폴더 열기..."), self)
         a_open.triggered.connect(self.action_open_folder)
         m_file.addAction(a_open)
@@ -1589,6 +1595,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_open_file = self._sc_act_open_file = QAction(tr("파일 열기..."), self)
         a_open_file.triggered.connect(self.action_open_pdf)
         m_file.addAction(a_open_file)
+        # 261021-5(입력 SOT §3.2, 사용자 결정): 새로고침 Ctrl+R — 포커스가 있는 책갈피창의 🔄 와 같은 일
+        a_refresh = self._sc_act_refresh = QAction(tr("새로고침"), self)
+        a_refresh.triggered.connect(self.action_refresh)
+        m_file.addAction(a_refresh)
 
         # 260930-2(마스터 §4.7.13, 사용자 요청): 저장을 **파일 메뉴에도** 둔다.
         #   종전에는 책갈피창의 💾 단추 하나뿐이라 찾기 어려웠다.
@@ -1599,7 +1609,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_save_as.triggered.connect(self._action_save_as)
         m_file.addAction(a_save_as)
         # 261011-2(§4.7.16): '저장(PolyPDF용)' → '저장' — 다른 뷰어에서도 보이게 PDF 에 사본을 넣는다
-        a_save = QAction(tr("저장"), self)
+        a_save = self._sc_act_save = QAction(tr("저장"), self)      # 261021-5: Ctrl+S(입력 SOT §3.2)
         a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
         a_save.triggered.connect(lambda: self.bookmark_tree._op_save())
         m_file.addAction(a_save)
@@ -1628,7 +1638,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # 260618-8: (구 '파일' 메뉴의 도구 항목들은 '도구' 메뉴 상부로 이동 — 아래 _build_tools_menu)
         m_file.addSeparator()
-        a_quit = self._sc_act_quit = QAction(tr("종료"), self)
+        a_quit = self._sc_act_quit = QAction(tr("종료(&X)"), self)   # 261021-5: Alt+F → X(크롬식, 입력 SOT §3.2)
         a_quit.triggered.connect(self.close)
         m_file.addAction(a_quit)
 
@@ -1798,8 +1808,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from collections import OrderedDict
         # id → (라벨, 기본키, 그룹). 260611-3: 그룹화 + 선긋기/발표 단축키 신설·통일.
         self._sc_defs = OrderedDict([
+            # 261021-5(입력 SOT §3.2, 사용자 지시): 크롬식 — 새 창·새로고침·저장·확대/축소/기본 크기
+            ("new_window",    (tr("새 창"), "Ctrl+N", tr("파일"))),
             ("open_folder",   (tr("폴더 열기"), "Ctrl+O", tr("파일"))),
             ("open_file",     (tr("파일 열기"), "Ctrl+Shift+O", tr("파일"))),
+            ("refresh",       (tr("새로고침"), "Ctrl+R", tr("파일"))),
+            ("save",          (tr("저장"), "Ctrl+S", tr("파일"))),
             ("print",         (tr("인쇄"), "Ctrl+P", tr("파일"))),
             ("merge",         (tr("PDF 병합"), "Ctrl+M", tr("파일"))),
             ("search_focus",  (tr("검색바 포커스"), "Ctrl+F", tr("탐색"))),
@@ -1809,8 +1823,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("rename_item",   (tr("파일·책갈피 이름 변경"), "F2", tr("책갈피창"))),
             ("toggle_split",  (tr("2단 보기"), "Ctrl+Shift+2", tr("보기"))),
             ("present",       (tr("발표보기"), "F5", tr("보기"))),
+            ("zoom_in",       (tr("확대"), "Ctrl++", tr("보기"))),
+            ("zoom_out",      (tr("축소"), "Ctrl+-", tr("보기"))),
+            ("zoom_reset",    (tr("기본 크기"), "Ctrl+0", tr("보기"))),
             ("capture",       (tr("화면 캡처"), "Ctrl+Shift+S", tr("캡처·저장"))),
-            ("save_shots_pdf", (tr("스크린샷 PDF 저장"), "Ctrl+S", tr("캡처·저장"))),
+            # 261021-5(사용자 결정): Ctrl+S 는 파일 저장 — 옛 설정 값은 settings_store v12 가 옮긴다
+            ("save_shots_pdf", (tr("스크린샷 PDF 저장"), "Ctrl+Alt+S", tr("캡처·저장"))),
             ("clipboard_save", (tr("클립보드로 복사"), "Ctrl+Shift+C", tr("캡처·저장"))),
             ("draw_pen_1",    (tr("선 1 선택"), "Ctrl+1", tr("선긋기(편집모드)"))),
             ("draw_pen_2",    (tr("선 2 선택"), "Ctrl+2", tr("선긋기(편집모드)"))),
@@ -1826,6 +1844,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("quit",          (tr("종료"), "Ctrl+Q", tr("기타"))),
         ])
         targets = {
+            "new_window": ("action", self._sc_act_new_window),
+            "refresh": ("action", self._sc_act_refresh),
+            "save": ("action", self._sc_act_save),
+            "zoom_in": ("func", lambda: self._zoom_step(+1)),
+            "zoom_out": ("func", lambda: self._zoom_step(-1)),
+            "zoom_reset": ("func", lambda: self._zoom_step(0)),
             "open_folder": ("action", self._sc_act_open),
             "open_file": ("action", self._sc_act_open_file),
             "print": ("action", self._sc_act_print),
@@ -1862,10 +1886,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 ref.setShortcut(seq)
                 self._sc_objs[sid] = ("action", ref)
             else:
-                sh = QShortcut(seq, self)
+                sh = QShortcut(self)
+                sh.setKeys(self._sc_with_alt(sid, seq))
                 sh.activated.connect(ref)
                 self._sc_objs[sid] = ("shortcut", sh)
         self._refresh_menu_key_hints()           # 261017-1(디자인 SOT §2.9.2)
+        self._refresh_zoom_tips()
+
+    # 261021-5(입력 SOT §3.2): 기본 Ctrl++ 는 Shift 없이 누른 Ctrl+= 도 받는다(크롬과 같이) — 사용자가 바꾼 키에는 붙이지 않는다
+    _SC_ALT_KEYS = {"zoom_in": ("Ctrl++", "Ctrl+=")}
+
+    def _sc_with_alt(self, sid, seq) -> list:
+        ks = QKeySequence(seq)
+        alt = self._SC_ALT_KEYS.get(sid)
+        if alt and not ks.isEmpty() and ks == QKeySequence(alt[0]):
+            return [ks, QKeySequence(alt[1])]
+        return [ks]
 
     def _sc_rename_item(self):
         """261019-1(사용자 지시): 이름 변경 단축키(기본 F2) — **포커스가 책갈피창 목록에 있을 때만**,
@@ -1903,8 +1939,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if kind == "action":
                 obj.setShortcut(ks)
             elif kind == "shortcut":
-                obj.setKey(ks)
+                obj.setKeys(self._sc_with_alt(sid, ks))
         self._refresh_menu_key_hints()
+        self._refresh_zoom_tips()
 
     # ===== 261017-1(디자인 SOT §2.9.2, 사용자 지시): 메뉴 오른쪽 칸에 단축키 =====
     def _sc_key(self, sid) -> str:
@@ -1963,6 +2000,107 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception:
                 pass
             self.status.showMessage(tr("단축키 저장됨"), 3000)
+
+    # ===== 261021-5(입력 SOT §3.2, 사용자 지시·결정): 크롬식 창 단축키 =====================
+    def action_new_window(self):
+        """Ctrl+N — PolyPDF 를 하나 더 띄운다(인자 없이 — 시작 동작은 환경설정 '시작 시 동작' 대로)."""
+        import sys
+        from PyQt6.QtCore import QProcess
+        args = [] if getattr(sys, "frozen", False) else [os.path.abspath(sys.argv[0])]
+        res = QProcess.startDetached(sys.executable, args)
+        if not (res[0] if isinstance(res, tuple) else res):
+            QMessageBox.warning(self, tr("새 창"), tr("새 창을 열지 못했습니다."))
+
+    def action_refresh(self):
+        """Ctrl+R — 포커스가 있는 책갈피창(없으면 위 창)의 🔄 와 같은 일(사용자 결정)."""
+        fw = QApplication.focusWidget()
+        bt, br = self.bookmark_tree, self.bookmark_tree_right
+        if fw is not None and br.isVisible() and (fw is br or br.isAncestorOf(fw)):
+            bt = br
+        bt.refresh()
+
+    def _zoom_kind_of(self, w):
+        """위젯 → ('main'|'thumb'|'bookmark'|'text', 그 창) — 확대·축소 대상이 아니면 None."""
+        while w is not None:
+            if any(w is mv for mv in self._mv):
+                return ("main", w)
+            if w is self.page_thumbs:
+                return ("thumb", w)
+            if w is self.bookmark_tree or w is self.bookmark_tree_right:
+                return ("bookmark", w)
+            if w is self.text_panel:
+                return ("text", w)
+            w = w.parentWidget()
+        return None
+
+    def _on_focus_for_zoom(self, _old, new):
+        t = self._zoom_kind_of(new)
+        if t is not None:
+            self._zoom_last = t
+
+    def _zoom_target(self):
+        """확대·축소 대상 = 포커스가 있는 창, 아니면 마지막으로 포커스가 있던 대상 창, 그것도 없으면 지금 본문."""
+        t = self._zoom_kind_of(QApplication.focusWidget())
+        if t is None:
+            t = getattr(self, "_zoom_last", None)
+        return t or ("main", self.main_view)
+
+    def _zoom_step(self, direction: int) -> None:
+        """+1 확대 / -1 축소 / 0 기본 크기 — 대상은 `_zoom_target`. 본문 말고는 설정 `view_scales` 에 기억."""
+        from viewer import view_scale
+        kind, w = self._zoom_target()
+        if kind == "main":
+            if direction > 0:
+                w._zoom_by(view_scale.VIEW_SCALE_STEP)
+            elif direction < 0:
+                w._zoom_by(1 / view_scale.VIEW_SCALE_STEP)
+            else:
+                w.zoom_reset()
+            return
+        vs = dict(self._prefs.get("view_scales") or {})
+        vs[kind] = view_scale.step(vs.get(kind, 1.0), direction)
+        self._prefs["view_scales"] = vs
+        self._apply_view_scale(kind, vs[kind])
+
+    def _apply_view_scale(self, kind: str, s) -> None:
+        if kind == "thumb":
+            self.page_thumbs.set_thumb_scale(s)
+        elif kind == "bookmark":
+            for bt in (self.bookmark_tree, self.bookmark_tree_right):
+                bt.set_font_scale(s)
+        elif kind == "text":
+            self.text_panel.set_view_scale(s)
+
+    def _apply_view_scales(self) -> None:
+        """설정 `view_scales` 를 모두 넣는다(시작 때) — 없는 종류는 기본 크기."""
+        from viewer import view_scale
+        vs = self._prefs.get("view_scales") or {}
+        for kind in view_scale.KINDS:
+            self._apply_view_scale(kind, vs.get(kind, 1.0))
+
+    def _build_zoom_buttons(self) -> None:
+        """창 아래 오른쪽(상태 막대 끝) + 0 − 단추(사용자 결정, 디자인 SOT §2.9.2) — 포커스를 받지 않아 대상 창의 포커스를 지킨다."""
+        from PyQt6.QtWidgets import QToolButton as _TB
+        self._zoom_last = None
+        self._zoom_btns = []
+        for text, d in (("+", +1), ("0", 0), ("−", -1)):
+            b = _TB(self.status)
+            b.setText(text)
+            b.setAutoRaise(True)
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.setMinimumWidth(22)
+            b.clicked.connect(lambda _=False, dd=d: self._zoom_step(dd))
+            self.status.addPermanentWidget(b)
+            self._zoom_btns.append(b)
+        QApplication.instance().focusChanged.connect(self._on_focus_for_zoom)
+
+    def _refresh_zoom_tips(self) -> None:
+        """단추 툴팁 = 이름 + 지금 키(단축키 설정을 따른다)."""
+        names = ((tr("확대"), "zoom_in"), (tr("기본 크기"), "zoom_reset"), (tr("축소"), "zoom_out"))
+        for b, (name, sid) in zip(getattr(self, "_zoom_btns", []), names):
+            k = self._sc_key(sid)
+            b.setToolTip((name + " (" + k + ")" if k else name) + "\n"
+                         + tr("포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)에 적용합니다"))
 
     # ===== 260611-11: Windows 기본 PDF 앱 등록(연결 프로그램) ============
     def _register_pdf_handler(self):
@@ -8269,7 +8407,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._prefs.setdefault("anthropic_api_key", "")   # 260621-P0: 번역(Claude) API 키
         self._prefs.setdefault("translate_model", "claude-opus-4-8")  # 260621-P0
         self._prefs.setdefault("translate_consent", False)  # 260621-P0: 외부 전송 동의
+        self._prefs.setdefault("view_scales", {})                # 261021-5(입력 SOT §3.2)
         self._apply_prefs(self._prefs)
+        try:
+            self._apply_view_scales()
+        except Exception:
+            pass
         # 260606-19: 단축키 오버라이드 적용
         try:
             self._apply_shortcuts((self._prefs or {}).get("shortcuts", {}))
@@ -8540,6 +8683,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),
+            "view_scales": prefs.get("view_scales", old.get("view_scales")),   # 261021-5(입력 SOT §3.2): Ctrl++/−/0 배율
             "crop_styles": prefs.get("crop_styles", old.get("crop_styles")),
             "crop_auto": prefs.get("crop_auto", old.get("crop_auto")),
             "crop_style_last": prefs.get("crop_style_last", old.get("crop_style_last")),

@@ -101,12 +101,14 @@ class PageThumbs(QWidget):
     ICON_KEEP_SCREENS = 3
     NUM_BAND = 18           # 260606-26: 썸네일 하단 페이지번호 띠 높이
     ITEM_MARGIN = 6         # 260611-12: 카드 위아래 여백(세로 간격) — 종횡비별 셀 높이에 가산
+    BASE_THUMB_W, BASE_THUMB_H = 120, 160   # 기본 크기(배율 1) — 261021-5: 배율을 곱한다(입력 SOT §3.2)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._doc: Optional[PdfDocument] = None
-        self._thumb_size = QSize(120, 160)
-        self._edit_mode = False              # 260606-22: 책갈피 편집모드와 동기
+        self._thumb_size = QSize(self.BASE_THUMB_W, self.BASE_THUMB_H)
+        self._thumb_scale = 1.0              # 261021-5(입력 SOT §3.2): Ctrl++/−/0 — set_thumb_scale
+        self._edit_mode = False             # 260606-22: 책갈피 편집모드와 동기
         self._orig_count = 0
         self._hidden_pages = set()           # 260609-14(D5): 숨김 페이지
         self._rotations = {}                 # 260609-15(A1): {page0: deg}
@@ -604,7 +606,7 @@ class PageThumbs(QWidget):
             return
         try:
             from PyQt6.QtCore import QRect
-            rp = doc.render_thumbnail(epg, dpi=self.THUMB_DPI)
+            rp = doc.render_thumbnail(epg, dpi=self._thumb_dpi())
             qimg = QImage(rp.samples, rp.width, rp.height,
                           rp.width * 3, QImage.Format.Format_RGB888)
             pix = QPixmap.fromImage(qimg).scaled(
@@ -829,6 +831,15 @@ class PageThumbs(QWidget):
                 # 260610-1: 뷰어모드 ↑/↓·PgUp/PgDn = 보이는(필터 통과) 썸네일 이동
                 #           + 뷰어 페이지 동기, 첫/끝에서 한 번 더 → 이전/다음 파일.
                 #           Shift/Ctrl 조합은 기본(다중 선택 확장, 260603-3)에 위임.
+                # 261021-5(입력 SOT §3.2): Home/End = 보이는 첫/마지막 썸네일 + 본문 — 종전에는 Qt 기본이 고르기만 하고 본문은 그대로였다
+                if k in (Qt.Key.Key_Home, Qt.Key.Key_End):
+                    rows = [i for i in range(self.list.count()) if not self.list.item(i).isHidden()]
+                    if rows:
+                        r = rows[0] if k == Qt.Key.Key_Home else rows[-1]
+                        self.list.setCurrentRow(r)
+                        self.list.scrollToItem(self.list.item(r))
+                        self._on_activated(self.list.item(r))
+                    return True
                 step = (+1 if k in (Qt.Key.Key_Down, Qt.Key.Key_PageDown)
                         else -1 if k in (Qt.Key.Key_Up, Qt.Key.Key_PageUp) else 0)
                 if step:
@@ -1238,7 +1249,7 @@ class PageThumbs(QWidget):
                 self._render_ext_item(item, str(page_idx[0]), int(page_idx[1]))
                 continue
             try:
-                rp = self._doc.render_thumbnail(page_idx, dpi=self.THUMB_DPI)
+                rp = self._doc.render_thumbnail(page_idx, dpi=self._thumb_dpi())
                 qimg = QImage(rp.samples, rp.width, rp.height,
                               rp.width * 3, QImage.Format.Format_RGB888)
                 pix = QPixmap.fromImage(qimg)
@@ -1508,6 +1519,36 @@ class PageThumbs(QWidget):
                 self.list.item(i).setSizeHint(QSize(vw, sh.height()))
             return True
         return False
+
+    # ===== 261021-5(입력 SOT §3.2, 사용자 지시): 썸네일 크기 — 칸 폭은 저절로 따라간다 =====
+    def thumb_scale(self) -> float:
+        return self._thumb_scale
+
+    def _thumb_dpi(self) -> int:
+        """크게 보면 흐려지지 않게 그리는 해상도도 함께 올린다(줄일 때는 기본 그대로)."""
+        return int(round(self.THUMB_DPI * max(1.0, self._thumb_scale)))
+
+    def set_thumb_scale(self, s) -> None:
+        from viewer import view_scale
+        s = view_scale.clamp(s)
+        tw, th = round(self.BASE_THUMB_W * s), round(self.BASE_THUMB_H * s)
+        old_th = self._thumb_size.height()
+        self._thumb_scale = s
+        if (tw, th) == (self._thumb_size.width(), old_th):
+            return
+        self._thumb_size = QSize(tw, th)
+        self._fixed_w = tw + 30
+        self._icon_w = self._fixed_w - 20
+        self.setFixedWidth(self._fixed_w)
+        self.list.setIconSize(QSize(self._icon_w, th + self.NUM_BAND))
+        # 셀 높이(종횡비별)는 같은 비율로 — 아이콘을 다시 그리면 실제 카드 높이로 다시 맞는다
+        pad = self.NUM_BAND + self.ITEM_MARGIN
+        for i in range(self.list.count()):
+            it = self.list.item(i)
+            h = max(1, it.sizeHint().height() - pad)
+            it.setSizeHint(QSize(self._icon_w, max(1, round(h * th / max(1, old_th))) + pad))
+        self._rerender_all()
+        QTimer.singleShot(0, self._sync_icon_width)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

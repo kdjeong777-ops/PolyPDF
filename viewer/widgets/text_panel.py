@@ -131,6 +131,7 @@ class TextPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._styles = {k: dict(v) for k, v in DEFAULT_STYLES.items()}
+        self._view_scale = 1.0          # 261021-5(입력 SOT §3.2): Ctrl++/−/0 — 보이는 글자만, 스타일 크기는 그대로
         self._rows = []                 # text_extract2.page_lines 결과
         self._page = 0
         self._path = ""
@@ -323,10 +324,16 @@ class TextPanel(QWidget):
         self._styles[self._cur_style_key()][key] = value
         self._apply_styles()
 
+    def set_view_scale(self, s) -> None:
+        """261021-5(입력 SOT §3.2): 보이는 글자 배율 — `size_pt`(Word 저장 크기)는 바꾸지 않는다."""
+        from viewer import view_scale
+        self._view_scale = view_scale.clamp(s)
+        self._apply_styles()
+
     def _qfont(self, key: str) -> QFont:
         st = self._styles[key]
         f = QFont(st.get("family", "맑은 고딕"))
-        f.setPointSizeF(float(st.get("size_pt", 11)))
+        f.setPointSizeF(float(st.get("size_pt", 11)) * self._view_scale)
         f.setBold(bool(st.get("bold", False)))
         sp = float(st.get("spacing_pt", 0.0) or 0.0)
         if sp:

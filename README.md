@@ -101,14 +101,18 @@ git add -A; git commit -m "fix: ..."; git push      # 소스 갱신(설정/스�
 ## 단축키
 | 단축키 | 동작 |
 |--------|------|
+| Ctrl+N | 새 창 |
 | Ctrl+O | 폴더 열기 |
+| Ctrl+R | 새로고침 (책갈피창) |
+| Ctrl+S | 저장 |
 | Ctrl+F | 검색바 포커스 |
 | F3 / Shift+F3 | 다음/이전 매치 |
 | ↓ / ↑ / PgDn / PgUp | 페이지 이동 (2장 보기 ±2) |
 | Home / End | 첫/마지막 페이지 |
 | Ctrl+Wheel | 줌 |
+| Ctrl++ / Ctrl+- / Ctrl+0 | 확대 / 축소 / 기본 크기 (포커스가 있는 창 — 본문·썸네일·책갈피창·텍스트 창) |
 | Ctrl+Shift+S | 스크린샷 캡처 |
-| Ctrl+S | 스크린샷 PDF 일괄 저장 |
+| Ctrl+Alt+S | 스크린샷 PDF 일괄 저장 |
 | F5 | 발표 보기(전체화면) |
 | S / D (발표 중) | 상하 2분할 보기 / 좌우 2쪽 보기 토글 |
 | Ctrl+Q | 종료 |

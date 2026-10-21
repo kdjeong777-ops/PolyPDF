@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-21 21:08+0900\n"
+"POT-Creation-Date: 2026-10-21 21:52+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -391,11 +391,19 @@ msgid "파일(&F)"
 msgstr ""
 
 #: viewer/app.py
+msgid "새 창"
+msgstr ""
+
+#: viewer/app.py
 msgid "폴더 열기..."
 msgstr ""
 
 #: viewer/app.py
 msgid "파일 열기..."
+msgstr ""
+
+#: viewer/app.py
+msgid "새로고침"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
@@ -441,7 +449,7 @@ msgid "최근 파일"
 msgstr ""
 
 #: viewer/app.py
-msgid "종료"
+msgid "종료(&X)"
 msgstr ""
 
 #: viewer/app.py
@@ -1039,6 +1047,22 @@ msgstr ""
 
 #: viewer/app.py
 msgid "단축키 저장됨"
+msgstr ""
+
+#: viewer/app.py
+msgid "새 창을 열지 못했습니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "확대"
+msgstr ""
+
+#: viewer/app.py
+msgid "기본 크기"
+msgstr ""
+
+#: viewer/app.py
+msgid "축소"
 msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
@@ -1673,6 +1697,10 @@ msgid "온용어 다시 분류 (용어집별·재조회)..."
 msgstr ""
 
 #: viewer/app.py
+msgid "포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)에 적용합니다"
+msgstr ""
+
+#: viewer/app.py
 msgid "등록 실패"
 msgstr ""
 
@@ -2234,6 +2262,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "다시실행"
+msgstr ""
+
+#: viewer/app.py
+msgid "종료"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/shortcuts_dialog.py

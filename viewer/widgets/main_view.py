@@ -2771,7 +2771,8 @@ class MainView(QWidget):
 
     def _on_page_step(self, delta: int):
         if self._is_image:                       # v1.6.9 G2: 스크린샷 리스트 순회
-            self.imageStepRequested.emit(1 if delta > 0 else -1)
+            # 261021-5(입력 SOT §3): Home/End(±10**6)는 끝까지 — 종전에는 한 장만 움직였다(받는 쪽이 목록 끝에서 멈춘다)
+            self.imageStepRequested.emit(delta if abs(delta) == 10**6 else (1 if delta > 0 else -1))
             return
         if not self._doc:
             return
@@ -2969,6 +2970,11 @@ class MainView(QWidget):
         self._fit_mode = self.FIT_NONE
         self._zoom = max(0.1, min(20.0, self._zoom * factor))
         self._render_current()
+
+    def zoom_reset(self) -> None:
+        """261021-5(입력 SOT §3.2): Ctrl+0 — 쪽 맞춤(더블클릭과 같다). 콤보가 이미 '쪽 맞춤' 이어도 다시 맞춘다."""
+        self._show_fit(self.FIT_PAGE)
+        self._set_fit_mode(self.FIT_PAGE)
 
     def _set_fit_mode(self, mode: str):
         if self._is_image:                       # v1.6.9 G1: 이미지 전용 fit

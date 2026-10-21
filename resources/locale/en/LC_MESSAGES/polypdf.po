@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-21 21:08+0900\n"
+"POT-Creation-Date: 2026-10-21 21:52+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -390,12 +390,20 @@ msgid "파일(&F)"
 msgstr "&File"
 
 #: viewer/app.py
+msgid "새 창"
+msgstr "New Window"
+
+#: viewer/app.py
 msgid "폴더 열기..."
 msgstr "Open Folder..."
 
 #: viewer/app.py
 msgid "파일 열기..."
 msgstr "Open File..."
+
+#: viewer/app.py
+msgid "새로고침"
+msgstr "Refresh"
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "다른 이름으로 저장..."
@@ -441,8 +449,8 @@ msgid "최근 파일"
 msgstr "Recent Files"
 
 #: viewer/app.py
-msgid "종료"
-msgstr "Exit"
+msgid "종료(&X)"
+msgstr "E&xit"
 
 #: viewer/app.py
 msgid "즐겨찾기(&V)"
@@ -1054,6 +1062,22 @@ msgstr "Until 1.0, you always receive beta (test) versions."
 #: viewer/app.py
 msgid "단축키 저장됨"
 msgstr "Shortcuts saved"
+
+#: viewer/app.py
+msgid "새 창을 열지 못했습니다."
+msgstr "Could not open a new window."
+
+#: viewer/app.py
+msgid "확대"
+msgstr "Zoom In"
+
+#: viewer/app.py
+msgid "기본 크기"
+msgstr "Default Size"
+
+#: viewer/app.py
+msgid "축소"
+msgstr "Zoom Out"
 
 #: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/hyperlink_dialog.py
@@ -1720,6 +1744,10 @@ msgid "온용어 다시 분류 (용어집별·재조회)..."
 msgstr "Reclassify Onterm Entries (by glossary · re-query)..."
 
 #: viewer/app.py
+msgid "포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)에 적용합니다"
+msgstr "Applies to the pane that has focus (main view, thumbnails, Bookmarks panel, Text pane)"
+
+#: viewer/app.py
 msgid "등록 실패"
 msgstr "Registration failed"
 
@@ -2306,6 +2334,10 @@ msgstr "Edit mode"
 #: viewer/app.py
 msgid "다시실행"
 msgstr "Redo"
+
+#: viewer/app.py
+msgid "종료"
+msgstr "Exit"
 
 #: viewer/app.py viewer/widgets/shortcuts_dialog.py
 msgid "기타"
