@@ -260,7 +260,8 @@ class PrintMixin:
         def _job(progress, _paths=paths, _base=base, _out=out_final,
                  _nup=nup, _s=settings, _name=name, _gen=gen):
             # 다단은 QImage 로 정규화·축소(이형/손상 포맷·초대용량으로 build_twoup 가
-            # 멈추던 문제 방지). 1단은 원본 그대로 삽입(무손실).
+            # 멈추던 문제 방지). 다단을 끄면 원본 그대로 삽입(무손실).
+            # 261021-4(이미지→PDF SOT §3, 사용자 결정): 다단 1장(1-up)도 '다단' 이라 축소한다.
             if not self._images_to_pdf(_paths, _base, progress, downscale=_nup):
                 return
             if _nup:

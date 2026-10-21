@@ -106,6 +106,48 @@ try:
     chk(o.get_toc(simple=True)[0][:2] == [1, "doc"], "D6 병합은 종전대로 파일 이름이 1단계", str(o.get_toc(simple=True)[:2]))
     o.close()
 
+    # G — 261021-4: 쪽 밖을 가리키는 책갈피(자동 생성)가 섞여도 목차 쪽 수·번호가 맞다
+    nob = root / "nobm.pdf"
+    d = fitz.open()
+    for i in range(6):
+        d.new_page(width=595, height=842).insert_text((72, 300), "N %d" % (i + 1))
+    d.save(str(nob)); d.close()
+    gen = lambda path, doc: ([("Good %d" % k, 1 + k % 6, 0) for k in range(10)]
+                             + [("Out %d" % k, 99, 0) for k in range(15)])
+    out4 = str(root / "outrange.pdf")
+    g_err = None
+    try:
+        build_twoup([{"type": "pdf", "path": str(nob), "name": "nobm"}],
+                    single_file_settings({"nup": 2, "make_cover": False, "make_toc": True}), out4,
+                    gen_bookmarks_fn=gen)
+    except Exception as e:                                     # noqa: BLE001
+        g_err = e
+    chk(g_err is None, "G1 쪽 밖 책갈피가 섞여도 만들어진다", repr(g_err))
+    if g_err is None:
+        o = fitz.open(out4)
+        body = [o[i].get_text("text") for i in range(o.page_count)]
+        chk(o.page_count == 1 + 3 and "Out 0" not in body[0] and "Good 9" in body[0],
+            "G2 목차는 쪽 안 책갈피만, 한 쪽(목차 1 + 본문 3)", str((o.page_count, body[0][:80])))
+        chk(body[1].strip().endswith("1") or "\n1\n" in "\n" + body[1] + "\n", "G3 본문 첫 시트 번호가 1", body[1][-20:])
+        o.close()
+
+    # H — 261021-4: 파일 하나 창의 샘플 단추는 간지 양식을 만들지 않는다
+    import importlib.util
+    if importlib.util.find_spec("docx") is not None:
+        sdir = root / "samples"; sdir.mkdir()
+        from PyQt6.QtWidgets import QFileDialog as _QFD
+        _orig_dir = _QFD.getExistingDirectory
+        _QFD.getExistingDirectory = staticmethod(lambda *a_, **k: str(sdir))
+        QMessageBox.information = staticmethod(lambda *a_, **k: None)
+        dlg3 = TwoUpSettingsDialog({}, None, preset_api=api, sample=str(src), single=True)
+        dlg3._save_samples()
+        made = sorted(p.name for p in sdir.iterdir())
+        chk(len(made) == 2 and not any("간지" in n for n in made), "H 파일 하나 창 샘플 = 표지·목차만", str(made))
+        dlg3.close()
+        _QFD.getExistingDirectory = _orig_dir
+    else:
+        print("SKIP - H python-docx 없음")
+
     # E — 미리보기 목차
     from viewer.twoup import compose_preview, clear_preview_cache
     png, ow, oh, cells, total = compose_preview(str(src), single_file_settings({"nup": 2, "make_cover": False, "make_toc": True}), 0, dpi=40)

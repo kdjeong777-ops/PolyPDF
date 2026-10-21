@@ -31,7 +31,7 @@ PAGE_SIZES = {
 
 DEFAULT_TWOUP = {
     "enabled": False,
-    "nup": 2,                          # 260611-36: 한 장에 배치할 원본 쪽 수(2 또는 6)
+    "nup": 2,                          # 260611-36: 한 장에 배치할 원본 쪽 수(1·2·4·6·8 — 1 은 261021-3)
     "page_size": "A4",                 # 출력 용지(PAGE_SIZES)
     "center": True,                    # 셀 안 가운데 정렬
     "fit_mode": "contain",             # 260611-46: 채움 방식 contain|cover|stretch
@@ -124,11 +124,13 @@ def _item_toc(it, doc, gen_bookmarks_fn=None):
     return emb
 
 
-def _single_toc_entries(emb, it, page_to_slab, body_plan):
+def _single_toc_entries(emb, it, page_to_slab, body_plan=None):
     """261021-3(§11.10.2, 사용자 결정): 파일 하나 다단의 목차 = 원본 책갈피 **1단계** `(제목, 본문 번호)`.
-    번호는 그 쪽이 든 시트의 본문(아라비아) 번호 — `_merge_body_plan` 의 셈과 같다."""
+    번호는 그 쪽이 든 시트의 본문(아라비아) 번호 — `_merge_body_plan` 의 셈과 같다.
+    `body_plan=None` 이면 번호 없이 `(제목, "")` — 목차 쪽 수를 미리 셀 때. **두 번 모두 같은 항목**을 골라야
+    목차 쪽 수가 같다(쪽 밖을 가리키는 책갈피는 둘 다 버린다 — 261021-4 점검)."""
     ara, cnt = {}, 0
-    for d in body_plan:
+    for d in body_plan or []:
         if d["kind"] in ("divider", "blank", "content"):
             cnt += 1
         if d.get("slab") is not None:
@@ -138,8 +140,9 @@ def _single_toc_entries(emb, it, page_to_slab, body_plan):
         if int(lvl) != 1:
             continue
         slab = page_to_slab.get((id(it), max(1, int(pno)) - 1))
-        if slab is not None and slab in ara:
-            out.append((str(title) or tr("(제목 없음)"), ara[slab]))
+        if slab is None or (body_plan is not None and slab not in ara):
+            continue
+        out.append((str(title) or tr("(제목 없음)"), ara[slab] if body_plan is not None else ""))
     return out
 
 
@@ -301,8 +304,9 @@ def _paper(s):
 
 def _grid_dims(p0, s):
     """nup·원본 방향으로 (cols, rows, 용지 가로, 용지 세로) 결정.
+    1-up(261021-3): 원본 방향 그대로 1×1(세로 원본→세로 용지, 가로 원본→가로 용지).
     2-up: 세로 원본→가로 용지 2×1 / 가로 원본→세로 용지 1×2.
-    6-up: 세로 용지 고정 2열×3행."""
+    4·6·8-up: 세로 용지 고정 2열×2·3·4행."""
     short, long_ = _paper(s)
     nup = int(s.get("nup", 2) or 2)
     portrait_src = p0.height >= p0.width
@@ -749,7 +753,7 @@ def _build_preview_state(items, s):
     cover_pages = cover_doc.page_count if cover_doc else 0
     names = [fb["name"] for fb in file_blocks]
     if single:
-        names = [str(t) for (lv, t, _p) in emb if int(lv) == 1] or names
+        names = [t for t, _n in _single_toc_entries(emb, file_blocks[0]["it"], _p2s)] or names
     toc_doc = None; toc_pages = 0
     if make_toc:
         toc_doc = _fitz_toc_doc([(n, "") for n in names], fw, fh)
@@ -1151,8 +1155,10 @@ def _paint_bg_behind(doc, bg):
         pass
 
 
-def write_sample_templates(folder):
-    """표지·목차·간지 Word 양식 샘플을 folder 에 생성. 생성된 경로 목록 반환."""
+def write_sample_templates(folder, divider=True):
+    """표지·목차·간지 Word 양식 샘플을 folder 에 생성. 생성된 경로 목록 반환.
+    `divider=False` 면 간지 양식은 빼고 — 도구 '다단 생성'(간지 없음, 261021-4 §11.10.2)."""
+    with_divider = bool(divider)
     try:
         from docx import Document
         from docx.shared import Pt
@@ -1194,7 +1200,8 @@ def write_sample_templates(folder):
 
     _save(tr("표지_샘플.docx"), cover)
     _save(tr("목차_샘플.docx"), toc)
-    _save(tr("간지_샘플.docx"), divider)
+    if with_divider:
+        _save(tr("간지_샘플.docx"), divider)
     return made
 
 
@@ -1375,7 +1382,8 @@ def _assemble(items, s, fast=False, gen_bookmarks_fn=None, tick=None, tmpdir=Non
         single = bool(s.get("single_file", False)) and len(file_blocks) == 1
         embs = {id(fb["it"]): _item_toc(fb["it"], _doc(fb["it"]), gen_bookmarks_fn) for fb in file_blocks}
         if single:
-            _top = [str(t) for (lv, t, _p) in embs[id(file_blocks[0]["it"])] if int(lv) == 1]
+            _it0 = file_blocks[0]["it"]
+            _top = [t for t, _n in _single_toc_entries(embs[id(_it0)], _it0, page_to_slab)]
             names = _top or names                   # 책갈피가 없으면 종전대로 파일 이름 한 줄
         toc_pages = 0
         if make_toc:

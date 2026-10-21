@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-21 20:35+0900\n"
+"POT-Creation-Date: 2026-10-21 21:08+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4586,11 +4586,11 @@ msgid "목차_샘플.docx"
 msgstr ""
 
 #: viewer/twoup.py
-msgid "간지_샘플.docx"
+msgid "최종 저장 중…"
 msgstr ""
 
 #: viewer/twoup.py
-msgid "최종 저장 중…"
+msgid "간지_샘플.docx"
 msgstr ""
 
 #: viewer/twoup.py

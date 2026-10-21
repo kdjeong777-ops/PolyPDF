@@ -315,7 +315,7 @@ class TwoUpSettingsDialog(QDialog):
         if not folder:
             return
         from viewer.twoup import write_sample_templates
-        made = write_sample_templates(folder)
+        made = write_sample_templates(folder, divider=not self._single)   # 261021-4: 파일 하나 창은 간지 양식 없이
         if made:
             QMessageBox.information(self, tr("샘플 저장"),
                                     tr('{n}개 양식을 저장했습니다:\n{join}').format(n=len(made), join='\n'.join((_P(m).name for m in made))))

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-21 20:35+0900\n"
+"POT-Creation-Date: 2026-10-21 21:08+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4750,12 +4750,12 @@ msgid "목차_샘플.docx"
 msgstr "Contents_sample.docx"
 
 #: viewer/twoup.py
-msgid "간지_샘플.docx"
-msgstr "Divider_sample.docx"
-
-#: viewer/twoup.py
 msgid "최종 저장 중…"
 msgstr "Saving final file…"
+
+#: viewer/twoup.py
+msgid "간지_샘플.docx"
+msgstr "Divider_sample.docx"
 
 #: viewer/twoup.py
 msgid "표지 생성 중…"
