@@ -232,6 +232,7 @@ class StudyMixin:
         """260621-P0: 여러 PDF 번역 — 병합형 선택 목록(좌 전체/우 대상, 추가·순서·삭제)."""
         if not self._translate_auth_ready_or_warn():
             return
+        self._lite_heavy_notice(tr("번역"))                 # 261021-1(응답성 SOT §4.7)
         all_files = []
         try:
             all_files = self.bookmark_tree.all_file_paths()
@@ -1582,6 +1583,7 @@ class StudyMixin:
             QMessageBox.information(self, "단어장", "먼저 PDF 를 여세요.")
             return
         path = Path(self._study_pdf)
+        self._lite_heavy_notice(tr("단어장 생성"))          # 261021-1(응답성 SOT §4.7)
         # 261019-3(마스터 §4.7.21): 책갈피는 우클릭한(없으면 활성 창의) 책갈피창에
         bm_tree = getattr(self, "_study_bm_tree", None) or self._bm_tree_for_pane()
         self._study_bm_tree = None

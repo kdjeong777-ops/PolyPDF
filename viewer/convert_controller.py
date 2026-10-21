@@ -38,6 +38,7 @@ class ConvertMixin:
         if not files:
             QMessageBox.information(self, tr("변환"), tr("변환할 PDF 를 먼저 여세요."))
             return False
+        self._lite_heavy_notice(tr("변환"))                 # 261021-1(응답성 SOT §4.7)
         if pages is not None:
             # 썸네일에서 — 저장 전 쪽 편집이 있으면 파일의 쪽 번호와 다르다(SOT §2.2)
             pt = self.page_thumbs

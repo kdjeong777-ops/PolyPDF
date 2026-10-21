@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-19 22:50+0900\n"
+"POT-Creation-Date: 2026-10-21 18:29+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -329,7 +329,8 @@ msgstr ""
 msgid "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/bookmark_tree.py viewer/widgets/study_panel.py
+#: viewer/app.py viewer/study_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/study_panel.py
 msgid "단어장 생성"
 msgstr ""
 
@@ -369,7 +370,7 @@ msgstr ""
 msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/study_controller.py
 msgid "번역"
 msgstr ""
 
@@ -573,6 +574,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "인덱싱 준비..."
+msgstr ""
+
+#: viewer/app.py viewer/widgets/bookmarker_dialog.py
+msgid "책갈피 자동 생성"
 msgstr ""
 
 #: viewer/app.py
@@ -1066,10 +1071,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "이미 목록에 있는 파일입니다."
-msgstr ""
-
-#: viewer/app.py viewer/widgets/bookmarker_dialog.py
-msgid "책갈피 자동 생성"
 msgstr ""
 
 #: viewer/app.py
@@ -3327,6 +3328,40 @@ msgstr ""
 
 #: viewer/jobs_controller.py
 msgid "지운 결과"
+msgstr ""
+
+#: viewer/lite_controller.py
+#, python-brace-format
+msgid "{why} '{what}' 은(는) 평소보다 오래 걸릴 수 있습니다 — Windows 전원 모드를 '균형' 이상으로 바꾸면 빨라집니다."
+msgstr ""
+
+#: viewer/lite_controller.py
+msgid "환경설정에서 '가벼운 넘김' 을 항상 켜 두었습니다."
+msgstr ""
+
+#: viewer/lite_controller.py
+msgid "Windows 전원 모드가 '최고의 전력 효율' 입니다."
+msgstr ""
+
+#: viewer/lite_controller.py
+msgid "Windows 배터리 절약 모드가 켜져 있습니다."
+msgstr ""
+
+#: viewer/lite_controller.py
+msgid "이 컴퓨터에서 쪽 넘김이 느립니다."
+msgstr ""
+
+#: viewer/lite_controller.py
+msgid "🔋 가벼운 넘김"
+msgstr ""
+
+#: viewer/lite_controller.py
+msgid "쪽이 부드럽게 넘어가도록 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라갑니다. 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다."
+msgstr ""
+
+#: viewer/lite_controller.py
+#, python-brace-format
+msgid "{why} 쪽이 부드럽게 넘어가도록 '가벼운 넘김' 으로 바꿨습니다 — 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다."
 msgstr ""
 
 #: viewer/ocr_batch.py
@@ -7565,7 +7600,7 @@ msgid ""
 "(녹화 중이면 저장됩니다)"
 msgstr ""
 
-#: viewer/widgets/presentation.py
+#: viewer/widgets/presentation.py viewer/widgets/settings_dialog.py
 msgid "끄기"
 msgstr ""
 
@@ -8155,6 +8190,18 @@ msgid "쪽 넘김 애니메이션 (한 쪽씩일 때 위아래로 밀기)"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "자동 (절전 모드이거나 넘김이 느릴 때)"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "항상"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다."
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). 2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
 msgstr ""
 
@@ -8393,6 +8440,10 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "페이지 이동 방식:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "가벼운 넘김(느린 컴퓨터):"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +37,7 @@ from PyQt6.QtWidgets import (
 )
 
 from viewer.pdf_doc import PdfDocument, page_hits
+from viewer import perf_mode                 # 261021-1: 가벼운 넘김(응답성 SOT §4.7)
 from viewer.resources_path import resource_path
 from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
 
@@ -1611,6 +1613,11 @@ class MainView(QWidget):
     CONT_GAP_PX = 12             # 붙인 쪽 사이 간격
     CONT_HYST_PX = 24            # 간격 가운데에서 이만큼 더 지나야 지금 쪽이 바뀐다
     CONT_SETTLE_MS = 250         # 지금 쪽이 바뀌고 스크롤이 이만큼 멈추면 pageChanged
+    # 261021-1(응답성 SOT §4.7): 가벼운 넘김 — 값의 원본은 여기다
+    FLIP_HOLD_MIN_MS = 80        # 넘긴 뒤 이만큼(또는 그 넘김에 걸린 만큼) 들어온 넘김은 모아 마지막만 그린다
+    PREFETCH_DELAY_MS = 250      # 넘김이 이만큼 멈추면 앞뒤 쪽을 미리 그린다
+    PREFETCH_GAP_MS = 15         # 미리 그리기는 한 쪽씩, 사이에 이만큼 쉰다
+    TWO_PAGE_GAP_PT = 8.0        # 2장 맞춤 두 쪽 사이(PDF pt)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1665,6 +1672,15 @@ class MainView(QWidget):
         self._cont_settle.timeout.connect(
             lambda: self.pageChanged.emit(self._current_page) if self._doc else None)
         self._page_slide = _PageSlide(self)
+        # 261021-1(응답성 SOT §4.7): 가벼운 넘김 — 잇단 넘김 모으기 · 멈춘 뒤 미리 그리기
+        self._flip_pending = None                 # (쪽, at_bottom) — 모아 둔 마지막 넘김
+        self._flip_hold = QTimer(self)
+        self._flip_hold.setSingleShot(True)
+        self._flip_hold.timeout.connect(self._on_flip_hold)
+        self._prefetch_queue = []
+        self._prefetch_timer = QTimer(self)
+        self._prefetch_timer.setSingleShot(True)
+        self._prefetch_timer.timeout.connect(self._prefetch_step)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -2415,6 +2431,7 @@ class MainView(QWidget):
             fwd = [p for p in self._nav_pages if p >= page_index]
             page_index = fwd[0] if fwd else self._nav_pages[-1]
         self._current_page = page_index
+        self._flip_pending = None             # 261021-1(응답성 SOT §4.7): 어디로 가든 모아 둔 넘김은 끝
         if self._page_slide is not None:
             self._page_slide.stop()           # 260914-1(§2.9): 낡은 겉모습을 남기지 않는다
         self._cont_settle.stop()              # 260914-1(§2.10): 아래에서 바로 알린다
@@ -2440,6 +2457,7 @@ class MainView(QWidget):
         self.pageChanged.emit(page_index)
         self._update_match_counter()
         self._update_doc_scroll()             # v1.6.8 F1
+        self._start_prefetch()                # 261021-1(응답성 SOT §4.7): 가벼운 넘김일 때만 돈다
 
     # --- v1.6.8 F1: 문서 전체 진행률 스크롤바 -----------------------------
     def _doc_units(self):
@@ -2640,7 +2658,7 @@ class MainView(QWidget):
             return
         if not self._doc:
             return
-        nxt = self._nav_step(self._current_page, direction)
+        nxt = self._nav_step(self._nav_base(), direction)
         if nxt is None:
             self.fileBoundaryRequested.emit(+1 if direction > 0 else -1)
             return
@@ -2661,9 +2679,16 @@ class MainView(QWidget):
         """한 쪽 넘김. 켜져 있으면 넘기기 직전·직후 화면을 떠서 밀어 보인다.
 
         이어 보기에서는 하지 않는다 — 스크롤 자체가 이어짐이다(§2.10).
+
+        261021-1(응답성 SOT §4.7): 가벼운 넘김이면 애니메이션 없이 넘기고, 방금 넘긴 직후
+        (`_flip_hold` 가 도는 동안) 들어온 넘김은 **마지막 것만** 모아 두었다가 한 번 그린다.
         """
+        lite = perf_mode.is_lite()
+        if lite and self._flip_hold.isActive():
+            self._flip_pending = (nxt, at_bottom)
+            return
         slide = self._page_slide
-        anim = (self._flip_anim and slide is not None and not self._is_image
+        anim = (self._flip_anim and slide is not None and not self._is_image and not lite
                 and not self._cont_active() and self.isVisible())
         old = None
         if anim:
@@ -2672,7 +2697,7 @@ class MainView(QWidget):
                 old = self.grab(self._view_area_rect())
             except Exception:
                 old = None
-        self.go_to_page(nxt, at_bottom=at_bottom)
+        self._go_timed(nxt, at_bottom)
         if old is None or old.isNull():
             return
         try:
@@ -2681,6 +2706,68 @@ class MainView(QWidget):
             return
         if not new.isNull():
             slide.start(old, new, direction, self._view_area_rect())
+
+    # --- 261021-1(응답성 SOT §4.7): 가벼운 넘김 -----------------------------------
+    def _nav_base(self) -> int:
+        """한 칸 넘김의 출발점 — 모아 둔 넘김이 있으면 그 쪽(아직 안 그렸어도 사용자는 거기까지 넘겼다)."""
+        return self._flip_pending[0] if self._flip_pending else self._current_page
+
+    def _go_timed(self, nxt: int, at_bottom: bool) -> None:
+        """한 쪽 넘김을 하고 걸린 시간(메인)을 잰다 — 느린 기계 판정과 다음 넘김을 모을 길이."""
+        t0 = time.perf_counter()
+        self.go_to_page(nxt, at_bottom=at_bottom)
+        ms = (time.perf_counter() - t0) * 1000.0
+        perf_mode.note_flip(ms)
+        if perf_mode.is_lite():
+            self._flip_hold.start(max(self.FLIP_HOLD_MIN_MS, int(ms)))
+
+    def _on_flip_hold(self) -> None:
+        if self._flip_pending and self._doc is not None:
+            nxt, at_bottom = self._flip_pending
+            self._go_timed(nxt, at_bottom)       # go_to_page 가 _flip_pending 을 비운다
+
+    def _prefetch_targets(self):
+        """멈춰 있을 때 미리 그릴 (쪽, 물리 배율) — 다음 넘김·이전 넘김에 쓸 쪽만. 이어 보기는 이미 붙여 그린다."""
+        if self._doc is None or self._is_image or self._cont_active():
+            return []
+        dpr = self.view.devicePixelRatioF() or 1.0
+        out = []
+        for d in (+1, -1):
+            n = self._nav_step(self._current_page, d)
+            if n is None or self._is_staged(n):
+                continue
+            if self._fit_mode == self.FIT_PAGE_TWO:
+                z = self._two_page_zoom(n)
+                pages = [n] + ([n + 1] if n + 1 < self._doc.page_count else [])
+            else:
+                z = self._single_zoom(n)
+                pages = [n]
+            if z:
+                out += [(p, z * dpr) for p in pages]
+        return out
+
+    def _start_prefetch(self) -> None:
+        self._prefetch_queue = []
+        self._prefetch_timer.stop()
+        if perf_mode.is_lite() and self._doc is not None:
+            self._prefetch_timer.start(self.PREFETCH_DELAY_MS)
+
+    def _prefetch_step(self) -> None:
+        """한 번에 한 쪽만 그린다(쪽당 수~수십 ms) — 사이사이 입력이 먼저 돈다(응답성 SOT §4 ⑥)."""
+        if self._doc is None:
+            return
+        if not self._prefetch_queue:
+            self._prefetch_queue = self._prefetch_targets()
+            self._prefetch_queue.reverse()        # pop() 이 앞(다음 쪽)부터 꺼내게
+            if not self._prefetch_queue:
+                return
+        page, ps = self._prefetch_queue.pop()
+        try:
+            self._doc.render_scaled(page, ps)     # 전역 렌더 캐시에 넣기만 한다(§19.11)
+        except Exception:
+            pass
+        if self._prefetch_queue:
+            self._prefetch_timer.start(self.PREFETCH_GAP_MS)
 
     def _on_page_step(self, delta: int):
         if self._is_image:                       # v1.6.9 G2: 스크린샷 리스트 순회
@@ -2695,7 +2782,7 @@ class MainView(QWidget):
             self.go_to_page(self._nav_pages[-1] if self._nav_pages
                             else self._doc.page_count - 1)
             return
-        nxt = self._nav_step(self._current_page, 1 if delta > 0 else -1)
+        nxt = self._nav_step(self._nav_base(), 1 if delta > 0 else -1)
         if nxt is None:
             self.fileBoundaryRequested.emit(+1 if delta > 0 else -1)
             return
@@ -2903,6 +2990,44 @@ class MainView(QWidget):
             r.normalize()
         return r
 
+    def _single_zoom(self, page_index: int, page_obj=None):
+        """한 쪽 보기의 표시 배율(PDF pt → 논리 px). 미리 그리기(§4.7)도 같은 값을 써야 캐시가 맞는다."""
+        if page_obj is None:
+            page_obj = self._page_for(page_index)
+            if page_obj is None:
+                return None
+        pdf_w = page_obj.rect.width
+        pdf_h = page_obj.rect.height
+        if pdf_w <= 0 or pdf_h <= 0:
+            return None
+        # 260609-15(A1): 90/270 회전이면 맞춤 계산용 폭·높이 스왑
+        if self._rotations.get(page_index, 0) in (90, 270):
+            pdf_w, pdf_h = pdf_h, pdf_w
+        vp = self.view.viewport().size()
+        vp_w = max(50, vp.width() - 4)
+        vp_h = max(50, vp.height() - 4)
+        if self._fit_mode == self.FIT_PAGE:
+            zoom = min(vp_w / pdf_w, vp_h / pdf_h)
+        elif self._fit_mode == self.FIT_WIDTH:
+            zoom = vp_w / pdf_w
+        else:
+            zoom = self._zoom
+        return max(0.1, min(20.0, zoom))
+
+    def _two_page_zoom(self, idx_left: int):
+        """2장 맞춤의 표시 배율 — 왼쪽 쪽과 그 다음 쪽을 나란히 놓고 화면에 맞춘다."""
+        n = self._doc.page_count
+        rl = self._doc.doc.load_page(idx_left).rect
+        rr = self._doc.doc.load_page(idx_left + 1).rect if idx_left + 1 < n else None
+        total_w = rl.width + (self.TWO_PAGE_GAP_PT + rr.width if rr is not None else self.TWO_PAGE_GAP_PT)
+        total_h = max(rl.height, rr.height if rr is not None else 0)
+        if total_w <= 0 or total_h <= 0:
+            return None
+        vp = self.view.viewport().size()
+        vp_w = max(50, vp.width() - 4)
+        vp_h = max(50, vp.height() - 4)
+        return max(0.1, min(20.0, min(vp_w / total_w, vp_h / total_h)))
+
     def _render_current(self):
         if not self._doc:
             return
@@ -2915,28 +3040,9 @@ class MainView(QWidget):
         page_obj = self._page_for(self._current_page)   # 260930-2: 스테이징 쪽도 그린다
         if page_obj is None:
             return
-        pdf_w = page_obj.rect.width
-        pdf_h = page_obj.rect.height
-        if pdf_w <= 0 or pdf_h <= 0:
+        zoom = self._single_zoom(self._current_page, page_obj)
+        if not zoom:
             return
-        # 260609-15(A1): 90/270 회전이면 맞춤 계산용 폭·높이 스왑
-        _rot_fit = self._rotations.get(self._current_page, 0)
-        if _rot_fit in (90, 270):
-            pdf_w, pdf_h = pdf_h, pdf_w
-
-        vp = self.view.viewport().size()
-        vp_w = max(50, vp.width() - 4)
-        vp_h = max(50, vp.height() - 4)
-
-        # 표시 zoom 결정 (PDF 포인트 → 논리 픽셀)
-        if self._fit_mode == self.FIT_PAGE:
-            zoom = min(vp_w / pdf_w, vp_h / pdf_h)
-        elif self._fit_mode == self.FIT_WIDTH:
-            zoom = vp_w / pdf_w
-        else:
-            zoom = self._zoom
-
-        zoom = max(0.1, min(20.0, zoom))
         self._zoom = zoom
 
         # 물리 픽셀 = 논리 * DPR. PyMuPDF 에 이 크기로 직접 요청.
@@ -3090,22 +3196,12 @@ class MainView(QWidget):
 
         page_left = self._doc.doc.load_page(idx_left)
         pdf_w_l = page_left.rect.width
-        pdf_h_l = page_left.rect.height
         page_right = self._doc.doc.load_page(idx_right) if idx_right is not None else None
-        pdf_w_r = page_right.rect.width if page_right else 0
-        pdf_h_r = page_right.rect.height if page_right else 0
 
-        gap_pt = 8.0
-        total_pdf_w = pdf_w_l + gap_pt + pdf_w_r
-        total_pdf_h = max(pdf_h_l, pdf_h_r)
-        if total_pdf_w <= 0:
+        gap_pt = self.TWO_PAGE_GAP_PT
+        zoom = self._two_page_zoom(idx_left)     # 261021-1: 미리 그리기(§4.7)와 같은 배율
+        if not zoom:
             return
-
-        vp = self.view.viewport().size()
-        vp_w = max(50, vp.width() - 4)
-        vp_h = max(50, vp.height() - 4)
-        zoom = min(vp_w / total_pdf_w, vp_h / total_pdf_h)
-        zoom = max(0.1, min(20.0, zoom))
         self._zoom = zoom
 
         dpr = self.view.devicePixelRatioF() or 1.0

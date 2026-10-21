@@ -281,6 +281,19 @@ class SettingsDialog(QDialog):
         self.chk_page_flip_anim.setChecked(
             self._prefs.get("page_flip_anim", True) is not False)
         pl.addWidget(self.chk_page_flip_anim)
+        # 261021-1(응답성 SOT §4.7): 가벼운 넘김 — 느린 컴퓨터·절전 모드
+        row_lite = QHBoxLayout()
+        row_lite.addWidget(QLabel(tr("가벼운 넘김(느린 컴퓨터):")))
+        self.cmb_lite_flip = QComboBox()
+        self.cmb_lite_flip.addItem(tr("자동 (절전 모드이거나 넘김이 느릴 때)"), "auto")
+        self.cmb_lite_flip.addItem(tr("항상"), "on")
+        self.cmb_lite_flip.addItem(tr("끄기"), "off")
+        _li = self.cmb_lite_flip.findData(str(self._prefs.get("lite_flip", "auto")))
+        self.cmb_lite_flip.setCurrentIndex(_li if _li >= 0 else 0)
+        self.cmb_lite_flip.setToolTip(tr("켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, "
+                                         "텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다."))
+        row_lite.addWidget(self.cmb_lite_flip, 1)
+        pl.addLayout(row_lite)
         info_psm = QLabel(
             tr("<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
             "온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). "
@@ -768,6 +781,7 @@ class SettingsDialog(QDialog):
             # 260609-2: 페이지 경계 파일 이동
             "cross_file_nav": self.chk_cross_file_nav.isChecked(),
             "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
+            "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
             "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
             # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
             # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋

@@ -15,6 +15,9 @@
 """
 import os, sys, inspect, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+# 261021-1(응답성 SOT §4.7): 이 검사는 시험 프로필 없이 실제 MainWindow 를 띄운다 — 기계가 절전이면 가벼운 넘김이
+#   켜져 텍스트 창이 넘김이 멈춘 뒤 따라간다. 여기서 보는 것은 곧바로 채우는 종전 길이라 끈 채로 잰다.
+os.environ.setdefault("POLYPDF_FAKE_POWER_SAVING", "0")
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path

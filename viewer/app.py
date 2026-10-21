@@ -59,6 +59,7 @@ from viewer.redact_controller import RedactMixin        # 261014-22(보안 SOT �
 from viewer.compare_controller import CompareMixin      # 261014-23(마스터 §4.11)
 from viewer.vprinter_controller import VPrinterMixin    # 261017(가상 프린터 SOT §4.4)
 from viewer.jobs_controller import JobsMixin            # 261019-1(응답성 SOT §4.6): 작업 창·저장 안 한 OCR
+from viewer.lite_controller import LiteMixin            # 261021-1(응답성 SOT §4.7): 가벼운 넘김(느린 컴퓨터)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -121,7 +122,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -201,6 +202,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260914-1(입력 SOT §2.9·§2.10): 쪽 넘김 애니메이션(기본 켜짐) · 이동 방식(기본 한 쪽씩)
             "page_flip_anim": True,
             "page_scroll_mode": "page",
+            "lite_flip": "auto",          # 261021-1(응답성 SOT §4.7): 가벼운 넘김 auto/on/off
             # 260912-7(입력 SOT §2.7): 텍스트 창에서 칠하면 본문에도 표시할지.
             #   기본 꺼짐 — 본문에 자국을 남기는 일은 묻지 않고 하지 않는다.
             "text_hl_mark_pdf": False,
@@ -376,6 +378,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.progress.setMaximumWidth(220)
         self.progress.setVisible(False)
         self.status.addPermanentWidget(self.progress)
+        self._lite_init()                    # 261021-1(응답성 SOT §4.7): 가벼운 넘김 표시
         self._jobs_init()                    # 261019-1: 진행 바 누르면 작업 창 + 저장 안 한 OCR 단추
 
         self.setCentralWidget(central)
@@ -1064,8 +1067,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if i != self._active_pane:
             return
         self.page_thumbs.select_page(page)
-        self._on_main_page_changed(page)
-        self._on_study_page_changed(page)
+        if self._lite_refresh():
+            # 261021-1(응답성 SOT §4.7 ③): 가벼운 넘김이면 텍스트 창·단어장은 넘김이 멈춘 뒤 한 번 —
+            #   텍스트 창 추출(표 인식)은 배경 스레드여도 GIL 을 쥐어 다음 넘김을 끊는다.
+            tp = getattr(self, "text_panel", None)
+            if tp is not None and self.search_tabs.currentWidget() is tp:
+                tp.set_busy(tr('p.{page} 읽는 중…').format(page=page + 1))
+            self._lite_follow.start()
+        else:
+            self._lite_follow.stop()
+            self._on_main_page_changed(page)
+            self._on_study_page_changed(page)
         self._mv[i].clear_word_highlights()
         self._sync_bookmark_to_active()
         self._refresh_page_hyperlinks(i)          # 260609-3: 페이지 링크 버튼 갱신
@@ -1347,10 +1359,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         + (띄움) + [기능] PDF병합/책갈피·단어장 동시/책갈피 생성/단어장 생성/스크린샷 PDF 저장.
         내부 상태 토글(act_toggle_search/shot)은 유지하되 툴바엔 노출하지 않음."""
         from PyQt6.QtWidgets import QToolButton, QLabel, QSizePolicy, QLineEdit
-        self._panel_toolbar = QToolBar(tr("패널"), self)
+        from viewer.widgets.center_bars import PanelToolBar
+        # 261021-2(디자인 SOT §2.9.3, 사용자 지시): 묶음을 창 가운데에 + 그룹마다 옅은 둥근 바탕
+        self._panel_toolbar = PanelToolBar(tr("패널"), self)
         self._panel_toolbar.setMovable(False)
         self.addToolBar(self._panel_toolbar)
+        self._panel_toolbar.addWidget(self._panel_toolbar.pad)   # 맨 앞 빈 칸 — 폭으로 가운데에 민다
         self._panel_btns = []     # 260606-26: 테마 스타일 재적용 대상
+        _groups = self._panel_toolbar.groups
 
         # 내부 가시성 상태(설정 메뉴·_sync_right_layout 가 사용; 툴바엔 미노출)
         self.act_toggle_search = QAction(tr("🔎 검색·단어"), self)
@@ -1378,6 +1394,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             act = self._panel_toolbar.addWidget(b)
             b._tb_action = act
             self._panel_btns.append(b)
+            _groups[-1].append(b)
             return b
 
         def lab(txt):
@@ -1386,8 +1403,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             q.setStyleSheet("color:#888;font-weight:bold;padding:0 4px;"
                             "background:transparent;border:none;")
             self._panel_toolbar.addWidget(q)
+            _groups.append([q])                 # 261021-2: 라벨부터 다음 라벨 전까지가 한 그룹(바탕)
 
-        # 260606-27: 좌측 정렬 / 260618-18: '뷰어'→'보기', '기능'→'도구', 법령/고시 보기 그룹으로
+        # 260606-27: 좌측 정렬 → 261021-2 가운데(디자인 SOT §2.9.3) / 260618-18: '뷰어'→'보기', '기능'→'도구', 법령/고시 보기 그룹으로
         lab(tr("보기"))
         mk(tr("1단"), tr("오른쪽 패널 숨김 (단일 보기)"), self._vm_single)
         mk(tr("2단"), tr("2단 보기(쪽 맞춤)"), self._vm_split)
@@ -1440,6 +1458,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _themed_icon("search"), QLineEdit.ActionPosition.LeadingPosition)
         self.toolbar_search.returnPressed.connect(self._on_toolbar_search)
         self._tb_search_act = self._panel_toolbar.addWidget(self.toolbar_search)
+        self._panel_toolbar.search = self.toolbar_search   # 261021-2: 묶음은 검색창과 GAP_TO_SEARCH 이상 띄운다
 
         from viewer import theme as _theme
         self._style_panel_toolbar(_theme.is_dark())
@@ -1463,6 +1482,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         try:
             for b in getattr(self, "_panel_btns", []):
                 b.setStyleSheet(css)
+        except Exception:
+            pass
+        try:                                      # 261021-2(디자인 SOT §2.9.3): 그룹 바탕 색
+            self._panel_toolbar.dark = bool(dark)
+            self._panel_toolbar.update()
         except Exception:
             pass
         # 260616-3: 오른쪽 끝 검색창 테마 스타일(둥근 모서리)
@@ -1553,6 +1577,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _build_menus(self):
         bar = self.menuBar()
+        from viewer.widgets.center_bars import center_menubar
+        self._menubar_center = center_menubar(bar)    # 261021-2(디자인 SOT §2.9.3): 메뉴를 창 가운데에
         m_file = bar.addMenu(tr("파일(&F)"))
         a_open = self._sc_act_open = QAction(tr("폴더 열기..."), self)
         a_open.triggered.connect(self.action_open_folder)
@@ -2563,6 +2589,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not bt.ensure_edit_mode(tr("책갈피 자동 생성")):
             return
         self._bookmarker_bt = bt
+        self._lite_heavy_notice(tr("책갈피 자동 생성"))     # 261021-1(응답성 SOT §4.7)
         # 지정 파일 > 현재 메인 PDF 를 입력 기본값으로
         if default_file and str(default_file).lower().endswith(".pdf"):
             default_pdf = Path(default_file)
@@ -3345,6 +3372,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not cur or mv._doc is None:
             return
         page = mv.current_page()
+        self._lite_heavy_notice("OCR")                     # 261021-1(응답성 SOT §4.7)
         # 260910-8(사용자 보고 "'문서 전체' 인데 보고 있던 쪽까지만 읽는다", SOT §3.1.2):
         #   `page_count` 는 **속성**이다. `page_count()` 로 부르면 TypeError 가 나고
         #   조용한 except 가 `page + 1` 로 떨어뜨려, '문서 전체' 가 **1쪽~현재 쪽**이 됐다.
@@ -8086,6 +8114,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._prefs["cross_file_nav"] = True
         self._prefs.setdefault("page_flip_anim", True)            # 260914-1(입력 SOT §2.9)
         self._prefs.setdefault("page_scroll_mode", "page")        # 260914-1(입력 SOT §2.10)
+        self._prefs.setdefault("lite_flip", "auto")               # 261021-1(응답성 SOT §4.7)
         self._apply_page_flow_prefs()
         self._prefs.setdefault("hyperlink_url_allowlist", [])     # 260609-3
         self._prefs.setdefault("presentation_pointers", [])       # 260609-5
@@ -8468,6 +8497,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             #   값은 그대로 둔다 — 'continuous' 가 아니면 한 쪽씩으로 읽는 것은 뷰어가 한다
             "page_scroll_mode": str(prefs.get("page_scroll_mode",
                                               old.get("page_scroll_mode", "page"))),
+            "lite_flip": str(prefs.get("lite_flip", old.get("lite_flip", "auto"))),   # 261021-1(응답성 SOT §4.7)
             # 260609-3: 하이퍼링크 URL 허용 도메인
             "hyperlink_url_allowlist": list(prefs.get(
                 "hyperlink_url_allowlist",
@@ -8587,6 +8617,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _apply_page_flow_prefs(self):
         """260914-1(입력 SOT §2.9·§2.10): 쪽 넘김 애니메이션·이동 방식을 두 뷰어에 넣는다."""
+        from viewer import perf_mode as _pm         # 261021-1(응답성 SOT §4.7): 가벼운 넘김
+        _pm.set_pref(self._prefs.get("lite_flip", "auto"))
+        try:
+            self._lite_refresh()
+        except Exception:
+            pass
         for mv in getattr(self, "_mv", []) or []:
             try:
                 mv.set_page_flip_anim(bool(self._prefs.get("page_flip_anim", True)))
