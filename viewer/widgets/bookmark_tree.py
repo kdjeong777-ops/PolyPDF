@@ -236,6 +236,8 @@ class BookmarkTree(QWidget):
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
     DATA_TOC_LOADED = Qt.ItemDataRole.UserRole + 2   # v1.6.2: TOC lazy load 완료 플래그
     DATA_IS_TOC_PLACEHOLDER = Qt.ItemDataRole.UserRole + 3   # v1.6.2: 펼치기 유도용 더미 자식 표식
+    # 261024-4(마스터 §15): 파일 경로 → 본문에 열린 그 문서의 목차(get_toc 꼴) 또는 None(모름 → 파일을 연다). 앱이 넣는다
+    toc_provider = None
     DATA_ENCRYPTED = _ENC_ROLE                       # 260611-57: 암호화 파일 표식
     DATA_AUTH = _AUTH_ROLE                            # 260618-1: 인증 상태(owner/user/locked)
     DATA_BASELABEL = Qt.ItemDataRole.UserRole + 7    # 260623: 해시태그 접미 적용 전 원본 라벨
@@ -2000,8 +2002,21 @@ class BookmarkTree(QWidget):
             item.setData(0, self.DATA_TOC_LOADED, True)
             return
 
+        # 261024-4(마스터 §15): 본문에 열린 파일이면 그 문서의 목차를 쓴다 — 쪽을 넘길 때(`select_for_page`) 같은 파일을
+        #   메인에서 다시 열어 창이 섰다(빌드 시험 T1 1.25초, 스택 fz_open_file). 없으면(None) 종전대로 연다.
+        prov = self.toc_provider
+        toc = None
+        if prov is not None:
+            try:
+                toc = prov(file_path)
+            except Exception:
+                toc = None
+        if toc is not None:
+            self._fill_toc(item, ph_idx, file_path, list(toc))
+            return
+
         # TOC 읽기 (암호화 파일은 저장된 암호로 해제 시도)
-        toc: list = []
+        toc = []
         try:
             doc = fitz.open(file_path)
             try:
@@ -2019,7 +2034,10 @@ class BookmarkTree(QWidget):
                 doc.close()
         except Exception:
             toc = []
+        self._fill_toc(item, ph_idx, file_path, toc)
 
+    def _fill_toc(self, item: QTreeWidgetItem, ph_idx: int, file_path, toc: list) -> None:
+        """placeholder 를 떼고 평탄한 목차(level, title, page1based)를 그 파일 행 아래 나무로 단다."""
         # placeholder 제거
         item.takeChild(ph_idx)
         item.setData(0, self.DATA_TOC_LOADED, True)

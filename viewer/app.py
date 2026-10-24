@@ -298,6 +298,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.bookmark_tree.setMinimumWidth(150)
         self.bookmark_tree_right = BookmarkTree()   # 260618-22: 하단 = 우측 창 폴더 목록(2단·다른폴더)
         self.bookmark_tree_right.setMinimumWidth(150)
+        # 261024-4(마스터 §15): 책갈피창이 본문에 열린 파일을 다시 열지 않게 — 두 책갈피창 모두에
+        self.bookmark_tree.toc_provider = self._open_doc_toc
+        self.bookmark_tree_right.toc_provider = self._open_doc_toc
         self._bk_split = QSplitter(Qt.Orientation.Vertical)
         self._bk_split.addWidget(self.bookmark_tree)
         self._bk_split.addWidget(self.bookmark_tree_right)
@@ -1076,6 +1079,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _on_copy_pane_requested(self, src: int):
         """260618-27: 책갈피 우클릭 '○창으로 복사' — 상단(src=0)=1창→2창, 하단(src=1)=2창→1창."""
         self._copy_pane_to(src, 1 - src)
+
+    def _open_doc_toc(self, file_path):
+        """261024-4(마스터 §15): 본문 창(둘 중 하나)에 열린 파일이면 그 문서의 목차, 아니면 None(책갈피창이 파일을 연다).
+        본문 문서는 이미 열려 암호도 풀려 있다 — 같은 파일을 메인에서 또 열면 큰 파일·백신에서 1초 넘게 섰다."""
+        from viewer.pathutil import norm_key
+        key = norm_key(file_path)
+        for mv in getattr(self, "_mv", []) or []:
+            cur = mv.current_file() if mv is not None else None
+            if cur and mv._doc is not None and not mv._is_image and norm_key(cur) == key:
+                return mv._doc.doc.get_toc() or []
+        return None
 
     def _on_pane_page_changed(self, i: int, page: int):
         # 260618-29: 본문 읽는 중 그 창의 페이지가 (사용자에 의해) 바뀌면 그 페이지부터 다시 읽기.

@@ -1793,6 +1793,7 @@ class MainView(QWidget):
 
         # 260609-26: 썸네일 필터 → 뷰어 페이지 이동 제한(허용 페이지 목록, None=전체)
         self._nav_pages = None
+        self._nav_ordered = False             # 261024-4: 목록이 쪽 편집 순서(저장 전)인가
         # 260609-22(J3): 본화면 선긋기
         self._draw_pens = list(MV_DEFAULT_PENS)
         # 260611-76: 모드(4버튼+지우개)와 스타일(색상버튼)을 분리.
@@ -1999,6 +2000,7 @@ class MainView(QWidget):
         #   옛 목록으로 스냅됐다(쪽 편집 저장 뒤 다시 열면 엉뚱한 쪽). 앱이 새 문서의 필터를 다시 넣는다.
         self._nav_pages = None
         self._nav_pos = {}
+        self._nav_ordered = False
         self._doc = newdoc
         self._is_image = False               # v1.6.4 C2: PDF 모드
         self._update_empty_label()           # 260606-30: 문서 로드 → 안내 숨김
@@ -2625,6 +2627,7 @@ class MainView(QWidget):
         else:
             ps = [int(p) for p in pages]
             self._nav_pages = ps if ordered else sorted(ps)
+        self._nav_ordered = bool(ordered and pages is not None)   # 261024-4: 2장 맞춤 오른쪽 쪽(_two_right)
         self._nav_pos = ({p: i for i, p in enumerate(self._nav_pages)}
                          if self._nav_pages else {})
         if (self._nav_pages is not None and self._doc and not self._is_image
@@ -2734,14 +2737,17 @@ class MainView(QWidget):
         out = []
         for d in (+1, -1):
             n = self._nav_step(self._current_page, d)
-            if n is None or self._is_staged(n):
+            if n is None:
                 continue
             if self._fit_mode == self.FIT_PAGE_TWO:
                 z = self._two_page_zoom(n)
-                pages = [n] + ([n + 1] if n + 1 < self._doc.page_count else [])
+                r = self._two_right(n)
+                pages = [n] + ([r] if r is not None else [])
             else:
                 z = self._single_zoom(n)
                 pages = [n]
+            # 끼운 쪽은 전역 캐시에 들지 않는다(그 원본에서 그때 그린다) — 미리 그릴 것이 없다
+            pages = [p for p in pages if not self._is_staged(p)]
             if z:
                 out += [(p, z * dpr) for p in pages]
         return out
@@ -3020,13 +3026,34 @@ class MainView(QWidget):
             zoom = self._zoom
         return max(0.1, min(20.0, zoom))
 
+    def _two_right(self, idx_left: int):
+        """2장 맞춤의 오른쪽 쪽. 쪽을 끼우거나 옮기고 저장 전(넘김 목록이 그 순서, `set_nav_pages(ordered=True)`)이면
+        **다음 넘김과 같은 쪽**, 아니면 종전대로 바로 다음 쪽(261024-4, 마스터 §3)."""
+        if getattr(self, "_nav_ordered", False):
+            return self._nav_step(idx_left, +1)
+        return idx_left + 1 if idx_left + 1 < self._doc.page_count else None
+
+    def _shown_size(self, page_index: int, page_obj=None):
+        """쪽이 화면에 놓이는 (폭, 높이) pt — 끼운 쪽도, 저장 전 회전(90·270)이면 바꿔서. 못 구하면 None."""
+        if page_obj is None:
+            page_obj = self._page_for(page_index)
+        if page_obj is None:
+            return None
+        w, h = page_obj.rect.width, page_obj.rect.height
+        if self._rotations.get(page_index, 0) in (90, 270):
+            w, h = h, w
+        return w, h
+
     def _two_page_zoom(self, idx_left: int):
-        """2장 맞춤의 표시 배율 — 왼쪽 쪽과 그 다음 쪽을 나란히 놓고 화면에 맞춘다."""
-        n = self._doc.page_count
-        rl = self._doc.doc.load_page(idx_left).rect
-        rr = self._doc.doc.load_page(idx_left + 1).rect if idx_left + 1 < n else None
-        total_w = rl.width + (self.TWO_PAGE_GAP_PT + rr.width if rr is not None else self.TWO_PAGE_GAP_PT)
-        total_h = max(rl.height, rr.height if rr is not None else 0)
+        """2장 맞춤의 표시 배율 — 왼쪽 쪽과 그 다음 쪽을 나란히 놓고 화면에 맞춘다.
+        261024-4(마스터 §3): 끼운 쪽·저장 전 회전도 한 쪽 보기와 같은 원천(`_shown_size`)."""
+        sl = self._shown_size(idx_left)
+        if sl is None:
+            return None
+        ir = self._two_right(idx_left)
+        sr = self._shown_size(ir) if ir is not None else None
+        total_w = sl[0] + self.TWO_PAGE_GAP_PT + (sr[0] if sr else 0)
+        total_h = max(sl[1], sr[1] if sr else 0)
         if total_w <= 0 or total_h <= 0:
             return None
         vp = self.view.viewport().size()
@@ -3193,16 +3220,32 @@ class MainView(QWidget):
                                    scroll=scroll, src=src)
 
 
-    def _render_two_pages(self):
-        """v1.5.0 M3: 페이지 N과 N+1을 가로로 합쳐 한 화면에 표시."""
-        from PyQt6.QtGui import QPainter as _QP
-        n = self._doc.page_count
-        idx_left = self._current_page
-        idx_right = idx_left + 1 if (idx_left + 1) < n else None
+    def _two_pixmap(self, page_index: int, ps: float) -> QPixmap:
+        """2장 맞춤 한쪽 그림 — 한 쪽 보기와 같은 원천(끼운 쪽은 그 원본, 나머지는 전역 캐시)에 저장 전 회전까지."""
+        rp = self._render_scaled_any(page_index, ps)
+        pm = QPixmap.fromImage(QImage(rp.samples, rp.width, rp.height, rp.width * 3,
+                                      QImage.Format.Format_RGB888).copy())
+        rot = self._rotations.get(page_index, 0)
+        if rot:
+            pm = pm.transformed(QTransform().rotate(rot), Qt.TransformationMode.SmoothTransformation)
+        return pm
 
-        page_left = self._doc.doc.load_page(idx_left)
-        pdf_w_l = page_left.rect.width
-        page_right = self._doc.doc.load_page(idx_right) if idx_right is not None else None
+    def _render_two_pages(self):
+        """v1.5.0 M3: 페이지 N과 N+1을 가로로 합쳐 한 화면에 표시.
+
+        261024-4(마스터 §3): 쪽의 원천은 한 쪽 보기와 같다 — 끼운 쪽(`_page_for`·`_render_scaled_any`), 저장 전 회전,
+        오른쪽 쪽은 `_two_right`. 종전에는 이 문서의 쪽만 읽어 끼운 쪽에서 예외가 났고 회전이 빠졌다."""
+        from PyQt6.QtGui import QPainter as _QP
+        idx_left = self._current_page
+        idx_right = self._two_right(idx_left)
+
+        page_left = self._page_for(idx_left)
+        if page_left is None:
+            return
+        page_right = self._page_for(idx_right) if idx_right is not None else None
+        if page_right is None:
+            idx_right = None
+        pdf_w_l = self._shown_size(idx_left, page_left)[0]
 
         gap_pt = self.TWO_PAGE_GAP_PT
         zoom = self._two_page_zoom(idx_left)     # 261021-1: 미리 그리기(§4.7)와 같은 배율
@@ -3213,24 +3256,20 @@ class MainView(QWidget):
         dpr = self.view.devicePixelRatioF() or 1.0
         ps = zoom * dpr
         # 260829(§19.11 P-A): 2쪽 보기도 전역 캐시 경유(좌/우 각각 1페이지 키).
-        pix_l = self._doc.render_scaled(idx_left, ps)
-        pix_r = self._doc.render_scaled(idx_right, ps) if page_right else None
+        pm_l = self._two_pixmap(idx_left, ps)
+        pm_r = self._two_pixmap(idx_right, ps) if page_right is not None else None
 
         gap_px = int(gap_pt * ps)
-        total_w_px = pix_l.width + gap_px + (pix_r.width if pix_r else 0)
-        total_h_px = max(pix_l.height, pix_r.height if pix_r else 0)
+        total_w_px = pm_l.width() + gap_px + (pm_r.width() if pm_r else 0)
+        total_h_px = max(pm_l.height(), pm_r.height() if pm_r else 0)
 
         # 합성 캔버스
         canvas = QPixmap(total_w_px, total_h_px)
         canvas.fill(QColor("white"))
         painter = _QP(canvas)
-        img_l = QImage(pix_l.samples, pix_l.width, pix_l.height,
-                       pix_l.width * 3, QImage.Format.Format_RGB888).copy()
-        painter.drawPixmap(0, 0, QPixmap.fromImage(img_l))
-        if pix_r:
-            img_r = QImage(pix_r.samples, pix_r.width, pix_r.height,
-                           pix_r.width * 3, QImage.Format.Format_RGB888).copy()
-            painter.drawPixmap(pix_l.width + gap_px, 0, QPixmap.fromImage(img_r))
+        painter.drawPixmap(0, 0, pm_l)
+        if pm_r:
+            painter.drawPixmap(pm_l.width() + gap_px, 0, pm_r)
         painter.end()
         canvas.setDevicePixelRatio(dpr)
 
@@ -3240,9 +3279,9 @@ class MainView(QWidget):
         self._cont_prev_h = None                  # 260914-1(§2.10): 2쪽 보기는 한 쪽씩
         self._cont_next = False
 
-        # 하이라이트 (현재 페이지 = 좌측)
+        # 하이라이트 (현재 페이지 = 좌측). 261024-4: 저장 전 회전한 쪽은 좌표가 어긋나 그리지 않는다(한 쪽 보기와 같다)
         if self._query:
-            for pg, off_pt_x in [(page_left, 0.0)]:
+            for pg, off_pt_x in ([(page_left, 0.0)] if not self._rotations.get(idx_left, 0) else []):
                 rects = page_hits(pg, self._query, self._search_mode, ocr=self._ocr_for(self._current_page))
                 for r in rects:
                     r = self._disp_search_rect(pg, r)        # 260611-99: /Rotate 보정
@@ -3252,9 +3291,9 @@ class MainView(QWidget):
                     item.setBrush(QBrush(QColor(255, 235, 59, 90)))
                     item.setPen(QPen(Qt.PenStyle.NoPen))
                     self.scene.addItem(item)
-            if page_right:
+            if page_right is not None and not self._rotations.get(idx_right, 0):
                 off_x = pdf_w_l + gap_pt
-                rects = page_hits(page_right, self._query, self._search_mode, ocr=self._ocr_for(self._current_page + 1))
+                rects = page_hits(page_right, self._query, self._search_mode, ocr=self._ocr_for(idx_right))
                 for r in rects:
                     r = self._disp_search_rect(page_right, r)  # 260611-99: /Rotate 보정
                     rect = QRectF((r.x0 + off_x) * zoom, r.y0 * zoom,
