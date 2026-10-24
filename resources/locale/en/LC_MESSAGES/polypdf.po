@@ -1656,6 +1656,10 @@ msgid "오류"
 msgstr "Error"
 
 #: viewer/app.py
+msgid "클립보드에 복사하지 못했습니다 — 다른 프로그램이 클립보드를 쓰고 있습니다."
+msgstr "Could not copy to the clipboard — another program is using it."
+
+#: viewer/app.py
 msgid "서명..."
 msgstr "Sign..."
 
@@ -2689,6 +2693,11 @@ msgstr "Upgrade"
 #: viewer/app.py
 msgid "업그레이드 시작에 실패했습니다. 그냥 종료합니다."
 msgstr "Failed to start the upgrade. Exiting without upgrading."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "클립보드로 복사: {done}개 — {failed}개는 다른 프로그램이 클립보드를 쓰고 있어 넣지 못했습니다."
+msgstr "Copied to clipboard: {done} — {failed} could not be copied because another program is using the clipboard."
 
 #: viewer/app.py
 #, python-brace-format

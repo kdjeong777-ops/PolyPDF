@@ -748,6 +748,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         stem = Path(cur).stem
         name = Path(cur).name
         n = 0
+        last = None
         for pg in rows:
             pm = self._render_page_pixmap(view, pg)
             if pm is None or pm.isNull():
@@ -755,7 +756,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             saved = ss.save_screenshot(pm, source_name=name, suffix=f"_p{pg+1}")
             self.shot_strip.add_item(str(saved), kind="image", label=stem,
                                      src_pdf=cur, src_page=int(pg), prepend=False)
+            last = pm
             n += 1
+        if last is not None:
+            # 261024-2(스크린샷 SOT §3): 이 길만 클립보드 복사가 빠져 있었다 — 여러 쪽이면 마지막 쪽
+            self._copy_image_to_clipboard(last)
         if n:
             self.status.showMessage(tr('{n}개 페이지 캡쳐').format(n=n), 4000)
             self._after_capture()
@@ -775,10 +780,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         cur = view.current_file()
         name = Path(cur).name if cur else "region.png"
         saved = ss.save_screenshot(pm, source_name=name, suffix="_R")
-        try:
-            QApplication.clipboard().setPixmap(pm)
-        except Exception:
-            pass
+        self._copy_image_to_clipboard(pm)
         self.shot_strip.add_item(str(saved), kind="image",
                                  label=Path(name).stem, prepend=False)
         self.status.showMessage(tr("영역 캡쳐 저장"), 4000)
@@ -799,9 +801,29 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         else:
             self._ensure_shots_visible()
 
+    def _copy_image_to_clipboard(self, img, on_done=None):
+        """261024-2(스크린샷 SOT §8.3): 캡처 그림을 클립보드에 — 다른 프로그램이 쥐고 있으면
+        다시 시도하고, 끝내 못 넣으면 상태 표시줄에 알린다(종전에는 말없이 빠졌다)."""
+        from viewer import clipboard_util
+
+        def done(ok):
+            if not ok:
+                self.status.showMessage(
+                    tr("클립보드에 복사하지 못했습니다 — 다른 프로그램이 클립보드를 쓰고 있습니다."), 6000)
+            if on_done:
+                on_done(ok)
+        clipboard_util.set_image(img, done)
+
+    CLIP_ITEM_GAP_MS = 350   # 컷 사이 간격 — 있어야 Win+V 기록에 따로 쌓인다
+
     def _on_clipboard_save(self):
-        """260606-17: 클립보드 비우고 스크린샷들을 순서대로 클립보드(히스토리)에 복사.
-        각 항목을 간격을 두고 복사 → Win+V 목록에 차례로 쌓임."""
+        """260606-17: 클립보드 기록을 비우고 스크린샷들을 순서대로 클립보드(기록)에 복사.
+        각 항목을 간격을 두고 복사 → Win+V 목록에 차례로 쌓임.
+
+        261024-2(스크린샷 SOT §8.1): 기록 지우기는 배경(`ClipHistoryClearWorker`) — 메인에서
+        1.5~2.2초 섰고, 지운 직후 첫 컷이 클립보드를 못 열어 빠졌다. 넣기는 §8.3 한 곳."""
+        if getattr(self, "_clip_busy", False):
+            return
         paths = []
         try:
             paths = [p for p in self.shot_strip.all_paths()
@@ -812,42 +834,40 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not paths:
             QMessageBox.information(self, tr("클립보드로 복사"), tr("복사할 스크린샷이 없습니다."))
             return
-        # 클립보드 히스토리 비우기(베스트 에포트) + 현재 클립보드 클리어
-        try:
-            import subprocess
-            subprocess.run(
-                ["powershell", "-NoProfile", "-Command",
-                 "Get-Command Clear-Clipboard -ErrorAction SilentlyContinue | "
-                 "ForEach-Object { Clear-Clipboard }; "
-                 "try{[Windows.ApplicationModel.DataTransfer.Clipboard,Windows.ApplicationModel.DataTransfer,ContentType=WindowsRuntime]::ClearHistory()}catch{}"],
-                creationflags=0x08000000, timeout=8)
-        except Exception:
-            pass
-        try:
-            QApplication.clipboard().clear()
-        except Exception:
-            pass
-        from PyQt6.QtGui import QImage
-        from PyQt6.QtCore import QTimer
+        from viewer import clipboard_util
+        from viewer.workers import run_in_thread
+        self._clip_busy = True
         self._clip_queue = list(paths)
         self._clip_total = len(paths)
-
-        def copy_next():
-            if not self._clip_queue:
-                self.status.showMessage(
-                    tr('클립보드로 복사 완료: {clip_total}개 — Win+V 로 붙여넣기').format(clip_total=self._clip_total), 7000)
-                return
-            p = self._clip_queue.pop(0)
-            try:
-                img = QImage(p)
-                if not img.isNull():
-                    QApplication.clipboard().setImage(img)
-            except Exception:
-                pass
-            QTimer.singleShot(350, copy_next)   # 간격 → 각각 히스토리 항목으로
-
+        self._clip_failed = 0
         self.status.showMessage(tr("클립보드로 복사 중..."), 3000)
-        copy_next()
+        w = clipboard_util.ClipHistoryClearWorker()
+        w.finished.connect(self._clip_copy_next)     # 메인 창의 메서드 → 메인 스레드에서 받는다
+        run_in_thread(w, self._thread_keep)
+
+    def _clip_copy_next(self):
+        """'클립보드로 복사' 의 컷 하나 넣기 — 들어간(또는 포기한) 뒤 간격을 두고 다음 컷."""
+        from PyQt6.QtGui import QImage
+        from PyQt6.QtCore import QTimer
+        from viewer import clipboard_util
+        if not self._clip_queue:
+            self._clip_busy = False
+            done = self._clip_total - self._clip_failed
+            if self._clip_failed:
+                self.status.showMessage(
+                    tr('클립보드로 복사: {done}개 — {failed}개는 다른 프로그램이 클립보드를 쓰고 있어 넣지 못했습니다.').format(
+                        done=done, failed=self._clip_failed), 9000)
+            else:
+                self.status.showMessage(
+                    tr('클립보드로 복사 완료: {clip_total}개 — Win+V 로 붙여넣기').format(clip_total=done), 7000)
+            return
+        img = QImage(self._clip_queue.pop(0))
+
+        def after(ok):
+            if not ok:
+                self._clip_failed += 1
+            QTimer.singleShot(self.CLIP_ITEM_GAP_MS, self._clip_copy_next)
+        clipboard_util.set_image(img, after)
 
     CLIP_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff")
 
@@ -2253,10 +2273,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     pm = scr.grabWindow(0)
             if pm is None or pm.isNull():
                 return
-            try:
-                QApplication.clipboard().setPixmap(pm)
-            except Exception:
-                pass
+            self._copy_image_to_clipboard(pm)
             saved = ss.save_screenshot(pm, source_name=tr("화면캡처.png"))
             self.shot_strip.add_item(str(saved), kind="image",
                                      label=Path(saved).stem, prepend=False)
@@ -8075,11 +8092,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # v1.6.3 B2: view 전체(스크롤바·레터박스 포함) → 렌더된 페이지 영역만 캡처
         pix = view.grab_page()
         # 260606-5: 캡처 이미지를 클립보드에도 복사(다른 프로그램에 붙여넣기 용도)
-        try:
-            if pix is not None and not pix.isNull():
-                QApplication.clipboard().setPixmap(pix)
-        except Exception:
-            pass
+        if pix is not None and not pix.isNull():
+            self._copy_image_to_clipboard(pix)
         cur = view.current_file()
         src_name = Path(cur).name if cur else "screenshot.pdf"
         is_pdf = bool(cur and cur.lower().endswith(".pdf"))
