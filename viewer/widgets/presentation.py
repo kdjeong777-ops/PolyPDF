@@ -785,7 +785,7 @@ class PresentationWindow(QWidget):
         self._tb_close.setStyleSheet(nav_css)
         self._tb_close.clicked.connect(self.close)   # D2: 전체모드 종료
         row1.addWidget(self._tb_close)
-        # 261021-3(발표 SOT §6.1, 사용자 지시): 맨 오른쪽 — 발표 창을 본화면(뷰어가 있는 모니터) ↔ 다른 화면으로
+        # 261021-3(발표 SOT §6.1, 사용자 지시): 맨 오른쪽 — 발표 창을 본화면(뷰어가 있는 모니터) ↔ 화면2로(261024-3: 글은 갈 곳)
         self._tb_screen = QPushButton()
         self._tb_screen.setStyleSheet(nav_css + "QPushButton:disabled{color:#777;background:rgba(255,255,255,0.05);}")
         self._tb_screen.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1150,15 +1150,30 @@ class PresentationWindow(QWidget):
         if emit:
             self.otherScreenChanged.emit(self._other_screen)
 
+    @staticmethod
+    def _screen_desc(scr) -> str:
+        """풍선 도움말용 모니터 이름·해상도(예: `\\\\.\\DISPLAY2 · 1920×1080`)."""
+        try:
+            g = scr.geometry()
+            return "%s · %d×%d" % (scr.name(), g.width(), g.height())
+        except Exception:
+            return ""
+
     def _update_screen_button(self) -> None:
+        """261024-3(발표 SOT §6.1, 사용자 결정): 글은 **누르면 갈 곳** — 본화면이면 '화면2로', 화면2면 '본화면으로'."""
         b = getattr(self, "_tb_screen", None)
         if b is None:
             return
-        has_other = self._other_target() is not None
-        b.setText(tr("🖥 다른 화면") if (self._other_screen and has_other) else tr("🖥 본화면"))
-        b.setEnabled(has_other)
-        b.setToolTip(tr("발표 창을 다른 모니터로 옮기기 / 뷰어가 있는 모니터로 되돌리기") if has_other
-                     else tr("모니터가 하나뿐입니다"))
+        other = self._other_target()
+        on_other = self._other_screen and other is not None
+        b.setText(tr("🖥 본화면으로") if on_other else tr("🖥 화면2로"))
+        b.setEnabled(other is not None)
+        if other is None:
+            b.setToolTip(tr("모니터가 하나뿐입니다"))
+        elif on_other:
+            b.setToolTip(tr("발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}").format(desc=self._screen_desc(self._home_screen())))
+        else:
+            b.setToolTip(tr("발표 창을 다른 모니터로 옮깁니다 — {desc}").format(desc=self._screen_desc(other)))
 
     def show_presentation(self):
         # 260609-9: 최상위 창으로 전체화면 표시 + 포커스(키 입력 수신)
