@@ -131,11 +131,12 @@ try:
         chk(stale not in ko_html, "F ko 도움말에 낡은 경로·없어진 설정이 없다: %s" % stale)
     chk("Restore the screenshot list on startup" not in en_html, "F en 도움말에 없어진 설정이 없다")
     i18n.install(None, "en")
-    for ko_name in ("도구", "환경설정...", "인덱스 재구축", "구성요소 설치(녹화·OCR)…", "Windows 기본 PDF 앱으로 등록…",
+    # 261024-1(디자인 SOT §2.9): 패널의 '도구' 라벨은 없어졌다 — 화면의 이름은 탭 `도구(&T)`(니모닉 & 는 뺀다)
+    for ko_name in ("도구(&T)", "환경설정...", "인덱스 재구축", "구성요소 설치(녹화·OCR)…", "Windows 기본 PDF 앱으로 등록…",
                     "현재 검색어를 즐겨찾기에 추가...", "즐겨찾기 관리...", "선과 텍스트 입력 설정…", "2단 보기",
                     "평탄화해서 내보내기...", "PDF로 인쇄", "다단 인쇄", "OCR 로 읽기", "해시태그 편집...", "녹화 테스트 (3초)",
                     "업데이트 자동 다운로드", "베타(테스트) 버전도 받기", "계속 편집"):
-        en_name = i18n.tr(ko_name).replace("...", "").replace("…", "")
+        en_name = i18n.tr(ko_name).replace("...", "").replace("…", "").replace("&", "")
         chk(en_name in en_html, "F en 도움말의 이름이 실제 영어 화면과 같다: %s" % en_name)
     ko_sec = len(re.findall(r"<h3>", ko_html))
     chk(ko_sec >= 17, "F ko 도움말이 편집·쪽 편집·인쇄·텍스트 창·발표·태그 절을 갖는다", str(ko_sec))

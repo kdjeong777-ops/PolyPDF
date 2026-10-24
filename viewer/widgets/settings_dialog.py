@@ -234,23 +234,25 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(grp_hist)
 
-        # ── 패널 토글 툴바 (v1.6.23) ─────────────────────
-        # 검색결과/스크린샷 패널의 표시는 설정 메뉴(상단)·툴바에서 토글.
-        # 여기서는 상단 토글 툴바 자체의 가시성만 제어 (기본 OFF — 메인 공간 확보).
-        grp_panels = QGroupBox(tr("패널 툴바 (기본 보이기)"))
+        # ── 메뉴 탭 세부 줄 · 모음 (v1.6.23 패널 툴바 → 261024-1, 디자인 SOT §2.9·§2.9.4) ──
+        grp_panels = QGroupBox(tr("세부 줄 (메뉴 탭 아래 한 줄)"))
         pl = QVBoxLayout(grp_panels)
-        self.chk_show_panel_toolbar = QCheckBox(
-            tr("상단 패널 툴바([뷰어모드]·[기능]) 보이기")
-        )
+        self.chk_show_panel_toolbar = QCheckBox(tr("메뉴 탭 아래 세부 줄 보이기"))
         self.chk_show_panel_toolbar.setChecked(
             bool(self._prefs.get("show_panel_toolbar", True)))
         pl.addWidget(self.chk_show_panel_toolbar)
         info_tb = QLabel(
-            tr("<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 패널 자체의 "
-            "보이기/숨기기는 메뉴 → 설정의 두 토글(검색결과/스크린샷)에서 즉시 가능.</small>")
-        )
+            tr("<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 숨긴 채 탭을 누르면 다시 보입니다.</small>"))
         info_tb.setStyleSheet("color:#666;"); info_tb.setWordWrap(True)
         pl.addWidget(info_tb)
+        self._collection = [str(x) for x in (self._prefs.get("ribbon_collection") or [])]
+        _crow = QHBoxLayout(); _crow.setContentsMargins(0, 0, 0, 0)
+        self.btn_edit_collection = QPushButton(tr("모음 메뉴 편집..."))
+        self.btn_edit_collection.setToolTip(tr("'모음' 탭에 보일 명령과 차례를 고릅니다"))
+        self.btn_edit_collection.clicked.connect(self._edit_collection)
+        self.btn_edit_collection.setEnabled(hasattr(self._host, "ribbon_catalog"))
+        _crow.addWidget(self.btn_edit_collection); _crow.addStretch(1)
+        pl.addLayout(_crow)
         # 260609-2: 페이지 경계에서 다음/이전 파일로 이동
         # 260912-6(입력 SOT §2.4): 이제 **물고 나서** 움직인다 — '자동 이동' 이라는
         #   문구가 낡았다. 설정은 경계 이동 자체를 켜고 끄는 스위치고, 물음은 그 안에서의 확인이다.
@@ -537,6 +539,15 @@ class SettingsDialog(QDialog):
         """'마지막에 열었던 …' 일 때만 '마지막 페이지' 항목이 뜻을 가진다."""
         self.chk_last_page.setEnabled(bool(on))
 
+    def _edit_collection(self):
+        """261024-1(디자인 SOT §2.9.4): '모음' 탭 사용자 지정 — 확인한 차례는 이 창의 [확인] 때 저장·적용된다."""
+        from viewer.widgets.ribbon import RibbonCustomizeDialog
+        catalog, labels = self._host.ribbon_catalog()
+        current = self._collection or list(self._host._collection_ids())
+        dlg = RibbonCustomizeDialog(catalog, current, labels, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._collection = dlg.result_ids()
+
     def _pick_startup_folder(self):
         from PyQt6.QtWidgets import QFileDialog
         d = QFileDialog.getExistingDirectory(self, tr("시작 시 열 폴더 선택"),
@@ -778,6 +789,7 @@ class SettingsDialog(QDialog):
             "screenshot_max": int(self.spin_screenshot.value()),
             # v1.6.23: 패널 토글 툴바 가시성
             "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),
+            "ribbon_collection": list(self._collection),     # 261024-1(디자인 SOT §2.9.4) — 비면 기본값
             # 260609-2: 페이지 경계 파일 이동
             "cross_file_nav": self.chk_cross_file_nav.isChecked(),
             "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1

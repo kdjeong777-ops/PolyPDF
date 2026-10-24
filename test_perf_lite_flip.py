@@ -154,33 +154,37 @@ mw._lite_heavy_notice("OCR")
 pump(50)
 chk(len(told) == 1 and "OCR" in told[0], "③ 무거운 작업 알림은 작업마다 한 번", str(len(told)))
 
-# ── ④ 메뉴·패널 가운데 (디자인 SOT §2.9.3) ─────────────────────────────────────────
-tb = mw._panel_toolbar
-bar = mw.menuBar()
+# ── ④ 탭 줄·세부 줄 가운데 (디자인 SOT §2.9.3, 261024-1 탭 구조) ─────────────────────────
+from viewer.widgets import ribbon as _rbm
+rb = mw._ribbon
+row = rb.row(_rbm.COLLECTION)
+rb.select(_rbm.COLLECTION)
+
+
+def _xspan(ws):
+    return (min(x.mapTo(mw, x.rect().topLeft()).x() for x in ws),
+            max(x.mapTo(mw, x.rect().topRight()).x() for x in ws))
+
+
 for w in (1920, 1700):
     mw.resize(w, 900)
     pump(300)
-    l, r = tb._span()
-    c = (l + r) / 2.0
+    l, r = _xspan([rb.tabs_box])
+    chk(abs((l + r) / 2.0 - mw.width() / 2.0) <= 3, "④ %dpx: 탭 묶음이 창 가운데" % w, "%d~%d / %d" % (l, r, mw.width()))
+    l, r = _xspan(row.buttons())
+    chk(abs((l + r) / 2.0 - mw.width() / 2.0) <= 3, "④ %dpx: 모음 줄이 창 가운데" % w, "%d~%d / %d" % (l, r, mw.width()))
     s = mw.toolbar_search
-    ok_c = abs(c - tb.width() / 2.0) <= 3 or (s.isVisible() and s.geometry().left() - r - 1 <= 16 + 3)
-    chk(ok_c and tb.pad.width() > 0, "④ %dpx: 패널 묶음이 창 가운데(또는 검색창과 16px 띄운 데까지)" % w,
-        "가운데 %.0f / 창 %.0f / 검색창까지 %d" % (c, tb.width() / 2.0, s.geometry().left() - r - 1))
     if s.isVisible():
-        chk(s.geometry().left() - r - 1 >= 16, "④ %dpx: 검색창과 최소 16px" % w)
-    rects = [bar.actionGeometry(a) for a in bar.actions() if a.isVisible()]
-    mc = (min(x.left() for x in rects) + max(x.right() for x in rects)) / 2.0
-    chk(abs(mc - bar.width() / 2.0) <= 3, "④ %dpx: 메뉴가 창 가운데" % w, "%.0f / %.0f" % (mc, bar.width() / 2.0))
+        chk(s.mapTo(mw, s.rect().topLeft()).x() > _xspan([rb.tabs_box])[1], "④ %dpx: 검색창은 탭 묶음 오른쪽" % w)
 mw.resize(1000, 900)
 pump(300)
-chk(tb.pad.width() == 0, "④ 좁으면 빈 칸을 없애 단추를 넘침(»)으로 밀지 않는다", str(tb.pad.width()))
-chk(len(tb.groups) == 2 and [g[0].text() for g in tb.groups] == ["보기", "도구"],
-    "④ 그룹 바탕은 '보기'·'도구' 두 묶음")
-from viewer.widgets import center_bars
-chk(center_bars.GROUP_BG[False] != center_bars.GROUP_BG[True], "④ 그룹 바탕색은 라이트·다크가 다르다")
+l, r = _xspan(row.buttons())
+chk(l < 40, "④ 좁으면 늘림 빈 칸이 0 이 되어 단추가 왼쪽부터", str(l))
+chk(len(row.groups()) == 2, "④ 모음 기본값의 그룹 바탕은 두 묶음(보기·도구)", str(len(row.groups())))
+chk(_rbm.GROUP_BG[False] != _rbm.GROUP_BG[True], "④ 그룹 바탕색은 라이트·다크가 다르다")
 mw.apply_theme("dark")
 pump(100)
-chk(tb.dark is True, "④ 다크로 바꾸면 그룹 바탕도 다크 색")
+chk(row.dark is True, "④ 다크로 바꾸면 그룹 바탕도 다크 색")
 
 os.environ.pop("POLYPDF_FAKE_POWER_SAVING", None)
 print("\n=== %s ===" % ("ALL PASS" if not fails else "FAIL %d" % len(fails)))

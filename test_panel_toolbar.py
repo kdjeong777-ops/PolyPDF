@@ -1,118 +1,188 @@
-"""260606-25: 패널 툴바 재설계 통합 테스트 (offscreen)."""
+"""260606-25 패널 툴바 → 261024-1 메뉴 탭(`Ribbon`)·모음 통합 테스트 (offscreen). 디자인 SOT §2.9·§2.9.3·§2.9.4."""
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")   # 260628-2: cp949 콘솔에서 한글·em-dash 출력이 깨지지 않게
 sys.path.insert(0, os.path.dirname(__file__))
 
+from PyQt6.QtCore import QStandardPaths, Qt
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
-from viewer.app import MainWindow
 
+QStandardPaths.setTestModeEnabled(True)    # 마스터 §14.7.2 — 사용자 설정 폴더를 건드리지 않는다
 app = QApplication.instance() or QApplication(sys.argv)
-mw = MainWindow()
-mw.show()
-app.processEvents()
+
+from viewer.app import MainWindow
+from viewer.widgets.ribbon import (COLLECTION, DEFAULT_COLLECTION, SEP, TAB_BAR_COLOR, Ribbon,
+                                   RibbonCustomizeDialog, cmd_id)
 
 fails = []
 
-def chk(cond, msg):
-    print(("PASS" if cond else "FAIL"), "-", msg)
+
+def chk(cond, msg, extra=""):
+    print(("PASS" if cond else "FAIL"), "-", msg, extra if not cond else "")
     if not cond:
         fails.append(msg)
 
-# 1) 패널 툴바 기본 보이기
-chk(mw._panel_toolbar.isVisible(), "패널 툴바 기본 보이기")
 
-# 2) 옛 토글 버튼이 툴바에 없음 (QAction 객체는 내부 상태로 유지)
-acts = mw._panel_toolbar.actions()
-btn_texts = []
-for a in acts:
-    w = mw._panel_toolbar.widgetForAction(a)
-    if isinstance(w, QToolButton):
-        btn_texts.append(w.text())
-print("버튼 목록:", btn_texts)
-# 디자인 SOT '화면 디자인 작업 계획서.md' §2.9 표 = 구성·순서의 기준.
-#   260618-8 ①  '전체화면' → '발표보기' 개명
-#   260618-18 ② '책갈피·단어장 동시 생성' 버튼 삭제(도구 메뉴엔 유지)
-#   +법령/고시·건설기준(260618-37)·특허(260618-43)·이미지→PDF(260825-13)·번역(260623)
-#   260910 보기에 '텍스트', 도구에 'OCR' 추가 + 보기의 탭 버튼 차례를 우측 탭 순서와 같게
-#   260911-1 도구 8개의 차례를 사용자 지시대로(§2.9.1) — 목록에 없던 '번역' 은 맨 뒤
+def mid_x(w, ref):
+    return w.mapTo(ref, w.rect().topLeft()).x() + w.width() / 2
+
+
+# 0) ★ 첫 레이아웃만으로 가운데(§2.9.3, 261024-1 결함) — 이벤트 루프를 돌리지 않는다.
+#    종전 코드는 창이 뜬 뒤 `RECENTER_MS` 타이머로 빈 칸 폭을 쟀다 — show() 직후에는 빈 칸 0(왼쪽 정렬)이라 이 검사에 실패한다
+#    (261024-1 실측: 첫 재기 전 pad=0, span 5~1187 / 창 1700).
+mw0 = MainWindow()
+mw0.resize(1600, 900)
+mw0.show()                                  # processEvents 없이 곧바로 잰다
+rb0 = mw0._ribbon
+chk(abs(mid_x(rb0.tabs_box, mw0) - mw0.width() / 2) <= 2, "첫 레이아웃: 탭 묶음이 창 가운데",
+    f"mid={mid_x(rb0.tabs_box, mw0)} win={mw0.width()}")
+bs0 = rb0.row(COLLECTION).buttons()
+l0 = bs0[0].mapTo(mw0, bs0[0].rect().topLeft()).x()
+r0 = bs0[-1].mapTo(mw0, bs0[-1].rect().topRight()).x()
+chk(abs((l0 + r0) / 2 - mw0.width() / 2) <= 3, "첫 레이아웃: 모음 줄이 창 가운데", f"{l0}~{r0}")
+chk(mw0.toolbar_search.isVisible() and mw0.toolbar_search.mapTo(mw0, mw0.toolbar_search.rect().topRight()).x()
+    > mw0.width() - 40, "첫 레이아웃: 검색창이 탭 줄 오른쪽 끝에 보인다")
+mw0.close()
+
+mw = MainWindow()
+mw.resize(1600, 900)
+mw.show()
+app.processEvents()
+rb = mw._ribbon
+
+# 1) 메뉴 자리 = 탭. 메뉴 객체는 화면에 붙지 않은 QMenuBar 가 들고 있다
+chk(isinstance(mw.menuWidget(), Ribbon), "창 메뉴 자리 = Ribbon")
+chk(mw.menuBar() is not mw.menuWidget() and not mw.menuBar().isVisible(), "menuBar() 는 숨은 메뉴 보관 막대")
+chk(mw.menuWidget() is rb, "menuBar() 를 불러도 탭이 바뀌지 않는다")
+titles = [rb.tab_button(k).text() for k in rb.keys()]
+chk(titles == ["모음", "파일(&F)", "즐겨찾기(&V)", "보기(&B)", "도구(&T)", "도움말(&H)"], "탭 차례·이름", str(titles))
+chk(rb.current_key() == COLLECTION, "기본 탭 = 모음")
+chk(mw.toolbar_search.parentWidget() is rb.right_box, "검색창은 탭 줄 오른쪽 칸")
+
+# 2) 모음 기본값 = 종전 패널 18개(§2.9 표) — 숨은 단추(키 없음·번역)도 액션으로는 있다
+row = rb.row(COLLECTION)
+acts = [a for a in row.actions() if not a.isSeparator() and row.widgetForAction(a)
+        and not row.widgetForAction(a).property("ribbonSpacer")]
+names = [a.iconText() for a in acts]
 expected = ["1단", "2단", "텍스트", "단어장", "검색", "스크린샷", "법령/고시",
             "건설기준", "특허", "발표보기",
             "OCR", "단어장 생성", "책갈피 생성", "PDF병합",
-            "이미지→PDF", "암호화", "번역", "변환해서 내보내기"]       # 261014-28: 스크린샷 PDF 저장 단추 뺌, 261016-4: 변환은 암호화 오른쪽
-for e in expected:
-    chk(e in btn_texts, f"버튼 존재: {e}")
-chk(btn_texts == expected, "버튼 순서: §2.9 표와 일치")
-chk("스크린샷 PDF 저장" not in btn_texts, "261014-28 '스크린샷 PDF 저장' 단추 제거됨(스크린샷 창에서)")
-chk("전체화면" not in btn_texts, "옛 '전체화면' 라벨 제거됨(→발표보기)")
-chk("책갈피·단어장 동시 생성" not in btn_texts, "'책갈피·단어장 동시 생성' 버튼 제거됨")
-chk("🔎 검색·단어" not in btn_texts, "옛 검색 토글 버튼 제거됨")
-chk("🖼 스크린샷" not in btn_texts, "옛 스크린샷 토글 버튼 제거됨")
+            "이미지→PDF", "암호화", "번역", "변환해서 내보내기"]
+chk(names == expected, "모음 기본 단추 차례: §2.9 표와 일치", str(names))
+chk([cmd_id(a) for a in acts] == [c for c in DEFAULT_COLLECTION if c != SEP], "모음 기본 id = DEFAULT_COLLECTION")
+groups = row.groups()
+chk(len(groups) == 2, "모음 그룹 둘(보기·도구)", str(len(groups)))
+chk("스크린샷 PDF 저장" not in names and "전체화면" not in names and "책갈피·단어장 동시 생성" not in names,
+    "옛 단추 없음(스크린샷 PDF 저장·전체화면·동시 생성)")
+vis = [b.text() for b in row.buttons()]
+chk("법령/고시" not in vis and "번역" not in vis, "키 없는 법령·번역 단추는 숨김(§11.12 — 액션 가시성)", str(vis))
+chk(acts[0] is mw._view_acts["single"], "모음 단추 = 메뉴 액션과 같은 객체")
 
 # 3) 내부 상태 QAction 유지
-chk(hasattr(mw, "act_toggle_search") and hasattr(mw, "act_toggle_shot"),
-    "act_toggle_search/shot 내부 유지")
+chk(hasattr(mw, "act_toggle_search") and hasattr(mw, "act_toggle_shot"), "act_toggle_search/shot 내부 유지")
 
-# 4) 뷰어 모드 동작
+# 4) 탭 전환 — 고른 탭만 체크, 세부 줄 바뀜, 밑줄 바 색
+rb.select("tools")
+chk(rb.tab_button("tools").isChecked() and not rb.tab_button(COLLECTION).isChecked(), "도구 탭 고름")
+chk(rb.stack.currentWidget() is rb.row("tools"), "세부 줄 = 도구")
+tnames = [a.iconText() for a in rb.row("tools").actions() if not a.isSeparator() and cmd_id(a)]
+chk(tnames[:3] == ["OCR", "단어장 생성", "책갈피 생성"], "도구 줄 앞부분 = 모음 도구 차례", str(tnames))
+sub = [rb.row("tools").widgetForAction(a) for a in rb.row("tools").actions() if a.menu() is not None]
+chk(sub and all(isinstance(w, QToolButton) and w.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+                for w in sub), "하위 메뉴는 ▾ 단추(누르면 펼침)")
+chk(TAB_BAR_COLOR in rb.tab_row.styleSheet() and "checked" in rb.tab_row.styleSheet(), "고른 탭 밑줄 바 스타일")
+fav = rb.row("fav")
+chk(len([a for a in fav.actions() if not a.isSeparator() and cmd_id(a) == ""]) >= 1, "즐겨찾기 줄 = 즐겨찾기 메뉴 항목")
+
+# 5) Alt+글자 → 그 탭(드롭다운 없음)
+mw.activateWindow(); app.processEvents()
+rb.select(COLLECTION)
+QTest.keyClick(mw, Qt.Key.Key_F, Qt.KeyboardModifier.AltModifier)
+QTest.qWait(300)                            # 니모닉은 animateClick — 잠시 뒤 눌린다
+chk(rb.current_key() == "file", "Alt+F → 파일 탭", rb.current_key())
+QTest.keyClick(mw, Qt.Key.Key_T, Qt.KeyboardModifier.AltModifier)
+QTest.qWait(300)
+chk(rb.current_key() == "tools", "Alt+T → 도구 탭", rb.current_key())
+
+# 6) 메뉴 막대를 뗐어도 메뉴 항목의 단축키가 산다(파일 줄이 안 보일 때도) — Ctrl+R 새로고침
+rb.select(COLLECTION); app.processEvents()
+hits = []
+mw._sc_act_refresh.triggered.connect(lambda *_: hits.append(1))
+QTest.keyClick(mw, Qt.Key.Key_R, Qt.KeyboardModifier.ControlModifier); app.processEvents()
+chk(hits == [1], "파일 탭이 안 보여도 Ctrl+R(메뉴 항목 키) 동작", str(hits))
+chk(mw._sc_act_save in mw.actions(), "저장 액션이 창에 붙어 있다(Ctrl+S)")
+
+# 7) 모음 사용자 지정 — 설정 값대로, 모르는 id 는 건너뜀, 비면 기본값
+mw._prefs["ribbon_collection"] = ["file.save", SEP, "view.text", "bogus.id"]
+mw._apply_collection()
+ids = [cmd_id(a) or ("|" if a.isSeparator() else None) for a in row.actions()]
+ids = [i for i in ids if i]
+chk(ids == ["file.save", "|", "view.text"], "사용자 모음 차례(모르는 id 건너뜀)", str(ids))
+mw._prefs["ribbon_collection"] = []
+mw._apply_collection()
+chk([cmd_id(a) for a in row.actions() if cmd_id(a)] == [c for c in DEFAULT_COLLECTION if c != SEP], "빈 값 = 기본값")
+
+# 8) 사용자 지정 창
+cat, labels = mw.ribbon_catalog()
+chk([t for t, _ in cat] == ["파일(&F)", "보기(&B)", "도구(&T)", "도움말(&H)"], "명령 고르기 = 탭별", str([t for t, _ in cat]))
+dlg = RibbonCustomizeDialog(cat, ["view.single"], labels, mw)
+chk(dlg.result_ids() == ["view.single"], "창: 지금 모음을 보인다")
+top = dlg.tree.topLevelItem(0)                       # 파일
+dlg.list.setCurrentRow(0)
+dlg.tree.setCurrentItem(top.child(0)); dlg._add()    # 새 창
+dlg._add()                                           # 같은 명령은 한 번만
+dlg._add_sep()
+chk(dlg.result_ids() == ["view.single", "file.new_window", SEP], "창: 추가·중복 막음·구분선", str(dlg.result_ids()))
+dlg.list.setCurrentRow(1); dlg._move(-1)
+chk(dlg.result_ids()[:2] == ["file.new_window", "view.single"], "창: 위로")
+dlg.list.setCurrentRow(2); dlg._remove()
+chk(dlg.result_ids() == ["file.new_window", "view.single"], "창: 제거")
+dlg.btn_default.click()
+chk(dlg.result_ids() == list(DEFAULT_COLLECTION), "창: 기본값으로")
+dlg.close()
+
+# 9) 환경설정 — 세부 줄 보이기 · 모음 메뉴 편집 단추 · 결과에 ribbon_collection
+from viewer.widgets.settings_dialog import SettingsDialog
+mw._prefs["ribbon_collection"] = ["view.text"]
+sd = SettingsDialog(mw._prefs, mw, host=mw)
+chk(sd.btn_edit_collection.isEnabled(), "설정: 모음 메뉴 편집 단추")
+chk(sd.result_prefs().get("ribbon_collection") == ["view.text"], "설정: 모음 값 보존")
+sd.close()
+mw._prefs["ribbon_collection"] = []
+mw._apply_collection()
+rb.set_rows_visible(False)
+chk(not rb.stack.isVisible(), "세부 줄 숨김")
+rb.select("view")
+chk(rb.stack.isVisible(), "숨긴 채 탭을 누르면 다시 보인다")
+rb.select(COLLECTION)
+
+# 10) 뷰어 모드 동작(종전)
 mw._vm_single()
-chk(not mw.act_split.isChecked(), "1단: split off")
-chk(not mw.act_toggle_search.isChecked(), "1단: search off")
-chk(not mw.act_toggle_shot.isChecked(), "1단: shot off")
-
+chk(not mw.act_split.isChecked() and not mw.act_toggle_search.isChecked() and not mw.act_toggle_shot.isChecked(), "1단")
 mw._vm_split()
 chk(mw.act_split.isChecked(), "2단: split on")
-
 mw._vm_search()
-chk(not mw.act_split.isChecked(), "검색: split off")
-chk(mw.act_toggle_search.isChecked(), "검색: search on")
-chk(mw.search_tabs.currentWidget() is mw.search_area, "검색: 검색 탭 선택")
-
+chk(not mw.act_split.isChecked() and mw.act_toggle_search.isChecked()
+    and mw.search_tabs.currentWidget() is mw.search_area, "검색: 검색 탭")
 mw._vm_study()
-chk(mw.act_toggle_search.isChecked(), "단어장: search on")
 chk(mw.search_tabs.currentWidget() is mw.study_panel, "단어장: 단어장 탭 선택")
-
 mw._vm_shot()
-chk(not mw.act_split.isChecked(), "스크린샷: split off")
-chk(not mw.act_toggle_search.isChecked(), "스크린샷: search off")
-chk(mw.act_toggle_shot.isChecked(), "스크린샷: shot on")
+chk(not mw.act_toggle_search.isChecked() and mw.act_toggle_shot.isChecked(), "스크린샷: shot on")
 
-# 5) 패널 버튼 스타일/가운데 정렬 (260606-26)
-chk(len(getattr(mw, "_panel_btns", [])) == len(expected),
-    f"패널 버튼 {len(expected)}개 등록(§2.9 — 보기 10 + 도구 8)")
+# 11) 세부 줄 스타일(260606-26) · 테마
 mw._style_panel_toolbar(True)
-chk("#48" in mw._panel_btns[0].styleSheet(), "다크 스타일 적용(옅은 회색)")
+chk("#48" in row.styleSheet() and row.dark, "다크 스타일 적용(옅은 회색)")
 mw._style_panel_toolbar(False)
-chk("#e2e2e2" in mw._panel_btns[0].styleSheet(), "라이트 스타일 적용(짙은 회색 배경)")
-chk(mw._panel_btns[0].property("panelBtn") is True, "panelBtn 속성")
+chk("#e2e2e2" in row.styleSheet() and not row.dark, "라이트 스타일 적용(짙은 회색 배경)")
 
-# 6) 썸네일 번호 하단 배치 (260606-26)
+# 12) 썸네일 번호 하단 배치 (260606-26)
 from viewer.widgets.thumbs_list import PageThumbs
 pt = PageThumbs()
 chk(pt.NUM_BAND > 0, "썸네일 번호 띠 높이>0")
-chk(pt.list.iconSize().height() == pt._thumb_size.height() + pt.NUM_BAND,
-    "아이콘 높이에 번호 띠 포함")
+chk(pt.list.iconSize().height() == pt._thumb_size.height() + pt.NUM_BAND, "아이콘 높이에 번호 띠 포함")
 
-# 7) 좌측 정렬 (260606-27) - 버튼 사이엔 Expanding 스페이서 금지.
-#    단, 마지막 버튼 뒤의 1개는 허용: 우측 검색창을 오른쪽 끝으로 미는 용도(260616-3).
-#    → 디자인 SOT §2.9 '좌측 정렬 규칙'.
-from PyQt6.QtWidgets import QWidget as _QW, QSizePolicy as _SP
-widgets = [mw._panel_toolbar.widgetForAction(a)
-           for a in mw._panel_toolbar.actions()]
-last_btn = max(i for i, w in enumerate(widgets)
-               if isinstance(w, QToolButton) and w.property("panelBtn") is True)
-exp_idx = [i for i, w in enumerate(widgets)
-           if isinstance(w, _QW)
-           and w.sizePolicy().horizontalPolicy() == _SP.Policy.Expanding]
-chk(all(i > last_btn for i in exp_idx),
-    "좌측 정렬 - 버튼 사이 Expanding 스페이서 없음")
-# 스페이서 = 민 QWidget(위젯 서브클래스 제외; QLineEdit 도 정책이 Expanding 이라 걸림)
-exp_spacers = [i for i, w in enumerate(widgets)
-               if type(w) is _QW
-               and w.sizePolicy().horizontalPolicy() == _SP.Policy.Expanding]
-chk(len(exp_spacers) == 1, "우측 검색창용 Expanding 스페이서 1개")
-chk(widgets[-1] is mw.toolbar_search, "툴바 맨 끝 = 검색 입력창")
-
-# 8) 테마 전환 직후 전 위젯 update 호출 - 예외 없이 토글 (260606-27)
+# 13) 테마 전환 반복 무예외 (260606-27)
 try:
     mw.apply_theme("dark"); app.processEvents()
     mw.apply_theme("light"); app.processEvents()
@@ -124,7 +194,6 @@ except Exception as e:
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
 mw.close()
-# 260628-2: 종료코드 반환(그동안 없어서 CI 가 실패를 감지 못했다) + Qt teardown 크래시(0xC0000409)
-# 회피 — `test_side_panels.py` 와 같은 `os._exit` 관례.
+# 260628-2: 종료코드 반환 + Qt teardown 크래시(0xC0000409) 회피 — `test_side_panels.py` 와 같은 `os._exit` 관례.
 sys.stdout.flush()
 os._exit(0 if not fails else 1)

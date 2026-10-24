@@ -1227,11 +1227,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             in_drawer = bool(getattr(self, "_panel_in_drawer", False))
             panel_shows_search = (not in_drawer) and self.act_toggle_search.isChecked()
             show_tb = not panel_shows_search
-            for name in ("_tb_search_act", "_tb_search_spacer_act"):
-                a = getattr(self, name, None)
-                if a is not None:
-                    a.setVisible(show_tb)
-            if hasattr(self, "toolbar_search"):
+            if hasattr(self, "toolbar_search"):           # 261024-1: 탭 줄 오른쪽 칸은 남는다(탭이 흔들리지 않게)
                 self.toolbar_search.setVisible(show_tb)
         except Exception:
             pass
@@ -1377,18 +1373,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return self.right_splitter
 
     def _build_toolbar(self):
-        """260606-25: 패널 툴바 = [뷰어모드] 1단/2단/검색/단어장/스크린샷
-        + (띄움) + [기능] PDF병합/책갈피·단어장 동시/책갈피 생성/단어장 생성/스크린샷 PDF 저장.
-        내부 상태 토글(act_toggle_search/shot)은 유지하되 툴바엔 노출하지 않음."""
-        from PyQt6.QtWidgets import QToolButton, QLabel, QSizePolicy, QLineEdit
-        from viewer.widgets.center_bars import PanelToolBar
-        # 261021-2(디자인 SOT §2.9.3, 사용자 지시): 묶음을 창 가운데에 + 그룹마다 옅은 둥근 바탕
-        self._panel_toolbar = PanelToolBar(tr("패널"), self)
-        self._panel_toolbar.setMovable(False)
-        self.addToolBar(self._panel_toolbar)
-        self._panel_toolbar.addWidget(self._panel_toolbar.pad)   # 맨 앞 빈 칸 — 폭으로 가운데에 민다
-        self._panel_btns = []     # 260606-26: 테마 스타일 재적용 대상
-        _groups = self._panel_toolbar.groups
+        """261024-1(사용자 지시, 디자인 SOT §2.9): 창 맨 위 = 메뉴 **탭**(`Ribbon`) — 탭 줄(오른쪽 끝 검색창) + 한 줄 세부 줄.
+        탭과 세부 줄의 항목은 `_build_menus` 가 메뉴를 만든 뒤 붙인다. 종전 패널 툴바(260606-25)는 `모음` 탭이 됐다.
+        내부 상태 토글(act_toggle_search/shot)은 유지하되 화면엔 노출하지 않음."""
+        from PyQt6.QtWidgets import QLineEdit
+        from viewer.widgets.ribbon import Ribbon
+        self._ribbon = Ribbon(self)
+        self.setMenuWidget(self._ribbon)
 
         # 내부 가시성 상태(설정 메뉴·_sync_right_layout 가 사용; 툴바엔 미노출)
         self.act_toggle_search = QAction(tr("🔎 검색·단어"), self)
@@ -1402,74 +1393,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.act_toggle_shot.toggled.connect(
             lambda _=False: self._sync_right_layout())
 
-        def mk(text, tip, slot):
-            b = QToolButton(self)
-            b.setText(text)
-            b.setProperty("panelBtn", True)
-            if tip:
-                b.setToolTip(tip)
-            b.clicked.connect(lambda _=False, s=slot: s())
-            # 260628(FIX): ★ QToolBar 에 넣은 위젯은 **`addWidget()` 가 돌려주는 QAction**
-            #   으로만 숨길 수 있다. 위젯에 직접 `setVisible(False)` 를 해도 툴바가 액션
-            #   가시성에 맞춰 다시 보여준다 → 키 미입력 시 버튼을 숨기려던 게이팅이
-            #   전혀 동작하지 않았다. 액션을 위젯에 달아 두고 게이팅에서 사용한다.
-            act = self._panel_toolbar.addWidget(b)
-            b._tb_action = act
-            self._panel_btns.append(b)
-            _groups[-1].append(b)
-            return b
-
-        def lab(txt):
-            q = QLabel(txt)
-            q.setObjectName("panelGroupLabel")
-            q.setStyleSheet("color:#888;font-weight:bold;padding:0 4px;"
-                            "background:transparent;border:none;")
-            self._panel_toolbar.addWidget(q)
-            _groups.append([q])                 # 261021-2: 라벨부터 다음 라벨 전까지가 한 그룹(바탕)
-
-        # 260606-27: 좌측 정렬 → 261021-2 가운데(디자인 SOT §2.9.3) / 260618-18: '뷰어'→'보기', '기능'→'도구', 법령/고시 보기 그룹으로
-        lab(tr("보기"))
-        mk(tr("1단"), tr("오른쪽 패널 숨김 (단일 보기)"), self._vm_single)
-        mk(tr("2단"), tr("2단 보기(쪽 맞춤)"), self._vm_split)
-        # 260910(사용자 지시): 우측 첫 탭인 '텍스트' 도 보기 그룹에 둔다 —
-        #   탭 순서(텍스트/단어장/검색)와 같은 차례로 놓는다(텍스트 창 SOT §2).
-        mk(tr("텍스트"), tr("오른쪽 패널 보이기 · 텍스트 탭"), self._vm_text)
-        self._btn_vm_study = mk(tr("단어장"), tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study)
-        mk(tr("검색"), tr("오른쪽 패널 보이기 · 검색 탭"), self._vm_search)
-        self._btn_shot = mk(tr("스크린샷"), tr("오른쪽 위 탭 숨김 · 스크린샷 보이기"), self._vm_shot)
-        self._btn_law = mk(tr("법령/고시"), tr("법제처 법령·고시 검색·본문 보기"), self._action_law_search)  # 260618-18
-        self._btn_kcsc = mk(tr("건설기준"), tr("국가건설기준센터(KCSC) KDS·KCS 본문 보기"), self._action_kcsc_search)  # 260618-37
-        self._btn_kipo = mk(tr("특허"), tr("특허청(KIPO) 특허 등록정보 조회"), self._action_kipo_search)  # 260618-43
-        mk(tr("발표보기"), tr("발표 전체화면 보기 (F5)"), self._open_presentation)  # 260609-15(E1)/260618-8
-        # 보기 ↔ 도구 사이 띄움
-        _sp = QWidget(); _sp.setFixedWidth(20)
-        self._panel_toolbar.addWidget(_sp)
-        lab(tr("도구"))
-        # 260911-1(사용자 지시, 디자인 SOT §2.9·§2.9.1): 차례의 뜻은 **얼마나 자주 쓰는가** —
-        #   읽기(OCR) → 그 결과로 만드는 것(단어장·책갈피) → 문서를 합치고 바꾸는 일
-        #   → 어쩌다 한 번 쓰는 일(암호화). `도구(&T)` 메뉴 첫 구역이 **같은 차례**다(예외: 변환은 파일 메뉴, 동시 생성은 메뉴에만 — 디자인 SOT §2.9.1).
-        mk("OCR", tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"),
-           self._action_ocr_read)
-        self._btn_build_study = mk(tr("단어장 생성"), tr("도구 → 단어장 생성"), self._action_build_study)
-        mk(tr("책갈피 생성"), tr("도구 → 책갈피 자동 생성"), self.action_open_bookmarker)
-        self._btn_merge = mk(tr("PDF병합"), tr("도구 → PDF 병합"), lambda: self._on_merge_files(None))
-        self._btn_img2pdf = mk(tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"),
-                               lambda: self.action_image_to_pdf())  # 260825-13
-        mk(tr("암호화"), tr("현재 PDF에 암호·권한 설정(암호화 저장)"), self.action_encrypt_pdf)
-        self._btn_tr = mk(tr("번역"), tr("PDF 번역 (목록 창)"), lambda: self._action_translate_files())  # 260623
-        # 261014-11(형식 변환 SOT §2.1, 사용자 결정): 누르면 변환 창 — 형식은 창에서 고른다
-        # 261014-28 → 261016-6: 이름 '변환해서 내보내기'(책갈피창과 같게, '스크린샷 PDF 저장' 단추는 뺐다).
-        # 261016-7(사용자 지시, 디자인 SOT §2.9): '번역' 오른쪽 — 도구의 **맨 오른쪽**
-        self._btn_convert = mk(tr("변환해서 내보내기"), tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"), lambda: self.action_convert())
-
-        # 260616-3: 패널 툴바 오른쪽 끝에 검색 입력창(돋보기 + '검색').
+        # 260616-3 → 261024-1(디자인 SOT §2.9): 탭 줄 오른쪽 끝에 검색 입력창(돋보기 + '검색').
         #   Enter 시 검색 실행 + 검색창(검색 탭)이 숨겨져 있으면 보이게 함.
-        _rsp = QWidget()
-        _rsp.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        # 260628(UI): 검색 탭이 보이면 상단 검색박스를 숨긴다(같은 기능 중복 노출 방지).
-        #   ★ 툴바 위젯은 `addWidget()` 반환 QAction 으로만 숨겨진다(SOT §11.12) →
-        #     스페이서·입력칸의 액션을 모두 보관해 함께 껐다 켠다.
-        self._tb_search_spacer_act = self._panel_toolbar.addWidget(_rsp)
+        #   260628(UI): 검색 탭이 보이면 이 검색박스를 숨긴다(같은 기능 중복 노출 방지, `_sync_toolbar_search_visibility`).
         self.toolbar_search = QLineEdit()
         self.toolbar_search.setPlaceholderText(tr("검색"))
         self.toolbar_search.setClearButtonEnabled(True)
@@ -1479,16 +1405,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._search_lead_action = self.toolbar_search.addAction(
             _themed_icon("search"), QLineEdit.ActionPosition.LeadingPosition)
         self.toolbar_search.returnPressed.connect(self._on_toolbar_search)
-        self._tb_search_act = self._panel_toolbar.addWidget(self.toolbar_search)
-        self._panel_toolbar.search = self.toolbar_search   # 261021-2: 묶음은 검색창과 GAP_TO_SEARCH 이상 띄운다
-
-        from viewer import theme as _theme
-        self._style_panel_toolbar(_theme.is_dark())
-        self._panel_toolbar.setVisible(True)    # 260606-25: 패널 초기 보이기
+        self._ribbon.set_search(self.toolbar_search)
 
     def _style_panel_toolbar(self, dark: bool):
-        """260606-26: 패널 버튼 테두리/배경을 테마별로. 라이트=짙은 회색,
-        다크=배경보다 옅은 회색. 너무 튀지 않게 은은한 대비."""
+        """260606-26: 세부 줄(종전 패널) 버튼 테두리/배경을 테마별로. 라이트=짙은 회색,
+        다크=배경보다 옅은 회색. 너무 튀지 않게 은은한 대비. 261024-1: 탭 줄·세부 줄 전부(`Ribbon.apply_style`)."""
         if dark:
             css = (
                 "QToolButton{background:#484848;border:1px solid #606060;"
@@ -1501,14 +1422,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "border-radius:3px;padding:2px 8px;margin:1px;color:#222;}"
                 "QToolButton:hover{background:#d4d4d4;border-color:#909090;}"
                 "QToolButton:pressed{background:#c4c4c4;}")
-        try:
-            for b in getattr(self, "_panel_btns", []):
-                b.setStyleSheet(css)
-        except Exception:
-            pass
-        try:                                      # 261021-2(디자인 SOT §2.9.3): 그룹 바탕 색
-            self._panel_toolbar.dark = bool(dark)
-            self._panel_toolbar.update()
+        try:                                      # 261021-2(디자인 SOT §2.9.3): 그룹 바탕 색도 함께
+            self._ribbon.apply_style(dark, css)
         except Exception:
             pass
         # 260616-3: 오른쪽 끝 검색창 테마 스타일(둥근 모서리)
@@ -1529,6 +1444,32 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._search_lead_action.setIcon(_themed_icon("search", dark=dark))
         except Exception:
             pass
+
+    def _collection_ids(self) -> list:
+        """`모음` 탭 내용(디자인 SOT §2.9·§2.9.4) — 설정 `ribbon_collection`, 없거나 비면 기본값."""
+        from viewer.widgets.ribbon import DEFAULT_COLLECTION
+        ids = (getattr(self, "_prefs", {}) or {}).get("ribbon_collection")
+        if not isinstance(ids, list) or not ids:
+            ids = list(DEFAULT_COLLECTION)
+        return [str(x) for x in ids]
+
+    def _apply_collection(self) -> None:
+        from viewer.widgets.ribbon import SEP
+        cmds = getattr(self, "_cmds", {}) or {}
+        items = [None if cid == SEP else cmds[cid] for cid in self._collection_ids()
+                 if cid == SEP or cid in cmds]           # 모르는 id(옛 이름)는 건너뛴다
+        self._ribbon.set_collection(items)
+
+    def ribbon_catalog(self):
+        """모음 사용자 지정 창의 왼쪽 목록 — [(탭 이름, [명령 id…])], id → 단추 이름(§2.9.4)."""
+        from viewer.widgets.ribbon import cmd_id
+        cat = []
+        for m in (getattr(self, "_tab_menus", {}) or {}).values():
+            ids = [cmd_id(a) for a in m.actions() if cmd_id(a)]
+            if ids:
+                cat.append((m.title(), ids))
+        labels = {cid: a.iconText() for cid, a in (getattr(self, "_cmds", {}) or {}).items()}
+        return cat, labels
 
     def _on_toolbar_search(self):
         """260616-3: 툴바 검색창 Enter — 검색 실행.
@@ -1597,10 +1538,31 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.act_toggle_shot.setChecked(True)
         self._sync_right_layout()
 
+    def menuBar(self):
+        """261024-1(디자인 SOT §2.9): 메뉴는 화면에 붙이지 않은 `QMenuBar` 가 들고 있다 — 창 맨 위는 `Ribbon`(탭)이다.
+        `QMainWindow.menuBar()` 를 그대로 부르면 메뉴 자리(`setMenuWidget`)의 탭을 새 메뉴 막대로 바꿔 버린다."""
+        mb = getattr(self, "_menu_store", None)
+        if mb is None:
+            from PyQt6.QtWidgets import QMenuBar
+            mb = self._menu_store = QMenuBar(self)
+            mb.hide()                            # 명시적으로 숨김 — 창이 떠도 보이지 않는다
+        return mb
+
+    def _reg_cmd(self, cid, a, short=None, tip=None):
+        """261024-1(디자인 SOT §2.9): 탭 세부 줄·`모음` 에 보일 명령 — id·짧은 단추 이름·툴팁(긴 메뉴 이름)."""
+        from viewer.widgets.ribbon import short_text
+        a.setProperty("cmd_id", cid)
+        a.setIconText(short or short_text(a.text()))
+        if tip:
+            a.setToolTip(tip)
+        elif short_text(a.text()) != a.iconText():
+            a.setToolTip(a.text().split("\t")[0])
+        self._cmds[cid] = a
+        return a
+
     def _build_menus(self):
         bar = self.menuBar()
-        from viewer.widgets.center_bars import center_menubar
-        self._menubar_center = center_menubar(bar)    # 261021-2(디자인 SOT §2.9.3): 메뉴를 창 가운데에
+        self._cmds = {}                          # 261024-1: 명령 id → QAction(디자인 SOT §2.9)
         m_file = bar.addMenu(tr("파일(&F)"))
         # 261021-5(입력 SOT §3.2, 사용자 지시): 크롬식 — 새 창 Ctrl+N. 키는 항목에 걸어 Qt 가 오른쪽 칸을 채운다(디자인 SOT §2.9.2)
         a_new_win = self._sc_act_new_window = QAction(tr("새 창"), self)
@@ -1661,6 +1623,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_quit = self._sc_act_quit = QAction(tr("종료(&X)"), self)   # 261021-5: Alt+F → X(크롬식, 입력 SOT §3.2)
         a_quit.triggered.connect(self.close)
         m_file.addAction(a_quit)
+        for _cid, _a in (("file.new_window", a_new_win), ("file.open_folder", a_open),
+                         ("file.open_file", a_open_file), ("file.refresh", a_refresh),
+                         ("file.save_as", a_save_as), ("file.save", a_save), ("file.flatten", a_flat),
+                         ("file.print", a_print), ("file.recent", self.menu_recent.menuAction()),
+                         ("file.recent_files", self.menu_recent_files.menuAction()), ("file.quit", a_quit)):
+            self._reg_cmd(_cid, _a)
+        self._reg_cmd("file.export", self.act_export, short=tr("변환해서 내보내기"),
+                      tip=tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"))
 
         # v1.6.1 F1: 즐겨찾기 메뉴 (파일 ↔ 보기 사이)
         self.menu_favorites = bar.addMenu(tr("즐겨찾기(&V)"))
@@ -1671,20 +1641,25 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261008(다국어 SOT §5): 항목은 **고정 id** 로 찾는다 — 종전에는 화면 이름('법령/고시')이
         #   키라 번역하면 게이팅이 항목을 못 찾았다. 화면 이름은 tr() 로만 쓴다.
         self._view_acts = {}
-        for _id, _label, _slot in (
-                ("single", tr("1단"), self._vm_single), ("split", tr("2단"), self._vm_split),
-                ("text", tr("텍스트"), self._vm_text),
-                ("study", tr("단어장"), self._vm_study), ("search", tr("검색"), self._vm_search),
-                ("shot", tr("스크린샷"), self._vm_shot),
-                ("law", tr("법령/고시"), self._action_law_search),
-                ("kcsc", tr("건설기준(KCSC)"), self._action_kcsc_search),
-                ("kipo", tr("특허(등록정보)"), self._action_kipo_search),
-                ("present", tr("발표보기"), self._open_presentation)):
+        # 261024-1(디자인 SOT §2.9): 단추 이름·툴팁은 종전 패널 단추 그대로(모음·보기 탭이 이 액션을 보인다)
+        for _id, _label, _short, _tip, _slot in (
+                ("single", tr("1단"), None, tr("오른쪽 패널 숨김 (단일 보기)"), self._vm_single),
+                ("split", tr("2단"), None, tr("2단 보기(쪽 맞춤)"), self._vm_split),
+                ("text", tr("텍스트"), None, tr("오른쪽 패널 보이기 · 텍스트 탭"), self._vm_text),
+                ("study", tr("단어장"), None, tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study),
+                ("search", tr("검색"), None, tr("오른쪽 패널 보이기 · 검색 탭"), self._vm_search),
+                ("shot", tr("스크린샷"), None, tr("오른쪽 위 탭 숨김 · 스크린샷 보이기"), self._vm_shot),
+                ("law", tr("법령/고시"), None, tr("법제처 법령·고시 검색·본문 보기"), self._action_law_search),
+                ("kcsc", tr("건설기준(KCSC)"), tr("건설기준"), tr("국가건설기준센터(KCSC) KDS·KCS 본문 보기"),
+                 self._action_kcsc_search),
+                ("kipo", tr("특허(등록정보)"), tr("특허"), tr("특허청(KIPO) 특허 등록정보 조회"), self._action_kipo_search),
+                ("present", tr("발표보기"), None, tr("발표 전체화면 보기"), self._open_presentation)):
             _a = QAction(_label, self)
             _a.setObjectName("view_" + _id)
             _a.triggered.connect(lambda _checked=False, s=_slot: s())
             m_view.addAction(_a)
             self._view_acts[_id] = _a           # 260621-P3: API 키 게이팅용
+            self._reg_cmd("view." + _id, _a, short=_short, tip=_tip)
         # 261017-15(디자인 SOT §2.9.2): 1단↔2단 키는 지금 상태의 **반대** 항목에만 — 메뉴를 열 때 맞춘다
         m_view.aboutToShow.connect(self._refresh_menu_key_hints)
 
@@ -1709,35 +1684,47 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260618-16 → 261016-3: '도구' 메뉴 — 구역 셋(🧰 도구 · ⚙️ 프로그램 환경설정 · 💻 시스템 연동), 묶음은 하위 메뉴(디자인 SOT §2.9.1)
         m_tools = bar.addMenu(tr("도구(&T)"))
 
-        def _act(text, slot):
+        def _act(text, slot, cid=None, short=None, tip=None):
             a = QAction(text, self)
             a.triggered.connect(slot)
             m_tools.addAction(a)
+            if cid:
+                self._reg_cmd(cid, a, short=short, tip=tip)
             return a
 
-        # 🧰 도구 — 260911-1(사용자 지시): 패널 툴바 '도구' 그룹과 **같은 차례**.
-        #   같은 것을 두 곳에서 다른 차례로 보여 주지 않는다(디자인 SOT §2.9.1).
+        # 🧰 도구 — 260911-1(사용자 지시): `모음` 기본값의 도구 묶음(종전 패널 '도구' 그룹)과 **같은 차례**.
+        #   같은 것을 두 곳에서 다른 차례로 보여 주지 않는다(디자인 SOT §2.9.1). 단추 이름은 종전 패널 그대로(§2.9).
         m_tools.addSection(tr("🧰 도구"))
-        _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read)
+        _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read, "tools.ocr", "OCR",
+             tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"))
         # 261008(다국어 SOT §7): 한국 전용 메뉴 항목 — `_gate_api_dependent_ui` 가 언어에 따라 숨긴다
         self._ko_only_acts = []
-        self._ko_only_acts.append(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study))
-        _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker)
+        self._ko_only_acts.append(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study,
+                                       "tools.build_study", tr("단어장 생성")))
+        _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker, "tools.bookmarker", tr("책갈피 생성"))
         # 261016-3(디자인 SOT §2.9.1 예외, 사용자 지시): 패널 단추가 없는 파생 항목은 그 원 항목 바로 아래
-        self._ko_only_acts.append(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks))
-        a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None))
-        _act(tr("다단 생성..."), self.action_nup_create)   # 261021-3(마스터 §11.10.2, 디자인 SOT §2.9.1 예외 둘째)
-        _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf())  # 260825-13
-        _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf)
-        self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files)
+        self._ko_only_acts.append(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks,
+                                       "tools.study_and_bookmarks"))
+        a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None),
+                                            "tools.merge", tr("PDF병합"))
+        _act(tr("다단 생성..."), self.action_nup_create, "tools.nup")   # 261021-3(마스터 §11.10.2, 디자인 SOT §2.9.1 예외 둘째)
+        _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf(), "tools.img2pdf",  # 260825-13
+             tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"))
+        _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf, "tools.encrypt", tr("암호화"),
+             tr("현재 PDF에 암호·권한 설정(암호화 저장)"))
+        self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files, "tools.translate", tr("번역"),
+                                  tr("PDF 번역 (목록 창)"))
 
-        def _sub(title, items):
-            """누르면 옆에 펼쳐지는 하위 메뉴 하나(261016-3, 사용자 지시) — 종전 구역 제목 + 항목들을 한 줄로."""
+        def _sub(title, items, cid=None):
+            """누르면 옆에 펼쳐지는 하위 메뉴 하나(261016-3, 사용자 지시) — 종전 구역 제목 + 항목들을 한 줄로.
+            261024-1: 세부 줄에서는 `▾` 단추 하나(디자인 SOT §2.9)."""
             sm = m_tools.addMenu(title)
             for _t, _s in items:
                 _a = QAction(_t, self)
                 _a.triggered.connect(_s)
                 sm.addAction(_a)
+            if cid:
+                self._reg_cmd(cid, sm.menuAction())
             return sm
         # 261016-3(사용자 지시): 전자서명·태그 자동 부여는 하위 메뉴로, 인덱스 재구축은 그 아래 — 도구 구역 안에 이어서.
         #   'PDF 꾸밈 저장' 은 파일 메뉴 '평탄화해서 내보내기...' 와 같은 함수라 뺐다. '검색 및 데이터 구축' 구역(법령·건설기준·특허)은
@@ -1749,20 +1736,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             (tr("서명 편집"), self.action_sign_edit),
             (tr("빈 서명 칸 만들기..."), self.action_sign_field),
             (tr("디지털 ID..."), self.action_digital_ids),
-            (tr("서명 그림..."), self.action_sign_image)))
+            (tr("서명 그림..."), self.action_sign_image)), "tools.sign")
         _sub(tr("태그 자동 부여"), (                     # 태그 SOT §8.2·§8.5(260829 P2)
             (tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True)),
             (tr("새 태그 후보 검토…"), self._autotag_review_candidates),
             (tr("직전 자동 부여 되돌리기"), self._autotag_undo),
             (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
-            (tr("없는 파일 항목 정리…"), self._autotag_prune_missing)))
-        _act(tr("인덱스 재구축"), self.action_reindex)
+            (tr("없는 파일 항목 정리…"), self._autotag_prune_missing)), "tools.autotag")
+        _act(tr("인덱스 재구축"), self.action_reindex, "tools.reindex")
         self._act_law = self._act_kcsc = self._act_kipo = None    # 보기 메뉴(`_view_acts`)에만 — 게이팅은 None 을 건너뛴다
 
         # ⚙️ 프로그램 환경설정 — '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
         m_tools.addSection(tr("⚙️ 프로그램 환경설정"))
-        _act(tr("환경설정..."), self.action_open_settings)        # 260618-18: 환경설정을 단축키 위로
-        _act(tr("단축키 설정..."), self._edit_shortcuts)
+        _act(tr("환경설정..."), self.action_open_settings, "tools.settings")        # 260618-18: 환경설정을 단축키 위로
+        _act(tr("단축키 설정..."), self._edit_shortcuts, "tools.shortcuts")
         # 📖 사전 및 용어집 관리 — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25). 261016-3: 하위 메뉴로 단축키 설정 아래
         _dict = _sub(tr("사전 및 용어집 관리"), (
             (tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
@@ -1774,14 +1761,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             (tr("사전 내보내기 (TBX·CSV)..."), self._action_export_dict),
             (tr("사전 백업 (내보내기)..."), self._action_backup_dict),
             (tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict),
-            (tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)))
+            (tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)), "tools.dict")
         self._ko_only_acts.append(_dict.menuAction())
 
         # 💻 시스템 연동 및 설치
         m_tools.addSection(tr("💻 시스템 연동 및 설치"))
-        _act(tr("Windows 기본 PDF 앱으로 등록…"), self._register_pdf_handler)
-        _act(tr("구성요소 설치(녹화·OCR)…"), self._open_components_installer)
-        _act(tr("가상 프린터(PolyPDF) 설치·제거…"), self._open_vprinter_dialog)   # 261017(가상 프린터 SOT §4.6)
+        _act(tr("Windows 기본 PDF 앱으로 등록…"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱 등록"))
+        _act(tr("구성요소 설치(녹화·OCR)…"), self._open_components_installer, "tools.components", tr("구성요소 설치"))
+        _act(tr("가상 프린터(PolyPDF) 설치·제거…"), self._open_vprinter_dialog, "tools.vprinter",   # 261017(가상 프린터 SOT §4.6)
+             tr("가상 프린터"))
 
         m_help = bar.addMenu(tr("도움말(&H)"))
         # v1.6.1 G2: 사용법
@@ -1820,6 +1808,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_about = QAction(tr("정보"), self)
         a_about.triggered.connect(self._show_about)
         m_help.addAction(a_about)
+        for _cid, _a in (("help.usage", a_usage), ("help.update", a_update), ("help.auto_download", a_autodl),
+                         ("help.beta", a_beta), ("help.about", a_about)):
+            self._reg_cmd(_cid, _a)
+
+        # 261024-1(디자인 SOT §2.9): 메뉴는 탭으로 — 세부 줄은 각 메뉴의 액션을 그대로 보인다.
+        from viewer.widgets.ribbon import COLLECTION
+        rb = self._ribbon
+        rb.add_tab(COLLECTION, tr("모음"))
+        for _key, _m in (("file", m_file), ("fav", self.menu_favorites), ("view", m_view),
+                         ("tools", m_tools), ("help", m_help)):
+            rb.add_tab(_key, _m.title(), _m)
+        self._tab_menus = {"file": m_file, "view": m_view, "tools": m_tools, "help": m_help}
+        # 메뉴 막대를 화면에서 뗐으므로 메뉴 항목에 건 단축키(Ctrl+S 등)는 창에 붙여야 산다 — 보이는 위젯의 액션만 키를 받는다
+        self.addActions([a for a in self._cmds.values() if a.menu() is None])
+        self._apply_collection()
+        from viewer import theme as _theme
+        self._style_panel_toolbar(_theme.is_dark())
 
         self._setup_shortcuts()
 
@@ -7101,14 +7106,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
         # 스크린샷 — 내용 복사(추출) 권한 기준
-        for b in (getattr(self, "_btn_shot", None),):
+        #   261024-1(디자인 SOT §2.9): 종전 패널 단추만 껐다 — 이제 단추가 메뉴 액션 자체라 메뉴·모음·세부 줄이 함께 꺼진다
+        for b in ((getattr(self, "_view_acts", {}) or {}).get("shot"),):
             if b is not None:
                 try:
                     b.setEnabled(can_copy)
                 except Exception:
                     pass
-        # PDF 병합 — 변경(조립) 권한 기준 (툴바 버튼 + 책갈피창 우클릭 병합)
-        b = getattr(self, "_btn_merge", None)
+        # PDF 병합 — 변경(조립) 권한 기준 (메뉴·단추·Ctrl+M + 책갈피창 우클릭 병합)
+        b = getattr(self, "_sc_act_merge", None)
         if b is not None:
             try:
                 b.setEnabled(can_modify)
@@ -8459,8 +8465,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260603-3: 스크린샷 패널은 기본 숨김 — 캡처/복원으로 항목이 있으면 자동 표시
         self.act_toggle_shot.setChecked(False)
         self.shot_strip.setVisible(False)
-        # 상단 토글 툴바 가시성 (기본 False)
-        self._panel_toolbar.setVisible(bool(self._prefs.get("show_panel_toolbar", False)))
+        # 메뉴 탭 아래 세부 줄 가시성 · 모음 내용(261024-1, 디자인 SOT §2.9)
+        self._ribbon.set_rows_visible(bool(self._prefs.get("show_panel_toolbar", True)))
+        self._apply_collection()
 
         # 즐겨찾기 로드 (세션 복원 여부와 무관)
         self._favorites = list(data.get("favorites", []))
@@ -8742,6 +8749,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # v1.6.23: 패널 토글 툴바 가시성만 prefs 로 관리
             "show_panel_toolbar": bool(prefs.get(
                 "show_panel_toolbar", old.get("show_panel_toolbar", True))),
+            # 261024-1(디자인 SOT §2.9.4): '모음' 탭 내용 — 명령 id·'|'. 설정 창이 모르면 옛 값 보존(마스터 §8.2 허용목록)
+            "ribbon_collection": [str(x) for x in (prefs.get("ribbon_collection", old.get("ribbon_collection")) or [])],
             # 260609-2/28: 페이지 경계에서 다음/이전 파일로 이동 — 미설정이면 켜짐
             "cross_file_nav": (lambda v: True if v is None else bool(v))(
                 prefs.get("cross_file_nav", old.get("cross_file_nav"))),
@@ -8853,7 +8862,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.shot_strip.set_max_items(s)
         # 즉시 반영
         try:
-            self._panel_toolbar.setVisible(self._prefs["show_panel_toolbar"])
+            self._ribbon.set_rows_visible(self._prefs["show_panel_toolbar"])
+            self._apply_collection()
         except Exception:
             pass
         self.apply_theme(self._prefs.get("theme", "auto"))
@@ -8899,16 +8909,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         has_tr = (str(p.get("translate_auth", "api")).strip() == "login"
                   or bool(str(p.get("anthropic_api_key", "")).strip()))
         va = getattr(self, "_view_acts", {}) or {}
-
-        def _btn(name, on):
-            # 260628(FIX): 툴바 위젯은 액션 가시성으로 제어해야 실제로 숨겨진다(위 mk 주석).
-            b = getattr(self, name, None)
-            if b is None:
-                return
-            act = getattr(b, "_tb_action", None)
-            if act is not None:
-                act.setVisible(on)
-            b.setVisible(on)
+        # 261024-1(디자인 SOT §2.9): 세부 줄·모음 단추는 이 메뉴 액션 자체 — 액션만 끄면 함께 숨는다(종전 `_btn_*` 갈래 없음)
 
         def _act_en(a, on):
             if a is not None:
@@ -8922,23 +8923,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 a.setEnabled(vis and on)
 
         # 법령·고시
-        _btn("_btn_law", vis and has_law)
         _act_vis(va.get("law"), has_law)
         _act_vis(getattr(self, "_act_law", None), has_law)
         # 건설기준(KCSC)
-        _btn("_btn_kcsc", vis and has_kcsc)
         _act_vis(va.get("kcsc"), has_kcsc)
         _act_vis(getattr(self, "_act_kcsc", None), has_kcsc)
         # 특허(KIPO)
-        _btn("_btn_kipo", vis and has_kipo)
         _act_vis(va.get("kipo"), has_kipo)
         _act_vis(getattr(self, "_act_kipo", None), has_kipo)
-        # 번역(Claude) — 툴바 'PDF번역' 버튼 + 메뉴(영→한이라 한국 전용, 사용자 결정 261008-25)
-        _btn("_btn_tr", vis and has_tr)
+        # 번역(Claude) — 도구 'PDF번역'(모음 '번역' 단추와 같은 액션, 영→한이라 한국 전용, 사용자 결정 261008-25)
         _act_vis(getattr(self, "_act_tr_files", None), has_tr)
-        # 영어단어 학습(단어장) — 툴바 단추 2개·보기 메뉴·도구 메뉴·우측 탭(키와 무관)
-        _btn("_btn_vm_study", vis)
-        _btn("_btn_build_study", vis)
+        # 영어단어 학습(단어장) — 보기 '단어장'·도구 '단어장 생성' 등·우측 탭(키와 무관)
         _act_en(va.get("study"), True)
         for a in getattr(self, "_ko_only_acts", []):
             _act_en(a, True)

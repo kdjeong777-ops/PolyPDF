@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-21 21:52+0900\n"
+"POT-Creation-Date: 2026-10-24 09:37+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -230,160 +230,11 @@ msgid "🔎 검색"
 msgstr ""
 
 #: viewer/app.py
-msgid "패널"
-msgstr ""
-
-#: viewer/app.py
 msgid "🔎 검색·단어"
-msgstr ""
-
-#: viewer/app.py
-msgid "보기"
-msgstr ""
-
-#: viewer/app.py
-msgid "1단"
-msgstr ""
-
-#: viewer/app.py
-msgid "오른쪽 패널 숨김 (단일 보기)"
-msgstr ""
-
-#: viewer/app.py
-msgid "2단"
-msgstr ""
-
-#: viewer/app.py
-msgid "2단 보기(쪽 맞춤)"
-msgstr ""
-
-#: viewer/app.py viewer/convert/__init__.py
-msgid "텍스트"
-msgstr ""
-
-#: viewer/app.py
-msgid "오른쪽 패널 보이기 · 텍스트 탭"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/study_panel.py
-msgid "단어장"
-msgstr ""
-
-#: viewer/app.py
-msgid "검색·단어장 창 보이기 · 단어장 탭"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/image_search_dialog.py
 msgid "검색"
-msgstr ""
-
-#: viewer/app.py
-msgid "오른쪽 패널 보이기 · 검색 탭"
-msgstr ""
-
-#: viewer/app.py
-msgid "스크린샷"
-msgstr ""
-
-#: viewer/app.py
-msgid "오른쪽 위 탭 숨김 · 스크린샷 보이기"
-msgstr ""
-
-#: viewer/app.py
-msgid "법령/고시"
-msgstr ""
-
-#: viewer/app.py
-msgid "법제처 법령·고시 검색·본문 보기"
-msgstr ""
-
-#: viewer/app.py
-msgid "건설기준"
-msgstr ""
-
-#: viewer/app.py
-msgid "국가건설기준센터(KCSC) KDS·KCS 본문 보기"
-msgstr ""
-
-#: viewer/app.py
-msgid "특허"
-msgstr ""
-
-#: viewer/app.py
-msgid "특허청(KIPO) 특허 등록정보 조회"
-msgstr ""
-
-#: viewer/app.py
-msgid "발표보기"
-msgstr ""
-
-#: viewer/app.py
-msgid "발표 전체화면 보기 (F5)"
-msgstr ""
-
-#: viewer/app.py
-msgid "도구"
-msgstr ""
-
-#: viewer/app.py
-msgid "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"
-msgstr ""
-
-#: viewer/app.py viewer/study_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/study_panel.py
-msgid "단어장 생성"
-msgstr ""
-
-#: viewer/app.py
-msgid "도구 → 단어장 생성"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피 생성"
-msgstr ""
-
-#: viewer/app.py
-msgid "도구 → 책갈피 자동 생성"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF병합"
-msgstr ""
-
-#: viewer/app.py
-msgid "도구 → PDF 병합"
-msgstr ""
-
-#: viewer/app.py
-msgid "이미지→PDF"
-msgstr ""
-
-#: viewer/app.py
-msgid "이미지 파일 → PDF 변환"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/encrypt_dialog.py
-msgid "암호화"
-msgstr ""
-
-#: viewer/app.py
-msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
-msgstr ""
-
-#: viewer/app.py viewer/study_controller.py
-msgid "번역"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF 번역 (목록 창)"
-msgstr ""
-
-#: viewer/app.py
-msgid "변환해서 내보내기"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
 msgstr ""
 
 #: viewer/app.py
@@ -485,11 +336,23 @@ msgid "OCR 로 읽기 (쪽 범위·언어·워터마크)..."
 msgstr ""
 
 #: viewer/app.py
+msgid "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"
+msgstr ""
+
+#: viewer/app.py
 msgid "책갈피 자동 생성..."
+msgstr ""
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "책갈피 생성"
 msgstr ""
 
 #: viewer/app.py
 msgid "PDF 병합..."
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF병합"
 msgstr ""
 
 #: viewer/app.py
@@ -501,11 +364,35 @@ msgid "이미지 → PDF 변환..."
 msgstr ""
 
 #: viewer/app.py
+msgid "이미지→PDF"
+msgstr ""
+
+#: viewer/app.py
+msgid "이미지 파일 → PDF 변환"
+msgstr ""
+
+#: viewer/app.py
 msgid "암호화 (암호·권한 설정)..."
+msgstr ""
+
+#: viewer/app.py viewer/widgets/encrypt_dialog.py
+msgid "암호화"
+msgstr ""
+
+#: viewer/app.py
+msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/translate_files_dialog.py
 msgid "PDF번역"
+msgstr ""
+
+#: viewer/app.py viewer/study_controller.py
+msgid "번역"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 번역 (목록 창)"
 msgstr ""
 
 #: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
@@ -545,11 +432,23 @@ msgid "Windows 기본 PDF 앱으로 등록…"
 msgstr ""
 
 #: viewer/app.py
+msgid "기본 PDF 앱 등록"
+msgstr ""
+
+#: viewer/app.py
 msgid "구성요소 설치(녹화·OCR)…"
+msgstr ""
+
+#: viewer/app.py viewer/update_controller.py
+msgid "구성요소 설치"
 msgstr ""
 
 #: viewer/app.py
 msgid "가상 프린터(PolyPDF) 설치·제거…"
+msgstr ""
+
+#: viewer/app.py
+msgid "가상 프린터"
 msgstr ""
 
 #: viewer/app.py
@@ -574,6 +473,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "정보"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/ribbon.py
+msgid "모음"
 msgstr ""
 
 #: viewer/app.py
@@ -968,6 +871,10 @@ msgid "현재 파일 즐겨찾기 추가"
 msgstr ""
 
 #: viewer/app.py
+msgid "스크린샷"
+msgstr ""
+
+#: viewer/app.py
 msgid ""
 "캡처 목록이 있습니다. PDF로 모아 저장할까요?\n"
 "(저장하지 않으면 목록은 사라집니다. 다음 실행은 빈 목록으로 시작합니다.)"
@@ -1026,7 +933,71 @@ msgid "📋 클립보드로 복사"
 msgstr ""
 
 #: viewer/app.py
+msgid "변환해서 내보내기"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
+msgstr ""
+
+#: viewer/app.py
+msgid "1단"
+msgstr ""
+
+#: viewer/app.py
+msgid "오른쪽 패널 숨김 (단일 보기)"
+msgstr ""
+
+#: viewer/app.py
+msgid "2단"
+msgstr ""
+
+#: viewer/app.py
+msgid "2단 보기(쪽 맞춤)"
+msgstr ""
+
+#: viewer/app.py viewer/convert/__init__.py
+msgid "텍스트"
+msgstr ""
+
+#: viewer/app.py
+msgid "오른쪽 패널 보이기 · 텍스트 탭"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/study_panel.py
+msgid "단어장"
+msgstr ""
+
+#: viewer/app.py
+msgid "검색·단어장 창 보이기 · 단어장 탭"
+msgstr ""
+
+#: viewer/app.py
+msgid "오른쪽 패널 보이기 · 검색 탭"
+msgstr ""
+
+#: viewer/app.py
+msgid "오른쪽 위 탭 숨김 · 스크린샷 보이기"
+msgstr ""
+
+#: viewer/app.py
+msgid "법령/고시"
+msgstr ""
+
+#: viewer/app.py
+msgid "법제처 법령·고시 검색·본문 보기"
+msgstr ""
+
+#: viewer/app.py
 msgid "건설기준(KCSC)"
+msgstr ""
+
+#: viewer/app.py
+msgid "건설기준"
+msgstr ""
+
+#: viewer/app.py
+msgid "국가건설기준센터(KCSC) KDS·KCS 본문 보기"
 msgstr ""
 
 #: viewer/app.py
@@ -1034,7 +1005,28 @@ msgid "특허(등록정보)"
 msgstr ""
 
 #: viewer/app.py
+msgid "특허"
+msgstr ""
+
+#: viewer/app.py
+msgid "특허청(KIPO) 특허 등록정보 조회"
+msgstr ""
+
+#: viewer/app.py
+msgid "발표보기"
+msgstr ""
+
+#: viewer/app.py
+msgid "발표 전체화면 보기"
+msgstr ""
+
+#: viewer/app.py
 msgid "단어장 생성 (OCR·어휘)..."
+msgstr ""
+
+#: viewer/app.py viewer/study_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/study_panel.py
+msgid "단어장 생성"
 msgstr ""
 
 #: viewer/app.py
@@ -2210,6 +2202,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "책갈피창"
+msgstr ""
+
+#: viewer/app.py
+msgid "보기"
 msgstr ""
 
 #: viewer/app.py
@@ -4741,10 +4737,6 @@ msgstr ""
 
 #: viewer/update_controller.py
 msgid "다운로드"
-msgstr ""
-
-#: viewer/update_controller.py
-msgid "구성요소 설치"
 msgstr ""
 
 #: viewer/update_controller.py
@@ -7640,15 +7632,11 @@ msgid "전체화면 보기 취소"
 msgstr ""
 
 #: viewer/widgets/presentation.py
-msgid "🖥 다른 화면"
+msgid "🖥 본화면으로"
 msgstr ""
 
 #: viewer/widgets/presentation.py
-msgid "🖥 본화면"
-msgstr ""
-
-#: viewer/widgets/presentation.py
-msgid "발표 창을 다른 모니터로 옮기기 / 뷰어가 있는 모니터로 되돌리기"
+msgid "🖥 화면2로"
 msgstr ""
 
 #: viewer/widgets/presentation.py
@@ -7747,6 +7735,16 @@ msgstr ""
 
 #: viewer/widgets/presentation.py
 msgid "두껍게"
+msgstr ""
+
+#: viewer/widgets/presentation.py
+#, python-brace-format
+msgid "발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}"
+msgstr ""
+
+#: viewer/widgets/presentation.py
+#, python-brace-format
+msgid "발표 창을 다른 모니터로 옮깁니다 — {desc}"
 msgstr ""
 
 #: viewer/widgets/presentation.py viewer/widgets/twoup_dialog.py
@@ -8067,6 +8065,42 @@ msgstr ""
 msgid "클릭 = {w}×{h} 상자 놓기 · Esc·오른쪽 클릭 = 취소"
 msgstr ""
 
+#: viewer/widgets/ribbon.py
+msgid "모음 메뉴 편집"
+msgstr ""
+
+#: viewer/widgets/ribbon.py
+msgid "왼쪽에서 명령을 골라 '모음' 탭에 넣습니다. 차례는 오른쪽 목록 차례입니다."
+msgstr ""
+
+#: viewer/widgets/ribbon.py
+msgid "추가 >"
+msgstr ""
+
+#: viewer/widgets/ribbon.py
+msgid "< 제거"
+msgstr ""
+
+#: viewer/widgets/ribbon.py
+msgid "구분선"
+msgstr ""
+
+#: viewer/widgets/ribbon.py viewer/widgets/toc_review_dialog.py
+msgid "위로"
+msgstr ""
+
+#: viewer/widgets/ribbon.py viewer/widgets/toc_review_dialog.py
+msgid "아래로"
+msgstr ""
+
+#: viewer/widgets/ribbon.py
+msgid "기본값으로"
+msgstr ""
+
+#: viewer/widgets/ribbon.py
+msgid "명령 고르기"
+msgstr ""
+
 #: viewer/widgets/screenshot_pdf_dialog.py
 msgid "스크린샷 PDF 저장 옵션"
 msgstr ""
@@ -8259,15 +8293,23 @@ msgid "스크린샷 리스트:"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "패널 툴바 (기본 보이기)"
+msgid "세부 줄 (메뉴 탭 아래 한 줄)"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "상단 패널 툴바([뷰어모드]·[기능]) 보이기"
+msgid "메뉴 탭 아래 세부 줄 보이기"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 패널 자체의 보이기/숨기기는 메뉴 → 설정의 두 토글(검색결과/스크린샷)에서 즉시 가능.</small>"
+msgid "<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 숨긴 채 탭을 누르면 다시 보입니다.</small>"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "모음 메뉴 편집..."
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "'모음' 탭에 보일 명령과 차례를 고릅니다"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -10087,14 +10129,6 @@ msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "선택 행 삭제(Del)"
-msgstr ""
-
-#: viewer/widgets/toc_review_dialog.py
-msgid "위로"
-msgstr ""
-
-#: viewer/widgets/toc_review_dialog.py
-msgid "아래로"
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py

@@ -47,10 +47,12 @@ KEYS = {"law_oc": "x", "kcsc_key": "x", "kipo_signkey": "x", "translate_auth": "
         "anthropic_api_key": "x"}
 
 
-def _vis(btn_name, mw):
-    b = getattr(mw, btn_name, None)
-    a = getattr(b, "_tb_action", None)
-    return bool(b is not None and a is not None and a.isVisible())
+def _vis(cid, mw):
+    """261024-1(디자인 SOT §2.9): '모음' 단추는 메뉴 액션 그 자체 — 단추 가시성 = 그 액션 가시성."""
+    from viewer.widgets.ribbon import COLLECTION, cmd_id
+    row = mw._ribbon.row(COLLECTION)
+    a = next((x for x in row.actions() if cmd_id(x) == cid), None)
+    return bool(a is not None and a.isVisible())
 
 
 def build(lang):
@@ -63,7 +65,7 @@ def build(lang):
     return mw
 
 
-BTNS = ("_btn_law", "_btn_kcsc", "_btn_kipo", "_btn_tr", "_btn_vm_study", "_btn_build_study")
+BTNS = ("view.law", "view.kcsc", "view.kipo", "tools.translate", "view.study", "tools.build_study")
 try:
     # ── en ──
     mw = build("en")

@@ -26,12 +26,10 @@ def chk(cond, msg, extra=""):
         fails.append(msg)
 
 
-# ── 패널 툴바 '도구' 그룹 ───────────────────────────
-btns = []
-for a in mw._panel_toolbar.actions():
-    w = mw._panel_toolbar.widgetForAction(a)
-    if isinstance(w, QToolButton):
-        btns.append(w.text())
+# ── '모음' 탭 기본값의 도구 묶음(종전 패널 '도구' 그룹, 261024-1 디자인 SOT §2.9) ─────
+from viewer.widgets.ribbon import COLLECTION, cmd_id
+_row = mw._ribbon.row(COLLECTION)
+btns = [a.iconText() for a in _row.actions() if cmd_id(a)]
 # 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261016-4(디자인 SOT §2.9, 사용자 지시): '변환해서 내보내기' 는 '암호화' 오른쪽
 TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "PDF병합",
          "이미지→PDF", "암호화", "번역", "변환해서 내보내기"]
@@ -132,9 +130,14 @@ chk(any(a.text() == "평탄화해서 내보내기..." for a in m_file.actions())
 # ── 단축키·권한이 잡는 손잡이이 살아 있는가 ───────────────
 chk(getattr(mw, "_sc_act_merge", None) is not None, "⑤ PDF 병합 손잡이(_sc_act_merge) 유지")
 chk(getattr(mw, "_act_tr_files", None) is not None, "⑤ 번역 메뉴 손잡이(_act_tr_files) 유지")
-chk(getattr(mw, "_btn_merge", None) is not None and getattr(mw, "_btn_tr", None) is not None
-    and getattr(mw, "_btn_img2pdf", None) is not None
-    and getattr(mw, "_btn_convert", None) is not None, "⑤ 패널 버튼 손잡이 4개 유지")
+# 261024-1(디자인 SOT §2.9): 모음 단추는 메뉴 액션 그 자체 — 따로 둔 패널 단추 손잡이는 없앴다
+_ids = {cmd_id(a): a for a in _row.actions() if cmd_id(a)}
+chk(_ids.get("tools.merge") is mw._sc_act_merge and _ids.get("tools.translate") is mw._act_tr_files
+    and _ids.get("file.export") is mw.act_export, "⑤ 모음 단추 = 메뉴 액션(병합·번역·변환)")
+# 도구 탭 세부 줄 = 도구 메뉴 차례 그대로(같은 액션)
+_trow = mw._ribbon.row("tools")
+chk([a for a in _trow.actions() if cmd_id(a)] == [a for a in menu.actions() if cmd_id(a)],
+    "⑦ 도구 탭 세부 줄 = 도구 메뉴 항목·차례")
 
 print()
 print("=== ALL PASS ===" if not fails else "=== FAILURE (%d) ===" % len(fails))
