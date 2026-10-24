@@ -3,7 +3,7 @@
 
 A. 끼운 흰 쪽(새 페이지 넣기, 저장 전)이 2장 맞춤에서 그려진다 — 왼쪽 쪽의 오른쪽 짝이 그 흰 쪽(넘김 차례와 같다),
    끼운 쪽으로 넘겨도 예외 없이 그린다(종전: 이 문서의 쪽만 읽어 `page not in document`)
-B. 저장 전 회전(90°)한 세로 쪽이 2장 맞춤에서 가로로 놓인다(종전: 회전이 빠졌다)
+B. 썸네일로 돌린(저장 전, `/Rotate` — 마스터 §4.7.16) 세로 쪽이 2장 맞춤에서 가로로 놓인다 — 실제 회전 길 `_rotate_pages`
 C. 파일을 열어 책갈피창이 지금 쪽 책갈피를 고르며 펼칠 때 **그 파일을 다시 열지 않는다**(종전: 메인에서 fitz.open — 빌드 시험 T1 1.25초)
    — 목차는 그대로 달린다. 본문에 없는 파일을 펼치면 종전대로 연다
 """
@@ -111,15 +111,18 @@ try:
     chk(err is None and mv.current_page() == staged and mv._page_item is not None,
         "A3 끼운 쪽으로 넘겨도 예외 없이 그린다", repr(err))
 
-    # B — 저장 전 회전한 쪽이 2장 맞춤에서 가로로
+    # B — 썸네일 회전(저장 전, 실제 길)한 쪽이 2장 맞춤에서 가로로
     mv.go_to_page(1); spin(0.2)
     w0 = mv._page_item.pixmap().width() / float(mv._page_item.pixmap().height())
-    mv.set_rotations({1: 90}); spin(0.2)
+    mw._rotate_pages([1], +90); spin(1.5)
+    mv = mw.main_view
+    if mv.current_page() != 1:
+        mv.go_to_page(1); spin(0.3)
     w1 = mv._page_item.pixmap().width() / float(mv._page_item.pixmap().height())
     want0, want1 = (595 + 8 + 595) / 842.0, (842 + 8 + 595) / 842.0    # 세로+세로 / 돌린 가로+세로 (간격 TWO_PAGE_GAP_PT)
     chk(abs(w0 - want0) < 0.03 and abs(w1 - want1) < 0.03,
         "B1 90° 돌린 세로 쪽이 가로로 놓인다(합친 그림 비율 = 돌린 폭+간격+옆 쪽 폭)", "%.2f → %.2f (기대 %.2f → %.2f)" % (w0, w1, want0, want1))
-    mv.set_rotations({})
+    mw._rotate_pages([1], -90); spin(1.0)
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

@@ -72,6 +72,11 @@ chk(perf_mode.reason() == "slow", "① 넘김이 느리면(가운데 값 ≥ SLO
 perf_mode._flips.clear()
 for _ in range(perf_mode.SLOW_WINDOW):
     perf_mode.note_flip(10)
+chk(perf_mode.reason() == "slow", "① 한 번 느리다고 재면 이 실행 동안 유지(261024-5 — 빨라져도 꺼졌다 켜지지 않는다)", perf_mode.reason())
+perf_mode._slow_latched = False                      # 새 실행과 같게
+perf_mode._flips.clear()
+for _ in range(perf_mode.SLOW_WINDOW):
+    perf_mode.note_flip(10)
 chk(perf_mode.reason() == "", "① 넘김이 빠르면 auto 는 꺼짐")
 perf_mode.set_pref("on")
 chk(perf_mode.reason() == "on", "① 설정 '항상' 은 켠다")

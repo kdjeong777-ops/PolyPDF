@@ -575,11 +575,12 @@ class PrintMixin:
         from PyQt6.QtCore import QProcess
         try:
             if getattr(sys, "frozen", False):
-                ok = QProcess.startDetached(sys.executable, [str(path)])
+                res = QProcess.startDetached(sys.executable, [str(path)])
             else:
-                ok = QProcess.startDetached(
+                res = QProcess.startDetached(
                     sys.executable, [os.path.abspath(sys.argv[0]), str(path)])
-            if ok:
+            # 261024-5(SOT 점검): PyQt6 는 (성공, pid) 를 돌려준다 — 튜플 자체는 늘 참이라 실패해도 대체 길에 닿지 않았다
+            if res[0] if isinstance(res, tuple) else res:
                 return
         except Exception:
             pass

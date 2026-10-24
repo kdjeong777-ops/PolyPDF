@@ -31,6 +31,7 @@ POWER_RECHECK_S = 30.0      # 전원 상태는 이 간격으로만 다시 묻는
 
 _pref = ""                  # 앱이 `set_pref` 로 넣기 전에는 꺼짐 — 홀로 쓰는 MainView(검사·다른 창)는 늘 종전대로
 _flips: list = []
+_slow_latched = False       # 실측으로 한 번 느리면 이 실행 동안 켜 둔다(measured_slow)
 _power = {"t": -1e9, "state": ""}
 _engaged_cb = None
 _announced = False
@@ -109,9 +110,15 @@ def note_flip(ms: float) -> None:
 
 
 def measured_slow() -> bool:
+    """한 번 느리다고 재면 **이 실행 동안 유지**한다(261024-5, 응답성 SOT §4.7) — 켜지면 텍스트 창이 미뤄져 넘김이 빨라지고,
+    최근 값만 보면 다시 꺼졌다가 또 켜지는 왕복(상태 표시줄 깜빡임)이 생긴다."""
+    global _slow_latched
+    if _slow_latched:
+        return True
     if len(_flips) < SLOW_WINDOW:
         return False
-    return sorted(_flips)[len(_flips) // 2] >= SLOW_FLIP_MS
+    _slow_latched = sorted(_flips)[len(_flips) // 2] >= SLOW_FLIP_MS
+    return _slow_latched
 
 
 def reason() -> str:
@@ -141,7 +148,7 @@ def is_lite() -> bool:
 
 
 def _reset_for_test() -> None:
-    global _pref, _announced, _engaged_cb
-    _pref, _announced, _engaged_cb = "", False, None
+    global _pref, _announced, _engaged_cb, _slow_latched
+    _pref, _announced, _engaged_cb, _slow_latched = "", False, None, False
     _flips.clear()
     _power.update(t=-1e9, state="")

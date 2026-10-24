@@ -390,6 +390,25 @@ QT_KNOWN = {"OnlineDictFetchWorker", "_MergeThread", "_SearchWorker", "_DetailWo
 new_qt = sorted(set(qt) - QT_KNOWN)
 chk(not new_qt, "H3 새 QThread 직접 상속이 없다(응답성 SOT §4.3 — `run_in_thread` 를 쓴다)", str(new_qt))
 
+# ── I. 없어진 화면 이름 ─────────────────────────────────────────────────────
+# 261024-5(SOT 점검): 패널 툴바는 261024-1 에 메뉴 탭·`모음` 으로 바뀌었다. 점검에서 본문 열 곳 넘게 옛 이름('패널 단추'·
+#   '도구 막대'·'툴바 `…`')이 지금 자리처럼 남아 있었다(디자인 SOT §2.9 'SOT 표기'). 경위를 말하는 줄('종전'·'옛'·'→')과 §0·코드 블록은 뺀다.
+print(NL + "=== I. 없어진 화면 이름(패널 툴바) ===")
+GONE = re.compile(r"패널 툴바|패널 단추|도구 툴바|도구 막대|툴바 `")
+OK_CTX = ("종전", "옛 ", "→", "v1.6.23")
+stale = []
+for name, txt in LIVE.items():
+    if name == "CLAUDE.md":
+        continue
+    fence = False
+    for ln in body(txt).splitlines():
+        if ln.startswith("```"):
+            fence = not fence
+        if fence or not GONE.search(ln) or any(k in ln for k in OK_CTX):
+            continue
+        stale.append("%s: %s" % (name[:8], GONE.search(ln).group(0)))
+chk(not stale, "I1 SOT 본문이 없어진 패널 툴바 이름을 지금 자리처럼 쓰지 않는다('종전 …' 으로만)", str(stale[:8]))
+
 print(NL + "=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for msg in fails:
     print(" -", msg)

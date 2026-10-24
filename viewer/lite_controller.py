@@ -55,7 +55,7 @@ class LiteMixin:
                 self.lite_badge.setToolTip(
                     self._lite_reason_text(r) + "\n" +
                     tr("쪽이 부드럽게 넘어가도록 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, "
-                       "텍스트 창은 넘김이 멈춘 뒤 따라갑니다. 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다."))
+                       "텍스트 창은 넘김이 멈춘 뒤 따라갑니다. 환경설정의 '세부 줄 (메뉴 탭 아래 한 줄)' 묶음에서 바꿀 수 있습니다."))
         except Exception:
             pass
         return on
@@ -65,7 +65,7 @@ class LiteMixin:
         try:
             self._lite_refresh()
             self.status.showMessage(
-                tr("{why} 쪽이 부드럽게 넘어가도록 '가벼운 넘김' 으로 바꿨습니다 — 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다.")
+                tr("{why} 쪽이 부드럽게 넘어가도록 '가벼운 넘김' 으로 바꿨습니다 — 환경설정의 '세부 줄 (메뉴 탭 아래 한 줄)' 묶음에서 바꿀 수 있습니다.")
                 .format(why=self._lite_reason_text(r)), self.LITE_NOTICE_MS)
         except Exception:
             pass

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-24 09:37+0900\n"
+"POT-Creation-Date: 2026-10-24 10:35+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3571,14 +3571,16 @@ msgstr "Page turning is slow on this computer."
 msgid "🔋 가벼운 넘김"
 msgstr "🔋 Light page turning"
 
+# | 따라갑니다. 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다."
 #: viewer/lite_controller.py
-msgid "쪽이 부드럽게 넘어가도록 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라갑니다. 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다."
-msgstr "To keep page turning smooth, the page-turn animation is off, pages in between are skipped when you turn several in a row, and the Text pane follows once you stop. You can change this in the 'Panel toolbar' group of Settings."
+msgid "쪽이 부드럽게 넘어가도록 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라갑니다. 환경설정의 '세부 줄 (메뉴 탭 아래 한 줄)' 묶음에서 바꿀 수 있습니다."
+msgstr "To keep page turning smooth, the page-turn animation is off, pages in between are skipped when you turn several in a row, and the Text pane follows once you stop. You can change this in the 'Command row (one row under the menu tabs)' group of Settings."
 
+# | 있습니다."
 #: viewer/lite_controller.py
 #, python-brace-format
-msgid "{why} 쪽이 부드럽게 넘어가도록 '가벼운 넘김' 으로 바꿨습니다 — 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다."
-msgstr "{why} Switched to 'Light page turning' so pages turn smoothly — you can change this in the 'Panel toolbar' group of Settings."
+msgid "{why} 쪽이 부드럽게 넘어가도록 '가벼운 넘김' 으로 바꿨습니다 — 환경설정의 '세부 줄 (메뉴 탭 아래 한 줄)' 묶음에서 바꿀 수 있습니다."
+msgstr "{why} Switched to 'Light page turning' so pages turn smoothly — you can change this in the 'Command row (one row under the menu tabs)' group of Settings."
 
 #: viewer/ocr_batch.py
 msgid "서명된 PDF — 덮어쓰면 서명이 깨집니다"

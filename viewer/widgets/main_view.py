@@ -1923,8 +1923,9 @@ class MainView(QWidget):
         vsb.rangeChanged.connect(lambda *_: self._on_view_scrolled())
         self.cmb_fit.currentIndexChanged.connect(
             lambda _i: self._set_fit_mode(self.cmb_fit.currentData()))
-        self.btn_zoom_in.clicked.connect(lambda: self._zoom_by(1.15))
-        self.btn_zoom_out.clicked.connect(lambda: self._zoom_by(1 / 1.15))
+        from viewer.view_scale import VIEW_SCALE_STEP      # 261024-5: 한 걸음 값은 한 곳(입력 SOT §3.2)
+        self.btn_zoom_in.clicked.connect(lambda: self._zoom_by(VIEW_SCALE_STEP))
+        self.btn_zoom_out.clicked.connect(lambda: self._zoom_by(1 / VIEW_SCALE_STEP))
 
         self.view.zoomRequested.connect(self._zoom_by)
         self.view.pageStep.connect(self._on_page_step)
@@ -3034,15 +3035,13 @@ class MainView(QWidget):
         return idx_left + 1 if idx_left + 1 < self._doc.page_count else None
 
     def _shown_size(self, page_index: int, page_obj=None):
-        """쪽이 화면에 놓이는 (폭, 높이) pt — 끼운 쪽도, 저장 전 회전(90·270)이면 바꿔서. 못 구하면 None."""
+        """쪽이 화면에 놓이는 (폭, 높이) pt — 끼운 쪽도. 저장 전 회전은 열린 문서의 `/Rotate`(마스터 §4.7.16)라
+        `page.rect` 에 이미 들어 있다. 못 구하면 None."""
         if page_obj is None:
             page_obj = self._page_for(page_index)
         if page_obj is None:
             return None
-        w, h = page_obj.rect.width, page_obj.rect.height
-        if self._rotations.get(page_index, 0) in (90, 270):
-            w, h = h, w
-        return w, h
+        return page_obj.rect.width, page_obj.rect.height
 
     def _two_page_zoom(self, idx_left: int):
         """2장 맞춤의 표시 배율 — 왼쪽 쪽과 그 다음 쪽을 나란히 놓고 화면에 맞춘다.
@@ -3221,20 +3220,17 @@ class MainView(QWidget):
 
 
     def _two_pixmap(self, page_index: int, ps: float) -> QPixmap:
-        """2장 맞춤 한쪽 그림 — 한 쪽 보기와 같은 원천(끼운 쪽은 그 원본, 나머지는 전역 캐시)에 저장 전 회전까지."""
+        """2장 맞춤 한쪽 그림 — 한 쪽 보기와 같은 원천(끼운 쪽은 그 원본, 나머지는 전역 캐시). 저장 전 회전은 `/Rotate` 로 이미 그려진다."""
         rp = self._render_scaled_any(page_index, ps)
-        pm = QPixmap.fromImage(QImage(rp.samples, rp.width, rp.height, rp.width * 3,
-                                      QImage.Format.Format_RGB888).copy())
-        rot = self._rotations.get(page_index, 0)
-        if rot:
-            pm = pm.transformed(QTransform().rotate(rot), Qt.TransformationMode.SmoothTransformation)
-        return pm
+        return QPixmap.fromImage(QImage(rp.samples, rp.width, rp.height, rp.width * 3,
+                                        QImage.Format.Format_RGB888).copy())
 
     def _render_two_pages(self):
         """v1.5.0 M3: 페이지 N과 N+1을 가로로 합쳐 한 화면에 표시.
 
-        261024-4(마스터 §3): 쪽의 원천은 한 쪽 보기와 같다 — 끼운 쪽(`_page_for`·`_render_scaled_any`), 저장 전 회전,
-        오른쪽 쪽은 `_two_right`. 종전에는 이 문서의 쪽만 읽어 끼운 쪽에서 예외가 났고 회전이 빠졌다."""
+        261024-4(마스터 §3): 쪽의 원천은 한 쪽 보기와 같다 — 끼운 쪽(`_page_for`·`_render_scaled_any`),
+        오른쪽 쪽은 `_two_right`. 종전에는 이 문서의 쪽만 읽어 끼운 쪽에서 예외가 났다. 저장 전 회전은 열린 문서의 `/Rotate`
+        (마스터 §4.7.16)라 `page.rect`·렌더·검색 강조(`_disp_search_rect`)에 이미 들어 있다."""
         from PyQt6.QtGui import QPainter as _QP
         idx_left = self._current_page
         idx_right = self._two_right(idx_left)
@@ -3279,9 +3275,9 @@ class MainView(QWidget):
         self._cont_prev_h = None                  # 260914-1(§2.10): 2쪽 보기는 한 쪽씩
         self._cont_next = False
 
-        # 하이라이트 (현재 페이지 = 좌측). 261024-4: 저장 전 회전한 쪽은 좌표가 어긋나 그리지 않는다(한 쪽 보기와 같다)
+        # 하이라이트 (현재 페이지 = 좌측)
         if self._query:
-            for pg, off_pt_x in ([(page_left, 0.0)] if not self._rotations.get(idx_left, 0) else []):
+            for pg, off_pt_x in [(page_left, 0.0)]:
                 rects = page_hits(pg, self._query, self._search_mode, ocr=self._ocr_for(self._current_page))
                 for r in rects:
                     r = self._disp_search_rect(pg, r)        # 260611-99: /Rotate 보정
@@ -3291,7 +3287,7 @@ class MainView(QWidget):
                     item.setBrush(QBrush(QColor(255, 235, 59, 90)))
                     item.setPen(QPen(Qt.PenStyle.NoPen))
                     self.scene.addItem(item)
-            if page_right is not None and not self._rotations.get(idx_right, 0):
+            if page_right is not None:
                 off_x = pdf_w_l + gap_pt
                 rects = page_hits(page_right, self._query, self._search_mode, ocr=self._ocr_for(idx_right))
                 for r in rects:

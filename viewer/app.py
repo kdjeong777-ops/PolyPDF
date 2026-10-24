@@ -174,7 +174,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._last_results: list = []
         self._recent_folders: list = []
         self._recent_files: list = []         # 261008-11: 파일 메뉴 '최근 파일'
-        self._pending_screenshot_after_load: bool = False
         self._current_shot_path = None        # v1.6.7 E1: 표시 중 스크린샷 카드 원본 path
         self._favorites: list = []
         self._law_favorites: list = []        # 260616-6: 법령·고시 즐겨찾기(메인 즐겨찾기 아래 별도)
@@ -1607,7 +1606,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261011-2(§4.7.16): '저장(PolyPDF용)' → '저장' — 다른 뷰어에서도 보이게 PDF 에 사본을 넣는다
         a_save = self._sc_act_save = QAction(tr("저장"), self)      # 261021-5: Ctrl+S(입력 SOT §3.2)
         a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
-        a_save.triggered.connect(lambda: self.bookmark_tree._op_save())
+        a_save.triggered.connect(lambda: self.action_save())       # 261024-5: 포커스 책갈피창(Ctrl+R 과 같게)
         m_file.addAction(a_save)
         a_flat = QAction(tr("평탄화해서 내보내기..."), self)     # 261011-2: 옛 '저장(일반뷰어용)...' — 새 파일로만
         a_flat.setToolTip(tr("꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."))
@@ -1634,7 +1633,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # 260618-8: (구 '파일' 메뉴의 도구 항목들은 '도구' 메뉴 상부로 이동 — 아래 _build_tools_menu)
         m_file.addSeparator()
-        a_quit = self._sc_act_quit = QAction(tr("종료(&X)"), self)   # 261021-5: Alt+F → X(크롬식, 입력 SOT §3.2)
+        a_quit = self._sc_act_quit = QAction(tr("종료(&X)"), self)   # 261021-5: 파일 탭 단추·Ctrl+Q(입력 SOT §3.2) — 탭 단추 글에서는 니모닉을 뺀다(ribbon.short_text)
         a_quit.triggered.connect(self.close)
         m_file.addAction(a_quit)
         for _cid, _a in (("file.new_window", a_new_win), ("file.open_folder", a_open),
@@ -1689,6 +1688,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.act_split.setCheckable(True)
         self.act_split.setChecked(False)
         self.act_split.toggled.connect(self._toggle_split)
+        # 261024-5(SOT 점검, 디자인 SOT §2.9.2): 1단↔2단 '바꾸는 키' 는 지금 상태의 반대 항목에만 — 메뉴는 이제 화면에
+        #   펼쳐지지 않아(메뉴 탭, 261024-1) aboutToShow 로는 안 맞춰진다. 상태가 바뀔 때마다 맞춘다.
+        self.act_split.toggled.connect(lambda _on: self._refresh_menu_key_hints())
         # 260609-4 (D): 발표 보기 (F5) — 메뉴엔 '보기'로, 단축키 유지 위해 창에 등록
         self.act_present = QAction(tr("📽 발표 보기"), self)
         self.act_present.setShortcut("F5")
@@ -2050,13 +2052,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not (res[0] if isinstance(res, tuple) else res):
             QMessageBox.warning(self, tr("새 창"), tr("새 창을 열지 못했습니다."))
 
-    def action_refresh(self):
-        """Ctrl+R — 포커스가 있는 책갈피창(없으면 위 창)의 🔄 와 같은 일(사용자 결정)."""
+    def _focused_bm_tree(self):
+        """포커스가 있는 책갈피창(아래 창이 보이고 그 안에 포커스가 있으면 아래, 아니면 위) — 저장·새로고침이 함께 쓴다."""
         fw = QApplication.focusWidget()
         bt, br = self.bookmark_tree, self.bookmark_tree_right
         if fw is not None and br.isVisible() and (fw is br or br.isAncestorOf(fw)):
-            bt = br
-        bt.refresh()
+            return br
+        return bt
+
+    def action_refresh(self):
+        """Ctrl+R — 포커스가 있는 책갈피창(없으면 위 창)의 🔄 와 같은 일(사용자 결정)."""
+        self._focused_bm_tree().refresh()
+
+    def action_save(self):
+        """Ctrl+S·파일 탭 '저장' — 포커스가 있는 책갈피창(없으면 위 창)의 💾 와 같은 일.
+        261024-5(SOT 점검): 종전에는 늘 위 창을 저장해, 2단에서 아래 창 파일을 고치고 Ctrl+S 를 누르면 위 창 파일이 저장됐다."""
+        self._focused_bm_tree()._op_save()
 
     def _zoom_kind_of(self, w):
         """위젯 → ('main'|'thumb'|'bookmark'|'text', 그 창) — 확대·축소 대상이 아니면 None."""
@@ -7597,15 +7608,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.shot_strip.activate_index(max(0, min(n - 1, int(idx))))
 
     def _on_main_page_changed(self, page: int):
-        """페이지가 바뀐 직후, 보류 중인 자동 스크린샷이 있으면 캡처."""
+        """페이지가 바뀐 직후 — 텍스트 창이 지금 쪽을 따라간다.
+        261024-5(SOT 점검): 종전 '보류 중인 자동 스크린샷' 갈래는 켜는 곳이 없어 지웠다(스크린샷 SOT §6)."""
         try:
             self._reload_text_panel()        # 260908-2: 텍스트 창은 현재 쪽을 따라간다
         except Exception:
             pass
-        if self._pending_screenshot_after_load:
-            self._pending_screenshot_after_load = False
-            QApplication.processEvents()
-            self.action_screenshot()
 
     # ===== 단어장 ====================================================
     def _law_oc_or_warn(self) -> str:
@@ -8637,7 +8645,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260628-13(사용자 요청): 프로그램을 켜면 **'1단' + 쪽 맞춤**으로 시작한다.
 
         마지막 세션의 레이아웃을 그대로 복원하면 2단이거나 검색·스크린샷 패널이 열린 채
-        떠서 첫 화면이 어수선했다. `_vm_single()` 은 패널 툴바의 '1단' 버튼과 **같은 동작**
+        떠서 첫 화면이 어수선했다. `_vm_single()` 은 보기 탭 '1단'(`_view_acts['single']`)과 **같은 동작**
         (2단 해제 + 검색·스크린샷 패널 숨김 + 우측 레이아웃 동기화)이라 별도 로직을 두지 않는다.
 
         ※ 세션 복원(`_load_main`)이 **끝난 뒤** 불러야 한다 — 문서를 열면서 맞춤 모드가

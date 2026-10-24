@@ -212,7 +212,8 @@ if HAVE_SOT:
             continue
         b = _body(txt)
         counted += ["%s: %s" % (name[:12], x) for x in
-                    re.findall(r"test_[a-z0-9_]+\.py`?\)?\s*\(?\*{0,2}[0-9]+\s*항목", b)]
+                    # 261024-5(SOT 점검): 굵게 쓴 이름 뒤 `**(9항목)` 꼴도 — 종전 식은 괄호 앞 `**` 를 못 넘어 세 곳을 놓쳤다
+                    re.findall(r"test_[a-z0-9_]+\.py`?\**\)?\s*\(?\**[0-9]+\s*항목", b)]
         if "| 파일 | 항목 |" in b:
             counted.append("%s: '항목' 열" % name[:12])
     chk(not counted, "§14.7.1 SOT 본문(§0 밖)에 검사 항목 수가 없다", str(counted[:4]))

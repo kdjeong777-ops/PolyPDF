@@ -2,7 +2,7 @@
 """261021-5: 크롬식 창 단축키 (입력 SOT §3·§3.2 · 디자인 SOT §2.9.2 · 마스터 §8.2 v12·§11.3).
 
 A. 기본 키 — 새 창 Ctrl+N · 저장 Ctrl+S · 새로고침 Ctrl+R · 스크린샷 PDF Ctrl+Alt+S · 확대/축소/기본 Ctrl++/Ctrl+-/Ctrl+0, 기본 키끼리 겹치지 않는다
-B. 파일 메뉴 — 새 창·저장·새로고침 항목이 그 키를 오른쪽 칸에(항목에 건 키), 종료는 니모닉 X(Alt+F → X)
+B. 파일 메뉴 — 새 창·저장·새로고침 항목이 그 키를 오른쪽 칸에(항목에 건 키), 종료 항목은 `종료(&X)`·Ctrl+Q(파일 탭 단추 글에서는 니모닉을 뺀다 — 261024-5)
 C. 실제 키: Ctrl+S 는 파일 저장(스크린샷 PDF 아님), Ctrl+Alt+S 는 스크린샷 PDF
 D. 설정 v11→v12 — 옛 기본값 Ctrl+S 로 남은 save_shots_pdf 를 Ctrl+Alt+S 로, 사용자가 바꾼 값은 그대로
 E. Ctrl+R — 포커스가 있는 책갈피창의 새로고침(아래 창이면 아래 창)
@@ -87,7 +87,7 @@ try:
         chk(x is not None and x.shortcut().toString() == key, "B1 파일 메뉴 '%s' 에 %s(오른쪽 칸)" % (name, key),
             str(x.shortcut().toString() if x else list(acts)))
     chk("종료(&X)" in acts and acts["종료(&X)"].shortcut().toString() == "Ctrl+Q",
-        "B2 종료는 니모닉 X(Alt+F → X), Ctrl+Q 도 그대로", str(list(acts)))
+        "B2 종료 항목 종료(&X)·Ctrl+Q(탭 단추 글은 니모닉 없음)", str(list(acts)))
     chk(m_file.title() == "파일(&F)", "B3 파일 메뉴 니모닉 F")
 
     # C — Ctrl+S / Ctrl+Alt+S 실제 키
