@@ -102,6 +102,28 @@ chk(rt.version_order_problem("1.0.0-beta.3", TAGS + ["v1.0.0"]) != "", "H 정식
 chk(rt.version_order_problem("1.1.0-beta.1", TAGS + ["v1.0.0"]) == "", "H 1.0.0 뒤 1.1.0-beta.1 은 통과")
 chk(rt.version_order_problem("1.0.0", ["v0.45.0-beta.298", "v2.41.0"]) != "", "H 가장 가까운 태그가 아니라 가장 높은 태그와 견준다")
 
+# H2. 261026(261025-12 보완): 견주는 목록은 updater 와 같은 **지금 있는 GitHub 릴리스**(초안 제외) — 6월 옛 체계의 `v2.41.0` 은
+#   태그만 남고 릴리스는 지워져 앱 안 업데이트에 보이지 않는데, git 태그로 견주던 plan 이 1.0.0 을 '거꾸로' 로 멈췄다(오탐).
+_gh, _git = rt.gh, rt.git
+try:
+    rt.git = lambda *a: "v0.45.0-beta.298\nv2.41.0\nv0.45.0-beta.297\n" if a[:2] == ("tag", "--list") else _git(*a)
+    rt.gh = lambda *a: json.dumps([{"tagName": "v0.45.0-beta.298", "isDraft": False},
+                                   {"tagName": "v0.45.0-beta.293", "isDraft": True},
+                                   {"tagName": "v9.0.0", "isDraft": True},
+                                   {"tagName": "components", "isDraft": False}])
+    tags, src = rt.released_tags()
+    chk("v2.41.0" not in tags and "v9.0.0" not in tags and src.startswith("GitHub"),
+        "H2 릴리스 목록(초안 제외)으로 견준다 — 태그만 남은 v2.41.0·초안 v9.0.0 은 빠진다", (tags, src))
+    chk(rt.version_order_problem("1.0.0", tags) == "", "H2 1.0.0 은 지금 있는 릴리스보다 높다 — 멈추지 않는다")
+
+    def _fail(*a):
+        raise SystemExit("gh 실패")
+    rt.gh = _fail
+    tags, src = rt.released_tags()
+    chk("v2.41.0" in tags and src.startswith("git"), "H2 릴리스 목록을 못 받으면 git 태그로 물러선다(그때는 v2.41.0 이 멈춤 사유)", src)
+finally:
+    rt.gh, rt.git = _gh, _git
+
 # I. 261025-12(릴리스 SOT §4.3 의 8): 측정이 다른 무거운 작업과 겹쳤는지 — 겹치면 판정 보류·기준점 그대로
 import overlap  # noqa: E402
 PS = [(1, 0, "claude.exe"), (10, 1, "powershell.exe"), (20, 10, "python.exe"),      # 20 = 이 측정

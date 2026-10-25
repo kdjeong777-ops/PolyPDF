@@ -423,12 +423,26 @@ def version_order_problem(new: str, tags: list) -> str:
         return ""
     top = max(vers, key=updater._vkey)
     if not updater.is_newer(new, top):
-        return "버전 %s 이 이미 낸 가장 높은 태그 %s 보다 높지 않다 — 앱 안 업데이트가 이 판을 고르지 못한다(릴리스 SOT §2.3)" % (new, top)
+        return "버전 %s 이 이미 낸 가장 높은 판 %s 보다 높지 않다 — 앱 안 업데이트가 이 판을 고르지 못한다(릴리스 SOT §2.3)" % (new, top)
     return ""
 
 
+def released_tags() -> tuple:
+    """(태그 목록, 출처) — `updater.check_latest` 와 같은 기준: **지금 있는 GitHub 릴리스**(초안 제외)의 태그.
+    261026: 6월 옛 번호 체계의 `v2.41.0` **태그**가 남아 있어 git 태그로 견주면 1.0.0 이 '거꾸로' 로 멈췄다 — 그 릴리스는
+    이미 지워져 앱 안 업데이트에는 보이지 않는다(오탐). 목록을 못 받으면(오프라인·gh 없음) git 태그로 물러선다."""
+    try:
+        rows = json.loads(gh("release", "list", "--repo", REPO, "--limit", "1000", "--json", "tagName,isDraft"))
+        return [r["tagName"] for r in rows if not r.get("isDraft")], "GitHub 릴리스"
+    except (SystemExit, Exception):              # noqa: BLE001 — gh 가 없거나 실패
+        return git("tag", "--list", "v*").split(), "git 태그(릴리스 목록을 받지 못함)"
+
+
 def plan(base_arg, urgent=False) -> int:
-    vp = version_order_problem(source_version(), git("tag", "--list", "v*").split())
+    tags, src = released_tags()
+    vp = version_order_problem(source_version(), tags)
+    if vp:
+        vp += " — 견준 목록: %s" % src
     if vp:
         say("■ 멈춤 — " + vp)
         return 4
