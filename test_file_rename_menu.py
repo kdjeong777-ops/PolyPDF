@@ -203,7 +203,7 @@ try:
         i_rn, i_sv, i_fl, i_2 = (raw.index("파일·책갈피 이름 변경"), raw.index("저장"),
                                  raw.index("평탄화해서 내보내기..."), raw.index("2단 보기"))
         # 261016-1(마스터 §4.7.13, 사용자 지시): 저장 그룹 끝에 변환·용량 줄이기·개인정보 지우기 — OCR 은 '책갈피 생성' 아래
-        extras = ["변환해서 내보내기...", "용량 줄여 내보내기...", "개인정보 지우고 별도 저장..."]
+        extras = ["변환...", "용량 줄여 내보내기...", "개인정보 지우고 별도 저장..."]
         i_end = i_fl + 1 + len(extras)
         chk(raw[i_rn + 2] == "" and i_sv == i_rn + 3 and raw[i_fl + 1:i_end] == extras and raw[i_end] == ""
             and i_2 == i_end + 1,

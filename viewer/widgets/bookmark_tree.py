@@ -2607,7 +2607,7 @@ class BookmarkTree(QWidget):
                                 if self._is_folder_node(item) else []))
         # 261014-1(마스터 §4.7.13, 사용자 요청) 메뉴 순서 — 파일 그룹:
         #   파일 탐색기 열기 · 새 폴더 만들기 · 파일 복사 · 파일 이동 · 이름 변경 · 삭제
-        #   ─ 저장 그룹: 저장 · 다른 이름으로 저장 · 평탄화해서 내보내기 · 변환해서 내보내기 · 용량 줄여 내보내기 · 개인정보 지우고 별도 저장(261016-1)
+        #   ─ 저장 그룹: 저장 · 다른 이름으로 저장 · 평탄화해서 내보내기 · 변환(261025-5) · 용량 줄여 내보내기 · 개인정보 지우고 별도 저장(261016-1)
         #   ─ 보기 그룹: 2단 보기 · 책갈피 모두 펼치기 · 모두 접기 (· 페이지순 정렬)
         # '파일 탐색기 열기'(260910-8 '파일 폴더 열기') 는 편집모드가 아니어도 쓴다 — `xfer_files` 와 따로.
         act_open_dir = None
@@ -2649,8 +2649,8 @@ class BookmarkTree(QWidget):
             _conv_files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
             if _dir_target not in _conv_files:
                 _conv_files = [_dir_target]
-            _ca = menu.addAction(tr("변환해서 내보내기...") if len(_conv_files) == 1
-                                 else tr('변환해서 내보내기 ({n}개 파일)...').format(n=len(_conv_files)))
+            _ca = menu.addAction(tr("변환...") if len(_conv_files) == 1          # 261025-5: 파일·도구 탭과 같은 이름 '변환'
+                                 else tr('변환 ({n}개 파일)...').format(n=len(_conv_files)))
             _ca.setToolTip(tr("Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다."))
             # 변환 창은 메뉴가 닫힌 뒤에(§4.7.11 '메뉴 안에서 모달 창')
             _ca.triggered.connect(lambda _=False, fs=list(_conv_files): QTimer.singleShot(

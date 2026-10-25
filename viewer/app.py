@@ -175,6 +175,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._last_results: list = []
         self._recent_folders: list = []
         self._recent_files: list = []         # 261008-11: 파일 메뉴 '최근 파일'
+        self._recent_searches: list = []      # 261025-5(검색창 SOT §10): 즐겨찾기 탭 '최근 검색어' — {query, case, regex}
         self._current_shot_path = None        # v1.6.7 E1: 표시 중 스크린샷 카드 원본 path
         self._favorites: list = []
         self._law_favorites: list = []        # 260616-6: 법령·고시 즐겨찾기(메인 즐겨찾기 아래 별도)
@@ -1466,20 +1467,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _style_panel_toolbar(self, dark: bool):
         """260606-26: 세부 줄(종전 패널) 버튼 테두리/배경을 테마별로. 라이트=짙은 회색,
         다크=배경보다 옅은 회색. 너무 튀지 않게 은은한 대비. 261024-1: 탭 줄·세부 줄 전부(`Ribbon.apply_style`)."""
-        if dark:
-            css = (
-                "QToolButton{background:#484848;border:1px solid #606060;"
-                "border-radius:3px;padding:2px 8px;margin:1px;color:#e8e8e8;}"
-                "QToolButton:hover{background:#555555;border-color:#707070;}"
-                "QToolButton:pressed{background:#3c3c3c;}")
-        else:
-            css = (
-                "QToolButton{background:#e2e2e2;border:1px solid #a8a8a8;"
-                "border-radius:3px;padding:2px 8px;margin:1px;color:#222;}"
-                "QToolButton:hover{background:#d4d4d4;border-color:#909090;}"
-                "QToolButton:pressed{background:#c4c4c4;}")
+        # 261025-5(디자인 SOT §2.9.3, 사용자 결정): 색은 `ribbon` 의 표 하나 — 일반 단추 옅게·드롭다운 진하게·리본 줄 회색
         try:                                      # 261021-2(디자인 SOT §2.9.3): 그룹 바탕 색도 함께
-            self._ribbon.apply_style(dark, css)
+            self._ribbon.apply_style(dark)
         except Exception:
             pass
         # 260616-3: 오른쪽 끝 검색창 테마 스타일(둥근 모서리)
@@ -1515,6 +1505,34 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         items = [None if cid == SEP else cmds[cid] for cid in self._collection_ids()
                  if cid == SEP or cid in cmds]           # 모르는 id(옛 이름)는 건너뛴다
         self._ribbon.set_collection(items)
+
+    def _ribbon_context_menu(self):
+        """261025-5(디자인 SOT §2.9.6, 사용자 지시): 탭 줄·리본 바탕 우클릭 — '리본 메뉴 보이기'(체크)·'모음 메뉴 관리...'."""
+        m = QMenu(self)
+        a_show = m.addAction(tr("리본 메뉴 보이기"))
+        a_show.setCheckable(True)
+        a_show.setChecked(bool((self._prefs or {}).get("show_panel_toolbar", True)))
+        a_show.toggled.connect(self._set_ribbon_visible)
+        m.addSeparator()
+        a_col = m.addAction(tr("모음 메뉴 관리..."))
+        a_col.triggered.connect(self._manage_collection)
+        return m
+
+    def _set_ribbon_visible(self, on: bool) -> None:
+        """리본 보이기 설정을 곧바로 바꾸고 저장한다(환경설정 '리본 메뉴 보이기' 와 같은 키 `show_panel_toolbar`)."""
+        self._prefs["show_panel_toolbar"] = bool(on)
+        self._ribbon.set_rows_visible(bool(on))
+        self._save_settings_now()
+
+    def _manage_collection(self) -> None:
+        """'모음 메뉴 관리' — 환경설정의 같은 단추와 같은 창(§2.9.4). [확인] 하면 곧바로 저장·적용."""
+        from viewer.widgets.ribbon import RibbonCustomizeDialog
+        cat, labels = self.ribbon_catalog()
+        dlg = RibbonCustomizeDialog(cat, self._collection_ids(), labels, self)
+        if dlg.exec() == dlg.DialogCode.Accepted:
+            self._prefs["ribbon_collection"] = [str(x) for x in dlg.result_ids()]
+            self._apply_collection()
+            self._save_settings_now()
 
     def ribbon_catalog(self):
         """모음 사용자 지정 창의 왼쪽 목록 — [(탭 이름, [명령 id…])], id → 단추 이름(§2.9.4)."""
@@ -1661,7 +1679,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
         # 261014-28(형식 변환 SOT §2.1, 사용자 지시): 하위 메뉴 없이 누르면 변환 창 — 본문에 열린 파일
-        self.act_export = QAction(tr("변환해서 내보내기..."), self)
+        self.act_export = QAction(tr("변환..."), self)          # 261025-5(사용자 지시): 종전 '변환해서 내보내기...'. 도구 탭에도(이미지→PDF 오른쪽)
         self.act_export.triggered.connect(lambda: self.action_convert())
         m_file.addAction(self.act_export)
         m_file.addSeparator()
@@ -1687,7 +1705,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                          ("file.print", a_print), ("file.recent", self.menu_recent.menuAction()),
                          ("file.recent_files", self.menu_recent_files.menuAction()), ("file.quit", a_quit)):
             self._reg_cmd(_cid, _a)
-        self._reg_cmd("file.export", self.act_export, short=tr("변환해서 내보내기"),
+        self._reg_cmd("file.export", self.act_export, short=tr("변환"),
                       tip=tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"))
 
         # v1.6.1 F1: 즐겨찾기 메뉴 (파일 ↔ 보기 사이)
@@ -1773,6 +1791,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act(tr("다단 생성..."), self.action_nup_create, "tools.nup")   # 261021-3(마스터 §11.10.2, 디자인 SOT §2.9.1 예외 둘째)
         _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf(), "tools.img2pdf",  # 260825-13
              tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"))
+        m_tools.addAction(self.act_export)       # 261025-5(사용자 지시): '변환' 은 파일·도구 탭 모두에 — 같은 액션(id file.export)
         _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf, "tools.encrypt", tr("암호화"),
              tr("현재 PDF에 암호·권한 설정(암호화 저장)"))
         self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files, "tools.translate", tr("번역"),
@@ -1888,7 +1907,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261024-1(디자인 SOT §2.9): 메뉴는 탭으로 — 세부 줄은 각 메뉴의 액션을 그대로 보인다.
         from viewer.widgets.ribbon import COLLECTION
         rb = self._ribbon
-        rb.add_tab(COLLECTION, tr("모음"))
+        rb.add_tab(COLLECTION, tr("모음(&C)"))          # 261025-5(사용자 지시): Alt+C — Collection·Curate
         for _key, _m in (("file", m_file), ("fav", self.menu_favorites), ("view", m_view),
                          ("tools", m_tools), ("help", m_help)):
             rb.add_tab(_key, _m.title(), _m)
@@ -1896,6 +1915,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 메뉴 막대를 화면에서 뗐으므로 메뉴 항목에 건 단축키(Ctrl+S 등)는 창에 붙여야 산다 — 보이는 위젯의 액션만 키를 받는다
         self.addActions([a for a in self._cmds.values() if a.menu() is None])
         self._apply_collection()
+        rb.context_menu_provider = self._ribbon_context_menu     # 261025-5(디자인 SOT §2.9.6)
         from viewer import theme as _theme
         self._style_panel_toolbar(_theme.is_dark())
 
@@ -2548,7 +2568,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.saveAsFileRequested.connect(
                 lambda f, b=_bt: self._action_save_as(bt=b, file_path=f))
         self.bookmark_tree.editGlossaryRequested.connect(self._action_edit_glossary)  # 260623
-        # 261014-11(형식 변환 SOT §2.1): 책갈피창 우클릭 '변환해서 내보내기...'(261016-1, 여러 파일이면 일괄) · 썸네일 '선택한 쪽 변환 ▸'
+        # 261014-11(형식 변환 SOT §2.1): 책갈피창 우클릭 '변환...'(261016-1 → 261025-5, 여러 파일이면 일괄) · 썸네일 '선택한 쪽 변환 ▸'
         for _bt in (self.bookmark_tree, self.bookmark_tree_right):
             _bt.convertFilesRequested.connect(lambda files, k: self.action_convert(files=files, fmt=k))
             _bt.ocrLayerFilesRequested.connect(self.action_ocr_batch)   # 261014-16(텍스트 창 SOT §5.5)
@@ -6879,6 +6899,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.status.showMessage(tr('정규식이 틀렸습니다: {e}').format(e=e), 8000)
                 return
         self.search_bar.set_invalid("")
+        self._touch_recent_search(query, bool(mode and mode[0]), bool(mode and mode[1]))   # 261025-5 최근 검색어
         for _mv in self._mv:
             _mv.set_search_mode(mode)
         self.status.showMessage(tr('검색 중: {query!r}').format(query=query))
@@ -8542,6 +8563,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._refresh_recent_menu()
         self._recent_files = [str(p) for p in data.get("recent_files", []) if p]
         self._refresh_recent_files_menu()
+        self._recent_searches = [dict(r) for r in (data.get("recent_searches") or [])
+                                 if isinstance(r, dict) and str(r.get("query", "")).strip()][: self.MAX_RECENT_SEARCHES]
+        self._refresh_recent_searches_menu()
 
         dpi = int(data.get("render_dpi", 192))
         fit_mode = data.get("fit_mode", "page")     # 261008: 내부 키(옛 '쪽 맞춤' 은 set_fit_mode 가 바꾼다)
@@ -9224,6 +9248,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "last_open": self._current_open_target(),
             "recent_folders": self._recent_folders,
             "recent_files": self._recent_files,
+            "recent_searches": self._recent_searches,   # 261025-5: 개인 항목(PERSONAL_TOP_KEYS)
             # 260906-3(사용자 결정): 스크린샷 목록은 **저장하지 않는다** — 시작은 항상 빈 목록이고,
             #   남겨 두면 지워진 캡처 경로만 설정 파일에 쌓인다. 종료 시 PDF 저장을 묻는다.
             "screenshots": [],
@@ -9366,13 +9391,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.menu_fav_folders = QMenu(tr("등록 폴더"), self)
         self.menu_fav_files = QMenu(tr("등록 파일"), self)
         self.menu_fav_searches = QMenu(tr("등록 검색어"), self)
+        self.menu_recent_searches = QMenu(tr("최근 검색어"), self)    # 261025-5(사용자 지시·결정)
         self.menu_fav_other = QMenu(tr("기타"), self)
+        # 261025-5(사용자 지시): 최근 파일은 등록 파일 그룹으로(그 왼쪽), 최근 검색어는 등록 검색어 왼쪽 — 그룹마다 '최근 ▸ 등록 ▸ 단추'
         m.addMenu(self.menu_recent)
         m.addMenu(self.menu_fav_folders)
-        m.addMenu(self.menu_recent_files)          # 폴더 단추는 이 앞에 끼운다
-        m.addSeparator()
+        self._fav_sep_folders = m.addSeparator()   # 폴더 단추는 이 앞에 끼운다
+        m.addMenu(self.menu_recent_files)
         m.addMenu(self.menu_fav_files)
-        m.addMenu(self.menu_fav_searches)          # 파일 단추는 이 앞에 끼운다
+        self._fav_sep_files = m.addSeparator()     # 파일 단추는 이 앞에 끼운다
+        m.addMenu(self.menu_recent_searches)
+        m.addMenu(self.menu_fav_searches)
         m.addSeparator()
         m.addMenu(self.menu_fav_other)
         m.addSeparator()
@@ -9392,9 +9421,50 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._reg_cmd("fav.manage", acts["fav.manage"], tip=tr("폴더·파일·검색어·법령·고시·특허·건설기준 즐겨찾기를 고칩니다"))
         for cid, menu in (("file.recent", self.menu_recent), ("fav.folders", self.menu_fav_folders),
                           ("file.recent_files", self.menu_recent_files), ("fav.files", self.menu_fav_files),
-                          ("fav.searches", self.menu_fav_searches), ("fav.other", self.menu_fav_other)):
+                          ("fav.recent_searches", self.menu_recent_searches), ("fav.searches", self.menu_fav_searches),
+                          ("fav.other", self.menu_fav_other)):
             self._reg_cmd(cid, menu.menuAction())
         self._fav_btn_acts = []                    # 지금 끼워 둔 개별 단추
+
+    MAX_RECENT_SEARCHES = 10
+
+    def _touch_recent_search(self, query: str, case: bool, regex: bool) -> None:
+        """261025-5(검색창 SOT §10, 사용자 지시·결정): 실행한 검색어를 맨 위로 — 같은 검색어(같은 토글)는 한 번만, 최대 10."""
+        q = (query or "").strip()
+        if not q:
+            return
+        item = {"query": q, "case": bool(case), "regex": bool(regex)}
+        rest = [r for r in (getattr(self, "_recent_searches", None) or []) if r != item]
+        self._recent_searches = ([item] + rest)[: self.MAX_RECENT_SEARCHES]
+        self._refresh_recent_searches_menu()
+
+    def _refresh_recent_searches_menu(self) -> None:
+        m = getattr(self, "menu_recent_searches", None)
+        if m is None:
+            return
+        m.clear()
+        items = getattr(self, "_recent_searches", None) or []
+        if not items:
+            a = QAction(tr("(최근 검색어 없음)"), m)
+            a.setEnabled(False)
+            m.addAction(a)
+            return
+        for r in items:
+            marks = ("  Aa" if r.get("case") else "") + ("  .*" if r.get("regex") else "")
+            a = QAction("🔍 " + r.get("query", "") + marks, m)
+            a.triggered.connect(lambda _c=False, rr=r: self._open_recent_search(rr))
+            m.addAction(a)
+
+    def _open_recent_search(self, r: dict) -> None:
+        """누르면 **지금 연 폴더(폴더 모드)나 파일(파일 모드)** 에서 다시 찾는다(사용자 결정) — 대소문자·정규식도 되살린다."""
+        q = r.get("query", "")
+        self._vm_search()
+        try:
+            self.search_bar.edit.setText(q)
+            self.search_bar.set_mode(bool(r.get("case")), bool(r.get("regex")))
+        except Exception:
+            pass
+        self.action_search(q)
 
     def _fav_other_on(self, kind: str) -> bool:
         """`기타`·항목 관리의 법령·고시/특허/건설기준 — 보기 탭 단추와 같은 판정(한국 전용 + API 키, 마스터 §11.12).
@@ -9467,14 +9537,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             mo.addAction(mg)
         mo.menuAction().setVisible(bool(on))
 
-        # 개별 단추 — 등록 폴더 다음(최근 파일 앞), 등록 파일 다음(등록 검색어 앞)
+        self._refresh_recent_searches_menu()
+        # 개별 단추 — 등록 폴더 다음, 등록 파일 다음(각 그룹의 끝 구분선 앞)
         m = self.menu_favorites
         for a in self._fav_btn_acts:
             m.removeAction(a)
             a.deleteLater()
         self._fav_btn_acts = []
-        for kind, before in (("folder", self.menu_recent_files.menuAction()),
-                             ("file", self.menu_fav_searches.menuAction())):
+        for kind, before in (("folder", self._fav_sep_folders), ("file", self._fav_sep_files)):
             for f in groups[kind][:BUTTONS_MAX]:
                 a = QAction(short_label(f), self)
                 where = (f.get("file") if kind == "file" else None) or f.get("folder") or ""

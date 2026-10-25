@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """261016-1: 책갈피창·썸네일 우클릭 메뉴 이름·차례, '스크린샷 붙여넣기' (마스터 §4.7.7·§4.7.11·§4.7.13, 사용자 지시).
 
-A. 책갈피창 파일 행 — 저장 그룹: … 평탄화해서 내보내기 · 변환해서 내보내기(하위 메뉴 없음) · 용량 줄여 내보내기 ·
+A. 책갈피창 파일 행 — 저장 그룹: … 평탄화해서 내보내기 · 변환(하위 메뉴 없음, 261025-5 이름) · 용량 줄여 내보내기 ·
    개인정보 지우고 별도 저장 / 'OCR로 글자층 생성...' 은 '책갈피 생성' 바로 아래 / 옛 이름 없음
-   A5 '변환해서 내보내기...' 를 누르면 변환 창이 형식 없이(창에서 고른다)
+   A5 '변환...' 을 누르면 변환 창이 형식 없이(창에서 고른다)
 B. 썸네일 우클릭(편집 모드, 붙일 것 없음) — 그룹과 차례가 사용자 지시대로, 붙여넣기 셋은 **끈 채로** 보인다
 C. 쪽 복사 · 스크린샷 컷 · 클립보드 그림이 있으면 붙여넣기 셋이 켜진다 · 편집 모드가 아니면 보이되 꺼진다
 D. '스크린샷 붙여넣기' 를 누르면 스트립의 그림 컷들이 누른 썸네일 아래 새 쪽으로(실제 처리기 — 미저장 끼운 쪽)
@@ -91,17 +91,17 @@ try:
     m = seen[-1] if seen else []
     L = labels(m)
     i_fl = L.index("평탄화해서 내보내기...") if "평탄화해서 내보내기..." in L else -1
-    chk(i_fl >= 0 and L[i_fl + 1:i_fl + 5] == ["변환해서 내보내기...", "용량 줄여 내보내기...", "개인정보 지우고 별도 저장...", "-"],
-        "A1 저장 그룹 끝 — 변환해서 내보내기 · 용량 줄여 내보내기 · 개인정보 지우고 별도 저장", str(L))
-    conv = [x for x in m if x[0] == "변환해서 내보내기..."]
-    chk(conv and conv[0][2] is False, "A2 '변환해서 내보내기...' 에 하위 메뉴가 없다", str(conv))
+    chk(i_fl >= 0 and L[i_fl + 1:i_fl + 5] == ["변환...", "용량 줄여 내보내기...", "개인정보 지우고 별도 저장...", "-"],
+        "A1 저장 그룹 끝 — 변환 · 용량 줄여 내보내기 · 개인정보 지우고 별도 저장", str(L))
+    conv = [x for x in m if x[0] == "변환..."]
+    chk(conv and conv[0][2] is False, "A2 '변환...' 에 하위 메뉴가 없다", str(conv))
     i_bc = L.index("책갈피 생성") if "책갈피 생성" in L else -1
     chk(i_bc >= 0 and L[i_bc + 1] == "OCR로 글자층 생성...", "A3 'OCR로 글자층 생성...' 은 '책갈피 생성' 바로 아래", str(L))
     old = ["변환", "OCR 글자층 넣기...", "PDF 압축...", "가림(개인정보 지우기)..."]
     chk(not any(o in L for o in old), "A4 옛 이름이 남지 않는다", str([o for o in old if o in L]))
     opened = []
     mw.action_convert = lambda files=None, fmt=None, pages=None: opened.append((files, fmt))
-    pick["t"], pick["trigger"] = "변환해서 내보내기", True
+    pick["t"], pick["trigger"] = "변환", True
     bt._on_tree_context_menu(bt.tree.visualItemRect(anode).center()); spin(0.3)
     pick["t"], pick["trigger"] = None, False
     chk(opened and opened[0][0] == [str(a)] and not opened[0][1], "A5 누르면 변환 창이 형식 없이(그 파일)", str(opened))

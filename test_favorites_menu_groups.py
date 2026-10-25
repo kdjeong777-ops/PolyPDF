@@ -44,7 +44,7 @@ try:
     shutil.copy(_fx.text_pdf(), f1); shutil.copy(_fx.text_pdf(), f2)
 
     mw = MainWindow()
-    mw.resize(1600, 900); mw.show(); QTest.qWait(100)
+    mw.resize(1920, 900); mw.show(); QTest.qWait(100)
     mw._law_favorites = [{"name": "도로법", "kind_label": "법률"}]
     mw._kcsc_favorites = [{"name": "KDS 14", "category": "설계"}]
     mw._kipo_favorites = []
@@ -64,17 +64,21 @@ try:
     row = mw._ribbon.row("fav")
     btns = row.buttons()
     texts = [b.text() for b in btns]
-    want = ["최근 폴더", "등록 폴더", "폴더1", "옛폴더", "최근 파일",
-            "등록 파일", "파일1", "짧은2", "없는파일", "등록 검색어",
+    # 261025-5(사용자 지시): 최근 파일은 등록 파일 그룹 왼쪽, 최근 검색어는 등록 검색어 왼쪽 — 그룹마다 '최근 · 등록 · 단추'
+    want = ["최근 폴더", "등록 폴더", "폴더1", "옛폴더",
+            "최근 파일", "등록 파일", "파일1", "짧은2", "없는파일",
+            "최근 검색어", "등록 검색어",
             "현재 폴더 추가", "현재 파일 추가", "현재 검색어 추가", "항목 관리"]
     chk(texts == want, "A 즐겨찾기 탭 세부 줄 차례(키 없음 → 기타 숨김)", str(texts))
     by = {b.text(): b for b in btns}
     for t, menu in (("등록 폴더", mw.menu_fav_folders), ("등록 파일", mw.menu_fav_files),
-                    ("등록 검색어", mw.menu_fav_searches), ("최근 폴더", mw.menu_recent)):
+                    ("등록 검색어", mw.menu_fav_searches), ("최근 폴더", mw.menu_recent),
+                    ("최근 검색어", mw.menu_recent_searches)):
         b = by.get(t)
         chk(b is not None and b.isEnabled() and b.defaultAction().menu() is menu,
             f"A '{t}' 은 켜진 ▾ 단추(누르면 목록이 펼쳐진다)")
-    chk(len(row.groups()) == 3, "A 그룹 바탕 셋(기타가 숨으면 겹친 구분선도 숨는다)", str([[w.text() for w in g] for g in row.groups()]))
+    chk([len(g) for g in row.groups()] == [4, 5, 2, 4], "A 그룹 바탕 넷(폴더·파일·검색어·추가 — 기타가 숨으면 겹친 구분선도 숨는다)",
+        str([[w.text() for w in g] for g in row.groups()]))
     mw._ribbon.select("file"); QTest.qWait(50)
     ftexts = [b.text() for b in mw._ribbon.row("file").buttons()]
     mw._ribbon.select("fav"); QTest.qWait(50)

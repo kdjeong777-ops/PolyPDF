@@ -179,17 +179,11 @@ class PresentMixin:
         return "cancel"
 
     def _open_recording_settings(self):
-        """260611-25: '화면+음성 녹화' 설정 화면(녹화 테스트 포함)을 띄움."""
-        from viewer.widgets.settings_dialog import SettingsDialog
+        """260611-25 → 261025-6(디자인 SOT §2.14): '발표화면 녹화 설정' 창(녹화 테스트 포함)을 바로 띄운다 —
+        종전에는 환경설정 전체를 띄우고 녹화 묶음으로 내렸다. [확인] 이면 곧바로 저장."""
+        from viewer.widgets.settings_dialog import RecordingSettingsDialog, open_sub_settings
         par = getattr(self, "_present", None) or self
-        dlg = SettingsDialog(self._prefs, par, host=self)
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(0, dlg.focus_recording)
-        if dlg.exec() == dlg.DialogCode.Accepted:
-            new_prefs = dlg.result_prefs()
-            self._apply_prefs(new_prefs)
-            self._save_settings_now()
-            self.status.showMessage(tr("설정 저장됨"), 3000)
+        open_sub_settings(RecordingSettingsDialog, self, par, tr("녹화 설정 저장됨"))
 
     def _on_record_pause(self):
         r = getattr(self, "_rec", None)

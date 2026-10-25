@@ -15,7 +15,7 @@ import re
 
 from PyQt6.QtCore import QEvent, QObject, QRectF, Qt, QTimer
 from PyQt6.QtGui import QColor, QKeySequence, QPainter
-from PyQt6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
+from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
                              QListWidget, QListWidgetItem, QPushButton, QSizePolicy, QStackedWidget,
                              QToolBar, QToolButton, QToolTip, QTreeWidget, QTreeWidgetItem,
                              QVBoxLayout, QWidget)
@@ -26,12 +26,20 @@ TAB_BAR_PX = 3              # 고른 탭 아래 바 두께
 TAB_BAR_COLOR = "#1456c4"   # 디자인 SOT §2.5 '강조'
 GROUP_PAD_X = 4             # 그룹 바탕이 단추 바깥으로 나오는 폭
 GROUP_RADIUS = 6
-GROUP_BG = {False: "#ebebeb", True: "#3a3a3d"}   # 라이트(툴바 #f5f5f5 · 버튼 #e2e2e2 사이) / 다크(#2e2e31 · #484848 사이)
+# 261025-5(디자인 SOT §2.9.3, 사용자 결정): 탭 줄은 밝게·리본(세부 줄)은 한 단계 진한 회색 — 드롭다운(▾)은 진하게, 일반 단추는 옅게.
+#   다크는 같은 단계를 반대로(리본 줄이 탭 줄보다 조금 밝다). 값은 이 표 하나 — 원본(§2.1 '리본 색').
+TAB_ROW_BG = {False: "#f5f5f5", True: "#2e2e31"}
+ROW_BG = {False: "#e4e4e4", True: "#38383c"}
+ROW_BORDER = {False: "#c8c8c8", True: "#4a4a50"}       # 탭 줄과 리본 줄 사이 1px
+GROUP_BG = {False: "#d8d8d8", True: "#424247"}
+BTN = {False: ("#fafafa", "#b4b4b4", "#222"), True: ("#3e3e42", "#55555a", "#e8e8e8")}        # 바탕·테두리·글
+BTN_DROP = {False: ("#c9c9c9", "#8c8c8c", "#222"), True: ("#5a5a60", "#707078", "#f0f0f0")}
 REBUILD_MS = 10             # 메뉴 항목이 바뀐 뒤 세부 줄을 다시 만들기까지(잇단 바뀜은 한 번으로 모인다)
 
 SEP = "|"                   # 모음의 구분선
 COLLECTION = "collection"   # 모음 탭 키
 DEFAULT_COLLECTION = (
+    "file.open_folder", "file.open_file", "file.print", SEP,          # 261025-5: 앞 그룹 — 폴더 열기·파일 열기·인쇄(사용자 지시)
     "view.single", "view.split", "view.text", "view.study", "view.search", "view.shot",
     "view.law", "view.kipo", "view.kcsc", "view.present", SEP,      # 261025-1: 보기 탭 차례와 같게(디자인 SOT §2.9.5)
     "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.merge", "tools.img2pdf",
@@ -116,12 +124,45 @@ class RibbonRow(QToolBar):
             if isinstance(w, QToolButton):
                 if a.menu() is not None:
                     w.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+                w.setProperty("ribbonDrop", a.menu() is not None)
+                w.style().unpolish(w)
+                w.style().polish(w)
                 w.installEventFilter(self._tips)
             a.changed.connect(self._sync_seps)
             self._watched.append(a)
             added = True
         self.trail = self.addWidget(self._spacer())
         self._sync_seps()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self._fit_spacers()
+
+    def _fit_spacers(self) -> None:
+        """261025-5(§2.9.3): 단추가 줄 폭에 다 들어가지 않으면(넘침 ») 앞·뒤 빈 칸을 0 으로 — 넘칠 때 Qt 는 뒤 빈 칸을
+        넘침 안으로 보내 **앞 빈 칸만** 남은 폭을 가져가 단추를 오른쪽으로 민다(모음이 길어진 뒤 드러남). 레이아웃 안에서만 바꾼다."""
+        lead, trail = getattr(self, "lead", None), getattr(self, "trail", None)
+        if lead is None or trail is None:
+            return
+        lay = self.layout()
+        sp = lay.spacing() if lay is not None else 0
+        need = 0
+        for a in self.actions():
+            if a in (lead, trail) or not a.isVisible():
+                continue
+            w = self.widgetForAction(a)
+            need += (w.sizeHint().width() if w is not None else 12) + sp
+        m = self.contentsMargins()
+        fits = need + m.left() + m.right() + 24 <= self.width()
+        pol = QSizePolicy.Policy.Expanding if fits else QSizePolicy.Policy.Ignored
+        changed = False
+        for a in (lead, trail):
+            w = self.widgetForAction(a)
+            if w is not None and w.sizePolicy().horizontalPolicy() != pol:
+                w.setSizePolicy(pol, QSizePolicy.Policy.Preferred)
+                changed = True
+        if changed and lay is not None:
+            lay.activate()                  # 이벤트 루프를 기다리지 않고 그 자리에서 다시 놓는다(첫 그림부터 맞게, §2.9.3)
 
     def _sync_seps(self) -> None:
         """261025-1: 구분선은 **양쪽에 보이는 단추가 있을 때만** — 묶음 전체가 숨으면(한국 전용·키 게이팅) 구분선이 겹쳐 보이지 않게."""
@@ -147,6 +188,7 @@ class RibbonRow(QToolBar):
         for s, on in show.items():
             if s.isVisible() != on:
                 s.setVisible(on)
+        self._fit_spacers()                 # 단추가 숨거나 보이면 폭도 다시 잰다
 
     def buttons(self) -> list:
         """보이는 단추(빈 칸 제외) — 차례대로."""
@@ -204,6 +246,8 @@ class Ribbon(QWidget):
 
         # 탭 줄: [왼쪽 빈 칸][탭 묶음][오른쪽 칸(검색창)] — 양쪽 같은 늘림 → 탭 묶음이 창 가운데(§2.9.3)
         self.tab_row = QWidget(self)
+        self.tab_row.setObjectName("ribbonTabRow")
+        self.tab_row.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         h = QHBoxLayout(self.tab_row)
         h.setContentsMargins(6, 2, 6, 0)
         h.setSpacing(0)
@@ -232,6 +276,8 @@ class Ribbon(QWidget):
         self._order = []
         self._dirty = set()
         self._rows_visible = True
+        self._peek = False               # 리본을 숨겨 둔 채 탭을 눌러 잠깐 보이는 중(§2.9.6)
+        self.context_menu_provider = None   # 우클릭 메뉴를 만드는 함수(MainWindow 가 넣는다)
         self.dark = False
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -249,6 +295,7 @@ class Ribbon(QWidget):
         b.clicked.connect(lambda _=False, k=key: self.select(k))
         self._tabs_lay.addWidget(b)
         row = RibbonRow(short_text(title), self.stack)
+        row.actionTriggered.connect(lambda _a: self.end_peek())
         self.stack.addWidget(row)
         self._tabs[key] = b
         self._rows[key] = row
@@ -256,6 +303,7 @@ class Ribbon(QWidget):
         if menu is not None:
             self._menus[key] = menu
             menu.installEventFilter(self)
+            menu.triggered.connect(lambda _a: self.end_peek())     # ▾ 펼침 안의 명령도(하위 메뉴는 위로 전해진다)
             self._fill_from_menu(key)
         if len(self._order) == 1:
             self.select(key)
@@ -268,9 +316,36 @@ class Ribbon(QWidget):
         if key in self._dirty:
             self._fill_from_menu(key)
         self.stack.setCurrentWidget(self._rows[key])
-        if not self._rows_visible:          # 세부 줄을 숨겨 둔 채 탭을 누르면 다시 보인다(§2.9)
-            self._rows_visible = True
-            self.stack.setVisible(True)
+        if not self._rows_visible:          # 261025-5(§2.9.6): 리본을 숨겨 두었으면 탭을 누를 때 **잠깐** 보인다
+            self._start_peek()
+
+    # ── 잠깐 보이기(§2.9.6, 사용자 지시) — 명령을 고르거나 리본 밖을 누르면 다시 숨는다 ──
+    def _start_peek(self) -> None:
+        if not self._peek:
+            self._peek = True
+            QApplication.instance().installEventFilter(self)
+        self.stack.setVisible(True)
+
+    def end_peek(self) -> None:
+        if not self._peek:
+            return
+        self._peek = False
+        QApplication.instance().removeEventFilter(self)
+        if not self._rows_visible:
+            self.stack.setVisible(False)
+
+    def peeking(self) -> bool:
+        return self._peek
+
+    def contextMenuEvent(self, ev):
+        """261025-5(§2.9.6): 탭 줄·리본 바탕 우클릭 — '리본 메뉴 보이기'·'모음 메뉴 관리...'."""
+        fn = self.context_menu_provider
+        if fn is None:
+            return super().contextMenuEvent(ev)
+        m = fn()
+        if m is not None:
+            m.exec(ev.globalPos())
+        ev.accept()
 
     def current_key(self) -> str:
         for k, b in self._tabs.items():
@@ -299,6 +374,10 @@ class Ribbon(QWidget):
         self._rows[key].set_items(items)
 
     def eventFilter(self, obj, ev):
+        if self._peek and ev.type() == QEvent.Type.MouseButtonPress and isinstance(obj, QWidget) and obj.isWindow() is False:
+            # 잠깐 보이는 중 리본 밖을 누르면 숨긴다 — 펼친 ▾ 메뉴(팝업) 안은 리본의 일로 본다
+            if not (obj is self or self.isAncestorOf(obj) or QApplication.activePopupWidget() is not None):
+                self.end_peek()
         if ev.type() in (QEvent.Type.ActionAdded, QEvent.Type.ActionRemoved):
             for k, m in self._menus.items():
                 if m is obj:
@@ -323,20 +402,40 @@ class Ribbon(QWidget):
 
     def set_rows_visible(self, on: bool) -> None:
         self._rows_visible = bool(on)
-        self.stack.setVisible(self._rows_visible)
+        if self._rows_visible:
+            self.end_peek()
+        self.stack.setVisible(self._rows_visible or self._peek)
 
-    def apply_style(self, dark: bool, button_css: str) -> None:
+    def rows_visible(self) -> bool:
+        return self._rows_visible
+
+    @staticmethod
+    def button_css(dark: bool) -> str:
+        """리본 단추 — 일반은 옅게, 드롭다운(▾)은 진하게(§2.9.3 표, 원본 `BTN`·`BTN_DROP`)."""
+        d = bool(dark)
+        css = ""
+        for sel, (bg, bd, fg) in (("QToolButton", BTN[d]), ('QToolButton[ribbonDrop="true"]', BTN_DROP[d])):
+            css += (f"{sel}{{background:{bg};border:1px solid {bd};border-radius:3px;padding:2px 8px;margin:1px;color:{fg};}}"
+                    f"{sel}:hover{{border-color:{'#909090' if not d else '#8a8a92'};}}")
+        css += ("QToolButton:pressed{background:%s;}" % ("#bdbdbd" if not d else "#2f2f33"))
+        return css
+
+    def apply_style(self, dark: bool, button_css: str = "") -> None:
         self.dark = bool(dark)
+        d = self.dark
         fg = "#e8e8e8" if dark else "#222"
         hover = "rgba(255,255,255,0.08)" if dark else "rgba(0,0,0,0.06)"
         self.tab_row.setStyleSheet(
+            f"QWidget#ribbonTabRow{{background:{TAB_ROW_BG[d]};}}"
             "QToolButton#ribbonTab{background:transparent;border:none;"
             f"border-bottom:{TAB_BAR_PX}px solid transparent;padding:3px 12px 2px 12px;color:{fg};}}"
             f"QToolButton#ribbonTab:hover{{background:{hover};}}"
             f"QToolButton#ribbonTab:checked{{border-bottom-color:{TAB_BAR_COLOR};}}")
+        css = button_css or self.button_css(d)
         for r in self._rows.values():
-            r.dark = self.dark
-            r.setStyleSheet(button_css + "QToolBar::separator{width:12px;background:transparent;}")
+            r.dark = d
+            r.setStyleSheet(f"QToolBar{{background:{ROW_BG[d]};border:none;border-top:1px solid {ROW_BORDER[d]};}}"
+                            + css + "QToolBar::separator{width:12px;background:transparent;}")
             r.update()
 
 

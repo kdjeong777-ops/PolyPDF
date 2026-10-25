@@ -32,7 +32,7 @@ _row = mw._ribbon.row(COLLECTION)
 btns = [a.iconText() for a in _row.actions() if cmd_id(a)]
 # 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261016-4(디자인 SOT §2.9, 사용자 지시): '변환해서 내보내기' 는 '암호화' 오른쪽
 TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "PDF병합",
-         "이미지→PDF", "암호화", "번역", "변환해서 내보내기"]
+         "이미지→PDF", "암호화", "번역", "변환"]            # 261025-5: '변환해서 내보내기' → '변환'
 N = len(TOOLS)
 chk(btns[-N:] == TOOLS, "① 패널 '도구' %d개가 지시한 차례다" % N, str(btns[-N:]))
 chk(btns.index("OCR") == len(btns) - N, "① 도구는 보기 뒤에 모여 있다", str(btns))
@@ -61,10 +61,11 @@ MENU = ["OCR 로 읽기 (쪽 범위·언어·워터마크)...",
         "PDF 병합...",
         "다단 생성...",                       # 261021-3(§2.9.1 예외 둘째): 파일 하나 다단 — 병합 아래, 패널 단추 없음
         "이미지 → PDF 변환...",
+        "변환...",                            # 261025-5(사용자 지시): 이미지→PDF 오른쪽 — 파일 메뉴와 같은 액션
         "암호화 (암호·권한 설정)...",
         "PDF번역",
         "전자서명", "태그 자동 부여", "인덱스 재구축"]   # 261016-3: 하위 메뉴 둘 + 인덱스 재구축, 도구 구역 안에 이어서
-chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다(§2.9.1 예외 — 변환은 파일 메뉴, 동시 생성은 책갈피 아래)", str(head))
+chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다(§2.9.1 예외 — 변환은 이미지→PDF 오른쪽, 동시 생성은 책갈피 아래)", str(head))
 subs = {a.text(): [x.text() for x in a.menu().actions()] for a in menu.actions() if a.menu()}
 chk(subs.get("전자서명", [])[:1] == ["서명..."] and len(subs.get("전자서명", [])) == 7
     and subs.get("태그 자동 부여", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 및 용어집 관리", [])) == 10,   # 261019-5: '사용자 뜻 편집' 더함
@@ -96,10 +97,11 @@ chk(_dlg.btn_save_default.text() == "현재 설정을 기본값으로 저장(배
     < _dlg.btn_reset_default.mapTo(_dlg, _dlg.btn_reset_default.rect().topLeft()).y(),
     "② 환경설정 창 맨 아래 — 기본값 저장(배포용) 아래 설정 초기화")
 _dlg.close(); _dlg.deleteLater()
-chk(not any(t and t.startswith("변환") for t in items), "② 도구 메뉴에 변환 항목이 없다(파일 메뉴에 있으므로)", str(items))
 m_file = next(a.menu() for a in mw.menuBar().actions() if a.text().startswith("파일"))
-fa = [a for a in m_file.actions() if a.text() == "변환해서 내보내기..."]
-chk(len(fa) == 1 and fa[0].menu() is None, "② 파일 메뉴 '변환해서 내보내기...' — 하위 메뉴 없음",
+fa = [a for a in m_file.actions() if a.text() == "변환..."]
+chk(fa and [a for a in menu.actions() if a.text() == "변환..."] == fa,
+    "② '변환...' 은 파일·도구 메뉴에 같은 액션(261025-5 사용자 지시)", str(items))
+chk(len(fa) == 1 and fa[0].menu() is None, "② 파일 메뉴 '변환...' — 하위 메뉴 없음",
     str([a.text() for a in m_file.actions()]))
 chk(not any(a.text() == "내보내기" for a in m_file.actions()), "② 옛 '내보내기 ▸' 는 없다")
 opened = []

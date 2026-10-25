@@ -153,6 +153,20 @@ class SettingsDialog(QDialog):
         ll.addRow(_row_ext)                  # 이름 칸 없이 두 칸 폭 — 영어 글자가 길다(디자인 SOT §2.14)
         layout.addWidget(grp_lang)
 
+        # ── 화면 스타일(테마) ── 261025-6(디자인 SOT §2.14, 사용자 지시): '언어' 바로 아래 ──
+        grp_theme = QGroupBox(tr("화면 스타일"))
+        tl = QFormLayout(grp_theme)
+        self.cmb_theme = QComboBox()
+        for _val, _lbl in THEME_LABELS:
+            self.cmb_theme.addItem(tr(_lbl), _val)
+        cur = str(self._prefs.get("theme", "auto"))
+        idx = max(0, [v for v, _ in THEME_LABELS].index(cur)
+                  if cur in [v for v, _ in THEME_LABELS] else 0)
+        self.cmb_theme.setCurrentIndex(idx)
+        tl.addRow(tr("테마:"), self.cmb_theme)
+        layout.addWidget(grp_theme)
+
+
         # ── 시작 시 동작 ─────────────────────────────────
         grp_start = QGroupBox(tr("시작 시 동작"))
         gl = QVBoxLayout(grp_start)
@@ -235,19 +249,21 @@ class SettingsDialog(QDialog):
         layout.addWidget(grp_hist)
 
         # ── 메뉴 탭 세부 줄 · 모음 (v1.6.23 패널 툴바 → 261024-1, 디자인 SOT §2.9·§2.9.4) ──
-        grp_panels = QGroupBox(tr("세부 줄 (메뉴 탭 아래 한 줄)"))
+        # 261025-5(디자인 SOT §2.9.6, 사용자 지시): '세부 줄' → '리본 메뉴'
+        grp_panels = QGroupBox(tr("리본 메뉴"))
         pl = QVBoxLayout(grp_panels)
-        self.chk_show_panel_toolbar = QCheckBox(tr("메뉴 탭 아래 세부 줄 보이기"))
+        self.chk_show_panel_toolbar = QCheckBox(tr("리본 메뉴 보이기"))
         self.chk_show_panel_toolbar.setChecked(
             bool(self._prefs.get("show_panel_toolbar", True)))
         pl.addWidget(self.chk_show_panel_toolbar)
         info_tb = QLabel(
-            tr("<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 숨긴 채 탭을 누르면 다시 보입니다.</small>"))
+            tr("<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 메뉴 탭을 누르면 리본이 잠깐 보이고, "
+                "명령을 고르거나 다른 곳을 누르면 다시 숨습니다. 탭 줄을 우클릭해도 바꿀 수 있습니다.</small>"))
         info_tb.setStyleSheet("color:#666;"); info_tb.setWordWrap(True)
         pl.addWidget(info_tb)
         self._collection = [str(x) for x in (self._prefs.get("ribbon_collection") or [])]
         _crow = QHBoxLayout(); _crow.setContentsMargins(0, 0, 0, 0)
-        self.btn_edit_collection = QPushButton(tr("모음 메뉴 편집..."))
+        self.btn_edit_collection = QPushButton(tr("모음 메뉴 관리..."))      # 261025-5: 우클릭 메뉴와 같은 이름
         self.btn_edit_collection.setToolTip(tr("'모음' 탭에 보일 명령과 차례를 고릅니다"))
         self.btn_edit_collection.clicked.connect(self._edit_collection)
         self.btn_edit_collection.setEnabled(hasattr(self._host, "ribbon_catalog"))
@@ -317,22 +333,6 @@ class SettingsDialog(QDialog):
         hlf.addRow(tr("페이지 내 버튼 상단 오프셋:"), self.spin_hl_offset)
         layout.addWidget(grp_hl)
 
-        # ── 화면+음성 녹화 ── 260609-17(F4) ─────────────────
-        self._build_recording_group(layout)
-
-        # ── 화면 스타일(테마) ─────────────────────────────
-        grp_theme = QGroupBox(tr("화면 스타일"))
-        tl = QFormLayout(grp_theme)
-        self.cmb_theme = QComboBox()
-        for _val, _lbl in THEME_LABELS:
-            self.cmb_theme.addItem(tr(_lbl), _val)
-        cur = str(self._prefs.get("theme", "auto"))
-        idx = max(0, [v for v, _ in THEME_LABELS].index(cur)
-                  if cur in [v for v, _ in THEME_LABELS] else 0)
-        self.cmb_theme.setCurrentIndex(idx)
-        tl.addRow(tr("테마:"), self.cmb_theme)
-        layout.addWidget(grp_theme)
-
         # ── 고급 설정 ── 261025-2(디자인 SOT §2.14, 사용자 지시): 외부 API 설정(사전·법제처·KCSC·특허·번역 키)은 별도 창.
         #   두 묶음 모두 한국 전용이라(다국어 SOT §7) 한국어 화면이 아니면 단추도 숨긴다.
         _row_adv = QHBoxLayout(); _row_adv.setContentsMargins(0, 0, 0, 0)
@@ -343,6 +343,14 @@ class SettingsDialog(QDialog):
         layout.addLayout(_row_adv)
         self.btn_advanced.setVisible(korea_only_visible())
         self.advanced_dialog = None          # 마지막으로 연 고급 창(검사용)
+        # 261025-6(디자인 SOT §2.14, 사용자 지시): 종전 '화면+음성 녹화' 묶음 → 고급 설정 아래 '발표화면 녹화 설정...' 단추(별도 창)
+        _row_rec = QHBoxLayout(); _row_rec.setContentsMargins(0, 0, 0, 0)
+        self.btn_recording = QPushButton(tr("발표화면 녹화 설정..."))
+        self.btn_recording.setToolTip(tr("발표(전체화면) 녹화 — 저장 위치·오디오·장치·단축키·녹화 테스트. 확인하면 바로 저장됩니다"))
+        self.btn_recording.clicked.connect(self._open_recording)
+        _row_rec.addWidget(self.btn_recording); _row_rec.addStretch(1)
+        layout.addLayout(_row_rec)
+        self.recording_dialog = None
 
 
         info = QLabel(
@@ -436,132 +444,16 @@ class SettingsDialog(QDialog):
             self.ed_startup_path.setText(f)
             self.rb_start_path.setChecked(True)
 
-    def focus_recording(self):
-        """260611-25: 녹화 설정 그룹으로 스크롤 이동."""
-        try:
-            if getattr(self, "_grp_rec", None) is not None:
-                self._scroll.ensureWidgetVisible(self._grp_rec)
-        except Exception:
-            pass
-
-    # ── 260609-17(F4): 화면+음성 녹화 설정 ───────────────────
-    def _build_recording_group(self, layout):
-        grp = QGroupBox(tr("화면+음성 녹화 (발표 전체화면)"))
-        self._grp_rec = grp
-        f = QFormLayout(grp)
-
-        self.ed_rec_dir = QLineEdit(str(self._prefs.get("recording_dir", "")))
-        self.ed_rec_dir.setPlaceholderText(tr("비우면 현재 책갈피 폴더에 저장"))
-        b_dir = QPushButton(tr("찾기…")); b_dir.clicked.connect(self._pick_rec_dir)
-        # 260628(UI): 래퍼 QWidget 의 **기본 여백(약 9px)** 때문에 입력칸이 안쪽으로 밀리고
-        #   행 높이도 아래 콤보들과 달라 보였다 → 여백 0·간격 4 로 맞춰 다른 행과 정렬 통일
-        #   (같은 목적의 `_keyrow` 는 이미 이렇게 되어 있었고 이 행만 누락).
-        _w1 = QWidget()
-        rd = QHBoxLayout(_w1)
-        rd.setContentsMargins(0, 0, 0, 0); rd.setSpacing(4)
-        rd.addWidget(self.ed_rec_dir, 1); rd.addWidget(b_dir)
-        f.addRow(tr("저장 위치:"), _w1)
-
-        self.cmb_audio = QComboBox()
-        for v, t in [("none", tr("영상만(소리 없음)")), ("mic", tr("마이크")),
-                     ("system", tr("시스템 소리")), ("both", tr("마이크 + 시스템"))]:
-            self.cmb_audio.addItem(t, v)
-        am = str(self._prefs.get("recording_audio_mode", "mic"))
-        self.cmb_audio.setCurrentIndex(max(0, [self.cmb_audio.itemData(i)
-                                               for i in range(self.cmb_audio.count())].index(am)
-                                            if am in [self.cmb_audio.itemData(i)
-                                                      for i in range(self.cmb_audio.count())] else 1))
-        f.addRow(tr("오디오:"), self.cmb_audio)
-
-        self.cmb_mic = QComboBox(); self.cmb_mic.setEditable(True)
-        self.cmb_mic.setEditText(str(self._prefs.get("recording_mic", "")))
-        self.cmb_sys = QComboBox(); self.cmb_sys.setEditable(True)
-        self.cmb_sys.setEditText(str(self._prefs.get("recording_system", "")))
-        b_dev = QPushButton(tr("오디오 장치 새로고침")); b_dev.clicked.connect(self._refresh_devices)
-        f.addRow(tr("마이크 장치:"), self.cmb_mic)
-        f.addRow(tr("시스템 장치:"), self.cmb_sys)
-        f.addRow("", b_dev)
-
-        # 260618-18: 'ffmpeg 경로' 입력 제거 — ffmpeg 은 설치 폴더에 동봉/복사되어 자동 탐색됨.
-        keys = list(self._prefs.get("recording_keys", []) or [])
-        self.ks_rec = QKeySequenceEdit(QKeySequence(keys[0]) if len(keys) > 0 and keys[0]
-                                       else QKeySequence("Ctrl+R"))
-        self.ks_recstop = QKeySequenceEdit(QKeySequence(keys[1]) if len(keys) > 1 and keys[1]
-                                           else QKeySequence("Ctrl+Shift+R"))
-        f.addRow(tr("녹화/재개 단축키:"), self.ks_rec)
-        f.addRow(tr("중지 단축키:"), self.ks_recstop)
-
-        b_test = QPushButton(tr("녹화 테스트 (3초)")); b_test.clicked.connect(self._on_rec_test)
-        f.addRow("", b_test)
-        info = QLabel(tr("<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 "
-                      "Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"))
-        info.setWordWrap(True); info.setStyleSheet("color:#666;")
-        f.addRow(info)
-        layout.addWidget(grp)
-
-    def _pick_rec_dir(self):
-        d = QFileDialog.getExistingDirectory(self, tr("녹화 저장 폴더"), self.ed_rec_dir.text())
-        if d:
-            self.ed_rec_dir.setText(d)
-
-    def _refresh_devices(self):
-        try:
-            from viewer.recorder import (find_ffmpeg, list_audio_devices,
-                                         guess_mic_device, guess_system_device)
-            ff = find_ffmpeg(self._prefs.get("ffmpeg_path", ""))
-            devs = list_audio_devices(ff)
-        except Exception:
-            devs = []
-        if not devs:
-            QMessageBox.information(self, tr("오디오 장치"),
-                                    tr("오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."))
-            return
-        cur_m, cur_s = self.cmb_mic.currentText(), self.cmb_sys.currentText()
-        for cmb in (self.cmb_mic, self.cmb_sys):
-            cmb.clear()
-            cmb.addItem("")
-            for d in devs:
-                cmb.addItem(d)
-        self.cmb_mic.setEditText(cur_m or guess_mic_device(devs))
-        self.cmb_sys.setEditText(cur_s or guess_system_device(devs))
-
-    def _on_rec_test(self):
-        if self._host is None or not hasattr(self._host, "_test_recording"):
-            return
-        # 현재 다이얼로그 값으로 임시 반영 후 테스트
-        self._host._prefs["recording_audio_mode"] = self.cmb_audio.currentData()
-        self._host._prefs["recording_mic"] = self.cmb_mic.currentText().strip()
-        self._host._prefs["recording_system"] = self.cmb_sys.currentText().strip()
-        # 260618-26: 사전 확인 없이 바로 테스트 녹화 진행(요청) — 결과만 아래에 표시.
-        ok, msg = self._host._test_recording(self)
-        # 260611-25: 합격 결과 기록(녹화 시작 전 게이트에서 확인)
-        self._host._prefs["recording_test_ok"] = bool(ok)
-        try:
-            self._host._save_settings_now()
-        except Exception:
-            pass
-        (QMessageBox.information if ok else QMessageBox.warning)(self, tr("녹화 테스트"), msg)
-
     def _open_advanced(self):
         """261025-2(디자인 SOT §2.14, 사용자 결정): 고급 창 [확인] 이면 **곧바로** 저장·적용 — 키 게이팅이 바로 따라간다.
         이 창을 [취소] 해도 남는다. 저장 길은 종전 그대로(`_apply_prefs` → `_save_settings_now`, 키 보호 마스터 §8.2.0)."""
-        host = self._host
-        base = dict(host._prefs) if host is not None else dict(self._prefs)
-        dlg = AdvancedSettingsDialog(base, self)
-        self.advanced_dialog = dlg
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-        new = dlg.result_prefs()
-        self._prefs.update(new)
-        if host is not None:
-            merged = dict(host._prefs)
-            merged.update(new)
-            host._apply_prefs(merged)
-            host._save_settings_now()
-            try:
-                host.status.showMessage(tr("고급 설정 저장됨"), 3000)
-            except Exception:
-                pass
+        self.advanced_dialog = open_sub_settings(AdvancedSettingsDialog, self._host, self, tr("고급 설정 저장됨"),
+                                                 self._prefs)
+
+    def _open_recording(self):
+        """261025-6(사용자 결정): 발표화면 녹화 설정 창 — 고급 설정과 같이 [확인] 이면 곧바로 저장."""
+        self.recording_dialog = open_sub_settings(RecordingSettingsDialog, self._host, self, tr("녹화 설정 저장됨"),
+                                                  self._prefs)
 
     def result_prefs(self) -> dict:
         return {
@@ -586,14 +478,6 @@ class SettingsDialog(QDialog):
             # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
             # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋
             "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),
-            # 260609-17(F4): 녹화
-            "recording_dir": self.ed_rec_dir.text().strip(),
-            "recording_audio_mode": self.cmb_audio.currentData(),
-            "recording_mic": self.cmb_mic.currentText().strip(),
-            "recording_system": self.cmb_sys.currentText().strip(),
-            "recording_keys": [self.ks_rec.keySequence().toString(),
-                               self.ks_recstop.keySequence().toString()],
-            "ffmpeg_path": str(self._prefs.get("ffmpeg_path", "")),   # 260618-18: UI 제거, 기존값 보존
             # 260606-13: 화면 스타일(테마)
             "theme": self.cmb_theme.currentData(),
             "language": self.cmb_language.currentData(),     # 261008(다국어 SOT §4)
@@ -917,4 +801,157 @@ class AdvancedSettingsDialog(QDialog):
             "anthropic_api_key": self.ed_anthropic_key.text().strip(),
             "translate_model": self.cmb_translate_model.currentData(),
             "translate_consent": self.chk_translate_consent.isChecked(),
+        }
+
+
+def open_sub_settings(cls, host, parent, saved_msg: str, local_prefs=None):
+    """261025-6(디자인 SOT §2.14): 환경설정에서 여는 별도 창(고급·녹화) — [확인] 이면 곧바로 `host._apply_prefs` → 저장.
+    `local_prefs`(부른 환경설정 창의 사본)도 맞춘다. 연 창을 돌려준다(검사용)."""
+    base = dict(host._prefs) if host is not None else dict(local_prefs or {})
+    dlg = cls(base, parent, host=host) if cls is RecordingSettingsDialog else cls(base, parent)
+    if dlg.exec() != QDialog.DialogCode.Accepted:
+        return dlg
+    new = dlg.result_prefs()
+    if local_prefs is not None:
+        local_prefs.update(new)
+    if host is not None:
+        merged = dict(host._prefs)
+        merged.update(new)
+        host._apply_prefs(merged)
+        host._save_settings_now()
+        try:
+            host.status.showMessage(saved_msg, 3000)
+        except Exception:
+            pass
+    return dlg
+
+
+class RecordingSettingsDialog(QDialog):
+    """261025-6(디자인 SOT §2.14, 사용자 지시): '발표화면 녹화 설정' — 종전 환경설정의 '화면+음성 녹화 (발표 전체화면)' 묶음.
+    키 이름·값 모양은 그대로(영상·음성 SOT). 발표 중 '녹화 설정' 도 이 창을 연다(`_open_recording_settings`)."""
+
+    def __init__(self, prefs: dict, parent=None, host=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("발표화면 녹화 설정"))
+        self.setMinimumWidth(440)
+        self._prefs = dict(prefs)
+        self._host = host
+        v = QVBoxLayout(self)
+        self._build_recording_group(v)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        v.addWidget(btns)
+        for _cb in self.findChildren(QComboBox):          # 디자인 SOT §2.14 — 장치 이름이 창을 밀지 않게
+            _cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            _cb.setMinimumContentsLength(14)
+
+    # ── 260609-17(F4): 화면+음성 녹화 설정 ───────────────────
+    def _build_recording_group(self, layout):
+        grp = QGroupBox(tr("화면+음성 녹화 (발표 전체화면)"))
+        self._grp_rec = grp
+        f = QFormLayout(grp)
+
+        self.ed_rec_dir = QLineEdit(str(self._prefs.get("recording_dir", "")))
+        self.ed_rec_dir.setPlaceholderText(tr("비우면 현재 책갈피 폴더에 저장"))
+        b_dir = QPushButton(tr("찾기…")); b_dir.clicked.connect(self._pick_rec_dir)
+        # 260628(UI): 래퍼 QWidget 의 **기본 여백(약 9px)** 때문에 입력칸이 안쪽으로 밀리고
+        #   행 높이도 아래 콤보들과 달라 보였다 → 여백 0·간격 4 로 맞춰 다른 행과 정렬 통일
+        #   (같은 목적의 `_keyrow` 는 이미 이렇게 되어 있었고 이 행만 누락).
+        _w1 = QWidget()
+        rd = QHBoxLayout(_w1)
+        rd.setContentsMargins(0, 0, 0, 0); rd.setSpacing(4)
+        rd.addWidget(self.ed_rec_dir, 1); rd.addWidget(b_dir)
+        f.addRow(tr("저장 위치:"), _w1)
+
+        self.cmb_audio = QComboBox()
+        for v, t in [("none", tr("영상만(소리 없음)")), ("mic", tr("마이크")),
+                     ("system", tr("시스템 소리")), ("both", tr("마이크 + 시스템"))]:
+            self.cmb_audio.addItem(t, v)
+        am = str(self._prefs.get("recording_audio_mode", "mic"))
+        self.cmb_audio.setCurrentIndex(max(0, [self.cmb_audio.itemData(i)
+                                               for i in range(self.cmb_audio.count())].index(am)
+                                            if am in [self.cmb_audio.itemData(i)
+                                                      for i in range(self.cmb_audio.count())] else 1))
+        f.addRow(tr("오디오:"), self.cmb_audio)
+
+        self.cmb_mic = QComboBox(); self.cmb_mic.setEditable(True)
+        self.cmb_mic.setEditText(str(self._prefs.get("recording_mic", "")))
+        self.cmb_sys = QComboBox(); self.cmb_sys.setEditable(True)
+        self.cmb_sys.setEditText(str(self._prefs.get("recording_system", "")))
+        b_dev = QPushButton(tr("오디오 장치 새로고침")); b_dev.clicked.connect(self._refresh_devices)
+        f.addRow(tr("마이크 장치:"), self.cmb_mic)
+        f.addRow(tr("시스템 장치:"), self.cmb_sys)
+        f.addRow("", b_dev)
+
+        # 260618-18: 'ffmpeg 경로' 입력 제거 — ffmpeg 은 설치 폴더에 동봉/복사되어 자동 탐색됨.
+        keys = list(self._prefs.get("recording_keys", []) or [])
+        self.ks_rec = QKeySequenceEdit(QKeySequence(keys[0]) if len(keys) > 0 and keys[0]
+                                       else QKeySequence("Ctrl+R"))
+        self.ks_recstop = QKeySequenceEdit(QKeySequence(keys[1]) if len(keys) > 1 and keys[1]
+                                           else QKeySequence("Ctrl+Shift+R"))
+        f.addRow(tr("녹화/재개 단축키:"), self.ks_rec)
+        f.addRow(tr("중지 단축키:"), self.ks_recstop)
+
+        b_test = QPushButton(tr("녹화 테스트 (3초)")); b_test.clicked.connect(self._on_rec_test)
+        f.addRow("", b_test)
+        info = QLabel(tr("<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 "
+                      "Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"))
+        info.setWordWrap(True); info.setStyleSheet("color:#666;")
+        f.addRow(info)
+        layout.addWidget(grp)
+
+    def _pick_rec_dir(self):
+        d = QFileDialog.getExistingDirectory(self, tr("녹화 저장 폴더"), self.ed_rec_dir.text())
+        if d:
+            self.ed_rec_dir.setText(d)
+
+    def _refresh_devices(self):
+        try:
+            from viewer.recorder import (find_ffmpeg, list_audio_devices,
+                                         guess_mic_device, guess_system_device)
+            ff = find_ffmpeg(self._prefs.get("ffmpeg_path", ""))
+            devs = list_audio_devices(ff)
+        except Exception:
+            devs = []
+        if not devs:
+            QMessageBox.information(self, tr("오디오 장치"),
+                                    tr("오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."))
+            return
+        cur_m, cur_s = self.cmb_mic.currentText(), self.cmb_sys.currentText()
+        for cmb in (self.cmb_mic, self.cmb_sys):
+            cmb.clear()
+            cmb.addItem("")
+            for d in devs:
+                cmb.addItem(d)
+        self.cmb_mic.setEditText(cur_m or guess_mic_device(devs))
+        self.cmb_sys.setEditText(cur_s or guess_system_device(devs))
+
+    def _on_rec_test(self):
+        if self._host is None or not hasattr(self._host, "_test_recording"):
+            return
+        # 현재 다이얼로그 값으로 임시 반영 후 테스트
+        self._host._prefs["recording_audio_mode"] = self.cmb_audio.currentData()
+        self._host._prefs["recording_mic"] = self.cmb_mic.currentText().strip()
+        self._host._prefs["recording_system"] = self.cmb_sys.currentText().strip()
+        # 260618-26: 사전 확인 없이 바로 테스트 녹화 진행(요청) — 결과만 아래에 표시.
+        ok, msg = self._host._test_recording(self)
+        # 260611-25: 합격 결과 기록(녹화 시작 전 게이트에서 확인)
+        self._host._prefs["recording_test_ok"] = bool(ok)
+        try:
+            self._host._save_settings_now()
+        except Exception:
+            pass
+        (QMessageBox.information if ok else QMessageBox.warning)(self, tr("녹화 테스트"), msg)
+
+    def result_prefs(self) -> dict:
+        return {
+            # 260609-17(F4): 녹화
+            "recording_dir": self.ed_rec_dir.text().strip(),
+            "recording_audio_mode": self.cmb_audio.currentData(),
+            "recording_mic": self.cmb_mic.currentText().strip(),
+            "recording_system": self.cmb_sys.currentText().strip(),
+            "recording_keys": [self.ks_rec.keySequence().toString(),
+                               self.ks_recstop.keySequence().toString()],
+            "ffmpeg_path": str(self._prefs.get("ffmpeg_path", "")),   # 260618-18: UI 제거, 기존값 보존
         }

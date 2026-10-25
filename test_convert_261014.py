@@ -10,7 +10,7 @@ E. 쪽 범위 `2-3`·썸네일에서 고른 쪽만
 F. 취소하면 만들던 파일을 지운다 · 표가 없으면 Excel 을 만들지 않는다
 G. 변환은 메인이 아닌 스레드에서 돈다
 H. 일괄(책갈피창 여러 파일) — 파일마다 결과
-I. 메뉴 넷 — 파일 '내보내기', 도구 막대 '변환', 책갈피창 우클릭 '변환해서 내보내기'(261016-1), 썸네일 우클릭 '선택한 쪽 변환'
+I. 메뉴 넷 — 파일 '내보내기', 도구 막대 '변환', 책갈피창 우클릭 '변환'(261016-1 → 261025-5), 썸네일 우클릭 '선택한 쪽 변환'
 """
 import os, sys, tempfile, shutil, threading
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -168,9 +168,9 @@ try:
     # 261017-12(형식 변환 SOT §2.1, 사용자 지시): Word 셋은 붙어 있고 'Word (Microsoft Word 사용)' 은 '모양 그대로' 바로 아래
     _keys = [f.key for f in convert.FORMATS]
     chk(_keys[:3] == ["docx_edit", "docx_shape", "docx_word"], "I 형식 차례 — Word 셋이 붙어 있다", str(_keys[:4]))
-    chk(mw.act_export.text() == "변환해서 내보내기..." and mw.act_export.menu() is None,
-        "I 파일 메뉴 '변환해서 내보내기...' — 하위 메뉴 없이 창(261014-28)")
-    chk(mw.act_export.iconText() == "변환해서 내보내기", "I 모음·파일 탭 '변환해서 내보내기' 단추(261024-1 — 메뉴 액션의 짧은 이름)")
+    chk(mw.act_export.text() == "변환..." and mw.act_export.menu() is None,
+        "I 파일 메뉴 '변환...' — 하위 메뉴 없이 창(261014-28, 261025-5 이름)")
+    chk(mw.act_export.iconText() == "변환", "I 모음·파일·도구 탭 '변환' 단추(261024-1 — 메뉴 액션의 짧은 이름, 261025-5)")
     menus = []
     _orig = QMenu.exec
 
@@ -188,9 +188,9 @@ try:
         mw.page_thumbs._on_list_menu(L.visualItemRect(L.item(0)).center()); spin(2)
     finally:
         QMenu.exec = _orig
-    # 261016-1(사용자 지시): 책갈피창은 하위 메뉴 없이 '변환해서 내보내기...' — 형식은 변환 창에서
-    tree_it = [s for t, s in (menus[0] if menus else []) if t == "변환해서 내보내기..."]
-    chk(tree_it == [None], "I 책갈피창 우클릭 '변환해서 내보내기...'(하위 메뉴 없음)", str(menus[:1]))
+    # 261016-1(사용자 지시): 책갈피창은 하위 메뉴 없이 '변환...'(261025-5 이름) — 형식은 변환 창에서
+    tree_it = [s for t, s in (menus[0] if menus else []) if t == "변환..."]
+    chk(tree_it == [None], "I 책갈피창 우클릭 '변환...'(하위 메뉴 없음)", str(menus[:1]))
     th_sub = [s for t, s in (menus[1] if len(menus) > 1 else []) if t.startswith("선택한 쪽 변환")]
     chk(th_sub and th_sub[0] == want_fmt, "I 썸네일 우클릭 '선택한 쪽 변환 ▸'",
         str(menus[1:2]))

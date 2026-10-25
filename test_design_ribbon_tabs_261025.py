@@ -127,6 +127,109 @@ try:
     mw._apply_prefs(d2.result_prefs())                     # 환경설정 [확인] 경로 — 키를 지우지 않는다(허용목록 old 폴백)
     chk(mw._prefs.get("law_oc") == "NEWOC" and mw._prefs.get("kcsc_key") == "KC", "E 환경설정 [확인] 이 고급 값을 지우지 않는다")
     d2.done(0)
+
+    # ── 261025-5·261025-6 (사용자 지시·결정) ─────────────────────────────────────────────
+    # F 최근 검색어 — 실제 Enter 로 검색하면 기록, 누르면 지금 폴더에서 다시(대소문자 토글도 되살림)
+    import tempfile, shutil
+    from pathlib import Path
+    import test_fixtures as _fx
+    _root = Path(tempfile.mkdtemp(prefix="polypdf_rs_"))
+    shutil.copy(_fx.text_pdf(), _root / "a.pdf")
+    mw.open_folder(_root); QTest.qWait(500)
+    mw._recent_searches = []; mw._refresh_recent_searches_menu()
+    sb = mw.search_bar
+    sb.edit.setText("가나다"); sb.btn_case.setChecked(True)
+    QTest.keyClick(sb.edit, Qt.Key.Key_Return); QTest.qWait(200)
+    sb.edit.setText("라마"); sb.btn_case.setChecked(False)      # 토글을 바꾸면 지금 글로 다시 찾는다(그것도 실행한 검색)
+    QTest.keyClick(sb.edit, Qt.Key.Key_Return); QTest.qWait(200)
+    rs = [a.text() for a in mw.menu_recent_searches.actions()]
+    chk(rs == ["🔍 라마", "🔍 가나다  Aa"], "F 실행한 검색어가 최근 검색어 맨 위에(토글 표시)", str(rs))
+    ran = []
+    _orig_as = mw.action_search
+    mw.action_search = lambda q: ran.append((q, sb.btn_case.isChecked()))
+    mw.menu_recent_searches.actions()[1].trigger(); QTest.qWait(50)
+    mw.action_search = _orig_as
+    chk(ran == [("가나다", True)] and sb.edit.text() == "가나다", "F 누르면 그 검색어·토글로 지금 폴더에서 다시 찾는다", str(ran))
+    chk("recent_searches" in __import__("viewer.settings_store", fromlist=["x"]).PERSONAL_TOP_KEYS,
+        "F 최근 검색어는 개인 항목(배포 기본값에서 빠짐)")
+    shutil.rmtree(_root, ignore_errors=True)
+
+    # G 리본 숨김 — 탭을 누르면 잠깐 보이고, 명령을 누르면 다시 숨는다 · 리본 밖을 눌러도
+    rb = mw._ribbon
+    mw._set_ribbon_visible(False); QTest.qWait(50)
+    chk(not rb.stack.isVisible(), "G '리본 메뉴 보이기' 를 끄면 리본이 숨는다")
+    QTest.mouseClick(rb.tab_button("view"), Qt.MouseButton.LeftButton); QTest.qWait(80)
+    chk(rb.stack.isVisible() and rb.peeking(), "G 숨긴 채 탭을 누르면 리본이 잠깐 보인다")
+    _b = [b for b in rb.row("view").buttons() if b.text() == "검색"][0]
+    QTest.mouseClick(_b, Qt.MouseButton.LeftButton); QTest.qWait(80)
+    chk(not rb.stack.isVisible() and not rb.peeking(), "G 명령을 누르면 다시 숨는다")
+    QTest.mouseClick(rb.tab_button("file"), Qt.MouseButton.LeftButton); QTest.qWait(80)
+    QTest.mouseClick(mw.main_view, Qt.MouseButton.LeftButton); QTest.qWait(80)
+    chk(not rb.stack.isVisible(), "G 리본 밖을 눌러도 다시 숨는다")
+    chk(mw._prefs.get("show_panel_toolbar") is False, "G 설정은 꺼진 채로 남는다")
+
+    # H 탭 줄 우클릭 — 리본 메뉴 보이기·모음 메뉴 관리
+    from PyQt6.QtGui import QContextMenuEvent
+    from PyQt6.QtWidgets import QMenu
+    from PyQt6.QtCore import QPoint
+    seen = []
+    _orig_mexec = QMenu.exec
+    QMenu.exec = lambda self, *a, **k: (seen.append([x.text() for x in self.actions() if not x.isSeparator()]),
+                                         [x for x in self.actions() if x.text() == "리본 메뉴 보이기"][0].setChecked(True))[1]
+    try:
+        QApplication.sendEvent(rb.tab_row, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(5, 5),
+                                                             rb.tab_row.mapToGlobal(QPoint(5, 5))))
+        QTest.qWait(50)
+    finally:
+        QMenu.exec = _orig_mexec
+    chk(seen and seen[0] == ["리본 메뉴 보이기", "모음 메뉴 관리..."], "H 탭 줄 우클릭 메뉴", str(seen))
+    chk(rb.stack.isVisible() and mw._prefs.get("show_panel_toolbar") is True, "H 우클릭 '리본 메뉴 보이기' 로 다시 보인다")
+
+    # I 설정창 배치 — 화면 스타일이 언어 바로 아래, 고급 설정 아래 '발표화면 녹화 설정...'
+    from PyQt6.QtWidgets import QGroupBox, QScrollArea
+    d3 = sd.SettingsDialog(dict(mw._prefs), parent=mw, host=mw); d3.show(); QTest.qWait(50)
+    content = d3.findChild(QScrollArea).widget()
+    titles = [g.title() for g in sorted((g for g in content.findChildren(QGroupBox) if g.parent() is content and g.isVisibleTo(d3)),
+                                         key=lambda g: g.y())]
+    chk(titles[:2] == ["언어 / Language", "화면 스타일"], "I 화면 스타일은 언어 바로 아래", str(titles))
+    chk("리본 메뉴" in titles and d3.chk_show_panel_toolbar.text() == "리본 메뉴 보이기"
+        and d3.btn_edit_collection.text() == "모음 메뉴 관리...", "I '리본 메뉴 보이기'·'모음 메뉴 관리...' 이름", str(titles))
+    chk(d3.btn_recording.mapTo(d3, d3.btn_recording.rect().topLeft()).y()
+        > d3.btn_advanced.mapTo(d3, d3.btn_advanced.rect().topLeft()).y(), "I '발표화면 녹화 설정...' 은 고급 설정 아래")
+    got = []
+    _orig_rexec = sd.RecordingSettingsDialog.exec
+
+    def _rexec(self):
+        self.ed_rec_dir.setText("D:/녹화")
+        got.append(self.windowTitle())
+        return QDialog.DialogCode.Accepted
+    sd.RecordingSettingsDialog.exec = _rexec
+    saved.clear(); mw._save_settings_now = lambda *a, **k: saved.append(1)
+    try:
+        QTest.mouseClick(d3.btn_recording, Qt.MouseButton.LeftButton); QTest.qWait(50)
+    finally:
+        sd.RecordingSettingsDialog.exec = _orig_rexec
+        mw._save_settings_now = orig_save
+    chk(got == ["발표화면 녹화 설정"] and mw._prefs.get("recording_dir") == "D:/녹화" and saved,
+        "I 녹화 설정 창 [확인] → 곧바로 저장", str((got, mw._prefs.get("recording_dir"))))
+    d3.reject()
+    called = []
+    _orig_rexec2 = sd.RecordingSettingsDialog.exec
+    sd.RecordingSettingsDialog.exec = lambda self: (called.append(self.windowTitle()), QDialog.DialogCode.Rejected)[1]
+    try:
+        mw._open_recording_settings()            # 발표 중 '녹화 설정'
+    finally:
+        sd.RecordingSettingsDialog.exec = _orig_rexec2
+    chk(called == ["발표화면 녹화 설정"], "I 발표 중 녹화 설정도 이 창을 바로 연다", str(called))
+
+    # J '변환' — 파일·도구 탭 모두, 도구는 이미지→PDF 오른쪽 · K 모음 탭 Alt+C
+    tn = [a.iconText() for a in rb.row("tools").actions() if a.iconText()]
+    fn = [a.iconText() for a in rb.row("file").actions() if a.iconText()]
+    chk("변환" in fn and tn[tn.index("이미지→PDF") + 1] == "변환", "J '변환' 은 파일 탭과 도구 탭(이미지→PDF 오른쪽)", str(tn))
+    rb.select("file"); QTest.qWait(30)
+    mw.activateWindow(); QTest.qWait(30)
+    QTest.keyClick(mw, Qt.Key.Key_C, Qt.KeyboardModifier.AltModifier); QTest.qWait(300)   # 니모닉은 animateClick
+    chk(rb.current_key() == "collection", "K Alt+C → 모음 탭", rb.current_key())
     mw._save_settings_now = orig_save
 except Exception:
     import traceback

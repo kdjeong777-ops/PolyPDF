@@ -24,7 +24,15 @@ chk(not hasattr(sd, "spin_overlap"), "본화면 설정에서 '겹침%' 위젯 �
 rp = sd.result_prefs()
 chk("presentation_overlap_pct" not in rp
     and "presentation_dual" not in rp, "result_prefs 에 발표 보기 키 없음")
-chk(hasattr(sd, "focus_recording"), "녹화 설정 포커스 메서드 존재")
+# 261025-6(디자인 SOT §2.14): 녹화 묶음은 '발표화면 녹화 설정' 별도 창 — 환경설정 창에는 단추만
+from viewer.widgets.settings_dialog import RecordingSettingsDialog
+chk(hasattr(sd, "btn_recording") and not hasattr(sd, "cmb_mic") and "recording_dir" not in rp,
+    "환경설정에는 '발표화면 녹화 설정...' 단추만(녹화 칸·키 없음)")
+_rd = RecordingSettingsDialog({"recording_dir": "D:/rec", "recording_keys": ["Ctrl+R", "Ctrl+Shift+R"]})
+_rp = _rd.result_prefs()
+chk(_rp.get("recording_dir") == "D:/rec" and _rp.get("recording_keys") == ["Ctrl+R", "Ctrl+Shift+R"],
+    "녹화 설정 창이 녹화 키를 돌려준다", str(_rp))
+_rd.done(0)
 
 # 2) _apply_prefs 가 발표 보기 키를 기존값에서 보존
 from viewer.app import MainWindow

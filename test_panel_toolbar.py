@@ -32,7 +32,7 @@ def mid_x(w, ref):
 #    종전 코드는 창이 뜬 뒤 `RECENTER_MS` 타이머로 빈 칸 폭을 쟀다 — show() 직후에는 빈 칸 0(왼쪽 정렬)이라 이 검사에 실패한다
 #    (261024-1 실측: 첫 재기 전 pad=0, span 5~1187 / 창 1700).
 mw0 = MainWindow()
-mw0.resize(1600, 900)
+mw0.resize(1920, 900)                       # 261025-5: 모음 기본값이 길어져(열기·인쇄) 1600 에서는 넘친다
 mw0.show()                                  # processEvents 없이 곧바로 잰다
 rb0 = mw0._ribbon
 chk(abs(mid_x(rb0.tabs_box, mw0) - mw0.width() / 2) <= 2, "첫 레이아웃: 탭 묶음이 창 가운데",
@@ -56,7 +56,7 @@ chk(isinstance(mw.menuWidget(), Ribbon), "창 메뉴 자리 = Ribbon")
 chk(mw.menuBar() is not mw.menuWidget() and not mw.menuBar().isVisible(), "menuBar() 는 숨은 메뉴 보관 막대")
 chk(mw.menuWidget() is rb, "menuBar() 를 불러도 탭이 바뀌지 않는다")
 titles = [rb.tab_button(k).text() for k in rb.keys()]
-chk(titles == ["모음", "파일(&F)", "즐겨찾기(&V)", "보기(&B)", "도구(&T)", "도움말(&H)"], "탭 차례·이름", str(titles))
+chk(titles == ["모음(&C)", "파일(&F)", "즐겨찾기(&V)", "보기(&B)", "도구(&T)", "도움말(&H)"], "탭 차례·이름", str(titles))
 chk(rb.current_key() == COLLECTION, "기본 탭 = 모음")
 chk(mw.toolbar_search.parentWidget() is rb.right_box, "검색창은 탭 줄 오른쪽 칸")
 
@@ -65,19 +65,20 @@ row = rb.row(COLLECTION)
 acts = [a for a in row.actions() if not a.isSeparator() and row.widgetForAction(a)
         and not row.widgetForAction(a).property("ribbonSpacer")]
 names = [a.iconText() for a in acts]
-expected = ["1단", "2단", "텍스트", "단어장", "검색", "스크린샷", "법령·고시",
+expected = ["폴더 열기", "파일 열기", "인쇄",           # 261025-5(사용자 지시): 앞 그룹
+            "1단", "2단", "텍스트", "단어장", "검색", "스크린샷", "법령·고시",
             "특허", "건설기준", "발표보기",            # 261025-1: 보기 탭 차례와 같게(디자인 SOT §2.9.5)
             "OCR", "단어장 생성", "책갈피 생성", "PDF병합",
-            "이미지→PDF", "암호화", "번역", "변환해서 내보내기"]
+            "이미지→PDF", "암호화", "번역", "변환"]
 chk(names == expected, "모음 기본 단추 차례: §2.9 표와 일치", str(names))
 chk([cmd_id(a) for a in acts] == [c for c in DEFAULT_COLLECTION if c != SEP], "모음 기본 id = DEFAULT_COLLECTION")
 groups = row.groups()
-chk(len(groups) == 2, "모음 그룹 둘(보기·도구)", str(len(groups)))
+chk(len(groups) == 3, "모음 그룹 셋(열기·인쇄·보기·도구)", str(len(groups)))
 chk("스크린샷 PDF 저장" not in names and "전체화면" not in names and "책갈피·단어장 동시 생성" not in names,
     "옛 단추 없음(스크린샷 PDF 저장·전체화면·동시 생성)")
 vis = [b.text() for b in row.buttons()]
 chk("법령·고시" not in vis and "번역" not in vis, "키 없는 법령·번역 단추는 숨김(§11.12 — 액션 가시성)", str(vis))
-chk(acts[0] is mw._view_acts["single"], "모음 단추 = 메뉴 액션과 같은 객체")
+chk(acts[0] is mw._cmds["file.open_folder"] and acts[3] is mw._view_acts["single"], "모음 단추 = 메뉴 액션과 같은 객체")
 
 # 3) 내부 상태 QAction 유지
 chk(hasattr(mw, "act_toggle_search") and hasattr(mw, "act_toggle_shot"), "act_toggle_search/shot 내부 유지")
@@ -172,9 +173,10 @@ chk(not mw.act_toggle_search.isChecked() and mw.act_toggle_shot.isChecked(), "�
 
 # 11) 세부 줄 스타일(260606-26) · 테마
 mw._style_panel_toolbar(True)
-chk("#48" in row.styleSheet() and row.dark, "다크 스타일 적용(옅은 회색)")
+chk("#3e3e42" in row.styleSheet() and "#5a5a60" in row.styleSheet() and row.dark, "다크 스타일 적용(일반·드롭다운 단추 색, 261025-5)")
 mw._style_panel_toolbar(False)
-chk("#e2e2e2" in row.styleSheet() and not row.dark, "라이트 스타일 적용(짙은 회색 배경)")
+chk("#fafafa" in row.styleSheet() and "#c9c9c9" in row.styleSheet() and "#e4e4e4" in row.styleSheet() and not row.dark,
+    "라이트 스타일 적용(일반 옅게·드롭다운 진하게·리본 줄 회색, 261025-5)")
 
 # 12) 썸네일 번호 하단 배치 (260606-26)
 from viewer.widgets.thumbs_list import PageThumbs

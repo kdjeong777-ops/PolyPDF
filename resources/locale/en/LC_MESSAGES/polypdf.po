@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-25 10:45+0900\n"
+"POT-Creation-Date: 2026-10-25 13:28+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -236,6 +236,14 @@ msgstr "🔎 Search · Words"
 msgid "검색"
 msgstr "Search"
 
+#: viewer/app.py viewer/widgets/settings_dialog.py
+msgid "리본 메뉴 보이기"
+msgstr "Show Ribbon"
+
+#: viewer/app.py viewer/widgets/settings_dialog.py
+msgid "모음 메뉴 관리..."
+msgstr "Manage Quick Access..."
+
 #: viewer/app.py
 msgid "파일(&F)"
 msgstr "&File"
@@ -284,8 +292,8 @@ msgid "꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥�
 msgstr "Exports a new PDF with annotations, photos and hyperlinks flattened into the page and content outside the crop really removed (the original is untouched). Signed documents are signed again at the same places."
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "변환해서 내보내기..."
-msgstr "Convert and export..."
+msgid "변환..."
+msgstr "Convert..."
 
 #: viewer/app.py
 msgid "인쇄..."
@@ -455,9 +463,9 @@ msgstr "Also Receive Beta (Test) Versions"
 msgid "정보"
 msgstr "About"
 
-#: viewer/app.py viewer/widgets/ribbon.py
-msgid "모음"
-msgstr "Quick Access"
+#: viewer/app.py
+msgid "모음(&C)"
+msgstr "Quick A&ccess"
 
 #: viewer/app.py
 msgid "PDF 폴더 선택"
@@ -842,6 +850,10 @@ msgstr "Saved Files"
 msgid "등록 검색어"
 msgstr "Saved Searches"
 
+#: viewer/app.py
+msgid "최근 검색어"
+msgstr "Recent Searches"
+
 #: viewer/app.py viewer/widgets/shortcuts_dialog.py
 msgid "기타"
 msgstr "Other"
@@ -918,9 +930,9 @@ msgstr ""
 msgid "📋 클립보드로 복사"
 msgstr "📋 Copy to clipboard"
 
-#: viewer/app.py
-msgid "변환해서 내보내기"
-msgstr "Convert and export"
+#: viewer/app.py viewer/convert_controller.py viewer/widgets/convert_dialog.py
+msgid "변환"
+msgstr "Convert"
 
 #: viewer/app.py
 msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
@@ -1603,7 +1615,7 @@ msgstr "This document does not allow copying (screenshots)."
 msgid "저장할 스크린샷이 없습니다."
 msgstr "There are no screenshots to save."
 
-#: viewer/app.py viewer/present_controller.py
+#: viewer/app.py
 msgid "설정 저장됨"
 msgstr "Settings saved"
 
@@ -1642,6 +1654,10 @@ msgstr "Add Current Search to Favorites..."
 #: viewer/app.py
 msgid "폴더·파일·검색어·법령·고시·특허·건설기준 즐겨찾기를 고칩니다"
 msgstr "Edit favorite folders, files, searches, laws/notices, patents and construction standards"
+
+#: viewer/app.py
+msgid "(최근 검색어 없음)"
+msgstr "(No recent searches)"
 
 #: viewer/app.py
 msgid "항목 관리..."
@@ -3135,10 +3151,6 @@ msgstr "Could not create the Word file"
 msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요"
 msgstr "Word turned the text of this PDF into pictures only — use 'Word (editable)' or 'Word (keep appearance)'"
 
-#: viewer/convert_controller.py viewer/widgets/convert_dialog.py
-msgid "변환"
-msgstr "Convert"
-
 #: viewer/convert_controller.py
 msgid "변환할 PDF 를 먼저 여세요."
 msgstr "Open a PDF to convert first."
@@ -3713,6 +3725,10 @@ msgstr "Continue Without Recording"
 #: viewer/present_controller.py
 msgid "녹화 설정"
 msgstr "Recording Settings"
+
+#: viewer/present_controller.py viewer/widgets/settings_dialog.py
+msgid "녹화 설정 저장됨"
+msgstr "Recording settings saved"
 
 #: viewer/present_controller.py
 msgid "녹화 불가"
@@ -5919,8 +5935,8 @@ msgstr "Move Files ({n})"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "변환해서 내보내기 ({n}개 파일)..."
-msgstr "Convert and export ({n} files)..."
+msgid "변환 ({n}개 파일)..."
+msgstr "Convert ({n} files)..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -8402,6 +8418,10 @@ msgstr "Reset to Default"
 msgid "명령 고르기"
 msgstr "Choose commands"
 
+#: viewer/widgets/ribbon.py
+msgid "모음"
+msgstr "Quick Access"
+
 #: viewer/widgets/screenshot_pdf_dialog.py
 msgid "스크린샷 PDF 저장 옵션"
 msgstr "Screenshot PDF Save Options"
@@ -8530,6 +8550,14 @@ msgid "설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 
 msgstr "Adds language packs (.mo · pack.json) placed in locale\\<code>\\ of the settings folder to the language list. A pack with the same code is used instead of the built-in one. For translators testing without a release."
 
 #: viewer/widgets/settings_dialog.py
+msgid "화면 스타일"
+msgstr "Appearance"
+
+#: viewer/widgets/settings_dialog.py
+msgid "테마:"
+msgstr "Theme:"
+
+#: viewer/widgets/settings_dialog.py
 msgid "시작 시 동작"
 msgstr "On startup"
 
@@ -8594,20 +8622,12 @@ msgid "스크린샷 리스트:"
 msgstr "Screenshot list:"
 
 #: viewer/widgets/settings_dialog.py
-msgid "세부 줄 (메뉴 탭 아래 한 줄)"
-msgstr "Command row (one row under the menu tabs)"
+msgid "리본 메뉴"
+msgstr "Ribbon"
 
 #: viewer/widgets/settings_dialog.py
-msgid "메뉴 탭 아래 세부 줄 보이기"
-msgstr "Show the command row under the menu tabs"
-
-#: viewer/widgets/settings_dialog.py
-msgid "<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 숨긴 채 탭을 누르면 다시 보입니다.</small>"
-msgstr "<small>Turn off for more vertical space in the main viewer. Clicking a tab while it is hidden shows it again.</small>"
-
-#: viewer/widgets/settings_dialog.py
-msgid "모음 메뉴 편집..."
-msgstr "Customize Quick Access..."
+msgid "<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 메뉴 탭을 누르면 리본이 잠깐 보이고, 명령을 고르거나 다른 곳을 누르면 다시 숨습니다. 탭 줄을 우클릭해도 바꿀 수 있습니다.</small>"
+msgstr "<small>Turn off for more vertical space in the main viewer. Clicking a menu tab shows the ribbon briefly; it hides again when you pick a command or click elsewhere. You can also change this by right-clicking the tab bar.</small>"
 
 #: viewer/widgets/settings_dialog.py
 msgid "'모음' 탭에 보일 명령과 차례를 고릅니다"
@@ -8654,20 +8674,20 @@ msgid "페이지 내 버튼 상단 오프셋:"
 msgstr "In-page button top offset:"
 
 #: viewer/widgets/settings_dialog.py
-msgid "화면 스타일"
-msgstr "Appearance"
-
-#: viewer/widgets/settings_dialog.py
-msgid "테마:"
-msgstr "Theme:"
-
-#: viewer/widgets/settings_dialog.py
 msgid "고급 설정..."
 msgstr "Advanced Settings..."
 
 #: viewer/widgets/settings_dialog.py
 msgid "인터넷 사전·법제처·건설기준·특허·번역(Claude) API 키 — 확인하면 바로 저장됩니다"
 msgstr "API keys for online dictionaries, law, construction standards, patents and translation (Claude) — saved as soon as you click OK"
+
+#: viewer/widgets/settings_dialog.py
+msgid "발표화면 녹화 설정..."
+msgstr "Presentation Recording Settings..."
+
+#: viewer/widgets/settings_dialog.py
+msgid "발표(전체화면) 녹화 — 저장 위치·오디오·장치·단축키·녹화 테스트. 확인하면 바로 저장됩니다"
+msgstr "Presentation (full screen) recording — save folder, audio, devices, shortcuts and test recording. Saved as soon as you click OK"
 
 #: viewer/widgets/settings_dialog.py
 msgid "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
@@ -8682,60 +8702,8 @@ msgid "시작 시 열 PDF 선택"
 msgstr "Choose PDF to Open on Startup"
 
 #: viewer/widgets/settings_dialog.py
-msgid "화면+음성 녹화 (발표 전체화면)"
-msgstr "Screen + Audio Recording (full-screen presentation)"
-
-#: viewer/widgets/settings_dialog.py
-msgid "비우면 현재 책갈피 폴더에 저장"
-msgstr "Leave blank to save in the current bookmark folder"
-
-#: viewer/widgets/settings_dialog.py
-msgid "찾기…"
-msgstr "Browse…"
-
-#: viewer/widgets/settings_dialog.py
-msgid "저장 위치:"
-msgstr "Save to:"
-
-#: viewer/widgets/settings_dialog.py
-msgid "오디오:"
-msgstr "Audio:"
-
-#: viewer/widgets/settings_dialog.py
-msgid "오디오 장치 새로고침"
-msgstr "Refresh audio devices"
-
-#: viewer/widgets/settings_dialog.py
-msgid "마이크 장치:"
-msgstr "Microphone:"
-
-#: viewer/widgets/settings_dialog.py
-msgid "시스템 장치:"
-msgstr "System device:"
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화/재개 단축키:"
-msgstr "Record/Resume shortcut:"
-
-#: viewer/widgets/settings_dialog.py
-msgid "중지 단축키:"
-msgstr "Stop shortcut:"
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화 테스트 (3초)"
-msgstr "Test Recording (3 s)"
-
-#: viewer/widgets/settings_dialog.py
-msgid "<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"
-msgstr "<small>Codec fixed at H.264/AAC, 192 kbps, 30 fps, CQ23. System audio requires Stereo Mix or a virtual audio device.</small>"
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화 저장 폴더"
-msgstr "Recording save folder"
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화 테스트"
-msgstr "Recording Test"
+msgid "고급 설정 저장됨"
+msgstr "Advanced settings saved"
 
 #: viewer/widgets/settings_dialog.py
 msgid "외부 언어팩 사용"
@@ -8887,6 +8855,66 @@ msgid "확인 중…"
 msgstr "Checking…"
 
 #: viewer/widgets/settings_dialog.py
+msgid "발표화면 녹화 설정"
+msgstr "Presentation Recording Settings"
+
+#: viewer/widgets/settings_dialog.py
+msgid "화면+음성 녹화 (발표 전체화면)"
+msgstr "Screen + Audio Recording (full-screen presentation)"
+
+#: viewer/widgets/settings_dialog.py
+msgid "비우면 현재 책갈피 폴더에 저장"
+msgstr "Leave blank to save in the current bookmark folder"
+
+#: viewer/widgets/settings_dialog.py
+msgid "찾기…"
+msgstr "Browse…"
+
+#: viewer/widgets/settings_dialog.py
+msgid "저장 위치:"
+msgstr "Save to:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "오디오:"
+msgstr "Audio:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "오디오 장치 새로고침"
+msgstr "Refresh audio devices"
+
+#: viewer/widgets/settings_dialog.py
+msgid "마이크 장치:"
+msgstr "Microphone:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "시스템 장치:"
+msgstr "System device:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화/재개 단축키:"
+msgstr "Record/Resume shortcut:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "중지 단축키:"
+msgstr "Stop shortcut:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화 테스트 (3초)"
+msgstr "Test Recording (3 s)"
+
+#: viewer/widgets/settings_dialog.py
+msgid "<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"
+msgstr "<small>Codec fixed at H.264/AAC, 192 kbps, 30 fps, CQ23. System audio requires Stereo Mix or a virtual audio device.</small>"
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화 저장 폴더"
+msgstr "Recording save folder"
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화 테스트"
+msgstr "Recording Test"
+
+#: viewer/widgets/settings_dialog.py
 msgid "연결 확인 ping"
 msgstr "Connection check ping"
 
@@ -8911,6 +8939,26 @@ msgid "설정 초기화(기본값으로 되돌리기)…"
 msgstr "Reset Settings (restore defaults)…"
 
 #: viewer/widgets/settings_dialog.py
+msgid "특허 PDF 저장 폴더 선택"
+msgstr "Select Patent PDF Save Folder"
+
+#: viewer/widgets/settings_dialog.py
+msgid "<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>"
+msgstr "<span style='color:#888'>Not installed — click [Claude Sign In]</span>"
+
+#: viewer/widgets/settings_dialog.py
+msgid "로그인되었습니다. 이제 번역을 사용할 수 있습니다."
+msgstr "Signed in. Translation is now available."
+
+#: viewer/widgets/settings_dialog.py
+msgid "<span style='color:#c00'>키 없음</span>"
+msgstr "<span style='color:#c00'>No key</span>"
+
+#: viewer/widgets/settings_dialog.py
+msgid "실패"
+msgstr "Failed"
+
+#: viewer/widgets/settings_dialog.py
 msgid "영상만(소리 없음)"
 msgstr "Video only (no audio)"
 
@@ -8933,30 +8981,6 @@ msgstr "Audio device"
 #: viewer/widgets/settings_dialog.py
 msgid "오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."
 msgstr "No audio input device found (check ffmpeg)."
-
-#: viewer/widgets/settings_dialog.py
-msgid "특허 PDF 저장 폴더 선택"
-msgstr "Select Patent PDF Save Folder"
-
-#: viewer/widgets/settings_dialog.py
-msgid "<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>"
-msgstr "<span style='color:#888'>Not installed — click [Claude Sign In]</span>"
-
-#: viewer/widgets/settings_dialog.py
-msgid "로그인되었습니다. 이제 번역을 사용할 수 있습니다."
-msgstr "Signed in. Translation is now available."
-
-#: viewer/widgets/settings_dialog.py
-msgid "<span style='color:#c00'>키 없음</span>"
-msgstr "<span style='color:#c00'>No key</span>"
-
-#: viewer/widgets/settings_dialog.py
-msgid "실패"
-msgstr "Failed"
-
-#: viewer/widgets/settings_dialog.py
-msgid "고급 설정 저장됨"
-msgstr "Advanced settings saved"
 
 #: viewer/widgets/settings_dialog.py
 msgid "모듈 없음"
@@ -12145,4 +12169,16 @@ msgstr "Getting Started"
 
 #~ msgid "모니터가 하나뿐입니다"
 #~ msgstr "Only one monitor is connected"
+
+#~ msgid "변환해서 내보내기..."
+#~ msgstr "Convert and export..."
+
+#~ msgid "변환해서 내보내기"
+#~ msgstr "Convert and export"
+
+#~ msgid "세부 줄 (메뉴 탭 아래 한 줄)"
+#~ msgstr "Command row (one row under the menu tabs)"
+
+#~ msgid "메뉴 탭 아래 세부 줄 보이기"
+#~ msgstr "Show the command row under the menu tabs"
 

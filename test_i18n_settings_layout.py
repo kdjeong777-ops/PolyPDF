@@ -47,8 +47,15 @@ try:
         d = SettingsDialog(dict(mw._prefs), parent=mw, host=mw)
         # 261009-14: 실제 PC 처럼 녹화 장치 이름이 길게 들어 있어도(설치본 화면에서만 가로 스크롤이 났다)
         _long = "마이크 배열(Realtek(R) Audio) — Intel® 스마트 사운드 기술 디지털 마이크용 장치 이름이 긴 경우"
-        for _cb in (d.cmb_mic, d.cmb_sys):
+        #   261025-6: 녹화 칸은 '발표화면 녹화 설정' 창으로 옮겼다 — 그 창도 같은 규칙(가로로 밀지 않음)
+        from viewer.widgets.settings_dialog import RecordingSettingsDialog
+        rd = RecordingSettingsDialog(dict(mw._prefs), d, host=mw)
+        for _cb in (rd.cmb_mic, rd.cmb_sys):
             _cb.addItem(_long); _cb.setEditText(_long)
+        rd.show(); app.processEvents()
+        _scr = rd.screen().availableGeometry().width() if rd.screen() else 1920
+        chk(rd.width() < _scr, "B2 [%s] 녹화 설정 창이 긴 장치 이름에 밀려 화면보다 넓어지지 않는다" % code, str(rd.width()))
+        rd.close()
         d.show(); app.processEvents()
         sc = d.findChild(QScrollArea); content = sc.widget()
         groups = [g for g in content.findChildren(QGroupBox) if g.parent() is content and g.isVisibleTo(d)]
