@@ -135,6 +135,52 @@ chk(not bad, "§14.7.2-3 메인 창·설정 폴더를 쓰는 검사는 시험 �
 bad = [p.name for p in tests
        if re.search(r"setApplicationName\(\s*[\"']PolyPDF[\"']\s*\)", strip_comments(read(p)))]
 chk(not bad, "§14.7.2-3 검사가 앱 이름을 실제 'PolyPDF' 로 정하지 않는다", str(bad))
+# 261025-13(마스터 §14.7.2 의 6): 메인 창을 띄우는 검사·도구는 오프스크린 모달을 `modal_guard.install(` 로 닫는다 — 각자 막던 방식을
+#   새 도구가 빠뜨려 261025 오래 켜 두기 시험이 안내 창에서 77분 멈췄다. 아래는 그 전부터 있던 것(각자 막거나 모달이 안 뜬다) — **줄기만 한다**:
+#   새 파일은 여기에 더하지 않고 `modal_guard` 를 쓴다. 옮긴 파일은 여기서 뺀다.
+MODAL_KNOWN = {
+    "scripts/load_test.py", "scripts/soak_test.py", "scripts/ui_check.py", "test_about_notice.py", "test_auto_tag.py",
+    "test_batch13.py", "test_batch19.py", "test_bookmark_gen_261019.py", "test_boundary_e2e.py", "test_capture.py",
+    "test_capture_region_drag_261014.py", "test_close_edit_confirm.py", "test_compare_261014.py", "test_convert_261014.py",
+    "test_convert_docx_261014.py", "test_convert_hwpx_261014.py", "test_convert_pptx_261014.py",
+    "test_convert_word_com_261014.py", "test_cross_file_nav.py", "test_darktheme.py", "test_db_lock.py",
+    "test_deco_copy_paste.py", "test_design_bk_status_count.py", "test_design_ribbon_tabs_261025.py",
+    "test_design_toolbar_icons_261025.py", "test_draw_paint.py", "test_draw_unify.py", "test_dualpane.py", "test_edit_undo.py",
+    "test_edit_undo2.py", "test_favorites_menu_groups.py", "test_file_rename_menu.py", "test_folder_scan.py",
+    "test_fullwidth.py", "test_global_capture_mode.py", "test_handle_scroll.py", "test_hyperlink_integration.py",
+    "test_i18n_core.py", "test_i18n_external.py", "test_i18n_keys.py", "test_i18n_packs.py", "test_i18n_panel_layout.py",
+    "test_i18n_settings_layout.py", "test_i18n_switch.py", "test_image_annot.py", "test_image_geom.py", "test_image_tools.py",
+    "test_index_corrupt_recover.py", "test_index_newfile.py", "test_input_highlight.py", "test_input_view_source.py",
+    "test_main_draw_v2.py", "test_merge2.py", "test_merge_fast.py", "test_merge_phase2.py", "test_merge_preview_peer.py",
+    "test_merge_thread.py", "test_merge_toc.py", "test_nav_save_index.py", "test_nup_create_261021.py",
+    "test_nup_preset_order.py", "test_ocr_batch_261014.py", "test_open_multi_files.py", "test_page_crop.py",
+    "test_page_edit_save_bg.py", "test_page_nav_261014.py", "test_page_rotate_save.py", "test_page_split.py",
+    "test_page_upright.py", "test_pageedit.py", "test_panel_input_261014.py", "test_panel_toolbar.py",
+    "test_paste_save_menu_261017.py", "test_pdf_compress_261014.py", "test_pen45.py", "test_perf_lite_flip.py",
+    "test_perf_open_page.py", "test_perf_study_reads.py", "test_perpane_combo.py", "test_prefs_allowlist.py",
+    "test_present_backzone_261025.py", "test_present_decorations.py", "test_present_options.py",
+    "test_present_screen_261021.py", "test_recent_files.py", "test_recording_rotate.py", "test_rename_locked_261014.py",
+    "test_render_cache.py", "test_reopen_after_save.py", "test_review_fixes_261024.py", "test_revise8.py",
+    "test_revise_bm4.py", "test_revise_bm4b.py", "test_revise_bm4c.py", "test_revise_bm4d.py", "test_save_as_261017.py",
+    "test_save_overwrite_locked.py", "test_screenshot_pdf_bake_261014.py", "test_search_case_regex_261014.py",
+    "test_security_redact_261014.py", "test_security_resign.py", "test_security_sign.py", "test_security_sign_drafts.py",
+    "test_shortcuts_capture.py", "test_shortcuts_chrome_261021.py", "test_shot_clipboard_copy_261024.py",
+    "test_shot_clipboard_pdf_open.py", "test_side_panels.py", "test_split_drawer.py", "test_start_view.py",
+    "test_startup_open.py", "test_startup_open_arg.py", "test_temp_sweep_261014.py",
+    "test_text_apply_multi.py", "test_text_panel.py", "test_text_word_bg_261014.py", "test_thumb_blank_page_261021.py",
+    "test_thumb_drag_copy.py", "test_thumb_drag_real_261016.py", "test_thumb_menu_261016.py", "test_thumb_move_staged.py",
+    "test_thumbs_rerender.py", "test_toc_review.py", "test_tool_cancel.py", "test_toolbar_align_play.py",
+    "test_toolbar_center.py", "test_toolbar_split.py", "test_tools_menu_order.py", "test_two_page_staged_toc_261024.py",
+    "test_ui_stall.py", "test_ui_stall_peer_table_261014.py", "test_update_channel.py", "test_update_order.py",
+    "test_viewer_menu_261016.py", "test_vprinter_receive.py",
+}
+_mw_files = [(p, p.name) for p in tests] + [(p, "scripts/" + p.name) for p in sorted((ROOT / "scripts").glob("*.py"))]
+_no_guard = {n for p, n in _mw_files
+             if re.search(r"\bMainWindow\(", strip_comments(read(p))) and "modal_guard.install(" not in strip_comments(read(p))}
+chk(not (_no_guard - MODAL_KNOWN), "§14.7.2-6 메인 창을 띄우는 새 검사·도구는 modal_guard 로 모달을 닫는다",
+    str(sorted(_no_guard - MODAL_KNOWN)))
+chk(not (MODAL_KNOWN - _no_guard), "§14.7.2-6 modal_guard 로 옮긴(또는 없앤) 파일은 MODAL_KNOWN 에서 뺀다",
+    str(sorted(MODAL_KNOWN - _no_guard)))
 
 print(NL + "=== 마스터 §14.7.1 — 검사 색인(이름 규칙으로 소유를 정한다) ===")
 # ★ 이 표는 마스터 §14.7.1 의 표와 **같은 내용**이다. 한쪽만 고치지 말 것.

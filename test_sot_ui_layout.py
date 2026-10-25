@@ -30,6 +30,8 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+import modal_guard
+guard = modal_guard.install(label=lambda: "ui_layout")    # 마스터 §14.7.2 의 6 — 뜨는 모달은 닫고 적는다
 fails = []
 
 
