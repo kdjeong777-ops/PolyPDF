@@ -175,7 +175,7 @@ chk(not mw.act_toggle_search.isChecked() and mw.act_toggle_shot.isChecked(), "�
 mw._style_panel_toolbar(True)
 chk("#3e3e42" in row.styleSheet() and "#5a5a60" in row.styleSheet() and row.dark, "다크 스타일 적용(일반·드롭다운 단추 색, 261025-5)")
 mw._style_panel_toolbar(False)
-chk("#fafafa" in row.styleSheet() and "#c9c9c9" in row.styleSheet() and "#e4e4e4" in row.styleSheet() and not row.dark,
+chk("#fafafa" in row.styleSheet() and "#e6e6e6" in row.styleSheet() and "#e4e4e4" in row.styleSheet() and not row.dark,
     "라이트 스타일 적용(일반 옅게·드롭다운 진하게·리본 줄 회색, 261025-5)")
 
 # 12) 썸네일 번호 하단 배치 (260606-26)

@@ -138,6 +138,7 @@ try:
     mw.open_folder(_root); QTest.qWait(500)
     mw._recent_searches = []; mw._refresh_recent_searches_menu()
     sb = mw.search_bar
+    sb.btn_regex.setChecked(False)                # 다른 검사가 남긴 토글 상태를 이어받지 않게
     sb.edit.setText("가나다"); sb.btn_case.setChecked(True)
     QTest.keyClick(sb.edit, Qt.Key.Key_Return); QTest.qWait(200)
     sb.edit.setText("라마"); sb.btn_case.setChecked(False)      # 토글을 바꾸면 지금 글로 다시 찾는다(그것도 실행한 검색)
