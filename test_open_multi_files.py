@@ -88,7 +88,7 @@ try:
         "A 여러 파일을 **파일 모드** 한 목록에 — **파일명 순**·중복·없는 파일 제외", str(tops()))
     chk(Path(mw.main_view.current_file()).name == "A.pdf", "A 이름 순 첫 파일을 본문에 연다")
     chk(len(mw._search_scope or ()) == 3, "A 검색 범위는 그 파일들", str(mw._search_scope))
-    chk("3개 파일" in bt.info.text(), "A 책갈피창에 파일 수", bt.info.text())
+    chk("3개 파일" in bt.count_text(), "A 책갈피창에 파일 수", bt.count_text())
     it = bt.tree.topLevelItem(1); bt.tree.setCurrentItem(it); bt.tree.itemClicked.emit(it, 0); spin(15)
     chk(Path(mw.main_view.current_file()).name == "B.pdf", "A 목록의 다른 파일을 누르면 그 파일이 열린다",
         str(mw.main_view.current_file()))
@@ -109,7 +109,7 @@ try:
         str(bt._root_dir))
 
     mw.open_pdf(A); spin(8)
-    chk(bt._is_file_mode() and tops() == ["A"] and "단일 파일" in bt.info.text(), "A 하나만 열면 종전과 같다")
+    chk(bt._is_file_mode() and tops() == ["A"] and "단일 파일" in bt.count_text(), "A 하나만 열면 종전과 같다")
 
     def mime(*paths):
         md = QMimeData(); md.setUrls([QUrl.fromLocalFile(str(x)) for x in paths]); return md

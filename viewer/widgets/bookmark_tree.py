@@ -231,6 +231,10 @@ class BookmarkTree(QWidget):
     filesListed = pyqtSignal()               # 260906-1: 폴더 목록 채우기 완료(비동기 스캔 후)
     probeProgress = pyqtSignal(int, int, str)  # 260906-4: 목록 조사 진행(done, total, 파일명)
     probeFinished = pyqtSignal()               # 260906-4: 목록 조사 끝
+    # 261025-4(디자인 SOT §2.8.6): 아래 글 줄은 창 상태 표시줄로 — 개수는 일반 칸, 알림·진행은 임시 메시지
+    countChanged = pyqtSignal()                # count_text() 가 바뀌었거나 이 창이 보이기·숨기기
+    noticeRequested = pyqtSignal(str, int)     # (글, ms) — ms 0 = 진행(끝날 때까지), 빈 글 + 0 = 그 진행 끝
+    NOTICE_MS = 5000                           # 알림이 상태 표시줄에 머무는 시간
 
     DATA_FILE = Qt.ItemDataRole.UserRole + 0
     DATA_PAGE = Qt.ItemDataRole.UserRole + 1
@@ -279,6 +283,7 @@ class BookmarkTree(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._root_dir: Optional[Path] = None
+        self._count_text: str = ""                  # 261025-4: 'N개 PDF' 등 — 상태 표시줄 일반 칸(앱이 보인다)
         self._kt = lambda text, key: text           # 261017-1(디자인 SOT §2.9.2): 메뉴 오른쪽 단축키 칸(app 이 주입)
         self._edit_mode: bool = False               # v1.6.18
         self._split_on: bool = False                # 260618-25: 우클릭 1단/2단 라벨용
@@ -393,7 +398,7 @@ class BookmarkTree(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(4, 4, 4, 0)       # 261025-4: 아래 0 — 아래 끝을 본문과 맞춘다(디자인 SOT §2.8.6)
 
         # v1.6.1 F4: 검색 입력창 + 즐겨찾기 추가 버튼
         from PyQt6.QtWidgets import QHBoxLayout, QPushButton
@@ -610,10 +615,29 @@ class BookmarkTree(QWidget):
         self.tree.itemExpanded.connect(lambda _it: self._schedule_visible_probes())
         self.tree.itemCollapsed.connect(lambda _it: self._schedule_visible_probes())
         layout.addWidget(self.tree, 1)
+        # 261025-4(디자인 SOT §2.8.6): 종전 트리 아래 글 줄(`info`)은 없앴다 — 개수·알림은 창 상태 표시줄.
+        #   아래 여백도 0 이라야 트리 아래 끝이 썸네일·본문 아래 끝과 같다.
 
-        self.info = QLabel()
-        self.info.setStyleSheet("color: #888; font-size: 11px;")
-        layout.addWidget(self.info)
+    # ---- 261025-4: 개수 글·알림 (상태 표시줄로 내보낸다) ----
+    def count_text(self) -> str:
+        return self._count_text
+
+    def _set_count(self, text: str) -> None:
+        self._count_text = text or ""
+        self.countChanged.emit()
+
+    def _notice(self, text: str, ms: Optional[int] = None) -> None:
+        self.noticeRequested.emit(text, self.NOTICE_MS if ms is None else ms)
+
+    def _progress(self, text: str) -> None:
+        self.noticeRequested.emit(text, 0)
+
+    def _progress_done(self) -> None:
+        self.noticeRequested.emit("", 0)
+
+    def hideEvent(self, ev):
+        super().hideEvent(ev)
+        self.countChanged.emit()
 
     def _mk_btn(self, text: str, tip: str, slot) -> QPushButton:
         b = QPushButton(text)
@@ -732,12 +756,13 @@ class BookmarkTree(QWidget):
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
             except Exception as e:
-                self.info.setText(tr('bookmarks.json 읽기 실패: {e}').format(e=e))
+                self._set_count("")
+                self._notice(tr('bookmarks.json 읽기 실패: {e}').format(e=e))
                 return False
             self._mode = "json"          # v1.6.19
             self._pdfs_flat = []
             self._populate_from_json(data)
-            self.info.setText(
+            self._set_count(
                 f"{data.get('source_pdf', '')} · {data.get('total_pages', '?')}p"
             )
             self._update_mode_button()
@@ -782,7 +807,7 @@ class BookmarkTree(QWidget):
         # 예산 초과 — 부분 결과는 버리고(중복·순서 뒤섞임 방지) 워커가 처음부터 다시 훑는다.
         self._pdfs_flat = []
         self._scan_stats = {}
-        self.info.setText(tr("PDF 찾는 중..."))
+        self._progress(tr("PDF 찾는 중..."))
         self._start_scan_worker(self._root_dir)
 
     def _start_scan_worker(self, folder: Path):
@@ -799,6 +824,7 @@ class BookmarkTree(QWidget):
     def _cancel_scan(self):
         """진행 중인 폴더 스캔 중단 + 토큰 증가(이미 큐에 든 신호까지 무시)."""
         self._scan_token += 1
+        self._progress_done()             # 261025-4: 상태 표시줄의 'PDF 찾는 중' 을 지운다
         w, self._scan_worker = self._scan_worker, None
         if w is not None:
             try:
@@ -813,7 +839,7 @@ class BookmarkTree(QWidget):
                 return
             self._pdfs_flat.extend(paths)
             self._scan_stats.update(stats)
-            self.info.setText(tr('{n}개 PDF 찾는 중...').format(n=len(self._pdfs_flat)))
+            self._progress(tr('{n}개 PDF 찾는 중...').format(n=len(self._pdfs_flat)))
         except RuntimeError:
             return
 
@@ -822,6 +848,7 @@ class BookmarkTree(QWidget):
             if token != self._scan_token or self._mode != "flat":
                 return
             self._scan_worker = None
+            self._progress_done()         # 261025-4: 진행 글을 지우면 개수 글이 다시 보인다
             if completed:
                 self._render_flat(after=getattr(self, "_scan_after", None))
             self._scan_after = None
@@ -1007,7 +1034,7 @@ class BookmarkTree(QWidget):
         self.tree.clear()
         self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
         pdfs = self._sorted_flat()
-        self.info.setText(tr('{n}개 PDF').format(n=len(pdfs)))   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
+        self._set_count(tr('{n}개 PDF').format(n=len(pdfs)))   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
         self._fill_plan = self._build_fill_plan(pdfs)
         self._fill_pos = 0
         self._fill_folders = {}
@@ -1258,7 +1285,7 @@ class BookmarkTree(QWidget):
             f = self._current_selected_file() or self._single_file
             folder = (f.parent if f else self._root_dir)
             if not folder or not Path(folder).exists():
-                self.info.setText(tr("폴더를 찾을 수 없습니다."))
+                self._notice(tr("폴더를 찾을 수 없습니다."))
                 return
             self.load_folder(folder)
             if f:
@@ -1268,7 +1295,7 @@ class BookmarkTree(QWidget):
             # 폴더 → 파일: 선택(또는 현재 본문) 파일만 표시
             f = self._current_selected_file()
             if not f or not f.exists():
-                self.info.setText(tr("파일 모드로 볼 파일을 먼저 선택하세요."))
+                self._notice(tr("파일 모드로 볼 파일을 먼저 선택하세요."))
                 return
             self.load_single_pdf(f)
             self.viewModeChanged.emit(False, str(f))
@@ -1309,7 +1336,8 @@ class BookmarkTree(QWidget):
         self.tree.clear()
         self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
         if not p.exists():
-            self.info.setText(tr('파일 없음: {name}').format(name=p.name))
+            self._set_count("")
+            self._notice(tr('파일 없음: {name}').format(name=p.name))
             return False
         item = QTreeWidgetItem([p.stem])      # .pdf 제거 (M2)
         item.setData(0, self.DATA_FILE, str(p))
@@ -1317,7 +1345,7 @@ class BookmarkTree(QWidget):
         self._decorate_file_node(item, p)      # 암호화 표식 + 책갈피 있으면 ▸
         self.tree.addTopLevelItem(item)
         item.setExpanded(False)
-        self.info.setText(tr('{name} (단일 파일)').format(name=p.name))
+        self._set_count(tr('{name} (단일 파일)').format(name=p.name))
         self._update_mode_button()
         # 260906-1: 파일 1개뿐이라 비용이 없다 — 표식(암호화·책갈피 ▸)을 바로 확정한다.
         self._ensure_probed(item, force=True)
@@ -1362,7 +1390,7 @@ class BookmarkTree(QWidget):
             item.setToolTip(0, str(p))
             self._decorate_file_node(item, p)
             self.tree.addTopLevelItem(item)
-        self.info.setText(tr('{n}개 파일 (파일 모드)').format(n=len(files)))
+        self._set_count(tr('{n}개 파일 (파일 모드)').format(n=len(files)))
         self._update_mode_button()
         self._queue_visible_probes()
         return [str(f) for f in files]
@@ -1686,6 +1714,7 @@ class BookmarkTree(QWidget):
         신호가 오지 않고, 위젯이 뜨기 전에는 뷰포트 높이가 0 이라 아무것도 안 보인다."""
         super().showEvent(e)
         self._queue_visible_probes()
+        self.countChanged.emit()          # 261025-4: 아래 책갈피창이 나타나면 상태 표시줄이 '위 · 아래' 로
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -2725,8 +2754,8 @@ class BookmarkTree(QWidget):
             d = self._ask_new_folder(base=_new_base)
             if d is not None:
                 # 다시 훑지 않는다 — 빈 폴더는 트리에 행이 없다(PDF 가 든 폴더만 보인다) — 만든 것을 글로 알린다.
-                self.info.setText(tr('새 폴더: {name} — 파일 복사·이동의 대상으로 고를 수 있습니다.')
-                                  .format(name=d.name))
+                self._notice(tr('새 폴더: {name} — 파일 복사·이동의 대상으로 고를 수 있습니다.')
+                             .format(name=d.name))
             return
         if chosen is None:
             return
@@ -3150,7 +3179,7 @@ class BookmarkTree(QWidget):
                 parent.insertChild(min(at + k, parent.childCount()), it)
         self._restore_cursor(ordered)
         self._mark_dirty()
-        self.info.setText(tr('페이지순 정렬: {n}개').format(n=len(ordered)))
+        self._notice(tr('페이지순 정렬: {n}개').format(n=len(ordered)))
 
     # ---- 삭제 / 선택만 남기기 ------------------------------------------
     def _on_del_key(self):
@@ -3238,7 +3267,7 @@ class BookmarkTree(QWidget):
                 QMessageBox.warning(self, tr("휴지통 이동 실패"), f"{p.name}: {e}")
                 self.fileOpCompleted.emit(str(p), str(p))    # revert → 원본 재로드
         if trashed:
-            self.info.setText(tr('파일 {trashed}개 휴지통으로 이동됨').format(trashed=trashed))
+            self._notice(tr('파일 {trashed}개 휴지통으로 이동됨').format(trashed=trashed))
 
     def _take_node(self, it: QTreeWidgetItem):
         """260901-2: 트리에서 노드 제거 — 최상위/폴더 자식 어느 쪽이든.
@@ -3411,7 +3440,7 @@ class BookmarkTree(QWidget):
         self._sync_after_transfer(new)
         if pairs:
             self.filesRelocated.emit(pairs)   # 인덱스·메인뷰 갱신
-        self.info.setText(tr('폴더 이름 변경: {name} → {name1}').format(name=folder.name, name1=name))
+        self._notice(tr('폴더 이름 변경: {name} → {name1}').format(name=folder.name, name1=name))
 
     EMPTY_CHECK_CAP = 200      # 260906-9: '비었는가' 판정에 훑는 항목 상한
 
@@ -3469,7 +3498,7 @@ class BookmarkTree(QWidget):
             QMessageBox.warning(self, tr("삭제 실패"), f"{folder.name}: {e}")
             return
         self._sync_after_transfer(folder.parent)
-        self.info.setText(tr('폴더 삭제됨: {name}').format(name=folder.name))
+        self._notice(tr('폴더 삭제됨: {name}').format(name=folder.name))
 
     def _ask_pick_folder(self, move: bool, start=None):
         """260901-4: 시작 위치 = 선택한 파일이 있는 세부 폴더(없으면 루트)."""
@@ -3532,7 +3561,7 @@ class BookmarkTree(QWidget):
         msg = tr('{done}개 파일을 {dst} 로 {word}했습니다.').format(done=done, dst=dst, word=word)
         if errors:
             msg += tr('\n실패: {join}').format(join=', '.join(errors[:5]))
-        self.info.setText(tr('파일 {done}개 {word}됨').format(done=done, word=word))
+        self._notice(tr('파일 {done}개 {word}됨').format(done=done, word=word))
         QMessageBox.information(self, tr('{word} 완료').format(word=word), msg)
 
     def _after_move(self, src: Path, dst: Path):
@@ -3780,7 +3809,7 @@ class BookmarkTree(QWidget):
         self._after_move(old_path, new_path)                          # 태그 승계
         self.fileOpCompleted.emit(old_s, new_s)                       # 본문 다시 열기
         self.filesRelocated.emit([[old_s, new_s]])                    # 색인·꾸밈·검색 범위
-        self.info.setText(tr('이름 변경: {name} → {name1}').format(name=old_path.name, name1=new_path.name))
+        self._notice(tr('이름 변경: {name} → {name1}').format(name=old_path.name, name1=new_path.name))
 
     def suggest_add_level(self, file_path: str = "") -> tuple:
         """260908-1(사용자 요청): 새 책갈피의 **기본 레벨**과 고를 수 있는 최대 레벨.

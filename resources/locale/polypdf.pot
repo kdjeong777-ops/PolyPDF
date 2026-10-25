@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-25 10:17+0900\n"
+"POT-Creation-Date: 2026-10-25 10:45+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1630,6 +1630,11 @@ msgstr ""
 
 #: viewer/app.py
 msgid "클립보드에 복사하지 못했습니다 — 다른 프로그램이 클립보드를 쓰고 있습니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "위 {top} · 아래 {bottom}"
 msgstr ""
 
 #: viewer/app.py

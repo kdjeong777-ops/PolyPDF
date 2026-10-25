@@ -42,6 +42,7 @@ from PyQt6.QtWidgets import (
     QToolBar,
     QPushButton,
     QStyle,
+    QLabel,
 )
 
 from viewer import side_panel_host as _sp
@@ -378,6 +379,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if _i18n_fb.fallback_from():
             QTimer.singleShot(1500, lambda c=_i18n_fb.fallback_from(): self.status.showMessage(
                 tr("'{code}' 언어팩을 찾지 못해 다른 언어로 표시합니다 (설정은 그대로입니다).").format(code=c), 10000))
+        # 261025-4(디자인 SOT §2.8.6): 책갈피창 개수 글('N개 PDF')은 진행 메시지 자리(왼쪽) 일반 칸 —
+        #   임시 메시지(진행·알림)가 떠 있는 동안 QStatusBar 가 스스로 숨기고, 지워지면 다시 보인다.
+        self._bk_count = QLabel()
+        self._bk_count.setObjectName("bkCount")
+        self._bk_count.setContentsMargins(4, 0, 0, 0)   # 임시 메시지 글자와 같은 x 에서 시작
+        self.status.addWidget(self._bk_count, 1)
+        self._bk_progress = {}               # 책갈피창 → 그 창이 띄운 진행 글(끝나면 그 글일 때만 지운다)
+        for _bt in (self.bookmark_tree, self.bookmark_tree_right):
+            _bt.countChanged.connect(self._update_bk_count)
+            _bt.noticeRequested.connect(lambda text, ms, t=_bt: self._on_bk_notice(t, text, ms))
+        self._update_bk_count()
         self.progress = QProgressBar()
         self.progress.setMaximumWidth(220)
         self.progress.setVisible(False)
@@ -1166,6 +1178,36 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._bk_split.setSizes([int(tot * 0.55), int(tot * 0.45)])
         except Exception:
             pass
+
+    def _update_bk_count(self):
+        """261025-4(디자인 SOT §2.8.6): 상태 표시줄 개수 칸 — 아래 책갈피창이 보이면 '위 … · 아래 …'."""
+        lbl = getattr(self, "_bk_count", None)
+        if lbl is None:
+            return
+        top = self.bookmark_tree.count_text()
+        rt = self.bookmark_tree_right
+        bottom = "" if rt.isHidden() else rt.count_text()
+        if top and bottom:
+            text = tr('위 {top} · 아래 {bottom}').format(top=top, bottom=bottom)
+        else:
+            text = top or bottom
+        lbl.setText(text)
+
+    def _on_bk_notice(self, tree, text: str, ms: int):
+        """261025-4: 책갈피창 알림·진행 → 상태 표시줄 임시 메시지(진행 메시지와 같은 자리).
+        ms 0 = 진행(지울 때까지). 빈 글 + 0 = 그 창의 진행 끝 — 상태 표시줄이 **아직 그 글일 때만** 지운다
+        (그사이 다른 진행 메시지가 덮었으면 그대로 둔다)."""
+        if ms == 0 and not text:
+            last = self._bk_progress.pop(tree, None)
+            if last and self.status.currentMessage() == last:
+                self.status.clearMessage()
+            return
+        if ms == 0:
+            self._bk_progress[tree] = text
+            self.status.showMessage(text)
+        else:
+            self._bk_progress.pop(tree, None)
+            self.status.showMessage(text, ms)
 
     def _update_title(self):
         """제목 — 2단이면 '좌측폴더 | 우측폴더'(우측 없으면 좌측만) + 현재 본문 파일명."""

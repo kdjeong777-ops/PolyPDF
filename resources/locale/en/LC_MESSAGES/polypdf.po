@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-25 10:17+0900\n"
+"POT-Creation-Date: 2026-10-25 10:45+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1678,6 +1678,11 @@ msgstr "Error"
 #: viewer/app.py
 msgid "클립보드에 복사하지 못했습니다 — 다른 프로그램이 클립보드를 쓰고 있습니다."
 msgstr "Could not copy to the clipboard — another program is using it."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "위 {top} · 아래 {bottom}"
+msgstr "Top {top} · Bottom {bottom}"
 
 #: viewer/app.py
 msgid "서명..."
