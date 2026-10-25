@@ -120,6 +120,11 @@ def verify(doc: str, row: str, d: Path) -> bool:
 
 
 def main(argv=None) -> int:
+    try:                                        # 한글·'—' 가 cp949 콘솔에서 UnicodeEncodeError 로 멈추지 않게(SystemExit 안내는 stderr)
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser(description="SOT §0 한 줄을 SOT 와 이력 아카이브에 함께 넣는다")
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("add")
