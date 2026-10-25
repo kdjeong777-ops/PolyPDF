@@ -1583,6 +1583,7 @@ class MainView(QWidget):
     # 261008(다국어 SOT §5): 맞춤 모드는 **내부 키**다 — 화면 이름(`FIT_LABELS`)과 나눈다.
     #   종전에는 '쪽 맞춤' 같은 화면 문구가 곧 값이라 설정 파일(`fit_mode`)에도 그대로 저장됐다.
     #   옛 값은 `normalize_fit` 가 읽을 때 바꾼다.
+    SEARCH_SLICE_MS = 30          # 261025-11(검색창 SOT §8): 본문 매치 수집 한 조각의 시간 — 응답성 SOT §4 ⑥
     FIT_PAGE = "page"
     FIT_PAGE_TWO = "two"          # v1.5.0 M3 (260606-19: 명칭 '2장 맞춤')
     FIT_WIDTH = "width"
@@ -1645,6 +1646,11 @@ class MainView(QWidget):
         self._ocr_words_provider = None
         self._view_src_cache = None     # (키, {"lines": …, "words": …})
         self._current_match = -1
+        # 261025-11(검색창 SOT §8): 매치를 나눠 모은다 — 세대 번호·쪽별 매치·남은 쪽·현재 매치를 (쪽, 쪽 안 차례)로 고정했는지
+        self._search_gen = 0
+        self._match_by_page: dict = {}
+        self._search_todo: list = []
+        self._match_pinned = False
         # _base_dpi 는 호환을 위해 보존하나, 본 파이프라인에선 zoom 만 사용
         self._base_dpi = 192
         self._render_pending = False
@@ -2006,8 +2012,7 @@ class MainView(QWidget):
         self._is_image = False               # v1.6.4 C2: PDF 모드
         self._update_empty_label()           # 260606-30: 문서 로드 → 안내 숨김
         self._query = query or ""
-        self._matches = self._doc.search(self._query, self._search_mode) if self._query else []
-        self._current_match = 0 if self._matches else -1
+        self._begin_match_search(page_index, pin_first=True)   # 261025-11: 결과 쪽 먼저, 나머지는 나눠서
 
         # v1.6.8 F1: 메인 PDF 는 내장 세로바 숨김, doc_scroll(문서 진행률) 표시.
         self.view._image_mode = False
@@ -2037,6 +2042,8 @@ class MainView(QWidget):
             self._doc = None
         self._is_image = True                # v1.6.4 C2: 이미지 모드 → ◀▶ 가 리스트 순회
         self._update_empty_label()           # 260606-30: 이미지 로드 → 안내 숨김
+        self._search_gen += 1                # 261025-11: 앞 문서의 매치 수집을 멈춘다
+        self._search_todo = []
         self._matches = []
         self._current_match = -1
 
@@ -2561,10 +2568,103 @@ class MainView(QWidget):
 
     def set_query(self, query: str):
         self._query = query or ""
-        self._matches = self._doc.search(self._query, self._search_mode) if (self._doc and self._query) else []
-        self._current_match = 0 if self._matches else -1
+        # 261025-11: 현재 매치는 종전처럼 문서의 첫 매치(고정하지 않음 — 앞쪽 매치가 들어오면 그리로)
+        self._begin_match_search(self._current_page, pin_first=False)
         self._render_current()
         self._update_match_counter()
+
+    # --- 매치 수집 (261025-11, 검색창 SOT §8) ------------------------------
+    def _begin_match_search(self, first_page: int, pin_first: bool) -> None:
+        """매치 수집을 새로 시작한다 — `first_page` 는 그 자리에서, 나머지 쪽은 `_search_step` 이 `SEARCH_SLICE_MS` 씩.
+
+        종전 `PdfDocument.search` 는 문서 전체를 메인 스레드에서 한 번에 훑어 598쪽에서 검색마다 1~2초 섰다.
+        `pin_first` 면 그 쪽의 첫 매치를 현재 매치로 고정한다(결과로 연 쪽 — `load_document(query=)`·`jump_to_search_result`)."""
+        self._search_gen += 1
+        self._match_by_page = {}
+        self._search_todo = []
+        self._match_pinned = False
+        if not (self._doc and self._query):
+            self._matches = []
+            self._current_match = -1
+            return
+        n = self._doc.page_count
+        fp = first_page if 0 <= first_page < n else 0      # 끼운 쪽(쪽 수 밖)이면 첫 쪽부터
+        for h in self._doc.search_pages(self._query, self._search_mode, [fp]):
+            self._match_by_page[h.page_index] = h
+        self._matches = list(self._match_by_page.values())
+        if pin_first and self._matches:
+            self._match_pinned = True
+        self._current_match = 0 if self._matches else -1
+        self._anchor_at_start = self._match_anchor()
+        self._search_todo = [i for i in range(n) if i != fp]
+        if self._search_todo:
+            gen = self._search_gen
+            QTimer.singleShot(0, lambda: self._search_step(gen))
+
+    def _search_step(self, gen: int) -> None:
+        if gen != self._search_gen or self._doc is None:
+            return                                          # 새 검색어·다른 파일 — 이 수집은 끝
+        import time as _t
+        t0 = _t.perf_counter()
+        todo = self._search_todo
+        k = 0
+        try:
+            while k < len(todo) and (_t.perf_counter() - t0) * 1000 < self.SEARCH_SLICE_MS:
+                for h in self._doc.search_pages(self._query, self._search_mode, [todo[k]]):
+                    self._match_by_page[h.page_index] = h
+                k += 1
+        except Exception:
+            k = len(todo)                                   # 문서가 닫히는 중 등 — 모은 것까지만
+        del todo[:k]
+        self._rebuild_matches()
+        self._update_match_counter()
+        if todo:
+            QTimer.singleShot(0, lambda: self._search_step(gen))
+        elif self._match_anchor() != getattr(self, "_anchor_at_start", None):
+            self._render_current()                          # 현재 매치(주황)의 자리가 바뀌었을 때만 한 번
+
+    def _match_anchor(self):
+        """현재 매치의 (쪽, 쪽 안 차례) — 앞쪽 매치가 늦게 들어와도 같은 자리를 가리키게."""
+        idx = self._current_match
+        if idx < 0:
+            return None
+        for h in self._matches:
+            if idx < len(h.rects):
+                return (h.page_index, idx)
+            idx -= len(h.rects)
+        return None
+
+    def _rebuild_matches(self) -> None:
+        anchor = self._match_anchor() if self._match_pinned else None
+        self._matches = [self._match_by_page[p] for p in sorted(self._match_by_page)]
+        if not self._matches:
+            self._current_match = -1
+            return
+        if anchor is None:
+            self._current_match = 0
+            return
+        gi = 0
+        for h in self._matches:
+            if h.page_index == anchor[0]:
+                self._current_match = gi + min(anchor[1], len(h.rects) - 1)
+                return
+            gi += len(h.rects)
+        self._current_match = 0
+
+    def match_search_done(self) -> bool:
+        """261025-11: 문서 전체 매치를 다 모았는지 — 앱이 '이 문서의 마지막 매치' 를 판단할 때(다음 파일로 넘기기 전)."""
+        return not self._search_todo
+
+    def select_last_match_on_page(self) -> None:
+        """261025-11: 보이는 쪽의 마지막 매치를 현재 매치로(Shift+F3 로 앞 파일에 왔을 때 — 다 모으기를 기다리지 않는다)."""
+        gi = 0
+        for h in self._matches:
+            if h.page_index == self._current_page:
+                self._current_match = gi + len(h.rects) - 1
+                self._match_pinned = True
+                self._jump_to_match(self._current_match)
+                return
+            gi += len(h.rects)
 
     def go_next_match(self):
         if not self._matches:
@@ -2573,6 +2673,7 @@ class MainView(QWidget):
         if total == 0:
             return
         self._current_match = (self._current_match + 1) % total
+        self._match_pinned = True                       # 261025-11: 사용자가 옮긴 자리는 수집 중에도 지킨다
         self._jump_to_match(self._current_match)
 
     def go_prev_match(self):
@@ -2582,6 +2683,7 @@ class MainView(QWidget):
         if total == 0:
             return
         self._current_match = (self._current_match - 1) % total
+        self._match_pinned = True
         self._jump_to_match(self._current_match)
 
     def apply_theme(self, dark: bool):
@@ -6256,12 +6358,12 @@ class MainView(QWidget):
             return
         if (query or "") != self._query:
             self._query = query or ""
-            self._matches = self._doc.search(self._query, self._search_mode) if self._query else []
-            self._current_match = 0 if self._matches else -1
+            self._begin_match_search(page_index, pin_first=True)   # 261025-11: 결과 쪽 먼저, 나머지는 나눠서
         if self._matches:
             gi = self._first_global_match_index(page_index)
             if gi >= 0:
                 self._current_match = gi
+                self._match_pinned = True
         self.go_to_page(page_index)
         if self._matches and self._current_match >= 0:
             self._scroll_to_current_match()

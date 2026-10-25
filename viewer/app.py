@@ -8020,7 +8020,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv = self.main_view
         if mv._matches:
             total = sum(len(h.rects) for h in mv._matches)
-            if total > 0 and mv._current_match < total - 1:
+            # 261025-11(검색창 SOT §8): 매치를 아직 다 모으지 않았으면 '마지막' 이 아니다 — 다음 파일로 넘기지 않는다
+            if total > 0 and (mv._current_match < total - 1 or not mv.match_search_done()):
                 mv.go_next_match()
                 return
         self._jump_search_file(+1)
@@ -8073,11 +8074,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 다음 파일로 갔을 때 첫/마지막 매치로 위치 보정
         QApplication.processEvents()
         if direction < 0 and self.main_view._matches:
-            total = sum(len(h.rects) for h in self.main_view._matches)
-            if total > 0:
-                self.main_view._current_match = total - 1
-                self.main_view._jump_to_match(total - 1)
-        # direction > 0 이면 main_view 가 이미 _current_match = 0 으로 시작
+            # 261025-11(검색창 SOT §8): 연 쪽(그 파일의 마지막 결과 쪽)의 마지막 매치 — 문서 전체를 다 모으기를 기다리지 않는다
+            self.main_view.select_last_match_on_page()
+        # direction > 0 이면 main_view 가 결과 쪽의 첫 매치로 시작
 
     # ===== 스크린샷 ====================================================
     # ===== 인쇄 (260603-3) =============================================

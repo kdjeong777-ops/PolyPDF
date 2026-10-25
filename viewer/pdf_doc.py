@@ -230,10 +230,17 @@ class PdfDocument:
 
     def search(self, query: str, mode=None) -> list:
         """쪽마다 맞은 자리. `mode=(대소문자, 정규식)` 이면 `search_match`(검색창 SOT §4.1), 아니면 `search_for`."""
+        return self.search_pages(query, mode, range(self.doc.page_count))
+
+    def search_pages(self, query: str, mode=None, pages=()) -> list:
+        """261025-11(검색창 SOT §8): 고른 쪽들만 — 본문이 문서를 나눠서 찾을 때 쓴다(없는 쪽 번호는 건너뜀)."""
         if not query:
             return []
         hits: list = []
-        for i in range(self.doc.page_count):
+        n = self.doc.page_count
+        for i in pages:
+            if not 0 <= i < n:
+                continue
             page = self.doc.load_page(i)
             if not mode or not any(mode):
                 # 빈칸 없는 쪽 글은 search_for 가 못 찾았을 때만 만든다 — 쪽마다 get_text 를 한 번 더 하지 않게(응답성 SOT §4 ⑥)

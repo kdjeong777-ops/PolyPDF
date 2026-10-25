@@ -251,12 +251,12 @@ def main():
         op("검색", lambda: mw.action_search(word), settle=2.0)
         op("테마 → 다크", lambda: mw.apply_theme("dark"))
         op("테마 → 밝게", lambda: mw.apply_theme("light"))
-        if bt._mode == "flat":        # 파일 모드(PDF 를 연 뒤)에서는 앱이 안내 창만 띄운다 — 폴더 목록일 때만
-            op("트리 ↔ 단일", lambda: (bt._toggle_tree_view(), app.processEvents(), bt._toggle_tree_view()))
         if bt._sort_combo.count():
             op("정렬 바꾸기", lambda: bt._sort_combo.setCurrentIndex(cyc % bt._sort_combo.count()))
         if cyc % 5 == 0:
             op("폴더 다시 열기", lambda: mw.open_folder(str(folder)), settle=3.0)
+            if bt._mode == "flat":    # 폴더 목록일 때만 — PDF 를 연 뒤(파일 모드)에는 앱이 안내 창만 띄운다
+                op("트리 ↔ 단일", lambda: (bt._toggle_tree_view(), app.processEvents(), bt._toggle_tree_view()))
         if time.time() >= next_sample:
             gc.collect()
             s = sample()
