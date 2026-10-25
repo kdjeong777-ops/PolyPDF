@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from viewer.i18n import tr, tr_noop
+from viewer.convert import page_step, step_text  # 진행 창 글(형식 변환 SOT §5, 261026-2)
 
 
 def write_xlsx(ps, pages, dst: Path, tick) -> None:
@@ -18,7 +19,7 @@ def write_xlsx(ps, pages, dst: Path, tick) -> None:
     wb.remove(wb.active)
     n = 0
     for i, pg in enumerate(pages):
-        tick(i, len(pages), f"p.{pg + 1}")
+        tick(i, len(pages), page_step(ps, pages, i))
         for k, (_bbox, rows) in enumerate(ps.tables(pg), start=1):
             ws = wb.create_sheet(f"p{pg + 1}_{k}"[:31])
             for r in rows:
@@ -26,7 +27,7 @@ def write_xlsx(ps, pages, dst: Path, tick) -> None:
             n += 1
     if not n:
         raise NothingToWrite("no tables")          # 화면 문구는 실행기가 tr("표가 없습니다") 로
-    tick(len(pages), len(pages), "")
+    tick(len(pages), len(pages), step_text("save"))
     wb.save(str(dst))
 
 
@@ -34,9 +35,9 @@ def write_txt(ps, pages, dst: Path, tick) -> None:
     """본문 줄(텍스트 창과 같은 원천·고침 반영). UTF-8 BOM, 쪽 사이 빈 줄 둘(§2.3)."""
     parts = []
     for i, pg in enumerate(pages):
-        tick(i, len(pages), f"p.{pg + 1}")
+        tick(i, len(pages), page_step(ps, pages, i))
         parts.append("\n".join(r.get("text", "") for r in ps.lines(pg)))
-    tick(len(pages), len(pages), "")
+    tick(len(pages), len(pages), step_text("save"))
     Path(dst).write_text("\n\n\n".join(parts), encoding="utf-8-sig")
 
 
@@ -49,10 +50,10 @@ def write_png(ps, pages, dst: Path, tick) -> None:
     stem = Path(ps.path).stem
     zoom = IMAGE_DPI / 72.0
     for i, pg in enumerate(pages):
-        tick(i, len(pages), f"p.{pg + 1}")
+        tick(i, len(pages), page_step(ps, pages, i))
         pix = ps.doc.load_page(int(pg)).get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
         pix.save(str(dst / f"{stem}_p{pg + 1:04d}.png"))
-    tick(len(pages), len(pages), "")
+    tick(len(pages), len(pages), step_text("save"))
 
 
 def write_docx_edit(ps, pages, dst: Path, tick) -> None:

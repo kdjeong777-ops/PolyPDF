@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from viewer.convert import layout
+from viewer.convert import page_step, step_text  # 진행 창 글(형식 변환 SOT §5, 261026-2)
 
 HWPUNIT_PER_PT = 100
 TITLE_STYLE = "개요 1"     # 한글 기본 스타일 이름(문서 안의 스타일 키 — 화면 문구가 아니다)
@@ -63,7 +64,7 @@ def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:
     doc = HwpxDocument.new()
     per_page = {}
     for i, pg in enumerate(pages):
-        tick(i, len(pages), f"p.{pg + 1}")
+        tick(i, len(pages), page_step(ps, pages, i))
         first_on_page = i > 0
         edges = per_page.setdefault(pg, [])
         for b in layout.page_blocks(ps, pg, join=True, edges=edges):
@@ -95,7 +96,7 @@ def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:
         if first_on_page:                       # 빈 쪽이어도 쪽은 나눈다
             doc.add_paragraph("", pageBreak="1")
     _edit_header_footer(doc, layout.edge_plan(per_page))
-    tick(len(pages), len(pages), "")
+    tick(len(pages), len(pages), step_text("save"))
     doc.save_to_path(str(dst))
 
 
@@ -381,7 +382,7 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
     anchor_para = st.para(0, 0)
     anchor_run = st.run(ANCHOR_PT, 0, False, True)
     for i, pg in enumerate(pages):
-        tick(i, len(pages), f"p.{pg + 1}")
+        tick(i, len(pages), page_step(ps, pages, i))
         page = ps.doc.load_page(int(pg))
         w, h = page.rect.width, page.rect.height
         sec = doc.sections[0] if i == 0 else doc.add_section()
@@ -482,5 +483,5 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
                 doc.add_paragraph(b["text"], section=sec, para_pr_id_ref=st.para(0, 0),
                                   char_pr_id_ref=st.run(b["size"], 0, b["bold"], b["serif"]))
     st.finish()
-    tick(len(pages), len(pages), "")
+    tick(len(pages), len(pages), step_text("save"))
     doc.save_to_path(str(dst))

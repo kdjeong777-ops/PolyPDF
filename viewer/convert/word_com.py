@@ -107,7 +107,7 @@ def _press_ok(pids) -> int:
 
 def convert_word(ps, pages, dst: Path, tick) -> None:
     """배경 스레드에서. `tick` 이 `Cancelled` 를 던지면 Word 를 끝내고 다시 던진다(부르는 쪽이 결과를 지운다)."""
-    from viewer.convert import Cancelled
+    from viewer.convert import Cancelled, step_text
     from viewer.convert.proc import _layered_copy
     tmpdir = Path(tempfile.mkdtemp(prefix="polypdf_conv_"))
     layered = None
@@ -138,7 +138,7 @@ def convert_word(ps, pages, dst: Path, tick) -> None:
             while not state["done"]:
                 time.sleep(0.3)
                 try:
-                    tick(0, 1, "Word")
+                    tick(0, 1, step_text("word"))           # 진행 창 글(형식 변환 SOT §5, 261026-2)
                 except Exception:
                     state["cancel"] = True
                 if state["cancel"] or time.monotonic() - t0 > limit:

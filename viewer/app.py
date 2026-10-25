@@ -5460,10 +5460,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _select()                                   # 목록이 이미 다 찼다(동기 경로)
         return True
 
-    def _run_merge_job(self, job, title, cancellable=True):
+    def _run_merge_job(self, job, title, cancellable=True, counts=True):
         """260611-33: job(progress)을 _MergeThread 로 실행. 모달 진행창으로 응답성 유지.
         반환: {ok, err, cancelled}. `cancellable=False` 면 취소 버튼을 두지 않는다(도중에 멈추면
-        안 되는 일 — 원본 제자리 쓰기, 260915-8)."""
+        안 되는 일 — 원본 제자리 쓰기, 260915-8). `counts=False` 면 글에 `(했음/전체)` 를 붙이지 않는다 —
+        전체가 내부 척도(파일마다 1000칸)라 글이 스스로 쪽 수를 말하는 일(변환, 형식 변환 SOT §5, 261026-2)."""
         from PyQt6.QtWidgets import QProgressDialog
         prog = QProgressDialog(tr("준비 중…"), tr("취소"), 0, 100, self)
         if not cancellable:
@@ -5479,13 +5480,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260825-16/17: 하트비트 — tick 이 없는 긴 구간(예: 최종 PDF 저장)에도
         #   막대 애니메이션(|→||→|||→||)으로 '진행 중'을 계속 표시.
         #   (\ 는 한글 폰트에서 ₩ 로 보여 사용 안 함. 경과시간 표시 없음.)
+        #   261026-2(디자인 SOT §2.7): 가운데 정렬 글이 출렁거리지 않게 폭이 같은 프레임·자릿수 맞춘 숫자
         from PyQt6.QtCore import QTimer
+        from viewer.progress_text import HEARTBEAT, pad_count
         st = {"lbl": tr("준비 중…"), "d": 0, "t": 1, "k": 0}
-        _SPIN = ("|", "||", "|||", "||")
 
         def _render():
-            sp = _SPIN[st["k"] % len(_SPIN)]
-            prog.setLabelText(f"{st['lbl']}  ({st['d']}/{st['t']})   {sp}")
+            sp = HEARTBEAT[st["k"] % len(HEARTBEAT)]
+            cnt = f"  ({pad_count(st['d'], st['t'])})" if counts else ""
+            prog.setLabelText(f"{st['lbl']}{cnt}   {sp}")
 
         def _on_prog(d, t, lbl):
             prog.setMaximum(max(1, t))

@@ -10,6 +10,7 @@ import io
 from pathlib import Path
 
 from viewer.convert import layout
+from viewer.convert import page_step, step_text  # 진행 창 글(형식 변환 SOT §5, 261026-2)
 
 EMU_PER_PT = 12700
 SPC_MIN, SPC_MAX = -400, 1000       # 글자 간격(1/100 pt) 범위 — 너무 좁히거나 벌리지 않게
@@ -128,7 +129,7 @@ def write_pptx_shape(ps, pages, dst: Path, tick) -> None:
     prs.slide_width, prs.slide_height = Emu(_emu(sw)), Emu(_emu(sh))
     blank = prs.slide_layouts[6]
     for i, pg in enumerate(pages):
-        tick(i, len(pages), f"p.{pg + 1}")
+        tick(i, len(pages), page_step(ps, pages, i))
         r = ps.doc.load_page(int(pg)).rect
         scale = min(sw / r.width, sh / r.height)
         place = ((sw - r.width * scale) / 2, (sh - r.height * scale) / 2, scale)   # 크기가 다른 쪽은 줄여 가운데
@@ -152,5 +153,5 @@ def write_pptx_shape(ps, pages, dst: Path, tick) -> None:
             y0 = min(q["rect"][1] for q in band)
             y1 = max(q["rect"][3] for q in band)
             _text_box(slide, place, text, x0, y0, width, y1 - y0, size, bold, serif)
-    tick(len(pages), len(pages), "")
+    tick(len(pages), len(pages), step_text("save"))
     prs.save(str(dst))

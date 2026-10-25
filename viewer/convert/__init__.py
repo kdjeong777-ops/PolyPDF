@@ -34,18 +34,52 @@ class Format:
     ready: bool
 
 
+# 261026-2(§2.1, 사용자 지시): 형식마다 '모양 그대로' 가 위 — 맨 위가 변환 창의 처음 고른 형식
 FORMATS = (
-    Format("docx_edit", tr_noop("Word (편집 가능)"), ".docx", True),
     Format("docx_shape", tr_noop("Word (모양 그대로)"), ".docx", True),
     # 261017-12(§2.1, 사용자 지시): Word 셋을 붙여 'Word (모양 그대로)' 바로 아래
     Format("docx_word", tr_noop("Word (Microsoft Word 사용)"), ".docx", True),    # 261014-20(§4.4) — Word 가 있을 때만
-    Format("hwpx_edit", tr_noop("한글 HWPX (편집 가능)"), ".hwpx", True),
+    Format("docx_edit", tr_noop("Word (편집 가능)"), ".docx", True),
     Format("hwpx_shape", tr_noop("한글 HWPX (모양 그대로)"), ".hwpx", True),
+    Format("hwpx_edit", tr_noop("한글 HWPX (편집 가능)"), ".hwpx", True),
     Format("pptx_shape", tr_noop("PowerPoint (모양 그대로)"), ".pptx", True),     # 261014-19(§1)
     Format("xlsx", tr_noop("Excel (표)"), ".xlsx", True),
     Format("txt", tr_noop("텍스트"), ".txt", True),
     Format("png", tr_noop("이미지 (PNG)"), "", True),
 )
+
+
+# 진행 창 2줄의 단계 이름(§5, 261026-2) — 엔진 내부 이름(pdf2docx parse/make)·날 글(p.12)은 화면에 내지 않는다
+STAGES = {
+    "pages": tr_noop("쪽 변환"),
+    "parse": tr_noop("쪽 분석"),
+    "make": tr_noop("Word 쓰기"),
+    "ocr": tr_noop("OCR 글자층"),
+    "edges": tr_noop("머리말·꼬리말 찾기"),
+    "save": tr_noop("저장"),
+    "word": tr_noop("Word 로 변환"),
+}
+
+
+def step_text(stage: str, k=None, n=None, page=None, doc_pages=None) -> str:
+    """진행 창 2줄 — `단계 k/n · 원본 p쪽`(k/n 은 이 일감의 몇째 쪽, p 는 원본 쪽 번호, 둘 다 1부터). 없는 칸은 뺀다.
+    `doc_pages`(문서 쪽 수)를 주면 p 도 그 자릿수에 맞춰 채운다(글 폭이 흔들리지 않게 — 디자인 SOT §2.7)."""
+    from viewer.i18n import tr
+    from viewer.progress_text import pad_count, FIGURE_SPACE
+    out = tr(STAGES[stage])
+    if k is not None and n:
+        out += " " + pad_count(k, n)
+    if page is not None:
+        p = str(int(page))
+        if doc_pages:
+            p = FIGURE_SPACE * max(0, len(str(int(doc_pages))) - len(p)) + p
+        out += "  ·  " + tr("원본 {page}쪽").format(page=p)
+    return out
+
+
+def page_step(ps, pages, i: int) -> str:
+    """쓰기 함수가 쪽마다 — `쪽 변환 i+1/n · 원본 p쪽`."""
+    return step_text("pages", i + 1, len(pages), int(pages[i]) + 1, ps.page_count)
 
 
 def ready_formats() -> list:

@@ -69,6 +69,7 @@ class ConvertMixin:
         from viewer import convert
         from viewer.text_word import snapshot_fixes
         from viewer.twoup import MergeCancelled
+        from viewer.progress_text import pad_count
         fixes = snapshot_fixes()
         forced_all = getattr(self, "_text_force_ocr", None) or set()
         results = []                                    # (원본, 결과|None, 알림|None)
@@ -78,11 +79,14 @@ class ConvertMixin:
                 name = Path(src).name
                 forced = {int(p) for (f, p) in forced_all if str(f) == str(src)}
 
-                def prog(done, total, label, _i=i, _name=name):
-                    # 여러 파일이면 파일 단위로 나눈 칸 안에서 나아간다
+                head = (name if len(files) == 1
+                        else tr('파일 {count} · {name}').format(count=pad_count(i + 1, len(files)), name=name))
+
+                def prog(done, total, label, _i=i, _head=head):
+                    # 여러 파일이면 파일 단위로 나눈 칸 안에서 나아간다 — 이 척도는 막대에만(형식 변환 SOT §5, 261026-2)
                     total = max(1, int(total))
                     return progress(_i * 1000 + int(1000 * done / total), len(files) * 1000,
-                                    f"{_name}  {label}".strip())
+                                    f"{_head}\n{label}" if label else _head)
                 try:
                     out = convert.run(src, key, pages, fixes=fixes, forced_pages=forced, progress=prog)
                     results.append((src, out, None))
@@ -92,7 +96,7 @@ class ConvertMixin:
                     results.append((src, None, tr("표가 없습니다")))
                 except Exception as e:                 # noqa: BLE001 — 한 파일 실패가 일괄을 멈추지 않게
                     results.append((src, None, str(e)))
-        res = self._run_merge_job(_job, tr("변환"))
+        res = self._run_merge_job(_job, tr("변환"), counts=False)
         if res.get("cancelled"):
             self.status.showMessage(tr("변환을 취소했습니다 — 만들던 파일은 지웠습니다."), 5000)
             return False

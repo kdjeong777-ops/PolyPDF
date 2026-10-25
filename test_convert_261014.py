@@ -166,8 +166,9 @@ try:
     # ── I. 메뉴 넷 ────────────────────────────────────────────────
     want_fmt = [f.label for f in convert.ready_formats()]          # 다 만든 형식이 늘면 함께 는다
     # 261017-12(형식 변환 SOT §2.1, 사용자 지시): Word 셋은 붙어 있고 'Word (Microsoft Word 사용)' 은 '모양 그대로' 바로 아래
+    # 261026-2: '모양 그대로' 가 위(차례 자체는 test_convert_progress_261026 A)
     _keys = [f.key for f in convert.FORMATS]
-    chk(_keys[:3] == ["docx_edit", "docx_shape", "docx_word"], "I 형식 차례 — Word 셋이 붙어 있다", str(_keys[:4]))
+    chk(_keys[:3] == ["docx_shape", "docx_word", "docx_edit"], "I 형식 차례 — Word 셋이 붙어 있다", str(_keys[:4]))
     chk(mw.act_export.text() == "변환..." and mw.act_export.menu() is None,
         "I 파일 메뉴 '변환...' — 하위 메뉴 없이 창(261014-28, 261025-5 이름)")
     chk(mw.act_export.iconText() == "변환", "I 모음·파일·도구 탭 '변환' 단추(261024-1 — 메뉴 액션의 짧은 이름, 261025-5)")

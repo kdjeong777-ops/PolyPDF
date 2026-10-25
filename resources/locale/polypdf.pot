@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-25 16:33+0900\n"
+"POT-Creation-Date: 2026-10-26 04:06+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -273,9 +273,10 @@ msgstr ""
 msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."
 msgstr ""
 
-#: viewer/app.py viewer/edit_controller.py viewer/jobs_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/thumbs_list.py
+#: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
+#: viewer/jobs_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/thumbs_list.py
 msgid "저장"
 msgstr ""
 
@@ -2987,7 +2988,27 @@ msgid "압축한 파일: {n}개"
 msgstr ""
 
 #: viewer/convert/__init__.py
-msgid "Word (편집 가능)"
+msgid "쪽 변환"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "쪽 분석"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "Word 쓰기"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "OCR 글자층"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "머리말·꼬리말 찾기"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "Word 로 변환"
 msgstr ""
 
 #: viewer/convert/__init__.py
@@ -2999,11 +3020,15 @@ msgid "Word (Microsoft Word 사용)"
 msgstr ""
 
 #: viewer/convert/__init__.py
-msgid "한글 HWPX (편집 가능)"
+msgid "Word (편집 가능)"
 msgstr ""
 
 #: viewer/convert/__init__.py
 msgid "한글 HWPX (모양 그대로)"
+msgstr ""
+
+#: viewer/convert/__init__.py
+msgid "한글 HWPX (편집 가능)"
 msgstr ""
 
 #: viewer/convert/__init__.py
@@ -3016,6 +3041,11 @@ msgstr ""
 
 #: viewer/convert/__init__.py
 msgid "이미지 (PNG)"
+msgstr ""
+
+#: viewer/convert/__init__.py
+#, python-brace-format
+msgid "원본 {page}쪽"
 msgstr ""
 
 #: viewer/convert/proc.py
@@ -3064,6 +3094,11 @@ msgstr ""
 
 #: viewer/convert_controller.py
 msgid "폴더를 열까요?"
+msgstr ""
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "파일 {count} · {name}"
 msgstr ""
 
 #: viewer/convert_controller.py

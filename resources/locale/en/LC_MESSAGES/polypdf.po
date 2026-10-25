@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-25 16:33+0900\n"
+"POT-Creation-Date: 2026-10-26 04:06+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -272,9 +272,10 @@ msgstr "Save As..."
 msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."
 msgstr "Save bookmarks, annotations and page edits to <original>_edited.pdf."
 
-#: viewer/app.py viewer/edit_controller.py viewer/jobs_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/thumbs_list.py
+#: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
+#: viewer/jobs_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/thumbs_list.py
 msgid "저장"
 msgstr "Save"
 
@@ -3104,8 +3105,28 @@ msgid "압축한 파일: {n}개"
 msgstr "Compressed files: {n}"
 
 #: viewer/convert/__init__.py
-msgid "Word (편집 가능)"
-msgstr "Word (editable)"
+msgid "쪽 변환"
+msgstr "Converting page"
+
+#: viewer/convert/__init__.py
+msgid "쪽 분석"
+msgstr "Analyzing page"
+
+#: viewer/convert/__init__.py
+msgid "Word 쓰기"
+msgstr "Writing Word"
+
+#: viewer/convert/__init__.py
+msgid "OCR 글자층"
+msgstr "OCR text layer"
+
+#: viewer/convert/__init__.py
+msgid "머리말·꼬리말 찾기"
+msgstr "Finding headers and footers"
+
+#: viewer/convert/__init__.py
+msgid "Word 로 변환"
+msgstr "Converting with Word"
 
 #: viewer/convert/__init__.py
 msgid "Word (모양 그대로)"
@@ -3116,12 +3137,16 @@ msgid "Word (Microsoft Word 사용)"
 msgstr "Word (using Microsoft Word)"
 
 #: viewer/convert/__init__.py
-msgid "한글 HWPX (편집 가능)"
-msgstr "Hangul HWPX (editable)"
+msgid "Word (편집 가능)"
+msgstr "Word (editable)"
 
 #: viewer/convert/__init__.py
 msgid "한글 HWPX (모양 그대로)"
 msgstr "Hangul HWPX (keep appearance)"
+
+#: viewer/convert/__init__.py
+msgid "한글 HWPX (편집 가능)"
+msgstr "Hangul HWPX (editable)"
 
 #: viewer/convert/__init__.py
 msgid "PowerPoint (모양 그대로)"
@@ -3134,6 +3159,11 @@ msgstr "Excel (tables)"
 #: viewer/convert/__init__.py
 msgid "이미지 (PNG)"
 msgstr "Images (PNG)"
+
+#: viewer/convert/__init__.py
+#, python-brace-format
+msgid "원본 {page}쪽"
+msgstr "source p.{page}"
 
 #: viewer/convert/proc.py
 msgid "변환 프로세스를 띄우지 못했습니다"
@@ -3182,6 +3212,11 @@ msgstr "Converted {ok} · failed {bad}"
 #: viewer/convert_controller.py
 msgid "폴더를 열까요?"
 msgstr "Open the folder?"
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "파일 {count} · {name}"
+msgstr "File {count} · {name}"
 
 #: viewer/convert_controller.py
 msgid "표가 없습니다"

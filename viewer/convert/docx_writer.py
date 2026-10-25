@@ -10,6 +10,7 @@ import io
 from pathlib import Path
 
 from viewer.convert import layout
+from viewer.convert import page_step, step_text  # 진행 창 글(형식 변환 SOT §5, 261026-2)
 
 TITLE_STYLE = "Heading 1"      # Word 기본 서식 이름(문서 안의 스타일 키 — 화면 문구가 아니다)
 TABLE_STYLE = "Table Grid"
@@ -42,7 +43,7 @@ def write_docx_edit(ps, pages, dst: Path, tick) -> None:
 
     per_page = {}
     for i, pg in enumerate(pages):
-        tick(i, len(pages), f"p.{pg + 1}")
+        tick(i, len(pages), page_step(ps, pages, i))
         if i:
             para().add_run().add_break(WD_BREAK.PAGE)
         for b in layout.page_blocks(ps, pg, join=True, edges=per_page.setdefault(pg, [])):
@@ -76,7 +77,7 @@ def write_docx_edit(ps, pages, dst: Path, tick) -> None:
                     continue                             # Word 가 못 받는 그림 형식 — 건너뛴다
     _header_footer(out, sec, layout.edge_plan(per_page))
     set_hf_distance(sec, per_page)
-    tick(len(pages), len(pages), "")
+    tick(len(pages), len(pages), step_text("save"))
     out.save(str(dst))
 
 
