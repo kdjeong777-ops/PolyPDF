@@ -124,5 +124,28 @@ src = (ROOT / "scripts" / "release_test.py").read_text(encoding="utf-8")
 chk('not rec.get("overlapped")' in src.split("def main")[1].split("save_baseline(rec")[0],
     "I 겹친 시험은 기준점을 옮기지 않는다(save_baseline 앞의 조건)")
 
+# J. 261025-12 보완(사용자 결정): 판정은 다른 무거운 프로세스로만 — 평소 부하(이 PC 37% 안팎)로 '보류' 하지 않는다.
+#   실제 값: 설치 시험 2120 시작 전 45.7%·2201 46.8%, 대상마다 다른 무거운 프로세스 0 → 종전 규칙(40%)은 둘 다 보류(수정 전 실패).
+#   빌드 시험 1607 은 다른 세션의 검사가 함께 돌았다 → 다른 python 이 한 코어 가까이 → 보류여야 한다.
+_busy_orig = overlap.system_busy_pct
+try:
+    for name, busy in (("2120", 45.7), ("2201", 46.8)):
+        overlap.system_busy_pct = lambda sec=1.0, b=busy: b
+        w = overlap.Watch(root=20)
+        w._others = lambda: {}
+        w.start()
+        w.check("T1"); w.check("T6")
+        chk(not w.overlapped, "J 설치 시험 %s(시작 전 %.1f%%, 다른 무거운 프로세스 없음)는 보류가 아니다" % (name, busy), w.events)
+    overlap.system_busy_pct = lambda sec=1.0: 13.3
+    w = overlap.Watch(root=20)
+    w._others = lambda: {30: ("python.exe", 0.0)}
+    w.start()
+    w._last = (_time.time() - 60, {30: ("python.exe", 0.0)})
+    w._others = lambda: {30: ("python.exe", 55.0)}             # 60초에 55초 — 다른 세션의 검사
+    chk(w.check("T5") and w.overlapped, "J 빌드 시험 1607 꼴(다른 python 이 한 코어 가까이)은 보류")
+    chk(not hasattr(overlap, "CPU_BUSY_PCT"), "J 시스템 CPU 한도 상수가 없다(판정에 쓰지 않는다)")
+finally:
+    overlap.system_busy_pct = _busy_orig
+
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)

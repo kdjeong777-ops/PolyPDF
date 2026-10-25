@@ -6,9 +6,12 @@
 그래서 측정 도구(release_test.py build/install · load_test.py · soak_test.py)는 시작부터 끝까지 이 감시를 두고,
 겹쳤으면 판정을 '보류' 로 적고 기준점을 옮기지 않는다.
 
-- **다른 무거운 프로세스**: 이름이 `HEAVY` 인 것 중 이 측정의 프로세스 나무(자신·조상·자손 — 잰 앱과 그 도우미) 밖의 것.
-  지난 점검 뒤 쓴 CPU 시간이 경과 시간의 `OVERLAP_CORES` 배를 넘으면 겹침.
-- **시스템 CPU**: 측정 **시작 전** 1초 동안 `CPU_BUSY_PCT` 를 넘으면 겹침(시작 뒤에는 잰 앱이 쓰므로 견주지 않는다).
+- **판정은 다른 무거운 프로세스로만**: 이름이 `HEAVY` 인 것 중 이 측정의 프로세스 나무(자신·조상·자손 — 잰 앱과 그 도우미) 밖의 것.
+  지난 점검 뒤 쓴 CPU 시간이 경과 시간의 `OVERLAP_CORES` 배를 넘으면 겹침. 측정을 실제로 흔드는 것은 다른 검사·빌드·측정이다.
+- **시스템 CPU 는 적기만 한다**(261025-12 보완): 측정 시작 전 1초의 사용률. 종전에는 `CPU_BUSY_PCT`(40%)를 넘으면 겹침으로 봤는데,
+  이 PC 의 **평소 부하가 37% 안팎**(Claude 앱 여러 세션·메신저 등)이라 다른 시험이 없는데도 설치 시험 2120·2201 이 '보류' 됐다
+  (시작 전 46%·47%, 대상마다 본 다른 무거운 프로세스는 0). 평소 부하는 PC 마다 다르고 측정 내내 비슷해 견줄 때 상쇄된다.
+  백신(MsMpEng)이 설치 직후 새 파일을 읽는 것도 환경이다(릴리스 SOT §4.3 의 6) — `HEAVY` 에 넣지 않는다.
 """
 import ctypes
 import ctypes.wintypes as wt
@@ -16,8 +19,7 @@ import os
 import time
 
 HEAVY = {"python.exe", "pythonw.exe", "polypdf.exe", "pyinstaller.exe", "iscc.exe", "tesseract.exe", "py-spy.exe"}
-OVERLAP_CORES = 0.3        # 다른 무거운 프로세스들이 점검 사이에 평균 이만큼(코어 수) 넘게 쓰면 겹침
-CPU_BUSY_PCT = 40          # 시작 전 시스템 CPU 사용률(%) — 넘으면 겹침
+OVERLAP_CORES = 0.3        # 다른 무거운 프로세스들이 점검 사이에 평균 이만큼(코어 수) 넘게 쓰면 겹침 — 판정 기준은 이것 하나
 
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 k32.CreateToolhelp32Snapshot.restype = wt.HANDLE
@@ -116,11 +118,8 @@ class Watch:
         return {pid: (name, _cpu_s(pid)) for pid, _pp, name in ps if name.lower() in HEAVY and pid not in mine}
 
     def start(self) -> "Watch":
-        self.start_busy = system_busy_pct()
-        o = self._others()
-        if self.start_busy > CPU_BUSY_PCT:
-            self.events.append(("시작 전", "시스템 CPU %.0f%% (한도 %d%%)" % (self.start_busy, CPU_BUSY_PCT)))
-        self._last = (time.time(), o)
+        self.start_busy = system_busy_pct()          # 적기만 한다 — 평소 부하는 PC 마다 다르다(위 설명)
+        self._last = (time.time(), self._others())
         return self
 
     def check(self, label: str) -> bool:
@@ -150,7 +149,8 @@ class Watch:
         return bool(self.events)
 
     def lines(self) -> list:
-        head = "- 겹침 감시(릴리스 SOT §4.3 의 8): 시작 전 시스템 CPU %s%%" % (self.start_busy if self.start_busy is not None else "?")
+        head = "- 겹침 감시(릴리스 SOT §4.3 의 8): 시작 전 시스템 CPU %s%%(참고 — 판정은 다른 무거운 프로세스로만)" % (
+            self.start_busy if self.start_busy is not None else "?")
         if not self.events:
             return [head + " · 다른 무거운 작업 없음"]
         return [head + " · **겹침 %d번 — 판정 보류, 기준점을 옮기지 않는다**" % len(self.events)] + \
