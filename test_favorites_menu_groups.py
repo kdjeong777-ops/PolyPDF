@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-"""261008-12: 즐겨찾기 메뉴 — 폴더와 파일을 별도 그룹으로, 즐겨찾기 폴더 밑에 즐겨찾기 파일.
+"""261008-12 → 261025-1(디자인 SOT §2.9.5, 사용자 지시·결정): `즐겨찾기` 탭.
 
-사용자 요청: "즐겨찾기 메뉴에 즐겨찾기한 폴더와 파일을 별도의 그룹으로 구분해.
-즐겨찾기 폴더 그룹 밑에 즐겨찾기 파일 그룹을 구성해"
+종전 결함(사용자 보고 '즐겨찾기 폴더 드롭다운이 작동하지 않음'): 메뉴의 '눌리지 않는 제목 줄' 이 탭 세부 줄에서
+꺼진 단추가 되어 목록이 펼쳐지지 않았다. 수정 전 코드로 A 가 실패한다.
 
-A. 등록 순서가 섞여 있어도 '즐겨찾기 폴더' → '즐겨찾기 파일' → '즐겨찾기 검색어' 순 · 그룹 안은 등록 순서
-B. 그룹 제목은 눌리지 않는다 · 항목이 없는 그룹은 제목도 없다 · kind 없는 옛 항목은 폴더로
-C. 파일 그룹 항목을 누르면 그 파일이 열린다 · 없는 대상은 '(없음)' 으로 꺼진다
-D. 즐겨찾기 관리 창도 같은 묶음으로 보이고, 순서는 같은 종류 안에서만 바뀐다(드래그로 넘겨도 저장은 그룹 순서)
-E. 파일 즐겨찾기 등록 창의 종류가 '📄 파일' 로 보인다(종전 '📁 폴더')
+A. 세부 줄 차례: 최근 폴더▾ · 등록 폴더▾ · 폴더 단추 · 최근 파일▾ | 등록 파일▾ · 파일 단추 · 등록 검색어▾ | 기타▾ | 추가 셋 · 항목 관리.
+   묶음 단추는 **켜져 있고 메뉴를 갖는다**. 파일 탭에는 최근 폴더·최근 파일이 없다.
+B. 드롭다운: 종류별·등록 순서·kind 없는 옛 항목은 폴더·마지막 '항목 관리...'·빈 목록은 '(등록된 항목 없음)'
+C. 개별 단추: 폴더·파일 앞 5개, 글은 요약 이름(short, 없으면 가운데 줄임) — 단추를 **눌러** 파일이 열린다
+D. 목록을 만들 때 있는지 보지 않는다(없는 파일 항목도 켜짐) — 누르면 알린다(응답성 SOT §5)
+E. 기타: 한국어+키가 있는 구역만, 하나도 없으면 단추 숨김 · 항목 관리 창은 꺼진 종류의 탭이 없다
+F. 항목 관리 창: 탭 안 순서·단추 이름 고침 → 저장 순서·요약 이름 반영
+G. 파일 즐겨찾기 등록 창의 종류가 '📄 파일'(261008-12, 실제 _add_file_favorite)
 """
 import os, sys, faulthandler, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -17,9 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 faulthandler.dump_traceback_later(180, exit=True)
 
 from pathlib import Path
-from PyQt6.QtCore import QStandardPaths
+from PyQt6.QtCore import QStandardPaths, Qt
 QStandardPaths.setTestModeEnabled(True)
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
 fails = []
@@ -40,71 +44,123 @@ try:
     shutil.copy(_fx.text_pdf(), f1); shutil.copy(_fx.text_pdf(), f2)
 
     mw = MainWindow()
-    mw._law_favorites = []; mw._kcsc_favorites = []
-    for k in ("_kipo_favorites",):
-        if hasattr(mw, k):
-            setattr(mw, k, [])
+    mw.resize(1600, 900); mw.show(); QTest.qWait(100)
+    mw._law_favorites = [{"name": "도로법", "kind_label": "법률"}]
+    mw._kcsc_favorites = [{"name": "KDS 14", "category": "설계"}]
+    mw._kipo_favorites = []
     mw._favorites = [                                   # 일부러 섞어서 등록
         {"kind": "file", "name": "파일1", "file": str(f1), "folder": str(d1)},
         {"kind": "folder", "name": "폴더1", "folder": str(d1)},
         {"kind": "search", "name": "검색", "folder": str(d1), "query": "가"},
-        {"kind": "file", "name": "파일2", "file": str(f2), "folder": str(d2)},
+        {"kind": "file", "name": "아주긴파일이름입니다정말로긴", "file": str(f2), "folder": str(d2), "short": "짧은2"},
         {"name": "옛폴더", "folder": str(d2)},             # kind 없음 → 폴더
         {"kind": "file", "name": "없는파일", "file": str(root / "x.pdf")},
     ]
-    mw._refresh_favorites_menu()
-    acts = mw.menu_favorites.actions()
-    texts = [a.text() for a in acts if not a.isSeparator()]
-    i0 = texts.index("즐겨찾기 관리...") + 1
-    got = texts[i0:i0 + 10]
-    want = ["즐겨찾기 폴더", "📁 폴더1", "📁 옛폴더",
-            "즐겨찾기 파일", "📄 파일1", "📄 파일2", "📄 없는파일  (없음)",
-            "즐겨찾기 검색어", "🔍 검색"]
-    chk(got[:len(want)] == want, "A 폴더 → 파일 → 검색어 그룹, 그룹 안은 등록 순서", str(got))
-    by = {a.text(): a for a in acts}
-    chk(all(not by[t].isEnabled() for t in ("즐겨찾기 폴더", "즐겨찾기 파일", "즐겨찾기 검색어")),
-        "B 그룹 제목은 눌리지 않는다")
-    seps = [i for i, a in enumerate(acts) if a.isSeparator()]
-    hdr_idx = [i for i, a in enumerate(acts) if a.text() in ("즐겨찾기 폴더", "즐겨찾기 파일", "즐겨찾기 검색어")]
-    chk(all(h - 1 in seps for h in hdr_idx), "B 그룹마다 구분선으로 나뉜다")
-    chk(not by["📄 없는파일  (없음)"].isEnabled(), "C 없는 대상은 '(없음)' 으로 꺼진다")
+    mw._prefs.update({"law_oc": "", "kcsc_key": "", "kipo_signkey": ""})
+    mw._gate_api_dependent_ui(mw._prefs)                 # 키 없음 → 기타 숨김(그리고 목록을 다시 넣는다)
+    QTest.qWait(80)
 
-    mw._favorites = [{"kind": "file", "name": "파일2", "file": str(f2), "folder": str(d2)}]
-    mw._refresh_favorites_menu()
-    texts = [a.text() for a in mw.menu_favorites.actions()]
-    chk("즐겨찾기 폴더" not in texts and "즐겨찾기 파일" in texts, "B 항목이 없는 그룹은 제목도 없다", str(texts))
-    [a for a in mw.menu_favorites.actions() if a.text() == "📄 파일2"][0].trigger()
-    app.processEvents()
+    mw._ribbon.select("fav"); QTest.qWait(50)
+    row = mw._ribbon.row("fav")
+    btns = row.buttons()
+    texts = [b.text() for b in btns]
+    want = ["최근 폴더", "등록 폴더", "폴더1", "옛폴더", "최근 파일",
+            "등록 파일", "파일1", "짧은2", "없는파일", "등록 검색어",
+            "현재 폴더 추가", "현재 파일 추가", "현재 검색어 추가", "항목 관리"]
+    chk(texts == want, "A 즐겨찾기 탭 세부 줄 차례(키 없음 → 기타 숨김)", str(texts))
+    by = {b.text(): b for b in btns}
+    for t, menu in (("등록 폴더", mw.menu_fav_folders), ("등록 파일", mw.menu_fav_files),
+                    ("등록 검색어", mw.menu_fav_searches), ("최근 폴더", mw.menu_recent)):
+        b = by.get(t)
+        chk(b is not None and b.isEnabled() and b.defaultAction().menu() is menu,
+            f"A '{t}' 은 켜진 ▾ 단추(누르면 목록이 펼쳐진다)")
+    chk(len(row.groups()) == 3, "A 그룹 바탕 셋(기타가 숨으면 겹친 구분선도 숨는다)", str([[w.text() for w in g] for g in row.groups()]))
+    mw._ribbon.select("file"); QTest.qWait(50)
+    ftexts = [b.text() for b in mw._ribbon.row("file").buttons()]
+    mw._ribbon.select("fav"); QTest.qWait(50)
+    chk("최근 폴더" not in ftexts and "최근 파일" not in ftexts, "A 파일 탭에서는 최근 폴더·최근 파일을 뺐다", str(ftexts))
+
+    # B 드롭다운
+    items = lambda m: [a.text() for a in m.actions() if not a.isSeparator()]
+    chk(items(mw.menu_fav_folders) == ["📁 폴더1", "📁 옛폴더", "항목 관리..."], "B 등록 폴더 목록(옛 항목은 폴더) + 항목 관리",
+        str(items(mw.menu_fav_folders)))
+    chk(items(mw.menu_fav_files) == ["📄 파일1", "📄 아주긴파일이름입니다정말로긴", "📄 없는파일", "항목 관리..."],
+        "B 등록 파일 목록은 등록 순서", str(items(mw.menu_fav_files)))
+    chk(items(mw.menu_fav_searches) == ["🔍 검색", "항목 관리..."], "B 등록 검색어", str(items(mw.menu_fav_searches)))
+
+    # D 있는지 보지 않는다 — 없는 파일도 켜짐, 누르면 알린다
+    a_missing = [a for a in mw.menu_fav_files.actions() if a.text() == "📄 없는파일"][0]
+    chk(a_missing.isEnabled(), "D 목록을 만들 때 있는지 보지 않는다(없는 파일 항목도 켜짐)")
+    warned = []
+    orig_warn = QMessageBox.warning
+    QMessageBox.warning = lambda *a, **k: (warned.append(a[2] if len(a) > 2 else ""), QMessageBox.StandardButton.Ok)[1]
+    try:
+        QTest.mouseClick(by["없는파일"], Qt.MouseButton.LeftButton); QTest.qWait(50)
+    finally:
+        QMessageBox.warning = orig_warn
+    chk(bool(warned), "D 없는 대상 단추를 누르면 알린다", str(warned))
+
+    # C 개별 단추 — 눌러서 열기, 요약 이름
+    QTest.qWait(80)
+    b2 = {b.text(): b for b in mw._ribbon.row("fav").buttons()}["짧은2"]
+    QTest.mouseClick(b2, Qt.MouseButton.LeftButton); QTest.qWait(300)
     cur = mw.main_view.current_file()
-    chk(cur and Path(str(cur)).name == "파일2.pdf", "C 파일 그룹 항목을 누르면 그 파일이 열린다", str(cur))
+    chk(cur and Path(str(cur)).name == "파일2.pdf", "C 파일 단추를 누르면 그 파일이 열린다", str(cur))
+    from viewer.widgets.favorites_dialog import middle_ellipsis, short_label, SHORT_MAX, BUTTONS_MAX
+    chk(short_label({"name": "아주긴파일이름입니다정말로긴"}) == middle_ellipsis("아주긴파일이름입니다정말로긴")
+        and len(middle_ellipsis("아주긴파일이름입니다정말로긴")) == SHORT_MAX and "…" in middle_ellipsis("아주긴파일이름입니다정말로긴"),
+        "C 요약 이름이 없으면 가운데를 줄인다", middle_ellipsis("아주긴파일이름입니다정말로긴"))
+    mw._favorites = [{"kind": "folder", "name": f"D{i}", "folder": str(d1)} for i in range(7)]
+    mw._refresh_favorites_menu(); QTest.qWait(80)
+    dt = [b.text() for b in mw._ribbon.row("fav").buttons() if b.text().startswith("D")]
+    chk(dt == [f"D{i}" for i in range(BUTTONS_MAX)], "C 폴더 단추는 목록 앞 5개", str(dt))
+    chk(items(mw.menu_fav_files) == ["(등록된 항목 없음)", "항목 관리..."], "B 빈 목록은 '(등록된 항목 없음)'", str(items(mw.menu_fav_files)))
 
-    # ── D 관리 창도 메뉴와 같은 묶음 · 순서는 같은 종류 안에서만 ──
-    from viewer.widgets.favorites_dialog import FavoritesDialog, AddFavoriteDialog
-    mixed = [{"kind": "file", "name": "F1", "file": str(f1)}, {"kind": "folder", "name": "D1", "folder": str(d1)},
-             {"kind": "search", "name": "S1", "folder": str(d1), "query": "가"},
-             {"kind": "file", "name": "F2", "file": str(f2)}, {"name": "D2", "folder": str(d2)}]
-    dlg = FavoritesDialog(mixed)
-    rows = lambda: [dlg.list.item(i).text() for i in range(dlg.list.count())]
-    chk(rows() == ["📁 D1", "📁 D2", "📄 F1", "📄 F2", "🔍 S1"], "D 관리 창이 폴더 → 파일 → 검색어로 묶여 보인다", str(rows()))
-    dlg.list.setCurrentRow(1); dlg._move(+1)                      # 폴더 끝 → 파일로 넘기려 함
-    chk(rows()[1:3] == ["📁 D2", "📄 F1"], "D ↓ 는 그룹 경계를 넘지 않는다", str(rows()))
-    dlg.list.setCurrentRow(3); dlg._move(-1)                      # F2 를 F1 위로
-    chk(rows()[2:4] == ["📄 F2", "📄 F1"], "D 같은 종류 안에서는 옮겨진다", str(rows()))
-    it = dlg.list.takeItem(4); dlg.list.insertItem(0, it)         # 드래그로 검색어를 맨 위로 옮긴 것과 같다
-    chk([f["name"] for f in dlg.result_favorites()] == ["D1", "D2", "F2", "F1", "S1"],
-        "D 드래그로 그룹을 넘겨도 저장은 그룹 순서(그룹 안 순서는 유지)")
+    # E 기타 — 법령 키만 있으면 법령 구역만
+    mw._prefs.update({"law_oc": "x"})
+    mw._gate_api_dependent_ui(mw._prefs); QTest.qWait(80)
+    chk(mw.menu_fav_other.menuAction().isVisible(), "E 키가 있으면 기타가 보인다")
+    ot = [a.text() for a in mw.menu_fav_other.actions() if not a.isSeparator() or a.text()]
+    chk(ot == ["법령·고시", "⚖ 도로법  (법률)", "항목 관리..."], "E 꺼진 구역(건설기준·특허)은 뺀다", str(ot))
+    seen_kinds = []
+    from viewer.widgets import favorites_dialog as _fd
+    orig_exec = _fd.FavoritesManagerDialog.exec
+    _fd.FavoritesManagerDialog.exec = lambda self: (seen_kinds.extend(self.kinds()), 0)[1]
+    try:
+        mw._manage_kcsc_favorites()                      # 건설기준 창의 '즐겨찾기 관리' — 키가 없어 탭 없음
+    finally:
+        _fd.FavoritesManagerDialog.exec = orig_exec
+    chk(seen_kinds == ["folder", "file", "search", "law"], "E 항목 관리 창은 꺼진 종류의 탭이 없다", str(seen_kinds))
+
+    # F 항목 관리 창 — 탭 안 순서·단추 이름
+    from viewer.widgets.favorites_dialog import FavoritesManagerDialog
+    dlg = FavoritesManagerDialog({"folder": [{"kind": "folder", "name": "A", "folder": "a"},
+                                             {"kind": "folder", "name": "B", "folder": "b"}],
+                                  "file": [{"kind": "file", "name": "F", "file": "f"}], "search": []}, "file")
+    chk(dlg.tabs.currentWidget() is dlg.page("file"), "F 드롭다운의 항목 관리는 그 종류의 탭으로 연다")
+    pg = dlg.page("folder"); pg.list.setCurrentRow(1); pg._move(-1)
+    from PyQt6.QtWidgets import QInputDialog
+    orig_get = QInputDialog.getText
+    QInputDialog.getText = staticmethod(lambda *a, **k: ("단추B", True))
+    try:
+        pg._on_short(pg.list.item(0))
+    finally:
+        QInputDialog.getText = orig_get
+    res = dlg.result("folder")
+    chk([f["name"] for f in res] == ["B", "A"] and res[0].get("short") == "단추B", "F 순서·단추 이름이 결과에", str(res))
     dlg.done(0)
 
-    # ── E 파일 즐겨찾기 등록 창의 종류 표시 (종전 '📁 폴더') — 실제 _add_file_favorite 경로 ──
+    # G 파일 즐겨찾기 등록 창의 종류 표시 — 실제 _add_file_favorite 경로
+    from viewer.widgets.favorites_dialog import AddFavoriteDialog
     from PyQt6.QtWidgets import QLabel
     seen = []
-    orig_exec = AddFavoriteDialog.exec
+    orig_exec2 = AddFavoriteDialog.exec
     AddFavoriteDialog.exec = lambda self: (seen.extend(l.text() for l in self.findChildren(QLabel)), 0)[1]
     try:
         mw._add_file_favorite(str(f1))
     finally:
-        AddFavoriteDialog.exec = orig_exec
-    chk("종류: 📄 파일" in seen, "E 파일 즐겨찾기 등록 창이 '📄 파일' 로 보인다", str(seen))
+        AddFavoriteDialog.exec = orig_exec2
+    chk("종류: 📄 파일" in seen, "G 파일 즐겨찾기 등록 창이 '📄 파일' 로 보인다", str(seen))
 except Exception:
     import traceback
     traceback.print_exc()

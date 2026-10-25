@@ -1478,7 +1478,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.widgets.ribbon import cmd_id
         cat = []
         for m in (getattr(self, "_tab_menus", {}) or {}).values():
-            ids = [cmd_id(a) for a in m.actions() if cmd_id(a)]
+            ids = []
+            for a in m.actions():
+                if cmd_id(a):
+                    ids.append(cmd_id(a))
+                if a.menu() is not None:         # 261025-1: 하위 묶음 안의 명령(도구 `등록·설치` 의 셋)도
+                    ids += [cmd_id(b) for b in a.menu().actions() if cmd_id(b)]
             if ids:
                 cat.append((m.title(), ids))
         labels = {cid: a.iconText() for cid, a in (getattr(self, "_cmds", {}) or {}).items()}
@@ -1623,13 +1628,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_print.triggered.connect(self.action_print)
         m_file.addAction(a_print)
 
-        # 260603: 최근 폴더를 '책갈피 자동 생성' 위로 이동
-        m_file.addSeparator()
+        # 261025-1(디자인 SOT §2.9.5, 사용자 지시): 최근 폴더·최근 파일은 `즐겨찾기` 탭으로 옮겼다(아래)
         self.menu_recent = QMenu(tr("최근 폴더"), self)
-        m_file.addMenu(self.menu_recent)
-        # 261008-11(사용자 요청): 최근 폴더 밑에 최근 파일 — 파일 열기·여러 파일 열기로 연 PDF
+        # 261008-11(사용자 요청): 파일 열기·여러 파일 열기로 연 PDF
         self.menu_recent_files = QMenu(tr("최근 파일"), self)
-        m_file.addMenu(self.menu_recent_files)
 
         # 260618-8: (구 '파일' 메뉴의 도구 항목들은 '도구' 메뉴 상부로 이동 — 아래 _build_tools_menu)
         m_file.addSeparator()
@@ -1647,6 +1649,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # v1.6.1 F1: 즐겨찾기 메뉴 (파일 ↔ 보기 사이)
         self.menu_favorites = bar.addMenu(tr("즐겨찾기(&V)"))
+        self._build_favorites_menu()
         self._refresh_favorites_menu()
 
         # 260618-8: 보기 메뉴 — 패널 '뷰어' 버튼(1단/2단/검색/단어장/스크린샷/법령·고시/발표보기)과 동일 동작
@@ -1655,6 +1658,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   키라 번역하면 게이팅이 항목을 못 찾았다. 화면 이름은 tr() 로만 쓴다.
         self._view_acts = {}
         # 261024-1(디자인 SOT §2.9): 단추 이름·툴팁은 종전 패널 단추 그대로(모음·보기 탭이 이 액션을 보인다)
+        # 261025-1(디자인 SOT §2.9.5, 사용자 지시): 차례 1단…스크린샷 | 법령·고시·특허·건설기준 | 발표보기, 키는 입력 SOT §3.2.1
         for _id, _label, _short, _tip, _slot in (
                 ("single", tr("1단"), None, tr("오른쪽 패널 숨김 (단일 보기)"), self._vm_single),
                 ("split", tr("2단"), None, tr("2단 보기(쪽 맞춤)"), self._vm_split),
@@ -1662,19 +1666,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 ("study", tr("단어장"), None, tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study),
                 ("search", tr("검색"), None, tr("오른쪽 패널 보이기 · 검색 탭"), self._vm_search),
                 ("shot", tr("스크린샷"), None, tr("오른쪽 위 탭 숨김 · 스크린샷 보이기"), self._vm_shot),
-                ("law", tr("법령/고시"), None, tr("법제처 법령·고시 검색·본문 보기"), self._action_law_search),
+                (None, None, None, None, None),
+                ("law", tr("법령·고시"), None, tr("법제처 법령·고시 검색·본문 보기"), self._action_law_search),
+                ("kipo", tr("특허(등록정보)"), tr("특허"), tr("특허청(KIPO) 특허 등록정보 조회"), self._action_kipo_search),
                 ("kcsc", tr("건설기준(KCSC)"), tr("건설기준"), tr("국가건설기준센터(KCSC) KDS·KCS 본문 보기"),
                  self._action_kcsc_search),
-                ("kipo", tr("특허(등록정보)"), tr("특허"), tr("특허청(KIPO) 특허 등록정보 조회"), self._action_kipo_search),
+                (None, None, None, None, None),
                 ("present", tr("발표보기"), None, tr("발표 전체화면 보기"), self._open_presentation)):
+            if _id is None:
+                m_view.addSeparator()
+                continue
             _a = QAction(_label, self)
             _a.setObjectName("view_" + _id)
             _a.triggered.connect(lambda _checked=False, s=_slot: s())
             m_view.addAction(_a)
             self._view_acts[_id] = _a           # 260621-P3: API 키 게이팅용
             self._reg_cmd("view." + _id, _a, short=_short, tip=_tip)
-        # 261017-15(디자인 SOT §2.9.2): 1단↔2단 키는 지금 상태의 **반대** 항목에만 — 메뉴를 열 때 맞춘다
-        m_view.aboutToShow.connect(self._refresh_menu_key_hints)
 
         # 260825: 뷰어 옵션(우클릭) 메뉴를 단축키로 — 보기 메뉴에 노출(단축키 표시) + 설정 등록
         m_view.addSeparator()
@@ -1688,9 +1695,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.act_split.setCheckable(True)
         self.act_split.setChecked(False)
         self.act_split.toggled.connect(self._toggle_split)
-        # 261024-5(SOT 점검, 디자인 SOT §2.9.2): 1단↔2단 '바꾸는 키' 는 지금 상태의 반대 항목에만 — 메뉴는 이제 화면에
-        #   펼쳐지지 않아(메뉴 탭, 261024-1) aboutToShow 로는 안 맞춰진다. 상태가 바뀔 때마다 맞춘다.
-        self.act_split.toggled.connect(lambda _on: self._refresh_menu_key_hints())
         # 260609-4 (D): 발표 보기 (F5) — 메뉴엔 '보기'로, 단축키 유지 위해 창에 등록
         self.act_present = QAction(tr("📽 발표 보기"), self)
         self.act_present.setShortcut("F5")
@@ -1782,10 +1786,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # 💻 시스템 연동 및 설치
         m_tools.addSection(tr("💻 시스템 연동 및 설치"))
-        _act(tr("Windows 기본 PDF 앱으로 등록…"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱 등록"))
-        _act(tr("구성요소 설치(녹화·OCR)…"), self._open_components_installer, "tools.components", tr("구성요소 설치"))
-        _act(tr("가상 프린터(PolyPDF) 설치·제거…"), self._open_vprinter_dialog, "tools.vprinter",   # 261017(가상 프린터 SOT §4.6)
-             tr("가상 프린터"))
+        # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목을 `등록·설치 ▾` 하나로 — 명령 id 는 그대로(모음에 넣은 단추가 남는다)
+        _inst = m_tools.addMenu(tr("등록·설치"))
+        for _t, _s, _cid, _short, _tip in (
+                (tr("기본 PDF 앱 등록…"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱 등록"),
+                 tr("Windows 기본 PDF 앱으로 등록…")),
+                (tr("구성요소 설치…"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
+                 tr("구성요소 설치(녹화·OCR)…")),
+                (tr("가상 프린터 설치·제거…"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
+                 tr("가상 프린터(PolyPDF) 설치·제거…"))):
+            _a = QAction(_t, self)
+            _a.triggered.connect(_s)
+            _inst.addAction(_a)
+            self._reg_cmd(_cid, _a, short=_short, tip=_tip)
+        self._reg_cmd("tools.install", _inst.menuAction())
 
         m_help = bar.addMenu(tr("도움말(&H)"))
         # v1.6.1 G2: 사용법
@@ -1835,7 +1849,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _key, _m in (("file", m_file), ("fav", self.menu_favorites), ("view", m_view),
                          ("tools", m_tools), ("help", m_help)):
             rb.add_tab(_key, _m.title(), _m)
-        self._tab_menus = {"file": m_file, "view": m_view, "tools": m_tools, "help": m_help}
+        self._tab_menus = {"file": m_file, "fav": self.menu_favorites, "view": m_view, "tools": m_tools, "help": m_help}
         # 메뉴 막대를 화면에서 뗐으므로 메뉴 항목에 건 단축키(Ctrl+S 등)는 창에 붙여야 산다 — 보이는 위젯의 액션만 키를 받는다
         self.addActions([a for a in self._cmds.values() if a.menu() is None])
         self._apply_collection()
@@ -1862,7 +1876,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("prev_match",    (tr("이전 매치"), "Shift+F3", tr("탐색"))),
             ("option_menu",   (tr("옵션 메뉴(우클릭)"), "Shift+F10", tr("탐색"))),
             ("rename_item",   (tr("파일·책갈피 이름 변경"), "F2", tr("책갈피창"))),
+            # 261025-1(입력 SOT §3.2.1, 사용자 지시): 보기 탭 차례대로 Ctrl+Shift+1~9. toggle_split 은 이제 2단으로만(사용자 결정) — id 는 저장된 키 때문에 그대로
+            ("view_single",   (tr("1단 보기"), "Ctrl+Shift+1", tr("보기"))),
             ("toggle_split",  (tr("2단 보기"), "Ctrl+Shift+2", tr("보기"))),
+            ("view_text",     (tr("텍스트"), "Ctrl+Shift+3", tr("보기"))),
+            ("view_study",    (tr("단어장"), "Ctrl+Shift+4", tr("보기"))),
+            ("view_search",   (tr("검색"), "Ctrl+Shift+5", tr("보기"))),
+            ("view_shot",     (tr("스크린샷"), "Ctrl+Shift+6", tr("보기"))),
+            ("view_law",      (tr("법령·고시"), "Ctrl+Shift+7", tr("보기"))),
+            ("view_kipo",     (tr("특허"), "Ctrl+Shift+8", tr("보기"))),
+            ("view_kcsc",     (tr("건설기준"), "Ctrl+Shift+9", tr("보기"))),
             ("present",       (tr("발표보기"), "F5", tr("보기"))),
             ("zoom_in",       (tr("확대"), "Ctrl++", tr("보기"))),
             ("zoom_out",      (tr("축소"), "Ctrl+-", tr("보기"))),
@@ -1905,7 +1928,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "save_shots_pdf": ("func", self.action_save_screenshot_pdf),
             "clipboard_save": ("func", self._on_clipboard_save),
             "rename_item": ("func", self._sc_rename_item),
-            "toggle_split": ("func", lambda: self.act_split.toggle()),
+            "view_single": ("func", lambda: self._view_key("single")),
+            "toggle_split": ("func", lambda: self._view_key("split")),
+            "view_text": ("func", lambda: self._view_key("text")),
+            "view_study": ("func", lambda: self._view_key("study")),
+            "view_search": ("func", lambda: self._view_key("search")),
+            "view_shot": ("func", lambda: self._view_key("shot")),
+            "view_law": ("func", lambda: self._view_key("law")),
+            "view_kipo": ("func", lambda: self._view_key("kipo")),
+            "view_kcsc": ("func", lambda: self._view_key("kcsc")),
             "draw_pen_1": ("func", lambda: self._draw_sc_pen(0)),
             "draw_pen_2": ("func", lambda: self._draw_sc_pen(1)),
             "draw_pen_3": ("func", lambda: self._draw_sc_pen(2)),
@@ -1999,13 +2030,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         k = self._sc_key(key) if key in getattr(self, "_sc_defs", {}) else (key or "")
         return text + "\t" + k if k else text
 
+    def _view_key(self, vid: str) -> None:
+        """261025-1(입력 SOT §3.2.1): 보기 탭 키 = 그 단추. 숨겨졌거나 꺼진 단추(한국 전용·키 게이팅)면 아무 일도 하지 않는다."""
+        a = (getattr(self, "_view_acts", {}) or {}).get(vid)
+        if a is not None and a.isVisible() and a.isEnabled():
+            a.trigger()
+
+    _VIEW_KEY_IDS = (("single", "view_single"), ("split", "toggle_split"), ("text", "view_text"),
+                     ("study", "view_study"), ("search", "view_search"), ("shot", "view_shot"),
+                     ("law", "view_law"), ("kipo", "view_kipo"), ("kcsc", "view_kcsc"), ("present", "present"))
+
     def _refresh_menu_key_hints(self) -> None:
-        """메뉴 막대에서 단축키가 다른 곳(창·QShortcut)에 걸린 항목 — Qt 가 저절로 보이지 않는 것만."""
+        """메뉴 막대에서 단축키가 다른 곳(창·QShortcut)에 걸린 항목 — Qt 가 저절로 보이지 않는 것만.
+        261025-1: 보기 탭 키는 항목마다 하는 일이 하나라(입력 SOT §3.2.1) 늘 그 항목에 보인다."""
         va = getattr(self, "_view_acts", {}) or {}
-        # 261017-15(점검): toggle_split 은 **바꾸는** 키라 지금 상태와 같은 항목에 붙이면 다른 일을 한다 — 반대 항목에만
-        split_on = bool(getattr(self, "act_split", None) is not None and self.act_split.isChecked())
-        for vid, sid in (("single", "toggle_split" if split_on else ""), ("split", "" if split_on else "toggle_split"),
-                         ("present", "present")):
+        for vid, sid in self._VIEW_KEY_IDS:
             a = va.get(vid)
             if a is None:
                 continue
@@ -5667,7 +5706,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         menu.addSeparator()
         # ② 보기
         if getattr(self, "_split_on", False):
-            add("single", self._kt(tr("1단 보기"), "toggle_split"))
+            add("single", tr("1단 보기"))      # 261025-1: Ctrl+Shift+1 은 보기 탭 `1단`(오른쪽 창도 숨김) — 하는 일이 달라 키를 보이지 않는다
             add("other", tr("옆 창에 열기"))               # 옛 '1창으로 복사'·'2창으로 복사'
         else:
             add("dual", self._kt(tr("2단 보기"), "toggle_split"))
@@ -7735,15 +7774,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._open_kcsc(fav)
 
     def _manage_kcsc_favorites(self):
-        from viewer.widgets.law_search_dialog import LawFavoritesManager
-        dlg = LawFavoritesManager(self._kcsc_favorites, self)
-        dlg.setWindowTitle(tr("건설기준(KCSC) 즐겨찾기 관리"))
-        if dlg.exec():
-            self._kcsc_favorites = dlg.result_favorites()
-            try:
-                self._save_settings_now()
-            except Exception:
-                pass
+        """261025-1(디자인 SOT §2.9.5): 건설기준 창의 즐겨찾기 관리 → `항목 관리` 창의 그 탭."""
+        self._open_favorites_manager("kcsc")
 
     def _enter_kcsc_layout(self):
         _sp.enter_layout(self, _sp.SPECS['kcsc'])
@@ -7846,15 +7878,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._open_kipo(fav)
 
     def _manage_kipo_favorites(self):
-        from viewer.widgets.law_search_dialog import LawFavoritesManager
-        dlg = LawFavoritesManager(self._kipo_favorites, self)
-        dlg.setWindowTitle(tr("특허 등록정보 즐겨찾기 관리"))
-        if dlg.exec():
-            self._kipo_favorites = dlg.result_favorites()
-            try:
-                self._save_settings_now()
-            except Exception:
-                pass
+        """261025-1(디자인 SOT §2.9.5): 특허 창의 즐겨찾기 관리 → `항목 관리` 창의 그 탭."""
+        self._open_favorites_manager("kipo")
 
     def _add_law_favorite_entry(self, row: dict):
         """260616-6: 법령·고시 항목을 (메인 즐겨찾기와 분리된) 법령 즐겨찾기에 추가."""
@@ -7887,13 +7912,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._open_law(fav)
 
     def _manage_law_favorites(self):
-        """260616-20: 법령·고시 즐겨찾기 관리(이름변경/이동/삭제)."""
-        from viewer.widgets.law_search_dialog import LawFavoritesManager
-        dlg = LawFavoritesManager(self._law_favorites, self)
-        if dlg.exec() == dlg.DialogCode.Accepted:
-            self._law_favorites = dlg.result_favorites()
-            self._refresh_favorites_menu()
-            self._save_settings_now()
+        """261025-1(디자인 SOT §2.9.5): 법령·고시 창의 즐겨찾기 관리 → `항목 관리` 창의 그 탭."""
+        self._open_favorites_manager("law")
 
     def _content_match(self, backward: bool) -> bool:
         """우측 패널 본문 검색 이동(◀▶) — 슬라이드 오버레이가 열려 있으면 그쪽으로. 없으면 소비만."""
@@ -8967,6 +8987,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 if not vis and tabs.currentIndex() == i:
                     tabs.setCurrentWidget(self.text_panel)
                 tabs.setTabVisible(i, vis)
+        # 261025-1(디자인 SOT §2.9.5): 즐겨찾기 `기타` 의 구역도 같은 판정 — 키가 바뀌면 다시 넣는다
+        self._fav_other_gate = {"law": vis and has_law, "kipo": vis and has_kipo, "kcsc": vis and has_kcsc}
+        self._refresh_favorites_menu()
 
     def apply_theme(self, mode: str):
         """260606-13: 화면 스타일 적용 — light/dark/auto(시스템). Fusion+팔레트."""
@@ -9281,102 +9304,130 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         return None
 
+    def _build_favorites_menu(self):
+        """261025-1(디자인 SOT §2.9.5, 사용자 지시): `즐겨찾기` 탭의 뼈대 — 묶음(▾)·추가·관리 액션은 **한 번만** 만든다.
+        목록이 바뀌면 `_refresh_favorites_menu` 가 드롭다운 안과 개별 단추만 다시 넣는다(세부 줄·모음의 단추가 같은 객체로 남는다).
+        종전에는 메뉴를 통째로 비우고 '눌리지 않는 제목 줄' 로 묶었는데, 탭 세부 줄에서 그 제목이 꺼진 단추가 되어 목록이 펼쳐지지 않았다."""
+        m = self.menu_favorites
+        self.menu_fav_folders = QMenu(tr("등록 폴더"), self)
+        self.menu_fav_files = QMenu(tr("등록 파일"), self)
+        self.menu_fav_searches = QMenu(tr("등록 검색어"), self)
+        self.menu_fav_other = QMenu(tr("기타"), self)
+        m.addMenu(self.menu_recent)
+        m.addMenu(self.menu_fav_folders)
+        m.addMenu(self.menu_recent_files)          # 폴더 단추는 이 앞에 끼운다
+        m.addSeparator()
+        m.addMenu(self.menu_fav_files)
+        m.addMenu(self.menu_fav_searches)          # 파일 단추는 이 앞에 끼운다
+        m.addSeparator()
+        m.addMenu(self.menu_fav_other)
+        m.addSeparator()
+        acts = {}
+        for cid, text, slot in (
+                ("fav.add_folder", tr("현재 폴더 추가"), self._add_current_folder_favorite),
+                ("fav.add_file", tr("현재 파일 추가"), self._add_current_file_favorite),
+                ("fav.add_search", tr("현재 검색어 추가"), self._add_current_search_favorite),
+                ("fav.manage", tr("항목 관리"), lambda: self._open_favorites_manager())):
+            a = QAction(text, self)
+            a.triggered.connect(lambda _c=False, s=slot: s())
+            m.addAction(a)
+            acts[cid] = a
+        self._reg_cmd("fav.add_folder", acts["fav.add_folder"], tip=tr("현재 폴더를 즐겨찾기에 추가..."))
+        self._reg_cmd("fav.add_file", acts["fav.add_file"], tip=tr("현재 파일을 즐겨찾기에 추가..."))
+        self._reg_cmd("fav.add_search", acts["fav.add_search"], tip=tr("현재 검색어를 즐겨찾기에 추가..."))
+        self._reg_cmd("fav.manage", acts["fav.manage"], tip=tr("폴더·파일·검색어·법령·고시·특허·건설기준 즐겨찾기를 고칩니다"))
+        for cid, menu in (("file.recent", self.menu_recent), ("fav.folders", self.menu_fav_folders),
+                          ("file.recent_files", self.menu_recent_files), ("fav.files", self.menu_fav_files),
+                          ("fav.searches", self.menu_fav_searches), ("fav.other", self.menu_fav_other)):
+            self._reg_cmd(cid, menu.menuAction())
+        self._fav_btn_acts = []                    # 지금 끼워 둔 개별 단추
+
+    def _fav_other_on(self, kind: str) -> bool:
+        """`기타`·항목 관리의 법령·고시/특허/건설기준 — 보기 탭 단추와 같은 판정(한국 전용 + API 키, 마스터 §11.12).
+        게이팅(`_gate_api_dependent_ui`)이 정한 값을 쓰고, 그 전이면 지금 설정으로 잰다."""
+        gate = getattr(self, "_fav_other_gate", None)
+        if gate is not None:
+            return bool(gate.get(kind))
+        if not korea_only_visible():
+            return False
+        p = getattr(self, "_prefs", {}) or {}
+        key = {"law": "law_oc", "kipo": "kipo_signkey", "kcsc": "kcsc_key"}[kind]
+        return bool(str(p.get(key, "")).strip())
+
+    def _fav_other_list(self, kind: str) -> list:
+        return {"law": self._law_favorites, "kipo": self._kipo_favorites, "kcsc": self._kcsc_favorites}[kind]
+
     def _refresh_favorites_menu(self):
+        """261025-1(디자인 SOT §2.9.5): 드롭다운 안과 개별 단추(폴더·파일 앞 `BUTTONS_MAX` 개)를 다시 넣는다.
+        목록을 만들 때 대상이 있는지 **보지 않는다**(사용자 결정, 응답성 SOT §5) — 누를 때 `_open_favorite` 가 본다."""
         from PyQt6.QtGui import QAction
-        ko_only = korea_only_visible()
-        self.menu_favorites.clear()
-        a_add_folder = QAction(tr("현재 폴더를 즐겨찾기에 추가..."), self)
-        a_add_folder.triggered.connect(self._add_current_folder_favorite)
-        self.menu_favorites.addAction(a_add_folder)
+        from viewer.widgets.favorites_dialog import (BUTTONS_MAX, KIND_PREFIX, OTHER_KINDS, fav_kind,
+                                                     kind_title, other_label, short_label)
+        if getattr(self, "menu_fav_folders", None) is None:
+            return
+        groups = {k: [f for f in self._favorites if fav_kind(f) == k] for k in ("folder", "file", "search")}
 
-        a_add_file = QAction(tr("현재 파일을 즐겨찾기에 추가..."), self)
-        a_add_file.triggered.connect(self._add_current_file_favorite)
-        self.menu_favorites.addAction(a_add_file)
+        def _fill(menu, kind, items, label, opener):
+            menu.clear()
+            for f in items:
+                act = QAction(label(f), menu)
+                act.triggered.connect(lambda _c=False, ff=f: opener(ff))
+                menu.addAction(act)
+            if not items:
+                ph = QAction(tr("(등록된 항목 없음)"), menu)
+                ph.setEnabled(False)
+                menu.addAction(ph)
+            menu.addSeparator()
+            mg = QAction(tr("항목 관리..."), menu)
+            mg.triggered.connect(lambda _c=False, k=kind: self._open_favorites_manager(k))
+            menu.addAction(mg)
 
-        a_add_search = QAction(tr("현재 검색어를 즐겨찾기에 추가..."), self)
-        a_add_search.triggered.connect(self._add_current_search_favorite)
-        self.menu_favorites.addAction(a_add_search)
+        for menu, kind in ((self.menu_fav_folders, "folder"), (self.menu_fav_files, "file"),
+                           (self.menu_fav_searches, "search")):
+            _fill(menu, kind, groups[kind], lambda f, k=kind: KIND_PREFIX[k] + f.get("name", "?"), self._open_favorite)
 
-        self.menu_favorites.addSeparator()
-        a_manage = QAction(tr("즐겨찾기 관리..."), self)
-        a_manage.triggered.connect(self._open_favorites_manager)
-        self.menu_favorites.addAction(a_manage)
+        # 기타 — 법령·고시 / 특허 / 건설기준, 꺼진 구역은 뺀다. 보일 구역이 없으면 단추도 숨긴다.
+        mo = self.menu_fav_other
+        mo.clear()
+        on = [k for k in OTHER_KINDS if self._fav_other_on(k)]
+        openers = {"law": self._open_law_favorite, "kipo": self._open_kipo_favorite, "kcsc": self._open_kcsc_favorite}
+        any_item = False
+        for k in on:
+            items = self._fav_other_list(k)
+            if not items:
+                continue
+            mo.addSection(kind_title(k))
+            for f in items:
+                act = QAction(other_label(k, f), mo)
+                act.triggered.connect(lambda _c=False, ff=f, o=openers[k]: o(ff))
+                mo.addAction(act)
+            any_item = True
+        if on and not any_item:
+            ph = QAction(tr("(등록된 항목 없음)"), mo)
+            ph.setEnabled(False)
+            mo.addAction(ph)
+        if on:
+            mo.addSeparator()
+            mg = QAction(tr("항목 관리..."), mo)
+            mg.triggered.connect(lambda _c=False, k=on[0]: self._open_favorites_manager(k))
+            mo.addAction(mg)
+        mo.menuAction().setVisible(bool(on))
 
-        if self._favorites:
-            # 261008-12(사용자 요청): 폴더·파일을 따로 묶는다 — 즐겨찾기 폴더 밑에 즐겨찾기 파일.
-            #   검색어는 그 밑에 따로(종전에는 셋이 등록 순서대로 섞여 있었다). 그룹 안은 등록 순서.
-            #   종류 판정·순서·접두는 관리 창과 같은 정의(favorites_dialog.KIND_ORDER/fav_kind).
-            from viewer.widgets.favorites_dialog import KIND_ORDER, KIND_PREFIX, fav_kind
-            titles = {"folder": tr("즐겨찾기 폴더"), "file": tr("즐겨찾기 파일"), "search": tr("즐겨찾기 검색어")}
-            for kind in KIND_ORDER:
-                title, prefix = titles[kind], KIND_PREFIX[kind]
-                items = [f for f in self._favorites if fav_kind(f) == kind]
-                if not items:
-                    continue
-                self.menu_favorites.addSeparator()
-                hdr = QAction(title, self)
-                hdr.setEnabled(False)
-                self.menu_favorites.addAction(hdr)
-                for f in items:
-                    act = QAction(prefix + f.get("name", "?"), self)
-                    # 대상이 없으면(이동/삭제) 비활성화 표시
-                    if self._fav_resolve(f) is None:
-                        act.setEnabled(False)
-                        act.setText(tr('{prefix}{get}  (없음)').format(prefix=prefix, get=f.get('name', '?')))
-                    else:
-                        act.triggered.connect(lambda _checked=False, ff=f: self._open_favorite(ff))
-                    self.menu_favorites.addAction(act)
-        elif not (ko_only and self._law_favorites):
-            placeholder = QAction(tr("(아직 등록된 즐겨찾기 없음)"), self)
-            placeholder.setEnabled(False)
-            self.menu_favorites.addAction(placeholder)
-
-        # 260616-6: 법령·고시 즐겨찾기는 항상 전체 즐겨찾기 '아래'에 별도 구역으로.
-        #   261008(다국어 SOT §7): 법령·KCSC·KIPO 구역은 한국 전용 — 다른 언어에서는 보이지 않는다
-        #   (즐겨찾기 자료는 지우지 않는다. 한국어로 돌아오면 그대로 보인다).
-        if ko_only and self._law_favorites:
-            self.menu_favorites.addSeparator()
-            hdr = QAction(tr("법령·고시 즐겨찾기"), self)
-            hdr.setEnabled(False)
-            self.menu_favorites.addAction(hdr)
-            for f in self._law_favorites:
-                label = "⚖ " + f.get("name", "?")
-                kl = f.get("kind_label") or f.get("category")
-                if kl:
-                    label += f"  ({kl})"
-                act = QAction(label, self)
-                act.triggered.connect(
-                    lambda _checked=False, ff=f: self._open_law_favorite(ff))
-                self.menu_favorites.addAction(act)
-
-        # 260618-40: 건설기준(KCSC) 즐겨찾기 — 법령·고시 아래 별도 구역
-        if ko_only and self._kcsc_favorites:
-            self.menu_favorites.addSeparator()
-            hdr = QAction(tr("건설기준(KCSC) 즐겨찾기"), self)
-            hdr.setEnabled(False)
-            self.menu_favorites.addAction(hdr)
-            for f in self._kcsc_favorites:
-                label = "🏗 " + f.get("name", "?")
-                cat = f.get("category")
-                if cat:
-                    label += f"  ({cat})"
-                act = QAction(label, self)
-                act.triggered.connect(
-                    lambda _checked=False, ff=f: self._open_kcsc_favorite(ff))
-                self.menu_favorites.addAction(act)
-
-        # 260618-43: 특허(KIPO) 등록정보 즐겨찾기 — 별도 구역
-        if ko_only and self._kipo_favorites:
-            self.menu_favorites.addSeparator()
-            hdr = QAction(tr("특허(KIPO) 즐겨찾기"), self)
-            hdr.setEnabled(False)
-            self.menu_favorites.addAction(hdr)
-            for f in self._kipo_favorites:
-                label = "📄 " + (f.get("name") or f.get("appNo") or f.get("regNo") or tr("특허"))
-                act = QAction(label, self)
-                act.triggered.connect(
-                    lambda _checked=False, ff=f: self._open_kipo_favorite(ff))
-                self.menu_favorites.addAction(act)
+        # 개별 단추 — 등록 폴더 다음(최근 파일 앞), 등록 파일 다음(등록 검색어 앞)
+        m = self.menu_favorites
+        for a in self._fav_btn_acts:
+            m.removeAction(a)
+            a.deleteLater()
+        self._fav_btn_acts = []
+        for kind, before in (("folder", self.menu_recent_files.menuAction()),
+                             ("file", self.menu_fav_searches.menuAction())):
+            for f in groups[kind][:BUTTONS_MAX]:
+                a = QAction(short_label(f), self)
+                where = (f.get("file") if kind == "file" else None) or f.get("folder") or ""
+                a.setToolTip(f.get("name", "?") + "\n" + str(where))
+                a.triggered.connect(lambda _c=False, ff=f: self._open_favorite(ff))
+                m.insertAction(before, a)
+                self._fav_btn_acts.append(a)
 
     def _add_current_folder_favorite(self):
         if not self._folder:
@@ -9454,11 +9505,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._refresh_favorites_menu()
             self._save_settings_now()
 
-    def _open_favorites_manager(self):
-        from viewer.widgets.favorites_dialog import FavoritesDialog
-        dlg = FavoritesDialog(self._favorites, self)
+    def _open_favorites_manager(self, kind: str = "folder"):
+        """261025-1(디자인 SOT §2.9.5): `항목 관리` — 종류마다 탭, 기능이 꺼진 종류(법령·고시/특허/건설기준)는 탭이 없다.
+        숨긴 종류의 자료는 그대로 둔다."""
+        from viewer.widgets.favorites_dialog import (FavoritesManagerDialog, KIND_ORDER, OTHER_KINDS,
+                                                     fav_kind, group_by_kind)
+        lists = {k: [f for f in self._favorites if fav_kind(f) == k] for k in KIND_ORDER}
+        for k in OTHER_KINDS:
+            if self._fav_other_on(k):
+                lists[k] = self._fav_other_list(k)
+        dlg = FavoritesManagerDialog(lists, kind, self)
         if dlg.exec() == dlg.DialogCode.Accepted:
-            self._favorites = dlg.result_favorites()
+            self._favorites = group_by_kind([f for k in KIND_ORDER for f in dlg.result(k)])
+            for k in OTHER_KINDS:
+                if k in dlg.kinds():
+                    setattr(self, {"law": "_law_favorites", "kipo": "_kipo_favorites",
+                                   "kcsc": "_kcsc_favorites"}[k], dlg.result(k))
             self._refresh_favorites_menu()
             self._save_settings_now()
 

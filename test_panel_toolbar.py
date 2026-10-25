@@ -65,8 +65,8 @@ row = rb.row(COLLECTION)
 acts = [a for a in row.actions() if not a.isSeparator() and row.widgetForAction(a)
         and not row.widgetForAction(a).property("ribbonSpacer")]
 names = [a.iconText() for a in acts]
-expected = ["1단", "2단", "텍스트", "단어장", "검색", "스크린샷", "법령/고시",
-            "건설기준", "특허", "발표보기",
+expected = ["1단", "2단", "텍스트", "단어장", "검색", "스크린샷", "법령·고시",
+            "특허", "건설기준", "발표보기",            # 261025-1: 보기 탭 차례와 같게(디자인 SOT §2.9.5)
             "OCR", "단어장 생성", "책갈피 생성", "PDF병합",
             "이미지→PDF", "암호화", "번역", "변환해서 내보내기"]
 chk(names == expected, "모음 기본 단추 차례: §2.9 표와 일치", str(names))
@@ -76,7 +76,7 @@ chk(len(groups) == 2, "모음 그룹 둘(보기·도구)", str(len(groups)))
 chk("스크린샷 PDF 저장" not in names and "전체화면" not in names and "책갈피·단어장 동시 생성" not in names,
     "옛 단추 없음(스크린샷 PDF 저장·전체화면·동시 생성)")
 vis = [b.text() for b in row.buttons()]
-chk("법령/고시" not in vis and "번역" not in vis, "키 없는 법령·번역 단추는 숨김(§11.12 — 액션 가시성)", str(vis))
+chk("법령·고시" not in vis and "번역" not in vis, "키 없는 법령·번역 단추는 숨김(§11.12 — 액션 가시성)", str(vis))
 chk(acts[0] is mw._view_acts["single"], "모음 단추 = 메뉴 액션과 같은 객체")
 
 # 3) 내부 상태 QAction 유지
@@ -125,7 +125,7 @@ chk([cmd_id(a) for a in row.actions() if cmd_id(a)] == [c for c in DEFAULT_COLLE
 
 # 8) 사용자 지정 창
 cat, labels = mw.ribbon_catalog()
-chk([t for t, _ in cat] == ["파일(&F)", "보기(&B)", "도구(&T)", "도움말(&H)"], "명령 고르기 = 탭별", str([t for t, _ in cat]))
+chk([t for t, _ in cat] == ["파일(&F)", "즐겨찾기(&V)", "보기(&B)", "도구(&T)", "도움말(&H)"], "명령 고르기 = 탭별(261025-1 즐겨찾기 포함)", str([t for t, _ in cat]))
 dlg = RibbonCustomizeDialog(cat, ["view.single"], labels, mw)
 chk(dlg.result_ids() == ["view.single"], "창: 지금 모음을 보인다")
 top = dlg.tree.topLevelItem(0)                       # 파일

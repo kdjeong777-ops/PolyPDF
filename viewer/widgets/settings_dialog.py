@@ -333,145 +333,17 @@ class SettingsDialog(QDialog):
         tl.addRow(tr("테마:"), self.cmb_theme)
         layout.addWidget(grp_theme)
 
-        # ── 인터넷 사전(단어장) ─────────────────────────── 260615-9(P11)
-        from PyQt6.QtWidgets import QCheckBox as _QCb, QLineEdit as _QLe
-        grp_od = QGroupBox(tr("인터넷 사전 (단어장)"))
-        ol = QFormLayout(grp_od)
-        self.chk_online_dict = _QCb(tr("인터넷 사전 포함 (켜면 단어 편집기에서 온라인 조회)"))
-        self.chk_online_dict.setChecked(bool(self._prefs.get("online_dict_enabled", False)))
-        ol.addRow(self.chk_online_dict)
-        self.ed_stdict_key = _QLe(str(self._prefs.get("stdict_key", "")))
-        self.ed_stdict_key.setPlaceholderText(tr("표준국어대사전 오픈API 인증키 (무료 발급)"))
-        ol.addRow(tr("표준국어대사전 키:"), self._keyrow(self.ed_stdict_key, "stdict"))
-        self.ed_onterm_key = _QLe(str(self._prefs.get("onterm_key", "")))
-        self.ed_onterm_key.setPlaceholderText(tr("국립국어원 온용어(전문용어) 오픈API 인증키 (무료 발급)"))
-        ol.addRow(tr("온용어 키:"), self._keyrow(self.ed_onterm_key, "onterm"))
-        self.ed_law_oc = _QLe(str(self._prefs.get("law_oc", "")))
-        self.ed_law_oc.setPlaceholderText(tr("법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)"))
-        ol.addRow(tr("법제처 OC:"), self._keyrow(self.ed_law_oc, "law"))
-        self.ed_kcsc_key = _QLe(str(self._prefs.get("kcsc_key", "")))   # 260618-37
-        self.ed_kcsc_key.setPlaceholderText(tr("국가건설기준센터(KCSC) OPEN API 키 (무료 발급)"))
-        ol.addRow(tr("KCSC 키:"), self._keyrow(self.ed_kcsc_key, "kcsc"))
-        self.ed_kipo_key = _QLe(str(self._prefs.get("kipo_signkey", "")))   # 260618-43/44
-        self.ed_kipo_key.setPlaceholderText(tr("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)"))
-        ol.addRow(tr("특허(KIPRIS) 키:"), self._keyrow(self.ed_kipo_key, "kipo"))
-        # 260618-47: 특허(전자명세서) PDF 저장 폴더 + 찾아보기
-        from PyQt6.QtWidgets import QHBoxLayout as _HB, QWidget as _QW, QPushButton as _QPb, QFileDialog as _QFD
-        self.ed_patent_dir = _QLe(str(self._prefs.get("patent_save_dir", "")))
-        self.ed_patent_dir.setPlaceholderText(tr("비우면 문서\\PolyPDF_특허"))
-        _pw = _QW(); _ph = _HB(_pw); _ph.setContentsMargins(0, 0, 0, 0)
-        _pbtn = _QPb(tr("찾아보기…"))
+        # ── 고급 설정 ── 261025-2(디자인 SOT §2.14, 사용자 지시): 외부 API 설정(사전·법제처·KCSC·특허·번역 키)은 별도 창.
+        #   두 묶음 모두 한국 전용이라(다국어 SOT §7) 한국어 화면이 아니면 단추도 숨긴다.
+        _row_adv = QHBoxLayout(); _row_adv.setContentsMargins(0, 0, 0, 0)
+        self.btn_advanced = QPushButton(tr("고급 설정..."))
+        self.btn_advanced.setToolTip(tr("인터넷 사전·법제처·건설기준·특허·번역(Claude) API 키 — 확인하면 바로 저장됩니다"))
+        self.btn_advanced.clicked.connect(self._open_advanced)
+        _row_adv.addWidget(self.btn_advanced); _row_adv.addStretch(1)
+        layout.addLayout(_row_adv)
+        self.btn_advanced.setVisible(korea_only_visible())
+        self.advanced_dialog = None          # 마지막으로 연 고급 창(검사용)
 
-        def _pick_dir():
-            d = _QFD.getExistingDirectory(self, tr("특허 PDF 저장 폴더 선택"),
-                                          self.ed_patent_dir.text().strip() or "")
-            if d:
-                self.ed_patent_dir.setText(d)
-        _pbtn.clicked.connect(_pick_dir)
-        _ph.addWidget(self.ed_patent_dir, 1); _ph.addWidget(_pbtn)
-        ol.addRow(tr("특허 PDF 저장 폴더:"), _pw)
-        _info_od = QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
-                             "한국어 사전은 위 키 입력 시 사용.</small>"))
-        _info_od.setWordWrap(True)           # 261009-10(디자인 SOT §2.14)
-        ol.addRow(_info_od)
-        layout.addWidget(grp_od)
-        grp_od.setVisible(korea_only_visible())      # 한국 사전·법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
-
-        # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
-        from PyQt6.QtWidgets import QComboBox as _QCmb
-        try:
-            from ..study import translate_api as _tapi
-            _MODELS = _tapi.MODELS
-            _DEFMODEL = _tapi.DEFAULT_MODEL
-        except Exception:
-            _MODELS = [("claude-opus-4-8", "Claude Opus 4.8", 5.0, 25.0)]
-            _DEFMODEL = "claude-opus-4-8"
-        grp_tr = QGroupBox(tr("번역 (Claude)"))
-        trl = QFormLayout(grp_tr)
-        self.cmb_translate_auth = _QCmb()
-        self.cmb_translate_auth.addItem(tr("API 키"), "api")
-        self.cmb_translate_auth.addItem(tr("Claude 로그인 (구독·OAuth)"), "login")
-        _cur_a = str(self._prefs.get("translate_auth", "api"))
-        _ai = self.cmb_translate_auth.findData(_cur_a)
-        self.cmb_translate_auth.setCurrentIndex(_ai if _ai >= 0 else 0)
-        trl.addRow(tr("인증 방식:"), self.cmb_translate_auth)
-        self.ed_anthropic_key = _QLe(str(self._prefs.get("anthropic_api_key", "")))
-        self.ed_anthropic_key.setPlaceholderText(tr("sk-ant-… (로그인 모드면 비워둠)"))
-        try:
-            self.ed_anthropic_key.setEchoMode(_QLe.EchoMode.Password)
-        except Exception:
-            pass
-        trl.addRow(tr("Claude API 키:"), self.ed_anthropic_key)
-        self.cmb_translate_model = _QCmb()
-        for mid, label, *_ in _MODELS:
-            self.cmb_translate_model.addItem(tr(label), mid)
-        _cur_m = str(self._prefs.get("translate_model", _DEFMODEL))
-        _mi = self.cmb_translate_model.findData(_cur_m)
-        self.cmb_translate_model.setCurrentIndex(_mi if _mi >= 0 else 0)
-        trl.addRow(tr("번역 모델:"), self.cmb_translate_model)
-        # 260621-P3: 구독 로그인 — 앱 내 'Claude 로그인' 버튼(ant 자동설치+브라우저)
-        from PyQt6.QtWidgets import QHBoxLayout as _HB2, QWidget as _QW2, QPushButton as _QPb2
-        _lw = _QW2(); _lh = _HB2(_lw); _lh.setContentsMargins(0, 0, 0, 0)
-        self.lbl_login_status = QLabel("")
-        self.btn_ant_login = _QPb2(tr("Claude 로그인"))
-        self.btn_ant_logout = _QPb2(tr("로그아웃"))
-        self.btn_ant_login.clicked.connect(self._ant_login)
-        self.btn_ant_logout.clicked.connect(self._ant_logout)
-        _lh.addWidget(self.lbl_login_status, 1)
-        _lh.addWidget(self.btn_ant_login)
-        _lh.addWidget(self.btn_ant_logout)
-        trl.addRow(tr("구독 로그인:"), _lw)
-
-        # 260621-P3: 연결·인증 확인(무료 count_tokens — 크레딧 없이 토큰/인증 점검)
-        _cw = _QW2(); _ch = _HB2(_cw); _ch.setContentsMargins(0, 0, 0, 0)
-        self.lbl_conn_status = QLabel("")
-        self.btn_test_conn = _QPb2(tr("연결 확인"))
-        self.btn_test_conn.setToolTip(tr("입력한 키/로그인으로 Claude 에 연결·인증되는지 확인(무료)"))
-        self.btn_test_conn.clicked.connect(self._test_translate_conn)
-        _ch.addWidget(self.lbl_conn_status, 1)
-        _ch.addWidget(self.btn_test_conn)
-        trl.addRow(tr("연결 확인:"), _cw)
-
-        self.chk_translate_consent = _QCb(
-            tr("번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의"))
-        self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
-        trl.addRow(self.chk_translate_consent)
-        _hlp_tr = QLabel(
-            tr("<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
-            "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 "
-            "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요).<br>"
-            "<b>주의</b>: 번역(Messages API)은 <b>API 크레딧</b>이 필요합니다 — Claude 구독(Pro/Max)은 "
-            "API 사용에 적용되지 않으니, console.anthropic.com → Billing 에서 크레딧을 충전하세요. "
-            "민감 문서 전송에 주의.</small>"))
-        _hlp_tr.setWordWrap(True)
-        trl.addRow(_hlp_tr)
-        layout.addWidget(grp_tr)
-        grp_tr.setVisible(korea_only_visible())      # 영→한 번역 — 한국 전용(사용자 결정 261008-25)
-        self.cmb_translate_auth.currentIndexChanged.connect(self._on_translate_auth_changed)
-        self._on_translate_auth_changed()
-        self._refresh_login_status()
-
-        # 260621-P3: 모든 API 키를 *** 로 가림 + '키 표시' 토글
-        self._key_edits = [self.ed_stdict_key, self.ed_onterm_key,
-                           self.ed_law_oc, self.ed_kcsc_key, self.ed_kipo_key,
-                           self.ed_anthropic_key]
-        for _e in self._key_edits:
-            try:
-                _e.setEchoMode(_QLe.EchoMode.Password)
-            except Exception:
-                pass
-        self.chk_show_keys = _QCb(tr("API 키 표시 (체크 해제 시 *** 로 가림)"))
-        self.chk_show_keys.setChecked(False)
-
-        def _toggle_show_keys(on):
-            m = _QLe.EchoMode.Normal if on else _QLe.EchoMode.Password
-            for _e in self._key_edits:
-                try:
-                    _e.setEchoMode(m)
-                except Exception:
-                    pass
-        self.chk_show_keys.toggled.connect(_toggle_show_keys)
-        layout.addWidget(self.chk_show_keys)
 
         info = QLabel(
             tr("<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
@@ -670,6 +542,261 @@ class SettingsDialog(QDialog):
             pass
         (QMessageBox.information if ok else QMessageBox.warning)(self, tr("녹화 테스트"), msg)
 
+    def _open_advanced(self):
+        """261025-2(디자인 SOT §2.14, 사용자 결정): 고급 창 [확인] 이면 **곧바로** 저장·적용 — 키 게이팅이 바로 따라간다.
+        이 창을 [취소] 해도 남는다. 저장 길은 종전 그대로(`_apply_prefs` → `_save_settings_now`, 키 보호 마스터 §8.2.0)."""
+        host = self._host
+        base = dict(host._prefs) if host is not None else dict(self._prefs)
+        dlg = AdvancedSettingsDialog(base, self)
+        self.advanced_dialog = dlg
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        new = dlg.result_prefs()
+        self._prefs.update(new)
+        if host is not None:
+            merged = dict(host._prefs)
+            merged.update(new)
+            host._apply_prefs(merged)
+            host._save_settings_now()
+            try:
+                host.status.showMessage(tr("고급 설정 저장됨"), 3000)
+            except Exception:
+                pass
+
+    def result_prefs(self) -> dict:
+        return {
+            "startup_mode": ("path" if self.rb_start_path.isChecked()
+                             else "none" if self.rb_start_none.isChecked() else "last"),
+            "startup_path": self.ed_startup_path.text().strip(),
+            # 다운그레이드 호환 — 구버전은 이 키만 본다(있으면 '마지막 것 열기'로 동작).
+            "restore_session": not self.rb_start_none.isChecked(),
+            "restore_last_page": self.chk_last_page.isChecked(),
+            "restore_screenshots": False,          # 260906-3: 시작은 항상 빈 목록
+            "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
+            "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
+            "screenshot_max": int(self.spin_screenshot.value()),
+            # v1.6.23: 패널 토글 툴바 가시성
+            "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),
+            "ribbon_collection": list(self._collection),     # 261024-1(디자인 SOT §2.9.4) — 비면 기본값
+            # 260609-2: 페이지 경계 파일 이동
+            "cross_file_nav": self.chk_cross_file_nav.isChecked(),
+            "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
+            "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
+            "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
+            # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
+            # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋
+            "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),
+            # 260609-17(F4): 녹화
+            "recording_dir": self.ed_rec_dir.text().strip(),
+            "recording_audio_mode": self.cmb_audio.currentData(),
+            "recording_mic": self.cmb_mic.currentText().strip(),
+            "recording_system": self.cmb_sys.currentText().strip(),
+            "recording_keys": [self.ks_rec.keySequence().toString(),
+                               self.ks_recstop.keySequence().toString()],
+            "ffmpeg_path": str(self._prefs.get("ffmpeg_path", "")),   # 260618-18: UI 제거, 기존값 보존
+            # 260606-13: 화면 스타일(테마)
+            "theme": self.cmb_theme.currentData(),
+            "language": self.cmb_language.currentData(),     # 261008(다국어 SOT §4)
+            "external_language_packs": self.chk_ext_lang.isChecked(),   # 261008-29(다국어 SOT §3.4)
+            # 261025-2: 외부 API 키는 고급 설정 창(AdvancedSettingsDialog)이 따로 저장한다 — 여기서 빼면
+            #   `_apply_prefs` 가 지금 값으로 둔다(허용목록 old 폴백).
+        }
+
+    def _on_ext_lang_toggled(self, on: bool):
+        """외부 언어팩을 켤 때 한 번 확인한다(다국어 SOT §13 '외부 팩의 신뢰' — 팩은 코드를 실행하지 못하지만
+        단추·안내 문구를 바꿔 사용자를 속일 수는 있다). 끌 때는 묻지 않는다."""
+        if not on:
+            return
+        ans = QMessageBox.question(
+            self, tr("외부 언어팩 사용"),
+            tr("외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
+               "프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
+               "믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n\n켤까요?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if ans != QMessageBox.StandardButton.Yes:
+            self.chk_ext_lang.setChecked(False)
+
+    def _open_external_lang_dir(self):
+        """외부 언어팩 폴더를 만들고(없으면) 탐색기로 연다(다국어 SOT §3.4)."""
+        from viewer import i18n as _i18n
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        d = _i18n.external_dir()
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(d)))
+
+
+class AdvancedSettingsDialog(QDialog):
+    """261025-2(디자인 SOT §2.14, 사용자 지시): 환경설정의 `고급 설정...` — 외부 API 설정.
+    인터넷 사전(표준국어대사전·온용어·법제처·KCSC·특허 키, 특허 PDF 저장 폴더)·번역(Claude)·API 키 표시.
+    값 모양·저장·키 보호는 종전 환경설정과 같다(마스터 §8.2.0) — 키 이름도 그대로."""
+
+    def __init__(self, prefs: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("고급 설정"))
+        self.setMinimumWidth(440)
+        self._prefs = dict(prefs)
+        self.resize(520, 600)
+        _outer = QVBoxLayout(self)
+        _scroll = QScrollArea(); _scroll.setWidgetResizable(True)
+        _content = QWidget(); _scroll.setWidget(_content)
+        _outer.addWidget(_scroll, 1)
+        layout = QVBoxLayout(_content)
+
+        # ── 인터넷 사전(단어장) ─────────────────────────── 260615-9(P11)
+        from PyQt6.QtWidgets import QCheckBox as _QCb, QLineEdit as _QLe
+        grp_od = QGroupBox(tr("인터넷 사전 (단어장)"))
+        ol = QFormLayout(grp_od)
+        self.chk_online_dict = _QCb(tr("인터넷 사전 포함 (켜면 단어 편집기에서 온라인 조회)"))
+        self.chk_online_dict.setChecked(bool(self._prefs.get("online_dict_enabled", False)))
+        ol.addRow(self.chk_online_dict)
+        self.ed_stdict_key = _QLe(str(self._prefs.get("stdict_key", "")))
+        self.ed_stdict_key.setPlaceholderText(tr("표준국어대사전 오픈API 인증키 (무료 발급)"))
+        ol.addRow(tr("표준국어대사전 키:"), self._keyrow(self.ed_stdict_key, "stdict"))
+        self.ed_onterm_key = _QLe(str(self._prefs.get("onterm_key", "")))
+        self.ed_onterm_key.setPlaceholderText(tr("국립국어원 온용어(전문용어) 오픈API 인증키 (무료 발급)"))
+        ol.addRow(tr("온용어 키:"), self._keyrow(self.ed_onterm_key, "onterm"))
+        self.ed_law_oc = _QLe(str(self._prefs.get("law_oc", "")))
+        self.ed_law_oc.setPlaceholderText(tr("법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)"))
+        ol.addRow(tr("법제처 OC:"), self._keyrow(self.ed_law_oc, "law"))
+        self.ed_kcsc_key = _QLe(str(self._prefs.get("kcsc_key", "")))   # 260618-37
+        self.ed_kcsc_key.setPlaceholderText(tr("국가건설기준센터(KCSC) OPEN API 키 (무료 발급)"))
+        ol.addRow(tr("KCSC 키:"), self._keyrow(self.ed_kcsc_key, "kcsc"))
+        self.ed_kipo_key = _QLe(str(self._prefs.get("kipo_signkey", "")))   # 260618-43/44
+        self.ed_kipo_key.setPlaceholderText(tr("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)"))
+        ol.addRow(tr("특허(KIPRIS) 키:"), self._keyrow(self.ed_kipo_key, "kipo"))
+        # 260618-47: 특허(전자명세서) PDF 저장 폴더 + 찾아보기
+        from PyQt6.QtWidgets import QHBoxLayout as _HB, QWidget as _QW, QPushButton as _QPb, QFileDialog as _QFD
+        self.ed_patent_dir = _QLe(str(self._prefs.get("patent_save_dir", "")))
+        self.ed_patent_dir.setPlaceholderText(tr("비우면 문서\\PolyPDF_특허"))
+        _pw = _QW(); _ph = _HB(_pw); _ph.setContentsMargins(0, 0, 0, 0)
+        _pbtn = _QPb(tr("찾아보기…"))
+
+        def _pick_dir():
+            d = _QFD.getExistingDirectory(self, tr("특허 PDF 저장 폴더 선택"),
+                                          self.ed_patent_dir.text().strip() or "")
+            if d:
+                self.ed_patent_dir.setText(d)
+        _pbtn.clicked.connect(_pick_dir)
+        _ph.addWidget(self.ed_patent_dir, 1); _ph.addWidget(_pbtn)
+        ol.addRow(tr("특허 PDF 저장 폴더:"), _pw)
+        _info_od = QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
+                             "한국어 사전은 위 키 입력 시 사용.</small>"))
+        _info_od.setWordWrap(True)           # 261009-10(디자인 SOT §2.14)
+        ol.addRow(_info_od)
+        layout.addWidget(grp_od)
+        grp_od.setVisible(korea_only_visible())      # 한국 사전·법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
+
+        # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
+        from PyQt6.QtWidgets import QComboBox as _QCmb
+        try:
+            from ..study import translate_api as _tapi
+            _MODELS = _tapi.MODELS
+            _DEFMODEL = _tapi.DEFAULT_MODEL
+        except Exception:
+            _MODELS = [("claude-opus-4-8", "Claude Opus 4.8", 5.0, 25.0)]
+            _DEFMODEL = "claude-opus-4-8"
+        grp_tr = QGroupBox(tr("번역 (Claude)"))
+        trl = QFormLayout(grp_tr)
+        self.cmb_translate_auth = _QCmb()
+        self.cmb_translate_auth.addItem(tr("API 키"), "api")
+        self.cmb_translate_auth.addItem(tr("Claude 로그인 (구독·OAuth)"), "login")
+        _cur_a = str(self._prefs.get("translate_auth", "api"))
+        _ai = self.cmb_translate_auth.findData(_cur_a)
+        self.cmb_translate_auth.setCurrentIndex(_ai if _ai >= 0 else 0)
+        trl.addRow(tr("인증 방식:"), self.cmb_translate_auth)
+        self.ed_anthropic_key = _QLe(str(self._prefs.get("anthropic_api_key", "")))
+        self.ed_anthropic_key.setPlaceholderText(tr("sk-ant-… (로그인 모드면 비워둠)"))
+        try:
+            self.ed_anthropic_key.setEchoMode(_QLe.EchoMode.Password)
+        except Exception:
+            pass
+        trl.addRow(tr("Claude API 키:"), self.ed_anthropic_key)
+        self.cmb_translate_model = _QCmb()
+        for mid, label, *_ in _MODELS:
+            self.cmb_translate_model.addItem(tr(label), mid)
+        _cur_m = str(self._prefs.get("translate_model", _DEFMODEL))
+        _mi = self.cmb_translate_model.findData(_cur_m)
+        self.cmb_translate_model.setCurrentIndex(_mi if _mi >= 0 else 0)
+        trl.addRow(tr("번역 모델:"), self.cmb_translate_model)
+        # 260621-P3: 구독 로그인 — 앱 내 'Claude 로그인' 버튼(ant 자동설치+브라우저)
+        from PyQt6.QtWidgets import QHBoxLayout as _HB2, QWidget as _QW2, QPushButton as _QPb2
+        _lw = _QW2(); _lh = _HB2(_lw); _lh.setContentsMargins(0, 0, 0, 0)
+        self.lbl_login_status = QLabel("")
+        self.btn_ant_login = _QPb2(tr("Claude 로그인"))
+        self.btn_ant_logout = _QPb2(tr("로그아웃"))
+        self.btn_ant_login.clicked.connect(self._ant_login)
+        self.btn_ant_logout.clicked.connect(self._ant_logout)
+        _lh.addWidget(self.lbl_login_status, 1)
+        _lh.addWidget(self.btn_ant_login)
+        _lh.addWidget(self.btn_ant_logout)
+        trl.addRow(tr("구독 로그인:"), _lw)
+
+        # 260621-P3: 연결·인증 확인(무료 count_tokens — 크레딧 없이 토큰/인증 점검)
+        _cw = _QW2(); _ch = _HB2(_cw); _ch.setContentsMargins(0, 0, 0, 0)
+        self.lbl_conn_status = QLabel("")
+        self.btn_test_conn = _QPb2(tr("연결 확인"))
+        self.btn_test_conn.setToolTip(tr("입력한 키/로그인으로 Claude 에 연결·인증되는지 확인(무료)"))
+        self.btn_test_conn.clicked.connect(self._test_translate_conn)
+        _ch.addWidget(self.lbl_conn_status, 1)
+        _ch.addWidget(self.btn_test_conn)
+        trl.addRow(tr("연결 확인:"), _cw)
+
+        self.chk_translate_consent = _QCb(
+            tr("번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의"))
+        self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
+        trl.addRow(self.chk_translate_consent)
+        _hlp_tr = QLabel(
+            tr("<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
+            "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 "
+            "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요).<br>"
+            "<b>주의</b>: 번역(Messages API)은 <b>API 크레딧</b>이 필요합니다 — Claude 구독(Pro/Max)은 "
+            "API 사용에 적용되지 않으니, console.anthropic.com → Billing 에서 크레딧을 충전하세요. "
+            "민감 문서 전송에 주의.</small>"))
+        _hlp_tr.setWordWrap(True)
+        trl.addRow(_hlp_tr)
+        layout.addWidget(grp_tr)
+        grp_tr.setVisible(korea_only_visible())      # 영→한 번역 — 한국 전용(사용자 결정 261008-25)
+        self.cmb_translate_auth.currentIndexChanged.connect(self._on_translate_auth_changed)
+        self._on_translate_auth_changed()
+        self._refresh_login_status()
+
+        # 260621-P3: 모든 API 키를 *** 로 가림 + '키 표시' 토글
+        self._key_edits = [self.ed_stdict_key, self.ed_onterm_key,
+                           self.ed_law_oc, self.ed_kcsc_key, self.ed_kipo_key,
+                           self.ed_anthropic_key]
+        for _e in self._key_edits:
+            try:
+                _e.setEchoMode(_QLe.EchoMode.Password)
+            except Exception:
+                pass
+        self.chk_show_keys = _QCb(tr("API 키 표시 (체크 해제 시 *** 로 가림)"))
+        self.chk_show_keys.setChecked(False)
+
+        def _toggle_show_keys(on):
+            m = _QLe.EchoMode.Normal if on else _QLe.EchoMode.Password
+            for _e in self._key_edits:
+                try:
+                    _e.setEchoMode(m)
+                except Exception:
+                    pass
+        self.chk_show_keys.toggled.connect(_toggle_show_keys)
+        layout.addWidget(self.chk_show_keys)
+        layout.addStretch(1)
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        _outer.addWidget(btns)
+        from PyQt6.QtWidgets import QComboBox as _QCb2
+        for _cb in self.findChildren(_QCb2):          # 디자인 SOT §2.14 — 콤보가 창을 밀지 않게
+            _cb.setSizeAdjustPolicy(_QCb2.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            _cb.setMinimumContentsLength(14)
+
     # ── 번역 구독 로그인(ant) ──────────────────────────── 260621-P3
     def _on_translate_auth_changed(self):
         login = (self.cmb_translate_auth.currentData() == "login")
@@ -777,39 +904,6 @@ class SettingsDialog(QDialog):
 
     def result_prefs(self) -> dict:
         return {
-            "startup_mode": ("path" if self.rb_start_path.isChecked()
-                             else "none" if self.rb_start_none.isChecked() else "last"),
-            "startup_path": self.ed_startup_path.text().strip(),
-            # 다운그레이드 호환 — 구버전은 이 키만 본다(있으면 '마지막 것 열기'로 동작).
-            "restore_session": not self.rb_start_none.isChecked(),
-            "restore_last_page": self.chk_last_page.isChecked(),
-            "restore_screenshots": False,          # 260906-3: 시작은 항상 빈 목록
-            "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
-            "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
-            "screenshot_max": int(self.spin_screenshot.value()),
-            # v1.6.23: 패널 토글 툴바 가시성
-            "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),
-            "ribbon_collection": list(self._collection),     # 261024-1(디자인 SOT §2.9.4) — 비면 기본값
-            # 260609-2: 페이지 경계 파일 이동
-            "cross_file_nav": self.chk_cross_file_nav.isChecked(),
-            "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
-            "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
-            "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
-            # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
-            # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋
-            "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),
-            # 260609-17(F4): 녹화
-            "recording_dir": self.ed_rec_dir.text().strip(),
-            "recording_audio_mode": self.cmb_audio.currentData(),
-            "recording_mic": self.cmb_mic.currentText().strip(),
-            "recording_system": self.cmb_sys.currentText().strip(),
-            "recording_keys": [self.ks_rec.keySequence().toString(),
-                               self.ks_recstop.keySequence().toString()],
-            "ffmpeg_path": str(self._prefs.get("ffmpeg_path", "")),   # 260618-18: UI 제거, 기존값 보존
-            # 260606-13: 화면 스타일(테마)
-            "theme": self.cmb_theme.currentData(),
-            "language": self.cmb_language.currentData(),     # 261008(다국어 SOT §4)
-            "external_language_packs": self.chk_ext_lang.isChecked(),   # 261008-29(다국어 SOT §3.4)
             # 260615-9(P11): 인터넷 사전
             "online_dict_enabled": self.chk_online_dict.isChecked(),
             "stdict_key": self.ed_stdict_key.text().strip(),
@@ -824,30 +918,3 @@ class SettingsDialog(QDialog):
             "translate_model": self.cmb_translate_model.currentData(),
             "translate_consent": self.chk_translate_consent.isChecked(),
         }
-
-    def _on_ext_lang_toggled(self, on: bool):
-        """외부 언어팩을 켤 때 한 번 확인한다(다국어 SOT §13 '외부 팩의 신뢰' — 팩은 코드를 실행하지 못하지만
-        단추·안내 문구를 바꿔 사용자를 속일 수는 있다). 끌 때는 묻지 않는다."""
-        if not on:
-            return
-        ans = QMessageBox.question(
-            self, tr("외부 언어팩 사용"),
-            tr("외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
-               "프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
-               "믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n\n켤까요?"),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No)
-        if ans != QMessageBox.StandardButton.Yes:
-            self.chk_ext_lang.setChecked(False)
-
-    def _open_external_lang_dir(self):
-        """외부 언어팩 폴더를 만들고(없으면) 탐색기로 연다(다국어 SOT §3.4)."""
-        from viewer import i18n as _i18n
-        from PyQt6.QtGui import QDesktopServices
-        from PyQt6.QtCore import QUrl
-        d = _i18n.external_dir()
-        try:
-            d.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(d)))

@@ -33,7 +33,7 @@ SEP = "|"                   # 모음의 구분선
 COLLECTION = "collection"   # 모음 탭 키
 DEFAULT_COLLECTION = (
     "view.single", "view.split", "view.text", "view.study", "view.search", "view.shot",
-    "view.law", "view.kcsc", "view.kipo", "view.present", SEP,
+    "view.law", "view.kipo", "view.kcsc", "view.present", SEP,      # 261025-1: 보기 탭 차례와 같게(디자인 SOT §2.9.5)
     "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.merge", "tools.img2pdf",
     "tools.encrypt", "tools.translate", "file.export",
 )
@@ -94,6 +94,12 @@ class RibbonRow(QToolBar):
 
     def set_items(self, items) -> None:
         """items: QAction 또는 None(구분선). 앞·뒤·겹친 구분선은 하나로 줄인다."""
+        for a in getattr(self, "_watched", ()):
+            try:
+                a.changed.disconnect(self._sync_seps)
+            except (TypeError, RuntimeError):
+                pass
+        self._watched = []
         self.clear()
         self.lead = self.addWidget(self._spacer())
         pending_sep = False
@@ -111,8 +117,36 @@ class RibbonRow(QToolBar):
                 if a.menu() is not None:
                     w.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
                 w.installEventFilter(self._tips)
+            a.changed.connect(self._sync_seps)
+            self._watched.append(a)
             added = True
         self.trail = self.addWidget(self._spacer())
+        self._sync_seps()
+
+    def _sync_seps(self) -> None:
+        """261025-1: 구분선은 **양쪽에 보이는 단추가 있을 때만** — 묶음 전체가 숨으면(한국 전용·키 게이팅) 구분선이 겹쳐 보이지 않게."""
+        show = {}
+        seen = False            # 앞에 보이는 단추가 있었나
+        pend = None             # 아직 뒤쪽 단추를 기다리는 구분선
+        for a in self.actions():
+            if a.isSeparator():
+                if pend is None and seen:
+                    pend = a
+                else:
+                    show[a] = False          # 앞에 단추가 없거나, 이미 기다리는 구분선이 있다
+                continue
+            w = self.widgetForAction(a)
+            if w is None or w.property("ribbonSpacer") or not a.isVisible():
+                continue
+            if pend is not None:
+                show[pend] = True
+                pend = None
+            seen = True
+        if pend is not None:
+            show[pend] = False
+        for s, on in show.items():
+            if s.isVisible() != on:
+                s.setVisible(on)
 
     def buttons(self) -> list:
         """보이는 단추(빈 칸 제외) — 차례대로."""
@@ -130,6 +164,8 @@ class RibbonRow(QToolBar):
         gs, cur = [], []
         for a in self.actions():
             if a.isSeparator():
+                if not a.isVisible():            # 숨긴 구분선(빈 묶음 사이)은 경계가 아니다
+                    continue
                 if cur:
                     gs.append(cur)
                 cur = []
@@ -259,7 +295,7 @@ class Ribbon(QWidget):
             return
         items = []
         for a in menu.actions():
-            items.append(None if a.isSeparator() else a)
+            items.append(None if a.isSeparator() else a)    # 빈 묶음 사이 구분선은 RibbonRow 가 숨긴다
         self._rows[key].set_items(items)
 
     def eventFilter(self, obj, ev):

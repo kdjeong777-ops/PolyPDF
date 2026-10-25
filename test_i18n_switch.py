@@ -106,17 +106,19 @@ try:
     chk(not popups, "E en 처리기를 직접 불러도 창이 뜨지 않는다", str(popups[:5]))
     chk(mw.search_tabs.currentWidget() is not mw.study_panel, "E en _vm_study 가 단어장 탭을 열지 않는다")
 
-    mw._refresh_favorites_menu()
-    texts = [a.text() for a in mw.menu_favorites.actions()]
+    mw._refresh_favorites_menu()                     # 261025-1(디자인 SOT §2.9.5): 구역은 즐겨찾기 탭 `기타 ▾`
+    texts = [a.text() for a in mw.menu_fav_other.actions()]
     leak = [t for t in texts if any(k in t for k in ("건축법", "KDS 14", "특허 1", "Law", "KCSC", "KIPO"))]
-    chk(not leak, "F en 즐겨찾기 메뉴에 법령·KCSC·KIPO 구역이 없다", str(leak))
+    chk(not leak and not mw.menu_fav_other.menuAction().isVisible(),
+        "F en 즐겨찾기 `기타` 에 법령·KCSC·KIPO 구역이 없고 단추도 숨는다", str(leak))
     chk(mw._law_favorites and mw._kcsc_favorites and mw._kipo_favorites, "F 즐겨찾기 자료는 지우지 않는다")
 
     from viewer.widgets.settings_dialog import SettingsDialog
     d = SettingsDialog(dict(mw._prefs), parent=mw, host=mw); d.show(); app.processEvents()
     grp_titles = [g.title() for g in d.findChildren(QGroupBox) if g.isVisible()]
     ko_grps = [t for t in grp_titles if t in (i18n.tr("인터넷 사전 (단어장)"), i18n.tr("번역 (Claude)"))]
-    chk(not ko_grps, "G en 설정 창의 한국 사전·키·번역 묶음 숨김", str(ko_grps))
+    chk(not ko_grps and not d.btn_advanced.isVisible(),
+        "G en 설정 창의 한국 사전·키·번역 묶음과 '고급 설정' 단추 숨김(261025-2)", str(ko_grps))
     d.close()
     from viewer.widgets.merge_dialog import MergeFilesDialog
     md = MergeFilesDialog([], parent=mw); md.show(); app.processEvents()
@@ -146,9 +148,9 @@ try:
     i = mw2.search_tabs.indexOf(mw2.study_panel)
     chk(mw2.search_tabs.isTabVisible(i), "I ko 단어장 탭이 보인다")
     mw2._refresh_favorites_menu()
-    texts = [a.text() for a in mw2.menu_favorites.actions()]
+    texts = [a.text() for a in mw2.menu_fav_other.actions()]
     chk(any("건축법" in t for t in texts) and any("KDS 14" in t for t in texts),
-        "I ko 즐겨찾기 메뉴에 법령·KCSC 구역이 보인다")
+        "I ko 즐겨찾기 `기타` 에 법령·KCSC 구역이 보인다", str(texts))
     mw2.close()
 except Exception:
     import traceback

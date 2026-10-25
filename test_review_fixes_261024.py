@@ -64,15 +64,14 @@ QProcess.startDetached = _orig_sd
 mw.open_pdf = _orig_open
 chk(len(opened) == 1, "B 새 창을 못 띄우면(False, 0) 이 창에서 연다", str(opened))
 
-# C — 1단↔2단 키 표시는 실제로 바꾼 뒤 그 반대 항목에
+# C — 261025-1(입력 SOT §3.2.1, 사용자 결정): 보기 탭 키는 항목마다 하는 일이 하나 — 상태와 무관하게 늘 그 항목에
 va = mw._view_acts
-key = mw._kt("x", "toggle_split").split("\t")[-1] if "\t" in mw._kt("x", "toggle_split") else ""
 mw.act_split.setChecked(True); spin(0.3)
-chk(key and "\t" in va["single"].text() and "\t" not in va["split"].text(),
-    "C1 2단이면 '1단' 항목에만 바꾸는 키", "%r / %r" % (va["single"].text(), va["split"].text()))
+chk(va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2"),
+    "C1 2단이어도 1단·2단 항목에 각자 키", "%r / %r" % (va["single"].text(), va["split"].text()))
 mw.act_split.setChecked(False); spin(0.3)
-chk("\t" in va["split"].text() and "\t" not in va["single"].text(),
-    "C2 1단으로 돌아가면 '2단' 항목에만", "%r / %r" % (va["single"].text(), va["split"].text()))
+chk(va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2"),
+    "C2 1단으로 돌아가도 같다", "%r / %r" % (va["single"].text(), va["split"].text()))
 
 # D — slow 는 한 번 켜지면 유지
 from viewer import perf_mode

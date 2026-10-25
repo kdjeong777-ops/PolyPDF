@@ -3,7 +3,7 @@
 
 사용자 요청: "파일메뉴의 최근 폴더 밑에 최근 파일을 추가해"
 
-A. 파일 메뉴에서 '최근 파일' 이 '최근 폴더' 바로 밑에 있다 · 처음엔 '(최근 파일 없음)'
+A. 즐겨찾기 탭(261025-1)에 '최근 폴더'·'최근 파일' 이 있다 · 처음엔 '(최근 파일 없음)'
 B. PDF 를 열면(open_pdf) 맨 위에 · 다시 열면 중복 없이 맨 위로 · 여러 개 열기(open_pdfs)도 기록
 C. 메뉴 항목을 누르면 그 파일이 열린다 · 없어진 파일은 목록에서 빠진다
 D. 최대 10개 · 설정에 저장되고(recent_files) 다시 읽힌다 · 개인 항목(배포 기본값에서 제외)
@@ -50,8 +50,11 @@ try:
     for m in mw.menuBar().actions():
         if m.menu() is not None and mw.menu_recent in [a.menu() for a in m.menu().actions()]:
             titles = [a.text() for a in m.menu().actions()]
+    # 261025-1(디자인 SOT §2.9.5): 즐겨찾기 탭 — 최근 폴더 · 등록 폴더 · (폴더 단추) · 최근 파일
     i_fold = titles.index("최근 폴더") if "최근 폴더" in titles else -1
-    chk(i_fold >= 0 and titles[i_fold + 1] == "최근 파일", "A '최근 파일' 이 '최근 폴더' 바로 밑", str(titles))
+    chk((i_fold == 0 and titles[1] == "등록 폴더" and "최근 파일" in titles
+                 and titles.index("최근 파일") < titles.index("등록 파일")),
+        "A 즐겨찾기 탭: 최근 폴더 · 등록 폴더 · … · 최근 파일 · 등록 파일", str(titles))
     items = lambda: [a.text() for a in mw.menu_recent_files.actions()]
     chk(items() == ["(최근 파일 없음)"], "A 처음엔 '(최근 파일 없음)'", str(items()))
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-24 10:35+0900\n"
+"POT-Creation-Date: 2026-10-25 10:09+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -428,27 +428,7 @@ msgid "💻 시스템 연동 및 설치"
 msgstr ""
 
 #: viewer/app.py
-msgid "Windows 기본 PDF 앱으로 등록…"
-msgstr ""
-
-#: viewer/app.py
-msgid "기본 PDF 앱 등록"
-msgstr ""
-
-#: viewer/app.py
-msgid "구성요소 설치(녹화·OCR)…"
-msgstr ""
-
-#: viewer/app.py viewer/update_controller.py
-msgid "구성요소 설치"
-msgstr ""
-
-#: viewer/app.py
-msgid "가상 프린터(PolyPDF) 설치·제거…"
-msgstr ""
-
-#: viewer/app.py
-msgid "가상 프린터"
+msgid "등록·설치"
 msgstr ""
 
 #: viewer/app.py
@@ -796,14 +776,6 @@ msgid "일괄 캡쳐 중…"
 msgstr ""
 
 #: viewer/app.py
-msgid "건설기준(KCSC) 즐겨찾기 관리"
-msgstr ""
-
-#: viewer/app.py
-msgid "특허 등록정보 즐겨찾기 관리"
-msgstr ""
-
-#: viewer/app.py
 msgid "암호화 PDF 저장"
 msgstr ""
 
@@ -851,19 +823,19 @@ msgid "설정 초기화"
 msgstr ""
 
 #: viewer/app.py
-msgid "현재 폴더를 즐겨찾기에 추가..."
+msgid "등록 폴더"
 msgstr ""
 
 #: viewer/app.py
-msgid "현재 파일을 즐겨찾기에 추가..."
+msgid "등록 파일"
 msgstr ""
 
 #: viewer/app.py
-msgid "현재 검색어를 즐겨찾기에 추가..."
+msgid "등록 검색어"
 msgstr ""
 
-#: viewer/app.py
-msgid "즐겨찾기 관리..."
+#: viewer/app.py viewer/widgets/shortcuts_dialog.py
+msgid "기타"
 msgstr ""
 
 #: viewer/app.py
@@ -980,8 +952,8 @@ msgstr ""
 msgid "오른쪽 위 탭 숨김 · 스크린샷 보이기"
 msgstr ""
 
-#: viewer/app.py
-msgid "법령/고시"
+#: viewer/app.py viewer/widgets/favorites_dialog.py
+msgid "법령·고시"
 msgstr ""
 
 #: viewer/app.py
@@ -989,27 +961,27 @@ msgid "법제처 법령·고시 검색·본문 보기"
 msgstr ""
 
 #: viewer/app.py
-msgid "건설기준(KCSC)"
-msgstr ""
-
-#: viewer/app.py
-msgid "건설기준"
-msgstr ""
-
-#: viewer/app.py
-msgid "국가건설기준센터(KCSC) KDS·KCS 본문 보기"
-msgstr ""
-
-#: viewer/app.py
 msgid "특허(등록정보)"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/favorites_dialog.py
 msgid "특허"
 msgstr ""
 
 #: viewer/app.py
 msgid "특허청(KIPO) 특허 등록정보 조회"
+msgstr ""
+
+#: viewer/app.py
+msgid "건설기준(KCSC)"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/favorites_dialog.py
+msgid "건설기준"
+msgstr ""
+
+#: viewer/app.py
+msgid "국가건설기준센터(KCSC) KDS·KCS 본문 보기"
 msgstr ""
 
 #: viewer/app.py
@@ -1031,6 +1003,42 @@ msgstr ""
 
 #: viewer/app.py
 msgid "단어장·책갈피 동시 생성..."
+msgstr ""
+
+#: viewer/app.py
+msgid "기본 PDF 앱 등록…"
+msgstr ""
+
+#: viewer/app.py
+msgid "기본 PDF 앱 등록"
+msgstr ""
+
+#: viewer/app.py
+msgid "Windows 기본 PDF 앱으로 등록…"
+msgstr ""
+
+#: viewer/app.py
+msgid "구성요소 설치…"
+msgstr ""
+
+#: viewer/app.py viewer/update_controller.py
+msgid "구성요소 설치"
+msgstr ""
+
+#: viewer/app.py
+msgid "구성요소 설치(녹화·OCR)…"
+msgstr ""
+
+#: viewer/app.py
+msgid "가상 프린터 설치·제거…"
+msgstr ""
+
+#: viewer/app.py
+msgid "가상 프린터"
+msgstr ""
+
+#: viewer/app.py
+msgid "가상 프린터(PolyPDF) 설치·제거…"
 msgstr ""
 
 #: viewer/app.py
@@ -1368,6 +1376,10 @@ msgstr ""
 msgid "사진 붙여넣기"
 msgstr ""
 
+#: viewer/app.py
+msgid "1단 보기"
+msgstr ""
+
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "옆 창에 열기"
 msgstr ""
@@ -1553,27 +1565,43 @@ msgid "내 기본값"
 msgstr ""
 
 #: viewer/app.py
-msgid "즐겨찾기 폴더"
+msgid "현재 폴더 추가"
 msgstr ""
 
 #: viewer/app.py
-msgid "즐겨찾기 파일"
+msgid "현재 파일 추가"
 msgstr ""
 
 #: viewer/app.py
-msgid "즐겨찾기 검색어"
+msgid "현재 검색어 추가"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/favorites_dialog.py
+msgid "항목 관리"
 msgstr ""
 
 #: viewer/app.py
-msgid "법령·고시 즐겨찾기"
+msgid "현재 폴더를 즐겨찾기에 추가..."
 msgstr ""
 
 #: viewer/app.py
-msgid "건설기준(KCSC) 즐겨찾기"
+msgid "현재 파일을 즐겨찾기에 추가..."
 msgstr ""
 
 #: viewer/app.py
-msgid "특허(KIPO) 즐겨찾기"
+msgid "현재 검색어를 즐겨찾기에 추가..."
+msgstr ""
+
+#: viewer/app.py
+msgid "폴더·파일·검색어·법령·고시·특허·건설기준 즐겨찾기를 고칩니다"
+msgstr ""
+
+#: viewer/app.py
+msgid "항목 관리..."
+msgstr ""
+
+#: viewer/app.py
+msgid "(등록된 항목 없음)"
 msgstr ""
 
 #: viewer/app.py
@@ -1922,10 +1950,6 @@ msgstr ""
 msgid "스크린샷 붙여넣기"
 msgstr ""
 
-#: viewer/app.py
-msgid "1단 보기"
-msgstr ""
-
 #: viewer/app.py viewer/widgets/bookmark_tree.py
 msgid "2단 보기"
 msgstr ""
@@ -2033,7 +2057,7 @@ msgid ""
 "pip install openpyxl"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/favorites_dialog.py
 msgid "파일"
 msgstr ""
 
@@ -2135,10 +2159,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "초기화 실패"
-msgstr ""
-
-#: viewer/app.py
-msgid "(아직 등록된 즐겨찾기 없음)"
 msgstr ""
 
 #: viewer/app.py
@@ -2266,10 +2286,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "종료"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/shortcuts_dialog.py
-msgid "기타"
 msgstr ""
 
 #: viewer/app.py
@@ -2839,11 +2855,6 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "'{name}' 을(를) 다시 열었습니다(저장됨)."
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
-msgid "{prefix}{get}  (없음)"
 msgstr ""
 
 #: viewer/app.py
@@ -3821,7 +3832,7 @@ msgstr ""
 msgid "영역"
 msgstr ""
 
-#: viewer/redact.py
+#: viewer/redact.py viewer/widgets/favorites_dialog.py
 msgid "검색어"
 msgstr ""
 
@@ -6255,13 +6266,7 @@ msgid "대상: {file_name}"
 msgstr ""
 
 #: viewer/widgets/favorites_dialog.py
-msgid "즐겨찾기 관리"
-msgstr ""
-
-#: viewer/widgets/favorites_dialog.py
-msgid ""
-"폴더 → 파일 → 검색어 순으로 묶여 있습니다. 같은 종류 안에서 드래그하거나\n"
-"↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정."
+msgid "폴더"
 msgstr ""
 
 #: viewer/widgets/favorites_dialog.py
@@ -6281,7 +6286,23 @@ msgid "새 이름:"
 msgstr ""
 
 #: viewer/widgets/favorites_dialog.py
+msgid "단추 이름"
+msgstr ""
+
+#: viewer/widgets/favorites_dialog.py
+msgid "즐겨찾기 탭 단추에 보일 이름 (비우면 자동):"
+msgstr ""
+
+#: viewer/widgets/favorites_dialog.py
+msgid "드래그하거나 ↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정. 폴더·파일은 앞 5개가 즐겨찾기 탭에 단추로 보입니다."
+msgstr ""
+
+#: viewer/widgets/favorites_dialog.py
 msgid "즐겨찾기 등록"
+msgstr ""
+
+#: viewer/widgets/favorites_dialog.py
+msgid "즐겨찾기 탭 개별 단추에 보일 짧은 이름 — 비우면 가운데를 줄인 이름"
 msgstr ""
 
 #: viewer/widgets/favorites_dialog.py
@@ -8361,6 +8382,99 @@ msgid "테마:"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "고급 설정..."
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "인터넷 사전·법제처·건설기준·특허·번역(Claude) API 키 — 확인하면 바로 저장됩니다"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "시작 시 열 폴더 선택"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "시작 시 열 PDF 선택"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "화면+음성 녹화 (발표 전체화면)"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "비우면 현재 책갈피 폴더에 저장"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "찾기…"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "저장 위치:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "오디오:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "오디오 장치 새로고침"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "마이크 장치:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "시스템 장치:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화/재개 단축키:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "중지 단축키:"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화 테스트 (3초)"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화 저장 폴더"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "녹화 테스트"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "외부 언어팩 사용"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid ""
+"외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
+"프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
+"믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n"
+"\n"
+"켤까요?"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "고급 설정"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "인터넷 사전 (단어장)"
 msgstr ""
 
@@ -8489,88 +8603,7 @@ msgid "API 키 표시 (체크 해제 시 *** 로 가림)"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "시작 시 열 폴더 선택"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "시작 시 열 PDF 선택"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "화면+음성 녹화 (발표 전체화면)"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "비우면 현재 책갈피 폴더에 저장"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "찾기…"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "저장 위치:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "오디오:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "오디오 장치 새로고침"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "마이크 장치:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "시스템 장치:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화/재개 단축키:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "중지 단축키:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화 테스트 (3초)"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화 저장 폴더"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "녹화 테스트"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
 msgid "확인 중…"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "외부 언어팩 사용"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid ""
-"외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
-"프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
-"믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n"
-"\n"
-"켤까요?"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -8587,10 +8620,6 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "가벼운 넘김(느린 컴퓨터):"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "특허 PDF 저장 폴더 선택"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -8626,6 +8655,10 @@ msgid "오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "특허 PDF 저장 폴더 선택"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "<span style='color:#888'>미설치 — [Claude 로그인]을 누르세요</span>"
 msgstr ""
 
@@ -8639,6 +8672,10 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "실패"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "고급 설정 저장됨"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

@@ -76,8 +76,15 @@ chk(env[:3] == ["환경설정...", "단축키 설정...", "사전 및 용어집 
 # 261017-19(디자인 SOT §2.9.1): 마지막 구역 '💻 시스템 연동 및 설치' 의 항목 차례(가상 프린터 SOT §4.6)
 _sys_i = next((i for i, a in enumerate(menu.actions()) if a.isSeparator() and a.text() == "💻 시스템 연동 및 설치"), None)
 sys_items = [a.text() for a in menu.actions()[_sys_i + 1:] if not a.isSeparator()] if _sys_i is not None else []
-chk(sys_items == ["Windows 기본 PDF 앱으로 등록…", "구성요소 설치(녹화·OCR)…", "가상 프린터(PolyPDF) 설치·제거…"],
-    "② '시스템 연동 및 설치' 구역 — PDF 앱 등록 · 구성요소 설치 · 가상 프린터", str(sys_items))
+# 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목은 '등록·설치 ▸' 하나로 — 명령 id 는 그대로
+_inst = next((a for a in menu.actions()[_sys_i + 1:] if a.menu() is not None), None) if _sys_i is not None else None
+inst_items = [a.text() for a in _inst.menu().actions()] if _inst is not None else []
+chk(sys_items == ["등록·설치"] and inst_items == ["기본 PDF 앱 등록…", "구성요소 설치…", "가상 프린터 설치·제거…"],
+    "② '시스템 연동 및 설치' 구역 — 등록·설치 ▸(PDF 앱 등록 · 구성요소 설치 · 가상 프린터)", str((sys_items, inst_items)))
+from viewer.widgets.ribbon import cmd_id as _cid
+chk([_cid(a) for a in (_inst.menu().actions() if _inst else [])] == ["tools.pdf_handler", "tools.components", "tools.vprinter"]
+    and "tools.vprinter" in dict(mw.ribbon_catalog()[0])["도구(&T)"],
+    "② 세 명령 id 는 그대로 — 모음 편집 목록에도 남는다(§2.9.4)")
 chk(not any(t and ("기본값으로 저장" in t or t.startswith("설정 초기화")) for t in items),
     "② 기본값 저장·설정 초기화는 도구 메뉴에서 뺐다(환경설정 창 맨 아래)")
 from viewer.widgets.settings_dialog import SettingsDialog
