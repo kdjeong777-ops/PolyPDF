@@ -33,7 +33,7 @@ ROW_BG = {False: "#e4e4e4", True: "#38383c"}
 ROW_BORDER = {False: "#c8c8c8", True: "#4a4a50"}       # 탭 줄과 리본 줄 사이 1px
 GROUP_BG = {False: "#d8d8d8", True: "#424247"}
 BTN = {False: ("#fafafa", "#b4b4b4", "#222"), True: ("#3e3e42", "#55555a", "#e8e8e8")}        # 바탕·테두리·글
-BTN_DROP = {False: ("#e6e6e6", "#9a9a9a", "#222"), True: ("#5a5a60", "#707078", "#f0f0f0")}
+BTN_DROP = {False: ("#efefef", "#a0a0a0", "#222"), True: ("#5a5a60", "#707078", "#f0f0f0")}
 REBUILD_MS = 10             # 메뉴 항목이 바뀐 뒤 세부 줄을 다시 만들기까지(잇단 바뀜은 한 번으로 모인다)
 
 SEP = "|"                   # 모음의 구분선
