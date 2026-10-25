@@ -65,16 +65,8 @@ def step_text(stage: str, k=None, n=None, page=None, doc_pages=None) -> str:
     """진행 창 2줄 — `단계 k/n · 원본 p쪽`(k/n 은 이 일감의 몇째 쪽, p 는 원본 쪽 번호, 둘 다 1부터). 없는 칸은 뺀다.
     `doc_pages`(문서 쪽 수)를 주면 p 도 그 자릿수에 맞춰 채운다(글 폭이 흔들리지 않게 — 디자인 SOT §2.7)."""
     from viewer.i18n import tr
-    from viewer.progress_text import pad_count, FIGURE_SPACE
-    out = tr(STAGES[stage])
-    if k is not None and n:
-        out += " " + pad_count(k, n)
-    if page is not None:
-        p = str(int(page))
-        if doc_pages:
-            p = FIGURE_SPACE * max(0, len(str(int(doc_pages))) - len(p)) + p
-        out += "  ·  " + tr("원본 {page}쪽").format(page=p)
-    return out
+    from viewer.progress_text import step
+    return step(tr(STAGES[stage]), k, n, page, doc_pages)
 
 
 def page_step(ps, pages, i: int) -> str:

@@ -10,8 +10,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from viewer.i18n import tr_noop
+from viewer.i18n import tr, tr_noop
 
+STAGE_OCR = tr_noop("OCR 읽기")          # 진행 창 2줄 단계 이름(디자인 SOT §2.7, 261026-2)
+STAGE_LAYER = tr_noop("글자층 쓰기")
 TEMP_PREFIX = "polypdf_ocrb_"      # temp_sweep.APP_TEMP_PREFIXES 에도 있다
 OCR_DPI = 300                      # [OCR 다시 읽기] 와 같다(TextOcrPageWorker 기본)
 
@@ -60,12 +62,14 @@ def run_file(path, *, lang: str, drop_watermark: bool, tick, cancelled, db_path=
         fkey = file_key_for(path)
         want = study_ocr.resolve_lang(lang or study_ocr.default_lang())
         todo = [p for p in scan if not store.is_page_done(fkey, p)]
-        n = len(todo) + len(scan)                # OCR 몇 쪽 + 글자층 몇 쪽
-        name = Path(path).name
+        n = len(todo) + len(scan)                # OCR 몇 쪽 + 글자층 몇 쪽(막대 척도 — 글에는 단계마다 따로)
+        npg = doc.page_count
+        # 261026-2(디자인 SOT §2.7): 글은 '단계 k/n · 원본 p쪽' — 파일 이름은 부르는 쪽이 1줄에
+        from viewer.progress_text import step
         for i, pg in enumerate(todo):
             if cancelled():
                 raise _Stop()
-            tick(i, n, f"{name} · OCR p.{pg + 1}")
+            tick(i, n, step(tr(STAGE_OCR), i + 1, len(todo), pg + 1, npg))
             r = study_ocr.build_page(doc, pg, lang=want, dpi=OCR_DPI, force_ocr=True,
                                      drop_watermark_bg=bool(drop_watermark))
             store.save_page(fkey, pg, r["text"], dpi=r["dpi"], engine=r["engine"], source=r["source"],
@@ -85,7 +89,7 @@ def run_file(path, *, lang: str, drop_watermark: bool, tick, cancelled, db_path=
 
         def layer_tick(k, total, p):
             if p >= 0:
-                tick(len(todo) + k, n, f"{name} · p.{p + 1}")
+                tick(len(todo) + k, n, step(tr(STAGE_LAYER), k + 1, total, p + 1, npg))
         tmp, stats = ta.build_layer_pdf(
             path, scan, rows_for=ta.layer_rows_for(path, look),
             fixes_for=lambda p, rows: fs.apply_to_rows(path, p, rows),

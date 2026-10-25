@@ -13,6 +13,8 @@ import re
 from viewer.i18n import tr_noop
 
 KIND_LABELS = {"replace": tr_noop("바뀜"), "delete": tr_noop("지움"), "insert": tr_noop("넣음")}
+# 진행 창 2줄 단계 이름(디자인 SOT §2.7, 261026-2) — 막대 척도(0~1000)는 글에 넣지 않는다(counts=False)
+STAGE_OLD, STAGE_NEW, STAGE_DIFF = tr_noop("옛판 읽기"), tr_noop("새판 읽기"), tr_noop("바뀐 곳 찾기")
 _WS = re.compile(r"\s+")
 
 
@@ -20,15 +22,18 @@ def _norm(t: str) -> str:
     return _WS.sub(" ", str(t or "")).strip()
 
 
-def _lines(path, tick, base: int, span: int) -> list:
-    """`[(쪽, 사각형, 글)]` — 빈 줄·자리 없는 줄은 뺀다."""
+def _lines(path, tick, base: int, span: int, stage: str = "") -> list:
+    """`[(쪽, 사각형, 글)]` — 빈 줄·자리 없는 줄은 뺀다. 진행 글은 `파일 이름` / `옛판 읽기 k/n`(디자인 SOT §2.7, 261026-2)."""
+    from pathlib import Path
     from viewer.convert.source import PageSource
+    from viewer.i18n import tr
+    from viewer.progress_text import step
     out = []
     with PageSource(path, tables="off") as ps:
         n = ps.page_count
         for pg in range(n):
             if tick:
-                tick(base + int(span * pg / max(1, n)), f"p.{pg + 1}")
+                tick(base + int(span * pg / max(1, n)), Path(path).name + "\n" + step(tr(stage), pg + 1, n))
             for r in ps.lines(pg, tables="off", join=False):
                 t = _norm(r.get("text", ""))
                 if t and r.get("rect"):
@@ -91,10 +96,11 @@ def _split_block(old: list, new: list) -> list:
 
 def compare(old_path, new_path, tick=None) -> list:
     """`tick(했음 0~1000, 글)`. 바뀐 곳 목록(차례대로)."""
-    a = _lines(old_path, tick, 0, 450)
-    b = _lines(new_path, tick, 450, 450)
+    a = _lines(old_path, tick, 0, 450, STAGE_OLD)
+    b = _lines(new_path, tick, 450, 450, STAGE_NEW)
     if tick:
-        tick(900, "diff")
+        from viewer.i18n import tr
+        tick(900, tr(STAGE_DIFF))
     sm = difflib.SequenceMatcher(None, [t for _p, _r, t in a], [t for _p, _r, t in b], autojunk=False)
     out = []
     for op, i1, i2, j1, j2 in sm.get_opcodes():

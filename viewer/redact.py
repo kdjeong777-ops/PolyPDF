@@ -10,6 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from viewer.i18n import tr, tr_noop
+from viewer.progress_text import step
+
+# 진행 창 단계 이름(디자인 SOT §2.7, 261026-2) — 날 글 `p.12` 대신 `가리기 3/8 · 원본 12쪽`
+STAGE_FIND, STAGE_APPLY, STAGE_SAVE = tr_noop("자리 찾기"), tr_noop("가리기"), tr_noop("저장")
 
 # (키, 화면 이름, 정규식) — 정규식은 OCR 이 빼먹거나 더 띄운 빈칸도 견딘다
 REDACT_PATTERNS = (
@@ -129,7 +133,7 @@ def find_marks(path, keys=(), custom: str = "", custom_regex: bool = False, tick
         n = doc.page_count
         for pg in range(n):
             if tick:
-                tick(pg, n, f"p.{pg + 1}")
+                tick(pg, n, step(tr(STAGE_FIND), pg + 1, n))
             page = doc.load_page(pg)
             if tx.has_text_layer(doc, pg):
                 for lab, m in matchers:
@@ -172,7 +176,7 @@ def apply(path, marks, *, scrub: bool = True, tick=None) -> tuple:
         pages = sorted(by_page)
         for i, pg in enumerate(pages):
             if tick:
-                tick(i, len(pages) + 1, f"p.{pg + 1}")
+                tick(i, len(pages) + 1, step(tr(STAGE_APPLY), i + 1, len(pages), pg + 1, doc.page_count))
             page = doc.load_page(pg)
             # ① 글 빼기는 자리의 가운데 띠만(TEXT_BAND) — MuPDF 는 글자 상자가 조금이라도 겹치면 지운다. 글자 상자는 글꼴 높이
             #   전체라 윗줄·아랫줄과 몇 pt 겹치고, 자리 전체로 지우면 **고르지 않은 옆 줄 글이 지워졌다**(261014-30 표본 시험).
@@ -194,7 +198,7 @@ def apply(path, marks, *, scrub: bool = True, tick=None) -> tuple:
                       thumbnails=True, xml_metadata=True)
             doc.set_metadata({})
         if tick:
-            tick(len(pages), len(pages) + 1, dst.name)
+            tick(len(pages), len(pages) + 1, step(tr(STAGE_SAVE)) + "  ·  " + dst.name)
         doc.save(str(dst), garbage=4, deflate=True, clean=True)
     finally:
         doc.close()

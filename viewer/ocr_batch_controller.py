@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """OCR 글자층 일괄 진입 (텍스트 창 SOT §5.5, 261014-16) — 책갈피창 우클릭 'OCR 글자층 넣기...' 가 `action_ocr_batch` 로.
 
-- 읽기·쓰기: 배경 일감 하나(`_run_merge_job` — 진행·중지, 파일마다 1000 칸). 파일 하나의 일은 `ocr_batch.run_file`.
+- 읽기·쓰기: 배경 일감 하나(`_run_merge_job(counts=False)` — 진행·중지, 막대는 파일마다 1000 칸, 글은 `progress_text.step`). 파일 하나의 일은 `ocr_batch.run_file`.
 - 원본 덮어쓰기: 끝난 뒤 **메인에서** 파일마다 `_finalize_save`(마스터 §4.7.5 — 저장의 단일 길). 백업은 `build_layer_pdf` 가 한 번.
 방식은 §11.11 표준: 본문 그대로 옮긴 믹스인(`class MainWindow(…, OcrBatchMixin, …)`).
 """
@@ -33,13 +33,18 @@ class OcrBatchMixin:
             return False
         results = []                                     # (원본, run_file 결과 | 예외 문자열)
 
+        from viewer.progress_text import file_head
+
         def _job(progress):
             stop = {"v": False}
             for i, src in enumerate(files):
-                def tick(done, total, label, _i=i):
+                head = file_head(i, len(files), Path(src).name)   # 261026-2(디자인 SOT §2.7): 1000칸 척도는 막대에만
+
+                def tick(done, total, label, _i=i, _head=head):
                     total = max(1, int(total))
                     try:
-                        progress(_i * 1000 + int(1000 * done / total), len(files) * 1000, label)
+                        progress(_i * 1000 + int(1000 * done / total), len(files) * 1000,
+                                 f"{_head}\n{label}" if label else _head)
                     except MergeCancelled:
                         stop["v"] = True
                         raise
@@ -51,7 +56,7 @@ class OcrBatchMixin:
                 except Exception as e:                   # noqa: BLE001 — 한 파일 실패가 일괄을 멈추지 않게
                     results.append((src, str(e)))
             progress(len(files) * 1000, len(files) * 1000, tr("원본에 넣는 중…"))
-        res = self._run_merge_job(_job, tr("OCR 글자층 넣기"))
+        res = self._run_merge_job(_job, tr("OCR 글자층 넣기"), counts=False)
         cancelled = bool(res.get("cancelled"))
         if not results and res.get("err") and not cancelled:
             QMessageBox.warning(self, tr("OCR 글자층 넣기"), res.get("err"))

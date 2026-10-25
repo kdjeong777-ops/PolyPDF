@@ -65,11 +65,16 @@ class CompressMixin:
         level = self._compress_level = dlg.level()
         results = []                                      # (원본, ("ok", 결과, 전, 후) | ("skip", 까닭) | ("fail", 까닭))
 
+        from viewer.progress_text import file_head
+
         def _job(progress):
             for i, src in enumerate(files):
-                def tick(done, total, label, _i=i):
+                # 261026-2(디자인 SOT §2.7): 파일마다 1000칸 척도는 막대에만 — 글은 '파일 i/n · 이름' / '압축 중'
+                head = file_head(i, len(files), Path(src).name) + "\n" + tr("압축 중")
+
+                def tick(done, total, label, _i=i, _head=head):
                     total = max(1, int(total))
-                    if progress(_i * 1000 + int(1000 * done / total), len(files) * 1000, label) is False:
+                    if progress(_i * 1000 + int(1000 * done / total), len(files) * 1000, _head) is False:
                         raise Cancelled()
                 try:
                     out, a, b = pdf_compress.run(src, level, tick)
@@ -80,7 +85,7 @@ class CompressMixin:
                     results.append((src, ("skip", tr(str(e)))))
                 except Exception as e:                     # noqa: BLE001 — 한 파일 실패가 일괄을 멈추지 않게
                     results.append((src, ("fail", str(e))))
-        res = self._run_merge_job(_job, tr("PDF 압축"))
+        res = self._run_merge_job(_job, tr("PDF 압축"), counts=False)
         cancelled = bool(res.get("cancelled"))
         ok = [(s, r) for s, r in results if r[0] == "ok"]
         lines = []

@@ -78,6 +78,16 @@ from viewer import screenshot as ss
 from viewer.resources_path import resource_path
 
 
+def _autotag_text(d: int, t: int) -> str:
+    """자동 태그 상태줄 — 워커는 두 바퀴(특징 읽기·태그 고르기)를 `전체 = 파일 수 × 2` 로 알린다.
+    합친 수(150/200)는 내부 값이라 바퀴마다 `파일 k/n` 으로 보인다(디자인 SOT §2.7, 261026-2)."""
+    from viewer.progress_text import step
+    n = max(1, int(t) // 2)
+    d = int(d)
+    stage, k = (tr("파일 읽기"), d) if d <= n else (tr("태그 고르기"), d - n)
+    return tr("태그 계산") + " · " + step(stage, k, n)
+
+
 def _data_dir() -> Path:
     """index.db 등 데이터 폴더 = 설정 폴더(261009-22: 휴대용 모드·자식 프로세스가 같은 곳을 쓰게 한 길로 — 종전에도 같은 경로)."""
     from viewer.settings_store import settings_dir
@@ -4150,7 +4160,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 raise MergeCancelled()
             out["r"] = (ok_, msg_)
             progress(len(pages), len(pages), tr("완료"))
-        res = self._run_merge_job(_job, tr("Word 로 저장"))
+        res = self._run_merge_job(_job, tr("Word 로 저장"), counts=False)   # 글이 'k/n' 을 말한다(디자인 SOT §2.7, 261026-2)
         if res.get("cancelled"):
             self.status.showMessage(tr("Word 저장을 취소했습니다."), 4000)
             return
@@ -6588,8 +6598,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                           fp_missing_keys=fp_missing, kw_skip_keys=kw_skip)
         self._autotag_worker = w
         self._set_probe_paused(True)              # 260906-8(응답성 SOT §4 ①)
-        w.progress.connect(lambda d, t, n: self.status.showMessage(
-            tr('태그 계산 {d}/{t}').format(d=d, t=t), 1500))
+        w.progress.connect(lambda d, t, n: self.status.showMessage(_autotag_text(d, t), 1500))
         w.finished.connect(self._on_autotag_finished)
         w.error.connect(self._on_autotag_error)
         run_in_thread(w, self._thread_keep)

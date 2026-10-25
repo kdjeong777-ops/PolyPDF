@@ -131,8 +131,9 @@ try:
     chk(steps and all(STEP.match(s) for s in steps) and not any(RAW.search(t) for t in shot["labels"]),
         "B 진행 글 2줄 = '단계 k/n · 원본 p쪽' — parse·(…/1000) 같은 내부 값 없음",
         str([s for s in steps if not STEP.match(s)][:3] or shot["labels"][:3]))
-    chk(any(s.startswith("쪽 분석") and "/10  ·" in s for s in steps) and any(s.startswith("Word 쓰기") for s in steps),
-        "B 범위 변환의 쪽 수는 범위(…/10) — 쪽 분석·Word 쓰기", str(steps[:6]))
+    # 표본은 20ms 마다라 빠른 단계는 놓칠 수 있다 — 단계별 글 전체는 C(convert.run)가 본다
+    chk(any(re.search(r" [ \d]+/10  ·", s) for s in steps) and not any(re.search(r"/(100|1000)\b", s) for s in steps),
+        "B 범위 변환의 쪽 수는 범위(…/10)", str(steps[:6]))
     if out.exists():
         out.unlink()
 
@@ -181,6 +182,79 @@ try:
         last = {w[-1] for _t, w in mine}
         chk(len({t for t, _w in mine}) >= 8 and len(last) == 1,
             f"D {name} — 진행 글 폭이 하트비트·쪽 수가 바뀌어도 같다", f"widths={sorted(last)[:6]} n={len(mine)}")
+
+    # ── E. 같은 종류의 다른 일(261026-2 '다른 유사한 것도') — 실제 함수가 내는 글 ─────────────
+    # E1 문서 비교 — 옛판·새판 읽기 k/n, 바뀐 곳 찾기
+    b2 = root / "R2.pdf"
+    shutil.copy2(str(src), str(b2))
+    from viewer import compare as cmpmod
+    seen = []
+    cmpmod.compare(str(src), str(b2), lambda d, l: seen.append(l))
+    lines2 = [l.split("\n")[-1] for l in seen if l]
+    chk(seen and not any(RAW.search(l) or "diff" in l for l in seen)
+        and any(l.startswith("옛판 읽기") and "/60" in l for l in lines2) and any(l.startswith("새판 읽기") for l in lines2)
+        and "바뀐 곳 찾기" in lines2 and all(l.split("\n")[0] in ("R.pdf", "R2.pdf") for l in seen if "\n" in l),
+        "E1 문서 비교 — '파일 / 옛판 읽기 k/n'·'바뀐 곳 찾기'(p.N·diff 없음)", str(seen[:2] + seen[-2:]))
+    # E2 가림 — 자리 찾기 k/n, 가리기 k/m · 원본 p쪽, 저장
+    from viewer import redact as rdmod
+    rsrc = root / "D.pdf"                      # 글이 적은 쪽은 스캔 쪽으로 본다 — 쪽마다 글을 넉넉히
+    d = fitz.open()
+    for i in range(15):
+        p = d.new_page()
+        for k in range(12):
+            p.insert_text((72, 80 + k * 16), f"Line {k} on page {i + 1} with enough words to count as text.", fontsize=11)
+        if i == 11:
+            p.insert_text((72, 400), "SECRETWORD here", fontsize=11)
+    d.save(str(rsrc)); d.close()
+    seen = []
+    marks = rdmod.find_marks(str(rsrc), custom="SECRETWORD", tick=lambda i, n, l: seen.append(l))
+    seen_apply = []
+    if marks:
+        rdmod.apply(str(rsrc), marks, tick=lambda i, n, l: seen_apply.append(l))
+    chk(seen and all(STEP.match(l) or l.startswith("자리 찾기") for l in seen) and not any(RAW.search(l) for l in seen + seen_apply)
+        and any("가리기 1/1  ·  원본 12쪽" in l for l in seen_apply),
+        "E2 가림 — '자리 찾기 k/n'·'가리기 k/m · 원본 p쪽'(p.N 없음)", str(seen[:2] + seen_apply))
+    # E3 텍스트 창 Word 저장
+    from viewer import text_word as twmod
+    seen = []
+    doc_ = fitz.open(str(src))
+    try:
+        twmod.export_pages_to_docx(str(src), doc_, [11, 12], str(root / "tw.docx"), {},
+                                   progress=lambda i, n, l: seen.append(l) or True)
+    finally:
+        doc_.close()
+    chk(seen and not any(RAW.search(l) for l in seen) and "쪽 쓰기 1/2  ·  원본 12쪽" in seen,
+        "E3 텍스트 창 Word 저장 — '쪽 쓰기 k/n · 원본 p쪽'", str(seen))
+    # E4 PDF 압축 — 실제 처리기: 진행 글에 1000칸 척도가 없다
+    from viewer import compress_controller as ccmod
+    ccmod.CompressDialog.exec = lambda dlg: ccmod.CompressDialog.DialogCode.Accepted
+    shot.update(labels=[], widths=[], cancel_when=None)
+    mw.action_compress([str(src)]); spin(5)
+    labs = [t for t in shot["labels"] if t != "준비 중…" and not t.startswith("준비 중…")]
+    chk(labs and not any(RAW.search(t) or re.search(r"\(\s*[ \d]+/\d+\)", t) for t in labs)
+        and all(t.split("\n")[0] == "R.pdf" for t in labs),
+        "E4 PDF 압축 — 진행 글 '이름 / 압축 중'(파일마다 1000칸 숫자 없음)", str(shot["labels"][:4]))
+    # E5 자동 태그 상태줄 — 두 바퀴를 합친 전체(…/200)가 아니라 바퀴마다 파일 k/n
+    import viewer.app as appmod
+    t1, t2 = appmod._autotag_text(30, 200), appmod._autotag_text(130, 200)
+    chk("파일 읽기" in t1 and "30/100" in t1 and "태그 고르기" in t2 and "30/100" in t2,
+        "E5 자동 태그 상태줄 — '파일 읽기 k/n'·'태그 고르기 k/n'", f"{t1} | {t2}")
+    # E6 코드 전체 — 진행 글에 날 쪽 글을 넣지 않고, 파일마다 1000칸 척도를 쓰는 일은 counts=False
+    vroot = Path(__file__).parent / "viewer"
+    raw_hits, scale_hits = [], []
+    for f in vroot.rglob("*.py"):
+        if "_vendor" in f.parts:
+            continue
+        txt = f.read_text(encoding="utf-8")
+        for ln_no, ln in enumerate(txt.splitlines(), 1):
+            if re.search(r"\b(tick|progress|_tick|on_progress|emit)\(.*(f\"p\.\{|\"p\.%d|OCR p\.)", ln):
+                raw_hits.append(f"{f.name}:{ln_no}")
+        if re.search(r"_i \* 1000 \+", txt):
+            for m in re.finditer(r"_run_merge_job\(([^\n]*)", txt):
+                if "counts=False" not in m.group(1):
+                    scale_hits.append(f"{f.name}: {m.group(0)[:60]}")
+    chk(not raw_hits, "E6 진행 글에 날 쪽 글(p.N)을 넣는 곳이 없다", str(raw_hits))
+    chk(not scale_hits, "E6 파일마다 1000칸 척도를 쓰는 일은 _run_merge_job(counts=False)", str(scale_hits))
     sampler.stop()
 finally:
     shutil.rmtree(root, ignore_errors=True)

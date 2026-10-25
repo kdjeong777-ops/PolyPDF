@@ -9,6 +9,11 @@
 """
 from __future__ import annotations
 
+from viewer.i18n import tr, tr_noop
+from viewer.progress_text import step
+
+STAGE_WRITE = tr_noop("쪽 쓰기")         # 진행 창 2줄 단계 이름(디자인 SOT §2.7, 261026-2)
+
 
 def _apply_run(run, st):
     from docx.shared import Pt
@@ -47,7 +52,9 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
     out = Document()
     try:
         for i, pg in enumerate(pages):
-            if progress is not None and progress(i, len(pages), f"p.{pg + 1}") is False:
+            # 261026-2(디자인 SOT §2.7): 날 글 `p.12` 대신 `쪽 쓰기 3/10 · 원본 12쪽`
+            if progress is not None and progress(i, len(pages), step(tr(STAGE_WRITE), i + 1, len(pages), pg + 1,
+                                                                     doc_fitz.page_count)) is False:
                 return False, ""
             ocr = ""
             if not tx.has_text_layer(doc_fitz, pg):

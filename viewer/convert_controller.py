@@ -69,7 +69,7 @@ class ConvertMixin:
         from viewer import convert
         from viewer.text_word import snapshot_fixes
         from viewer.twoup import MergeCancelled
-        from viewer.progress_text import pad_count
+        from viewer.progress_text import file_head
         fixes = snapshot_fixes()
         forced_all = getattr(self, "_text_force_ocr", None) or set()
         results = []                                    # (원본, 결과|None, 알림|None)
@@ -79,8 +79,7 @@ class ConvertMixin:
                 name = Path(src).name
                 forced = {int(p) for (f, p) in forced_all if str(f) == str(src)}
 
-                head = (name if len(files) == 1
-                        else tr('파일 {count} · {name}').format(count=pad_count(i + 1, len(files)), name=name))
+                head = file_head(i, len(files), name)
 
                 def prog(done, total, label, _i=i, _head=head):
                     # 여러 파일이면 파일 단위로 나눈 칸 안에서 나아간다 — 이 척도는 막대에만(형식 변환 SOT §5, 261026-2)

@@ -30,7 +30,7 @@ class RedactMixin:
         if locked:
             QMessageBox.information(self, tr("가림(개인정보 지우기)"), tr(redact.REFUSE_ENCRYPTED))
             return None
-        dlg = RedactDialog(self, path=path, runner=lambda job, title: self._run_merge_job(job, title))
+        dlg = RedactDialog(self, path=path, runner=lambda job, title: self._run_merge_job(job, title, counts=False))
         if dlg.exec() != dlg.DialogCode.Accepted or not dlg.marks():
             return None
         marks, scrub = dlg.marks(), dlg.scrub()
@@ -42,7 +42,7 @@ class RedactMixin:
                     from viewer.twoup import MergeCancelled
                     raise MergeCancelled()
             box["out"] = redact.apply(path, marks, scrub=scrub, tick=tick)
-        res = self._run_merge_job(job, tr("가림(개인정보 지우기)"))
+        res = self._run_merge_job(job, tr("가림(개인정보 지우기)"), counts=False)   # 글이 'k/n' 을 말한다(디자인 SOT §2.7)
         if "out" not in box:
             if res.get("err"):
                 QMessageBox.warning(self, tr("가림(개인정보 지우기)"), str(res.get("err")))

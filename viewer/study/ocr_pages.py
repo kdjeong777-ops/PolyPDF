@@ -102,7 +102,8 @@ class OcrPages:
                 pass
         if not run or self.should_cancel():
             return [], 0
-        self.progress(f"OCR p.{pno1}")
+        from viewer.i18n import tr                # 261026-2(디자인 SOT §2.7): 날 글 'OCR p.12' 대신
+        self.progress(tr("OCR {pg}쪽 읽는 중…").format(pg=pno1))
         self.pace()
         res = self._ocr.build_page(self.doc, pno1 - 1, lang=self.lang, dpi=DPI,
                                    force_ocr=True, drop_watermark_bg=True)

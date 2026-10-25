@@ -74,7 +74,7 @@ class CompareMixin:
                 if progress(int(done), 1000, label) is False:
                     raise MergeCancelled()
             box["ch"] = compare.compare(old, new, tick)
-        res = self._run_merge_job(job, tr("문서 비교"))
+        res = self._run_merge_job(job, tr("문서 비교"), counts=False)   # 막대 척도 0~1000 은 글에 넣지 않는다(디자인 SOT §2.7)
         if "ch" not in box:
             if res.get("err"):
                 QMessageBox.warning(self, tr("문서 비교"), str(res.get("err")))

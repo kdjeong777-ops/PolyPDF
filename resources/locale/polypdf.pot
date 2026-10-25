@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-26 04:06+0900\n"
+"POT-Creation-Date: 2026-10-26 04:21+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -158,6 +158,18 @@ msgid "책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다."
 msgstr ""
 
 #: viewer/app.py
+msgid "파일 읽기"
+msgstr ""
+
+#: viewer/app.py
+msgid "태그 고르기"
+msgstr ""
+
+#: viewer/app.py
+msgid "태그 계산"
+msgstr ""
+
+#: viewer/app.py
 msgid "오른쪽 패널 펼치기/접기"
 msgstr ""
 
@@ -274,7 +286,7 @@ msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다.
 msgstr ""
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
-#: viewer/jobs_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/jobs_controller.py viewer/redact.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
 #: viewer/widgets/thumbs_list.py
 msgid "저장"
@@ -2720,11 +2732,6 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
-msgid "태그 계산 {d}/{t}"
-msgstr ""
-
-#: viewer/app.py
-#, python-brace-format
 msgid "검색 오류: {e}"
 msgstr ""
 
@@ -2910,6 +2917,18 @@ msgstr ""
 msgid "넣음"
 msgstr ""
 
+#: viewer/compare.py
+msgid "옛판 읽기"
+msgstr ""
+
+#: viewer/compare.py
+msgid "새판 읽기"
+msgstr ""
+
+#: viewer/compare.py
+msgid "바뀐 곳 찾기"
+msgstr ""
+
 #: viewer/compare_controller.py
 msgid "문서 비교"
 msgstr ""
@@ -2967,6 +2986,10 @@ msgstr ""
 #: viewer/compress_controller.py
 #, python-brace-format
 msgid "PDF {n}개를 압축해 새 파일로 저장합니다."
+msgstr ""
+
+#: viewer/compress_controller.py
+msgid "압축 중"
 msgstr ""
 
 #: viewer/compress_controller.py viewer/ocr_batch_controller.py
@@ -3043,11 +3066,6 @@ msgstr ""
 msgid "이미지 (PNG)"
 msgstr ""
 
-#: viewer/convert/__init__.py
-#, python-brace-format
-msgid "원본 {page}쪽"
-msgstr ""
-
 #: viewer/convert/proc.py
 msgid "변환 프로세스를 띄우지 못했습니다"
 msgstr ""
@@ -3094,11 +3112,6 @@ msgstr ""
 
 #: viewer/convert_controller.py
 msgid "폴더를 열까요?"
-msgstr ""
-
-#: viewer/convert_controller.py
-#, python-brace-format
-msgid "파일 {count} · {name}"
 msgstr ""
 
 #: viewer/convert_controller.py
@@ -3505,6 +3518,14 @@ msgid "{why} 쪽이 부드럽게 넘어가도록 '가벼운 넘김' 으로 바�
 msgstr ""
 
 #: viewer/ocr_batch.py
+msgid "OCR 읽기"
+msgstr ""
+
+#: viewer/ocr_batch.py
+msgid "글자층 쓰기"
+msgstr ""
+
+#: viewer/ocr_batch.py
 msgid "서명된 PDF — 덮어쓰면 서명이 깨집니다"
 msgstr ""
 
@@ -3863,6 +3884,16 @@ msgstr ""
 msgid "파일 읽는 중… {name}"
 msgstr ""
 
+#: viewer/progress_text.py
+#, python-brace-format
+msgid "파일 {count} · {name}"
+msgstr ""
+
+#: viewer/progress_text.py
+#, python-brace-format
+msgid "원본 {page}쪽"
+msgstr ""
+
 #: viewer/recorder.py
 msgid "이미 녹화 중입니다."
 msgstr ""
@@ -3890,6 +3921,14 @@ msgstr ""
 
 #: viewer/redact.py
 msgid "암호 PDF 입니다 — 사본이 암호 없이 저장되므로 암호를 풀고 다시 하세요"
+msgstr ""
+
+#: viewer/redact.py
+msgid "자리 찾기"
+msgstr ""
+
+#: viewer/redact.py
+msgid "가리기"
 msgstr ""
 
 #: viewer/redact.py
@@ -4532,6 +4571,11 @@ msgstr ""
 msgid "헤딩 {n}개"
 msgstr ""
 
+#: viewer/study/ocr_pages.py
+#, python-brace-format
+msgid "OCR {pg}쪽 읽는 중…"
+msgstr ""
+
 #: viewer/study/translate_api.py
 msgid "Claude Opus 4.8 (최고 품질·1M)"
 msgstr ""
@@ -4658,6 +4702,10 @@ msgstr ""
 #: viewer/text_apply.py
 #, python-brace-format
 msgid "PyMuPDF 없음: {e}"
+msgstr ""
+
+#: viewer/text_word.py
+msgid "쪽 쓰기"
 msgstr ""
 
 #: viewer/twoup.py
