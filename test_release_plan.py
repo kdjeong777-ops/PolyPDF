@@ -170,5 +170,32 @@ try:
 finally:
     overlap.system_busy_pct = _busy_orig
 
+# K. 261026-4(릴리스 SOT §4.5.1): 끝자리 패치 정식판은 바뀐 곳에 맞춘 줄인 점검 — soak·프린터 설치·부하는 닿을 때만
+chk(rt.is_stable_patch("1.0.1") and not rt.is_stable_patch("1.1.0") and not rt.is_stable_patch("1.0.1-beta.1")
+    and not rt.is_stable_patch("1.0.0"), "K 끝자리 패치 정식 판별(1.0.1 예, 1.1.0·1.0.0·베타 아니오)")
+pc = rt.patch_checks([("M", "viewer/convert/docx_writer.py", 30), ("A", "viewer/progress_text.py", 40)],
+                     diff("viewer/convert/docx_writer.py", "+    doc.add_paragraph(t)"))
+chk(pc == {"soak": "", "vprinter": "", "load": ""}, "K 변환 코드만 바뀐 패치 — soak·프린터·부하 건너뜀", pc)
+pc = rt.patch_checks([("M", "viewer/convert_controller.py", 5)],
+                     diff("viewer/convert_controller.py", "+        QTimer.singleShot(0, self._tick)"))
+chk(pc["soak"] and pc["load"] and not pc["vprinter"], "K 타이머 줄을 바꾸면 soak·부하", pc)
+pc = rt.patch_checks([("M", "installer/PolyPDF.iss", 2)], diff("installer/PolyPDF.iss", "+x"))
+chk(pc["vprinter"] and not pc["soak"], "K 설치 프로그램을 바꾸면 프린터 설치 확인", pc)
+pc = rt.patch_checks([("M", "viewer/app.py", 3)], diff("viewer/app.py", "+        x = 1", head="def closeEvent(self, e):"))
+chk(pc["soak"] and not pc["load"], "K app.py 시작·종료 함수 → soak", pc)
+pc = rt.patch_checks([("M", "viewer/widgets/bookmark_tree.py", 3)], diff("viewer/widgets/bookmark_tree.py", "+x"))
+chk(pc["soak"] and pc["load"], "K 책갈피 트리 → soak·부하", pc)
+_ch = rt._changes
+try:
+    rt._changes = lambda base: ([("M", "viewer/convert/docx_writer.py", 30)], diff("viewer/convert/docx_writer.py", "+x"))
+    txt = "\n".join(rt.stable_lines("1.0.1", "v1.0.0"))
+    chk("§4.5.1" in txt and "건너뜀" in txt and "checks --ui" in txt and "fresh" in txt,
+        "K plan 이 패치 정식판에 줄인 점검 목록(늘 할 것 + 건너뛸 것)을 낸다", txt)
+    chk("§4.5 전부" in "\n".join(rt.stable_lines("1.1.0", "v1.0.0")), "K 기능 묶음 정식은 §4.5 전부")
+    chk("§4.5 전부" in "\n".join(rt.stable_lines("1.0.1", "")), "K 앞선 릴리스 태그가 없으면 전부")
+    chk(rt.stable_lines("1.0.1-beta.1", "v1.0.0") == [], "K 베타는 정식판 목록을 내지 않는다")
+finally:
+    rt._changes = _ch
+
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)

@@ -267,6 +267,42 @@ FOCUS = [   # (경로 앞부분, 볼 것, 측정 대상) — 상시 점검 목�
 ]
 
 
+# 261026-4(릴리스 SOT §4.5.1): 끝자리 패치 정식판(X.Y.Z, Z>0)은 '바뀐 곳에 맞춘 줄인 점검' — 아래 셋은 바뀐 곳이 그 영역에 닿을 때만.
+#   오래 켜 두기(soak): 메인 루프·스레드·타이머·색인·메모리·렌더 — BUILD_PATHS·BUILD_TOKENS 줄·APP_FUNCS 에 더해 이 경로
+SOAK_PATHS = BUILD_PATHS + ("viewer/pdf_doc.py", "viewer/widgets/main_view.py", "viewer/widgets/bookmark_tree.py",
+                            "viewer/widgets/text_panel.py", "viewer/text_extract2.py")
+#   가상 프린터 설치 확인(vprinter_check.py install): 설치 프로그램·동봉물·프린터 코드
+VPRINTER_PATHS = ("installer/", "printer/", "viewer/vprinter")
+#   부하 시험(load_test.py): 색인 중 화면 조작 — 트리·목록·테마·본문·색인, 또는 BUILD_TOKENS 줄
+LOAD_PATHS = ("viewer/widgets/bookmark_tree.py", "viewer/widgets/thumbs_list.py", "viewer/widgets/main_view.py",
+              "viewer/theme.py", "viewer/indexer.py", "viewer/index_proc.py", "viewer/workers.py")
+
+
+def is_stable_patch(ver: str) -> bool:
+    """접미사 없는 X.Y.Z 이고 Z>0 — 릴리스 SOT §2.3 '끝자리 = 버그 수정·작은 UI 조정'."""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", ver or "")
+    return bool(m) and int(m.group(3)) > 0
+
+
+def patch_checks(changes: list, diff_text: str) -> dict:
+    """261026-4(릴리스 SOT §4.5.1): 패치 정식판에서 조건부 셋(soak·프린터 설치·부하)을 할지 — {이름: 까닭 또는 ''}."""
+    paths = [p for _, p, _ in changes if not NO_BUILD.search(p)]
+    cur, tok, app_hit = None, set(), False
+    for line in diff_text.splitlines():
+        if line.startswith("+++ "):
+            cur = line[6:] if line.startswith("+++ b/") else None
+        elif line.startswith("@@") and cur == "viewer/app.py" and APP_FUNCS.search(line):
+            app_hit = True
+        elif cur and line[:1] in "+-" and not line.startswith(("+++", "---")) and not NO_BUILD.search(cur) \
+                and BUILD_TOKENS.search(line):
+            tok.add(cur)
+    soak = [p for p in paths if p.startswith(SOAK_PATHS)] + sorted(tok) + (["app.py 시작·종료 함수"] if app_hit else [])
+    vpr = [p for p in paths if p.startswith(VPRINTER_PATHS)]
+    load = [p for p in paths if p.startswith(LOAD_PATHS)] + sorted(tok)
+    why = lambda xs: ", ".join(dict.fromkeys(xs))
+    return {"soak": why(soak), "vprinter": why(vpr), "load": why(load)}
+
+
 def classify(changes: list, diff_text: str) -> dict:
     """changes = [(상태, 경로, 바뀐 줄 수)], diff_text = `git diff -U0`(파이썬 함수 머리 포함).
     돌려줌: level(install|build|skip), reasons, focus, code_lines. **skip 은 후보** — 사용자에게 묻는다(릴리스 SOT §3.1)."""
@@ -427,6 +463,37 @@ def version_order_problem(new: str, tags: list) -> str:
     return ""
 
 
+def _changes(base: str) -> tuple:
+    """base..HEAD 의 ([(상태, 경로, 바뀐 줄 수)], `git diff -U0` — 파이썬 함수 머리 포함)."""
+    ns = [l.split("\t") for l in git("diff", "--name-status", base + "..HEAD").splitlines() if l]
+    nums = {}
+    for l in git("diff", "--numstat", base + "..HEAD").splitlines():
+        a, d, p = l.split("\t", 2)
+        nums[p] = (int(a) if a.isdigit() else 0) + (int(d) if d.isdigit() else 0)
+    attrs = REVIEW / ".plan_attrs"
+    REVIEW.mkdir(exist_ok=True)
+    attrs.write_text("*.py diff=python\n", encoding="utf-8")      # 함수 머리(@@ … def x)를 얻으려고
+    diff = git("-c", "core.attributesFile=" + str(attrs), "diff", "-U0", base + "..HEAD")
+    return [(r[0], r[-1], nums.get(r[-1], 0)) for r in ns], diff
+
+
+def stable_lines(ver: str, last_tag: str) -> list:
+    """261026-4(릴리스 SOT §4.5·§4.5.1): 정식판이면 그 점검 목록 — 기능 묶음·첫 정식은 §4.5 전부, 끝자리 패치는 줄인 점검."""
+    if not re.fullmatch(r"\d+\.\d+\.\d+", ver or ""):
+        return []
+    if not is_stable_patch(ver) or not last_tag:
+        return ["", "## 정식판 — §4.5 전부(기능 묶음·첫 정식)", "",
+                "- §4.1 전부(측정은 설치 시험) + `soak_test.py` · `stable_check.py fresh`·`report --online` · `vprinter_check.py install` · 부하 시험"]
+    pc = patch_checks(*_changes(last_tag))
+    L = ["", "## 정식 패치(끝자리, 릴리스 SOT §4.5.1) — 마지막 릴리스 `%s` 뒤 바뀐 곳에 맞춘 점검" % last_tag, "",
+         "- 늘: 전체 검사 `checks --ui` · 빌드 시험 · CI 설치 시험(업그레이드) · `stable_check.py fresh --exe <설치본> --out <폴더>`·`report --out <폴더> --online` · 바뀐 기능 손 확인"]
+    for key, what, cmd in (("soak", "오래 켜 두기", "python scripts\\soak_test.py"),
+                           ("vprinter", "가상 프린터 설치 확인", "python scripts\\vprinter_check.py install <설치 파일>"),
+                           ("load", "부하 시험", "python scripts\\load_test.py")):
+        L.append("- %s: %s" % (what, ("**한다** `%s` — 닿은 곳: %s" % (cmd, pc[key])) if pc[key] else "건너뜀(바뀐 곳이 닿지 않음)"))
+    return L
+
+
 def released_tags() -> tuple:
     """(태그 목록, 출처) — `updater.check_latest` 와 같은 기준: **지금 있는 GitHub 릴리스**(초안 제외)의 태그.
     261026: 6월 옛 번호 체계의 `v2.41.0` **태그**가 남아 있어 git 태그로 견주면 1.0.0 이 '거꾸로' 로 멈췄다 — 그 릴리스는
@@ -450,16 +517,7 @@ def plan(base_arg, urgent=False) -> int:
     base = base_arg or (bl or {}).get("commit")
     if not base:
         raise SystemExit("기준점이 없다 — --base <커밋|태그> 로 주거나 시험을 한 번 통과시켜 %s 를 만든다" % BASELINE)
-    ns = [l.split("\t") for l in git("diff", "--name-status", base + "..HEAD").splitlines() if l]
-    nums = {}
-    for l in git("diff", "--numstat", base + "..HEAD").splitlines():
-        a, d, p = l.split("\t", 2)
-        nums[p] = (int(a) if a.isdigit() else 0) + (int(d) if d.isdigit() else 0)
-    changes = [(r[0], r[-1], nums.get(r[-1], 0)) for r in ns]
-    attrs = REVIEW / ".plan_attrs"
-    REVIEW.mkdir(exist_ok=True)
-    attrs.write_text("*.py diff=python\n", encoding="utf-8")      # 함수 머리(@@ … def x)를 얻으려고
-    diff = git("-c", "core.attributesFile=" + str(attrs), "diff", "-U0", base + "..HEAD")
+    changes, diff = _changes(base)
     c = classify(changes, diff)
     if urgent and c["level"] == "skip":    # 긴급 릴리스는 생략하지 않는다(릴리스 SOT §2.1)
         c["level"] = "build"
@@ -491,7 +549,7 @@ def plan(base_arg, urgent=False) -> int:
     L += ["", "## 기준점 이후 커밋", ""] + ["- " + l for l in git("log", "--oneline", base + "..HEAD").splitlines()]
     L += ["", "## 이번 변경과 관련된 항목", ""]
     L += ["- %s%s" % (w, " — `--cases %s`" % k if k else "") for w, k in c["focus"]] or ["- (경로로 고른 항목 없음 — 마스터 §0 행을 보고 손 확인 단계를 더한다)"]
-    if not urgent:
+    if not urgent and not (is_stable_patch(source_version()) and u["tag"]):   # 패치 정식판은 §4.5.1 목록이 대신한다(아래)
         L += ["", "## 묶음 릴리스 — 최대 범위(릴리스 SOT §4.1)", "",
               "- 전체 검사: `python scripts\\release_test.py checks --ui` (CI 가 돌리지 않는 것까지 `test_*.py` 전부 + 화면 점검 ko·en)",
               "- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)",
@@ -500,6 +558,7 @@ def plan(base_arg, urgent=False) -> int:
               "- 기능 점검표(릴리스 SOT §4.2) — 시험 프로필로 띄운 빌드본에서 주요 기능을 차례로"]
         if c["level"] == "skip":
             L.append("- 쌓인 변경이 미미하다 — 측정 묶음·기능 점검표를 건너뛸지 사용자에게 묻는다(전체 검사는 한다)")
+    L += stable_lines(source_version(), u["tag"])
     L += ["", "## 상시 항목", ""]
     if c["level"] == "skip":
         L.append("- 측정 묶음을 돌리지 않는다 — 정지·자식 남음·색인 속도는 이번 판에서 보지 않는다(못 한 것)")
