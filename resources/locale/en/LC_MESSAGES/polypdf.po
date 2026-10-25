@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-25 15:16+0900\n"
+"POT-Creation-Date: 2026-10-25 16:28+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -6648,7 +6648,8 @@ msgstr "Source (EN) — editable"
 msgid "번역(KO) — 수정 가능"
 msgstr "Translation (KO) — editable"
 
-#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/translate_dialog.py
+#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/study_panel.py
+#: viewer/widgets/translate_dialog.py
 msgid "출처"
 msgstr "Source"
 
@@ -8249,8 +8250,8 @@ msgid "본문 읽기/정지 (머리말·표·수식·그림 제외)"
 msgstr "Read body aloud / stop (excluding headers, tables, formulas, figures)"
 
 #: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
-msgid "재생구간 ▾"
-msgstr "Range ▾"
+msgid "재생구간"
+msgstr "Range"
 
 #: viewer/widgets/read_aloud.py
 msgid "재생 구간 / 빠르기 / 성우"
@@ -9914,10 +9915,6 @@ msgid "접기"
 msgstr "Collapse"
 
 #: viewer/widgets/study_panel.py
-msgid "출처 ▾"
-msgstr "Source ▾"
-
-#: viewer/widgets/study_panel.py
 msgid "표시할 사전 출처를 켜고 끕니다(기본/사용자 용어집)."
 msgstr "Turn dictionary sources on/off for display (default/user glossaries)."
 
@@ -9938,8 +9935,8 @@ msgid "단어장 자동 읽기 시작/정지"
 msgstr "Start/stop reading the vocabulary aloud"
 
 #: viewer/widgets/study_panel.py
-msgid "재생내용 ▾"
-msgstr "Playback ▾"
+msgid "재생내용"
+msgstr "Playback"
 
 #: viewer/widgets/study_panel.py
 msgid "선택시읽기"
@@ -12181,4 +12178,7 @@ msgstr "Getting Started"
 
 #~ msgid "화면 스타일"
 #~ msgstr "Appearance"
+
+#~ msgid "출처 ▾"
+#~ msgstr "Source ▾"
 

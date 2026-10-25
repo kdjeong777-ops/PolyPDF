@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-25 15:16+0900\n"
+"POT-Creation-Date: 2026-10-25 16:28+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -6406,7 +6406,8 @@ msgstr ""
 msgid "번역(KO) — 수정 가능"
 msgstr ""
 
-#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/translate_dialog.py
+#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/study_panel.py
+#: viewer/widgets/translate_dialog.py
 msgid "출처"
 msgstr ""
 
@@ -7982,7 +7983,7 @@ msgid "본문 읽기/정지 (머리말·표·수식·그림 제외)"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
-msgid "재생구간 ▾"
+msgid "재생구간"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py
@@ -9642,10 +9643,6 @@ msgid "접기"
 msgstr ""
 
 #: viewer/widgets/study_panel.py
-msgid "출처 ▾"
-msgstr ""
-
-#: viewer/widgets/study_panel.py
 msgid "표시할 사전 출처를 켜고 끕니다(기본/사용자 용어집)."
 msgstr ""
 
@@ -9666,7 +9663,7 @@ msgid "단어장 자동 읽기 시작/정지"
 msgstr ""
 
 #: viewer/widgets/study_panel.py
-msgid "재생내용 ▾"
+msgid "재생내용"
 msgstr ""
 
 #: viewer/widgets/study_panel.py

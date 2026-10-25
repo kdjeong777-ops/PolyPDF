@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 from viewer.i18n import tr                   # 261008: 화면 문구(다국어 SOT §6)
+from viewer.widgets.read_aloud import set_play_state
+from viewer.widgets.icons import drop_button
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent
@@ -228,7 +230,8 @@ class StudyPanel(QWidget):
         flow.addWidget(self.btn_expand)
         # 260611-102(P2): 사전 출처 선택(일반/○○지침/사용자 …) on/off
         self.btn_src = QToolButton()
-        self.btn_src.setText(tr("출처 ▾"))
+        self.btn_src.setText(tr("출처"))      # 261025-10(디자인 SOT §2.7): ▾ 는 Qt 메뉴 화살표 하나
+        drop_button(self.btn_src)
         self.btn_src.setToolTip(tr("표시할 사전 출처를 켜고 끕니다(기본/사용자 용어집)."))
         self.btn_src.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.btn_src.setMenu(_StayOpenMenu(self.btn_src))   # 260615-23: 연속 토글
@@ -246,18 +249,18 @@ class StudyPanel(QWidget):
         # 읽기 — ▶/■ 토글 + 재생구간 + 재생내용 + 선택시읽기
         flow.addWidget(QLabel(tr("읽기")))
         self.btn_play = QToolButton()
-        self.btn_play.setText("▶")
+        set_play_state(self.btn_play, False)     # 261025-10: 본문 도구 줄과 같은 색 아이콘(디자인 SOT §4.5)
         self.btn_play.setToolTip(tr("단어장 자동 읽기 시작/정지"))
-        self.btn_play.setStyleSheet("QToolButton{color:#1565c0;font-size:15px;font-weight:bold;}")
         self.btn_play.clicked.connect(self._on_play_clicked)
         flow.addWidget(self.btn_play)
         self._read_mode = READ_ALL_REPEAT     # 전체 연속 기본
         self.btn_readmode = self._make_readmode_button()
-        self.btn_readmode.setText(self._read_mode + " ▾")
+        self.btn_readmode.setText(self._read_mode)
         flow.addWidget(self.btn_readmode)
         # 재생내용 풀다운(한글뜻/영어뜻/예시)
         self.btn_content = QToolButton()
-        self.btn_content.setText(tr("재생내용 ▾"))
+        self.btn_content.setText(tr("재생내용"))
+        drop_button(self.btn_content)
         self.btn_content.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         cm = QMenu(self.btn_content)
         self.act_play_ko = QAction(tr("한글뜻"), cm, checkable=True)
@@ -314,7 +317,8 @@ class StudyPanel(QWidget):
     # --- 재생구간 메뉴(구간 | 빠르기 | 성우) — 빠르기/성우는 본화면과 공유 ---
     def _make_readmode_button(self) -> QToolButton:
         btn = QToolButton()
-        btn.setText(tr("재생구간 ▾"))
+        btn.setText(tr("재생구간"))
+        drop_button(btn)
         btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(btn)
         g = QActionGroup(menu); g.setExclusive(True)
@@ -360,7 +364,7 @@ class StudyPanel(QWidget):
 
     def _set_read_mode(self, mode: str) -> None:
         self._read_mode = mode
-        self.btn_readmode.setText(mode + " ▾")
+        self.btn_readmode.setText(mode)
 
     # --- 외부 API ----------------------------------------------------------
     def set_status(self, text: str) -> None:
@@ -381,10 +385,7 @@ class StudyPanel(QWidget):
 
     def set_playing(self, on: bool) -> None:
         self._playing = bool(on)
-        self.btn_play.setText("■" if on else "▶")
-        self.btn_play.setStyleSheet(
-            "QToolButton{color:%s;font-size:15px;font-weight:bold;}"
-            % ("#c0392b" if on else "#1565c0"))
+        set_play_state(self.btn_play, on)
 
     def _on_play_clicked(self) -> None:
         self.set_playing(not self._playing)

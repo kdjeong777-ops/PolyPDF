@@ -635,17 +635,33 @@ class ReadAloud(QObject):
             return ""
 
 
+PLAY_ICON_PX = 14      # 261025-10(디자인 SOT §2.10): 읽기 ▶/■ 그림 크기
+
+
+def set_play_state(btn, active: bool, dark=None) -> None:
+    """읽기 단추 ▶/■ — 글자는 상태 표시(보이지 않는다), 보이는 것은 색 아이콘(디자인 SOT §4.5).
+    종전 글리프 ▶ 는 글꼴 기준선 탓에 아래로 처졌다(261025-10). 테마를 바꾸면 다시 부른다."""
+    from PyQt6.QtCore import QSize
+    from viewer.widgets.icons import color_icon
+    btn.setText("■" if active else "▶")
+    btn.setIcon(color_icon("stop" if active else "play", dark))
+    btn.setIconSize(QSize(PLAY_ICON_PX, PLAY_ICON_PX))
+    btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+
+
 def make_read_buttons(controller: ReadAloud, parent=None):
     """본문 읽기 — (1) 파란 ▶/■ 토글 버튼  (2) 별도 풀다운 메뉴 버튼.
     메뉴: (1회, 연속, 전체, 전체연속) | 빠르기 | 성우. 빠르기·성우는 단어장과 공유."""
     btn = QToolButton(parent)
-    btn.setText("▶")
-    btn.setStyleSheet("QToolButton{color:#1565c0;font-size:16px;font-weight:bold;}")
+    set_play_state(btn, False)
     btn.setToolTip(tr("본문 읽기/정지 (머리말·표·수식·그림 제외)"))
     btn.clicked.connect(controller.toggle)
 
     menu_btn = QToolButton(parent)
-    menu_btn.setText(tr("재생구간 ▾"))
+    # 261025-10(디자인 SOT §2.7): 드롭다운 표시는 Qt 메뉴 화살표 하나 — 글자에 ▾ 를 붙이지 않는다
+    menu_btn.setText(tr("재생구간"))
+    from viewer.widgets.icons import drop_button
+    drop_button(menu_btn)
     menu_btn.setToolTip(tr("재생 구간 / 빠르기 / 성우"))
     menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     menu = QMenu(menu_btn)
@@ -694,14 +710,12 @@ def make_read_buttons(controller: ReadAloud, parent=None):
     menu_btn.setMenu(menu)
 
     def on_mode_text():
-        menu_btn.setText(tr(controller.mode) + " ▾")     # 값(한글 키)은 그대로, 표시만 번역
+        menu_btn.setText(tr(controller.mode))     # 값(한글 키)은 그대로, 표시만 번역
     on_mode_text()
     for a in g_mode.actions():
         a.triggered.connect(lambda *_: on_mode_text())
 
     def on_state(active):
-        btn.setText("■" if active else "▶")
-        btn.setStyleSheet("QToolButton{color:%s;font-size:16px;font-weight:bold;}"
-                          % ("#c0392b" if active else "#1565c0"))
+        set_play_state(btn, active)
     controller.stateChanged.connect(on_state)
     return btn, menu_btn

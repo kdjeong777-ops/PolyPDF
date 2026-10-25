@@ -186,6 +186,76 @@ _DRAW = {
 }
 
 
+# --- 색 아이콘(채움) — 본문 도구 줄의 읽기 ▶/■·캡처 카메라 (261025-10, 디자인 SOT §4.5) ----------
+#   글리프 ▶·■ 는 글꼴 기준선 탓에 단추 가운데보다 아래로 처졌다 — 16x16 캔버스 가운데에 그린다.
+#   다크는 같은 색 계열을 밝게(어두운 바탕에서 또렷하게). 값은 이 표 하나.
+ACCENT = {"play": {False: "#1565c0", True: "#5aa0f0"},
+          "stop": {False: "#c0392b", True: "#e05545"}}
+ACCENT["camera"] = ACCENT["play"]
+
+
+def _play(p, c):
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawPolygon(QPolygonF([QPointF(4.0, 2.0), QPointF(4.0, 14.0), QPointF(14.0, 8.0)]))
+
+
+def _stop(p, c):
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawRoundedRect(QRectF(3.0, 3.0, 10.0, 10.0), 1.2, 1.2)
+
+
+def _camera(p, c):
+    """카메라 몸체(위 가운데 뷰파인더 턱) + 렌즈 고리 + 오른쪽 위 플래시 점 — 렌즈·플래시는 뚫어 바탕이 보인다."""
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawRoundedRect(QRectF(0.5, 4.0, 15.0, 10.5), 2.0, 2.0)
+    p.drawPolygon(QPolygonF([QPointF(4.6, 4.5), QPointF(5.8, 1.8), QPointF(10.2, 1.8), QPointF(11.4, 4.5)]))
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+    p.drawEllipse(QPointF(8.0, 9.2), 3.9, 3.9)
+    p.drawEllipse(QPointF(13.1, 6.4), 0.9, 0.9)
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+    p.drawEllipse(QPointF(8.0, 9.2), 2.5, 2.5)
+
+
+_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera}
+
+# 261025-10(디자인 SOT §2.7): 글자 + 메뉴 단추의 드롭다운 표시는 **Qt 메뉴 화살표 하나**(오른쪽 아래) — 글자에 ▾ 를 붙이지 않는다.
+#   글자가 화살표에 붙지 않게 오른쪽 안쪽 여백만 준다(바탕·테두리는 기본 스타일 그대로).
+DROP_PAD_RIGHT = 10
+
+
+def drop_button(btn) -> None:
+    """메뉴가 달린 글자 단추(QToolButton) — 화살표 자리만큼 오른쪽 여백."""
+    btn.setStyleSheet("QToolButton{padding-right:%dpx;}" % DROP_PAD_RIGHT)
+
+
+def color_icon(name: str, dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) -> QIcon:
+    """이름으로 테마별 색 아이콘(채움) — `ACCENT` 표의 색. 없는 이름이면 빈 아이콘."""
+    fn = _COLOR_DRAW.get(name)
+    if fn is None:
+        return QIcon()
+    if dark is None:
+        try:
+            from viewer import theme
+            dark = theme.is_dark()
+        except Exception:
+            dark = False
+    c = QColor(ACCENT[name][bool(dark)])
+    pm = QPixmap(int(size * dpr), int(size * dpr))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    try:
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.scale(size / 16.0, size / 16.0)
+        fn(p, c)
+    finally:
+        p.end()
+    return QIcon(pm)
+
+
 def themed_icon(name: str, dark: bool | None = None, size: int = 16, *,
                 pad_right: int = 0, dpr: float = 1.0) -> QIcon:
     """이름으로 테마색 단색 아이콘 생성. 없는 이름이면 빈 아이콘.

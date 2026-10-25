@@ -350,6 +350,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._cap_sizes = [{"name": tr('사용자{i}').format(i=i + 1), "w": 300, "h": 200}
                            for i in range(5)]
         self._cap_menus = []
+        self._cap_btns = []       # 261025-10: 두 창의 캡쳐 단추 — 테마를 바꾸면 카메라를 다시 그린다
         from viewer.widgets.read_aloud import ReadAloud
         self.read_aloud = ReadAloud(self)
         self._read_btns = [self._build_pane_controls(0),
@@ -612,14 +613,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return btn_read, btn_read_menu
 
     def _update_read_buttons(self):
-        """260606-12: 각 창의 ▶/■ 는 '그 창이 읽는 중'일 때만 ■(빨강)."""
+        """260606-12: 각 창의 ▶/■ 는 '그 창이 읽는 중'일 때만 ■(빨강). 261025-10: 색 아이콘(디자인 SOT §4.5)."""
+        from viewer.widgets.read_aloud import set_play_state
         for i, (btn, _menu) in enumerate(getattr(self, "_read_btns", [])):
             on = (self.read_aloud.is_active()
                   and getattr(self.read_aloud, "_view", None) is self._mv[i])
-            btn.setText("■" if on else "▶")
-            btn.setStyleSheet(
-                "QToolButton{color:%s;font-size:16px;font-weight:bold;}"
-                % ("#c0392b" if on else "#1565c0"))
+            set_play_state(btn, on)
 
     def _pane_read_toggle(self, idx: int):
         """그 창(idx)의 읽기 시작/정지(다른 창이 읽는 중이면 멈추고 이 창으로)."""
@@ -635,13 +634,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         ra.start()
 
+    CAPTURE_ICON_PX = 18     # 261025-10(디자인 SOT §2.10): 카메라 그림 — mp3 음표와 어울리는 크기
+
+    def _set_capture_icon(self, b, dark=None):
+        """캡쳐 단추 카메라 — 테마별 색 아이콘(디자인 SOT §4.5). 종전 `screenshot.png` 는 테두리 안의 작은 카메라라 작아 보였다."""
+        from PyQt6.QtCore import QSize
+        from viewer.widgets.icons import color_icon
+        b.setIcon(color_icon("camera", dark, self.CAPTURE_ICON_PX))
+        b.setIconSize(QSize(self.CAPTURE_ICON_PX, self.CAPTURE_ICON_PX))
+
     def _make_capture_button(self, idx: int):
         b = QPushButton()
-        ico = resource_path("screenshot.png")
-        if ico:
-            b.setIcon(QIcon(ico))
-        else:
-            b.setText("📷")
+        self._set_capture_icon(b)
+        self._cap_btns.append(b)
         b.setToolTip(tr("이 창 캡처 (활성 창은 Ctrl+Shift+S)"))
         try:                                      # 260606-19: 캡쳐 글자 삭제·폭 최소
             b.setFixedSize(34, self._mv[idx].TOOLBAR_H)
@@ -659,6 +664,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         dd._pane_idx = idx                        # 261017-1: 모드를 고르면 이 창을 캡처한다
         dd.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         dd.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        from viewer.widgets.icons import drop_button
+        drop_button(dd)
         try:
             dd.setFixedHeight(self._mv[idx].TOOLBAR_H)
         except Exception:
@@ -703,7 +710,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a = m.addAction(tr("사용자 크기 설정..."))
         a.triggered.connect(self._edit_capture_sizes)
         dd.setMenu(m)
-        dd.setText(self._capture_mode_label() + " ▾")
+        dd.setText(self._capture_mode_label())       # 261025-10(디자인 SOT §2.7): ▾ 는 Qt 메뉴 화살표 하나
 
     def _refresh_capture_labels(self):
         for dd in getattr(self, "_cap_menus", []):
@@ -9156,6 +9163,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 _mv.refresh_theme_icons(dark)
             except Exception:
                 pass
+        # 261025-10(디자인 SOT §4.5): 본문 도구 줄·단어장의 색 아이콘(캡쳐 카메라·읽기 ▶/■)도 테마 색으로
+        try:
+            for _b in getattr(self, "_cap_btns", []):
+                self._set_capture_icon(_b, dark)
+            self._update_read_buttons()
+            self.study_panel.set_playing(self.study_panel.is_playing())
+        except Exception:
+            pass
         # 260902-5: 책갈피 트리 파일 아이콘(테마 단색) 재적용
         for _bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
             try:
