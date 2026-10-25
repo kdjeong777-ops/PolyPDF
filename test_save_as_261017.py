@@ -124,14 +124,14 @@ try:
     chk(mw._closed_panes[1] == (str(a), 1) and mw._closed_panes[0] == (str(b), 1), "E 다른 창의 쪽 번호가 새 번호로", str(mw._closed_panes))
     mw._closed_panes = {}
 
-    # F — 보기 메뉴 1단↔2단 키는 반대 항목에만(디자인 SOT §2.9.2)
+    # F — 261025-1(입력 SOT §3.2.1·디자인 SOT §2.9.2, 사용자 결정): 1단·2단 키는 항목마다 하나 — 상태와 무관하게 각자 항목에
     va = mw._view_acts
     mw._refresh_menu_key_hints()
-    single_off = "\t" not in va["single"].text() and "\t" in va["split"].text()
+    off = va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2")
     mw.act_split.setChecked(True); spin(0.5); mw._refresh_menu_key_hints()
-    split_on = "\t" in va["single"].text() and "\t" not in va["split"].text()
+    on = va["single"].text().endswith("\tCtrl+Shift+1") and va["split"].text().endswith("\tCtrl+Shift+2")
     mw.act_split.setChecked(False); spin(0.5)
-    chk(single_off and split_on, "F 1단↔2단 키는 지금 상태의 반대 항목에만")
+    chk(off and on, "F 1단·2단 키는 늘 각자 항목에(Ctrl+Shift+1·2)", "%r / %r" % (va["single"].text(), va["split"].text()))
 finally:
     shutil.rmtree(root, ignore_errors=True)
 
