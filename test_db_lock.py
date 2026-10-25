@@ -127,6 +127,10 @@ try:
     # ── ⑥ 시작 점검은 인덱싱 중에 하지 않는다 ────────────────────────────
     from PyQt6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv)
+    # 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+    from PyQt6.QtCore import QStandardPaths, QCoreApplication
+    QStandardPaths.setTestModeEnabled(True)
+    QCoreApplication.setApplicationName("polypdf_db_lock_%d" % os.getpid())
     import viewer.indexer as _ix_mod
     from viewer.app import MainWindow
     mw = MainWindow(); mw._skip_save_on_close = True

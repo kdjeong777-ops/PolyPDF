@@ -21,6 +21,10 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_ocr_lang_repair_%d" % os.getpid())
 
 ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
 fails = []

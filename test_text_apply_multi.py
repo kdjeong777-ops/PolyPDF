@@ -22,6 +22,10 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_text_apply_multi_%d" % os.getpid())
 fails = []
 
 

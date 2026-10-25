@@ -29,6 +29,10 @@ d.save(str(tmp / "T.pdf")); d.close()
     encoding="utf-8")
 
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_main_draw_v2_%d" % os.getpid())
 from viewer.app import MainWindow
 from viewer.widgets.main_view import MV_DEFAULT_PENS
 mw = MainWindow(); mw.resize(1200, 800); mw.show(); app.processEvents()

@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import sys
 
 from viewer import dbutil as _dbutil
 from viewer import pacing as _pacing
@@ -93,12 +94,15 @@ class PdfIndex:
         #   쿼리 도중에야 드러나는 손상('malformed')은 여는 순간에는 잡히지 않는다(설치본 실측).
         #   다른 연결이 파일을 쥐고 있어 지우지 못하면 표식을 남겨 두고 다음 열기에서 다시 한다.
         mark = self._corrupt_mark(self.db_path)
-        if mark.exists() and self._remove_db_files(self.db_path):
-            try:
-                mark.unlink()
-            except OSError:
-                pass
-            self.migrated = True
+        if mark.exists():
+            size = self._db_size(self.db_path)
+            if self._remove_db_files(self.db_path):
+                self.log_reset(self.db_path, "손상 표식을 보고 지움", size)
+                try:
+                    mark.unlink()
+                except OSError:
+                    pass
+                self.migrated = True
         try:
             self.conn = _dbutil.connect(self.db_path, self.busy_ms)
             self._init_schema()
@@ -115,21 +119,51 @@ class PdfIndex:
             #   등은 그대로 올려 보내고, 부르는 쪽이 '이번엔 못 읽었다'로 넘긴다.
             if not self._is_corrupt_error(e):
                 raise
-            self._recreate_corrupt_db()
+            self._recreate_corrupt_db(str(e))
 
     _is_corrupt_error = staticmethod(_dbutil.is_corrupt_error)
+
+    ERROR_LOG_NAME = "error.log"        # main.ERROR_LOG_NAME 과 같은 파일(마스터 §14.7.3 안전망)
+    ERROR_LOG_MAX = 1_000_000           # main.ERROR_LOG_MAX 와 같은 규칙 — 넘으면 비우고 새로
+
+    @staticmethod
+    def _db_size(db_path) -> int:
+        try:
+            return os.path.getsize(db_path)
+        except OSError:
+            return -1
+
+    @classmethod
+    def log_reset(cls, db_path, reason: str, size: int | None = None) -> None:
+        """261025-7(검색창 SOT §3 '색인을 지우면 까닭을 남긴다'): 색인을 지우거나 비울 때 `index.db` 옆
+        `error.log` 에 한 줄 — 시각·까닭·경로·크기·프로세스. 10-25 에 사용자 색인이 946MB → 16MB 로 새로
+        만들어졌는데 기록이 없어 어느 길이었는지 알 수 없었다. 기록이 실패해도 색인은 계속한다."""
+        import time
+        try:
+            if size is None:
+                size = cls._db_size(db_path)
+            log = Path(db_path).parent / cls.ERROR_LOG_NAME
+            mode = "w" if log.exists() and log.stat().st_size > cls.ERROR_LOG_MAX else "a"
+            exe = os.path.basename(sys.argv[0]) if sys.argv and sys.argv[0] else sys.executable
+            reason = " ".join(str(reason).split())          # 한 줄로(오류 문구에 줄바꿈이 있을 수 있다)
+            with open(log, mode, encoding="utf-8") as f:
+                f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')}\n[색인 초기화] 까닭={reason} "
+                        f"경로={db_path} 크기={size} pid={os.getpid()} 실행={exe}\n\n")
+        except Exception:
+            pass
 
     @staticmethod
     def _corrupt_mark(db_path) -> Path:
         return Path(str(db_path) + ".corrupt")
 
     @classmethod
-    def mark_corrupt(cls, db_path) -> None:
+    def mark_corrupt(cls, db_path, reason: str = "") -> None:
         """261009-14: 쿼리 도중 손상을 만난 쪽이 부른다 — 다음에 여는 연결이 새로 만든다."""
         try:
             cls._corrupt_mark(db_path).write_text("1", encoding="utf-8")
         except OSError:
             pass
+        cls.log_reset(db_path, "손상 표식을 남김" + (f": {reason}" if reason else ""))
 
     @staticmethod
     def _remove_db_files(db_path) -> bool:
@@ -145,13 +179,16 @@ class PdfIndex:
                 ok = ok and suf != ""
         return ok
 
-    def _recreate_corrupt_db(self):
+    def _recreate_corrupt_db(self, reason: str = ""):
         try:
             self.conn.close()
         except Exception:
             pass
-        if not self._remove_db_files(self.db_path):
-            self.mark_corrupt(self.db_path)      # 지금은 못 지운다 — 다음 열기에서(261009-14)
+        size = self._db_size(self.db_path)
+        if self._remove_db_files(self.db_path):
+            self.log_reset(self.db_path, "손상을 만나 새로 만듦" + (f": {reason}" if reason else ""), size)
+        else:
+            self.mark_corrupt(self.db_path, f"지우지 못함(다음 열기에서) {reason}".strip())   # 261009-14
         self.conn = _dbutil.connect(self.db_path, self.busy_ms)
         self._init_schema()
         self.migrated = True
@@ -280,8 +317,10 @@ class PdfIndex:
                 fts_empty = self.is_empty()
                 files_any = self.conn.execute("SELECT 1 FROM files LIMIT 1").fetchone() is not None
                 if fts_empty and files_any:
+                    n = self.conn.execute("SELECT count(*) FROM files").fetchone()[0]
                     self.conn.execute("DELETE FROM files")
                     self.migrated = True
+                    self.log_reset(self.db_path, f"스키마 정리 — 본문 색인이 비어 files {n}행을 비움(v{uv}→v{self.SCHEMA_VERSION})")
             except Exception:
                 pass
             if uv < 4:

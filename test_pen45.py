@@ -20,6 +20,10 @@ d = fitz.open(); d.new_page(width=400, height=600).insert_text((40, 80), "x"); d
 (tmp/"bookmarks.json").write_text(json.dumps({"version":1,"bookmarks":[{"title":"P","file":"P.pdf","children":[]}]}),encoding="utf-8")
 
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_pen45_%d" % os.getpid())
 from viewer.app import MainWindow
 mw = MainWindow(); mw.resize(1100,800); mw.show(); app.processEvents()
 mw.open_folder(tmp); app.processEvents()

@@ -481,8 +481,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 _qapp = QApplication(sys.argv)
-_qapp.setApplicationName("PolyPDF")
-_qapp.setOrganizationName("LocalTools")
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_auto_tag_%d" % os.getpid())
 
 from viewer.workers import AutoTagWorker  # noqa: E402
 

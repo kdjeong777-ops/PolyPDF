@@ -10,6 +10,10 @@ from viewer.app import MainWindow
 
 PDF = _fx.text_pdf()
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_cross_file_nav_%d" % os.getpid())
 mw = MainWindow(); mw.resize(1100, 800); mw.show(); app.processEvents()
 
 fails = []

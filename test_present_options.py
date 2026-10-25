@@ -14,6 +14,10 @@ def chk(c, m, extra=""):
     if not c: fails.append(m)
 
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_present_options_%d" % os.getpid())
 
 # 1) 본화면 설정 다이얼로그에서 발표 보기 위젯 제거 + result_prefs 에 키 없음
 from viewer.widgets.settings_dialog import SettingsDialog

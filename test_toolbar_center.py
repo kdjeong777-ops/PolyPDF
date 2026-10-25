@@ -10,6 +10,10 @@ def check(n, c, e=""):
 
 from PyQt6.QtWidgets import QApplication, QWidget, QPushButton
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_toolbar_center_%d" % os.getpid())
 from viewer.widgets.flow_layout import FlowLayout
 
 # 한 줄에 들어가는 좁은 항목들 → 넓은 폭에서 가로 중앙(왼쪽 여백>0)

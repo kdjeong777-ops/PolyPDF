@@ -124,6 +124,17 @@ chk(not bad, "§14.7 업무 문서 절대경로를 쓰는 검사가 없다(픽�
 import test_fixtures as _fx
 for name in ("text_pdf", "scanned_pdf", "ruled_table_pdf", "scanned_form_pdf"):
     chk(hasattr(_fx, name), "§14.7 픽스처 `%s()` 가 있다" % name)
+# 261025-7(마스터 §14.7.2 의 3): 메인 창을 띄우거나 설정 폴더를 쓰는 검사는 **시험 모드나 시험 프로필**을 켠다.
+#   격리 없이 돈 검사 61개가 사용자 실제 `index.db` 에 검사 임시 폴더를 넣었다(그 색인은 손상된 채 발견됐다).
+_USES_APPDATA = re.compile(r"\bMainWindow\(|setApplicationName\(|from viewer import [^\n]*\bsettings_store\b"
+                           r"|from viewer\.settings_store import|import viewer\.settings_store")
+_ISOLATED = re.compile(r"setTestModeEnabled\(True\)|POLYPDF_PROFILE")
+bad = [p.name for p in tests
+       if _USES_APPDATA.search(strip_comments(read(p))) and not _ISOLATED.search(strip_comments(read(p)))]
+chk(not bad, "§14.7.2-3 메인 창·설정 폴더를 쓰는 검사는 시험 모드나 시험 프로필을 켠다", str(bad))
+bad = [p.name for p in tests
+       if re.search(r"setApplicationName\(\s*[\"']PolyPDF[\"']\s*\)", strip_comments(read(p)))]
+chk(not bad, "§14.7.2-3 검사가 앱 이름을 실제 'PolyPDF' 로 정하지 않는다", str(bad))
 
 print(NL + "=== 마스터 §14.7.1 — 검사 색인(이름 규칙으로 소유를 정한다) ===")
 # ★ 이 표는 마스터 §14.7.1 의 표와 **같은 내용**이다. 한쪽만 고치지 말 것.

@@ -27,6 +27,10 @@ def check(n, c, e=""):
 
 from PyQt6.QtWidgets import QApplication, QMessageBox
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_side_panels_%d" % os.getpid())
 
 # ★ 오프스크린에서 모달 대화상자는 영원히 블록된다 — 정적 메서드를 무력화한다.
 #   (키 미입력 시 `_law_oc_or_warn` 등이 안내창을 띄우는 경로가 있어 필수)

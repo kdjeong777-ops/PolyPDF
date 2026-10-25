@@ -11,6 +11,10 @@ def check(n, c, e=""):
 
 from PyQt6.QtWidgets import QApplication, QPushButton, QLabel
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_batch13_%d" % os.getpid())
 
 # 카드 라벨 중앙 정렬: make_card_pixmap 가 예외 없이 동작(시각은 수동), 라벨=stem
 from viewer.widgets.strip import make_card_pixmap

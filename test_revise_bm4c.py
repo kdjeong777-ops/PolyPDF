@@ -17,6 +17,10 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import QSize
 from viewer.resources_path import resource_path
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_revise_bm4c_%d" % os.getpid())
 
 # mp3 아이콘: 비율이 이전(가로 길쭉)보다 작아짐(세로 여백 포함) → 글자 작게
 ic = QIcon(resource_path("icon_mp3.png"))

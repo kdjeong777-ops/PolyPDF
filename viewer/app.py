@@ -6455,7 +6455,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.status.showMessage(tr("검색 색인이 손상되어 새로 만듭니다. 끝나면 다시 검색해 주세요."), 10000)
         self._close_probe_idx()
         self._cancel_active_indexing()
-        PdfIndex.mark_corrupt(self._db_path)
+        PdfIndex.mark_corrupt(self._db_path, str(e)[:200])     # 261025-7: 까닭을 error.log 에
         QTimer.singleShot(300, lambda: self.action_reindex(verify=False))
 
     def _cancel_active_indexing(self):

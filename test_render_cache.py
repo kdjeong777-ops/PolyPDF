@@ -12,8 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication(sys.argv)
-app.setApplicationName("PolyPDF")
-app.setOrganizationName("LocalTools")
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_render_cache_%d" % os.getpid())
 
 from test_fixtures import scanned_pdf, text_pdf  # noqa: E402
 from viewer.pdf_doc import GLOBAL_PAGE_CACHE, PdfDocument  # noqa: E402

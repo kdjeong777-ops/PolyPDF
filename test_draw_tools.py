@@ -26,8 +26,10 @@ def chk(cond, msg, extra=""):
 
 
 app = QApplication.instance() or QApplication(sys.argv)
-app.setApplicationName("PolyPDF")
-app.setOrganizationName("LocalTools")
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_draw_tools_%d" % os.getpid())
 import test_fixtures as _fx
 from viewer.widgets.main_view import MainView
 

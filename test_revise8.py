@@ -69,6 +69,10 @@ doc.close()
 # --- 1,3) GUI 배선·버튼 크기 ---
 from PyQt6.QtWidgets import QApplication
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_revise8_%d" % os.getpid())
 mw = MainWindow()
 mv = mw.main_view
 # 260628-2: v1.25.0(260606-19) '툴바 폭 최소화' 로 치수가 바뀌었다

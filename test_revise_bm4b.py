@@ -16,6 +16,10 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 from viewer.resources_path import resource_path
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_revise_bm4b_%d" % os.getpid())
 
 # 아이콘 파일 로드 확인
 for n in ("icon_edit.png", "icon_word.png", "icon_mp3.png"):

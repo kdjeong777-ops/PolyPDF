@@ -23,6 +23,10 @@ exe = folder / "bad.exe"; exe.write_text("x")
 report = folder / "report.pdf"; shutil.copy(SRC_PDF, report)   # 비미디어 파일(기본앱 경로 검증용)
 
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_hyperlink_integration_%d" % os.getpid())
 # offscreen: 모달 메시지박스는 블록되므로 무력화
 from PyQt6.QtWidgets import QMessageBox
 QMessageBox.warning = staticmethod(lambda *a, **k: None)

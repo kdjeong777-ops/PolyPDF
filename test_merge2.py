@@ -10,6 +10,10 @@ def check(n, c, e=""):
 
 from PyQt6.QtWidgets import QApplication
 app = QApplication.instance() or QApplication(sys.argv)
+# 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
+from PyQt6.QtCore import QStandardPaths, QCoreApplication
+QStandardPaths.setTestModeEnabled(True)
+QCoreApplication.setApplicationName("polypdf_merge2_%d" % os.getpid())
 from viewer.widgets.merge_dialog import MergeFilesDialog, SHOTS_NAME
 
 allf = [r"C:/x/bravo.pdf", r"C:/x/alpha.pdf", r"C:/x/charlie.pdf"]
