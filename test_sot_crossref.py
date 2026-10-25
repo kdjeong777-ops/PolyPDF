@@ -13,6 +13,7 @@ E. 낡는 숫자 — 'N 가지 의무', '`test_x_` N개' 를 쓰지 않는다
 F. 이름 — SOT 본문(§0 밖)의 백틱 식별자가 코드에 있다 · CLAUDE.md 가 대는 SOT 파일이 있다
 G. 값 — SOT 의 `상수 = 값`·`값(상수)` 이 코드와 같다 · 비밀 키 표 = SECRET_PREF_KEYS · signing.json 예시 키 · i18n 명령
 H. 짝 — 최근 모듈 §0 행의 작업 번호가 마스터 §0 에도 있다 · QThread 직접 상속은 응답성 SOT §4.4 에 등재
+I. 없어진·바뀐 화면 이름 — 패널 툴바 이름, 그리고 `RENAMED` 표의 옛 이름이 SOT 본문·검사 기대·화면 문구·도움말에 남지 않는다
 
 SOT 문서는 공개 저장소 밖(부모 폴더)에 있다 — 없으면(CI) 건너뛴다.
 """
@@ -22,7 +23,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 from pathlib import Path
 
 ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
-SOT_DIR = ROOT.parent
+# 261025-9: 새 검사가 '수정 전 문서로 실패하는지' 볼 때 옛 SOT 를 따로 꺼내 둔 폴더를 가리킨다(평소에는 비워 둔다)
+SOT_DIR = Path(os.environ.get("POLYPDF_SOT_DIR") or ROOT.parent)
 NL = "\n"
 fails = []
 
@@ -229,6 +231,23 @@ for name, txt in SOTS.items():
         if any('" + ' in c or ' + "' in c for c in re.findall(r"`[^`]*`", l)):      # 코드 표기 안의 이어붙이기
             frag.append("%s:%d" % (name[:8], i + 1))
 chk(not broken, "D1 표가 머리 구분선(| --- |) 없이 시작하지 않는다(빈 줄로 끊긴 표)", str(broken[:8]))
+
+# 261025-9(SOT 점검): 인용문(`> | …`) 안의 표에 `> ` 없는 행이 끼면 표가 거기서 끊긴다 — 마스터 문서 지도에서 두 행이 그랬다.
+#   D1 은 `> ` 를 벗기고 보므로 이것을 못 잡는다.
+mixed = []
+for name, txt in SOTS.items():
+    lines = txt.splitlines()
+    fence = False
+    for i in range(1, len(lines)):
+        if lines[i].startswith("```"):
+            fence = not fence
+        if fence:
+            continue
+        a, b = lines[i - 1].strip(), lines[i].strip()
+        qa, qb = re.match(r"^>\s*\|", a), re.match(r"^>\s*\|", b)
+        if (qa and b.startswith("|")) or (qb and a.startswith("|")):
+            mixed.append("%s:%d" % (name[:8], i + 1))
+chk(not mixed, "D3 인용문 안 표의 행이 모두 `> ` 로 시작한다(섞이면 표가 끊긴다)", str(mixed[:8]))
 chk(not frag, "D2 SOT 에 파이썬 이어붙이기 조각(\" + …)이 없다", str(frag[:8]))
 
 # ── E. 낡는 숫자 ───────────────────────────────────────────────────────
@@ -394,7 +413,7 @@ chk(not new_qt, "H3 새 QThread 직접 상속이 없다(응답성 SOT §4.3 — 
 # 261024-5(SOT 점검): 패널 툴바는 261024-1 에 메뉴 탭·`모음` 으로 바뀌었다. 점검에서 본문 열 곳 넘게 옛 이름('패널 단추'·
 #   '도구 막대'·'툴바 `…`')이 지금 자리처럼 남아 있었다(디자인 SOT §2.9 'SOT 표기'). 경위를 말하는 줄('종전'·'옛'·'→')과 §0·코드 블록은 뺀다.
 print(NL + "=== I. 없어진 화면 이름(패널 툴바) ===")
-GONE = re.compile(r"패널 툴바|패널 단추|도구 툴바|도구 막대|툴바 `")
+GONE = re.compile(r"패널 툴바|패널 단추|도구 툴바|도구 막대|툴바 `|패널 '도구'")   # 261025-9: 보안 SOT 의 패널 '도구' 단추
 OK_CTX = ("종전", "옛 ", "→", "v1.6.23")
 stale = []
 for name, txt in LIVE.items():
@@ -408,6 +427,51 @@ for name, txt in LIVE.items():
             continue
         stale.append("%s: %s" % (name[:8], GONE.search(ln).group(0)))
 chk(not stale, "I1 SOT 본문이 없어진 패널 툴바 이름을 지금 자리처럼 쓰지 않는다('종전 …' 으로만)", str(stale[:8]))
+
+# 261025-9(SOT 점검, CLAUDE.md §4 의 1): 화면 이름을 바꾸면 옛 이름이 SOT·검사 기대·화면 문구·도움말에 남는다 — 261025 에만
+#   이름 바꿈 뒤 검사 기대가 낡아 실패 2건, SOT 여러 곳. ★ 이름을 바꾸면 이 표에 한 줄을 더한다(옛 이름, 새 이름, 작업 번호).
+#   옛 이름을 경위로 적는 줄('종전'·'옛 '·'→'·사용자 말 인용 *"…"*)과 §0·코드 블록은 보지 않는다 — 지금 이름처럼 쓴 곳만 잡는다.
+RENAMED = [
+    ("즐겨찾기 폴더", "등록 폴더", "261025-1"),
+    ("변환해서 내보내기", "변환", "261025-5"), ("변환하여 내보내기", "변환", "261025-5"),
+    ("화면 스타일", "스타일", "261025-6"),
+    ("모음 메뉴 편집", "모음 메뉴 관리", "261025-5"),
+    ("메뉴 탭 아래 세부 줄 보이기", "리본 메뉴 보이기", "261025-5"),
+]
+# 화면 문구(tr("옛 이름…"))가 아직 남은 것 — 코드 결함으로 보고했고 고칠 세션이 이 줄을 지운다. 고쳤는데 남아 있으면 실패(목록은 줄기만).
+RENAMED_CODE_PENDING = {"모음 메뉴 편집"}         # ribbon.py 모음 편집 창 제목(261025-9 보고)
+REN_OK = ("종전", "옛 ", "→", '*"', "개명", "이름이 바뀐")
+ren_sot, ren_test, ren_code, ren_help = [], [], set(), []
+for name, txt in LIVE.items():
+    fence = False
+    for ln in body(txt).splitlines():
+        if ln.startswith("```"):
+            fence = not fence
+        if fence or any(k in ln for k in REN_OK):
+            continue
+        ren_sot += ["%s: %s" % (name[:8], o) for o, _n, _w in RENAMED if o in ln]
+for p, src in CODE.items():
+    if p.name == "test_sot_crossref.py":
+        continue                                        # 이 표 자체
+    is_test = p.parent == ROOT and p.name.startswith("test_")
+    for ln in src.splitlines():
+        code = ln.split("#", 1)[0]                      # 주석은 경위라 보지 않는다
+        for o, _n, _w in RENAMED:
+            lit = re.search(r"([\"'])%s(?:\.\.\.|…)?\1" % re.escape(o), code)
+            if not lit:
+                continue
+            if is_test and "not in" not in code and not any(k in ln for k in REN_OK):
+                ren_test.append("%s: %s" % (p.name, o))   # 검사가 옛 이름을 기대한다
+            if not is_test and re.search(r"\btr\(\s*[\"']%s" % re.escape(o), code):
+                ren_code.add(o)
+for hp in sorted((ROOT / "resources" / "help").glob("help_*.html")):
+    h = read(hp)
+    ren_help += ["%s: %s" % (hp.name, o) for o, _n, _w in RENAMED if o in h]
+chk(not ren_sot, "I2 SOT 본문이 바뀐 화면 이름의 옛 이름을 지금 이름처럼 쓰지 않는다(RENAMED)", str(ren_sot[:8]))
+chk(not ren_test, "I3 검사(test_*.py)가 바뀐 화면 이름의 옛 이름을 기대하지 않는다", str(ren_test[:8]))
+chk(not (ren_code - RENAMED_CODE_PENDING), "I4 화면 문구 tr(…) 에 옛 이름이 없다", str(sorted(ren_code - RENAMED_CODE_PENDING)))
+chk(not (RENAMED_CODE_PENDING - ren_code), "I4b 고친 화면 문구는 RENAMED_CODE_PENDING 에서 뺀다", str(sorted(RENAMED_CODE_PENDING - ren_code)))
+chk(not ren_help, "I5 도움말(help_*.html)에 옛 이름이 없다", str(ren_help[:8]))
 
 print(NL + "=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for msg in fails:
