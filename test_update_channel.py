@@ -122,11 +122,15 @@ try:
         check("1.0.0 은 beta.299 보다 새 판", updater.is_newer("1.0.0", "0.45.0-beta.299"))
         rels[:] = [_rel("v1.1.0-beta.2"), _rel("v1.0.1"), _rel("v1.0.0"), _rel("v1.1.0-beta.3", draft=True)]
         updater.current_version = lambda: "1.0.0"
-        check("1.0.0 정식 채널 → 긴급 정식 1.0.1(베타 1.1.0-beta.2 는 건너뜀)",
+        check("1.0.0 정식 채널 → 버그 수정 정식 1.0.1(베타 1.1.0-beta.2 는 건너뜀)",
               (updater.check_latest("o/r", channel="stable") or {}).get("tag") == "v1.0.1")
         check("1.0.0 베타 채널 → 1.1.0-beta.2(초안은 건너뜀)",
               (updater.check_latest("o/r", channel="beta") or {}).get("tag") == "v1.1.0-beta.2")
         check("베타 다음 같은 번호의 정식은 더 새 판(1.1.0-beta.N → 1.1.0)", updater.is_newer("1.1.0", "1.1.0-beta.9"))
+        # 261026-3(릴리스 SOT §2.3): 끝자리 = 버그 수정·작은 UI — 그 베타는 1.0.0 보다 새 판이고 1.0.1 정식보다 낮다
+        check("수정 베타 1.0.1-beta.1 은 1.0.0 보다 새 판, 1.0.1 보다 낮다",
+              updater.is_newer("1.0.1-beta.1", "1.0.0") and updater.is_newer("1.0.1", "1.0.1-beta.1"))
+        check("기능 묶음 1.1.0 은 수정 1.0.9 보다 새 판", updater.is_newer("1.1.0", "1.0.9"))
     finally:
         updater._get_json, updater.current_version = _orig_get, _orig_cur
 finally:

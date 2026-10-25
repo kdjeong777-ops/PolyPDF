@@ -98,8 +98,9 @@ chk(rt.version_order_problem("0.5.0", TAGS) != "", "H 0.5.0 은 0.45.0-beta.298 
 chk(rt.version_order_problem("0.6.0", TAGS) != "", "H 0.6.0 도 낮다(0.6 < 0.45)")
 chk(rt.version_order_problem("0.45.0-beta.298", TAGS) != "", "H 이미 낸 번호와 같으면 멈춤")
 chk(rt.version_order_problem("1.0.0", TAGS) == "", "H 1.0.0 은 통과")
-chk(rt.version_order_problem("1.0.0-beta.3", TAGS + ["v1.0.0"]) != "", "H 정식 뒤 같은 번호의 베타는 낮다 — 멈춤(§2.3 다음 정식-beta.N)")
-chk(rt.version_order_problem("1.1.0-beta.1", TAGS + ["v1.0.0"]) == "", "H 1.0.0 뒤 1.1.0-beta.1 은 통과")
+chk(rt.version_order_problem("1.0.0-beta.3", TAGS + ["v1.0.0"]) != "", "H 정식 뒤 같은 번호의 베타는 낮다 — 멈춤(§2.3 나갈 정식 번호-beta.N)")
+chk(rt.version_order_problem("1.1.0-beta.1", TAGS + ["v1.0.0"]) == "", "H 1.0.0 뒤 기능 묶음 베타 1.1.0-beta.1 은 통과")
+chk(rt.version_order_problem("1.0.1", TAGS + ["v1.0.0"]) == "", "H 1.0.0 뒤 버그 수정 정식 1.0.1 은 통과(261026-3)")
 chk(rt.version_order_problem("1.0.0", ["v0.45.0-beta.298", "v2.41.0"]) != "", "H 가장 가까운 태그가 아니라 가장 높은 태그와 견준다")
 
 # H2. 261026(261025-12 보완): 견주는 목록은 updater 와 같은 **지금 있는 GitHub 릴리스**(초안 제외) — 6월 옛 체계의 `v2.41.0` 은
