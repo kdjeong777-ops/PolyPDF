@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-25 10:09+0900\n"
+"POT-Creation-Date: 2026-10-25 10:17+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7553,6 +7553,10 @@ msgid "사용자선 3"
 msgstr ""
 
 #: viewer/widgets/presentation.py
+msgid "❮ 뒤로"
+msgstr ""
+
+#: viewer/widgets/presentation.py
 msgid "청소 — 현재 페이지의 선 모두 지우기"
 msgstr ""
 
@@ -7609,6 +7613,10 @@ msgid "상하 2분할 보기"
 msgstr ""
 
 #: viewer/widgets/presentation.py
+msgid "화면 왼쪽에서 이 폭 안을 누르면 이전 쪽으로 갑니다(창 폭의 %)."
+msgstr ""
+
+#: viewer/widgets/presentation.py
 msgid "좌우 2쪽 보기"
 msgstr ""
 
@@ -7661,11 +7669,11 @@ msgid "🖥 화면2로"
 msgstr ""
 
 #: viewer/widgets/presentation.py
-msgid "모니터가 하나뿐입니다"
+msgid "중앙겹침"
 msgstr ""
 
 #: viewer/widgets/presentation.py
-msgid "중앙겹침"
+msgid "뒤로 가기 영역"
 msgstr ""
 
 #: viewer/widgets/presentation.py
@@ -7742,6 +7750,16 @@ msgstr ""
 
 #: viewer/widgets/presentation.py
 #, python-brace-format
+msgid "발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}"
+msgstr ""
+
+#: viewer/widgets/presentation.py
+#, python-brace-format
+msgid "발표 창을 다른 모니터로 옮깁니다 — {desc}"
+msgstr ""
+
+#: viewer/widgets/presentation.py
+#, python-brace-format
 msgid "페이지 {numbuf} / {page_count}"
 msgstr ""
 
@@ -7756,16 +7774,6 @@ msgstr ""
 
 #: viewer/widgets/presentation.py
 msgid "두껍게"
-msgstr ""
-
-#: viewer/widgets/presentation.py
-#, python-brace-format
-msgid "발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}"
-msgstr ""
-
-#: viewer/widgets/presentation.py
-#, python-brace-format
-msgid "발표 창을 다른 모니터로 옮깁니다 — {desc}"
 msgstr ""
 
 #: viewer/widgets/presentation.py viewer/widgets/twoup_dialog.py

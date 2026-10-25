@@ -29,6 +29,11 @@ DEFAULT_POINTERS = [
     {"name": tr_noop("사용자 포인터 3"), "fill": "#ffffff", "border": "#202020"},
 ]
 POINTER_HIDE_MS = 2000          # 2초 무동작 시 포인터 숨김
+# 261025-3(발표 SOT §3.1): 왼쪽 '뒤로 가기 영역' 폭(창 폭 %)과 '❮ 뒤로' 표시 시간
+BACK_ZONE_DEFAULT = 20
+BACK_ZONE_MIN = 5
+BACK_ZONE_MAX = 50
+BACK_HINT_MS = 800
 
 # 260609-16(F3): 발표 펜(드래그 그리기) 기본 프리셋·단축키
 DEFAULT_PENS = [
@@ -412,6 +417,7 @@ class PresentationWindow(QWidget):
     viewSettingsRequested = pyqtSignal()        # 260611-25: '보기 설정…'(상단띠+크롭)
     overlapChanged = pyqtSignal(int)            # 260611-26: 중앙겹침(%) 변경(메뉴 입력박스)
     otherScreenChanged = pyqtSignal(bool)       # 261021-3(발표 SOT §6.1): 본화면(거짓)/다른 화면(참) — 영속
+    backZoneChanged = pyqtSignal(int)           # 261025-3(발표 SOT §3.1): 뒤로 가기 영역 폭(%) — 영속
 
     def __init__(self, file_path, page0: int = 0, parent=None,
                  pointers=None, pointer_active: int = 0,
@@ -423,7 +429,8 @@ class PresentationWindow(QWidget):
                  pens=None, pen_active: int = 0, pen_keys=None, rec_keys=None,
                  pen_straight: bool = True, eraser_widths=None,
                  line_mode: int = 0, highlight_alpha: int = 35, timer_cfg=None,
-                 render_source=None, other_screen: bool = False):
+                 render_source=None, other_screen: bool = False,
+                 back_zone_pct: int = BACK_ZONE_DEFAULT):
         super().__init__(parent)
         # 261009-14(발표 SOT §2, 사용자 지시): 본문에 그린 선·도형·글·사진이 발표에도 보이게 — 그릴 원천은 꾸밈을
         #   구운 사본(`render_source`, 인쇄와 같은 굽기 마스터 §4.7.13), 크롭·숨김·회전·하이퍼링크의 열쇠는 원본 경로.
@@ -446,6 +453,8 @@ class PresentationWindow(QWidget):
         self._split_mode = False
         self._split_half = 0                  # 0=상부, 1=하부
         self._overlap_frac = max(0.0, min(0.4, float(overlap_pct) / 100.0))
+        # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역(창 폭 비율)
+        self._back_zone_frac = self._clamp_back_zone(back_zone_pct) / 100.0
         # 260905(발표 SOT §4.1): 좌우 2쪽 보기 · 맞쪽 — 상하 2분할과 **상호배타**.
         #   상하분할과 달리 사용자가 명시적으로 켜는 모드라 **설정에 저장**하고,
         #   켜져 있는 동안에는 상하분할 자동판정(_orient_split_default)을 건너뛴다.
@@ -557,6 +566,15 @@ class PresentationWindow(QWidget):
         self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._hint.hide()
+        # 261025-3(발표 SOT §3.1): 마우스로 뒤로 갔을 때 왼쪽 가운데에 잠깐 '❮ 뒤로'
+        self._back_hint = QLabel(tr("❮ 뒤로"), self)
+        self._back_hint.setStyleSheet(self._hint.styleSheet())
+        self._back_hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._back_hint.hide()
+        self._back_hint_timer = QTimer(self)
+        self._back_hint_timer.setSingleShot(True)
+        self._back_hint_timer.setInterval(BACK_HINT_MS)
+        self._back_hint_timer.timeout.connect(self._back_hint.hide)
 
         self._build_topbar()
         # 260609-16(F3): 그리기 오버레이(투명, 마우스 통과 → 창이 드래그 수신)
@@ -569,6 +587,8 @@ class PresentationWindow(QWidget):
         self._thumb_panel.pageSelected.connect(self._on_thumb_panel_select)
         self._topbar.raise_()
         self._hint.raise_()
+        self._back_hint.raise_()
+        self._watch_screens(True)             # 261025-3(§6.1): 모니터 꽂기·빼기
         # 260611-7: 툴바 버튼·썸네일 리스트가 키보드 포커스를 가져가면 방향키가
         #   페이지 이동 대신 위젯 탐색에 쓰여 '방향키 이동'이 안 먹힌다.
         #   → 버튼/리스트를 NoFocus 로 두어 창이 항상 방향키를 받게 함.
@@ -1166,14 +1186,54 @@ class PresentationWindow(QWidget):
             return
         other = self._other_target()
         on_other = self._other_screen and other is not None
-        b.setText(tr("🖥 본화면으로") if on_other else tr("🖥 화면2로"))
-        b.setEnabled(other is not None)
+        # 261025-3(§6.1, 사용자 결정): 모니터가 2대 이상일 때만 보인다 — 옮길 곳이 없으면 숨긴다
+        b.setVisible(other is not None)
         if other is None:
-            b.setToolTip(tr("모니터가 하나뿐입니다"))
-        elif on_other:
+            return
+        b.setText(tr("🖥 본화면으로") if on_other else tr("🖥 화면2로"))
+        if on_other:
             b.setToolTip(tr("발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}").format(desc=self._screen_desc(self._home_screen())))
         else:
             b.setToolTip(tr("발표 창을 다른 모니터로 옮깁니다 — {desc}").format(desc=self._screen_desc(other)))
+
+    def _watch_screens(self, on: bool) -> None:
+        """261025-3(§6.1): 모니터 꽂기·빼기(`screenAdded`·`screenRemoved`)를 받거나 끊는다."""
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is None or bool(on) == getattr(self, "_screens_watched", False):
+            return
+        for sig in (app.screenAdded, app.screenRemoved):
+            try:
+                (sig.connect if on else sig.disconnect)(self._on_screens_changed)
+            except (TypeError, RuntimeError):
+                pass
+        self._screens_watched = bool(on)
+
+    def _on_screens_changed(self, *_):
+        # 빠지는 모니터는 신호 때 아직 목록에 남아 있을 수 있어 한 박자 뒤에 맞춘다
+        QTimer.singleShot(0, self._apply_screens_changed)
+
+    def _apply_screens_changed(self) -> None:
+        """261025-3(§6.1): 단추를 다시 맞추고, 창이 있던 모니터가 빠졌으면 본화면(또는 화면2)으로 다시 연다.
+
+        기억(`_other_screen`)은 바꾸지 않는다 — 빼는 것은 사용자의 선택이 아니다. 다시 꽂으면 기억대로 화면2로 간다.
+        """
+        from PyQt6.QtWidgets import QApplication
+        if not getattr(self, "_screens_watched", False):
+            return
+        screens = QApplication.screens()
+        tgt = self._target_screen
+        other = self._other_target()
+        want = None
+        if tgt is not None and not any(s is tgt for s in screens):
+            want = other if (self._other_screen and other is not None) else self._home_screen()
+        elif self._other_screen and other is not None and (tgt is None or tgt is self._home_screen()):
+            want = other
+        if want is not None and self.isVisible():
+            self.set_target_screen(want)
+        elif want is not None:
+            self._target_screen = want
+        self._update_screen_button()
 
     def show_presentation(self):
         # 260609-9: 최상위 창으로 전체화면 표시 + 포커스(키 입력 수신)
@@ -2140,7 +2200,7 @@ class PresentationWindow(QWidget):
             if self._tool == "erase":
                 self._erasing = False
                 if not moved:                 # 단순 클릭 → 탐색
-                    (self._prev if x <= int(self.width() * 0.10) else self._next)()
+                    self._click_nav(x)
             elif self._cur_stroke is not None:
                 stroke = self._cur_stroke
                 self._cur_stroke = None
@@ -2151,10 +2211,45 @@ class PresentationWindow(QWidget):
                                              []).append(stroke)
                     self._draw_overlay.update()
                 else:
-                    (self._prev if x <= int(self.width() * 0.10) else self._next)()
+                    self._click_nav(x)
             self._press_pos = None
             self._drag_moved = False
         super().mouseReleaseEvent(e)
+
+    # --- 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 · '❮ 뒤로' 표시 ---
+    @staticmethod
+    def _clamp_back_zone(pct) -> int:
+        try:
+            v = int(pct)
+        except (TypeError, ValueError):
+            v = BACK_ZONE_DEFAULT
+        return max(BACK_ZONE_MIN, min(BACK_ZONE_MAX, v))
+
+    def _in_back_zone(self, x) -> bool:
+        return x <= int(self.width() * self._back_zone_frac)
+
+    def _click_nav(self, x) -> None:
+        """클릭 한 번 = 탐색. 왼쪽 영역이면 이전 + '❮ 뒤로' 표시, 아니면 다음(표시 없음, 사용자 결정)."""
+        if self._in_back_zone(x):
+            self._prev()
+            self._flash_back_hint()
+        else:
+            self._next()
+
+    def _flash_back_hint(self) -> None:
+        h = self._back_hint
+        h.adjustSize()
+        h.move(16, max(0, (self.height() - h.height()) // 2))
+        h.show()
+        h.raise_()
+        self._back_hint_timer.start()
+
+    def set_back_zone_pct(self, pct, emit: bool = True) -> None:
+        """뒤로 가기 영역 폭(창 폭 %)을 바꾸고 기억한다(`backZoneChanged`)."""
+        v = self._clamp_back_zone(pct)
+        self._back_zone_frac = v / 100.0
+        if emit:
+            self.backZoneChanged.emit(v)
 
     def contextMenuEvent(self, e):
         menu = QMenu(self)
@@ -2209,6 +2304,18 @@ class PresentationWindow(QWidget):
         _sw.setStyleSheet("QWidget{color:#fff;background:transparent;}"
                           "QCheckBox{color:#fff;} QLabel{color:#fff;}")
         _wa = QWidgetAction(menu); _wa.setDefaultWidget(_sw); menu.addAction(_wa)
+        # 261025-3(§3.1): 왼쪽 뒤로 가기 영역 폭(창 폭 %) — 중앙겹침 줄 바로 아래
+        _bw = QWidget()
+        _bhb = QHBoxLayout(_bw); _bhb.setContentsMargins(20, 4, 14, 4); _bhb.setSpacing(8)
+        _bhb.addWidget(QLabel(tr("뒤로 가기 영역")))
+        sp_back = QSpinBox(); sp_back.setRange(BACK_ZONE_MIN, BACK_ZONE_MAX); sp_back.setSuffix(" %")
+        sp_back.setFixedWidth(72)
+        sp_back.setValue(int(round(self._back_zone_frac * 100)))
+        sp_back.setToolTip(tr("화면 왼쪽에서 이 폭 안을 누르면 이전 쪽으로 갑니다(창 폭의 %)."))
+        sp_back.valueChanged.connect(self.set_back_zone_pct)
+        _bhb.addWidget(sp_back); _bhb.addStretch(1)
+        _bw.setStyleSheet("QWidget{color:#fff;background:transparent;} QLabel{color:#fff;}")
+        _wab = QWidgetAction(menu); _wab.setDefaultWidget(_bw); menu.addAction(_wab)
         # 260905(§4.1): 좌우 2쪽 보기 + 맞쪽 — 상하 2분할 바로 아래 줄
         _dw = QWidget()
         _dhb = QHBoxLayout(_dw); _dhb.setContentsMargins(20, 4, 14, 4); _dhb.setSpacing(8)
@@ -2877,6 +2984,7 @@ class PresentationWindow(QWidget):
             self.closed.emit(self._page)
         except Exception:
             pass
+        self._watch_screens(False)            # 261025-3(§6.1): 닫힌 창은 모니터 꽂기·빼기를 받지 않는다
         try:
             self._doc.close()
         except Exception:

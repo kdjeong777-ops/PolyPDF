@@ -218,6 +218,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "presentation_dual": False,
             "presentation_facing": False,
             "presentation_other_screen": False,     # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면'
+            "presentation_back_zone_pct": 20,       # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%)
             # 260609-16(F3): 발표 펜(빈 값이면 모듈 기본)·활성·단축키
             "presentation_pens": [],
             "presentation_pen_active": 0,
@@ -7298,8 +7299,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                            # 261009-14(사용자 지시): 본문 꾸밈(선·도형·글·사진)을 구운 사본으로 그린다 — 하이퍼링크는 발표 단추로
                                            render_source=lambda p: self._baked_src(p, include_links=False),
                                            # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' 기억
-                                           other_screen=bool(self._prefs.get("presentation_other_screen", False)))
+                                           other_screen=bool(self._prefs.get("presentation_other_screen", False)),
+                                           # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%)
+                                           back_zone_pct=int(self._prefs.get("presentation_back_zone_pct", 20)))
         self._present.otherScreenChanged.connect(self._on_present_other_screen)
+        self._present.backZoneChanged.connect(self._on_present_back_zone)
         self._present.splitModeChanged.connect(self._on_present_split_changed)
         self._present.dualModeChanged.connect(self._on_present_dual_changed)    # 260905
         self._present.facingChanged.connect(self._on_present_facing_changed)    # 260905
@@ -7346,6 +7350,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _on_present_other_screen(self, on: bool):
         """261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' — 다음 발표도 그 화면에서."""
         self._prefs["presentation_other_screen"] = bool(on)
+        self._save_settings_now()
+
+    def _on_present_back_zone(self, pct: int):
+        """261025-3(발표 SOT §3.1): 우클릭 '뒤로 가기 영역' 폭(%) — 다음 발표에도."""
+        self._prefs["presentation_back_zone_pct"] = int(pct)
         self._save_settings_now()
 
     def _on_pres_timer_cfg(self, cfg):
@@ -8418,6 +8427,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._prefs.setdefault("presentation_dual", False)        # 260905(§4.1)
         self._prefs.setdefault("presentation_facing", False)      # 260905(§4.1)
         self._prefs.setdefault("presentation_other_screen", False)  # 261021-3(발표 SOT §6.1)
+        self._prefs.setdefault("presentation_back_zone_pct", 20)  # 261025-3(발표 SOT §3.1)
         self._prefs.setdefault("presentation_pens", [])           # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_active", 0)      # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_keys", [])       # 260609-16(F3)
@@ -8830,6 +8840,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "presentation_facing", old.get("presentation_facing", False))),
             "presentation_other_screen": bool(prefs.get(            # 261021-3(발표 SOT §6.1)
                 "presentation_other_screen", old.get("presentation_other_screen", False))),
+            "presentation_back_zone_pct": int(prefs.get(            # 261025-3(발표 SOT §3.1)
+                "presentation_back_zone_pct", old.get("presentation_back_zone_pct", 20))),
             # 260609-16(F3): 발표 펜
             "presentation_pens": list(prefs.get(
                 "presentation_pens", old.get("presentation_pens", []))),

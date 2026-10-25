@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-25 10:09+0900\n"
+"POT-Creation-Date: 2026-10-25 10:17+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -7818,6 +7818,10 @@ msgid "사용자선 3"
 msgstr "Custom line 3"
 
 #: viewer/widgets/presentation.py
+msgid "❮ 뒤로"
+msgstr "❮ Back"
+
+#: viewer/widgets/presentation.py
 msgid "청소 — 현재 페이지의 선 모두 지우기"
 msgstr "Clear — erase all lines on this page"
 
@@ -7874,6 +7878,10 @@ msgid "상하 2분할 보기"
 msgstr "Top/Bottom Split View"
 
 #: viewer/widgets/presentation.py
+msgid "화면 왼쪽에서 이 폭 안을 누르면 이전 쪽으로 갑니다(창 폭의 %)."
+msgstr "Clicking within this width from the left edge goes to the previous page (% of the window width)."
+
+#: viewer/widgets/presentation.py
 msgid "좌우 2쪽 보기"
 msgstr "Two-Page View"
 
@@ -7926,12 +7934,12 @@ msgid "🖥 화면2로"
 msgstr "🖥 To Screen 2"
 
 #: viewer/widgets/presentation.py
-msgid "모니터가 하나뿐입니다"
-msgstr "Only one monitor is connected"
-
-#: viewer/widgets/presentation.py
 msgid "중앙겹침"
 msgstr "Center Overlap"
+
+#: viewer/widgets/presentation.py
+msgid "뒤로 가기 영역"
+msgstr "Back zone"
 
 #: viewer/widgets/presentation.py
 msgid "본화면 적용 ✓"
@@ -8009,6 +8017,16 @@ msgstr "Resume"
 
 #: viewer/widgets/presentation.py
 #, python-brace-format
+msgid "발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}"
+msgstr "Moves the presentation back to the viewer's monitor — {desc}"
+
+#: viewer/widgets/presentation.py
+#, python-brace-format
+msgid "발표 창을 다른 모니터로 옮깁니다 — {desc}"
+msgstr "Moves the presentation to the other monitor — {desc}"
+
+#: viewer/widgets/presentation.py
+#, python-brace-format
 msgid "페이지 {numbuf} / {page_count}"
 msgstr "Page {numbuf} / {page_count}"
 
@@ -8024,16 +8042,6 @@ msgstr "Thin"
 #: viewer/widgets/presentation.py
 msgid "두껍게"
 msgstr "Thick"
-
-#: viewer/widgets/presentation.py
-#, python-brace-format
-msgid "발표 창을 뷰어가 있는 모니터로 되돌립니다 — {desc}"
-msgstr "Moves the presentation back to the viewer's monitor — {desc}"
-
-#: viewer/widgets/presentation.py
-#, python-brace-format
-msgid "발표 창을 다른 모니터로 옮깁니다 — {desc}"
-msgstr "Moves the presentation to the other monitor — {desc}"
 
 #: viewer/widgets/presentation.py viewer/widgets/twoup_dialog.py
 msgid "선"
@@ -12129,4 +12137,7 @@ msgstr "Getting Started"
 #~ msgstr ""
 #~ "Grouped by folders → files → searches. Drag within a group or use the\n"
 #~ "↑/↓ buttons to reorder. Double-click to rename."
+
+#~ msgid "모니터가 하나뿐입니다"
+#~ msgstr "Only one monitor is connected"
 
