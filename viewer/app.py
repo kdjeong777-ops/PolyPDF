@@ -5474,8 +5474,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260611-33: job(progress)을 _MergeThread 로 실행. 모달 진행창으로 응답성 유지.
         반환: {ok, err, cancelled}. `cancellable=False` 면 취소 버튼을 두지 않는다(도중에 멈추면
         안 되는 일 — 원본 제자리 쓰기, 260915-8). `counts=False` 면 글에 `(했음/전체)` 를 붙이지 않는다 —
-        전체가 내부 척도(파일마다 1000칸)라 글이 스스로 쪽 수를 말하는 일(변환, 형식 변환 SOT §5, 261026-2)."""
-        from PyQt6.QtWidgets import QProgressDialog
+        전체가 내부 척도(파일마다 1000칸)라 글이 스스로 쪽 수를 말하는 일(변환, 형식 변환 SOT §5, 261026-2).
+        261026-2(응답성 SOT §4.3 '겹치지 않는다'): 앞 작업이 도는 동안 취소할 수 있는 새 작업은 거절(`busy`), [취소] 뒤에도
+        진행창은 '취소하는 중…' 으로 작업이 끝날 때까지 남는다 — Qt 진행창은 [취소] 에 곧바로 숨어 그 틈에 변환이 네 겹 쌓였다."""
+        from PyQt6.QtCore import QElapsedTimer, QTimer
+        from PyQt6.QtWidgets import QProgressDialog, QPushButton
+        if cancellable and getattr(self, "_merge_busy", 0):
+            QTimer.singleShot(0, lambda: self.status.showMessage(tr("앞 작업이 끝난 뒤에 다시 하세요."), 6000))
+            return {"ok": False, "err": None, "cancelled": True, "busy": True}
         prog = QProgressDialog(tr("준비 중…"), tr("취소"), 0, 100, self)
         if not cancellable:
             prog.setCancelButton(None)
@@ -5491,23 +5497,42 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   막대 애니메이션(|→||→|||→||)으로 '진행 중'을 계속 표시.
         #   (\ 는 한글 폰트에서 ₩ 로 보여 사용 안 함. 경과시간 표시 없음.)
         #   261026-2(디자인 SOT §2.7): 가운데 정렬 글이 출렁거리지 않게 폭이 같은 프레임·자릿수 맞춘 숫자
-        from PyQt6.QtCore import QTimer
         from viewer.progress_text import HEARTBEAT, pad_count
-        st = {"lbl": tr("준비 중…"), "d": 0, "t": 1, "k": 0}
+        st = {"lbl": tr("준비 중…"), "d": 0, "t": 1, "k": 0, "stopping": False}
+        clock = QElapsedTimer()
+        clock.start()
 
         def _render():
             sp = HEARTBEAT[st["k"] % len(HEARTBEAT)]
+            if st["stopping"]:
+                prog.setLabelText(f"{tr('취소하는 중…')}   {sp}")
+                return
             cnt = f"  ({pad_count(st['d'], st['t'])})" if counts else ""
             prog.setLabelText(f"{st['lbl']}{cnt}   {sp}")
 
         def _on_prog(d, t, lbl):
+            if st["stopping"]:
+                return
             prog.setMaximum(max(1, t))
             prog.setValue(min(d, t))
             st.update(d=d, t=t, lbl=lbl)
             _render()
 
+        def _on_cancel():
+            # Qt 는 [취소]·닫기에 진행창을 숨긴다 — 작업은 아직 돈다. 끝날 때까지 다시 띄워 창을 막는다(_beat 도 지킨다)
+            if not th.isRunning():               # 다 끝나 닫을 때도 Qt 가 canceled 를 보낸다 — 그때는 다시 띄우지 않는다
+                return
+            th.cancel()
+            st["stopping"] = True
+            for b in prog.findChildren(QPushButton):
+                b.setEnabled(False)
+            prog.show()
+            _render()
+
         def _beat():
             st["k"] += 1
+            if th.isRunning() and not prog.isVisible() and (st["stopping"] or clock.elapsed() >= 300):
+                prog.show()                      # 숨은 채 작업이 돌면 그 틈에 또 시작할 수 있다(응답성 SOT §4.3)
             _render()
         hb = QTimer(self)
         hb.setInterval(250)
@@ -5518,12 +5543,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         th.failed.connect(lambda e: res.__setitem__("err", e))
         th.cancelledSig.connect(lambda: res.__setitem__("cancelled", True))
         th.okSig.connect(lambda: res.__setitem__("ok", True))
-        prog.canceled.connect(th.cancel)
+        prog.canceled.connect(_on_cancel)
         loop = QEventLoop()
         th.finished.connect(loop.quit)
-        th.start()
-        loop.exec()                # 작업이 끝날 때까지 UI 이벤트 처리(응답성 유지)
-        th.wait()
+        self._merge_busy = getattr(self, "_merge_busy", 0) + 1
+        try:
+            th.start()
+            loop.exec()                # 작업이 끝날 때까지 UI 이벤트 처리(응답성 유지)
+            th.wait()
+        finally:
+            self._merge_busy -= 1
         hb.stop()
         # 진행창을 확실히 닫고 화면에서 즉시 제거(후처리로 인한 100% 잔상 방지)
         prog.reset()

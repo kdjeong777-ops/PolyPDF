@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-26 04:21+0900\n"
+"POT-Creation-Date: 2026-10-26 04:35+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2508,6 +2508,10 @@ msgstr ""
 msgid "새 페이지를 만들지 못했습니다: %s"
 msgstr ""
 
+#: viewer/app.py
+msgid "앞 작업이 끝난 뒤에 다시 하세요."
+msgstr ""
+
 #: viewer/app.py viewer/widgets/favorites_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
@@ -2709,6 +2713,10 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "병합 완료 → {name} (책갈피창에서 선택)"
+msgstr ""
+
+#: viewer/app.py viewer/update_controller.py
+msgid "취소하는 중…"
 msgstr ""
 
 #: viewer/app.py
@@ -4805,10 +4813,6 @@ msgstr ""
 
 #: viewer/update_controller.py
 msgid "업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다."
-msgstr ""
-
-#: viewer/update_controller.py
-msgid "취소하는 중…"
 msgstr ""
 
 #: viewer/update_controller.py

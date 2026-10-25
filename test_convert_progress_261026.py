@@ -256,6 +256,78 @@ try:
     chk(not raw_hits, "E6 진행 글에 날 쪽 글(p.N)을 넣는 곳이 없다", str(raw_hits))
     chk(not scale_hits, "E6 파일마다 1000칸 척도를 쓰는 일은 _run_merge_job(counts=False)", str(scale_hits))
     sampler.stop()
+
+    # ── F. 진행 창 작업은 겹치지 않는다(응답성 SOT §4.3) — crash.log 1.0.0: 취소 뒤 다시 시작해 변환이 네 겹 ─────
+    depth = {"now": 0, "max": 0}
+    _orig_rmj = MainWindow._run_merge_job
+
+    def spy_rmj(self, *a, **k):
+        depth["now"] += 1
+        try:
+            return _orig_rmj(self, *a, **k)
+        finally:
+            depth["now"] -= 1
+    from viewer import app as _appmod
+    _orig_thread_start = _appmod._MergeThread.start
+
+    def _count_start(self, *a):
+        # 작업 스레드가 실제로 시작한 겹 수만 센다 — 거절된 호출은 스레드를 띄우지 않는다
+        depth["max"] = max(depth["max"], depth["now"])
+        return _orig_thread_start(self, *a)
+    _appmod._MergeThread.start = _count_start
+    MainWindow._run_merge_job = spy_rmj
+    fst = {"clicked": False, "after": None, "status": ""}
+
+    def slow_stop_job(progress):
+        """Word·pdf2docx 처럼 취소를 받고도 잠깐 더 도는 일(Word 를 끝내고·자식을 기다린다)."""
+        from viewer.twoup import MergeCancelled
+        for k in range(200):
+            if progress(k, 200, "SLOWJOB") is False:
+                time.sleep(0.8)
+                raise MergeCancelled()
+            time.sleep(0.02)
+
+    def f_poll():
+        if fst["clicked"]:
+            return
+        for pd in mw.findChildren(QProgressDialog):
+            if pd.isVisible() and "SLOWJOB" in pd.labelText():
+                fst["clicked"] = True
+                pd.findChild(QPushButton).click()                  # 사용자가 [취소]
+                QTimer.singleShot(60, f_after)
+                return
+
+    def f_after():
+        vis = any(pd.isVisible() for pd in mw.findChildren(QProgressDialog))
+        modal = QApplication.activeModalWidget()
+        lab = next((pd.labelText() for pd in mw.findChildren(QProgressDialog) if pd.isVisible()), "")
+        fst["after"] = (vis, type(modal).__name__ if modal else None, lab)
+        mw.act_export.trigger()                                    # 그 사이 또 '변환...'(창이 풀려 있었다면 사용자가 누를 수 있었다)
+        QTimer.singleShot(30, lambda: fst.update(status=mw.status.currentMessage()))   # 안내는 부르는 쪽 글 다음 틱에
+    mw._load_main(HistoryItem(str(src), 0, "", "bookmark")); spin(5)
+    fp = QTimer(); fp.setInterval(20); fp.timeout.connect(f_poll); fp.start()
+    want["range"] = None
+    resF = mw._run_merge_job(slow_stop_job, "변환"); spin(5)
+    fp.stop()
+    chk(resF.get("cancelled"), "F 준비 — 취소가 작업에 닿았다", str(resF))
+    chk(fst["after"] and fst["after"][0] and fst["after"][1] == "QProgressDialog" and "취소하는 중" in fst["after"][2],
+        "F1 [취소] 뒤에도 진행 창이 '취소하는 중…' 으로 남아 창을 막는다", str(fst["after"]))
+    spin(5)
+    chk(depth["max"] == 1, "F2 작업이 도는 동안 또 시작한 변환은 그 안에서 돌지 않는다(겹침 없음)", f"max={depth['max']}")
+    chk("앞 작업이 끝난 뒤에" in (fst["status"] or ""), "F2 거절하면 상태줄에 알린다", repr(fst["status"]))
+    # F3 취소 없는 일(원본 제자리 쓰기·가상 프린터 받기 등)은 앞 작업 안에서도 거절하지 않는다 — 저장 길이 반쯤 끊기지 않게
+    inner = {}
+
+    def outer_job(progress):
+        for k in range(30):
+            progress(k, 30, "outer")
+            time.sleep(0.02)
+    QTimer.singleShot(150, lambda: inner.update(r=mw._run_merge_job(lambda pr: pr(1, 1, "inner"), "inner",
+                                                                      cancellable=False)))
+    mw._run_merge_job(outer_job, "outer"); spin(3)
+    chk(inner.get("r", {}).get("ok") is True, "F3 cancellable=False 인 일은 앞 작업 중에도 돈다", str(inner))
+    MainWindow._run_merge_job = _orig_rmj
+    _appmod._MergeThread.start = _orig_thread_start
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

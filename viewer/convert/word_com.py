@@ -173,10 +173,13 @@ def convert_word(ps, pages, dst: Path, tick) -> None:
             state["done"] = True
             leftovers = ours()
             try:
-                if app is not None:
+                # 중지·시간 상한으로 이미 끝낸 Word 에 Quit 를 부르면 RPC 실패(0x800706BA)만 난다 — crash.log 에 '치명적 예외' 로
+                #   적혀 오해를 낳았다(261026-2, 응답성 SOT §4.3). 끝낸 Word 는 부르지 않는다
+                if app is not None and not (state["cancel"] or state["timeout"]):
                     app.Quit()
             except Exception:
                 pass
+            app = None
             time.sleep(0.5)
             _kill({p for p in leftovers if p in _pids("winword.exe") | _pids("pdfreflow.exe")})   # 남은 자식까지
             pythoncom.CoUninitialize()
