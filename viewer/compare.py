@@ -10,7 +10,8 @@ from __future__ import annotations
 import difflib
 import re
 
-from viewer.i18n import tr_noop
+from viewer.i18n import tr, tr_noop
+from viewer.progress_text import step
 
 KIND_LABELS = {"replace": tr_noop("바뀜"), "delete": tr_noop("지움"), "insert": tr_noop("넣음")}
 # 진행 창 2줄 단계 이름(디자인 SOT §2.7, 261026-2) — 막대 척도(0~1000)는 글에 넣지 않는다(counts=False)
@@ -26,8 +27,6 @@ def _lines(path, tick, base: int, span: int, stage: str = "") -> list:
     """`[(쪽, 사각형, 글)]` — 빈 줄·자리 없는 줄은 뺀다. 진행 글은 `파일 이름` / `옛판 읽기 k/n`(디자인 SOT §2.7, 261026-2)."""
     from pathlib import Path
     from viewer.convert.source import PageSource
-    from viewer.i18n import tr
-    from viewer.progress_text import step
     out = []
     with PageSource(path, tables="off") as ps:
         n = ps.page_count
@@ -99,7 +98,6 @@ def compare(old_path, new_path, tick=None) -> list:
     a = _lines(old_path, tick, 0, 450, STAGE_OLD)
     b = _lines(new_path, tick, 450, 450, STAGE_NEW)
     if tick:
-        from viewer.i18n import tr
         tick(900, tr(STAGE_DIFF))
     sm = difflib.SequenceMatcher(None, [t for _p, _r, t in a], [t for _p, _r, t in b], autojunk=False)
     out = []

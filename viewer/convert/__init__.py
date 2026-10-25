@@ -13,7 +13,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from viewer.i18n import tr_noop
+from viewer.i18n import tr, tr_noop
+from viewer.progress_text import step
 
 IMAGE_DPI = 150
 
@@ -64,8 +65,6 @@ STAGES = {
 def step_text(stage: str, k=None, n=None, page=None, doc_pages=None) -> str:
     """진행 창 2줄 — `단계 k/n · 원본 p쪽`(k/n 은 이 일감의 몇째 쪽, p 는 원본 쪽 번호, 둘 다 1부터). 없는 칸은 뺀다.
     `doc_pages`(문서 쪽 수)를 주면 p 도 그 자릿수에 맞춰 채운다(글 폭이 흔들리지 않게 — 디자인 SOT §2.7)."""
-    from viewer.i18n import tr
-    from viewer.progress_text import step
     return step(tr(STAGES[stage]), k, n, page, doc_pages)
 
 

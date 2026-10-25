@@ -17,6 +17,8 @@ from pathlib import Path
 from statistics import median
 from typing import Callable, Optional
 
+from viewer.i18n import tr
+
 DPI = 300
 TOC_PSM = 11                 # 흩어진 글 — 점선 리더 사이의 제목·쪽 번호를 따로 집는다
 
@@ -102,7 +104,7 @@ class OcrPages:
                 pass
         if not run or self.should_cancel():
             return [], 0
-        from viewer.i18n import tr                # 261026-2(디자인 SOT §2.7): 날 글 'OCR p.12' 대신
+        # 261026-2(디자인 SOT §2.7): 날 글 'OCR p.12' 대신
         self.progress(tr("OCR {pg}쪽 읽는 중…").format(pg=pno1))
         self.pace()
         res = self._ocr.build_page(self.doc, pno1 - 1, lang=self.lang, dpi=DPI,

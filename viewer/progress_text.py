@@ -7,8 +7,13 @@
 - `step` — 쪽을 말하는 일의 글 `단계 k/n · 원본 p쪽`. 파일마다 나눈 막대 척도(1000칸)·엔진 단계 이름·날 글(`p.12`)은 글에 넣지 않는다
   (그런 일은 `_run_merge_job(counts=False)` 로 부르고 글이 스스로 몇째인지 말한다).
 - `file_head` — 일괄의 1줄 `파일 2/5 · 이름`(한 파일이면 이름만).
+
+쓰는 쪽은 단계 이름을 `tr_noop` 상수로 두고 `step(tr(상수), …)` 로 부른다. `tr` 은 **모듈 머리에서** import 한다 —
+함수 안에서 `from viewer.i18n import tr` 하면 그 함수의 `tr` 이 지역 이름이 되어 UnboundLocalError 가 날 수 있다(`test_i18n_keys` F, 261026-2 에 실제로 걸렸다).
 """
 from __future__ import annotations
+
+from viewer.i18n import tr
 
 HEARTBEAT = ("|··", "·|·", "··|", "·|·")
 FIGURE_SPACE = " "
@@ -23,7 +28,6 @@ def pad_count(k, n) -> str:
 def step(label: str, k=None, n=None, page=None, doc_pages=None) -> str:
     """`단계 k/n · 원본 p쪽`(label 은 이미 tr() 한 단계 이름, k·p 는 1부터). 없는 칸은 뺀다.
     `doc_pages`(문서 쪽 수)를 주면 p 도 그 자릿수에 맞춰 채운다."""
-    from viewer.i18n import tr
     out = str(label)
     if k is not None and n:
         out += " " + pad_count(k, n)
@@ -37,7 +41,6 @@ def step(label: str, k=None, n=None, page=None, doc_pages=None) -> str:
 
 def file_head(i: int, n: int, name: str) -> str:
     """일괄 진행 글의 1줄 — 여러 파일이면 `파일 2/5 · 이름`(i 는 0부터), 하나면 이름만."""
-    from viewer.i18n import tr
     if n <= 1:
         return str(name)
     return tr('파일 {count} · {name}').format(count=pad_count(i + 1, n), name=name)
