@@ -1831,7 +1831,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # ⚙️ 프로그램 환경설정 — '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
         m_tools.addSection(tr("⚙️ 프로그램 환경설정"))
         _act(tr("환경설정..."), self.action_open_settings, "tools.settings")        # 260618-18: 환경설정을 단축키 위로
-        _act(tr("단축키 설정..."), self._edit_shortcuts, "tools.shortcuts")
+        # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
         # 📖 사전 및 용어집 관리 — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25). 261016-3: 하위 메뉴로 단축키 설정 아래
         _dict = _sub(tr("사전 및 용어집 관리"), (
             (tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
@@ -2125,10 +2125,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             out.append(ov.get(sid, d[1] if d else ""))
         return out
 
-    def _edit_shortcuts(self):
+    def _edit_shortcuts(self, parent=None):
+        """단축키 설정 창 — 261025-6 보완: 환경설정 '스타일' 묶음의 단추가 연다(parent = 환경설정 창). [확인] 이면 곧바로 저장."""
         from viewer.widgets.shortcuts_dialog import ShortcutsDialog
         cur = (self._prefs or {}).get("shortcuts", {})
-        d = ShortcutsDialog(self._sc_defs, cur, self,
+        d = ShortcutsDialog(self._sc_defs, cur, parent or self,
                             capture_global=bool(self._prefs.get("capture_global", False)))
         if d.exec():
             self._prefs["shortcuts"] = d.result_shortcuts()

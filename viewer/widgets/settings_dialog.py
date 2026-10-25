@@ -153,8 +153,8 @@ class SettingsDialog(QDialog):
         ll.addRow(_row_ext)                  # 이름 칸 없이 두 칸 폭 — 영어 글자가 길다(디자인 SOT §2.14)
         layout.addWidget(grp_lang)
 
-        # ── 화면 스타일(테마) ── 261025-6(디자인 SOT §2.14, 사용자 지시): '언어' 바로 아래 ──
-        grp_theme = QGroupBox(tr("화면 스타일"))
+        # ── 스타일(테마·단축키) ── 261025-6(디자인 SOT §2.14, 사용자 지시): '언어' 바로 아래. 이름은 종전 '화면 스타일' ──
+        grp_theme = QGroupBox(tr("스타일"))
         tl = QFormLayout(grp_theme)
         self.cmb_theme = QComboBox()
         for _val, _lbl in THEME_LABELS:
@@ -164,6 +164,13 @@ class SettingsDialog(QDialog):
                   if cur in [v for v, _ in THEME_LABELS] else 0)
         self.cmb_theme.setCurrentIndex(idx)
         tl.addRow(tr("테마:"), self.cmb_theme)
+        # 261025-6 보완(사용자 지시): 도구 탭의 '단축키 설정...' 을 여기 테마 아래 단추로 옮겼다 — 단축키 창은 종전처럼 [확인] 때 곧바로 저장
+        self.btn_shortcuts = QPushButton(tr("단축키 설정..."))
+        self.btn_shortcuts.clicked.connect(lambda: self._host._edit_shortcuts(self))
+        self.btn_shortcuts.setEnabled(hasattr(self._host, "_edit_shortcuts"))
+        _row_sc = QHBoxLayout(); _row_sc.setContentsMargins(0, 0, 0, 0)
+        _row_sc.addWidget(self.btn_shortcuts); _row_sc.addStretch(1)
+        tl.addRow(_row_sc)
         layout.addWidget(grp_theme)
 
 

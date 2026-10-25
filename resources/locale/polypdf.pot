@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-25 13:28+0900\n"
+"POT-Creation-Date: 2026-10-25 15:16+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -421,10 +421,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "환경설정..."
-msgstr ""
-
-#: viewer/app.py
-msgid "단축키 설정..."
 msgstr ""
 
 #: viewer/app.py
@@ -6037,7 +6033,8 @@ msgstr ""
 msgid "현재 쪽"
 msgstr ""
 
-#: viewer/widgets/crop_dialog.py viewer/widgets/text_panel.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/text_panel.py
 msgid "스타일"
 msgstr ""
 
@@ -8283,11 +8280,11 @@ msgid "설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "화면 스타일"
+msgid "테마:"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "테마:"
+msgid "단축키 설정..."
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

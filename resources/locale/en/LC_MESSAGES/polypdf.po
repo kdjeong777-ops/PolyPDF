@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-25 13:28+0900\n"
+"POT-Creation-Date: 2026-10-25 15:16+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -422,10 +422,6 @@ msgstr "⚙️ Program Settings"
 #: viewer/app.py
 msgid "환경설정..."
 msgstr "Settings..."
-
-#: viewer/app.py
-msgid "단축키 설정..."
-msgstr "Keyboard Shortcuts..."
 
 #: viewer/app.py
 msgid "사전 및 용어집 관리"
@@ -6279,7 +6275,8 @@ msgstr "Pages selected on the left"
 msgid "현재 쪽"
 msgstr "Current page"
 
-#: viewer/widgets/crop_dialog.py viewer/widgets/text_panel.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/text_panel.py
 msgid "스타일"
 msgstr "Style"
 
@@ -8550,12 +8547,12 @@ msgid "설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 
 msgstr "Adds language packs (.mo · pack.json) placed in locale\\<code>\\ of the settings folder to the language list. A pack with the same code is used instead of the built-in one. For translators testing without a release."
 
 #: viewer/widgets/settings_dialog.py
-msgid "화면 스타일"
-msgstr "Appearance"
-
-#: viewer/widgets/settings_dialog.py
 msgid "테마:"
 msgstr "Theme:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "단축키 설정..."
+msgstr "Keyboard Shortcuts..."
 
 #: viewer/widgets/settings_dialog.py
 msgid "시작 시 동작"
@@ -12181,4 +12178,7 @@ msgstr "Getting Started"
 
 #~ msgid "메뉴 탭 아래 세부 줄 보이기"
 #~ msgstr "Show the command row under the menu tabs"
+
+#~ msgid "화면 스타일"
+#~ msgstr "Appearance"
 

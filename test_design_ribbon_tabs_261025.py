@@ -192,7 +192,20 @@ try:
     content = d3.findChild(QScrollArea).widget()
     titles = [g.title() for g in sorted((g for g in content.findChildren(QGroupBox) if g.parent() is content and g.isVisibleTo(d3)),
                                          key=lambda g: g.y())]
-    chk(titles[:2] == ["언어 / Language", "화면 스타일"], "I 화면 스타일은 언어 바로 아래", str(titles))
+    chk(titles[:2] == ["언어 / Language", "스타일"], "I '스타일' 묶음은 언어 바로 아래", str(titles))
+    _grp_style = [g for g in content.findChildren(QGroupBox) if g.title() == "스타일"][0]
+    chk(_grp_style.isAncestorOf(d3.btn_shortcuts) and d3.btn_shortcuts.mapTo(d3, d3.btn_shortcuts.rect().topLeft()).y()
+        > d3.cmb_theme.mapTo(d3, d3.cmb_theme.rect().topLeft()).y(), "I '단축키 설정...' 단추는 스타일 묶음의 테마 아래")
+    from viewer.widgets import shortcuts_dialog as _scd
+    _sc_par = []
+    _orig_scexec = _scd.ShortcutsDialog.exec
+    _scd.ShortcutsDialog.exec = lambda self: (_sc_par.append(self.parent()), 0)[1]
+    try:
+        QTest.mouseClick(d3.btn_shortcuts, Qt.MouseButton.LeftButton); QTest.qWait(50)
+    finally:
+        _scd.ShortcutsDialog.exec = _orig_scexec
+    chk(_sc_par == [d3], "I 단추를 누르면 단축키 설정 창이 환경설정 창 위에 뜬다", str(_sc_par))
+    chk("tools.shortcuts" not in mw._cmds, "I 도구 탭에서 '단축키 설정' 을 뺐다")
     chk("리본 메뉴" in titles and d3.chk_show_panel_toolbar.text() == "리본 메뉴 보이기"
         and d3.btn_edit_collection.text() == "모음 메뉴 관리...", "I '리본 메뉴 보이기'·'모음 메뉴 관리...' 이름", str(titles))
     chk(d3.btn_recording.mapTo(d3, d3.btn_recording.rect().topLeft()).y()
