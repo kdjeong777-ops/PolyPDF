@@ -103,9 +103,12 @@ class PdfIndex:
                 except OSError:
                     pass
                 self.migrated = True
+        is_new = not self.db_path.exists()
         try:
             self.conn = _dbutil.connect(self.db_path, self.busy_ms)
             self._init_schema()
+            if is_new:
+                self._stamp_checked(self.db_path)    # 261025-8: 방금 만든 색인은 점검할 것이 없다(빈 색인에서 시작한 첫 색인 중 점검 방지)
             # 사용자가 '인덱스 재구축' 을 고르면 배경에서 무결성까지 본다(큰 색인은 수 초 — 워커 전용)
             if verify:
                 if self.conn.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
@@ -224,6 +227,7 @@ class PdfIndex:
             self.mark_corrupt(self.db_path, f"지우지 못함(다음 열기에서) {reason}".strip())   # 261009-14
         self.conn = _dbutil.connect(self.db_path, self.busy_ms)
         self._init_schema()
+        self._stamp_checked(self.db_path)            # 261025-8: 새로 만든 색인
         self.migrated = True
 
     def _tune(self):

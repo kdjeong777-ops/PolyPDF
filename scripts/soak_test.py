@@ -45,6 +45,12 @@ SEARCH_WORDS = ("도로", "asphalt", "기준", "pavement")
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 u32 = ctypes.WinDLL("user32")
 k32.GetCurrentProcess.restype = wt.HANDLE
+k32.GetProcessHandleCount.argtypes = [wt.HANDLE, ctypes.POINTER(wt.DWORD)]
+k32.CreateToolhelp32Snapshot.restype = wt.HANDLE
+k32.CreateToolhelp32Snapshot.argtypes = [wt.DWORD, wt.DWORD]
+k32.Process32FirstW.argtypes = k32.Process32NextW.argtypes = [wt.HANDLE, ctypes.c_void_p]
+k32.CloseHandle.argtypes = [wt.HANDLE]
+u32.GetGuiResources.argtypes = [wt.HANDLE, wt.DWORD]
 
 
 class PROCESSENTRY32W(ctypes.Structure):
@@ -55,7 +61,6 @@ class PROCESSENTRY32W(ctypes.Structure):
 
 
 def _procs():
-    k32.CreateToolhelp32Snapshot.restype = wt.HANDLE
     snap = k32.CreateToolhelp32Snapshot(0x2, 0)
     out = []
     e = PROCESSENTRY32W()

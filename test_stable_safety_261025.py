@@ -147,6 +147,8 @@ try:
     ix.conn.commit()
     ix.conn.execute("pragma wal_checkpoint(truncate)")
     ix.conn.close()
+    check("C1 방금 만든 색인은 표식 → 첫 색인 중 점검 없음", not PdfIndex.integrity_due(db))
+    PdfIndex._checked_stamp(db).unlink()          # 이 판 전에 만든 색인(표식 없음)
     check("C2 표식 없는 기존 색인 → 점검 대상(처음 한 번)", PdfIndex.integrity_due(db))
     PdfIndex(db, verify=True).conn.close()
     check("C3 점검 통과 → 표식 → 대상 아님", PdfIndex._checked_stamp(db).exists() and not PdfIndex.integrity_due(db))
