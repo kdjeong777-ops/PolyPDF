@@ -17,6 +17,10 @@ TRF = {"tr", "trp", "trn", "tr_noop"}
 SKIPF = {"debug", "info", "warning", "exception", "error", "critical", "print", "RuntimeError",
          "ValueError", "KeyError", "Exception", "TypeError", "OSError", "PermissionError",
          "FileNotFoundError"}
+# 261025-12: 앱의 기록 파일(error.log·crash.log)에 쓰는 함수 — 이름에 `log` 마디가 있으면(`_log_error`·`log_reset`) 그 인자는
+#   개발자용 기록이지 화면 문구가 아니다(다국어 SOT §6 '감싸지 않는 것' 의 로그). 새 기록 함수를 만들 때 이 검사를 따로 고치지 않게
+#   이름 규칙으로 건너뛴다 — 261025-8 의 `settings_store._log_error` 문구가 이 규칙 전에 '감싸지 않은 화면 문구' 로 걸렸다.
+LOGF = re.compile(r"(^|_)log(_|$)")
 
 KOREA_ONLY = {
     "viewer/study_controller.py", "viewer/widgets/study_panel.py",
@@ -49,7 +53,8 @@ ALLOW = {
                       "기본값"},                                # 배포 기본값 프로필 이름
     "viewer/instance_link.py": {"응답 없음"},                 # 창 사이 통신 오류 값(로그)
     "viewer/vprinter_recv.py": {"PolyPDF 인쇄"},              # 261017 가상 프린터 기본 저장 폴더 이름(사용자 디스크의 자리)
-    "viewer/settings_store.py": {"기본값"},
+    "viewer/settings_store.py": {"기본값",
+                                 "옮기지 못함("},                # 261025-8 error.log 기록 — 화면 문구 아님(다국어 SOT §6 로그). 변수로 만든 뒤 _log_error 로 넘겨 이름 규칙(LOGF)이 못 본다
     "viewer/text_word.py": {"python-docx 없음: "},            # 예외 메시지
     # 장치 이름 짐작(실제 장치 이름과 맞춰 본다)
     "viewer/recorder.py": {"마이크", "믹스", "스테레오 믹스"},
@@ -93,7 +98,7 @@ def bare_korean(path, funcs=None, script_consts=()):
     for n in ast.walk(t):
         if isinstance(n, ast.Call):
             fn = n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
-            if fn in TRF or fn in SKIPF:
+            if fn in TRF or fn in SKIPF or LOGF.search(fn or ""):
                 skip.update(id(m) for m in ast.walk(n))
         if (isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module))
                 and n.body and isinstance(n.body[0], ast.Expr)
