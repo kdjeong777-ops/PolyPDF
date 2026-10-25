@@ -71,6 +71,9 @@ try:
 
     # C — 파일을 열면 책갈피창이 그 파일을 펼치며 목차를 단다: 다시 열지 않는다
     opened.clear()
+    #   261025-4: 배경 표식 검사가 아직 캐시를 못 채운 때(바쁜 기계 — 전체 검사에서만 실패했다)를 만든다
+    _pc = getattr(mw.bookmark_tree, "_probe_cache", None) or {}
+    mw.bookmark_tree._probe_cache = {k: v for k, v in _pc.items() if Path(k[0]).name != "a.pdf"}
     mw._on_bookmark_activated(str(a), 0); spin(1.0)
     bt = mw.bookmark_tree
     node = next(it for it in bt._iter_file_nodes() if Path(it.data(0, bt.DATA_FILE)).name == "a.pdf")
@@ -80,7 +83,8 @@ try:
     nb = next(it for it in bt._iter_file_nodes() if Path(it.data(0, bt.DATA_FILE)).name == "b.pdf")
     opened.clear()
     nb.setExpanded(True); spin(0.2)
-    chk([Path(p).name for p in opened] == ["b.pdf"] and nb.childCount() == 1, "C3 본문에 없는 파일을 펼치면 종전대로 연다",
+    #   (표식 검사가 아직이면 검사와 목차 읽기로 두 번 연다 — 종전 그대로)
+    chk(opened and {Path(p).name for p in opened} == {"b.pdf"} and nb.childCount() == 1, "C3 본문에 없는 파일을 펼치면 종전대로 연다",
         str((opened, nb.childCount())))
 
     # A — 끼운 흰 쪽이 2장 맞춤에서

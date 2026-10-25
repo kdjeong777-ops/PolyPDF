@@ -2011,9 +2011,23 @@ class BookmarkTree(QWidget):
         # 이미 로드한 적 있으면 패스
         if item.data(0, self.DATA_TOC_LOADED):
             return
+        file_path = item.data(0, self.DATA_FILE)
+        # 261024-4(마스터 §15): 본문에 열린 파일이면 그 문서의 목차를 쓴다 — 쪽을 넘길 때(`select_for_page`) 같은 파일을
+        #   메인에서 다시 열어 창이 섰다(빌드 시험 T1 1.25초, 스택 fz_open_file). 없으면(None) 종전대로 연다.
+        prov = self.toc_provider
+        toc = None
+        if prov is not None and file_path:
+            try:
+                toc = prov(file_path)
+            except Exception:
+                toc = None
+        # 261025-4: 목차를 받았으면 아래 표식 검사(`_ensure_probed` → fitz.open)도 먼저 하지 않는다 — 배경 검사가
+        #   아직 캐시를 못 채웠을 때(바쁜 기계) 그 검사가 같은 파일을 메인에서 다시 열었다. 표식은 배경 검사 큐가 단다.
+        if toc is not None and self._is_file_node(item) and item.childCount() == 0:
+            self._attach_toc_placeholder(item, Path(file_path))
         # 260906-1: 표식 검사는 보이는 행만 하므로, 아직 차례가 오지 않은 행을 펼쳤을 수 있다.
         #   그 경우 placeholder 가 없어 **책갈피가 안 펼쳐진 것처럼** 보인다 → 이 행만 즉시 검사.
-        if self._is_file_node(item):
+        if toc is None and self._is_file_node(item):
             self._ensure_probed(item, force=True)
         # 자식 중 placeholder 가 있는지 확인
         ph_idx = -1
@@ -2025,21 +2039,11 @@ class BookmarkTree(QWidget):
         if ph_idx < 0:
             return
 
-        file_path = item.data(0, self.DATA_FILE)
         if not file_path or not Path(file_path).exists():
             item.takeChild(ph_idx)
             item.setData(0, self.DATA_TOC_LOADED, True)
             return
 
-        # 261024-4(마스터 §15): 본문에 열린 파일이면 그 문서의 목차를 쓴다 — 쪽을 넘길 때(`select_for_page`) 같은 파일을
-        #   메인에서 다시 열어 창이 섰다(빌드 시험 T1 1.25초, 스택 fz_open_file). 없으면(None) 종전대로 연다.
-        prov = self.toc_provider
-        toc = None
-        if prov is not None:
-            try:
-                toc = prov(file_path)
-            except Exception:
-                toc = None
         if toc is not None:
             self._fill_toc(item, ph_idx, file_path, list(toc))
             return
