@@ -42,7 +42,7 @@
     Paste from Clipboard · Paste Photo · Delete · Save · Hide/Unhide · Add Bookmark · Add Hyperlink · Shape/Text Input Settings.
     In edit mode, pressing <b>Del</b> with no object selected deletes this page (until you save). Menus show each item's shortcut on the right. <b>Paste uses what you copied last</b> — copied pages go below this page, copied objects go where you clicked.
     Paste from Clipboard pastes pages and pictures as a picture and text as a text box.</li>
-  <li><b>Menu tabs</b>: click <b>Quick Access · File · Favorites · View · Tools · Help</b> at the top of the window and the tab's commands appear in one row below it (Alt+F·V·B·T·H also switch tabs).
+  <li><b>Menu tabs</b>: click <b>Quick Access · File · Favorites · View · Tools · Help</b> at the top of the window and the tab's commands appear in one row below it (Alt+C·F·V·B·T·H also switch tabs).
     <b>Quick Access</b> holds the buttons you use most and is shown at start; add, remove or reorder them with <b>Manage Quick Access...</b> in Settings or by right-clicking the tab bar (Alt+C opens the tab). Turn off <b>Show Ribbon</b> there and the ribbon only appears briefly when you click a tab. The search box is at the right end of the tab row.</li>
   <li><b>View buttons</b> (Quick Access · View tab): <b>Single</b> (hide the right panel) · <b>Split</b> · <b>Text</b> · <b>Search</b> ·
     <b>Screenshots</b> · <b>Presentation</b> (§12).</li>
@@ -270,9 +270,9 @@
     Styles (font · size · bold · letter spacing · line spacing for titles and body), <b>Skip tables</b>, <b>Join sentences</b>.</li>
   <li>You can fix the text line by line; selecting a line marks that spot on the page.
     <b>Highlight</b> · <b>Show in body too</b> · <b>To bookmarks</b> (turn highlighted spots into bookmarks) · <b>Save Word ▾</b> (current page / page range / whole document).</li>
-  <li><b>Read with OCR</b> (OCR toolbar button · Tools menu · text pane): reads the text of scanned PDFs — current page / page range / whole document, language,
+  <li><b>Read with OCR</b> (Quick Access 'OCR' · Tools tab · text pane): reads the text of scanned PDFs — current page / page range / whole document, language,
     'Ignore background watermarks', 'Skip pages that already have text'. <b>Apply to PDF</b> writes the text layer into the PDF (the original is backed up).
-    Get the OCR engine from <b>Tools → Install Components (recording · OCR)…</b>.</li>
+    Get the OCR engine from <b>Tools → Register &amp; Install → Install Components…</b>.</li>
   <li><b>Create OCR text layer</b> (select several files or a folder row in the bookmark panel and right-click): reads the scanned pages without a text layer
     in all selected PDFs with OCR at once and adds an invisible text layer to the originals — other programs can then search and copy the text.
     A backup is kept next to the original the first time, pages already read are not read again, and signed or password-protected PDFs are skipped.</li>
@@ -287,7 +287,7 @@
 
 <h3>12. Presentation · recording (F5)</h3>
 <ul>
-  <li><b>Presentation</b> (F5 · toolbar · View menu · page right-click): full screen. Move the mouse to the top of the screen for the <b>top bar</b>
+  <li><b>Presentation</b> (F5 · Quick Access · View tab · page right-click): full screen. Move the mouse to the top of the screen for the <b>top bar</b>
     (page · pens 1–N · line type · partial erase · clear · Apply to Main View · Open Links · ⏱ presentation timer · ● record · ✕ exit · 🖥 Main/Other Screen),
     and to the left edge for <b>thumbnails</b>. Lines, shapes, text and photos added in the main view are shown too.</li>
   <li>Mouse: left-drag = draw, click in the left 10% = previous page, click elsewhere = next page. Keys: → Space PgDn ↓ next · ← PgUp ↑ previous ·
@@ -340,7 +340,7 @@
 <tr><td>Ctrl+Shift+Backspace</td><td>Clear lines on the current page</td></tr>
 <tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo edits (everything done in edit mode)</td></tr>
 <tr><td>Ctrl+R / Ctrl+Shift+R</td><td>Record/resume / stop (during a presentation; change them in Settings)</td></tr>
-<tr><td>Ctrl+Q · Alt+F → X</td><td>Exit</td></tr>
+<tr><td>Ctrl+Q</td><td>Exit (File tab 'Exit')</td></tr>
 </table>
 <p><small>You can change any shortcut in <b>Tools → Settings... → Style → Keyboard Shortcuts...</b>, and
 'Restore Defaults' puts them back.</small></p>
@@ -365,8 +365,8 @@
     Pressing [Update] <b>downloads the file first</b>, then closes all open PolyPDF windows and installs
     (if you cancel the download or it fails, nothing is closed).
     <b>Download Updates Automatically</b> (on by default) fetches new versions in advance. <b>Also Receive Beta (Test) Versions</b> is always on before 1.0.</li>
-  <li><b>Tools → Install Components (recording · OCR)…</b>: downloads ffmpeg for recording and the OCR engine (installed ✓ / not installed).</li>
-  <li><b>Tools → Virtual Printer (PolyPDF) Install/Remove…</b>: when you print to the <b>'PolyPDF'</b> printer from another program
+  <li><b>Tools → Register &amp; Install → Install Components…</b>: downloads ffmpeg for recording and the OCR engine (installed ✓ / not installed).</li>
+  <li><b>Tools → Register &amp; Install → Install/Remove Virtual Printer…</b>: when you print to the <b>'PolyPDF'</b> printer from another program
     (PowerPoint, Word, Notepad …), it saves a PDF without a save dialog and opens it in PolyPDF. It saves next to the original file
     (or in the default save folder if the original can't be found) and adds (1), (2) if the name exists.
     Choose the save folder and black-and-white in that window. Available in the installed version only (not the portable one); it can also be installed during setup.

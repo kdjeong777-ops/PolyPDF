@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-25 16:28+0900\n"
+"POT-Creation-Date: 2026-10-25 16:33+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -917,7 +917,7 @@ msgid "변환"
 msgstr ""
 
 #: viewer/app.py
-msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
+msgid "PDF 를 Word·한글·PowerPoint·Excel·이미지·텍스트로 변환"
 msgstr ""
 
 #: viewer/app.py
@@ -8114,7 +8114,7 @@ msgid "클릭 = {w}×{h} 상자 놓기 · Esc·오른쪽 클릭 = 취소"
 msgstr ""
 
 #: viewer/widgets/ribbon.py
-msgid "모음 메뉴 편집"
+msgid "모음 메뉴 관리"
 msgstr ""
 
 #: viewer/widgets/ribbon.py

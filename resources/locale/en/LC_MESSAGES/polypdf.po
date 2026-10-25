@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-25 16:28+0900\n"
+"POT-Creation-Date: 2026-10-25 16:33+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -931,8 +931,8 @@ msgid "변환"
 msgstr "Convert"
 
 #: viewer/app.py
-msgid "PDF 를 Word·한글·Excel·이미지·텍스트로 변환"
-msgstr "Convert the PDF to Word, Hangul, Excel, images or text"
+msgid "PDF 를 Word·한글·PowerPoint·Excel·이미지·텍스트로 변환"
+msgstr "Convert the PDF to Word, Hangul, PowerPoint, Excel, images or text"
 
 #: viewer/app.py
 msgid "1단"
@@ -8381,8 +8381,8 @@ msgid "클릭 = {w}×{h} 상자 놓기 · Esc·오른쪽 클릭 = 취소"
 msgstr "Click = place a {w}×{h} box · Esc/right-click = cancel"
 
 #: viewer/widgets/ribbon.py
-msgid "모음 메뉴 편집"
-msgstr "Customize Quick Access"
+msgid "모음 메뉴 관리"
+msgstr "Manage Quick Access"
 
 #: viewer/widgets/ribbon.py
 msgid "왼쪽에서 명령을 골라 '모음' 탭에 넣습니다. 차례는 오른쪽 목록 차례입니다."
@@ -12181,4 +12181,7 @@ msgstr "Getting Started"
 
 #~ msgid "출처 ▾"
 #~ msgstr "Source ▾"
+
+#~ msgid "모음 메뉴 편집"
+#~ msgstr "Customize Quick Access"
 

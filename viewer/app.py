@@ -220,7 +220,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "presentation_dual": False,
             "presentation_facing": False,
             "presentation_other_screen": False,     # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면'
-            "presentation_back_zone_pct": 20,       # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%)
+            "presentation_back_zone_pct": None,     # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%). None = 기본값(presentation.BACK_ZONE_DEFAULT — 261025-5 보완, 값은 한 곳)
             # 260609-16(F3): 발표 펜(빈 값이면 모듈 기본)·활성·단축키
             "presentation_pens": [],
             "presentation_pen_active": 0,
@@ -1713,7 +1713,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                          ("file.recent_files", self.menu_recent_files.menuAction()), ("file.quit", a_quit)):
             self._reg_cmd(_cid, _a)
         self._reg_cmd("file.export", self.act_export, short=tr("변환"),
-                      tip=tr("PDF 를 Word·한글·Excel·이미지·텍스트로 변환"))
+                      tip=tr("PDF 를 Word·한글·PowerPoint·Excel·이미지·텍스트로 변환"))
 
         # v1.6.1 F1: 즐겨찾기 메뉴 (파일 ↔ 보기 사이)
         self.menu_favorites = bar.addMenu(tr("즐겨찾기(&V)"))
@@ -1839,7 +1839,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         m_tools.addSection(tr("⚙️ 프로그램 환경설정"))
         _act(tr("환경설정..."), self.action_open_settings, "tools.settings")        # 260618-18: 환경설정을 단축키 위로
         # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
-        # 📖 사전 및 용어집 관리 — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25). 261016-3: 하위 메뉴로 단축키 설정 아래
+        # 📖 사전 및 용어집 관리 — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25). 261016-3: 하위 메뉴로 환경설정 아래(261025-6 보완 — 단축키 설정은 환경설정 창으로)
         _dict = _sub(tr("사전 및 용어집 관리"), (
             (tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
             (tr("사용자 뜻 편집..."), self._action_user_terms),          # 261019-5(단어장 SOT §4.1)
@@ -7340,7 +7340,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
             if self.bookmark_tree.is_edit_mode():
                 return                       # 사용자가 '계속 편집' 선택 → 발표 취소
-        from viewer.widgets.presentation import PresentationWindow, DEFAULT_POINTERS
+        from viewer.widgets.presentation import PresentationWindow, DEFAULT_POINTERS, BACK_ZONE_DEFAULT
         page = self.main_view.current_page()
         pointers = self._prefs.get("presentation_pointers") or DEFAULT_POINTERS
         active = int(self._prefs.get("presentation_pointer_active", 0))
@@ -7372,7 +7372,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                            # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' 기억
                                            other_screen=bool(self._prefs.get("presentation_other_screen", False)),
                                            # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%)
-                                           back_zone_pct=int(self._prefs.get("presentation_back_zone_pct", 20)))
+                                           back_zone_pct=self._back_zone_pct(BACK_ZONE_DEFAULT))
         self._present.otherScreenChanged.connect(self._on_present_other_screen)
         self._present.backZoneChanged.connect(self._on_present_back_zone)
         self._present.splitModeChanged.connect(self._on_present_split_changed)
@@ -7422,6 +7422,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' — 다음 발표도 그 화면에서."""
         self._prefs["presentation_other_screen"] = bool(on)
         self._save_settings_now()
+
+    def _back_zone_pct(self, default: int) -> int:
+        """261025-5 보완: 저장된 뒤로 가기 폭 — 없거나 읽을 수 없으면 `presentation.BACK_ZONE_DEFAULT`(값은 한 곳)."""
+        try:
+            return int(self._prefs.get("presentation_back_zone_pct") or 0) or default
+        except (TypeError, ValueError):
+            return default
 
     def _on_present_back_zone(self, pct: int):
         """261025-3(발표 SOT §3.1): 우클릭 '뒤로 가기 영역' 폭(%) — 다음 발표에도."""
@@ -8498,7 +8505,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._prefs.setdefault("presentation_dual", False)        # 260905(§4.1)
         self._prefs.setdefault("presentation_facing", False)      # 260905(§4.1)
         self._prefs.setdefault("presentation_other_screen", False)  # 261021-3(발표 SOT §6.1)
-        self._prefs.setdefault("presentation_back_zone_pct", 20)  # 261025-3(발표 SOT §3.1)
+        self._prefs.setdefault("presentation_back_zone_pct", None)  # 261025-3(발표 SOT §3.1) — None = presentation.BACK_ZONE_DEFAULT
         self._prefs.setdefault("presentation_pens", [])           # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_active", 0)      # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_keys", [])       # 260609-16(F3)
@@ -8914,8 +8921,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "presentation_facing", old.get("presentation_facing", False))),
             "presentation_other_screen": bool(prefs.get(            # 261021-3(발표 SOT §6.1)
                 "presentation_other_screen", old.get("presentation_other_screen", False))),
-            "presentation_back_zone_pct": int(prefs.get(            # 261025-3(발표 SOT §3.1)
-                "presentation_back_zone_pct", old.get("presentation_back_zone_pct", 20))),
+            "presentation_back_zone_pct": prefs.get(              # 261025-3(발표 SOT §3.1) — None = 기본값, 숫자로 읽는 것은 발표를 열 때
+                "presentation_back_zone_pct", old.get("presentation_back_zone_pct")),
             # 260609-16(F3): 발표 펜
             "presentation_pens": list(prefs.get(
                 "presentation_pens", old.get("presentation_pens", []))),

@@ -447,7 +447,7 @@ class RibbonCustomizeDialog(QDialog):
     def __init__(self, catalog, current, labels, parent=None):
         """catalog: [(탭 이름, [명령 id, ...]), ...] · current: 지금 모음(id·SEP) · labels: id → 단추 이름."""
         super().__init__(parent)
-        self.setWindowTitle(tr("모음 메뉴 편집"))
+        self.setWindowTitle(tr("모음 메뉴 관리"))          # 261025-5 보완: 단추·우클릭 이름 '모음 메뉴 관리...' 와 같게
         self.resize(640, 480)
         self._labels = dict(labels)
         self._sep_text = self.SEP_LABEL.format(sep=tr("구분선"))

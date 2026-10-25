@@ -439,7 +439,7 @@ RENAMED = [
     ("메뉴 탭 아래 세부 줄 보이기", "리본 메뉴 보이기", "261025-5"),
 ]
 # 화면 문구(tr("옛 이름…"))가 아직 남은 것 — 코드 결함으로 보고했고 고칠 세션이 이 줄을 지운다. 고쳤는데 남아 있으면 실패(목록은 줄기만).
-RENAMED_CODE_PENDING = {"모음 메뉴 편집"}         # ribbon.py 모음 편집 창 제목(261025-9 보고)
+RENAMED_CODE_PENDING = set()                   # 261025-9 보고분(ribbon.py 모음 창 제목)은 261025-5 보완에서 고쳤다
 REN_OK = ("종전", "옛 ", "→", '*"', "개명", "이름이 바뀐")
 ren_sot, ren_test, ren_code, ren_help = [], [], set(), []
 for name, txt in LIVE.items():
@@ -472,6 +472,132 @@ chk(not ren_test, "I3 검사(test_*.py)가 바뀐 화면 이름의 옛 이름을
 chk(not (ren_code - RENAMED_CODE_PENDING), "I4 화면 문구 tr(…) 에 옛 이름이 없다", str(sorted(ren_code - RENAMED_CODE_PENDING)))
 chk(not (RENAMED_CODE_PENDING - ren_code), "I4b 고친 화면 문구는 RENAMED_CODE_PENDING 에서 뺀다", str(sorted(RENAMED_CODE_PENDING - ren_code)))
 chk(not ren_help, "I5 도움말(help_*.html)에 옛 이름이 없다", str(ren_help[:8]))
+
+# ── J. §0 한 줄 도구 ───────────────────────────────────────────────────────
+# 261025-9: `scripts/sot_row.py` 가 SOT §0 과 이력 아카이브 그 절에 같은 행을 넣는다(CLAUDE.md §4). 사본에서 돌려 본다 —
+#   두 문서를 한 번에(뒤 절의 행을 보고 앞 절을 '이미 있음' 으로 건너뛰던 결함), 다시 돌리면 그대로, 날짜를 거스르면 거부.
+print(NL + "=== J. §0 한 줄 도구(scripts/sot_row.py) ===")
+import shutil, tempfile, importlib.util, contextlib, io
+_spec = importlib.util.spec_from_file_location("sot_row", ROOT / "scripts" / "sot_row.py")
+sot_row = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(sot_row)
+_tmp = Path(tempfile.mkdtemp(prefix="sot_row_"))
+try:
+    for p in SOT_DIR.glob("*.md"):
+        shutil.copy2(p, _tmp / p.name)
+    _old_env = os.environ.get("POLYPDF_SOT_DIR")
+    os.environ["POLYPDF_SOT_DIR"] = str(_tmp)
+    _args = ["add", "--date", "2099-12-31", "--ver", "9.9.9", "--title", "검사 행 (999999-1, 검사)",
+             "--docs", "디자인,검색창", "--detail", "검사 원문"]
+    with contextlib.redirect_stdout(io.StringIO()):
+        rc1 = sot_row.main(_args)
+        snap = {n: (_tmp / n).read_bytes() for n in ("화면 디자인 작업 계획서.md", "검색창 작업 계획서.md", sot_row.ARCHIVE)}
+        rc2 = sot_row.main(_args)
+        try:
+            sot_row.main(["add", "--date", "2000-01-01", "--ver", "1", "--title", "옛 날짜 (999999-2, 검사)", "--docs", "디자인"])
+            rej = False
+        except SystemExit:
+            rej = True
+    row = sot_row.make_row("2099-12-31", "9.9.9", "검사 행 (999999-1, 검사)")
+    both = all(sot_row.verify(sot_row.resolve(x, _tmp), row, _tmp) for x in ("디자인", "검색창"))
+    same = all((_tmp / n).read_bytes() == b for n, b in snap.items())
+    crlf = all((b"\r\n" in (SOT_DIR / n).read_bytes()) == (b"\r\n" in b) for n, b in snap.items())
+    chk(rc1 == 0 and both, "J1 두 문서의 §0 과 아카이브 그 절에 모두 넣는다")
+    chk(rc2 == 0 and same, "J2 다시 돌리면 아무것도 바꾸지 않는다")
+    chk(rej, "J3 표 첫 행보다 이른 날짜는 거부한다(내림차순)")
+    chk(crlf, "J4 파일의 줄 끝(CRLF/LF)을 그대로 둔다")
+    chk(sot_row.MAXLEN == 220, "J5 sot_row.MAXLEN = test_sot_compliance 의 §0 행 길이(220)")
+finally:
+    if _old_env is None:
+        os.environ.pop("POLYPDF_SOT_DIR", None)
+    else:
+        os.environ["POLYPDF_SOT_DIR"] = _old_env
+    shutil.rmtree(_tmp, ignore_errors=True)
+
+# ── K. 마스터 §9 신호 표 · §7 API ─────────────────────────────────────────
+# 261025-9(SOT 점검): §9 에 261025-4 의 두 신호가 빠졌고, §7.6 에 없는 클래스(`FavoritesDialog`)·빠진 마이그레이션이 남아 있었다.
+print(NL + "=== K. 마스터 §9 신호 표 · §7 API 가 코드와 같다 ===")
+VIEWER = NL.join(s for p, s in CODE.items() if "viewer" in p.parts or p.name == "main.py")
+s9 = mst[mst.find("## 9."):mst.find("## 10.")]
+s9_rows = [l for l in s9.splitlines() if l.startswith("| ") and l.count("|") >= 5 and not l.startswith("| Source")]
+tab_sigs, tab_emit = set(), set()
+for l in s9_rows:
+    c = l.split("|")
+    tab_sigs |= set(re.findall(r"`(\w+)`", c[2]))
+    tab_emit |= set(re.findall(r"[A-Z][A-Za-z]+", c[1]))
+gone = sorted(s for s in tab_sigs if not re.search(r"\b%s\s*=\s*pyqtSignal|\.%s\.connect\(" % (s, s), VIEWER))
+chk(not gone, "K1 §9 표의 신호가 코드에 있다(선언·연결)", str(gone))
+cls_sigs = {}
+for p, s in CODE.items():
+    if "viewer" not in p.parts and p.name != "main.py":
+        continue
+    for m in re.finditer(r"^class (\w+)\(.*?(?=^class |\Z)", s, re.M | re.S):
+        sg = re.findall(r"^    (\w+)\s*=\s*pyqtSignal\(", m.group(0), re.M)
+        if sg:
+            cls_sigs.setdefault(m.group(1), set()).update(sg)
+app_conn = set(re.findall(r"\.(\w+)\.connect\(", read(ROOT / "viewer" / "app.py")))
+undoc = set()
+for c in tab_emit & set(cls_sigs):
+    undoc |= (cls_sigs[c] & app_conn) - tab_sigs
+# 표에 이미 나오는 위젯(BookmarkTree·PageThumbs·MainView …)의 신호 중 아직 표에 없는 것 — 260628 이후 쌓였다. **줄기만 한다**:
+#   새로 연결한 신호는 표에 행을 넣는다(이 목록에 더하지 않는다). 표에 넣으면 여기서 뺀다.
+SIG_KNOWN_UNDOC = {
+    "activated", "addBlankPageRequested", "addBookmarkAtPage", "addFileFavoriteRequested", "addImagePagesRequested", "applyPageEditsRequested",
+    "bookmarksChanged", "bookmarksEdited", "bookmarksReverted", "bookmarksUndoable", "clearedAll", "compareFilesRequested",
+    "compressFilesRequested", "contextMenuRequested", "convertFilesRequested", "convertPagesRequested", "copyPagesRequested", "copyPaneRequested",
+    "createBookmarksRequested", "createStudyBookmarksRequested", "createStudyRequested", "cropPagesRequested", "cropRequested", "dragHoverOpen",
+    "drawModeChanged", "editCancelled", "editGlossaryRequested", "error", "fileOpCompleted", "filePasswordEntered",
+    "filesRelocated", "flattenFileRequested", "hyperlinkActivated", "imageDropRefused", "imageGotoRequested", "imageStepRequested",
+    "mergeFilesRequested", "modeChanged", "ocrLayerFilesRequested", "pageClicked", "pageDeleteRequested", "pageFilterChanged",
+    "pagesDropped", "pastePagesRequested", "pathDropped", "printPagesRequested", "probeFinished", "probeProgress",
+    "redactFileRequested", "registerHyperlinkAtPage", "releaseFileRequested", "rotatePages", "saveAsFileRequested", "saveRequested",
+    "screenshotPagesRequested", "setPagesHidden", "signEditRequested", "signPanelRequested", "signRegionSelected", "signRequested",
+    "splitViewRequested", "textCopied", "translateFileRequested", "translateFilesRequested", "uncropPagesRequested", "viewListModeChanged",
+    "viewModeChanged", "wordHovered",
+}
+chk(not (undoc - SIG_KNOWN_UNDOC), "K2 §9 표에 나오는 위젯의 새 신호를 연결하면 표에도 행이 있다",
+    str(sorted(undoc - SIG_KNOWN_UNDOC)))
+chk(not (SIG_KNOWN_UNDOC - undoc), "K2b 표에 넣은(또는 없앤) 신호는 SIG_KNOWN_UNDOC 에서 뺀다", str(sorted(SIG_KNOWN_UNDOC - undoc)))
+s7 = mst[mst.find("## 7."):mst.find("## 8.")]
+api_cls, api_def = set(), set()
+for blk in re.findall(r"```python\n(.*?)```", s7, re.S):
+    api_def |= set(re.findall(r"^\s*def (\w+)\(", blk, re.M))
+    for m in re.finditer(r"^([A-Z]\w+(?:\s*/\s*[A-Z]\w+)*)\s*[:(]", blk, re.M):
+        api_cls |= set(re.findall(r"[A-Z]\w+", m.group(1)))
+chk(not sorted(c for c in api_cls if not re.search(r"^\s*class %s\b" % c, VIEWER, re.M)),
+    "K3 마스터 §7 API 블록의 클래스가 코드에 있다", str(sorted(c for c in api_cls if not re.search(r"^\s*class %s\b" % c, VIEWER, re.M))))
+chk(not sorted(d for d in api_def if not re.search(r"def %s\(" % d, VIEWER)),
+    "K4 마스터 §7 API 블록의 함수가 코드에 있다", str(sorted(d for d in api_def if not re.search(r"def %s\(" % d, VIEWER))))
+ss_migs = set(re.findall(r"^def (_migrate_v\d+_to_v\d+)\(", read(ROOT / "viewer" / "settings_store.py"), re.M))
+chk(ss_migs <= api_def, "K5 마스터 §7.5 마이그레이션 목록이 settings_store 의 것을 모두 담는다", str(sorted(ss_migs - api_def)))
+
+# ── L. 디자인 SOT §2.9 `모음` 표 = ribbon.DEFAULT_COLLECTION ─────────────────
+# 261025-9: 화면 자리의 원본은 코드(ribbon.py·app.py 메뉴)다. Qt 없이 볼 수 있는 기본 모음은 여기서, 탭 자리는 test_sot_ui_layout.py 가 실제 창으로 본다.
+print(NL + "=== L. 디자인 SOT §2.9 모음 표 = DEFAULT_COLLECTION ===")
+rb = read(ROOT / "viewer" / "widgets" / "ribbon.py")
+mdc = re.search(r"^DEFAULT_COLLECTION = \((.*?)^\)", rb, re.S | re.M)
+code_groups, cur = [], []
+for tok in re.findall(r'"([a-z0-9_.]+)"|\bSEP\b', mdc.group(1) if mdc else ""):
+    if tok:
+        cur.append(tok)
+    else:
+        code_groups.append(cur); cur = []
+code_groups.append(cur)
+dz = SOTS.get("화면 디자인 작업 계획서.md", "")
+seg = dz[dz.find("**`모음` 탭**"):]
+seg = seg[:seg.find("\n\n", seg.find("| # |"))]
+doc_groups, last = [], None
+for l in seg.splitlines():
+    m = re.match(r"^\|\s*\d+\s*\|\s*([^|]+?)\s*\|[^|]*\|\s*`([a-z0-9_.]+)`\s*\|", l)
+    if m:
+        if m.group(1) != last:
+            doc_groups.append([]); last = m.group(1)
+        doc_groups[-1].append(m.group(2))
+chk(bool(code_groups[0]) and doc_groups == code_groups, "L1 디자인 SOT §2.9 모음 표의 명령 id·그룹이 DEFAULT_COLLECTION 과 같다",
+    "문서 %s / 코드 %s" % (doc_groups, code_groups))
+n_doc = sum(len(g) for g in doc_groups)
+m_n = re.search(r"기본값 — (\d+)개", seg)
+chk(not m_n or int(m_n.group(1)) == n_doc, "L2 모음 표 앞 글의 개수가 표와 같다", str((m_n.group(1) if m_n else None, n_doc)))
 
 print(NL + "=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for msg in fails:
