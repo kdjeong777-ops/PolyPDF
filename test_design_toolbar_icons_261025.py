@@ -77,6 +77,18 @@ mw._refresh_capture_labels()
 sp._set_read_mode(sp._read_mode)
 chk(all("▾" not in b.text() for _n, b in drops), "A 다시 만든 뒤에도 ▾ 없음", str([b.text() for _n, b in drops]))
 
+# A2. 맞춤 콤보의 ▾ 는 드롭다운 단추와 같은 오른쪽 아래 작은 화살표 — 진한 픽셀이 그 자리에만 있고, 큰 화살표 자리(세로 가운데)에는 없다
+cmb = mw.main_view.cmb_fit
+cmb.show(); pump()
+img = cmb.grab().toImage()
+ar = icons.corner_arrow_rect(cmb)
+txt_end = 6 + cmb.fontMetrics().horizontalAdvance(cmb.currentText()) + 4
+dark_px = [(x, y) for y in range(3, img.height() - 3) for x in range(txt_end, img.width() - 3)
+           if img.pixelColor(x, y).lightness() < 110]
+in_corner = [pt for pt in dark_px if ar.adjusted(-1, -1, 1, 1).contains(*pt)]
+chk(bool(in_corner) and len(in_corner) == len(dark_px), "A2 맞춤 콤보 화살표는 오른쪽 아래 작은 것 하나",
+    "구석 %d / 글자 뒤 진한 픽셀 %d, 자리 %s" % (len(in_corner), len(dark_px), ar))
+
 # B. 카메라 크기
 cam = mw.btn_capture
 box = color_box(cam)

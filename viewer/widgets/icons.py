@@ -231,6 +231,40 @@ def drop_button(btn) -> None:
     btn.setStyleSheet("QToolButton{padding-right:%dpx;}" % DROP_PAD_RIGHT)
 
 
+def corner_arrow_rect(widget):
+    """Qt 가 메뉴 단추(InstantPopup)에 그리는 작은 ▾ 의 자리 — QCommonStyle 의 CC_ToolButton 계산 그대로."""
+    from PyQt6.QtCore import QRect
+    from PyQt6.QtWidgets import QStyle
+    mbi = widget.style().pixelMetric(QStyle.PixelMetric.PM_MenuButtonIndicator, None, widget)
+    r = widget.rect()
+    return QRect(r.right() + 5 - mbi, r.height() - mbi + 4, mbi - 6, mbi - 6)
+
+
+def _make_corner_combo():
+    from PyQt6.QtWidgets import QComboBox, QStyle, QStyleOption, QStyleOptionComboBox, QStylePainter
+
+    class CornerArrowComboBox(QComboBox):
+        """261025-10(디자인 SOT §2.7, 사용자 지시): 콤보의 ▾ 를 드롭다운 단추와 같은 모양으로 — 오른쪽 아래 작은 화살표.
+        Fusion 의 큰 화살표(SC_ComboBoxArrow)는 빼고 그리고, 메뉴 단추와 같은 자리·같은 그림(PE_IndicatorArrowDown)을 얹는다."""
+
+        def paintEvent(self, _ev):
+            p = QStylePainter(self)
+            opt = QStyleOptionComboBox()
+            self.initStyleOption(opt)
+            opt.subControls &= ~QStyle.SubControl.SC_ComboBoxArrow
+            p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
+            p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
+            a = QStyleOption()
+            a.initFrom(self)
+            a.rect = corner_arrow_rect(self)
+            p.drawPrimitive(QStyle.PrimitiveElement.PE_IndicatorArrowDown, a)
+
+    return CornerArrowComboBox
+
+
+CornerArrowComboBox = _make_corner_combo()
+
+
 def color_icon(name: str, dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) -> QIcon:
     """이름으로 테마별 색 아이콘(채움) — `ACCENT` 표의 색. 없는 이름이면 빈 아이콘."""
     fn = _COLOR_DRAW.get(name)

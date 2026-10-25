@@ -1717,7 +1717,8 @@ class MainView(QWidget):
         self.lbl_page_total.setFixedHeight(H)
         self.lbl_page_total.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # 260606-9: 보기 콤보 폭 최소화(내용에 맞춤)
-        self.cmb_fit = QComboBox()
+        from viewer.widgets.icons import CornerArrowComboBox     # 261025-10(디자인 SOT §2.7): ▾ 를 드롭다운 단추와 같은 모양으로
+        self.cmb_fit = CornerArrowComboBox()
         for _k in self.FIT_ORDER:                 # 261008: 보이는 글자 + 내부 키(다국어 SOT §5)
             self.cmb_fit.addItem(tr(self.FIT_LABELS[_k]), _k)
         self.cmb_fit.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
