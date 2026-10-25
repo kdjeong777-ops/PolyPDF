@@ -267,6 +267,31 @@ def _install_excepthook() -> None:
     sys.excepthook = _hook
 
 
+CRASH_LOG_NAME = "crash.log"
+_crash_file = None                 # faulthandler 가 쓰는 파일 — 프로세스가 끝날 때까지 열어 둔다
+
+
+def _install_crash_log() -> None:
+    """261025-8(마스터 §14.7.3, 사용자 결정): **네이티브 크래시**(접근 위반 0xC0000005 등)의 호출 경로를 남긴다.
+
+    excepthook 은 Python 예외만 받는다 — Qt·PyMuPDF 안에서 죽으면 이벤트 로그에 모듈 이름·주소만 남아
+    원인을 찾을 수 없었다. `faulthandler` 가 그 순간 모든 스레드의 Python 스택을 설정 폴더 `crash.log` 에 쓴다.
+    시작 때 `ERROR_LOG_MAX` 를 넘었으면 비운다. 실패해도 앱은 계속한다."""
+    global _crash_file
+    try:
+        import faulthandler
+        import time
+        from viewer.settings_store import settings_dir
+        log = settings_dir() / CRASH_LOG_NAME
+        mode = "w" if log.exists() and log.stat().st_size > ERROR_LOG_MAX else "a"
+        _crash_file = open(log, mode, encoding="utf-8")
+        _crash_file.write(f"=== 시작 {time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()}\n")
+        _crash_file.flush()
+        faulthandler.enable(file=_crash_file, all_threads=True)
+    except Exception:
+        pass
+
+
 def _make_splash(icon_path):
     """260606-28: 실행 즉시 화면 중앙에 뜨는 아이콘 스플래시.
 
@@ -402,6 +427,7 @@ def main():
 
     _migrate_appdata()       # v1.6.15: 구 'Smart PDF Viewer' AppData 1회 이전
     _install_excepthook()    # 261008-1(§14.7.3): 처리 안 된 예외로 창이 사라지지 않게(앱 이름 뒤 — 기록 폴더)
+    _install_crash_log()     # 261025-8(§14.7.3): 네이티브 크래시의 스택을 crash.log 에
     _install_language(app)   # 261008(다국어 SOT §3.6): 앱 이름 뒤·창 만들기 전 — 화면 언어 + Qt 기본 번역
 
     # --- 여기서부터 무거운 로딩(스플래시가 보이는 동안 진행) ---

@@ -33,6 +33,10 @@ class IndexWorker(QObject):
     def request_cancel(self):
         self._cancel = True
 
+    def _verify(self) -> bool:
+        # 261025-8(응답성 SOT §4 ⑤): 사용자가 '재구축' 을 고르지 않아도 INTEGRITY_DAYS 마다 배경에서 무결성까지 본다
+        return bool(self.verify) or PdfIndex.integrity_due(self.db_path)
+
     def _run_in_child(self) -> bool:
         """자식 프로세스로 일감을 넘긴다 — 했으면 True, 못 띄웠으면 False. 자식이 보낸 오류는 그대로 올린다(손상 복구가 받는다)."""
         from viewer import index_proc
@@ -40,7 +44,7 @@ class IndexWorker(QObject):
         targets = self.files or ([Path(self.single_file)] if self.single_file is not None else None)
         job = {"db": str(self.db_path), "folder": (str(self.folder) if self.folder is not None else None),
                "files": [str(p) for p in targets] if targets is not None else None,
-               "verify": bool(self.verify), "settings_dir": str(settings_dir())}
+               "verify": self._verify(), "settings_dir": str(settings_dir())}
         r = index_proc.run_job(job, lambda d, t, n: self.progress.emit(d, t, n), lambda: self._cancel)
         return r is not None
 
@@ -52,7 +56,7 @@ class IndexWorker(QObject):
             #   못 띄우면(None) 아래 종전 길(이 프로세스의 배경 스레드)로.
             if self._run_in_child():
                 return
-            idx = PdfIndex(self.db_path, verify=self.verify)
+            idx = PdfIndex(self.db_path, verify=self._verify())
             try:
                 targets = self.files or ([Path(self.single_file)] if self.single_file is not None else None)
                 if targets is not None:

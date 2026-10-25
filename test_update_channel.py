@@ -65,12 +65,16 @@ try:
     from viewer.app import MainWindow
     mw = MainWindow()
 
-    # ---------- ① 1.0 이전 강제 beta ----------
+    # ---------- ① 1.0 이전 강제 beta / 1.0 이후 설정을 따름 ----------
+    # 261025-8(릴리스 SOT §2.3): 첫 정식판이 1.0.0 — 판에 따라 두 갈래로 본다(버전을 올려도 이 검사가 깨지지 않게)
     cur = updater.current_version()
     pre10 = int((cur.lstrip("vV").split(".")[0]) or "0") == 0
-    check("현재 빌드는 1.0 이전(major 0)", pre10, cur)
-    check("1.0 이전: 베타 메뉴 체크됨", mw._act_update_beta.isChecked())
-    check("1.0 이전: 베타 메뉴 비활성(선택 불가)", not mw._act_update_beta.isEnabled())
+    if pre10:
+        check("1.0 이전: 베타 메뉴 체크됨", mw._act_update_beta.isChecked(), cur)
+        check("1.0 이전: 베타 메뉴 비활성(선택 불가)", not mw._act_update_beta.isEnabled())
+    else:
+        check("1.0 이후: 베타 메뉴를 고를 수 있다", mw._act_update_beta.isEnabled(), cur)
+        check("1.0 이후: 깨끗한 프로필은 베타 메뉴 꺼짐(정식만)", not mw._act_update_beta.isChecked())
 
     # ---------- ② 깨끗한 프로필의 기본값 ----------
     check("update_channel 기본값 = stable",
@@ -102,6 +106,29 @@ try:
     check("접미사 기준 프리릴리즈 판정",
           updater.is_prerelease_tag("v0.45.0-beta.101")
           and not updater.is_prerelease_tag("v0.45.0"))
+
+    # ---------- ⑤ 첫 정식판 1.0.0 과 그 뒤 번호 체계(릴리스 SOT §2.3, 261025-8) ----------
+    def _rel(tag, draft=False):
+        return {"tag_name": tag, "draft": draft, "body": "", "html_url": "", "published_at": "2026-10-25",
+                "assets": [{"name": "PolyPDF-win.zip",
+                            "browser_download_url": "https://github.com/x/y/releases/download/%s/PolyPDF-win.zip" % tag}]}
+    _orig_get, _orig_cur = updater._get_json, updater.current_version
+    try:
+        rels = [_rel("v1.0.0"), _rel("v0.45.0-beta.299"), _rel("v0.45.0-beta.298"), _rel("components")]
+        updater._get_json = lambda url, timeout: rels
+        updater.current_version = lambda: "0.45.0-beta.299"
+        check("beta.299(베타 채널) → 1.0.0 을 새 판으로", (updater.check_latest("o/r", channel="beta") or {}).get("tag") == "v1.0.0")
+        check("정식 채널도 1.0.0", (updater.check_latest("o/r", channel="stable") or {}).get("tag") == "v1.0.0")
+        check("1.0.0 은 beta.299 보다 새 판", updater.is_newer("1.0.0", "0.45.0-beta.299"))
+        rels[:] = [_rel("v1.1.0-beta.2"), _rel("v1.0.1"), _rel("v1.0.0"), _rel("v1.1.0-beta.3", draft=True)]
+        updater.current_version = lambda: "1.0.0"
+        check("1.0.0 정식 채널 → 긴급 정식 1.0.1(베타 1.1.0-beta.2 는 건너뜀)",
+              (updater.check_latest("o/r", channel="stable") or {}).get("tag") == "v1.0.1")
+        check("1.0.0 베타 채널 → 1.1.0-beta.2(초안은 건너뜀)",
+              (updater.check_latest("o/r", channel="beta") or {}).get("tag") == "v1.1.0-beta.2")
+        check("베타 다음 같은 번호의 정식은 더 새 판(1.1.0-beta.N → 1.1.0)", updater.is_newer("1.1.0", "1.1.0-beta.9"))
+    finally:
+        updater._get_json, updater.current_version = _orig_get, _orig_cur
 finally:
     restore()
 

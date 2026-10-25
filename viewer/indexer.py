@@ -107,8 +107,10 @@ class PdfIndex:
             self.conn = _dbutil.connect(self.db_path, self.busy_ms)
             self._init_schema()
             # 사용자가 '인덱스 재구축' 을 고르면 배경에서 무결성까지 본다(큰 색인은 수 초 — 워커 전용)
-            if verify and self.conn.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
-                raise sqlite3.DatabaseError("database disk image is malformed (quick_check)")
+            if verify:
+                if self.conn.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok":
+                    raise sqlite3.DatabaseError("database disk image is malformed (quick_check)")
+                self._stamp_checked(self.db_path)
         except sqlite3.DatabaseError as e:
             # 260827: index.db 손상(malformed) → 파일 삭제 후 새로 생성(캐시라 안전).
             #   다음 인덱싱이 다시 채운다. PdfIndex 생성이 실패해 검색/인덱싱이 통째로
@@ -150,6 +152,37 @@ class PdfIndex:
                 f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')}\n[색인 초기화] 까닭={reason} "
                         f"경로={db_path} 크기={size} pid={os.getpid()} 실행={exe}\n\n")
         except Exception:
+            pass
+
+    INTEGRITY_DAYS = 7                  # 261025-8: 배경 색인이 이 날수마다 quick_check(응답성 SOT §4 ⑤)
+
+    @staticmethod
+    def _checked_stamp(db_path) -> Path:
+        return Path(str(db_path) + ".checked")
+
+    @classmethod
+    def integrity_due(cls, db_path) -> bool:
+        """261025-8(응답성 SOT §4 ⑤ '정기 점검'): 마지막 무결성 점검이 `INTEGRITY_DAYS` 보다 오래됐으면 True.
+
+        쿼리에 걸리지 않는 손상(`Rowid out of order` 등)은 '손상 복구' 가 보지 못한다 — 10-25 에 사용자 색인이
+        6일 넘게 손상된 채였다. **배경 색인(자식 프로세스·워커)만** 부른다 — 큰 색인은 수 초 읽는다(UI 스레드 금지).
+        색인이 아직 없으면 False(새로 만든다), 표식이 없으면 True(처음 한 번)."""
+        import time
+        try:
+            if not os.path.exists(db_path):
+                return False
+            stamp = cls._checked_stamp(db_path)
+            if not stamp.exists():
+                return True
+            return time.time() - stamp.stat().st_mtime > cls.INTEGRITY_DAYS * 86400
+        except OSError:
+            return False
+
+    @classmethod
+    def _stamp_checked(cls, db_path) -> None:
+        try:
+            cls._checked_stamp(db_path).write_text("ok", encoding="utf-8")
+        except OSError:
             pass
 
     @staticmethod

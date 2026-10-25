@@ -43,6 +43,14 @@ foreach ($r in $all) {
 $sorted = @($ver | Sort-Object -Property Major, Minor, Patch, Stable, PreLabel, PreNum -Descending)
 $keepList = @($sorted | Select-Object -First $Keep)
 $drop = @($sorted | Select-Object -Skip $Keep)
+# 261025-8(릴리스 SOT §2.3): 가장 새 정식판(접미사 없음)은 10개 밖이어도 남긴다 — 베타가 10개 넘게 이어지면
+#   정식판이 지워져 '정식만' 채널(updater.check_latest)이 받을 판이 없어진다.
+$newestStable = @($sorted | Where-Object { $_.Stable -eq 1 } | Select-Object -First 1)
+if ($newestStable.Count -eq 1 -and ($drop | Where-Object { $_.Tag -eq $newestStable[0].Tag })) {
+    $drop = @($drop | Where-Object { $_.Tag -ne $newestStable[0].Tag })
+    $keepList += $newestStable[0]
+    Write-Host ("keep newest stable outside top {0}: {1}" -f $Keep, $newestStable[0].Tag)
+}
 
 Write-Host ("releases: total={0} version={1} keep={2} delete={3}" -f $all.Count, $sorted.Count, $keepList.Count, $drop.Count)
 Write-Host ("keep  : " + (($keepList | ForEach-Object { $_.Tag }) -join ", "))

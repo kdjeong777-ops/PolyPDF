@@ -51,7 +51,12 @@ try:
     chk(not appdata.exists(), "A 사용자 폴더(%APPDATA%)에는 이 실행의 폴더가 생기지 않는다", str(appdata))
     # ── B ──
     marker.unlink()
-    shutil.rmtree(data, ignore_errors=True)
+    # 261025-8: 앱이 crash.log 를 끝까지 열어 둔다(마스터 §14.7.3) — venv 런처를 죽여도 실제 파이썬은 잠깐 뒤에 끝나므로 지워질 때까지
+    for _ in range(40):
+        shutil.rmtree(data, ignore_errors=True)
+        if not data.exists():
+            break
+        time.sleep(0.25)
     launch_and_wait(appdata)
     chk((appdata / "instances").exists() and not data.exists(), "B 표식이 없으면 종전대로 사용자 폴더", str(appdata))
     # ── C ──
