@@ -10,7 +10,8 @@
 - 개발 코드로 오프스크린 실행(load_test.py 와 같은 방식). 시험 모드 — 사용자 실제 설정 폴더를 쓰지 않는다(마스터 §14.7.2 의 3).
 - 한 바퀴: PDF 열기(측정 묶음 T1·T2·T3 차례로) → 쪽 넘기기 → 텍스트 창 보며 넘기기 → 검색 → 테마 왕복 → 트리·정렬 → (5바퀴마다) 폴더 다시 열기.
 - 판정(값은 아래 상수 한 곳): 처음 `WARMUP_MINUTES` 뒤 표본부터 끝까지 전용 메모리 증가 < `LEAK_MB`, 핸들·GDI·USER·스레드 증가가
-  한도 안, 처리 안 된 예외 0, 조작 오류 0, 조작마다 최장 정지 < `STALL_LIMIT`, 창을 닫은 뒤 `CHILD_WAIT_S` 안에 자식 프로세스 0.
+  한도 안(자식 프로세스 수 포함), 처리 안 된 예외 0, 조작 오류 0, 조작마다 최장 정지 < `STALL_LIMIT`. 정지 순간 메인 스레드 스택과
+  자동 조작이 부른 모달 창을 summary 에 남긴다(모달은 받아 적고 '아니오·취소' 로 닫는다).
 종료 코드: 0 통과, 1 실패.
 """
 import argparse
@@ -36,9 +37,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 SOAK_MINUTES = 60           # 사용자 결정(261025-8)
 WARMUP_MINUTES = 10         # 이 뒤의 첫 표본을 기준으로 증가를 잰다(캐시·글꼴·첫 색인이 차는 동안은 늘어도 정상)
 LEAK_MB = 50.0              # 사용자 결정(261025-8)
-GROWTH_LIMITS = {"handles": 200, "gdi": 50, "user": 50, "threads": 10}   # 기준 표본에서 끝까지 늘어도 되는 개수
+GROWTH_LIMITS = {"handles": 200, "gdi": 50, "user": 50, "threads": 10, "children": 1}   # 기준 표본에서 끝까지 늘어도 되는 개수
+#   자식 프로세스(띄어쓰기 도우미·색인 자식)는 창 프로세스와 함께 끝난다 — 닫은 뒤 남지 않는지는 측정 묶음의 '도우미 남음'(release_test.py)이 본다.
+#   이 시험은 한 프로세스 안이라 창을 닫아도 프로세스가 살아 있으므로, 도는 동안 자식이 쌓이지 않는지만 본다.
 STALL_LIMIT = 1.0           # 응답성 SOT §5 통과 조건
-CHILD_WAIT_S = 10.0         # 창을 닫은 뒤 자식 프로세스가 끝나기를 기다리는 시간
+STALL_DUMP_S = 0.8          # 박동이 이만큼 끊기면 메인 스레드 스택을 뜬다(정지 원인)
 SAMPLE_S = 30.0
 SEARCH_WORDS = ("도로", "asphalt", "기준", "pavement")
 
@@ -134,7 +137,26 @@ def main():
         print("!! 처리 안 된 예외:", et.__name__, ev, flush=True)
     sys.excepthook = hook
 
+    # 모달 창은 오프스크린에서 영원히 멈춘다(마스터 §14.7.2 의 6) — 받아 적고 안전한 답(아니오·취소)으로 닫는다.
+    #   첫 실행이 책갈피창이 파일 모드일 때 '트리 ↔ 단일' 의 안내 창에서 멈췄다(261025, 앱 결함 아님 — 사용자에게는 안내가 뜬다).
+    from PyQt6.QtWidgets import QMessageBox
+    modals = []
+
+    def _modal(kind):
+        def f(*args, **kw):
+            txt = " / ".join(str(x) for x in args[1:3] if isinstance(x, str))
+            modals.append((cur_op["name"], kind, txt[:160]))
+            print("!! 모달 %s — %s: %s" % (kind, cur_op["name"], txt[:80]), flush=True)
+            return QMessageBox.StandardButton.No if kind == "question" else QMessageBox.StandardButton.Ok
+        return f
+    for _k in ("information", "warning", "critical", "question"):
+        setattr(QMessageBox, _k, staticmethod(_modal(_k)))
+    QMessageBox.exec = lambda self: (modals.append((cur_op["name"], "exec", self.text()[:160])),
+                                     QMessageBox.StandardButton.Cancel)[1]
+
     beat = {"last": time.perf_counter(), "max": 0.0}
+    cur_op = {"name": "준비"}
+    stall_stacks = []           # (조작, 정지 초, 메인 스레드 스택) — 정지 원인을 코드 줄로
 
     def tick():
         now = time.perf_counter()
@@ -144,6 +166,20 @@ def main():
     hb.setInterval(20)
     hb.timeout.connect(tick)
     hb.start()
+
+    main_id = threading.get_ident()
+
+    def watchdog():             # 박동이 STALL_DUMP_S 넘게 끊기면 그 순간 메인 스레드 스택을 뜬다(정지마다 한 번)
+        dumped = None
+        while True:
+            time.sleep(0.05)
+            age = time.perf_counter() - beat["last"]
+            if age > STALL_DUMP_S and dumped != beat["last"]:
+                dumped = beat["last"]
+                fr = sys._current_frames().get(main_id)
+                st = "".join(traceback.format_stack(fr)[-14:]) if fr else "(스택 없음)"
+                stall_stacks.append([cur_op["name"], round(age, 2), st])
+    threading.Thread(target=watchdog, daemon=True).start()
 
     def spin(sec):
         t0 = time.perf_counter()
@@ -155,6 +191,7 @@ def main():
 
     def op(name, fn, settle=0.5):
         spin(0.05)
+        cur_op["name"] = name
         beat["last"] = time.perf_counter()
         beat["max"] = 0.0
         err = ""
@@ -214,7 +251,8 @@ def main():
         op("검색", lambda: mw.action_search(word), settle=2.0)
         op("테마 → 다크", lambda: mw.apply_theme("dark"))
         op("테마 → 밝게", lambda: mw.apply_theme("light"))
-        op("트리 ↔ 단일", lambda: (bt._toggle_tree_view(), app.processEvents(), bt._toggle_tree_view()))
+        if bt._mode == "flat":        # 파일 모드(PDF 를 연 뒤)에서는 앱이 안내 창만 띄운다 — 폴더 목록일 때만
+            op("트리 ↔ 단일", lambda: (bt._toggle_tree_view(), app.processEvents(), bt._toggle_tree_view()))
         if bt._sort_combo.count():
             op("정렬 바꾸기", lambda: bt._sort_combo.setCurrentIndex(cyc % bt._sort_combo.count()))
         if cyc % 5 == 0:
@@ -237,18 +275,8 @@ def main():
     # 기준 표본: 예열 시간이 지난 첫 표본
     t_warm = t_start + warm * 60
     basis = next((s for s in samples if s["t"] >= t_warm), samples[0])
-    growth = {k: last[k] - basis[k] for k in ("private_mb", "handles", "gdi", "user", "threads")}
-
-    # 창 닫기 → 자식 프로세스가 남지 않는지
-    mw._skip_save_on_close = True
-    mw.close()
-    t0 = time.time()
-    left = []
-    while time.time() - t0 < CHILD_WAIT_S:
-        spin(0.5)
-        left = _descendants(_procs(), os.getpid())
-        if not left:
-            break
+    growth = {k: last[k] - basis[k] for k in ("private_mb", "handles", "gdi", "user", "threads", "children")}
+    left = [(0, 0, 0, n) for n in last["children_names"]]
 
     stall_bad = {k: v for k, v in ops.items() if v["stalls"]}
     err_bad = {k: v for k, v in ops.items() if v["errors"]}
@@ -258,7 +286,6 @@ def main():
         "처리 안 된 예외 0": not excs,
         "조작 오류 0": not err_bad,
         "정지 < %.0f초" % STALL_LIMIT: not stall_bad,
-        "닫은 뒤 자식 0": not left,
     }
     ok = all(verdict.values()) and a.minutes >= SOAK_MINUTES
     L = ["# 오래 켜 두기 시험 — %s" % ver, "",
@@ -268,7 +295,9 @@ def main():
              basis["private_mb"], last["private_mb"], basis["handles"], last["handles"], basis["gdi"], last["gdi"],
              basis["user"], last["user"], basis["threads"], last["threads"]),
          "- 시작 전용 메모리 %.1fMB · 최대 %.1fMB" % (samples[0]["private_mb"], max(s["private_mb"] for s in samples)),
-         "- 닫은 뒤 남은 자식: %s" % (", ".join("%s(%d)" % (x[3], x[0]) for x in left) or "없음"),
+         "- 자식 프로세스: 기준 %d → 끝 %d (%s) · 도는 동안 최대 %d — 닫은 뒤 남는지는 측정 묶음이 본다" % (
+             basis["children"], last["children"], ", ".join(x[3] for x in left) or "없음",
+             max(s["children"] for s in samples)),
          ""]
     if a.minutes < SOAK_MINUTES:
         L.append("> 짧은 실행(%.0f분 < SOAK_MINUTES %d분) — 도구 확인용, 판정에 쓰지 않는다." % (a.minutes, SOAK_MINUTES))
@@ -281,10 +310,18 @@ def main():
           for k, v in ops.items()]
     if excs:
         L += ["", "## 처리 안 된 예외(%d)" % len(excs), "", "```", excs[0][-2000:], "```"]
+    if modals:
+        L += ["", "## 뜬 모달 창(%d) — 자동 조작이 부른 안내·확인. 결함인지 사람이 본다" % len(modals), ""]
+        L += ["- %s · %s · %s" % m for m in modals[:20]]
+    if stall_stacks:
+        L += ["", "## 정지 순간 메인 스레드 스택(%d, %.1f초+)" % (len(stall_stacks), STALL_DUMP_S)]
+        for o, sec, st in stall_stacks[:8]:
+            L += ["", "### %s — %.2f초+" % (o, sec), "", "```", st.rstrip(), "```"]
     L += ["", "**판정: %s**" % ("통과" if ok else "실패")]
     (out / "summary.md").write_text("\n".join(L), encoding="utf-8")
     (out / "samples.json").write_text(json.dumps({"version": ver, "samples": samples, "ops": ops, "growth": growth,
-                                                  "verdict": verdict, "exceptions": excs, "ok": ok},
+                                                  "verdict": verdict, "exceptions": excs, "modals": modals,
+                                                  "stall_stacks": stall_stacks, "ok": ok},
                                                  ensure_ascii=False, indent=1), encoding="utf-8")
     print("\n".join(L[-1:]))
     print("결과:", out / "summary.md", flush=True)
