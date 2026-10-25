@@ -116,6 +116,7 @@ def main():
     rows = []
 
     def op(name, fn, settle=1.0):
+        cur["op"] = name
         spin(0.3)
         beat["last"] = time.perf_counter()
         beat["max"] = 0.0
@@ -134,6 +135,9 @@ def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import overlap                                  # 261025-12(릴리스 SOT §4.3 의 8): 다른 무거운 작업과 겹쳤는지
     watch = overlap.Watch().start()
+    import modal_guard                              # 261025-12: 모달은 공통 장치가 닫고 적는다(마스터 §14.7.2 의 6)
+    cur = {"op": "준비"}
+    guard = modal_guard.install(label=lambda: cur["op"])
     from viewer import settings_store
     for f in ("index.db", "index.db-wal", "index.db-shm"):
         p = os.path.join(settings_store.settings_dir(), f)
@@ -214,6 +218,9 @@ def main():
          "| 조작 | 최장 정지 | 판정 |", "| --- | --- | --- |"]
     for r in rows:
         L.append("| %s | %.3fs | %s |" % (r["op"], r["max_stall_s"], "실패" if (r["max_stall_s"] >= STALL_LIMIT or r["err"]) else "통과"))
+    if guard.seen:
+        L += ["", "- 뜬 모달 창 %d개(자동으로 닫음 — 결함인지 사람이 본다): %s" % (
+            len(guard.seen), "; ".join("%s·%s·%s" % s for s in guard.seen[:10]))]
     L += [""] + watch.lines()
     L += ["", "**판정: %s**" % ("실패" if not ok else ("보류(겹침)" if watch.overlapped else "통과"))]
     (out / "summary.md").write_text("\n".join(L), encoding="utf-8")

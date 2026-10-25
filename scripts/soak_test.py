@@ -138,25 +138,14 @@ def main():
         print("!! 처리 안 된 예외:", et.__name__, ev, flush=True)
     sys.excepthook = hook
 
-    # 모달 창은 오프스크린에서 영원히 멈춘다(마스터 §14.7.2 의 6) — 받아 적고 안전한 답(아니오·취소)으로 닫는다.
+    # 모달 창은 오프스크린에서 영원히 멈춘다(마스터 §14.7.2 의 6) — 공통 장치가 받아 적고 안전한 답(아니오·취소)으로 닫는다.
     #   첫 실행이 책갈피창이 파일 모드일 때 '트리 ↔ 단일' 의 안내 창에서 멈췄다(261025, 앱 결함 아님 — 사용자에게는 안내가 뜬다).
-    from PyQt6.QtWidgets import QMessageBox
-    modals = []
-
-    def _modal(kind):
-        def f(*args, **kw):
-            txt = " / ".join(str(x) for x in args[1:3] if isinstance(x, str))
-            modals.append((cur_op["name"], kind, txt[:160]))
-            print("!! 모달 %s — %s: %s" % (kind, cur_op["name"], txt[:80]), flush=True)
-            return QMessageBox.StandardButton.No if kind == "question" else QMessageBox.StandardButton.Ok
-        return f
-    for _k in ("information", "warning", "critical", "question"):
-        setattr(QMessageBox, _k, staticmethod(_modal(_k)))
-    QMessageBox.exec = lambda self: (modals.append((cur_op["name"], "exec", self.text()[:160])),
-                                     QMessageBox.StandardButton.Cancel)[1]
+    import modal_guard
+    cur_op = {"name": "준비"}
+    guard = modal_guard.install(label=lambda: cur_op["name"])
+    modals = guard.seen
 
     beat = {"last": time.perf_counter(), "max": 0.0}
-    cur_op = {"name": "준비"}
     stall_stacks = []           # (조작, 정지 초, 메인 스레드 스택) — 정지 원인을 코드 줄로
 
     def tick():
@@ -177,8 +166,16 @@ def main():
             age = time.perf_counter() - beat["last"]
             if age > STALL_DUMP_S and dumped != beat["last"]:
                 dumped = beat["last"]
-                fr = sys._current_frames().get(main_id)
+                frames = sys._current_frames()
+                fr = frames.get(main_id)
                 st = "".join(traceback.format_stack(fr)[-14:]) if fr else "(스택 없음)"
+                # 메인이 이벤트 펌프 안에 있으면(우리 코드가 아님) GIL 을 쥔 다른 스레드가 범인이다 — 다른 스레드의 맨 위 몇 줄도
+                names = {t.ident: t.name for t in threading.enumerate()}
+                for tid, f in frames.items():
+                    if tid in (main_id, threading.get_ident()):
+                        continue
+                    top = "".join(traceback.format_stack(f)[-4:])
+                    st += "\n--- 스레드 %s ---\n%s" % (names.get(tid, tid), top)
                 stall_stacks.append([cur_op["name"], round(age, 2), st])
     threading.Thread(target=watchdog, daemon=True).start()
 

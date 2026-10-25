@@ -139,7 +139,7 @@ chk(not bad, "§14.7.2-3 검사가 앱 이름을 실제 'PolyPDF' 로 정하지 
 #   새 도구가 빠뜨려 261025 오래 켜 두기 시험이 안내 창에서 77분 멈췄다. 아래는 그 전부터 있던 것(각자 막거나 모달이 안 뜬다) — **줄기만 한다**:
 #   새 파일은 여기에 더하지 않고 `modal_guard` 를 쓴다. 옮긴 파일은 여기서 뺀다.
 MODAL_KNOWN = {
-    "scripts/load_test.py", "scripts/soak_test.py", "scripts/ui_check.py", "test_about_notice.py", "test_auto_tag.py",
+    "test_about_notice.py", "test_auto_tag.py",
     "test_batch13.py", "test_batch19.py", "test_bookmark_gen_261019.py", "test_boundary_e2e.py", "test_capture.py",
     "test_capture_region_drag_261014.py", "test_close_edit_confirm.py", "test_compare_261014.py", "test_convert_261014.py",
     "test_convert_docx_261014.py", "test_convert_hwpx_261014.py", "test_convert_pptx_261014.py",

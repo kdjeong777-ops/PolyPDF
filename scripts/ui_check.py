@@ -96,6 +96,10 @@ def run_one(lang: str, out_root: Path, only=None, theme: str = "light"):
             time.sleep(0.01)
 
     # ── 막히는 호출 막기 ────────────────────────────────────────────────
+    # 261025-12: 공통 장치(마스터 §14.7.2 의 6)가 확인·파일·입력 창을 닫는다. 이 도구는 대화상자를 **띄워서 찍으므로**
+    #   exec 는 아래 fake_exec(보이기)로 다시 바꾸고 감시 타이머는 끈다(찍기 전에 닫히지 않게). 메시지는 결과(msgs)에 남기려고 다시 받는다.
+    import modal_guard
+    modal_guard.install(dialogs=False, watch_ms=0, echo=False)
     captured = []                     # exec() 로 띄우려던 대화상자
 
     def fake_exec(self, *a, **k):
@@ -115,11 +119,6 @@ def run_one(lang: str, out_root: Path, only=None, theme: str = "light"):
 
     for _k in ("information", "warning", "critical", "question"):
         setattr(QMessageBox, _k, _fake_static(_k))
-    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: ("", ""))
-    QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: ("", ""))
-    QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: ([], ""))
-    QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: "")
-    QInputDialog.getText = staticmethod(lambda *a, **k: ("", False))
 
     def via_exec(fn):
         """앱 처리기를 그대로 부르고, 그 안에서 exec() 하려던 대화상자를 돌려준다."""
