@@ -92,5 +92,37 @@ try:
 finally:
     rt.BASELINE = _old
 
+# H. 261025-12(릴리스 SOT §2.3): 새 버전이 이미 낸 가장 높은 태그보다 높지 않으면 plan 이 멈춘다 — 0.6·0.5 지시가 0.45.0-beta.N 보다 작았다
+TAGS = ["v0.45.0-beta.297", "v0.45.0-beta.298", "components", "v0.45.0-beta.99"]
+chk(rt.version_order_problem("0.5.0", TAGS) != "", "H 0.5.0 은 0.45.0-beta.298 보다 낮다 — 멈춤")
+chk(rt.version_order_problem("0.6.0", TAGS) != "", "H 0.6.0 도 낮다(0.6 < 0.45)")
+chk(rt.version_order_problem("0.45.0-beta.298", TAGS) != "", "H 이미 낸 번호와 같으면 멈춤")
+chk(rt.version_order_problem("1.0.0", TAGS) == "", "H 1.0.0 은 통과")
+chk(rt.version_order_problem("1.0.0-beta.3", TAGS + ["v1.0.0"]) != "", "H 정식 뒤 같은 번호의 베타는 낮다 — 멈춤(§2.3 다음 정식-beta.N)")
+chk(rt.version_order_problem("1.1.0-beta.1", TAGS + ["v1.0.0"]) == "", "H 1.0.0 뒤 1.1.0-beta.1 은 통과")
+chk(rt.version_order_problem("1.0.0", ["v0.45.0-beta.298", "v2.41.0"]) != "", "H 가장 가까운 태그가 아니라 가장 높은 태그와 견준다")
+
+# I. 261025-12(릴리스 SOT §4.3 의 8): 측정이 다른 무거운 작업과 겹쳤는지 — 겹치면 판정 보류·기준점 그대로
+import overlap  # noqa: E402
+PS = [(1, 0, "claude.exe"), (10, 1, "powershell.exe"), (20, 10, "python.exe"),      # 20 = 이 측정
+      (21, 20, "PolyPDF.exe"), (22, 21, "python.exe"),                                 # 잰 앱과 도우미
+      (11, 1, "powershell.exe"), (30, 11, "python.exe")]                               # 30 = 같은 셸 아래 다른 세션의 검사
+mine = overlap._tree(PS, 20)
+chk({20, 21, 22, 10, 1} <= mine and 30 not in mine, "I 조상의 다른 자손(다른 세션의 검사)은 남으로 본다", sorted(mine))
+w = overlap.Watch(root=20)
+w._others = lambda: {30: ("python.exe", 0.0)}
+w.start_busy, w._last = 5.0, (0.0, {30: ("python.exe", 0.0)})
+import time as _time  # noqa: E402
+w._last = (_time.time() - 10, {30: ("python.exe", 0.0)})
+w._others = lambda: {30: ("python.exe", 8.0)}                  # 10초에 8초 = 0.8코어
+chk(w.check("T5") and w.overlapped, "I 다른 무거운 프로세스가 OVERLAP_CORES 넘게 쓰면 겹침")
+w2 = overlap.Watch(root=20)
+w2.start_busy, w2._last = 5.0, (_time.time() - 10, {30: ("python.exe", 0.0)})
+w2._others = lambda: {30: ("python.exe", 0.5)}                 # 0.05코어 — 쉬는 프로세스
+chk(not w2.check("T5") and not w2.overlapped, "I 쉬는 다른 프로세스는 겹침이 아니다")
+src = (ROOT / "scripts" / "release_test.py").read_text(encoding="utf-8")
+chk('not rec.get("overlapped")' in src.split("def main")[1].split("save_baseline(rec")[0],
+    "I 겹친 시험은 기준점을 옮기지 않는다(save_baseline 앞의 조건)")
+
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)

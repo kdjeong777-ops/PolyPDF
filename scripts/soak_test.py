@@ -12,7 +12,8 @@
 - 판정(값은 아래 상수 한 곳): 처음 `WARMUP_MINUTES` 뒤 표본부터 끝까지 전용 메모리 증가 < `LEAK_MB`, 핸들·GDI·USER·스레드 증가가
   한도 안(자식 프로세스 수 포함), 처리 안 된 예외 0, 조작 오류 0, 조작마다 최장 정지 < `STALL_LIMIT`. 정지 순간 메인 스레드 스택과
   자동 조작이 부른 모달 창을 summary 에 남긴다(모달은 받아 적고 '아니오·취소' 로 닫는다).
-종료 코드: 0 통과, 1 실패.
+- 다른 무거운 작업과 겹쳤으면 판정 '보류'(`scripts/overlap.py`, 릴리스 SOT §4.3 의 8 — 261025-12).
+종료 코드: 0 통과, 1 실패, 3 보류(겹침 — 다시 잰다).
 """
 import argparse
 import ctypes
@@ -221,6 +222,8 @@ def main():
     bt = mw.bookmark_tree
     op("폴더 열기", lambda: mw.open_folder(str(folder)), settle=5.0)
 
+    import overlap                              # 261025-12(릴리스 SOT §4.3 의 8): 다른 무거운 작업과 겹쳤는지
+    watch = overlap.Watch().start()
     samples = [sample()]
     t_start = time.time()
     t_end = t_start + a.minutes * 60
@@ -261,6 +264,7 @@ def main():
             gc.collect()
             s = sample()
             s["cycle"] = cyc
+            s["overlap"] = watch.check("%.1f분" % ((time.time() - t_start) / 60))
             samples.append(s)
             next_sample = time.time() + SAMPLE_S
             print("[%5.1f분] 바퀴 %d · 전용 %.1fMB · 핸들 %d · GDI %d · USER %d · 스레드 %d · 자식 %d · 예외 %d" % (
@@ -287,6 +291,7 @@ def main():
         "조작 오류 0": not err_bad,
         "정지 < %.0f초" % STALL_LIMIT: not stall_bad,
     }
+    watch.check("끝")
     ok = all(verdict.values()) and a.minutes >= SOAK_MINUTES
     L = ["# 오래 켜 두기 시험 — %s" % ver, "",
          "- 시간 %.1f분(예열 %.1f분) · %d바퀴 · 폴더 `%s` · PDF %s" % (
@@ -317,7 +322,8 @@ def main():
         L += ["", "## 정지 순간 메인 스레드 스택(%d, %.1f초+)" % (len(stall_stacks), STALL_DUMP_S)]
         for o, sec, st in stall_stacks[:8]:
             L += ["", "### %s — %.2f초+" % (o, sec), "", "```", st.rstrip(), "```"]
-    L += ["", "**판정: %s**" % ("통과" if ok else "실패")]
+    L += [""] + watch.lines()
+    L += ["", "**판정: %s**" % ("실패" if not ok else ("보류(겹침)" if watch.overlapped else "통과"))]
     (out / "summary.md").write_text("\n".join(L), encoding="utf-8")
     (out / "samples.json").write_text(json.dumps({"version": ver, "samples": samples, "ops": ops, "growth": growth,
                                                   "verdict": verdict, "exceptions": excs, "modals": modals,
@@ -326,7 +332,7 @@ def main():
     print("\n".join(L[-1:]))
     print("결과:", out / "summary.md", flush=True)
     sys.stdout.flush()
-    os._exit(0 if ok else 1)
+    os._exit(1 if not ok else (3 if watch.overlapped else 0))
 
 
 if __name__ == "__main__":

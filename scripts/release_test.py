@@ -51,6 +51,7 @@ DEFAULT_EXE = Path(r"C:\Program Files\PolyPDF\PolyPDF.exe")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_installed as probe                          # noqa: E402
+import overlap                                           # noqa: E402  261025-12: 다른 무거운 작업과 겹쳤는지(릴리스 SOT §4.3 의 8)
 
 
 def say(*a):
@@ -409,7 +410,28 @@ def unreleased() -> dict:
     return {"tag": tag, "count": len(code), "days": int(days)}
 
 
+def version_order_problem(new: str, tags: list) -> str:
+    """261025-12(릴리스 SOT §2.3): 새 버전이 이미 낸 **가장 높은** 버전 태그보다 높지 않으면 그 까닭(문자열), 괜찮으면 ''.
+
+    앱 안 업데이트는 `updater.is_newer` 로만 새 판을 고른다 — 낮거나 같은 번호로 내면 아무도 받지 못한다.
+    261025 에 0.6·0.5 지시가 0.45.0-beta.N 보다 **작아** 그대로 냈으면 업데이트가 멈출 뻔했다(0.50.0 → 1.0.0 으로 바로잡음).
+    가장 가까운 태그가 아니라 **가장 높은** 태그와 견준다(가지·되돌린 태그가 있어도)."""
+    sys.path.insert(0, str(ROOT))
+    from viewer import updater
+    vers = [t for t in tags if updater._vkey(t) is not None]
+    if not vers:
+        return ""
+    top = max(vers, key=updater._vkey)
+    if not updater.is_newer(new, top):
+        return "버전 %s 이 이미 낸 가장 높은 태그 %s 보다 높지 않다 — 앱 안 업데이트가 이 판을 고르지 못한다(릴리스 SOT §2.3)" % (new, top)
+    return ""
+
+
 def plan(base_arg, urgent=False) -> int:
+    vp = version_order_problem(source_version(), git("tag", "--list", "v*").split())
+    if vp:
+        say("■ 멈춤 — " + vp)
+        return 4
     bl = load_baseline()
     base = base_arg or (bl or {}).get("commit")
     if not base:
@@ -540,7 +562,7 @@ def load_suite(only):
     return base, cases
 
 
-def run_suite(exe: Path, out: Path, only, rec: dict):
+def run_suite(exe: Path, out: Path, only, rec: dict, watch=None):
     base, cases = load_suite(only)
     probe.EXE = exe
     # 261009-19: 실제 설정은 **읽어서** 시험 프로필로 복사만 — 대상마다 그 복사본(cfg_seed)으로 되돌린다
@@ -558,6 +580,8 @@ def run_suite(exe: Path, out: Path, only, rec: dict):
                 rec["fail"].append("%s 대상이 없다: %s" % (c["name"], target))
                 continue
             r = probe.run(c["name"], target, int(c.get("seconds", 60)), out / "runs")
+            if watch is not None:
+                watch.check(c["name"])                       # 이 대상을 재는 동안 다른 무거운 작업이 돌았나
             rec["runs"].append({k: r.get(k) for k in ("name", "t_window", "t_loaded", "max_hang_sec", "peak_ws_mb",
                                                       "max_private_mb", "helper_max_ws_mb", "helper_left",
                                                       "close_sec", "exit", "indexed_files")} | {"hangs": len(r["hangs"])})
@@ -590,7 +614,10 @@ def write_summary(out: Path, rec: dict):
         L += ["", "기준점 `%s`(%s) 과 견줌: %s" % (rec["baseline"], rec.get("baseline_version", "?"),
                                               "회귀 의심 없음" if not rec.get("regress") else "**회귀 의심 %d건**" % len(rec["regress"]))]
         L += ["- " + x for x in rec.get("regress", [])]
-    L += ["", "**판정: %s**" % ("통과" if not rec["fail"] else "실패")] + ["- " + f for f in rec["fail"]]
+    if rec.get("overlap"):
+        L += [""] + rec["overlap"]
+    verdict = "실패" if rec["fail"] else ("보류(겹침 — 다른 무거운 작업이 없을 때 다시 잰다)" if rec.get("overlapped") else "통과")
+    L += ["", "**판정: %s**" % verdict] + ["- " + f for f in rec["fail"]]
     (out / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     (out / "result.json").write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
     say("\n".join(L))
@@ -643,7 +670,9 @@ def main():
             exe = exe_for_install(a, out, rec)
         rec["exe"] = str(exe)
         if not (a.mode == "install" and a.no_suite) and not rec["fail"]:
-            run_suite(exe, out, a.cases, rec)
+            watch = overlap.Watch().start()                  # 빌드·설치 뒤, 재기 직전부터(그 전의 빌드는 이 측정의 자손이라 세지 않는다)
+            run_suite(exe, out, a.cases, rec, watch)
+            rec["overlap"], rec["overlapped"] = watch.lines(), watch.overlapped
     except SystemExit as e:
         rec["fail"].append(str(e))
         rec.setdefault("exe", "-")
@@ -661,10 +690,12 @@ def main():
     write_summary(out, rec)
     # 묶음 전체를 돌려 통과했을 때만 기준점을 옮긴다(일부 대상·설치만 확인은 기준이 못 된다)
     full = not a.cases and not (a.mode == "install" and a.no_suite)
-    if not rec["fail"] and full and rec["runs"]:
+    if not rec["fail"] and full and rec["runs"] and not rec.get("overlapped"):
         save_baseline(rec, out)
         say("기준점 갱신:", BASELINE)
-    return 0 if not rec["fail"] else 1
+    elif rec.get("overlapped"):
+        say("겹침 — 기준점을 옮기지 않는다(릴리스 SOT §4.3 의 8)")
+    return 1 if rec["fail"] else (3 if rec.get("overlapped") else 0)
 
 
 if __name__ == "__main__":

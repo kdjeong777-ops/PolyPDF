@@ -12,7 +12,8 @@
 - 색인을 비우고 연다 → 색인 자식 프로세스가 도는 동안 조작한다(시작·끝 색인 파일 수를 적는다 — 부하가 실제로 있었는지).
 - 박동: 20ms QTimer 의 간격 최댓값 = 조작 중 메인 정지. 판정 **모든 조작 < 1초**, 테마 왕복 뒤 전용 메모리 증가 < 20MB.
 - 시험 프로필(`QStandardPaths` 테스트 모드) — 사용자 실제 설정 폴더를 건드리지 않는다.
-종료 코드: 0 통과, 1 실패.
+- 261025-12: 다른 무거운 작업(다른 검사·빌드·측정)과 겹쳤으면 판정 '보류'(`scripts/overlap.py`, 릴리스 SOT §4.3 의 8).
+종료 코드: 0 통과, 1 실패, 3 보류(겹침 — 다시 잰다).
 """
 import argparse
 import gc
@@ -130,6 +131,9 @@ def main():
         rows.append({"op": name, "max_stall_s": round(beat["max"], 3), "op_s": round(dur, 3), "err": err})
         print("%-30s 최장 정지 %.3fs%s" % (name, beat["max"], ("  " + err) if err else ""), flush=True)
 
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import overlap                                  # 261025-12(릴리스 SOT §4.3 의 8): 다른 무거운 작업과 겹쳤는지
+    watch = overlap.Watch().start()
     from viewer import settings_store
     for f in ("index.db", "index.db-wal", "index.db-shm"):
         p = os.path.join(settings_store.settings_dir(), f)
@@ -202,6 +206,7 @@ def main():
     bad = [r for r in rows if r["max_stall_s"] >= STALL_LIMIT or r["err"]]
     leak = (m2 - m1) if (m1 > 0 and m2 > 0) else 0.0
     ok = not bad and leak < LEAK_LIMIT_MB
+    watch.check("부하 시험 동안")
     L = ["# 부하 시험 — %s" % ver, "",
          "- 폴더: `%s` (파일 %d개) · 큰 PDF: `%s`" % (folder.name, files, bigpdf.name if bigpdf else "-"),
          "- 색인 파일 수: 시작 %s → 끝 %s (부하가 실제로 있었는지)" % (idx0, idx1),
@@ -209,7 +214,8 @@ def main():
          "| 조작 | 최장 정지 | 판정 |", "| --- | --- | --- |"]
     for r in rows:
         L.append("| %s | %.3fs | %s |" % (r["op"], r["max_stall_s"], "실패" if (r["max_stall_s"] >= STALL_LIMIT or r["err"]) else "통과"))
-    L += ["", "**판정: %s**" % ("통과" if ok else "실패")]
+    L += [""] + watch.lines()
+    L += ["", "**판정: %s**" % ("실패" if not ok else ("보류(겹침)" if watch.overlapped else "통과"))]
     (out / "summary.md").write_text("\n".join(L), encoding="utf-8")
     (out / "result.json").write_text(json.dumps({"version": ver, "files": files, "indexed": [idx0, idx1],
                                                  "mem": [m1, m2], "rows": rows, "ok": ok}, ensure_ascii=False, indent=1),
@@ -217,7 +223,7 @@ def main():
     print("\n".join(L[-3:]))
     print("결과:", out / "summary.md", flush=True)
     sys.stdout.flush()
-    os._exit(0 if ok else 1)
+    os._exit(1 if not ok else (3 if watch.overlapped else 0))
 
 
 if __name__ == "__main__":
