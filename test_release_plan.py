@@ -197,5 +197,31 @@ try:
 finally:
     rt._changes = _ch
 
+# L. 261026-4: 크래시 근거를 잡음과 가른다 — ① crash.log 는 faulthandler 가 처리되는 첫 기회 SEH(COM/RPC 0x8007xxxx)까지 적어
+#   1.0.0 설치본 Word 변환 중 4건이 '치명' 으로 보였다 ② 검사가 ALL PASS 뒤 종료 때 Qt 소멸로 죽으면 종료 코드 0 이지만 오류 보고에 남는다
+import stable_check  # noqa: E402
+chk(not stable_check.is_fatal_line("Windows fatal exception: code 0x800706be")
+    and not stable_check.is_fatal_line("Windows fatal exception: code 0x800706ba"),
+    "L COM/RPC 첫 기회 예외(0x800706be·ba)는 치명이 아니다")
+chk(all(stable_check.is_fatal_line(s) for s in ("Windows fatal exception: access violation",
+                                                "Windows fatal exception: code 0xc0000409",
+                                                "Fatal Python error: Segmentation fault")),
+    "L 접근 위반·스택 버퍼·Fatal Python error 는 치명")
+_tmp = Path(tempfile.mkdtemp()) / "crash.log"
+_tmp.write_text("=== 시작 2026-10-26 03:33:13 pid=1\nWindows fatal exception: code 0x800706be\n"
+                "=== 시작 2026-10-26 05:00:00 pid=2\nWindows fatal exception: access violation\n", encoding="utf-8")
+chk(len(stable_check.crash_entries(_tmp, "2026-10-26 00:00:00")) == 1
+    and len(stable_check.crash_entries(_tmp, "2026-10-26 00:00:00", fatal=False)) == 1,
+    "L crash.log 를 치명 1·비치명 1 로 가른다")
+RUNS = [("test_a.py", "2026-10-26 04:07:44", "2026-10-26 04:07:50", 0),
+        ("test_b.py", "2026-10-26 04:08:00", "2026-10-26 04:08:09", 3221225477)]
+EV = [("2026-10-26 04:07:45", "0xc0000005", "QtCore.pyd", "0x156d6a"),
+      ("2026-10-26 04:08:05", "0xc0000005", "QtCore.pyd", "0x1"),
+      ("2026-10-26 04:20:00", "0xc0000005", "x.dll", "0x2")]
+cl = "\n".join(rt.crash_lines(RUNS, EV))
+chk("판정 뒤" in cl and "test_a.py" in cl and "판정 전" in cl and "test_b.py" in cl and "밖의" in cl,
+    "L 검사 시간에 맞춰 판정 뒤(종료 코드 0)·판정 전(죽음)·검사 밖을 가른다", cl)
+chk(rt.NATIVE_RC.get(3221225477, "").startswith("0xC0000005"), "L 종료 코드 0xC0000005 를 네이티브 크래시로 이름 붙인다")
+
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)

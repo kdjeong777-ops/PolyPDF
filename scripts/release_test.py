@@ -376,6 +376,48 @@ PENDING_DAYS, PENDING_COUNT = 14, 5     # 묶음 릴리스 제안 기준(릴리�
 CHECK_TIMEOUT = 600                     # 검사 하나의 상한(초)
 
 
+NATIVE_RC = {3221225477: "0xC0000005 접근 위반", 3221226505: "0xC0000409 스택 버퍼", 3221225725: "0xC00000FD 스택 넘침",
+             3221226356: "0xC0000374 힙 손상"}      # 검사의 종료 코드가 이것이면 판정 전에 네이티브로 죽은 것
+
+
+def native_crashes(since: str) -> list:
+    """261026-4: since(‘yyyy-MM-dd HH:mm:ss’) 이후 Windows 이벤트 로그의 python.exe 응용 프로그램 오류(1000) — [(시각, 코드, 모듈, 오프셋)].
+    검사가 'ALL PASS' 뒤 `os._exit` 에서 Qt 소멸 순서로 죽어도(마스터 §14.8) 종료 코드는 0 이라 판정은 통과지만 오류 보고에 남고
+    몇 초를 쓴다 — 무엇이 그랬는지 summary 에 적는다(같은 오프셋 `QtCore.pyd 0x156d6a` 가 30일에 수백 건이었다)."""
+    ps = ("Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=[datetime]'%s'} -ErrorAction SilentlyContinue | "
+          "Where-Object { $_.Message -match 'application name: python' } | ForEach-Object { $m = $_.Message -split \"`n\"; "
+          "$_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss') + '|' + (($m | Where-Object {$_ -match 'Exception code'}) -replace '.*: ','').Trim() + '|' + "
+          "(($m | Where-Object {$_ -match 'Faulting module name'}) -replace 'Faulting module name: ','' -replace ',.*','').Trim() + '|' + "
+          "(($m | Where-Object {$_ -match 'Fault offset'}) -replace '.*: ','').Trim() }") % since
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=60)
+        return [tuple(x.strip().split("|")) for x in r.stdout.splitlines() if x.count("|") == 3]
+    except Exception:                         # noqa: BLE001 — 이벤트 로그를 못 읽어도 검사 판정은 그대로
+        return []
+
+
+def crash_lines(runs: list, events: list) -> list:
+    """runs = [(검사 이름, 시작, 끝, 마지막 종료 코드)](시각은 'yyyy-MM-dd HH:mm:ss'), events = native_crashes() — summary 줄."""
+    after, before, other = [], [], []
+    for when, code, mod, off in events:
+        hit = next((r for r in runs if r[1] <= when <= r[2]), None)
+        if hit is None:
+            other.append("%s %s %s+%s" % (when[11:], code, mod, off))
+        elif hit[3] == 0:
+            after.append("%s(%s %s+%s)" % (hit[0], code, mod, off))
+        else:
+            before.append("%s(rc=%s, %s %s+%s)" % (hit[0], hit[3], code, mod, off))
+    L = []
+    if before:
+        L.append("- **네이티브 크래시 — 판정 전에 죽음**(실패의 까닭): " + " · ".join(before))
+    if after:
+        L.append("- 네이티브 크래시 — 판정 뒤 종료 때(종료 코드 0, 판정은 그대로 — 마스터 §14.8): %d건 %s" % (len(after), " · ".join(after[:10])))
+    if other:
+        L.append("- 같은 시간 이 검사 밖의 python.exe 크래시(다른 세션일 수 있다): " + " · ".join(other[:10]))
+    return L
+
+
 def checks(ui: bool, only=None) -> int:
     """묶음 릴리스의 전체 검사(릴리스 SOT §4.1) — CI 는 일부만 돌리므로 `test_*.py` **전부**를 개발 venv 로,
     판정은 **종료 코드**(출력 문자열 아님 — 'ALL PASS' 대신 '전부 통과' 로 끝나는 검사가 있다). `--ui` 면 화면 점검 ko·en 도."""
@@ -387,9 +429,11 @@ def checks(ui: bool, only=None) -> int:
         keys = [k.strip() for k in only.split(",") if k.strip()]
         tests = [t for t in tests if any(k in t.name for k in keys)]
     fails, flaky, t0, durs = [], [], time.perf_counter(), {}
+    runs, since = [], time.strftime("%Y-%m-%d %H:%M:%S")
     env = dict(os.environ, PYTHONUNBUFFERED="1")    # 걸렸을 때 로그에 어디까지 갔는지 남게
     for i, t in enumerate(tests, 1):
         s = time.perf_counter()
+        s_wall = time.strftime("%Y-%m-%d %H:%M:%S")
         rcs = []
         for k in range(2):                            # 실패하면 한 번 더 — 다시 통과하면 '불안정' 으로 따로 적는다
             log = out / "logs" / (t.stem + ("" if k == 0 else ".retry") + ".log")
@@ -409,8 +453,11 @@ def checks(ui: bool, only=None) -> int:
             rcs.append(rc)
             if rc == 0 or rc == "시간 초과":          # 261012-13: 멈춘 검사(모달 등)는 다시 돌려도 또 멈춘다 — 10분을 두 번 쓰지 않는다
                 break
+        time.sleep(1.0)                               # 끝난 뒤 오류 보고 기록이 이 검사의 시간 안에 들게
+        runs.append((t.name, s_wall, time.strftime("%Y-%m-%d %H:%M:%S"), rcs[-1]))
         if rcs[-1] != 0:
-            fails.append("%s (rc=%s)" % (t.name, "·".join(map(str, rcs))))
+            fails.append("%s (rc=%s%s)" % (t.name, "·".join(map(str, rcs)),
+                                           (" — " + NATIVE_RC[rcs[-1]]) if rcs[-1] in NATIVE_RC else ""))
         elif len(rcs) > 1:
             flaky.append("%s (처음 rc=%s, 다시 통과)" % (t.name, rcs[0]))
         durs[t.name] = round(time.perf_counter() - s, 1)
@@ -422,6 +469,7 @@ def checks(ui: bool, only=None) -> int:
     # 261012-13(릴리스 SOT §4.1): 오래 걸린 검사 — 과한 검사·멈춤 후보를 다음 검토에서 고른다(durations.json 에 전부)
     slow = sorted(durs.items(), key=lambda kv: -kv[1])[:10]
     L += ["- 오래 걸린 검사: " + " · ".join("%s %.0fs" % kv for kv in slow)]
+    L += crash_lines(runs, native_crashes(since))      # 261026-4: 이벤트 로그의 python.exe 크래시를 검사에 맞춰 적는다
     (out / "durations.json").write_text(json.dumps(durs, ensure_ascii=False, indent=1), encoding="utf-8")
     if ui:
         r = subprocess.run([str(py), "scripts/ui_check.py", "--out", str(out / "ui")], cwd=ROOT,

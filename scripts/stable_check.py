@@ -33,6 +33,23 @@ FRESH_SECONDS = 30                             # 새 프로필 첫 실행을 지
 ENTRY = re.compile(r"^--- (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)")
 START = re.compile(r"^=== 시작 (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)")
 FATAL = re.compile(r"Fatal Python error|Windows fatal exception")
+# 261026-4: Windows 의 faulthandler 는 오류 등급 SEH 를 **모두** 적는다 — 처리되는 첫 기회 예외까지. Word COM 변환 중 RPC 런타임이
+#   스스로 던지고 받는 0x800706be(호출 실패)·0x800706ba(서버 없음)가 1.0.0 설치본 crash.log 에 4건 '치명' 으로 적혔지만 앱은 계속 돌았다
+#   (이벤트 로그 크래시 0). 그래서 프로세스를 실제로 끝내는 코드만 치명으로 센다 — 나머지(0x8xxxxxxx 등)는 '참고'.
+FATAL_CODES = {"0xc0000005", "0xc0000409", "0xc00000fd", "0xc0000374", "0xc000001d", "0xc0000094", "0xc0000096",
+               "0xc0000417", "0xc0000602"}
+_CODE = re.compile(r"Windows fatal exception: (?:code )?(0x[0-9a-fA-F]+|access violation|stack overflow)", re.I)
+
+
+def is_fatal_line(line: str) -> bool:
+    """crash.log 한 줄이 진짜 크래시인지 — `Fatal Python error` 는 늘 치명, Windows 예외는 코드로 가린다."""
+    if "Fatal Python error" in line:
+        return True
+    m = _CODE.search(line)
+    if not m:
+        return False
+    c = m.group(1).lower()
+    return c in FATAL_CODES or c in ("access violation", "stack overflow")
 
 
 def stat_real() -> dict:
@@ -87,8 +104,8 @@ def log_entries(p: Path, since: str) -> list:
     return [tuple(x) for x in out]
 
 
-def crash_entries(p: Path, since: str) -> list:
-    """crash.log 에서 since 이후 시작한 실행의 치명 오류 줄."""
+def crash_entries(p: Path, since: str, fatal: bool = True) -> list:
+    """crash.log 에서 since 이후 시작한 실행의 예외 줄 — fatal=True 면 진짜 크래시만, False 면 비치명(첫 기회 SEH)만."""
     if not p.exists():
         return []
     out, run = [], ""
@@ -96,7 +113,7 @@ def crash_entries(p: Path, since: str) -> list:
         m = START.match(line)
         if m:
             run = m.group(1)
-        elif FATAL.search(line) and run >= since:
+        elif FATAL.search(line) and run >= since and is_fatal_line(line) == fatal:
             out.append((run, line.strip()[:160]))
     return out
 
@@ -180,10 +197,16 @@ def cmd_report(out: Path, online: bool) -> int:
         if errs or fatal or sj.startswith("**") or not (db == "없음" or db.startswith("ok")):
             bad.append(cfg.name)
     real_db = check_db_copy(REAL / "index.db")
+    real_fatal = crash_entries(REAL / "crash.log", since)                    # 읽기만
+    real_noise = crash_entries(REAL / "crash.log", since, fatal=False)
     L = ["## 크래시 근거·데이터 무결성 (%s 이후)" % since, "",
          "| 항목 | 결과 |", "| --- | --- |",
          "| 이벤트 로그 PolyPDF.exe 오류·정지 | %s |" % ("없음" if not ev else "**%d건**" % len(ev)),
+         "| 사용자 실제 crash.log 치명(`FATAL_CODES`) | %s |" % ("없음" if not real_fatal else "**%d건**" % len(real_fatal)),
+         "| 사용자 실제 crash.log 비치명(처리된 첫 기회 SEH — COM/RPC 0x8007xxxx 등, 참고) | %d건%s |" % (
+             len(real_noise), (" — " + "; ".join("%s %s" % x for x in real_noise[:3])) if real_noise else ""),
          "| 사용자 실제 색인(복사본) quick_check | %s |" % real_db, ""]
+    L += ["- crash.log 치명 %s %s" % x for x in real_fatal]
     L += ["- " + e for e in ev]
     L += ["", "| 시험 프로필 | error.log 새 항목 | crash.log 치명 | settings.json | index.db quick_check(복사본) |",
           "| --- | --- | --- | --- | --- |"]
@@ -208,7 +231,7 @@ def cmd_report(out: Path, online: bool) -> int:
             info = updater.check_latest("kdjeong777-ops/PolyPDF", channel=ch) or {}
             L.append("- 업데이트 확인(지금 판 %s, %s 채널): 새 판 `%s` · 자산 %s" % (
                 updater.current_version(), ch, info.get("tag"), "있음" if info.get("asset_url") else "없음"))
-    ok = not ev and not bad and real_db.startswith(("ok", "없음"))
+    ok = not ev and not bad and not real_fatal and real_db.startswith(("ok", "없음"))
     L += ["", "**판정: %s**" % ("통과" if ok else "실패")]
     (out / "stable_report.md").write_text("\n".join(L), encoding="utf-8")
     print("\n".join(L))
