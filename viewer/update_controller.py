@@ -49,8 +49,15 @@ class UpdateMixin:
                 self._save_settings_now()
             except Exception:
                 pass
+        dlg = None
         if manual:
             self.status.showMessage(tr("업데이트 확인 중…"), 3000)
+            # 261026-5(사용자 지시): 창을 **먼저** 띄우고 확인 결과를 그 창에 보인다 — 아래에 두 체크(자동 다운로드·베타)
+            from viewer.widgets.update_dialog import UpdateDialog
+            from viewer import updater as _upd
+            dlg = UpdateDialog(None, _upd.current_version(), "check", self, options=self._update_options())
+            self._update_check_dlg = dlg
+            self._update_check_closed = False
         import threading
         sig = self._update_sig
 
@@ -70,31 +77,45 @@ class UpdateMixin:
             except Exception:
                 pass
         threading.Thread(target=work, daemon=True).start()
+        if dlg is not None:
+            try:
+                dlg.exec()
+            finally:
+                self._update_check_dlg = None
+                self._update_check_closed = True     # 결과가 늦게 오면 창을 다시 띄우지 않는다
+            if dlg.choice == "update":
+                self._upgrade_now()
+
+    def _manual_note(self, text: str) -> None:
+        """261026-5 수동 확인의 결과 한 줄 — 업데이트 창이 열려 있으면 그 창에, 아니면 알림 창."""
+        dlg = getattr(self, "_update_check_dlg", None)
+        if dlg is not None:
+            dlg.show_message(text.replace("\n", "<br>"))
+        else:
+            QMessageBox.information(self, tr("업데이트"), text)
 
     def _on_update_result(self, info, manual):
         from viewer import updater
         cur = updater.current_version()
+        if manual and getattr(self, "_update_check_closed", False):
+            manual = False                     # 261026-5 확인 창을 먼저 닫았다 — 시작 때 자동 확인처럼 조용히
         if not info:
             if manual:
-                QMessageBox.information(
-                    self, tr("업데이트"),
-                    tr("업데이트 정보를 가져오지 못했습니다.\n인터넷 연결과 저장소 설정을 확인하세요."))
+                self._manual_note(tr("업데이트 정보를 가져오지 못했습니다.\n인터넷 연결과 저장소 설정을 확인하세요."))
             return
         latest = info.get("version") or ""
         if not updater.is_newer(latest, cur):
             if manual:
-                QMessageBox.information(self, tr("업데이트"), tr('현재 최신 버전입니다. (v{cur})').format(cur=cur))
+                self._manual_note(tr('현재 최신 버전입니다. (v{cur})').format(cur=cur))
             return
         if not updater.is_frozen():
             if manual:
-                QMessageBox.information(
-                    self, tr("업데이트"),
+                self._manual_note(
                     tr('새 버전 v{latest} 이 있습니다(현재 v{cur}).\n개발(소스) 실행 중에는 자동 교체가 적용되지 않습니다.\n{get}').format(latest=latest, cur=cur, get=info.get('html_url', '')))
             return
         if not info.get("asset_url"):
             if manual:
-                QMessageBox.information(
-                    self, tr("업데이트"),
+                self._manual_note(
                     tr('새 버전 v{latest} 이 있으나 배포 zip 자산을 찾지 못했습니다.\n{get}').format(latest=latest, get=info.get('html_url', '')))
             return
         # 260618-24: 새 버전 인지(종료 시 업그레이드 프롬프트용)
@@ -106,11 +127,16 @@ class UpdateMixin:
             # 261008-17·-18(마스터 §14.5 U13·U14): 업데이트 창에서 **바뀐 내용**을 보고 고른다 →
             #   ① 앱이 켜진 채 먼저 받는다 ② 닫는다(편집 저장 확인은 종료 길) ③ 설치 도우미가
             #   다른 창을 모두 닫고 확인 ④ 설치. 받기를 실패·취소하면 닫지 않는다.
-            from viewer.widgets.update_dialog import UpdateDialog
-            dlg = UpdateDialog(info, cur, "manual", self)
-            dlg.exec()
-            if dlg.choice == "update":
-                self._upgrade_now()
+            #   261026-5: 먼저 띄운 확인 창(`_check_for_updates`)에 결과를 넣는다 — [업데이트] 는 그 창이 닫힌 뒤 `_upgrade_now`
+            dlg = getattr(self, "_update_check_dlg", None)
+            if dlg is not None:
+                dlg.show_result(info, cur)
+            else:
+                from viewer.widgets.update_dialog import UpdateDialog
+                dlg = UpdateDialog(info, cur, "manual", self, options=self._update_options())
+                dlg.exec()
+                if dlg.choice == "update":
+                    self._upgrade_now()
         else:
             # C: 시작 시 자동 확인 — 설정 켜져 있으면 백그라운드로 미리 받아둠
             if self._prefs.get("auto_download_update", True):

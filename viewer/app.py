@@ -1889,36 +1889,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_update = QAction(tr("업데이트 확인…"), self)
         a_update.triggered.connect(lambda: self._check_for_updates(manual=True))
         m_help.addAction(a_update)
-        # 260618-24(C): 업데이트 자동 다운로드(미리 받아두기) 체크박스 — 기본 켜짐
-        a_autodl = QAction(tr("업데이트 자동 다운로드"), self)
-        a_autodl.setCheckable(True)
-        a_autodl.setChecked(bool(getattr(self, "_prefs", {}).get("auto_download_update", True)))
-        a_autodl.toggled.connect(self._on_toggle_auto_download)
-        m_help.addAction(a_autodl)
-        self._act_auto_download = a_autodl
-        # 260618-33: 베타(테스트) 업데이트 채널 — 켜면 -beta/-rc 등 프리릴리즈도 받음(기본 꺼짐=정식만)
-        a_beta = QAction(tr("베타(테스트) 버전도 받기"), self)
-        a_beta.setCheckable(True)
-        # 260618-36: 1.0 이전(pre-stable)에는 빌드가 베타로만 나오므로 항상 베타 수신 → 체크·잠금.
-        _pre10 = False
-        try:
-            from viewer import updater as _u0
-            _pre10 = int((_u0.current_version().lstrip("vV").split(".")[0]) or "0") == 0
-        except Exception:
-            pass
-        a_beta.setChecked(_pre10 or str(getattr(self, "_prefs", {}).get("update_channel", "stable")).lower() == "beta")
-        if _pre10:
-            a_beta.setEnabled(False)
-            a_beta.setToolTip(tr("1.0 이전에는 항상 베타(테스트) 버전을 받습니다."))
-        a_beta.toggled.connect(self._on_toggle_update_channel)
-        m_help.addAction(a_beta)
-        self._act_update_beta = a_beta
+        # 261026-5(사용자 지시): '업데이트 자동 다운로드'·'베타(테스트) 버전도 받기' 체크 항목은 리본 단추로는 체크를 다룰 수 없어
+        #   **업데이트 확인 창 아래**로 옮겼다(`UpdateDialog` options, 마스터 §14.5 U14). 도움말 탭에서는 뺐다.
         m_help.addSeparator()
         a_about = QAction(tr("정보"), self)
         a_about.triggered.connect(self._show_about)
         m_help.addAction(a_about)
-        for _cid, _a in (("help.usage", a_usage), ("help.update", a_update), ("help.auto_download", a_autodl),
-                         ("help.beta", a_beta), ("help.about", a_about)):
+        for _cid, _a in (("help.usage", a_usage), ("help.update", a_update), ("help.about", a_about)):
             self._reg_cmd(_cid, _a)
 
         # 261024-1(디자인 SOT §2.9): 메뉴는 탭으로 — 세부 줄은 각 메뉴의 액션을 그대로 보인다.
@@ -9955,6 +9932,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 방금 켰고 새 버전을 이미 인지했다면 바로 미리 받기 시작
         if checked and getattr(self, "_pending_update", None):
             self._start_bg_update_download(self._pending_update)
+
+    def _update_options(self) -> dict:
+        """261026-5: 업데이트 확인 창 아래 두 체크의 지금 값·잠금·바꿀 때 부를 함수(`UpdateDialog` options)."""
+        pre10 = False
+        try:
+            from viewer import updater as _u0
+            # 260618-36: 1.0 이전(pre-stable)에는 빌드가 베타로만 나오므로 항상 베타 수신 → 체크·잠금.
+            pre10 = int((_u0.current_version().lstrip("vV").split(".")[0]) or "0") == 0
+        except Exception:
+            pass
+        p = getattr(self, "_prefs", {}) or {}
+        return {"auto_download": bool(p.get("auto_download_update", True)),
+                "beta": pre10 or str(p.get("update_channel", "stable")).lower() == "beta",
+                "beta_locked": pre10,
+                "on_auto_download": self._on_toggle_auto_download,
+                "on_beta": self._on_toggle_update_channel}
 
     def _on_toggle_update_channel(self, checked: bool):
         """260618-33: 베타(테스트) 채널 토글 — 켜면 -beta/-rc 등 프리릴리즈도 후보."""

@@ -26,6 +26,8 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+from PyQt6.QtCore import QCoreApplication as _QCA
+_QCA.setApplicationName("polypdf_fav_groups_%d" % os.getpid())   # 마스터 §14.7.2 의 3 — 공유 시험 설정(qttest/python)에 남기지 않는다
 fails = []
 
 

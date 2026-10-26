@@ -69,12 +69,16 @@ try:
     # 261025-8(릴리스 SOT §2.3): 첫 정식판이 1.0.0 — 판에 따라 두 갈래로 본다(버전을 올려도 이 검사가 깨지지 않게)
     cur = updater.current_version()
     pre10 = int((cur.lstrip("vV").split(".")[0]) or "0") == 0
+    # 261026-5(마스터 §14.5 U14): 두 체크는 도움말 탭이 아니라 업데이트 확인 창 아래 — 그 창의 체크로 본다
+    from viewer.widgets.update_dialog import UpdateDialog
+    _ud = UpdateDialog(None, cur, "check", mw, options=mw._update_options())
     if pre10:
-        check("1.0 이전: 베타 메뉴 체크됨", mw._act_update_beta.isChecked(), cur)
-        check("1.0 이전: 베타 메뉴 비활성(선택 불가)", not mw._act_update_beta.isEnabled())
+        check("1.0 이전: 베타 체크됨", _ud.chk_beta.isChecked(), cur)
+        check("1.0 이전: 베타 체크 비활성(선택 불가)", not _ud.chk_beta.isEnabled())
     else:
-        check("1.0 이후: 베타 메뉴를 고를 수 있다", mw._act_update_beta.isEnabled(), cur)
-        check("1.0 이후: 깨끗한 프로필은 베타 메뉴 꺼짐(정식만)", not mw._act_update_beta.isChecked())
+        check("1.0 이후: 베타 체크를 고를 수 있다", _ud.chk_beta.isEnabled(), cur)
+        check("1.0 이후: 깨끗한 프로필은 베타 체크 꺼짐(정식만)", not _ud.chk_beta.isChecked())
+    _ud.done(0)
 
     # ---------- ② 깨끗한 프로필의 기본값 ----------
     check("update_channel 기본값 = stable",

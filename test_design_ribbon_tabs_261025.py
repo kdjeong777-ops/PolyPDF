@@ -20,6 +20,8 @@ from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+from PyQt6.QtCore import QCoreApplication as _QCA
+_QCA.setApplicationName("polypdf_ribbon_tabs_%d" % os.getpid())   # 마스터 §14.7.2 의 3 — 공유 시험 설정(qttest/python)에 남기지 않는다
 fails = []
 
 
@@ -223,7 +225,7 @@ try:
         QTest.mouseClick(d3.btn_recording, Qt.MouseButton.LeftButton); QTest.qWait(50)
     finally:
         sd.RecordingSettingsDialog.exec = _orig_rexec
-        mw._save_settings_now = orig_save
+        mw._save_settings_now = lambda *a, **k: None   # 공유 시험 설정에 고급 키를 남기지 않는다(다른 검사로 샌다)
     chk(got == ["발표화면 녹화 설정"] and mw._prefs.get("recording_dir") == "D:/녹화" and saved,
         "I 녹화 설정 창 [확인] → 곧바로 저장", str((got, mw._prefs.get("recording_dir"))))
     d3.reject()
@@ -244,7 +246,7 @@ try:
     mw.activateWindow(); QTest.qWait(30)
     QTest.keyClick(mw, Qt.Key.Key_C, Qt.KeyboardModifier.AltModifier); QTest.qWait(300)   # 니모닉은 animateClick
     chk(rb.current_key() == "collection", "K Alt+C → 모음 탭", rb.current_key())
-    mw._save_settings_now = orig_save
+    mw._save_settings_now = lambda *a, **k: None   # 공유 시험 설정에 고급 키를 남기지 않는다(다른 검사로 샌다)
 except Exception:
     import traceback
     traceback.print_exc()

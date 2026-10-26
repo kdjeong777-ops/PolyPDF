@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-26 04:35+0900\n"
+"POT-Creation-Date: 2026-10-26 09:46+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -461,14 +461,6 @@ msgid "업데이트 확인…"
 msgstr "Check for Updates…"
 
 #: viewer/app.py
-msgid "업데이트 자동 다운로드"
-msgstr "Download Updates Automatically"
-
-#: viewer/app.py
-msgid "베타(테스트) 버전도 받기"
-msgstr "Also Receive Beta (Test) Versions"
-
-#: viewer/app.py
 msgid "정보"
 msgstr "About"
 
@@ -504,7 +496,7 @@ msgstr "Bookmark Generation Stopped"
 #: viewer/print_controller.py viewer/update_controller.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
 #: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
-#: viewer/widgets/vprinter_dialog.py
+#: viewer/widgets/update_dialog.py viewer/widgets/vprinter_dialog.py
 msgid "닫기"
 msgstr "Close"
 
@@ -1075,10 +1067,6 @@ msgstr "Virtual Printer"
 #: viewer/app.py
 msgid "가상 프린터(PolyPDF) 설치·제거…"
 msgstr "Virtual Printer (PolyPDF) Install/Remove…"
-
-#: viewer/app.py
-msgid "1.0 이전에는 항상 베타(테스트) 버전을 받습니다."
-msgstr "Until 1.0, you always receive beta (test) versions."
 
 #: viewer/app.py
 msgid "단축키 저장됨"
@@ -11297,12 +11285,32 @@ msgid "바뀐 내용을 가져오지 못했습니다."
 msgstr "Could not get the list of changes."
 
 #: viewer/widgets/update_dialog.py
+msgid "<b>업데이트를 확인하는 중…</b>"
+msgstr "<b>Checking for updates…</b>"
+
+#: viewer/widgets/update_dialog.py
 msgid "<b>새 베타(테스트) 버전이 있습니다.</b>"
 msgstr "<b>A new beta (test) version is available.</b>"
 
 #: viewer/widgets/update_dialog.py
 msgid "<b>새 버전이 있습니다.</b>"
 msgstr "<b>A new version is available.</b>"
+
+#: viewer/widgets/update_dialog.py
+msgid "업데이트 설정"
+msgstr "Update Settings"
+
+#: viewer/widgets/update_dialog.py
+msgid "업데이트 자동 다운로드"
+msgstr "Download Updates Automatically"
+
+#: viewer/widgets/update_dialog.py
+msgid "시작할 때 새 버전이 있으면 미리 받아 둡니다(설치는 종료할 때 묻습니다)."
+msgstr "If a new version is available at startup, it is downloaded in advance (you are asked before installing when you exit)."
+
+#: viewer/widgets/update_dialog.py
+msgid "베타(테스트) 버전도 받기"
+msgstr "Also Receive Beta (Test) Versions"
 
 #: viewer/widgets/update_dialog.py
 msgid "베타 업데이트"
@@ -11318,16 +11326,8 @@ msgid "업데이트 파일을 <b>먼저 받은 뒤</b>, 열린 PolyPDF 창을 �
 msgstr "The update file is <b>downloaded first</b>, then all open PolyPDF windows are closed and it is installed."
 
 #: viewer/widgets/update_dialog.py
-msgid "업그레이드 후 종료"
-msgstr "Upgrade and Exit"
-
-#: viewer/widgets/update_dialog.py
-msgid "그냥 종료"
-msgstr "Just Exit"
-
-#: viewer/widgets/update_dialog.py
-msgid "나중에"
-msgstr "Later"
+msgid "1.0 이전에는 항상 베타(테스트) 버전을 받습니다."
+msgstr "Until 1.0, you always receive beta (test) versions."
 
 #: viewer/widgets/update_dialog.py
 msgid "전체 비교"
@@ -11355,6 +11355,18 @@ msgstr[1] "({n} versions)"
 #: viewer/widgets/update_dialog.py
 msgid "이 버전은 테스트(베타)입니다."
 msgstr "This is a test (beta) version."
+
+#: viewer/widgets/update_dialog.py
+msgid "업그레이드 후 종료"
+msgstr "Upgrade and Exit"
+
+#: viewer/widgets/update_dialog.py
+msgid "그냥 종료"
+msgstr "Just Exit"
+
+#: viewer/widgets/update_dialog.py
+msgid "나중에"
+msgstr "Later"
 
 #: viewer/widgets/view_settings_dialog.py
 msgid "보기 설정"

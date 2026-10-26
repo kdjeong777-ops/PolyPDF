@@ -135,6 +135,26 @@ chk(not bad, "§14.7.2-3 메인 창·설정 폴더를 쓰는 검사는 시험 �
 bad = [p.name for p in tests
        if re.search(r"setApplicationName\(\s*[\"']PolyPDF[\"']\s*\)", strip_comments(read(p)))]
 chk(not bad, "§14.7.2-3 검사가 앱 이름을 실제 'PolyPDF' 로 정하지 않는다", str(bad))
+# 261026-5 보완(마스터 §14.7.2 의 3): 시험 모드로 메인 창을 띄우는 검사는 **고유 앱 이름**(`polypdf_<이름>_<pid>`) 또는 시험 프로필 —
+#   앱 이름을 정하지 않으면 모두 `qttest/python/settings.json` 하나를 나눠 써, 한 검사가 저장한 키(법령·KCSC·KIPO)가
+#   다음 검사로 새어 순서에 따라 실패했다(261026 test_panel_toolbar). 아래는 그 전부터 있던 것 — **줄기만 한다**(옮긴 파일은 뺀다).
+APPNAME_KNOWN = {
+    "test_about_notice.py", "test_bookmark_gen_261019.py", "test_capture_region_drag_261014.py", "test_compare_261014.py",
+    "test_convert_261014.py", "test_convert_docx_261014.py", "test_convert_hwpx_261014.py", "test_convert_pptx_261014.py",
+    "test_convert_progress_261026.py", "test_convert_word_com_261014.py", "test_design_bk_status_count.py", "test_file_rename_menu.py",
+    "test_i18n_core.py", "test_i18n_keys.py", "test_merge_fast.py", "test_nup_preset_order.py",
+    "test_ocr_batch_261014.py", "test_open_multi_files.py", "test_page_edit_save_bg.py", "test_page_nav_261014.py",
+    "test_panel_input_261014.py", "test_panel_toolbar.py", "test_pdf_compress_261014.py", "test_recent_files.py",
+    "test_rename_locked_261014.py", "test_reopen_after_save.py", "test_save_overwrite_locked.py", "test_screenshot_pdf_bake_261014.py",
+    "test_search_case_regex_261014.py", "test_security_redact_261014.py", "test_shot_clipboard_copy_261024.py", "test_shot_clipboard_pdf_open.py",
+    "test_sot_ui_layout.py", "test_temp_sweep_261014.py", "test_text_word_bg_261014.py",
+    "test_thumb_move_staged.py", "test_ui_stall_peer_table_261014.py", "test_update_order.py"
+}
+_shared = {p.name for p in tests
+           if "setTestModeEnabled(True)" in strip_comments(read(p)) and re.search(r"\bMainWindow\(", strip_comments(read(p)))
+           and "setApplicationName(" not in strip_comments(read(p)) and "POLYPDF_PROFILE" not in strip_comments(read(p))}
+chk(not (_shared - APPNAME_KNOWN), "§14.7.2-3 시험 모드로 메인 창을 띄우는 새 검사는 고유 앱 이름을 정한다", str(sorted(_shared - APPNAME_KNOWN)))
+chk(not (APPNAME_KNOWN - _shared), "§14.7.2-3 고유 앱 이름으로 옮긴(또는 없앤) 파일은 APPNAME_KNOWN 에서 뺀다", str(sorted(APPNAME_KNOWN - _shared)))
 # 261025-13(마스터 §14.7.2 의 6): 메인 창을 띄우는 검사·도구는 오프스크린 모달을 `modal_guard.install(` 로 닫는다 — 각자 막던 방식을
 #   새 도구가 빠뜨려 261025 오래 켜 두기 시험이 안내 창에서 77분 멈췄다. 아래는 그 전부터 있던 것(각자 막거나 모달이 안 뜬다) — **줄기만 한다**:
 #   새 파일은 여기에 더하지 않고 `modal_guard` 를 쓴다. 옮긴 파일은 여기서 뺀다.
