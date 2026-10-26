@@ -60,6 +60,85 @@ def pending_enabled() -> bool:
     return bool(_PENDING["on"])
 
 
+# 보류 DB 의 표 — `{p}` 는 붙인 DB 이름(`p.`) 또는 빈 글자(배경에서 파일을 바로 만들 때)
+_PENDING_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS {p}ocr_page(
+        file_key TEXT, page INTEGER, text TEXT, dpi INTEGER,
+        engine TEXT, source TEXT, conf REAL, done_at TEXT,
+        PRIMARY KEY(file_key, page));
+    CREATE TABLE IF NOT EXISTS {p}ocr_word(
+        file_key TEXT, page INTEGER, lemma TEXT, surface TEXT, lang TEXT,
+        x0 REAL, y0 REAL, x1 REAL, y1 REAL, conf REAL);
+    CREATE INDEX IF NOT EXISTS {p}ix_pword_page ON ocr_word(file_key, page);
+    CREATE TABLE IF NOT EXISTS {p}vocab(
+        file_key TEXT, lemma TEXT, lang TEXT, level TEXT,
+        zipf REAL, freq_in_book INTEGER,
+        PRIMARY KEY(file_key, lemma, lang));
+    CREATE TABLE IF NOT EXISTS {p}vocab_page(
+        file_key TEXT, page INTEGER, lemma TEXT, lang TEXT, count INTEGER,
+        pos INTEGER DEFAULT 0,
+        PRIMARY KEY(file_key, page, lemma, lang));
+    CREATE INDEX IF NOT EXISTS {p}ix_pvpage ON vocab_page(file_key, page);
+    CREATE TABLE IF NOT EXISTS {p}study_meta(
+        file_key TEXT PRIMARY KEY, path TEXT, page_count INTEGER,
+        lang TEXT, updated_at TEXT);
+    -- 이 파일의 어휘는 보류 쪽이 통째로 대신한다(다시 만들기)
+    CREATE TABLE IF NOT EXISTS {p}vocab_files(file_key TEXT PRIMARY KEY);
+    -- 이 파일의 저장본은 지운 것으로 본다('단어장 다시 만들기')
+    CREATE TABLE IF NOT EXISTS {p}cleared(file_key TEXT PRIMARY KEY);
+"""
+
+# 261026-4(응답성 SOT §6 '메인은 새 파일을 만들지 않는다', 사용자 결정): 보류 DB 는 프로세스마다 **새 파일**이다. 종전에는 본문 첫 쪽을
+#   그리는 메인 스레드의 첫 `StudyStore()` 가 그 파일을 만들었는데, 새 exe(업데이트 직후)가 만드는 새 파일을 백신이 붙들어 1.37초 섰다
+#   (1.0.1 빌드 시험 T1, 정지 스택 `_attach_pending`). 이제 앱 시작 때 배경 스레드가 먼저 만든다(`startup_pending`). 메인의 첫 붙이기는
+#   그것이 끝났으면 바로, 아직이면 `PENDING_READY_WAIT_S` 까지 기다린다 — 기다리지 않고 함께 만들면 잠금 경합으로 '보류 없이 바로 저장' 으로
+#   떨어질 수 있다(이 저장소의 약속을 깬다).
+PENDING_READY_WAIT_S = 3.0
+_PEND_PREP = {"started": False, "ready": None}
+
+
+def prepare_pending() -> None:
+    """보류 DB 파일과 표를 만든다(배경 스레드에서 — WAL). 실패해도 메인의 첫 붙이기가 종전처럼 만든다."""
+    import threading
+    if _PEND_PREP["ready"] is None:
+        _PEND_PREP["ready"] = threading.Event()
+    try:
+        pp = pending_db_path()
+        pp.parent.mkdir(parents=True, exist_ok=True)
+        con = _dbutil.connect(pp, _dbutil.BUSY_MS_BG)          # 표준 연결 — WAL·대기 상한(응답성 SOT §4 ⑤)
+        try:
+            con.executescript(_PENDING_SCHEMA.format(p=""))
+            con.commit()
+        finally:
+            con.close()
+    except Exception:
+        pass
+    finally:
+        _PEND_PREP["ready"].set()
+
+
+def startup_pending() -> None:
+    """앱 시작 때 배경 스레드 하나로: 이 프로세스의 보류 DB 를 먼저 만들고(첫 쪽이 곧 쓴다) 옛 보류 파일을 지운다."""
+    prepare_pending()
+    cleanup_stale_pending()
+
+
+def start_pending_prep() -> None:
+    """앱 진입점이 부른다 — 배경 스레드를 띄우기 **전에** 표식을 세워, 메인의 첫 붙이기가 기다릴지 알게 한다."""
+    import threading
+    _PEND_PREP["started"] = True
+    _PEND_PREP["ready"] = threading.Event()
+    threading.Thread(target=startup_pending, name="study-pending-prep", daemon=True).start()
+
+
+def wait_pending_ready() -> bool:
+    """배경 준비가 시작됐으면 끝나기를 기다린다(상한 `PENDING_READY_WAIT_S`). 준비를 띄우지 않은 실행(검사·도구)은 바로 True."""
+    ev = _PEND_PREP["ready"]
+    if not _PEND_PREP["started"] or ev is None:
+        return True
+    return ev.wait(PENDING_READY_WAIT_S)
+
+
 def cleanup_stale_pending() -> int:
     """끝난(또는 죽은) 프로세스가 남긴 보류 DB 를 지운다 — 저장하지 않은 결과는 버리는 것이 규칙.
     다른 PolyPDF 창이 쓰고 있는 파일은 열려 있어 지워지지 않는다(그대로 둔다). 지운 수."""
@@ -110,39 +189,14 @@ class StudyStore:
     # --- 261019-1: 보류 저장소 ---------------------------------------------
     def _attach_pending(self) -> None:
         pp = pending_db_path()
+        wait_pending_ready()                   # 261025-8 보완(261026-4): 배경이 만드는 중이면 끝나기를 짧게 — 메인이 새 파일을 만들지 않게
         pp.parent.mkdir(parents=True, exist_ok=True)
         self.conn.execute("ATTACH DATABASE ? AS p", (str(pp),))
         try:
             self.conn.execute("PRAGMA p.journal_mode = WAL")
         except Exception:
             pass
-        self.conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS p.ocr_page(
-                file_key TEXT, page INTEGER, text TEXT, dpi INTEGER,
-                engine TEXT, source TEXT, conf REAL, done_at TEXT,
-                PRIMARY KEY(file_key, page));
-            CREATE TABLE IF NOT EXISTS p.ocr_word(
-                file_key TEXT, page INTEGER, lemma TEXT, surface TEXT, lang TEXT,
-                x0 REAL, y0 REAL, x1 REAL, y1 REAL, conf REAL);
-            CREATE INDEX IF NOT EXISTS p.ix_pword_page ON ocr_word(file_key, page);
-            CREATE TABLE IF NOT EXISTS p.vocab(
-                file_key TEXT, lemma TEXT, lang TEXT, level TEXT,
-                zipf REAL, freq_in_book INTEGER,
-                PRIMARY KEY(file_key, lemma, lang));
-            CREATE TABLE IF NOT EXISTS p.vocab_page(
-                file_key TEXT, page INTEGER, lemma TEXT, lang TEXT, count INTEGER,
-                pos INTEGER DEFAULT 0,
-                PRIMARY KEY(file_key, page, lemma, lang));
-            CREATE INDEX IF NOT EXISTS p.ix_pvpage ON vocab_page(file_key, page);
-            CREATE TABLE IF NOT EXISTS p.study_meta(
-                file_key TEXT PRIMARY KEY, path TEXT, page_count INTEGER,
-                lang TEXT, updated_at TEXT);
-            -- 이 파일의 어휘는 보류 쪽이 통째로 대신한다(다시 만들기)
-            CREATE TABLE IF NOT EXISTS p.vocab_files(file_key TEXT PRIMARY KEY);
-            -- 이 파일의 저장본은 지운 것으로 본다('단어장 다시 만들기')
-            CREATE TABLE IF NOT EXISTS p.cleared(file_key TEXT PRIMARY KEY);
-            """)
+        self.conn.executescript(_PENDING_SCHEMA.format(p="p."))
         # 읽기는 TEMP VIEW(이름이 같아 main 표를 가린다) — 보류 ▶ 저장본
         hide_main = "m.file_key NOT IN (SELECT file_key FROM p.cleared)"
         self.conn.executescript(f"""
