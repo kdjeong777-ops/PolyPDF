@@ -832,11 +832,15 @@ def main():
     write_summary(out, rec)
     # 묶음 전체를 돌려 통과했을 때만 기준점을 옮긴다(일부 대상·설치만 확인은 기준이 못 된다)
     full = not a.cases and not (a.mode == "install" and a.no_suite)
-    if not rec["fail"] and full and rec["runs"] and not rec.get("overlapped"):
+    # 261026-6 보완(릴리스 SOT §3.2): '회귀 의심' 이 있는 결과는 통과여도 기준점이 되지 않는다 — 느린 T6 결과(1809)가 기준점이 되어
+    #   다음 시험이 흔들린 값과 견주게 됐다. 사람이 가려(§4.3) 깨끗하다고 보면 같은 명령으로 다시 재서 옮긴다.
+    if not rec["fail"] and full and rec["runs"] and not rec.get("overlapped") and not rec.get("regress"):
         save_baseline(rec, out)
         say("기준점 갱신:", BASELINE)
     elif rec.get("overlapped"):
         say("겹침 — 기준점을 옮기지 않는다(릴리스 SOT §4.3 의 8)")
+    elif rec.get("regress"):
+        say("회귀 의심 %d건 — 기준점을 옮기지 않는다(릴리스 SOT §3.2)" % len(rec["regress"]))
     return 1 if rec["fail"] else (3 if rec.get("overlapped") else 0)
 
 

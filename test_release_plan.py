@@ -146,6 +146,8 @@ chk(not w2.check("T5") and not w2.overlapped, "I 쉬는 다른 프로세스는 �
 src = (ROOT / "scripts" / "release_test.py").read_text(encoding="utf-8")
 chk('not rec.get("overlapped")' in src.split("def main")[1].split("save_baseline(rec")[0],
     "I 겹친 시험은 기준점을 옮기지 않는다(save_baseline 앞의 조건)")
+chk('not rec.get("regress")' in src.split("def main")[1].split("save_baseline(rec")[0],
+    "I 회귀 의심이 있는 시험은 통과여도 기준점을 옮기지 않는다(261026-6 보완 — 느린 T6 결과가 기준점이 됐다)")
 
 # J. 261025-12 보완(사용자 결정): 판정은 다른 무거운 프로세스로만 — 평소 부하(이 PC 37% 안팎)로 '보류' 하지 않는다.
 #   실제 값: 설치 시험 2120 시작 전 45.7%·2201 46.8%, 대상마다 다른 무거운 프로세스 0 → 종전 규칙(40%)은 둘 다 보류(수정 전 실패).
