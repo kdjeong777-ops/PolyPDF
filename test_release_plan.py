@@ -223,5 +223,17 @@ chk("판정 뒤" in cl and "test_a.py" in cl and "판정 전" in cl and "test_b.
     "L 검사 시간에 맞춰 판정 뒤(종료 코드 0)·판정 전(죽음)·검사 밖을 가른다", cl)
 chk(rt.NATIVE_RC.get(3221225477, "").startswith("0xC0000005"), "L 종료 코드 0xC0000005 를 네이티브 크래시로 이름 붙인다")
 
+# M. 261026-4: 빌드·설치 시험의 정지 스택을 summary 에 옮긴다(종전에는 runs\ 파일에만 — 1.0.1 의 1.37초 정지를 summary 로는 몰랐다)
+_runs = Path(tempfile.mkdtemp())
+(_runs / "T1_small_stall1.txt").write_text(
+    "Process 1: PolyPDF.exe x.pdf\nPython v3.14.3\n\nThread 20356 (active): \"MainThread\"\n"
+    "    _attach_pending (study_store.py:116)\n    __init__ (study_store.py:105)\n    _study_read (app.py:3578)\n"
+    "    _ocr_page_words (app.py:3592)\n    <lambda> (app.py:3552)\n    pick_ocr_words (text_extract2.py:2265)\n"
+    "    _view_ocr_words (app.py:3550)\n\nThread 2 (idle): \"other\"\n    run (x.py:1)\n", encoding="utf-8")
+st = rt.stall_tops(_runs, "T1_small")
+chk(len(st) == 1 and st[0][2][0].startswith("_attach_pending") and len(st[0][2]) == rt.STALL_TOP and "run (x.py:1)" not in st[0][2],
+    "M 정지 스택 파일에서 메인 스레드 맨 위 줄만 옮긴다", st)
+chk(rt.stall_tops(_runs, "T2_HM") == [], "M 정지 파일이 없는 대상은 비어 있다")
+
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)

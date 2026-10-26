@@ -708,12 +708,29 @@ def run_suite(exe: Path, out: Path, only, rec: dict, watch=None):
                                                       "close_sec", "exit", "indexed_files")} | {"hangs": len(r["hangs"])})
             if r["max_hang_sec"] >= 1.0:
                 rec["fail"].append("%s 1초+ 정지 %d회(최장 %ss)" % (c["name"], len(r["hangs"]), r["max_hang_sec"]))
+            rec.setdefault("stalls", []).extend(stall_tops(out / "runs", c["name"]))
             if r.get("helper_left"):
                 rec["fail"].append("%s 닫은 뒤 도우미 %s개 남음" % (c["name"], r["helper_left"]))
             if r["exit"] or r.get("close_sec") is None:
                 rec["fail"].append("%s 종료 이상: %s" % (c["name"], r["exit"] or "닫히지 않음"))
     finally:
         restore_dir(out)
+
+
+STALL_TOP = 6       # summary 에 옮겨 적는 정지 스택의 메인 스레드 맨 위 줄 수(전체는 runs\<대상>_stall*.txt)
+
+
+def stall_tops(runs: Path, name: str) -> list:
+    """261026-4: 대상의 정지 스택 파일(probe_installed 가 py-spy 로 뜬 것)에서 메인 스레드 맨 위 몇 줄 — summary 에 옮긴다.
+    종전에는 파일만 남고 summary 에 없어 1.0.1 빌드 시험의 1.36~1.37초 정지(study 보류 DB 를 메인에서 처음 만듦·첫 PDF 열기)를
+    사람이 runs 폴더를 열어 봐야 알았다."""
+    out = []
+    for f in sorted(runs.glob("%s_stall*.txt" % name)):
+        lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        i = next((k for k, l in enumerate(lines) if '"MainThread"' in l), None)
+        top = [l.strip() for l in lines[i + 1:] if l.startswith("    ")][:STALL_TOP] if i is not None else []
+        out.append((name, f.name, top))
+    return out
 
 
 def write_summary(out: Path, rec: dict):
@@ -735,6 +752,10 @@ def write_summary(out: Path, rec: dict):
         L += ["", "기준점 `%s`(%s) 과 견줌: %s" % (rec["baseline"], rec.get("baseline_version", "?"),
                                               "회귀 의심 없음" if not rec.get("regress") else "**회귀 의심 %d건**" % len(rec["regress"]))]
         L += ["- " + x for x in rec.get("regress", [])]
+    if rec.get("stalls"):
+        L += ["", "## 정지 순간 메인 스레드(py-spy, 맨 위 %d줄 — 전체는 `runs\\`)" % STALL_TOP]
+        for name, fn, top in rec["stalls"]:
+            L += ["", "- **%s** `%s`" % (name, fn)] + ["  - `%s`" % t for t in top]
     if rec.get("overlap"):
         L += [""] + rec["overlap"]
     verdict = "실패" if rec["fail"] else ("보류(겹침 — 다른 무거운 작업이 없을 때 다시 잰다)" if rec.get("overlapped") else "통과")
