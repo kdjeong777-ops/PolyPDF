@@ -88,7 +88,7 @@ _PENDING_SCHEMA = """
     CREATE TABLE IF NOT EXISTS {p}cleared(file_key TEXT PRIMARY KEY);
 """
 
-# 261026-4(응답성 SOT §6 '메인은 새 파일을 만들지 않는다', 사용자 결정): 보류 DB 는 프로세스마다 **새 파일**이다. 종전에는 본문 첫 쪽을
+# 261026-6(응답성 SOT §6 '메인은 새 파일을 만들지 않는다', 사용자 결정): 보류 DB 는 프로세스마다 **새 파일**이다. 종전에는 본문 첫 쪽을
 #   그리는 메인 스레드의 첫 `StudyStore()` 가 그 파일을 만들었는데, 새 exe(업데이트 직후)가 만드는 새 파일을 백신이 붙들어 1.37초 섰다
 #   (1.0.1 빌드 시험 T1, 정지 스택 `_attach_pending`). 이제 앱 시작 때 배경 스레드가 먼저 만든다(`startup_pending`). 메인의 첫 붙이기는
 #   그것이 끝났으면 바로, 아직이면 `PENDING_READY_WAIT_S` 까지 기다린다 — 기다리지 않고 함께 만들면 잠금 경합으로 '보류 없이 바로 저장' 으로
@@ -189,7 +189,7 @@ class StudyStore:
     # --- 261019-1: 보류 저장소 ---------------------------------------------
     def _attach_pending(self) -> None:
         pp = pending_db_path()
-        wait_pending_ready()                   # 261025-8 보완(261026-4): 배경이 만드는 중이면 끝나기를 짧게 — 메인이 새 파일을 만들지 않게
+        wait_pending_ready()                   # 261025-8 보완(261026-6): 배경이 만드는 중이면 끝나기를 짧게 — 메인이 새 파일을 만들지 않게
         pp.parent.mkdir(parents=True, exist_ok=True)
         self.conn.execute("ATTACH DATABASE ? AS p", (str(pp),))
         try:
