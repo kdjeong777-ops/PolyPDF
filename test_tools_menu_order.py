@@ -71,7 +71,10 @@ MENU = ["OCR 로 읽기 (쪽 범위·언어·워터마크)...",
         "전자서명", "태그 자동 부여", "인덱스 재구축"]   # 261016-3: 하위 메뉴 둘 + 인덱스 재구축, 도구 구역 안에 이어서
 chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다(§2.9.1 예외 — 변환은 이미지→PDF 오른쪽, 동시 생성은 책갈피 아래)", str(head))
 subs = {a.text(): [x.text() for x in a.menu().actions()] for a in menu.actions() if a.menu()}
-chk(subs.get("전자서명", [])[:1] == ["서명..."] and len(subs.get("전자서명", [])) == 7
+# 261031-1: 개수(종전 7) 대신 항목 그대로 — '서명 그림...' 을 빼고 '디지털 ID...' → '디지털 ID 관리...'(보안 SOT §3). 개수만 보면
+#   항목이 바뀐 까닭을 실패 글이 말하지 못하고, 이름 바꿈 검사(test_sot_crossref RENAMED I3)도 숫자는 못 본다
+SIGN_SUB = ["서명...", "그림만 넣기...", "서명 확정...", "서명 편집", "빈 서명 칸 만들기...", "디지털 ID 관리..."]
+chk(subs.get("전자서명", []) == SIGN_SUB
     and subs.get("태그 자동 부여", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 및 용어집 관리", [])) == 10,   # 261019-5: '사용자 뜻 편집' 더함
     "② 전자서명·태그 자동 부여·사전 및 용어집 관리는 하위 메뉴(▸)", str(subs))
 sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
