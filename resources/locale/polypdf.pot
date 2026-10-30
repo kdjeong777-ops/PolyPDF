@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-26 09:46+0900\n"
+"POT-Creation-Date: 2026-10-31 01:01+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1671,11 +1671,7 @@ msgid "빈 서명 칸 만들기..."
 msgstr ""
 
 #: viewer/app.py
-msgid "디지털 ID..."
-msgstr ""
-
-#: viewer/app.py
-msgid "서명 그림..."
+msgid "디지털 ID 관리..."
 msgstr ""
 
 #: viewer/app.py
@@ -3998,6 +3994,18 @@ msgstr ""
 msgid "서명 확인 중…"
 msgstr ""
 
+#: viewer/sign_controller.py
+msgid "이 비밀번호로 열리는 디지털 ID 가 없습니다. 비밀번호를 다시 넣거나 디지털 ID 를 만드세요."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "다시 입력"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "디지털 ID 관리…"
+msgstr ""
+
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "서명할 PDF를 먼저 여세요."
 msgstr ""
@@ -4116,15 +4124,11 @@ msgid "Windows Hello 확인 중"
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 만들까요?"
+msgid "디지털 ID 가 없습니다. 지금 만들까요?"
 msgstr ""
 
-#: viewer/sign_controller.py
-msgid "서명 그림 만들기…"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "그림 없이"
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 확인 중"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -4146,30 +4150,21 @@ msgstr ""
 msgid "빈 서명 칸을 만들었습니다: {name}"
 msgstr ""
 
-#: viewer/sign_controller.py viewer/sign_draft_controller.py
-#: viewer/widgets/sign_dialogs.py
-msgid "Windows Hello 확인"
-msgstr ""
-
-#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
-msgid "디지털 ID 확인 중"
-msgstr ""
-
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid " · 빈 서명 칸 {n}개"
 msgstr ""
 
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 확인"
+msgstr ""
+
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
-msgid "그림만 넣기"
+msgid "서명 그림 넣기…"
 msgstr ""
 
 #: viewer/sign_controller.py
-msgid "서명 그림이 없습니다. 지금 만들까요?"
-msgstr ""
-
-#: viewer/sign_controller.py viewer/sign_draft_controller.py
-msgid "디지털 ID 가 없습니다. 지금 만들까요?"
+msgid "그림 없이"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -4179,14 +4174,6 @@ msgstr ""
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid "이 빈 서명 칸에는 이미 서명 자리가 있습니다: {name}"
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "Windows Hello 를 취소했습니다 — 비밀번호를 넣어 서명할 수 있습니다."
-msgstr ""
-
-#: viewer/sign_controller.py
-msgid "Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. 비밀번호를 넣어 서명하세요 — 서명한 뒤 다시 보관할지 묻습니다."
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -4216,6 +4203,26 @@ msgstr ""
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "서명을 확인하지 못했습니다({e})."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "Windows Hello 를 취소했습니다 — 비밀번호를 넣을 수 있습니다."
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. 비밀번호를 넣으세요 — 맞으면 다시 보관할지 묻습니다."
+msgstr ""
+
+#: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
+msgid "Windows Hello"
+msgstr ""
+
+#: viewer/sign_controller.py
+msgid "이 비밀번호를 Windows Hello 로 다시 보관할까요?"
+msgstr ""
+
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
+msgid "그림만 넣기"
 msgstr ""
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
@@ -4251,6 +4258,11 @@ msgstr ""
 
 #: viewer/sign_controller.py
 #, python-brace-format
+msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 넣을까요?"
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
 msgid "이 칸에 서명하면 문서의 모든 칸이 잠겨 남은 빈 서명 칸 {n}개에 더 서명할 수 없습니다. 계속할까요?"
 msgstr ""
 
@@ -4263,6 +4275,11 @@ msgstr ""
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid "내 디지털 ID 로 한 {m}개는 내보낸 파일의 같은 자리에 다시 서명합니다(서명 시각은 지금, 겉모양은 지금 서명 설정).\n"
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 지금 넣을까요?"
 msgstr ""
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
@@ -4282,8 +4299,16 @@ msgstr ""
 msgid "그림만(전자서명 아님)"
 msgstr ""
 
-#: viewer/sign_draft_controller.py viewer/widgets/study_panel.py
-msgid "그림"
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "디지털 ID"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "다른 디지털 ID 열기…"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "서명 그림"
 msgstr ""
 
 #: viewer/sign_draft_controller.py
@@ -4311,6 +4336,19 @@ msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr ""
 
 #: viewer/sign_draft_controller.py
+msgid "서명 그림 바꾸기…"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/capture_settings.py
+#: viewer/widgets/sign_dialogs.py
+msgid "이름"
+msgstr ""
+
+#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "날짜"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
 msgid "쪽 범위를 읽지 못했습니다. 예: 1-3, 5"
 msgstr ""
 
@@ -4329,6 +4367,10 @@ msgstr ""
 #: viewer/sign_draft_controller.py
 #, python-brace-format
 msgid "전자서명 {a}개 · 그림만 {b}개 (p.{pages})"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '서명 그림 넣기…' 로 넣은 뒤 다시 확정하세요."
 msgstr ""
 
 #: viewer/sign_draft_controller.py
@@ -4377,14 +4419,6 @@ msgstr ""
 msgid "서명 중"
 msgstr ""
 
-#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
-msgid "Windows Hello"
-msgstr ""
-
-#: viewer/sign_draft_controller.py
-msgid "이 비밀번호를 Windows Hello 로 다시 보관할까요?"
-msgstr ""
-
 #: viewer/sign_draft_controller.py
 msgid "작성자가 인증한 문서입니다 — 새 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다. 문서에 빈 서명 칸이 있으면 그 칸에만 서명할 수 있습니다."
 msgstr ""
@@ -4428,6 +4462,10 @@ msgid "서명하면 문서의 모든 칸이 잠깁니다"
 msgstr ""
 
 #: viewer/sign_draft_controller.py
+msgid "이 디지털 ID 를 열지 않았습니다. 서명을 다시 시작하세요."
+msgstr ""
+
+#: viewer/sign_draft_controller.py
 msgid "Windows 가 물은 PIN·확인을 취소했습니다."
 msgstr ""
 
@@ -4454,10 +4492,6 @@ msgstr ""
 #: viewer/sign_draft_controller.py
 #, python-brace-format
 msgid "서명 칸: {name} (p.{page})"
-msgstr ""
-
-#: viewer/sign_draft_controller.py
-msgid "디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."
 msgstr ""
 
 #: viewer/sign_draft_controller.py
@@ -5997,10 +6031,6 @@ msgstr ""
 
 #: viewer/widgets/capture_settings.py
 msgid "캡쳐 박스의 사용자 크기 5개 (이름·가로·세로 픽셀)"
-msgstr ""
-
-#: viewer/widgets/capture_settings.py viewer/widgets/sign_dialogs.py
-msgid "이름"
 msgstr ""
 
 #: viewer/widgets/capture_settings.py
@@ -8868,6 +8898,10 @@ msgid "읽을 수 없음"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "서명 내용이 없습니다 — 서명 그림이나 겉모양 글자(이름·날짜·사유)를 하나 이상 켜세요."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "이 PC 에서는 Windows Hello 를 쓸 수 없습니다. 비밀번호를 Google 비밀번호 관리자에 저장해 두고 복사해 붙여넣을 수 있습니다(Ctrl+V). 붙여넣은 비밀번호는 Windows 클립보드 기록(Win+V)에 남을 수 있습니다."
 msgstr ""
 
@@ -8884,7 +8918,7 @@ msgid "손으로 그리기"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "서명 그림 만들기"
+msgid "서명 그림 넣기"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -8909,10 +8943,6 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "잉크 색"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "기본"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -8960,7 +8990,15 @@ msgid "직접 만든 디지털 ID 는 받는 사람의 PDF 뷰어에서 '신원 
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "디지털 ID"
+msgid "(서명 그림 없음 — 글자만 찍힙니다)"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 그림 바꾸기"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "디지털 ID 관리"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -8985,6 +9023,10 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "Windows Hello 보관"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "서명 그림…"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9124,15 +9166,11 @@ msgid "서명에 쓸 인증서를 고르세요. 키는 복사하지 않습니다
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "(그림 없음)"
+msgid "서명 — 본인 확인"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "서명 그림"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "날짜"
+msgid "디지털 ID 비밀번호(붙여넣기 가능)"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9140,7 +9178,7 @@ msgid "사유"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
-msgid "겉모양 글자"
+msgid "겉모양"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9189,14 +9227,6 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "겉모양 미리보기"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "디지털 ID 비밀번호(붙여넣기 가능)"
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "Windows Hello 로 서명"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9276,6 +9306,10 @@ msgid "  · Windows 저장소"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "  · 서명 그림"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "디지털 ID 만드는 중"
 msgstr ""
 
@@ -9289,6 +9323,18 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "인증서 저장소 읽는 중"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 디지털 ID 에는 서명 그림이 있습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "바꾸기…"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "빼기"
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9345,6 +9391,10 @@ msgid "인증서를 고르세요."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
+msgid "Windows Hello 로 확인"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
 msgid "서명 칸"
 msgstr ""
 
@@ -9382,6 +9432,10 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 msgid "실제 서명과 같은 그리기 — 날짜는 서명하는 때의 시각으로 바뀝니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "이 디지털 ID 에는 서명 그림이 없습니다 — 디지털 ID 관리에서 넣을 수 있습니다."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9449,6 +9503,11 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
+msgid "서명에 쓸 디지털 ID 를 엽니다(이 PC 의 디지털 ID {n}개). 비밀번호가 맞는 ID 로 서명하고, 여럿이면 기본 ID(없으면 첫 ID)로 시작합니다 — 서명 자리 우클릭에서 바꿀 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
 msgid "이 쪽만 (p.{n})"
 msgstr ""
 
@@ -9460,10 +9519,6 @@ msgstr ""
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "서명한 결과는 새 파일 '{name}' 로 저장되고 원본은 그대로입니다. 서명한 파일을 PolyPDF 에서 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-msgid "겉모양에 쓸 한글 글꼴이 없습니다 — 서명 그림을 고르거나 겉모양 글자를 끄세요."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9555,7 +9610,16 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
+msgid "Windows Hello 로 확인 — {name}"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
 msgid "전자서명 — {name}"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+msgid "겉모양에 쓸 한글 글꼴이 없습니다 — 서명 그림을 고르거나 겉모양 글자를 끄세요."
 msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
@@ -9609,11 +9673,6 @@ msgstr ""
 
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
-msgid "미리보기를 만들지 못했습니다({e})."
-msgstr ""
-
-#: viewer/widgets/sign_dialogs.py
-#, python-brace-format
 msgid ""
 "서명 시점 판을 저장했습니다. 지금 열까요?\n"
 "{name}"
@@ -9627,6 +9686,11 @@ msgstr ""
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
 msgid "인증서를 읽지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "미리보기를 만들지 못했습니다({e})."
 msgstr ""
 
 #: viewer/widgets/sign_draft_layer.py
@@ -9711,6 +9775,10 @@ msgstr ""
 
 #: viewer/widgets/study_panel.py
 msgid "사전 뜻 끝에 출처(참고문헌)를 표시합니다."
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "그림"
 msgstr ""
 
 #: viewer/widgets/study_panel.py

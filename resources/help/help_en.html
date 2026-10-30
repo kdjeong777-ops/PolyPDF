@@ -228,32 +228,33 @@
 
 <h3>10-1. Digital signature (button to the right of Crop on the page toolbar · Tools → Digital Signature ▸)</h3>
 <ul>
-  <li><b>Signature Image...</b>: load a photo of your signature on paper (or a transparent PNG). The background is removed, you pick the ink color
-    (Original · Black · Blue), and it is cropped to the signature and saved under a name. An image on the clipboard works too.</li>
-  <li><b>Digital IDs...</b>: create a new digital ID (name · email · validity · password) or import an existing .pfx/.p12.
+  <li><b>Manage Digital IDs...</b>: create a new digital ID (name · email · validity · password) or import an existing .pfx/.p12.
+    Each digital ID holds one <b>signature image</b> — <b>Add Signature Image</b> at the bottom of the new-ID window, or <b>Signature Image…</b> in the manager later.
+    Load a photo of your signature on paper (or a transparent PNG, a clipboard image, or draw by hand): the background is removed, you pick the ink color (Original · Black · Blue), and it is cropped to the signature.
     After creating one, use <b>Export Backup</b> to keep the .pfx somewhere safe — if the PC fails you cannot sign with the same ID again.
     Give the <b>public certificate</b> (.cer, Export Public Certificate) to the people who receive your documents.
     <b>Import Korean Certificate (NPKI)…</b> finds Korean certificates in NPKI folders on the PC or a USB drive and imports one with its certificate password (the original folder is unchanged; the password stays the same).
     <b>From Windows Certificate Store…</b> uses a certificate held by Windows (including smart cards and USB tokens) without copying the key — Windows may ask for a PIN when you sign.</li>
-  <li><b>Signing — place, then confirm once</b>: press the digital signature button to the right of Crop (or Tools → Sign...) and drag on the page where the signature image goes
-    (a single click uses the default size). <b>Right-click → Sign Here…</b> places one with the default size at that spot.
-    Dragging does not sign yet — it makes a <b>signature place</b> (dashed box): drag it to move, use the bottom-right corner to resize (keeps the image ratio; hold Shift for free), press Delete to remove. You can put several on one page.
-    Its right-click menu offers 'Image only (not a digital signature)' and 'Place on Other Pages…'. Drawing tools of edit mode are turned off when you press the signature button.
-    When done, press <b>Confirm Signatures…</b> in the band above the page, choose the digital ID, signature image and appearance text (name · date · reason),
-    then <b>Sign with Windows Hello</b> or enter the password and press <b>Confirm Signatures</b>. All places are signed at once into a <b>new file 'name_signed.pdf'</b>; the original stays unchanged.
+  <li><b>Signing — place, then confirm once</b>: press the digital signature button to the right of Crop (or Tools → Sign...). First you <b>confirm it is you</b> once —
+    <b>Confirm with Windows Hello</b> or a digital ID password. The IDs that password opens are the ones you can sign with; with several, the default ID (or the first) is used
+    (if none opens, enter it again or create a digital ID). Then drag on the page where the signature image goes (a single click puts the default size with its top-left at that spot). <b>Right-click → Sign Here…</b> works the same.
+    Dragging does not sign yet — it makes a <b>signature place</b> (dashed box; the page shows through): drag it to move, use the bottom-right corner to resize (keeps the image ratio; hold Shift for free), press Delete to remove. You can put several on one page.
+    Its right-click menu switches the <b>digital ID</b> (among the opened ones) and turns the <b>signature image</b>, <b>name</b> and <b>date</b> on or off, and offers 'Add Signature Image…', 'Image only (not a digital signature)' and 'Place on Other Pages…' — your choices are kept for next time. Drawing tools of edit mode are turned off when you press the signature button.
+    When done, press <b>Confirm Signatures…</b> in the band above the page, check the digital ID, signature image and appearance text (name · date · reason) and press <b>Confirm Signatures</b> (no password again).
+    If both the image and all text are off, nothing is signed ('nothing to show'). Image and text sit at the left of the signature box. All places are signed at once into a <b>new file 'name_signed.pdf'</b>; the original stays unchanged.
     You cannot place signatures in two-page view. Rotated pages are signed in the text direction.</li>
   <li><b>Changing a signature</b>: a signed file shows <b>Edit Signatures</b> in the band above the page (for signatures made with your digital ID). It turns the signatures back into places — move, resize or delete them, then <b>Confirm Signatures…</b> replaces that signed file.
     It is not possible when someone else's signature comes after yours.</li>
-  <li><b>Image only</b>: <b>Tools → Insert Image Only...</b> puts only a registered signature image, without a digital signature (the image has no signature effect). Placing and confirming work as for signatures.</li>
+  <li><b>Image only</b>: <b>Tools → Insert Image Only...</b> puts only the digital ID's signature image, without a digital signature (the image has no signature effect; the same identity check applies). The image keeps its ratio at the top-left of the box you drag; the rest stays empty. Placing and confirming work as for signatures.</li>
   <li><b>More choices in the signing window</b>: <b>Signature type</b> — approval signature (default) or certification (no changes / form filling and signing allowed / comments, forms and signing allowed; only as the document's first signature) ·
     <b>Text layout</b> — image above, text below (default — the image fills the dragged box, the text goes below it and wraps so it is never cut off) / over the image / image left, text right ·
-    <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default). The signature image window also offers <b>Draw by Hand…</b>.</li>
+    <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default).</li>
   <li><b>Empty signature fields</b>: <b>Tools → Create Empty Signature Field...</b> lets you drag a place on the page and name it (e.g. Approver); the recipient then signs in that field.
     A document with empty fields shows 'empty signature field' in the band above the page, and the signature button offers <b>Sign in an empty field</b> (dragging inside a field or right-clicking in it also signs that field).
     A document certified by its author can be signed only in its empty fields.
     When creating a field you can designate the <b>signer</b> by that person's public certificate (.cer), and <b>Lock all fields in the document when this field is signed</b> prevents any further change or signature after that signature (use it on the last signature field).</li>
-  <li><b>Password</b>: on a PC with Windows Hello (fingerprint · PIN) the password is locked with Windows Hello when you create the ID, and signing only asks
-    for Windows Hello. Without Windows Hello, keep the password in a password manager such as Google Password Manager and paste it (Ctrl+V).
+  <li><b>Password</b>: on a PC with Windows Hello (fingerprint · PIN) the password is locked with Windows Hello when you create the ID, and starting to sign only asks
+    for Windows Hello; the opened key is used only until you confirm or cancel that signing. Without Windows Hello, keep the password in a password manager such as Google Password Manager and paste it (Ctrl+V).
     PolyPDF never stores the password in plain text.</li>
   <li><b>Checking signatures</b>: a signed document shows a band above the page — ✅ Valid · Trusted / ⚠ Valid · Identity unknown / ⚠ Changed after signing / ❌ Invalid.
     <b>Signatures</b> shows the signer, time and certificate fingerprint; <b>Trust This Certificate</b> adds it (only after confirming the fingerprint with that person). <b>Save Signed Version…</b> saves the file exactly as it was when that signature was made.</li>

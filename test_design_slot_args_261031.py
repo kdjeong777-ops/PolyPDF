@@ -19,8 +19,8 @@ OK_NAMES = {"checked", "_checked", "on", "state", "flag", "enabled", "visible", 
 # (파일 이름, 처리기 이름): 까닭 — 기본값 인자를 일부러 checked 로 받는 것
 ALLOW = {}
 # 찾았지만 그 파일을 다른 세션이 고치는 중이라 아직 못 고친 것 — 고치면 여기서 뺀다(남아 있는데 고쳐졌으면 실패, 목록은 줄기만).
-#   app.py 인쇄: checked(False) 가 preset_scope 로 — 지금은 'current'·'thumb' 가 아니라 None 처럼 동작(261031-3 보고, 서명 세션 몫)
-PENDING = {("app.py", "action_print")}
+#   (app.py 인쇄 — 261031-3 보고분은 서명 세션이 `_no_checked` 로 고쳤다, 261031-1)
+PENDING = set()
 fails = []
 
 

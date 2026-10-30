@@ -27,7 +27,7 @@ def root() -> Path:
 
 def _empty() -> dict:
     return {"ids": [], "default_id": "", "images": [], "default_image": "",
-            "appearance": {"show_name": True, "show_date": True, "show_reason": False, "layout": "image_top"},
+            "appearance": {"show_image": True, "show_name": True, "show_date": True, "show_reason": False, "layout": "image_top"},
             "appearance_rev": APPEARANCE_REV,
             "last_reason": "", "last_location": "", "trusted": [],
             "tsa_on": False, "tsa_url": ""}                 # 2단계(보안 SOT §3.6): 타임스탬프 — 끄는 것이 기본
@@ -61,6 +61,12 @@ def load() -> dict:
                 # 사용자 지시(261012-1) '기본값을 그림 위·글자 아래로' — 옛 기본(겹쳐)이 저장돼 있어 기본만 바꾸면 안 바뀐다
                 data["appearance"] = dict(data["appearance"], layout="image_top")
                 data["appearance_rev"] = APPEARANCE_REV
+            # 261031-1(보안 SOT §3.1·§9): 서명 그림은 디지털 ID 마다 하나 — 그림이 없는 옛 ID 는 옛 기본 그림을 쓴다(파일은 그대로 공유)
+            old = next((x for x in data["images"] if x.get("name") == data.get("default_image")), None)
+            if old:
+                for e in data["ids"]:
+                    if "image" not in e:
+                        e["image"] = old.get("file", "")
     except FileNotFoundError:
         pass
     except Exception:
@@ -108,6 +114,7 @@ def add_id(pfx: bytes, info, source: str = "") -> dict:
     if source:
         entry["source"] = source
     entry.setdefault("hello", False)
+    entry.setdefault("image", "")                   # 서명 그림은 ID 마다(261031-1) — 새 ID 는 옛 기본 그림을 물려받지 않는다
     if not d["default_id"]:
         d["default_id"] = info.fp
     # 내 디지털 ID 는 자동 신뢰(SOT §5)
@@ -134,6 +141,7 @@ def add_win_id(sc) -> dict:
     entry.pop("source", None)
     entry.update(name=sc.name, email=sc.email, org=sc.org, not_after=sc.not_after, kind="win",
                  thumb=sc.thumb, cert=rel, hello=False)
+    entry.setdefault("image", "")
     if not d["default_id"]:
         d["default_id"] = sc.fp
     if sc.fp not in d["trusted"]:
@@ -173,6 +181,12 @@ def remove_id(fp: str) -> None:
             except Exception:
                 pass
         d["ids"] = [x for x in d["ids"] if x.get("fp") != fp]
+        rel = e.get("image", "")
+        if rel and rel.startswith(_ID_IMAGE_PREFIX) and not any(x.get("image") == rel for x in d["ids"]):
+            try:
+                abspath(rel).unlink(missing_ok=True)     # 그 ID 만의 서명 그림(옛 공유 그림은 남긴다)
+            except Exception:
+                pass
         if d["default_id"] == fp:
             d["default_id"] = d["ids"][0]["fp"] if d["ids"] else ""
         save(d)
@@ -183,7 +197,48 @@ def remove_id(fp: str) -> None:
         pass
 
 
-# ---- 서명 그림 -----------------------------------------------------------------
+# ---- 서명 그림 — 디지털 ID 마다 하나 (261031-1, SOT §3.1) ----------------------
+
+_ID_IMAGE_PREFIX = "images/id_"
+
+
+def set_id_image(fp: str, img) -> str:
+    """정리한 RGBA 그림을 그 ID 의 서명 그림 `images\\id_<지문16>.png` 로(있으면 바꾼다). 상대 경로를 돌려준다."""
+    rel = f"{_ID_IMAGE_PREFIX}{fp[:16]}.png"
+    path = abspath(rel)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    img.save(str(tmp), "PNG")
+    os.replace(tmp, path)
+    d = load()
+    for e in d["ids"]:
+        if e.get("fp") == fp:
+            e["image"] = rel
+    save(d)
+    return rel
+
+
+def clear_id_image(fp: str) -> None:
+    d = load()
+    for e in d["ids"]:
+        if e.get("fp") == fp:
+            rel = e.get("image", "")
+            e["image"] = ""
+            if rel.startswith(_ID_IMAGE_PREFIX) and not any(x.get("image") == rel for x in d["ids"] if x is not e):
+                try:
+                    abspath(rel).unlink(missing_ok=True)
+                except Exception:
+                    pass
+    save(d)
+
+
+def id_image_path(fp: str) -> str:
+    """그 ID 의 서명 그림 경로 — 없으면 ''."""
+    e = get_id(fp) or {}
+    rel = e.get("image", "")
+    p = abspath(rel) if rel else None
+    return str(p) if p is not None and p.exists() else ""
+
 
 _BAD = re.compile(r'[\\/:*?"<>|]+')
 

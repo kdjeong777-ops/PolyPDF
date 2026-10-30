@@ -490,6 +490,23 @@ def _has_image(app: Appearance) -> bool:
     return bool(app.image_path and os.path.exists(app.image_path))
 
 
+def has_content(app: Appearance, signer_text: str = "", reason: str = "") -> bool:
+    """겉모양에 그릴 것이 있나 — 그림이나 글자 줄 하나. 둘 다 없으면 서명하지 않는다(261031-1, SOT §3.3 —
+    종전에는 pyHanko 기본 글자 `%(signer)s` 를 찍어 미리보기에 엉뚱한 글자가 나왔다)."""
+    return _has_image(app) or bool(_text_lines(app, signer_text, reason))
+
+
+def fit_left(box, img_w: float, img_h: float) -> tuple:
+    """상자 안에 그림을 **비율 그대로** 가장 크게 — 왼쪽 위에 붙이고 남는 오른쪽·아래는 비운다(261031-1, SOT §3.11).
+    `box` = (x0, y0, x1, y1) 왼쪽 위 원점(fitz·화면 좌표)."""
+    x0, y0, x1, y1 = (float(v) for v in box)
+    w, h = max(0.0, x1 - x0), max(0.0, y1 - y0)
+    if img_w <= 0 or img_h <= 0 or w <= 0 or h <= 0:
+        return (x0, y0, x1, y1)
+    k = min(w / img_w, h / img_h)
+    return (x0, y0, x0 + img_w * k, y0 + img_h * k)
+
+
 def stamp_size(app: Appearance, signer_text: str, reason: str, width_pt: float, height_pt: float) -> tuple:
     """끈 상자(= 그림 자리) → 실제 서명 영역 (폭, 높이). '그림 위·글자 아래' 에서 그림과 글자가 둘 다 있으면
     글자 줄을 상자 **아래에 덧붙인다**(SOT §3.6). 그 밖은 상자 그대로."""
@@ -547,44 +564,48 @@ def _stamp_style(app: Appearance, signer_text: str, reason: str, box_w: float = 
     if _has_image(app):
         from PIL import Image
         bg = PdfImage(Image.open(app.image_path).convert("RGBA"))
+    from pyhanko.pdf_utils.layout import AxisAlignment as _AA, SimpleBoxLayoutRule as _SB, InnerScaling as _IS
+    # 261031-1(사용자 지시): 그림·글자는 상자 **왼쪽**에 붙인다(종전 가운데)
+    _img_left = _SB(x_align=_AA.ALIGN_MIN, y_align=_AA.ALIGN_MID, inner_content_scaling=_IS.STRETCH_TO_FIT)
     raw = _text_lines(app, signer_text, reason)
     if not raw:
         if bg is None:
-            return stamp.TextStampStyle(stamp_text="%(signer)s", border_width=0)
-        return stamp.StaticStampStyle(background=bg, background_opacity=1, border_width=0)
+            raise SignError("empty_appearance")       # 261031-1: 그릴 것이 없다 — 종전 '%(signer)s' 기본 글자를 찍지 않는다
+        return stamp.StaticStampStyle(background=bg, background_opacity=1, border_width=0, background_layout=_img_left)
     font_ok = bool(app.font_path and os.path.exists(app.font_path) and app.font_path.lower().endswith((".ttf", ".otf")))
     if not font_ok and any(ord(c) > 127 for c in (signer_text + reason)):
         # 한글을 쓸 글꼴이 없다 — 깨진 글자를 넣지 않는다(그림만, 그림도 없으면 거부)
         if bg is not None:
-            return stamp.StaticStampStyle(background=bg, background_opacity=1, border_width=0)
+            return stamp.StaticStampStyle(background=bg, background_opacity=1, border_width=0, background_layout=_img_left)
         raise SignError("no_font")
     layout = app.layout or LAYOUT_DEFAULT
     w, h = max(1.0, float(box_w or 0)), max(1.0, float(box_h or 0))
     mid, lo = AxisAlignment.ALIGN_MID, AxisAlignment.ALIGN_MIN
     fit, shrink = InnerScaling.STRETCH_TO_FIT, InnerScaling.SHRINK_TO_FIT
+    # 261031-1(사용자 지시): 가로는 모두 왼쪽 정렬(`lo`) — 그림·글자 줄이 상자 왼쪽에 붙고 남는 오른쪽은 빈다
     if bg is None:                               # 글자만 — 상자 가득
         tl = text_layout(app, signer_text, reason, w, h)
-        kw = {"inner_content_layout": SimpleBoxLayoutRule(x_align=mid, y_align=mid, margins=Margins.uniform(TEXT_PAD_PT),
+        kw = {"inner_content_layout": SimpleBoxLayoutRule(x_align=lo, y_align=mid, margins=Margins.uniform(TEXT_PAD_PT),
                                                           inner_content_scaling=shrink)}
     elif layout == "image_left":
         half = w / 2.0
         tl = text_layout(app, signer_text, reason, half, h)
-        kw = {"background_layout": SimpleBoxLayoutRule(x_align=mid, y_align=mid, margins=Margins(0, half, 0, 0),
+        kw = {"background_layout": SimpleBoxLayoutRule(x_align=lo, y_align=mid, margins=Margins(0, half, 0, 0),
                                                        inner_content_scaling=fit),
               "inner_content_layout": SimpleBoxLayoutRule(x_align=lo, y_align=mid,
                                                           margins=Margins(half + TEXT_PAD_PT, TEXT_PAD_PT, TEXT_PAD_PT, TEXT_PAD_PT),
                                                           inner_content_scaling=shrink)}
     elif layout == "overlay":
         tl = text_layout(app, signer_text, reason, w, h)
-        kw = {"background_layout": SimpleBoxLayoutRule(x_align=mid, y_align=mid, inner_content_scaling=fit),
-              "inner_content_layout": SimpleBoxLayoutRule(x_align=mid, y_align=mid, margins=Margins.uniform(TEXT_PAD_PT),
+        kw = {"background_layout": SimpleBoxLayoutRule(x_align=lo, y_align=mid, inner_content_scaling=fit),
+              "inner_content_layout": SimpleBoxLayoutRule(x_align=lo, y_align=mid, margins=Margins.uniform(TEXT_PAD_PT),
                                                           inner_content_scaling=shrink)}
     else:                                        # image_top — 위 그림(비율 유지, 꽉 차게) · 아래 글자 줄
         tl = text_layout(app, signer_text, reason, w)
         strip = min(tl.height, h * 0.9)
-        kw = {"background_layout": SimpleBoxLayoutRule(x_align=mid, y_align=mid, margins=Margins(0, 0, 0, strip),
+        kw = {"background_layout": SimpleBoxLayoutRule(x_align=lo, y_align=mid, margins=Margins(0, 0, 0, strip),
                                                        inner_content_scaling=fit),
-              "inner_content_layout": SimpleBoxLayoutRule(x_align=mid, y_align=mid,
+              "inner_content_layout": SimpleBoxLayoutRule(x_align=lo, y_align=mid,
                                                           margins=Margins(TEXT_PAD_PT, TEXT_PAD_PT,
                                                                           max(0.0, h - strip) + TEXT_PAD_PT, TEXT_PAD_PT),
                                                           inner_content_scaling=shrink)}
@@ -604,8 +625,9 @@ def _stamp_style(app: Appearance, signer_text: str, reason: str, box_w: float = 
 
 def preview_png(app: "Appearance", signer_text: str, reason: str, width_pt: float, height_pt: float,
                 dpi: int = 110) -> bytes:
-    """서명 겉모양 미리보기 PNG — **서명과 같은 그리기**(`_stamp_style` → pyHanko `create_stamp`)를 흰 쪽에 찍는다
-    (보안 SOT §3.3). 0.2~0.4초(글꼴 부분집합) — 배경 스레드에서 부른다. 그릴 수 없으면 SignError(no_font)."""
+    """서명 겉모양 미리보기 PNG — **서명과 같은 그리기**(`_stamp_style` → pyHanko `create_stamp`)를 **투명 바탕**에 찍는다
+    (보안 SOT §3.3 — 261031-1: 서명 자리 아래의 본문이 보이게. 종전 흰 바탕은 자리 밑 글을 가렸다).
+    0.2~0.4초(글꼴 부분집합) — 배경 스레드에서 부른다. 그릴 수 없으면 SignError(no_font·empty_appearance)."""
     import fitz
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     from pyhanko.pdf_utils.layout import BoxConstraints
@@ -613,7 +635,8 @@ def preview_png(app: "Appearance", signer_text: str, reason: str, width_pt: floa
     h = max(8.0, float(height_pt))
     d = fitz.open()
     pg = d.new_page(width=w, height=h)
-    pg.draw_rect(pg.rect, color=None, fill=(1, 1, 1))     # 내용이 있어야 pyHanko 가 찍는다(/Contents 없으면 실패, 실측)
+    # 내용이 있어야 pyHanko 가 찍는다(/Contents 없으면 실패, 실측) — 보이지 않는 사각형 하나
+    pg.draw_rect(pg.rect, color=None, fill=(1, 1, 1), fill_opacity=0)
     data = d.tobytes()
     d.close()
     style = _stamp_style(app, signer_text, reason, w, h)
@@ -624,7 +647,7 @@ def preview_png(app: "Appearance", signer_text: str, reason: str, width_pt: floa
     wr.write(out)
     pd = fitz.open("pdf", out.getvalue())
     try:
-        return pd[0].get_pixmap(dpi=dpi).tobytes("png")
+        return pd[0].get_pixmap(dpi=dpi, alpha=True).tobytes("png")
     finally:
         pd.close()
 
@@ -1041,7 +1064,14 @@ def insert_images(src, dst, items, doc_password: str = "") -> None:
             if not (img and os.path.exists(img)) or not (0 <= int(pg_i) < d.page_count):
                 continue
             page = d[int(pg_i)]
-            r = fitz.Rect(box)
+            # 261031-1(사용자 지시): 비율 그대로 상자 **왼쪽 위**에 — 남는 오른쪽·아래는 빈다(종전 keep_proportion 은 가운데)
+            try:
+                from PIL import Image
+                with Image.open(str(img)) as _im:
+                    iw, ih = _im.size
+            except Exception:
+                iw = ih = 0
+            r = fitz.Rect(fit_left(box, iw, ih))
             rot = int(page.rotation) % 360
             if rot:
                 r = r * page.derotation_matrix

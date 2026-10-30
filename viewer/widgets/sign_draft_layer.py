@@ -38,7 +38,14 @@ class _DraftBox(QWidget):
         r = self.rect()
         pix = self.d.get("pix")
         if pix is not None and not pix.isNull():
-            p.drawPixmap(r, pix)
+            if self.d.get("kind") == "image":
+                # 261031-1(사용자 지시): 그림만 — 비율 그대로 왼쪽 위에(넣을 때와 같은 `sign_core.fit_left`), 남는 곳은 빈다
+                from viewer.sign_core import fit_left
+                x0, y0, x1, y1 = fit_left((r.left(), r.top(), r.left() + r.width(), r.top() + r.height()),
+                                          pix.width(), pix.height())
+                p.drawPixmap(QRectF(x0, y0, x1 - x0, y1 - y0).toRect(), pix)
+            else:
+                p.drawPixmap(r, pix)                 # 전자서명 미리보기는 자리 크기 그대로 그렸다(투명 바탕)
         else:
             p.fillRect(r, QColor(21, 101, 192, 28))
         pen = QPen(QColor(ACCENT))

@@ -66,16 +66,142 @@ class SignMixin(SignDraftMixin):
         finally:
             dlg.deleteLater()        # 안의 비밀번호 칸까지 — 창마다 남겨 두지 않는다(SOT §6.4, 261011-1)
 
-    def action_sign_image(self) -> str:
+    def _sign_id_image(self, fp: str) -> bool:
+        """그 디지털 ID 의 서명 그림 넣기(261031-1 — ID 하나에 그림 하나). 넣었으면 True."""
         from viewer.widgets.sign_dialogs import SignImageDialog
-        dlg = SignImageDialog(self)
-        dlg.exec()
-        return dlg.saved_name
+        dlg = SignImageDialog(self, fp=fp)
+        try:
+            return dlg.exec() == dlg.DialogCode.Accepted and dlg.result_image is not None
+        finally:
+            dlg.deleteLater()
+
+    # ---- 서명 시작 확인 — 한 번 열고 확정·취소까지 (SOT §3.3·§6.4, 261031-1) -----------
+    def _sign_lock(self) -> None:
+        """연 디지털 ID 열쇠를 버린다 — 서명 확정·확정 창 취소·자리 모두 지우기 때(사용자 결정 261031-1 '확정·취소까지만')."""
+        self._sign_unlocked = {}
+        self._sign_cur_fp = ""
+
+    def _sign_creds(self) -> dict:
+        return getattr(self, "_sign_unlocked", None) or {}
+
+    def _sign_current_fp(self) -> str:
+        """지금 쓰는 ID — 연 것 중 고른 것, 없으면 기본 ID(열렸으면), 아니면 연 것 중 첫째(목록 차례)."""
+        creds = self._sign_creds()
+        if not creds:
+            return ""
+        cur = getattr(self, "_sign_cur_fp", "")
+        if cur in creds:
+            return cur
+        from viewer import sign_store
+        d = sign_store.load()
+        if d.get("default_id") in creds:
+            return d["default_id"]
+        return next((e["fp"] for e in d["ids"] if e.get("fp") in creds), next(iter(creds)))
+
+    def _sign_unlock(self, more: bool = False) -> bool:
+        """서명을 시작할 때 한 번 — 비밀번호 또는 Windows Hello 로 쓸 수 있는 디지털 ID 를 연다.
+        이미 열었으면(그리고 `more` 가 아니면) 묻지 않는다. 연 ID 가 없으면 다시 입력하거나 디지털 ID 를 만들게 한다."""
+        from viewer import sign_core, sign_store
+        if self._sign_creds() and not more:
+            return True
+        d = sign_store.load()
+        if not d["ids"]:
+            if QMessageBox.question(self, tr("서명"), tr("디지털 ID 가 없습니다. 지금 만들까요?")) != QMessageBox.StandardButton.Yes:
+                return False
+            self.action_digital_ids()
+            d = sign_store.load()
+            if not d["ids"]:
+                return False
+        creds = dict(self._sign_creds())
+        # Windows 저장소 ID 는 PolyPDF 가 비밀번호를 묻지 않는다 — 서명할 때 Windows 가 PIN 을 묻는다(SOT §3.9)
+        for e in d["ids"]:
+            if e.get("kind") == "win":
+                creds.setdefault(e["fp"], ("win", e.get("thumb", ""), None))
+        pfx_ids = [e for e in d["ids"] if e.get("kind") != "win" and e["fp"] not in creds]
+        if not pfx_ids:
+            self._sign_unlocked = creds
+            return bool(creds)
+        hello_ok = self._sign_hello_ready()
+        from viewer import sign_hello
+        hello_ids = [e for e in pfx_ids if e.get("hello") and sign_hello.has(e["fp"])] if hello_ok else []
+        hello_e = next((e for e in hello_ids if e["fp"] == d.get("default_id")), hello_ids[0] if hello_ids else None)
+        from viewer.widgets.sign_dialogs import SignUnlockDialog
+        while True:
+            dlg = SignUnlockDialog(self, hello_ok=hello_ok, hello_name=(hello_e or {}).get("name", ""), n_ids=len(d["ids"]))
+            try:
+                if dlg.exec() != dlg.DialogCode.Accepted:
+                    return False
+                mode, pw = dlg.mode, dlg.password()
+            finally:
+                dlg.ed_pw.clear()                # 칸에 남기지 않는다(SOT §6.4)
+                dlg.deleteLater()
+            got = {}
+            if mode == "hello" and hello_e is not None:
+                fp = hello_e["fp"]
+                try:
+                    hpw = self._sign_bg(lambda: sign_hello.recall(fp), tr("Windows Hello 확인"))
+                    pfx = sign_store.read_pfx(fp)
+                    self._sign_bg(lambda: sign_core.load_pfx(pfx, hpw), tr("디지털 ID 확인 중"))
+                    got[fp] = ("pfx", pfx, hpw)
+                except sign_hello.HelloCancelled:
+                    self.status.showMessage(tr("Windows Hello 를 취소했습니다 — 비밀번호를 넣을 수 있습니다."), 6000)
+                    continue
+                except Exception:
+                    QMessageBox.information(self, tr("서명"), tr("Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. 비밀번호를 넣으세요 — 맞으면 다시 보관할지 묻습니다."))
+                    self._sign_rehello = fp
+                    continue
+            else:
+                def _try(ids=tuple(e["fp"] for e in pfx_ids), pw_=pw):
+                    ok = {}
+                    for fp_ in ids:
+                        try:
+                            pfx_ = sign_store.read_pfx(fp_)
+                            sign_core.load_pfx(pfx_, pw_)
+                            ok[fp_] = ("pfx", pfx_, pw_)
+                        except Exception:
+                            pass
+                    return ok
+                got = self._sign_bg(_try, tr("디지털 ID 확인 중"))
+            if got:
+                creds.update(got)
+                self._sign_unlocked = creds
+                rh = getattr(self, "_sign_rehello", None)
+                if rh and rh in got and mode != "hello":            # SOT §6.1 '꺼내지 못할 때'
+                    self._sign_rehello = None
+                    if QMessageBox.question(self, tr("Windows Hello"), tr("이 비밀번호를 Windows Hello 로 다시 보관할까요?")) == QMessageBox.StandardButton.Yes:
+                        try:
+                            self._sign_bg(lambda: sign_hello.store(rh, got[rh][2]), tr("Windows Hello 확인"))
+                            sign_store.set_id_flag(rh, hello=True)
+                        except Exception:
+                            pass
+                if more:
+                    self._sign_cur_fp = next(iter(got))
+                return True
+            # 쓸 수 있는 ID 가 없다 — 다시 입력하거나 디지털 ID 를 만든다(261031-1, 사용자 지시)
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle(tr("서명"))
+            box.setText(tr("이 비밀번호로 열리는 디지털 ID 가 없습니다. 비밀번호를 다시 넣거나 디지털 ID 를 만드세요."))
+            b_again = box.addButton(tr("다시 입력"), QMessageBox.ButtonRole.AcceptRole)
+            b_make = box.addButton(tr("디지털 ID 관리…"), QMessageBox.ButtonRole.ActionRole)
+            box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(b_again)
+            box.exec()
+            c = box.clickedButton()
+            if c is b_make:
+                self.action_digital_ids()
+                d = sign_store.load()
+                pfx_ids = [e for e in d["ids"] if e.get("kind") != "win" and e["fp"] not in creds]
+                if not pfx_ids:
+                    return False
+            elif c is not b_again:
+                return False
 
     def action_sign_pdf(self, at_scene=None, kind: str = "sign"):
         """도구 '서명' — 사전 점검 뒤 본문에서 서명 자리를 끌게 한다(SOT §3·§3.3·§3.10).
         `at_scene`(scene 점, 본문 우클릭 '여기에 서명…')이면 끌지 않고 그 자리에 기본 크기로 자리를 놓는다(S6).
-        `kind="image"` 면 그림만 자리(§3.11) — 디지털 ID 가 없어도 된다."""
+        `kind="image"` 면 그림만 자리(§3.11) — 같은 확인 뒤 그 ID 의 서명 그림(사용자 결정 261031-1).
+        자리를 놓기 전에 한 번 비밀번호·Windows Hello 로 디지털 ID 를 연다(`_sign_unlock`, 261031-1)."""
         if isinstance(at_scene, bool):           # 261031-1: 메뉴 `triggered(checked)` 가 그대로 들어온 것 — 점이 아니다
             at_scene = None
         mv = self.main_view
@@ -86,33 +212,28 @@ class SignMixin(SignDraftMixin):
         if not self._sign_preflight(str(cur)):
             return
         from viewer import sign_store
-        if kind == "image":
-            if not sign_store.load()["images"]:
-                if QMessageBox.question(self, tr("그림만 넣기"), tr("서명 그림이 없습니다. 지금 만들까요?")) != QMessageBox.StandardButton.Yes:
+        if not self._sign_unlock():
+            return
+        fp = self._sign_current_fp()
+        self._sign_cur_fp = fp
+        if not sign_store.id_image_path(fp):
+            name = (sign_store.get_id(fp) or {}).get("name", "")
+            if kind == "image":
+                if QMessageBox.question(self, tr("그림만 넣기"), tr("디지털 ID '{name}' 에 서명 그림이 없습니다. 지금 넣을까요?").format(name=name)
+                                        ) != QMessageBox.StandardButton.Yes or not self._sign_id_image(fp):
                     return
-                self.action_sign_image()
-                if not sign_store.load()["images"]:
-                    return
-        else:
-            d = sign_store.load()
-            if not d["ids"]:
-                if QMessageBox.question(self, tr("서명"), tr("디지털 ID 가 없습니다. 지금 만들까요?")) != QMessageBox.StandardButton.Yes:
-                    return
-                self.action_digital_ids()
-                if not sign_store.load()["ids"]:
-                    return
-            if not sign_store.load()["images"]:
+            elif bool((sign_store.load().get("appearance") or {}).get("show_image", True)):
                 box = QMessageBox(self)
                 box.setIcon(QMessageBox.Icon.Question)
                 box.setWindowTitle(tr("서명"))
-                box.setText(tr("서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 만들까요?"))
-                b_make = box.addButton(tr("서명 그림 만들기…"), QMessageBox.ButtonRole.AcceptRole)
+                box.setText(tr("디지털 ID '{name}' 에 서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 넣을까요?").format(name=name))
+                b_make = box.addButton(tr("서명 그림 넣기…"), QMessageBox.ButtonRole.AcceptRole)
                 b_skip = box.addButton(tr("그림 없이"), QMessageBox.ButtonRole.ActionRole)
                 box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
                 box.exec()
                 c = box.clickedButton()
                 if c is b_make:
-                    self.action_sign_image()
+                    self._sign_id_image(fp)
                 elif c is not b_skip:
                     return
         # 3단계(SOT §3.7): 빈 서명 칸이 있으면 먼저 묻는다 — 끌기·우클릭은 _on_sign_region 이 칸 안인지 본다
@@ -367,7 +488,8 @@ class SignMixin(SignDraftMixin):
         return "", False
 
     def _sign_box_fit(self, page, r):
-        """클릭(작은 상자)이면 기본 크기 — 서명 그림 비율, 쪽 안으로 맞춘다."""
+        """클릭(작은 상자)이면 기본 크기 — 지금 ID 의 서명 그림 비율로, **누른 자리를 왼쪽 위**로(261031-1, 사용자 지시 — 종전 가운데).
+        쪽 안으로 맞춘다."""
         import fitz
         pr = page.rect
         if r.width < SIGN_MIN_SIDE_PT or r.height < SIGN_MIN_SIDE_PT:
@@ -375,38 +497,18 @@ class SignMixin(SignDraftMixin):
             h = w / 2.5
             try:
                 from viewer import sign_store
-                ip = sign_store.image_path(sign_store.load().get("default_image", ""))
+                ip = sign_store.id_image_path(self._sign_current_fp())
                 if ip:
                     from PIL import Image
                     with Image.open(ip) as im:
                         h = w * im.height / max(1, im.width)
             except Exception:
                 pass
-            cx, cy = r.x0, r.y0
-            r = fitz.Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+            r = fitz.Rect(r.x0, r.y0, r.x0 + w, r.y0 + h)
         dx = max(0, pr.x0 - r.x0) - max(0, r.x1 - pr.x1)
         dy = max(0, pr.y0 - r.y0) - max(0, r.y1 - pr.y1)
         r = fitz.Rect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy) & pr
         return r
-
-    def _sign_password(self, dlg):
-        """1순위 Windows Hello, 안 되면 칸에 넣은 비밀번호(SOT §6). None = 다시 서명 창으로."""
-        fp = dlg.fp()
-        from viewer import sign_store
-        if (sign_store.get_id(fp) or {}).get("kind") == "win":
-            return ""                            # Windows 저장소 — 비밀번호 대신 Windows 가 PIN 을 묻는다(SOT §3.9)
-        if dlg.use_hello:
-            from viewer import sign_hello
-            try:
-                return self._sign_bg(lambda: sign_hello.recall(fp), tr("Windows Hello 확인"))
-            except sign_hello.HelloCancelled:
-                self.status.showMessage(tr("Windows Hello 를 취소했습니다 — 비밀번호를 넣어 서명할 수 있습니다."), 6000)
-                return None
-            except Exception:
-                QMessageBox.information(self, tr("서명"), tr("Windows Hello 로 보관한 비밀번호를 꺼내지 못했습니다. 비밀번호를 넣어 서명하세요 — 서명한 뒤 다시 보관할지 묻습니다."))
-                self._sign_rehello = fp
-                return None
-        return dlg.password() or None
 
     @staticmethod
     def _sign_store_msg(e) -> str:
@@ -605,11 +707,12 @@ class SignMixin(SignDraftMixin):
         from viewer import pdf_mirror as _pm
         return _pm.take_marks(doc)
 
-    def _resign_appearance(self):
+    def _resign_appearance(self, fp: str = ""):
+        """다시 서명할 겉모양 — 지금 서명 설정 + **그 ID 의** 서명 그림(261031-1)."""
         from viewer import sign_core, sign_store
         d = sign_store.load()
         a = d.get("appearance") or {}
-        return sign_core.Appearance(image_path=sign_store.image_path(d.get("default_image", "")),
+        return sign_core.Appearance(image_path=sign_store.id_image_path(fp) if a.get("show_image", True) else "",
                                     show_name=bool(a.get("show_name", True)), show_date=bool(a.get("show_date", True)),
                                     show_reason=bool(a.get("show_reason", False)), font_path=sign_core.default_font(),
                                     layout=str(a.get("layout") or sign_core.LAYOUT_DEFAULT)), \
@@ -624,7 +727,6 @@ class SignMixin(SignDraftMixin):
         if not mine:
             return 0, total
         from viewer import sign_core
-        app, tsa = self._resign_appearance()
         groups = []                                  # 같은 ID 가 이어지면 한 번에(targets)
         for s in mine:
             if s["field"] not in boxes:
@@ -639,6 +741,9 @@ class SignMixin(SignDraftMixin):
         for g in groups:
             fp = g[0]["fp"]
             kind, a1, pw = plan["creds"][fp]
+            app, tsa = self._resign_appearance(fp)
+            if not sign_core.has_content(app, "x"):                 # 그림·글자가 모두 꺼져 있으면 이름 줄이라도
+                app.show_name = True
             certify = g[0]["certify"] if (first and g[0]["certify"]) else 0
             targets = [boxes[s["field"]] for s in g]
             if certify == 1:

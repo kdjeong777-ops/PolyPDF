@@ -138,11 +138,16 @@ try:
     class _Fake(sdlg.SignDialog):
         def exec(self):
             self.cmb_id.setCurrentIndex(self.cmb_id.findData(info.fp))
-            self.ed_pw.setText("Upright-2026!")
             self._sign()
             return QDialog.DialogCode.Accepted
-    _Real = sdlg.SignDialog
-    sdlg.SignDialog = _Fake
+
+    class _Unlock(sdlg.SignUnlockDialog):            # 261031-1: 비밀번호는 서명을 시작할 때 한 번
+        def exec(self):
+            self.ed_pw.setText("Upright-2026!")
+            self._ok()
+            return QDialog.DialogCode.Accepted
+    _Real, _RealU = sdlg.SignDialog, sdlg.SignUnlockDialog
+    sdlg.SignDialog, sdlg.SignUnlockDialog = _Fake, _Unlock
     picks = ("새 자리 끌기", "그림 없이")          # 빈 서명 칸이 있는 문서 — 새 자리에, 서명 그림 없이
     orig_exec = QMessageBox.exec
     QMessageBox.exec = lambda self: (setattr(self, "_pick", next((b for b in self.buttons() if any(t in b.text() for t in picks)), None)), 0)[1]
@@ -155,7 +160,7 @@ try:
     z = mv._zoom or 1.0
     mv.signRegionSelected.emit(QRectF(300 * z, 400 * z, 520 * z, 480 * z)); spin(0.5)
     mw.action_sign_confirm(); spin(2.0)                  # 261012-1(보안 SOT §3.10): 자리 → [서명 확정] → 별도 파일
-    sdlg.SignDialog = _Real
+    sdlg.SignDialog, sdlg.SignUnlockDialog = _Real, _RealU
     QMessageBox.exec = orig_exec
     src_plain, src = src, src.with_name(src.stem + "_서명.pdf")
     rep = sc.verify_pdf(str(src), st.trusted())

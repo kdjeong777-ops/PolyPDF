@@ -268,7 +268,8 @@ try:
             # 261016-3(디자인 SOT §2.9.1): '전자서명 ▸' 하위 메뉴
             sub = next((a.menu() for a in act.menu().actions() if a.text() == "전자서명" and a.menu()), None)
             labels = [a.text() for a in sub.actions()] if sub else []
-    chk("서명..." in labels and "디지털 ID..." in labels, "D1 도구 메뉴에 '전자서명 ▸' 하위 메뉴", str(labels))
+    chk("서명..." in labels and "디지털 ID 관리..." in labels and "서명 그림..." not in labels,
+        "D1 도구 메뉴에 '전자서명 ▸' 하위 메뉴 — '디지털 ID 관리...', '서명 그림...' 은 없다(261031-1, ID 가 그림을 갖는다)", str(labels))
     chk(not mv.sign_band.isVisible(), "D2 서명 없는 문서에는 검증 띠가 없다")
 
     picked = {}
@@ -279,15 +280,23 @@ try:
     QMessageBox.information = staticmethod(lambda *a, **k: None)
     QMessageBox.warning = staticmethod(lambda *a, **k: print("   [warning]", a[1:3] if len(a) > 2 else a))
 
-    class _FakeSignDialog(sdlg.SignDialog):
+    # 261031-1: 비밀번호·Hello 는 서명을 시작할 때 한 번(본인 확인 창) — 서명 확정 창에는 비밀번호가 없다
+    class _FakeUnlock(sdlg.SignUnlockDialog):
         mode = "hello"
+        pw = PW
 
         def exec(self):
-            if _FakeSignDialog.mode == "hello":
+            if _FakeUnlock.mode == "hello":
                 self._hello()
             else:
-                self.ed_pw.setText(PW)
-                self._sign()
+                self.ed_pw.setText(_FakeUnlock.pw)
+                self._ok()
+            return QDialog.DialogCode.Accepted
+    sdlg.SignUnlockDialog = _FakeUnlock
+
+    class _FakeSignDialog(sdlg.SignDialog):
+        def exec(self):
+            self._sign()
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _FakeSignDialog
     tb = [mv._toolbar_widget.layout().itemAt(i).widget() for i in range(mv._toolbar_widget.layout().count())]
@@ -339,7 +348,7 @@ try:
     # 비밀번호 칸 경로(2순위·직접 입력)도 — Hello 를 못 쓰는 PC 처럼
     os.environ["POLYPDF_FAKE_HELLO"] = ""
     sh._cached_available = False
-    _FakeSignDialog.mode = "password"
+    _FakeUnlock.mode = "password"
     mw._open_saved_file(str(doc_path)); spin(0.6)
     picked["text"] = "그림 없이"
     mw.action_sign_pdf()
@@ -359,11 +368,13 @@ try:
     chk(idd.lst.count() == 1 and "Windows Hello" in idd.lst.item(0).text() and idd.b_hello.isVisible() is not None,
         "G1 디지털 ID 창 — 목록·Hello 표시", idd.lst.item(0).text() if idd.lst.count() else "")
     idd.close()
-    imd = sdlg.SignImageDialog(mw)
+    imd = sdlg.SignImageDialog(mw, fp=info.fp)
     imd.set_source(photo)
     chk(imd._btn_save.isEnabled(), "G2 서명 그림 창 — 사진을 넣으면 저장할 수 있다")
-    imd.ed_name.setText("기본"); imd._save()
-    chk(st.image_path("기본") and Path(st.image_path("기본")).exists(), "G3 서명 그림 저장(signing\\images)")
+    imd._save()
+    chk(st.id_image_path(info.fp) and Path(st.id_image_path(info.fp)).exists() and st.image_path("기본") == "",
+        "G3 서명 그림은 그 디지털 ID 의 그림으로 저장(signing\\images\\id_…, 261031-1)", st.id_image_path(info.fp))
+    st.add_image(photo.convert("RGBA"), "기본")             # 아래 옛 검사(겉모양·미리보기)는 그림 파일 경로만 쓴다
     pan = sdlg.SignPanelDialog(mw, sc.verify_pdf(str(two), [info.fp]))
     chk(pan.lst.count() == 2 and "홍길동" in pan.detail.text() and "PC" in pan.detail.text(), "G4 서명 패널 — 목록·상세(PC 시계 기준 문구)")
     pan.close()
@@ -382,7 +393,7 @@ try:
     # ── H. 서명 창 겉모양 미리보기(S8) — 실제 서명과 같은 그리기, 배경에서, 바꾸면 다시 ──
     from PIL import Image as _I
     _RealSign = sdlg.SignDialog.__mro__[1] if sdlg.SignDialog.__name__ == "_FakeSignDialog" else sdlg.SignDialog
-    sd = _RealSign(mw, hello_ok=False, file_name="x.pdf", box_size=(200.0, 75.0))
+    sd = _RealSign(mw, file_name="x.pdf", box_size=(200.0, 75.0))
 
     def _wait_pv(prev_key=None, sec=8.0):
         t0 = time.time()
@@ -435,11 +446,10 @@ try:
     dh = fitz.open(str(here))
     ws = [w.rect for w in dh[0].widgets()]
     dh.close()
-    cx = (ws[0].x0 + ws[0].x1) / 2 if ws else -1
-    cy = (ws[0].y0 + ws[0].y1) / 2 if ws else -1
-    chk(sc.is_signed_file(here) and abs(cx - want_pt[0]) < 3 and ws[0].y0 < want_pt[1] < ws[0].y1
+    # 261031-1(사용자 지시): 누른 자리가 서명의 **왼쪽 위**(종전 가운데) — 그림·글자는 왼쪽 정렬
+    chk(sc.is_signed_file(here) and ws and abs(ws[0].x0 - want_pt[0]) < 3 and abs(ws[0].y0 - want_pt[1]) < 3
         and abs(ws[0].width - 50 / 25.4 * 72) < 1,
-        "I2 끌기 없이 누른 자리를 가운데로 기본 크기(그림 폭 50mm) 서명", str(ws))
+        "I2 끌기 없이 누른 자리를 왼쪽 위로 기본 크기(그림 폭 50mm) 서명", str(ws))
 
     # ── J. 책갈피창 서명 표식(S1) — probe_cache.signed, 옛 index.db 에 열 더하기, 파일 행 아이콘·툴팁 ──
     import sqlite3
@@ -625,7 +635,7 @@ try:
     class _MultiDlg(_RealSign):
         def exec(self):
             self.cmb_kind.setCurrentIndex(self.cmb_kind.findData(2))
-            self.ed_pw.setText(PW); self._sign()
+            self._sign()
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _MultiDlg
     picked["text"] = "그림 없이"
@@ -726,7 +736,7 @@ try:
         def exec(self):
             import re as _re
             _FieldDlg.got.append((",".join(_re.findall(r"서명 칸: (\S+)", self.summary)), self.cmb_pages.isVisibleTo(self)))
-            self.ed_pw.setText(PW); self._sign()
+            self._sign()
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _FieldDlg
     QMessageBox.exec = lambda self: (seen_buttons.append([b.text() for b in self.buttons()]),
@@ -812,7 +822,7 @@ try:
             _OnceDlg.n += 1
             if _OnceDlg.n > 1:
                 return QDialog.DialogCode.Rejected
-            self.ed_pw.setText(PW); self._sign()
+            self._sign()
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _OnceDlg
     picked["text"] = "빈 칸에 서명"
@@ -957,7 +967,7 @@ try:
 
         def exec(self):
             self.cmb_id.setCurrentIndex(self.cmb_id.findData(went["fp"]))
-            _WinDlg.seen.append((self.ed_pw.isEnabled(), self._win_note.isVisibleTo(self)))
+            _WinDlg.seen.append((hasattr(self, "ed_pw"), self._win_note.isVisibleTo(self)))     # 261031-1: 확정 창에 비밀번호 칸이 없다
             if len(_WinDlg.seen) > 1:
                 return QDialog.DialogCode.Rejected
             self._sign()
@@ -968,7 +978,7 @@ try:
     mw.action_sign_pdf(); mv.signRegionSelected.emit(QRectF(80 * z, 80 * z, 200 * z, 70 * z)); spin(0.5)
     rw = sc.verify_pdf(str(confirm(mw, picked)), st.trusted())
     chk(_WinDlg.seen[:1] == [(False, True)] and rw.worst == sc.OK_TRUSTED and rw.sigs[0].signer == "저장소 RSA",
-        "Q5 저장소 ID 로 서명 — 비밀번호 칸 끔·'Windows 가 PIN' 안내, 서명 파일 유효", str((_WinDlg.seen, rw.worst)))
+        "Q5 저장소 ID 로 서명 — 비밀번호 칸 없음·'Windows 가 PIN' 안내, 서명 파일 유효", str((_WinDlg.seen, rw.worst)))
     sdlg.SignDialog = _RealSign
     os.environ.pop(ws.FAKE_ENV, None)
 

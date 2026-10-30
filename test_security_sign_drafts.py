@@ -61,6 +61,7 @@ try:
     dr.rectangle([0, 0, 399, 159], outline=(0, 0, 220, 255), width=6)
     dr.rectangle([0, 0, 70, 50], fill=(220, 0, 0, 255))        # 왼쪽 위 표식(회전 확인)
     st.add_image(im, "기본")
+    st.set_id_image(info.fp, im)                     # 261031-1: 서명 그림은 디지털 ID 가 갖는다
 
     # T2 — 옛 signing.json(겹쳐, rev 없음) → 한 번 '그림 위·글자 아래'
     import json
@@ -118,9 +119,26 @@ try:
 
     class _HelloDlg(sdlg.SignDialog):
         def exec(self):
-            self._hello()
+            self._sign()
             return QDialog.DialogCode.Accepted
     sdlg.SignDialog = _HelloDlg
+
+    class _Unlock(sdlg.SignUnlockDialog):           # 261031-1: 서명을 시작할 때 한 번 확인(가짜 Hello)
+        shown = 0
+        mode = "hello"
+        pw = PW
+
+        def exec(self):
+            _Unlock.shown += 1
+            if _Unlock.mode == "cancel":
+                return QDialog.DialogCode.Rejected
+            if _Unlock.mode == "hello":
+                self._hello()
+            else:
+                self.ed_pw.setText(_Unlock.pw)
+                self._ok()
+            return QDialog.DialogCode.Accepted
+    sdlg.SignUnlockDialog = _Unlock
 
     # T1 — 편집 모드 + 글쓰기 도구가 켜진 채 서명 단추 → 실제 마우스로 끌기
     mw._on_edit_mode_toggled(True)
@@ -233,6 +251,7 @@ try:
     mv.sign_draft_band.btn_confirm.click()
     spin(2.0)
     chk(out.exists() and sha(doc_path) == orig_sha, "T5a [서명 확정] → '계약서_서명.pdf', 원본 바이트 그대로", str(list(src.iterdir())))
+    chk(not mw._sign_creds(), "T5h 확정하면 서명을 시작할 때 연 열쇠를 버린다(확정·취소까지만, 261031-1)")
     rep = sc.verify_pdf(str(out), st.trusted())
     chk(len(rep.sigs) == 2 and rep.worst == sc.OK_TRUSTED, "T5b 전자서명 둘 — 모두 유효·신뢰함", str([(s.field, s.state) for s in rep.sigs]))
     od = fitz.open(str(out))
@@ -324,6 +343,113 @@ try:
     cx = sum(p[0] for p in red) / max(1, len(red)); cy = sum(p[1] for p in red) / max(1, len(red))
     chk(red and 100 <= cx <= 150 and 300 <= cy <= 330 and rot_out.read_bytes()[:doc_path.stat().st_size] == doc_path.read_bytes(),
         "T9 회전 90° 쪽 그림만 — 끈 상자 왼쪽 위에 표식·앞 바이트 그대로(증분)", str((cx, cy)))
+
+    # ── 261031-1 (사용자 지시) ─────────────────────────────────────────
+    # U1 그림만 — 비율 그대로 상자 왼쪽 위(남는 오른쪽은 빈다). 그림 400×160 = 2.5:1, 상자 300×80
+    lo_out = tmp / "left.pdf"
+    sc.insert_images(str(doc_path), str(lo_out), [(0, (100, 300, 400, 380), st.id_image_path(info.fp))])
+    with fitz.open(str(lo_out)) as ld:
+        ir = [r for x in ld[0].get_images(full=True) for r in ld[0].get_image_rects(x[0])]
+    chk(ir and abs(ir[-1].x0 - 100) < 0.5 and abs(ir[-1].x1 - 300) < 0.5 and abs(ir[-1].y0 - 300) < 0.5,
+        "U1 그림만 넣기 — 비율 그대로 상자 왼쪽 위, 오른쪽은 빈다(종전 가운데)", str(ir))
+    # U2 자리 미리보기 바탕은 투명 — 자리 아래 본문이 보인다
+    pv = sc.preview_png(sc.Appearance(image_path=st.id_image_path(info.fp), font_path=sc.default_font()), "홍길동", "", 200, 100)
+    pm_ = fitz.Pixmap(pv)
+    chk(pm_.alpha and pm_.pixel(pm_.width - 1, 0)[3] == 0, "U2 서명 겉모양 미리보기 바탕이 투명(종전 흰색)", str(pm_.pixel(pm_.width - 1, 0)))
+    # U3 그림·글자를 모두 끄면 서명하지 않는다 — 확정 창이 막는다(종전 '%(signer)s' 같은 글자가 찍혔다)
+    _RealDlg = sdlg.SignDialog.__mro__[1]
+    infos.clear()
+    sd_ = _RealDlg(mw, file_name="x.pdf", ids=[info.fp], cur_fp=info.fp)
+    for c_ in (sd_.chk_img, sd_.chk_name, sd_.chk_date, sd_.chk_reason):
+        c_.setChecked(False)
+    sd_._sign()
+    chk(sd_.result() != QDialog.DialogCode.Accepted and any("서명 내용이 없습니다" in str(t) for t in infos)
+        and not hasattr(sd_, "ed_pw") and sd_.chk_img.isEnabled(),
+        "U3 확정 창 — 비밀번호 칸 없음·서명 그림은 체크, 모두 끄면 '서명 내용이 없습니다' 로 막는다", str(infos[-1:]))
+    sd_.stop_preview(); sd_.close(); sd_.deleteLater()
+    try:
+        sc.preview_png(sc.Appearance(show_name=False, show_date=False), "x", "", 100, 40)
+        chk(False, "U3b 빈 겉모양은 그리지 않는다(empty_appearance)")
+    except sc.SignError as e:
+        chk(e.reason == "empty_appearance", "U3b 빈 겉모양은 그리지 않는다(empty_appearance)", e.reason)
+    # U4 처음 확인 — 비밀번호로 열리는 ID 가 쓸 수 있는 ID, 기본 ID 가 열렸으면 그것, 아니면 첫째. 없으면 다시 입력·만들기
+    pfx3, info3 = sc.create_id("이순신", PW)
+    st.add_id(pfx3, info3)
+    pfx4, info4 = sc.create_id("강감찬", "Other-Password-1!")
+    st.add_id(pfx4, info4)
+    mw._sign_lock()
+    _Unlock.mode, _Unlock.pw = "password", PW
+    ok_ = mw._sign_unlock()
+    chk(ok_ and set(mw._sign_creds()) == {info.fp, info3.fp} and mw._sign_current_fp() == info.fp,
+        "U4a 비밀번호가 맞는 ID 둘을 열고 기본 ID 로 시작", str([st.get_id(f)["name"] for f in mw._sign_creds()]))
+    d_ = st.load(); d_["default_id"] = info4.fp; st.save(d_)
+    chk(mw._sign_current_fp() == info.fp, "U4b 기본 ID 가 열리지 않았으면 연 것 중 첫 ID", mw._sign_current_fp()[:8])
+    mw._sign_lock()
+    _Unlock.pw = "wrong-password"
+    picked["text"] = "취소"
+    n0 = _Unlock.shown
+    chk(not mw._sign_unlock() and not mw._sign_creds() and _Unlock.shown == n0 + 1,
+        "U4c 열리는 ID 가 없으면 '다시 입력 / 디지털 ID 관리…' 를 묻고, 취소하면 서명하지 않는다")
+    d_ = st.load(); d_["default_id"] = info.fp; st.save(d_)
+    # U5 메뉴·관리 창 — '디지털 ID 관리...', '서명 그림...' 없음, 새 ID 창 [서명 그림 넣기], 관리 창 [서명 그림…]
+    _labels = [a.text() for a in mw._cmds["tools.sign"].menu().actions()]
+    idd = sdlg.DigitalIdDialog(mw, runner=mw._sign_bg, hello_ok=False)
+    cdl = sdlg._CreateIdDialog(mw)
+    chk("디지털 ID 관리..." in _labels and "서명 그림..." not in _labels and idd.windowTitle() == "디지털 ID 관리"
+        and idd.b_img.text().startswith("서명 그림") and cdl.b_image.text() == "서명 그림 넣기"
+        and any("서명 그림" in idd.lst.item(i).text() for i in range(idd.lst.count())),
+        "U5 '디지털 ID 관리' — 메뉴 이름·서명 그림 항목 없음·새 ID 창 [서명 그림 넣기]·목록 '· 서명 그림'", str(_labels))
+    idd.close(); idd.deleteLater(); cdl.close(); cdl.deleteLater()
+    # U6 자리 옵션 — 실제 우클릭 메뉴로 ID 바꾸기·그림 끄기, 모두 끄려 하면 막는다(고른 것은 기억)
+    plain = src / "옵션.pdf"
+    shutil.copy(doc_path, plain)
+    mw.open_pdfs([str(plain)]); spin(1.0)
+    mv = mw.main_view
+    mv.go_to_page(0); spin(0.3)
+    _Unlock.mode, _Unlock.pw = "password", PW
+    mw._sign_lock()
+    mw.action_sign_pdf(); spin(0.2)
+    mw._on_sign_region(QRectF(150 * mv._zoom, 200 * mv._zoom, 150 * mv._zoom, 200 * mv._zoom), view=mv)   # 클릭만
+    spin(0.3)
+    dd0 = sdr.drafts(plain)[0]
+    chk(abs(dd0["rect"][0] - 150) < 1 and abs(dd0["rect"][1] - 200) < 1, "U6a 클릭만 하면 누른 자리가 왼쪽 위(종전 가운데)", str(dd0["rect"]))
+    from PyQt6.QtWidgets import QMenu as _QM
+    _orig_mexec = _QM.exec
+
+    def _pick_menu(text):
+        def _ex(self, *a, **k):
+            for a_ in self.actions():
+                if a_.menu() is not None:
+                    hit = next((b for b in a_.menu().actions() if b.text().startswith(text)), None)
+                    if hit is not None:
+                        return hit
+                if a_.text() == text:
+                    if a_.isCheckable():
+                        a_.setChecked(not a_.isChecked())
+                    return a_
+            return None
+        return _ex
+    try:
+        _QM.exec = _pick_menu("이순신")
+        mw._sign_draft_menu(mv, dd0["id"], QPoint(0, 0))
+        chk(mw._sign_current_fp() == info3.fp and st.load()["default_id"] == info3.fp,
+            "U6b 자리 우클릭 '디지털 ID ▸' 로 연 ID 를 바꾸고 다음에도 그대로(기본 ID)", st.load()["default_id"][:8])
+        _QM.exec = _pick_menu("홍길동")                       # 이순신은 그림이 없다 — 홍길동으로 되돌린다
+        mw._sign_draft_menu(mv, dd0["id"], QPoint(0, 0))
+        infos.clear()
+        for t_ in ("서명 그림", "이름", "날짜"):
+            _QM.exec = _pick_menu(t_)
+            mw._sign_draft_menu(mv, dd0["id"], QPoint(0, 0))
+        ap_ = st.load()["appearance"]
+        chk(ap_["show_image"] is False and ap_["show_name"] is False and ap_["show_date"] is True
+            and any("서명 내용이 없습니다" in str(t) for t in infos),
+            "U6c 자리 옵션으로 그림·글자를 끄고 기억, 마지막 하나까지 끄려 하면 막는다", str((ap_, infos[-1:])))
+    finally:
+        _QM.exec = _orig_mexec
+    from viewer.widgets.sign_dialogs import remember_appearance
+    remember_appearance(show_image=True, show_name=True, show_date=True, fp=info.fp)
+    mw._sign_drafts_clear(mv)
+    chk(not mw._sign_creds(), "U7 자리를 모두 지우면(서명 취소) 연 열쇠를 버린다")
 except Exception:
     import traceback
     traceback.print_exc()

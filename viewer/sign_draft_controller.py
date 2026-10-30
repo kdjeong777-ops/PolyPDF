@@ -33,17 +33,36 @@ class SignDraftMixin:
         mv.sign_draft_band.confirmRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_confirm()))
         mv.sign_draft_band.clearRequested.connect(lambda v=mv: self._sign_drafts_clear(v))
 
+    def _sign_view_fp(self) -> str:
+        """자리 미리보기에 쓸 ID — 서명을 시작할 때 연 ID(고른 것), 아직 안 열었으면 기본 ID(없으면 첫 ID)."""
+        from viewer import sign_store
+        fp = self._sign_current_fp() if hasattr(self, "_sign_current_fp") else ""
+        if fp:
+            return fp
+        d = sign_store.load()
+        e = next((x for x in d["ids"] if x.get("fp") == d.get("default_id")), None) or (d["ids"][0] if d["ids"] else {})
+        return str(e.get("fp", ""))
+
     def _sign_view_appearance(self):
-        """자리 미리보기·확정 기본값 — 기억한 겉모양 + 기본 서명 그림 + 기본 ID 이름 줄."""
+        """자리 미리보기·확정 기본값 — 기억한 겉모양 + **그 ID 의** 서명 그림(켰을 때, 261031-1) + 그 ID 이름 줄."""
         from viewer import sign_core, sign_store
         d = sign_store.load()
         a = d.get("appearance") or {}
-        app = sign_core.Appearance(image_path=sign_store.image_path(d.get("default_image", "")),
+        fp = self._sign_view_fp()
+        app = sign_core.Appearance(image_path=sign_store.id_image_path(fp) if a.get("show_image", True) else "",
                                    show_name=bool(a.get("show_name", True)), show_date=bool(a.get("show_date", True)),
                                    show_reason=bool(a.get("show_reason", False)), font_path=sign_core.default_font(),
                                    layout=str(a.get("layout") or sign_core.LAYOUT_DEFAULT))
-        e = next((x for x in d["ids"] if x.get("fp") == d.get("default_id")), None) or (d["ids"][0] if d["ids"] else {})
+        e = sign_store.get_id(fp) or {}
         return app, sign_core.signer_label(e.get("name", ""), e.get("email", "")), str(d.get("last_reason", "") or "")
+
+    @staticmethod
+    def _sign_draft_image(d: dict) -> str:
+        """그림만 자리의 그림 — 그 자리의 ID 의 서명 그림(261031-1). 옛 기록(그림 이름)은 그 그림."""
+        from viewer import sign_store
+        if d.get("fp"):
+            return sign_store.id_image_path(d["fp"])
+        return sign_store.image_path(d.get("image", "")) if d.get("image") else ""
 
     def _sign_draft_items(self, path: str, page: int) -> list:
         """`SignDraftLayer` 의 provider — 그 쪽 자리 + 글자 줄 높이 + 미리보기(없으면 배경에서 그리기 시작)."""
@@ -57,7 +76,7 @@ class SignDraftMixin:
             x0, y0, x1, y1 = d["rect"]
             w, h = max(1.0, x1 - x0), max(1.0, y1 - y0)
             if d["kind"] == "image":
-                ip = sign_store.image_path(d["image"]) or app.image_path
+                ip = self._sign_draft_image(d) or sign_store.id_image_path(self._sign_view_fp())
                 key = ("image", ip)
                 strip = 0.0
                 pix = self._sign_pix_cache().get(key)
@@ -161,7 +180,7 @@ class SignDraftMixin:
                 r = fitz.Rect(r.x0, max(pr.y0, r.y0 - over), r.x1, max(pr.y0, r.y0 - over) + r.height)
         ds = sign_drafts.drafts(cur)
         d = {"id": sign_drafts.new_id(), "page": int(page), "rect": [r.x0, r.y0, r.x1, r.y1], "kind": kind,
-             "image": sign_store.load().get("default_image", "") if kind == "image" else "", "field": field}
+             "image": "", "field": field, "fp": self._sign_view_fp() if kind == "image" else ""}
         ds.append(d)
         sign_drafts.set_drafts(cur, ds)
         self._sign_drafts_sync(mv)
@@ -193,7 +212,10 @@ class SignDraftMixin:
         cur = mv.current_file()
         if not cur:
             return
-        sign_drafts.set_drafts(cur, [d for d in sign_drafts.drafts(cur) if d["id"] != draft_id])
+        left = [d for d in sign_drafts.drafts(cur) if d["id"] != draft_id]
+        sign_drafts.set_drafts(cur, left)
+        if not left:
+            self._sign_lock()                    # 자리를 모두 지웠다 = 서명 취소 — 연 열쇠를 버린다(261031-1)
         self._sign_drafts_sync(mv)
 
     def _sign_drafts_clear(self, mv) -> None:
@@ -204,6 +226,7 @@ class SignDraftMixin:
         if QMessageBox.question(self, tr("서명 자리"), tr("이 파일의 서명 자리를 모두 지울까요?")) != QMessageBox.StandardButton.Yes:
             return
         sign_drafts.clear(cur)
+        self._sign_lock()
         self._sign_drafts_sync(mv)
 
     def _sign_draft_menu(self, mv, draft_id: str, gpos) -> None:
@@ -214,6 +237,11 @@ class SignDraftMixin:
         d = next((x for x in ds if x["id"] == draft_id), None)
         if d is None:
             return
+        # 261031-1(사용자 지시): 확정 전에 자리 옵션으로 디지털 ID(연 것)·서명 그림·겉모양 글자를 바꾼다 — 고른 것은 다음에도 그대로
+        st = sign_store.load()
+        ap = st.get("appearance") or {}
+        creds = self._sign_creds()
+        cur_fp = d.get("fp") if d["kind"] == "image" and d.get("fp") else self._sign_view_fp()
         m = QMenu(self)
         a_sign = m.addAction(tr("전자서명"))
         a_img = m.addAction(tr("그림만(전자서명 아님)"))
@@ -221,14 +249,32 @@ class SignDraftMixin:
             a.setCheckable(True)
             a.setChecked(d["kind"] == k)
             a.setEnabled(not d["field"])
-        sub = m.addMenu(tr("그림"))
-        img_acts = {}
-        for im in sign_store.load()["images"]:
-            a = sub.addAction(im.get("name", ""))
+        m.addSeparator()
+        sub = m.addMenu(tr("디지털 ID"))
+        id_acts = {}
+        for e in st["ids"]:
+            if e.get("fp") not in creds:
+                continue
+            a = sub.addAction(e.get("name", "") + (f" <{e['email']}>" if e.get("email") else ""))
             a.setCheckable(True)
-            a.setChecked(d["image"] == im.get("name", ""))
-            img_acts[a] = im.get("name", "")
-        sub.setEnabled(d["kind"] == "image" and bool(img_acts))
+            a.setChecked(e.get("fp") == cur_fp)
+            id_acts[a] = e["fp"]
+        sub.addSeparator()
+        a_more = sub.addAction(tr("다른 디지털 ID 열기…"))
+        has_img = bool(sign_store.id_image_path(cur_fp))
+        a_show_img = m.addAction(tr("서명 그림"))
+        a_show_img.setCheckable(True)
+        a_show_img.setChecked(has_img and (d["kind"] == "image" or bool(ap.get("show_image", True))))
+        a_show_img.setEnabled(has_img and d["kind"] == "sign")
+        a_add_img = m.addAction(tr("서명 그림 바꾸기…") if has_img else tr("서명 그림 넣기…"))
+        txt_acts = {}
+        for k, label in (("show_name", tr("이름")), ("show_date", tr("날짜"))):
+            a = m.addAction(label)
+            a.setCheckable(True)
+            a.setChecked(bool(ap.get(k, True)))
+            a.setEnabled(d["kind"] == "sign")
+            txt_acts[a] = k
+        m.addSeparator()
         a_copy = m.addAction(tr("다른 쪽에도 놓기…"))
         a_copy.setEnabled(not d["field"])
         m.addSeparator()
@@ -242,17 +288,61 @@ class SignDraftMixin:
         if got is a_copy:
             self._sign_draft_copy(mv, cur, d)
             return
+        if got is a_more:
+            if self._sign_unlock(more=True):
+                self._sign_draft_use_id(cur, ds, d, self._sign_current_fp())
+            return
+        if got in id_acts:
+            self._sign_draft_use_id(cur, ds, d, id_acts[got])
+            return
+        if got is a_add_img:
+            self._sign_id_image(cur_fp)
+            self._sign_pix_cache().clear()
+            self._sign_drafts_sync()
+            return
+        if got is a_show_img or got in txt_acts:
+            key = "show_image" if got is a_show_img else txt_acts[got]
+            new = {"show_image": bool(ap.get("show_image", True)), "show_name": bool(ap.get("show_name", True)),
+                   "show_date": bool(ap.get("show_date", True)), "show_reason": bool(ap.get("show_reason", False))}
+            new[key] = got.isChecked()
+            from viewer import sign_core
+            app, label, reason = self._sign_view_appearance()
+            app.image_path = sign_store.id_image_path(cur_fp) if new["show_image"] else ""
+            app.show_name, app.show_date, app.show_reason = new["show_name"], new["show_date"], new["show_reason"]
+            if not sign_core.has_content(app, label, reason):
+                from viewer.widgets.sign_dialogs import empty_appearance_text
+                QMessageBox.information(self, tr("서명 자리"), empty_appearance_text())
+                return
+            from viewer.widgets.sign_dialogs import remember_appearance
+            remember_appearance(**{key: new[key]})
+            self._sign_drafts_sync()
+            return
         if got is a_sign:
             d["kind"] = "sign"
         elif got is a_img:
             d["kind"] = "image"
-            d["image"] = d["image"] or sign_store.load().get("default_image", "")
-        elif got in img_acts:
-            d["image"] = img_acts[got]
+            d["fp"] = d.get("fp") or cur_fp
+            if not sign_store.id_image_path(d["fp"]) and not self._sign_id_image(d["fp"]):
+                return
         else:
             return
         sign_drafts.set_drafts(cur, ds)
         self._sign_drafts_sync(mv)
+
+    def _sign_draft_use_id(self, cur: str, ds: list, d: dict, fp: str) -> None:
+        """자리 옵션에서 디지털 ID 를 바꾼다 — 전자서명 자리는 모두 그 ID 로(확정 창도 같은 ID), 그림만 자리는 그 자리만.
+        고른 ID 는 다음에도 그대로(기본 ID 로 기억, 261031-1)."""
+        from viewer import sign_drafts
+        if not fp:
+            return
+        if d["kind"] == "image":
+            d["fp"] = fp
+            sign_drafts.set_drafts(cur, ds)
+        else:
+            self._sign_cur_fp = fp
+            from viewer.widgets.sign_dialogs import remember_appearance
+            remember_appearance(fp=fp)
+        self._sign_drafts_sync()
 
     def _sign_draft_copy(self, mv, cur: str, d: dict) -> None:
         """'다른 쪽에도 놓기…' — 모든 쪽 / 쪽 범위(SOT §3.6). 같은 자리·종류·그림, 쪽 밖이면 쪽 안으로."""
@@ -289,7 +379,7 @@ class SignDraftMixin:
                 continue
             have.add(k)
             ds.append({"id": sign_drafts.new_id(), "page": p, "rect": [r.x0, r.y0, r.x1, r.y1], "kind": d["kind"],
-                       "image": d["image"], "field": ""})
+                       "image": d["image"], "field": "", "fp": d.get("fp", "")})
         sign_drafts.set_drafts(cur, ds)
         self._sign_drafts_sync(mv)
 
@@ -321,20 +411,19 @@ class SignDraftMixin:
         if mv.current_file() and str(mv.current_file()) != cur:
             return
         others = sign_core.doc_is_signed(doc)
+        # 261031-1: 자리를 놓을 때 연 열쇠가 없으면(앱을 다시 켰다 등) 여기서 한 번 확인 — 그림만 자리도(사용자 결정)
+        if not self._sign_unlock():
+            return
         if not signs:
             text = tr("그림 {n}개를 넣은 새 파일을 만듭니다(전자서명은 넣지 않습니다). 원본은 그대로입니다.").format(n=len(images))
             if others:
                 text += "\n" + tr("이 문서의 기존 전자서명은 그림을 넣은 새 파일에서 '서명 후 변경됨' 이 됩니다.")
             if QMessageBox.question(self, tr("그림만 넣기"), text) != QMessageBox.StandardButton.Yes:
+                self._sign_lock()
                 return
-            self._sign_confirm_do(cur, ds, None, "")
+            self._sign_confirm_do(cur, ds, None)
+            self._sign_lock()
             return
-        if not sign_store.load()["ids"]:
-            if QMessageBox.question(self, tr("서명"), tr("디지털 ID 가 없습니다. 지금 만들까요?")) != QMessageBox.StandardButton.Yes:
-                return
-            self.action_digital_ids()
-            if not sign_store.load()["ids"]:
-                return
         empties = {f.name: f for f in sign_core.empty_fields(doc)}
         for d in signs:
             if d["field"] and d["field"] not in empties:
@@ -355,34 +444,32 @@ class SignDraftMixin:
         first = signs[0]
         x0, y0, x1, y1 = first["rect"]
         from viewer.widgets.sign_dialogs import SignDialog
-        dlg = SignDialog(self, hello_ok=self._sign_hello_ready(), file_name=Path(cur).name,
+        dlg = SignDialog(self, file_name=Path(cur).name,
                          box_size=(x1 - x0, y1 - y0), page_count=doc.page_count, current_page=first["page"],
                          can_certify=not others, summary=summary, out_name=Path(out).name,
-                         box_is_field=bool(first["field"]))
+                         box_is_field=bool(first["field"]), ids=list(self._sign_creds()), cur_fp=self._sign_current_fp())
         try:
             while True:
-                dlg.save_as = dlg.use_hello = False
-                dlg.ed_pw.clear()
+                dlg.save_as = False
                 if dlg.exec() != dlg.DialogCode.Accepted:
                     return
-                pw = self._sign_password(dlg)
-                if pw is None:
-                    continue
-                if self._sign_confirm_do(cur, ds, dlg, pw) != "retry":
+                self._sign_cur_fp = dlg.fp()
+                if self._sign_confirm_do(cur, ds, dlg) != "retry":
                     return
         finally:
             dlg.stop_preview()
-            dlg.ed_pw.clear()                    # 입력한 비밀번호는 서명이 끝나면 버린다(SOT §6.4)
             dlg.deleteLater()
+            self._sign_lock()                    # 확정·취소까지만 — 연 열쇠는 여기서 버린다(사용자 결정 261031-1, SOT §6.4)
 
-    def _sign_confirm_do(self, cur: str, ds: list, dlg, pw: str) -> str:
-        """배경에서 바탕 → 그림만 → 전자서명 → 저장(별도 파일) → 기록 → 열기. 'ok' | 'retry' | 'fail'."""
+    def _sign_confirm_do(self, cur: str, ds: list, dlg) -> str:
+        """배경에서 바탕 → 그림만 → 전자서명 → 저장(별도 파일) → 기록 → 열기. 'ok' | 'retry' | 'fail'.
+        열쇠는 서명을 시작할 때 연 것(`_sign_creds`, 261031-1) — 여기서 비밀번호를 묻지 않는다."""
         from viewer import sign_core, sign_drafts, sign_store
         mv = self.main_view
         doc = mv._doc.doc
         signs = [d for d in ds if d["kind"] == "sign"]
         images = [d for d in ds if d["kind"] == "image"]
-        pfx, signer, fp = b"", None, ""
+        pfx, signer, fp, pw = b"", None, "", ""
         app = tsa = None
         reason = loc = ""
         certify = 0
@@ -405,11 +492,11 @@ class SignDraftMixin:
                     QMessageBox.warning(self, tr("서명"), self._sign_store_msg(e))
                     return "fail"
             else:
-                try:
-                    pfx = sign_store.read_pfx(fp)
-                except Exception:
-                    QMessageBox.warning(self, tr("서명"), tr("디지털 ID 파일을 찾지 못했습니다. 디지털 ID 창에서 다시 가져오세요."))
+                cred = self._sign_creds().get(fp)
+                if not cred or cred[0] != "pfx":
+                    QMessageBox.warning(self, tr("서명"), tr("이 디지털 ID 를 열지 않았습니다. 서명을 다시 시작하세요."))
                     return "fail"
+                pfx, pw = cred[1], cred[2]
             certify = dlg.certify()
             if certify == 1 and len(signs) > 1:
                 QMessageBox.information(self, tr("서명"), tr("'인증 — 변경 금지' 는 서명 하나에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."))
@@ -438,7 +525,11 @@ class SignDraftMixin:
         else:
             targets, fields = [], []
         doc_pw, remembered = self._sign_doc_password(cur, doc)
-        img_items = [(d["page"], tuple(d["rect"]), sign_store.image_path(d["image"])) for d in images]
+        img_items = [(d["page"], tuple(d["rect"]), self._sign_draft_image(d) or sign_store.id_image_path(self._sign_current_fp()))
+                     for d in images]
+        if any(not ip for _p, _r, ip in img_items):
+            QMessageBox.information(self, tr("그림만 넣기"), tr("서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '서명 그림 넣기…' 로 넣은 뒤 다시 확정하세요."))
+            return "fail"
         tmps = []
 
         def _job():
@@ -503,15 +594,6 @@ class SignDraftMixin:
         for t in tmps:
             if t != final_tmp:
                 self._sign_unlink(t)
-        if signs and getattr(self, "_sign_rehello", None) == fp:
-            self._sign_rehello = None
-            if QMessageBox.question(self, tr("Windows Hello"), tr("이 비밀번호를 Windows Hello 로 다시 보관할까요?")) == QMessageBox.StandardButton.Yes:
-                from viewer import sign_hello
-                try:
-                    self._sign_bg(lambda: sign_hello.store(fp, pw), tr("Windows Hello 확인"))
-                    sign_store.set_id_flag(fp, hello=True)
-                except Exception:
-                    pass
         out = sign_drafts.out_of(cur) or sign_drafts.default_out(cur)
         final = self._sign_place_out(cur, final_tmp, out, bool(dlg is not None and dlg.save_as))
         if not final:

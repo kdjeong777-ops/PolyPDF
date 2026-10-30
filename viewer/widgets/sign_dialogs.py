@@ -147,14 +147,16 @@ class _DrawDialog(QDialog):
 
 
 class SignImageDialog(QDialog):
-    """불러오기 → 배경 지우기(자동 임계값) → 잉크 색 → 자르기 → 이름 붙여 저장."""
+    """불러오기 → 배경 지우기(자동 임계값) → 잉크 색 → 자르기 → 디지털 ID 의 서명 그림으로(261031-1 — ID 하나에 그림 하나).
+    `fp` 를 주면 그 ID 에 바로 저장하고, 없으면(새 ID 만들기 창) 정리한 그림을 `result_image` 로만 돌려준다."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, fp: str = ""):
         super().__init__(parent)
-        self.setWindowTitle(tr("서명 그림 만들기"))
+        self.setWindowTitle(tr("서명 그림 넣기"))
+        self._fp = str(fp or "")
         self._src = None            # PIL 원본
         self._out = None            # 정리한 RGBA
-        self.saved_name = ""
+        self.result_image = None
         v = QVBoxLayout(self)
         row = QHBoxLayout()
         b_open = QPushButton(tr("그림 불러오기…"))
@@ -188,8 +190,6 @@ class SignImageDialog(QDialog):
         for key, label in (("original", tr("원래 색")), ("black", tr("검정")), ("blue", tr("파랑"))):
             self.cmb_ink.addItem(label, key)
         form.addRow(tr("잉크 색"), self.cmb_ink)
-        self.ed_name = QLineEdit(tr("기본"))
-        form.addRow(tr("이름"), self.ed_name)
         v.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         bb.accepted.connect(self._save)
@@ -265,9 +265,10 @@ class SignImageDialog(QDialog):
     def _save(self):
         if self._out is None:
             return
-        from viewer import sign_store
-        e = sign_store.add_image(self._out, self.ed_name.text())
-        self.saved_name = e["name"]
+        self.result_image = self._out
+        if self._fp:
+            from viewer import sign_store
+            sign_store.set_id_image(self._fp, self._out)
         self.accept()
 
 
@@ -317,12 +318,37 @@ class _CreateIdDialog(QDialog):
                          "문서가 바뀌었는지는 신뢰 등록 없이도 드러납니다."))
         note.setWordWrap(True)
         v.addWidget(note)
+        # 261031-1(사용자 지시): 디지털 ID 가 서명 그림도 갖는다 — 만들 때 아래 단추로 넣는다(나중에 관리 창에서 바꿀 수 있다)
+        self.image = None
+        img_row = QHBoxLayout()
+        self.b_image = QPushButton(tr("서명 그림 넣기"))
+        self.b_image.clicked.connect(self._pick_image)
+        self.lab_image = QLabel(tr("(서명 그림 없음 — 글자만 찍힙니다)"))
+        img_row.addWidget(self.b_image)
+        img_row.addWidget(self.lab_image, 1)
+        v.addLayout(img_row)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         bb.accepted.connect(self._ok)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
         self.ed_pw.textChanged.connect(self._strength)
         self.resize(460, 0)
+
+    def _pick_image(self):
+        dlg = SignImageDialog(self)
+        try:
+            if dlg.exec() != QDialog.DialogCode.Accepted or dlg.result_image is None:
+                return
+            self.image = dlg.result_image
+        finally:
+            dlg.deleteLater()
+        pm = QPixmap.fromImage(_pil_to_qimage(self.image)).scaledToHeight(40, Qt.TransformationMode.SmoothTransformation)
+        bg = _checker(pm.width(), pm.height())
+        p = QPainter(bg)
+        p.drawPixmap(0, 0, pm)
+        p.end()
+        self.lab_image.setPixmap(bg)
+        self.b_image.setText(tr("서명 그림 바꾸기"))
 
     def _strength(self, t):
         from viewer.sign_core import password_weak, PASSWORD_MIN
@@ -372,11 +398,11 @@ def _ask_password(parent, title: str, text: str) -> str | None:
 
 
 class DigitalIdDialog(QDialog):
-    """디지털 ID 관리 — 만들기·가져오기·백업·공개 인증서·기본·Hello 보관·지우기."""
+    """디지털 ID 관리 — 만들기·가져오기·백업·공개 인증서·기본·Hello 보관·서명 그림·지우기."""
 
     def __init__(self, parent=None, runner=None, hello_ok: bool = False):
         super().__init__(parent)
-        self.setWindowTitle(tr("디지털 ID"))
+        self.setWindowTitle(tr("디지털 ID 관리"))
         self._run = runner or (lambda fn, _t: fn())
         self._hello_ok = bool(hello_ok)
         v = QVBoxLayout(self)
@@ -393,8 +419,9 @@ class DigitalIdDialog(QDialog):
         grid2 = QHBoxLayout()
         self.b_def = QPushButton(tr("기본으로"))
         self.b_hello = QPushButton(tr("Windows Hello 보관"))
+        self.b_img = QPushButton(tr("서명 그림…"))          # 261031-1: 고른 ID 의 서명 그림 넣기·바꾸기·빼기
         self.b_del = QPushButton(tr("지우기…"))
-        for b in (self.b_def, self.b_hello, self.b_del):
+        for b in (self.b_def, self.b_hello, self.b_img, self.b_del):
             grid2.addWidget(b)
         grid2.addStretch(1)
         v.addLayout(grid2)
@@ -428,6 +455,7 @@ class DigitalIdDialog(QDialog):
         self.b_cer.clicked.connect(self._export_cer)
         self.b_def.clicked.connect(self._set_default)
         self.b_hello.clicked.connect(self._toggle_hello)
+        self.b_img.clicked.connect(self._image)
         self.b_del.clicked.connect(self._delete)
         self.lst.currentRowChanged.connect(lambda _r: self._sync_buttons())
         self.resize(620, 360)
@@ -445,6 +473,8 @@ class DigitalIdDialog(QDialog):
                 hello += tr("  · Windows 저장소")
             elif e.get("source") == "npki":
                 hello += tr("  · 공동인증서")
+            if sign_store.id_image_path(e.get("fp", "")):
+                hello += tr("  · 서명 그림")
             mail = f" <{e['email']}>" if e.get("email") else ""
             it = QListWidgetItem(tr("{mark}{name}{mail} — ~{until}{hello}").format(
                 mark=mark, name=e.get("name", ""), mail=mail, until=e.get("not_after", ""), hello=hello))
@@ -463,7 +493,7 @@ class DigitalIdDialog(QDialog):
 
     def _sync_buttons(self):
         has = bool(self._fp())
-        for b in (self.b_bak, self.b_cer, self.b_def, self.b_hello, self.b_del):
+        for b in (self.b_bak, self.b_cer, self.b_def, self.b_hello, self.b_img, self.b_del):
             b.setEnabled(has)
         if has:
             from viewer import sign_store
@@ -503,6 +533,8 @@ class DigitalIdDialog(QDialog):
             QMessageBox.warning(self, self.windowTitle(), tr("디지털 ID 를 만들지 못했습니다: {e}").format(e=type(e).__name__))
             return
         sign_store.add_id(pfx, info)
+        if dlg.image is not None:
+            sign_store.set_id_image(info.fp, dlg.image)
         if self._hello_ok and dlg.chk_hello.isChecked():
             self._store_hello(info.fp, pw)
         self.refresh(info.fp)
@@ -644,6 +676,35 @@ class DigitalIdDialog(QDialog):
             return
         sign_store.add_win_id(dlg.chosen)
         self.refresh(dlg.chosen.fp)
+
+    def _image(self):
+        """고른 ID 의 서명 그림 — 넣기·바꾸기, 있으면 빼기도(261031-1, ID 하나에 그림 하나)."""
+        from viewer import sign_store
+        fp = self._fp()
+        if not fp:
+            return
+        if sign_store.id_image_path(fp):
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(tr("서명 그림"))
+            box.setText(tr("이 디지털 ID 에는 서명 그림이 있습니다."))
+            b_new = box.addButton(tr("바꾸기…"), QMessageBox.ButtonRole.AcceptRole)
+            b_rm = box.addButton(tr("빼기"), QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            c = box.clickedButton()
+            if c is b_rm:
+                sign_store.clear_id_image(fp)
+                self.refresh(fp)
+                return
+            if c is not b_new:
+                return
+        dlg = SignImageDialog(self, fp=fp)
+        try:
+            dlg.exec()
+        finally:
+            dlg.deleteLater()
+        self.refresh(fp)
 
     def _set_default(self):
         from viewer import sign_store
@@ -939,27 +1000,90 @@ class StoreCertDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
+# 서명 시작 확인 — SOT §3.3·§6 (261031-1)
+# ---------------------------------------------------------------------------
+
+class SignUnlockDialog(QDialog):
+    """서명을 시작할 때 한 번 — 비밀번호(붙여넣기 가능) 또는 Windows Hello 로 디지털 ID 를 연다.
+    비밀번호는 맞는 ID 를 모두 연다(쓸 수 있는 ID), Hello 는 기본 ID(없으면 Hello 로 보관한 첫 ID) 하나를 연다.
+    연 열쇠는 서명 확정·취소까지만 앱이 들고 있다(SOT §6.4). 결과: `mode` = "hello" | "password"."""
+
+    def __init__(self, parent=None, hello_ok: bool = False, hello_name: str = "", n_ids: int = 0):
+        super().__init__(parent)
+        self.setWindowTitle(tr("서명 — 본인 확인"))
+        self.mode = ""
+        v = QVBoxLayout(self)
+        lab = QLabel(tr("서명에 쓸 디지털 ID 를 엽니다(이 PC 의 디지털 ID {n}개). 비밀번호가 맞는 ID 로 서명하고, "
+                        "여럿이면 기본 ID(없으면 첫 ID)로 시작합니다 — 서명 자리 우클릭에서 바꿀 수 있습니다.").format(n=n_ids))
+        lab.setWordWrap(True)
+        v.addWidget(lab)
+        self.btn_hello = QPushButton(tr("Windows Hello 로 확인 — {name}").format(name=hello_name) if hello_name
+                                     else tr("Windows Hello 로 확인"))
+        self.btn_hello.setVisible(bool(hello_ok and hello_name))
+        self.btn_hello.clicked.connect(self._hello)
+        v.addWidget(self.btn_hello)
+        form = QFormLayout()
+        self.ed_pw = QLineEdit()
+        self.ed_pw.setEchoMode(QLineEdit.EchoMode.Password)
+        self.ed_pw.setPlaceholderText(tr("디지털 ID 비밀번호(붙여넣기 가능)"))
+        form.addRow(tr("비밀번호"), self.ed_pw)
+        v.addLayout(form)
+        if not hello_ok:
+            v.addWidget(google_hint_label())
+            r = QHBoxLayout()
+            r.addWidget(google_button(self))
+            r.addStretch(1)
+            v.addLayout(r)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self._ok)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        if self.btn_hello.isVisible():
+            self.btn_hello.setDefault(True)
+            self.btn_hello.setFocus()
+        else:
+            self.ed_pw.setFocus()
+        self.resize(440, 0)
+
+    def password(self) -> str:
+        return self.ed_pw.text()
+
+    def _hello(self):
+        self.mode = "hello"
+        self.accept()
+
+    def _ok(self):
+        if not self.ed_pw.text():
+            if self.btn_hello.isVisible():
+                self._hello()
+                return
+            QMessageBox.information(self, self.windowTitle(), tr("비밀번호를 넣으세요."))
+            return
+        self.mode = "password"
+        self.accept()
+
+
+# ---------------------------------------------------------------------------
 # 서명 창 — SOT §3.3
 # ---------------------------------------------------------------------------
 
 class SignDialog(QDialog):
-    """서명 확정 창 — 디지털 ID·그림·겉모양 글자·사유·비밀번호(또는 Windows Hello) → [서명 확정] / [다른 이름으로…].
+    """서명 확정 창 — 디지털 ID(서명을 시작할 때 연 것만)·서명 그림(그 ID 의 것, 켜고 끔)·겉모양 글자·사유 → [서명 확정] / [다른 이름으로…].
+    비밀번호는 묻지 않는다 — 서명을 시작할 때 한 번 확인했다(261031-1, SOT §3.3·§6). 그림·글자를 모두 끄면 확정하지 않는다.
     첫 서명 자리 크기(그림 상자 + 아래 글자 줄)로 실제 겉모양을 미리 보인다(보안 SOT §3.3·§3.10)."""
 
     PREVIEW_DELAY_MS = 250
     PREVIEW_MAX = (360, 150)
     PREVIEW_DPI = 110
 
-    def __init__(self, parent=None, hello_ok: bool = False, file_name: str = "", box_size=(142.0, 57.0),
+    def __init__(self, parent=None, file_name: str = "", box_size=(142.0, 57.0),
                  page_count: int = 1, current_page: int = 0, can_certify: bool = True, field_name: str = "",
                  field_signers=(), field_lock: bool = False, summary: str = "", out_name: str = "",
-                 box_is_field: bool = False):
+                 box_is_field: bool = False, ids=None, cur_fp: str = ""):
         super().__init__(parent)
-        from viewer import sign_hello, sign_store
+        from viewer import sign_store
         self.setWindowTitle(tr("전자서명 — {name}").format(name=file_name) if file_name else tr("전자서명"))
-        self._hello_ok = bool(hello_ok)
         self.save_as = False
-        self.use_hello = False
         self.field_name = str(field_name or "")      # 3단계(보안 SOT §3.7): 빈 서명 칸 채우기
         self.summary = str(summary or "")
         self._box_is_field = bool(box_is_field or self.field_name)   # 칸 크기 그대로(글자 줄을 덧붙이지 않는다)
@@ -977,26 +1101,25 @@ class SignDialog(QDialog):
             if field_lock:
                 form.addRow(tr("잠금"), QLabel(tr("서명하면 문서의 모든 칸이 잠깁니다")))
         self.cmb_id = QComboBox()
+        allow = None if ids is None else {str(x) for x in ids}
         for e in d["ids"]:
+            if allow is not None and e.get("fp") not in allow:
+                continue                          # 서명을 시작할 때 열지 못한 ID 는 고를 수 없다(261031-1)
             self.cmb_id.addItem(f"{e.get('name', '')}" + (f" <{e['email']}>" if e.get("email") else ""), e.get("fp"))
-        i = self.cmb_id.findData(d.get("default_id"))
+        i = self.cmb_id.findData(cur_fp or d.get("default_id"))
         if i >= 0:
             self.cmb_id.setCurrentIndex(i)
         form.addRow(tr("디지털 ID"), self.cmb_id)
-        self.cmb_img = QComboBox()
-        self.cmb_img.addItem(tr("(그림 없음)"), "")
-        for im in d["images"]:
-            self.cmb_img.addItem(im.get("name", ""), im.get("name", ""))
-        j = self.cmb_img.findData(d.get("default_image"))
-        if j >= 0:
-            self.cmb_img.setCurrentIndex(j)
-        form.addRow(tr("서명 그림"), self.cmb_img)
         ap = d.get("appearance") or {}
         # 줄 하나짜리 묶음 — QGroupBox 는 줄바꿈 라벨이 있는 창에서 높이를 못 받아 빈 막대로 눌렸다(화면 확인)
         from PyQt6.QtWidgets import QWidget
         g = QWidget()
         gl = QHBoxLayout(g)
         gl.setContentsMargins(0, 0, 0, 0)
+        # 261031-1(사용자 지시): 서명 그림은 그 ID 의 그림 하나 — 고르기 목록 대신 켜고 끄는 체크
+        self.chk_img = QCheckBox(tr("서명 그림"))
+        self.chk_img.setChecked(bool(ap.get("show_image", True)))
+        gl.addWidget(self.chk_img)
         self.chk_name = QCheckBox(tr("이름"))
         self.chk_date = QCheckBox(tr("날짜"))
         self.chk_reason = QCheckBox(tr("사유"))
@@ -1006,7 +1129,7 @@ class SignDialog(QDialog):
         for c in (self.chk_name, self.chk_date, self.chk_reason):
             gl.addWidget(c)
         gl.addStretch(1)
-        form.addRow(tr("겉모양 글자"), g)
+        form.addRow(tr("겉모양"), g)
         # 2단계(보안 SOT §3.6): 글자 배치
         self.cmb_layout = QComboBox()
         for key, label in (("image_top", tr("그림 위·글자 아래")), ("overlay", tr("그림 위에 겹쳐")),
@@ -1086,22 +1209,7 @@ class SignDialog(QDialog):
         self._pv_timer.setSingleShot(True)
         self._pv_timer.setInterval(self.PREVIEW_DELAY_MS)
         self._pv_timer.timeout.connect(self._render_preview)
-        self.ed_pw = QLineEdit()
-        self.ed_pw.setEchoMode(QLineEdit.EchoMode.Password)
-        self.ed_pw.setPlaceholderText(tr("디지털 ID 비밀번호(붙여넣기 가능)"))
-        form.addRow(tr("비밀번호"), self.ed_pw)
         v.addLayout(form)
-        self.btn_hello = QPushButton(tr("Windows Hello 로 서명"))
-        self.btn_hello.setDefault(True)
-        self.btn_hello.clicked.connect(self._hello)
-        v.addWidget(self.btn_hello)
-        self._google_row = QHBoxLayout()
-        self._g_lab = google_hint_label()
-        self._g_btn = google_button(self)
-        v.addWidget(self._g_lab)
-        self._google_row.addWidget(self._g_btn)
-        self._google_row.addStretch(1)
-        v.addLayout(self._google_row)
         self._win_note = QLabel(tr("Windows 인증서 저장소의 키로 서명합니다 — 비밀번호 대신 Windows 가 PIN·확인을 물을 수 있습니다."))
         self._win_note.setWordWrap(True)
         v.addWidget(self._win_note)
@@ -1118,13 +1226,11 @@ class SignDialog(QDialog):
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
         self.cmb_id.currentIndexChanged.connect(lambda _i: self._sync())
-        for sig in (self.cmb_id.currentIndexChanged, self.cmb_img.currentIndexChanged):
-            sig.connect(lambda _i: self._pv_timer.start())
-        for c in (self.chk_name, self.chk_date, self.chk_reason):
+        self.cmb_id.currentIndexChanged.connect(lambda _i: self._pv_timer.start())
+        for c in (self.chk_img, self.chk_name, self.chk_date, self.chk_reason):
             c.toggled.connect(lambda _on: self._pv_timer.start())
         self.ed_reason.textChanged.connect(lambda _t: self._pv_timer.start())
         self.cmb_layout.currentIndexChanged.connect(lambda _i: self._pv_timer.start())
-        self._has_hello = sign_hello.has
         self._sync()
         self.resize(480, 0)
         self._pv_timer.start()
@@ -1158,7 +1264,8 @@ class SignDialog(QDialog):
             self.preview.setToolTip(tr("실제 서명과 같은 그리기 — 날짜는 서명하는 때의 시각으로 바뀝니다."))
         else:
             self.preview.setPixmap(QPixmap())
-            self.preview.setText(tr("겉모양에 쓸 한글 글꼴이 없습니다 — 서명 그림을 고르거나 겉모양 글자를 끄세요.")
+            self.preview.setText(empty_appearance_text() if res == "empty_appearance"
+                                 else tr("겉모양에 쓸 한글 글꼴이 없습니다 — 서명 그림을 고르거나 겉모양 글자를 끄세요.")
                                  if res == "no_font" else tr("미리보기를 만들지 못했습니다({e}).").format(e=res))
 
     def _fit_height(self):
@@ -1194,9 +1301,9 @@ class SignDialog(QDialog):
         super().done(r)
 
     def appearance(self):
-        """지금 고른 겉모양(서명·미리보기 공용)."""
+        """지금 고른 겉모양(서명·미리보기 공용) — 그림은 고른 ID 의 서명 그림(켰을 때)."""
         from viewer import sign_core, sign_store
-        return sign_core.Appearance(image_path=sign_store.image_path(self.image_name()),
+        return sign_core.Appearance(image_path=sign_store.id_image_path(self.fp()) if self.chk_img.isChecked() else "",
                                     show_name=self.chk_name.isChecked(), show_date=self.chk_date.isChecked(),
                                     show_reason=self.chk_reason.isChecked(), font_path=sign_core.default_font(),
                                     layout=str(self.cmb_layout.currentData() or sign_core.LAYOUT_DEFAULT))
@@ -1224,69 +1331,64 @@ class SignDialog(QDialog):
     def fp(self) -> str:
         return str(self.cmb_id.currentData() or "")
 
-    def image_name(self) -> str:
-        return str(self.cmb_img.currentData() or "")
-
-    def _id_hello(self) -> bool:
-        from viewer import sign_store
-        e = sign_store.get_id(self.fp()) or {}
-        return bool(self._hello_ok and e.get("hello") and self._has_hello(self.fp()))
-
     def _id_win(self) -> bool:
         from viewer import sign_store
         return (sign_store.get_id(self.fp()) or {}).get("kind") == "win"
 
     def _sync(self):
-        win = self._id_win()
-        h = self._id_hello() and not win
-        self.btn_hello.setVisible(h)
-        self._g_lab.setVisible(not self._hello_ok and not win)
-        self._g_btn.setVisible(not self._hello_ok and not win)
-        self.ed_pw.setEnabled(not win)
-        self._win_note.setVisible(win)
-        self.b_sign.setDefault(not h)
-
-    def password(self) -> str:
-        return self.ed_pw.text()
+        from viewer import sign_store
+        has_img = bool(sign_store.id_image_path(self.fp()))
+        self.chk_img.setEnabled(has_img)
+        self.chk_img.setToolTip("" if has_img else tr("이 디지털 ID 에는 서명 그림이 없습니다 — 디지털 ID 관리에서 넣을 수 있습니다."))
+        self._win_note.setVisible(self._id_win())
+        self.b_sign.setDefault(True)
 
     def _remember_choices(self):
-        from viewer import sign_store
-        d = sign_store.load()
-        d["appearance"] = {"show_name": self.chk_name.isChecked(), "show_date": self.chk_date.isChecked(),
-                           "show_reason": self.chk_reason.isChecked(),
-                           "layout": str(self.cmb_layout.currentData() or "image_top")}
-        d["tsa_on"] = self.chk_tsa.isChecked()
-        d["tsa_url"] = self.ed_tsa.text().strip()
-        d["last_reason"] = self.ed_reason.text()
-        d["last_location"] = self.ed_loc.text()
-        if self.fp():
-            d["default_id"] = self.fp()
-        d["default_image"] = self.image_name() or d.get("default_image", "")
-        sign_store.save(d)
-
-    def _hello(self):
-        self.use_hello = True
-        self._remember_choices()
-        self.accept()
+        """고른 것은 다음 서명에도 그대로(261031-1, 사용자 지시) — 그림 켬·글자·배치·사유·타임스탬프·ID."""
+        remember_appearance(show_image=self.chk_img.isChecked(), show_name=self.chk_name.isChecked(),
+                            show_date=self.chk_date.isChecked(), show_reason=self.chk_reason.isChecked(),
+                            layout=str(self.cmb_layout.currentData() or "image_top"),
+                            tsa_on=self.chk_tsa.isChecked(), tsa_url=self.ed_tsa.text().strip(),
+                            last_reason=self.ed_reason.text(), last_location=self.ed_loc.text(), fp=self.fp())
 
     def _sign(self):
         if not self.fp():
             return
-        if not self.ed_pw.text() and not self._id_win():
-            QMessageBox.information(self, self.windowTitle(), tr("비밀번호를 넣으세요."))
+        from viewer import sign_core, sign_store
+        e = sign_store.get_id(self.fp()) or {}
+        if not sign_core.has_content(self.appearance(), sign_core.signer_label(e.get("name", ""), e.get("email", "")),
+                                     self.ed_reason.text()):
+            QMessageBox.information(self, self.windowTitle(), empty_appearance_text())     # 261031-1 — 빈 서명은 하지 않는다
             return
-        self.use_hello = False
         self._remember_choices()
         self.accept()
 
     def _sign_as(self):
         self.save_as = True
-        if self._id_hello() and not self.ed_pw.text():
-            self._hello()
-            return
         self._sign()
         if self.result() != QDialog.DialogCode.Accepted:
             self.save_as = False
+
+
+def empty_appearance_text() -> str:
+    return tr("서명 내용이 없습니다 — 서명 그림이나 겉모양 글자(이름·날짜·사유)를 하나 이상 켜세요.")
+
+
+def remember_appearance(fp: str = "", **kw) -> None:
+    """서명 겉모양 고른 것을 `signing.json` 에 — 서명 확정 창·서명 자리 옵션 공용(261031-1).
+    kw: show_image·show_name·show_date·show_reason·layout(appearance 안) · tsa_on·tsa_url·last_reason·last_location(맨 위)."""
+    from viewer import sign_store
+    d = sign_store.load()
+    ap = dict(d.get("appearance") or {})
+    for k in ("show_image", "show_name", "show_date", "show_reason", "layout"):
+        if k in kw:
+            ap[k] = kw.pop(k)
+    d["appearance"] = ap
+    for k, val in kw.items():
+        d[k] = val
+    if fp:
+        d["default_id"] = fp
+    sign_store.save(d)
 
 
 class SignPanelDialog(QDialog):

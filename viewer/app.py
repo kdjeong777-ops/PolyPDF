@@ -1709,7 +1709,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # 260603-3: 인쇄
         a_print = self._sc_act_print = QAction(tr("인쇄..."), self)
-        a_print.triggered.connect(self.action_print)
+        a_print.triggered.connect(_no_checked(self.action_print))     # 261031-3: preset_scope 에 checked(False) 가 들어가지 않게
         m_file.addAction(a_print)
 
         # 261025-1(디자인 SOT §2.9.5, 사용자 지시): 최근 폴더·최근 파일은 `즐겨찾기` 탭으로 옮겼다(아래)
@@ -1840,8 +1840,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             (tr("서명 확정..."), self.action_sign_confirm),           # 보안 SOT §3.10
             (tr("서명 편집"), self.action_sign_edit),
             (tr("빈 서명 칸 만들기..."), self.action_sign_field),
-            (tr("디지털 ID..."), self.action_digital_ids),
-            (tr("서명 그림..."), self.action_sign_image)), "tools.sign")
+            (tr("디지털 ID 관리..."), self.action_digital_ids)), "tools.sign")   # 261031-1: 서명 그림은 디지털 ID 가 갖는다
         _sub(tr("태그 자동 부여"), (                     # 태그 SOT §8.2·§8.5(260829 P2)
             (tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True)),
             (tr("새 태그 후보 검토…"), self._autotag_review_candidates),

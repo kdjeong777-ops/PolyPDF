@@ -5,7 +5,8 @@
 - `{"drafts": [...], "out": "<결과 파일>"}` — 아직 확정 안 한 자리. `out` 은 서명 편집에서 왔을 때만(확정 결과를 그 파일로).
 - `{"signed": {"src", "base_len", "base_sha", "drafts"}}` — 확정해 만든 서명 파일. 서명 편집이 바탕·자리를 되살릴 때 쓴다.
 
-`drafts[]` = `{"id", "page", "rect": [x0, y0, x1, y1], "kind": "sign"|"image", "image": "<서명 그림 이름>", "field": "<빈 칸 이름>"}` —
+`drafts[]` = `{"id", "page", "rect": [x0, y0, x1, y1], "kind": "sign"|"image", "image": "<옛 서명 그림 이름>", "field": "<빈 칸 이름>",
+"fp": "<그림만 자리의 디지털 ID — 그 ID 의 서명 그림, 261031-1>"}` —
 `rect` 는 **그림 상자**, 보이는 쪽 좌표(fitz `page.rect`, `/Rotate` 적용 뒤). 쓰기는 원자적, 깨진 파일은 옆에 보관(sign_store 와 같은 규칙).
 """
 from __future__ import annotations
@@ -63,7 +64,8 @@ def _clean(d: dict) -> dict:
     r = [float(v) for v in (d.get("rect") or (0, 0, 0, 0))][:4]
     return {"id": str(d.get("id") or new_id()), "page": int(d.get("page", 0)), "rect": r,
             "kind": d.get("kind") if d.get("kind") in KINDS else "sign",
-            "image": str(d.get("image") or ""), "field": str(d.get("field") or "")}
+            "image": str(d.get("image") or ""), "field": str(d.get("field") or ""),
+            "fp": str(d.get("fp") or "")}                 # 261031-1: 그림만 자리의 디지털 ID(그 ID 의 서명 그림)
 
 
 # ---- 아직 확정 안 한 자리 ----------------------------------------------------------
