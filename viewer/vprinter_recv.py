@@ -511,13 +511,19 @@ def task_name() -> str:
     return TASK_PREFIX + user_name()
 
 
+# 261031-2(가상 프린터 SOT §4.4): 'Queue' 였을 때 — 창이 없을 때 인쇄하면 `--printed` 실행이 그대로 창이 되어 **작업 인스턴스가 창이
+#   닫힐 때까지 살아 있고**, 그동안 온 두 번째 인쇄의 작업은 줄에서 기다려 받는 창에 알리지 못했다(사용자 보고 '연이어 인쇄하면 두 번째가 안 된다').
+#   'Parallel' 이면 두 번째 실행이 곧바로 떠 받는 창에 넘기고 끝난다(main.py `--printed`).
+TASK_POLICY = "Parallel"
+
+
 def _task_xml(exe_cmd: str, args: str) -> str:
     from xml.sax.saxutils import escape
     return ("<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n"
             "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n"
             "  <RegistrationInfo><Description>PolyPDF virtual printer - opens printed PDFs</Description></RegistrationInfo>\n"
             "  <Principals><Principal id=\"Author\"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\n"
-            "  <Settings><MultipleInstancesPolicy>Queue</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"
+            "  <Settings><MultipleInstancesPolicy>" + TASK_POLICY + "</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"
             "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><AllowStartOnDemand>true</AllowStartOnDemand>"
             "<Hidden>true</Hidden></Settings>\n"
             "  <Actions Context=\"Author\"><Exec><Command>%s</Command><Arguments>%s</Arguments></Exec></Actions>\n"
@@ -533,7 +539,7 @@ def launch_command() -> tuple:
 
 
 def task_command():
-    """지금 등록된 작업의 (명령, 인자) — 없으면 None."""
+    """지금 등록된 작업의 (명령, 인자, 여러 실행 정책) — 없으면 None."""
     r = subprocess.run(["schtasks", "/query", "/tn", task_name(), "/xml"], capture_output=True, creationflags=_NO_WINDOW)
     if r.returncode != 0:
         return None
@@ -544,8 +550,9 @@ def task_command():
         txt = raw.decode("utf-8", "replace")
     c = re.search(r"<Command>(.*?)</Command>", txt, re.S)
     a = re.search(r"<Arguments>(.*?)</Arguments>", txt, re.S)
+    m = re.search(r"<MultipleInstancesPolicy>(.*?)</MultipleInstancesPolicy>", txt, re.S)
     from xml.sax.saxutils import unescape
-    return (unescape(c.group(1)) if c else "", unescape(a.group(1)) if a else "")
+    return (unescape(c.group(1)) if c else "", unescape(a.group(1)) if a else "", m.group(1).strip() if m else "")
 
 
 def task_owner() -> bool:
@@ -561,10 +568,11 @@ def task_owner() -> bool:
 
 
 def ensure_task() -> bool:
-    """사용자별 예약 작업을 지금 실행 파일로 맞춘다(없거나 다르면 만든다). 바꿨으면 True. 부르는 쪽이 `task_owner()` 를 먼저 본다."""
+    """사용자별 예약 작업을 지금 실행 파일·정책으로 맞춘다(없거나 다르면 만든다 — 옛 'Queue' 작업도 여기서 바뀐다). 바꿨으면 True.
+    부르는 쪽이 `task_owner()` 를 먼저 본다."""
     exe, args = launch_command()
     cur = task_command()
-    if cur and os.path.normcase(cur[0]) == os.path.normcase(exe) and cur[1] == args:
+    if cur and os.path.normcase(cur[0]) == os.path.normcase(exe) and cur[1] == args and cur[2] == TASK_POLICY:
         return False
     fd, xml = tempfile.mkstemp(suffix=".xml", prefix="polypdf_task_")
     os.close(fd)

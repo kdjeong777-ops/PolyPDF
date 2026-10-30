@@ -7,6 +7,7 @@ B. 저장 창 없이 바로 저장(261017-14) — 원래 파일 폴더에 원래
 C. 원래 파일이 없으면 기본 저장 폴더 · 이름 다듬기(프로그램 이름·'[읽기 전용]' 떼기, 못 쓰는 글자)
 D. 여는 곳 — 저장 폴더를 이 창이 보고 있으면 목록 다시 읽기 + 본문, 다른 폴더면 새 창
 E. 변환 실패면 PS 를 남긴다(잃지 않게)
+Q. 연이어 인쇄 — 예약 작업은 'Parallel', 옛 'Queue' 작업은 다시 만든다(261031-2)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -242,6 +243,39 @@ try:
 finally:
     del sys.frozen
     R.ensure_task, VC._printer_installed = _ens, _inst
+
+print("\n=== Q. 연이어 인쇄 — 예약 작업은 겹쳐 실행(261031-2) ===")
+# 사용자 보고: 창이 없을 때 인쇄하면 --printed 실행이 그대로 창이 되어 작업 인스턴스가 살아 있고, 'Queue' 정책이라
+#   두 번째 인쇄의 작업이 그 창이 닫힐 때까지 줄에서 기다려 PDF 가 만들어지지 않았다(이 PC 작업이 실제로 Queue 였다)
+xml = R._task_xml(r"C:\Program Files\PolyPDF\PolyPDF.exe", "--printed")
+chk("<MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>" in xml, "Q1 새 예약 작업은 'Parallel' — 두 번째 실행이 곧바로 받는 창에 넘긴다")
+_run, _lc = R.subprocess.run, R.launch_command
+calls = []
+
+
+class _R:
+    def __init__(self, rc=0, out=b""):
+        self.returncode, self.stdout = rc, out
+
+
+def _fake_run(args, **k):
+    calls.append(list(args))
+    if "/query" in args:
+        return _R(0, R._task_xml(r"C:\P\PolyPDF.exe", "--printed").replace("Parallel", "Queue").encode("utf-16"))
+    return _R(0)
+
+
+R.subprocess.run = _fake_run
+R.launch_command = lambda: (r"C:\P\PolyPDF.exe", "--printed")
+try:
+    changed = R.ensure_task()
+    chk(changed and any("/create" in c for c in calls), "Q2 이미 있는 옛 'Queue' 작업은 명령이 같아도 다시 만든다(업데이트한 설치본)", str(calls))
+    calls.clear()
+    R.subprocess.run = lambda args, **k: (calls.append(list(args)),
+                                          _R(0, R._task_xml(r"C:\P\PolyPDF.exe", "--printed").encode("utf-16")) if "/query" in args else _R(0))[1]
+    chk(not R.ensure_task() and not any("/create" in c for c in calls), "Q3 이미 'Parallel' 이면 건드리지 않는다", str(calls))
+finally:
+    R.subprocess.run, R.launch_command = _run, _lc
 print("\n=== F. 도구 메뉴 ===")
 from PyQt6.QtGui import QAction
 texts = [a.text() for a in mw.findChildren(QAction)]
