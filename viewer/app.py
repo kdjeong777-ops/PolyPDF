@@ -4338,7 +4338,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     # ── 260915-2(§4.7.8): 다른 PolyPDF 창과의 핸드셰이크 ─────────────────
     def _on_instance_request(self, op, path, page=None) -> dict:
-        """다른 창의 요청 처리 — query(열고 있나·미저장 편집) / release(놓기) / reload(다시 열기)."""
+        """다른 창의 요청 처리 — query(열고 있나·미저장 편집) / release(놓기) / reload(다시 열기) / show(가상 프린터가 넘긴 파일)."""
         from viewer.instance_link import same_file
         panes = [(i, mv) for i, mv in enumerate(getattr(self, "_mv", []))
                  if mv.current_file() and same_file(mv.current_file(), path)]
@@ -4382,6 +4382,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                         pass
                 QTimer.singleShot(0, _reopen)          # 응답을 먼저 보내고 연다
             return {"ok": True}
+        if op == "show":                               # 261031-4: 가상 프린터 받는 창이 넘긴 파일(가상 프린터 SOT §4.4)
+            return self._vprinter_peer_show(path)
         return {"error": tr('알 수 없는 요청: {op}').format(op=op)}
 
     def _ask_peer_release(self, name: str, holders: list) -> str:

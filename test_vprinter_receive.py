@@ -8,6 +8,7 @@ C. 원래 파일이 없으면 기본 저장 폴더 · 이름 다듬기(프로그
 D. 여는 곳 — 저장 폴더를 이 창이 보고 있으면 목록 다시 읽기 + 본문, 다른 폴더면 새 창
 E. 변환 실패면 PS 를 남긴다(잃지 않게)
 Q. 연이어 인쇄 — 예약 작업은 'Parallel', 옛 'Queue' 작업은 다시 만든다(261031-2)
+W. 같은 폴더면 같은 창 — 아래 책갈피창·다른 PolyPDF 창에 넘김(InstanceLink 'show', 261031-4)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -276,6 +277,68 @@ try:
     chk(not R.ensure_task() and not any("/create" in c for c in calls), "Q3 이미 'Parallel' 이면 건드리지 않는다", str(calls))
 finally:
     R.subprocess.run, R.launch_command = _run, _lc
+
+print("\n=== W. 같은 폴더면 같은 창 — 아래 책갈피창·다른 PolyPDF 창(261031-4) ===")
+# 사용자 결정 261017-6 '폴더 = 창': 종전에는 받는 창의 위 책갈피창만 봐서, 아래 책갈피창이나 다른 창이 그 폴더를 보고 있어도 새 창이 떴다
+other = root / "다른"; other.mkdir()
+w_pdf = str(orig_dir / "넘김.pdf"); mkpdf(w_pdf, 1)
+rt = mw.bookmark_tree_right
+added_r, panes, peer_calls = [], [], []
+rt.add_or_refresh_file = lambda p, after=None: added_r.append(p)
+_sap = mw._set_active_pane
+mw._set_active_pane = lambda i: panes.append(i)
+link = mw._instance_link
+_show = getattr(link, "show_file", None)
+added.clear(); saved_open.clear(); newwin.clear()
+mw._folder, mw._folder_right, mw._split_on = other, orig_dir, True
+rt.setVisible(True)
+mw._vprinter_open(w_pdf)
+chk(added_r == [w_pdf] and panes == [1] and saved_open == [w_pdf] and not added and not newwin,
+    "W1 2단에서 아래 책갈피창이 그 폴더를 보고 있으면 아래 목록에 더하고 2창에 연다",
+    "아래 %s · 창 %s · 열기 %s · 위 %s · 새 창 %s" % (added_r, panes, saved_open, added, newwin))
+rt.setVisible(False)
+saved_open.clear(); added_r.clear()
+link.show_file = lambda p: (peer_calls.append(p), True)[1]
+mw._vprinter_open(w_pdf)
+chk(peer_calls == [w_pdf] and not newwin and not saved_open and not added_r,
+    "W2 이 창이 그 폴더를 안 보면(아래 책갈피창이 숨었으면 그것도 아님) 다른 PolyPDF 창에 넘기고, 받았으면 새 창을 띄우지 않는다",
+    "넘김 %s · 새 창 %s · 열기 %s" % (peer_calls, newwin, saved_open))
+link.show_file = lambda p: False
+mw._vprinter_open(w_pdf)
+chk(newwin == [w_pdf], "W3 그 폴더를 보는 창이 어디에도 없으면 새 창", str(newwin))
+mw._split_on = False
+mw._folder = orig_dir
+r_ok = mw._on_instance_request("show", w_pdf)
+mw._folder = other
+r_no = mw._on_instance_request("show", w_pdf)
+mw._folder = orig_dir
+for _ in range(5):
+    app.processEvents()
+chk(r_ok == {"ok": True} and r_no == {"ok": False} and added == [w_pdf] and saved_open == [w_pdf],
+    "W4 넘겨받은 창은 그 폴더를 보고 있을 때만 받아(응답 먼저) 목록에 더하고 연다",
+    "%s · %s · 더함 %s · 열기 %s" % (r_ok, r_no, added, saved_open))
+# 실제 통로 — 받는 창 프로세스의 InstanceLink 가 배경 스레드에서 묻고(`_peer_bg` 와 같게), 이 창이 제 처리기로 답한다
+if _show is not None:
+    link.show_file = _show
+else:
+    del link.show_file
+from viewer.instance_link import InstanceLink
+asker = InstanceLink(lambda op, p, pg: {"ok": False})
+added.clear(); saved_open.clear()
+got = {}
+th = threading.Thread(target=lambda: got.setdefault("v", asker.show_file(w_pdf)), daemon=True)
+th.start()
+t0 = time.time()
+while th.is_alive() and time.time() - t0 < 10:
+    app.processEvents(); time.sleep(0.01)
+for _ in range(5):
+    app.processEvents()
+asker.close()
+chk(got.get("v") is True and added == [w_pdf] and saved_open == [w_pdf],
+    "W5 실제 통로 — 다른 프로세스 자리의 InstanceLink.show_file 이 이 창에 넘기고, 이 창이 목록에 더해 연다",
+    "%s · 더함 %s · 열기 %s" % (got, added, saved_open))
+mw._set_active_pane = _sap
+
 print("\n=== F. 도구 메뉴 ===")
 from PyQt6.QtGui import QAction
 texts = [a.text() for a in mw.findChildren(QAction)]

@@ -4,8 +4,8 @@
   쌓인 PS 가 있으면 처리한다. 인쇄 뒤 예약 작업이 `PolyPDF.exe --printed` 를 띄우면 그 실행은 이 통로에 알리고 끝난다.
 - 한 건씩: 변환(배경, `_run_merge_job`) → 도구 메뉴 설정(폴더·흑백)대로 저장(배경, 같은 이름이면 (1)(2)) → 연다.
   저장 창은 띄우지 않는다(261017-14 사용자 지시 — 인쇄 창으로 열지 않고 그냥 연다).
-- 여는 곳: 저장 폴더를 이 창이 보고 있으면 그 목록에 더하고(`add_or_refresh_file`) `_open_saved_file` 로 연다, 아무것도 안 열려 있으면 여기서 연다,
-  아니면 새 PolyPDF 창.
+- 여는 곳: 저장 폴더를 이 창의 위·아래 책갈피창이 보고 있으면 그 목록에 더하고(`add_or_refresh_file`) `_open_saved_file` 로 연다,
+  다른 PolyPDF 창이 보고 있으면 그 창에 넘기고(`InstanceLink.show_file`, 261031-4), 아무것도 안 열려 있으면 여기서 연다, 아니면 새 PolyPDF 창.
 """
 from __future__ import annotations
 
@@ -203,24 +203,71 @@ class VPrinterMixin:
 
     # ── 여는 곳(SOT §4.4) ─────────────────────────────────────────────
     def _vprinter_open(self, path: str):
-        folder = os.path.normcase(os.path.dirname(os.path.abspath(path)))
-        mine = getattr(self, "_folder", None)
-        same = bool(mine) and os.path.normcase(os.path.abspath(str(mine))) == folder
-        nothing_open = not mine and not self.main_view.current_file()
+        nothing_open = not getattr(self, "_folder", None) and not self.main_view.current_file()
         try:
-            if same:
-                # 261017-18 점검: 폴더 전체를 다시 읽지 않고(`refresh` 는 메인에서 전부·편집 중이면 질문 창) 그 파일만 더하고,
-                #   색인부터 거는 '저장 뒤 여는 길' 하나로(CLAUDE.md `_open_saved_file`)
-                self.bookmark_tree.add_or_refresh_file(str(path))
-                self._open_saved_file(str(path), 0)
-            elif nothing_open:
-                self.open_pdf(Path(path))
-            else:
+            if self._vprinter_place(path):
+                return
+            # 261031-4: 받는 창이 아닌 다른 창이 그 폴더를 보고 있으면 그 창에 넘긴다('폴더 = 창', 사용자 결정 261017-6)
+            if self._vprinter_to_peer(path):
+                return
+            if not nothing_open:
                 self._vprinter_new_window(path)
                 return
+            self.open_pdf(Path(path))
         except Exception:
             self._vprinter_new_window(path)
             return
+        self._vprinter_raise()
+
+    def _vprinter_pane_for(self, path: str):
+        """그 PDF 의 폴더를 보고 있는 이 창의 책갈피창 → (창 번호, 책갈피창) 또는 None.
+        위 책갈피창(`_folder`) 먼저, 2단에서 아래 책갈피창이 보이면 그것(`_folder_right`, 261031-4 — 종전에는 위만 봤다)."""
+        folder = os.path.normcase(os.path.dirname(os.path.abspath(path)))
+
+        def same(f):
+            return bool(f) and os.path.normcase(os.path.abspath(str(f))) == folder
+        if same(getattr(self, "_folder", None)):
+            return 0, self.bookmark_tree
+        rt = getattr(self, "bookmark_tree_right", None)
+        if getattr(self, "_split_on", False) and rt is not None and not rt.isHidden() \
+                and same(getattr(self, "_folder_right", None)):
+            return 1, rt
+        return None
+
+    def _vprinter_place(self, path: str) -> bool:
+        """이 창의 책갈피창이 그 폴더를 보고 있으면 그 목록에 더하고 그 창(위=1창·아래=2창)에 연다 → 했으면 True."""
+        hit = self._vprinter_pane_for(path)
+        if hit is None:
+            return False
+        pane, tree = hit
+        if getattr(self, "_split_on", False):
+            self._set_active_pane(pane)
+        # 261017-18 점검: 폴더 전체를 다시 읽지 않고(`refresh` 는 메인에서 전부·편집 중이면 질문 창) 그 파일만 더하고,
+        #   색인부터 거는 '저장 뒤 여는 길' 하나로(CLAUDE.md `_open_saved_file`)
+        tree.add_or_refresh_file(str(path))
+        try:
+            tree._pending_nav = None                 # 새 행이 예약한 열기 — 여기서 직접 연다(`_open_saved_file` 은 위 창 것만 지운다)
+        except Exception:
+            pass
+        self._open_saved_file(str(path), 0)
+        self._vprinter_raise()
+        return True
+
+    def _vprinter_to_peer(self, path: str) -> bool:
+        """261031-4: 그 폴더를 보고 있는 **다른 PolyPDF 창**에 넘긴다 → 받았으면 True. 묻고 기다리는 일은 배경(`_peer_bg`, 응답성 SOT §4.4)."""
+        link = getattr(self, "_instance_link", None)
+        if link is None:
+            return False
+        return bool(self._peer_bg(lambda: link.show_file(path), tr("그 폴더를 보고 있는 PolyPDF 창을 찾는 중…")))
+
+    def _vprinter_peer_show(self, path) -> dict:
+        """261031-4: 다른 창(받는 창)이 넘긴 파일 — 이 창이 그 폴더를 보고 있으면 응답을 먼저 보내고 연다(`_on_instance_request` 'show')."""
+        if not path or self._vprinter_pane_for(str(path)) is None:
+            return {"ok": False}
+        QTimer.singleShot(0, lambda p=str(path): self._vprinter_place(p))
+        return {"ok": True}
+
+    def _vprinter_raise(self):
         if self.isMinimized():
             self.showNormal()
         self.raise_()

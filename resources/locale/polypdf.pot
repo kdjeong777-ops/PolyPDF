@@ -5001,6 +5001,10 @@ msgid "저장하는 중…"
 msgstr ""
 
 #: viewer/vprinter_controller.py
+msgid "그 폴더를 보고 있는 PolyPDF 창을 찾는 중…"
+msgstr ""
+
+#: viewer/vprinter_controller.py
 msgid "받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPDF 를 켤 때 다시 바꿔 봅니다."
 msgstr ""
 

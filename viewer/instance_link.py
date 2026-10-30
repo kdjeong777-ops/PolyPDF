@@ -7,7 +7,8 @@
 - 창마다 `QLocalServer` 하나(이름 `polypdf-<사용자>-<pid>-<n>`)를 열고, 설정 폴더의
   `instances/<이름>.json` 에 적어 서로 찾는다. 연결되지 않는 항목(죽은 프로세스)은 지운다.
 - 요청·응답은 JSON 한 줄. `query`(열고 있나·저장 안 한 편집이 있나) / `release`(놓기) /
-  `reload`(다시 열기). 창 쪽 동작은 `handler(op, path, page)` 가 한다(앱이 넣는다).
+  `reload`(다시 열기) / `show`(그 폴더를 보고 있으면 목록에 더하고 열기 — 가상 프린터, 261031-4).
+  창 쪽 동작은 `handler(op, path, page)` 가 한다(앱이 넣는다).
 - 기다림은 짧다(연결 0.3초·응답 3초) — 응답하지 않는 창 하나 때문에 저장이 멈추지 않게.
 """
 from __future__ import annotations
@@ -199,3 +200,18 @@ class InstanceLink(QObject):
     def reload(self, released, path):
         for r in released:
             self._request(r["server"], {"op": "reload", "path": str(path), "page": r["page"]})
+
+    def show_file(self, path) -> bool:
+        """261031-4(가상 프린터 SOT §4.4): 그 PDF 의 폴더를 책갈피창에 보고 있는 다른 창에 넘긴다(`show`) —
+        처음 받은 창 하나가 목록에 더하고 연다. 받은 창이 있으면 True. 죽은 등록은 지운다."""
+        for name, f in self._peers():
+            res = self._request(name, {"op": "show", "path": str(path)})
+            if res is None:
+                try:
+                    f.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                continue
+            if res.get("ok"):
+                return True
+        return False
