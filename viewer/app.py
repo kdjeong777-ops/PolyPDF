@@ -88,6 +88,12 @@ def _autotag_text(d: int, t: int) -> str:
     return tr("태그 계산") + " · " + step(stage, k, n)
 
 
+def _no_checked(slot):
+    """메뉴 항목의 `triggered(bool)` 는 첫 인자로 `checked`(False)를 넘긴다 — 선택 인자가 있는 처리기(`action_sign_pdf(at_scene=None)`)는
+    그것을 자기 인자로 받아 오류가 났다(261031-1, error.log `QRectF(False, False)` — 메뉴 '서명...' 이 아예 안 됐다). 인자 없이 부른다."""
+    return lambda _checked=False: slot()
+
+
 def _data_dir() -> Path:
     """index.db 등 데이터 폴더 = 설정 폴더(261009-22: 휴대용 모드·자식 프로세스가 같은 곳을 쓰게 한 길로 — 종전에도 같은 경로)."""
     from viewer.settings_store import settings_dir
@@ -1784,7 +1790,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         def _act(text, slot, cid=None, short=None, tip=None):
             a = QAction(text, self)
-            a.triggered.connect(slot)
+            a.triggered.connect(_no_checked(slot))
             m_tools.addAction(a)
             if cid:
                 self._reg_cmd(cid, a, short=short, tip=tip)
@@ -1820,7 +1826,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             sm = m_tools.addMenu(title)
             for _t, _s in items:
                 _a = QAction(_t, self)
-                _a.triggered.connect(_s)
+                _a.triggered.connect(_no_checked(_s))
                 sm.addAction(_a)
             if cid:
                 self._reg_cmd(cid, sm.menuAction())
@@ -1875,7 +1881,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 (tr("가상 프린터 설치·제거…"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
                  tr("가상 프린터(PolyPDF) 설치·제거…"))):
             _a = QAction(_t, self)
-            _a.triggered.connect(_s)
+            _a.triggered.connect(_no_checked(_s))
             _inst.addAction(_a)
             self._reg_cmd(_cid, _a, short=_short, tip=_tip)
         self._reg_cmd("tools.install", _inst.menuAction())

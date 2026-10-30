@@ -76,6 +76,8 @@ class SignMixin(SignDraftMixin):
         """도구 '서명' — 사전 점검 뒤 본문에서 서명 자리를 끌게 한다(SOT §3·§3.3·§3.10).
         `at_scene`(scene 점, 본문 우클릭 '여기에 서명…')이면 끌지 않고 그 자리에 기본 크기로 자리를 놓는다(S6).
         `kind="image"` 면 그림만 자리(§3.11) — 디지털 ID 가 없어도 된다."""
+        if isinstance(at_scene, bool):           # 261031-1: 메뉴 `triggered(checked)` 가 그대로 들어온 것 — 점이 아니다
+            at_scene = None
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not (cur and str(cur).lower().endswith(".pdf") and getattr(mv, "_doc", None) is not None):

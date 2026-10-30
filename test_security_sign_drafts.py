@@ -147,6 +147,22 @@ try:
     spin(0.3)
     chk(mv.sign_draft_band.isVisible() and "1" in mv.sign_draft_band.label.text(), "T1d 서명 자리 띠가 보인다",
         mv.sign_draft_band.label.text())
+    # 261031-1(error.log): 도구 메뉴 '전자서명 ▸ 서명...' 은 triggered(checked=False) 를 at_scene 으로 넘겨 QRectF(False, False) 오류 —
+    #   메뉴로는 서명을 시작할 수 없었다. 실제 메뉴 항목을 눌러 끌기가 무장되는지 본다(sys.excepthook 으로 예외를 잡는다)
+    _exc = []
+    _hook = sys.excepthook
+    sys.excepthook = lambda *a: _exc.append(a[1])
+    try:
+        mv.view.arm_block_select(False)
+        _sub = mw._cmds["tools.sign"].menu()
+        _a_sign = next(a for a in _sub.actions() if a.text().startswith("서명"))
+        _a_sign.trigger(); spin(0.2)
+    finally:
+        sys.excepthook = _hook
+    chk(not _exc and mv.view._block_armed and mv.view._block_purpose == "sign",
+        "T1m 도구 메뉴 '서명...' 을 누르면 오류 없이 자리 끌기를 무장한다(261031-1)", repr(_exc[:1]))
+    mv.view.arm_block_select(False)
+    mw._sign_pending = None
 
     # T4 — 자리 둘 더(전자서명·그림만), 실제 마우스로 옮기기·크기, Delete
     from PyQt6.QtCore import QRectF
