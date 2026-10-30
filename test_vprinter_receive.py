@@ -337,6 +337,21 @@ asker.close()
 chk(got.get("v") is True and added == [w_pdf] and saved_open == [w_pdf],
     "W5 실제 통로 — 다른 프로세스 자리의 InstanceLink.show_file 이 이 창에 넘기고, 이 창이 목록에 더해 연다",
     "%s · 더함 %s · 열기 %s" % (got, added, saved_open))
+# 답 없는 창 — 등록은 있으나 통로가 없으면(멈췄거나 끝난 창) 건너뛰고 False → 여는 쪽은 새 창. 죽은 등록은 지운다
+from viewer.instance_link import _registry_dir
+dead = _registry_dir() / "polypdf-dead-test.json"
+dead.write_text('{"server": "polypdf-dead-test-%d", "pid": %d}' % (os.getpid(), os.getpid()), encoding="utf-8")
+mw._folder = other
+asker = InstanceLink(lambda op, p, pg: {"ok": False})
+got.clear()
+th = threading.Thread(target=lambda: got.setdefault("v", asker.show_file(w_pdf)), daemon=True)
+th.start()
+t0 = time.time()
+while th.is_alive() and time.time() - t0 < 10:
+    app.processEvents(); time.sleep(0.01)
+asker.close()
+chk(got.get("v") is False and not dead.exists(), "W6 그 폴더를 보는 창이 없거나 답하지 않으면 False(→ 새 창), 답 없는 등록은 지운다",
+    "%s · 등록 남음 %s" % (got, dead.exists()))
 mw._set_active_pane = _sap
 
 print("\n=== F. 도구 메뉴 ===")
