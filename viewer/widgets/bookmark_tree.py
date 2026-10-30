@@ -511,7 +511,7 @@ class BookmarkTree(QWidget):
         else:
             self.btn_save.setText(tr("💾 저장"))
         self.btn_save.setToolTip(tr("저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."))
-        self.btn_save.clicked.connect(self._op_save)
+        self.btn_save.clicked.connect(lambda: self._op_save())   # 261031-3: clicked(checked) 가 file_path 자리로 들어가지 않게(디자인 SOT §2.9)
         self.btn_save.setVisible(False)
         edit_row.addWidget(self.btn_save)
         self._edit_row = edit_row

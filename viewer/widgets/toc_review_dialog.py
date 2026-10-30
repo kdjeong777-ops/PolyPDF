@@ -120,7 +120,7 @@ class TocReviewDialog(QDialog):
         self.cmb_cand.currentIndexChanged.connect(self._pick_candidate)
         fo.addWidget(QLabel(tr("추천:"))); fo.addWidget(self.cmb_cand)
         self.btn_apply_off = QPushButton(tr("오프셋 적용"))
-        self.btn_apply_off.clicked.connect(self._apply_offset)
+        self.btn_apply_off.clicked.connect(lambda: self._apply_offset())   # 261031-3: clicked(checked) 가 initial 자리로 들어가지 않게
         fo.addWidget(self.btn_apply_off)
         self.btn_verify = QPushButton(tr("제목 대조"))
         self.btn_verify.setToolTip(tr("각 행의 실제 쪽 텍스트에 제목 앞부분이 있는지 검사(✓/✗). 저장에는 영향 없음"))
