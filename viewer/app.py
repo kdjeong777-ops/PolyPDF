@@ -1760,6 +1760,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _id, _label, _short, _tip, _slot in (
                 ("single", tr("1단"), None, tr("오른쪽 패널 숨김 (단일 보기)"), self._vm_single),
                 ("split", tr("2단"), None, tr("2단 보기(쪽 맞춤)"), self._vm_split),
+                (None, None, None, None, None),        # 261031-15(디자인 SOT §2.9.5, 사용자 지시): 1단·2단은 따로 그룹
                 ("text", tr("텍스트"), None, tr("오른쪽 패널 보이기 · 텍스트 탭"), self._vm_text),
                 ("study", tr("단어장"), None, tr("검색·단어장 창 보이기 · 단어장 탭"), self._vm_study),
                 ("search", tr("검색"), None, tr("오른쪽 패널 보이기 · 검색 탭"), self._vm_search),

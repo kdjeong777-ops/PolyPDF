@@ -49,8 +49,8 @@ try:
     mw._prefs.update({"law_oc": "x", "kcsc_key": "y", "kipo_signkey": "z"})
     mw._gate_api_dependent_ui(mw._prefs); QTest.qWait(50)
     chk([[b.text() for b in g] for g in row.groups()] ==
-        [["1단", "2단", "텍스트", "단어장", "검색", "스크린샷"], ["법령·고시", "특허", "건설기준"], ["발표보기"]],
-        "A 구분선 둘(법령 앞·발표 앞)", str([[b.text() for b in g] for g in row.groups()]))
+        [["1단", "2단"], ["텍스트", "단어장", "검색", "스크린샷"], ["법령·고시", "특허", "건설기준"], ["발표보기"]],
+        "A 구분선 셋(1단·2단 따로 — 261031-15, 법령 앞·발표 앞)", str([[b.text() for b in g] for g in row.groups()]))
     mw._prefs.update({"law_oc": "", "kcsc_key": "", "kipo_signkey": ""})
     mw._gate_api_dependent_ui(mw._prefs); QTest.qWait(50)
 
