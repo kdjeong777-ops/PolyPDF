@@ -49,9 +49,8 @@ KEYS = {"law_oc": "x", "kcsc_key": "x", "kipo_signkey": "x", "translate_auth": "
 
 def _vis(cid, mw):
     """261024-1(디자인 SOT §2.9): '모음' 단추는 메뉴 액션 그 자체 — 단추 가시성 = 그 액션 가시성."""
-    from viewer.widgets.ribbon import COLLECTION, cmd_id
-    row = mw._ribbon.row(COLLECTION)
-    a = next((x for x in row.actions() if cmd_id(x) == cid), None)
+    #   261031-18: 모음 기본값에 없는 명령(번역)도 있어 명령 id 로 그 액션을 바로 본다(어느 탭 단추든 같은 객체)
+    a = (getattr(mw, "_cmds", {}) or {}).get(cid)
     return bool(a is not None and a.isVisible())
 
 

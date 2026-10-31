@@ -35,8 +35,9 @@ from viewer.widgets.ribbon import COLLECTION, cmd_id
 _row = mw._ribbon.row(COLLECTION)
 btns = [a.iconText() for a in _row.actions() if cmd_id(a)]
 # 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261031-16(디자인 SOT §2.9.1): 도구 탭 차례와 같게 — 이미지→PDF 가 병합 앞, 변환 다음 번역
+# 261031-18(디자인 SOT §2.9, 사용자 지시): 모음 기본값은 사용자가 설치본에서 고친 차례 — 다단 생성 들어가고 번역은 빠졌다
 TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "이미지→PDF",
-         "PDF병합", "암호화", "변환", "번역"]            # 261025-5: '변환해서 내보내기' → '변환'
+         "PDF병합", "다단 생성", "암호화", "변환"]            # 261025-5: '변환해서 내보내기' → '변환'
 N = len(TOOLS)
 chk(btns[-N:] == TOOLS, "① 패널 '도구' %d개가 지시한 차례다" % N, str(btns[-N:]))
 chk(btns.index("OCR") == len(btns) - N, "① 도구는 보기 뒤에 모여 있다", str(btns))
@@ -164,8 +165,8 @@ chk(getattr(mw, "_sc_act_merge", None) is not None, "⑤ PDF 병합 손잡이(_s
 chk(getattr(mw, "_act_tr_files", None) is not None, "⑤ 번역 메뉴 손잡이(_act_tr_files) 유지")
 # 261024-1(디자인 SOT §2.9): 모음 단추는 메뉴 액션 그 자체 — 따로 둔 패널 단추 손잡이는 없앴다
 _ids = {cmd_id(a): a for a in _row.actions() if cmd_id(a)}
-chk(_ids.get("tools.merge") is mw._sc_act_merge and _ids.get("tools.translate") is mw._act_tr_files
-    and _ids.get("file.export") is mw.act_export, "⑤ 모음 단추 = 메뉴 액션(병합·번역·변환)")
+chk(_ids.get("tools.merge") is mw._sc_act_merge and mw._cmds.get("tools.translate") is mw._act_tr_files
+    and _ids.get("file.export") is mw.act_export, "⑤ 모음 단추 = 메뉴 액션(병합·변환), 번역 명령 id 는 메뉴 액션")
 # 도구 탭 세부 줄 = 도구 메뉴 차례 그대로(같은 액션)
 _trow = mw._ribbon.row("tools")
 chk([a for a in _trow.actions() if cmd_id(a)] == [a for a in menu.actions() if cmd_id(a)],

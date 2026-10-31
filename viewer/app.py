@@ -609,8 +609,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mp3.clicked.connect(lambda _=False, i=idx: self._on_main_mp3(view=self._mv[i]))
         mp3.setFixedHeight(H)
         try:
-            mp3.setIcon(_QIcon(resource_path("icon_mp3.png")))
+            from viewer.widgets.icons import color_icon as _ci
+            mp3.setIcon(_ci("mp3", size=24))      # 261031-18(디자인 SOT §4.5): ▶ 와 같은 색 — 테마가 바뀌면 _set_fav_icons 가 다시
             mp3.setIconSize(_QSize(24, 24))     # 260611-31: 정사각 mp3 아이콘
+            mp3.setProperty("colorIcon", "mp3")
         except Exception:
             mp3.setText("mp3")
         cap = self._make_capture_button(idx)
@@ -9743,6 +9745,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """261031-12(디자인 SOT §2.9.5·§4.5, 사용자 결정 '시안 C'): 즐겨찾기 탭 종류 아이콘 — 테마가 바뀌면 다시 그린다.
         261031-13(§2.9.7): 파일 탭 그림(열기·저장 바깥 표시, 새 창·폴더·파일·인쇄·종료 그림만 단추)도 여기서."""
         from viewer.widgets.icons import color_icon, FAV_ICON_PX
+        # 261031-18(디자인 SOT §4.5): mp3 음표도 ▶ 색 — 각 창 툴바·단어장 창
+        for b in [getattr(self, "btn_main_mp3", None)] + [w for w in self.findChildren(QWidget) if w.property("colorIcon") == "mp3"]:
+            if b is not None:
+                b.setIcon(color_icon("mp3", size=24))
         for a, name in getattr(self, "_file_icon_acts", ()):
             a.setIcon(color_icon(name, size=FAV_ICON_PX))
             a.setProperty("ribbonIconOnly", True)

@@ -42,14 +42,14 @@ COLLECTION = "collection"   # 모음 탭 키
 # 261031-17(디자인 SOT §2.9·§2.9.4, 사용자 결정 '표시를 항목으로'): 그룹 표시(바깥 왼쪽 그림·글자)도 모음 항목이다 —
 #   `mark.*` id 로 넣고 뺀다. 원 탭(파일 `열기`·`저장`, 도구 `생성`·`PDF`)과 같은 표시(같은 RibbonIconMark 액션).
 MARK_PREFIX = "mark."
-DEFAULT_COLLECTION = (
-    "mark.open", "file.open_folder", "file.open_file", "file.print", SEP,   # 261025-5: 앞 그룹 — 폴더 열기·파일 열기·인쇄(사용자 지시)
-    "view.single", "view.split", SEP,                                # 261031-17: 보기 탭 그룹 그대로(디자인 SOT §2.9.5)
+DEFAULT_COLLECTION = (                     # 261031-18(디자인 SOT §2.9, 사용자 지시): 사용자가 설치본에서 고친 모음 그대로
+    "file.open_folder", "file.open_file", "file.print", SEP,
+    "view.single", "view.split", SEP,
     "view.text", "view.study", "view.search", "view.shot", SEP,
-    "view.law", "view.kipo", "view.kcsc", SEP, "view.present", SEP,
-    "mark.create", "tools.ocr", "tools.build_study", "tools.bookmarker", SEP,   # 261031-16: 도구 탭 차례·묶음과 같게(§2.9.1)
-    "mark.pdf", "tools.img2pdf", "tools.merge", "tools.encrypt", SEP,
-    "file.export", "tools.translate",
+    "view.law", "view.kipo", "view.kcsc", "view.present", SEP,
+    "mark.create", "tools.ocr", "tools.build_study", "tools.bookmarker", SEP,
+    "mark.pdf", "tools.img2pdf", "tools.merge", "tools.nup", "tools.encrypt", SEP,
+    "file.export",
 )
 
 _MNEMONIC = re.compile(r"\(&.\)")

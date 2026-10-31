@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QPointF, QRectF
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QPolygonF
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPainterPath, QPen, QColor, QPolygonF
 
 
 def fg_color(dark: bool | None = None) -> str:
@@ -344,7 +344,29 @@ def _exit(p, c, dark=False):
     p.drawLine(QPointF(14.5, 8.0), QPointF(11.8, 10.7))
 
 
-_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera,
+def _mp3(p, c):
+    """261031-18(디자인 SOT §4.5, 사용자 지시 '▶ 와 색 통일'): mp3 저장 — 8분음표 + 오른쪽 아래 ✚, 모두 ▶ 색.
+    종전 `icon_mp3.png`(밝은 파랑 그라데이션)를 대신한다 — 테마마다 ▶ 와 같은 색이 된다."""
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.save()
+    p.translate(5.2, 12.0)
+    p.rotate(-25)
+    p.drawEllipse(QRectF(-3.4, -2.4, 6.8, 4.8))       # 음표 머리
+    p.restore()
+    p.drawRoundedRect(QRectF(7.6, 2.0, 1.8, 10.2), 0.9, 0.9)   # 기둥
+    path = QPainterPath()                               # 깃발
+    path.moveTo(9.0, 2.0)
+    path.cubicTo(11.6, 2.6, 13.4, 4.4, 12.4, 7.6)
+    path.cubicTo(12.2, 5.8, 11.0, 4.9, 9.0, 4.6)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.drawRoundedRect(QRectF(12.4, 10.4, 1.6, 5.4), 0.5, 0.5)  # ✚
+    p.drawRoundedRect(QRectF(10.5, 12.3, 5.4, 1.6), 0.5, 0.5)
+
+
+ACCENT["mp3"] = ACCENT["play"]
+_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "mp3": _mp3,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
 _COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
