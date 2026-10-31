@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-31 13:33+0900\n"
+"POT-Creation-Date: 2026-10-31 13:48+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1623,6 +1623,30 @@ msgstr "Settings saved"
 #: viewer/app.py
 msgid "내 기본값"
 msgstr "My defaults"
+
+#: viewer/app.py
+msgid "최근에 연 폴더·파일·검색어"
+msgstr "Recently opened folders, files and searches"
+
+#: viewer/app.py
+msgid "최근"
+msgstr "Recent"
+
+#: viewer/app.py
+msgid "등록한 폴더·파일·검색어"
+msgstr "Saved folders, files and searches"
+
+#: viewer/app.py
+msgid "등록"
+msgstr "Saved"
+
+#: viewer/app.py
+msgid "지금 연 폴더·파일·검색어를 등록"
+msgstr "Save the current folder, file or search"
+
+#: viewer/app.py
+msgid "추가"
+msgstr "Add"
 
 #: viewer/app.py
 msgid "현재 폴더 추가"

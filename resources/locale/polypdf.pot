@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-31 13:33+0900\n"
+"POT-Creation-Date: 2026-10-31 13:48+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1575,6 +1575,30 @@ msgstr ""
 
 #: viewer/app.py
 msgid "내 기본값"
+msgstr ""
+
+#: viewer/app.py
+msgid "최근에 연 폴더·파일·검색어"
+msgstr ""
+
+#: viewer/app.py
+msgid "최근"
+msgstr ""
+
+#: viewer/app.py
+msgid "등록한 폴더·파일·검색어"
+msgstr ""
+
+#: viewer/app.py
+msgid "등록"
+msgstr ""
+
+#: viewer/app.py
+msgid "지금 연 폴더·파일·검색어를 등록"
+msgstr ""
+
+#: viewer/app.py
+msgid "추가"
 msgstr ""
 
 #: viewer/app.py

@@ -36,6 +36,7 @@ BTN = {False: ("#fafafa", "#b4b4b4", "#222"), True: ("#3e3e42", "#55555a", "#e8e
 BTN_DROP = {False: ("#efefef", "#a0a0a0", "#222"), True: ("#5a5a60", "#707078", "#f0f0f0")}
 REBUILD_MS = 10             # 메뉴 항목이 바뀐 뒤 세부 줄을 다시 만들기까지(잇단 바뀜은 한 번으로 모인다)
 
+ICON_DROP_PAD = 14          # 261031-12 보완: 그림만 있는 ▾ 단추의 오른쪽 여백(▾ 자리)
 SEP = "|"                   # 모음의 구분선
 COLLECTION = "collection"   # 모음 탭 키
 DEFAULT_COLLECTION = (
@@ -83,6 +84,48 @@ class _TipFilter(QObject):
         return False
 
 
+def _make_icon_mark():
+    from PyQt6.QtWidgets import QWidgetAction
+
+    class RibbonIconMark(QWidgetAction):
+        """261031-12 보완(디자인 SOT §2.9.5, 사용자 지시): 단추 무리 **바깥 왼쪽**의 눌리지 않는 그림 표시 —
+        세부 줄에 놓이면 작은 그림 하나(`QLabel`), 메뉴로 펼칠 때는 보이지 않는다. 테마가 바뀌면 `refresh()`."""
+
+        def __init__(self, parent, icon_fn=None, tip: str = "", text: str = ""):
+            super().__init__(parent)
+            self._icon_fn = icon_fn          # () -> QIcon — 없으면 글자 표시(`text`, 예: '최근'·'등록')
+            self._text = text
+            self.setToolTip(tip)
+            self.setProperty("ribbonMark", True)
+
+        def createWidget(self, parent):
+            lab = QLabel(parent)
+            lab.setProperty("ribbonMark", True)
+            lab.setToolTip(self.toolTip())
+            lab.setContentsMargins(2, 0, 0, 0)
+            self._paint(lab)
+            return lab
+
+        def _paint(self, lab) -> None:
+            if self._icon_fn is None:
+                lab.setText(self._text)
+                lab.setContentsMargins(4, 0, 2, 0)
+                return
+            ic = self._icon_fn()
+            px = lab.parentWidget().iconSize() if hasattr(lab.parentWidget(), "iconSize") else None
+            n = px.width() if px is not None and px.width() > 0 else 13
+            lab.setPixmap(ic.pixmap(n, n))
+
+        def refresh(self) -> None:
+            for w in self.createdWidgets():
+                self._paint(w)
+
+    return RibbonIconMark
+
+
+RibbonIconMark = _make_icon_mark()
+
+
 class RibbonRow(QToolBar):
     """세부 줄 하나 — 앞·뒤 늘림 빈 칸으로 가운데, 구분선 사이 단추마다 둥근 그룹 바탕."""
 
@@ -124,6 +167,11 @@ class RibbonRow(QToolBar):
             if isinstance(w, QToolButton):
                 if a.menu() is not None:
                     w.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+                if a.property("ribbonIconOnly") and self.toolButtonStyle() != Qt.ToolButtonStyle.ToolButtonTextOnly:
+                    # 261031-12 보완: 그림만(글자는 무리 바깥 표시·툴팁) — 글자만 줄(모음 등)에서는 종전 글자 단추
+                    w.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+                    if a.menu() is not None:             # ▾ 가 그림에 겹치지 않게 오른쪽 여백(ICON_DROP_PAD)
+                        w.setStyleSheet("QToolButton{padding-right:%dpx;}" % ICON_DROP_PAD)
                 w.setProperty("ribbonDrop", a.menu() is not None)
                 w.style().unpolish(w)
                 w.style().polish(w)

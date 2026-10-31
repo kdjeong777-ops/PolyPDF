@@ -51,6 +51,7 @@ try:
         if m.menu() is not None and mw.menu_recent in [a.menu() for a in m.menu().actions()]:
             titles = [a.text() for a in m.menu().actions()]
     # 261031-12(디자인 SOT §2.9.5): 즐겨찾기 탭 — 최근 폴더 · 최근 파일 · 최근 검색어 | 등록 …
+    titles = [t for t in titles if t]                      # 무리 바깥 글자판('최근' 등)·구분선은 빼고 본다
     chk(titles[:3] == ["최근 폴더", "최근 파일", "최근 검색어"] and titles.index("최근 파일") < titles.index("등록 파일"),
         "A 즐겨찾기 탭: 최근 폴더 · 최근 파일 · 최근 검색어 | 등록 …", str(titles))
     items = lambda: [a.text() for a in mw.menu_recent_files.actions()]

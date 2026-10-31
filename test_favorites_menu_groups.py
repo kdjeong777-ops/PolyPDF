@@ -64,7 +64,8 @@ try:
 
     mw._ribbon.select("fav"); QTest.qWait(50)
     row = mw._ribbon.row("fav")
-    btns = row.buttons()
+    allw = row.buttons()
+    btns = [b for b in allw if not b.property("ribbonMark")]   # 무리 바깥 왼쪽 그림 표시는 단추가 아니다
     texts = [b.text() for b in btns]
     # 261025-5(사용자 지시): 최근 파일은 등록 파일 그룹 왼쪽, 최근 검색어는 등록 검색어 왼쪽 — 그룹마다 '최근 · 등록 · 단추'
     # 261031-12(사용자 지시): (최근 셋) | (등록 셋 + 기타) | (폴더 단추 ≤3) | (파일 단추 ≤3) | 추가·관리
@@ -81,7 +82,7 @@ try:
         b = by.get(t)
         chk(b is not None and b.isEnabled() and b.defaultAction().menu() is menu,
             f"A '{t}' 은 켜진 ▾ 단추(누르면 목록이 펼쳐진다)")
-    chk([len(g) for g in row.groups()] == [3, 3, 2, 3, 4], "A 그룹 바탕 다섯(최근·등록·폴더 단추·파일 단추·추가 — 기타가 숨으면 등록은 셋)",
+    chk([len(g) for g in row.groups()] == [4, 4, 3, 4, 4, 1], "A 그룹 바탕 여섯(['최근'+셋]·['등록'+셋]·[폴더 그림+단추]·[파일 그림+단추]·['추가'+셋]·[항목 관리] — 기타가 숨으면 등록은 셋)",
         str([[w.text() for w in g] for g in row.groups()]))
     mw._ribbon.select("file"); QTest.qWait(50)
     ftexts = [b.text() for b in mw._ribbon.row("file").buttons()]
@@ -123,12 +124,31 @@ try:
     dt = [b.text() for b in mw._ribbon.row("fav").buttons() if b.text().startswith("D")]
     chk(dt == [f"D{i}" for i in range(BUTTONS_MAX)], "C 폴더 단추는 목록 앞 BUTTONS_MAX(3)개", str(dt))
     chk(BUTTONS_MAX == 3, "C 단추 수는 3(261031-12 사용자 지시)")
-    # 261031-12(사용자 결정 '시안 C'): 종류 아이콘 — 최근·등록 단추와 무리의 첫 단추에만
-    _fb = [b for b in mw._ribbon.row("fav").buttons()]
+    # 261031-12(사용자 결정 '시안 C') · 보완(사용자 지시): 최근·등록 단추 안에 아이콘, 폴더·파일 무리는 첫 단추 **바깥 왼쪽** 그림 표시
+    _all = mw._ribbon.row("fav").buttons()
+    _fb = [b for b in _all if not b.property("ribbonMark")]
     _ic = {b.text(): not b.icon().isNull() for b in _fb}
+    _marks = [w for w in _all if w.property("ribbonMark")]
+    _i_mark = _all.index(_marks[0]) if _marks else -1
     chk(_ic.get("최근 폴더") and _ic.get("등록 폴더") and _ic.get("최근 파일") and _ic.get("등록 검색어")
-        and _ic.get("D0") and not _ic.get("D1") and not _ic.get("현재 폴더 추가"),
-        "C 아이콘은 최근·등록 단추와 폴더 무리 첫 단추에만", str(_ic))
+        and not _ic.get("D0") and not _ic.get("D1") and _ic.get("현재 폴더 추가") and not _ic.get("항목 관리"),
+        "C 아이콘은 최근·등록·추가 단추 안에(폴더 단추·항목 관리 안에는 없다)", str(_ic))
+    _lab = [w.text() for w in _all if w.property("ribbonMark") and w.text()]
+    _io = {b.text(): b.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly for b in _fb}
+    chk(_lab == ["최근", "등록", "추가"] and _io.get("최근 폴더") and _io.get("등록 검색어") and _io.get("현재 폴더 추가")
+        and not _io.get("항목 관리") and not _io.get("D0"),
+        "C 최근·등록·추가 무리는 바깥 왼쪽 글자 + 그림만 있는 단추, 항목 관리·개별 단추는 글자(보완 사용자 지시)", str((_lab, _io)))
+    mw._ribbon.select("collection"); QTest.qWait(50)
+    mw._prefs["ribbon_collection"] = ["fav.add_folder", "file.recent"]; mw._apply_collection(); QTest.qWait(50)
+    _cb = mw._ribbon.row("collection").buttons()
+    chk(_cb and all(b.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextOnly for b in _cb),
+        "C 모음 탭(글자만 줄)에 넣으면 종전 글자 단추", str([(b.text(), b.toolButtonStyle()) for b in _cb]))
+    mw._prefs["ribbon_collection"] = []; mw._apply_collection(); mw._ribbon.select("fav"); QTest.qWait(50)
+    _marks = [w for w in _marks if not w.text()]
+    _i_mark = _all.index(_marks[0]) if _marks else -1
+    chk(len(_marks) == 1 and _all[_i_mark + 1].text() == "D0" and _marks[0].pixmap() is not None
+        and not _marks[0].pixmap().isNull() and _marks[0].x() + _marks[0].width() <= _all[_i_mark + 1].x(),
+        "C 폴더 무리 첫 단추 바깥 왼쪽에 폴더 그림(파일 없음 → 파일 그림도 없음)", str(len(_marks)))
     _iw = mw._ribbon.row("fav").iconSize().width()
     from viewer.widgets.icons import FAV_ICON_PX
     chk(_iw == FAV_ICON_PX and mw._ribbon.row("fav").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon

@@ -9475,27 +9475,36 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.menu_recent_searches = QMenu(tr("최근 검색어"), self)    # 261025-5(사용자 지시·결정)
         self.menu_fav_other = QMenu(tr("기타"), self)
         # 261031-12(디자인 SOT §2.9.5, 사용자 지시): (최근 셋) | (등록 셋 + 기타) | (폴더 단추) | (파일 단추) | 추가·관리
+        #   보완(사용자 지시): 최근·등록 무리는 바깥 왼쪽에 글자 '최근'·'등록', 단추는 폴더·파일·검색어 그림만
+        from viewer.widgets.ribbon import RibbonIconMark
+        m.addAction(RibbonIconMark(self, None, tr("최근에 연 폴더·파일·검색어"), tr("최근")))
         m.addMenu(self.menu_recent)
         m.addMenu(self.menu_recent_files)
         m.addMenu(self.menu_recent_searches)
         m.addSeparator()
+        m.addAction(RibbonIconMark(self, None, tr("등록한 폴더·파일·검색어"), tr("등록")))
         m.addMenu(self.menu_fav_folders)
         m.addMenu(self.menu_fav_files)
         m.addMenu(self.menu_fav_searches)
         m.addMenu(self.menu_fav_other)
         self._fav_sep_folders = m.addSeparator()   # 폴더 단추 무리는 이 뒤 · 다음 구분선 앞
         self._fav_sep_files = m.addSeparator()     # 파일 단추 무리는 이 뒤 · 다음 구분선 앞
-        self._fav_sep_adds = m.addSeparator()      # 추가·관리는 이 뒤
+        self._fav_sep_adds = m.addSeparator()      # 추가는 이 뒤
+        # 261031-12 보완(사용자 지시): 추가 무리도 바깥 왼쪽 글자 '추가' + 그림만 단추, '항목 관리' 는 따로 그룹
+        m.addAction(RibbonIconMark(self, None, tr("지금 연 폴더·파일·검색어를 등록"), tr("추가")))
         acts = {}
         for cid, text, slot in (
                 ("fav.add_folder", tr("현재 폴더 추가"), self._add_current_folder_favorite),
                 ("fav.add_file", tr("현재 파일 추가"), self._add_current_file_favorite),
                 ("fav.add_search", tr("현재 검색어 추가"), self._add_current_search_favorite),
                 ("fav.manage", tr("항목 관리"), lambda: self._open_favorites_manager())):
+            if cid == "fav.manage":
+                m.addSeparator()
             a = QAction(text, self)
             a.triggered.connect(lambda _c=False, s=slot: s())
             m.addAction(a)
             acts[cid] = a
+        self._fav_add_acts = {k: acts[k] for k in ("fav.add_folder", "fav.add_file", "fav.add_search")}
         self._reg_cmd("fav.add_folder", acts["fav.add_folder"], tip=tr("현재 폴더를 즐겨찾기에 추가..."))
         self._reg_cmd("fav.add_file", acts["fav.add_file"], tip=tr("현재 파일을 즐겨찾기에 추가..."))
         self._reg_cmd("fav.add_search", acts["fav.add_search"], tip=tr("현재 검색어를 즐겨찾기에 추가..."))
@@ -9625,10 +9634,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             m.removeAction(a)
             a.deleteLater()
         self._fav_btn_acts = []
+        from viewer.widgets.ribbon import RibbonIconMark
+        from viewer.widgets.icons import color_icon, FAV_ICON_PX
         for kind, before in (("folder", self._fav_sep_files), ("file", self._fav_sep_adds)):
-            for n, f in enumerate(groups[kind][:BUTTONS_MAX]):
+            items = groups[kind][:BUTTONS_MAX]
+            if items:
+                # 261031-12 보완(사용자 지시): 종류 그림은 첫 단추 **안**이 아니라 무리 **바깥 왼쪽**에 — 눌리지 않는 표시
+                name = "fav_folder" if kind == "folder" else "fav_file"
+                mk = RibbonIconMark(self, lambda nm=name: color_icon(nm, size=FAV_ICON_PX),
+                                    tr("등록 폴더") if kind == "folder" else tr("등록 파일"))
+                m.insertAction(before, mk)
+                self._fav_btn_acts.append(mk)
+            for f in items:
                 a = QAction(short_label(f), self)
-                a.setProperty("fav_icon", ("fav_folder" if kind == "folder" else "fav_file") if n == 0 else "")
                 where = (f.get("file") if kind == "file" else None) or f.get("folder") or ""
                 a.setToolTip(f.get("name", "?") + "\n" + str(where))
                 a.triggered.connect(lambda _c=False, ff=f: self._open_favorite(ff))
@@ -9645,9 +9663,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                            (self.menu_recent_files, "fav_file"), (self.menu_fav_files, "fav_file"),
                            (self.menu_recent_searches, "fav_search"), (self.menu_fav_searches, "fav_search")):
             menu.menuAction().setIcon(color_icon(name, size=FAV_ICON_PX))
+            menu.menuAction().setProperty("ribbonIconOnly", True)     # 그림만 — 이름은 툴팁(디자인 SOT §2.9.5)
+        for cid, name in (("fav.add_folder", "fav_folder"), ("fav.add_file", "fav_file"), ("fav.add_search", "fav_search")):
+            a = (getattr(self, "_fav_add_acts", None) or {}).get(cid)
+            if a is not None:
+                a.setIcon(color_icon(name, size=FAV_ICON_PX))
+                a.setProperty("ribbonIconOnly", True)
         for a in getattr(self, "_fav_btn_acts", []):
-            name = a.property("fav_icon") or ""
-            a.setIcon(color_icon(name, size=FAV_ICON_PX) if name else QIcon())
+            if hasattr(a, "refresh"):              # 무리 바깥 왼쪽 그림 표시(RibbonIconMark)
+                a.refresh()
 
     def _add_current_folder_favorite(self):
         if not self._folder:
