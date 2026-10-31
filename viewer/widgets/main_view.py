@@ -3477,7 +3477,7 @@ class MainView(QWidget):
         sm = _QMenu(self._shape_btn)
         for key, label in (("none", tr("채움 없음")), ("semi", tr("반투명 채움")), ("full", tr("채움"))):
             a = sm.addAction(label); a.setCheckable(True); a.setData(key)
-            a.triggered.connect(lambda _=False, k=key: self._set_shape_fill(k))
+            a.triggered.connect(lambda _=False, k=key: self._pick_shape_fill(k))
         self._shape_menu = sm; self._shape_btn.setMenu(sm)
         hb.addWidget(self._shape_btn)
         # 260611-74(Phase2): 글쓰기 버튼 — 클릭=선택/해제, 더블클릭=글쓰기↔지시선, ▾=스타일
@@ -3713,6 +3713,13 @@ class MainView(QWidget):
         self._shape_fill = kind
         self._update_shape_button()
 
+    def _pick_shape_fill(self, kind):
+        """261031-9(마스터 §4.6.10): 도형 ▾ 에서 고르면 채움을 바꾸고 도형 도구를 켠다(켜져 있으면 그대로)."""
+        self._set_shape_fill(kind)
+        self._draw_kind = "shape"
+        self._ensure_pen()
+        self._apply_tool()
+
     def _update_line_button(self):
         if not hasattr(self, "_draw_mode_btn"):
             return
@@ -3802,7 +3809,7 @@ class MainView(QWidget):
         for s in getattr(self, "_text_styles", []):
             nm = s.get("name", "")
             a = self._text_menu.addAction(tr(nm)); a.setCheckable(True); a.setData(nm)   # 이름=키, 표시만 번역(§5)
-            a.triggered.connect(lambda _=False, n=nm: self._set_text_style(n))
+            a.triggered.connect(lambda _=False, n=nm: self._pick_text_style(n))
         self._update_text_button()
 
     def _set_text_style(self, name):
@@ -3827,6 +3834,13 @@ class MainView(QWidget):
             if self._draw_overlay is not None:
                 self._draw_overlay.update()
         self._update_text_button()
+
+    def _pick_text_style(self, name):
+        """261031-9(마스터 §4.6.10): 글쓰기 ▾ 에서 고르면 스타일을 넣고 글쓰기 도구를 켠다(켜져 있으면 그대로).
+        `set_text_styles` 의 다시 적용은 `_set_text_style` 을 직접 불러 도구를 건드리지 않는다."""
+        self._set_text_style(name)
+        self._draw_kind = "text"
+        self._apply_tool()
 
     # ===== 260611-77: 신규 박스 기본 스타일 get/set =====
     def text_defaults(self, leader):
