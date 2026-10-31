@@ -4352,22 +4352,37 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             return False
 
-    def _edit_save_dst(self, src, shift: bool):
-        """저장 목적지 결정 — shift 없으면 원본 덮어쓰기, shift 면 `_edited`(충돌 시 (k)).
-        (dst_path, overwrite) 반환."""
+    def _edit_save_dst(self, src, shift: bool, ask: bool = True):
+        """저장 목적지 결정 — shift 없으면 원본 덮어쓰기, shift 면 새 이름. (dst_path, overwrite) 반환.
+
+        261031-14(마스터 §4.7.13, 사용자 지시·결정): 새 이름은 **저장 창에서 폴더·이름을 고른다**(기본 = `<원본>_edited.pdf`,
+        충돌 시 (k)) — 메뉴·책갈피창 '다른 이름으로 저장', Shift+저장, 서명 가드 '새 이름', 다른 창 '새 이름으로 저장' 모두.
+        `ask=False` 는 덮어쓰기 실패 뒤 자동으로 비켜 쓰는 오류 복구 길(묻지 않는다 — 거기서 취소하면 편집을 잃는다).
+        고르다 취소하면 `SaveCancelled`. 원본 자리를 고르면 덮어쓰기(서명 가드·다른 창 확인을 그대로 탄다)."""
         from pathlib import Path as _P
         src = _P(src)
         if not shift:
             return src, True                         # 원본 덮어쓰기
         base = src.stem + "_edited"
         d = src.with_name(base + ".pdf")
-        if not d.exists():
+        if d.exists():
+            for k in range(1, 1000):
+                d = src.with_name(f"{base} ({k}).pdf")
+                if not d.exists():
+                    break
+        if not ask:
             return d, False
-        for k in range(1, 1000):
-            d = src.with_name(f"{base} ({k}).pdf")
-            if not d.exists():
-                return d, False
-        return d, False
+        from PyQt6.QtWidgets import QFileDialog
+        picked, _f = QFileDialog.getSaveFileName(self, tr("다른 이름으로 저장"), str(d), "PDF (*.pdf)")
+        if not picked:
+            from viewer.file_overwrite import SaveCancelled
+            raise SaveCancelled(tr("저장을 취소했습니다 — 원본은 그대로입니다."))
+        p = _P(picked)
+        if p.suffix.lower() != ".pdf":
+            p = p.with_name(p.name + ".pdf")
+        if os.path.normcase(os.path.abspath(str(p))) == os.path.normcase(os.path.abspath(str(src))):
+            return src, True                         # 원본 자리를 골랐다 → 덮어쓰기 길
+        return p, False
 
     # ── 260915-2(§4.7.8): 다른 PolyPDF 창과의 핸드셰이크 ─────────────────
     def _on_instance_request(self, op, path, page=None) -> dict:
@@ -4509,7 +4524,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             shift = bool(getattr(self, "_force_save_as", False)) or bool(
                 QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         src = _P(src); produced = _P(produced)
-        dst, overwrite = self._edit_save_dst(src, shift)
+
+        def _pick(sh):
+            """새 이름 고르기를 취소하면 임시 산출물을 지우고 그대로 알린다(261031-14)."""
+            from viewer.file_overwrite import SaveCancelled
+            try:
+                return self._edit_save_dst(src, sh)
+            except SaveCancelled:
+                try:
+                    produced.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                raise
+        dst, overwrite = _pick(shift)
         if overwrite:
             # 보안 SOT §4: 서명된 PDF 에 덮어쓰면 서명이 깨진다 — 가드는 이 한 곳(서명 자체의 저장은 건너뛴다)
             g = self._sign_guard(dst)
@@ -4521,7 +4548,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 from viewer.file_overwrite import SaveCancelled
                 raise SaveCancelled(tr("저장을 취소했습니다 — 서명한 원본은 그대로입니다."))
             if g == "new":
-                dst, overwrite = self._edit_save_dst(src, True)
+                dst, overwrite = _pick(True)
         if not overwrite:
             err = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), tr('새 이름으로 저장 중: {name}').format(name=dst.name))
             if err is not None:
@@ -4547,7 +4574,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     from viewer.file_overwrite import SaveCancelled
                     raise SaveCancelled(tr("저장을 취소했습니다 — 원본은 그대로입니다."))
                 if choice == "rename":
-                    fb, _ = self._edit_save_dst(src, True)
+                    fb, _ov = _pick(True)
+                    if _ov:                                  # 저장 창에서 원본 자리를 골랐다 — 다른 창이 쥐고 있어 쓸 수 없다
+                        try:
+                            produced.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                        from viewer.file_overwrite import SaveCancelled
+                        raise SaveCancelled(tr("다른 PolyPDF 창이 연 원본에는 새 이름으로 저장할 수 없습니다."))
                     err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)),
                                            tr('새 이름으로 저장 중: {name}').format(name=fb.name))
                     if err is not None:
@@ -4631,7 +4665,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return str(dst)
         # 그래도 안 되면(다른 프로그램이 쓰기를 막고 열었거나 읽기 전용) `_edited` 로 저장하고
         #   **알린다**. 알림은 호출측이 책갈피창을 갱신하고 새 파일로 옮긴 **뒤에** 뜨게 미룬다.
-        fb, _ = self._edit_save_dst(src, True)
+        fb, _ = self._edit_save_dst(src, True, ask=False)     # 261031-14: 오류 복구 길은 묻지 않는다
         err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)), tr('새 이름으로 저장 중: {name}').format(name=fb.name))
         if err is not None:
             raise err

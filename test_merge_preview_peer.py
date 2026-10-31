@@ -23,6 +23,10 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+# 261031-14(마스터 §4.7.13): 새 이름은 저장 창에서 고른다 — 검사는 기본 이름(<원본>_edited.pdf)을 그대로 받는다(물은 기록은 _SAVE_ASKED)
+from PyQt6.QtWidgets import QFileDialog as _QFD
+_SAVE_ASKED = []
+_QFD.getSaveFileName = staticmethod(lambda *a, **k: (_SAVE_ASKED.append(a[2] if len(a) > 2 else ""), (a[2] if len(a) > 2 else "", "PDF (*.pdf)"))[1])
 app.setApplicationName("PolyPDF-test-peer")       # 두 프로세스가 같은 등록 폴더를 보게
 
 

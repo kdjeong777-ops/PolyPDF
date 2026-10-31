@@ -19,6 +19,10 @@ QStandardPaths.setTestModeEnabled(True)
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+# 261031-14(마스터 §4.7.13): 새 이름은 저장 창에서 고른다 — 검사는 기본 이름(<원본>_edited.pdf)을 그대로 받는다(물은 기록은 _SAVE_ASKED)
+from PyQt6.QtWidgets import QFileDialog as _QFD
+_SAVE_ASKED = []
+_QFD.getSaveFileName = staticmethod(lambda *a, **k: (_SAVE_ASKED.append(a[2] if len(a) > 2 else ""), (a[2] if len(a) > 2 else "", "PDF (*.pdf)"))[1])
 QCoreApplication.setApplicationName("polypdf_saveas261017_%d" % os.getpid())
 
 fails = []
@@ -75,6 +79,7 @@ try:
     ea = edited(folder, "a")
     chk(sha(a) == h_a and fitz.open(str(a)).page_count == 3, "A1 원본 a.pdf 는 그대로(3쪽) — 덮어쓰지 않는다")
     chk(len(ea) == 1 and fitz.open(str(ea[0])).page_count == 2, "A2 새 파일 a_edited 에 쪽 편집(2쪽)", str(ea))
+    chk(_SAVE_ASKED and _SAVE_ASKED[-1].endswith("a_edited.pdf"), "A3 저장 창을 띄우고 기본 이름은 <원본>_edited.pdf(261031-14)", str(_SAVE_ASKED))
 
     # B — 꾸밈만 + 다른 이름으로 저장
     mw._on_bookmark_activated(str(b), 0); spin(1.0)

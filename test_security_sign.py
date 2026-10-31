@@ -34,6 +34,10 @@ from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
 QCoreApplication.setApplicationName("polypdf_sign_%d" % os.getpid())
+# 261031-14(마스터 §4.7.13): 새 이름은 저장 창에서 고른다 — 검사는 기본 이름을 그대로 받는다(물은 기록은 _SAVE_ASKED)
+from PyQt6.QtWidgets import QFileDialog as _QFD
+_SAVE_ASKED = []
+_QFD.getSaveFileName = staticmethod(lambda *a, **k: (_SAVE_ASKED.append(a[2] if len(a) > 2 else ""), (a[2] if len(a) > 2 else "", "PDF (*.pdf)"))[1])
 from viewer import sign_core as sc, sign_store as st, sign_hello as sh
 
 fails = []
@@ -329,7 +333,9 @@ try:
         dd = fitz.open(str(src)); dd.save(str(p)); dd.close()
         return p
     picked["text"] = "새 파일로"
+    _n_ask = len(_SAVE_ASKED)
     out1 = mw._finalize_save(str(sgn), str(produced()))
+    chk(len(_SAVE_ASKED) == _n_ask + 1, "E1 '새 파일로' 는 저장 창에서 이름을 고른다(261031-14)", str(_SAVE_ASKED[_n_ask:]))
     chk(Path(out1) != sgn and Path(out1).exists() and sc.verify_pdf(str(sgn), st.trusted()).worst == sc.OK_TRUSTED,
         "E1 서명된 파일에 저장 → '새 파일로' 면 원본 서명은 그대로", out1)
     picked["text"] = "취소"

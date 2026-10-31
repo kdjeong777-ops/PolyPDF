@@ -2640,7 +2640,7 @@ class BookmarkTree(QWidget):
             act_save_poly = menu.addAction(tr("저장"))
             act_save_poly.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
             act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
-            act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
+            act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf)."))
             act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
             act_flatten.setToolTip(
                 tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
