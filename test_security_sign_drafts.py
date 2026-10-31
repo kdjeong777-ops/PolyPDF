@@ -377,6 +377,26 @@ try:
     st.add_id(pfx3, info3)
     pfx4, info4 = sc.create_id("강감찬", "Other-Password-1!")
     st.add_id(pfx4, info4)
+    # X (261031-8) Hello 로 보관한 ID 가 있으면 확인 창 없이 바로 Hello — 취소하면 그때 비밀번호 창
+    mw._sign_lock()
+    n0 = _Unlock.shown
+    chk(mw._sign_unlock() and set(mw._sign_creds()) == {info.fp} and _Unlock.shown == n0,
+        "X1 서명 시작 — Hello 로 보관한 ID 는 확인 창 없이 바로 Windows Hello 로 연다", str((_Unlock.shown - n0, len(mw._sign_creds()))))
+    mw._sign_lock()
+    _rec0 = sh.recall
+
+    def _hello_cancel(fp):
+        raise sh.HelloCancelled()
+    sh.recall = _hello_cancel
+    _Unlock.mode, _Unlock.pw = "password", PW
+    try:
+        ok_x = mw._sign_unlock()
+    finally:
+        sh.recall = _rec0
+    chk(ok_x and _Unlock.shown == n0 + 1 and info3.fp in mw._sign_creds(),
+        "X2 Hello 를 취소하면 그때 비밀번호 창(비밀번호로 열리는 ID 들)", str(_Unlock.shown - n0))
+    # 아래 U4~W 는 비밀번호 길(Hello 없는 PC)을 본다
+    mw._sign_hello_ready = lambda: False
     mw._sign_lock()
     _Unlock.mode, _Unlock.pw = "password", PW
     ok_ = mw._sign_unlock()

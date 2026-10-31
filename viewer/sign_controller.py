@@ -157,15 +157,22 @@ class SignMixin(SignDraftMixin):
         hello_ids = [e for e in pfx_ids if e.get("hello") and sign_hello.has(e["fp"])] if hello_ok else []
         hello_e = next((e for e in hello_ids if e["fp"] == d.get("default_id")), hello_ids[0] if hello_ids else None)
         from viewer.widgets.sign_dialogs import SignUnlockDialog
+        # 261031-8(사용자 지시): Hello 로 보관한 ID 가 있으면 확인 창 없이 **바로 Windows Hello**(지문·얼굴·PIN) —
+        #   취소하거나 꺼내지 못하면 그때 비밀번호 창. '다른 디지털 ID 열기…'(more)는 고르려는 것이라 창부터.
+        hello_first = hello_e is not None and not more
         while True:
-            dlg = SignUnlockDialog(self, hello_ok=hello_ok, hello_name=(hello_e or {}).get("name", ""), n_ids=len(d["ids"]))
-            try:
-                if dlg.exec() != dlg.DialogCode.Accepted:
-                    return False
-                mode, pw = dlg.mode, dlg.password()
-            finally:
-                dlg.ed_pw.clear()                # 칸에 남기지 않는다(SOT §6.4)
-                dlg.deleteLater()
+            if hello_first:
+                hello_first = False
+                mode, pw = "hello", ""
+            else:
+                dlg = SignUnlockDialog(self, hello_ok=hello_ok, hello_name=(hello_e or {}).get("name", ""), n_ids=len(d["ids"]))
+                try:
+                    if dlg.exec() != dlg.DialogCode.Accepted:
+                        return False
+                    mode, pw = dlg.mode, dlg.password()
+                finally:
+                    dlg.ed_pw.clear()                # 칸에 남기지 않는다(SOT §6.4)
+                    dlg.deleteLater()
             got = {}
             if mode == "hello" and hello_e is not None:
                 fp = hello_e["fp"]
