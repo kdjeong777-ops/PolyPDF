@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""261031: 깨진 색인에 쓰면 SQLite 가 꾸밈 없는 'constraint failed' 만 낸다 — 손상 복구가 알아보게(응답성 SOT §4 ⑤, 사용자 결정).
+"""261031-5: 깨진 색인에 쓰면 SQLite 가 꾸밈 없는 'constraint failed' 만 낸다 — 손상 복구가 알아보게(응답성 SOT §4 ⑤, 사용자 결정).
 
 사용자 실제 index.db 가 10-26~31 사이 다시 손상됐다(`btreeInitPage() returns error code 11`). 폴더를 열면 색인 자식이 첫 새 파일을 쓰다
 `sqlite3.IntegrityError: constraint failed` 로 멈췄고, `dbutil.is_corrupt_error` 가 손상으로 보지 않아 복구(새로 만들기·error.log)가 돌지
