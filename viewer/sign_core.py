@@ -167,6 +167,23 @@ def pfx_info(data: bytes, password: str) -> IdInfo:
     return _cert_info(cert)
 
 
+def pfx_self_signed(data: bytes, password: str) -> bool:
+    """자체 서명 인증서(발급자 = 주체)인가 — '내용 고치기'(새로 발급)는 이것만(보안 SOT §3.2, 261031-6).
+    기관이 발급한 인증서는 PolyPDF 가 다시 발급할 수 없다."""
+    _key, cert, _ = load_pfx(data, password)
+    return cert is not None and cert.issuer == cert.subject
+
+
+MM_PER_PT = 25.4 / 72.0
+
+
+def real_box_pt(width_mm: float, img_w: float = 0.0, img_h: float = 0.0) -> tuple:
+    """서명 그림 실제 크기 → 쪽 단위(pt) (폭, 높이) — 높이는 그림 비율, 그림이 없으면 폭 ÷ 2.5(보안 SOT §3.3, 261031-6)."""
+    w = float(width_mm) / MM_PER_PT
+    h = w * float(img_h) / float(img_w) if img_w > 0 and img_h > 0 else w / 2.5
+    return (w, h)
+
+
 def cert_der(data: bytes, password: str) -> bytes:
     """공개 인증서(.cer, DER) — 받는 사람이 신뢰 등록하는 데 쓴다(SOT §3.2 내보내기)."""
     from cryptography.hazmat.primitives import serialization

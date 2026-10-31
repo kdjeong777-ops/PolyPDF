@@ -16,6 +16,9 @@ from pathlib import Path
 
 INDEX = "signing.json"
 APPEARANCE_REV = 2      # 2 = 기본 글자 배치가 '그림 위·글자 아래'(261012-1) — 옛 목록은 한 번 바꾼다(보안 SOT §9)
+IMAGE_MM_DEFAULT = 50.0  # 서명 그림 실제 폭(mm) — 값이 없는 ID(보안 SOT §3.1, 261031-6)
+IMAGE_MM_MIN = 5.0
+IMAGE_MM_MAX = 200.0
 
 
 def root() -> Path:
@@ -94,9 +97,9 @@ def abspath(rel: str) -> Path:
 
 # ---- 디지털 ID ---------------------------------------------------------------
 
-def add_id(pfx: bytes, info, source: str = "") -> dict:
+def add_id(pfx: bytes, info, source: str = "", self_made: bool = False) -> dict:
     """`.pfx` 를 `ids\\<지문16>.pfx` 로 두고 목록에 넣는다. 이미 있으면 파일만 새로 쓴다.
-    `source="npki"` 면 공동인증서에서 가져온 것(SOT §3.8 — 목록 표시용)."""
+    `source="npki"` 면 공동인증서에서 가져온 것(SOT §3.8 — 목록 표시용). `self_made` = PolyPDF 가 만든 자체 서명 ID(§3.2 고치기 대상)."""
     d = load()
     rel = f"ids/{info.fp[:16]}.pfx"
     path = abspath(rel)
@@ -113,6 +116,8 @@ def add_id(pfx: bytes, info, source: str = "") -> dict:
     entry.pop("thumb", None)
     if source:
         entry["source"] = source
+    if self_made:
+        entry["self_made"] = True
     entry.setdefault("hello", False)
     entry.setdefault("image", "")                   # 서명 그림은 ID 마다(261031-1) — 새 ID 는 옛 기본 그림을 물려받지 않는다
     if not d["default_id"]:
@@ -238,6 +243,58 @@ def id_image_path(fp: str) -> str:
     rel = e.get("image", "")
     p = abspath(rel) if rel else None
     return str(p) if p is not None and p.exists() else ""
+
+
+def _clamp_mm(v) -> float:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return IMAGE_MM_DEFAULT
+    if v != v or v <= 0:                         # NaN·0 — 기본
+        return IMAGE_MM_DEFAULT
+    return min(IMAGE_MM_MAX, max(IMAGE_MM_MIN, v))
+
+
+def id_image_mm(fp: str) -> float:
+    """그 ID 의 서명 그림 실제 폭(mm) — 없으면 기본(보안 SOT §3.1, 261031-6)."""
+    e = get_id(fp) or {}
+    return _clamp_mm(e.get("image_mm", IMAGE_MM_DEFAULT))
+
+
+def set_id_image_mm(fp: str, mm) -> float:
+    v = round(_clamp_mm(mm), 1)
+    set_id_flag(fp, image_mm=v)
+    return v
+
+
+def replace_id(old_fp: str, pfx: bytes, info, image=None, keep_image: bool = True, image_mm=None) -> dict:
+    """'내용 고치기' = 새 인증서로 바꾸기(보안 SOT §3.2, 261031-6) — 새 ID 를 옛 ID 의 목록 자리에 두고
+    기본 ID·서명 그림·그림 폭을 옮긴 뒤 옛 ID 를 지운다(신뢰 지문은 남는다 — 이미 서명한 문서).
+    `image` = 새 그림(PIL), 없고 `keep_image` 면 옛 그림을 복사한다."""
+    old = get_id(old_fp) or {}
+    old_img = id_image_path(old_fp)
+    was_default = load().get("default_id") == old_fp
+    entry = add_id(pfx, info, self_made=True)
+    new_fp = info.fp
+    if image is not None:
+        set_id_image(new_fp, image)
+    elif keep_image and old_img:
+        from PIL import Image
+        with Image.open(old_img) as im:
+            set_id_image(new_fp, im.convert("RGBA"))
+    set_id_image_mm(new_fp, image_mm if image_mm is not None else old.get("image_mm", IMAGE_MM_DEFAULT))
+    d = load()
+    ids = d["ids"]
+    pos = next((i for i, x in enumerate(ids) if x.get("fp") == old_fp), None)
+    cur = next((i for i, x in enumerate(ids) if x.get("fp") == new_fp), None)
+    if pos is not None and cur is not None and cur != pos:
+        ids.insert(pos, ids.pop(cur))
+    if was_default:
+        d["default_id"] = new_fp
+    save(d)
+    if old_fp != new_fp:
+        remove_id(old_fp)
+    return get_id(new_fp) or entry
 
 
 _BAD = re.compile(r'[\\/:*?"<>|]+')

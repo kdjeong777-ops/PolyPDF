@@ -13,7 +13,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QImage, QPainter, QPixmap, QColor
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSlider,
     QSpinBox, QVBoxLayout,
 )
@@ -276,10 +276,43 @@ class SignImageDialog(QDialog):
 # 디지털 ID — SOT §3.2·§6.1
 # ---------------------------------------------------------------------------
 
+def _mm_spin(value: float) -> QDoubleSpinBox:
+    from viewer import sign_store
+    sp = QDoubleSpinBox()
+    sp.setRange(sign_store.IMAGE_MM_MIN, sign_store.IMAGE_MM_MAX)
+    sp.setDecimals(1)
+    sp.setSingleStep(1.0)
+    sp.setSuffix(" mm")
+    sp.setValue(float(value))
+    return sp
+
+
+def _height_mm_text(width_mm: float, img) -> str:
+    """폭 mm → 그림 비율의 높이 mm 글(보안 SOT §3.1 실제 크기, 261031-6)."""
+    if img is None:
+        return tr("(그림 없음)")
+    w, h = img.size                              # PIL
+    if not w or not h:
+        return ""
+    return tr("× 높이 {h:.1f} mm").format(h=float(width_mm) * h / w)
+
+
+def _checker_preview(pil_img, height: int) -> QPixmap:
+    pm = QPixmap.fromImage(_pil_to_qimage(pil_img)).scaledToHeight(height, Qt.TransformationMode.SmoothTransformation)
+    bg = _checker(pm.width(), pm.height())
+    p = QPainter(bg)
+    p.drawPixmap(0, 0, pm)
+    p.end()
+    return bg
+
+
 class _CreateIdDialog(QDialog):
-    def __init__(self, parent=None, hello_ok: bool = False):
+    """새 디지털 ID — `edit`(ID 항목)을 주면 **내용 고치기**(지금 값으로 채움 — 확인하면 새 인증서로 발급, 보안 SOT §3.2, 261031-6)."""
+
+    def __init__(self, parent=None, hello_ok: bool = False, edit: dict | None = None):
         super().__init__(parent)
-        self.setWindowTitle(tr("새 디지털 ID"))
+        self._edit = edit
+        self.setWindowTitle(tr("디지털 ID 내용 고치기") if edit else tr("새 디지털 ID"))
         v = QVBoxLayout(self)
         form = QFormLayout()
         self.ed_name = QLineEdit()
@@ -313,9 +346,14 @@ class _CreateIdDialog(QDialog):
             row.addWidget(google_button(self))
             row.addStretch(1)
             v.addLayout(row)
-        note = QLabel(tr("직접 만든 디지털 ID 는 받는 사람의 PDF 뷰어에서 '신원 알 수 없음' 으로 보입니다. "
-                         "받는 사람이 공개 인증서(.cer)를 신뢰 등록하면 '유효' 로 보입니다. "
-                         "문서가 바뀌었는지는 신뢰 등록 없이도 드러납니다."))
+        if edit:
+            note = QLabel(tr("인증서에 서명된 내용은 바꿀 수 없어, 확인하면 새 인증서로 발급하고 기존 디지털 ID 는 지웁니다. "
+                             "이미 서명한 문서는 그대로 유효합니다. 받는 사람에게 준 공개 인증서(.cer)는 다시 보내야 합니다. "
+                             "비밀번호는 새로 넣으세요(전과 같아도 됩니다)."))
+        else:
+            note = QLabel(tr("직접 만든 디지털 ID 는 받는 사람의 PDF 뷰어에서 '신원 알 수 없음' 으로 보입니다. "
+                             "받는 사람이 공개 인증서(.cer)를 신뢰 등록하면 '유효' 로 보입니다. "
+                             "문서가 바뀌었는지는 신뢰 등록 없이도 드러납니다."))
         note.setWordWrap(True)
         v.addWidget(note)
         # 261031-1(사용자 지시): 디지털 ID 가 서명 그림도 갖는다 — 만들 때 아래 단추로 넣는다(나중에 관리 창에서 바꿀 수 있다)
@@ -323,32 +361,72 @@ class _CreateIdDialog(QDialog):
         img_row = QHBoxLayout()
         self.b_image = QPushButton(tr("서명 그림 넣기"))
         self.b_image.clicked.connect(self._pick_image)
+        self.b_image_rm = QPushButton(tr("빼기"))
+        self.b_image_rm.clicked.connect(self._drop_image)
+        self.b_image_rm.setVisible(False)
         self.lab_image = QLabel(tr("(서명 그림 없음 — 글자만 찍힙니다)"))
         img_row.addWidget(self.b_image)
+        img_row.addWidget(self.b_image_rm)
         img_row.addWidget(self.lab_image, 1)
         v.addLayout(img_row)
+        # 261031-6(사용자 지시): 서명 그림의 실제 크기 — 폭 mm, 높이는 그림 비율(보안 SOT §3.1)
+        from viewer import sign_store
+        mm_row = QHBoxLayout()
+        mm_row.addWidget(QLabel(tr("그림 실제 폭")))
+        self.sp_mm = _mm_spin((edit or {}).get("image_mm", sign_store.IMAGE_MM_DEFAULT) if edit else sign_store.IMAGE_MM_DEFAULT)
+        self.lab_h = QLabel("")
+        mm_row.addWidget(self.sp_mm)
+        mm_row.addWidget(self.lab_h, 1)
+        v.addLayout(mm_row)
+        self.sp_mm.valueChanged.connect(lambda _v: self._sync_h())
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         bb.accepted.connect(self._ok)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
         self.ed_pw.textChanged.connect(self._strength)
+        if edit:
+            self.ed_name.setText(str(edit.get("name", "")))
+            self.ed_email.setText(str(edit.get("email", "")))
+            self.ed_org.setText(str(edit.get("org", "")))
+            self.chk_hello.setChecked(bool(edit.get("hello")) and hello_ok)
+            ip = sign_store.id_image_path(str(edit.get("fp", "")))
+            if ip:
+                try:
+                    from PIL import Image
+                    with Image.open(ip) as im:
+                        self._set_image(im.convert("RGBA"))
+                except Exception:
+                    pass
+        self._sync_h()
         self.resize(460, 0)
+
+    def _sync_h(self):
+        self.lab_h.setText(_height_mm_text(self.sp_mm.value(), self.image))
+
+    def _set_image(self, img):
+        self.image = img
+        if img is None:
+            self.lab_image.setPixmap(QPixmap())
+            self.lab_image.setText(tr("(서명 그림 없음 — 글자만 찍힙니다)"))
+            self.b_image.setText(tr("서명 그림 넣기"))
+        else:
+            self.lab_image.setPixmap(_checker_preview(img, 40))
+            self.b_image.setText(tr("서명 그림 바꾸기"))
+        self.b_image_rm.setVisible(img is not None)
+        self._sync_h()
+
+    def _drop_image(self):
+        self._set_image(None)
 
     def _pick_image(self):
         dlg = SignImageDialog(self)
         try:
             if dlg.exec() != QDialog.DialogCode.Accepted or dlg.result_image is None:
                 return
-            self.image = dlg.result_image
+            img = dlg.result_image
         finally:
             dlg.deleteLater()
-        pm = QPixmap.fromImage(_pil_to_qimage(self.image)).scaledToHeight(40, Qt.TransformationMode.SmoothTransformation)
-        bg = _checker(pm.width(), pm.height())
-        p = QPainter(bg)
-        p.drawPixmap(0, 0, pm)
-        p.end()
-        self.lab_image.setPixmap(bg)
-        self.b_image.setText(tr("서명 그림 바꾸기"))
+        self._set_image(img)
 
     def _strength(self, t):
         from viewer.sign_core import password_weak, PASSWORD_MIN
@@ -406,8 +484,38 @@ class DigitalIdDialog(QDialog):
         self._run = runner or (lambda fn, _t: fn())
         self._hello_ok = bool(hello_ok)
         v = QVBoxLayout(self)
+        top = QHBoxLayout()
         self.lst = QListWidget()
-        v.addWidget(self.lst, 1)
+        top.addWidget(self.lst, 3)
+        # 261031-6(사용자 지시): 고른 ID 의 내용을 그림까지 보이고, 그림 폭(mm)은 여기서 바로 고친다(보안 SOT §3.2 '관리 창 — 보기')
+        det = QVBoxLayout()
+        self.lab_pic = QLabel()
+        self.lab_pic.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.lab_pic.setMinimumHeight(76)
+        det.addWidget(self.lab_pic)
+        mm_row = QHBoxLayout()
+        mm_row.addWidget(QLabel(tr("그림 실제 폭")))
+        from viewer import sign_store as _ss
+        self.sp_mm = _mm_spin(_ss.IMAGE_MM_DEFAULT)
+        self.lab_h = QLabel("")
+        mm_row.addWidget(self.sp_mm)
+        mm_row.addWidget(self.lab_h, 1)
+        det.addLayout(mm_row)
+        info = QFormLayout()
+        self.lab_info = {}
+        for k, label in (("name", tr("이름")), ("email", tr("이메일")), ("org", tr("조직")), ("until", tr("유효기간")),
+                         ("kind", tr("종류")), ("hello", tr("Windows Hello")), ("fp", tr("지문"))):
+            lab = QLabel("")
+            lab.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            lab.setWordWrap(True)
+            self.lab_info[k] = lab
+            info.addRow(label, lab)
+        det.addLayout(info)
+        det.addStretch(1)
+        top.addLayout(det, 4)
+        v.addLayout(top, 1)
+        self._img_pil = None
+        self.sp_mm.valueChanged.connect(self._mm_changed)
         grid = QHBoxLayout()
         self.b_new = QPushButton(tr("새로 만들기…"))
         self.b_imp = QPushButton(tr("가져오기…"))
@@ -420,8 +528,9 @@ class DigitalIdDialog(QDialog):
         self.b_def = QPushButton(tr("기본으로"))
         self.b_hello = QPushButton(tr("Windows Hello 보관"))
         self.b_img = QPushButton(tr("서명 그림…"))          # 261031-1: 고른 ID 의 서명 그림 넣기·바꾸기·빼기
+        self.b_edit = QPushButton(tr("내용 고치기…"))       # 261031-6: 만들 때 넣은 것을 모두 고침 = 새 인증서로 발급
         self.b_del = QPushButton(tr("지우기…"))
-        for b in (self.b_def, self.b_hello, self.b_img, self.b_del):
+        for b in (self.b_def, self.b_hello, self.b_img, self.b_edit, self.b_del):
             grid2.addWidget(b)
         grid2.addStretch(1)
         v.addLayout(grid2)
@@ -456,9 +565,10 @@ class DigitalIdDialog(QDialog):
         self.b_def.clicked.connect(self._set_default)
         self.b_hello.clicked.connect(self._toggle_hello)
         self.b_img.clicked.connect(self._image)
+        self.b_edit.clicked.connect(self._reissue)
         self.b_del.clicked.connect(self._delete)
         self.lst.currentRowChanged.connect(lambda _r: self._sync_buttons())
-        self.resize(620, 360)
+        self.resize(820, 420)
         self.refresh()
 
     # ---- 목록 ----
@@ -491,15 +601,74 @@ class DigitalIdDialog(QDialog):
         it = self.lst.currentItem()
         return str(it.data(Qt.ItemDataRole.UserRole)) if it else ""
 
+    @staticmethod
+    def _kind_text(e: dict) -> str:
+        if e.get("kind") == "win":
+            return tr("Windows 인증서 저장소")
+        if e.get("source") == "npki":
+            return tr("공동인증서")
+        if e.get("self_made"):
+            return tr("직접 만든 디지털 ID")
+        return tr("가져온 디지털 ID(.pfx)")
+
+    @staticmethod
+    def _can_reissue(e: dict) -> bool:
+        """고치기(새로 발급) 후보 — 기관 인증서(공동인증서·Windows 저장소)는 아니다. 가져온 .pfx 는 열어 본 뒤 자체 서명만."""
+        return bool(e) and e.get("kind") != "win" and e.get("source") != "npki"
+
+    def _show_detail(self):
+        from viewer import sign_store
+        fp = self._fp()
+        e = sign_store.get_id(fp) or {}
+        self._img_pil = None
+        ip = sign_store.id_image_path(fp) if fp else ""
+        if ip:
+            try:
+                from PIL import Image
+                with Image.open(ip) as im:
+                    self._img_pil = im.convert("RGBA")
+            except Exception:
+                self._img_pil = None
+        if self._img_pil is not None:
+            self.lab_pic.setPixmap(_checker_preview(self._img_pil, 70))
+        else:
+            self.lab_pic.setPixmap(QPixmap())
+            self.lab_pic.setText(tr("(서명 그림 없음 — [서명 그림…] 으로 넣으세요)") if fp else "")
+        self.sp_mm.blockSignals(True)
+        self.sp_mm.setValue(sign_store.id_image_mm(fp) if fp else sign_store.IMAGE_MM_DEFAULT)
+        self.sp_mm.blockSignals(False)
+        self.sp_mm.setEnabled(bool(fp))
+        self.lab_h.setText(_height_mm_text(self.sp_mm.value(), self._img_pil) if fp else "")
+        vals = {"name": e.get("name", ""), "email": e.get("email", ""), "org": e.get("org", ""),
+                "until": ("~ " + e["not_after"]) if e.get("not_after") else "",
+                "kind": self._kind_text(e) if e else "",
+                "hello": (tr("보관함") if e.get("hello") else tr("보관 안 함")) if e else "",
+                "fp": fp}
+        for k, lab in self.lab_info.items():
+            lab.setText(str(vals.get(k, "")))
+
+    def _mm_changed(self, val):
+        fp = self._fp()
+        if not fp:
+            return
+        from viewer import sign_store
+        sign_store.set_id_image_mm(fp, val)
+        self.lab_h.setText(_height_mm_text(val, self._img_pil))
+
     def _sync_buttons(self):
         has = bool(self._fp())
-        for b in (self.b_bak, self.b_cer, self.b_def, self.b_hello, self.b_img, self.b_del):
+        for b in (self.b_bak, self.b_cer, self.b_def, self.b_hello, self.b_img, self.b_edit, self.b_del):
             b.setEnabled(has)
+        self._show_detail()
         if has:
             from viewer import sign_store
-            win = (sign_store.get_id(self._fp()) or {}).get("kind") == "win"
+            e = sign_store.get_id(self._fp()) or {}
+            win = e.get("kind") == "win"
             self.b_bak.setEnabled(not win)           # 키가 Windows 안에 있다(SOT §3.9)
             self.b_hello.setEnabled(not win)
+            self.b_edit.setEnabled(self._can_reissue(e))
+            self.b_edit.setToolTip("" if self._can_reissue(e) else
+                                   tr("기관이 발급한 인증서는 고칠 수 없습니다 — 서명 그림·그림 폭만 바꿀 수 있습니다."))
         if has and self._hello_ok:
             from viewer import sign_store
             e = sign_store.get_id(self._fp()) or {}
@@ -532,9 +701,10 @@ class DigitalIdDialog(QDialog):
         except Exception as e:
             QMessageBox.warning(self, self.windowTitle(), tr("디지털 ID 를 만들지 못했습니다: {e}").format(e=type(e).__name__))
             return
-        sign_store.add_id(pfx, info)
+        sign_store.add_id(pfx, info, self_made=True)
         if dlg.image is not None:
             sign_store.set_id_image(info.fp, dlg.image)
+        sign_store.set_id_image_mm(info.fp, dlg.sp_mm.value())
         if self._hello_ok and dlg.chk_hello.isChecked():
             self._store_hello(info.fp, pw)
         self.refresh(info.fp)
@@ -705,6 +875,68 @@ class DigitalIdDialog(QDialog):
         finally:
             dlg.deleteLater()
         self.refresh(fp)
+
+    def _reissue(self):
+        """내용 고치기 = 새 인증서로 발급하고 기존 ID 를 지운다(사용자 결정 261031-6, 보안 SOT §3.2).
+        기존 비밀번호(또는 Hello)로 자체 서명 인증서인지 확인 → 지금 값으로 채운 만들기 창 → 확인 → `replace_id`."""
+        from viewer import sign_core, sign_store
+        fp = self._fp()
+        e = sign_store.get_id(fp) or {}
+        title = tr("디지털 ID 내용 고치기")
+        if not self._can_reissue(e):
+            QMessageBox.information(self, title, tr("기관이 발급한 인증서는 고칠 수 없습니다 — 서명 그림·그림 폭만 바꿀 수 있습니다."))
+            return
+        pw = self._password_for(fp)
+        if pw is None:
+            return
+        try:
+            own = self._run(lambda: sign_core.pfx_self_signed(sign_store.read_pfx(fp), pw), tr("비밀번호 확인 중"))
+        except sign_core.WrongPassword:
+            QMessageBox.warning(self, title, tr("비밀번호가 맞지 않습니다."))
+            return
+        except Exception as ex:
+            QMessageBox.warning(self, title, tr("디지털 ID 를 열지 못했습니다: {e}").format(e=type(ex).__name__))
+            return
+        finally:
+            pw = None
+        if not own:
+            QMessageBox.information(self, title, tr("기관이 발급한 인증서는 고칠 수 없습니다 — 서명 그림·그림 폭만 바꿀 수 있습니다."))
+            return
+        dlg = _CreateIdDialog(self, hello_ok=self._hello_ok, edit=dict(e, image_mm=sign_store.id_image_mm(fp)))
+        try:
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle(title)
+            box.setText(tr("새 인증서로 발급하고 기존 디지털 ID '{name}' 은 지웁니다. 이미 서명한 문서는 그대로 유효합니다"
+                           "(옛 인증서는 신뢰 목록에 남습니다). 받는 사람에게 준 공개 인증서(.cer)는 다시 보내야 합니다.").format(name=e.get("name", "")))
+            b_bak = box.addButton(tr("백업 후 고치기…"), QMessageBox.ButtonRole.AcceptRole)
+            b_go = box.addButton(tr("고치기"), QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            c = box.clickedButton()
+            if c is b_bak:
+                self._backup()
+            elif c is not b_go:
+                return
+            new_pw = dlg.ed_pw.text()
+            try:
+                pfx, info = self._run(lambda: sign_core.create_id(
+                    dlg.ed_name.text(), new_pw, email=dlg.ed_email.text(), org=dlg.ed_org.text(),
+                    years=dlg.sp_years.value()), tr("디지털 ID 만드는 중"))
+            except Exception as ex:
+                QMessageBox.warning(self, title, tr("디지털 ID 를 만들지 못했습니다: {e}").format(e=type(ex).__name__))
+                return
+            # 창의 그림 = 옛 그림으로 채워 두었다 — 그대로·바꿈·뺌(None) 모두 창 값대로
+            sign_store.replace_id(fp, pfx, info, image=dlg.image, keep_image=False, image_mm=dlg.sp_mm.value())
+            if self._hello_ok and dlg.chk_hello.isChecked():
+                self._store_hello(info.fp, new_pw)
+            new_pw = None
+        finally:
+            dlg.deleteLater()        # 비밀번호 칸을 남겨 두지 않는다(SOT §6.4)
+        self.refresh(info.fp)
+        QMessageBox.information(self, title, tr("새 디지털 ID 로 바꿨습니다. '백업 내보내기' 로 새 .pfx 를 백업해 두세요."))
 
     def _set_default(self):
         from viewer import sign_store

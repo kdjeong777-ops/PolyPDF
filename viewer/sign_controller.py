@@ -19,7 +19,6 @@ from PyQt6.QtWidgets import QMessageBox
 from viewer.i18n import tr
 from viewer.sign_draft_controller import SignDraftMixin
 
-SIGN_DEFAULT_WIDTH_PT = 50 / 25.4 * 72      # 클릭만 했을 때 서명 상자 폭 50mm (SOT §3.3)
 SIGN_MIN_SIDE_PT = 12                       # 이보다 작게 끌면 클릭으로 본다
 
 
@@ -82,7 +81,15 @@ class SignMixin(SignDraftMixin):
         self._sign_cur_fp = ""
 
     def _sign_creds(self) -> dict:
-        return getattr(self, "_sign_unlocked", None) or {}
+        c = getattr(self, "_sign_unlocked", None) or {}
+        if c:
+            # 관리 창에서 지우거나 '내용 고치기'(새로 발급)로 바뀐 ID 의 열쇠는 버린다(보안 SOT §3.2, 261031-6)
+            from viewer import sign_store
+            have = {e.get("fp") for e in sign_store.load()["ids"]}
+            gone = [fp for fp in c if fp not in have]
+            for fp in gone:
+                c.pop(fp, None)
+        return c
 
     def _sign_current_fp(self) -> str:
         """지금 쓰는 ID — 연 것 중 고른 것, 없으면 기본 ID(열렸으면), 아니면 연 것 중 첫째(목록 차례)."""
@@ -344,8 +351,9 @@ class SignMixin(SignDraftMixin):
         if mode == "sign" and _sc.doc_certify_level(mv._doc.doc):
             QMessageBox.information(self, tr("서명"), tr("작성자가 인증한 문서입니다 — 새 자리에는 서명할 수 없고 빈 서명 칸에만 서명할 수 있습니다."))
             return
+        auto = self._sign_is_click(r)              # 클릭 = 실제 크기를 따르는 자리(ID·그림을 바꾸면 다시 맞춘다, 261031-6)
         r = self._sign_box_fit(page, r)
-        self._sign_add_draft(mv, cur, pidx, r, kind="image" if mode == "image" else "sign")
+        self._sign_add_draft(mv, cur, pidx, r, kind="image" if mode == "image" else "sign", auto=auto)
 
     # ---- 빈 서명 칸 — SOT §3.7 -----------------------------------------------
     def _sign_choose_field(self, empties, certified: int):
@@ -487,24 +495,45 @@ class SignMixin(SignDraftMixin):
             pass
         return "", False
 
+    @staticmethod
+    def _sign_is_click(r) -> bool:
+        return r.width < SIGN_MIN_SIDE_PT or r.height < SIGN_MIN_SIDE_PT
+
+    @staticmethod
+    def _sign_real_size(fp: str) -> tuple:
+        """그 ID 의 서명 그림 **실제 크기**(쪽 단위 pt) — 폭 mm(`image_mm`)·그림 비율(보안 SOT §3.3, 261031-6)."""
+        from viewer import sign_core, sign_store
+        iw = ih = 0
+        try:
+            ip = sign_store.id_image_path(fp)
+            if ip:
+                from PIL import Image
+                with Image.open(ip) as im:
+                    iw, ih = im.size
+        except Exception:
+            pass
+        mm = sign_store.id_image_mm(fp) if fp else sign_store.IMAGE_MM_DEFAULT
+        return sign_core.real_box_pt(mm, iw, ih)
+
+    @staticmethod
+    def _sign_fit_real(pr, x0: float, y0: float, w: float, h: float):
+        """실제 크기 상자를 누른 자리(왼쪽 위)에 — 쪽보다 크면 비율대로 줄이고 쪽 안으로 민다."""
+        import fitz
+        k = min(1.0, pr.width / max(w, 1e-6), pr.height / max(h, 1e-6))
+        w, h = w * k, h * k
+        r = fitz.Rect(x0, y0, x0 + w, y0 + h)
+        dx = max(0, pr.x0 - r.x0) - max(0, r.x1 - pr.x1)
+        dy = max(0, pr.y0 - r.y0) - max(0, r.y1 - pr.y1)
+        return fitz.Rect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy)
+
     def _sign_box_fit(self, page, r):
-        """클릭(작은 상자)이면 기본 크기 — 지금 ID 의 서명 그림 비율로, **누른 자리를 왼쪽 위**로(261031-1, 사용자 지시 — 종전 가운데).
-        쪽 안으로 맞춘다."""
+        """클릭(작은 상자)이면 **실제 크기** — 지금 ID 의 서명 그림 폭 mm·비율로, **누른 자리를 왼쪽 위**로
+        (261031-6 사용자 지시 — 종전 폭 50mm 고정, 261031-1 왼쪽 위). 쪽 안으로 맞춘다."""
         import fitz
         pr = page.rect
-        if r.width < SIGN_MIN_SIDE_PT or r.height < SIGN_MIN_SIDE_PT:
-            w = SIGN_DEFAULT_WIDTH_PT
-            h = w / 2.5
-            try:
-                from viewer import sign_store
-                ip = sign_store.id_image_path(self._sign_current_fp())
-                if ip:
-                    from PIL import Image
-                    with Image.open(ip) as im:
-                        h = w * im.height / max(1, im.width)
-            except Exception:
-                pass
-            r = fitz.Rect(r.x0, r.y0, r.x0 + w, r.y0 + h)
+        if self._sign_is_click(r):
+            w, h = self._sign_real_size(self._sign_current_fp())
+            return self._sign_fit_real(pr, r.x0, r.y0, w, h)
         dx = max(0, pr.x0 - r.x0) - max(0, r.x1 - pr.x1)
         dy = max(0, pr.y0 - r.y0) - max(0, r.y1 - pr.y1)
         r = fitz.Rect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy) & pr

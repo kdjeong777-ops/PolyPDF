@@ -409,7 +409,7 @@ try:
     _Unlock.mode, _Unlock.pw = "password", PW
     mw._sign_lock()
     mw.action_sign_pdf(); spin(0.2)
-    mw._on_sign_region(QRectF(150 * mv._zoom, 200 * mv._zoom, 150 * mv._zoom, 200 * mv._zoom), view=mv)   # 클릭만
+    mw._on_sign_region(QRectF(150 * mv._zoom, 200 * mv._zoom, 0, 0), view=mv)   # 클릭만(크기 0)
     spin(0.3)
     dd0 = sdr.drafts(plain)[0]
     chk(abs(dd0["rect"][0] - 150) < 1 and abs(dd0["rect"][1] - 200) < 1, "U6a 클릭만 하면 누른 자리가 왼쪽 위(종전 가운데)", str(dd0["rect"]))
@@ -450,6 +450,103 @@ try:
     remember_appearance(show_image=True, show_name=True, show_date=True, fp=info.fp)
     mw._sign_drafts_clear(mv)
     chk(not mw._sign_creds(), "U7 자리를 모두 지우면(서명 취소) 연 열쇠를 버린다")
+
+    # ── V (261031-6) 실제 크기·옵션 단추·관리 창 보기·내용 고치기 ──────────────
+    MMPT = 72.0 / 25.4
+    st.set_id_image_mm(info.fp, 30)                      # 홍길동 그림 400×160 → 30mm × 12mm
+    _Unlock.mode, _Unlock.pw = "password", PW
+    mw.action_sign_pdf(); spin(0.2)
+    mw._on_sign_region(QRectF(100 * mv._zoom, 100 * mv._zoom, 0, 0), view=mv)      # 클릭(크기 0)
+    spin(0.3)
+    va = sdr.drafts(plain)[-1]
+    vw, vh = va["rect"][2] - va["rect"][0], va["rect"][3] - va["rect"][1]
+    chk(abs(vw - 30 * MMPT) < 0.5 and abs(vh - 12 * MMPT) < 0.5 and va.get("auto") is True,
+        "V1 클릭 자리 = 그 ID 의 그림 폭 mm(쪽 단위)·그림 비율 높이, auto 로 적음", "%.1f×%.1f" % (vw, vh))
+    import fitz as _fz
+    fr = mw._sign_fit_real(_fz.Rect(0, 0, 100, 100), 50, 50, 300, 120) if hasattr(mw, "_sign_fit_real") else None
+    chk(fr is not None and abs(fr.width - 100) < 0.01 and abs(fr.height - 40) < 0.01 and fr.x0 == 0,
+        "V2 실제 크기가 쪽보다 크면 비율대로 줄이고 쪽 안으로", str(fr))
+    # 끈 자리(직접 크기) 하나 더 — ID 를 바꿔도 크기 그대로여야 한다
+    mw.action_sign_pdf(); spin(0.2)
+    mw._on_sign_region(QRectF(100 * mv._zoom, 500 * mv._zoom, 200 * mv._zoom, 80 * mv._zoom), view=mv)
+    spin(0.3)
+    vb = sdr.drafts(plain)[-1]
+    seen = {}
+
+    def _spy(self, *a, **k):
+        for a_ in self.actions():
+            if a_.text() == "전자서명":
+                g = a_.actionGroup()
+                seen["kind"] = bool(g is not None and g.isExclusive())
+            if a_.menu() is not None and a_.text() == "디지털 ID":
+                ids_ = [b for b in a_.menu().actions() if b.isCheckable()]
+                seen["id"] = bool(ids_) and all(b.actionGroup() is not None and b.actionGroup().isExclusive() for b in ids_)
+                hit = next((b for b in ids_ if b.text().startswith("이순신")), None)
+                return hit
+        return None
+    try:
+        _QM.exec = _spy
+        mw._sign_draft_menu(mv, va["id"], QPoint(0, 0))
+    finally:
+        _QM.exec = _orig_mexec
+    chk(seen.get("kind") and seen.get("id"), "V3 자리 옵션 종류·디지털 ID 는 옵션 단추(배타 묶음)", str(seen))
+    by = {x["id"]: x for x in sdr.drafts(plain)}
+    w_def, h_def = mw._sign_real_size(info3.fp)          # 이순신 — 그림 없음: 기본 폭, 높이 폭/2.5
+    ra, rb = by[va["id"]]["rect"], by[vb["id"]]["rect"]
+    chk(abs((ra[2] - ra[0]) - w_def) < 0.5 and abs((ra[3] - ra[1]) - h_def) < 0.5 and abs(ra[0] - 100) < 0.5
+        and abs((rb[2] - rb[0]) - 200) < 0.5,
+        "V4 ID 를 바꾸면 클릭 자리만 새 ID 의 실제 크기(왼쪽 위 그대로), 끈 자리는 그대로", str((ra, rb)))
+    mw._sign_draft_use_id(plain, sdr.drafts(plain), by[va["id"]], info.fp)
+    mw._sign_drafts_clear(mv)
+    # V5 관리 창 — 고른 ID 의 내용·그림을 보이고 그림 폭 mm 를 바로 저장
+    idd = sdlg.DigitalIdDialog(mw, runner=mw._sign_bg, hello_ok=False)
+    idd.refresh(info.fp)
+    pm_ = idd.lab_pic.pixmap()
+    idd.sp_mm.setValue(42)
+    chk(idd.lab_info["name"].text() == "홍길동" and info.email in idd.lab_info["email"].text()
+        and pm_ is not None and not pm_.isNull() and abs(st.id_image_mm(info.fp) - 42) < 0.01
+        and "16.8" in idd.lab_h.text(),
+        "V5 관리 창 — 이름·이메일·그림 미리보기, 폭 mm 저장·높이 mm 표시", idd.lab_h.text())
+    idd.close(); idd.deleteLater()
+    # V6 내용 고치기 = 새 인증서 발급 — 옛 자리·기본·그림·폭 옮기고 옛 ID 지움, 신뢰 지문은 남김
+    pfx5, info5 = sc.create_id("갑돌이", PW, email="gap@example.com")
+    st.add_id(pfx5, info5, self_made=True)
+    st.set_id_image(info5.fp, im)
+    st.set_id_image_mm(info5.fp, 33)
+    d_ = st.load(); d_["default_id"] = info5.fp; st.save(d_)
+    pos5 = [e["fp"] for e in st.load()["ids"]].index(info5.fp)
+    _orig_cexec = sdlg._CreateIdDialog.exec
+
+    def _edit_exec(self):
+        self.ed_name.setText("갑돌이 부장")
+        self.ed_org.setText("새 회사")
+        self.ed_pw.setText("New-Password-9!"); self.ed_pw2.setText("New-Password-9!")
+        self._ok()
+        return QDialog.DialogCode.Accepted
+    sdlg._CreateIdDialog.exec = _edit_exec
+    try:
+        idd = sdlg.DigitalIdDialog(mw, runner=mw._sign_bg, hello_ok=False)
+        idd.refresh(info5.fp)
+        idd._password_for = lambda fp: PW
+        idd._backup = lambda: None
+        picked["text"] = "고치기"
+        chk(idd.b_edit.isEnabled(), "V6a 직접 만든 ID 는 [내용 고치기…] 가 켜진다")
+        idd._reissue()
+        idd.close(); idd.deleteLater()
+    finally:
+        sdlg._CreateIdDialog.exec = _orig_cexec
+    d6 = st.load()
+    new6 = d6["ids"][pos5] if pos5 < len(d6["ids"]) else {}
+    chk(st.get_id(info5.fp) is None and new6.get("name") == "갑돌이 부장" and new6.get("org") == "새 회사"
+        and new6.get("fp") != info5.fp and d6["default_id"] == new6.get("fp") and new6.get("self_made")
+        and st.id_image_path(new6.get("fp", "")) and abs(st.id_image_mm(new6.get("fp", "")) - 33) < 0.01
+        and info5.fp in d6["trusted"],
+        "V6b 고치면 새 지문 ID 가 옛 자리에(기본·그림·폭 옮김), 옛 ID 는 지우고 신뢰 지문은 남김", str(new6)[:160])
+    chk(sc.pfx_self_signed(st.read_pfx(new6["fp"]), "New-Password-9!") is True,
+        "V6c 새 ID 는 새 비밀번호로 열리는 자체 서명 인증서")
+    chk(not sdlg.DigitalIdDialog._can_reissue({"fp": "x", "source": "npki"})
+        and not sdlg.DigitalIdDialog._can_reissue({"fp": "x", "kind": "win"}),
+        "V7 공동인증서·Windows 저장소 ID 는 고치기 대상이 아니다")
 except Exception:
     import traceback
     traceback.print_exc()

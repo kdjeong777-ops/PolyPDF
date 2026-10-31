@@ -166,7 +166,7 @@ class SignDraftMixin:
         except Exception:
             pass
 
-    def _sign_add_draft(self, mv, cur: str, page: int, rect, kind: str = "sign", field: str = "") -> str:
+    def _sign_add_draft(self, mv, cur: str, page: int, rect, kind: str = "sign", field: str = "", auto: bool = False) -> str:
         """자리 하나를 기록에 더한다. 전자서명 자리는 아래 글자 줄까지 쪽 안에 들게 위로 민다."""
         from viewer import sign_drafts, sign_core, sign_store
         import fitz
@@ -180,7 +180,8 @@ class SignDraftMixin:
                 r = fitz.Rect(r.x0, max(pr.y0, r.y0 - over), r.x1, max(pr.y0, r.y0 - over) + r.height)
         ds = sign_drafts.drafts(cur)
         d = {"id": sign_drafts.new_id(), "page": int(page), "rect": [r.x0, r.y0, r.x1, r.y1], "kind": kind,
-             "image": "", "field": field, "fp": self._sign_view_fp() if kind == "image" else ""}
+             "image": "", "field": field, "fp": self._sign_view_fp() if kind == "image" else "",
+             "auto": bool(auto and not field)}
         ds.append(d)
         sign_drafts.set_drafts(cur, ds)
         self._sign_drafts_sync(mv)
@@ -199,7 +200,11 @@ class SignDraftMixin:
         ds = sign_drafts.drafts(cur)
         for d in ds:
             if d["id"] == draft_id and not d["field"]:
-                d["rect"] = [float(v) for v in rect]
+                new = [float(v) for v in rect]
+                ow, oh = d["rect"][2] - d["rect"][0], d["rect"][3] - d["rect"][1]
+                if abs((new[2] - new[0]) - ow) > 0.5 or abs((new[3] - new[1]) - oh) > 0.5:
+                    d["auto"] = False            # 손잡이로 크기를 정했다 — 이제 실제 크기를 따르지 않는다(261031-6)
+                d["rect"] = new
         sign_drafts.set_drafts(cur, ds)
         self._sign_drafts_sync(mv)
         lay = getattr(mv, "sign_draft_layer", None)
@@ -242,21 +247,29 @@ class SignDraftMixin:
         ap = st.get("appearance") or {}
         creds = self._sign_creds()
         cur_fp = d.get("fp") if d["kind"] == "image" and d.get("fp") else self._sign_view_fp()
+        from PyQt6.QtGui import QActionGroup
         m = QMenu(self)
+        # 261031-6(사용자 지시): 하나만 고르는 것은 옵션 단추 — 배타 묶음(QActionGroup)이면 메뉴가 동그라미 표시로 그린다
+        g_kind = QActionGroup(m)
+        g_kind.setExclusive(True)
         a_sign = m.addAction(tr("전자서명"))
         a_img = m.addAction(tr("그림만(전자서명 아님)"))
         for a, k in ((a_sign, "sign"), (a_img, "image")):
             a.setCheckable(True)
+            g_kind.addAction(a)
             a.setChecked(d["kind"] == k)
             a.setEnabled(not d["field"])
         m.addSeparator()
         sub = m.addMenu(tr("디지털 ID"))
+        g_id = QActionGroup(sub)
+        g_id.setExclusive(True)
         id_acts = {}
         for e in st["ids"]:
             if e.get("fp") not in creds:
                 continue
             a = sub.addAction(e.get("name", "") + (f" <{e['email']}>" if e.get("email") else ""))
             a.setCheckable(True)
+            g_id.addAction(a)
             a.setChecked(e.get("fp") == cur_fp)
             id_acts[a] = e["fp"]
         sub.addSeparator()
@@ -296,7 +309,8 @@ class SignDraftMixin:
             self._sign_draft_use_id(cur, ds, d, id_acts[got])
             return
         if got is a_add_img:
-            self._sign_id_image(cur_fp)
+            if self._sign_id_image(cur_fp):
+                self._sign_resize_auto(mv, cur, cur_fp)       # 그림 비율이 바뀌었을 수 있다 — 클릭 자리는 새 실제 크기로
             self._sign_pix_cache().clear()
             self._sign_drafts_sync()
             return
@@ -338,11 +352,47 @@ class SignDraftMixin:
         if d["kind"] == "image":
             d["fp"] = fp
             sign_drafts.set_drafts(cur, ds)
+            self._sign_resize_auto(self.main_view, cur, fp, only=d["id"])
         else:
             self._sign_cur_fp = fp
             from viewer.widgets.sign_dialogs import remember_appearance
             remember_appearance(fp=fp)
+            self._sign_resize_auto(self.main_view, cur, fp)
         self._sign_drafts_sync()
+
+    def _sign_resize_auto(self, mv, cur: str, fp: str, only: str = "") -> None:
+        """클릭으로 놓은 자리(`auto`)를 그 ID 의 **실제 크기**로 다시 맞춘다 — 왼쪽 위 그대로(보안 SOT §3.3, 261031-6).
+        `only` 가 없으면 그 ID 를 쓰는 자리 모두(전자서명 자리 = 지금 ID, 그림만 자리 = 자리의 `fp`)."""
+        from viewer import sign_drafts, sign_core
+        import fitz
+        if not cur or mv is None or getattr(mv, "_doc", None) is None:
+            return
+        ds = sign_drafts.drafts(cur)
+        sign_fp = self._sign_view_fp()
+        w, h = self._sign_real_size(fp)
+        changed = False
+        for d in ds:
+            if not d.get("auto") or d["field"] or (only and d["id"] != only):
+                continue
+            uses = d.get("fp") if d["kind"] == "image" else sign_fp
+            if not only and uses != fp:
+                continue
+            try:
+                pr = mv._doc.doc[d["page"]].rect
+            except Exception:
+                continue
+            r = self._sign_fit_real(pr, d["rect"][0], d["rect"][1], w, h)
+            if d["kind"] == "sign":
+                app, label, reason = self._sign_view_appearance()
+                _tw, th = sign_core.stamp_size(app, label, reason, r.width, r.height)
+                over = r.y0 + th - pr.y1
+                if over > 0:
+                    y0 = max(pr.y0, r.y0 - over)
+                    r = fitz.Rect(r.x0, y0, r.x1, y0 + r.height)
+            d["rect"] = [r.x0, r.y0, r.x1, r.y1]
+            changed = True
+        if changed:
+            sign_drafts.set_drafts(cur, ds)
 
     def _sign_draft_copy(self, mv, cur: str, d: dict) -> None:
         """'다른 쪽에도 놓기…' — 모든 쪽 / 쪽 범위(SOT §3.6). 같은 자리·종류·그림, 쪽 밖이면 쪽 안으로."""
@@ -379,7 +429,7 @@ class SignDraftMixin:
                 continue
             have.add(k)
             ds.append({"id": sign_drafts.new_id(), "page": p, "rect": [r.x0, r.y0, r.x1, r.y1], "kind": d["kind"],
-                       "image": d["image"], "field": "", "fp": d.get("fp", "")})
+                       "image": d["image"], "field": "", "fp": d.get("fp", ""), "auto": bool(d.get("auto"))})
         sign_drafts.set_drafts(cur, ds)
         self._sign_drafts_sync(mv)
 

@@ -230,6 +230,9 @@
 <ul>
   <li><b>Manage Digital IDs...</b>: create a new digital ID (name · email · validity · password) or import an existing .pfx/.p12.
     Each digital ID holds one <b>signature image</b> — <b>Add Signature Image</b> at the bottom of the new-ID window, or <b>Signature Image…</b> in the manager later.
+    Enter the image's <b>actual width (mm)</b> — the height follows the image's proportions, and clicking on a document places the signature at that size.
+    The manager shows the selected ID's details (including the image). <b>Edit Details…</b> changes a self-made ID's name · email · organization · validity · password · image by
+    <b>issuing a new certificate</b> and deleting the old ID (documents already signed stay valid; send the new public certificate again).
     Load a photo of your signature on paper (or a transparent PNG, a clipboard image, or draw by hand): the background is removed, you pick the ink color (Original · Black · Blue), and it is cropped to the signature.
     After creating one, use <b>Export Backup</b> to keep the .pfx somewhere safe — if the PC fails you cannot sign with the same ID again.
     Give the <b>public certificate</b> (.cer, Export Public Certificate) to the people who receive your documents.
@@ -237,7 +240,7 @@
     <b>From Windows Certificate Store…</b> uses a certificate held by Windows (including smart cards and USB tokens) without copying the key — Windows may ask for a PIN when you sign.</li>
   <li><b>Signing — place, then confirm once</b>: press the digital signature button to the right of Crop (or Tools → Sign...). First you <b>confirm it is you</b> once —
     <b>Confirm with Windows Hello</b> or a digital ID password. The IDs that password opens are the ones you can sign with; with several, the default ID (or the first) is used
-    (if none opens, enter it again or create a digital ID). Then drag on the page where the signature image goes (a single click puts the default size with its top-left at that spot). <b>Right-click → Sign Here…</b> works the same.
+    (if none opens, enter it again or create a digital ID). Then drag on the page where the signature image goes (a single click puts the signature image at its actual size with its top-left at that spot — switching the ID resizes it to that ID's size). <b>Right-click → Sign Here…</b> works the same.
     Dragging does not sign yet — it makes a <b>signature place</b> (dashed box; the page shows through): drag it to move, use the bottom-right corner to resize (keeps the image ratio; hold Shift for free), press Delete to remove. You can put several on one page.
     Its right-click menu switches the <b>digital ID</b> (among the opened ones) and turns the <b>signature image</b>, <b>name</b> and <b>date</b> on or off, and offers 'Add Signature Image…', 'Image only (not a digital signature)' and 'Place on Other Pages…' — your choices are kept for next time. Drawing tools of edit mode are turned off when you press the signature button.
     When done, press <b>Confirm Signatures…</b> in the band above the page, check the digital ID, signature image and appearance text (name · date · reason) and press <b>Confirm Signatures</b> (no password again).

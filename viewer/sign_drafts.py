@@ -65,7 +65,8 @@ def _clean(d: dict) -> dict:
     return {"id": str(d.get("id") or new_id()), "page": int(d.get("page", 0)), "rect": r,
             "kind": d.get("kind") if d.get("kind") in KINDS else "sign",
             "image": str(d.get("image") or ""), "field": str(d.get("field") or ""),
-            "fp": str(d.get("fp") or "")}                 # 261031-1: 그림만 자리의 디지털 ID(그 ID 의 서명 그림)
+            "fp": str(d.get("fp") or ""),                 # 261031-1: 그림만 자리의 디지털 ID(그 ID 의 서명 그림)
+            "auto": bool(d.get("auto"))}                  # 261031-6: 클릭으로 놓아 실제 크기를 따르는 자리
 
 
 # ---- 아직 확정 안 한 자리 ----------------------------------------------------------
