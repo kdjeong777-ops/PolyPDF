@@ -1576,6 +1576,7 @@ class MainView(QWidget):
     signEditRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): 검증 띠의 [서명 편집]
     hyperlinkActivated = pyqtSignal(object)      # 260609-3: 페이지 하이퍼링크 버튼 클릭(link dict)
     drawModeChanged = pyqtSignal(int)            # 260611-4: 선 종류 순환(0/1/2) — 공유 동기
+    fitShown = pyqtSignal(str)                   # 261031-11: 보이는 맞춤이 바뀜 — 창 아래 맞춤 콤보가 따른다(디자인 SOT §2.9.2)
 
     _DOC_U = 1000                                # v1.6.8 F1: doc_scroll 페이지당 단위
 
@@ -1603,12 +1604,18 @@ class MainView(QWidget):
         return cls._FIT_LEGACY.get(v, default or cls.FIT_PAGE)
 
     def _show_fit(self, mode):
-        """콤보 표시만 바꾼다(신호 없이) — 화면 글자가 아니라 내부 키로 고른다."""
-        i = self.cmb_fit.findData(mode)
-        if i >= 0:
-            self.cmb_fit.blockSignals(True)
-            self.cmb_fit.setCurrentIndex(i)
-            self.cmb_fit.blockSignals(False)
+        """보이는 맞춤만 바꾼다 — 261031-11(디자인 SOT §2.9.2): 맞춤 콤보는 창 아래(MainWindow)에 하나라 `fitShown` 으로 알린다."""
+        self._shown_fit = mode
+        self.fitShown.emit(str(mode))
+
+    def shown_fit(self) -> str:
+        """지금 이 창이 보이는 맞춤(콤보 표시용 — 그림 보기면 그림 맞춤)."""
+        return getattr(self, "_shown_fit", self.FIT_PAGE)
+
+    def choose_fit(self, mode: str) -> None:
+        """261031-11: 창 아래 맞춤 콤보에서 고름 — 종전 이 창 툴바 콤보의 `currentIndexChanged` 와 같은 일."""
+        self._show_fit(mode)
+        self._set_fit_mode(mode)
 
     # 260914-1(입력 SOT §2.10): 이어 보기 — 값의 원본은 여기다
     CONT_GAP_PX = 12             # 붙인 쪽 사이 간격
@@ -1716,17 +1723,8 @@ class MainView(QWidget):
         self.lbl_page_total = QLabel("/ 0")
         self.lbl_page_total.setFixedHeight(H)
         self.lbl_page_total.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # 260606-9: 보기 콤보 폭 최소화(내용에 맞춤)
-        from viewer.widgets.icons import CornerArrowComboBox     # 261025-10(디자인 SOT §2.7): ▾ 를 드롭다운 단추와 같은 모양으로
-        self.cmb_fit = CornerArrowComboBox()
-        for _k in self.FIT_ORDER:                 # 261008: 보이는 글자 + 내부 키(다국어 SOT §5)
-            self.cmb_fit.addItem(tr(self.FIT_LABELS[_k]), _k)
-        self.cmb_fit.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        self.cmb_fit.setMaximumWidth(86)
-        self.cmb_fit.setFixedHeight(H)
-        # 260606-3: -, + 줌 버튼 폭 좁게·동일 높이
-        self.btn_zoom_in = QPushButton("+"); self.btn_zoom_in.setFixedSize(24, H)
-        self.btn_zoom_out = QPushButton("−"); self.btn_zoom_out.setFixedSize(24, H)
+        # 261031-11(사용자 지시, 디자인 SOT §2.9.2·§2.10): 맞춤 콤보는 창 아래 오른쪽 `+ 0 −` 왼쪽으로 옮겼고(MainWindow.cmb_fit),
+        #   이 툴바의 − / + 단추는 없앴다 — 확대·축소는 창 아래 `+ 0 −`·Ctrl++/−/0(포커스 창 기준, 입력 SOT §3.2).
         # 261010-7(마스터 §4.7.15): '+' 오른쪽 크롭 단추 — 그림은 테마 단색 아이콘(첨부 그림)
         from viewer.widgets.icons import themed_icon as _ti
         self.btn_crop = QPushButton(); self.btn_crop.setFixedSize(28, H)
@@ -1746,9 +1744,6 @@ class MainView(QWidget):
         # 260606-19: MP3 등 외부 버튼과 보기콤보 사이 구분 여백
         _sep = QWidget(); _sep.setFixedSize(12, H)
         bar.addWidget(_sep)
-        bar.addWidget(self.cmb_fit)
-        bar.addWidget(self.btn_zoom_out)
-        bar.addWidget(self.btn_zoom_in)
         bar.addWidget(self.btn_crop)
         bar.addWidget(self.btn_sign)
         # 261012-11(사용자 지시): 크롭·서명 단추는 **편집 모드에서만** 보인다(set_draw_mode). 도구 메뉴·썸네일 메뉴·
@@ -1919,8 +1914,8 @@ class MainView(QWidget):
         self._page_item: Optional[QGraphicsPixmapItem] = None
 
         # 시그널
-        self.view.fitPageRequested.connect(                       # 260618-16: 더블클릭=쪽 맞춤
-            lambda: self.cmb_fit.setCurrentIndex(self.cmb_fit.findData(self.FIT_PAGE)))
+        self.view.fitPageRequested.connect(                       # 260618-16: 더블클릭=쪽 맞춤(이미 쪽 맞춤이면 그대로 — 종전 콤보와 같다)
+            lambda: self.shown_fit() != self.FIT_PAGE and self.choose_fit(self.FIT_PAGE))
         self.btn_prev_page.clicked.connect(lambda: self._on_step_clicked(-1))
         self.btn_next_page.clicked.connect(lambda: self._on_step_clicked(+1))
         self.spin_page.editingFinished.connect(self._on_spin_edited)
@@ -1928,11 +1923,6 @@ class MainView(QWidget):
         vsb = self.view.verticalScrollBar()
         vsb.valueChanged.connect(self._on_view_scrolled)
         vsb.rangeChanged.connect(lambda *_: self._on_view_scrolled())
-        self.cmb_fit.currentIndexChanged.connect(
-            lambda _i: self._set_fit_mode(self.cmb_fit.currentData()))
-        from viewer.view_scale import VIEW_SCALE_STEP      # 261024-5: 한 걸음 값은 한 곳(입력 SOT §3.2)
-        self.btn_zoom_in.clicked.connect(lambda: self._zoom_by(VIEW_SCALE_STEP))
-        self.btn_zoom_out.clicked.connect(lambda: self._zoom_by(1 / VIEW_SCALE_STEP))
 
         self.view.zoomRequested.connect(self._zoom_by)
         self.view.pageStep.connect(self._on_page_step)

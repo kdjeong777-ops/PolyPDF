@@ -80,13 +80,13 @@ mv = mw.main_view
 #   높이는 v1.22.1(260606-14)의 MainView.TOOLBAR_H 로 통일돼 있으므로 함께 확인한다.
 H = mv.TOOLBAR_H
 check(f"‹ 폭 24 (실측 {mv.btn_prev_page.width()})", mv.btn_prev_page.width() == 24)
-check(f"+ 줌 폭 24 (실측 {mv.btn_zoom_in.width()})", mv.btn_zoom_in.width() == 24)
+check("+ − 줌 단추는 본문 툴바에 없다(261031-11 — 창 아래 + 0 −)", not hasattr(mv, "btn_zoom_in") and not hasattr(mv, "btn_zoom_out"))
 check(f"읽기 ▶ 폭 26 (실측 {mw.btn_read.width()})", mw.btn_read.width() == 26)
 # 261017-1(디자인 SOT §2.10, 사용자 지시): 읽기메뉴 폭은 78 고정이 아니라 글자에 맞춤(캡쳐 모드 드롭다운과 같게) — 높이만 고정
 check(f"읽기메뉴 폭은 글자에 맞춤·높이만 고정 (실측 {mw.btn_read_menu.minimumWidth()}~{mw.btn_read_menu.maximumWidth()})",
       mw.btn_read_menu.maximumWidth() > 1000 and mw.btn_read_menu.width() >= mw.btn_read_menu.sizeHint().width() - 1)
 check(f"툴바 버튼 높이 = TOOLBAR_H({H}) 통일",
-      mv.btn_prev_page.height() == H and mv.btn_zoom_in.height() == H
+      mv.btn_prev_page.height() == H
       and mw.btn_read.height() == H and mw.btn_read_menu.height() == H)
 check("메인 mp3 버튼 존재", hasattr(mw, "btn_main_mp3"))
 check("_on_main_mp3 메서드", callable(getattr(mw, "_on_main_mp3", None)))

@@ -137,7 +137,8 @@ try:
     chk(mv.current_file() and Path(mv.current_file()).name == "mixed.pdf", "D 준비 — 본문에 열림", str(mv.current_file()))
     bar = mv._toolbar
     idx = {bar.itemAt(i).widget(): i for i in range(bar.count()) if bar.itemAt(i).widget() is not None}
-    chk(mv.btn_crop in idx and idx[mv.btn_crop] == idx[mv.btn_zoom_in] + 1, "D 크롭 단추가 '+' 바로 오른쪽")
+    chk(mv.btn_crop in idx and idx[mv.btn_sign] == idx[mv.btn_crop] + 1 and not hasattr(mv, "btn_zoom_in"),
+        "D 크롭 단추는 툴바에 있고 서명 단추가 바로 오른쪽(261031-11: '+' 단추는 없앴다)")
     chk(not mv.btn_crop.icon().isNull(), "D 크롭 단추에 그림")
 
     seen = {}

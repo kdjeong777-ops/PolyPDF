@@ -88,7 +88,7 @@ m.show()
 pump()
 m.set_page_flip_anim(True)
 m.load_document(PDF, 5)
-m.cmb_fit.setCurrentIndex(m.cmb_fit.findData(MainView.FIT_PAGE_TWO))
+m.choose_fit(MainView.FIT_PAGE_TWO)
 pump(m.FLIP_HOLD_MIN_MS + 200)
 pages = []
 m.pageChanged.connect(pages.append)

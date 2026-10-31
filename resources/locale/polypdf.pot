@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-31 12:44+0900\n"
+"POT-Creation-Date: 2026-10-31 13:16+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -466,6 +466,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "모음(&C)"
+msgstr ""
+
+#: viewer/app.py
+msgid "본화면 맞춤 — 쪽·2장·폭·수동(2단이면 활성 창)"
 msgstr ""
 
 #: viewer/app.py

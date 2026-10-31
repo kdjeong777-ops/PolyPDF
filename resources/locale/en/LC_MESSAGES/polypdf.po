@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-31 12:44+0900\n"
+"POT-Creation-Date: 2026-10-31 13:16+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -467,6 +467,10 @@ msgstr "About"
 #: viewer/app.py
 msgid "모음(&C)"
 msgstr "Quick A&ccess"
+
+#: viewer/app.py
+msgid "본화면 맞춤 — 쪽·2장·폭·수동(2단이면 활성 창)"
+msgstr "Main view fit — page, two pages, width or manual (the active pane in split view)"
 
 #: viewer/app.py
 msgid "PDF 폴더 선택"

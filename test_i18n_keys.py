@@ -98,12 +98,12 @@ try:
                              ensure_ascii=False), encoding="utf-8")
     mw = MainWindow(); mw._skip_save_on_close = True
     mv = mw.main_view
-    chk(mv._fit_mode == "width" and mv.cmb_fit.currentData() == "width",
-        "B 옛 설정 '폭 맞춤' 으로 시작해도 폭 맞춤(콤보도)", repr((mv._fit_mode, mv.cmb_fit.currentData())))
+    chk(mv._fit_mode == "width" and mw.cmb_fit.currentData() == "width",
+        "B 옛 설정 '폭 맞춤' 으로 시작해도 폭 맞춤(창 아래 콤보도, 261031-11)", repr((mv._fit_mode, mw.cmb_fit.currentData())))
     chk(mw._build_settings_payload().get("fit_mode") == "width", "B 저장은 내부 키")
-    for i in range(mv.cmb_fit.count()):
-        mv.cmb_fit.setItemText(i, "X%d" % i)                 # 다른 언어 글자라 해도
-    mv.cmb_fit.setCurrentIndex(mv.cmb_fit.findData("two"))
+    for i in range(mw.cmb_fit.count()):
+        mw.cmb_fit.setItemText(i, "X%d" % i)                 # 다른 언어 글자라 해도
+    mw.cmb_fit.setCurrentIndex(mw.cmb_fit.findData("two"))
     chk(mv._fit_mode == "two", "B 콤보 글자를 바꿔도 고르면 그 모드가 된다", mv._fit_mode)
     sp.unlink()
 

@@ -28,7 +28,7 @@ from viewer.widgets.capture_settings import CaptureSizesDialog
 _dn = CaptureSizesDialog([]).result_sizes()[0]["name"]
 ck("사용자 명칭 단축(기본)", _dn == "사용자1", _dn)
 # 콤보 항목 텍스트
-items = [mv.cmb_fit.itemText(i) for i in range(mv.cmb_fit.count())]
+items = [mw.cmb_fit.itemText(i) for i in range(mw.cmb_fit.count())]   # 261031-11: 맞춤 콤보는 창 아래(MainWindow)
 ck("콤보에 2장 맞춤·수동 맞춤", "2장 맞춤" in items and "수동 맞춤" in items, f"{items}")
 
 # 패널 드로어/확장

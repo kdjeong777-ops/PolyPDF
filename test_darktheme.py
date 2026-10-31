@@ -67,8 +67,7 @@ widths = {
     "prev": mv.btn_prev_page.height() or mv.btn_prev_page.minimumHeight(),
 }
 heights = [mv.btn_prev_page.minimumHeight(), mv.btn_next_page.minimumHeight(),
-           mv.spin_page.minimumHeight(), mv.cmb_fit.minimumHeight(),
-           mv.btn_zoom_in.minimumHeight(), mv.btn_zoom_out.minimumHeight(),
+           mv.spin_page.minimumHeight(),          # 261031-11: 맞춤 콤보·− + 단추는 본문 툴바에 없다
            mw.btn_read.minimumHeight(), mw.btn_read_menu.minimumHeight(),
            mw.btn_main_mp3.minimumHeight(), mw.btn_capture.minimumHeight()]
 check("모든 툴바 버튼 높이 통일(=H)", all(h == H for h in heights), f"H={H} hs={heights}")

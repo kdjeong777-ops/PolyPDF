@@ -78,7 +78,7 @@ sp._set_read_mode(sp._read_mode)
 chk(all("▾" not in b.text() for _n, b in drops), "A 다시 만든 뒤에도 ▾ 없음", str([b.text() for _n, b in drops]))
 
 # A2. 맞춤 콤보의 ▾ 는 드롭다운 단추와 같은 오른쪽 아래 작은 화살표 — 진한 픽셀이 그 자리에만 있고, 큰 화살표 자리(세로 가운데)에는 없다
-cmb = mw.main_view.cmb_fit
+cmb = mw.cmb_fit                    # 261031-11: 맞춤 콤보는 창 아래(+ 0 − 왼쪽)
 cmb.show(); pump()
 img = cmb.grab().toImage()
 ar = icons.corner_arrow_rect(cmb)

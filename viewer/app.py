@@ -983,6 +983,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not self._split_on:
             idx = 0
         self._active_pane = idx
+        self._sync_fit_combo()                   # 261031-11: 창 아래 맞춤 콤보는 활성 창의 맞춤을 보인다
         dual = self._split_on
         for j, fr in enumerate(self._panes):
             if dual and j == idx:
@@ -2232,7 +2233,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _build_zoom_buttons(self) -> None:
         """창 아래 오른쪽(상태 막대 끝) + 0 − 단추(사용자 결정, 디자인 SOT §2.9.2) — 포커스를 받지 않아 대상 창의 포커스를 지킨다."""
-        from PyQt6.QtWidgets import QToolButton as _TB
+        from PyQt6.QtWidgets import QToolButton as _TB, QComboBox as _QCB
+        from viewer.widgets.icons import CornerArrowComboBox
+        from viewer.widgets.main_view import MainView as _MV
+        # 261031-11(사용자 지시, 디자인 SOT §2.9.2): 본문 툴바의 맞춤 콤보를 여기(+ 0 − 왼쪽)로 — 본화면(활성 창)에만 작용.
+        self.cmb_fit = CornerArrowComboBox(self.status)
+        for _k in _MV.FIT_ORDER:                 # 261008: 보이는 글자 + 내부 키(다국어 SOT §5)
+            self.cmb_fit.addItem(tr(_MV.FIT_LABELS[_k]), _k)
+        self.cmb_fit.setSizeAdjustPolicy(_QCB.SizeAdjustPolicy.AdjustToContents)
+        self.cmb_fit.setMaximumWidth(90)
+        self.cmb_fit.setFocusPolicy(Qt.FocusPolicy.NoFocus)      # 포커스 창(+ 0 − 대상)을 빼앗지 않는다
+        self.cmb_fit.setToolTip(tr("본화면 맞춤 — 쪽·2장·폭·수동(2단이면 활성 창)"))
+        self.cmb_fit.currentIndexChanged.connect(
+            lambda _i: self.main_view.choose_fit(self.cmb_fit.currentData()))
+        self.status.addPermanentWidget(self.cmb_fit)
+        for _mv in self._mv:
+            _mv.fitShown.connect(lambda _m, v=_mv: v is self.main_view and self._sync_fit_combo())
         self._zoom_last = None
         self._zoom_btns = []
         for text, d in (("+", +1), ("0", 0), ("−", -1)):
@@ -2245,6 +2261,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.status.addPermanentWidget(b)
             self._zoom_btns.append(b)
         QApplication.instance().focusChanged.connect(self._on_focus_for_zoom)
+
+    def _sync_fit_combo(self) -> None:
+        """261031-11: 창 아래 맞춤 콤보 = 활성 창이 보이는 맞춤(신호 없이)."""
+        cmb = getattr(self, "cmb_fit", None)
+        if cmb is None:
+            return
+        i = cmb.findData(self.main_view.shown_fit())
+        if i >= 0 and i != cmb.currentIndex():
+            cmb.blockSignals(True)
+            cmb.setCurrentIndex(i)
+            cmb.blockSignals(False)
 
     def _refresh_zoom_tips(self) -> None:
         """단추 툴팁 = 이름 + 지금 키(단축키 설정을 따른다)."""

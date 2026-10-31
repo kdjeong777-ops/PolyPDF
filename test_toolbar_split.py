@@ -35,7 +35,7 @@ narrow = mv._toolbar.heightForWidth(180)
 check("좁아지면 툴바 2단(높이 증가)", narrow > wide, f"wide={wide} narrow={narrow}")
 # 위젯 폭 축소
 check("페이지칸 폭 ≤ 48", mv.spin_page.maximumWidth() <= 48 or mv.spin_page.width() <= 48)
-check("보기콤보 폭 ≤ 90", mv.cmb_fit.maximumWidth() <= 90)
+check("보기콤보 폭 ≤ 90(창 아래, 261031-11)", mw.cmb_fit.maximumWidth() <= 90 and not hasattr(mv, "cmb_fit"))
 # 캡쳐 버튼: v1.25.0(260606-19)에서 **글자 삭제 → 아이콘만·폭 34**(그 전 260606-9 의 '캡쳐' 라벨은 폐기)
 check("캡쳐 버튼 아이콘만(글자 없음)", mw.btn_capture.text() == "" and not mw.btn_capture.icon().isNull(),
       f"text={mw.btn_capture.text()!r}")

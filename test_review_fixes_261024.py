@@ -95,7 +95,7 @@ from viewer.view_scale import VIEW_SCALE_STEP
 mv = mw.main_view
 mw.open_pdf(text_pdf()); spin(1.0)
 z0 = mv._zoom
-mv.btn_zoom_in.click(); spin(0.2)
+mv.view.setFocus(); spin(0.1); mw._zoom_btns[0].click(); spin(0.2)   # 포커스 창 기준             # 261031-11: 본문 툴바 ＋ 대신 창 아래 + (포커스 없으면 본문)
 chk(abs(mv._zoom / z0 - VIEW_SCALE_STEP) < 1e-6, "E 본문 ＋ 한 번 = VIEW_SCALE_STEP 배", "%.4f" % (mv._zoom / z0))
 
 print("\n=== %s ===" % ("ALL PASS" if not fails else "FAIL %d" % len(fails)))
