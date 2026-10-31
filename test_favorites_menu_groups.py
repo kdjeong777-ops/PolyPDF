@@ -67,9 +67,11 @@ try:
     btns = row.buttons()
     texts = [b.text() for b in btns]
     # 261025-5(사용자 지시): 최근 파일은 등록 파일 그룹 왼쪽, 최근 검색어는 등록 검색어 왼쪽 — 그룹마다 '최근 · 등록 · 단추'
-    want = ["최근 폴더", "등록 폴더", "폴더1", "옛폴더",
-            "최근 파일", "등록 파일", "파일1", "짧은2", "없는파일",
-            "최근 검색어", "등록 검색어",
+    # 261031-12(사용자 지시): (최근 셋) | (등록 셋 + 기타) | (폴더 단추 ≤3) | (파일 단추 ≤3) | 추가·관리
+    want = ["최근 폴더", "최근 파일", "최근 검색어",
+            "등록 폴더", "등록 파일", "등록 검색어",
+            "폴더1", "옛폴더",
+            "파일1", "짧은2", "없는파일",
             "현재 폴더 추가", "현재 파일 추가", "현재 검색어 추가", "항목 관리"]
     chk(texts == want, "A 즐겨찾기 탭 세부 줄 차례(키 없음 → 기타 숨김)", str(texts))
     by = {b.text(): b for b in btns}
@@ -79,7 +81,7 @@ try:
         b = by.get(t)
         chk(b is not None and b.isEnabled() and b.defaultAction().menu() is menu,
             f"A '{t}' 은 켜진 ▾ 단추(누르면 목록이 펼쳐진다)")
-    chk([len(g) for g in row.groups()] == [4, 5, 2, 4], "A 그룹 바탕 넷(폴더·파일·검색어·추가 — 기타가 숨으면 겹친 구분선도 숨는다)",
+    chk([len(g) for g in row.groups()] == [3, 3, 2, 3, 4], "A 그룹 바탕 다섯(최근·등록·폴더 단추·파일 단추·추가 — 기타가 숨으면 등록은 셋)",
         str([[w.text() for w in g] for g in row.groups()]))
     mw._ribbon.select("file"); QTest.qWait(50)
     ftexts = [b.text() for b in mw._ribbon.row("file").buttons()]
@@ -119,7 +121,19 @@ try:
     mw._favorites = [{"kind": "folder", "name": f"D{i}", "folder": str(d1)} for i in range(7)]
     mw._refresh_favorites_menu(); QTest.qWait(80)
     dt = [b.text() for b in mw._ribbon.row("fav").buttons() if b.text().startswith("D")]
-    chk(dt == [f"D{i}" for i in range(BUTTONS_MAX)], "C 폴더 단추는 목록 앞 5개", str(dt))
+    chk(dt == [f"D{i}" for i in range(BUTTONS_MAX)], "C 폴더 단추는 목록 앞 BUTTONS_MAX(3)개", str(dt))
+    chk(BUTTONS_MAX == 3, "C 단추 수는 3(261031-12 사용자 지시)")
+    # 261031-12(사용자 결정 '시안 C'): 종류 아이콘 — 최근·등록 단추와 무리의 첫 단추에만
+    _fb = [b for b in mw._ribbon.row("fav").buttons()]
+    _ic = {b.text(): not b.icon().isNull() for b in _fb}
+    chk(_ic.get("최근 폴더") and _ic.get("등록 폴더") and _ic.get("최근 파일") and _ic.get("등록 검색어")
+        and _ic.get("D0") and not _ic.get("D1") and not _ic.get("현재 폴더 추가"),
+        "C 아이콘은 최근·등록 단추와 폴더 무리 첫 단추에만", str(_ic))
+    _iw = mw._ribbon.row("fav").iconSize().width()
+    from viewer.widgets.icons import FAV_ICON_PX
+    chk(_iw == FAV_ICON_PX and mw._ribbon.row("fav").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        and mw._ribbon.row("file").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextOnly,
+        "C 즐겨찾기 줄만 작은 아이콘 + 글자(다른 탭은 글자만)", str(_iw))
     chk(items(mw.menu_fav_files) == ["(등록된 항목 없음)", "항목 관리..."], "B 빈 목록은 '(등록된 항목 없음)'", str(items(mw.menu_fav_files)))
 
     # E 기타 — 법령 키만 있으면 법령 구역만

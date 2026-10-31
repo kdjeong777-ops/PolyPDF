@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 QStandardPaths.setTestModeEnabled(True)    # 마스터 §14.7.2 — 사용자 설정 폴더를 건드리지 않는다
 app = QApplication.instance() or QApplication(sys.argv)
+from PyQt6.QtCore import QCoreApplication as _QCA
+_QCA.setApplicationName("polypdf_panel_toolbar_%d" % os.getpid())   # 마스터 §14.7.2 의 3 — 공유 시험 설정(qttest/python)에 남은 키를 이어받지 않게
 
 from viewer.app import MainWindow
 from viewer.widgets.ribbon import (COLLECTION, DEFAULT_COLLECTION, SEP, TAB_BAR_COLOR, Ribbon,

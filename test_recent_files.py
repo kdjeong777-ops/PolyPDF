@@ -50,11 +50,9 @@ try:
     for m in mw.menuBar().actions():
         if m.menu() is not None and mw.menu_recent in [a.menu() for a in m.menu().actions()]:
             titles = [a.text() for a in m.menu().actions()]
-    # 261025-1(디자인 SOT §2.9.5): 즐겨찾기 탭 — 최근 폴더 · 등록 폴더 · (폴더 단추) · 최근 파일
-    i_fold = titles.index("최근 폴더") if "최근 폴더" in titles else -1
-    chk((i_fold == 0 and titles[1] == "등록 폴더" and "최근 파일" in titles
-                 and titles.index("최근 파일") < titles.index("등록 파일")),
-        "A 즐겨찾기 탭: 최근 폴더 · 등록 폴더 · … · 최근 파일 · 등록 파일", str(titles))
+    # 261031-12(디자인 SOT §2.9.5): 즐겨찾기 탭 — 최근 폴더 · 최근 파일 · 최근 검색어 | 등록 …
+    chk(titles[:3] == ["최근 폴더", "최근 파일", "최근 검색어"] and titles.index("최근 파일") < titles.index("등록 파일"),
+        "A 즐겨찾기 탭: 최근 폴더 · 최근 파일 · 최근 검색어 | 등록 …", str(titles))
     items = lambda: [a.text() for a in mw.menu_recent_files.actions()]
     chk(items() == ["(최근 파일 없음)"], "A 처음엔 '(최근 파일 없음)'", str(items()))
 

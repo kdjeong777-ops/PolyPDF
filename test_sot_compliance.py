@@ -144,7 +144,7 @@ APPNAME_KNOWN = {
     "test_convert_progress_261026.py", "test_convert_word_com_261014.py", "test_design_bk_status_count.py", "test_file_rename_menu.py",
     "test_i18n_core.py", "test_i18n_keys.py", "test_merge_fast.py", "test_nup_preset_order.py",
     "test_ocr_batch_261014.py", "test_open_multi_files.py", "test_page_edit_save_bg.py", "test_page_nav_261014.py",
-    "test_panel_input_261014.py", "test_panel_toolbar.py", "test_pdf_compress_261014.py", "test_recent_files.py",
+    "test_panel_input_261014.py", "test_pdf_compress_261014.py", "test_recent_files.py",
     "test_rename_locked_261014.py", "test_reopen_after_save.py", "test_save_overwrite_locked.py", "test_screenshot_pdf_bake_261014.py",
     "test_search_case_regex_261014.py", "test_security_redact_261014.py", "test_shot_clipboard_copy_261024.py", "test_shot_clipboard_pdf_open.py",
     "test_sot_ui_layout.py", "test_temp_sweep_261014.py", "test_text_word_bg_261014.py",

@@ -1494,6 +1494,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261025-5(디자인 SOT §2.9.3, 사용자 결정): 색은 `ribbon` 의 표 하나 — 일반 단추 옅게·드롭다운 진하게·리본 줄 회색
         try:                                      # 261021-2(디자인 SOT §2.9.3): 그룹 바탕 색도 함께
             self._ribbon.apply_style(dark)
+            self._set_fav_icons()                # 261031-12: 즐겨찾기 탭 색 아이콘도 테마 색으로
         except Exception:
             pass
         # 260616-3: 오른쪽 끝 검색창 테마 스타일(둥근 모서리)
@@ -1911,6 +1912,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _key, _m in (("file", m_file), ("fav", self.menu_favorites), ("view", m_view),
                          ("tools", m_tools), ("help", m_help)):
             rb.add_tab(_key, _m.title(), _m)
+        # 261031-12(디자인 SOT §2.9.5): 즐겨찾기 줄만 아이콘 + 글자, 작은 아이콘(단추 폭이 늘지 않게)
+        from viewer.widgets.icons import FAV_ICON_PX as _FIP
+        from PyQt6.QtCore import QSize as _QS
+        rb.row("fav").setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        rb.row("fav").setIconSize(_QS(_FIP, _FIP))
+        self._set_fav_icons()
         self._tab_menus = {"file": m_file, "fav": self.menu_favorites, "view": m_view, "tools": m_tools, "help": m_help}
         # 메뉴 막대를 화면에서 뗐으므로 메뉴 항목에 건 단축키(Ctrl+S 등)는 창에 붙여야 산다 — 보이는 위젯의 액션만 키를 받는다
         self.addActions([a for a in self._cmds.values() if a.menu() is None])
@@ -9467,18 +9474,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.menu_fav_searches = QMenu(tr("등록 검색어"), self)
         self.menu_recent_searches = QMenu(tr("최근 검색어"), self)    # 261025-5(사용자 지시·결정)
         self.menu_fav_other = QMenu(tr("기타"), self)
-        # 261025-5(사용자 지시): 최근 파일은 등록 파일 그룹으로(그 왼쪽), 최근 검색어는 등록 검색어 왼쪽 — 그룹마다 '최근 ▸ 등록 ▸ 단추'
+        # 261031-12(디자인 SOT §2.9.5, 사용자 지시): (최근 셋) | (등록 셋 + 기타) | (폴더 단추) | (파일 단추) | 추가·관리
         m.addMenu(self.menu_recent)
-        m.addMenu(self.menu_fav_folders)
-        self._fav_sep_folders = m.addSeparator()   # 폴더 단추는 이 앞에 끼운다
         m.addMenu(self.menu_recent_files)
-        m.addMenu(self.menu_fav_files)
-        self._fav_sep_files = m.addSeparator()     # 파일 단추는 이 앞에 끼운다
         m.addMenu(self.menu_recent_searches)
+        m.addSeparator()
+        m.addMenu(self.menu_fav_folders)
+        m.addMenu(self.menu_fav_files)
         m.addMenu(self.menu_fav_searches)
-        m.addSeparator()
         m.addMenu(self.menu_fav_other)
-        m.addSeparator()
+        self._fav_sep_folders = m.addSeparator()   # 폴더 단추 무리는 이 뒤 · 다음 구분선 앞
+        self._fav_sep_files = m.addSeparator()     # 파일 단추 무리는 이 뒤 · 다음 구분선 앞
+        self._fav_sep_adds = m.addSeparator()      # 추가·관리는 이 뒤
         acts = {}
         for cid, text, slot in (
                 ("fav.add_folder", tr("현재 폴더 추가"), self._add_current_folder_favorite),
@@ -9612,20 +9619,35 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mo.menuAction().setVisible(bool(on))
 
         self._refresh_recent_searches_menu()
-        # 개별 단추 — 등록 폴더 다음, 등록 파일 다음(각 그룹의 끝 구분선 앞)
+        # 개별 단추 — 폴더 무리·파일 무리(261031-12: 각자 그룹, 첫 단추 왼쪽에만 종류 아이콘)
         m = self.menu_favorites
         for a in self._fav_btn_acts:
             m.removeAction(a)
             a.deleteLater()
         self._fav_btn_acts = []
-        for kind, before in (("folder", self._fav_sep_folders), ("file", self._fav_sep_files)):
-            for f in groups[kind][:BUTTONS_MAX]:
+        for kind, before in (("folder", self._fav_sep_files), ("file", self._fav_sep_adds)):
+            for n, f in enumerate(groups[kind][:BUTTONS_MAX]):
                 a = QAction(short_label(f), self)
+                a.setProperty("fav_icon", ("fav_folder" if kind == "folder" else "fav_file") if n == 0 else "")
                 where = (f.get("file") if kind == "file" else None) or f.get("folder") or ""
                 a.setToolTip(f.get("name", "?") + "\n" + str(where))
                 a.triggered.connect(lambda _c=False, ff=f: self._open_favorite(ff))
                 m.insertAction(before, a)
                 self._fav_btn_acts.append(a)
+        self._set_fav_icons()
+
+    def _set_fav_icons(self) -> None:
+        """261031-12(디자인 SOT §2.9.5·§4.5, 사용자 결정 '시안 C'): 즐겨찾기 탭 종류 아이콘 — 테마가 바뀌면 다시 그린다."""
+        from viewer.widgets.icons import color_icon, FAV_ICON_PX
+        if getattr(self, "menu_fav_folders", None) is None:
+            return
+        for menu, name in ((self.menu_recent, "fav_folder"), (self.menu_fav_folders, "fav_folder"),
+                           (self.menu_recent_files, "fav_file"), (self.menu_fav_files, "fav_file"),
+                           (self.menu_recent_searches, "fav_search"), (self.menu_fav_searches, "fav_search")):
+            menu.menuAction().setIcon(color_icon(name, size=FAV_ICON_PX))
+        for a in getattr(self, "_fav_btn_acts", []):
+            name = a.property("fav_icon") or ""
+            a.setIcon(color_icon(name, size=FAV_ICON_PX) if name else QIcon())
 
     def _add_current_folder_favorite(self):
         if not self._folder:

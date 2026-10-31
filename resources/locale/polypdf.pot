@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-31 13:16+0900\n"
+"POT-Creation-Date: 2026-10-31 13:33+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -6421,7 +6421,7 @@ msgid "즐겨찾기 탭 단추에 보일 이름 (비우면 자동):"
 msgstr ""
 
 #: viewer/widgets/favorites_dialog.py
-msgid "드래그하거나 ↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정. 폴더·파일은 앞 5개가 즐겨찾기 탭에 단추로 보입니다."
+msgid "드래그하거나 ↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정. 폴더·파일은 앞 3개가 즐겨찾기 탭에 단추로 보입니다."
 msgstr ""
 
 #: viewer/widgets/favorites_dialog.py

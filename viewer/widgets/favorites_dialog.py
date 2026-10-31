@@ -31,7 +31,7 @@ KIND_PREFIX = {"folder": "📁 ", "file": "📄 ", "search": "🔍 "}
 OTHER_KINDS = ("law", "kipo", "kcsc")
 OTHER_PREFIX = {"law": "⚖ ", "kipo": "📄 ", "kcsc": "🏗 "}
 SHORT_MAX = 12          # 개별 단추 요약 이름 — 이보다 길면 가운데를 줄인다
-BUTTONS_MAX = 5         # 등록 폴더·등록 파일 개별 단추 수(목록 앞에서부터)
+BUTTONS_MAX = 3         # 등록 폴더·등록 파일 개별 단추 수(목록 앞에서부터) — 261031-12 사용자 지시(종전 5)
 
 
 def fav_kind(f: dict) -> str:
@@ -210,7 +210,7 @@ class FavoritesManagerDialog(QDialog):
         self.resize(600, 460)
         v = QVBoxLayout(self)
         info = QLabel(tr("드래그하거나 ↑/↓ 버튼으로 순서 변경. 더블클릭으로 이름 수정. "
-                         "폴더·파일은 앞 5개가 즐겨찾기 탭에 단추로 보입니다."))
+                         "폴더·파일은 앞 3개가 즐겨찾기 탭에 단추로 보입니다."))
         info.setStyleSheet("color:#666;")
         info.setWordWrap(True)
         v.addWidget(info)

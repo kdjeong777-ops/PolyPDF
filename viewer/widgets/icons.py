@@ -219,7 +219,51 @@ def _camera(p, c):
     p.drawEllipse(QPointF(8.0, 9.2), 2.5, 2.5)
 
 
-_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera}
+# 261031-12(디자인 SOT §2.9.5·§4.5, 사용자 결정 '시안 C'): 즐겨찾기 탭 — 폴더·파일·검색어. 파랑은 ▶·카메라와 같은 값.
+FAV_YELLOW = {False: ("#f0b429", "#ffcf4a"), True: ("#d99a12", "#f5bd2e")}     # 폴더 뒤판·앞판
+FAV_FILE_FOLD = {False: "#9cc3f0", True: "#b8d6fa"}                              # 파일 접힌 모서리
+FAV_ICON_PX = 13                                                                 # 즐겨찾기 탭 단추 아이콘 — 단추 폭이 늘지 않게 작게
+for _k in ("fav_folder", "fav_file", "fav_search"):
+    ACCENT[_k] = ACCENT["play"]
+
+
+def _fav_folder(p, c, dark=False):
+    """노란 폴더(탭·뒤판·앞판) + 오른쪽 아래 작은 파란 면(사용자가 보낸 그림의 파란 면)."""
+    back, front = FAV_YELLOW[bool(dark)]
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(back))
+    p.drawRoundedRect(QRectF(1.0, 2.5, 6.0, 3.0), 1.0, 1.0)
+    p.drawRoundedRect(QRectF(1.0, 4.0, 14.0, 10.5), 1.4, 1.4)
+    p.setBrush(QColor(front))
+    p.drawRoundedRect(QRectF(1.0, 6.2, 14.0, 8.3), 1.4, 1.4)
+    p.setBrush(c)
+    p.drawRoundedRect(QRectF(9.0, 7.6, 4.6, 5.6), 1.2, 1.2)
+
+
+def _fav_file(p, c, dark=False):
+    """파란 종이 — 접힌 모서리는 밝은 파랑, 흰 줄 셋."""
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawPolygon(QPolygonF([QPointF(3, 1), QPointF(10, 1), QPointF(13.5, 4.5), QPointF(13.5, 15), QPointF(3, 15)]))
+    p.setBrush(QColor(FAV_FILE_FOLD[bool(dark)]))
+    p.drawPolygon(QPolygonF([QPointF(10, 1), QPointF(13.5, 4.5), QPointF(10, 4.5)]))
+    p.setBrush(QColor("#ffffff" if not dark else "#f2f2f2"))
+    for y in (7.0, 9.6, 12.2):
+        p.drawRect(QRectF(5.0, y, 6.4, 1.2))
+
+
+def _fav_search(p, c, dark=False):
+    """파란 돋보기 — 굵은 고리 + 둥근 손잡이."""
+    p.setPen(QPen(c, 2.4))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(QPointF(6.6, 6.6), 4.4, 4.4)
+    p.setPen(QPen(c, 3.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(10.0, 10.0), QPointF(14.2, 14.2))
+
+
+_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera,
+               "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search}
+_COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search"}        # 두 색 이상 — 테마도 넘긴다
 
 # 261025-10(디자인 SOT §2.7): 글자 + 메뉴 단추의 드롭다운 표시는 **Qt 메뉴 화살표 하나**(오른쪽 아래) — 글자에 ▾ 를 붙이지 않는다.
 #   글자가 화살표에 붙지 않게 오른쪽 안쪽 여백만 준다(바탕·테두리는 기본 스타일 그대로).
@@ -284,7 +328,10 @@ def color_icon(name: str, dark: bool | None = None, size: int = 16, *, dpr: floa
     try:
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         p.scale(size / 16.0, size / 16.0)
-        fn(p, c)
+        if name in _COLOR_NEEDS_DARK:
+            fn(p, c, bool(dark))
+        else:
+            fn(p, c)
     finally:
         p.end()
     return QIcon(pm)
