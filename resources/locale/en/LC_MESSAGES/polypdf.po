@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-31 14:47+0900\n"
+"POT-Creation-Date: 2026-10-31 15:30+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -361,6 +361,14 @@ msgid "도구(&T)"
 msgstr "&Tools"
 
 #: viewer/app.py
+msgid "OCR·단어장·책갈피·태그·인덱스 만들기"
+msgstr "Create OCR text, word lists, bookmarks, tags and the index"
+
+#: viewer/app.py
+msgid "생성"
+msgstr "Create"
+
+#: viewer/app.py
 msgid "OCR 로 읽기 (쪽 범위·언어·워터마크)..."
 msgstr "Read with OCR (page range · language · watermark)..."
 
@@ -379,6 +387,14 @@ msgstr "Tags"
 #: viewer/app.py
 msgid "인덱스"
 msgstr "Index"
+
+#: viewer/app.py
+msgid "PDF 만들기·합치기·암호·서명"
+msgstr "Create, merge, encrypt and sign PDFs"
+
+#: viewer/app.py
+msgid "PDF"
+msgstr "PDF"
 
 #: viewer/app.py
 msgid "이미지"
@@ -1016,14 +1032,6 @@ msgid "발표 전체화면 보기"
 msgstr "Full-screen presentation"
 
 #: viewer/app.py
-msgid "OCR·단어장·책갈피·태그·인덱스 만들기"
-msgstr "Create OCR text, word lists, bookmarks, tags and the index"
-
-#: viewer/app.py
-msgid "생성"
-msgstr "Create"
-
-#: viewer/app.py
 msgid "책갈피 자동 생성..."
 msgstr "Generate Bookmarks Automatically..."
 
@@ -1038,14 +1046,6 @@ msgstr "Vocabulary · Bookmarks"
 #: viewer/app.py
 msgid "인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"
 msgstr "Rebuild the search index of the open folder from scratch"
-
-#: viewer/app.py
-msgid "PDF 만들기·합치기·암호·서명"
-msgstr "Create, merge, encrypt and sign PDFs"
-
-#: viewer/app.py
-msgid "PDF"
-msgstr "PDF"
 
 #: viewer/app.py
 msgid "이미지 → PDF 변환..."
@@ -1763,6 +1763,10 @@ msgstr "Could not copy to the clipboard — another program is using it."
 #, python-brace-format
 msgid "위 {top} · 아래 {bottom}"
 msgstr "Top {top} · Bottom {bottom}"
+
+#: viewer/app.py
+msgid "그룹 표시"
+msgstr "Group labels"
 
 #: viewer/app.py
 msgid "단어장 생성 (OCR·어휘)..."
@@ -2817,6 +2821,11 @@ msgstr "Clipboard.png"
 #: viewer/app.py
 msgid "복사할 텍스트가 없습니다."
 msgstr "There is no text to copy."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "〔표시〕 {name}"
+msgstr "[Label] {name}"
 
 #: viewer/app.py
 #, python-brace-format

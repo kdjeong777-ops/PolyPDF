@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-31 14:47+0900\n"
+"POT-Creation-Date: 2026-10-31 15:30+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -361,6 +361,14 @@ msgid "도구(&T)"
 msgstr ""
 
 #: viewer/app.py
+msgid "OCR·단어장·책갈피·태그·인덱스 만들기"
+msgstr ""
+
+#: viewer/app.py
+msgid "생성"
+msgstr ""
+
+#: viewer/app.py
 msgid "OCR 로 읽기 (쪽 범위·언어·워터마크)..."
 msgstr ""
 
@@ -378,6 +386,14 @@ msgstr ""
 
 #: viewer/app.py
 msgid "인덱스"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 만들기·합치기·암호·서명"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF"
 msgstr ""
 
 #: viewer/app.py
@@ -1002,14 +1018,6 @@ msgid "발표 전체화면 보기"
 msgstr ""
 
 #: viewer/app.py
-msgid "OCR·단어장·책갈피·태그·인덱스 만들기"
-msgstr ""
-
-#: viewer/app.py
-msgid "생성"
-msgstr ""
-
-#: viewer/app.py
 msgid "책갈피 자동 생성..."
 msgstr ""
 
@@ -1023,14 +1031,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF 만들기·합치기·암호·서명"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF"
 msgstr ""
 
 #: viewer/app.py
@@ -1715,6 +1715,10 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "위 {top} · 아래 {bottom}"
+msgstr ""
+
+#: viewer/app.py
+msgid "그룹 표시"
 msgstr ""
 
 #: viewer/app.py
@@ -2720,6 +2724,11 @@ msgstr ""
 
 #: viewer/app.py
 msgid "복사할 텍스트가 없습니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "〔표시〕 {name}"
 msgstr ""
 
 #: viewer/app.py

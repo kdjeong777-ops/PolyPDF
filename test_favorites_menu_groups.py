@@ -141,8 +141,9 @@ try:
     mw._ribbon.select("collection"); QTest.qWait(50)
     mw._prefs["ribbon_collection"] = ["fav.add_folder", "file.recent"]; mw._apply_collection(); QTest.qWait(50)
     _cb = mw._ribbon.row("collection").buttons()
-    chk(_cb and all(b.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextOnly for b in _cb),
-        "C 모음 탭(글자만 줄)에 넣으면 종전 글자 단추", str([(b.text(), b.toolButtonStyle()) for b in _cb]))
+    # 261031-17(디자인 SOT §2.9, 사용자 결정 '원 탭과 같게'): 모음에 넣어도 원 탭처럼 그림만
+    chk(_cb and all(b.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly for b in _cb),
+        "C 모음 탭에 넣어도 원 탭과 같은 그림만 단추(261031-17)", str([(b.text(), b.toolButtonStyle()) for b in _cb]))
     mw._prefs["ribbon_collection"] = []; mw._apply_collection(); mw._ribbon.select("fav"); QTest.qWait(50)
     _marks = [w for w in _marks if not w.text()]
     _i_mark = _all.index(_marks[0]) if _marks else -1

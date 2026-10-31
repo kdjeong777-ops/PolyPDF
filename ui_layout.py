@@ -8,7 +8,7 @@
     layout(mw)["view"]            # [[ "view.single", "view.split", … ], [ "view.law", … ], [ "view.present" ]]
     where(mw, "tools.vprinter")   # ("tools", 묶음 번호, 묶음 안 차례) — 하위 메뉴 안이면 ("tools", g, i, "tools.install")
 
-항목 이름: 명령 id(`cmd_id`)가 있으면 그것, 없으면 `item:<단추 글자>`(즐겨찾기 개별 단추 등).
+항목 이름: 명령 id(`cmd_id`)가 있으면 그것, 그룹 표시는 `mark.*`(261031-17), 없으면 `item:<단추 글자>`(즐겨찾기 개별 단추 등).
 숨긴 액션·숨긴 구분선은 세지 않는다 — 화면에 보이는 그대로다(메인 창을 `show()` 하지 않아도 된다).
 검사가 아니다(이름이 `test_` 로 시작하지 않는다) — `test_sot_ui_layout.py` 가 디자인 SOT 표와 대조한다.
 """
@@ -16,7 +16,7 @@
 
 def _cid(a) -> str:
     from viewer.widgets.ribbon import cmd_id
-    return cmd_id(a) or ("item:" + a.iconText())
+    return cmd_id(a) or a.property("mark_id") or ("item:" + a.iconText())   # 261031-17: 그룹 표시는 mark.*
 
 
 def layout(mw) -> dict:

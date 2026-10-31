@@ -1526,7 +1526,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _apply_collection(self) -> None:
         from viewer.widgets.ribbon import SEP
-        cmds = getattr(self, "_cmds", {}) or {}
+        cmds = dict(getattr(self, "_cmds", {}) or {})
+        cmds.update(getattr(self, "_marks", {}) or {})   # 261031-17: 그룹 표시(mark.*)도 항목
         items = [None if cid == SEP else cmds[cid] for cid in self._collection_ids()
                  if cid == SEP or cid in cmds]           # 모르는 id(옛 이름)는 건너뛴다
         self._ribbon.set_collection(items)
@@ -1573,6 +1574,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if ids:
                 cat.append((m.title(), ids))
         labels = {cid: a.iconText() for cid, a in (getattr(self, "_cmds", {}) or {}).items()}
+        # 261031-17(§2.9.4, 사용자 결정): 그룹 표시는 맨 아래 따로 — 넣으면 그 자리 단추 무리의 바깥 왼쪽 표시가 된다
+        marks = getattr(self, "_marks", {}) or {}
+        if marks:
+            cat.append((tr("그룹 표시"), list(marks)))
+            labels.update({cid: tr("〔표시〕 {name}").format(name=getattr(mk, "_text", "") or mk.toolTip())
+                           for cid, mk in marks.items()})
         return cat, labels
 
     def _on_toolbar_search(self):
@@ -1671,7 +1678,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261021-5(입력 SOT §3.2, 사용자 지시): 크롬식 — 새 창 Ctrl+N. 키는 항목에 걸어 Qt 가 오른쪽 칸을 채운다(디자인 SOT §2.9.2)
         # 261031-13(디자인 SOT §2.9.7, 사용자 지시): 탭에서는 바깥 왼쪽 '열기' 그림 + 새 창·폴더·파일 그림만 단추
         from viewer.widgets.ribbon import RibbonIconMark
-        self._file_marks = {"open": RibbonIconMark(self, None, tr("열기")), "save": RibbonIconMark(self, None, tr("저장"))}
+        self._file_marks = {"open": RibbonIconMark(self, None, tr("열기"), tr("열기")),
+                            "save": RibbonIconMark(self, None, tr("저장"), tr("저장"))}
         m_file.addAction(self._file_marks["open"])
         a_new_win = self._sc_act_new_window = QAction(tr("새 창"), self)
         a_new_win.triggered.connect(self.action_new_window)
@@ -1833,7 +1841,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return sm
 
         # 생성
-        m_tools.addAction(RibbonIconMark(self, None, tr("OCR·단어장·책갈피·태그·인덱스 만들기"), tr("생성")))
+        _mk_create = RibbonIconMark(self, None, tr("OCR·단어장·책갈피·태그·인덱스 만들기"), tr("생성"))
+        m_tools.addAction(_mk_create)
         _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read, "tools.ocr", "OCR",
              tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"))
         # 261008(다국어 SOT §7): 한국 전용 메뉴 항목 — `_gate_api_dependent_ui` 가 언어에 따라 숨긴다
@@ -1852,7 +1861,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act(tr("인덱스"), self.action_reindex, "tools.reindex", tip=tr("인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"))   # 261031-16: 종전 '인덱스 재구축'
         # PDF
         m_tools.addSeparator()
-        m_tools.addAction(RibbonIconMark(self, None, tr("PDF 만들기·합치기·암호·서명"), tr("PDF")))
+        _mk_pdf = RibbonIconMark(self, None, tr("PDF 만들기·합치기·암호·서명"), tr("PDF"))
+        m_tools.addAction(_mk_pdf)
+        # 261031-17(디자인 SOT §2.9.4): 그룹 표시 — 모음에도 같은 표시를 넣을 수 있다(id 로)
+        self._marks = {"mark.open": self._file_marks["open"], "mark.save": self._file_marks["save"],
+                       "mark.create": _mk_create, "mark.pdf": _mk_pdf}
+        for _mid, _mk in self._marks.items():
+            _mk.setProperty("mark_id", _mid)          # 자리 표(ui_layout)·검사가 표시를 id 로 읽는다
         _short(_act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf(), "tools.img2pdf",  # 260825-13
                     tr("이미지→PDF"), tr("이미지 파일 → PDF 변환")), tr("이미지"))
         a_merge = self._sc_act_merge = _short(_act(tr("PDF 병합..."), lambda: self._on_merge_files(None),
@@ -1948,6 +1963,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         rb._fill_from_menu("file")                  # 줄 모양을 바꾼 뒤 다시 채운다 — 그림만 단추는 채울 때 정해진다
         rb.row("tools").use_short = True            # 261031-16(§2.9.1): 도구 탭도 짧은 이름
         rb.row("tools")._apply_short()
+        # 261031-17(디자인 SOT §2.9, 사용자 결정 '원 탭과 같게'): 모음 줄도 그림만 단추·짧은 이름·그룹 표시
+        _crow = rb.row(COLLECTION)
+        _crow.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        _crow.setIconSize(_QS(_FIP, _FIP))
+        _crow.use_short = True
         self._set_fav_icons()
         self._tab_menus = {"file": m_file, "fav": self.menu_favorites, "view": m_view, "tools": m_tools, "help": m_help}
         # 메뉴 막대를 화면에서 뗐으므로 메뉴 항목에 건 단축키(Ctrl+S 등)는 창에 붙여야 산다 — 보이는 위젯의 액션만 키를 받는다

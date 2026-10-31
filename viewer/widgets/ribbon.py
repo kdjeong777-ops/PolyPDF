@@ -39,12 +39,17 @@ REBUILD_MS = 10             # 메뉴 항목이 바뀐 뒤 세부 줄을 다시 �
 ICON_DROP_PAD = 14          # 261031-12 보완: 그림만 있는 ▾ 단추의 오른쪽 여백(▾ 자리)
 SEP = "|"                   # 모음의 구분선
 COLLECTION = "collection"   # 모음 탭 키
+# 261031-17(디자인 SOT §2.9·§2.9.4, 사용자 결정 '표시를 항목으로'): 그룹 표시(바깥 왼쪽 그림·글자)도 모음 항목이다 —
+#   `mark.*` id 로 넣고 뺀다. 원 탭(파일 `열기`·`저장`, 도구 `생성`·`PDF`)과 같은 표시(같은 RibbonIconMark 액션).
+MARK_PREFIX = "mark."
 DEFAULT_COLLECTION = (
-    "file.open_folder", "file.open_file", "file.print", SEP,          # 261025-5: 앞 그룹 — 폴더 열기·파일 열기·인쇄(사용자 지시)
-    "view.single", "view.split", "view.text", "view.study", "view.search", "view.shot",
-    "view.law", "view.kipo", "view.kcsc", "view.present", SEP,      # 261025-1: 보기 탭 차례와 같게(디자인 SOT §2.9.5)
-    "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.img2pdf", "tools.merge",
-    "tools.encrypt", "file.export", "tools.translate",              # 261031-16: 도구 탭 차례와 같게(디자인 SOT §2.9.1)
+    "mark.open", "file.open_folder", "file.open_file", "file.print", SEP,   # 261025-5: 앞 그룹 — 폴더 열기·파일 열기·인쇄(사용자 지시)
+    "view.single", "view.split", SEP,                                # 261031-17: 보기 탭 그룹 그대로(디자인 SOT §2.9.5)
+    "view.text", "view.study", "view.search", "view.shot", SEP,
+    "view.law", "view.kipo", "view.kcsc", SEP, "view.present", SEP,
+    "mark.create", "tools.ocr", "tools.build_study", "tools.bookmarker", SEP,   # 261031-16: 도구 탭 차례·묶음과 같게(§2.9.1)
+    "mark.pdf", "tools.img2pdf", "tools.merge", "tools.encrypt", SEP,
+    "file.export", "tools.translate",
 )
 
 _MNEMONIC = re.compile(r"\(&.\)")
@@ -169,7 +174,7 @@ class RibbonRow(QToolBar):
                 if a.menu() is not None:
                     w.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
                 if a.property("ribbonIconOnly") and self.toolButtonStyle() != Qt.ToolButtonStyle.ToolButtonTextOnly:
-                    # 261031-12 보완: 그림만(글자는 무리 바깥 표시·툴팁) — 글자만 줄(모음 등)에서는 종전 글자 단추
+                    # 261031-12 보완: 그림만(글자는 무리 바깥 표시·툴팁) — 글자만 줄(보기·도구 탭)에서는 글자 단추
                     w.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
                     if a.menu() is not None:             # ▾ 가 그림에 겹치지 않게 오른쪽 여백(ICON_DROP_PAD)
                         w.setStyleSheet("QToolButton{padding-right:%dpx;}" % ICON_DROP_PAD)
