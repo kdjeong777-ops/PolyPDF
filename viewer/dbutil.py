@@ -89,4 +89,17 @@ def is_corrupt_error(e: Exception) -> bool:
     # 261009-14: 데이터 쪽이 깨지면 'malformed' 대신 글자 복원 실패로도 드러난다(색인·사전은 UTF-8 만 쓴다)
     return ("malformed" in msg or "not a database" in msg
             or "file is encrypted" in msg or "corrupt" in msg
-            or "could not decode to utf-8" in msg)
+            or "could not decode to utf-8" in msg
+            or _bare_constraint(msg))
+
+
+def _bare_constraint(msg: str) -> bool:
+    """261031(응답성 SOT §4 ⑤, 사용자 결정 '오류 문구 추가'): 꾸밈 없는 `constraint failed` — b-tree 가 깨진 색인에 쓰면
+    SQLite 가 이 문구만 낸다(사용자 실제 index.db, `btreeInitPage() returns error code 11` — 색인 쓰기가 첫 새 파일에서 말없이
+    멈췄다). 진짜 제약 위반은 종류와 자리를 붙인다(`UNIQUE constraint failed: files.path`·`NOT NULL constraint failed: …`) — 그것은
+    손상이 아니다(손상으로 보면 멀쩡한 색인을 지운다)."""
+    m = msg.strip().rstrip(".")
+    if not m.endswith("constraint failed"):
+        return False
+    head = m[: -len("constraint failed")].rstrip()
+    return head == "" or head.endswith(":")          # 'constraint failed' 또는 '<예외 이름>: constraint failed'
