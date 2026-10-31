@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-31 13:48+0900\n"
+"POT-Creation-Date: 2026-10-31 14:47+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -281,8 +281,8 @@ msgid "다른 이름으로 저장..."
 msgstr "Save As..."
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."
-msgstr "Save bookmarks, annotations and page edits to <original>_edited.pdf."
+msgid "책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf)."
+msgstr "Save bookmarks, annotations and page edits to a new file — choose the folder and name (default <original>_edited.pdf)."
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
 #: viewer/jobs_controller.py viewer/redact.py viewer/widgets/bookmark_tree.py
@@ -325,6 +325,18 @@ msgid "종료(&X)"
 msgstr "E&xit"
 
 #: viewer/app.py
+msgid "일반"
+msgstr "Save"
+
+#: viewer/app.py
+msgid "다른 이름"
+msgstr "Save As"
+
+#: viewer/app.py
+msgid "평탄화"
+msgstr "Flatten"
+
+#: viewer/app.py
 msgid "즐겨찾기(&V)"
 msgstr "Fa&vorites"
 
@@ -349,10 +361,6 @@ msgid "도구(&T)"
 msgstr "&Tools"
 
 #: viewer/app.py
-msgid "🧰 도구"
-msgstr "🧰 Tools"
-
-#: viewer/app.py
 msgid "OCR 로 읽기 (쪽 범위·언어·워터마크)..."
 msgstr "Read with OCR (page range · language · watermark)..."
 
@@ -360,37 +368,29 @@ msgstr "Read with OCR (page range · language · watermark)..."
 msgid "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"
 msgstr "Read this document with OCR (page range · language · watermark)"
 
-#: viewer/app.py
-msgid "책갈피 자동 생성..."
-msgstr "Generate Bookmarks Automatically..."
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피 생성"
-msgstr "Build Bookmarks"
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
+msgid "책갈피"
+msgstr "Bookmarks"
 
 #: viewer/app.py
-msgid "PDF 병합..."
-msgstr "Merge PDFs..."
+msgid "태그"
+msgstr "Tags"
 
 #: viewer/app.py
-msgid "PDF병합"
-msgstr "Merge PDFs"
+msgid "인덱스"
+msgstr "Index"
 
 #: viewer/app.py
-msgid "다단 생성..."
-msgstr "Create N-up PDF..."
+msgid "이미지"
+msgstr "Images"
+
+#: viewer/app.py viewer/widgets/merge_dialog.py
+msgid "병합"
+msgstr "Merge"
 
 #: viewer/app.py
-msgid "이미지 → PDF 변환..."
-msgstr "Convert Images → PDF..."
-
-#: viewer/app.py
-msgid "이미지→PDF"
-msgstr "Images→PDF"
-
-#: viewer/app.py
-msgid "이미지 파일 → PDF 변환"
-msgstr "Convert image files → PDF"
+msgid "다단"
+msgstr "N-up"
 
 #: viewer/app.py
 msgid "암호화 (암호·권한 설정)..."
@@ -404,6 +404,10 @@ msgstr "Encrypt"
 msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
 msgstr "Set password and permissions on the current PDF (save encrypted)"
 
+#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "전자서명"
+msgstr "Digital Signature"
+
 #: viewer/app.py viewer/widgets/translate_files_dialog.py
 msgid "PDF번역"
 msgstr "Translate PDF"
@@ -416,33 +420,13 @@ msgstr "Translate"
 msgid "PDF 번역 (목록 창)"
 msgstr "Translate PDF (list window)"
 
-#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
-msgid "전자서명"
-msgstr "Digital Signature"
-
-#: viewer/app.py
-msgid "태그 자동 부여"
-msgstr "Automatic Tagging"
-
-#: viewer/app.py
-msgid "인덱스 재구축"
-msgstr "Rebuild Index"
-
-#: viewer/app.py
-msgid "⚙️ 프로그램 환경설정"
-msgstr "⚙️ Program Settings"
-
 #: viewer/app.py
 msgid "환경설정..."
 msgstr "Settings..."
 
 #: viewer/app.py
-msgid "사전 및 용어집 관리"
-msgstr "Dictionaries and Glossaries"
-
-#: viewer/app.py
-msgid "💻 시스템 연동 및 설치"
-msgstr "💻 System Integration and Installation"
+msgid "사전 관리"
+msgstr "Dictionaries"
 
 #: viewer/app.py
 msgid "등록·설치"
@@ -604,6 +588,10 @@ msgstr "Bookmark Title"
 #: viewer/widgets/toc_review_dialog.py
 msgid "제목"
 msgstr "Title"
+
+#: viewer/app.py viewer/sign_draft_controller.py
+msgid "다른 이름으로 저장"
+msgstr "Save As"
 
 #: viewer/app.py
 msgid "다른 PolyPDF 창에서 열려 있음"
@@ -935,6 +923,10 @@ msgstr ""
 msgid "📋 클립보드로 복사"
 msgstr "📋 Copy to clipboard"
 
+#: viewer/app.py
+msgid "열기"
+msgstr "Open"
+
 #: viewer/app.py viewer/convert_controller.py viewer/widgets/convert_dialog.py
 msgid "변환"
 msgstr "Convert"
@@ -1024,17 +1016,60 @@ msgid "발표 전체화면 보기"
 msgstr "Full-screen presentation"
 
 #: viewer/app.py
-msgid "단어장 생성 (OCR·어휘)..."
-msgstr "Build Vocabulary (OCR · words)..."
-
-#: viewer/app.py viewer/study_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/study_panel.py
-msgid "단어장 생성"
-msgstr "Build Vocabulary"
+msgid "OCR·단어장·책갈피·태그·인덱스 만들기"
+msgstr "Create OCR text, word lists, bookmarks, tags and the index"
 
 #: viewer/app.py
-msgid "단어장·책갈피 동시 생성..."
-msgstr "Build Vocabulary and Bookmarks Together..."
+msgid "생성"
+msgstr "Create"
+
+#: viewer/app.py
+msgid "책갈피 자동 생성..."
+msgstr "Generate Bookmarks Automatically..."
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "책갈피 생성"
+msgstr "Build Bookmarks"
+
+#: viewer/app.py
+msgid "단어장·책갈피"
+msgstr "Vocabulary · Bookmarks"
+
+#: viewer/app.py
+msgid "인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"
+msgstr "Rebuild the search index of the open folder from scratch"
+
+#: viewer/app.py
+msgid "PDF 만들기·합치기·암호·서명"
+msgstr "Create, merge, encrypt and sign PDFs"
+
+#: viewer/app.py
+msgid "PDF"
+msgstr "PDF"
+
+#: viewer/app.py
+msgid "이미지 → PDF 변환..."
+msgstr "Convert Images → PDF..."
+
+#: viewer/app.py
+msgid "이미지→PDF"
+msgstr "Images→PDF"
+
+#: viewer/app.py
+msgid "이미지 파일 → PDF 변환"
+msgstr "Convert image files → PDF"
+
+#: viewer/app.py
+msgid "PDF 병합..."
+msgstr "Merge PDFs..."
+
+#: viewer/app.py
+msgid "PDF병합"
+msgstr "Merge PDFs"
+
+#: viewer/app.py
+msgid "다단 생성..."
+msgstr "Create N-up PDF..."
 
 #: viewer/app.py
 msgid "기본 PDF 앱 등록…"
@@ -1272,10 +1307,6 @@ msgid "단계"
 msgstr "Step"
 
 #: viewer/app.py
-msgid "단어장·책갈피"
-msgstr "Vocabulary · Bookmarks"
-
-#: viewer/app.py
 msgid "먼저 PDF를 여세요."
 msgstr "Open a PDF first."
 
@@ -1290,6 +1321,10 @@ msgid ""
 msgstr ""
 "There is no readable text (scanned/image document).\n"
 "Run document recognition (OCR) to build the vocabulary and bookmarks together?"
+
+#: viewer/app.py
+msgid "저장을 취소했습니다 — 원본은 그대로입니다."
+msgstr "Save canceled — the original is unchanged."
 
 #: viewer/app.py
 #, python-brace-format
@@ -1525,8 +1560,8 @@ msgid "(최근 파일 없음)"
 msgstr "(No recent files)"
 
 #: viewer/app.py
-msgid "검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스 재구축' 을 해 주세요."
-msgstr "The search index could not be repaired. Restart PolyPDF, then use 'Tools → Rebuild Index'."
+msgid "검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."
+msgstr "The search index could not be repaired. Restart PolyPDF, then rebuild it with 'Tools → Index'."
 
 #: viewer/app.py
 msgid "태그 백업 실패 — 자동 부여를 건너뜀"
@@ -1536,6 +1571,10 @@ msgstr "Tag backup failed — automatic tagging skipped"
 #, python-brace-format
 msgid "태그 자동 부여: {get}개 검토, {n_auto}개 파일에 부여"
 msgstr "Automatic tagging: {get} reviewed, tags added to {n_auto} files"
+
+#: viewer/app.py
+msgid "태그 자동 부여"
+msgstr "Automatic Tagging"
 
 #: viewer/app.py
 msgid "되돌리기"
@@ -1726,6 +1765,39 @@ msgid "위 {top} · 아래 {bottom}"
 msgstr "Top {top} · Bottom {bottom}"
 
 #: viewer/app.py
+msgid "단어장 생성 (OCR·어휘)..."
+msgstr "Build Vocabulary (OCR · words)..."
+
+#: viewer/app.py viewer/study_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/study_panel.py
+msgid "단어장 생성"
+msgstr "Build Vocabulary"
+
+#: viewer/app.py
+msgid "단어장·책갈피 동시 생성..."
+msgstr "Build Vocabulary and Bookmarks Together..."
+
+#: viewer/app.py
+msgid "태그 다시 계산"
+msgstr "Recalculate Tags"
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "새 태그 후보 검토…"
+msgstr "Review New Tag Candidates…"
+
+#: viewer/app.py
+msgid "직전 자동 부여 되돌리기"
+msgstr "Undo Last Automatic Tagging"
+
+#: viewer/app.py
+msgid "자동 태그 전체 삭제"
+msgstr "Delete All Automatic Tags"
+
+#: viewer/app.py
+msgid "없는 파일 항목 정리…"
+msgstr "Clean Up Missing File Entries…"
+
+#: viewer/app.py
 msgid "서명..."
 msgstr "Sign..."
 
@@ -1748,26 +1820,6 @@ msgstr "Create Empty Signature Field..."
 #: viewer/app.py
 msgid "디지털 ID 관리..."
 msgstr "Manage Digital IDs..."
-
-#: viewer/app.py
-msgid "태그 다시 계산"
-msgstr "Recalculate Tags"
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "새 태그 후보 검토…"
-msgstr "Review New Tag Candidates…"
-
-#: viewer/app.py
-msgid "직전 자동 부여 되돌리기"
-msgstr "Undo Last Automatic Tagging"
-
-#: viewer/app.py
-msgid "자동 태그 전체 삭제"
-msgstr "Delete All Automatic Tags"
-
-#: viewer/app.py
-msgid "없는 파일 항목 정리…"
-msgstr "Clean Up Missing File Entries…"
 
 #: viewer/app.py
 msgid "단어장 관리 (출처·우선순위·폴더)..."
@@ -2550,10 +2602,6 @@ msgstr ""
 "That window closes the file briefly while saving, then reopens it at the page it was showing."
 
 #: viewer/app.py
-msgid "저장을 취소했습니다 — 원본은 그대로입니다."
-msgstr "Save canceled — the original is unchanged."
-
-#: viewer/app.py
 msgid "다른 PolyPDF 창이 파일을 놓기를 기다리는 중…"
 msgstr "Waiting for other PolyPDF windows to release the file…"
 
@@ -2802,6 +2850,10 @@ msgstr "Page range to export (1–{n}), e.g. 3-12"
 #: viewer/app.py
 msgid "3-12 처럼 적어 주세요."
 msgstr "Enter a range like 3-12."
+
+#: viewer/app.py
+msgid "다른 PolyPDF 창이 연 원본에는 새 이름으로 저장할 수 없습니다."
+msgstr "You cannot save as the original while another PolyPDF window has it open."
 
 #: viewer/app.py viewer/edit_controller.py viewer/widgets/merge_preview.py
 msgid "크롭"
@@ -3371,10 +3423,6 @@ msgstr "Hyperlinks"
 #: viewer/edit_controller.py
 msgid "쪽 편집"
 msgstr "Page edits"
-
-#: viewer/edit_controller.py viewer/widgets/bookmark_tree.py
-msgid "책갈피"
-msgstr "Bookmarks"
 
 #: viewer/edit_controller.py
 #, python-brace-format
@@ -4549,10 +4597,6 @@ msgstr "{a} digital signature(s) · {b} image(s) only (p.{pages})"
 #: viewer/sign_draft_controller.py
 msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리…' 에서 넣은 뒤 다시 확정하세요."
 msgstr "An image-only place has no signature image — add one via its right-click menu 'Digital ID ▸ Manage Digital IDs…', then confirm again."
-
-#: viewer/sign_draft_controller.py
-msgid "다른 이름으로 저장"
-msgstr "Save As"
 
 #: viewer/sign_draft_controller.py
 msgid "서명된 PDF를 먼저 여세요."
@@ -7410,10 +7454,6 @@ msgstr "Create N-up (page numbers, TOC, cover)"
 #: viewer/widgets/merge_dialog.py
 msgid "배치 설정…"
 msgstr "Layout Settings…"
-
-#: viewer/widgets/merge_dialog.py
-msgid "병합"
-msgstr "Merge"
 
 #: viewer/widgets/merge_dialog.py
 msgid ""
@@ -12486,4 +12526,13 @@ msgstr "Getting Started"
 
 #~ msgid "서명 그림 바꾸기…"
 #~ msgstr "Change Signature Image…"
+
+#~ msgid "🧰 도구"
+#~ msgstr "🧰 Tools"
+
+#~ msgid "⚙️ 프로그램 환경설정"
+#~ msgstr "⚙️ Program Settings"
+
+#~ msgid "💻 시스템 연동 및 설치"
+#~ msgstr "💻 System Integration and Installation"
 

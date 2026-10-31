@@ -181,7 +181,7 @@ try:
         mw.action_reindex()
     finally:
         appmod.IndexWorker = orig_iw
-    chk(made == [True], "E '인덱스 재구축' 은 verify 로 워커를 만든다", str(made))
+    chk(made == [True], "E 도구 '인덱스'(다시 만들기)는 verify 로 워커를 만든다", str(made))
     chk(closed == [1] and mw._probe_idx is None, "E 그 전에 UI 의 조사용 색인 연결을 닫는다(열린 파일은 못 지운다)")
     t0 = time.time()
     while time.time() - t0 < 5 and mw._index_workers:

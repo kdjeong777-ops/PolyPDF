@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-31 13:48+0900\n"
+"POT-Creation-Date: 2026-10-31 14:47+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -282,7 +282,7 @@ msgid "다른 이름으로 저장..."
 msgstr ""
 
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."
+msgid "책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf)."
 msgstr ""
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
@@ -325,6 +325,18 @@ msgid "종료(&X)"
 msgstr ""
 
 #: viewer/app.py
+msgid "일반"
+msgstr ""
+
+#: viewer/app.py
+msgid "다른 이름"
+msgstr ""
+
+#: viewer/app.py
+msgid "평탄화"
+msgstr ""
+
+#: viewer/app.py
 msgid "즐겨찾기(&V)"
 msgstr ""
 
@@ -349,10 +361,6 @@ msgid "도구(&T)"
 msgstr ""
 
 #: viewer/app.py
-msgid "🧰 도구"
-msgstr ""
-
-#: viewer/app.py
 msgid "OCR 로 읽기 (쪽 범위·언어·워터마크)..."
 msgstr ""
 
@@ -360,36 +368,28 @@ msgstr ""
 msgid "이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"
 msgstr ""
 
-#: viewer/app.py
-msgid "책갈피 자동 생성..."
-msgstr ""
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피 생성"
+#: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
+msgid "책갈피"
 msgstr ""
 
 #: viewer/app.py
-msgid "PDF 병합..."
+msgid "태그"
 msgstr ""
 
 #: viewer/app.py
-msgid "PDF병합"
+msgid "인덱스"
 msgstr ""
 
 #: viewer/app.py
-msgid "다단 생성..."
+msgid "이미지"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/merge_dialog.py
+msgid "병합"
 msgstr ""
 
 #: viewer/app.py
-msgid "이미지 → PDF 변환..."
-msgstr ""
-
-#: viewer/app.py
-msgid "이미지→PDF"
-msgstr ""
-
-#: viewer/app.py
-msgid "이미지 파일 → PDF 변환"
+msgid "다단"
 msgstr ""
 
 #: viewer/app.py
@@ -404,6 +404,10 @@ msgstr ""
 msgid "현재 PDF에 암호·권한 설정(암호화 저장)"
 msgstr ""
 
+#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+msgid "전자서명"
+msgstr ""
+
 #: viewer/app.py viewer/widgets/translate_files_dialog.py
 msgid "PDF번역"
 msgstr ""
@@ -416,32 +420,12 @@ msgstr ""
 msgid "PDF 번역 (목록 창)"
 msgstr ""
 
-#: viewer/app.py viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
-msgid "전자서명"
-msgstr ""
-
-#: viewer/app.py
-msgid "태그 자동 부여"
-msgstr ""
-
-#: viewer/app.py
-msgid "인덱스 재구축"
-msgstr ""
-
-#: viewer/app.py
-msgid "⚙️ 프로그램 환경설정"
-msgstr ""
-
 #: viewer/app.py
 msgid "환경설정..."
 msgstr ""
 
 #: viewer/app.py
-msgid "사전 및 용어집 관리"
-msgstr ""
-
-#: viewer/app.py
-msgid "💻 시스템 연동 및 설치"
+msgid "사전 관리"
 msgstr ""
 
 #: viewer/app.py
@@ -599,6 +583,10 @@ msgstr ""
 #: viewer/app.py viewer/widgets/main_view.py viewer/widgets/text_panel.py
 #: viewer/widgets/toc_review_dialog.py
 msgid "제목"
+msgstr ""
+
+#: viewer/app.py viewer/sign_draft_controller.py
+msgid "다른 이름으로 저장"
 msgstr ""
 
 #: viewer/app.py
@@ -921,6 +909,10 @@ msgstr ""
 msgid "📋 클립보드로 복사"
 msgstr ""
 
+#: viewer/app.py
+msgid "열기"
+msgstr ""
+
 #: viewer/app.py viewer/convert_controller.py viewer/widgets/convert_dialog.py
 msgid "변환"
 msgstr ""
@@ -1010,16 +1002,59 @@ msgid "발표 전체화면 보기"
 msgstr ""
 
 #: viewer/app.py
-msgid "단어장 생성 (OCR·어휘)..."
-msgstr ""
-
-#: viewer/app.py viewer/study_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/study_panel.py
-msgid "단어장 생성"
+msgid "OCR·단어장·책갈피·태그·인덱스 만들기"
 msgstr ""
 
 #: viewer/app.py
-msgid "단어장·책갈피 동시 생성..."
+msgid "생성"
+msgstr ""
+
+#: viewer/app.py
+msgid "책갈피 자동 생성..."
+msgstr ""
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "책갈피 생성"
+msgstr ""
+
+#: viewer/app.py
+msgid "단어장·책갈피"
+msgstr ""
+
+#: viewer/app.py
+msgid "인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 만들기·합치기·암호·서명"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF"
+msgstr ""
+
+#: viewer/app.py
+msgid "이미지 → PDF 변환..."
+msgstr ""
+
+#: viewer/app.py
+msgid "이미지→PDF"
+msgstr ""
+
+#: viewer/app.py
+msgid "이미지 파일 → PDF 변환"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 병합..."
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF병합"
+msgstr ""
+
+#: viewer/app.py
+msgid "다단 생성..."
 msgstr ""
 
 #: viewer/app.py
@@ -1240,10 +1275,6 @@ msgid "단계"
 msgstr ""
 
 #: viewer/app.py
-msgid "단어장·책갈피"
-msgstr ""
-
-#: viewer/app.py
 msgid "먼저 PDF를 여세요."
 msgstr ""
 
@@ -1255,6 +1286,10 @@ msgstr ""
 msgid ""
 "읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
 "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"
+msgstr ""
+
+#: viewer/app.py
+msgid "저장을 취소했습니다 — 원본은 그대로입니다."
 msgstr ""
 
 #: viewer/app.py
@@ -1478,7 +1513,7 @@ msgid "(최근 파일 없음)"
 msgstr ""
 
 #: viewer/app.py
-msgid "검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스 재구축' 을 해 주세요."
+msgid "검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."
 msgstr ""
 
 #: viewer/app.py
@@ -1488,6 +1523,10 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "태그 자동 부여: {get}개 검토, {n_auto}개 파일에 부여"
+msgstr ""
+
+#: viewer/app.py
+msgid "태그 자동 부여"
 msgstr ""
 
 #: viewer/app.py
@@ -1679,6 +1718,39 @@ msgid "위 {top} · 아래 {bottom}"
 msgstr ""
 
 #: viewer/app.py
+msgid "단어장 생성 (OCR·어휘)..."
+msgstr ""
+
+#: viewer/app.py viewer/study_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/study_panel.py
+msgid "단어장 생성"
+msgstr ""
+
+#: viewer/app.py
+msgid "단어장·책갈피 동시 생성..."
+msgstr ""
+
+#: viewer/app.py
+msgid "태그 다시 계산"
+msgstr ""
+
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "새 태그 후보 검토…"
+msgstr ""
+
+#: viewer/app.py
+msgid "직전 자동 부여 되돌리기"
+msgstr ""
+
+#: viewer/app.py
+msgid "자동 태그 전체 삭제"
+msgstr ""
+
+#: viewer/app.py
+msgid "없는 파일 항목 정리…"
+msgstr ""
+
+#: viewer/app.py
 msgid "서명..."
 msgstr ""
 
@@ -1700,26 +1772,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "디지털 ID 관리..."
-msgstr ""
-
-#: viewer/app.py
-msgid "태그 다시 계산"
-msgstr ""
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "새 태그 후보 검토…"
-msgstr ""
-
-#: viewer/app.py
-msgid "직전 자동 부여 되돌리기"
-msgstr ""
-
-#: viewer/app.py
-msgid "자동 태그 전체 삭제"
-msgstr ""
-
-#: viewer/app.py
-msgid "없는 파일 항목 정리…"
 msgstr ""
 
 #: viewer/app.py
@@ -2469,10 +2521,6 @@ msgid ""
 msgstr ""
 
 #: viewer/app.py
-msgid "저장을 취소했습니다 — 원본은 그대로입니다."
-msgstr ""
-
-#: viewer/app.py
 msgid "다른 PolyPDF 창이 파일을 놓기를 기다리는 중…"
 msgstr ""
 
@@ -2705,6 +2753,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "3-12 처럼 적어 주세요."
+msgstr ""
+
+#: viewer/app.py
+msgid "다른 PolyPDF 창이 연 원본에는 새 이름으로 저장할 수 없습니다."
 msgstr ""
 
 #: viewer/app.py viewer/edit_controller.py viewer/widgets/merge_preview.py
@@ -3251,10 +3303,6 @@ msgstr ""
 
 #: viewer/edit_controller.py
 msgid "쪽 편집"
-msgstr ""
-
-#: viewer/edit_controller.py viewer/widgets/bookmark_tree.py
-msgid "책갈피"
 msgstr ""
 
 #: viewer/edit_controller.py
@@ -4391,10 +4439,6 @@ msgstr ""
 
 #: viewer/sign_draft_controller.py
 msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리…' 에서 넣은 뒤 다시 확정하세요."
-msgstr ""
-
-#: viewer/sign_draft_controller.py
-msgid "다른 이름으로 저장"
 msgstr ""
 
 #: viewer/sign_draft_controller.py
@@ -7151,10 +7195,6 @@ msgstr ""
 
 #: viewer/widgets/merge_dialog.py
 msgid "배치 설정…"
-msgstr ""
-
-#: viewer/widgets/merge_dialog.py
-msgid "병합"
 msgstr ""
 
 #: viewer/widgets/merge_dialog.py

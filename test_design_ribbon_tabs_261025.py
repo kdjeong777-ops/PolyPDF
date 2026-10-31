@@ -241,7 +241,10 @@ try:
     # J '변환' — 파일·도구 탭 모두, 도구는 이미지→PDF 오른쪽 · K 모음 탭 Alt+C
     tn = [a.iconText() for a in rb.row("tools").actions() if a.iconText()]
     fn = [a.iconText() for a in rb.row("file").actions() if a.iconText()]
-    chk("변환" in fn and tn[tn.index("이미지→PDF") + 1] == "변환", "J '변환' 은 파일 탭과 도구 탭(이미지→PDF 오른쪽)", str(tn))
+    from viewer.widgets.ribbon import cmd_id
+    tid = [cmd_id(a) for a in rb.row("tools").actions() if cmd_id(a)]
+    chk("변환" in fn and tid[tid.index("file.export") + 1] == "tools.translate",
+        "J '변환' 은 파일 탭과 도구 탭(번역 왼쪽 — 261031-16)", str(tid))
     rb.select("file"); QTest.qWait(30)
     mw.activateWindow(); QTest.qWait(30)
     QTest.keyClick(mw, Qt.Key.Key_C, Qt.KeyboardModifier.AltModifier); QTest.qWait(300)   # 니모닉은 animateClick

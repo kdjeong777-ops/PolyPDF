@@ -1800,7 +1800,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.act_present.triggered.connect(self._open_presentation)
         self.addAction(self.act_present)           # 메뉴에 없어도 F5 동작 유지
 
-        # 260618-16 → 261016-3: '도구' 메뉴 — 구역 셋(🧰 도구 · ⚙️ 프로그램 환경설정 · 💻 시스템 연동), 묶음은 하위 메뉴(디자인 SOT §2.9.1)
+        # 260618-16 → 261031-16: '도구' 메뉴 — 묶음 다섯, 하위 메뉴는 ▾ 단추(디자인 SOT §2.9.1)
         m_tools = bar.addMenu(tr("도구(&T)"))
 
         def _act(text, slot, cid=None, short=None, tip=None):
@@ -1811,29 +1811,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._reg_cmd(cid, a, short=short, tip=tip)
             return a
 
-        # 🧰 도구 — 260911-1(사용자 지시): `모음` 기본값의 도구 묶음(종전 패널 '도구' 그룹)과 **같은 차례**.
-        #   같은 것을 두 곳에서 다른 차례로 보여 주지 않는다(디자인 SOT §2.9.1). 단추 이름은 종전 패널 그대로(§2.9).
-        m_tools.addSection(tr("🧰 도구"))
-        _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read, "tools.ocr", "OCR",
-             tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"))
-        # 261008(다국어 SOT §7): 한국 전용 메뉴 항목 — `_gate_api_dependent_ui` 가 언어에 따라 숨긴다
-        self._ko_only_acts = []
-        self._ko_only_acts.append(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study,
-                                       "tools.build_study", tr("단어장 생성")))
-        _act(tr("책갈피 자동 생성..."), self.action_open_bookmarker, "tools.bookmarker", tr("책갈피 생성"))
-        # 261016-3(디자인 SOT §2.9.1 예외, 사용자 지시): 패널 단추가 없는 파생 항목은 그 원 항목 바로 아래
-        self._ko_only_acts.append(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks,
-                                       "tools.study_and_bookmarks"))
-        a_merge = self._sc_act_merge = _act(tr("PDF 병합..."), lambda: self._on_merge_files(None),
-                                            "tools.merge", tr("PDF병합"))
-        _act(tr("다단 생성..."), self.action_nup_create, "tools.nup")   # 261021-3(마스터 §11.10.2, 디자인 SOT §2.9.1 예외 둘째)
-        _act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf(), "tools.img2pdf",  # 260825-13
-             tr("이미지→PDF"), tr("이미지 파일 → PDF 변환"))
-        m_tools.addAction(self.act_export)       # 261025-5(사용자 지시): '변환' 은 파일·도구 탭 모두에 — 같은 액션(id file.export)
-        _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf, "tools.encrypt", tr("암호화"),
-             tr("현재 PDF에 암호·권한 설정(암호화 저장)"))
-        self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files, "tools.translate", tr("번역"),
-                                  tr("PDF 번역 (목록 창)"))
+        # 261031-16(디자인 SOT §2.9.1, 사용자 지시·결정): 묶음 다섯 — 생성 | PDF | 변환·번역 | 환경설정·사전 관리 | 등록·설치.
+        #   앞 둘은 바깥 왼쪽 글자(RibbonIconMark). 탭 단추의 짧은 이름은 `ribbonShort`(도구 탭에서만 — 모음·메뉴 글자는 그대로).
+        #   종전 구역 제목(🧰·⚙️·💻)은 없앴다 — 세부 줄에서 구역은 구분선·바깥 글자로 보인다.
+        from viewer.widgets.ribbon import RibbonIconMark
+
+        def _short(a, text):
+            a.setProperty("ribbonShort", text)
+            return a
 
         def _sub(title, items, cid=None):
             """누르면 옆에 펼쳐지는 하위 메뉴 하나(261016-3, 사용자 지시) — 종전 구역 제목 + 항목들을 한 줄로.
@@ -1846,31 +1831,57 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if cid:
                 self._reg_cmd(cid, sm.menuAction())
             return sm
-        # 261016-3(사용자 지시): 전자서명·태그 자동 부여는 하위 메뉴로, 인덱스 재구축은 그 아래 — 도구 구역 안에 이어서.
-        #   'PDF 꾸밈 저장' 은 파일 메뉴 '평탄화해서 내보내기...' 와 같은 함수라 뺐다. '검색 및 데이터 구축' 구역(법령·건설기준·특허)은
-        #   보기 메뉴에 같은 항목이 있어 뺐다.
-        _sub(tr("전자서명"), (                          # 보안 SOT §3(261010-21)
+
+        # 생성
+        m_tools.addAction(RibbonIconMark(self, None, tr("OCR·단어장·책갈피·태그·인덱스 만들기"), tr("생성")))
+        _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read, "tools.ocr", "OCR",
+             tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"))
+        # 261008(다국어 SOT §7): 한국 전용 메뉴 항목 — `_gate_api_dependent_ui` 가 언어에 따라 숨긴다
+        self._ko_only_acts = []
+        self._ko_only_acts.append(_short(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study,
+                                              "tools.build_study", tr("단어장 생성")), tr("단어장")))
+        _short(_act(tr("책갈피 자동 생성..."), self.action_open_bookmarker, "tools.bookmarker", tr("책갈피 생성")), tr("책갈피"))
+        self._ko_only_acts.append(_short(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks,
+                                              "tools.study_and_bookmarks"), tr("단어장·책갈피")))
+        _sub(tr("태그"), (                               # 태그 SOT §8.2·§8.5(260829 P2) — 261031-16: 종전 '태그 자동 부여'
+            (tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True)),
+            (tr("새 태그 후보 검토…"), self._autotag_review_candidates),
+            (tr("직전 자동 부여 되돌리기"), self._autotag_undo),
+            (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
+            (tr("없는 파일 항목 정리…"), self._autotag_prune_missing)), "tools.autotag")
+        _act(tr("인덱스"), self.action_reindex, "tools.reindex", tip=tr("인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"))   # 261031-16: 종전 '인덱스 재구축'
+        # PDF
+        m_tools.addSeparator()
+        m_tools.addAction(RibbonIconMark(self, None, tr("PDF 만들기·합치기·암호·서명"), tr("PDF")))
+        _short(_act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf(), "tools.img2pdf",  # 260825-13
+                    tr("이미지→PDF"), tr("이미지 파일 → PDF 변환")), tr("이미지"))
+        a_merge = self._sc_act_merge = _short(_act(tr("PDF 병합..."), lambda: self._on_merge_files(None),
+                                                   "tools.merge", tr("PDF병합")), tr("병합"))
+        _short(_act(tr("다단 생성..."), self.action_nup_create, "tools.nup"), tr("다단"))   # 261021-3(마스터 §11.10.2)
+        _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf, "tools.encrypt", tr("암호화"),
+             tr("현재 PDF에 암호·권한 설정(암호화 저장)"))
+        _sub(tr("전자서명"), (                          # 보안 SOT §3(261010-21) — 261031-16(사용자 결정): PDF 묶음
             (tr("서명..."), self.action_sign_pdf),
             (tr("그림만 넣기..."), self.action_sign_image_only),       # 보안 SOT §3.11
             (tr("서명 확정..."), self.action_sign_confirm),           # 보안 SOT §3.10
             (tr("서명 편집"), self.action_sign_edit),
             (tr("빈 서명 칸 만들기..."), self.action_sign_field),
             (tr("디지털 ID 관리..."), self.action_digital_ids)), "tools.sign")   # 261031-1: 서명 그림은 디지털 ID 가 갖는다
-        _sub(tr("태그 자동 부여"), (                     # 태그 SOT §8.2·§8.5(260829 P2)
-            (tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True)),
-            (tr("새 태그 후보 검토…"), self._autotag_review_candidates),
-            (tr("직전 자동 부여 되돌리기"), self._autotag_undo),
-            (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
-            (tr("없는 파일 항목 정리…"), self._autotag_prune_missing)), "tools.autotag")
-        _act(tr("인덱스 재구축"), self.action_reindex, "tools.reindex")
+        # 변환 · 번역(사용자 결정 '변환 옆')
+        m_tools.addSeparator()
+        m_tools.addAction(self.act_export)       # 261025-5(사용자 지시): '변환' 은 파일·도구 탭 모두에 — 같은 액션(id file.export)
+        self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files, "tools.translate", tr("번역"),
+                                  tr("PDF 번역 (목록 창)"))
+        # 261016-3(사용자 지시): 'PDF 꾸밈 저장' 은 파일 메뉴 '평탄화해서 내보내기...' 와 같은 함수라 뺐다. '검색 및 데이터 구축' 구역(법령·건설기준·특허)은
+        #   보기 메뉴에 같은 항목이 있어 뺐다.
         self._act_law = self._act_kcsc = self._act_kipo = None    # 보기 메뉴(`_view_acts`)에만 — 게이팅은 None 을 건너뛴다
 
-        # ⚙️ 프로그램 환경설정 — '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
-        m_tools.addSection(tr("⚙️ 프로그램 환경설정"))
-        _act(tr("환경설정..."), self.action_open_settings, "tools.settings")        # 260618-18: 환경설정을 단축키 위로
+        # 환경설정 · 사전 관리 — '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
+        m_tools.addSeparator()
+        _act(tr("환경설정..."), self.action_open_settings, "tools.settings")        # 260618-18
         # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
-        # 📖 사전 및 용어집 관리 — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25). 261016-3: 하위 메뉴로 환경설정 아래(261025-6 보완 — 단축키 설정은 환경설정 창으로)
-        _dict = _sub(tr("사전 및 용어집 관리"), (
+        # 📖 사전 관리(261031-16: 종전 '사전 및 용어집 관리') — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25)
+        _dict = _sub(tr("사전 관리"), (
             (tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
             (tr("사용자 뜻 편집..."), self._action_user_terms),          # 261019-5(단어장 SOT §4.1)
             (tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary),
@@ -1883,8 +1894,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             (tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)), "tools.dict")
         self._ko_only_acts.append(_dict.menuAction())
 
-        # 💻 시스템 연동 및 설치
-        m_tools.addSection(tr("💻 시스템 연동 및 설치"))
+        # 등록·설치
+        m_tools.addSeparator()
         # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목을 `등록·설치 ▾` 하나로 — 명령 id 는 그대로(모음에 넣은 단추가 남는다)
         _inst = m_tools.addMenu(tr("등록·설치"))
         for _t, _s, _cid, _short, _tip in (
@@ -6571,7 +6582,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 파일을 못 지우는 상황에서 '오류 → 복구 → 오류' 가 되풀이되지 않게 실행당 두 번까지
         self._index_recover_count = getattr(self, "_index_recover_count", 0) + 1
         if self._index_recover_count > 2:
-            self.status.showMessage(tr("검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스 재구축' 을 해 주세요."), 15000)
+            self.status.showMessage(tr("검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."), 15000)
             return
         self._index_recovering = True
         self.status.showMessage(tr("검색 색인이 손상되어 새로 만듭니다. 끝나면 다시 검색해 주세요."), 10000)

@@ -43,8 +43,8 @@ DEFAULT_COLLECTION = (
     "file.open_folder", "file.open_file", "file.print", SEP,          # 261025-5: 앞 그룹 — 폴더 열기·파일 열기·인쇄(사용자 지시)
     "view.single", "view.split", "view.text", "view.study", "view.search", "view.shot",
     "view.law", "view.kipo", "view.kcsc", "view.present", SEP,      # 261025-1: 보기 탭 차례와 같게(디자인 SOT §2.9.5)
-    "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.merge", "tools.img2pdf",
-    "tools.encrypt", "tools.translate", "file.export",
+    "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.img2pdf", "tools.merge",
+    "tools.encrypt", "file.export", "tools.translate",              # 261031-16: 도구 탭 차례와 같게(디자인 SOT §2.9.1)
 )
 
 _MNEMONIC = re.compile(r"\(&.\)")

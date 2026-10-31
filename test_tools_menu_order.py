@@ -1,8 +1,8 @@
 """260911-1: 도구 차례 — 패널과 메뉴가 같은가 (offscreen).
 
-기준은 디자인 SOT `화면 디자인 작업 계획서.md` §2.9 표 11~18 과 §2.9.1 이다.
-사용자 지시: OCR · 단어장 생성 · 책갈피 생성 · PDF병합 · 이미지→PDF ·
-스크린샷 PDF 저장 · 암호화 — 그리고 목록에 없던 `번역` 은 맨 뒤.
+기준은 디자인 SOT `화면 디자인 작업 계획서.md` §2.9 표와 §2.9.1 이다.
+261031-16(사용자 지시·결정): 도구 메뉴는 묶음 다섯 — 생성 | PDF | 변환·번역 | 환경설정·사전 관리 | 등록·설치,
+모음 기본값의 도구 묶음도 같은 차례.
 """
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -34,9 +34,9 @@ def chk(cond, msg, extra=""):
 from viewer.widgets.ribbon import COLLECTION, cmd_id
 _row = mw._ribbon.row(COLLECTION)
 btns = [a.iconText() for a in _row.actions() if cmd_id(a)]
-# 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261016-4(디자인 SOT §2.9, 사용자 지시): '변환해서 내보내기' 는 '암호화' 오른쪽
-TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "PDF병합",
-         "이미지→PDF", "암호화", "번역", "변환"]            # 261025-5: '변환해서 내보내기' → '변환'
+# 261014-28: '스크린샷 PDF 저장' 단추는 없다. 261031-16(디자인 SOT §2.9.1): 도구 탭 차례와 같게 — 이미지→PDF 가 병합 앞, 변환 다음 번역
+TOOLS = ["OCR", "단어장 생성", "책갈피 생성", "이미지→PDF",
+         "PDF병합", "암호화", "변환", "번역"]            # 261025-5: '변환해서 내보내기' → '변환'
 N = len(TOOLS)
 chk(btns[-N:] == TOOLS, "① 패널 '도구' %d개가 지시한 차례다" % N, str(btns[-N:]))
 chk(btns.index("OCR") == len(btns) - N, "① 도구는 보기 뒤에 모여 있다", str(btns))
@@ -51,45 +51,60 @@ chk(menu is not None, "② '도구(&T)' 메뉴가 있다")
 items = []
 for a in (menu.actions() if menu else []):
     if a.isSeparator():
-        items.append(None)          # addSection 은 구분선 + 제목으로 들어온다
-    else:
+        items.append(None)
+    elif not a.property("ribbonMark"):     # 바깥 글자 표시(RibbonIconMark)는 메뉴 항목이 아니다
         items.append(a.text())
-# 첫 구분선 다음부터 다음 구분선 앞까지 = 첫 구역
-first = items.index(None)
-rest = items[first + 1:]
-head = rest[:rest.index(None)] if None in rest else rest
-MENU = ["OCR 로 읽기 (쪽 범위·언어·워터마크)...",
-        "단어장 생성 (OCR·어휘)...",
-        "책갈피 자동 생성...",
-        "단어장·책갈피 동시 생성...",          # 261016-3(§2.9.1 예외 둘째): 파생 항목은 원 항목 바로 아래
-        "PDF 병합...",
-        "다단 생성...",                       # 261021-3(§2.9.1 예외 둘째): 파일 하나 다단 — 병합 아래, 패널 단추 없음
-        "이미지 → PDF 변환...",
-        "변환...",                            # 261025-5(사용자 지시): 이미지→PDF 오른쪽 — 파일 메뉴와 같은 액션
-        "암호화 (암호·권한 설정)...",
-        "PDF번역",
-        "전자서명", "태그 자동 부여", "인덱스 재구축"]   # 261016-3: 하위 메뉴 둘 + 인덱스 재구축, 도구 구역 안에 이어서
-chk(head == MENU, "② 메뉴 첫 구역이 패널과 같은 차례다(§2.9.1 예외 — 변환은 이미지→PDF 오른쪽, 동시 생성은 책갈피 아래)", str(head))
+ids = []
+for a in (menu.actions() if menu else []):
+    if a.isSeparator():
+        ids.append(None)
+    elif not a.property("ribbonMark"):
+        ids.append(cmd_id(a) or a.text())
+groups, cur = [], []
+for t in ids:
+    if t is None:
+        groups.append(cur); cur = []
+    else:
+        cur.append(t)
+groups.append(cur)
+groups = [g for g in groups if g]
+# 261031-16(디자인 SOT §2.9.1, 사용자 지시·결정): 묶음 다섯 — 생성 | PDF | 변환·번역 | 환경설정·사전 관리 | 등록·설치
+# 마스터 §14.7.2 의 19: 메뉴 항목은 이름이 아니라 명령 id 목록으로 견준다
+GROUPS = [["tools.ocr", "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag", "tools.reindex"],
+          ["tools.img2pdf", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign"],
+          ["file.export", "tools.translate"],
+          ["tools.settings", "tools.dict"],
+          ["tools.install"]]
+chk(groups == GROUPS, "② 도구 메뉴 묶음 다섯·차례(261031-16)", str(groups))
+marks = [a.text() or a.toolTip() for a in menu.actions() if a.property("ribbonMark")]
+_row_t = mw._ribbon.row("tools")
+mark_txt = [w.text() for w in (_row_t.widgetForAction(a) for a in _row_t.actions() if a.property("ribbonMark")) if w is not None]
+chk(mark_txt == ["생성", "PDF"], "② 생성·PDF 묶음은 바깥 왼쪽 글자", str(mark_txt))
+short = {cmd_id(a): _row_t.widgetForAction(a).text() for a in _row_t.actions() if cmd_id(a) and _row_t.widgetForAction(a)}
+chk(short.get("tools.build_study") == "단어장" and short.get("tools.bookmarker") == "책갈피"
+    and short.get("tools.study_and_bookmarks") == "단어장·책갈피" and short.get("tools.img2pdf") == "이미지"
+    and short.get("tools.merge") == "병합" and short.get("tools.nup") == "다단",
+    "② 도구 탭 단추는 짧은 이름(ribbonShort)", str(short))
+chk(mw._cmds["tools.build_study"].iconText() == "단어장 생성" and mw._cmds["tools.merge"].iconText() == "PDF병합",
+    "② 모음 단추 이름은 그대로(짧은 이름은 도구 탭에서만)")
 subs = {a.text(): [x.text() for x in a.menu().actions()] for a in menu.actions() if a.menu()}
+names = {cmd_id(a): a.text() for a in menu.actions() if cmd_id(a)}
+chk(names.get("tools.autotag") == "태그" and names.get("tools.reindex") == "인덱스" and names.get("tools.dict") == "사전 관리",
+    "② 이름 바꿈 — 태그 · 인덱스 · 사전 관리(261031-16, RENAMED)", str(names))
 # 261031-1: 개수(종전 7) 대신 항목 그대로 — '서명 그림...' 을 빼고 '디지털 ID...' → '디지털 ID 관리...'(보안 SOT §3). 개수만 보면
 #   항목이 바뀐 까닭을 실패 글이 말하지 못하고, 이름 바꿈 검사(test_sot_crossref RENAMED I3)도 숫자는 못 본다
 SIGN_SUB = ["서명...", "그림만 넣기...", "서명 확정...", "서명 편집", "빈 서명 칸 만들기...", "디지털 ID 관리..."]
 chk(subs.get("전자서명", []) == SIGN_SUB
-    and subs.get("태그 자동 부여", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 및 용어집 관리", [])) == 10,   # 261019-5: '사용자 뜻 편집' 더함
-    "② 전자서명·태그 자동 부여·사전 및 용어집 관리는 하위 메뉴(▸)", str(subs))
+    and subs.get("태그", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 관리", [])) == 10,   # 261019-5: '사용자 뜻 편집' 더함
+    "② 전자서명·태그·사전 관리는 하위 메뉴(▸)", str(subs))
 sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
-chk(sec_titles == ["🧰 도구", "⚙️ 프로그램 환경설정", "💻 시스템 연동 및 설치"], "② 구역은 셋(검색 및 데이터 구축·그 밖의·전자서명 구역 없음)", str(sec_titles))
-env = items[items.index("환경설정..."):] if "환경설정..." in items else []
-chk(env[:2] == ["환경설정...", "사전 및 용어집 관리"] and "단축키 설정..." not in items,
-    "② 환경설정 · 사전 및 용어집 관리 ▸ — 단축키 설정은 환경설정 '스타일' 묶음으로(261025-6 보완)", str(env[:4]))
-# 261017-19(디자인 SOT §2.9.1): 마지막 구역 '💻 시스템 연동 및 설치' 의 항목 차례(가상 프린터 SOT §4.6)
-_sys_i = next((i for i, a in enumerate(menu.actions()) if a.isSeparator() and a.text() == "💻 시스템 연동 및 설치"), None)
-sys_items = [a.text() for a in menu.actions()[_sys_i + 1:] if not a.isSeparator()] if _sys_i is not None else []
+chk(sec_titles == [], "② 구역 제목은 없다(261031-16 — 구분선·바깥 글자)", str(sec_titles))
+chk("단축키 설정..." not in items, "② 단축키 설정은 환경설정 '스타일' 묶음으로(261025-6 보완)")
 # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목은 '등록·설치 ▸' 하나로 — 명령 id 는 그대로
-_inst = next((a for a in menu.actions()[_sys_i + 1:] if a.menu() is not None), None) if _sys_i is not None else None
+_inst = next((a for a in menu.actions() if a.menu() is not None and a.text() == "등록·설치"), None)
 inst_items = [a.text() for a in _inst.menu().actions()] if _inst is not None else []
-chk(sys_items == ["등록·설치"] and inst_items == ["기본 PDF 앱 등록…", "구성요소 설치…", "가상 프린터 설치·제거…"],
-    "② '시스템 연동 및 설치' 구역 — 등록·설치 ▸(PDF 앱 등록 · 구성요소 설치 · 가상 프린터)", str((sys_items, inst_items)))
+chk(inst_items == ["기본 PDF 앱 등록…", "구성요소 설치…", "가상 프린터 설치·제거…"],
+    "② 등록·설치 ▸(PDF 앱 등록 · 구성요소 설치 · 가상 프린터)", str(inst_items))
 from viewer.widgets.ribbon import cmd_id as _cid
 chk([_cid(a) for a in (_inst.menu().actions() if _inst else [])] == ["tools.pdf_handler", "tools.components", "tools.vprinter"]
     and "tools.vprinter" in dict(mw.ribbon_catalog()[0])["도구(&T)"],

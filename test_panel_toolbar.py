@@ -70,8 +70,8 @@ names = [a.iconText() for a in acts]
 expected = ["폴더 열기", "파일 열기", "인쇄",           # 261025-5(사용자 지시): 앞 그룹
             "1단", "2단", "텍스트", "단어장", "검색", "스크린샷", "법령·고시",
             "특허", "건설기준", "발표보기",            # 261025-1: 보기 탭 차례와 같게(디자인 SOT §2.9.5)
-            "OCR", "단어장 생성", "책갈피 생성", "PDF병합",
-            "이미지→PDF", "암호화", "번역", "변환"]
+            "OCR", "단어장 생성", "책갈피 생성", "이미지→PDF",
+            "PDF병합", "암호화", "변환", "번역"]          # 261031-16: 도구 탭 차례와 같게(디자인 SOT §2.9.1)
 chk(names == expected, "모음 기본 단추 차례: §2.9 표와 일치", str(names))
 chk([cmd_id(a) for a in acts] == [c for c in DEFAULT_COLLECTION if c != SEP], "모음 기본 id = DEFAULT_COLLECTION")
 groups = row.groups()
@@ -90,7 +90,7 @@ rb.select("tools")
 chk(rb.tab_button("tools").isChecked() and not rb.tab_button(COLLECTION).isChecked(), "도구 탭 고름")
 chk(rb.stack.currentWidget() is rb.row("tools"), "세부 줄 = 도구")
 tnames = [a.iconText() for a in rb.row("tools").actions() if not a.isSeparator() and cmd_id(a)]
-chk(tnames[:3] == ["OCR", "단어장 생성", "책갈피 생성"], "도구 줄 앞부분 = 모음 도구 차례", str(tnames))
+chk(tnames[:3] == ["OCR", "단어장 생성", "책갈피 생성"], "도구 줄 앞부분 = 모음 도구 차례(액션 이름 — 단추 글은 짧은 이름)", str(tnames))
 sub = [rb.row("tools").widgetForAction(a) for a in rb.row("tools").actions() if a.menu() is not None]
 chk(sub and all(isinstance(w, QToolButton) and w.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
                 for w in sub), "하위 메뉴는 ▾ 단추(누르면 펼침)")
