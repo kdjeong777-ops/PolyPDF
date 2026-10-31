@@ -61,7 +61,7 @@ class SignMixin(SignDraftMixin):
         self._sign_manage_ids()
 
     def _sign_manage_ids(self, fp: str = "") -> str:
-        """디지털 ID 관리 창 — `fp` 를 골라 연다. 서명 그림·폭·내용은 **여기서만** 고친다(261031-7 사용자 지시).
+        """디지털 ID 관리 창 — `fp` 를 골라 연다. 서명 그림·폭·내용은 **여기서만** 고친다(261031-10 사용자 지시).
         닫으면 지금 서명에 반영한다: '내용 고치기'(새로 발급)로 바뀐 지문은 새 지문으로 잇고, 클릭 자리는 새 실제 크기로,
         자리 미리보기는 다시 그린다. 돌려주는 값 = `fp` 의 지금 지문(바뀌었으면 새 것)."""
         from viewer import sign_drafts
@@ -256,7 +256,7 @@ class SignMixin(SignDraftMixin):
         self._sign_cur_fp = fp
         if not sign_store.id_image_path(fp):
             name = (sign_store.get_id(fp) or {}).get("name", "")
-            # 서명 그림은 디지털 ID 관리 창에서만 넣고 바꾼다(261031-7 사용자 지시)
+            # 서명 그림은 디지털 ID 관리 창에서만 넣고 바꾼다(261031-10 사용자 지시)
             if kind == "image":
                 if QMessageBox.question(self, tr("그림만 넣기"), tr("디지털 ID '{name}' 에 서명 그림이 없습니다. 디지털 ID 관리에서 넣을까요?").format(name=name)
                                         ) != QMessageBox.StandardButton.Yes:

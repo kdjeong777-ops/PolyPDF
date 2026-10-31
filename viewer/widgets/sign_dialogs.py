@@ -481,7 +481,7 @@ class DigitalIdDialog(QDialog):
     def __init__(self, parent=None, runner=None, hello_ok: bool = False, select_fp: str = ""):
         super().__init__(parent)
         self.setWindowTitle(tr("디지털 ID 관리"))
-        self.replaced = {}           # '내용 고치기' 로 바뀐 지문 {옛: 새} — 지금 서명에 잇는다(261031-7)
+        self.replaced = {}           # '내용 고치기' 로 바뀐 지문 {옛: 새} — 지금 서명에 잇는다(261031-10)
         self._run = runner or (lambda fn, _t: fn())
         self._hello_ok = bool(hello_ok)
         v = QVBoxLayout(self)

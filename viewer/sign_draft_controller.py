@@ -274,7 +274,7 @@ class SignDraftMixin:
             id_acts[a] = e["fp"]
         sub.addSeparator()
         a_more = sub.addAction(tr("다른 디지털 ID 열기…"))
-        # 261031-7(사용자 지시): 서명 그림·폭·ID 내용은 디지털 ID 관리에서만 — 지금 ID 를 골라 연다(닫으면 이 서명에 반영)
+        # 261031-10(사용자 지시): 서명 그림·폭·ID 내용은 디지털 ID 관리에서만 — 지금 ID 를 골라 연다(닫으면 이 서명에 반영)
         a_manage = sub.addAction(tr("디지털 ID 관리…"))
         has_img = bool(sign_store.id_image_path(cur_fp))
         a_show_img = m.addAction(tr("서명 그림"))

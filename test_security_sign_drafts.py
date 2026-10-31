@@ -568,7 +568,7 @@ try:
         and not sdlg.DigitalIdDialog._can_reissue({"fp": "x", "kind": "win"}),
         "V7 공동인증서·Windows 저장소 ID 는 고치기 대상이 아니다")
 
-    # ── W (261031-7) 서명 그림은 디지털 ID 관리에서만 — 자리 옵션 '디지털 ID ▸ 디지털 ID 관리…' ─────
+    # ── W (261031-10) 서명 그림은 디지털 ID 관리에서만 — 자리 옵션 '디지털 ID ▸ 디지털 ID 관리…' ─────
     mw._sign_lock()
     _Unlock.mode, _Unlock.pw = "password", PW
     mw.action_sign_pdf(); spin(0.2)
