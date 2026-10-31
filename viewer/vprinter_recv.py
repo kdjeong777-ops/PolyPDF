@@ -235,6 +235,12 @@ def gs_exe():
     return p if os.path.isfile(p) else None
 
 
+def can_receive() -> bool:
+    """이 실행이 인쇄를 받아도 되는가 — 동봉 변환 도구(`printer\\bin\\gs`)가 있을 때만(SOT §4.4, 261031-7).
+    없는 실행(로컬 빌드·`printer\\bin` 없는 개발 폴더)이 받기 통로를 먼저 차지해 '다시 설치하세요' 경고를 띄웠다 — 설치본이 있는데도."""
+    return gs_exe() is not None
+
+
 def is_landscape(ps_path: str) -> bool:
     """PScript5 는 문서 머리에 `%%Orientation: Landscape` 를 적는다(261017 표본) — 가로 문서는 세로 쪽에 돌려 그려 온다."""
     try:
@@ -557,8 +563,9 @@ def task_command():
 
 def task_owner() -> bool:
     """예약 작업을 맞춰도 되는 실행인가 — **설치본**(빌드된 exe · 휴대용 아님 · 시험 프로필 아님)만(SOT §4.4, 261017-18 점검:
-    종전에는 개발 main.py·휴대용·시험 프로필 창이 사용자의 예약 작업을 자기 쪽으로 바꿨다)."""
-    if not getattr(sys, "frozen", False) or os.environ.get("POLYPDF_PROFILE"):
+    종전에는 개발 main.py·휴대용·시험 프로필 창이 사용자의 예약 작업을 자기 쪽으로 바꿨다).
+    변환 도구가 없는 빌드(`printer\\bin` 없는 로컬 빌드)도 아니다 — 작업이 그 exe 를 띄우면 받지 못한다(261031-7)."""
+    if not getattr(sys, "frozen", False) or os.environ.get("POLYPDF_PROFILE") or not can_receive():
         return False
     try:
         from viewer import settings_store

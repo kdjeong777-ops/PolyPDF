@@ -72,6 +72,9 @@ class VPrinterMixin:
         self._vp_busy = False
         self._vp_failed = set()                    # 이 창에서 변환에 실패한 PS — 다시 시도하지 않는다(경고 되풀이 방지, 261017-18)
         self._vp_keep = []
+        from viewer import vprinter_recv
+        if not vprinter_recv.can_receive():        # 변환 도구가 없는 창(로컬 빌드·개발)은 통로를 차지하지 않는다 — 설치본 `--printed` 가 받게(261031-7)
+            return
         try:
             from viewer.open_gather import OpenGather
             g = OpenGather(name=print_server_name(), lock_file=print_lock_path(), parent=self)
@@ -118,6 +121,9 @@ class VPrinterMixin:
         """스풀 폴더의 PS 를 하나씩 저장한다. 처리 중에 또 오면 끝난 뒤 다시 본다(한 건이 끝날 때마다 폴더를 다시 읽는다).
         이 창에서 변환에 실패한 PS 는 건너뛴다 — 지우지 않고 다음 실행 때 한 번 더(SOT §4.3, 261017-18)."""
         if getattr(self, "_vp_busy", False):
+            return
+        from viewer import vprinter_recv
+        if not vprinter_recv.can_receive():        # 변환하지 못할 PS 는 건드리지 않는다 — 받을 수 있는 창이 처리한다(261031-7)
             return
         self._vp_busy = True
         failed = getattr(self, "_vp_failed", set())

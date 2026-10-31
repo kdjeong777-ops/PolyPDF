@@ -154,6 +154,8 @@ def fake_convert(ps, out, title="", gray=False, gs=None):
 
 
 R.convert = fake_convert
+_real_can_receive = getattr(R, "can_receive", lambda: True)
+R.can_receive = lambda: True             # 흐름 검사는 변환 도구가 있는 창(CI 처럼 printer\bin 이 없는 곳에서도) — 없는 창은 X 절
 grays = []
 R.to_gray = lambda src, out, gs=None: (grays.append(out), shutil.copyfile(src, out))
 mw._prefs["vprinter"] = {"kind": "original", "color": "color"}      # 기본 설정 그대로(종전 '저장 창 없이' 를 켜지 않은 상태)
@@ -353,6 +355,44 @@ asker.close()
 chk(got.get("v") is False and not dead.exists(), "W6 그 폴더를 보는 창이 없거나 답하지 않으면 False(→ 새 창), 답 없는 등록은 지운다",
     "%s · 등록 남음 %s" % (got, dead.exists()))
 mw._set_active_pane = _sap
+
+print("\n=== X. 변환 도구가 없는 창은 인쇄를 받지 않는다(261031-7) ===")
+# 사용자가 겪음: printer\bin 이 없는 로컬 빌드를 켜 둔 채 인쇄 → 그 창이 받기 통로를 먼저 차지해 받고 'Ghostscript 가 없습니다 —
+#   다시 설치하세요' 경고. 설치본에는 변환 도구가 있었는데 받지 못했다(PS 는 남음)
+import viewer.open_gather as OG
+_claim, _gs = OG.OpenGather.claim, R.gs_exe
+claims = []
+OG.OpenGather.claim = lambda self: claims.append(1) or False
+R.can_receive = _real_can_receive
+try:
+    R.gs_exe = lambda: r"C:\x\gswin64c.exe"
+    mw._vprinter_start()
+    chk(claims, "X0 변환 도구가 있는 창은 받기 통로를 연다(검사 전제)", str(claims))
+    claims.clear()
+    R.gs_exe = lambda: None
+    mw._vprinter_start()
+    chk(not claims, "X1 변환 도구가 없는 창은 받기 통로를 차지하지 않는다 — 설치본 --printed 가 받는다", str(claims))
+    xp = spool / "20-0001 Microsoft PowerPoint - 계획.pptx.ps"; xp.write_bytes(b"%!PS")
+    n_msgs, n_conv = len(msgs), len(conv_calls)
+    mw._vprinter_receive()
+    chk(xp.exists() and len(conv_calls) == n_conv and len(msgs) == n_msgs,
+        "X2 변환 도구가 없는 창은 쌓인 PS 를 건드리지 않고 경고도 없다", "변환 %d→%d · 경고 %d→%d" % (n_conv, len(conv_calls), n_msgs, len(msgs)))
+    xp.unlink()
+    sys.frozen = True
+    try:
+        import viewer.settings_store as SS
+        _port = getattr(SS, "PORTABLE", False)
+        SS.PORTABLE = False
+        os.environ.pop("POLYPDF_PROFILE", None)
+        chk(not R.task_owner(), "X3 변환 도구가 없는 빌드(로컬 빌드)는 예약 작업을 자기 쪽으로 바꾸지 않는다")
+        R.gs_exe = lambda: r"C:\x\gswin64c.exe"
+        chk(R.task_owner(), "X4 변환 도구가 있는 설치본은 그대로 예약 작업 주인")
+        SS.PORTABLE = _port
+    finally:
+        del sys.frozen
+finally:
+    OG.OpenGather.claim, R.gs_exe = _claim, _gs
+    R.can_receive = lambda: True
 
 print("\n=== F. 도구 메뉴 ===")
 from PyQt6.QtGui import QAction
