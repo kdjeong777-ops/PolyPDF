@@ -478,9 +478,10 @@ def _ask_password(parent, title: str, text: str) -> str | None:
 class DigitalIdDialog(QDialog):
     """디지털 ID 관리 — 만들기·가져오기·백업·공개 인증서·기본·Hello 보관·서명 그림·지우기."""
 
-    def __init__(self, parent=None, runner=None, hello_ok: bool = False):
+    def __init__(self, parent=None, runner=None, hello_ok: bool = False, select_fp: str = ""):
         super().__init__(parent)
         self.setWindowTitle(tr("디지털 ID 관리"))
+        self.replaced = {}           # '내용 고치기' 로 바뀐 지문 {옛: 새} — 지금 서명에 잇는다(261031-7)
         self._run = runner or (lambda fn, _t: fn())
         self._hello_ok = bool(hello_ok)
         v = QVBoxLayout(self)
@@ -569,7 +570,7 @@ class DigitalIdDialog(QDialog):
         self.b_del.clicked.connect(self._delete)
         self.lst.currentRowChanged.connect(lambda _r: self._sync_buttons())
         self.resize(820, 420)
-        self.refresh()
+        self.refresh(select_fp)
 
     # ---- 목록 ----
     def refresh(self, select_fp: str = "") -> None:
@@ -930,6 +931,7 @@ class DigitalIdDialog(QDialog):
                 return
             # 창의 그림 = 옛 그림으로 채워 두었다 — 그대로·바꿈·뺌(None) 모두 창 값대로
             sign_store.replace_id(fp, pfx, info, image=dlg.image, keep_image=False, image_mm=dlg.sp_mm.value())
+            self.replaced[fp] = info.fp
             if self._hello_ok and dlg.chk_hello.isChecked():
                 self._store_hello(info.fp, new_pw)
             new_pw = None

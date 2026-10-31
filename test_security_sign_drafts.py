@@ -547,6 +547,66 @@ try:
     chk(not sdlg.DigitalIdDialog._can_reissue({"fp": "x", "source": "npki"})
         and not sdlg.DigitalIdDialog._can_reissue({"fp": "x", "kind": "win"}),
         "V7 공동인증서·Windows 저장소 ID 는 고치기 대상이 아니다")
+
+    # ── W (261031-7) 서명 그림은 디지털 ID 관리에서만 — 자리 옵션 '디지털 ID ▸ 디지털 ID 관리…' ─────
+    mw._sign_lock()
+    _Unlock.mode, _Unlock.pw = "password", PW
+    mw.action_sign_pdf(); spin(0.2)
+    mw._on_sign_region(QRectF(120 * mv._zoom, 120 * mv._zoom, 0, 0), view=mv)
+    spin(0.3)
+    wd = sdr.drafts(plain)[-1]
+    cur_w = mw._sign_current_fp()
+    wseen = {}
+
+    def _wspy(self, *a, **k):
+        wseen["top"] = [a_.text() for a_ in self.actions()]
+        for a_ in self.actions():
+            if a_.menu() is not None and a_.text() == "디지털 ID":
+                subs = [b for b in a_.menu().actions() if not b.isSeparator()]
+                wseen["sub_tail"] = [b.text() for b in subs[-2:]]
+                return subs[-1]
+        return None
+    opened = {}
+    _orig_iexec = sdlg.DigitalIdDialog.exec
+
+    def _mm_exec(self):
+        opened["fp"] = self._fp()
+        self.sp_mm.setValue(60)
+        return 0
+    try:
+        _QM.exec = _wspy
+        sdlg.DigitalIdDialog.exec = _mm_exec
+        mw._sign_draft_menu(mv, wd["id"], QPoint(0, 0))
+    finally:
+        _QM.exec = _orig_mexec
+        sdlg.DigitalIdDialog.exec = _orig_iexec
+    chk(not any("서명 그림 바꾸기" in t or "서명 그림 넣기" in t for t in wseen.get("top", []))
+        and wseen.get("sub_tail") == ["다른 디지털 ID 열기…", "디지털 ID 관리…"],
+        "W1 자리 옵션에 '서명 그림 바꾸기/넣기' 없음 · '디지털 ID ▸' 의 '다른 디지털 ID 열기…' 아래 '디지털 ID 관리…'", str(wseen))
+    wr = next(x for x in sdr.drafts(plain) if x["id"] == wd["id"])["rect"]
+    chk(opened.get("fp") == cur_w and abs((wr[2] - wr[0]) - 60 * MMPT) < 0.5 and abs(wr[0] - 120) < 0.5,
+        "W2 '디지털 ID 관리…' 는 지금 ID 를 골라 열고, 닫으면 폭 바뀐 클릭 자리를 새 실제 크기로", str((opened, wr)))
+    # W3 관리 창에서 지금 ID 를 '내용 고치기'(새로 발급) → 지금 서명이 새 지문으로 잇는다
+    mw._sign_draft_use_id(plain, sdr.drafts(plain), next(x for x in sdr.drafts(plain) if x["id"] == wd["id"]), info3.fp)
+
+    def _re_exec(self):
+        self._password_for = lambda fp: PW
+        self._backup = lambda: None
+        self._reissue()
+        return 0
+    sdlg.DigitalIdDialog.exec = _re_exec
+    sdlg._CreateIdDialog.exec = _edit_exec
+    picked["text"] = "고치기"
+    try:
+        mw._sign_manage_ids(info3.fp)
+    finally:
+        sdlg.DigitalIdDialog.exec = _orig_iexec
+        sdlg._CreateIdDialog.exec = _orig_cexec
+    newfp = getattr(mw, "_sign_cur_fp", "")
+    chk(st.get_id(info3.fp) is None and newfp and newfp != info3.fp and st.get_id(newfp) is not None
+        and info3.fp not in mw._sign_creds(),
+        "W3 관리 창에서 지금 ID 를 고쳐 발급하면 지금 서명 ID 를 새 지문으로 잇고 옛 열쇠는 버린다", newfp[:8])
+    mw._sign_drafts_clear(mv)
 except Exception:
     import traceback
     traceback.print_exc()

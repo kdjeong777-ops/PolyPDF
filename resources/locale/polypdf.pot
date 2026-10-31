@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-31 11:07+0900\n"
+"POT-Creation-Date: 2026-10-31 12:44+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4002,7 +4002,7 @@ msgstr ""
 msgid "다시 입력"
 msgstr ""
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "디지털 ID 관리…"
 msgstr ""
 
@@ -4160,7 +4160,7 @@ msgid "Windows Hello 확인"
 msgstr ""
 
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
-msgid "서명 그림 넣기…"
+msgid "그림만 넣기"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -4221,10 +4221,6 @@ msgstr ""
 msgid "이 비밀번호를 Windows Hello 로 다시 보관할까요?"
 msgstr ""
 
-#: viewer/sign_controller.py viewer/sign_draft_controller.py
-msgid "그림만 넣기"
-msgstr ""
-
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "인증서 파일을 읽지 못했습니다."
 msgstr ""
@@ -4258,7 +4254,12 @@ msgstr ""
 
 #: viewer/sign_controller.py
 #, python-brace-format
-msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 넣을까요?"
+msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 디지털 ID 관리에서 넣을까요?"
+msgstr ""
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 디지털 ID 관리에서 종이에 한 서명을 찍은 사진으로 넣을까요?"
 msgstr ""
 
 #: viewer/sign_controller.py
@@ -4275,11 +4276,6 @@ msgstr ""
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid "내 디지털 ID 로 한 {m}개는 내보낸 파일의 같은 자리에 다시 서명합니다(서명 시각은 지금, 겉모양은 지금 서명 설정).\n"
-msgstr ""
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 지금 넣을까요?"
 msgstr ""
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
@@ -4335,10 +4331,6 @@ msgstr ""
 msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr ""
 
-#: viewer/sign_draft_controller.py
-msgid "서명 그림 바꾸기…"
-msgstr ""
-
 #: viewer/sign_draft_controller.py viewer/widgets/capture_settings.py
 #: viewer/widgets/sign_dialogs.py
 msgid "이름"
@@ -4370,7 +4362,7 @@ msgid "전자서명 {a}개 · 그림만 {b}개 (p.{pages})"
 msgstr ""
 
 #: viewer/sign_draft_controller.py
-msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '서명 그림 넣기…' 로 넣은 뒤 다시 확정하세요."
+msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리…' 에서 넣은 뒤 다시 확정하세요."
 msgstr ""
 
 #: viewer/sign_draft_controller.py
@@ -4477,6 +4469,10 @@ msgstr ""
 #: viewer/sign_draft_controller.py
 #, python-brace-format
 msgid "그림을 넣었습니다: {name}"
+msgstr ""
+
+#: viewer/sign_draft_controller.py
+msgid "이 디지털 ID 에 서명 그림이 없습니다. 디지털 ID 관리에서 넣을까요?"
 msgstr ""
 
 #: viewer/sign_draft_controller.py

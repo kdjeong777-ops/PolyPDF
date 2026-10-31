@@ -274,12 +274,13 @@ class SignDraftMixin:
             id_acts[a] = e["fp"]
         sub.addSeparator()
         a_more = sub.addAction(tr("다른 디지털 ID 열기…"))
+        # 261031-7(사용자 지시): 서명 그림·폭·ID 내용은 디지털 ID 관리에서만 — 지금 ID 를 골라 연다(닫으면 이 서명에 반영)
+        a_manage = sub.addAction(tr("디지털 ID 관리…"))
         has_img = bool(sign_store.id_image_path(cur_fp))
         a_show_img = m.addAction(tr("서명 그림"))
         a_show_img.setCheckable(True)
         a_show_img.setChecked(has_img and (d["kind"] == "image" or bool(ap.get("show_image", True))))
         a_show_img.setEnabled(has_img and d["kind"] == "sign")
-        a_add_img = m.addAction(tr("서명 그림 바꾸기…") if has_img else tr("서명 그림 넣기…"))
         txt_acts = {}
         for k, label in (("show_name", tr("이름")), ("show_date", tr("날짜"))):
             a = m.addAction(label)
@@ -308,11 +309,8 @@ class SignDraftMixin:
         if got in id_acts:
             self._sign_draft_use_id(cur, ds, d, id_acts[got])
             return
-        if got is a_add_img:
-            if self._sign_id_image(cur_fp):
-                self._sign_resize_auto(mv, cur, cur_fp)       # 그림 비율이 바뀌었을 수 있다 — 클릭 자리는 새 실제 크기로
-            self._sign_pix_cache().clear()
-            self._sign_drafts_sync()
+        if got is a_manage:
+            self._sign_manage_ids(cur_fp)                     # 그림·폭이 바뀌었으면 클릭 자리는 새 실제 크기로(그 안에서)
             return
         if got is a_show_img or got in txt_acts:
             key = "show_image" if got is a_show_img else txt_acts[got]
@@ -336,8 +334,17 @@ class SignDraftMixin:
         elif got is a_img:
             d["kind"] = "image"
             d["fp"] = d.get("fp") or cur_fp
-            if not sign_store.id_image_path(d["fp"]) and not self._sign_id_image(d["fp"]):
-                return
+            if not sign_store.id_image_path(d["fp"]):
+                if QMessageBox.question(self, tr("그림만 넣기"), tr("이 디지털 ID 에 서명 그림이 없습니다. 디지털 ID 관리에서 넣을까요?")
+                                        ) != QMessageBox.StandardButton.Yes:
+                    return
+                d["fp"] = self._sign_manage_ids(d["fp"])
+                if not sign_store.id_image_path(d["fp"]):
+                    return
+                ds = sign_drafts.drafts(cur)                  # 관리 창이 자리 기록을 고쳤을 수 있다 — 다시 읽어 종류만 바꾼다
+                for x in ds:
+                    if x["id"] == d["id"]:
+                        x["kind"], x["fp"] = "image", d["fp"]
         else:
             return
         sign_drafts.set_drafts(cur, ds)
@@ -578,7 +585,7 @@ class SignDraftMixin:
         img_items = [(d["page"], tuple(d["rect"]), self._sign_draft_image(d) or sign_store.id_image_path(self._sign_current_fp()))
                      for d in images]
         if any(not ip for _p, _r, ip in img_items):
-            QMessageBox.information(self, tr("그림만 넣기"), tr("서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '서명 그림 넣기…' 로 넣은 뒤 다시 확정하세요."))
+            QMessageBox.information(self, tr("그림만 넣기"), tr("서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리…' 에서 넣은 뒤 다시 확정하세요."))
             return "fail"
         tmps = []
 

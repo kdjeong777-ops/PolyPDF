@@ -58,21 +58,45 @@ class SignMixin(SignDraftMixin):
 
     # ---- 메뉴 동작 -----------------------------------------------------------
     def action_digital_ids(self):
+        self._sign_manage_ids()
+
+    def _sign_manage_ids(self, fp: str = "") -> str:
+        """디지털 ID 관리 창 — `fp` 를 골라 연다. 서명 그림·폭·내용은 **여기서만** 고친다(261031-7 사용자 지시).
+        닫으면 지금 서명에 반영한다: '내용 고치기'(새로 발급)로 바뀐 지문은 새 지문으로 잇고, 클릭 자리는 새 실제 크기로,
+        자리 미리보기는 다시 그린다. 돌려주는 값 = `fp` 의 지금 지문(바뀌었으면 새 것)."""
+        from viewer import sign_drafts
         from viewer.widgets.sign_dialogs import DigitalIdDialog
-        dlg = DigitalIdDialog(self, runner=self._sign_bg, hello_ok=self._sign_hello_ready())
+        dlg = DigitalIdDialog(self, runner=self._sign_bg, hello_ok=self._sign_hello_ready(), select_fp=fp)
         try:
             dlg.exec()
+            rep = dict(dlg.replaced)
         finally:
             dlg.deleteLater()        # 안의 비밀번호 칸까지 — 창마다 남겨 두지 않는다(SOT §6.4, 261011-1)
 
-    def _sign_id_image(self, fp: str) -> bool:
-        """그 디지털 ID 의 서명 그림 넣기(261031-1 — ID 하나에 그림 하나). 넣었으면 True."""
-        from viewer.widgets.sign_dialogs import SignImageDialog
-        dlg = SignImageDialog(self, fp=fp)
-        try:
-            return dlg.exec() == dlg.DialogCode.Accepted and dlg.result_image is not None
-        finally:
-            dlg.deleteLater()
+        def _now(f):
+            while f in rep:
+                f = rep[f]
+            return f
+        if getattr(self, "_sign_cur_fp", "") in rep:
+            self._sign_cur_fp = _now(self._sign_cur_fp)
+        self._sign_creds()                               # 지워지거나 바뀐 ID 의 열쇠는 버린다
+        for mv in (getattr(self, "_mv", None) or [getattr(self, "main_view", None)]):
+            cur = mv.current_file() if mv is not None else None
+            if not cur or not sign_drafts.drafts(cur):
+                continue
+            ds = sign_drafts.drafts(cur)
+            for d in ds:
+                if d.get("fp") in rep:
+                    d["fp"] = _now(d["fp"])
+            sign_drafts.set_drafts(cur, ds)
+            if hasattr(self, "_sign_resize_auto"):
+                for f in {self._sign_view_fp()} | {d.get("fp") for d in ds if d["kind"] == "image" and d.get("fp")}:
+                    self._sign_resize_auto(mv, str(cur), f)
+        if hasattr(self, "_sign_pix_cache"):
+            self._sign_pix_cache().clear()
+        if hasattr(self, "_sign_drafts_sync"):
+            self._sign_drafts_sync()
+        return _now(fp)
 
     # ---- 서명 시작 확인 — 한 번 열고 확정·취소까지 (SOT §3.3·§6.4, 261031-1) -----------
     def _sign_lock(self) -> None:
@@ -225,24 +249,32 @@ class SignMixin(SignDraftMixin):
         self._sign_cur_fp = fp
         if not sign_store.id_image_path(fp):
             name = (sign_store.get_id(fp) or {}).get("name", "")
+            # 서명 그림은 디지털 ID 관리 창에서만 넣고 바꾼다(261031-7 사용자 지시)
             if kind == "image":
-                if QMessageBox.question(self, tr("그림만 넣기"), tr("디지털 ID '{name}' 에 서명 그림이 없습니다. 지금 넣을까요?").format(name=name)
-                                        ) != QMessageBox.StandardButton.Yes or not self._sign_id_image(fp):
+                if QMessageBox.question(self, tr("그림만 넣기"), tr("디지털 ID '{name}' 에 서명 그림이 없습니다. 디지털 ID 관리에서 넣을까요?").format(name=name)
+                                        ) != QMessageBox.StandardButton.Yes:
+                    return
+                fp = self._sign_manage_ids(fp)
+                if not sign_store.id_image_path(fp):
                     return
             elif bool((sign_store.load().get("appearance") or {}).get("show_image", True)):
                 box = QMessageBox(self)
                 box.setIcon(QMessageBox.Icon.Question)
                 box.setWindowTitle(tr("서명"))
-                box.setText(tr("디지털 ID '{name}' 에 서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 넣을까요?").format(name=name))
-                b_make = box.addButton(tr("서명 그림 넣기…"), QMessageBox.ButtonRole.AcceptRole)
+                box.setText(tr("디지털 ID '{name}' 에 서명 그림이 없습니다. 디지털 ID 관리에서 종이에 한 서명을 찍은 사진으로 넣을까요?").format(name=name))
+                b_make = box.addButton(tr("디지털 ID 관리…"), QMessageBox.ButtonRole.AcceptRole)
                 b_skip = box.addButton(tr("그림 없이"), QMessageBox.ButtonRole.ActionRole)
                 box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
                 box.exec()
                 c = box.clickedButton()
                 if c is b_make:
-                    self._sign_id_image(fp)
+                    fp = self._sign_manage_ids(fp)
                 elif c is not b_skip:
                     return
+            if not self._sign_creds():               # 관리 창에서 그 ID 를 새로 발급했다 — 새 ID 를 다시 연다
+                if not self._sign_unlock():
+                    return
+                self._sign_cur_fp = self._sign_current_fp()
         # 3단계(SOT §3.7): 빈 서명 칸이 있으면 먼저 묻는다 — 끌기·우클릭은 _on_sign_region 이 칸 안인지 본다
         from viewer import sign_core as _sc
         empties = _sc.empty_fields(mv._doc.doc)

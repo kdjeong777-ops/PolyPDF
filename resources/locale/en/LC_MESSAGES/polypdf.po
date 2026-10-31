@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-31 11:07+0900\n"
+"POT-Creation-Date: 2026-10-31 12:44+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4158,7 +4158,7 @@ msgstr "No digital ID opens with this password. Enter the password again or crea
 msgid "다시 입력"
 msgstr "Enter Again"
 
-#: viewer/sign_controller.py
+#: viewer/sign_controller.py viewer/sign_draft_controller.py
 msgid "디지털 ID 관리…"
 msgstr "Manage Digital IDs…"
 
@@ -4316,8 +4316,8 @@ msgid "Windows Hello 확인"
 msgstr "Windows Hello Verification"
 
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
-msgid "서명 그림 넣기…"
-msgstr "Add Signature Image…"
+msgid "그림만 넣기"
+msgstr "Insert Image Only"
 
 #: viewer/sign_controller.py
 msgid "그림 없이"
@@ -4378,10 +4378,6 @@ msgstr "Windows Hello"
 msgid "이 비밀번호를 Windows Hello 로 다시 보관할까요?"
 msgstr "Store this password with Windows Hello again?"
 
-#: viewer/sign_controller.py viewer/sign_draft_controller.py
-msgid "그림만 넣기"
-msgstr "Insert Image Only"
-
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "인증서 파일을 읽지 못했습니다."
 msgstr "Could not read the certificate file."
@@ -4415,8 +4411,13 @@ msgstr "Signing again ({n})"
 
 #: viewer/sign_controller.py
 #, python-brace-format
-msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 종이에 한 서명을 찍은 사진으로 넣을까요?"
-msgstr "Digital ID '{name}' has no signature image. Add one from a photo of your signature on paper?"
+msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 디지털 ID 관리에서 넣을까요?"
+msgstr "Digital ID '{name}' has no signature image. Add one in Manage Digital IDs?"
+
+#: viewer/sign_controller.py
+#, python-brace-format
+msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 디지털 ID 관리에서 종이에 한 서명을 찍은 사진으로 넣을까요?"
+msgstr "Digital ID '{name}' has no signature image. Add one from a photo of your signature on paper in Manage Digital IDs?"
 
 #: viewer/sign_controller.py
 #, python-brace-format
@@ -4433,11 +4434,6 @@ msgstr "Could not save: {e}"
 #, python-brace-format
 msgid "내 디지털 ID 로 한 {m}개는 내보낸 파일의 같은 자리에 다시 서명합니다(서명 시각은 지금, 겉모양은 지금 서명 설정).\n"
 msgstr "The {m} signature(s) made with your digital ID will be signed again at the same places in the exported file (signing time is now; the appearance uses your current signature settings).\n"
-
-#: viewer/sign_controller.py
-#, python-brace-format
-msgid "디지털 ID '{name}' 에 서명 그림이 없습니다. 지금 넣을까요?"
-msgstr "Digital ID '{name}' has no signature image. Add one now?"
 
 #: viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 #, python-brace-format
@@ -4492,10 +4488,6 @@ msgstr "Signature Places"
 msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr "Remove all signature places of this file?"
 
-#: viewer/sign_draft_controller.py
-msgid "서명 그림 바꾸기…"
-msgstr "Change Signature Image…"
-
 #: viewer/sign_draft_controller.py viewer/widgets/capture_settings.py
 #: viewer/widgets/sign_dialogs.py
 msgid "이름"
@@ -4527,8 +4519,8 @@ msgid "전자서명 {a}개 · 그림만 {b}개 (p.{pages})"
 msgstr "{a} digital signature(s) · {b} image(s) only (p.{pages})"
 
 #: viewer/sign_draft_controller.py
-msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '서명 그림 넣기…' 로 넣은 뒤 다시 확정하세요."
-msgstr "An image-only place has no signature image — add one with 'Add Signature Image…' in its right-click menu, then confirm again."
+msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리…' 에서 넣은 뒤 다시 확정하세요."
+msgstr "An image-only place has no signature image — add one via its right-click menu 'Digital ID ▸ Manage Digital IDs…', then confirm again."
 
 #: viewer/sign_draft_controller.py
 msgid "다른 이름으로 저장"
@@ -4635,6 +4627,10 @@ msgstr "Signed: {name}"
 #, python-brace-format
 msgid "그림을 넣었습니다: {name}"
 msgstr "Images inserted: {name}"
+
+#: viewer/sign_draft_controller.py
+msgid "이 디지털 ID 에 서명 그림이 없습니다. 디지털 ID 관리에서 넣을까요?"
+msgstr "This digital ID has no signature image. Add one in Manage Digital IDs?"
 
 #: viewer/sign_draft_controller.py
 #, python-brace-format
@@ -12456,4 +12452,10 @@ msgstr "Getting Started"
 
 #~ msgid "Windows Hello 로 서명"
 #~ msgstr "Sign with Windows Hello"
+
+#~ msgid "서명 그림 넣기…"
+#~ msgstr "Add Signature Image…"
+
+#~ msgid "서명 그림 바꾸기…"
+#~ msgstr "Change Signature Image…"
 
