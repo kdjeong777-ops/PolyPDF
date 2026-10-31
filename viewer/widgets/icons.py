@@ -261,9 +261,93 @@ def _fav_search(p, c, dark=False):
     p.drawLine(QPointF(10.0, 10.0), QPointF(14.2, 14.2))
 
 
+# 261031-13(디자인 SOT §2.9.7·§4.5, 사용자 결정 '열린 폴더+↑ / 플로피 / 문+→'): 파일 탭 그림
+OK_GREEN = {False: "#2e9b4f", True: "#4cc06f"}       # 새 창 ⊕·인쇄 표시등
+EXIT_RED = ACCENT["stop"]                             # 종료 → (정지 ■ 와 같은 빨강)
+FILE_GRAY = {False: "#5f6b78", True: "#c4ccd6"}      # 인쇄 몸체·문 테
+PAPER_WHITE = {False: "#ffffff", True: "#f2f2f2"}
+for _k in ("open", "new_window", "save", "print", "exit"):
+    ACCENT[_k] = ACCENT["play"]
+
+
+def _open(p, c, dark=False):
+    """열린 노란 폴더(앞판이 비스듬히) + 파란 ↑."""
+    back, front = FAV_YELLOW[bool(dark)]
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(back))
+    p.drawRoundedRect(QRectF(1.0, 2.5, 6.0, 3.0), 1.0, 1.0)
+    p.drawRoundedRect(QRectF(1.0, 4.0, 12.5, 10.5), 1.4, 1.4)
+    p.setBrush(QColor(front))
+    p.drawPolygon(QPolygonF([QPointF(3.6, 7.0), QPointF(15.5, 7.0), QPointF(13.0, 14.5), QPointF(1.0, 14.5)]))
+    p.setPen(QPen(c, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(11.5, 6.5), QPointF(11.5, 1.2))
+    p.drawLine(QPointF(11.5, 1.2), QPointF(9.2, 3.5))
+    p.drawLine(QPointF(11.5, 1.2), QPointF(13.8, 3.5))
+
+
+def _new_window(p, c, dark=False):
+    """흰 창 + 파란 제목줄 + 오른쪽 아래 초록 ⊕."""
+    d = bool(dark)
+    p.setPen(QPen(c, 1.2))
+    p.setBrush(QColor(PAPER_WHITE[d]))
+    p.drawRoundedRect(QRectF(1.0, 2.0, 12.0, 10.5), 1.2, 1.2)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawRoundedRect(QRectF(1.0, 2.0, 12.0, 3.0), 1.2, 1.2)
+    p.setBrush(QColor(OK_GREEN[d]))
+    p.drawEllipse(QPointF(12.3, 12.3), 3.5, 3.5)
+    p.setPen(QPen(QColor("#ffffff"), 1.5))
+    p.drawLine(QPointF(12.3, 10.4), QPointF(12.3, 14.2))
+    p.drawLine(QPointF(10.4, 12.3), QPointF(14.2, 12.3))
+
+
+def _save(p, c, dark=False):
+    """파란 플로피 — 흰 라벨(파란 셔터 창)·아래 흰 칸."""
+    w = QColor(PAPER_WHITE[bool(dark)])
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawPolygon(QPolygonF([QPointF(1.5, 1.5), QPointF(12.5, 1.5), QPointF(14.5, 3.5), QPointF(14.5, 14.5), QPointF(1.5, 14.5)]))
+    p.setBrush(w)
+    p.drawRect(QRectF(4.0, 1.5, 7.0, 4.5))
+    p.setBrush(c)
+    p.drawRect(QRectF(8.4, 2.3, 1.6, 2.9))
+    p.setBrush(w)
+    p.drawRoundedRect(QRectF(3.5, 8.5, 9.0, 6.0), 0.8, 0.8)
+
+
+def _print(p, c, dark=False):
+    """회색 프린터 + 흰 종이(위·아래, 파란 글 줄) + 초록 표시등."""
+    d = bool(dark)
+    g, w = QColor(FILE_GRAY[d]), QColor(PAPER_WHITE[d])
+    p.setPen(QPen(g, 1.0)); p.setBrush(w)
+    p.drawRect(QRectF(4.0, 1.0, 8.0, 4.5))
+    p.setPen(Qt.PenStyle.NoPen); p.setBrush(g)
+    p.drawRoundedRect(QRectF(1.0, 5.0, 14.0, 7.0), 1.5, 1.5)
+    p.setPen(QPen(g, 1.0)); p.setBrush(w)
+    p.drawRect(QRectF(4.0, 9.5, 8.0, 5.5))
+    p.setPen(QPen(c, 1.0))
+    p.drawLine(QPointF(5.5, 11.5), QPointF(10.5, 11.5))
+    p.drawLine(QPointF(5.5, 13.3), QPointF(9.0, 13.3))
+    p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(OK_GREEN[d]))
+    p.drawEllipse(QPointF(12.6, 7.3), 0.9, 0.9)
+
+
+def _exit(p, c, dark=False):
+    """회색 문 테 + 밖으로 나가는 빨간 →."""
+    d = bool(dark)
+    p.setPen(QPen(QColor(FILE_GRAY[d]), 1.4)); p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPolyline(QPolygonF([QPointF(8.5, 4.0), QPointF(8.5, 1.5), QPointF(1.5, 1.5), QPointF(1.5, 14.5),
+                              QPointF(8.5, 14.5), QPointF(8.5, 12.0)]))
+    p.setPen(QPen(QColor(EXIT_RED[d]), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(5.0, 8.0), QPointF(14.5, 8.0))
+    p.drawLine(QPointF(14.5, 8.0), QPointF(11.8, 5.3))
+    p.drawLine(QPointF(14.5, 8.0), QPointF(11.8, 10.7))
+
+
 _COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera,
-               "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search}
-_COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search"}        # 두 색 이상 — 테마도 넘긴다
+               "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
+               "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
+_COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
 
 # 261025-10(디자인 SOT §2.7): 글자 + 메뉴 단추의 드롭다운 표시는 **Qt 메뉴 화살표 하나**(오른쪽 아래) — 글자에 ▾ 를 붙이지 않는다.
 #   글자가 화살표에 붙지 않게 오른쪽 안쪽 여백만 준다(바탕·테두리는 기본 스타일 그대로).

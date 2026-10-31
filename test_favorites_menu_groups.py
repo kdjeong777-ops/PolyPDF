@@ -152,8 +152,8 @@ try:
     _iw = mw._ribbon.row("fav").iconSize().width()
     from viewer.widgets.icons import FAV_ICON_PX
     chk(_iw == FAV_ICON_PX and mw._ribbon.row("fav").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        and mw._ribbon.row("file").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextOnly,
-        "C 즐겨찾기 줄만 작은 아이콘 + 글자(다른 탭은 글자만)", str(_iw))
+        and mw._ribbon.row("view").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextOnly,
+        "C 즐겨찾기 줄은 작은 아이콘 + 글자(보기 탭 등은 글자만 — 파일 탭도 그림 줄, 261031-13)", str(_iw))
     chk(items(mw.menu_fav_files) == ["(등록된 항목 없음)", "항목 관리..."], "B 빈 목록은 '(등록된 항목 없음)'", str(items(mw.menu_fav_files)))
 
     # E 기타 — 법령 키만 있으면 법령 구역만

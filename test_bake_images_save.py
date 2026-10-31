@@ -134,7 +134,7 @@ try:
     from viewer import app as appmod
     s_app = inspect.getsource(appmod)
     i_file = s_app.find('m_file = bar.addMenu')
-    seg_f = s_app[i_file:i_file + 2000]
+    seg_f = s_app[i_file:s_app.find('self.menu_favorites = bar.addMenu', i_file)]   # 261031-13: 파일 메뉴 절 전체(길이 고정 대신)
     for label in ('tr("저장")', "다른 이름으로 저장", "평탄화해서 내보내기"):   # 261011-2 이름(§4.7.16)
         chk(label in seg_f, "⑦ 파일 메뉴에 '%s'" % label)
     chk("_force_save_as" in s_app,

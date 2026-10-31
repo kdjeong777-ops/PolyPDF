@@ -1669,10 +1669,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._cmds = {}                          # 261024-1: 명령 id → QAction(디자인 SOT §2.9)
         m_file = bar.addMenu(tr("파일(&F)"))
         # 261021-5(입력 SOT §3.2, 사용자 지시): 크롬식 — 새 창 Ctrl+N. 키는 항목에 걸어 Qt 가 오른쪽 칸을 채운다(디자인 SOT §2.9.2)
+        # 261031-13(디자인 SOT §2.9.7, 사용자 지시): 탭에서는 바깥 왼쪽 '열기' 그림 + 새 창·폴더·파일 그림만 단추
+        from viewer.widgets.ribbon import RibbonIconMark
+        self._file_marks = {"open": RibbonIconMark(self, None, tr("열기")), "save": RibbonIconMark(self, None, tr("저장"))}
+        m_file.addAction(self._file_marks["open"])
         a_new_win = self._sc_act_new_window = QAction(tr("새 창"), self)
         a_new_win.triggered.connect(self.action_new_window)
         m_file.addAction(a_new_win)
-        m_file.addSeparator()
         a_open = self._sc_act_open = QAction(tr("폴더 열기..."), self)
         a_open.triggered.connect(self.action_open_folder)
         m_file.addAction(a_open)
@@ -1682,23 +1685,26 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_open_file.triggered.connect(self.action_open_pdf)
         m_file.addAction(a_open_file)
         # 261021-5(입력 SOT §3.2, 사용자 결정): 새로고침 Ctrl+R — 포커스가 있는 책갈피창의 🔄 와 같은 일
+        #   261031-13(사용자 지시): 메뉴·탭에서는 뺐다 — 키는 창에 붙여 그대로 산다
         a_refresh = self._sc_act_refresh = QAction(tr("새로고침"), self)
         a_refresh.triggered.connect(self.action_refresh)
-        m_file.addAction(a_refresh)
+        self.addAction(a_refresh)
 
         # 260930-2(마스터 §4.7.13, 사용자 요청): 저장을 **파일 메뉴에도** 둔다.
         #   종전에는 책갈피창의 💾 단추 하나뿐이라 찾기 어려웠다.
         m_file.addSeparator()
         # 261008-1(§4.7.13, 사용자 결정): 이름·순서를 책갈피창 우클릭 메뉴와 같게 맞춘다.
+        #   261031-13(디자인 SOT §2.9.7): 탭에서는 바깥 왼쪽 '저장' 그림 + 저장(일반)·다른 이름·평탄화·변환
+        m_file.addAction(self._file_marks["save"])
         a_save_as = QAction(tr("다른 이름으로 저장..."), self)
-        a_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 <원본>_edited.pdf 로 저장합니다."))
+        a_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf)."))
         a_save_as.triggered.connect(self._action_save_as)
-        m_file.addAction(a_save_as)
         # 261011-2(§4.7.16): '저장(PolyPDF용)' → '저장' — 다른 뷰어에서도 보이게 PDF 에 사본을 넣는다
         a_save = self._sc_act_save = QAction(tr("저장"), self)      # 261021-5: Ctrl+S(입력 SOT §3.2)
         a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
         a_save.triggered.connect(lambda: self.action_save())       # 261024-5: 포커스 책갈피창(Ctrl+R 과 같게)
         m_file.addAction(a_save)
+        m_file.addAction(a_save_as)                 # 261031-13: 차례는 책갈피창 우클릭 저장 그룹과 같게(저장 · 다른 이름)
         a_flat = QAction(tr("평탄화해서 내보내기..."), self)     # 261011-2: 옛 '저장(일반뷰어용)...' — 새 파일로만
         a_flat.setToolTip(tr("꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."))
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
@@ -1725,13 +1731,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_quit.triggered.connect(self.close)
         m_file.addAction(a_quit)
         for _cid, _a in (("file.new_window", a_new_win), ("file.open_folder", a_open),
-                         ("file.open_file", a_open_file), ("file.refresh", a_refresh),
+                         ("file.open_file", a_open_file),
                          ("file.save_as", a_save_as), ("file.save", a_save), ("file.flatten", a_flat),
                          ("file.print", a_print), ("file.recent", self.menu_recent.menuAction()),
                          ("file.recent_files", self.menu_recent_files.menuAction()), ("file.quit", a_quit)):
             self._reg_cmd(_cid, _a)
         self._reg_cmd("file.export", self.act_export, short=tr("변환"),
                       tip=tr("PDF 를 Word·한글·PowerPoint·Excel·이미지·텍스트로 변환"))
+        # 261031-13(디자인 SOT §2.9.7): 파일 탭에서만 쓰는 짧은 이름 — 메뉴 글자·모음 단추는 그대로
+        a_save.setProperty("ribbonShort", tr("일반"))
+        a_save_as.setProperty("ribbonShort", tr("다른 이름"))
+        a_flat.setProperty("ribbonShort", tr("평탄화"))
+        self._file_icon_acts = ((a_new_win, "new_window"), (a_open, "fav_folder"), (a_open_file, "fav_file"),
+                                (a_print, "print"), (a_quit, "exit"))
 
         # v1.6.1 F1: 즐겨찾기 메뉴 (파일 ↔ 보기 사이)
         self.menu_favorites = bar.addMenu(tr("즐겨찾기(&V)"))
@@ -1917,6 +1929,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from PyQt6.QtCore import QSize as _QS
         rb.row("fav").setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         rb.row("fav").setIconSize(_QS(_FIP, _FIP))
+        # 261031-13(디자인 SOT §2.9.7): 파일 줄도 — 그림만 단추·바깥 그림, 저장 무리는 짧은 이름
+        rb.row("file").setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        rb.row("file").setIconSize(_QS(_FIP, _FIP))
+        rb.row("file").use_short = True
+        rb._fill_from_menu("file")                  # 줄 모양을 바꾼 뒤 다시 채운다 — 그림만 단추는 채울 때 정해진다
+        rb.row("tools").use_short = True            # 261031-16(§2.9.1): 도구 탭도 짧은 이름
+        rb.row("tools")._apply_short()
         self._set_fav_icons()
         self._tab_menus = {"file": m_file, "fav": self.menu_favorites, "view": m_view, "tools": m_tools, "help": m_help}
         # 메뉴 막대를 화면에서 뗐으므로 메뉴 항목에 건 단축키(Ctrl+S 등)는 창에 붙여야 산다 — 보이는 위젯의 액션만 키를 받는다
@@ -9689,8 +9708,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._set_fav_icons()
 
     def _set_fav_icons(self) -> None:
-        """261031-12(디자인 SOT §2.9.5·§4.5, 사용자 결정 '시안 C'): 즐겨찾기 탭 종류 아이콘 — 테마가 바뀌면 다시 그린다."""
+        """261031-12(디자인 SOT §2.9.5·§4.5, 사용자 결정 '시안 C'): 즐겨찾기 탭 종류 아이콘 — 테마가 바뀌면 다시 그린다.
+        261031-13(§2.9.7): 파일 탭 그림(열기·저장 바깥 표시, 새 창·폴더·파일·인쇄·종료 그림만 단추)도 여기서."""
         from viewer.widgets.icons import color_icon, FAV_ICON_PX
+        for a, name in getattr(self, "_file_icon_acts", ()):
+            a.setIcon(color_icon(name, size=FAV_ICON_PX))
+            a.setProperty("ribbonIconOnly", True)
+        marks = getattr(self, "_file_marks", None)
+        if marks:
+            for key, mk in marks.items():
+                mk._icon_fn = (lambda nm=key: color_icon(nm, size=FAV_ICON_PX))
+                mk.refresh()
         if getattr(self, "menu_fav_folders", None) is None:
             return
         for menu, name in ((self.menu_recent, "fav_folder"), (self.menu_fav_folders, "fav_folder"),

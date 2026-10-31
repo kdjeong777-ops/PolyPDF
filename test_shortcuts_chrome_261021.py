@@ -82,10 +82,14 @@ try:
     # B — 파일 메뉴
     m_file = next(x.menu() for x in mw.menuBar().actions() if x.text().startswith("파일"))
     acts = {x.text().split("\t")[0]: x for x in m_file.actions() if not x.isSeparator()}
-    for name, key in (("새 창", "Ctrl+N"), ("저장", "Ctrl+S"), ("새로고침", "Ctrl+R")):
+    for name, key in (("새 창", "Ctrl+N"), ("저장", "Ctrl+S")):
         x = acts.get(name)
         chk(x is not None and x.shortcut().toString() == key, "B1 파일 메뉴 '%s' 에 %s(오른쪽 칸)" % (name, key),
             str(x.shortcut().toString() if x else list(acts)))
+    # 261031-13(디자인 SOT §2.9.7, 사용자 지시): 새로고침은 파일 메뉴·탭에서 뺐다 — Ctrl+R 은 창에 붙어 그대로(E)
+    chk("새로고침" not in acts and mw._sc_act_refresh in mw.actions()
+        and mw._sc_act_refresh.shortcut().toString() == "Ctrl+R",
+        "B1 새로고침은 파일 메뉴에 없고 Ctrl+R 은 창에", str(list(acts)))
     chk("종료(&X)" in acts and acts["종료(&X)"].shortcut().toString() == "Ctrl+Q",
         "B2 종료 항목 종료(&X)·Ctrl+Q(탭 단추 글은 니모닉 없음)", str(list(acts)))
     chk(m_file.title() == "파일(&F)", "B3 파일 메뉴 니모닉 F")

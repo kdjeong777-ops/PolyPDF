@@ -135,6 +135,7 @@ class RibbonRow(QToolBar):
         self.setFloatable(False)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.dark = False
+        self.use_short = False           # 261031-13(§2.9.7): 이 줄에서는 액션의 `ribbonShort` 를 단추 글로(파일·도구 탭)
         self._tips = _TipFilter(self)
 
     def _spacer(self) -> QWidget:
@@ -236,7 +237,19 @@ class RibbonRow(QToolBar):
         for s, on in show.items():
             if s.isVisible() != on:
                 s.setVisible(on)
+        self._apply_short()
         self._fit_spacers()                 # 단추가 숨거나 보이면 폭도 다시 잰다
+
+    def _apply_short(self) -> None:
+        """261031-13(디자인 SOT §2.9.7): 탭에서만 쓰는 짧은 이름 — 액션이 바뀌면 단추가 글을 되돌리므로 그때마다 다시 넣는다."""
+        if not self.use_short:
+            return
+        for a in self.actions():
+            short = a.property("ribbonShort")
+            if short:
+                w = self.widgetForAction(a)
+                if isinstance(w, QToolButton) and w.text() != short:
+                    w.setText(short)
 
     def buttons(self) -> list:
         """보이는 단추(빈 칸 제외) — 차례대로."""
