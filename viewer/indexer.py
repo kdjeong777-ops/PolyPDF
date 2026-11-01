@@ -263,6 +263,10 @@ class PdfIndex:
                     "text, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')")
     _FTS_FLAT = ("CREATE VIRTUAL TABLE IF NOT EXISTS pages2 USING fts5("
                  "flat, text UNINDEXED, file_id UNINDEXED, page_index UNINDEXED, tokenize='trigram')")
+    # 261102-1(검색창 SOT §3.1): 배경에서 이어 하는 이전의 자리 — 이름별 마지막으로 끝낸 rowid
+    _MIGRATE_STATE = "CREATE TABLE IF NOT EXISTS migrate_state(name TEXT PRIMARY KEY, pos INTEGER NOT NULL)"
+    FLAT_REDO = "flat6"      # `flat` 을 원문에서 다시 만들기(스키마 5→6)
+    FLAT_CHUNK = 512         # 한 쓰기 트랜잭션에 보는 행 수(잠금 시간 상한 — WRITE_CHUNK 와 같은 생각)
 
     def _init_schema(self):
         self.migrated = False
@@ -369,13 +373,18 @@ class PdfIndex:
                     self.conn.execute("DELETE FROM page_tables")
                 except Exception:
                     pass
-            if uv < 6:
+            if uv < 5:
                 # 261019-4: 옛 표의 파일은 다음 배경 색인 때 새 표로 다시 읽는다(옛 글은 그때까지 그대로 검색된다)
-                # 261101-1: 6 도 같다 — `flat` 을 하이픈 뺀 꼴로 다시 적는다
                 try:
                     self.conn.execute("UPDATE files SET size = -1")
                 except Exception:
                     pass
+            elif uv < 6:
+                # 261102-1(검색창 SOT §3.1): 6 은 `flat` 만 바뀐다 — PDF 를 다시 읽지 않고 저장한 원문에서 다시 만든다.
+                #   여기서는 표식만 적고, 일은 색인 일감이 배경에서 한다(`finish_migration`). 종전 `size=-1` 은
+                #   업데이트 뒤 첫 실행에 이미 색인된 파일 전부(사용자 4,622개·15.8GB)를 다시 읽었다.
+                self.conn.execute(self._MIGRATE_STATE)
+                self.conn.execute("INSERT OR REPLACE INTO migrate_state(name, pos) VALUES(?, 0)", (self.FLAT_REDO,))
             self.conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
         self.conn.commit()
 
@@ -580,6 +589,41 @@ class PdfIndex:
             return (row[0] if row and row[0] else text)
         except Exception:
             return text
+
+    def finish_migration(self, should_cancel: Callable[[], bool] | None = None) -> bool:
+        """261102-1(검색창 SOT §3.1): 남은 `flat` 다시 만들기를 잇는다 — PDF 를 열지 않고 저장한 원문(`text`)에서.
+
+        rowid 순서로 `FLAT_CHUNK` 행씩, 바뀐 행만 고치고 끝낸 자리를 같은 트랜잭션에 적는다(취소·종료 뒤 그 자리부터).
+        색인 일감이 파일 색인 **앞에** 부른다. 끝났거나 할 일이 없으면 True, 취소되면 False."""
+        try:
+            row = self.conn.execute("SELECT pos FROM migrate_state WHERE name=?", (self.FLAT_REDO,)).fetchone()
+        except sqlite3.OperationalError:
+            return True                        # 표가 없다 = 이전할 것이 없던 DB
+        if row is None:
+            return True
+        pos = int(row[0])
+        while True:
+            if should_cancel and should_cancel():
+                return False
+            rows = self.conn.execute(
+                "SELECT rowid, flat, text FROM pages2 WHERE rowid > ? ORDER BY rowid LIMIT ?",
+                (pos, self.FLAT_CHUNK)).fetchall()
+            if not rows:
+                break
+            upd = []
+            for rid, flat, text in rows:
+                f2 = flat_text(text)
+                if f2 != flat:
+                    upd.append((f2, rid))
+            pos = int(rows[-1][0])
+            with self.conn:
+                if upd:
+                    self.conn.executemany("UPDATE pages2 SET flat=? WHERE rowid=?", upd)
+                self.conn.execute("UPDATE migrate_state SET pos=? WHERE name=?", (pos, self.FLAT_REDO))
+            self._pace()
+        with self.conn:
+            self.conn.execute("DELETE FROM migrate_state WHERE name=?", (self.FLAT_REDO,))
+        return True
 
     def index_file(self, file_path: Path):
         """단일 PDF 인덱싱(또는 재인덱싱)."""

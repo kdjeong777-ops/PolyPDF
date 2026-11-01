@@ -231,6 +231,7 @@ def serve(address: str) -> None:
             return _index_file(*a, **k)
         idx.index_file = _counted
         try:
+            idx.finish_migration(cancel)                               # 261102-1: 남은 `flat` 다시 만들기 먼저(검색창 SOT §3.1)
             files = job.get("files")
             if files:
                 n = len(files)

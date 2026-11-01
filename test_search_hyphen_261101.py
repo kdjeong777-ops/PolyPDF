@@ -3,7 +3,7 @@
 
 A. 색인 검색: `laboratory` 가 `labora-\\ntory` 를, `coarse graded`·`coarsegraded`·`coarse-graded` 가 `coarse-\\ngraded` 를 찾는다
 B. 본문 강조(`pdf_doc.flat_hits`)도 같은 꼴로 칠한다
-C. 스키마 5 색인은 6 으로 올리며 파일마다 다시 색인 표시(size=-1)를 한다 — 옛 글은 그대로 검색된다
+C. 스키마 5 색인은 6 으로 올리며 원문에서 flat 을 고친다(261102-1 — 파일을 다시 읽지 않는다) — 고치기 전에도 옛 글은 검색된다
 """
 import os, sys, tempfile, sqlite3
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -58,8 +58,11 @@ c.execute("INSERT INTO pages2(flat, text, file_id, page_index) VALUES(?, ?, 1, 0
 c.execute("PRAGMA user_version = 5"); c.commit(); c.close()
 ix = PdfIndex(old)
 sz = ix.conn.execute("SELECT size FROM files").fetchone()[0]
-chk(sz == -1, "C1 스키마 5 → 6 에서 파일마다 다시 색인 표시", str(sz))
-chk(len(ix.search("옛 색인의 글")) == 1, "C2 다시 색인 전에도 옛 글은 검색된다")
+# 261102-1: 5→6 은 PDF 를 다시 읽지 않고 저장한 원문에서 flat 을 고친다(test_index_flat_migrate_261102)
+chk(sz == 123, "C1 스키마 5 → 6 은 파일을 다시 읽게 하지 않는다", str(sz))
+chk(len(ix.search("옛 색인의 글")) == 1, "C2 고치기 전에도 옛 글은 검색된다")
+ix.finish_migration()
+chk(len(ix.search("coarse graded")) == 1, "C3 원문에서 고친 flat 으로 하이픈 없이도 찾는다")
 ix.close()
 
 print()

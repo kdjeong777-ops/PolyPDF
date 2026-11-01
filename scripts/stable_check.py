@@ -27,7 +27,10 @@ from pathlib import Path
 PUBLIC = Path(__file__).resolve().parents[1]
 WORK = PUBLIC.parent
 LT = Path(os.environ["APPDATA"]) / "LocalTools"
-REAL = LT / "PolyPDF"                          # 사용자 실제 설정 — 읽기만
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import real_profile                            # noqa: E402
+# 사용자 실제 설정 — 읽기만. 261102-1: MSIX 셸이면 관리 공유로(복사본과 섞인 보기를 진짜로 믿지 않게, `real_profile`)
+REAL, REAL_OK = real_profile.real_dir()
 WATCH = ("settings.json", "index.db", "index.db-wal", "error.log", "crash.log")
 FRESH_SECONDS = 30                             # 새 프로필 첫 실행을 지켜보는 시간
 ENTRY = re.compile(r"^--- (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)")
@@ -196,7 +199,7 @@ def cmd_report(out: Path, online: bool) -> int:
         prof_rows.append((cfg.name, len(errs), len(fatal), sj, db, errs, fatal))
         if errs or fatal or sj.startswith("**") or not (db == "없음" or db.startswith("ok")):
             bad.append(cfg.name)
-    real_db = check_db_copy(REAL / "index.db")
+    real_db = check_db_copy(REAL / "index.db") if REAL_OK else "확인 안 함 — " + real_profile.MIXED_MSG
     real_fatal = crash_entries(REAL / "crash.log", since)                    # 읽기만
     real_noise = crash_entries(REAL / "crash.log", since, fatal=False)
     L = ["## 크래시 근거·데이터 무결성 (%s 이후)" % since, "",

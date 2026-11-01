@@ -58,6 +58,7 @@ class IndexWorker(QObject):
                 return
             idx = PdfIndex(self.db_path, verify=self._verify())
             try:
+                idx.finish_migration(lambda: self._cancel)     # 261102-1: 남은 `flat` 다시 만들기 먼저(검색창 SOT §3.1)
                 targets = self.files or ([Path(self.single_file)] if self.single_file is not None else None)
                 if targets is not None:
                     n = len(targets)

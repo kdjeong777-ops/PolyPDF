@@ -31,7 +31,10 @@
 import argparse, ctypes, ctypes.wintypes as wt, json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
 
-EXE = Path(os.environ.get("POLYPDF_EXE", r"C:\Program Files\PolyPDF\PolyPDF.exe"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import real_profile                                     # noqa: E402  261102-1: 실제 폴더는 패키지 가상화 밖에서 읽는다
+
+EXE =Path(os.environ.get("POLYPDF_EXE", r"C:\Program Files\PolyPDF\PolyPDF.exe"))
 PROFILE = os.environ.get("POLYPDF_TEST_PROFILE", "test")
 REAL = Path(os.environ["APPDATA"]) / "LocalTools" / "PolyPDF"          # 사용자 실제 설정 — 읽기만
 CFG = Path(os.environ["APPDATA"]) / "LocalTools" / ("PolyPDF-" + PROFILE)   # 시험 프로필 — 여기만 쓰고 지운다
@@ -284,10 +287,14 @@ def check_profile_support(exe):
 
 
 def seed():
-    """실제 설정을 **읽어서** 시험 프로필로 복사한다(받아 둔 업데이트·창 기록 제외). 시험 프로필이 있으면 지우고 새로."""
+    """실제 설정을 **읽어서** 시험 프로필로 복사한다(받아 둔 업데이트·창 기록 제외). 시험 프로필이 있으면 지우고 새로.
+    261102-1: MSIX 셸이면 관리 공유로 읽는다(`real_profile` — 섞인 보기를 복사하면 시드 색인이 '손상' 으로 보였다)."""
+    src, ok = real_profile.real_dir()
+    if not ok:
+        raise SystemExit(real_profile.MIXED_MSG)
     drop()
-    shutil.copytree(REAL, CFG, ignore=lambda d, names: [n for n in names if n in SKIP and Path(d) == REAL])
-    print("시험 프로필 ←", REAL, "→", CFG)
+    shutil.copytree(src, CFG, ignore=lambda d, names: [n for n in names if n in SKIP and Path(d) == src])
+    print("시험 프로필 ←", src, "→", CFG)
 
 
 def drop():
