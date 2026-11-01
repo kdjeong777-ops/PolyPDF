@@ -21,6 +21,11 @@ from __future__ import annotations
 MIN_H_PT = 4.0       # 글자 상자 높이가 이보다 낮으면 글자가 아니다(A4 에서 약 1.4mm)
 THIN = 0.12          # 한 글자인데 폭이 높이의 이 비율 미만(또는 그 반대)이면 글자가 아니다
 MIN_CONF = 0.30      # OCR 이 스스로 이만큼도 확신하지 못한 낱말은 버린다
+# 261101-1(SOT §3.5.3): 신뢰도가 낮아도 **영어 사전에 이만큼(zipf) 흔한 낱말**이면 남긴다.
+#   실측 HM 4쪽 — 버려진 사전 낱말 `What's`(3.8 이상)·`they're`·`shouldn't`·`raise` 는 모두 3 이상, 잡음 조각은 사전에 없다.
+KEEP_ZIPF = 3.0
+# 문장 속 `|` 를 `I` 로 볼 상자 높이(그 줄 낱말 높이 중앙값의 배). 실측 `I`·`|` 29px / 줄 중앙 29~33px.
+BAR_I_LO, BAR_I_HI = 0.6, 1.6
 
 
 def has_letter(text) -> bool:
@@ -65,14 +70,54 @@ def is_noise_box(text, x0, y0, x1, y1, *, min_h: float = MIN_H_PT,
     return False
 
 
+def known_word(surface) -> bool:
+    """라틴 글자 낱말이 영어 빈도 사전에 있는가 (텍스트 창 SOT §3.5.3, 261101-1).
+
+    문장부호·따옴표를 떼고 `’` 는 `'` 로 본다. `—`·`–` 로 이어진 것(`Wait—I`)은 조각마다 본다.
+    한글·숫자가 섞이면 False — 한글 잡음이 사전 낱말로 살아나면 안 된다. 사전을 못 쓰면 False(종전대로)."""
+    import re
+    t = str(surface or "").strip().replace("’", "'").replace("‘", "'")
+    parts = [p.strip("\"'“”‘’.,;:!?()[]…*") for p in re.split(r"[—–]", t)]
+    parts = [p for p in parts if p]
+    if not parts:
+        return False
+    try:
+        from viewer.study.wordfreq_fast import zipf_frequency
+    except Exception:
+        return False
+    for p in parts:
+        if not re.fullmatch(r"[A-Za-z]+(?:'[A-Za-z]+)?", p):
+            return False
+        if (len(p) < 2 and p not in ("I", "a", "A")) or zipf_frequency(p.lower(), "en") < KEEP_ZIPF:
+            return False
+    return True
+
+
+def bar_as_i(prev, cur, nxt, line_h: float) -> bool:
+    """문장 속 `|` 를 `I` 로 볼까 (텍스트 창 SOT §3.5.3, 261101-1).
+
+    Tesseract 는 세리프 `I` 를 `|` 로 읽는다(HM 4쪽: `I` 63개 중 5개). `prev`·`nxt` 는 **같은 줄**의 바로 앞뒤
+    낱말 글자, `cur` 는 `(글자, 상자 높이)`, `line_h` 는 그 줄 낱말 높이의 중앙값이다.
+    `I` 로 읽힌 것도 같은 조건이면 참 — 부르는 쪽이 ③(홀쭉한 한 글자)으로 버리지 않게 한다(획이 1px 인 `I` 3개)."""
+    s, h = cur
+    if str(s or "").strip() not in ("|", "I") or line_h <= 0:
+        return False
+    if not (BAR_I_LO <= float(h) / float(line_h) <= BAR_I_HI):
+        return False
+    lat = lambda t: any("A" <= c <= "z" and c.isalpha() for c in str(t or ""))    # noqa: E731
+    return lat(prev) and lat(nxt)
+
+
 def keep_ocr_word(surface, x0, y0, x1, y1, conf, *, scale: float = 1.0,
                   min_conf: float = MIN_CONF) -> bool:
     """OCR 낱말 하나를 남길지. 좌표는 픽셀이어도 되고 `scale` 로 pt 로 환산한다.
 
     `scale = 72 / dpi` (300dpi 면 0.24). 신뢰도가 낮은 낱말도 함께 버린다 —
     티를 글자로 읽을 때 Tesseract 의 conf 는 대체로 바닥이다.
+    261101-1(SOT §3.5.3): 단 **영어 사전 낱말**은 신뢰도가 낮아도 남긴다 — 곧은 따옴표(`What's`)는
+    conf 가 0 언저리로 나와 진짜 낱말이 사라지고 그 빈자리가 표 칸 구분(` | `)이 됐다. 모양(①③)은 그대로 본다.
     """
-    if conf is not None and float(conf) < min_conf:
+    if conf is not None and float(conf) < min_conf and not known_word(surface):
         return False
     if is_symbol_only(surface):
         return False

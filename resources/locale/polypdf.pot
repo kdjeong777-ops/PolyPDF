@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-10-31 15:30+0900\n"
+"POT-Creation-Date: 2026-11-01 20:12+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4660,6 +4660,10 @@ msgid "(이미 있음)"
 msgstr ""
 
 #: viewer/study/ocr.py
+msgid "한글이 보여 한글 + 영문으로 다시 읽습니다"
+msgstr ""
+
+#: viewer/study/ocr.py
 #, python-brace-format
 msgid "pytesseract 미설치: {e}"
 msgstr ""
@@ -4667,6 +4671,10 @@ msgstr ""
 #: viewer/study/ocr.py
 #, python-brace-format
 msgid "tesseract 실행 불가: {e}"
+msgstr ""
+
+#: viewer/study/ocr.py
+msgid "한글이 없어 영문으로 읽습니다"
 msgstr ""
 
 #: viewer/study/ocr_headings.py
@@ -11565,6 +11573,11 @@ msgstr ""
 
 #: viewer/workers.py
 #, python-brace-format
+msgid "{pg}쪽"
+msgstr ""
+
+#: viewer/workers.py
+#, python-brace-format
 msgid "인터넷 사전 조회 {idx}/{total}"
 msgstr ""
 
@@ -11575,11 +11588,6 @@ msgstr ""
 #: viewer/workers.py
 #, python-brace-format
 msgid "{pg}쪽 읽는 중…"
-msgstr ""
-
-#: viewer/workers.py
-#, python-brace-format
-msgid "{pg}쪽"
 msgstr ""
 
 #: viewer/workers.py

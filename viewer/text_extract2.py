@@ -1037,7 +1037,7 @@ def _merge_rows(frags, cjk_gap=None):
     """세로로 겹치는 조각을 **한 줄**로 잇는다 — 왼쪽부터 오른쪽으로.
 
     잇는 방법은 벌어진 폭에 따른다(SOT §3.6).
-      - 글자크기의 0.25 배 미만 → 붙여 쓴다
+      - 글자크기의 0.25 배 미만 → 붙여 쓴다(OCR 낱말 상자의 라틴은 붙이지 않는다 — §3.6.13)
       - 2.5 배 미만 → 공백 하나
       - 그 이상 → `" | "` — 표의 다른 칸으로 본다(§3.3 과 같은 표기)
 
@@ -1067,9 +1067,13 @@ def _merge_rows(frags, cjk_gap=None):
                     glue = CJK_GLUE_GAP
             elif _is_num_pair(text, piece):
                 glue = NUM_GLUE_GAP
+            elif cjk_gap is not None:
+                # 261101-1(SOT §3.6.13): OCR 낱말 상자의 라틴은 Tesseract 가 이미 갈랐다 — 붙이지 않는다.
+                #   `GLUE_GAP` 은 글자층 조각을 위한 것이라 양쪽 정렬된 소설에서 486곳을 붙였다(`mywillpower`).
+                glue = None
             else:
                 glue = GLUE_GAP
-            if gap < glue * ref:
+            if glue is not None and gap < glue * ref:
                 sep = ""
             elif gap < COL_GAP * ref:
                 sep = "" if (not text or text.endswith(" ")) else " "
@@ -1393,7 +1397,11 @@ JOIN_PITCH = 2.2
 JOIN_PITCH_REL = 1.45    # 그 쪽의 중앙 줄거리의 이 배를 넘으면 남남으로 본다
 JOIN_PITCH_SPARSE = 3.0  # 중앙 줄거리가 글자 크기의 이 배를 넘으면 '성긴 쪽'
 JOIN_PITCH_MIN_N = 4     # 줄이 이보다 적으면 중앙값을 믿지 않는다(종전 크기 기준)
-JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다
+JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다(OCR 줄에는 보지 않는다 — SOT §3.7.11)
+# 261101-1(SOT §3.7.11): 줄 끝 `-` 로 이은 말의 영어 빈도(zipf)가 이보다 낮고 앞뒤가 각각 사전 낱말이면
+#   분철이 아니라 합성어다 — `-` 를 남긴다(`oval-shaped`). `satisfied`·`itself`·`otherwise` 는 모두 이 값보다 높다.
+HYPHEN_KEEP_ZIPF = 1.0
+_TOC_TAIL = re.compile(r"\s\d{1,4}$")     # 차례 항목의 끝(빈칸 + 쪽 번호) — SOT §3.7.11
 _CAPTION_HEAD = None
 _LIST_HEAD = None
 
@@ -1495,6 +1503,26 @@ def _ko_wants_space(a, b, ctx: int = 8) -> bool:
     return False
 
 
+def _hyphen_keep(a, b) -> bool:
+    """줄 끝 `-` 가 분철이 아니라 **합성어의 붙임표**인가 (SOT §3.7.3·§3.7.11, 261101-1).
+
+    `oval-` + `shaped` → `ovalshaped` 는 사전에 없고 `oval`·`shaped` 는 각각 낱말이다 → 남긴다.
+    `satis-` + `fied` → `satisfied` 는 사전에 있다 → 뗀다. 사전을 못 쓰면 False(종전대로 뗀다)."""
+    import re
+    ma = re.search(r"([A-Za-z]+)-$", a)
+    mb = re.match(r"([a-z]+)", b)
+    if not ma or not mb:
+        return False
+    wa, wb = ma.group(1).lower(), mb.group(1)
+    try:
+        from viewer.study.wordfreq_fast import zipf_frequency
+        from viewer.text_noise import KEEP_ZIPF
+        return (zipf_frequency(wa + wb, "en") < HYPHEN_KEEP_ZIPF
+                and zipf_frequency(wa, "en") >= KEEP_ZIPF and zipf_frequency(wb, "en") >= KEEP_ZIPF)
+    except Exception:
+        return False
+
+
 def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
     """두 줄을 어떻게 이을지 — 빈칸 / 붙임 / 분철 떼기 (SOT §3.7·§3.7.7·§3.7.10).
 
@@ -1512,7 +1540,7 @@ def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
     if not a or not b:
         return ''
     if a.endswith('-') and ('a' <= b[0] <= 'z'):
-        return '-drop'
+        return '' if _hyphen_keep(a, b) else '-drop'
     if _is_cjk(a[-1]) and _is_cjk(b[0]):
         if _ko_wants_space(a, b):
             return ' '
@@ -1577,6 +1605,40 @@ def join_sentences(rows) -> list:
         r.pop('_last', None)
         r.pop('_tail', None)
     return out
+
+
+def page_carry(prev_rows, rows) -> bool:
+    """쪽을 넘어간 문장을 잇는다 — 앞 쪽 마지막 줄 + 다음 쪽 첫 줄 (SOT §3.7.12, 261101-1).
+
+    **여러 쪽을 한 글로 만드는 곳**(Word 저장·단어장 글)만 부른다 — 텍스트 창은 쪽마다 보여 주므로 잇지 않는다.
+    이으면 `prev_rows[-1]['text']` 를 늘리고 `rows[0]` 을 지운 뒤 True. 두 목록은 고쳐 쓴다.
+    조건: 두 줄이 §3.7.2 의 ①②③⑦ 을 만족하고, 앞 줄이 그 단 오른쪽 끝까지 찼다(④ 의 첫 갈래).
+    자리·거리(⑤⑥)는 쪽이 달라 재지 않는다. 빈칸은 §3.7.3 그대로(`_join_sep`)."""
+    if not prev_rows or not rows:
+        return False
+    a, b = prev_rows[-1], rows[0]
+    for r in (a, b):
+        if r.get('style') != 'body' or r.get('kind') != 'text' or ' | ' in (r.get('text') or ''):
+            return False                                    # ①②
+    ta, tb = (a.get('text') or '').rstrip(), (b.get('text') or '').lstrip()
+    if not ta or not tb or ta[-1] in SENT_END or ta[-1] in '”"’)':
+        return False                                        # ③ (닫는 따옴표로 끝난 대화문도 끝난 것)
+    if _starts_list(tb) and not _unclosed_paren(ta):
+        return False                                        # ⑦
+    ra = (a.get('rects') or [a.get('rect')])[-1] if (a.get('rects') or a.get('rect')) else None
+    if not ra:
+        return False
+    body = [r for r in prev_rows if r.get('rect') and r.get('style') == 'body' and r.get('kind') == 'text']
+    margin, _span = _extent_for(_column_extents(body), {'rect': ra})
+    sa = max(1.0, a.get('size') or (ra[3] - ra[1]))
+    if margin <= 0 or (margin - ra[2]) > sa * JOIN_FILL:
+        return False                                        # ④ 앞 줄이 차지 않았다 — 문단이 끝났다
+    sep = _join_sep(a.get('text') or '', tb)
+    if sep == '-drop':
+        ta, sep = ta[:-1], ''
+    a['text'] = ta + sep + tb
+    del rows[0]
+    return True
 
 
 def _median_pitch(body) -> float:
@@ -1752,8 +1814,14 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0) -> bool:
     #   목록 표시가 아니라 그 괄호를 닫는 이어지는 글이다.
     if _starts_list(tb) and not _unclosed_paren(ta):
         return False                                    # ⑦
-    if abs(sa - sb) > max(sa, sb) * JOIN_SIZE_TOL:
+    # ⑧ 261101-1(SOT §3.7.11): OCR 줄의 `size` 는 잉크 높이라 **줄에 든 글자**로 달라진다
+    #   (`two?”` 7.0 / `plus` 가 든 줄 10.8) — 글꼴 크기를 잴 수 없어 OCR 줄에는 보지 않는다.
+    if not (a.get('ocr') or b.get('ocr')) and abs(sa - sb) > max(sa, sb) * JOIN_SIZE_TOL:
         return False                                    # ⑧
+    #   ⑧ 을 빼자 차례 쪽의 두 항목(`…자극 추구 165` + `성격 연습 9 성실성 167`)이 이어졌다 — 종전에는 ⑧ 이
+    #   우연히 막고 있었다. **두 줄 다 쪽 번호 같은 수로 끝나면** 차례로 보고 잇지 않는다(OCR 줄만).
+    if (a.get('ocr') or b.get('ocr')) and _TOC_TAIL.search(ta.rstrip()) and _TOC_TAIL.search(tb.rstrip()):
+        return False
     # ⑨ 260910-4(SOT §3.7.6 다): 표·그림 제목은 **첫머리로** 알아본다.
     #   캡션은 부호로 끝나지 않고 길이도 본문과 비슷할 수 있어 ④ 로는 안 갈린다.
     if _is_caption(ta):
@@ -1904,7 +1972,8 @@ def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None, edges_o
             _ok = {id(f) for f in items}
             edges_out.extend(edge_rows([f for f in _before if id(f) not in _ok], page))
     styles = _classify(items)
-    return [{'text': t, 'style': st, 'rect': r, 'kind': 'text', 'size': sz}
+    # 'ocr' — 낱말 상자로 만든 줄이다(`size` 가 잉크 높이, SOT §3.7.11 의 ⑧)
+    return [{'text': t, 'style': st, 'rect': r, 'kind': 'text', 'size': sz, 'ocr': True}
             for (r, t, sz), st in zip(items, styles)]
 
 def peer_texts_from_words(peer_words) -> list:
@@ -1975,8 +2044,8 @@ def merge_words_by_gap(words) -> list:
             elif _is_num_pair(p["surface"], t):
                 glue = NUM_GLUE_GAP
             else:
-                glue = GLUE_GAP
-            if same_row and gap < glue * ref:
+                glue = None             # 261101-1(SOT §3.6.13): OCR 라틴 낱말은 붙이지 않는다
+            if same_row and glue is not None and gap < glue * ref:
                 p["surface"] += t
                 p["x1"] = max(p["x1"], x1)
                 p["y0"] = min(p["y0"], y0)
@@ -2100,9 +2169,12 @@ def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
 
 
 def _peer_words(words_lookup, pno: int, n: int) -> list:
-    """옆 쪽(앞뒤 하나씩)의 OCR 낱말 — 꼬리말 되풀이 판정용(§3.5.2). 못 읽으면 건너뛴다."""
+    """옆 쪽(앞뒤 **둘씩**)의 OCR 낱말 — 머리말·꼬리말 되풀이 판정용(§3.5.2). 못 읽으면 건너뛴다.
+
+    261101-1: 책은 짝수 쪽과 홀수 쪽의 머리말이 다르다(`4 ANDY WEIR` / `PROJECT HAIL MARY 5`) — ±1 만 보면
+    언제나 다른 머리말이라 한 쪽도 지우지 못했다(HM 31쪽 중 0 → ±2 로 26)."""
     out = []
-    for k in (pno - 1, pno + 1):
+    for k in (pno - 2, pno - 1, pno + 1, pno + 2):
         if 0 <= k < n:
             try:
                 ws, dpi = words_lookup(k)
@@ -2218,6 +2290,10 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
                 _m[k] = _f(k)
             return _m[k]
     out = []
+    held = None                     # (쪽, 줄목록) — 다음 쪽 첫 줄을 이어 붙일 수 있게 한 쪽 늦게 낸다(§3.7.12)
+
+    def _emit(h):
+        out.append((h[0], chr(10).join(x for x in (r.get('text', '') for r in h[1]) if x)))
     try:
         idx = range(doc.page_count) if pages is None else [int(p) for p in pages]
         for pno in idx:
@@ -2239,8 +2315,15 @@ def clean_page_texts(pdf_path, pages=None, *, ocr_lookup=None,
                     rows = fixes.apply_to_rows(str(pdf_path), pno, rows)
                 except Exception:
                     pass
-            lines = [r.get('text', '') for r in rows]
-            out.append((pno, chr(10).join(x for x in lines if x)))
+            rows = [dict(r) for r in rows]
+            # 261101-1(SOT §3.7.12): 쪽 끝에서 끊긴 문장을 다음 쪽 첫 줄과 잇는다 — 이어진 쪽끼리만
+            if held is not None:
+                if held[0] + 1 == pno:
+                    page_carry(held[1], rows)
+                _emit(held)
+            held = (pno, rows)
+        if held is not None:
+            _emit(held)
     finally:
         try:
             doc.close()

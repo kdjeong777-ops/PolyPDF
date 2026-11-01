@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-31 15:30+0900\n"
+"POT-Creation-Date: 2026-11-01 20:12+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4824,6 +4824,10 @@ msgid "(이미 있음)"
 msgstr "(already present)"
 
 #: viewer/study/ocr.py
+msgid "한글이 보여 한글 + 영문으로 다시 읽습니다"
+msgstr "Korean text found — re-reading as Korean + English"
+
+#: viewer/study/ocr.py
 #, python-brace-format
 msgid "pytesseract 미설치: {e}"
 msgstr "pytesseract is not installed: {e}"
@@ -4832,6 +4836,10 @@ msgstr "pytesseract is not installed: {e}"
 #, python-brace-format
 msgid "tesseract 실행 불가: {e}"
 msgstr "Cannot run tesseract: {e}"
+
+#: viewer/study/ocr.py
+msgid "한글이 없어 영문으로 읽습니다"
+msgstr "No Korean text — reading as English"
 
 #: viewer/study/ocr_headings.py
 msgid "저장된 OCR"
@@ -11861,6 +11869,11 @@ msgstr "Resuming: {done0}/{total} done"
 
 #: viewer/workers.py
 #, python-brace-format
+msgid "{pg}쪽"
+msgstr "Page {pg}"
+
+#: viewer/workers.py
+#, python-brace-format
 msgid "인터넷 사전 조회 {idx}/{total}"
 msgstr "Online dictionary lookup {idx}/{total}"
 
@@ -11872,11 +11885,6 @@ msgstr "Saving Word..."
 #, python-brace-format
 msgid "{pg}쪽 읽는 중…"
 msgstr "Reading page {pg}…"
-
-#: viewer/workers.py
-#, python-brace-format
-msgid "{pg}쪽"
-msgstr "Page {pg}"
 
 #: viewer/workers.py
 #, python-brace-format

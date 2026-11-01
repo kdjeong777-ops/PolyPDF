@@ -61,6 +61,7 @@ def run_file(path, *, lang: str, drop_watermark: bool, tick, cancelled, db_path=
         store = StudyStore(db_path)
         fkey = file_key_for(path)
         want = study_ocr.resolve_lang(lang or study_ocr.default_lang())
+        picker = study_ocr.LangPicker(want)      # 261101-1(단어학습 SOT §14.8.1): 한글이 없으면 `eng` 로 좁힌다
         todo = [p for p in scan if not store.is_page_done(fkey, p)]
         n = len(todo) + len(scan)                # OCR 몇 쪽 + 글자층 몇 쪽(막대 척도 — 글에는 단계마다 따로)
         npg = doc.page_count
@@ -70,10 +71,9 @@ def run_file(path, *, lang: str, drop_watermark: bool, tick, cancelled, db_path=
             if cancelled():
                 raise _Stop()
             tick(i, n, step(tr(STAGE_OCR), i + 1, len(todo), pg + 1, npg))
-            r = study_ocr.build_page(doc, pg, lang=want, dpi=OCR_DPI, force_ocr=True,
-                                     drop_watermark_bg=bool(drop_watermark))
+            r = picker.read(doc, pg, dpi=OCR_DPI, force_ocr=True, drop_watermark_bg=bool(drop_watermark))
             store.save_page(fkey, pg, r["text"], dpi=r["dpi"], engine=r["engine"], source=r["source"],
-                            conf=r["conf"], words=r.get("words") or [], lang=want)   # 쪽마다 바로 — 중지해도 남는다
+                            conf=r["conf"], words=r.get("words") or [], lang=r.get("lang") or want)   # 쪽마다 바로 — 중지해도 남는다
             res["ocr"] += 1
         doc.close()
         doc = None

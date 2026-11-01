@@ -36,6 +36,7 @@ class OcrPages:
         self.doc = fitz.open(self.path)
         self.page_count = self.doc.page_count
         self.lang = _ocr.resolve_lang(lang or _ocr.default_lang())
+        self._picker = _ocr.LangPicker(self.lang)   # 261101-1(단어학습 SOT §14.8.1)
         self._own_store = store is None
         try:
             self.store = store if store is not None else StudyStore()
@@ -107,8 +108,7 @@ class OcrPages:
         # 261026-2(디자인 SOT §2.7): 날 글 'OCR p.12' 대신
         self.progress(tr("OCR {pg}쪽 읽는 중…").format(pg=pno1))
         self.pace()
-        res = self._ocr.build_page(self.doc, pno1 - 1, lang=self.lang, dpi=DPI,
-                                   force_ocr=True, drop_watermark_bg=True)
+        res = self._picker.read(self.doc, pno1 - 1, dpi=DPI, force_ocr=True, drop_watermark_bg=True)
         ws = res.get("words") or []
         dpi = int(res.get("dpi") or DPI)
         self.ran += 1
@@ -118,7 +118,7 @@ class OcrPages:
                 self.store.save_page(self.fkey, pno1 - 1, res.get("text") or "", dpi=dpi,
                                      engine=res.get("engine") or "tesseract",
                                      source=res.get("source") or "ocr",
-                                     conf=float(res.get("conf") or 0.0), words=ws, lang=self.lang)
+                                     conf=float(res.get("conf") or 0.0), words=ws, lang=res.get("lang") or self.lang)
                 saved = True
             except Exception:
                 saved = False
@@ -155,7 +155,7 @@ class OcrPages:
             self.pace()
             try:
                 img, _r, _sz = self._ocr.render_page(self.doc, pno1 - 1, dpi=DPI, drop_watermark_bg=True)
-                extra = (self._ocr.ocr_image(img, lang=self.lang, psm=TOC_PSM, dpi=DPI).get("words") or [])
+                extra = (self._ocr.ocr_image(img, lang=self._picker.lang, psm=TOC_PSM, dpi=DPI).get("words") or [])
             except Exception:
                 extra = []
         width = float(self.doc.load_page(pno1 - 1).rect.width) * dpi / 72.0

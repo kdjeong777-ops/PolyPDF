@@ -50,7 +50,16 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
     from viewer import text_extract2 as tx
 
     out = Document()
+    if words_lookup is not None:
+        # 옆 쪽 낱말도 읽으므로(머리말 판정, 텍스트 창 SOT §3.5.2) 한 쪽을 여러 번 묻지 않게 기억한다
+        _raw, _memo = words_lookup, {}
+
+        def words_lookup(k, _f=_raw, _m=_memo):
+            if k not in _m:
+                _m[k] = _f(k) or ([], 0)
+            return _m[k]
     try:
+        per_page = []
         for i, pg in enumerate(pages):
             # 261026-2(디자인 SOT §2.7): 날 글 `p.12` 대신 `쪽 쓰기 3/10 · 원본 12쪽`
             if progress is not None and progress(i, len(pages), step(tr(STAGE_WRITE), i + 1, len(pages), pg + 1,
@@ -61,9 +70,12 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
                 ocr = (ocr_lookup(pg) if ocr_lookup else "") or ""
             # 260913-6(텍스트 창 SOT §3.1·§7): 원천은 창과 같다 — 스캔 쪽은 우리 OCR
             ws, wdpi = ((words_lookup(pg) or ([], 0)) if words_lookup else ([], 0))
+            # 261101-1(텍스트 창 SOT §3.5.2): 옆 쪽 낱말로 머리말·꼬리말을 거른다 — 창과 같게(종전에는 빠져 있었다)
+            peers = tx._peer_words(words_lookup, pg, doc_fitz.page_count) if (ws and words_lookup) else None
             rows = tx.page_lines(doc_fitz, pdf_path, pg,
                                  tables=("omit" if omit_tables else "lines"),
-                                 ocr_text=ocr, ocr_words=ws or None, ocr_dpi=int(wdpi or 0))
+                                 ocr_text=ocr, ocr_words=ws or None, ocr_dpi=int(wdpi or 0),
+                                 ocr_peer_words=peers or None)
             # 260913-4(텍스트 창 SOT §5.1.3): 줄 번호가 아니라 **자리로** 얹는다(합친 줄 포함).
             #   `fix_rows(쪽, 줄목록) -> 줄목록` — 창·본문 읽기·단어장과 같은 함수를 쓴다.
             if fix_rows is not None:
@@ -71,30 +83,41 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
                     rows = fix_rows(pg, rows)
                 except Exception:
                     pass
+            rows = [dict(r) for r in rows or []]
+            # 261101-1(텍스트 창 SOT §3.7.12): 쪽 끝에서 끊긴 문장은 다음 쪽 첫 줄과 잇는다 — 이어진 쪽끼리만
+            if per_page and per_page[-1][0] + 1 == pg:
+                tx.page_carry(per_page[-1][1], rows)
+            per_page.append((pg, rows))
+        for pg, rows in per_page:
             if not rows:
                 continue
-            for r in rows:
-                key = r.get("style", "body")
-                st = (styles or {}).get(key, {})
-                p = out.add_paragraph()
-                if key == "title":
-                    try:
-                        p.style = out.styles["Heading 1"]
-                    except Exception:
-                        pass
-                run = p.add_run(r.get("text", ""))
-                _apply_run(run, st)
-                try:
-                    p.paragraph_format.line_spacing = float(
-                        st.get("line_spacing", 1.2))
-                except Exception:
-                    pass
+            _write_rows(out, rows, styles)
             if pg != pages[-1]:
                 out.add_page_break()
         out.save(str(dst))
         return True, ""
     except Exception as e:                       # noqa: BLE001
         return False, str(e)
+
+
+def _write_rows(out, rows, styles) -> None:
+    """한 쪽의 줄을 문단으로 쓴다(제목은 `Heading 1`)."""
+    for r in rows:
+        key = r.get("style", "body")
+        st = (styles or {}).get(key, {})
+        p = out.add_paragraph()
+        if key == "title":
+            try:
+                p.style = out.styles["Heading 1"]
+            except Exception:
+                pass
+        run = p.add_run(r.get("text", ""))
+        _apply_run(run, st)
+        try:
+            p.paragraph_format.line_spacing = float(
+                st.get("line_spacing", 1.2))
+        except Exception:
+            pass
 
 
 def export_docx_job(pdf_path, pages, dst, styles, *, omit_tables: bool = False,

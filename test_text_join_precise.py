@@ -57,8 +57,11 @@ chk(tx._join_sep("이 그룹은", "균형 혼합물", True) == " ",
     "(4) 어절이 안 들어가 넘어갔으면 빈칸")
 chk(tx._join_sep("의무사", "용대상", False) == "",
     "(4) 줄이 꽉 차 넘어갔으면 붙임(낱말 가운데일 수 있다)")
-chk(tx._join_sep("performance-", "based spec", False) == "-drop",
+chk(tx._join_sep("the com-", "puter asks", False) == "-drop",
     "(4) 영문 분철은 그대로 뗀다")
+# 261101-1(SOT §3.7.11): 줄 끝에 걸린 **합성어**는 붙임표를 남긴다 — 종전 기대(`performancebased`)가 결함이었다
+chk(tx._join_sep("performance-", "based spec", False) == "",
+    "(4) 줄 끝 합성어는 붙임표를 남긴다(performance-based)")
 chk(tx._join_sep("ends with space ", "next", False) == " ",
     "(4) 원문이 빈칸으로 끝나면 빈칸")
 chk(tx._join_sep("the same", "application.", False) == " ",

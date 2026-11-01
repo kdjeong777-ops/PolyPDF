@@ -352,6 +352,8 @@ class TextOcrPageWorker(QObject):
             from viewer.study import ocr as study_ocr
             from viewer.study.study_store import StudyStore, file_key_for
             lang = study_ocr.resolve_lang(self.lang or study_ocr.default_lang())
+            # 261101-1(단어학습 SOT §14.8.1): `kor+eng` 인데 한글이 없으면 읽은 결과로 `eng` 로 좁힌다
+            picker = study_ocr.LangPicker(lang)
             total = len(self.pages)
             doc = fitz.open(self.doc_path)
             store = None
@@ -371,20 +373,20 @@ class TextOcrPageWorker(QObject):
                         self.progress.emit(i + 1, total, tr('{pg}쪽 건너뜀(글자 있음)').format(pg=pg + 1))
                         continue
                     self.progress.emit(i, total, tr('{pg}쪽 읽는 중…').format(pg=pg + 1))
-                    res = study_ocr.build_page(
-                        doc, pg, lang=lang, dpi=self.dpi, force_ocr=True,
-                        drop_watermark_bg=self.drop_watermark)
+                    res = picker.read(doc, pg, dpi=self.dpi, force_ocr=True,
+                                      drop_watermark_bg=self.drop_watermark)
                     words = res.get('words') or []
                     if store is not None:      # 쪽마다 바로 — 취소해도 남는다
                         try:
                             store.save_page(fkey, pg, res['text'], dpi=res['dpi'],
                                             engine=res['engine'], source=res['source'],
-                                            conf=res['conf'], words=words, lang=lang)
+                                            conf=res['conf'], words=words, lang=res.get('lang') or lang)
                         except Exception:
                             pass
                     if not self._cancel:
                         self.done.emit(pg, words, int(res.get('dpi') or 0), self.token)
-                    self.progress.emit(i + 1, total, tr('{pg}쪽').format(pg=pg + 1))
+                    _msg = tr('{pg}쪽').format(pg=pg + 1)
+                    self.progress.emit(i + 1, total, (_msg + ' — ' + picker.changed) if picker.changed else _msg)
                     _pacing.pace(self)
             finally:
                 doc.close()
@@ -928,6 +930,7 @@ class StudyBuildWorker(QObject):
             _lang = (study_ocr.resolve_lang(self.lang) if self.lang
                      else study_ocr.detect_lang(doc))
             store.set_meta(fkey, str(self.pdf_path), total, _lang)
+            picker = study_ocr.LangPicker(_lang)     # 261101-1(§14.8.1): 한글이 없으면 `eng` 로 좁힌다
 
             done0 = len(store.done_pages(fkey))
             self.progress.emit(done0, total, tr('재개: {done0}/{total} 완료됨').format(done0=done0, total=total))
@@ -947,8 +950,8 @@ class StudyBuildWorker(QObject):
                     #   읽는다 — 언어는 고쳐진 판정(단어학습 SOT §14.8), 워터마크는
                     #   지우고(§14.9). 종전에는 이 경로만 옛 판정을 쓰고 워터마크를
                     #   그대로 읽어, 단어장에 워터마크 글자가 들어갔다.
-                    res = study_ocr.build_page(
-                        doc, i, lang=_lang, dpi=self.dpi,
+                    res = picker.read(
+                        doc, i, dpi=self.dpi,
                         force_ocr=self.force_ocr,
                         drop_watermark_bg=self.drop_watermark)
                 except Exception as pe:
@@ -961,11 +964,12 @@ class StudyBuildWorker(QObject):
                     ocr_used = True
                 store.save_page(fkey, i, res["text"], dpi=res["dpi"],
                                 engine=res["engine"], source=res["source"],
-                                conf=res["conf"], words=res["words"], lang=_lang)
+                                conf=res["conf"], words=res["words"], lang=res.get("lang") or _lang)
                 processed += 1
                 if i % 1 == 0:
                     self.progress.emit(processed, total,
-                                       f"{i+1}p [{res['source']}]")
+                                       f"{i+1}p [{res['source']}]"
+                                       + (" — " + picker.changed if picker.changed else ""))
 
             vocab_summary = None
             if self.with_vocab and not self._cancel:

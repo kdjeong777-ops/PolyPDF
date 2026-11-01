@@ -3561,13 +3561,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260913-6(SOT §3.1, 사용자 결정): 원천은 본문과 **같은 규칙** — 스캔 쪽은 우리 OCR.
         ow, odpi = self._view_ocr_words(cur, page)
         # 260913-4(SOT §3.5.2): 옆 쪽 OCR 낱말 — 조금씩 다르게 읽힌 꼬리말을 알아본다
+        #   261101-1: 모으는 법은 `_peer_words` 한 곳(앞뒤 둘씩 — 짝·홀수 쪽 머리말이 다르다)
         peers = []
         if ow:
-            for k in (page - 1, page + 1):
-                if 0 <= k < mv._doc.page_count:
-                    pw, pd = self._view_ocr_words(cur, k)
-                    if pw:
-                        peers.append((pw, pd))
+            from viewer import text_extract2 as _tx
+            peers = _tx._peer_words(lambda k: self._view_ocr_words(cur, k), page, mv._doc.page_count)
         w = TextPageWorker(cur, page,
                            tables=("omit" if tp.omit_tables() else "lines"),
                            ocr_text=ocr_text, token=tok, cached_only=busy_idx,

@@ -551,7 +551,7 @@ def _join_words_by_gap(parts) -> str:
     """
     NL = chr(10)
     try:
-        from viewer.text_extract2 import (GLUE_GAP, CJK_GLUE_GAP, NUM_GLUE_GAP,
+        from viewer.text_extract2 import (CJK_GLUE_GAP, NUM_GLUE_GAP,
                                           CJK_GLUE_TOP, CJK_GLUE_MIN,
                                           CJK_GLUE_MAX, CJK_GLUE_MIN_N,
                                           _is_cjk_pair, _is_num_pair,
@@ -617,8 +617,9 @@ def _join_words_by_gap(parts) -> str:
                 elif _is_num_pair(text, t):
                     glue = NUM_GLUE_GAP
                 else:
-                    glue = GLUE_GAP
-                text += ('' if gap < glue * ref else ' ') + t
+                    # 261101-1(텍스트 창 SOT §3.6.13): 라틴 낱말은 Tesseract 가 이미 갈랐다 — 언제나 빈칸
+                    glue = None
+                text += ('' if glue is not None and gap < glue * ref else ' ') + t
             prev = q
         chunks.append(text)
     text = NL.join(chunks)
@@ -646,8 +647,27 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     parts = []
     prev_line = None        # (block,par,line) — 줄이 바뀌면 개행 삽입(머리말/꼬리말·하이픈 처리용)
     has_lineinfo = all(k in data for k in ("block_num", "par_num", "line_num"))
-    for i, txt in enumerate(data["text"]):
-        s = txt.strip()
+    # 261101-1(텍스트 창 SOT §3.5.3): 문장 속 `|` 는 `I` — 같은 줄의 앞뒤 낱말과 그 줄 낱말 높이로 판단한다
+    _key = ((lambda i: (data["block_num"][i], data["par_num"][i], data["line_num"][i]))
+            if has_lineinfo else (lambda i: 0))
+    _idx = [i for i, t in enumerate(data["text"]) if str(t).strip()]
+    _hs = {}
+    for i in _idx:
+        _hs.setdefault(_key(i), []).append(data["height"][i])
+    _med = {k: sorted(v)[len(v) // 2] for k, v in _hs.items()}
+    _texts = list(data["text"])
+    _is_i = set()
+    for n, i in enumerate(_idx):
+        if str(_texts[i]).strip() not in ("|", "I"):
+            continue
+        a = _idx[n - 1] if n > 0 and _key(_idx[n - 1]) == _key(i) else None
+        b = _idx[n + 1] if n + 1 < len(_idx) and _key(_idx[n + 1]) == _key(i) else None
+        if a is not None and b is not None and _noise.bar_as_i(
+                _texts[a], (_texts[i], data["height"][i]), _texts[b], _med.get(_key(i), 0)):
+            _texts[i] = "I"
+            _is_i.add(i)
+    for i, txt in enumerate(_texts):
+        s = str(txt).strip()
         if not s:
             continue
         c = data["conf"][i]
@@ -659,8 +679,13 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
             continue
         x, y, w, h = (data["left"][i], data["top"][i],
                       data["width"][i], data["height"][i])
-        if not _noise.keep_ocr_word(s, x, y, x + w, y + h, c / 100.0,
-                                    scale=72.0 / max(1, int(dpi))):
+        if i in _is_i:
+            # 문장 속 `I` — 획이 1px 로 잡혀도 버리지 않는다. 상자를 글자 폭쯤으로 넓혀 두어
+            #   화면 단계의 같은 규칙(③ 홀쭉한 한 글자)에도 걸리지 않게 한다.
+            if w < h * 0.3:
+                x, w = int(x + w / 2 - h * 0.15), max(1, int(round(h * 0.3)))
+        elif not _noise.keep_ocr_word(s, x, y, x + w, y + h, c / 100.0,
+                                      scale=72.0 / max(1, int(dpi))):
             continue                    # 260908-8: 잡음은 본문에서도 뺀다
         words.append({"surface": s, "x0": float(x), "y0": float(y),
                       "x1": float(x + w), "y1": float(y + h), "conf": c / 100.0})
@@ -703,6 +728,71 @@ def words_from_layer(page: "fitz.Page") -> dict:
                  if _noise.keep_ocr_word(w["surface"], w["x0"], w["y0"],
                                          w["x1"], w["y1"], w["conf"])]
     return {"text": text, "conf": 1.0, "words": words}
+
+
+# 261101-1(§14.8.1): `kor+eng` 로 읽는데 한글이 없으면 읽은 결과로 `eng` 로 좁힌다 — 값은 §14.B
+LANG_EN_PAGES = 2          # 잇달아 이만큼 한글 0자 쪽이면
+LANG_EN_MIN_WORDS = 40     # (그 쪽에 라틴 낱말이 이만큼 있어야 판단에 넣는다)
+LANG_EN_BACK_Q = 0.6       # `eng` 로 읽은 쪽의 영문다움(`_english_quality`)이 이 아래면 되돌린다
+
+
+def _english_quality(text: str) -> float:
+    """영문다움 0~1 — 세 글자 이상 낱말 가운데 **자연스러운 대소문자**(소문자·첫 글자만 대문자)이고 사전에 흔한(zipf ≥ 3) 것의 비율.
+
+    261101-1(§14.8.1): `_latin_quality` 는 `Al`·`Bk` 같은 두 글자 조각도 사전 낱말로 쳐서, 한글 쪽을 `eng` 로 읽은
+    잡글도 0.91~0.95 가 나온다. 이 값은 실측 잡글 0.25~0.40(검사의이해·성격심리) / 영문 0.91~0.95(HM·NAPA)."""
+    toks = re.findall(r"[A-Za-z]{3,}", text or "")
+    if not toks:
+        return 0.0
+    try:
+        from viewer.study.wordfreq_fast import zipf_frequency
+    except Exception:
+        return _latin_quality(text)
+    ok = sum(1 for t in toks if (t.islower() or t.istitle()) and zipf_frequency(t.lower(), "en") >= 3.0)
+    return ok / len(toks)
+
+
+class LangPicker:
+    """여러 쪽을 읽는 동안 언어를 고른다 (단어학습 SOT §14.8.1, 261101-1).
+
+    `kor+eng` 로 읽은 쪽이 잇달아 한글 0자면 그 뒤는 `eng` 로 — 영문 스캔본을 `kor+eng` 로 읽으면
+    `I` 를 `1` 로 읽는다(HM 31쪽 42곳 → `eng` 3곳). `eng` 로 읽은 쪽이 사전 낱말 비율이 낮으면(한글 쪽을
+    영문으로 읽은 잡글) 그 쪽을 다시 읽고 되돌린다. `kor`·`eng` 하나만 고른 것은 건드리지 않는다.
+    `read()` 결과에 실제로 읽은 언어를 `lang` 으로 붙인다 — `save_page(lang=)` 에 그대로 쓴다."""
+
+    def __init__(self, lang: str):
+        self.base = resolve_lang(lang)
+        parts = self.base.split("+")
+        self.adapt = ("kor" in parts and "eng" in parts and "eng" in set(available_langs() or ["eng"]))
+        self.lang = self.base
+        self._streak = 0
+        self.changed = ""           # 바뀌었으면 사람이 읽을 알림(부르는 쪽이 진행 글에 보인다)
+
+    def read(self, doc, page_index: int, **kw) -> dict:
+        res = build_page(doc, page_index, lang=self.lang, **kw)
+        used = self.lang
+        self.changed = ""
+        if self.adapt and res.get("source") == "ocr":
+            text = res.get("text") or ""
+            if self.lang == self.base:
+                if _HANGUL_RE.search(text):
+                    self._streak = 0
+                elif (len(_WORD_RE.findall(text)) >= LANG_EN_MIN_WORDS
+                      and _english_quality(text) >= LANG_EN_BACK_Q):
+                    self._streak += 1
+                    if self._streak >= LANG_EN_PAGES:
+                        # 정한 그 쪽부터 `eng` 로 — 한 쪽을 더 읽는 값은 한 번뿐이다
+                        self.lang = "eng"
+                        self.changed = tr("한글이 없어 영문으로 읽습니다")
+                        res = build_page(doc, page_index, lang=self.lang, **kw)
+                        used = self.lang
+            elif len(text.strip()) >= 50 and _english_quality(text) < LANG_EN_BACK_Q:
+                self.lang, self._streak = self.base, 0
+                res = build_page(doc, page_index, lang=self.lang, **kw)
+                used = self.lang
+                self.changed = tr("한글이 보여 한글 + 영문으로 다시 읽습니다")
+        res["lang"] = used
+        return res
 
 
 def build_page(doc: "fitz.Document", page_index: int, *,
