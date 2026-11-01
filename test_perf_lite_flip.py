@@ -185,7 +185,20 @@ mw.resize(1000, 900)
 pump(300)
 l, r = _xspan(row.buttons())
 chk(l < 40, "④ 좁으면 늘림 빈 칸이 0 이 되어 단추가 왼쪽부터", "%s~%s / %s" % (l, r, mw.width()))
-chk(len(row.groups()) == 3, "④ 모음 기본값의 그룹 바탕은 세 묶음(열기·인쇄 / 보기 / 도구, 261025-5)", str(len(row.groups())))
+# 261031-18 보완(마스터 §14.7.2 의 19): 그룹 수는 손으로 적지 않고 원본 `DEFAULT_COLLECTION` 에서 — 보이는 항목이 있는 묶음만
+_known = dict(getattr(mw, "_cmds", {}) or {}); _known.update(getattr(mw, "_marks", {}) or {})
+_want, _cur = [], []
+for _c in list(_rbm.DEFAULT_COLLECTION) + [_rbm.SEP]:
+    if _c == _rbm.SEP:
+        if any(_known[x].isVisible() and not _known[x].property("ribbonMark") for x in _cur if x in _known):
+            _want.append(_cur)
+        _cur = []
+    else:
+        _cur.append(_c)
+mw.resize(1920, 900)                         # 좁으면 뒤 묶음이 넘침(») 안으로 들어가 세지 않는다 — 다 들어가는 폭에서
+pump(300)
+chk(len(row.groups()) == len(_want) > 1, "④ 모음 기본값의 그룹 바탕 = DEFAULT_COLLECTION 의 보이는 묶음 수",
+    "%d / %d" % (len(row.groups()), len(_want)))
 chk(_rbm.GROUP_BG[False] != _rbm.GROUP_BG[True], "④ 그룹 바탕색은 라이트·다크가 다르다")
 mw.apply_theme("dark")
 pump(100)
