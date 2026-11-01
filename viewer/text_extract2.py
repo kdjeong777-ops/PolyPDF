@@ -93,6 +93,9 @@ SIDE_SPREAD = 0.02       # 띠 조각들이 차지하는 가로 폭이 이 이�
 #   사이가 넉넉해 0.02 로 둔다 — 표 칸을 버리면 본문을 잃는다.
 EDGE_PEERS = 2           # 옆 쪽 이만큼을 둘러본다
 EDGE_SIM = 0.70          # 빈칸을 뺀 **순서 유사도**가 이만큼이면 '되풀이되는 것'
+# 261101-1(SOT §3.5.2): 쪽 번호를 단 줄이 이만큼 이하의 낱말이면 옆 쪽을 못 봐도 머리말·꼬리말로 본다
+#   (`PROJECT HAIL MARY 5` 4개 · `Page 3 of 12` 는 끝이 쪽 번호라 4개). 본문 첫 줄은 띠 밖이거나 본문과 붙어 있어 묻지 않는다.
+EDGE_NUM_WORDS = 6
 # 260913-4(SOT §3.5.2, 사용자 보고 "AASHTO 하단이 반복되는데 꼬리말로 인식 못한다"):
 #   종전에는 **같은 자리의 글자끼리** 견줬다(0.60). OCR 이 쪽마다 한 글자만 더 읽어도
 #   그 뒤가 전부 밀려 같은 꼬리말이 0.10~0.36 이 됐다. 순서 유사도로는 0.73~0.95.
@@ -404,11 +407,20 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
     if edge:
         seen = _edge_peer_texts(page)
         more = [_norm_edge(t) for t in (peers or []) if str(t or "").strip()]
+        # 261101-1(SOT §3.5.2): **쪽 번호를 단 짧은 줄**은 옆 쪽을 못 봐도(두 쪽만 OCR 한 상태) 머리말·꼬리말이다 —
+        #   되풀이를 확인할 길이 없어 `4 ANDY WEIR`·`PROVECGCT HAIL MARY 5` 가 남아 본문 첫 줄에 붙었다.
+        #   판정은 **같은 높이의 조각을 모은 한 줄**로 한다 — 띠에 걸친 표의 칸 하나(`100`)가 쪽 번호로 보이지 않게.
+        def _row_text(i):
+            r = frags[i][0]
+            same = [j for j in rest
+                    if min(r[3], frags[j][0][3]) - max(r[1], frags[j][0][1]) > 0.5 * min(r[3] - r[1], frags[j][0][3] - frags[j][0][1])]
+            return " ".join(frags[j][1] for j in sorted(same, key=lambda j: frags[j][0][0]))
+        pno = {i for i in edge if _page_number_line(_row_text(i))}
         if seen is None and not more:
-            edge = set()                     # 옆 쪽을 못 보면 **버리지 않는다**
+            edge = pno                       # 옆 쪽을 못 보면 쪽 번호 모양만 버린다
         else:
             allp = list(seen or []) + more
-            edge = {i for i in edge if _looks_repeated(frags[i][1], allp)}
+            edge = {i for i in edge if i in pno or _looks_repeated(frags[i][1], allp)}
 
     drop = side | edge
     if len(drop) >= len(frags):
@@ -450,6 +462,21 @@ def edge_rows(frags, page) -> list:
         out.append({"text": "  ".join(p[2] for p in pieces), "rect": rect, "size": size,
                     "where": "head" if (not ph or it["cy"] < ph / 2) else "foot", "pieces": pieces})
     return out
+
+
+# 아라비아(세 자리까지 — 네 자리는 `January 2025` 처럼 연도일 때가 많다)·소문자 로마 숫자
+_PAGE_NO = re.compile(r"^[-–—(\[]?(\d{1,3}|(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3}))[-–—)\]]?$")
+
+
+def _page_number_line(t: str) -> bool:
+    """쪽 번호를 단 머리말·꼬리말 모양인가 — 낱말 `EDGE_NUM_WORDS` 개 이하이고 **맨 앞이나 맨 끝**이 쪽 번호
+    (`4 ANDY WEIR` · `PROJECT HAIL MARY 5` · `- 12 -` · `iv`). 위·아래 띠에서 본문과 떨어진 줄에만 묻는다(§3.5.2)."""
+    toks = [x for x in re.split(r"\s+", str(t or "").replace(CELL_SEP, " ").strip()) if x]
+    if not toks or len(toks) > EDGE_NUM_WORDS:
+        return False
+    if len(toks) >= 3 and toks[0] in "-–—" and toks[-1] in "-–—":
+        toks = toks[1:-1]                     # `- 12 -`
+    return bool(_PAGE_NO.match(toks[0]) or _PAGE_NO.match(toks[-1]))
 
 
 def _norm_edge(t: str) -> str:
@@ -1401,6 +1428,10 @@ JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다
 # 261101-1(SOT §3.7.11): 줄 끝 `-` 로 이은 말의 영어 빈도(zipf)가 이보다 낮고 앞뒤가 각각 사전 낱말이면
 #   분철이 아니라 합성어다 — `-` 를 남긴다(`oval-shaped`). `satisfied`·`itself`·`otherwise` 는 모두 이 값보다 높다.
 HYPHEN_KEEP_ZIPF = 1.0
+_CLOSERS = "”\"’')]」』"   # 문장 끝 부호 뒤에 올 수 있는 닫는 따옴표·괄호(SOT §3.7.2 ③)
+# 앞 줄이 뒷줄보다 본문 폭의 이 비율 넘게 오른쪽에서 시작하면 잇지 않는다(SOT §3.7.11).
+#   실측: 지우지 못한 머리말 `PROJECT HAIL MARY 5` 0.52 / 검사의이해 문단 첫 줄(앞이 그림 옆) 0.21 — 그 사이.
+JOIN_LEFT_MAX = 0.40
 _TOC_TAIL = re.compile(r"\s\d{1,4}$")     # 차례 항목의 끝(빈칸 + 쪽 번호) — SOT §3.7.11
 _CAPTION_HEAD = None
 _LIST_HEAD = None
@@ -1523,6 +1554,24 @@ def _hyphen_keep(a, b) -> bool:
         return False
 
 
+def _dehyphen_ligature(a, b) -> str:
+    """분철을 이은 낱말이 `fi`↔`fl` 합자를 바꿔 읽은 것이면 뒷줄 첫머리를 고친다 (SOT §3.5.3, 261101-1).
+
+    `satis-` + `fled.` — `fled` 는 저 혼자 사전 낱말이라 OCR 단계에서는 고칠 수 없고, 이어야 `satisfled` 가 드러난다."""
+    ma = re.search(r"([A-Za-z]+)$", a or "")
+    mb = re.match(r"([a-z]+)(.*)$", b or "", re.S)
+    if not ma or not mb:
+        return b
+    try:
+        from viewer.text_noise import fix_ligature
+        got = fix_ligature(ma.group(1) + mb.group(1))
+    except Exception:
+        got = None
+    if got and got.lower().startswith(ma.group(1).lower()):
+        return got[len(ma.group(1)):] + mb.group(2)
+    return b
+
+
 def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
     """두 줄을 어떻게 이을지 — 빈칸 / 붙임 / 분철 떼기 (SOT §3.7·§3.7.7·§3.7.10).
 
@@ -1589,9 +1638,11 @@ def join_sentences(rows) -> list:
             _wrapped = (margin - _ra[2]) > _sa * JOIN_FILL
             sep = _join_sep(prev.get('_tail', prev['text']), r['text'], _wrapped)
             a = prev['text']
+            b_txt = r['text'].lstrip()
             if sep == '-drop':
                 a, sep = a.rstrip()[:-1], ''
-            prev['text'] = a.rstrip() + sep + r['text'].lstrip()
+                b_txt = _dehyphen_ligature(a, b_txt)
+            prev['text'] = a.rstrip() + sep + b_txt
             prev['rects'] = list(prev.get('rects', [])) + list(r.get('rects', []))
             pr, rr = prev['rect'], r['rect']
             prev['rect'] = (min(pr[0], rr[0]), min(pr[1], rr[1]),
@@ -1636,6 +1687,7 @@ def page_carry(prev_rows, rows) -> bool:
     sep = _join_sep(a.get('text') or '', tb)
     if sep == '-drop':
         ta, sep = ta[:-1], ''
+        tb = _dehyphen_ligature(ta, tb)
     a['text'] = ta + sep + tb
     del rows[0]
     return True
@@ -1779,7 +1831,8 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0) -> bool:
     if ' | ' in ta or ' | ' in tb:
         return False                                    # ②
     core = ta.rstrip()
-    if not core or core[-1] in SENT_END:
+    # 261101-1(SOT §3.7.11): 닫는 따옴표·괄호 **앞**의 부호로 본다 — `…two-i-pi.”` 다음 문단이 붙었다
+    if not core or core[-1] in SENT_END or core.rstrip(_CLOSERS)[-1:] in SENT_END:
         return False                                    # ③
     sa = max(1.0, a.get('size') or (ra[3] - ra[1]))
     sb = max(1.0, b.get('size') or (rb[3] - rb[1]))
@@ -1801,6 +1854,11 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0) -> bool:
         return False
     if rb[0] > ra[0] + sa * 4:
         return False                                    # 너무 많이 들여썼다 — 다른 글
+    # 261101-1(SOT §3.7.11): **앞 줄이 한참 오른쪽에서 시작**하면(가운데·오른쪽 머리말 `PROJECT HAIL MARY 5`)
+    #   다른 글이다 — 첫 줄 들여쓰기는 본문 폭의 몇 % 다. ⑧ 을 OCR 줄에서 빼자 지우지 못한 머리말이 본문에 붙었다.
+    #   OCR 줄에만 — 글자층은 한 줄이 여러 조각으로 오고 조각이 줄 가운데서 시작할 수 있다(NAPA 2쪽 `of an asphalt`).
+    if a.get('ocr') and span > 0 and ra[0] - rb[0] > span * JOIN_LEFT_MAX:
+        return False
     pitch = rb[1] - ra[1]                               # ⑥ 줄 사이 거리
     if pitch <= 0:
         return False

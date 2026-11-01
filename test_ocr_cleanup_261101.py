@@ -79,9 +79,25 @@ try:
     chk(tn.keep_ocr_word("xqzvw", 0, 0, 100, 30, 0.05, scale=0.24) is False,
         "② 사전에 없는 낮은 신뢰도 낱말은 종전대로 버린다")
     chk(tn.keep_ocr_word("픔", 0, 0, 30, 30, 0.05, scale=0.24) is False, "② 한글 잡음은 살리지 않는다")
-    bar = getattr(tn, "bar_as_i", None)            # 수정 전 코드에는 없다 — 그때는 실패로 센다
-    chk(bool(bar) and bar("12", ("|", 30), "45", 30) is False, "② 숫자 사이 `|`(표 괘선)는 `I` 가 아니다")
-    chk(bool(bar) and bar("say", ("|", 80), "like", 30) is False, "② 글자보다 훨씬 긴 `|` 는 `I` 가 아니다")
+    fi = getattr(tn, "fix_i", None)                 # 수정 전 코드에는 없다 — 그때는 실패로 센다
+    F = (lambda *a: fi(*a)) if fi else (lambda *a: "없음")                         # noqa: E731
+    chk(F("12", "|", 4, 30, "45", 30) is None, "② 숫자 사이 `|`(표 괘선)는 `I` 가 아니다")
+    chk(F("say", "|", 4, 80, "like", 30) is None, "② 글자보다 훨씬 긴 `|` 는 `I` 가 아니다")
+    # 261101-1 보완(지휘 세션의 실제 경로 확인): HM 에서 실제로 나온 `I` 의 모양들
+    chk(F("Ooh!", "I", 5, 53, "felt", 31) == "I", "② 위아래 글줄과 엉겨 높이 53 인 `I` 도 남긴다")
+    chk(F("say.", "1", 1, 28, "keep", 31) == "I", "② 획 1px 인 `1` 은 `I`")
+    chk(F("page", "1", 14, 28, "of", 31) is None, "② 폭이 있는 숫자 `1` 은 그대로")
+    chk(F("it.", "[", 4, 28, "summon", 31) == "I", "② 좁은 `[` 는 `I`")
+    chk(F("God.", "[can", 78, 28, "talk.", 31) == "I can", "② 낱말에 붙은 `[can` → `I can`")
+    chk(F("am", "[?”", 39, 29, "]", 31) == "I?”" and F("[?”", "]", 8, 28, "say", 31) == "I",
+        "② `am [?” ] say` → `am I?” I say`(이웃이 그 자신 `I` 후보여도)")
+    chk(F(None, "Wait—t", 135, 28, "just", 31) == "Wait—I", "② 대시 뒤 `Wait—t` → `Wait—I`")
+    chk(F("because", "|", 8, 28, None, 31) == "I", "② 줄 끝 `|` 도 앞이 영문이면 `I`")
+    lig = getattr(tn, "fix_ligature", None)
+    chk(bool(lig) and lig("satisfled.") == "satisfied." and lig("fled.") is None,
+        "② `fi`↔`fl` 합자 — 사전에 없는 낱말만 고친다")
+    chk(tx._dehyphen_ligature("satis", "fled.") == "fied." if hasattr(tx, "_dehyphen_ligature") else False,
+        "② 분철을 이어야 드러나는 합자(`satis-` + `fled.`)도 고친다")
 
     # ── ③ OCR 줄은 ⑧(크기)로 끊지 않는다(§3.7.11) — 잉크 높이가 줄마다 다르다 ─────────
     body = ["The whiteness lessens My eyes are adjusting I start to see shapes and",
@@ -142,6 +158,39 @@ try:
     allt = " ".join(r["text"] for r in rows)
     chk("HAIL" not in allt, "⑤ 짝·홀수 머리말이 다른 책에서 오인식된 머리말까지 지운다", allt[:60])
     chk("take another breath" in allt and "Theres one in each arm" in allt, "⑤ 본문은 잃지 않는다")
+    # 261101-1 보완: 텍스트 창에서 **두 쪽만** OCR 한 상태 — 옆 쪽 낱말이 없어도 쪽 번호를 단 머리말은 지운다
+    none = lambda k: ([], 0)                                                     # noqa: E731
+    d = fitz.open(dst)
+    rows = tx.page_lines(d, dst, 2, ocr_words=pages[2][0], ocr_dpi=0, ocr_peer_words=tx._peer_words(none, 2, 5))
+    allt = " ".join(r["text"] for r in rows)
+    chk("HAIL" not in allt and allt.startswith("take another breath"), "⑤ 옆 쪽 OCR 이 없어도 쪽 번호를 단 머리말은 지운다", allt[:60])
+    # 쪽 번호가 없는 머리말은 되풀이를 확인할 길이 없어 남는다 — 그래도 **본문 첫 줄에 붙지 않는다**
+    bw = []
+    for i, ln in enumerate(BODY):                    # HM 처럼 머리말 바로 아래(줄 거리 하나)에서 본문이 시작한다
+        bw += line_words(ln, 54 + i * 14, x=40, cw=4.6, gap=2.4)
+    hw = line_words("PROJECT HAIL MARY", 40, x=150, h=7.0, cw=5.0, gap=4.0)
+    dx = max(q["x1"] for q in bw) - max(q["x1"] for q in hw)     # HM 처럼 오른쪽 끝에 맞춘 머리말
+    for q in hw:
+        q["x0"] += dx; q["x1"] += dx
+    w = hw + bw
+    rows = tx.page_lines(d, dst, 2, ocr_words=w, ocr_dpi=0, ocr_peer_words=None)
+    d.close()
+    chk(rows and rows[0]["text"] == "PROJECT HAIL MARY", "⑤ 지우지 못한 머리말이 본문 첫 줄에 이어 붙지 않는다",
+        rows[0]["text"][:60] if rows else "")
+    chk(not tx._page_number_line("January 2025") if hasattr(tx, "_page_number_line") else False,
+        "⑤ 네 자리 수(연도)는 쪽 번호로 보지 않는다")
+
+    # ── ③' 닫는 따옴표 앞 문장 끝 — 다음 문단을 붙이지 않는다(§3.7.2 ③) ─────────────────
+    q = ["But I take a deep breath and speak slowly and carefully to the robot",
+         "computer that hangs above my bed. Two times e to the two i pi.”",
+         "“Incorrect. What is the cube root of eight asks the computer again",
+         "and I sigh because it will not stop asking me that same question."]
+    words = []
+    for i, ln in enumerate(q):
+        words += line_words(ln, 100 + i * 14, cw=4.6, gap=2.4)
+    rows = tx.join_sentences(tx.lines_from_words(words, dpi=0))
+    chk(len(rows) == 2 and rows[1]["text"].startswith("“Incorrect."), "③' `…pi.”` 다음 줄은 새 문단",
+        str([r["text"][-20:] for r in rows]))
 
     # ── ⑥ 쪽을 넘어간 문장 — 여러 쪽 산출물에서만 잇는다(§3.7.12) ───────────────────
     carry = getattr(tx, "page_carry", None)
@@ -183,7 +232,8 @@ try:
             k1 = []
     finally:
         ocr.build_page, ocr.available_langs = _ob, _al
-    chk(langs[:4] == ["kor+eng", "eng", "eng", "eng"], "⑦ 한글 없는 쪽이 두 번 잇달면 그 쪽부터 `eng`", str(langs))
+    # 261101-1 보완: 두 쪽만 읽어도 첫 쪽부터 — 한글 없는 쪽 **하나**면 그 쪽을 `eng` 로 다시 읽는다
+    chk(langs[:4] == ["eng"] * 4, "⑦ 한글 없는 쪽이 나오면 그 쪽부터 `eng`", str(langs))
     chk(langs[4:] == ["kor+eng", "kor+eng"], "⑦ `eng` 로 읽은 쪽이 잡글이면 그 쪽을 다시 읽고 되돌린다", str(langs))
     chk(k1 == ["kor"] * 4, "⑦ `kor` 하나를 고른 것은 건드리지 않는다", str(k1))
 finally:

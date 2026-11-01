@@ -647,7 +647,8 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     parts = []
     prev_line = None        # (block,par,line) — 줄이 바뀌면 개행 삽입(머리말/꼬리말·하이픈 처리용)
     has_lineinfo = all(k in data for k in ("block_num", "par_num", "line_num"))
-    # 261101-1(텍스트 창 SOT §3.5.3): 문장 속 `|` 는 `I` — 같은 줄의 앞뒤 낱말과 그 줄 낱말 높이로 판단한다
+    # 261101-1(텍스트 창 SOT §3.5.3): 영문 `I` 를 `|`·`[`·`1`·`[can`·`Wait—t` 로 읽은 것과 `fi`↔`fl` 합자를
+    #   **버리기 전에** 고친다 — 같은 줄의 앞뒤 낱말과 그 줄 낱말 높이로 판단한다
     _key = ((lambda i: (data["block_num"][i], data["par_num"][i], data["line_num"][i]))
             if has_lineinfo else (lambda i: 0))
     _idx = [i for i, t in enumerate(data["text"]) if str(t).strip()]
@@ -656,16 +657,20 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
         _hs.setdefault(_key(i), []).append(data["height"][i])
     _med = {k: sorted(v)[len(v) // 2] for k, v in _hs.items()}
     _texts = list(data["text"])
-    _is_i = set()
+    _is_i = {}                     # 고친 낱말 → 상자를 맞출 이웃 낱말(같은 줄)
     for n, i in enumerate(_idx):
-        if str(_texts[i]).strip() not in ("|", "I"):
-            continue
         a = _idx[n - 1] if n > 0 and _key(_idx[n - 1]) == _key(i) else None
         b = _idx[n + 1] if n + 1 < len(_idx) and _key(_idx[n + 1]) == _key(i) else None
-        if a is not None and b is not None and _noise.bar_as_i(
-                _texts[a], (_texts[i], data["height"][i]), _texts[b], _med.get(_key(i), 0)):
-            _texts[i] = "I"
-            _is_i.add(i)
+        s0 = str(_texts[i]).strip()
+        got = _noise.fix_i(_texts[a] if a is not None else None, s0, data["width"][i], data["height"][i],
+                           _texts[b] if b is not None else None, _med.get(_key(i), 0))
+        if got is None:
+            got = _noise.fix_ligature(s0)
+            if got is not None:
+                _texts[i] = got
+            continue
+        _texts[i] = got
+        _is_i[i] = a if a is not None else b
     for i, txt in enumerate(_texts):
         s = str(txt).strip()
         if not s:
@@ -680,8 +685,11 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
         x, y, w, h = (data["left"][i], data["top"][i],
                       data["width"][i], data["height"][i])
         if i in _is_i:
-            # 문장 속 `I` — 획이 1px 로 잡혀도 버리지 않는다. 상자를 글자 폭쯤으로 넓혀 두어
-            #   화면 단계의 같은 규칙(③ 홀쭉한 한 글자)에도 걸리지 않게 한다.
+            # 고친 `I` — 획이 1px 로 잡혀도 버리지 않는다. 높이는 이웃 낱말에 맞추고(위아래 글줄과 엉긴 53px 상자가
+            #   두 줄을 잇지 않게) 폭은 글자 폭쯤으로 넓혀 화면 단계의 같은 규칙(③ 홀쭉한 한 글자)에도 걸리지 않게 한다.
+            j = _is_i[i]
+            if j is not None:
+                y, h = data["top"][j], data["height"][j]
             if w < h * 0.3:
                 x, w = int(x + w / 2 - h * 0.15), max(1, int(round(h * 0.3)))
         elif not _noise.keep_ocr_word(s, x, y, x + w, y + h, c / 100.0,
@@ -731,7 +739,7 @@ def words_from_layer(page: "fitz.Page") -> dict:
 
 
 # 261101-1(§14.8.1): `kor+eng` 로 읽는데 한글이 없으면 읽은 결과로 `eng` 로 좁힌다 — 값은 §14.B
-LANG_EN_PAGES = 2          # 잇달아 이만큼 한글 0자 쪽이면
+LANG_EN_PAGES = 1          # 잇달아 이만큼 한글 0자 쪽이면(261101-1 보완: 2 → 1 — 두 쪽만 읽으면 첫 쪽이 늘 kor+eng 로 남았다)
 LANG_EN_MIN_WORDS = 40     # (그 쪽에 라틴 낱말이 이만큼 있어야 판단에 넣는다)
 LANG_EN_BACK_Q = 0.6       # `eng` 로 읽은 쪽의 영문다움(`_english_quality`)이 이 아래면 되돌린다
 

@@ -24,8 +24,11 @@ MIN_CONF = 0.30      # OCR 이 스스로 이만큼도 확신하지 못한 낱말
 # 261101-1(SOT §3.5.3): 신뢰도가 낮아도 **영어 사전에 이만큼(zipf) 흔한 낱말**이면 남긴다.
 #   실측 HM 4쪽 — 버려진 사전 낱말 `What's`(3.8 이상)·`they're`·`shouldn't`·`raise` 는 모두 3 이상, 잡음 조각은 사전에 없다.
 KEEP_ZIPF = 3.0
-# 문장 속 `|` 를 `I` 로 볼 상자 높이(그 줄 낱말 높이 중앙값의 배). 실측 `I`·`|` 29px / 줄 중앙 29~33px.
+# 문장 속 `|`·`[`·`]`·`1` 을 `I` 로 볼 상자 높이(그 줄 낱말 높이 중앙값의 배). 실측 `I`·`|` 29px / 줄 중앙 29~33px.
 BAR_I_LO, BAR_I_HI = 0.6, 1.6
+I_TALL = 2.2         # `I` 로 읽혔는데 위아래 글줄과 엉겨 큰 상자(실측 53px ÷ 31 = 1.7) — `I` 는 이만큼까지 받는다
+BRACKET_I_W = 0.35   # `[`·`]` 가 이보다 좁으면(폭÷높이) `I` 의 획이다(실측 4~8px ÷ 28)
+ONE_I_W = 0.2        # `1` 이 이보다 좁으면 `I` 의 획이다(실측 1px ÷ 28) — 진짜 숫자 1 은 폭이 있다
 
 
 def has_letter(text) -> bool:
@@ -93,19 +96,60 @@ def known_word(surface) -> bool:
     return True
 
 
-def bar_as_i(prev, cur, nxt, line_h: float) -> bool:
-    """문장 속 `|` 를 `I` 로 볼까 (텍스트 창 SOT §3.5.3, 261101-1).
+import re as _re
+_I_LIKE = _re.compile(r"[\[\]|I][?!.,;:”\"’)]*|1[?!.,;:”\"’)]+")   # 그 자신이 `I` 로 읽혔을 법한 토막(맨 `1` 은 숫자일 수 있어 뺀다)
 
-    Tesseract 는 세리프 `I` 를 `|` 로 읽는다(HM 4쪽: `I` 63개 중 5개). `prev`·`nxt` 는 **같은 줄**의 바로 앞뒤
-    낱말 글자, `cur` 는 `(글자, 상자 높이)`, `line_h` 는 그 줄 낱말 높이의 중앙값이다.
-    `I` 로 읽힌 것도 같은 조건이면 참 — 부르는 쪽이 ③(홀쭉한 한 글자)으로 버리지 않게 한다(획이 1px 인 `I` 3개)."""
-    s, h = cur
-    if str(s or "").strip() not in ("|", "I") or line_h <= 0:
-        return False
-    if not (BAR_I_LO <= float(h) / float(line_h) <= BAR_I_HI):
-        return False
-    lat = lambda t: any("A" <= c <= "z" and c.isalpha() for c in str(t or ""))    # noqa: E731
-    return lat(prev) and lat(nxt)
+
+def _latin(t) -> bool:
+    return any("A" <= c <= "z" and c.isalpha() for c in str(t or ""))
+
+
+def fix_i(prev, s, w, h, nxt, line_h: float):
+    """OCR 이 영문 낱말 `I` 를 다른 글자로 읽었으면 고친 글을, 아니면 None (텍스트 창 SOT §3.5.3, 261101-1).
+
+    세리프 `I` 는 획 하나라 Tesseract 가 여러 모양으로 읽는다(HM 실측): `|`·`[`·`]`·`1`(획 1px), 위아래 글줄과
+    엉겨 **높이 53px** 로 잡힌 `I`, 뒤 낱말에 붙은 `[can`·`[?”`, 대시 뒤 `Wait—t`. `prev`·`nxt` 는 **같은 줄**의
+    바로 앞뒤 낱말(줄 끝·줄 머리면 None), `w`·`h` 는 이 상자, `line_h` 는 그 줄 낱말 높이의 중앙값.
+    영문 낱말 사이(한쪽은 줄 끝이어도 된다)일 때만 — 숫자 사이 `|`(표 괘선)·제대로 된 숫자 `1` 은 건드리지 않는다."""
+    import re
+    t = str(s or "").strip()
+    if not t or line_h <= 0 or h <= 0:
+        return None
+    # 이웃이 그 자신 `I` 후보(`[?”` 다음 `]`)면 없는 것으로 본다 — `“Where am [?” ] say` 를 둘 다 `I` 로
+    side = [x for x in (prev, nxt) if x is not None and not _I_LIKE.fullmatch(str(x).strip())]
+    if not side or not all(_latin(x) for x in side):
+        return None
+    r = float(h) / float(line_h)
+    if t in ("I", "|", "[", "]", "1"):
+        hi = I_TALL if t == "I" else BAR_I_HI
+        if not (BAR_I_LO <= r <= hi):
+            return None
+        if t in ("[", "]") and w > h * BRACKET_I_W:
+            return None                      # 진짜 괄호는 폭이 있다
+        if t == "1" and w > h * ONE_I_W:
+            return None                      # 진짜 숫자 1
+        return "I"
+    m = re.fullmatch(r"[\[\]|1]([?!.,;:”\"’)]+)", t)             # `[?”`·`1?”` → `I?”`
+    if m and BAR_I_LO <= r <= BAR_I_HI:
+        return "I" + m.group(1)
+    m = re.fullmatch(r"[\[|]([a-z]{2,}[.,;:!?”\"’]*)", t)        # `[can` → `I can`
+    if m and known_word(m.group(1)):
+        return "I " + m.group(1)
+    m = re.fullmatch(r"([A-Za-z]+[—–])[t|\[\]1]", t)            # `Wait—t` → `Wait—I`
+    if m and known_word(m.group(1)[:-1]):
+        return m.group(1) + "I"
+    return None
+
+
+def fix_ligature(s):
+    """`fi`·`fl` 합자를 서로 바꿔 읽은 낱말(`satisfled`)을 사전으로 되돌린다 — 아니면 None (§3.5.3, 261101-1)."""
+    t = str(s or "")
+    if ("fl" not in t and "fi" not in t) or known_word(t):
+        return None
+    for a, b in (("fl", "fi"), ("fi", "fl")):
+        if a in t and known_word(t.replace(a, b)):
+            return t.replace(a, b)
+    return None
 
 
 def keep_ocr_word(surface, x0, y0, x1, y1, conf, *, scale: float = 1.0,
