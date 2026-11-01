@@ -64,6 +64,9 @@ ALLOW = {
                                     "선 1", "선 2", "선 3", "선 4", "선 5"},
     "viewer/widgets/read_aloud.py": {"전체"},                 # 읽기 구간 값(정규식은 _REGEX 가 거른다)
     "viewer/widgets/thumbs_list.py": {"한"},                  # 글자 폭을 재는 표본
+    # 261101-2(마스터 §4.4.3 H2): 목차 없는 스캔본의 장 이름 — 책 본문의 장 머리(`제N장`)를 그대로 적는 **문서의 언어**
+    #   (다국어 SOT §7: 문서 처리는 화면 언어와 무관). 영문 책은 `CHAPTER n` 이 그대로 나온다
+    "viewer/study/ocr_headings.py": {"제", "장"},
     # 261014-14 형식 변환(형식 변환 SOT §1): 만든 문서 안의 키·원본 글꼴 이름 짐작
     "viewer/convert/hwpx_writer.py": {"개요 1"},              # 한글 기본 스타일 이름(문서 안의 키)
     "viewer/convert/layout.py": {"명조", "고딕"},              # PDF 글꼴 이름에서 세리프 여부를 짐작하는 조각
