@@ -263,6 +263,15 @@ try:
     except TypeError:                               # 수정 전 코드에는 쪽 순서 인자가 없다
         ok = False
     chk(ok, "⑤s 쪽 순서와 동떨어진 수(차례 항목 `…생애 270`, 12쪽)는 쪽 번호가 아니다")
+    # 글자층 PDF 확인(NAPA_BMD, 사용자 지시): `1)` 은 목록 번호 — 15쪽 본문 줄이 꼬리말로 지워졌다. 괄호는 짝일 때만 쪽 번호
+    try:
+        ok = (not tx._page_number_line("1) materials, 2) production, and 3) testing.", 16)
+              and tx._page_number_line("(16) BMD-001", 16) and tx._page_number_line("- 16 -", 16))
+    except TypeError:
+        ok = False
+    chk(ok, "⑤s `1) materials…` 의 `1)` 은 쪽 번호가 아니다(괄호는 짝일 때만)")
+    chk(tx._join_sep("Design, 24(3), 836–849. https://doi.org/10.1080/", "14680629.2022.2029548") == "",
+        "⑤s 줄 끝에서 끊긴 웹 주소는 빈칸 없이 잇는다")
 
     # ── ③' 닫는 따옴표 앞 문장 끝 — 다음 문단을 붙이지 않는다(§3.7.2 ③) ─────────────────
     q = ["But I take a deep breath and speak slowly and carefully to the robot",

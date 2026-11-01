@@ -514,7 +514,9 @@ def edge_rows(frags, page) -> list:
 
 # 아라비아(세 자리까지 — 네 자리는 `January 2025` 처럼 연도일 때가 많다)·소문자 로마 숫자
 #   OCR 이 끝자리 `1` 을 `|`·`l`·`I` 로 읽은 것(`30|`)도 받는다(표본 조사)
-_PAGE_NO = re.compile(r"^[-–—(\[]?(\d{1,2}[\d|lI]?|(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3}))[-–—)\]]?$")
+#   괄호는 짝으로만 — `1)` 은 목록 번호다(NAPA 15쪽 `1) materials, 2) production, …` 이 꼬리말로 지워졌다)
+_PN = r"(\d{1,2}[\d|lI]?|(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3}))"
+_PAGE_NO = re.compile(r"^(?:[-–—]?" + _PN + r"[-–—]?|\(" + _PN + r"\)|\[" + _PN + r"\])$")
 
 
 def _page_number_line(t: str, page_no: int = 0) -> bool:
@@ -532,7 +534,7 @@ def _page_number_line(t: str, page_no: int = 0) -> bool:
         m = _PAGE_NO.match(tk)
         if not m:
             continue
-        num = re.sub(r"[|lI]$", "1", m.group(1))
+        num = re.sub(r"[|lI]$", "1", next(g for g in m.groups() if g))
         if page_no and num.isdigit() and abs(int(num) - int(page_no)) > EDGE_NUM_OFFSET:
             continue
         return True
@@ -1721,6 +1723,9 @@ def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
         return ''
     if a.endswith('-') and ('a' <= b[0] <= 'z'):
         return '' if _hyphen_keep(a, b) else '-drop'
+    # 261101-1: 줄 끝에서 끊긴 웹 주소는 빈칸 없이 잇는다(NAPA 10쪽 `https://doi.org/10.1080/` + `14680629.2022…`)
+    if re.search(r"(?:https?://|www\.|doi\.org/)\S*$", a) and not b[0].isspace() and a[-1] in "/.-_=?&#":
+        return ''
     if _is_cjk(a[-1]) and _is_cjk(b[0]):
         if _ko_wants_space(a, b):
             return ' '
