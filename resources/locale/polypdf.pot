@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-01 20:12+0900\n"
+"POT-Creation-Date: 2026-11-01 23:35+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -499,8 +499,9 @@ msgstr ""
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
 #: viewer/print_controller.py viewer/update_controller.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
-#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
-#: viewer/widgets/update_dialog.py viewer/widgets/vprinter_dialog.py
+#: viewer/widgets/stamp_dialog.py viewer/widgets/translate_dialog.py
+#: viewer/widgets/translate_files_dialog.py viewer/widgets/update_dialog.py
+#: viewer/widgets/vprinter_dialog.py
 msgid "닫기"
 msgstr ""
 
@@ -1644,7 +1645,7 @@ msgstr ""
 msgid "지금 연 폴더·파일·검색어를 등록"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/stamp_dialog.py
 msgid "추가"
 msgstr ""
 
@@ -4431,11 +4432,12 @@ msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr ""
 
 #: viewer/sign_draft_controller.py viewer/widgets/capture_settings.py
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "이름"
 msgstr ""
 
 #: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "날짜"
 msgstr ""
 
@@ -4484,7 +4486,7 @@ msgstr ""
 msgid "이 파일의 서명 기록이 없어 서명 자리만 되살립니다 — 확정 때 넣은 '그림만' 은 바탕에 남습니다."
 msgstr ""
 
-#: viewer/sign_draft_controller.py
+#: viewer/sign_draft_controller.py viewer/stamp_controller.py
 #, python-brace-format
 msgid "쪽 범위(예: 1-3, 5) — 비우면 모든 쪽({n}쪽)"
 msgstr ""
@@ -6120,7 +6122,7 @@ msgid "TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py viewer/widgets/ocr_options_dialog.py
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "자동"
 msgstr ""
 
@@ -9133,7 +9135,7 @@ msgstr ""
 msgid "배경 지우기"
 msgstr ""
 
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "잉크 색"
 msgstr ""
 
@@ -9474,15 +9476,15 @@ msgstr ""
 msgid "마우스나 펜으로 서명을 그리세요."
 msgstr ""
 
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "원래 색"
 msgstr ""
 
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "검정"
 msgstr ""
 
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "파랑"
 msgstr ""
 
@@ -9522,7 +9524,8 @@ msgstr ""
 msgid "두 비밀번호가 다릅니다."
 msgstr ""
 
-#: viewer/widgets/sign_dialogs.py viewer/widgets/study_panel.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/study_panel.py
 msgid "종류"
 msgstr ""
 
