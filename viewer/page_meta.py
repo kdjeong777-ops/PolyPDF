@@ -20,6 +20,12 @@ from typing import Optional
 SIDECAR_NAME = "page_meta.json"
 SCHEMA_VERSION = 2
 CROP_MAX = 45.0
+BLOB_MIN = 4096          # 261101-3(마스터 §4.6.11): 이보다 긴 사진 값(`data`·`pdf`)은 파일별 `blobs` 에 한 번만
+_BLOB_FIELDS = ("data", "pdf")
+
+
+def _blob_ref(v) -> Optional[str]:
+    return v[1:] if isinstance(v, str) and v.startswith("@") and len(v) == 41 else None
 
 
 def _clamp_crop(v) -> float:
@@ -145,6 +151,8 @@ class PageMetaStore:
                     fr[section].pop(p, None)
         target["drawings"], target["images"], target["crop_pages"] = drawings, images, crops
         target["hidden"] = sorted(hidden)
+        if target is not fr and fr.get("blobs"):          # 261101-3: 옮긴 사진이 가리키는 값도
+            target.setdefault("blobs", {}).update(fr["blobs"])
         return True
 
     # --- IO ---
@@ -159,10 +167,24 @@ class PageMetaStore:
             except Exception:
                 pass
 
+    def _gc_blobs(self) -> None:
+        """261101-3: 어느 사진도 가리키지 않는 `blobs` 값을 지운다(저장 때)."""
+        for fr in self._data["files"].values():
+            bl = fr.get("blobs") if isinstance(fr, dict) else None
+            if not bl:
+                continue
+            used = {_blob_ref(d.get(f)) for lst in (fr.get("images") or {}).values()
+                    for d in (lst or []) if isinstance(d, dict) for f in _BLOB_FIELDS}
+            for h in [h for h in bl if h not in used]:
+                del bl[h]
+            if not bl:
+                fr.pop("blobs", None)
+
     def save(self) -> bool:
         p = self._sidecar()
         if not p:
             return False
+        self._gc_blobs()
         try:
             tmp = p.with_suffix(".json.tmp")
             tmp.write_text(json.dumps(self._data, ensure_ascii=False, indent=2),
@@ -337,16 +359,39 @@ class PageMetaStore:
         fr = self._data["files"].get(key) if key else None
         if not fr:
             return []
-        return list(fr.get("images", {}).get(str(int(page0)), []))
+        bl = fr.get("blobs") or {}
+        out = []
+        for d in fr.get("images", {}).get(str(int(page0)), []):
+            if isinstance(d, dict) and any(_blob_ref(d.get(f)) for f in _BLOB_FIELDS):
+                d = dict(d)                      # 261101-3: `@sha1` → 값(호출측은 늘 풀린 값을 본다)
+                for f in _BLOB_FIELDS:
+                    h = _blob_ref(d.get(f))
+                    if h:
+                        d[f] = bl.get(h, "")
+            out.append(d)
+        return out
 
     def set_images(self, file_path, page0, images) -> bool:
         key = self._key(file_path)
         if key is None:
             return False
-        im = self._file(key, create=True)["images"]
+        fr = self._file(key, create=True)
+        im = fr["images"]
         pg = str(int(page0))
         if images:
-            im[pg] = list(images)
+            import hashlib
+            stored = []
+            for d in images:
+                if isinstance(d, dict) and any(isinstance(d.get(f), str) and len(d[f]) > BLOB_MIN for f in _BLOB_FIELDS):
+                    d = dict(d)                  # 261101-3: 같은 그림을 여러 쪽에 넣어도 한 번만
+                    for f in _BLOB_FIELDS:
+                        v = d.get(f)
+                        if isinstance(v, str) and len(v) > BLOB_MIN:
+                            h = hashlib.sha1(v.encode("ascii", "replace")).hexdigest()
+                            fr.setdefault("blobs", {})[h] = v
+                            d[f] = "@" + h
+                stored.append(d)
+            im[pg] = stored
         else:
             im.pop(pg, None)
         return True

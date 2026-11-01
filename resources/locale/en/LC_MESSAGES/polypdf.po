@@ -1514,6 +1514,14 @@ msgid "선택 사진 모양 변경"
 msgstr "Change Selected Photo Shape"
 
 #: viewer/app.py
+msgid "다른 쪽에도 넣기…"
+msgstr "Place on Other Pages…"
+
+#: viewer/app.py
+msgid "등록 이미지로 등록…"
+msgstr "Register as Saved Image…"
+
+#: viewer/app.py
 msgid "선과 텍스트 입력 설정…"
 msgstr "Line and Text Input Settings…"
 
@@ -4559,6 +4567,7 @@ msgid "다른 쪽에도 놓기…"
 msgstr "Place on Other Pages…"
 
 #: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "지우기"
 msgstr "Delete"
 
@@ -4781,6 +4790,55 @@ msgstr "{stem}_unsigned ({n}).pdf"
 #, python-brace-format
 msgid "{stem}_서명.pdf"
 msgstr "{stem}_signed.pdf"
+
+#: viewer/stamp_controller.py
+msgid "다른 쪽에도 넣기"
+msgstr "Place on Other Pages"
+
+#: viewer/stamp_controller.py
+msgid "영역이 너무 작습니다 — 끌어서 고르세요."
+msgstr "The area is too small — drag to select it."
+
+#: viewer/stamp_controller.py
+msgid "넣을 다른 쪽이 없습니다. 예: 1-3, 5"
+msgstr "There are no other pages to place it on. Example: 1-3, 5"
+
+#: viewer/stamp_controller.py
+#, python-brace-format
+msgid "{n}쪽에 넣었습니다(미저장) — 💾 ‘저장’ 을 눌러 반영하세요."
+msgstr "Placed on {n} pages (unsaved) — press 💾 'Save' to apply."
+
+#: viewer/stamp_controller.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
+msgid "클립보드에 그림이 없습니다."
+msgstr "There is no image on the clipboard."
+
+#: viewer/stamp_controller.py
+msgid "등록할 영역을 끌어 고르세요 — 글자층이 있으면 선명하게(PDF 그대로) 등록합니다."
+msgstr "Drag to select the area to register — if it has a text layer, it is registered sharp (as PDF)."
+
+#: viewer/stamp_controller.py
+#, python-brace-format
+msgid "'{name}' 을(를) 등록했습니다 — 본문을 누르면 그 자리에 실제 크기로 넣습니다."
+msgstr "Registered '{name}' — click the page to place it there at actual size."
+
+#: viewer/stamp_controller.py
+#, python-brace-format
+msgid "'{name}' 을(를) 등록했습니다."
+msgstr "Registered '{name}'."
+
+#: viewer/stamp_controller.py viewer/widgets/stamp_dialog.py
+msgid "등록 이미지"
+msgstr "Saved Images"
+
+#: viewer/stamp_controller.py
+msgid "2쪽 보기에서는 영역을 정할 수 없습니다. 1쪽 보기로 바꾼 뒤 다시 하세요."
+msgstr "You cannot select an area in two-page view. Switch to single-page view and try again."
+
+#: viewer/stamp_controller.py
+#, python-brace-format
+msgid "{n}쪽에 넣습니다. 계속할까요?"
+msgstr "This will place it on {n} pages. Continue?"
 
 #: viewer/study/ocr.py
 msgid "중국어(간체)"
@@ -7336,6 +7394,10 @@ msgid "글쓰기 — 클릭:선택/해제, 더블클릭:글쓰기↔지시선, �
 msgstr "Text — click: select/clear, double-click: text ↔ callout, ▾: style"
 
 #: viewer/widgets/main_view.py
+msgid "이미지 넣기 — 클릭: 등록 이미지를 누른 자리에(실제 크기), ▾: 고르기·파일·클립보드·관리"
+msgstr "Insert image — click: place the saved image where you click (actual size), ▾: choose · file · clipboard · manage"
+
+#: viewer/widgets/main_view.py
 msgid "개체 선택(이미지 이동·크기·삭제)"
 msgstr "Select objects (move · resize · delete images)"
 
@@ -7375,6 +7437,23 @@ msgstr "Fill"
 msgid "청소"
 msgstr "Clear"
 
+#: viewer/widgets/main_view.py viewer/widgets/stamp_dialog.py
+msgid "파일에서…"
+msgstr "From File…"
+
+#: viewer/widgets/main_view.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
+msgid "클립보드에서"
+msgstr "From Clipboard"
+
+#: viewer/widgets/main_view.py
+msgid "PDF 에서 영역 등록…"
+msgstr "Register Area from PDF…"
+
+#: viewer/widgets/main_view.py
+msgid "등록 이미지 관리…"
+msgstr "Manage Saved Images…"
+
 #: viewer/widgets/main_view.py
 #, python-brace-format
 msgid "{get} — 클릭:선택/해제, 더블클릭:글쓰기↔지시선, ▾:스타일({text_style})"
@@ -7384,6 +7463,15 @@ msgstr "{get} — click: select/clear, double-click: text ↔ callout, ▾: styl
 #, python-brace-format
 msgid "선 종류: {MODE_NAME} (클릭해 전환)"
 msgstr "Line type: {MODE_NAME} (click to switch)"
+
+#: viewer/widgets/main_view.py viewer/widgets/stamp_dialog.py
+#, python-brace-format
+msgid "{name} · 폭 {mm} mm"
+msgstr "{name} · width {mm} mm"
+
+#: viewer/widgets/main_view.py
+msgid "등록 이미지 없음 — 아래 '등록 이미지 관리…' 에서 추가"
+msgstr "No saved images — add them in 'Manage Saved Images…' below"
 
 #: viewer/widgets/main_view.py
 #, python-brace-format
@@ -7784,6 +7872,7 @@ msgid "사용자 포인터 {i}"
 msgstr "Custom pointer {i}"
 
 #: viewer/widgets/pres_timer.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "없음"
 msgstr "None"
 
@@ -9303,10 +9392,6 @@ msgid "그림 불러오기…"
 msgstr "Load Image…"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "클립보드에서"
-msgstr "From Clipboard"
-
-#: viewer/widgets/sign_dialogs.py
 msgid "손으로 그리기…"
 msgstr "Draw by Hand…"
 
@@ -9670,10 +9755,6 @@ msgstr "Black"
 #: viewer/widgets/sign_dialogs.py
 msgid "파랑"
 msgstr "Blue"
-
-#: viewer/widgets/sign_dialogs.py
-msgid "클립보드에 그림이 없습니다."
-msgstr "There is no image on the clipboard."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "잉크가 보이지 않습니다 — '자동' 을 끄고 배경 지우기 값을 조정하세요."
@@ -10173,6 +10254,115 @@ msgstr "✍  {n} signature place(s) ({a} digital signature · {b} image only) �
 #, python-brace-format
 msgid " · 확정하면 '{name}' 을 바꿉니다"
 msgstr " · confirming replaces '{name}'"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "선명하게 (PDF 그대로 — 글자가 글자로 남는다)"
+msgstr "Sharp (as PDF — text stays text)"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "그림 (바탕 투명)"
+msgstr "Picture (transparent background)"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "자르기"
+msgstr "Crop"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "누른 뒤 미리보기에서 남길 부분을 끌어 고릅니다 — 다시 누르면 적용"
+msgstr "Press, then drag in the preview to choose the part to keep — press again to apply"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "바탕 지우기"
+msgstr "Remove background"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "실제 폭"
+msgstr "Actual width"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "날짜 넣기 (넣는 날의 날짜 — 미리보기에서 끌어 자리를 정합니다)"
+msgstr "Add date (the date it is placed — drag in the preview to set its position)"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "날짜 글자 색"
+msgstr "Date text color"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "등록 이미지 관리"
+msgstr "Manage Saved Images"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "스크린샷에서"
+msgstr "From Screenshot"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "고치기…"
+msgstr "Edit…"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "PDF 그대로(선명)"
+msgstr "As PDF (sharp)"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "그림(바탕 투명)"
+msgstr "Picture (transparent background)"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "등록할 그림·PDF"
+msgstr "Image or PDF to register"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "그림·PDF (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff *.pdf)"
+msgstr "Images and PDF (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff *.pdf)"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "도장"
+msgstr "Stamp"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "색: 잉크"
+msgstr "Color: ink"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "남은 그림이 없습니다 — 바탕 지우기 문턱을 낮추세요."
+msgstr "Nothing is left — lower the background removal threshold."
+
+#: viewer/widgets/stamp_dialog.py
+msgid "그림을 열 수 없습니다."
+msgstr "Cannot open the image."
+
+#: viewer/widgets/stamp_dialog.py
+msgid "등록 이미지가 없습니다 — [추가] 로 파일·클립보드·스크린샷을 등록하거나, 이미지 ▾ 'PDF 에서 영역 등록…' 으로 본문의 영역을 등록합니다."
+msgstr "No saved images — use [Add] to register a file, clipboard image or screenshot, or use image ▾ 'Register Area from PDF…' to register an area of the page."
+
+#: viewer/widgets/stamp_dialog.py
+#, python-brace-format
+msgid "높이 {h} mm"
+msgstr "height {h} mm"
+
+#: viewer/widgets/stamp_dialog.py
+#, python-brace-format
+msgid "{kind} · 폭 {w} mm × 높이 {h} mm · 날짜: {d}"
+msgstr "{kind} · width {w} mm × height {h} mm · date: {d}"
+
+#: viewer/widgets/stamp_dialog.py
+#, python-brace-format
+msgid "색: {c}"
+msgstr "Color: {c}"
+
+#: viewer/widgets/stamp_dialog.py
+msgid "스크린샷 없음"
+msgstr "No screenshots"
+
+#: viewer/widgets/stamp_dialog.py
+#, python-brace-format
+msgid "'{name}' 을(를) 지울까요? 이미 넣은 곳은 그대로 남습니다."
+msgstr "Delete '{name}'? Places where it was already inserted stay as they are."
+
+#: viewer/widgets/stamp_dialog.py
+#, python-brace-format
+msgid "등록할 쪽 (1~{n})"
+msgstr "Page to register (1–{n})"
 
 #: viewer/widgets/strip.py
 msgid "전체 삭제"

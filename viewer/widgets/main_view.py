@@ -1086,13 +1086,15 @@ class _PdfGraphicsView(QGraphicsView):
             self._block_armed = False
             purpose, self._block_purpose = self._block_purpose, "copy"
             self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
-            if purpose == "sign":
+            if purpose in ("sign", "stamp"):
                 # 서명 자리 — 끌지 않고 클릭만 했으면 그 점(크기 0)을 넘기고 앱이 기본 크기로 놓는다
+                # 261101-3(마스터 §4.6.11): "stamp" = 등록할 PDF 영역
                 try:
                     if self._owner is not None:
                         tl = self.mapToScene(rect.topLeft())
                         br = self.mapToScene(rect.bottomRight())
-                        self._owner.signRegionSelected.emit(QRectF(tl, br).normalized())
+                        sig = self._owner.stampRegionSelected if purpose == "stamp" else self._owner.signRegionSelected
+                        sig.emit(QRectF(tl, br).normalized())
                 except Exception:
                     pass
                 return
@@ -1572,6 +1574,8 @@ class MainView(QWidget):
     signRequested = pyqtSignal()                 # 261010-22(보안 SOT §3): 툴바 전자서명 단추
     pageDeleteRequested = pyqtSignal()           # 261017-1(입력 SOT §3): 편집모드·고른 개체 없음에서 Del — 지금 쪽 삭제
     signRegionSelected = pyqtSignal(object)      # 261010-21(보안 SOT §3.3): 서명 자리(scene QRectF)
+    stampRegionSelected = pyqtSignal(object)     # 261101-3(마스터 §4.6.11): 등록할 PDF 영역(scene QRectF)
+    imageMenuRequested = pyqtSignal(str)         # 261101-3: 이미지 ▾ — "file"·"clip"·"region"·"manage"
     signPanelRequested = pyqtSignal()            # 261010-21(보안 SOT §5): 검증 띠의 [서명 패널]
     signEditRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): 검증 띠의 [서명 편집]
     hyperlinkActivated = pyqtSignal(object)      # 260609-3: 페이지 하이퍼링크 버튼 클릭(link dict)
@@ -3428,6 +3432,7 @@ class MainView(QWidget):
         for b, name in ((getattr(self, "btn_crop", None), "crop"), (getattr(self, "btn_sign", None), "sign")):
             if b is not None:
                 b.setIcon(_ti(name, dark=dark, size=16))
+        self._update_image_button()            # 261101-3: 이미지 단추(테마 단색)
 
     def set_rotations(self, rotations):
         """260609-15(A1): {page0: deg} — 현재 페이지 회전 반영."""
@@ -3485,6 +3490,16 @@ class MainView(QWidget):
         self._text_menu = _QMenu(self._text_btn)
         self._text_btn.setMenu(self._text_menu)
         hb.addWidget(self._text_btn)
+        # 261101-3(마스터 §4.6.11): 이미지 넣기 — 클릭=등록 이미지 도구 켜기/끄기, ▾=등록 이미지·파일·클립보드·관리
+        self._image_btn = _DblTool()
+        self._image_btn.setFixedSize(self.IMAGE_BTN_W, H)
+        self._image_btn.setToolTip(tr("이미지 넣기 — 클릭: 등록 이미지를 누른 자리에(실제 크기), ▾: 고르기·파일·클립보드·관리"))
+        self._image_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self._image_btn.singleClick.connect(self._toggle_stamp)
+        self._image_menu = _QMenu(self._image_btn)
+        self._image_menu.aboutToShow.connect(self._rebuild_image_menu)
+        self._image_btn.setMenu(self._image_menu)
+        hb.addWidget(self._image_btn)
         # 260611-16: 개체선택 버튼(선 종류 버튼 오른쪽) — 눌러서 이미지 선택/이동/수정
         # 260908-4(사용자 요청): 글리프 `⤢` → 그림 아이콘(점선 상자 + 화살표).
         #   무엇을 하는 단추인지 글자보다 그림이 빨리 읽힌다(디자인 SOT §2).
@@ -3620,6 +3635,11 @@ class MainView(QWidget):
     # 클래스 기본값 — _build_ui→_update_text_button 이 __init__ 상태블록보다 먼저 호출됨
     _text_kind = "text"
     _text_style = "본문"
+    # 261101-3(마스터 §4.6.11): 이미지 넣기 — 등록 이미지 도구(`_draw_kind == "stamp"`)
+    IMAGE_BTN_W = 46
+    _IMG_BASE_KEYS = ("data", "rect", "shape", "alpha", "rot")
+    _stamp_id = ""
+    _stamp_cache = {}                        # (id, 파일 크기·시각, 날짜 글) → compose 결과 — 같은 날 같은 그림은 한 번만 그린다
 
     def _sync_draw_buttons(self):
         """260611-74: 선/도형/글쓰기 버튼 활성 테두리 동기. 글쓰기 이탈 시 인라인 편집 커밋."""
@@ -3629,6 +3649,7 @@ class MainView(QWidget):
         self._update_line_button()
         self._update_shape_button()
         self._update_text_button()
+        self._update_image_button()
 
     def _apply_tool(self):
         """260611-76: 모드(_draw_kind)+스타일(_pen_idx)→파생 _draw_tool 재계산 후 UI 동기.
@@ -3644,6 +3665,8 @@ class MainView(QWidget):
             tool = ("erase", int(w))
         elif k == "select":
             tool = ("select", None)
+        elif k == "stamp":
+            tool = ("stamp", self._stamp_id)
         elif k == "text":
             # 260907-2(사용자 요청): 글쓰기는 **색상버튼(선 종류)을 안 골라도** 쓸 수 있다.
             #   종전에는 펜이 없으면 도구 자체가 꺼져 **텍스트 박스가 아예 안 만들어졌다**.
@@ -4561,7 +4584,8 @@ class MainView(QWidget):
     @staticmethod
     def _img_clone(o) -> dict:
         return {"pix": o.get("pix"), "data": o.get("data"), "rect": list(o.get("rect", [0, 0, 0, 0])),
-                "shape": o.get("shape", "rect"), "alpha": int(o.get("alpha", 100)), "rot": float(o.get("rot", 0.0))}
+                "shape": o.get("shape", "rect"), "alpha": int(o.get("alpha", 100)), "rot": float(o.get("rot", 0.0)),
+                "extra": dict(o.get("extra") or {})}          # 261101-3: 등록 이미지의 벡터 조각(`pdf`) 등
 
     def copy_decorations(self) -> int:
         """고른 꾸밈을 담는다. 담은 개수."""
@@ -5654,7 +5678,9 @@ class MainView(QWidget):
                         "rect": list(d.get("rect", [0.1, 0.1, 0.3, 0.3])),
                         "shape": d.get("shape", "rect"),
                         "alpha": int(d.get("alpha", 100)),
-                        "rot": float(d.get("rot", 0.0))})
+                        "rot": float(d.get("rot", 0.0)),
+                        # 261101-3(마스터 §4.6.11): 모르는 필드(등록 이미지의 `pdf`·`stamp`)는 그대로 들고 있다가 다시 쓴다
+                        "extra": {k: v for k, v in d.items() if k not in self._IMG_BASE_KEYS}})
             except Exception:
                 pass
         if self._draw_overlay is not None:
@@ -5663,10 +5689,11 @@ class MainView(QWidget):
     def _save_page_images(self):
         f = self.current_file()
         if self._img_setter and f and not self._is_image:
-            out = [{"data": o["data"] or self._pix_to_b64(o["pix"]),   # 260829: 지연 생성
-                    "rect": [round(v, 5) for v in o["rect"]],
-                    "shape": o["shape"], "alpha": int(o["alpha"]),
-                    "rot": round(float(o.get("rot", 0.0)), 2)}
+            out = [dict(o.get("extra") or {},
+                        data=o["data"] or self._pix_to_b64(o["pix"]),   # 260829: 지연 생성
+                        rect=[round(v, 5) for v in o["rect"]],
+                        shape=o["shape"], alpha=int(o["alpha"]),
+                        rot=round(float(o.get("rot", 0.0)), 2))
                    for o in self._img_objects]
             try:
                 self._img_setter(str(f), self._current_page, out)
@@ -5919,6 +5946,183 @@ class MainView(QWidget):
         self.add_image_from_pixmap(pm)
         return True
 
+    # ===== 261101-3(마스터 §4.6.11): 이미지 넣기 · 등록 이미지 =====
+    def _update_image_button(self):
+        if not hasattr(self, "_image_btn"):
+            return
+        from viewer.widgets.icons import themed_icon
+        on = self._draw_kind == "stamp"
+        self._image_btn.setIcon(themed_icon("image", dark=(False if on else None), size=18, pad_right=10, dpr=2.0))
+        self._image_btn.setIconSize(QSize(28, 18))
+        self._image_btn.setStyleSheet(self._dbl_css(on))
+
+    def _toggle_stamp(self):
+        """클릭 = 등록 이미지 도구 켜기/끄기. 등록 이미지가 없으면 ▾ 메뉴를 연다."""
+        if self._draw_kind == "stamp":
+            self._draw_kind = None
+            self._apply_tool()
+            return
+        from viewer import stamp_store
+        e = (stamp_store.get(self._stamp_id) if self._stamp_id else None) or stamp_store.last()
+        if e is None:
+            self._image_btn.showMenu()
+            return
+        self.pick_stamp(e["id"])
+
+    def pick_stamp(self, sid: str):
+        """이 등록 이미지로 도구를 켠다(켜져 있으면 그대로 — §4.6.10 과 같다)."""
+        from viewer import stamp_store
+        self._commit_text_editor()
+        self._stamp_id = sid
+        stamp_store.set_last(sid)
+        self._draw_kind = "stamp"
+        self._stroke_selected = -1
+        self._apply_tool()
+
+    def _rebuild_image_menu(self):
+        from viewer import stamp_store
+        m = self._image_menu
+        m.clear()
+        cur = self._stamp_id or (stamp_store.last() or {}).get("id", "")
+        its = stamp_store.items()
+        for e in its:
+            a = m.addAction(tr('{name} · 폭 {mm} mm').format(name=e.get("name", ""), mm=f'{float(e.get("width_mm", 0)):g}'))
+            a.setCheckable(True)
+            a.setChecked(e["id"] == cur)
+            a.triggered.connect(lambda _=False, s=e["id"]: self.pick_stamp(s))
+        if not its:
+            m.addAction(tr("등록 이미지 없음 — 아래 '등록 이미지 관리…' 에서 추가")).setEnabled(False)
+        m.addSeparator()
+        for key, label in (("file", tr("파일에서…")), ("clip", tr("클립보드에서")),
+                           (None, None), ("region", tr("PDF 에서 영역 등록…")), ("manage", tr("등록 이미지 관리…"))):
+            if key is None:
+                m.addSeparator()
+                continue
+            a = m.addAction(label)
+            a.triggered.connect(lambda _=False, k=key: self.imageMenuRequested.emit(k))
+
+    def _stamp_event(self, t, ev, pr):
+        """등록 이미지 도구 — 누르기·끌기·놓기. 넣은 그림을 잡으면 None(종전 사진 조작으로)."""
+        from PyQt6.QtCore import QEvent, QRect
+        if t == QEvent.Type.MouseButtonPress and ev.button() == Qt.MouseButton.LeftButton:
+            pos = ev.position().toPoint()
+            if self._img_hit(pos, pr)[0] >= 0:
+                return None
+            try:
+                self.activated.emit()
+            except Exception:
+                pass
+            self._stamp_press = pos
+            self._rubber = None
+            self.view.setFocus()
+            return True
+        press = getattr(self, "_stamp_press", None)
+        if press is None:
+            return None
+        if t == QEvent.Type.MouseMove:
+            if ev.buttons() & Qt.MouseButton.LeftButton:
+                self._rubber = QRect(press, ev.position().toPoint()).normalized()
+                self._draw_overlay.update()
+            return True
+        if t == QEvent.Type.MouseButtonRelease and ev.button() == Qt.MouseButton.LeftButton:
+            self._stamp_press = None
+            rb, self._rubber = self._rubber, None
+            W, H = max(1.0, pr.width()), max(1.0, pr.height())
+            box = None
+            if rb is not None and (rb.width() >= self.RUBBER_MIN_PX or rb.height() >= self.RUBBER_MIN_PX):
+                box = [(rb.left() - pr.left()) / W, (rb.top() - pr.top()) / H, rb.width() / W, rb.height() / H]
+            self.place_stamp(self._stamp_id, (press.x() - pr.left()) / W, (press.y() - pr.top()) / H, box=box)
+            return True
+        return None
+
+    def stamp_render(self, sid: str):
+        """등록 이미지 → (항목, `stamp_core.compose` 결과) — 오늘 날짜로. 같은 날 같은 그림은 한 번만 그린다."""
+        from viewer import stamp_store, stamp_core
+        e = stamp_store.get(sid) if sid else None
+        if e is None:
+            return None, None
+        try:
+            p = stamp_store.abspath(e["file"])
+            st = p.stat()
+            d = stamp_store.norm_date(e.get("date"))
+            key = (sid, st.st_size, st.st_mtime_ns, repr(sorted(d.items())),
+                   stamp_store.date_text(d["fmt"]) if d["on"] else "")
+            c = MainView._stamp_cache.get(key)
+            if c is None:
+                c = stamp_core.compose(e, p.read_bytes())
+                if len(MainView._stamp_cache) > 16:
+                    MainView._stamp_cache.clear()
+                MainView._stamp_cache[key] = c
+            return e, c
+        except Exception:
+            return e, None
+
+    @staticmethod
+    def stamp_object(e, c, rect) -> dict:
+        """compose 결과 → 사진 꾸밈 개체(벡터 조각은 `extra["pdf"]`)."""
+        import base64
+        pix = QPixmap()
+        pix.loadFromData(c["png"], "PNG")
+        extra = {"stamp": e.get("name", "")}
+        if c.get("pdf"):
+            extra["pdf"] = base64.b64encode(c["pdf"]).decode("ascii")
+        return {"pix": pix, "data": base64.b64encode(c["png"]).decode("ascii"), "rect": list(rect),
+                "shape": "rect", "alpha": 100, "rot": 0.0, "extra": extra}
+
+    def page_size_pt(self):
+        """지금 쪽의 보이는 크기(pt) — PDF 쪽 상자(`/Rotate`·CropBox 반영) + 저장 전 회전. 화면 상자 ÷ 배율은
+        그린 그림의 픽셀 반올림만큼(실측 0.2%) 어긋나 실제 mm 가 흐려져 쪽 상자를 먼저 쓴다."""
+        try:
+            r = self._doc.doc[int(self._current_page)].rect
+            if (getattr(self, "_rotations", {}) or {}).get(int(self._current_page), 0) % 180 == 90:
+                return float(r.height), float(r.width)
+            return float(r.width), float(r.height)
+        except Exception:
+            pass
+        pr = self._page_view_rect()
+        z = self._zoom or 1.0
+        if pr is None or pr.width() <= 0:
+            return None
+        return pr.width() / z, pr.height() / z
+
+    def place_stamp(self, sid: str, fx: float, fy: float, box=None) -> bool:
+        """누른 자리(쪽 비율 fx, fy)가 왼쪽 위인 **실제 크기**로, `box`(쪽 비율 [x, y, w, h])면 그 안에 비율대로."""
+        from viewer import stamp_core, stamp_store
+        if self._is_image or self._doc is None:
+            return False
+        sz = self.page_size_pt()
+        e, c = self.stamp_render(sid)
+        if sz is None or c is None:
+            return False
+        pw, ph = sz
+        if box:
+            bw, bh = box[2] * pw, box[3] * ph
+            w = min(bw, bh / max(c["aspect"], 1e-6))
+            rect = stamp_core.fit_rect(box[0] * pw, box[1] * ph, w, w * c["aspect"], pw, ph)
+        else:
+            rect = stamp_core.real_rect(fx, fy, e.get("width_mm", stamp_store.MM_DEFAULT), c["aspect"], pw, ph)
+        self._img_objects.append(self.stamp_object(e, c, rect))
+        self._img_selected = len(self._img_objects) - 1
+        try:                                   # 넣은 것을 바로 옮길 수 있게 개체선택으로(§4.5.9)
+            self._commit_text_editor()
+            self.set_draw_tool(("select", None))
+        except Exception:
+            pass
+        self._save_page_images()
+        if self._draw_overlay is not None:
+            self._draw_overlay.update()
+        try:
+            self.activated.emit()
+        except Exception:
+            pass
+        return True
+
+    def selected_image_object(self):
+        """고른 사진 꾸밈(하나) — 없으면 None. 앱의 '다른 쪽에도 넣기'·'등록 이미지로 등록'."""
+        if 0 <= self._img_selected < len(self._img_objects):
+            return self._img_objects[self._img_selected]
+        return None
+
     def _position_draw_overlay(self):
         ov = self._draw_overlay
         if ov is None:
@@ -6003,6 +6207,10 @@ class MainView(QWidget):
                     # 260611-74: 글쓰기/지시선 모드 — 텍스트 작성·변형이 최우선
                     if self._draw_kind == "text":
                         r = self._text_event(t, ev, pr)
+                        if r is not None:
+                            return r
+                    if self._draw_kind == "stamp":          # 261101-3(§4.6.11): 등록 이미지 넣기가 먼저
+                        r = self._stamp_event(t, ev, pr)
                         if r is not None:
                             return r
                     if t == QEvent.Type.MouseButtonPress \

@@ -155,6 +155,15 @@ def _sign(p, c):
     p.drawLine(QPointF(3.5, 10), QPointF(4.5, 12))
 
 
+def _image(p, c):
+    """261101-3(마스터 §4.6.11): 이미지 넣기 — 그림 틀 + 산 + 해."""
+    p.setPen(QPen(c, 1.5))
+    p.drawRoundedRect(QRectF(1.5, 2.5, 13.0, 11.0), 1.2, 1.2)        # 틀
+    p.drawPolyline(QPolygonF([QPointF(2.2, 12.6), QPointF(6.2, 7.8), QPointF(9.0, 10.6),
+                              QPointF(10.8, 9.0), QPointF(13.8, 12.6)]))   # 산
+    p.drawEllipse(QPointF(10.6, 5.7), 1.3, 1.3)                       # 해
+
+
 def _view_tree(p, c):
     """261011-4(디자인 SOT §2.8.5): 책갈피창 '트리' 보기 — 위 마디에서 세로 줄이 내려가 두 가지로 갈린다."""
     p.setPen(QPen(c, 1.5))
@@ -181,7 +190,7 @@ _DRAW = {
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
-    "crop": _crop, "sign": _sign,
+    "crop": _crop, "sign": _sign, "image": _image,
     "view_tree": _view_tree, "view_single": _view_single,
 }
 

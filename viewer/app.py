@@ -61,6 +61,7 @@ from viewer.compare_controller import CompareMixin      # 261014-23(마스터 §
 from viewer.vprinter_controller import VPrinterMixin    # 261017(가상 프린터 SOT §4.4)
 from viewer.jobs_controller import JobsMixin            # 261019-1(응답성 SOT §4.6): 작업 창·저장 안 한 OCR
 from viewer.lite_controller import LiteMixin            # 261021-1(응답성 SOT §4.7): 가벼운 넘김(느린 컴퓨터)
+from viewer.stamp_controller import StampMixin          # 261101-3(마스터 §4.6.11): 이미지 넣기·등록 이미지
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -139,7 +140,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -1385,6 +1386,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv.signPanelRequested.connect(lambda i=idx: self._on_sign_panel(view=self._mv[i]))         # 보안 SOT §5
         mv.signEditRequested.connect(lambda i=idx: (self._set_active_pane(i), self.action_sign_edit()))   # 보안 SOT §3.10
         self._sign_drafts_attach(mv, idx)                                                         # 보안 SOT §3.10 서명 자리
+        self._wire_stamp(mv)                                                                      # 261101-3(§4.6.11) 이미지 넣기
         mv.hyperlinkActivated.connect(
             lambda link, i=idx: (i == self._active_pane) and self._launch_hyperlink(link))
         mv.drawModeChanged.connect(self._on_main_draw_mode_changed)   # 260611-4: 공유 동기
@@ -6094,6 +6096,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 ca = m_chg.addAction(self._shape_icon(key), label)
                 ca.setCheckable(True)
                 shape_acts[ca] = key
+            a_more = menu.addAction(tr("다른 쪽에도 넣기…"))          # 261101-3(§4.6.11)
+            a_reg = menu.addAction(tr("등록 이미지로 등록…"))
         a_del = menu.addAction(self._kt({"text": tr("선택 글상자 삭제"), "leader": tr("선택 글상자 삭제"),
                                          "image": tr("선택 이미지 삭제"), "line": tr("선택 개체 삭제"),
                                          "multi": tr("고른 개체 삭제")}[kind], "Del"))
@@ -6112,6 +6116,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             mv.set_leader_tip(tip_acts[chosen])
         elif chosen in shape_acts:
             mv.set_image_shape(shape_acts[chosen])
+        elif kind == "image" and chosen is a_more:
+            self._stamp_to_pages(mv)
+        elif kind == "image" and chosen is a_reg:
+            self._stamp_register_selected(mv)
         elif chosen is a_del:
             mv.delete_deco_selection()
         elif a_cfg is not None and chosen is a_cfg:

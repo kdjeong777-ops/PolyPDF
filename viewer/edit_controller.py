@@ -118,6 +118,9 @@ class EditMixin:
             page = doc[page0]
             W, H = float(page.rect.width), float(page.rect.height)
             for d in (st.get_images(path, page0) or []):
+                if self._bake_stamp_vector(page, d, W, H):
+                    done += 1
+                    continue
                 pm = QPixmap()
                 try:
                     pm.loadFromData(base64.b64decode(d.get("data", "")), "PNG")
@@ -172,6 +175,37 @@ class EditMixin:
                 except Exception:
                     continue
         return done
+
+    @staticmethod
+    def _bake_stamp_vector(page, d, W, H) -> bool:
+        """261101-3(마스터 §4.6.11): 벡터 조각(`pdf`)이 있는 등록 이미지는 **벡터 그대로** 얹는다 — 투명도 100%·사각형일 때만
+        (투명도·둥근 모양은 Qt 합성으로). 쪽에 `/Rotate` 가 있으면(인쇄 굽기) 종전 그림 길로 — 레이어 사본의 임시 쪽은 늘 회전 0."""
+        import math, base64
+        import fitz
+        if not d.get("pdf") or int(d.get("alpha", 100)) < 100 or d.get("shape", "rect") != "rect" or int(page.rotation):
+            return False
+        try:
+            src = fitz.open(stream=base64.b64decode(d["pdf"]), filetype="pdf")
+        except Exception:
+            return False
+        try:
+            fx, fy, fw, fh = d.get("rect", [0.1, 0.1, 0.3, 0.3])
+            w_pt, h_pt = float(fw) * W, float(fh) * H
+            if w_pt <= 0 or h_pt <= 0:
+                return False
+            rot = float(d.get("rot", 0.0) or 0.0)
+            th = math.radians(rot)
+            bw = abs(w_pt * math.cos(th)) + abs(h_pt * math.sin(th))
+            bh = abs(w_pt * math.sin(th)) + abs(h_pt * math.cos(th))
+            cx, cy = (float(fx) + float(fw) / 2.0) * W, (float(fy) + float(fh) / 2.0) * H
+            # show_pdf_page 의 rotate 는 반시계(실측) — 화면(Qt)은 시계 방향
+            page.show_pdf_page(fitz.Rect(cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2), src, 0,
+                               rotate=-rot, keep_proportion=False if not rot else True, overlay=True)
+            return True
+        except Exception:
+            return False
+        finally:
+            src.close()
 
     def _bake_drawings_into_doc(self, doc, norm):
         """260615-3: 정규화 선긋기(선·도형·텍스트박스·지시선·하이라이트)를 열린 doc 에 베이크.
