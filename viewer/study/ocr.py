@@ -628,6 +628,155 @@ def _join_words_by_gap(parts) -> str:
     return chr(10).join(fix_number_spaces(fix_number_ocr(x))
                         for x in text.split(chr(10)))
 
+# 261101-1(§14.8.2): 한글 줄의 잡글 낱말을 잘라 다시 읽는다 — 쪽마다 이만큼까지(한 자리 약 0.12초, 표본 쪽당 10곳 남짓)
+REREAD_MAX = 60
+REREAD_RETRY = 12         # 쌓아 읽기에서 문턱을 못 넘은 자리를 따로 다시 읽는 최대 수(쪽마다)
+REREAD_PAD = 6            # 자를 때 상자 둘레에 더하는 픽셀(300dpi)
+REREAD_KOR_CONF = 80       # `kor` 로 다시 읽은 결과를 받는 평균 신뢰도
+REREAD_ENG_CONF = 30       # 괄호 속 영문을 `eng` 로 다시 읽은 결과를 받는 평균 신뢰도(작은 세리프라 낮게 나온다)
+_LATIN_JUNK = re.compile(r"(?:[A-Z]{2,5}|[A-Za-z]{1,4}[\]}]|[A-Za-z]{1,2}[\]}][A-Za-z]{1,2}[\]}])[,.]?")
+
+
+def _reread_kind(s: str, lang: str) -> str:
+    """한글 줄의 이 낱말을 다시 읽을까 — `kor`(한글을 영문 잡글로) / `eng`(괄호 속 영문을 숫자 잡글로) / ''."""
+    if not s:
+        return ""
+    if _LATIN_JUNK.fullmatch(s):
+        core = re.sub(r"[^A-Za-z]", "", s)
+        try:
+            from viewer.study.wordfreq_fast import zipf_frequency
+            if len(core) >= 4 and not core.isupper() and zipf_frequency(core.lower(), "en") >= 4.5:
+                return ""               # 흔한 영어 낱말이다
+        except Exception:
+            pass
+        return "kor"
+    if "eng" in str(lang).split("+") and (("(" in s or ")" in s) and (sum(ch.isdigit() for ch in s) >= 3
+                                                                       or not re.search(r"[A-Za-z]{3,}", s))
+                                          or re.fullmatch(r"\d{5,}[)\],.]*", s)):
+        return "eng"
+    return ""
+
+
+def _read_stack(img, boxes, lang):
+    """잘라낸 자리들을 **한 장에 세로로 쌓아** 한 번에 읽는다 → 자리마다 `(글, 평균 신뢰도)`.
+
+    자리마다 Tesseract 를 따로 부르면 한 번에 0.1초 남짓 프로세스 값이 들어 쪽당 2~4초가 늘었다(실측 성격심리)."""
+    import pytesseract
+    from PIL import Image
+    crops = [img.crop(b) for b in boxes]
+    if len(crops) == 1:
+        # 한 자리는 쌓지 않고 한 줄로 읽는다(psm 7) — 실험에서 가장 잘 읽힌 방식
+        r = pytesseract.image_to_data(crops[0], lang=lang, config="--psm 7", output_type=pytesseract.Output.DICT)
+        ws = []
+        for t, c in zip(r["text"], r["conf"]):
+            try:
+                c = float(c)
+            except (TypeError, ValueError):
+                c = -1.0
+            if str(t).strip() and c >= 0:
+                ws.append((str(t).strip(), c))
+        return [(" ".join(t for t, _ in ws), (sum(c for _, c in ws) / len(ws)) if ws else 0.0)]
+    gap = 24
+    W = max(c.size[0] for c in crops) + 2 * gap
+    H = sum(c.size[1] + gap for c in crops) + gap
+    sheet = Image.new(img.mode, (W, H), "white")
+    spans, y = [], gap
+    for c in crops:
+        sheet.paste(c, (gap, y))
+        spans.append((y, y + c.size[1]))
+        y += c.size[1] + gap
+    r = pytesseract.image_to_data(sheet, lang=lang, config="--psm 6", output_type=pytesseract.Output.DICT)
+    got = [[] for _ in boxes]
+    for t, c, top, hh, left in zip(r["text"], r["conf"], r["top"], r["height"], r["left"]):
+        try:
+            c = float(c)
+        except (TypeError, ValueError):
+            c = -1.0
+        if not str(t).strip() or c < 0:
+            continue
+        cy = top + hh / 2.0
+        for k, (a, b) in enumerate(spans):
+            if a - gap / 2 <= cy <= b + gap / 2:
+                got[k].append((left, str(t).strip(), c))
+                break
+    out = []
+    for ws in got:
+        ws.sort()
+        out.append((" ".join(t for _x, t, _c in ws), (sum(c for _x, _t, c in ws) / len(ws)) if ws else 0.0))
+    return out
+
+
+def _reread_words(img, items):
+    """잡글 자리들을 다시 읽는다 — `items = [(번호, (x,y,w,h), 종류, 원래 글)]` → `{번호: (새 글, 신뢰도)}` (§14.8.2).
+
+    `kor`: 한글 음절만 남고(빈칸은 지운다 — 한 낱말 자리다) 신뢰도가 `REREAD_KOR_CONF` 이상일 때만.
+    실험 성격심리 5쪽 56곳 중 52곳이 바른 한글(`SAS`→`음식을`, `YES`→`행동을`, `ASA`→`실존적`).
+    `eng`: 영문 조각(`(prepotence)`)을 `eng` 로 읽고, **원래 글이 괄호 앞뒤에 다른 글자를 달고 있었으면**
+    (`psychology)o]e}` 의 `o]e}`) 그 자리의 한글 토막(`이라`)을 `kor` 로 읽어 잇는다 — 이미 따로 읽힌 토막은 다시 달지 않는다."""
+    out = {}
+    if not items:
+        return out
+    try:
+        W, H = img.size
+        boxes = [(max(0, int(x) - REREAD_PAD), max(0, int(y) - REREAD_PAD),
+                  min(W, int(x + w) + REREAD_PAD), min(H, int(y + h) + REREAD_PAD)) for _i, (x, y, w, h), _k, _s in items]
+        kor_idx = [n for n, it in enumerate(items) if it[2] == "kor"]
+        eng_idx = [n for n, it in enumerate(items) if it[2] == "eng"]
+        kor_need = kor_idx + [n for n in eng_idx if re.search(r"\)[^)\s]|[^(\s]\(", items[n][3])]
+        kres = dict(zip(kor_need, _read_stack(img, [boxes[n] for n in kor_need], "kor"))) if kor_need else {}
+        eres = dict(zip(eng_idx, _read_stack(img, [boxes[n] for n in eng_idx], "eng"))) if eng_idx else {}
+        # 쌓아 읽으면 몇 자리는 옆 자리에 휩쓸린다(실측 성격심리 300쪽 14곳 중 3곳) — 문턱을 못 넘은 자리만 따로 한 번 더
+        retry = 0
+        for n in kor_idx:
+            if retry >= REREAD_RETRY:
+                break
+            if kres.get(n, ("", 0.0))[1] < REREAD_KOR_CONF:
+                kres[n] = _read_stack(img, [boxes[n]], "kor")[0]
+                retry += 1
+        for n in eng_idx:
+            if retry >= REREAD_RETRY:
+                break
+            if eres.get(n, ("", 0.0))[1] < REREAD_ENG_CONF or not re.search(r"[A-Za-z]{3,}", eres.get(n, ("", 0))[0]):
+                eres[n] = _read_stack(img, [boxes[n]], "eng")[0]
+                retry += 1
+        from viewer.study.wordfreq_fast import zipf_frequency
+        for n, (i, _b, kind, s) in enumerate(items):
+            if kind == "kor":
+                t, c = kres.get(n, ("", 0.0))
+                core = t.replace(" ", "")
+                if c >= REREAD_KOR_CONF and _HANGUL_RE.search(core) and re.fullmatch(r"[가-힣.,?!·()\-]+", core):
+                    out[i] = (core, c)
+                continue
+            e, ec = eres.get(n, ("", 0.0))
+            pieces = re.findall(r"\(?[A-Za-z][A-Za-z\-]{2,}\)?[,.]?", e)
+            if ec < REREAD_ENG_CONF or not pieces:
+                continue
+            lat = max(pieces, key=len)
+            letters = re.sub(r"[^A-Za-z]", "", lat).lower()
+            if zipf_frequency(letters, "en") < 2.0 and len(letters) < 7:
+                continue
+            k = kres.get(n, ("", 0.0))[0]
+            pre = "".join(_HANGUL_RE.findall(k.split("(")[0])) if (lat.startswith("(") and "(" in k
+                                                                    and re.search(r"[^(\s]\(", s)) else ""
+            suf = "".join(_HANGUL_RE.findall(k.rsplit(")", 1)[1])) if (lat.rstrip(",.").endswith(")") and ")" in k
+                                                                       and re.search(r"\)[^)\s]", s)) else ""
+            out[i] = (pre + lat + suf, max(ec, float(MIN_CONF_PCT)))
+    except Exception:
+        return out
+    return out
+
+
+def _small_glyph_keep(data, nb, s, x, w, h, c, line_h, dpi) -> bool:
+    """납작한 진짜 글자인가(텍스트 창 SOT §3.5.3, 261101-1) — 이웃 낱말(`nb`) 높이로 맞춘 상자도 모양 거르기를 지나야 한다."""
+    if nb is None or _noise.is_symbol_only(s) or not _noise.small_glyph_ok(s, h, c / 100.0, line_h):
+        return False
+    return _noise.keep_ocr_word(s, x, data["top"][nb], x + w, data["top"][nb] + data["height"][nb],
+                                c / 100.0, scale=72.0 / max(1, int(dpi)))
+
+
+MIN_CONF_PCT = 31           # 다시 읽어 받은 낱말이 신뢰도 거르기(§3.5 ④)에 다시 걸리지 않게 주는 최소값
+
+
 def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     """이미지 OCR → {text, conf, words:[{surface,x0,y0,x1,y1,conf}]} (픽셀 좌표).
 
@@ -658,9 +807,28 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     _med = {k: sorted(v)[len(v) // 2] for k, v in _hs.items()}
     _texts = list(data["text"])
     _is_i = {}                     # 고친 낱말 → 상자를 맞출 이웃 낱말(같은 줄)
+    _conf = {}                     # 다시 읽어 바꾼 낱말의 새 신뢰도(0~100)
+    # 261101-1(§14.8.2, 표본 조사): `kor` 를 섞어 읽은 한글 줄에서 한글 낱말이 영문 대문자 잡글(`음식을`→`SAS`)로,
+    #   괄호 속 작은 영문이 숫자 잡글(`(prepotence)`→`(0100010009'`)로 나온다 — 그 자리만 잘라 다시 읽는다
+    _han_lines = {_key(i) for i in _idx if _HANGUL_RE.search(str(data["text"][i]))}
+    _items = []
+    if img is not None and "kor" in str(lang).split("+"):
+        for i in _idx:
+            if len(_items) >= REREAD_MAX:
+                break
+            s0 = str(_texts[i]).strip()
+            kind = _reread_kind(s0, lang) if _key(i) in _han_lines else ""
+            if kind:
+                _items.append((i, (data["left"][i], data["top"][i], data["width"][i], data["height"][i]), kind, s0))
+    for i, (t_new, c_new) in _reread_words(img, _items).items():
+        _texts[i], _conf[i] = t_new, c_new
+    _neighbor = {}                 # 같은 줄의 이웃 낱말(앞, 없으면 뒤) — 상자 높이를 맞출 때
     for n, i in enumerate(_idx):
         a = _idx[n - 1] if n > 0 and _key(_idx[n - 1]) == _key(i) else None
         b = _idx[n + 1] if n + 1 < len(_idx) and _key(_idx[n + 1]) == _key(i) else None
+        _neighbor[i] = a if a is not None else b
+        if i in _conf:
+            continue
         s0 = str(_texts[i]).strip()
         got = _noise.fix_i(_texts[a] if a is not None else None, s0, data["width"][i], data["height"][i],
                            _texts[b] if b is not None else None, _med.get(_key(i), 0))
@@ -671,11 +839,14 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
             continue
         _texts[i] = got
         _is_i[i] = a if a is not None else b
+    def _small_ok(i, s, x, w, h, c):
+        return _small_glyph_keep(data, _neighbor.get(i), s, x, w, h, c, _med.get(_key(i), 0), dpi)
+
     for i, txt in enumerate(_texts):
         s = str(txt).strip()
         if not s:
             continue
-        c = data["conf"][i]
+        c = _conf.get(i, data["conf"][i])
         try:
             c = float(c)
         except (TypeError, ValueError):
@@ -684,7 +855,9 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
             continue
         x, y, w, h = (data["left"][i], data["top"][i],
                       data["width"][i], data["height"][i])
-        if i in _is_i:
+        if i in _conf:
+            pass                        # 다시 읽어 얻은 낱말(§14.8.2) — 잡글이던 자리라 모양·신뢰도 거르기는 하지 않는다
+        elif i in _is_i:
             # 고친 `I` — 획이 1px 로 잡혀도 버리지 않는다. 높이는 이웃 낱말에 맞추고(위아래 글줄과 엉긴 53px 상자가
             #   두 줄을 잇지 않게) 폭은 글자 폭쯤으로 넓혀 화면 단계의 같은 규칙(③ 홀쭉한 한 글자)에도 걸리지 않게 한다.
             j = _is_i[i]
@@ -694,7 +867,11 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
                 x, w = int(x + w / 2 - h * 0.15), max(1, int(round(h * 0.3)))
         elif not _noise.keep_ocr_word(s, x, y, x + w, y + h, c / 100.0,
                                       scale=72.0 / max(1, int(dpi))):
-            continue                    # 260908-8: 잡음은 본문에서도 뺀다
+            if not _small_ok(i, s, x, w, h, c):
+                continue                    # 260908-8: 잡음은 본문에서도 뺀다
+            # 261101-1(텍스트 창 SOT §3.5.3): 납작한 진짜 글자(`을`·`는` 15px)는 ①(4pt)에 걸려도 남긴다 — 상자 높이를
+            #   같은 줄 이웃 낱말에 맞춰 화면 단계의 같은 규칙에도 걸리지 않게 한다
+            y, h = data["top"][_neighbor[i]], data["height"][_neighbor[i]]
         words.append({"surface": s, "x0": float(x), "y0": float(y),
                       "x1": float(x + w), "y1": float(y + h), "conf": c / 100.0})
         confs.append(c / 100.0)

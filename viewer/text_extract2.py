@@ -56,6 +56,10 @@ _LOOKALIKE = {'O': '0', 'o': '0', 'l': '1', 'I': '1'}
 _NUMRUN_CHARS = _NUM_CHARS | set(_LOOKALIKE) | {' '}
 COL_GAP = 2.5           # 이보다 넓게 벌어지면 '다른 칸' — " | " 로 잇는다
 CELL_SEP = " | "
+# 261101-1(SOT §3.6.14): OCR 본문 쪽에서 ` | ` 가 든 줄이 이 비율 이하이면 빈자리로 본다(표본 조사: 본문 쪽 0.05~0.37,
+#   표·서식 쪽은 대부분 행). 줄이 `PROSE_MIN_ROWS` 보다 적은 쪽은 판단하지 않는다.
+PROSE_BAR_MAX = 0.40
+PROSE_MIN_ROWS = 8
 COL_ALIGN = 0.40        # 단으로 보려면 왼쪽 끝이 이 비율 이상 맞아야 한다
 # 260910-8(SOT §3.6.4): 단 사이 빈 띠의 최소 폭(쪽 너비 대비).
 #   실측 0.012~0.038 — 종전 0.04 는 **실제 2단 쪽을 하나도 통과시키지 못했다**.
@@ -81,6 +85,9 @@ SIDE_CHARS = 4           # 글자 수도 이하
 SIDE_MIN_N = 8           # 이만큼 모여 있고
 SIDE_SPAN = 0.40         # 높이의 이만큼에 걸쳐 있어야 '띠' 다
 HEAD_BAND = 0.08         # 위쪽 이 비율 안 → 머리말 후보
+HEAD_EXT, FOOT_EXT = 0.12, 0.85   # 쪽의 맨 위·맨 아래 줄은 이 비율까지 머리말·꼬리말 후보로 본다(쪽 번호 모양일 때만, 261101-1)
+EDGE_GAP_TOP = 0.4       # 그 줄이 바로 옆 줄과 줄 높이의 이 배 이상 떨어져 있어야 한다
+HEAD_SLACK = 0.03       # 머리말 상자 아래끝은 띠보다 이만큼까지 내려와도 된다(큰 쪽 번호, 261101-1)
 FOOT_BAND = 0.88         # 아랫쪽 이 비율 밖 → 꼬리말 후보
 EDGE_GAP = 1.5           # 본문과 이만큼(줄 높이 배) 떨어져 있어야 한다
 # 260913-2 보강(실측으로 본문을 잃어 좁혔다):
@@ -94,8 +101,11 @@ SIDE_SPREAD = 0.02       # 띠 조각들이 차지하는 가로 폭이 이 이�
 EDGE_PEERS = 2           # 옆 쪽 이만큼을 둘러본다
 EDGE_SIM = 0.70          # 빈칸을 뺀 **순서 유사도**가 이만큼이면 '되풀이되는 것'
 # 261101-1(SOT §3.5.2): 쪽 번호를 단 줄이 이만큼 이하의 낱말이면 옆 쪽을 못 봐도 머리말·꼬리말로 본다
-#   (`PROJECT HAIL MARY 5` 4개 · `Page 3 of 12` 는 끝이 쪽 번호라 4개). 본문 첫 줄은 띠 밖이거나 본문과 붙어 있어 묻지 않는다.
-EDGE_NUM_WORDS = 6
+#   (`PROJECT HAIL MARY 5` 4개 · `Page 3 of 12` 는 끝이 쪽 번호라 4개 · 성격심리 `300 제12장 머레이의 욕구및 동기 이론` 6개 —
+#   띄어쓰기 하나로 7개가 되므로 8). 본문 첫 줄은 띠 밖이거나 본문과 붙어 있어 묻지 않는다.
+EDGE_NUM_WORDS = 8
+EDGE_NUM_OFFSET = 50     # 인쇄된 쪽 번호와 PDF 쪽 순서의 차이 상한(앞붙이) — 넘으면 쪽 번호가 아니라 본문의 수(차례 항목)
+EDGE_GAP_NUM = 1.0      # 쪽 번호를 단 줄은 본문과 줄 높이 이만큼만 떨어져도 머리말·꼬리말 후보(표본 조사: 성격심리 1.1~1.3배)
 # 260913-4(SOT §3.5.2, 사용자 보고 "AASHTO 하단이 반복되는데 꼬리말로 인식 못한다"):
 #   종전에는 **같은 자리의 글자끼리** 견줬다(0.60). OCR 이 쪽마다 한 글자만 더 읽어도
 #   그 뒤가 전부 밀려 같은 꼬리말이 0.10~0.36 이 됐다. 순서 유사도로는 0.73~0.95.
@@ -340,8 +350,11 @@ def _line_items(page, edges_out=None):
 
 
 def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
-                    peers=None):
+                    peers=None, ocr: bool = False):
     """세로 띠·머리말·꼬리말 조각을 버린다 → `(남은 조각, 버린 수)` (SOT §3.5.2).
+
+    `ocr=True`(OCR 낱말로 만든 줄): 쪽 번호 모양 줄의 완화(본문과 `EDGE_GAP_NUM`, 쪽의 맨 위·맨 아래 줄)를 함께 건다 —
+    글자층은 되풀이 판정이 잘 듣고, 합성 검사의 첫 줄 `line 0 of page 1` 이 쪽 번호 머리말로 지워졌다(261101-1).
 
     사용자 지시: *"세로 띠, 상단부 머리말, 하단부 꼬리말 등은 텍스트 창에서 제외"*.
 
@@ -392,15 +405,56 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
     edge = set()
     body = [i for i in rest
             if HEAD_BAND < (frags[i][0][1] / ph) and (frags[i][0][1] / ph) < FOOT_BAND]
+
+    # 261101-1(SOT §3.5.2): 쪽 번호 판정은 **같은 높이의 조각을 모은 한 줄**로 한다 — 띠에 걸친 표의 칸 하나(`100`)가
+    #   쪽 번호로 보이지 않게.
+    def _row_text(i):
+        r = frags[i][0]
+        same = [j for j in rest
+                if min(r[3], frags[j][0][3]) - max(r[1], frags[j][0][1]) > 0.5 * min(r[3] - r[1], frags[j][0][3] - frags[j][0][1])]
+        return " ".join(frags[j][1] for j in sorted(same, key=lambda j: frags[j][0][0]))
+    try:
+        _pg_no = int(page.number) + 1
+    except Exception:
+        _pg_no = 0
+    pno = set()
     if body and do_edge:
         body_top = min(frags[i][0][1] for i in body)
         body_bot = max(frags[i][0][3] for i in body)
         for i in rest:
             r = frags[i][0]
-            if (r[3] / ph) <= HEAD_BAND and (body_top - r[3]) >= lh * EDGE_GAP:
+            # 261101-1(표본 조사): 위끝이 띠 안이고 아래끝이 `HEAD_SLACK` 만큼까지 — 성격심리는 큰 쪽 번호(`300`) 때문에
+            #   머리말 상자 아래끝이 8.2% 라 상자 **전체**를 띠 안에 요구하던 종전 판정에 6/11쪽이 걸리지 않았다.
+            #   쪽 번호를 단 줄은 본문과 `EDGE_GAP_NUM` 줄 높이만 떨어져도 된다(성격심리 1.1~1.3배).
+            in_head = (r[1] / ph) <= HEAD_BAND and (r[3] / ph) <= HEAD_BAND + HEAD_SLACK
+            in_foot = (r[1] / ph) >= FOOT_BAND
+            if not (in_head or in_foot):
+                continue
+            gap = (body_top - r[3]) if in_head else (r[1] - body_bot)
+            if gap >= lh * EDGE_GAP:
                 edge.add(i)
-            elif (r[1] / ph) >= FOOT_BAND and (r[1] - body_bot) >= lh * EDGE_GAP:
+            elif ocr and gap >= lh * EDGE_GAP_NUM and _page_number_line(_row_text(i), _pg_no):
                 edge.add(i)
+    # 261101-1(표본 조사, 심리검사의이해 12쪽 모두): 머리말 위끝이 8.3~8.6% 라 띠 밖이었고, 그래서 본문으로 잡혀 '본문과
+    #   떨어짐' 도 잴 수 없었다. **쪽의 맨 위·맨 아래 줄**은 `HEAD_EXT`·`FOOT_EXT` 까지 보고, 쪽 번호 모양이며 바로 옆 줄과
+    #   줄 높이의 `EDGE_GAP_TOP` 배 이상 떨어져 있으면 후보로 한다(같은 높이의 조각도 함께).
+    if ocr and do_edge and len(rest) >= 3:
+        def _same_row(i, j):
+            a, b = frags[i][0], frags[j][0]
+            return min(a[3], b[3]) - max(a[1], b[1]) > 0.5 * min(a[3] - a[1], b[3] - b[1])
+        order = sorted(rest, key=lambda i: frags[i][0][1])
+        for i, top in ((order[0], True), (max(rest, key=lambda i: frags[i][0][3]), False)):
+            r = frags[i][0]
+            if (top and r[1] / ph > HEAD_EXT) or (not top and r[1] / ph < FOOT_EXT):
+                continue
+            row = [j for j in rest if j == i or _same_row(i, j)]
+            others = [frags[j][0] for j in rest if j not in row]
+            if not others:
+                continue
+            gap = (min(o[1] for o in others if o[1] >= r[1]) - max(frags[j][0][3] for j in row)) if top else \
+                  (min(frags[j][0][1] for j in row) - max(o[3] for o in others if o[3] <= r[3]))
+            if gap >= lh * EDGE_GAP_TOP and _page_number_line(_row_text(i), _pg_no):
+                edge.update(row)
 
     # **되풀이되는가** — 머리말·꼬리말은 옆 쪽에도 거의 같은 글이 같은 자리에 있다.
     #   자리만으로 가르면 단의 마지막 줄까지 꼬리말로 본다(실측: `demanding conditions.`).
@@ -409,13 +463,7 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
         more = [_norm_edge(t) for t in (peers or []) if str(t or "").strip()]
         # 261101-1(SOT §3.5.2): **쪽 번호를 단 짧은 줄**은 옆 쪽을 못 봐도(두 쪽만 OCR 한 상태) 머리말·꼬리말이다 —
         #   되풀이를 확인할 길이 없어 `4 ANDY WEIR`·`PROVECGCT HAIL MARY 5` 가 남아 본문 첫 줄에 붙었다.
-        #   판정은 **같은 높이의 조각을 모은 한 줄**로 한다 — 띠에 걸친 표의 칸 하나(`100`)가 쪽 번호로 보이지 않게.
-        def _row_text(i):
-            r = frags[i][0]
-            same = [j for j in rest
-                    if min(r[3], frags[j][0][3]) - max(r[1], frags[j][0][1]) > 0.5 * min(r[3] - r[1], frags[j][0][3] - frags[j][0][1])]
-            return " ".join(frags[j][1] for j in sorted(same, key=lambda j: frags[j][0][0]))
-        pno = {i for i in edge if _page_number_line(_row_text(i))}
+        pno = {i for i in edge if _page_number_line(_row_text(i), _pg_no)}
         if seen is None and not more:
             edge = pno                       # 옆 쪽을 못 보면 쪽 번호 모양만 버린다
         else:
@@ -465,18 +513,30 @@ def edge_rows(frags, page) -> list:
 
 
 # 아라비아(세 자리까지 — 네 자리는 `January 2025` 처럼 연도일 때가 많다)·소문자 로마 숫자
-_PAGE_NO = re.compile(r"^[-–—(\[]?(\d{1,3}|(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3}))[-–—)\]]?$")
+#   OCR 이 끝자리 `1` 을 `|`·`l`·`I` 로 읽은 것(`30|`)도 받는다(표본 조사)
+_PAGE_NO = re.compile(r"^[-–—(\[]?(\d{1,2}[\d|lI]?|(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3}))[-–—)\]]?$")
 
 
-def _page_number_line(t: str) -> bool:
+def _page_number_line(t: str, page_no: int = 0) -> bool:
     """쪽 번호를 단 머리말·꼬리말 모양인가 — 낱말 `EDGE_NUM_WORDS` 개 이하이고 **맨 앞이나 맨 끝**이 쪽 번호
-    (`4 ANDY WEIR` · `PROJECT HAIL MARY 5` · `- 12 -` · `iv`). 위·아래 띠에서 본문과 떨어진 줄에만 묻는다(§3.5.2)."""
+    (`4 ANDY WEIR` · `PROJECT HAIL MARY 5` · `- 12 -` · `iv`). 위·아래 띠에서 본문과 떨어진 줄에만 묻는다(§3.5.2).
+
+    `page_no`(1부터) 를 주면 아라비아 숫자가 그 쪽 순서와 `EDGE_NUM_OFFSET` 안이어야 한다 — 차례 쪽 맨 아래 항목
+    `1, 설리반의 생애 270`(12쪽)이 꼬리말로 지워졌다(표본 조사). 책은 앞붙이 때문에 인쇄 쪽 번호가 몇 쪽 어긋난다(HM 7)."""
     toks = [x for x in re.split(r"\s+", str(t or "").replace(CELL_SEP, " ").strip()) if x]
     if not toks or len(toks) > EDGE_NUM_WORDS:
         return False
     if len(toks) >= 3 and toks[0] in "-–—" and toks[-1] in "-–—":
         toks = toks[1:-1]                     # `- 12 -`
-    return bool(_PAGE_NO.match(toks[0]) or _PAGE_NO.match(toks[-1]))
+    for tk in (toks[0], toks[-1]):
+        m = _PAGE_NO.match(tk)
+        if not m:
+            continue
+        num = re.sub(r"[|lI]$", "1", m.group(1))
+        if page_no and num.isdigit() and abs(int(num) - int(page_no)) > EDGE_NUM_OFFSET:
+            continue
+        return True
+    return False
 
 
 def _norm_edge(t: str) -> str:
@@ -1427,11 +1487,14 @@ JOIN_PITCH_MIN_N = 4     # 줄이 이보다 적으면 중앙값을 믿지 않는
 JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다(OCR 줄에는 보지 않는다 — SOT §3.7.11)
 # 261101-1(SOT §3.7.11): 줄 끝 `-` 로 이은 말의 영어 빈도(zipf)가 이보다 낮고 앞뒤가 각각 사전 낱말이면
 #   분철이 아니라 합성어다 — `-` 를 남긴다(`oval-shaped`). `satisfied`·`itself`·`otherwise` 는 모두 이 값보다 높다.
-HYPHEN_KEEP_ZIPF = 1.0
+HYPHEN_KEEP_ZIPF = 2.0   # 표본 조사: `twentysix` 1.19·`wellknown` 1.57 / 분철 `unconsciousness` 2.69 — 1.0 이면 앞의 둘이 붙었다
 _CLOSERS = "”\"’')]」』"   # 문장 끝 부호 뒤에 올 수 있는 닫는 따옴표·괄호(SOT §3.7.2 ③)
 # 앞 줄이 뒷줄보다 본문 폭의 이 비율 넘게 오른쪽에서 시작하면 잇지 않는다(SOT §3.7.11).
 #   실측: 지우지 못한 머리말 `PROJECT HAIL MARY 5` 0.52 / 검사의이해 문단 첫 줄(앞이 그림 옆) 0.21 — 그 사이.
 JOIN_LEFT_MAX = 0.40
+# 261101-1(SOT §3.7.13): 들여쓰기 문단 — 첫 줄 들여쓰기는 본문 폭의 이 사이(실측 HM 3%·성격심리 4%),
+#   그런 줄이 이만큼 이상이면 들여쓰기 문단 쪽. 들여쓰지 않은 줄은 왼쪽 끝에서 본문 폭의 `PARA_FLUSH` 안.
+PARA_INDENT_LO, PARA_INDENT_HI, PARA_INDENT_MIN, PARA_FLUSH = 0.015, 0.08, 2, 0.01
 _TOC_TAIL = re.compile(r"\s\d{1,4}$")     # 차례 항목의 끝(빈칸 + 쪽 번호) — SOT §3.7.11
 _CAPTION_HEAD = None
 _LIST_HEAD = None
@@ -1443,7 +1506,7 @@ def _starts_list(text) -> bool:
     if _LIST_HEAD is None:
         import re
         _LIST_HEAD = re.compile(
-            r'^\s*(?:\(?\d+[.)]|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—]\s|○|※)')
+            r'^\s*(?:\(?\d+[.)](?!\d)|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—]\s|○|※|【)')   # `1.00 g` 는 목록이 아니다(261101-1)
     return bool(_LIST_HEAD.match(text or ''))
 
 
@@ -1615,6 +1678,7 @@ def join_sentences(rows) -> list:
     #   ④(오른쪽까지 찼는가)가 언제나 거짓이었다.
     cols = _column_extents(body)
     med_pitch = _median_pitch(body)
+    indents = _para_indents(cols, body)
     idx = {id(q): i for i, q in enumerate(body)}
     out = []
     for r in rows:
@@ -1629,7 +1693,9 @@ def join_sentences(rows) -> list:
             _near = [q for q in body[_lo:_hi]
                      if abs(q['rect'][0] - r['rect'][0]) <= 24.0]
         margin, span = _extent_for(cols, r, _near)
-        if prev is not None and _can_join(prev, r, margin, span, med_pitch):
+        if prev is not None and (_can_join(prev, r, margin, span, med_pitch)
+                                 or (r.get('ocr') and prev.get('ocr') and _continues_para(r, indents)
+                                     and _can_join(prev, r, margin, span, med_pitch, para=True))):
             # ★ 조건 판정은 **마지막에 붙인 줄**로 한다(`_can_join` 안에서 `_last`).
             # 260910-4(SOT §3.7.7): 왜 넘어갔는지가 빈칸 여부를 가른다.
             #   어절이 안 들어가서 넘어갔으면 그 자리는 어절 경계다.
@@ -1691,6 +1757,37 @@ def page_carry(prev_rows, rows) -> bool:
     a['text'] = ta + sep + tb
     del rows[0]
     return True
+
+
+def _para_indents(cols, body) -> list:
+    """단마다 **들여쓰기로 문단을 가르는가** → `[(g0, g1, 왼쪽 끝, 본문 폭)]` (SOT §3.7.13, 261101-1).
+
+    표본 조사(HM_bm 12쪽 27곳·성격심리 7곳): 소설·교재는 문단 첫 줄을 들여 쓰고, 문단 안에서도 줄 끝에서 문장이
+    끝난다. 그 쪽에 들여쓴 줄(왼쪽 끝 + 본문 폭의 `PARA_INDENT_LO`~`PARA_INDENT_HI`)이 `PARA_INDENT_MIN` 개 이상이면
+    들여쓰기 문단으로 본다. 들여쓰기가 없는 문서(문단 사이를 띄우는 보고서)에는 걸리지 않는다."""
+    out = []
+    for g0, g1, _margin, span in cols:
+        if span <= 0:
+            continue
+        mine = sorted(r['rect'][0] for r in body if g0 - 0.5 <= r['rect'][0] <= g1 + 0.5)
+        if len(mine) < 4:
+            continue
+        left = mine[len(mine) // 5]
+        ind = sum(1 for x in mine if left + span * PARA_INDENT_LO <= x <= left + span * PARA_INDENT_HI)
+        if ind >= PARA_INDENT_MIN:
+            out.append((g0, g1, left, span))
+    return out
+
+
+def _continues_para(b, indents) -> bool:
+    """뒷줄이 들여쓰기 문단 단에서 **들여쓰지 않고** 시작하는가 — 그러면 앞 문단이 이어진다(§3.7.13)."""
+    rb = b.get('rect')
+    if not rb or not indents:
+        return False
+    for g0, g1, left, span in indents:
+        if g0 - 0.5 <= rb[0] <= g1 + 0.5:
+            return abs(rb[0] - left) <= span * PARA_FLUSH
+    return False
 
 
 def _median_pitch(body) -> float:
@@ -1814,8 +1911,11 @@ def _extent_for(cols, r, near=None):
     return got
 
 
-def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0) -> bool:
-    """SOT §3.7 의 여덟 조건을 모두 본다."""
+def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: bool = False) -> bool:
+    """SOT §3.7 의 여덟 조건을 모두 본다.
+
+    `para=True`(§3.7.13): 들여쓰기 문단 단에서 뒷줄이 들여쓰지 않았다 — ③(문장 끝)을 보지 않는 대신 앞 줄이
+    **오른쪽 끝까지 찼어야** 한다(④ 의 첫 갈래만). 나머지 조건은 그대로."""
     # ★ 260910: 이미 이어 붙인 줄이면 **마지막에 붙인 줄**로 잰다. 합친 사각형으로 재면
     #   오른쪽 끝이 늘 여백까지 차 있어 ④ 가 무력해진다(문단 마지막 줄까지 붙는다).
     ra = a.get('_last') or a.get('rect')
@@ -1832,10 +1932,14 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0) -> bool:
         return False                                    # ②
     core = ta.rstrip()
     # 261101-1(SOT §3.7.11): 닫는 따옴표·괄호 **앞**의 부호로 본다 — `…two-i-pi.”` 다음 문단이 붙었다
-    if not core or core[-1] in SENT_END or core.rstrip(_CLOSERS)[-1:] in SENT_END:
+    if not core:
+        return False
+    if not para and (core[-1] in SENT_END or core.rstrip(_CLOSERS)[-1:] in SENT_END):
         return False                                    # ③
     sa = max(1.0, a.get('size') or (ra[3] - ra[1]))
     sb = max(1.0, b.get('size') or (rb[3] - rb[1]))
+    if para and margin - ra[2] > sa * JOIN_FILL:
+        return False                                    # ③ 대신: 앞 줄이 끝까지 찼어야 같은 문단
     # ④ 오른쪽이 찼는가. 260910-4(SOT §3.7.6 가): 고정 문턱만 보면 **11.4pt 모자란**
     #   줄이 탈락했는데, 뒷줄 첫 어절은 18pt 라 애초에 들어갈 수 없었다 — 문단이 끝난 게
     #   아니라 자리가 없어 넘어간 것이다. 그래서 거의 찼으면 통과, 덜 찼으면
@@ -2021,10 +2125,16 @@ def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None, edges_o
                 else _by_column([((0, 0, 0, 0), frags)], page, word_level=True)):
         items.extend(_merge_rows(col, cjk_gap=cjk_gap))
     items = [it for it in items if not _noise.is_symbol_only(it[1])]
+    # 261101-1(SOT §3.6.14, 표본 조사): **본문 쪽**의 ` | ` 는 표 칸이 아니라 버려진 낱말의 빈자리다 — ` | ` 가 든 줄이
+    #   그 쪽 줄의 `PROSE_BAR_MAX` 이하이고 그 줄에 하나뿐이면 빈칸으로. 표·서식 쪽은 거의 모든 행에 ` | ` 가 있다.
+    if len(items) >= PROSE_MIN_ROWS:
+        nb = sum(1 for it in items if CELL_SEP in it[1])
+        if nb and nb <= len(items) * PROSE_BAR_MAX:
+            items = [(r, t.replace(CELL_SEP, " ") if t.count(CELL_SEP) == 1 else t, sz) for r, t, sz in items]
     # 머리말·꼬리말은 **줄을 이은 뒤** 줄 단위로 — 낱말 하나는 옆 쪽 꼬리말 한 줄과 같을 수 없다.
     if page is not None and items:
         _before = items
-        items, _n = drop_edge_frags(items, page, side=False,
+        items, _n = drop_edge_frags(items, page, side=False, ocr=True,
                                     peers=peer_texts_from_words(peer_words))
         if edges_out is not None and _n:
             _ok = {id(f) for f in items}

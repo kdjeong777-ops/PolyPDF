@@ -98,6 +98,44 @@ try:
         "② `fi`↔`fl` 합자 — 사전에 없는 낱말만 고친다")
     chk(tx._dehyphen_ligature("satis", "fled.") == "fied." if hasattr(tx, "_dehyphen_ligature") else False,
         "② 분철을 이어야 드러나는 합자(`satis-` + `fled.`)도 고친다")
+    # 표본 조사(HM_bm·성격심리 각 12쪽)에서 나온 것
+    chk(F("least", "J", 5, 29, "didn’t", 31) == "I", "②s `At least J didn't` → `I`")
+    chk(F(None, "[t", 20, 29, "would", 31) == "It", "②s `[t would` → `It would`")
+    chk(F("easy.", "If]", 30, 29, "eat", 31) == "If I", "②s `If] eat` → `If I eat`")
+    sg = getattr(tn, "small_glyph_ok", None)
+    chk(bool(sg) and sg("을", 15, 0.96, 40) and not sg("을", 15, 0.20, 40) and sg("■", 15, 0.96, 40) is False,
+        "②s 납작한 한글 낱자(`을` 15px, 신뢰도 0.96)는 진짜 글자 — 신뢰도 낮으면 아니다")
+    rk = getattr(ocr, "_reread_kind", None)
+    chk(bool(rk) and rk("SAS", "kor+eng") == "kor" and rk("Aro]", "kor+eng") == "kor" and rk("Adler", "kor+eng") == ""
+        and rk("(0100010009'", "kor+eng") == "eng" and rk("(press)", "kor+eng") == "",
+        "②s 다시 읽을 자리 고르기 — 대문자 잡글은 `kor`, 괄호 속 숫자 잡글은 `eng`, 이름·바른 영문은 그대로")
+    # 실제 `ocr_image` 길 — 쪽 판독(psm 4)은 한글 줄에 `SAS`·납작한 `을` 을 내놓고, 그 자리를 `kor` 로 다시 읽으면 `음식을`
+    from PIL import Image
+    kd = {k: [] for k in ("text", "conf", "left", "top", "width", "height", "block_num", "par_num", "line_num")}
+    for s, x, w, h, cf in (("위해", 100, 60, 40, 95), ("SAS", 170, 70, 40, 60), ("찾는다.", 250, 90, 40, 95),
+                           ("초점", 360, 60, 40, 95), ("을", 422, 25, 15, 96), ("두고", 455, 60, 40, 95)):
+        kd["text"].append(s); kd["left"].append(x); kd["top"].append(100 + (40 - h)); kd["width"].append(w)
+        kd["height"].append(h); kd["conf"].append(cf); kd["block_num"].append(1); kd["par_num"].append(1)
+        kd["line_num"].append(1)
+
+    def fake_itd(im, lang="", config="", output_type=None):
+        if "--psm 4" in config:
+            return kd
+        if "--psm 7" in config and lang == "kor":
+            return {"text": ["음", "식", "을"], "conf": [92, 93, 94], "top": [0, 0, 0], "height": [30] * 3, "left": [0, 20, 40]}
+        return {"text": [], "conf": [], "top": [], "height": [], "left": []}
+    _old = (ocr.ensure_tesseract, pytesseract.image_to_data)
+    ocr.ensure_tesseract = lambda: {"ok": True}
+    pytesseract.image_to_data = fake_itd
+    try:
+        txt = ocr.ocr_image(Image.new("RGB", (800, 300), "white"), lang="kor+eng", dpi=300)["text"]
+    finally:
+        ocr.ensure_tesseract, pytesseract.image_to_data = _old
+    chk("음식을" in txt and "SAS" not in txt, "②s 한글 줄의 영문 잡글을 그 자리만 `kor` 로 다시 읽는다(§14.8.2)", txt)
+    chk("초점" in txt and "을" in txt.split("초점", 1)[1][:3], "②s 납작한 `을` 이 사라지지 않는다", txt)
+    chk(not tx._starts_list("1.00 g.") and tx._starts_list("【주2】소성") and tx._starts_list("1. 개요"),
+        "②s `1.00 g` 은 목록이 아니고 `【주2】` 는 목록 표시")
+    chk(tx._join_sep("We need at least twenty-", "six years.") == "", "②s `twenty-` + `six` → 붙임표를 남긴다")
 
     # ── ③ OCR 줄은 ⑧(크기)로 끊지 않는다(§3.7.11) — 잉크 높이가 줄마다 다르다 ─────────
     body = ["The whiteness lessens My eyes are adjusting I start to see shapes and",
@@ -179,6 +217,22 @@ try:
         rows[0]["text"][:60] if rows else "")
     chk(not tx._page_number_line("January 2025") if hasattr(tx, "_page_number_line") else False,
         "⑤ 네 자리 수(연도)는 쪽 번호로 보지 않는다")
+    # 표본 조사(성격심리): 큰 쪽 번호로 머리말 아래끝이 8% 를 넘고, 본문과 줄 높이의 1.2배만 떨어졌다 · `30|`
+    for head in ("3 제12장 머레이의 욕구 및 동기 이론", "3. 성격 발달 3|"):           # 합성 문서의 3번째 쪽
+        hw = line_words(head, 40, x=40, h=16.0, cw=7.0, gap=12.0)      # 40~56 → 아래끝 0.086
+        bw = []
+        for i, ln in enumerate(BODY):
+            bw += line_words(ln, 76 + i * 16, x=40, h=12.0, cw=4.6, gap=2.4)
+        d = fitz.open(dst)
+        rows = tx.page_lines(d, dst, 2, ocr_words=hw + bw, ocr_dpi=0, ocr_peer_words=None)
+        d.close()
+        chk(rows and rows[0]["text"].startswith("take another"), "⑤s 큰 쪽 번호 머리말(`%s`)도 지운다" % head[:8],
+            rows[0]["text"][:40] if rows else "")
+    try:
+        ok = not tx._page_number_line("1, 설리반의 생애 270", 12) and tx._page_number_line("300 제12장 머레이", 301)
+    except TypeError:                               # 수정 전 코드에는 쪽 순서 인자가 없다
+        ok = False
+    chk(ok, "⑤s 쪽 순서와 동떨어진 수(차례 항목 `…생애 270`, 12쪽)는 쪽 번호가 아니다")
 
     # ── ③' 닫는 따옴표 앞 문장 끝 — 다음 문단을 붙이지 않는다(§3.7.2 ③) ─────────────────
     q = ["But I take a deep breath and speak slowly and carefully to the robot",
@@ -191,6 +245,46 @@ try:
     rows = tx.join_sentences(tx.lines_from_words(words, dpi=0))
     chk(len(rows) == 2 and rows[1]["text"].startswith("“Incorrect."), "③' `…pi.”` 다음 줄은 새 문단",
         str([r["text"][-20:] for r in rows]))
+
+    # ── ③s 들여쓰기 문단(§3.7.13) — 문장 끝 + 들여쓰지 않은 다음 줄은 같은 문단, 들여쓴 줄은 새 문단 ─────
+    para = [("I squeeze another shot of gravy goo into my mouth. Still delicious.", 52),
+            ("I gobble it down. Soon the tube is empty and I hold it up for more", 40),
+            ("food. The computer does not answer me and I sigh once again here.", 40),
+            ("It makes sense. My digestive system is getting used to semi solid", 52),
+            ("food right now. Best to take it easy and not eat too much at once.", 40),
+            ("Give me more food! No one cares about the right thing when they are", 52),
+            ("hungry right now and I am hungry too so give me some food please.", 40)]
+    pw = []
+    for i, (ln, x) in enumerate(para):
+        ww = line_words(ln, 100 + i * 14, x=x, cw=4.6, gap=2.4)
+        dx = 360 - ww[-1]["x1"]                           # 양쪽 정렬 — 오른쪽 끝을 맞춘다(마지막 줄 제외)
+        if i not in (2, 4, 6):
+            for k, q in enumerate(ww):
+                sh = dx * k / max(1, len(ww) - 1)
+                q["x0"] += sh; q["x1"] += sh
+        pw += ww
+    rows = tx.join_sentences(tx.lines_from_words(pw, dpi=0))
+    chk(len(rows) == 3 and rows[0]["text"].endswith("sigh once again here."),
+        "③s 들여쓰기 문단 책 — `…delicious.` 다음 들여쓰지 않은 줄은 같은 문단", str([r["text"][:25] for r in rows]))
+    lay = [{"text": r["text"], "style": "body", "kind": "text", "rect": r["rect"], "size": r["size"]}
+           for r in tx.lines_from_words(pw, dpi=0)]
+    chk(len(tx.join_sentences(lay)) > 3, "③s 글자층 줄에는 걸지 않는다(참고문헌·주석이 붙었다)")
+
+    # ── ③s 본문 쪽의 ` | ` 는 빈자리 — 빈칸으로(§3.6.14), 표 쪽은 그대로 ─────────────────
+    pw = []
+    for i in range(10):
+        ww = line_words("the quick brown fox jumps over the lazy dog again and", 100 + i * 14, cw=4.6, gap=2.4)
+        if i == 4:
+            for q in ww[5:]:
+                q["x0"] += 60; q["x1"] += 60               # 버려진 낱말 자리
+        pw += ww
+    allt = " ".join(r["text"] for r in tx.lines_from_words(pw, dpi=0))
+    chk(" | " not in allt, "③s 본문 쪽의 빈자리는 ` | ` 가 아니라 빈칸", allt[:80])
+    tw = []
+    for i in range(10):
+        tw += line_words("항목 값", 100 + i * 14, x=40, cw=8, gap=4) + line_words("12.5", 100 + i * 14, x=300, cw=8)
+    allt = " ".join(r["text"] for r in tx.lines_from_words(tw, dpi=0))
+    chk(allt.count(" | ") == 10, "③s 표 쪽(모든 행에 칸)은 ` | ` 를 그대로 둔다", allt[:60])
 
     # ── ⑥ 쪽을 넘어간 문장 — 여러 쪽 산출물에서만 잇는다(§3.7.12) ───────────────────
     carry = getattr(tx, "page_carry", None)

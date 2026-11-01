@@ -28,7 +28,9 @@ KEEP_ZIPF = 3.0
 BAR_I_LO, BAR_I_HI = 0.6, 1.6
 I_TALL = 2.2         # `I` 로 읽혔는데 위아래 글줄과 엉겨 큰 상자(실측 53px ÷ 31 = 1.7) — `I` 는 이만큼까지 받는다
 BRACKET_I_W = 0.35   # `[`·`]` 가 이보다 좁으면(폭÷높이) `I` 의 획이다(실측 4~8px ÷ 28)
-ONE_I_W = 0.2        # `1` 이 이보다 좁으면 `I` 의 획이다(실측 1px ÷ 28) — 진짜 숫자 1 은 폭이 있다
+# 납작한 진짜 글자(`을`·`는`, 15px ÷ 줄 31~42px)는 ①(4pt) 을 건너뛴다 — 신뢰도·줄 높이 비율로(`small_glyph_ok`)
+SMALL_GLYPH_CONF, SMALL_GLYPH = 0.80, 0.30
+ONE_I_W = 0.2       # `1` 이 이보다 좁으면 `I` 의 획이다(실측 1px ÷ 28) — 진짜 숫자 1 은 폭이 있다
 
 
 def has_letter(text) -> bool:
@@ -120,6 +122,8 @@ def fix_i(prev, s, w, h, nxt, line_h: float):
     if not side or not all(_latin(x) for x in side):
         return None
     r = float(h) / float(line_h)
+    if t == "J" and BAR_I_LO <= r <= BAR_I_HI:
+        return "I"                           # 표본 조사: `At least J didn't` — 홀로 선 `J` 는 영어 낱말이 아니다
     if t in ("I", "|", "[", "]", "1"):
         hi = I_TALL if t == "I" else BAR_I_HI
         if not (BAR_I_LO <= r <= hi):
@@ -138,6 +142,12 @@ def fix_i(prev, s, w, h, nxt, line_h: float):
     m = re.fullmatch(r"([A-Za-z]+[—–])[t|\[\]1]", t)            # `Wait—t` → `Wait—I`
     if m and known_word(m.group(1)[:-1]):
         return m.group(1) + "I"
+    m = re.fullmatch(r"[\[|]([a-z]{1,3})([.,;:!?”\"’]*)", t)     # `[t would` → `It would` (`If`·`In`·`Is`)
+    if m and known_word("I" + m.group(1)):
+        return "I" + m.group(1) + m.group(2)
+    m = re.fullmatch(r"([A-Za-z]{2,})[\]|]", t)                  # `If] eat` → `If I eat`
+    if m and known_word(m.group(1)):
+        return m.group(1) + " I"
     return None
 
 
@@ -153,7 +163,7 @@ def fix_ligature(s):
 
 
 def keep_ocr_word(surface, x0, y0, x1, y1, conf, *, scale: float = 1.0,
-                  min_conf: float = MIN_CONF) -> bool:
+                  min_conf: float = MIN_CONF, min_h: float = MIN_H_PT) -> bool:
     """OCR 낱말 하나를 남길지. 좌표는 픽셀이어도 되고 `scale` 로 pt 로 환산한다.
 
     `scale = 72 / dpi` (300dpi 면 0.24). 신뢰도가 낮은 낱말도 함께 버린다 —
@@ -166,4 +176,14 @@ def keep_ocr_word(surface, x0, y0, x1, y1, conf, *, scale: float = 1.0,
     if is_symbol_only(surface):
         return False
     return not is_noise_box(surface, float(x0) * scale, float(y0) * scale,
-                            float(x1) * scale, float(y1) * scale)
+                            float(x1) * scale, float(y1) * scale, min_h=min_h)
+
+
+def small_glyph_ok(surface, h, conf, line_h) -> bool:
+    """납작한 진짜 글자인가 — ①(높이 4pt 미만)을 건너뛸까 (SOT §3.5.3, 261101-1 표본 조사).
+
+    받침 없는 `을`·`는` 은 잉크 높이가 줄 글자의 절반쯤이라 300dpi 에서 15px(3.6pt)로 잡혀 ① 에 걸렸다 —
+    신뢰도 0.9 가 넘는 글자가 사라져 `초점을 두고` 가 `초점 두고` 가 됐다. **글자가 있고 신뢰도가 높고 그 줄 낱말
+    높이의 `SMALL_GLYPH` 배 이상**이면 진짜 글자로 본다(티는 신뢰도가 바닥이고 줄과 상관없이 작다)."""
+    return (has_letter(surface) and conf is not None and float(conf) >= SMALL_GLYPH_CONF
+            and line_h > 0 and float(h) >= float(line_h) * SMALL_GLYPH)
