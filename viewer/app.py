@@ -3035,7 +3035,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                               offset=int(result.get("offset") or 0),
                               candidates=result.get("candidates") or [],
                               method=result.get("method") or "toc",
-                              toc_pages=result.get("toc_pages") or [], parent=self)
+                              toc_pages=result.get("toc_pages") or [],
+                              page_map=result.get("page_map"), parent=self)
         # 행을 고르면 본문 뷰어도 그 쪽으로(같은 파일이 열려 있을 때만) — 큰 화면으로 대조
         def _pv(p0):
             try:

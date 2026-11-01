@@ -3798,6 +3798,11 @@ msgstr "Preparing to place in original"
 msgid "쪽 복사 중"
 msgstr "Copying pages"
 
+#: viewer/page_numbers.py
+#, python-brace-format
+msgid "인쇄된 쪽 번호 읽는 중… {pg}쪽"
+msgstr "Reading printed page numbers… page {pg}"
+
 #: viewer/pdf_compress.py
 msgid "서명된 PDF — 사본에서 서명이 깨집니다"
 msgstr "Signed PDF — the signature would break in the copy"
@@ -4842,6 +4847,10 @@ msgid "한글이 없어 영문으로 읽습니다"
 msgstr "No Korean text — reading as English"
 
 #: viewer/study/ocr_headings.py
+msgid "장 첫 쪽 찾는 중…"
+msgstr "Finding chapter opening pages…"
+
+#: viewer/study/ocr_headings.py
 msgid "저장된 OCR"
 msgstr "Stored OCR"
 
@@ -4849,6 +4858,11 @@ msgstr "Stored OCR"
 #, python-brace-format
 msgid "헤딩 {n}개"
 msgstr "{n} headings"
+
+#: viewer/study/ocr_headings.py
+#, python-brace-format
+msgid "장 머리 읽는 중… {pg}쪽"
+msgstr "Reading chapter heading… page {pg}"
 
 #: viewer/study/ocr_pages.py
 #, python-brace-format
@@ -10861,6 +10875,16 @@ msgstr "extracted"
 
 #: viewer/widgets/toc_review_dialog.py
 #, python-brace-format
+msgid "장 제목 맞춤 (장 {n}개)"
+msgstr "Matched by chapter titles ({n} chapters)"
+
+#: viewer/widgets/toc_review_dialog.py
+#, python-brace-format
+msgid "쪽 번호 맞춤 (구간 {n}개)"
+msgstr "Matched by page numbers ({n} ranges)"
+
+#: viewer/widgets/toc_review_dialog.py
+#, python-brace-format
 msgid "{off:+d}  (신뢰도 {conf:.0%})"
 msgstr "{off:+d}  (confidence {conf:.0%})"
 
@@ -10911,6 +10935,11 @@ msgstr "read from TOC pages {join}"
 #, python-brace-format
 msgid " (장 행 {skipped}개 제외)"
 msgstr " ({skipped} chapter rows excluded)"
+
+#: viewer/widgets/toc_review_dialog.py
+#, python-brace-format
+msgid "쪽 번호로 맞춘 쪽 — 구간 {k}"
+msgstr "Page matched by printed page numbers — range {k}"
 
 #: viewer/widgets/translate_dialog.py
 msgid "용어집 생성 중…"
@@ -11833,10 +11862,6 @@ msgid "스캔 이미지 감지 — OCR 모드로 추출"
 msgstr "Scanned image detected — extracting in OCR mode"
 
 #: viewer/workers.py
-msgid "OCR 헤딩 인식 중..."
-msgstr "Recognizing OCR headings..."
-
-#: viewer/workers.py
 msgid "책갈피 추출 중..."
 msgstr "Extracting bookmarks..."
 
@@ -11847,6 +11872,14 @@ msgstr "Download stopped."
 #: viewer/workers.py
 msgid "오프셋(목차 쪽 → 실제 쪽) 추정 중..."
 msgstr "Estimating offset (TOC page → actual page)..."
+
+#: viewer/workers.py
+msgid "OCR 헤딩 인식 중..."
+msgstr "Recognizing OCR headings..."
+
+#: viewer/workers.py
+msgid "장 제목으로 쪽 맞추는 중..."
+msgstr "Matching pages by chapter titles..."
 
 #: viewer/workers.py
 msgid "어휘 분석 중..."

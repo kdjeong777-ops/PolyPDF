@@ -749,15 +749,25 @@ class BookmarkerWorker(QObject):
                 off = self.opts.get("offset")
                 if off is None:
                     off = cands[0][0] if cands else 0
+                # 261101-2(마스터 §4.4.2 ③): 인쇄된 쪽 번호로 구간별 차이 → 행마다 쪽(F1~F3).
+                #   쪽 번호를 못 읽으면 장 제목 쪽으로 장마다 맞춘다(F4). 사용자가 오프셋을 정했으면 하지 않는다.
+                page_map = None
+                if self.opts.get("offset") is None:
+                    page_map = self._map_pages(rows, toc_pages, int(off))
+                    if self._cancel:
+                        self._cancelled(rows, "toc"); return
                 if self.opts.get("review"):
                     # 검토 단계: 표만 돌려주고 끝. 앱이 검토 창을 띄운 뒤 결과를 책갈피창에 넣는다.
                     self.finished.emit(dict({"phase": "review", "method": "toc",
                                              "rows": rows, "candidates": cands, "offset": int(off),
-                                             "toc_pages": toc_pages}, **self._stats()))
+                                             "toc_pages": toc_pages, "page_map": page_map}, **self._stats()))
                     return
                 import fitz
                 _d = fitz.open(str(self.input_pdf)); _n = _d.page_count; _d.close()
-                toc_parse.apply_offset(rows, int(off), _n, keep_manual=False)
+                if page_map:                       # 맞춘 쪽은 두고, 못 맞춘 행만 오프셋으로
+                    for r_ in rows:
+                        r_["manual"] = r_.get("page") is not None
+                toc_parse.apply_offset(rows, int(off), _n, keep_manual=bool(page_map))
                 import pdf_bookmarker as _pb
                 bookmarks = [_pb.Bookmark(title=t_, page=p_, level=l_)
                              for (t_, p_, l_) in toc_parse.to_bookmarks(rows)]
@@ -773,15 +783,26 @@ class BookmarkerWorker(QObject):
             mode = "ocr"
         if mode == "ocr":
             # 스캔/이미지 PDF → OCR로 'CHAPTER 1'·'1.1 제목' 등 헤딩 인식
-            from viewer.study.ocr_headings import extract_ocr_bookmarks
-            self.progress.emit(tr("OCR 헤딩 인식 중..."))
-            bookmarks = extract_ocr_bookmarks(
-                self.input_pdf,
-                use_font_auto=bool(self.opts.get("ocr_font_auto", True)),
-                progress=lambda d, t, m: self.progress.emit(m),
-                should_cancel=lambda: self._cancel,
-                pages=op,
-            )
+            from viewer.study.ocr_headings import extract_ocr_bookmarks, chapter_pages_fast
+            from viewer._vendor.pdf_bookmarker.core import Bookmark as _BM
+            # 261101-2(마스터 §4.4.3 H2): 먼저 쪽 윤곽 + 머리 띠 OCR 로 장만 빨리 — 3개 미만이면 전 쪽 OCR 헤딩
+            fast = chapter_pages_fast(
+                self.input_pdf, lang=getattr(getattr(op, "_picker", None), "lang", "") or "",
+                progress=lambda m: self.progress.emit(m), should_cancel=lambda: self._cancel,
+                pace=lambda: _pacing.pace(self))
+            if self._cancel:
+                self._cancelled([], "ocr"); return
+            if fast:
+                bookmarks = [_BM(title=t_, page=p_, level=0) for t_, p_ in fast]
+            else:
+                self.progress.emit(tr("OCR 헤딩 인식 중..."))
+                bookmarks = extract_ocr_bookmarks(
+                    self.input_pdf,
+                    use_font_auto=bool(self.opts.get("ocr_font_auto", True)),
+                    progress=lambda d, t, m: self.progress.emit(m),
+                    should_cancel=lambda: self._cancel,
+                    pages=op,
+                )
             method = "ocr"
         else:
             self.progress.emit(tr("책갈피 추출 중..."))
@@ -810,6 +831,33 @@ class BookmarkerWorker(QObject):
                                      "candidates": [], "offset": 0, "toc_pages": []}, **self._stats()))
             return
         self._write_and_finish(bridge, bookmarks, method, res, mode)
+
+    def _map_pages(self, rows, toc_pages, off):
+        """261101-2(F1~F4): 행마다 PDF 쪽·구간(`page`·`seg`). 성공하면 {"method": "folio"|"chapters", …}, 못 하면 None(오프셋으로)."""
+        try:
+            from viewer import page_numbers as _pn
+            first = max(toc_pages) + 1
+            with _pn.PrintedPages(self.input_pdf, ocr=self._op, should_cancel=lambda: self._cancel,
+                                  progress=lambda m: self.progress.emit(m),
+                                  pace=lambda: _pacing.pace(self)) as pp:
+                n = pp.page_count
+                est = pp.estimate(first, n)
+                if self._cancel:
+                    return None
+                if est is not None:
+                    _pn.map_rows(rows, est, n)
+                    _pn.refine_chapter_pages(rows, pp.text_of, skip=set(toc_pages))
+                    return {"method": "folio", "segments": est.as_list()}
+                self.progress.emit(tr("장 제목으로 쪽 맞추는 중..."))
+                found = _pn.map_rows_by_chapters(rows, pp.text_of, n, start_offset=off, skip=set(toc_pages),
+                                                 should_cancel=lambda: self._cancel)
+                if found:
+                    return {"method": "chapters", "chapters": found}
+                for r in rows:                      # 못 찾았으면 표는 종전대로(오프셋)
+                    r["page"] = None; r.pop("seg", None)
+        except Exception:
+            pass
+        return None
 
     def _write_and_finish(self, bridge, bookmarks, method, res, mode):
         """추출/검토 결과를 돌려준다 — **PDF 는 쓰지 않는다**(261019-1, 마스터 §4.4.2).

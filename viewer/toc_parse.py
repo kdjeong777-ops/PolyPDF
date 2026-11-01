@@ -36,7 +36,11 @@ _ROMAN = re.compile(r"^(?=[ivxlcdm]+$)m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|
 
 # 줄 끝 쪽번호 표기들: `… 12` / `  12` / `/ 12` / `/12` / `Materials85`
 _SEP_PAGE = re.compile(
-    r"^(?P<title>.+?)\s*(?:[·•．․‥…⋯]{2,}|\.{3,}|/|\s{2,})\s*(?P<page>[0-9lIO|oSB][0-9lIO|oSB ]{0,4})\s*$")
+    r"^(?P<title>.+?)\s*(?:[·•．․‥…⋯]{2,}|\.{3,}|/|_+|\s{2,})\s*(?P<page>[0-9lIO|oSB][0-9lIO|oSB ]{0,4})\s*$")
+# 261101-2(P1): 한 칸 + 쪽 번호 `요약 80` — 숫자만 1~3자리, 제목 두 글자 이상. 장 낱말만 남는 줄(`CHAPTER 12`)은 아니다
+_SPACE_PAGE = re.compile(r"^(?P<title>\S.*?[^\s\d])\s(?P<page>\d{1,3})\s*$")
+_BARE_CHAPTER = re.compile(r"^[제저졔]\s*\d+\s*[장부편]\W*$")
+_BARE_HEAD = re.compile(r"^(chapter|part|section|unit|appendix|부록|제)\W*$", re.I)
 _TIGHT_PAGE = re.compile(r"^(?P<title>.+?[A-Za-z가-힣\)\]])(?P<page>\d{1,4})\s*$")
 _ROMAN_PAGE = re.compile(r"^(?P<title>.+?)\s*(?:/|\.{3,}|[·…]{2,}|\s{2,})\s*(?P<page>[ivxlcdmIVXLCDM]{1,6})\s*$")
 # 한 줄에 여러 항목: `1)검사점수/10 2)반응의내용과주제/ll` — '/숫자' 뒤에 공백+새 항목이 이어짐
@@ -53,7 +57,7 @@ def _split_multi(text: str) -> list[str]:
 # 하위 번호(2단계) `1)`, `(1)`, `가.`, `a.`  /  본문 번호(1단계) `1 `, `1.`, `2. SSCT`
 _SUB_NUM = re.compile(r"^\(?\d{1,2}\)|^[가-힣]\.\s|^[a-zA-Z]\.\s")
 _MAIN_NUM = re.compile(r"^\d{1,2}[\.\s]\s*\S")
-_CHAPTER = re.compile(r"^(제\s*\d+\s*[장부편]|chapter\s+\d+|part\s+\d+|부록\s*\S*|참고\s*문헌|찾아보기|색인|서문|머리말"
+_CHAPTER = re.compile(r"^([제저졔]\s*\d+\s*[장부편]|chapter\s+\d+|part\s+\d+|부록\s*\S*|참고\s*문헌|찾아보기|색인|서문|머리말"
                       r"|(?:appendix|references|bibliography|index|preface|foreword|acknowledg\w*)\b)", re.I)   # 260904-5: 영문 장 급
 _NOISE = re.compile(r"^[\W_\d\s]{0,3}$|차\s*[례려]|CONTENTS", re.I)
 
@@ -76,6 +80,10 @@ def parse_line(text: str) -> list[dict]:
         if not part:
             continue
         m = _SEP_PAGE.match(part) or _TIGHT_PAGE.match(part)
+        if not m:
+            m = _SPACE_PAGE.match(part)
+            if m and (len(m.group("title").strip()) < 2 or _BARE_HEAD.match(m.group("title").strip())):
+                m = None
         if m:
             title = _clean_title(m.group("title"))
             page = fix_ocr_number(m.group("page"))
@@ -203,11 +211,50 @@ def _levels_from_x(xs: list[float]) -> list[int]:
     return lv
 
 
+# 261101-2(P8): 스캔 쪽 글자층이 '뜻 있는 글'인가 — 값은 여기 한 곳(마스터 §4.4.3 P8)
+LAYER_MEANINGFUL = 0.6       # 뜻 있는 줄의 비율 하한
+LAYER_ODD_MAX = 0.1          # 이상한 글자(한자·도형·기호)의 비율 상한
+_PLAIN_CH = re.compile(r"[가-힣A-Za-z0-9\s.,()\[\]{}/\-–—:;·…_'\"“”‘’?!%&+~<>=*#@|]")
+_NUM_STRUCT = re.compile(r"^\(?\d{1,3}(?:\s?\.\s?\d{1,2}){0,3}[.)]?(?:\s|$)")
+
+
+def _meaningful_line(s: str) -> bool:
+    if _NUM_STRUCT.match(s) or re.search(r"[가-힣]{2,}", s):
+        return True
+    try:
+        from viewer.text_noise import known_word
+    except Exception:
+        return False
+    return any(known_word(w) for w in re.findall(r"[A-Za-z']{3,}", s))
+
+
+def layer_meaningful(lines: list[str]) -> bool:
+    """글자층 줄이 번호 구조(1.1·2·1))·두 글자 이상 한글 낱말·사전 영어 낱말로 된 **뜻 있는 글**인가(P8, 사용자 지시).
+    덧씌운 OCR 층이 장식체를 읽은 잡글(`㉧U=UJ직PT트日`)이면 False — 그런 층은 쓰지 않는다."""
+    lines = [ln.strip() for ln in lines if ln and len(ln.strip()) >= 2]
+    if len(lines) < 3:
+        return False
+    chars = "".join(lines).replace(" ", "")
+    if not chars:
+        return False
+    odd = sum(1 for c in chars if not _PLAIN_CH.match(c))
+    if odd / len(chars) > LAYER_ODD_MAX:
+        return False
+    good = sum(1 for ln in lines if _meaningful_line(ln))
+    return good / len(lines) >= LAYER_MEANINGFUL
+
+
+def _entry_count(lines) -> int:
+    """쪽 번호가 붙은 항목 수(P8 — 두 판독 중 고를 때)."""
+    return sum(1 for _x, t in lines for it in parse_line(t) if it.get("toc_page"))
+
+
 def _page_lines(pdf_path, pages: Iterable[int], ocr=None) -> list[tuple[int, float, str]]:
     """(쪽, x0, 줄) 목록 — pdfplumber 줄 묶음. 텍스트층이 비면 OCR 폴백.
 
     261019-1: `ocr`(`study.ocr_pages.OcrPages`)를 주면 **스캔 쪽**(덧씌운 OCR 층 포함)은 그 공급자의
-    목차 판독(`toc_lines` — 저장된 OCR 재사용 + 흩어진 글 판독)으로 읽는다."""
+    목차 판독(`toc_lines` — 저장된 OCR 재사용 + 흩어진 글 판독)으로 읽는다.
+    261101-2(P8): 스캔 쪽 글자층이 뜻 있는 글이면 그것도 읽어, 쪽 번호 붙은 항목이 더 많은 쪽을 쓴다(같으면 글자층)."""
     out = []
     try:
         import pdfplumber
@@ -217,7 +264,11 @@ def _page_lines(pdf_path, pages: Iterable[int], ocr=None) -> list[tuple[int, flo
                 if pno < 1 or pno > len(pdf.pages):
                     continue
                 if ocr is not None and ocr.is_scan(pno):
+                    layer = _T._group_lines_by_y(pdf.pages[pno - 1])
                     lines = ocr.toc_lines(pno)
+                    if layer and layer_meaningful([t for _x, t in layer]) \
+                            and _entry_count(layer) >= _entry_count(lines):
+                        lines = layer
                 else:
                     lines = _T._group_lines_by_y(pdf.pages[pno - 1])
                     if not lines:
@@ -249,7 +300,18 @@ def _ocr_lines(pdf_path, pno: int) -> list[tuple[float, str]]:
 def parse_toc_pages(pdf_path, pages: Iterable[int], ocr=None) -> list[dict]:
     """지정한 목차 쪽들 → 행 목록(순서 유지). 쪽번호 없는 장 제목은 첫 하위 쪽을 상속."""
     rows = []
+    pending = None                                  # 261101-2: 장 번호만 한 줄(`제18장`) — 다음 줄 제목과 잇는다
     for pno, x0, text in _page_lines(pdf_path, list(pages), ocr=ocr):
+        if _BARE_CHAPTER.match(text.strip()):
+            pending = (text.strip(), x0)
+            continue
+        if pending is not None:
+            if _NUM_STRUCT.match(text.strip()) or parse_line(text) and parse_line(text)[0].get("toc_page") is None:
+                for it in parse_line(pending[0]):          # 다음 줄이 하위 번호·다른 장이면 잇지 않는다
+                    it["src"] = f"p{pno}"; it["x0"] = pending[1]; rows.append(it)
+                pending = None
+            else:
+                text, x0, pending = pending[0] + " " + text.strip(), pending[1], None
         for it in parse_line(text):
             it["src"] = f"p{pno}"
             it["x0"] = x0
@@ -312,6 +374,7 @@ def parse_toc_pages(pdf_path, pages: Iterable[int], ocr=None) -> list[dict]:
             for nxt in rows[i + 1:]:
                 if nxt.get("toc_page"):
                     r["toc_page"] = nxt["toc_page"]
+                    r["toc_inherited"] = True      # 261101-2(F3): 장 표지는 그 앞 — page_numbers 가 당긴다
                     break
     # 앞 부속(로마 숫자 쪽) 은 표에서 뺀다 — 실제 쪽을 알 수 없음
     rows = [r for r in rows if r.get("toc_page")]
@@ -561,7 +624,10 @@ def find_toc_pages(pdf_path, scan_first_n: int = 40, min_entries: int = 4, gap: 
                 if ocr is not None and ocr.is_scan(pno):
                     if pno > ocr_first_n and not found:
                         break                               # 앞쪽에 목차가 없으면 더 읽지 않는다(쪽당 수 초)
-                    lines = [t_ for _x, t_ in ocr.lines(pno)]
+                    # 261101-2(P8): 뜻 있는 글자층이 있으면 그것으로 탐지한다(OCR 하지 않는다)
+                    lines = [t_ for _x, t_ in _T._group_lines_by_y(pdf.pages[i])]
+                    if not layer_meaningful(lines):
+                        lines = [t_ for _x, t_ in ocr.lines(pno)]
                 else:
                     lines = [t_ for _x, t_ in _T._group_lines_by_y(pdf.pages[i])]
                     if not lines:
@@ -618,7 +684,7 @@ def _title_needle(title: str, head_chars: int = 10) -> str:
     """제목 → 대조용 앞부분(번호·'제N장' 제거, 공백·기호 제거, 소문자)."""
     # 번호·표제 접두 제거: '1)', '1.', '제3장', 'Chapter 2', 'Part II', 'Section 3' — 본문 쪽에는
     # 보통 제목만 인쇄돼 있어 접두를 남기면 대조가 실패한다.
-    core = re.sub(r"^\(?\d{1,2}\)?[\.\s]*|^제\s*\d+\s*[장부편]\s*|^(chapter|part|section|unit)\s+[\divxlc]+[\.\s:]*",
+    core = re.sub(r"^\(?\d{1,2}\)?[\.\s]*|^[제저졔]\s*\d+\s*[장부편]\s*|^(chapter|part|section|unit)\s+[\divxlc]+[\.\s:]*",
                   "", title or "", flags=re.I)
     return _norm(core)[:head_chars]
 

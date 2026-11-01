@@ -326,3 +326,128 @@ def extract_headings_from_store(store, file_key: str, page_count: int, *,
     bms = _bookmarks_from_page_lines(page_lines, use_font_auto=use_font_auto,
                                      font_ratio=font_ratio)
     return prefer_heading_per_page(bms)
+
+
+# ─── 261101-2(마스터 §4.4.3 H2): 목차 없는 스캔본 — 쪽 윤곽 + 머리 띠 OCR ─────────
+LAYOUT_DPI = 36            # 첫 잉크 줄 재는 회색 그림 해상도(487쪽 6초)
+LAYOUT_INK = 190           # 이보다 어두우면 잉크(0~255)
+LAYOUT_DROP = 0.08         # 첫 잉크가 중앙값보다 쪽 높이의 이만큼 이상 낮으면 후보
+CHAPTER_SHARE = 0.7        # 후보 가운데 장 머리가 읽힌 비율이 이 이상이면 같은 윤곽의 나머지도 장
+MIN_CHAPTERS = 3           # 이보다 적으면 종전 길(H1)
+# 머리 띠 OCR 해상도·psm 은 단어학습 SOT §14.B '장 머리 띠' 가 소유한다
+HEAD_DPI = 200
+HEAD_PSM = 6
+HEAD_BAND = (0.02, 0.12)   # 첫 잉크 위 · 아래로 이만큼(쪽 높이 비율)을 읽는다
+_CHAPTER_WORD = re.compile(r"^\W*(?:[a-z]{0,4}h[a4]pt[e3f]r|part|book)\b\W*(?P<num>\S*)", re.I)
+_KO_CHAP_WORD = re.compile(r"^\W*[제저]?\s*(?P<num>\d+)\s*장")
+
+
+def _first_ink(page) -> float:
+    """쪽 높이에 대한 첫 잉크 줄 위치(0~1). 가장자리 4%·좌우 8% 는 뺀다(스캔 테두리)."""
+    pix = page.get_pixmap(dpi=LAYOUT_DPI, colorspace=fitz.csGRAY)
+    w, h, s = pix.width, pix.height, pix.samples
+    x0, x1 = int(w * 0.08), int(w * 0.92)
+    for y in range(int(h * 0.04), int(h * 0.96)):
+        row = s[y * w + x0:y * w + x1]
+        if sum(1 for v in row if v < LAYOUT_INK) > 2:
+            return y / h
+    return 1.0
+
+
+def _chapter_word(text: str):
+    """장 머리 낱말이면 (종류, 번호 글자) — 'CHAPTER G'·'GCGHAPTER 3'·'제3장'. 아니면 None."""
+    t = (text or "").strip()
+    m = _KO_CHAP_WORD.match(t)
+    if m:
+        return ("ko", m.group("num"))
+    m = _CHAPTER_WORD.match(t)
+    if m:
+        word = "PART" if t.lower().lstrip(" \"'(").startswith("part") else (
+            "BOOK" if t.lower().lstrip(" \"'(").startswith("book") else "CHAPTER")
+        return (word, m.group("num"))
+    return None
+
+
+def _num_value(s: str) -> Optional[int]:
+    """장 번호 글자 → 수('2O'→20, 'l1'→11). 숫자로 읽을 수 없으면 None('G')."""
+    t = (s or "").strip(".:,;)").upper()
+    if not re.fullmatch(r"[\dOLI]{1,3}", t) or not re.search(r"\d", t):
+        return None
+    return int(t.replace("O", "0").replace("L", "1").replace("I", "1"))
+
+
+def sequence_names(heads: list) -> list[str]:
+    """장 머리 [(종류, 번호 글자)…] → 순번 이름. 읽은 번호 − 순서의 최빈값을 시작값으로(OCR 번호 'G'·'41'·'2O' 는 믿지 않는다)."""
+    from collections import Counter
+    kinds = Counter(k for k, _n in heads if k)
+    kind = kinds.most_common(1)[0][0] if kinds else "CHAPTER"
+    base = Counter()
+    for i, (_k, n) in enumerate(heads):
+        v = _num_value(n)
+        if v is not None:
+            base[v - i] += 1
+    start = base.most_common(1)[0][0] if base else 1
+    if kind == "ko":
+        return [f"제{start + i}장" for i in range(len(heads))]
+    return [f"{kind} {start + i}" for i in range(len(heads))]
+
+
+def chapter_pages_fast(pdf_path, *, lang: str = "", progress: Optional[Callable] = None,
+                       should_cancel: Optional[Callable[[], bool]] = None,
+                       pace: Optional[Callable[[], object]] = None) -> list:
+    """H2: 목차 없는 스캔본의 장 [(제목, 쪽 1-based)] — 3개 미만이면 [] (호출자가 H1 로)."""
+    from PIL import Image
+    should_cancel = should_cancel or (lambda: False)
+    progress = progress or (lambda _m: None)
+    pace = pace or (lambda: None)
+    doc = fitz.open(str(pdf_path))
+    try:
+        n = doc.page_count
+        progress(tr("장 첫 쪽 찾는 중…"))
+        tops = []
+        for i in range(n):
+            if should_cancel():
+                return []
+            if i % 10 == 0:
+                pace()             # 응답성 SOT §4 ② — 쪽 그림 10장(약 0.1초)마다 양보
+            tops.append(_first_ink(doc.load_page(i)))
+        med = median(tops) if tops else 1.0
+        cands = [i + 1 for i, t in enumerate(tops) if t < 0.9 and t - med >= LAYOUT_DROP]
+        if len(cands) < MIN_CHAPTERS:
+            return []
+        lang = _ocr.resolve_lang(lang or _ocr.default_lang())
+        heads = {}
+        for k, p in enumerate(cands):
+            if should_cancel():
+                return []
+            pace()
+            if k % 5 == 0:
+                progress(tr("장 머리 읽는 중… {pg}쪽").format(pg=p))
+            page = doc.load_page(p - 1)
+            H, W = page.rect.height, page.rect.width
+            t = tops[p - 1]
+            clip = fitz.Rect(0, max(0.0, t - HEAD_BAND[0]) * H, W, min(1.0, t + HEAD_BAND[1]) * H)
+            pix = page.get_pixmap(dpi=HEAD_DPI, clip=clip, colorspace=fitz.csGRAY)
+            img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+            words = _ocr.ocr_image(img, lang=lang, psm=HEAD_PSM, dpi=HEAD_DPI).get("words") or []
+            for ln in _group_lines(words)[:2]:
+                cw = _chapter_word(ln["text"])
+                if cw:
+                    heads[p] = cw
+                    break
+        if len(heads) < MIN_CHAPTERS:
+            return []
+        got = [tops[p - 1] for p in heads]
+        lo, hi = min(got) - 0.01, max(got) + 0.01
+        pages = []
+        for p in cands:
+            if p in heads:
+                pages.append(p)
+            elif len(heads) >= CHAPTER_SHARE * len(cands) and lo <= tops[p - 1] <= hi                     and min(heads) < p < max(heads):
+                pages.append(p)            # 머리를 못 읽었지만 같은 윤곽이고 읽힌 장들 사이 — 장으로 본다(앞뒤 부속은 아니다)
+        if len(pages) < MIN_CHAPTERS:
+            return []
+        names = sequence_names([heads.get(p, ("", "")) for p in pages])
+        return list(zip(names, pages))
+    finally:
+        doc.close()

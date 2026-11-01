@@ -75,6 +75,7 @@ _OK_BG = QColor("#e8f5e9")
 _NG_BG = QColor("#fdecea")
 _MANUAL_BG = QColor("#fff8e1")
 _MOVED_BG = QColor("#e3f2fd")       # 260904-8: 쪽 순서 정렬로 옮기거나 번호를 고친 행의 목차 쪽 셀
+_MAPPED_ROLE = Qt.ItemDataRole.UserRole + 1   # 261101-2: 쪽 번호·장 제목으로 맞춘 쪽
 
 
 class TocReviewDialog(QDialog):
@@ -82,7 +83,8 @@ class TocReviewDialog(QDialog):
 
     def __init__(self, pdf_path, rows: list[dict], *, offset: int = 0,
                  candidates: list[tuple[int, float]] | None = None,
-                 method: str = "toc", toc_pages: list[int] | None = None, parent=None):
+                 method: str = "toc", toc_pages: list[int] | None = None,
+                 page_map: dict | None = None, parent=None):
         super().__init__(parent)
         self.pdf_path = Path(pdf_path)
         self.method = method
@@ -90,6 +92,7 @@ class TocReviewDialog(QDialog):
         self._rows = [dict(r) for r in rows]
         self._page_count = self._count_pages()
         self._offset = int(offset)
+        self._page_map = page_map or None        # 261101-2(§4.4.4): 쪽 번호·장 제목으로 맞춘 쪽(③)
         self.setWindowTitle((tr("기존 책갈피 수정 — ") if method == "existing" else tr("책갈피 검토 — "))
                             + self.pdf_path.name)
         # 260904-2(사용자 요청): 전체 화면의 3/4 크기, 미리보기를 오른쪽에 충분히 크게
@@ -113,6 +116,12 @@ class TocReviewDialog(QDialog):
         self.spin_offset = QSpinBox(); self.spin_offset.setRange(-200, 2000); self.spin_offset.setValue(self._offset)
         fo.addWidget(self.spin_offset)
         self.cmb_cand = QComboBox()
+        if self._page_map:
+            if self._page_map.get("method") == "chapters":
+                lab = tr("장 제목 맞춤 (장 {n}개)").format(n=int(self._page_map.get("chapters") or 0))
+            else:
+                lab = tr("쪽 번호 맞춤 (구간 {n}개)").format(n=len(self._page_map.get("segments") or []))
+            self.cmb_cand.addItem(lab, "map")
         for off, conf in (candidates or []):
             self.cmb_cand.addItem(tr('{off:+d}  (신뢰도 {conf:.0%})').format(off=off, conf=conf), off)
         if self.cmb_cand.count() == 0:
@@ -248,7 +257,7 @@ class TocReviewDialog(QDialog):
 
         self._pv_page = None; self._pv_mode = None; self._pv_rendered = False
         self._fill()
-        if method == "toc":
+        if method == "toc" and not self._page_map:
             self._apply_offset(initial=True)
         self._fit_table_width()
         if self.table.rowCount():
@@ -320,6 +329,12 @@ class TocReviewDialog(QDialog):
                 it.setData(Qt.ItemDataRole.UserRole, r.get("src") or "")   # 출처 쪽(pN) 보존
             if c == COL_PAGE:
                 it.setData(Qt.ItemDataRole.UserRole, r.get("page"))        # 260904-6: 이전 값(이동량 계산)
+                if self._page_map and r.get("page") is not None and not r.get("manual"):
+                    it.setData(_MAPPED_ROLE, r.get("page"))                # 261101-2: 맞춘 쪽(되돌리기용)
+                    if r.get("seg") is not None:
+                        it.setToolTip(tr("쪽 번호로 맞춘 쪽 — 구간 {k}").format(k=int(r["seg"]) + 1))
+            if c == COL_TOC:
+                it.setData(Qt.ItemDataRole.UserRole, r.get("seg"))         # 261101-2(R1): 구간
             self.table.setItem(row, c, it)
         if r.get("manual"):
             self.table.item(row, COL_PAGE).setBackground(QBrush(_MANUAL_BG))
@@ -367,6 +382,7 @@ class TocReviewDialog(QDialog):
         if old is None or new is None or int(old) == int(new):
             return
         delta = int(new) - int(old)
+        seg0 = self._seg(item.row())
         self.table.blockSignals(True)
         try:
             for j in range(item.row() + 1, self.table.rowCount()):
@@ -375,6 +391,9 @@ class TocReviewDialog(QDialog):
                     continue
                 if pit.background().color() == _MANUAL_BG:
                     break                                   # 다음 수동 행부터는 그 행이 기준
+                sj = self._seg(j)
+                if seg0 is not None and sj is not None and sj != seg0:
+                    break                                   # 261101-2(R1): 구간 밖은 따로 맞춘 것
                 p = toc_parse.fix_ocr_number(pit.text())
                 if p is None:
                     continue
@@ -384,6 +403,10 @@ class TocReviewDialog(QDialog):
                 if tt: tt.setBackground(QBrush())           # 대조 결과 무효화
         finally:
             self.table.blockSignals(False)
+
+    def _seg(self, row: int):
+        it = self.table.item(row, COL_TOC)
+        return it.data(Qt.ItemDataRole.UserRole) if it is not None else None
 
     def _add_row(self, where: str = "below"):
         """260905(§4.4.4): 현재 행의 **아래**(기본) 또는 **위**에 빈 항목을 넣는다."""
@@ -519,8 +542,25 @@ class TocReviewDialog(QDialog):
     # ── 오프셋 / 대조 ───────────────────────────────────────────────
     def _pick_candidate(self, _i):
         off = self.cmb_cand.currentData()
-        if off is not None:
+        if off == "map":
+            self._apply_mapped()
+        elif off is not None:
             self.spin_offset.setValue(int(off))
+
+    def _apply_mapped(self):
+        """261101-2(§4.4.4): 수동 아닌 행을 쪽 번호·장 제목으로 맞춘 쪽으로 되돌린다."""
+        self.table.blockSignals(True)
+        for i in range(self.table.rowCount()):
+            it = self.table.item(i, COL_PAGE)
+            if it is None or it.background().color() == _MANUAL_BG:
+                continue
+            mp = it.data(_MAPPED_ROLE)
+            if mp is not None:
+                it.setText(str(int(mp))); it.setData(Qt.ItemDataRole.UserRole, int(mp))
+                tt = self.table.item(i, COL_TITLE)
+                if tt: tt.setBackground(QBrush())
+        self.table.blockSignals(False)
+        self._show_preview(self.table.currentRow())
 
     def _apply_offset(self, initial: bool = False):
         off = int(self.spin_offset.value())

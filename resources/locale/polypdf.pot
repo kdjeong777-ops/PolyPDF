@@ -3661,6 +3661,11 @@ msgstr ""
 msgid "쪽 복사 중"
 msgstr ""
 
+#: viewer/page_numbers.py
+#, python-brace-format
+msgid "인쇄된 쪽 번호 읽는 중… {pg}쪽"
+msgstr ""
+
 #: viewer/pdf_compress.py
 msgid "서명된 PDF — 사본에서 서명이 깨집니다"
 msgstr ""
@@ -4678,12 +4683,21 @@ msgid "한글이 없어 영문으로 읽습니다"
 msgstr ""
 
 #: viewer/study/ocr_headings.py
+msgid "장 첫 쪽 찾는 중…"
+msgstr ""
+
+#: viewer/study/ocr_headings.py
 msgid "저장된 OCR"
 msgstr ""
 
 #: viewer/study/ocr_headings.py
 #, python-brace-format
 msgid "헤딩 {n}개"
+msgstr ""
+
+#: viewer/study/ocr_headings.py
+#, python-brace-format
+msgid "장 머리 읽는 중… {pg}쪽"
 msgstr ""
 
 #: viewer/study/ocr_pages.py
@@ -10582,6 +10596,16 @@ msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py
 #, python-brace-format
+msgid "장 제목 맞춤 (장 {n}개)"
+msgstr ""
+
+#: viewer/widgets/toc_review_dialog.py
+#, python-brace-format
+msgid "쪽 번호 맞춤 (구간 {n}개)"
+msgstr ""
+
+#: viewer/widgets/toc_review_dialog.py
+#, python-brace-format
 msgid "{off:+d}  (신뢰도 {conf:.0%})"
 msgstr ""
 
@@ -10631,6 +10655,11 @@ msgstr ""
 #: viewer/widgets/toc_review_dialog.py
 #, python-brace-format
 msgid " (장 행 {skipped}개 제외)"
+msgstr ""
+
+#: viewer/widgets/toc_review_dialog.py
+#, python-brace-format
+msgid "쪽 번호로 맞춘 쪽 — 구간 {k}"
 msgstr ""
 
 #: viewer/widgets/translate_dialog.py
@@ -11537,10 +11566,6 @@ msgid "스캔 이미지 감지 — OCR 모드로 추출"
 msgstr ""
 
 #: viewer/workers.py
-msgid "OCR 헤딩 인식 중..."
-msgstr ""
-
-#: viewer/workers.py
 msgid "책갈피 추출 중..."
 msgstr ""
 
@@ -11550,6 +11575,14 @@ msgstr ""
 
 #: viewer/workers.py
 msgid "오프셋(목차 쪽 → 실제 쪽) 추정 중..."
+msgstr ""
+
+#: viewer/workers.py
+msgid "OCR 헤딩 인식 중..."
+msgstr ""
+
+#: viewer/workers.py
+msgid "장 제목으로 쪽 맞추는 중..."
 msgstr ""
 
 #: viewer/workers.py
