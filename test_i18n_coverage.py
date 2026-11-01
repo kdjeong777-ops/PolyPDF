@@ -74,6 +74,9 @@ ALLOW = {
     "viewer/widgets/favorites_dialog.py": {"📁 폴더"},
     "viewer/widgets/pres_timer.py": {"준비"},
     "viewer/widgets/presentation.py": {"링크"},
+    # 261101-3(마스터 §4.6.11): 도장에 **찍는** 날짜 형식 값(설정 키·문서 안의 글) — 화면 언어와 무관하게 한국 서식을 고를 수 있어야 한다.
+    #   화면 언어에 맞춘 날짜 표기는 다국어 SOT §13 백로그
+    "viewer/stamp_store.py": {"%Y년 %#m월 %#d일"},
 }
 
 fails = []

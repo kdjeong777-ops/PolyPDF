@@ -10256,6 +10256,10 @@ msgid " · 확정하면 '{name}' 을 바꿉니다"
 msgstr " · confirming replaces '{name}'"
 
 #: viewer/widgets/stamp_dialog.py
+msgid "빨강"
+msgstr "Red"
+
+#: viewer/widgets/stamp_dialog.py
 msgid "선명하게 (PDF 그대로 — 글자가 글자로 남는다)"
 msgstr "Sharp (as PDF — text stays text)"
 

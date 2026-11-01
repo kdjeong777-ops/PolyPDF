@@ -15,11 +15,11 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLa
                              QDialogButtonBox, QListWidget, QListWidgetItem, QMenu, QMessageBox, QFileDialog,
                              QInputDialog, QColorDialog, QAbstractItemView)
 
-from viewer.i18n import tr
+from viewer.i18n import tr, tr_noop
 from viewer import stamp_store, stamp_core
 
 INPUT_MAX = 2400          # 정리 전에 긴 변을 이만큼으로 — 사진·600dpi 영역이 커도 창이 서지 않게(응답성 SOT §5)
-INKS = (("original", "원래 색"), ("black", "검정"), ("blue", "파랑"), ("red", "빨강"))
+INKS = (("original", tr_noop("원래 색")), ("black", tr_noop("검정")), ("blue", tr_noop("파랑")), ("red", tr_noop("빨강")))   # 표시는 tr()
 RED = (192, 32, 32)
 
 
