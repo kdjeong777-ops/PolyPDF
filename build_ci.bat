@@ -176,6 +176,7 @@ python -m PyInstaller ^
     --collect-all PyQt6 ^
     --hidden-import PyQt6.QtMultimedia ^
     --hidden-import PyQt6.QtMultimediaWidgets ^
+    --collect-all pymupdf ^
     --collect-all fitz ^
     --collect-all pdfplumber ^
     --collect-all pypdfium2 ^
