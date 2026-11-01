@@ -137,6 +137,36 @@ try:
         "②s `1.00 g` 은 목록이 아니고 `【주2】` 는 목록 표시")
     chk(tx._join_sep("We need at least twenty-", "six years.") == "", "②s `twenty-` + `six` → 붙임표를 남긴다")
 
+    # ── 남은 과제 ① 홀로 선 한글 한 음절(§3.6.15) · ② 줄 첫머리 목록 기호(§3.5.4) ───────────
+    fk = getattr(tx, "fix_ko_spacing", None)
+    got = fk("가 족이나 권위적 대 상에 대한 불만") if fk else ""
+    chk(got == "가족이나 권위적 대상에 대한 불만", "남① `가 족이나`·`대 상에` → 붙인다", got)
+    got = fk("자신 및 사회와의 괴리, 실시 및 채점 요강과 기술") if fk else ""
+    chk(got == "자신 및 사회와의 괴리, 실시 및 채점 요강과 기술", "남① 늘 띄어 쓰는 `및` 과 다른 빈칸은 그대로", got)
+    got = fk("이 척도에서 측정하는 주요 대상이다.") if fk else ""
+    chk(got == "이 척도에서 측정하는 주요 대상이다.", "남① 관형사 `이` 는 띄운 채로", got)
+    ab = getattr(tn, "as_bullet", None)
+    chk(bool(ab) and ab("ㆍ", 9, 10, True, True, 38) == "•" and ab("*", 17, 16, True, True, 38) == "■"
+        and ab("■", 60, 60, True, False, 38) is None and ab("ㆍ", 9, 10, False, True, 38) is None,
+        "남② 줄 첫머리의 작은 `ㆍ`→`•`, 네모 `*`→`■` — 홀로 있거나 줄 가운데면 아니다")
+    bd = {k: [] for k in ("text", "conf", "left", "top", "width", "height", "block_num", "par_num", "line_num")}
+    for s, x, w, h, cf, ln in (("ㆍ", 100, 9, 10, 83, 1), ("사회적", 120, 90, 40, 95, 1), ("가치를", 235, 90, 40, 95, 1),
+                               ("ㆍ", 100, 9, 10, 88, 2), ("화를", 115, 60, 40, 95, 2), ("낸다.", 200, 70, 40, 95, 2)):
+        bd["text"].append(s); bd["left"].append(x); bd["top"].append(100 * ln + (40 - h) // 2); bd["width"].append(w)
+        bd["height"].append(h); bd["conf"].append(cf); bd["block_num"].append(1); bd["par_num"].append(1)
+        bd["line_num"].append(ln)
+    _old = (ocr.ensure_tesseract, pytesseract.image_to_data)
+    ocr.ensure_tesseract = lambda: {"ok": True}
+    pytesseract.image_to_data = lambda *a, **k: bd
+    try:
+        res = ocr.ocr_image(None, lang="kor+eng", dpi=300)
+    finally:
+        ocr.ensure_tesseract, pytesseract.image_to_data = _old
+    rows = tx.lines_from_words(res["words"], dpi=300)
+    chk(res["text"].startswith("• 사회적") and "\n• 화를" in res["text"], "남② study.db 본문에 목록 기호가 남는다", res["text"])
+    chk([r["text"][:5] for r in rows] == ["• 사회적", "• 화를 "[:5]], "남② 텍스트 창 줄에도 `• ` 로 남는다",
+        str([r["text"] for r in rows]))
+
     # ── ③ OCR 줄은 ⑧(크기)로 끊지 않는다(§3.7.11) — 잉크 높이가 줄마다 다르다 ─────────
     body = ["The whiteness lessens My eyes are adjusting I start to see shapes and",
             "but nothing sensible yet Lets see can I move my hands No feet either",

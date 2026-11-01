@@ -622,6 +622,12 @@ def _join_words_by_gap(parts) -> str:
                 text += ('' if glue is not None and gap < glue * ref else ' ') + t
             prev = q
         chunks.append(text)
+    # 261101-1(텍스트 창 SOT §3.6.15): 홀로 선 한글 한 음절은 줄 목록과 같은 규칙으로 — 검색·단어장 글도 같게
+    try:
+        from viewer.text_extract2 import fix_ko_spacing
+        chunks = [re.sub(r"^([•■])(?=\S)", r"\1 ", fix_ko_spacing(c)) for c in chunks]   # 목록 기호 뒤 빈칸(§3.5.4)
+    except Exception:
+        pass
     text = NL.join(chunks)
     # 260909-3/4: 줄마다 수를 바로잡는다 — 닮은 글자(O→0) 되돌리기(§3.6.3) 뒤에
     #   빈칸 없애기(§3.6.2). 순서가 중요하다: `1 OO.O` 는 글자를 먼저 고쳐야 붙는다.
@@ -830,6 +836,13 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
         if i in _conf:
             continue
         s0 = str(_texts[i]).strip()
+        bul = _noise.as_bullet(s0, data["width"][i], data["height"][i], a is None, b is not None,
+                               _med.get(_key(i), 0))
+        if bul:
+            # 261101-1(텍스트 창 SOT §3.5.4): 줄 첫머리의 작은 점·네모는 목록 기호 — 잡음으로 버리지 않는다
+            _texts[i] = bul
+            _is_i[i] = b
+            continue
         got = _noise.fix_i(_texts[a] if a is not None else None, s0, data["width"][i], data["height"][i],
                            _texts[b] if b is not None else None, _med.get(_key(i), 0))
         if got is None:

@@ -30,7 +30,10 @@ I_TALL = 2.2         # `I` 로 읽혔는데 위아래 글줄과 엉겨 큰 상�
 BRACKET_I_W = 0.35   # `[`·`]` 가 이보다 좁으면(폭÷높이) `I` 의 획이다(실측 4~8px ÷ 28)
 # 납작한 진짜 글자(`을`·`는`, 15px ÷ 줄 31~42px)는 ①(4pt) 을 건너뛴다 — 신뢰도·줄 높이 비율로(`small_glyph_ok`)
 SMALL_GLYPH_CONF, SMALL_GLYPH = 0.80, 0.30
-ONE_I_W = 0.2       # `1` 이 이보다 좁으면 `I` 의 획이다(실측 1px ÷ 28) — 진짜 숫자 1 은 폭이 있다
+# 줄 첫머리의 목록 기호(`as_bullet`) — Tesseract 가 내놓는 모양, 줄 글자 높이 대비 상한·네모 문턱(실측 `ㆍ` 10px · `■` 16px ÷ 38px)
+BULLET_LIKE = frozenset("ㆍ·•∙*:■□▪●○◆◇ㅁ")
+BULLET_MAX, BULLET_SQUARE = 0.6, 0.35
+ONE_I_W = 0.2      # `1` 이 이보다 좁으면 `I` 의 획이다(실측 1px ÷ 28) — 진짜 숫자 1 은 폭이 있다
 
 
 def has_letter(text) -> bool:
@@ -149,6 +152,20 @@ def fix_i(prev, s, w, h, nxt, line_h: float):
     if m and known_word(m.group(1)):
         return m.group(1) + " I"
     return None
+
+
+def as_bullet(s, w, h, first, has_next, line_h):
+    """줄 첫머리의 작은 점·네모를 목록 기호로 → `•`·`■`, 아니면 None (텍스트 창 SOT §3.5.4, 261101-1 표본 조사).
+
+    Tesseract 는 `•` 를 `ㆍ`(10px)·`*`·`:` 로, `■` 를 `*`·`ㅁ` 로 읽는다. 기호만이거나 4pt 미만이라 ①② 로 버려져
+    목록 항목이 맨 글이 되었다(심리검사의이해 82쪽 23줄). **그 줄의 첫 낱말이고 뒤에 낱말이 있으며 그 줄 글자보다
+    작을 때만** — 빈 자리의 `■` 티(260908 사용자 보고)는 홀로 있거나 크다. 높이가 줄 글자의 `BULLET_SQUARE` 배 이상이면 `■`."""
+    t = str(s or "").strip()
+    if not first or not has_next or t not in BULLET_LIKE or line_h <= 0 or h <= 0:
+        return None
+    if h > line_h * BULLET_MAX or w > line_h * BULLET_MAX:
+        return None
+    return "■" if h >= line_h * BULLET_SQUARE else "•"
 
 
 def fix_ligature(s):

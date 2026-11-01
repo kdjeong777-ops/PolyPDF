@@ -1465,6 +1465,8 @@ COL_CROSS = 0.15
 # 260910-4(SOT §3.7.6 나): 한글 한 글자 목록 표시는 **가나다 차례**만 인정한다.
 #   아무 글자나 받으면 `포함)` 의 `함)` 이 목록으로 보여 문장이 끊긴다.
 KO_LIST_ORDER = "가나다라마바사아자차카타파하"
+# 261101-1(SOT §3.6.15): 늘 띄어 쓰는 한 음절 — 낱자 붙이기(`fix_ko_spacing`)가 건드리지 않는다(`및 주지화` 가 붙었다)
+KO_ALONE = set("및등또각총약첫더잘못안꼭곧즉단")
 # 줄 **간격**이 아니라 **줄 사이 거리(pitch)** 를 글자 크기로 잰다 — 간격으로 재면
 #   글자가 큰데 줄이 성긴 쪽(발표자료·서식)에서 남남인 줄이 붙는다(260910 실측).
 #   실측 pitch÷크기: 이어지는 본문 1.6~1.8 / 따로 놓인 줄 2.9.
@@ -1506,7 +1508,7 @@ def _starts_list(text) -> bool:
     if _LIST_HEAD is None:
         import re
         _LIST_HEAD = re.compile(
-            r'^\s*(?:\(?\d+[.)](?!\d)|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—]\s|○|※|【)')   # `1.00 g` 는 목록이 아니다(261101-1)
+            r'^\s*(?:\(?\d+[.)](?!\d)|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—■□]\s|○|※|【)')   # `1.00 g` 는 목록이 아니다(261101-1)
     return bool(_LIST_HEAD.match(text or ''))
 
 
@@ -1595,6 +1597,72 @@ def _ko_wants_space(a, b, ctx: int = 8) -> bool:
             if n > at:
                 break
     return False
+
+
+_HAN1 = re.compile(r"[가-힣]")
+_HAN_TAIL = re.compile(r"[가-힣]+$")
+_HAN_HEAD = re.compile(r"^[가-힣]+")
+
+
+def _kiwi_spaces(probe: str):
+    """kiwi 가 띄운 자리 — 빈칸을 뺀 글자 수의 집합. 못 물으면 None."""
+    if _KIWI["bad"]:
+        return None
+    out = _kiwi_space(probe)
+    if out is None:
+        return None
+    pos, n = set(), 0
+    for ch in out:
+        if ch == " ":
+            pos.add(n)
+        else:
+            n += 1
+    return pos
+
+
+def fix_ko_spacing(text: str) -> str:
+    """OCR 한글 줄의 **홀로 선 한 음절**(`가 족이나`·`대 상에`)을 앞뒤 낱말에 붙일지 말뭉치에 묻는다 (SOT §3.6.15, 261101-1).
+
+    표본 조사: 쪽마다 뽑는 붙임 문턱(§3.6.12)이 명조체 교재에서 흔들려 성격심리 48곳·심리검사의이해 75곳이 남았다.
+    줄 전체를 kiwi 에 맡기면 이름(`전용신` → `전 용 신`)과 `실시 및 채점 요강과…` 를 망쳤다 — 그래서 **그 음절의 양옆 경계
+    두 곳만** 묻고(앞뒤 한 토막씩 문맥을 넣어) 다른 빈칸은 건드리지 않는다. 늘 띄어 쓰는 음절(`KO_ALONE`)은 그대로.
+    kiwi 를 못 쓰면(UI 스레드에서 준비 전 포함) 그대로 돌려준다."""
+    if not text or not re.search(r"(?:^|\s)[가-힣](?=\s|$)", text):
+        return text
+    toks = text.split(" ")
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if len(t) != 1 or not _HAN1.match(t) or t in KO_ALONE:
+            i += 1
+            continue
+        L = toks[i - 1] if i > 0 else ""
+        R = toks[i + 1] if i + 1 < len(toks) else ""
+        lh = _HAN_TAIL.search(L) if (L and L not in KO_ALONE) else None
+        rh = _HAN_HEAD.match(R) if (R and R not in KO_ALONE) else None
+        if not lh and not rh:
+            i += 1
+            continue
+        a = lh.group(0) if lh else ""
+        b = rh.group(0) if rh else ""
+        L2 = toks[i - 2] if (lh and a == L and i > 1 and re.fullmatch(r"[가-힣]+", toks[i - 2])) else ""
+        r2 = _HAN_HEAD.match(toks[i + 2]) if (rh and b == R and i + 2 < len(toks)) else None
+        R2 = r2.group(0) if r2 else ""
+        pos = _kiwi_spaces((L2 + " " if L2 else "") + a + t + b + (" " + R2 if R2 else ""))
+        if pos is None:
+            return " ".join(toks)
+        off = len(L2)
+        join_r = bool(rh) and (off + len(a) + 1) not in pos
+        join_l = bool(lh) and (off + len(a)) not in pos
+        if join_r:
+            toks[i] = t + R
+            del toks[i + 1]
+        if join_l:
+            toks[i - 1] = L + toks[i]
+            del toks[i]
+            i -= 1
+        i += 1
+    return " ".join(toks)
 
 
 def _hyphen_keep(a, b) -> bool:
@@ -2125,6 +2193,10 @@ def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None, edges_o
                 else _by_column([((0, 0, 0, 0), frags)], page, word_level=True)):
         items.extend(_merge_rows(col, cjk_gap=cjk_gap))
     items = [it for it in items if not _noise.is_symbol_only(it[1])]
+    # 261101-1(SOT §3.6.15): 홀로 선 한글 한 음절(`가 족이나`)은 앞뒤 경계만 말뭉치에 물어 붙인다
+    items = [(r, fix_ko_spacing(t), sz) for r, t, sz in items]
+    # 261101-1(SOT §3.5.4): 줄 첫머리 목록 기호 뒤에는 빈칸 — 기호와 한글이 붙어(`•화를`) 목록으로 보이지 않았다
+    items = [(r, re.sub(r"^([•■])(?=\S)", r"\1 ", t), sz) for r, t, sz in items]
     # 261101-1(SOT §3.6.14, 표본 조사): **본문 쪽**의 ` | ` 는 표 칸이 아니라 버려진 낱말의 빈자리다 — ` | ` 가 든 줄이
     #   그 쪽 줄의 `PROSE_BAR_MAX` 이하이고 그 줄에 하나뿐이면 빈칸으로. 표·서식 쪽은 거의 모든 행에 ` | ` 가 있다.
     if len(items) >= PROSE_MIN_ROWS:
