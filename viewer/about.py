@@ -22,7 +22,7 @@ OSS = (
     ("Python", "PSF License", "Python Software Foundation", ()),
     ("Qt 6", "LGPL v3", "The Qt Company", ()),
     ("PyQt6", "GPL v3", "Riverbank Computing", ("PyQt6",)),
-    ("PyMuPDF · MuPDF", "AGPL v3", "Artifex Software", ("PyMuPDF",)),
+    ("PyMuPDF · MuPDF", "AGPL v3", "Artifex Software", ("pymupdf-lite",)),   # 261101-4: 레이아웃 엔진을 뺀 같은 판(마스터 §14.2)
     ("pdfplumber · pdfminer.six", "MIT", tr_noop("Jeremy Singer-Vine 외"), ("pdfplumber",)),
     ("pypdfium2 · PDFium", "Apache 2.0 / BSD-3-Clause", tr_noop("pypdfium2 팀 · Google"), ("pypdfium2",)),
     ("pypdf", "BSD-3-Clause", tr_noop("pypdf 기여자"), ("pypdf",)),
