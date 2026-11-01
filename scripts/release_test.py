@@ -423,7 +423,15 @@ def checks(ui: bool, only=None) -> int:
     판정은 **종료 코드**(출력 문자열 아님 — 'ALL PASS' 대신 '전부 통과' 로 끝나는 검사가 있다). `--ui` 면 화면 점검 ko·en 도."""
     py = ROOT / ".venv" / "Scripts" / "python.exe"
     out = REVIEW / ("checks_%s_%s" % (source_version(), time.strftime("%y%m%d-%H%M%S")))
-    (out / "logs").mkdir(parents=True)
+    # 261101-5: 여러 세션이 같은 초에 checks 를 시작하면 이름이 겹쳐 FileExistsError 로 멈췄다 — 뒤에 -2, -3 …
+    base, n = out, 1
+    while True:
+        try:
+            (out / "logs").mkdir(parents=True)
+            break
+        except FileExistsError:
+            n += 1
+            out = base.with_name("%s-%d" % (base.name, n))
     tests = sorted(p for p in ROOT.glob("test_*.py") if p.name != "test_fixtures.py")
     if only:                                      # 다시 볼 것만: --only nup_links,ocr_lang
         keys = [k.strip() for k in only.split(",") if k.strip()]
