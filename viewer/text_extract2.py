@@ -1491,8 +1491,13 @@ JOIN_PITCH_MIN_N = 4     # 줄이 이보다 적으면 중앙값을 믿지 않는
 JOIN_SIZE_TOL = 0.20     # 글자 크기가 이만큼 안에서 같아야 한다(OCR 줄에는 보지 않는다 — SOT §3.7.11)
 # 261101-1(SOT §3.7.11): 줄 끝 `-` 로 이은 말의 영어 빈도(zipf)가 이보다 낮고 앞뒤가 각각 사전 낱말이면
 #   분철이 아니라 합성어다 — `-` 를 남긴다(`oval-shaped`). `satisfied`·`itself`·`otherwise` 는 모두 이 값보다 높다.
-HYPHEN_KEEP_ZIPF = 2.0   # 표본 조사: `twentysix` 1.19·`wellknown` 1.57 / 분철 `unconsciousness` 2.69 — 1.0 이면 앞의 둘이 붙었다
-_CLOSERS = "”\"’')]」』"   # 문장 끝 부호 뒤에 올 수 있는 닫는 따옴표·괄호(SOT §3.7.2 ③)
+HYPHEN_PART_ZIPF = 2.0   # 그때 앞뒤 조각이 각각 이만큼 흔한 낱말이어야 한다(`volumetric` 2.6 — 3.0 이면 `volumetriconly` 로 붙었다)
+HYPHEN_KEEP_ZIPF = 2.0  # 표본 조사: `twentysix` 1.19·`wellknown` 1.57 / 분철 `unconsciousness` 2.69 — 1.0 이면 앞의 둘이 붙었다
+_CAPTION_REF = re.compile(r"^\s*[\[<(]?\s*(?:표|그림|사진|도표|부표)\s*[\]>)]?\s*[-.]?\s*[\d.\-]+\s*[\]>)]?"
+                          r"(?:은|는|이|가|을|를|에|에서|에는|과|와|의|로|으로|처럼|및|부터|까지)(?:\s|,|$)")
+# 끝까지 찬 한글 줄 뒤의 `다.` — 목록 셋째 표시가 아니라 문장 끝 `…있` + `다.` (`가.`·`나.` 는 목록 그대로, test_text_join)
+_KO_LIST_HEAD = re.compile(r"^\s*다[.,]")
+_CLOSERS ="”\"’')]」』"   # 문장 끝 부호 뒤에 올 수 있는 닫는 따옴표·괄호(SOT §3.7.2 ③)
 # 앞 줄이 뒷줄보다 본문 폭의 이 비율 넘게 오른쪽에서 시작하면 잇지 않는다(SOT §3.7.11).
 #   실측: 지우지 못한 머리말 `PROJECT HAIL MARY 5` 0.52 / 검사의이해 문단 첫 줄(앞이 그림 옆) 0.21 — 그 사이.
 JOIN_LEFT_MAX = 0.40
@@ -1680,9 +1685,8 @@ def _hyphen_keep(a, b) -> bool:
     wa, wb = ma.group(1).lower(), mb.group(1)
     try:
         from viewer.study.wordfreq_fast import zipf_frequency
-        from viewer.text_noise import KEEP_ZIPF
         return (zipf_frequency(wa + wb, "en") < HYPHEN_KEEP_ZIPF
-                and zipf_frequency(wa, "en") >= KEEP_ZIPF and zipf_frequency(wb, "en") >= KEEP_ZIPF)
+                and zipf_frequency(wa, "en") >= HYPHEN_PART_ZIPF and zipf_frequency(wb, "en") >= HYPHEN_PART_ZIPF)
     except Exception:
         return False
 
@@ -1723,6 +1727,9 @@ def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
         return ''
     if a.endswith('-') and ('a' <= b[0] <= 'z'):
         return '' if _hyphen_keep(a, b) else '-drop'
+    # 261101-1: `Performance-` + `Based` — 대문자로 이어지면 분철일 수 없다(합성어) — 붙임표를 남기고 붙인다
+    if re.search(r"[A-Za-z]{2,}-$", a) and b[0].isupper() and b[:1].isalpha():
+        return ''
     # 261101-1: 줄 끝에서 끊긴 웹 주소는 빈칸 없이 잇는다(NAPA 10쪽 `https://doi.org/10.1080/` + `14680629.2022…`)
     if re.search(r"(?:https?://|www\.|doi\.org/)\S*$", a) and not b[0].isspace() and a[-1] in "/.-_=?&#":
         return ''
@@ -1795,6 +1802,36 @@ def join_sentences(rows) -> list:
         r.pop('_last', None)
         r.pop('_tail', None)
     return out
+
+
+def join_hyphens(rows) -> list:
+    """'문장 잇기' 를 꺼도 **줄 끝 하이픈으로 끊긴 영문 낱말만** 잇는다 (SOT §3.7.4, 261101-1 사용자 결정).
+
+    앞 줄이 `글자-` 로 끝나고 뒷줄이 소문자로 시작하는 본문 줄 둘 — 뒷줄의 **첫 낱말만** 앞 줄로 옮기고
+    (`labora-` + `tory is …` → `laboratory` / `is …`) 나머지 줄은 그대로 둔다. 줄 수와 자리가 원본 줄과 같다 —
+    뒷줄이 그 낱말 하나뿐이면 그 줄은 없어지고 자리는 앞 줄에 합친다.
+    붙임표를 남길지는 §3.7.3 그대로(`_join_sep`)."""
+    out = [dict(r) for r in rows]
+    for a, b in zip(out, out[1:]):
+        ta, tb = (a.get('text') or '').rstrip(), (b.get('text') or '').lstrip()
+        # 뒷줄이 소문자(분철·합성어) 또는 대문자 합성어(`Performance-` + `Based`)로 시작할 때만
+        if not (ta and tb and re.search(r"[A-Za-z]-$", ta) and re.match(r"[A-Za-z]", tb)
+                and (tb[0].islower() or re.search(r"[A-Za-z]{2,}-$", ta))):
+            continue
+        if any(r.get('style') != 'body' or r.get('kind') != 'text' or CELL_SEP in (r.get('text') or '') for r in (a, b)):
+            continue
+        head, _sp, rest = tb.partition(" ")
+        m = re.match(r"([A-Za-z]+)(.*)$", head)
+        word, punct = (m.group(1), m.group(2)) if m else (head, "")
+        sep = _join_sep(ta, tb)
+        if sep == '-drop':
+            ta = ta[:-1]
+            word = _dehyphen_ligature(ta, word)
+        a['text'] = ta + word + punct
+        b['text'] = rest
+        if not rest.strip():                  # 뒷줄이 그 낱말 하나뿐이었다 — 자리를 앞 줄에 합친다(고침이 자리로 되맞춰지게)
+            a['rects'] = list(a.get('rects') or [a.get('rect')]) + list(b.get('rects') or [b.get('rect')])
+    return [r for r in out if (r.get('text') or '').strip() or r.get('kind') != 'text']
 
 
 def page_carry(prev_rows, rows) -> bool:
@@ -1907,7 +1944,11 @@ def _is_caption(t) -> bool:
         _CAPTION_HEAD = re.compile(
             r'^\s*[\[<(]?\s*(?:표|그림|사진|도표|부표|Table|Figure|Fig|Photo)'
             r'\s*[\]>)]?\s*[-.]?\s*\d', re.IGNORECASE)
-    return bool(_CAPTION_HEAD.match(t or ''))
+    if not _CAPTION_HEAD.match(t or ''):
+        return False
+    # 261101-1: 번호 바로 뒤에 조사가 붙으면(`<표 1.3>은`·`그림 2에서`) 표를 **가리키는 본문 문장**이다 —
+    #   글자층 보고서에서 `<표 1.3>은 … 총 58개 지역이 도출` + `되었으며` 가 갈렸다(4곳)
+    return not _CAPTION_REF.match(t)
 
 
 def _unclosed_paren(t) -> bool:
@@ -2047,7 +2088,10 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: boo
         return False
     # ⑦ 260910-4(SOT §3.7.6 나): 앞줄에 닫히지 않은 `(` 가 있으면 뒷줄의 `)` 는
     #   목록 표시가 아니라 그 괄호를 닫는 이어지는 글이다.
-    if _starts_list(tb) and not _unclosed_paren(ta):
+    # 261101-1(SOT §3.7.2 ⑦): 앞 줄이 오른쪽 끝까지 찬 **한글**로 끝나면 뒷줄의 `다.`·`가.` 는 목록 번호가 아니라
+    #   이어지는 낱말 끝이다 — 글자층 보고서에서 `…하고 있` + `다. 또한` 이 갈렸다(5곳). 목록 앞 줄은 끝까지 차지 않는다.
+    if (_starts_list(tb) and not _unclosed_paren(ta)
+            and not (_KO_LIST_HEAD.match(tb) and _is_cjk(core[-1]) and (margin - ra[2]) <= sa * JOIN_FILL)):
         return False                                    # ⑦
     # ⑧ 261101-1(SOT §3.7.11): OCR 줄의 `size` 는 잉크 높이라 **줄에 든 글자**로 달라진다
     #   (`two?”` 7.0 / `plus` 가 든 줄 10.8) — 글꼴 크기를 잴 수 없어 OCR 줄에는 보지 않는다.
@@ -2102,7 +2146,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
         if rows:
             _NOISE["n"] = 0
             if join_lines:
-                rows = join_sentences(rows)
+                rows = join_hyphens(join_sentences(rows))   # 261101-1(SOT §3.7.4): 남은 분철도
             if not has_text_layer(doc, page_index):
                 if edges_out is not None:
                     edges_out.extend(_ocr_edges)
@@ -2154,7 +2198,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
                     r["kind"] = "table"
     _NOISE["n"] = noise          # 표 처리가 `_line_items` 를 다시 부르지 않음을 명시
     if join_lines:               # 260910(SOT §3.7): 종이 때문에 끊긴 문장을 잇는다
-        rows_out = join_sentences(rows_out)
+        rows_out = join_hyphens(join_sentences(rows_out))   # 261101-1(SOT §3.7.4): 남은 분철도
     return rows_out
 
 

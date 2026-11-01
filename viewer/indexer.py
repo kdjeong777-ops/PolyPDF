@@ -41,19 +41,22 @@ SELECT EXISTS(SELECT 1 FROM pragma_compile_options WHERE compile_options = 'ENAB
 """
 
 
-_WS = re.compile(r"\s+")
+# 261101-1(검색창 SOT §3.1): 하이픈도 빈칸처럼 뺀다 — 글자층의 줄 끝 분철(`labora-`/`tory`)이 `laboratory` 로 찾히고,
+#   `coarse-graded`·`coarse graded`·`coarsegraded` 가 서로 맞는다. 색인·질의·본문 강조(`pdf_doc.flat_hits`)가 이 하나를 쓴다.
+FLAT_SKIP = r"\s\-­‐‑"
+_WS = re.compile("[" + FLAT_SKIP + "]+")
 
 
 def flat_text(s: str) -> str:
-    """261019-4(검색창 SOT §3.1): 빈칸·줄바꿈을 모두 뺀 글 — 색인과 질의를 같은 모양으로 맞춘다.
+    """261019-4(검색창 SOT §3.1): 빈칸·줄바꿈(·하이픈, 261101-1)을 모두 뺀 글 — 색인과 질의를 같은 모양으로 맞춘다.
     글자층은 줄 끝마다 줄바꿈이 들어 있어(문단 안에서도) '아스팔트 포장' 이 '아스팔트\n포장' 으로 남는다."""
     return _WS.sub("", s or "")
 
 
 def flat_pattern(q: str):
-    """질의 글자 사이에 빈칸·줄바꿈이 얼마든 있어도 맞는 정규식 — 개수·미리보기용(색인 비교와 같은 뜻)."""
+    """질의 글자 사이에 빈칸·줄바꿈·하이픈이 얼마든 있어도 맞는 정규식 — 개수·미리보기용(색인 비교와 같은 뜻)."""
     qf = flat_text(q)
-    return re.compile(r"\s*".join(re.escape(c) for c in qf), re.IGNORECASE) if qf else None
+    return re.compile(("[" + FLAT_SKIP + "]*").join(re.escape(c) for c in qf), re.IGNORECASE) if qf else None
 
 
 def _apply_text_fixes(file_path, page: int, text: str) -> str:
@@ -247,7 +250,8 @@ class PdfIndex:
     # 261019-4(검색창 SOT §3.1): 5 = 새 표 `pages2`(빈칸 없는 `flat` 에 트라이그램, 원문 `text` 는 보관만).
     #   옛 `pages_fts` 는 지우지 않는다 — 파일마다 다시 색인될 때 옮겨 간다(`size=-1` 표식, 배경 색인).
     #   그동안 검색은 두 표를 함께 본다(검색이 비는 구간 없음 — §3 '파괴적 재생성 금지').
-    SCHEMA_VERSION = 5
+    # 261101-1(검색창 SOT §3.1): 6 = `flat` 에서 하이픈도 뺀다 — 5 와 같은 방식(파일마다 `size=-1`, 배경에서 다시 색인).
+    SCHEMA_VERSION = 6
     YIELD_S = 0.005          # 260906-5: 배경 작업의 GIL 양보 간격(응답성 SOT §4 ②)
     # 260908-5(응답성 SOT §4 ⑦): 간격이 아니라 **점유율**로 조절한다.
     #   5ms 간격만으로는 쪽 하나가 무거울 때 배경이 벽시계를 거의 다 쓴다 —
@@ -365,8 +369,9 @@ class PdfIndex:
                     self.conn.execute("DELETE FROM page_tables")
                 except Exception:
                     pass
-            if uv < 5:
+            if uv < 6:
                 # 261019-4: 옛 표의 파일은 다음 배경 색인 때 새 표로 다시 읽는다(옛 글은 그때까지 그대로 검색된다)
+                # 261101-1: 6 도 같다 — `flat` 을 하이픈 뺀 꼴로 다시 적는다
                 try:
                     self.conn.execute("UPDATE files SET size = -1")
                 except Exception:

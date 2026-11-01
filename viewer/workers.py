@@ -629,6 +629,10 @@ class TextPageWorker(QObject):
                                      ocr_dpi=self.ocr_dpi,
                                      ocr_peer_words=self.ocr_peer_words,
                                      join_lines=self.join_lines)
+                if not self.join_lines:
+                    # 261101-1(텍스트 창 SOT §3.7.4, 사용자 결정): 문장 잇기를 꺼도 줄 끝 하이픈으로 끊긴 낱말만은 잇는다
+                    #   — 줄 수·자리는 원본 줄 그대로. PDF 반영(text_apply)·형식 변환 '모양 그대로' 는 이 길을 타지 않는다
+                    rows = tx.join_hyphens(rows)
                 # 260908-6(SOT §3.5): 뺀 잡음 줄 수 — 창 안내에 남긴다
                 self.noise = tx.last_noise_count()
             finally:

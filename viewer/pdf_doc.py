@@ -58,12 +58,13 @@ def flat_hits(page, query: str, ocr=None, flat_txt=None) -> list:
     `search_for` 가 못 찾을 때만 부른다(질의와 본문의 띄어쓰기가 다를 때 · 스캔 쪽). 값싼 미리 거르기(쪽 글에 있나)를 먼저 한다.
     `ocr()` → (낱말[픽셀@dpi], dpi): 글자층이 없는 쪽은 저장된 우리 OCR 낱말로 자리를 찾는다."""
     import re as _re
-    qf = _re.sub(r"\s+", "", query or "").lower()
+    from viewer.indexer import flat_text as _flat      # 261101-1: 하이픈도 빼는 색인과 같은 꼴(검색창 SOT §3.1)
+    qf = _flat(query).lower()
     if not qf:
         return []
     if flat_txt is None:                          # 문서 전체 검색은 쪽 글을 기억해 둔 것을 준다(PdfDoc._flat_page)
         try:
-            flat_txt = _re.sub(r"\s+", "", page.get_text("text") or "").lower()
+            flat_txt = _flat(page.get_text("text") or "").lower()
         except Exception:
             flat_txt = ""
     if qf in flat_txt:
@@ -74,7 +75,7 @@ def flat_hits(page, query: str, ocr=None, flat_txt=None) -> list:
                     for sp in ln.get("spans", []):
                         for ch in sp.get("chars", []):
                             c = ch.get("c", "")
-                            if c and not c.isspace():
+                            if c and _flat(c):          # 빈칸·하이픈은 견주지 않는다(색인과 같은 꼴)
                                 chars.append((c.lower() if len(c.lower()) == 1 else c, tuple(ch["bbox"])))
         except Exception:
             chars = []
@@ -88,7 +89,7 @@ def flat_hits(page, query: str, ocr=None, flat_txt=None) -> list:
             k = 72.0 / float(dpi) if dpi else 1.0
             chars = []
             for w in sorted(words, key=lambda w: (round(float(w["y0"]) / max(1.0, float(w["y1"]) - float(w["y0"]))), float(w["x0"]))):
-                sfc = _re.sub(r"\s+", "", str(w.get("surface", "")))
+                sfc = _flat(str(w.get("surface", "")))
                 if not sfc:
                     continue
                 x0, y0, x1, y1 = (float(w["x0"]) * k, float(w["y0"]) * k, float(w["x1"]) * k, float(w["y1"]) * k)
@@ -258,7 +259,8 @@ class PdfDocument:
             import re as _re
             try:
                 pg = page if page is not None else self.doc.load_page(i)
-                cache[i] = _re.sub(r"\s+", "", pg.get_text("text") or "").lower()
+                from viewer.indexer import flat_text as _flat   # 261101-1: 하이픈도 뺀다(검색창 SOT §3.1)
+                cache[i] = _flat(pg.get_text("text") or "").lower()
             except Exception:
                 cache[i] = ""
         return cache[i]

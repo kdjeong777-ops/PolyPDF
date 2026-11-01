@@ -273,6 +273,30 @@ try:
     chk(tx._join_sep("Design, 24(3), 836–849. https://doi.org/10.1080/", "14680629.2022.2029548") == "",
         "⑤s 줄 끝에서 끊긴 웹 주소는 빈칸 없이 잇는다")
 
+    # ── 글자층 줄 끝 끊긴 낱말(사용자 지시 '글자층의 단어가 줄 끝에서 끊겨 있으면 잇는 방안') ──────────
+    def lay_row(t, y, x1=400, x0=72):
+        return {"text": t, "style": "body", "kind": "text", "rect": (x0, y, x1, y + 10), "size": 10.0}
+    page = [lay_row("이 기준은 적설 지역에 대해 별도의 대응책을 세우도록 하고 있", 100),
+            lay_row("다. 또한, 해안 지역은 없는 것으로 파악되었다.", 112, 300),
+            lay_row("<표 1.3>은 연간 누적 적설량 60cm 이상인 지역에 대해서 조사한 결과, 총 58개 지역이 도출", 140),
+            lay_row("되었으며, 분포도를 포함하고 있다.", 152, 250)]
+    for k in range(3):
+        page.append(lay_row("본문 줄 %d 은 여백까지 차 있는 보통의 글자층 줄이다 그리고 계속 이어진다." % k, 180 + k * 12, 300))
+    rows = tx.join_sentences(page)
+    allt = [r["text"] for r in rows]
+    chk(any("하고 있다. 또한" in t for t in allt), "글⑦ 끝까지 찬 한글 줄 다음의 `다.` 는 목록 번호가 아니다", str(allt[:2]))
+    chk(any("도출되었으며" in t for t in allt), "글⑨ `<표 1.3>은 …` 은 표 제목이 아니라 본문 문장", str(allt[:3]))
+    chk(tx._is_caption("<표 1.1> 콘크리트 포장 특수환경 기준") and tx._is_caption("그림 2 시험 장면"),
+        "글⑨ 진짜 표·그림 제목은 그대로 제목")
+    jh = getattr(tx, "join_hyphens", None)
+    hy = [lay_row("BMD is used to establish whether a laboratory-", 100), lay_row("designed mixture meets the", 112),
+          lay_row("framework in a volumetric-", 124), lay_row("only test. The labora-", 136, 200),
+          lay_row("tory work and Performance-", 148), lay_row("Based design.", 160, 150)]
+    got = [r["text"] for r in jh(hy)] if jh else []
+    chk(got == ["BMD is used to establish whether a laboratory-designed", "mixture meets the",
+                "framework in a volumetric-only", "test. The laboratory", "work and Performance-Based", "design."],
+        "글 '문장 잇기' 끔: 분철 낱말만 앞 줄로(줄 수 그대로) — 합성어 붙임표는 남긴다", str(got))
+
     # ── ③' 닫는 따옴표 앞 문장 끝 — 다음 문단을 붙이지 않는다(§3.7.2 ③) ─────────────────
     q = ["But I take a deep breath and speak slowly and carefully to the robot",
          "computer that hangs above my bed. Two times e to the two i pi.”",
