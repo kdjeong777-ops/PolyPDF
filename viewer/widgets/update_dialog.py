@@ -91,13 +91,18 @@ def changes_markdown(changes: list, chain=None) -> str:
 
 
 class UpdateDialog(QDialog):
+    # 261102-5(디자인 SOT §2.19, 사용자 지시 '내용에 비해 너무 크다'): 크기는 내용에 맞춘다 — 종전 640×520 고정
+    MSG_W = (380, 520)        # 확인 중·결과 한 줄일 때 폭 범위
+    NOTES_W = 600             # 바뀐 내용이 있을 때 폭
+    NOTES_H = (320, 620)      # 바뀐 내용이 있을 때 높이 범위
+    SCREEN_FRAC = 0.85        # 화면 높이의 이만큼을 넘지 않는다
+
     def __init__(self, info, current: str, mode: str = "manual", parent=None, options=None):
         """options(261026-5): {"auto_download": bool, "beta": bool, "beta_locked": bool, "on_auto_download": fn, "on_beta": fn}
         — 주면 창 아래에 두 체크를 둔다(mode manual·check). 바꾸면 곧바로 그 함수를 부른다(저장은 부른 쪽)."""
         super().__init__(parent)
         self.mode = mode
         self.choice = "cancel" if mode == "close" else "later"
-        self.resize(640, 520)
         lay = QVBoxLayout(self)
         self.head = QLabel()
         self.head.setWordWrap(True)
@@ -140,6 +145,7 @@ class UpdateDialog(QDialog):
         while self._btn_row.count():
             it = self._btn_row.takeAt(0)
             if it.widget() is not None:
+                it.widget().hide()            # 261102-5: 지워지기 전까지 옛 단추가 새 자리에 겹쳐 보이지 않게
                 it.widget().deleteLater()
         self._btn_row.addStretch(1)
         for text, key, default in btns:
@@ -149,23 +155,63 @@ class UpdateDialog(QDialog):
             b.clicked.connect(lambda _=False, k=key: self._pick(k))
             self._btn_row.addWidget(b)
 
+    def _fit(self, old_center=None) -> None:
+        """지금 보이는 내용에 맞춘 크기(디자인 SOT §2.19) — 떠 있는 창이면 가운데(`old_center`)를 그대로 둔다.
+        가운데는 상태를 바꾸기 **전에** 잰다 — 칸을 보이면 Qt 가 그 자리에서 창을 위쪽 고정으로 먼저 키운다."""
+        lay = self.layout()
+        lay.activate()
+        with_notes = not self.notes.isHidden()
+        scr = self.screen().availableGeometry() if self.screen() is not None else None
+        max_h = int(scr.height() * self.SCREEN_FRAC) if scr is not None else 10 ** 6
+        if with_notes:
+            w = self.NOTES_W
+            doc = self.notes.document()
+            fw = 2 * self.notes.frameWidth()
+            m = lay.contentsMargins()
+            doc.setTextWidth(w - m.left() - m.right() - fw - self.notes.verticalScrollBar().sizeHint().width())
+            doc_h = int(doc.size().height()) + fw + 4
+            rest = lay.totalHeightForWidth(w) - self.notes.sizeHint().height()
+            lo, hi = self.NOTES_H
+            h = max(lo, min(rest + doc_h, hi, max_h))
+        else:
+            lo, hi = self.MSG_W
+            w = max(lo, min(lay.totalSizeHint().width(), hi))
+            h = min(lay.totalHeightForWidth(w), max_h)
+        self.setMinimumSize(0, 0)
+        if self.isVisible() and old_center is not None:
+            # resize 직후 frameGeometry 는 아직 옛 크기다 — 테두리 두께를 미리 재서 새 자리를 계산한다
+            fg, g = self.frameGeometry(), self.geometry()
+            fw, fh = w + fg.width() - g.width(), h + fg.height() - g.height()
+            c = old_center
+            self.setGeometry(c.x() - fw // 2 + g.x() - fg.x(), c.y() - fh // 2 + g.y() - fg.y(), w, h)
+        else:
+            self.resize(w, h)
+
+    def _center(self):
+        return self.frameGeometry().center() if self.isVisible() else None
+
     def _show_checking(self) -> None:
+        c = self._center()
         self.setWindowTitle(tr("업데이트"))
         self.head.setText(tr("<b>업데이트를 확인하는 중…</b>"))
         self.notes.setVisible(False)
         self.how.setVisible(False)
         self._set_buttons(((tr("닫기"), "later", True),))
+        self._fit(c)
 
     def show_message(self, text: str) -> None:
         """261026-5 새 버전이 없거나 확인하지 못했을 때 — 그 한 줄과 `닫기`."""
+        c = self._center()
         self.setWindowTitle(tr("업데이트"))
         self.head.setText(text)
         self.notes.setVisible(False)
         self.how.setVisible(False)
         self._set_buttons(((tr("닫기"), "later", True),))
+        self._fit(c)
 
     def show_result(self, info, current: str) -> None:
         """새 버전 정보 — 바뀐 내용·설치 안내·단추."""
+        c = self._center()
         info = info or {}
         latest = info.get("version", "")
         changes = list(info.get("changes") or [])
@@ -189,6 +235,7 @@ class UpdateDialog(QDialog):
                                (tr("취소"), "cancel", False)))
         else:
             self._set_buttons(((tr("업데이트"), "update", True), (tr("나중에"), "later", False)))
+        self._fit(c)
 
     def _pick(self, key: str):
         self.choice = key
