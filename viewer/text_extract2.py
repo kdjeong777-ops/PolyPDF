@@ -1176,6 +1176,10 @@ def _merge_rows(frags, cjk_gap=None):
         #   준 중앙값' 으로 바꿔 봤으나 표 많은 스캔 서식이 되레 나빠져(제목 38 → 69)
         #   되돌렸다. 고치려면 제목 판정 자체를 손봐야 한다.
         size = max(items, key=lambda f: len(f[1].strip()))[2]
+        if row_ref is not None:
+            # 261102-2(SOT §3.4): OCR 낱말 줄은 **낱말 높이의 중앙값** — 상자 몇 개가 위아래 글줄과 엉겨 68px 로 잡히면
+            #   (_96 보고서 12쪽 `됐다.`·`로시`·`험의`, 나머지 46px) 줄이 제목이 되어 문단이 끊겼다
+            size = row_ref
         # 260910(SOT §3.7): 끝의 빈칸을 **남긴다** — 문장을 이을 때 그 자리가
         #   낱말 경계였는지 알려 주는 유일한 단서다. 판단은 **마지막 조각의 원본**으로
         #   한다: `text` 는 이미 다듬여 있어 그것으로 재면 언제나 빈칸이 없다.
@@ -1503,7 +1507,10 @@ _CLOSERS ="”\"’')]」』"   # 문장 끝 부호 뒤에 올 수 있는 닫는
 JOIN_LEFT_MAX = 0.40
 # 261101-1(SOT §3.7.13): 들여쓰기 문단 — 첫 줄 들여쓰기는 본문 폭의 이 사이(실측 HM 3%·성격심리 4%),
 #   그런 줄이 이만큼 이상이면 들여쓰기 문단 쪽. 들여쓰지 않은 줄은 왼쪽 끝에서 본문 폭의 `PARA_FLUSH` 안.
-PARA_INDENT_LO, PARA_INDENT_HI, PARA_INDENT_MIN, PARA_FLUSH = 0.015, 0.08, 2, 0.01
+# 261102-2(SOT §3.7.14): 왼쪽 정렬 단 — 문장 끝이 아닌 줄 가운데 오른쪽이 글자 크기의 RAGGED_GAP 배 넘게 빈 비율·최소 줄 수
+#   (실측 NAPA 왼쪽 정렬 단 0.6 넘게 / 양쪽 정렬 교재·보고서 0.1 아래)
+RAGGED_GAP, RAGGED_SHARE, RAGGED_MIN_N = 1.0, 0.4, 4
+PARA_INDENT_LO, PARA_INDENT_HI, PARA_INDENT_MIN, PARA_FLUSH =0.015, 0.08, 2, 0.01
 _TOC_TAIL = re.compile(r"\s\d{1,4}$")     # 차례 항목의 끝(빈칸 + 쪽 번호) — SOT §3.7.11
 _CAPTION_HEAD = None
 _LIST_HEAD = None
@@ -1515,7 +1522,7 @@ def _starts_list(text) -> bool:
     if _LIST_HEAD is None:
         import re
         _LIST_HEAD = re.compile(
-            r'^\s*(?:\(?\d+[.)](?!\d)|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—■□]\s|○|※|【)')   # `1.00 g` 는 목록이 아니다(261101-1)
+            r'^\s*(?:\(?\d+[.)](?!\d)|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—■□]\s|○|※|【|§)')   # `1.00 g` 는 목록이 아니다(261101-1)
     return bool(_LIST_HEAD.match(text or ''))
 
 
@@ -1759,6 +1766,7 @@ def join_sentences(rows) -> list:
     cols = _column_extents(body)
     med_pitch = _median_pitch(body)
     indents = _para_indents(cols, body)
+    ragged = _ragged_cols(cols, body)
     idx = {id(q): i for i, q in enumerate(body)}
     out = []
     for r in rows:
@@ -1773,7 +1781,8 @@ def join_sentences(rows) -> list:
             _near = [q for q in body[_lo:_hi]
                      if abs(q['rect'][0] - r['rect'][0]) <= 24.0]
         margin, span = _extent_for(cols, r, _near)
-        if prev is not None and (_can_join(prev, r, margin, span, med_pitch)
+        rg = bool(r.get('rect')) and any(g0 - 0.5 <= r['rect'][0] <= g1 + 0.5 for g0, g1 in ragged)
+        if prev is not None and (_can_join(prev, r, margin, span, med_pitch, ragged=rg)
                                  or (r.get('ocr') and prev.get('ocr') and _continues_para(r, indents)
                                      and _can_join(prev, r, margin, span, med_pitch, para=True))):
             # ★ 조건 판정은 **마지막에 붙인 줄**로 한다(`_can_join` 안에서 `_last`).
@@ -1801,6 +1810,19 @@ def join_sentences(rows) -> list:
         r['text'] = r['text'].rstrip()
         r.pop('_last', None)
         r.pop('_tail', None)
+    return out
+
+
+def as_body(rows) -> list:
+    """텍스트 창·텍스트 창 Word 저장용 — 모든 글 줄을 **본문**으로 (SOT §3.4, 261102-2 사용자 결정).
+
+    '제목' 은 글자 크기로 가린 짐작이라 OCR 쪽에서 엉뚱한 줄(끊긴 어절)에 제목 글꼴이 붙었다. 제목 판정은 줄 잇기(§3.7 ①)와
+    형식 변환(형식 변환 SOT)에서만 쓰고, 텍스트 창에는 보이지 않는다."""
+    out = []
+    for r in rows:
+        if r.get("style") == "title":
+            r = dict(r, style="body")
+        out.append(r)
     return out
 
 
@@ -2025,7 +2047,29 @@ def _extent_for(cols, r, near=None):
     return got
 
 
-def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: bool = False) -> bool:
+def _ragged_cols(cols, body) -> list:
+    """**왼쪽 정렬(오른쪽이 들쭉날쭉한)** 단 → `[(g0, g1)]` (SOT §3.7.14, 261102-2).
+
+    ④ 의 둘째 갈래('뒷줄 첫 어절이 그 빈칸에 들어갔겠는가')는 양쪽 정렬 글을 전제로 한다. 왼쪽 정렬 글은 줄 끝이 15~33pt 씩
+    들쭉날쭉해, 짧은 낱말(`BMD`·`the`·`to`)이 다음 줄에 오면 문단이 끝난 것으로 잘못 봤다(NAPA 2·3쪽 7곳 — '건너뛰기' 와 무관).
+    문장 끝 부호로 끝나지 않는 낱말 셋 이상 줄 가운데 오른쪽이 글자 크기의 `RAGGED_GAP` 배 넘게 빈 것이 `RAGGED_SHARE`
+    이상(그런 줄 `RAGGED_MIN_N` 개 이상)이면 왼쪽 정렬 단이다. 양쪽 정렬 글은 그런 줄이 거의 없다."""
+    out = []
+    for g0, g1, margin, _span in cols:
+        mine = [r for r in body if g0 - 0.5 <= r['rect'][0] <= g1 + 0.5]
+        mid = [r for r in mine
+               if len((r.get('text') or '').split()) >= 3
+               and (r.get('text') or '').rstrip().rstrip(_CLOSERS)[-1:] not in SENT_END]
+        if len(mid) < RAGGED_MIN_N:
+            continue
+        loose = sum(1 for r in mid if margin - r['rect'][2] > max(1.0, r.get('size') or 1.0) * RAGGED_GAP)
+        if loose >= len(mid) * RAGGED_SHARE:
+            out.append((g0, g1))
+    return out
+
+
+def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: bool = False,
+              ragged: bool = False) -> bool:
     """SOT §3.7 의 여덟 조건을 모두 본다.
 
     `para=True`(§3.7.13): 들여쓰기 문단 단에서 뒷줄이 들여쓰지 않았다 — ③(문장 끝)을 보지 않는 대신 앞 줄이
@@ -2063,7 +2107,10 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: boo
         if span > 0 and gap > span * JOIN_GAP_MAX:
             return False            # 너무 많이 남았다 — 어떤 어절이 와도 문단 끝
         w = _first_word_width(b)
-        if w <= 0 or gap >= w * JOIN_WORD_SLACK:
+        # 261102-2(SOT §3.7.14): 왼쪽 정렬 단은 줄 끝이 원래 들쭉날쭉하다 — '어절이 들어갔겠는가' 를 묻지 않는다
+        #   다만 숫자로 끝나거나(차례 `…주요 문제 39`) 숫자로 시작하는(표의 수 줄) 줄은 그 완화를 받지 않는다
+        rag_ok = ragged and not re.search(r"\d$", core) and not re.match(r"\s*\d", tb)
+        if not rag_ok and (w <= 0 or gap >= w * JOIN_WORD_SLACK):
             return False            # 넉넉히 들어갔을 텐데 넘어갔다 → 문단이 끝났다
     # ⑤ 왼쪽 여백. 뒷줄이 들여써져 있으면 보통 **새 문단**이지만, 앞줄이 목록 항목의
     #   첫 줄이면(`(3) …`) 그 다음 줄들은 표시 아래로 들여쓰는 것이 정상이다

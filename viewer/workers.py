@@ -634,6 +634,9 @@ class TextPageWorker(QObject):
                     # 261101-1(텍스트 창 SOT §3.7.4, 사용자 결정): 문장 잇기를 꺼도 줄 끝 하이픈으로 끊긴 낱말만은 잇는다
                     #   — 줄 수·자리는 원본 줄 그대로. PDF 반영(text_apply)·형식 변환 '모양 그대로' 는 이 길을 타지 않는다
                     rows = tx.join_hyphens(rows)
+                # 261102-2(텍스트 창 SOT §3.4, 사용자 결정): 텍스트 창은 OCR·글자층 모두 **본문 글꼴 하나** — 제목 판정은
+                #   줄 잇기 안에서만 쓰고(이미 끝났다) 화면에는 보이지 않는다
+                rows = tx.as_body(rows)
                 # 260908-6(SOT §3.5): 뺀 잡음 줄 수 — 창 안내에 남긴다
                 self.noise = tx.last_noise_count()
             finally:

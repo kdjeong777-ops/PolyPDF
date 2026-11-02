@@ -640,13 +640,20 @@ REREAD_RETRY = 12         # 쌓아 읽기에서 문턱을 못 넘은 자리를 �
 REREAD_PAD = 6            # 자를 때 상자 둘레에 더하는 픽셀(300dpi)
 REREAD_KOR_CONF = 80       # `kor` 로 다시 읽은 결과를 받는 평균 신뢰도
 REREAD_ENG_CONF = 30       # 괄호 속 영문을 `eng` 로 다시 읽은 결과를 받는 평균 신뢰도(작은 세리프라 낮게 나온다)
+REREAD_ONE_MAX = 10        # 번호·섞인 낱말·갈린 영문을 한 자리씩 다시 읽는 최대 수(쪽마다, §14.8.3)
+_SECTION_NO = re.compile(r"\d{2,3}\.\d{1,2}|\d\.\d{2,3}|\d{2}")     # 점이 빠졌을 법한 줄 첫머리 번호(§14.8.3)
+_JAMO_JUNK = re.compile(r"[ㄱ-ㅎㅏ-ㅠ\\]")                           # 낱자모(줄 같은 ㅡ·ㅣ 빼고)·`\` — 굵은 영문이 갈린 흔적
+_LATIN_HEAD = re.compile(r"[A-Z]{2,}[A-Za-z\]}\[|0-9]+")            # `COES]`·`CBRAAYS` — 영문 머리 + 한글 토막이 잡글로
 _LATIN_JUNK = re.compile(r"(?:[A-Z]{2,5}|[A-Za-z]{1,4}[\]}]|[A-Za-z]{1,2}[\]}][A-Za-z]{1,2}[\]}])[,.]?")
 
 
 def _reread_kind(s: str, lang: str) -> str:
-    """한글 줄의 이 낱말을 다시 읽을까 — `kor`(한글을 영문 잡글로) / `eng`(괄호 속 영문을 숫자 잡글로) / ''."""
+    """한글 줄의 이 낱말을 다시 읽을까 — `kor`(한글을 영문 잡글로) / `eng`(괄호 속 영문을 숫자 잡글로)
+    / `mix`(영문 머리 + 한글 토막이 잡글로, §14.8.3) / ''."""
     if not s:
         return ""
+    if _LATIN_HEAD.fullmatch(s) and (re.search(r"[\]}\[|0-9]", s) or len(s) >= 5):
+        return "mix"
     if _LATIN_JUNK.fullmatch(s):
         core = re.sub(r"[^A-Za-z]", "", s)
         try:
@@ -726,7 +733,15 @@ def _reread_words(img, items):
         W, H = img.size
         boxes = [(max(0, int(x) - REREAD_PAD), max(0, int(y) - REREAD_PAD),
                   min(W, int(x + w) + REREAD_PAD), min(H, int(y + h) + REREAD_PAD)) for _i, (x, y, w, h), _k, _s in items]
-        kor_idx = [n for n, it in enumerate(items) if it[2] == "kor"]
+        # 261102-2(§14.8.3): 번호·섞인 낱말·갈린 영문은 한 자리씩 한 줄로(psm 7) 읽는다 — 드물고(쪽당 몇 곳) 쌓으면 점이 뭉개진다
+        for n, (i, _b, kind, s) in enumerate(items):
+            if kind in ("num", "mix", "grp"):
+                got = _reread_one(img, boxes[n], kind, s)
+                if got:
+                    out[i] = got
+        # 종전에 `kor` 로 읽던 꼴(`_LATIN_JUNK`)의 섞인 낱말은 쌓아 읽기에도 그대로 넣는다 — 쌓은 묶음이 바뀌면 이웃 자리의
+        #   결과도 바뀐다(실측 성격심리 401쪽 `변화를`→`번화를`). 영문 머리를 못 가른 자리는 그 결과(종전 규칙)를 쓴다
+        kor_idx = [n for n, it in enumerate(items) if it[2] == "kor" or (it[2] == "mix" and _LATIN_JUNK.fullmatch(it[3]))]
         eng_idx = [n for n, it in enumerate(items) if it[2] == "eng"]
         kor_need = kor_idx + [n for n in eng_idx if re.search(r"\)[^)\s]|[^(\s]\(", items[n][3])]
         kres = dict(zip(kor_need, _read_stack(img, [boxes[n] for n in kor_need], "kor"))) if kor_need else {}
@@ -736,6 +751,8 @@ def _reread_words(img, items):
         for n in kor_idx:
             if retry >= REREAD_RETRY:
                 break
+            if items[n][0] in out:
+                continue
             if kres.get(n, ("", 0.0))[1] < REREAD_KOR_CONF:
                 kres[n] = _read_stack(img, [boxes[n]], "kor")[0]
                 retry += 1
@@ -747,7 +764,9 @@ def _reread_words(img, items):
                 retry += 1
         from viewer.study.wordfreq_fast import zipf_frequency
         for n, (i, _b, kind, s) in enumerate(items):
-            if kind == "kor":
+            if kind not in ("kor", "eng", "mix") or i in out:
+                continue
+            if kind in ("kor", "mix"):
                 t, c = kres.get(n, ("", 0.0))
                 core = t.replace(" ", "")
                 if c >= REREAD_KOR_CONF and _HANGUL_RE.search(core) and re.fullmatch(r"[가-힣.,?!·()\-]+", core):
@@ -770,6 +789,114 @@ def _reread_words(img, items):
     except Exception:
         return out
     return out
+
+
+def _reread_one(img, box, kind, s):
+    """한 자리를 한 줄로 다시 읽어 받을 글을 고른다(§14.8.3) → `(글, 신뢰도)` 또는 None.
+
+    `num`: `kor` 로 읽은 번호가 **숫자는 같고 점이 더 많을 때만**(`45.2`→`4.5.2`) — 숫자를 바꾸지 않는다.
+    `mix`: 영문 머리는 `eng` 로(원래 글이 그 머리로 시작할 때), 뒤 한글은 `kor` 로(1~4 음절, 신뢰도 `REREAD_KOR_CONF` 이상)
+    — `COES]`→`COE의`. 한글이 시작하는 자리(`kor` 낱말 상자)에서 가른다. 영문 머리를 못 가르면 None — 부르는 쪽이
+    쌓아 읽은 `kor` 결과(종전 규칙)를 쓴다.
+    `grp`: 갈린 토막을 묶은 상자를 `eng` 로 — 대문자 3자 이상(`WASHO`), 뒤 한글은 `mix` 와 같이."""
+    crop = [box]
+    if kind == "num":
+        t, c = _read_stack(img, crop, "kor")[0]
+        t = t.replace(" ", "")
+        digits = lambda x: re.sub(r"\D", "", x)   # noqa: E731
+        if (re.fullmatch(r"\d+(?:\.\d+)+\.?", t) and digits(t) == digits(s) and t.count(".") > s.count(".")):
+            return (t, max(c, float(MIN_CONF_PCT)))
+        return None
+    # mix·grp: 한글이 시작하는 자리(`kor` 낱말 상자)에서 가른다 — 그 앞의 대문자는 `eng` 글자, 그 뒤는 `kor` 한글 낱말
+    kws = _read_line_words(img, box, "kor")
+    han = [(t, c, x) for t, c, x in kws if re.fullmatch(r"[가-힣]+[.,]?", t)]
+    cut = han[0][2] if han else float("inf")
+    tail = [(t, c) for t, c, x in han if x >= cut]
+    # 영문에 맞닿은 첫 음절은 신뢰도가 바닥으로 나오곤 한다(`CBR설` 의 `설` 0) — 아래쪽 가운데 값으로 본다
+    #   (둘이면 낮은 쪽 — 옆 낱말 음절이 걸려 든 `WAIS-IV는연` 의 `연` 을 받지 않게)
+    tail_ok = bool(tail) and sorted(c for _t, c in tail)[(len(tail) - 1) // 2] >= REREAD_KOR_CONF
+    head = ""
+    for ch, cx in _read_line_chars(img, box, "eng"):
+        if cx >= cut or not ("A" <= ch <= "Z" or (ch == "-" and head)):
+            break
+        head += ch
+    head = head.rstrip("-")
+    need = 3 if kind == "grp" else 2
+    if len(head) >= need and (kind == "grp" or s.startswith(head.replace("-", ""))) \
+            and (tail_ok or (kind == "grp" and not tail)):
+        got = head + ("".join(t for t, _c in tail) if tail_ok else "")
+        if got != s:
+            return (got, float(REREAD_KOR_CONF if tail_ok else MIN_CONF_PCT))
+        return None
+    return None                   # 영문 머리를 못 가르면 쌓아 읽은 `kor` 결과(종전 규칙)에 맡긴다
+
+
+_CAPTION_CLOSE = re.compile(r"\d+(?:[-.]\d+)*>")      # 표·그림 번호의 닫는 꺾쇠 `2-1>`·`4-74>`
+
+
+def _caption_open(texts, idx, key, conf):
+    """닫는 꺾쇠만 있는 표·그림 제목에 여는 `<` 를 되살린다 (텍스트 창 SOT §3.5.5, 261102-2).
+
+    `<그림2-1>` 의 `<` 는 Tesseract 가 아예 내놓지 않거나(실측 _96 12쪽) 낮은 신뢰도로 내놓아 버려진다.
+    `표`·`그림` 바로 뒤 번호가 `>` 로 끝나고 그 앞에 `<` 가 없으면 `표`/`그림` 첫 낱말 앞에 붙인다 — 따로 읽힌 `<` 가 있으면 그것을 남긴다."""
+    by_line = {}
+    for i in idx:
+        by_line.setdefault(key(i), []).append(i)
+    for ids in by_line.values():
+        ids = [i for i in ids if str(texts[i]).strip()]
+        for n, i in enumerate(ids):
+            s = str(texts[i]).strip()
+            m = re.match(r"(.*?)(표|그림)" + _CAPTION_CLOSE.pattern + r"$", s)
+            if m is not None:
+                start, word = n, m.group(1) + m.group(2)
+            elif _CAPTION_CLOSE.match(s):
+                # `그` `림` `2-1>` 처럼 갈렸다 — 바로 앞 낱말 한두 개가 `표`/`그림` 으로 끝나면
+                word, start = "", n
+                for k in range(n - 1, max(-1, n - 3), -1):
+                    word = str(texts[ids[k]]).strip() + word
+                    start = k
+                    if word.endswith(("표", "그림")):
+                        break
+                if not word.endswith(("표", "그림")):
+                    continue
+            else:
+                continue
+            if "<" in word or "〈" in word:
+                continue
+            if start > 0 and str(texts[ids[start - 1]]).strip() in ("<", "〈"):
+                conf[ids[start - 1]] = max(float(conf.get(ids[start - 1], 0) or 0), float(MIN_CONF_PCT))
+                continue
+            # 문장 속 가리킴(`<표4-73>과같다`)은 이미 `<` 가 붙어 위에서 걸러진다 — 여기 오는 것은 `<` 가 빠진 것
+            texts[ids[start]] = "<" + str(texts[ids[start]]).strip()
+
+
+def _read_line_words(img, box, lang):
+    """한 자리를 한 줄로(psm 7) 읽어 낱말마다 `(글, 신뢰도, 왼쪽 x)` — 자른 그림 좌표."""
+    import pytesseract
+    r = pytesseract.image_to_data(img.crop(box), lang=lang, config="--psm 7", output_type=pytesseract.Output.DICT)
+    out = []
+    for t, c, x in zip(r["text"], r["conf"], r["left"]):
+        try:
+            c = float(c)
+        except (TypeError, ValueError):
+            c = -1.0
+        if str(t).strip() and c >= 0:
+            out.append((str(t).strip(), c, x))
+    return out
+
+
+def _read_line_chars(img, box, lang):
+    """한 자리를 한 줄로(psm 7) 읽어 글자마다 `(글자, 가운데 x)` — 자른 그림 좌표, 왼쪽부터."""
+    import pytesseract
+    out = []
+    for ln in pytesseract.image_to_boxes(img.crop(box), lang=lang, config="--psm 7").splitlines():
+        f = ln.split(" ")
+        if len(f) >= 5:
+            try:
+                out.append((f[0], (int(f[1]) + int(f[3])) / 2.0))
+            except ValueError:
+                pass
+    return sorted(out, key=lambda t: t[1])
 
 
 def _small_glyph_keep(data, nb, s, x, w, h, c, line_h, dpi) -> bool:
@@ -818,21 +945,68 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     #   괄호 속 작은 영문이 숫자 잡글(`(prepotence)`→`(0100010009'`)로 나온다 — 그 자리만 잘라 다시 읽는다
     _han_lines = {_key(i) for i in _idx if _HANGUL_RE.search(str(data["text"][i]))}
     _items = []
+    _groups = {}                   # 묶어 읽은 첫 낱말 → 함께 지울 나머지 낱말(§14.8.3 `\4 ㅅ 980` → `WASHO`)
     if img is not None and "kor" in str(lang).split("+"):
-        for i in _idx:
+        n_idx = len(_idx)
+        skip = set()
+        for n, i in enumerate(_idx):
             if len(_items) >= REREAD_MAX:
                 break
+            if i in skip:
+                continue
             s0 = str(_texts[i]).strip()
-            kind = _reread_kind(s0, lang) if _key(i) in _han_lines else ""
-            if kind:
-                _items.append((i, (data["left"][i], data["top"][i], data["width"][i], data["height"][i]), kind, s0))
+            first = n == 0 or _key(_idx[n - 1]) != _key(i)
+            box = (data["left"][i], data["top"][i], data["width"][i], data["height"][i])
+            if _key(i) not in _han_lines:
+                continue
+            one = sum(1 for it in _items if it[2] in ("num", "mix", "grp"))
+            # 261102-2(§14.8.3): 한글 줄 첫머리 번호 `45.2`·`21.1` — `kor` 로 다시 읽으면 `4.5.2`·`2.1.1`
+            if first and _SECTION_NO.fullmatch(s0):
+                if one < REREAD_ONE_MAX:
+                    _items.append((i, box, "num", s0))
+                continue
+            # 261102-2(§14.8.3): 낱자모·`\` 가 낀 토막이 잇달면 굵은 영문 낱말이 갈린 것(`\4` `ㅅ` `980` = WASHO) — 묶어 `eng` 로
+            #   괄호가 든 토막은 괄호 속 영문(§14.8.2 `eng`)이 먼저다 — `(『6\` = `(Psy`
+            if _JAMO_JUNK.search(s0) and not _HANGUL_RE.search(s0) and len(s0) <= 4 and not re.search(r"[()]", s0):
+                if one >= REREAD_ONE_MAX:
+                    continue
+                run = [i]
+                for m in range(n + 1, min(n_idx, n + 6)):
+                    j = _idx[m]
+                    sj = str(_texts[j]).strip()
+                    if _key(j) != _key(i) or not re.fullmatch(r"[^\s가-힣]{1,4}", sj):
+                        break
+                    run.append(j)
+                x0 = min(data["left"][j] for j in run)
+                y0 = min(data["top"][j] for j in run)
+                x1 = max(data["left"][j] + data["width"][j] for j in run)
+                y1 = max(data["top"][j] + data["height"][j] for j in run)
+                _items.append((i, (x0, y0, x1 - x0, y1 - y0), "grp", s0))
+                after = _idx[n + len(run)] if n + len(run) < n_idx and _key(_idx[n + len(run)]) == _key(i) else None
+                _groups[i] = (run[1:], after)
+                skip.update(run[1:])
+                continue
+            kind = _reread_kind(s0, lang)
+            if kind and (kind != "mix" or one < REREAD_ONE_MAX):
+                _items.append((i, box, kind, s0))
     for i, (t_new, c_new) in _reread_words(img, _items).items():
+        rest, after = _groups.get(i, ((), None))
+        if after is not None:
+            # 묶은 상자에 바로 뒤 한글 낱말이 걸려 읽혔으면(`WASHO의` + `의도로`) 겹친 꼬리를 뗀다
+            m = re.match(r"([A-Z]+)([가-힣]+)$", t_new)
+            if m and str(_texts[after]).strip().startswith(m.group(2)):
+                t_new = m.group(1)
         _texts[i], _conf[i] = t_new, c_new
+        for j in rest:
+            _texts[j] = ""            # 묶어 읽은 나머지 토막은 지운다
+    _caption_open(_texts, _idx, _key, _conf)
     _neighbor = {}                 # 같은 줄의 이웃 낱말(앞, 없으면 뒤) — 상자 높이를 맞출 때
+    _adj = {}                      # 같은 줄의 (앞, 뒤) 낱말 — 괄호가 낱말에 붙었나 볼 때
     for n, i in enumerate(_idx):
         a = _idx[n - 1] if n > 0 and _key(_idx[n - 1]) == _key(i) else None
         b = _idx[n + 1] if n + 1 < len(_idx) and _key(_idx[n + 1]) == _key(i) else None
         _neighbor[i] = a if a is not None else b
+        _adj[i] = (a, b)
         if i in _conf:
             continue
         s0 = str(_texts[i]).strip()
@@ -854,6 +1028,19 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
         _is_i[i] = a if a is not None else b
     def _small_ok(i, s, x, w, h, c):
         return _small_glyph_keep(data, _neighbor.get(i), s, x, w, h, c, _med.get(_key(i), 0), dpi)
+
+    def _bracket_ok(i, s, x, w, h, c):
+        # 261102-2(텍스트 창 SOT §3.5.5): 낱말에 붙은 `<`·`(`·따옴표는 기호만이어도 남긴다 — 이웃이 지워진 토막이면 보지 않는다
+        a, b = _adj.get(i, (None, None))
+        gaps = []
+        if a is not None and str(_texts[a]).strip():
+            gaps.append(x - (data["left"][a] + data["width"][a]))
+        if b is not None and str(_texts[b]).strip():
+            gaps.append(data["left"][b] - (x + w))
+        return _noise.bracket_ok(s, c / 100.0, h, _med.get(_key(i), 0), min((max(0, g) for g in gaps), default=None))
+
+    def _rescue(i, s, x, w, h, c):
+        return _small_ok(i, s, x, w, h, c) or _bracket_ok(i, s, x, w, h, c)
 
     for i, txt in enumerate(_texts):
         s = str(txt).strip()
@@ -880,8 +1067,8 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
                 x, w = int(x + w / 2 - h * 0.15), max(1, int(round(h * 0.3)))
         elif not _noise.keep_ocr_word(s, x, y, x + w, y + h, c / 100.0,
                                       scale=72.0 / max(1, int(dpi))):
-            if not _small_ok(i, s, x, w, h, c):
-                continue                    # 260908-8: 잡음은 본문에서도 뺀다
+            if not _rescue(i, s, x, w, h, c):
+                continue                    # 260908-8: 잡음은 본문에서도 뺀다(괄호 남기기는 §3.5.5)
             # 261101-1(텍스트 창 SOT §3.5.3): 납작한 진짜 글자(`을`·`는` 15px)는 ①(4pt)에 걸려도 남긴다 — 상자 높이를
             #   같은 줄 이웃 낱말에 맞춰 화면 단계의 같은 규칙에도 걸리지 않게 한다
             y, h = data["top"][_neighbor[i]], data["height"][_neighbor[i]]

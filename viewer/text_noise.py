@@ -34,6 +34,10 @@ SMALL_GLYPH_CONF, SMALL_GLYPH = 0.80, 0.30
 BULLET_LIKE = frozenset("ㆍ·•∙*:■□▪●○◆◇ㅁ")
 BULLET_MAX, BULLET_SQUARE = 0.6, 0.35
 ONE_I_W = 0.2      # `1` 이 이보다 좁으면 `I` 의 획이다(실측 1px ÷ 28) — 진짜 숫자 1 은 폭이 있다
+# 낱말에 붙은 괄호·따옴표(`bracket_ok`, 261102-2) — 신뢰도 하한, 줄 글자 높이 대비 하한, 옆 낱말과의 틈 상한(줄 높이 배)
+#   실측 _96 표 제목 `<` 신뢰도 0.92·높이 1.0배·틈 0.2배 — 잡음 기호는 신뢰도가 바닥이거나 옆 낱말과 떨어져 있다
+BRACKETS = frozenset("<>()[]{}〈〉《》「」『』“”‘’\"'")
+BRACKET_CONF, BRACKET_H, BRACKET_GAP = 0.60, 0.5, 1.0
 
 
 def has_letter(text) -> bool:
@@ -194,6 +198,17 @@ def keep_ocr_word(surface, x0, y0, x1, y1, conf, *, scale: float = 1.0,
         return False
     return not is_noise_box(surface, float(x0) * scale, float(y0) * scale,
                             float(x1) * scale, float(y1) * scale, min_h=min_h)
+
+
+def bracket_ok(surface, conf, h, line_h, gap) -> bool:
+    """낱말 옆에 붙은 괄호·따옴표 하나인가 — 기호만이라고 버리지 않는다 (SOT §3.5.5, 261102-2).
+
+    Tesseract 는 표 제목 `<표 2.1>` 의 `<` 를 바르게(신뢰도 0.92) 따로 읽는데, 기호만 남은 낱말이라 버려
+    `표 2.1>` 이 됐다. `gap` 은 같은 줄 가장 가까운 낱말과의 틈(픽셀, 없으면 None)."""
+    t = (surface or "").strip()
+    return (len(t) == 1 and t in BRACKETS and conf is not None and float(conf) >= BRACKET_CONF
+            and line_h > 0 and float(h) >= float(line_h) * BRACKET_H
+            and gap is not None and float(gap) <= float(line_h) * BRACKET_GAP)
 
 
 def small_glyph_ok(surface, h, conf, line_h) -> bool:
