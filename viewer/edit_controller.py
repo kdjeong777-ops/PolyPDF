@@ -742,17 +742,27 @@ class EditMixin:
             return False, "error", ""
         payload = self._mirror_payload(path)
         has = bool(payload["deco"] or payload["img"] or payload["link"] or payload["tags"])
-        d, why = self._mirror_open(path)
-        if d is None:
-            return False, why if has else "", ""
-        try:
-            old = _pm.stored_hash(d)
-            if not has and not old:
-                return False, "", ""
-            h = _pm.fingerprint(dict(payload, geom=_pm.geometry(d)))
-            return h != old, "", h
-        finally:
-            d.close()
+        box = {}
+
+        def _probe():
+            d, why = self._mirror_open(path)
+            if d is None:
+                box["r"] = (False, why if has else "", "")
+                return
+            try:
+                old = _pm.stored_hash(d)
+                if not has and not old:
+                    box["r"] = (False, "", "")
+                    return
+                h = _pm.fingerprint(dict(payload, geom=_pm.geometry(d)))
+                box["r"] = (h != old, "", h)
+            finally:
+                d.close()
+        # 261102-4(응답성 SOT §4.4): 여는 일은 배경에서 — 방금 저장한 파일은 백신 검사가 끝날 때까지 `fz_open_file` 이
+        #   붙들려 [저장] 뒤 메인이 섰다(_96 10MB 실측 0.81초). 메인은 저장소(꾸밈·링크) 값만 모은다.
+        if self._file_op_bg(_probe, tr("저장 중: {name}").format(name=Path(str(path)).name)) is not None:
+            return False, "error", ""
+        return box.get("r", (False, "error", ""))
 
     def _mirror_needed(self, path) -> bool:
         try:
@@ -787,7 +797,12 @@ class EditMixin:
         doc = None
         try:
             import fitz
-            doc = fitz.open(str(tmp))
+            _o = {}
+            # 261102-4: 방금 복사한 임시 파일 열기도 배경에서(백신 검사 — 위 `_mirror_state` 와 같은 까닭). 굽기만 메인
+            err = self._file_op_bg(lambda: _o.update(d=fitz.open(str(tmp))), tr("저장 중: {name}").format(name=src.name))
+            if err is not None:
+                raise err
+            doc = _o["d"]
             if doc.needs_pass:
                 from viewer import secure_store
                 doc.authenticate(secure_store.recall_any(str(src)) or "")

@@ -4303,23 +4303,27 @@ class BookmarkTree(QWidget):
         # 벤더링된 pdf_bookmarker 사용
         try:
             from viewer import bookmarker_bridge as bridge
-            if not bridge.is_available():
-                raise RuntimeError(bridge.get_status())
-            import pdf_bookmarker as pb  # alias 등록됨
-            bms = [pb.Bookmark(title=t, page=p, level=l) for (t, p, l) in bookmarks_raw]
             # 260822: 임시로 생성 후 목적지 배치(기본=원본 덮어쓰기, Shift=_edited(충돌 시 (k)))
             tmp = src.with_name(src.stem + "_book_savetmp.pdf")
+
+            def _write():
+                # 261102-4(응답성 SOT §4.4): 쓰개 불러오기(`pdf_bookmarker`·pypdf import)도 배경에서 — 처음 [저장] 때
+                #   메인에서 불러와 1.1초 섰다(_96 실측)
+                if not bridge.is_available():
+                    raise RuntimeError(bridge.get_status())
+                import pdf_bookmarker as pb  # alias 등록됨
+                bms = [pb.Bookmark(title=t, page=p, level=l) for (t, p, l) in bookmarks_raw]
+                return bridge.apply_to_pdf(src, tmp, bms)
             # 261019-1(응답성 SOT §4.4): pypdf 로 파일 전체를 다시 쓰는 일이라 배경에서(앱의 `_file_op_bg`) —
             #   책갈피 자동 생성 결과도 이제 이 [저장] 으로 쓰여 큰 문서가 흔해졌다
             if self._file_op is not None:
                 _res = {}
-                _e = self._file_op(lambda: _res.update(out=bridge.apply_to_pdf(src, tmp, bms)),
-                                   tr("책갈피 쓰는 중…"))
+                _e = self._file_op(lambda: _res.update(out=_write()), tr("책갈피 쓰는 중…"))
                 if _e is not None:
                     raise _e
                 out = _res["out"]
             else:
-                out = bridge.apply_to_pdf(src, tmp, bms)
+                out = _write()
             if self._finalize_save is not None:
                 out = self._finalize_save(str(src), str(out))
             else:
