@@ -543,41 +543,147 @@ def _overlaps(w, ws) -> bool:
     return False
 
 
+def _next_nos(no: str) -> list:
+    """앞 줄 절 번호 다음에 올 수 있는 번호 — `1.2` → `1.3`·`1.2.1`·`2.`, `2.` → `2.1`·`3.`."""
+    try:
+        p = [int(x) for x in no.rstrip(".").split(".")]
+    except ValueError:
+        return []
+    if len(p) == 1:
+        return [f"{p[0]}.1", f"{p[0] + 1}."]
+    out = [".".join(map(str, p[:-1] + [p[-1] + 1])), no.rstrip(".") + ".1", f"{p[0] + 1}."]
+    if len(p) >= 3:
+        out.append(".".join(map(str, p[:-2] + [p[-2] + 1])))
+    return out
+
+
+TOC_SWAP_LOW = 0.6          # 표준 판독 낱말이 이보다 낮은 신뢰도이고
+TOC_SWAP_HIGH = 0.8         # … 같은 자리 흩어진 글 판독이 이 이상이면 그 글로(`NASHO` 0.51 → `AASHO` 0.91, `ACGO-70` 0.31 → `AC60-70` 0.91)
+
+
 def _fill_toc_from_sparse(lines: list, sparse: list, width: float) -> tuple:
     """목차 쪽 표준 판독 줄(`lines`, 제자리에서 고침)을 흩어진 글 판독 줄(`sparse`)로 채운다 → (바꿨나, 새 줄들).
-    ① 쪽 번호를 못 읽은 줄에 쪽 번호 ② 번호를 잘못 읽은 줄(`(32`)의 번호를 같은 숫자의 바른 번호(`3.2`)로
-    ③ 표준 판독에 통째로 없는 번호 줄(`3.6 요약`)을 제목·쪽 번호만 더한다(점선 리더 잡글은 뺀다)."""
+    ① 쪽 번호를 못 읽은 줄에 쪽 번호 ② 번호를 잘못 읽은 줄(`(32`·`OB`)의 번호를 — 같은 숫자의 바른 번호, 또는 앞 줄 번호 다음에 올 번호 중
+    숫자가 같은 것(`1.2` 다음 `(13` → `1.3`)으로 ③ 표준 판독에 통째로 없는 번호 줄(`3.6 요약`)·꺾쇠 줄(`<참고문헌>`)을 제목·쪽 번호만
+    ④ 표준 제목이 흩어진 글 제목의 앞부분이면(`평가기` / `평가기준치`) 긴 쪽으로 ⑤ 신뢰도 낮은 영문·숫자 낱말은 같은 자리·같은 길이의
+    높은 신뢰도 글, 또는 같은 쪽에서 높은 신뢰도로 읽힌 글로(`NASHO`→`AASHO`·`AC60O~70`→`AC60~70`), 제목 끝 쉼표(`재료,`)는 떼고.
+    점선 리더 잡글은 더하지 않는다."""
     changed, used, all_ws = False, set(), [w for ln in lines for w in ln["words"]]
+    prev_no = None
+    sure = {str(w["surface"]) for w in all_ws if float(w.get("conf", 0.0)) >= TOC_SWAP_HIGH}
     for ln in lines:
         best, bd = None, None
         for j, sp in enumerate(sparse):
             d = abs(ln["cy"] - sp["cy"])
             if j not in used and d <= 0.6 * max(ln["h"], sp["h"]) and (bd is None or d < bd):
                 best, bd = j, d
-        if best is None:
-            continue
-        used.add(best)
-        ws, sw = ln["words"], sparse[best]["words"]
-        tail = sw[-1]
-        has_page = float(ws[-1]["x0"]) >= 0.70 * width and re.search(r"\d", str(ws[-1]["surface"]))
-        if (not has_page and float(tail["x0"]) >= 0.70 * width and re.fullmatch(r"\d{1,4}", str(tail["surface"]))
-                and not _overlaps(tail, all_ws)):
-            ws.append(dict(tail))                                                     # ①
-            changed = True
-        f0, s0 = str(ws[0]["surface"]), str(sw[0]["surface"])
-        if (not _SEC_NO.fullmatch(f0) and _SEC_NO.fullmatch(s0) and re.sub(r"\D", "", f0) == re.sub(r"\D", "", s0)
-                and abs(float(ws[0]["x0"]) - float(sw[0]["x0"])) <= ln["h"]):
-            ws[0] = dict(ws[0], surface=s0)                                           # ②
-            changed = True
+        ws = ln["words"]
+        if best is not None:
+            used.add(best)
+            sw = sparse[best]["words"]
+            tail = sw[-1]
+            has_page = float(ws[-1]["x0"]) >= 0.70 * width and re.search(r"\d", str(ws[-1]["surface"]))
+            if (not has_page and float(tail["x0"]) >= 0.70 * width and re.fullmatch(r"\d{1,4}", str(tail["surface"]))
+                    and not _overlaps(tail, all_ws)):
+                ws.append(dict(tail))                                                     # ①
+                changed = True
+            f0, s0 = str(ws[0]["surface"]), str(sw[0]["surface"])
+            near = abs(float(ws[0]["x0"]) - float(sw[0]["x0"])) <= ln["h"]
+            if not _SEC_NO.fullmatch(f0) and not _HANGUL.search(f0) and near:
+                dg = re.sub(r"\D", "", f0) or re.sub(r"\D", "", s0)
+                cand = ([s0] if _SEC_NO.fullmatch(s0) else []) + (_next_nos(prev_no) if prev_no else [])
+                hit = next((c for c in cand if dg and re.sub(r"\D", "", c) == dg), None)
+                if hit:
+                    ws[0] = dict(ws[0], surface=hit)                                      # ②
+                    changed = True
+            for i, w in enumerate(ws):                                                    # ⑤
+                s = str(w["surface"])
+                if float(w["x0"]) >= 0.70 * width:
+                    continue
+                qs = [q for q in sw if _overlaps(q, [w])]
+                if len(qs) != 1 or str(qs[0]["surface"]) == s:
+                    continue
+                q, qc = str(qs[0]["surface"]), float(qs[0].get("conf", 0.0))
+                if q == s.rstrip(",") and qc >= TOC_SWAP_HIGH:
+                    ok = True                       # 제목 끝에 붙은 쉼표(`재료,`) — 같은 자리 판독에는 없다
+                else:
+                    # 같은 자리 높은 신뢰도 글, 또는 같은 쪽에서 높은 신뢰도로 읽힌 글(`AC60O~70` 0.37 / 4.4 줄의 `AC60~70` 0.89)
+                    ok = (not _HANGUL.search(s) and not _HANGUL.search(q) and float(w.get("conf", 1.0)) < TOC_SWAP_LOW
+                          and abs(len(q) - len(s)) <= 1 and (qc >= TOC_SWAP_HIGH or q in sure))
+                if ok:
+                    ws[i] = dict(w, surface=q, conf=qc)
+                    changed = True
+            ta, tb = _toc_parts(ln, width), _toc_parts(sparse[best], width)
+            a, b = re.sub(r"\s", "", ta["title"]), re.sub(r"\s", "", tb["title"])
+            if len(a) >= 3 and len(b) > len(a) and b.startswith(a) and _HANGUL.search(b[len(a):]):
+                ids = {id(w) for w in ta["ws"]}                                           # ④
+                ln["words"] = ws = sorted([w for w in ws if id(w) not in ids] + [dict(w) for w in tb["ws"]],
+                                          key=lambda w: float(w["x0"]))
+                changed = True
+        if _SEC_NO.fullmatch(str(ws[0]["surface"])):
+            prev_no = str(ws[0]["surface"])
     extra = []
     for j, sp in enumerate(sparse):
         if j in used:
             continue
         tp = _toc_parts(sp, width)
         new = list(tp["ws"]) + ([sp["words"][-1]] if tp["page"] is not None else [])
-        if tp["ws"] and _toc_numbered(tp["title"]) and not any(_overlaps(w, all_ws) for w in new):
-            extra.append(dict(sp, words=[dict(w) for w in new]))                     # ③
+        ok = _toc_numbered(tp["title"]) or (tp["title"].startswith("<") and tp["page"] is not None)
+        if tp["ws"] and ok and not any(_overlaps(w, all_ws) for w in new):
+            extra.append(dict(sp, words=[dict(w) for w in new]))                         # ③
     return changed or bool(extra), extra
+
+
+def _cho(c: str) -> int:
+    return (ord(c) - 0xAC00) // 588
+
+
+TOC_VOCAB_MIN = 3            # 한 번 나온 세 음절을 고칠 때 맞는 쪽이 쪽 안에 나와야 하는 횟수 — 2 로는 `포장상태`→`포장설태`(`포장설계` 둘)·`저항의`→`저항인`(`적인 측면` 둘)이 났다
+
+
+def _fix_by_page_vocab(lines_ws: list) -> bool:
+    """목차 쪽 안에서 한 번만 나온 세 음절이 `TOC_VOCAB_MIN` 번 이상 나온 세 음절과 한 음절만 다르고, 그 음절의 첫소리가 같고 그 음절이 쪽에서 거기 하나뿐이면 그것으로
+    (`5.1 샤후관측` ↔ `사후관측` 셋 — `샤` 는 신뢰도 0.86 이라 신뢰도로는 못 가른다). 쪽 번호는 보지 않는다. 줄마다 한 곳만."""
+    from collections import Counter
+    seqs = []
+    for ws in lines_ws:
+        seqs.append([(i, k, c) for i, w in enumerate(ws) if not re.fullmatch(r"\d+", str(w["surface"]))
+                     for k, c in enumerate(str(w["surface"])) if "가" <= c <= "힣"])
+    cnt = Counter("".join(c for *_x, c in seq[s:s + 3]) for seq in seqs for s in range(len(seq) - 2))
+    syl = Counter(c for seq in seqs for *_x, c in seq)
+    changed = False
+    for li, seq in enumerate(seqs):
+        for s in range(len(seq) - 2):
+            win = "".join(c for *_x, c in seq[s:s + 3])
+            if cnt[win] != 1:
+                continue
+            cands = [v for v, n in cnt.items() if n >= TOC_VOCAB_MIN and sum(x != y for x, y in zip(v, win)) == 1]
+            if len(cands) != 1:
+                continue
+            v = cands[0]
+            p = next(q for q in range(3) if v[q] != win[q])
+            if _cho(v[p]) != _cho(win[p]) or syl[win[p]] > 1:
+                continue
+            i, k, _c = seq[s + p]
+            w = lines_ws[li][i]
+            t = str(w["surface"])
+            lines_ws[li][i] = dict(w, surface=t[:k] + v[p] + t[k + 1:])
+            changed = True
+            break
+    return changed
+
+
+def _clean_toc_rest(rest: list, page_w, page) -> list:
+    """목차 줄의 제목 뒤 낱말(`rest`)에서 점선 리더를 읽은 잡글(`아아아`·`ㅇ`·`eee`)을 빼고, 잡글이 붙은 쪽 번호(`아아아122`·`ll`)는
+    쪽 번호(`122`·`11`)만 남긴다 — 같은 객체를 그대로 두면 바뀌지 않은 것(사용자 지시 '픽스 되지 않은 것 수정')."""
+    out = []
+    for w in rest:
+        s = str(w["surface"])
+        if w is page_w:
+            out.append(w if s == str(page) else dict(w, surface=str(page)))
+        elif not _LEADER.match(s):
+            out.append(w)
+    return out
 
 
 def fix_toc_page(ocr_mod, img, res: dict, dpi: int, lang: str = "kor+eng") -> bool:
@@ -590,21 +696,12 @@ def fix_toc_page(ocr_mod, img, res: dict, dpi: int, lang: str = "kor+eng") -> bo
     if not lines or not looks_like_toc(lines):
         return False
     width = float(img.size[0])
-    for ln in lines:
-        ln["words"] = list(ln["words"])
-    try:
-        sparse = group_lines(ocr_mod.ocr_image(img, lang=lang, psm=TOC_PSM, dpi=dpi).get("words") or [], dpi, raw=True)
-    except Exception:
-        sparse = []
-    changed, extra = _fill_toc_from_sparse(lines, sparse, width) if sparse else (False, [])
-    lines = sorted(lines + extra, key=lambda ln: ln["cy"])
-    out = []
-    for ln in lines:
-        tp = _toc_parts(ln, width)
-        tw = tp["ws"]
-        new = None
+
+    def reread(ln) -> bool:
+        """줄의 제목 잡글 낱말을 `kor` 로 다시 읽고 벌린 제목 끝 음절을 더한다 — `ln["words"]` 를 바꾼다."""
+        tw = _toc_parts(ln, width)["ws"]
         try:
-            new = _reread_toc_words(ocr_mod, img, tw, drop_tail=False)    # 쪽 글은 지우지 않는다(점선 리더 조각은 책갈피 쪽이 뗀다)
+            new = _reread_toc_words(ocr_mod, img, tw, drop_tail=False)    # 지우는 것은 아래 `_clean_toc_rest` 가 제목 뒤에서만
         except Exception:
             new = None
         cur = list(new) if new is not None else list(tw)
@@ -614,14 +711,38 @@ def fix_toc_page(ocr_mod, img, res: dict, dpi: int, lang: str = "kor+eng") -> bo
             tail = None
         if tail is not None:
             cur.append(tail)
+        if new is None and tail is None:
+            return False
         # 벌린 음절은 붙이지 않는다 — Tesseract 는 한글을 음절마다 낱말로 내놓아, 붙임은 쪽 글 잇기(빈틈 규칙)가 정한다
-        if new is not None or tail is not None:
+        ids = {id(w) for w in tw}
+        ln["words"] = sorted(cur + [w for w in ln["words"] if id(w) not in ids], key=lambda w: float(w["x0"]))
+        return True
+
+    changed = False
+    for ln in lines:                    # 먼저 `kor` 다시 읽기 — 흩어진 글 판독의 번호 고침이 `Ds Fi`(=`1. 서 론`)의 `Ds` 만 `1.` 로 바꾸지 않게
+        ln["words"] = list(ln["words"])
+        changed = reread(ln) or changed
+    try:
+        sparse = group_lines(ocr_mod.ocr_image(img, lang=lang, psm=TOC_PSM, dpi=dpi).get("words") or [], dpi, raw=True)
+    except Exception:
+        sparse = []
+    filled, extra = _fill_toc_from_sparse(lines, sparse, width) if sparse else (False, [])
+    for ln in extra:
+        reread(ln)
+    changed = changed or filled
+    out = []
+    for ln in sorted(lines + extra, key=lambda ln: ln["cy"]):
+        tp = _toc_parts(ln, width)
+        ids = {id(w) for w in tp["ws"]}
+        rest = [w for w in ln["words"] if id(w) not in ids]
+        clean = _clean_toc_rest(rest, ln["words"][-1] if tp["page"] is not None else None, tp["page"])
+        if clean != rest:
             changed = True
-            ids = {id(w) for w in tw}
-            rest = [w for w in ln["words"] if id(w) not in ids]     # 쪽 번호·점선 리더는 그대로
-            out.append(sorted(cur + rest, key=lambda w: float(w["x0"])))
+            out.append(sorted(list(tp["ws"]) + clean, key=lambda w: float(w["x0"])))
         else:
             out.append(list(ln["words"]))
+    if _fix_by_page_vocab(out):
+        changed = True
     if not changed:
         return False
     res["words"] = [w for ws in out for w in ws]
