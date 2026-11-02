@@ -1579,30 +1579,43 @@ class StudyMixin:
     def _action_build_study(self, checked: bool = False, also_bookmarks: bool = False):
         """현재 PDF 를 OCR·어휘 분석해 study.db 생성 (백그라운드).
         also_bookmarks=True 면 같은 OCR 결과(study.db)를 재사용해 책갈피까지 동시 생성."""
+        self._study_build_run(also_bookmarks=also_bookmarks, with_vocab=True)
+
+    def _study_build_run(self, *, also_bookmarks: bool, with_vocab: bool):
+        """단어장 생성·일괄 OCR 의 공용 속 — 모든 언어가 쓴다(다국어 SOT §7 SHARED, 261102-6).
+
+        일괄 OCR(마스터 §4.4.2 ②'', 사용자 지시 '단어장·책갈피 → 일괄 OCR, OCR+단어장+책갈피를 한번에'):
+        전 쪽 OCR(보류 저장소 — [저장] 때만 남는다, 단어학습 SOT §14.21) → 단어장(한국어 화면만 — `with_vocab`)
+        → 책갈피(`_build_bookmarks_from_study`, 자동 생성과 같은 길). 무거운 일은 모두 배경(응답성 SOT §4)."""
         if not self._study_pdf or not Path(self._study_pdf).exists():
-            QMessageBox.information(self, "단어장", "먼저 PDF 를 여세요.")
+            QMessageBox.information(self, tr("일괄 OCR") if not with_vocab else tr("단어장"), tr("먼저 PDF를 여세요."))
             return
         path = Path(self._study_pdf)
-        self._lite_heavy_notice(tr("단어장 생성"))          # 261021-1(응답성 SOT §4.7)
+        what = tr("일괄 OCR") if also_bookmarks else tr("단어장 생성")
+        self._lite_heavy_notice(what)          # 261021-1(응답성 SOT §4.7)
         # 261019-3(마스터 §4.7.21): 책갈피는 우클릭한(없으면 활성 창의) 책갈피창에
         bm_tree = getattr(self, "_study_bm_tree", None) or self._bm_tree_for_pane()
         self._study_bm_tree = None
         # 261019-2(마스터 §4.7.0): 책갈피까지 만들면 편집 모드에서만 — 아니면 켤지 묻는다
-        if also_bookmarks and not bm_tree.ensure_edit_mode(tr("단어장·책갈피 동시 생성")):
+        if also_bookmarks and not bm_tree.ensure_edit_mode(what):
             return
         lang = self._detect_study_lang(path)
-        what = "단어장·책갈피 동시 생성" if also_bookmarks else "단어장 생성"
-        extra = ("\n(OCR 1회로 단어장과 책갈피를 함께 만듭니다 — 따로 만드는 것보다 빠릅니다.)"
-                 if also_bookmarks else "")
+        if also_bookmarks and with_vocab:
+            extra = tr("\n(OCR 한 번으로 단어장과 책갈피를 함께 만듭니다 — 따로 만드는 것보다 빠릅니다.)")
+        elif also_bookmarks:
+            extra = tr("\n(OCR 한 번으로 글자층과 책갈피를 함께 만듭니다.)")
+        else:
+            extra = ""
         # 260615-6: ① 이미 단어장이 있으면 '다시 만들기' 를 묻고, 예 → 기존 캐시 삭제 후 재생성
         from viewer.study.study_store import file_key_for
         store = self._study_get_store()
         fkey = file_key_for(path)
         done_n = len(store.done_pages(fkey))
-        already = store.vocab_count(fkey) > 0 or done_n > 0
+        has_vocab = store.vocab_count(fkey) > 0
+        already = has_vocab or done_n > 0
         # 261019-1(응답성 SOT §4.6): 어휘 없이 OCR 쪽만 있으면 **중지했던 것** — 이어서 할지 묻는다
         #   (종전에는 '다시 만들기'로만 물어 읽은 쪽을 지우고 처음부터 했다).
-        if already and store.vocab_count(fkey) == 0:
+        if already and (not has_vocab or not with_vocab):
             box = QMessageBox(self)
             box.setWindowTitle(what)
             box.setText(tr("'{name}' 은(는) {n}쪽까지 읽다 멈췄습니다. 이어서 할까요?").format(name=path.name, n=done_n))
@@ -1617,25 +1630,26 @@ class StudyMixin:
             elif c is not b_resume:
                 return
         elif already:
-            msg = (f"'{path.name}' 의 단어장이 이미 있습니다.\n"
-                   f"기존 내용을 삭제하고 다시 만들까요?\n(감지 언어: {lang}){extra}")
-            if QMessageBox.question(self, what + " — 다시 만들기", msg) \
+            msg = tr("'{name}' 의 단어장이 이미 있습니다.\n기존 내용을 삭제하고 다시 만들까요?\n(감지 언어: {lang}){extra}") \
+                .format(name=path.name, lang=lang, extra=extra)
+            if QMessageBox.question(self, tr("{what} — 다시 만들기").format(what=what), msg) \
                     != QMessageBox.StandardButton.Yes:
                 return
             store.clear_file(fkey)        # 재생성 위해 기존 OCR·어휘 캐시 삭제
         else:
-            msg = (f"'{path.name}' 을(를) OCR·분석합니다.\n"
-                   f"감지 언어: {lang}.  분량에 따라 수 분 걸릴 수 있습니다.{extra}\n계속할까요?")
+            msg = tr("'{name}' 을(를) OCR·분석합니다.\n감지 언어: {lang}.  분량에 따라 수 분 걸릴 수 있습니다.{extra}\n계속할까요?") \
+                .format(name=path.name, lang=lang, extra=extra)
             if QMessageBox.question(self, what, msg) != QMessageBox.StandardButton.Yes:
                 return
-        self.study_panel.set_building(True)
+        if with_vocab:
+            self.study_panel.set_building(True)
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)        # busy until first progress
         # 260615-14: 인터넷 사전 포함 옵션이면 빌드 시 각 단어를 온라인 조회·캐시
         online_prefs = {k: self._prefs.get(k) for k in
                         ("online_dict_enabled", "stdict_key",
                          "onterm_key")}
-        worker = StudyBuildWorker(path, lang=lang, online_prefs=online_prefs)
+        worker = StudyBuildWorker(path, lang=lang, with_vocab=with_vocab, online_prefs=online_prefs)
         self._study_worker = worker
         jid = "study_build"
         self.job_add(jid, f"{what} — {path.name}", worker.request_cancel)      # 261019-1: 작업 창에서 중지
@@ -1648,7 +1662,8 @@ class StudyMixin:
             self.job_progress(jid, f"{m} ({done}/{total})")
 
         def on_done(summary):
-            self.study_panel.set_building(False)
+            if with_vocab:
+                self.study_panel.set_building(False)
             self.progress.setVisible(False)
             self.job_done(jid)
             if summary.get("cancelled") and not summary.get("error"):
@@ -1667,28 +1682,33 @@ class StudyMixin:
                         hint = ""
                     if hint:
                         msg = hint
-                QMessageBox.warning(self, "단어장", f"실패: {msg}")
-                self.status.showMessage("단어장 생성 실패", 4000)
+                QMessageBox.warning(self, what, tr("실패: {msg}").format(msg=msg))
+                self.status.showMessage(tr("{what} 실패").format(what=what), 4000)
                 return
             v = (summary.get("vocab") or {}).get("vocab", 0)
             if also_bookmarks:
                 # 재OCR 없이 책갈피(261019-3: 그 책갈피창에). 261102-3: 자동 생성과 같은 길 — 배경에서, 끝나면 따로 알린다
-                self._build_bookmarks_from_study(path, bt=bm_tree)
-            self.search_tabs.setCurrentWidget(self.study_panel)
-            self._refresh_study_panel(self.main_view.current_page())
+                self._build_bookmarks_from_study(path, bt=bm_tree, what=what)
+            if with_vocab:
+                self.search_tabs.setCurrentWidget(self.study_panel)
+                self._refresh_study_panel(self.main_view.current_page())
             tail = tr(", 책갈피는 만드는 중") if also_bookmarks else ""
             on = summary.get("online") or 0
-            on_tail = f", 인터넷 사전 {on}개" if on else ""
-            self.status.showMessage(
-                f"{what} 완료: {summary.get('done')}p, 어휘 {v}{tail}{on_tail}", 6000)
+            on_tail = tr(", 인터넷 사전 {on}개").format(on=on) if on else ""
+            if with_vocab:
+                self.status.showMessage(tr("{what} 완료: {done}p, 어휘 {v}{tail}{on_tail}").format(
+                    what=what, done=summary.get("done"), v=v, tail=tail, on_tail=on_tail), 6000)
+            else:
+                self.status.showMessage(tr("{what} 완료: {done}p{tail}").format(
+                    what=what, done=summary.get("done"), tail=tail), 6000)
 
         worker.progress.connect(on_prog)
         worker.finished.connect(on_done)
-        worker.error.connect(lambda e: self.status.showMessage(f"단어장 오류: {e}", 5000))
+        worker.error.connect(lambda e: self.status.showMessage(tr("{what} 오류: {e}").format(what=what, e=e), 5000))
         worker.error.connect(lambda _e: self.job_done(jid))
         run_in_thread(worker, self._study_threads)
 
-    def _build_bookmarks_from_study(self, path, bt=None) -> None:
+    def _build_bookmarks_from_study(self, path, bt=None, what: str = "") -> None:
         """방금 만든 OCR(study.db·보류 저장소)을 다시 써서 책갈피를 만든다 — 새로 읽는 것은 목차 쪽 판독·쪽 번호 띠뿐.
 
         261102-3(마스터 §4.4.2 ②''·§4.4.3 T1·T2, 사용자 지시): 종전에는 전 쪽 OCR 헤딩만 써 목차 쪽 줄과
@@ -1707,7 +1727,8 @@ class StudyMixin:
             self.job_done(jid)
             bms = list(res.get("bookmarks") or []) if res.get("phase") == "done" else []
             # 261019-2(점검): 몇 분 사이에 편집 모드를 껐을 수 있다 — 넣기 직전에 다시 본다(마스터 §4.7.0)
-            if not bms or not tree.has_file(str(path), warn=True)                     or not tree.ensure_edit_mode(tr("단어장·책갈피 동시 생성")):
+            if not bms or not tree.has_file(str(path), warn=True) \
+                    or not tree.ensure_edit_mode(what or tr("일괄 OCR")):
                 return
             if tree.replace_file_bookmarks(str(path), [(str(t), int(p), int(lv)) for t, p, lv in bms]):
                 self.status.showMessage(

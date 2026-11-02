@@ -33,7 +33,8 @@ KOREA_ONLY = {
 SHARED = {
     "viewer/study/ocr.py": None,                 # OCR 엔진(텍스트 창·OCR 읽기·구성요소 설치)
     "viewer/study/ocr_headings.py": None,        # 책갈피 자동 생성의 스캔본 헤딩
-    "viewer/study_controller.py": {"_on_main_mp3"},   # 본문 mp3 단추
+    "viewer/study_controller.py": {"_on_main_mp3",    # 본문 mp3 단추
+                                   "_study_build_run", "_build_bookmarks_from_study"},   # 261102-6 일괄 OCR(모든 언어)
 }
 PENDING = {
 }

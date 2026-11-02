@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""260606-11: 창별 읽기/mp3 버튼, OCR 제안, 단어장·책갈피 동시 생성(OCR재사용)."""
+"""260606-11: 창별 읽기/mp3 버튼, OCR 제안, 일괄 OCR(종전 단어장·책갈피 동시 생성, OCR재사용)."""
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.stdout.reconfigure(encoding="utf-8")
@@ -38,7 +38,7 @@ check("read_aloud 타깃=왼쪽창", mw.read_aloud._v is mw._mv[0])
 mw.act_split.setChecked(False)
 
 # 결합 빌드/제안 메서드 존재
-for name in ("_action_build_study_and_bookmarks", "_maybe_offer_ocr",
+for name in ("_action_batch_ocr", "_maybe_offer_ocr",
              "_build_bookmarks_from_study", "_pane_read_toggle"):
     check(f"{name} 존재", callable(getattr(mw, name, None)))
 

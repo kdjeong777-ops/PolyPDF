@@ -78,7 +78,7 @@ try:
         acts = [va["study"], va["law"], va["kcsc"], va["kipo"], mw._act_tr_files] + list(mw._ko_only_acts)
         return acts, [a.text() for a in acts if a.isVisible() or a.isEnabled()]
     acts, bad = menu_state(mw)
-    chk(len(acts) >= 8, "B 한국 전용 메뉴 항목을 모두 잡았다", str(len(acts)))
+    chk(len(acts) >= 7, "B 한국 전용 메뉴 항목을 모두 잡았다", str(len(acts)))   # 261102-6: 일괄 OCR 은 모든 언어 — 하나 줄었다
     chk(not bad, "B en 메뉴 항목이 숨김·비활성", str(bad))
 
     mw._gate_api_dependent_ui(dict(mw._prefs, **KEYS))           # 키를 넣고 설정 확인한 것과 같다
@@ -91,7 +91,8 @@ try:
     chk(mw.search_tabs.currentWidget() is not mw.study_panel, "D en 단어장 탭이 열려 있지 않다")
 
     popups.clear()
-    for nm in ("_vm_study", "_action_build_study", "_action_build_study_and_bookmarks",
+    # 261102-6: 일괄 OCR(종전 단어장·책갈피 동시 생성)은 모든 언어 — 이 목록에서 뺐다
+    for nm in ("_vm_study", "_action_build_study",
                "_action_law_search", "_action_kcsc_search", "_action_kipo_search",
                "_action_translate_files", "_action_dict_manager", "_action_import_glossary",
                "_action_export_dict", "_action_backup_dict", "_action_restore_dict",

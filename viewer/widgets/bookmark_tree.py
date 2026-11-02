@@ -206,7 +206,7 @@ class BookmarkTree(QWidget):
     bookmarksReverted = pyqtSignal()         # 261019-3: 저장 전 고침을 버렸다(취소·편집 끝 '저장 안 함') — 따라간 창은 디스크로 되돌린다
     createBookmarksRequested = pyqtSignal(str)  # 260606-4: 파일 우클릭 '책갈피 생성'(자동생성 다이얼로그)
     createStudyRequested = pyqtSignal(str)      # 260606-5: 파일 우클릭 '단어장 생성'
-    createStudyBookmarksRequested = pyqtSignal(str)  # 260606-11: '단어장·책갈피 동시 생성'
+    createStudyBookmarksRequested = pyqtSignal(str)  # 260606-11 · 261102-6: 일괄 OCR(종전 단어장·책갈피 동시 생성)
     mergeFilesRequested = pyqtSignal(list)      # 260606-13: 선택 파일들 병합(경로 리스트)
     translateFileRequested = pyqtSignal(str)    # 260621-P0: 파일 우클릭 '번역'(단일)
     flattenFileRequested = pyqtSignal(str)      # 260930-2(§4.7.13): 파일 우클릭 '평탄화해서 내보내기'(261011-2 이름)
@@ -2729,7 +2729,8 @@ class BookmarkTree(QWidget):
             # 260902-5: '책갈피 편집'(편집모드 진입) 삭제 — 편집 버튼과 중복이고 책갈피 수정과 혼동.
             if korea_only_visible():                # 단어장은 한국 전용(다국어 SOT §7)
                 act_study = menu.addAction(tr("단어장 생성"))
-                act_study_bm = menu.addAction(tr("단어장·책갈피 동시 생성"))
+            # 261102-6(사용자 지시): 종전 '단어장·책갈피 동시 생성' — 모든 언어(단어장 단계만 한국어 화면)
+            act_study_bm = menu.addAction(tr("일괄 OCR"))
             act_tags = menu.addAction(tr("해시태그 편집..."))   # 260623: 파일 분류 태그
             # 260930-2 '일반뷰어용으로 저장' 은 261008-1 에 위쪽 저장 그룹으로 옮겼다.
             menu.addSeparator()

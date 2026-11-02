@@ -1854,8 +1854,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._ko_only_acts.append(_short(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study,
                                               "tools.build_study", tr("단어장 생성")), tr("단어장")))
         _short(_act(tr("책갈피 자동 생성..."), self.action_open_bookmarker, "tools.bookmarker", tr("책갈피 생성")), tr("책갈피"))
-        self._ko_only_acts.append(_short(_act(tr("단어장·책갈피 동시 생성..."), self._action_build_study_and_bookmarks,
-                                              "tools.study_and_bookmarks"), tr("단어장·책갈피")))
+        # 261102-6(사용자 지시): 종전 '단어장·책갈피 동시 생성' → 일괄 OCR — 모든 언어(단어장 단계는 한국어 화면만).
+        #   명령 id 는 그대로(사용자 단축키·모음 설정이 이 id 로 저장돼 있다)
+        _short(_act(tr("일괄 OCR (OCR·단어장·책갈피)..."), self._action_batch_ocr,
+                    "tools.study_and_bookmarks", tr("일괄 OCR"),
+                    tip=tr("OCR 로 모든 쪽을 읽고 단어장(한국어 화면)과 책갈피를 한 번에 만듭니다")), tr("일괄 OCR"))
         _sub(tr("태그"), (                               # 태그 SOT §8.2·§8.5(260829 P2) — 261031-16: 종전 '태그 자동 부여'
             (tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True)),
             (tr("새 태그 후보 검토…"), self._autotag_review_candidates),
@@ -2644,7 +2647,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.createBookmarksRequested.connect(
                 lambda f, b=_bt: self.action_open_bookmarker(default_file=f, bt=b))
             _bt.createStudyBookmarksRequested.connect(
-                lambda f, b=_bt: self._action_build_study_and_bookmarks(file_path=f, bt=b))
+                lambda f, b=_bt: self._action_batch_ocr(file_path=f, bt=b))
             _bt.bookmarksChanged.connect(lambda p, b=_bt, o=_other: o.mirror_file_from(b, p))
             _bt.bookmarksReverted.connect(lambda o=_other: o.reload_mirrored())
         self.bookmark_tree.createStudyRequested.connect(self._on_create_study_requested)
@@ -4315,15 +4318,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._load_main(HistoryItem(str(p), 0, "", "bookmark"))
         self._action_build_study()
 
-    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
-    def _action_build_study_and_bookmarks(self, checked: bool = False, file_path: str = None, bt=None):
-        """260606-11: 단어장·책갈피 동시 생성(OCR 1회 공유). 도구 메뉴/트리 우클릭/읽기 제안에서.
-        261019-3: `bt` = 우클릭한 책갈피창(없으면 활성 창의 책갈피창) — 책갈피는 그 창에."""
+    def _action_batch_ocr(self, checked: bool = False, file_path: str = None, bt=None):
+        """260606-11: OCR 1회로 단어장·책갈피. 도구 메뉴/트리 우클릭/읽기 제안에서.
+        261019-3: `bt` = 우클릭한 책갈피창(없으면 활성 창의 책갈피창) — 책갈피는 그 창에.
+        261102-6(사용자 지시): 이름 '일괄 OCR', **모든 언어** — 단어장 단계만 한국어 화면에서(다국어 SOT §7)."""
         self._study_bm_tree = bt
         cur = self.main_view.current_file() if self.main_view else None
         p = Path(file_path) if file_path else (Path(cur) if cur else None)
         if not p or not p.exists() or p.suffix.lower() != ".pdf":
-            QMessageBox.information(self, tr("단어장·책갈피"), tr("먼저 PDF를 여세요."))
+            QMessageBox.information(self, tr("일괄 OCR"), tr("먼저 PDF를 여세요."))
             return
         try:
             same = cur and Path(cur).resolve() == p.resolve()
@@ -4331,7 +4334,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             same = False
         if not same:
             self._load_main(HistoryItem(str(p), 0, "", "bookmark"))
-        self._action_build_study(also_bookmarks=True)
+        self._study_build_run(also_bookmarks=True, with_vocab=korea_only_visible())
 
     def _maybe_offer_ocr(self, view) -> bool:
         """260606-11: 읽을 텍스트가 없고 스캔/이미지면 OCR(단어장+책갈피) 제안.
@@ -4367,7 +4370,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 tr("읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
                 "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"))
             if ret == QMessageBox.StandardButton.Yes:
-                self._action_build_study_and_bookmarks(file_path=f)
+                self._action_batch_ocr(file_path=f)
                 return True
             return False
         except Exception:

@@ -83,7 +83,7 @@ mark_txt = [w.text() for w in (_row_t.widgetForAction(a) for a in _row_t.actions
 chk(mark_txt == ["생성", "PDF"], "② 생성·PDF 묶음은 바깥 왼쪽 글자", str(mark_txt))
 short = {cmd_id(a): _row_t.widgetForAction(a).text() for a in _row_t.actions() if cmd_id(a) and _row_t.widgetForAction(a)}
 chk(short.get("tools.build_study") == "단어장" and short.get("tools.bookmarker") == "책갈피"
-    and short.get("tools.study_and_bookmarks") == "단어장·책갈피" and short.get("tools.img2pdf") == "이미지"
+    and short.get("tools.study_and_bookmarks") == "일괄 OCR" and short.get("tools.img2pdf") == "이미지"
     and short.get("tools.merge") == "병합" and short.get("tools.nup") == "다단",
     "② 도구 탭 단추는 짧은 이름(ribbonShort)", str(short))
 chk(mw._cmds["tools.build_study"].iconText() == "단어장 생성" and mw._cmds["tools.merge"].iconText() == "PDF병합",
