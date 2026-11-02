@@ -101,6 +101,14 @@ chk(("4.5.2 배합설계", 9, 2) in got, "D2 '45.2' 는 뒤 번호 4.5.3 을 보
 chk(not any("계측" in t for t, _p, _l in got) and ("2.1.2 도로시험", 7, 2) in got,
     "D3 번호 순서에 끼어든 줄('8 계측' — 2.1.1 과 2.1.2 사이)은 버린다", str(got))
 
+from viewer.study.ocr_headings import numbered_level
+nl = lambda t: numbered_level(t, 20, 14)
+chk(nl("2.1.1개요") == 2 and nl("1.서론") == 0 and nl("1.1 연구 배경") == 1,
+    "D4 번호 뒤 빈칸을 OCR 이 먹어도 제목(2.1.1개요·1.서론)", str([nl("2.1.1개요"), nl("1.서론")]))
+chk(nl("3개월 후 측정") is None and nl("2019년 조사") is None
+    and nl("4.5.2 배합설계 및 시험 결과를 정리하면 다음과 같다.") is None,
+    "D5 숫자로 시작해도 번호 제목이 아니거나 뒤 문장이 길면 아니다")
+
 print()
 print("ALL PASS" if not fails else f"FAILED {len(fails)}: {fails}")
 sys.exit(1 if fails else 0)

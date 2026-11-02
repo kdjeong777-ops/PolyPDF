@@ -234,7 +234,8 @@ def _extract_with_pages(op, *, use_font_auto, font_ratio, scanned_only, progress
 
 
 # 261019-1: 십진 번호 제목('1. 서론', '1.1 연구의 배경', '2.1.1 개요') — 짧은 줄만, 문장은 제외
-_DEC_HEADING = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+(?=[가-힣A-Za-z(])")
+# 261102-3(사용자 지시): 점이 있는 다단 번호는 OCR 이 빈칸을 먹어도(`2.1.1개요`) 받는다 — 한 단 숫자는 점(`1.서론`)이나 빈칸이 있어야(`3개월` 은 아니다)
+_DEC_HEADING = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){1,3})\.?\s*(?=[가-힣A-Za-z(])|^\s*(\d{1,2})(?:\.\s*|\s+)(?=[가-힣A-Za-z(])")
 _SENTENCE_END = re.compile(r"다\s*[\.。]?$|[\.。,;:]$")       # '개요'·'요약' 은 제목이다 — 문장 끝만
 
 
@@ -247,7 +248,7 @@ def numbered_level(text: str, h: float, body_h: float) -> Optional[int]:
     rest = text[m.end():].strip()
     if not rest or len(rest) > 40 or len(rest.split()) > 8 or _SENTENCE_END.search(rest):
         return None
-    depth = m.group(1).count(".") + 1
+    depth = (m.group(1) or m.group(2)).count(".") + 1
     if depth == 1 and h < body_h * 1.15:
         return None
     return min(5, depth - 1)
