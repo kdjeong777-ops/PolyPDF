@@ -82,6 +82,25 @@ except Exception as e:
     kept = [f"error {e!r}"]
 chk(kept == [("1.1 A", 12, 1), ("8 B", 37, 0)], "C1 목차 쪽(4~6)을 가리키는 헤딩은 버린다", str(kept))
 
+# ── D. 번호 모양대로 하위 책갈피(사용자 추가 지시) — 헤딩 길 ─────────────
+from viewer.study.ocr_headings import _bookmarks_from_page_lines
+def line(text, y, h=20.0):
+    ws, x = [], 50.0
+    for t in text.split():
+        ws.append({"surface": t, "x0": x, "y0": y, "x1": x + 12 * len(t), "y1": y + h}); x += 12 * len(t) + 8
+    return {"text": text, "h": h, "x0": 50.0, "y0": y, "words": ws}
+body = [line(f"본문 줄 {k} 글자가 이어진다 여기에", 300 + 22 * k, 14.0) for k in range(8)]
+seq = [(1, "1. 서론"), (2, "1.1 연구 배경"), (3, "2. 포장 일반"), (4, "2.1 포장설계"), (5, "2.1.1 개요"),
+       (6, "8 계측"), (7, "2.1.2 도로시험"), (9, "45.2 배합설계"), (10, "4.5.3 시험시공"), (11, "5. 사후관측")]
+page_lines = {p - 1: [line(t, 100)] + body for p, t in seq}
+got = [(b.title, b.page, b.level) for b in _bookmarks_from_page_lines(page_lines, use_font_auto=False)]
+lv = {t.split()[0]: l for t, _p, l in got}
+chk(lv.get("1.") == 0 and lv.get("1.1") == 1 and lv.get("2.1.1") == 2 and lv.get("5.") == 0,
+    "D1 1 / 1.1 / 1.1.1 → 단계 0 / 1 / 2", str(got))
+chk(("4.5.2 배합설계", 9, 2) in got, "D2 '45.2' 는 뒤 번호 4.5.3 을 보고 4.5.2(단계 2)로", str(got))
+chk(not any("계측" in t for t, _p, _l in got) and ("2.1.2 도로시험", 7, 2) in got,
+    "D3 번호 순서에 끼어든 줄('8 계측' — 2.1.1 과 2.1.2 사이)은 버린다", str(got))
+
 print()
 print("ALL PASS" if not fails else f"FAILED {len(fails)}: {fails}")
 sys.exit(1 if fails else 0)

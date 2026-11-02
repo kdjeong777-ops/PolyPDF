@@ -303,7 +303,36 @@ def _bookmarks_from_page_lines(page_lines: dict, *, use_font_auto: bool = True,
                 continue
             page_done.add(title)
             bookmarks.append(Bookmark(title=title, page=pi + 1, level=lvl))
-    return bookmarks
+    return _fix_decimal_levels(bookmarks)
+
+
+def _fix_decimal_levels(bookmarks: list) -> list:
+    """261102-3(사용자 지시 '1, 1.1, 1.1.1 모양대로 하위 책갈피'): 번호 제목의 점을 앞뒤 번호로 되살리고
+    (OCR 이 `4.5.2` 를 `45.2` 로 — 목차 길의 D1 `toc_parse.fix_decimal_numbers` 를 그대로), 번호 깊이로 레벨을 다시 매긴다."""
+    try:
+        from viewer import toc_parse as _tp
+    except Exception:
+        return bookmarks
+    rows = [{"title": b.title} for b in bookmarks]
+    if not _tp.fix_decimal_numbers(rows):
+        return bookmarks
+    for b, r in zip(bookmarks, rows):
+        b.title = r["title"]
+        lv = _tp.decimal_level(b.title)
+        if lv >= 0 and regex_level(b.title) is None:
+            b.level = lv
+    # 번호 순서에 끼어든 줄은 버린다 — 앞 번호 다음일 수 없고 뒤 번호가 앞 번호에 바로 이어지면
+    #   (`_96` 37쪽: 표 칸 '8 계측' 이 2.4.1 과 2.4.2 사이에). 장 머리(정규식)는 건드리지 않는다
+    nums = [None if regex_level(b.title) is not None else _tp._dec_parts(b.title) for b in bookmarks]
+    keep, prev = [], None
+    for i, (b, cur) in enumerate(zip(bookmarks, nums)):
+        if cur:
+            nxt = next((n for n in nums[i + 1:] if n), None)
+            if prev is not None and not _tp._is_successor(prev, cur)                     and (nxt is None or _tp._is_successor(prev, nxt)):
+                continue
+            prev = cur
+        keep.append(b)
+    return keep
 
 
 def extract_headings_from_store(store, file_key: str, page_count: int, *,

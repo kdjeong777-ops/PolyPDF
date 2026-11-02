@@ -171,6 +171,12 @@ def fix_decimal_numbers(rows: list[dict]) -> bool:
             prev = cur; continue
         digits = re.sub(r"\D", "", m.group("num"))
         cand = [c for c in _splits(digits) if _is_successor(prev, c)]
+        if not cand:
+            # 261102-3: 앞 번호로 못 고치면 **뒤 번호**가 그것의 다음인 나눔으로(앞 장을 OCR 이 놓쳤을 때 — '45.2' 뒤 '4.5.3')
+            nxt = next((_dec_parts(rr.get("title", "")) for rr in rows[rows.index(r) + 1:]
+                        if _dec_parts(rr.get("title", ""))), None)
+            if nxt is not None:
+                cand = [c for c in _splits(digits) if len(c) >= 2 and _is_successor(c, nxt) and c != cur]
         if cand:
             best = min(cand, key=lambda c: (abs(len(c) - len(cur)), len(c)))
             r["title"] = ".".join(map(str, best)) + ("." if len(best) == 1 else "") + " " + t[m.end():].strip()
