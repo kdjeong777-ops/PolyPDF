@@ -1253,6 +1253,12 @@ class _PdfGraphicsView(QGraphicsView):
             self._fling = True          # 손은 이미 떠났다
         elif phase == Qt.ScrollPhase.ScrollEnd:
             self._fling = False
+        else:
+            # 261102-4(입력 SOT §2.3, 사용자 보고 '책갈피를 만든 뒤 휠로 본문이 안 움직였다 — 키보드는 됐고 다시 켜야 됐다'):
+            #   단계 없는 보통 마우스 휠은 관성일 수 없다 — 여기서 지운다. 종전에는 관성의 `ScrollEnd` 가 끊기면(관성 도중
+            #   모달 창이 뜨거나 창이 멈추거나 다른 창으로 넘어가 버려지면) `_fling` 이 남아, 그 뒤 모든 마우스 휠이 관성으로
+            #   취급돼 쪽을 넘기지 않고 반대 방향은 버려졌다(`test_wheel_fling_stuck_261102`).
+            self._fling = False
 
         _dy = event.angleDelta().y()
         if not self._fling and _dy:
