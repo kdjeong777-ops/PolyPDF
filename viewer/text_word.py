@@ -3,7 +3,7 @@
 
 - 범위는 부르는 쪽이 정한다 — 현재 쪽 / 쪽 범위 / 문서 전체(사용자 결정 260908).
 - 문단 스타일은 창에서 정한 값(글꼴·크기·굵기·자간·줄간격)을 그대로 얹는다.
-  제목은 `Heading 1`, 내용은 `Normal` 위에 올린다 — Word 의 목차·탐색창이 그대로 먹는다.
+  261102-2(SOT §3.4·§7, 사용자 결정 "Word도 본문 하나로"): 창과 같게 모두 '내용'(`Normal`) — 판정한 제목은 쓰지 않는다.
 - 표는 **글줄**로 나간다(SOT §3.3·§7). 표 개체로 만들면 원본 구조를 반쯤 맞게 복원해
   오히려 고치기 번거롭다.
 """
@@ -83,7 +83,7 @@ def export_pages_to_docx(pdf_path, doc_fitz, pages, dst, styles, *,
                     rows = fix_rows(pg, rows)
                 except Exception:
                     pass
-            rows = [dict(r) for r in rows or []]
+            rows = tx.as_body([dict(r) for r in rows or []])   # 261102-2(SOT §3.4·§7): 창과 같게 본문 하나
             # 261101-1(텍스트 창 SOT §3.7.12): 쪽 끝에서 끊긴 문장은 다음 쪽 첫 줄과 잇는다 — 이어진 쪽끼리만
             if per_page and per_page[-1][0] + 1 == pg:
                 tx.page_carry(per_page[-1][1], rows)

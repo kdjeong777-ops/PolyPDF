@@ -168,7 +168,8 @@ try:
         from docx import Document as _D
         d2 = _D(str(dst))
         heads = [p.text for p in d2.paragraphs if p.style.name.startswith("Heading")]
-        chk(len(heads) >= 1, "⑧ 제목 줄이 Word 제목 스타일로 나간다", str(heads[:1]))
+        # 261102-2(SOT §3.4·§7, 사용자 결정 "Word도 본문 하나로"): 창과 같게 제목 스타일을 쓰지 않는다
+        chk(not heads and any(p.text.strip() for p in d2.paragraphs), "⑧ Word 저장은 본문 하나 — 제목 스타일 없음", str(heads[:1]))
     except Exception as e:
         chk(False, "⑧ Word 파일을 다시 읽을 수 있다", str(e))
     from viewer.app import MainWindow
