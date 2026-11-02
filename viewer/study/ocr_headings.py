@@ -248,6 +248,10 @@ def numbered_level(text: str, h: float, body_h: float) -> Optional[int]:
     rest = text[m.end():].strip()
     if not rest or len(rest) > 40 or len(rest.split()) > 8 or _SENTENCE_END.search(rest):
         return None
+    # 261102-3: 숫자·기호가 대부분인 잡글(`2 정96393적 0 [oem I id` — 목차·숫자 줄 OCR)은 제목이 아니다
+    body = re.sub(r"\s+", "", rest)
+    if len(re.findall(r"[가-힣A-Za-z]", body)) < 0.6 * len(body):
+        return None
     depth = (m.group(1) or m.group(2)).count(".") + 1
     if depth == 1 and h < body_h * 1.15:
         return None

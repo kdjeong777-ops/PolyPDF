@@ -109,6 +109,18 @@ chk(nl("3개월 후 측정") is None and nl("2019년 조사") is None
     and nl("4.5.2 배합설계 및 시험 결과를 정리하면 다음과 같다.") is None,
     "D5 숫자로 시작해도 번호 제목이 아니거나 뒤 문장이 길면 아니다")
 
+# 사용자 그림(_96, 동시 생성 결과)의 차례 그대로 — 잡글은 빠지고 바른 번호는 그대로, 깨진 점만 고친다
+from viewer._vendor.pdf_bookmarker.core import Bookmark
+from viewer.study.ocr_headings import _fix_decimal_levels
+seq = ["4.4.3 시험시공", "2 정96393적 0 [oem I id", "4.5.1 재료의 품질", "45.2 배합설계", "4.5.3 시험시공",
+       "0 vin I I Nod I I", "5.1 사후관측", "5.1.1 사후관측 항목", "5.1.2 평가기준치", "10 표면처리, 보수개요",
+       "5.1.3.1 교통량 및 환경 조건", "5.2 현장조사", "1. APES BL"]
+got = [(b.title, b.level) for b in _fix_decimal_levels([Bookmark(title=t, page=i + 1, level=0) for i, t in enumerate(seq)])]
+chk(got == [("4.4.3 시험시공", 2), ("4.5.1 재료의 품질", 2), ("4.5.2 배합설계", 2), ("4.5.3 시험시공", 2),
+            ("5.1 사후관측", 1), ("5.1.1 사후관측 항목", 2), ("5.1.2 평가기준치", 2), ("5.1.3.1 교통량 및 환경 조건", 3),
+            ("5.2 현장조사", 1)], "D6 사용자 그림의 차례 — 4.5.1 은 그대로, 45.2→4.5.2, 끼어든·잡글 줄은 버림", str(got))
+chk(nl("2 정96393적 0 [oem I id") is None, "D7 숫자·기호가 대부분인 잡글 줄은 제목이 아니다")
+
 print()
 print("ALL PASS" if not fails else f"FAILED {len(fails)}: {fails}")
 sys.exit(1 if fails else 0)

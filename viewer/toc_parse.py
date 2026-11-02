@@ -125,6 +125,9 @@ def _is_successor(prev: Optional[list[int]], cur: list[int]) -> bool:
     for d in range(len(prev), 0, -1):
         if cur[:-1] == prev[:d - 1] and cur[-1] - prev[d - 1] in (1, 2):
             return True
+        # 261102-3: 그 단에서 +1 한 뒤 곧바로 하위 첫 번호로 — 4.4.3 → 4.5.1, 5.1.2 → 5.1.3.1, 2.4 → 3.1.1
+        if len(cur) > d and cur[:d - 1] == prev[:d - 1] and cur[d - 1] - prev[d - 1] in (1, 2)                 and all(x in (1, 2) for x in cur[d:]):
+            return True
     return False
 
 
@@ -175,8 +178,10 @@ def fix_decimal_numbers(rows: list[dict]) -> bool:
             # 261102-3: 앞 번호로 못 고치면 **뒤 번호**가 그것의 다음인 나눔으로(앞 장을 OCR 이 놓쳤을 때 — '45.2' 뒤 '4.5.3')
             nxt = next((_dec_parts(rr.get("title", "")) for rr in rows[rows.index(r) + 1:]
                         if _dec_parts(rr.get("title", ""))), None)
-            if nxt is not None:
-                cand = [c for c in _splits(digits) if len(c) >= 2 and _is_successor(c, nxt) and c != cur]
+            # 뒤 번호 자체가 깨진 것(`45.2`)이면 근거로 삼지 않는다 — 맨 앞 수가 앞 번호보다 3 넘게 크면 깨진 것
+            if nxt is not None and (prev is None or nxt[0] <= prev[0] + 3):
+                cand = [c for c in _splits(digits) if len(c) >= 2 and _is_successor(c, nxt) and c != cur
+                        and (prev is None or c[0] <= prev[0] + 3)]
         if cand:
             best = min(cand, key=lambda c: (abs(len(c) - len(cur)), len(c)))
             r["title"] = ".".join(map(str, best)) + ("." if len(best) == 1 else "") + " " + t[m.end():].strip()
