@@ -57,6 +57,8 @@ ALLOW = {
     "viewer/settings_store.py": {"기본값",
                                  "옮기지 못함("},                # 261025-8 error.log 기록 — 화면 문구 아님(다국어 SOT §6 로그). 변수로 만든 뒤 _log_error 로 넘겨 이름 규칙(LOGF)이 못 본다
     "viewer/text_word.py": {"python-docx 없음: "},            # 예외 메시지
+    # 261102-2(텍스트 창 SOT §3.5.5): OCR 글에서 찾는 표·그림 제목 낱말 — 문서의 언어(다국어 SOT §7 문서 처리), 화면 문구 아님
+    "viewer/study/ocr.py": {"표", "그림"},
     # 장치 이름 짐작(실제 장치 이름과 맞춰 본다)
     "viewer/recorder.py": {"마이크", "믹스", "스테레오 믹스"},
     # 내부 키(값) — 표시할 때만 tr(값)

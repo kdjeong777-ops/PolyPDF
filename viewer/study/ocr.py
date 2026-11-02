@@ -832,6 +832,7 @@ def _reread_one(img, box, kind, s):
 
 
 _CAPTION_CLOSE = re.compile(r"\d+(?:[-.]\d+)*>")      # 표·그림 번호의 닫는 꺾쇠 `2-1>`·`4-74>`
+_CAPTION_WORDS = ("표", "그림")                      # 문서 글에서 찾는 표·그림 제목 낱말(화면 문구 아님 — 다국어 SOT §7 문서 처리)
 
 
 def _caption_open(texts, idx, key, conf):
@@ -846,7 +847,7 @@ def _caption_open(texts, idx, key, conf):
         ids = [i for i in ids if str(texts[i]).strip()]
         for n, i in enumerate(ids):
             s = str(texts[i]).strip()
-            m = re.match(r"(.*?)(표|그림)" + _CAPTION_CLOSE.pattern + r"$", s)
+            m = re.match(r"(.*?)(" + "|".join(_CAPTION_WORDS) + ")" + _CAPTION_CLOSE.pattern + r"$", s)
             if m is not None:
                 start, word = n, m.group(1) + m.group(2)
             elif _CAPTION_CLOSE.match(s):
@@ -855,9 +856,9 @@ def _caption_open(texts, idx, key, conf):
                 for k in range(n - 1, max(-1, n - 3), -1):
                     word = str(texts[ids[k]]).strip() + word
                     start = k
-                    if word.endswith(("표", "그림")):
+                    if word.endswith(_CAPTION_WORDS):
                         break
-                if not word.endswith(("표", "그림")):
+                if not word.endswith(_CAPTION_WORDS):
                     continue
             else:
                 continue
