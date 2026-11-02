@@ -144,6 +144,71 @@ allt = [r["text"] for r in tx.join_sentences(toc)]
 chk(not any("39 요약" in t or "39요약" in t or "같다 12" in t for t in allt), "⑦ 숫자로 끝나거나 숫자로 시작하는 줄(목차·표의 수)은 잇지 않는다", str(allt))
 chk(tx._starts_list("§ 3 시험 방법"), "⑦ `§` 는 목록 표시 — 앞 줄에 잇지 않는다")
 
+
+# ── ⑧ 목차 쪽 제목의 잡글 낱말(단어학습 SOT §14.8.4) — 사용자 보고 '_96 목차의 1. 서론을 인식하지 못함' ─────────────
+from viewer.study import ocr_pages as opm
+
+
+class FakeOcr:
+    """`read_line_words` 흉내 — 상자 왼쪽 x 로 정해 둔 답을 준다(쪽 그림 좌표)."""
+    def __init__(self, line=(), one=None, band=None):
+        self.line, self.one, self.band = list(line), one or {}, band or []
+
+    def read_line_words(self, img, box, lang, psm=7):
+        if psm == 7 and box[0] > 300:                  # 오른쪽 띠(벌린 제목)
+            return [dict(q) for q in self.band]
+        if psm in (8, 10):
+            return [dict(q) for q in self.one.get(int(box[0]) // 10, [])]
+        return [dict(q) for q in self.line]
+
+
+def Wd(s, x0, x1, conf=0.9, y0=440, y1=495):
+    return {"surface": s, "x0": float(x0), "x1": float(x1), "y0": float(y0), "y1": float(y1), "conf": conf}
+
+
+img = Image.new("RGB", (2400, 1200), "white")
+rt = getattr(opm, "reread_toc_title", None)
+RT = (lambda *a: rt(*a)) if rt else (lambda *a: "없음")                    # noqa: E731
+ws = [Wd("DVD", 266, 376, 0.27), Wd("설계", 412, 493), Wd("법정립을", 560, 722), Wd("위한", 790, 880)]
+got = RT(FakeOcr(line=[Wd("2.1.2", 266, 376, 0.43), Wd("설", 406, 446)]), img, ws)
+chk(got == "2.1.2 설계 법정립을 위한", "⑧ 줄 첫 잡글(`DVD`)은 그 자리의 `kor` 번호로 — 나머지 낱말은 그대로", str(got))
+ws = [Wd("2.2.5", 270, 370), Wd("Asphalt", 400, 560), Wd("Institute(", 570, 760), Wd("AL)", 770, 820, 0.4)]
+chk(RT(FakeOcr(line=[Wd("1", 775, 815, 0.9)]), img, ws) is None, "⑧ 영어 문맥의 토막(`Institute( AL)`)은 한글·번호로 바꾸지 않는다")
+ws = [Wd("2.2.2", 270, 370), Wd("AASHO", 400, 560, 0.9), Wd("설계법", 590, 700)]
+chk(RT(FakeOcr(line=[]), img, ws) is None, "⑧ 영어 약어(`AASHO`)는 `kor` 가 글을 못 내면 그대로")
+ws = [Wd("4.3.3", 270, 370), Wd("ALAR", 400, 560, 0.5)]
+got = RT(FakeOcr(line=[Wd("시험시공", 400, 560, 0.91)]), img, ws)
+chk(got == "4.3.3 시험시공", "⑧ 대문자 4자도 `kor` 가 높은 신뢰도의 한글이면 바꾼다", str(got))
+ws = [Wd("31", 230, 280, 0.9), Wd("고무아스팔트", 300, 500)]
+got = RT(FakeOcr(line=[Wd("3.1", 230, 280, 0.9), Wd("고무아스팔트", 300, 500)]), img, ws)
+chk(got == "3.1 고무아스팔트", "⑧ 점 빠진 줄 첫 번호(`31`)는 숫자가 같을 때만 `3.1`", str(got))
+ws = [Wd("OB", 195, 293, 0.31), Wd("연구", 319, 412)]
+chk(RT(FakeOcr(line=[Wd("13", 195, 293, 0.0)], one={18: [Wd("18", 195, 293, 0.6)]}), img, ws) is None,
+    "⑧ 점 없는 두 자리 수(`OB`→`18`)는 번호로 받지 않는다")
+ws = [Wd("Ds", 180, 278, 0.15), Wd("Fi", 281, 305, 0.07)]
+got = RT(FakeOcr(line=[Wd("1.", 180, 210, 0.92), Wd("서", 240, 275, 0.49)]), img, ws)
+chk(got == "1. 서", "⑧ `Ds Fi` → `1. 서`(덮지 못한 `Fi` 는 한 낱말로 읽어도 글이 없으면 뺀다)", str(got))
+ws = [Wd("단독상승9", 230, 420), Wd("/113", 470, 560, 0.4)]
+chk(RT(FakeOcr(line=[Wd("7113", 470, 560, 0.8)]), img, ws) is None, "⑧ 숫자 토막의 `/` 가 숫자가 되면(`/113`→`7113`) 받지 않는다")
+ws = [Wd("표", 230, 270), Wd("6-2]", 300, 380, 0.4), Wd("반응", 420, 500)]
+chk(RT(FakeOcr(line=[Wd("62", 300, 380, 0.8)]), img, ws) is None, "⑧ 번호 모양이 바뀌면(`6-2]`→`62`) 받지 않는다")
+ws = [Wd("그림", 230, 300), Wd("BGT", 340, 430, 0.5), Wd("도형", 470, 540)]
+chk(RT(FakeOcr(line=[Wd("벼티", 340, 430, 0.6)]), img, ws) is None, "⑧ 대문자 3자 약어(`BGT`)는 낮은 신뢰도의 한글로 바꾸지 않는다")
+es = getattr(opm, "extend_spaced_title", None)
+got = es(FakeOcr(band=[Wd("론", 315, 360, 0.92)]), img, "1. 서", ws) if es else None
+chk(got == "1. 서론", "⑧ 벌린 제목의 다음 음절을 오른쪽 띠에서 읽어 잇는다(`1. 서` → `1. 서론`)", str(got))
+got = es(FakeOcr(band=[Wd("록>", 315, 360, 0.9)]), img, "<부", [Wd("<부", 200, 305)]) if es else None
+chk(got == "<부록>", "⑧ `<부` → `<부록>`", str(got))
+chk(es is not None and es(FakeOcr(band=[Wd("론", 315, 360, 0.92)]), img, "2.1 포장설계의 개념", ws) is None,
+    "⑧ 끊기지 않은 제목은 늘이지 않는다")
+td = getattr(opm, "_tidy_toc_title", lambda t: t)
+chk(td("<참고문 헌>") == "<참고문헌>" and td("7. 결 론") == "7. 결론" and td("6. 자료분석 및 평가") == "6. 자료분석 및 평가",
+    "⑧ 벌려 쓴 한 음절(`결 론`)·꺾쇠 속 빈칸만 붙인다 — `및` 같은 한 음절 낱말은 그대로")
+la = {"x0": 60.0, "cy": 100.0, "h": 50.0, "title": "DVD 설계 법정립을", "page": 5, "n": 9, "ws": []}
+lb = {"x0": 98.0, "cy": 101.0, "h": 50.0, "title": "설계 법정립을 위한 도로시험", "page": 5, "n": 13, "ws": []}
+chk(opm._merge_toc_lines([la], [lb])[0]["title"].startswith("DVD"),
+    "⑧ 두 판독을 합칠 때 줄 첫머리(번호 자리)를 놓친 제목은 고르지 않는다")
+
 print()
 print("FAIL", len(fails), fails) if fails else print("ALL PASS")
 sys.exit(1 if fails else 0)

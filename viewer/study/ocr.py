@@ -886,6 +886,24 @@ def _read_line_words(img, box, lang):
     return out
 
 
+def read_line_words(img, box, lang, psm=7):
+    """한 자리를 한 줄로 읽어 낱말 상자 목록 — `{surface, x0, y0, x1, y1, conf(0~1)}`, **쪽 그림 좌표**(`box` 의 왼쪽 위를 더한다).
+    목차 줄 다시 읽기(마스터 §4.4.2·단어학습 SOT §14.8.3)처럼 부르는 쪽이 낱말 자리로 맞춰 쓸 때."""
+    import pytesseract
+    r = pytesseract.image_to_data(img.crop(box), lang=lang, config=f"--psm {int(psm)}",
+                                  output_type=pytesseract.Output.DICT)
+    out = []
+    for t, c, x, y, w, h in zip(r["text"], r["conf"], r["left"], r["top"], r["width"], r["height"]):
+        try:
+            c = float(c)
+        except (TypeError, ValueError):
+            c = -1.0
+        if str(t).strip() and c >= 0:
+            out.append({"surface": str(t).strip(), "x0": float(box[0] + x), "y0": float(box[1] + y),
+                        "x1": float(box[0] + x + w), "y1": float(box[1] + y + h), "conf": c / 100.0})
+    return out
+
+
 def _read_line_chars(img, box, lang):
     """한 자리를 한 줄로(psm 7) 읽어 글자마다 `(글자, 가운데 x)` — 자른 그림 좌표, 왼쪽부터."""
     import pytesseract

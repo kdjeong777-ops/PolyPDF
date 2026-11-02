@@ -150,7 +150,7 @@ class OcrPages:
         읽힌 쪽에서 가져온다. 표본(1996 보고서 4~6쪽): 표준만으로는 5·6쪽의 쪽 번호가 하나도 없었다."""
         std_ws, dpi = self.words(pno1)
         dpi = dpi or DPI
-        extra = []
+        extra, img = [], None
         if self.run_ocr and not self.should_cancel():
             self.pace()
             try:
@@ -162,6 +162,24 @@ class OcrPages:
         a = [_toc_parts(ln, width) for ln in group_lines(std_ws, dpi, raw=True)]
         b = [_toc_parts(ln, width) for ln in group_lines(extra, DPI, raw=True)] if extra else []
         merged = _merge_toc_lines(a, b)
+        if img is not None and int(dpi) == DPI and "kor" in str(self._picker.lang).split("+"):
+            # 261102-2(단어학습 SOT §14.8.4): 목차 제목의 잡글 낱말(`Ds Fi`=`1. 서 론`, `OB`=`1.3`)을 `kor` 로 다시 읽는다
+            for m in merged:
+                if self.should_cancel():
+                    break
+                try:
+                    fixed = reread_toc_title(self._ocr, img, m.get("ws") or [])
+                except Exception:
+                    fixed = None
+                if fixed:
+                    m["title"] = fixed
+                try:
+                    longer = extend_spaced_title(self._ocr, img, m["title"], m.get("ws") or [])
+                except Exception:
+                    longer = None
+                if longer:
+                    m["title"] = longer
+                m["title"] = _tidy_toc_title(m["title"])
         out = []
         for m in merged:
             title = m["title"]
@@ -234,7 +252,9 @@ def _toc_parts(ln: dict, width_px: float) -> dict:
     for w in ws[:tail_idx]:
         s = str(w["surface"])
         if prev is not None and float(w["x0"]) - float(prev["x1"]) > 3.0 * h:
-            break                                  # 점선 리더 자리의 큰 빈틈
+            # 261102-2: 글자 사이를 크게 벌린 짧은 제목(`1. 서   론`·`<부   록>`)은 잇는다 — 뒤가 한두 음절 한글이고 제목이 아직 짧을 때
+            if not (len(title_ws) <= 3 and re.fullmatch(r"[가-힣]{1,2}[>)]?", s) and not _LEADER.match(s)):
+                break                              # 점선 리더 자리의 큰 빈틈
         if title_ws and _LEADER.match(s) and float(w.get("conf", 1.0)) < 0.7:
             break
         title_ws.append(w); prev = w
@@ -243,7 +263,7 @@ def _toc_parts(ln: dict, width_px: float) -> dict:
         title_ws.pop()
     title = _join(title_ws) if title_ws else ""
     return {"x0": ln["x0"], "cy": ln["cy"], "h": h, "title": title.strip(), "page": page,
-            "n": sum(len(re.sub(r"\W", "", str(w["surface"]))) for w in title_ws)}
+            "n": sum(len(re.sub(r"\W", "", str(w["surface"]))) for w in title_ws), "ws": title_ws}
 
 
 def _merge_toc_lines(a: list, b: list) -> list:
@@ -266,8 +286,9 @@ def _merge_toc_lines(a: list, b: list) -> list:
         used.add(best)
         lb = b[best]
         m = dict(la)
-        if lb["title"] and (lb["n"] > la["n"] or not la["title"]):
-            m["title"], m["x0"], m["n"] = lb["title"], min(la["x0"], lb["x0"]), lb["n"]
+        # 261102-2: 흩어진 글 판독이 줄 첫머리(번호 자리)를 놓친 제목은 고르지 않는다(`DVD 설계…` 대신 `설계…` 가 뽑혀 번호가 사라졌다)
+        if lb["title"] and (not la["title"] or (lb["n"] > la["n"] and lb["x0"] <= la["x0"] + la["h"] * 72.0 / DPI)):
+            m["title"], m["x0"], m["n"], m["ws"] = lb["title"], min(la["x0"], lb["x0"]), lb["n"], lb.get("ws")
         if m.get("page") is None:
             m["page"] = lb.get("page")
         out.append(m)
@@ -283,3 +304,183 @@ def _merge_toc_lines(a: list, b: list) -> list:
         out.append(lb)
     out.sort(key=lambda m: m["cy"])
     return out
+
+
+# ── 261102-2: 목차 제목의 잡글 낱말 다시 읽기 (단어학습 SOT §14.8.4) ───────────────────────
+_HANGUL = re.compile(r"[가-힣]")
+TOC_REREAD_CONF = 0.30       # 잡글 자리를 다시 읽은 글을 받는 평균 신뢰도(0~1)
+TOC_CAPS_CONF = 0.80         # 대문자 4자 이상(`ALAR` — 진짜 약어 `AASHO`·`LTPP` 와 같은 꼴)을 한글로 바꾸는 신뢰도
+
+
+def _toc_junk(s: str) -> bool:
+    """목차 제목의 이 낱말이 잡글인가 — 한글·번호·문장부호·로마 숫자·영어 낱말(소문자 3자 이상, 대문자 4자 이상)은 아니다."""
+    s = s.strip()
+    if not s or _HANGUL.search(s):
+        return False
+    if re.fullmatch(r"[<(]?\d+(?:\.\d+)*\.?[>)]?|[^\w]+|[ivx]+\.?|[IVX]+\.?", s):   # 로마 숫자는 i·v·x 만(`DVD` 는 잡글)
+        return False
+    if re.search(r"[a-z]{3}", s) or re.match(r"[A-Z]{4,}", s):
+        return False
+    return True
+
+
+def _num_like(s: str) -> bool:
+    """점이 빠졌을 법한 번호(`31`·`(32`)."""
+    return bool(re.fullmatch(r"[(]?\d{2,3}", s.strip()))
+
+
+def _caps(s: str) -> bool:
+    """대문자 3자 이상 — 진짜 약어(`BGT`·`TAT`·`AASHO`)와 같은 꼴이라 높은 신뢰도의 한글이거나 줄 첫 번호일 때만 바꾼다."""
+    return bool(re.fullmatch(r"[A-Z]{3,}[,.]?", s.strip()))
+
+
+def _keeps_number(orig: str, txt: str) -> bool:
+    """원래 토막에 숫자가 있으면 다시 읽은 글이 그 숫자 모양을 지켜야 한다 — 뒤쪽이 같고(`A5.1`→`4.5.1`), 앞에 늘어난 숫자는
+    원래 그 자리에 있던 영문 글자 수까지만(`/113`→`7113` 은 `/` 가 숫자가 된 것이라 받지 않는다), `-` 는 남아 있어야 한다(`6-2]`→`62` ✗)."""
+    core = re.search(r"\d[\d.\-]*\d|\d", orig)
+    if not core:
+        return True
+    oc = core.group(0)
+    m = re.search(r"\d[\d.\-]*", txt)
+    if not m or not m.group(0).rstrip(".").endswith(oc.rstrip(".")):
+        return False
+    extra = len(re.sub(r"\D", "", m.group(0))) - len(re.sub(r"\D", "", oc))
+    return extra <= len(re.findall(r"[A-Za-z]", orig[:core.start()]))
+
+
+def _tidy_toc_title(t: str) -> str:
+    """번호 뒤 빈칸, 벌려 쓴 한 음절들(`서 론`·`부 록`)은 붙인다."""
+    t = re.sub(r"^([<(]?\d+(?:\.\d+)*\.?)(?=[가-힣A-Za-z<(])", r"\1 ", t.strip())
+    # 번호 뒤 제목 전체가 벌려 쓴 한 음절들일 때만(`1. 서 론`·`2.1.1 개 요`) — `및 석8` 같은 가운데 토막은 두다
+    t = re.sub(r"^([<(]?\d+(?:\.\d+)*\.?\s+)([가-힣](?: [가-힣])+)$", lambda m: m.group(1) + m.group(2).replace(" ", ""), t)
+    t = re.sub(r"<([가-힣 ]+)>", lambda m: "<" + m.group(1).replace(" ", "") + ">", t)   # `<참고문 헌>` → `<참고문헌>`
+    return t
+
+
+def reread_toc_title(ocr_mod, img, ws: list):
+    """목차 줄 제목 낱말(`ws`, 쪽 그림 픽셀) 중 잡글을 `kor` 한 줄 읽기로 바꾼다 → 새 제목 또는 None(바꿀 것 없음).
+
+    `kor+eng` 판독은 가는 글씨 목차의 번호·한글을 영문 잡글로 읽는다(_96 보고서: `1.3`→`OB`, `2.1.2`→`DVD`,
+    `4.5.1`→`A5.1`, `1. 서 론`→`Ds Fi`, `개 요`→`개 Go`, `4.3.3 시험시공`→`ABS ALAR`). 제목 자리를 `kor` 로 한 줄 읽으면
+    맞게 나오지만 영어 낱말(`AASHO`·`Asphalt Institute`·`LTPP(Long …`)은 망가지므로, **잡글 낱말 자리만** 바꾼다.
+      - 잇단 잡글 낱말은 한 묶음으로 — 그 자리에 가운데가 든 `kor` 한글·번호 낱말로(문장부호는 뺀다). 없으면 그 자리만 한 낱말로(psm 8)
+      - 받는 조건: 평균 신뢰도 `TOC_REREAD_CONF` 이상. 대문자 4자 이상 묶음은 `TOC_CAPS_CONF` 이상의 한글일 때만
+      - 줄 첫 번호(`31`)는 숫자가 같고 점이 더 많을 때만(단어학습 SOT §14.8.3 과 같은 규칙)
+      - 끝에 남은 잡글(점선 리더 조각 `PoC`)은 `kor` 로도 글이 없으면 뗀다"""
+    if not ws:
+        return None
+    flags = []
+    for k, w in enumerate(ws):
+        s = str(w["surface"])
+        kind = ("caps" if _caps(s) else "junk") if _toc_junk(s) else ("num" if (k == 0 and _num_like(s)) else ("caps" if _caps(s) else ""))
+        flags.append(kind)
+    if not any(flags):
+        return None
+    groups, k = [], 0
+    while k < len(ws):
+        if flags[k]:
+            j = k
+            while j + 1 < len(ws) and flags[j + 1] and flags[j + 1] != "num":
+                j += 1
+            groups.append((k, j))
+            k = j + 1
+        else:
+            k += 1
+    W, H = img.size
+    pad = 6
+    box = (max(0, int(min(float(w["x0"]) for w in ws)) - pad), max(0, int(min(float(w["y0"]) for w in ws)) - pad),
+           min(W, int(max(float(w["x1"]) for w in ws)) + pad), min(H, int(max(float(w["y1"]) for w in ws)) + pad))
+    kor = [q for q in ocr_mod.read_line_words(img, box, "kor")                 # 점만 있는 낱말(티)은 뺀다
+           if re.fullmatch(r"[가-힣0-9.<>()]+", q["surface"]) and not re.fullmatch(r"\.+", q["surface"])]
+    new = list(ws)
+    drop = set()
+    changed = False
+    for g0, g1 in groups:
+        if g0 > 0 and re.search(r"[A-Za-z]{3}", str(ws[g0 - 1]["surface"])):
+            continue                                   # 영어 문맥(`Asphalt Institute(AI)`)의 토막은 한글로 읽지 않는다
+        a, b = float(ws[g0]["x0"]), float(ws[g1]["x1"])
+        keep = [(float(ws[i]["x0"]), float(ws[i]["x1"])) for i in range(len(ws)) if not flags[i]]
+        # 남기는 낱말 위에 놓인 `kor` 낱말은 쓰지 않는다(`Bel` + `형태의` → `형태형태의` 가 되지 않게)
+        cover = [q for q in kor if a - pad <= (q["x0"] + q["x1"]) / 2.0 <= b + pad
+                 and not any(k0 <= (q["x0"] + q["x1"]) / 2.0 <= k1 for k0, k1 in keep)]
+        if not cover or sum(q["conf"] for q in cover) / len(cover) < TOC_REREAD_CONF:
+            bx = (max(0, int(a) - pad), max(0, int(min(float(ws[i]["y0"]) for i in range(g0, g1 + 1))) - pad),
+                  min(W, int(b) + pad), min(H, int(max(float(ws[i]["y1"]) for i in range(g0, g1 + 1))) + pad))
+            one = [q for q in ocr_mod.read_line_words(img, bx, "kor", psm=8)
+                   if re.fullmatch(r"[가-힣0-9.<>()]+", q["surface"])]
+            if one and (not cover or sum(q["conf"] for q in one) / len(one) > sum(q["conf"] for q in cover) / len(cover)):
+                cover = one
+        if cover:
+            for i in range(g0, g1 + 1):                # 묶음 안에서 `kor` 가 덮지 못한 낱말(`Ds Fi` 의 `Fi`=`론`)은 그 자리만
+                wi = ws[i]
+                if not any(float(wi["x0"]) - pad <= (q["x0"] + q["x1"]) / 2.0 <= float(wi["x1"]) + pad for q in cover):
+                    bx = (max(0, int(float(wi["x0"])) - pad), max(0, int(float(wi["y0"])) - pad),
+                          min(W, int(float(wi["x1"])) + pad), min(H, int(float(wi["y1"])) + pad))
+                    cover += [q for q in ocr_mod.read_line_words(img, bx, "kor", psm=8)
+                              if re.fullmatch(r"[가-힣]+", q["surface"]) and q["conf"] >= TOC_REREAD_CONF]
+            cover.sort(key=lambda q: q["x0"])
+        txt = " ".join(q["surface"] for q in cover)
+        conf = (sum(q["conf"] for q in cover) / len(cover)) if cover else 0.0
+        kinds = {flags[i] for i in range(g0, g1 + 1)}
+        dotted = g0 == 0 and bool(re.match(r"\d+(?:\.\d+)+\.?", txt))     # 줄 첫 번호로 시작(`ABS ALAR`=`4.3.3 시험시공`)
+        if kinds == {"caps"} and not dotted:           # 대문자 약어 꼴은 높은 신뢰도의 한글일 때만(줄 첫 번호 `DVD`=`2.1.2` 는 예외)
+            ok = bool(txt) and conf >= TOC_CAPS_CONF and bool(_HANGUL.search(txt))
+        else:
+            ok = bool(txt) and conf >= TOC_REREAD_CONF
+        orig = " ".join(str(ws[i]["surface"]) for i in range(g0, g1 + 1))
+        if ok and "num" not in kinds and not _keeps_number(orig, txt.replace(" ", "")):
+            ok = False
+        if ok and g0 > 0 and not re.search(r"\d", orig) and re.search(r"\d", txt):
+            ok = False                                 # 숫자 없던 줄 가운데 토막에 숫자가 생기면(`EAS`→`난독 상승 2`) 받지 않는다
+        if ok and g0 == 0 and re.fullmatch(r"\d{2,}", txt.replace(" ", "")):
+            ok = False                                 # 줄 첫머리의 점 없는 두 자리 수(`OB`→`18`)는 번호가 아니다 — 1.3 을 1.8 로 읽기도 한다
+        if ok and "num" in kinds:
+            txt = txt.replace(" ", "")
+            digits = re.sub(r"\D", "", str(ws[g0]["surface"]))
+            ok = bool(re.fullmatch(r"\d+(?:\.\d+)+\.?", txt)) and re.sub(r"\D", "", txt) == digits
+        if ok:
+            if re.match(r"\.+\d", txt):
+                txt = txt.lstrip(".")
+            new[g0] = dict(ws[g0], surface=txt, conf=conf, x1=ws[g1]["x1"])
+            drop.update(range(g0 + 1, g1 + 1))
+            changed = True
+        elif not cover and g1 == len(ws) - 1 and g0 > 0 and kinds == {"junk"}:
+            drop.update(range(g0, g1 + 1))            # 끝에 붙은 점선 리더 조각
+            changed = True
+    if not changed:
+        return None
+    return _tidy_toc_title(_join([w for i, w in enumerate(new) if i not in drop])) or None
+
+
+def extend_spaced_title(ocr_mod, img, title: str, ws: list):
+    """글자 사이를 크게 벌린 짧은 제목이 첫 음절에서 끊겼으면(`1. 서`·`7. 결`·`<부`) 오른쪽 띠를 `kor` 로 읽어 잇는다 → 새 제목 또는 None.
+
+    판독이 `론`·`록>` 을 점선 리더 쪽 빈틈 너머로 두어 제목이 한 음절로 남았다(_96 보고서 목차 `1. 서 론`·`7. 결 론`·`<부 록>`).
+    제목 끝에서 줄 높이의 `TOC_SPACED_BAND` 배까지만 본다 — 한두 음절 한글(필요하면 `>`)만 받는다."""
+    t = (title or "").strip()
+    if not ws or not re.fullmatch(r"(?:[<(]?\d+(?:\.\d+)*\.?\s*[가-힣]|<[가-힣]{1,3})", t):
+        return None
+    W, H = img.size
+    x1 = int(max(float(w["x1"]) for w in ws))
+    y0 = int(min(float(w["y0"]) for w in ws))
+    y1 = int(max(float(w["y1"]) for w in ws))
+    h = max(1, y1 - y0)
+    bx = (min(W - 1, x1 + 2), max(0, y0 - 6), min(W, x1 + int(TOC_SPACED_BAND * h)), min(H, y1 + 6))
+    if bx[2] - bx[0] < h:
+        return None
+    m = None
+    for psm in (7, 10):                          # 띠가 점선 리더를 품으면 psm 7 이 비곤 한다 — 한 글자 모드로 한 번 더
+        for q in ocr_mod.read_line_words(img, bx, "kor", psm=psm):
+            m = re.match(r"([가-힣]{1,2})(>?)", q["surface"])
+            if m and q["conf"] >= TOC_REREAD_CONF:
+                break
+            m = None
+        if m:
+            break
+    if not m:
+        return None
+    tail = m.group(1) + (">" if t.startswith("<") else "")
+    return _tidy_toc_title(t + " " + tail)
+
+
+TOC_SPACED_BAND = 2.0       # 벌린 제목의 다음 음절을 찾는 띠 폭(줄 높이의 배) — 넓히면 점선 리더가 들어 판독이 빈다(실측 `론` 0.92 → 없음)
