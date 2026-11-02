@@ -417,6 +417,17 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
         _pg_no = int(page.number) + 1
     except Exception:
         _pg_no = 0
+    # 261102-2(SOT §3.5.2): 목차 쪽의 첫·끝 항목(`3. 시험포장공법의 재료적 특성 43`)은 쪽 번호를 단 머리말 모양이지만 지우지 않는다
+    _toc = {}
+
+    def _page_number_row(i):
+        t = _row_text(i)
+        if not _page_number_line(t, _pg_no):
+            return False
+        from viewer.study.ocr_pages import toc_text_lines, _toc_numbered
+        if "page" not in _toc:
+            _toc["page"] = toc_text_lines(list({_row_text(j) for j in rest}))
+        return not (_toc["page"] and _toc_numbered(t))
     pno = set()
     if body and do_edge:
         body_top = min(frags[i][0][1] for i in body)
@@ -433,7 +444,7 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
             gap = (body_top - r[3]) if in_head else (r[1] - body_bot)
             if gap >= lh * EDGE_GAP:
                 edge.add(i)
-            elif ocr and gap >= lh * EDGE_GAP_NUM and _page_number_line(_row_text(i), _pg_no):
+            elif ocr and gap >= lh * EDGE_GAP_NUM and _page_number_row(i):
                 edge.add(i)
     # 261101-1(표본 조사, 심리검사의이해 12쪽 모두): 머리말 위끝이 8.3~8.6% 라 띠 밖이었고, 그래서 본문으로 잡혀 '본문과
     #   떨어짐' 도 잴 수 없었다. **쪽의 맨 위·맨 아래 줄**은 `HEAD_EXT`·`FOOT_EXT` 까지 보고, 쪽 번호 모양이며 바로 옆 줄과
@@ -453,7 +464,7 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
                 continue
             gap = (min(o[1] for o in others if o[1] >= r[1]) - max(frags[j][0][3] for j in row)) if top else \
                   (min(frags[j][0][1] for j in row) - max(o[3] for o in others if o[3] <= r[3]))
-            if gap >= lh * EDGE_GAP_TOP and _page_number_line(_row_text(i), _pg_no):
+            if gap >= lh * EDGE_GAP_TOP and _page_number_row(i):
                 edge.update(row)
 
     # **되풀이되는가** — 머리말·꼬리말은 옆 쪽에도 거의 같은 글이 같은 자리에 있다.
@@ -463,7 +474,7 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
         more = [_norm_edge(t) for t in (peers or []) if str(t or "").strip()]
         # 261101-1(SOT §3.5.2): **쪽 번호를 단 짧은 줄**은 옆 쪽을 못 봐도(두 쪽만 OCR 한 상태) 머리말·꼬리말이다 —
         #   되풀이를 확인할 길이 없어 `4 ANDY WEIR`·`PROVECGCT HAIL MARY 5` 가 남아 본문 첫 줄에 붙었다.
-        pno = {i for i in edge if _page_number_line(_row_text(i), _pg_no)}
+        pno = {i for i in edge if _page_number_row(i)}
         if seen is None and not more:
             edge = pno                       # 옆 쪽을 못 보면 쪽 번호 모양만 버린다
         else:

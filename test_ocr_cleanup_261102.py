@@ -266,6 +266,45 @@ _para = [{"text": t, "style": "body", "kind": "text", "rect": (72, y, 520, y + 1
                       ("크게 달라지며 시험포장으로 그 차이를 확인하였다.", 118)]]
 chk(len(te.join_sentences(_para)) == 1, "⑩ 본문 쪽의 끊긴 문장은 그대로 잇는다")
 
+# ── ⑪ 목차 쪽 OCR 이 놓친 쪽 번호·번호·줄을 흩어진 글 판독(psm 11)으로 채운다 — 사용자 보고 '5쪽 3.6 요약이 없다' ──
+#   _96 5쪽 실측: 표준 판독은 쪽 번호를 하나도 못 읽고 `3.2`→`(32`, `3.6 요약` 줄은 통째로 없었다. psm 11 은 다 읽었다
+def _ln(y, *ws):
+    return [Wd(s, a, b, 0.9, y, y + 45) for s, a, b in ws]
+_std, _sp = [], []
+for k, (no, title, pg) in enumerate([("3.1", "고무", "43"), ("3.2", "제강", "45"), ("3.3", "폴리", "50"), ("3.4", "개립", "53"),
+                                     ("3.5", "요약", "57"), ("3.6", "결론", "60"), ("4.1", "재료", "61"), ("4.2", "배합", "62"),
+                                     ("4.3", "시공", "64"), ("4.4", "품질", "72"), ("4.5", "설계", "74")]):
+    y = 200 + 100 * k
+    _sp += _ln(y, (no, 264, 330), (title, 353, 450), ("eee", 1100, 1160), (pg, 2034, 2080))
+    if no == "3.6":
+        continue                                              # 표준 판독에 없는 줄
+    _std += _ln(y, ("(32" if no == "3.2" else no, 255 if no == "3.2" else 264, 330), (title, 353, 450))
+_orig2 = (so.ocr_image, so.render_page, so.read_line_words)
+so.ocr_image = lambda img, lang="eng", psm=0, dpi=300: ({"text": "", "conf": 0.8, "words": [dict(w) for w in _sp]} if psm == opm.TOC_PSM
+                                                         else {"text": "", "conf": 0.8, "words": [dict(w) for w in _std]})
+so.render_page = lambda doc, i, dpi=300, drop_watermark_bg=False: (Image.new("RGB", (2480, 3508), "white"), None, None)
+so.read_line_words = lambda *a, **k: []
+try:
+    r = so.build_page(_d, 0, lang="kor+eng", force_ocr=True)
+finally:
+    so.ocr_image, so.render_page, so.read_line_words = _orig2
+_lines = [" ".join(w["surface"] for w in ln["words"]) for ln in opm.group_lines(r["words"], 300, raw=True)]
+chk(_lines[0] == "3.1 고무 43" and _lines[-1] == "4.5 설계 74", "⑪ 못 읽은 쪽 번호를 채운다", str(_lines[:2]))
+chk(_lines[1] == "3.2 제강 45", "⑪ 잘못 읽은 번호(`(32`)는 같은 숫자의 바른 번호(`3.2`)로", _lines[1])
+chk("3.6 결론 60" in _lines, "⑪ 표준 판독에 없는 번호 줄을 더한다", str(_lines[4:7]))
+chk(not any("eee" in t for t in _lines), "⑪ 점선 리더 잡글은 더하지 않는다")
+# 텍스트 창 머리말·꼬리말(§3.5.2): 목차 쪽 맨 위·맨 아래 항목은 쪽 번호를 달아도 지우지 않는다
+_pg = fitz.open()
+_pg.new_page(width=595, height=842)
+_toc_ws = []
+for k in range(12):
+    y = (30 if k == 0 else 120 + 50 * k) * 300 / 72
+    _toc_ws += [Wd("3.%d" % k if k else "3.", 250, 330, 0.9, y, y + 45), Wd("제목", 353, 450, 0.9, y, y + 45),
+                Wd(str(40 + k), 2034, 2080, 0.9, y, y + 45)]
+_rows = te.lines_from_words(_toc_ws, dpi=300, page=_pg.load_page(0))
+chk(len(_rows) == 12 and _rows[0]["text"].startswith("3. 제목"), "⑪ 목차 쪽 첫 항목(`3. 제목 40`)은 머리말로 지우지 않는다",
+    str([x["text"] for x in _rows[:2]]))
+
 print()
 print("FAIL", len(fails), fails) if fails else print("ALL PASS")
 sys.exit(1 if fails else 0)

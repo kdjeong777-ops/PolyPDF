@@ -8,6 +8,7 @@
     그래서 책갈피를 만든 뒤 텍스트 창에 그 글이 바로 보인다. 남는 곳은 보류 저장소다([저장] 해야 확정).
   - 목차 쪽은 표준 psm 이 쪽 번호를 놓치는 일이 있어(실측: 점선 리더가 긴 쪽에서 오른쪽 숫자 열 전체) 흩어진 글
     모드(psm 11)를 **한 번 더** 읽어 줄마다 합친다(`toc_lines`). 이 추가 판독은 저장하지 않는다(목차 표에만).
+    쪽 OCR(`build_page`)도 목차 쪽이면 같은 판독으로 놓친 쪽 번호·번호·줄을 채워 저장한다(`fix_toc_page`, 261102-2).
 Qt 비의존 — 워커 스레드에서 쓴다(응답성 SOT §4 ①: 문서는 이 객체가 따로 연다).
 """
 from __future__ import annotations
@@ -505,6 +506,16 @@ def looks_like_toc(lines: list) -> bool:
     return toc_text_lines([" ".join(str(w["surface"]) for w in ln["words"]) for ln in lines if ln.get("words")])
 
 
+def _toc_numbered(text) -> bool:
+    """목차 번호 줄인가 — 첫 낱말이 절 번호(`2.1.1`·`1.`)이고 그 뒤에 제목 글자가 있다."""
+    tok = str(text).split(None, 1)
+    if not tok:
+        return False
+    s, rest = tok[0], (tok[1] if len(tok) > 1 else "")
+    return bool((_TOC_NO.fullmatch(s) and re.search(r"\d\.\d", s) or re.fullmatch(r"\d{1,2}\.", s))
+                and re.search(r"[가-힣A-Za-z]", rest))
+
+
 def toc_text_lines(texts: list) -> bool:
     """줄 글 목록으로 목차 쪽인지 — `looks_like_toc` 의 판정. 텍스트 창 줄 잇기도 이것을 쓴다(텍스트 창 SOT §3.7.15).
     번호 줄은 절 번호 **뒤에 제목 글자**가 있어야 한다 — 수 표(`2.147 …`·`12.5`)를 목차로 보지 않게."""
@@ -514,24 +525,79 @@ def toc_text_lines(texts: list) -> bool:
         if not tok:
             continue
         starts += 1
-        s, rest = tok[0], (tok[1] if len(tok) > 1 else "")
-        if ((_TOC_NO.fullmatch(s) and re.search(r"\d\.\d", s) or re.fullmatch(r"\d{1,2}\.", s))
-                and re.search(r"[가-힣A-Za-z]", rest)):
-            num.append(s)
+        if _toc_numbered(t):
+            num.append(tok[0])
     deep = [s for s in num if re.search(r"\d\.\d", s)]
     return len(num) >= TOC_PAGE_MIN and len(num) >= TOC_PAGE_SHARE * starts and len(deep) >= 3
 
 
-def fix_toc_page(ocr_mod, img, res: dict, dpi: int) -> bool:
+_SEC_NO = re.compile(r"\d+(?:\.\d+)+\.?|\d{1,2}\.")
+
+
+def _overlaps(w, ws) -> bool:
+    """낱말 상자 `w` 가 `ws` 의 어느 상자와 가로·세로 모두 겹치는가."""
+    for q in ws:
+        if (min(float(w["x1"]), float(q["x1"])) > max(float(w["x0"]), float(q["x0"]))
+                and min(float(w["y1"]), float(q["y1"])) > max(float(w["y0"]), float(q["y0"]))):
+            return True
+    return False
+
+
+def _fill_toc_from_sparse(lines: list, sparse: list, width: float) -> tuple:
+    """목차 쪽 표준 판독 줄(`lines`, 제자리에서 고침)을 흩어진 글 판독 줄(`sparse`)로 채운다 → (바꿨나, 새 줄들).
+    ① 쪽 번호를 못 읽은 줄에 쪽 번호 ② 번호를 잘못 읽은 줄(`(32`)의 번호를 같은 숫자의 바른 번호(`3.2`)로
+    ③ 표준 판독에 통째로 없는 번호 줄(`3.6 요약`)을 제목·쪽 번호만 더한다(점선 리더 잡글은 뺀다)."""
+    changed, used, all_ws = False, set(), [w for ln in lines for w in ln["words"]]
+    for ln in lines:
+        best, bd = None, None
+        for j, sp in enumerate(sparse):
+            d = abs(ln["cy"] - sp["cy"])
+            if j not in used and d <= 0.6 * max(ln["h"], sp["h"]) and (bd is None or d < bd):
+                best, bd = j, d
+        if best is None:
+            continue
+        used.add(best)
+        ws, sw = ln["words"], sparse[best]["words"]
+        tail = sw[-1]
+        has_page = float(ws[-1]["x0"]) >= 0.70 * width and re.search(r"\d", str(ws[-1]["surface"]))
+        if (not has_page and float(tail["x0"]) >= 0.70 * width and re.fullmatch(r"\d{1,4}", str(tail["surface"]))
+                and not _overlaps(tail, all_ws)):
+            ws.append(dict(tail))                                                     # ①
+            changed = True
+        f0, s0 = str(ws[0]["surface"]), str(sw[0]["surface"])
+        if (not _SEC_NO.fullmatch(f0) and _SEC_NO.fullmatch(s0) and re.sub(r"\D", "", f0) == re.sub(r"\D", "", s0)
+                and abs(float(ws[0]["x0"]) - float(sw[0]["x0"])) <= ln["h"]):
+            ws[0] = dict(ws[0], surface=s0)                                           # ②
+            changed = True
+    extra = []
+    for j, sp in enumerate(sparse):
+        if j in used:
+            continue
+        tp = _toc_parts(sp, width)
+        new = list(tp["ws"]) + ([sp["words"][-1]] if tp["page"] is not None else [])
+        if tp["ws"] and _toc_numbered(tp["title"]) and not any(_overlaps(w, all_ws) for w in new):
+            extra.append(dict(sp, words=[dict(w) for w in new]))                     # ③
+    return changed or bool(extra), extra
+
+
+def fix_toc_page(ocr_mod, img, res: dict, dpi: int, lang: str = "kor+eng") -> bool:
     """`build_page` 결과(`res`, 쪽 그림 픽셀 낱말)가 목차 쪽이면 줄마다 제목의 잡글 낱말을 `kor` 로 다시 읽고 벌린 제목을 잇는다.
     `res` 의 `words`·`text` 를 바꾼다 → 바꿨으면 True. 책갈피의 `toc_lines` 와 같은 규칙(`_reread_toc_words`·`_spaced_tail_word`) —
-    텍스트 창·글자층·검색·단어장이 모두 이 글을 쓴다(사용자 보고 '텍스트 창 4쪽 OCR 다시 읽기에도 1. 서론이 안 된다')."""
+    텍스트 창·글자층·검색·단어장이 모두 이 글을 쓴다(사용자 보고 '텍스트 창 4쪽 OCR 다시 읽기에도 1. 서론이 안 된다').
+    표준 판독이 놓친 쪽 번호·번호·줄은 흩어진 글 판독(psm 11) 한 번으로 채운다(`_fill_toc_from_sparse`, 사용자 보고 '5쪽 3.6 요약이 없다')."""
     words = list(res.get("words") or [])
     lines = group_lines(words, dpi, raw=True)
     if not lines or not looks_like_toc(lines):
         return False
     width = float(img.size[0])
-    changed = False
+    for ln in lines:
+        ln["words"] = list(ln["words"])
+    try:
+        sparse = group_lines(ocr_mod.ocr_image(img, lang=lang, psm=TOC_PSM, dpi=dpi).get("words") or [], dpi, raw=True)
+    except Exception:
+        sparse = []
+    changed, extra = _fill_toc_from_sparse(lines, sparse, width) if sparse else (False, [])
+    lines = sorted(lines + extra, key=lambda ln: ln["cy"])
     out = []
     for ln in lines:
         tp = _toc_parts(ln, width)

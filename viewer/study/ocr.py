@@ -1219,7 +1219,7 @@ def build_page(doc: "fitz.Document", page_index: int, *,
         try:
             import sys as _sys
             from viewer.study import ocr_pages as _op
-            _op.fix_toc_page(_sys.modules[__name__], img, res, dpi)
+            _op.fix_toc_page(_sys.modules[__name__], img, res, dpi, lang=resolve_lang(lang))
         except Exception:
             pass
     res.update(source="ocr", dpi=dpi, engine="tesseract", why=why)
