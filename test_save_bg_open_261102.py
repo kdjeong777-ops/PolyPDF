@@ -9,6 +9,9 @@
   B  저장 뒤 사본 확인이 그 파일을 메인에서 `fitz.open` 하지 않는다(수정 전 코드는 `_mirror_open` 이 메인에서) —
      다시 여는 본문·썸네일은 보는 일이라 메인이 연다(마스터 §4.7.10, 이 검사 밖)
   C  책갈피는 PDF 에 실제로 써진다
+  D  (사용자 보고 '저장한 후 빈 화면이 표시되고 응답 없음이었다가 돌아왔다') 원본 자리에 놓은 뒤 메인이 그 파일을 처음 열기
+     (책갈피창 새로 고침의 조사·본문 다시 열기) **전에** 배경에서 한 번 훑는다(`app._warm_read`) — 백신의 첫 열기 검사를 메인 밖에서.
+     수정 전 코드는 `add_or_refresh_file` 의 조사가 메인에서 먼저 열어 실패
 """
 import os, sys, shutil, tempfile, threading
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -62,12 +65,19 @@ opens = []
 _real_open = fitz.open
 
 
+events = []        # (순서 표, 스레드, 무엇) — 저장 뒤 메인이 그 파일을 처음 열기 전에 배경이 한 번 훑었나(D)
+placed = []        # `_finalize_save` 가 새 파일을 원본 자리에 놓은 뒤부터 센다
+
+
 def _open(*a, **k):
     # 다시 여는 본문·썸네일은 보는 일이라 메인이 연다(마스터 §4.7.10) — '다른 뷰어용 사본' 확인만 본다
     if a and Path(str(a[0])).name == pdf.name:
         import traceback
-        if any(f.name in ("_mirror_open", "_mirror_state") for f in traceback.extract_stack()):
+        st = traceback.extract_stack()
+        if any(f.name in ("_mirror_open", "_mirror_state") for f in st):
             opens.append(threading.get_ident())
+        if threading.get_ident() == MAIN and placed:
+            events.append(("open", MAIN, " > ".join(f.name for f in st[-6:-1])))
     return _real_open(*a, **k)
 
 mw = MainWindow(); mw.show(); app.processEvents()
@@ -78,6 +88,21 @@ try:
     bt.btn_edit.setChecked(True); app.processEvents()
     bms = [("가 장", 1, 0), ("나 장", 3, 0), ("다 절", 4, 1)]
     chk(bt.replace_file_bookmarks(str(pdf), bms), "준비: 책갈피창에 '저장 안 됨' 으로 넣었다")
+    import viewer.app as _appmod
+    _real_warm = getattr(_appmod, "_warm_read", None)
+    if _real_warm is not None:
+        def _warm(p, *a, **k):
+            if Path(str(p)).name == pdf.name:
+                events.append(("warm", threading.get_ident(), ""))
+            return _real_warm(p, *a, **k)
+        _appmod._warm_read = _warm
+    _real_fin = bt._finalize_save
+
+    def _fin(*a, **k):
+        r = _real_fin(*a, **k)
+        placed.append(1)
+        return r
+    bt._finalize_save = _fin
     fitz.open = _open
     bt._op_save(str(pdf))
     for _ in range(40):
@@ -87,6 +112,11 @@ try:
         "main=%s threads=%s" % (MAIN, import_threads))
     chk(opens and MAIN not in opens, "B 저장 뒤 사본 확인(`_mirror_state`)은 그 파일을 메인에서 열지 않는다",
         "확인 %d번 중 메인 %d번" % (len(opens), opens.count(MAIN)))
+    first_open = next((i for i, e in enumerate(events) if e[0] == "open"), None)
+    warm_before = [e for e in events[: first_open if first_open is not None else len(events)] if e[0] == "warm"]
+    chk(warm_before and all(e[1] != MAIN for e in warm_before),
+        "D 저장 뒤 메인이 그 파일을 처음 열기 전에 배경에서 한 번 훑는다(백신 검사를 메인 밖에서)",
+        "처음 메인 열기: %s" % (events[first_open][2] if first_open is not None else "-"))
     d = fitz.open(str(pdf)); toc = d.get_toc(); d.close()
     chk([t[1] for t in toc] == ["가 장", "나 장", "다 절"], "C 책갈피가 PDF 에 써졌다", toc)
 finally:

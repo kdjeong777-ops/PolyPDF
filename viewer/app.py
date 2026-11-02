@@ -101,6 +101,19 @@ def _data_dir() -> Path:
     return settings_dir()
 
 
+def _warm_read(path: str, chunk: int = 4 * 1024 * 1024) -> None:
+    """261102-4(응답성 SOT §6): 파일을 파이썬 `read()` 로 한 번 훑는다(내용은 버린다) — **배경 스레드에서** 부른다.
+    백신의 첫 열기 검사를 여기서 치르게 해, 뒤에 메인의 `fitz.open` 이 GIL 을 쥔 채 기다리지 않게 한다
+    (PyMuPDF 는 디스크·검사를 기다리는 동안에도 GIL 을 놓지 않는다, §4 ③ — 색인의 `_prefetch` 와 같은 생각).
+    설치본은 서명 없는 새 exe 가 쓴 파일이라 검사가 더 길다."""
+    try:
+        with open(path, "rb", buffering=0) as f:
+            while f.read(chunk):
+                pass
+    except OSError:
+        pass
+
+
 class _MergeThread(QThread):
     """260611-33: PDF 병합/2단 배치를 백그라운드 스레드에서 실행(UI '응답 없음' 방지).
     job(progress)=실제 작업. progress(done,total,label)->bool(계속). 취소는 cancel()."""
@@ -4546,6 +4559,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         keep_page = self._page_to_keep(src)                 # 261014-1(§4.7.5): 바꿔치기가 본문을 닫기 **전에**
         final = self._finalize_save_place(src, produced, shift)
         self._save_keep_page = (os.path.normcase(str(final)), keep_page) if keep_page is not None else None
+        # 261102-4(응답성 SOT §6, 사용자 보고 '저장한 후 빈 화면이 표시되고 응답 없음이었다가 돌아왔다'): 놓은 파일을
+        #   메인이 다시 열기 전에(책갈피창 새로 고침·본문) 배경에서 한 번 훑어 백신 검사를 먼저 치른다 — `_warm_read`
+        self._file_op_bg(lambda p=str(final): _warm_read(p), tr("저장 중: {name}").format(name=Path(str(final)).name))
         if pw:
             try:
                 from viewer import secure_store
