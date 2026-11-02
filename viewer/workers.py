@@ -740,27 +740,17 @@ class BookmarkerWorker(QObject):
         if self._cancel:
             self._cancelled(); return
         if toc_pages and mode in ("auto", "toc"):
-            from viewer import toc_parse
+            from viewer import toc_parse, bookmark_gen
             self.progress.emit(tr('목차 쪽 {toc_pages}~{toc_pages2} 읽는 중...').format(toc_pages=toc_pages[0], toc_pages2=toc_pages[-1]))
-            rows = toc_parse.parse_toc_pages(self.input_pdf, toc_pages, ocr=op)
+            # 261101-2·261102-3(마스터 §4.4.2 ②''·③): 목차 항목만(T2) — 실제 쪽은 인쇄 쪽 번호·장 제목(F1~F4),
+            #   사용자가 오프셋을 정했으면 그것. 목차 쪽 줄 대신 목차 첫 쪽에 '목차' 하나(T1)
+            got = bookmark_gen.toc_rows(self.input_pdf, toc_pages, ocr=op, offset=self.opts.get("offset"),
+                                        should_cancel=lambda: self._cancel,
+                                        progress=lambda m: self.progress.emit(m), pace=lambda: _pacing.pace(self))
+            rows, cands, off, page_map = got["rows"], got["candidates"], got["offset"], got["page_map"]
             if self._cancel:
                 self._cancelled(rows, "toc"); return
             if rows:
-                self.progress.emit(tr("오프셋(목차 쪽 → 실제 쪽) 추정 중..."))
-                page_text = None
-                if op is not None:
-                    page_text = (lambda pg: op.text(pg, run=False) if op.is_scan(pg) else None)
-                cands = toc_parse.suggest_offsets(self.input_pdf, rows, toc_pages, page_text=page_text)
-                off = self.opts.get("offset")
-                if off is None:
-                    off = cands[0][0] if cands else 0
-                # 261101-2(마스터 §4.4.2 ③): 인쇄된 쪽 번호로 구간별 차이 → 행마다 쪽(F1~F3).
-                #   쪽 번호를 못 읽으면 장 제목 쪽으로 장마다 맞춘다(F4). 사용자가 오프셋을 정했으면 하지 않는다.
-                page_map = None
-                if self.opts.get("offset") is None:
-                    page_map = self._map_pages(rows, toc_pages, int(off))
-                    if self._cancel:
-                        self._cancelled(rows, "toc"); return
                 if self.opts.get("review"):
                     # 검토 단계: 표만 돌려주고 끝. 앱이 검토 창을 띄운 뒤 결과를 책갈피창에 넣는다.
                     self.finished.emit(dict({"phase": "review", "method": "toc",
@@ -769,13 +759,9 @@ class BookmarkerWorker(QObject):
                     return
                 import fitz
                 _d = fitz.open(str(self.input_pdf)); _n = _d.page_count; _d.close()
-                if page_map:                       # 맞춘 쪽은 두고, 못 맞춘 행만 오프셋으로
-                    for r_ in rows:
-                        r_["manual"] = r_.get("page") is not None
-                toc_parse.apply_offset(rows, int(off), _n, keep_manual=bool(page_map))
                 import pdf_bookmarker as _pb
                 bookmarks = [_pb.Bookmark(title=t_, page=p_, level=l_)
-                             for (t_, p_, l_) in toc_parse.to_bookmarks(rows)]
+                             for (t_, p_, l_) in bookmark_gen.finish_rows(rows, int(off), _n, page_map)]
                 res = {"offset": int(off)}
                 self._write_and_finish(bridge, bookmarks, "toc", res, "toc")
                 return
@@ -826,6 +812,14 @@ class BookmarkerWorker(QObject):
             pass
         rows = [{"title": b.title, "toc_page": None, "page": int(b.page),
                  "level": int(b.level), "src": method} for b in bookmarks]
+        if toc_pages and mode in ("auto", "ocr"):
+            # 261102-3(T1): 목차 쪽은 찾았는데 항목을 못 읽은 경우 — 목차 쪽 위 헤딩은 버리고 '목차' 하나
+            from viewer import bookmark_gen
+            import pdf_bookmarker as _pb
+            bookmarks = bookmark_gen.drop_toc_pages(bookmarks, toc_pages)
+            e = bookmark_gen.toc_entry_row(toc_pages)
+            bookmarks = [_pb.Bookmark(title=e["title"], page=e["page"], level=0)] + bookmarks
+            rows = [e] + [r for r in rows if r["page"] not in set(toc_pages)]
         if self._cancel:
             self._cancelled(rows, method); return
         if not bookmarks:
@@ -836,33 +830,6 @@ class BookmarkerWorker(QObject):
                                      "candidates": [], "offset": 0, "toc_pages": []}, **self._stats()))
             return
         self._write_and_finish(bridge, bookmarks, method, res, mode)
-
-    def _map_pages(self, rows, toc_pages, off):
-        """261101-2(F1~F4): 행마다 PDF 쪽·구간(`page`·`seg`). 성공하면 {"method": "folio"|"chapters", …}, 못 하면 None(오프셋으로)."""
-        try:
-            from viewer import page_numbers as _pn
-            first = max(toc_pages) + 1
-            with _pn.PrintedPages(self.input_pdf, ocr=self._op, should_cancel=lambda: self._cancel,
-                                  progress=lambda m: self.progress.emit(m),
-                                  pace=lambda: _pacing.pace(self)) as pp:
-                n = pp.page_count
-                est = pp.estimate(first, n)
-                if self._cancel:
-                    return None
-                if est is not None:
-                    _pn.map_rows(rows, est, n)
-                    _pn.refine_chapter_pages(rows, pp.text_of, skip=set(toc_pages))
-                    return {"method": "folio", "segments": est.as_list()}
-                self.progress.emit(tr("장 제목으로 쪽 맞추는 중..."))
-                found = _pn.map_rows_by_chapters(rows, pp.text_of, n, start_offset=off, skip=set(toc_pages),
-                                                 should_cancel=lambda: self._cancel)
-                if found:
-                    return {"method": "chapters", "chapters": found}
-                for r in rows:                      # 못 찾았으면 표는 종전대로(오프셋)
-                    r["page"] = None; r.pop("seg", None)
-        except Exception:
-            pass
-        return None
 
     def _write_and_finish(self, bridge, bookmarks, method, res, mode):
         """추출/검토 결과를 돌려준다 — **PDF 는 쓰지 않는다**(261019-1, 마스터 §4.4.2).

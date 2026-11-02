@@ -1671,12 +1671,12 @@ class StudyMixin:
                 self.status.showMessage("단어장 생성 실패", 4000)
                 return
             v = (summary.get("vocab") or {}).get("vocab", 0)
-            nb = 0
             if also_bookmarks:
-                nb = self._build_bookmarks_from_study(path, bt=bm_tree)   # 재OCR 없이 책갈피(261019-3: 그 책갈피창에)
+                # 재OCR 없이 책갈피(261019-3: 그 책갈피창에). 261102-3: 자동 생성과 같은 길 — 배경에서, 끝나면 따로 알린다
+                self._build_bookmarks_from_study(path, bt=bm_tree)
             self.search_tabs.setCurrentWidget(self.study_panel)
             self._refresh_study_panel(self.main_view.current_page())
-            tail = f", 책갈피 {nb}개" if also_bookmarks else ""
+            tail = tr(", 책갈피는 만드는 중") if also_bookmarks else ""
             on = summary.get("online") or 0
             on_tail = f", 인터넷 사전 {on}개" if on else ""
             self.status.showMessage(
@@ -1688,31 +1688,35 @@ class StudyMixin:
         worker.error.connect(lambda _e: self.job_done(jid))
         run_in_thread(worker, self._study_threads)
 
-    def _build_bookmarks_from_study(self, path, bt=None) -> int:
-        """260606-11(시간단축): 방금 만든 study.db 의 OCR 단어좌표를 재사용해
-        책갈피(헤딩)를 추출 → 책갈피 트리에 추가(재OCR 없음). 추가 개수 반환."""
-        try:
-            import fitz
-            from viewer.study.study_store import file_key_for
-            from viewer.study.ocr_headings import extract_headings_from_store
-            store = self._study_get_store()
-            fk = file_key_for(path)
-            doc = fitz.open(str(path))
-            try:
-                total = doc.page_count
-            finally:
-                doc.close()
-            bms = extract_headings_from_store(store, fk, total, use_font_auto=False)
-            tree = bt or self.bookmark_tree
-            # 261019-2(점검): OCR 이 도는 몇 분 사이에 편집 모드를 껐을 수 있다 — 넣기 직전에 다시 본다(마스터 §4.7.0)
-            if bms and (not tree.has_file(str(path), warn=True)
-                        or not tree.ensure_edit_mode(tr("단어장·책갈피 동시 생성"))):
-                return 0
-            for b in bms:
-                tree.add_bookmark(str(path), b.page, b.title)
-            if bms:
+    def _build_bookmarks_from_study(self, path, bt=None) -> None:
+        """방금 만든 OCR(study.db·보류 저장소)을 다시 써서 책갈피를 만든다 — 새로 읽는 것은 목차 쪽 판독·쪽 번호 띠뿐.
+
+        261102-3(마스터 §4.4.2 ②''·§4.4.3 T1·T2, 사용자 지시): 종전에는 전 쪽 OCR 헤딩만 써 목차 쪽 줄과
+        목차에 없는 본문 번호 줄('8 계측')까지 책갈피가 됐다. 이제 책갈피 자동 생성과 **같은 길**
+        (`BookmarkerWorker` → `bookmark_gen`)을 배경에서 타고(응답성 SOT §4), 끝나면 그 책갈피창의 그 파일에
+        통째로 넣는다(저장 안 됨 — [저장]·[취소], 책갈피 자동 생성의 '새로 만들기'와 같다)."""
+        from pathlib import Path as _P
+        from viewer.workers import BookmarkerWorker, run_in_thread
+        tree = bt or self.bookmark_tree
+        worker = BookmarkerWorker(_P(path), {"mode": "auto", "review": False})
+        jid = "study_bookmarks"
+        self.job_add(jid, tr("책갈피 만들기 — {name}").format(name=_P(path).name), worker.request_cancel)
+        worker.progress.connect(lambda m: self.job_progress(jid, m))
+
+        def on_done(res):
+            self.job_done(jid)
+            bms = list(res.get("bookmarks") or []) if res.get("phase") == "done" else []
+            # 261019-2(점검): 몇 분 사이에 편집 모드를 껐을 수 있다 — 넣기 직전에 다시 본다(마스터 §4.7.0)
+            if not bms or not tree.has_file(str(path), warn=True)                     or not tree.ensure_edit_mode(tr("단어장·책갈피 동시 생성")):
+                return
+            if tree.replace_file_bookmarks(str(path), [(str(t), int(p), int(lv)) for t, p, lv in bms]):
                 self.status.showMessage(
-                    f"책갈피 {len(bms)}개 추가됨 — 책갈피창 편집(✏)에서 저장(💾)하면 PDF에 반영", 7000)
-            return len(bms)
-        except Exception:
-            return 0
+                    tr("책갈피 {n}개를 넣었습니다 — 책갈피창 [저장] 하면 PDF 에 반영").format(n=len(bms)), 7000)
+
+        def on_err(e):
+            self.job_done(jid)
+            self.status.showMessage(tr("책갈피 만들기 실패: {e}").format(e=e), 5000)
+
+        worker.finished.connect(on_done)
+        worker.error.connect(on_err)
+        run_in_thread(worker, self._study_threads)

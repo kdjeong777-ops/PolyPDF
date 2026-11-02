@@ -5806,25 +5806,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _gen_source_bookmarks(self, path, doc=None) -> list:
         """260606-24: 책갈피 없는 원본의 책갈피를 생성 → [(title, page_1based, level0based)].
-        디지털=폰트/텍스트(pdf_bookmarker), 스캔/이미지=OCR 헤딩."""
-        # 1) 폰트/텍스트 기반(디지털 문서)
+        261102-3(마스터 §4.4.2 ②'', 사용자 지시): 책갈피 자동 생성과 같은 길(`bookmark_gen.generate`) —
+        목차가 있으면 목차 항목만 + 목차 첫 쪽 '목차', 없으면 장 찾기·헤딩(스캔)·글꼴(디지털)."""
         try:
-            from viewer import bookmarker_bridge as bridge
-            if bridge.is_available():
-                res = bridge.extract_auto(path, mode="auto")
-                bms = res.get("bookmarks") or []
-                if bms:
-                    return [(b.title, int(b.page), int(b.level)) for b in bms]
+            from viewer import bookmark_gen
+            return bookmark_gen.generate(path)
         except Exception:
-            pass
-        # 2) 스캔/이미지 → OCR 헤딩
-        try:
-            from viewer.study.ocr_headings import extract_ocr_bookmarks
-            bms = extract_ocr_bookmarks(path, use_font_auto=False)
-            return [(b.title, int(b.page), int(b.level)) for b in bms]
-        except Exception:
-            pass
-        return []
+            return []
 
     def _on_thumb_add_bookmark(self, page_index: int):
         """260606-4: 썸네일 우클릭 → 현재 PDF의 해당 페이지로 책갈피 추가."""

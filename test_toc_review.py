@@ -291,7 +291,9 @@ opts = {"input_pdf": str(pdf), "mode": "toc", "toc_pages": [2], "review": True, 
         "save_pdf": True, "overwrite": False, "save_txt": False, "out_dir": str(root)}
 w = BookmarkerWorker(pdf, opts); w.finished.connect(lambda r: got.update(r)); w.error.connect(lambda e: got.update(err=e))
 w.run()
-chk(got.get("phase") == "review" and len(got.get("rows", [])) == 8 and got.get("offset") == 3,
+# 261102-3(마스터 §4.4.3 T1): 목차 항목 8 + 목차 첫 쪽 '목차' 1
+chk(got.get("phase") == "review" and len(got.get("rows", [])) == 9 and got.get("offset") == 3
+    and got["rows"][0].get("toc_entry") and got["rows"][0]["page"] == 2,
     "④ 워커 검토 단계 — rows·offset 반환, 파일은 쓰지 않음", f"phase={got.get('phase')} err={got.get('err')}")
 chk(not (root / "book_bookmarked.pdf").exists(), "④ 검토 단계에서는 저장 없음")
 got.clear()
@@ -299,8 +301,8 @@ got.clear()
 w2 = BookmarkerWorker(pdf, {**opts, "review": False})
 w2.finished.connect(lambda r: got.update(r)); w2.error.connect(lambda e: got.update(err=e)); w2.run()
 bms2 = got.get("bookmarks") or []
-chk(got.get("phase") == "done" and got.get("count") == 8 and len(bms2) == 8 and bms2[0][1] == 4,
-    "④ 검토 없이 끝 — 책갈피 8개(오프셋 3 적용)를 돌려준다", f"{got.get('phase')} {bms2[:2]}")
+chk(got.get("phase") == "done" and got.get("count") == 9 and len(bms2) == 9 and bms2[0][1] == 2 and bms2[1][1] == 4,
+    "④ 검토 없이 끝 — '목차'(2쪽) + 책갈피 8개(오프셋 3 적용)를 돌려준다", f"{got.get('phase')} {bms2[:2]}")
 _d4 = fitz.open(str(pdf)); _toc4 = _d4.get_toc(); _d4.close()   # Windows: 핸들 닫아야 뒤에서 덮어쓸 수 있다
 chk(not list(root.glob("*_bookmarked.pdf")) and not _toc4,
     "④ 워커는 어떤 PDF 도 쓰지 않는다(새 파일·원본 모두)")
