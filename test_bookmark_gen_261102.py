@@ -4,6 +4,7 @@
 A. 목차 쪽 줄은 책갈피가 되지 않고 목차 첫 쪽에 '목차'(화면 언어) 하나 — 검토 표 길·검토 없는 길
 B. 목차가 있으면 목차에 없는 본문 번호 제목(`8 Measurement`)은 넣지 않는다 — `bookmark_gen.generate`(동시 생성·병합이 쓰는 길)
 C. 헤딩 길에서도 목차 쪽 위 헤딩은 버린다(drop_toc_pages)
+E. 261103-1(F3'): 원본 목차 쪽 숫자가 틀린 세부 행 — 맞춘 쪽에 '번호+제목' 이 없고 뒤 몇 쪽 안에 있으면 그 쪽으로(_96 4.3.3·4.4)
 """
 import os, sys, tempfile
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -120,6 +121,23 @@ chk(got == [("4.4.3 시험시공", 2), ("4.5.1 재료의 품질", 2), ("4.5.2 �
             ("5.1 사후관측", 1), ("5.1.1 사후관측 항목", 2), ("5.1.2 평가기준치", 2), ("5.1.3.1 교통량 및 환경 조건", 3),
             ("5.2 현장조사", 1)], "D6 사용자 그림의 차례 — 4.5.1 은 그대로, 45.2→4.5.2, 끼어든·잡글 줄은 버림", str(got))
 chk(nl("2 정96393적 0 [oem I id") is None, "D7 숫자·기호가 대부분인 잡글 줄은 제목이 아니다")
+
+# ── E. 261103-1(F3'): 세부 행 쪽 다시 맞추기 — _96 본문 OCR 줄 그대로 ─────────────
+from viewer import page_numbers as pn
+body = {96: "4.3.2.3 관리 시험 (1) 두께 및 포장 시공 후", 97: "4.3.3 시험 시공 4.3.3.1 공사 개요",
+        102: "4.3.4 관리 시험", 103: "(2) 다짐도", 104: "4.4 AC60~70 아스콘 시 험 포장 441 재 료 의 품질 (1) 골재",
+        105: "4.4.2 배합 설계", 106: "표 4-12", 107: "그림", 108: "4.4.3 시 험 시공", 109: "", 110: ""}
+rows = [{"title": "4.3.3 시험 시공", "page": 96, "level": 2}, {"title": "4.4 아스콘 시험 포장", "page": 102, "level": 1},
+        {"title": "4.4.1 재료의 품질", "page": 102, "level": 2}, {"title": "4.4.2 배합 설계", "page": 105, "level": 2},
+        {"title": "4.4.3 시험시공", "page": 106, "level": 2}, {"title": "4. 시험 포장", "page": 60, "level": 0},
+        {"title": "4.5 없는 제목", "page": 106, "level": 1}, {"title": "4.4.9 수동", "page": 96, "level": 2, "manual": True}]
+moved = pn.refine_sub_pages(rows, lambda p: body.get(p), page_count=200)
+chk([r["page"] for r in rows] == [97, 104, 104, 105, 108, 60, 106, 96] and moved == 4,
+    "E1 맞춘 쪽에 번호+제목이 없으면 뒤 몇 쪽에서 — 4.3.3→97·4.4→104(본문 제목이 더 길어도)·4.4.1→104('441')·4.4.3→108, "
+    "이미 맞은 행·장 행·못 찾은 행·수동 행은 그대로", f"{[r['page'] for r in rows]} moved={moved}")
+rows2 = [{"title": "4.3.3 시험 시공", "page": 96, "level": 2}]
+chk(pn.refine_sub_pages(rows2, lambda p: None) == 0 and rows2[0]["page"] == 96,
+    "E2 쪽 글을 모르면(저장된 OCR·글자층 없음) 옮기지 않는다 — 새로 OCR 하지 않는다")
 
 print()
 print("ALL PASS" if not fails else f"FAILED {len(fails)}: {fails}")

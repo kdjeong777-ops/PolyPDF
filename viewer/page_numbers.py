@@ -26,6 +26,9 @@ OFF_LIMIT = 80           # |차이| 상한
 CHAPTER_BACK = 3         # 장 행: 앞으로 이만큼까지 장 제목 쪽을 찾는다(F3)
 CHAPTER_WINDOW = 8       # F4: 앞 장에서 이어 짐작한 쪽의 앞뒤 이만큼에서 장 제목 쪽을 찾는다
 MAX_REFINE = 12          # 경계 좁히기 반복 상한
+SUB_AHEAD = 3            # F3': 세부 행 — 맞춘 쪽에 제목이 없으면 뒤로 이만큼까지 찾는다(원본 목차 쪽 숫자 틀림)
+SUB_HEAD = 4             # F3': 대조할 제목 앞 글자 수(번호 뒤) — OCR 이 뒤쪽 글을 자주 깬다(`AC60O~70`)
+SUB_GAP = 10             # F3': 번호와 제목 앞 글자 사이에 끼어도 되는 글자 수(본문 제목이 목차보다 길다)
 # 띠 OCR 해상도·psm·언어는 단어학습 SOT §14.B '쪽 번호 띠' 가 소유한다
 FOLIO_DPI = 150
 FOLIO_PSM = 11
@@ -315,6 +318,22 @@ class PrintedPages:
         self._txt[pno] = t
         return t
 
+    def known_text(self, pno: int) -> Optional[str]:
+        """F3'(261103-1): 쪽 **전체** 글을 이미 알 때만 — 저장된 OCR ▶ 뜻 있는 글자층. 모르면 None(새로 OCR 하지 않는다)."""
+        known = self.__dict__.setdefault("_known", {})
+        if pno in known:
+            return known[pno]
+        t = None
+        try:
+            if self.ocr is not None and self.ocr.has_cached(pno):
+                t = self.ocr.text(pno, run=False) or ""
+            elif self._layer_usable(pno):
+                t = self.doc.load_page(pno - 1).get_text() or ""
+        except Exception:
+            t = None
+        known[pno] = t
+        return t
+
 
 def _needle(title: str) -> str:
     from viewer.toc_parse import _title_needle
@@ -364,6 +383,51 @@ def refine_chapter_pages(rows: list[dict], text_of: Callable[[int], str], *, bac
                 continue
         r["page"] = q
         n += 1
+    return n
+
+
+_SUB_NUM = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){1,3})\.?\s*(.+)$")
+
+
+def _sub_needle(title: str):
+    """세부 행 대조 — 번호(점 뺀 숫자) 뒤 `SUB_GAP` 글자 안에 제목 앞 `SUB_HEAD` 글자(본문 제목이 목차보다 길기도 하다 —
+    목차 '4.4 아스콘 시험 포장', 본문 '4.4 AC60~70 아스콘 시험포장'). 번호 없는 행·짧은 제목은 None(대조하지 않는다)."""
+    m = _SUB_NUM.match(title or "")
+    if not m:
+        return None
+    rest = _norm(m.group(2))
+    if len(rest) < 2:
+        return None
+    return re.compile(re.escape(_norm(m.group(1))) + r".{0,%d}?" % SUB_GAP + re.escape(rest[:SUB_HEAD]))
+
+
+def refine_sub_pages(rows: list[dict], text_of: Callable[[int], Optional[str]], *, ahead: int = SUB_AHEAD,
+                     skip=(), page_count: int = 0) -> int:
+    """F3'(261103-1): 세부 행(레벨 1~, 번호 있는 행) — 원본 목차의 쪽 숫자가 틀린 책이 있다(_96 목차 4.3.3=90·4.4=96,
+    실제 인쇄 91·98). 맞춘 쪽에 '번호+제목'(`_sub_needle`)이 안 보이고 뒤 `ahead` 쪽 안에 보이면 처음 보이는 쪽으로 민다.
+    맞춘 쪽에 보이거나 어디에도 안 보이면 그대로. `text_of` 는 **이미 아는 글만**(`PrintedPages.known_text` — 저장된 OCR·
+    뜻 있는 글자층) 주고 모르면 None — 새로 OCR 하지 않는다(띠 OCR 로 재면 _96 에서 +250초). 옮긴 수."""
+    n = 0
+    for r in rows:
+        if int(r.get("level", 0)) == 0 or not r.get("page") or r.get("manual"):
+            continue
+        nd = _sub_needle(r.get("title", ""))
+        if nd is None:
+            continue
+        p = int(r["page"])
+        t = text_of(p)
+        if t is None or nd.search(_norm(t)):
+            continue
+        for q in range(p + 1, p + ahead + 1):
+            if q in skip or (page_count and q > page_count):
+                break
+            tq = text_of(q)
+            if tq is None:
+                break
+            if nd.search(_norm(tq)):
+                r["page"] = q
+                n += 1
+                break
     return n
 
 

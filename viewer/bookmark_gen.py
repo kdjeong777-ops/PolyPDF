@@ -49,11 +49,13 @@ def map_pages(pdf_path, rows: list[dict], toc_pages: list[int], off: int, *, ocr
             if est is not None:
                 _pn.map_rows(rows, est, n)
                 _pn.refine_chapter_pages(rows, pp.text_of, skip=set(toc_pages))
+                _pn.refine_sub_pages(rows, pp.known_text, skip=set(toc_pages), page_count=n)     # F3'(261103-1)
                 return {"method": "folio", "segments": est.as_list()}
             progress(tr("장 제목으로 쪽 맞추는 중..."))
             found = _pn.map_rows_by_chapters(rows, pp.text_of, n, start_offset=off, skip=set(toc_pages),
                                              should_cancel=should_cancel)
             if found:
+                _pn.refine_sub_pages(rows, pp.known_text, skip=set(toc_pages), page_count=n)     # F3'(261103-1)
                 return {"method": "chapters", "chapters": found}
             for r in rows:                      # 못 찾았으면 표는 종전대로(오프셋)
                 r["page"] = None

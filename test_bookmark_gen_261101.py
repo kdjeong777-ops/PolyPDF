@@ -78,6 +78,10 @@ class FakeOcr2(FakeOcr):
     def toc_lines(self, p): return [(72.0, f"{i}. Chapter title {i} .... {i * 10}") for i in range(1, 9)]
 lines = tp._page_lines(toc_pdf, [1], ocr=FakeOcr2())
 chk(len(lines) == 8 and "Chapter title" in lines[0][2], "B4 OCR 가 더 많으면 OCR")
+class FakeOcr3(FakeOcr):      # 261103-1: 항목 수가 같으면 OCR 판독 — 예전에 덧씌운 글자층의 잡글이 이기지 않게
+    def toc_lines(self, p): return [(72.0, f"{i}. Fresh title {i} .... {i * 10}") for i in range(1, 7)]
+lines = tp._page_lines(toc_pdf, [1], ocr=FakeOcr3())
+chk(len(lines) == 6 and "Fresh title" in lines[0][2], "B5 항목 수가 같으면 OCR 판독(글자층이 아니라)", f"{lines[:1]}")
 
 # ── C. 인쇄 쪽 번호 ────────────────────────────────────────────────────
 from viewer import page_numbers as pn

@@ -265,7 +265,8 @@ def _page_lines(pdf_path, pages: Iterable[int], ocr=None) -> list[tuple[int, flo
 
     261019-1: `ocr`(`study.ocr_pages.OcrPages`)를 주면 **스캔 쪽**(덧씌운 OCR 층 포함)은 그 공급자의
     목차 판독(`toc_lines` — 저장된 OCR 재사용 + 흩어진 글 판독)으로 읽는다.
-    261101-2(P8): 스캔 쪽 글자층이 뜻 있는 글이면 그것도 읽어, 쪽 번호 붙은 항목이 더 많은 쪽을 쓴다(같으면 글자층)."""
+    261101-2(P8): 스캔 쪽 글자층이 뜻 있는 글이면 그것도 읽어, 쪽 번호 붙은 항목이 **더 많을 때만** 글자층을 쓴다 —
+    같으면 OCR 판독(261103-1: PolyPDF 가 예전에 덧씌운 글자층에는 다시 읽기 전 잡글('Ds Fi')이 남아 같은 수에서 이겼다)."""
     out = []
     try:
         import pdfplumber
@@ -278,7 +279,7 @@ def _page_lines(pdf_path, pages: Iterable[int], ocr=None) -> list[tuple[int, flo
                     layer = _T._group_lines_by_y(pdf.pages[pno - 1])
                     lines = ocr.toc_lines(pno)
                     if layer and layer_meaningful([t for _x, t in layer]) \
-                            and _entry_count(layer) >= _entry_count(lines):
+                            and _entry_count(layer) > _entry_count(lines):
                         lines = layer
                 else:
                     lines = _T._group_lines_by_y(pdf.pages[pno - 1])
