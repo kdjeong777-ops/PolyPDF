@@ -502,10 +502,24 @@ _TOC_NO = re.compile(r"[<(]?\d+(?:\.\d+)*\.?[>)]?")
 
 def looks_like_toc(lines: list) -> bool:
     """줄(`group_lines`) 대부분이 절 번호로 시작하면 목차 쪽 — 본문의 번호 목록과 가르려고 여러 단 번호(`2.1`)도 셋 이상."""
-    starts = [str(ln["words"][0]["surface"]) for ln in lines if ln.get("words")]
-    num = [s for s in starts if _TOC_NO.fullmatch(s) and re.search(r"\d\.\d", s) or re.fullmatch(r"\d{1,2}\.", s)]
+    return toc_text_lines([" ".join(str(w["surface"]) for w in ln["words"]) for ln in lines if ln.get("words")])
+
+
+def toc_text_lines(texts: list) -> bool:
+    """줄 글 목록으로 목차 쪽인지 — `looks_like_toc` 의 판정. 텍스트 창 줄 잇기도 이것을 쓴다(텍스트 창 SOT §3.7.15).
+    번호 줄은 절 번호 **뒤에 제목 글자**가 있어야 한다 — 수 표(`2.147 …`·`12.5`)를 목차로 보지 않게."""
+    starts, num = 0, []
+    for t in texts:
+        tok = str(t).split(None, 1)
+        if not tok:
+            continue
+        starts += 1
+        s, rest = tok[0], (tok[1] if len(tok) > 1 else "")
+        if ((_TOC_NO.fullmatch(s) and re.search(r"\d\.\d", s) or re.fullmatch(r"\d{1,2}\.", s))
+                and re.search(r"[가-힣A-Za-z]", rest)):
+            num.append(s)
     deep = [s for s in num if re.search(r"\d\.\d", s)]
-    return len(num) >= TOC_PAGE_MIN and len(num) >= TOC_PAGE_SHARE * len(starts) and len(deep) >= 3
+    return len(num) >= TOC_PAGE_MIN and len(num) >= TOC_PAGE_SHARE * starts and len(deep) >= 3
 
 
 def fix_toc_page(ocr_mod, img, res: dict, dpi: int) -> bool:

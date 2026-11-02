@@ -1759,6 +1759,11 @@ def join_sentences(rows) -> list:
             and r.get('kind') == 'text' and ' | ' not in r.get('text', '')]
     if len(body) < 2:
         return list(rows)
+    # 261102-2(SOT §3.7.15): 목차 쪽은 잇지 않는다 — OCR 이 쪽 번호·점선을 못 읽으면 제목 줄이 오른쪽까지 찬
+    #   문단처럼 보여 `3.1 …` 뒤에 `3.2 …`·`3.3 …` 이 붙었다(_96 5쪽). 판정은 OCR 목차 쪽과 같은 것(단어학습 SOT §14.8.4).
+    from viewer.study.ocr_pages import toc_text_lines
+    if toc_text_lines([r.get('text') or '' for r in body]):
+        return list(rows)
     # 260910-12(사용자 보고 "부호로 잇는 규칙이 적용 안 된다", SOT §3.7.8):
     #   여백은 **단마다** 잰다. 쪽 하나로 재면 2단 쪽에서 왼쪽 단이 한 줄도 못 잇는다 —
     #   실측 1쪽: 쪽 전체 90분위 556.9 인데 왼쪽 단은 **가장 긴 줄도 300.2** 라
