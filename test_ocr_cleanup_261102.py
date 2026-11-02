@@ -209,6 +209,43 @@ lb = {"x0": 98.0, "cy": 101.0, "h": 50.0, "title": "설계 법정립을 위한 �
 chk(opm._merge_toc_lines([la], [lb])[0]["title"].startswith("DVD"),
     "⑧ 두 판독을 합칠 때 줄 첫머리(번호 자리)를 놓친 제목은 고르지 않는다")
 
+
+# ── ⑨ 목차 쪽 OCR 자체(build_page) — 사용자 보고 '텍스트 창 4쪽 OCR 다시 읽기에도 1. 서론이 안 된다' ─────────────
+#   ⑧ 의 다시 읽기는 책갈피(`toc_lines`)에만 있었다 — 텍스트 창·글자층·검색이 읽는 쪽 OCR 도 같은 규칙을 거쳐야 한다
+import fitz
+from viewer.study import ocr as so
+
+
+def toc_res():
+    ws = [Wd("Ds", 180, 278, 0.15), Wd("Fi", 281, 305, 0.07), Wd("1", 2100, 2130)]
+    for k in range(10):
+        y = 600 + 80 * k
+        ws += [Wd("2.%d" % (k + 1), 200, 290, 0.9, y, y + 50), Wd("포장", 320, 420, 0.9, y, y + 50),
+               Wd("설계", 440, 540, 0.9, y, y + 50), Wd(str(4 + k), 2100, 2130, 0.9, y, y + 50)]
+    text = "\n".join(" ".join(w["surface"] for w in ws[i:i + 4]) for i in range(3, len(ws), 4))
+    return {"text": "Ds Fi 1\n" + text, "conf": 0.8, "words": ws}
+
+
+fake = FakeOcr(line=[Wd("1.", 180, 210, 0.92), Wd("서", 240, 275, 0.49)], band=[Wd("론", 315, 360, 0.92)])
+_orig = (so.ocr_image, so.render_page, so.read_line_words)
+so.ocr_image = lambda img, lang="eng", psm=0, dpi=300: toc_res()
+so.render_page = lambda doc, i, dpi=300, drop_watermark_bg=False: (img, None, None)
+so.read_line_words = fake.read_line_words
+try:
+    _d = fitz.open()
+    _d.new_page()
+    r = so.build_page(_d, 0, lang="kor+eng", force_ocr=True)
+    surf = [w["surface"] for w in r["words"]]
+    chk(surf[:2] == ["1. 서", "론"] and "Ds" not in surf, "⑨ 목차 쪽 OCR(build_page)의 `Ds Fi` → `1. 서`(묶음 자리 한 낱말) + 띠의 `론`", str(surf[:4]))
+    chk(r["text"].splitlines()[0].startswith("1. 서") and "Ds" not in r["text"], "⑨ 쪽 글(검색·단어장)도 고친 낱말로", r["text"][:30])
+    chk(sum(1 for s in surf if s == "포장") == 10, "⑨ 잡글 없는 줄은 그대로")
+    r = so.build_page(_d, 0, lang="eng", force_ocr=True)
+    chk("Ds" in [w["surface"] for w in r["words"]], "⑨ `kor` 를 읽지 않는 쪽(`eng`)은 건드리지 않는다")
+finally:
+    so.ocr_image, so.render_page, so.read_line_words = _orig
+body = [{"words": [Wd(s, 200, 300)]} for s in ["이", "그", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "또"]]
+chk(not opm.looks_like_toc(body), "⑨ 번호 목록만 있는 본문 쪽(여러 단 번호 없음)은 목차로 보지 않는다")
+
 print()
 print("FAIL", len(fails), fails) if fails else print("ALL PASS")
 sys.exit(1 if fails else 0)

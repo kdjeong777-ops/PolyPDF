@@ -3896,7 +3896,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   워커는 계속 읽고 있었지만 화면·표시가 첫 쪽에서 멈춘 것처럼 보였다.
         self._ocr_token = getattr(self, '_ocr_token', 0) + 1
         tok = self._ocr_token
-        tp.set_busy(tr('OCR 로 읽는 중… (%d쪽)') % len(pages))
+        # 261102-2(사용자 보고 '4쪽만 읽었는데 1쪽 처리 후 4쪽'): 쪽 수 `(1쪽)` 이 '1쪽' 으로 읽혔다 — 한 쪽이면 그 쪽 번호를
+        tp.set_busy(tr('OCR 로 {pg}쪽 읽는 중…').format(pg=pages[0] + 1) if len(pages) == 1
+                    else tr('OCR 로 읽는 중… ({n}개 쪽)').format(n=len(pages)))
         from viewer.workers import TextOcrPageWorker, run_in_thread
         w = TextOcrPageWorker(path, pages, lang=lang, db_path=None, token=tok,
                               drop_watermark=watermark, skip_text_pages=skip_text)

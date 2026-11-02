@@ -1233,11 +1233,6 @@ msgid "이 설치본에는 %s OCR 자료가 없습니다."
 msgstr "This installation has no %s OCR data."
 
 #: viewer/app.py
-#, python-format
-msgid "OCR 로 읽는 중… (%d쪽)"
-msgstr "Reading with OCR… (%d pages)"
-
-#: viewer/app.py
 msgid "OCR 준비 중…"
 msgstr "Preparing OCR…"
 
@@ -2527,6 +2522,16 @@ msgstr "Reading p.{page}…"
 #: viewer/app.py
 msgid "받지 못했습니다."
 msgstr "Could not download."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "OCR 로 {pg}쪽 읽는 중…"
+msgstr "Reading page {pg} with OCR…"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "OCR 로 읽는 중… ({n}개 쪽)"
+msgstr "Reading with OCR… ({n} pages)"
 
 #: viewer/app.py
 #, python-format

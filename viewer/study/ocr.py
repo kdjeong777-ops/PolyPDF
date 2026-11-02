@@ -1214,5 +1214,13 @@ def build_page(doc: "fitz.Document", page_index: int, *,
     img, _, _ = render_page(doc, page_index, dpi=dpi,
                             drop_watermark_bg=drop_watermark_bg)
     res = ocr_image(img, lang=resolve_lang(lang), dpi=dpi)
+    if "kor" in resolve_lang(lang).split("+"):
+        # 261102-2(§14.8.4): 목차 쪽이면 제목의 잡글 낱말(`Ds Fi`=`1. 서 론`)을 `kor` 로 — 텍스트 창·글자층·책갈피가 같은 글을 쓴다
+        try:
+            import sys as _sys
+            from viewer.study import ocr_pages as _op
+            _op.fix_toc_page(_sys.modules[__name__], img, res, dpi)
+        except Exception:
+            pass
     res.update(source="ocr", dpi=dpi, engine="tesseract", why=why)
     return res

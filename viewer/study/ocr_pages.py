@@ -358,7 +358,13 @@ def _tidy_toc_title(t: str) -> str:
 
 
 def reread_toc_title(ocr_mod, img, ws: list):
-    """목차 줄 제목 낱말(`ws`, 쪽 그림 픽셀) 중 잡글을 `kor` 한 줄 읽기로 바꾼다 → 새 제목 또는 None(바꿀 것 없음).
+    """목차 줄 제목 낱말 중 잡글을 `kor` 로 다시 읽은 제목 → 새 제목 또는 None(바꿀 것 없음). 규칙은 `_reread_toc_words`."""
+    new = _reread_toc_words(ocr_mod, img, ws)
+    return (_tidy_toc_title(_join(new)) or None) if new is not None else None
+
+
+def _reread_toc_words(ocr_mod, img, ws: list, drop_tail: bool = True):
+    """목차 줄 제목 낱말(`ws`, 쪽 그림 픽셀) 중 잡글을 `kor` 한 줄 읽기로 바꾼다 → 새 낱말 목록 또는 None(바꿀 것 없음).
 
     `kor+eng` 판독은 가는 글씨 목차의 번호·한글을 영문 잡글로 읽는다(_96 보고서: `1.3`→`OB`, `2.1.2`→`DVD`,
     `4.5.1`→`A5.1`, `1. 서 론`→`Ds Fi`, `개 요`→`개 Go`, `4.3.3 시험시공`→`ABS ALAR`). 제목 자리를 `kor` 로 한 줄 읽으면
@@ -444,12 +450,12 @@ def reread_toc_title(ocr_mod, img, ws: list):
             new[g0] = dict(ws[g0], surface=txt, conf=conf, x1=ws[g1]["x1"])
             drop.update(range(g0 + 1, g1 + 1))
             changed = True
-        elif not cover and g1 == len(ws) - 1 and g0 > 0 and kinds == {"junk"}:
+        elif drop_tail and not cover and g1 == len(ws) - 1 and g0 > 0 and kinds == {"junk"}:
             drop.update(range(g0, g1 + 1))            # 끝에 붙은 점선 리더 조각
             changed = True
     if not changed:
         return None
-    return _tidy_toc_title(_join([w for i, w in enumerate(new) if i not in drop])) or None
+    return [w for i, w in enumerate(new) if i not in drop]
 
 
 def extend_spaced_title(ocr_mod, img, title: str, ws: list):
@@ -457,6 +463,12 @@ def extend_spaced_title(ocr_mod, img, title: str, ws: list):
 
     판독이 `론`·`록>` 을 점선 리더 쪽 빈틈 너머로 두어 제목이 한 음절로 남았다(_96 보고서 목차 `1. 서 론`·`7. 결 론`·`<부 록>`).
     제목 끝에서 줄 높이의 `TOC_SPACED_BAND` 배까지만 본다 — 한두 음절 한글(필요하면 `>`)만 받는다."""
+    q = _spaced_tail_word(ocr_mod, img, title, ws)
+    return _tidy_toc_title((title or "").strip() + " " + q["surface"]) if q else None
+
+
+def _spaced_tail_word(ocr_mod, img, title: str, ws: list):
+    """`extend_spaced_title` 의 다음 음절 낱말(쪽 그림 좌표) → `{surface, x0, y0, x1, y1, conf}` 또는 None."""
     t = (title or "").strip()
     if not ws or not re.fullmatch(r"(?:[<(]?\d+(?:\.\d+)*\.?\s*[가-힣]|<[가-힣]{1,3})", t):
         return None
@@ -468,19 +480,78 @@ def extend_spaced_title(ocr_mod, img, title: str, ws: list):
     bx = (min(W - 1, x1 + 2), max(0, y0 - 6), min(W, x1 + int(TOC_SPACED_BAND * h)), min(H, y1 + 6))
     if bx[2] - bx[0] < h:
         return None
-    m = None
+    m = hit = None
     for psm in (7, 10):                          # 띠가 점선 리더를 품으면 psm 7 이 비곤 한다 — 한 글자 모드로 한 번 더
-        for q in ocr_mod.read_line_words(img, bx, "kor", psm=psm):
-            m = re.match(r"([가-힣]{1,2})(>?)", q["surface"])
-            if m and q["conf"] >= TOC_REREAD_CONF:
+        for hit in ocr_mod.read_line_words(img, bx, "kor", psm=psm):
+            m = re.match(r"([가-힣]{1,2})(>?)", hit["surface"])
+            if m and hit["conf"] >= TOC_REREAD_CONF:
                 break
             m = None
         if m:
             break
     if not m:
         return None
-    tail = m.group(1) + (">" if t.startswith("<") else "")
-    return _tidy_toc_title(t + " " + tail)
+    return dict(hit, surface=m.group(1) + (">" if t.startswith("<") else ""))
+
+
+# ── 261102-2: 목차 쪽 OCR 자체를 고친다 — 텍스트 창·글자층·검색도 같은 글 (단어학습 SOT §14.8.4) ──────────
+TOC_PAGE_MIN = 8             # 목차 쪽으로 볼 번호 줄(`2.1.1 …`·`1. …`) 수의 하한
+TOC_PAGE_SHARE = 0.5         # … 그리고 쪽 줄 가운데 번호 줄의 몫
+_TOC_NO = re.compile(r"[<(]?\d+(?:\.\d+)*\.?[>)]?")
+
+
+def looks_like_toc(lines: list) -> bool:
+    """줄(`group_lines`) 대부분이 절 번호로 시작하면 목차 쪽 — 본문의 번호 목록과 가르려고 여러 단 번호(`2.1`)도 셋 이상."""
+    starts = [str(ln["words"][0]["surface"]) for ln in lines if ln.get("words")]
+    num = [s for s in starts if _TOC_NO.fullmatch(s) and re.search(r"\d\.\d", s) or re.fullmatch(r"\d{1,2}\.", s)]
+    deep = [s for s in num if re.search(r"\d\.\d", s)]
+    return len(num) >= TOC_PAGE_MIN and len(num) >= TOC_PAGE_SHARE * len(starts) and len(deep) >= 3
+
+
+def fix_toc_page(ocr_mod, img, res: dict, dpi: int) -> bool:
+    """`build_page` 결과(`res`, 쪽 그림 픽셀 낱말)가 목차 쪽이면 줄마다 제목의 잡글 낱말을 `kor` 로 다시 읽고 벌린 제목을 잇는다.
+    `res` 의 `words`·`text` 를 바꾼다 → 바꿨으면 True. 책갈피의 `toc_lines` 와 같은 규칙(`_reread_toc_words`·`_spaced_tail_word`) —
+    텍스트 창·글자층·검색·단어장이 모두 이 글을 쓴다(사용자 보고 '텍스트 창 4쪽 OCR 다시 읽기에도 1. 서론이 안 된다')."""
+    words = list(res.get("words") or [])
+    lines = group_lines(words, dpi, raw=True)
+    if not lines or not looks_like_toc(lines):
+        return False
+    width = float(img.size[0])
+    changed = False
+    out = []
+    for ln in lines:
+        tp = _toc_parts(ln, width)
+        tw = tp["ws"]
+        new = None
+        try:
+            new = _reread_toc_words(ocr_mod, img, tw, drop_tail=False)    # 쪽 글은 지우지 않는다(점선 리더 조각은 책갈피 쪽이 뗀다)
+        except Exception:
+            new = None
+        cur = list(new) if new is not None else list(tw)
+        try:
+            tail = _spaced_tail_word(ocr_mod, img, _join(cur), cur)
+        except Exception:
+            tail = None
+        if tail is not None:
+            cur.append(tail)
+        # 벌린 음절은 붙이지 않는다 — Tesseract 는 한글을 음절마다 낱말로 내놓아, 붙임은 쪽 글 잇기(빈틈 규칙)가 정한다
+        if new is not None or tail is not None:
+            changed = True
+            ids = {id(w) for w in tw}
+            rest = [w for w in ln["words"] if id(w) not in ids]     # 쪽 번호·점선 리더는 그대로
+            out.append(sorted(cur + rest, key=lambda w: float(w["x0"])))
+        else:
+            out.append(list(ln["words"]))
+    if not changed:
+        return False
+    res["words"] = [w for ws in out for w in ws]
+    parts = []                                   # 쪽 하나로 잇는다 — 한글 붙임 문턱은 쪽의 빈틈 분포에서(텍스트 창 SOT §3.6.12)
+    for ws in out:
+        if parts:
+            parts.append("\n")
+        parts.extend(ws)
+    res["text"] = ocr_mod._join_words_by_gap(parts)
+    return True
 
 
 TOC_SPACED_BAND = 2.0       # 벌린 제목의 다음 음절을 찾는 띠 폭(줄 높이의 배) — 넓히면 점선 리더가 들어 판독이 빈다(실측 `론` 0.92 → 없음)
