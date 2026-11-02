@@ -1023,6 +1023,7 @@ class StudyBuildWorker(QObject):
             done, _ = store.page_progress(fkey)
             self.finished.emit({
                 "file_key": fkey, "pages": total, "done": done,
+                "new_pages": processed - done0,       # 261103-1: 이번에 새로 읽은 쪽(보류 — 일괄 OCR 끝 창)
                 "cancelled": self._cancel, "ocr_used": ocr_used,
                 "tesseract": info, "vocab": vocab_summary, "online": online_n,
             })

@@ -1688,7 +1688,10 @@ class StudyMixin:
             v = (summary.get("vocab") or {}).get("vocab", 0)
             if also_bookmarks:
                 # 재OCR 없이 책갈피(261019-3: 그 책갈피창에). 261102-3: 자동 생성과 같은 길 — 배경에서, 끝나면 따로 알린다
-                self._build_bookmarks_from_study(path, bt=bm_tree, what=what)
+                #   261103-1(마스터 §4.4.3 B2): 끝나면 저장할 것을 가운데 창으로 — 새로 읽은 쪽·단어장은 보류 중
+                from viewer.study.study_store import pending_enabled
+                ocr_pending = pending_enabled() and bool(summary.get("new_pages") or with_vocab)
+                self._build_bookmarks_from_study(path, bt=bm_tree, what=what, ocr_pending=ocr_pending)
             if with_vocab:
                 self.search_tabs.setCurrentWidget(self.study_panel)
                 self._refresh_study_panel(self.main_view.current_page())
@@ -1708,13 +1711,14 @@ class StudyMixin:
         worker.error.connect(lambda _e: self.job_done(jid))
         run_in_thread(worker, self._study_threads)
 
-    def _build_bookmarks_from_study(self, path, bt=None, what: str = "") -> None:
+    def _build_bookmarks_from_study(self, path, bt=None, what: str = "", ocr_pending: bool = False) -> None:
         """방금 만든 OCR(study.db·보류 저장소)을 다시 써서 책갈피를 만든다 — 새로 읽는 것은 목차 쪽 판독·쪽 번호 띠뿐.
 
         261102-3(마스터 §4.4.2 ②''·§4.4.3 T1·T2, 사용자 지시): 종전에는 전 쪽 OCR 헤딩만 써 목차 쪽 줄과
         목차에 없는 본문 번호 줄('8 계측')까지 책갈피가 됐다. 이제 책갈피 자동 생성과 **같은 길**
         (`BookmarkerWorker` → `bookmark_gen`)을 배경에서 타고(응답성 SOT §4), 끝나면 그 책갈피창의 그 파일에
-        통째로 넣는다(저장 안 됨 — [저장]·[취소], 책갈피 자동 생성의 '새로 만들기'와 같다)."""
+        통째로 넣는다(저장 안 됨 — [저장]·[취소], 책갈피 자동 생성의 '새로 만들기'와 같다).
+        261103-1(B2): 그 파일 행이 없으면 더하고(종전에는 버렸다), 끝나면 `_batch_ocr_finished` 가 가운데 창으로 알린다."""
         from pathlib import Path as _P
         from viewer.workers import BookmarkerWorker, run_in_thread
         tree = bt or self.bookmark_tree
@@ -1725,19 +1729,59 @@ class StudyMixin:
 
         def on_done(res):
             self.job_done(jid)
-            bms = list(res.get("bookmarks") or []) if res.get("phase") == "done" else []
+            phase = res.get("phase")
+            bms = list(res.get("bookmarks") or []) if phase == "done" else []
+            n, why = 0, ""
+            if phase == "cancelled":
+                why = tr("책갈피 만들기를 중지했습니다.")
+            elif not bms:
+                why = tr("만들 책갈피를 찾지 못했습니다.")
             # 261019-2(점검): 몇 분 사이에 편집 모드를 껐을 수 있다 — 넣기 직전에 다시 본다(마스터 §4.7.0)
-            if not bms or not tree.has_file(str(path), warn=True) \
-                    or not tree.ensure_edit_mode(what or tr("일괄 OCR")):
-                return
-            if tree.replace_file_bookmarks(str(path), [(str(t), int(p), int(lv)) for t, p, lv in bms]):
-                self.status.showMessage(
-                    tr("책갈피 {n}개를 넣었습니다 — 책갈피창 [저장] 하면 PDF 에 반영").format(n=len(bms)), 7000)
+            elif not tree.ensure_edit_mode(what or tr("일괄 OCR")):
+                why = tr("편집 모드가 아니어서 책갈피는 넣지 않았습니다.")
+            # 261103-1(B2): 그 파일 행이 없으면 더한다 — 자동 생성과 같다(`replace_file_bookmarks`)
+            elif tree.replace_file_bookmarks(str(path), [(str(t), int(p), int(lv)) for t, p, lv in bms]):
+                n = len(bms)
+            else:
+                why = tr("책갈피창에서 이 파일을 찾지 못했습니다.")
+            self._batch_ocr_finished(path, tree, n, why, ocr_pending)
 
         def on_err(e):
             self.job_done(jid)
-            self.status.showMessage(tr("책갈피 만들기 실패: {e}").format(e=e), 5000)
+            self._batch_ocr_finished(path, tree, 0, tr("책갈피 만들기 실패: {e}").format(e=e), ocr_pending)
 
         worker.finished.connect(on_done)
         worker.error.connect(on_err)
         run_in_thread(worker, self._study_threads)
+
+    def _batch_ocr_finished(self, path, tree, n: int, why: str, ocr_pending: bool) -> None:
+        """261103-1(마스터 §4.4.3 B2·디자인 SOT §2.18, 사용자 지시 '저장이 필요하면 가운데 창으로 안내'):
+        일괄 OCR 이 끝나 저장할 것(넣은 책갈피·보류 OCR)이 있으면 주 창 가운데 확인 창 — `저장`(기본) / `나중에`.
+        `저장` 은 책갈피창 [저장] 과 같은 길(`_op_save` → `_finalize_save`, 보류 OCR 도 확정), 책갈피가 없으면 OCR 만 확정."""
+        self._pending_refresh()                        # '저장 안 한 OCR' 단추(배경에서 센다)
+        name = Path(path).name
+        if not n and not ocr_pending:
+            if why:
+                QMessageBox.information(self, tr("일괄 OCR"), tr("'{name}' — {why}").format(name=name, why=why))
+            return
+        lines = [tr("'{name}' 의 일괄 OCR 이 끝났습니다.").format(name=name), ""]
+        lines.append(tr("책갈피 {n}개를 책갈피창에 넣었습니다(저장 안 됨).").format(n=n) if n else why)
+        if ocr_pending:
+            lines.append(tr("읽은 OCR 결과도 아직 저장하지 않았습니다."))
+        lines += ["", tr("[저장] 하면 책갈피는 PDF 에 쓰고 OCR 결과는 남겨 둡니다.")]
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle(tr("일괄 OCR"))
+        box.setText("\n".join(s for s in lines if s is not None))
+        b_save = box.addButton(tr("저장"), QMessageBox.ButtonRole.AcceptRole)
+        b_later = box.addButton(tr("나중에"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_save)                    # 입력칸 없는 확인 창 — 긍정 기본(디자인 SOT §2.7 예외)
+        box.setEscapeButton(b_later)
+        box.exec()
+        if box.clickedButton() is b_save:
+            if n:
+                tree._op_save(str(path))                # 책갈피 저장이 OCR·단어장도 확정한다(마스터 §4.7.13)
+            else:
+                self.study_commit_for(str(path))
+            return
+        self.status.showMessage(tr("저장하지 않았습니다 — 책갈피창에서 확인한 뒤 [저장] 을 누르세요."), 8000)

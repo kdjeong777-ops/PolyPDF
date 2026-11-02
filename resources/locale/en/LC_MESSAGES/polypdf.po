@@ -285,9 +285,9 @@ msgid "책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 �
 msgstr "Save bookmarks, annotations and page edits to a new file — choose the folder and name (default <original>_edited.pdf)."
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
-#: viewer/jobs_controller.py viewer/redact.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/thumbs_list.py
+#: viewer/jobs_controller.py viewer/redact.py viewer/study_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/thumbs_list.py
 msgid "저장"
 msgstr "Save"
 
@@ -1203,7 +1203,7 @@ msgstr "Bookmark generation canceled (canceled in the review table) — the PDF 
 msgid "넣을 책갈피가 없습니다."
 msgstr "There are no bookmarks to add."
 
-#: viewer/app.py
+#: viewer/app.py viewer/study_controller.py
 msgid "책갈피창에서 이 파일을 찾지 못했습니다."
 msgstr "This file was not found in the Bookmarks panel."
 
@@ -4979,6 +4979,18 @@ msgstr ""
 "(One OCR pass makes both the vocabulary and the bookmarks — faster than doing them separately.)"
 
 #: viewer/study_controller.py
+msgid "[저장] 하면 책갈피는 PDF 에 쓰고 OCR 결과는 남겨 둡니다."
+msgstr "[Save] writes the bookmarks to the PDF and keeps the OCR results."
+
+#: viewer/study_controller.py viewer/widgets/update_dialog.py
+msgid "나중에"
+msgstr "Later"
+
+#: viewer/study_controller.py
+msgid "저장하지 않았습니다 — 책갈피창에서 확인한 뒤 [저장] 을 누르세요."
+msgstr "Not saved — check them in the Bookmarks panel, then press [Save]."
+
+#: viewer/study_controller.py
 msgid "mp3 분할 기준"
 msgstr "mp3 Split By"
 
@@ -5015,6 +5027,14 @@ msgid ", 책갈피는 만드는 중"
 msgstr ", bookmarks in progress"
 
 #: viewer/study_controller.py
+msgid "책갈피 만들기를 중지했습니다."
+msgstr "Bookmark creation was stopped."
+
+#: viewer/study_controller.py
+msgid "읽은 OCR 결과도 아직 저장하지 않았습니다."
+msgstr "The OCR results are not saved yet either."
+
+#: viewer/study_controller.py
 msgid "PDF 문서를 찾을 수 없습니다."
 msgstr "PDF document not found."
 
@@ -5026,6 +5046,15 @@ msgstr "mp3 Save Failed"
 #, python-brace-format
 msgid "책갈피 만들기 — {name}"
 msgstr "Making bookmarks — {name}"
+
+#: viewer/study_controller.py
+msgid "만들 책갈피를 찾지 못했습니다."
+msgstr "No bookmarks were found."
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "'{name}' 의 일괄 OCR 이 끝났습니다."
+msgstr "Batch OCR of '{name}' is finished."
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -5076,9 +5105,18 @@ msgid ", 인터넷 사전 {on}개"
 msgstr ", online dictionary {on}"
 
 #: viewer/study_controller.py
+msgid "편집 모드가 아니어서 책갈피는 넣지 않았습니다."
+msgstr "The bookmarks were not added because edit mode is off."
+
+#: viewer/study_controller.py
 #, python-brace-format
 msgid "책갈피 만들기 실패: {e}"
 msgstr "Making bookmarks failed: {e}"
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "책갈피 {n}개를 책갈피창에 넣었습니다(저장 안 됨)."
+msgstr "Added {n} bookmarks to the Bookmarks panel (not saved)."
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -5112,8 +5150,8 @@ msgstr "{what} error: {e}"
 
 #: viewer/study_controller.py
 #, python-brace-format
-msgid "책갈피 {n}개를 넣었습니다 — 책갈피창 [저장] 하면 PDF 에 반영"
-msgstr "Added {n} bookmarks — click [Save] in the bookmarks panel to write them to the PDF"
+msgid "'{name}' — {why}"
+msgstr "'{name}' — {why}"
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -11925,10 +11963,6 @@ msgstr "Upgrade and Exit"
 #: viewer/widgets/update_dialog.py
 msgid "그냥 종료"
 msgstr "Just Exit"
-
-#: viewer/widgets/update_dialog.py
-msgid "나중에"
-msgstr "Later"
 
 #: viewer/widgets/view_settings_dialog.py
 msgid "보기 설정"

@@ -286,9 +286,9 @@ msgid "책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 �
 msgstr ""
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
-#: viewer/jobs_controller.py viewer/redact.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/thumbs_list.py
+#: viewer/jobs_controller.py viewer/redact.py viewer/study_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/thumbs_list.py
 msgid "저장"
 msgstr ""
 
@@ -1178,7 +1178,7 @@ msgstr ""
 msgid "넣을 책갈피가 없습니다."
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/study_controller.py
 msgid "책갈피창에서 이 파일을 찾지 못했습니다."
 msgstr ""
 
@@ -4813,6 +4813,18 @@ msgid ""
 msgstr ""
 
 #: viewer/study_controller.py
+msgid "[저장] 하면 책갈피는 PDF 에 쓰고 OCR 결과는 남겨 둡니다."
+msgstr ""
+
+#: viewer/study_controller.py viewer/widgets/update_dialog.py
+msgid "나중에"
+msgstr ""
+
+#: viewer/study_controller.py
+msgid "저장하지 않았습니다 — 책갈피창에서 확인한 뒤 [저장] 을 누르세요."
+msgstr ""
+
+#: viewer/study_controller.py
 msgid "mp3 분할 기준"
 msgstr ""
 
@@ -4847,6 +4859,14 @@ msgid ", 책갈피는 만드는 중"
 msgstr ""
 
 #: viewer/study_controller.py
+msgid "책갈피 만들기를 중지했습니다."
+msgstr ""
+
+#: viewer/study_controller.py
+msgid "읽은 OCR 결과도 아직 저장하지 않았습니다."
+msgstr ""
+
+#: viewer/study_controller.py
 msgid "PDF 문서를 찾을 수 없습니다."
 msgstr ""
 
@@ -4857,6 +4877,15 @@ msgstr ""
 #: viewer/study_controller.py
 #, python-brace-format
 msgid "책갈피 만들기 — {name}"
+msgstr ""
+
+#: viewer/study_controller.py
+msgid "만들 책갈피를 찾지 못했습니다."
+msgstr ""
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "'{name}' 의 일괄 OCR 이 끝났습니다."
 msgstr ""
 
 #: viewer/study_controller.py
@@ -4899,8 +4928,17 @@ msgid ", 인터넷 사전 {on}개"
 msgstr ""
 
 #: viewer/study_controller.py
+msgid "편집 모드가 아니어서 책갈피는 넣지 않았습니다."
+msgstr ""
+
+#: viewer/study_controller.py
 #, python-brace-format
 msgid "책갈피 만들기 실패: {e}"
+msgstr ""
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "책갈피 {n}개를 책갈피창에 넣었습니다(저장 안 됨)."
 msgstr ""
 
 #: viewer/study_controller.py
@@ -4935,7 +4973,7 @@ msgstr ""
 
 #: viewer/study_controller.py
 #, python-brace-format
-msgid "책갈피 {n}개를 넣었습니다 — 책갈피창 [저장] 하면 PDF 에 반영"
+msgid "'{name}' — {why}"
 msgstr ""
 
 #: viewer/study_controller.py
@@ -11624,10 +11662,6 @@ msgstr ""
 
 #: viewer/widgets/update_dialog.py
 msgid "그냥 종료"
-msgstr ""
-
-#: viewer/widgets/update_dialog.py
-msgid "나중에"
 msgstr ""
 
 #: viewer/widgets/view_settings_dialog.py
