@@ -126,6 +126,7 @@ class StudyPanel(QWidget):
     playToggled = pyqtSignal(bool)           # ▶/■ 단어장 자동읽기 시작/정지
     wordFilterChanged = pyqtSignal()         # 표시 필터(전체/선택/날짜/초기) 변경
     sourceToggled = pyqtSignal(str, bool)    # 260611-102(P2): 사전 출처 on/off
+    styleChosen = pyqtSignal(str)            # 261103-2(단어장 SOT §11.1): 사전 스타일 고름
     markSelectedRequested = pyqtSignal()     # ▲ 선택단어 저장
     deleteWordRequested = pyqtSignal()       # ▼ 리스트에서 삭제
     speedChanged = pyqtSignal(int)           # 빠르기(본화면·단어장 공유)
@@ -444,15 +445,23 @@ class StudyPanel(QWidget):
     def set_filter_dates(self, dates: list) -> None:
         self._rebuild_filter(list(dates))
 
-    def set_dict_sources(self, sources: list) -> None:
+    def set_dict_sources(self, sources: list, styles: list | None = None) -> None:
         """260611-102(P2)/260615-7(P9): '출처 ▾' 메뉴 — 구분(category)별 그룹.
-        sources: [{source_id,name,category,kind,enabled,n_entries}]."""
+        sources: [{source_id,name,category,kind,enabled,active,inactive,n_entries}].
+        261103-2(단어장 SOT §11.1): 맨 위 스타일 목록(styleChosen), 사전 목록에서 끈(inactive) 사전은 숨김."""
         menu = self.btn_src.menu()
         # 260615-23: 메뉴가 열려 있는 동안(연속 토글 중)에는 재구성하지 않음(아이템 파괴 방지)
         if menu.isVisible():
             return
         menu.clear()
         self._src_submenus = []          # 하위메뉴 참조 유지(GC 방지)
+        sources = [s for s in sources if not s.get("inactive")]
+        if styles:
+            hdr = menu.addAction(tr("스타일")); hdr.setEnabled(False)
+            for name in styles:
+                a = menu.addAction(f"  {name}")
+                a.triggered.connect(lambda _c=False, _n=name: self.styleChosen.emit(_n))
+            menu.addSeparator()
         if not sources:
             a = menu.addAction(tr("(사전 없음)")); a.setEnabled(False)
             return

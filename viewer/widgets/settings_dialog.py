@@ -526,12 +526,12 @@ class AdvancedSettingsDialog(QDialog):
     인터넷 사전(표준국어대사전·온용어·법제처·KCSC·특허 키, 특허 PDF 저장 폴더)·번역(Claude)·API 키 표시.
     값 모양·저장·키 보호는 종전 환경설정과 같다(마스터 §8.2.0) — 키 이름도 그대로."""
 
-    def __init__(self, prefs: dict, parent=None):
+    def __init__(self, prefs: dict, parent=None, host=None):
         super().__init__(parent)
         self.setWindowTitle(tr("고급 설정"))
         self.setMinimumWidth(440)
         self._prefs = dict(prefs)
-        self.resize(520, 600)
+        self.resize(560, 720)          # 261103-2: 사전 목록 표가 들어갈 만큼
         _outer = QVBoxLayout(self)
         _scroll = QScrollArea(); _scroll.setWidgetResizable(True)
         _content = QWidget(); _scroll.setWidget(_content)
@@ -581,6 +581,13 @@ class AdvancedSettingsDialog(QDialog):
         ol.addRow(_info_od)
         layout.addWidget(grp_od)
         grp_od.setVisible(korea_only_visible())      # 한국 사전·법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
+
+        # ── 사전 목록 ── 261103-2(단어장 SOT §11.1, 사용자 지시): 활성·가져오기·삭제·되살리기·폴더 — 프로그램 창에서 열 때만
+        self.grp_dict_list = None
+        if host is not None and hasattr(host, "_study_get_dict") and korea_only_visible():
+            from .dict_list_group import DictListGroup
+            self.grp_dict_list = DictListGroup(host, self)
+            layout.addWidget(self.grp_dict_list)
 
         # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
         from PyQt6.QtWidgets import QComboBox as _QCmb
@@ -793,6 +800,11 @@ class AdvancedSettingsDialog(QDialog):
             msg = (dbg[-1] if dbg else tr("실패"))
             self.lbl_conn_status.setText(tr("<span style='color:#c00'>실패: {msg}</span>").format(msg=msg))
 
+    def accept(self):
+        if self.grp_dict_list is not None:       # 261103-2: 사전 목록의 활성 체크는 [확인] 때 저장
+            self.grp_dict_list.apply()
+        super().accept()
+
     def result_prefs(self) -> dict:
         return {
             # 260615-9(P11): 인터넷 사전
@@ -815,7 +827,8 @@ def open_sub_settings(cls, host, parent, saved_msg: str, local_prefs=None):
     """261025-6(디자인 SOT §2.14): 환경설정에서 여는 별도 창(고급·녹화) — [확인] 이면 곧바로 `host._apply_prefs` → 저장.
     `local_prefs`(부른 환경설정 창의 사본)도 맞춘다. 연 창을 돌려준다(검사용)."""
     base = dict(host._prefs) if host is not None else dict(local_prefs or {})
-    dlg = cls(base, parent, host=host) if cls is RecordingSettingsDialog else cls(base, parent)
+    dlg = (cls(base, parent, host=host) if cls in (RecordingSettingsDialog, AdvancedSettingsDialog)
+           else cls(base, parent))
     if dlg.exec() != QDialog.DialogCode.Accepted:
         return dlg
     new = dlg.result_prefs()

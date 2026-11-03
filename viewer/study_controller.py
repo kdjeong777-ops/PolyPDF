@@ -92,18 +92,78 @@ class StudyMixin:
         False → 이 PDF 의 선택으로만(기본 선택·다른 PDF 는 그대로)."""
         dic = self._study_get_dict()
         active = set(active_ids)
-        all_ids = [s["source_id"] for s in dic.list_sources()]
+        srcs = dic.list_sources()
+        # 비활성 사전은 고를 수 없다 — 그 전 상태를 그대로 둬, 다시 활성으로 하면 돌아온다(단어장 SOT §11.1)
+        live = [s["source_id"] for s in srcs if not s.get("inactive")]
         key = self._dict_file_key()
         sel = dict(self._prefs.get("dict_file_off") or {})
         if as_default or not key:
-            for sid in all_ids:
+            for sid in live:
                 dic.set_source_enabled(sid, sid in active)
             sel.pop(key, None)
         else:
-            sel[key] = [sid for sid in all_ids if sid not in active]
+            was_off = set(sel.get(key) or [s["source_id"] for s in srcs if not s.get("enabled")])
+            sel[key] = ([sid for sid in live if sid not in active]
+                        + [s["source_id"] for s in srcs if s.get("inactive") and s["source_id"] in was_off])
         self._prefs["dict_file_off"] = sel
         self._sync_dict_file_sel()
         self._spot_terms_cache = None
+
+    def _apply_dict_active(self, active_ids):
+        """패널 메뉴·스타일 — 이 PDF 의 선택이 있으면 그것을, 없으면 기본 선택을 바꾼다."""
+        self._set_dict_selection(active_ids, as_default=self._dict_file_off() is None)
+
+    # ----- 스타일(settings.json `dict_styles`) -----
+    def _dict_styles(self) -> list:
+        return [s for s in (self._prefs.get("dict_styles") or [])
+                if isinstance(s, dict) and s.get("name")]
+
+    def _save_dict_style(self, name: str, source_ids) -> None:
+        name = (name or "").strip()
+        if not name:
+            return
+        styles = [s for s in self._dict_styles() if s["name"] != name]
+        styles.append({"name": name, "sources": [str(x) for x in source_ids]})
+        self._prefs["dict_styles"] = styles
+
+    def _delete_dict_style(self, name: str) -> None:
+        self._prefs["dict_styles"] = [s for s in self._dict_styles() if s["name"] != name]
+
+    def _dict_style_sources(self, name: str) -> list:
+        """스타일의 사전 가운데 지금 있고 활성인 것만(단어장 SOT §11.1 — 나머지는 건너뛴다)."""
+        st = next((s for s in self._dict_styles() if s["name"] == name), None)
+        if st is None:
+            return []
+        live = {s["source_id"] for s in self._study_get_dict().list_sources() if not s.get("inactive")}
+        return [sid for sid in st.get("sources") or [] if sid in live]
+
+    def _on_dict_style_chosen(self, name: str):
+        """패널 '출처 ▾' 맨 위 스타일 — 고르면 바로 적용."""
+        try:
+            self._apply_dict_active(self._dict_style_sources(name))
+        except Exception:
+            pass
+        self._refresh_dict_sources_menu()
+        try:
+            self._refresh_study_panel(self.main_view.current_page())
+        except Exception:
+            pass
+
+    def _refresh_dict_sources_menu(self):
+        try:
+            self.study_panel.set_dict_sources(self._study_get_dict().list_sources(),
+                                              styles=[s["name"] for s in self._dict_styles()])
+        except Exception:
+            pass
+
+    def _after_dict_list_changed(self):
+        """환경설정 '사전 목록' 을 고친 뒤 — 패널 메뉴·뜻·용어 인식을 다시."""
+        self._spot_terms_cache = None
+        self._refresh_dict_sources_menu()
+        try:
+            self._refresh_study_panel(self.main_view.current_page())
+        except Exception:
+            pass
 
     def _relocate_dict_file_sel(self, pairs):
         """파일 이름 변경·이동(마스터 §4.7.14 `filesRelocated`) — 이 PDF 의 선택을 새 경로 키로. 복사(old="")는 두지 않는다."""
@@ -156,18 +216,12 @@ class StudyMixin:
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_dict_manager(self, checked: bool = False):
-        """260621-70: 단어장 관리(출처 on/off·우선순위·폴더)."""
+        """260621-70: 단어장 관리 — 261103-2(단어장 SOT §11.1): 대기·적용 두 목록·스타일·우선순위."""
         from viewer.widgets.dict_manager_dialog import DictManagerDialog
         dlg = DictManagerDialog(self._study_get_dict(), self._prefs, host=self, parent=self)
-
-        def _refresh():
-            try:
-                self.study_panel.set_dict_sources(self._study_get_dict().list_sources())
-            except Exception:
-                pass
-        dlg.changed.connect(_refresh)
+        dlg.changed.connect(self._refresh_dict_sources_menu)
         dlg.exec()
-        _refresh()
+        self._refresh_dict_sources_menu()
         # 261103-2(단어장 SOT §11.1): 고른 사전이 바로 단어장 뜻·용어 인식에 보이게
         self._spot_terms_cache = None
         try:
@@ -643,10 +697,7 @@ class StudyMixin:
             self._page_term_rects = term_rects
             rows = term_rows + rows
             self.study_panel.set_filter_dates(self._study_get_user().event_dates(fkey))
-            try:
-                self.study_panel.set_dict_sources(self._study_get_dict().list_sources())
-            except Exception:
-                pass
+            self._refresh_dict_sources_menu()
             self.study_panel.set_page_words(page, rows)
             self._maybe_online_enrich(rows, page)   # 260615-13(P11b): 인터넷 사전 자동 보강
             # 호버 영역 설정(메인 뷰어에서 단어 위 → 포인터 변경 + 패널 선택)

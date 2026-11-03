@@ -1787,7 +1787,7 @@ msgid "디지털 ID 관리..."
 msgstr ""
 
 #: viewer/app.py
-msgid "단어장 관리 (출처·우선순위·폴더)..."
+msgid "단어장 관리 (적용 사전·스타일)..."
 msgstr ""
 
 #: viewer/app.py
@@ -6438,7 +6438,7 @@ msgid "현재 쪽"
 msgstr ""
 
 #: viewer/widgets/crop_dialog.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/text_panel.py
+#: viewer/widgets/study_panel.py viewer/widgets/text_panel.py
 msgid "스타일"
 msgstr ""
 

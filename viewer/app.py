@@ -1917,7 +1917,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
         # 📖 사전 관리(261031-16: 종전 '사전 및 용어집 관리') — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25)
         _dict = _sub(tr("사전 관리"), (
-            (tr("단어장 관리 (출처·우선순위·폴더)..."), self._action_dict_manager),
+            (tr("단어장 관리 (적용 사전·스타일)..."), self._action_dict_manager),
             (tr("사용자 뜻 편집..."), self._action_user_terms),          # 261019-5(단어장 SOT §4.1)
             (tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary),
             (tr("사전 복원 (가져오기)..."), self._action_restore_dict),
@@ -2596,6 +2596,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.study_panel.deleteWordRequested.connect(self._on_study_delete_word)
         self.study_panel.mp3Requested.connect(self._on_study_mp3)
         self.study_panel.sourceToggled.connect(self._on_study_source_toggled)  # P2 출처 on/off
+        self.study_panel.styleChosen.connect(self._on_dict_style_chosen)       # 261103-2 사전 스타일
         # 260606-3/5: 스크린샷이 모두 삭제되면 창 숨김
         # rowsRemoved=개별 삭제(takeItem), modelReset/clearedAll='전체 삭제'(list.clear())
         self.shot_strip.list.model().rowsRemoved.connect(
@@ -9003,6 +9004,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261103-2(단어장 SOT §11.1·§13): PDF 마다의 사전 선택 — 허용목록에 없으면 조용히 사라진다
             "dict_file_off": dict(prefs.get("dict_file_off",
                                             old.get("dict_file_off", {})) or {}),
+            "dict_styles": list(prefs.get("dict_styles", old.get("dict_styles", [])) or []),   # 사전 스타일
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),
