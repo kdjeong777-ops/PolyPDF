@@ -189,39 +189,39 @@ class PrintMixin:
         progress(done,total,label)->bool: False 면 MergeCancelled 로 취소.
         """
         import fitz
+        import io
         from viewer.twoup import MergeCancelled
         d = fitz.open()
         total = max(1, len(paths))
         for i, p in enumerate(paths):
             placed = False
+            # 261104-1(사진 보기 SOT 4.14 G6·G7): 두 길 모두 사진 공통 함수로 — 방향대로 세우고 GPS 를 넣지 않는다.
+            #   종전 축소 길은 QImage 로 다시 저장해 방향을 잃었고(세로 사진이 누움), 원본 길은 EXIF·GPS 를 그대로 넣었다.
+            from viewer import photo_io
             if downscale:
                 try:
-                    from PyQt6.QtGui import QImage
-                    from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
-                    img = QImage(str(p))
-                    if not img.isNull():
-                        if max(img.width(), img.height()) > max_px:
-                            img = img.scaled(
-                                max_px, max_px,
-                                Qt.AspectRatioMode.KeepAspectRatio,
-                                Qt.TransformationMode.SmoothTransformation)
-                        ba = QByteArray(); buf = QBuffer(ba)
-                        buf.open(QIODevice.OpenModeFlag.WriteOnly)
-                        img.save(buf, "PNG" if img.hasAlphaChannel() else "JPEG", 88)
-                        buf.close()
-                        w_pt = img.width() / 150.0 * 72.0
-                        h_pt = img.height() / 150.0 * 72.0
-                        pg = d.new_page(width=w_pt, height=h_pt)
-                        pg.insert_image(fitz.Rect(0, 0, w_pt, h_pt), stream=bytes(ba))
-                        placed = True
+                    from PIL import Image, ImageOps
+                    with Image.open(str(p)) as im:
+                        im = ImageOps.exif_transpose(im)
+                        im.thumbnail((max_px, max_px))
+                        alpha = "A" in im.getbands() or im.mode == "P"
+                        im = im.convert("RGBA" if alpha else "RGB")
+                        out = io.BytesIO()
+                        im.save(out, "PNG" if alpha else "JPEG", quality=88)    # EXIF 를 싣지 않는다
+                        w_pt = im.width / 150.0 * 72.0
+                        h_pt = im.height / 150.0 * 72.0
+                    pg = d.new_page(width=w_pt, height=h_pt)
+                    pg.insert_image(fitz.Rect(0, 0, w_pt, h_pt), stream=out.getvalue())
+                    placed = True
                 except Exception:
                     placed = False
             if not placed:
                 try:
-                    pix = fitz.Pixmap(str(p))
-                    pg = d.new_page(width=pix.width, height=pix.height)
-                    pg.insert_image(fitz.Rect(0, 0, pix.width, pix.height),
-                                    filename=str(p))
+                    w, h = photo_io.oriented_size(p)
+                    if w > 0 and h > 0:
+                        pg = d.new_page(width=w, height=h)
+                        if not photo_io.insert_photo(pg, (0, 0, w, h), p):
+                            d.delete_page(pg.number)
                 except Exception:
                     pass
             if progress is not None and progress(i + 1, total, tr("이미지 변환 중")) is False:

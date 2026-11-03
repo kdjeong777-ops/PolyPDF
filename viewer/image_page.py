@@ -90,17 +90,15 @@ def blank_page_pdf(out_pdf, width: float, height: float) -> bool:
 
 
 def image_size(path) -> tuple:
-    """그림의 (폭, 높이) 픽셀 — **머리만** 읽는다(Pillow 는 열 때 몸을 풀지 않는다). 못 읽으면 (0, 0).
+    """그림의 **보이는 대로의** (폭, 높이) 픽셀 — 머리만 읽는다. 못 읽으면 (0, 0).
 
     261103-21(사진 보기 SOT 4.14 G4): 종전에는 크기만 재려고 `fitz.Pixmap` 으로 그림 전체를 풀었다 —
-    24 MP 사진이면 장마다 수백 ms. Pillow 가 모르는 형식만 종전 길로."""
-    try:
-        from PIL import Image
-        with Image.open(str(path)) as im:
-            w, h = im.size
+    24 MP 사진이면 장마다 수백 ms. Pillow 가 모르는 형식만 종전 길로.
+    261104-1(G7): EXIF 방향을 적용한 뒤의 크기 — 휴대폰 세로 사진이 가로 쪽에 눕던 것(`photo_io.oriented_size`)."""
+    from viewer import photo_io
+    w, h = photo_io.oriented_size(path)
+    if w > 0 and h > 0:
         return float(w), float(h)
-    except Exception:
-        pass
     try:
         import fitz
         pix = fitz.Pixmap(str(path))
@@ -141,7 +139,10 @@ def images_to_pdf(image_paths, out_pdf, page_size=None, progress=None) -> int:
             except Exception:
                 continue
             try:
-                page.insert_image(fitz.Rect(*fit_rect(iw, ih, pw, ph)), filename=p)
+                # 261104-1(사진 보기 SOT 4.14 G6·G7): GPS 를 비우고 방향대로 세워 넣는다 — 이미지→PDF 와 같은 함수
+                from viewer import photo_io
+                if not photo_io.insert_photo(page, fit_rect(iw, ih, pw, ph), p):
+                    raise ValueError(p)
             except Exception:
                 doc.delete_page(page.number)    # 머리는 읽혔는데 몸이 깨진 그림 — 빈 쪽을 남기지 않는다
                 continue

@@ -4,8 +4,8 @@
 종전에는 목록 아이콘(56px)·미리보기를 `QPixmap(경로)` 로 **메인에서 원본 전체** 디코드했다 — 24 MP 사진 50장이면 수십 초 '응답 없음'.
 A. 큰 JPEG 여러 장을 넣는 `_add_files` 가 메인에서 짧게 끝난다(디코드는 배경)
 B. 아이콘이 결국 붙는다(배경 줄여 읽기) · 미리보기·크기 글이 원래 픽셀로 나온다
-C. EXIF 방향(6 = 시계 90°): 이 창은 **종전처럼 적용하지 않는다**(만드는 PDF 와 같게 — 셋을 함께 세우는 것은 사진 보기 SOT P1).
-   `read_scaled(auto_transform=True)` 는 세운다(사진 모드가 쓸 길)
+C. EXIF 방향(6 = 시계 90°): 이 창도 **세워 보인다** — 만드는 PDF 가 261104-1(사진 보기 SOT 4.14 G7)부터 세우므로 같게.
+   크기 글도 보이는 대로(400×800)
 D. `image_page.image_size` 는 머리만 읽고, `images_to_pdf` 쪽 크기 = 사진 크기
 """
 import os, sys, time, tempfile, shutil
@@ -91,7 +91,7 @@ try:
 
     dlg._add_files([str(rot)])
     dlg.lst.setCurrentRow(dlg.lst.count() - 1)
-    chk(pump_until(lambda: "800×400" in dlg.info.text()), "C 이 창은 종전처럼 방향을 적용하지 않는다(만드는 PDF 와 같게)", dlg.info.text())
+    chk(pump_until(lambda: "400×800" in dlg.info.text()), "C 이 창도 방향대로 — 크기 글이 세로(만드는 PDF 와 같게)", dlg.info.text())
     from viewer.widgets.image_to_pdf_dialog import read_scaled
     img, w, h = read_scaled(str(rot), 200, auto_transform=True)
     chk((w, h) == (400, 800) and img.height() > img.width(), "C auto_transform 이면 크기·그림이 세로", "%s %dx%d" % ((w, h), img.width(), img.height()))
