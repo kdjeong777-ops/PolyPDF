@@ -175,9 +175,10 @@ class ReadAloud(QObject):
         tts.set_rate(self.rate)
         self._active = True
         self.stateChanged.emit(True)
-        # 읽기 중에는 '본문강조'(전체 단어 배경)를 끄고 카라오케(읽는 단어)만 표시
+        # 읽기 중에는 '본문강조'(단어장 밑줄, 261103-4)를 끄고 카라오케(읽는 단어)만 표시
         try:
             self._v.clear_word_highlights()
+            self.mw._clear_vocab_marks()
         except Exception:
             pass
         self._load_page()
@@ -197,7 +198,7 @@ class ReadAloud(QObject):
         # 카라오케 강조 제거 + (옵션이면) 본문강조 복원
         try:
             self._v.clear_word_highlights()
-            if self.mw.study_panel.is_auto_highlight():
+            if self.mw._vocab_marks_on():        # 261103-4: 단어장 창이 보일 때만 밑줄 복원
                 self.mw._refresh_study_panel(self._v.current_page())
         except Exception:
             pass

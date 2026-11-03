@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QGraphicsPixmapItem,
     QGraphicsRectItem,
+    QGraphicsLineItem,
     QToolButton,
     QWidget,
     QVBoxLayout,
@@ -127,6 +128,8 @@ MV_A4_PT_H = 842.0        # 옛 `size`(비율)를 pt 로 환산할 때의 기준
 MV_TEXT_STYLE_MAP = {n: s for n, s in MV_TEXT_STYLES}
 # 260611-74: 지시선 화살표 끝 모양
 MV_LEADER_TIPS = ("arrow", "circle", "plain")
+# 261103-4(디자인 SOT §2.6): 단어장 단어 밑줄 색 — 검색 노랑·텍스트 창 강조와 겹쳐도 구분되게
+VOCAB_MARK_COLOR = "#00897B"
 
 
 def focus_widgets_in_layout(layout) -> list:
@@ -3246,6 +3249,7 @@ class MainView(QWidget):
         if getattr(self, "_word_hl_groups", None):
             self._word_hl_items = []
             self._draw_word_highlights()
+        self._draw_vocab_marks()          # 261103-4: 단어장 밑줄(그 쪽 것만)
         # 260611-107: 하이퍼링크 버튼은 렌더된 페이지 기준으로 위치 → 매 렌더 후 재배치
         #   (페이지 선택/이동 시 set_hyperlinks 가 렌더 전 호출돼 숨겨지던 문제 수정)
         self._position_hl_overlay()
@@ -3310,6 +3314,53 @@ class MainView(QWidget):
             x0, y0, x1, y1 = self._word_hl_groups[0][0][0]
             z = self._zoom
             self.view.ensureVisible(QRectF(x0 * z, y0 * z, (x1 - x0) * z, (y1 - y0) * z))
+
+    # --- 단어장 단어 밑줄 (261103-4, 단어장 SOT §11.2) ----------------------
+    # 강조(_word_hl_*)와 따로 둔 층 — 검색·단어 클릭·텍스트 창·읽기 강조를 걸거나 지워도,
+    # 쪽을 넘길 때의 clear_word_highlights 도 이것을 건드리지 않는다.
+    def set_vocab_marks(self, page: int, rects_pt: list):
+        """지금 파일의 `page` 쪽 단어 상자(PDF pt)에 밑줄. 그 파일·그 쪽일 때만 그린다."""
+        self._remove_vocab_items()
+        rects = [tuple(r[:4]) for r in (rects_pt or [])]
+        self._vocab_marks = (str(self.current_file() or ""), int(page), rects) if rects else None
+        self._draw_vocab_marks()
+
+    def clear_vocab_marks(self):
+        self._remove_vocab_items()
+        self._vocab_marks = None
+
+    def has_vocab_marks(self) -> bool:
+        return bool(getattr(self, "_vocab_items", None))
+
+    def _remove_vocab_items(self):
+        for it in getattr(self, "_vocab_items", []):
+            try:
+                self.scene.removeItem(it)
+            except Exception:          # scene.clear() 로 이미 지워진 것
+                pass
+        self._vocab_items = []
+
+    def _draw_vocab_marks(self):
+        """다시 렌더한 뒤(scene.clear 로 아이템이 사라짐)에도 부른다 — 그 파일·그 쪽이 아니면 긋지 않는다."""
+        self._vocab_items = []
+        marks = getattr(self, "_vocab_marks", None)
+        if not marks or self._is_image:
+            return
+        fkey, page, rects = marks
+        if page != self._current_page or fkey != str(self.current_file() or ""):
+            return
+        z = self._zoom
+        col = QColor(VOCAB_MARK_COLOR)
+        for (x0, y0, x1, y1) in rects:
+            w = max(1.5, min(3.0, (y1 - y0) * z * 0.08))
+            pen = QPen(col, w)
+            pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+            y = y1 * z - w / 2
+            item = QGraphicsLineItem(x0 * z, y, x1 * z, y)
+            item.setPen(pen)
+            item.setZValue(5)
+            self.scene.addItem(item)
+            self._vocab_items.append(item)
 
     def highlight_word_rects(self, rects_pt: list, strong: bool = True,
                              style: str = None, scroll: bool = None, src=None):
@@ -3403,6 +3454,7 @@ class MainView(QWidget):
                     self.scene.addItem(item)
 
         self.view.resetTransform()
+        self._draw_vocab_marks()           # 261103-4: 단어장 밑줄(왼쪽 = 지금 쪽, 원점 그대로)
         self._position_hl_overlay()        # 260609-11(C8): 페이지 위치 기준 버튼 재배치
         self._update_hidden_band()         # 260609-14(D5): 숨김 띠 위치/표시
         self._position_draw_overlay()      # 260609-22(J3): 선긋기 오버레이 위치

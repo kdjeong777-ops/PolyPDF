@@ -10592,8 +10592,8 @@ msgid "본문강조"
 msgstr "Highlight in body"
 
 #: viewer/widgets/study_panel.py
-msgid "이 페이지의 단어장 단어를 메인 뷰어에 옅게 강조합니다."
-msgstr "Lightly highlight this page's vocabulary words in the main viewer."
+msgid "단어장 창이 보이는 동안 이 쪽의 단어장 단어에 본문 밑줄을 긋습니다."
+msgstr "While the Vocabulary panel is visible, underline this page's vocabulary words in the main viewer."
 
 #: viewer/widgets/study_panel.py
 msgid "단어장 자동 읽기 시작/정지"

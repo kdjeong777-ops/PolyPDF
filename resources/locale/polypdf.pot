@@ -10309,7 +10309,7 @@ msgid "본문강조"
 msgstr ""
 
 #: viewer/widgets/study_panel.py
-msgid "이 페이지의 단어장 단어를 메인 뷰어에 옅게 강조합니다."
+msgid "단어장 창이 보이는 동안 이 쪽의 단어장 단어에 본문 밑줄을 긋습니다."
 msgstr ""
 
 #: viewer/widgets/study_panel.py

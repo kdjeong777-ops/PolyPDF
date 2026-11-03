@@ -682,6 +682,7 @@ class StudyMixin:
             store = self._study_get_store()
             fkey = file_key_for(self._study_pdf)
             if store.vocab_count(fkey) == 0:
+                self._apply_vocab_marks(page, [])        # 261103-4: 목록이 없으면 밑줄도 없다
                 self.study_panel.set_page(page)
                 self.study_panel.set_page_words(page, [])
                 self.study_panel.set_status(
@@ -707,10 +708,8 @@ class StudyMixin:
                           for key, rs in term_rects.items() for (x0, y0, x1, y1) in rs]
             rects = rects + term_hover
             self.main_view.set_hover_words(rects)
-            # 본문 강조 옵션 — 단, 읽기 모드에서는 카라오케와 충돌하므로 적용하지 않음
-            reading = getattr(self, "read_aloud", None) and self.read_aloud.is_active()
-            if self.study_panel.is_auto_highlight() and not reading:
-                self.main_view.highlight_word_rects([r[:4] for r in rects], style="all")
+            # 261103-4(단어장 SOT §11.2): 본문 밑줄 — 목록에 보이는 행 그대로(호버와 같은 상자)
+            self._apply_vocab_marks(page, rects)
             # 자동 읽기: 리더가 넘긴 페이지가 아니고(사용자 이동) 새 페이지면 그 페이지부터 읽기 시작
             if (self.study_panel.is_auto_read() and not self._ar_advancing
                     and page != self._last_read_page):
@@ -720,8 +719,9 @@ class StudyMixin:
             self.study_panel.set_status(f"단어 조회 오류: {e}")
 
     def _on_study_page_changed(self, page: int):
-        # 단어장 탭이 활성일 때만 갱신(비용 절약). 탭 전환 시에도 1회 갱신됨.
-        if self.search_tabs.currentWidget() is self.study_panel:
+        # 단어장 창이 보일 때만 갱신(비용 절약). 보이게 될 때 1회 갱신됨(shownChanged, 261103-4 —
+        # 종전 '탭이 앞' 만 보면 오른쪽 창이 닫혀 있어도 돌았다)
+        if self.study_panel.isVisible():
             self._refresh_study_panel(page)
 
     # --- 음성 읽기 / 편집 / 내보내기 / 본문강조 (260603) -------------------
@@ -1293,11 +1293,39 @@ class StudyMixin:
         worker.finished.connect(on_fin)
         run_in_thread(worker, self._study_threads)
 
+    # --- 261103-4(단어장 SOT §11.2): 단어장 창이 보이면 본문에 단어장 단어 밑줄 ---------
+    def _vocab_marks_on(self) -> bool:
+        """창이 보이고 · `본문강조` 가 켜져 있고 · 읽기(TTS) 중이 아닐 때(카라오케와 섞지 않는다)."""
+        reading = getattr(self, "read_aloud", None) is not None and self.read_aloud.is_active()
+        return (self.study_panel.isVisible() and self.study_panel.is_auto_highlight()
+                and not reading)
+
+    def _apply_vocab_marks(self, page: int, rects: list) -> None:
+        """활성 창에만 긋고 다른 창 것은 지운다. 꺼진 조건이면 지우기만."""
+        for mv in getattr(self, "_mv", None) or [self.main_view]:
+            if mv is not self.main_view:
+                mv.clear_vocab_marks()
+        if rects and self._vocab_marks_on():
+            self.main_view.set_vocab_marks(page, [r[:4] for r in rects])
+        else:
+            self.main_view.clear_vocab_marks()
+
+    def _clear_vocab_marks(self) -> None:
+        for mv in getattr(self, "_mv", None) or [self.main_view]:
+            mv.clear_vocab_marks()
+
+    def _on_study_panel_shown(self, shown: bool) -> None:
+        """탭 바꾸기·오른쪽 창 열고 닫기. 보이면 그 쪽으로 다시 고치고(밑줄 포함), 안 보이면 밑줄을 지운다."""
+        if shown:
+            self._refresh_study_panel(self.main_view.current_page())
+        else:
+            self._clear_vocab_marks()
+
     def _on_study_auto_highlight(self, on: bool) -> None:
         if on:
             self._refresh_study_panel(self.main_view.current_page())
         else:
-            self.main_view.clear_word_highlights()
+            self._clear_vocab_marks()
 
     def _study_page_rotation(self, page: int):
         """260611-99: 메인뷰에 렌더되는 해당 페이지의 (회전각, 회전행렬).
@@ -1362,11 +1390,6 @@ class StudyMixin:
             return out
         except Exception:
             return []
-
-    def _highlight_all_page_words(self, page: int, rows: list) -> None:
-        """페이지의 단어장 단어 전체를 메인 뷰어에 옅게 강조(본문강조 옵션)."""
-        rects = self._compute_word_rects(page, rows)
-        self.main_view.highlight_word_rects([r[:4] for r in rects], style="all")
 
     def _on_study_word_activated(self, lemma: str, page: int):
         """단어 클릭 → 현재 페이지에서 해당 표제어 위치를 하이라이트.

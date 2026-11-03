@@ -2611,10 +2611,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             lambda name: self.read_aloud.set_voice(name or None))
         # 260603/260606-8: 호버·클릭·페이지변경·매치위치·이미지스텝은 _wire_pane_signals 에서
         #                   양쪽 창에 대해 활성 창 기준으로 연결됨.
-        # 단어장 탭으로 전환 시 현재 페이지 단어 1회 갱신
-        self.search_tabs.currentChanged.connect(
-            lambda _i: self._refresh_study_panel(self.main_view.current_page())
-            if self.search_tabs.currentWidget() is self.study_panel else None)
+        # 단어장 창이 보이게 되면(탭 전환·오른쪽 창 열기) 현재 페이지 단어 1회 갱신,
+        # 안 보이게 되면 본문 밑줄을 지운다(261103-4, 단어장 SOT §11.2)
+        self.study_panel.shownChanged.connect(self._on_study_panel_shown)
         # 260908-2: 텍스트 탭으로 오면 그때 뽑는다(안 볼 때는 뽑지 않는다 — 응답성 §4 ⑥)
         self.search_tabs.currentChanged.connect(lambda _i: self._reload_text_panel())
         self._wire_text_panel()

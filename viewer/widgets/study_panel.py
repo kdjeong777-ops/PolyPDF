@@ -122,7 +122,8 @@ class StudyPanel(QWidget):
     addTermRequested = pyqtSignal()          # 260611-104(P5): ＋ 새 용어 등록
     exportRequested = pyqtSignal()
     mp3Requested = pyqtSignal()              # 재생내용 mp3 저장
-    autoHighlightChanged = pyqtSignal(bool)  # 본문 전체 강조 옵션
+    autoHighlightChanged = pyqtSignal(bool)  # 본문 밑줄 옵션(261103-4, 단어장 SOT §11.2)
+    shownChanged = pyqtSignal(bool)          # 261103-4: 창이 보이게/안 보이게 됨(최소화는 빼고)
     playToggled = pyqtSignal(bool)           # ▶/■ 단어장 자동읽기 시작/정지
     wordFilterChanged = pyqtSignal()         # 표시 필터(전체/선택/날짜/초기) 변경
     sourceToggled = pyqtSignal(str, bool)    # 260611-102(P2): 사전 출처 on/off
@@ -250,7 +251,8 @@ class StudyPanel(QWidget):
         self.cmb_filter.currentIndexChanged.connect(self._on_filter_changed)
         flow.addWidget(self.cmb_filter)
         self.chk_hl = QCheckBox(tr("본문강조"))
-        self.chk_hl.setToolTip(tr("이 페이지의 단어장 단어를 메인 뷰어에 옅게 강조합니다."))
+        self.chk_hl.setChecked(True)         # 261103-4(단어장 SOT §11.2): 기본 켬
+        self.chk_hl.setToolTip(tr("단어장 창이 보이는 동안 이 쪽의 단어장 단어에 본문 밑줄을 긋습니다."))
         self.chk_hl.toggled.connect(self.autoHighlightChanged.emit)
         flow.addWidget(self.chk_hl)
 
@@ -541,7 +543,7 @@ class StudyPanel(QWidget):
             "show_ex": self.chk_ex.isChecked(), "show_ref": self.chk_ref.isChecked(),
             "show_img": self.chk_img.isChecked(),
             "sort": self.sort_combo.currentText(),
-            "auto_highlight": self.chk_hl.isChecked(),
+            "body_highlight": self.chk_hl.isChecked(),     # 261103-4: 옛 auto_highlight 는 읽지 않는다
             "read_mode": self._read_mode,
             "speak_on_select": self.chk_speak_sel.isChecked(),
             "play_ko": self.act_play_ko.isChecked(),
@@ -572,8 +574,8 @@ class StudyPanel(QWidget):
             self.sort_combo.setCurrentText(d["sort"])
         if d.get("read_mode"):
             self._set_read_mode(d["read_mode"])
-        if "auto_highlight" in d:
-            self.chk_hl.setChecked(bool(d["auto_highlight"]))
+        if "body_highlight" in d:          # 261103-4(§11.2): 옛 auto_highlight(모두 꺼진 채 저장) 대신
+            self.chk_hl.setChecked(bool(d["body_highlight"]))
         if d.get("word_filter"):
             i = self.cmb_filter.findText(d["word_filter"])
             if i >= 0:
@@ -585,6 +587,17 @@ class StudyPanel(QWidget):
 
     def is_auto_highlight(self) -> bool:
         return self.chk_hl.isChecked()
+
+    # 261103-4(단어장 SOT §11.2): 탭 바꾸기·오른쪽 창 닫기를 알린다. 최소화(spontaneous)는 '안 보임' 이 아니다.
+    def showEvent(self, e):
+        super().showEvent(e)
+        if not e.spontaneous():
+            self.shownChanged.emit(True)
+
+    def hideEvent(self, e):
+        super().hideEvent(e)
+        if not e.spontaneous():
+            self.shownChanged.emit(False)
 
     def shown_lemmas(self) -> list[tuple[str, str]]:
         """현재 표시(필터·정렬 후) 단어 (lemma, lang) 목록."""
