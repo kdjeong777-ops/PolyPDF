@@ -3459,6 +3459,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             sign_drafts.relocate([(o, n) for o, n in pairs if o])
         except Exception:
             pass
+        # 261103-2(단어장 SOT §11.1): 이 PDF 의 사전 선택(`dict_file_off`, norm_key)도 새 이름으로
+        try:
+            self._relocate_dict_file_sel(pairs)
+        except Exception:
+            pass
         # 261017-15(§4.7.14, 점검): 기억 암호(경로+크기 키)와 저장 전 크롭(경로 키)도 새 이름으로
         for old, new in pairs:
             if not old:
@@ -8995,6 +9000,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             #   조용히 사라진다(§8.2 함정) — `test_prefs_allowlist.py` 가 지킨다.
             "text_panel_styles": dict(prefs.get("text_panel_styles",
                                                 old.get("text_panel_styles", {})) or {}),
+            # 261103-2(단어장 SOT §11.1·§13): PDF 마다의 사전 선택 — 허용목록에 없으면 조용히 사라진다
+            "dict_file_off": dict(prefs.get("dict_file_off",
+                                            old.get("dict_file_off", {})) or {}),
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),

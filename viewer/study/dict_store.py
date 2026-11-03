@@ -290,11 +290,16 @@ class DictStore:
         return True
 
     def list_sources(self) -> list[dict]:
-        return [dict(r) for r in self.conn.execute(
+        """출처 목록. `enabled` = 기본 선택, `active` = 이 연결이 지금 쓰는지(단어장 SOT §11.1)."""
+        rows = [dict(r) for r in self.conn.execute(
             "SELECT s.*, (SELECT COUNT(*) FROM dict_entry e"
             "  WHERE e.source_id=s.source_id AND e.enabled=1) AS n_entries"
             " FROM dict_source s ORDER BY"
             " CASE s.kind WHEN 'user' THEN 0 WHEN 'base' THEN 1 ELSE 2 END, s.priority")]
+        for r in rows:
+            r["active"] = (bool(r.get("enabled")) if self._file_off is None
+                           else r["source_id"] not in self._file_off)
+        return rows
 
     def get_source(self, source_id: str) -> Optional[dict]:
         r = self.conn.execute("SELECT * FROM dict_source WHERE source_id=?",
@@ -406,15 +411,30 @@ class DictStore:
     _LAYER_ORDER = ("ORDER BY CASE s.kind WHEN 'user' THEN 0 WHEN 'base' THEN 1 "
                     "ELSE 2 END, s.priority, e.entry_id")
 
+    # 261103-2(단어장 SOT §11.1): 이 PDF 의 사전 선택 — 꺼진 출처 집합. None 이면 기본 선택(s.enabled)
+    _file_off: Optional[frozenset] = None
+
+    def set_file_off(self, ids) -> None:
+        """이 연결의 조회가 쓸 출처를 정한다 — ids=None 이면 기본 선택, 아니면 ids 를 뺀 모든 출처."""
+        self._file_off = None if ids is None else frozenset(str(i) for i in ids)
+
+    def _src_filter(self) -> tuple[str, list]:
+        if self._file_off is None:
+            return "s.enabled=1", []
+        if not self._file_off:
+            return "1=1", []
+        return f"s.source_id NOT IN ({','.join('?' * len(self._file_off))})", sorted(self._file_off)
+
     def _join_rows(self, where: str, args: list) -> list[dict]:
+        sf, sargs = self._src_filter()
         sql = (
             "SELECT e.*, s.name AS src_name, s.category AS src_category,"
             " s.kind AS src_kind,"
             " s.reference AS src_reference, s.priority AS src_priority,"
             " s.is_termbase AS src_is_termbase"
             " FROM dict_entry e JOIN dict_source s ON s.source_id=e.source_id"
-            f" WHERE e.enabled=1 AND s.enabled=1 AND {where} " + self._LAYER_ORDER)
-        return [dict(r) for r in self.conn.execute(sql, args)]
+            f" WHERE e.enabled=1 AND {sf} AND {where} " + self._LAYER_ORDER)
+        return [dict(r) for r in self.conn.execute(sql, sargs + list(args))]
 
     def lookup(self, term: str) -> list[dict]:
         """표제어(한글/영문 표면형) 정확 매칭 — enabled 출처만, 우선순위 정렬."""

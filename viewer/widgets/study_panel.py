@@ -461,7 +461,7 @@ class StudyPanel(QWidget):
             tag = "👤" if s.get("kind") == "user" else "📘"
             a = QAction(f"{tag} {s.get('name', s['source_id'])}"
                         f"  ({s.get('n_entries', 0)})", parent, checkable=True)
-            a.setChecked(bool(s.get("enabled", 1)))
+            a.setChecked(bool(s.get("active", s.get("enabled", 1))))   # 261103-2: 이 PDF 에 쓰는 출처(단어장 SOT §11.1)
             sid = s["source_id"]
             a.toggled.connect(lambda on, _sid=sid: self.sourceToggled.emit(_sid, on))
             parent.addAction(a)

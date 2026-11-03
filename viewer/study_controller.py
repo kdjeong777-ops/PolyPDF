@@ -59,7 +59,60 @@ class StudyMixin:
                 _gf.sync_folder(self._dict_store, self._prefs)
             except Exception:
                 pass
+        self._sync_dict_file_sel()
         return self._dict_store
+
+    # ----- 261103-2(단어장 SOT §11.1): 이 PDF 의 사전 선택 ↔ 기본 선택 -----
+    def _dict_file_key(self):
+        """지금 단어장 PDF 의 `dict_file_off` 키(없으면 None)."""
+        if not getattr(self, "_study_pdf", None):
+            return None
+        from viewer.pathutil import norm_key
+        return norm_key(self._study_pdf)
+
+    def _dict_file_off(self):
+        """이 PDF 의 꺼진 출처 목록 — 이 PDF 의 선택이 없으면 None(기본 선택을 따른다)."""
+        key = self._dict_file_key()
+        sel = self._prefs.get("dict_file_off") or {}
+        return list(sel[key]) if key and key in sel else None
+
+    def _sync_dict_file_sel(self):
+        """화면 스레드 사전 연결에 이 PDF 의 선택을 건다 — 바뀌었을 때만(용어 인식 캐시도 비운다)."""
+        dic = getattr(self, "_dict_store", None)
+        if dic is None:
+            return
+        off = self._dict_file_off()
+        want = None if off is None else frozenset(off)
+        if getattr(dic, "_file_off", None) != want:
+            dic.set_file_off(want)
+            self._spot_terms_cache = None
+
+    def _set_dict_selection(self, active_ids, *, as_default: bool):
+        """관리 창의 체크 결과 저장. as_default=True → 기본 선택(dict.db)으로, 이 PDF 의 선택은 지운다.
+        False → 이 PDF 의 선택으로만(기본 선택·다른 PDF 는 그대로)."""
+        dic = self._study_get_dict()
+        active = set(active_ids)
+        all_ids = [s["source_id"] for s in dic.list_sources()]
+        key = self._dict_file_key()
+        sel = dict(self._prefs.get("dict_file_off") or {})
+        if as_default or not key:
+            for sid in all_ids:
+                dic.set_source_enabled(sid, sid in active)
+            sel.pop(key, None)
+        else:
+            sel[key] = [sid for sid in all_ids if sid not in active]
+        self._prefs["dict_file_off"] = sel
+        self._sync_dict_file_sel()
+        self._spot_terms_cache = None
+
+    def _relocate_dict_file_sel(self, pairs):
+        """파일 이름 변경·이동(마스터 §4.7.14 `filesRelocated`) — 이 PDF 의 선택을 새 경로 키로. 복사(old="")는 두지 않는다."""
+        from viewer.pathutil import norm_key
+        sel = self._prefs.get("dict_file_off") or {}
+        for old, new in pairs:
+            if old and norm_key(old) in sel:
+                sel[norm_key(new)] = sel.pop(norm_key(old))
+        self._sync_dict_file_sel()
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_user_terms(self, checked: bool = False):
@@ -115,6 +168,12 @@ class StudyMixin:
         dlg.changed.connect(_refresh)
         dlg.exec()
         _refresh()
+        # 261103-2(단어장 SOT §11.1): 고른 사전이 바로 단어장 뜻·용어 인식에 보이게
+        self._spot_terms_cache = None
+        try:
+            self._refresh_study_panel(self.main_view.current_page())
+        except Exception:
+            pass
 
     def _study_get_tts(self):
         if self._tts is None:
@@ -459,9 +518,17 @@ class StudyMixin:
         w.start()
 
     def _on_study_source_toggled(self, source_id: str, enabled: bool):
-        """260611-102(P2): 사전 출처 on/off → 저장 후 패널 갱신."""
+        """260611-102(P2): 사전 출처 on/off → 저장 후 패널 갱신.
+        261103-2(단어장 SOT §11.1): 이 PDF 의 선택이 있으면 그것을, 없으면 기본 선택을 고친다."""
         try:
-            self._study_get_dict().set_source_enabled(source_id, enabled)
+            dic = self._study_get_dict()
+            off = self._dict_file_off()
+            if off is None:
+                dic.set_source_enabled(source_id, enabled)
+            else:
+                active = {s["source_id"] for s in dic.list_sources() if s.get("active")}
+                (active.add if enabled else active.discard)(source_id)
+                self._set_dict_selection(active, as_default=False)
         except Exception:
             pass
         self._spot_terms_cache = None     # 출처 변경 → spotting 목록 무효화
@@ -469,6 +536,7 @@ class StudyMixin:
 
     def _get_spot_terms(self):
         """260611-103(P4): 활성 사전의 다단어 표제어 [(norm, entry)] 캐시."""
+        self._study_get_dict()       # 261103-2: PDF 가 바뀌었으면 사전 선택을 다시 걸고 캐시를 비운다
         if self._spot_terms_cache is not None:
             return self._spot_terms_cache
         from viewer.study.dict_store import normalize_key
