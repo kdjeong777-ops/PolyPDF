@@ -33,13 +33,15 @@ from viewer.app import MainWindow
 mw = MainWindow()
 # 260628-2: 40×20 은 260611-31 이전 사양이다. 그 항목이 mp3 아이콘을 **정사각**(분홍 음표+＋)으로
 #   교체하면서 메인 툴바는 24×24 가 됐고, 단어장 패널 헤더는 버튼 4종을 26×26 칸에 22×22 아이콘으로
-#   통일(메인 툴바 높이 26 과 맞춤)했다.
+#   통일(메인 툴바 높이 26 과 맞춤)했다. 아이콘은 이제 두 곳 모두 BTN_ICON_PX(디자인 SOT §4.6 — 22·24 는 단추에 꽉 찼다).
+from viewer.widgets.icons import BTN_ICON_PX
+_B = QSize(BTN_ICON_PX, BTN_ICON_PX)
 _sz = mw.study_panel.btn_mp3.iconSize()
-check(f"단어장 mp3 iconSize 22x22 (실측 {_sz.width()}x{_sz.height()})", _sz == QSize(22, 22))
+check(f"단어장 mp3 iconSize = BTN_ICON_PX (실측 {_sz.width()}x{_sz.height()})", _sz == _B)
 check("단어장 mp3 버튼 26x26 정사각", mw.study_panel.btn_mp3.size() == QSize(26, 26),
       str(mw.study_panel.btn_mp3.size()))
 _sz2 = mw.btn_main_mp3.iconSize()
-check(f"메인 mp3 iconSize 24x24 (실측 {_sz2.width()}x{_sz2.height()})", _sz2 == QSize(24, 24))
+check(f"메인 mp3 iconSize = BTN_ICON_PX (실측 {_sz2.width()}x{_sz2.height()})", _sz2 == _B)
 
 # 파일 우클릭 '단어장 생성'
 bt = mw.bookmark_tree

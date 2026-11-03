@@ -8935,10 +8935,6 @@ msgstr "Matches"
 msgid "📊 저장"
 msgstr "📊 Save"
 
-#: viewer/widgets/search_panel.py
-msgid "📷 전체 캡쳐"
-msgstr "📷 Capture all"
-
 #: viewer/widgets/search_panel.py viewer/widgets/text_panel.py
 #: viewer/widgets/toc_review_dialog.py
 msgid "내용"

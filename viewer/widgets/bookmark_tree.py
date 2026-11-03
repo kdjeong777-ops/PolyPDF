@@ -479,6 +479,7 @@ class BookmarkTree(QWidget):
         view_row.addWidget(self.btn_view_mode_v)
 
         # ── 편집 줄: [편집] [취소] [저장] ──
+        from viewer.widgets.icons import BTN_ICON_PX          # 디자인 SOT §4.6: 아이콘 위아래 여백(종전 18 은 단추에 꽉 찼다)
         self.btn_edit = _SlimButton(tr(" 편집"), None)
         self.btn_edit.setCheckable(True)
         self.btn_edit.setToolTip(tr("책갈피 편집 모드"))
@@ -487,7 +488,7 @@ class BookmarkTree(QWidget):
                                     resource_path("icon_edit.png") or "")
         self._ico_edit_red = QIcon(resource_path("icon_edit_red.png") or
                                    resource_path("icon_edit.png") or "")
-        self.btn_edit.setIconSize(QSize(18, 18))
+        self.btn_edit.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         self._update_edit_icon()
         self.btn_edit.toggled.connect(self.set_edit_mode)
         self._edit_row_w = QWidget()
@@ -497,7 +498,7 @@ class BookmarkTree(QWidget):
         self.btn_cancel = _SlimButton(tr(" 취소"), None)
         _cp = resource_path("icon_cancel.png")
         if _cp:
-            self.btn_cancel.setIcon(QIcon(_cp)); self.btn_cancel.setIconSize(QSize(18, 18))
+            self.btn_cancel.setIcon(QIcon(_cp)); self.btn_cancel.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         else:
             self.btn_cancel.setText(tr("✖ 취소"))
         self.btn_cancel.setToolTip(tr("편집 후 저장 전의 수정 사항을 모두 취소(되돌리기)"))
@@ -507,7 +508,7 @@ class BookmarkTree(QWidget):
         self.btn_save = _SlimButton(tr(" 저장"), None)
         _sp = resource_path("icon_save.png")
         if _sp:
-            self.btn_save.setIcon(QIcon(_sp)); self.btn_save.setIconSize(QSize(18, 18))
+            self.btn_save.setIcon(QIcon(_sp)); self.btn_save.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         else:
             self.btn_save.setText(tr("💾 저장"))
         self.btn_save.setToolTip(tr("저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."))
@@ -534,7 +535,7 @@ class BookmarkTree(QWidget):
         self.btn_edit_single = _SlimButton("", 28)
         _bep = resource_path("icon_bookmark_edit.png")
         if _bep:
-            self.btn_edit_single.setIcon(QIcon(_bep)); self.btn_edit_single.setIconSize(QSize(18, 18))
+            self.btn_edit_single.setIcon(QIcon(_bep)); self.btn_edit_single.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         else:
             self.btn_edit_single.setText("✎")
         self.btn_edit_single.setToolTip(tr("책갈피명 수정 (단일 편집: 제목·페이지)"))

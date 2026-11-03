@@ -92,9 +92,10 @@ chk(bool(in_corner) and len(in_corner) == len(dark_px), "A2 맞춤 콤보 화살
 # B. 카메라 크기
 cam = mw.btn_capture
 box = color_box(cam)
-chk(box is not None and box[1] - box[0] + 1 >= 13, "B 카메라 색 픽셀 높이 ≥ 13px",
+chk(box is not None and box[1] - box[0] + 1 >= 12, "B 카메라 색 픽셀 높이 ≥ 12px",
     "box=%s" % (box[:3] if box else None,))
-chk(cam.iconSize().height() >= 18, "B 카메라 아이콘 크기 ≥ 18", str(cam.iconSize()))
+# 크기는 그림 단추 공통 BTN_ICON_PX(디자인 SOT §4.6 — 종전 18, 사용자 지시 '꽉 차 답답'으로 줄임, test_design_icon_margin)
+chk(cam.iconSize().height() == icons.BTN_ICON_PX, "B 카메라 아이콘 크기 = BTN_ICON_PX", str(cam.iconSize()))
 
 # C. ▶ 세로 가운데
 play = mw._read_btns[0][0]

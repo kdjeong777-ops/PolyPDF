@@ -180,19 +180,19 @@ class StudyPanel(QWidget):
             from PyQt6.QtGui import QIcon
             from PyQt6.QtCore import QSize
             from viewer.resources_path import resource_path
+            from viewer.widgets.icons import color_icon, BTN_ICON_PX     # 디자인 SOT §4.6: 위아래 여백을 둔 크기
             for b, ic in ((self.btn_edit, "icon_edit.png"),
                           (self.btn_word, "icon_word.png"),
                           (self.btn_build, "icon_vocab_add.png")):
                 b.setText("")
                 b.setIcon(QIcon(resource_path(ic)))
-                b.setIconSize(QSize(22, 22))           # 26 정사각 안에 들어가는 아이콘
+                b.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
                 b.setFixedSize(QSize(26, 26))          # 메인 툴바 높이(26)와 동일 + 정사각형
                 b.setStyleSheet("QPushButton{padding:0px;}")
             # 261031-18(디자인 SOT §4.5, 사용자 지시): mp3 음표는 ▶ 와 같은 색 그림 — 테마가 바뀌면 메인 창이 다시 그린다
-            from viewer.widgets.icons import color_icon
             self.btn_mp3.setText("")
-            self.btn_mp3.setIcon(color_icon("mp3", size=22))
-            self.btn_mp3.setIconSize(QSize(22, 22))
+            self.btn_mp3.setIcon(color_icon("mp3", size=BTN_ICON_PX))
+            self.btn_mp3.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
             self.btn_mp3.setFixedSize(QSize(26, 26))
             self.btn_mp3.setStyleSheet("QPushButton{padding:0px;}")
             self.btn_mp3.setProperty("colorIcon", "mp3")

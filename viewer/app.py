@@ -623,9 +623,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mp3.clicked.connect(lambda _=False, i=idx: self._on_main_mp3(view=self._mv[i]))
         mp3.setFixedHeight(H)
         try:
-            from viewer.widgets.icons import color_icon as _ci
-            mp3.setIcon(_ci("mp3", size=24))      # 261031-18(디자인 SOT §4.5): ▶ 와 같은 색 — 테마가 바뀌면 _set_fav_icons 가 다시
-            mp3.setIconSize(_QSize(24, 24))     # 260611-31: 정사각 mp3 아이콘
+            from viewer.widgets.icons import color_icon as _ci, BTN_ICON_PX as _BIP
+            mp3.setIcon(_ci("mp3", size=_BIP))      # 261031-18(디자인 SOT §4.5): ▶ 와 같은 색 — 테마가 바뀌면 _set_fav_icons 가 다시
+            mp3.setIconSize(_QSize(_BIP, _BIP))     # 디자인 SOT §4.6: 위아래 여백(종전 24 는 단추를 꽉 채웠다)
             mp3.setProperty("colorIcon", "mp3")
         except Exception:
             mp3.setText("mp3")
@@ -666,7 +666,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         ra.start()
 
-    CAPTURE_ICON_PX = 18     # 261025-10(디자인 SOT §2.10): 카메라 그림 — mp3 음표와 어울리는 크기
+    from viewer.widgets.icons import BTN_ICON_PX as CAPTURE_ICON_PX     # 261025-10(디자인 SOT §2.10·§4.6): 카메라 — mp3 음표와 같은 크기
 
     def _set_capture_icon(self, b, dark=None):
         """캡쳐 단추 카메라 — 테마별 색 아이콘(디자인 SOT §4.5). 종전 `screenshot.png` 는 테두리 안의 작은 카메라라 작아 보였다."""
@@ -9769,10 +9769,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """261031-12(디자인 SOT §2.9.5·§4.5, 사용자 결정 '시안 C'): 즐겨찾기 탭 종류 아이콘 — 테마가 바뀌면 다시 그린다.
         261031-13(§2.9.7): 파일 탭 그림(열기·저장 바깥 표시, 새 창·폴더·파일·인쇄·종료 그림만 단추)도 여기서."""
         from viewer.widgets.icons import color_icon, FAV_ICON_PX
-        # 261031-18(디자인 SOT §4.5): mp3 음표도 ▶ 색 — 각 창 툴바·단어장 창
-        for b in [getattr(self, "btn_main_mp3", None)] + [w for w in self.findChildren(QWidget) if w.property("colorIcon") == "mp3"]:
-            if b is not None:
-                b.setIcon(color_icon("mp3", size=24))
+        # 261031-18(디자인 SOT §4.5): mp3 음표도 ▶ 색 — 각 창 툴바·단어장 창. 검색결과 '전체 캡쳐' 카메라도(§4.6) — 크기는 그 단추의 아이콘 크기
+        for b in [w for w in self.findChildren(QWidget) if w.property("colorIcon")]:
+            b.setIcon(color_icon(b.property("colorIcon"), size=b.iconSize().height()))
         for a, name in getattr(self, "_file_icon_acts", ()):
             a.setIcon(color_icon(name, size=FAV_ICON_PX))
             a.setProperty("ribbonIconOnly", True)

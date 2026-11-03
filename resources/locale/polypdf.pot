@@ -8657,10 +8657,6 @@ msgstr ""
 msgid "📊 저장"
 msgstr ""
 
-#: viewer/widgets/search_panel.py
-msgid "📷 전체 캡쳐"
-msgstr ""
-
 #: viewer/widgets/search_panel.py viewer/widgets/text_panel.py
 #: viewer/widgets/toc_review_dialog.py
 msgid "내용"

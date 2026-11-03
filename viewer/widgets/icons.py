@@ -375,6 +375,11 @@ def _mp3(p, c):
 
 
 ACCENT["mp3"] = ACCENT["play"]
+
+# 261103-3(디자인 SOT §4.6, 사용자 지시 '아이콘이 단추에 꽉 차 답답'): 그림 단추의 아이콘은 단추 높이에서 위아래 ICON_MARGIN 씩 비운다.
+#   도구 줄·단어장 머리줄의 26px 단추는 BTN_ICON_PX — 종전 22·24 는 단추를 꽉 채웠다. 16 은 검색결과·메뉴 탭 글자 단추의 아이콘과도 같다.
+ICON_MARGIN = 4          # 이보다 좁으면 답답 — 모든 그림 단추의 최소(검사 test_design_icon_margin)
+BTN_ICON_PX = 16
 _COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "mp3": _mp3,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}

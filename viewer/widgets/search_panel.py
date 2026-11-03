@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QIcon
 from viewer.resources_path import resource_path
 from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
@@ -185,13 +185,13 @@ class SearchResults(QWidget):
         self.btn_excel.clicked.connect(self.exportRequested.emit)
         head.addWidget(self.btn_excel)
 
-        # v1.6.1 S4: screenshot.png + "캡쳐"
+        # v1.6.1 S4: 카메라 + "캡쳐". 디자인 SOT §4.6: 본문 도구 줄 캡쳐 단추와 같은 그린 카메라(종전 screenshot.png) —
+        #   테마가 바뀌면 메인 창 _set_fav_icons 가 colorIcon 표시를 보고 다시 그린다
+        from viewer.widgets.icons import color_icon
         self.btn_shot_result = QPushButton(tr(" 전체 캡쳐"))
-        _ico = resource_path("screenshot.png")
-        if _ico:
-            self.btn_shot_result.setIcon(QIcon(_ico))
-        else:
-            self.btn_shot_result.setText(tr("📷 전체 캡쳐"))
+        self.btn_shot_result.setIcon(color_icon("camera"))
+        self.btn_shot_result.setIconSize(QSize(16, 16))
+        self.btn_shot_result.setProperty("colorIcon", "camera")
         self.btn_shot_result.setToolTip(tr("검색결과의 모든 매치 페이지를 일괄 스크린샷"))
         self.btn_shot_result.clicked.connect(self.screenshotForResultRequested.emit)
         head.addWidget(self.btn_shot_result)
