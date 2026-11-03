@@ -3025,6 +3025,11 @@ msgstr ""
 msgid "'{PKG_NAME}' 가 namespace package 로 로드됨 — 잘못된 경로일 가능성. 패키지의 부모(=__init__.py 가 들어있는 폴더의 상위)를 지정하세요."
 msgstr ""
 
+#: viewer/bookmarker_bridge.py
+#, python-brace-format
+msgid "책갈피 페이지 {p} 가 PDF 범위(1~{n})를 벗어남: {t}"
+msgstr ""
+
 #: viewer/compare.py
 msgid "바뀜"
 msgstr ""

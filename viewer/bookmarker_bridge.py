@@ -179,8 +179,25 @@ def extract_auto(pdf_path, mode: str = "auto", offset: Optional[int] = None) -> 
 
 
 def apply_to_pdf(input_pdf, output_pdf, bookmarks) -> Path:
-    pb = _require()
-    return Path(pb.apply_bookmarks_to_pdf(str(input_pdf), str(output_pdf), bookmarks))
+    """책갈피(`.title`·`.page` 1-based·`.level` 0-based)를 넣은 사본을 `output_pdf` 에 쓴다 — PyMuPDF 로.
+
+    261103-9(마스터 §4.7): 종전 `pdf_bookmarker.apply_bookmarks_to_pdf`(pypdf)는 xref 가 상한 PDF 를 읽지 못해
+    ('Could not read Boolean object' — 24 아스팔트 시공지침 598쪽) 책갈피 [저장] 이 통째로 실패했다. 본문은 PyMuPDF 로
+    잘 열리는 파일이다 → 쪽 편집 저장과 같은 `page_edit_build.apply_toc` 로 쓰고(모양 같음), 읽기·쓰기를 한 엔진으로."""
+    import fitz
+    from viewer.page_edit_build import apply_toc
+    bms = [(str(b.title), int(b.page), int(b.level)) for b in bookmarks]
+    doc = fitz.open(str(input_pdf))
+    try:
+        n = doc.page_count
+        for t, p, _l in bms:
+            if p < 1 or p > n:
+                raise ValueError(tr("책갈피 페이지 {p} 가 PDF 범위(1~{n})를 벗어남: {t}").format(p=p, n=n, t=t))
+        apply_toc(doc, bms)
+        doc.save(str(output_pdf), garbage=1, deflate=True)
+    finally:
+        doc.close()
+    return Path(output_pdf)
 
 
 def write_txt(bookmarks, out_path) -> Path:

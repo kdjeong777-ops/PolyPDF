@@ -3139,6 +3139,11 @@ msgstr "Package not found."
 msgid "'{PKG_NAME}' 가 namespace package 로 로드됨 — 잘못된 경로일 가능성. 패키지의 부모(=__init__.py 가 들어있는 폴더의 상위)를 지정하세요."
 msgstr "'{PKG_NAME}' was loaded as a namespace package — the path may be wrong. Specify the package's parent (the folder above the one containing __init__.py)."
 
+#: viewer/bookmarker_bridge.py
+#, python-brace-format
+msgid "책갈피 페이지 {p} 가 PDF 범위(1~{n})를 벗어남: {t}"
+msgstr "Bookmark page {p} is outside the PDF range (1–{n}): {t}"
+
 #: viewer/compare.py
 msgid "바뀜"
 msgstr "Changed"
