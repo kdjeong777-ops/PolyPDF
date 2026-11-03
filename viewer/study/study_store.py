@@ -277,6 +277,55 @@ class StudyStore:
         for t in _PENDING_TABLES + ("vocab_files", "cleared"):
             self.conn.execute(f"DELETE FROM p.{t} WHERE file_key=?", (file_key,))
 
+    # --- 쪽 편집 뒤 쪽 번호 옮기기 (261103-16, 마스터 §4.7.9) --------------------
+    _PAGE_COLS = {
+        "ocr_page": "text,dpi,engine,source,conf,done_at",
+        "ocr_word": "lemma,surface,lang,x0,y0,x1,y1,conf",
+        "vocab_page": "lemma,lang,count,pos",
+    }
+
+    def remap_pages(self, dst_key: str, sources: list) -> bool:
+        """쪽 편집 저장 뒤 OCR 쪽·낱말·쪽별 어휘를 **새 쪽 번호로** 옮긴다(261103-16, 사용자 보고 '새 쪽에 다음 쪽 내용').
+
+        `sources[i]` = 새 파일 쪽 i 가 온 곳 `(file_key, 옛 쪽)` — 자체 쪽은 원본 키, 다른 PDF 에서 끼운 쪽은 그 파일 키,
+        빈 쪽처럼 OCR 이 없는 곳은 None. `dst_key` 의 쪽 기록은 이것으로 **통째로 바뀐다**(지운 쪽은 버려진다).
+        새 이름 저장이면 원본 키의 기록은 그대로 둔다(원본 파일이 그대로다). 저장본·보류 저장소 둘 다 옮긴다 —
+        보류는 보류로 남는다(단어학습 SOT §14.21). 어휘(`vocab`)는 끼운 쪽 파일의 것을 더하기만 한다. 바꾼 것이 있으면 True."""
+        pairs = [(i, k, int(p)) for i, s in enumerate(sources or []) if s for k, p in [s]]
+        skeys = sorted({k for _i, k, _p in pairs})
+        schemas = ["main"] + (["p"] if self._pend else [])
+        c = self.conn
+        changed = False
+        with c:
+            c.execute("DROP TABLE IF EXISTS temp._pmap")
+            c.execute("CREATE TEMP TABLE _pmap(new INTEGER, skey TEXT, spage INTEGER)")
+            c.executemany("INSERT INTO temp._pmap VALUES(?,?,?)", pairs)
+            for s in schemas:
+                had = any(c.execute(f"SELECT 1 FROM {s}.{t} WHERE file_key=? LIMIT 1", (k,)).fetchone()
+                          for t in self._PAGE_COLS for k in set(skeys) | {dst_key})
+                if not had:
+                    continue
+                changed = True
+                for t, cols in self._PAGE_COLS.items():
+                    sel = ",".join("t." + x for x in cols.split(","))
+                    c.execute(f"DROP TABLE IF EXISTS temp._rm_{t}")
+                    c.execute(f"CREATE TEMP TABLE _rm_{t} AS SELECT m.new AS page, {sel} FROM {s}.{t} t"
+                              f" JOIN temp._pmap m ON t.file_key=m.skey AND t.page=m.spage")
+                    c.execute(f"DELETE FROM {s}.{t} WHERE file_key=?", (dst_key,))
+                    c.execute(f"INSERT OR REPLACE INTO {s}.{t}(file_key,page,{cols}) SELECT ?,page,{cols} FROM temp._rm_{t}",
+                              (dst_key,))
+                    c.execute(f"DROP TABLE temp._rm_{t}")
+                c.executemany(f"INSERT OR IGNORE INTO {s}.vocab(file_key,lemma,lang,level,zipf,freq_in_book)"
+                              f" SELECT ?,lemma,lang,level,zipf,freq_in_book FROM {s}.vocab WHERE file_key=?",
+                              [(dst_key, k) for k in skeys if k != dst_key])
+                c.execute(f"UPDATE {s}.study_meta SET page_count=? WHERE file_key=?", (len(sources), dst_key))
+            if self._pend:                      # 원본의 '저장본 가림' 표시도 새 키로(새 이름 저장)
+                for t in ("vocab_files", "cleared"):
+                    c.executemany(f"INSERT OR IGNORE INTO p.{t}(file_key) SELECT ? FROM p.{t} WHERE file_key=?",
+                                  [(dst_key, k) for k in skeys if k != dst_key])
+            c.execute("DROP TABLE temp._pmap")
+        return changed
+
     def _init_schema(self) -> None:
         self.conn.executescript(
             """

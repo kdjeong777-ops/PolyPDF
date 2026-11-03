@@ -4910,6 +4910,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         self.status.showMessage(tr('페이지 편집 저장: {saved_n}쪽 → {name}').format(saved_n=saved_n, name=_P(final).name), 6000)
         self._remap_page_keys(str(src), str(final), meta_keys)   # 261017-1: 꾸밈·숨김·링크를 새 쪽 번호로
+        self._remap_page_text(str(src), str(final), plan)         # 261103-16: OCR·단어장·텍스트 창 고침도
         self._remap_closed_pane_pages(str(src), str(final), meta_keys)
         # 261011-2(§4.7.16): 쪽·회전이 바뀌었으니 사본도 다시 — 261017-1: **다시 열기 전에**(종전엔 두 번 열어 본문이 두 번 깜빡였다)
         self._mirror_to_pdf(final, reopen=False)
@@ -4937,6 +4938,34 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 new = min(int(pg), max(0, n - 1))
             rec[i] = (f, new)
 
+    def _remap_page_text(self, src, final, plan) -> None:
+        """261103-16(마스터 §4.7.9, 사용자 보고 '새 쪽 넣기 후 저장하면 텍스트 창·단어장에 다음 쪽 내용'): 쪽 편집 저장 뒤
+        OCR 쪽·낱말·쪽별 어휘(study.db — 보류 저장소 포함)와 텍스트 창 고침·칠을 **새 쪽 번호로** 옮긴다. 다른 PDF 에서 끼운 쪽은
+        그 파일 그 쪽의 것을 가져오고, 지운 쪽의 것은 버린다. `plan=None` 은 쪽이 그대로인 저장 — 새 이름이면 그대로 **복사**한다.
+        배경에서(응답성 SOT §4.4 — study.db 를 통째로 다시 쓰고, 쪽 수를 알려고 새 파일을 연다)."""
+        from viewer.pathutil import norm_key
+        if plan is None and norm_key(str(src)) == norm_key(str(final)):
+            return
+
+        def _job():
+            if plan is None:
+                import fitz
+                with fitz.open(str(final)) as d:
+                    srcs = [(str(src), i) for i in range(d.page_count)]
+            else:
+                srcs = [((str(src), int(it[1])) if it[0] == "own" else (str(it[1]), int(it[2]))) if it else None
+                        for it in plan]
+            self._text_store().remap_pages(final, srcs)
+            from viewer.study.study_store import StudyStore, file_key_for
+            st = StudyStore()
+            try:
+                st.remap_pages(file_key_for(final), [(file_key_for(x[0]), x[1]) if x else None for x in srcs])
+            finally:
+                st.close()
+        err = self._file_op_bg(_job, tr("OCR·단어장을 새 쪽 번호로 옮기는 중…"))
+        if err is not None:
+            self.status.showMessage(tr("OCR·단어장을 새 쪽 번호로 옮기지 못했습니다: {e}").format(e=err), 8000)
+
     def _remap_page_keys(self, src, final, meta_keys) -> None:
         """261017-1(마스터 §4.7.9, 사용자 보고 '붙여넣은 쪽 꾸밈이 저장하면 사라짐'): 쪽 편집 저장 뒤 꾸밈·사진·숨김(page_meta)과
         하이퍼링크를 새 쪽 번호로 옮기고 디스크에 쓴다. 끼운 쪽(합성 번호)도 자기 자리의 실제 쪽 번호가 된다.
@@ -4948,6 +4977,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 st.save()
         except Exception:
             pass
+        if meta_keys is None:                       # 261103-16: 새 이름이면 OCR·단어장·텍스트 창 고침도 복사
+            self._remap_page_text(src, final, None)
         try:
             hl = self._ensure_hyperlink_store()
             if hl is not None and (hl.copy_file(src, final) if meta_keys is None

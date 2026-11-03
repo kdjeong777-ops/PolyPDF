@@ -332,6 +332,36 @@ class TextFixStore:
         d = self._doc(file_path)
         return bool(d and d.get("fix"))
 
+    def remap_pages(self, dst_path, sources) -> bool:
+        """쪽 편집 저장 뒤 고침·칠·반영 표시를 **새 쪽 번호로** 옮긴다 (SOT §5.1.6, 261103-16).
+
+        `sources[i]` = 새 파일 쪽 i 가 온 곳 `(파일 경로, 옛 쪽)` 또는 None(빈 쪽). `dst_path` 의 쪽 기록은 이것으로 통째로
+        바뀐다 — 지운 쪽의 기록은 버려지고, 다른 PDF 에서 끼운 쪽은 그 파일의 기록을 가져온다. 원본 파일의 기록은 새 이름
+        저장이면 그대로 둔다. 바꾼 것이 있으면 True(저장까지 한다)."""
+        import copy
+        with _LOCK:
+            docs = {}
+            for s in sources or []:
+                if s:
+                    k = norm_key(s[0])
+                    docs.setdefault(k, copy.deepcopy(self._data.get(k) or {}))
+            kd = norm_key(dst_path)
+            if not any(docs.values()) and not self._data.get(kd):
+                return False
+            out = {"fix": {}, "hl": {}, "applied": {}}
+            for i, s in enumerate(sources or []):
+                if not s:
+                    continue
+                d = docs.get(norm_key(s[0])) or {}
+                for sec in out:
+                    v = (d.get(sec) or {}).get(str(int(s[1])))
+                    if v:
+                        out[sec][str(i)] = v
+            dd = self._data.setdefault(kd, {})
+            dd.update(out)
+            self.save()
+            return True
+
     # ---- 하이라이트 ----------------------------------------------------
     def get_highlights(self, file_path, page: int) -> list:
         d = self._doc(file_path)

@@ -634,6 +634,10 @@ msgstr "Other PolyPDF windows"
 msgid "쪽 편집 저장"
 msgstr "Save Page Edits"
 
+#: viewer/app.py
+msgid "OCR·단어장을 새 쪽 번호로 옮기는 중…"
+msgstr "Moving OCR and vocabulary to the new page numbers…"
+
 #: viewer/app.py viewer/widgets/crop_dialog.py
 msgid "크롭 해제"
 msgstr "Remove Crop"
@@ -2648,6 +2652,11 @@ msgstr "Waiting for other PolyPDF windows to release the file…"
 #, python-brace-format
 msgid "원본에 쓰는 중: {name}"
 msgstr "Writing to the original: {name}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "OCR·단어장을 새 쪽 번호로 옮기지 못했습니다: {e}"
+msgstr "Could not move OCR and vocabulary to the new page numbers: {e}"
 
 #: viewer/app.py
 #, python-brace-format
