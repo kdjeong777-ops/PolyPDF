@@ -83,6 +83,7 @@ def main():
     ap.add_argument("--theme-rounds", type=int, default=40, help="누수 확인용 테마 왕복 수")
     ap.add_argument("--out", default="")
     a = ap.parse_args()
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # 261103: cp949 콘솔에서 '—' 출력이 끝에 터져 종료 코드 1
     folder, bigpdf = suite_targets()
 
     from PyQt6.QtCore import QStandardPaths, QCoreApplication, QTimer
