@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-02 20:35+0900\n"
+"POT-Creation-Date: 2026-11-03 15:43+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2018,6 +2018,11 @@ msgstr ""
 msgid "알 수 없는 요청: {op}"
 msgstr "Unknown request: {op}"
 
+#: viewer/app.py viewer/edit_controller.py viewer/sign_draft_controller.py
+#, python-brace-format
+msgid "저장 중: {name}"
+msgstr "Saving: {name}"
+
 #: viewer/app.py
 msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
 msgstr "Save cancelled — the signed original is unchanged."
@@ -3450,11 +3455,6 @@ msgid ""
 msgstr ""
 "Apply the lines drawn in full screen?\n"
 "({n} pages)"
-
-#: viewer/edit_controller.py viewer/sign_draft_controller.py
-#, python-brace-format
-msgid "저장 중: {name}"
-msgstr "Saving: {name}"
 
 #: viewer/edit_controller.py
 #, python-brace-format
@@ -12933,4 +12933,16 @@ msgstr "Getting Started"
 
 #~ msgid "단어장·책갈피 동시 생성"
 #~ msgstr "Build Vocabulary and Bookmarks Together"
+
+#~ msgid "책갈피 {n}개를 넣었습니다 — 책갈피창 [저장] 하면 PDF 에 반영"
+#~ msgstr "Added {n} bookmarks — click [Save] in the bookmarks panel to write them to the PDF"
+
+#~ msgid "읽은 OCR 결과(텍스트 창·단어장)도 아직 저장하지 않았습니다."
+#~ msgstr ""
+
+#~ msgid "📷 전체 캡쳐"
+#~ msgstr "📷 Capture all"
+
+#~ msgid "이 페이지의 단어장 단어를 메인 뷰어에 옅게 강조합니다."
+#~ msgstr "Lightly highlight this page's vocabulary words in the main viewer."
 
