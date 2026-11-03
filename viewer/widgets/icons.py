@@ -457,6 +457,92 @@ def color_icon(name: str, dark: bool | None = None, size: int = 16, *, dpr: floa
     return QIcon(pm)
 
 
+# 사진 보기 SOT §4.8(사용자 결정 '가안 수정'): 책갈피창 줄 앞 **파일 종류** 아이콘 — 접힌 종이 + 아래 색 띠에 형식 글자,
+#   첫 영문은 크게(JPG 면 J)·나머지는 작게. 형식마다 띠 색이 다르고, 첫 글자가 같은 PDF·PNG 는 색으로, 같은 회색 TIF·BMP 는 첫 글자로 가린다.
+FILE_KIND_COLOR = {"PDF": {False: "#d93025", True: "#ef5350"}, "JPG": ACCENT["play"],
+                   "PNG": OK_GREEN, "HEIC": {False: "#7b3fb3", True: "#b388e8"},
+                   "GIF": {False: "#d9822b", True: "#f0a050"}, "TIF": FILE_GRAY, "BMP": FILE_GRAY,
+                   "WEBP": {False: "#00838f", True: "#4dd0e1"}}
+EXT_KIND = {".pdf": "PDF", ".jpg": "JPG", ".jpeg": "JPG", ".png": "PNG", ".heic": "HEIC", ".heif": "HEIC",
+            ".gif": "GIF", ".tif": "TIF", ".tiff": "TIF", ".bmp": "BMP", ".webp": "WEBP"}   # 같은 형식의 다른 확장자는 한 아이콘
+FILE_KIND_LINE = {False: "#9aa3ad", True: "#6b737c"}     # 종이 테두리
+INK_DARK = "#1e1f22"                                      # 밝은 띠 위 글자
+_FILE_KIND_CACHE: dict = {}
+
+
+def file_kind(path) -> str | None:
+    """경로(또는 확장자)의 형식 이름(`EXT_KIND` 값) — 모르는 확장자는 None."""
+    s = str(path).lower()
+    dot = s.rfind(".")
+    return EXT_KIND.get(s[dot:]) if dot >= 0 else None
+
+
+def band_ink(color: str) -> str:
+    """띠 글자색 — 밝은 띠(어두운 테마의 회색·청록 등)에는 어두운 글자, 그 밖에는 흰 글자(대비)."""
+    q = QColor(color)
+    return INK_DARK if 0.299 * q.redF() + 0.587 * q.greenF() + 0.114 * q.blueF() > 0.62 else "#ffffff"
+
+
+def _file_kind(p, kind: str, dark: bool):
+    from PyQt6.QtGui import QFont, QFontMetricsF
+    d = bool(dark)
+    col = FILE_KIND_COLOR[kind][d]
+    p.setPen(QPen(QColor(FILE_KIND_LINE[d]), 0.8))
+    p.setBrush(QColor(PAPER_WHITE[d]))
+    p.drawPolygon(QPolygonF([QPointF(3, 1), QPointF(10, 1), QPointF(13.5, 4.5), QPointF(13.5, 15), QPointF(3, 15)]))
+    p.drawPolyline(QPolygonF([QPointF(10, 1), QPointF(10, 4.5), QPointF(13.5, 4.5)]))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(col))
+    p.drawRoundedRect(QRectF(0.6, 7.2, 14.0, 7.6), 1.2, 1.2)
+    # 글자는 10배 좌표에서 정수 픽셀 크기로 그린다 — 점(pt) 크기는 그림판 DPI(dpr)에 따라 폭이 달라졌다
+    big, small = QFont(), QFont()
+    for f, px in ((big, 70), (small, 34 if len(kind) <= 3 else 28)):
+        f.setBold(True)
+        f.setPixelSize(px)
+    fb, fs = QFontMetricsF(big), QFontMetricsF(small)
+    head, tail = kind[0], kind[1:]
+    w = fb.horizontalAdvance(head) + fs.horizontalAdvance(tail)
+    p.save()
+    p.scale(0.1, 0.1)
+    x = 76.0 - w / 2.0
+    p.setPen(QColor(band_ink(col)))
+    p.setFont(big)
+    p.drawText(QPointF(x, 137.0), head)
+    p.setFont(small)
+    p.drawText(QPointF(x + fb.horizontalAdvance(head), 137.0), tail)
+    p.restore()
+
+
+def file_kind_icon(path_or_kind, dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) -> QIcon:
+    """책갈피창 줄 앞 파일 종류 아이콘(사진 보기 SOT §4.8). 모르는 형식이면 빈 아이콘.
+    형식·테마·크기마다 **한 번만** 그린다 — 수천 줄 목록에서 줄마다 그리지 않게(응답성 SOT §6)."""
+    kind = path_or_kind if path_or_kind in FILE_KIND_COLOR else file_kind(path_or_kind)
+    if kind is None:
+        return QIcon()
+    if dark is None:
+        try:
+            from viewer import theme
+            dark = theme.is_dark()
+        except Exception:
+            dark = False
+    key = (kind, bool(dark), size, dpr)
+    ico = _FILE_KIND_CACHE.get(key)
+    if ico is None:
+        pm = QPixmap(int(size * dpr), int(size * dpr))
+        pm.setDevicePixelRatio(dpr)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            p.scale(size / 16.0, size / 16.0)
+            _file_kind(p, kind, bool(dark))
+        finally:
+            p.end()
+        ico = _FILE_KIND_CACHE[key] = QIcon(pm)
+    return ico
+
+
 def themed_icon(name: str, dark: bool | None = None, size: int = 16, *,
                 pad_right: int = 0, dpr: float = 1.0) -> QIcon:
     """이름으로 테마색 단색 아이콘 생성. 없는 이름이면 빈 아이콘.
