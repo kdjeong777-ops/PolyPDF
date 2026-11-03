@@ -6092,6 +6092,18 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid ""
+"책갈피를 PDF 에 쓰지 못했습니다 — 책갈피 고침은 '저장 안 됨' 으로 남습니다.\n"
+"\n"
+"원인: {e}"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "OCR·단어장 결과는 따로 저장했습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid ""
 "파일을 열 수 없습니다:\n"
 "{e}"
 msgstr ""

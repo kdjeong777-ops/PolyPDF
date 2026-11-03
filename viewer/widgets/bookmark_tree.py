@@ -4335,7 +4335,14 @@ class BookmarkTree(QWidget):
             from viewer.file_overwrite import SaveCancelled
             if isinstance(e, SaveCancelled):          # 260915-2: 사용자가 취소 — 편집은 그대로 남는다
                 return
-            QMessageBox.warning(self, tr("저장 실패"), str(e))
+            # 261103-10(단어학습 SOT §14.21): PDF 쓰기가 실패해도 그 파일의 보류 OCR·단어장은 PDF 와 별개라 저장한다 —
+            #   종전엔 함께 버려져(저장 안 됨으로 남아) 사용자가 우측 아래 단추를 따로 눌러야 했고, 'Could not read
+            #   Boolean object' 같은 원문만 보여 무엇이 저장 안 됐는지 알 수 없었다
+            studied = self._commit_study(src)
+            msg = tr("책갈피를 PDF 에 쓰지 못했습니다 — 책갈피 고침은 '저장 안 됨' 으로 남습니다.\n\n원인: {e}").format(e=e)
+            if studied:
+                msg += "\n\n" + tr("OCR·단어장 결과는 따로 저장했습니다.")
+            QMessageBox.warning(self, tr("저장 실패"), msg)
             return
         self._dirty = False
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장

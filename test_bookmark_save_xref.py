@@ -6,6 +6,8 @@
 불(Boolean) 값으로 읽다 실패했다. 책갈피 쓰기만 아직 pypdf(`pdf_bookmarker.apply_bookmarks_to_pdf`)였다.
 실제 처리기(`BookmarkTree._op_save`, 앱의 `_finalize_save`·`_file_op_bg` 연결 그대로)로:
   A  그런 PDF 에서 [저장] 이 '저장 실패' 창 없이 끝나고 책갈피가 PDF 에 써진다(수정 전 코드는 실패 창)
+  C  PDF 쓰기가 실패해도 그 파일의 보류 OCR·단어장은 저장하고, 안내가 무엇이 저장 안 됐는지 말한다(261103-10 —
+     사용자가 우측 아래 'OCR·단어장 저장' 대신 [저장] 을 눌러 OCR 까지 날린 줄 알았다. 수정 전 코드는 확정을 부르지 않아 실패)
   B  (재발 방지) 뷰어 코드는 pypdf 로 PDF 를 열지 않는다 — 벤더 사본의 옛 쓰개 `pdf_writer.py` 밖에서 `pypdf` import 가 없다
 """
 import os, re, sys, shutil, tempfile
@@ -76,6 +78,32 @@ try:
     d = fitz.open(str(pdf)); toc = d.get_toc(); d.close()
     chk([t[1] for t in toc] == ["목차", "가 장", "나 절"] and [t[0] for t in toc] == [1, 1, 2],
         "A 책갈피가 PDF 에 써졌다(레벨까지)", toc)
+
+    # C — 사용자가 찾은 원인: 일괄 OCR 뒤 우측 아래 'OCR·단어장 저장' 대신 [저장] 을 눌렀고, PDF 쓰기가 실패하자 OCR 결과까지
+    #     저장되지 않았다. PDF 쓰기가 실패해도 그 파일의 보류 OCR·단어장은 저장하고, 무엇이 저장 안 됐는지 알린다
+    from viewer import bookmarker_bridge as _br
+    _real_apply = _br.apply_to_pdf
+    committed = []
+    _real_commit = bt._study_commit
+
+    def _commit(p):
+        committed.append(str(p))
+        return True                                    # '보류가 있었다' — 실제 보류 저장소는 이 검사 밖
+    bt._study_commit = _commit
+    _br.apply_to_pdf = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("Could not read Boolean object"))
+    warned.clear()
+    chk(bt.replace_file_bookmarks(str(pdf), [("라 장", 5, 0)]), "준비: 책갈피를 또 고쳤다")
+    try:
+        bt._op_save(str(pdf))
+        for _ in range(20):
+            app.processEvents(); QTest.qWait(50)
+    finally:
+        _br.apply_to_pdf = _real_apply
+        bt._study_commit = _real_commit
+    chk(committed and Path(committed[0]).name == pdf.name, "C PDF 쓰기가 실패해도 그 파일의 보류 OCR·단어장은 저장한다", committed)
+    txt = warned[0][1] if warned else ""
+    chk("OCR·단어장 결과는 따로 저장했습니다" in txt and "저장 안 됨" in txt and "Boolean" in txt,
+        "C 실패 안내가 무엇이 저장됐고 무엇이 안 됐는지와 원인을 함께 말한다", txt)
 finally:
     QMessageBox.warning = _real_warn
     mw._skip_save_on_close = True
