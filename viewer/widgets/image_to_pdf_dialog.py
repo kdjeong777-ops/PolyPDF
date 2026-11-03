@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 from viewer.widgets.nup_preset import NupPresetMixin   # 260628: 다단 프리셋 공통(SOT §11.10)
 from viewer.i18n import tr
 
-IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp")
+from viewer.image_page import IMAGE_EXTS_T as IMAGE_EXTS   # 261104-2(사진 보기 SOT §3.3): 확장자 표 하나
 _PATH_ROLE = Qt.ItemDataRole.UserRole
 ICON_PX = 56                    # 목록 아이콘
 PREVIEW_DELAY_MS = 120          # 창 크기를 끄는 동안 미리보기를 매번 다시 읽지 않게 모은다

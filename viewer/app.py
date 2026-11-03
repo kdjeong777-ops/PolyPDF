@@ -62,6 +62,7 @@ from viewer.vprinter_controller import VPrinterMixin    # 261017(가상 프린�
 from viewer.jobs_controller import JobsMixin            # 261019-1(응답성 SOT §4.6): 작업 창·저장 안 한 OCR
 from viewer.lite_controller import LiteMixin            # 261021-1(응답성 SOT §4.7): 가벼운 넘김(느린 컴퓨터)
 from viewer.stamp_controller import StampMixin          # 261101-3(마스터 §4.6.11): 이미지 넣기·등록 이미지
+from viewer.photo_controller import PhotoMixin          # 261104-2(사진 보기 SOT): 사진 모드(PolyPix)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -153,7 +154,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -278,6 +279,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._build_menus()
         self._wire_signals()
         self._restore_settings()
+        self._photo_init()                   # 261104-2(사진 보기 SOT 4.1·4.10): 보기 종류·모드 토글 — 리본·설정 뒤
         # 260628(FIX): API 키 미입력 게이팅을 **시작 시에도** 적용. 종전에는
         #   `_apply_prefs`(설정 확인 시)에서만 불려서, 키가 없어도 프로그램을 새로 켜면
         #   법령·건설기준·특허 버튼이 그대로 보이고 메뉴도 활성 상태였다.
@@ -924,7 +926,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QTimer.singleShot(self.CLIP_ITEM_GAP_MS, self._clip_copy_next)
         clipboard_util.set_image(img, after)
 
-    CLIP_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff")
+    from viewer.image_page import IMAGE_EXTS_T as CLIP_IMAGE_EXTS   # 261104-2(사진 보기 SOT §3.3): 확장자 표 하나
 
     def _on_clipboard_import(self):
         """261008-1(스크린샷 SOT §8.2, 사용자 요청): 클립보드의 그림을 스크린샷 목록에 카드로 넣는다.
@@ -7426,6 +7428,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 else:
                     self.main_view.set_hover_words([])
                     self._apply_vocab_marks(item.page_index or 0, [])
+            elif self._photo_mode and self._is_photo_path(path):
+                # 261104-2(사진 보기 SOT 4.4 (다)): 사진 모드 — 사진 문서로(경로는 원본, 그림은 Pillow 로 필요한 크기만)
+                self.main_view.load_document(path, page_index=0)
+                self._photo_after_open(path)
             else:
                 self.main_view.load_image(path)
                 # 260901: 리스트만 비우면 '같은 파일' 가드에 걸려, 원본 PDF 로 돌아왔을 때
@@ -7555,6 +7561,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         열리고(_load_main→_push_nav_filter), 필터 밖 끝페이지는 보이는 페이지로 스냅된다.
         """
         if idx != self._active_pane:
+            return
+        if getattr(self, "_photo_mode", False):
+            self._photo_step(direction)            # 261104-2(사진 보기 SOT 4.12): 사진은 파일이 넘김 단위 — 묻지 않는다
             return
         if not self._prefs.get("cross_file_nav", False):
             return
@@ -9065,6 +9074,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _lang_before = (str(self._prefs.get("language", "ko")),
                             bool(self._prefs.get("external_language_packs", False)))
             self._apply_prefs(new_prefs)
+            self._photo_apply_view_kind()          # 261104-2(사진 보기 SOT 4.10): 바로 적용 — 재시작 없음
             # 즉시 settings.json 저장
             self._save_settings_now()
             self.status.showMessage(tr("설정 저장됨"), 3000)
@@ -9174,6 +9184,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "page_scroll_mode": str(prefs.get("page_scroll_mode",
                                               old.get("page_scroll_mode", "page"))),
             "lite_flip": str(prefs.get("lite_flip", old.get("lite_flip", "auto"))),   # 261021-1(응답성 SOT §4.7)
+            # 261104-2(사진 보기 SOT 4.7·4.10·4.15): 사진 모드 묶음(보기 종류·마지막 모드·즐겨찾기·최근) — 최상위 새 키를 만들지 않는다
+            "picture": (lambda v: dict(v) if isinstance(v, dict) else {})(prefs.get("picture", old.get("picture"))),
             # 260609-3: 하이퍼링크 URL 허용 도메인
             "hyperlink_url_allowlist": list(prefs.get(
                 "hyperlink_url_allowlist",
@@ -9450,6 +9462,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 _mv.refresh_theme_icons(dark)
             except Exception:
                 pass
+        try:
+            self._photo_refresh_button(dark)       # 261104-2(사진 보기 SOT 4.1): 모드 토글 그림
+        except Exception:
+            pass
         # 261025-10(디자인 SOT §4.5): 본문 도구 줄·단어장의 색 아이콘(캡쳐 카메라·읽기 ▶/■)도 테마 색으로
         try:
             for _b in getattr(self, "_cap_btns", []):

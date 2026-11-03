@@ -990,7 +990,7 @@ class _PdfGraphicsView(QGraphicsView):
     def arm_text_select(self, on: bool = True):
         self.arm_block_select(on)
 
-    _IMG_EXT = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff")
+    from viewer.image_page import IMAGE_EXTS_T as _IMG_EXT   # 261104-2(사진 보기 SOT §3.3): 확장자 표 하나
 
     def _drop_ok(self, md):
         ownr = self._owner
@@ -2084,7 +2084,8 @@ class MainView(QWidget):
     def load_document(self, file_path, page_index: int = 0, query: str = "") -> bool:
         # 260611-64: 새 문서를 먼저 열고 인증까지 끝낸 뒤에야 기존 문서를 교체.
         #   암호 입력을 '취소'하면 기존 표시를 그대로 유지(빈 화면 방지). 반환 True=성공/False=취소.
-        newdoc = PdfDocument(file_path)
+        from viewer.photo_doc import open_document     # 261104-2(사진 보기 SOT 4.4): 그림이면 사진 문서(같은 겉면)
+        newdoc = open_document(file_path)
         if newdoc.needs_password:
             from viewer import secure_store
             saved = secure_store.recall_any(file_path)

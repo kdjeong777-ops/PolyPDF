@@ -58,6 +58,8 @@ try:
         cur = mw._prefs.get(k)
         if isinstance(cur, list):
             probe[k] = ["_probe1", "_probe2"]     # 목록형은 목록으로(형 변환 주의)
+        elif isinstance(cur, dict):
+            probe[k] = {**cur, "_probe": 1}       # 261104-2: 사전형(사진 묶음 picture)은 사전으로
         elif isinstance(cur, bool) or cur is None:
             probe[k] = not bool(cur)
         elif isinstance(cur, (int, float)):

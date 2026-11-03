@@ -3910,6 +3910,22 @@ msgstr "Could not create the compressed file"
 msgid "{stem}_압축"
 msgstr "{stem}_compressed"
 
+#: viewer/photo_controller.py
+msgid "PDF 모드로 바꾸기"
+msgstr "Switch to PDF mode"
+
+#: viewer/photo_controller.py
+msgid "사진 모드(PolyPix)로 바꾸기"
+msgstr "Switch to photo mode (PolyPix)"
+
+#: viewer/photo_controller.py
+msgid "마지막 사진입니다."
+msgstr "This is the last photo."
+
+#: viewer/photo_controller.py
+msgid "첫 사진입니다."
+msgstr "This is the first photo."
+
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"
 msgstr "Switching recording… (finalizing previous file)"
@@ -5709,10 +5725,6 @@ msgid "책갈피명 수정 (단일 편집: 제목·페이지)"
 msgstr "Edit bookmark name (single edit: title · page)"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "PDF 찾는 중..."
-msgstr "Finding PDFs..."
-
-#: viewer/widgets/bookmark_tree.py
 msgid "글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자층을 원본 PDF 에 넣습니다 — 다른 프로그램에서도 검색·복사가 됩니다(처음 한 번 백업을 남깁니다)."
 msgstr "Reads scanned pages without a text layer with OCR and adds an invisible text layer to the original PDF — other programs can then search and copy the text (a backup is kept the first time)."
 
@@ -5816,6 +5828,10 @@ msgstr "File name (without .pdf):"
 msgid "<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. 메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"
 msgstr "<small>The file on disk is renamed too. If it is open in the main viewer, switch to another file briefly and try again.</small>"
 
+#: viewer/widgets/bookmark_tree.py
+msgid "확장자 순"
+msgstr "By extension"
+
 #: viewer/widgets/bookmark_tree.py viewer/widgets/merge_dialog.py
 msgid "정렬:"
 msgstr "Sort:"
@@ -5883,6 +5899,14 @@ msgstr "Save and Refresh"
 #: viewer/widgets/bookmark_tree.py
 msgid "버리고 새로고침"
 msgstr "Discard and Refresh"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "사진 찾는 중..."
+msgstr "Finding photos..."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "PDF 찾는 중..."
+msgstr "Finding PDFs..."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "OCR로 글자층 생성..."
@@ -6054,11 +6078,6 @@ msgid "변경 실패"
 msgstr "Rename failed"
 
 #: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "{n}개 PDF"
-msgstr "{n} PDFs"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "폴더를 찾을 수 없습니다."
 msgstr "Folder not found."
 
@@ -6217,11 +6236,6 @@ msgstr "Writing bookmarks…"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "{n}개 PDF 찾는 중..."
-msgstr "Finding {n} PDFs..."
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
 msgid "OCR로 글자층 생성 ({n}개 파일)..."
 msgstr "Create OCR text layer ({n} files)..."
 
@@ -6229,6 +6243,16 @@ msgstr "Create OCR text layer ({n} files)..."
 #, python-brace-format
 msgid "용량 줄여 내보내기 ({n}개 파일)..."
 msgstr "Reduce size and export ({n} files)..."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}장"
+msgstr "{n} photos"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}개 PDF"
+msgstr "{n} PDFs"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -6373,6 +6397,16 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 msgid "OCR·단어장 결과는 따로 저장했습니다."
 msgstr "The OCR and vocabulary results were saved separately."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}장 찾는 중..."
+msgstr "Finding {n} photos..."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}개 PDF 찾는 중..."
+msgstr "Finding {n} PDFs..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -9152,6 +9186,18 @@ msgid "켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데
 msgstr "When on, the page-turn animation is off, pages in between are skipped when you turn several in a row, the Text pane follows once you stop, and the next pages are drawn in advance."
 
 #: viewer/widgets/settings_dialog.py
+msgid "PDF 전용"
+msgstr "PDF only"
+
+#: viewer/widgets/settings_dialog.py
+msgid "혼용 (PDF 모드 ↔ 사진 모드)"
+msgstr "Mixed (PDF mode ↔ photo mode)"
+
+#: viewer/widgets/settings_dialog.py
+msgid "혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. PDF 전용이면 사진 모드를 쓰지 않습니다."
+msgstr "In Mixed, the leftmost ribbon button turns photo mode (PolyPix) on and off. PDF only does not use photo mode."
+
+#: viewer/widgets/settings_dialog.py
 msgid "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). 2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
 msgstr "<small>Continuous view shows the previous/next pages above and below the current one, and the page at the center of the screen becomes the current page (the text panel follows it). Two-page view and screenshot view are single-page.</small>"
 
@@ -9415,6 +9461,10 @@ msgstr "Page navigation:"
 #: viewer/widgets/settings_dialog.py
 msgid "가벼운 넘김(느린 컴퓨터):"
 msgstr "Light page turning (slow computers):"
+
+#: viewer/widgets/settings_dialog.py
+msgid "보기 종류:"
+msgstr "View type:"
 
 #: viewer/widgets/settings_dialog.py
 msgid "현재 설정을 기본값으로 저장(배포용)…"

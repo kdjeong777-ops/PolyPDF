@@ -3773,6 +3773,22 @@ msgstr ""
 msgid "{stem}_압축"
 msgstr ""
 
+#: viewer/photo_controller.py
+msgid "PDF 모드로 바꾸기"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 모드(PolyPix)로 바꾸기"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "마지막 사진입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "첫 사진입니다."
+msgstr ""
+
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"
 msgstr ""
@@ -5494,10 +5510,6 @@ msgid "책갈피명 수정 (단일 편집: 제목·페이지)"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "PDF 찾는 중..."
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
 msgid "글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자층을 원본 PDF 에 넣습니다 — 다른 프로그램에서도 검색·복사가 됩니다(처음 한 번 백업을 남깁니다)."
 msgstr ""
 
@@ -5601,6 +5613,10 @@ msgstr ""
 msgid "<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. 메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"
 msgstr ""
 
+#: viewer/widgets/bookmark_tree.py
+msgid "확장자 순"
+msgstr ""
+
 #: viewer/widgets/bookmark_tree.py viewer/widgets/merge_dialog.py
 msgid "정렬:"
 msgstr ""
@@ -5667,6 +5683,14 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "버리고 새로고침"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "사진 찾는 중..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "PDF 찾는 중..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -5837,11 +5861,6 @@ msgid "변경 실패"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "{n}개 PDF"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
 msgid "폴더를 찾을 수 없습니다."
 msgstr ""
 
@@ -5992,17 +6011,22 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "{n}개 PDF 찾는 중..."
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
 msgid "OCR로 글자층 생성 ({n}개 파일)..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "용량 줄여 내보내기 ({n}개 파일)..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}장"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}개 PDF"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -6129,6 +6153,16 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "OCR·단어장 결과는 따로 저장했습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}장 찾는 중..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}개 PDF 찾는 중..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -8871,6 +8905,18 @@ msgid "켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "PDF 전용"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "혼용 (PDF 모드 ↔ 사진 모드)"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. PDF 전용이면 사진 모드를 쓰지 않습니다."
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). 2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
 msgstr ""
 
@@ -9133,6 +9179,10 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "가벼운 넘김(느린 컴퓨터):"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "보기 종류:"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

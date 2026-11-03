@@ -543,6 +543,104 @@ def file_kind_icon(path_or_kind, dark: bool | None = None, size: int = 16, *, dp
     return ico
 
 
+# 사진 보기 SOT 4.1(사용자 결정 '시안 C, 위 안테나 뺌'): 리본 맨 왼쪽 PDF ↔ 사진 모드 토글 — 브라운관 TV 화면 안에 문서·사진 두 장,
+#   앞 장 = 지금 모드(뒤 장은 회색), 오른쪽 다이얼 바늘이 그쪽. 좌표는 시안 스크립트(_review/polypicture/make_tv_icons.py)의 확정안 그대로.
+TV_GLASS = {False: "#22303a", True: "#11171c"}          # 화면 유리
+TV_KNOB = {False: "#ffffff", True: "#2b3138"}           # 다이얼·스피커
+SUN = {False: "#f0b429", True: "#f5bd2e"}               # 사진 속 해(= FAV_YELLOW 뒤판)
+
+
+def _tv_pdf(p, d, x, y, w, h, active):
+    fold = min(w, h) * 0.32
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(FILE_KIND_COLOR["PDF"][d] if active else FILE_KIND_LINE[d]))
+    p.drawPolygon(QPolygonF([QPointF(x, y), QPointF(x + w - fold, y), QPointF(x + w, y + fold),
+                             QPointF(x + w, y + h), QPointF(x, y + h)]))
+    paper = QColor(PAPER_WHITE[d])
+    paper.setAlphaF(0.85)
+    p.setBrush(paper)
+    p.drawPolygon(QPolygonF([QPointF(x + w - fold, y), QPointF(x + w - fold, y + fold), QPointF(x + w, y + fold)]))
+    p.setBrush(QColor(PAPER_WHITE[d]))
+    for k in range(3):
+        p.drawRect(QRectF(x + w * 0.18, y + h * (0.42 + 0.17 * k), w * 0.6, max(0.55, h * 0.08)))
+
+
+def _tv_photo(p, d, x, y, w, h, active):
+    p.save()
+    if not active:
+        p.setOpacity(0.55)
+    p.setPen(Qt.PenStyle.NoPen)
+    r = min(w, h) * 0.12
+    p.setBrush(QColor(ACCENT["play"][d] if active else FILE_KIND_LINE[d]))
+    p.drawRoundedRect(QRectF(x, y, w, h), r, r)
+    p.setBrush(QColor(SUN[d] if active else PAPER_WHITE[d]))
+    p.drawEllipse(QPointF(x + w * 0.72, y + h * 0.3), min(w, h) * 0.15, min(w, h) * 0.15)
+    p.setBrush(QColor(OK_GREEN[d] if active else PAPER_WHITE[d]))
+    p.drawPolygon(QPolygonF([QPointF(x, y + h), QPointF(x + w * 0.38, y + h * 0.45), QPointF(x + w * 0.62, y + h * 0.75),
+                             QPointF(x + w * 0.78, y + h * 0.58), QPointF(x + w, y + h)]))
+    p.restore()
+
+
+def _mode_tv(p, photo: bool, dark: bool):
+    import math
+    d = bool(dark)
+    body = QColor(FILE_GRAY[d])
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(body)
+    p.drawRoundedRect(QRectF(0.6, 1.6, 14.8, 10.8), 2.2, 2.2)
+    p.setPen(QPen(body, 1.1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(2.6, 12.4), QPointF(2.1, 13.7))
+    p.drawLine(QPointF(13.4, 12.4), QPointF(13.9, 13.7))
+    knob = QColor(TV_KNOB[d])
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(knob)
+    p.drawEllipse(QPointF(13.6, 4.6), 1.05, 1.05)
+    a = math.radians(-45 if photo else -135)                        # 바늘 — 켜진 모드 쪽
+    p.setPen(QPen(body, 0.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(13.6, 4.6), QPointF(13.6 + 0.9 * math.cos(a), 4.6 + 0.9 * math.sin(a)))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(knob)
+    p.drawEllipse(QPointF(13.6, 7.6), 0.75, 0.75)
+    p.setPen(QPen(knob, 0.5))
+    p.drawLine(QPointF(12.7, 9.6), QPointF(14.5, 9.6))
+    p.drawLine(QPointF(12.7, 10.7), QPointF(14.5, 10.7))
+    screen = QPainterPath()
+    screen.addRoundedRect(QRectF(1.7, 2.7, 10.3, 8.6), 1.8, 1.8)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(TV_GLASS[d]))
+    p.drawPath(screen)
+    p.save()
+    p.setClipPath(screen)
+    if photo:
+        _tv_pdf(p, d, 2.6, 3.4, 4.0, 5.4, False)
+        _tv_photo(p, d, 4.6, 5.2, 6.8, 5.4, True)
+    else:
+        _tv_photo(p, d, 5.6, 3.4, 5.6, 4.6, False)
+        _tv_pdf(p, d, 2.7, 4.4, 4.6, 6.2, True)
+    p.restore()
+
+
+def mode_tv_icon(photo: bool, dark: bool | None = None, size: int = 16, *, dpr: float = 2.0) -> QIcon:
+    """리본 맨 왼쪽 모드 토글 그림(사진 보기 SOT 4.1) — `photo` 가 지금 모드(앞 장)."""
+    if dark is None:
+        try:
+            from viewer import theme
+            dark = theme.is_dark()
+        except Exception:
+            dark = False
+    pm = QPixmap(int(size * dpr), int(size * dpr))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    try:
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.scale(size / 16.0, size / 16.0)
+        _mode_tv(p, bool(photo), bool(dark))
+    finally:
+        p.end()
+    return QIcon(pm)
+
+
 def themed_icon(name: str, dark: bool | None = None, size: int = 16, *,
                 pad_right: int = 0, dpr: float = 1.0) -> QIcon:
     """이름으로 테마색 단색 아이콘 생성. 없는 이름이면 빈 아이콘.

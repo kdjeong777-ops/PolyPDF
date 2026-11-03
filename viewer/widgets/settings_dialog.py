@@ -319,6 +319,18 @@ class SettingsDialog(QDialog):
                                          "텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다."))
         row_lite.addWidget(self.cmb_lite_flip, 1)
         pl.addLayout(row_lite)
+        # 261104-2(사진 보기 SOT 4.10, 사용자 결정 D12): 보기 종류 — PDF 전용(사진 모드 없음)·혼용(PDF ↔ 사진 모드 토글)
+        row_vk = QHBoxLayout()
+        row_vk.addWidget(QLabel(tr("보기 종류:")))
+        self.cmb_view_kind = QComboBox()
+        self.cmb_view_kind.addItem(tr("PDF 전용"), "pdf")
+        self.cmb_view_kind.addItem(tr("혼용 (PDF 모드 ↔ 사진 모드)"), "mixed")
+        _pic = self._prefs.get("picture") if isinstance(self._prefs.get("picture"), dict) else {}
+        self.cmb_view_kind.setCurrentIndex(1 if _pic.get("view_kind") == "mixed" else 0)
+        self.cmb_view_kind.setToolTip(tr("혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. "
+                                         "PDF 전용이면 사진 모드를 쓰지 않습니다."))
+        row_vk.addWidget(self.cmb_view_kind, 1)
+        pl.addLayout(row_vk)
         info_psm = QLabel(
             tr("<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
             "온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). "
@@ -481,6 +493,7 @@ class SettingsDialog(QDialog):
             "cross_file_nav": self.chk_cross_file_nav.isChecked(),
             "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
             "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
+            "picture": dict(self._prefs.get("picture") or {}, view_kind=str(self.cmb_view_kind.currentData() or "pdf")),   # 261104-2
             "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
             # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
             # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋

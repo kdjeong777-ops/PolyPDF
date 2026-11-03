@@ -18,7 +18,11 @@ from __future__ import annotations
 from pathlib import Path
 
 # 받는 그림 확장자 — 끌어 놓기에서 거르는 데도 쓴다(§4.7.11 '그림 파일만 받는다').
+# 261104-2(사진 보기 SOT §3.3): **이 표 하나** — 클립보드·본문 끌어 놓기·이미지→PDF 창·발표 미디어가 가져다 쓴다(종전 다섯 벌).
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp"}
+IMAGE_EXTS_T = tuple(sorted(IMAGE_EXTS))      # `str.endswith` 용
+# 사진 모드 목록은 HEIC 까지(사진 보기 SOT §4.9) — PDF 로 넣는 길(위 표)은 PyMuPDF 가 HEIC 를 못 열어 넣지 않는다
+PHOTO_EXTS = IMAGE_EXTS | {".heic", ".heif"}
 
 
 def is_image_path(path) -> bool:

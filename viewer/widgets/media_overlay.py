@@ -23,7 +23,7 @@ from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QWidget, QLabel, QPushButton, QSlider, QHBoxLayout, QStyle)
 from viewer.i18n import tr, tr_noop
 
-IMAGE_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
+from viewer.image_page import IMAGE_EXTS as IMAGE_EXT   # 261104-2(사진 보기 SOT §3.3): 확장자 표 하나
 VIDEO_EXT = {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv", ".mpg", ".mpeg"}
 
 SUPPORTED_TEXT = tr_noop(

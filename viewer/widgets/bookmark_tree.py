@@ -271,6 +271,7 @@ class BookmarkTree(QWidget):
     SORT_NAME = "name"
     SORT_MTIME = "mtime"
     SORT_SIZE = "size"
+    SORT_EXT = "ext"              # 261104-2(사진 보기 SOT 4.8, R12): 사진 모드에서만 — 같은 형식끼리, 그 안은 이름
     SORT_LABELS = ((SORT_BOOK, tr_noop("책갈피 순")), (SORT_NAME, tr_noop("이름 순")),
                    (SORT_MTIME, tr_noop("수정일 순")), (SORT_SIZE, tr_noop("크기 순")))
 
@@ -279,6 +280,44 @@ class BookmarkTree(QWidget):
         i = self._sort_combo.findData(key)
         if i >= 0:
             self._sort_combo.setCurrentIndex(i)
+
+    # ── 261104-2(사진 보기 SOT 4.2·4.3·4.8): 사진 모드 — 같은 목록 길에 확장자만 바꾼다 ──
+    def _photo_on(self) -> bool:
+        return bool(self.__dict__.get("_photo", False))
+
+    def _list_exts(self) -> tuple:
+        if self._photo_on():
+            from viewer.image_page import PHOTO_EXTS
+            return tuple(sorted(PHOTO_EXTS))
+        return (".pdf",)
+
+    def set_photo_mode(self, on: bool) -> None:
+        """사진 모드를 켜고 끈다 — 그림 파일만 보이고(확장자는 이름에서 빼고 형식 아이콘), 정렬에 '확장자 순'.
+        지금 폴더를 같은 길(폴더 열기 3단, 응답성 SOT §4.1)로 다시 훑는다. 파일 모드 목록(PDF 여러 개)은 비운다."""
+        on = bool(on)
+        if on == self._photo_on():
+            return
+        self.__dict__["_photo"] = on
+        c = self._sort_combo
+        i = c.findData(self.SORT_EXT)
+        if on and i < 0:
+            c.blockSignals(True)
+            c.addItem(tr("확장자 순"), self.SORT_EXT)
+            c.blockSignals(False)
+        elif not on and i >= 0:
+            c.blockSignals(True)
+            if c.currentIndex() == i:
+                c.setCurrentIndex(c.findData(self.SORT_NAME))
+            c.removeItem(i)
+            c.blockSignals(False)
+        if self._root_dir is not None:
+            self.load_folder(self._root_dir)
+        else:
+            self._cancel_scan()
+            self._cancel_fill()
+            self.tree.clear()
+            self._pdfs_flat = []
+            self._set_count("")
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -753,7 +792,7 @@ class BookmarkTree(QWidget):
         self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
 
         json_path = self._root_dir / "bookmarks.json"
-        if json_path.exists():
+        if json_path.exists() and not self._photo_on():     # 사진 모드는 분할 산출물 목록을 쓰지 않는다
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
             except Exception as e:
@@ -797,7 +836,7 @@ class BookmarkTree(QWidget):
 
         stats: dict = {}
         try:
-            found = list(iter_pdfs(self._root_dir, should_cancel=_expired, stats=stats))
+            found = list(iter_pdfs(self._root_dir, should_cancel=_expired, stats=stats, exts=self._list_exts()))
         except Exception:
             found = []
         if not _expired():
@@ -808,14 +847,14 @@ class BookmarkTree(QWidget):
         # 예산 초과 — 부분 결과는 버리고(중복·순서 뒤섞임 방지) 워커가 처음부터 다시 훑는다.
         self._pdfs_flat = []
         self._scan_stats = {}
-        self._progress(tr("PDF 찾는 중..."))
+        self._progress(tr("사진 찾는 중...") if self._photo_on() else tr("PDF 찾는 중..."))
         self._start_scan_worker(self._root_dir)
 
     def _start_scan_worker(self, folder: Path):
         from viewer.workers import FolderScanWorker, run_in_thread
         self._scan_token += 1
         token = self._scan_token
-        w = FolderScanWorker(folder)
+        w = FolderScanWorker(folder, exts=self._list_exts())
         self._scan_worker = w
         w.batch.connect(lambda paths, st, t=token: self._on_scan_batch(t, paths, st))
         w.finished.connect(lambda done, t=token: self._on_scan_done(t, done))
@@ -840,7 +879,7 @@ class BookmarkTree(QWidget):
                 return
             self._pdfs_flat.extend(paths)
             self._scan_stats.update(stats)
-            self._progress(tr('{n}개 PDF 찾는 중...').format(n=len(self._pdfs_flat)))
+            self._progress((tr('{n}장 찾는 중...') if self._photo_on() else tr('{n}개 PDF 찾는 중...')).format(n=len(self._pdfs_flat)))
         except RuntimeError:
             return
 
@@ -1035,7 +1074,7 @@ class BookmarkTree(QWidget):
         self.tree.clear()
         self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
         pdfs = self._sorted_flat()
-        self._set_count(tr('{n}개 PDF').format(n=len(pdfs)))   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
+        self._set_count((tr('{n}장') if self._photo_on() else tr('{n}개 PDF')).format(n=len(pdfs)))   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
         self._fill_plan = self._build_fill_plan(pdfs)
         self._fill_pos = 0
         self._fill_folders = {}
@@ -1195,7 +1234,12 @@ class BookmarkTree(QWidget):
         item = QTreeWidgetItem([pdf.stem])
         item.setData(0, self.DATA_FILE, str(pdf))
         item.setData(0, self.DATA_PAGE, 0)
-        item.setIcon(0, self._leaf_icon())          # 260902-5: 파일 표식
+        if self._photo_on():
+            # 261104-2(사진 보기 SOT 4.8): 그림은 형식 아이콘(JPG·PNG·HEIC …) — 형식·테마마다 한 번만 그린 것을 다시 쓴다
+            from viewer.widgets.icons import file_kind_icon
+            item.setIcon(0, file_kind_icon(pdf))
+        else:
+            item.setIcon(0, self._leaf_icon())          # 260902-5: 파일 표식
         self._decorate_file_node(item, pdf)
         return item
 
@@ -1225,6 +1269,10 @@ class BookmarkTree(QWidget):
             lst.sort(key=lambda p: self._sort_stat(p)[1], reverse=True)
         elif mode == self.SORT_SIZE:
             lst.sort(key=lambda p: self._sort_stat(p)[0], reverse=True)
+        elif mode == self.SORT_EXT:
+            # 같은 형식의 다른 확장자(.jpg·.jpeg)는 한 무리 — 형식 이름, 그 안은 이름 차례. 값은 이름에서(디스크를 다시 읽지 않는다)
+            from viewer.widgets.icons import file_kind
+            lst.sort(key=lambda p: ((file_kind(p) or p.suffix.upper()), p.stem.lower()))
         return lst
 
     def _sort_stat(self, p) -> tuple:

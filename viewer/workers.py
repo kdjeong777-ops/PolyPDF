@@ -107,9 +107,10 @@ class FolderScanWorker(QObject):
 
     BATCH = 300
 
-    def __init__(self, folder: Path):
+    def __init__(self, folder: Path, exts=(".pdf",)):
         super().__init__()
         self.folder = Path(folder)
+        self.exts = tuple(exts)             # 261104-2(사진 보기 SOT 4.3): 사진 모드는 그림 확장자
         self._cancel = False
 
     def request_cancel(self):
@@ -121,7 +122,7 @@ class FolderScanWorker(QObject):
         stats: dict = {}
         try:
             for pdf in iter_pdfs(self.folder, should_cancel=lambda: self._cancel,
-                                 stats=stats):
+                                 stats=stats, exts=self.exts):
                 found.append(pdf)
                 if len(found) >= self.BATCH:
                     # 정렬용 크기·수정시각을 함께 보낸다 — 메인에서 다시 stat 하면
