@@ -4707,7 +4707,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception as e:                   # noqa: BLE001
                 out["e"] = e
             progress(1, 1, tr("완료"))
-        res = self._run_merge_job(_job, title or tr("원본에 저장"), cancellable=False)
+        self._file_op_depth = getattr(self, "_file_op_depth", 0) + 1   # 261103-11: 미룬 알림이 이 안에서 뜨지 않게
+        try:
+            res = self._run_merge_job(_job, title or tr("원본에 저장"), cancellable=False)
+        finally:
+            self._file_op_depth -= 1
         if "e" in out:
             return out["e"]
         return None if res.get("ok") else RuntimeError(res.get("err") or "파일 작업 실패")
@@ -4754,6 +4758,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from PyQt6.QtCore import QTimer
 
         def _warn():
+            # 261103-11: 저장 뒤 사본 확인(`_mirror_state`)도 `_file_op_bg` 의 진행 루프를 돌아(261102-4) singleShot(0) 이
+            #   그 안에서 터져, 알림이 책갈피창 갱신·새 파일 이동 **전에** 떴다 — 배경 파일 작업이 도는 동안은 다시 미룬다
+            if getattr(self, "_file_op_depth", 0) > 0:
+                QTimer.singleShot(50, _warn)
+                return
             try:
                 QMessageBox.warning(self, tr("저장"), msg)
             except Exception:
