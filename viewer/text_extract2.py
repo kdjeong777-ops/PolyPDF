@@ -2364,6 +2364,37 @@ def peer_texts_from_words(peer_words) -> list:
     return out
 
 
+LINE_YC_TOL = 0.5           # 세로 가운데가 줄 높이의 이 배 안이면 같은 줄(§3.6.16)
+
+
+def words_in_line_order(words) -> list:
+    """낱말 상자를 **줄 차례**로 늘어놓는다 — 줄은 위→아래, 줄 안은 왼→오른 (SOT §3.6.16).
+
+    261103-5: 저장된 OCR 낱말은 `ORDER BY y0, x0` 로 와서 줄 안이 뒤섞인다(한글 음절마다 위끝이 1~2px 다르다).
+    이웃끼리 견주는 곳은 받은 차례를 믿지 않고 이것을 먼저 거친다. 좌표가 없는 낱말은 버리지 않고 끝에 둔다."""
+    good, bad = [], []
+    for w in words or []:
+        try:
+            y0, y1 = float(w['y0']), float(w['y1'])
+            float(w['x0'])
+            good.append(((y0 + y1) / 2.0, max(1e-6, y1 - y0), w))
+        except Exception:
+            bad.append(w)
+    good.sort(key=lambda q: q[0])
+    rows = []
+    for yc, h, w in good:
+        if rows:
+            r = rows[-1]
+            if abs(yc - r["yc"]) <= LINE_YC_TOL * max(h, r["h"]):
+                n = len(r["ws"])
+                r["yc"] = (r["yc"] * n + yc) / (n + 1)
+                r["h"] = (r["h"] * n + h) / (n + 1)
+                r["ws"].append(w)
+                continue
+        rows.append({"yc": yc, "h": h, "ws": [w]})
+    return [w for r in rows for w in sorted(r["ws"], key=lambda q: float(q['x0']))] + bad
+
+
 def merge_words_by_gap(words) -> list:
     """낱말 상자를 **낱말 단위로** 묶는다 (SOT §3.6.2 의 규칙 그대로).
 
@@ -2372,10 +2403,10 @@ def merge_words_by_gap(words) -> list:
     글도 글자마다 띄어진다. 여기서 붙여 준다 — 붙임/띄움 기준은 §3.6.2 가 소유하고
     이 함수는 그것을 **부르기만** 한다(같은 규칙이 두 벌이 되면 반드시 어긋난다).
 
-    받는 것도 주는 것도 `{"surface", "x0", "y0", "x1", "y1"}` 목록이다.
+    받는 것도 주는 것도 `{"surface", "x0", "y0", "x1", "y1"}` 목록이다. 받은 차례는 믿지 않는다 — 줄 차례로 늘어놓고 묶는다(§3.6.16).
     """
     out = []
-    for w in words or []:
+    for w in words_in_line_order(words):
         try:
             t = str(w.get("surface") or "")
             x0, y0 = float(w["x0"]), float(w["y0"])
@@ -2422,7 +2453,7 @@ def words_in_reading_order(words, *, dpi: int = 0, page=None) -> list:
     """
     src = list(words or [])
     if not src or page is None:
-        return src
+        return words_in_line_order(src)
     k = 1.0 if not dpi else 72.0 / float(dpi)
     frags, keep = [], []
     for w in src:
@@ -2438,7 +2469,7 @@ def words_in_reading_order(words, *, dpi: int = 0, page=None) -> list:
     try:
         groups = _by_column([((0, 0, 0, 0), frags)], page, word_level=True)
     except Exception:
-        return src
+        return words_in_line_order(src)
     out = []
     for grp in groups:
         for bd in sorted(_row_bands(grp), key=lambda b: (b["y0"], b["y1"])):
@@ -2446,8 +2477,8 @@ def words_in_reading_order(words, *, dpi: int = 0, page=None) -> list:
                 i = pos.get(id(f))
                 if i is not None:
                     out.append(keep[i])
-    # 하나라도 빠지면 원래 차례를 쓴다 — 읽다 마는 것보다 낫다
-    return out if len(out) == len(src) else src
+    # 하나라도 빠지면 줄 차례를 쓴다 — 읽다 마는 것보다 낫고, 받은 차례(`y0, x0`)는 줄 안이 뒤섞였을 수 있다(§3.6.16)
+    return out if len(out) == len(src) else words_in_line_order(src)
 
 
 def merge_layer_and_ocr(layer_rows, ocr_rows, *, frac: float = 0.5) -> list:
