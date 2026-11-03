@@ -927,6 +927,10 @@ class _PdfGraphicsView(QGraphicsView):
         # 261103-7(입력 SOT §2.2 규칙 8): 단계 없는 터치패드(Windows)는 휠 흐름이 끊겨야 한 손짓이 끝난다.
         self._stream_ts = -1e9                # 흐름의 마지막 휠 시각(이벤트 시각, 없으면 처리 시각)
         self._stream_smooth = False           # 이 흐름에 120 의 배수가 아닌 값이 왔나(터치패드·고해상도 휠)
+        self._swipe_recent = []               # 최근 100ms 의 (이벤트 시각, |값|) — 다시 솟음을 잰다
+        self._swipe_peak = 0                  # 넘긴 뒤 가장 컸던 칸 합
+        self._run_dir = 0                     # 같은 방향이 몇 건 이어졌나
+        self._run_n = 0
         self._ts_off = None                  # (처리 시각 − 이벤트 시각) 중 가장 작았던 값
         # 260910-6(마스터 SOT §19.12.3): 1회성 설정은 여기 — 종전에는 이 네 줄이
         #   mouseMoveEvent 맨 끝에 있어 **마우스가 움직일 때마다** 실행됐다.
@@ -1202,6 +1206,12 @@ class _PdfGraphicsView(QGraphicsView):
     FLIP_LOCK_MS = 120        # 넘긴(다 그린) 직후 이만큼 들어온 휠은 버린다
     FLIP_BOUNCE_MS = 250      # 넘긴 직후 이만큼은 반대 방향 휠을 버린다
     STALE_MS = 250            # 만들어진 뒤 이만큼 늦게 처리된 휠로는 넘기지 않는다
+    # 261103-7(입력 SOT §2.2 규칙 8·10): 위상 없는 터치패드 — 실측(쓸기 88번)으로 정한 값
+    SWIPE_BIN_MS = 16         # 속도를 재는 칸(이벤트 시각)
+    SWIPE_RISE = 3.0          # 지금 칸 합이 앞 5칸 최대의 이 배 이상이면 '다시 솟음'
+    SWIPE_JUMP = 400          # …그리고 지금 칸 합이 이 이상
+    SWIPE_CALM = 0.3          # …그리고 앞 5칸 최대가 넘긴 뒤 최고 칸의 이 비율 이하(잦아들었다)
+    SWIPE_RUN = 3             # 같은 방향이 이만큼 이어져야 넘긴다·뒤집기로 본다(손 닿을 때 튀는 반대 값 한 건)
 
     def _wheel_lag_ms(self, event, now: float) -> float:
         """이 휠 이벤트가 만들어진 뒤 얼마나 늦게 처리되고 있나(ms). 모르면 0.
@@ -1309,14 +1319,36 @@ class _PdfGraphicsView(QGraphicsView):
         self._stream_ts = ts
         if phase == Qt.ScrollPhase.NoScrollPhase and delta % 120:
             self._stream_smooth = True
+        self._run_n = self._run_n + 1 if sd == self._run_dir else 1
+        self._run_dir = sd
         since_flip = now - self._flip_ms
+        # 규칙 10(실측 261103-7): 쓸기 사이가 0~110ms 뿐인 일이 흔해 끊김만으로는 새 손짓을 못 가른다 — 관성이 **잦아들었다가
+        #   다시 솟으면** 새 손짓이다. 손가락 쓸기는 늘 급히 솟고, 관성은 매끄럽게 줄기만 한다.
+        ad = abs(delta)
+        if (self._need_new_gesture and sd == self._flip_dir
+                and since_flip >= self.FLIP_LOCK_MS):
+            bw = self.SWIPE_BIN_MS
+            bins = {}
+            for t, a in self._swipe_recent:
+                bins[int(t // bw)] = bins.get(int(t // bw), 0) + a
+            k = int(ts // bw)
+            cur = bins.get(k, 0) + ad
+            prev = max(bins.get(k - j, 0) for j in range(1, 6))
+            if (cur >= self.SWIPE_RISE * max(prev, 1) and cur >= self.SWIPE_JUMP
+                    and prev <= self.SWIPE_CALM * self._swipe_peak):
+                self._need_new_gesture = False
+            self._swipe_peak = max(self._swipe_peak, cur)
+        self._swipe_recent = [r for r in self._swipe_recent if ts - r[0] < 100] + [(ts, ad)]
         if since_flip < self.FLIP_LOCK_MS or (
                 sd != self._flip_dir and since_flip < self.FLIP_BOUNCE_MS):
             # 규칙 5·6: 넘긴 직후 — 그리는 동안 쌓였던 이벤트이거나 걸쇠가 되튄 것이다
             event.accept()
             return
-        if self._need_new_gesture and sd != self._flip_dir:
-            self._need_new_gesture = False  # 뒤집었다 — 새 손짓이다(§1 의 3)
+        if (self._need_new_gesture and sd != self._flip_dir
+                and (not self._stream_smooth or self._run_n >= self.SWIPE_RUN)):
+            # 뒤집었다 — 새 손짓이다(§1 의 3). 작은 값 흐름은 반대가 SWIPE_RUN 건 이어져야 — 손가락이 닿는 순간 반대 값이
+            #   한 건 튄다(실측: 아래로 쓰는데 +105~+275). 종전에는 그 한 건이 쪽을 뒤로 넘겨 10→9→10 으로 제자리였다.
+            self._need_new_gesture = False
         if now - self._last_wheel_ms > self.EDGE_IDLE_MS:
             self._edge_sum = 0          # 규칙 4: 멈췄다 — 떨림이 시간을 두고 쌓이지 않게
         self._last_wheel_ms = now
@@ -1344,7 +1376,8 @@ class _PdfGraphicsView(QGraphicsView):
             self._edge_sum += abs(delta)
             held = (not room) or (now - self._edge_ms) >= self.EDGE_HOLD_MS
             if (not held or self._edge_sum < self.EDGE_PUSH
-                    or self._need_new_gesture):
+                    or self._need_new_gesture
+                    or (self._stream_smooth and self._run_n < self.SWIPE_RUN)):   # 규칙 10: 튄 한 건으로는 넘기지 않는다
                 event.accept()
                 return
             self._edge_dir = 0
@@ -1352,6 +1385,7 @@ class _PdfGraphicsView(QGraphicsView):
             self._flip_dir = at_edge
             self._need_new_gesture = (phase != Qt.ScrollPhase.NoScrollPhase
                                       or self._stream_smooth)   # 규칙 8 — 한 손짓에 한 쪽
+            self._swipe_peak = 0
             self.pageStep.emit(at_edge)
             self._flip_ms = _perf_ms()  # 규칙 5: **다 그린 뒤**부터 잰다
             event.accept()
