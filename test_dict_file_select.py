@@ -6,8 +6,8 @@ B. 다시 열면 '이 PDF 만의 선택' · 왼쪽에서 하나 [추가 →] + '
 C. [모두 추가 →] + Esc → 모든 PDF 에 모든 사전 · 두 번 누르기로 옮기기 · ▲▼ = 우선순위
 D. 스타일 — 저장·고르기·삭제, 패널 '출처 ▾' 맨 위 스타일로 바로 적용
 E. 패널 메뉴 — 이 PDF 의 선택이 있으면 그것만, 없으면 기본 선택을 고친다
-F. 고급 설정 '사전 목록' — 활성 끔([확인] 때) → 관리 창 왼쪽·메뉴에서 사라지고 조회에서 빠짐(다른 연결도) · 다시 켜면 그 전 선택으로
-G. 사전 목록 [삭제] — 다시 생기지 않음(폴더 CSV·동봉 시드) · [지운 사전 되살리기...] · 관리 창에는 [삭제](사전 지우기)가 없다
+F. 고급 설정에는 '사전 목록' 이 없다 — 가져오기·지우기·되살리기·폴더 단추는 단어장 관리 창에(261103-8, 사용자 지시)
+G. 관리 창 [사전 지우기] — 다시 생기지 않음(폴더 CSV·동봉 시드) · [지운 사전 되살리기...]
 H. 이름 변경(filesRelocated) → 이 PDF 의 선택이 새 경로를 따라간다 · 복사는 따라가지 않는다
 I. settings.json — 허용목록·개인 항목(배포 기본값에서 뺌)
 """
@@ -107,8 +107,8 @@ chk(found(pdf_a, "포장시험어zq") and found(pdf_b, "골재시험어zq"), "A0
 d = open_dlg(pdf_a)
 chk(set(d.use_ids()) == ALL and not d.wait_ids(), "A1 오른쪽(적용할 사전)에 지금 쓰는 사전, 왼쪽은 비어 있음")
 chk(d.chk_default.isChecked(), "A2 이 PDF 의 선택이 없으면 '이후 PDF 에도' 켜짐")
-chk(not [b for b in d.findChildren(QPushButton) if b.text() == "삭제" and b is not d.btn_style_del],
-    "A3 관리 창에는 사전 지우기 [삭제] 가 없다(스타일 삭제만)")
+chk(d.btn_delete.text() == "사전 지우기" and d.btn_remove.text() == "← 삭제",
+    "A3 적용 목록에서 빼기([← 삭제])와 사전 지우기([사전 지우기])는 다른 단추")
 click(d.btn_remove_all)
 chk(not d.use_ids() and set(d.wait_ids()) == ALL, "A4 [← 모두 삭제] → 모두 대기 사전으로")
 d.chk_default.click()
@@ -189,61 +189,42 @@ chk(not found(pdf_b, "포장시험어zq") and not dic.get_source("g1")["enabled"
 chk(found(pdf_a, "포장시험어zq"), "E3 a 는 자기 선택이라 영향 없음")
 menu_toggle(pdf_b, "g1", True)
 
-# ---- F 사전 목록 활성 ----
-def open_adv():
-    a = AdvancedSettingsDialog(dict(host._prefs), None, host=host)
-    a.show(); QTest.qWait(10)
-    return a
-adv = open_adv()
-g = adv.grp_dict_list
-chk(g is not None, "F0 고급 설정에 '사전 목록' 묶음")
-def row_chk(sid):
-    return next(g.table.item(r, 0) for r in range(g.table.rowCount())
-                if g.table.item(r, 0).data(Qt.ItemDataRole.UserRole) == sid)
-row_chk("g2").setCheckState(Qt.CheckState.Unchecked)
+# ---- F 고급 설정에는 사전 목록이 없다(단어장 관리로 옮김) ----
+from PyQt6.QtWidgets import QGroupBox
+adv = AdvancedSettingsDialog(dict(host._prefs), None)
+adv.show(); QTest.qWait(10)
+chk(not [g for g in adv.findChildren(QGroupBox) if g.title() == "사전 목록"] and not hasattr(adv, "grp_dict_list"),
+    "F0 고급 설정에 '사전 목록' 묶음이 없다")
 adv.reject()
-chk(found(pdf_b, "골재시험어zq"), "F1 [취소] 면 활성 체크는 저장 안 함")
-adv = open_adv(); g = adv.grp_dict_list
-row_chk("g2").setCheckState(Qt.CheckState.Unchecked)
-chk(not (row_chk("user").flags() & Qt.ItemFlag.ItemIsUserCheckable), "F2 사용자 단어장은 끌 수 없다")
-adv.accept()
-chk(not found(pdf_b, "골재시험어zq") and not found(pdf_a, "골재시험어zq"), "F3 비활성 → 모든 PDF 조회에서 빠짐")
-other = ds.DictStore(root / "dict.db")
-chk(not other.lookup("골재시험어zq") and other.lookup("포장시험어zq"), "F4 다른 연결(번역·워커)도 뺀다")
-other.close()
 d = open_dlg(pdf_b)
-chk("g2" not in d.use_ids() + d.wait_ids(), "F5 관리 창 왼쪽·오른쪽 어디에도 없다")
+chk(all(hasattr(d, n) for n in ("btn_import", "btn_delete", "btn_restore")), "F1 관리 창에 [가져오기...]·[사전 지우기]·[지운 사전 되살리기...]")
+chk({"폴더 열기", "새로고침", "양식 CSV"} <= {b.text() for b in d.findChildren(QPushButton)}, "F2 관리 창에 [폴더 열기]·[새로고침]·[양식 CSV]")
 d.reject()
-host._refresh_dict_sources_menu()
-chk(not [a for a in panel.btn_src.menu().actions() if "건설" in a.text()], "F6 패널 메뉴에서도 숨김")
-adv = open_adv(); g = adv.grp_dict_list
-row_chk("g2").setCheckState(Qt.CheckState.Checked); adv.accept()
-chk(found(pdf_b, "골재시험어zq") and not found(pdf_a, "골재시험어zq"), "F7 다시 켜면 그 전 선택으로(b 기본=켜짐, a 자기 선택=꺼짐)")
 
-# ---- G 삭제·되살리기 ----
+# ---- G 사전 지우기·되살리기(관리 창) ----
 gf.write_sample(root / "gl")
 gf.sync_folder(dic, host._prefs)
 fid = next(s["source_id"] for s in dic.list_sources() if s["source_id"].startswith("folder__"))
-adv = open_adv(); g = adv.grp_dict_list
-g.table.clearSelection()
-for r in range(g.table.rowCount()):
-    if g.table.item(r, 0).data(Qt.ItemDataRole.UserRole) in (fid, "g1"):
-        g.table.item(r, 3).setSelected(True)
-click(g.btn_delete)
+d = open_dlg(pdf_b)
+select(d.lst_use, {fid}); select(d.lst_wait, {"g1"})
+if "g1" in d.use_ids():
+    item_of(d.lst_use, "g1").setSelected(True)
+click(d.btn_delete)
 ids = {s["source_id"] for s in dic.list_sources()}
-chk(fid not in ids and "g1" not in ids, "G1 [삭제] — 고른 사전 지움")
+chk(fid not in ids and "g1" not in ids, "G1 [사전 지우기] — 두 목록 어디서 골라도 지움")
+chk(fid not in d.use_ids() + d.wait_ids(), "G1b 관리 창 목록에서도 바로 빠진다")
 gf.sync_folder(dic, host._prefs)
 chk(fid not in {s["source_id"] for s in dic.list_sources()}, "G2 폴더에 파일이 있어도 [새로고침] 에 다시 안 생김")
 chk(not dic.seed_source_if_newer("g1", "도로 용어집", reference="", version=99,
                                  rows=[{"term_ko": "포장시험어zq"}]), "G3 동봉 시드도 지운 사전은 건너뜀")
 chk((root / "gl" / "예제_단어장.csv").exists(), "G4 원본 파일은 그대로")
-chk(g.btn_restore.isEnabled(), "G5 [지운 사전 되살리기...] 켜짐")
-QTimer.singleShot(50, lambda: g._restore_dialog.accept())
-click(g.btn_restore)
+chk(d.btn_restore.isEnabled(), "G5 [지운 사전 되살리기...] 켜짐")
+QTimer.singleShot(50, lambda: d._restore_dialog.accept())
+click(d.btn_restore)
 ids = {s["source_id"] for s in dic.list_sources()}
-chk(fid in ids, "G6 되살리기 → 폴더 사전 다시 실림")
-chk("g1" not in ids and "도로 용어집" in g.info.text(), "G7 가져온(동봉 아님) 사전은 다시 가져오라고 알림", g.info.text())
-adv.accept()
+chk(fid in ids and fid in d.use_ids() + d.wait_ids(), "G6 되살리기 → 폴더 사전 다시 실림(관리 창에도)")
+chk("g1" not in ids and "도로 용어집" in d.info.text(), "G7 가져온(동봉 아님) 사전은 다시 가져오라고 알림", d.info.text())
+d.accept()
 
 # ---- H 이름 변경 ----
 d = open_dlg(pdf_a); d.chk_default.setChecked(False); select(d.lst_use, {"g2"}); click(d.btn_remove); d.accept()

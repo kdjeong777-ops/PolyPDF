@@ -1,12 +1,14 @@
-"""단어장 관리 다이얼로그 — 적용할 사전 고르기 · 스타일 · 우선순위(▲▼).
+"""단어장 관리 다이얼로그 — 적용할 사전 고르기 · 스타일 · 우선순위(▲▼) · 사전 더하기·지우기.
 
 SOT: `단어장 작업 계획서.md` §11.1 (261103-2, 사용자 지시·결정).
-- 왼쪽 '대기 사전'(사전 목록에서 활성인 것 가운데 안 쓰는 것) ↔ 오른쪽 '적용할 사전'(지금 PDF 에 쓰는 것).
+- 왼쪽 '대기 사전'(있는 사전 가운데 지금 PDF 에 안 쓰는 것) ↔ 오른쪽 '적용할 사전'(지금 PDF 에 쓰는 것).
   [추가 →] [← 삭제] [모두 추가 →] [← 모두 삭제], 두 번 누르기. '삭제' 는 적용 목록에서 빼기 — 사전은 지우지 않는다.
 - 오른쪽 차례 = 우선순위(▲▼ → priority 재배정, 모든 PDF 공통, 바로 저장).
 - 스타일(settings.json `dict_styles`): 오른쪽 조합에 이름을 붙여 저장·삭제·고르기.
 - '이후 PDF 에도 계속 적용' 켜짐 = 기본 선택 `enabled`, 꺼짐 = 이 PDF 의 선택(`dict_file_off`). 어느 길로 닫아도 저장.
-- 사전 더하기·지우기·활성·폴더는 환경설정 → 고급 설정 → 사전 목록(`dict_list_group.py`).
+- 사전 파일 줄: [가져오기...]·[사전 지우기]·[지운 사전 되살리기...]·[폴더 열기]·[새로고침]·[양식 CSV] — 누르면 바로 dict.db 에 쓴다.
+  지운 사전은 `dict_meta.deleted_sources` 에 기억 — 동봉 용어집·폴더 CSV 도 다시 싣지 않는다.
+  (261103-8: 고급 설정 '사전 목록' 묶음을 없애고 이리로 옮겼다 — 사용자 지시 '단어장 관리로 충분')
 """
 from __future__ import annotations
 
@@ -16,6 +18,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QCheckBox, QComboBox,
     QListWidget, QListWidgetItem, QAbstractItemView, QMessageBox, QInputDialog,
+    QDialogButtonBox,
 )
 
 _KIND_LABEL = {"user": "사용자", "base": "사전/용어집", "auto": "자동(번역)",
@@ -24,7 +27,7 @@ _STYLE_NONE = "(스타일 고르기)"
 
 
 def source_label(s: dict) -> str:
-    """목록 한 줄 — '이름  (종류 / 구분, 항목 수)'. 사전 목록 묶음도 같은 꼴을 쓴다."""
+    """목록 한 줄 — '이름  (종류 / 구분, 항목 수)'."""
     kind = _KIND_LABEL.get(s.get("kind"), s.get("kind") or "")
     cat = (s.get("category") or "").strip()
     meta = kind + (f" / {cat}" if cat else "")
@@ -46,7 +49,7 @@ class DictManagerDialog(QDialog):
         intro = QLabel(
             "지금 PDF 에 쓸 사전을 <b>오른쪽(적용할 사전)</b>으로 옮깁니다. 오른쪽 차례가 <b>우선순위</b>입니다"
             "(사용자 ▶ 사전/용어집 ▶ 자동/인터넷 안에서 위부터).<br>"
-            "<small>사전 더하기·지우기·활성은 환경설정 → 고급 설정 → <b>사전 목록</b>에서 합니다.</small>")
+            "<small>[← 삭제] 는 적용 목록에서 빼기만 합니다. 사전 자체를 지우려면 아래 [사전 지우기].</small>")
         intro.setWordWrap(True)
         v.addWidget(intro)
 
@@ -111,6 +114,26 @@ class DictManagerDialog(QDialog):
         body.addLayout(col)
         v.addLayout(body, 1)
 
+        # ── 사전 파일 ── 더하기·지우기·되살리기·폴더(누르면 바로 저장)
+        r1 = QHBoxLayout()
+        self.btn_import = QPushButton("가져오기...")
+        self.btn_import.setToolTip("용어집 파일(PDF·CSV)을 사전으로 불러옵니다.")
+        self.btn_delete = QPushButton("사전 지우기")
+        self.btn_delete.setToolTip("고른 사전과 그 항목을 지웁니다(어느 목록에서 골라도) — 사용자 단어장은 지울 수 없습니다.")
+        self.btn_restore = QPushButton("지운 사전 되살리기...")
+        for b, fn in ((self.btn_import, self._import), (self.btn_delete, self._delete),
+                      (self.btn_restore, self._restore)):
+            b.clicked.connect(fn); r1.addWidget(b)
+        r1.addStretch(1)
+        for txt, fn in (("폴더 열기", self._open_folder), ("새로고침", self._refresh_folder),
+                        ("양식 CSV", self._write_sample)):
+            b = QPushButton(txt); b.clicked.connect(fn); r1.addWidget(b)
+        v.addLayout(r1)
+        self.info = QLabel("")
+        self.info.setStyleSheet("color:#666;")
+        self.info.setWordWrap(True)
+        v.addWidget(self.info)
+
         # ── 적용 범위 ── 켜면 오른쪽 목록이 기본 선택(이후 PDF 에도), 끄면 이 PDF 에만
         self.chk_default = QCheckBox("이후 PDF 에도 계속 적용(바꿀 때까지)")
         self.chk_default.setToolTip(
@@ -155,18 +178,26 @@ class DictManagerDialog(QDialog):
         return lst
 
     def _load(self, initial: bool = False):
-        """사전 목록(활성인 것만, 우선순위 차례)을 다시 읽는다 — 아직 저장하지 않은 고름은 남긴다."""
+        """사전(우선순위 차례)을 다시 읽는다 — 아직 저장하지 않은 고름은 남긴다.
+        새로 생긴 사전(가져오기·되살리기·새로고침)은 그 사전의 지금 상태대로(켜짐이면 오른쪽)."""
         try:
             srcs = self._store.list_sources()
         except Exception:
             srcs = []
-        self._srcs = [s for s in srcs if not s.get("inactive")]
+        seen = {s["source_id"] for s in self._srcs}
+        self._srcs = srcs
         ids = {s["source_id"] for s in self._srcs}
         if initial:
             self._use = {s["source_id"] for s in self._srcs if s.get("active")}
         else:
-            self._use &= ids
+            self._use = (self._use & ids) | {s["source_id"] for s in self._srcs
+                                             if s["source_id"] not in seen and s.get("active")}
         self._render()
+        try:
+            n_gone = len(self._store.deleted_sources())
+        except Exception:
+            n_gone = 0
+        self.btn_restore.setEnabled(n_gone > 0)
 
     def _render(self, keep_sel: set | None = None):
         for lst in (self.lst_wait, self.lst_use):
@@ -219,7 +250,7 @@ class DictManagerDialog(QDialog):
             return
         other = right[nr]
         try:
-            order = [s["source_id"] for s in self._store.list_sources()]   # 비활성까지 전체 차례
+            order = [s["source_id"] for s in self._store.list_sources()]
             i, j = order.index(sid), order.index(other)
             order[i], order[j] = order[j], order[i]
             for k, x in enumerate(order):
@@ -283,6 +314,116 @@ class DictManagerDialog(QDialog):
                 self._store.set_source_enabled(s["source_id"], s["source_id"] in use)
             except Exception:
                 pass
+
+    # ----- 사전 파일(더하기·지우기·되살리기·폴더) — 누르면 바로 dict.db 에 쓴다 -----
+    def _files_changed(self):
+        self._load()
+        self.changed.emit()
+        if self._host is not None and hasattr(self._host, "_after_dict_list_changed"):
+            try:
+                self._host._after_dict_list_changed()
+            except Exception:
+                pass
+
+    def _delete(self):
+        from viewer.study.dict_store import USER_SOURCE_ID
+        names = {s["source_id"]: (s.get("name") or s["source_id"]) for s in self._srcs}
+        picked = [(sid, names.get(sid, sid)) for sid in self._ids(self.lst_wait) + self._ids(self.lst_use)
+                  if sid != USER_SOURCE_ID]
+        if not picked:
+            self.info.setText("지울 사전을 고르세요(사용자 단어장은 지울 수 없습니다).")
+            return
+        lines = "\n".join(f"• {n}" for _s, n in picked[:12]) + ("\n…" if len(picked) > 12 else "")
+        if QMessageBox.question(
+                self, "사전 지우기",
+                f"다음 사전과 그 항목을 지울까요?\n\n{lines}\n\n"
+                "지운 사전은 프로그램을 다시 켜거나 [새로고침] 해도 다시 생기지 않습니다.\n"
+                "되살리려면 [지운 사전 되살리기...] 를 누르세요(원본 파일은 그대로입니다).") \
+                != QMessageBox.StandardButton.Yes:
+            return
+        for sid, _n in picked:
+            try:
+                self._store.delete_source(sid, remember=True)
+            except Exception:
+                pass
+        self._files_changed()
+
+    def _restore(self):
+        gone = self._store.deleted_sources()
+        if not gone:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("지운 사전 되살리기")
+        lv = QVBoxLayout(dlg)
+        lv.addWidget(QLabel("되살릴 사전을 고르세요. 동봉 용어집·단어장 폴더의 사전은 다시 싣고,\n"
+                            "[가져오기...] 로 불러온 사전은 원본 파일을 다시 가져와야 합니다."))
+        lst = QListWidget()
+        for sid, name in gone.items():
+            it = QListWidgetItem(str(name))
+            it.setData(Qt.ItemDataRole.UserRole, sid)
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked)
+            lst.addItem(it)
+        lv.addWidget(lst)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject)
+        lv.addWidget(bb)
+        self._restore_dialog = dlg            # 검사가 잡을 수 있게
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        ids = [lst.item(i).data(Qt.ItemDataRole.UserRole) for i in range(lst.count())
+               if lst.item(i).checkState() == Qt.CheckState.Checked]
+        if not ids:
+            return
+        self._store.forget_deleted(ids)
+        try:
+            from viewer.study.glossary_import import load_bundled_glossaries
+            load_bundled_glossaries(self._store)
+        except Exception:
+            pass
+        try:
+            from viewer.study import glossary_folder as gf
+            gf.sync_folder(self._store, self._prefs)
+        except Exception:
+            pass
+        back = {s["source_id"] for s in self._store.list_sources()}
+        need = [gone[i] for i in ids if i not in back]
+        self._files_changed()
+        if need:
+            self.info.setText("원본 파일을 다시 가져와야 하는 사전: " + ", ".join(map(str, need)))
+
+    def _import(self):
+        if self._host is not None and hasattr(self._host, "_action_import_glossary"):
+            self._host._action_import_glossary()
+            self._files_changed()
+
+    def _open_folder(self):
+        from viewer.study import glossary_folder as gf
+        d = gf.glossaries_dir(self._prefs)
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(d))
+        except Exception as e:
+            self.info.setText(f"폴더 열기 실패: {e}")
+
+    def _refresh_folder(self):
+        from viewer.study import glossary_folder as gf
+        try:
+            s = gf.sync_folder(self._store, self._prefs)
+            self.info.setText(f"폴더 동기화: 파일 {s['files']}개 · 갱신 {s['updated']} · "
+                              f"삭제 {s['removed']}  ({s['dir']})")
+        except Exception as e:
+            self.info.setText(f"동기화 실패: {e}")
+        self._files_changed()
+
+    def _write_sample(self):
+        from viewer.study import glossary_folder as gf
+        try:
+            p = gf.write_sample(prefs=self._prefs)
+            self.info.setText(f"양식 저장: {p}")
+            os.startfile(str(p.parent))
+        except Exception as e:
+            self.info.setText(f"양식 저장 실패: {e}")
 
     def _user_terms(self):
         if self._host is not None and hasattr(self._host, "_action_user_terms"):

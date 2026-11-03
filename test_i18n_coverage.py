@@ -25,7 +25,7 @@ LOGF = re.compile(r"(^|_)log(_|$)")
 KOREA_ONLY = {
     "viewer/study_controller.py", "viewer/widgets/study_panel.py",
     "viewer/widgets/study_edit_dialog.py", "viewer/widgets/dict_manager_dialog.py",
-    "viewer/widgets/user_terms_dialog.py", "viewer/widgets/dict_list_group.py",   # 261103-2 고급 설정 사전 목록
+    "viewer/widgets/user_terms_dialog.py",
     "viewer/widgets/law_search_dialog.py", "viewer/widgets/kipo_search_dialog.py",
     "viewer/widgets/kcsc_search_dialog.py", "viewer/side_panel_host.py", "viewer/study/",
 }

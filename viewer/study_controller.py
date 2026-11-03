@@ -92,9 +92,7 @@ class StudyMixin:
         False → 이 PDF 의 선택으로만(기본 선택·다른 PDF 는 그대로)."""
         dic = self._study_get_dict()
         active = set(active_ids)
-        srcs = dic.list_sources()
-        # 비활성 사전은 고를 수 없다 — 그 전 상태를 그대로 둬, 다시 활성으로 하면 돌아온다(단어장 SOT §11.1)
-        live = [s["source_id"] for s in srcs if not s.get("inactive")]
+        live = [s["source_id"] for s in dic.list_sources()]
         key = self._dict_file_key()
         sel = dict(self._prefs.get("dict_file_off") or {})
         if as_default or not key:
@@ -102,9 +100,7 @@ class StudyMixin:
                 dic.set_source_enabled(sid, sid in active)
             sel.pop(key, None)
         else:
-            was_off = set(sel.get(key) or [s["source_id"] for s in srcs if not s.get("enabled")])
-            sel[key] = ([sid for sid in live if sid not in active]
-                        + [s["source_id"] for s in srcs if s.get("inactive") and s["source_id"] in was_off])
+            sel[key] = [sid for sid in live if sid not in active]
         self._prefs["dict_file_off"] = sel
         self._sync_dict_file_sel()
         self._spot_terms_cache = None
@@ -130,11 +126,11 @@ class StudyMixin:
         self._prefs["dict_styles"] = [s for s in self._dict_styles() if s["name"] != name]
 
     def _dict_style_sources(self, name: str) -> list:
-        """스타일의 사전 가운데 지금 있고 활성인 것만(단어장 SOT §11.1 — 나머지는 건너뛴다)."""
+        """스타일의 사전 가운데 지금 있는 것만(단어장 SOT §11.1 — 지운 사전은 건너뛴다)."""
         st = next((s for s in self._dict_styles() if s["name"] == name), None)
         if st is None:
             return []
-        live = {s["source_id"] for s in self._study_get_dict().list_sources() if not s.get("inactive")}
+        live = {s["source_id"] for s in self._study_get_dict().list_sources()}
         return [sid for sid in st.get("sources") or [] if sid in live]
 
     def _on_dict_style_chosen(self, name: str):
@@ -157,7 +153,7 @@ class StudyMixin:
             pass
 
     def _after_dict_list_changed(self):
-        """환경설정 '사전 목록' 을 고친 뒤 — 패널 메뉴·뜻·용어 인식을 다시."""
+        """단어장 관리 창에서 사전을 더하거나 지운 뒤 — 패널 메뉴·뜻·용어 인식을 다시."""
         self._spot_terms_cache = None
         self._refresh_dict_sources_menu()
         try:
@@ -1301,10 +1297,15 @@ class StudyMixin:
                 and not reading)
 
     def _apply_vocab_marks(self, page: int, rects: list) -> None:
-        """활성 창에만 긋고 다른 창 것은 지운다. 꺼진 조건이면 지우기만."""
+        """활성 창에만 긋고 다른 창 것은 지운다. 꺼진 조건이면 지우기만.
+        목록에 지금 보이는 단어만 긋는다 — '종류' 체크로 걸러진 단어는 뺀다(단어장 SOT §11.2)."""
+        self._vocab_page_rects = (page, list(rects))
         for mv in getattr(self, "_mv", None) or [self.main_view]:
             if mv is not self.main_view:
                 mv.clear_vocab_marks()
+        if rects:
+            shown = {lm for lm, _lang in self.study_panel.shown_lemmas()}
+            rects = [r for r in rects if r[4] in shown]
         if rects and self._vocab_marks_on():
             self.main_view.set_vocab_marks(page, [r[:4] for r in rects])
         else:
@@ -1320,6 +1321,12 @@ class StudyMixin:
             self._refresh_study_panel(self.main_view.current_page())
         else:
             self._clear_vocab_marks()
+
+    def _on_study_levels_changed(self) -> None:
+        """'종류' 체크 — 목록이 다시 그려진 뒤 같은 쪽의 밑줄을 보이는 단어로 다시 긋는다(다시 계산 없음)."""
+        page, rects = getattr(self, "_vocab_page_rects", None) or (None, [])
+        if page is not None and page == self.main_view.current_page():
+            self._apply_vocab_marks(page, rects)
 
     def _on_study_auto_highlight(self, on: bool) -> None:
         if on:

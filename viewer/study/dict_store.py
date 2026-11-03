@@ -293,19 +293,15 @@ class DictStore:
         return True
 
     def list_sources(self) -> list[dict]:
-        """출처 목록. `enabled` = 기본 선택, `inactive` = 사전 목록에서 끔,
-        `active` = 이 연결이 지금 쓰는지(단어장 SOT §11.1 — 비활성은 언제나 False)."""
+        """출처 목록. `enabled` = 기본 선택, `active` = 이 연결이 지금 쓰는지(단어장 SOT §11.1)."""
         rows = [dict(r) for r in self.conn.execute(
             "SELECT s.*, (SELECT COUNT(*) FROM dict_entry e"
             "  WHERE e.source_id=s.source_id AND e.enabled=1) AS n_entries"
             " FROM dict_source s ORDER BY"
             " CASE s.kind WHEN 'user' THEN 0 WHEN 'base' THEN 1 ELSE 2 END, s.priority")]
-        ina = self.inactive_sources()
         for r in rows:
-            r["inactive"] = r["source_id"] in ina
-            r["active"] = (not r["inactive"]) and (
-                bool(r.get("enabled")) if self._file_off is None
-                else r["source_id"] not in self._file_off)
+            r["active"] = (bool(r.get("enabled")) if self._file_off is None
+                           else r["source_id"] not in self._file_off)
         return rows
 
     def get_source(self, source_id: str) -> Optional[dict]:
@@ -337,7 +333,7 @@ class DictStore:
         self.conn.execute("DELETE FROM dict_source WHERE source_id=?", (source_id,))
         self.conn.commit()
 
-    # --- 261103-2(단어장 SOT §11.1): 사전 목록 — 비활성·지운 사전 기억(dict_meta, 모든 연결이 본다) ---
+    # --- 261103-2(단어장 SOT §11.1): 지운 사전 기억(dict_meta, 모든 연결이 본다) ---
     def _meta_json(self, key: str, default):
         try:
             v = json.loads(self._meta_get(key) or "null")
@@ -358,17 +354,6 @@ class DictStore:
         for sid in source_ids:
             gone.pop(sid, None)
         self._meta_set("deleted_sources", json.dumps(gone, ensure_ascii=False))
-
-    def inactive_sources(self) -> frozenset:
-        """환경설정 '사전 목록' 에서 끈 출처 — 어느 길에서도 쓰지 않는다."""
-        if self._inactive is None:
-            self._inactive = frozenset(str(x) for x in self._meta_json("inactive_sources", []))
-        return self._inactive
-
-    def set_inactive(self, ids) -> None:
-        ids = sorted({str(i) for i in ids if str(i) != USER_SOURCE_ID})
-        self._meta_set("inactive_sources", json.dumps(ids, ensure_ascii=False))
-        self._inactive = frozenset(ids)
 
     # --- 항목 CRUD ---------------------------------------------------------
     def add_entry(self, *, source_id: str = USER_SOURCE_ID,
@@ -459,16 +444,15 @@ class DictStore:
 
     # 261103-2(단어장 SOT §11.1): 이 PDF 의 사전 선택 — 꺼진 출처 집합. None 이면 기본 선택(s.enabled)
     _file_off: Optional[frozenset] = None
-    _inactive: Optional[frozenset] = None      # 비활성 출처(dict_meta 캐시) — 이 연결로 고치면 같이 바뀐다
 
     def set_file_off(self, ids) -> None:
         """이 연결의 조회가 쓸 출처를 정한다 — ids=None 이면 기본 선택, 아니면 ids 를 뺀 모든 출처."""
         self._file_off = None if ids is None else frozenset(str(i) for i in ids)
 
     def _src_filter(self) -> tuple[str, list]:
-        """기본 선택 또는 이 PDF 의 선택 — 어느 쪽이든 비활성 출처는 뺀다."""
+        """기본 선택 또는 이 PDF 의 선택."""
         sql, args = ("s.enabled=1", []) if self._file_off is None else ("1=1", [])
-        off = set(self.inactive_sources()) | set(self._file_off or ())
+        off = set(self._file_off or ())
         if off:
             sql += f" AND s.source_id NOT IN ({','.join('?' * len(off))})"
             args = sorted(off)

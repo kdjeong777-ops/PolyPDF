@@ -104,7 +104,7 @@ def sync_folder(store, prefs: dict = None) -> dict:
         sid = _PREFIX + _slug(fp.stem)
         seen.add(sid)
         if store.is_deleted(sid):
-            continue        # 261103-2(단어장 SOT §11.1): 사전 목록에서 지운 것 — 파일이 있어도 다시 싣지 않는다
+            continue        # 261103-2(단어장 SOT §11.1): 단어장 관리에서 지운 사전 — 파일이 있어도 다시 싣지 않는다
         meta = _read_meta(fp)
         try:
             ver = int(fp.stat().st_mtime)

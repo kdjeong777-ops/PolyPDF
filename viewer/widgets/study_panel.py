@@ -124,6 +124,7 @@ class StudyPanel(QWidget):
     mp3Requested = pyqtSignal()              # 재생내용 mp3 저장
     autoHighlightChanged = pyqtSignal(bool)  # 본문 밑줄 옵션(261103-4, 단어장 SOT §11.2)
     shownChanged = pyqtSignal(bool)          # 261103-4: 창이 보이게/안 보이게 됨(최소화는 빼고)
+    levelsChanged = pyqtSignal()             # 261103-6: '종류' 체크로 목록에 보이는 단어가 바뀜
     playToggled = pyqtSignal(bool)           # ▶/■ 단어장 자동읽기 시작/정지
     wordFilterChanged = pyqtSignal()         # 표시 필터(전체/선택/날짜/초기) 변경
     sourceToggled = pyqtSignal(str, bool)    # 260611-102(P2): 사전 출처 on/off
@@ -216,6 +217,7 @@ class StudyPanel(QWidget):
             cb = QCheckBox(lv)
             cb.setChecked(_default_on[lv])
             cb.stateChanged.connect(self._render)
+            cb.stateChanged.connect(lambda _s: self.levelsChanged.emit())   # 본문 밑줄도 같은 단어로
             flow.addWidget(cb)
             self._chk[lv] = cb
 
@@ -449,15 +451,14 @@ class StudyPanel(QWidget):
 
     def set_dict_sources(self, sources: list, styles: list | None = None) -> None:
         """260611-102(P2)/260615-7(P9): '출처 ▾' 메뉴 — 구분(category)별 그룹.
-        sources: [{source_id,name,category,kind,enabled,active,inactive,n_entries}].
-        261103-2(단어장 SOT §11.1): 맨 위 스타일 목록(styleChosen), 사전 목록에서 끈(inactive) 사전은 숨김."""
+        sources: [{source_id,name,category,kind,enabled,active,n_entries}].
+        261103-2(단어장 SOT §11.1): 맨 위 스타일 목록(styleChosen)."""
         menu = self.btn_src.menu()
         # 260615-23: 메뉴가 열려 있는 동안(연속 토글 중)에는 재구성하지 않음(아이템 파괴 방지)
         if menu.isVisible():
             return
         menu.clear()
         self._src_submenus = []          # 하위메뉴 참조 유지(GC 방지)
-        sources = [s for s in sources if not s.get("inactive")]
         if styles:
             hdr = menu.addAction(tr("스타일")); hdr.setEnabled(False)
             for name in styles:

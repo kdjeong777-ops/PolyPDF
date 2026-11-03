@@ -59,7 +59,8 @@ class FakeStore:
     def get_page_dpi(self, fkey, page):
         return 0
     def get_page_study(self, fkey, page):
-        return [{"lemma": w, "lang": "eng", "level": "중급", "count": 1, "pos": i,
+        return [{"lemma": w, "lang": "eng", "level": "고급" if w == "binder" else "중급",
+                 "count": 1, "pos": i,
                  "definitions": [], "examples": []}
                 for i, w in enumerate(self.pages[page]) if w in LEMMAS]
     def __getattr__(self, name):          # 그 밖의 쓰기·조회는 빈 값
@@ -99,6 +100,7 @@ try:
     fake = FakeStore(PAGES)
     mw._study_get_store = lambda: fake
     mw._maybe_online_enrich = lambda *a, **k: None
+    mw._enrich_rows_with_dict = lambda rows: rows     # 기본 사전이 '전문용어' 로 바꾸지 않게 — 종류는 대역이 정한다
     mw._load_main(HistoryItem(src, 0, "", "bookmark")); wait()
     m = mw.main_view
     tabs = mw.search_tabs
@@ -164,6 +166,12 @@ try:
     ra._active = False
     mw._refresh_study_panel(1); app.processEvents()
     chk(len(marks(m)) == 3, "E4 읽기가 끝나면 다시 긋는다")
+    lv_mid = mw.study_panel._chk["중급"]
+    lv_mid.click(); app.processEvents()
+    mk = marks(m)
+    chk(not lv_mid.isChecked() and len(mk) == 1, "E5 '종류' 중급을 끄면 목록에 남은 단어(binder, 고급)만 밑줄", str(mk))
+    lv_mid.click(); app.processEvents()
+    chk(len(marks(m)) == 3, "E6 다시 켜면 바로 다시 긋는다")
 
     # ---- F ----
     p2 = StudyPanel()

@@ -2614,6 +2614,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 단어장 창이 보이게 되면(탭 전환·오른쪽 창 열기) 현재 페이지 단어 1회 갱신,
         # 안 보이게 되면 본문 밑줄을 지운다(261103-4, 단어장 SOT §11.2)
         self.study_panel.shownChanged.connect(self._on_study_panel_shown)
+        self.study_panel.levelsChanged.connect(self._on_study_levels_changed)
         # 260908-2: 텍스트 탭으로 오면 그때 뽑는다(안 볼 때는 뽑지 않는다 — 응답성 §4 ⑥)
         self.search_tabs.currentChanged.connect(lambda _i: self._reload_text_panel())
         self._wire_text_panel()
