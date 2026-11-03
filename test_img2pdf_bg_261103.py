@@ -46,10 +46,13 @@ try:
     big = tmp / "큰 사진 00.jpg"
     Image.new("RGB", (W, H), (60, 120, 200)).save(big, quality=90)
     paths = [big]
-    for k in range(1, 8):
+    for k in range(1, 20):
         p = tmp / ("큰 사진 %02d.jpg" % k)
         shutil.copy(big, p)
         paths.append(p)
+    png = tmp / "큰 그림.png"                         # PNG 는 디코드 단계에서 줄일 수 없다 — 그래도 메인이 서지 않게
+    Image.new("RGB", (W, H), (30, 160, 90)).save(png)
+    paths.append(png)
     rot = tmp / "눕힌 사진.jpg"                         # EXIF 방향 6 — 저장은 가로, 보이기는 세로
     ex = Image.Exif()
     ex[0x0112] = 6
@@ -60,14 +63,28 @@ try:
     dlg.resize(860, 580)
     dlg.show()
     app.processEvents()
+    # 응답성 SOT §7.1 하트비트 — 넣기부터 아이콘이 다 붙을 때까지 최장 공백 < 1초
+    from PyQt6.QtCore import QTimer
+    beats = {"last": time.perf_counter(), "worst": 0.0}
+
+    def beat():
+        now = time.perf_counter()
+        beats["worst"] = max(beats["worst"], now - beats["last"])
+        beats["last"] = now
+    hb = QTimer(); hb.setInterval(20); hb.timeout.connect(beat); hb.start()
+    app.processEvents()
+    beats["last"] = time.perf_counter()
     t0 = time.perf_counter()
     dlg._add_files([str(p) for p in paths])
     dt = time.perf_counter() - t0
-    chk(dt < 0.3, "A 24 MP 8장 넣기가 메인에서 짧다", "%.2f초" % dt)
+    chk(dt < 0.3, "A 24 MP 20장 넣기가 메인에서 짧다", "%.2f초" % dt)
 
     def icons_ready():
         return all(not dlg.lst.item(i).icon().isNull() for i in range(dlg.lst.count()))
     chk(pump_until(icons_ready), "B 아이콘이 배경에서 붙는다")
+    hb.stop()
+    print("     하트비트 최장 공백 %.3f초 (넣기 %.3f초)" % (beats["worst"], dt))
+    chk(beats["worst"] < 1.0, "A 하트비트 최장 공백 < 1초(응답성 SOT §7.1) — 넣기부터 아이콘 끝까지", "%.3f초" % beats["worst"])
     chk(pump_until(lambda: dlg.preview.pixmap() is not None and not dlg.preview.pixmap().isNull()),
         "B 미리보기가 그려진다")
     chk(("%d×%d" % (W, H)) in dlg.info.text(), "B 크기 글이 원래 픽셀", dlg.info.text())

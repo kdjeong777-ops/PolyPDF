@@ -32,7 +32,15 @@ def read_scaled(path: str, box: int, auto_transform: bool = False):
     셋(썸네일·미리보기·PDF)을 함께 세우는 것은 사진 보기 SOT P1(EXIF 방향 함수 하나).
 
     261103-21(사진 보기 SOT 4.14 G4): 종전에는 `QPixmap(path)` 로 **메인에서 원본 전체**를 풀었다 —
-    24 MP 사진 50장을 넣으면 수십 초 '응답 없음'. JPEG 은 디코드 단계에서 줄어 빠르다. 배경 스레드에서 부른다(QImage 만 쓴다)."""
+    24 MP 사진 50장을 넣으면 수십 초 '응답 없음'. 배경 스레드에서 부른다(QImage 만 쓴다).
+
+    **Pillow 로 읽는다** — `QImageReader.read` 는 디코드하는 동안 GIL 을 쥐어, 배경이라도 메인이 섰다(24 MP 20장 하트비트
+    최장 1.28초, 응답성 SOT §7.1 실측). Pillow 의 해독기는 GIL 을 놓고, JPEG 은 `draft` 로 디코드 단계에서 1/2~1/8 로 줄인다.
+    Pillow 가 모르는 형식만 Qt 로."""
+    try:
+        return _read_scaled_pil(path, box, auto_transform)
+    except Exception:
+        pass
     r = QImageReader(str(path))
     r.setAutoTransform(bool(auto_transform))
     sz = r.size()
@@ -45,6 +53,24 @@ def read_scaled(path: str, box: int, auto_transform: bool = False):
             r.setScaledSize(QSize(max(1, int(sz.width() * k)), max(1, int(sz.height() * k))))
     img = r.read()
     return img, w, h
+
+
+def _read_scaled_pil(path: str, box: int, auto_transform: bool):
+    from PIL import Image, ImageOps
+    with Image.open(str(path)) as im:
+        w, h = im.size
+        if auto_transform:
+            o = im.getexif().get(0x0112, 1)
+            if o in (5, 6, 7, 8):
+                w, h = h, w                          # EXIF 로 눕힌 사진 — 보이는 대로의 폭·높이
+        im.draft("RGB", (box, box))                  # JPEG: 디코드 단계에서 줄인다(다른 형식은 그대로)
+        im = ImageOps.exif_transpose(im) if auto_transform else im
+        im.thumbnail((box, box))
+        im = im.convert("RGBA" if "A" in im.getbands() else "RGB")
+        fmt = QImage.Format.Format_RGBA8888 if im.mode == "RGBA" else QImage.Format.Format_RGB888
+        data = im.tobytes()
+        qi = QImage(data, im.width, im.height, im.width * len(im.mode), fmt).copy()   # 버퍼를 놓기 전에 복사
+    return qi, w, h
 
 
 class _ScaledReader(QObject):
