@@ -924,7 +924,10 @@ class _PdfGraphicsView(QGraphicsView):
         self._flip_ms = -1e9                  # 쪽을 넘기고 **다 그린** 시각
         self._flip_dir = 0                    # 그때 넘긴 방향
         self._need_new_gesture = False        # 트랙패드: 넘긴 뒤 손을 새로 얹어야 다음 쪽
-        self._ts_off = None                   # (처리 시각 − 이벤트 시각) 중 가장 작았던 값
+        # 261103-7(입력 SOT §2.2 규칙 8): 단계 없는 터치패드(Windows)는 휠 흐름이 끊겨야 한 손짓이 끝난다.
+        self._stream_ts = -1e9                # 흐름의 마지막 휠 시각(이벤트 시각, 없으면 처리 시각)
+        self._stream_smooth = False           # 이 흐름에 120 의 배수가 아닌 값이 왔나(터치패드·고해상도 휠)
+        self._ts_off = None                  # (처리 시각 − 이벤트 시각) 중 가장 작았던 값
         # 260910-6(마스터 SOT §19.12.3): 1회성 설정은 여기 — 종전에는 이 네 줄이
         #   mouseMoveEvent 맨 끝에 있어 **마우스가 움직일 때마다** 실행됐다.
         #   실측상 정책 값은 load_document/load_image 와 같아 증상은 없었으나,
@@ -1224,8 +1227,11 @@ class _PdfGraphicsView(QGraphicsView):
         # v1.6.9 G2: 이미지 모드도 PDF 와 동일 — 페이지(스크린샷)내 스크롤하다
         #            끝에서 한 번 더 굴리면 다음/이전 항목으로(_on_page_step 분기).
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
-            self.zoomRequested.emit(factor)
+            # 261103-7(입력 SOT §2.3 규칙 7): 값에 비례한다 — 휠 한 칸(120)이 1.15 배. Windows 터치패드의 집기는
+            #   Ctrl+작은 값 수십 건으로 오는데, 종전에는 건마다 1.15 배라 한 번 집기에 수십 배가 됐다. 세로 값이 없으면(가로) 무시.
+            dy = event.angleDelta().y()
+            if dy:
+                self.zoomRequested.emit(1.15 ** (dy / 120.0))
             event.accept()
             return
 
@@ -1288,15 +1294,31 @@ class _PdfGraphicsView(QGraphicsView):
         now = _perf_ms()
         lag = self._wheel_lag_ms(event, now)   # 모든 칸에서 재야 기준(가장 작은 차이)이 바르다
         sd = +1 if delta < 0 else -1    # +1 아래로 / -1 위로
+        # 261103-7(규칙 8, 사용자 보고 '쪽 맞춤에서 터치패드 쓸기 한 번에 1쪽·2쪽 그때그때'): Windows 터치패드는 단계 없이
+        #   작은 값을 8~16ms 마다, 손 뗀 뒤 관성도 같은 모양으로 보낸다. 흐름이 `EDGE_IDLE_MS` 끊겨야 한 손짓이 끝난다.
+        #   간격은 **이벤트 시각**으로 잰다 — 넘긴 쪽을 그리는 동안 쌓였다 풀린 꼬리가 '끊김' 으로 보이지 않게. 넘긴 직후
+        #   버리는 칸(규칙 5·6)도 흐름에는 센다.
+        try:
+            ts = float(event.timestamp())
+        except Exception:
+            ts = 0.0
+        ts = ts if ts > 0 else now
+        if ts - self._stream_ts > self.EDGE_IDLE_MS or ts < self._stream_ts:
+            self._stream_smooth = False     # 새 흐름 — 앞 손짓은 끝났다
+            self._need_new_gesture = False
+        self._stream_ts = ts
+        if phase == Qt.ScrollPhase.NoScrollPhase and delta % 120:
+            self._stream_smooth = True
         since_flip = now - self._flip_ms
         if since_flip < self.FLIP_LOCK_MS or (
                 sd != self._flip_dir and since_flip < self.FLIP_BOUNCE_MS):
             # 규칙 5·6: 넘긴 직후 — 그리는 동안 쌓였던 이벤트이거나 걸쇠가 되튄 것이다
             event.accept()
             return
+        if self._need_new_gesture and sd != self._flip_dir:
+            self._need_new_gesture = False  # 뒤집었다 — 새 손짓이다(§1 의 3)
         if now - self._last_wheel_ms > self.EDGE_IDLE_MS:
             self._edge_sum = 0          # 규칙 4: 멈췄다 — 떨림이 시간을 두고 쌓이지 않게
-            self._need_new_gesture = False
         self._last_wheel_ms = now
 
         room = sb.maximum() > sb.minimum()
@@ -1328,7 +1350,8 @@ class _PdfGraphicsView(QGraphicsView):
             self._edge_dir = 0
             self._edge_sum = 0
             self._flip_dir = at_edge
-            self._need_new_gesture = (phase != Qt.ScrollPhase.NoScrollPhase)   # 규칙 8
+            self._need_new_gesture = (phase != Qt.ScrollPhase.NoScrollPhase
+                                      or self._stream_smooth)   # 규칙 8 — 한 손짓에 한 쪽
             self.pageStep.emit(at_edge)
             self._flip_ms = _perf_ms()  # 규칙 5: **다 그린 뒤**부터 잰다
             event.accept()

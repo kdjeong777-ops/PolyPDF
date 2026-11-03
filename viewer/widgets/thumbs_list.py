@@ -109,6 +109,11 @@ class PageThumbs(QWidget):
         self._thumb_size = QSize(self.BASE_THUMB_W, self.BASE_THUMB_H)
         self._thumb_scale = 1.0              # 261021-5(입력 SOT §3.2): Ctrl++/−/0 — set_thumb_scale
         self._edit_mode = False             # 260606-22: 책갈피 편집모드와 동기
+        # 261103-7(입력 SOT §2.3 규칙 8): 터치패드의 작은 휠 값을 모아 120 마다 한 칸, 파일 경계는 한 흐름에 한 번
+        self._wheel_acc = 0
+        self._wheel_ms = -1e9
+        self._wheel_edge_done = False
+        self._wheel_smooth = False
         self._orig_count = 0
         self._hidden_pages = set()           # 260609-14(D5): 숨김 페이지
         self._rotations = {}                 # 260609-15(A1): {page0: deg}
@@ -780,15 +785,33 @@ class PageThumbs(QWidget):
                     return False                       # Ctrl+휠은 기본(확대 등) 유지
                 dy = event.angleDelta().y()
                 if dy != 0:
+                    # 261103-7: Windows 터치패드는 작은 값(120 의 배수가 아님)을 수십 건 보낸다 — 종전에는 건마다 한 칸이라
+                    #   한 번 쓸기에 썸네일이 수십 개 지나가고, 목록 끝에서는 건마다 파일 경계를 물었다. 값을 모아 120 마다 한 칸,
+                    #   작은 값 흐름의 파일 경계는 흐름이 200ms 끊길 때까지 한 번. 보통 휠 한 칸(120)은 종전 그대로.
+                    import time as _t
+                    now = _t.perf_counter() * 1000.0
+                    if now - self._wheel_ms > 200 or (self._wheel_acc and (dy > 0) != (self._wheel_acc > 0)):
+                        self._wheel_acc = 0
+                        self._wheel_edge_done = False
+                        self._wheel_smooth = False
+                    self._wheel_ms = now
+                    self._wheel_smooth = self._wheel_smooth or bool(dy % 120)
+                    smooth = self._wheel_smooth
+                    self._wheel_acc += dy
+                    if abs(self._wheel_acc) < 120:
+                        return True
+                    up = self._wheel_acc > 0
+                    self._wheel_acc -= 120 if up else -120
                     sb = self.list.verticalScrollBar()
                     if not self._edit_mode:
-                        if dy < 0 and sb.value() >= sb.maximum():
-                            self.fileBoundaryRequested.emit(+1)
+                        at = (+1 if (not up and sb.value() >= sb.maximum()) else
+                              -1 if (up and sb.value() <= sb.minimum()) else 0)
+                        if at:
+                            if not (smooth and self._wheel_edge_done):
+                                self._wheel_edge_done = smooth
+                                self.fileBoundaryRequested.emit(at)
                             return True
-                        if dy > 0 and sb.value() <= sb.minimum():
-                            self.fileBoundaryRequested.emit(-1)
-                            return True
-                    sb.setValue(sb.value() + (-1 if dy > 0 else 1))  # ScrollPerItem=1칸
+                    sb.setValue(sb.value() + (-1 if up else 1))  # ScrollPerItem=1칸
                     return True
             except Exception:
                 return False
