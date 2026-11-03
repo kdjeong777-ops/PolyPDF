@@ -3534,6 +3534,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         tp.highlightAdded.connect(self._on_text_highlight)      # 260908-3(SOT §6)
         tp.ocrRequested.connect(self._on_text_need_ocr)
+        try:    # 261103-15(텍스트 창 SOT §5.1.5): 본문의 줄 상자를 끌어 늘리면 늘린 띠를 읽어 그 줄에 넣는다
+            self.main_view.panelRectStretched.connect(self._on_text_rect_stretched)
+        except Exception:
+            pass
         try:
             tp.set_styles(self._prefs.get("text_panel_styles") or {})
             tp.set_mark_pdf(bool(self._prefs.get("text_hl_mark_pdf", False)))
@@ -3711,6 +3715,49 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                     src="text_panel")   # 260912-7(§2.6)
         except Exception:
             pass
+
+    def _on_text_rect_stretched(self, page, old, new):
+        """본문에서 텍스트 창 줄 상자의 끝을 끌어 늘렸다 → **늘어난 띠만** OCR 해 그 줄에 넣는다 (텍스트 창 SOT §5.1.5).
+
+        261103-15 사용자 지시: 줄 앞·뒤 낱말이 빠졌을 때(`(DSM-I:`) 상자를 늘려 채운다. 읽기는 배경(`TextStripOcrWorker`, 응답성 SOT §4 ①)."""
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if not cur or mv._doc is None:
+            return
+        x0, y0, x1, y1 = (float(v) for v in new)
+        ox0, _oy0, ox1, _oy1 = (float(v) for v in old)
+        strips = []
+        if x0 < ox0:
+            strips.append((x0, y0, ox0, y1))
+        if x1 > ox1:
+            strips.append((ox1, y0, x1, y1))
+        if not strips:
+            return
+        sx0, _a, sx1, _b = strips[0] if len(strips) == 1 else (x0, y0, x1, y1)
+        pad = (y1 - y0) * 0.1                      # 글자 위·아래가 잘리지 않게
+        clip = (sx0, y0 - pad, sx1, y1 + pad)
+        from viewer.workers import TextStripOcrWorker, run_in_thread
+        self._text_strip_token = getattr(self, "_text_strip_token", 0) + 1
+        tok = (self._text_strip_token, str(cur), int(page), tuple(old), tuple(new))
+        w = TextStripOcrWorker(cur, int(page), clip, lang=self._ocr_lang_for(cur), token=tok)
+        w.done.connect(self._on_text_strip_done)
+        w.error.connect(lambda _t, e: self.status.showMessage(tr("늘린 자리를 읽지 못했습니다: {e}").format(e=e), 6000))
+        self.status.showMessage(tr("늘린 자리를 읽는 중…"), 3000)
+        if not hasattr(self, "_text_strip_keep"):
+            self._text_strip_keep = []
+        run_in_thread(w, self._text_strip_keep)
+
+    def _on_text_strip_done(self, tok, text):
+        """늘린 띠를 읽었다 — 같은 파일·같은 쪽을 보고 있을 때만 텍스트 창 그 줄에 넣는다(§5.1.5)."""
+        n, path, page, old, new = tok
+        mv = self.main_view
+        if n != getattr(self, "_text_strip_token", 0) or mv is None or str(mv.current_file() or "") != path                 or mv.current_page() != page:
+            return
+        if not (text or "").strip():
+            self.status.showMessage(tr("늘린 자리에서 글을 찾지 못했습니다."), 5000)
+            return
+        if not self.text_panel.stretch_line(old, new, text):
+            self.status.showMessage(tr("늘린 줄을 텍스트 창에서 찾지 못했습니다."), 5000)
 
     def _on_text_highlight_mark(self, page, rects):
         """텍스트 창에서 칠한 자리를 **본문 그리기 층**에도 얹는다 (입력 SOT §2.7).

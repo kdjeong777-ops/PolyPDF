@@ -531,6 +531,35 @@ def toc_text_lines(texts: list) -> bool:
     return len(num) >= TOC_PAGE_MIN and len(num) >= TOC_PAGE_SHARE * starts and len(deep) >= 3
 
 
+TOC_TAIL_SHARE = 0.6         # 쪽 번호로 끝나는 차례 줄의 몫(`toc_tail_lines`)
+TOC_TAIL_RISE = 0.8          # … 그 쪽 번호가 앞 줄보다 크거나 같은 쌍의 몫 — 찾아보기(색인) 쪽은 쪽 번호가 뒤섞인다
+TOC_TAIL_GROW = 0.5          # … 그 가운데 **커지는** 쌍의 몫 — 끝 칸이 모두 `5` 인 설문 표가 목차로 보이지 않게
+_TOC_TAIL_NO = re.compile(r"(?:\s|_)(\d{1,4})$")
+
+
+def toc_tail_lines(texts: list) -> bool:
+    """줄 글 목록으로 **한 단계 번호 목차**(`1. 아들러 생애 192`·`요약 187`) 쪽인지 — 텍스트 창 줄 잇기가 `toc_text_lines` 와 함께 쓴다
+    (텍스트 창 SOT §3.7.15, 261103-13 사용자 보고). 여러 단 번호가 없는 교재 목차는 `toc_text_lines` 에 걸리지 않아 차례 두 줄이
+    한 줄로 이어졌다. 글자가 있는 줄 대부분이 쪽 번호로 끝나고, 그 쪽 번호가 대체로 커져 가면 목차다(줄은 위→아래 차례로 준다).
+    OCR 목차 쪽 다시 읽기(`looks_like_toc`)는 이것을 쓰지 않는다 — 판정을 넓히면 그 길의 비용·결과가 바뀐다."""
+    starts, tails = 0, []
+    for t in texts:
+        s = str(t).strip()
+        if not s:
+            continue
+        starts += 1
+        if " | " in s:                       # 표 행(텍스트 창의 칸 구분) — 끝 칸 숫자는 쪽 번호가 아니다
+            continue
+        m = _TOC_TAIL_NO.search(s)
+        if m and re.search(r"[가-힣A-Za-z]", s[:m.start()]):
+            tails.append(int(m.group(1)))
+    if len(tails) < TOC_PAGE_MIN or len(tails) < TOC_TAIL_SHARE * starts:
+        return False
+    pairs = list(zip(tails, tails[1:]))
+    return (sum(1 for a, b in pairs if b >= a) >= TOC_TAIL_RISE * len(pairs)
+            and sum(1 for a, b in pairs if b > a) >= TOC_TAIL_GROW * len(pairs))
+
+
 _SEC_NO = re.compile(r"\d+(?:\.\d+)+\.?|\d{1,2}\.")
 
 

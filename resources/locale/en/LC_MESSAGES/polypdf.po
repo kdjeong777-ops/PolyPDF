@@ -513,6 +513,10 @@ msgstr "Close"
 msgid "책갈피 생성 실패"
 msgstr "Bookmark generation failed"
 
+#: viewer/app.py
+msgid "늘린 자리를 읽는 중…"
+msgstr "Reading the extended area…"
+
 #: viewer/app.py viewer/study/ocr.py
 msgid "한국어"
 msgstr "Korean"
@@ -1222,6 +1226,14 @@ msgstr "Open a PDF first."
 #: viewer/app.py
 msgid "이 쪽은 스캔본이라 글자가 없습니다. [단어장 생성] 으로 이 문서를 읽으면 여기에 글이 나옵니다."
 msgstr "This page is a scan and has no text. Read this document with [Build Vocabulary] and the text will appear here."
+
+#: viewer/app.py
+msgid "늘린 자리에서 글을 찾지 못했습니다."
+msgstr "No text was found in the extended area."
+
+#: viewer/app.py
+msgid "늘린 줄을 텍스트 창에서 찾지 못했습니다."
+msgstr "The extended line was not found in the Text panel."
 
 #: viewer/app.py
 msgid "원래 글자층으로 되돌렸습니다."
@@ -2854,6 +2866,11 @@ msgstr "[Label] {name}"
 #, python-brace-format
 msgid "인덱싱 오류: {e}"
 msgstr "Indexing error: {e}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "늘린 자리를 읽지 못했습니다: {e}"
+msgstr "Couldn't read the extended area: {e}"
 
 #: viewer/app.py
 #, python-brace-format
@@ -10895,6 +10912,11 @@ msgstr "Changed {n} lines to '{v}'."
 #, python-brace-format
 msgid " · 표 {n_tb}"
 msgstr " · tables {n_tb}"
+
+#: viewer/widgets/text_panel.py
+#, python-brace-format
+msgid "늘린 자리의 글을 넣었습니다: {t}"
+msgstr "Added the text from the extended area: {t}"
 
 #: viewer/widgets/text_panel.py
 msgid "칠했습니다 — 본문에도 표시했습니다."

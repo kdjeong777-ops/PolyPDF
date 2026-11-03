@@ -530,6 +530,81 @@ class TextPanel(QWidget):
         self.info.setText(tr("두 줄을 합쳤습니다 — 반영하면 두 자리가 하나로 들어갑니다."))
         return True
 
+    def find_rect(self, rect):
+        """본문 줄 상자(PDF pt) → (줄 번호, 그 줄 안의 상자 번호) 또는 None (SOT §5.1.5)."""
+        if not rect:
+            return None
+        cur = self.current_line()
+        order = ([cur] if 0 <= cur < len(self._rows) else []) + [i for i in range(len(self._rows)) if i != cur]
+        for i in order:
+            r = self._rows[i]
+            for k, q in enumerate(r.get("rects") or ([r["rect"]] if r.get("rect") else [])):
+                if q and all(abs(float(a) - float(b)) <= 0.5 for a, b in zip(q, rect)):
+                    return i, k
+        return None
+
+    def stretch_line(self, old_rect, new_rect, text: str) -> bool:
+        """본문에서 줄 상자를 끌어 늘린 자리의 글(`text`)을 그 줄의 **그 상자 자리**에 넣는다 (SOT §5.1.5, 261103-15 사용자 지시).
+
+        이은 줄(§3.7)은 원래 줄마다의 글(`parts`)로 상자 `k` 의 글이 어디서 시작하는지 찾는다 — 왼쪽으로 늘렸으면 그 앞,
+        오른쪽이면 다음 상자의 글 앞(마지막이면 줄 끝). 찾지 못하면(사용자가 그 사이를 고쳤다) 첫 상자는 줄 앞, 그 밖은 줄 끝.
+        고침으로 남는다(`lineEdited`) — [저장] 때 반영되고, 상자 자리도 늘린 대로 바뀐다."""
+        hit = self.find_rect(old_rect)
+        text = (text or "").strip()
+        if hit is None or not text:
+            return False
+        i, k = hit
+        r = self._rows[i]
+        rects = list(r.get("rects") or ([r["rect"]] if r.get("rect") else []))
+        cur_t = r.get("text") or ""
+        left = float(new_rect[0]) < float(old_rect[0]) - 0.5
+        parts = list(r.get("parts") or [cur_t])
+        starts = None
+        if len(parts) == len(rects):
+            starts, pos = [], 0
+            for p in parts:
+                key = p.strip()[:6]
+                j = cur_t.find(key, pos) if key else -1
+                if j < 0:
+                    starts = None
+                    break
+                starts.append(j)
+                pos = j + len(key)
+        if left:
+            at = starts[k] if starts else (0 if k == 0 else len(cur_t))
+        else:
+            at = starts[k + 1] if starts and k + 1 < len(starts) else len(cur_t)
+        head, tail = cur_t[:at].rstrip(), cur_t[at:].lstrip()
+        glue_l = "" if (not head or head[-1] in "([{") else " "
+        glue_r = "" if (not tail or tail[0] in ",.;:)]}") else " "
+        new_t = head + glue_l + text + glue_r + tail
+        r.setdefault("orig", cur_t)
+        r["text"] = new_t
+        if len(parts) == len(rects) and 0 <= k < len(parts):
+            parts[k] = (text + " " + parts[k]) if left else (parts[k] + " " + text)
+            r["parts"] = parts
+        if 0 <= k < len(rects):
+            rects[k] = tuple(new_rect)
+            r["rects"] = rects
+            r["rect"] = (min(q[0] for q in rects), min(q[1] for q in rects),
+                         max(q[2] for q in rects), max(q[3] for q in rects))
+        blk = self.edit.document().findBlockByNumber(i)
+        if blk.isValid():
+            self._loading = True
+            try:
+                c = QTextCursor(blk)
+                c.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+                c.insertText(new_t)
+                c = QTextCursor(blk)
+                c.setPosition(blk.position() + min(len(head) + len(glue_l) + len(text), len(new_t)))
+                self.edit.setTextCursor(c)
+            finally:
+                self._loading = False
+        self.lineEdited.emit(self._page, i, new_t, r.get("orig") or "")
+        self.lineFocused.emit(self._page, list(rects))
+        self.info.setText(tr("늘린 자리의 글을 넣었습니다: {t}").format(t=text))
+        return True
+
     def _resync_blocks(self) -> None:
         """줄 수가 어긋났을 때 지금의 `_rows` 로 되돌린다(260908-6 안전망)."""
         self._loading = True

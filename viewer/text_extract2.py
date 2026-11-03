@@ -1758,6 +1758,62 @@ def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
     return ' '
 
 
+def _is_toc_rows(rows) -> bool:
+    """목차 쪽인가(SOT §3.7.15) — 여러 단 번호 목차(`toc_text_lines`, 단어학습 SOT §14.8.4) 또는 한 단계 번호 목차(`toc_tail_lines`).
+    261103-13(사용자 보고): 교재 목차(`1. 아이젱크의 … 151`)는 앞의 판정에 걸리지 않아 `…모델 158` 과 `요약 162` 가 한 줄로 이어졌다."""
+    from viewer.study.ocr_pages import toc_text_lines, toc_tail_lines
+    texts = [r.get('text') or '' for r in rows]
+    return toc_text_lines(texts) or toc_tail_lines(texts)
+
+
+_TOC_NO_OK = re.compile(r"(\d{1,2})\.\s")
+_TOC_NO_BAD = re.compile(r"(\d{1,2}|[A-Za-z])[.,]?\s+(?=[가-힣A-Za-z])")
+
+
+def fix_toc_numbers(rows) -> list:
+    """목차 쪽의 **잘못 읽은 항목 번호**를 앞뒤 줄 번호로 바로잡는다 (SOT §3.6.17, 261103-14 사용자 지시).
+
+    `3. 성격 발달 180` / `A 성격 평가기법 183` / `5. 성격이론의 적용 185` → `4. 성격 평가기법 183`.
+    `1, 아이젱크의 …`·`2 주요 개념` 처럼 점을 못 읽거나 쉼표로 읽은 것도 `1.`·`2.` 로. 바로 위·아래 줄의 번호만 본다 —
+    사이에 `요약`·`제7장` 이 끼면 그 줄은 이웃이 아니다. 글자로 읽은 번호(`A`)는 **위·아래가 둘 다** 맞을 때만,
+    숫자로 읽은 번호는 그 숫자가 이웃 번호에서 나온 값과 같을 때만 고친다. 목차 쪽(`_is_toc_rows`)이 아니면 그대로 돌려준다."""
+    body = [r for r in rows if r.get('kind') == 'text' and (r.get('text') or '').strip()]
+    if len(body) < 3 or not _is_toc_rows(body):
+        return rows
+
+    def _ok(r):
+        m = _TOC_NO_OK.match((r.get('text') or '').lstrip()) if r is not None else None
+        return int(m.group(1)) if m else None
+    for _ in range(3):                       # `1 융` / `2 주요` / `3. …` — 아래에서 고친 번호로 위를 다시 본다
+        changed = False
+        for i, r in enumerate(body):
+            t = (r.get('text') or '').lstrip()
+            if _TOC_NO_OK.match(t):
+                continue
+            m = _TOC_NO_BAD.match(t)
+            if not m:
+                continue
+            p = _ok(body[i - 1]) if i > 0 else None
+            n = _ok(body[i + 1]) if i + 1 < len(body) else None
+            if p is not None and n is not None:
+                k = p + 1 if p + 1 == n - 1 else None
+            else:
+                k = p + 1 if p is not None else (n - 1 if n is not None else None)
+            head = m.group(1)
+            if not k or k < 1:
+                continue
+            if head.isdigit():
+                if int(head) != k:
+                    continue
+            elif p is None or n is None:
+                continue
+            r['text'] = "%d. %s" % (k, t[m.end():])
+            changed = True
+        if not changed:
+            break
+    return rows
+
+
 def join_sentences(rows) -> list:
     """종이 때문에 끊긴 줄을 **한 문장으로** 잇는다 (SOT §3.7).
 
@@ -1772,8 +1828,7 @@ def join_sentences(rows) -> list:
         return list(rows)
     # 261102-2(SOT §3.7.15): 목차 쪽은 잇지 않는다 — OCR 이 쪽 번호·점선을 못 읽으면 제목 줄이 오른쪽까지 찬
     #   문단처럼 보여 `3.1 …` 뒤에 `3.2 …`·`3.3 …` 이 붙었다(_96 5쪽). 판정은 OCR 목차 쪽과 같은 것(단어학습 SOT §14.8.4).
-    from viewer.study.ocr_pages import toc_text_lines
-    if toc_text_lines([r.get('text') or '' for r in body]):
+    if _is_toc_rows(body):
         return list(rows)
     # 260910-12(사용자 보고 "부호로 잇는 규칙이 적용 안 된다", SOT §3.7.8):
     #   여백은 **단마다** 잰다. 쪽 하나로 재면 2단 쪽에서 왼쪽 단이 한 줄도 못 잇는다 —
@@ -1810,6 +1865,8 @@ def join_sentences(rows) -> list:
             sep = _join_sep(prev.get('_tail', prev['text']), r['text'], _wrapped)
             a = prev['text']
             b_txt = r['text'].lstrip()
+            # 261103-15(SOT §5.1.5): 원래 줄마다의 글 — 본문에서 줄 상자 하나를 늘리면 텍스트 창이 그 줄 자리에 넣는다
+            prev['parts'] = list(prev.get('parts') or [a]) + list(r.get('parts') or [b_txt])
             if sep == '-drop':
                 a, sep = a.rstrip()[:-1], ''
                 b_txt = _dehyphen_ligature(a, b_txt)
@@ -2213,13 +2270,13 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
             if not has_text_layer(doc, page_index):
                 if edges_out is not None:
                     edges_out.extend(_ocr_edges)
-                return rows                     # 스캔 쪽 — OCR 이 전부다
+                return fix_toc_numbers(rows)    # 스캔 쪽 — OCR 이 전부다
             # 260909-2(SOT §3.1.3): 글자층이 있는 쪽은 **갈아 끼우지 않고 합친다**.
             #   글자층이 정확하고, 그림 속 글만 OCR 로 채운다.
             base = page_lines(doc, pdf_path, page_index, tables=tables,
                               tables_cached_only=tables_cached_only,
                               join_lines=join_lines, edges_out=edges_out)
-            return merge_layer_and_ocr(base, rows)
+            return fix_toc_numbers(merge_layer_and_ocr(base, rows))
     items = _line_items(page, edges_out)
     noise = last_noise_count()
 
@@ -2262,7 +2319,8 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
     _NOISE["n"] = noise          # 표 처리가 `_line_items` 를 다시 부르지 않음을 명시
     if join_lines:               # 260910(SOT §3.7): 종이 때문에 끊긴 문장을 잇는다
         rows_out = join_hyphens(join_sentences(rows_out))   # 261101-1(SOT §3.7.4): 남은 분철도
-    return rows_out
+    # 261103-14(SOT §3.6.17): 목차 쪽 항목 번호 오독(`A 성격 평가기법` → `4.`)
+    return fix_toc_numbers(rows_out)
 
 
 def lines_from_words(words, *, dpi: int = 0, page=None, peer_words=None, edges_out=None) -> list:

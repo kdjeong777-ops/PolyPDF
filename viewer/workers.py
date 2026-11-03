@@ -1242,6 +1242,44 @@ def run_in_thread(worker: QObject, parent_keep: list) -> QThread:
     return th
 
 
+class TextStripOcrWorker(QObject):
+    """261103-15(텍스트 창 SOT §5.1.5): 본문의 줄 상자를 끌어 늘린 **띠만** OCR 한다 — 줄 끝·첫머리에서 빠진 낱말(`(DSM-I:`)을 채운다.
+    한 줄 띠라 `psm 7`(한 줄). 자기 문서를 따로 연다(응답성 SOT §4 ①). 결과는 `done(토큰, 글)` — 못 읽으면 빈 글."""
+    done = pyqtSignal(object, str)
+    error = pyqtSignal(object, str)
+    finished = pyqtSignal()
+
+    DPI = 300
+    PSM = 7
+
+    def __init__(self, doc_path, page: int, clip, lang: str = '', token=None):
+        super().__init__()
+        self.doc_path, self.page, self.clip = str(doc_path), int(page), tuple(clip)
+        self.lang, self.token = lang, token
+
+    def run(self):
+        try:
+            import fitz
+            from PIL import Image
+            from viewer.study import ocr as study_ocr
+            from viewer import text_extract2 as tx
+            lang = study_ocr.resolve_lang(self.lang or study_ocr.default_lang())
+            doc = fitz.open(self.doc_path)
+            try:
+                page = doc.load_page(self.page)
+                pix = page.get_pixmap(dpi=self.DPI, clip=fitz.Rect(*self.clip), colorspace=fitz.csGRAY)
+                img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+            finally:
+                doc.close()
+            words = study_ocr.ocr_image(img, lang=lang, psm=self.PSM, dpi=self.DPI).get("words") or []
+            text = " ".join(w["surface"] for w in tx.merge_words_by_gap(words)).strip()
+            self.done.emit(self.token, text)
+        except Exception as e:                    # noqa: BLE001
+            self.error.emit(self.token, str(e))
+        finally:
+            self.finished.emit()
+
+
 class SignVerifyWorker(QObject):
     """261012-16(응답성 SOT §4.3·보안 SOT §10): 서명 검증 — 파일을 연다. `run_in_thread` 로 돌린다.
     결과는 `done(경로, mtime, 보고서)`. 종전 `_SignVerifyThread(QThread)` 직접 상속을 옮겼다."""

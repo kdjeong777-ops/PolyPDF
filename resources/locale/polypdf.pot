@@ -513,6 +513,10 @@ msgstr ""
 msgid "책갈피 생성 실패"
 msgstr ""
 
+#: viewer/app.py
+msgid "늘린 자리를 읽는 중…"
+msgstr ""
+
 #: viewer/app.py viewer/study/ocr.py
 msgid "한국어"
 msgstr ""
@@ -1196,6 +1200,14 @@ msgstr ""
 
 #: viewer/app.py
 msgid "이 쪽은 스캔본이라 글자가 없습니다. [단어장 생성] 으로 이 문서를 읽으면 여기에 글이 나옵니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "늘린 자리에서 글을 찾지 못했습니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "늘린 줄을 텍스트 창에서 찾지 못했습니다."
 msgstr ""
 
 #: viewer/app.py
@@ -2757,6 +2769,11 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "인덱싱 오류: {e}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "늘린 자리를 읽지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/app.py
@@ -10605,6 +10622,11 @@ msgstr ""
 #: viewer/widgets/text_panel.py
 #, python-brace-format
 msgid " · 표 {n_tb}"
+msgstr ""
+
+#: viewer/widgets/text_panel.py
+#, python-brace-format
+msgid "늘린 자리의 글을 넣었습니다: {t}"
 msgstr ""
 
 #: viewer/widgets/text_panel.py

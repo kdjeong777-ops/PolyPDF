@@ -960,6 +960,8 @@ class _PdfGraphicsView(QGraphicsView):
         self._block_purpose = "copy"        # 261010-21(보안 SOT §3.3): "copy" | "sign" — 같은 러버밴드로 서명 자리
         self._brb = None                    # 블럭 러버밴드
         self._brb_origin = None
+        self._edge_drag = False             # 261103-15(텍스트 창 SOT §5.1.5): 텍스트 창 줄 상자 끝을 끄는 중
+        self._edge_hover = False
         try:
             self.viewport().setCursor(Qt.CursorShape.IBeamCursor)   # 텍스트 선택 포인터
         except Exception:
@@ -1061,10 +1063,18 @@ class _PdfGraphicsView(QGraphicsView):
 
     def mousePressEvent(self, event):
         self._press_pos = event.position().toPoint()
+        # 261103-15(텍스트 창 SOT §5.1.5): 텍스트 창이 건 줄 상자의 왼·오른 끝 → 끌어 늘리기(단어 선택보다 우선).
+        #   활성화 신호보다 먼저 본다 — 그 신호가 텍스트 창 강조를 지운다(입력 SOT §2.6), 끄는 동안은 지우지 않는다
+        if event.button() == Qt.MouseButton.LeftButton and hasattr(self._owner, "_panel_edge_begin"):
+            z = getattr(self._owner, "_zoom", 1.0) or 1.0
+            sp = self.mapToScene(self._press_pos)
+            self._edge_drag = bool(self._owner._panel_edge_begin(sp.x() / z, sp.y() / z))
         try:
             self.viewActivated.emit()      # 260606-8: 클릭한 창을 활성으로
         except Exception:
             pass
+        if self._edge_drag:
+            return
         # 260617-5: 블럭설정(무장) → 사각형 러버밴드 시작(단어 선택보다 우선)
         if (self._block_armed and event.button() == Qt.MouseButton.LeftButton
                 and self._text_sel_ok()):
@@ -1087,6 +1097,11 @@ class _PdfGraphicsView(QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if self._edge_drag and event.button() == Qt.MouseButton.LeftButton:
+            self._edge_drag = False
+            if self._owner is not None:
+                self._owner._panel_edge_end()
+            return
         # 260617-5: 블럭 선택 완료 → 영역 텍스트 복사 후 무장 해제
         if (self._brb is not None and self._brb.isVisible()
                 and event.button() == Qt.MouseButton.LeftButton):
@@ -1163,6 +1178,22 @@ class _PdfGraphicsView(QGraphicsView):
             self._brb.setGeometry(
                 QRect(self._brb_origin, event.position().toPoint()).normalized())
             return
+        if self._edge_drag and self._owner is not None:
+            z = getattr(self._owner, "_zoom", 1.0) or 1.0
+            sp = self.mapToScene(event.position().toPoint())
+            self._owner._panel_edge_move(sp.x() / z)
+            return
+        if not event.buttons() and hasattr(self._owner, "_panel_edge_at"):
+            z = getattr(self._owner, "_zoom", 1.0) or 1.0
+            sp = self.mapToScene(event.position().toPoint())
+            if self._owner._panel_edge_at(sp.x() / z, sp.y() / z) is not None:
+                if not self._edge_hover:
+                    self._edge_hover = True
+                    self.viewport().setCursor(Qt.CursorShape.SizeHorCursor)
+                return
+            if self._edge_hover:
+                self._edge_hover = False
+                self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
         # 260617-3: 좌버튼 드래그 → 시작점~현재점 사이 단어를 선택(하이라이트)
         if ((event.buttons() & Qt.MouseButton.LeftButton)
                 and self._press_scene is not None and self._owner is not None):
@@ -1646,6 +1677,7 @@ class MainView(QWidget):
     signEditRequested = pyqtSignal()             # 261012-1(보안 SOT §3.10): 검증 띠의 [서명 편집]
     hyperlinkActivated = pyqtSignal(object)      # 260609-3: 페이지 하이퍼링크 버튼 클릭(link dict)
     drawModeChanged = pyqtSignal(int)            # 260611-4: 선 종류 순환(0/1/2) — 공유 동기
+    panelRectStretched = pyqtSignal(int, object, object)   # 261103-15(텍스트 창 SOT §5.1.5): 쪽, 줄 상자(전), 끌어 늘린 상자(PDF pt)
     fitShown = pyqtSignal(str)                   # 261031-11: 보이는 맞춤이 바뀜 — 창 아래 맞춤 콤보가 따른다(디자인 SOT §2.9.2)
 
     _DOC_U = 1000                                # v1.6.8 F1: doc_scroll 페이지당 단위
@@ -3318,6 +3350,8 @@ class MainView(QWidget):
         읽기(TTS)·단어장이 건 강조는 그대로 둔다 — 사용자가 본문을 눌렀다고 해서
         읽기가 끝난 것은 아니다. 그래서 지우개가 아니라 **출처를 보고** 지운다.
         """
+        if getattr(self, "_edge_state", None):
+            return                          # 261103-15(텍스트 창 SOT §5.1.5): 그 상자를 끌어 늘리는 중
         if getattr(self, "_word_hl_src", None) == "text_panel":
             self.clear_word_highlights()
 
@@ -3352,6 +3386,70 @@ class MainView(QWidget):
                 item.setPen(pen)
                 self.scene.addItem(item)
                 self._word_hl_items.append(item)
+
+    # --- 텍스트 창 줄 상자 끌어 늘리기 (261103-15, 텍스트 창 SOT §5.1.5) ------------
+    EDGE_GRIP_PX = 6          # 상자 왼·오른 끝에서 이 화면 픽셀 안이면 잡는다
+    EDGE_MIN_PT = 2.0         # 이만큼도 안 늘었으면 신호를 내지 않는다
+
+    def _panel_edge_at(self, px: float, py: float):
+        """텍스트 창이 건 줄 상자의 왼·오른 끝 위인가 → (상자 번호, 'left'|'right') 또는 None. 좌표는 PDF pt."""
+        if getattr(self, "_word_hl_src", None) != "text_panel" or self.is_two_page_mode():
+            return None
+        groups = getattr(self, "_word_hl_groups", None) or []
+        if len(groups) != 1:
+            return None
+        tol = self.EDGE_GRIP_PX / (self._zoom or 1.0)
+        for i, (x0, y0, x1, y1) in enumerate(groups[0][0]):
+            if not (y0 <= py <= y1):
+                continue
+            if abs(px - x0) <= tol:
+                return i, "left"
+            if abs(px - x1) <= tol:
+                return i, "right"
+        return None
+
+    def _panel_edge_begin(self, px: float, py: float) -> bool:
+        hit = self._panel_edge_at(px, py)
+        if hit is None:
+            return False
+        i, side = hit
+        self._edge_state = {"i": i, "side": side, "orig": tuple(self._word_hl_groups[0][0][i])}
+        return True
+
+    def _panel_edge_move(self, px: float):
+        st = getattr(self, "_edge_state", None)
+        if not st:
+            return
+        x0, y0, x1, y1 = st["orig"]
+        try:
+            pw = float(self._doc.doc.load_page(self._current_page).rect.width)
+        except Exception:
+            pw = x1 + 1000.0
+        if st["side"] == "left":
+            x0 = max(0.0, min(px, x1 - 1.0))
+        else:
+            x1 = min(pw, max(px, x0 + 1.0))
+        rects = self._word_hl_groups[0][0]
+        rects[st["i"]] = (x0, y0, x1, y1)
+        z = self._zoom
+        items = getattr(self, "_word_hl_items", [])
+        if st["i"] < len(items):
+            items[st["i"]].setRect(QRectF(x0 * z, y0 * z, (x1 - x0) * z, (y1 - y0) * z))
+
+    def _panel_edge_end(self):
+        st, self._edge_state = getattr(self, "_edge_state", None), None
+        if not st or not getattr(self, "_word_hl_groups", None):
+            return
+        new = tuple(self._word_hl_groups[0][0][st["i"]])
+        old = st["orig"]
+        if abs(new[0] - old[0]) < self.EDGE_MIN_PT and abs(new[2] - old[2]) < self.EDGE_MIN_PT:
+            self._word_hl_groups[0][0][st["i"]] = old        # 거의 안 끌었다 — 되돌린다
+            items = getattr(self, "_word_hl_items", [])
+            if st["i"] < len(items):
+                z = self._zoom
+                items[st["i"]].setRect(QRectF(old[0] * z, old[1] * z, (old[2] - old[0]) * z, (old[3] - old[1]) * z))
+            return
+        self.panelRectStretched.emit(int(self._current_page), old, new)
 
     def highlight_word_groups(self, groups, scroll: bool = True, src=None):
         """여러 묶음을 각자 스타일로 강조. groups=[(rects_pt, style), ...].
