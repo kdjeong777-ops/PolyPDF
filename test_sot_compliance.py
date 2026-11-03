@@ -288,7 +288,7 @@ if HAVE_SOT:
         "파일 태그·키워드": "파일 태그·키워드 작업 계획서.md",
         "형식 변환": "형식 변환 작업 계획서.md",
         "가상 프린터": "가상 프린터 작업 계획서.md",
-        "사진 보기": "사진 보기(PolyPicture) 작업 계획서.md",
+        "사진 보기": "사진 보기(PolyPix) 작업 계획서.md",
     }
     for owner, sot_name in NAMED.items():
         txt = SOTS.get(sot_name, "")
