@@ -204,7 +204,7 @@ chk(not (MODAL_KNOWN - _no_guard), "§14.7.2-6 modal_guard 로 옮긴(또는 없
 # 261025-9 보완(마스터 §14.7.2 의 21): `scripts/*.py` 가 한글·'—' 를 찍으면 시작에 `sys.stdout.reconfigure(encoding="utf-8")` —
 #   Windows 콘솔은 cp949 라 '—'(U+2014) 같은 글자에서 UnicodeEncodeError 로 멈춘다(`sot_row.py --dry-run`). stderr 로 한글을 내면
 #   (`SystemExit("…")`·`file=sys.stderr`) `sys.stderr.reconfigure` 도. 아래는 그 전부터 있던 것 — **줄기만 한다**.
-ENC_KNOWN = {"scripts/bump_version.py", "scripts/load_test.py", "scripts/soak_test.py"}
+ENC_KNOWN = {"scripts/bump_version.py", "scripts/soak_test.py"}
 _enc_bad = set()
 for p in sorted((ROOT / "scripts").glob("*.py")):
     s = strip_comments(read(p))
