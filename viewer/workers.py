@@ -29,6 +29,12 @@ class IndexWorker(QObject):
         #   작업을 여럿 띄우면 `_start_index_worker` 가 앞 작업을 취소한다)
         self.files = [Path(f) for f in files] if files else None
         self._cancel = False                # 260611-89: 다른 폴더/파일 열 때 중단
+        # 261103-20(사진 보기 SOT 4.14 G2): 색인은 PDF 만. 거른 뒤 비면 할 일이 없다 — 빈 목록이 `files or …` 에서
+        #   '폴더 전체 색인' 으로 번지지 않게 끝낸다.
+        if self.files is not None:
+            self.files = [p for p in self.files if p.suffix.lower() == ".pdf"]
+            if not self.files:
+                self._cancel = True
 
     def request_cancel(self):
         self._cancel = True

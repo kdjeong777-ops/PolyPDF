@@ -1321,6 +1321,10 @@ msgid "닫고 저장"
 msgstr ""
 
 #: viewer/app.py
+msgid "PDF 가 아닌 원본은 덮어쓰지 않습니다 — 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/app.py
 #, python-brace-format
 msgid ""
 "원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n"

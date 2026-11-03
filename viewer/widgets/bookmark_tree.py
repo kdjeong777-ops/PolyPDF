@@ -1416,24 +1416,6 @@ class BookmarkTree(QWidget):
                 self.tree.blockSignals(False)
         return [p for p in new if p in shown]
 
-    def all_file_paths(self) -> list:
-        """260616-3: 현재 트리에 표시된 모든 PDF 파일 경로(중복 제거, 출현 순).
-        검색 범위를 '책갈피 목록'으로 한정하는 데 사용(json/flat/single 모드 공통)."""
-        out: list = []
-        seen: set = set()
-
-        def walk(item):
-            for i in range(item.childCount()):
-                ch = item.child(i)
-                f = ch.data(0, self.DATA_FILE)
-                if f and f not in seen:
-                    seen.add(f)
-                    out.append(f)
-                walk(ch)
-
-        walk(self.tree.invisibleRootItem())
-        return out
-
     def _populate_from_json(self, data: dict):
         bookmarks = data.get("bookmarks", [])
 
@@ -1479,10 +1461,13 @@ class BookmarkTree(QWidget):
         암호화+미인증이면 저장된 암호로 해제 시도, 실패하면 책갈피여부 None(미상).
         인증상태: None(암호화 아님) / "owner"(전체 권한) / "user"(제한 암호) / "locked"(미인증)."""
         p = Path(pdf_path)
+        # 261103-20(사진 보기 SOT 4.14 G5): PDF 가 아닌 파일(사진 등)은 열어 보지 않는다 — 큰 사진을 PDF 로 열면 그만큼 선다
+        if p.suffix.lower() != ".pdf":
+            return (False, False, None, False)
         try:
             st = p.stat(); key = (str(p), int(st.st_size), int(st.st_mtime))
         except Exception:
-            return (False, False, None)
+            return (False, False, None, False)       # 부르는 쪽이 넷으로 푼다(종전 셋이라 ValueError)
         cache = getattr(self, "_probe_cache", None)
         if cache is None:
             cache = self._probe_cache = {}
@@ -4258,6 +4243,11 @@ class BookmarkTree(QWidget):
         if not src.exists():
             QMessageBox.warning(self, tr("오류"), tr('원본 PDF 없음: {src}').format(src=src))
             return
+        if src.suffix.lower() != ".pdf":
+            # 261103-19(사진 보기 SOT 4.14 G1): 사진 등은 책갈피·쪽 편집 저장이 없다 — 꾸밈(사이드카)만 남기고 원본은 건드리지 않는다
+            self._dirty = False
+            self._commit_meta()
+            return
         bookmarks_raw = []   # (title, page_1based, level)
         self._walk_collect(target, 0, bookmarks_raw)
         # 260606-13: 원본 PDF의 현재 책갈피(TOC)와 비교해 '실제 변경 여부'로 메시지 결정
@@ -4389,7 +4379,8 @@ class BookmarkTree(QWidget):
                 pass
 
     def all_file_paths(self) -> list:
-        """260606-15: 트리의 최상위 파일 노드 경로 목록(PDF 병합 좌측 리스트용)."""
+        """260606-15: 트리의 최상위 파일 노드 경로 목록(PDF 병합 좌측 리스트용).
+        261103-20(사진 보기 SOT 4.12): 같은 이름의 앞 정의(260616-3, 검색 범위용)는 이 정의에 덮여 죽은 코드였다 — 지웠다(동작 그대로)."""
         out = []
         for it in self._iter_file_nodes():          # 260901-2: 트리 보기 포함
             d = it.data(0, self.DATA_FILE)

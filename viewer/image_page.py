@@ -89,6 +89,28 @@ def blank_page_pdf(out_pdf, width: float, height: float) -> bool:
         doc.close()
 
 
+def image_size(path) -> tuple:
+    """그림의 (폭, 높이) 픽셀 — **머리만** 읽는다(Pillow 는 열 때 몸을 풀지 않는다). 못 읽으면 (0, 0).
+
+    261103-21(사진 보기 SOT 4.14 G4): 종전에는 크기만 재려고 `fitz.Pixmap` 으로 그림 전체를 풀었다 —
+    24 MP 사진이면 장마다 수백 ms. Pillow 가 모르는 형식만 종전 길로."""
+    try:
+        from PIL import Image
+        with Image.open(str(path)) as im:
+            w, h = im.size
+        return float(w), float(h)
+    except Exception:
+        pass
+    try:
+        import fitz
+        pix = fitz.Pixmap(str(path))
+        w, h = float(pix.width), float(pix.height)
+        pix = None
+        return w, h
+    except Exception:
+        return 0.0, 0.0
+
+
 def images_to_pdf(image_paths, out_pdf, page_size=None, progress=None) -> int:
     """그림들을 **한 장에 한 쪽씩** 담은 PDF 로 저장한다. 넣은 쪽 수를 준다.
 
@@ -110,19 +132,18 @@ def images_to_pdf(image_paths, out_pdf, page_size=None, progress=None) -> int:
     doc = fitz.open()
     try:
         for p in paths:
-            try:
-                pix = fitz.Pixmap(p)
-                iw, ih = float(pix.width), float(pix.height)
-                pix = None                      # 자리만 재고 곧바로 놓아 준다
-            except Exception:
-                continue                        # 깨진 그림은 건너뛴다
+            iw, ih = image_size(p)
             if iw <= 0 or ih <= 0:
-                continue
+                continue                        # 깨진 그림은 건너뛴다
             pw, ph = (float(page_size[0]), float(page_size[1])) if page_size else (iw, ih)
             try:
                 page = doc.new_page(width=pw, height=ph)
+            except Exception:
+                continue
+            try:
                 page.insert_image(fitz.Rect(*fit_rect(iw, ih, pw, ph)), filename=p)
             except Exception:
+                doc.delete_page(page.number)    # 머리는 읽혔는데 몸이 깨진 그림 — 빈 쪽을 남기지 않는다
                 continue
             if progress is not None and progress(
                     doc.page_count, len(paths), "사진을 쪽으로 만드는 중") is False:

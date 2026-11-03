@@ -8,8 +8,8 @@ from __future__ import annotations
 import os
 import re
 
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtCore import Qt, QSize, QObject, QTimer, pyqtSignal
+from PyQt6.QtGui import QPixmap, QIcon, QImage, QImageReader, QImageIOHandler
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QLabel,
     QPushButton, QDialogButtonBox, QCheckBox, QComboBox, QWidget, QFileDialog,
@@ -21,6 +21,59 @@ from viewer.i18n import tr
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp")
 _PATH_ROLE = Qt.ItemDataRole.UserRole
+ICON_PX = 56                    # 목록 아이콘
+PREVIEW_DELAY_MS = 120          # 창 크기를 끄는 동안 미리보기를 매번 다시 읽지 않게 모은다
+
+
+def read_scaled(path: str, box: int, auto_transform: bool = False):
+    """그림을 **긴 변 `box` 안으로 줄여 읽는다** → (QImage, 원래 폭, 원래 높이). `auto_transform` 이면 EXIF 방향을 적용한다.
+
+    이 창은 **적용하지 않는다** — 만드는 PDF(`_images_to_pdf`)가 아직 EXIF 방향을 보지 않아, 미리보기만 세우면 결과와 달라진다.
+    셋(썸네일·미리보기·PDF)을 함께 세우는 것은 사진 보기 SOT P1(EXIF 방향 함수 하나).
+
+    261103-21(사진 보기 SOT 4.14 G4): 종전에는 `QPixmap(path)` 로 **메인에서 원본 전체**를 풀었다 —
+    24 MP 사진 50장을 넣으면 수십 초 '응답 없음'. JPEG 은 디코드 단계에서 줄어 빠르다. 배경 스레드에서 부른다(QImage 만 쓴다)."""
+    r = QImageReader(str(path))
+    r.setAutoTransform(bool(auto_transform))
+    sz = r.size()
+    w, h = sz.width(), sz.height()
+    if w > 0 and h > 0:
+        if auto_transform and r.transformation() & QImageIOHandler.Transformation.TransformationRotate90:
+            w, h = h, w                              # EXIF 로 눕힌 사진 — 보이는 대로의 폭·높이
+        k = min(1.0, float(box) / max(sz.width(), sz.height()))
+        if k < 1.0:
+            r.setScaledSize(QSize(max(1, int(sz.width() * k)), max(1, int(sz.height() * k))))
+    img = r.read()
+    return img, w, h
+
+
+class _ScaledReader(QObject):
+    """그림 여럿을 배경에서 줄여 읽는다 — 한 장 끝날 때마다 `done(세대, 경로, QImage, 폭, 높이)`(응답성 SOT §4)."""
+    done = pyqtSignal(int, str, QImage, int, int)
+    finished = pyqtSignal()
+
+    def __init__(self, gen: int, paths, box: int):
+        super().__init__()
+        self.gen, self.paths, self.box = gen, list(paths), int(box)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        from viewer import pacing
+        try:
+            for p in self.paths:
+                if self._cancel:
+                    break
+                try:
+                    img, w, h = read_scaled(p, self.box)
+                except Exception:
+                    img, w, h = QImage(), 0, 0
+                self.done.emit(self.gen, p, img, w, h)
+                pacing.pace(self)                    # 그림마다 양보(응답성 SOT §4 ②·⑦)
+        finally:
+            self.finished.emit()
 
 
 def _natural_key(path: str):
@@ -144,6 +197,17 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
         bb.rejected.connect(self.reject)
         root.addWidget(bb)
 
+        # 261103-21(G4): 아이콘·미리보기는 배경에서 줄여 읽는다 — 세대 토큰으로 낡은 결과를 버린다
+        self._keep: list = []
+        self._readers: list = []
+        self._icon_gen = 0
+        self._prev_gen = 0
+        self._items: dict = {}
+        self._prev_timer = QTimer(self)
+        self._prev_timer.setSingleShot(True)
+        self._prev_timer.setInterval(PREVIEW_DELAY_MS)
+        self._prev_timer.timeout.connect(self._start_preview)
+
         if initial_paths:
             self._add_files(initial_paths)
 
@@ -165,14 +229,35 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
             it = QListWidgetItem(os.path.basename(p))
             it.setData(_PATH_ROLE, p)
             it.setToolTip(p)
-            pm = QPixmap(p)
-            if not pm.isNull():
-                it.setIcon(QIcon(pm.scaled(
-                    56, 56, Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation)))
+            self._items[p] = it              # 아이콘은 배경에서 줄여 읽어 붙인다(G4)
             self.lst.addItem(it)
+        if news:
+            self._icon_gen += 1
+            self._run_reader(self._icon_gen, news, ICON_PX * 2, self._on_icon)   # 고해상도 화면 2배
         if news and self.lst.currentRow() < 0:
             self.lst.setCurrentRow(0)
+
+    def _run_reader(self, gen, paths, box, slot):
+        from viewer.workers import run_in_thread
+        w = _ScaledReader(gen, paths, box)
+        w.done.connect(slot)
+        w.finished.connect(lambda w=w: self._readers.remove(w) if w in self._readers else None)
+        self._readers.append(w)
+        run_in_thread(w, self._keep)
+
+    def _on_icon(self, gen, path, img, _w, _h):
+        it = self._items.get(path)
+        if it is None or img.isNull() or self.lst.row(it) < 0:
+            return                           # 지운 항목·못 읽은 그림
+        it.setIcon(QIcon(QPixmap.fromImage(img).scaled(
+            ICON_PX, ICON_PX, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)))
+
+    def done(self, r):
+        for w in list(self._readers):        # 창을 닫으면 읽던 것을 멈춘다
+            w.request_cancel()
+        self._prev_timer.stop()
+        super().done(r)
 
     def _pick_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
@@ -183,10 +268,12 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
 
     def _remove_sel(self):
         for it in self.lst.selectedItems():
+            self._items.pop(it.data(_PATH_ROLE), None)
             self.lst.takeItem(self.lst.row(it))
         self._update_preview()
 
     def _clear_all(self):
+        self._items.clear()
         self.lst.clear()
         self._update_preview()
 
@@ -204,27 +291,44 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
     def _update_preview(self):
         it = self.lst.currentItem()
         if it is None:
+            self._prev_timer.stop()
+            self._prev_gen += 1              # 읽던 미리보기는 버린다
             self.preview.setText(tr("파일을 선택하면 미리보기가 표시됩니다."))
             self.preview.setPixmap(QPixmap())
             self.info.setText("")
             return
-        path = it.data(_PATH_ROLE)
-        pm = QPixmap(path)
-        if pm.isNull():
+        self._prev_timer.start()             # 고르기·창 크기 바꾸기를 모아 한 번만 읽는다(G4)
+
+    def _preview_box(self):
+        area = self.preview.size()
+        return max(200, area.width() - 8), max(200, area.height() - 8)
+
+    def _start_preview(self):
+        it = self.lst.currentItem()
+        if it is None:
+            return
+        self._prev_gen += 1
+        w, h = self._preview_box()
+        self._run_reader(self._prev_gen, [it.data(_PATH_ROLE)], max(w, h) * 2, self._on_preview)
+
+    def _on_preview(self, gen, path, img, iw, ih):
+        it = self.lst.currentItem()
+        if gen != self._prev_gen or it is None or it.data(_PATH_ROLE) != path:
+            return                           # 그사이 다른 항목을 골랐다
+        if img.isNull():
             self.preview.setText(tr("미리보기를 불러올 수 없습니다."))
+            self.preview.setPixmap(QPixmap())
             self.info.setText(os.path.basename(path))
             return
-        area = self.preview.size()
-        w = max(200, area.width() - 8)
-        h = max(200, area.height() - 8)
-        self.preview.setPixmap(pm.scaled(
+        w, h = self._preview_box()
+        self.preview.setPixmap(QPixmap.fromImage(img).scaled(
             w, h, Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation))
         try:
             kb = os.path.getsize(path) // 1024
         except Exception:
             kb = 0
-        self.info.setText(f"{os.path.basename(path)}  ·  {pm.width()}×{pm.height()}px  ·  {kb:,} KB")
+        self.info.setText(f"{os.path.basename(path)}  ·  {iw}×{ih}px  ·  {kb:,} KB")
 
     def resizeEvent(self, e):
         super().resizeEvent(e)

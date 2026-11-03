@@ -2919,6 +2919,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _index_files(self, files):
         """파일 모드의 파일들만 색인(한 작업으로 차례로)."""
+        files = [f for f in (files or []) if str(f).lower().endswith(".pdf")]   # 261103-20(사진 보기 SOT 4.14 G2): PDF 만
+        if not files:
+            return
         try:
             self.progress.setVisible(True)
             self.progress.setRange(0, 0)
@@ -4464,6 +4467,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         try:
             from viewer import page_crop as _pc
             cur = self.main_view.current_file() if self.main_view else None
+            if cur and not str(cur).lower().endswith(".pdf"):
+                cur = None          # 261103-19(사진 보기 SOT 4.14 G1): 크롭·회전 대기값을 PDF 저장 길로 넘기는 것은 PDF 만
             if cur and _pc.has_pending(cur):
                 return True
             from viewer import page_rotate as _pr       # 261011-2(§4.7.16): 저장 전 회전도 같은 저장 길로
@@ -4652,6 +4657,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             shift = bool(getattr(self, "_force_save_as", False)) or bool(
                 QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
         src = _P(src); produced = _P(produced)
+        # 261103-19(사진 보기 SOT 4.14 G1): 원본이 PDF 가 아니면(사진 등) **덮어쓰지 않는다** — 바꿔치기하면 JPG 가
+        #   PDF 내용이 된다. 새 이름(.pdf)으로만 저장한다. 가드는 이 한 곳(모든 원본 저장이 이 함수를 지난다).
+        if src.suffix.lower() != ".pdf":
+            shift = True
 
         def _pick(sh):
             """새 이름 고르기를 취소하면 임시 산출물을 지우고 그대로 알린다(261031-14)."""
@@ -4665,6 +4674,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     pass
                 raise
         dst, overwrite = _pick(shift)
+        if overwrite and dst.suffix.lower() != ".pdf":      # 261103-19(G1): 어떤 길로도 PDF 아닌 파일 덮어쓰기는 없다
+            try:
+                produced.unlink(missing_ok=True)
+            except Exception:
+                pass
+            from viewer.file_overwrite import SaveCancelled
+            raise SaveCancelled(tr("PDF 가 아닌 원본은 덮어쓰지 않습니다 — 원본은 그대로입니다."))
         if overwrite:
             # 보안 SOT §4: 서명된 PDF 에 덮어쓰면 서명이 깨진다 — 가드는 이 한 곳(서명 자체의 저장은 건너뛴다)
             g = self._sign_guard(dst)

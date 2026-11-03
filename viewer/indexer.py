@@ -628,6 +628,10 @@ class PdfIndex:
     def index_file(self, file_path: Path):
         """단일 PDF 인덱싱(또는 재인덱싱)."""
         self.remove_file(file_path)
+        # 261103-20(사진 보기 SOT 4.14 G2): PDF 가 아닌 파일은 색인하지 않는다 — 이름 변경·OCR 확정 뒤 '다시 색인' 으로
+        #   사진이 들어왔다가 다음 폴더 색인이 지우기를 되풀이했다. 남아 있던 행은 위에서 지웠다.
+        if Path(file_path).suffix.lower() != ".pdf":
+            return
         self._prefetch(file_path)
         try:
             doc = fitz.open(file_path)

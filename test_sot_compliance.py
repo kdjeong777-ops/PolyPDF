@@ -243,6 +243,7 @@ OWNER_RULES = [
     (("test_security_",), "문서 보안"),
     (("test_convert_",), "형식 변환"),
     (("test_vprinter_",), "가상 프린터"),          # 261017 신설
+    (("test_photo_",), "사진 보기"),                # 261103-19 신설
 ]
 
 
@@ -287,6 +288,7 @@ if HAVE_SOT:
         "파일 태그·키워드": "파일 태그·키워드 작업 계획서.md",
         "형식 변환": "형식 변환 작업 계획서.md",
         "가상 프린터": "가상 프린터 작업 계획서.md",
+        "사진 보기": "사진 보기(PolyPicture) 작업 계획서.md",
     }
     for owner, sot_name in NAMED.items():
         txt = SOTS.get(sot_name, "")
