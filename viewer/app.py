@@ -7325,7 +7325,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 except Exception:
                     pass
                 self._study_pdf = path           # 단어장 컨텍스트
-                self._refresh_study_panel(item.page_index or 0)
+                # 261103-12(응답성 SOT §4.4): 단어장 창이 보일 때만 — 숨은 창 때문에 메인이 사전·NLTK 를
+                #   읽지 않는다(빌드 측정 9.35초 정지). 보이게 되면 shownChanged 가 그 쪽으로 다시 그린다.
+                if self.study_panel.isVisible():
+                    self._refresh_study_panel(item.page_index or 0)
+                else:
+                    self.main_view.set_hover_words([])
+                    self._apply_vocab_marks(item.page_index or 0, [])
             else:
                 self.main_view.load_image(path)
                 # 260901: 리스트만 비우면 '같은 파일' 가드에 걸려, 원본 PDF 로 돌아왔을 때

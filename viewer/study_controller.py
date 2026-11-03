@@ -584,25 +584,50 @@ class StudyMixin:
         self._spot_terms_cache = None     # 출처 변경 → spotting 목록 무효화
         self._refresh_study_panel(self.main_view.current_page())
 
+    # 261103-12(응답성 SOT §4.4): 용어 인식 목록 캐시 — None 으로 비우면 세대가 올라
+    #   배경에서 늦게 온 옛 목록(비우기 전에 읽기 시작한 것)을 버린다.
+    @property
+    def _spot_terms_cache(self):
+        return self.__dict__.get("_spot_terms_val")
+
+    @_spot_terms_cache.setter
+    def _spot_terms_cache(self, v):
+        if v is None:
+            self.__dict__["_spot_terms_gen"] = self.__dict__.get("_spot_terms_gen", 0) + 1
+        self.__dict__["_spot_terms_val"] = v
+
     def _get_spot_terms(self):
-        """260611-103(P4): 활성 사전의 다단어 표제어 [(norm, entry)] 캐시."""
-        self._study_get_dict()       # 261103-2: PDF 가 바뀌었으면 사전 선택을 다시 걸고 캐시를 비운다
+        """260611-103(P4): 활성 사전의 다단어 표제어 [(norm, entry)] 캐시.
+        261103-12(응답성 SOT §4.4): 없으면 **배경에서** 만들기 시작하고 지금은 빈 목록 — 다 되면 단어장 창을 다시 그린다."""
+        dic = self._study_get_dict()       # 261103-2: PDF 가 바뀌었으면 사전 선택을 다시 걸고 캐시를 비운다
         if self._spot_terms_cache is not None:
             return self._spot_terms_cache
-        from viewer.study.dict_store import normalize_key
-        terms = []
-        try:
-            for e in self._study_get_dict().all_terms():
-                tko = (e.get("term_ko") or "").strip()
-                ten = (e.get("term_en") or "").strip()
-                if " " in tko:
-                    terms.append((normalize_key(tko), e))
-                if " " in ten:
-                    terms.append((normalize_key(ten), e))
-        except Exception:
-            terms = []
-        self._spot_terms_cache = terms
-        return terms
+        gen = self.__dict__.get("_spot_terms_gen", 0)
+        if getattr(self, "_spot_terms_building", None) == gen:
+            return []
+        db_path = getattr(dic, "db_path", None)
+        if db_path is None:                # 파일 없는 사전(검사의 가짜) — 그 자리에서
+            from viewer.study.term_spotter import term_list
+            try:
+                self._spot_terms_cache = term_list(dic.all_terms())
+            except Exception:
+                self._spot_terms_cache = []
+            return self._spot_terms_cache
+        self._spot_terms_building = gen
+        from viewer.workers import SpotTermsWorker, run_in_thread
+        w = SpotTermsWorker(db_path, getattr(dic, "_file_off", None), gen)
+        w.done.connect(self._on_spot_terms_built)
+        run_in_thread(w, self._study_threads)
+        return []
+
+    def _on_spot_terms_built(self, gen, terms):
+        if getattr(self, "_spot_terms_building", None) == gen:
+            self._spot_terms_building = None
+        if gen == self.__dict__.get("_spot_terms_gen", 0):
+            self._spot_terms_cache = list(terms)
+        # 옛 세대면(읽는 사이 사전·선택이 바뀜) 버리고, 다시 그리기가 새로 읽기 시작한다
+        if self._study_pdf and self.study_panel.isVisible():
+            self._refresh_study_panel(self.main_view.current_page())
 
     def _spot_page_terms(self, page: int):
         """260611-103(P4): 페이지 본문에서 다단어 전문용어 인식 → (term_rows, rects_map).
@@ -1370,7 +1395,9 @@ class StudyMixin:
         try:
             import re as _re
             from viewer.study.study_store import file_key_for
-            from viewer.study.vocab import lemma_en
+            from viewer.study.vocab import lemma_en as _lemma, nltk_ready
+            # 261103-12(응답성 SOT §4.4): NLTK 를 아직 안 불렀으면 원형 찾기 없이 — 배경에서 불러 둔 뒤 다시 그린다
+            lemma_en = _lemma if nltk_ready() else (lambda w: w)
             store = self._study_get_store()
             fkey = file_key_for(self._study_pdf)
             lemset = {r["lemma"] for r in rows}

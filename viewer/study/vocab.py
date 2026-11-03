@@ -77,6 +77,12 @@ def _ensure_nltk():
         _WN_READY = False
 
 
+def nltk_ready() -> bool:
+    """NLTK 를 이미 불러 봤나(성공·실패 모두). 화면 스레드는 이것이 False 면 `lemma_en` 을 부르지 않는다 —
+    첫 import 가 수 초라(261103-12, 응답성 SOT §4.4) 배경 `SpotTermsWorker` 가 먼저 불러 둔다."""
+    return _WN_READY is not None
+
+
 def lemma_en(word: str) -> str:
     _ensure_nltk()
     if not _LEMMATIZER:

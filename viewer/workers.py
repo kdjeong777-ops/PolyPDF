@@ -1179,6 +1179,37 @@ class StudyMp3Worker(QObject):
                 pass
 
 
+class SpotTermsWorker(QObject):
+    """261103-12(응답성 SOT §4.4): 단어장 용어 인식 목록 — 사전 전체 읽기(`all_terms`)와 NLTK 적재를 배경에서.
+    메인에서 하던 때 실제 사전(13,000여 항목)으로 PDF 를 처음 열 때 창이 9.35초 섰다(beta.3 빌드 측정 T3).
+    자기 사전 연결을 따로 열고 이 PDF 의 사전 선택(`file_off`)을 그대로 건다. 결과는 `done(세대, 목록)`."""
+    done = pyqtSignal(object, list)
+    finished = pyqtSignal()
+
+    def __init__(self, db_path, file_off, gen):
+        super().__init__()
+        self._a = (db_path, file_off, gen)
+
+    def run(self):
+        db_path, file_off, gen = self._a
+        terms = []
+        try:
+            from viewer.study import vocab
+            vocab._ensure_nltk()                 # 낱말 대조(lemma_en)의 첫 import — 메인이 치르지 않게
+            from viewer.study.dict_store import DictStore
+            from viewer.study.term_spotter import term_list
+            dic = DictStore(db_path)
+            try:
+                dic.set_file_off(file_off)
+                terms = term_list(dic.all_terms())
+            finally:
+                dic.close()
+        except Exception:
+            terms = []
+        self.done.emit(gen, terms)
+        self.finished.emit()
+
+
 def run_in_thread(worker: QObject, parent_keep: list) -> QThread:
     """worker.run 을 새 QThread 에서 실행. 참조 보존을 위해 parent_keep 리스트에 넣어두면
     GC 로 사라지지 않는다.

@@ -11,6 +11,20 @@ from __future__ import annotations
 from viewer.study.dict_store import normalize_key
 
 
+def term_list(entries) -> list:
+    """사전 항목 → 다단어 표제어 [(norm, entry)] (한·영 표제어 각각, 띄어쓰기 있는 것만).
+    사전 전체를 읽어 만드므로 **배경**(`workers.SpotTermsWorker`, 응답성 SOT §4.4)에서 부른다."""
+    terms = []
+    for e in entries:
+        tko = (e.get("term_ko") or "").strip()
+        ten = (e.get("term_en") or "").strip()
+        if " " in tko:
+            terms.append((normalize_key(tko), e))
+        if " " in ten:
+            terms.append((normalize_key(ten), e))
+    return terms
+
+
 def _concat(norms: list[str]):
     starts: set[int] = set()
     wordpos: list[int] = []
