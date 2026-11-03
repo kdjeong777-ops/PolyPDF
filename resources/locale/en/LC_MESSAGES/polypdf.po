@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-03 15:43+0900\n"
+"POT-Creation-Date: 2026-11-03 17:00+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1342,10 +1342,6 @@ msgid "닫고 저장"
 msgstr "Close and Save"
 
 #: viewer/app.py
-msgid "원본에 저장"
-msgstr "Save to Original"
-
-#: viewer/app.py
 #, python-brace-format
 msgid ""
 "원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n"
@@ -2034,6 +2030,10 @@ msgstr "Checking other PolyPDF windows…"
 #: viewer/app.py
 msgid "다른 PolyPDF 창에 다시 열게 하는 중…"
 msgstr "Asking other PolyPDF windows to reopen the file…"
+
+#: viewer/app.py
+msgid "원본에 저장"
+msgstr "Save to Original"
 
 #: viewer/app.py
 #, python-brace-format
