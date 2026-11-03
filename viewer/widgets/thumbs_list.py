@@ -1120,6 +1120,16 @@ class PageThumbs(QWidget):
         scale = min(tw / pw, th / ph)
         return int(round(ph * scale)) + self.NUM_BAND
 
+    def set_alt_view(self, w, on: bool) -> None:
+        """261104-2(사진 보기 SOT 4.3): 사진 모드 — 쪽 목록·필터 단추 대신 `w`(사진 썸네일 줄)를 이 칸에 보인다.
+        칸 자체(분할기 자리·폭·숨기기)는 그대로 — 저장된 분할기 상태가 위젯 수에 묶여 있어 새 칸을 만들지 않는다."""
+        if w.parent() is not self:
+            self.layout().addWidget(w, 1)
+        w.setVisible(bool(on))
+        self.list.setVisible(not on)
+        for b in self._filter_btns.values():
+            b.setVisible(not on)
+
     def clear_document(self):
         """260901: 패널을 비우고 문서 상태까지 초기화(핸들 해제).
 

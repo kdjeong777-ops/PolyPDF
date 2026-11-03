@@ -452,6 +452,8 @@ def main():
     #   줄을 서서 '이미 연 것이 있으면 덮지 않는다' 가드가 작동하지 않았다 — 지난 폴더(다운로드)를 메인에서 훑느라
     #   4.4초 선 뒤에야 요청한 파일을 열었다(설치본 실측). 이벤트 루프가 돌기 전이라 복원보다 앞선다.
     win._startup_has_args = bool(pdf_args) or printed
+    if win._startup_has_args:
+        win._photo_force_pdf()           # 261104-2(사진 보기 SOT D1): 파일을 지정해 뜬 창은 PDF 모드로 시작
     win.show()
     # 261017(가상 프린터 SOT §4.4): 인쇄 받기 — 창이 뜬 뒤에(시작을 늦추지 않게). --printed 로 떴으면 곧바로
     try:

@@ -31,7 +31,10 @@ PERSONAL_PREF_KEYS = {"recording_dir", "recording_mic", "recording_system",
                       # 261008-29(다국어 SOT §3.4): 외부 언어팩 사용 — 이 PC 의 설정 폴더를 가리킨다
                       "external_language_packs",
                       # 261103-2(단어장 SOT §13): PDF 마다의 사전 선택 — 이 PC 의 경로가 키다
-                      "dict_file_off", "dict_styles"}
+                      "dict_file_off", "dict_styles",
+                      # 261104-2(사진 보기 SOT 4.7·4.15): 사진 모드 묶음 — 사진 즐겨찾기·최근(이 PC 의 경로)이 들어 있다.
+                      #   배포용 기본값에 섞이면 경로가 새고, 초기화로 지워지면 안 된다
+                      "picture"}
 
 # 260628(보안감사): API 키 등 **비밀 값** — 마스터 SOT §8.2.0 의 3중 규칙 대상.
 #   ① 저장 시 DPAPI 암호화, ② 마이그레이션 백업에서 제거, ③ 배포용 기본값에서 제외.

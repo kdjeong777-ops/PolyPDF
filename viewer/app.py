@@ -2781,6 +2781,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
             self.status.showMessage(tr('PDF 파일이 아닙니다: {name}').format(name=pdf_path.name))
             return
+        if getattr(self, "_photo_mode", False):
+            self._set_photo_mode(False)          # 261104-2(사진 보기 SOT D1): PDF 를 열면 PDF 모드로(끌어 놓기·최근·가상 프린터)
         self._touch_recent_files([pdf_path])
         if getattr(self, "_split_on", False):
             # 2단: 활성 창에만 로드(다른 창·폴더·반대편 책갈피 보존).
@@ -2830,6 +2832,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if files:
                 self.open_pdf(files[0])
             return
+        if getattr(self, "_photo_mode", False):
+            self._set_photo_mode(False)          # 261104-2(사진 보기 SOT D1): PDF 를 열면 PDF 모드로
         self._touch_recent_files(files)
         split = getattr(self, "_split_on", False)
         bt = (self.bookmark_tree_right if split and self._active_pane == 1 else self.bookmark_tree)
@@ -6709,6 +6713,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._refresh_recent_files_menu()
             self.status.showMessage(tr('파일이 없어 최근 파일에서 뺐습니다: {path_str}').format(path_str=path_str), 5000)
             return
+        if getattr(self, "_photo_mode", False) and self._is_photo_path(path_str):
+            self._photo_open_file(path_str)        # 261104-2(사진 보기 SOT 4.7): 사진 모드의 최근 파일
+            return
         self.open_pdf(Path(path_str))
 
     def _close_probe_idx(self):
@@ -9375,6 +9382,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261025-1(디자인 SOT §2.9.5): 즐겨찾기 `기타` 의 구역도 같은 판정 — 키가 바뀌면 다시 넣는다
         self._fav_other_gate = {"law": vis and has_law, "kipo": vis and has_kipo, "kcsc": vis and has_kcsc}
         self._refresh_favorites_menu()
+        # 261104-2(사진 보기 SOT 4.13): 사진 모드가 허용하지 않는 명령도 **이 함수에서** — 따로 두면 설정 적용 때 서로 되돌린다
+        if hasattr(self, "_photo_gate_actions"):
+            self._photo_gate_actions()
 
     def apply_theme(self, mode: str):
         """260606-13: 화면 스타일 적용 — light/dark/auto(시스템). Fusion+팔레트."""
@@ -9565,8 +9575,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 260906-3: 1번째 뷰어가 보던 것을 **형태까지** 기억한다 — 파일 모드로 보던 것을
             #   다음 실행에서 상위 폴더로 열어 버리면 열라고 하지 않은 폴더를 훑게 된다.
             "last_open": self._current_open_target(),
-            "recent_folders": self._recent_folders,
-            "recent_files": self._recent_files,
+            # 261104-2(사진 보기 SOT 4.7): 사진 모드면 지금 목록은 사진 것 — PDF 목록은 따로 들고 있다(사진 것은 picture 묶음에)
+            "recent_folders": self._photo_saved_list("_recent_folders"),
+            "recent_files": self._photo_saved_list("_recent_files"),
             "recent_searches": self._recent_searches,   # 261025-5: 개인 항목(PERSONAL_TOP_KEYS)
             # 260906-3(사용자 결정): 스크린샷 목록은 **저장하지 않는다** — 시작은 항상 빈 목록이고,
             #   남겨 두면 지워진 캡처 경로만 설정 파일에 쌓인다. 종료 시 PDF 저장을 묻는다.
@@ -9587,7 +9598,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "capture_last_region": getattr(self, "_cap_last_region", None),
             # 260908-2: 텍스트 창의 최신 스타일 값을 담아 둔다(다음 실행에 그대로)
             "preferences": self._text_prefs_snapshot(),
-            "favorites": self._favorites,
+            "favorites": self._photo_saved_list("_favorites"),
             "law_favorites": self._law_favorites,
             "kcsc_favorites": self._kcsc_favorites,   # 260618-39
             "kipo_favorites": self._kipo_favorites,   # 260618-43
@@ -9957,7 +9968,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260615-4: ⑪⑫ 개별 파일을 즐겨찾기로 등록(열면 책갈피에 그 파일만 표시)."""
         from viewer.widgets.favorites_dialog import AddFavoriteDialog, make_unique_name
         p = Path(file_path)
-        if not (p.exists() and p.suffix.lower() == ".pdf"):
+        _photo_ok = getattr(self, "_photo_mode", False) and self._is_photo_path(p)   # 261104-2(사진 보기 SOT 4.7)
+        if not (p.exists() and (p.suffix.lower() == ".pdf" or _photo_ok)):
             QMessageBox.information(self, tr("안내"), tr("PDF 파일을 선택하세요."))
             return
         suggested = make_unique_name(p.stem, self._favorites)
@@ -10028,6 +10040,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._refresh_favorites_menu()
             return
         kind = fav.get("kind", "folder")
+        if kind == "file" and getattr(self, "_photo_mode", False) and self._is_photo_path(target):
+            self._photo_open_file(str(target))     # 261104-2(사진 보기 SOT 4.7): 사진 즐겨찾기 — 그 폴더를 열고 그 사진
+            return
         if kind == "file":
             # 260615-4: ⑪ 개별 파일 즐겨찾기 → 단일 파일로 열어 책갈피에 그 파일만 표시
             self.open_pdf(Path(target))
