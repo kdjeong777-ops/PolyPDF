@@ -7485,7 +7485,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 #   썸네일이 영영 비어 있었다 → 상태까지 초기화(핸들도 해제).
                 self.page_thumbs.clear_document()
                 try:
-                    self.page_thumbs.title.setText(self.page_thumbs._format_title(path.name))
+                    self.page_thumbs.set_title(path.name)      # 261104-8: 이름 앞 종류 아이콘
                 except Exception:
                     pass
             self._current_main = item

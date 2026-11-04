@@ -114,6 +114,7 @@ class PhotoMixin:
         self._photo_watch_update()                     # 폴더 감시(4.27, 261104-7 B2) — 사진 모드에서만
         if not on:
             self._photo_search_paths = None
+            self._photo_zip_paths = None
             self._photo_anim_stop(hide=True)
             self._photo_deco_gate(True)
             self._photo_info_hide()
@@ -158,6 +159,7 @@ class PhotoMixin:
         strip = self._photo_strip_widget()
         if not q:
             self._photo_search_paths = None
+            self._photo_zip_paths = None                 # '폴더 전체' 로 — zip 보기도 내려놓는다
             cur = self.main_view.current_file() if self.main_view else None
             strip.set_paths(self._photo_strip_source(), current=str(cur) if cur else None)
             self.status.showMessage(tr("사진 검색을 지웠습니다 — 폴더 전체."), 3000)
@@ -232,6 +234,7 @@ class PhotoMixin:
         bt = self.bookmark_tree
         if bt.is_edit_mode() and getattr(bt, "_dirty", False):
             return                                       # 저장 안 한 고침이 있으면 다시 읽지 않는다(묻는 창을 띄우지 않게)
+        self._photo_relist_keep = folder                  # 같은 폴더 다시 읽기 — 검색 결과·zip 보기는 지킨다(4.27)
         bt.refresh()                                     # 다시 읽기(폴더 열기 3단 — 배경 훑기)
         self._photo_index_start()                        # 사진 색인도 바뀐 것만
         self.status.showMessage(tr("폴더가 바뀌어 사진 목록을 새로 읽었습니다."), 3000)
@@ -616,7 +619,13 @@ class PhotoMixin:
         """책갈피창 목록이 다 찼을 때 — 썸네일 줄이 폴더 전체를 보이는 중이면 새 목록으로(D3)."""
         if not getattr(self, "_photo_mode", False):
             return
-        self._photo_search_paths = None              # 새 목록 — 앞 검색 결과는 내려놓는다
+        keep = self.__dict__.pop("_photo_relist_keep", None)
+        if keep and os.path.normcase(str(keep)) == os.path.normcase(str(getattr(self, "_folder", "") or "")):
+            found = self.__dict__.get("_photo_search_paths")    # 폴더 감시의 다시 읽기 — 검색 결과에서 없어진 것만 뺀다(4.27)
+            if found:
+                self._photo_search_paths = [p for p in found if os.path.exists(p)] or None
+        else:
+            self._photo_search_paths = None          # 새 목록 — 앞 검색 결과는 내려놓는다
         self._photo_watch_update()                   # 폴더가 바뀌었으면 감시도 그 폴더로(4.27)
         cur = self.main_view.current_file() if self.main_view else None
         if cur and self._is_photo_path(cur):
@@ -680,12 +689,23 @@ class PhotoMixin:
         """사진을 본문에 연 뒤 — 쪽 썸네일은 비우고(PDF 쪽 편집이 섞이지 않게, 4.3), 앞뒤 사진을 배경에서 미리 푼다(§6.4)."""
         try:
             self.page_thumbs.clear_document()
-            self.page_thumbs.title.setText(self.page_thumbs._format_title(path.name))
         except Exception:
             pass
+        zipped = self.__dict__.get("_photo_zip_paths")
+        if zipped and str(path) not in zipped:
+            self._photo_zip_paths = None                 # zip 밖으로 나갔다 — 썸네일 줄은 종전대로(4.32)
+            zipped = None
         found = self.__dict__.get("_photo_search_paths")
         if found and str(path) not in found:
             self._photo_search_paths = None             # 검색 결과·zip 밖 사진을 열었다 — 원천은 다시 책갈피창(4.24)
+        try:
+            zsrc = self.__dict__.get("_photo_zip_src") or ""
+            if zipped and zsrc:
+                self.page_thumbs.set_title(Path(zsrc).name, "ZIP")    # 261104-8(4.32): zip 안 사진이면 제목은 zip 이름
+            else:
+                self.page_thumbs.set_title(Path(str(path)).name)
+        except Exception:
+            pass
         strip = self._photo_strip_widget()
         self.page_thumbs.set_alt_view(strip, True)
         strip.set_paths(self._photo_strip_source(), current=str(path))
@@ -703,7 +723,11 @@ class PhotoMixin:
             pass
 
     def _photo_strip_source(self) -> list:
-        """썸네일 줄에 넣을 사진(D3) — 책갈피창에서 여럿 골랐으면 고른 것(트리 차례), 하나면 폴더 전체."""
+        """썸네일 줄에 넣을 사진(D3) — 책갈피창에서 여럿 골랐으면 고른 것(트리 차례), 하나면 폴더 전체.
+        zip 을 보는 동안은 그 zip 안 사진만(4.32, 261104-8 사용자 지시) — 폴더의 다른 사진·고름을 섞지 않는다."""
+        zipped = self.__dict__.get("_photo_zip_paths")
+        if zipped:
+            return list(zipped)
         bt = self.bookmark_tree
         sel = []
         for it in bt._iter_file_nodes():
@@ -1023,6 +1047,11 @@ class PhotoMixin:
         w.done.connect(self._photo_zip_opened)
         self._photo_zip_src = str(zip_path)            # 꺼낸 사진을 볼 때 책갈피창은 이 zip 줄(4.26)
         self._photo_zipper = w
+        try:                                             # 꺼내는 동안에도 줄은 그 zip 것만(4.32) — 앞 폴더 사진을 지운다
+            self._photo_strip_widget().set_paths([])
+            self.page_thumbs.set_title(Path(str(zip_path)).name, "ZIP")
+        except Exception:
+            pass
         self.status.showMessage(tr("zip 여는 중… {name}").format(name=Path(str(zip_path)).name), 3000)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
@@ -1033,7 +1062,8 @@ class PhotoMixin:
         if not paths:
             self.status.showMessage(tr("zip 에서 사진을 꺼내지 못했습니다: {name}").format(name=Path(zip_path).name), 5000)
             return
-        self._photo_search_paths = list(paths)            # 썸네일 줄·넘김의 원천 = zip 안 사진
+        self._photo_zip_paths = list(paths)               # 썸네일 줄·넘김의 원천 = zip 안 사진(4.32 — 고름·검색보다 먼저)
+        self._photo_search_paths = None
         self._on_bookmark_activated(paths[0], 0)
         self._photo_strip_widget().set_paths(paths, current=paths[0])
         self.status.showMessage(tr("{name}: 사진 {n}장(읽기 전용)").format(name=Path(zip_path).name, n=len(paths)), 5000)

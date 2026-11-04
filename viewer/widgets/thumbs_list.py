@@ -169,7 +169,17 @@ class PageThumbs(QWidget):
         fm = self.title.fontMetrics()
         self.title.setMaximumHeight(fm.height() * 3 + 8)
         self.title.setMinimumHeight(fm.height() * 3 + 8)
-        layout.addWidget(self.title)
+        # 261104-8(사진 보기 SOT 4.32, 사용자 지시): 제목 앞 파일 종류 아이콘 — 책갈피창 줄과 같은 그림(icons.file_kind_icon)
+        from PyQt6.QtWidgets import QHBoxLayout as _QHBt
+        self._title_kind = None
+        self._title_icon = QLabel()
+        self._title_icon.setObjectName("thumbsTitleIcon")
+        self._title_icon.setFixedSize(16, 16)
+        self._title_icon.setVisible(False)
+        tr_row = _QHBt(); tr_row.setContentsMargins(4, 6, 0, 0); tr_row.setSpacing(0)
+        tr_row.addWidget(self._title_icon, 0, Qt.AlignmentFlag.AlignTop)
+        tr_row.addWidget(self.title, 1)
+        layout.addLayout(tr_row)
 
         # 260609-21(J4): 필터 버튼 — 전체/보임/꾸밈/숨김
         from PyQt6.QtWidgets import QHBoxLayout as _QHB, QPushButton as _QPB
@@ -1113,6 +1123,25 @@ class PageThumbs(QWidget):
             return "..." + stem[-(max_total - 3):]
         return stem
 
+    def set_title(self, name_with_ext: str, kind: str | None = None) -> None:
+        """261104-8(사진 보기 SOT 4.32): 제목(확장자 뺀 이름) + 앞에 파일 종류 아이콘. kind 가 없으면 이름의 확장자로.
+        모르는 형식이면 아이콘을 숨긴다(빈 자리를 남기지 않는다)."""
+        from viewer.widgets.icons import file_kind, file_kind_icon
+        k = kind or file_kind(name_with_ext)
+        self._title_kind = k
+        self._title_name = name_with_ext
+        if k:
+            self._title_icon.setPixmap(file_kind_icon(k).pixmap(16, 16))
+        self._title_icon.setVisible(bool(k))
+        self.title.setText(self._format_title(name_with_ext))
+
+    def changeEvent(self, ev):
+        super().changeEvent(ev)
+        from PyQt6.QtCore import QEvent
+        if ev.type() == QEvent.Type.PaletteChange and getattr(self, "_title_kind", None):
+            from viewer.widgets.icons import file_kind_icon       # 테마가 바뀌면 아이콘도 그 테마 색으로
+            self._title_icon.setPixmap(file_kind_icon(self._title_kind).pixmap(16, 16))
+
     def _card_h_for(self, pw, ph):
         """260611-12: 페이지 종횡비(pw×ph)의 썸네일 카드 높이(썸네일 높이+번호띠)."""
         tw, th = self._thumb_size.width(), self._thumb_size.height()
@@ -1194,12 +1223,12 @@ class PageThumbs(QWidget):
         self._iconed = {}
 
         if not path.exists() or path.suffix.lower() != ".pdf":
-            self.title.setText(self._format_title(path.name))
+            self.set_title(path.name)
             self._doc_path = None; self._doc_mtime = None
             return
         self._doc_path = str(path); self._doc_mtime = mt
 
-        self.title.setText(self._format_title(path.name))
+        self.set_title(path.name)
         try:
             self._doc = PdfDocument(file_path)
             if self._doc.needs_password:        # 260611-61: 암호화 파일 썸네일 인증
@@ -1592,3 +1621,5 @@ class PageThumbs(QWidget):
         if self._doc is not None:
             full_name = Path(str(self._doc.path)).name
             self.title.setText(self._format_title(full_name))
+        elif getattr(self, "_title_kind", None) and getattr(self, "_title_name", None):
+            self.title.setText(self._format_title(self._title_name))    # 사진 모드 제목도 폭에 맞춰(261104-8)
