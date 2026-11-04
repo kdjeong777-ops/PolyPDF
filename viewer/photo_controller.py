@@ -335,6 +335,7 @@ class PhotoMixin:
         self._photo_preload_neighbors(str(path))
         self._photo_deco_gate(not self._photo_is_broken())
         self._photo_info_request(path)
+        self._photo_sync_tree(path)                   # 261104-4(4.26, 사용자 지시): 책갈피창도 그 사진 줄을
         try:
             self._touch_recent_files([path])          # 사진 모드면 사진의 최근 파일(4.7)
         except Exception:
@@ -596,6 +597,40 @@ class PhotoMixin:
         elif chosen is a_100:
             self._photo_zoom_actual()
 
+    def _photo_sync_tree(self, path):
+        """본문 사진이 바뀌면(썸네일 줄·넘김·검색·지운 뒤) 책갈피창의 그 줄을 고른다 — 신호 없이(다시 열지 않게).
+        책갈피창에서 여러 장을 골라 둔 채 그중 하나면 고름은 그대로 두고 '지금 줄' 만 옮긴다(썸네일 줄 원천 D3 를 지키게).
+        zip 에서 꺼낸 사진이면 그 zip 줄을 고른다(4.24)."""
+        from PyQt6.QtCore import QItemSelectionModel
+        from viewer.pathutil import norm_key
+        bt = getattr(self, "bookmark_tree", None)
+        if bt is None or not path:
+            return
+        target = str(path)
+        if self._photo_any_cached([target]):
+            target = self.__dict__.get("_photo_zip_src") or ""
+            if not target:
+                return
+        key = norm_key(target)
+        node = next((it for it in bt._iter_file_nodes() if norm_key(str(it.data(0, bt.DATA_FILE))) == key), None)
+        if node is None:
+            return
+        tree = bt.tree
+        tree.blockSignals(True)
+        try:
+            if node.isSelected() and len(tree.selectedItems()) > 1:
+                tree.selectionModel().setCurrentIndex(tree.indexFromItem(node), QItemSelectionModel.SelectionFlag.NoUpdate)
+            else:
+                par = node.parent()
+                while par is not None:
+                    par.setExpanded(True)
+                    par = par.parent()
+                tree.setCurrentItem(node)
+            tree.scrollToItem(node)
+        finally:
+            tree.blockSignals(False)
+        bt._pending_nav = None
+
     def _photo_any_cached(self, paths) -> bool:
         from viewer.photo_zip import is_cached
         return any(is_cached(p) for p in paths or [])
@@ -608,6 +643,7 @@ class PhotoMixin:
             old.request_cancel()
         w = PhotoZipWorker(str(zip_path))
         w.done.connect(self._photo_zip_opened)
+        self._photo_zip_src = str(zip_path)            # 꺼낸 사진을 볼 때 책갈피창은 이 zip 줄(4.26)
         self._photo_zipper = w
         self.status.showMessage(tr("zip 여는 중… {name}").format(name=Path(str(zip_path)).name), 3000)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
