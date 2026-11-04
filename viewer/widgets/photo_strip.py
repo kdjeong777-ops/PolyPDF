@@ -158,6 +158,10 @@ class PhotoStrip(QListWidget):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # 261104-3(사용자 지시 '썸네일을 보면서 2개 이상 선택'): Ctrl·Shift+클릭으로 여러 장 — 고르기만 하고 본문은 그대로(4.20)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        # 261104-6(사진 보기 SOT 4.11): 끌어내기 — 파일 URL 로(다른 창의 쪽 썸네일·탐색기·다른 프로그램이 받는다). 이 줄 안에서는 옮기지 않는다
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
         self._icon_w = icon_w
         self.setIconSize(QSize(icon_w, int(icon_w * 0.75)))
         self._paths: list = []
@@ -310,6 +314,18 @@ class PhotoStrip(QListWidget):
         p = it.data(_PATH_ROLE)
         if p:
             self.photoActivated.emit(str(p))
+
+    def mimeData(self, items):
+        """끌어내는 자료 — 고른 사진들의 파일 URL(줄 차례)."""
+        from PyQt6.QtCore import QMimeData, QUrl
+        sel = {id(x) for x in items}
+        paths = [p for p in self._paths if id(self._items.get(p)) in sel]
+        md = QMimeData()
+        md.setUrls([QUrl.fromLocalFile(p) for p in paths])
+        return md
+
+    def supportedDropActions(self):
+        return Qt.DropAction.CopyAction
 
     def keyPressEvent(self, ev):
         if ev.key() == Qt.Key.Key_Delete:

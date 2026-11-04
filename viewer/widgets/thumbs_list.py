@@ -370,8 +370,9 @@ class PageThumbs(QWidget):
                 pass
 
     def _image_paths_from_mime(self, mime) -> list:
-        """끌어온 것 중 **그림 파일만** 골라 준다 (§4.7.11 — PDF 는 이번 범위가 아니다)."""
-        from viewer.image_page import is_image_path
+        """끌어온 것 중 **그림 파일만** 골라 준다 (§4.7.11 — PDF 는 이번 범위가 아니다).
+        261104-6(사진 보기 SOT 4.11): 사진 모드 썸네일 줄에서 끌어 온 HEIC 도 받는다(`PHOTO_EXTS` — 쪽 만들기는 `photo_io.insert_photo` 가 세운다)."""
+        from viewer.image_page import PHOTO_EXTS
         out = []
         if mime is not None and mime.hasUrls():
             for u in mime.urls():
@@ -379,7 +380,7 @@ class PageThumbs(QWidget):
                     f = u.toLocalFile()
                 except Exception:
                     f = ""
-                if f and is_image_path(f):
+                if f and Path(f).suffix.lower() in PHOTO_EXTS:
                     out.append(f)
         return out
 

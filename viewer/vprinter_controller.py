@@ -210,6 +210,12 @@ class VPrinterMixin:
     # ── 여는 곳(SOT §4.4) ─────────────────────────────────────────────
     def _vprinter_open(self, path: str):
         nothing_open = not getattr(self, "_folder", None) and not self.main_view.current_file()
+        if getattr(self, "_photo_mode", False):
+            # 261104-6(사진 보기 SOT 4.11 · 가상 프린터 SOT §4.4): 사진 모드 창은 PDF 를 받지 않는다 — 이 창을 PDF 모드로 바꾸지 않고
+            #   그 폴더를 보는 다른 PDF 모드 창, 없으면 새 창(파일 인자로 뜬 창은 늘 PDF 모드, 사진 보기 SOT D1)
+            if not self._vprinter_to_peer(path):
+                self._vprinter_new_window(path)
+            return
         try:
             if self._vprinter_place(path):
                 return
@@ -228,6 +234,8 @@ class VPrinterMixin:
     def _vprinter_pane_for(self, path: str):
         """그 PDF 의 폴더를 보고 있는 이 창의 책갈피창 → (창 번호, 책갈피창) 또는 None.
         위 책갈피창(`_folder`) 먼저, 2단에서 아래 책갈피창이 보이면 그것(`_folder_right`, 261031-4 — 종전에는 위만 봤다)."""
+        if getattr(self, "_photo_mode", False):
+            return None                          # 261104-6: 사진 모드 창은 PDF 를 받는 자리로 치지 않는다(다른 창이 넘겨도 거절)
         folder = os.path.normcase(os.path.dirname(os.path.abspath(path)))
 
         def same(f):
