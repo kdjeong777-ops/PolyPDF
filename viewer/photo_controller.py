@@ -671,7 +671,7 @@ class PhotoMixin:
         icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DriveCDIcon)
         as_folders = bt.is_tree_view()                 # 트리(폴더) 보기면 장치·사진 폴더를 폴더 줄 모양으로, 연 폴더 아래 사진 줄(사용자 지시)
         opened = self.__dict__.get("_photo_dev_open")
-        for dev, folders, err in found:
+        for pos, (dev, folders, err) in enumerate(found):
             top = QTreeWidgetItem([dev])
             top.setIcon(0, icon)
             top.setData(0, self.DEVICE_ROLE, (dev, "", err or ""))
@@ -690,7 +690,7 @@ class PhotoMixin:
                         ch.setExpanded(True)
             if as_folders:
                 self._photo_device_folder_look(top)
-            tree.addTopLevelItem(top)
+            tree.insertTopLevelItem(pos, top)              # 맨 위에 — 꽂은 장치는 보려고 꽂은 것(사용자 지시)
             top.setExpanded(as_folders or bool(opened and opened[0] == dev))
 
     def _photo_device_folder_look(self, item):

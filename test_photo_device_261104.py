@@ -2,7 +2,7 @@
 """아이폰 등 휴대 장치의 사진 — 둘러보기 + 복사 (사진 보기 SOT 4.33, 261104-9 사용자 결정).
 
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3). 장치는 **가짜**(`photo_device.BACKEND` 를 바꿔 끼움).
-A. 사진 모드 책갈피창 끝에 장치 줄(파일 행 아님) — 아래에 사진 폴더 새것부터. 잠긴 장치를 누르면 알림만. PDF 모드에는 없다
+A. 사진 모드 책갈피창 맨 위에 장치 줄(파일 행 아님) — 아래에 사진 폴더 새것부터. 잠긴 장치를 누르면 알림만. PDF 모드에는 없다
 B. 폴더 줄을 누르면 사진을 한 장씩 캐시로 받아 썸네일 줄에 더하고 첫 장을 연다 — 제목 '장치 › 폴더', 상태 막대 '장치 › 폴더 › 이름'
 C. 받는 동안 메인이 멈추지 않는다(최장 공백 < 0.5초), 읽기 전용(방향 저장·지우기 막힘)
 D. 다시 열면 장치에서 다시 받지 않는다(캐시)
@@ -109,6 +109,8 @@ try:
     chk(not devrows(), "A PDF 모드에는 장치 줄이 없다")
     mw._set_photo_mode(True)
     chk(pump(lambda: len(devrows()) == 2, timeout=10), "A 사진 모드 — 장치 줄 둘", str([r.text(0) for r in devrows()]))
+    chk([tree.topLevelItem(i).text(0) for i in range(2)] == ["Apple iPhone", "잠긴 폰"], "A 장치 줄은 책갈피창 맨 위(사용자 지시)",
+        str([tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]))
     iph = next((r for r in devrows() if r.text(0) == "Apple iPhone"), None)
     kids = [iph.child(i).text(0) for i in range(iph.childCount())] if iph else []
     chk(kids == ["202611_a", "202610_a"], "A 아래에 사진 폴더 — 새것부터", str(kids))
