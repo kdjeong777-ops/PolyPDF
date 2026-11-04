@@ -114,7 +114,8 @@ def body(txt):
 SEC = r"§\s?(\d+(?:\.\d+)*)"
 ARCHIVE_OF = {MASTER: ("뷰어 변경상세 아카이브.md",),
               "단어학습(OCR·어휘) 기능 작업계획서.md": ("단어학습 변경상세 아카이브.md",),
-              "단어장 작업 계획서.md": ("단어학습 변경상세 아카이브.md",)}
+              "단어장 작업 계획서.md": ("단어학습 변경상세 아카이브.md",),
+              "사진 보기(PolyPix) 작업 계획서.md": ("사진 보기 변경상세 아카이브.md",)}   # 261104-16: 끝난 계획·기록(장 번호 유지)
 
 # ── A. 절 참조 ─────────────────────────────────────────────────────────
 print("=== A. 절 참조가 실제 머리말로 있다 ===")
@@ -131,9 +132,10 @@ for p, src in CODE.items():
             if any(f in l for f in FOREIGN):
                 continue
             doc = ALIAS_MAP[al]
-            if not has_sec(doc, num):
+            # 261104-16: 아카이브로 옮긴 장은 번호를 그대로 둔다(장 번호 유지) — 코드 주석의 옛 장 번호는 그 문서의 아카이브에서 찾는다
+            if not has_sec(doc, num) and not any(has_sec(a, num) for a in ARCHIVE_OF.get(doc, ())):
                 bad.append("%s: %s §%s" % (p.name, al, num))
-chk(not bad, "A1 코드 주석이 가리키는 SOT 절이 있다", str(sorted(set(bad))[:12]))
+chk(not bad, "A1 코드 주석이 가리키는 SOT 절이 있다(옮긴 장은 그 아카이브에서)", str(sorted(set(bad))[:12]))
 
 bad = []
 near = re.compile(r"(" + ALIAS_RE + r")(?:\s*SOT|\s*작업 계획서(?:\.md)?|`?\]\([^)]*\))?\s*(?:의\s*)?$")
