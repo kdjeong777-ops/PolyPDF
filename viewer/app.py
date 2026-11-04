@@ -3661,6 +3661,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             mv = self.main_view
             if mv is None or mv._doc is None:
                 return ([], 0)
+            if getattr(self, "_photo_mode", False) and self._is_photo_path(path):
+                return self._photo_view_words(path) if int(page) == 0 else ([], 0)   # 261104-14(사진 보기 SOT 4.39): 사진 위 글자 고르기
             from viewer import text_extract2 as _tx
             forced = getattr(self, "_text_force_ocr", None) or set()
             return _tx.pick_ocr_words(

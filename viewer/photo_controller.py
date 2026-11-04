@@ -1131,6 +1131,7 @@ class PhotoMixin:
     def _photo_ocr_done(self, path: str, n: int):
         cur = self.main_view.current_file() if self.main_view else None
         if cur and os.path.normcase(str(cur)) == os.path.normcase(path):
+            self._photo_words_changed()                  # 본문 위 글자 고르기(4.39)도 새 낱말로
             self._reload_text_panel()
         try:
             self._pending_refresh()                      # 상태 줄 '💾 저장 안 한 OCR'
@@ -1155,6 +1156,27 @@ class PhotoMixin:
                 return []
             return st.get_page_words(key, 0)
         return self._study_read(read, [])
+
+    def _photo_words_changed(self):
+        """본문이 기억한 쪽 낱말을 버린다 — OCR 이 새로 들어왔거나 보기 회전이 바뀌었을 때(4.39)."""
+        for mv in getattr(self, "_mv", None) or [self.main_view]:
+            try:
+                mv._view_src_cache = None
+                mv._page_words = []
+                mv.clear_text_selection()
+            except Exception:
+                pass
+
+    def _photo_view_words(self, path):
+        """본문 위 글자 고르기·복사(4.39, F9)와 검색 강조가 쓰는 사진 OCR 낱말 — 지금 보기 회전 판, `(낱말, 72)`.
+        낡은 OCR(덮어쓴 사진)·읽지 않은 사진은 빈 목록(OCR 은 누를 때만 — D15)."""
+        words = self._photo_ocr_words(path)
+        if not words:
+            return ([], 0)
+        from viewer.study import ocr as _ocr
+        from viewer.photo_io import oriented_size
+        w0, h0 = oriented_size(path)
+        return (_ocr.photo_words_view(words, self._photo_rot_for(path), w0, h0), 72)
 
     def _photo_text_reload(self, cur):
         """텍스트 창 — 사진은 우리 OCR 낱말만으로 줄을 만든다(표 인식 없음). 낱말은 지금 보기 회전으로 돌려 쓴다."""
@@ -1440,6 +1462,7 @@ class PhotoMixin:
         if mv.load_document(cur, 0):
             mv._fit_mode = fit
             self._photo_after_open(Path(cur))
+            self._photo_words_changed()          # 본문 위 글자 고르기 — 돈 판 낱말로(4.39)
             mv._render_current()
 
     def _photo_is_broken(self) -> bool:
