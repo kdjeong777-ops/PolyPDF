@@ -2,7 +2,7 @@
 """261104-2: PDF ↔ 사진 모드 토글 TV 그림 (사진 보기 SOT 4.1, 디자인 SOT §4.5·§4.6, 사용자 지시 '한 화면에 PDF 또는 사진만, 크게').
 
 mode_tv_icon 을 실제 단추 크기(MODE_ICON_PX, 배율 2)로 그려 픽셀로 잰다 — 라이트·다크 모두.
-A. PDF 모드 화면에는 붉은 PDF 만(사진의 파랑·초록 없음), 사진 모드 화면에는 사진만(붉은 PDF 없음)
+A. PDF 모드 화면에는 붉은 PDF 만(사진의 파랑·초록 없음), 사진 모드 화면에는 사진만(붉은 PDF 없음), 노란 해 없음(달처럼 보였다)
 B. 지금 모드 그림이 크다 — 색 픽셀이 그림 전체의 SHARE_MIN 이상(종전 겹친 두 장은 앞 장이 작아 구분이 안 됐다)
 C. 그려진 TV 높이 ≤ 단추 높이 − 2×ICON_MARGIN (탭 줄 안, 디자인 SOT §4.6)
 """
@@ -44,7 +44,7 @@ for dark in (False, True):
         grey = icons.FILE_KIND_LINE[dark]          # 종전 뒤 장(꺼진 모드)의 회색
         k = img.width() / 16.0                     # 16 캔버스 → 픽셀
         scr = icons.TV_SCREEN.adjusted(0.5, 0.5, -0.5, -0.5)
-        n_red = n_photo = n_all = n_grey = 0
+        n_red = n_photo = n_all = n_grey = n_sun = 0
         ys = []
         for y in range(img.height()):
             for x in range(img.width()):
@@ -59,8 +59,11 @@ for dark in (False, True):
                     n_photo += 1
                 elif near(c, grey, 12) and scr.contains(x / k, y / k):    # 화면 안만 — 몸체 가장자리 흐림은 빼고
                     n_grey += 1
+                elif near(c, "#f0b429") or near(c, "#f5bd2e"):
+                    n_sun += 1
         mode = "사진" if photo else "PDF"
         chk(n_grey <= 4, "A [%s] %s 화면에 꺼진 모드의 회색 장 없음" % (tag, mode), str(n_grey))
+        chk(n_sun == 0, "A [%s] %s 화면에 노란 해 없음(달처럼 보여 뺐다)" % (tag, mode), str(n_sun))
         if photo:
             chk(n_red == 0, "A [%s] 사진 모드 화면에 붉은 PDF 없음" % tag, str(n_red))
             share = n_photo / max(1, n_all)

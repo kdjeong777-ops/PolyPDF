@@ -547,7 +547,6 @@ def file_kind_icon(path_or_kind, dark: bool | None = None, size: int = 16, *, dp
 #   화면에는 지금 모드 그림 하나만(261104-2), 오른쪽 다이얼 바늘이 그쪽. 몸체·다리는 시안 스크립트(_review/polypicture/make_tv_icons.py)의 확정안을 따른다.
 TV_GLASS = {False: "#22303a", True: "#11171c"}          # 화면 유리
 TV_KNOB = {False: "#ffffff", True: "#2b3138"}           # 다이얼·스피커
-SUN = {False: "#f0b429", True: "#f5bd2e"}               # 사진 속 해(= FAV_YELLOW 뒤판)
 
 
 def _tv_pdf(p, d, x, y, w, h, active):
@@ -573,8 +572,7 @@ def _tv_photo(p, d, x, y, w, h, active):
     r = min(w, h) * 0.12
     p.setBrush(QColor(ACCENT["play"][d] if active else FILE_KIND_LINE[d]))
     p.drawRoundedRect(QRectF(x, y, w, h), r, r)
-    p.setBrush(QColor(SUN[d] if active else PAPER_WHITE[d]))
-    p.drawEllipse(QPointF(x + w * 0.72, y + h * 0.3), min(w, h) * 0.15, min(w, h) * 0.15)
+    # 해(노란 점)는 뺐다 — 작은 단추에서 달처럼 보여 오히려 헷갈렸다(사용자 지시, 사진 보기 SOT 4.1). 하늘 + 산만.
     p.setBrush(QColor(OK_GREEN[d] if active else PAPER_WHITE[d]))
     p.drawPolygon(QPolygonF([QPointF(x, y + h), QPointF(x + w * 0.38, y + h * 0.45), QPointF(x + w * 0.62, y + h * 0.75),
                              QPointF(x + w * 0.78, y + h * 0.58), QPointF(x + w, y + h)]))
