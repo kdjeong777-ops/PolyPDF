@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 18:23+0900\n"
+"POT-Creation-Date: 2026-11-04 19:48+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4051,6 +4051,10 @@ msgid "촬영일"
 msgstr "Date taken"
 
 #: viewer/photo_controller.py
+msgid "파일 날짜"
+msgstr "File Date"
+
+#: viewer/photo_controller.py
 msgid "카메라"
 msgstr "Camera"
 
@@ -4254,13 +4258,13 @@ msgid "{dev}: 사진을 받는 동안 응답이 없습니다 — 연결을 확�
 msgstr "{dev}: No response while receiving photos — check the connection. Only the photos already copied are shown."
 
 #: viewer/photo_controller.py
+msgid "마지막 사진입니다."
+msgstr "This is the last photo."
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "{dev} 에서 사진을 받는 중… {folder}"
 msgstr "Receiving photos from {dev}… {folder}"
-
-#: viewer/photo_controller.py
-msgid "마지막 사진입니다."
-msgstr "This is the last photo."
 
 #: viewer/photo_controller.py
 msgid "첫 사진입니다."
@@ -4376,6 +4380,11 @@ msgstr "Made {n} copies for sharing."
 #, python-brace-format
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr "Made {n} copies for sharing; {m} could not be made."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{t} (파일 날짜)"
+msgstr "{t} (file date)"
 
 #: viewer/photo_controller.py
 #, python-brace-format

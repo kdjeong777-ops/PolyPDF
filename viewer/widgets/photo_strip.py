@@ -159,6 +159,7 @@ class PhotoStrip(QListWidget):
     photoActivated = pyqtSignal(str)
     menuRequested = pyqtSignal(str, object)       # 261104-3(사진 보기 SOT 4.20): 우클릭 — (사진 경로, 전역 위치)
     deleteRequested = pyqtSignal(list)            # 261104-4(사진 보기 SOT 4.25): Del — 고른 사진(없으면 지금 칸)
+    nearEnd = pyqtSignal()                        # 261104-9(4.33): 끝에 닿았다(스크롤 맨 아래·마지막 칸·끝에서 더 내림) — 휴대 장치는 다음 폴더를 잇는다
 
     def __init__(self, icon_w: int = 130, parent=None):
         super().__init__(parent)
@@ -364,7 +365,21 @@ class PhotoStrip(QListWidget):
     def supportedDropActions(self):
         return Qt.DropAction.CopyAction
 
+    def _at_end(self) -> bool:
+        sb = self.verticalScrollBar()
+        return sb.value() >= sb.maximum()
+
+    def wheelEvent(self, ev):
+        down = ev.angleDelta().y() < 0
+        end = self._at_end()
+        super().wheelEvent(ev)
+        if down and (end or self._at_end()) and self._paths:
+            self.nearEnd.emit()
+
     def keyPressEvent(self, ev):
+        if ev.key() in (Qt.Key.Key_Down, Qt.Key.Key_PageDown, Qt.Key.Key_End) and self.count() \
+                and self.currentRow() >= self.count() - 1:
+            self.nearEnd.emit()                   # 마지막 칸에서 더 내림
         if ev.key() == Qt.Key.Key_Delete:
             ps = self.selected_paths()
             if not ps and self.currentItem() is not None:

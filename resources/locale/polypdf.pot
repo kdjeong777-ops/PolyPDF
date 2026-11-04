@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 18:23+0900\n"
+"POT-Creation-Date: 2026-11-04 19:48+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3914,6 +3914,10 @@ msgid "촬영일"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "파일 날짜"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "카메라"
 msgstr ""
 
@@ -4117,12 +4121,12 @@ msgid "{dev}: 사진을 받는 동안 응답이 없습니다 — 연결을 확�
 msgstr ""
 
 #: viewer/photo_controller.py
-#, python-brace-format
-msgid "{dev} 에서 사진을 받는 중… {folder}"
+msgid "마지막 사진입니다."
 msgstr ""
 
 #: viewer/photo_controller.py
-msgid "마지막 사진입니다."
+#, python-brace-format
+msgid "{dev} 에서 사진을 받는 중… {folder}"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4238,6 +4242,11 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{t} (파일 날짜)"
 msgstr ""
 
 #: viewer/photo_controller.py

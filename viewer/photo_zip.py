@@ -122,6 +122,12 @@ def extract(zip_path, should_cancel=None) -> list:
                                 raise ValueError("zip member larger than declared")   # 목차를 속인 폭탄
                             fh.write(buf)
                     os.replace(str(tmp), str(dst))
+                    try:                             # zip 안의 날짜를 남긴다 — 촬영 정보가 없는 사진의 일시(사진 보기 SOT 4.18)
+                        import time as _t
+                        ts = _t.mktime(tuple(info.date_time) + (0, 0, -1))
+                        os.utime(str(dst), (ts, ts))
+                    except (OverflowError, ValueError, OSError):
+                        pass
                 except (ValueError, OSError, zipfile.BadZipFile):
                     try:
                         tmp.unlink()

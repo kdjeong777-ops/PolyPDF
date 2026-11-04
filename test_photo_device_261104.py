@@ -10,6 +10,8 @@ E. 'PC 로 복사' — 고른 폴더로, 같은 이름이면 번호
 F. 받는 도중 연결이 끊기면 받은 것만 두고 알림
 G. 책갈피창 트리(폴더) 보기 — 장치·사진 폴더가 폴더 줄 모양, 연 폴더 아래 사진 줄, 누르면 그 사진(사용자 지시)
 H. 단일 보기 — 폴더 줄 없이 장치의 모든 사진 줄, 누르면 그 사진이 든 폴더를 그 사진부터 받아 연다(사용자 결정)
+I. 썸네일 줄 끝에서 더 내리면(넘김·휠) 다음(더 오래된) 폴더를 이어 받는다 — 줄은 그대로 아래에 더한다(사용자 지시)
+J. 상태 표시줄에 사진 일시 — 촬영 정보가 없으면 파일 날짜(장치 복사는 장치의 날짜가 남는다)(사용자 지시)
 """
 import os, sys, tempfile, shutil, time, io
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -87,6 +89,8 @@ try:
             self.copies += 1
             p = Path(dest) / name
             p.write_bytes(self.data[h][name])
+            ts = time.mktime((2026, 7, 23, 14, 15, 0, 0, 0, -1))
+            os.utime(p, (ts, ts))                # 셸 복사처럼 장치의 날짜가 남는다
             return p
 
     fake = FakeBackend()
@@ -209,6 +213,27 @@ try:
     chk(pump(lambda: mw.main_view.current_file() and Path(mw.main_view.current_file()).name == "IMG_0002.JPG", timeout=5)
         and pump(lambda: mw.__dict__.get("_photo_dev_worker") is None, timeout=5)
         and names() == ["IMG_0001.JPG", "IMG_0002.JPG", "IMG_0004.PNG"], "H 누른 사진부터 받아 열고, 줄은 이름 차례", str(names()))
+
+    # I — 이어 받기(단일 보기, 202611_a 를 보는 중)
+    pump(lambda: mw.__dict__.get("_photo_dev_worker") is None, timeout=5)
+    mw._on_bookmark_activated(strip.paths()[-1], 0); pump(timeout=0.4)
+    mw._on_file_boundary(+1, mw._active_pane)
+    chk(pump(lambda: names() == ["IMG_0001.JPG", "IMG_0002.JPG", "IMG_0004.PNG", "IMG_0100.JPG"]
+             and mw.main_view.current_file() and Path(mw.main_view.current_file()).name == "IMG_0100.JPG", timeout=5),
+        "I 끝에서 넘기면 다음 폴더를 이어 받아 그 첫 장", str(names()))
+    pump(lambda: mw.__dict__.get("_photo_dev_worker") is None, timeout=5)
+    chk(mw.page_thumbs.title.text() == "Apple iPhone", "I 두 폴더를 이으면 제목은 장치 이름", mw.page_thumbs.title.text())
+    hits = []
+    strip.nearEnd.connect(lambda: hits.append(1))
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtCore import Qt as _Qt
+    strip.setCurrentRow(strip.count() - 1)
+    QTest.keyClick(strip, _Qt.Key.Key_Down); pump(timeout=0.3)
+    chk(len(hits) >= 1, "I 마지막 칸에서 ↓ 를 누르면 끝에 닿았다고 알린다")
+    chk(mw.__dict__.get("_photo_dev_worker") is None and len(names()) == 4, "I 더 없으면 그대로")
+
+    # J — 사진 일시
+    chk(pump(lambda: "2026-07-23 14:15 (파일 날짜)" in btn.text(), timeout=5), "J 촬영 정보가 없는 사진 — 파일 날짜", btn.text())
 
     # F
     shutil.rmtree(pd.cache_dir_for("Apple iPhone", "Internal Storage/202611_a"), ignore_errors=True)

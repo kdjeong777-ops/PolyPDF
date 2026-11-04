@@ -568,6 +568,9 @@ class PhotoMixin:
             s.photoActivated.connect(lambda p: self._on_bookmark_activated(p, 0))
             s.menuRequested.connect(self._photo_strip_menu)          # 261104-3(4.20)
             s.deleteRequested.connect(self._photo_delete)            # 261104-4(4.25): Del
+            s.nearEnd.connect(self._photo_device_next)                # 261104-9(4.33): 휴대 장치 — 끝에 닿으면 다음 폴더를 잇는다
+            s.verticalScrollBar().valueChanged.connect(
+                lambda v, _s=s: v and v >= _s.verticalScrollBar().maximum() and self._photo_device_next())
             s.rotation_provider = self._photo_rot_for
             self._photo_strip = s
         return s
@@ -674,6 +677,7 @@ class PhotoMixin:
         as_folders = bt.is_tree_view()
         opened = self.__dict__.get("_photo_dev_open")
         names = self.__dict__.setdefault("_photo_dev_names", {})     # 장치 → [(폴더, [이름…])] — 다시 읽지 않게
+        self._photo_dev_folders = {d: list(fs) for d, fs, e in found if not e}   # 이어 받기(다음 폴더)의 차례
         for gone in [d for d in names if d not in {f[0] for f in found}]:
             names.pop(gone, None)                        # 뽑힌 장치
         to_scan = []
@@ -690,8 +694,11 @@ class PhotoMixin:
                     ch.setToolTip(0, dev + " › " + f.replace("/", " › "))
                     top.addChild(ch)
                     self._photo_device_folder_look(ch)
-                    if opened == (dev, f):
-                        self._photo_device_fill_rows(ch, dev, f, [Path(p).name for p in (self.__dict__.get("_photo_zip_paths") or [])])
+                    if opened and opened[0] == dev and f in self.__dict__.get("_photo_dev_loaded", []):
+                        from viewer import photo_device as _pd
+                        pd_dir = os.path.normcase(str(_pd.cache_dir_for(dev, f)))
+                        self._photo_device_fill_rows(ch, dev, f, [Path(p).name for p in (self.__dict__.get("_photo_zip_paths") or [])
+                                                                  if os.path.normcase(str(Path(p).parent)) == pd_dir])
                         ch.setExpanded(True)
                 self._photo_device_folder_look(top)
             elif not err:
@@ -784,7 +791,8 @@ class PhotoMixin:
             self.status.showMessage(self._photo_device_error_text(dev, err), 8000)
             return
         if path:                                         # 사진 줄 — 그 폴더를 보고 있고 받아 둔 사진이면 바로, 아니면 그 폴더를 받으며 이 사진부터
-            if self.__dict__.get("_photo_dev_open") == (dev, folder):
+            op = self.__dict__.get("_photo_dev_open")
+            if op and op[0] == dev and folder in self.__dict__.get("_photo_dev_loaded", []):
                 if path in (self.__dict__.get("_photo_zip_paths") or []):
                     self._on_bookmark_activated(path, 0)
                     return
@@ -796,9 +804,44 @@ class PhotoMixin:
         if folder:
             self._photo_open_device(dev, folder)
 
-    def _photo_open_device(self, dev: str, folder: str, want: str | None = None):
-        """사진 폴더 하나를 캐시로 복사하며 본다 — 복사된 차례로 썸네일 줄에, 첫 장(또는 누른 사진 — 그것부터 받는다)을 연다(4.33)."""
+    def _photo_device_next(self, open_first: bool = False):
+        """썸네일 줄 끝에 닿았다 — 휴대 장치를 보는 중이면 다음(더 오래된) 폴더를 **이어** 받는다(줄은 그대로, 아래에 더한다, 사용자 지시).
+        받는 중이면 기다린다. 더 없으면 알림만. open_first: 넘김(다음 사진)으로 닿았으면 이어 받은 첫 장을 연다."""
+        op = self.__dict__.get("_photo_dev_open")
+        if not op or self.__dict__.get("_photo_dev_worker") is not None or not self.__dict__.get("_photo_zip_paths"):
+            return False
+        dev = op[0]
+        folders = (self.__dict__.get("_photo_dev_folders") or {}).get(dev) or []
+        loaded = self.__dict__.get("_photo_dev_loaded") or []
+        rest = [f for f in folders if f not in loaded]
+        if not rest or not loaded or loaded[-1] not in folders:
+            return False
+        nxt = next((f for f in folders[folders.index(loaded[-1]) + 1:] if f not in loaded), None)
+        if nxt is None:
+            if open_first:
+                self.status.showMessage(tr("마지막 사진입니다."), 2000)
+            return False
+        self._photo_open_device(dev, nxt, append=True, open_first=open_first)
+        return True
+
+    def _photo_open_device(self, dev: str, folder: str, want: str | None = None, append: bool = False, open_first: bool = False):
+        """사진 폴더 하나를 캐시로 복사하며 본다 — 복사된 차례로 썸네일 줄에, 첫 장(또는 누른 사진 — 그것부터 받는다)을 연다(4.33).
+        append: 썸네일 줄 끝에 이어 받는다(지금 사진·줄은 그대로, 제목은 장치 이름)."""
         from viewer.workers import run_in_thread
+        if append:
+            self._photo_dev_loaded = list(self.__dict__.get("_photo_dev_loaded") or []) + [folder]
+            self._photo_group = (dev, None)
+            self._photo_dev_want = None
+            self._photo_dev_first = bool(open_first)
+            try:
+                self.page_thumbs.set_title(dev, None)
+            except Exception:
+                pass
+            fi = self._photo_device_folder_item(dev, folder) if self.bookmark_tree.is_tree_view() else None
+            if fi is not None:
+                fi.setExpanded(True)
+            self._photo_device_start(dev, folder, None)
+            return
         self._photo_device_stop()
         old = self.__dict__.get("_photo_zipper")
         if old is not None:
@@ -811,6 +854,7 @@ class PhotoMixin:
         self._photo_dev_want = want
         self._photo_dev_first = want is None
         self._photo_dev_open = (dev, folder)
+        self._photo_dev_loaded = [folder]
         if self.bookmark_tree.is_tree_view():              # 트리 보기 — 앞에 연 폴더의 사진 줄은 걷고 이 폴더를 펼친다
             for top in self._photo_device_nodes():
                 for i in range(top.childCount()):
@@ -823,7 +867,11 @@ class PhotoMixin:
             self.page_thumbs.set_title(self._photo_group[0], None)
         except Exception:
             pass
-        w = PhotoDeviceWorker(dev, folder, Path(want).name if want else None)
+        self._photo_device_start(dev, folder, Path(want).name if want else None)
+
+    def _photo_device_start(self, dev: str, folder: str, first):
+        from viewer.workers import run_in_thread
+        w = PhotoDeviceWorker(dev, folder, first)
         w.listed.connect(lambda n, _w=w: self._photo_device_listed_names(n, _w))
         w.fileReady.connect(lambda p, _w=w: self._photo_device_file(p, _w))
         w.done.connect(lambda d, f, n, e, _w=w: self._photo_device_done(d, f, n, e, _w))
@@ -865,15 +913,20 @@ class PhotoMixin:
             return
         self._photo_dev_worker = None
         lst = self.__dict__.get("_photo_zip_paths")
-        if lst:                                          # 누른 사진부터 받았으면 줄 차례를 이름 차례로 되돌린다
-            lst.sort(key=lambda p: Path(p).name.lower())
+        if lst:                                          # 누른 사진부터 받았으면 줄 차례를 이름 차례로 되돌린다(이어 받은 폴더는 그 뒤에)
+            from viewer import photo_device as _pd
+            order = {os.path.normcase(str(_pd.cache_dir_for(dev, f))): i
+                     for i, f in enumerate(self.__dict__.get("_photo_dev_loaded") or [folder])}
+            lst.sort(key=lambda p: (order.get(os.path.normcase(str(Path(p).parent)), 0), Path(p).name.lower()))
             cur = self.main_view.current_file() if self.main_view else None
             self._photo_strip_widget().set_paths(lst, current=str(cur) if cur else None)
             if self.bookmark_tree.is_tree_view():
                 fi = self._photo_device_folder_item(dev, folder)
                 if fi is not None:
                     fi.takeChildren()
-                    self._photo_device_fill_rows(fi, dev, folder, [Path(p).name for p in lst])
+                    mine = os.path.normcase(str(_pd.cache_dir_for(dev, folder)))
+                    self._photo_device_fill_rows(fi, dev, folder, [Path(p).name for p in lst
+                                                                   if os.path.normcase(str(Path(p).parent)) == mine])
                 if cur:
                     self._photo_sync_device_row(str(cur))
         if err:
@@ -1029,6 +1082,8 @@ class PhotoMixin:
             return
         j = i + (1 if direction > 0 else -1)
         if j < 0 or j >= len(lst):
+            if direction > 0 and self._photo_device_next(open_first=True):
+                return                                   # 휴대 장치 — 다음 폴더를 이어 받아 그 첫 장(4.33)
             self.status.showMessage(tr("마지막 사진입니다.") if direction > 0 else tr("첫 사진입니다."), 2000)
             return
         self._on_bookmark_activated(lst[j], 0)
@@ -2204,6 +2259,8 @@ def photo_info_line(info: dict, name: str = "") -> str:
     parts = [name] if name else []
     if info.get("taken"):
         parts.append(_fmt_taken(info["taken"]))
+    elif info.get("file_time"):                  # 촬영 정보가 없으면 파일 날짜(사용자 지시 '사진의 일시') — 그렇다고 알린다
+        parts.append(tr("{t} (파일 날짜)").format(t=_fmt_taken(info["file_time"])))
     if info.get("width"):
         parts.append("%d × %d" % (info["width"], info["height"]))
     if info.get("bytes"):
@@ -2221,6 +2278,7 @@ def photo_info_rows(info: dict) -> list:
             (tr("크기(픽셀)"), "%d × %d" % (info.get("width", 0), info.get("height", 0)) if info.get("width") else ""),
             (tr("파일 크기"), _fmt_bytes(info["bytes"]) if info.get("bytes") else ""),
             (tr("촬영일"), _fmt_taken(info.get("taken", ""))),
+            (tr("파일 날짜"), _fmt_taken(info.get("file_time", ""))),
             (tr("카메라"), info.get("camera", "")),
             (tr("렌즈"), ex.get("LensModel", "")),
             (tr("노출 시간"), ex.get("ExposureTime", "")),

@@ -321,7 +321,14 @@ def _num(v):
 def photo_info(path, data: bytes | None = None) -> dict:
     """사진 정보 — 배경에서 부른다(머리만 읽는다). 키: taken·width·height·bytes·camera·format·exif(태그 이름 → 값 글)·gps((위도, 경도) 또는 None)·icc(프로필 이름).
     `data` 를 주면 파일 대신 그 바이트(zip 안 사진, 사진 보기 SOT 4.24) — `path` 는 이름(확장자)으로만 쓴다."""
-    info = {"taken": "", "width": 0, "height": 0, "bytes": 0, "camera": "", "format": "", "exif": {}, "gps": None, "icc": ""}
+    info = {"taken": "", "width": 0, "height": 0, "bytes": 0, "camera": "", "format": "", "exif": {}, "gps": None, "icc": "",
+            "file_time": ""}
+    if data is None:
+        try:                                     # 촬영 정보가 없는 사진(메신저로 받은 JPG·화면 캡처 PNG)의 일시 — 파일 날짜(사진 보기 SOT 4.18).
+            import time as _t                    #   장치에서 복사한 사진은 셸 복사가 장치의 날짜를, zip 에서 꺼낸 사진은 zip 의 날짜를 남긴다
+            info["file_time"] = _t.strftime("%Y:%m:%d %H:%M:%S", _t.localtime(os.path.getmtime(str(path))))
+        except (OSError, ValueError, OverflowError):
+            pass
     if data is not None:
         info["bytes"] = len(data)
         heif = Path(str(path)).suffix.lower() in HEIF_EXTS or (len(data) >= 12 and data[4:8] == b"ftyp" and data[8:12] in _HEIF_BRANDS)
