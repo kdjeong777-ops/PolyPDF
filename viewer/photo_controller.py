@@ -111,6 +111,7 @@ class PhotoMixin:
         self._photo_gate_actions()
         if not on:
             self._photo_deco_gate(True)
+            self._photo_info_hide()
         hook = getattr(self, "_photo_after_mode", None)
         if hook is not None:
             hook(on)
@@ -243,7 +244,8 @@ class PhotoMixin:
         if str(Path(path)) in lst:                    # 쪽 칸 = 넘김 원천 안의 순번(4.12) — 사진은 늘 1쪽이라 '1 / 1' 은 뜻이 없다
             self.main_view.set_photo_position(lst.index(str(Path(path))), len(lst))
         self._photo_preload_neighbors(str(path))
-        self._photo_deco_gate(self._photo_rot_for(path) == 0)
+        self._photo_deco_gate(self._photo_rot_for(path) == 0 and not self._photo_is_broken())
+        self._photo_info_request(path)
         try:
             self._touch_recent_files([path])          # 사진 모드면 사진의 최근 파일(4.7)
         except Exception:
@@ -293,7 +295,7 @@ class PhotoMixin:
     def _photo_rotate(self, delta: int = 90, absolute: int | None = None):
         """지금 사진을 돌린다 — 보기만(원본 사진은 그대로, 방향 저장 D17 은 따로). 폴더를 연 사진만 기억한다(사이드카가 폴더에 있다)."""
         cur = self.main_view.current_file() if self.main_view else None
-        if not cur or not self._is_photo_path(cur):
+        if not cur or not self._is_photo_path(cur) or self._photo_is_broken():
             return
         st = self._ensure_page_meta_store()
         old = st.photo_rotation(cur) if st else 0
@@ -314,6 +316,101 @@ class PhotoMixin:
             self._photo_rot_told = True
             self.status.showMessage(tr("돌린 사진에는 선·도형·글·사진 꾸밈이 보이지 않습니다 — 원래 방향으로 돌리면 다시 보입니다."), 6000)
 
+    def _photo_is_broken(self) -> bool:
+        return bool(getattr(getattr(self.main_view, "_doc", None), "is_broken", False))
+
+    # ── 사진 정보 — 상태 막대 가운데·세부 정보 창 (4.18, 261104-3 사용자 지시) ─────────
+    def _photo_info_button(self, create: bool = True):
+        b = getattr(self, "_photo_info_btn", None)
+        if b is None and create:
+            from PyQt6.QtCore import QEvent, QObject as _QO
+            b = QToolButton(self.status)
+            b.setObjectName("photoInfo")
+            b.setAutoRaise(True)
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.setToolTip(tr("누르면 사진의 세부 정보를 봅니다."))
+            b.clicked.connect(self._photo_info_dialog)
+            b.hide()
+            owner = self
+
+            class _Center(_QO):                          # 상태 막대 가운데에 둔다 — 상태 글(왼쪽)·단추(오른쪽) 자리와 따로
+                def eventFilter(self, obj, ev):
+                    if ev.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+                        owner._photo_info_place()
+                    return False
+            self._photo_info_filter = _Center(self)
+            self.status.installEventFilter(self._photo_info_filter)
+            self._photo_info_btn = b
+        return b
+
+    def _photo_info_place(self):
+        b = getattr(self, "_photo_info_btn", None)
+        if b is None:
+            return
+        b.adjustSize()
+        sb = self.status
+        b.move(max(0, (sb.width() - b.width()) // 2), max(0, (sb.height() - b.height()) // 2))
+        b.raise_()
+
+    def _photo_info_hide(self):
+        b = self._photo_info_button(create=False)
+        if b is not None:
+            b.hide()
+        self._photo_info = None
+
+    def _photo_info_request(self, path):
+        """지금 사진의 정보를 배경에서 읽는다(머리만) — 끝나면 상태 막대 가운데에 한 줄."""
+        from viewer.workers import run_in_thread
+        self._photo_info_gen = getattr(self, "_photo_info_gen", 0) + 1
+        self._photo_info = None
+        b = self._photo_info_button()
+        if self._photo_is_broken():
+            from viewer.photo_doc import broken_reason_text
+            b.setText(tr("열 수 없는 파일") + " · " + broken_reason_text(self.main_view._doc.reason))
+            b.show(); self._photo_info_place()
+            return
+        b.setText(Path(str(path)).name)
+        b.show(); self._photo_info_place()
+        w = PhotoInfoWorker(self._photo_info_gen, str(path))
+        w.done.connect(self._photo_info_done)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_info_done(self, gen: int, path: str, info: dict):
+        if gen != getattr(self, "_photo_info_gen", 0) or not info:
+            return
+        self._photo_info = dict(info, path=path)
+        b = self._photo_info_button()
+        b.setText(photo_info_line(info))
+        self._photo_info_place()
+
+    def _photo_info_dialog(self):
+        """세부 정보 창 — 파일·크기·촬영·카메라·노출·색 프로필·위치(있으면)."""
+        info = getattr(self, "_photo_info", None)
+        if not info:
+            return
+        from PyQt6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QHeaderView, QTableWidget,
+                                     QTableWidgetItem, QVBoxLayout)
+        rows = photo_info_rows(info)
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("사진 정보") + " — " + Path(info["path"]).name)
+        lay = QVBoxLayout(dlg)
+        t = QTableWidget(len(rows), 2, dlg)
+        t.setHorizontalHeaderLabels([tr("항목"), tr("값")])
+        t.verticalHeader().setVisible(False)
+        t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        for i, (k, v) in enumerate(rows):
+            t.setItem(i, 0, QTableWidgetItem(k))
+            t.setItem(i, 1, QTableWidgetItem(v))
+        t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        t.horizontalHeader().setStretchLastSection(True)
+        lay.addWidget(t)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dlg)
+        bb.rejected.connect(dlg.reject)
+        lay.addWidget(bb)
+        dlg.resize(560, 420)
+        self._photo_info_dlg = dlg
+        dlg.exec()
+
     def _photo_deco_gate(self, ok: bool):
         """꾸미기 도구 줄을 켜고 끈다 — 돌린 사진에서는 끈다(4.16, 그려도 남지 않으면 고장으로 보인다)."""
         bar = getattr(self.main_view, "_draw_bar", None)
@@ -331,6 +428,9 @@ class PhotoMixin:
         a_180 = menu.addAction(tr("180° 돌리기"))
         a_0 = menu.addAction(tr("원래 방향"))
         a_0.setEnabled(self._photo_rot_for(mv.current_file()) != 0)
+        if self._photo_is_broken():                      # 4.18 — 열 수 없는 파일은 돌리지 않는다
+            for a in (a_l, a_r, a_180, a_0):
+                a.setEnabled(False)
         a_save = menu.addAction(tr("방향 저장 (원본 JPEG)"))       # 4.17 — 돌린 JPEG 일 때만
         a_save.setEnabled(self._photo_rot_for(mv.current_file()) != 0
                           and photo_io_is_jpeg(mv.current_file()) and not self.__dict__.get("_photo_orient_busy"))
@@ -531,6 +631,77 @@ class PhotoOrientSaveWorker(QObject):
                     Path(tmp).unlink()
                 except OSError:
                     pass
+            self.finished.emit()
+
+
+def _fmt_bytes(n: int) -> str:
+    return "%.1f MB" % (n / 1048576.0) if n >= 1048576 else "%d KB" % max(1, round(n / 1024.0))
+
+
+def _fmt_taken(s: str) -> str:
+    """EXIF 날짜 '2026:10:30 14:22:05' → '2026-10-30 14:22'."""
+    s = (s or "").strip()
+    if len(s) >= 16 and s[4] == ":" and s[7] == ":":
+        return s[:4] + "-" + s[5:7] + "-" + s[8:10] + " " + s[11:16]
+    return s
+
+
+def photo_info_line(info: dict) -> str:
+    """상태 막대 가운데 한 줄 — 촬영일 · 크기 · 파일 크기 · 카메라(있는 것만)."""
+    parts = []
+    if info.get("taken"):
+        parts.append(_fmt_taken(info["taken"]))
+    if info.get("width"):
+        parts.append("%d × %d" % (info["width"], info["height"]))
+    if info.get("bytes"):
+        parts.append(_fmt_bytes(info["bytes"]))
+    if info.get("camera"):
+        parts.append(info["camera"])
+    return "  ·  ".join(parts) or tr("사진 정보")
+
+
+def photo_info_rows(info: dict) -> list:
+    """세부 정보 창의 (항목, 값) — 화면 글은 tr(), 값은 그대로."""
+    ex = info.get("exif") or {}
+    rows = [(tr("파일"), str(info.get("path", ""))),
+            (tr("형식"), info.get("format", "")),
+            (tr("크기(픽셀)"), "%d × %d" % (info.get("width", 0), info.get("height", 0)) if info.get("width") else ""),
+            (tr("파일 크기"), _fmt_bytes(info["bytes"]) if info.get("bytes") else ""),
+            (tr("촬영일"), _fmt_taken(info.get("taken", ""))),
+            (tr("카메라"), info.get("camera", "")),
+            (tr("렌즈"), ex.get("LensModel", "")),
+            (tr("노출 시간"), ex.get("ExposureTime", "")),
+            (tr("조리개"), ex.get("FNumber", "")),
+            (tr("ISO"), ex.get("ISOSpeedRatings", "")),
+            (tr("초점 거리"), ex.get("FocalLength", "")),
+            (tr("방향(EXIF)"), ex.get("Orientation", "")),
+            (tr("색 프로필"), info.get("icc", "")),
+            (tr("위치(GPS)"), "%.6f, %.6f" % info["gps"] if info.get("gps") else ""),
+            (tr("소프트웨어"), ex.get("Software", ""))]
+    return [(k, v) for k, v in rows if v]
+
+
+class PhotoInfoWorker(QObject):
+    """지금 사진의 정보(머리만)를 배경에서 읽는다 — 응답성 SOT §4.4 감사표의 한 행."""
+    done = pyqtSignal(int, str, dict)
+    finished = pyqtSignal()
+
+    def __init__(self, gen: int, path: str):
+        super().__init__()
+        self.gen, self.path = gen, path
+
+    def request_cancel(self):
+        pass
+
+    def run(self):
+        try:
+            from viewer.photo_io import photo_info
+            try:
+                info = photo_info(self.path)
+            except Exception:
+                info = {}
+            self.done.emit(self.gen, self.path, info)
+        finally:
             self.finished.emit()
 
 

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 12:59+0900\n"
+"POT-Creation-Date: 2026-11-04 13:06+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2244,7 +2244,7 @@ msgstr ""
 "Exporting to Excel requires the openpyxl package.\n"
 "pip install openpyxl"
 
-#: viewer/app.py viewer/widgets/favorites_dialog.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/favorites_dialog.py
 msgid "파일"
 msgstr "File"
 
@@ -2795,7 +2795,7 @@ msgstr "Loaded: {name}"
 msgid "{v} 파일: {name}"
 msgstr "{v} file: {name}"
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/photo_strip.py
 msgid "열 수 없음"
 msgstr "Cannot Open"
 
@@ -3929,6 +3929,10 @@ msgid "{stem}_압축"
 msgstr "{stem}_compressed"
 
 #: viewer/photo_controller.py
+msgid "사진 정보"
+msgstr "Photo Info"
+
+#: viewer/photo_controller.py
 msgid "PDF 모드로 바꾸기"
 msgstr "Switch to PDF mode"
 
@@ -3964,6 +3968,63 @@ msgstr "Actual Size (100%)"
 msgid "방향 저장 중…"
 msgstr "Saving orientation…"
 
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/convert_dialog.py
+msgid "형식"
+msgstr "Format"
+
+#: viewer/photo_controller.py
+msgid "크기(픽셀)"
+msgstr "Size (pixels)"
+
+#: viewer/photo_controller.py
+msgid "파일 크기"
+msgstr "File size"
+
+#: viewer/photo_controller.py
+msgid "촬영일"
+msgstr "Date taken"
+
+#: viewer/photo_controller.py
+msgid "카메라"
+msgstr "Camera"
+
+#: viewer/photo_controller.py
+msgid "렌즈"
+msgstr "Lens"
+
+#: viewer/photo_controller.py
+msgid "노출 시간"
+msgstr "Exposure time"
+
+#: viewer/photo_controller.py
+msgid "조리개"
+msgstr "Aperture"
+
+#: viewer/photo_controller.py
+msgid "ISO"
+msgstr "ISO"
+
+#: viewer/photo_controller.py
+msgid "초점 거리"
+msgstr "Focal length"
+
+#: viewer/photo_controller.py
+msgid "방향(EXIF)"
+msgstr "Orientation (EXIF)"
+
+#: viewer/photo_controller.py
+msgid "색 프로필"
+msgstr "Color profile"
+
+#: viewer/photo_controller.py
+msgid "위치(GPS)"
+msgstr "Location (GPS)"
+
+#: viewer/photo_controller.py
+msgid "소프트웨어"
+msgstr "Software"
+
 #: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr "Only photos selected from an opened folder can be rotated."
@@ -3971,6 +4032,18 @@ msgstr "Only photos selected from an opened folder can be rotated."
 #: viewer/photo_controller.py
 msgid "돌린 사진에는 선·도형·글·사진 꾸밈이 보이지 않습니다 — 원래 방향으로 돌리면 다시 보입니다."
 msgstr "Lines, shapes, text and image marks are hidden on a rotated photo — rotate it back to the original orientation to see them again."
+
+#: viewer/photo_controller.py
+msgid "누르면 사진의 세부 정보를 봅니다."
+msgstr "Click to see the photo details."
+
+#: viewer/photo_controller.py viewer/twoup.py
+msgid "항목"
+msgstr "Item"
+
+#: viewer/photo_controller.py
+msgid "값"
+msgstr "Value"
 
 #: viewer/photo_controller.py
 msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
@@ -4001,9 +4074,37 @@ msgstr "A rotated photo cannot be marked up — rotate it back to the original o
 msgid "방향을 원본 사진에 저장했습니다: {name}"
 msgstr "Orientation saved to the original photo: {name}"
 
+#: viewer/photo_controller.py viewer/photo_doc.py
+msgid "열 수 없는 파일"
+msgstr "Cannot open this file"
+
 #: viewer/photo_controller.py
 msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
 msgstr "Another program is using the photo, so the orientation was not saved — the original is unchanged."
+
+#: viewer/photo_doc.py
+msgid "그림 형식이 아니거나 파일이 깨졌습니다."
+msgstr "Not a picture format, or the file is damaged."
+
+#: viewer/photo_doc.py
+msgid "사진이 아니라 동영상 파일입니다(그림 이름으로 저장됨 — 예: 라이브 포토의 영상)."
+msgstr "This is a video, not a photo (saved under a picture name — e.g. the video of a Live Photo)."
+
+#: viewer/photo_doc.py
+msgid "빈 파일입니다."
+msgstr "The file is empty."
+
+#: viewer/photo_doc.py
+msgid "그림 자료가 잘렸거나 깨졌습니다."
+msgstr "The picture data is truncated or damaged."
+
+#: viewer/photo_doc.py
+msgid "이 형식을 읽는 구성 요소가 없습니다."
+msgstr "The component that reads this format is missing."
+
+#: viewer/photo_doc.py
+msgid "다음·이전 사진으로 그대로 넘길 수 있습니다."
+msgstr "You can move on to the next or previous photo as usual."
 
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"
@@ -5391,10 +5492,6 @@ msgid "다단 생성 완료: 총 {pages}쪽"
 msgstr "N-up complete: {pages} pages total"
 
 #: viewer/twoup.py
-msgid "항목"
-msgstr "Item"
-
-#: viewer/twoup.py
 #, python-brace-format
 msgid "하이퍼링크 {ok}개 옮김 (옮기지 못함 {drop}개)"
 msgstr "{ok} hyperlinks carried over ({drop} could not be)"
@@ -5810,10 +5907,6 @@ msgstr "Reads scanned pages without a text layer with OCR and adds an invisible 
 #: viewer/widgets/bookmark_tree.py
 msgid "그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로."
 msgstr "Makes a smaller new file by lowering image resolution and quality — text and the original stay as they are."
-
-#: viewer/widgets/bookmark_tree.py viewer/widgets/convert_dialog.py
-msgid "형식"
-msgstr "Format"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "주제"

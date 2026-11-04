@@ -80,7 +80,7 @@ try:
     mw._on_bookmark_activated(str(small / "사진1.jpg"), 0); pump()
     strip = mw._photo_strip
     chk(strip.isVisible() and not mw.page_thumbs.list.isVisible(), "A 쪽 썸네일 자리에 사진 썸네일 줄")
-    chk(strip.count() == 4 and strip.currentItem() is not None and strip.currentItem().text() == "사진1", "A 줄에 4장, 지금 사진 선택",
+    chk(strip.count() == 4 and strip.currentItem() is not None and strip.currentItem().text().splitlines()[0] == "사진1", "A 줄에 4장, 지금 사진 선택",
         "%d %s" % (strip.count(), strip.currentItem().text() if strip.currentItem() else None))
     chk(pump(lambda: len(strip._done) == 4), "A 썸네일 그림이 배경에서 붙는다")
     cdir = photo_strip.cache_dir()

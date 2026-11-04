@@ -13,6 +13,7 @@ Qt 를 쓰지 않는다(배경 스레드·자식 프로세스에서 부른다). 
 from __future__ import annotations
 
 import io
+import os
 import struct
 from pathlib import Path
 
@@ -249,6 +250,98 @@ def is_jpeg_file(path) -> bool:
             return f.read(3) == b"\xff\xd8\xff"
     except OSError:
         return False
+
+
+# ── 읽을 수 없는 파일의 까닭·사진 정보 (사진 보기 SOT 4.18, 261104-3 사용자 지시) ─────────────
+UNREADABLE_VIDEO = "video"         # 동영상(QuickTime·MP4)이 그림 이름으로 — 아이폰 라이브 포토의 영상 등
+UNREADABLE_EMPTY = "empty"         # 빈 파일
+UNREADABLE_TRUNCATED = "truncated"  # 그림 머리는 맞는데 자료가 잘림·깨짐
+UNREADABLE_OTHER = "other"         # 그림 형식이 아니거나 알 수 없는 까닭
+_QT_ATOMS = (b"wide", b"mdat", b"moov", b"free", b"skip", b"pnot")
+_VIDEO_BRANDS = (b"qt  ", b"isom", b"iso2", b"mp41", b"mp42", b"avc1", b"M4V ", b"3gp4", b"3gp5")
+
+
+def unreadable_reason(path) -> str:
+    """그림으로 열리지 않는 파일의 까닭(위 상수 중 하나) — 머리 몇 바이트만 본다."""
+    try:
+        with open(str(path), "rb") as f:
+            head = f.read(32)
+    except OSError:
+        return UNREADABLE_OTHER
+    if not head:
+        return UNREADABLE_EMPTY
+    if len(head) >= 12 and head[4:8] == b"ftyp" and head[8:12] in _VIDEO_BRANDS:
+        return UNREADABLE_VIDEO
+    if len(head) >= 8 and head[4:8] in _QT_ATOMS:            # ftyp 없이 시작하는 QuickTime(사용자 표본 IMG_9298 — 'wide' 다음 'mdat')
+        return UNREADABLE_VIDEO
+    if head[:3] == b"\xff\xd8\xff" or head[:8] == b"\x89PNG\r\n\x1a\n":
+        return UNREADABLE_TRUNCATED
+    return UNREADABLE_OTHER
+
+
+_EXIF_IFD = 0x8769
+_TAG_NAMES = {0x010F: "Make", 0x0110: "Model", 0x0131: "Software", 0x0132: "DateTime", 0x9003: "DateTimeOriginal",
+              0x829A: "ExposureTime", 0x829D: "FNumber", 0x8827: "ISOSpeedRatings", 0x920A: "FocalLength",
+              0xA405: "FocalLengthIn35mmFilm", 0xA434: "LensModel", 0x9209: "Flash", 0xA402: "ExposureMode",
+              0xA403: "WhiteBalance", 0x0112: "Orientation", 0xA001: "ColorSpace"}
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        try:
+            return float(v[0]) / float(v[1])
+        except Exception:
+            return None
+
+
+def photo_info(path) -> dict:
+    """사진 정보 — 배경에서 부른다(머리만 읽는다). 키: taken·width·height·bytes·camera·format·exif(태그 이름 → 값 글)·gps((위도, 경도) 또는 None)·icc(프로필 이름)."""
+    info = {"taken": "", "width": 0, "height": 0, "bytes": 0, "camera": "", "format": "", "exif": {}, "gps": None, "icc": ""}
+    try:
+        info["bytes"] = os.path.getsize(str(path))
+    except OSError:
+        pass
+    _prep(path)
+    from PIL import Image
+    with Image.open(str(path)) as im:
+        info["format"] = "HEIC" if is_heif(path) else (im.format or "")
+        ex = im.getexif()
+        o = int(ex.get(ORIENT_TAG, 1) or 1)
+        w, h = im.size
+        info["width"], info["height"] = ((h, w) if o in (5, 6, 7, 8) else (w, h))
+        sub = {}
+        try:
+            sub = ex.get_ifd(_EXIF_IFD) or {}
+        except Exception:
+            pass
+        for src in (ex, sub):
+            for tag, name in _TAG_NAMES.items():
+                v = src.get(tag)
+                if v not in (None, "", b""):
+                    info["exif"][name] = str(v).strip("\x00 ")
+        info["taken"] = (info["exif"].get("DateTimeOriginal") or info["exif"].get("DateTime") or "")
+        info["camera"] = " ".join(x for x in (info["exif"].get("Make", ""), info["exif"].get("Model", "")) if x).strip()
+        try:
+            g = ex.get_ifd(GPS_TAG) or {}
+            if g.get(2) and g.get(4):
+                def dms(t):
+                    d, m, s = (_num(x) or 0.0 for x in t)
+                    return d + m / 60.0 + s / 3600.0
+                lat = dms(g[2]) * (-1 if g.get(1) == "S" else 1)
+                lon = dms(g[4]) * (-1 if g.get(3) == "W" else 1)
+                info["gps"] = (round(lat, 6), round(lon, 6))
+        except Exception:
+            pass
+        icc = im.info.get("icc_profile")
+        if icc:
+            try:
+                from PIL import ImageCms
+                info["icc"] = ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(icc))).strip()
+            except Exception:
+                info["icc"] = "ICC"
+    return info
 
 
 def has_gps(path) -> bool:

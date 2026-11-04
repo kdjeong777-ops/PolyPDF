@@ -90,9 +90,16 @@ def prune_cache(max_bytes: int = CACHE_MAX_BYTES) -> int:
     return n
 
 
+def label_text(path, w: int = 0, h: int = 0, unreadable: bool = False) -> str:
+    """칸 아래 글 — 이름(확장자 없이) 다음 줄에 원본 픽셀 크기(EXIF 방향 뒤). 모르면 줄만 비워 둔다(칸 높이가 흔들리지 않게)."""
+    from viewer.i18n import tr
+    second = tr("열 수 없음") if unreadable else ("%d × %d" % (w, h) if w and h else " ")
+    return Path(str(path)).stem + "\n" + second
+
+
 class PhotoThumbWorker(QObject):
     """썸네일 그림을 배경에서 만든다(응답성 SOT §4.4 감사표 한 행)."""
-    done = pyqtSignal(int, str, QImage)
+    done = pyqtSignal(int, str, QImage, int, int)     # 세대, 경로, 썸네일, 보이는 폭·높이(EXIF 방향 뒤 원본 픽셀, 못 읽으면 0)
     finished = pyqtSignal()
 
     def __init__(self, gen: int, paths, box: int = THUMB_BOX):
@@ -113,7 +120,9 @@ class PhotoThumbWorker(QObject):
                     img = load_thumb(p, self.box)
                 except Exception:
                     img = QImage()
-                self.done.emit(self.gen, p, img)
+                from viewer.photo_io import oriented_size
+                w, h = oriented_size(p)                  # 머리만 — 썸네일만 보고 원본 크기를 알게(261104-3 사용자 지시)
+                self.done.emit(self.gen, p, img, int(w), int(h))
                 pacing.pace(self)
             if not self._cancel and not _PRUNED["done"]:
                 _PRUNED["done"] = True                    # 실행마다 한 번 — 캐시 용량 상한(D9)
@@ -186,7 +195,7 @@ class PhotoStrip(QListWidget):
         try:
             self.clear()
             for p in paths:
-                it = QListWidgetItem(self._placeholder, Path(p).stem)
+                it = QListWidgetItem(self._placeholder, label_text(p))
                 it.setData(_PATH_ROLE, p)
                 it.setToolTip(Path(p).name)
                 it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
@@ -218,6 +227,7 @@ class PhotoStrip(QListWidget):
             return
         self._done.discard(p)
         it.setIcon(self._placeholder)
+        it.setText(label_text(p))
         self._restart_from_visible()
 
     # ── 속 ─────────────────────────────────────────────
@@ -247,12 +257,15 @@ class PhotoStrip(QListWidget):
         self._worker = w
         run_in_thread(w, self._keep)
 
-    def _on_done(self, gen: int, path: str, img: QImage):
+    def _on_done(self, gen: int, path: str, img: QImage, w: int = 0, h: int = 0):
         if gen != self._gen:
             return
         self._done.add(path)
         it = self._items.get(path)
-        if it is None or img.isNull():
+        if it is None:
+            return
+        it.setText(label_text(path, w, h, unreadable=img.isNull() and not w))
+        if img.isNull():
             return
         pm = QPixmap.fromImage(img).scaled(self.iconSize(), Qt.AspectRatioMode.KeepAspectRatio,
                                            Qt.TransformationMode.SmoothTransformation)

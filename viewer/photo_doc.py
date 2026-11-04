@@ -264,10 +264,76 @@ class PhotoDocument:
         return out
 
 
+BROKEN_PAGE_SIZE = (1200, 800)     # 읽을 수 없는 사진 자리의 알림 쪽(사진 보기 SOT 4.18)
+
+
+def broken_reason_text(reason: str) -> str:
+    from viewer.i18n import tr
+    return {photo_io.UNREADABLE_VIDEO: tr("사진이 아니라 동영상 파일입니다(그림 이름으로 저장됨 — 예: 라이브 포토의 영상)."),
+            photo_io.UNREADABLE_EMPTY: tr("빈 파일입니다."),
+            photo_io.UNREADABLE_TRUNCATED: tr("그림 자료가 잘렸거나 깨졌습니다."),
+            "format": tr("이 형식을 읽는 구성 요소가 없습니다.")}.get(
+        reason, tr("그림 형식이 아니거나 파일이 깨졌습니다."))
+
+
+class BrokenPhotoDocument(PhotoDocument):
+    """열 수 없는 사진 자리 — 본문에 까닭을 보이는 알림 쪽 하나(사진 보기 SOT 4.18, 261104-3 사용자 지시).
+    경로는 그 파일 그대로라 목록 순번·다음/이전 넘김이 다른 사진과 똑같이 돈다. 회전·방향 저장·꾸밈은 하지 않는다."""
+
+    is_broken = True
+
+    def __init__(self, file_path, reason: str, cache: PageCache | None = None):
+        self.path = Path(file_path)
+        self.reason = reason
+        self.rotation = 0
+        self.size = BROKEN_PAGE_SIZE
+        self.doc = fitz.open()
+        self.doc.new_page(width=float(self.size[0]), height=float(self.size[1]))
+        self.cache = cache or GLOBAL_PAGE_CACHE
+        self._cache_tag = "photo-broken|%s" % _tag(self.path)
+
+    def _render(self, factor: float, cache: bool) -> RenderedPage:
+        from PyQt6.QtCore import QRectF, Qt
+        from PyQt6.QtGui import QColor, QFont, QImage, QPainter
+        from viewer.i18n import tr
+        w, h = self.size
+        tw, th = max(1, round(w * factor)), max(1, round(h * factor))
+        tw += (-tw) % 4                                     # RGB888 줄 길이를 4 의 배수로(바이트 그대로 넘긴다)
+        img = QImage(tw, th, QImage.Format.Format_RGB888)
+        img.fill(QColor(238, 238, 238))
+        p = QPainter(img)
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+            s = th / float(h)
+            p.setPen(QColor(150, 150, 150))
+            p.drawRect(QRectF(2, 2, tw - 4, th - 4))
+            f = QFont(); f.setPixelSize(max(8, int(44 * s))); f.setBold(True)
+            p.setFont(f); p.setPen(QColor(90, 90, 90))
+            p.drawText(QRectF(0, th * 0.28, tw, th * 0.14), int(Qt.AlignmentFlag.AlignCenter), tr("열 수 없는 파일"))
+            f.setBold(False); f.setPixelSize(max(7, int(30 * s))); p.setFont(f)
+            p.drawText(QRectF(0, th * 0.44, tw, th * 0.1), int(Qt.AlignmentFlag.AlignCenter), self.path.name)
+            f.setPixelSize(max(7, int(26 * s))); p.setFont(f); p.setPen(QColor(110, 110, 110))
+            p.drawText(QRectF(tw * 0.08, th * 0.56, tw * 0.84, th * 0.18),
+                       int(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap), broken_reason_text(self.reason))
+            p.drawText(QRectF(0, th * 0.76, tw, th * 0.1), int(Qt.AlignmentFlag.AlignCenter),
+                       tr("다음·이전 사진으로 그대로 넘길 수 있습니다."))
+        finally:
+            p.end()
+        return RenderedPage(width=tw, height=th, samples=bytes(img.constBits().asarray(img.sizeInBytes())),
+                            page_rect=(0.0, 0.0, float(w), float(h)))
+
+
 def open_document(file_path, cache: PageCache | None = None):
-    """경로에 맞는 문서 — 그림(사진 모드의 확장자)이면 사진 문서, 아니면 PDF 문서."""
+    """경로에 맞는 문서 — 그림(사진 모드의 확장자)이면 사진 문서, 아니면 PDF 문서.
+    그림으로 열리지 않으면 **알림 쪽**(`BrokenPhotoDocument`) — 본문이 멈추거나 앞 사진에 머물지 않는다(4.18)."""
     from viewer.image_page import PHOTO_EXTS
     from viewer.pdf_doc import PdfDocument
     if Path(file_path).suffix.lower() in PHOTO_EXTS:
-        return PhotoDocument(file_path, cache)
+        try:
+            return PhotoDocument(file_path, cache)
+        except PhotoFormatMissing:
+            return BrokenPhotoDocument(file_path, "format", cache)
+        except (ValueError, OSError):
+            return BrokenPhotoDocument(file_path, photo_io.unreadable_reason(file_path), cache)
     return PdfDocument(file_path, cache)
