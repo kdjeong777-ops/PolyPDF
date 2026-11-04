@@ -80,6 +80,9 @@ class PresentMixin:
         260628(B7): 종전에는 `stop()`(최대 8초 대기)을 UI 스레드에서 수행해 **발표 도중
         파일이 바뀌는 순간 화면이 멈출 수 있었다**. 이제 종료는 백그라운드에서 하고
         **완료 시그널을 받은 뒤 새 녹화를 시작**한다(순서는 그대로 보장)."""
+        if getattr(getattr(self, "_present", None), "_photo", False):
+            self._photo_slide_next_file(path)  # 261104-7(사진 보기 SOT 4.12): 사진 슬라이드쇼는 녹화 하나 — 사진마다 끊지 않는다
+            return
         r = getattr(self, "_rec", None)
         if r is None or not r.is_recording():
             return

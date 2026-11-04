@@ -330,6 +330,18 @@ class SettingsDialog(QDialog):
         self.cmb_view_kind.setToolTip(tr("혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. "
                                          "PDF 전용이면 사진 모드를 쓰지 않습니다."))
         row_vk.addWidget(self.cmb_view_kind, 1)
+        # 261104-7(사진 보기 SOT 4.12): 슬라이드쇼 자동 넘김 간격(초, 0 = 끔) — 사진 묶음 하나에
+        row_vk.addWidget(QLabel(tr("슬라이드쇼 자동 넘김:")))
+        self.sp_slide_s = QSpinBox()
+        self.sp_slide_s.setRange(0, 600)
+        self.sp_slide_s.setSuffix(tr(" 초"))
+        self.sp_slide_s.setSpecialValueText(tr("끔"))
+        try:
+            self.sp_slide_s.setValue(int(_pic.get("slide_interval_s", 0) or 0))
+        except (TypeError, ValueError):
+            self.sp_slide_s.setValue(0)
+        self.sp_slide_s.setToolTip(tr("사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격마다 다음 사진으로 넘어갑니다. 0 이면 넘기지 않습니다."))
+        row_vk.addWidget(self.sp_slide_s)
         pl.addLayout(row_vk)
         info_psm = QLabel(
             tr("<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
@@ -493,7 +505,8 @@ class SettingsDialog(QDialog):
             "cross_file_nav": self.chk_cross_file_nav.isChecked(),
             "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
             "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
-            "picture": dict(self._prefs.get("picture") or {}, view_kind=str(self.cmb_view_kind.currentData() or "pdf")),   # 261104-2
+            "picture": dict(self._prefs.get("picture") or {}, view_kind=str(self.cmb_view_kind.currentData() or "pdf"),
+                            slide_interval_s=int(self.sp_slide_s.value())),   # 261104-2 · 261104-7 슬라이드쇼 간격
             "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
             # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
             # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋

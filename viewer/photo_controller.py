@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import os
+
 from PyQt6.QtCore import QObject, QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton
 
@@ -22,10 +24,10 @@ MODE_ICON_PX = 20                # 탭 줄 높이 안 — 탭 글자보다 크�
 # 사진 모드에서 끄는 명령(사진 보기 SOT 4.13 표) — 사진에 뜻이 없거나 사진용 동작이 아직 없는 것(평탄화·인쇄는 P2 에서 사진용으로 켠다)
 PHOTO_OFF_CMDS = ("file.save_as", "file.export",                     # 인쇄·평탄화는 사진용으로 켠다(261104-3, 4.21)
                   "fav.recent_searches", "fav.searches", "fav.add_search",
-                  "view.text", "view.study", "view.search", "view.present",
+                  "view.text", "view.study", "view.search",                 # 발표 = 사진 슬라이드쇼(261104-7, 4.12)
                   "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
                   "tools.reindex", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign", "tools.translate")
-PHOTO_OFF_ATTRS = ("act_present",)       # 창에 따로 붙은 액션(F5)
+PHOTO_OFF_ATTRS = ()                     # 창에 따로 붙은 액션 — F5 발표는 사진 슬라이드쇼로 켠다(261104-7)
 PHOTO_LIST_ATTRS = ("_favorites", "_recent_folders", "_recent_files")   # 모드마다 따로(4.7) — 사진 묶음 키는 앞 _ 를 뺀 이름
 
 
@@ -1038,6 +1040,89 @@ class PhotoMixin:
             strip.set_paths(self._photo_strip_source(), current=str(now) if now else None)
         self.status.showMessage(tr("사진 {n}장을 휴지통으로 보냈습니다.").format(n=len(gone)), 4000)
 
+    # ── 슬라이드쇼 (4.12, 261104-7 — 발표 창 재사용) ─────────────────
+    def _photo_sibling(self, cur_path: str, direction: int):
+        """슬라이드쇼 다음/이전 사진 — 넘김 원천 하나(썸네일 줄 차례, 4.12)."""
+        lst = [str(Path(p)) for p in self._photo_list()]
+        cs = str(Path(cur_path))
+        if cs not in lst:
+            return None
+        j = lst.index(cs) + (1 if direction > 0 else -1)
+        return lst[j] if 0 <= j < len(lst) else None
+
+    def _photo_slide_src(self, path):
+        """슬라이드쇼가 그릴 원천 — 꾸밈이 있는 사진만 구운 1쪽 PDF(보기 회전은 `/Rotate`), 아니면 사진 그대로(사진 문서가 돌림까지)."""
+        rot, deco = self._photo_needs_bake(path)
+        if not deco:
+            return str(path)
+        import fitz
+        from viewer import photo_io
+        try:
+            st = os.stat(str(path))
+            key = (str(path), st.st_mtime_ns, rot, repr(self._ensure_page_meta_store().get_drawings(path, 0)),
+                   len(self._ensure_page_meta_store().get_images(path, 0)))
+        except Exception:
+            key = (str(path), rot)
+        cache = self.__dict__.setdefault("_photo_slide_cache", {})
+        hit = cache.get(key)
+        if hit and os.path.exists(hit):
+            return hit
+        w, h = photo_io.oriented_size(path)
+        doc = fitz.open()
+        try:
+            pg = doc.new_page(width=w, height=h)
+            photo_io.insert_photo(pg, (0, 0, w, h), str(path))
+            self._bake_decorations(doc, str(path))
+            if rot:
+                doc[0].set_rotation(rot)
+            out = str(self._mk_print_tmpdir("polypdf_slide_") / (Path(str(path)).stem + "_slide.pdf"))
+            doc.save(out, deflate=True)
+        except Exception:
+            return str(path)
+        finally:
+            doc.close()
+        cache[key] = out
+        return out
+
+    def _photo_slideshow_started(self):
+        pres = getattr(self, "_present", None)
+        if pres is None:
+            return
+        self._photo_preload_neighbors(str(pres._path))
+        sec = 0
+        try:
+            sec = int(self._photo_prefs().get("slide_interval_s", 0) or 0)
+        except (TypeError, ValueError):
+            sec = 0
+        if sec > 0:
+            from PyQt6.QtCore import QTimer
+            t = QTimer(self)
+            t.setInterval(sec * 1000)
+            t.timeout.connect(self._photo_slide_tick)
+            pres.closed.connect(lambda _pg=None, tt=t: tt.stop())
+            t.start()
+            self._photo_slide_timer = t
+
+    def _photo_slide_tick(self):
+        """자동 넘김 — 마지막 사진이면 멈춘다(처음으로 돌지 않는다, 4.12 '목록 끝')."""
+        pres = getattr(self, "_present", None)
+        t = self.__dict__.get("_photo_slide_timer")
+        if pres is None or not getattr(pres, "_photo", False):
+            if t is not None:
+                t.stop()
+            return
+        if self._photo_sibling(str(pres._path), +1) is None:
+            if t is not None:
+                t.stop()
+            return
+        pres._next()
+        if t is not None and self._photo_sibling(str(pres._path), +1) is None:
+            t.stop()                                     # 마지막 사진에 닿았다 — 바로 멈춘다
+
+    def _photo_slide_next_file(self, path):
+        """슬라이드쇼가 다른 사진으로 넘어갔다 — 그 앞뒤를 미리 푼다(§6.4)."""
+        self._photo_preload_neighbors(str(path))
+
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""
         mv = self.main_view
@@ -1084,6 +1169,12 @@ class PhotoMixin:
                 self.main_view._render_current()
         except Exception:
             pass
+        pres = getattr(self, "_present", None)
+        if pres is not None and hasattr(pres, "refresh_photo"):
+            try:
+                pres.refresh_photo(path)                 # 슬라이드쇼도 임시 그림 대신(261104-7)
+            except Exception:
+                pass
 
     def _photo_preload_neighbors(self, cur: str):
         from viewer.workers import run_in_thread

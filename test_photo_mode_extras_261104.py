@@ -69,7 +69,8 @@ try:
     # C — 끄기 전 상태
     ocr = mw._cmds.get("tools.ocr")
     ocr_before = ocr.isEnabled() if ocr else None
-    pres_before = mw.act_present.isEnabled()
+    mrg = mw._cmds.get("tools.merge")                     # 261104-7: 발표는 이제 사진 슬라이드쇼로 켜진다 — 꺼지는 명령은 병합으로 본다
+    pres_before = mrg.isEnabled()
 
     bt.load_folder(small); pump(lambda: sum(1 for _ in bt._iter_file_nodes()) == 1)
     mw._set_photo_mode(True)
@@ -102,9 +103,9 @@ try:
     # C
     if ocr is not None and ocr_before:
         chk(not ocr.isEnabled(), "C 사진 모드에서 OCR 꺼짐")
-    chk(not mw.act_present.isEnabled(), "C 발표(F5) 꺼짐")
+    chk(not mrg.isEnabled() and mw.act_present.isEnabled(), "C 병합 꺼짐·발표(F5)는 슬라이드쇼로 켜짐")
     mw._gate_api_dependent_ui(mw._prefs)
-    chk(not mw.act_present.isEnabled() and (ocr is None or not ocr.isEnabled()), "C 설정 적용을 거쳐도 꺼진 채")
+    chk(not mrg.isEnabled() and (ocr is None or not ocr.isEnabled()), "C 설정 적용을 거쳐도 꺼진 채")
 
     # D — 사진 즐겨찾기·최근
     mw._favorites.append({"name": "사진 하나", "kind": "file", "file": str(small / "사진3.jpg"), "folder": str(small)})
@@ -118,7 +119,7 @@ try:
     # E — PDF 를 열면 PDF 모드
     mw.open_pdf(small / "보고서.pdf"); pump()
     chk(not mw._photo_mode, "E 사진 모드에서 PDF 를 열면 PDF 모드")
-    chk(mw.act_present.isEnabled() == pres_before and (ocr is None or ocr.isEnabled() == ocr_before),
+    chk(mrg.isEnabled() == pres_before and (ocr is None or ocr.isEnabled() == ocr_before),
         "C PDF 모드로 오면 꺼 둔 명령이 되살아난다")
     chk(mw._favorites == pdf_favs_before, "D PDF 모드 즐겨찾기 그대로")
     mw._set_photo_mode(True)

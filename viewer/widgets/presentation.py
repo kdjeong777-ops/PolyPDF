@@ -430,12 +430,16 @@ class PresentationWindow(QWidget):
                  pen_straight: bool = True, eraser_widths=None,
                  line_mode: int = 0, highlight_alpha: int = 35, timer_cfg=None,
                  render_source=None, other_screen: bool = False,
-                 back_zone_pct: int = BACK_ZONE_DEFAULT):
+                 back_zone_pct: int = BACK_ZONE_DEFAULT, photo: bool = False):
         super().__init__(parent)
+        # 261104-7(사진 보기 SOT 4.12 슬라이드쇼, 발표 SOT §6.4): 사진이면 사진 문서로 열고(Pillow 줄여 읽기 — 화면 크기만큼),
+        #   세로 사진에서 상하 2분할을 저절로 켜지 않고, 파일 경계는 무장 없이 바로 넘기고, DPI 하한(72)을 걸지 않는다
+        self._photo = bool(photo)
+        self._dpi_min = 1 if self._photo else 72
         # 261009-14(발표 SOT §2, 사용자 지시): 본문에 그린 선·도형·글·사진이 발표에도 보이게 — 그릴 원천은 꾸밈을
         #   구운 사본(`render_source`, 인쇄와 같은 굽기 마스터 §4.7.13), 크롭·숨김·회전·하이퍼링크의 열쇠는 원본 경로.
         self._render_source = render_source
-        self._doc = PdfDocument(str(self._render_path(file_path)))
+        self._doc = self._open_doc(file_path)
         self._path = Path(str(file_path))
         self._page = max(0, min(self._doc.page_count - 1, int(page0)))
         self._numbuf = ""
@@ -1317,6 +1321,20 @@ class PresentationWindow(QWidget):
                 return 0
         return 0
 
+    def _open_doc(self, path):
+        """그릴 문서 — 사진(구운 사본이 아닌 그림)이면 사진 문서, 아니면 PDF."""
+        rp = str(self._render_path(path))
+        if getattr(self, "_photo", False) and not rp.lower().endswith(".pdf"):
+            from viewer.photo_doc import open_document
+            return open_document(rp)
+        return PdfDocument(rp)
+
+    def refresh_photo(self, path) -> None:
+        """사진 배경 해독이 끝났다 — 이 사진을 보이는 중이면 임시 그림 대신 다시 그린다(앱이 부른다)."""
+        if getattr(self, "_photo", False) and str(self._path) == str(path):
+            self._pm_cache = {}
+            self._render()
+
     def _render_path(self, path):
         """그릴 PDF — 꾸밈을 구운 사본이 있으면 그것(없거나 실패하면 원본)."""
         fn = getattr(self, "_render_source", None)
@@ -1349,7 +1367,9 @@ class PresentationWindow(QWidget):
         return ph >= pw
 
     def _orient_split_default(self):
-        """260611-27: 페이지 세로길이>가로길이(세로 페이지)일 때만 분할 기본 ON."""
+        """260611-27: 페이지 세로길이>가로길이(세로 페이지)일 때만 분할 기본 ON. 사진은 늘 끔(261104-7)."""
+        if getattr(self, "_photo", False):
+            return False
         try:
             pw, ph = self._page_points()
             return ph > pw
@@ -1425,7 +1445,7 @@ class PresentationWindow(QWidget):
             return None
         try:
             if self._page_is_split():
-                dpi = max(72, min(400, int(sw * 72.0 / vw)))      # 크롭 후 폭맞춤
+                dpi = max(self._dpi_min, min(400, int(sw * 72.0 / vw)))      # 크롭 후 폭맞춤
                 pm = self._render_cropped(dpi)
                 H = pm.height()
                 ov = int(H * self._overlap_frac)
@@ -1449,7 +1469,7 @@ class PresentationWindow(QWidget):
                         _p.end()
             else:
                 dpi = min(sw * 72.0 / vw, sh * 72.0 / vh)
-                dpi = max(72, min(400, int(dpi)))
+                dpi = max(self._dpi_min, min(400, int(dpi)))
                 pm = self._render_cropped(dpi)
             # 260615-2 / 260905(§4.1.3): 화면 채움 — 비율 무시하고 sw×sh 로 늘려 전체 채움.
             #   종전에는 `not self._page_is_split()` 조건 탓에 상하 2분할(세로 페이지 기본 ON)
@@ -1568,7 +1588,7 @@ class PresentationWindow(QWidget):
             if tot_w <= 0 or tot_h <= 0:
                 return None
             scale = min(max(1, sw - gap) / tot_w, sh / tot_h)
-            dpi = max(72, min(400, int(scale * 72.0)))
+            dpi = max(self._dpi_min, min(400, int(scale * 72.0)))
             pms = {p: self._render_cropped(dpi, p) for p in szs}
             pw_l = pms[left].width() if left is not None else int(wl * dpi / 72.0)
             pw_r = pms[right].width() if right is not None else int(wr * dpi / 72.0)
@@ -1642,7 +1662,7 @@ class PresentationWindow(QWidget):
         p.fillRect(0, 0, sw, sh, QColor(0, 0, 0, 150))      # 흐리게(딤)
         # 형제 파일 미리보기(50%)
         try:
-            d = PdfDocument(str(self._armed_path))
+            d = self._open_doc(self._armed_path)
             pg = (d.page_count - 1) if self._armed < 0 else 0
             r = d.doc.load_page(pg).rect
             pw, ph = float(r.width), float(r.height)
@@ -1740,6 +1760,9 @@ class PresentationWindow(QWidget):
             sib = None
         if not sib:
             return False
+        if getattr(self, "_photo", False):
+            self._switch_file(sib, to_end=direction < 0)     # 사진은 무장 없이 바로 다음 사진(261104-7)
+            return True
         self._armed = direction
         self._armed_path = sib
         self._render()
@@ -1756,7 +1779,7 @@ class PresentationWindow(QWidget):
             self._doc.close()
         except Exception:
             pass
-        self._doc = PdfDocument(str(self._render_path(path)))
+        self._doc = self._open_doc(path)
         self._path = Path(str(path))
         self.setWindowTitle(tr('발표 — {name}').format(name=self._path.name))
         self._strokes = {}            # 260609-25(I4): 파일 바뀌면 화면 선 초기화(파일별 적용)
@@ -2148,9 +2171,9 @@ class PresentationWindow(QWidget):
             pass
         sw, sh = max(1, self.width()), max(1, self.height())
         if self._page_is_split():
-            dpi = max(72, min(400, int(sw * 72.0 / vw)))
+            dpi = max(self._dpi_min, min(400, int(sw * 72.0 / vw)))
         else:
-            dpi = max(72, min(400, int(min(sw * 72.0 / vw, sh * 72.0 / vh))))
+            dpi = max(self._dpi_min, min(400, int(min(sw * 72.0 / vw, sh * 72.0 / vh))))
         return dpi / 72.0
 
     def _avg_line_height_screen(self):

@@ -7664,7 +7664,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _open_presentation(self):
         """현재 활성 창의 PDF·페이지를 전체화면 발표 창으로 연다(F5)."""
         cur = self.main_view.current_file() if self.main_view else None
-        if not cur or not str(cur).lower().endswith(".pdf"):
+        # 261104-7(사진 보기 SOT 4.12): 사진 모드면 사진 슬라이드쇼 — 같은 발표 창(사진 문서·사진 목록·자동 넘김)
+        photo = bool(cur) and getattr(self, "_photo_mode", False) and self._is_photo_path(cur) \
+            and not getattr(getattr(self.main_view, "_doc", None), "is_broken", False)
+        if not cur or not (str(cur).lower().endswith(".pdf") or photo):
             QMessageBox.information(self, tr("안내"), tr("먼저 PDF를 표시하세요."))
             return
         # 260611-2: 편집모드면 '저장 여부 처리(저장/되돌리기/계속편집)' 후 곧바로 전체화면 실행.
@@ -7684,7 +7687,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._present = PresentationWindow(cur, page, self,
                                            pointers=pointers, pointer_active=active,
                                            overlap_pct=overlap,
-                                           sibling_resolver=self._presentation_sibling,
+                                           sibling_resolver=(self._photo_sibling if photo else self._presentation_sibling),
                                            hyperlink_resolver=self._presentation_hyperlinks,
                                            bookmark_resolver=self._presentation_bookmarks,
                                            # 260905(발표 SOT §4.1): 좌우 2쪽·맞쪽은 영속 설정
@@ -7704,7 +7707,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                            highlight_alpha=self._draw_highlight_alpha(),
                                            timer_cfg=self._prefs.get("presentation_timer"),  # 260611-19
                                            # 261009-14(사용자 지시): 본문 꾸밈(선·도형·글·사진)을 구운 사본으로 그린다 — 하이퍼링크는 발표 단추로
-                                           render_source=lambda p: self._baked_src(p, include_links=False),
+                                           render_source=(self._photo_slide_src if photo
+                                                          else (lambda p: self._baked_src(p, include_links=False))),
+                                           photo=photo,
                                            # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' 기억
                                            other_screen=bool(self._prefs.get("presentation_other_screen", False)),
                                            # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%)
@@ -7735,6 +7740,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._present.pointerChanged.connect(self._on_pointer_changed)
         self._present.pointerSettingsRequested.connect(self._on_pointer_settings)
         self._present.show_presentation()
+        if photo:
+            self._photo_slideshow_started()          # 261104-7: 자동 넘김·다음 사진 미리 풀기
 
     def _on_pointer_changed(self, idx: int):
         self._prefs["presentation_pointer_active"] = int(idx)

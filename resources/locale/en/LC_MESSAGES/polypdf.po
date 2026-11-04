@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 15:40+0900\n"
+"POT-Creation-Date: 2026-11-04 16:15+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -9543,6 +9543,18 @@ msgid "혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고
 msgstr "In Mixed, the leftmost ribbon button turns photo mode (PolyPix) on and off. PDF only does not use photo mode."
 
 #: viewer/widgets/settings_dialog.py
+msgid " 초"
+msgstr " s"
+
+#: viewer/widgets/settings_dialog.py
+msgid "끔"
+msgstr "Off"
+
+#: viewer/widgets/settings_dialog.py
+msgid "사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격마다 다음 사진으로 넘어갑니다. 0 이면 넘기지 않습니다."
+msgstr "A slideshow opened with Presentation (F5) in photo mode moves to the next photo at this interval. 0 turns it off."
+
+#: viewer/widgets/settings_dialog.py
 msgid "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). 2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
 msgstr "<small>Continuous view shows the previous/next pages above and below the current one, and the page at the center of the screen becomes the current page (the text panel follows it). Two-page view and screenshot view are single-page.</small>"
 
@@ -9810,6 +9822,10 @@ msgstr "Light page turning (slow computers):"
 #: viewer/widgets/settings_dialog.py
 msgid "보기 종류:"
 msgstr "View type:"
+
+#: viewer/widgets/settings_dialog.py
+msgid "슬라이드쇼 자동 넘김:"
+msgstr "Slideshow auto-advance:"
 
 #: viewer/widgets/settings_dialog.py
 msgid "현재 설정을 기본값으로 저장(배포용)…"
