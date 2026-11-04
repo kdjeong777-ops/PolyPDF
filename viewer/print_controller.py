@@ -26,8 +26,12 @@ __all__ = ["PrintMixin"]
 class PrintMixin:
     """MainWindow 에 믹스인되는 인쇄·PDF 내보내기 메서드 모음."""
 
-    def action_print(self, preset_scope=None):
-        """인쇄 창. 261016-2(마스터 §4.7.7·§4.7.20): 썸네일·본문 우클릭 '인쇄…' 도 이 창 — `preset_scope`('current'|'thumb')가 범위 기본값."""
+    def action_print(self, preset_scope=None, photo_pdf=None):
+        """인쇄 창. 261016-2(마스터 §4.7.7·§4.7.20): 썸네일·본문 우클릭 '인쇄…' 도 이 창 — `preset_scope`('current'|'thumb')가 범위 기본값.
+        261104-3(사진 보기 SOT 4.21): 사진 모드면 사진을 보이는 그대로의 임시 PDF 로 만들어(`photo_pdf` = (경로, 지금 쪽)) 같은 창·같은 갈래로."""
+        if photo_pdf is None and getattr(self, "_photo_mode", False) and self._is_photo_path(self.main_view.current_file() or ""):
+            self._photo_print(preset_scope)
+            return
         cur = self.main_view.current_file()
         is_pdf = bool(cur and str(cur).lower().endswith(".pdf"))
         pc = (self.main_view._doc.page_count
@@ -39,6 +43,12 @@ class PrintMixin:
             sel_files = self.bookmark_tree.selected_file_paths()
         except Exception:
             sel_files = []
+        if photo_pdf is not None:
+            import fitz as _fz
+            cur, cur_page = str(photo_pdf[0]), int(photo_pdf[1])
+            with _fz.open(cur) as _d:
+                pc = _d.page_count
+            is_pdf, n_thumb, sel_files = True, 0, []
         n_files = len(sel_files)
         if not is_pdf and self.shot_strip.list.count() == 0 and n_files == 0:
             QMessageBox.information(self, tr("인쇄"), tr("인쇄할 문서가 없습니다."))
@@ -257,14 +267,20 @@ class PrintMixin:
         name = Path(paths[0]).stem
         gen = self._gen_source_bookmarks
 
+        # 261104-3(사진 보기 SOT 4.21): 사진 모드의 꾸밈·보기 회전은 **다단으로 묶기 전에** 쪽마다 굽는다(메인) — 그래서 두 단계로 나눈다
+        photo_bake = bool(getattr(self, "_photo_mode", False)) and any(
+            any(self._photo_needs_bake(p)) for p in paths if self._is_photo_path(p))
+        if photo_bake:
+            paths = self._photo_readable(paths)          # 쪽 차례 = 사진 차례(읽지 못한 사진은 쪽이 빠진다)
+
         def _job(progress, _paths=paths, _base=base, _out=out_final,
-                 _nup=nup, _s=settings, _name=name, _gen=gen):
+                 _nup=nup, _s=settings, _name=name, _gen=gen, _split=photo_bake):
             # 다단은 QImage 로 정규화·축소(이형/손상 포맷·초대용량으로 build_twoup 가
             # 멈추던 문제 방지). 다단을 끄면 원본 그대로 삽입(무손실).
             # 261021-4(이미지→PDF SOT §3, 사용자 결정): 다단 1장(1-up)도 '다단' 이라 축소한다.
             if not self._images_to_pdf(_paths, _base, progress, downscale=_nup):
                 return
-            if _nup:
+            if _nup and not _split:
                 from viewer.twoup import build_twoup
                 build_twoup([{"type": "pdf", "path": _base, "name": _name}], _s, _out,
                             gen_bookmarks_fn=_gen, progress=progress)
@@ -276,6 +292,19 @@ class PrintMixin:
         if res.get("err"):
             QMessageBox.warning(self, tr("이미지 → PDF"), res["err"])
             return
+        if photo_bake and Path(base).exists():
+            baked = self._photo_bake_pdf(base, paths)
+            if not nup:
+                out_final = baked
+            else:
+                def _job2(progress, _b=baked, _out=out_final, _s=settings, _name=name, _gen=gen):
+                    from viewer.twoup import build_twoup
+                    build_twoup([{"type": "pdf", "path": _b, "name": _name}], _s, _out,
+                                gen_bookmarks_fn=_gen, progress=progress)
+                res = self._run_merge_job(_job2, tr('이미지 → PDF{v}').format(v=tr(' (다단)')))
+                if res.get("cancelled") or res.get("err"):
+                    self.status.showMessage(res.get("err") or tr("취소했습니다."), 4000)
+                    return
         import fitz as _f
         try:
             nd = _f.open(out_final); npg = nd.page_count; nd.close()
@@ -287,7 +316,10 @@ class PrintMixin:
         dst = self._save_pdf_dialog(default_name)
         if dst and self._copy_pdf(out_final, dst):
             self.status.showMessage(tr('PDF 저장: {dst}').format(dst=dst), 4000)
-            self._after_pdf_created(dst)
+            if getattr(self, "_photo_mode", False):
+                self._open_pdf_new_window(dst)      # 261104-3(사진 보기 SOT 4.6·D6): 사진에서 만든 PDF 는 새 창(PDF 모드)으로 바로
+            else:
+                self._after_pdf_created(dst)
 
     def _build_nup_pdf(self, cur, pages, settings):
         """260611-37/54: 선택 페이지를 다단(N-up)으로 구성(목차 제외). 출력 PDF 경로 반환(실패 None)."""

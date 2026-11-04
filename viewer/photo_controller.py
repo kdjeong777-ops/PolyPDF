@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QObject, QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QToolButton
+from PyQt6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton
 
 from pathlib import Path
 
@@ -20,7 +20,7 @@ VIEW_PDF = "pdf"                 # 'PDF 전용' — 사진 모드 없음(기본)
 VIEW_MIXED = "mixed"             # '혼용' — PDF 모드 ↔ 사진 모드
 MODE_ICON_PX = 20                # 탭 줄 높이 안 — 탭 글자보다 크게(261104-2 사용자 지시). TV 그림은 가로로 길어 실제 높이는 약 15px
 # 사진 모드에서 끄는 명령(사진 보기 SOT 4.13 표) — 사진에 뜻이 없거나 사진용 동작이 아직 없는 것(평탄화·인쇄는 P2 에서 사진용으로 켠다)
-PHOTO_OFF_CMDS = ("file.save_as", "file.export", "file.flatten", "file.print",
+PHOTO_OFF_CMDS = ("file.save_as", "file.export",                     # 인쇄·평탄화는 사진용으로 켠다(261104-3, 4.21)
                   "fav.recent_searches", "fav.searches", "fav.add_search",
                   "view.text", "view.study", "view.search", "view.present",
                   "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
@@ -468,7 +468,7 @@ class PhotoMixin:
         extra = {}
         for key, label in (("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
                            ("reveal", tr("파일 탐색기 열기")), ("info", tr("사진 정보...")),
-                           ("to_pdf", tr("PDF 로 만들기..."))):
+                           ("to_pdf", tr("PDF 로 만들기...")), ("print", tr("인쇄…")), ("flatten", tr("평탄화..."))):
             a = menu.addAction(label)
             a.setEnabled(not broken or key in ("copy_path", "reveal"))
             extra[a] = key
@@ -579,7 +579,11 @@ class PhotoMixin:
             self.status.showMessage(tr("사진 복사 중…"), 2000)
             run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
         elif kind == "to_pdf":
-            self.action_image_to_pdf(initial_paths=paths)      # 이미지 → PDF 창(이미지 PDF SOT) — 고른 사진을 미리 넣는다
+            self.action_image_to_pdf(initial_paths=paths)      # 이미지 → PDF 창(이미지 PDF SOT) — 고른 사진을 미리 넣는다(4.21: 굽기·새 창)
+        elif kind == "print":
+            self._photo_print()
+        elif kind == "flatten":
+            self._photo_flatten(paths[0])
         elif kind == "reveal":
             try:
                 self.bookmark_tree._reveal_in_explorer(paths[0])
@@ -630,6 +634,122 @@ class PhotoMixin:
             self._photo_action("to_pdf", allp)
         elif chosen in acts:
             self._photo_action(acts[chosen], [path])
+
+    # ── 사진 → PDF·인쇄·평탄화 (P2 ④, 4.21) ─────────────────────────────
+    def _photo_needs_bake(self, path) -> tuple:
+        """(보기 회전, 꾸밈이 있는가) — 사진을 PDF·그림으로 내보낼 때 보이는 그대로가 되도록."""
+        rot = self._photo_rot_for(path)
+        st = self._ensure_page_meta_store()
+        deco = bool(st and (0 in set(st.pages_with_drawings(path)) or 0 in set(st.pages_with_images(path))))
+        return rot, deco
+
+    def _photo_bake_pdf(self, pdf_path: str, paths: list) -> str:
+        """사진을 쪽마다 하나씩 넣은 PDF(`paths` 와 같은 차례)에 꾸밈을 굽고 보기 회전을 `/Rotate` 로 — 보이는 그대로.
+        굽기 그림은 메인(마스터 §4.7.16 과 같은 길 — 사진 몇 장은 짧다). 고칠 것이 없으면 받은 경로 그대로."""
+        need = [(i, p) + self._photo_needs_bake(p) for i, p in enumerate(paths)]
+        need = [t for t in need if t[2] or t[3]]
+        if not need:
+            return pdf_path
+        import fitz
+        doc = fitz.open(pdf_path)
+        try:
+            if doc.page_count != len(paths):
+                return pdf_path                      # 차례가 어긋났다(읽지 못한 사진) — 굽지 않는다
+            for i, p, rot, deco in need:
+                if deco:
+                    sub = fitz.open()
+                    sub.insert_pdf(doc, from_page=i, to_page=i)
+                    try:
+                        self._bake_decorations(sub, p)
+                    except Exception:
+                        pass
+                    doc.delete_page(i)
+                    doc.insert_pdf(sub, start_at=i)
+                    sub.close()
+                if rot:
+                    doc[i].set_rotation((doc[i].rotation + rot) % 360)
+            out = str(Path(pdf_path).with_name(Path(pdf_path).stem + "_baked.pdf"))
+            doc.save(out, garbage=3, deflate=True)
+            return out
+        finally:
+            doc.close()
+
+    def _photo_readable(self, paths) -> list:
+        from viewer.photo_io import oriented_size
+        return [str(p) for p in paths if oriented_size(p)[0]]
+
+    def _photo_make_pdf(self, paths, name: str = "") -> str | None:
+        """사진들 → 보이는 그대로의 임시 PDF(사진 한 장 = 한 쪽, 원본 그대로 넣기·GPS 빼기 G6). 배경 진행창 + 메인 굽기."""
+        paths = self._photo_readable(paths)
+        if not paths:
+            return None
+        tmp = self._mk_print_tmpdir("polypdf_photopdf_")
+        stem = name or (Path(paths[0]).stem if len(paths) == 1 else tr('사진 {n}장').format(n=len(paths)))
+        base = str(tmp / (stem + ".pdf"))
+
+        def _job(progress, _p=list(paths), _b=base):
+            self._images_to_pdf(_p, _b, progress, downscale=False)
+        res = self._run_merge_job(_job, tr("사진 → PDF"))
+        if res.get("cancelled") or res.get("err") or not Path(base).exists():
+            return None
+        return self._photo_bake_pdf(base, paths)
+
+    def _photo_print(self, preset_scope=None):
+        """사진 인쇄(4.21) — 책갈피창에서 여러 장 골랐으면 그것, 아니면 지금 사진. 보이는 그대로의 임시 PDF 를 같은 인쇄 창에."""
+        cur = self.main_view.current_file() if self.main_view else None
+        try:
+            sel = [p for p in self.bookmark_tree.selected_file_paths() if self._is_photo_path(p)]
+        except Exception:
+            sel = []
+        paths = sel if len(sel) > 1 else ([cur] if cur else [])
+        pdf = self._photo_make_pdf(paths)
+        if not pdf:
+            QMessageBox.information(self, tr("인쇄"), tr("인쇄할 사진이 없습니다."))
+            return
+        here = 0
+        if cur and cur in paths:
+            here = self._photo_readable(paths).index(cur) if cur in self._photo_readable(paths) else 0
+        self.action_print(preset_scope=preset_scope, photo_pdf=(pdf, here))
+
+    def _photo_flatten(self, path):
+        """사진 평탄화(D4, 4.21) — 꾸밈을 굽고 보기 회전까지 적용한 **새 그림 파일**을 원본 옆에. 원본은 그대로."""
+        rot, deco = self._photo_needs_bake(path)
+        if not rot and not deco:
+            QMessageBox.information(self, tr("평탄화"), tr("이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향이 없습니다."))
+            return
+        if self.__dict__.get("_photo_flat_busy"):
+            return
+        overlay = None
+        if deco:
+            import fitz
+            from viewer.photo_io import oriented_size
+            w0, h0 = oriented_size(path)
+            ov = fitz.open()
+            ov.new_page(width=w0, height=h0)
+            try:
+                self._bake_decorations(ov, path)          # 빈 쪽에 꾸밈만(메인 — 굽기 그림은 Qt)
+                overlay = ov.tobytes()
+            finally:
+                ov.close()
+        from viewer.workers import run_in_thread
+        self._photo_flat_busy = True
+        w = PhotoFlattenWorker(str(path), rot, overlay)
+        w.done.connect(self._photo_flattened)
+        self.status.showMessage(tr("평탄화 중…"), 3000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_flattened(self, src: str, out: str, why: str):
+        self._photo_flat_busy = False
+        if not out:
+            self.status.showMessage(tr("평탄화하지 못했습니다 — 원본은 그대로입니다."), 6000)
+            return
+        try:
+            for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                if bt is not None and hasattr(bt, "add_or_refresh_file"):
+                    bt.add_or_refresh_file(out, after=src)
+        except Exception:
+            pass
+        self.status.showMessage(tr("평탄화한 새 사진: {name}").format(name=Path(out).name), 6000)
 
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""
@@ -788,6 +908,70 @@ class PhotoCopyWorker(QObject):
             img = None
         finally:
             self.done.emit(self.path, img)
+            self.finished.emit()
+
+
+FLAT_JPEG_QUALITY = 95          # 평탄화한 JPEG 화질(다시 압축 — 꾸밈을 그림에 굽는다)
+
+
+class PhotoFlattenWorker(QObject):
+    """사진 평탄화(4.21) — 배경: 원본(방향 세움) 위에 꾸밈 겹(PDF 한 쪽)을 같은 크기로 그려 얹고, 보기 회전까지 돌려
+    같은 폴더 임시 파일에 쓴 뒤 **새 이름**으로 옮긴다(원본은 덮어쓰지 않는다 — os.replace 도 배경). 응답성 SOT §4.4 감사표의 한 행."""
+    done = pyqtSignal(str, str, str)          # 원본, 새 파일(실패면 ""), 까닭
+    finished = pyqtSignal()
+
+    def __init__(self, path: str, rot: int, overlay: bytes | None):
+        super().__init__()
+        self.path, self.rot, self.overlay = path, int(rot or 0) % 360, overlay
+
+    def request_cancel(self):
+        pass
+
+    def run(self):
+        import os
+        out, why, tmp = "", "", None
+        try:
+            from PIL import Image, ImageOps
+            from viewer import photo_doc, photo_io
+            from viewer.pathutil import unique_path
+            src = Path(self.path)
+            photo_io._prep(src)
+            with Image.open(str(src)) as im:
+                icc = im.info.get("icc_profile")
+                im = ImageOps.exif_transpose(im)
+                im = photo_io.to_srgb(im, icc).convert("RGBA")
+            if self.overlay:
+                import fitz
+                d = fitz.open("pdf", self.overlay)
+                try:
+                    pm = d[0].get_pixmap(alpha=True)            # 쪽 pt = 사진 픽셀(D14) — 1:1
+                    ov = Image.frombytes("RGBA", (pm.width, pm.height), pm.samples)
+                finally:
+                    d.close()
+                if ov.size != im.size:
+                    ov = ov.resize(im.size)
+                im = Image.alpha_composite(im, ov)
+            im = photo_doc._rotate(im, self.rot)
+            jpeg = src.suffix.lower() in (".jpg", ".jpeg") or photo_io.is_heif(src)
+            ext = ".jpg" if jpeg else ".png"
+            from viewer.i18n import tr as _tr
+            dst = unique_path(src.with_name(_tr('{stem}_평탄화').format(stem=src.stem) + ext))
+            tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
+            if jpeg:
+                im.convert("RGB").save(str(tmp), "JPEG", quality=FLAT_JPEG_QUALITY)   # EXIF·GPS 는 싣지 않는다
+            else:
+                im.save(str(tmp), "PNG")
+            os.replace(str(tmp), str(dst))
+            tmp, out = None, str(dst)
+        except Exception as e:                                   # noqa: BLE001 — 원본은 손대지 않았다
+            why = type(e).__name__
+        finally:
+            if tmp is not None:
+                try:
+                    Path(tmp).unlink()
+                except OSError:
+                    pass
+            self.done.emit(self.path, out, why)
             self.finished.emit()
 
 

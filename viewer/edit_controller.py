@@ -636,6 +636,9 @@ class EditMixin:
         """
         cur = str(file_path) if file_path else (
             self.main_view.current_file() if self.main_view else None)
+        if cur and getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+            self._photo_flatten(cur)                  # 261104-3(사진 보기 SOT 4.21, D4): 사진은 꾸밈 구운 새 그림
+            return
         if not cur or not str(cur).lower().endswith(".pdf"):
             QMessageBox.information(self, tr("안내"), tr("먼저 PDF를 표시하세요."))
             return

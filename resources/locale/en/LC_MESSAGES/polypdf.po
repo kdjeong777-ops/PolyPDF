@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 13:25+0900\n"
+"POT-Creation-Date: 2026-11-04 13:37+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -332,7 +332,7 @@ msgstr "Save"
 msgid "다른 이름"
 msgstr "Save As"
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "평탄화"
 msgstr "Flatten"
 
@@ -2125,7 +2125,7 @@ msgstr "Saving with reduced size… (this may take a while)"
 msgid "저장 중…"
 msgstr "Saving…"
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "인쇄…"
 msgstr "Print…"
 
@@ -2394,7 +2394,8 @@ msgstr "Open Folder"
 msgid "파일 열기"
 msgstr "Open File"
 
-#: viewer/app.py viewer/print_controller.py viewer/widgets/print_dialog.py
+#: viewer/app.py viewer/photo_controller.py viewer/print_controller.py
+#: viewer/widgets/print_dialog.py
 msgid "인쇄"
 msgstr "Print"
 
@@ -3968,6 +3969,14 @@ msgstr "Actual Size (100%)"
 msgid "방향 저장 중…"
 msgstr "Saving orientation…"
 
+#: viewer/photo_controller.py
+msgid "사진 → PDF"
+msgstr "Photos → PDF"
+
+#: viewer/photo_controller.py
+msgid "평탄화 중…"
+msgstr "Flattening…"
+
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py
 msgid "형식"
@@ -4062,6 +4071,10 @@ msgid "PDF 로 만들기..."
 msgstr "Make PDF..."
 
 #: viewer/photo_controller.py
+msgid "평탄화..."
+msgstr "Flatten..."
+
+#: viewer/photo_controller.py
 msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
 msgstr "Orientation can be saved only for JPEG photos — this photo stays rotated in the view only."
 
@@ -4080,6 +4093,18 @@ msgstr "Path copied."
 #: viewer/photo_controller.py
 msgid "사진을 복사하지 못했습니다."
 msgstr "Could not copy the photo."
+
+#: viewer/photo_controller.py
+msgid "인쇄할 사진이 없습니다."
+msgstr "There is no photo to print."
+
+#: viewer/photo_controller.py
+msgid "이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향이 없습니다."
+msgstr "This photo has no markups (lines, shapes, text, images) or rotation to bake in."
+
+#: viewer/photo_controller.py
+msgid "평탄화하지 못했습니다 — 원본은 그대로입니다."
+msgstr "Could not flatten — the original is unchanged."
 
 #: viewer/photo_controller.py
 msgid "마지막 사진입니다."
@@ -4107,6 +4132,11 @@ msgstr "Copying photo…"
 msgid "사진을 복사했습니다: {name}"
 msgstr "Photo copied: {name}"
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "평탄화한 새 사진: {name}"
+msgstr "New flattened photo: {name}"
+
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
 msgstr "Cannot open this file"
@@ -4119,6 +4149,11 @@ msgstr "Another program is using the photo, so the orientation was not saved —
 #, python-brace-format
 msgid "줄의 사진 {n}장으로 PDF 만들기..."
 msgstr "Make PDF from the {n} photos in the strip..."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장"
+msgstr "{n} photos"
 
 #: viewer/photo_doc.py
 msgid "그림 형식이 아니거나 파일이 깨졌습니다."

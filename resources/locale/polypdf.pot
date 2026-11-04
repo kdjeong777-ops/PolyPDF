@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 13:25+0900\n"
+"POT-Creation-Date: 2026-11-04 13:37+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -332,7 +332,7 @@ msgstr ""
 msgid "다른 이름"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "평탄화"
 msgstr ""
 
@@ -2073,7 +2073,7 @@ msgstr ""
 msgid "저장 중…"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "인쇄…"
 msgstr ""
 
@@ -2323,7 +2323,8 @@ msgstr ""
 msgid "파일 열기"
 msgstr ""
 
-#: viewer/app.py viewer/print_controller.py viewer/widgets/print_dialog.py
+#: viewer/app.py viewer/photo_controller.py viewer/print_controller.py
+#: viewer/widgets/print_dialog.py
 msgid "인쇄"
 msgstr ""
 
@@ -3831,6 +3832,14 @@ msgstr ""
 msgid "방향 저장 중…"
 msgstr ""
 
+#: viewer/photo_controller.py
+msgid "사진 → PDF"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "평탄화 중…"
+msgstr ""
+
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py
 msgid "형식"
@@ -3925,6 +3934,10 @@ msgid "PDF 로 만들기..."
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "평탄화..."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
 msgstr ""
 
@@ -3942,6 +3955,18 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "사진을 복사하지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "인쇄할 사진이 없습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향이 없습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "평탄화하지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -3970,6 +3995,11 @@ msgstr ""
 msgid "사진을 복사했습니다: {name}"
 msgstr ""
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "평탄화한 새 사진: {name}"
+msgstr ""
+
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
 msgstr ""
@@ -3981,6 +4011,11 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "줄의 사진 {n}장으로 PDF 만들기..."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장"
 msgstr ""
 
 #: viewer/photo_doc.py
