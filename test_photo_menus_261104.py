@@ -147,9 +147,14 @@ try:
     st = mw._ensure_page_meta_store()
     chk(st.photo_rotation(b) == 90 and Path(mw.main_view.current_file()).name == "a 가로.jpg",
         "D 지금 사진이 아닌 칸도 돌린다(본문은 그대로)", str(st.photo_rotation(b)))
-    ico = strip._items[b].icon().pixmap(strip.iconSize())
-    chk(pump(lambda: (lambda pm: pm.height() > pm.width())(strip._items[b].icon().pixmap(strip.iconSize())), timeout=5),
-        "D 그 썸네일이 돌아 보인다(세로)", str((ico.width(), ico.height())))
+    def drawn_wh(it):
+        """칸 그림 자리 안에서 실제 그림이 차지한 폭·높이(투명 여백 뺌 — photo_strip.boxed, 261104-8)."""
+        im = it.icon().pixmap(strip.iconSize()).toImage()
+        xs = [x for x in range(im.width()) if im.pixelColor(x, im.height() // 2).alpha() > 0]
+        ys = [y for y in range(im.height()) if im.pixelColor(im.width() // 2, y).alpha() > 0]
+        return (len(xs), len(ys))
+    chk(pump(lambda: (lambda wh: wh[1] > wh[0])(drawn_wh(strip._items[b])), timeout=5),
+        "D 그 썸네일이 돌아 보인다(세로)", str(drawn_wh(strip._items[b])))
 
     # E
     mw._photo_context_menu(QPoint(10, 10))

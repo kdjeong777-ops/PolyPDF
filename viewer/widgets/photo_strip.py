@@ -104,6 +104,22 @@ def label_text(path, w: int = 0, h: int = 0, unreadable: bool = False) -> str:
     return Path(str(path)).stem + "\n" + second
 
 
+def boxed(pm: QPixmap, box: QSize) -> QPixmap:
+    """썸네일을 칸 그림 자리(box) 가운데에 — 투명 여백으로 늘 같은 크기. 목록은 아이콘의 **실제 크기** 바로 밑에 글을 놓아,
+    납작한 그림(181×50 등)이면 글이 위로 붙고 칸 아래가 비었다(261104-8 사용자 보고). 그림 자리를 같게 해 글 자리도 같다."""
+    if pm.size() == box:
+        return pm
+    out = QPixmap(box)
+    out.fill(Qt.GlobalColor.transparent)
+    from PyQt6.QtGui import QPainter
+    p = QPainter(out)
+    try:
+        p.drawPixmap((box.width() - pm.width()) // 2, (box.height() - pm.height()) // 2, pm)
+    finally:
+        p.end()
+    return out
+
+
 class PhotoThumbWorker(QObject):
     """썸네일 그림을 배경에서 만든다(응답성 SOT §4.4 감사표 한 행)."""
     done = pyqtSignal(int, str, QImage, int, int)     # 세대, 경로, 썸네일, 보이는 폭·높이(EXIF 방향 뒤 원본 픽셀, 못 읽으면 0)
@@ -309,7 +325,7 @@ class PhotoStrip(QListWidget):
             img = img.transformed(QTransform().rotate(rot))      # 작은 썸네일만 — 가볍다
         pm = QPixmap.fromImage(img).scaled(self.iconSize(), Qt.AspectRatioMode.KeepAspectRatio,
                                            Qt.TransformationMode.SmoothTransformation)
-        it.setIcon(QIcon(pm))
+        it.setIcon(QIcon(boxed(pm, self.iconSize())))
 
     def _on_clicked(self, it):
         self._key_pick.stop()                    # 클릭은 바로(타이머와 겹쳐 두 번 열지 않는다)

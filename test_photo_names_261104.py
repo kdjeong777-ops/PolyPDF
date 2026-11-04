@@ -6,6 +6,7 @@ A. 앞머리가 같은 긴 이름 둘 — 썸네일 칸에 그려진 이름이 �
 B. 상태 막대 가운데 사진 정보에 파일 이름이 있다
 C. zip 안 사진이면 'zip 이름 › 사진 이름'
 D. 빈칸·'-' 이 든 이름(스크린샷 2026-11-04 174958)도 접지 않는다 — 칸 글은 늘 두 줄(이름 한 줄·크기 한 줄)
+E. 납작한 그림(181×50)도 썸네일 그림 자리가 같다 — 글이 위로 붙어 칸 아래가 비지 않는다
 """
 import os, sys, tempfile, shutil, time, zipfile, io
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -61,6 +62,8 @@ try:
     Image.new("RGB", (320, 240), (160, 90, 90)).save(b, "JPEG")
     sc = tmp / "스크린샷 2026-11-04 174958.png"
     Image.new("RGB", (278, 149), (200, 200, 200)).save(sc, "PNG")
+    flat = tmp / "스크린샷 2026-11-04 093235.png"
+    Image.new("RGB", (181, 50), (60, 120, 200)).save(flat, "PNG")
     buf = io.BytesIO(); Image.new("RGB", (200, 150), (40, 140, 40)).save(buf, "JPEG")
     zp = tmp / "현장 사진.zip"
     with zipfile.ZipFile(zp, "w") as z:
@@ -74,10 +77,10 @@ try:
     mw._photo_apply_view_kind()
     mw._set_photo_mode(True)
     mw.open_folder(tmp)
-    pump(lambda: sum(1 for _ in bt._iter_file_nodes()) == 4)
+    pump(lambda: sum(1 for _ in bt._iter_file_nodes()) == 5)
     mw._on_bookmark_activated(str(a), 0); pump(timeout=0.8)
     strip = mw._photo_strip
-    pump(lambda: len(strip.paths()) == 3, timeout=5)
+    pump(lambda: len(strip.paths()) == 4, timeout=5)
     pump(lambda: all("×" in strip._items[p].text() for p in strip.paths()), timeout=5)
 
     # A
@@ -87,6 +90,10 @@ try:
     # D
     ns = drawn_name(strip, str(sc))
     chk(not strip.wordWrap() and ns.endswith("174958"), "D 빈칸 든 이름도 한 줄(끝이 보인다)·칸 글 두 줄", f"wrap={strip.wordWrap()} {ns!r}")
+    # E
+    sizes = {Path(p).name: strip._items[p].icon().actualSize(strip.iconSize()) for p in strip.paths()}
+    chk(all(sz == strip.iconSize() for sz in sizes.values()), "E 썸네일 그림 자리가 모두 같다(납작한 그림도)",
+        str({k: (v.width(), v.height()) for k, v in sizes.items()}))
     if os.environ.get("ZT_SHOT"):                  # 눈으로 볼 때만
         strip.grab().save(os.environ["ZT_SHOT"])
 
