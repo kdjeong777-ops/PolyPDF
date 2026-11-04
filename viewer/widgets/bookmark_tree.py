@@ -2685,7 +2685,8 @@ class BookmarkTree(QWidget):
                 _ps = [_dir_target]
             for _key, _label in (("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
                                  ("to_pdf", tr("PDF 로 만들기...") if len(_ps) == 1
-                                  else tr('고른 사진 {n}장으로 PDF 만들기...').format(n=len(_ps)))):
+                                  else tr('고른 사진 {n}장으로 PDF 만들기...').format(n=len(_ps))),
+                                 ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))):
                 if _key == "copy_image" and len(_ps) != 1:
                     continue
                 _pa = menu.addAction(_label)

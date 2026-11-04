@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 13:37+0900\n"
+"POT-Creation-Date: 2026-11-04 14:08+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3840,6 +3840,10 @@ msgstr ""
 msgid "평탄화 중…"
 msgstr ""
 
+#: viewer/photo_controller.py
+msgid "공유용 사본 만드는 중…"
+msgstr ""
+
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py
 msgid "형식"
@@ -3937,6 +3941,14 @@ msgstr ""
 msgid "평탄화..."
 msgstr ""
 
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "공유용 사본 (위치 지움)"
+msgstr ""
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "공유용 사본 (정보 모두 지움)"
+msgstr ""
+
 #: viewer/photo_controller.py
 msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
 msgstr ""
@@ -3967,6 +3979,10 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "평탄화하지 못했습니다 — 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4016,6 +4032,21 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 {n}장"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "공유용 사본: {name}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "공유용 사본 {n}장을 만들었습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr ""
 
 #: viewer/photo_doc.py

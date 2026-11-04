@@ -243,6 +243,28 @@ def jpeg_set_orientation(data: bytes, value: int) -> bytes | None:
     return bytes(buf[:after_app0]) + seg + bytes(buf[after_app0:])
 
 
+_META_MARKERS = (0xE1, 0xED, 0xFE)        # APP1(EXIF·XMP)·APP13(IPTC·포토샵)·COM(주석) — 공유용 사본에서 뺀다(사진 보기 SOT 4.22)
+
+
+def jpeg_strip_meta(data: bytes, orientation: int = 1) -> bytes | None:
+    """JPEG 의 정보 묶음(EXIF·XMP·IPTC·주석)을 모두 뺀다 — 그림 자료·색 프로필(APP2)·JFIF 는 그대로, 다시 압축 없음.
+    `orientation` 이 1 이 아니면 방향 태그 하나만 든 EXIF 를 새로 넣는다(빼면 세로 사진이 눕는다). JPEG 이 아니면 None."""
+    if data[:2] != b"\xff\xd8":
+        return None
+    out = bytearray(b"\xff\xd8")
+    for marker, start, end in _jpeg_segments(data):
+        if end is None:                                      # SOS — 그림 자료부터 끝까지 그대로
+            out += data[start:]
+            break
+        if marker in _META_MARKERS:
+            continue
+        out += data[start:end]
+    res = bytes(out)
+    if int(orientation or 1) != 1:
+        res = jpeg_set_orientation(res, int(orientation)) or res
+    return res
+
+
 def is_jpeg_file(path) -> bool:
     """진짜 JPEG 인가(머리 FF D8 FF) — `.JPG` 이름의 HEIC·동영상을 거른다."""
     try:

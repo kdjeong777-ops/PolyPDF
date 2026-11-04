@@ -468,7 +468,8 @@ class PhotoMixin:
         extra = {}
         for key, label in (("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
                            ("reveal", tr("파일 탐색기 열기")), ("info", tr("사진 정보...")),
-                           ("to_pdf", tr("PDF 로 만들기...")), ("print", tr("인쇄…")), ("flatten", tr("평탄화..."))):
+                           ("to_pdf", tr("PDF 로 만들기...")), ("print", tr("인쇄…")), ("flatten", tr("평탄화...")),
+                           ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))):
             a = menu.addAction(label)
             a.setEnabled(not broken or key in ("copy_path", "reveal"))
             extra[a] = key
@@ -580,6 +581,8 @@ class PhotoMixin:
             run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
         elif kind == "to_pdf":
             self.action_image_to_pdf(initial_paths=paths)      # 이미지 → PDF 창(이미지 PDF SOT) — 고른 사진을 미리 넣는다(4.21: 굽기·새 창)
+        elif kind in ("share_gps", "share_all"):
+            self._photo_share(paths, "gps" if kind == "share_gps" else "all")
         elif kind == "print":
             self._photo_print()
         elif kind == "flatten":
@@ -615,7 +618,8 @@ class PhotoMixin:
         items = [("open", tr("열기")), (None, None),
                  ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), (None, None),
                  ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")), (None, None),
-                 ("to_pdf", tr("PDF 로 만들기..."))]
+                 ("to_pdf", tr("PDF 로 만들기...")), (None, None),
+                 ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
         acts = {}
         for key, label in items:
             if key is None:
@@ -750,6 +754,36 @@ class PhotoMixin:
         except Exception:
             pass
         self.status.showMessage(tr("평탄화한 새 사진: {name}").format(name=Path(out).name), 6000)
+
+    def _photo_share(self, paths, mode: str = "gps"):
+        """공유용 사본(F5, 4.22) — 원본은 그대로, 같은 폴더에 '<이름>_공유'. 배경 워커 하나가 여러 장을 차례로."""
+        paths = self._photo_readable(paths)
+        if not paths or self.__dict__.get("_photo_share_busy"):
+            return
+        from viewer.workers import run_in_thread
+        self._photo_share_busy = True
+        w = PhotoShareWorker(paths, mode, {p: self._photo_rot_for(p) for p in paths})
+        w.done.connect(self._photo_shared)
+        self.status.showMessage(tr("공유용 사본 만드는 중…"), 3000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_shared(self, pairs: list, failed: list):
+        self._photo_share_busy = False
+        for src, out in pairs:
+            try:
+                for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                    if bt is not None and hasattr(bt, "add_or_refresh_file"):
+                        bt.add_or_refresh_file(out, after=src)
+            except Exception:
+                pass
+        if pairs and not failed:
+            msg = (tr("공유용 사본: {name}").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
+                   else tr("공유용 사본 {n}장을 만들었습니다.").format(n=len(pairs)))
+        elif pairs:
+            msg = tr("공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다.").format(n=len(pairs), m=len(failed))
+        else:
+            msg = tr("공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다.")
+        self.status.showMessage(msg, 6000)
 
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""
@@ -912,6 +946,92 @@ class PhotoCopyWorker(QObject):
 
 
 FLAT_JPEG_QUALITY = 95          # 평탄화한 JPEG 화질(다시 압축 — 꾸밈을 그림에 굽는다)
+SHARE_JPEG_QUALITY = 92         # 공유용 사본 — JPEG 이 아닌 사진(HEIC)을 JPEG 로 바꿀 때 화질(JPEG 원본은 다시 압축하지 않는다)
+
+
+class PhotoShareWorker(QObject):
+    """공유용 사본(사진 보기 SOT 4.22, F5) — 배경: 사진마다 같은 폴더 임시 파일에 쓰고 새 이름 '<이름>_공유' 로 옮긴다(원본 그대로).
+    JPEG: `gps` 면 GPS 만 비움(D16 `jpeg_strip_gps`), `all` 이면 정보 묶음을 모두 빼고 방향 태그만(`jpeg_strip_meta`) — 둘 다 다시 압축 없음,
+    보기 회전은 방향 태그로. 그 밖: HEIC 는 JPEG 로, 나머지는 같은 형식으로 정보 없이 다시 저장(방향·보기 회전은 픽셀로 세움)."""
+    done = pyqtSignal(list, list)          # [(원본, 사본)], [실패한 원본]
+    finished = pyqtSignal()
+
+    def __init__(self, paths, mode: str, rots: dict):
+        super().__init__()
+        self.paths, self.mode, self.rots = list(paths), mode, dict(rots or {})
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def _one(self, src: Path) -> str:
+        import os
+        from viewer import photo_doc, photo_io
+        from viewer.i18n import tr as _tr
+        from viewer.pathutil import unique_path
+        rot = int(self.rots.get(str(src), 0) or 0) % 360
+        jpeg = photo_io.is_jpeg_file(src)
+        if jpeg:
+            data = src.read_bytes()
+            o = photo_io.orientation(src)
+            new_o = photo_io.compose_orientation(o, rot) if rot else o
+            if self.mode == "all":
+                new = photo_io.jpeg_strip_meta(data, new_o)
+            else:
+                new = photo_io.jpeg_strip_gps(data)
+                if new_o != o:
+                    new = photo_io.jpeg_set_orientation(new, new_o)
+            if not new:
+                raise ValueError("jpeg")
+            ext = src.suffix if src.suffix.lower() in (".jpg", ".jpeg") else ".jpg"
+            payload, pil = new, None
+        else:
+            from PIL import Image, ImageOps
+            photo_io._prep(src)
+            with Image.open(str(src)) as im:
+                icc = im.info.get("icc_profile")
+                im = ImageOps.exif_transpose(im)
+                pil = photo_doc._rotate(photo_io.to_srgb(im, icc), rot)
+                pil.load()
+            heif = photo_io.is_heif(src)
+            ext = ".jpg" if heif else src.suffix
+            payload = None
+        dst = unique_path(src.with_name(_tr('{stem}_공유').format(stem=src.stem) + ext))
+        tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
+        try:
+            if payload is not None:
+                tmp.write_bytes(payload)
+            elif ext.lower() in (".jpg", ".jpeg"):
+                pil.convert("RGB").save(str(tmp), "JPEG", quality=SHARE_JPEG_QUALITY)      # EXIF·GPS 를 싣지 않는다
+            else:
+                fmt = {".png": "PNG", ".tif": "TIFF", ".tiff": "TIFF", ".bmp": "BMP", ".webp": "WEBP", ".gif": "GIF"}.get(ext.lower(), "PNG")
+                if fmt == "PNG" and ext.lower() != ".png":
+                    dst = unique_path(dst.with_suffix(".png"))
+                pil.save(str(tmp), fmt)
+            os.replace(str(tmp), str(dst))
+            return str(dst)
+        finally:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+
+    def run(self):
+        from viewer import pacing
+        ok, bad = [], []
+        try:
+            for p in self.paths:
+                if self._cancel:
+                    break
+                try:
+                    ok.append((p, self._one(Path(p))))
+                except Exception:
+                    bad.append(p)
+                pacing.pace(self)
+        finally:
+            self.done.emit(ok, bad)
+            self.finished.emit()
 
 
 class PhotoFlattenWorker(QObject):
