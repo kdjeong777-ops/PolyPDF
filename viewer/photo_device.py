@@ -162,6 +162,16 @@ class ShellBackend:
 BACKEND = ShellBackend()
 
 
+def qt_test_mode() -> bool:
+    """Qt 시험 모드(`QStandardPaths.setTestModeEnabled(True)`)인가 — PyQt6 에는 묻는 함수가 없어 경로의 `qttest` 로 안다."""
+    try:
+        from PyQt6.QtCore import QStandardPaths
+        p = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericDataLocation) or ""
+        return "qttest" in p.replace("\\", "/").split("/")
+    except Exception:
+        return False
+
+
 # ── 캐시 ──────────────────────────────────────────────
 def cache_root() -> Path:
     from viewer.settings_store import settings_dir

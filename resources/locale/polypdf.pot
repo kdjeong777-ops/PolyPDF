@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 20:16+0900\n"
+"POT-Creation-Date: 2026-11-04 20:27+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3262,6 +3262,14 @@ msgid "변환할 PDF 를 먼저 여세요."
 msgstr ""
 
 #: viewer/convert_controller.py
+msgid "변환할 사진을 먼저 여세요."
+msgstr ""
+
+#: viewer/convert_controller.py
+msgid "zip·휴대 장치 사진은 'PC 로 복사' 한 뒤 변환하세요."
+msgstr ""
+
+#: viewer/convert_controller.py
 msgid "변환을 취소했습니다 — 만들던 파일은 지웠습니다."
 msgstr ""
 
@@ -3272,6 +3280,11 @@ msgstr ""
 #: viewer/convert_controller.py
 #, python-brace-format
 msgid "변환했습니다: {name}"
+msgstr ""
+
+#: viewer/convert_controller.py
+#, python-brace-format
+msgid "사진의 글자를 먼저 읽으세요 — 텍스트 창 [OCR 로 읽기]: {name}"
 msgstr ""
 
 #: viewer/convert_controller.py

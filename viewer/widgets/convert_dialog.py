@@ -15,7 +15,7 @@ from viewer import convert
 
 class ConvertDialog(QDialog):
     def __init__(self, parent=None, *, files=(), page_count: int = 0, preset: str | None = None,
-                 picked_pages=None):
+                 picked_pages=None, keys=None):
         super().__init__(parent)
         self.setWindowTitle(tr("변환"))
         self.setMinimumWidth(420)
@@ -35,6 +35,8 @@ class ConvertDialog(QDialog):
         self.fmt_group = QButtonGroup(self)
         self._fmt_btn = {}
         for f in convert.ready_formats():
+            if keys is not None and f.key not in keys:
+                continue                          # 사진은 뜻 있는 형식만(사진 보기 SOT §4.35)
             b = QRadioButton(tr(f.label))
             b.setObjectName("fmt_" + f.key)
             self.fmt_group.addButton(b)

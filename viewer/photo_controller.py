@@ -22,7 +22,7 @@ VIEW_PDF = "pdf"                 # 'PDF 전용' — 사진 모드 없음(기본)
 VIEW_MIXED = "mixed"             # '혼용' — PDF 모드 ↔ 사진 모드
 MODE_ICON_PX = 20                # 탭 줄 높이 안 — 탭 글자보다 크게(261104-2 사용자 지시). TV 그림은 가로로 길어 실제 높이는 약 15px
 # 사진 모드에서 끄는 명령(사진 보기 SOT 4.13 표) — 사진에 뜻이 없거나 사진용 동작이 아직 없는 것(평탄화·인쇄는 P2 에서 사진용으로 켠다)
-PHOTO_OFF_CMDS = ("file.save_as", "file.export",                     # 인쇄·평탄화는 사진용으로 켠다(261104-3, 4.21)
+PHOTO_OFF_CMDS = ("file.save_as",                                    # 인쇄·평탄화는 사진용으로 켠다(261104-3, 4.21) · 변환은 사진 → Word·HWPX·텍스트(261104-10 P4-b, 4.35)
                   "fav.recent_searches", "fav.searches", "fav.add_search",
                   "view.study", "view.search",       # 발표 = 사진 슬라이드쇼(261104-7, 4.12) · 텍스트 창·도구 OCR = 사진 한 장 OCR(261104-10, 4.34)
                   "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
@@ -643,6 +643,9 @@ class PhotoMixin:
 
     def _photo_devices_refresh(self):
         from viewer.workers import run_in_thread
+        from viewer import photo_device
+        if photo_device.qt_test_mode() and isinstance(photo_device.BACKEND, photo_device.ShellBackend):
+            return                                       # 검사는 실제 장치(셸)를 읽지 않는다 — 가짜 장치를 끼운 검사만(종료 때 셸 호출이 걸려 프로세스가 끝나지 않았다)
         old = self.__dict__.get("_photo_dev_lister")
         if old is not None:
             old.request_cancel()

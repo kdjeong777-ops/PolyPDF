@@ -34,6 +34,8 @@ class ConvertMixin:
         if not files:
             cur = mv.current_file() if mv else None
             files = [cur] if cur else []
+        if getattr(self, "_photo_mode", False):
+            return self._photo_convert([str(f) for f in files if f], fmt)    # 사진 보기 SOT §4.35(261104-10 P4-b)
         files = [str(f) for f in files if f and str(f).lower().endswith(".pdf") and Path(f).exists()]
         if not files:
             QMessageBox.information(self, tr("변환"), tr("변환할 PDF 를 먼저 여세요."))
@@ -65,7 +67,30 @@ class ConvertMixin:
         sel = dlg.pages() if len(files) == 1 else None
         return self._run_convert(files, key, sel)
 
-    def _run_convert(self, files, key, pages) -> bool:
+    def _photo_convert(self, files, fmt=None) -> bool:
+        """사진 → Word·HWPX·텍스트(사진 보기 SOT §4.35). 글은 사진 한 장 OCR(§4.34)의 결과 — 읽지 않은 사진은 먼저 읽으라고 알린다.
+        zip·휴대 장치 사진(캐시)은 결과가 캐시에 생기므로 PC 로 복사한 뒤에."""
+        from viewer import convert
+        from viewer.widgets.convert_dialog import ConvertDialog
+        files = [f for f in files if self._is_photo_path(f) and Path(f).exists()]
+        if not files:
+            QMessageBox.information(self, tr("변환"), tr("변환할 사진을 먼저 여세요."))
+            return False
+        if self._photo_any_cached(files):
+            QMessageBox.information(self, tr("변환"), tr("zip·휴대 장치 사진은 'PC 로 복사' 한 뒤 변환하세요."))
+            return False
+        unread = [f for f in files if not self._photo_ocr_words(f)]
+        if unread:
+            QMessageBox.information(self, tr("변환"), tr("사진의 글자를 먼저 읽으세요 — 텍스트 창 [OCR 로 읽기]: {name}").format(
+                name=", ".join(Path(f).name for f in unread[:3])))
+            return False
+        dlg = ConvertDialog(self, files=files, page_count=1, preset=fmt if fmt in convert.PHOTO_KEYS else None,
+                            keys=convert.PHOTO_KEYS)
+        if dlg.exec() != dlg.DialogCode.Accepted:
+            return False
+        return self._run_convert(files, dlg.format_key(), None, rots={f: self._photo_rot_for(f) for f in files})
+
+    def _run_convert(self, files, key, pages, rots=None) -> bool:
         from viewer import convert
         from viewer.text_word import snapshot_fixes
         from viewer.twoup import MergeCancelled
@@ -87,7 +112,8 @@ class ConvertMixin:
                     return progress(_i * 1000 + int(1000 * done / total), len(files) * 1000,
                                     f"{_head}\n{label}" if label else _head)
                 try:
-                    out = convert.run(src, key, pages, fixes=fixes, forced_pages=forced, progress=prog)
+                    out = convert.run(src, key, pages, fixes=fixes, forced_pages=forced, progress=prog,
+                                      photo_rot=int((rots or {}).get(src, 0) or 0))
                     results.append((src, out, None))
                 except convert.Cancelled:
                     raise MergeCancelled()

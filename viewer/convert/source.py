@@ -21,11 +21,25 @@ def xml_safe(text: str) -> str:
     return _XML_BAD.sub("\ufffd", text) if text else text
 
 
+PHOTO_TMP_PREFIX = "polypdf_photosrc_"
+
+
+def _sweep_photo_tmp() -> None:
+    """앞 변환이 남긴 사진 임시 PDF 폴더를 지운다 — 실패한 쓰기 함수의 예외가 문서를 쥔 채로 끝나면 그때는 못 지운다(쓰는 중인 것은 안 지워진다)."""
+    import glob, os, shutil, tempfile
+    for d in glob.glob(os.path.join(tempfile.gettempdir(), PHOTO_TMP_PREFIX + "*")):
+        shutil.rmtree(d, ignore_errors=True)
+
+
 class PageSource:
     """`with PageSource(경로, fixes=…, forced_pages=…) as src:` — 끝나면 문서·연결을 닫는다."""
 
-    def __init__(self, pdf_path, *, fixes=None, forced_pages=(), tables: str = "lines"):
+    def __init__(self, pdf_path, *, fixes=None, forced_pages=(), tables: str = "lines", photo_rot: int = 0):
         self.path = str(pdf_path)
+        self.src_path = self.path                # 고침·OCR 의 키가 되는 원본(사진이면 사진 경로 — 사진 보기 SOT §4.35)
+        self.photo_rot = int(photo_rot or 0) % 360
+        self._photo = None                       # 사진이면 (회전 0 판 폭, 높이) — 쓰기 함수는 임시 PDF(`self.path`)를 연다
+        self._tmpdir = None
         self.fixes = fixes
         self.forced = {int(p) for p in (forced_pages or ())}
         self.tables_mode = tables
@@ -37,6 +51,11 @@ class PageSource:
     # ---- 열고 닫기 ------------------------------------------------------
     def __enter__(self):
         import fitz
+        from viewer.image_page import PHOTO_EXTS
+        import os as _os
+        if _os.path.splitext(self.path)[1].lower() in PHOTO_EXTS:
+            self._open_photo()
+            return self
         self.doc = fitz.open(self.path)
         if self.doc.needs_pass:
             from viewer import secure_store
@@ -52,7 +71,65 @@ class PageSource:
             self._st = None
         return self
 
+    def _open_photo(self):
+        """사진 한 장 → 보기 회전대로 구운 1쪽 임시 PDF(사진 보기 SOT §4.35). 쪽 크기 = 돈 판 픽셀(= pt, D14).
+        OCR 낱말은 원본 사진 키의 보류 ▶ 저장본(단어학습 SOT §14.22 — 사진이 바뀌었으면 없는 것으로)."""
+        import io
+        import os
+        import tempfile
+        from pathlib import Path
+        import fitz
+        from PIL import Image, ImageOps
+        from viewer import photo_io
+        from viewer.study import ocr as _ocr
+        photo_io._prep(self.path)
+        with Image.open(self.path) as im:
+            im = ImageOps.exif_transpose(im)
+            im.load()
+        w0, h0 = im.size
+        if self.photo_rot:
+            im = im.rotate(-self.photo_rot, expand=True)
+        buf = io.BytesIO()
+        im.convert("RGB").save(buf, "JPEG", quality=92)
+        self._photo = (w0, h0)
+        _sweep_photo_tmp()
+        self._tmpdir = tempfile.mkdtemp(prefix=PHOTO_TMP_PREFIX)
+        pdf = os.path.join(self._tmpdir, Path(self.path).stem + ".pdf")
+        d = fitz.open()
+        pg = d.new_page(width=float(im.width), height=float(im.height))
+        pg.insert_image(pg.rect, stream=buf.getvalue())
+        d.save(pdf)
+        d.close()
+        self.path = pdf
+        self.doc = fitz.open(pdf)
+        self._photo_words, self._photo_text = [], ""
+        try:
+            from viewer.study.study_store import StudyStore, file_key_for
+            from viewer import dbutil
+            self._st = StudyStore(busy_ms=dbutil.BUSY_MS_UI)
+            self._key = file_key_for(self.src_path)
+            row = self._st.conn.execute("SELECT engine FROM ocr_page WHERE file_key=? AND page=0", (self._key,)).fetchone()
+            if row and str(row["engine"] or "").endswith(_ocr.photo_sig(self.src_path)):
+                self._photo_words = _ocr.photo_words_view(self._st.get_page_words(self._key, 0), self.photo_rot, w0, h0)
+                self._photo_text = self._st.get_page_text(self._key, 0) or ""
+        except Exception:
+            self._st = None
+
     def __exit__(self, *exc):
+        if self._tmpdir:
+            try:
+                if self.doc is not None:
+                    self.doc.close()
+                    self.doc = None
+            except Exception:
+                pass
+            import gc, os, shutil, time
+            for _ in range(5):                   # 실패한 쓰기 함수가 연 문서가 아직 파일을 쥐고 있을 수 있다 — 거둔 뒤 다시
+                shutil.rmtree(self._tmpdir, ignore_errors=True)
+                if not os.path.exists(self._tmpdir):
+                    break
+                gc.collect()
+                time.sleep(0.1)
         if self._plumb is not None:
             try:
                 self._plumb.close()
@@ -73,6 +150,8 @@ class PageSource:
 
     # ---- 텍스트 창과 같은 원천 ------------------------------------------
     def ocr_text(self, pg) -> str:
+        if self._photo is not None:
+            return self._photo_text if int(pg) == 0 else ""
         try:
             return (self._st.get_page_text(self._key, int(pg)) or "") if self._st else ""
         except Exception:
@@ -80,6 +159,8 @@ class PageSource:
 
     def ocr_words(self, pg):
         """`(낱말상자, dpi)` — 판단은 `pick_ocr_words` 한 곳(텍스트 창 SOT §3.1)."""
+        if self._photo is not None:                  # 사진 — 우리 OCR 낱말만(돈 판 px = pt)
+            return (list(self._photo_words), 72) if int(pg) == 0 and self._photo_words else ([], 0)
         if self._st is None:
             return ([], 0)
         from viewer import text_extract2 as tx
@@ -93,7 +174,7 @@ class PageSource:
         if self.fixes is None:
             return rows
         try:
-            return self.fixes.apply_to_rows(self.path, int(pg), rows)
+            return self.fixes.apply_to_rows(self.src_path, int(pg), rows)
         except Exception:
             return rows
 

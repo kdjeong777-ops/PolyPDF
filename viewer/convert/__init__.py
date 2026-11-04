@@ -115,8 +115,11 @@ def parse_range(text: str, n: int) -> list:
     return res
 
 
-def run(src, key: str, pages=None, *, fixes=None, forced_pages=(), progress=None) -> Path:
-    """한 파일을 변환해 결과 경로를 돌려준다. 배경 스레드에서 부른다."""
+PHOTO_KEYS = ("docx_shape", "docx_edit", "hwpx_shape", "hwpx_edit", "txt")   # 사진에 뜻 있는 형식(사진 보기 SOT §4.35)
+
+
+def run(src, key: str, pages=None, *, fixes=None, forced_pages=(), progress=None, photo_rot: int = 0) -> Path:
+    """한 파일을 변환해 결과 경로를 돌려준다. 배경 스레드에서 부른다. 사진이면 `photo_rot`(보기 회전)대로 구운 1쪽으로."""
     from viewer.convert import writers
     from viewer.convert.source import PageSource
     dst = out_path(src, key)
@@ -125,7 +128,7 @@ def run(src, key: str, pages=None, *, fixes=None, forced_pages=(), progress=None
         if progress is not None and progress(i, n, label) is False:
             raise Cancelled()
 
-    with PageSource(src, fixes=fixes, forced_pages=forced_pages) as ps:
+    with PageSource(src, fixes=fixes, forced_pages=forced_pages, photo_rot=photo_rot) as ps:
         pg = list(pages) if pages else list(range(ps.page_count))
         try:
             writers.WRITERS[key](ps, pg, dst, tick)

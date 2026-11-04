@@ -11,6 +11,7 @@ F. 받는 도중 연결이 끊기면 받은 것만 두고 알림
 G. 책갈피창 트리(폴더) 보기 — 장치·사진 폴더가 폴더 줄 모양, 연 폴더 아래 사진 줄, 누르면 그 사진(사용자 지시)
 H. 단일 보기 — 폴더 줄 없이 장치의 모든 사진 줄, 누르면 그 사진이 든 폴더를 그 사진부터 받아 연다(사용자 결정)
 I. 썸네일 줄 끝에서 더 내리면(넘김·휠) 다음(더 오래된) 폴더를 이어 받는다 — 줄은 그대로 아래에 더한다(사용자 지시)
+K. 장치 조사가 응답 없는 장치에 붙들려도 창 닫기는 기다리지 않는다(지휘 세션 확인 요청)
 J. 상태 표시줄에 사진 일시 — 촬영 정보가 없으면 파일 날짜(장치 복사는 장치의 날짜가 남는다)(사용자 지시)
 """
 import os, sys, tempfile, shutil, time, io
@@ -241,7 +242,20 @@ try:
     mw._photo_open_device("Apple iPhone", "Internal Storage/202611_a")
     chk(pump(lambda: mw.__dict__.get("_photo_dev_worker") is None, timeout=5) and names() == ["IMG_0001.JPG"]
         and "연결이 끊겼습니다" in mw.status.currentMessage(), "F 끊기면 받은 것만 두고 알림", f"{names()} {mw.status.currentMessage()}")
-    mw.close()
+    # K — 장치 조사가 응답 없는 장치에 붙들려도 창 닫기는 기다리지 않는다(지휘 세션 확인 요청 — 닫은 뒤 main.py 가 곧바로 끝낸다)
+    import threading
+    hold = threading.Event()
+
+    class StuckBackend(FakeBackend):
+        def devices(self):
+            hold.wait(20)                         # 응답 없는 장치
+            return []
+    pd.BACKEND = StuckBackend()
+    mw._photo_devices_refresh(); pump(timeout=0.3)
+    t0 = time.perf_counter()
+    mw.close(); app.processEvents()
+    chk(time.perf_counter() - t0 < 1.0, "K 장치 조사가 붙들려 있어도 창 닫기는 기다리지 않는다", "%.2f" % (time.perf_counter() - t0))
+    hold.set()
 except Exception:
     import traceback
     traceback.print_exc()
