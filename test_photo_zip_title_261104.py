@@ -80,6 +80,16 @@ try:
     pump(lambda: names() == ["밖 둘.jpg", "밖 하나.jpg", "여행 사진.zip"])
     mw._on_bookmark_activated(str(tmp / "밖 하나.jpg"), 0); pump(timeout=0.8)
     chk(kind() == "JPG" and icon_on() and pt.title.text() == "밖 하나", "A 사진 제목 앞 JPG 아이콘", f"{kind()} {pt.title.text()}")
+    # A2 — 이름은 아이콘 오른쪽 같은 줄(사용자 보고: 아래 줄로 보였다). 첫 줄 글자 띠 = 제목 위 + 4px 여백 + 한 줄 높이
+    from PyQt6.QtCore import Qt as _Qt
+    ic, tl = pt._title_icon.geometry(), pt.title.geometry()
+    line_top = tl.top() + 4
+    line_bot = line_top + pt.title.fontMetrics().height()
+    chk(bool(pt.title.alignment() & _Qt.AlignmentFlag.AlignTop) and line_top <= ic.bottom() - 8 <= line_bot
+        and ic.right() < tl.left() + 6,
+        "A2 이름은 아이콘 오른쪽 같은 줄에서 시작", f"icon={ic} title={tl} align={pt.title.alignment()}")
+    if os.environ.get("ZT_SHOT"):                  # 눈으로 볼 때만(사진 폴더 안에 쓰면 폴더 감시가 목록에 넣는다)
+        pt.grab().save(os.environ["ZT_SHOT"])
     strip = mw._photo_strip
 
     # B·C — 책갈피창에서 밖 사진 둘과 zip 을 함께 고른 채 zip 을 연다

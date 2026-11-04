@@ -174,9 +174,14 @@ class PageThumbs(QWidget):
         self._title_kind = None
         self._title_icon = QLabel()
         self._title_icon.setObjectName("thumbsTitleIcon")
-        self._title_icon.setFixedSize(16, 16)
+        _off = 4 + max(0, (fm.height() - 16) // 2)     # 제목 칸 안쪽 여백(4) + 첫 줄 높이 가운데
+        self._title_icon.setFixedSize(16, 16 + _off)
+        self._title_icon.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
         self._title_icon.setVisible(False)
-        tr_row = _QHBt(); tr_row.setContentsMargins(4, 6, 0, 0); tr_row.setSpacing(0)
+        # 이름은 아이콘 오른쪽 **같은 줄**에서 시작한다(위 맞춤) — 가운데 맞춤이면 한 줄 이름이 칸 가운데(둘째 줄)에 떠
+        #   아이콘 아래 줄로 보였다(261104-8 사용자 보고). 아이콘은 첫 줄 높이의 가운데에.
+        self.title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        tr_row = _QHBt(); tr_row.setContentsMargins(4, 2, 0, 0); tr_row.setSpacing(0)
         tr_row.addWidget(self._title_icon, 0, Qt.AlignmentFlag.AlignTop)
         tr_row.addWidget(self.title, 1)
         layout.addLayout(tr_row)
