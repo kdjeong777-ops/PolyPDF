@@ -544,7 +544,7 @@ def file_kind_icon(path_or_kind, dark: bool | None = None, size: int = 16, *, dp
 
 
 # 사진 보기 SOT 4.1(사용자 결정 '시안 C, 위 안테나 뺌'): 리본 맨 왼쪽 PDF ↔ 사진 모드 토글 — 브라운관 TV 화면 안에 문서·사진 두 장,
-#   앞 장 = 지금 모드(뒤 장은 회색), 오른쪽 다이얼 바늘이 그쪽. 좌표는 시안 스크립트(_review/polypicture/make_tv_icons.py)의 확정안 그대로.
+#   화면에는 지금 모드 그림 하나만(261104-2), 오른쪽 다이얼 바늘이 그쪽. 몸체·다리는 시안 스크립트(_review/polypicture/make_tv_icons.py)의 확정안을 따른다.
 TV_GLASS = {False: "#22303a", True: "#11171c"}          # 화면 유리
 TV_KNOB = {False: "#ffffff", True: "#2b3138"}           # 다이얼·스피커
 SUN = {False: "#f0b429", True: "#f5bd2e"}               # 사진 속 해(= FAV_YELLOW 뒤판)
@@ -581,42 +581,47 @@ def _tv_photo(p, d, x, y, w, h, active):
     p.restore()
 
 
+TV_SCREEN = QRectF(1.3, 2.9, 11.0, 9.2)                 # 화면 — 몸체 대부분(다이얼 칸은 오른쪽 좁게)
+
+
 def _mode_tv(p, photo: bool, dark: bool):
+    """261104-2(사용자 지시 '내용 구분이 안 돼 — 크게, 한 화면에 PDF 또는 사진만'): 화면에는 **지금 모드 그림 하나**만,
+    화면을 채워 크게 — PDF 모드는 붉은 PDF 문서, 사진 모드는 산·해 사진. 종전 시안 C 는 두 장을 겹쳐 작아 구분이 안 됐다."""
     import math
     d = bool(dark)
     body = QColor(FILE_GRAY[d])
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(body)
-    p.drawRoundedRect(QRectF(0.6, 1.6, 14.8, 10.8), 2.2, 2.2)
+    p.drawRoundedRect(QRectF(0.3, 1.9, 15.4, 11.2), 2.0, 2.0)
     p.setPen(QPen(body, 1.1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-    p.drawLine(QPointF(2.6, 12.4), QPointF(2.1, 13.7))
-    p.drawLine(QPointF(13.4, 12.4), QPointF(13.9, 13.7))
+    p.drawLine(QPointF(2.6, 13.1), QPointF(2.1, 14.3))
+    p.drawLine(QPointF(13.4, 13.1), QPointF(13.9, 14.3))
     knob = QColor(TV_KNOB[d])
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(knob)
-    p.drawEllipse(QPointF(13.6, 4.6), 1.05, 1.05)
+    p.drawEllipse(QPointF(14.0, 5.0), 0.95, 0.95)
     a = math.radians(-45 if photo else -135)                        # 바늘 — 켜진 모드 쪽
-    p.setPen(QPen(body, 0.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-    p.drawLine(QPointF(13.6, 4.6), QPointF(13.6 + 0.9 * math.cos(a), 4.6 + 0.9 * math.sin(a)))
+    p.setPen(QPen(body, 0.55, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(14.0, 5.0), QPointF(14.0 + 0.8 * math.cos(a), 5.0 + 0.8 * math.sin(a)))
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(knob)
-    p.drawEllipse(QPointF(13.6, 7.6), 0.75, 0.75)
+    p.drawEllipse(QPointF(14.0, 7.9), 0.65, 0.65)
     p.setPen(QPen(knob, 0.5))
-    p.drawLine(QPointF(12.7, 9.6), QPointF(14.5, 9.6))
-    p.drawLine(QPointF(12.7, 10.7), QPointF(14.5, 10.7))
+    p.drawLine(QPointF(13.3, 9.9), QPointF(14.7, 9.9))
+    p.drawLine(QPointF(13.3, 10.9), QPointF(14.7, 10.9))
+    s = TV_SCREEN
     screen = QPainterPath()
-    screen.addRoundedRect(QRectF(1.7, 2.7, 10.3, 8.6), 1.8, 1.8)
+    screen.addRoundedRect(s, 1.5, 1.5)
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor(TV_GLASS[d]))
     p.drawPath(screen)
     p.save()
     p.setClipPath(screen)
     if photo:
-        _tv_pdf(p, d, 2.6, 3.4, 4.0, 5.4, False)
-        _tv_photo(p, d, 4.6, 5.2, 6.8, 5.4, True)
+        _tv_photo(p, d, s.x(), s.y(), s.width(), s.height(), True)        # 사진이 화면 전체
     else:
-        _tv_photo(p, d, 5.6, 3.4, 5.6, 4.6, False)
-        _tv_pdf(p, d, 2.7, 4.4, 4.6, 6.2, True)
+        w, h = 7.6, s.height() - 0.8                                       # 세로 문서 — 화면 높이를 거의 다
+        _tv_pdf(p, d, s.x() + (s.width() - w) / 2, s.y() + 0.4, w, h, True)
     p.restore()
 
 

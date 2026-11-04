@@ -18,7 +18,7 @@ from viewer.i18n import tr
 
 VIEW_PDF = "pdf"                 # 'PDF 전용' — 사진 모드 없음(기본)
 VIEW_MIXED = "mixed"             # '혼용' — PDF 모드 ↔ 사진 모드
-MODE_ICON_PX = 18                # 탭 줄 높이 안 — 탭 글자보다 조금 크게
+MODE_ICON_PX = 20                # 탭 줄 높이 안 — 탭 글자보다 크게(261104-2 사용자 지시). TV 그림은 가로로 길어 실제 높이는 약 15px
 # 사진 모드에서 끄는 명령(사진 보기 SOT 4.13 표) — 사진에 뜻이 없거나 사진용 동작이 아직 없는 것(평탄화·인쇄는 P2 에서 사진용으로 켠다)
 PHOTO_OFF_CMDS = ("file.save_as", "file.export", "file.flatten", "file.print",
                   "fav.recent_searches", "fav.searches", "fav.add_search",
