@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 21:56+0900\n"
+"POT-Creation-Date: 2026-11-05 07:51+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3921,6 +3921,14 @@ msgstr ""
 msgid "공유용 사본 만드는 중…"
 msgstr ""
 
+#: viewer/photo_controller.py
+msgid "공유용 사본 폴더"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "새 폴더 이름"
+msgstr ""
+
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py
 msgid "형식"
@@ -4128,6 +4136,14 @@ msgid "평탄화하지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "공유용 사본 저장"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진사본"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
@@ -4218,6 +4234,15 @@ msgid "평탄화한 새 사진: {name}"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "원본 자리에는 저장하지 않습니다 — 다른 이름을 고르세요."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "공유용 사본 {n}장을 넣을 위치"
+msgstr ""
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 {n}장을 휴지통으로 보냈습니다."
 msgstr ""
@@ -4282,12 +4307,22 @@ msgstr ""
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "{stem}_공유"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "그림 (*{ext})"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "공유용 사본: {name}"
 msgstr ""
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "공유용 사본 {n}장을 만들었습니다."
+msgid "공유용 사본 {n}장을 만들었습니다: {folder}"
 msgstr ""
 
 #: viewer/photo_controller.py

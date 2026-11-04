@@ -2148,20 +2148,66 @@ class PhotoMixin:
         self.status.showMessage(tr("평탄화한 새 사진: {name}").format(name=Path(out).name), 6000)
 
     def _photo_share(self, paths, mode: str = "gps"):
-        """공유용 사본(F5, 4.22) — 원본은 그대로, 같은 폴더에 '<이름>_공유'. 배경 워커 하나가 여러 장을 차례로."""
+        """공유용 사본(4.22) — 원본은 그대로. 저장 자리를 고른다(261104-18 사용자 지시): **1장**이면 저장 창(위치·이름, 처음 이름은
+        '<이름>_공유'), **2장 이상**이면 위치(폴더)를 고르고 그 안에 새 폴더('YYMMDD-사진사본', 고칠 수 있음, 겹치면 '(2)')를 만들어 모두 넣는다.
+        창은 마지막으로 고른 위치에서 시작한다(처음이면 사진 폴더). 파일 쓰기는 배경 워커 하나가 차례로."""
         paths = self._photo_readable(paths)
         if not paths or self.__dict__.get("_photo_share_busy"):
             return
+        dest = self._photo_share_dest(paths)
+        if not dest:
+            return                                       # 취소
         from viewer.workers import run_in_thread
         self._photo_share_busy = True
-        w = PhotoShareWorker(paths, mode, {p: self._photo_rot_for(p) for p in paths})
+        w = PhotoShareWorker(paths, mode, {p: self._photo_rot_for(p) for p in paths}, dest=dest)
         w.done.connect(self._photo_shared)
         self.status.showMessage(tr("공유용 사본 만드는 중…"), 3000)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
+    SHARE_DIR_FMT = "%y%m%d"                         # 여러 장 사본 폴더 이름의 날짜 꼴('261105-사진사본')
+
+    def _photo_share_dest(self, paths):
+        """저장 자리를 묻는다 — 1장: `('file', 경로)`, 여러 장: `('dir', 새 폴더 경로)`(만들기는 워커가). 취소면 None."""
+        import time as _t
+        from PyQt6.QtWidgets import QFileDialog, QInputDialog, QLineEdit
+        pic = self._photo_prefs()
+        start = str(pic.get("share_dir") or "")
+        if not start or not os.path.isdir(start):
+            start = str(Path(paths[0]).parent)
+        if len(paths) == 1:
+            from viewer import photo_io as _pio
+            src = Path(paths[0])
+            if _pio.is_jpeg_file(src):                   # 워커가 쓰는 확장자와 같게(JPEG 은 .jpg/.jpeg 그대로, HEIC 는 .jpg)
+                ext = src.suffix if src.suffix.lower() in (".jpg", ".jpeg") else ".jpg"
+            else:
+                ext = ".jpg" if _pio.is_heif(src) else src.suffix
+            name = tr('{stem}_공유').format(stem=src.stem) + ext
+            got, _f = QFileDialog.getSaveFileName(self, tr("공유용 사본 저장"), str(Path(start) / name),
+                                                  tr("그림 (*{ext})").format(ext=ext))
+            if not got:
+                return None
+            got = str(Path(got).with_suffix(ext)) if not Path(got).suffix else got
+            if os.path.normcase(os.path.abspath(got)) == os.path.normcase(os.path.abspath(str(src))):
+                self.status.showMessage(tr("원본 자리에는 저장하지 않습니다 — 다른 이름을 고르세요."), 6000)
+                return None
+            pic["share_dir"] = str(Path(got).parent)
+            return ("file", got)
+        base = QFileDialog.getExistingDirectory(self, tr("공유용 사본 {n}장을 넣을 위치").format(n=len(paths)), start)
+        if not base:
+            return None
+        default = share_dir_name(base, _t.strftime(self.SHARE_DIR_FMT) + "-" + tr("사진사본"))
+        name, ok = QInputDialog.getText(self, tr("공유용 사본 폴더"), tr("새 폴더 이름"), QLineEdit.EchoMode.Normal, Path(default).name)
+        name = (name or "").strip().strip(".")
+        if not ok or not name or any(c in name for c in '<>:"/\\|?*'):
+            return None
+        pic["share_dir"] = str(base)
+        return ("dir", share_dir_name(base, name))
+
     def _photo_shared(self, pairs: list, failed: list):
         self._photo_share_busy = False
         for src, out in pairs:
+            if os.path.normcase(str(Path(out).parent)) != os.path.normcase(str(Path(src).parent)):
+                continue                                 # 다른 폴더에 만든 사본 — 보고 있는 목록에 끼우지 않는다
             try:
                 for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
                     if bt is not None and hasattr(bt, "add_or_refresh_file"):
@@ -2170,7 +2216,7 @@ class PhotoMixin:
                 pass
         if pairs and not failed:
             msg = (tr("공유용 사본: {name}").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
-                   else tr("공유용 사본 {n}장을 만들었습니다.").format(n=len(pairs)))
+                   else tr("공유용 사본 {n}장을 만들었습니다: {folder}").format(n=len(pairs), folder=Path(pairs[0][1]).parent.name))
         elif pairs:
             msg = tr("공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다.").format(n=len(pairs), m=len(failed))
         else:
@@ -2489,6 +2535,16 @@ FLAT_JPEG_QUALITY = 95          # 평탄화한 JPEG 화질(다시 압축 — 꾸
 SHARE_JPEG_QUALITY = 92         # 공유용 사본 — JPEG 이 아닌 사진(HEIC)을 JPEG 로 바꿀 때 화질(JPEG 원본은 다시 압축하지 않는다)
 
 
+def share_dir_name(base, name: str) -> str:
+    """여러 장 공유용 사본 폴더 — `base/name`, 이미 있으면 `name(2)`·`name(3)` …(261104-18 사용자 결정 — 빈칸 없이)."""
+    p = Path(str(base)) / name
+    k = 2
+    while p.exists():
+        p = Path(str(base)) / ("%s(%d)" % (name, k))
+        k += 1
+    return str(p)
+
+
 class PhotoShareWorker(QObject):
     """공유용 사본(사진 보기 SOT 4.22, F5) — 배경: 사진마다 같은 폴더 임시 파일에 쓰고 새 이름 '<이름>_공유' 로 옮긴다(원본 그대로).
     JPEG: `gps` 면 GPS 만 비움(D16 `jpeg_strip_gps`), `all` 이면 정보 묶음을 모두 빼고 방향 태그만(`jpeg_strip_meta`) — 둘 다 다시 압축 없음,
@@ -2496,9 +2552,10 @@ class PhotoShareWorker(QObject):
     done = pyqtSignal(list, list)          # [(원본, 사본)], [실패한 원본]
     finished = pyqtSignal()
 
-    def __init__(self, paths, mode: str, rots: dict):
+    def __init__(self, paths, mode: str, rots: dict, dest=None):
         super().__init__()
         self.paths, self.mode, self.rots = list(paths), mode, dict(rots or {})
+        self.dest = dest                                 # ('file', 경로) · ('dir', 새 폴더) · None(원본 옆 — 검사·옛 길)
         self._cancel = False
 
     def request_cancel(self):
@@ -2536,7 +2593,15 @@ class PhotoShareWorker(QObject):
             heif = photo_io.is_heif(src)
             ext = ".jpg" if heif else src.suffix
             payload = None
-        dst = unique_path(src.with_name(_tr('{stem}_공유').format(stem=src.stem) + ext))
+        name = _tr('{stem}_공유').format(stem=src.stem) + ext
+        if self.dest and self.dest[0] == "file":
+            dst = Path(self.dest[1])                     # 사용자가 저장 창에서 고른 이름(덮어쓰기는 창이 물었다)
+        elif self.dest and self.dest[0] == "dir":
+            d = Path(self.dest[1])
+            d.mkdir(parents=True, exist_ok=True)
+            dst = unique_path(d / name)
+        else:
+            dst = unique_path(src.with_name(name))
         tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
         try:
             if payload is not None:
@@ -2546,7 +2611,7 @@ class PhotoShareWorker(QObject):
             else:
                 fmt = {".png": "PNG", ".tif": "TIFF", ".tiff": "TIFF", ".bmp": "BMP", ".webp": "WEBP", ".gif": "GIF"}.get(ext.lower(), "PNG")
                 if fmt == "PNG" and ext.lower() != ".png":
-                    dst = unique_path(dst.with_suffix(".png"))
+                    dst = unique_path(dst.with_suffix(".png")) if not (self.dest and self.dest[0] == "file") else dst.with_suffix(".png")
                 pil.save(str(tmp), fmt)
             os.replace(str(tmp), str(dst))
             return str(dst)

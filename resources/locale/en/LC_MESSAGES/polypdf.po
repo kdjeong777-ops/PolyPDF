@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 21:56+0900\n"
+"POT-Creation-Date: 2026-11-05 07:51+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4058,6 +4058,14 @@ msgstr "Flattening…"
 msgid "공유용 사본 만드는 중…"
 msgstr "Making copies for sharing…"
 
+#: viewer/photo_controller.py
+msgid "공유용 사본 폴더"
+msgstr "Folder for Shared Copies"
+
+#: viewer/photo_controller.py
+msgid "새 폴더 이름"
+msgstr "New folder name"
+
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py
 msgid "형식"
@@ -4265,6 +4273,14 @@ msgid "평탄화하지 못했습니다 — 원본은 그대로입니다."
 msgstr "Could not flatten — the original is unchanged."
 
 #: viewer/photo_controller.py
+msgid "공유용 사본 저장"
+msgstr "Save Copy for Sharing"
+
+#: viewer/photo_controller.py
+msgid "사진사본"
+msgstr "photo-copies"
+
+#: viewer/photo_controller.py
 msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다."
 msgstr "Could not make the copy for sharing — the original is unchanged."
 
@@ -4355,6 +4371,15 @@ msgid "평탄화한 새 사진: {name}"
 msgstr "New flattened photo: {name}"
 
 #: viewer/photo_controller.py
+msgid "원본 자리에는 저장하지 않습니다 — 다른 이름을 고르세요."
+msgstr "Not saved over the original — choose another name."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "공유용 사본 {n}장을 넣을 위치"
+msgstr "Where to put {n} copies for sharing"
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 {n}장을 휴지통으로 보냈습니다."
 msgstr "Moved {n} photos to the Recycle Bin."
@@ -4419,13 +4444,23 @@ msgstr "{n} photos"
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "{stem}_공유"
+msgstr "{stem}_share"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "그림 (*{ext})"
+msgstr "Images (*{ext})"
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "공유용 사본: {name}"
 msgstr "Copy for sharing: {name}"
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "공유용 사본 {n}장을 만들었습니다."
-msgstr "Made {n} copies for sharing."
+msgid "공유용 사본 {n}장을 만들었습니다: {folder}"
+msgstr "Made {n} copies for sharing: {folder}"
 
 #: viewer/photo_controller.py
 #, python-brace-format

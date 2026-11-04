@@ -6,7 +6,8 @@ A. '위치 지움': 같은 폴더 '<이름>_공유.jpg' — GPS 만 없고 다�
 B. '정보 모두 지움': EXIF(기기·GPS)·주석 없음, 방향 태그만 남음, 색 프로필 그대로, 그림 자료 같음
 C. 돌린 사진(보기 회전 90)의 사본은 방향 태그로 돌아 있다
 D. JPEG 아닌 사진(PNG)은 같은 형식으로 정보 없이 다시 저장
-E. 여러 장 한 번에, 다시 만들면 '(1)' 이 붙는다 — 사본을 덮어쓰지 않는다, 임시 파일이 남지 않는다
+E. 여러 장 한 번에 — 고른 위치의 새 폴더('YYMMDD-사진사본')에, 다시 만들면 '(2)' 폴더(261104-18) — 덮어쓰지 않는다, 임시 파일이 남지 않는다
+   (저장 자리 창은 '기본값 그대로 확인' 으로 바꿔 끼운다 — 자리 고르기 자체는 test_photo_share_dest_261104)
 F. 세 메뉴(책갈피창 사진 행·썸네일 줄·본문)에 두 항목
 G. 바꿔치기(os.replace)는 메인 스레드에서 하지 않는다
 """
@@ -92,7 +93,13 @@ try:
         return real_replace(s, t)
     os.replace = spy
 
+    from PyQt6.QtWidgets import QFileDialog, QInputDialog
+    QFileDialog.getSaveFileName = staticmethod(lambda _w, _t, path, *_a, **_k: (path, ""))     # 처음 이름 그대로
+    QFileDialog.getExistingDirectory = staticmethod(lambda *_a, **_k: str(tmp))
+    QInputDialog.getText = staticmethod(lambda _w, _t, _l, _m, text, *_a, **_k: (text, True))
+
     def share(paths, mode):
+        mw._photo_prefs().pop("share_dir", None)        # 1장 창이 사진 폴더에서 시작하게(앞 회차의 '마지막 위치' 를 지운다)
         mw._photo_share(paths, mode)
         pump(lambda: not mw.__dict__.get("_photo_share_busy"), timeout=10); pump(timeout=0.3)
 
@@ -143,9 +150,12 @@ try:
 
     # E
     share([a, b], "gps")
-    names = sorted(n for n in os.listdir(tmp) if "_공유" in n)
-    chk("a_공유 (1).jpg" in names and "b 방향6_공유 (1).jpg" in names, "E 여러 장·다시 만들면 '(1)' — 덮어쓰지 않음", str(names))
-    chk(not any(n.endswith(".polypix-tmp") for n in os.listdir(tmp)), "E 임시 파일이 남지 않는다")
+    share([a, b], "gps")
+    dirs = sorted(n for n in os.listdir(tmp) if n.endswith("-사진사본") or n.endswith("-사진사본(2)"))
+    inside = [sorted(os.listdir(tmp / x)) for x in dirs]
+    chk(len(dirs) == 2 and dirs[1].endswith("(2)") and all(x == ["a_공유.jpg", "b 방향6_공유.jpg"] for x in inside),
+        "E 여러 장 — 새 폴더에, 다시 만들면 '(2)' 폴더 — 덮어쓰지 않음", f"{dirs} {inside}")
+    chk(not any(n.endswith(".polypix-tmp") for d in [tmp] + [tmp / x for x in dirs] for n in os.listdir(d)), "E 임시 파일이 남지 않는다")
     chk(all(Path(p).read_bytes() == raw[p] for p in (a, b, d)), "E 원본은 모두 그대로")
 
     # F
