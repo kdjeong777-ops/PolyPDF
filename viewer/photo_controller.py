@@ -24,8 +24,8 @@ MODE_ICON_PX = 20                # 탭 줄 높이 안 — 탭 글자보다 크�
 # 사진 모드에서 끄는 명령(사진 보기 SOT 4.13 표) — 사진에 뜻이 없거나 사진용 동작이 아직 없는 것(평탄화·인쇄는 P2 에서 사진용으로 켠다)
 PHOTO_OFF_CMDS = ("file.save_as", "file.export",                     # 인쇄·평탄화는 사진용으로 켠다(261104-3, 4.21)
                   "fav.recent_searches", "fav.searches", "fav.add_search",
-                  "view.text", "view.study", "view.search",                 # 발표 = 사진 슬라이드쇼(261104-7, 4.12)
-                  "tools.ocr", "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
+                  "view.study", "view.search",       # 발표 = 사진 슬라이드쇼(261104-7, 4.12) · 텍스트 창·도구 OCR = 사진 한 장 OCR(261104-10, 4.34)
+                  "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
                   "tools.reindex", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign", "tools.translate")
 PHOTO_OFF_ATTRS = ()                     # 창에 따로 붙은 액션 — F5 발표는 사진 슬라이드쇼로 켠다(261104-7)
 PHOTO_LIST_ATTRS = ("_favorites", "_recent_folders", "_recent_files")   # 모드마다 따로(4.7) — 사진 묶음 키는 앞 _ 를 뺀 이름
@@ -933,6 +933,99 @@ class PhotoMixin:
             self.status.showMessage(self._photo_device_error_text(dev, err), 8000)
         else:
             self.status.showMessage(tr("{dev}: 사진 {n}장(읽기 전용)").format(dev=dev, n=n), 5000)
+
+    # ── 사진 한 장 OCR → 텍스트 창 (4.34, 261104-10 P4-a, D15) ─────────────────
+    def _photo_ocr_start(self):
+        """지금 사진을 배경에서 읽는다(누를 때만). 결과는 보류 저장소 — 확정은 '💾 저장 안 한 OCR'·종료 창."""
+        from viewer.workers import run_in_thread
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur or not self._is_photo_path(cur) or self._photo_is_broken():
+            return
+        if self.__dict__.get("_photo_ocr_worker") is not None:
+            self.status.showMessage(tr("사진 글자를 읽는 중입니다 — 끝난 뒤 다시 눌러 주세요."), 4000)
+            return
+        try:
+            self._vm_text()
+        except Exception:
+            pass
+        w = PhotoOcrWorker(str(cur), self._photo_rot_for(cur), None)   # 언어는 워커에서(OCR 모듈을 메인에서 처음 불러오지 않게)
+        w.done.connect(self._photo_ocr_done)
+        w.error.connect(lambda p, e: self.status.showMessage(tr("사진 글자를 읽지 못했습니다: {e}").format(e=e), 8000))
+        w.finished.connect(lambda: self.__dict__.pop("_photo_ocr_worker", None))
+        self._photo_ocr_worker = w
+        tp = getattr(self, "text_panel", None)
+        if tp is not None:
+            tp.set_busy(tr("사진 글자를 읽는 중…"))
+        self.status.showMessage(tr("사진 글자를 읽는 중… {name}").format(name=Path(str(cur)).name), 4000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_ocr_done(self, path: str, n: int):
+        cur = self.main_view.current_file() if self.main_view else None
+        if cur and os.path.normcase(str(cur)) == os.path.normcase(path):
+            self._reload_text_panel()
+        try:
+            self._pending_refresh()                      # 상태 줄 '💾 저장 안 한 OCR'
+        except Exception:
+            pass
+        self.status.showMessage(tr("사진 글자 {n}개를 읽었습니다 — 남기려면 '저장 안 한 OCR' 을 저장하세요.").format(n=n), 6000)
+
+    def _photo_ocr_words(self, path):
+        """보류 ▶ 저장본에서 이 사진의 OCR 낱말 — 사진이 바뀌었으면(크기·수정 시각, 단어학습 SOT §14.22) 없는 것으로."""
+        from viewer.study import ocr as _ocr
+        from viewer.study.study_store import file_key_for
+        key = file_key_for(str(path))
+
+        def read(st):
+            row = st.conn.execute("SELECT engine FROM ocr_page WHERE file_key=? AND page=0", (key,)).fetchone()
+            if not row:
+                return []
+            try:
+                if not str(row["engine"] or "").endswith(_ocr.photo_sig(path)):
+                    return []
+            except OSError:
+                return []
+            return st.get_page_words(key, 0)
+        return self._study_read(read, [])
+
+    def _photo_text_reload(self, cur):
+        """텍스트 창 — 사진은 우리 OCR 낱말만으로 줄을 만든다(표 인식 없음). 낱말은 지금 보기 회전으로 돌려 쓴다."""
+        tp = getattr(self, "text_panel", None)
+        if tp is None:
+            return
+        try:
+            tp.btn_apply.setEnabled(False)               # [PDF 에 반영] — 사진에는 없다(4.34·G1)
+        except Exception:
+            pass
+        words = self._photo_ocr_words(cur)
+        if not words:
+            tp.set_page(str(cur), 0, [], tr("이 사진의 글자를 아직 읽지 않았습니다 — [OCR 로 읽기] 를 누르세요."))
+            return
+        from viewer.study import ocr as _ocr
+        from viewer.photo_io import oriented_size
+        from viewer.workers import TextPageWorker, run_in_thread
+        w0, h0 = oriented_size(cur)
+        rot = self._photo_rot_for(cur)
+        vw = _ocr.photo_words_view(words, rot, w0, h0)
+        size = (h0, w0) if rot in (90, 270) else (w0, h0)
+        prev = getattr(self, "_text_worker", None)
+        if prev is not None:
+            try:
+                prev.request_cancel()
+            except Exception:
+                pass
+        self._text_token = getattr(self, "_text_token", 0) + 1
+        tok = self._text_token
+        tp.set_busy(tr("사진 글자 줄을 만드는 중…"))
+        w = TextPageWorker(cur, 0, tables="omit", token=tok, ocr_words=vw, ocr_dpi=72,
+                           join_lines=tp.join_lines(), page_size=size)
+        self._text_worker = w
+        w.done.connect(lambda pg, rows, t, _w=w: self._on_text_rows(cur, pg, rows, t, "", getattr(_w, "noise", 0)))
+        w.error.connect(lambda msg, t: tp.set_busy(tr('읽지 못했습니다: {msg}').format(msg=msg)) if t == self._text_token else None)
+        w.finished.connect(lambda: setattr(self, "_text_worker", None))
+        run_in_thread(w, self._thread_keep)
+
+    def _photo_text_blocked(self):
+        self.status.showMessage(tr("사진에는 글자층이 없어 PDF 에 반영하지 않습니다 — 글은 텍스트 창에서 복사하거나 [OCR 로 읽기] 로 다시 읽으세요."), 6000)
 
     def _photo_copy_out(self, paths):
         """'PC 로 복사' — 캐시의 장치 사진을 고른 폴더로(배경 진행 창·취소, 같은 이름이면 번호)."""
@@ -2481,6 +2574,37 @@ class PhotoIndexWorker(QObject):
             pass
         finally:
             self.done.emit(self.folder, n_new, n_gone, total)
+            self.finished.emit()
+
+
+class PhotoOcrWorker(QObject):
+    """사진 한 장 OCR(사진 보기 SOT 4.34, 단어학습 SOT §14.22) — 배경, 결과는 보류 저장소. 응답성 SOT 감사표의 한 행."""
+    done = pyqtSignal(str, int)                  # 사진 경로, 낱말 수
+    error = pyqtSignal(str, str)
+    finished = pyqtSignal()
+
+    def __init__(self, path: str, rot: int, lang: str):
+        super().__init__()
+        self.path, self.rot, self.lang = path, int(rot or 0), lang
+
+    def run(self):
+        try:
+            from viewer.study import ocr
+            from viewer.study.study_store import StudyStore, file_key_for
+            res = ocr.LangPicker(self.lang or ocr.default_lang()).read_photo(self.path, rot=self.rot)
+            words = res.get("words") or []
+            st = StudyStore()                        # 보류가 켜져 있으면 보류 DB 로(단어학습 SOT §14.21)
+            try:
+                key = file_key_for(self.path)
+                st.save_page(key, 0, res.get("text", "") or "", dpi=72, engine=res.get("engine", "tesseract"),
+                             source="ocr", conf=float(res.get("conf", 0) or 0), words=words, lang=res.get("lang", ""))
+                st.set_meta(key, self.path, 1, res.get("lang", ""))
+            finally:
+                st.close()
+            self.done.emit(self.path, len(words))
+        except Exception as e:                   # noqa: BLE001 — Tesseract 없음·못 여는 사진
+            self.error.emit(self.path, str(e))
+        finally:
             self.finished.emit()
 
 

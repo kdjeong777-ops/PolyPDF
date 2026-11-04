@@ -4,7 +4,7 @@
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3).
 A. 사진을 열면 쪽 썸네일 자리에 **사진 썸네일 줄** — 그림이 배경에서 붙고, 사용자 데이터 폴더 캐시(`photo_thumbs`)에 남는다(사진 폴더에는 아무것도 쓰지 않는다)
 B. 책갈피창에서 여럿 고르면 썸네일 줄은 고른 사진만, 하나면 폴더 전체(D3)
-C. 사진 모드면 뜻 없는 명령(OCR·발표 F5 등)이 꺼지고, 설정 적용(`_gate_api_dependent_ui`)을 거쳐도 꺼진 채, PDF 모드로 오면 되살아난다
+C. 사진 모드면 뜻 없는 명령(병합 등)이 꺼지고(OCR 은 사진 한 장 OCR 로 켜진다 — 261104-10), 설정 적용(`_gate_api_dependent_ui`)을 거쳐도 꺼진 채, PDF 모드로 오면 되살아난다
 D. 즐겨찾기·최근 파일은 모드마다 따로 — 사진 것은 `picture` 묶음, 저장 내용의 `favorites` 는 PDF 것 그대로
 E. 사진 모드에서 PDF 를 열면 PDF 모드로, 파일 인자 창(`_photo_force_pdf`)도 PDF 모드
 F. `picture` 는 개인 항목 — 배포용 기본값에서 빠지고 초기화해도 남는다
@@ -102,10 +102,10 @@ try:
 
     # C
     if ocr is not None and ocr_before:
-        chk(not ocr.isEnabled(), "C 사진 모드에서 OCR 꺼짐")
+        chk(ocr.isEnabled(), "C 사진 모드에서도 OCR 켜짐(사진 한 장 OCR — 261104-10 P4-a, 사진 보기 SOT 4.34)")
     chk(not mrg.isEnabled() and mw.act_present.isEnabled(), "C 병합 꺼짐·발표(F5)는 슬라이드쇼로 켜짐")
     mw._gate_api_dependent_ui(mw._prefs)
-    chk(not mrg.isEnabled() and (ocr is None or not ocr.isEnabled()), "C 설정 적용을 거쳐도 꺼진 채")
+    chk(not mrg.isEnabled(), "C 설정 적용을 거쳐도 꺼진 채")
 
     # D — 사진 즐겨찾기·최근
     mw._favorites.append({"name": "사진 하나", "kind": "file", "file": str(small / "사진3.jpg"), "folder": str(small)})

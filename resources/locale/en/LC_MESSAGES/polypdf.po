@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 19:48+0900\n"
+"POT-Creation-Date: 2026-11-04 20:16+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3084,7 +3084,7 @@ msgstr ""
 "Another program may already use the same combination.\n"
 "Change the 'Screen Capture' key to another combination in Keyboard Shortcuts and try again."
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 #, python-brace-format
 msgid "읽지 못했습니다: {msg}"
 msgstr "Could not read: {msg}"
@@ -3974,6 +3974,14 @@ msgid "일괄 작업"
 msgstr "Batch"
 
 #: viewer/photo_controller.py
+msgid "사진 글자 줄을 만드는 중…"
+msgstr "Building text lines from the photo…"
+
+#: viewer/photo_controller.py
+msgid "사진에는 글자층이 없어 PDF 에 반영하지 않습니다 — 글은 텍스트 창에서 복사하거나 [OCR 로 읽기] 로 다시 읽으세요."
+msgstr "Photos have no text layer, so nothing is applied to a PDF — copy the text from the Text pane, or read it again with [Read with OCR]."
+
+#: viewer/photo_controller.py
 msgid "PC 로 복사할 폴더"
 msgstr "Folder to Copy to PC"
 
@@ -4124,6 +4132,18 @@ msgid "이 폴더에는 사진이 없습니다."
 msgstr "There are no photos in this folder."
 
 #: viewer/photo_controller.py
+msgid "사진 글자를 읽는 중입니다 — 끝난 뒤 다시 눌러 주세요."
+msgstr "Reading the photo's text — press again when it is done."
+
+#: viewer/photo_controller.py
+msgid "사진 글자를 읽는 중…"
+msgstr "Reading the photo's text…"
+
+#: viewer/photo_controller.py
+msgid "이 사진의 글자를 아직 읽지 않았습니다 — [OCR 로 읽기] 를 누르세요."
+msgstr "The text in this photo has not been read yet — press [Read with OCR]."
+
+#: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr "Only photos selected from an opened folder can be rotated."
 
@@ -4267,6 +4287,16 @@ msgid "{dev} 에서 사진을 받는 중… {folder}"
 msgstr "Receiving photos from {dev}… {folder}"
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 글자를 읽는 중… {name}"
+msgstr "Reading the photo's text… {name}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 글자 {n}개를 읽었습니다 — 남기려면 '저장 안 한 OCR' 을 저장하세요."
+msgstr "Read {n} words from the photo — to keep them, save 'Unsaved OCR'."
+
+#: viewer/photo_controller.py
 msgid "첫 사진입니다."
 msgstr "This is the first photo."
 
@@ -4394,6 +4424,11 @@ msgstr "Could not rename: {name}"
 #: viewer/photo_controller.py
 msgid "사진 바꾸는 중"
 msgstr "Converting photos"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 글자를 읽지 못했습니다: {e}"
+msgstr "Couldn't read the photo's text: {e}"
 
 #: viewer/photo_controller.py
 msgid "PC 로 복사하는 중"

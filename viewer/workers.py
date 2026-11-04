@@ -603,9 +603,10 @@ class TextPageWorker(QObject):
     def __init__(self, doc_path, page: int, *, tables: str = "lines",
                  ocr_text: str = "", token: int = 0, cached_only: bool = False,
                  ocr_words=None, ocr_dpi: int = 0, join_lines: bool = True,
-                 ocr_peer_words=None):
+                 ocr_peer_words=None, page_size=None):
         super().__init__()
         self.doc_path = str(doc_path)
+        self.page_size = page_size             # 261104-10(사진 보기 SOT §4.34): 사진 — 이 크기의 빈 쪽에 OCR 낱말만
         self.page = int(page)
         self.tables = tables
         self.ocr_text = ocr_text or ""
@@ -629,7 +630,11 @@ class TextPageWorker(QObject):
             from viewer import text_extract2 as tx
             # ★ 워커 안에서 **따로 연다** — 메인 뷰어의 문서 객체를 두 스레드가 함께
             #   쓰면 PyMuPDF 가 깨진다(문서 객체는 스레드 안전하지 않다).
-            doc = fitz.open(self.doc_path)
+            if self.page_size:
+                doc = fitz.open()
+                doc.new_page(width=float(self.page_size[0]), height=float(self.page_size[1]))
+            else:
+                doc = fitz.open(self.doc_path)
             try:
                 rows = tx.page_lines(doc, self.doc_path, self.page,
                                      tables=self.tables, ocr_text=self.ocr_text,

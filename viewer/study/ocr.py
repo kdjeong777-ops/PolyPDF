@@ -233,6 +233,7 @@ def _image_coverage(page: "fitz.Page") -> float:
 DEFAULT_PSM = 4
 
 DEFAULT_LANG = "kor+eng"
+PHOTO_MAX_SIDE = 4000       # 사진 OCR 긴 변 상한(px) — 단어학습 SOT §14.B·§14.22
 FALLBACK_LANG = "eng"
 
 
@@ -1173,7 +1174,14 @@ class LangPicker:
         self.changed = ""           # 바뀌었으면 사람이 읽을 알림(부르는 쪽이 진행 글에 보인다)
 
     def read(self, doc, page_index: int, **kw) -> dict:
-        res = build_page(doc, page_index, lang=self.lang, **kw)
+        return self._read(lambda lang: build_page(doc, page_index, lang=lang, **kw))
+
+    def read_photo(self, path, rot: int = 0) -> dict:
+        """사진 한 장(단어학습 SOT §14.22) — 언어 고르기는 PDF 와 같다."""
+        return self._read(lambda lang: build_photo(path, lang=lang, rot=rot))
+
+    def _read(self, fn) -> dict:
+        res = fn(self.lang)
         used = self.lang
         self.changed = ""
         if self.adapt and res.get("source") == "ocr":
@@ -1188,15 +1196,79 @@ class LangPicker:
                         # 정한 그 쪽부터 `eng` 로 — 한 쪽을 더 읽는 값은 한 번뿐이다
                         self.lang = "eng"
                         self.changed = tr("한글이 없어 영문으로 읽습니다")
-                        res = build_page(doc, page_index, lang=self.lang, **kw)
+                        res = fn(self.lang)
                         used = self.lang
             elif len(text.strip()) >= 50 and _english_quality(text) < LANG_EN_BACK_Q:
                 self.lang, self._streak = self.base, 0
-                res = build_page(doc, page_index, lang=self.lang, **kw)
+                res = fn(self.lang)
                 used = self.lang
                 self.changed = tr("한글이 보여 한글 + 영문으로 다시 읽습니다")
         res["lang"] = used
         return res
+
+
+def photo_sig(path) -> str:
+    """사진 OCR 의 낡음 판정 표(단어학습 SOT §14.22) — 크기·수정 시각. study.db 의 `engine` 칸 끝에 붙여 남긴다."""
+    st = os.stat(str(path))
+    return "photo:%d:%d" % (st.st_size, st.st_mtime_ns)
+
+
+def _box_rot(x0, y0, x1, y1, rot, w0, h0):
+    """상자(픽셀) — 폭 w0·높이 h0 판에서 시계 방향 rot 만큼 돈 판으로(사진 꾸밈 좌표와 같은 규칙, photo_deco)."""
+    if rot == 90:
+        return h0 - y1, x0, h0 - y0, x1
+    if rot == 180:
+        return w0 - x1, h0 - y1, w0 - x0, h0 - y0
+    if rot == 270:
+        return y0, w0 - x1, y1, w0 - x0
+    return x0, y0, x1, y1
+
+
+def photo_words_view(words, rot: int, w0: float, h0: float) -> list:
+    """회전 0 판 낱말(픽셀 = pt) → 보기 회전 판 낱말. 텍스트 창 줄·본문 강조가 돈 쪽 좌표를 쓴다."""
+    rot = int(rot or 0) % 360
+    if not rot:
+        return [dict(w) for w in words]
+    out = []
+    for w in words:
+        d = dict(w)
+        d["x0"], d["y0"], d["x1"], d["y1"] = _box_rot(w["x0"], w["y0"], w["x1"], w["y1"], rot, w0, h0)
+        out.append(d)
+    return out
+
+
+def build_photo(path, *, lang: str = "eng", rot: int = 0) -> dict:
+    """사진 한 장 OCR(단어학습 SOT §14.22) — 원래 픽셀(EXIF 방향 적용 = 회전 0 판), 보기 회전대로 돌려 읽고 긴 변은
+    `PHOTO_MAX_SIDE` 까지. 낱말 상자는 **회전 0 판 픽셀(= pt)** 로 되돌려 `dpi=72`. `engine` 끝에 `photo_sig`."""
+    from PIL import Image, ImageOps
+    from viewer import photo_io
+    sig = photo_sig(path)
+    photo_io._prep(path)
+    with Image.open(str(path)) as im:
+        im = ImageOps.exif_transpose(im)
+        im.load()
+    w0, h0 = im.size
+    rot = int(rot or 0) % 360
+    if rot:
+        im = im.rotate(-rot, expand=True)               # PIL 은 반시계 — 시계 방향으로
+    vw, vh = im.size
+    s = min(1.0, PHOTO_MAX_SIDE / float(max(vw, vh)))
+    if s < 1.0:
+        im = im.resize((max(1, round(vw * s)), max(1, round(vh * s))), Image.Resampling.LANCZOS)
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGB")
+    res = ocr_image(im, lang=resolve_lang(lang), dpi=72.0 * s)
+    back = (360 - rot) % 360
+    words = []
+    for w in res.get("words") or []:
+        x0, y0, x1, y1 = (float(w[k]) / s for k in ("x0", "y0", "x1", "y1"))
+        x0, y0, x1, y1 = _box_rot(x0, y0, x1, y1, back, vw, vh)
+        d = dict(w)
+        d.update(x0=x0, y0=y0, x1=x1, y1=y1)
+        words.append(d)
+    res["words"] = words
+    res.update(source="ocr", dpi=72, engine="tesseract|" + sig, why={"reason": "photo"}, size=(w0, h0))
+    return res
 
 
 def build_page(doc: "fitz.Document", page_index: int, *,

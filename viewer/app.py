@@ -3575,6 +3575,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         mv = self.main_view
         cur = mv.current_file() if mv else None
+        if cur and mv._doc is not None and getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+            self._photo_text_reload(cur)                   # 261104-10(사진 보기 SOT §4.34): 사진 — 우리 OCR 낱말만
+            return
         if not cur or not str(cur).lower().endswith(".pdf") or mv._doc is None:
             tp.set_page("", 0, [], tr("PDF 를 먼저 여세요."))
             return
@@ -3741,6 +3744,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         cur = mv.current_file() if mv else None
         if not cur or mv._doc is None:
             return
+        if getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+            self._photo_text_blocked()                     # 261104-10(§4.34): 늘린 자리 읽기는 PDF 를 여는 길 — 사진은 [OCR 로 읽기] 로
+            return
         x0, y0, x1, y1 = (float(v) for v in new)
         ox0, _oy0, ox1, _oy1 = (float(v) for v in old)
         strips = []
@@ -3834,6 +3840,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not cur or mv._doc is None:
+            return
+        if getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+            self._photo_ocr_start()                        # 261104-10(사진 보기 SOT §4.34): 지금 사진 한 장 — 묻는 창 없이
             return
         page = mv.current_page()
         self._lite_heavy_notice("OCR")                     # 261021-1(응답성 SOT §4.7)
@@ -4081,6 +4090,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv = self.main_view
         cur = mv.current_file() if mv else None
         if not cur or mv._doc is None:
+            return
+        if getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+            self._photo_text_blocked()                     # 261104-10(사진 보기 SOT §4.34·G1): 사진에는 글자층이 없다 — 원본을 덮어쓰지 않는다
             return
         if getattr(self, "_text_layer_worker", None) is not None:
             self.status.showMessage(tr("글자층을 쓰는 중입니다 — 끝난 뒤 다시 눌러 주세요."), 4000)
