@@ -129,8 +129,8 @@ try:
     # 텍스트 창에 이은 줄 하나(원래 줄 넷) — 실제 추출로
     rows = tx.page_lines(m._doc.doc, src, 0, tables="off")
     joined_row = max(rows, key=lambda r: len(r.get('rects') or []))
-    chk(len(joined_row.get('parts') or []) == len(joined_row.get('rects') or []) >= 2,
-        "③ 이은 줄은 원래 줄마다의 글(`parts`)을 상자 수만큼 가진다", (joined_row.get('parts'), joined_row.get('rects')))
+    chk(len(joined_row.get('line_texts') or []) == len(joined_row.get('rects') or []) >= 2,
+        "③ 이은 줄은 원래 줄마다의 글(`line_texts`)을 상자 수만큼 가진다", (joined_row.get('line_texts'), joined_row.get('rects')))
     tp.set_page(src, 0, rows)
     li = rows.index(joined_row)
     blk = tp.edit.document().findBlockByNumber(li)
@@ -161,7 +161,7 @@ try:
         if "(DSM-I:" in (tp.rows()[li].get("text") or ""):
             break
     t_new = tp.rows()[li].get("text") or ""
-    first, second = (joined_row.get('parts') or ["", ""])[:2]
+    first, second = (joined_row.get('line_texts') or ["", ""])[:2]
     chk(seen.get("psm") == 7, "③ 늘린 띠만 한 줄로 읽는다(psm 7)", seen)
     chk("manual (DSM-I: Diagnostic" in t_new.replace("  ", " "),
         "③ 읽은 글은 그 상자(첫 줄) 끝 — 다음 줄 글 앞에 들어간다", t_new)

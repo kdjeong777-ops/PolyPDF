@@ -546,7 +546,7 @@ class TextPanel(QWidget):
     def stretch_line(self, old_rect, new_rect, text: str) -> bool:
         """본문에서 줄 상자를 끌어 늘린 자리의 글(`text`)을 그 줄의 **그 상자 자리**에 넣는다 (SOT §5.1.5, 261103-15 사용자 지시).
 
-        이은 줄(§3.7)은 원래 줄마다의 글(`parts`)로 상자 `k` 의 글이 어디서 시작하는지 찾는다 — 왼쪽으로 늘렸으면 그 앞,
+        이은 줄(§3.7)은 원래 줄마다의 글(`line_texts`, 261104-11 — `parts` 는 고침 저장소의 (자리, 글) 짝)로 상자 `k` 의 글이 어디서 시작하는지 찾는다 — 왼쪽으로 늘렸으면 그 앞,
         오른쪽이면 다음 상자의 글 앞(마지막이면 줄 끝). 찾지 못하면(사용자가 그 사이를 고쳤다) 첫 상자는 줄 앞, 그 밖은 줄 끝.
         고침으로 남는다(`lineEdited`) — [저장] 때 반영되고, 상자 자리도 늘린 대로 바뀐다."""
         hit = self.find_rect(old_rect)
@@ -558,7 +558,7 @@ class TextPanel(QWidget):
         rects = list(r.get("rects") or ([r["rect"]] if r.get("rect") else []))
         cur_t = r.get("text") or ""
         left = float(new_rect[0]) < float(old_rect[0]) - 0.5
-        parts = list(r.get("parts") or [cur_t])
+        parts = list(r.get("line_texts") or [cur_t])
         starts = None
         if len(parts) == len(rects):
             starts, pos = [], 0
@@ -582,7 +582,7 @@ class TextPanel(QWidget):
         r["text"] = new_t
         if len(parts) == len(rects) and 0 <= k < len(parts):
             parts[k] = (text + " " + parts[k]) if left else (parts[k] + " " + text)
-            r["parts"] = parts
+            r["line_texts"] = parts
         if 0 <= k < len(rects):
             rects[k] = tuple(new_rect)
             r["rects"] = rects

@@ -1866,7 +1866,8 @@ def join_sentences(rows) -> list:
             a = prev['text']
             b_txt = r['text'].lstrip()
             # 261103-15(SOT §5.1.5): 원래 줄마다의 글 — 본문에서 줄 상자 하나를 늘리면 텍스트 창이 그 줄 자리에 넣는다
-            prev['parts'] = list(prev.get('parts') or [a]) + list(r.get('parts') or [b_txt])
+            # 261104-11: 키는 'line_texts'(글 목록) — 'parts' 는 (자리, 글) 짝 목록(text_fix_store·text_apply)이라 같은 이름이면 [PDF 에 반영]·Word 가 깨졌다
+            prev['line_texts'] = list(prev.get('line_texts') or [a]) + list(r.get('line_texts') or [b_txt])
             if sep == '-drop':
                 a, sep = a.rstrip()[:-1], ''
                 b_txt = _dehyphen_ligature(a, b_txt)
