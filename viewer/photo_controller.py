@@ -110,6 +110,7 @@ class PhotoMixin:
                 strip.stop()
         self._photo_gate_actions()
         if not on:
+            self._photo_search_paths = None
             self._photo_deco_gate(True)
             self._photo_info_hide()
             self._photo_resume_index()
@@ -120,9 +121,66 @@ class PhotoMixin:
                 self.progress.setVisible(False)
             except Exception:
                 pass
+            self._photo_index_start()                   # 사진 정보 색인(4.24, D19)
         hook = getattr(self, "_photo_after_mode", None)
         if hook is not None:
             hook(on)
+
+    def _photo_index_start(self):
+        """사진 정보 색인(4.24, D19) — 사진 모드에서 연 폴더(하위 포함)를 배경에서 훑어 바뀐 사진만 다시 읽는다. 앞 일은 멈춘다(세대 토큰)."""
+        folder = getattr(self, "_folder", None)
+        if not folder or not getattr(self, "_photo_mode", False):
+            return
+        from viewer.workers import run_in_thread
+        old = self.__dict__.get("_photo_indexer")
+        if old is not None:
+            old.request_cancel()
+        w = PhotoIndexWorker(str(folder))
+        w.done.connect(self._photo_index_done)
+        self._photo_indexer = w
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_index_done(self, folder: str, n_new: int, n_gone: int, n_total: int):
+        if self.__dict__.get("_photo_indexer") is not None and getattr(self._photo_indexer, "folder", None) == folder:
+            self._photo_indexer = None
+        if n_new or n_gone:
+            self.status.showMessage(tr("사진 색인: {n}장 (새로 {a}·지움 {d})").format(n=n_total, a=n_new, d=n_gone), 4000)
+
+    def _photo_search(self, query: str):
+        """사진 모드 검색(4.24, R13) — 사진 정보 색인에서 이름·촬영일·카메라·태그로 찾아 **썸네일 줄**에 결과를 보이고 첫 사진을 연다.
+        빈 검색어면 폴더 전체로 돌아간다. zip 안 사진은 조각 ③·④ 뒤에 결과에 든다."""
+        from viewer import photo_index
+        q = (query or "").strip()
+        strip = self._photo_strip_widget()
+        if not q:
+            self._photo_search_paths = None
+            cur = self.main_view.current_file() if self.main_view else None
+            strip.set_paths(self._photo_strip_source(), current=str(cur) if cur else None)
+            self.status.showMessage(tr("사진 검색을 지웠습니다 — 폴더 전체."), 3000)
+            return
+        rows = photo_index.search(q, folder=getattr(self, "_folder", None))
+        paths = []
+        zips = {}
+        for r in rows:
+            if r.get("zip"):
+                zips.setdefault(r["zip"], []).append(r["member"])
+                continue
+            p = Path(r["path"])
+            if p.exists():
+                paths.append(str(p))
+        if not paths and zips:
+            # zip 안에서만 찾았다 — 그 zip 을 열어(꺼내) 맞은 사진부터 보인다(4.24 ④)
+            zp, members = next(iter(zips.items()))
+            self._photo_open_zip(zp)
+            self.status.showMessage(tr("'{q}': {name} 안 사진 {n}장").format(q=q, name=Path(zp).name, n=len(members)), 6000)
+            return
+        if not paths:
+            self.status.showMessage(tr("'{q}' 에 맞는 사진이 없습니다.").format(q=q), 5000)
+            return
+        self._photo_search_paths = paths
+        self._on_bookmark_activated(paths[0], 0)
+        strip.set_paths(paths, current=paths[0])
+        self.status.showMessage(tr("사진 검색 '{q}': {n}장").format(q=q, n=len(paths)), 6000)
 
     def _photo_resume_index(self):
         """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""
@@ -199,6 +257,7 @@ class PhotoMixin:
         """책갈피창 목록이 다 찼을 때 — 썸네일 줄이 폴더 전체를 보이는 중이면 새 목록으로(D3)."""
         if not getattr(self, "_photo_mode", False):
             return
+        self._photo_search_paths = None              # 새 목록 — 앞 검색 결과는 내려놓는다
         cur = self.main_view.current_file() if self.main_view else None
         if cur and self._is_photo_path(cur):
             strip = self._photo_strip_widget()
@@ -263,6 +322,9 @@ class PhotoMixin:
             self.page_thumbs.title.setText(self.page_thumbs._format_title(path.name))
         except Exception:
             pass
+        found = self.__dict__.get("_photo_search_paths")
+        if found and str(path) not in found:
+            self._photo_search_paths = None             # 검색 결과·zip 밖 사진을 열었다 — 원천은 다시 책갈피창(4.24)
         strip = self._photo_strip_widget()
         self.page_thumbs.set_alt_view(strip, True)
         strip.set_paths(self._photo_strip_source(), current=str(path))
@@ -286,7 +348,12 @@ class PhotoMixin:
                 p = it.data(0, bt.DATA_FILE)
                 if p and self._is_photo_path(p):
                     sel.append(str(p))
-        return sel if len(sel) > 1 else self._photo_tree_list()
+        if len(sel) > 1:
+            return sel
+        found = self.__dict__.get("_photo_search_paths")
+        if found:
+            return list(found)                       # 사진 검색 결과(4.24) — 넘김·썸네일 줄이 결과 안에서
+        return self._photo_tree_list()
 
     def _photo_step(self, direction: int):
         """다음·이전 사진(4.12) — 묻는 창 없이, 원천은 책갈피창 차례 하나. 목록 끝이면 상태 표시줄 알림만(처음으로 돌지 않는다)."""
@@ -520,9 +587,40 @@ class PhotoMixin:
         elif chosen is a_100:
             self._photo_zoom_actual()
 
+    def _photo_any_cached(self, paths) -> bool:
+        from viewer.photo_zip import is_cached
+        return any(is_cached(p) for p in paths or [])
+
+    def _photo_open_zip(self, zip_path):
+        """사진이 든 zip(4.24) — 배경에서 캐시로 꺼내 썸네일 줄에 보이고 첫 장을 연다. 넘김은 zip 안에서."""
+        from viewer.workers import run_in_thread
+        old = self.__dict__.get("_photo_zipper")
+        if old is not None:
+            old.request_cancel()
+        w = PhotoZipWorker(str(zip_path))
+        w.done.connect(self._photo_zip_opened)
+        self._photo_zipper = w
+        self.status.showMessage(tr("zip 여는 중… {name}").format(name=Path(str(zip_path)).name), 3000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_zip_opened(self, zip_path: str, paths: list):
+        if self.__dict__.get("_photo_zipper") is not None and self._photo_zipper.zip_path != zip_path:
+            return                                       # 그새 다른 zip 을 열었다
+        self._photo_zipper = None
+        if not paths:
+            self.status.showMessage(tr("zip 에서 사진을 꺼내지 못했습니다: {name}").format(name=Path(zip_path).name), 5000)
+            return
+        self._photo_search_paths = list(paths)            # 썸네일 줄·넘김의 원천 = zip 안 사진
+        self._on_bookmark_activated(paths[0], 0)
+        self._photo_strip_widget().set_paths(paths, current=paths[0])
+        self.status.showMessage(tr("{name}: 사진 {n}장(읽기 전용)").format(name=Path(zip_path).name, n=len(paths)), 5000)
+
     def _photo_save_orientation(self):
         """보기 회전을 원본 JPEG 의 방향 태그에(D17, 4.17) — 배경 한 길, 끝나면 `_photo_orient_saved`."""
         cur = self.main_view.current_file() if self.main_view else None
+        if cur and self._photo_any_cached([cur]):
+            self.status.showMessage(tr("zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."), 5000)
+            return
         rot = self._photo_rot_for(cur) if cur else 0
         if not cur or not rot or self.__dict__.get("_photo_orient_busy"):
             return
@@ -591,7 +689,12 @@ class PhotoMixin:
     def _photo_action(self, kind: str, paths: list):
         """사진 모드 메뉴의 일(4.20) — 책갈피창·썸네일 줄·본문이 같은 함수를 부른다."""
         paths = [str(p) for p in (paths or []) if p]
+        if kind not in ("copy_path", "reveal"):
+            paths = [p for p in paths if self._is_photo_path(p)]     # zip 줄 등 사진 아닌 것은 빼고(4.24)
         if not paths:
+            return
+        if kind in ("share_gps", "share_all", "flatten", "reveal", "rot_l", "rot_r") and self._photo_any_cached(paths):
+            self.status.showMessage(tr("zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."), 5000)
             return
         from PyQt6.QtWidgets import QApplication
         if kind == "copy_path":
@@ -1215,6 +1318,149 @@ def photo_io_is_jpeg(path) -> bool:
 def _photo_doc_cls():
     from viewer.photo_doc import PhotoDocument
     return PhotoDocument
+
+
+class PhotoIndexWorker(QObject):
+    """사진 정보 색인(사진 보기 SOT 4.24) — 폴더(하위 포함) 사진을 훑어 바뀐 것만 머리를 읽어 넣는다, 사라진 것은 지운다.
+    응답성 SOT §4.4 감사표의 한 행(배경·pacing·취소)."""
+    done = pyqtSignal(str, int, int, int)      # 폴더, 새로·고친 장 수, 지운 장 수, 모두
+    finished = pyqtSignal()
+
+    def __init__(self, folder: str):
+        super().__init__()
+        self.folder = str(folder)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def _index_zip(self, con, zpath: str, old: dict, seen: set, tags) -> int:
+        """zip 안 사진(4.24 ④) — 열쇠 `<zip 소문자 경로>|<안 이름>`, 크기·시각은 zip 의 것(zip 이 그대로면 다시 읽지 않는다)."""
+        import os
+        from viewer import pacing, photo_index, photo_zip
+        try:
+            st = os.stat(zpath)
+        except OSError:
+            return 0
+        members = photo_zip.photo_members(zpath)
+        zkey = os.path.normcase(zpath)
+        n = 0
+        for m in members:
+            if self._cancel:
+                break
+            key = zkey + "|" + m
+            seen.add(key)
+            if old.get(key) == (st.st_size, st.st_mtime_ns):
+                continue
+            try:
+                from viewer.photo_io import photo_info
+                info = photo_info(m, photo_zip.member_bytes(zpath, m))
+            except Exception:
+                info = {}
+            name = m.replace("\\", "/").split("/")[-1]
+            photo_index.upsert(con, key, zpath + "|" + m, os.path.normcase(os.path.dirname(zpath)), name,
+                               os.path.splitext(name)[1].lower(), st.st_size, st.st_mtime_ns, info,
+                               tags.get(zpath) if tags is not None else [], zip_path=zpath, member=m)
+            n += 1
+            pacing.pace(self)
+        return n
+
+    def run(self):
+        import os
+        from viewer import pacing, photo_index
+        from viewer.image_page import PHOTO_EXTS
+        n_new = n_gone = total = 0
+        try:
+            root = photo_index.norm_folder(self.folder)
+            tags = None
+            try:
+                from viewer.tag_store import TagStore
+                tags = TagStore()
+            except Exception:
+                tags = None
+            con = photo_index.connect()
+            try:
+                old = photo_index.known(con, root)
+                seen = set()
+                batch = 0
+                for dirpath, dirnames, filenames in os.walk(root):
+                    if self._cancel:
+                        break
+                    dirnames[:] = [d for d in dirnames if not d.startswith((".", "~"))]
+                    for fn in filenames:
+                        if self._cancel:
+                            break
+                        ext = os.path.splitext(fn)[1].lower()
+                        if ext == ".zip" and not fn.startswith("~"):
+                            n_new += self._index_zip(con, os.path.join(dirpath, fn), old, seen, tags)
+                            continue
+                        if ext not in PHOTO_EXTS or fn.startswith("~"):
+                            continue
+                        full = os.path.join(dirpath, fn)
+                        key = os.path.normcase(full)
+                        seen.add(key)
+                        total += 1
+                        try:
+                            st = os.stat(full)
+                        except OSError:
+                            continue
+                        if old.get(key) == (st.st_size, st.st_mtime_ns):
+                            continue
+                        try:
+                            from viewer.photo_io import photo_info
+                            info = photo_info(full)
+                        except Exception:
+                            info = {}
+                        t = tags.get(full) if tags is not None else []
+                        photo_index.upsert(con, key, full, os.path.normcase(dirpath), fn, ext, st.st_size, st.st_mtime_ns, info, t)
+                        n_new += 1
+                        batch += 1
+                        if batch >= 50:
+                            con.commit()
+                            batch = 0
+                        pacing.pace(self)
+                if not self._cancel:
+                    gone = [k for k in old if k not in seen]
+                    photo_index.remove(con, gone)
+                    n_gone = len(gone)
+                con.commit()
+            finally:
+                con.close()
+        except Exception:
+            pass
+        finally:
+            self.done.emit(self.folder, n_new, n_gone, total)
+            self.finished.emit()
+
+
+class PhotoZipWorker(QObject):
+    """사진이 든 zip 을 캐시로 꺼낸다(사진 보기 SOT 4.24 ③) — 배경, 취소 가능. 응답성 SOT §4.4 감사표의 한 행."""
+    done = pyqtSignal(str, list)
+    finished = pyqtSignal()
+
+    def __init__(self, zip_path: str):
+        super().__init__()
+        self.zip_path = zip_path
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        out = []
+        try:
+            from viewer import photo_zip
+            out = photo_zip.extract(self.zip_path, should_cancel=lambda: self._cancel)
+            try:
+                photo_zip.prune_cache()
+            except Exception:
+                pass
+        except Exception:
+            out = []
+        finally:
+            if not self._cancel:
+                self.done.emit(self.zip_path, out)
+            self.finished.emit()
 
 
 class PhotoPreloadWorker(QObject):

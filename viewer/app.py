@@ -6778,6 +6778,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.progress.setVisible(False)
             except Exception:
                 pass
+            self._photo_index_start()                 # 261104-4(사진 보기 SOT 4.24, D19): 대신 사진 정보 색인
             return
         self._cancel_active_indexing()
         self._index_workers.append(worker)
@@ -7193,6 +7194,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._content_query = query
             self._open_content_find(query)
             return
+        if getattr(self, "_photo_mode", False):
+            self._photo_search(query)                 # 261104-4(사진 보기 SOT 4.24, R13): 사진 모드는 사진 정보 색인만
+            return
         if not self._folder:
             self.status.showMessage(tr("폴더를 먼저 여세요."))
             return
@@ -7455,6 +7459,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 else:
                     self.main_view.set_hover_words([])
                     self._apply_vocab_marks(item.page_index or 0, [])
+            elif self._photo_mode and path.suffix.lower() == ".zip":
+                self._photo_open_zip(path)            # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip — 꺼내 썸네일 줄에
+                return
             elif self._photo_mode and self._is_photo_path(path):
                 # 261104-2(사진 보기 SOT 4.4 (다)): 사진 모드 — 사진 문서로(경로는 원본, 그림은 Pillow 로 필요한 크기만)
                 from viewer.photo_doc import PhotoFormatMissing

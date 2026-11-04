@@ -318,17 +318,27 @@ def _num(v):
             return None
 
 
-def photo_info(path) -> dict:
-    """사진 정보 — 배경에서 부른다(머리만 읽는다). 키: taken·width·height·bytes·camera·format·exif(태그 이름 → 값 글)·gps((위도, 경도) 또는 None)·icc(프로필 이름)."""
+def photo_info(path, data: bytes | None = None) -> dict:
+    """사진 정보 — 배경에서 부른다(머리만 읽는다). 키: taken·width·height·bytes·camera·format·exif(태그 이름 → 값 글)·gps((위도, 경도) 또는 None)·icc(프로필 이름).
+    `data` 를 주면 파일 대신 그 바이트(zip 안 사진, 사진 보기 SOT 4.24) — `path` 는 이름(확장자)으로만 쓴다."""
     info = {"taken": "", "width": 0, "height": 0, "bytes": 0, "camera": "", "format": "", "exif": {}, "gps": None, "icc": ""}
-    try:
-        info["bytes"] = os.path.getsize(str(path))
-    except OSError:
-        pass
-    _prep(path)
+    if data is not None:
+        info["bytes"] = len(data)
+        heif = Path(str(path)).suffix.lower() in HEIF_EXTS or (len(data) >= 12 and data[4:8] == b"ftyp" and data[8:12] in _HEIF_BRANDS)
+        if heif:
+            heif_ready()
+        src = io.BytesIO(data)
+    else:
+        try:
+            info["bytes"] = os.path.getsize(str(path))
+        except OSError:
+            pass
+        _prep(path)
+        heif = is_heif(path)
+        src = str(path)
     from PIL import Image
-    with Image.open(str(path)) as im:
-        info["format"] = "HEIC" if is_heif(path) else (im.format or "")
+    with Image.open(src) as im:
+        info["format"] = "HEIC" if heif else (im.format or "")
         ex = im.getexif()
         o = int(ex.get(ORIENT_TAG, 1) or 1)
         w, h = im.size

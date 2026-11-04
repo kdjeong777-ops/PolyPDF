@@ -66,7 +66,7 @@ def safe_name(s: str, fallback: str = "", maxlen: int = 80) -> str:
     return out[:maxlen] if out else fallback
 
 
-def iter_pdfs(folder, should_cancel=None, stats=None, exts=(".pdf",)):
+def iter_pdfs(folder, should_cancel=None, stats=None, exts=(".pdf",), keep=None):
     """260906-1: `folder` 하위의 PDF 를 하나씩 내놓는 제너레이터 (`rglob("*.pdf")` 대체).
 
     `Path.rglob` 은 **끝까지 돌아야** 첫 결과를 쓸 수 있고 중간에 멈출 수도 없어,
@@ -84,6 +84,7 @@ def iter_pdfs(folder, should_cancel=None, stats=None, exts=(".pdf",)):
       (실측: 외장 SSD 의 PDF 28,954개를 수정일로 정렬하는 데 **12.5초**, 그동안 창이 멈춘다).
     - 261104-2(사진 보기 SOT §3.7·4.3): `exts` — 고를 확장자(소문자 튜플). 사진 모드가 그림 확장자로 같은 길을 쓴다.
       색인은 기본값(PDF 만) 그대로다.
+    - 261104-4(사진 보기 SOT 4.24): `keep(경로)` 를 주면 그것이 False 인 항목은 뺀다(사진 모드 — 사진이 없는 zip).
     """
     stack = [str(folder)]
     while stack:
@@ -97,6 +98,8 @@ def iter_pdfs(folder, should_cancel=None, stats=None, exts=(".pdf",)):
                         if entry.is_dir(follow_symlinks=False):
                             stack.append(entry.path)
                         elif entry.name.lower().endswith(exts):
+                            if keep is not None and not keep(entry.path):
+                                continue
                             if stats is not None:
                                 try:
                                     st = entry.stat(follow_symlinks=False)

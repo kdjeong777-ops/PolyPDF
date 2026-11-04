@@ -289,8 +289,20 @@ class BookmarkTree(QWidget):
     def _list_exts(self) -> tuple:
         if self._photo_on():
             from viewer.image_page import PHOTO_EXTS
-            return tuple(sorted(PHOTO_EXTS))
+            return tuple(sorted(PHOTO_EXTS)) + (".zip",)       # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip 도
         return (".pdf",)
+
+    def _list_keep(self):
+        """목록에 둘지 — 사진 모드의 zip 은 사진이 든 것만(4.24). 그 밖은 모두."""
+        if not self._photo_on():
+            return None
+
+        def keep(p):
+            if not str(p).lower().endswith(".zip"):
+                return True
+            from viewer.photo_zip import has_photos
+            return has_photos(p)
+        return keep
 
     def set_photo_mode(self, on: bool) -> None:
         """사진 모드를 켜고 끈다 — 그림 파일만 보이고(확장자는 이름에서 빼고 형식 아이콘), 정렬에 '확장자 순'.
@@ -837,7 +849,7 @@ class BookmarkTree(QWidget):
 
         stats: dict = {}
         try:
-            found = list(iter_pdfs(self._root_dir, should_cancel=_expired, stats=stats, exts=self._list_exts()))
+            found = list(iter_pdfs(self._root_dir, should_cancel=_expired, stats=stats, exts=self._list_exts(), keep=self._list_keep()))
         except Exception:
             found = []
         if not _expired():
@@ -855,7 +867,7 @@ class BookmarkTree(QWidget):
         from viewer.workers import FolderScanWorker, run_in_thread
         self._scan_token += 1
         token = self._scan_token
-        w = FolderScanWorker(folder, exts=self._list_exts())
+        w = FolderScanWorker(folder, exts=self._list_exts(), keep=self._list_keep())
         self._scan_worker = w
         w.batch.connect(lambda paths, st, t=token: self._on_scan_batch(t, paths, st))
         w.finished.connect(lambda done, t=token: self._on_scan_done(t, done))

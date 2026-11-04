@@ -462,9 +462,10 @@ def color_icon(name: str, dark: bool | None = None, size: int = 16, *, dpr: floa
 FILE_KIND_COLOR = {"PDF": {False: "#d93025", True: "#ef5350"}, "JPG": ACCENT["play"],
                    "PNG": OK_GREEN, "HEIC": {False: "#7b3fb3", True: "#b388e8"},
                    "GIF": {False: "#d9822b", True: "#f0a050"}, "TIF": FILE_GRAY, "BMP": FILE_GRAY,
-                   "WEBP": {False: "#00838f", True: "#4dd0e1"}}
+                   "WEBP": {False: "#00838f", True: "#4dd0e1"},
+                   "ZIP": {False: "#8d6e63", True: "#bcaaa4"}}     # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip
 EXT_KIND = {".pdf": "PDF", ".jpg": "JPG", ".jpeg": "JPG", ".png": "PNG", ".heic": "HEIC", ".heif": "HEIC",
-            ".gif": "GIF", ".tif": "TIF", ".tiff": "TIF", ".bmp": "BMP", ".webp": "WEBP"}   # 같은 형식의 다른 확장자는 한 아이콘
+            ".gif": "GIF", ".tif": "TIF", ".tiff": "TIF", ".bmp": "BMP", ".webp": "WEBP", ".zip": "ZIP"}   # 같은 형식의 다른 확장자는 한 아이콘
 FILE_KIND_LINE = {False: "#9aa3ad", True: "#6b737c"}     # 종이 테두리
 INK_DARK = "#1e1f22"                                      # 밝은 띠 위 글자
 _FILE_KIND_CACHE: dict = {}
