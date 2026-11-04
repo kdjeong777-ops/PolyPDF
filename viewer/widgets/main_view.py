@@ -2134,6 +2134,37 @@ class MainView(QWidget):
             self._scroll_to_current_match()
         return True
 
+    def close_document(self) -> None:
+        """문서를 놓고 빈 화면(안내 글) — 모드를 바꿀 때 앞 모드의 문서가 남지 않게(사진 보기 SOT 4.2, 261104-17 사용자 보고)."""
+        if self._doc is not None:
+            try:
+                self._doc.close()
+            except Exception:
+                pass
+            self._doc = None
+        self._close_staged_doc()
+        self._nav_pages = None
+        self._nav_pos = {}
+        self._nav_ordered = False
+        self._photo_pos = None
+        self._is_image = False
+        self._search_gen += 1
+        self._search_todo = []
+        self._matches = []
+        self._current_match = -1
+        self._view_src_cache = None
+        self._page_words = []
+        try:
+            self.clear_text_selection()
+        except Exception:
+            pass
+        self.scene.clear()
+        self._page_item = None
+        self.view._image_mode = False
+        self.spin_page.setMaximum(1)
+        self.lbl_page_total.setText("/ 0")
+        self._update_empty_label()
+
     def load_image(self, file_path):
         if self._doc is not None:
             self._doc.close()

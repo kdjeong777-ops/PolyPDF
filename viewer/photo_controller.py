@@ -93,12 +93,80 @@ class PhotoMixin:
         on = bool(on) and self._photo_enabled()
         if on == self._photo_mode:
             return
+        if not self._photo_leave_guard():                # 저장 안 한 편집 — 취소면 모드를 바꾸지 않는다(261104-17)
+            self._photo_refresh_button()
+            return
+        mv = getattr(self, "main_view", None)
+        prev = mv.current_file() if mv is not None else None
+        prev_page = mv.current_page() if (mv is not None and prev) else 0
+        if prev and not self._photo_mode and str(prev).lower().endswith(".pdf"):
+            self._photo_pdf_last = (str(prev), int(prev_page or 0))   # PDF 는 보던 쪽까지(이 실행 안)
         self._photo_mode = on
         if remember:
             self._photo_prefs()["mode"] = "photo" if on else "pdf"
         self._photo_swap_lists(on)
         self._photo_refresh_button()
         self._photo_on_mode_changed(on)
+        self._photo_swap_document(on, prev)
+
+    def _photo_leave_guard(self) -> bool:
+        """모드를 바꾸기 전 — 편집 모드의 저장 안 한 꾸밈·쪽 편집은 파일을 옮길 때와 같은 확인 창(`_confirm_edit_save`). 취소면 False."""
+        try:
+            meta_dirty = self._in_edit() and self._edit_snap is not None and self._edit_dirty
+            page_dirty = self._in_edit() and self._page_edits_dirty()
+        except Exception:
+            return True
+        if not (meta_dirty or page_dirty):
+            return True
+        cur = self.main_view.current_file() if self.main_view else None
+        choice = self._confirm_edit_save(switching=True)
+        if choice == "cancel":
+            return False
+        if choice == "save":
+            if page_dirty and cur:
+                self._save_page_edits_for(cur)
+            if meta_dirty:
+                self._commit_edit()
+        else:
+            if meta_dirty:
+                self._restore_edit()
+            if page_dirty and cur:
+                self._discard_page_edits(cur)
+        self._edit_snap = None
+        return True
+
+    def _photo_swap_document(self, on: bool, prev):
+        """모드가 바뀌면 본문(과 썸네일 칸·텍스트 창·쪽 칸)이 앞 모드 문서를 버리고 새 모드의 마지막 자리를 연다 —
+        그 모드의 **최근 파일 맨 앞**(모드마다 따로, 4.7 — 사진 모드면 마지막에 본 사진), PDF 는 이 실행에서 보던 쪽까지.
+        없으면 빈 화면(4.2, 261104-17 사용자 보고)."""
+        from viewer.history import HistoryItem
+        mv = self.main_view
+        target, page = None, 0
+        last = self.__dict__.get("_photo_pdf_last") if not on else None
+        if last and os.path.isfile(last[0]):
+            target, page = last
+        else:
+            for t in list(getattr(self, "_recent_files", []) or []):
+                ok = self._is_photo_path(t) if on else str(t).lower().endswith(".pdf")
+                if ok and os.path.isfile(str(t)) and not self._photo_any_cached([str(t)]):
+                    target = str(t)
+                    break
+        if prev and target and os.path.normcase(str(prev)) == os.path.normcase(target):
+            return
+        try:
+            mv.close_document()
+            self.page_thumbs.clear_document()
+            self.page_thumbs.set_title("")
+        except Exception:
+            pass
+        self._current_main = None
+        try:
+            self._reload_text_panel()
+            self._update_title()
+        except Exception:
+            pass
+        if target:
+            self._load_main(HistoryItem(target, int(page or 0), "", "bookmark"))
 
     def _photo_on_mode_changed(self, on: bool):
         """모드가 바뀐 뒤 — 원천을 바꾼다(4.2). 메인이 하는 일은 보이는 것 바꾸기뿐, 훑기·디코드는 배경(§6, 응답성 SOT §5)."""

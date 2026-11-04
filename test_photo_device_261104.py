@@ -119,6 +119,7 @@ try:
     chk([tree.topLevelItem(i).text(0) for i in range(2)] == ["Apple iPhone", "잠긴 폰"], "A 장치 줄은 책갈피창 맨 위(사용자 지시)",
         str([tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]))
     iph = next((r for r in devrows() if r.text(0) == "Apple iPhone"), None)
+    IPH = lambda: next(r for r in devrows() if r.text(0) == "Apple iPhone")   # 목록을 다시 늘어놓으면 줄이 새로 생긴다 — 그때그때 찾는다
     kids = [iph.child(i).text(0) for i in range(iph.childCount())] if iph else []
     chk(kids == ["202611_a", "202610_a"], "A 아래에 사진 폴더 — 새것부터", str(kids))
     chk(all(n.data(0, bt.DATA_FILE) for n in bt._iter_file_nodes()) and
@@ -136,7 +137,7 @@ try:
         now = time.perf_counter(); gap[0] = max(gap[0], now - last[0]); last[0] = now
     from PyQt6.QtCore import QTimer
     hb = QTimer(); hb.setInterval(10); hb.timeout.connect(beat); hb.start()
-    mw._photo_device_clicked(iph.child(0))
+    mw._photo_device_clicked(IPH().child(0))
     names = lambda: [Path(p).name for p in strip.paths()]
     chk(pump(lambda: names() == ["IMG_0001.JPG", "IMG_0002.JPG", "IMG_0004.PNG"] and mw.__dict__.get("_photo_dev_worker") is None, timeout=10),
         "B 그 폴더 사진만 썸네일 줄에(사진 아닌 것은 빼고)", str(names()))
@@ -156,8 +157,8 @@ try:
 
     # D
     before = fake.copies
-    mw._photo_device_clicked(iph.child(1)); pump(lambda: names() == ["IMG_0100.JPG"], timeout=5)
-    mw._photo_device_clicked(iph.child(0))
+    mw._photo_device_clicked(IPH().child(1)); pump(lambda: names() == ["IMG_0100.JPG"], timeout=5)
+    mw._photo_device_clicked(IPH().child(0))
     pump(lambda: len(names()) == 3 and mw.__dict__.get("_photo_dev_worker") is None, timeout=5)
     chk(fake.copies == before + 1, "D 다시 열면 장치에서 다시 받지 않는다", "%d → %d" % (before, fake.copies))
 
