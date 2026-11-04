@@ -111,6 +111,7 @@ class PhotoMixin:
             if not on:
                 strip.stop()
         self._photo_gate_actions()
+        self._photo_watch_update()                     # 폴더 감시(4.27, 261104-7 B2) — 사진 모드에서만
         if not on:
             self._photo_search_paths = None
             self._photo_deco_gate(True)
@@ -183,6 +184,56 @@ class PhotoMixin:
         self._on_bookmark_activated(paths[0], 0)
         strip.set_paths(paths, current=paths[0])
         self.status.showMessage(tr("사진 검색 '{q}': {n}장").format(q=q, n=len(paths)), 6000)
+
+    # ── 폴더 감시 (4.27, 261104-7 B2 — 사진 SOT §5 '폴더 감시') ─────────────────
+    def _photo_watch_update(self):
+        """사진 모드에서 보는 폴더 **하나**만 감시한다(하위 폴더는 보지 않는다). 사진 모드가 아니면 감시를 놓는다."""
+        from PyQt6.QtCore import QFileSystemWatcher, QTimer
+        w = self.__dict__.get("_photo_watcher")
+        folder = str(getattr(self, "_folder", "") or "")
+        want = folder if (getattr(self, "_photo_mode", False) and folder and os.path.isdir(folder)) else ""
+        if w is None:
+            if not want:
+                return
+            w = QFileSystemWatcher(self)
+            w.directoryChanged.connect(lambda _p: self._photo_watch_timer.start())
+            t = QTimer(self)
+            t.setSingleShot(True)
+            t.setInterval(WATCH_DEBOUNCE_MS)
+            t.timeout.connect(self._photo_watch_fire)
+            self._photo_watcher, self._photo_watch_timer = w, t
+        cur = w.directories()
+        if cur and (not want or os.path.normcase(cur[0]) != os.path.normcase(want)):
+            w.removePaths(cur)
+            self._photo_watch_sig = None
+        if want and not w.directories():
+            w.addPath(want)
+            self._photo_watch_sig = None
+            self._photo_watch_fire(quiet=True)          # 지금 지문을 잡아 둔다(다음 바뀜과 견주게)
+
+    def _photo_watch_fire(self, quiet: bool = False):
+        """알림을 모은 뒤 — 배경에서 사진·zip 목록 지문을 재고 바뀌었을 때만 다시 읽는다(우리가 쓰는 사이드카 `page_meta.json` 등은 지문에 없다)."""
+        folder = str(getattr(self, "_folder", "") or "")
+        if not folder or not getattr(self, "_photo_mode", False):
+            return
+        from viewer.workers import run_in_thread
+        w = PhotoWatchScanWorker(folder)
+        w.done.connect(lambda f, sig, q=quiet: self._photo_watch_scanned(f, sig, q))
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_watch_scanned(self, folder: str, sig, quiet: bool):
+        if not getattr(self, "_photo_mode", False) or os.path.normcase(folder) != os.path.normcase(str(getattr(self, "_folder", "") or "")):
+            return
+        old = self.__dict__.get("_photo_watch_sig")
+        self._photo_watch_sig = sig
+        if quiet or old is None or old == sig:
+            return
+        bt = self.bookmark_tree
+        if bt.is_edit_mode() and getattr(bt, "_dirty", False):
+            return                                       # 저장 안 한 고침이 있으면 다시 읽지 않는다(묻는 창을 띄우지 않게)
+        bt.refresh()                                     # 다시 읽기(폴더 열기 3단 — 배경 훑기)
+        self._photo_index_start()                        # 사진 색인도 바뀐 것만
+        self.status.showMessage(tr("폴더가 바뀌어 사진 목록을 새로 읽었습니다."), 3000)
 
     def _photo_resume_index(self):
         """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""
@@ -261,10 +312,12 @@ class PhotoMixin:
         if not getattr(self, "_photo_mode", False):
             return
         self._photo_search_paths = None              # 새 목록 — 앞 검색 결과는 내려놓는다
+        self._photo_watch_update()                   # 폴더가 바뀌었으면 감시도 그 폴더로(4.27)
         cur = self.main_view.current_file() if self.main_view else None
         if cur and self._is_photo_path(cur):
             strip = self._photo_strip_widget()
             strip.set_paths(self._photo_strip_source(), current=str(cur))
+            self._photo_sync_tree(cur)               # 다시 읽은 목록에서도 그 줄(4.26)
 
     def _photo_gate_actions(self):
         """사진 모드면 `PHOTO_OFF_CMDS` 를 끈다 — 끈 것만 기억했다가 PDF 모드에서 되살리고, 키·언어 판정
@@ -1520,6 +1573,40 @@ def photo_io_is_jpeg(path) -> bool:
 def _photo_doc_cls():
     from viewer.photo_doc import PhotoDocument
     return PhotoDocument
+
+
+WATCH_DEBOUNCE_MS = 300        # 폴더 감시 알림을 모으는 시간(4.27) — 카메라·캡처가 여러 장을 잇달아 쓸 때 한 번만
+
+
+class PhotoWatchScanWorker(QObject):
+    """폴더 감시(4.27) — 보는 폴더(하위 빼고)의 사진·zip 지문(이름·크기·수정 시각)을 배경에서. 응답성 SOT §4.4 감사표의 한 행."""
+    done = pyqtSignal(str, object)
+    finished = pyqtSignal()
+
+    def __init__(self, folder: str):
+        super().__init__()
+        self.folder = folder
+
+    def request_cancel(self):
+        pass
+
+    def run(self):
+        sig = None
+        try:
+            from viewer.image_page import PHOTO_EXTS
+            exts = tuple(PHOTO_EXTS) + (".zip",)
+            items = []
+            with os.scandir(self.folder) as it:
+                for e in it:
+                    if e.is_file() and e.name.lower().endswith(exts) and not e.name.startswith("~"):
+                        st = e.stat()
+                        items.append((e.name.lower(), st.st_size, st.st_mtime_ns))
+            sig = frozenset(items)
+        except OSError:
+            sig = None
+        finally:
+            self.done.emit(self.folder, sig)
+            self.finished.emit()
 
 
 class PhotoIndexWorker(QObject):

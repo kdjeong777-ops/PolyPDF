@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 16:15+0900\n"
+"POT-Creation-Date: 2026-11-04 16:20+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3932,6 +3932,10 @@ msgstr "{stem}_compressed"
 #: viewer/photo_controller.py
 msgid "사진 정보"
 msgstr "Photo Info"
+
+#: viewer/photo_controller.py
+msgid "폴더가 바뀌어 사진 목록을 새로 읽었습니다."
+msgstr "The folder changed, so the photo list was reloaded."
 
 #: viewer/photo_controller.py
 msgid "PDF 모드로 바꾸기"
