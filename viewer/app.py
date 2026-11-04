@@ -1392,6 +1392,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             lambda step, i=idx: (i == self._active_pane) and self._on_image_step(step))
         mv.imageGotoRequested.connect(
             lambda p, i=idx: (i == self._active_pane) and self._on_image_goto(p))
+        mv.photoGotoRequested.connect(                    # 261104-2(사진 보기 SOT 4.12): 쪽 칸에 사진 순번
+            lambda p, i=idx: (i == self._active_pane) and self._photo_goto(p))
         mv.fileBoundaryRequested.connect(
             lambda d, i=idx: self._on_file_boundary(d, i))
         mv.cropRequested.connect(lambda i=idx: self._open_crop_dialog(view=self._mv[i]))   # 261010-7(§4.7.15)
@@ -7565,6 +7567,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.main_view.set_copy_allowed(can_copy)
         except Exception:
             pass
+        # 261104-2(사진 보기 SOT 4.13): 위에서 다시 켠 명령(병합 등)을 사진 모드면 다시 끈다 — 끄는 길은 하나
+        if getattr(self, "_photo_mode", False):
+            self._photo_gate_actions()
 
     def _on_file_boundary(self, direction: int, idx: int):
         """260609-2: 마지막/첫 페이지 경계에서 책갈피창의 다음/이전 파일로 이동.

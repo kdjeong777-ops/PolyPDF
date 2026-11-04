@@ -1123,7 +1123,7 @@ class PageThumbs(QWidget):
     def set_alt_view(self, w, on: bool) -> None:
         """261104-2(사진 보기 SOT 4.3): 사진 모드 — 쪽 목록·필터 단추 대신 `w`(사진 썸네일 줄)를 이 칸에 보인다.
         칸 자체(분할기 자리·폭·숨기기)는 그대로 — 저장된 분할기 상태가 위젯 수에 묶여 있어 새 칸을 만들지 않는다."""
-        if w.parent() is not self:
+        if self.layout().indexOf(w) < 0:          # 부모만 보면 안 된다 — 이 칸을 부모로 만든 위젯이 레이아웃 밖에 떠 있었다(261104-2 손 확인)
             self.layout().addWidget(w, 1)
         w.setVisible(bool(on))
         self.list.setVisible(not on)

@@ -42,6 +42,8 @@ from viewer import perf_mode                 # 261021-1: 가벼운 넘김(응답
 from viewer.resources_path import resource_path
 from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
 
+PHOTO_FIT_MAX = 1.0                          # 261104-2(사진 보기 SOT 4.4): 맞춤 배율 상한 — 사진 픽셀 = 화면 논리 픽셀(작은 사진을 키우지 않는다)
+
 
 def _hyperlink_icon(ln: dict) -> str:
     """260611-107: 하이퍼링크 종류별 아이콘 — 사진/영상/유튜브/파일/링크."""
@@ -1666,6 +1668,7 @@ class MainView(QWidget):
     textCopied = pyqtSignal(int)                 # 260616-21: 텍스트 복사됨(글자수)
     imageStepRequested = pyqtSignal(int)         # v1.6.4 C2: 이미지 모드 ◀▶ (±1)
     imageGotoRequested = pyqtSignal(int)         # v1.6.8 F2: 이미지 모드 페이지번호 입력 (0-based)
+    photoGotoRequested = pyqtSignal(int)         # 261104-2(사진 보기 SOT 4.12): 사진 모드 쪽 칸 = 사진 목록 순번 입력 (0-based)
     fileBoundaryRequested = pyqtSignal(int)      # 260609-2: 마지막/첫 페이지 경계에서 다음/이전 파일 (±1)
     cropRequested = pyqtSignal()                 # 261010-7(마스터 §4.7.15): 툴바 크롭 단추
     signRequested = pyqtSignal()                 # 261010-22(보안 SOT §3): 툴바 전자서명 단추
@@ -2102,6 +2105,7 @@ class MainView(QWidget):
         self._nav_pages = None
         self._nav_pos = {}
         self._nav_ordered = False
+        self._photo_pos = None               # 261104-2: 사진 목록 순번 — 앱이 사진을 연 뒤 set_photo_position 으로 넣는다
         self._doc = newdoc
         self._is_image = False               # v1.6.4 C2: PDF 모드
         self._update_empty_label()           # 260606-30: 문서 로드 → 안내 숨김
@@ -2135,6 +2139,7 @@ class MainView(QWidget):
             self._doc.close()
             self._doc = None
         self._is_image = True                # v1.6.4 C2: 이미지 모드 → ◀▶ 가 리스트 순회
+        self._photo_pos = None               # 261104-2: 사진 목록 순번은 사진 문서에만
         self._update_empty_label()           # 260606-30: 이미지 로드 → 안내 숨김
         self._search_gen += 1                # 261025-11: 앞 문서의 매치 수집을 멈춘다
         self._search_todo = []
@@ -2218,6 +2223,18 @@ class MainView(QWidget):
 
     def current_file(self):
         return str(self._doc.path) if self._doc else None
+
+    def set_photo_position(self, idx0: int, total: int) -> None:
+        """261104-2(사진 보기 SOT 4.12): 사진 문서는 쪽이 하나뿐 — 쪽 칸에 **사진 목록 안 순번** i / N 을 보인다."""
+        total = max(1, int(total))
+        idx0 = max(0, min(total - 1, int(idx0)))
+        self._photo_pos = (idx0, total)
+        self.spin_page.blockSignals(True)
+        self.spin_page.setMinimum(1)
+        self.spin_page.setMaximum(total)
+        self.spin_page.setValue(idx0 + 1)
+        self.spin_page.blockSignals(False)
+        self.lbl_page_total.setText(f"/ {total}")
 
     def current_page(self) -> int:
         return self._current_page
@@ -2556,7 +2573,8 @@ class MainView(QWidget):
         else:
             _sb.setValue(0)                                  # 페이지 상단으로(지금 쪽 원점)
         self.spin_page.blockSignals(True)
-        self.spin_page.setValue(page_index + 1)
+        pp = getattr(self, "_photo_pos", None)
+        self.spin_page.setValue((pp[0] if pp else page_index) + 1)   # 261104-2: 사진은 목록 순번
         self.spin_page.blockSignals(False)
         self.pageChanged.emit(page_index)
         self._update_match_counter()
@@ -2628,7 +2646,10 @@ class MainView(QWidget):
     def _on_spin_edited(self):
         """페이지 번호 입력 — v1.6.8 F2: 이미지 모드면 스크린샷 이동."""
         v = self.spin_page.value() - 1
-        if self._is_image:
+        if getattr(self, "_photo_pos", None):
+            if v != self._photo_pos[0]:
+                self.photoGotoRequested.emit(v)
+        elif self._is_image:
             self.imageGotoRequested.emit(v)
         else:
             self.go_to_page(v)
@@ -3215,12 +3236,16 @@ class MainView(QWidget):
         vp = self.view.viewport().size()
         vp_w = max(50, vp.width() - 4)
         vp_h = max(50, vp.height() - 4)
-        if self._fit_mode == self.FIT_PAGE:
+        photo = getattr(self._doc, "is_photo", False)
+        if self._fit_mode == self.FIT_PAGE or (photo and self._fit_mode == self.FIT_PAGE_TWO):
             zoom = min(vp_w / pdf_w, vp_h / pdf_h)
         elif self._fit_mode == self.FIT_WIDTH:
             zoom = vp_w / pdf_w
         else:
             zoom = self._zoom
+        if photo and self._fit_mode != self.FIT_NONE:
+            # 261104-2(사진 보기 SOT 4.4): 맞춤은 작은 사진을 원본보다 키우지 않는다 — 160×120 사진을 8배로 늘려 흐렸다(손 확인)
+            zoom = min(zoom, PHOTO_FIT_MAX)
         return max(0.1, min(20.0, zoom))
 
     def _two_right(self, idx_left: int):
@@ -3260,8 +3285,8 @@ class MainView(QWidget):
         if not self._doc:
             return
 
-        # v1.5.0 M3: 2장 보기 분기
-        if self._fit_mode == self.FIT_PAGE_TWO:
+        # v1.5.0 M3: 2장 보기 분기 — 사진은 늘 한 장(261104-2, 사진 보기 SOT 4.12)
+        if self._fit_mode == self.FIT_PAGE_TWO and not getattr(self._doc, "is_photo", False):
             self._render_two_pages()
             return
 

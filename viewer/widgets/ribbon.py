@@ -34,6 +34,7 @@ ROW_BORDER = {False: "#c8c8c8", True: "#4a4a50"}       # 탭 줄과 리본 줄 �
 GROUP_BG = {False: "#d8d8d8", True: "#424247"}
 BTN = {False: ("#fafafa", "#b4b4b4", "#222"), True: ("#3e3e42", "#55555a", "#e8e8e8")}        # 바탕·테두리·글
 BTN_DROP = {False: ("#efefef", "#a0a0a0", "#222"), True: ("#5a5a60", "#707078", "#f0f0f0")}
+BTN_OFF_FG = {False: "#a8a8a8", True: "#6a6a70"}   # 꺼진 단추 글(261104-2 — 종전엔 글 색이 고정이라 꺼져도 켜진 것과 같아 보였다)
 REBUILD_MS = 10             # 메뉴 항목이 바뀐 뒤 세부 줄을 다시 만들기까지(잇단 바뀜은 한 번으로 모인다)
 
 ICON_DROP_PAD = 14          # 261031-12 보완: 그림만 있는 ▾ 단추의 오른쪽 여백(▾ 자리)
@@ -484,6 +485,7 @@ class Ribbon(QWidget):
             css += (f"{sel}{{background:{bg};border:1px solid {bd};border-radius:3px;padding:2px 8px;margin:1px;color:{fg};}}"
                     f"{sel}:hover{{border-color:{'#909090' if not d else '#8a8a92'};}}")
         css += ("QToolButton:pressed{background:%s;}" % ("#bdbdbd" if not d else "#2f2f33"))
+        css += "QToolButton:disabled{color:%s;}" % BTN_OFF_FG[d]
         return css
 
     def apply_style(self, dark: bool, button_css: str = "") -> None:

@@ -236,6 +236,9 @@ class PhotoMixin:
         strip = self._photo_strip_widget()
         self.page_thumbs.set_alt_view(strip, True)
         strip.set_paths(self._photo_strip_source(), current=str(path))
+        lst = [str(Path(p)) for p in self._photo_list()]
+        if str(Path(path)) in lst:                    # 쪽 칸 = 넘김 원천 안의 순번(4.12) — 사진은 늘 1쪽이라 '1 / 1' 은 뜻이 없다
+            self.main_view.set_photo_position(lst.index(str(Path(path))), len(lst))
         self._photo_preload_neighbors(str(path))
         try:
             self._touch_recent_files([path])          # 사진 모드면 사진의 최근 파일(4.7)
@@ -270,6 +273,12 @@ class PhotoMixin:
             return
         self._on_bookmark_activated(lst[j], 0)
 
+    def _photo_goto(self, idx0: int):
+        """쪽 칸에 적은 순번의 사진으로(4.12)."""
+        lst = self._photo_list()
+        if 0 <= idx0 < len(lst):
+            self._on_bookmark_activated(lst[idx0], 0)
+
     def _photo_request_decode(self, path, box: int):
         """사진 문서가 메인에서 풀리지 않은 사진을 그리려 할 때 — 배경에서 풀고, 끝나면 그 사진이 아직 본문이면 다시 그린다."""
         from viewer.workers import run_in_thread
@@ -279,17 +288,19 @@ class PhotoMixin:
             return
         pend.add(key)
         w = PhotoPreloadWorker([str(path)], box=int(box))
-
-        def _done(k=key, p=str(path)):
-            pend.discard(k)
-            try:
-                cur = self.main_view.current_file() if self.main_view else None
-                if cur and str(cur) == p:
-                    self.main_view._render_current()
-            except Exception:
-                pass
-        w.finished.connect(_done)
+        # 다 풀린 것만 알린다(못 풀면 알리지 않는다 — 다시 그리기 ↔ 다시 요청이 돌지 않게). 받는 쪽은 창의 메서드 = 메인 스레드
+        w.decodedOne.connect(self._photo_on_decoded)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_on_decoded(self, path: str, box: int):
+        """배경 해독이 끝났다(메인 스레드) — 그 사진이 아직 본문이면 다시 그린다."""
+        self.__dict__.setdefault("_photo_decoding", set()).discard((str(path), int(box)))
+        try:
+            cur = self.main_view.current_file() if self.main_view else None
+            if cur and str(cur) == str(path):
+                self.main_view._render_current()
+        except Exception:
+            pass
 
     def _photo_preload_neighbors(self, cur: str):
         from viewer.workers import run_in_thread
@@ -312,6 +323,7 @@ class PhotoMixin:
 class PhotoPreloadWorker(QObject):
     """다음·이전 사진을 배경에서 미리 푼다(사진 보기 SOT §6.4) — 응답성 SOT §4.4 감사표의 한 행."""
     finished = pyqtSignal()
+    decodedOne = pyqtSignal(str, int)        # 다 푼 사진(경로, 긴 변) — box 를 준 해독 요청만
 
     def __init__(self, paths, box: int | None = None):
         super().__init__()
@@ -328,7 +340,12 @@ class PhotoPreloadWorker(QObject):
             for p in self.paths:
                 if self._cancel:
                     break
-                photo_doc.preload(p) if self.box is None else photo_doc.preload(p, self.box)
+                if self.box is None:
+                    photo_doc.preload(p)
+                else:
+                    photo_doc.preload(p, self.box)
+                    if photo_doc.decoded_ready(p, self.box) is not None:   # 못 풀었으면 알리지 않는다 — 다시 그리기 ↔ 다시 요청이 돌지 않게
+                        self.decodedOne.emit(p, int(self.box))
                 pacing.pace(self)
         finally:
             self.finished.emit()
