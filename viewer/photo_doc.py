@@ -40,11 +40,12 @@ def _decode(path: Path, box: int):
     from PIL import Image, ImageOps
     photo_io._prep(path)                                   # HEIC 면 해독기를 처음 한 번 등록
     with Image.open(str(path)) as im:
+        icc = im.info.get("icc_profile")
         im.draft("RGB", (box, box))                        # JPEG: 디코드 단계에서 줄인다
         im = ImageOps.exif_transpose(im)
         if max(im.size) > box:
             im.thumbnail((box, box))
-        return im.convert("RGB")
+        return photo_io.to_srgb(im, icc).convert("RGB")      # 색 관리 — 사진 프로필을 화면 sRGB 로(§5.1 F2)
 
 
 def decoded(path, box: int):

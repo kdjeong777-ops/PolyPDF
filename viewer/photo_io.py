@@ -192,6 +192,47 @@ def insert_photo(page, rect, path) -> bool:
     return True
 
 
+# ── 색 관리 — 사진에 든 ICC 프로필을 화면용 sRGB 로 (사진 보기 SOT §5.1 F2) ───────────
+_CMS: dict = {}                 # 프로필 해시 → 변환(또는 None = sRGB 라 그대로) — 같은 프로필은 한 번만 짓는다
+_CMS_LOCK = None
+
+
+def to_srgb(im, icc: bytes | None = None):
+    """Pillow 그림을 sRGB 로 — 프로필이 없거나 sRGB 면 받은 그대로. Adobe RGB·넓은 색역 사진이 물빠져 보이지 않게.
+    줄인 뒤의 그림에 부른다(변환 비용은 픽셀 수만큼 — 줄인 그림이면 짧다). 새 의존성 없음(Pillow 동봉 littlecms)."""
+    global _CMS_LOCK
+    icc = icc if icc is not None else im.info.get("icc_profile")
+    if not icc or im.mode not in ("RGB", "RGBA", "CMYK"):
+        return im
+    import hashlib
+    import threading
+    from PIL import ImageCms
+    if _CMS_LOCK is None:
+        _CMS_LOCK = threading.Lock()
+    key = (hashlib.sha1(icc).hexdigest(), im.mode)
+    with _CMS_LOCK:
+        got = _CMS.get(key, False)
+    if got is False:
+        try:
+            src = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+            desc = (ImageCms.getProfileDescription(src) or "").lower()
+            if "srgb" in desc and im.mode != "CMYK":
+                got = None                                   # 이미 sRGB — 바꾸지 않는다
+            else:
+                out_mode = "RGBA" if im.mode == "RGBA" else "RGB"
+                got = ImageCms.buildTransform(src, ImageCms.createProfile("sRGB"), im.mode, out_mode)
+        except Exception:
+            got = None                                       # 깨진 프로필 — 그대로 보인다
+        with _CMS_LOCK:
+            _CMS[key] = got
+    if got is None:
+        return im
+    try:
+        return ImageCms.applyTransform(im, got)
+    except Exception:
+        return im
+
+
 # ── 화면용 줄여 읽기(배경 스레드) ───────────────────────────────────
 def read_scaled(path: str, box: int, auto_transform: bool = False):
     """그림을 **긴 변 `box` 안으로 줄여 읽는다** → (QImage, 원래 폭, 원래 높이). `auto_transform` 이면 EXIF 방향을 적용하고
@@ -225,11 +266,14 @@ def _read_scaled_pil(path: str, box: int, auto_transform: bool):
     from PyQt6.QtGui import QImage
     with Image.open(str(path)) as im:
         w, h = im.size
+        icc = im.info.get("icc_profile")
         if auto_transform and int(im.getexif().get(ORIENT_TAG, 1) or 1) in (5, 6, 7, 8):
             w, h = h, w
         im.draft("RGB", (box, box))                      # JPEG: 디코드 단계에서 줄인다
         im = ImageOps.exif_transpose(im) if auto_transform else im
         im.thumbnail((box, box))
+        if auto_transform:
+            im = to_srgb(im, icc)                        # 화면용(방향을 세우는 길)이면 색 관리(F2) — 썸네일·본문·이미지→PDF 창 미리보기
         im = im.convert("RGBA" if "A" in im.getbands() else "RGB")
         fmt = QImage.Format.Format_RGBA8888 if im.mode == "RGBA" else QImage.Format.Format_RGB888
         data = im.tobytes()

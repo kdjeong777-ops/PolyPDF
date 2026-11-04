@@ -20,6 +20,9 @@ from PyQt6.QtWidgets import QAbstractItemView, QListView, QListWidget, QListWidg
 THUMB_BOX = 256                 # 줄여 읽는 긴 변(고해상도 화면 2배) — 캐시 키에 들어간다
 CACHE_DIRNAME = "photo_thumbs"
 CACHE_QUALITY = 82
+CACHE_VERSION = 2               # 캐시 그림을 만드는 규칙이 바뀌면 올린다(2 = 색 관리 sRGB, 261104-2)
+CACHE_MAX_BYTES = 300 * 1024 * 1024     # D9 용량 상한 — 넘으면 오래 안 쓴 것부터 지운다(썸네일 약 2만 장)
+_PRUNED = {"done": False}
 RESCAN_MS = 150                 # 스크롤이 멈추면 그 자리부터 다시 고른다
 _PATH_ROLE = Qt.ItemDataRole.UserRole
 
@@ -34,7 +37,7 @@ def cache_key(path: str, box: int = THUMB_BOX) -> str | None:
         st = os.stat(path)
     except OSError:
         return None
-    raw = "%s|%d|%d|%d" % (os.path.normcase(os.path.abspath(path)), st.st_size, st.st_mtime_ns, box)
+    raw = "%s|%d|%d|%d|v%d" % (os.path.normcase(os.path.abspath(path)), st.st_size, st.st_mtime_ns, box, CACHE_VERSION)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
@@ -45,6 +48,10 @@ def load_thumb(path: str, box: int = THUMB_BOX) -> QImage:
     if f is not None and f.is_file():
         img = QImage(str(f))                              # 작은 JPEG — 짧다
         if not img.isNull():
+            try:
+                os.utime(f)                               # 쓴 때를 새로 — 용량 상한은 오래 안 쓴 것부터 지운다
+            except OSError:
+                pass
             return img
     from viewer.photo_io import read_scaled
     img, _w, _h = read_scaled(path, box, auto_transform=True)
@@ -57,6 +64,29 @@ def load_thumb(path: str, box: int = THUMB_BOX) -> QImage:
         except OSError:
             pass
     return img
+
+
+def prune_cache(max_bytes: int = CACHE_MAX_BYTES) -> int:
+    """캐시 폴더가 상한을 넘으면 오래 안 쓴 것(수정 시각 — 읽을 때 새로 찍는다)부터 지운다. 지운 개수. 배경에서 부른다."""
+    d = cache_dir()
+    try:
+        files = [(e.stat().st_mtime, e.stat().st_size, e.path) for e in os.scandir(d) if e.is_file() and e.name.endswith(".jpg")]
+    except OSError:
+        return 0
+    total = sum(sz for _m, sz, _p in files)
+    if total <= max_bytes:
+        return 0
+    n = 0
+    for _m, sz, p in sorted(files):
+        if total <= max_bytes * 0.9:                      # 10% 여유를 두고 멈춘다 — 매번 지우지 않게
+            break
+        try:
+            os.remove(p)
+            total -= sz
+            n += 1
+        except OSError:
+            pass
+    return n
 
 
 class PhotoThumbWorker(QObject):
@@ -84,6 +114,9 @@ class PhotoThumbWorker(QObject):
                     img = QImage()
                 self.done.emit(self.gen, p, img)
                 pacing.pace(self)
+            if not self._cancel and not _PRUNED["done"]:
+                _PRUNED["done"] = True                    # 실행마다 한 번 — 캐시 용량 상한(D9)
+                prune_cache()
         finally:
             self.finished.emit()
 
