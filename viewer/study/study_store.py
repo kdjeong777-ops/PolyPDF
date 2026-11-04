@@ -416,6 +416,13 @@ class StudyStore:
         self.conn.commit()
 
     # --- 조회 --------------------------------------------------------------
+    def saved_page(self, file_key: str, page: int):
+        """**확정된(저장본)** 쪽만 — 보류를 겹치지 않는다. `(text, engine)` 또는 None.
+        사진 정보 색인·자동 태그가 '확정한 글만' 쓸 때(단어학습 SOT §14.22·사진 보기 SOT §4.36)."""
+        tbl = "main.ocr_page" if self._pend else "ocr_page"
+        row = self.conn.execute(f"SELECT text, engine FROM {tbl} WHERE file_key=? AND page=?", (file_key, page)).fetchone()
+        return (row["text"] or "", row["engine"] or "") if row else None
+
     def get_page_text(self, file_key: str, page: int) -> Optional[str]:
         row = self.conn.execute(
             "SELECT text FROM ocr_page WHERE file_key=? AND page=?", (file_key, page)

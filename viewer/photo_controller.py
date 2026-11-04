@@ -1027,6 +1027,38 @@ class PhotoMixin:
         w.finished.connect(lambda: setattr(self, "_text_worker", None))
         run_in_thread(w, self._thread_keep)
 
+    def _photo_ocr_committed(self, found: list):
+        """OCR 을 확정한 사진들(§4.36) — `found` = [(경로, 확정 글, 형식 또는 None, 키워드)](배경에서 읽어 옴).
+        태그는 앱의 태그 저장소 하나로 메인에서(자동 칸만 — 사용자 태그·고친 키워드는 그대로), 그 다음 사진 정보 색인 그 행."""
+        if not found:
+            return
+        bt = self.bookmark_tree
+        tags = getattr(bt, "_tags", None)
+        from viewer import dbutil, photo_index
+        try:
+            con = photo_index.connect(busy_ms=dbutil.BUSY_MS_UI)
+        except Exception:
+            con = None
+        try:
+            for path, text, fmt, kws in found:
+                if tags is not None:
+                    try:
+                        tags.set_auto(path, [fmt] if fmt else [], src="photo_ocr")
+                        if kws and not tags.kw_edited(path):
+                            tags.set_keywords(path, kws, src="photo_ocr")
+                    except Exception:
+                        pass
+                if con is not None:
+                    try:
+                        photo_index.set_ocr(con, path, text, tags.get(path) if tags is not None else None)
+                    except Exception:
+                        pass
+            if con is not None:
+                con.commit()
+        finally:
+            if con is not None:
+                con.close()
+
     def _photo_text_blocked(self):
         self.status.showMessage(tr("사진에는 글자층이 없어 PDF 에 반영하지 않습니다 — 글은 텍스트 창에서 복사하거나 [OCR 로 읽기] 로 다시 읽으세요."), 6000)
 
@@ -2526,6 +2558,12 @@ class PhotoIndexWorker(QObject):
             except Exception:
                 tags = None
             con = photo_index.connect()
+            st = None
+            try:
+                from viewer.study.study_store import StudyStore
+                st = StudyStore()                # 확정 글(저장본)만 읽는다 — §4.36
+            except Exception:
+                st = None
             try:
                 old = photo_index.known(con, root)
                 seen = set()
@@ -2548,10 +2586,10 @@ class PhotoIndexWorker(QObject):
                         seen.add(key)
                         total += 1
                         try:
-                            st = os.stat(full)
+                            stt = os.stat(full)
                         except OSError:
                             continue
-                        if old.get(key) == (st.st_size, st.st_mtime_ns):
+                        if old.get(key) == (stt.st_size, stt.st_mtime_ns):
                             continue
                         try:
                             from viewer.photo_io import photo_info
@@ -2559,7 +2597,8 @@ class PhotoIndexWorker(QObject):
                         except Exception:
                             info = {}
                         t = tags.get(full) if tags is not None else []
-                        photo_index.upsert(con, key, full, os.path.normcase(dirpath), fn, ext, st.st_size, st.st_mtime_ns, info, t)
+                        photo_index.upsert(con, key, full, os.path.normcase(dirpath), fn, ext, stt.st_size, stt.st_mtime_ns, info, t,
+                                           ocr=photo_saved_ocr(st, full))
                         n_new += 1
                         batch += 1
                         if batch >= 50:
@@ -2573,11 +2612,51 @@ class PhotoIndexWorker(QObject):
                 con.commit()
             finally:
                 con.close()
+                if st is not None:
+                    st.close()
         except Exception:
             pass
         finally:
             self.done.emit(self.folder, n_new, n_gone, total)
             self.finished.emit()
+
+
+def photo_saved_ocr(st, path) -> str:
+    """확정된(저장본) 사진 OCR 글 — 사진이 바뀌었으면(낡음, 단어학습 SOT §14.22) ''. 배경에서."""
+    if st is None:
+        return ""
+    try:
+        from viewer.study import ocr as _ocr
+        from viewer.study.study_store import file_key_for
+        got = st.saved_page(file_key_for(str(path)), 0)
+        if not got or not str(got[1]).endswith(_ocr.photo_sig(path)):
+            return ""
+        return got[0] or ""
+    except Exception:
+        return ""
+
+
+def photo_auto_tags(path, text):
+    """확정 글로 형식(사진은 '영수증' 만 — 태그 SOT §5.3)·키워드(태그 SOT §9). `(형식 또는 None, [키워드])`. 배경에서."""
+    if not (text or "").strip():
+        return None, []
+    from collections import Counter
+    from viewer import auto_tag as at
+    f = at.Features(path=str(path), stem="", page_count=1, head_text=text, full_text=text, struct_text=text,
+                    terms=Counter(at._tokenize(text)))
+    fmt = at.classify_format(f, {})                   # 표준명으로 판정(별칭 전) — 사진은 영수증만 받는다
+    if fmt != "영수증":
+        fmt = None
+    else:
+        try:
+            fmt = (at.load_rules().get("alias") or {}).get("영수증", "영수증")
+        except Exception:
+            pass
+    try:
+        kws = [k["word"] for k in at.suggest_keywords(f, {}, 1)][:10]
+    except Exception:
+        kws = []
+    return fmt, kws
 
 
 class PhotoOcrWorker(QObject):

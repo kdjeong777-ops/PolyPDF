@@ -6,7 +6,7 @@ PDF 색인의 스키마·G2(PDF 만)는 그대로 둔다.
 
 - 행: 사진마다 경로·폴더·이름·확장자·크기·수정 시각·보이는 크기·촬영일·카메라·태그. 머리만 읽는다(`photo_io.photo_info`).
   zip 안 사진은 `zip`(zip 경로)·`member`(안 이름)를 함께 두고 경로 칸은 `<zip 경로>|<안 이름>`.
-- 글(FTS): 이름·촬영일(YYYY-MM-DD)·카메라·태그. OCR 글자는 D15 그대로(확정한 사진만 — 여기에는 넣지 않는다).
+- 글(FTS): 이름·촬영일(YYYY-MM-DD)·카메라·태그 + 확정한 OCR 글(`ocr` 칸 — 사진 보기 SOT §4.36, D15).
 - 다시 훑기는 **바뀐 것만**(크기·수정 시각) — 폴더에서 사라진 사진의 행은 지운다.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 
 DB_NAME = "photo_index.db"
-SCHEMA = 1
+SCHEMA = 2                       # 2: `ocr` 칸(261104-10 P4-c)
 _LOCK = threading.Lock()
 
 
@@ -66,7 +66,10 @@ def _init(con) -> None:
         CREATE VIRTUAL TABLE IF NOT EXISTS photo_fts USING fts5(key UNINDEXED, body, tokenize='unicode61');
         CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
         """)
-    con.execute("INSERT OR IGNORE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA),))
+    cols = {r[1] for r in con.execute("PRAGMA table_info(photos)")}
+    if "ocr" not in cols:
+        con.execute("ALTER TABLE photos ADD COLUMN ocr TEXT")
+    con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA),))
 
 
 def norm_folder(folder) -> str:
@@ -80,19 +83,37 @@ def _taken_text(taken: str) -> str:
     return t[:10]
 
 
+def _body(name, taken, camera, tag_txt, ocr) -> str:
+    return " ".join(x for x in (Path(name).stem, taken, camera, tag_txt, ocr) if x)
+
+
 def upsert(con, key: str, path: str, folder: str, name: str, ext: str, size: int, mtime_ns: int, info: dict,
-           tags: list, zip_path: str | None = None, member: str | None = None) -> None:
-    """`key` 는 비교용(소문자 경로), `path` 는 원래 글자 그대로의 경로(열 때 쓴다)."""
+           tags: list, zip_path: str | None = None, member: str | None = None, ocr: str = "") -> None:
+    """`key` 는 비교용(소문자 경로), `path` 는 원래 글자 그대로의 경로(열 때 쓴다). `ocr` 은 **확정한** 글만(§4.36)."""
     taken = _taken_text(info.get("taken", ""))
     camera = info.get("camera", "") or ""
     tag_txt = " ".join("#" + t for t in tags or [])
-    con.execute("INSERT OR REPLACE INTO photos(key, path, folder, name, ext, size, mtime_ns, width, height, taken, camera, tags, zip, member) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    con.execute("INSERT OR REPLACE INTO photos(key, path, folder, name, ext, size, mtime_ns, width, height, taken, camera, tags, zip, member, ocr) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (key, path, folder, name, ext, int(size), int(mtime_ns), int(info.get("width") or 0), int(info.get("height") or 0),
-                 taken, camera, tag_txt, zip_path, member))
+                 taken, camera, tag_txt, zip_path, member, ocr or ""))
     con.execute("DELETE FROM photo_fts WHERE key=?", (key,))
-    con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)",
-                (key, " ".join(x for x in (Path(name).stem, taken, camera, tag_txt) if x)))
+    con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)", (key, _body(name, taken, camera, tag_txt, ocr)))
+
+
+def set_ocr(con, path: str, ocr: str, tags=None) -> bool:
+    """OCR 을 확정한 사진 — 그 행의 `ocr`(·태그) 칸과 검색 글을 바꾼다. 행이 없으면 False(다음 색인 훑기가 넣는다, §4.36)."""
+    key = os.path.normcase(os.path.abspath(str(path)))
+    row = con.execute("SELECT name, taken, camera, tags FROM photos WHERE key=?", (key,)).fetchone()
+    if not row:
+        return False
+    name, taken, camera, tag_txt = row
+    if tags is not None:
+        tag_txt = " ".join("#" + t for t in tags)
+    con.execute("UPDATE photos SET ocr=?, tags=? WHERE key=?", (ocr or "", tag_txt, key))
+    con.execute("DELETE FROM photo_fts WHERE key=?", (key,))
+    con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)", (key, _body(name, taken, camera, tag_txt, ocr)))
+    return True
 
 
 def known(con, folder: str) -> dict:

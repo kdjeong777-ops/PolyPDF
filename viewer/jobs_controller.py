@@ -212,9 +212,11 @@ class JobsMixin:
         """확정(commit) 또는 버림 — 배경. {key: 옮긴 것이 있었나}."""
         done = {}
         reindex = []
+        photos = []                                  # 사진 보기 SOT §4.36 — OCR 을 확정한 사진: (경로, 확정 글, 형식, 키워드)
 
         def _fn():
             from viewer.study.study_store import StudyStore, path_for_key
+            from viewer.image_page import PHOTO_EXTS
             st = StudyStore()
             try:
                 have = set(st.pending_keys())
@@ -223,8 +225,14 @@ class JobsMixin:
                     if k in have:
                         if commit:
                             st.commit_pending(k)
-                            if path_for_key(k):
-                                reindex.append(path_for_key(k))
+                            p = path_for_key(k)
+                            if p and Path(p).suffix.lower() in PHOTO_EXTS:
+                                from viewer.photo_controller import photo_auto_tags, photo_saved_ocr
+                                text = photo_saved_ocr(st, p)
+                                if text:
+                                    photos.append((p, text) + tuple(photo_auto_tags(p, text)))
+                            elif p:
+                                reindex.append(p)        # PDF 만 다시 색인(G2 — 사진은 PDF 색인에 넣지 않는다)
                         else:
                             st.discard_pending(k)
             finally:
@@ -244,6 +252,11 @@ class JobsMixin:
         e = self._file_op_bg(_fn, tr("OCR·단어장 결과 저장 중…") if commit else tr("OCR·단어장 결과 버리는 중…"))
         if e is not None and not quiet:
             QMessageBox.warning(self, tr("저장"), str(e))
+        if photos:
+            try:
+                self._photo_ocr_committed(photos)
+            except Exception:
+                pass
         cache = self._pending_cache_get()
         for k in keys:
             cache.pop(k, None)
