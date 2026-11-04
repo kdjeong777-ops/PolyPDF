@@ -36,6 +36,10 @@ BTN = {False: ("#fafafa", "#b4b4b4", "#222"), True: ("#3e3e42", "#55555a", "#e8e
 BTN_DROP = {False: ("#efefef", "#a0a0a0", "#222"), True: ("#5a5a60", "#707078", "#f0f0f0")}
 BTN_OFF_FG = {False: "#a8a8a8", True: "#6a6a70"}   # 꺼진 단추 글(261104-2 — 종전엔 글 색이 고정이라 꺼져도 켜진 것과 같아 보였다)
 REBUILD_MS = 10             # 메뉴 항목이 바뀐 뒤 세부 줄을 다시 만들기까지(잇단 바뀜은 한 번으로 모인다)
+# 261104-15(디자인 SOT §2.9.3, 사용자 결정 '늘 창 가운데'): 탭 줄 오른쪽 칸 검색창 폭 — 창이 좁으면 SEARCH_W 에서
+#   SEARCH_MIN_W 까지 줄어 탭 묶음이 가운데에 남는다. 양쪽 칸의 최소 폭도 SEARCH_MIN_W(그보다 좁은 창은 Qt 가 막는다).
+SEARCH_W = 220
+SEARCH_MIN_W = 120
 
 ICON_DROP_PAD = 14          # 261031-12 보완: 그림만 있는 ▾ 단추의 오른쪽 여백(▾ 자리)
 SEP = "|"                   # 모음의 구분선
@@ -70,6 +74,26 @@ def short_text(text: str) -> str:
 def cmd_id(action) -> str:
     v = action.property("cmd_id") if action is not None else None
     return str(v) if v else ""
+
+
+class _SideBox(QWidget):
+    """탭 줄 왼쪽·오른쪽 칸 — 두 칸이 **같은** 크기 힌트·최소 폭을 내, 같은 늘림 비율로 늘 같은 폭이 된다(§2.9.3).
+    종전에는 오른쪽 칸 힌트가 검색창 폭(220)이라 창이 좁아지면 오른쪽만 그 폭에 걸려 탭이 왼쪽으로 밀렸다(261104-15)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(SEARCH_MIN_W)
+
+    def sizeHint(self):
+        sh = super().sizeHint()
+        sh.setWidth(SEARCH_MIN_W)
+        return sh
+
+    def minimumSizeHint(self):
+        sh = super().minimumSizeHint()
+        sh.setWidth(SEARCH_MIN_W)
+        return sh
 
 
 class _TipFilter(QObject):
@@ -311,21 +335,19 @@ class Ribbon(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        # 탭 줄: [왼쪽 빈 칸][탭 묶음][오른쪽 칸(검색창)] — 양쪽 같은 늘림 → 탭 묶음이 창 가운데(§2.9.3)
+        # 탭 줄: [왼쪽 빈 칸][탭 묶음][오른쪽 칸(검색창)] — 양쪽 같은 늘림·같은 힌트 → 탭 묶음이 늘 창 가운데(§2.9.3)
         self.tab_row = QWidget(self)
         self.tab_row.setObjectName("ribbonTabRow")
         self.tab_row.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         h = QHBoxLayout(self.tab_row)
         h.setContentsMargins(6, 2, 6, 0)
         h.setSpacing(0)
-        self.left_fill = QWidget(self.tab_row)
-        self.left_fill.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.left_fill = _SideBox(self.tab_row)
         self.tabs_box = QWidget(self.tab_row)
         self._tabs_lay = QHBoxLayout(self.tabs_box)
         self._tabs_lay.setContentsMargins(0, 0, 0, 0)
         self._tabs_lay.setSpacing(2)
-        self.right_box = QWidget(self.tab_row)
-        self.right_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.right_box = _SideBox(self.tab_row)
         self._right_lay = QHBoxLayout(self.right_box)
         self._right_lay.setContentsMargins(0, 0, 0, 0)
         self._right_lay.addStretch(1)
@@ -465,6 +487,10 @@ class Ribbon(QWidget):
 
     # ── 검색창·보이기·테마 ───────────────────────────────
     def set_search(self, w: QWidget) -> None:
+        # 창이 좁으면 SEARCH_W → SEARCH_MIN_W 로 줄어든다(탭 묶음은 가운데 그대로, §2.9.3 261104-15)
+        w.setMinimumWidth(SEARCH_MIN_W)
+        w.setMaximumWidth(SEARCH_W)
+        w.setSizePolicy(QSizePolicy.Policy.Expanding, w.sizePolicy().verticalPolicy())
         self._right_lay.addWidget(w, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def set_rows_visible(self, on: bool) -> None:
