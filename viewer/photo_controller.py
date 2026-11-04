@@ -2169,7 +2169,7 @@ class PhotoMixin:
     def _photo_share_dest(self, paths):
         """저장 자리를 묻는다 — 1장: `('file', 경로)`, 여러 장: `('dir', 새 폴더 경로)`(만들기는 워커가). 취소면 None."""
         import time as _t
-        from PyQt6.QtWidgets import QFileDialog, QInputDialog, QLineEdit
+        from PyQt6.QtWidgets import QFileDialog
         pic = self._photo_prefs()
         start = str(pic.get("share_dir") or "")
         if not start or not os.path.isdir(start):
@@ -2196,12 +2196,37 @@ class PhotoMixin:
         if not base:
             return None
         default = share_dir_name(base, _t.strftime(self.SHARE_DIR_FMT) + "-" + tr("사진사본"))
-        name, ok = QInputDialog.getText(self, tr("공유용 사본 폴더"), tr("새 폴더 이름"), QLineEdit.EchoMode.Normal, Path(default).name)
+        pic["share_dir"] = str(base)
+        from PyQt6.QtWidgets import QApplication
+        shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        if pic.get("share_auto_name") and not shift:     # '폴더 이름 자동' — 묻지 않고 그 이름 그대로(261104-18 보완 사용자 지시)
+            return ("dir", default)
+        name, ok, auto = self._photo_share_ask_name(Path(default).name)
         name = (name or "").strip().strip(".")
         if not ok or not name or any(c in name for c in '<>:"/\\|?*'):
             return None
-        pic["share_dir"] = str(base)
+        pic["share_auto_name"] = bool(auto)
         return ("dir", share_dir_name(base, name))
+
+    def _photo_share_ask_name(self, default: str):
+        """새 폴더 이름 창 — (이름, 확인?, '폴더 이름 자동' 체크). 체크하면 다음부터 묻지 않는다(Shift 를 누른 채 고르면 다시 묻는다)."""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QCheckBox, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("공유용 사본 폴더"))
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(QLabel(tr("새 폴더 이름")))
+        ed = QLineEdit(default)
+        ed.selectAll()
+        lay.addWidget(ed)
+        cb = QCheckBox(tr("폴더 이름 자동 설정 — 다음부터 묻지 않고 저장"))
+        cb.setToolTip(tr("다시 물으려면 Shift 를 누른 채 공유용 사본을 고르세요."))
+        lay.addWidget(cb)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        lay.addWidget(bb)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        return ed.text(), ok, cb.isChecked()
 
     def _photo_shared(self, pairs: list, failed: list):
         self._photo_share_busy = False
@@ -2217,6 +2242,8 @@ class PhotoMixin:
         if pairs and not failed:
             msg = (tr("공유용 사본: {name}").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
                    else tr("공유용 사본 {n}장을 만들었습니다: {folder}").format(n=len(pairs), folder=Path(pairs[0][1]).parent.name))
+            if len(pairs) > 1 and self._photo_prefs().get("share_auto_name"):
+                msg += " " + tr("(폴더 이름을 물으려면 Shift 를 누른 채 고르세요)")
         elif pairs:
             msg = tr("공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다.").format(n=len(pairs), m=len(failed))
         else:

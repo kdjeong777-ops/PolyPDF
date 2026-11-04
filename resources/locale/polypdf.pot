@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-05 07:51+0900\n"
+"POT-Creation-Date: 2026-11-05 08:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3926,7 +3926,11 @@ msgid "공유용 사본 폴더"
 msgstr ""
 
 #: viewer/photo_controller.py
-msgid "새 폴더 이름"
+msgid "폴더 이름 자동 설정 — 다음부터 묻지 않고 저장"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "다시 물으려면 Shift 를 누른 채 공유용 사본을 고르세요."
 msgstr ""
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
@@ -4144,6 +4148,10 @@ msgid "사진사본"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "새 폴더 이름"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
@@ -4240,6 +4248,10 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "공유용 사본 {n}장을 넣을 위치"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "(폴더 이름을 물으려면 Shift 를 누른 채 고르세요)"
 msgstr ""
 
 #: viewer/photo_controller.py

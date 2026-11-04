@@ -93,10 +93,10 @@ try:
         return real_replace(s, t)
     os.replace = spy
 
-    from PyQt6.QtWidgets import QFileDialog, QInputDialog
+    from PyQt6.QtWidgets import QFileDialog
     QFileDialog.getSaveFileName = staticmethod(lambda _w, _t, path, *_a, **_k: (path, ""))     # 처음 이름 그대로
     QFileDialog.getExistingDirectory = staticmethod(lambda *_a, **_k: str(tmp))
-    QInputDialog.getText = staticmethod(lambda _w, _t, _l, _m, text, *_a, **_k: (text, True))
+    MainWindow._photo_share_ask_name = lambda _self, text: (text, True, False)                 # 폴더 이름 창 — 처음 이름 그대로
 
     def share(paths, mode):
         mw._photo_prefs().pop("share_dir", None)        # 1장 창이 사진 폴더에서 시작하게(앞 회차의 '마지막 위치' 를 지운다)

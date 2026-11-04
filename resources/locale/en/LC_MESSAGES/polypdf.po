@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-05 07:51+0900\n"
+"POT-Creation-Date: 2026-11-05 08:04+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4063,8 +4063,12 @@ msgid "공유용 사본 폴더"
 msgstr "Folder for Shared Copies"
 
 #: viewer/photo_controller.py
-msgid "새 폴더 이름"
-msgstr "New folder name"
+msgid "폴더 이름 자동 설정 — 다음부터 묻지 않고 저장"
+msgstr "Name folders automatically — save without asking next time"
+
+#: viewer/photo_controller.py
+msgid "다시 물으려면 Shift 를 누른 채 공유용 사본을 고르세요."
+msgstr "To be asked again, hold Shift while choosing Copy for Sharing."
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #: viewer/widgets/convert_dialog.py
@@ -4281,6 +4285,10 @@ msgid "사진사본"
 msgstr "photo-copies"
 
 #: viewer/photo_controller.py
+msgid "새 폴더 이름"
+msgstr "New folder name"
+
+#: viewer/photo_controller.py
 msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다."
 msgstr "Could not make the copy for sharing — the original is unchanged."
 
@@ -4378,6 +4386,10 @@ msgstr "Not saved over the original — choose another name."
 #, python-brace-format
 msgid "공유용 사본 {n}장을 넣을 위치"
 msgstr "Where to put {n} copies for sharing"
+
+#: viewer/photo_controller.py
+msgid "(폴더 이름을 물으려면 Shift 를 누른 채 고르세요)"
+msgstr "(Hold Shift while choosing to be asked for the folder name)"
 
 #: viewer/photo_controller.py
 #, python-brace-format
