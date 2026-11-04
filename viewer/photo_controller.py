@@ -872,7 +872,7 @@ class PhotoMixin:
             b.setText(tr("열 수 없는 파일") + " · " + broken_reason_text(self.main_view._doc.reason))
             b.show(); self._photo_info_place()
             return
-        b.setText(Path(str(path)).name)
+        b.setText(self._photo_display_name(path))
         b.show(); self._photo_info_place()
         w = PhotoInfoWorker(self._photo_info_gen, str(path))
         w.done.connect(self._photo_info_done)
@@ -883,8 +883,16 @@ class PhotoMixin:
             return
         self._photo_info = dict(info, path=path)
         b = self._photo_info_button()
-        b.setText(photo_info_line(info))
+        b.setText(photo_info_line(info, self._photo_display_name(path)))
         self._photo_info_place()
+
+    def _photo_display_name(self, path) -> str:
+        """상태 막대에 보일 파일 이름 — zip 안 사진이면 'zip 이름 › 안쪽 사진 이름'(4.18·4.32, 사용자 지시)."""
+        name = Path(str(path)).name
+        zsrc = self.__dict__.get("_photo_zip_src") or ""
+        if zsrc and self._photo_any_cached([str(path)]):
+            return Path(zsrc).name + " › " + name
+        return name
 
     def _photo_info_dialog(self):
         """세부 정보 창 — 파일·크기·촬영·카메라·노출·색 프로필·위치(있으면)."""
@@ -1867,9 +1875,9 @@ def _fmt_taken(s: str) -> str:
     return s
 
 
-def photo_info_line(info: dict) -> str:
-    """상태 막대 가운데 한 줄 — 촬영일 · 크기 · 파일 크기 · 카메라(있는 것만)."""
-    parts = []
+def photo_info_line(info: dict, name: str = "") -> str:
+    """상태 막대 가운데 한 줄 — 파일 이름 · 촬영일 · 크기 · 파일 크기 · 카메라(있는 것만)."""
+    parts = [name] if name else []
     if info.get("taken"):
         parts.append(_fmt_taken(info["taken"]))
     if info.get("width"):

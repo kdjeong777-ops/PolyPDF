@@ -155,6 +155,8 @@ class PhotoStrip(QListWidget):
         self.setUniformItemSizes(True)
         self.setSpacing(4)
         self.setWordWrap(True)
+        # 긴 이름은 가운데를 줄인다(앞·뒤가 보이게) — 끝을 줄이면 같은 앞머리(device_001_2026072…)의 사진이 모두 같아 보였다(4.18, 사용자 보고)
+        self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # 261104-3(사용자 지시 '썸네일을 보면서 2개 이상 선택'): Ctrl·Shift+클릭으로 여러 장 — 고르기만 하고 본문은 그대로(4.20)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
