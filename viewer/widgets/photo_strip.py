@@ -26,6 +26,7 @@ _PRUNED = {"done": False}
 RESCAN_MS = 150                 # 스크롤이 멈추면 그 자리부터 다시 고른다
 KEY_ACTIVATE_MS = 120           # 키(↑↓·PageUp/Down·Home/End)로 고른 칸을 본문에 — 꾹 누르면 멈춘 칸만(261104-3 사용자 보고)
 _PATH_ROLE = Qt.ItemDataRole.UserRole
+_INFO_ROLE = Qt.ItemDataRole.UserRole + 1         # 칸 글에 쓰는 값(날짜·크기·용량) — 보기설정을 바꾸면 다시 잇는다(4.38)
 
 
 def cache_dir() -> Path:
@@ -97,11 +98,16 @@ def _modifying() -> bool:
     return bool(m & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier))
 
 
-def label_text(path, w: int = 0, h: int = 0, unreadable: bool = False) -> str:
-    """칸 아래 글 — 이름(확장자 없이) 다음 줄에 원본 픽셀 크기(EXIF 방향 뒤). 모르면 줄만 비워 둔다(칸 높이가 흔들리지 않게)."""
+def label_text(path, date: str = "", unreadable: bool = False, style=None, w: int = 0, h: int = 0, nbytes: int = 0) -> str:
+    """칸 아래 글 두 줄 — 보기설정 스타일(사진 보기 SOT 4.38, 기본 윗줄 이름·아랫줄 날짜 — 261104-12·-13 사용자 지시).
+    줄이 비면 빈칸 하나(칸 높이가 흔들리지 않게). 열 수 없으면 아랫줄 '열 수 없음'."""
     from viewer.i18n import tr
-    second = tr("열 수 없음") if unreadable else ("%d × %d" % (w, h) if w and h else " ")
-    return Path(str(path)).stem + "\n" + second
+    from viewer import photo_label as PL
+    l1, l2 = (style or PL.BUILTIN_STRIP[PL.DEFAULT])[:2]
+    vals = PL.values(path, date, w, h, nbytes)
+    first = PL.render(l1, vals) or Path(str(path)).stem
+    second = tr("열 수 없음") if unreadable else (PL.render(l2, vals) or " ")
+    return first + "\n" + second
 
 
 def boxed(pm: QPixmap, box: QSize) -> QPixmap:
@@ -122,7 +128,7 @@ def boxed(pm: QPixmap, box: QSize) -> QPixmap:
 
 class PhotoThumbWorker(QObject):
     """썸네일 그림을 배경에서 만든다(응답성 SOT §4.4 감사표 한 행)."""
-    done = pyqtSignal(int, str, QImage, int, int)     # 세대, 경로, 썸네일, 보이는 폭·높이(EXIF 방향 뒤 원본 픽셀, 못 읽으면 0)
+    done = pyqtSignal(int, str, QImage, int, int, str, object)   # 세대, 경로, 썸네일, 보이는 폭·높이(못 읽으면 0), 날짜, 바이트
     finished = pyqtSignal()
 
     def __init__(self, gen: int, paths, box: int = THUMB_BOX):
@@ -143,9 +149,13 @@ class PhotoThumbWorker(QObject):
                     img = load_thumb(p, self.box)
                 except Exception:
                     img = QImage()
-                from viewer.photo_io import oriented_size
-                w, h = oriented_size(p)                  # 머리만 — 썸네일만 보고 원본 크기를 알게(261104-3 사용자 지시)
-                self.done.emit(self.gen, p, img, int(w), int(h))
+                from viewer.photo_io import size_and_date
+                w, h, d = size_and_date(p)               # 머리만 — 날짜는 칸 글, 크기는 칸 도움말(261104-12 사용자 지시)
+                try:
+                    nb = os.path.getsize(p)
+                except OSError:
+                    nb = 0
+                self.done.emit(self.gen, p, img, int(w), int(h), d or "", int(nb))
                 pacing.pace(self)
             if not self._cancel and not _PRUNED["done"]:
                 _PRUNED["done"] = True                    # 실행마다 한 번 — 캐시 용량 상한(D9)
@@ -186,6 +196,7 @@ class PhotoStrip(QListWidget):
         self._icon_w = icon_w
         self.setIconSize(QSize(icon_w, int(icon_w * 0.75)))
         self._paths: list = []
+        self._label_style = None                  # 보기설정(4.38) — None 이면 기본
         self._items: dict = {}
         self._done: set = set()
         self._gen = 0
@@ -240,8 +251,20 @@ class PhotoStrip(QListWidget):
         self.set_current(current)
         self._restart_from_visible()
 
+    def set_label_style(self, style) -> None:
+        """보기설정 스타일([윗줄, 아랫줄] 구문)로 — 읽어 둔 값으로 칸 글만 다시 잇는다(다시 읽지 않는다)."""
+        self._label_style = list(style) if style else None
+        self.setUpdatesEnabled(False)
+        try:
+            for p, it in self._items.items():
+                info = it.data(_INFO_ROLE) or {}
+                it.setText(label_text(p, info.get("date", ""), unreadable=info.get("bad", False), style=self._label_style,
+                                      w=info.get("w", 0), h=info.get("h", 0), nbytes=info.get("nbytes", 0)))
+        finally:
+            self.setUpdatesEnabled(True)
+
     def _add_item(self, p: str) -> None:
-        it = QListWidgetItem(self._placeholder, label_text(p))
+        it = QListWidgetItem(self._placeholder, label_text(p, style=self._label_style))
         it.setData(_PATH_ROLE, p)
         it.setToolTip(Path(p).name)
         it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
@@ -292,7 +315,7 @@ class PhotoStrip(QListWidget):
             return
         self._done.discard(p)
         it.setIcon(self._placeholder)
-        it.setText(label_text(p))
+        it.setText(label_text(p, style=self._label_style))
         self._restart_from_visible()
 
     # ── 속 ─────────────────────────────────────────────
@@ -322,14 +345,17 @@ class PhotoStrip(QListWidget):
         self._worker = w
         run_in_thread(w, self._keep)
 
-    def _on_done(self, gen: int, path: str, img: QImage, w: int = 0, h: int = 0):
+    def _on_done(self, gen: int, path: str, img: QImage, w: int = 0, h: int = 0, date: str = "", nbytes=0):
         if gen != self._gen:
             return
         self._done.add(path)
         it = self._items.get(path)
         if it is None:
             return
-        it.setText(label_text(path, w, h, unreadable=img.isNull() and not w))
+        info = {"date": date, "w": int(w), "h": int(h), "nbytes": int(nbytes or 0), "bad": bool(img.isNull() and not w)}
+        it.setData(_INFO_ROLE, info)
+        it.setText(label_text(path, date, unreadable=info["bad"], style=self._label_style, w=w, h=h, nbytes=info["nbytes"]))
+        it.setToolTip(Path(path).name + ("\n%d × %d" % (w, h) if w and h else ""))
         if img.isNull():
             return
         rot = 0

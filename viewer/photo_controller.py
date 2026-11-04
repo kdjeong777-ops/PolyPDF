@@ -569,6 +569,7 @@ class PhotoMixin:
             s.menuRequested.connect(self._photo_strip_menu)          # 261104-3(4.20)
             s.deleteRequested.connect(self._photo_delete)            # 261104-4(4.25): Del
             s.nearEnd.connect(self._photo_device_next)                # 261104-9(4.33): 휴대 장치 — 끝에 닿으면 다음 폴더를 잇는다
+            s.set_label_style(self._photo_strip_style())             # 261104-13(4.38): 보기설정 스타일
             s.verticalScrollBar().valueChanged.connect(
                 lambda v, _s=s: v and v >= _s.verticalScrollBar().maximum() and self._photo_device_next())
             s.rotation_provider = self._photo_rot_for
@@ -637,6 +638,165 @@ class PhotoMixin:
             strip.set_paths(self._photo_strip_source(), current=str(cur))
             self._photo_sync_tree(cur)               # 다시 읽은 목록에서도 그 줄(4.26)
         self._photo_devices_refresh()                # 휴대 장치 줄(4.33) — 폴더 열기·🔄 때 배경에서 한 번
+        self._photo_dates_start()                    # 책갈피창 이름 앞 날짜(4.37) — 배경에서 읽어 붙인다
+
+    # ── 책갈피창 줄 표기 — 날짜(4.37, 261104-12)·보기설정 스타일(4.38, 261104-13) ─────────────────
+    def _photo_dates_start(self):
+        """목록의 사진·zip 줄 이름을 보기설정 스타일대로(기본 'YYYY-MM-DD 이름') — 날짜·가로×세로는 배경에서
+        (사진 정보 색인이 캐시 → 없거나 바뀐 것만 머리 읽기). 이름·확장자·용량은 바로. 읽은 것은 기억한다."""
+        from viewer.workers import run_in_thread
+        if not getattr(self, "_photo_mode", False):
+            return
+        bt = self.bookmark_tree
+        cache = self.__dict__.setdefault("_photo_date_cache", {})
+        paths = []
+        for it in bt._iter_file_nodes():
+            p = str(it.data(0, bt.DATA_FILE) or "")
+            if p and (self._is_photo_path(p) or p.lower().endswith(".zip")):
+                paths.append(p)
+        bt.photo_sort_time = self._photo_sort_time       # '수정일 순' 정렬도 같은 값(§4.37)
+        self._photo_label_nodes = None
+        self._photo_labels_apply(None)                   # 지금 아는 값으로 먼저(이름·용량·기억한 날짜)
+        old = self.__dict__.get("_photo_dater")
+        if old is not None:
+            old.request_cancel()
+        if not paths:
+            return
+        w = PhotoDateWorker(paths, dict(cache))
+        w.batch.connect(lambda d, _w=w: self._photo_dates_got(d, _w))
+        w.finished.connect(lambda _w=w: self._photo_dates_done(_w))
+        self._photo_dater = w
+        self._photo_dates_new = False
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    CLOSE_WAIT_MS = 500                              # 창을 닫을 때 사진 배경 작업을 기다리는 상한(합계)
+
+    def _photo_close_workers(self):
+        """창을 닫을 때 — 사진 배경 작업에 멈추라고 알리고 `CLOSE_WAIT_MS` 까지만 기다린다. 이어서 `main.py` 가 프로세스를 곧바로 끝내는데,
+        그때 작업이 그림 라이브러리를 불러오는 중이면 종료가 막힐 수 있었다(묶음 검사에서 ALL PASS 뒤 10분 — 261104-13).
+        휴대 장치(셸 COM) 작업은 응답 없는 장치에 붙들릴 수 있어 기다리지 않는다(4.33 '닫기')."""
+        import time as _t
+        from PyQt6.QtCore import QThread
+        keep = list(self.__dict__.get("_photo_keep", []) or [])
+        s = self.__dict__.get("_photo_strip")
+        if s is not None:
+            try:
+                s.stop()
+                keep += list(getattr(s, "_keep", []) or [])
+            except Exception:
+                pass
+        skip = (PhotoDeviceListWorker, PhotoDeviceScanWorker, PhotoDeviceWorker)
+        ths = []
+        for i, obj in enumerate(keep):
+            if isinstance(obj, QThread):
+                w = keep[i + 1] if i + 1 < len(keep) else None
+                if isinstance(w, skip):
+                    continue
+                if w is not None and hasattr(w, "request_cancel"):
+                    try:
+                        w.request_cancel()
+                    except Exception:
+                        pass
+                ths.append(obj)
+        end = _t.monotonic() + self.CLOSE_WAIT_MS / 1000.0
+        for th in ths:
+            left = int((end - _t.monotonic()) * 1000)
+            if left <= 0:
+                break
+            try:
+                if th.isRunning():
+                    th.wait(left)
+            except RuntimeError:
+                pass
+
+    def _photo_dates_got(self, found: dict, worker=None):
+        if worker is not self.__dict__.get("_photo_dater") or not getattr(self, "_photo_mode", False):
+            return
+        cache = self.__dict__.setdefault("_photo_date_cache", {})
+        for p, rec in found.items():
+            cache[os.path.normcase(p)] = tuple(rec)      # (수정 시각 ns, 날짜, 정렬 시각, 폭, 높이, 바이트)
+        self._photo_dates_new = True
+        self._photo_labels_apply(set(os.path.normcase(p) for p in found))
+
+    def _photo_sort_time(self, path):
+        hit = self.__dict__.get("_photo_date_cache", {}).get(os.path.normcase(str(path)))
+        return hit[2] if hit else None
+
+    def _photo_dates_done(self, worker=None):
+        """새로 읽은 날짜가 있고 정렬이 '수정일 순' 이면 한 번 다시 늘어놓는다(같은 값으로 — §4.37). 기억한 값만 쓰니 다시 읽지 않는다."""
+        if worker is not self.__dict__.get("_photo_dater"):
+            return
+        self._photo_dater = None
+        bt = self.bookmark_tree
+        if not (self.__dict__.pop("_photo_dates_new", False) and getattr(self, "_photo_mode", False)):
+            return
+        if getattr(bt, "_mode", "") != "flat" or bt._sort_combo.currentData() != bt.SORT_MTIME:
+            return
+        self._photo_relist_keep = str(getattr(self, "_folder", "") or "")   # 검색 결과·zip 보기는 지킨다(4.27)
+        bt._render_flat(after=(lambda c=self.main_view.current_file() if self.main_view else None:
+                               self._photo_sync_tree(c) if c else None))
+
+    def _photo_label_values(self, path) -> dict:
+        """구문에 넣을 값 — 기억한 날짜·크기·용량, 없으면 목록 훑기가 준 용량(`_scan_stats`)."""
+        from viewer import photo_label as PL
+        hit = self.__dict__.get("_photo_date_cache", {}).get(os.path.normcase(str(path)))
+        if hit and len(hit) >= 6:
+            return PL.values(path, hit[1], hit[3], hit[4], hit[5])
+        nbytes = 0
+        try:
+            v = self.bookmark_tree._scan_stats.get(str(path))
+            nbytes = int(v[0]) if v else 0
+        except Exception:
+            nbytes = 0
+        return PL.values(path, hit[1] if hit else "", 0, 0, nbytes)
+
+    def _photo_labels_apply(self, only=None):
+        """책갈피창 사진·zip 줄 이름을 지금 스타일로(글 잇기만 — 메인). `only` 는 바꿀 줄(normcase 경로 모음), None 이면 모두."""
+        from viewer import photo_label as PL
+        bt = self.bookmark_tree
+        tpl = PL.current(self._photo_prefs(), "tree")
+        nodes = self.__dict__.get("_photo_label_nodes")
+        if only is None or nodes is None:
+            nodes = {}                                   # 경로 → 줄(목록을 다시 채우면 새로) — 알림마다 모든 줄을 훑지 않게
+            for it in bt._iter_file_nodes():
+                p = str(it.data(0, bt.DATA_FILE) or "")
+                if p and (self._is_photo_path(p) or p.lower().endswith(".zip")):
+                    nodes[os.path.normcase(p)] = it
+            self._photo_label_nodes = nodes
+        todo = nodes.items() if only is None else ((k, nodes[k]) for k in only if k in nodes)
+        with bt.batch_rows():                            # 한 줄씩 바꾸면 트리가 매번 모든 행을 다시 잰다(행 수의 제곱)
+            for _k, it in todo:
+                try:
+                    p = str(it.data(0, bt.DATA_FILE) or "")
+                except RuntimeError:
+                    continue                             # 지워진 줄
+                base = PL.render(tpl, self._photo_label_values(p)) or Path(p).stem
+                if it.data(0, bt.DATA_BASELABEL) == base:
+                    continue
+                it.setData(0, bt.DATA_BASELABEL, base)
+                if getattr(bt, "_tags", None) is not None:
+                    bt._apply_tag_label(it, p)           # 태그 꼬리는 그대로 다시 붙인다
+                else:
+                    it.setText(0, base)
+
+    def _photo_label_dialog(self, which: str):
+        """보기설정(4.38) — 책갈피창(`tree`)·썸네일창(`strip`) 줄 표기 스타일. 적용하면 다시 그린다."""
+        from viewer.widgets.photo_label_dialog import PhotoLabelDialog
+        cur = self.main_view.current_file() if self.main_view else None
+        sample = self._photo_label_values(cur) if cur else {"name": tr("사진 이름"), "ext": "JPG", "date": "2025-06-10",
+                                                               "size": "4032×3024", "bytes": "2.4MB"}
+
+        def apply():
+            self._photo_labels_apply(None)
+            s = self._photo_strip_widget(create=False)
+            if s is not None:
+                s.set_label_style(self._photo_strip_style())
+        dlg = PhotoLabelDialog(self, self._photo_prefs(), which, sample, on_apply=apply)
+        dlg.exec()
+
+    def _photo_strip_style(self):
+        from viewer import photo_label as PL
+        return PL.current(self._photo_prefs(), "strip")
 
     # ── 휴대 장치 — 둘러보기 + 복사 (4.33, 261104-9 사용자 결정) ─────────────────
     DEVICE_ROLE = Qt.ItemDataRole.UserRole + 40      # 책갈피창 장치 줄 표식 — (장치, 폴더 또는 '', 오류 종류 또는 '')
@@ -684,6 +844,13 @@ class PhotoMixin:
         for gone in [d for d in names if d not in {f[0] for f in found}]:
             names.pop(gone, None)                        # 뽑힌 장치
         to_scan = []
+        with bt.batch_rows():
+            self._photo_devices_rows(bt, tree, found, icon, as_folders, opened, names, to_scan)
+        if to_scan:
+            self._photo_device_scan(to_scan)
+
+    def _photo_devices_rows(self, bt, tree, found, icon, as_folders, opened, names, to_scan):
+        from PyQt6.QtWidgets import QTreeWidgetItem
         for pos, (dev, folders, err) in enumerate(found):
             top = QTreeWidgetItem([dev])
             top.setIcon(0, icon)
@@ -713,8 +880,6 @@ class PhotoMixin:
                     to_scan.append((dev, list(folders)))
             tree.insertTopLevelItem(pos, top)              # 맨 위에 — 꽂은 장치는 보려고 꽂은 것(사용자 지시)
             top.setExpanded(as_folders or not err)
-        if to_scan:
-            self._photo_device_scan(to_scan)
 
     def _photo_device_scan(self, todo: list):
         """단일 보기 — 장치의 모든 사진 이름을 배경에서(새 폴더부터 한 폴더씩 알림). 받지는 않는다."""
@@ -735,7 +900,8 @@ class PhotoMixin:
             return
         top = next((t for t in self._photo_device_nodes() if t.data(0, self.DEVICE_ROLE)[0] == dev), None)
         if top is not None:
-            self._photo_device_fill_rows(top, dev, folder, nm)
+            with self.bookmark_tree.batch_rows():
+                self._photo_device_fill_rows(top, dev, folder, nm)
 
     def _photo_device_fill_rows(self, parent, dev: str, folder: str, nm):
         """사진 줄 — 경로는 캐시에 받을 자리(받기 전에도 같은 경로라 본문 사진과 줄을 짝지을 수 있다)."""
@@ -1648,6 +1814,9 @@ class PhotoMixin:
 
     def _photo_action(self, kind: str, paths: list):
         """사진 모드 메뉴의 일(4.20) — 책갈피창·썸네일 줄·본문이 같은 함수를 부른다."""
+        if kind in ("label_style_tree", "label_style_strip"):
+            self._photo_label_dialog("tree" if kind == "label_style_tree" else "strip")   # 보기설정(4.38)
+            return
         paths = [str(p) for p in (paths or []) if p]
         if kind not in ("copy_path", "reveal"):
             paths = [p for p in paths if self._is_photo_path(p)]     # zip 줄 등 사진 아닌 것은 빼고(4.24)
@@ -1747,8 +1916,13 @@ class PhotoMixin:
         a_del.setEnabled(self.bookmark_tree.is_edit_mode() and not self._photo_any_cached(targets))
         if not self.bookmark_tree.is_edit_mode():
             a_del.setToolTip(tr("편집 모드에서 지울 수 있습니다."))
+        menu.addSeparator()
+        a_style = menu.addAction(tr("보기설정..."))            # 4.38(261104-13) — 메뉴 끝
         chosen = menu.exec(global_pos)
         if chosen is None:
+            return
+        if chosen is a_style:
+            self._photo_label_dialog("strip")
             return
         if chosen is a_del:
             self._photo_delete(targets)
@@ -2657,6 +2831,78 @@ def photo_auto_tags(path, text):
     except Exception:
         kws = []
     return fmt, kws
+
+
+class PhotoDateWorker(QObject):
+    """책갈피창 이름 앞 날짜·'수정일 순' 정렬 값(사진 보기 SOT 4.37) — EXIF 촬영 시각(머리만) → 파일 날짜.
+    50 줄마다 알린다. 응답성 SOT 감사표의 한 행."""
+    batch = pyqtSignal(dict)                     # 경로 → (수정 시각 ns, 'YYYY-MM-DD', 정렬 시각 초, 폭, 높이, 바이트)
+    finished = pyqtSignal()
+
+    def __init__(self, paths, cache: dict):
+        super().__init__()
+        self.paths, self.cache = list(paths), cache
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        import os as _os
+        from viewer import pacing, photo_io, photo_index
+        try:
+            known = {}                                   # 사진 정보 색인 = 캐시(4.38 사용자 결정) — 크기·수정 시각이 같으면 그 값
+            try:
+                con = photo_index.connect()
+                try:
+                    for k, sz, mt, tk, w_, h_ in con.execute(
+                            "SELECT key, size, mtime_ns, taken, width, height FROM photos WHERE zip IS NULL"):
+                        known[k] = (sz, mt, tk or "", w_ or 0, h_ or 0)
+                finally:
+                    con.close()
+            except Exception:
+                known = {}
+            out = {}
+            for p in self.paths:
+                if self._cancel:
+                    return
+                try:
+                    st = _os.stat(p)
+                except OSError:
+                    continue
+                key = _os.path.normcase(p)
+                hit = self.cache.get(key)
+                if hit and hit[0] == st.st_mtime_ns and len(hit) >= 6:
+                    continue                             # 앱이 이미 붙였다
+                row = known.get(key)
+                w = h = 0
+                if p.lower().endswith(".zip"):
+                    d, ts = photo_io._file_date(p), float(st.st_mtime)
+                elif row and row[0] == st.st_size and row[1] == st.st_mtime_ns and row[3] and row[4]:
+                    w, h = row[3], row[4]
+                    if row[2]:                           # 색인의 촬영일(날짜만) — 정렬 시각은 그날 + 파일 시각의 하루 안 자리
+                        import time as _t
+                        d = row[2][:10]
+                        try:
+                            ts = _t.mktime((int(d[:4]), int(d[5:7]), int(d[8:10]), 0, 0, 0, 0, 0, -1)) + (st.st_mtime % 86400)
+                        except (ValueError, OverflowError):
+                            ts = float(st.st_mtime)
+                    else:
+                        d, ts = photo_io._file_date(p), float(st.st_mtime)
+                else:
+                    d, ts, w, h = photo_io.photo_meta(p)  # 촬영 시각·크기(머리만) → 없으면 파일 시각
+                    pacing.pace(self)
+                if d:
+                    out[p] = (st.st_mtime_ns, d, ts, int(w), int(h), int(st.st_size))
+                if len(out) >= 50:
+                    self.batch.emit(out)
+                    out = {}
+            if out and not self._cancel:
+                self.batch.emit(out)
+        except Exception:
+            pass
+        finally:
+            self.finished.emit()
 
 
 class PhotoOcrWorker(QObject):

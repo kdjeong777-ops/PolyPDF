@@ -1294,10 +1294,16 @@ class BookmarkTree(QWidget):
         여기서 `Path.stat()` 을 다시 부르면 **파일 수만큼** 디스크를 때린다 — 실측
         외장 SSD 의 PDF 28,954개 수정일 정렬에 12.5초가 걸렸고 그동안 창이 멈췄다."""
         v = self._scan_stats.get(str(p))
-        if v is not None:
-            return v
-        st = _stat(p)
-        return (st.st_size, st.st_mtime)
+        if v is None:
+            st = _stat(p)
+            v = (st.st_size, st.st_mtime)
+        # 261104-12(사진 보기 SOT §4.37): 사진 모드의 '수정일 순' 은 이름 앞 날짜와 **같은 값**(촬영 시각, 없으면 파일 시각)으로
+        when = getattr(self, "photo_sort_time", None)
+        if when is not None and self._photo_on():
+            t = when(str(p))
+            if t:
+                return (v[0], t)
+        return v
 
     def _on_sort_changed(self, _text: str):
         """정렬 콤보 변경 — 평탄 모드에서만 재렌더."""
@@ -2154,6 +2160,26 @@ class BookmarkTree(QWidget):
             from PyQt6.QtGui import QIcon
             return QIcon()
 
+    def batch_rows(self):
+        """여러 줄의 글·아이콘을 한꺼번에 바꿀 때 — `with bt.batch_rows(): …`. 첫 열이 '내용에 맞춤'이라 줄 하나를 바꿀 때마다
+        트리가 모든 행을 다시 재서(행 수의 제곱, 아래 `refresh_icons` 의 261011-7) 사진 1,500장에 이름 앞 날짜를 붙이는 데 25초
+        멈췄다(261104-12). 바꾸는 동안만 맞춤·화면 갱신을 멈추고 끝난 뒤 한 번 잰다(응답성 SOT §4 ⑥)."""
+        from contextlib import contextmanager
+        from PyQt6.QtWidgets import QHeaderView as _QHV
+
+        @contextmanager
+        def _cm():
+            hdr = self.tree.header()
+            mode = hdr.sectionResizeMode(0)
+            hdr.setSectionResizeMode(0, _QHV.ResizeMode.Interactive)
+            self.tree.setUpdatesEnabled(False)
+            try:
+                yield
+            finally:
+                self.tree.setUpdatesEnabled(True)
+                hdr.setSectionResizeMode(0, mode)
+        return _cm()
+
     def refresh_icons(self):
         """260902-5: 테마 전환 후 파일 행 아이콘 재적용(폴더 행은 테마 무관이라 그대로).
         261010-27: 서명된 파일은 `sign` 아이콘을 지킨다."""
@@ -2823,6 +2849,10 @@ class BookmarkTree(QWidget):
         # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
         act_fav_folder = menu.addAction(tr("현재 폴더를 즐겨찾기에 추가"))
         act_fav_file = menu.addAction(tr("현재 파일을 즐겨찾기에 추가")) if is_file else None
+        if pm:                                          # 261104-13(사진 보기 SOT 4.38): 사진 모드 줄 표기 — 메뉴 끝
+            menu.addSeparator()
+            _ls = menu.addAction(tr("보기설정..."))
+            _ls.triggered.connect(lambda _=False: QTimer.singleShot(0, lambda: self.photoActionRequested.emit("label_style_tree", [])))
         chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
         if act_open_dir is not None and chosen is act_open_dir:
             if _dir_target:

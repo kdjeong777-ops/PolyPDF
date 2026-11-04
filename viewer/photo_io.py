@@ -87,6 +87,103 @@ def oriented_size(path) -> tuple:
         return (0, 0)
 
 
+def _exif_when(im) -> tuple:
+    """EXIF 촬영 시각(DateTimeOriginal, 없으면 DateTime) → ('YYYY-MM-DD', 초). 없으면 ('', 0)."""
+    import time as _t
+    try:
+        ex = im.getexif()
+        v = ""
+        try:
+            v = (ex.get_ifd(0x8769) or {}).get(0x9003) or ""
+        except Exception:
+            v = ""
+        v = str(v or ex.get(0x0132) or "").strip("\x00 ")
+        if len(v) >= 10 and v[4] in ":-" and v[7] in ":-":
+            d = v[:4] + "-" + v[5:7] + "-" + v[8:10]
+            try:
+                hh, mm, ss = (int(x) for x in (v[11:13] or 0, v[14:16] or 0, v[17:19] or 0))
+            except ValueError:
+                hh = mm = ss = 0
+            try:
+                ts = _t.mktime((int(v[:4]), int(v[5:7]), int(v[8:10]), hh, mm, ss, 0, 0, -1))
+            except (ValueError, OverflowError):
+                ts = 0
+            return d, float(ts)
+    except Exception:
+        pass
+    return "", 0.0
+
+
+def _exif_date(im) -> str:
+    return _exif_when(im)[0]
+
+
+def _file_date(path) -> str:
+    import time as _t
+    try:
+        return _t.strftime("%Y-%m-%d", _t.localtime(os.path.getmtime(str(path))))
+    except (OSError, ValueError, OverflowError):
+        return ""
+
+
+def photo_when(path) -> tuple:
+    """사진의 날짜·시각 `('YYYY-MM-DD', 초)` — 촬영 시각(EXIF), 없으면 파일 수정 시각(사진 보기 SOT §4.18·§4.37).
+    책갈피창 이름 앞 날짜와 '수정일 순' 정렬이 **같은 값**을 쓴다. **머리만** 읽는다. 배경에서."""
+    _prep(path)
+    try:
+        from PIL import Image
+        with Image.open(str(path)) as im:
+            d, ts = _exif_when(im)
+        if d:
+            return d, ts
+    except Exception:
+        pass
+    try:
+        return _file_date(path), float(os.path.getmtime(str(path)))
+    except OSError:
+        return "", 0.0
+
+
+def photo_meta(path) -> tuple:
+    """`(날짜, 정렬 시각 초, 보이는 폭, 높이)` — `photo_when` 과 같은 기준, 한 번 열어(머리만). 배경에서."""
+    _prep(path)
+    try:
+        from PIL import Image
+        with Image.open(str(path)) as im:
+            w, h = im.size
+            o = int(im.getexif().get(ORIENT_TAG, 1) or 1)
+            d, ts = _exif_when(im)
+        if o in (5, 6, 7, 8):
+            w, h = h, w
+        if d:
+            return d, ts, w, h
+        return _file_date(path), float(os.path.getmtime(str(path))), w, h
+    except Exception:
+        try:
+            return _file_date(path), float(os.path.getmtime(str(path))), 0, 0
+        except OSError:
+            return "", 0.0, 0, 0
+
+
+def photo_date(path) -> str:
+    """사진의 날짜 'YYYY-MM-DD' — `photo_when` 의 날짜."""
+    return photo_when(path)[0]
+
+
+def size_and_date(path) -> tuple:
+    """`(보이는 폭, 높이, 날짜)` — 썸네일 줄이 한 번 열어 둘 다(머리만). 못 읽으면 (0, 0, 파일 날짜)."""
+    _prep(path)
+    try:
+        from PIL import Image
+        with Image.open(str(path)) as im:
+            w, h = im.size
+            o = int(im.getexif().get(ORIENT_TAG, 1) or 1)
+            d = _exif_date(im)
+        return ((h, w) if o in (5, 6, 7, 8) else (w, h)) + (d or _file_date(path),)
+    except Exception:
+        return (0, 0, _file_date(path))
+
+
 # ── GPS 지우기(JPEG, 다시 압축하지 않음) ─────────────────────────────
 _TYPE_SIZE = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 

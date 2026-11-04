@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 20:27+0900\n"
+"POT-Creation-Date: 2026-11-04 21:56+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -752,7 +752,7 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/view_settings_dialog.py
+#: viewer/widgets/photo_label_dialog.py viewer/widgets/view_settings_dialog.py
 msgid "적용"
 msgstr ""
 
@@ -3905,6 +3905,10 @@ msgstr ""
 msgid "일괄 작업..."
 msgstr ""
 
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "보기설정..."
+msgstr ""
+
 #: viewer/photo_controller.py
 msgid "사진 → PDF"
 msgstr ""
@@ -3996,6 +4000,10 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "움직이는 그림 재생·멈춤"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 이름"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4357,6 +4365,43 @@ msgstr ""
 
 #: viewer/photo_doc.py
 msgid "다음·이전 사진으로 그대로 넘길 수 있습니다."
+msgstr ""
+
+#: viewer/photo_label.py viewer/sign_draft_controller.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+msgid "날짜"
+msgstr ""
+
+#: viewer/photo_label.py
+msgid "파일명"
+msgstr ""
+
+#: viewer/photo_label.py
+msgid "가로×세로"
+msgstr ""
+
+#: viewer/photo_label.py
+msgid "용량(MB)"
+msgstr ""
+
+#: viewer/photo_label.py
+msgid "확장자"
+msgstr ""
+
+#: viewer/photo_label.py
+msgid "기본"
+msgstr ""
+
+#: viewer/photo_label.py
+msgid "이름만"
+msgstr ""
+
+#: viewer/photo_label.py
+msgid "상세"
+msgstr ""
+
+#: viewer/photo_label.py viewer/widgets/pres_timer.py
+msgid "크기"
 msgstr ""
 
 #: viewer/present_controller.py
@@ -5061,8 +5106,8 @@ msgstr ""
 msgid "다른 쪽에도 놓기…"
 msgstr ""
 
-#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
+#: viewer/sign_draft_controller.py viewer/widgets/photo_label_dialog.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "지우기"
 msgstr ""
 
@@ -5085,11 +5130,6 @@ msgstr ""
 #: viewer/sign_draft_controller.py viewer/widgets/capture_settings.py
 #: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "이름"
-msgstr ""
-
-#: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
-msgid "날짜"
 msgstr ""
 
 #: viewer/sign_draft_controller.py
@@ -7085,8 +7125,9 @@ msgstr ""
 msgid "현재 쪽"
 msgstr ""
 
-#: viewer/widgets/crop_dialog.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/study_panel.py viewer/widgets/text_panel.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/photo_label_dialog.py
+#: viewer/widgets/settings_dialog.py viewer/widgets/study_panel.py
+#: viewer/widgets/text_panel.py
 msgid "스타일"
 msgstr ""
 
@@ -8353,6 +8394,71 @@ msgstr ""
 msgid "사용자선 {i}"
 msgstr ""
 
+#: viewer/widgets/photo_label_dialog.py
+msgid "새 스타일..."
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "구분자"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "마지막 조각 지우기"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "새 스타일"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "스타일 이름"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "보기설정 — 책갈피창"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "보기설정 — 썸네일창"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "구문"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "윗줄"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "아랫줄"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "넣기"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "미리보기 (지금 사진)"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py viewer/widgets/ribbon.py
+msgid "기본값으로"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "빈칸"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+msgid "스타일 지우기"
+msgstr ""
+
+#: viewer/widgets/photo_label_dialog.py
+#, python-brace-format
+msgid "'{name}' 스타일을 지울까요?"
+msgstr ""
+
 #: viewer/widgets/pointer_settings_dialog.py
 msgid "발표 포인터 설정"
 msgstr ""
@@ -8598,10 +8704,6 @@ msgstr ""
 
 #: viewer/widgets/pres_timer.py
 msgid "클립보드에 이미지가 없습니다."
-msgstr ""
-
-#: viewer/widgets/pres_timer.py
-msgid "크기"
 msgstr ""
 
 #: viewer/widgets/pres_timer.py
@@ -9206,10 +9308,6 @@ msgstr ""
 
 #: viewer/widgets/ribbon.py viewer/widgets/toc_review_dialog.py
 msgid "아래로"
-msgstr ""
-
-#: viewer/widgets/ribbon.py
-msgid "기본값으로"
 msgstr ""
 
 #: viewer/widgets/ribbon.py

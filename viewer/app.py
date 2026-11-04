@@ -10233,6 +10233,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
 
         try:
+            self._photo_close_workers()          # 261104-13(사진 보기 SOT 4.38): 사진 배경 작업 멈춤 — 짧게만 기다린다
+        except Exception:
+            pass
+        try:
             if getattr(self, "_instance_link", None) is not None:
                 self._instance_link.close()      # 260915-2(§4.7.8): 다른 창이 더는 찾지 않게
         except Exception:

@@ -76,7 +76,8 @@ try:
     s = mw._photo_strip
     chk(pump(lambda: len(s._done) >= 3, timeout=10), "A 썸네일 3장 다 만듦")
     t0, t1 = s._items[lst[0]].text(), s._items[lst[1]].text()
-    chk(t0.split("\n")[-1] == "400 × 800", "A 이름 아래 원본 크기(방향 뒤 400 × 800)", repr(t0))
+    chk(t0.split("\n")[-1] == "2026-10-30" and "400 × 800" in s._items[lst[0]].toolTip(),
+        "A 이름 아래 날짜(촬영일), 원본 크기(방향 뒤 400 × 800)는 칸 도움말 — 261104-12", repr(t0) + " " + repr(s._items[lst[0]].toolTip()))
     chk(t0.split("\n")[0] == "1 세로", "A 첫 줄은 이름(확장자 없이)", repr(t0))
 
     # B

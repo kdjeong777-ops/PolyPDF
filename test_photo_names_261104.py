@@ -81,7 +81,7 @@ try:
     mw._on_bookmark_activated(str(a), 0); pump(timeout=0.8)
     strip = mw._photo_strip
     pump(lambda: len(strip.paths()) == 4, timeout=5)
-    pump(lambda: all("×" in strip._items[p].text() for p in strip.paths()), timeout=5)
+    pump(lambda: len(strip._done) == len(strip.paths()), timeout=5)
 
     # A
     na, nb = drawn_name(strip, str(a)), drawn_name(strip, str(b))
