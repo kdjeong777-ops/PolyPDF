@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 16:44+0900\n"
+"POT-Creation-Date: 2026-11-04 16:46+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3801,6 +3801,10 @@ msgid "폴더가 바뀌어 사진 목록을 새로 읽었습니다."
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "지도에서 위치 보기"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "PDF 모드로 바꾸기"
 msgstr ""
 
@@ -4016,6 +4020,11 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 검색 '{q}': {n}장"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "촬영 위치({lat:.5f}, {lon:.5f})가 지도 서비스(OpenStreetMap)로 보내집니다. 기본 브라우저로 열까요?"
 msgstr ""
 
 #: viewer/photo_controller.py

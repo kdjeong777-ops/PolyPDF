@@ -318,6 +318,18 @@ class PhotoMixin:
             self._set_active_pane(me)
             self._photo_pair_stepping = False
 
+    # ── 지도 (4.29, 261104-7 B4, §5.1 F6·D18) ─────────────────
+    def _photo_open_map(self, lat: float, lon: float) -> bool:
+        """촬영 위치를 지도 서비스(OpenStreetMap)로 — **매번** '위치가 밖으로 보내진다' 고 묻고(D18) 기본 브라우저로. 열었으면 True."""
+        ans = QMessageBox.question(
+            self, tr("지도에서 위치 보기"),
+            tr("촬영 위치({lat:.5f}, {lon:.5f})가 지도 서비스(OpenStreetMap)로 보내집니다. 기본 브라우저로 열까요?").format(lat=lat, lon=lon))
+        if ans != QMessageBox.StandardButton.Yes:
+            return False
+        from PyQt6.QtCore import QUrl
+        from PyQt6.QtGui import QDesktopServices
+        return bool(QDesktopServices.openUrl(QUrl(map_url(lat, lon))))
+
     def _photo_resume_index(self):
         """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""
         if not self.__dict__.pop("_photo_index_skipped", False):
@@ -662,6 +674,9 @@ class PhotoMixin:
         lay.addWidget(t)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dlg)
         bb.rejected.connect(dlg.reject)
+        if info.get("gps"):                                # 4.29(261104-7 B4, F6·D18): 지도에서 위치 보기 — 매번 확인
+            b_map = bb.addButton(tr("지도에서 위치 보기"), QDialogButtonBox.ButtonRole.ActionRole)
+            b_map.clicked.connect(lambda _=False, g=info["gps"]: self._photo_open_map(*g))
         lay.addWidget(bb)
         dlg.resize(560, 420)
         self._photo_info_dlg = dlg
@@ -705,6 +720,10 @@ class PhotoMixin:
             a = menu.addAction(label)
             a.setEnabled(not broken or key in ("copy_path", "reveal"))
             extra[a] = key
+        _gps = (self.__dict__.get("_photo_info") or {}).get("gps")
+        if _gps and not broken:
+            a = menu.addAction(tr("지도에서 위치 보기"))      # 4.29 — GPS 가 있는 사진만
+            extra[a] = "map"
         a_pair = None
         if getattr(self, "_split_on", False):
             menu.addSeparator()
@@ -914,6 +933,10 @@ class PhotoMixin:
                 pass
         elif kind == "info":
             self._photo_info_dialog()
+        elif kind == "map":
+            g = (self.__dict__.get("_photo_info") or {}).get("gps")
+            if g:
+                self._photo_open_map(*g)
         elif kind == "open":
             self._on_bookmark_activated(paths[0], 0)
         elif kind in ("rot_l", "rot_r"):
@@ -1666,6 +1689,13 @@ def photo_io_is_jpeg(path) -> bool:
 def _photo_doc_cls():
     from viewer.photo_doc import PhotoDocument
     return PhotoDocument
+
+
+MAP_URL = "https://www.openstreetmap.org/?mlat={lat:.6f}&mlon={lon:.6f}#map=17/{lat:.6f}/{lon:.6f}"   # 4.29 — API 키가 필요 없는 지도
+
+
+def map_url(lat: float, lon: float) -> str:
+    return MAP_URL.format(lat=float(lat), lon=float(lon))
 
 
 WATCH_DEBOUNCE_MS = 300        # 폴더 감시 알림을 모으는 시간(4.27) — 카메라·캡처가 여러 장을 잇달아 쓸 때 한 번만
