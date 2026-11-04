@@ -2,11 +2,12 @@
 """책갈피창 파일 종류 아이콘 (사진 보기 SOT §4.8, 사용자 결정 '가안 수정 — 첫 영문 크게').
 
 A. 확장자 → 형식: 같은 형식의 다른 확장자(.jpeg·.tiff·.heif)는 한 아이콘, 대문자도, 모르는 확장자는 빈 아이콘
-B. 띠 색이 형식 색(`FILE_KIND_COLOR`) — 밝은·어두운 테마 모두
+B. 종이(띠) 색이 형식 색(`FILE_KIND_COLOR`) — 밝은·어두운 테마 모두
 C. 띠 글자색: 밝은 띠(어두운 테마 회색 TIF 등)는 어두운 글자, 그 밖에는 흰 글자
 D. 첫 글자가 같은 PDF·PNG 는 색으로, 같은 회색 TIF·BMP 는 글자로 다르다
 E. 형식·테마·크기마다 한 번만 그린다(같은 QIcon) — 수천 줄 목록에서 줄마다 그리지 않게
 F. 배율(dpr 1·2)이 달라도 글자 폭이 같다 — 종전 점(pt) 크기 글꼴은 dpr 2 에서 띠 밖으로 넘쳤다
+G. 첫 글자가 아이콘 높이에 가깝다(≥ 10/16) — 261104-5 사용자 지시 'JPG 의 J 가 잘 안 보인다'(종전 띠 안 5/16)
 """
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -39,9 +40,9 @@ def near(a: QColor, b: QColor, tol=24):
 
 
 def band_pixels(im, size=48):
-    """띠 안(글자 밖일 가능성이 큰 왼쪽 끝 기둥)의 색."""
+    """종이 왼쪽 위(글자 위, 접힌 모서리 밖)의 색."""
     s = size / 16.0
-    return QColor(im.pixel(int(1.4 * s), int(11.0 * s)))
+    return QColor(im.pixel(int(1.6 * s), int(1.6 * s)))
 
 
 def ink_pixels(im, ink: QColor, size=48):
@@ -104,6 +105,33 @@ for kind in ("HEIC", "WEBP", "JPG"):
     r1, r2 = ink_right(kind, 1.0), ink_right(kind, 2.0)
     chk(0 < r1 < 14.4 and 0 < r2 < 14.4 and abs(r1 - r2) < 1.0, "F 글자가 띠 안·배율과 무관 %s" % kind,
         "dpr1 %.2f · dpr2 %.2f" % (r1, r2))
+
+
+# G — 첫 글자(글자색 화소가 가장 많은 세로 줄들)의 높이
+def head_height(kind, dark):
+    size = 48
+    im = img(kind, dark, size)
+    s = size / 16.0
+    ink = QColor(icons.band_ink(icons.FILE_KIND_COLOR[kind][dark]))
+    col = QColor(icons.FILE_KIND_COLOR[kind][dark])
+    reach = int(2 * s)
+    ys = []
+    for y in range(im.height()):
+        for x in range(int(9 * s)):
+            if not near(QColor(im.pixel(x, y)), ink, 40):
+                continue
+            # 글자 획 = 글자색 화소 옆(가로 2/16 안)에 형식 색 바탕 — 종전 흰 종이는 형식 색과 맞닿지 않아 세지 않는다
+            if any(0 <= x + dx < im.width() and near(QColor(im.pixel(x + dx, y)), col, 30)
+                   for dx in range(-reach, reach + 1)):
+                ys.append(y)
+                break
+    return (max(ys) - min(ys) + 1) / s if ys else 0.0
+
+
+for dark in (False, True):
+    for kind in icons.FILE_KIND_COLOR:
+        h = head_height(kind, dark)
+        chk(h >= 10.0, "G 첫 글자 높이 ≥ 10/16 %s %s" % (kind, "어두운" if dark else "밝은"), "%.2f" % h)
 
 print()
 print("ALL PASS" if not fails else "FAILURES: %d" % len(fails))

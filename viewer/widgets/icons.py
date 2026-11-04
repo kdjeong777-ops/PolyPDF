@@ -484,33 +484,56 @@ def band_ink(color: str) -> str:
     return INK_DARK if 0.299 * q.redF() + 0.587 * q.greenF() + 0.114 * q.blueF() > 0.62 else "#ffffff"
 
 
-def _file_kind(p, kind: str, dark: bool):
+FILE_KIND_PAGE = QRectF(0.8, 0.6, 14.4, 14.8)   # 형식 색 종이(16 격자) — 오른쪽 위 모서리를 접는다
+FILE_KIND_FOLD = 3.6                             # 접힌 모서리 크기
+FILE_KIND_HEAD_CAP = 11.0                        # 첫 글자 대문자 높이 — 아이콘 높이(16)에 가깝게(261104-5, 사용자 지시)
+FILE_KIND_TAIL_CAP = 4.2                         # 나머지 글자 대문자 높이
+FILE_KIND_BASE = 14.0                            # 글자 바닥선
+FILE_KIND_FONT = "Arial"                         # 형식 글자 글꼴(굵게)
+
+
+def _cap_font(cap: float):
+    """대문자 높이가 cap(10배 좌표)인 굵은 글꼴 — 정수 픽셀 크기라 dpr 과 무관하다."""
     from PyQt6.QtGui import QFont, QFontMetricsF
+    f = QFont(FILE_KIND_FONT)                    # 기본 글꼴은 J 갈고리가 짧아 크게 그리면 I 처럼 보였다
+    f.setBold(True)
+    f.setPixelSize(100)
+    c = QFontMetricsF(f).capHeight() or 72.0
+    f.setPixelSize(max(1, round(100 * cap / c)))
+    return f, QFontMetricsF(f)
+
+
+def _file_kind(p, kind: str, dark: bool):
     d = bool(dark)
     col = FILE_KIND_COLOR[kind][d]
-    p.setPen(QPen(QColor(FILE_KIND_LINE[d]), 0.8))
-    p.setBrush(QColor(PAPER_WHITE[d]))
-    p.drawPolygon(QPolygonF([QPointF(3, 1), QPointF(10, 1), QPointF(13.5, 4.5), QPointF(13.5, 15), QPointF(3, 15)]))
-    p.drawPolyline(QPolygonF([QPointF(10, 1), QPointF(10, 4.5), QPointF(13.5, 4.5)]))
+    ink = QColor(band_ink(col))
+    r, k = FILE_KIND_PAGE, FILE_KIND_FOLD
+    # 종이 전체가 형식 색 — 첫 글자를 아이콘 높이만큼 키우려고 종전 '흰 종이 + 아래 띠' 를 한 면으로(261104-5)
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor(col))
-    p.drawRoundedRect(QRectF(0.6, 7.2, 14.0, 7.6), 1.2, 1.2)
+    p.drawPolygon(QPolygonF([QPointF(r.left(), r.top()), QPointF(r.right() - k, r.top()),
+                             QPointF(r.right(), r.top() + k), QPointF(r.right(), r.bottom()),
+                             QPointF(r.left(), r.bottom())]))
+    fold = QColor(ink)
+    fold.setAlphaF(0.45)
+    p.setBrush(fold)
+    p.drawPolygon(QPolygonF([QPointF(r.right() - k, r.top()), QPointF(r.right() - k, r.top() + k),
+                             QPointF(r.right(), r.top() + k)]))
     # 글자는 10배 좌표에서 정수 픽셀 크기로 그린다 — 점(pt) 크기는 그림판 DPI(dpr)에 따라 폭이 달라졌다
-    big, small = QFont(), QFont()
-    for f, px in ((big, 70), (small, 34 if len(kind) <= 3 else 28)):
-        f.setBold(True)
-        f.setPixelSize(px)
-    fb, fs = QFontMetricsF(big), QFontMetricsF(small)
+    (big, fb), (small, fs) = _cap_font(FILE_KIND_HEAD_CAP * 10), _cap_font(FILE_KIND_TAIL_CAP * 10)
     head, tail = kind[0], kind[1:]
-    w = fb.horizontalAdvance(head) + fs.horizontalAdvance(tail)
+    wh, wt = fb.horizontalAdvance(head), fs.horizontalAdvance(tail)
+    avail = (r.width() - 0.8) * 10
+    sx = min(1.0, avail / (wh + wt))             # 넓은 W·네 글자는 가로로만 좁힌다(높이는 그대로)
     p.save()
     p.scale(0.1, 0.1)
-    x = 76.0 - w / 2.0
-    p.setPen(QColor(band_ink(col)))
+    p.translate((r.left() + 0.4) * 10 + (avail - (wh + wt) * sx) / 2.0, FILE_KIND_BASE * 10)
+    p.scale(sx, 1.0)
+    p.setPen(ink)
     p.setFont(big)
-    p.drawText(QPointF(x, 137.0), head)
+    p.drawText(QPointF(0, 0), head)
     p.setFont(small)
-    p.drawText(QPointF(x + fb.horizontalAdvance(head), 137.0), tail)
+    p.drawText(QPointF(wh, 0), tail)
     p.restore()
 
 
