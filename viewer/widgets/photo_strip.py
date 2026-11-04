@@ -24,6 +24,7 @@ CACHE_VERSION = 2               # 캐시 그림을 만드는 규칙이 바뀌면
 CACHE_MAX_BYTES = 300 * 1024 * 1024     # D9 용량 상한 — 넘으면 오래 안 쓴 것부터 지운다(썸네일 약 2만 장)
 _PRUNED = {"done": False}
 RESCAN_MS = 150                 # 스크롤이 멈추면 그 자리부터 다시 고른다
+KEY_ACTIVATE_MS = 120           # 키(↑↓·PageUp/Down·Home/End)로 고른 칸을 본문에 — 꾹 누르면 멈춘 칸만(261104-3 사용자 보고)
 _PATH_ROLE = Qt.ItemDataRole.UserRole
 
 
@@ -153,6 +154,13 @@ class PhotoStrip(QListWidget):
         self._rescan.timeout.connect(self._restart_from_visible)
         self.verticalScrollBar().valueChanged.connect(lambda _v: self._rescan.start())
         self.itemClicked.connect(self._on_clicked)
+        # 261104-3(사용자 보고 '썸네일을 위아래로 이동할 경우 본화면이 안 바뀜'): 클릭만 이었다 — 지금 칸이 바뀌면(키) 본문도.
+        #   앱이 고르는 칸(set_current·set_paths)은 신호를 막아 되먹임이 없다.
+        self._key_pick = QTimer(self)
+        self._key_pick.setSingleShot(True)
+        self._key_pick.setInterval(KEY_ACTIVATE_MS)
+        self._key_pick.timeout.connect(self._activate_current)
+        self.currentItemChanged.connect(lambda cur, _prev: cur is not None and self._key_pick.start())
 
     def _make_placeholder(self) -> QIcon:
         pm = QPixmap(self.iconSize())
@@ -174,6 +182,7 @@ class PhotoStrip(QListWidget):
         self._items = {}
         self._done = set()
         self.setUpdatesEnabled(False)
+        self.blockSignals(True)                  # 다시 채우는 동안 '지금 칸 바뀜' 을 내지 않는다
         try:
             self.clear()
             for p in paths:
@@ -184,6 +193,7 @@ class PhotoStrip(QListWidget):
                 self.addItem(it)
                 self._items[p] = it
         finally:
+            self.blockSignals(False)
             self.setUpdatesEnabled(True)
         self.set_current(current)
         self._restart_from_visible()
@@ -239,6 +249,13 @@ class PhotoStrip(QListWidget):
         it.setIcon(QIcon(pm))
 
     def _on_clicked(self, it):
+        self._key_pick.stop()                    # 클릭은 바로(타이머와 겹쳐 두 번 열지 않는다)
         p = it.data(_PATH_ROLE)
+        if p:
+            self.photoActivated.emit(str(p))
+
+    def _activate_current(self):
+        it = self.currentItem()
+        p = it.data(_PATH_ROLE) if it is not None else None
         if p:
             self.photoActivated.emit(str(p))

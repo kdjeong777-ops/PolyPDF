@@ -9,6 +9,7 @@ D. 꺼진 리본 단추는 글 색이 다르다(종전: 글 색이 고정이라 
 E. 맞춤은 작은 사진을 원본보다 키우지 않는다(120×160 사진이 8배로 늘어 흐렸다), 2장 맞춤에서도 사진은 한 장
 F. (지킴) 미리 풀지 않은 사진을 연 뒤 배경 해독이 끝나면 메인 스레드에서 다시 그려 실제 사진이 보인다 — 수정 전에도 통과(지키는 검사).
    A~E 는 수정 전 코드에서 8건 실패를 확인했다.
+G. 사진 썸네일 줄에서 ↓ 키로 옮기면 본문도 그 사진(261104-3 사용자 보고 — 종전엔 클릭만 받았다), 포커스는 줄에 남아 이어서 누를 수 있다
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -19,6 +20,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PyQt6.QtCore import QStandardPaths, QCoreApplication
 QStandardPaths.setTestModeEnabled(True)             # 마스터 §14.7.2 의 3
 from PyQt6.QtWidgets import QApplication, QToolBar
+from PyQt6.QtTest import QTest
+from PyQt6.QtCore import Qt
 from pathlib import Path
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -141,6 +144,15 @@ try:
     size2 = (round(item.pixmap().width() / dpr), round(item.pixmap().height() / dpr)) if item is not None else None
     chk(size2 == (120, 160), "E 2장 맞춤에서도 사진 한 장·원본 크기", str(size2))
     mv._fit_mode = mv.FIT_PAGE
+
+    # G
+    mw._on_bookmark_activated(lst[0], 0); pump(timeout=1.0)
+    s.setFocus(); pump()
+    QTest.keyClick(s, Qt.Key.Key_Down); pump(timeout=0.6)
+    chk(Path(mv.current_file()).name == Path(lst[1]).name, "G 썸네일 줄 ↓ → 본문 두 번째 사진", str(mv.current_file()))
+    QTest.keyClick(s, Qt.Key.Key_Down); pump(timeout=0.6)
+    chk(Path(mv.current_file()).name == Path(lst[2]).name and s.hasFocus(), "G 한 번 더 ↓ → 세 번째, 포커스는 줄에",
+        "%s focus=%s" % (mv.current_file(), s.hasFocus()))
 
     # F
     import threading

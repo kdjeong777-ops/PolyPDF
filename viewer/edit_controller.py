@@ -870,10 +870,14 @@ class EditMixin:
 
     # ===== 260609-22(J3): 본화면 선긋기 =================================
     def _drawings_for(self, path, page0):
+        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
+            return []
         st = self._ensure_page_meta_store()
         return st.get_drawings(path, page0) if st else []
 
     def _set_drawings(self, path, page0, strokes):
+        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
+            return                       # 회전 0 판 좌표를 돌린 쪽 위 좌표로 덮어쓰지 않는다
         st = self._ensure_page_meta_store()
         if not st:
             return
@@ -884,6 +888,8 @@ class EditMixin:
 
     # 260611-15: 삽입 이미지(주석) page_meta 연동
     def _images_for(self, path, page0):
+        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
+            return []
         st = self._ensure_page_meta_store()
         return st.get_images(path, page0) if st else []
 
@@ -898,6 +904,8 @@ class EditMixin:
         return self._images_for(str(f), int(page0))
 
     def _set_images(self, path, page0, images):
+        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
+            return
         st = self._ensure_page_meta_store()
         if not st:
             return

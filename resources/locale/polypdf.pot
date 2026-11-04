@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-03 17:00+0900\n"
+"POT-Creation-Date: 2026-11-04 11:32+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2359,6 +2359,14 @@ msgstr ""
 msgid "보기"
 msgstr ""
 
+#: viewer/app.py viewer/photo_controller.py
+msgid "왼쪽으로 90° 돌리기"
+msgstr ""
+
+#: viewer/app.py viewer/photo_controller.py
+msgid "오른쪽으로 90° 돌리기"
+msgstr ""
+
 #: viewer/app.py
 msgid "화면 캡처"
 msgstr ""
@@ -3792,11 +3800,43 @@ msgid "사진 모드(PolyPix)로 바꾸기"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "180° 돌리기"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "원래 방향"
+msgstr ""
+
+#: viewer/photo_controller.py viewer/widgets/main_view.py
+msgid "쪽 맞춤"
+msgstr ""
+
+#: viewer/photo_controller.py viewer/widgets/main_view.py
+msgid "폭 맞춤"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "원래 크기 (100%)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "돌린 사진에는 선·도형·글·사진 꾸밈이 보이지 않습니다 — 원래 방향으로 돌리면 다시 보입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "마지막 사진입니다."
 msgstr ""
 
 #: viewer/photo_controller.py
 msgid "첫 사진입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "돌린 사진에는 꾸밀 수 없습니다 — 원래 방향으로 돌리면 됩니다."
 msgstr ""
 
 #: viewer/present_controller.py
@@ -7292,15 +7332,7 @@ msgid "강조"
 msgstr ""
 
 #: viewer/widgets/main_view.py
-msgid "쪽 맞춤"
-msgstr ""
-
-#: viewer/widgets/main_view.py
 msgid "2장 맞춤"
-msgstr ""
-
-#: viewer/widgets/main_view.py
-msgid "폭 맞춤"
 msgstr ""
 
 #: viewer/widgets/main_view.py

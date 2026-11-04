@@ -49,6 +49,7 @@ class PhotoMixin:
         self.bookmark_tree.filesListed.connect(self._photo_on_listed)
         from viewer import photo_doc
         photo_doc.set_decode_requester(self._photo_request_decode)
+        photo_doc.set_rotation_provider(self._photo_rot_for)     # 261104-3: 보기 회전(사이드카 `photo_rot`)
         self._photo_refresh_button()
         self._photo_apply_view_kind(restore=True)
 
@@ -108,6 +109,8 @@ class PhotoMixin:
             if not on:
                 strip.stop()
         self._photo_gate_actions()
+        if not on:
+            self._photo_deco_gate(True)
         hook = getattr(self, "_photo_after_mode", None)
         if hook is not None:
             hook(on)
@@ -240,6 +243,7 @@ class PhotoMixin:
         if str(Path(path)) in lst:                    # 쪽 칸 = 넘김 원천 안의 순번(4.12) — 사진은 늘 1쪽이라 '1 / 1' 은 뜻이 없다
             self.main_view.set_photo_position(lst.index(str(Path(path))), len(lst))
         self._photo_preload_neighbors(str(path))
+        self._photo_deco_gate(self._photo_rot_for(path) == 0)
         try:
             self._touch_recent_files([path])          # 사진 모드면 사진의 최근 파일(4.7)
         except Exception:
@@ -272,6 +276,100 @@ class PhotoMixin:
             self.status.showMessage(tr("마지막 사진입니다.") if direction > 0 else tr("첫 사진입니다."), 2000)
             return
         self._on_bookmark_activated(lst[j], 0)
+
+    # ── 보기 회전 (4.11 '보기 회전'·4.16, 261104-3) ─────────────────
+    def _photo_rot_for(self, path) -> int:
+        """사진의 보기 회전(시계 방향 도) — 폴더 사이드카의 `photo_rot`(PDF 쪽 회전 대기값과 다른 자리)."""
+        if not self._is_photo_path(path):
+            return 0
+        st = self._ensure_page_meta_store()
+        return st.photo_rotation(path) if st else 0
+
+    def _photo_rot_blocks(self, path) -> bool:
+        """돌린 사진에는 꾸밈을 보이지도 남기지도 않는다(4.16) — 꾸밈 좌표는 회전 0 판(D14)이라 돌린 쪽 위에서는 자리가 틀린다.
+        좌표 옮기기는 꾸밈 사이드카 조각(P2 ③)에서."""
+        return bool(path) and self._is_photo_path(path) and self._photo_rot_for(path) != 0
+
+    def _photo_rotate(self, delta: int = 90, absolute: int | None = None):
+        """지금 사진을 돌린다 — 보기만(원본 사진은 그대로, 방향 저장 D17 은 따로). 폴더를 연 사진만 기억한다(사이드카가 폴더에 있다)."""
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur or not self._is_photo_path(cur):
+            return
+        st = self._ensure_page_meta_store()
+        old = st.photo_rotation(cur) if st else 0
+        new = (int(absolute) if absolute is not None else old + int(delta)) % 360
+        if new == old:
+            return
+        if not st or st.set_photo_rotation(cur, new) is False and new != 0:
+            self.status.showMessage(tr("폴더를 열어 고른 사진만 돌릴 수 있습니다."), 4000)
+            return
+        st.save_photo_rotation()                 # 보기 상태 — 편집 저장 대기와 섞지 않고 이 묶음만 바로(4.16)
+        mv = self.main_view
+        fit = mv._fit_mode
+        if mv.load_document(cur, 0):
+            mv._fit_mode = fit
+            self._photo_after_open(Path(cur))
+            mv._render_current()
+        if new and self.__dict__.get("_photo_rot_told") is None:
+            self._photo_rot_told = True
+            self.status.showMessage(tr("돌린 사진에는 선·도형·글·사진 꾸밈이 보이지 않습니다 — 원래 방향으로 돌리면 다시 보입니다."), 6000)
+
+    def _photo_deco_gate(self, ok: bool):
+        """꾸미기 도구 줄을 켜고 끈다 — 돌린 사진에서는 끈다(4.16, 그려도 남지 않으면 고장으로 보인다)."""
+        bar = getattr(self.main_view, "_draw_bar", None)
+        if bar is not None:
+            bar.setEnabled(bool(ok))
+            bar.setToolTip("" if ok else tr("돌린 사진에는 꾸밀 수 없습니다 — 원래 방향으로 돌리면 됩니다."))
+
+    def _photo_context_menu(self, global_pos):
+        """사진 본문 우클릭 — 돌리기·맞춤(4.16). PDF 의 쪽 메뉴(쪽 번호·숨김·책갈피 …)는 사진에 뜻이 없다."""
+        from PyQt6.QtWidgets import QMenu
+        mv = self.main_view
+        menu = QMenu(self)
+        a_l = menu.addAction(self._kt(tr("왼쪽으로 90° 돌리기"), "rotate_left"))
+        a_r = menu.addAction(self._kt(tr("오른쪽으로 90° 돌리기"), "rotate_right"))
+        a_180 = menu.addAction(tr("180° 돌리기"))
+        a_0 = menu.addAction(tr("원래 방향"))
+        a_0.setEnabled(self._photo_rot_for(mv.current_file()) != 0)
+        menu.addSeparator()
+        a_fp = menu.addAction(tr("쪽 맞춤"))
+        a_fw = menu.addAction(tr("폭 맞춤"))
+        a_100 = menu.addAction(tr("원래 크기 (100%)"))
+        chosen = menu.exec(global_pos)
+        if chosen is None:
+            return
+        if chosen is a_l:
+            self._photo_rotate(-90)
+        elif chosen is a_r:
+            self._photo_rotate(+90)
+        elif chosen is a_180:
+            self._photo_rotate(180)
+        elif chosen is a_0:
+            self._photo_rotate(absolute=0)
+        elif chosen in (a_fp, a_fw):
+            mv._show_fit(mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH)
+            mv._fit_mode = mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH
+            mv._render_current()
+        elif chosen is a_100:
+            self._photo_zoom_actual()
+
+    def _photo_zoom_actual(self):
+        """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""
+        mv = self.main_view
+        mv._show_fit(mv.FIT_NONE)
+        mv._fit_mode = mv.FIT_NONE
+        mv._zoom = 1.0
+        mv._render_current()
+
+    def _rotate_current(self, delta: int):
+        """돌리기 키(Ctrl+[ · Ctrl+]) — 사진이면 사진 보기 회전, PDF 면 지금 쪽 회전(쪽 메뉴의 회전과 같은 길)."""
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur:
+            return
+        if self._is_photo_path(cur) and isinstance(getattr(self.main_view, "_doc", None), _photo_doc_cls()):
+            self._photo_rotate(delta)
+        elif str(cur).lower().endswith(".pdf"):
+            self._rotate_pages([self.main_view.current_page()], delta)
 
     def _photo_goto(self, idx0: int):
         """쪽 칸에 적은 순번의 사진으로(4.12)."""
@@ -318,6 +416,11 @@ class PhotoMixin:
         w = PhotoPreloadWorker(near)
         self._photo_preloader = w
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+
+def _photo_doc_cls():
+    from viewer.photo_doc import PhotoDocument
+    return PhotoDocument
 
 
 class PhotoPreloadWorker(QObject):

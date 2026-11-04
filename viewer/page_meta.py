@@ -108,6 +108,11 @@ class PageMetaStore:
         새 키로 옮긴다. 키가 상대경로라 옮기지 않으면 꾸밈이 옛 이름에 남아 **사라진 것처럼** 보인다."""
         ko, kn = self._key(old_path), self._key(new_path)
         files = self._data["files"]
+        sec = self._data.get("photo_rot") or {}
+        if ko is not None and kn is not None and ko != kn and ko in sec:
+            sec[kn] = sec.pop(ko)                       # 261104-3: 사진 보기 회전도 새 이름으로
+            if ko not in files:
+                return True
         if ko is None or kn is None or ko == kn or ko not in files:
             return False
         files[kn] = files.pop(ko)
@@ -164,6 +169,8 @@ class PageMetaStore:
                 if isinstance(d, dict) and isinstance(d.get("files"), dict):
                     self._data = {"version": int(d.get("version", SCHEMA_VERSION)),
                                   "files": d["files"]}
+                    if isinstance(d.get("photo_rot"), dict) and d["photo_rot"]:
+                        self._data["photo_rot"] = d["photo_rot"]          # 261104-3: 사진 보기 회전
             except Exception:
                 pass
 
@@ -308,6 +315,60 @@ class PageMetaStore:
             else:
                 rot[str(int(p))] = nv
         return True
+
+    # --- 사진 보기 회전(261104-3, 사진 보기 SOT 4.16) ---
+    #   PDF 쪽 회전 대기값(파일 기록의 `rotation`)과 **다른 자리** — 같은 자리면 💾 가 '쪽 편집 저장' 으로 사진을 PDF 로 덮어쓰려 한다.
+    #   파일 기록 밖 맨 위 묶음 `photo_rot`({키: 0·90·180·270 시계 방향}) 에 둔다 — 보기 상태라 편집(저장 대기·편집 취소)과 섞이지 않고,
+    #   누를 때 **이 묶음만** 디스크에 쓴다(`save_photo_rotation` — 저장 대기 중인 꾸밈을 같이 내보내지 않는다).
+    def photo_rotation(self, file_path) -> int:
+        key = self._key(file_path)
+        try:
+            return int((self._data.get("photo_rot") or {}).get(key, 0)) % 360 if key else 0
+        except (TypeError, ValueError):
+            return 0
+
+    def set_photo_rotation(self, file_path, deg) -> bool:
+        """메모리만 바꾼다. 키를 못 만들면(기준 폴더 밖) False."""
+        key = self._key(file_path)
+        if key is None:
+            return False
+        v = int(deg) % 360
+        sec = self._data.setdefault("photo_rot", {})
+        if v == 0:
+            sec.pop(key, None)
+        else:
+            sec[key] = v
+        if not sec:
+            self._data.pop("photo_rot", None)
+        return True
+
+    def save_photo_rotation(self) -> bool:
+        """디스크의 사이드카에 `photo_rot` 묶음만 바꿔 쓴다(파일 기록은 디스크 것 그대로)."""
+        p = self._sidecar()
+        if not p:
+            return False
+        try:
+            d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+            if not isinstance(d, dict):
+                d = {}
+        except Exception:
+            d = {}
+        d.setdefault("version", SCHEMA_VERSION)
+        d.setdefault("files", {})
+        sec = self._data.get("photo_rot") or {}
+        if sec:
+            d["photo_rot"] = dict(sec)
+        else:
+            d.pop("photo_rot", None)
+            if not p.exists():
+                return True                      # 쓸 것이 없다 — 사진 폴더에 파일을 만들지 않는다
+        try:
+            tmp = p.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(str(tmp), str(p))
+            return True
+        except Exception:
+            return False
 
     def clear_rotation(self, file_path) -> bool:
         key = self._key(file_path)

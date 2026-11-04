@@ -2035,6 +2035,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("zoom_in",       (tr("확대"), "Ctrl++", tr("보기"))),
             ("zoom_out",      (tr("축소"), "Ctrl+-", tr("보기"))),
             ("zoom_reset",    (tr("기본 크기"), "Ctrl+0", tr("보기"))),
+            # 261104-3(입력 SOT §3.2.2·사진 보기 SOT 4.16): 본문 돌리기 — 사진은 보기 회전, PDF 는 지금 쪽 회전
+            ("rotate_left",   (tr("왼쪽으로 90° 돌리기"), "Ctrl+[", tr("보기"))),
+            ("rotate_right",  (tr("오른쪽으로 90° 돌리기"), "Ctrl+]", tr("보기"))),
             ("capture",       (tr("화면 캡처"), "Ctrl+Shift+S", tr("캡처·저장"))),
             # 261021-5(사용자 결정): Ctrl+S 는 파일 저장 — 옛 설정 값은 settings_store v12 가 옮긴다
             ("save_shots_pdf", (tr("스크린샷 PDF 저장"), "Ctrl+Alt+S", tr("캡처·저장"))),
@@ -2059,6 +2062,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "zoom_in": ("func", lambda: self._zoom_step(+1)),
             "zoom_out": ("func", lambda: self._zoom_step(-1)),
             "zoom_reset": ("func", lambda: self._zoom_step(0)),
+            "rotate_left": ("func", lambda: self._rotate_current(-90)),
+            "rotate_right": ("func", lambda: self._rotate_current(+90)),
             "open_folder": ("action", self._sc_act_open),
             "open_file": ("action", self._sc_act_open_file),
             "print": ("action", self._sc_act_print),
@@ -5975,6 +5980,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _on_viewer_context_menu(self, global_pos):
         """260606-4: 뷰어 우클릭 메뉴. 책갈피 추가(편집모드) + 하이퍼링크 등록(260609-3)."""
         cur = self.main_view.current_file() if self.main_view else None
+        if cur and getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+            self._photo_context_menu(global_pos)          # 261104-3(사진 보기 SOT 4.16): 사진은 돌리기·맞춤 메뉴
+            return
         if not cur or not str(cur).lower().endswith(".pdf"):
             return
         page = self.main_view.current_page() + 1

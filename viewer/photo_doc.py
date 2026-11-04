@@ -83,6 +83,32 @@ def decoded_ready(path, box: int):
 
 
 _REQUESTER = {"fn": None}
+_ROT_PROVIDER = {"fn": None}
+
+
+def set_rotation_provider(fn) -> None:
+    """사진의 보기 회전(경로 → 0·90·180·270, 시계 방향)을 알려 줄 함수 — 앱이 폴더 사이드카(`photo_rot`)로 넣는다(4.11 '보기 회전')."""
+    _ROT_PROVIDER["fn"] = fn
+
+
+def _view_rotation(path) -> int:
+    fn = _ROT_PROVIDER["fn"]
+    if fn is None:
+        return 0
+    try:
+        v = int(fn(str(path)) or 0) % 360
+    except Exception:
+        return 0
+    return v if v in (90, 180, 270) else 0
+
+
+def _rotate(im, rot: int):
+    """시계 방향 `rot` 도로 돌린다(PIL 의 ROTATE_n 은 반시계)."""
+    if not rot:
+        return im
+    from PIL import Image
+    return im.transpose({90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180,
+                         270: Image.Transpose.ROTATE_90}[rot])
 
 
 def set_decode_requester(fn) -> None:
@@ -90,8 +116,9 @@ def set_decode_requester(fn) -> None:
     _REQUESTER["fn"] = fn
 
 
-def _provisional(path: Path, tw: int, th: int):
-    """풀리기 전 임시 그림 — 썸네일 캐시가 있으면 그것을 키우고, 없으면 회색. 렌더 캐시에 넣지 않는다."""
+def _provisional(path: Path, tw: int, th: int, rot: int = 0):
+    """풀리기 전 임시 그림 — 썸네일 캐시가 있으면 그것을 키우고, 없으면 회색. 렌더 캐시에 넣지 않는다.
+    `tw`·`th` 는 돌린 뒤 크기 — 캐시 그림(방향만 세운 것)을 돌려 맞춘다."""
     from PIL import Image
     try:
         from viewer.widgets.photo_strip import cache_dir, cache_key
@@ -99,7 +126,7 @@ def _provisional(path: Path, tw: int, th: int):
         f = cache_dir() / (key + ".jpg") if key else None
         if f is not None and f.is_file():
             with Image.open(str(f)) as im:
-                return im.convert("RGB").resize((tw, th))
+                return _rotate(im.convert("RGB"), rot).resize((tw, th))
     except Exception:
         pass
     return Image.new("RGB", (tw, th), (128, 128, 128))
@@ -134,11 +161,16 @@ class PhotoDocument:
             if photo_io.is_heif(self.path) and not photo_io.heif_ready():
                 raise PhotoFormatMissing(str(self.path))
             raise ValueError("그림을 읽을 수 없다: %s" % self.path)
+        # 보기 회전(261104-3, 4.11): 쪽 자체를 돌린다 — 꾸밈 겹(선·하이퍼링크·서명 자리)이 쪽 사각형을 따라가도록
+        #   본문 화면을 돌리지 않고 쪽 크기를 바꾼다. 좌표 판(D14, `COORD_VERSION`)은 **회전 0** 기준 그대로다.
+        self.rotation = _view_rotation(self.path)
+        if self.rotation in (90, 270):
+            w, h = h, w
         self.size = (int(w), int(h))
         self.doc = fitz.open()
         self.doc.new_page(width=float(w), height=float(h))   # 그림 없는 빈 쪽 — 좌표·사각형만
         self.cache = cache or GLOBAL_PAGE_CACHE
-        self._cache_tag = "photo|" + _tag(self.path)
+        self._cache_tag = "photo|%s|r%d" % (_tag(self.path), self.rotation)
 
     # ── PdfDocument 겉면 ──────────────────────────────
     @property
@@ -219,9 +251,10 @@ class PhotoDocument:
             if req is not None and threading.current_thread() is threading.main_thread():
                 # 메인에서 큰 사진(HEIC 24 MP 0.7~0.9초, 사용자 표본)을 풀지 않는다 — 임시 그림을 주고 배경에 맡긴다(응답성 SOT §6)
                 req(self.path, need)
-                tmp = _provisional(self.path, tw, th)
+                tmp = _provisional(self.path, tw, th, self.rotation)
                 return RenderedPage(width=tw, height=th, samples=tmp.tobytes(), page_rect=(0.0, 0.0, float(w), float(h)))
             im = decoded(self.path, need)
+        im = _rotate(im, self.rotation)
         if im.size != (tw, th):
             from PIL import Image
             im = im.resize((tw, th), Image.Resampling.LANCZOS if max(tw, th) < max(im.size) else Image.Resampling.BICUBIC)

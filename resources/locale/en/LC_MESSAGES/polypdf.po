@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-03 17:00+0900\n"
+"POT-Creation-Date: 2026-11-04 11:32+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -2430,6 +2430,14 @@ msgstr "Bookmarks panel"
 msgid "보기"
 msgstr "View"
 
+#: viewer/app.py viewer/photo_controller.py
+msgid "왼쪽으로 90° 돌리기"
+msgstr "Rotate 90° Left"
+
+#: viewer/app.py viewer/photo_controller.py
+msgid "오른쪽으로 90° 돌리기"
+msgstr "Rotate 90° Right"
+
 #: viewer/app.py
 msgid "화면 캡처"
 msgstr "Screen Capture"
@@ -3929,12 +3937,44 @@ msgid "사진 모드(PolyPix)로 바꾸기"
 msgstr "Switch to photo mode (PolyPix)"
 
 #: viewer/photo_controller.py
+msgid "180° 돌리기"
+msgstr "Rotate 180°"
+
+#: viewer/photo_controller.py
+msgid "원래 방향"
+msgstr "Original Orientation"
+
+#: viewer/photo_controller.py viewer/widgets/main_view.py
+msgid "쪽 맞춤"
+msgstr "Fit Page"
+
+#: viewer/photo_controller.py viewer/widgets/main_view.py
+msgid "폭 맞춤"
+msgstr "Fit Width"
+
+#: viewer/photo_controller.py
+msgid "원래 크기 (100%)"
+msgstr "Actual Size (100%)"
+
+#: viewer/photo_controller.py
+msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
+msgstr "Only photos selected from an opened folder can be rotated."
+
+#: viewer/photo_controller.py
+msgid "돌린 사진에는 선·도형·글·사진 꾸밈이 보이지 않습니다 — 원래 방향으로 돌리면 다시 보입니다."
+msgstr "Lines, shapes, text and image marks are hidden on a rotated photo — rotate it back to the original orientation to see them again."
+
+#: viewer/photo_controller.py
 msgid "마지막 사진입니다."
 msgstr "This is the last photo."
 
 #: viewer/photo_controller.py
 msgid "첫 사진입니다."
 msgstr "This is the first photo."
+
+#: viewer/photo_controller.py
+msgid "돌린 사진에는 꾸밀 수 없습니다 — 원래 방향으로 돌리면 됩니다."
+msgstr "A rotated photo cannot be marked up — rotate it back to the original orientation first."
 
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"
@@ -7552,16 +7592,8 @@ msgid "강조"
 msgstr "Emphasis"
 
 #: viewer/widgets/main_view.py
-msgid "쪽 맞춤"
-msgstr "Fit Page"
-
-#: viewer/widgets/main_view.py
 msgid "2장 맞춤"
 msgstr "Fit 2 Pages"
-
-#: viewer/widgets/main_view.py
-msgid "폭 맞춤"
-msgstr "Fit Width"
 
 #: viewer/widgets/main_view.py
 msgid "수동 맞춤"
