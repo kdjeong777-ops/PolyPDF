@@ -141,6 +141,116 @@ def jpeg_strip_gps(data: bytes) -> bytes:
     return bytes(buf)
 
 
+# ── 방향 저장(D17, 사진 보기 SOT 4.17 — 다시 압축하지 않음) ─────────────────────
+# 방향 = (거울?, 시계 방향 회전) — 거울 방향은 '좌우 뒤집은 뒤 돌리기' 로 본다(EXIF 2·7·4·5 = 뒤집기 + 0·90·180·270)
+_ORIENT_PARTS = {1: (False, 0), 6: (False, 90), 3: (False, 180), 8: (False, 270),
+                 2: (True, 0), 7: (True, 90), 4: (True, 180), 5: (True, 270)}
+_PARTS_ORIENT = {v: k for k, v in _ORIENT_PARTS.items()}
+
+
+def compose_orientation(orient: int, rot_cw: int) -> int:
+    """지금 EXIF 방향 다음에 시계 방향 `rot_cw` 도를 더 돌린 EXIF 방향."""
+    mirror, r = _ORIENT_PARTS.get(int(orient) if orient else 1, (False, 0))
+    return _PARTS_ORIENT[(mirror, (r + int(rot_cw)) % 360)]
+
+
+def _jpeg_segments(buf):
+    """(표지, 시작, 끝) — 머리 묶음들(SOS 전까지). SOS 는 (0xDA, 시작, None)."""
+    i = 2
+    while i + 4 <= len(buf) and buf[i] == 0xFF:
+        marker = buf[i + 1]
+        if marker == 0xFF:                                  # 채움 바이트
+            i += 1
+            continue
+        if marker == 0xDA:
+            yield marker, i, None
+            return
+        if marker == 0xD9:
+            return
+        seg = struct.unpack_from(">H", buf, i + 2)[0]
+        yield marker, i, i + 2 + seg
+        i += 2 + seg
+
+
+def jpeg_scan_data(data: bytes) -> bytes:
+    """그림 자료(SOS 부터 끝까지) — 방향 저장 뒤 픽셀이 그대로인지 견줄 때."""
+    for marker, start, _end in _jpeg_segments(data):
+        if marker == 0xDA:
+            return bytes(data[start:])
+    return b""
+
+
+def _patch_orient_in_tiff(t: bytearray, value: int) -> bool:
+    """TIFF(EXIF 본체) IFD0 의 방향 항목 값을 그 자리에서 바꾼다. 항목이 있으면 True."""
+    if len(t) < 8 or t[:2] not in (b"II", b"MM"):
+        return False
+    e = "<" if t[:2] == b"II" else ">"
+    try:
+        ifd0 = struct.unpack_from(e + "I", t, 4)[0]
+        n = struct.unpack_from(e + "H", t, ifd0)[0]
+        for k in range(n):
+            at = ifd0 + 2 + 12 * k
+            tag, typ, num = struct.unpack_from(e + "HHI", t, at)
+            if tag == ORIENT_TAG:
+                if typ != 3 or num != 1:                    # SHORT 하나가 아니면 손대지 않는다(다시 짓는다)
+                    return False
+                struct.pack_into(e + "HH", t, at + 8, int(value), 0)
+                return True
+    except struct.error:
+        return False
+    return False
+
+
+def jpeg_set_orientation(data: bytes, value: int) -> bytes | None:
+    """JPEG 바이트의 EXIF 방향만 `value` 로(D17). 그림 자료·다른 묶음은 그대로. JPEG 이 아니면 None.
+    태그가 있으면 그 자리에서 값만(길이 그대로), EXIF 는 있는데 태그가 없으면 그 EXIF 묶음만 다시 짓고, EXIF 가 없으면 새로 넣는다."""
+    if data[:2] != b"\xff\xd8" or not 1 <= int(value) <= 8:
+        return None
+    buf = bytearray(data)
+    app1 = None
+    after_app0 = 2
+    for marker, start, end in _jpeg_segments(buf):
+        if end is None:
+            break
+        if marker == 0xE0 and start == after_app0:
+            after_app0 = end                                 # JFIF 뒤에 넣는다(JFIF 는 맨 앞이어야 한다)
+        if marker == 0xE1 and buf[start + 4:start + 10] == b"Exif\x00\x00":
+            app1 = (start, end)
+            break
+    if app1 is not None:
+        start, end = app1
+        tiff = bytearray(buf[start + 10:end])
+        if _patch_orient_in_tiff(tiff, value):
+            buf[start + 10:end] = tiff
+            return bytes(buf)
+    from PIL import Image
+    ex = Image.Exif()
+    if app1 is not None:
+        try:
+            ex.load(bytes(buf[app1[0] + 4:app1[1]]))
+        except Exception:
+            return None                                      # 읽을 수 없는 EXIF — 망가뜨리지 않는다
+    ex[ORIENT_TAG] = int(value)
+    payload = ex.tobytes()
+    if not payload.startswith(b"Exif\x00\x00"):
+        payload = b"Exif\x00\x00" + payload
+    if len(payload) + 2 > 0xFFFF:
+        return None
+    seg = b"\xff\xe1" + struct.pack(">H", len(payload) + 2) + payload
+    if app1 is not None:
+        return bytes(buf[:app1[0]]) + seg + bytes(buf[app1[1]:])
+    return bytes(buf[:after_app0]) + seg + bytes(buf[after_app0:])
+
+
+def is_jpeg_file(path) -> bool:
+    """진짜 JPEG 인가(머리 FF D8 FF) — `.JPG` 이름의 HEIC·동영상을 거른다."""
+    try:
+        with open(str(path), "rb") as f:
+            return f.read(3) == b"\xff\xd8\xff"
+    except OSError:
+        return False
+
+
 def has_gps(path) -> bool:
     try:
         from PIL import Image

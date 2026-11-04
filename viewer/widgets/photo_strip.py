@@ -210,6 +210,16 @@ class PhotoStrip(QListWidget):
     def stop(self) -> None:
         self._stop()
 
+    def refresh(self, path: str) -> None:
+        """한 사진의 썸네일을 다시 만든다(방향 저장 뒤 — 수정 시각이 바뀌어 캐시 키도 새로, 사진 보기 SOT 4.17)."""
+        p = str(path)
+        it = self._items.get(p)
+        if it is None:
+            return
+        self._done.discard(p)
+        it.setIcon(self._placeholder)
+        self._restart_from_visible()
+
     # ── 속 ─────────────────────────────────────────────
     def _stop(self):
         self._gen += 1

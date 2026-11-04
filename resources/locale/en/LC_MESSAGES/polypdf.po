@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 11:32+0900\n"
+"POT-Creation-Date: 2026-11-04 12:59+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3944,6 +3944,10 @@ msgstr "Rotate 180°"
 msgid "원래 방향"
 msgstr "Original Orientation"
 
+#: viewer/photo_controller.py
+msgid "방향 저장 (원본 JPEG)"
+msgstr "Save Orientation (Original JPEG)"
+
 #: viewer/photo_controller.py viewer/widgets/main_view.py
 msgid "쪽 맞춤"
 msgstr "Fit Page"
@@ -3957,12 +3961,28 @@ msgid "원래 크기 (100%)"
 msgstr "Actual Size (100%)"
 
 #: viewer/photo_controller.py
+msgid "방향 저장 중…"
+msgstr "Saving orientation…"
+
+#: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr "Only photos selected from an opened folder can be rotated."
 
 #: viewer/photo_controller.py
 msgid "돌린 사진에는 선·도형·글·사진 꾸밈이 보이지 않습니다 — 원래 방향으로 돌리면 다시 보입니다."
 msgstr "Lines, shapes, text and image marks are hidden on a rotated photo — rotate it back to the original orientation to see them again."
+
+#: viewer/photo_controller.py
+msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
+msgstr "Orientation can be saved only for JPEG photos — this photo stays rotated in the view only."
+
+#: viewer/photo_controller.py
+msgid "꾸밈이 있는 사진은 아직 방향을 저장하지 않습니다 — 꾸밈 자리가 어긋납니다."
+msgstr "Orientation is not saved for a photo with markups yet — the markups would be misplaced."
+
+#: viewer/photo_controller.py
+msgid "방향을 저장하지 못했습니다 — 원본은 그대로입니다."
+msgstr "Could not save the orientation — the original is unchanged."
 
 #: viewer/photo_controller.py
 msgid "마지막 사진입니다."
@@ -3975,6 +3995,15 @@ msgstr "This is the first photo."
 #: viewer/photo_controller.py
 msgid "돌린 사진에는 꾸밀 수 없습니다 — 원래 방향으로 돌리면 됩니다."
 msgstr "A rotated photo cannot be marked up — rotate it back to the original orientation first."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "방향을 원본 사진에 저장했습니다: {name}"
+msgstr "Orientation saved to the original photo: {name}"
+
+#: viewer/photo_controller.py
+msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
+msgstr "Another program is using the photo, so the orientation was not saved — the original is unchanged."
 
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"

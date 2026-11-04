@@ -331,6 +331,9 @@ class PhotoMixin:
         a_180 = menu.addAction(tr("180° 돌리기"))
         a_0 = menu.addAction(tr("원래 방향"))
         a_0.setEnabled(self._photo_rot_for(mv.current_file()) != 0)
+        a_save = menu.addAction(tr("방향 저장 (원본 JPEG)"))       # 4.17 — 돌린 JPEG 일 때만
+        a_save.setEnabled(self._photo_rot_for(mv.current_file()) != 0
+                          and photo_io_is_jpeg(mv.current_file()) and not self.__dict__.get("_photo_orient_busy"))
         menu.addSeparator()
         a_fp = menu.addAction(tr("쪽 맞춤"))
         a_fw = menu.addAction(tr("폭 맞춤"))
@@ -346,12 +349,60 @@ class PhotoMixin:
             self._photo_rotate(180)
         elif chosen is a_0:
             self._photo_rotate(absolute=0)
+        elif chosen is a_save:
+            self._photo_save_orientation()
         elif chosen in (a_fp, a_fw):
             mv._show_fit(mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH)
             mv._fit_mode = mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH
             mv._render_current()
         elif chosen is a_100:
             self._photo_zoom_actual()
+
+    def _photo_save_orientation(self):
+        """보기 회전을 원본 JPEG 의 방향 태그에(D17, 4.17) — 배경 한 길, 끝나면 `_photo_orient_saved`."""
+        cur = self.main_view.current_file() if self.main_view else None
+        rot = self._photo_rot_for(cur) if cur else 0
+        if not cur or not rot or self.__dict__.get("_photo_orient_busy"):
+            return
+        if not photo_io_is_jpeg(cur):
+            self.status.showMessage(tr("방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."), 5000)
+            return
+        st = self._ensure_page_meta_store()
+        if st is not None and (st.pages_with_drawings(cur) or st.pages_with_images(cur)):
+            self.status.showMessage(tr("꾸밈이 있는 사진은 아직 방향을 저장하지 않습니다 — 꾸밈 자리가 어긋납니다."), 6000)
+            return
+        from viewer.workers import run_in_thread
+        self._photo_orient_busy = True
+        w = PhotoOrientSaveWorker(cur, rot)
+        w.done.connect(self._photo_orient_saved)
+        self.status.showMessage(tr("방향 저장 중…"), 2000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_orient_saved(self, path: str, ok: bool, why: str):
+        """방향 저장이 끝났다(메인) — 성공이면 보기 회전을 지우고 다시 그린다. 실패면 원본 그대로·보기 회전 그대로."""
+        self._photo_orient_busy = False
+        if not ok:
+            msg = {"locked": tr("다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."),
+                   "jpeg": tr("방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다.")}.get(
+                why, tr("방향을 저장하지 못했습니다 — 원본은 그대로입니다."))
+            self.status.showMessage(msg, 8000)
+            return
+        st = self._ensure_page_meta_store()
+        if st is not None:
+            st.set_photo_rotation(path, 0)
+            st.save_photo_rotation()
+        strip = self._photo_strip_widget(create=False)
+        if strip is not None:
+            strip.refresh(path)                      # 썸네일 다시(캐시 키에 수정 시각 — 새 그림)
+        cur = self.main_view.current_file() if self.main_view else None
+        if cur and str(Path(cur)) == str(Path(path)):
+            mv = self.main_view
+            fit = mv._fit_mode
+            if mv.load_document(cur, 0):
+                mv._fit_mode = fit
+                self._photo_after_open(Path(cur))
+                mv._render_current()
+        self.status.showMessage(tr("방향을 원본 사진에 저장했습니다: {name}").format(name=Path(path).name), 5000)
 
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""
@@ -416,6 +467,78 @@ class PhotoMixin:
         w = PhotoPreloadWorker(near)
         self._photo_preloader = w
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+
+ORIENT_TMP_SUFFIX = ".polypix-tmp"       # 방향 저장 임시 파일 — 그림 확장자가 아니라 목록에 안 뜬다(4.17)
+ORIENT_REPLACE_TRIES = 4                 # 바꿔치기 재시도(마스터 §4.7.5 `SAVE_REPLACE_TRIES` 와 같은 횟수)
+ORIENT_REPLACE_WAIT_S = 0.15
+
+
+class PhotoOrientSaveWorker(QObject):
+    """사진 방향 저장 한 길(사진 보기 SOT 4.17, D17) — 배경에서: 읽기 → 임시 파일 → 확인 → 바꿔치기. 실패하면 원본 그대로.
+    응답성 SOT §4.4 감사표의 한 행(파일 작업은 메인에서 하지 않는다 — 마스터 §4.7.5)."""
+    done = pyqtSignal(str, bool, str)        # 경로, 성공, 실패 까닭
+    finished = pyqtSignal()
+
+    def __init__(self, path: str, rot_cw: int):
+        super().__init__()
+        self.path, self.rot = str(path), int(rot_cw) % 360
+
+    def request_cancel(self):
+        pass                                 # 짧은 일 — 중간에 멈추지 않는다(반쯤 쓴 원본을 남기지 않게)
+
+    def run(self):
+        import os
+        import time
+        from viewer import photo_io
+        tmp = None
+        try:
+            ok, why = False, ""
+            src = Path(self.path)
+            data = src.read_bytes()
+            from PIL import Image
+            with Image.open(src) as im:
+                old = int(im.getexif().get(photo_io.ORIENT_TAG, 1) or 1)
+                size = im.size
+            new_o = photo_io.compose_orientation(old, self.rot)
+            new = photo_io.jpeg_set_orientation(data, new_o)
+            if new is None:
+                why = "jpeg"
+            else:
+                tmp = src.with_name("~" + src.name + ORIENT_TMP_SUFFIX)
+                tmp.write_bytes(new)
+                with Image.open(tmp) as im:                 # 확인 — 태그·크기·그림 자료
+                    good = (int(im.getexif().get(photo_io.ORIENT_TAG, 1) or 1) == new_o and im.size == size
+                            and photo_io.jpeg_scan_data(tmp.read_bytes()) == photo_io.jpeg_scan_data(data))
+                if not good:
+                    why = "verify"
+                else:
+                    for k in range(ORIENT_REPLACE_TRIES):
+                        try:
+                            os.replace(str(tmp), str(src))
+                            ok, tmp = True, None
+                            break
+                        except OSError:
+                            time.sleep(ORIENT_REPLACE_WAIT_S)
+                    if not ok:
+                        why = "locked"
+            self.done.emit(self.path, ok, why)
+        except Exception as e:                               # noqa: BLE001 — 원본은 손대지 않았다
+            self.done.emit(self.path, False, type(e).__name__)
+        finally:
+            if tmp is not None:
+                try:
+                    Path(tmp).unlink()
+                except OSError:
+                    pass
+            self.finished.emit()
+
+
+def photo_io_is_jpeg(path) -> bool:
+    if not path:
+        return False
+    from viewer.photo_io import is_jpeg_file
+    return is_jpeg_file(path)
 
 
 def _photo_doc_cls():
