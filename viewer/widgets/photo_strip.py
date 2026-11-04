@@ -154,7 +154,9 @@ class PhotoStrip(QListWidget):
         self.setMovement(QListView.Movement.Static)
         self.setUniformItemSizes(True)
         self.setSpacing(4)
-        self.setWordWrap(True)
+        # 줄바꿈 없음 — 이름은 늘 한 줄(길면 가운데 줄임), 크기는 둘째 줄: 칸 글은 두 줄로 같다. 줄바꿈을 켜면 빈칸·'-' 이 든 이름
+        #   (스크린샷 2026-11-04 174958)이 두 줄로 접혀 크기 줄이 밀려 나가 칸마다 2~3줄로 달랐다(261104-8 사용자 보고).
+        self.setWordWrap(False)
         # 긴 이름은 가운데를 줄인다(앞·뒤가 보이게) — 끝을 줄이면 같은 앞머리(device_001_2026072…)의 사진이 모두 같아 보였다(4.18, 사용자 보고)
         self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
