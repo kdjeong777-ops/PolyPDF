@@ -90,6 +90,13 @@ def prune_cache(max_bytes: int = CACHE_MAX_BYTES) -> int:
     return n
 
 
+def _modifying() -> bool:
+    """Ctrl·Shift 를 누른 채인가 — 여러 장 고르는 중이면 본문을 바꾸지 않는다."""
+    from PyQt6.QtWidgets import QApplication
+    m = QApplication.keyboardModifiers()
+    return bool(m & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier))
+
+
 def label_text(path, w: int = 0, h: int = 0, unreadable: bool = False) -> str:
     """칸 아래 글 — 이름(확장자 없이) 다음 줄에 원본 픽셀 크기(EXIF 방향 뒤). 모르면 줄만 비워 둔다(칸 높이가 흔들리지 않게)."""
     from viewer.i18n import tr
@@ -148,7 +155,8 @@ class PhotoStrip(QListWidget):
         self.setSpacing(4)
         self.setWordWrap(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # 261104-3(사용자 지시 '썸네일을 보면서 2개 이상 선택'): Ctrl·Shift+클릭으로 여러 장 — 고르기만 하고 본문은 그대로(4.20)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._icon_w = icon_w
         self.setIconSize(QSize(icon_w, int(icon_w * 0.75)))
         self._paths: list = []
@@ -173,7 +181,7 @@ class PhotoStrip(QListWidget):
         self._key_pick.setSingleShot(True)
         self._key_pick.setInterval(KEY_ACTIVATE_MS)
         self._key_pick.timeout.connect(self._activate_current)
-        self.currentItemChanged.connect(lambda cur, _prev: cur is not None and self._key_pick.start())
+        self.currentItemChanged.connect(lambda cur, _prev: cur is not None and not _modifying() and self._key_pick.start())
 
     def _make_placeholder(self) -> QIcon:
         pm = QPixmap(self.iconSize())
@@ -216,9 +224,19 @@ class PhotoStrip(QListWidget):
         if it is None:
             return
         self.blockSignals(True)
-        self.setCurrentItem(it)
+        if it.isSelected() and len(self.selectedItems()) > 1:
+            # 여러 장 골라 둔 채 그중 하나를 열었다 — 고른 것을 지우지 않고 '지금 칸' 만 옮긴다
+            from PyQt6.QtCore import QItemSelectionModel
+            self.selectionModel().setCurrentIndex(self.indexFromItem(it), QItemSelectionModel.SelectionFlag.NoUpdate)
+        else:
+            self.setCurrentItem(it)
         self.blockSignals(False)
         self.scrollToItem(it, QAbstractItemView.ScrollHint.PositionAtCenter)
+
+    def selected_paths(self) -> list:
+        """고른 칸의 사진 경로 — 줄 차례대로."""
+        sel = {id(x) for x in self.selectedItems()}
+        return [p for p in self._paths if id(self._items.get(p)) in sel]
 
     def stop(self) -> None:
         self._stop()
@@ -286,6 +304,8 @@ class PhotoStrip(QListWidget):
 
     def _on_clicked(self, it):
         self._key_pick.stop()                    # 클릭은 바로(타이머와 겹쳐 두 번 열지 않는다)
+        if _modifying():
+            return                               # Ctrl·Shift+클릭은 고르기만(본문은 그대로)
         p = it.data(_PATH_ROLE)
         if p:
             self.photoActivated.emit(str(p))

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 14:08+0900\n"
+"POT-Creation-Date: 2026-11-04 15:01+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4049,6 +4049,21 @@ msgstr ""
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr ""
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "고른 사진 {n}장 왼쪽으로 90° 돌리기"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "고른 사진 {n}장 오른쪽으로 90° 돌리기"
+msgstr ""
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "고른 사진 {n}장으로 PDF 만들기..."
+msgstr ""
+
 #: viewer/photo_doc.py
 msgid "그림 형식이 아니거나 파일이 깨졌습니다."
 msgstr ""
@@ -6292,11 +6307,6 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "파일 없음: {name}"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "고른 사진 {n}장으로 PDF 만들기..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

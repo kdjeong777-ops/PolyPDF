@@ -614,19 +614,29 @@ class PhotoMixin:
         ok = bool(oriented_size(path)[0])
         strip = self._photo_strip_widget(create=False)
         allp = strip.paths() if strip is not None else [path]
+        sel = strip.selected_paths() if strip is not None else []
+        many = path in sel and len(sel) > 1          # 고른 칸 위를 눌렀으면 고른 사진 모두에(사용자 지시 261104-3)
+        targets = sel if many else [path]
         menu = QMenu(self)
         items = [("open", tr("열기")), (None, None),
                  ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), (None, None),
                  ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")), (None, None),
                  ("to_pdf", tr("PDF 로 만들기...")), (None, None),
                  ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
+        if many:
+            n = len(targets)
+            items = [("rot_l", tr('고른 사진 {n}장 왼쪽으로 90° 돌리기').format(n=n)),
+                     ("rot_r", tr('고른 사진 {n}장 오른쪽으로 90° 돌리기').format(n=n)), (None, None),
+                     ("copy_path", tr("경로 복사")), (None, None),
+                     ("to_pdf", tr('고른 사진 {n}장으로 PDF 만들기...').format(n=n)), (None, None),
+                     ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
         acts = {}
         for key, label in items:
             if key is None:
                 menu.addSeparator()
                 continue
             a = menu.addAction(label)
-            a.setEnabled(ok or key in ("open", "copy_path", "reveal"))
+            a.setEnabled(many or ok or key in ("open", "copy_path", "reveal"))
             acts[a] = key
         a_all = None
         if len(allp) > 1:
@@ -637,7 +647,12 @@ class PhotoMixin:
         if chosen is a_all:
             self._photo_action("to_pdf", allp)
         elif chosen in acts:
-            self._photo_action(acts[chosen], [path])
+            k = acts[chosen]
+            if k in ("rot_l", "rot_r"):
+                for p in targets:                    # 여러 장이면 한 장씩(돌리기는 사진마다)
+                    self._photo_action(k, [p])
+            else:
+                self._photo_action(k, targets)
 
     # ── 사진 → PDF·인쇄·평탄화 (P2 ④, 4.21) ─────────────────────────────
     def _photo_needs_bake(self, path) -> tuple:

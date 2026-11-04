@@ -9,6 +9,8 @@ C. 경로 복사·사진 복사(배경 — 보기 회전까지 적용한 그림�
 D. 썸네일 줄 우클릭 메뉴 — 열기·돌리기·복사·탐색기·PDF 만들기·줄 전체로 PDF, 지금 사진이 아닌 칸도 돌릴 수 있고 그 썸네일이 돌아 보인다
 E. 본문 사진 메뉴에 사진 복사·경로 복사·탐색기·사진 정보·PDF 로 만들기
 F. 'PDF 로 만들기' 는 이미지 → PDF 창에 고른 사진을 넣어 연다
+G. 썸네일 줄에서 Ctrl+클릭으로 여러 장 고른다 — 본문은 그대로, 고른 칸 위 우클릭은 고른 사진 모두에(PDF 만들기·돌리기)
+   (261104-3 사용자 지시 '썸네일을 2개 이상 선택하는 게 안 돼' — 종전엔 한 장만 골랐다)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -70,6 +72,7 @@ try:
     import fitz
     Image.new("RGB", (800, 400), (200, 60, 60)).save(tmp / "a 가로.jpg", "JPEG")
     Image.new("RGB", (600, 300), (60, 160, 60)).save(tmp / "b 가로.jpg", "JPEG")
+    Image.new("RGB", (500, 250), (60, 60, 200)).save(tmp / "c3 가로.jpg", "JPEG")
     d = fitz.open(); d.new_page(); d.save(str(tmp / "c 문서.pdf")); d.close()
     a, b = str(tmp / "a 가로.jpg"), str(tmp / "b 가로.jpg")
 
@@ -100,7 +103,7 @@ try:
 
     # A — 사진 모드
     mw._set_photo_mode(True)
-    pump(lambda: node("a 가로.jpg") is not None and node("b 가로.jpg") is not None)
+    pump(lambda: node("a 가로.jpg") is not None and node("b 가로.jpg") is not None and node("c3 가로.jpg") is not None)
     bt.set_sort_mode(bt.SORT_NAME); pump()
     tx = tree_menu("a 가로.jpg")
     for want in ("사진 복사", "경로 복사", "PDF 로 만들기...", "해시태그 편집...", "파일 탐색기 열기"):
@@ -116,6 +119,7 @@ try:
     tx = list(seen["texts"])
     chk("고른 사진 2장으로 PDF 만들기..." in tx and not any("병합" in t for t in tx), "A 여러 장 — PDF 만들기(병합 없음)", str(tx))
     bt._edit_mode = bt._edit_mode_saved
+    bt.tree.clearSelection()                       # 책갈피창 여러 장 고르기를 풀어 썸네일 줄이 폴더 전체(D3)
 
     # C
     mw._photo_action("copy_path", [a, b])
@@ -135,7 +139,7 @@ try:
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     tx = list(seen["texts"])
     for want in ("열기", "왼쪽으로 90° 돌리기", "오른쪽으로 90° 돌리기", "사진 복사", "경로 복사", "파일 탐색기 열기", "PDF 로 만들기...",
-                 "줄의 사진 2장으로 PDF 만들기..."):
+                 "줄의 사진 3장으로 PDF 만들기..."):
         chk(want in tx, "D 썸네일 줄 메뉴에 '%s'" % want, str(tx))
     seen["pick"] = "오른쪽으로 90° 돌리기"
     strip.menuRequested.emit(b, QPoint(10, 10))
@@ -156,9 +160,37 @@ try:
     # F
     got = []
     mw.action_image_to_pdf = lambda initial_paths=None: got.append(list(initial_paths or []))
-    seen["pick"] = "줄의 사진 2장으로 PDF 만들기..."
+    seen["pick"] = "줄의 사진 3장으로 PDF 만들기..."
     strip.menuRequested.emit(a, QPoint(10, 10)); pump()
-    chk(got and sorted(got[-1]) == sorted([a, b]), "F 줄 전체로 PDF 만들기 — 이미지 → PDF 창에 두 장", str(got))
+    chk(got and len(got[-1]) == 3, "F 줄 전체로 PDF 만들기 — 이미지 → PDF 창에 세 장", str(got))
+
+    # G
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtCore import Qt as _Qt
+    c3 = str(tmp / "c3 가로.jpg")
+    mw._on_bookmark_activated(a, 0); pump(timeout=0.5)
+
+    def click(path, mod=_Qt.KeyboardModifier.NoModifier):
+        it = strip._items[path]
+        strip.scrollToItem(it)
+        QTest.mouseClick(strip.viewport(), _Qt.MouseButton.LeftButton, mod, strip.visualItemRect(it).center())
+        pump(timeout=0.4)
+    click(b, _Qt.KeyboardModifier.ControlModifier)
+    click(c3, _Qt.KeyboardModifier.ControlModifier)
+    chk(sorted(strip.selected_paths()) == sorted([a, b, c3]), "G Ctrl+클릭으로 세 장 고름", str(strip.selected_paths()))
+    chk(Path(mw.main_view.current_file()).name == "a 가로.jpg", "G Ctrl+클릭은 본문을 바꾸지 않는다", str(mw.main_view.current_file()))
+    strip.menuRequested.emit(b, QPoint(10, 10)); pump()
+    tx = list(seen["texts"])
+    chk("고른 사진 3장으로 PDF 만들기..." in tx and "고른 사진 3장 오른쪽으로 90° 돌리기" in tx, "G 고른 칸 우클릭 — 고른 사진 모두에", str(tx))
+    seen["pick"] = "고른 사진 3장으로 PDF 만들기..."
+    strip.menuRequested.emit(b, QPoint(10, 10)); pump()
+    chk(got and sorted(got[-1]) == sorted([a, b, c3]), "G 고른 세 장으로 PDF 만들기", str(got[-1:]))
+    seen["pick"] = "고른 사진 3장 오른쪽으로 90° 돌리기"
+    strip.menuRequested.emit(b, QPoint(10, 10)); pump(timeout=1.0)
+    chk(st.photo_rotation(c3) == 90 and st.photo_rotation(a) == 90, "G 고른 사진 모두 돌린다", "%s %s" % (st.photo_rotation(a), st.photo_rotation(c3)))
+    chk(len(strip.selected_paths()) == 3, "G 지금 사진을 다시 열어도 고른 것이 남는다", str(strip.selected_paths()))
+    click(c3)
+    chk(Path(mw.main_view.current_file()).name == "c3 가로.jpg" and len(strip.selected_paths()) == 1, "G 그냥 클릭은 그 사진을 열고 한 장만 고른다")
     mw.close()
 except Exception:
     import traceback

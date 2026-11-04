@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 14:08+0900\n"
+"POT-Creation-Date: 2026-11-04 15:01+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4186,6 +4186,21 @@ msgstr "Made {n} copies for sharing."
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr "Made {n} copies for sharing; {m} could not be made."
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "고른 사진 {n}장 왼쪽으로 90° 돌리기"
+msgstr "Rotate {n} Selected Photos 90° Left"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "고른 사진 {n}장 오른쪽으로 90° 돌리기"
+msgstr "Rotate {n} Selected Photos 90° Right"
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "고른 사진 {n}장으로 PDF 만들기..."
+msgstr "Make PDF from {n} selected photos..."
+
 #: viewer/photo_doc.py
 msgid "그림 형식이 아니거나 파일이 깨졌습니다."
 msgstr "Not a picture format, or the file is damaged."
@@ -6518,11 +6533,6 @@ msgstr "{n} PDFs"
 #, python-brace-format
 msgid "파일 없음: {name}"
 msgstr "File missing: {name}"
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "고른 사진 {n}장으로 PDF 만들기..."
-msgstr "Make PDF from {n} selected photos..."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "두 파일 비교..."
