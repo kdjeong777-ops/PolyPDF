@@ -2,6 +2,7 @@
 
 beta.293 은 CI 가 PyMuPDF 2.0 을 받아(요구 사항이 `>=` 였다) 설치본이 시작하자마자 꺼졌다 — 레이아웃 모델 파일이 빌드 묶음에 없었다.
 A. `main.py --selftest <파일>` 이 시작 때 싣는 모듈을 싣고 'ok …' 를 적고 0 으로 끝난다(CI 가 빌드본에 같은 것을 돌린다).
+   결과 줄에 HEIC 해독기(heif)·Qt 그림 플러그인(qimg — 261104-14)도 적는다.
 B. requirements.txt 의 PyMuPDF 는 `pymupdf-lite` `==` 고정 판이고, 본판 `PyMuPDF` 줄은 없다(261101-4 — 본판 2.x 는 레이아웃 의존).
 C. release.yml 에 빌드본 자가 시험 단계가 있다.
 D. build_ci.bat 이 `pymupdf`(실체)와 `fitz`(옛 이름)를 함께 수집한다(마스터 §14.2 'PyMuPDF 패키지').
@@ -31,6 +32,8 @@ first = out.read_text(encoding="utf-8").splitlines()[0] if out.exists() else ""
 chk(r.returncode == 0 and first.startswith("ok ") and first.endswith(" text"),
     "A --selftest 가 모듈을 싣고 PDF 를 만들어 'ok' 로 끝난다", f"rc={r.returncode} {first!r} {r.stderr[-300:]!r}")
 chk(" heif " in first, "A2 HEIC 해독기(pi-heif)도 싣는다 - 빌드 묶음에 DLL 이 빠지면 여기서 잡힌다(261104-2, 사진 보기 SOT 4.9)", first)
+chk(" qimg jpeg,tiff,webp,gif " in first,
+    "A3 Qt 그림 플러그인(qjpeg·qtiff·qwebp·qgif)으로 실제 그림을 푼다 - 빌드 묶음에 imageformats 가 빠지면 잡힌다(261104-14)", first)
 
 req = (ROOT / "requirements.txt").read_text(encoding="utf-8")
 m = re.search(r"^pymupdf-lite\s*([=<>!~]=?)\s*([\w.]+)", req, re.M | re.I)

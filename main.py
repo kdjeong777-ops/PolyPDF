@@ -66,8 +66,24 @@ if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--selftest"
         # 261104-2(사진 보기 SOT 4.9): HEIC 해독기 — 빌드 묶음에 DLL(libheif·libde265)이 빠지면 여기서 실패한다
         import pi_heif as _ph
         _heif = "heif %s" % _ph.libheif_version()
+        # 261104-14(사진 보기 SOT 4.9·§6.3, 릴리스 SOT 점검 목록): Qt 그림 플러그인 — 사진 썸네일·움직이는 그림이 쓴다.
+        #   빌드 묶음에 imageformats(qjpeg·qtiff·qwebp·qgif)가 빠지면 사진이 열리지 않으므로 작은 그림을 실제로 풀어 본다
+        import io as _io
+        from PyQt6.QtCore import QCoreApplication as _QC, QByteArray as _QB
+        from PyQt6.QtGui import QImage as _QI
+        from PIL import Image as _PI
+        _qa = _QC.instance() or _QC([sys.argv[0]])
+        _ok = []
+        for _fmt, _pil in (("jpeg", "JPEG"), ("tiff", "TIFF"), ("webp", "WEBP"), ("gif", "GIF")):
+            _b = _io.BytesIO()
+            _PI.new("RGB", (4, 3), (10, 20, 30)).save(_b, _pil)
+            _q = _QI()
+            if not (_q.loadFromData(_QB(_b.getvalue()), _fmt.upper()) and _q.width() == 4):
+                raise RuntimeError("Qt 그림 플러그인 없음: " + _fmt)
+            _ok.append(_fmt)
+        _qimg = "qimg " + ",".join(_ok)
         with open(_out, "w", encoding="utf-8") as _f:
-            _f.write("ok %s pymupdf %s %s %s\n" % (_ver, _fz.VersionBind, _heif, "text" if "selftest" in _txt else "notext"))
+            _f.write("ok %s pymupdf %s %s %s %s\n" % (_ver, _fz.VersionBind, _heif, _qimg, "text" if "selftest" in _txt else "notext"))
         os._exit(0)
     except BaseException:
         import traceback as _tb
