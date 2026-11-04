@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 16:20+0900\n"
+"POT-Creation-Date: 2026-11-04 16:44+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4047,6 +4047,14 @@ msgid "사진 검색을 지웠습니다 — 폴더 전체."
 msgstr "Photo search cleared — showing the whole folder."
 
 #: viewer/photo_controller.py
+msgid "2분할 함께 움직이기: 켬"
+msgstr "Move split panes together: on"
+
+#: viewer/photo_controller.py
+msgid "2분할 함께 움직이기: 끔"
+msgstr "Move split panes together: off"
+
+#: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr "Only photos selected from an opened folder can be rotated."
 
@@ -4093,6 +4101,10 @@ msgstr "Copy for Sharing (Remove Location)"
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 msgid "공유용 사본 (정보 모두 지움)"
 msgstr "Copy for Sharing (Remove All Info)"
+
+#: viewer/photo_controller.py
+msgid "2분할 함께 움직이기"
+msgstr "Move Split Panes Together"
 
 #: viewer/photo_controller.py
 msgid "편집 모드에서 지울 수 있습니다."

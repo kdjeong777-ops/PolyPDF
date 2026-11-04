@@ -235,6 +235,89 @@ class PhotoMixin:
         self._photo_index_start()                        # 사진 색인도 바뀐 것만
         self.status.showMessage(tr("폴더가 바뀌어 사진 목록을 새로 읽었습니다."), 3000)
 
+    # ── 2분할 비교 — 함께 움직이기 (4.28, 261104-7 B3, §5.1 F3) ─────────────────
+    def _photo_pair_set(self, on: bool):
+        """두 창의 확대·스크롤·넘김을 함께. 켜면 지금 창의 맞춤·배율을 다른 창에 맞춘다."""
+        self._photo_pair_on = bool(on)
+        if on:
+            self._photo_pair_wire()
+            self._photo_pair_zoom(self._active_pane)
+            self._photo_pair_scroll(self._active_pane)
+        self.status.showMessage(tr("2분할 함께 움직이기: 켬") if on else tr("2분할 함께 움직이기: 끔"), 2500)
+
+    def _photo_pair_ok(self) -> bool:
+        if not (self.__dict__.get("_photo_pair_on") and getattr(self, "_split_on", False) and getattr(self, "_photo_mode", False)):
+            return False
+        mvs = getattr(self, "_mv", [])
+        return len(mvs) >= 2 and all(getattr(getattr(m, "_doc", None), "is_photo", False) for m in mvs[:2])
+
+    def _photo_pair_wire(self):
+        if self.__dict__.get("_photo_pair_wired"):
+            return
+        self._photo_pair_wired = True
+        for i, mv in enumerate(self._mv[:2]):
+            for sb in (mv.view.horizontalScrollBar(), mv.view.verticalScrollBar()):
+                sb.valueChanged.connect(lambda _v, k=i: self._photo_pair_scroll(k))
+                sb.rangeChanged.connect(lambda _a, _b, k=i: self._photo_pair_zoom(k))
+
+    def _photo_pair_zoom(self, src: int):
+        """한 창의 맞춤·배율이 바뀌었다 — 다른 창도 같게(사진 크기가 달라도 같은 맞춤 규칙·같은 배율)."""
+        if not self._photo_pair_ok() or self.__dict__.get("_photo_pair_busy"):
+            return
+        a, b = self._mv[src], self._mv[1 - src]
+        if b._fit_mode == a._fit_mode and (a._fit_mode != a.FIT_NONE or abs(b._zoom - a._zoom) < 1e-6):
+            return
+        self._photo_pair_busy = True
+        try:
+            b._fit_mode = a._fit_mode
+            b._zoom = a._zoom
+            b._show_fit(a._fit_mode)
+            b._render_current()
+        finally:
+            self._photo_pair_busy = False
+        self._photo_pair_scroll(src)
+
+    def _photo_pair_scroll(self, src: int):
+        """한 창을 스크롤했다 — 다른 창도 같은 비율 자리로."""
+        if not self._photo_pair_ok() or self.__dict__.get("_photo_pair_busy"):
+            return
+        a, b = self._mv[src].view, self._mv[1 - src].view
+        self._photo_pair_busy = True
+        try:
+            for sa, sb in ((a.horizontalScrollBar(), b.horizontalScrollBar()), (a.verticalScrollBar(), b.verticalScrollBar())):
+                ra = sa.maximum() - sa.minimum()
+                rb = sb.maximum() - sb.minimum()
+                frac = (sa.value() - sa.minimum()) / ra if ra > 0 else 0.0
+                sb.setValue(int(round(sb.minimum() + frac * rb)))
+        finally:
+            self._photo_pair_busy = False
+
+    def _photo_pair_step(self, direction: int):
+        """함께 움직이기 — 다른 창도 제 목록(그 창의 책갈피창 차례)에서 한 장 넘긴다."""
+        if not self._photo_pair_ok() or self.__dict__.get("_photo_pair_stepping"):
+            return
+        other = 1 - self._active_pane
+        mv = self._mv[other]
+        bt = self.bookmark_tree_right if other == 1 else self.bookmark_tree
+        cur = mv.current_file()
+        lst = [str(it.data(0, bt.DATA_FILE)) for it in bt._iter_file_nodes()
+               if it.data(0, bt.DATA_FILE) and self._is_photo_path(it.data(0, bt.DATA_FILE)) and not it.isHidden()]
+        norm = [str(Path(p)) for p in lst]
+        if not cur or str(Path(cur)) not in norm:
+            return
+        j = norm.index(str(Path(cur))) + (1 if direction > 0 else -1)
+        if not (0 <= j < len(lst)):
+            return
+        me = self._active_pane
+        self._photo_pair_stepping = True
+        try:
+            from viewer.history import HistoryItem
+            self._set_active_pane(other)
+            self._load_main(HistoryItem(lst[j], 0, "", "bookmark"))   # 그 창에(옆 창에 열기와 같은 길 — 책갈피창 신호는 위 창 기준이다)
+        finally:
+            self._set_active_pane(me)
+            self._photo_pair_stepping = False
+
     def _photo_resume_index(self):
         """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""
         if not self.__dict__.pop("_photo_index_skipped", False):
@@ -428,6 +511,7 @@ class PhotoMixin:
             self.status.showMessage(tr("마지막 사진입니다.") if direction > 0 else tr("첫 사진입니다."), 2000)
             return
         self._on_bookmark_activated(lst[j], 0)
+        self._photo_pair_step(direction)                # 2분할 함께 움직이기면 다른 창도 한 장(4.28)
 
     # ── 보기 회전 (4.11 '보기 회전'·4.16, 261104-3) ─────────────────
     def _photo_rot_for(self, path) -> int:
@@ -621,12 +705,21 @@ class PhotoMixin:
             a = menu.addAction(label)
             a.setEnabled(not broken or key in ("copy_path", "reveal"))
             extra[a] = key
+        a_pair = None
+        if getattr(self, "_split_on", False):
+            menu.addSeparator()
+            a_pair = menu.addAction(tr("2분할 함께 움직이기"))     # 4.28(261104-7 B3, §5.1 F3)
+            a_pair.setCheckable(True)
+            a_pair.setChecked(bool(self.__dict__.get("_photo_pair_on")))
         menu.addSeparator()
         a_del = menu.addAction(self._kt(tr("삭제"), "Del"))
         a_del.setEnabled(self.bookmark_tree.is_edit_mode() and bool(cur) and not self._photo_any_cached([cur]))
         if not self.bookmark_tree.is_edit_mode():
             a_del.setToolTip(tr("편집 모드에서 지울 수 있습니다."))
         chosen = menu.exec(global_pos)
+        if a_pair is not None and chosen is a_pair:
+            self._photo_pair_set(a_pair.isChecked())
+            return
         if chosen is a_del:
             self._photo_delete([str(cur)])
             return
