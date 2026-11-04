@@ -45,6 +45,8 @@ OSS = (
     (tr_noop("kengdic 한영사전"), "CC BY-SA 3.0", "kengdic contributors (garfieldnate/kengdic)", ()),
     ("FFmpeg", "GPL v3", tr_noop("FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"), ()),
     ("lameenc · LAME", "LGPL", tr_noop("Chris Cooper · LAME 프로젝트"), ("lameenc",)),
+    # 261104-2(사진 보기 SOT 4.9): HEIC 읽기 — 동적 링크 DLL(libheif·libde265 LGPL v3, MinGW libstdc++ GCC 런타임 예외)
+    ("pi-heif · libheif · libde265", "BSD-3-Clause / LGPL v3", "Pillow-Heif contributors · struktur AG", ("pi-heif",)),
     # 261017(가상 프린터 SOT §4.2): 가상 프린터 — 포트 모니터(원본을 고쳐 우리 이름으로 빌드)·PS→PDF 변환기
     ("MFILEMON 1.6.1", "GPL v3", tr_noop("Lorenzo Monti — 고쳐 빌드한 포트 모니터(printer/monitor_src)"), ()),
     ("Ghostscript 10.08.0", "AGPL v3", tr_noop("Artifex Software — 별도 실행 파일(가상 프린터 PS→PDF)"), ()),

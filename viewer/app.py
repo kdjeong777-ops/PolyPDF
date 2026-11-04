@@ -7437,7 +7437,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     self._apply_vocab_marks(item.page_index or 0, [])
             elif self._photo_mode and self._is_photo_path(path):
                 # 261104-2(사진 보기 SOT 4.4 (다)): 사진 모드 — 사진 문서로(경로는 원본, 그림은 Pillow 로 필요한 크기만)
-                self.main_view.load_document(path, page_index=0)
+                from viewer.photo_doc import PhotoFormatMissing
+                try:
+                    self.main_view.load_document(path, page_index=0)
+                except PhotoFormatMissing:
+                    self.status.showMessage(tr("이 형식을 읽는 구성 요소가 없습니다: {name}").format(name=path.name), 6000)
+                    return
                 self._photo_after_open(path)
             else:
                 self.main_view.load_image(path)

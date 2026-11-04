@@ -24,6 +24,8 @@ python-hwpx==6.6.0       # 261014-14: 한글 HWPX 변환(형식 변환 SOT §4.2
 python-pptx==1.0.2       # 261014-19: PowerPoint 변환(형식 변환 SOT §4.3 — 고정 판, MIT)
 XlsxWriter==3.2.9        # 261014-19: python-pptx 의 의존성(BSD-2-Clause)
 lameenc>=1.7              # 260606: 재생내용 mp3 저장(libmp3lame 내장)
+pi-heif==1.4.0            # 261104-2: 사진 모드 HEIC 읽기 — pillow-heif 의 읽기 전용 판(인코더 x265 GPL 없음, 동봉 libheif·libde265 LGPL v3)
+                          #   고정 판 — 올릴 때 pi_heif.libheif_version() 과 휠 라이선스를 다시 본다(사진 보기 SOT 4.9·§8.1 ④)
 pywin32>=306             # 260603: 음성 읽기(Windows SAPI, win32com) — Windows 전용
 anthropic>=0.40          # 260621-P0: PDF 번역·요약(Claude API)
 # 261010-21: 전자서명(보안 SOT §8) — pyHanko(MIT, PAdES 증분 서명·검증) + 겉모양 한글 글꼴(opentype: fontTools·uharfbuzz)

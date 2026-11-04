@@ -189,6 +189,7 @@ python -m PyInstaller ^
     --collect-all hwpx ^
     --collect-all pptx ^
     --collect-all lameenc ^
+    --collect-all pi_heif ^
     --collect-submodules viewer ^
     --add-data "resources;resources" ^
     --add-data "viewer;viewer" ^

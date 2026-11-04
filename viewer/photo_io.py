@@ -21,11 +21,37 @@ GPS_TAG = 0x8825
 # EXIF 방향 → PyMuPDF `insert_image(rotate=)`(반시계, 261104-1 실측). 거울 방향은 None — 다시 그린다
 ROTATE_FOR = {1: 0, 3: 180, 6: 270, 8: 90}
 MIRRORED = {2, 4, 5, 7}
-REENCODE_QUALITY = 95                         # 거울 방향만 — 다시 그릴 때 JPEG 화질
+REENCODE_QUALITY = 95                         # 거울 방향·HEIC — 다시 그릴 때 JPEG 화질
+HEIF_EXTS = (".heic", ".heif")
+_HEIF_STATE = {"tried": False, "ok": False}
+
+
+def is_heif(path) -> bool:
+    return Path(str(path)).suffix.lower() in HEIF_EXTS
+
+
+def heif_ready() -> bool:
+    """HEIC 해독기(pi-heif, 읽기 전용 — 사진 보기 SOT 4.9·D5)를 **처음 만날 때 한 번** Pillow 에 등록한다.
+    시작·PDF 모드에는 불러오지 않는다(§6.1). 없으면(휴대용 판에서 빠졌을 때 등) False — 목록에는 보이고 열 때 알린다."""
+    if not _HEIF_STATE["tried"]:
+        _HEIF_STATE["tried"] = True
+        try:
+            import pi_heif
+            pi_heif.register_heif_opener()
+            _HEIF_STATE["ok"] = True
+        except Exception:
+            _HEIF_STATE["ok"] = False
+    return _HEIF_STATE["ok"]
+
+
+def _prep(path) -> None:
+    if is_heif(path):
+        heif_ready()
 
 
 def orientation(path) -> int:
     """EXIF 방향(1~8). 없거나 못 읽으면 1."""
+    _prep(path)
     try:
         from PIL import Image
         with Image.open(str(path)) as im:
@@ -37,6 +63,7 @@ def orientation(path) -> int:
 
 def oriented_size(path) -> tuple:
     """보이는 대로의 (폭, 높이) 픽셀 — **머리만** 읽는다. 못 읽으면 (0, 0)."""
+    _prep(path)
     try:
         from PIL import Image
         with Image.open(str(path)) as im:
@@ -124,6 +151,14 @@ def pdf_image(path):
         return None, 0, 0, 0
     o = orientation(p)
     is_jpeg = Path(p).suffix.lower() in (".jpg", ".jpeg")
+    if is_heif(p):
+        # PyMuPDF 는 HEIC 를 못 연다(사진 보기 SOT §8.1 ④) — 바로 세워 JPEG 으로 다시 그린다(EXIF·GPS 는 싣지 않는다)
+        from PIL import Image, ImageOps
+        with Image.open(p) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            out = io.BytesIO()
+            im.save(out, "JPEG", quality=REENCODE_QUALITY)
+        return out.getvalue(), 0, w, h
     if o in MIRRORED:
         from PIL import Image, ImageOps
         with Image.open(p) as im:
@@ -165,6 +200,7 @@ def read_scaled(path: str, box: int, auto_transform: bool = False):
     **Pillow 로 읽는다** — Qt 의 `QImageReader.read` 는 디코드하는 동안 GIL 을 쥐어 배경에서도 메인이 섰다
     (24 MP 20장 최장 1.28초, 응답성 SOT §6). Pillow 해독기는 GIL 을 놓고 JPEG 은 draft 로 디코드 단계에서 줄인다.
     Pillow 가 모르는 형식만 Qt 로."""
+    _prep(path)
     try:
         return _read_scaled_pil(path, box, auto_transform)
     except Exception:

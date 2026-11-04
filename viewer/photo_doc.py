@@ -38,6 +38,7 @@ def _tag(path: Path) -> str:
 def _decode(path: Path, box: int):
     """긴 변 `box` 이상으로(원본보다 크게는 안 함) 방향을 세워 푼다 — 배경·메인 어디서든(Pillow 는 해독 중 GIL 을 놓는다)."""
     from PIL import Image, ImageOps
+    photo_io._prep(path)                                   # HEIC 면 해독기를 처음 한 번 등록
     with Image.open(str(path)) as im:
         im.draft("RGB", (box, box))                        # JPEG: 디코드 단계에서 줄인다
         im = ImageOps.exif_transpose(im)
@@ -80,6 +81,10 @@ def forget_decoded() -> None:
         _DECODED.clear()
 
 
+class PhotoFormatMissing(ValueError):
+    """이 형식(HEIC)을 읽는 구성 요소가 없다 — 목록에는 보이고 열 때 알린다(사진 보기 SOT 4.9)."""
+
+
 class PhotoDocument:
     """`PdfDocument` 의 겉면(본문·썸네일·캡처가 부르는 것)만 가진 사진 한 장."""
 
@@ -89,6 +94,8 @@ class PhotoDocument:
         self.path = Path(file_path)
         w, h = photo_io.oriented_size(self.path)
         if w <= 0 or h <= 0:
+            if photo_io.is_heif(self.path) and not photo_io.heif_ready():
+                raise PhotoFormatMissing(str(self.path))
             raise ValueError("그림을 읽을 수 없다: %s" % self.path)
         self.size = (int(w), int(h))
         self.doc = fitz.open()

@@ -3137,6 +3137,11 @@ msgstr "p.{p} ({r})"
 
 #: viewer/app.py
 #, python-brace-format
+msgid "이 형식을 읽는 구성 요소가 없습니다: {name}"
+msgstr "No component can read this format: {name}"
+
+#: viewer/app.py
+#, python-brace-format
 msgid "· {p}쪽: {r}\n"
 msgstr "· p.{p}: {r}\n"
 

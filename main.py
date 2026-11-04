@@ -63,8 +63,11 @@ if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--selftest"
         from PyQt6.QtWidgets import QApplication as _QA       # noqa: F401
         import viewer.app as _va                              # noqa: F401 — 창 코드가 끄는 모듈 전부
         from viewer import __version__ as _ver
+        # 261104-2(사진 보기 SOT 4.9): HEIC 해독기 — 빌드 묶음에 DLL(libheif·libde265)이 빠지면 여기서 실패한다
+        import pi_heif as _ph
+        _heif = "heif %s" % _ph.libheif_version()
         with open(_out, "w", encoding="utf-8") as _f:
-            _f.write("ok %s pymupdf %s %s\n" % (_ver, _fz.VersionBind, "text" if "selftest" in _txt else "notext"))
+            _f.write("ok %s pymupdf %s %s %s\n" % (_ver, _fz.VersionBind, _heif, "text" if "selftest" in _txt else "notext"))
         os._exit(0)
     except BaseException:
         import traceback as _tb

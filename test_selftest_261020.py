@@ -30,6 +30,7 @@ r = subprocess.run([sys.executable, str(ROOT / "main.py"), "--selftest", str(out
 first = out.read_text(encoding="utf-8").splitlines()[0] if out.exists() else ""
 chk(r.returncode == 0 and first.startswith("ok ") and first.endswith(" text"),
     "A --selftest 가 모듈을 싣고 PDF 를 만들어 'ok' 로 끝난다", f"rc={r.returncode} {first!r} {r.stderr[-300:]!r}")
+chk(" heif " in first, "A2 HEIC 해독기(pi-heif)도 싣는다 - 빌드 묶음에 DLL 이 빠지면 여기서 잡힌다(261104-2, 사진 보기 SOT 4.9)", first)
 
 req = (ROOT / "requirements.txt").read_text(encoding="utf-8")
 m = re.search(r"^pymupdf-lite\s*([=<>!~]=?)\s*([\w.]+)", req, re.M | re.I)
