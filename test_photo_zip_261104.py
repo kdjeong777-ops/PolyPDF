@@ -7,6 +7,8 @@ B. zip 줄을 누르면 안의 사진을 꺼내 썸네일 줄에 보이고 첫 �
 C. zip 안 사진은 읽기 전용 — 공유용 사본·방향 저장을 하지 않는다, 원본 zip 그대로
 D. 색인에 zip 안 사진이 들어가고(열쇠 = zip|안 이름), 검색하면 그 zip 을 열어 보인다
 E. zip 밖 사진을 누르면 썸네일 줄은 다시 폴더 사진
+F. 경로 탈출(../·드라이브·절대 경로) 이름은 캐시 폴더 밖에 쓰지 않는다, 압축 폭탄(풀린 크기 ÷ 압축 크기가 큰 항목)은 뺀다
+G. 사진 색인 DB 가 손상되면 지우고 새로 만든다(캐시 — 마스터 §8.3.1)
 """
 import os, sys, tempfile, shutil, time, zipfile, io
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -108,6 +110,32 @@ try:
     mw.action_search("해변")
     chk(pump(lambda: any(Path(p).name == "첫날 해변.jpg" for p in strip.paths()), timeout=10), "D 검색 '해변' → 그 zip 을 열어 보인다",
         str(strip.paths()))
+    # F
+    evil = tmp / "위험.zip"
+    with zipfile.ZipFile(evil, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("../../탈출.jpg", jpg_bytes((10, 10, 10)))
+        z.writestr("C:/Windows/드라이브.jpg", jpg_bytes((20, 20, 20)))
+        z.writestr("/abs/절대.jpg", jpg_bytes((30, 30, 30)))
+        z.writestr("폭탄.jpg", b"\0" * (40 * 1024 * 1024))          # 40 MB 0 — 압축하면 수십 KB
+    members = photo_zip.photo_members(evil)
+    chk("폭탄.jpg" not in members and len(members) == 3, "F 압축 폭탄 항목은 뺀다", str(members))
+    out = photo_zip.extract(evil)
+    root = photo_zip.cache_dir_for(evil)
+    chk(len(out) == 3 and all(photo_zip._inside(root, Path(o)) for o in out), "F 꺼낸 것은 모두 캐시 폴더 안", str(out))
+    chk(not (tmp.parent / "탈출.jpg").exists() and not Path("C:/Windows/드라이브.jpg").exists(), "F 밖에 쓰지 않았다")
+
+    # G
+    dbp = photo_index.db_path()
+    for suf in ("-wal", "-shm"):
+        try:
+            os.remove(str(dbp) + suf)
+        except OSError:
+            pass
+    dbp.write_bytes(b"not a database" * 100)
+    con = photo_index.connect()
+    n = con.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+    con.close()
+    chk(n == 0, "G 손상된 사진 색인은 새로 만든다")
     mw.close()
 except Exception:
     import traceback

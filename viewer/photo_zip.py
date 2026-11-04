@@ -15,6 +15,11 @@ from pathlib import Path
 
 CACHE_DIRNAME = "photo_zip_cache"
 CACHE_MAX_BYTES = 1024 * 1024 * 1024       # 1 GB — 넘으면 오래 안 쓴 zip 꺼냄부터 지운다
+# 압축 폭탄 거름(261104-4 보강) — 목차 값과 실제로 읽은 바이트 둘 다로 막는다
+MEMBER_MAX_BYTES = 300 * 1024 * 1024       # 사진 한 장의 풀린 크기 상한
+ZIP_MAX_TOTAL = 4 * 1024 * 1024 * 1024     # zip 한 개에서 꺼낼 사진의 풀린 크기 합 상한
+MAX_RATIO = 200                            # 풀린 크기 ÷ 압축 크기 상한(사진은 이미 압축돼 1~2 배)
+MAX_MEMBERS = 10000                        # zip 한 개에서 보일 사진 장 수 상한
 _SKIP_PREFIX = ("__MACOSX/",)
 
 
@@ -28,11 +33,19 @@ def photo_members(zip_path) -> list:
     exts = _photo_exts()
     try:
         with zipfile.ZipFile(str(zip_path)) as z:
-            names = [i.filename for i in z.infolist()
-                     if not i.is_dir() and not i.filename.startswith(_SKIP_PREFIX)
-                     and os.path.splitext(i.filename)[1].lower() in exts
-                     and not os.path.basename(i.filename).startswith(".")]
-    except (OSError, zipfile.BadZipFile, ValueError):
+            names, total = [], 0
+            for i in z.infolist():
+                if i.is_dir() or i.filename.startswith(_SKIP_PREFIX) or os.path.basename(i.filename).startswith("."):
+                    continue
+                if os.path.splitext(i.filename)[1].lower() not in exts or not _safe_rel(i.filename):
+                    continue
+                if i.file_size > MEMBER_MAX_BYTES or i.file_size > max(1, i.compress_size) * MAX_RATIO:
+                    continue                         # 압축 폭탄으로 보이는 항목은 뺀다
+                total += i.file_size
+                if total > ZIP_MAX_TOTAL or len(names) >= MAX_MEMBERS:
+                    break
+                names.append(i.filename)
+    except (OSError, zipfile.BadZipFile, ValueError, RuntimeError, NotImplementedError):
         return []
     return sorted(names, key=lambda n: n.lower())
 
@@ -62,8 +75,22 @@ def is_cached(path) -> bool:
 
 
 def _safe_rel(name: str) -> str:
-    parts = [p for p in name.replace("\\", "/").split("/") if p not in ("", ".", "..")]
-    return os.path.join(*parts) if parts else "photo"
+    """zip 안 이름 → 캐시 안 상대 경로. 경로 탈출(`..`·절대 경로·드라이브 `C:`·UNC)은 빼고, 빈 이름이면 ''(그 항목은 쓰지 않는다)."""
+    parts = []
+    for p in name.replace("\\", "/").split("/"):
+        if p in ("", ".", "..") or ":" in p:
+            continue
+        parts.append(p)
+    return os.path.join(*parts) if parts else ""
+
+
+def _inside(root: Path, target: Path) -> bool:
+    try:
+        r = os.path.normcase(os.path.abspath(str(root)))
+        t = os.path.normcase(os.path.abspath(str(target)))
+        return os.path.commonpath([r, t]) == r and t != r
+    except ValueError:
+        return False
 
 
 def extract(zip_path, should_cancel=None) -> list:
@@ -75,18 +102,32 @@ def extract(zip_path, should_cancel=None) -> list:
         for name in photo_members(zip_path):
             if should_cancel is not None and should_cancel():
                 break
-            dst = d / _safe_rel(name)
+            rel = _safe_rel(name)
+            dst = d / rel
+            if not rel or not _inside(d, dst):
+                continue                             # 캐시 폴더 밖으로 나가는 이름 — 쓰지 않는다
             info = z.getinfo(name)
             if not (dst.exists() and dst.stat().st_size == info.file_size):
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 tmp = dst.with_name(dst.name + ".part")
-                with z.open(name) as src, open(tmp, "wb") as fh:
-                    while True:
-                        buf = src.read(1 << 20)
-                        if not buf:
-                            break
-                        fh.write(buf)
-                os.replace(str(tmp), str(dst))
+                got = 0
+                try:
+                    with z.open(name) as src, open(tmp, "wb") as fh:
+                        while True:
+                            buf = src.read(1 << 20)
+                            if not buf:
+                                break
+                            got += len(buf)
+                            if got > min(MEMBER_MAX_BYTES, info.file_size + (1 << 20)):
+                                raise ValueError("zip member larger than declared")   # 목차를 속인 폭탄
+                            fh.write(buf)
+                    os.replace(str(tmp), str(dst))
+                except (ValueError, OSError, zipfile.BadZipFile):
+                    try:
+                        tmp.unlink()
+                    except OSError:
+                        pass
+                    continue
             out.append(str(dst))
     try:
         os.utime(d)                                  # 쓴 때 — 상한을 넘으면 오래 안 쓴 것부터
@@ -96,8 +137,13 @@ def extract(zip_path, should_cancel=None) -> list:
 
 
 def member_bytes(zip_path, name: str) -> bytes:
+    """zip 안 사진 한 장의 바이트(색인 머리 읽기용) — 상한을 넘으면 ValueError."""
     with zipfile.ZipFile(str(zip_path)) as z:
-        return z.read(name)
+        with z.open(name) as src:
+            data = src.read(MEMBER_MAX_BYTES + 1)
+    if len(data) > MEMBER_MAX_BYTES:
+        raise ValueError("zip member too large")
+    return data
 
 
 def prune_cache(max_bytes: int = CACHE_MAX_BYTES) -> int:

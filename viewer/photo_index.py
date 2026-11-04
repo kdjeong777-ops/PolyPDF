@@ -26,10 +26,36 @@ def db_path() -> Path:
     return Path(settings_dir()) / DB_NAME
 
 
-def connect(path: Path | None = None) -> sqlite3.Connection:
+def connect(path: Path | None = None, busy_ms: int | None = None) -> sqlite3.Connection:
+    """표준 연결(대기 상한·WAL — 응답성 SOT §4 ⑤). 메인 스레드는 `dbutil.BUSY_MS_UI`, 워커는 기본(`BUSY_MS_BG`).
+    손상됐으면 지우고 새로 만든다 — 이 DB 는 캐시다(마스터 §8.3.1, `index.db` 와 같은 규칙)."""
     from viewer import dbutil
     p = Path(path) if path else db_path()
-    con = dbutil.connect(p, row_factory=False)         # 표준 연결(대기 상한·WAL — 응답성 SOT §4 ⑤)
+    try:
+        return _open(p, busy_ms)
+    except sqlite3.DatabaseError as e:
+        if not dbutil.is_corrupt_error(e):
+            raise
+        for suf in ("", "-wal", "-shm", "-journal"):
+            try:
+                os.remove(str(p) + suf)
+            except OSError:
+                pass
+        return _open(p, busy_ms)
+
+
+def _open(p: Path, busy_ms: int | None) -> sqlite3.Connection:
+    from viewer import dbutil
+    con = dbutil.connect(p, busy_ms=busy_ms or dbutil.BUSY_MS_BG, row_factory=False)
+    try:
+        _init(con)
+    except Exception:
+        con.close()                      # 실패한 연결을 놓아야 손상 파일을 지울 수 있다(Windows)
+        raise
+    return con
+
+
+def _init(con) -> None:
     con.executescript(
         """
         CREATE TABLE IF NOT EXISTS photos(
@@ -41,7 +67,6 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
         """)
     con.execute("INSERT OR IGNORE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA),))
-    return con
 
 
 def norm_folder(folder) -> str:
@@ -89,7 +114,11 @@ def search(query: str, folder=None, limit: int = 500, path: Path | None = None) 
     if not words:
         return []
     fts = " ".join('"%s"*' % w.lstrip("#") for w in words)
-    con = connect(path)
+    from viewer import dbutil
+    try:
+        con = connect(path, busy_ms=dbutil.BUSY_MS_UI)   # 메인에서 부른다 — 오래 기다리지 않는다(못 읽으면 빈 결과)
+    except sqlite3.Error:
+        return []
     try:
         sql = ("SELECT p.key, p.path, p.name, p.folder, p.taken, p.camera, p.width, p.height, p.zip, p.member "
                "FROM photo_fts f JOIN photos p ON p.key=f.key WHERE photo_fts MATCH ?")
