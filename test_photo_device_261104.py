@@ -9,6 +9,7 @@ D. 다시 열면 장치에서 다시 받지 않는다(캐시)
 E. 'PC 로 복사' — 고른 폴더로, 같은 이름이면 번호
 F. 받는 도중 연결이 끊기면 받은 것만 두고 알림
 G. 책갈피창 트리(폴더) 보기 — 장치·사진 폴더가 폴더 줄 모양, 연 폴더 아래 사진 줄, 누르면 그 사진(사용자 지시)
+H. 단일 보기 — 폴더 줄 없이 장치의 모든 사진 줄, 누르면 그 사진이 든 폴더를 그 사진부터 받아 연다(사용자 결정)
 """
 import os, sys, tempfile, shutil, time, io
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -107,6 +108,7 @@ try:
 
     # A
     chk(not devrows(), "A PDF 모드에는 장치 줄이 없다")
+    bt.set_tree_view(True)                        # A~G 는 트리(폴더) 보기, H 는 단일 보기
     mw._set_photo_mode(True)
     chk(pump(lambda: len(devrows()) == 2, timeout=10), "A 사진 모드 — 장치 줄 둘", str([r.text(0) for r in devrows()]))
     chk([tree.topLevelItem(i).text(0) for i in range(2)] == ["Apple iPhone", "잠긴 폰"], "A 장치 줄은 책갈피창 맨 위(사용자 지시)",
@@ -184,12 +186,34 @@ try:
     pump(lambda: next((r for r in devrows() if r.text(0) == "Apple iPhone"), None) is not None, timeout=10)
     pump(timeout=0.5)
     iph = next(r for r in devrows() if r.text(0) == "Apple iPhone")
-    chk(iph.child(0).childCount() == 0 and iph.child(0).background(0).color() != yellow, "G 단일 보기는 폴더 목록만(사진 줄 없음)")
+    # H — 단일 보기: 폴더 없이 장치의 모든 사진 줄(사용자 결정 '모든 사진을 파일 줄로')
+    allrows = lambda: [iph.child(i).text(0) for i in range(iph.childCount())] if iph else []
+    chk(pump(lambda: (lambda r: r == ["IMG_0001", "IMG_0002", "IMG_0004", "IMG_0100"])(
+        [x.text(0) for x in [next(r for r in devrows() if r.text(0) == "Apple iPhone")] for _ in [0]] and
+        [next(r for r in devrows() if r.text(0) == "Apple iPhone").child(i).text(0)
+         for i in range(next(r for r in devrows() if r.text(0) == "Apple iPhone").childCount())]), timeout=10),
+        "H 단일 보기 — 폴더 줄 없이 모든 사진 줄(새 폴더부터)", str(allrows()))
+    iph = next(r for r in devrows() if r.text(0) == "Apple iPhone")
+    chk(all(iph.child(i).childCount() == 0 and iph.child(i).background(0).color() != yellow for i in range(iph.childCount())),
+        "H 폴더 줄 모양이 없다")
+    chk([Path(str(n.data(0, bt.DATA_FILE))).name for n in bt._iter_file_nodes()] == ["폴더 사진.jpg"], "H 사진 줄도 파일 행이 아니다")
+    r100 = next(iph.child(i) for i in range(iph.childCount()) if iph.child(i).text(0) == "IMG_0100")
+    mw._photo_device_clicked(r100)
+    chk(pump(lambda: mw.main_view.current_file() and Path(mw.main_view.current_file()).name == "IMG_0100.JPG"
+             and names() == ["IMG_0100.JPG"] and mw.__dict__.get("_photo_dev_worker") is None, timeout=5),
+        "H 다른 폴더 사진 줄을 누르면 그 폴더를 받아 그 사진을 연다", str(names()))
+    chk(bt.tree.currentItem() is r100, "H 본문 사진의 줄이 골라진다")
+    r2 = next(iph.child(i) for i in range(iph.childCount()) if iph.child(i).text(0) == "IMG_0002")
+    shutil.rmtree(pd.cache_dir_for("Apple iPhone", "Internal Storage/202611_a"), ignore_errors=True)
+    mw._photo_device_clicked(r2)
+    chk(pump(lambda: mw.main_view.current_file() and Path(mw.main_view.current_file()).name == "IMG_0002.JPG", timeout=5)
+        and pump(lambda: mw.__dict__.get("_photo_dev_worker") is None, timeout=5)
+        and names() == ["IMG_0001.JPG", "IMG_0002.JPG", "IMG_0004.PNG"], "H 누른 사진부터 받아 열고, 줄은 이름 차례", str(names()))
 
     # F
     shutil.rmtree(pd.cache_dir_for("Apple iPhone", "Internal Storage/202611_a"), ignore_errors=True)
     fake.break_after = fake.copies + 1
-    mw._photo_device_clicked(iph.child(0))
+    mw._photo_open_device("Apple iPhone", "Internal Storage/202611_a")
     chk(pump(lambda: mw.__dict__.get("_photo_dev_worker") is None, timeout=5) and names() == ["IMG_0001.JPG"]
         and "연결이 끊겼습니다" in mw.status.currentMessage(), "F 끊기면 받은 것만 두고 알림", f"{names()} {mw.status.currentMessage()}")
     mw.close()

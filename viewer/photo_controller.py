@@ -654,7 +654,9 @@ class PhotoMixin:
                 if bt.tree.topLevelItem(i).data(0, self.DEVICE_ROLE)]
 
     def _photo_devices_listed(self, found: list, worker=None):
-        """장치 줄을 다시 단다 — 파일 행이 아닌 가지 행(DATA_FILE 없음)이라 파일 작업·색인·태그가 닿지 않는다."""
+        """장치 줄을 다시 단다 — 파일 행이 아닌 가지 행(DATA_FILE 없음)이라 파일 작업·색인·태그가 닿지 않는다.
+        트리(폴더) 보기: 장치·사진 폴더를 폴더 줄 모양으로, 연 폴더 아래 사진 줄. 단일 보기: 폴더 없이 장치의 모든 사진 줄
+        (배경에서 새 폴더부터 이름만 읽어 붙인다 — 사용자 결정 261104-9)."""
         if worker is not None and worker is not self.__dict__.get("_photo_dev_lister"):
             return                                       # 앞 일의 늦은 결과
         self._photo_dev_lister = None
@@ -669,29 +671,76 @@ class PhotoMixin:
             self._photo_dev_wired = True
             tree.itemClicked.connect(self._photo_device_clicked)
         icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DriveCDIcon)
-        as_folders = bt.is_tree_view()                 # 트리(폴더) 보기면 장치·사진 폴더를 폴더 줄 모양으로, 연 폴더 아래 사진 줄(사용자 지시)
+        as_folders = bt.is_tree_view()
         opened = self.__dict__.get("_photo_dev_open")
+        names = self.__dict__.setdefault("_photo_dev_names", {})     # 장치 → [(폴더, [이름…])] — 다시 읽지 않게
+        for gone in [d for d in names if d not in {f[0] for f in found}]:
+            names.pop(gone, None)                        # 뽑힌 장치
+        to_scan = []
         for pos, (dev, folders, err) in enumerate(found):
             top = QTreeWidgetItem([dev])
             top.setIcon(0, icon)
-            top.setData(0, self.DEVICE_ROLE, (dev, "", err or ""))
+            top.setData(0, self.DEVICE_ROLE, (dev, "", err or "", ""))
             if err:
                 top.setToolTip(0, self._photo_device_error_text(dev, err))
-            for f in folders:
-                ch = QTreeWidgetItem([f.rsplit("/", 1)[-1]])
-                ch.setData(0, self.DEVICE_ROLE, (dev, f, ""))
-                ch.setToolTip(0, dev + " › " + f.replace("/", " › "))
-                top.addChild(ch)
-                if as_folders:
+            if as_folders:
+                for f in folders:
+                    ch = QTreeWidgetItem([f.rsplit("/", 1)[-1]])
+                    ch.setData(0, self.DEVICE_ROLE, (dev, f, "", ""))
+                    ch.setToolTip(0, dev + " › " + f.replace("/", " › "))
+                    top.addChild(ch)
                     self._photo_device_folder_look(ch)
                     if opened == (dev, f):
-                        for ph in list(self.__dict__.get("_photo_zip_paths") or []):
-                            self._photo_device_photo_row(ch, dev, f, ph)
+                        self._photo_device_fill_rows(ch, dev, f, [Path(p).name for p in (self.__dict__.get("_photo_zip_paths") or [])])
                         ch.setExpanded(True)
-            if as_folders:
                 self._photo_device_folder_look(top)
+            elif not err:
+                if dev in names and [f for f, _n in names[dev]] == list(folders):
+                    for f, nm in names[dev]:
+                        self._photo_device_fill_rows(top, dev, f, nm)
+                else:
+                    names.pop(dev, None)
+                    to_scan.append((dev, list(folders)))
             tree.insertTopLevelItem(pos, top)              # 맨 위에 — 꽂은 장치는 보려고 꽂은 것(사용자 지시)
-            top.setExpanded(as_folders or bool(opened and opened[0] == dev))
+            top.setExpanded(as_folders or not err)
+        if to_scan:
+            self._photo_device_scan(to_scan)
+
+    def _photo_device_scan(self, todo: list):
+        """단일 보기 — 장치의 모든 사진 이름을 배경에서(새 폴더부터 한 폴더씩 알림). 받지는 않는다."""
+        from viewer.workers import run_in_thread
+        old = self.__dict__.get("_photo_dev_scanner")
+        if old is not None:
+            old.request_cancel()
+        w = PhotoDeviceScanWorker(todo)
+        w.folderScanned.connect(lambda d, f, nm, _w=w: self._photo_device_scanned(d, f, nm, _w))
+        self._photo_dev_scanner = w
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_device_scanned(self, dev: str, folder: str, nm: list, worker=None):
+        if worker is not self.__dict__.get("_photo_dev_scanner"):
+            return
+        self.__dict__.setdefault("_photo_dev_names", {}).setdefault(dev, []).append((folder, list(nm)))
+        if self.bookmark_tree.is_tree_view():
+            return
+        top = next((t for t in self._photo_device_nodes() if t.data(0, self.DEVICE_ROLE)[0] == dev), None)
+        if top is not None:
+            self._photo_device_fill_rows(top, dev, folder, nm)
+
+    def _photo_device_fill_rows(self, parent, dev: str, folder: str, nm):
+        """사진 줄 — 경로는 캐시에 받을 자리(받기 전에도 같은 경로라 본문 사진과 줄을 짝지을 수 있다)."""
+        from PyQt6.QtWidgets import QTreeWidgetItem
+        from viewer import photo_device
+        from viewer.widgets.icons import file_kind_icon
+        d = photo_device.cache_dir_for(dev, folder)
+        rows = []
+        for n in nm:
+            it = QTreeWidgetItem([Path(n).stem])
+            it.setIcon(0, file_kind_icon(n))
+            it.setData(0, self.DEVICE_ROLE, (dev, folder, "", str(d / n)))
+            it.setToolTip(0, dev + " › " + folder.rsplit("/", 1)[-1] + " › " + n)
+            rows.append(it)
+        parent.addChildren(rows)
 
     def _photo_device_folder_look(self, item):
         """폴더 줄 모양(책갈피창 트리 보기의 폴더 그룹 행과 같게 — 디자인 §2.5). 폴더 표식(DATA_IS_FOLDER)은 달지 않는다 —
@@ -708,24 +757,14 @@ class PhotoMixin:
             except Exception:
                 pass
 
-    def _photo_device_photo_row(self, folder_item, dev: str, folder: str, path: str):
-        """트리 보기에서 연 사진 폴더 아래 사진 한 줄 — 파일 행이 아니다(캐시 사진이라 파일 작업이 닿지 않게). 누르면 그 사진."""
-        from PyQt6.QtWidgets import QTreeWidgetItem
-        from viewer.widgets.icons import file_kind_icon
-        it = QTreeWidgetItem([Path(path).stem])
-        it.setIcon(0, file_kind_icon(path))
-        it.setData(0, self.DEVICE_ROLE, (dev, folder, "", str(path)))
-        it.setToolTip(0, Path(path).name)
-        folder_item.addChild(it)
-        return it
-
     def _photo_device_folder_item(self, dev: str, folder: str):
         for top in self._photo_device_nodes():
             k = top.data(0, self.DEVICE_ROLE)
             if k and k[0] == dev:
                 for i in range(top.childCount()):
                     ch = top.child(i)
-                    if ch.data(0, self.DEVICE_ROLE)[1] == folder:
+                    kk = ch.data(0, self.DEVICE_ROLE)
+                    if kk[1] == folder and not kk[3]:
                         return ch
         return None
 
@@ -740,18 +779,25 @@ class PhotoMixin:
         key = item.data(0, self.DEVICE_ROLE) if item is not None else None
         if not key:
             return
-        dev, folder, err = key[:3]
-        if len(key) > 3 and key[3]:
-            self._on_bookmark_activated(key[3], 0)      # 트리 보기의 사진 줄
-            return
+        dev, folder, err, path = key
         if err:
             self.status.showMessage(self._photo_device_error_text(dev, err), 8000)
+            return
+        if path:                                         # 사진 줄 — 그 폴더를 보고 있고 받아 둔 사진이면 바로, 아니면 그 폴더를 받으며 이 사진부터
+            if self.__dict__.get("_photo_dev_open") == (dev, folder):
+                if path in (self.__dict__.get("_photo_zip_paths") or []):
+                    self._on_bookmark_activated(path, 0)
+                    return
+                if self.__dict__.get("_photo_dev_worker") is not None:
+                    self._photo_dev_want = path          # 받는 중 — 그 사진이 들어오면 연다
+                    return
+            self._photo_open_device(dev, folder, want=path)
             return
         if folder:
             self._photo_open_device(dev, folder)
 
-    def _photo_open_device(self, dev: str, folder: str):
-        """사진 폴더 하나를 캐시로 복사하며 본다 — 복사된 차례로 썸네일 줄에, 첫 장을 연다(4.33)."""
+    def _photo_open_device(self, dev: str, folder: str, want: str | None = None):
+        """사진 폴더 하나를 캐시로 복사하며 본다 — 복사된 차례로 썸네일 줄에, 첫 장(또는 누른 사진 — 그것부터 받는다)을 연다(4.33)."""
         from viewer.workers import run_in_thread
         self._photo_device_stop()
         old = self.__dict__.get("_photo_zipper")
@@ -762,7 +808,8 @@ class PhotoMixin:
         self._photo_group = (dev + " › " + folder.rsplit("/", 1)[-1], None)
         self._photo_zip_paths = []
         self._photo_search_paths = None
-        self._photo_dev_first = True
+        self._photo_dev_want = want
+        self._photo_dev_first = want is None
         self._photo_dev_open = (dev, folder)
         if self.bookmark_tree.is_tree_view():              # 트리 보기 — 앞에 연 폴더의 사진 줄은 걷고 이 폴더를 펼친다
             for top in self._photo_device_nodes():
@@ -776,7 +823,7 @@ class PhotoMixin:
             self.page_thumbs.set_title(self._photo_group[0], None)
         except Exception:
             pass
-        w = PhotoDeviceWorker(dev, folder)
+        w = PhotoDeviceWorker(dev, folder, Path(want).name if want else None)
         w.listed.connect(lambda n, _w=w: self._photo_device_listed_names(n, _w))
         w.fileReady.connect(lambda p, _w=w: self._photo_device_file(p, _w))
         w.done.connect(lambda d, f, n, e, _w=w: self._photo_device_done(d, f, n, e, _w))
@@ -807,14 +854,28 @@ class PhotoMixin:
         if self.bookmark_tree.is_tree_view():
             fi = self._photo_device_folder_item(*worker.dev_folder)
             if fi is not None:
-                self._photo_device_photo_row(fi, worker.dev, worker.folder, path)
-        if self.__dict__.pop("_photo_dev_first", False):
+                self._photo_device_fill_rows(fi, worker.dev, worker.folder, [Path(path).name])
+        want = self.__dict__.get("_photo_dev_want")
+        if (want and os.path.normcase(want) == os.path.normcase(path)) or (not want and self.__dict__.pop("_photo_dev_first", False)):
+            self._photo_dev_want = None
             self._on_bookmark_activated(path, 0)
 
     def _photo_device_done(self, dev: str, folder: str, n: int, err: str, worker=None):
         if not self._photo_device_mine(worker):
             return
         self._photo_dev_worker = None
+        lst = self.__dict__.get("_photo_zip_paths")
+        if lst:                                          # 누른 사진부터 받았으면 줄 차례를 이름 차례로 되돌린다
+            lst.sort(key=lambda p: Path(p).name.lower())
+            cur = self.main_view.current_file() if self.main_view else None
+            self._photo_strip_widget().set_paths(lst, current=str(cur) if cur else None)
+            if self.bookmark_tree.is_tree_view():
+                fi = self._photo_device_folder_item(dev, folder)
+                if fi is not None:
+                    fi.takeChildren()
+                    self._photo_device_fill_rows(fi, dev, folder, [Path(p).name for p in lst])
+                if cur:
+                    self._photo_sync_device_row(str(cur))
         if err:
             self.status.showMessage(self._photo_device_error_text(dev, err), 8000)
         else:
@@ -1265,20 +1326,24 @@ class PhotoMixin:
     def _photo_sync_device_row(self, path: str):
         """트리 보기에서 장치 사진 줄을 고른다(신호 없이 — 다시 열지 않게)."""
         tree = self.bookmark_tree.tree
+        want = os.path.normcase(str(path))
+
+        def rows(node):
+            for i in range(node.childCount()):
+                ch = node.child(i)
+                yield ch
+                yield from rows(ch)
         for top in self._photo_device_nodes():
-            for i in range(top.childCount()):
-                fi = top.child(i)
-                for j in range(fi.childCount()):
-                    row = fi.child(j)
-                    k = row.data(0, self.DEVICE_ROLE)
-                    if k and len(k) > 3 and k[3] == path:
-                        tree.blockSignals(True)
-                        try:
-                            tree.setCurrentItem(row)
-                            tree.scrollToItem(row)
-                        finally:
-                            tree.blockSignals(False)
-                        return
+            for row in rows(top):
+                k = row.data(0, self.DEVICE_ROLE)
+                if k and k[3] and os.path.normcase(k[3]) == want:
+                    tree.blockSignals(True)
+                    try:
+                        tree.setCurrentItem(row)
+                        tree.scrollToItem(row)
+                    finally:
+                        tree.blockSignals(False)
+                    return
 
     def _photo_any_cached(self, paths) -> bool:
         """zip 에서 꺼낸 사진·휴대 장치에서 복사한 사진(읽기 전용 — 4.24·4.33)."""
@@ -2402,9 +2467,9 @@ class PhotoDeviceWorker(QObject):
     done = pyqtSignal(str, str, int, str)        # 장치, 폴더, 장 수, 오류 종류 또는 ''
     finished = pyqtSignal()
 
-    def __init__(self, dev: str, folder: str):
+    def __init__(self, dev: str, folder: str, first: str | None = None):
         super().__init__()
-        self.dev, self.folder = dev, folder
+        self.dev, self.folder, self.first = dev, folder, first
         self.dev_folder = (dev, folder)
         self._cancel = False
 
@@ -2416,7 +2481,7 @@ class PhotoDeviceWorker(QObject):
         try:
             from viewer import photo_device as pd
             with pd.com_thread():
-                got = pd.copy_folder(self.dev, self.folder, should_cancel=lambda: self._cancel,
+                got = pd.copy_folder(self.dev, self.folder, should_cancel=lambda: self._cancel, first=self.first,
                                      on_list=lambda names: self.listed.emit(len(names)),
                                      on_file=lambda p: self._cancel or self.fileReady.emit(p))
                 n = len(got)
@@ -2429,6 +2494,39 @@ class PhotoDeviceWorker(QObject):
         finally:
             if not self._cancel:
                 self.done.emit(self.dev, self.folder, n, err)
+            self.finished.emit()
+
+
+class PhotoDeviceScanWorker(QObject):
+    """단일 보기 — 장치의 모든 사진 이름(사진 보기 SOT 4.33). 새 폴더부터 한 폴더씩 알림, 받지는 않는다. 응답성 SOT 감사표의 한 행."""
+    folderScanned = pyqtSignal(str, str, list)   # 장치, 폴더, 사진 이름
+    finished = pyqtSignal()
+
+    def __init__(self, todo: list):
+        super().__init__()
+        self.todo = todo                         # [(장치, [폴더…])]
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        try:
+            from viewer import photo_device as pd
+            with pd.com_thread():
+                for dev, folders in self.todo:
+                    for f in folders:
+                        if self._cancel:
+                            return
+                        try:
+                            nm = pd.BACKEND.photos(pd.BACKEND.open_folder(dev, f))
+                        except Exception:
+                            break                # 뽑혔거나 잠김 — 그 장치는 여기까지
+                        if not self._cancel:
+                            self.folderScanned.emit(dev, f, nm)
+        except Exception:
+            pass
+        finally:
             self.finished.emit()
 
 

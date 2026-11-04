@@ -186,9 +186,10 @@ def is_cached(path) -> bool:
         return False
 
 
-def copy_folder(dev: str, folder: str, should_cancel=None, on_list=None, on_file=None) -> list:
+def copy_folder(dev: str, folder: str, should_cancel=None, on_list=None, on_file=None, first: str | None = None) -> list:
     """사진 폴더 하나를 캐시로 — 이미 있는 것은 그대로 두고 없는 것만 장치에서 복사한다. 복사(또는 이미 있던) 경로 목록.
-    on_list(이름 목록) · on_file(경로) 로 차례로 알린다. 배경 스레드에서 `com_thread()` 안에서 부른다."""
+    on_list(이름 목록) · on_file(경로) 로 차례로 알린다. first 가 있으면 그 사진부터(책갈피창에서 누른 사진).
+    배경 스레드에서 `com_thread()` 안에서 부른다."""
     d = cache_dir_for(dev, folder)
     d.mkdir(parents=True, exist_ok=True)
     os.utime(d, None)                            # 오래 안 쓴 것부터 지울 때의 기준
@@ -197,7 +198,8 @@ def copy_folder(dev: str, folder: str, should_cancel=None, on_list=None, on_file
     if on_list is not None:
         on_list(names)
     out = []
-    for n in names:
+    order = ([first] if first in names else []) + [n for n in names if n != first]
+    for n in order:
         if should_cancel is not None and should_cancel():
             break
         dst = d / n
