@@ -6,7 +6,7 @@ A. 오른쪽으로 돌리면 쪽 자체가 돈다 — 800×400 사진의 쪽이 
 B. 값은 폴더 사이드카 맨 위 `photo_rot` 묶음(디스크에 바로) — PDF 쪽 회전 대기값(`rotation`)에는 없다, 편집 저장 대기·쪽 편집 저장 대상 아님,
    다른 사진으로 갈 때 '저장하지 않은 편집' 을 묻지 않는다, 원본 사진은 그대로
 C. 다른 사진을 갔다 와도 그 회전 그대로, 원래 방향이면 사이드카 키가 지워진다
-D. 돌린 사진에서는 꾸밈을 보이지도 남기지도 않고 꾸미기 줄이 꺼진다 — 원래 방향이면 회전 0 판 꾸밈이 다시 보인다
+D. 돌린 사진에서도 꾸밈이 사진과 함께 돌아 보이고(4.19), 그 위에서 고친 것은 회전 0 판 좌표로 되돌려 남는다 — 꾸미기 줄은 켜져 있다
 E. 돌리기 키(Ctrl+] · Ctrl+[) — 사진이면 사진 회전, PDF 면 지금 쪽 회전(쪽 메뉴와 같은 길)
 F. 사진 본문 우클릭은 사진 메뉴(돌리기·맞춤), 원래 크기(100%) = 사진 픽셀 그대로
 """
@@ -80,7 +80,7 @@ try:
 
     # D 준비 — 회전 0 판에 선 하나
     _st = mw._ensure_page_meta_store()                     # 저장된 꾸밈(편집 저장 대기 없이)
-    _st.set_drawings(a_path, 0, [{"kind": "line", "pts": [[0.1, 0.1], [0.9, 0.1]], "pen": 0}])
+    _st.set_drawings(a_path, 0, [{"points": [[0.1, 0.1], [0.9, 0.1]], "pen": 0, "width": 3}])
     _st.save()
     mw._on_bookmark_activated(a_path, 0); pump(timeout=0.5)
     chk(len(mv._page_strokes) == 1, "D 준비 — 회전 0 에서 선 1개가 보인다")
@@ -106,18 +106,27 @@ try:
     chk(hashlib.sha1(Path(a_path).read_bytes()).hexdigest() == a_hash, "B 원본 사진은 그대로")
 
     # D
-    chk(mv._page_strokes == [] and not mv._draw_bar.isEnabled(), "D 돌린 사진에서는 꾸밈이 안 보이고 꾸미기 줄이 꺼진다")
-    mw._set_drawings(a_path, 0, [])
-    chk(len(mw._ensure_page_meta_store().get_drawings(a_path, 0)) == 1, "D 돌린 사진에서 꾸밈을 덮어쓰지 않는다")
+    pts = [[round(x, 4), round(y, 4)] for x, y in (mv._page_strokes[0]["points"] if mv._page_strokes else [])]
+    chk(pts == [[0.9, 0.1], [0.9, 0.9]] and mv._draw_bar.isEnabled(),
+        "D 돌린 사진에서 선이 함께 돈다((0.1,0.1)-(0.9,0.1) → (0.9,0.1)-(0.9,0.9)), 꾸미기 줄 켜짐", str(pts))
+    shown = [dict(s) for s in mv._page_strokes]
+    shown.append({"points": [[0.5, 0.25], [0.5, 0.75]], "pen": 1, "width": 3})          # 돌린 쪽 위에서 세로선 하나 더
+    mw._set_drawings(a_path, 0, shown)
+    saved = mw._ensure_page_meta_store().get_drawings(a_path, 0)
+    back = [[[round(x, 4), round(y, 4)] for x, y in s["points"]] for s in saved]
+    chk(back == [[[0.1, 0.1], [0.9, 0.1]], [[0.25, 0.5], [0.75, 0.5]]],
+        "D 돌린 쪽 위에서 고친 것은 회전 0 판 좌표로 되돌려 남는다", str(back))
+    mw._set_drawings(a_path, 0, mv._page_strokes[:1] or shown[:1])
+    mw._commit_edit(); mw._edit_dirty = False              # 고친 꾸밈을 저장(다음 파일로 갈 때 묻지 않게)
 
     # C
     mw._on_bookmark_activated(str(tmp / "b 초록.jpg"), 0); pump(timeout=0.5)
-    chk(mv._draw_bar.isEnabled(), "D 돌리지 않은 사진에서는 꾸미기 줄이 켜진다")
+    chk(mv._draw_bar.isEnabled(), "D 다른 사진에서도 꾸미기 줄이 켜져 있다")
     mw._on_bookmark_activated(a_path, 0); pump(timeout=0.5)
     chk(tuple(map(round, mv._doc.doc[0].rect[2:])) == (400, 800), "C 다른 사진을 갔다 와도 회전 그대로")
     mw._photo_rotate(absolute=0); pump(timeout=0.5)
     chk("photo_rot" not in sidecar(tmp) and tuple(map(round, mv._doc.doc[0].rect[2:])) == (800, 400), "C 원래 방향이면 키가 지워지고 쪽도 원래대로")
-    chk(len(mv._page_strokes) == 1 and mv._draw_bar.isEnabled(), "D 원래 방향이면 꾸밈이 다시 보인다")
+    chk(len(mv._page_strokes) >= 1 and mv._draw_bar.isEnabled(), "D 원래 방향이면 회전 0 판 그대로 보인다")
 
     # F
     mw._on_bookmark_activated(a_path, 0); pump(timeout=0.5)

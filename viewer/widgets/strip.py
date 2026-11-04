@@ -192,6 +192,7 @@ class MiniStrip(QWidget):
     DATA_QUERY    = Qt.ItemDataRole.UserRole + 5   # v1.6.4: 캡처 당시 검색어 (str, optional)
     DATA_QMODE    = Qt.ItemDataRole.UserRole + 7   # 261014-18: 그 검색어의 (대소문자, 정규식) — 검색창 SOT §4.1
     DATA_LABEL    = Qt.ItemDataRole.UserRole + 6   # 260606-14: 카드 라벨(테마 변경 재렌더용)
+    DATA_SRC_PHOTO = Qt.ItemDataRole.UserRole + 8  # 261104-3(사진 보기 SOT 4.5): 사진 위에서 잡은 카드의 원본 사진 경로(str, optional)
 
     CARD_W = 110
     CARD_H = 150            # 260606-6: 상하 여백 축소(기존 210 → 150)
@@ -282,7 +283,7 @@ class MiniStrip(QWidget):
                  src_pdf: Optional[str] = None,           # v1.6.2: 원본 PDF (PDF 저장 시 1:1 재렌더)
                  src_page: Optional[int] = None,          # v1.6.2: 원본 PDF 페이지 (0-based)
                  src_query: Optional[str] = None,         # v1.6.4: 캡처 당시 검색어 (형광펜 재렌더)
-                 prepend: bool = True, src_mode=None):
+                 prepend: bool = True, src_mode=None, src_photo: Optional[str] = None):
         if not label:
             label = Path(file_path).stem
 
@@ -311,6 +312,8 @@ class MiniStrip(QWidget):
         if src_pdf:
             item.setData(self.DATA_SRC_PDF, str(src_pdf))
             item.setData(self.DATA_SRC_PAGE, int(src_page if src_page is not None else 0))
+        if src_photo:
+            item.setData(self.DATA_SRC_PHOTO, str(src_photo))
         if src_query:
             item.setData(self.DATA_QUERY, str(src_query))
             if src_mode:
@@ -321,6 +324,8 @@ class MiniStrip(QWidget):
             tip += f"  (p.{page_index + 1})"
         elif src_pdf:
             tip += f"  ← {Path(src_pdf).stem} (p.{int(src_page or 0) + 1})"
+        elif src_photo:
+            tip += f"  ← {Path(src_photo).name}"
         item.setToolTip(tip)
         item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom)
         item.setSizeHint(QSize(self.CARD_W + 8, self.CARD_H + 8 + 16))   # 260606-17: 번호 줄
@@ -474,6 +479,7 @@ class MiniStrip(QWidget):
                 "src_page": it.data(self.DATA_SRC_PAGE),
                 "src_query": it.data(self.DATA_QUERY),
                 "src_mode": it.data(self.DATA_QMODE),
+                "src_photo": it.data(self.DATA_SRC_PHOTO),
             })
         return out
 

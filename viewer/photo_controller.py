@@ -244,7 +244,7 @@ class PhotoMixin:
         if str(Path(path)) in lst:                    # 쪽 칸 = 넘김 원천 안의 순번(4.12) — 사진은 늘 1쪽이라 '1 / 1' 은 뜻이 없다
             self.main_view.set_photo_position(lst.index(str(Path(path))), len(lst))
         self._photo_preload_neighbors(str(path))
-        self._photo_deco_gate(self._photo_rot_for(path) == 0 and not self._photo_is_broken())
+        self._photo_deco_gate(not self._photo_is_broken())
         self._photo_info_request(path)
         try:
             self._touch_recent_files([path])          # 사진 모드면 사진의 최근 파일(4.7)
@@ -287,10 +287,16 @@ class PhotoMixin:
         st = self._ensure_page_meta_store()
         return st.photo_rotation(path) if st else 0
 
-    def _photo_rot_blocks(self, path) -> bool:
-        """돌린 사진에는 꾸밈을 보이지도 남기지도 않는다(4.16) — 꾸밈 좌표는 회전 0 판(D14)이라 돌린 쪽 위에서는 자리가 틀린다.
-        좌표 옮기기는 꾸밈 사이드카 조각(P2 ③)에서."""
-        return bool(path) and self._is_photo_path(path) and self._photo_rot_for(path) != 0
+    def _photo_deco_frame(self, path):
+        """돌린 사진이면 (회전, 회전 0 판 폭, 높이) — 꾸밈 좌표를 읽을 때 돌리고 쓸 때 되돌린다(4.19). 아니면 None."""
+        if not path or not self._is_photo_path(path):
+            return None
+        rot = self._photo_rot_for(path)
+        if not rot:
+            return None
+        from viewer.photo_io import oriented_size
+        w0, h0 = oriented_size(path)
+        return (rot, float(w0), float(h0)) if w0 and h0 else None
 
     def _photo_rotate(self, delta: int = 90, absolute: int | None = None):
         """지금 사진을 돌린다 — 보기만(원본 사진은 그대로, 방향 저장 D17 은 따로). 폴더를 연 사진만 기억한다(사이드카가 폴더에 있다)."""
@@ -312,9 +318,6 @@ class PhotoMixin:
             mv._fit_mode = fit
             self._photo_after_open(Path(cur))
             mv._render_current()
-        if new and self.__dict__.get("_photo_rot_told") is None:
-            self._photo_rot_told = True
-            self.status.showMessage(tr("돌린 사진에는 선·도형·글·사진 꾸밈이 보이지 않습니다 — 원래 방향으로 돌리면 다시 보입니다."), 6000)
 
     def _photo_is_broken(self) -> bool:
         return bool(getattr(getattr(self.main_view, "_doc", None), "is_broken", False))
@@ -416,7 +419,7 @@ class PhotoMixin:
         bar = getattr(self.main_view, "_draw_bar", None)
         if bar is not None:
             bar.setEnabled(bool(ok))
-            bar.setToolTip("" if ok else tr("돌린 사진에는 꾸밀 수 없습니다 — 원래 방향으로 돌리면 됩니다."))
+            bar.setToolTip("" if ok else tr("열 수 없는 파일에는 꾸밀 수 없습니다."))
 
     def _photo_context_menu(self, global_pos):
         """사진 본문 우클릭 — 돌리기·맞춤(4.16). PDF 의 쪽 메뉴(쪽 번호·숨김·책갈피 …)는 사진에 뜻이 없다."""
@@ -467,9 +470,9 @@ class PhotoMixin:
         if not photo_io_is_jpeg(cur):
             self.status.showMessage(tr("방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."), 5000)
             return
-        st = self._ensure_page_meta_store()
-        if st is not None and (st.pages_with_drawings(cur) or st.pages_with_images(cur)):
-            self.status.showMessage(tr("꾸밈이 있는 사진은 아직 방향을 저장하지 않습니다 — 꾸밈 자리가 어긋납니다."), 6000)
+        if self._in_edit() and getattr(self, "_edit_dirty", False):
+            # 꾸밈 좌표를 함께 옮겨 바로 써야 한다(4.19) — 저장 대기 중인 편집을 같이 내보내지 않게 먼저 저장하게 한다
+            self.status.showMessage(tr("저장하지 않은 편집이 있습니다 — 먼저 [저장] 한 뒤 방향을 저장하세요."), 6000)
             return
         from viewer.workers import run_in_thread
         self._photo_orient_busy = True
@@ -489,6 +492,8 @@ class PhotoMixin:
             return
         st = self._ensure_page_meta_store()
         if st is not None:
+            rot = st.photo_rotation(path)
+            self._photo_move_decorations(st, path, rot)          # 회전 0 판이 바뀌었다 — 꾸밈도 같은 만큼(4.19)
             st.set_photo_rotation(path, 0)
             st.save_photo_rotation()
         strip = self._photo_strip_widget(create=False)
@@ -503,6 +508,26 @@ class PhotoMixin:
                 self._photo_after_open(Path(cur))
                 mv._render_current()
         self.status.showMessage(tr("방향을 원본 사진에 저장했습니다: {name}").format(name=Path(path).name), 5000)
+
+    def _photo_move_decorations(self, st, path, rot: int):
+        """방향을 파일에 저장한 뒤 — 사이드카의 꾸밈(쪽 0)을 새 회전 0 판으로 옮겨 바로 쓴다.
+        `oriented_size` 는 이미 새 방향이라 돌리기 전 크기는 맞바꿔 구한다."""
+        if not rot:
+            return
+        from viewer import photo_deco
+        from viewer.photo_io import oriented_size
+        w1, h1 = oriented_size(path)
+        w0, h0 = (h1, w1) if rot in (90, 270) else (w1, h1)
+        moved = False
+        for p0 in sorted(set(st.pages_with_drawings(path)) | set(st.pages_with_images(path))):
+            d = st.get_drawings(path, p0)
+            if d:
+                st.set_drawings(path, p0, photo_deco.rotate_strokes(d, rot, w0, h0)); moved = True
+            im = st.get_images(path, p0)
+            if im:
+                st.set_images(path, p0, photo_deco.rotate_images(im, rot, w0, h0)); moved = True
+        if moved:
+            st.save()
 
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""

@@ -8587,13 +8587,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.status.showMessage(tr('스크린샷 (좌/우): {name}, {name1}').format(name=saved_l.name, name1=saved_r.name), 4000)
             else:
                 saved = ss.save_screenshot(pix, source_name=src_name)
+                # 261104-3(사진 보기 SOT 4.5): 사진 위에서 잡았으면 원본 사진 경로를 카드에 — PDF 저장은 잡은 그림 그대로(확대 중이면 일부라서)
+                src_photo = cur if (cur and getattr(getattr(view, "_doc", None), "is_photo", False)
+                                    and not getattr(view._doc, "is_broken", False)) else None
                 self.shot_strip.add_item(
                     str(saved), kind="image", label=Path(src_name).stem,
                     thumb_pdf_path=cur if is_pdf else None,
                     src_pdf=cur if is_pdf else None,
                     src_page=cur_page,
                     src_query=cur_query, src_mode=cur_mode,
-                    prepend=False,
+                    prepend=False, src_photo=src_photo,
                 )
                 self.status.showMessage(tr('스크린샷 저장: {name}').format(name=saved.name), 4000)
             # 260606-19: 드로어에 있으면 슬라이드 표시(1.5초 자동 접기), 아니면 패널 표시

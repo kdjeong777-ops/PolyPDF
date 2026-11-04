@@ -870,14 +870,20 @@ class EditMixin:
 
     # ===== 260609-22(J3): 본화면 선긋기 =================================
     def _drawings_for(self, path, page0):
-        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
-            return []
         st = self._ensure_page_meta_store()
-        return st.get_drawings(path, page0) if st else []
+        got = st.get_drawings(path, page0) if st else []
+        fr = self._photo_deco_frame(path) if getattr(self, "_photo_deco_frame", None) else None
+        if fr:                                   # 261104-3(사진 보기 SOT 4.19): 돌린 사진 — 회전 0 판 좌표를 돌려 보인다
+            from viewer import photo_deco
+            got = photo_deco.rotate_strokes(got, *fr)
+        return got
 
     def _set_drawings(self, path, page0, strokes):
-        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
-            return                       # 회전 0 판 좌표를 돌린 쪽 위 좌표로 덮어쓰지 않는다
+        fr = self._photo_deco_frame(path) if getattr(self, "_photo_deco_frame", None) else None
+        if fr:                                   # 261104-3(사진 보기 SOT 4.19): 돌린 쪽 위 좌표를 회전 0 판으로 되돌려 남긴다
+            from viewer import photo_deco
+            rot, w0, h0 = fr
+            strokes = photo_deco.rotate_strokes(strokes, photo_deco.inverse(rot), *((h0, w0) if rot in (90, 270) else (w0, h0)))
         st = self._ensure_page_meta_store()
         if not st:
             return
@@ -888,10 +894,13 @@ class EditMixin:
 
     # 260611-15: 삽입 이미지(주석) page_meta 연동
     def _images_for(self, path, page0):
-        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
-            return []
         st = self._ensure_page_meta_store()
-        return st.get_images(path, page0) if st else []
+        got = st.get_images(path, page0) if st else []
+        fr = self._photo_deco_frame(path) if getattr(self, "_photo_deco_frame", None) else None
+        if fr:                                   # 261104-3(사진 보기 SOT 4.19)
+            from viewer import photo_deco
+            got = photo_deco.rotate_images(got, *fr)
+        return got
 
     def _thumb_images_for(self, page0):
         """260611-18(A5): 썸네일 베이킹용 — 현재 표시 파일의 page0 삽입 이미지."""
@@ -904,8 +913,11 @@ class EditMixin:
         return self._images_for(str(f), int(page0))
 
     def _set_images(self, path, page0, images):
-        if getattr(self, "_photo_rot_blocks", None) and self._photo_rot_blocks(path):   # 261104-3(사진 보기 SOT 4.16): 돌린 사진
-            return
+        fr = self._photo_deco_frame(path) if getattr(self, "_photo_deco_frame", None) else None
+        if fr:                                   # 261104-3(사진 보기 SOT 4.19)
+            from viewer import photo_deco
+            rot, w0, h0 = fr
+            images = photo_deco.rotate_images(images, photo_deco.inverse(rot), *((h0, w0) if rot in (90, 270) else (w0, h0)))
         st = self._ensure_page_meta_store()
         if not st:
             return

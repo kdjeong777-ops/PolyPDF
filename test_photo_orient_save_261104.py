@@ -6,7 +6,7 @@ A. 돌린 JPEG 을 저장하면 EXIF 방향 태그만 바뀐다 — 그림 자�
    보기 회전(`photo_rot`)은 지워지고 본문은 그 방향 그대로 보인다
 B. 이미 방향이 있는 사진(6)을 왼쪽으로 돌려 저장하면 1 — 방향 합성
 C. JPEG 이 아니면(`.jpg` 이름의 PNG 포함) 저장하지 않는다 — 파일 그대로
-D. 꾸밈이 있는 사진은 저장하지 않는다 — 파일 그대로
+D. 꾸밈이 있는 사진도 저장한다 — 꾸밈(사이드카)도 새 회전 0 판으로 함께 옮겨진다(4.19)
 E. 바꿔치기가 끝내 거부되면 원본 그대로·임시 파일 지움·보기 회전 그대로
 F. 파일 작업(`os.replace`)은 메인 스레드에서 하지 않는다(마스터 §4.7.5·응답성 SOT)
 """
@@ -127,11 +127,19 @@ try:
     chk(Path(c).read_bytes() == raw[c] and st.photo_rotation(c) == 90, "C JPEG 아니면 파일 그대로·보기 회전만")
 
     # D
-    st.set_drawings(d, 0, [{"kind": "line", "pts": [[0.1, 0.1], [0.9, 0.1]], "pen": 0}]); st.save()
+    st.set_drawings(d, 0, [{"points": [[0.1, 0.1], [0.9, 0.1]], "pen": 0, "width": 3}])
+    st.set_images(d, 0, [{"data": "", "rect": [0.0, 0.0, 0.25, 0.5], "shape": "rect", "alpha": 100, "rot": 0}]); st.save()
     mw._on_bookmark_activated(d, 0); pump(timeout=0.5)
     mw._photo_rotate(+90); pump(timeout=0.5)
     save_and_wait()
-    chk(Path(d).read_bytes() == raw[d], "D 꾸밈이 있는 사진은 파일 그대로")
+    with Image.open(d) as im:
+        chk(im.getexif().get(0x0112) == 6, "D 꾸밈이 있어도 방향 태그 저장")
+    pts = [[round(x, 4), round(y, 4)] for x, y in st.get_drawings(d, 0)[0]["points"]]
+    chk(pts == [[0.9, 0.1], [0.9, 0.9]], "D 선도 새 판으로 옮겨진다", str(pts))
+    img = (st.get_images(d, 0) or [{}])[0]
+    chk([round(v, 4) for v in img.get("rect", [])] == [0.5, 0.0, 0.5, 0.25] and round(img.get("rot", 0)) == 90,
+        "D 삽입 그림은 중심을 옮기고 픽셀 크기 그대로·rot 90", str(img.get("rect")) + " rot=" + str(img.get("rot")))
+    chk(st.photo_rotation(d) == 0, "D 보기 회전 지움")
 
     # E
     mw._on_bookmark_activated(e, 0); pump(timeout=0.5)
