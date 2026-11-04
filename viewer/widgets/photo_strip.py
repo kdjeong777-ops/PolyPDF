@@ -232,16 +232,33 @@ class PhotoStrip(QListWidget):
         try:
             self.clear()
             for p in paths:
-                it = QListWidgetItem(self._placeholder, label_text(p))
-                it.setData(_PATH_ROLE, p)
-                it.setToolTip(Path(p).name)
-                it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-                self.addItem(it)
-                self._items[p] = it
+                self._add_item(p)
         finally:
             self.blockSignals(False)
             self.setUpdatesEnabled(True)
         self.set_current(current)
+        self._restart_from_visible()
+
+    def _add_item(self, p: str) -> None:
+        it = QListWidgetItem(self._placeholder, label_text(p))
+        it.setData(_PATH_ROLE, p)
+        it.setToolTip(Path(p).name)
+        it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        self.addItem(it)
+        self._items[p] = it
+
+    def append_paths(self, paths) -> None:
+        """끝에 더한다 — 다시 만들지 않는다(휴대 장치에서 한 장씩 받아 오는 동안, 사진 보기 SOT 4.33)."""
+        new = [str(p) for p in paths if str(p) not in self._items]
+        if not new:
+            return
+        self.blockSignals(True)
+        try:
+            for p in new:
+                self._paths.append(p)
+                self._add_item(p)
+        finally:
+            self.blockSignals(False)
         self._restart_from_visible()
 
     def set_current(self, path: str | None) -> None:

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 16:52+0900\n"
+"POT-Creation-Date: 2026-11-04 18:23+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3974,6 +3974,14 @@ msgid "일괄 작업"
 msgstr "Batch"
 
 #: viewer/photo_controller.py
+msgid "PC 로 복사할 폴더"
+msgstr "Folder to Copy to PC"
+
+#: viewer/photo_controller.py
+msgid "PC 로 복사"
+msgstr "Copy to PC"
+
+#: viewer/photo_controller.py
 msgid "PDF 모드로 바꾸기"
 msgstr "Switch to PDF mode"
 
@@ -4103,6 +4111,15 @@ msgid "움직이는 그림 재생·멈춤"
 msgstr "Play / stop animation"
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 연결이 끊겼습니다 — 복사한 사진만 보입니다."
+msgstr "{dev}: Disconnected — only the photos already copied are shown."
+
+#: viewer/photo_controller.py
+msgid "이 폴더에는 사진이 없습니다."
+msgstr "There are no photos in this folder."
+
+#: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr "Only photos selected from an opened folder can be rotated."
 
@@ -4151,12 +4168,20 @@ msgid "공유용 사본 (정보 모두 지움)"
 msgstr "Copy for Sharing (Remove All Info)"
 
 #: viewer/photo_controller.py
+msgid "PC 로 복사..."
+msgstr "Copy to PC..."
+
+#: viewer/photo_controller.py
 msgid "2분할 함께 움직이기"
 msgstr "Move Split Panes Together"
 
 #: viewer/photo_controller.py
 msgid "편집 모드에서 지울 수 있습니다."
 msgstr "You can delete in edit mode."
+
+#: viewer/photo_controller.py
+msgid "휴대 장치 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄·PC 로 복사만 됩니다."
+msgstr "Photos on a portable device are read-only — you can view, copy, make a PDF, print, and copy to PC."
 
 #: viewer/photo_controller.py
 msgid "zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."
@@ -4217,6 +4242,21 @@ msgstr "Batch — {n} photos"
 #, python-brace-format
 msgid "사진 {n}장의 이름을 바꿨습니다."
 msgstr "Renamed {n} photos."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 장치를 열 수 없습니다 — 잠금을 풀고 '이 컴퓨터 신뢰' 를 누른 뒤 🔄 를 누르세요."
+msgstr "{dev}: Can't open the device — unlock it, tap 'Trust This Computer', then press 🔄."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 사진을 받는 동안 응답이 없습니다 — 연결을 확인하세요. 복사한 사진만 보입니다."
+msgstr "{dev}: No response while receiving photos — check the connection. Only the photos already copied are shown."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev} 에서 사진을 받는 중… {folder}"
+msgstr "Receiving photos from {dev}… {folder}"
 
 #: viewer/photo_controller.py
 msgid "마지막 사진입니다."
@@ -4289,6 +4329,16 @@ msgstr "A name already exists, so nothing was renamed: {name}"
 msgid "새 파일 {n}장을 만들었습니다."
 msgstr "Made {n} new files."
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 사진 {n}장(읽기 전용)"
+msgstr "{dev}: {n} photos (read-only)"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 복사했습니다: {dest}"
+msgstr "Copied {n} photos: {dest}"
+
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
 msgstr "Cannot open this file"
@@ -4337,6 +4387,10 @@ msgid "사진 바꾸는 중"
 msgstr "Converting photos"
 
 #: viewer/photo_controller.py
+msgid "PC 로 복사하는 중"
+msgstr "Copying to PC"
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "고른 사진 {n}장 왼쪽으로 90° 돌리기"
 msgstr "Rotate {n} Selected Photos 90° Left"
@@ -4350,6 +4404,11 @@ msgstr "Rotate {n} Selected Photos 90° Right"
 #, python-brace-format
 msgid "고른 사진 {n}장으로 PDF 만들기..."
 msgstr "Make PDF from {n} selected photos..."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "PC 로 복사 ({n}장)..."
+msgstr "Copy to PC ({n})..."
 
 #: viewer/photo_controller.py
 #, python-brace-format

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 16:52+0900\n"
+"POT-Creation-Date: 2026-11-04 18:23+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3837,6 +3837,14 @@ msgid "일괄 작업"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "PC 로 복사할 폴더"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "PC 로 복사"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "PDF 모드로 바꾸기"
 msgstr ""
 
@@ -3966,6 +3974,15 @@ msgid "움직이는 그림 재생·멈춤"
 msgstr ""
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 연결이 끊겼습니다 — 복사한 사진만 보입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "이 폴더에는 사진이 없습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr ""
 
@@ -4014,11 +4031,19 @@ msgid "공유용 사본 (정보 모두 지움)"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "PC 로 복사..."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "2분할 함께 움직이기"
 msgstr ""
 
 #: viewer/photo_controller.py
 msgid "편집 모드에서 지울 수 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "휴대 장치 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄·PC 로 복사만 됩니다."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4079,6 +4104,21 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 {n}장의 이름을 바꿨습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 장치를 열 수 없습니다 — 잠금을 풀고 '이 컴퓨터 신뢰' 를 누른 뒤 🔄 를 누르세요."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 사진을 받는 동안 응답이 없습니다 — 연결을 확인하세요. 복사한 사진만 보입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev} 에서 사진을 받는 중… {folder}"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4152,6 +4192,16 @@ msgstr ""
 msgid "새 파일 {n}장을 만들었습니다."
 msgstr ""
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{dev}: 사진 {n}장(읽기 전용)"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 복사했습니다: {dest}"
+msgstr ""
+
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
 msgstr ""
@@ -4200,6 +4250,10 @@ msgid "사진 바꾸는 중"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "PC 로 복사하는 중"
+msgstr ""
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "고른 사진 {n}장 왼쪽으로 90° 돌리기"
 msgstr ""
@@ -4212,6 +4266,11 @@ msgstr ""
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "고른 사진 {n}장으로 PDF 만들기..."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "PC 로 복사 ({n}장)..."
 msgstr ""
 
 #: viewer/photo_controller.py
