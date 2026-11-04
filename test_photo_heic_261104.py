@@ -7,6 +7,7 @@ B. 있으면: 처음 만날 때 한 번 등록, 크기는 보이는 대로(48×6
 C. 사진 문서로 열고 그리면 원래 위(빨강)가 오른쪽
 D. 사진 → PDF: PyMuPDF 가 HEIC 를 못 열어도 바로 세운 JPEG 으로 들어가고, EXIF(GPS)는 싣지 않는다
 E. 사진 썸네일 줄의 줄여 읽기도 된다
+F. 아이폰이 내보낸 **.JPG 이름의 HEIC**(파일 머리 `ftypheic`)도 HEIC 로 알아본다 — 크기·사진 문서·PDF 만들기(사용자 표본 51장 중 25장이 이랬다)
 """
 import base64, io, os, sys, tempfile, shutil
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -78,6 +79,14 @@ try:
     chk(n == 1 and (round(pg.rect.width), round(pg.rect.height)) == (48, 64), "D HEIC → PDF 쪽(48×64)")
     chk(info["ext"] in ("jpeg", "jpg") and not ex.get_ifd(0x8825), "D JPEG 으로 들어가고 GPS 없음", str(info["ext"]))
     d.close()
+
+    # F — .JPG 이름의 HEIC
+    pj = tmp / "IMG_0001.JPG"
+    pj.write_bytes(base64.b64decode(HEIC_B64))
+    chk(photo_io.is_heif(pj) and photo_io.oriented_size(pj) == (48, 64), "F .JPG 이름의 HEIC 를 머리로 알아본다")
+    dj = PhotoDocument(pj); dj.render_scaled(0, 1.0); dj.close()
+    out2 = tmp / "묶음2.pdf"
+    chk(image_page.images_to_pdf([pj], out2) == 1, "F .JPG 이름의 HEIC 도 PDF 로 들어간다")
 
     # E
     from viewer.widgets.photo_strip import load_thumb

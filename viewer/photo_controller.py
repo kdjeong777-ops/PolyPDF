@@ -47,6 +47,8 @@ class PhotoMixin:
         lay.addStretch(1)                         # 빈 칸은 단추 뒤에서 늘어난다 — 탭 줄 가운데는 그대로(디자인 SOT §2.9.3)
         self._photo_btn = b
         self.bookmark_tree.filesListed.connect(self._photo_on_listed)
+        from viewer import photo_doc
+        photo_doc.set_decode_requester(self._photo_request_decode)
         self._photo_refresh_button()
         self._photo_apply_view_kind(restore=True)
 
@@ -268,6 +270,27 @@ class PhotoMixin:
             return
         self._on_bookmark_activated(lst[j], 0)
 
+    def _photo_request_decode(self, path, box: int):
+        """사진 문서가 메인에서 풀리지 않은 사진을 그리려 할 때 — 배경에서 풀고, 끝나면 그 사진이 아직 본문이면 다시 그린다."""
+        from viewer.workers import run_in_thread
+        key = (str(path), int(box))
+        pend = self.__dict__.setdefault("_photo_decoding", set())
+        if key in pend:
+            return
+        pend.add(key)
+        w = PhotoPreloadWorker([str(path)], box=int(box))
+
+        def _done(k=key, p=str(path)):
+            pend.discard(k)
+            try:
+                cur = self.main_view.current_file() if self.main_view else None
+                if cur and str(cur) == p:
+                    self.main_view._render_current()
+            except Exception:
+                pass
+        w.finished.connect(_done)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
     def _photo_preload_neighbors(self, cur: str):
         from viewer.workers import run_in_thread
         lst = self._photo_list()
@@ -290,9 +313,10 @@ class PhotoPreloadWorker(QObject):
     """다음·이전 사진을 배경에서 미리 푼다(사진 보기 SOT §6.4) — 응답성 SOT §4.4 감사표의 한 행."""
     finished = pyqtSignal()
 
-    def __init__(self, paths):
+    def __init__(self, paths, box: int | None = None):
         super().__init__()
         self.paths = list(paths)
+        self.box = box
         self._cancel = False
 
     def request_cancel(self):
@@ -304,7 +328,7 @@ class PhotoPreloadWorker(QObject):
             for p in self.paths:
                 if self._cancel:
                     break
-                photo_doc.preload(p)
+                photo_doc.preload(p) if self.box is None else photo_doc.preload(p, self.box)
                 pacing.pace(self)
         finally:
             self.finished.emit()

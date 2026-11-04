@@ -26,8 +26,20 @@ HEIF_EXTS = (".heic", ".heif")
 _HEIF_STATE = {"tried": False, "ok": False}
 
 
+# 아이폰은 HEIC 를 **.JPG 이름으로** 내보내기도 한다(사용자 표본 `_samples\pix` 51장 중 25장, 261104-2) — 확장자가 아니라 머리를 본다
+_HEIF_BRANDS = (b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1")
+
+
 def is_heif(path) -> bool:
-    return Path(str(path)).suffix.lower() in HEIF_EXTS
+    """HEIC/HEIF 인가 — 확장자 또는 **파일 머리**(ISO BMFF `ftyp` 의 HEIF 상표). 머리는 16바이트만 읽는다."""
+    if Path(str(path)).suffix.lower() in HEIF_EXTS:
+        return True
+    try:
+        with open(str(path), "rb") as fh:
+            head = fh.read(16)
+    except OSError:
+        return False
+    return len(head) >= 12 and head[4:8] == b"ftyp" and head[8:12] in _HEIF_BRANDS
 
 
 def heif_ready() -> bool:

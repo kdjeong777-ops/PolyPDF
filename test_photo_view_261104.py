@@ -8,6 +8,8 @@ C. PDF 전용 가드가 그대로 꺼 준다 — 쪽 편집 저장 대상 아님
 D. 경계 넘김(휠·PageDown 의 파일 경계)은 **묻지 않고** 책갈피창 차례 다음 사진, 끝이면 그대로(상태 표시줄 알림)
 E. 24 MP 사진을 열고 넘기는 동안 하트비트 최장 공백 < 1초(응답성 SOT §7.1) — 앞뒤 사진은 배경에서 미리 푼다
 F. PDF 모드에서는 종전대로(그림은 스크린샷 보기 `load_image`) — 사진 문서를 쓰지 않는다
+G. 미리 풀어 두지 않은 큰 사진을 바로 열어도 메인에서 풀지 않는다 — 임시 그림(썸네일 캐시 또는 회색)을 먼저 보이고 배경에서 푼 뒤 다시 그린다
+   (사용자 표본 아이폰 HEIC 24 MP 는 풀기에 0.7~0.9초 — 메인에서 풀면 기준 1초에 바짝 닿는다)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -115,6 +117,22 @@ try:
     chk(Path(mw.main_view.current_file()).name == "3 큰 사진.jpg", "D 그다음 사진")
     mw._on_file_boundary(+1, mw._active_pane); pump()
     chk(Path(mw.main_view.current_file()).name == "3 큰 사진.jpg", "D 목록 끝이면 그대로(처음으로 돌지 않는다)")
+    # G — 미리 풀지 않은 큰 사진을 바로
+    from viewer import photo_doc
+    photo_doc.forget_decoded()
+    from viewer.pdf_doc import GLOBAL_PAGE_CACHE
+    GLOBAL_PAGE_CACHE.clear()                       # 앞서 넘길 때 그린 그림이 남아 있으면 풀 일이 없다
+    beats["last"] = time.perf_counter(); worst_before = beats["worst"]; beats["worst"] = 0.0
+    big = str(tmp / "2 큰 사진.jpg")
+    mw._on_bookmark_activated(big, 0); app.processEvents()
+    g_gap = beats["worst"]
+    chk(pump(lambda: photo_doc.decoded_ready(big, 100) is not None, timeout=10), "G 배경에서 풀린다")
+    pump(timeout=0.5)
+    item = mw.main_view._page_item
+    chk(item is not None and not item.pixmap().isNull(), "G 풀린 뒤 본문을 다시 그린다")
+    print("     미리 안 푼 24 MP 바로 열기 — 그동안 최장 공백 %.3f초" % g_gap)
+    chk(g_gap < 0.3, "G 메인에서 풀지 않는다(최장 공백 0.3초 미만)", "%.3f초" % g_gap)
+    beats["worst"] = max(beats["worst"], worst_before)
     hb.stop()
     print("     하트비트 최장 공백 %.3f초 · 미리 푼 사진으로 넘김 %.3f초" % (beats["worst"], t_next))
     chk(beats["worst"] < 1.0, "E 24 MP 열기·넘김 동안 최장 공백 < 1초", "%.3f초" % beats["worst"])

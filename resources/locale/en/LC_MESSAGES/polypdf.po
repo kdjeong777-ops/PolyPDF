@@ -3142,6 +3142,11 @@ msgstr "No component can read this format: {name}"
 
 #: viewer/app.py
 #, python-brace-format
+msgid "그림을 읽을 수 없습니다: {name}"
+msgstr "Cannot read this picture: {name}"
+
+#: viewer/app.py
+#, python-brace-format
 msgid "· {p}쪽: {r}\n"
 msgstr "· p.{p}: {r}\n"
 

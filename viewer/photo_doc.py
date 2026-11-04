@@ -69,6 +69,42 @@ def decoded(path, box: int):
     return im
 
 
+def decoded_ready(path, box: int):
+    """이미 풀어 둔 그림이 `box` 에 넉넉하면 그것, 아니면 None — **기다리지 않는다**(메인 스레드용)."""
+    tag = _tag(Path(path))
+    with _LOCK:
+        got = _DECODED.get(tag)
+        if got is not None:
+            _DECODED.move_to_end(tag)
+    if got is None:
+        return None
+    im, have = got
+    return im if (have >= box or max(im.size) < have) else None
+
+
+_REQUESTER = {"fn": None}
+
+
+def set_decode_requester(fn) -> None:
+    """메인 스레드가 풀리지 않은 사진을 그려야 할 때 부를 함수(경로, 긴 변) — 앱이 배경 해독을 띄우고 끝나면 다시 그린다."""
+    _REQUESTER["fn"] = fn
+
+
+def _provisional(path: Path, tw: int, th: int):
+    """풀리기 전 임시 그림 — 썸네일 캐시가 있으면 그것을 키우고, 없으면 회색. 렌더 캐시에 넣지 않는다."""
+    from PIL import Image
+    try:
+        from viewer.widgets.photo_strip import cache_dir, cache_key
+        key = cache_key(str(path))
+        f = cache_dir() / (key + ".jpg") if key else None
+        if f is not None and f.is_file():
+            with Image.open(str(f)) as im:
+                return im.convert("RGB").resize((tw, th))
+    except Exception:
+        pass
+    return Image.new("RGB", (tw, th), (128, 128, 128))
+
+
 def preload(path, box: int = PRELOAD_BOX) -> None:
     """배경 스레드에서 부른다 — 다음·이전 사진을 미리 풀어 둔다. 실패는 조용히(보일 때 다시 푼다)."""
     try:
@@ -176,7 +212,16 @@ class PhotoDocument:
             got = self.cache.get(key)
             if got is not None:
                 return got
-        im = decoded(self.path, max(tw, th))
+        need = max(tw, th)
+        im = decoded_ready(self.path, need)
+        if im is None:
+            req = _REQUESTER["fn"]
+            if req is not None and threading.current_thread() is threading.main_thread():
+                # 메인에서 큰 사진(HEIC 24 MP 0.7~0.9초, 사용자 표본)을 풀지 않는다 — 임시 그림을 주고 배경에 맡긴다(응답성 SOT §6)
+                req(self.path, need)
+                tmp = _provisional(self.path, tw, th)
+                return RenderedPage(width=tw, height=th, samples=tmp.tobytes(), page_rect=(0.0, 0.0, float(w), float(h)))
+            im = decoded(self.path, need)
         if im.size != (tw, th):
             from PIL import Image
             im = im.resize((tw, th), Image.Resampling.LANCZOS if max(tw, th) < max(im.size) else Image.Resampling.BICUBIC)

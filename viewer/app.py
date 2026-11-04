@@ -7443,6 +7443,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 except PhotoFormatMissing:
                     self.status.showMessage(tr("이 형식을 읽는 구성 요소가 없습니다: {name}").format(name=path.name), 6000)
                     return
+                except (ValueError, OSError):
+                    # 확장자만 그림이고 내용이 아닌 파일(아이폰 라이브 포토의 영상이 .JPG 이름으로 — 사용자 표본) 등
+                    self.status.showMessage(tr("그림을 읽을 수 없습니다: {name}").format(name=path.name), 6000)
+                    return
                 self._photo_after_open(path)
             else:
                 self.main_view.load_image(path)
