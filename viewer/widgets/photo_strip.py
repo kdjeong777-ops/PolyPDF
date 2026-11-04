@@ -134,6 +134,7 @@ class PhotoThumbWorker(QObject):
 class PhotoStrip(QListWidget):
     """사진 썸네일 줄 — 한 칸 = 사진 하나, 아래 줄에 이름(확장자 없이)."""
     photoActivated = pyqtSignal(str)
+    menuRequested = pyqtSignal(str, object)       # 261104-3(사진 보기 SOT 4.20): 우클릭 — (사진 경로, 전역 위치)
 
     def __init__(self, icon_w: int = 130, parent=None):
         super().__init__(parent)
@@ -163,6 +164,9 @@ class PhotoStrip(QListWidget):
         self._rescan.timeout.connect(self._restart_from_visible)
         self.verticalScrollBar().valueChanged.connect(lambda _v: self._rescan.start())
         self.itemClicked.connect(self._on_clicked)
+        self.rotation_provider = None             # 경로 → 보기 회전(시계 방향 도) — 앱이 넣는다(4.16 의 photo_rot 를 썸네일에도)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._on_menu)
         # 261104-3(사용자 보고 '썸네일을 위아래로 이동할 경우 본화면이 안 바뀜'): 클릭만 이었다 — 지금 칸이 바뀌면(키) 본문도.
         #   앱이 고르는 칸(set_current·set_paths)은 신호를 막아 되먹임이 없다.
         self._key_pick = QTimer(self)
@@ -267,6 +271,15 @@ class PhotoStrip(QListWidget):
         it.setText(label_text(path, w, h, unreadable=img.isNull() and not w))
         if img.isNull():
             return
+        rot = 0
+        if self.rotation_provider is not None:
+            try:
+                rot = int(self.rotation_provider(path) or 0) % 360
+            except Exception:
+                rot = 0
+        if rot:
+            from PyQt6.QtGui import QTransform
+            img = img.transformed(QTransform().rotate(rot))      # 작은 썸네일만 — 가볍다
         pm = QPixmap.fromImage(img).scaled(self.iconSize(), Qt.AspectRatioMode.KeepAspectRatio,
                                            Qt.TransformationMode.SmoothTransformation)
         it.setIcon(QIcon(pm))
@@ -276,6 +289,12 @@ class PhotoStrip(QListWidget):
         p = it.data(_PATH_ROLE)
         if p:
             self.photoActivated.emit(str(p))
+
+    def _on_menu(self, pos):
+        it = self.itemAt(pos)
+        p = it.data(_PATH_ROLE) if it is not None else None
+        if p:
+            self.menuRequested.emit(str(p), self.viewport().mapToGlobal(pos))
 
     def _activate_current(self):
         it = self.currentItem()

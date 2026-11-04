@@ -2690,6 +2690,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.compressFilesRequested.connect(self.action_compress)    # 261014-21(마스터 §4.7.19)
             _bt.redactFileRequested.connect(self.action_redact)         # 261014-22(보안 SOT §14)
             _bt.compareFilesRequested.connect(self.action_compare)      # 261014-23(마스터 §4.11)
+            _bt.photoActionRequested.connect(self._photo_action)        # 261104-3(사진 보기 SOT 4.20)
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(
                 files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,

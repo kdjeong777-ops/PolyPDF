@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 13:18+0900\n"
+"POT-Creation-Date: 2026-11-04 13:25+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -952,7 +952,7 @@ msgstr ""
 msgid "📋 클립보드로 복사"
 msgstr "📋 Copy to clipboard"
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "열기"
 msgstr "Open"
 
@@ -4041,6 +4041,26 @@ msgstr "Item"
 msgid "값"
 msgstr "Value"
 
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "사진 복사"
+msgstr "Copy Photo"
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "경로 복사"
+msgstr "Copy Path"
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "파일 탐색기 열기"
+msgstr "Open in File Explorer"
+
+#: viewer/photo_controller.py
+msgid "사진 정보..."
+msgstr "Photo Info..."
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "PDF 로 만들기..."
+msgstr "Make PDF..."
+
 #: viewer/photo_controller.py
 msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
 msgstr "Orientation can be saved only for JPEG photos — this photo stays rotated in the view only."
@@ -4052,6 +4072,14 @@ msgstr "There are unsaved edits — press [Save] first, then save the orientatio
 #: viewer/photo_controller.py
 msgid "방향을 저장하지 못했습니다 — 원본은 그대로입니다."
 msgstr "Could not save the orientation — the original is unchanged."
+
+#: viewer/photo_controller.py
+msgid "경로를 복사했습니다."
+msgstr "Path copied."
+
+#: viewer/photo_controller.py
+msgid "사진을 복사하지 못했습니다."
+msgstr "Could not copy the photo."
 
 #: viewer/photo_controller.py
 msgid "마지막 사진입니다."
@@ -4070,6 +4098,15 @@ msgstr "A file that cannot be opened cannot be marked up."
 msgid "방향을 원본 사진에 저장했습니다: {name}"
 msgstr "Orientation saved to the original photo: {name}"
 
+#: viewer/photo_controller.py
+msgid "사진 복사 중…"
+msgstr "Copying photo…"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진을 복사했습니다: {name}"
+msgstr "Photo copied: {name}"
+
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
 msgstr "Cannot open this file"
@@ -4077,6 +4114,11 @@ msgstr "Cannot open this file"
 #: viewer/photo_controller.py
 msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
 msgstr "Another program is using the photo, so the orientation was not saved — the original is unchanged."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "줄의 사진 {n}장으로 PDF 만들기..."
+msgstr "Make PDF from the {n} photos in the strip..."
 
 #: viewer/photo_doc.py
 msgid "그림 형식이 아니거나 파일이 깨졌습니다."
@@ -5933,18 +5975,6 @@ msgid "책갈피는 편집 모드에서만 바꿀 수 있습니다."
 msgstr "Bookmarks can only be changed in edit mode."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "책갈피 모두 펼치기"
-msgstr "Expand All Bookmarks"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. 스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."
-msgstr "Expand the bookmarks of all files visible in the bookmarks panel. Files that appear when you scroll are expanded too (until 'Collapse All')."
-
-#: viewer/widgets/bookmark_tree.py
-msgid "책갈피 모두 접기"
-msgstr "Collapse All Bookmarks"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "현재 폴더를 즐겨찾기에 추가"
 msgstr "Add Current Folder to Favorites"
 
@@ -5987,10 +6017,6 @@ msgstr "Page:"
 #: viewer/widgets/bookmark_tree.py
 msgid "파일명 변경"
 msgstr "Rename File"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "파일명 (.pdf 제외):"
-msgstr "File name (without .pdf):"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. 메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"
@@ -6121,28 +6147,20 @@ msgid "대상 PDF 파일을 알 수 없습니다."
 msgstr "The target PDF file is unknown."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "파일 탐색기 열기"
-msgstr "Open in File Explorer"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "파일·책갈피 삭제"
 msgstr "Delete File/Bookmark"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."
-msgstr "Flatten annotations and inserted photos into the page content so other programs show them too."
+msgid "책갈피 모두 펼치기"
+msgstr "Expand All Bookmarks"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다."
-msgstr "Makes a new Word, Hangul, Excel, PowerPoint, image or text file — choose the format in the conversion window."
+msgid "책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. 스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."
+msgstr "Expand the bookmarks of all files visible in the bookmarks panel. Files that appear when you scroll are expanded too (until 'Collapse All')."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "개인정보 지우고 별도 저장..."
-msgstr "Remove personal data and save separately..."
-
-#: viewer/widgets/bookmark_tree.py
-msgid "고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."
-msgstr "Makes a new file with the chosen areas and personal data such as ID and phone numbers actually removed (the original stays)."
+msgid "책갈피 모두 접기"
+msgstr "Collapse All Bookmarks"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "폴더 이름 변경..."
@@ -6238,6 +6256,14 @@ msgid "편집할 항목 1개를 선택하세요."
 msgstr "Select one item to edit."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "파일명 (확장자 제외):"
+msgstr "File name (without extension):"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "파일명 (.pdf 제외):"
+msgstr "File name (without .pdf):"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "파일명에 사용할 수 없는 글자가 있습니다."
 msgstr "The file name contains characters that can't be used."
 
@@ -6282,24 +6308,24 @@ msgid "편집 모드를 켜고 계속할까요?"
 msgstr "Turn on edit mode and continue?"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "두 파일 비교..."
-msgstr "Compare two files..."
+msgid "꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."
+msgstr "Flatten annotations and inserted photos into the page content so other programs show them too."
 
 #: viewer/widgets/bookmark_tree.py
-msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
-msgstr "Shows the changes between two PDFs side by side in split view (older = the file modified earlier)."
+msgid "Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다."
+msgstr "Makes a new Word, Hangul, Excel, PowerPoint, image or text file — choose the format in the conversion window."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "개인정보 지우고 별도 저장..."
+msgstr "Remove personal data and save separately..."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."
+msgstr "Makes a new file with the chosen areas and personal data such as ID and phone numbers actually removed (the original stays)."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
 msgstr "Arrange the selected bookmarks and their children in page order and match their level to the bookmark above"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "번역..."
-msgstr "Translate..."
-
-#: viewer/widgets/bookmark_tree.py
-msgid "번역 용어집 교정..."
-msgstr "Review Translation Glossary..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -6429,13 +6455,24 @@ msgstr "File missing: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "선택 {n}개 파일 병합..."
-msgstr "Merge {n} Selected Files..."
+msgid "고른 사진 {n}장으로 PDF 만들기..."
+msgstr "Make PDF from {n} selected photos..."
 
 #: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "PDF 파일 {n}개를 휴지통으로 보냅니다."
-msgstr "Move {n} PDF files to the Recycle Bin."
+msgid "두 파일 비교..."
+msgstr "Compare two files..."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
+msgstr "Shows the changes between two PDFs side by side in split view (older = the file modified earlier)."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "번역..."
+msgstr "Translate..."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "번역 용어집 교정..."
+msgstr "Review Translation Glossary..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -6587,8 +6624,8 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "선택 {n}개 파일 번역..."
-msgstr "Translate {n} Selected Files..."
+msgid "선택 {n}개 파일 병합..."
+msgstr "Merge {n} Selected Files..."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -6602,22 +6639,23 @@ msgstr "Move Files ({n})"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "변환 ({n}개 파일)..."
-msgstr "Convert ({n} files)..."
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
 msgid "선택 책갈피 {_n_bm}개 페이지순 정렬"
 msgstr "Sort {_n_bm} Selected Bookmarks by Page"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "이 PDF 의 번역 용어집이 없습니다(먼저 번역)."
-msgstr "This PDF has no translation glossary (translate it first)."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "새 폴더: {name} — 파일 복사·이동의 대상으로 고를 수 있습니다."
 msgstr "New folder: {name} — you can pick it as a copy/move target."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "사진 {n}장을 휴지통으로 보냅니다."
+msgstr "Move {n} photos to the Recycle Bin."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "PDF 파일 {n}개를 휴지통으로 보냅니다."
+msgstr "Move {n} PDF files to the Recycle Bin."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -6648,6 +6686,20 @@ msgstr "{name}: original missing"
 #, python-brace-format
 msgid "bookmarks.json 읽기 실패: {e}"
 msgstr "Failed to read bookmarks.json: {e}"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "선택 {n}개 파일 번역..."
+msgstr "Translate {n} Selected Files..."
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "변환 ({n}개 파일)..."
+msgstr "Convert ({n} files)..."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "이 PDF 의 번역 용어집이 없습니다(먼저 번역)."
+msgstr "This PDF has no translation glossary (translate it first)."
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format

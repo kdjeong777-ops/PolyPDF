@@ -122,6 +122,8 @@ class PhotoMixin:
             from viewer.widgets.photo_strip import PhotoStrip
             s = PhotoStrip(getattr(self.page_thumbs, "_icon_w", 130), self.page_thumbs)
             s.photoActivated.connect(lambda p: self._on_bookmark_activated(p, 0))
+            s.menuRequested.connect(self._photo_strip_menu)          # 261104-3(4.20)
+            s.rotation_provider = self._photo_rot_for
             self._photo_strip = s
         return s
 
@@ -298,10 +300,26 @@ class PhotoMixin:
         w0, h0 = oriented_size(path)
         return (rot, float(w0), float(h0)) if w0 and h0 else None
 
-    def _photo_rotate(self, delta: int = 90, absolute: int | None = None):
-        """지금 사진을 돌린다 — 보기만(원본 사진은 그대로, 방향 저장 D17 은 따로). 폴더를 연 사진만 기억한다(사이드카가 폴더에 있다)."""
-        cur = self.main_view.current_file() if self.main_view else None
-        if not cur or not self._is_photo_path(cur) or self._photo_is_broken():
+    def _photo_rotate(self, delta: int = 90, absolute: int | None = None, path=None):
+        """사진을 돌린다 — 보기만(원본 사진은 그대로, 방향 저장 D17 은 따로). 폴더를 연 사진만 기억한다(사이드카가 폴더에 있다).
+        `path` 를 주면 그 사진(썸네일 줄 메뉴 — 지금 본문이 아니어도), 없으면 지금 사진."""
+        now = self.main_view.current_file() if self.main_view else None
+        cur = str(path) if path else now
+        is_now = bool(now) and cur is not None and str(Path(cur)) == str(Path(now))
+        if not cur or not self._is_photo_path(cur) or (is_now and self._photo_is_broken()):
+            return
+        if not is_now:
+            from viewer.photo_io import oriented_size
+            if not oriented_size(cur)[0]:
+                return                                   # 열 수 없는 파일은 돌리지 않는다(4.18)
+            st = self._ensure_page_meta_store()
+            old = st.photo_rotation(cur) if st else 0
+            new = (int(absolute) if absolute is not None else old + int(delta)) % 360
+            if st and new != old and st.set_photo_rotation(cur, new) is not False:
+                st.save_photo_rotation()
+                strip = self._photo_strip_widget(create=False)
+                if strip is not None:
+                    strip.refresh(cur)
             return
         st = self._ensure_page_meta_store()
         old = st.photo_rotation(cur) if st else 0
@@ -312,6 +330,9 @@ class PhotoMixin:
             self.status.showMessage(tr("폴더를 열어 고른 사진만 돌릴 수 있습니다."), 4000)
             return
         st.save_photo_rotation()                 # 보기 상태 — 편집 저장 대기와 섞지 않고 이 묶음만 바로(4.16)
+        strip = self._photo_strip_widget(create=False)
+        if strip is not None:
+            strip.refresh(cur)                   # 썸네일도 돌려 보인다(4.20)
         mv = self.main_view
         fit = mv._fit_mode
         if mv.load_document(cur, 0):
@@ -441,7 +462,20 @@ class PhotoMixin:
         a_fp = menu.addAction(tr("쪽 맞춤"))
         a_fw = menu.addAction(tr("폭 맞춤"))
         a_100 = menu.addAction(tr("원래 크기 (100%)"))
+        menu.addSeparator()
+        cur = mv.current_file()
+        broken = self._photo_is_broken()
+        extra = {}
+        for key, label in (("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
+                           ("reveal", tr("파일 탐색기 열기")), ("info", tr("사진 정보...")),
+                           ("to_pdf", tr("PDF 로 만들기..."))):
+            a = menu.addAction(label)
+            a.setEnabled(not broken or key in ("copy_path", "reveal"))
+            extra[a] = key
         chosen = menu.exec(global_pos)
+        if chosen in extra:
+            self._photo_action(extra[chosen], [str(cur)])
+            return
         if chosen is None:
             return
         if chosen is a_l:
@@ -528,6 +562,74 @@ class PhotoMixin:
                 st.set_images(path, p0, photo_deco.rotate_images(im, rot, w0, h0)); moved = True
         if moved:
             st.save()
+
+    def _photo_action(self, kind: str, paths: list):
+        """사진 모드 메뉴의 일(4.20) — 책갈피창·썸네일 줄·본문이 같은 함수를 부른다."""
+        paths = [str(p) for p in (paths or []) if p]
+        if not paths:
+            return
+        from PyQt6.QtWidgets import QApplication
+        if kind == "copy_path":
+            QApplication.clipboard().setText("\n".join(paths))
+            self.status.showMessage(tr("경로를 복사했습니다."), 2500)
+        elif kind == "copy_image":
+            from viewer.workers import run_in_thread
+            w = PhotoCopyWorker(paths[0], self._photo_rot_for(paths[0]))
+            w.done.connect(self._photo_copied)
+            self.status.showMessage(tr("사진 복사 중…"), 2000)
+            run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+        elif kind == "to_pdf":
+            self.action_image_to_pdf(initial_paths=paths)      # 이미지 → PDF 창(이미지 PDF SOT) — 고른 사진을 미리 넣는다
+        elif kind == "reveal":
+            try:
+                self.bookmark_tree._reveal_in_explorer(paths[0])
+            except Exception:
+                pass
+        elif kind == "info":
+            self._photo_info_dialog()
+        elif kind == "open":
+            self._on_bookmark_activated(paths[0], 0)
+        elif kind in ("rot_l", "rot_r"):
+            self._photo_rotate(-90 if kind == "rot_l" else +90, path=paths[0])
+
+    def _photo_copied(self, path: str, img):
+        from PyQt6.QtWidgets import QApplication
+        if img is None or img.isNull():
+            self.status.showMessage(tr("사진을 복사하지 못했습니다."), 4000)
+            return
+        QApplication.clipboard().setImage(img)
+        self.status.showMessage(tr("사진을 복사했습니다: {name}").format(name=Path(path).name), 3000)
+
+    def _photo_strip_menu(self, path: str, global_pos):
+        """썸네일 줄 우클릭(4.20) — 누른 사진에. 줄 전체로 PDF 만들기도."""
+        from PyQt6.QtWidgets import QMenu
+        from viewer.photo_io import oriented_size
+        ok = bool(oriented_size(path)[0])
+        strip = self._photo_strip_widget(create=False)
+        allp = strip.paths() if strip is not None else [path]
+        menu = QMenu(self)
+        items = [("open", tr("열기")), (None, None),
+                 ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), (None, None),
+                 ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")), (None, None),
+                 ("to_pdf", tr("PDF 로 만들기..."))]
+        acts = {}
+        for key, label in items:
+            if key is None:
+                menu.addSeparator()
+                continue
+            a = menu.addAction(label)
+            a.setEnabled(ok or key in ("open", "copy_path", "reveal"))
+            acts[a] = key
+        a_all = None
+        if len(allp) > 1:
+            a_all = menu.addAction(tr('줄의 사진 {n}장으로 PDF 만들기...').format(n=len(allp)))
+        chosen = menu.exec(global_pos)
+        if chosen is None:
+            return
+        if chosen is a_all:
+            self._photo_action("to_pdf", allp)
+        elif chosen in acts:
+            self._photo_action(acts[chosen], [path])
 
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""
@@ -656,6 +758,36 @@ class PhotoOrientSaveWorker(QObject):
                     Path(tmp).unlink()
                 except OSError:
                     pass
+            self.finished.emit()
+
+
+COPY_MAX_SIDE = 8192            # 사진 복사 — 긴 변 상한(클립보드에 24 MP 그대로는 무겁다, 4.20)
+
+
+class PhotoCopyWorker(QObject):
+    """사진 복사 — 배경에서 풀고(보기 회전까지) 메인은 클립보드에 넣기만(응답성 SOT §4.4 감사표의 한 행)."""
+    done = pyqtSignal(str, object)
+    finished = pyqtSignal()
+
+    def __init__(self, path: str, rot: int = 0):
+        super().__init__()
+        self.path, self.rot = path, int(rot or 0) % 360
+
+    def request_cancel(self):
+        pass
+
+    def run(self):
+        img = None
+        try:
+            from viewer.photo_io import read_scaled
+            img, _w, _h = read_scaled(self.path, COPY_MAX_SIDE, auto_transform=True)
+            if self.rot and img is not None and not img.isNull():
+                from PyQt6.QtGui import QTransform
+                img = img.transformed(QTransform().rotate(self.rot))
+        except Exception:
+            img = None
+        finally:
+            self.done.emit(self.path, img)
             self.finished.emit()
 
 

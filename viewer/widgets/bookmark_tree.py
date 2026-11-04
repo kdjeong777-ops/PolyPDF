@@ -217,6 +217,7 @@ class BookmarkTree(QWidget):
     redactFileRequested = pyqtSignal(str)            # 261014-22(보안 SOT §14): 파일 — 가림(개인정보 지우기)
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
+    photoActionRequested = pyqtSignal(str, list)  # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴 — (일 이름, 사진 경로들)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
@@ -2621,7 +2622,13 @@ class BookmarkTree(QWidget):
         menu = QMenu(self)
         act_merge = None
         act_translate_sel = None
-        if sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
+        pm = self._photo_on()           # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴
+        if sel_files and pm:
+            _ps = [str(it.data(0, self.DATA_FILE)) for it in sel_files]
+            _pa = menu.addAction(tr('고른 사진 {n}장으로 PDF 만들기...').format(n=len(_ps)))
+            _pa.triggered.connect(lambda _=False, fs=_ps: QTimer.singleShot(0, lambda: self.photoActionRequested.emit("to_pdf", fs)))
+            menu.addSeparator()
+        elif sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
             act_merge = menu.addAction(tr('선택 {n}개 파일 병합...').format(n=len(sel_files)))
             if korea_only_visible():                # 영→한 번역은 한국 전용(다국어 SOT §7)
                 act_translate_sel = menu.addAction(tr('선택 {n}개 파일 번역...').format(n=len(sel_files)))  # 260621-P0
@@ -2670,7 +2677,22 @@ class BookmarkTree(QWidget):
         menu.addSeparator()
         # 저장 셋 — 모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
         act_save_as = act_save_poly = act_flatten = None
-        if _dir_target:
+        _conv_files = []
+        if _dir_target and pm:
+            # 사진 — PDF 저장 묶음(저장·평탄화·변환·용량·개인정보)은 뜻이 없다. 사진에 바로 쓰는 것만(4.20)
+            _ps = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
+            if _dir_target not in _ps:
+                _ps = [_dir_target]
+            for _key, _label in (("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
+                                 ("to_pdf", tr("PDF 로 만들기...") if len(_ps) == 1
+                                  else tr('고른 사진 {n}장으로 PDF 만들기...').format(n=len(_ps)))):
+                if _key == "copy_image" and len(_ps) != 1:
+                    continue
+                _pa = menu.addAction(_label)
+                _pa.triggered.connect(lambda _=False, k=_key, fs=list(_ps): QTimer.singleShot(
+                    0, lambda: self.photoActionRequested.emit(k, fs)))
+            menu.addSeparator()
+        elif _dir_target:
             act_save_poly = menu.addAction(tr("저장"))
             act_save_poly.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
             act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
@@ -2710,13 +2732,15 @@ class BookmarkTree(QWidget):
             act_split_view = menu.addAction(tr("2단 보기"))
             _is_copy = False
         # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
-        act_exp_all = menu.addAction(tr("책갈피 모두 펼치기"))
-        # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크로 보인다(보이는 파일이 계속 펼쳐진다)
-        act_exp_all.setCheckable(True)
-        act_exp_all.setChecked(self._expand_all_mode)
-        act_exp_all.setToolTip(tr("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
-                               "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."))
-        act_col_all = menu.addAction(tr("책갈피 모두 접기"))
+        act_exp_all = act_col_all = None
+        if not pm:                                   # 사진에는 책갈피가 없다(4.20)
+            act_exp_all = menu.addAction(tr("책갈피 모두 펼치기"))
+            # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크로 보인다(보이는 파일이 계속 펼쳐진다)
+            act_exp_all.setCheckable(True)
+            act_exp_all.setChecked(self._expand_all_mode)
+            act_exp_all.setToolTip(tr("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
+                                   "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."))
+            act_col_all = menu.addAction(tr("책갈피 모두 접기"))
         act_sort_pg = None
         if self._edit_mode:
             _n_bm = len([it for it in self.tree.selectedItems()
@@ -2752,7 +2776,10 @@ class BookmarkTree(QWidget):
         act_edit_gloss = None
         act_tags = None
         act_password = None
-        if is_file:
+        if is_file and pm:
+            act_tags = menu.addAction(tr("해시태그 편집..."))   # 사진도 경로를 키로 — 그대로(4.20)
+            menu.addSeparator()
+        elif is_file:
             # 260618-1: 암호화 파일이면 '암호 입력'(마스터/제한 무관 새 암호)
             if item.data(0, self.DATA_ENCRYPTED):
                 act_password = menu.addAction(tr("암호 입력"))
@@ -3272,7 +3299,8 @@ class BookmarkTree(QWidget):
                     tr("파일 삭제(휴지통)는 send2trash 모듈이 필요합니다.\n"
                     "  pip install send2trash"))
                 return
-            msg_parts.append(tr('PDF 파일 {n}개를 휴지통으로 보냅니다.').format(n=len(files)))
+            msg_parts.append((tr('사진 {n}장을 휴지통으로 보냅니다.') if self._photo_on()
+                              else tr('PDF 파일 {n}개를 휴지통으로 보냅니다.')).format(n=len(files)))
         if bookmarks:
             msg_parts.append(tr('책갈피 {n}개를 트리에서 제거합니다.').format(n=len(bookmarks)))
         if QMessageBox.question(
@@ -3749,7 +3777,7 @@ class BookmarkTree(QWidget):
         f = QFormLayout(dlg)
         ed_name = QLineEdit(cur_stem)
         ed_name.setMinimumWidth(460)
-        f.addRow(tr("파일명 (.pdf 제외):"), ed_name)
+        f.addRow(tr("파일명 (확장자 제외):") if self._photo_on() else tr("파일명 (.pdf 제외):"), ed_name)
         hint = QLabel(tr("<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. "
                       "메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"))
         hint.setStyleSheet("color:#666;"); hint.setWordWrap(True)
