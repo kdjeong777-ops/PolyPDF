@@ -205,6 +205,7 @@ class PhotoMixin:
             s = PhotoStrip(getattr(self.page_thumbs, "_icon_w", 130), self.page_thumbs)
             s.photoActivated.connect(lambda p: self._on_bookmark_activated(p, 0))
             s.menuRequested.connect(self._photo_strip_menu)          # 261104-3(4.20)
+            s.deleteRequested.connect(self._photo_delete)            # 261104-4(4.25): Del
             s.rotation_provider = self._photo_rot_for
             self._photo_strip = s
         return s
@@ -564,7 +565,15 @@ class PhotoMixin:
             a = menu.addAction(label)
             a.setEnabled(not broken or key in ("copy_path", "reveal"))
             extra[a] = key
+        menu.addSeparator()
+        a_del = menu.addAction(self._kt(tr("삭제"), "Del"))
+        a_del.setEnabled(self.bookmark_tree.is_edit_mode() and bool(cur) and not self._photo_any_cached([cur]))
+        if not self.bookmark_tree.is_edit_mode():
+            a_del.setToolTip(tr("편집 모드에서 지울 수 있습니다."))
         chosen = menu.exec(global_pos)
+        if chosen is a_del:
+            self._photo_delete([str(cur)])
+            return
         if chosen in extra:
             self._photo_action(extra[chosen], [str(cur)])
             return
@@ -768,10 +777,17 @@ class PhotoMixin:
         a_all = None
         if len(allp) > 1:
             a_all = menu.addAction(tr('줄의 사진 {n}장으로 PDF 만들기...').format(n=len(allp)))
+        menu.addSeparator()
+        a_del = menu.addAction(self._kt(tr('삭제 ({n}장)').format(n=len(targets)) if many else tr("삭제"), "Del"))
+        a_del.setEnabled(self.bookmark_tree.is_edit_mode() and not self._photo_any_cached(targets))
+        if not self.bookmark_tree.is_edit_mode():
+            a_del.setToolTip(tr("편집 모드에서 지울 수 있습니다."))
         chosen = menu.exec(global_pos)
         if chosen is None:
             return
-        if chosen is a_all:
+        if chosen is a_del:
+            self._photo_delete(targets)
+        elif chosen is a_all:
             self._photo_action("to_pdf", allp)
         elif chosen in acts:
             k = acts[chosen]
@@ -926,6 +942,65 @@ class PhotoMixin:
         else:
             msg = tr("공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다.")
         self.status.showMessage(msg, 6000)
+
+    def _photo_delete(self, paths):
+        """사진 지우기(4.25, 사용자 지시) — 편집 모드에서만. 사진은 쪽이 하나라 **파일을 휴지통으로**.
+        책갈피창의 삭제 한 길(`_op_delete` — 확인 창·핸들 놓기·목록에서 빼기)을 그대로 쓰고, 지운 사진이 보던 것이면 다음 사진을 연다."""
+        paths = [str(p) for p in (paths or []) if p and self._is_photo_path(p)]
+        if not paths:
+            return
+        bt = self.bookmark_tree
+        if not bt.is_edit_mode():
+            self.status.showMessage(tr("편집 모드에서 지울 수 있습니다."), 4000)
+            return
+        if self._photo_any_cached(paths):
+            self.status.showMessage(tr("zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."), 5000)
+            return
+        from viewer.pathutil import norm_key
+        want = {norm_key(p) for p in paths}
+        nodes = [it for it in bt._iter_file_nodes() if norm_key(str(it.data(0, bt.DATA_FILE))) in want]
+        if not nodes:
+            return
+        lst = self._photo_list()
+        cur = self.main_view.current_file() if self.main_view else None
+        keys = [norm_key(p) for p in lst]
+        idxs = [i for i, k in enumerate(keys) if k in want]
+        nxt = None
+        if idxs:
+            after = [lst[i] for i in range(max(idxs) + 1, len(lst)) if keys[i] not in want]
+            before = [lst[i] for i in range(min(idxs) - 1, -1, -1) if keys[i] not in want]
+            nxt = (after or before or [None])[0]
+        bt.tree.blockSignals(True)
+        try:
+            bt.tree.clearSelection()
+            bt.tree.setCurrentItem(nodes[0])
+            for it in nodes:
+                it.setSelected(True)
+        finally:
+            bt.tree.blockSignals(False)
+        bt._pending_nav = None
+        bt._op_delete(keep_mode=False)
+        bt._pending_nav = None                             # 줄을 지우며 바뀐 '지금 줄' 이 예약한 이동은 버린다 — 다음 사진은 아래에서
+        gone = [p for p in paths if not Path(p).exists()]
+        if not gone:
+            return                                         # 취소했거나 지우지 못했다
+        gk = {norm_key(p) for p in gone}
+        found = self.__dict__.get("_photo_search_paths")
+        if found:
+            self._photo_search_paths = [p for p in found if norm_key(p) not in gk] or None
+        if cur and norm_key(str(cur)) in gk and nxt:
+            self._on_bookmark_activated(nxt, 0)          # 보던 사진을 지웠다 — 다음(없으면 앞) 사진
+            bt.tree.blockSignals(True)
+            try:
+                bt._select_top_file(nxt)                 # 책갈피창도 그 줄을(신호 없이 — 다시 열지 않게)
+            finally:
+                bt.tree.blockSignals(False)
+            bt._pending_nav = None
+        strip = self._photo_strip_widget(create=False)
+        if strip is not None:
+            now = self.main_view.current_file() if self.main_view else None
+            strip.set_paths(self._photo_strip_source(), current=str(now) if now else None)
+        self.status.showMessage(tr("사진 {n}장을 휴지통으로 보냈습니다.").format(n=len(gone)), 4000)
 
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""

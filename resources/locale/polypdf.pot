@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 15:21+0900\n"
+"POT-Creation-Date: 2026-11-04 15:40+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2633,7 +2633,7 @@ msgstr ""
 msgid "앞 작업이 끝난 뒤에 다시 하세요."
 msgstr ""
 
-#: viewer/app.py viewer/widgets/favorites_dialog.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/favorites_dialog.py
 #: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_to_pdf_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py viewer/widgets/merge_dialog.py
 #: viewer/widgets/strip.py viewer/widgets/thumbs_list.py
@@ -3954,6 +3954,10 @@ msgid "공유용 사본 (정보 모두 지움)"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "편집 모드에서 지울 수 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."
 msgstr ""
 
@@ -4041,6 +4045,11 @@ msgstr ""
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "사진 {n}장을 휴지통으로 보냈습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "사진 색인: {n}장 (새로 {a}·지움 {d})"
 msgstr ""
 
@@ -4105,6 +4114,11 @@ msgstr ""
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "고른 사진 {n}장으로 PDF 만들기..."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "삭제 ({n}장)"
 msgstr ""
 
 #: viewer/photo_doc.py

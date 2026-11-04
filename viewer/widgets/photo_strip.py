@@ -142,6 +142,7 @@ class PhotoStrip(QListWidget):
     """사진 썸네일 줄 — 한 칸 = 사진 하나, 아래 줄에 이름(확장자 없이)."""
     photoActivated = pyqtSignal(str)
     menuRequested = pyqtSignal(str, object)       # 261104-3(사진 보기 SOT 4.20): 우클릭 — (사진 경로, 전역 위치)
+    deleteRequested = pyqtSignal(list)            # 261104-4(사진 보기 SOT 4.25): Del — 고른 사진(없으면 지금 칸)
 
     def __init__(self, icon_w: int = 130, parent=None):
         super().__init__(parent)
@@ -309,6 +310,17 @@ class PhotoStrip(QListWidget):
         p = it.data(_PATH_ROLE)
         if p:
             self.photoActivated.emit(str(p))
+
+    def keyPressEvent(self, ev):
+        if ev.key() == Qt.Key.Key_Delete:
+            ps = self.selected_paths()
+            if not ps and self.currentItem() is not None:
+                ps = [str(self.currentItem().data(_PATH_ROLE))]
+            if ps:
+                self.deleteRequested.emit(ps)
+            ev.accept()
+            return
+        super().keyPressEvent(ev)
 
     def _on_menu(self, pos):
         it = self.itemAt(pos)

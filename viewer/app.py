@@ -6154,6 +6154,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """본문 우클릭 '삭제'·본문 Del(261017-1, 입력 SOT §3) — 지금 쪽을 썸네일 쪽 편집으로 지운다(미저장). 편집모드에서만."""
         if not self.bookmark_tree.is_edit_mode():
             return
+        _cur = self.main_view.current_file() if self.main_view else None
+        if _cur and getattr(self, "_photo_mode", False) and self._is_photo_path(_cur):
+            self._photo_delete([_cur])                 # 261104-4(사진 보기 SOT 4.25): 사진은 쪽이 하나 — 파일을 휴지통으로
+            return
         if mv is not None and mv is not self.main_view:
             return                                      # 활성 창의 썸네일만 그 창 문서다
         pt = self.page_thumbs
