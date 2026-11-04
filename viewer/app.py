@@ -6770,6 +6770,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _start_index_worker(self, worker):
         """260611-89: 이전 인덱싱을 취소하고 새 인덱싱 시작(겹치지 않게)."""
+        if getattr(self, "_photo_mode", False):
+            # 261104-3(사진 보기 SOT 4.23, 사용자 지시 '사진 모드에서 PDF 를 인덱싱하고 있어'): 사진 모드에서는 PDF 색인을 걸지 않는다 —
+            #   PDF 모드로 돌아오면 그 폴더를 다시 건다(`_photo_resume_index`). 모든 색인 시작이 여기를 지난다
+            self._photo_index_skipped = True
+            try:
+                self.progress.setVisible(False)
+            except Exception:
+                pass
+            return
         self._cancel_active_indexing()
         self._index_workers.append(worker)
 

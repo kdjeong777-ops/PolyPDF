@@ -112,9 +112,33 @@ class PhotoMixin:
         if not on:
             self._photo_deco_gate(True)
             self._photo_info_hide()
+            self._photo_resume_index()
+        else:
+            try:
+                self._cancel_active_indexing()          # 돌던 PDF 색인은 멈춘다(4.23) — PDF 모드로 오면 다시
+                self._photo_index_skipped = True
+                self.progress.setVisible(False)
+            except Exception:
+                pass
         hook = getattr(self, "_photo_after_mode", None)
         if hook is not None:
             hook(on)
+
+    def _photo_resume_index(self):
+        """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""
+        if not self.__dict__.pop("_photo_index_skipped", False):
+            return
+        folder = getattr(self, "_folder", None)
+        if not folder:
+            return
+        try:
+            from viewer.workers import IndexWorker
+            worker = IndexWorker(self._db_path, Path(folder))
+            worker.progress.connect(self._on_index_progress)
+            worker.finished.connect(self._on_index_finished)
+            self._start_index_worker(worker)
+        except Exception:
+            pass
 
     def _photo_strip_widget(self, create: bool = True):
         s = getattr(self, "_photo_strip", None)
