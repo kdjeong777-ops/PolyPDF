@@ -330,6 +330,142 @@ class PhotoMixin:
         from PyQt6.QtGui import QDesktopServices
         return bool(QDesktopServices.openUrl(QUrl(map_url(lat, lon))))
 
+    # ── 일괄 작업 (4.30, 261104-7 B5, §5.1 F7) ─────────────────
+    def _photo_batch_dialog(self, paths):
+        """고른 사진에 — 이름 바꾸기(이름_###)·크기 줄이기·형식 바꾸기. 하나를 골라 실행."""
+        from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QRadioButton,
+                                     QSpinBox, QVBoxLayout)
+        paths = [p for p in (paths or []) if self._is_photo_path(p)]
+        if not paths:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("일괄 작업 — 사진 {n}장").format(n=len(paths)))
+        lay = QVBoxLayout(dlg)
+        r_ren = QRadioButton(tr("이름 바꾸기 (이름_001 …)")); r_ren.setChecked(True)
+        r_size = QRadioButton(tr("크기 줄이기 (새 파일)"))
+        r_fmt = QRadioButton(tr("형식 바꾸기 (새 파일)"))
+        form = QFormLayout()
+        ed_name = QLineEdit(Path(paths[0]).parent.name or "사진")
+        sp_start = QSpinBox(); sp_start.setRange(0, 99999); sp_start.setValue(1)
+        sp_side = QSpinBox(); sp_side.setRange(64, 20000); sp_side.setValue(BATCH_SIDE_DEFAULT); sp_side.setSuffix(" px")
+        cb_fmt = QComboBox(); cb_fmt.addItem("JPEG", "jpg"); cb_fmt.addItem("PNG", "png")
+        form.addRow(tr("새 이름:"), ed_name)
+        form.addRow(tr("시작 번호:"), sp_start)
+        form.addRow(tr("긴 변:"), sp_side)
+        form.addRow(tr("형식:"), cb_fmt)
+        for w in (r_ren, r_size, r_fmt):
+            lay.addWidget(w)
+        lay.addLayout(form)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, dlg)
+        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject)
+        lay.addWidget(bb)
+        if not dlg.exec():
+            return
+        if r_ren.isChecked():
+            self._photo_batch_rename(paths, ed_name.text().strip(), sp_start.value())
+        elif r_size.isChecked():
+            self._photo_batch_convert(paths, "size", side=sp_side.value())
+        else:
+            self._photo_batch_convert(paths, "format", fmt=str(cb_fmt.currentData()))
+
+    def _photo_batch_rename(self, paths, base: str, start: int = 1) -> int:
+        """이름 바꾸기 — `<base>_<번호>`(자릿수는 장 수에 맞춰 3자리 이상), 확장자 그대로. 마스터 §4.7.14 의 한 길(`_rename_bg` → `_after_rename`)을
+        사진마다 — 태그·색인·꾸밈 사이드카·본문이 새 이름을 따른다. 바꿀 이름이 이미 있으면 **하나도 바꾸지 않고** 알린다. 바꾼 장 수."""
+        from viewer.pathutil import safe_name
+        base = safe_name(base or "", fallback="사진")
+        paths = [str(p) for p in paths]
+        width = max(3, len(str(int(start) + len(paths) - 1)))
+        plan = [(Path(p), Path(p).with_name("%s_%0*d%s" % (base, width, int(start) + i, Path(p).suffix))) for i, p in enumerate(paths)]
+        srcs = {os.path.normcase(str(a)) for a, _b in plan}
+        clash = [b for a, b in plan if b.exists() and os.path.normcase(str(b)) not in srcs]
+        if clash or len({os.path.normcase(str(b)) for _a, b in plan}) != len(plan):
+            self.status.showMessage(tr("이미 있는 이름이 있어 바꾸지 않았습니다: {name}").format(name=clash[0].name if clash else base), 6000)
+            return 0
+        # 고른 것끼리 이름이 엇갈리면(가 → 나, 나 → 다) 임시 이름을 거친다
+        bt = self.bookmark_tree
+        stage = []
+        for a, b in plan:
+            if a == b:
+                continue
+            mid = a.with_name("~" + a.stem + ".polypix-ren" + a.suffix) if os.path.normcase(str(b)) in srcs else b
+            stage.append((a, mid, b))
+        n = 0
+        for a, mid, _b in stage:
+            bt.releaseFileRequested.emit(str(a))
+            err = bt._rename_bg(a, mid, tr("이름 바꾸는 중…"))
+            if err is not None:
+                self.status.showMessage(tr("이름을 바꾸지 못했습니다: {name}").format(name=a.name), 6000)
+                break
+            bt._after_rename(bt._file_node_for_path(str(a)), a, mid)
+            n += 1
+        for a, mid, b in stage:
+            if mid != b and mid.exists():
+                if bt._rename_bg(mid, b, tr("이름 바꾸는 중…")) is None:
+                    bt._after_rename(bt._file_node_for_path(str(mid)), mid, b)
+        self.status.showMessage(tr("사진 {n}장의 이름을 바꿨습니다.").format(n=n), 5000)
+        return n
+
+    def _photo_batch_convert(self, paths, mode: str, side: int = 0, fmt: str = "jpg") -> list:
+        """크기 줄이기·형식 바꾸기 — 배경 진행 창 하나에서 **새 파일**(원본 그대로). 보이는 그대로(EXIF 방향·보기 회전), EXIF·GPS 는 싣지 않는다.
+        HEIC 로는 쓰지 않는다(쓰기 인코더 없음 — JPEG 으로). 만든 경로 목록."""
+        from viewer import photo_doc, photo_io
+        from viewer.pathutil import unique_path
+        rots = {str(p): self._photo_rot_for(p) for p in paths}
+        out = []
+
+        def job(progress, _paths=[str(p) for p in paths]):
+            from PIL import Image, ImageOps
+            from viewer.twoup import MergeCancelled
+            for i, p in enumerate(_paths):
+                src = Path(p)
+                try:
+                    photo_io._prep(src)
+                    with Image.open(str(src)) as im:
+                        icc = im.info.get("icc_profile")
+                        im = ImageOps.exif_transpose(im)
+                        im = photo_doc._rotate(photo_io.to_srgb(im, icc), rots.get(p, 0))
+                        im.load()
+                    heif = photo_io.is_heif(src)
+                    if mode == "size":
+                        if max(im.size) > int(side):
+                            im.thumbnail((int(side), int(side)), Image.Resampling.LANCZOS)
+                        ext = ".jpg" if heif or src.suffix.lower() in (".jpg", ".jpeg") else src.suffix.lower()
+                        dst = unique_path(src.with_name("%s_%dpx%s" % (src.stem, int(side), ext)))
+                    else:
+                        ext = "." + fmt
+                        dst = unique_path(src.with_name(src.stem + ext))
+                    tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
+                    if ext in (".jpg", ".jpeg"):
+                        im.convert("RGB").save(str(tmp), "JPEG", quality=SHARE_JPEG_QUALITY)
+                    elif ext == ".png":
+                        im.save(str(tmp), "PNG")
+                    else:
+                        im.save(str(tmp))
+                    os.replace(str(tmp), str(dst))
+                    out.append((p, str(dst)))
+                except MergeCancelled:
+                    raise
+                except Exception:
+                    try:
+                        tmp.unlink()
+                    except Exception:
+                        pass
+                if progress is not None and progress(i + 1, len(_paths), tr("사진 바꾸는 중")) is False:
+                    raise MergeCancelled()
+        res = self._run_merge_job(job, tr("일괄 작업"))
+        for src, dst in out:
+            try:
+                for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                    if bt is not None:
+                        bt.add_or_refresh_file(dst, after=src)
+            except Exception:
+                pass
+        if res.get("err"):
+            self.status.showMessage(res["err"], 6000)
+        else:
+            self.status.showMessage(tr("새 파일 {n}장을 만들었습니다.").format(n=len(out)), 5000)
+        return [d for _s, d in out]
+
     def _photo_resume_index(self):
         """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""
         if not self.__dict__.pop("_photo_index_skipped", False):
@@ -905,7 +1041,7 @@ class PhotoMixin:
             paths = [p for p in paths if self._is_photo_path(p)]     # zip 줄 등 사진 아닌 것은 빼고(4.24)
         if not paths:
             return
-        if kind in ("share_gps", "share_all", "flatten", "reveal", "rot_l", "rot_r") and self._photo_any_cached(paths):
+        if kind in ("share_gps", "share_all", "flatten", "reveal", "rot_l", "rot_r", "batch") and self._photo_any_cached(paths):
             self.status.showMessage(tr("zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."), 5000)
             return
         from PyQt6.QtWidgets import QApplication
@@ -920,6 +1056,8 @@ class PhotoMixin:
             run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
         elif kind == "to_pdf":
             self.action_image_to_pdf(initial_paths=paths)      # 이미지 → PDF 창(이미지 PDF SOT) — 고른 사진을 미리 넣는다(4.21: 굽기·새 창)
+        elif kind == "batch":
+            self._photo_batch_dialog(paths)
         elif kind in ("share_gps", "share_all"):
             self._photo_share(paths, "gps" if kind == "share_gps" else "all")
         elif kind == "print":
@@ -984,6 +1122,8 @@ class PhotoMixin:
         a_all = None
         if len(allp) > 1:
             a_all = menu.addAction(tr('줄의 사진 {n}장으로 PDF 만들기...').format(n=len(allp)))
+        a_batch = menu.addAction(tr("일괄 작업..."))                 # 4.30(261104-7 B5, F7)
+        a_batch.setEnabled(not self._photo_any_cached(targets))
         menu.addSeparator()
         a_del = menu.addAction(self._kt(tr('삭제 ({n}장)').format(n=len(targets)) if many else tr("삭제"), "Del"))
         a_del.setEnabled(self.bookmark_tree.is_edit_mode() and not self._photo_any_cached(targets))
@@ -994,6 +1134,8 @@ class PhotoMixin:
             return
         if chosen is a_del:
             self._photo_delete(targets)
+        elif chosen is a_batch:
+            self._photo_batch_dialog(targets)
         elif chosen is a_all:
             self._photo_action("to_pdf", allp)
         elif chosen in acts:
@@ -1691,6 +1833,7 @@ def _photo_doc_cls():
     return PhotoDocument
 
 
+BATCH_SIDE_DEFAULT = 1920       # 일괄 작업 '크기 줄이기' 의 긴 변 기본값(4.30)
 MAP_URL = "https://www.openstreetmap.org/?mlat={lat:.6f}&mlon={lon:.6f}#map=17/{lat:.6f}/{lon:.6f}"   # 4.29 — API 키가 필요 없는 지도
 
 

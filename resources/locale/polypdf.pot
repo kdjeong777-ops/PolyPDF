@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 16:46+0900\n"
+"POT-Creation-Date: 2026-11-04 16:49+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3805,6 +3805,38 @@ msgid "지도에서 위치 보기"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "이름 바꾸기 (이름_001 …)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "크기 줄이기 (새 파일)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "형식 바꾸기 (새 파일)"
+msgstr ""
+
+#: viewer/photo_controller.py viewer/widgets/favorites_dialog.py
+msgid "새 이름:"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "시작 번호:"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "긴 변:"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "형식:"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "일괄 작업"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "PDF 모드로 바꾸기"
 msgstr ""
 
@@ -3838,6 +3870,10 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "방향 저장 중…"
+msgstr ""
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "일괄 작업..."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -3919,6 +3955,10 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "2분할 함께 움직이기: 끔"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "이름 바꾸는 중…"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4028,6 +4068,16 @@ msgid "촬영 위치({lat:.5f}, {lon:.5f})가 지도 서비스(OpenStreetMap)로
 msgstr ""
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "일괄 작업 — 사진 {n}장"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장의 이름을 바꿨습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "마지막 사진입니다."
 msgstr ""
 
@@ -4088,6 +4138,16 @@ msgstr ""
 msgid "'{q}' 에 맞는 사진이 없습니다."
 msgstr ""
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "이미 있는 이름이 있어 바꾸지 않았습니다: {name}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "새 파일 {n}장을 만들었습니다."
+msgstr ""
+
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
 msgstr ""
@@ -4124,6 +4184,15 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "이름을 바꾸지 못했습니다: {name}"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 바꾸는 중"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -7160,10 +7229,6 @@ msgstr ""
 
 #: viewer/widgets/favorites_dialog.py
 msgid "이름 변경"
-msgstr ""
-
-#: viewer/widgets/favorites_dialog.py
-msgid "새 이름:"
 msgstr ""
 
 #: viewer/widgets/favorites_dialog.py
