@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-04 16:49+0900\n"
+"POT-Creation-Date: 2026-11-04 16:52+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4097,6 +4097,10 @@ msgstr "Move split panes together: off"
 #: viewer/photo_controller.py
 msgid "이름 바꾸는 중…"
 msgstr "Renaming…"
+
+#: viewer/photo_controller.py
+msgid "움직이는 그림 재생·멈춤"
+msgstr "Play / stop animation"
 
 #: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."

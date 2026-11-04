@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-04 16:49+0900\n"
+"POT-Creation-Date: 2026-11-04 16:52+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3959,6 +3959,10 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "이름 바꾸는 중…"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "움직이는 그림 재생·멈춤"
 msgstr ""
 
 #: viewer/photo_controller.py

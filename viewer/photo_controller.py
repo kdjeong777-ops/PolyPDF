@@ -114,6 +114,7 @@ class PhotoMixin:
         self._photo_watch_update()                     # 폴더 감시(4.27, 261104-7 B2) — 사진 모드에서만
         if not on:
             self._photo_search_paths = None
+            self._photo_anim_stop(hide=True)
             self._photo_deco_gate(True)
             self._photo_info_hide()
             self._photo_resume_index()
@@ -466,6 +467,79 @@ class PhotoMixin:
             self.status.showMessage(tr("새 파일 {n}장을 만들었습니다.").format(n=len(out)), 5000)
         return [d for _s, d in out]
 
+    # ── 움직이는 GIF·WebP (4.31, 261104-7 B6, §5.1 F10) ─────────────────
+    def _photo_anim_check(self, path):
+        """첫 장만 보이고, 움직이는 그림이면 본문 왼쪽 아래에 ▶ — 재생은 누를 때만·보일 때만."""
+        self._photo_anim_stop(hide=True)
+        if not path or Path(str(path)).suffix.lower() not in ANIM_EXTS:
+            return
+        from PyQt6.QtGui import QImageReader
+        r = QImageReader(str(path))
+        if not (r.supportsAnimation() and r.imageCount() != 1):
+            return
+        b = self.__dict__.get("_photo_anim_btn")
+        mv = self.main_view
+        if b is None or b.parent() is not mv.view:
+            b = QToolButton(mv.view)
+            b.setObjectName("photoAnimPlay")
+            b.setAutoRaise(False)
+            b.setToolTip(tr("움직이는 그림 재생·멈춤"))
+            b.clicked.connect(self._photo_anim_toggle)
+            self._photo_anim_btn = b
+            for sb in (mv.view.horizontalScrollBar(), mv.view.verticalScrollBar()):
+                sb.rangeChanged.connect(lambda _a, _b: self._photo_anim_stop())    # 확대가 바뀌면 멈춘다(첫 장으로)
+        b.setText("▶")
+        b.adjustSize()
+        b.move(12, max(0, mv.view.height() - b.height() - 12))
+        b.show()
+        b.raise_()
+        self._photo_anim_path = str(path)
+
+    def _photo_anim_toggle(self):
+        lab = self.__dict__.get("_photo_anim_label")
+        if lab is not None and lab.isVisible():
+            self._photo_anim_stop()
+            return
+        path = self.__dict__.get("_photo_anim_path")
+        mv = self.main_view
+        item = getattr(mv, "_page_item", None)
+        if not path or item is None:
+            return
+        from PyQt6.QtGui import QMovie
+        from PyQt6.QtWidgets import QLabel
+        rect = mv.view.mapFromScene(item.sceneBoundingRect()).boundingRect()
+        if lab is None or lab.parent() is not mv.view.viewport():
+            lab = QLabel(mv.view.viewport())
+            lab.setObjectName("photoAnimLabel")
+            self._photo_anim_label = lab
+        movie = QMovie(path, parent=lab)
+        movie.setScaledSize(rect.size())
+        lab.setMovie(movie)
+        lab.setGeometry(rect)
+        lab.show()
+        lab.raise_()
+        movie.start()
+        self._photo_anim_movie = movie
+        b = self.__dict__.get("_photo_anim_btn")
+        if b is not None:
+            b.setText("■")
+            b.raise_()
+
+    def _photo_anim_stop(self, hide: bool = False):
+        m = self.__dict__.pop("_photo_anim_movie", None)
+        if m is not None:
+            m.stop()
+        lab = self.__dict__.get("_photo_anim_label")
+        if lab is not None:
+            lab.hide()
+            lab.setMovie(None)
+        b = self.__dict__.get("_photo_anim_btn")
+        if b is not None:
+            if hide:
+                b.hide()
+            else:
+                b.setText("▶")
+
     def _photo_resume_index(self):
         """사진 모드에서 걸지 않은 PDF 색인을 PDF 모드로 돌아와 그 폴더에 다시 건다(4.23). 바뀐 것만 다시 읽는다(색인 SOT 규칙 그대로)."""
         if not self.__dict__.pop("_photo_index_skipped", False):
@@ -622,6 +696,7 @@ class PhotoMixin:
         self._photo_deco_gate(not self._photo_is_broken())
         self._photo_info_request(path)
         self._photo_sync_tree(path)                   # 261104-4(4.26, 사용자 지시): 책갈피창도 그 사진 줄을
+        self._photo_anim_check(path)                  # 움직이는 GIF·WebP 면 ▶(4.31, 261104-7 B6)
         try:
             self._touch_recent_files([path])          # 사진 모드면 사진의 최근 파일(4.7)
         except Exception:
@@ -1833,6 +1908,7 @@ def _photo_doc_cls():
     return PhotoDocument
 
 
+ANIM_EXTS = (".gif", ".webp")   # 움직이는 그림일 수 있는 형식(4.31) — 장 수가 1 보다 많을 때만 ▶
 BATCH_SIDE_DEFAULT = 1920       # 일괄 작업 '크기 줄이기' 의 긴 변 기본값(4.30)
 MAP_URL = "https://www.openstreetmap.org/?mlat={lat:.6f}&mlon={lon:.6f}#map=17/{lat:.6f}/{lon:.6f}"   # 4.29 — API 키가 필요 없는 지도
 
