@@ -9077,6 +9077,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             opened = False
         if self._folder is not None or self._current_main is not None or opened:
             return
+        if self._photo_restore_start():         # 사진 모드로 켰으면 사진 모드의 마지막 폴더·사진(사진 보기 SOT §6.1, 261105-1)
+            self._apply_start_view()
+            return
 
         target, kind = self._startup_target(data)
         if target is None:
@@ -9638,10 +9641,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "schema_version": settings_store.CURRENT_SCHEMA,
             "render_dpi": self.main_view._base_dpi,
             "fit_mode": self.main_view._fit_mode,
-            "last_folder": str(self._folder) if self._folder else "",
+            # 261105-1(사진 보기 SOT §6.1): 사진 모드로 닫으면 PDF 모드의 마지막 자리를 쓴다 — 사진 것은 picture 묶음에
+            "last_folder": self._photo_saved_last("last_folder", str(self._folder) if self._folder else ""),
             # 260906-3: 1번째 뷰어가 보던 것을 **형태까지** 기억한다 — 파일 모드로 보던 것을
             #   다음 실행에서 상위 폴더로 열어 버리면 열라고 하지 않은 폴더를 훑게 된다.
-            "last_open": self._current_open_target(),
+            "last_open": self._photo_saved_last("last_open", self._current_open_target()),
             # 261104-2(사진 보기 SOT 4.7): 사진 모드면 지금 목록은 사진 것 — PDF 목록은 따로 들고 있다(사진 것은 picture 묶음에)
             "recent_folders": self._photo_saved_list("_recent_folders"),
             "recent_files": self._photo_saved_list("_recent_files"),
@@ -9654,7 +9658,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "search_results": self.act_toggle_search.isChecked(),
                 "screenshots": self.act_toggle_shot.isChecked(),
             },
-            "last_main": (self._current_main.to_dict() if self._current_main else None),
+            "last_main": self._photo_saved_last("last_main", self._current_main.to_dict() if self._current_main else None),
             # 260606-17: 캡쳐 모드/복사크기/사용자 크기
             "capture_mode": getattr(self, "_cap_mode", "full"),
             "capture_copy": getattr(self, "_cap_copy", "visible"),

@@ -56,7 +56,73 @@ class PhotoMixin:
         photo_doc.set_decode_requester(self._photo_request_decode)
         photo_doc.set_rotation_provider(self._photo_rot_for)     # 261104-3: 보기 회전(사이드카 `photo_rot`)
         self._photo_refresh_button()
+        # 모드마다 마지막 자리(6.1, 261105-1 사용자 지시) — PDF 것은 원래 자리(last_open·last_main·last_folder), 사진 것은 picture 묶음
+        data = getattr(self, "_session_data", None) or {}
+        pic = self._photo_prefs()
+        self._photo_mode_last = {
+            "pdf": {k: data.get(k) for k in ("last_open", "last_main", "last_folder")},
+            "photo": {"last_open": pic.get("last_open"), "last_main": pic.get("last_main")},
+        }
         self._photo_apply_view_kind(restore=True)
+        self._photo_started = True
+
+    # ── 모드마다 마지막 자리 (6.1, 261105-1) ───────────────
+    def _photo_capture_last(self):
+        """지금 모드의 마지막 자리를 담아 둔다 — 모드를 바꾸기 직전과 설정 저장 때."""
+        rec = self.__dict__.get("_photo_mode_last")
+        if rec is None or not self.__dict__.get("_photo_started"):
+            return                                       # 창을 만드는 중의 모드 복원 — 아직 연 것이 없다(지난 자리를 지우지 않는다)
+        cur = self.__dict__.get("_current_main")
+        rec["photo" if self._photo_mode else "pdf"] = {
+            "last_open": self._current_open_target(),
+            "last_main": cur.to_dict() if cur is not None else None,
+            "last_folder": str(self._folder) if getattr(self, "_folder", None) else "",
+        }
+
+    def _photo_saved_last(self, key: str, current):
+        """settings.json 에 쓸 **PDF 모드** 마지막 자리(`key`) — 사진 모드로 닫으면 사진 것은 picture 묶음에 담고
+        PDF 모드에서 마지막으로 보던 것을 준다(다음에 PDF 모드로 켜면 그 자리, 6.1)."""
+        rec = self.__dict__.get("_photo_mode_last")
+        if rec is None:
+            return current
+        self._photo_capture_last()
+        ph = rec.get("photo") or {}
+        pic = self._photo_prefs()
+        pic["last_open"] = ph.get("last_open") or {}
+        pic["last_main"] = ph.get("last_main")
+        if not self._photo_mode:
+            return current
+        v = (rec.get("pdf") or {}).get(key)
+        return v if v is not None else ({} if key == "last_open" else ("" if key == "last_folder" else None))
+
+    def _photo_restore_start(self) -> bool:
+        """사진 모드로 켠 창의 시작(6.1, 261105-1 사용자 지시) — 사진 모드에서 마지막으로 보던 폴더와 사진을 연다.
+        PDF 시작 설정(startup_mode 'path')은 PDF 모드 몫이고, '없음' 이면 아무것도 열지 않는다. 사진 모드가 아니면 False."""
+        if not self._photo_mode:
+            return False
+        if str(self._prefs.get("startup_mode", "last")) == "none":
+            return True
+        ph = (self.__dict__.get("_photo_mode_last") or {}).get("photo") or {}
+        lo = ph.get("last_open") or {}
+        target = str(lo.get("path") or "")
+        main = ph.get("last_main") if isinstance(ph.get("last_main"), dict) else None
+        if not target:                                    # 옛 설정 — 사진 최근 폴더 맨 앞
+            target = next((str(f) for f in (self._recent_folders or []) if os.path.isdir(str(f))), "")
+        p = Path(target) if target else None
+        if p is None or not p.exists():
+            return True                                   # 사라졌으면 빈 화면 — 다른 것을 열어 주지 않는다
+        folder = p if p.is_dir() else p.parent
+        self.open_folder(folder)
+        fp = str((main or {}).get("file_path") or "")
+        if not fp and p.is_file():
+            fp = str(p)
+        if not fp:                                        # 마지막 본 사진 — 그 폴더 안의 사진 최근 파일 맨 앞
+            fp = next((str(t) for t in (self._recent_files or [])
+                       if self._is_photo_path(t) and Path(str(t)).parent == folder and os.path.isfile(str(t))), "")
+        if fp and os.path.isfile(fp) and folder in Path(fp).parents:
+            from viewer.history import HistoryItem
+            self._load_main(HistoryItem(fp, 0, "", "bookmark"))
+        return True
 
     # ── 설정 묶음 ─────────────────────────────────────
     def _photo_prefs(self) -> dict:
@@ -107,6 +173,7 @@ class PhotoMixin:
         prev_page = mv.current_page() if (mv is not None and prev) else 0
         if prev and not self._photo_mode and str(prev).lower().endswith(".pdf"):
             self._photo_pdf_last = (str(prev), int(prev_page or 0))   # PDF 는 보던 쪽까지(이 실행 안)
+        self._photo_capture_last()                       # 떠나는 모드의 마지막 자리(6.1, 261105-1)
         self._photo_mode = on
         if remember:
             self._photo_prefs()["mode"] = "photo" if on else "pdf"
@@ -803,13 +870,41 @@ class PhotoMixin:
             return
         self._photo_dater = None
         bt = self.bookmark_tree
-        if not (self.__dict__.pop("_photo_dates_new", False) and getattr(self, "_photo_mode", False)):
+        self.__dict__.pop("_photo_dates_new", None)
+        if not getattr(self, "_photo_mode", False):
             return
         if getattr(bt, "_mode", "") != "flat" or bt._sort_combo.currentData() != bt.SORT_MTIME:
+            return
+        # '새로 읽은 것' 표시가 아니라 **지금 줄 순서**로 판단한다(261105-2) — 읽는 도중 목록을 다시 그리면 새 작업이 그 표시를 지워
+        #   다시 늘어놓기를 건너뛰었고, 날짜가 섞인 목록이 남았다. 순서가 맞으면 다시 그리지 않는다(되먹임 없음).
+        if not self._photo_tree_out_of_order(bt):
             return
         self._photo_relist_keep = str(getattr(self, "_folder", "") or "")   # 검색 결과·zip 보기는 지킨다(4.27)
         bt._render_flat(after=(lambda c=self.main_view.current_file() if self.main_view else None:
                                self._photo_sync_tree(c) if c else None))
+
+    @staticmethod
+    def _photo_tree_out_of_order(bt) -> bool:
+        """같은 부모 아래 파일 줄이 정렬 값(`_sort_stat` — 사진은 촬영 시각) 내림차순이 아니면 True. 기억한 값만 쓴다(디스크를 읽지 않는다)."""
+        from PyQt6.QtWidgets import QTreeWidgetItem
+
+        def files_of(children):
+            return [bt._sort_stat(str(c.data(0, bt.DATA_FILE)))[1] for c in children if c.data(0, bt.DATA_FILE)]
+
+        tree = bt.tree
+        parents = [[tree.topLevelItem(i) for i in range(tree.topLevelItemCount())]]
+        stack = list(parents[0])
+        while stack:
+            it: QTreeWidgetItem = stack.pop()
+            if it.childCount():
+                kids = [it.child(i) for i in range(it.childCount())]
+                parents.append(kids)
+                stack.extend(kids)
+        for kids in parents:
+            ks = files_of(kids)
+            if any(a < b for a, b in zip(ks, ks[1:])):
+                return True
+        return False
 
     def _photo_label_values(self, path) -> dict:
         """구문에 넣을 값 — 기억한 날짜·크기·용량, 없으면 목록 훑기가 준 용량(`_scan_stats`)."""
