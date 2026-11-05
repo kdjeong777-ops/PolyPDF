@@ -3780,7 +3780,7 @@ class PhotoKindWorker(QObject):
 
     def run(self):
         import os
-        from viewer import pacing, photo_index, photo_tags
+        from viewer import pacing, photo_index, photo_io, photo_tags
         try:
             from viewer.study import ocr
             if not ocr.ensure_tesseract().get("ok"):
@@ -3803,7 +3803,10 @@ class PhotoKindWorker(QObject):
                 for key, path in todo:
                     if self._cancel:
                         break
-                    if not os.path.isfile(path):
+                    try:
+                        if photo_io.cloud_only(os.stat(path)):
+                            continue                         # 색인 뒤 클라우드로 비워진 사진 — 열면 내려받는다(§4.37, 261105-20). 판정은 아직으로 남긴다
+                    except OSError:
                         continue
                     try:
                         k = photo_tags.kind_tag(path, self.lang or None)

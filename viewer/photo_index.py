@@ -154,9 +154,12 @@ def autotag_todo(con, folder: str, ver: int) -> set:
 
 
 def kind_todo(con, folder: str, ver: int) -> list:
-    """종류 판정이 아직이거나 옛 판인 사진 — [(key, path)]. zip 안 사진·스크린샷은 뺀다(태그 SOT §5.7)."""
+    """종류 판정이 아직이거나 옛 판인 사진 — [(key, path)]. zip 안 사진·스크린샷은 뺀다(태그 SOT §5.7).
+    클라우드에만 있는 사진의 이름 행(수정 시각 0)도 뺀다 — 열면 통째로 내려받는다(사진 보기 SOT §4.37, 261105-20).
+    PC 로 받아지면 다음 색인 훑기가 머리를 읽어 행을 새로 쓰고(수정 시각이 생긴다) 그때 판정한다."""
     like = folder.rstrip("\\/") + os.sep + "%"
-    rows = con.execute("SELECT key, path, kind, tags FROM photos WHERE (folder=? OR folder LIKE ?) AND zip IS NULL ORDER BY taken DESC, name",
+    rows = con.execute("SELECT key, path, kind, tags FROM photos WHERE (folder=? OR folder LIKE ?) AND zip IS NULL AND mtime_ns<>0 "
+                       "ORDER BY taken DESC, name",
                        (folder, like)).fetchall()
     pre = "%d:" % int(ver)
     return [(k, p) for k, p, kd, tg in rows if not (kd or "").startswith(pre) and "#스크린샷" not in (tg or "")]
