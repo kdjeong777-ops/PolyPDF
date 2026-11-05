@@ -71,10 +71,13 @@ try:
     bt = mw.bookmark_tree
     mw._prefs.setdefault("picture", {})["view_kind"] = "mixed"
     mw._photo_apply_view_kind()
+    PL.select(mw._photo_prefs(), "tree", "날짜 + 이름")   # 261105-11: '기본' 은 이름만 — 날짜가 붙었는지로 읽기 끝을 본다
     mw._set_photo_mode(True)
     mw.open_folder(tmp)
     labels = lambda: {Path(str(it.data(0, bt.DATA_FILE))).name: it.text(0) for it in bt._iter_file_nodes()}
     pump(lambda: labels().get("가 해변.jpg", "").startswith("2025-06-10"), timeout=10)
+    PL.select(mw._photo_prefs(), "tree", "기본")           # 날짜를 다 읽었다 — 아래 C 는 '기본' 을 고친다
+    mw._photo_labels_apply(None)
     mw._on_bookmark_activated(str(a), 0)
     strip = mw._photo_strip
     pump(lambda: str(a) in strip._done and str(b) in strip._done, timeout=10)
@@ -134,9 +137,9 @@ try:
     _m.QInputDialog.getText = staticmethod(lambda *a_, **k_: ("내 스타일", True))
     dlg._new()
     chk("내 스타일" in PL.styles(pic, "tree") and PL.current_name(pic, "tree") == "내 스타일", "D 새 스타일 저장·고름")
-    dlg.cb.setCurrentIndex(dlg.cb.findData("이름만"))
+    dlg.cb.setCurrentIndex(dlg.cb.findData("날짜 + 이름"))
     dlg.apply()
-    chk(labels()["가 해변.jpg"].startswith("가 해변") and not labels()["가 해변.jpg"].startswith("2025"), "D 기본 스타일 '이름만' 고르기", labels()["가 해변.jpg"])
+    chk(labels()["가 해변.jpg"].startswith("2025-06-10 가 해변"), "D 기본 스타일 '날짜 + 이름' 고르기", labels()["가 해변.jpg"])
     dlg.cb.setCurrentIndex(dlg.cb.findData("내 스타일"))
     _m.QMessageBox.question = staticmethod(lambda *a_, **k_: _m.QMessageBox.StandardButton.Yes)
     dlg._delete()
@@ -144,8 +147,8 @@ try:
     dlg.cb.setCurrentIndex(dlg.cb.findData("기본"))
     dlg._delete()                                    # 기본값으로
     dlg.apply()
-    chk(PL.current(pic, "tree") == PL.BUILTIN_TREE["기본"] and labels()["가 해변.jpg"].startswith("2025-06-10 가 해변"),
-        "D '기본값으로' — 기본 스타일 그대로", labels()["가 해변.jpg"])
+    chk(PL.current(pic, "tree") == PL.BUILTIN_TREE["기본"] == "{name}" and labels()["가 해변.jpg"].startswith("가 해변")
+        and not labels()["가 해변.jpg"].startswith("2025"), "D '기본값으로' — 기본 스타일은 이름만(261105-11)", labels()["가 해변.jpg"])
 
     # E — 설정 자리
     payload = mw._build_settings_payload()
@@ -157,6 +160,7 @@ try:
     raw = a.read_bytes()
     for i in range(1500):
         (big / ("p%04d.jpg" % i)).write_bytes(raw)
+    PL.select(pic, "tree", "날짜 + 이름")
     mw.open_folder(big)
     pump(lambda: sum(1 for it in bt._iter_file_nodes() if it.text(0).startswith("2025-06-10")) == 1500, timeout=60)
     PL.select(pic, "tree", "상세")

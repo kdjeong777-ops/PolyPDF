@@ -126,6 +126,15 @@ def _file_date(path) -> str:
         return ""
 
 
+# 클라우드에만 있는 파일(iCloud·OneDrive '필요할 때 내려받기') — 머리를 읽으면 Windows 가 통째로 내려받는다(사진 보기 SOT §4.37, 261105-10)
+CLOUD_ATTRS = 0x400000 | 0x40000 | 0x1000            # RECALL_ON_DATA_ACCESS · RECALL_ON_OPEN · OFFLINE
+
+
+def cloud_only(st) -> bool:
+    """`os.stat` 결과가 클라우드에만 있는 파일이면 True(Windows 밖에서는 늘 False)."""
+    return bool(int(getattr(st, "st_file_attributes", 0) or 0) & CLOUD_ATTRS)
+
+
 def photo_when(path) -> tuple:
     """사진의 날짜·시각 `('YYYY-MM-DD', 초)` — 촬영 시각(EXIF), 없으면 파일 수정 시각(사진 보기 SOT §4.18·§4.37).
     책갈피창 이름 앞 날짜와 '수정일 순' 정렬이 **같은 값**을 쓴다. **머리만** 읽는다. 배경에서."""

@@ -4577,7 +4577,7 @@ msgid "기본"
 msgstr ""
 
 #: viewer/photo_label.py
-msgid "이름만"
+msgid "날짜 + 이름"
 msgstr ""
 
 #: viewer/photo_label.py

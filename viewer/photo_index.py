@@ -44,6 +44,15 @@ def connect(path: Path | None = None, busy_ms: int | None = None) -> sqlite3.Con
         return _open(p, busy_ms)
 
 
+def connect_read(path: Path | None = None, busy_ms: int | None = None) -> sqlite3.Connection:
+    """읽기만 하는 연결 — 스키마 맞추기(`_init` 의 쓰기)를 하지 않는다. 색인 훑기가 쓰기 트랜잭션을 쥐고 있어도 기다리지 않는다(WAL).
+    `connect` 는 열 때마다 meta 행을 써서, 읽기만 하는 날짜 작업·검색이 색인 훑기 뒤에 대기 상한까지 섰다(261105-10).
+    파일이 없으면 `sqlite3.OperationalError`."""
+    from viewer import dbutil
+    p = Path(path) if path else db_path()
+    return dbutil.connect(p, busy_ms=busy_ms or dbutil.BUSY_MS_BG, row_factory=False, readonly=True)
+
+
 def _open(p: Path, busy_ms: int | None) -> sqlite3.Connection:
     from viewer import dbutil
     con = dbutil.connect(p, busy_ms=busy_ms or dbutil.BUSY_MS_BG, row_factory=False)
@@ -197,7 +206,7 @@ def search(query: str, folder=None, limit: int = 500, path: Path | None = None) 
     fts = " ".join('"%s"*' % w.lstrip("#") for w in words)
     from viewer import dbutil
     try:
-        con = connect(path, busy_ms=dbutil.BUSY_MS_UI)   # 메인에서 부른다 — 오래 기다리지 않는다(못 읽으면 빈 결과)
+        con = connect_read(path, busy_ms=dbutil.BUSY_MS_UI)   # 메인에서 부른다 — 읽기만, 오래 기다리지 않는다(못 읽으면 빈 결과)
     except sqlite3.Error:
         return []
     try:

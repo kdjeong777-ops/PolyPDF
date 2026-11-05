@@ -4717,8 +4717,8 @@ msgid "기본"
 msgstr "Default"
 
 #: viewer/photo_label.py
-msgid "이름만"
-msgstr "Name only"
+msgid "날짜 + 이름"
+msgstr "Date + name"
 
 #: viewer/photo_label.py
 msgid "상세"
@@ -14086,4 +14086,7 @@ msgstr "Getting Started"
 
 #~ msgid "돌린 사진에는 꾸밀 수 없습니다 — 원래 방향으로 돌리면 됩니다."
 #~ msgstr "A rotated photo cannot be marked up — rotate it back to the original orientation first."
+
+#~ msgid "이름만"
+#~ msgstr "Name only"
 

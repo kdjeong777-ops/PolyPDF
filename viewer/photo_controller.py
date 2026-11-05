@@ -293,6 +293,7 @@ class PhotoMixin:
         w.autoTags.connect(lambda d, _w=w: self._photo_autotag_apply(d, "meta", _w))
         self._photo_indexer = w
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+        self._photo_dates_prime()                        # 색인에 있는 촬영일은 첫 그리기부터(4.37, 261105-10)
 
     def _photo_index_done(self, folder: str, n_new: int, n_gone: int, n_total: int):
         if self.__dict__.get("_photo_indexer") is not None and getattr(self._photo_indexer, "folder", None) == folder:
@@ -900,9 +901,43 @@ class PhotoMixin:
             return
         w = PhotoDateWorker(paths, dict(cache))
         w.batch.connect(lambda d, _w=w: self._photo_dates_got(d, _w))
+        w.indexed.connect(lambda _w=w: self._photo_dates_resort(_w))     # ① 색인 단계가 끝나면 한 번(261105-10)
         w.finished.connect(lambda _w=w: self._photo_dates_done(_w))
         self._photo_dater = w
         self._photo_dates_new = False
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_dates_prime(self):
+        """사진 모드에서 폴더를 열 때(색인 시작과 함께) — 그 폴더 색인 행의 날짜를 배경에서 먼저 기억한다(SQL 만, §4.37 261105-10).
+        큰 폴더는 목록 훑기보다 대개 먼저 끝나 **첫 그리기부터** 촬영일 순. 늦으면 끝났을 때 다시 늘어놓는다."""
+        from viewer.workers import run_in_thread
+        folder = getattr(self, "_folder", None)
+        if not folder or not getattr(self, "_photo_mode", False):
+            return
+        self.bookmark_tree.photo_sort_time = self._photo_sort_time
+        old = self.__dict__.get("_photo_primer")
+        if old is not None:
+            old.request_cancel()
+        w = PhotoDateWorker([], dict(self.__dict__.setdefault("_photo_date_cache", {})), folder=str(folder))
+        w.batch.connect(lambda d, _w=w: self._photo_dates_got(d, _w))
+        w.finished.connect(lambda _w=w: self._photo_dates_resort(_w))
+        self._photo_primer = w
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_date_recheck(self, path):
+        """본문에 연 사진이 클라우드에서 받아졌다(해독 끝) — 날짜가 임시 값이면 그 한 장만 머리를 읽어 줄 이름을 고친다(§4.37).
+        순서는 다음 목록 그리기 때(보던 목록이 갑자기 움직이지 않게)."""
+        from viewer.workers import run_in_thread
+        key = os.path.normcase(str(path))
+        cache = self.__dict__.get("_photo_date_cache", {})
+        hit = cache.get(key)
+        if not hit or len(hit) < 7 or not hit[6]:
+            return
+        cache[key] = tuple(hit[:6]) + (False,)          # 해독 알림이 여러 번 와도 한 번만
+        w = PhotoDateWorker([str(path)], {}, force=True)
+        w.batch.connect(lambda d, _w=w: self._photo_dates_got(d, _w))
+        self.__dict__.setdefault("_photo_rechecks", set()).add(w)
+        w.finished.connect(lambda _w=w: self.__dict__.get("_photo_rechecks", set()).discard(_w))
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
     CLOSE_WAIT_MS = 500                              # 창을 닫을 때 사진 배경 작업을 기다리는 상한(합계)
@@ -946,7 +981,9 @@ class PhotoMixin:
                 pass
 
     def _photo_dates_got(self, found: dict, worker=None):
-        if worker is not self.__dict__.get("_photo_dater") or not getattr(self, "_photo_mode", False):
+        live = (worker is self.__dict__.get("_photo_dater") or worker is self.__dict__.get("_photo_primer")
+                or worker in self.__dict__.get("_photo_rechecks", ()))
+        if not live or not getattr(self, "_photo_mode", False):
             return
         cache = self.__dict__.setdefault("_photo_date_cache", {})
         for p, rec in found.items():
@@ -963,11 +1000,22 @@ class PhotoMixin:
         if worker is not self.__dict__.get("_photo_dater"):
             return
         self._photo_dater = None
-        bt = self.bookmark_tree
         self.__dict__.pop("_photo_dates_new", None)
+        self._photo_dates_resort()
+
+    def _photo_dates_resort(self, worker=None):
+        """'수정일 순' 이고 지금 줄 순서가 기억한 값과 다르면 한 번 다시 늘어놓는다 — 미리 읽기·① 색인 단계·② 머리 읽기가 끝날 때(261105-10).
+        목록을 채우는 중이면 하지 않는다(채우기가 끝나면 새 날짜 작업이 다시 본다)."""
+        if worker is not None and worker is not self.__dict__.get("_photo_dater") and worker is not self.__dict__.get("_photo_primer"):
+            return
+        if worker is not None and worker is self.__dict__.get("_photo_primer"):
+            self._photo_primer = None
+        bt = self.bookmark_tree
         if not getattr(self, "_photo_mode", False):
             return
         if getattr(bt, "_mode", "") != "flat" or bt._sort_combo.currentData() != bt.SORT_MTIME:
+            return
+        if getattr(bt, "_fill_plan", None):
             return
         # '새로 읽은 것' 표시가 아니라 **지금 줄 순서**로 판단한다(261105-2) — 읽는 도중 목록을 다시 그리면 새 작업이 그 표시를 지워
         #   다시 늘어놓기를 건너뛰었고, 날짜가 섞인 목록이 남았다. 순서가 맞으면 다시 그리지 않는다(되먹임 없음).
@@ -2985,6 +3033,7 @@ class PhotoMixin:
     def _photo_on_decoded(self, path: str, box: int):
         """배경 해독이 끝났다(메인 스레드) — 그 사진이 아직 본문이면 다시 그린다."""
         self.__dict__.setdefault("_photo_decoding", set()).discard((str(path), int(box)))
+        self._photo_date_recheck(path)                   # 클라우드에서 받아졌으면 날짜를 촬영일로(4.37, 261105-10)
         try:
             cur = self.main_view.current_file() if self.main_view else None
             if cur and str(cur) == str(path):
@@ -3567,12 +3616,25 @@ class PhotoIndexWorker(QObject):
                                     batch = 0
                                 pacing.pace(self)
                             continue
+                        t = tags.get(full) if tags is not None else []
+                        from viewer.photo_io import cloud_only
+                        if cloud_only(stt):
+                            # 클라우드에만 있는 사진 — 머리를 읽으면 통째로 내려받는다(4.24·4.37, 261105-10 사용자 결정).
+                            #   이름 행만(수정 시각 0 — PC 로 받아지면 다음 훑기가 머리를 읽는다)
+                            if key not in old:
+                                photo_index.upsert(con, key, full, os.path.normcase(dirpath), fn, ext, stt.st_size, 0, {}, t,
+                                                   ocr=photo_saved_ocr(st, full))
+                                n_new += 1
+                                batch += 1
+                                if batch >= 50:
+                                    con.commit()
+                                    batch = 0
+                            continue
                         try:
                             from viewer.photo_io import photo_info
                             info = photo_info(full)
                         except Exception:
                             info = {}
-                        t = tags.get(full) if tags is not None else []
                         at_ver = None
                         if self.autotag and info:
                             from viewer import photo_tags
@@ -3704,37 +3766,86 @@ def photo_auto_tags(path, text):
     return fmt, kws
 
 
-class PhotoDateWorker(QObject):
-    """책갈피창 이름 앞 날짜·'수정일 순' 정렬 값(사진 보기 SOT 4.37) — EXIF 촬영 시각(머리만) → 파일 날짜.
-    50 줄마다 알린다. 응답성 SOT 감사표의 한 행."""
-    batch = pyqtSignal(dict)                     # 경로 → (수정 시각 ns, 'YYYY-MM-DD', 정렬 시각 초, 폭, 높이, 바이트)
-    finished = pyqtSignal()
+def _photo_date_of_ns(mtime_ns: int) -> str:
+    import time as _t
+    try:
+        return _t.strftime("%Y-%m-%d", _t.localtime(int(mtime_ns) / 1e9))
+    except (ValueError, OverflowError, OSError):
+        return ""
 
-    def __init__(self, paths, cache: dict):
+
+def _photo_taken_ts(taken: str, mtime: float) -> float:
+    """색인의 촬영일(날짜만)의 정렬 시각 — 그날 0시 + 파일 시각의 하루 안 자리(같은 날 사진끼리는 파일 시각 차례)."""
+    import time as _t
+    d = (taken or "")[:10]
+    try:
+        return _t.mktime((int(d[:4]), int(d[5:7]), int(d[8:10]), 0, 0, 0, 0, 0, -1)) + (float(mtime) % 86400)
+    except (ValueError, OverflowError):
+        return float(mtime)
+
+
+class PhotoDateWorker(QObject):
+    """책갈피창 사진 줄 날짜·'수정일 순' 정렬 값(사진 보기 SOT 4.37) — 촬영일(색인 → EXIF 머리만) → 파일 날짜. 응답성 SOT 감사표의 한 행.
+
+    두 단계(261105-10): ① 기억한 값·사진 정보 색인 행·zip·**클라우드에만 있는 사진**(머리를 읽으면 통째로 내려받는다 — 파일 날짜를
+    임시 값으로) — `stat` 만, 끝나면 `indexed` ② 나머지만 머리 읽기(pacing). `folder` 를 주면 **미리 읽기** — 그 폴더(하위 포함)
+    색인 행만 SQL 로(디스크를 보지 않는다 — 바뀐 사진은 목록 뒤의 작업이 수정 시각으로 걸러 다시 읽는다). `force` 는 한 장 다시 읽기(본문에 열어 받아진 사진)."""
+    batch = pyqtSignal(dict)                     # 경로 → (수정 시각 ns, 'YYYY-MM-DD', 정렬 시각 초, 폭, 높이, 바이트, 임시 값)
+    indexed = pyqtSignal()
+    finished = pyqtSignal()
+    INDEX_BATCH = 500
+    READ_BATCH = 50
+
+    def __init__(self, paths, cache: dict, folder=None, force: bool = False):
         super().__init__()
         self.paths, self.cache = list(paths), cache
+        self.folder = folder
+        self.force = bool(force)
         self._cancel = False
 
     def request_cancel(self):
         self._cancel = True
 
+    @staticmethod
+    def _known(root=None) -> dict:
+        """사진 정보 색인 = 캐시(4.38 사용자 결정) — 열쇠 → (크기, 수정 시각 ns, 촬영일, 폭, 높이, 원래 경로). `root` 면 그 폴더(하위 포함)만."""
+        import os as _os
+        from viewer import photo_index
+        known = {}
+        try:
+            con = photo_index.connect_read()             # 읽기만 — 색인 훑기의 쓰기 트랜잭션 뒤에 서지 않는다(261105-10)
+            try:
+                if root:
+                    sql = ("SELECT key, size, mtime_ns, taken, width, height, path FROM photos WHERE zip IS NULL"
+                           " AND (folder = ? OR substr(folder, 1, ?) = ?)")
+                    pre = root.rstrip("\\/") + _os.sep
+                    rows = con.execute(sql, (root, len(pre), pre))
+                else:
+                    rows = con.execute("SELECT key, size, mtime_ns, taken, width, height, path FROM photos WHERE zip IS NULL")
+                for k, sz, mt, tk, w_, h_, pth in rows:
+                    known[k] = (sz or 0, mt or 0, tk or "", w_ or 0, h_ or 0, pth or k)
+            finally:
+                con.close()
+        except Exception:
+            known = {}
+        return known
+
+    def _emit(self, out: dict, n: int) -> dict:
+        if len(out) >= n and not self._cancel:
+            self.batch.emit(out)
+            return {}
+        return out
+
     def run(self):
         import os as _os
         from viewer import pacing, photo_io, photo_index
         try:
-            known = {}                                   # 사진 정보 색인 = 캐시(4.38 사용자 결정) — 크기·수정 시각이 같으면 그 값
-            try:
-                con = photo_index.connect()
-                try:
-                    for k, sz, mt, tk, w_, h_ in con.execute(
-                            "SELECT key, size, mtime_ns, taken, width, height FROM photos WHERE zip IS NULL"):
-                        known[k] = (sz, mt, tk or "", w_ or 0, h_ or 0)
-                finally:
-                    con.close()
-            except Exception:
-                known = {}
-            out = {}
-            for p in self.paths:
+            if self.folder is not None:
+                self._prime(photo_index.norm_folder(self.folder))
+                return
+            known = self._known()
+            out, rest = {}, []
+            for p in self.paths:                         # ① 디스크는 stat 만
                 if self._cancel:
                     return
                 try:
@@ -3743,37 +3854,65 @@ class PhotoDateWorker(QObject):
                     continue
                 key = _os.path.normcase(p)
                 hit = self.cache.get(key)
-                if hit and hit[0] == st.st_mtime_ns and len(hit) >= 6:
-                    continue                             # 앱이 이미 붙였다
+                cloud = photo_io.cloud_only(st)
+                if self.force:
+                    rest.append((p, st))
+                    continue
+                if hit and hit[0] == st.st_mtime_ns and len(hit) >= 6 and not (len(hit) > 6 and hit[6] and not cloud):
+                    continue                             # 앱이 이미 붙였다(임시 값이면 PC 로 받아진 뒤 다시)
                 row = known.get(key)
-                w = h = 0
                 if p.lower().endswith(".zip"):
-                    d, ts = photo_io._file_date(p), float(st.st_mtime)
-                elif row and row[0] == st.st_size and row[1] == st.st_mtime_ns and row[3] and row[4]:
-                    w, h = row[3], row[4]
-                    if row[2]:                           # 색인의 촬영일(날짜만) — 정렬 시각은 그날 + 파일 시각의 하루 안 자리
-                        import time as _t
-                        d = row[2][:10]
-                        try:
-                            ts = _t.mktime((int(d[:4]), int(d[5:7]), int(d[8:10]), 0, 0, 0, 0, 0, -1)) + (st.st_mtime % 86400)
-                        except (ValueError, OverflowError):
-                            ts = float(st.st_mtime)
+                    rec = (photo_io._file_date(p), float(st.st_mtime), 0, 0, False)
+                elif row and row[0] == st.st_size and row[1] and row[1] == st.st_mtime_ns:
+                    if row[2]:                           # 색인의 촬영일 — 머리를 다시 읽지 않는다(폭·높이가 없어도)
+                        rec = (row[2][:10], _photo_taken_ts(row[2], st.st_mtime), row[3], row[4], False)
+                    else:                                # 색인이 머리를 읽었는데 촬영일이 없었다 — 파일 날짜
+                        rec = (photo_io._file_date(p), float(st.st_mtime), row[3], row[4], False)
+                elif cloud:
+                    if row and row[2]:                   # 받아 둔 적 있는 촬영일(지금은 클라우드에만)
+                        rec = (row[2][:10], _photo_taken_ts(row[2], st.st_mtime), row[3], row[4], True)
                     else:
-                        d, ts = photo_io._file_date(p), float(st.st_mtime)
+                        rec = (photo_io._file_date(p), float(st.st_mtime), 0, 0, True)
                 else:
-                    d, ts, w, h = photo_io.photo_meta(p)  # 촬영 시각·크기(머리만) → 없으면 파일 시각
-                    pacing.pace(self)
+                    rest.append((p, st))
+                    continue
+                if rec[0]:
+                    out[p] = (st.st_mtime_ns, rec[0], rec[1], int(rec[2]), int(rec[3]), int(st.st_size), rec[4])
+                out = self._emit(out, self.INDEX_BATCH)
+            out = self._emit(out, 1)
+            if self._cancel:
+                return
+            self.indexed.emit()
+            for p, st in rest:                           # ② 머리 읽기
+                if self._cancel:
+                    return
+                d, ts, w, h = photo_io.photo_meta(p)     # 촬영 시각·크기(머리만) → 없으면 파일 시각
+                pacing.pace(self)
                 if d:
-                    out[p] = (st.st_mtime_ns, d, ts, int(w), int(h), int(st.st_size))
-                if len(out) >= 50:
-                    self.batch.emit(out)
-                    out = {}
-            if out and not self._cancel:
-                self.batch.emit(out)
+                    out[p] = (st.st_mtime_ns, d, ts, int(w), int(h), int(st.st_size), False)
+                out = self._emit(out, self.READ_BATCH)
+            self._emit(out, 1)
         except Exception:
             pass
         finally:
             self.finished.emit()
+
+    def _prime(self, root: str):
+        """미리 읽기 — 색인 행만(디스크를 보지 않는다). 기억한 값이 있는 줄은 건너뛴다."""
+        out = {}
+        for key, (sz, mt, tk, w, h, pth) in self._known(root).items():
+            if self._cancel:
+                return
+            if not mt or key in self.cache:
+                continue                                 # 이름 행만(클라우드 사진, 4.24)·이미 아는 것
+            if tk:
+                rec = (tk[:10], _photo_taken_ts(tk, mt / 1e9))
+            else:
+                rec = (_photo_date_of_ns(mt), mt / 1e9)
+            if rec[0]:
+                out[pth] = (int(mt), rec[0], rec[1], int(w), int(h), int(sz), False)
+            out = self._emit(out, self.INDEX_BATCH)
+        self._emit(out, 1)
 
 
 class PhotoOcrWorker(QObject):

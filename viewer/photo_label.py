@@ -20,9 +20,11 @@ _SEP_CHARS = " ·|-_/"
 _TOKEN = re.compile(r"(\{(?:%s)\})" % "|".join(FIELDS))
 
 # 기본 스타일 — 이름은 화면에 tr() 로. 사용자가 같은 이름으로 고치면 그 값이 이긴다('기본값으로' 로 되돌린다)
-BUILTIN_TREE = {"기본": "{date} {name}", "이름만": "{name}", "상세": "{date} {name} · {size} · {bytes}"}
+# 261105-11(사진 보기 SOT 4.37, 사용자 결정): 책갈피창 '기본' 은 이름만 — 날짜는 촬영일 자동 태그(·#YYYY-MM-DD)로 꼬리에 보인다.
+#   종전 '{date} {name}' 은 날짜를 아직 못 읽은 줄만 이름으로 보여 줄마다 꼴이 달랐다. 앞 날짜는 '날짜 + 이름' 으로 고른다
+BUILTIN_TREE = {"기본": "{name}", "날짜 + 이름": "{date} {name}", "상세": "{date} {name} · {size} · {bytes}"}
 BUILTIN_STRIP = {"기본": ["{name}", "{date}"], "크기": ["{name}", "{size}"], "상세": ["{name}", "{date} · {bytes}"]}
-_NAMES = (tr_noop("기본"), tr_noop("이름만"), tr_noop("상세"), tr_noop("크기"))   # 기본 스타일 이름 — 번역 목록에 들게
+_NAMES = (tr_noop("기본"), tr_noop("날짜 + 이름"), tr_noop("상세"), tr_noop("크기"))   # 기본 스타일 이름 — 번역 목록에 들게
 DEFAULT = "기본"
 
 

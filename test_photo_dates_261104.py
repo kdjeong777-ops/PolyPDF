@@ -2,7 +2,7 @@
 """책갈피창 이름 앞 날짜·썸네일 칸 날짜 (사진 보기 SOT 4.37·4.18, 261104-12 사용자 지시).
 
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3).
-A. 사진 모드 책갈피창 — '2025-06-10 이름'(촬영일), 촬영일이 없으면 파일 날짜, zip 줄은 zip 의 파일 날짜
+A. 사진 모드 책갈피창(스타일 '날짜 + 이름', 261105-11) — '2025-06-10 이름'(촬영일), 촬영일이 없으면 파일 날짜, zip 줄은 zip 의 파일 날짜
 B. 태그 꼬리는 그대로(날짜 + 이름 + 태그)
 C. 썸네일 칸 둘째 줄은 날짜, 원본 크기는 칸 도움말
 D. PDF 모드 목록에는 날짜를 붙이지 않는다
@@ -77,6 +77,8 @@ try:
     bt = mw.bookmark_tree
     mw._prefs.setdefault("picture", {})["view_kind"] = "mixed"
     mw._photo_apply_view_kind()
+    from viewer import photo_label as PL
+    PL.select(mw._photo_prefs(), "tree", "날짜 + 이름")   # 261105-11: 책갈피창 '기본' 은 이름만 — 이 검사는 앞 날짜 스타일로 날짜 읽기를 본다
     mw.open_folder(tmp)
     pump(lambda: sum(1 for _ in bt._iter_file_nodes()) >= 1)
     labels = lambda: {Path(str(it.data(0, bt.DATA_FILE))).name: it.text(0) for it in bt._iter_file_nodes()}
