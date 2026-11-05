@@ -88,9 +88,10 @@ class ConvertMixin:
                             keys=convert.PHOTO_KEYS)
         if dlg.exec() != dlg.DialogCode.Accepted:
             return False
-        return self._run_convert(files, dlg.format_key(), None, rots={f: self._photo_rot_for(f) for f in files})
+        return self._run_convert(files, dlg.format_key(), None, rots={f: self._photo_rot_for(f) for f in files},
+                                 crops={f: self._photo_crop_for(f) for f in files})     # 보기 크롭(사진 보기 SOT §4.40)
 
-    def _run_convert(self, files, key, pages, rots=None) -> bool:
+    def _run_convert(self, files, key, pages, rots=None, crops=None) -> bool:
         from viewer import convert
         from viewer.text_word import snapshot_fixes
         from viewer.twoup import MergeCancelled
@@ -113,7 +114,7 @@ class ConvertMixin:
                                     f"{_head}\n{label}" if label else _head)
                 try:
                     out = convert.run(src, key, pages, fixes=fixes, forced_pages=forced, progress=prog,
-                                      photo_rot=int((rots or {}).get(src, 0) or 0))
+                                      photo_rot=int((rots or {}).get(src, 0) or 0), photo_crop=(crops or {}).get(src))
                     results.append((src, out, None))
                 except convert.Cancelled:
                     raise MergeCancelled()

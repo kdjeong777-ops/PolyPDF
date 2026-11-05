@@ -634,7 +634,8 @@ msgstr ""
 msgid "OCR·단어장을 새 쪽 번호로 옮기는 중…"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
 msgid "크롭 해제"
 msgstr ""
 
@@ -1512,6 +1513,7 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
 msgid "왼쪽"
 msgstr ""
 
@@ -1521,6 +1523,7 @@ msgstr ""
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
 msgid "오른쪽"
 msgstr ""
 
@@ -3885,6 +3888,10 @@ msgstr ""
 msgid "방향 저장 (원본 JPEG)"
 msgstr ""
 
+#: viewer/photo_controller.py
+msgid "크롭..."
+msgstr ""
+
 #: viewer/photo_controller.py viewer/widgets/main_view.py
 msgid "쪽 맞춤"
 msgstr ""
@@ -4044,6 +4051,22 @@ msgid "이 사진의 글자를 아직 읽지 않았습니다 — [OCR 로 읽기
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "폴더를 열어 고른 사진만 자를 수 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진을 읽지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "크롭을 풀었습니다 — 원본 사진은 그대로입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "자른 모양으로 봅니다 — 원본 사진은 그대로입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr ""
 
@@ -4136,7 +4159,7 @@ msgid "인쇄할 사진이 없습니다."
 msgstr ""
 
 #: viewer/photo_controller.py
-msgid "이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향이 없습니다."
+msgid "이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향·자른 모양이 없습니다."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -7271,11 +7294,11 @@ msgstr ""
 msgid "새 스타일 이름:"
 msgstr ""
 
-#: viewer/widgets/crop_dialog.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "위"
 msgstr ""
 
-#: viewer/widgets/crop_dialog.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "아래"
 msgstr ""
 
@@ -8448,6 +8471,14 @@ msgstr ""
 #: viewer/widgets/pen_settings_dialog.py viewer/widgets/presentation.py
 #, python-brace-format
 msgid "사용자선 {i}"
+msgstr ""
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."
+msgstr ""
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "사진 크롭"
 msgstr ""
 
 #: viewer/widgets/photo_label_dialog.py

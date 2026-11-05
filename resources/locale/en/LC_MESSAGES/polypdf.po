@@ -638,7 +638,8 @@ msgstr "Save Page Edits"
 msgid "OCR·단어장을 새 쪽 번호로 옮기는 중…"
 msgstr "Moving OCR and vocabulary to the new page numbers…"
 
-#: viewer/app.py viewer/widgets/crop_dialog.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/crop_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
 msgid "크롭 해제"
 msgstr "Remove Crop"
 
@@ -1559,6 +1560,7 @@ msgstr "Choose Color"
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
 msgid "왼쪽"
 msgstr "Left"
 
@@ -1568,6 +1570,7 @@ msgstr "Center"
 
 #: viewer/app.py viewer/widgets/crop_dialog.py
 #: viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
 msgid "오른쪽"
 msgstr "Right"
 
@@ -4022,6 +4025,10 @@ msgstr "Original Orientation"
 msgid "방향 저장 (원본 JPEG)"
 msgstr "Save Orientation (Original JPEG)"
 
+#: viewer/photo_controller.py
+msgid "크롭..."
+msgstr "Crop..."
+
 #: viewer/photo_controller.py viewer/widgets/main_view.py
 msgid "쪽 맞춤"
 msgstr "Fit Page"
@@ -4181,6 +4188,22 @@ msgid "이 사진의 글자를 아직 읽지 않았습니다 — [OCR 로 읽기
 msgstr "The text in this photo has not been read yet — press [Read with OCR]."
 
 #: viewer/photo_controller.py
+msgid "폴더를 열어 고른 사진만 자를 수 있습니다."
+msgstr "Only photos selected from an opened folder can be cropped."
+
+#: viewer/photo_controller.py
+msgid "사진을 읽지 못했습니다."
+msgstr "Could not read the photo."
+
+#: viewer/photo_controller.py
+msgid "크롭을 풀었습니다 — 원본 사진은 그대로입니다."
+msgstr "Crop removed — the original photo is unchanged."
+
+#: viewer/photo_controller.py
+msgid "자른 모양으로 봅니다 — 원본 사진은 그대로입니다."
+msgstr "Showing the cropped view — the original photo is unchanged."
+
+#: viewer/photo_controller.py
 msgid "폴더를 열어 고른 사진만 돌릴 수 있습니다."
 msgstr "Only photos selected from an opened folder can be rotated."
 
@@ -4273,8 +4296,8 @@ msgid "인쇄할 사진이 없습니다."
 msgstr "There is no photo to print."
 
 #: viewer/photo_controller.py
-msgid "이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향이 없습니다."
-msgstr "This photo has no markups (lines, shapes, text, images) or rotation to bake in."
+msgid "이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향·자른 모양이 없습니다."
+msgstr "This photo has no markups (lines, shapes, text, images), rotation or crop to bake in."
 
 #: viewer/photo_controller.py
 msgid "평탄화하지 못했습니다 — 원본은 그대로입니다."
@@ -7527,11 +7550,11 @@ msgstr "No content — not cropped"
 msgid "새 스타일 이름:"
 msgstr "New style name:"
 
-#: viewer/widgets/crop_dialog.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "위"
 msgstr "Top"
 
-#: viewer/widgets/crop_dialog.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "아래"
 msgstr "Bottom"
 
@@ -8728,6 +8751,14 @@ msgstr "Shortcut:"
 #, python-brace-format
 msgid "사용자선 {i}"
 msgstr "Custom line {i}"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."
+msgstr "The original photo stays unchanged; only the crop is remembered — Photo → PDF, printing, flattening, Copy for Sharing and photo copy also use the crop."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "사진 크롭"
+msgstr "Crop Photo"
 
 #: viewer/widgets/photo_label_dialog.py
 msgid "새 스타일..."

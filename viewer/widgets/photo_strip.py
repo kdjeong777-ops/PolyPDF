@@ -211,6 +211,7 @@ class PhotoStrip(QListWidget):
         self.verticalScrollBar().valueChanged.connect(lambda _v: self._rescan.start())
         self.itemClicked.connect(self._on_clicked)
         self.rotation_provider = None             # 경로 → 보기 회전(시계 방향 도) — 앱이 넣는다(4.16 의 photo_rot 를 썸네일에도)
+        self.crop_provider = None                 # 경로 → 보기 크롭(회전 0 판 쪽 비율 상자 또는 None) — 앱이 넣는다(4.40)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._on_menu)
         # 261104-3(사용자 보고 '썸네일을 위아래로 이동할 경우 본화면이 안 바뀜'): 클릭만 이었다 — 지금 칸이 바뀌면(키) 본문도.
@@ -365,6 +366,13 @@ class PhotoStrip(QListWidget):
                 rot = int(self.rotation_provider(path) or 0) % 360
             except Exception:
                 rot = 0
+        if self.crop_provider is not None:       # 보기 크롭(4.40) — 자른 뒤 돌린다(디스크 캐시는 자르지 않은 그대로)
+            try:
+                from viewer.photo_crop import crop_qimage, norm
+                box = self.crop_provider(path)
+                img = crop_qimage(img, norm(box) if box else None)
+            except Exception:
+                pass
         if rot:
             from PyQt6.QtGui import QTransform
             img = img.transformed(QTransform().rotate(rot))      # 작은 썸네일만 — 가볍다

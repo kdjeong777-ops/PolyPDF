@@ -55,6 +55,7 @@ class PhotoMixin:
         from viewer import photo_doc
         photo_doc.set_decode_requester(self._photo_request_decode)
         photo_doc.set_rotation_provider(self._photo_rot_for)     # 261104-3: 보기 회전(사이드카 `photo_rot`)
+        photo_doc.set_crop_provider(self._photo_crop_for)        # 261105-4: 보기 크롭(사이드카 `photo_crop`, 4.40)
         self._photo_refresh_button()
         # 모드마다 마지막 자리(6.1, 261105-1 사용자 지시) — PDF 것은 원래 자리(last_open·last_main·last_folder), 사진 것은 picture 묶음
         data = getattr(self, "_session_data", None) or {}
@@ -558,6 +559,7 @@ class PhotoMixin:
         from viewer import photo_doc, photo_io
         from viewer.pathutil import unique_path
         rots = {str(p): self._photo_rot_for(p) for p in paths}
+        crops = {str(p): self._photo_crop_for(p) for p in paths}          # 보기 크롭(4.40)
         out = []
 
         def job(progress, _paths=[str(p) for p in paths]):
@@ -570,7 +572,8 @@ class PhotoMixin:
                     with Image.open(str(src)) as im:
                         icc = im.info.get("icc_profile")
                         im = ImageOps.exif_transpose(im)
-                        im = photo_doc._rotate(photo_io.to_srgb(im, icc), rots.get(p, 0))
+                        from viewer.photo_crop import crop_pil
+                        im = photo_doc._rotate(crop_pil(photo_io.to_srgb(im, icc), crops.get(p)), rots.get(p, 0))
                         im.load()
                     heif = photo_io.is_heif(src)
                     if mode == "size":
@@ -715,6 +718,7 @@ class PhotoMixin:
             s.verticalScrollBar().valueChanged.connect(
                 lambda v, _s=s: v and v >= _s.verticalScrollBar().maximum() and self._photo_device_next())
             s.rotation_provider = self._photo_rot_for
+            s.crop_provider = self._photo_crop_for                   # 261105-4(4.40)
             self._photo_strip = s
         return s
 
@@ -1343,10 +1347,22 @@ class PhotoMixin:
         words = self._photo_ocr_words(path)
         if not words:
             return ([], 0)
+        return (self._photo_words_shown(path, words)[0], 72)
+
+    def _photo_words_shown(self, path, words) -> tuple:
+        """회전 0 판 OCR 낱말 → 지금 보이는 쪽(보기 회전 뒤·자른 뒤, 4.39·4.40)의 낱말과 그 쪽 크기(pt)."""
         from viewer.study import ocr as _ocr
         from viewer.photo_io import oriented_size
         w0, h0 = oriented_size(path)
-        return (_ocr.photo_words_view(words, self._photo_rot_for(path), w0, h0), 72)
+        rot = self._photo_rot_for(path)
+        vw = _ocr.photo_words_view(words, rot, w0, h0)
+        size = (h0, w0) if rot in (90, 270) else (w0, h0)
+        boxv = self._photo_view_box(path)
+        if boxv:
+            from viewer import photo_crop
+            vw = photo_crop.words_view(vw, boxv, *size)
+            size = photo_crop.size_after(size[0], size[1], boxv)
+        return vw, size
 
     def _photo_text_reload(self, cur):
         """텍스트 창 — 사진은 우리 OCR 낱말만으로 줄을 만든다(표 인식 없음). 낱말은 지금 보기 회전으로 돌려 쓴다."""
@@ -1364,10 +1380,7 @@ class PhotoMixin:
         from viewer.study import ocr as _ocr
         from viewer.photo_io import oriented_size
         from viewer.workers import TextPageWorker, run_in_thread
-        w0, h0 = oriented_size(cur)
-        rot = self._photo_rot_for(cur)
-        vw = _ocr.photo_words_view(words, rot, w0, h0)
-        size = (h0, w0) if rot in (90, 270) else (w0, h0)
+        vw, size = self._photo_words_shown(cur, words)
         prev = getattr(self, "_text_worker", None)
         if prev is not None:
             try:
@@ -1594,6 +1607,121 @@ class PhotoMixin:
         w0, h0 = oriented_size(path)
         return (rot, float(w0), float(h0)) if w0 and h0 else None
 
+    def _photo_deco_in(self, path, items, images: bool = False):
+        """저장된 꾸밈(회전 0 판·자르지 않은 쪽 비율) → 지금 보이는 쪽 비율 — 돌리고(4.19) 자른다(4.40). 사진이 아니면 그대로."""
+        fr = self._photo_deco_frame(path)
+        boxv = self._photo_view_box(path) if path and self._is_photo_path(path) else None
+        if fr:
+            from viewer import photo_deco
+            items = (photo_deco.rotate_images if images else photo_deco.rotate_strokes)(items, *fr)
+        if boxv:
+            from viewer import photo_crop
+            items = (photo_crop.map_images if images else photo_crop.map_strokes)(items, boxv)
+        return items
+
+    def _photo_deco_out(self, path, items, images: bool = False):
+        """보이는 쪽 비율의 꾸밈 → 저장할 회전 0 판·자르지 않은 쪽 비율(`_photo_deco_in` 의 역)."""
+        fr = self._photo_deco_frame(path)
+        boxv = self._photo_view_box(path) if path and self._is_photo_path(path) else None
+        if boxv:
+            from viewer import photo_crop
+            items = (photo_crop.map_images if images else photo_crop.map_strokes)(items, boxv, back=True)
+        if fr:
+            from viewer import photo_deco
+            rot, w0, h0 = fr
+            items = (photo_deco.rotate_images if images else photo_deco.rotate_strokes)(
+                items, photo_deco.inverse(rot), *((h0, w0) if rot in (90, 270) else (w0, h0)))
+        return items
+
+    # ── 보기 크롭 (4.40, 261105-4 — 원본 그대로, 자른 모양만 사이드카 `photo_crop`) ─────────────
+    def _photo_crop_for(self, path):
+        """사진의 보기 크롭 — 회전 0 판 쪽 비율 상자, 없으면 None."""
+        if not path or not self._is_photo_path(path):
+            return None
+        st = self._ensure_page_meta_store()
+        try:
+            return st.photo_crop(path) if st else None
+        except Exception:
+            return None
+
+    def _photo_view_box(self, path):
+        """보이는 방향(보기 회전 뒤)의 크롭 상자, 없으면 None."""
+        box0 = self._photo_crop_for(path)
+        if not box0:
+            return None
+        from viewer.photo_crop import to_view
+        return to_view(box0, self._photo_rot_for(path))
+
+    def _photo_crop_dialog(self, path=None):
+        """크롭 창(4.40) — 미리보기 그림은 배경에서 풀고(사진 복사와 같은 워커) 끝나면 창을 연다."""
+        now = self.main_view.current_file() if self.main_view else None
+        cur = str(path) if path else now
+        if not cur or not self._is_photo_path(cur):
+            return
+        if self._photo_any_cached([cur]):
+            self._photo_ro_notice()
+            return
+        is_now = bool(now) and str(Path(cur)) == str(Path(now))
+        from viewer.photo_io import oriented_size
+        if (is_now and self._photo_is_broken()) or not oriented_size(cur)[0]:
+            return                                       # 열 수 없는 파일은 자르지 않는다(4.18)
+        st = self._ensure_page_meta_store()
+        if st is None or st._key(cur) is None:
+            self.status.showMessage(tr("폴더를 열어 고른 사진만 자를 수 있습니다."), 4000)
+            return
+        if self.__dict__.get("_photo_crop_busy"):
+            return
+        from viewer.workers import run_in_thread
+        self._photo_crop_busy = True
+        w = PhotoCopyWorker(cur, self._photo_rot_for(cur), max_side=CROP_PREVIEW_SIDE)
+        w.done.connect(self._photo_crop_ready)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_crop_ready(self, path: str, img):
+        self._photo_crop_busy = False
+        if img is None or img.isNull():
+            self.status.showMessage(tr("사진을 읽지 못했습니다."), 4000)
+            return
+        from PyQt6.QtWidgets import QDialog
+        from viewer import photo_crop
+        from viewer.widgets.photo_crop_dialog import PhotoCropDialog
+        boxv = self._photo_view_box(path)
+        dlg = PhotoCropDialog(img, photo_crop.margins_of(boxv), has_crop=bool(boxv), title=Path(path).name, parent=self)
+        self._photo_crop_dlg = dlg
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        m = dlg.margins()
+        box0 = None if m is None else photo_crop.norm(photo_crop.to_rot0(photo_crop.box_of(m), self._photo_rot_for(path)))
+        self._photo_set_crop(path, box0)
+
+    def _photo_set_crop(self, path, box0):
+        """크롭을 정한다(None 이면 푼다) — 보기 상태라 사진 보기 묶음만 바로 쓰고(4.16 과 같은 길), 썸네일·본문을 다시 그린다."""
+        st = self._ensure_page_meta_store()
+        if st is None:
+            return False
+        old = st.photo_crop(path)
+        if old == (tuple(box0) if box0 else None):
+            return True
+        if st.set_photo_crop(path, box0) is False:
+            self.status.showMessage(tr("폴더를 열어 고른 사진만 자를 수 있습니다."), 4000)
+            return False
+        st.save_photo_rotation()
+        strip = self._photo_strip_widget(create=False)
+        if strip is not None:
+            strip.refresh(str(path))
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if cur and str(Path(cur)) == str(Path(path)):
+            fit = mv._fit_mode
+            if mv.load_document(cur, 0):
+                mv._fit_mode = fit
+                self._photo_after_open(Path(cur))
+                self._photo_words_changed()
+                mv._render_current()
+        self.status.showMessage(tr("크롭을 풀었습니다 — 원본 사진은 그대로입니다.") if not box0 else
+                                tr("자른 모양으로 봅니다 — 원본 사진은 그대로입니다."), 4000)
+        return True
+
     def _photo_rotate(self, delta: int = 90, absolute: int | None = None, path=None):
         """사진을 돌린다 — 보기만(원본 사진은 그대로, 방향 저장 D17 은 따로). 폴더를 연 사진만 기억한다(사이드카가 폴더에 있다).
         `path` 를 주면 그 사진(썸네일 줄 메뉴 — 지금 본문이 아니어도), 없으면 지금 사진."""
@@ -1764,6 +1892,11 @@ class PhotoMixin:
         a_save = menu.addAction(tr("방향 저장 (원본 JPEG)"))       # 4.17 — 돌린 JPEG 일 때만
         a_save.setEnabled(self._photo_rot_for(mv.current_file()) != 0
                           and photo_io_is_jpeg(mv.current_file()) and not self.__dict__.get("_photo_orient_busy"))
+        a_crop = menu.addAction(tr("크롭..."))                     # 4.40(261105-4) — 보기 크롭, 원본 그대로
+        a_uncrop = menu.addAction(tr("크롭 해제"))
+        _ro = self._photo_is_broken() or self._photo_any_cached([mv.current_file()])
+        a_crop.setEnabled(not _ro)
+        a_uncrop.setEnabled(not _ro and bool(self._photo_crop_for(mv.current_file())))
         menu.addSeparator()
         a_fp = menu.addAction(tr("쪽 맞춤"))
         a_fw = menu.addAction(tr("폭 맞춤"))
@@ -1820,6 +1953,10 @@ class PhotoMixin:
             self._photo_rotate(absolute=0)
         elif chosen is a_save:
             self._photo_save_orientation()
+        elif chosen is a_crop:
+            self._photo_crop_dialog()
+        elif chosen is a_uncrop:
+            self._photo_set_crop(mv.current_file(), None)
         elif chosen in (a_fp, a_fw):
             mv._show_fit(mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH)
             mv._fit_mode = mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH
@@ -1970,6 +2107,10 @@ class PhotoMixin:
         if st is not None:
             rot = st.photo_rotation(path)
             self._photo_move_decorations(st, path, rot)          # 회전 0 판이 바뀌었다 — 꾸밈도 같은 만큼(4.19)
+            box = st.photo_crop(path)
+            if box:                                              # 크롭도 같은 만큼(4.40)
+                from viewer.photo_crop import after_orient_save
+                st.set_photo_crop(path, after_orient_save(box, rot))
             st.set_photo_rotation(path, 0)
             st.save_photo_rotation()
         strip = self._photo_strip_widget(create=False)
@@ -2015,7 +2156,7 @@ class PhotoMixin:
             paths = [p for p in paths if self._is_photo_path(p)]     # zip 줄 등 사진 아닌 것은 빼고(4.24)
         if not paths:
             return
-        if kind in ("share_gps", "share_all", "flatten", "reveal", "rot_l", "rot_r", "batch") and self._photo_any_cached(paths):
+        if kind in ("share_gps", "share_all", "flatten", "reveal", "rot_l", "rot_r", "batch", "crop") and self._photo_any_cached(paths):
             self._photo_ro_notice()
             return
         from PyQt6.QtWidgets import QApplication
@@ -2024,7 +2165,7 @@ class PhotoMixin:
             self.status.showMessage(tr("경로를 복사했습니다."), 2500)
         elif kind == "copy_image":
             from viewer.workers import run_in_thread
-            w = PhotoCopyWorker(paths[0], self._photo_rot_for(paths[0]))
+            w = PhotoCopyWorker(paths[0], self._photo_rot_for(paths[0]), crop=self._photo_crop_for(paths[0]))
             w.done.connect(self._photo_copied)
             self.status.showMessage(tr("사진 복사 중…"), 2000)
             run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
@@ -2055,6 +2196,8 @@ class PhotoMixin:
             self._photo_copy_out(paths)
         elif kind in ("rot_l", "rot_r"):
             self._photo_rotate(-90 if kind == "rot_l" else +90, path=paths[0])
+        elif kind == "crop":
+            self._photo_crop_dialog(paths[0])
 
     def _photo_copied(self, path: str, img):
         from PyQt6.QtWidgets import QApplication
@@ -2076,7 +2219,7 @@ class PhotoMixin:
         targets = sel if many else [path]
         menu = QMenu(self)
         items = [("open", tr("열기")), (None, None),
-                 ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), (None, None),
+                 ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), ("crop", tr("크롭...")), (None, None),
                  ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")), (None, None),
                  ("to_pdf", tr("PDF 로 만들기...")), (None, None),
                  ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
@@ -2135,17 +2278,25 @@ class PhotoMixin:
 
     # ── 사진 → PDF·인쇄·평탄화 (P2 ④, 4.21) ─────────────────────────────
     def _photo_needs_bake(self, path) -> tuple:
-        """(보기 회전, 꾸밈이 있는가) — 사진을 PDF·그림으로 내보낼 때 보이는 그대로가 되도록."""
+        """(보기 회전, 꾸밈이 있는가, 보기 크롭 상자|None) — 사진을 PDF·그림으로 내보낼 때 보이는 그대로가 되도록(4.21·4.40)."""
         rot = self._photo_rot_for(path)
         st = self._ensure_page_meta_store()
         deco = bool(st and (0 in set(st.pages_with_drawings(path)) or 0 in set(st.pages_with_images(path))))
-        return rot, deco
+        return rot, deco, self._photo_crop_for(path)
+
+    @staticmethod
+    def _photo_pdf_cut(page, box0) -> None:
+        """사진 한 쪽(회전 0, 원점 0)을 보기 크롭대로 — CropBox 를 정하고 바깥을 실제로 지운다(4.40, 마스터 §4.7.15 `cut_outside`)."""
+        from viewer import page_crop, photo_crop
+        r = page.rect
+        page_crop.set_crop(page, photo_crop.native_rect(box0, r.width, r.height))
+        page_crop.cut_outside(page.parent[page.number])
 
     def _photo_bake_pdf(self, pdf_path: str, paths: list) -> str:
         """사진을 쪽마다 하나씩 넣은 PDF(`paths` 와 같은 차례)에 꾸밈을 굽고 보기 회전을 `/Rotate` 로 — 보이는 그대로.
         굽기 그림은 메인(마스터 §4.7.16 과 같은 길 — 사진 몇 장은 짧다). 고칠 것이 없으면 받은 경로 그대로."""
         need = [(i, p) + self._photo_needs_bake(p) for i, p in enumerate(paths)]
-        need = [t for t in need if t[2] or t[3]]
+        need = [t for t in need if t[2] or t[3] or t[4]]
         if not need:
             return pdf_path
         import fitz
@@ -2153,7 +2304,7 @@ class PhotoMixin:
         try:
             if doc.page_count != len(paths):
                 return pdf_path                      # 차례가 어긋났다(읽지 못한 사진) — 굽지 않는다
-            for i, p, rot, deco in need:
+            for i, p, rot, deco, crop in need:
                 if deco:
                     sub = fitz.open()
                     sub.insert_pdf(doc, from_page=i, to_page=i)
@@ -2164,6 +2315,8 @@ class PhotoMixin:
                     doc.delete_page(i)
                     doc.insert_pdf(sub, start_at=i)
                     sub.close()
+                if crop:
+                    self._photo_pdf_cut(doc[i], crop)
                 if rot:
                     doc[i].set_rotation((doc[i].rotation + rot) % 360)
             out = str(Path(pdf_path).with_name(Path(pdf_path).stem + "_baked.pdf"))
@@ -2211,9 +2364,9 @@ class PhotoMixin:
 
     def _photo_flatten(self, path):
         """사진 평탄화(D4, 4.21) — 꾸밈을 굽고 보기 회전까지 적용한 **새 그림 파일**을 원본 옆에. 원본은 그대로."""
-        rot, deco = self._photo_needs_bake(path)
-        if not rot and not deco:
-            QMessageBox.information(self, tr("평탄화"), tr("이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향이 없습니다."))
+        rot, deco, crop = self._photo_needs_bake(path)
+        if not rot and not deco and not crop:
+            QMessageBox.information(self, tr("평탄화"), tr("이 사진에 구울 꾸밈(선·도형·글·사진)이나 돌린 방향·자른 모양이 없습니다."))
             return
         if self.__dict__.get("_photo_flat_busy"):
             return
@@ -2231,7 +2384,7 @@ class PhotoMixin:
                 ov.close()
         from viewer.workers import run_in_thread
         self._photo_flat_busy = True
-        w = PhotoFlattenWorker(str(path), rot, overlay)
+        w = PhotoFlattenWorker(str(path), rot, overlay, crop)
         w.done.connect(self._photo_flattened)
         self.status.showMessage(tr("평탄화 중…"), 3000)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
@@ -2261,7 +2414,8 @@ class PhotoMixin:
             return                                       # 취소
         from viewer.workers import run_in_thread
         self._photo_share_busy = True
-        w = PhotoShareWorker(paths, mode, {p: self._photo_rot_for(p) for p in paths}, dest=dest)
+        w = PhotoShareWorker(paths, mode, {p: self._photo_rot_for(p) for p in paths}, dest=dest,
+                             crops={p: self._photo_crop_for(p) for p in paths})
         w.done.connect(self._photo_shared)
         self.status.showMessage(tr("공유용 사본 만드는 중…"), 3000)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
@@ -2423,14 +2577,14 @@ class PhotoMixin:
 
     def _photo_slide_src(self, path):
         """슬라이드쇼가 그릴 원천 — 꾸밈이 있는 사진만 구운 1쪽 PDF(보기 회전은 `/Rotate`), 아니면 사진 그대로(사진 문서가 돌림까지)."""
-        rot, deco = self._photo_needs_bake(path)
+        rot, deco, crop = self._photo_needs_bake(path)
         if not deco:
-            return str(path)
+            return str(path)                             # 사진 문서가 돌림·자름까지(4.16·4.40)
         import fitz
         from viewer import photo_io
         try:
             st = os.stat(str(path))
-            key = (str(path), st.st_mtime_ns, rot, repr(self._ensure_page_meta_store().get_drawings(path, 0)),
+            key = (str(path), st.st_mtime_ns, rot, crop, repr(self._ensure_page_meta_store().get_drawings(path, 0)),
                    len(self._ensure_page_meta_store().get_images(path, 0)))
         except Exception:
             key = (str(path), rot)
@@ -2444,6 +2598,8 @@ class PhotoMixin:
             pg = doc.new_page(width=w, height=h)
             photo_io.insert_photo(pg, (0, 0, w, h), str(path))
             self._bake_decorations(doc, str(path))
+            if crop:
+                self._photo_pdf_cut(doc[0], crop)
             if rot:
                 doc[0].set_rotation(rot)
             out = str(self._mk_print_tmpdir("polypdf_slide_") / (Path(str(path)).stem + "_slide.pdf"))
@@ -2630,6 +2786,7 @@ class PhotoOrientSaveWorker(QObject):
             self.finished.emit()
 
 
+CROP_PREVIEW_SIDE = 1600        # 크롭 창 미리보기 그림의 긴 변(4.40)
 COPY_MAX_SIDE = 8192            # 사진 복사 — 긴 변 상한(클립보드에 24 MP 그대로는 무겁다, 4.20)
 
 
@@ -2638,9 +2795,10 @@ class PhotoCopyWorker(QObject):
     done = pyqtSignal(str, object)
     finished = pyqtSignal()
 
-    def __init__(self, path: str, rot: int = 0):
+    def __init__(self, path: str, rot: int = 0, crop=None, max_side: int = 0):
         super().__init__()
-        self.path, self.rot = path, int(rot or 0) % 360
+        self.path, self.rot, self.crop = path, int(rot or 0) % 360, crop        # 보기 크롭(4.40) — 자른 뒤 돌린다
+        self.max_side = int(max_side or COPY_MAX_SIDE)
 
     def request_cancel(self):
         pass
@@ -2649,7 +2807,10 @@ class PhotoCopyWorker(QObject):
         img = None
         try:
             from viewer.photo_io import read_scaled
-            img, _w, _h = read_scaled(self.path, COPY_MAX_SIDE, auto_transform=True)
+            img, _w, _h = read_scaled(self.path, self.max_side, auto_transform=True)
+            if self.crop and img is not None and not img.isNull():
+                from viewer.photo_crop import crop_qimage
+                img = crop_qimage(img, self.crop)
             if self.rot and img is not None and not img.isNull():
                 from PyQt6.QtGui import QTransform
                 img = img.transformed(QTransform().rotate(self.rot))
@@ -2681,9 +2842,10 @@ class PhotoShareWorker(QObject):
     done = pyqtSignal(list, list)          # [(원본, 사본)], [실패한 원본]
     finished = pyqtSignal()
 
-    def __init__(self, paths, mode: str, rots: dict, dest=None):
+    def __init__(self, paths, mode: str, rots: dict, dest=None, crops=None):
         super().__init__()
         self.paths, self.mode, self.rots = list(paths), mode, dict(rots or {})
+        self.crops = {k: v for k, v in (crops or {}).items() if v}       # 보기 크롭(4.40) — 자른 사진은 픽셀로 다시 쓴다
         self.dest = dest                                 # ('file', 경로) · ('dir', 새 폴더) · None(원본 옆 — 검사·옛 길)
         self._cancel = False
 
@@ -2695,8 +2857,10 @@ class PhotoShareWorker(QObject):
         from viewer import photo_doc, photo_io
         from viewer.pathutil import unique_path
         rot = int(self.rots.get(str(src), 0) or 0) % 360
+        crop = self.crops.get(str(src))
         jpeg = photo_io.is_jpeg_file(src)
-        if jpeg:
+        exif = None
+        if jpeg and not crop:
             data = src.read_bytes()
             o = photo_io.orientation(src)
             new_o = photo_io.compose_orientation(o, rot) if rot else o
@@ -2713,13 +2877,22 @@ class PhotoShareWorker(QObject):
         else:
             from PIL import Image, ImageOps
             photo_io._prep(src)
+            from viewer.photo_crop import crop_pil
             with Image.open(str(src)) as im:
                 icc = im.info.get("icc_profile")
+                if jpeg and crop and self.mode != "all":    # 자른 JPEG '위치 지움' — 다른 정보는 남기고 GPS 만 뺀다(방향은 픽셀로 세운다)
+                    try:
+                        ex = im.getexif()
+                        ex.pop(0x8825, None)
+                        ex[0x0112] = 1
+                        exif = ex.tobytes()
+                    except Exception:
+                        exif = None
                 im = ImageOps.exif_transpose(im)
-                pil = photo_doc._rotate(photo_io.to_srgb(im, icc), rot)
+                pil = photo_doc._rotate(crop_pil(photo_io.to_srgb(im, icc), crop), rot)
                 pil.load()
             heif = photo_io.is_heif(src)
-            ext = ".jpg" if heif else src.suffix
+            ext = ".jpg" if heif else (src.suffix if not jpeg or src.suffix.lower() in (".jpg", ".jpeg") else ".jpg")
             payload = None
         name = tr('{stem}_공유').format(stem=src.stem) + ext
         if self.dest and self.dest[0] == "file":
@@ -2735,7 +2908,10 @@ class PhotoShareWorker(QObject):
             if payload is not None:
                 tmp.write_bytes(payload)
             elif ext.lower() in (".jpg", ".jpeg"):
-                pil.convert("RGB").save(str(tmp), "JPEG", quality=SHARE_JPEG_QUALITY)      # EXIF·GPS 를 싣지 않는다
+                if exif:
+                    pil.convert("RGB").save(str(tmp), "JPEG", quality=SHARE_JPEG_QUALITY, exif=exif)   # GPS 를 뺀 정보
+                else:
+                    pil.convert("RGB").save(str(tmp), "JPEG", quality=SHARE_JPEG_QUALITY)      # EXIF·GPS 를 싣지 않는다
             else:
                 fmt = {".png": "PNG", ".tif": "TIFF", ".tiff": "TIFF", ".bmp": "BMP", ".webp": "WEBP", ".gif": "GIF"}.get(ext.lower(), "PNG")
                 if fmt == "PNG" and ext.lower() != ".png":
@@ -2773,9 +2949,10 @@ class PhotoFlattenWorker(QObject):
     done = pyqtSignal(str, str, str)          # 원본, 새 파일(실패면 ""), 까닭
     finished = pyqtSignal()
 
-    def __init__(self, path: str, rot: int, overlay: bytes | None):
+    def __init__(self, path: str, rot: int, overlay: bytes | None, crop=None):
         super().__init__()
         self.path, self.rot, self.overlay = path, int(rot or 0) % 360, overlay
+        self.crop = crop                                         # 보기 크롭(4.40) — 꾸밈을 얹은 뒤 자르고 돌린다
 
     def request_cancel(self):
         pass
@@ -2804,7 +2981,8 @@ class PhotoFlattenWorker(QObject):
                 if ov.size != im.size:
                     ov = ov.resize(im.size)
                 im = Image.alpha_composite(im, ov)
-            im = photo_doc._rotate(im, self.rot)
+            from viewer.photo_crop import crop_pil
+            im = photo_doc._rotate(crop_pil(im, self.crop), self.rot)
             jpeg = src.suffix.lower() in (".jpg", ".jpeg") or photo_io.is_heif(src)
             ext = ".jpg" if jpeg else ".png"
             dst = unique_path(src.with_name(tr('{stem}_평탄화').format(stem=src.stem) + ext))

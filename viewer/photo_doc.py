@@ -85,6 +85,24 @@ def decoded_ready(path, box: int):
 
 _REQUESTER = {"fn": None}
 _ROT_PROVIDER = {"fn": None}
+_CROP_PROVIDER = {"fn": None}
+
+
+def set_crop_provider(fn) -> None:
+    """사진의 보기 크롭(경로 → 회전 0 판 쪽 비율 상자 또는 None) — 앱이 사이드카 `photo_crop` 으로 넣는다(4.40)."""
+    _CROP_PROVIDER["fn"] = fn
+
+
+def view_crop(path):
+    fn = _CROP_PROVIDER["fn"]
+    if fn is None:
+        return None
+    try:
+        from viewer.photo_crop import norm
+        v = fn(str(path))
+        return norm(v) if v else None
+    except Exception:
+        return None
 
 
 def set_rotation_provider(fn) -> None:
@@ -117,7 +135,7 @@ def set_decode_requester(fn) -> None:
     _REQUESTER["fn"] = fn
 
 
-def _provisional(path: Path, tw: int, th: int, rot: int = 0):
+def _provisional(path: Path, tw: int, th: int, rot: int = 0, crop=None):
     """풀리기 전 임시 그림 — 썸네일 캐시가 있으면 그것을 키우고, 없으면 회색. 렌더 캐시에 넣지 않는다.
     `tw`·`th` 는 돌린 뒤 크기 — 캐시 그림(방향만 세운 것)을 돌려 맞춘다."""
     from PIL import Image
@@ -127,7 +145,8 @@ def _provisional(path: Path, tw: int, th: int, rot: int = 0):
         f = cache_dir() / (key + ".jpg") if key else None
         if f is not None and f.is_file():
             with Image.open(str(f)) as im:
-                return _rotate(im.convert("RGB"), rot).resize((tw, th))
+                from viewer.photo_crop import crop_pil
+                return _rotate(crop_pil(im.convert("RGB"), crop), rot).resize((tw, th))
     except Exception:
         pass
     return Image.new("RGB", (tw, th), (128, 128, 128))
@@ -167,11 +186,17 @@ class PhotoDocument:
         self.rotation = _view_rotation(self.path)
         if self.rotation in (90, 270):
             w, h = h, w
-        self.size = (int(w), int(h))
+        # 보기 크롭(261105-4, 4.40): 회전처럼 쪽 자체를 자른다 — 쪽 크기 = 자른 영역(회전 뒤). 좌표 판(D14)은 그대로
+        self.crop = view_crop(self.path)
+        self.full_size = (int(w), int(h))
+        if self.crop:
+            from viewer.photo_crop import size_after, to_view
+            w, h = size_after(w, h, to_view(self.crop, self.rotation))
+        self.size = (max(1, int(round(w))), max(1, int(round(h))))
         self.doc = fitz.open()
         self.doc.new_page(width=float(w), height=float(h))   # 그림 없는 빈 쪽 — 좌표·사각형만
         self.cache = cache or GLOBAL_PAGE_CACHE
-        self._cache_tag = "photo|%s|r%d" % (_tag(self.path), self.rotation)
+        self._cache_tag = "photo|%s|r%d|c%s" % (_tag(self.path), self.rotation, ",".join("%g" % v for v in (self.crop or ())))
 
     # ── PdfDocument 겉면 ──────────────────────────────
     @property
@@ -246,15 +271,21 @@ class PhotoDocument:
             if got is not None:
                 return got
         need = max(tw, th)
+        if self.crop:                                       # 자른 곳이 `need` 가 되게 더 크게 푼다(원본보다 크게는 안 푼다 — `_decode`)
+            from viewer.photo_crop import decode_box
+            need = decode_box(self.crop, need)
         im = decoded_ready(self.path, need)
         if im is None:
             req = _REQUESTER["fn"]
             if req is not None and threading.current_thread() is threading.main_thread():
                 # 메인에서 큰 사진(HEIC 24 MP 0.7~0.9초, 사용자 표본)을 풀지 않는다 — 임시 그림을 주고 배경에 맡긴다(응답성 SOT §6)
                 req(self.path, need)
-                tmp = _provisional(self.path, tw, th, self.rotation)
+                tmp = _provisional(self.path, tw, th, self.rotation, self.crop)
                 return RenderedPage(width=tw, height=th, samples=tmp.tobytes(), page_rect=(0.0, 0.0, float(w), float(h)))
             im = decoded(self.path, need)
+        if self.crop:
+            from viewer.photo_crop import crop_pil
+            im = crop_pil(im, self.crop)
         im = _rotate(im, self.rotation)
         if im.size != (tw, th):
             from PIL import Image
@@ -286,7 +317,8 @@ class BrokenPhotoDocument(PhotoDocument):
         self.path = Path(file_path)
         self.reason = reason
         self.rotation = 0
-        self.size = BROKEN_PAGE_SIZE
+        self.crop = None
+        self.size = self.full_size = BROKEN_PAGE_SIZE
         self.doc = fitz.open()
         self.doc.new_page(width=float(self.size[0]), height=float(self.size[1]))
         self.cache = cache or GLOBAL_PAGE_CACHE

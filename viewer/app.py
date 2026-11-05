@@ -5048,6 +5048,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return str(path), int(mv.current_page() or 0)
 
     def _open_crop_dialog(self, pages=None, view=None):
+        mv0 = view or self.main_view
+        cur0 = mv0.current_file() if mv0 is not None else None
+        if cur0 and getattr(self, "_photo_mode", False) and self._is_photo_path(cur0):
+            self._photo_crop_dialog(cur0)       # 사진은 보기 크롭 창(사진 보기 SOT §4.40, 261105-4) — CropBox 는 PDF 전용
+            return
         tgt = self._crop_target(view)
         if tgt is None:
             return

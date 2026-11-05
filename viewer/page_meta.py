@@ -19,6 +19,7 @@ from typing import Optional
 
 SIDECAR_NAME = "page_meta.json"
 SCHEMA_VERSION = 2
+PHOTO_VIEW_KEYS = ("photo_rot", "photo_crop")   # 사진 보기 상태 — 파일 기록 밖 맨 위 묶음(사진 보기 SOT §4.16·§4.40)
 CROP_MAX = 45.0
 BLOB_MIN = 4096          # 261101-3(마스터 §4.6.11): 이보다 긴 사진 값(`data`·`pdf`)은 파일별 `blobs` 에 한 번만
 _BLOB_FIELDS = ("data", "pdf")
@@ -108,11 +109,14 @@ class PageMetaStore:
         새 키로 옮긴다. 키가 상대경로라 옮기지 않으면 꾸밈이 옛 이름에 남아 **사라진 것처럼** 보인다."""
         ko, kn = self._key(old_path), self._key(new_path)
         files = self._data["files"]
-        sec = self._data.get("photo_rot") or {}
-        if ko is not None and kn is not None and ko != kn and ko in sec:
-            sec[kn] = sec.pop(ko)                       # 261104-3: 사진 보기 회전도 새 이름으로
-            if ko not in files:
-                return True
+        moved = False
+        for name in PHOTO_VIEW_KEYS:                    # 261104-3·261105-4: 사진 보기 회전·크롭도 새 이름으로
+            sec = self._data.get(name) or {}
+            if ko is not None and kn is not None and ko != kn and ko in sec:
+                sec[kn] = sec.pop(ko)
+                moved = True
+        if moved and ko not in files:
+            return True
         if ko is None or kn is None or ko == kn or ko not in files:
             return False
         files[kn] = files.pop(ko)
@@ -169,8 +173,9 @@ class PageMetaStore:
                 if isinstance(d, dict) and isinstance(d.get("files"), dict):
                     self._data = {"version": int(d.get("version", SCHEMA_VERSION)),
                                   "files": d["files"]}
-                    if isinstance(d.get("photo_rot"), dict) and d["photo_rot"]:
-                        self._data["photo_rot"] = d["photo_rot"]          # 261104-3: 사진 보기 회전
+                    for name in PHOTO_VIEW_KEYS:                          # 261104-3·261105-4: 사진 보기 회전·크롭
+                        if isinstance(d.get(name), dict) and d[name]:
+                            self._data[name] = d[name]
             except Exception:
                 pass
 
@@ -342,8 +347,33 @@ class PageMetaStore:
             self._data.pop("photo_rot", None)
         return True
 
+    # --- 사진 보기 크롭(261105-4, 사진 보기 SOT §4.40) — `photo_rot` 과 같은 성격의 맨 위 묶음 `photo_crop` ---
+    #   값 = 회전 0 판 쪽 비율 [x0, y0, x1, y1](D14). 보기 상태라 편집 저장 대기와 섞지 않고 `save_photo_rotation` 이 함께 쓴다.
+    def photo_crop(self, file_path):
+        key = self._key(file_path)
+        if not key:
+            return None
+        from viewer.photo_crop import norm
+        return norm((self._data.get("photo_crop") or {}).get(key))
+
+    def set_photo_crop(self, file_path, box) -> bool:
+        """메모리만 바꾼다. `box` 가 None·쪽 전체면 지운다. 키를 못 만들면 False."""
+        key = self._key(file_path)
+        if key is None:
+            return False
+        from viewer.photo_crop import norm
+        v = norm(box) if box is not None else None
+        sec = self._data.setdefault("photo_crop", {})
+        if v is None:
+            sec.pop(key, None)
+        else:
+            sec[key] = list(v)
+        if not sec:
+            self._data.pop("photo_crop", None)
+        return True
+
     def save_photo_rotation(self) -> bool:
-        """디스크의 사이드카에 `photo_rot` 묶음만 바꿔 쓴다(파일 기록은 디스크 것 그대로)."""
+        """디스크의 사이드카에 사진 보기 묶음(`photo_rot`·`photo_crop`)만 바꿔 쓴다(파일 기록은 디스크 것 그대로)."""
         p = self._sidecar()
         if not p:
             return False
@@ -355,13 +385,16 @@ class PageMetaStore:
             d = {}
         d.setdefault("version", SCHEMA_VERSION)
         d.setdefault("files", {})
-        sec = self._data.get("photo_rot") or {}
-        if sec:
-            d["photo_rot"] = dict(sec)
-        else:
-            d.pop("photo_rot", None)
-            if not p.exists():
-                return True                      # 쓸 것이 없다 — 사진 폴더에 파일을 만들지 않는다
+        any_sec = False
+        for name in PHOTO_VIEW_KEYS:
+            sec = self._data.get(name) or {}
+            if sec:
+                d[name] = dict(sec)
+                any_sec = True
+            else:
+                d.pop(name, None)
+        if not any_sec and not p.exists():
+            return True                          # 쓸 것이 없다 — 사진 폴더에 파일을 만들지 않는다
         try:
             tmp = p.with_suffix(".json.tmp")
             tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")

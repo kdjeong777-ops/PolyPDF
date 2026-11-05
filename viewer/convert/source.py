@@ -34,10 +34,11 @@ def _sweep_photo_tmp() -> None:
 class PageSource:
     """`with PageSource(경로, fixes=…, forced_pages=…) as src:` — 끝나면 문서·연결을 닫는다."""
 
-    def __init__(self, pdf_path, *, fixes=None, forced_pages=(), tables: str = "lines", photo_rot: int = 0):
+    def __init__(self, pdf_path, *, fixes=None, forced_pages=(), tables: str = "lines", photo_rot: int = 0, photo_crop=None):
         self.path = str(pdf_path)
         self.src_path = self.path                # 고침·OCR 의 키가 되는 원본(사진이면 사진 경로 — 사진 보기 SOT §4.35)
         self.photo_rot = int(photo_rot or 0) % 360
+        self.photo_crop = photo_crop                 # 사진 보기 크롭 — 회전 0 판 쪽 비율(사진 보기 SOT §4.40)
         self._photo = None                       # 사진이면 (회전 0 판 폭, 높이) — 쓰기 함수는 임시 PDF(`self.path`)를 연다
         self._tmpdir = None
         self.fixes = fixes
@@ -87,6 +88,9 @@ class PageSource:
             im = ImageOps.exif_transpose(im)
             im.load()
         w0, h0 = im.size
+        if self.photo_crop:
+            from viewer.photo_crop import crop_pil
+            im = crop_pil(im, self.photo_crop)
         if self.photo_rot:
             im = im.rotate(-self.photo_rot, expand=True)
         buf = io.BytesIO()
@@ -111,6 +115,10 @@ class PageSource:
             row = self._st.conn.execute("SELECT engine FROM ocr_page WHERE file_key=? AND page=0", (self._key,)).fetchone()
             if row and str(row["engine"] or "").endswith(_ocr.photo_sig(self.src_path)):
                 self._photo_words = _ocr.photo_words_view(self._st.get_page_words(self._key, 0), self.photo_rot, w0, h0)
+                if self.photo_crop:
+                    from viewer import photo_crop as _pc
+                    vw, vh = (h0, w0) if self.photo_rot in (90, 270) else (w0, h0)
+                    self._photo_words = _pc.words_view(self._photo_words, _pc.to_view(self.photo_crop, self.photo_rot), vw, vh)
                 self._photo_text = self._st.get_page_text(self._key, 0) or ""
         except Exception:
             self._st = None
