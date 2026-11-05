@@ -41,6 +41,12 @@ ALLOWED = {
         "이미 있는 파일 — 시작 뒤 색인이 비었는지(색인 중이면 미룸)",
     "viewer/app.py:MainWindow._autotag_suggest_single":
         "이미 있는 파일 — 태그 제안의 글 읽기(UI 대기)",
+    "viewer/app.py:MainWindow._remap_page_text._job":
+        "배경 — `_file_op_bg` 에서 쪽 편집 뒤 OCR·단어장 쪽 번호 옮김(261103-16)",
+    "viewer/photo_controller.py:PhotoIndexWorker.run":
+        "배경 — `run_in_thread` 워커가 사진 정보 색인 훑기(261104-4)",
+    "viewer/photo_controller.py:PhotoOcrWorker.run":
+        "배경 — `run_in_thread` 워커가 사진 OCR 보류 저장(261104-10)",
 }
 
 fails = []
