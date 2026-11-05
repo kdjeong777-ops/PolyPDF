@@ -3272,7 +3272,7 @@ class PhotoCopyWorker(QObject):
 
 
 FLAT_JPEG_QUALITY = 95          # 평탄화한 JPEG 화질(다시 압축 — 꾸밈을 그림에 굽는다)
-SHARE_JPEG_QUALITY = 92         # 공유용 사본 — JPEG 이 아닌 사진(HEIC)을 JPEG 로 바꿀 때 화질(JPEG 원본은 다시 압축하지 않는다)
+SHARE_JPEG_QUALITY = 92         # 공유용 사본 — HEIC 를 JPEG 로 바꿀 때·보기 크롭으로 자른 JPEG 을 다시 압축할 때 화질(자르지 않은 JPEG 은 다시 압축하지 않는다, 사진 보기 SOT 4.22·4.40)
 
 
 def share_dir_name(base, name: str) -> str:
@@ -3287,8 +3287,8 @@ def share_dir_name(base, name: str) -> str:
 
 class PhotoShareWorker(QObject):
     """공유용 사본(사진 보기 SOT 4.22, F5) — 배경: 사진마다 같은 폴더 임시 파일에 쓰고 새 이름 '<이름>_공유' 로 옮긴다(원본 그대로).
-    JPEG: `gps` 면 GPS 만 비움(D16 `jpeg_strip_gps`), `all` 이면 정보 묶음을 모두 빼고 방향 태그만(`jpeg_strip_meta`) — 둘 다 다시 압축 없음,
-    보기 회전은 방향 태그로. 그 밖: HEIC 는 JPEG 로, 나머지는 같은 형식으로 정보 없이 다시 저장(방향·보기 회전은 픽셀로 세움)."""
+    자르지 않은 JPEG: `gps` 면 GPS 만 비움(D16 `jpeg_strip_gps`), `all` 이면 정보 묶음을 모두 빼고 방향 태그만(`jpeg_strip_meta`) — 둘 다 다시 압축 없음,
+    보기 회전은 방향 태그로. 보기 크롭으로 자른 JPEG 은 픽셀을 잘라 다시 압축(`SHARE_JPEG_QUALITY`). 그 밖: HEIC 는 JPEG 로, 나머지는 같은 형식으로 정보 없이 다시 저장(방향·보기 회전은 픽셀로 세움)."""
     done = pyqtSignal(list, list)          # [(원본, 사본)], [실패한 원본]
     finished = pyqtSignal()
 

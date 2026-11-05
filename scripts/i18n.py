@@ -470,8 +470,21 @@ def _accels(s: str) -> int:
     return len(re.findall(r"&(?=[^\s&])", _ENTITY.sub("", (s or "").replace("&&", ""))))
 
 
+# 메뉴 항목 끝 장수 `({n}장)` 는 숫자만 `({n})` — 다국어 SOT §12.2 용어표(261105-21). 진행 글('… 중… ({n}장)')은 `({n} photos)`.
+_MENU_COUNT = re.compile(r"\((\{\w+\})장\)(…|\.\.\.)?$")
+
+
+def menu_count_tail(mid: str, s: str) -> str:
+    """메뉴 끝 장수 꼴이 용어표와 다르면 문제 한 줄, 맞거나 대상이 아니면 빈 글."""
+    m = _MENU_COUNT.search(mid or "")
+    if not m or "중…" in mid or "중..." in mid:
+        return ""
+    want = "(%s)%s" % (m.group(1), m.group(2) or "")
+    return "" if (s or "").endswith(want) else "메뉴 끝 장수는 '%s' 로 끝난다(다국어 SOT §12.2)" % want
+
+
 def check_translation(mid: str, s: str) -> list:
-    """번역문 하나의 문제 목록(빈 목록이면 통과). 자리표시·한글·단축키 `&` 수."""
+    """번역문 하나의 문제 목록(빈 목록이면 통과). 자리표시·한글·단축키 `&` 수·메뉴 끝 장수 꼴."""
     if not s:
         return ["빈 번역"]
     bad = []
@@ -481,6 +494,9 @@ def check_translation(mid: str, s: str) -> list:
         bad.append("번역문에 한글이 남았다")
     if _accels(mid) != _accels(s):
         bad.append("단축키 & 수가 원문과 다르다(%d ≠ %d)" % (_accels(s), _accels(mid)))
+    tail = menu_count_tail(mid, s)
+    if tail:
+        bad.append(tail)
     return bad
 
 

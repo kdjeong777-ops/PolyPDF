@@ -13,12 +13,10 @@ from __future__ import annotations
 
 import os
 import sqlite3
-import threading
 from pathlib import Path
 
 DB_NAME = "photo_index.db"
 SCHEMA = 3                       # 2: `ocr` 칸(261104-10 P4-c) · 3: `at_ver`·`kind` 칸(자동 태그 판정 표시, 태그 SOT §5.7, 261105-6)
-_LOCK = threading.Lock()
 
 
 def db_path() -> Path:

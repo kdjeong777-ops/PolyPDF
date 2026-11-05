@@ -218,6 +218,15 @@ try:
             if T.hangul_leak(mid, s):                            # 규칙은 scripts/i18n.py 한 곳(fill 도 같은 것)
                 leak.append(mid[:30])
         chk(not leak, "F %s 번역문에 한글이 남지 않았다(허용: 두 언어 안내·'제1장'·_번역)" % d.name, str(leak[:5]))
+        # 261105-21: 메뉴 끝 장수 '({n}장)' 는 '({n})' 꼴로(다국어 SOT §12.2 용어표) — 'Print ({n} photos)…' 처럼 섞였다
+        tails = []
+        for m in cat:
+            if m.id and isinstance(m.id, str) and m.string and T.menu_count_tail(m.id, m.string):
+                tails.append("%s → %s" % (m.id, m.string))
+        chk(not tails, "F %s 메뉴 끝 장수 꼴이 용어표대로 '({n})'" % d.name, str(tails[:5]))
+    chk(T.menu_count_tail("인쇄 ({n}장)…", "Print ({n} photos)…") and not T.menu_count_tail("인쇄 ({n}장)…", "Print ({n})…")
+        and not T.menu_count_tail("사진 위치를 읽는 중… ({n}장)", "Reading photo locations… ({n} photos)"),
+        "F 메뉴 끝 장수 규칙 — 섞인 꼴은 잡고, 맞는 꼴·진행 글은 통과")
     chk(not (real / "qps_ploc").exists(), "F 가짜 언어 폴더가 저장소·빌드에 남아 있지 않다")
 
     # ── H — 메인 창 감싸기(Phase 2) ──

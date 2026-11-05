@@ -4568,7 +4568,7 @@ msgstr "Another program is using the photo, so the orientation was not saved —
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "인쇄 ({n}장)…"
-msgstr "Print ({n} photos)…"
+msgstr "Print ({n})…"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -4671,7 +4671,7 @@ msgstr "Copy to PC ({n})..."
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "삭제 ({n}장)"
-msgstr "Delete ({n} photos)"
+msgstr "Delete ({n})"
 
 #: viewer/photo_controller.py
 #, python-brace-format
