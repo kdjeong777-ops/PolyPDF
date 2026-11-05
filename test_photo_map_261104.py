@@ -12,6 +12,8 @@ F. 브라우저의 [PolyPDF 에서 고르기] → 책갈피창에서 그 사진�
 G. 메뉴 — 책갈피창 사진 줄(한 장·'(N장)')·썸네일 줄 칸에 '지도에서 위치 보기'
 H. 클라우드에만 있는 사진은 머리도 읽지 않는다(내려받지 않음, §4.37)
 I. 400장 위치 읽기 — 메인 최장 공백 < 0.5초(배경)
+J. 묶음 창 '7장 · 2026-11-04(2), 2026-10-23(5)' — 최근 날짜 순, 날짜는 책갈피창과 같은 값(촬영일, 없으면 파일 날짜),
+   날짜 없음은 끝, 한 줄을 넘으면 '…'·전체는 툴팁 (261105-18). 페이지의 JS 를 node 로 돌려 본다(없으면 SKIP)
 """
 import os, sys, tempfile, shutil, time, urllib.request, urllib.error
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -94,12 +96,13 @@ try:
     from PIL import Image
     from viewer import photo_io, photo_map
 
-    def gps_jpg(path, lat, lon, color=(30, 160, 60)):
+    def gps_jpg(path, lat, lon, color=(30, 160, 60), taken="2026:11:05 10:20:30"):
         ex = Image.Exif()
         d = int(lat); m = (lat - d) * 60
         e = int(lon); n = (lon - e) * 60
         ex[0x8825] = {1: "N", 2: (float(d), float(m), 0.0), 3: "E", 4: (float(e), float(n), 0.0)}
-        ex[0x8769] = {0x9003: "2026:11:05 10:20:30"}
+        if taken:
+            ex[0x8769] = {0x9003: taken}
         Image.new("RGB", (300, 200), color).save(path, "JPEG", exif=ex.tobytes())
 
     A = tmp / "a 위치.jpg"; gps_jpg(A, 37.5, 127.01)
@@ -183,6 +186,41 @@ try:
     chk(code == 404, "D 모르는 토큰은 404", str(code))
     code, _, _ = http(base + "/lib/../../viewer/app.py")
     chk(code == 404, "D 동봉 목록 밖 파일은 404", str(code))
+
+    # J — 묶음 창 날짜(장수)
+    import re, json as _json, subprocess, datetime
+    J = tmp / "jj"; J.mkdir()
+    gps_jpg(J / "j1.jpg", 37.5, 127.01, taken="2026:10:23 09:00:00")
+    gps_jpg(J / "j2.jpg", 37.5, 127.01, taken=None)                       # 촬영일 없음 → 파일 날짜
+    n_open = len(opened)
+    mw._photo_action("map", [str(A), str(J / "j1.jpg"), str(J / "j2.jpg")])
+    pump(lambda: len(opened) > n_open, timeout=15)
+    code, body, _ = http(opened[-1]) if len(opened) > n_open else (0, b"", {})
+    html_j = body.decode("utf-8", "replace")
+    m = re.search(r"const D = (\{.*?\});\n", html_j)
+    dj = _json.loads(m.group(1)) if m else {"pts": []}
+    days = {pt[2]: (pt[4] if len(pt) > 4 else None) for pt in dj["pts"]}
+    today = datetime.date.fromtimestamp(os.path.getmtime(J / "j2.jpg")).isoformat()
+    chk(days == {"a 위치.jpg": "2026-11-05", "j1.jpg": "2026-10-23", "j2.jpg": today},
+        "J 페이지의 날짜 — 촬영일, 없으면 파일 날짜(책갈피창과 같은 값)", str(days))
+    chk(all(photo_io.photo_when(str(pp))[0] == days.get(pp.name) for pp in (A, J / "j1.jpg", J / "j2.jpg")),
+        "J 책갈피창 날짜(photo_io.photo_when)와 같다")
+    chk(".days{" in html_j and "text-overflow:ellipsis" in html_j and "white-space:nowrap" in html_j and "s.title" in html_j,
+        "J 한 줄을 넘으면 '…', 전체는 툴팁")
+    fn = re.search(r"function daysText\(ids\)\{.*?\n\}", html_j, re.S)
+    node = shutil.which("node")
+    if not fn or not node:
+        chk(bool(fn), "J daysText 가 페이지에 있다")
+        print("SKIP - J 묶음 글 계산(daysText 또는 node 없음)")
+    else:
+        dd = {"pts": [[0, 0, "x", "", d] for d in
+                      ["2026-10-23"] * 5 + ["2026-11-04"] * 2 + [""] + ["2025-01-02"]],
+              "t": dj.get("t", {})}
+        js = "const D = %s;\n%s\nconsole.log(daysText([0,1,2,3,4,5,6,7,8]));" % (_json.dumps(dd, ensure_ascii=False), fn.group(0))
+        r = subprocess.run([node, "-e", js], capture_output=True, timeout=30)
+        out = r.stdout.decode("utf-8", "replace").strip()
+        chk(out == "9장 · 2026-11-04(2), 2026-10-23(5), 2025-01-02(1), 날짜 없음(1)",
+            "J 묶음 글 — 총 장수 · 최근 날짜 순 날짜(장수), 날짜 없음은 끝", repr(out) + r.stderr.decode("utf-8", "replace")[:300])
 
     # E
     n_ask, n_open = len(asked), len(opened)

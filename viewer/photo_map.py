@@ -200,18 +200,19 @@ def stop_server() -> None:
 
 
 def page_html(points: list, skipped_gps: int = 0, skipped_cloud: int = 0) -> str:
-    """지도 페이지 HTML. points: [{"lat","lon","name","date"}...] — 경로는 싣지 않는다."""
+    """지도 페이지 HTML. points: [{"lat","lon","name","date","day"}...] — 경로는 싣지 않는다.
+    day = 책갈피창 이름 앞 날짜와 같은 'YYYY-MM-DD'(`photo_io.photo_when`) — 묶음 창의 '날짜(장수)' (261105-18)."""
     note = []
     if skipped_gps:
         note.append(tr("위치 없는 사진 {n}장 뺌").format(n=skipped_gps))
     if skipped_cloud:
         note.append(tr("클라우드에만 있는 사진 {n}장 뺌").format(n=skipped_cloud))
     data = {
-        "pts": [[round(float(p["lat"]), 6), round(float(p["lon"]), 6), p.get("name", ""), p.get("date", "")] for p in points],
+        "pts": [[round(float(p["lat"]), 6), round(float(p["lon"]), 6), p.get("name", ""), p.get("date", ""), p.get("day", "")] for p in points],
         "tile": MAP_TILE_URL, "attr": MAP_ATTRIBUTION, "icon": MAP_ICON_SIDE, "pop": MAP_POPUP_SIDE,
         "title": tr("사진 위치 — {n}장").format(n=len(points)), "note": " · ".join(note),
         "t": {"open": tr("PolyPDF 에서 열기"), "pick": tr("PolyPDF 에서 고르기"), "zoom": tr("확대"),
-              "n": tr("{n}장"), "sent": tr("PolyPDF 로 보냈습니다"), "fail": tr("PolyPDF 에 닿지 않습니다 — 앱이 닫혔을 수 있습니다")},
+              "n": tr("{n}장"), "noday": tr("날짜 없음"), "sent": tr("PolyPDF 로 보냈습니다"), "fail": tr("PolyPDF 에 닿지 않습니다 — 앱이 닫혔을 수 있습니다")},
     }
     js = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     return _TEMPLATE.replace("__TITLE__", _esc(data["title"])).replace("__DATA__", js)
@@ -232,6 +233,15 @@ def add_page(points: list, skipped_gps: int = 0, skipped_cloud: int = 0) -> str:
         while len(pages) > MAP_PAGES_MAX:
             pages.popitem(last=False)
     return "http://127.0.0.1:%d/m/%s/" % (port, tok)
+
+
+def _day_of(info: dict) -> str:
+    """책갈피창 이름 앞 날짜와 같은 규칙(`photo_io.photo_when` — 촬영일 DateTimeOriginal·DateTime, 없으면 파일 날짜, §4.37).
+    이미 읽은 사진 정보에서 만든다 — 같은 사진을 다시 열지 않는다(261105-18)."""
+    for v in (str(info.get("taken") or "").strip("\x00 "), str(info.get("file_time") or "")):
+        if len(v) >= 10 and v[4] in ":-" and v[7] in ":-":
+            return v[:4] + "-" + v[5:7] + "-" + v[8:10]
+    return ""
 
 
 class PhotoMapWorker(QObject):
@@ -272,8 +282,9 @@ class PhotoMapWorker(QObject):
                 if not g:
                     out["no_gps"] += 1
                 else:
+                    day = _day_of(info)
                     pts.append({"path": p, "lat": g[0], "lon": g[1], "name": Path(p).name,
-                                "date": (info.get("taken") or "")[:16].replace(":", "-", 2)})
+                                "date": (info.get("taken") or "")[:16].replace(":", "-", 2), "day": day})
                 pacing.pace(self)
             out["shown"] = len(pts)
             out["points"] = pts
@@ -302,6 +313,7 @@ html,body{margin:0;height:100%;font-family:"Malgun Gothic","Segoe UI",sans-serif
 .ph span{position:absolute;right:-8px;top:-8px;min-width:20px;padding:1px 5px;border-radius:10px;background:#1a73e8;color:#fff;font-size:12px;text-align:center;box-sizing:border-box}
 .pop img{display:block;max-width:100%;border-radius:4px}
 .pop .nm{font-weight:bold;margin-top:4px;word-break:break-all}.pop .dt{color:#666}
+.pop .days{font-weight:bold;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pop button{margin-top:6px;margin-right:4px;padding:3px 10px;cursor:pointer}
 #toast{position:absolute;z-index:1000;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:6px 14px;border-radius:6px;display:none}
 </style></head><body>
@@ -332,10 +344,16 @@ D.pts.forEach((p, i) => {
     return d; }, {maxWidth: D.pop + 40});
   cl.addLayer(m);
 });
+function daysText(ids){   // 261105-18: total, then day(count) newest first, no-date last
+  const c = {}; ids.forEach(i => { const k = D.pts[i][4] || ''; c[k] = (c[k] || 0) + 1; });
+  const ks = Object.keys(c).sort((a, b) => a === '' ? 1 : b === '' ? -1 : (a < b ? 1 : a > b ? -1 : 0));
+  return D.t.n.replace('{n}', ids.length) + ' · ' + ks.map(k => (k || D.t.noday) + '(' + c[k] + ')').join(', ');
+}
 cl.on('clusterclick', e => {
   const c = e.layer, ms = c.getAllChildMarkers(), ids = ms.map(m => m.options.i);
   const d = document.createElement('div'); d.className = 'pop'; d.style.width = (D.pop * 0.75) + 'px';
-  d.innerHTML = '<img src="b/' + ids[0] + '.jpg"><div class="nm">' + esc(D.t.n.replace('{n}', ids.length)) + '</div>';
+  d.innerHTML = '<img src="b/' + ids[0] + '.jpg">';
+  const s = document.createElement('div'); s.className = 'days'; s.textContent = s.title = daysText(ids); d.appendChild(s);
   const z = document.createElement('button'); z.textContent = D.t.zoom;
   z.onclick = () => { map.closePopup(); if (map.getZoom() >= map.getMaxZoom()) c.spiderfy(); else c.zoomToBounds({padding: [40, 40]}); };
   const k = document.createElement('button'); k.textContent = D.t.pick; k.onclick = () => pick(ids);

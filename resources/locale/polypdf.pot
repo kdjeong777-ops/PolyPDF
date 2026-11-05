@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-05 22:39+0900\n"
+"POT-Creation-Date: 2026-11-05 22:57+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4642,6 +4642,10 @@ msgstr ""
 #: viewer/photo_map.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "{n}장"
+msgstr ""
+
+#: viewer/photo_map.py
+msgid "날짜 없음"
 msgstr ""
 
 #: viewer/photo_map.py
