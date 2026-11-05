@@ -2332,8 +2332,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.cmb_fit.setMaximumWidth(90)
         self.cmb_fit.setFocusPolicy(Qt.FocusPolicy.NoFocus)      # 포커스 창(+ 0 − 대상)을 빼앗지 않는다
         self.cmb_fit.setToolTip(tr("본화면 맞춤 — 쪽·2장·폭·수동(2단이면 활성 창)"))
-        self.cmb_fit.currentIndexChanged.connect(
-            lambda _i: self.main_view.choose_fit(self.cmb_fit.currentData()))
+        self.cmb_fit.currentIndexChanged.connect(          # 261105-16: 사진 모드 '원래 크기' 는 `_fit_combo_pick` 이 가른다
+            lambda _i: self._fit_combo_pick(self.cmb_fit.currentData()))
         self.status.addPermanentWidget(self.cmb_fit)
         for _mv in self._mv:
             _mv.fitShown.connect(lambda _m, v=_mv: v is self.main_view and self._sync_fit_combo())
@@ -2349,6 +2349,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.status.addPermanentWidget(b)
             self._zoom_btns.append(b)
         QApplication.instance().focusChanged.connect(self._on_focus_for_zoom)
+        self._photo_fit_combo(getattr(self, "_photo_mode", False))   # 사진 모드로 시작했으면 '원래 크기'(261105-16 — 모드 복원이 콤보보다 먼저)
 
     def _sync_fit_combo(self) -> None:
         """261031-11: 창 아래 맞춤 콤보 = 활성 창이 보이는 맞춤(신호 없이)."""

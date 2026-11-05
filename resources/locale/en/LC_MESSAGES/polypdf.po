@@ -4054,18 +4054,6 @@ msgstr "Save Orientation (Original JPEG)"
 msgid "크롭..."
 msgstr "Crop..."
 
-#: viewer/photo_controller.py viewer/widgets/main_view.py
-msgid "쪽 맞춤"
-msgstr "Fit Page"
-
-#: viewer/photo_controller.py viewer/widgets/main_view.py
-msgid "폭 맞춤"
-msgstr "Fit Width"
-
-#: viewer/photo_controller.py
-msgid "원래 크기 (100%)"
-msgstr "Actual Size (100%)"
-
 #: viewer/photo_controller.py
 msgid "방향 저장 중…"
 msgstr "Saving orientation…"
@@ -4485,6 +4473,10 @@ msgid "이미 그 폴더에 있는 사진입니다."
 msgstr "The photo is already in that folder."
 
 #: viewer/photo_controller.py
+msgid "원래 크기"
+msgstr "Actual Size"
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "{stem}_공유"
 msgstr "{stem}_share"
@@ -4536,6 +4528,11 @@ msgstr "Could not extract photos from the zip: {name}"
 #: viewer/photo_controller.py
 msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
 msgstr "Another program is using the photo, so the orientation was not saved — the original is unchanged."
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "인쇄 ({n}장)…"
+msgstr "Print ({n} photos)…"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -7186,11 +7183,6 @@ msgstr "File missing: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "인쇄 ({n}장)…"
-msgstr "Print ({n} photos)…"
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
 msgid "인쇄 ({n}개 파일)…"
 msgstr "Print ({n} files)…"
 
@@ -8504,8 +8496,16 @@ msgid "강조"
 msgstr "Emphasis"
 
 #: viewer/widgets/main_view.py
+msgid "쪽 맞춤"
+msgstr "Fit Page"
+
+#: viewer/widgets/main_view.py
 msgid "2장 맞춤"
 msgstr "Fit 2 Pages"
+
+#: viewer/widgets/main_view.py
+msgid "폭 맞춤"
+msgstr "Fit Width"
 
 #: viewer/widgets/main_view.py
 msgid "수동 맞춤"
@@ -14106,4 +14106,7 @@ msgstr "Getting Started"
 
 #~ msgid "이름만"
 #~ msgstr "Name only"
+
+#~ msgid "원래 크기 (100%)"
+#~ msgstr "Actual Size (100%)"
 

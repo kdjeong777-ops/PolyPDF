@@ -3917,18 +3917,6 @@ msgstr ""
 msgid "크롭..."
 msgstr ""
 
-#: viewer/photo_controller.py viewer/widgets/main_view.py
-msgid "쪽 맞춤"
-msgstr ""
-
-#: viewer/photo_controller.py viewer/widgets/main_view.py
-msgid "폭 맞춤"
-msgstr ""
-
-#: viewer/photo_controller.py
-msgid "원래 크기 (100%)"
-msgstr ""
-
 #: viewer/photo_controller.py
 msgid "방향 저장 중…"
 msgstr ""
@@ -4348,6 +4336,10 @@ msgid "이미 그 폴더에 있는 사진입니다."
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "원래 크기"
+msgstr ""
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "{stem}_공유"
 msgstr ""
@@ -4398,6 +4390,11 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "인쇄 ({n}장)…"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -6953,11 +6950,6 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid "인쇄 ({n}장)…"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
 msgid "인쇄 ({n}개 파일)…"
 msgstr ""
 
@@ -8236,7 +8228,15 @@ msgid "강조"
 msgstr ""
 
 #: viewer/widgets/main_view.py
+msgid "쪽 맞춤"
+msgstr ""
+
+#: viewer/widgets/main_view.py
 msgid "2장 맞춤"
+msgstr ""
+
+#: viewer/widgets/main_view.py
+msgid "폭 맞춤"
 msgstr ""
 
 #: viewer/widgets/main_view.py

@@ -11,6 +11,9 @@ E. 본문 사진 메뉴에 사진 복사·경로 복사·탐색기·사진 정�
 F. 'PDF 로 만들기' 는 이미지 → PDF 창에 고른 사진을 넣어 연다
 G. 썸네일 줄에서 Ctrl+클릭으로 여러 장 고른다 — 본문은 그대로, 고른 칸 위 우클릭은 고른 사진 모두에(PDF 만들기·돌리기)
    (261104-3 사용자 지시 '썸네일을 2개 이상 선택하는 게 안 돼' — 종전엔 한 장만 골랐다)
+261105-16(사용자 지시 '썸네일 옵션 제일 위에도 인쇄 … 본화면 뷰어 옵션에서 쪽맞춤~원래크기 삭제, 인쇄를 사진복사 위에'):
+D·G 썸네일 줄 메뉴 맨 위 '인쇄…'/'인쇄 (N장)…' → 사진 인쇄 길, E 본문 메뉴에 맞춤 없음·'인쇄…' 가 '사진 복사' 바로 위,
+H 창 아래 맞춤 콤보에 사진 모드에만 '원래 크기'(사용자 결정 — 메뉴에서 빼면 닿을 길이 없어서)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -139,6 +142,13 @@ try:
     chk(pump(lambda: len(strip._done) >= 2, timeout=8), "D 썸네일 다 만듦")
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     tx = list(seen["texts"])
+    chk(tx[:2] == ["인쇄…", "열기"], "D 썸네일 줄 메뉴 맨 위 '인쇄…'(261105-16)", str(tx[:3]))
+    printed = []
+    _orig_pp = mw._photo_print
+    mw._photo_print = lambda preset_scope=None, paths=None: printed.append(list(paths or []))
+    seen["pick"] = "인쇄…"
+    strip.menuRequested.emit(b, QPoint(10, 10)); pump()
+    chk(printed and printed[-1] == [b], "D 썸네일 '인쇄…' — 누른 사진을 사진 인쇄 길로(_photo_print paths)", str(printed))
     for want in ("열기", "왼쪽으로 90° 돌리기", "오른쪽으로 90° 돌리기", "사진 복사", "경로 복사", "파일 탐색기 열기", "PDF 로 만들기...",
                  "줄의 사진 3장으로 PDF 만들기..."):
         chk(want in tx, "D 썸네일 줄 메뉴에 '%s'" % want, str(tx))
@@ -162,6 +172,10 @@ try:
     tx = list(seen["texts"])
     for want in ("사진 복사", "경로 복사", "파일 탐색기 열기", "사진 정보...", "PDF 로 만들기...", "왼쪽으로 90° 돌리기"):
         chk(want in tx, "E 본문 사진 메뉴에 '%s'" % want, str(tx))
+    for gone in ("쪽 맞춤", "폭 맞춤", "원래 크기 (100%)"):           # 261105-16 — 맞춤은 창 아래 콤보
+        chk(gone not in tx, "E 본문 사진 메뉴에 '%s' 없음(261105-16)" % gone, str(tx))
+    chk("인쇄…" in tx and "사진 복사" in tx and tx.index("인쇄…") + 1 == tx.index("사진 복사"),
+        "E '인쇄…' 가 '사진 복사' 바로 위(261105-16)", str(tx))
 
     # F
     got = []
@@ -188,6 +202,11 @@ try:
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     tx = list(seen["texts"])
     chk("고른 사진 3장으로 PDF 만들기..." in tx and "고른 사진 3장 오른쪽으로 90° 돌리기" in tx, "G 고른 칸 우클릭 — 고른 사진 모두에", str(tx))
+    chk(tx[:1] == ["인쇄 (3장)…"], "G 고른 칸 우클릭 맨 위 '인쇄 (3장)…'(261105-16)", str(tx[:2]))
+    seen["pick"] = "인쇄 (3장)…"
+    strip.menuRequested.emit(b, QPoint(10, 10)); pump()
+    chk(printed and sorted(printed[-1]) == sorted([a, b, c3]), "G '인쇄 (3장)…' — 고른 세 장을 사진 인쇄로", str(printed[-1:]))
+    mw._photo_print = _orig_pp
     seen["pick"] = "고른 사진 3장으로 PDF 만들기..."
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     chk(got and sorted(got[-1]) == sorted([a, b, c3]), "G 고른 세 장으로 PDF 만들기", str(got[-1:]))
@@ -197,6 +216,20 @@ try:
     chk(len(strip.selected_paths()) == 3, "G 지금 사진을 다시 열어도 고른 것이 남는다", str(strip.selected_paths()))
     click(c3)
     chk(Path(mw.main_view.current_file()).name == "c3 가로.jpg" and len(strip.selected_paths()) == 1, "G 그냥 클릭은 그 사진을 열고 한 장만 고른다")
+
+    # H — 창 아래 맞춤 콤보 '원래 크기'(사진 모드에만, 261105-16 사용자 결정)
+    cmb, mv = mw.cmb_fit, mw.main_view
+    i = cmb.findData("actual")
+    chk(i == cmb.count() - 1 and cmb.itemText(i) == "원래 크기", "H 사진 모드 맞춤 콤보 끝에 '원래 크기'",
+        str([cmb.itemText(k) for k in range(cmb.count())]))
+    cmb.setCurrentIndex(i); pump(timeout=0.5)
+    chk(mv._fit_mode == mv.FIT_NONE and abs(mv._zoom - 1.0) < 1e-6 and cmb.currentData() == "actual",
+        "H '원래 크기' 를 고르면 100%·콤보는 '원래 크기'", str((mv._fit_mode, mv._zoom, cmb.currentData())))
+    cmb.setCurrentIndex(cmb.findData(mv.FIT_PAGE)); pump(timeout=0.5)
+    chk(mv._fit_mode == mv.FIT_PAGE, "H 다시 '쪽 맞춤' 은 본문 맞춤 그대로", str(mv._fit_mode))
+    mw._set_photo_mode(False); pump(timeout=0.5)
+    chk(mw.cmb_fit.findData("actual") < 0, "H PDF 모드 콤보에는 '원래 크기' 가 없다",
+        str([cmb.itemText(k) for k in range(cmb.count())]))
     mw.close()
 except Exception:
     import traceback

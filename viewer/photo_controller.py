@@ -29,6 +29,7 @@ PHOTO_OFF_CMDS = ("file.save_as",                                    # 인쇄·�
                   "tools.reindex", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign", "tools.translate")
 PHOTO_OFF_ATTRS = ()                     # 창에 따로 붙은 액션 — F5 발표는 사진 슬라이드쇼로 켠다(261104-7)
 PHOTO_LIST_ATTRS = ("_favorites", "_recent_folders", "_recent_files")   # 모드마다 따로(4.7) — 사진 묶음 키는 앞 _ 를 뺀 이름
+FIT_ACTUAL = "actual"                    # 창 아래 맞춤 콤보의 '원래 크기' — 사진 모드에만(4.16, 261105-16 사용자 결정)
 
 
 START_PDF = False                        # main.py 가 창을 만들기 **전에** 켠다 — 파일 인자·인쇄로 뜬 창(D1, 261104-20)
@@ -255,6 +256,7 @@ class PhotoMixin:
             if not on:
                 strip.stop()
         self._photo_gate_actions()
+        self._photo_fit_combo(on)                      # 창 아래 맞춤 콤보 '원래 크기'(4.16, 261105-16)
         self._photo_watch_update()                     # 폴더 감시(4.27, 261104-7 B2) — 사진 모드에서만
         if not on:
             self._photo_search_paths = None
@@ -2036,16 +2038,14 @@ class PhotoMixin:
         a_crop.setEnabled(not _ro)
         a_uncrop.setEnabled(not _ro and bool(self._photo_crop_for(mv.current_file())))
         menu.addSeparator()
-        a_fp = menu.addAction(tr("쪽 맞춤"))
-        a_fw = menu.addAction(tr("폭 맞춤"))
-        a_100 = menu.addAction(tr("원래 크기 (100%)"))
-        menu.addSeparator()
+        # 261105-16(4.16·4.20, 사용자 지시): 맞춤(쪽·폭·원래 크기)은 이 메뉴에서 뺐다 — 창 아래 맞춤 콤보(`_photo_fit_combo`).
+        #   '인쇄…' 는 '사진 복사' 바로 위.
         cur = mv.current_file()
         broken = self._photo_is_broken()
         extra = {}
-        for key, label in (("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
+        for key, label in (("print", tr("인쇄…")), ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
                            ("reveal", tr("파일 탐색기 열기")), ("info", tr("사진 정보...")),
-                           ("to_pdf", tr("PDF 로 만들기...")), ("print", tr("인쇄…")), ("flatten", tr("평탄화...")),
+                           ("to_pdf", tr("PDF 로 만들기...")), ("flatten", tr("평탄화...")),
                            ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))):
             a = menu.addAction(label)
             a.setEnabled(not broken or key in ("copy_path", "reveal"))
@@ -2097,12 +2097,6 @@ class PhotoMixin:
             self._photo_crop_dialog()
         elif chosen is a_uncrop:
             self._photo_set_crop(mv.current_file(), None)
-        elif chosen in (a_fp, a_fw):
-            mv._show_fit(mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH)
-            mv._fit_mode = mv.FIT_PAGE if chosen is a_fp else mv.FIT_WIDTH
-            mv._render_current()
-        elif chosen is a_100:
-            self._photo_zoom_actual()
 
     def _photo_sync_tree(self, path):
         """본문 사진이 바뀌면(썸네일 줄·넘김·검색·지운 뒤) 책갈피창의 그 줄을 고른다 — 신호 없이(다시 열지 않게).
@@ -2358,6 +2352,10 @@ class PhotoMixin:
         many = path in sel and len(sel) > 1          # 고른 칸 위를 눌렀으면 고른 사진 모두에(사용자 지시 261104-3)
         targets = sel if many else [path]
         menu = QMenu(self)
+        # 261105-16(4.20, 사용자 지시 '썸네일 옵션 제일 위에도 인쇄'): 맨 위 — 책갈피창 사진 행(261105-12)과 같은 길·같은 이름
+        a_print = menu.addAction(tr('인쇄 ({n}장)…').format(n=len(targets)) if many else tr("인쇄…"))
+        a_print.setEnabled(many or ok)
+        menu.addSeparator()
         items = [("open", tr("열기")), (None, None),
                  ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), ("crop", tr("크롭...")), (None, None),
                  ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")), (None, None),
@@ -2400,6 +2398,9 @@ class PhotoMixin:
             return
         if chosen is a_style:
             self._photo_label_dialog("strip")
+            return
+        if chosen is a_print:
+            self._photo_print(paths=targets)
             return
         if chosen is a_del:
             self._photo_delete(targets)
@@ -2996,10 +2997,36 @@ class PhotoMixin:
     def _photo_zoom_actual(self):
         """원래 크기 — 사진 픽셀 하나 = 화면 논리 픽셀 하나(D14 좌표 = pt)."""
         mv = self.main_view
-        mv._show_fit(mv.FIT_NONE)
+        mv._show_fit(FIT_ACTUAL)                 # 콤보는 '원래 크기'(261105-16) — 배율을 바꾸면 '수동 맞춤'
         mv._fit_mode = mv.FIT_NONE
         mv._zoom = 1.0
         mv._render_current()
+
+    def _photo_fit_combo(self, on: bool):
+        """261105-16(4.16, 사용자 결정): 본문 메뉴에서 뺀 '원래 크기' 를 창 아래 맞춤 콤보 끝에 — 사진 모드에서만(PDF 모드면 뺀다)."""
+        cmb = getattr(self, "cmb_fit", None)
+        if cmb is None:
+            return
+        i = cmb.findData(FIT_ACTUAL)
+        cmb.blockSignals(True)
+        try:
+            if on and i < 0:
+                cmb.addItem(tr("원래 크기"), FIT_ACTUAL)
+            elif not on and i >= 0:
+                if cmb.currentIndex() == i:
+                    cmb.setCurrentIndex(max(0, cmb.findData(self.main_view.shown_fit())))
+                cmb.removeItem(i)
+        finally:
+            cmb.blockSignals(False)
+        self._sync_fit_combo()
+
+    def _fit_combo_pick(self, key):
+        """창 아래 맞춤 콤보에서 고름 — '원래 크기'(사진 모드) 는 `_photo_zoom_actual`, 그 밖은 본문 `choose_fit`(261031-11)."""
+        if key == FIT_ACTUAL:
+            if getattr(self, "_photo_mode", False):
+                self._photo_zoom_actual()
+            return
+        self.main_view.choose_fit(key)
 
     def _rotate_current(self, delta: int):
         """돌리기 키(Ctrl+[ · Ctrl+]) — 사진이면 사진 보기 회전, PDF 면 지금 쪽 회전(쪽 메뉴의 회전과 같은 길)."""
