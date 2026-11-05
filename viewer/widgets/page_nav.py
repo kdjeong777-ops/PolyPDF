@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpin
 NAV_H = 26          # = MainView.TOOLBAR_H (디자인 SOT §2.10)
 BTN_W = 24
 SPIN_W = 46
+TOTAL_W = "/ 8888"   # '/ 전체' 칸 최소 폭을 재는 글 — 9,999쪽까지 묶음 폭이 같다(261105-29)
 
 
 class PageNav(QWidget):
@@ -50,7 +51,10 @@ class PageNav(QWidget):
         self.spin.setVisible(editable)
         self.lbl_total = QLabel("/ 0")
         self.lbl_total.setFixedHeight(NAV_H)
-        self.lbl_total.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # 261105-29: '/ 전체' 칸 폭은 자릿수와 무관(`TOTAL_W` 글 폭 이상) — 파일마다 '/ 6' ↔ '/ 487' 로 묶음 폭이 바뀌어
+        #   가운데에 둔 묶음이 흔들렸다. 글은 칸 왼쪽에 붙인다(칸 숫자 바로 뒤에 읽히게).
+        self.lbl_total.setMinimumWidth(self.lbl_total.fontMetrics().horizontalAdvance(TOTAL_W) + 2)
+        self.lbl_total.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         for w in (self.btn_prev, self.lbl_prefix, self.spin, self.lbl_total, self.btn_next):
             lay.addWidget(w)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
