@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-05 08:04+0900\n"
+"POT-Creation-Date: 2026-11-05 09:21+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -4007,6 +4007,10 @@ msgid "2분할 함께 움직이기: 끔"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "사진"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "이름 바꾸는 중…"
 msgstr ""
 
@@ -4261,6 +4265,11 @@ msgstr ""
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "{stem}_공유"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "사진 색인: {n}장 (새로 {a}·지움 {d})"
 msgstr ""
 
@@ -4315,11 +4324,6 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 {n}장"
-msgstr ""
-
-#: viewer/photo_controller.py
-#, python-brace-format
-msgid "{stem}_공유"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4388,6 +4392,11 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "삭제 ({n}장)"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{stem}_평탄화"
 msgstr ""
 
 #: viewer/photo_doc.py

@@ -418,7 +418,7 @@ class PhotoMixin:
         r_size = QRadioButton(tr("크기 줄이기 (새 파일)"))
         r_fmt = QRadioButton(tr("형식 바꾸기 (새 파일)"))
         form = QFormLayout()
-        ed_name = QLineEdit(Path(paths[0]).parent.name or "사진")
+        ed_name = QLineEdit(Path(paths[0]).parent.name or tr("사진"))
         sp_start = QSpinBox(); sp_start.setRange(0, 99999); sp_start.setValue(1)
         sp_side = QSpinBox(); sp_side.setRange(64, 20000); sp_side.setValue(BATCH_SIDE_DEFAULT); sp_side.setSuffix(" px")
         cb_fmt = QComboBox(); cb_fmt.addItem("JPEG", "jpg"); cb_fmt.addItem("PNG", "png")
@@ -445,7 +445,7 @@ class PhotoMixin:
         """이름 바꾸기 — `<base>_<번호>`(자릿수는 장 수에 맞춰 3자리 이상), 확장자 그대로. 마스터 §4.7.14 의 한 길(`_rename_bg` → `_after_rename`)을
         사진마다 — 태그·색인·꾸밈 사이드카·본문이 새 이름을 따른다. 바꿀 이름이 이미 있으면 **하나도 바꾸지 않고** 알린다. 바꾼 장 수."""
         from viewer.pathutil import safe_name
-        base = safe_name(base or "", fallback="사진")
+        base = safe_name(base or "", fallback=tr("사진"))
         paths = [str(p) for p in paths]
         width = max(3, len(str(int(start) + len(paths) - 1)))
         plan = [(Path(p), Path(p).with_name("%s_%0*d%s" % (base, width, int(start) + i, Path(p).suffix))) for i, p in enumerate(paths)]
@@ -2591,7 +2591,6 @@ class PhotoShareWorker(QObject):
     def _one(self, src: Path) -> str:
         import os
         from viewer import photo_doc, photo_io
-        from viewer.i18n import tr as _tr
         from viewer.pathutil import unique_path
         rot = int(self.rots.get(str(src), 0) or 0) % 360
         jpeg = photo_io.is_jpeg_file(src)
@@ -2620,7 +2619,7 @@ class PhotoShareWorker(QObject):
             heif = photo_io.is_heif(src)
             ext = ".jpg" if heif else src.suffix
             payload = None
-        name = _tr('{stem}_공유').format(stem=src.stem) + ext
+        name = tr('{stem}_공유').format(stem=src.stem) + ext
         if self.dest and self.dest[0] == "file":
             dst = Path(self.dest[1])                     # 사용자가 저장 창에서 고른 이름(덮어쓰기는 창이 물었다)
         elif self.dest and self.dest[0] == "dir":
@@ -2706,8 +2705,7 @@ class PhotoFlattenWorker(QObject):
             im = photo_doc._rotate(im, self.rot)
             jpeg = src.suffix.lower() in (".jpg", ".jpeg") or photo_io.is_heif(src)
             ext = ".jpg" if jpeg else ".png"
-            from viewer.i18n import tr as _tr
-            dst = unique_path(src.with_name(_tr('{stem}_평탄화').format(stem=src.stem) + ext))
+            dst = unique_path(src.with_name(tr('{stem}_평탄화').format(stem=src.stem) + ext))
             tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
             if jpeg:
                 im.convert("RGB").save(str(tmp), "JPEG", quality=FLAT_JPEG_QUALITY)   # EXIF·GPS 는 싣지 않는다

@@ -17,6 +17,8 @@ from PyQt6.QtCore import QObject, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon, QImage, QPixmap
 from PyQt6.QtWidgets import QAbstractItemView, QListView, QListWidget, QListWidgetItem
 
+from viewer.i18n import tr
+
 THUMB_BOX = 256                 # 줄여 읽는 긴 변(고해상도 화면 2배) — 캐시 키에 들어간다
 CACHE_DIRNAME = "photo_thumbs"
 CACHE_QUALITY = 82
@@ -101,7 +103,6 @@ def _modifying() -> bool:
 def label_text(path, date: str = "", unreadable: bool = False, style=None, w: int = 0, h: int = 0, nbytes: int = 0) -> str:
     """칸 아래 글 두 줄 — 보기설정 스타일(사진 보기 SOT 4.38, 기본 윗줄 이름·아랫줄 날짜 — 261104-12·-13 사용자 지시).
     줄이 비면 빈칸 하나(칸 높이가 흔들리지 않게). 열 수 없으면 아랫줄 '열 수 없음'."""
-    from viewer.i18n import tr
     from viewer import photo_label as PL
     l1, l2 = (style or PL.BUILTIN_STRIP[PL.DEFAULT])[:2]
     vals = PL.values(path, date, w, h, nbytes)

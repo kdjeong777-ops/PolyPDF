@@ -18,6 +18,7 @@ from pathlib import Path
 import fitz
 
 from viewer import photo_io
+from viewer.i18n import tr
 from viewer.pdf_doc import GLOBAL_PAGE_CACHE, PageCache, RenderedPage, RenderKey
 
 COORD_VERSION = 1           # 사진 쪽 좌표 판(D14: 방향 적용 뒤 픽셀 = pt) — 바꾸면 꾸밈·OCR 자리를 옮기는 길이 필요하다
@@ -268,7 +269,6 @@ BROKEN_PAGE_SIZE = (1200, 800)     # 읽을 수 없는 사진 자리의 알림 �
 
 
 def broken_reason_text(reason: str) -> str:
-    from viewer.i18n import tr
     return {photo_io.UNREADABLE_VIDEO: tr("사진이 아니라 동영상 파일입니다(그림 이름으로 저장됨 — 예: 라이브 포토의 영상)."),
             photo_io.UNREADABLE_EMPTY: tr("빈 파일입니다."),
             photo_io.UNREADABLE_TRUNCATED: tr("그림 자료가 잘렸거나 깨졌습니다."),
@@ -295,7 +295,6 @@ class BrokenPhotoDocument(PhotoDocument):
     def _render(self, factor: float, cache: bool) -> RenderedPage:
         from PyQt6.QtCore import QRectF, Qt
         from PyQt6.QtGui import QColor, QFont, QImage, QPainter
-        from viewer.i18n import tr
         w, h = self.size
         tw, th = max(1, round(w * factor)), max(1, round(h * factor))
         tw += (-tw) % 4                                     # RGB888 줄 길이를 4 의 배수로(바이트 그대로 넘긴다)

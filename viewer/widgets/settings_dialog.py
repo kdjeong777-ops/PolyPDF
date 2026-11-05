@@ -330,7 +330,10 @@ class SettingsDialog(QDialog):
         self.cmb_view_kind.setToolTip(tr("혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. "
                                          "PDF 전용이면 사진 모드를 쓰지 않습니다."))
         row_vk.addWidget(self.cmb_view_kind, 1)
-        # 261104-7(사진 보기 SOT 4.12): 슬라이드쇼 자동 넘김 간격(초, 0 = 끔) — 사진 묶음 하나에
+        pl.addLayout(row_vk)
+        # 261104-7(사진 보기 SOT 4.12): 슬라이드쇼 자동 넘김 간격(초, 0 = 끔) — 사진 묶음 하나에.
+        #   보기 종류와 한 줄이면 창 기본 폭이 480 을 넘는다(261104-19, test_i18n_settings_layout C) — 따로 한 줄
+        row_vk = QHBoxLayout()
         row_vk.addWidget(QLabel(tr("슬라이드쇼 자동 넘김:")))
         self.sp_slide_s = QSpinBox()
         self.sp_slide_s.setRange(0, 600)
@@ -342,6 +345,7 @@ class SettingsDialog(QDialog):
             self.sp_slide_s.setValue(0)
         self.sp_slide_s.setToolTip(tr("사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격마다 다음 사진으로 넘어갑니다. 0 이면 넘기지 않습니다."))
         row_vk.addWidget(self.sp_slide_s)
+        row_vk.addStretch(1)
         pl.addLayout(row_vk)
         info_psm = QLabel(
             tr("<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "

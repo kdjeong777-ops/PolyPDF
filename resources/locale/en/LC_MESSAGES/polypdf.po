@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-05 08:04+0900\n"
+"POT-Creation-Date: 2026-11-05 09:21+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -4144,6 +4144,10 @@ msgid "2분할 함께 움직이기: 끔"
 msgstr "Move split panes together: off"
 
 #: viewer/photo_controller.py
+msgid "사진"
+msgstr "Photo"
+
+#: viewer/photo_controller.py
 msgid "이름 바꾸는 중…"
 msgstr "Renaming…"
 
@@ -4398,6 +4402,11 @@ msgstr "Moved {n} photos to the Recycle Bin."
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "{stem}_공유"
+msgstr "{stem}_share"
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "사진 색인: {n}장 (새로 {a}·지움 {d})"
 msgstr "Photo index: {n} photos ({a} new, {d} removed)"
 
@@ -4453,11 +4462,6 @@ msgstr "Make PDF from the {n} photos in the strip..."
 #, python-brace-format
 msgid "사진 {n}장"
 msgstr "{n} photos"
-
-#: viewer/photo_controller.py
-#, python-brace-format
-msgid "{stem}_공유"
-msgstr "{stem}_share"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -4526,6 +4530,11 @@ msgstr "Copy to PC ({n})..."
 #, python-brace-format
 msgid "삭제 ({n}장)"
 msgstr "Delete ({n} photos)"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{stem}_평탄화"
+msgstr "{stem}_flattened"
 
 #: viewer/photo_doc.py
 msgid "그림 형식이 아니거나 파일이 깨졌습니다."
