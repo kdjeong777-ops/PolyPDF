@@ -3985,7 +3985,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return False
 
         from viewer.workers import OcrLangRepairWorker, run_in_thread
-        dlg = QProgressDialog(tr('OCR 언어 자료를 받는 중…'), tr('중지'), 0, 0, self)
+        dlg = QProgressDialog(tr('OCR 언어 자료를 받는 중…'), tr('중단'), 0, 0, self)
         dlg.setWindowTitle(tr('OCR 언어 자료'))
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
         dlg.setMinimumDuration(0)
@@ -4069,7 +4069,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         w.error.connect(lambda msg, t: tp.set_busy(tr('OCR 실패: %s') % msg)
                         if t == getattr(self, '_ocr_token', 0) else None)
         if len(pages) > 1:
-            dlgp = QProgressDialog(tr('OCR 준비 중…'), tr('중지'), 0, len(pages), self)
+            dlgp = QProgressDialog(tr('OCR 준비 중…'), tr('중단'), 0, len(pages), self)
             dlgp.setWindowTitle(tr('OCR 다시 읽기'))
             dlgp.setWindowModality(Qt.WindowModality.NonModal)
             dlgp.setMinimumDuration(400)
@@ -4228,7 +4228,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         tok = self._text_layer_token
         w = TextLayerWorker(cur, todo, scope=scope, forced_pages=forced, token=tok)
         self._text_layer_worker = w
-        dlgp = QProgressDialog(tr("글자층 준비 중…"), tr("중지"), 0, max(1, len(todo)), self)
+        dlgp = QProgressDialog(tr("글자층 준비 중…"), tr("중단"), 0, max(1, len(todo)), self)
         dlgp.setWindowTitle(tr("PDF 에 반영"))
         dlgp.setWindowModality(Qt.WindowModality.NonModal)
         dlgp.setMinimumDuration(400)
@@ -4268,7 +4268,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         stats = stats or {}
         if stats.get("cancelled"):
-            self.status.showMessage(tr("PDF 에 반영을 중지했습니다 — 원본은 그대로입니다."), 5000)
+            self.status.showMessage(tr("PDF 에 반영을 중단했습니다 — 원본은 그대로입니다."), 5000)
             return
         if not tmp:
             why = stats.get("reasons") or {}

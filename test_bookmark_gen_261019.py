@@ -8,7 +8,7 @@ D. OCR 공급자 — 저장된 OCR 이 있으면 다시 읽지 않는다
 E. 십진 목차 — OCR 이 떨어뜨린 점·잘못 읽은 번호를 앞뒤 번호로 되살린다, 깊이 → 레벨
 F. 번호 제목 인식 + 줄 높이 = 중앙값(키 큰 상자 하나로 본문이 제목이 되지 않게)
 G. 워커 중지 → phase=cancelled + 지금까지 찾은 행
-H. 작업 창 — 진행 바 누르면 열리고 [중지] 가 작업의 중지 함수를 부른다
+H. 작업 창 — 진행 바 누르면 열리고 [중단] 이 작업의 중단 함수를 부른다
 I. 책갈피 생성은 본문 문서를 닫지 않는다 — 검토 표를 취소해도 본문·썸네일 그대로(사용자 보고 '화면이 없어졌다')
 """
 import os, sys, tempfile
@@ -194,10 +194,10 @@ QApplication.sendEvent(mw.progress, press); app.processEvents()
 jd = mw._jobs_dlg
 chk(jd is not None and jd.isVisible(), "H1 진행 바를 누르면 작업 창")
 sb = jd.findChild(QPushButton, "job_stop_t1") if jd else None
-chk(sb is not None and sb.isEnabled(), "H2 작업마다 [중지]")
+chk(sb is not None and sb.isEnabled(), "H2 작업마다 [중단]")
 if sb:
     sb.click(); app.processEvents()
-chk(stopped == [1], "H3 [중지] → 작업의 중지 함수", f"{stopped}")
+chk(stopped == [1], "H3 [중단] → 작업의 중단 함수", f"{stopped}")
 mw.job_done("t1"); app.processEvents()
 chk(not mw._jobs_list(), "H4 끝나면 목록에서 빠짐")
 jd.close()

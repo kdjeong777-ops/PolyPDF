@@ -103,7 +103,7 @@ class OcrBatchMixin:
                 pass
         lines = [tr('글자층을 넣은 파일: {n}개 · {p}쪽 (새로 읽은 쪽 {o}쪽)').format(n=len(done), p=pages, o=ocred)]
         if cancelled:
-            lines.append(tr('중지했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 이 실행 동안 남아 다시 읽지 않습니다 — 남기려면 상태 표시줄 \'저장 안 한 OCR\' 에서 저장).').format(
+            lines.append(tr('중단했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 이 실행 동안 남아 다시 읽지 않습니다 — 남기려면 상태 표시줄 \'저장 안 한 OCR\' 에서 저장).').format(
                 k=max(0, n_files - len(results))))
         if skipped:
             lines.append(tr("건너뛴 파일:") + "".join("\n· %s — %s" % (Path(s).name, w) for s, w in skipped[:10]))

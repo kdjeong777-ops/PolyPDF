@@ -101,7 +101,7 @@ class CompressMixin:
         if failed:
             msg.append(tr("실패:") + "".join("\n· %s — %s" % (Path(s).name, w) for s, w in failed[:10]))
         if cancelled:
-            msg.append(tr("중지했습니다 — 만들던 파일은 지웠습니다."))
+            msg.append(tr("중단했습니다 — 만들던 파일은 지웠습니다."))
         for s, r in ok:                                   # 새 파일을 책갈피창에(원본 바로 아래)
             try:
                 self.bookmark_tree.add_or_refresh_file(str(r[1]), after=str(s))

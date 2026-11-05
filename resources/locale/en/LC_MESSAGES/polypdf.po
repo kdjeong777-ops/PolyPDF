@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-06 06:11+0900\n"
+"POT-Creation-Date: 2026-11-06 06:19+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -581,8 +581,8 @@ msgstr "Cancel"
 msgid "OCR 언어 자료를 받는 중…"
 msgstr "Downloading OCR language data…"
 
-#: viewer/app.py
-msgid "중지"
+#: viewer/app.py viewer/jobs_controller.py
+msgid "중단"
 msgstr "Stop"
 
 #: viewer/app.py
@@ -1314,7 +1314,7 @@ msgid "고친 쪽만"
 msgstr "Corrected pages only"
 
 #: viewer/app.py
-msgid "PDF 에 반영을 중지했습니다 — 원본은 그대로입니다."
+msgid "PDF 에 반영을 중단했습니다 — 원본은 그대로입니다."
 msgstr "Stopped applying to PDF — the original is unchanged."
 
 #: viewer/app.py
@@ -3321,7 +3321,7 @@ msgid "압축할 PDF 가 없습니다."
 msgstr "There is no PDF to compress."
 
 #: viewer/compress_controller.py
-msgid "중지했습니다 — 만들던 파일은 지웠습니다."
+msgid "중단했습니다 — 만들던 파일은 지웠습니다."
 msgstr "Stopped — the file being made was deleted."
 
 #: viewer/compress_controller.py
@@ -3788,10 +3788,6 @@ msgid "저장 안 한 OCR 확인 중…"
 msgstr "Checking for unsaved OCR…"
 
 #: viewer/jobs_controller.py
-msgid "중단"
-msgstr "Stop"
-
-#: viewer/jobs_controller.py
 msgid "멈추는 중…"
 msgstr "Stopping…"
 
@@ -3964,9 +3960,10 @@ msgstr "Saved under a different name:"
 msgid "OCR 글자층: {n}개 파일 · {p}쪽"
 msgstr "OCR text layer: {n} files · {p} pages"
 
+# | '저장 안 한 OCR' 에서 저장)."
 #: viewer/ocr_batch_controller.py
 #, python-brace-format
-msgid "중지했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 이 실행 동안 남아 다시 읽지 않습니다 — 남기려면 상태 표시줄 '저장 안 한 OCR' 에서 저장)."
+msgid "중단했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 이 실행 동안 남아 다시 읽지 않습니다 — 남기려면 상태 표시줄 '저장 안 한 OCR' 에서 저장)."
 msgstr "Stopped — {k} file(s) were left untouched (pages already read are kept for this session and not read again — to keep them, save from 'Unsaved OCR' in the status bar)."
 
 #: viewer/page_edit_build.py
@@ -14243,4 +14240,7 @@ msgstr "Getting Started"
 
 #~ msgid "다음 ▶"
 #~ msgstr "Next ▶"
+
+#~ msgid "중지"
+#~ msgstr "Stop"
 
