@@ -409,7 +409,28 @@ def _make_corner_combo():
 
     class CornerArrowComboBox(QComboBox):
         """261025-10(디자인 SOT §2.7, 사용자 지시): 콤보의 ▾ 를 드롭다운 단추와 같은 모양으로 — 오른쪽 아래 작은 화살표.
-        Fusion 의 큰 화살표(SC_ComboBoxArrow)는 빼고 그리고, 메뉴 단추와 같은 자리·같은 그림(PE_IndicatorArrowDown)을 얹는다."""
+        Fusion 의 큰 화살표(SC_ComboBoxArrow)는 빼고 그리고, 메뉴 단추와 같은 자리·같은 그림(PE_IndicatorArrowDown)을 얹는다.
+
+        261105-26(사용자 지시 '쪽맞춤 버튼의 폭을 최소화', 디자인 SOT §2.9.2): `compact = True` 면 폭 = **가장 긴 항목 글 +
+        양쪽 안 여백**(왼쪽 `COMPACT_PAD_LEFT`, 오른쪽 화살표 자리 `DROP_PAD_RIGHT`) — Fusion 이 큰 화살표 몫으로 잡던 폭을 뺀다.
+        항목이 늘면(사진 모드 '원래 크기') 그 글에 맞춰 다시 잰다."""
+
+        compact = False
+        COMPACT_PAD_LEFT = 6
+
+        def _compact_size(self, base):
+            fm = self.fontMetrics()
+            tw = max([fm.horizontalAdvance(self.itemText(i)) for i in range(self.count())] or [0])
+            base.setWidth(tw + self.COMPACT_PAD_LEFT + DROP_PAD_RIGHT + 2)
+            return base
+
+        def sizeHint(self):
+            s = super().sizeHint()
+            return self._compact_size(s) if self.compact else s
+
+        def minimumSizeHint(self):
+            s = super().minimumSizeHint()
+            return self._compact_size(s) if self.compact else s
 
         def paintEvent(self, _ev):
             p = QStylePainter(self)
@@ -417,7 +438,13 @@ def _make_corner_combo():
             self.initStyleOption(opt)
             opt.subControls &= ~QStyle.SubControl.SC_ComboBoxArrow
             p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
-            p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
+            if self.compact:              # 글 자리 = 화살표 자리만 빼고 다(종전 편집 칸은 큰 화살표 폭을 뺐다)
+                from PyQt6.QtCore import Qt as _Qt
+                p.drawItemText(self.rect().adjusted(self.COMPACT_PAD_LEFT, 0, -DROP_PAD_RIGHT, 0),
+                               int(_Qt.AlignmentFlag.AlignLeft | _Qt.AlignmentFlag.AlignVCenter),
+                               opt.palette, self.isEnabled(), opt.currentText, self.foregroundRole())
+            else:
+                p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
             a = QStyleOption()
             a.initFrom(self)
             a.rect = corner_arrow_rect(self)

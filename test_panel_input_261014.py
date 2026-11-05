@@ -170,7 +170,10 @@ try:
 
     # ── Tab 차례 ───────────────────────────────────────────────────
     mv.view.setFocus(); spin(1)
-    order, w = [], mv.btn_prev_page
+    # 261105-26: 쪽 이동(‹ 칸 ›)은 창 아래 상태 줄로 갔다 — 차례 = 툴바(보이는 차례) → 쪽 이동 → 본문
+    from viewer.widgets.main_view import focus_widgets_in_layout as _fw
+    tb_first = (_fw(mv._toolbar) or [mv.btn_prev_page])[0]
+    order, w = [], tb_first
     for _ in range(60):
         order.append(w)
         if w is mv.view:
@@ -178,10 +181,12 @@ try:
         w = w.nextInFocusChain()
         while not (w.focusPolicy() & Qt.FocusPolicy.TabFocus) or w.focusProxy() is not None:
             w = w.nextInFocusChain()
-    bar = [x for x in order if x is not mv.view and x.isVisible()]
+    nav = [mv.btn_prev_page, mv.spin_page, mv.btn_next_page]
+    bar = [x for x in order if x is not mv.view and x.isVisible() and x not in nav]
     xs = [(x.mapTo(mv, QPoint(0, 0)).y() // 10, x.mapTo(mv, QPoint(0, 0)).x()) for x in bar]
-    chk(order[-1] is mv.view and xs == sorted(xs),
-        "본문 페이지 바의 Tab 차례 = 보이는 차례(줄마다 왼쪽→오른쪽) → 본문", str(xs))
+    tail = [x for x in order if x in nav]
+    chk(order[-1] is mv.view and xs == sorted(xs) and tail == nav and order[-4:-1] == nav,
+        "본문 페이지 바의 Tab 차례 = 툴바 보이는 차례(줄마다 왼쪽→오른쪽) → 쪽 이동 ‹ 칸 › → 본문", str(xs))
     te.setFocus(); spin(1)
     before = te.toPlainText()
     QTest.keyClick(te, Qt.Key.Key_Tab); spin(1)

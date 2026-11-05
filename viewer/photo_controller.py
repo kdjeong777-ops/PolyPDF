@@ -2094,6 +2094,11 @@ class PhotoMixin:
             b.clicked.connect(self._photo_info_dialog)
             b.hide()
             owner = self
+            host = getattr(self, "page_nav_host", None)
+            if host is not None:            # 261105-26(디자인 SOT §2.9.2): 쪽 이동 바로 오른쪽 — 가운데는 쪽 이동 자리라 겹쳤다
+                host.set_side_widget(b)
+                self._photo_info_btn = b
+                return b
 
             class _Center(_QO):                          # 상태 막대 가운데에 둔다 — 상태 글(왼쪽)·단추(오른쪽) 자리와 따로
                 def eventFilter(self, obj, ev):
@@ -2110,6 +2115,8 @@ class PhotoMixin:
         if b is None:
             return
         b.adjustSize()
+        if b.parentWidget() is getattr(self, "page_nav_host", None):
+            return                          # 261105-26: 쪽 이동 칸의 레이아웃이 자리를 정한다
         sb = self.status
         b.move(max(0, (sb.width() - b.width()) // 2), max(0, (sb.height() - b.height()) // 2))
         b.raise_()

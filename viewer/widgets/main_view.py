@@ -1842,10 +1842,20 @@ class MainView(QWidget):
         self.btn_sign.setToolTip(tr("전자서명 — 서명 자리를 두고 확정하면 서명한 새 파일(원본은 그대로)"))
         self.btn_sign.clicked.connect(self.signRequested.emit)
 
-        bar.addWidget(self.btn_prev_page)
-        bar.addWidget(self.spin_page)
-        bar.addWidget(self.lbl_page_total)
-        bar.addWidget(self.btn_next_page)
+        # 261105-26(사용자 지시, 디자인 SOT §2.9.2): 쪽 이동 ‹ 칸 / 전체 › 은 툴바가 아니라 창 아래 상태 줄로 —
+        #   묶음(`page_nav`)만 여기서 만들고, 앱이 `PageNavHost` 에 넣어 이 창 가운데 아래에 둔다(2단 오른쪽 창은 메시지 바로 왼쪽).
+        #   툴바 옛 자리에는 보이지 않는 표시(`_nav_anchor`)만 남겨 외부 단추(캡처·읽기·mp3)를 같은 차례로 끼운다.
+        self.page_nav = QWidget()
+        self.page_nav.setObjectName("pageNav")
+        _nl = QHBoxLayout(self.page_nav)
+        _nl.setContentsMargins(0, 0, 0, 0)
+        _nl.setSpacing(2)
+        for _w in (self.btn_prev_page, self.spin_page, self.lbl_page_total, self.btn_next_page):
+            _nl.addWidget(_w)
+        self._nav_anchor = QWidget()
+        self._nav_anchor.setFixedSize(0, 0)
+        self._nav_anchor.hide()
+        bar.addWidget(self._nav_anchor)
         # 260606-19: MP3 등 외부 버튼과 보기콤보 사이 구분 여백
         _sep = QWidget(); _sep.setFixedSize(12, H)
         bar.addWidget(_sep)
@@ -2232,8 +2242,9 @@ class MainView(QWidget):
         self._update_doc_scroll()               # v1.6.9 G2: 리스트 진행률 동기
 
     def add_main_button(self, btn):
-        """v1.6.10 H2 / 260606-9: 페이지 바의 › 우측에 외부 버튼 삽입(FlowLayout)."""
-        idx = self._toolbar.indexOf(self.btn_next_page)
+        """v1.6.10 H2 / 260606-9: 페이지 바의 › 우측에 외부 버튼 삽입(FlowLayout).
+        261105-26: › 는 상태 줄로 갔다 — 그 옛 자리 표시(`_nav_anchor`) 바로 뒤에 끼운다(차례는 종전 그대로)."""
+        idx = self._toolbar.indexOf(self._nav_anchor)
         if idx < 0:
             self._toolbar.addWidget(btn)
         else:
@@ -2246,6 +2257,9 @@ class MainView(QWidget):
         종전에는 만든 차례를 따라, 나중에 › 옆에 끼운 단추(캡처·읽기·mp3)가 줄 끝의 그리기
         도구와 본문 **뒤**에 왔다 — Tab 이 오른쪽 끝까지 갔다가 왼쪽으로 되돌아 뛰었다."""
         order = focus_widgets_in_layout(self._toolbar)
+        # 261105-26: 쪽 이동은 상태 줄(본문 아래)로 갔다 — 툴바 → 쪽 이동(‹ 칸 ›) → 본문
+        order += [w for w in (self.btn_prev_page, self.spin_page, self.btn_next_page)
+                  if w.focusPolicy() & Qt.FocusPolicy.TabFocus]
         if not order:
             return
         order.append(self.view)

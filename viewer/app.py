@@ -432,6 +432,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._lite_init()                    # 261021-1(응답성 SOT §4.7): 가벼운 넘김 표시
         self._jobs_init()                    # 261019-1: 진행 바 누르면 작업 창 + 저장 안 한 OCR 단추
         self._build_zoom_buttons()           # 261021-5(입력 SOT §3.2): 맨 오른쪽 + 0 −
+        from viewer.widgets.page_nav_bar import PageNavHost   # 261105-26(디자인 SOT §2.9.2): 쪽 이동 = 본문 창 가운데 아래
+        self.page_nav_host = PageNavHost(self.status, self._mv, self._panes)
 
         self.setCentralWidget(central)
         self._central = central
@@ -2329,6 +2331,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _k in _MV.FIT_ORDER:                 # 261008: 보이는 글자 + 내부 키(다국어 SOT §5)
             self.cmb_fit.addItem(tr(_MV.FIT_LABELS[_k]), _k)
         self.cmb_fit.setSizeAdjustPolicy(_QCB.SizeAdjustPolicy.AdjustToContents)
+        self.cmb_fit.compact = True              # 261105-26(사용자 지시): 폭 = 가장 긴 항목 글에 맞춘 최소
         self.cmb_fit.setMaximumWidth(90)
         self.cmb_fit.setFocusPolicy(Qt.FocusPolicy.NoFocus)      # 포커스 창(+ 0 − 대상)을 빼앗지 않는다
         self.cmb_fit.setToolTip(tr("본화면 맞춤 — 쪽·2장·폭·수동(2단이면 활성 창)"))

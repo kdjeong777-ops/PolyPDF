@@ -41,11 +41,12 @@ check("캡쳐 버튼 아이콘만(글자 없음)", mw.btn_capture.text() == "" a
       f"text={mw.btn_capture.text()!r}")
 check("캡쳐 버튼 폭 34", mw.btn_capture.width() == 34, f"w={mw.btn_capture.width()}")
 check("캡쳐 툴팁에 '캡처'", "캡처" in mw.btn_capture.toolTip(), mw.btn_capture.toolTip())
-# 툴바 순서: › 다음 캡쳐
+# 툴바 순서: › 의 옛 자리(261105-26: 쪽 이동은 상태 줄로 — 툴바에는 보이지 않는 표시 `_nav_anchor`) 다음 캡쳐
 tb = mv._toolbar
-i_next = tb.indexOf(mv.btn_next_page)
+i_next = tb.indexOf(mv._nav_anchor)
 i_cap = tb.indexOf(mw.btn_capture.parent())   # 260606-17: 캡쳐는 캡쳐그룹(버튼+드롭다운) 안
-check("› 다음에 캡쳐그룹", i_cap == i_next + 1, f"next={i_next} cap={i_cap}")
+check("› 옛 자리 다음에 캡쳐그룹(툴바 맨 앞)", i_next == 0 and i_cap == i_next + 1 and tb.indexOf(mv.btn_next_page) < 0,
+      f"anchor={i_next} cap={i_cap}")
 
 # 2분할 시 검색·스크린샷 → 슬라이딩 드로어(오버레이)로 이동(평소 숨김)
 # 260628-2: 컬럼 4단은 저장된 `panels_visible` 의존이므로(계획서 §3.1) 두 패널을 명시적으로 켠 뒤 전환을 본다.
