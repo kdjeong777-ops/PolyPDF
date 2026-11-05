@@ -150,10 +150,20 @@ for name, txt in LIVE.items():
             prev = l
             continue
         before, prev = prev, l
+        chain = None                                  # (앞 § 의 끝, 그 문서) — '검색 SOT §5.1·§5.2' 의 둘째 § 는 같은 문서다
         for m in re.finditer(SEC, l):
             num = m.group(1).rstrip(".")
             if num == "0":
+                chain = None
                 continue                              # §0 은 이력 표 — 마스터에 맡긴 문서는 없다
+            # 261105-19: 이어 쓴 § 는 앞 § 의 문서에서만 찾는다 — 종전엔 줄의 다른 문서에서도 찾아 태그 SOT 의 검색 쪽 없는 절 참조가 지나갔다
+            if chain and re.fullmatch(r"\s*[·/]\s*", l[chain[0]:m.start()]):
+                cdoc = chain[1]
+                chain = (m.end(), cdoc)
+                if cdoc in SOTS and not has_sec(cdoc, num) and not any(has_sec(a, num) for a in ARCHIVE_OF.get(cdoc, ())) \
+                        and not re.search(r"없다|없는|어디에도|존재하지", l):
+                    bad.append("%s → %s §%s(이어 쓴 §: …%s)" % (name[:8], cdoc[:8], num, l[max(0, m.start() - 30):m.end()]))
+                continue
             pre = l[max(0, m.start() - 40):m.start()]
             pre = re.split(r"[(（),;:.—]", pre)[-1]                # 괄호·쉼표·마침표 앞의 다른 문서 이름은 보지 않는다
             mm = None
@@ -164,15 +174,21 @@ for name, txt in LIVE.items():
                 doc = ALIAS_MAP[mm.group(0)]
             else:
                 doc = name
+            tail = l[:m.start()]                      # 이어 쓸 문서 — § 바로 앞의 이름(`마스터 §7`·`검색창 계획서 §6`·`… 작업 계획서.md` §6)
+            mt = re.search(r"(" + ALIAS_RE + r")\s*(?:SOT|작업 ?계획서|계획서)?\s*$", tail)
+            mf = re.search(r"`([^`]+\.md)`\s*$", tail)
+            chain = (m.end(), mf.group(1) if mf and mf.group(1) in SOTS else ALIAS_MAP[mt.group(1)] if mt else doc)
             if doc not in SOTS:
                 continue
             if has_sec(doc, num):
                 continue
             # 못 찾으면 — 같은 줄 앞쪽에 나온 다른 문서 이름(목록 '입력 SOT §2.2 · §2.3' 처럼 이어 쓴 것),
             #   또는 이 문서의 아카이브(번호를 그대로 둔 옛 장)에서 찾는다
-            alts = [ALIAS_MAP[x] for x in re.findall(ALIAS_RE, before + " " + l[:m.start()])]   # 앞 줄에서 이어진 인용도
+            alts = [ALIAS_MAP[x] for x in re.findall(ALIAS_RE, before + " " + l[:m.start()])][::-1]   # 앞 줄에서 이어진 인용도 — 가까운 이름부터
             alts += [name] + [a for a in ARCHIVE_OF.get(name, ())]
-            if any(has_sec(d, num) for d in alts):
+            hit = [d for d in alts if has_sec(d, num)]
+            if hit:
+                chain = (m.end(), hit[0])
                 continue
             if re.search(r"없다|없는|어디에도|존재하지", l):
                 continue
@@ -323,6 +339,16 @@ claude = SOTS.get("CLAUDE.md", "")
 named = {x for x in re.findall(r"`([^`/\\]+(?:작업 ?계획서|아카이브)\.md)`", claude) if "*" not in x}   # `*작업 계획서.md` 는 무시 규칙
 gone = sorted(n for n in named if n not in SOTS)
 chk(not gone, "F2 CLAUDE.md 가 대는 SOT 파일 이름이 실제로 있다", str(gone))
+# 261105-19: 파일 꼴(`test_photo_*.py`)도 맞는 파일이 하나는 있어야 한다 — 사진 SOT 가 없는 꼴 `test_picture_*.py` 를 가리켰다
+nomatch = set()
+for name, txt in LIVE.items():
+    for l in body(txt).splitlines():
+        if SKIP_LINE.search(l):
+            continue
+        for pat in re.findall(r"`((?:[\w.-]+/)*[\w.-]*\*[\w.*-]*\.py)`", l):
+            if not any(ROOT.glob(pat)) and not any(ROOT.glob("**/" + pat)):
+                nomatch.add("%s: %s" % (name[:10], pat))
+chk(not nomatch, "F3 SOT 본문이 대는 파일 꼴(`test_x_*.py`)에 맞는 파일이 있다", str(sorted(nomatch)))
 
 # ── G. 값 ──────────────────────────────────────────────────────────────
 print(NL + "=== G. SOT 의 값이 코드와 같다 ===")
