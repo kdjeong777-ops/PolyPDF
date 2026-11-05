@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-05 17:39+0900\n"
+"POT-Creation-Date: 2026-11-05 21:51+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -12946,6 +12946,10 @@ msgid "흑백으로 저장"
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py
+msgid "받은 문서의 사진·그림을 이 해상도로 줄여 PDF 를 가볍게 합니다(넘김이 빨라짐). 300 dpi 면 인쇄에서 차이가 없습니다."
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
 msgid "관리자 권한으로 진행하는 중… (Windows 확인 창이 뜨면 '예')"
 msgstr ""
 
@@ -12970,6 +12974,10 @@ msgid "다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py
+msgid "사진·그림 해상도"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
 msgid "저장 창 없이 바로 저장하고 엽니다. 쪽 범위·여러 쪽 모아 찍기는 인쇄하는 프로그램의 인쇄 창에서 고르세요."
 msgstr ""
 
@@ -12979,6 +12987,10 @@ msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "수리"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "줄이지 않음"
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py
@@ -13021,6 +13033,11 @@ msgstr ""
 #: viewer/widgets/vprinter_dialog.py
 #, python-brace-format
 msgid "상태를 읽지 못했습니다: {err}"
+msgstr ""
+
+#: viewer/widgets/vprinter_dialog.py
+#, python-brace-format
+msgid "{dpi} dpi"
 msgstr ""
 
 #: viewer/workers.py

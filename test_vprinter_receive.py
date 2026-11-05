@@ -127,6 +127,42 @@ chk(rots[3] == 0, "O3 글 없는 쪽은 문서의 다수 결정을 따른다", s
 e = fitz.open(); e.new_page(width=595, height=842)
 chk(R.upright_pages(e, True, 1) == [90] and R.upright_pages(e, True, 2) == [0], "O4 문서에 글이 없으면 머리 규칙(가로·1쪽씩일 때만 90°)")
 
+print("\n=== P. 사진 인쇄 — 쪽마다 방향·그림 해상도(261105-14·15) ===")
+# 사용자 보고: 사진 '방향 자동' 인쇄의 가로 사진이 세로 쪽에 돌아간 채 치우쳐 저장됐다. PScript5 는 가로 쪽을 세로 용지에 돌려 그리고
+#   (쪽마다 `/mysetup [0 s s 0 …]`), 문서 머리 `%%Orientation` 은 첫 쪽(세로) 방향뿐 — 글 없는 쪽을 머리만 보고 두었다
+ps_mix = root / "mix.ps"
+ps_mix.write_bytes(b"%!PS-Adobe-3.0\n%%Orientation: Portrait\n%%Pages: 2\n/V {div} bind def\n%%BeginSetup\n"
+                   b"/mysetup [ 72 600 V 0 0 -72 600 V 0 842 ] def \n%%EndSetup\n"
+                   b"%%Page: 1 1\n<< /PageSize [595 842] >> setpagedevice\ngsave mysetup concat 0 0 1 setrgbcolor 0 0 4958 7016 rectfill grestore showpage\n"
+                   b"%%Page: 2 2\n%%BeginPageSetup\n/mysetup [ 0 72 600 V 72 600 V 0 0 0 ] def \n%%EndPageSetup\n"
+                   b"<< /PageSize [595 842] >> setpagedevice\ngsave mysetup concat 0 0 1 setrgbcolor 0 0 7017 4957 rectfill "
+                   b"1 0 0 setrgbcolor 0 0 1500 1000 rectfill grestore showpage\n%%EOF\n")      # 빨강 = 장치 왼쪽 위
+_pr = getattr(R, "page_rotations", lambda p: "없음")(str(ps_mix))
+chk(_pr == [0, 90], "P1 쪽마다 PS 방향을 읽는다(세로 0 · 돌려 그린 가로 90)", str(_pr))
+if gs:
+    out_mix = root / "mix.pdf"
+    R.convert(str(ps_mix), str(out_mix), title="mix", gs=gs)
+    dm = fitz.open(str(out_mix))
+    r0, r1 = dm[0].rect, dm[1].rect
+    pix = dm[1].get_pixmap(matrix=fitz.Matrix(0.2, 0.2))
+    tl = pix.pixel(3, 3)
+    chk(r0.width < r0.height and r1.width > r1.height and tl[0] > 200 and tl[2] < 80,
+        "P2 세로로 시작한 섞인 인쇄의 그림만 있는 가로 쪽을 가로로 세운다(왼쪽 위가 왼쪽 위)", "%s %s 왼쪽위 %s" % (r0, r1, tl))
+    dm.close()
+_srun, calls_gs = R.subprocess.run, []
+R.subprocess.run = lambda args, **k: (calls_gs.append(list(args)), R.subprocess.CompletedProcess(args, 1, b"", b"x"))[1]
+try:
+    for dpi in (300, 0):
+        try:
+            R.convert(str(ps_mix), str(root / "dpi.pdf"), gs="gs.exe", img_dpi=dpi)
+        except Exception:
+            pass
+finally:
+    R.subprocess.run = _srun
+chk(len(calls_gs) == 2 and "-dColorImageResolution=300" in calls_gs[0] and "-dDownsampleColorImages=true" in calls_gs[0]
+    and not any("Downsample" in a for a in calls_gs[1]),
+    "P3 그림을 도구 메뉴 해상도(기본 300)로 줄이고, '줄이지 않음'(0)이면 그대로", str([c[-6:] for c in calls_gs]))
+
 print("\n=== C. 이름 다듬기 ===")
 chk(R.clean_title("Microsoft PowerPoint - 계획.pptx [읽기 전용]") == "계획.pptx", "C1 프로그램 이름·[읽기 전용] 떼기")
 chk(R.safe_stem("..\\a/b:c") == "_a_b_c" or "\\" not in R.safe_stem("..\\a/b:c") and "/" not in R.safe_stem("..\\a/b:c"), "C2 경로 문자 걸러냄", R.safe_stem("..\\a/b:c"))
@@ -143,11 +179,12 @@ R.find_original = lambda name: str(orig_file) if name == "계획.pptx" else None
 R.default_save_dir = lambda: str(dflt)
 chk(R.is_temp_dir(str(orig_dir)), "C4 임시 폴더 아래의 원래 파일은 원래 폴더로 쓰지 않는다(검사 폴더가 TEMP 아래)")
 R.is_temp_dir = lambda d: False          # 아래 흐름 검사는 '원래 폴더' 가 보통 폴더라고 본다
-conv_calls = []
+conv_calls, conv_kw = [], []
 
 
-def fake_convert(ps, out, title="", gray=False, gs=None):
+def fake_convert(ps, out, title="", gray=False, gs=None, **k):
     conv_calls.append(title)
+    conv_kw.append(k)
     if "실패" in ps:
         raise RuntimeError("가짜 변환 실패")
     mkpdf(out, 2)
@@ -189,6 +226,7 @@ for name in ("3-0001 Microsoft PowerPoint - 계획.pptx.ps", "4-0001 Microsoft P
 mw._folder = orig_dir                    # 이 창이 원래 폴더를 보고 있다
 mw._vprinter_receive()
 chk(not dialogs, "B0 저장 창(인쇄 창)을 띄우지 않고 바로 저장한다(261017-14)", str(len(dialogs)))
+chk(conv_kw and conv_kw[0].get("img_dpi") == 300, "B7 변환에 도구 메뉴의 사진·그림 해상도(기본 300)를 넘긴다(261105-15)", str(conv_kw[:1]))
 chk((orig_dir / "계획.pdf").is_file() and (orig_dir / "계획 (1).pdf").is_file(), "B1 원래 폴더에 원래 이름, 둘째는 (1)",
     str(sorted(x.name for x in orig_dir.iterdir())))
 chk((dflt / "웹 페이지 제목.pdf").is_file(), "B2 원래 파일이 없는 문서는 기본 저장 폴더에", str(list(dflt.glob("*")) if dflt.exists() else "없음"))
@@ -356,6 +394,68 @@ chk(got.get("v") is False and not dead.exists(), "W6 그 폴더를 보는 창이
     "%s · 등록 남음 %s" % (got, dead.exists()))
 mw._set_active_pane = _sap
 
+print("\n=== K. 인쇄 쪽 — 쪽마다 장치 크기·보내는 그림 해상도(261105-14·15) ===")
+# 쪽 방향을 바꾸면 장치 크기는 바뀌어도 painter 의 영역은 첫 쪽 그대로였다(Qt — PDF 출력도 같다) — 세로로 시작한 묶음의 가로 사진을
+#   세로 크기 영역에 그려 작고 치우쳤다. 그리고 '맞춤' 사진을 장치 해상도(600dpi)로 키워 보내 PS 가 수백 MB 가 됐다
+from PyQt6.QtGui import QImage, QColor, QPageLayout
+from PyQt6.QtPrintSupport import QPrinter
+kimgs = []
+for w_, h_ in ((800, 1200), (1200, 800)):
+    im_ = QImage(w_, h_, QImage.Format.Format_RGB888); im_.fill(QColor(30, 90, 200)); kimgs.append(im_)
+kpdf = root / "kprint.pdf"
+kpr = QPrinter(QPrinter.PrinterMode.HighResolution)
+kpr.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+kpr.setOutputFileName(str(kpdf))
+mw._print_opts = {"printer": kpr, "auto_orient": True, "size_mode": "fit", "alignment": "center"}
+_kcap = getattr(mw, "_print_cap_dpi", None)
+mw._print_render(2, lambda p, t, i: mw._draw_image_fit(p, t, kimgs[i]),
+                 orient_fn=lambda i: QPageLayout.Orientation.Landscape if kimgs[i].width() >= kimgs[i].height() else QPageLayout.Orientation.Portrait)
+kd = fitz.open(str(kpdf))
+kb = [pg.get_image_info()[0]["bbox"] if pg.get_image_info() else None for pg in kd]
+k1 = kd[1].rect
+chk(kd.page_count == 2 and kd[0].rect.width < kd[0].rect.height and k1.width > k1.height and kb[1]
+    and (kb[1][2] - kb[1][0]) > 0.9 * k1.width,
+    "K1 세로 쪽 뒤의 가로 쪽에 가로 사진이 가로로 꽉 차게(쪽마다 지금 장치 크기로 그린다)", "%s %s" % ([str(p.rect) for p in kd], kb))
+kd.close()
+big = QImage(6000, 4000, QImage.Format.Format_RGB888); big.fill(QColor(200, 60, 60))
+kpdf2 = root / "kprint2.pdf"
+kpr2 = QPrinter(QPrinter.PrinterMode.HighResolution)
+kpr2.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+kpr2.setOutputFileName(str(kpdf2))
+kpr2.setPageOrientation(QPageLayout.Orientation.Landscape)
+mw._print_opts = {"printer": kpr2, "auto_orient": False, "size_mode": "fit", "alignment": "center"}
+mw._print_cap_dpi = lambda p: 300                      # 'PolyPDF' 프린터에서 도구 메뉴 기본값
+mw._print_render(1, lambda p, t, i: mw._draw_image_fit(p, t, big))
+kd = fitz.open(str(kpdf2))
+ki = kd[0].get_image_info()
+kw = ki[0]["width"] if ki else 0
+need = int(kd[0].rect.width / 72.0 * 300) + 2
+chk(ki and kw <= need and (ki[0]["bbox"][2] - ki[0]["bbox"][0]) > 0.9 * kd[0].rect.width,
+    "K2 가상 프린터에는 사진을 300dpi 크기까지만 보내고 쪽은 그대로 꽉 차게", "그림 폭 %s px · 300dpi 폭 %d px" % (kw, need))
+kd.close()
+if _kcap is not None:
+    mw._print_cap_dpi = _kcap
+    import viewer.vprinter as VPM
+
+    class _Dev:
+        def __init__(self, n): self.n = n
+        def printerName(self): return self.n
+
+    class _Pt:
+        def __init__(self, n): self.d = _Dev(n)
+        def device(self): return self.d
+    mw._prefs["vprinter"] = {"kind": "original", "color": "color"}
+    a1 = mw._print_cap_dpi(_Pt(VPM.PRINTER_NAME))
+    mw._prefs["vprinter"]["img_dpi"] = 0
+    a2 = mw._print_cap_dpi(_Pt(VPM.PRINTER_NAME))
+    a3 = mw._print_cap_dpi(_Pt("Some Laser"))
+    chk(a1 == 300 and a2 is None and a3 is None,
+        "K3 줄이는 것은 'PolyPDF' 프린터에만, 도구 메뉴 값대로(기본 300 · 줄이지 않음이면 그대로) — 다른 프린터는 종전대로", str((a1, a2, a3)))
+    mw._prefs["vprinter"] = {"kind": "original", "color": "color"}
+else:
+    chk(False, "K3 _print_cap_dpi 가 있다")
+mw._print_opts = None
+
 print("\n=== X. 변환 도구가 없는 창은 인쇄를 받지 않는다(261031-7) ===")
 # 사용자가 겪음: printer\bin 이 없는 로컬 빌드를 켜 둔 채 인쇄 → 그 창이 받기 통로를 먼저 차지해 받고 'Ghostscript 가 없습니다 —
 #   다시 설치하세요' 경고. 설치본에는 변환 도구가 있었는데 받지 못했다(PS 는 남음)
@@ -423,6 +523,11 @@ vd.chk_gray.setChecked(True)
 rp = vd.result_prefs()
 chk(rp["kind"] == "default" and rp["color"] == "gray" and "skip" not in rp and rp["default_dir"] == str(dflt),
     "F5 저장 설정(폴더·흑백)을 돌려주고, 옛 '저장 창 없이' 값은 버린다", str(rp))
+chk(rp.get("img_dpi") == 300 and hasattr(vd, "cb_dpi") and vd.cb_dpi.count() == 4,
+    "F7 '사진·그림 해상도' 고르기(150·300·600·줄이지 않음, 처음 값 300)를 돌려준다(261105-15)", str(rp))
+if hasattr(vd, "cb_dpi"):
+    vd.cb_dpi.setCurrentIndex(vd.cb_dpi.findData(0))
+    chk(vd.result_prefs()["img_dpi"] == 0, "F8 '줄이지 않음' 을 고르면 0 으로 저장")
 vd.reject()
 mw._skip_save_on_close = True
 mw.close()

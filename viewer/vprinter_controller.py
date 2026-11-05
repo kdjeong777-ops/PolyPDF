@@ -21,9 +21,19 @@ from PyQt6.QtWidgets import QMessageBox
 
 from viewer.i18n import tr
 
-__all__ = ["VPrinterMixin", "print_server_name", "print_lock_path"]
+__all__ = ["VPrinterMixin", "print_server_name", "print_lock_path", "image_dpi"]
 
-PREF_KEY = "vprinter"                        # {"kind": original|default, "default_dir", "color": color|gray}
+PREF_KEY = "vprinter"                        # {"kind": original|default, "default_dir", "color": color|gray, "img_dpi": 150|300|600|0}
+
+
+def image_dpi(pref: dict | None) -> int:
+    """도구 메뉴의 '사진·그림 해상도'(SOT §4.6, 261105-15) — 0 = 줄이지 않음. 모르는 값이면 기본."""
+    from viewer.vprinter_recv import IMG_DPI_CHOICES, IMG_DPI_DEFAULT
+    try:
+        v = int((pref or {}).get("img_dpi", IMG_DPI_DEFAULT))
+    except (TypeError, ValueError):
+        return IMG_DPI_DEFAULT
+    return v if v in IMG_DPI_CHOICES else IMG_DPI_DEFAULT
 
 
 def print_server_name() -> str:
@@ -160,7 +170,8 @@ class VPrinterMixin:
             try:
                 plan = R.plan_save(ps, "original" if pref["kind"] != "default" else "default", pref.get("default_dir", ""))
                 conv = os.path.join(tmpdir, "printed.pdf")
-                R.convert(ps, conv, title=os.path.splitext(R.clean_title(plan["title"]))[0] or plan["name"])
+                R.convert(ps, conv, title=os.path.splitext(R.clean_title(plan["title"]))[0] or plan["name"],
+                          img_dpi=image_dpi(pref))
                 box["plan"], box["conv"] = plan, conv
             except Exception:
                 shutil.rmtree(tmpdir, ignore_errors=True)

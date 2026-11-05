@@ -725,6 +725,7 @@ class PrintMixin:
         """
         from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
         from PyQt6.QtGui import QPainter
+        from PyQt6.QtCore import QRect
         if count <= 0:
             return
         opts = getattr(self, "_print_opts", None) or {}
@@ -753,6 +754,11 @@ class PrintMixin:
                         except Exception:
                             pass
                     printer.newPage()
+                # 261105-14(가상 프린터 SOT §4.1): 쪽 방향을 바꾸면 장치 크기는 바뀌어도 painter 의 영역은 첫 쪽 그대로였다 —
+                #   세로로 시작한 묶음의 가로 쪽을 세로 크기로 그려 잘리고 치우쳤다(실제 프린터도 같음). 쪽마다 지금 장치 크기로.
+                dev = QRect(0, 0, printer.width(), printer.height())
+                painter.setViewport(dev)
+                painter.setWindow(dev)
                 draw_fn(painter, painter.viewport(), i)
                 if i % 3 == 0:
                     self.status.showMessage(tr('인쇄 중 {i}/{count}').format(i=i + 1, count=count))
@@ -762,15 +768,48 @@ class PrintMixin:
         finally:
             QApplication.restoreOverrideCursor()
 
+    def _print_cap_dpi(self, painter):
+        """보내는 그림의 최대 dpi — 'PolyPDF' 가상 프린터면 도구 메뉴의 '사진·그림 해상도'(기본 300, 0 = 줄이지 않음 → None),
+        다른 프린터는 None(종전대로 장치 해상도). 600dpi 로 키워 보낸 사진이 PS 수백 MB·느린 PDF 가 됐다(261105-15)."""
+        try:
+            from viewer import vprinter
+            from viewer.vprinter_controller import PREF_KEY, image_dpi
+            dev = painter.device()
+            if not hasattr(dev, "printerName") or dev.printerName() != vprinter.PRINTER_NAME:
+                return None
+            return image_dpi((getattr(self, "_prefs", {}) or {}).get(PREF_KEY)) or None
+        except Exception:
+            return None
+
     def _draw_image_fit(self, painter, target, img, natural_dpi=None) -> None:
         """260827: 크기 모드(맞춤/실제/배율)+정렬(가운데/좌상)로 페이지 이미지를 인쇄면에 그린다.
-        natural_dpi 는 img 가 렌더된 dpi(실제크기·배율 계산용, PDF=200). None 이면 항상 '맞춤'."""
-        from PyQt6.QtCore import QRect
+        natural_dpi 는 img 가 렌더된 dpi(실제크기·배율 계산용, PDF=200). None 이면 항상 '맞춤'.
+        261105-15: '맞춤' 이고 `_print_cap_dpi` 가 있으면 그 dpi 크기까지만 줄여 보내고 키우기는 장치에 맡긴다."""
+        from PyQt6.QtCore import QRect, QSize
         if img.isNull():
             return
         opts = getattr(self, "_print_opts", None) or {}
         mode = opts.get("size_mode", "fit")
         pct = opts.get("scale_pct", 100)
+        cap = self._print_cap_dpi(painter) if not (mode in ("actual", "scale") and natural_dpi) else None
+        if cap:
+            try:
+                ddpi = float(painter.device().logicalDpiX())
+            except Exception:
+                ddpi = 0.0
+            if ddpi > cap:
+                fit = img.size().scaled(target.size(), Qt.AspectRatioMode.KeepAspectRatio)
+                want = QSize(max(1, int(fit.width() * cap / ddpi)), max(1, int(fit.height() * cap / ddpi)))
+                src = img if img.width() <= want.width() else img.scaled(
+                    want, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                if opts.get("alignment", "center") == "topleft":
+                    x, y = target.x(), target.y()
+                else:
+                    x = target.x() + (target.width() - fit.width()) // 2
+                    y = target.y() + (target.height() - fit.height()) // 2
+                painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
+                painter.drawImage(QRect(x, y, fit.width(), fit.height()), src)
+                return
         if mode in ("actual", "scale") and natural_dpi:
             try:
                 dpi = float(painter.device().logicalDpiX()) or float(natural_dpi)
@@ -824,6 +863,19 @@ class PrintMixin:
         def draw(painter, target, i):
             page = doc.load_page(pages[i])
             zoom = 200 / 72.0
+            # 261105-15: '맞춤' 이면 보낼 크기보다 크게 그리지 않는다 — 사진 쪽(쪽 크기 = 화소 수)은 200/72 배로 그려 쪽마다 1억 화소를 넘겼다
+            if ((getattr(self, "_print_opts", None) or {}).get("size_mode", "fit")) == "fit":
+                r = page.rect
+                if r.width > 0 and r.height > 0:
+                    need = min(target.width() / r.width, target.height() / r.height)
+                    cap = self._print_cap_dpi(painter)
+                    try:
+                        ddpi = float(painter.device().logicalDpiX())
+                    except Exception:
+                        ddpi = 0.0
+                    if cap and ddpi > cap:
+                        need *= cap / ddpi
+                    zoom = min(zoom, max(need, 0.05))
             pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
             img = QImage(pix.samples, pix.width, pix.height, pix.width * 3,
                          QImage.Format.Format_RGB888).copy()

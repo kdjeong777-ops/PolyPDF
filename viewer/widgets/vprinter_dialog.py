@@ -10,7 +10,7 @@ import os
 import sys
 
 from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QFileDialog, QGroupBox, QHBoxLayout, QLabel,
+from PyQt6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QGroupBox, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QRadioButton, QVBoxLayout)
 
 from viewer.i18n import tr
@@ -116,6 +116,18 @@ class VPrinterDialog(QDialog):
         self.chk_gray = QCheckBox(tr("흑백으로 저장"))
         self.chk_gray.setChecked(self._prefs.get("color") == "gray")
         g.addWidget(self.chk_gray)
+        from viewer.vprinter_controller import image_dpi
+        from viewer.vprinter_recv import IMG_DPI_CHOICES
+        rrow = QHBoxLayout()
+        rrow.addWidget(QLabel(tr("사진·그림 해상도")))
+        self.cb_dpi = QComboBox()
+        for dpi in IMG_DPI_CHOICES:
+            self.cb_dpi.addItem(tr("줄이지 않음") if not dpi else tr("{dpi} dpi").format(dpi=dpi), dpi)
+        self.cb_dpi.setCurrentIndex(max(0, self.cb_dpi.findData(image_dpi(self._prefs))))
+        self.cb_dpi.setToolTip(tr("받은 문서의 사진·그림을 이 해상도로 줄여 PDF 를 가볍게 합니다(넘김이 빨라짐). 300 dpi 면 인쇄에서 차이가 없습니다."))
+        rrow.addWidget(self.cb_dpi)
+        rrow.addStretch(1)
+        g.addLayout(rrow)
         g.addWidget(QLabel(tr("저장 창 없이 바로 저장하고 엽니다. 쪽 범위·여러 쪽 모아 찍기는 인쇄하는 프로그램의 인쇄 창에서 고르세요.")))
         v.addWidget(gb)
         v.addStretch(1)
@@ -135,7 +147,8 @@ class VPrinterDialog(QDialog):
     def result_prefs(self) -> dict:
         p = dict(self._prefs)
         p.update({"kind": "default" if self.rb_default.isChecked() else "original",
-                  "default_dir": self.ed_dir.text().strip(), "color": "gray" if self.chk_gray.isChecked() else "color"})
+                  "default_dir": self.ed_dir.text().strip(), "color": "gray" if self.chk_gray.isChecked() else "color",
+                  "img_dpi": int(self.cb_dpi.currentData())})
         p.pop("skip", None)
         return p
 

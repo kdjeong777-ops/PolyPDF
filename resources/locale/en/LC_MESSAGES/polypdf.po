@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-05 17:39+0900\n"
+"POT-Creation-Date: 2026-11-05 21:51+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -13263,6 +13263,10 @@ msgid "흑백으로 저장"
 msgstr "Save in black and white"
 
 #: viewer/widgets/vprinter_dialog.py
+msgid "받은 문서의 사진·그림을 이 해상도로 줄여 PDF 를 가볍게 합니다(넘김이 빨라짐). 300 dpi 면 인쇄에서 차이가 없습니다."
+msgstr "Downsamples photos and images in received documents to this resolution to keep the PDF light (faster page turning). At 300 dpi there is no visible difference in print."
+
+#: viewer/widgets/vprinter_dialog.py
 msgid "관리자 권한으로 진행하는 중… (Windows 확인 창이 뜨면 '예')"
 msgstr "Running as administrator… (choose 'Yes' if Windows asks)"
 
@@ -13287,6 +13291,10 @@ msgid "다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저
 msgstr "Print to the 'PolyPDF' printer from any program to save a PDF and open it in PolyPDF."
 
 #: viewer/widgets/vprinter_dialog.py
+msgid "사진·그림 해상도"
+msgstr "Photo/image resolution"
+
+#: viewer/widgets/vprinter_dialog.py
 msgid "저장 창 없이 바로 저장하고 엽니다. 쪽 범위·여러 쪽 모아 찍기는 인쇄하는 프로그램의 인쇄 창에서 고르세요."
 msgstr "Saves and opens right away, without a save dialog. Choose the page range and pages per sheet in the print dialog of the program you print from."
 
@@ -13297,6 +13305,10 @@ msgstr "Installed ✓ — printer 'PolyPDF'"
 #: viewer/widgets/vprinter_dialog.py
 msgid "수리"
 msgstr "Repair"
+
+#: viewer/widgets/vprinter_dialog.py
+msgid "줄이지 않음"
+msgstr "Do not downsample"
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "ARM64 Windows 에서는 쓸 수 없습니다."
@@ -13339,6 +13351,11 @@ msgstr "Failed (code {rc}) — log: {log}"
 #, python-brace-format
 msgid "상태를 읽지 못했습니다: {err}"
 msgstr "Could not read the status: {err}"
+
+#: viewer/widgets/vprinter_dialog.py
+#, python-brace-format
+msgid "{dpi} dpi"
+msgstr "{dpi} dpi"
 
 #: viewer/workers.py
 msgid "스캔 이미지 감지 — OCR 모드로 추출"

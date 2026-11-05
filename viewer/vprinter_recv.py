@@ -279,10 +279,49 @@ def text_rotation(page) -> int | None:
     return max(votes, key=votes.get) if votes else None
 
 
-def upright_pages(doc, landscape: bool, nup: int) -> list:
-    """쪽마다 바로 세울 회전. 글 방향이 우선, 글이 없는 쪽은 문서의 다수 결정, 문서 전체에 글이 없으면
-    머리 규칙(가로이고 1쪽씩일 때만 90°) — 머리만 보면 '한 장에 2쪽' 을 다시 눕혔다(261017-16)."""
+def _ps_matrix(txt: bytes):
+    """`/mysetup [ 72 600 V 0 0 -72 600 V 0 842 ] def` 의 행렬(V = 나누기) → 숫자 6개. 못 읽으면 None."""
+    st = []
+    for tok in txt.split():
+        if tok == b"V" and len(st) >= 2:
+            b, a = st.pop(), st.pop()
+            st.append(a / b if b else 0.0)
+        else:
+            try:
+                st.append(float(tok))
+            except ValueError:
+                return None
+    return st if len(st) == 6 else None
+
+
+def page_rotations(ps_path: str) -> list:
+    """쪽마다 PScript5 가 놓은 방향 — 가로 쪽은 세로 용지에 돌려 그린다(`mysetup` 행렬의 첫 값이 0). 쪽 순서대로 90·270·0.
+    문서 머리(`%%Orientation`)는 **첫 쪽 방향뿐**이라 섞인 인쇄(사진 '방향 자동')에서는 틀렸다(261105-14). 줄 단위로 훑는다(그림 줄은 건너뜀)."""
+    rots, cur, seen = [], 0, False
+    try:
+        with open(ps_path, "rb") as f:
+            for line in f:
+                if line.startswith(b"%%Page:"):
+                    rots.append(cur)
+                elif line.startswith(b"/mysetup ["):
+                    m = _ps_matrix(line[len(b"/mysetup ["):].split(b"]", 1)[0])
+                    if m:
+                        seen = True
+                        cur = 0 if m[0] else (90 if m[1] > 0 else 270)   # [0 s s 0 …] 를 90° 로 세우면 바로 선다(261105-14 실측)
+                        if rots:
+                            rots[-1] = cur                 # 쪽 설정 안에서 다시 정의 — 그 쪽 방향
+    except OSError:
+        return []
+    return rots if seen else []                    # 행렬이 없는 PS(다른 드라이버 꼴)면 모른다 — 종전 규칙으로
+
+
+def upright_pages(doc, landscape: bool, nup: int, page_rots: list | None = None) -> list:
+    """쪽마다 바로 세울 회전. 글 방향이 우선. 글이 없는 쪽(사진·그림)은 **그 쪽의 PS 방향**(`page_rotations`, 1쪽씩이고 쪽 수가 맞을 때),
+    없으면 문서의 다수 결정, 문서 전체에 글이 없으면 머리 규칙(가로이고 1쪽씩일 때만 90°) — 머리만 보면 '한 장에 2쪽' 을 다시 눕혔다(261017-16),
+    섞인 쪽(세로로 시작한 사진 묶음)의 가로 쪽을 눕힌 채 두었다(261105-14)."""
     rots = [text_rotation(pg) for pg in doc]
+    if nup == 1 and page_rots and len(page_rots) == len(rots):
+        return [pr if r is None else r for r, pr in zip(rots, page_rots)]
     known = [r for r in rots if r is not None]
     if known:
         fallback = max(set(known), key=known.count)
@@ -450,8 +489,25 @@ _PS_PROLOG = (
 )
 
 
-def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs: str | None = None) -> None:
-    """PS → PDF(사용자 권한). 쪽을 글 방향으로 바로 세우고 회전 표시를 없앤다. 제목을 문서 이름으로. 실패하면 예외."""
+IMG_DPI_DEFAULT = 300                       # 사진·그림 해상도 기본(가상 프린터 SOT §4.1, 261105-15 사용자 결정 — 도구 메뉴에서 고침)
+IMG_DPI_CHOICES = (150, 300, 600, 0)        # 0 = 줄이지 않음
+
+
+def image_args(img_dpi: int) -> list:
+    """Ghostscript 가 그림을 `img_dpi` 로 줄이게(넘는 것만). 0 이면 없음 — 다른 프로그램이 600dpi 로 보낸 사진도 PDF 가 무거워지지 않게(261105-15)."""
+    if not img_dpi:
+        return []
+    out = []
+    for k in ("Color", "Gray"):
+        out += ["-dDownsample%sImages=true" % k, "-d%sImageDownsampleType=/Bicubic" % k,
+                "-d%sImageResolution=%d" % (k, img_dpi), "-d%sImageDownsampleThreshold=1.0" % k]
+    return out
+
+
+def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs: str | None = None,
+            img_dpi: int = IMG_DPI_DEFAULT) -> None:
+    """PS → PDF(사용자 권한). 쪽을 글 방향으로(글 없는 쪽은 그 쪽의 PS 방향으로) 바로 세우고 회전 표시를 없앤다. 제목을 문서 이름으로.
+    그림은 `img_dpi` 로 줄인다(0 = 그대로). 실패하면 예외."""
     gs = gs or gs_exe()
     if not gs:
         raise FileNotFoundError(tr("변환 도구(Ghostscript)가 없습니다 — PolyPDF 를 다시 설치하세요(수리로는 되살아나지 않습니다)."))
@@ -463,6 +519,7 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
             "-dAutoRotatePages=/None", "-dEmbedAllFonts=true", "-dSubsetFonts=true"]
     if gray:
         args += ["-sColorConversionStrategy=Gray", "-dProcessColorModel=/DeviceGray"]
+    args += image_args(img_dpi)
     args += ["-sOutputFile=" + tmp, prolog, ps_path]
     env = dict(os.environ)
     env["GS_LIB"] = ""                      # 다른 Ghostscript 설치의 설정을 읽지 않게
@@ -480,7 +537,7 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
     import fitz
     d = fitz.open(tmp)
     try:
-        for pg, rot in zip(d, upright_pages(d, is_landscape(ps_path), nup_count(ps_path))):
+        for pg, rot in zip(d, upright_pages(d, is_landscape(ps_path), nup_count(ps_path), page_rotations(ps_path))):
             if rot:
                 pg.set_rotation((pg.rotation + rot) % 360)
             if pg.rotation:
