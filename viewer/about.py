@@ -46,6 +46,10 @@ OSS = (
     # 261105-6(태그 SOT §5.7): 사진 위치 → 행정동 — resources/geo/kr_dong.bin(단순화·압축해 넣음). CC BY 4.0 출처 표시
     (tr_noop("행정동 경계 (admdongkor ver20261001)"), "CC BY 4.0",
      tr_noop("통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPDF 가 단순화"), ()),
+    # 261105-17(사진 보기 SOT §4.29): 고른 사진 지도 — resources/map 의 Leaflet·markercluster 를 브라우저 페이지에 싣는다. 지도 그림은 OpenStreetMap(ODbL)
+    ("Leaflet 1.9.4", "BSD-2-Clause", "Volodymyr Agafonkin", ()),
+    ("Leaflet.markercluster 1.5.3", "MIT", "David Leaver", ()),
+    (tr_noop("OpenStreetMap 지도 그림"), "ODbL", tr_noop("© OpenStreetMap contributors — 지도 페이지에 출처를 보인다"), ()),
     ("FFmpeg", "GPL v3", tr_noop("FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"), ()),
     ("lameenc · LAME", "LGPL", tr_noop("Chris Cooper · LAME 프로젝트"), ("lameenc",)),
     # 261104-2(사진 보기 SOT 4.9): HEIC 읽기 — 동적 링크 DLL(libheif·libde265 LGPL v3, MinGW libstdc++ GCC 런타임 예외)

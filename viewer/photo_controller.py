@@ -559,17 +559,96 @@ class PhotoMixin:
             self._set_active_pane(me)
             self._photo_pair_stepping = False
 
-    # ── 지도 (4.29, 261104-7 B4, §5.1 F6·D18) ─────────────────
-    def _photo_open_map(self, lat: float, lon: float) -> bool:
-        """촬영 위치를 지도 서비스(OpenStreetMap)로 — **매번** '위치가 밖으로 보내진다' 고 묻고(D18) 기본 브라우저로. 열었으면 True."""
-        ans = QMessageBox.question(
-            self, tr("지도에서 위치 보기"),
-            tr("촬영 위치({lat:.5f}, {lon:.5f})가 지도 서비스(OpenStreetMap)로 보내집니다. 기본 브라우저로 열까요?").format(lat=lat, lon=lon))
+    # ── 지도 (4.29, 261104-7 B4·261105-17, §5.1 F6·D18) ─────────────────
+    def _photo_map_show(self, paths):
+        """고른 사진들을 한 지도에 — 위치 읽기·페이지 만들기는 배경(`PhotoMapWorker`), 메인은 확인 창과 브라우저 열기만."""
+        from viewer import photo_map
+        from viewer.workers import run_in_thread
+        paths = [str(p) for p in (paths or []) if p]
+        if not paths:
+            return
+        if self.__dict__.get("_photo_map_bridge") is None:
+            b = photo_map.MapBridge(self)                # 브라우저의 [PolyPDF 에서 열기·고르기] → 메인
+            b.picked.connect(self._photo_map_picked)
+            photo_map.set_bridge(b)
+            self._photo_map_bridge = b
+        old = self.__dict__.get("_photo_mapper")
+        if old is not None:
+            old.request_cancel()
+        w = photo_map.PhotoMapWorker(paths)
+        w.done.connect(lambda r, _w=w: self._photo_map_done(r, _w))
+        self._photo_mapper = w
+        try:
+            self.statusBar().showMessage(tr("사진 위치를 읽는 중… ({n}장)").format(n=len(paths)), 3000)
+        except Exception:
+            pass
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_map_done(self, r: dict, w=None):
+        if w is not None and self.__dict__.get("_photo_mapper") is not w:
+            return                                       # 뒤에 다시 불렀다
+        self._photo_mapper = None
+        shown, no_gps, cloud = int(r.get("shown", 0)), int(r.get("no_gps", 0)), int(r.get("cloud", 0))
+        skip = []
+        if no_gps:
+            skip.append(tr("위치가 없는 사진 {n}장").format(n=no_gps))
+        if cloud:
+            skip.append(tr("클라우드에만 있어 읽지 않은 사진 {n}장").format(n=cloud))
+        if not shown or not r.get("url"):
+            msg = tr("고른 사진에 촬영 위치가 없습니다.")
+            if cloud:
+                msg += "\n" + tr("클라우드에만 있어 읽지 않은 사진 {n}장 — 내려받은 뒤 다시 해 보세요.").format(n=cloud)
+            QMessageBox.information(self, tr("지도에서 위치 보기"), msg)
+            return
+        msg = tr("사진 {n}장의 위치를 지도에 표시합니다.").format(n=shown)
+        if skip:
+            msg += "\n" + tr("빼는 것: {list}").format(list=", ".join(skip))
+        msg += "\n\n" + tr("지도 그림은 OpenStreetMap 에서 받으며, 보이는 곳의 대략적인 위치가 그 서버로 보내집니다. 기본 브라우저로 열까요?")
+        ans = QMessageBox.question(self, tr("지도에서 위치 보기"), msg)      # D18 — 매번 묻는다(기억하지 않는다)
         if ans != QMessageBox.StandardButton.Yes:
-            return False
+            return
         from PyQt6.QtCore import QUrl
         from PyQt6.QtGui import QDesktopServices
-        return bool(QDesktopServices.openUrl(QUrl(map_url(lat, lon))))
+        QDesktopServices.openUrl(QUrl(r["url"]))
+
+    def _photo_map_picked(self, paths: list):
+        """지도 페이지의 [PolyPDF 에서 열기·고르기] — 책갈피창에서 그 사진들을 고르고(하나면 연다) 창을 앞으로."""
+        try:
+            if self.isMinimized():
+                self.showNormal()
+            self.raise_()
+            self.activateWindow()
+        except Exception:
+            pass
+        if not getattr(self, "_photo_mode", False):
+            return
+        from viewer.pathutil import norm_key
+        want = {norm_key(p) for p in (paths or [])}
+        bt = self.bookmark_tree
+        found = []
+        with bt.batch_rows():
+            for it in bt._iter_file_nodes():
+                d = it.data(0, bt.DATA_FILE)
+                if d and norm_key(str(d)) in want:
+                    found.append(it)
+        if not found:
+            return                                       # 다른 폴더로 옮겼다 — 아무것도 하지 않는다
+        if len(found) == 1:
+            self._on_bookmark_activated(str(found[0].data(0, bt.DATA_FILE)), 0)
+        tree = bt.tree
+        tree.blockSignals(True)                          # 고르기만 — 이동(파일 열기)은 하지 않는다
+        try:
+            tree.clearSelection()
+            for it in found:
+                par = it.parent()
+                while par is not None:
+                    par.setExpanded(True)
+                    par = par.parent()
+                it.setSelected(True)
+            tree.setCurrentItem(found[0], 0, tree.selectionModel().SelectionFlag.NoUpdate)
+            tree.scrollToItem(found[0])
+        finally:
+            tree.blockSignals(False)
 
     # ── 일괄 작업 (4.30, 261104-7 B5, §5.1 F7) ─────────────────
     def _photo_batch_dialog(self, paths):
@@ -2003,7 +2082,7 @@ class PhotoMixin:
         bb.rejected.connect(dlg.reject)
         if info.get("gps"):                                # 4.29(261104-7 B4, F6·D18): 지도에서 위치 보기 — 매번 확인
             b_map = bb.addButton(tr("지도에서 위치 보기"), QDialogButtonBox.ButtonRole.ActionRole)
-            b_map.clicked.connect(lambda _=False, g=info["gps"]: self._photo_open_map(*g))
+            b_map.clicked.connect(lambda _=False, pth=str(info["path"]): self._photo_map_show([pth]))
         lay.addWidget(bb)
         dlg.resize(560, 420)
         self._photo_info_dlg = dlg
@@ -2321,9 +2400,7 @@ class PhotoMixin:
         elif kind == "info":
             self._photo_info_dialog()
         elif kind == "map":
-            g = (self.__dict__.get("_photo_info") or {}).get("gps")
-            if g:
-                self._photo_open_map(*g)
+            self._photo_map_show(paths)                  # 4.29(261105-17) — 고른 사진 모두를 한 지도에
         elif kind == "open":
             self._on_bookmark_activated(paths[0], 0)
         elif kind == "copy_out":
@@ -2358,14 +2435,15 @@ class PhotoMixin:
         menu.addSeparator()
         items = [("open", tr("열기")), (None, None),
                  ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), ("crop", tr("크롭...")), (None, None),
-                 ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")), (None, None),
+                 ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")),
+                 ("map", tr("지도에서 위치 보기")), (None, None),             # 4.29(261105-17)
                  ("to_pdf", tr("PDF 로 만들기...")), (None, None),
                  ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
         if many:
             n = len(targets)
             items = [("rot_l", tr('고른 사진 {n}장 왼쪽으로 90° 돌리기').format(n=n)),
                      ("rot_r", tr('고른 사진 {n}장 오른쪽으로 90° 돌리기').format(n=n)), (None, None),
-                     ("copy_path", tr("경로 복사")), (None, None),
+                     ("copy_path", tr("경로 복사")), ("map", tr('지도에서 위치 보기 ({n}장)').format(n=n)), (None, None),
                      ("to_pdf", tr('고른 사진 {n}장으로 PDF 만들기...').format(n=n)), (None, None),
                      ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
         acts = {}
@@ -2374,7 +2452,7 @@ class PhotoMixin:
                 menu.addSeparator()
                 continue
             a = menu.addAction(label)
-            a.setEnabled(many or ok or key in ("open", "copy_path", "reveal"))
+            a.setEnabled(many or ok or key in ("open", "copy_path", "reveal", "map"))
             acts[a] = key
         a_all = None
         if len(allp) > 1:
@@ -3465,13 +3543,6 @@ def _photo_doc_cls():
 
 ANIM_EXTS = (".gif", ".webp")   # 움직이는 그림일 수 있는 형식(4.31) — 장 수가 1 보다 많을 때만 ▶
 BATCH_SIDE_DEFAULT = 1920       # 일괄 작업 '크기 줄이기' 의 긴 변 기본값(4.30)
-MAP_URL = "https://www.openstreetmap.org/?mlat={lat:.6f}&mlon={lon:.6f}#map=17/{lat:.6f}/{lon:.6f}"   # 4.29 — API 키가 필요 없는 지도
-
-
-def map_url(lat: float, lon: float) -> str:
-    return MAP_URL.format(lat=float(lat), lon=float(lon))
-
-
 WATCH_DEBOUNCE_MS = 300        # 폴더 감시 알림을 모으는 시간(4.27) — 카메라·캡처가 여러 장을 잇달아 쓸 때 한 번만
 
 

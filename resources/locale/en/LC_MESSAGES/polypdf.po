@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-05 21:51+0900\n"
+"POT-Creation-Date: 2026-11-05 22:39+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -76,6 +76,14 @@ msgstr "Korean administrative-dong boundaries (admdongkor ver20261001)"
 #: viewer/about.py
 msgid "통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPDF 가 단순화"
 msgstr "Statistics Korea SGIS boundaries (KOGL Type 1), processed by vuski/admdongkor — github.com/vuski/admdongkor, simplified by PolyPDF"
+
+#: viewer/about.py
+msgid "OpenStreetMap 지도 그림"
+msgstr "OpenStreetMap map tiles"
+
+#: viewer/about.py
+msgid "© OpenStreetMap contributors — 지도 페이지에 출처를 보인다"
+msgstr "© OpenStreetMap contributors — credited on the map page"
 
 #: viewer/about.py
 msgid "FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"
@@ -1137,7 +1145,7 @@ msgstr "Shortcuts saved"
 msgid "새 창을 열지 못했습니다."
 msgstr "Could not open a new window."
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_map.py
 msgid "확대"
 msgstr "Zoom In"
 
@@ -3979,6 +3987,14 @@ msgid "폴더가 바뀌어 사진 목록을 새로 읽었습니다."
 msgstr "The folder changed, so the photo list was reloaded."
 
 #: viewer/photo_controller.py
+msgid "고른 사진에 촬영 위치가 없습니다."
+msgstr "The selected photos have no location."
+
+#: viewer/photo_controller.py
+msgid "지도 그림은 OpenStreetMap 에서 받으며, 보이는 곳의 대략적인 위치가 그 서버로 보내집니다. 기본 브라우저로 열까요?"
+msgstr "Map tiles come from OpenStreetMap, so the approximate area you view is sent to its server. Open in your default browser?"
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 msgid "지도에서 위치 보기"
 msgstr "Show Location on Map"
 
@@ -4162,6 +4178,11 @@ msgstr "Move split panes together: on"
 #: viewer/photo_controller.py
 msgid "2분할 함께 움직이기: 끔"
 msgstr "Move split panes together: off"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장의 위치를 지도에 표시합니다."
+msgstr "Show the locations of {n} photos on a map."
 
 #: viewer/photo_controller.py
 msgid "사진"
@@ -4363,11 +4384,6 @@ msgstr "Photo search '{q}': {n} photos"
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "촬영 위치({lat:.5f}, {lon:.5f})가 지도 서비스(OpenStreetMap)로 보내집니다. 기본 브라우저로 열까요?"
-msgstr "The photo location ({lat:.5f}, {lon:.5f}) will be sent to a map service (OpenStreetMap). Open it in the default browser?"
-
-#: viewer/photo_controller.py
-#, python-brace-format
 msgid "일괄 작업 — 사진 {n}장"
 msgstr "Batch — {n} photos"
 
@@ -4498,6 +4514,26 @@ msgstr "No photos match '{q}'."
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "사진 위치를 읽는 중… ({n}장)"
+msgstr "Reading photo locations… ({n} photos)"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "위치가 없는 사진 {n}장"
+msgstr "{n} photos without a location"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "클라우드에만 있어 읽지 않은 사진 {n}장"
+msgstr "{n} cloud-only photos not read"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "빼는 것: {list}"
+msgstr "Left out: {list}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "이미 있는 이름이 있어 바꾸지 않았습니다: {name}"
 msgstr "A name already exists, so nothing was renamed: {name}"
 
@@ -4586,6 +4622,11 @@ msgstr "{t} (file date)"
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "클라우드에만 있어 읽지 않은 사진 {n}장 — 내려받은 뒤 다시 해 보세요."
+msgstr "{n} cloud-only photos were not read — download them and try again."
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "이름을 바꾸지 못했습니다: {name}"
 msgstr "Could not rename: {name}"
 
@@ -4611,6 +4652,11 @@ msgstr "Rotate {n} Selected Photos 90° Left"
 #, python-brace-format
 msgid "고른 사진 {n}장 오른쪽으로 90° 돌리기"
 msgstr "Rotate {n} Selected Photos 90° Right"
+
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "지도에서 위치 보기 ({n}장)"
+msgstr "Show Location on Map ({n})"
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -4724,6 +4770,46 @@ msgstr "Detailed"
 #: viewer/photo_label.py viewer/widgets/pres_timer.py
 msgid "크기"
 msgstr "Size"
+
+#: viewer/photo_map.py
+msgid "PolyPDF 에서 열기"
+msgstr "Open in PolyPDF"
+
+#: viewer/photo_map.py
+msgid "PolyPDF 에서 고르기"
+msgstr "Select in PolyPDF"
+
+#: viewer/photo_map.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "{n}장"
+msgstr "{n} photos"
+
+#: viewer/photo_map.py
+msgid "PolyPDF 로 보냈습니다"
+msgstr "Sent to PolyPDF"
+
+#: viewer/photo_map.py
+msgid "PolyPDF 에 닿지 않습니다 — 앱이 닫혔을 수 있습니다"
+msgstr "Can't reach PolyPDF — the app may be closed"
+
+#: viewer/photo_map.py
+#, python-brace-format
+msgid "사진 위치 — {n}장"
+msgstr "Photo locations — {n} photos"
+
+#: viewer/photo_map.py
+#, python-brace-format
+msgid "위치 없는 사진 {n}장 뺌"
+msgstr "{n} photos without a location left out"
+
+#: viewer/photo_map.py
+#, python-brace-format
+msgid "클라우드에만 있는 사진 {n}장 뺌"
+msgstr "{n} cloud-only photos left out"
+
+#: viewer/photo_map.py
+msgid "지도 페이지가 없습니다 — PolyPDF 에서 다시 여세요."
+msgstr "This map page is gone — open it again from PolyPDF."
 
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"
@@ -7165,11 +7251,6 @@ msgstr "Create OCR text layer ({n} files)..."
 #, python-brace-format
 msgid "용량 줄여 내보내기 ({n}개 파일)..."
 msgstr "Reduce size and export ({n} files)..."
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "{n}장"
-msgstr "{n} photos"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -14109,4 +14190,7 @@ msgstr "Getting Started"
 
 #~ msgid "원래 크기 (100%)"
 #~ msgstr "Actual Size (100%)"
+
+#~ msgid "촬영 위치({lat:.5f}, {lon:.5f})가 지도 서비스(OpenStreetMap)로 보내집니다. 기본 브라우저로 열까요?"
+#~ msgstr "The photo location ({lat:.5f}, {lon:.5f}) will be sent to a map service (OpenStreetMap). Open it in the default browser?"
 
