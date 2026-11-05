@@ -20,7 +20,8 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
     def __init__(self, page_count: int, cur_page: int,
                  n_thumb_sel: int, n_shot_sel: int, parent=None,
                  preset_api=None, sample=None, n_files_sel: int = 0,
-                 thumb_pages=None, file_paths=None, bake_src=None, preset_scope=None):
+                 thumb_pages=None, file_paths=None, bake_src=None, preset_scope=None,
+                 preset_range=None):
         super().__init__(parent)
         self.setWindowTitle(tr("인쇄"))
         self.resize(800, 600)
@@ -89,6 +90,15 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
             self.rb_cur.setChecked(True)
         elif preset_scope == "thumb" and self.rb_thumb.isEnabled():
             self.rb_thumb.setChecked(True)
+        # 261105-12(마스터 §4.7.13 '맨 위 인쇄'): 책갈피창 우클릭 — 파일 하나는 전체, 책갈피는 그 쪽 범위, 여러 파일은 파일 인쇄
+        elif preset_scope == "all":
+            self.rb_all.setChecked(True)
+        elif preset_scope == "files" and self.rb_files.isEnabled():
+            self.rb_files.setChecked(True)
+        elif preset_scope == "range" and preset_range:
+            self.sp_from.setValue(int(preset_range[0]) + 1)
+            self.sp_to.setValue(int(preset_range[1]) + 1)
+            self.rb_range.setChecked(True)
 
         nrow = QHBoxLayout()
         self.chk_nup = QCheckBox(tr("다단 인쇄"))

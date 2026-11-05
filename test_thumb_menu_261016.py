@@ -90,6 +90,7 @@ try:
     bt._on_tree_context_menu(bt.tree.visualItemRect(anode).center()); spin(0.3)
     m = seen[-1] if seen else []
     L = labels(m)
+    chk(L[:2] == ["인쇄…", "-"], "A0 맨 위 '인쇄…'(261105-12, 마스터 §4.7.13)", str(L[:3]))
     i_fl = L.index("평탄화해서 내보내기...") if "평탄화해서 내보내기..." in L else -1
     chk(i_fl >= 0 and L[i_fl + 1:i_fl + 6] == ["변환...", "용량 줄여 내보내기...", "개인정보 지우고 별도 저장...", "전달...", "-"],
         "A1 저장 그룹 끝 — 변환 · 용량 줄여 내보내기 · 개인정보 지우고 별도 저장 · 전달(261105-9)", str(L))

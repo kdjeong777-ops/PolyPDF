@@ -2096,7 +2096,7 @@ msgstr ""
 msgid "저장 중…"
 msgstr ""
 
-#: viewer/app.py viewer/photo_controller.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 msgid "인쇄…"
 msgstr ""
 
@@ -6949,6 +6949,16 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "파일 없음: {name}"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "인쇄 ({n}장)…"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "인쇄 ({n}개 파일)…"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

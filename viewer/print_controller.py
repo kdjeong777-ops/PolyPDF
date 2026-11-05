@@ -26,10 +26,37 @@ __all__ = ["PrintMixin"]
 class PrintMixin:
     """MainWindow 에 믹스인되는 인쇄·PDF 내보내기 메서드 모음."""
 
-    def action_print(self, preset_scope=None, photo_pdf=None):
+    def _on_tree_print(self, files, page_range=None):
+        """261105-12(마스터 §4.7.13 '맨 위 인쇄'): 책갈피창(위·아래) 우클릭 '인쇄…' — 새 인쇄 구현 없이 같은 인쇄 창으로.
+        사진(사진 모드)은 사진 인쇄(사진 보기 SOT 4.21), PDF 는 `action_print(files=…, page_range=…)`."""
+        files = [str(f) for f in (files or []) if f]
+        if not files:
+            return
+        if getattr(self, "_photo_mode", False) and all(self._is_photo_path(f) for f in files):
+            self._photo_print(paths=files)
+            return
+        files = [f for f in files if f.lower().endswith(".pdf")]
+        if files:
+            self.action_print(files=files, page_range=page_range)
+
+    @staticmethod
+    def _tree_print_range(page_range, pc):
+        """책갈피 쪽 범위(0-based, 끝 None = 끝 쪽) → 그 문서 안으로 자른 (첫 쪽, 끝 쪽). 없으면 None."""
+        if not page_range or pc <= 0:
+            return None
+        a = max(0, min(int(page_range[0]), pc - 1))
+        b = pc - 1 if page_range[1] is None else max(a, min(int(page_range[1]), pc - 1))
+        return (a, b)
+
+    def action_print(self, preset_scope=None, photo_pdf=None, files=None, page_range=None):
         """인쇄 창. 261016-2(마스터 §4.7.7·§4.7.20): 썸네일·본문 우클릭 '인쇄…' 도 이 창 — `preset_scope`('current'|'thumb')가 범위 기본값.
-        261104-3(사진 보기 SOT 4.21): 사진 모드면 사진을 보이는 그대로의 임시 PDF 로 만들어(`photo_pdf` = (경로, 지금 쪽)) 같은 창·같은 갈래로."""
-        if photo_pdf is None and getattr(self, "_photo_mode", False) and self._is_photo_path(self.main_view.current_file() or ""):
+        261104-3(사진 보기 SOT 4.21): 사진 모드면 사진을 보이는 그대로의 임시 PDF 로 만들어(`photo_pdf` = (경로, 지금 쪽)) 같은 창·같은 갈래로.
+        261105-12(마스터 §4.7.13): 책갈피창 우클릭 — `files` 하나면 창의 '현재 문서' 를 그 파일로(`page_range` = 책갈피 쪽 범위를 '페이지 범위' 에),
+        둘 이상이면 '선택한 책갈피 파일 인쇄' 를 그 파일들로 골라 연다."""
+        if files is not None and len(files) == 1 and photo_pdf is None:
+            photo_pdf = (str(files[0]), int(page_range[0]) if page_range else 0)   # 같은 '다른 문서' 갈래
+            preset_scope = "range" if page_range else "all"
+        if photo_pdf is None and files is None and getattr(self, "_photo_mode", False) and self._is_photo_path(self.main_view.current_file() or ""):
             self._photo_print(preset_scope)
             return
         cur = self.main_view.current_file()
@@ -49,6 +76,8 @@ class PrintMixin:
             with _fz.open(cur) as _d:
                 pc = _d.page_count
             is_pdf, n_thumb, sel_files = True, 0, []
+        elif files is not None:                       # 261105-12: 책갈피창 우클릭 — 고른 파일 둘 이상
+            sel_files, preset_scope = [str(f) for f in files], "files"
         n_files = len(sel_files)
         if not is_pdf and self.shot_strip.list.count() == 0 and n_files == 0:
             QMessageBox.information(self, tr("인쇄"), tr("인쇄할 문서가 없습니다."))
@@ -64,7 +93,8 @@ class PrintMixin:
                                n_files_sel=n_files,
                                thumb_pages=thumb_pages, file_paths=sel_files,
                                bake_src=self._baked_src,   # 261009-1(§4.7.13)
-                               preset_scope=preset_scope)
+                               preset_scope=preset_scope,
+                               preset_range=self._tree_print_range(page_range, pc))
         if not dlg.exec():
             return
         spec = dlg.result_spec()

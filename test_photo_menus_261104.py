@@ -106,6 +106,7 @@ try:
     pump(lambda: node("a 가로.jpg") is not None and node("b 가로.jpg") is not None and node("c3 가로.jpg") is not None)
     bt.set_sort_mode(bt.SORT_NAME); pump()
     tx = tree_menu("a 가로.jpg")
+    chk(tx[:1] == ["인쇄…"], "A 사진 행 메뉴 맨 위 '인쇄…'(261105-12)", str(tx[:3]))
     for want in ("사진 복사", "경로 복사", "PDF 로 만들기...", "해시태그 편집...", "파일 탐색기 열기"):
         chk(want in tx, "A 사진 행 메뉴에 '%s'" % want, str(tx))
     for gone in ("저장", "평탄화해서 내보내기...", "변환...", "책갈피 생성", "일괄 OCR", "책갈피 모두 펼치기", "개인정보 지우고 별도 저장..."):

@@ -2438,14 +2438,18 @@ class PhotoMixin:
             return None
         return self._photo_bake_pdf(base, paths)
 
-    def _photo_print(self, preset_scope=None):
-        """사진 인쇄(4.21) — 책갈피창에서 여러 장 골랐으면 그것, 아니면 지금 사진. 보이는 그대로의 임시 PDF 를 같은 인쇄 창에."""
+    def _photo_print(self, preset_scope=None, paths=None):
+        """사진 인쇄(4.21) — 책갈피창에서 여러 장 골랐으면 그것, 아니면 지금 사진. 보이는 그대로의 임시 PDF 를 같은 인쇄 창에.
+        `paths` 를 주면 그 사진들(261105-12 책갈피창 우클릭 맨 위 '인쇄…' — 위·아래 창 어디서든 누른 사진)."""
         cur = self.main_view.current_file() if self.main_view else None
-        try:
-            sel = [p for p in self.bookmark_tree.selected_file_paths() if self._is_photo_path(p)]
-        except Exception:
-            sel = []
-        paths = sel if len(sel) > 1 else ([cur] if cur else [])
+        if paths:
+            paths = [str(p) for p in paths if self._is_photo_path(str(p))]
+        else:
+            try:
+                sel = [p for p in self.bookmark_tree.selected_file_paths() if self._is_photo_path(p)]
+            except Exception:
+                sel = []
+            paths = sel if len(sel) > 1 else ([cur] if cur else [])
         pdf = self._photo_make_pdf(paths)
         if not pdf:
             QMessageBox.information(self, tr("인쇄"), tr("인쇄할 사진이 없습니다."))

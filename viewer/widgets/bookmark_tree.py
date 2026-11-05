@@ -216,6 +216,7 @@ class BookmarkTree(QWidget):
     compressFilesRequested = pyqtSignal(object)      # 261014-21(마스터 §4.7.19): [파일] — PDF 압축
     redactFileRequested = pyqtSignal(str)            # 261014-22(보안 SOT §14): 파일 — 가림(개인정보 지우기)
     shareFilesRequested = pyqtSignal(list)           # 261105-9(마스터 §4.7.23): 파일들 — 전달 묶음(.polypdf.zip)
+    printFilesRequested = pyqtSignal(object, object)  # 261105-12(마스터 §4.7.13): 맨 위 '인쇄…' — ([파일], (첫 쪽, 끝 쪽|None) 또는 None)
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
     photoActionRequested = pyqtSignal(str, list)  # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴 — (일 이름, 사진 경로들)
@@ -2649,6 +2650,63 @@ class BookmarkTree(QWidget):
             return
         self._edit_item(item)
 
+    def _bookmark_page_range(self, item):
+        """261105-12(마스터 §4.7.13 '맨 위 인쇄'): 책갈피 행 → (첫 쪽, 끝 쪽|None) 0-based.
+        끝 = 다음 책갈피(같은 층 다음, 없으면 위층의 다음) 앞 쪽 — 없으면 None(그 파일 끝 쪽)."""
+        start = item.data(0, self.DATA_PAGE)
+        if start is None:
+            return None
+        start = int(start)
+        cur = item
+        while cur is not None and not self._is_file_node(cur):
+            par = cur.parent()
+            if par is None:
+                break
+            for j in range(par.indexOfChild(cur) + 1, par.childCount()):
+                nx = par.child(j)
+                p = nx.data(0, self.DATA_PAGE)
+                if p is not None and not nx.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+                    return (start, max(start, int(p) - 1))
+            cur = par
+        return (start, None)
+
+    def _add_print_action(self, menu, item, pm) -> None:
+        """261105-12(마스터 §4.7.13, 사용자 지시 '책갈피창의 리스트 선택시 옵션창 가장 상단에 인쇄'): 메뉴 맨 위 '인쇄…'.
+        파일 행 = 고른 파일들, 책갈피 행 = 그 책갈피 쪽 범위, 폴더 행 = 그 아래 PDF 전부(사진 모드 폴더 행에는 없다),
+        사진 줄 = 고른 사진. 인쇄 창은 메뉴가 닫힌 뒤(§4.7.11) — 앱이 `printFilesRequested` 를 받아 기존 인쇄 길로."""
+        is_folder = self._is_folder_node(item)
+        if is_folder and pm:
+            return
+        files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
+        if is_folder:
+            mine = [str(f.data(0, self.DATA_FILE)) for f in self._iter_folder_files(item)]
+            files = files if item.isSelected() else mine
+        else:
+            own = self._file_path_of(item)
+            if not own:
+                return
+            if own not in files:
+                files = [own]
+        if not pm:
+            files = [f for f in files if f.lower().endswith(".pdf")]
+        if not files:
+            return
+        rng = None
+        if (len(files) == 1 and not is_folder and not self._is_file_node(item)
+                and item.data(0, self.DATA_PAGE) is not None):
+            rng = self._bookmark_page_range(item)          # 책갈피 행 — 그 쪽 범위
+        n = len(files)
+        if n == 1:
+            label = tr("인쇄…")
+        elif pm:
+            label = tr('인쇄 ({n}장)…').format(n=n)
+        else:
+            label = tr('인쇄 ({n}개 파일)…').format(n=n)
+        act = menu.addAction(label)
+        act.triggered.connect(lambda _=False, fs=list(files), r=rng: QTimer.singleShot(
+            0, lambda: self.printFilesRequested.emit(fs, r)))
+        menu.addSeparator()
+
     def _on_tree_context_menu(self, pos):
         item = self.tree.itemAt(pos)
         if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
@@ -2679,6 +2737,7 @@ class BookmarkTree(QWidget):
         act_merge = None
         act_translate_sel = None
         pm = self._photo_on()           # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴
+        self._add_print_action(menu, item, pm)   # 261105-12(마스터 §4.7.13, 사용자 지시): 맨 위 '인쇄…'
         if sel_files and pm:
             _ps = [str(it.data(0, self.DATA_FILE)) for it in sel_files]
             _pa = menu.addAction(tr('고른 사진 {n}장으로 PDF 만들기...').format(n=len(_ps)))

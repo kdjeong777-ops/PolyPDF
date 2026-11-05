@@ -2148,7 +2148,7 @@ msgstr "Saving with reduced size… (this may take a while)"
 msgid "저장 중…"
 msgstr "Saving…"
 
-#: viewer/app.py viewer/photo_controller.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 msgid "인쇄…"
 msgstr "Print…"
 
@@ -7183,6 +7183,16 @@ msgstr "{n} PDFs"
 #, python-brace-format
 msgid "파일 없음: {name}"
 msgstr "File missing: {name}"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "인쇄 ({n}장)…"
+msgstr "Print ({n} photos)…"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "인쇄 ({n}개 파일)…"
+msgstr "Print ({n} files)…"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "두 파일 비교..."
