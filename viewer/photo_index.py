@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 
 DB_NAME = "photo_index.db"
-SCHEMA = 2                       # 2: `ocr` 칸(261104-10 P4-c)
+SCHEMA = 3                       # 2: `ocr` 칸(261104-10 P4-c) · 3: `at_ver`·`kind` 칸(자동 태그 판정 표시, 태그 SOT §5.7, 261105-6)
 _LOCK = threading.Lock()
 
 
@@ -69,6 +69,10 @@ def _init(con) -> None:
     cols = {r[1] for r in con.execute("PRAGMA table_info(photos)")}
     if "ocr" not in cols:
         con.execute("ALTER TABLE photos ADD COLUMN ocr TEXT")
+    if "at_ver" not in cols:                 # 사진 머리 자동 태그(meta)를 만든 규칙 판 — 다르면 다시(태그 SOT §5.7)
+        con.execute("ALTER TABLE photos ADD COLUMN at_ver INTEGER")
+    if "kind" not in cols:                   # 종류 판정 '판:태그'('1:영수증'·'1:') — NULL 이면 아직(태그 SOT §5.7)
+        con.execute("ALTER TABLE photos ADD COLUMN kind TEXT")
     con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA),))
 
 
@@ -88,15 +92,16 @@ def _body(name, taken, camera, tag_txt, ocr) -> str:
 
 
 def upsert(con, key: str, path: str, folder: str, name: str, ext: str, size: int, mtime_ns: int, info: dict,
-           tags: list, zip_path: str | None = None, member: str | None = None, ocr: str = "") -> None:
-    """`key` 는 비교용(소문자 경로), `path` 는 원래 글자 그대로의 경로(열 때 쓴다). `ocr` 은 **확정한** 글만(§4.36)."""
+           tags: list, zip_path: str | None = None, member: str | None = None, ocr: str = "", at_ver=None) -> None:
+    """`key` 는 비교용(소문자 경로), `path` 는 원래 글자 그대로의 경로(열 때 쓴다). `ocr` 은 **확정한** 글만(§4.36).
+    `at_ver` = 이 행의 머리 자동 태그를 만든 규칙 판(태그 SOT §5.7). 행을 새로 쓰면 종류 판정(`kind`)은 비운다 — 사진이 바뀌었다."""
     taken = _taken_text(info.get("taken", ""))
     camera = info.get("camera", "") or ""
     tag_txt = " ".join("#" + t for t in tags or [])
-    con.execute("INSERT OR REPLACE INTO photos(key, path, folder, name, ext, size, mtime_ns, width, height, taken, camera, tags, zip, member, ocr) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    con.execute("INSERT OR REPLACE INTO photos(key, path, folder, name, ext, size, mtime_ns, width, height, taken, camera, tags, zip, member, ocr, at_ver) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (key, path, folder, name, ext, int(size), int(mtime_ns), int(info.get("width") or 0), int(info.get("height") or 0),
-                 taken, camera, tag_txt, zip_path, member, ocr or ""))
+                 taken, camera, tag_txt, zip_path, member, ocr or "", at_ver))
     con.execute("DELETE FROM photo_fts WHERE key=?", (key,))
     con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)", (key, _body(name, taken, camera, tag_txt, ocr)))
 
@@ -114,6 +119,37 @@ def set_ocr(con, path: str, ocr: str, tags=None) -> bool:
     con.execute("DELETE FROM photo_fts WHERE key=?", (key,))
     con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)", (key, _body(name, taken, camera, tag_txt, ocr)))
     return True
+
+
+def set_tags(con, key: str, tags, at_ver=None, kind=None) -> bool:
+    """자동 태그를 정한 뒤(태그 SOT §5.7) — 그 행의 태그 글·검색 글을 바꾸고, 주면 `at_ver`·`kind` 도. 워커에서. 행이 없으면 False."""
+    row = con.execute("SELECT name, taken, camera, ocr FROM photos WHERE key=?", (key,)).fetchone()
+    if not row:
+        return False
+    name, taken, camera, ocr = row
+    tag_txt = " ".join("#" + t for t in tags or [])
+    con.execute("UPDATE photos SET tags=?, at_ver=COALESCE(?, at_ver), kind=COALESCE(?, kind) WHERE key=?",
+                (tag_txt, at_ver, kind, key))
+    con.execute("DELETE FROM photo_fts WHERE key=?", (key,))
+    con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)", (key, _body(name, taken, camera, tag_txt, ocr)))
+    return True
+
+
+def autotag_todo(con, folder: str, ver: int) -> set:
+    """폴더(하위 포함)에서 머리 자동 태그가 아직이거나 옛 판인 사진 행의 key — zip 안 사진은 빼고(파일 태그가 없다)."""
+    like = folder.rstrip("\\/") + os.sep + "%"
+    rows = con.execute("SELECT key FROM photos WHERE (folder=? OR folder LIKE ?) AND zip IS NULL AND (at_ver IS NULL OR at_ver<>?)",
+                       (folder, like, int(ver))).fetchall()
+    return {r[0] for r in rows}
+
+
+def kind_todo(con, folder: str, ver: int) -> list:
+    """종류 판정이 아직이거나 옛 판인 사진 — [(key, path)]. zip 안 사진·스크린샷은 뺀다(태그 SOT §5.7)."""
+    like = folder.rstrip("\\/") + os.sep + "%"
+    rows = con.execute("SELECT key, path, kind, tags FROM photos WHERE (folder=? OR folder LIKE ?) AND zip IS NULL ORDER BY taken DESC, name",
+                       (folder, like)).fetchall()
+    pre = "%d:" % int(ver)
+    return [(k, p) for k, p, kd, tg in rows if not (kd or "").startswith(pre) and "#스크린샷" not in (tg or "")]
 
 
 def known(con, folder: str) -> dict:

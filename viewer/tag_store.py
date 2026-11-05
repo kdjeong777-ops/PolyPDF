@@ -37,6 +37,8 @@ from pathlib import Path
 
 
 MAX_KEYWORDS = 10          # §9.1 — 파일당 키워드 상한
+AUTO_FIELDS = ("auto", "auto_conf", "auto_at", "auto_src", "auto_parts")   # 자동 칸 — 지울 때 함께(§6, auto_parts 는 §5.7)
+AUTO_PART_ORDER = ("meta", "kind", "ocr")   # §5.7 사진 — `auto` 합집합의 차례(촬영일·동·장비 → 종류 → 확정 OCR 형식)
 
 
 def normalize_tags(tags) -> list:
@@ -268,10 +270,83 @@ class TagStore:
             v["auto_at"] = int(time.time())
             v["auto_src"] = src
         else:
-            for f in ("auto", "auto_conf", "auto_at", "auto_src"):
+            for f in AUTO_FIELDS:
                 v.pop(f, None)
+        parts = v.get("auto_parts")
+        if isinstance(parts, dict) and tags:         # 부분이 있던 기록(사진, §5.7) — 남은 태그만 제 부분에, 새 것은 `_` 로
+            low = {t.lower() for t in tags}
+            keep = {p: [t for t in ts if t.lower() in low] for p, ts in parts.items() if p != "_"}
+            keep = {p: ts for p, ts in keep.items() if ts}
+            inparts = {t.lower() for ts in keep.values() for t in ts}
+            rest = [t for t in tags if t.lower() not in inparts]
+            if rest:
+                keep["_"] = rest
+            v["auto_parts"] = keep
+        else:
+            v.pop("auto_parts", None)
         self._collapse(k)
         self._save()
+
+    def get_auto_part(self, path, part: str) -> list:
+        v = self._data.get(self._key(path))
+        if isinstance(v, dict):
+            return list((v.get("auto_parts") or {}).get(part) or [])
+        return []
+
+    def set_auto_part(self, path, part: str, tags, src: str = "photo"):
+        """자동 칸의 **한 부분만** 바꾼다(태그 SOT §5.7 — 사진의 meta·kind·ocr). 다른 부분·사용자 태그·거절은 그대로.
+        `auto` = 부분들의 합집합(부분 차례). 부분 없이 쓴 옛 자동 태그는 `_` 부분으로 남긴다. 바뀌었으면 True."""
+        tags = normalize_tags(tags)
+        k = self._key(path)
+        cur = self._data.get(k)
+        if not tags and not (isinstance(cur, dict) and part in (cur.get("auto_parts") or {})):
+            return False                              # 지울 것이 없다 — 기록을 건드리지 않는다
+        v = self._dictify(k)
+        block = {t.lower() for t in (v.get("rejected") or [])}
+        block |= {t.lower() for t in (v.get("manual") or [])}
+        tags = [t for t in tags if t.lower() not in block]
+        parts = v.get("auto_parts")
+        if not isinstance(parts, dict):
+            parts = {"_": list(v["auto"])} if v.get("auto") else {}
+        if parts.get(part, []) == tags and v.get("auto_parts") is not None:
+            self._collapse(k)
+            return False
+        if tags:
+            parts[part] = tags
+        else:
+            parts.pop(part, None)
+        union, low = [], set()
+        for p in sorted(parts, key=lambda p: (AUTO_PART_ORDER.index(p) if p in AUTO_PART_ORDER else len(AUTO_PART_ORDER), p == "_", p)):
+            for t in parts[p]:
+                if t.lower() not in low:
+                    low.add(t.lower())
+                    union.append(t)
+        if union:
+            v["auto"] = union
+            v["auto_parts"] = parts
+            if v.get("auto_conf"):
+                v["auto_conf"] = {t: c for t, c in v["auto_conf"].items() if t.lower() in low}
+            v["auto_at"] = int(time.time())
+            v["auto_src"] = src
+        else:
+            for f in AUTO_FIELDS:
+                v.pop(f, None)
+            v.pop("auto_parts", None)
+        self._collapse(k)
+        self._save()
+        return True
+
+    @staticmethod
+    def _drop_from_parts(v: dict, drop: set):
+        parts = v.get("auto_parts")
+        if not isinstance(parts, dict):
+            return
+        for p in list(parts):
+            parts[p] = [t for t in parts[p] if t.lower() not in drop]
+            if not parts[p]:
+                parts.pop(p)
+        if not parts:
+            v.pop("auto_parts", None)
 
     def reject(self, path, tags):
         """사용자가 뺀 자동 태그 — rejected 에 영구 기록 + auto 에서 제거(§1-⑤)."""
@@ -286,11 +361,12 @@ class TagStore:
         v["rejected"] = rej
         drop = {t.lower() for t in tags}
         v["auto"] = [t for t in (v.get("auto") or []) if t.lower() not in drop]
+        self._drop_from_parts(v, drop)
         if v.get("auto_conf"):
             v["auto_conf"] = {t: c for t, c in v["auto_conf"].items()
                               if t.lower() not in drop}
         if not v["auto"]:
-            for f in ("auto", "auto_conf", "auto_at", "auto_src"):
+            for f in AUTO_FIELDS:
                 v.pop(f, None)
         self._save()
 
@@ -314,6 +390,10 @@ class TagStore:
             return
         v["manual"] = man
         v["auto"] = [t for t in (v.get("auto") or []) if t.lower() not in moved]
+        self._drop_from_parts(v, set(moved))
+        if not v["auto"]:
+            for f in AUTO_FIELDS:
+                v.pop(f, None)
         if v.get("auto_conf"):
             v["auto_conf"] = {t: c for t, c in v["auto_conf"].items()
                               if t.lower() not in moved}
@@ -327,7 +407,7 @@ class TagStore:
             for k in keys:
                 v = self._data.get(k)
                 if isinstance(v, dict):
-                    for f in ("auto", "auto_conf", "auto_at", "auto_src"):
+                    for f in AUTO_FIELDS:
                         v.pop(f, None)
                     self._collapse(k)
             self._dirty = True
@@ -341,11 +421,12 @@ class TagStore:
             for k, v in list(self._data.items()):
                 if isinstance(v, dict) and v.get("auto"):
                     v["auto"] = [t for t in v["auto"] if t.lower() != tl]
+                    self._drop_from_parts(v, {tl})
                     if v.get("auto_conf"):
                         v["auto_conf"] = {t: c for t, c in v["auto_conf"].items()
                                           if t.lower() != tl}
                     if not v["auto"]:
-                        for f in ("auto", "auto_conf", "auto_at", "auto_src"):
+                        for f in AUTO_FIELDS:
                             v.pop(f, None)
                     self._collapse(k)
             self._dirty = True

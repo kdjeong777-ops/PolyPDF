@@ -1617,10 +1617,11 @@ class BookmarkTree(QWidget):
             self._tags._load()                      # 다른 경로(백업 복원)로 바뀐 파일 재읽기
         except Exception:
             pass
-        for it in self._iter_file_nodes():          # 260901-2: 트리 보기 포함
-            p = it.data(0, self.DATA_FILE)
-            if p:
-                self._apply_tag_label(it, p)
+        with self.batch_rows():                     # 261105-6: 줄마다 글을 바꾸면 행 수의 제곱(응답성 SOT §4 ⑥)
+            for it in self._iter_file_nodes():      # 260901-2: 트리 보기 포함
+                p = it.data(0, self.DATA_FILE)
+                if p:
+                    self._apply_tag_label(it, p)
         self._on_filter(self.search_edit.text())
 
     def _rebuild_tag_menu(self):
@@ -1654,7 +1655,10 @@ class BookmarkTree(QWidget):
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
         groups = {"형식": [], "주제": []}
+        from viewer import photo_tags as _pt
         for t in tags:
+            if _pt.is_date_tag(t):
+                continue                      # 사진 촬영일 — 아래 '날짜' 묶음에 해·달로(태그 SOT §5.7, 검색 SOT §5.1)
             groups[axis_of(t) if axis_of(t) in groups else "주제"].append(t)
         # 축 이름은 태그 데이터의 내부 값(한글)이다 — 키는 그대로, 머리글만 번역(다국어 SOT §5)
         for gname in (tr_noop("형식"), tr_noop("주제")):
@@ -1668,6 +1672,16 @@ class BookmarkTree(QWidget):
                 cb.toggled.connect(
                     lambda on, tag=t: (self._add_tag_to_search(tag) if on
                                        else self._remove_tag_from_search(tag)))
+                lay.addWidget(cb)
+        dates = _pt.date_groups(counts)       # 261105-6: 하루 태그는 늘어놓지 않고 해·달 토큰으로(앞부분 일치)
+        if dates:
+            lay.addWidget(_QL("<b>%s</b>" % tr("날짜")))
+            for tok, n in dates:
+                cb = QCheckBox(("#%s  (%d)" if len(tok) == 4 else "    #%s  (%d)") % (tok, n))
+                cb.setChecked(tok.lower() in active)
+                cb.toggled.connect(
+                    lambda on, tag=tok: (self._add_tag_to_search(tag) if on
+                                         else self._remove_tag_from_search(tag)))
                 lay.addWidget(cb)
         area = QScrollArea()
         area.setWidgetResizable(True)
@@ -1688,6 +1702,7 @@ class BookmarkTree(QWidget):
             auto_ts = self._tags.auto_tag_set()
         except Exception:
             pass
+        auto_ts = [t for t in auto_ts if not _pt.is_date_tag(t)]   # 촬영일은 사진마다 달라 회수 메뉴에 늘어놓지 않는다
         if auto_ts:
             sub = self._tag_menu.addMenu(tr("자동 부여 취소"))
             for t in auto_ts[:30]:

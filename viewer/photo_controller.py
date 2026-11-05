@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 
-from PyQt6.QtCore import QObject, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QObject, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton
 
 from pathlib import Path
@@ -260,6 +260,7 @@ class PhotoMixin:
             self._photo_search_paths = None
             self._photo_zip_paths = None
             self._photo_device_stop()
+            self._photo_kind_stop()                     # 종류 자동 태그(태그 SOT §5.7) — 사진 모드에서만
             self._photo_anim_stop(hide=True)
             self._photo_deco_gate(True)
             self._photo_info_hide()
@@ -285,8 +286,11 @@ class PhotoMixin:
         old = self.__dict__.get("_photo_indexer")
         if old is not None:
             old.request_cancel()
-        w = PhotoIndexWorker(str(folder))
+        self._photo_kind_stop()
+        prefs = getattr(self, "_prefs", {}) or {}
+        w = PhotoIndexWorker(str(folder), autotag=bool(prefs.get("photo_auto_tag", True)))
         w.done.connect(self._photo_index_done)
+        w.autoTags.connect(lambda d, _w=w: self._photo_autotag_apply(d, "meta", _w))
         self._photo_indexer = w
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
@@ -295,6 +299,91 @@ class PhotoMixin:
             self._photo_indexer = None
         if n_new or n_gone:
             self.status.showMessage(tr("사진 색인: {n}장 (새로 {a}·지움 {d})").format(n=n_total, a=n_new, d=n_gone), 4000)
+        self._photo_kind_start(folder)
+
+    # ── 사진 자동 태그(태그 SOT §5.7, 261105-6) — 값은 배경 워커가 만들고, 태그 저장소에는 메인이 쓴다 ─────
+    def _photo_autotag_apply(self, found: dict, part: str, run=None):
+        """워커가 만든 자동 태그를 태그 저장소의 그 부분(`set_auto_part`)에 — 사용자 태그·거절한 태그는 그대로.
+        한 번의 훑기(run)에서 처음 바꿀 때 `file_tags.bak.json` 백업(태그 SOT §6·§8.5) — 실패하면 쓰지 않는다."""
+        if not found:
+            return
+        store = getattr(getattr(self, "bookmark_tree", None), "_tags", None)
+        if store is None:
+            return
+        runs = self.__dict__.setdefault("_photo_autotag_backed", set())
+        rid = id(run) if run is not None else 0
+        if rid not in runs:
+            if all({t.lower() for t in store.get_auto_part(p, part)} == {t.lower() for t in ts} for p, ts in found.items()):
+                return                                   # 바꿀 것이 없다 — 백업도 하지 않는다
+            if not store.backup():                       # bulk() 밖에서 — 안에서는 빈 저장소의 파일이 아직 없어 복사가 실패한다
+                self.status.showMessage(tr("태그 백업 실패 — 사진 자동 태그를 건너뜀"), 5000)
+                return
+            runs.add(rid)
+        dirty = self.__dict__.setdefault("_photo_autotag_dirty", set())
+        with store.bulk():
+            for path, tags in found.items():
+                if store.set_auto_part(path, part, tags):
+                    dirty.add(os.path.normcase(str(path)))
+        if dirty:
+            self._photo_autotag_refresh_soon()
+
+    def _photo_autotag_refresh_soon(self):
+        """태그 꼬리 다시 그리기를 모은다(0.5초) — 50장마다 목록 전체를 다시 그리지 않게."""
+        t = self.__dict__.get("_photo_autotag_timer")
+        if t is None:
+            t = QTimer(self)
+            t.setSingleShot(True)
+            t.setInterval(500)
+            t.timeout.connect(self._photo_autotag_refresh)
+            self._photo_autotag_timer = t
+        t.start()
+
+    def _photo_autotag_refresh(self):
+        """바뀐 사진 줄의 태그 꼬리만, `batch_rows()` 안에서 — 한 줄씩 `setText` 하면 트리가 매번 모든 행을 다시 재
+        1,500장 폴더에서 메인이 2초 넘게 섰다(행 수의 제곱, 실측 — `refresh_tag_labels` 를 쓰지 않는 까닭)."""
+        dirty = self.__dict__.pop("_photo_autotag_dirty", set())
+        if not dirty:
+            return
+        main = getattr(self, "bookmark_tree", None)
+        for bt in (main, getattr(self, "bookmark_tree_right", None)):
+            if bt is None or getattr(bt, "_tags", None) is None:
+                continue
+            try:
+                if bt is not main:
+                    bt._tags._load()                     # 아래 창은 저장소를 따로 든다 — 디스크에서 다시
+                with bt.batch_rows():
+                    for it in bt._iter_file_nodes():
+                        pth = it.data(0, bt.DATA_FILE)
+                        if pth and os.path.normcase(str(pth)) in dirty:
+                            bt._apply_tag_label(it, pth)
+                if "#" in (bt.search_edit.text() or ""):
+                    bt._on_filter(bt.search_edit.text())  # `#태그` 로 거르는 중이면 다시 거른다
+            except Exception:
+                pass
+
+    def _photo_kind_start(self, folder: str):
+        """종류 자동 태그(영수증·명함·서류) — 색인 훑기 뒤 배경에서(설정 `photo_kind_ocr`, 기본 켬)."""
+        prefs = getattr(self, "_prefs", {}) or {}
+        if not getattr(self, "_photo_mode", False) or not prefs.get("photo_auto_tag", True) or not prefs.get("photo_kind_ocr", True):
+            return
+        if str(folder) != str(getattr(self, "_folder", "") or ""):
+            return
+        from viewer.workers import run_in_thread
+        self._photo_kind_stop()
+        w = PhotoKindWorker(str(folder))
+        w.found.connect(lambda d, _w=w: self._photo_autotag_apply(d, "kind", _w))
+        w.finished.connect(lambda _w=w: self.__dict__.get("_photo_kinder") is _w and setattr(self, "_photo_kinder", None))
+        self._photo_kinder = w
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_kind_stop(self):
+        w = self.__dict__.get("_photo_kinder")
+        if w is not None:
+            try:
+                w.request_cancel()
+            except Exception:
+                pass
+            self._photo_kinder = None
 
     def _photo_search(self, query: str):
         """사진 모드 검색(4.24, R13) — 사진 정보 색인에서 이름·촬영일·카메라·태그로 찾아 **썸네일 줄**에 결과를 보이고 첫 사진을 연다.
@@ -1415,7 +1504,7 @@ class PhotoMixin:
             for path, text, fmt, kws in found:
                 if tags is not None:
                     try:
-                        tags.set_auto(path, [fmt] if fmt else [], src="photo_ocr")
+                        tags.set_auto_part(path, "ocr", [fmt] if fmt else [], src="photo_ocr")   # 261105-6: 자기 부분만 — 머리·종류 태그는 그대로(태그 SOT §5.7)
                         if kws and not tags.kw_edited(path):
                             tags.set_keywords(path, kws, src="photo_ocr")
                     except Exception:
@@ -3339,12 +3428,36 @@ class PhotoIndexWorker(QObject):
     """사진 정보 색인(사진 보기 SOT 4.24) — 폴더(하위 포함) 사진을 훑어 바뀐 것만 머리를 읽어 넣는다, 사라진 것은 지운다.
     응답성 SOT §4.4 감사표의 한 행(배경·pacing·취소)."""
     done = pyqtSignal(str, int, int, int)      # 폴더, 새로·고친 장 수, 지운 장 수, 모두
+    autoTags = pyqtSignal(dict)                # 경로 → 머리 자동 태그(태그 SOT §5.7) — 50장마다, 메인이 태그 저장소에
     finished = pyqtSignal()
+    AUTOTAG_BATCH = 50
 
-    def __init__(self, folder: str):
+    def __init__(self, folder: str, autotag: bool = False):
         super().__init__()
         self.folder = str(folder)
+        self.autotag = bool(autotag)
         self._cancel = False
+        self._tag_out = {}
+
+    def _autotag_one(self, con, tags, rules, key, full, info, write_row: bool):
+        """머리 자동 태그(태그 SOT §5.7) — 만든 값을 내보낼 묶음에 넣고, 색인 행의 태그 글은 미리 맞춘다."""
+        from viewer import photo_index, photo_tags
+        try:
+            meta = photo_tags.meta_tags(full, info, rules)
+        except Exception:
+            meta = []
+        self._tag_out[full] = meta
+        row = photo_tags.row_tags(tags, full, "meta", meta)
+        if write_row:
+            photo_index.set_tags(con, key, row, at_ver=photo_tags.AUTOTAG_VER)
+        if len(self._tag_out) >= self.AUTOTAG_BATCH:
+            self._flush_tags()
+        return row
+
+    def _flush_tags(self):
+        if self._tag_out:                        # 멈춰도 내보낸다 — 색인 행에는 이미 판 표시를 적었다
+            self.autoTags.emit(self._tag_out)
+        self._tag_out = {}
 
     def request_cancel(self):
         self._cancel = True
@@ -3400,6 +3513,16 @@ class PhotoIndexWorker(QObject):
                 st = StudyStore()                # 확정 글(저장본)만 읽는다 — §4.36
             except Exception:
                 st = None
+            rules = None
+            todo = set()
+            if self.autotag:
+                try:
+                    from viewer import auto_tag, kr_dong, photo_tags
+                    rules = auto_tag.load_rules()
+                    kr_dong.ensure_loaded()              # 행정동 자료 — 처음 한 번(배경)
+                    todo = photo_index.autotag_todo(con, root, photo_tags.AUTOTAG_VER)
+                except Exception:
+                    todo = set()
             try:
                 old = photo_index.known(con, root)
                 seen = set()
@@ -3426,6 +3549,17 @@ class PhotoIndexWorker(QObject):
                         except OSError:
                             continue
                         if old.get(key) == (stt.st_size, stt.st_mtime_ns):
+                            if key in todo:                  # 바뀌지 않았지만 머리 자동 태그가 아직·옛 판(태그 SOT §5.7)
+                                try:
+                                    from viewer.photo_io import photo_info
+                                    self._autotag_one(con, tags, rules, key, full, photo_info(full), True)
+                                except Exception:
+                                    pass
+                                batch += 1
+                                if batch >= 50:
+                                    con.commit()
+                                    batch = 0
+                                pacing.pace(self)
                             continue
                         try:
                             from viewer.photo_io import photo_info
@@ -3433,8 +3567,13 @@ class PhotoIndexWorker(QObject):
                         except Exception:
                             info = {}
                         t = tags.get(full) if tags is not None else []
+                        at_ver = None
+                        if self.autotag and info:
+                            from viewer import photo_tags
+                            t = self._autotag_one(con, tags, rules, key, full, info, False)
+                            at_ver = photo_tags.AUTOTAG_VER
                         photo_index.upsert(con, key, full, os.path.normcase(dirpath), fn, ext, stt.st_size, stt.st_mtime_ns, info, t,
-                                           ocr=photo_saved_ocr(st, full))
+                                           ocr=photo_saved_ocr(st, full), at_ver=at_ver)
                         n_new += 1
                         batch += 1
                         if batch >= 50:
@@ -3453,7 +3592,71 @@ class PhotoIndexWorker(QObject):
         except Exception:
             pass
         finally:
+            self._flush_tags()
             self.done.emit(self.folder, n_new, n_gone, total)
+            self.finished.emit()
+
+
+class PhotoKindWorker(QObject):
+    """사진 종류 자동 태그(태그 SOT §5.7) — 영수증·명함·서류. 글이 있어 보이는 사진만 작게 OCR, 글은 판정에만(저장 없음, 사진 SOT D15).
+    색인 훑기가 끝난 뒤 한 장씩, 취소 가능. 응답성 SOT §4.4 감사표의 한 행(배경·pacing·취소)."""
+    found = pyqtSignal(dict)                   # 경로 → [종류] 또는 [] — 판정할 때마다(OCR 이 느려 묶지 않는다)
+    finished = pyqtSignal()
+
+    def __init__(self, folder: str, lang: str = ""):
+        super().__init__()
+        self.folder, self.lang = str(folder), lang
+        self._cancel = False
+        self.judged = 0
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        import os
+        from viewer import pacing, photo_index, photo_tags
+        try:
+            from viewer.study import ocr
+            if not ocr.ensure_tesseract().get("ok"):
+                return                               # Tesseract 없음 — 판정하지 않고 다음에 다시
+            tags = None
+            try:
+                from viewer.tag_store import TagStore
+                tags = TagStore()
+            except Exception:
+                tags = None
+            rules = None
+            try:
+                from viewer import auto_tag
+                rules = auto_tag.load_rules()
+            except Exception:
+                pass
+            con = photo_index.connect()
+            try:
+                todo = photo_index.kind_todo(con, photo_index.norm_folder(self.folder), photo_tags.KIND_VER)
+                for key, path in todo:
+                    if self._cancel:
+                        break
+                    if not os.path.isfile(path):
+                        continue
+                    try:
+                        k = photo_tags.kind_tag(path, self.lang or None)
+                    except Exception:
+                        k = None
+                    if self._cancel:
+                        break
+                    new = [photo_tags.alias(k, rules)] if k else []
+                    photo_index.set_tags(con, key, photo_tags.row_tags(tags, path, "kind", new),
+                                         kind="%d:%s" % (photo_tags.KIND_VER, new[0] if new else ""))
+                    con.commit()
+                    self.judged += 1
+                    self.found.emit({path: new})
+                    pacing.pace(self)
+            finally:
+                con.close()
+        except Exception:
+            pass
+        finally:
             self.finished.emit()
 
 

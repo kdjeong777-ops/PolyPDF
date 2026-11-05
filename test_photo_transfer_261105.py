@@ -152,7 +152,8 @@ try:
         chk(st.export_entry(str(A)) is None, "D 연 폴더 사이드카 — 옛 키 지움")
         chk(PageMetaStore(out).photo_crop(str(na)) == (0.5, 0.0, 1.0, 0.5), "D 대상 폴더 사이드카에 크롭")
         chk(irow(na) == ("hello",) and irow(A) is None, "D 사진 정보 색인 — 행을 새 경로로", str((irow(na), irow(A))))
-        chk(bt._tags is None or (bt._tags.get(str(na)) == ["여행"] and not bt._tags.get(str(A))), "D 태그가 따라온다",
+        # 261105-6: 사진 자동 태그(촬영일 등, 태그 SOT §5.7)도 함께 붙어 있다 — 사용자 태그로 본다
+        chk(bt._tags is None or (bt._tags.get_manual(str(na)) == ["여행"] and not bt._tags.get(str(A))), "D 태그가 따라온다",
             str(bt._tags.get(str(na)) if bt._tags else None))
         cur = win.main_view.current_file()
         chk(cur is not None and Path(cur).parent == pix, "D 보던 사진이 밖으로 — 다음 사진을 연다", str(cur))

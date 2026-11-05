@@ -229,6 +229,19 @@ class SettingsDialog(QDialog):
                               "도구 메뉴에서 되돌릴 수 있습니다.</small>"))
         _info_tag.setStyleSheet("color:#666;"); _info_tag.setWordWrap(True)
         gl.addWidget(_info_tag)
+        # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그 — 기본 켬. 종류(영수증·명함·서류)는 글이 있어 보이는 사진만 OCR
+        self.chk_photo_tag = QCheckBox(tr("사진 자동 해시태그 (촬영일·동·장비·스크린샷)"))
+        self.chk_photo_tag.setChecked(bool(self._prefs.get("photo_auto_tag", True)))
+        gl.addWidget(self.chk_photo_tag)
+        self.chk_photo_kind = QCheckBox(tr("사진 종류도 구분 (영수증·명함·서류 — 글자 있는 사진만 OCR)"))
+        self.chk_photo_kind.setChecked(bool(self._prefs.get("photo_kind_ocr", True)))
+        self.chk_photo_kind.setEnabled(self.chk_photo_tag.isChecked())
+        self.chk_photo_tag.toggled.connect(self.chk_photo_kind.setEnabled)
+        gl.addWidget(self.chk_photo_kind)
+        _info_ptag = QLabel(tr("<small>사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 "
+                               "찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다.</small>"))
+        _info_ptag.setStyleSheet("color:#666;"); _info_ptag.setWordWrap(True)
+        gl.addWidget(_info_ptag)
 
         # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
         mrow = QHBoxLayout()
@@ -500,6 +513,8 @@ class SettingsDialog(QDialog):
             "restore_last_page": self.chk_last_page.isChecked(),
             "restore_screenshots": False,          # 260906-3: 시작은 항상 빈 목록
             "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
+            "photo_auto_tag": self.chk_photo_tag.isChecked(),       # 261105-6(태그 SOT §5.7): 기본 켬
+            "photo_kind_ocr": self.chk_photo_kind.isChecked(),
             "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
             "screenshot_max": int(self.spin_screenshot.value()),
             # v1.6.23: 패널 토글 툴바 가시성

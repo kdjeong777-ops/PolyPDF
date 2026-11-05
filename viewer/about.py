@@ -43,6 +43,9 @@ OSS = (
     ("NLTK", "Apache 2.0", "NLTK Project", ("nltk",)),
     ("WordNet", "WordNet License", "Princeton University", ()),
     (tr_noop("kengdic 한영사전"), "CC BY-SA 3.0", "kengdic contributors (garfieldnate/kengdic)", ()),
+    # 261105-6(태그 SOT §5.7): 사진 위치 → 행정동 — resources/geo/kr_dong.bin(단순화·압축해 넣음). CC BY 4.0 출처 표시
+    (tr_noop("행정동 경계 (admdongkor ver20261001)"), "CC BY 4.0",
+     tr_noop("통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPDF 가 단순화"), ()),
     ("FFmpeg", "GPL v3", tr_noop("FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"), ()),
     ("lameenc · LAME", "LGPL", tr_noop("Chris Cooper · LAME 프로젝트"), ("lameenc",)),
     # 261104-2(사진 보기 SOT 4.9): HEIC 읽기 — 동적 링크 DLL(libheif·libde265 LGPL v3, MinGW libstdc++ GCC 런타임 예외)
