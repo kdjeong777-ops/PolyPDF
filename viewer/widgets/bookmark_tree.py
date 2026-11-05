@@ -376,6 +376,7 @@ class BookmarkTree(QWidget):
         self._probe_total = 0        # 260906-4: 이번 묶음 진행 표시용
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
+        self.photo_menu_extra = None  # 앱이 주입: (메뉴, 사진 경로들) — 사진 줄의 '폴더로 복사·이동 ▸'(사진 보기 SOT §4.41)
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
         self._probe_paused = False   # 260906-5(응답성 SOT §4 ①): 인덱싱 중에는 조사를 멈춘다
         self._probe_scan_timer = QTimer(self)     # 260906-4: 보이는 행 걷기를 모아서 1회
@@ -2702,7 +2703,7 @@ class BookmarkTree(QWidget):
         act_fold_new = None
         if _new_base and self._mode == "flat":
             act_fold_new = menu.addAction(tr("새 폴더 만들기..."))
-        if xfer_files:
+        if xfer_files and not (pm and _dir_target):      # 사진 줄은 사진 길(폴더로 복사·이동 — 사진 보기 SOT §4.41)만
             n = len(xfer_files)
             # 항목은 각자 triggered 로 처리 — 아래 chosen 분기와 겹치지 않는다.
             try:
@@ -2731,6 +2732,11 @@ class BookmarkTree(QWidget):
                 _pa = menu.addAction(_label)
                 _pa.triggered.connect(lambda _=False, k=_key, fs=list(_ps): QTimer.singleShot(
                     0, lambda: self.photoActionRequested.emit(k, fs)))
+            if self.photo_menu_extra is not None:
+                try:
+                    self.photo_menu_extra(menu, list(_ps))
+                except Exception:
+                    pass
             menu.addSeparator()
         elif _dir_target:
             act_save_poly = menu.addAction(tr("저장"))

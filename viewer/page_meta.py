@@ -122,6 +122,50 @@ class PageMetaStore:
         files[kn] = files.pop(ko)
         return True
 
+    # --- 261105-5(사진 보기 SOT §4.41): 사진을 **연 폴더 밖으로** 복사·이동할 때 그 사진의 기록을 다른 사이드카로 ---
+    def export_entry(self, file_path):
+        """그 파일의 기록(파일 기록·사진 보기 회전·크롭)을 떼어 낼 수 있는 dict 로 — 없으면 None. 이 저장소는 바꾸지 않는다."""
+        import copy
+        key = self._key(file_path)
+        if key is None:
+            return None
+        out = {}
+        fr = self._data["files"].get(key)
+        if fr:
+            out["file"] = copy.deepcopy(fr)
+        for name in PHOTO_VIEW_KEYS:
+            v = (self._data.get(name) or {}).get(key)
+            if v is not None:
+                out[name] = copy.deepcopy(v)
+        return out or None
+
+    def import_entry(self, file_path, entry) -> bool:
+        """`export_entry` 가 준 기록을 이 저장소의 그 파일 키에(메모리만 — 쓰는 것은 `save`). 키를 못 만들면 False."""
+        import copy
+        key = self._key(file_path)
+        if key is None or not entry:
+            return False
+        if entry.get("file"):
+            self._data["files"][key] = copy.deepcopy(entry["file"])
+        for name in PHOTO_VIEW_KEYS:
+            if name in entry:
+                self._data.setdefault(name, {})[key] = copy.deepcopy(entry[name])
+        return True
+
+    def drop_entry(self, file_path) -> bool:
+        """그 파일의 기록을 지운다(메모리만) — 연 폴더 밖으로 옮긴 사진의 옛 키."""
+        key = self._key(file_path)
+        if key is None:
+            return False
+        hit = self._data["files"].pop(key, None) is not None
+        for name in PHOTO_VIEW_KEYS:
+            sec = self._data.get(name) or {}
+            if sec.pop(key, None) is not None:
+                hit = True
+            if name in self._data and not sec:
+                self._data.pop(name, None)
+        return hit
+
     def copy_file(self, src_path, dst_path) -> bool:
         """261017-15(마스터 §4.7.9): 쪽이 그대로인 채 **새 이름으로** 저장했으면(책갈피·꾸밈만 바꾼 '다른 이름으로 저장')
         메타를 새 파일 키에 복사한다 — 원본 파일은 그대로 있으니 원본 메타도 둔다. 같은 키면 False."""

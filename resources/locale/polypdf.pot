@@ -4183,6 +4183,26 @@ msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입�
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "다른 폴더..."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "옮길 폴더"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "복사할 폴더"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 복사·이동"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 이동"
+msgstr ""
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 검색 '{q}': {n}장"
 msgstr ""
@@ -4287,6 +4307,18 @@ msgid "사진 {n}장을 휴지통으로 보냈습니다."
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "폴더로 이동"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "폴더로 복사"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "이미 그 폴더에 있는 사진입니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "{stem}_공유"
 msgstr ""
@@ -4369,6 +4401,21 @@ msgstr ""
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr ""
 
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "대상 폴더가 없습니다: {dst}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 옮겼습니다: {dst}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 복사했습니다: {dst}"
+msgstr ""
+
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "{t} (파일 날짜)"
@@ -4415,6 +4462,34 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "삭제 ({n}장)"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "폴더로 이동 ({n}장)"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "폴더로 복사 ({n}장)"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid ""
+"사진 {n}장을 아래 폴더로 옮길까요?\n"
+"\n"
+"{dst}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진을 옮기지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진을 복사하지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -6778,11 +6853,6 @@ msgid ""
 "빈 폴더를 삭제할까요?\n"
 "\n"
 "{folder}"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "대상 폴더가 없습니다: {dst}"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

@@ -52,6 +52,7 @@ class PhotoMixin:
         lay.addStretch(1)                         # 빈 칸은 단추 뒤에서 늘어난다 — 탭 줄 가운데는 그대로(디자인 SOT §2.9.3)
         self._photo_btn = b
         self.bookmark_tree.filesListed.connect(self._photo_on_listed)
+        self.bookmark_tree.photo_menu_extra = self._photo_xfer_menu   # 4.41 — 책갈피창 사진 줄의 폴더로 복사·이동
         from viewer import photo_doc
         photo_doc.set_decode_requester(self._photo_request_decode)
         photo_doc.set_rotation_provider(self._photo_rot_for)     # 261104-3: 보기 회전(사이드카 `photo_rot`)
@@ -1916,6 +1917,8 @@ class PhotoMixin:
         if cur and photo_device.is_cached(cur):
             a = menu.addAction(tr("PC 로 복사..."))          # 4.33 — 휴대 장치 사진
             extra[a] = "copy_out"
+        if cur:
+            self._photo_xfer_menu(menu, [str(cur)])          # 4.41 — 폴더로 복사·이동
         _gps = (self.__dict__.get("_photo_info") or {}).get("gps")
         if _gps and not broken:
             a = menu.addAction(tr("지도에서 위치 보기"))      # 4.29 — GPS 가 있는 사진만
@@ -2245,6 +2248,7 @@ class PhotoMixin:
         a_out = None
         if any(photo_device.is_cached(p) for p in targets):
             a_out = menu.addAction(tr('PC 로 복사 ({n}장)...').format(n=len(targets)) if many else tr("PC 로 복사..."))   # 4.33
+        self._photo_xfer_menu(menu, targets)                     # 4.41(261105-5) — 폴더로 복사·이동
         a_batch = menu.addAction(tr("일괄 작업..."))                 # 4.30(261104-7 B5, F7)
         a_batch.setEnabled(not self._photo_any_cached(targets))
         menu.addSeparator()
@@ -2565,6 +2569,202 @@ class PhotoMixin:
             strip.set_paths(self._photo_strip_source(), current=str(now) if now else None)
         self.status.showMessage(tr("사진 {n}장을 휴지통으로 보냈습니다.").format(n=len(gone)), 4000)
 
+    # ── 폴더로 복사·이동 (4.41, 261105-5 — 파일 통째로, 최근 폴더 + 다른 폴더) ─────────────
+    def _photo_xfer_dirs(self) -> list:
+        """최근 쓴 대상 폴더(맨 앞이 최근) — 없어진 폴더는 뺀다."""
+        lst = [str(d) for d in (self._photo_prefs().get("transfer_dirs") or []) if d]
+        return [d for d in lst if os.path.isdir(d)][:PHOTO_XFER_RECENT]
+
+    def _photo_xfer_remember(self, d) -> None:
+        pic = self._photo_prefs()
+        old = [str(x) for x in (pic.get("transfer_dirs") or []) if os.path.normcase(str(x)) != os.path.normcase(str(d))]
+        pic["transfer_dirs"] = ([str(d)] + old)[:PHOTO_XFER_RECENT]
+
+    def _photo_xfer_menu(self, menu, paths) -> None:
+        """우클릭 메뉴에 '폴더로 복사 ▸'·'폴더로 이동 ▸' — 최근 폴더 `PHOTO_XFER_RECENT` 개 + '다른 폴더…'. zip·휴대 장치 사진은 복사만."""
+        from PyQt6.QtCore import QTimer
+        paths = [str(p) for p in (paths or []) if p and self._is_photo_path(p)]
+        if not paths:
+            return
+        cached = self._photo_any_cached(paths)
+        dirs = self._photo_xfer_dirs()
+        k = len(paths)
+        for move in (False, True):
+            if k > 1:
+                title = (tr('폴더로 이동 ({n}장)') if move else tr('폴더로 복사 ({n}장)')).format(n=k)
+            else:
+                title = tr("폴더로 이동") if move else tr("폴더로 복사")
+            sub = menu.addMenu(title)
+            sub.setToolTipsVisible(True)
+            if move and cached:
+                sub.setEnabled(False)
+                continue
+            for d in dirs:
+                a = sub.addAction(Path(d).name or d)
+                a.setToolTip(d)
+                a.triggered.connect(lambda _=False, dd=d, mv=move, ps=list(paths):
+                                    QTimer.singleShot(0, lambda: self._photo_transfer(ps, dd, mv)))
+            if dirs:
+                sub.addSeparator()
+            a = sub.addAction(tr("다른 폴더..."))
+            a.triggered.connect(lambda _=False, mv=move, ps=list(paths):
+                                QTimer.singleShot(0, lambda: self._photo_transfer(ps, self._photo_xfer_pick(mv, ps), mv)))
+
+    def _photo_xfer_pick(self, move: bool, paths):
+        from PyQt6.QtWidgets import QFileDialog
+        dirs = self._photo_xfer_dirs()
+        start = dirs[0] if dirs else (str(Path(paths[0]).parent) if paths else "")
+        d = QFileDialog.getExistingDirectory(self, tr("옮길 폴더") if move else tr("복사할 폴더"), start)
+        return d or None
+
+    def _photo_transfer(self, paths, dst, move: bool) -> list:
+        """사진을 폴더로 복사·이동(4.41) — 파일 작업은 배경 진행 창, 이동 뒤는 이름 변경·이동과 같은 한 길(마스터 §4.7.14). [(원본, 새 경로)]."""
+        if not dst:
+            return []
+        from viewer.pathutil import norm_key
+        dst = Path(str(dst))
+        paths = [str(p) for p in (paths or []) if p and self._is_photo_path(p)]
+        if not paths:
+            return []
+        if not dst.is_dir():
+            QMessageBox.warning(self, tr("사진 복사·이동"), tr('대상 폴더가 없습니다: {dst}').format(dst=dst))
+            return []
+        if move and self._photo_any_cached(paths):
+            self._photo_ro_notice()
+            return []
+        if move:
+            dk = norm_key(str(dst))
+            paths = [p for p in paths if norm_key(str(Path(p).parent)) != dk]
+            if not paths:
+                self.status.showMessage(tr("이미 그 폴더에 있는 사진입니다."), 4000)
+                return []
+            if QMessageBox.question(self, tr("사진 이동"), tr('사진 {n}장을 아래 폴더로 옮길까요?\n\n{dst}').format(n=len(paths), dst=dst)) \
+                    != QMessageBox.StandardButton.Yes:
+                return []
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        want = {norm_key(p) for p in paths}
+        cur_in = bool(cur) and norm_key(str(cur)) in want
+        if move and cur_in and not self._photo_leave_guard():
+            return []
+        st = self._ensure_page_meta_store()
+        entries = {p: (st.export_entry(p) if st else None) for p in paths}
+        root = str(self._folder) if getattr(self, "_folder", None) else ""
+        lst = self._photo_list()
+        keys = [norm_key(p) for p in lst]
+        idxs = [i for i, kk in enumerate(keys) if kk in want]
+        nxt = None
+        if idxs:
+            after = [lst[i] for i in range(max(idxs) + 1, len(lst)) if keys[i] not in want]
+            before = [lst[i] for i in range(min(idxs) - 1, -1, -1) if keys[i] not in want]
+            nxt = (after or before or [None])[0]
+        if move and cur_in:
+            self.bookmark_tree.releaseFileRequested.emit(str(cur))     # 본문 핸들을 놓는다(마스터 §4.7.14)
+        done = []
+
+        def inside(path_s: str) -> bool:
+            if not root:
+                return False
+            try:
+                return norm_key(os.path.commonpath([root, path_s])) == norm_key(root)
+            except ValueError:
+                return False
+
+        def after_files(_move):
+            """옮긴(복사한) 것까지 — 사진 정보 색인 행·연 폴더 밖 대상 사이드카(배경). 도중에 실패해도 된 것은 맞춘다."""
+            try:
+                from viewer import photo_index
+                con = photo_index.connect()
+                try:
+                    with con:
+                        for o, nw in done:
+                            photo_index.relocate(con, o, nw, copy=not _move)
+                finally:
+                    con.close()
+            except Exception:
+                pass
+            from viewer.page_meta import PageMetaStore
+            stores = {}
+            for o, nw in done:
+                ent = entries.get(o)
+                if ent and not inside(nw):
+                    ds = stores.setdefault(str(Path(nw).parent), PageMetaStore(Path(nw).parent))
+                    ds.import_entry(nw, ent)
+            for ds in stores.values():
+                ds.save()
+
+        def job(progress, _paths=list(paths), _dst=str(dst), _move=move):
+            import shutil
+            from viewer.pathutil import rename_when_free, unique_path
+            from viewer.twoup import MergeCancelled
+            try:
+                for i, p in enumerate(_paths):
+                    if progress is not None and progress(i, len(_paths), Path(p).name) is False:
+                        raise MergeCancelled()
+                    src = Path(p)
+                    tgt = unique_path(Path(_dst) / src.name, first=2)
+                    if _move:
+                        rename_when_free(src, tgt, move=True)
+                    else:
+                        tmp = tgt.with_name("~" + tgt.name + ".polypix-tmp")
+                        try:
+                            shutil.copy2(str(src), str(tmp))
+                            os.replace(str(tmp), str(tgt))
+                        finally:
+                            if tmp.exists():
+                                try:
+                                    tmp.unlink()
+                                except OSError:
+                                    pass
+                    done.append((p, str(tgt)))
+            finally:
+                after_files(_move)
+            if progress is not None:
+                progress(len(_paths), len(_paths), "")
+
+        res = self._run_merge_job(job, tr("사진 이동") if move else tr("사진 복사"))
+        if res.get("err"):
+            self.status.showMessage(tr('사진을 옮기지 못했습니다: {e}').format(e=res["err"]) if move else
+                                    tr('사진을 복사하지 못했습니다: {e}').format(e=res["err"]), 8000)
+        if not done:
+            if move and cur_in and cur and os.path.exists(str(cur)):
+                self._on_bookmark_activated(str(cur), 0)                 # 놓았던 본문을 되살린다
+            return []
+        self._photo_xfer_remember(dst)
+        bt = self.bookmark_tree
+        dirty = bool(getattr(self, "_edit_dirty", False))
+        if st is not None:                                           # 연 폴더 안 — 복사는 사본 키에, 밖으로 옮긴 것은 옛 키를 지운다
+            changed = False
+            for o, nw in done:
+                ent = entries.get(o)
+                if not move and ent and inside(nw):
+                    changed = st.import_entry(nw, ent) or changed
+                if move and ent and not inside(nw):
+                    changed = st.drop_entry(o) or changed
+            if changed and not dirty:
+                try:
+                    st.save()
+                except Exception:
+                    pass
+        pairs = []
+        for o, nw in done:
+            if move:
+                bt._after_move(Path(o), Path(nw))                    # 태그(태그 SOT §6.1)
+                pairs.append([o, nw])
+            else:
+                pairs.append(["", nw])
+        try:
+            bt._sync_after_transfer(dst)
+        except Exception:
+            pass
+        bt.filesRelocated.emit(pairs)                               # 색인·연 폴더 안 사이드카·본문(마스터 §4.7.14 한 길)
+        new_cur = next((nw for o, nw in done if cur and norm_key(o) == norm_key(str(cur))), None)
+        if move and new_cur and not inside(new_cur) and nxt:
+            self._on_bookmark_activated(nxt, 0)                      # 보던 사진이 연 폴더 밖으로 — 다음(없으면 앞) 사진(§4.25 와 같다)
+        k = len(done)
+        self.status.showMessage((tr('사진 {n}장을 옮겼습니다: {dst}') if move else tr('사진 {n}장을 복사했습니다: {dst}')).format(n=k, dst=dst), 6000)
+        return done
+
     # ── 슬라이드쇼 (4.12, 261104-7 — 발표 창 재사용) ─────────────────
     def _photo_sibling(self, cur_path: str, direction: int):
         """슬라이드쇼 다음/이전 사진 — 넘김 원천 하나(썸네일 줄 차례, 4.12)."""
@@ -2786,6 +2986,7 @@ class PhotoOrientSaveWorker(QObject):
             self.finished.emit()
 
 
+PHOTO_XFER_RECENT = 5           # '폴더로 복사·이동' 메뉴의 최근 폴더 수(4.41, 사용자 결정)
 CROP_PREVIEW_SIDE = 1600        # 크롭 창 미리보기 그림의 긴 변(4.40)
 COPY_MAX_SIDE = 8192            # 사진 복사 — 긴 변 상한(클립보드에 24 MP 그대로는 무겁다, 4.20)
 

@@ -4320,6 +4320,26 @@ msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입�
 msgstr "Could not make the copy for sharing — the original is unchanged."
 
 #: viewer/photo_controller.py
+msgid "다른 폴더..."
+msgstr "Other Folder..."
+
+#: viewer/photo_controller.py
+msgid "옮길 폴더"
+msgstr "Folder to Move To"
+
+#: viewer/photo_controller.py
+msgid "복사할 폴더"
+msgstr "Folder to Copy To"
+
+#: viewer/photo_controller.py
+msgid "사진 복사·이동"
+msgstr "Copy/Move Photos"
+
+#: viewer/photo_controller.py
+msgid "사진 이동"
+msgstr "Move Photos"
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "사진 검색 '{q}': {n}장"
 msgstr "Photo search '{q}': {n} photos"
@@ -4424,6 +4444,18 @@ msgid "사진 {n}장을 휴지통으로 보냈습니다."
 msgstr "Moved {n} photos to the Recycle Bin."
 
 #: viewer/photo_controller.py
+msgid "폴더로 이동"
+msgstr "Move to Folder"
+
+#: viewer/photo_controller.py
+msgid "폴더로 복사"
+msgstr "Copy to Folder"
+
+#: viewer/photo_controller.py
+msgid "이미 그 폴더에 있는 사진입니다."
+msgstr "The photo is already in that folder."
+
+#: viewer/photo_controller.py
 #, python-brace-format
 msgid "{stem}_공유"
 msgstr "{stem}_share"
@@ -4506,6 +4538,21 @@ msgstr "Made {n} copies for sharing: {folder}"
 msgid "공유용 사본 {n}장을 만들고 {m}장은 만들지 못했습니다."
 msgstr "Made {n} copies for sharing; {m} could not be made."
 
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "대상 폴더가 없습니다: {dst}"
+msgstr "Destination folder does not exist: {dst}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 옮겼습니다: {dst}"
+msgstr "Moved {n} photos: {dst}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 복사했습니다: {dst}"
+msgstr "Copied {n} photos: {dst}"
+
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "{t} (파일 날짜)"
@@ -4553,6 +4600,37 @@ msgstr "Copy to PC ({n})..."
 #, python-brace-format
 msgid "삭제 ({n}장)"
 msgstr "Delete ({n} photos)"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "폴더로 이동 ({n}장)"
+msgstr "Move to Folder ({n})"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "폴더로 복사 ({n}장)"
+msgstr "Copy to Folder ({n})"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid ""
+"사진 {n}장을 아래 폴더로 옮길까요?\n"
+"\n"
+"{dst}"
+msgstr ""
+"Move {n} photos to the folder below?\n"
+"\n"
+"{dst}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진을 옮기지 못했습니다: {e}"
+msgstr "Could not move the photos: {e}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진을 복사하지 못했습니다: {e}"
+msgstr "Could not copy the photos: {e}"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -7015,11 +7093,6 @@ msgstr ""
 "Delete the empty folder?\n"
 "\n"
 "{folder}"
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "대상 폴더가 없습니다: {dst}"
-msgstr "Destination folder does not exist: {dst}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format

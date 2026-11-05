@@ -123,6 +123,30 @@ def known(con, folder: str) -> dict:
     return {k: (s, m) for k, s, m in rows}
 
 
+def relocate(con, old: str, new: str, copy: bool = False) -> bool:
+    """사진을 옮기거나 복사한 뒤(사진 보기 SOT §4.41) — 그 행을 새 경로로(복사면 새 행을 하나 더). OCR 확정 글·태그 글이 그대로 남는다.
+    옛 행이 없으면 False(다음 색인 훑기가 넣는다)."""
+    ko = os.path.normcase(os.path.abspath(str(old)))
+    kn = os.path.normcase(os.path.abspath(str(new)))
+    row = con.execute("SELECT name, taken, camera, tags, ocr FROM photos WHERE key=?", (ko,)).fetchone()
+    if not row or ko == kn:
+        return False
+    p = Path(str(new))
+    folder, name, ext = norm_folder(p.parent), p.name, p.suffix.lower()
+    if copy:
+        con.execute("INSERT OR REPLACE INTO photos(key, path, folder, name, ext, size, mtime_ns, width, height, taken, camera, tags, zip, member, ocr) "
+                    "SELECT ?, ?, ?, ?, ?, size, mtime_ns, width, height, taken, camera, tags, zip, member, ocr FROM photos WHERE key=?",
+                    (kn, str(p), folder, name, ext, ko))
+    else:
+        con.execute("DELETE FROM photos WHERE key=?", (kn,))
+        con.execute("UPDATE photos SET key=?, path=?, folder=?, name=?, ext=? WHERE key=?", (kn, str(p), folder, name, ext, ko))
+        con.execute("DELETE FROM photo_fts WHERE key=?", (ko,))
+    _n, taken, camera, tag_txt, ocr = row
+    con.execute("DELETE FROM photo_fts WHERE key=?", (kn,))
+    con.execute("INSERT INTO photo_fts(key, body) VALUES(?, ?)", (kn, _body(name, taken, camera, tag_txt, ocr)))
+    return True
+
+
 def remove(con, keys) -> None:
     for k in keys:
         con.execute("DELETE FROM photos WHERE key=?", (k,))
