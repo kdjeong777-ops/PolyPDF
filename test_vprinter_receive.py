@@ -400,7 +400,7 @@ print("\n=== K. 인쇄 쪽 — 쪽마다 장치 크기·보내는 그림 해상�
 from PyQt6.QtGui import QImage, QColor, QPageLayout
 from PyQt6.QtPrintSupport import QPrinter
 kimgs = []
-for w_, h_ in ((800, 1200), (1200, 800)):
+for w_, h_ in ((900, 1600), (1200, 800), (1200, 900), (1200, 900)):    # 사용자 재보고 꼴 — 세로 1장 뒤 가로 3장(pix 사진 4장)
     im_ = QImage(w_, h_, QImage.Format.Format_RGB888); im_.fill(QColor(30, 90, 200)); kimgs.append(im_)
 kpdf = root / "kprint.pdf"
 kpr = QPrinter(QPrinter.PrinterMode.HighResolution)
@@ -408,14 +408,25 @@ kpr.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
 kpr.setOutputFileName(str(kpdf))
 mw._print_opts = {"printer": kpr, "auto_orient": True, "size_mode": "fit", "alignment": "center"}
 _kcap = getattr(mw, "_print_cap_dpi", None)
-mw._print_render(2, lambda p, t, i: mw._draw_image_fit(p, t, kimgs[i]),
+mw._print_render(len(kimgs), lambda p, t, i: mw._draw_image_fit(p, t, kimgs[i]),
                  orient_fn=lambda i: QPageLayout.Orientation.Landscape if kimgs[i].width() >= kimgs[i].height() else QPageLayout.Orientation.Portrait)
 kd = fitz.open(str(kpdf))
 kb = [pg.get_image_info()[0]["bbox"] if pg.get_image_info() else None for pg in kd]
-k1 = kd[1].rect
-chk(kd.page_count == 2 and kd[0].rect.width < kd[0].rect.height and k1.width > k1.height and kb[1]
-    and (kb[1][2] - kb[1][0]) > 0.9 * k1.width,
-    "K1 세로 쪽 뒤의 가로 쪽에 가로 사진이 가로로 꽉 차게(쪽마다 지금 장치 크기로 그린다)", "%s %s" % ([str(p.rect) for p in kd], kb))
+
+
+def _kfull(pg, b):                                     # 그림이 쪽 긴 변 방향으로 꽉(가로 쪽은 폭, 세로 쪽은 높이) 차고 가운데
+    r = pg.rect
+    if not b:
+        return False
+    w, h = b[2] - b[0], b[3] - b[1]
+    full = (w > 0.95 * r.width) or (h > 0.95 * r.height)
+    mid = abs((b[0] + b[2]) / 2 - r.width / 2) < 3 and abs((b[1] + b[3]) / 2 - r.height / 2) < 3
+    return full and mid
+
+
+chk(kd.page_count == 4 and kd[0].rect.width < kd[0].rect.height and all(kd[i].rect.width > kd[i].rect.height for i in (1, 2, 3))
+    and all(_kfull(kd[i], kb[i]) for i in range(4)),
+    "K1 세로 1장 뒤 가로 3장 — 쪽마다 제 방향, 사진이 꽉 차고 가운데(쪽마다 지금 장치 크기로 그린다)", "%s %s" % ([str(p.rect) for p in kd], kb))
 kd.close()
 big = QImage(6000, 4000, QImage.Format.Format_RGB888); big.fill(QColor(200, 60, 60))
 kpdf2 = root / "kprint2.pdf"
