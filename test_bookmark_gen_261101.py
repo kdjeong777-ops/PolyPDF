@@ -259,9 +259,14 @@ if os.path.exists(ps):
 else:
     print("SKIP - F2 심리검사의이해_최정윤_bm.pdf 없음")
 pa = os.path.join(SAMPLES, "성격심리.pdf")
-if os.path.exists(pa):
+_pa_truth = truth_of(pa) if os.path.exists(pa) else []
+if os.path.exists(pa) and len(_pa_truth) != 29:
+    # 261105: 샘플에 생성 책갈피(214개)가 [저장]돼 정답이 바뀌었다 — beta.3 코드로도 같은 값(행 195)이라 코드 회귀 아님.
+    #         원래 29개 책갈피 판을 _samples 에 되돌려 놓으면 다시 잰다.
+    print(f"SKIP - F3 성격심리.pdf 책갈피가 원래 정답(29개)이 아님 — {len(_pa_truth)}개")
+elif os.path.exists(pa):
     rows = sample_pages(pa, list(range(9, 18)))
-    truth = truth_of(pa)
+    truth = _pa_truth
     # 사용자 결정(261101-2): 목표는 내용이 있는 쪽 — 정답이 한 쪽 앞이던 곳(그림으로 확인)
     ok = score(rows, truth, fix={79: 80, 83: 84, 45: 46, 60: 61, 186: 187})
     chk(len(rows) >= 200 and ok >= 27, "F3 성격심리: 목차 표·쪽(정답 29)", f"행 {len(rows)} · 쪽 맞음 {ok}")
