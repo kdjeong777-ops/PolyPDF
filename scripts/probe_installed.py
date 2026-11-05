@@ -152,6 +152,10 @@ def _set_startup(target):
     pr = d.setdefault("preferences", {})
     pr["startup_mode"] = "path"
     pr["startup_path"] = str(target)
+    # 261104-20: 측정 대상은 PDF 폴더 — 사용자 설정이 사진 모드면 PDF 를 색인하지 않아(사진 SOT §4.23) 기준점과 견줄 수 없다
+    pic = pr.get("picture")
+    if isinstance(pic, dict):
+        pic["mode"] = "pdf"
     f.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
