@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-05 17:20+0900\n"
+"POT-Creation-Date: 2026-11-05 17:39+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -556,12 +556,12 @@ msgid "있는 언어로 진행"
 msgstr ""
 
 #: viewer/app.py viewer/jobs_controller.py viewer/present_controller.py
-#: viewer/sign_controller.py viewer/sign_draft_controller.py
-#: viewer/study_controller.py viewer/update_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/pen_settings_dialog.py
+#: viewer/share_controller.py viewer/sign_controller.py
+#: viewer/sign_draft_controller.py viewer/study_controller.py
+#: viewer/update_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/main_view.py
+#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/update_dialog.py
 msgid "취소"
@@ -1871,6 +1871,10 @@ msgstr ""
 
 #: viewer/app.py
 msgid "파일 작업"
+msgstr ""
+
+#: viewer/app.py viewer/share_controller.py
+msgid "PolyPDF 전달 묶음"
 msgstr ""
 
 #: viewer/app.py
@@ -4203,7 +4207,7 @@ msgstr ""
 msgid "공유용 사본을 만들지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
-#: viewer/photo_controller.py
+#: viewer/photo_controller.py viewer/share_controller.py
 msgid "다른 폴더..."
 msgstr ""
 
@@ -4938,6 +4942,149 @@ msgstr ""
 
 #: viewer/redact_controller.py
 msgid "주의: 아래 자리에 글이 남았습니다 — 새 파일을 확인하세요."
+msgstr ""
+
+#: viewer/share_bundle.py
+msgid "PolyPDF 전달 묶음이 아닙니다."
+msgstr ""
+
+#: viewer/share_bundle.py
+msgid "더 새 PolyPDF 가 만든 묶음입니다 — PolyPDF 를 업데이트하세요."
+msgstr ""
+
+#: viewer/share_bundle.py
+#, python-brace-format
+msgid "전달_{date}_{n}개"
+msgstr ""
+
+#: viewer/share_bundle.py
+msgid "압축 파일이 손상됐습니다."
+msgstr ""
+
+#: viewer/share_bundle.py
+msgid "묶음 목록이 너무 큽니다."
+msgstr ""
+
+#: viewer/share_bundle.py
+msgid "PolyPDF 전달 묶음이 아닙니다(목록 없음)."
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "전달"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "만든 파일을 클립보드에 복사(메신저·메일 창에 붙여넣기)"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "만들기..."
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "전달 묶음 저장"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "전달 묶음 만들기"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "묶음 읽는 중…"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "전달 묶음 풀기"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "받은 자료 넣는 중…"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "전달 묶음 열기"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "여기에 풀기"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "OCR 결과·단어장(고른 낱말 포함)"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "텍스트 창 고친 글·하이라이트"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "꾸밈(선·도형·글·사진)·하이퍼링크 — 저장하지 않은 것 포함"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "해시태그·키워드"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "전달할 PDF 가 없습니다."
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "묶음에 PDF 가 없습니다."
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid "PDF {n}개를 풀었습니다: {dest}"
+msgstr ""
+
+#: viewer/share_controller.py
+msgid "풀 폴더"
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid ""
+"PolyPDF 전달 묶음 — PDF {n}개\n"
+"\n"
+"풀 폴더: {here}"
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid ""
+"PDF {n}개를 묶음 파일(.polypdf.zip)로 만듭니다.\n"
+"받는 사람이 PolyPDF 로 열면 아래 자료까지 함께 봅니다 — 원본 PDF 는 바뀌지 않습니다."
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid "전달 묶음을 만들고 클립보드에 복사했습니다: {name}"
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid "전달 묶음을 만들었습니다: {name}"
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid "묶음을 풀지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid "내용이 목록과 달라(손상·바뀜) 자료를 넣지 않은 파일: {names}"
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid "자료를 넣다가 실패: {e}"
+msgstr ""
+
+#: viewer/share_controller.py
+#, python-brace-format
+msgid "묶음을 만들지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
@@ -6677,6 +6824,10 @@ msgid "고른 영역·주민번호·전화번호 같은 개인정보를 실제�
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"
 msgstr ""
 
@@ -6806,6 +6957,10 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "전달..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -7007,6 +7162,11 @@ msgstr ""
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
 msgid "변환 ({n}개 파일)..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "전달 ({n}개 파일)..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

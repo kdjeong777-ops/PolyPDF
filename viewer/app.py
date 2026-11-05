@@ -63,6 +63,7 @@ from viewer.jobs_controller import JobsMixin            # 261019-1(응답성 SOT
 from viewer.lite_controller import LiteMixin            # 261021-1(응답성 SOT §4.7): 가벼운 넘김(느린 컴퓨터)
 from viewer.stamp_controller import StampMixin          # 261101-3(마스터 §4.6.11): 이미지 넣기·등록 이미지
 from viewer.photo_controller import PhotoMixin          # 261104-2(사진 보기 SOT): 사진 모드(PolyPix)
+from viewer.share_controller import ShareMixin          # 261105-9(마스터 §4.7.23): 전달 묶음
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -154,7 +155,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, ShareMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -2690,6 +2691,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.ocrLayerFilesRequested.connect(self.action_ocr_batch)   # 261014-16(텍스트 창 SOT §5.5)
             _bt.compressFilesRequested.connect(self.action_compress)    # 261014-21(마스터 §4.7.19)
             _bt.redactFileRequested.connect(self.action_redact)         # 261014-22(보안 SOT §14)
+            _bt.shareFilesRequested.connect(self.action_share_files)    # 261105-9(§4.7.23) 전달 묶음
             _bt.compareFilesRequested.connect(self.action_compare)      # 261014-23(마스터 §4.11)
             _bt.photoActionRequested.connect(self._photo_action)        # 261104-3(사진 보기 SOT 4.20)
         self.page_thumbs.convertPagesRequested.connect(
@@ -2779,8 +2781,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def action_open_pdf(self):
         """v1.6.11 I1: 단일 PDF 파일 열기."""
         start = self._dialog_start_dir()
-        fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 파일 열기"), start, "PDF (*.pdf)")
-        if fn:
+        fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 파일 열기"), start,
+                                            "PDF (*.pdf);;" + tr("PolyPDF 전달 묶음") + " (*.polypdf.zip)")
+        if fn and fn.lower().endswith(".polypdf.zip"):        # 261105-9(§4.7.23)
+            self.open_share_bundle(Path(fn))
+        elif fn:
             self.open_pdf(Path(fn))
 
     def open_pdf(self, pdf_path: Path):
@@ -2927,6 +2932,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260915-5(§4.9.2): 책갈피창·본문·창에 놓은 것 — 폴더가 있으면 종전대로 폴더 열기,
         PDF 만이면 그 창의 목록에 더한다."""
         ps = [Path(p) for p in paths or []]
+        from viewer.share_bundle import is_bundle            # 261105-9(§4.7.23): 받은 전달 묶음 — 풀고 자료를 넣어 목록에
+        for b in [p for p in ps if is_bundle(p)]:
+            self.open_share_bundle(b)
+        ps = [p for p in ps if not is_bundle(p)]
+        if not ps:
+            return
         dirs = [p for p in ps if p.is_dir()]
         if dirs:
             self._on_pane_path_drop(idx, str(dirs[0]))
@@ -2955,7 +2966,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if md.hasUrls():
             for u in md.urls():
                 p = Path(u.toLocalFile())
-                if p.is_dir() or p.suffix.lower() == ".pdf":
+                if p.is_dir() or p.suffix.lower() == ".pdf" or p.name.lower().endswith(".polypdf.zip"):
                     event.acceptProposedAction()
                     return
         event.ignore()
@@ -2983,7 +2994,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         # 260915-5(§4.9.2): 책갈피창·본문과 같은 규칙 — 폴더면 폴더 열기, PDF 면 지금 목록에 더한다.
         urls = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
-        ok = [p for p in urls if p.lower().endswith(".pdf") or Path(p).is_dir()]
+        ok = [p for p in urls if p.lower().endswith((".pdf", ".polypdf.zip")) or Path(p).is_dir()]
         if ok:
             self._on_paths_dropped(self._active_pane, ok)
             event.acceptProposedAction()

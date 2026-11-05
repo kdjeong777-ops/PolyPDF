@@ -88,7 +88,7 @@ class _EditableTree(QTreeWidget):
                     continue
                 lf = u.toLocalFile()
                 try:
-                    if lf.lower().endswith(".pdf") or _P(lf).is_dir():
+                    if lf.lower().endswith((".pdf", ".polypdf.zip")) or _P(lf).is_dir():   # 261105-9: 전달 묶음
                         out.append(lf)
                 except Exception:
                     pass
@@ -215,6 +215,7 @@ class BookmarkTree(QWidget):
     ocrLayerFilesRequested = pyqtSignal(object)      # 261014-16(텍스트 창 SOT §5.5): [파일] — OCR 글자층 일괄
     compressFilesRequested = pyqtSignal(object)      # 261014-21(마스터 §4.7.19): [파일] — PDF 압축
     redactFileRequested = pyqtSignal(str)            # 261014-22(보안 SOT §14): 파일 — 가림(개인정보 지우기)
+    shareFilesRequested = pyqtSignal(list)           # 261105-9(마스터 §4.7.23): 파일들 — 전달 묶음(.polypdf.zip)
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
     photoActionRequested = pyqtSignal(str, list)  # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴 — (일 이름, 사진 경로들)
@@ -2778,6 +2779,12 @@ class BookmarkTree(QWidget):
             _ra.setToolTip(tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."))
             _ra.triggered.connect(lambda _=False, f=_dir_target: QTimer.singleShot(
                 0, lambda: self.redactFileRequested.emit(str(f))))
+            # 261105-9(마스터 §4.7.23, 사용자 지시 '전달'): PDF + PolyPDF 자료(OCR·고친 글·꾸밈·링크) 묶음
+            _sa = menu.addAction(tr("전달...") if len(_conv_files) == 1
+                                 else tr('전달 ({n}개 파일)...').format(n=len(_conv_files)))
+            _sa.setToolTip(tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다."))
+            _sa.triggered.connect(lambda _=False, fs=list(_conv_files): QTimer.singleShot(
+                0, lambda: self.shareFilesRequested.emit(fs)))
             menu.addSeparator()
         elif _folder_row is not None:
             # 261014-16(텍스트 창 SOT §5.5): 폴더 행 — 그 아래 파일 전체에 OCR 글자층

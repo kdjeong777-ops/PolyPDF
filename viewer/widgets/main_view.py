@@ -1006,7 +1006,7 @@ class _PdfGraphicsView(QGraphicsView):
                 if not u.isLocalFile():
                     continue
                 lf = u.toLocalFile()
-                if lf.lower().endswith(".pdf"):
+                if lf.lower().endswith((".pdf", ".polypdf.zip")):     # 261105-9: 전달 묶음도
                     return True
                 try:
                     if _P(lf).is_dir():
@@ -1038,7 +1038,7 @@ class _PdfGraphicsView(QGraphicsView):
         if md.hasUrls():
             from pathlib import Path as _P
             found = [u.toLocalFile() for u in md.urls() if u.isLocalFile()
-                     and (u.toLocalFile().lower().endswith(".pdf") or _P(u.toLocalFile()).is_dir())]
+                     and (u.toLocalFile().lower().endswith((".pdf", ".polypdf.zip")) or _P(u.toLocalFile()).is_dir())]
             if found:
                 self.pathsDropped.emit(found)      # 260915-5(§4.9.2): 전부 — 앱이 목록에 더한다
                 e.acceptProposedAction()
