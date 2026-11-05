@@ -181,10 +181,15 @@ class PhotoMixin:
         if remember:
             self._photo_prefs()["mode"] = "photo" if on else "pdf"
         self._photo_swap_lists(on)
+        plan = self._photo_mode_folder(on) if load_last else ("keep", None)
+        if plan[0] != "keep":                            # 다른 폴더를 연다 — 앞 모드 폴더를 새 모드로 한 번 더 훑지 않게 떼어 둔다
+            self.bookmark_tree._root_dir = None          # (set_photo_mode 는 뿌리가 없으면 목록만 비운다)
         self._photo_refresh_button()
         self._photo_on_mode_changed(on)
         if load_last:
-            self._photo_swap_document(on, prev)
+            if self._photo_swap_folder(plan):            # 그 모드의 마지막 폴더(6.1, 261105-24)
+                self._photo_swap_document(on, prev)
+            self._photo_check_listed_soon()              # 본문은 늘 책갈피창 목록에 있는 파일(6.1, 261105-23)
 
     def _photo_leave_guard(self) -> bool:
         """모드를 바꾸기 전 — 편집 모드의 저장 안 한 꾸밈·쪽 편집은 파일을 옮길 때와 같은 확인 창(`_confirm_edit_save`). 취소면 False."""
@@ -212,26 +217,58 @@ class PhotoMixin:
         self._edit_snap = None
         return True
 
-    def _photo_swap_document(self, on: bool, prev):
-        """모드가 바뀌면 본문(과 썸네일 칸·텍스트 창·쪽 칸)이 앞 모드 문서를 버리고 새 모드의 마지막 자리를 연다 —
-        그 모드의 **최근 파일 맨 앞**(모드마다 따로, 4.7 — 사진 모드면 마지막에 본 사진), PDF 는 이 실행에서 보던 쪽까지.
-        없으면 빈 화면(4.2, 261104-17 사용자 보고)."""
-        from viewer.history import HistoryItem
-        mv = self.main_view
-        target, page = None, 0
-        last = self.__dict__.get("_photo_pdf_last") if not on else None
-        if last and os.path.isfile(last[0]):
-            target, page = last
-        else:
-            for t in list(getattr(self, "_recent_files", []) or []):
-                ok = self._is_photo_path(t) if on else str(t).lower().endswith(".pdf")
-                if ok and os.path.isfile(str(t)) and not self._photo_any_cached([str(t)]):
-                    target = str(t)
-                    break
-        if prev and target and os.path.normcase(str(prev)) == os.path.normcase(target):
-            return
+    def _photo_mode_folder(self, on: bool):
+        """바꿀 모드에서 열 폴더(6.1, 261105-24 사용자 지시·결정) — 모드마다 마지막 자리(`_photo_mode_last`)의 대상.
+        → ("keep", None): 그 모드의 기억이 없다 — 지금 폴더 그대로(사용자 결정 '지금 폴더 그대로') ·
+          ("open", (Path, "folder"|"file")) · ("empty", None): 기억한 폴더도 그 모드 최근 폴더도 없다.
+        기억한 폴더가 없어졌으면 그 모드 **최근 폴더** 중 있는 것 맨 앞(사용자 결정). `_photo_swap_lists` 뒤에 부른다(최근 폴더가 새 모드 것)."""
+        rec = (self.__dict__.get("_photo_mode_last") or {}).get("photo" if on else "pdf") or {}
+        lo = rec.get("last_open") if isinstance(rec.get("last_open"), dict) else {}
+        target, kind = str(lo.get("path") or ""), lo.get("kind")
+        if not target:
+            target, kind = str(rec.get("last_folder") or ""), "folder"
+        if not target:
+            return "keep", None
+        p = Path(target)
+        if p.exists():
+            if kind not in ("file", "folder"):
+                kind = "file" if p.is_file() else "folder"
+            if kind == "file" and (on or p.suffix.lower() != ".pdf"):
+                p, kind = p.parent, "folder"             # 사진 모드는 늘 폴더로
+            return "open", (p, kind)
+        for f in list(getattr(self, "_recent_folders", []) or []):
+            if os.path.isdir(str(f)):
+                return "open", (Path(str(f)), "folder")
+        return "empty", None
+
+    def _photo_swap_folder(self, plan) -> bool:
+        """`_photo_mode_folder` 의 결과대로 책갈피창을 연다. 본문을 고를 일이 남았으면 True(파일 하나를 연 PDF 는 이미 열었다)."""
+        what, arg = plan
+        if what == "keep":
+            return True
+        if what == "empty":
+            self._clear_workspace()
+            self._folder = None
+            self._photo_clear_document()
+            self.status.showMessage(tr("이 모드에서 마지막으로 연 폴더가 없어졌습니다."), 5000)
+            return False
+        p, kind = arg
+        if kind == "file":                               # PDF 모드에서 파일 하나만 보던 것 — 그 파일만(마스터 260906-3)
+            self.open_pdf(p)
+            lm = ((self.__dict__.get("_photo_mode_last") or {}).get("pdf") or {}).get("last_main") or {}
+            if isinstance(lm, dict) and os.path.normcase(str(lm.get("file_path") or "")) == os.path.normcase(str(p)):
+                try:
+                    self.main_view.go_to_page(int(lm.get("page_index") or 0))
+                except Exception:
+                    pass
+            return False
+        self.open_folder(p)
+        return True
+
+    def _photo_clear_document(self):
+        """본문·썸네일 칸·텍스트 창·창 제목을 비운다."""
         try:
-            mv.close_document()
+            self.main_view.close_document()
             self.page_thumbs.clear_document()
             self.page_thumbs.set_title("")
         except Exception:
@@ -242,8 +279,65 @@ class PhotoMixin:
             self._update_title()
         except Exception:
             pass
+
+    def _photo_swap_document(self, on: bool, prev):
+        """모드가 바뀌면 본문(과 썸네일 칸·텍스트 창·쪽 칸)이 앞 모드 문서를 버리고 새 모드의 마지막 자리를 연다 —
+        **지금 책갈피창 폴더 안의 파일만**(6.1, 261105-23): 그 모드에서 마지막으로 보던 것(PDF 는 이 실행에서 보던 쪽까지) →
+        그 모드의 최근 파일 맨 앞(모드마다 따로, 4.7). 없으면 빈 화면(4.2, 261104-17 사용자 보고).
+        종전에는 폴더와 상관없이 최근 PDF 를 열어, 사진 폴더 그대로 PDF 모드로 오면 목록('0개 PDF')에 없는 PDF 가 본문에 남았다."""
+        from viewer.history import HistoryItem
+        root = getattr(self, "_folder", None)
+        if root is None:
+            self._photo_clear_document()
+            return
+
+        def inside(t) -> bool:
+            try:
+                return Path(root) in Path(str(t)).parents
+            except Exception:
+                return False
+
+        def kind_ok(t) -> bool:
+            return self._is_photo_path(t) if on else str(t).lower().endswith(".pdf")
+
+        target, page = None, 0
+        cands = []
+        last = self.__dict__.get("_photo_pdf_last") if not on else None
+        if last:
+            cands.append((last[0], last[1]))
+        lm = ((self.__dict__.get("_photo_mode_last") or {}).get("photo" if on else "pdf") or {}).get("last_main")
+        if isinstance(lm, dict) and lm.get("file_path"):
+            cands.append((str(lm["file_path"]), int(lm.get("page_index") or 0) if not on else 0))
+        cands += [(str(t), 0) for t in list(getattr(self, "_recent_files", []) or [])]
+        for t, pg in cands:
+            if kind_ok(t) and inside(t) and os.path.isfile(t) and not self._photo_any_cached([t]):
+                target, page = t, pg
+                break
+        if prev and target and os.path.normcase(str(prev)) == os.path.normcase(target) \
+                and self.main_view.current_file():
+            return
+        self._photo_clear_document()
         if target:
             self._load_main(HistoryItem(target, int(page or 0), "", "bookmark"))
+
+    def _photo_check_listed_soon(self):
+        """모드를 바꾼 뒤 본문 파일이 책갈피창 목록에 없으면 비운다(6.1, 261105-23 사용자 지시 '이 경우에는 안 보여야 해').
+        목록을 채우는 중이면 다 찬 뒤(`filesListed`) 한 번, 다 찼으면 바로."""
+        bt = self.bookmark_tree
+        busy = getattr(bt, "_scan_worker", None) is not None or bt._fill_timer.isActive()
+        if busy:
+            self._photo_listed_check = True
+        else:
+            self._photo_drop_unlisted()
+
+    def _photo_drop_unlisted(self):
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur:
+            return
+        bt = self.bookmark_tree
+        have = {os.path.normcase(str(it.data(0, bt.DATA_FILE) or "")) for it in bt._iter_file_nodes()}
+        if os.path.normcase(str(cur)) not in have:
+            self._photo_clear_document()
 
     def _photo_on_mode_changed(self, on: bool):
         """모드가 바뀐 뒤 — 원천을 바꾼다(4.2). 메인이 하는 일은 보이는 것 바꾸기뿐, 훑기·디코드는 배경(§6, 응답성 SOT §5)."""
@@ -940,6 +1034,8 @@ class PhotoMixin:
 
     def _photo_on_listed(self):
         """책갈피창 목록이 다 찼을 때 — 썸네일 줄이 폴더 전체를 보이는 중이면 새 목록으로(D3)."""
+        if self.__dict__.pop("_photo_listed_check", False):
+            self._photo_drop_unlisted()                  # 모드를 바꾼 뒤 첫 목록(6.1, 261105-23)
         if not getattr(self, "_photo_mode", False):
             return
         keep = self.__dict__.pop("_photo_relist_keep", None)

@@ -4031,6 +4031,10 @@ msgid "소프트웨어"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "이 모드에서 마지막으로 연 폴더가 없어졌습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "사진 검색을 지웠습니다 — 폴더 전체."
 msgstr ""
 
