@@ -24,6 +24,17 @@ _HEAD = re.compile(r"^(\w+)(?:\([^)]*\))?!?:\s*")
 _TAIL = re.compile(r"\s*\([^()]*\d+\.\d+\.\d+[^()]*\)\s*$")     # 끝의 '(…, 0.45.0-beta.197)'
 _TRAILER = re.compile(r"^Release-Note-([A-Za-z_]+):\s*(.+?)\s*$")
 # 언어마다 절 머리·비교 링크 이름·빈 절(앱 업데이트 창이 이 머리를 지운다 — update_dialog._NOTES_HEAD)
+_CODE = re.compile(r"(`[^`\n]*`)")
+
+
+def escape_angles(text: str) -> str:
+    """261105-3: 글의 `<이름>`·`<N>` 을 `\\<…\\>` 로 — 앱 업데이트 창(QTextBrowser 마크다운)이 HTML 태그로 읽어
+    뒤 글이 사라지고 점만 있는 빈 줄이 남았다. 이미 설치된 옛 판 창도 고칠 수 없으니 설명 쪽에서 막는다
+    (GitHub 페이지에서도 `\\<` 는 `<` 로 보인다). 코드 표기(`…`) 안은 그대로."""
+    parts = _CODE.split(text)
+    return "".join(pt if i % 2 else pt.replace("<", r"\<").replace(">", r"\>") for i, pt in enumerate(parts))
+
+
 HEADS = {"ko": ("## 바뀐 내용", "**전체 비교**", "- (설명할 변경이 없습니다)"),
          "en": ("## What's changed", "**Full comparison**", "- (No notable changes)")}
 
@@ -55,16 +66,16 @@ def render(tag: str, prev: str) -> str:
         for b in body.splitlines():
             mt = _TRAILER.match(b.strip())
             if mt:
-                other.setdefault(mt.group(1).lower(), []).append("- " + mt.group(2))
+                other.setdefault(mt.group(1).lower(), []).append("- " + escape_angles(mt.group(2)))
         m = _HEAD.match(subj)
         kind = KIND.get(m.group(1).lower(), "") if m else ""
-        title = _TAIL.sub("", subj[m.end():] if m else subj).strip()
+        title = escape_angles(_TAIL.sub("", subj[m.end():] if m else subj).strip())
         if not title:
             continue
         lines.append(f"- **{kind}** {title}" if kind else f"- {title}")
         keep = False                       # 지금 줄이 살린 항목의 이어지는 줄인가
         for b in body.splitlines():
-            t = b.strip()
+            t = escape_angles(b.strip())
             if t.startswith("- "):
                 keep = not ("test_" in t)
                 if keep:

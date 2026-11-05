@@ -28,11 +28,19 @@ _NOTES_HEAD = re.compile(r"^#{1,6}\s*(바뀐 내용|What's changed)\s*$", re.M)
 _CODE_OR_URL = re.compile(r"(`[^`\n]*`|https?://\S+)")
 
 
+_ANGLE = re.compile(r"(?<!\\)([<>])")      # 이미 `\<` 로 온 것(scripts/release_notes.py 가 미리 바꾼다)은 그대로
+
+
+def _escape_plain(pt: str) -> str:
+    return _ANGLE.sub(r"\\\1", pt.replace("_", r"\_"))
+
+
 def escape_underscores(text: str) -> str:
-    """릴리스 설명 글의 `_` 를 글자 그대로 — 마크다운이 `_review/load_<버전>_` 을 기울임으로 읽어 밑줄이 사라졌다
-    (261012-5, 사용자 지시). 코드 표기(`…`)와 주소(URL) 안은 건드리지 않는다(주소가 깨진다)."""
+    """릴리스 설명 글의 `_`·`<`·`>` 를 글자 그대로 — 마크다운이 `_review/load_<버전>_` 을 기울임으로 읽어 밑줄이 사라졌고
+    (261012-5), `<이름>_<N>px` 를 HTML 태그로 읽어 뒤 글이 통째로 사라지고 점만 있는 빈 줄이 남았다(261105-3, beta.4 설명).
+    설명은 사람이 쓴 글이라 HTML 을 쓰지 않는다. 코드 표기(`…`)와 주소(URL) 안은 건드리지 않는다(주소가 깨진다)."""
     parts = _CODE_OR_URL.split(text or "")
-    return "".join(pt if i % 2 else pt.replace("_", r"\_") for i, pt in enumerate(parts))
+    return "".join(pt if i % 2 else _escape_plain(pt) for i, pt in enumerate(parts))
 
 
 _LANG_MARK = re.compile(r"^<!--\s*lang:([A-Za-z_\-]+)\s*-->\s*$", re.M)

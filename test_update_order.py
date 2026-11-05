@@ -192,6 +192,34 @@ try:
     shown = tb.toPlainText()
     chk("_review/load_<버전>_<시각>/summary.md" in shown and "a_b_c" in shown and "https://example.com/x_y_z" in shown
         and "\\_" not in shown, "I 밑줄(_)은 글자 그대로 보인다 — 코드 표기·주소도 그대로", repr(shown[-120:]))
+    # J — 261105-3: 글의 `<이름>`·`<N>` 이 HTML 태그로 읽혀 뒤 글이 사라지고 점만 있는 빈 줄이 남았다(beta.4 설명, 사용자 보고)
+    notes_lt = ("<!-- lang:ko -->\n## 바뀐 내용\n\n- **기능** 사진 일괄 작업\n"
+                "    - 크기 줄이기 <이름>_<N>px·형식 바꾸기 JPEG/PNG: 배경 진행 창\n"
+                "- **기능** 공유용 사본 '<이름>_공유' 를 같은 폴더에\n"
+                "    - 자가 시험이 'heif <판>' 을 적는다 · 크기 a < b > c · `<코드>` 그대로\n")
+    tb2 = QTextBrowser()
+    tb2.setMarkdown(changes_markdown([{"version": "1.1.0-beta.4", "notes": notes_lt}], chain=["ko"]))
+    shown2 = tb2.toPlainText()
+    bare = [ln for ln in shown2.splitlines() if ln.strip() in ("•", "◦", "▪", "-")]
+    chk(all(s in shown2 for s in ("<이름>_<N>px·형식 바꾸기", "'<이름>_공유'", "'heif <판>'", "a < b > c", "<코드>"))
+        and "&lt;" not in shown2 and "\\<" not in shown2 and not bare,
+        "J 꺾쇠(<…>)는 글자 그대로 보이고 뒤 글이 사라지지 않는다", repr(shown2[-200:]))
+    # J2 — 설명을 만드는 쪽(scripts/release_notes.py)이 미리 `\<` 로: 새 창도, 이미 설치된 옛 창(밑줄만 바꿈)도 그대로 보인다
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts"))
+    from release_notes import escape_angles
+    gen = escape_angles("크기 줄이기 <이름>_<N>px·형식 `<코드>` 그대로")
+    chk(gen == "크기 줄이기 \\<이름\\>_\\<N\\>px·형식 `<코드>` 그대로", "J2 설명 생성은 꺾쇠를 \\< 로(코드 표기 안은 그대로)", gen)
+    notes_gen = "<!-- lang:ko -->\n## 바뀐 내용\n\n- **기능** " + gen + "\n- **기능** 다음 항목\n"
+    import re as _re
+    _old = lambda t: "".join(p if i % 2 else p.replace("_", r"\_")                       # beta.4 까지의 escape_underscores
+                              for i, p in enumerate(_re.split(r"(`[^`\n]*`|https?://\S+)", t)))
+    tb3 = QTextBrowser(); tb3.setMarkdown(changes_markdown([{"version": "9.9.9", "notes": notes_gen}], chain=["ko"]))
+    tb4 = QTextBrowser(); tb4.setMarkdown(_old(notes_gen.split("\n", 1)[1]))
+    want = "크기 줄이기 <이름>_<N>px·형식 <코드> 그대로"
+    chk(want in tb3.toPlainText() and "다음 항목" in tb3.toPlainText() and "\\" not in tb3.toPlainText(),
+        "J2 새 창: 미리 바꾼 설명도 한 번만 풀린다", repr(tb3.toPlainText()[-120:]))
+    chk(want in tb4.toPlainText() and "다음 항목" in tb4.toPlainText(),
+        "J2 옛 창(beta.4 까지): 미리 바꾼 설명이면 그대로 보인다", repr(tb4.toPlainText()[-120:]))
 except Exception:
     import traceback
     traceback.print_exc()
