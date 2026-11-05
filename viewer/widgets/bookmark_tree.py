@@ -3667,7 +3667,9 @@ class BookmarkTree(QWidget):
                     self._after_move(src, target)
                     pairs.append([str(src), str(target)])
                 else:
-                    shutil.copy2(src, target)
+                    err = self._copy_bg(src, target, tr('복사 중: {name}').format(name=src.name))
+                    if err is not None:
+                        raise err
                     pairs.append(["", str(target)])
                 done += 1
             except Exception as e:
@@ -3872,6 +3874,32 @@ class BookmarkTree(QWidget):
             except Exception as e:                      # noqa: BLE001
                 return e
         return self._file_op(lambda: rename_when_free(src, dst, move=move), label)
+
+    def _copy_bg(self, src, dst, label: str):
+        """261105-7(응답성 SOT §4.4): 파일 복사도 **배경에서** — 메인에서 `shutil.copy2` 를 부르면 큰 파일·네트워크 폴더·
+        백신 검사 동안 창이 선다. 임시 이름에 쓰고 다 쓰면 바꿔 이름 — 실패하면 반쯤 쓴 파일을 남기지 않는다.
+        실패면 그 예외, 성공이면 None. 앱이 실행기를 안 넣었으면(단독 위젯·검사) 그 자리에서 한 번."""
+        import os
+        src, dst = Path(src), Path(dst)
+
+        def _job():
+            tmp =dst.with_name(dst.name + ".polypdf-copy.tmp")
+            try:
+                shutil.copy2(str(src), str(tmp))
+                os.replace(str(tmp), str(dst))
+            except BaseException:
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+                raise
+        if self._file_op is None:
+            try:
+                _job()
+                return None
+            except Exception as e:                      # noqa: BLE001
+                return e
+        return self._file_op(_job, label)
 
     def _after_rename(self, it, old_path: Path, new_path: Path):
         """261008-1(마스터 §4.7.14, 사용자 보고 '새로 추가한 PDF 여러 개를 연속으로 이름 변경하면

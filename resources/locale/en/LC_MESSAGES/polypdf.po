@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-05 09:21+0900\n"
+"POT-Creation-Date: 2026-11-05 15:19+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -7244,6 +7244,11 @@ msgstr "This PDF has no translation glossary (translate it first)."
 #, python-brace-format
 msgid "옮기는 중: {name}"
 msgstr "Moving: {name}"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "복사 중: {name}"
+msgstr "Copying: {name}"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
