@@ -81,30 +81,30 @@ try:
 
     dlg = PrintScopeDialog(8, 2, 0, 0, None, preset_api=None, sample=str(src), thumb_pages=[1, 4, 6])
     dlg.resize(900, 650); dlg.show(); app.processEvents(); QTest.qWait(30)
-    off_label = dlg.lbl_pageno.text()
+    off_label = dlg.nav.text()
     chk(off_label == "1 / 8", "준비 — 다단 끄면 원본 쪽 기준", off_label)
     dlg.chk_nup.setChecked(True); app.processEvents()
     n_real, r_real = real_sheets(list(range(8)), dlg.nup_settings())
-    chk(dlg.lbl_pageno.text() == f"시트 1 / {n_real}",
-        "B 다단을 켜면 미리보기가 **인쇄될 시트** 기준(실제 다단 PDF 와 같은 수)", f"{dlg.lbl_pageno.text()} vs {n_real}")
+    chk(dlg.nav.text() == f"시트 1 / {n_real}",
+        "B 다단을 켜면 미리보기가 **인쇄될 시트** 기준(실제 다단 PDF 와 같은 수)", f"{dlg.nav.text()} vs {n_real}")
     pm = dlg.preview.pixmap()
     chk(pm is not None and not pm.isNull() and (pm.width() > pm.height()) == (r_real.width > r_real.height),
         "B 미리보기 모양 = 실제 시트 방향(2-up 세로 원본 → 가로 시트)",
         f"{pm.width()}x{pm.height()} vs {r_real.width:.0f}x{r_real.height:.0f}")
     chk(dlg.preview_cap.text().startswith("다단"), "B 설명 줄에 '다단'", dlg.preview_cap.text())
     dlg.btn_next.click(); app.processEvents()
-    chk(dlg.lbl_pageno.text() == f"시트 2 / {n_real}", "B ▶ 는 시트를 넘긴다", dlg.lbl_pageno.text())
+    chk(dlg.nav.text() == f"시트 2 / {n_real}", "B ▶ 는 시트를 넘긴다", dlg.nav.text())
     for rb, pages, why in ((dlg.rb_cur, [2], "현재 페이지"), (dlg.rb_thumb, [1, 4, 6], "선택 썸네일")):
         rb.setEnabled(True); rb.setChecked(True); app.processEvents()
         n, _r = real_sheets(pages, dlg.nup_settings())
-        chk(dlg.lbl_pageno.text() == f"시트 1 / {n}", f"B 범위 '{why}' 도 실제와 같은 시트 수", f"{dlg.lbl_pageno.text()} vs {n}")
+        chk(dlg.nav.text() == f"시트 1 / {n}", f"B 범위 '{why}' 도 실제와 같은 시트 수", f"{dlg.nav.text()} vs {n}")
     dlg.rb_range.setChecked(True); dlg.sp_from.setValue(3); dlg.sp_to.setValue(7); app.processEvents()
     n, _r = real_sheets([2, 3, 4, 5, 6], dlg.nup_settings())
-    chk(dlg.lbl_pageno.text() == f"시트 1 / {n}", "B 페이지 범위(3~7)도 같다", f"{dlg.lbl_pageno.text()} vs {n}")
+    chk(dlg.nav.text() == f"시트 1 / {n}", "B 페이지 범위(3~7)도 같다", f"{dlg.nav.text()} vs {n}")
     dlg.rb_all.setChecked(True)
     dlg.chk_nup.setChecked(False); app.processEvents()
-    chk(dlg.lbl_pageno.text() == "1 / 8" and not dlg.preview_cap.text().startswith("다단"),
-        "B 다단을 끄면 원본 쪽 미리보기로 돌아온다", dlg.lbl_pageno.text())
+    chk(dlg.nav.text() == "1 / 8" and not dlg.preview_cap.text().startswith("다단"),
+        "B 다단을 끄면 원본 쪽 미리보기로 돌아온다", dlg.nav.text())
 
     # ── C. 단면/양면 연동 ─────────────────────────────────────────────
     dlg.cmb_duplex.setCurrentText("양면(긴 쪽)")

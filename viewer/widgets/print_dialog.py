@@ -1,7 +1,7 @@
 """인쇄 다이얼로그 (260603-3 / 260827 개편).
 
 좌: 인쇄 범위 + 다단 + 프린터/옵션(용지·색상·양면·정렬·부수·방향/포함),
-우: 실제 용지 비율 미리보기(페이지 탐색 ◀▶).
+우: 실제 용지 비율 미리보기(쪽 이동 ❮ 칸 / 전체 ❯ 은 미리보기 아래 가운데 — 261105-27).
 """
 from __future__ import annotations
 
@@ -119,21 +119,19 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
 
         # ── 우: 미리보기 ──
         right = QVBoxLayout()
-        prow = QHBoxLayout()
-        prow.addWidget(QLabel(tr("<b>미리보기</b>")))
-        prow.addStretch(1)
-        self.btn_prev = QPushButton("◀"); self.btn_prev.setFixedWidth(32)
-        self.btn_next = QPushButton("▶"); self.btn_next.setFixedWidth(32)
-        self.lbl_pageno = QLabel("")
-        self.btn_prev.clicked.connect(lambda: self._step_preview(-1))
-        self.btn_next.clicked.connect(lambda: self._step_preview(1))
-        prow.addWidget(self.btn_prev); prow.addWidget(self.lbl_pageno); prow.addWidget(self.btn_next)
-        right.addLayout(prow)
+        right.addWidget(QLabel(tr("<b>미리보기</b>")))
         self.preview = QLabel(tr("미리보기"))
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumWidth(320)
         self.preview.setStyleSheet("background:#e9e9e9;border:1px solid #cccccc;")
         right.addWidget(self.preview, 1)
+        # 261105-27(디자인 SOT §2.20): 쪽 이동은 미리보기 아래 가운데 — 공통 `PageNav`(칸에 쓰면 그 쪽·시트로)
+        from viewer.widgets.page_nav import PageNav, centered_row
+        self.nav = PageNav()
+        self.btn_prev, self.btn_next = self.nav.btn_prev, self.nav.btn_next
+        self.nav.stepRequested.connect(self._step_preview)
+        self.nav.pageRequested.connect(lambda p: self._step_preview(p - 1 - self._preview_page))
+        right.addLayout(centered_row(self.nav))
         self.preview_cap = QLabel("")
         self.preview_cap.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_cap.setStyleSheet("color:#555555;")
@@ -447,9 +445,8 @@ class PrintScopeDialog(NupPresetMixin, QDialog):
                 self._preview_page = self._nup_total - 1
                 ppix = self._render_nup_pixmap(self._preview_page)
         total = self._preview_count()
-        self.btn_prev.setEnabled(self._preview_page > 0)
-        self.btn_next.setEnabled(self._preview_page < total - 1)
-        self.lbl_pageno.setText(f"{tr('시트 ') if nup else ''}{self._preview_page + 1} / {total}")
+        self.nav.set_prefix(tr("시트 ") if nup else "")
+        self.nav.set_state(self._preview_page + 1, total)
         if not nup and (not self._sample or not str(self._sample).lower().endswith(".pdf")):
             self.preview.setText(tr("미리보기 없음")); self.preview_cap.setText("")
             return

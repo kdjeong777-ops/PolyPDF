@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-06 06:00+0900\n"
+"POT-Creation-Date: 2026-11-06 06:11+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8832,14 +8832,6 @@ msgstr ""
 "Can't open the image.\n"
 "{get}"
 
-#: viewer/widgets/merge_dialog.py viewer/widgets/toc_review_dialog.py
-msgid "◀ 쪽"
-msgstr "◀ Page"
-
-#: viewer/widgets/merge_dialog.py viewer/widgets/toc_review_dialog.py
-msgid "쪽 ▶"
-msgstr "Page ▶"
-
 #: viewer/widgets/merge_dialog.py
 msgid "파일을 하나 고르면 여기에 미리 보입니다."
 msgstr "Select a file to preview it here."
@@ -8960,14 +8952,6 @@ msgstr "Hidden"
 msgid "가이드:"
 msgstr "Guides:"
 
-#: viewer/widgets/merge_preview.py viewer/widgets/view_settings_dialog.py
-msgid "◀ 이전"
-msgstr "◀ Previous"
-
-#: viewer/widgets/merge_preview.py viewer/widgets/view_settings_dialog.py
-msgid "다음 ▶"
-msgstr "Next ▶"
-
 #: viewer/widgets/merge_preview.py
 msgid "전체 화면으로 보기"
 msgstr "View in full screen"
@@ -8983,10 +8967,10 @@ msgstr "Source Crop (%)"
 #: viewer/widgets/merge_preview.py
 msgid ""
 "파란선=여백, 초록선=간격, 주황선=크롭.\n"
-"드래그/숫자로 조정하고 ◀▶로 페이지를 넘겨 확인하세요."
+"드래그/숫자로 조정하고 아래 ❮ ❯ 로 페이지를 넘겨 확인하세요."
 msgstr ""
 "Blue = margin, green = spacing, orange = crop.\n"
-"Adjust by dragging or entering numbers, and use ◀▶ to flip pages and check."
+"Adjust by dragging or entering numbers, and use ❮ ❯ to flip pages and check."
 
 #: viewer/widgets/merge_preview.py
 msgid "병합 미리보기 — 전체화면"
@@ -9865,6 +9849,10 @@ msgid "다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서
 msgstr "Follows the 'Print sides' option in N-up printing settings (change it there)."
 
 #: viewer/widgets/print_dialog.py
+msgid "시트 "
+msgstr "Sheet "
+
+#: viewer/widgets/print_dialog.py
 msgid "미리보기 없음"
 msgstr "No preview"
 
@@ -9901,10 +9889,6 @@ msgstr "Screenshots ({n_shot_sel} selected; all if none)"
 #, python-brace-format
 msgid "{v}용지: {currentText} · {orient} · {currentText2} · {v2} · {currentText3}"
 msgstr "{v}Paper: {currentText} · {orient} · {currentText2} · {v2} · {currentText3}"
-
-#: viewer/widgets/print_dialog.py
-msgid "시트 "
-msgstr "Sheet "
 
 #: viewer/widgets/print_dialog.py
 msgid "다단 · "
@@ -12336,8 +12320,8 @@ msgid "이 행을 읽어 온 차례 쪽을 보여 줍니다(제목·쪽번호 �
 msgstr "Shows the TOC page this row was read from (verify the original title and page number)"
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "실제 쪽을 보여 줍니다(◀▶ 로 이웃 쪽을 훑고 '이 쪽으로 확정')"
-msgstr "Shows the actual page (browse neighboring pages with ◀▶, then 'Set to This Page')"
+msgid "실제 쪽을 보여 줍니다(아래 ❮ ❯ 로 이웃 쪽을 훑고 '이 쪽으로 확정')"
+msgstr "Shows the actual page (browse neighboring pages with ❮ ❯, then 'Set to This Page')"
 
 #: viewer/widgets/toc_review_dialog.py
 msgid "가로 꽉 차게"
@@ -12469,10 +12453,10 @@ msgstr "<b>{n} entries {v}</b> — Check them against the actual pages, fix them
 #, python-brace-format
 msgid ""
 "{n_ok} / {rowCount} 행에서 실제 쪽에 제목이 확인됐습니다(제목 칸 초록=확인, 빨강=미확인).\n"
-"빨간 행은 실제 쪽을 직접 고치거나(미리보기 ◀▶ 후 '이 쪽으로 확정') 삭제하세요."
+"빨간 행은 실제 쪽을 직접 고치거나(미리보기 ❮ ❯ 후 '이 쪽으로 확정') 삭제하세요."
 msgstr ""
 "Titles were found on the actual page in {n_ok} / {rowCount} rows (title cell green = found, red = not found).\n"
-"For red rows, fix the actual page directly (preview ◀▶, then 'Set to This Page') or delete them."
+"For red rows, fix the actual page directly (preview ❮ ❯, then 'Set to This Page') or delete them."
 
 #: viewer/widgets/toc_review_dialog.py
 #, python-brace-format
@@ -13354,13 +13338,13 @@ msgid "개별 적용된 쪽: {join}"
 msgstr "Pages with individual settings: {join}"
 
 #: viewer/widgets/view_settings_dialog.py
-msgid "표시할 쪽 없음"
-msgstr "No page to display"
-
-#: viewer/widgets/view_settings_dialog.py
 #, python-brace-format
 msgid "{join}쪽"
 msgstr "p.{join}"
+
+#: viewer/widgets/view_settings_dialog.py
+msgid "표시할 쪽 없음"
+msgstr "No page to display"
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "가상 프린터 (PolyPDF)"
@@ -14247,4 +14231,16 @@ msgstr "Getting Started"
 
 #~ msgid "<small>중지하면 지금 쪽(또는 파일)을 마친 뒤 멈춥니다. 읽은 OCR 은 저장 안 한 상태로 남아 같은 작업을 다시 시작하면 이어서 합니다.</small>"
 #~ msgstr "<small>Stopping finishes the current page (or file) first. OCR already read stays unsaved, and starting the same task again continues from there.</small>"
+
+#~ msgid "◀ 쪽"
+#~ msgstr "◀ Page"
+
+#~ msgid "쪽 ▶"
+#~ msgstr "Page ▶"
+
+#~ msgid "◀ 이전"
+#~ msgstr "◀ Previous"
+
+#~ msgid "다음 ▶"
+#~ msgstr "Next ▶"
 

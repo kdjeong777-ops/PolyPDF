@@ -75,19 +75,13 @@ class FilePreview(QWidget):
         # 디자인 SOT §2.13(= §2.12 미리보기 규격): 바탕 #f3f3f3·테두리 #c8c8c8, 쪽 넘김은 폭 중앙
         self.canvas.setStyleSheet("QLabel{background:#f3f3f3; border:1px solid #c8c8c8;}")
         v.addWidget(self.canvas, 1)
-        nav = QHBoxLayout()
-        self.btn_prev = QPushButton(tr("◀ 쪽"))
-        self.btn_next = QPushButton(tr("쪽 ▶"))
-        for b in (self.btn_prev, self.btn_next):       # 디자인 SOT §2.7 — Enter 로 눌리지 않게
-            b.setAutoDefault(False); b.setDefault(False)
-        self.lbl_page = QLabel("")
-        self.lbl_page.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.btn_prev.clicked.connect(lambda: self.step(-1))
-        self.btn_next.clicked.connect(lambda: self.step(+1))
-        nav.addStretch(1)
-        nav.addWidget(self.btn_prev); nav.addWidget(self.lbl_page); nav.addWidget(self.btn_next)
-        nav.addStretch(1)
-        v.addLayout(nav)
+        # 261105-27(디자인 SOT §2.20): 쪽 이동은 미리보기 아래 가운데 — 공통 `PageNav`(칸에 쓰면 그 쪽으로)
+        from viewer.widgets.page_nav import PageNav, centered_row
+        self.nav = PageNav()
+        self.btn_prev, self.btn_next = self.nav.btn_prev, self.nav.btn_next
+        self.nav.stepRequested.connect(self.step)
+        self.nav.pageRequested.connect(lambda p: self.step(p - 1 - self._page))
+        v.addLayout(centered_row(self.nav))
         self.clear(tr("파일을 하나 고르면 여기에 미리 보입니다."))
 
     # ── 대상 ──────────────────────────────────────────────
@@ -150,9 +144,7 @@ class FilePreview(QWidget):
 
     # ── 그리기 ────────────────────────────────────────────
     def _sync_nav(self):
-        self.btn_prev.setEnabled(self._count > 0 and self._page > 0)
-        self.btn_next.setEnabled(self._count > 0 and self._page < self._count - 1)
-        self.lbl_page.setText(f"{self._page + 1} / {self._count}" if self._count else "")
+        self.nav.set_state(self._page + 1, self._count)
 
     def _render(self):
         self._sync_nav()

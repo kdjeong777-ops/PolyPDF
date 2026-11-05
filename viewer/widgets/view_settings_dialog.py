@@ -166,18 +166,13 @@ class ViewSettingsDialog(QDialog):
         self.preview.installEventFilter(self)
         right.addWidget(self.preview, 1)
         # 쪽 이동(§4.2.3) — 이동 단위는 발표 화면과 같다(좌우 2쪽이면 펼침 단위, 숨김은 건너뜀)
-        nav = QHBoxLayout()
-        nav.addStretch(1)
-        self.btn_prev = QPushButton(tr("◀ 이전"))
-        self.btn_next = QPushButton(tr("다음 ▶"))
-        self.btn_prev.setAutoDefault(False)
-        self.btn_next.setAutoDefault(False)
-        self.btn_prev.clicked.connect(lambda: self._step(-1))
-        self.btn_next.clicked.connect(lambda: self._step(+1))
-        nav.addWidget(self.btn_prev)
-        nav.addWidget(self.btn_next)
-        nav.addStretch(1)
-        right.addLayout(nav)
+        # 261105-27(디자인 SOT §2.20): 미리보기 아래 가운데 공통 `PageNav` — 이동 단위가 펼침(2쪽)이고 숨김을 건너뛰어
+        #   칸에 쪽 번호를 쓰는 길은 두지 않는다(editable=False, 칸 자리에 '3·4쪽')
+        from viewer.widgets.page_nav import PageNav, centered_row
+        self.nav = PageNav(editable=False)
+        self.btn_prev, self.btn_next = self.nav.btn_prev, self.nav.btn_next
+        self.nav.stepRequested.connect(self._step)
+        right.addLayout(centered_row(self.nav))
         wrap = QWidget()
         wrap.setLayout(right)
         root.addWidget(wrap, 1)
@@ -311,9 +306,10 @@ class ViewSettingsDialog(QDialog):
 
     def _sync_nav(self):
         has = self._step_fn is not None
-        self.btn_prev.setEnabled(has and self._step_fn(self._cur, -1) is not None)
-        self.btn_next.setEnabled(has and self._step_fn(self._cur, +1) is not None)
         nums = [str(int(p) + 1) for p in self._preview_pages if p is not None]
+        self.nav.set_text(tr('{join}쪽').format(join='·'.join(nums)) if nums else "",
+                          has and self._step_fn(self._cur, -1) is not None,
+                          has and self._step_fn(self._cur, +1) is not None)
         self.lbl_preview_title.setText(
             tr('미리보기 — {v}').format(v=tr('{join}쪽').format(join='·'.join(nums)) if nums else tr('표시할 쪽 없음')))
 

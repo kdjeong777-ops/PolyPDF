@@ -133,10 +133,10 @@ try:
     dlg.resize(1100, 600); dlg.show(); spin(5)
     pv = dlg.preview
     dlg.left.item(1).setSelected(True); spin(3)
-    chk(pv.lbl_title.text() == "B.pdf" and pv.lbl_page.text() == "1 / 6" and not pv.canvas.pixmap().isNull(),
-        "2 왼쪽 목록에서 하나 고르면 그 파일 첫 쪽이 보인다", "%s %s" % (pv.lbl_title.text(), pv.lbl_page.text()))
+    chk(pv.lbl_title.text() == "B.pdf" and pv.nav.text() == "1 / 6" and not pv.canvas.pixmap().isNull(),
+        "2 왼쪽 목록에서 하나 고르면 그 파일 첫 쪽이 보인다", "%s %s" % (pv.lbl_title.text(), pv.nav.text()))
     pv.step(+1); spin(2)
-    chk(pv.lbl_page.text() == "2 / 6" and pv.btn_prev.isEnabled(), "2 ▶ 로 쪽을 넘긴다", pv.lbl_page.text())
+    chk(pv.nav.text() == "2 / 6" and pv.btn_prev.isEnabled(), "2 ▶ 로 쪽을 넘긴다", pv.nav.text())
     dlg.left.item(0).setSelected(True); spin(3)
     chk(pv._doc is None and "2개" in pv.canvas.text(), "2 둘을 고르면 미리보기 대신 안내(문서는 닫는다)",
         pv.canvas.text())
@@ -151,8 +151,8 @@ try:
     dlg._screenshot_paths = [str(shot), str(shot)]
     dlg._add_screenshots()
     dlg.right.clearSelection(); dlg.right.item(dlg.right.count() - 1).setSelected(True); spin(3)
-    chk(pv.lbl_page.text() == "1 / 2" and not pv.canvas.pixmap().isNull(), "2 스크린샷 묶음도 차례로 보인다",
-        pv.lbl_page.text())
+    chk(pv.nav.text() == "1 / 2" and not pv.canvas.pixmap().isNull(), "2 스크린샷 묶음도 차례로 보인다",
+        pv.nav.text())
     dlg.right.clearSelection(); dlg.right.item(0).setSelected(True); spin(3)
     chk(pv._doc is not None, "준비 — 미리보기 문서가 열려 있다")
     dlg.reject(); spin(2)

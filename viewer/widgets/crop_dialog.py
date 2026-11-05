@@ -248,20 +248,22 @@ class CropDialog(QDialog):
         # ── 가운데: 미리보기 ──
         mid = QVBoxLayout()
         nav = QHBoxLayout()
-        self.btn_prev = QPushButton("◀"); self.btn_prev.setFixedWidth(34)
-        self.btn_next = QPushButton("▶"); self.btn_next.setFixedWidth(34)
-        self.spin_page = QSpinBox(); self.spin_page.setRange(1, max(1, self._n))
-        self.lbl_total = QLabel("/ %d" % self._n)
+        # 261105-27(디자인 SOT §2.20): 쪽 이동은 미리보기 아래 가운데 — 공통 `PageNav`. 위 줄에는 쪽 방향·겹쳐 보기만 남는다
+        from viewer.widgets.page_nav import PageNav, centered_row
+        self.nav = PageNav()
+        self.btn_prev, self.btn_next = self.nav.btn_prev, self.nav.btn_next
+        self.spin_page, self.lbl_total = self.nav.spin, self.nav.lbl_total
+        self.spin_page.setKeyboardTracking(True)       # 종전 그대로 — 칸 값이 바뀌면 바로 그 쪽(valueChanged)
+        self.nav.set_state(1, self._n)
         self.lbl_kind = QLabel()
         self.chk_overlay = QCheckBox(tr("겹쳐 보기"))
         self.chk_overlay.setToolTip(tr("적용할 쪽 가운데 지금 쪽과 같은 방향의 쪽을 겹쳐 그립니다(최대 40쪽) — "
                                        "어느 쪽 내용도 잘리지 않게 고를 때"))
-        for w in (self.btn_prev, self.spin_page, self.lbl_total, self.btn_next):
-            nav.addWidget(w)
-        nav.addSpacing(12); nav.addWidget(self.lbl_kind); nav.addStretch(1); nav.addWidget(self.chk_overlay)
+        nav.addWidget(self.lbl_kind); nav.addStretch(1); nav.addWidget(self.chk_overlay)
         mid.addLayout(nav)
         self.canvas = CropCanvas()
         mid.addWidget(self.canvas, 1)
+        mid.addLayout(centered_row(self.nav))
         root.addLayout(mid, 1)
 
         # ── 오른쪽: 설정 ──
@@ -474,8 +476,7 @@ class CropDialog(QDialog):
         if i == self._cur and not force:
             return
         self._cur = i
-        for w, v in ((self.spin_page, i + 1),):
-            w.blockSignals(True); w.setValue(v); w.blockSignals(False)
+        self.nav.set_state(i + 1, self._n)
         self.list.blockSignals(True); self.list.setCurrentRow(i, QItemSelectionModel.SelectionFlag.NoUpdate)
         self.list.blockSignals(False)
         page = self._page_full(i)

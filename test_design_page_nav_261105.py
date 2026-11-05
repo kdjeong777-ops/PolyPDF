@@ -22,7 +22,7 @@ QCoreApplication.setApplicationName("polypdf_page_nav_%d" % os.getpid())
 import modal_guard
 modal_guard.install(label=lambda: "쪽 이동 자리", echo=False)   # 마스터 §14.7.2 의 6 — 뜨는 모달은 닫는다
 from viewer.app import MainWindow
-from viewer.widgets import icons
+from viewer.widgets import icons, page_nav_bar
 import test_fixtures
 
 fails = []
@@ -35,8 +35,10 @@ def chk(cond, msg, extra=""):
 
 
 def pump(n=6):
+    from PyQt6.QtTest import QTest
     for _ in range(n):
         app.processEvents()
+        QTest.qWait(page_nav_bar.RELAYOUT_MS + 5)    # 자리 맞추기는 RELAYOUT_MS 뒤 한 번 — 그만큼 기다린다
 
 
 def rect_in(w, mw):

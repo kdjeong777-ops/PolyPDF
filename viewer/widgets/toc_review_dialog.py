@@ -205,7 +205,7 @@ class TocReviewDialog(QDialog):
         # 260904-4(사용자 요청): 처음엔 '목차 보기' — 읽어 온 원문과 표를 먼저 대조하도록
         (self.rb_pv_toc if self.toc_pages else self.rb_pv_body).setChecked(True)
         self.rb_pv_toc.setToolTip(tr("이 행을 읽어 온 차례 쪽을 보여 줍니다(제목·쪽번호 원문 확인)"))
-        self.rb_pv_body.setToolTip(tr("실제 쪽을 보여 줍니다(◀▶ 로 이웃 쪽을 훑고 '이 쪽으로 확정')"))
+        self.rb_pv_body.setToolTip(tr("실제 쪽을 보여 줍니다(아래 ❮ ❯ 로 이웃 쪽을 훑고 '이 쪽으로 확정')"))
         self.rb_pv_toc.setEnabled(bool(self.toc_pages))
         for rb in (self.rb_pv_toc, self.rb_pv_body):
             rb.toggled.connect(lambda on: on and self._show_preview(self.table.currentRow(), force=True))
@@ -226,18 +226,18 @@ class TocReviewDialog(QDialog):
         self.pv_scroll.setMinimumSize(360, 300)
         self.pv_scroll.setStyleSheet("QScrollArea{background:#f3f3f3; border:1px solid #c8c8c8;}")
         rl.addWidget(self.pv_scroll, 1)
-        nav = QHBoxLayout()
-        self.btn_pv_prev = QPushButton(tr("◀ 쪽")); self.btn_pv_next = QPushButton(tr("쪽 ▶"))
+        # 260904-3 → 261105-27(디자인 SOT §2.20): 쪽 이동은 미리보기 아래 **정확히** 가운데(공통 `PageNav` — 칸에 쓰면 그 쪽),
+        #   확정 버튼은 오른쪽 칸(`centered_row` 가 왼쪽에 같은 폭을 둬 버튼이 묶음을 밀지 않는다)
+        from viewer.widgets.page_nav import PageNav, centered_row
+        self.pv_nav = PageNav()
+        self.btn_pv_prev, self.btn_pv_next = self.pv_nav.btn_prev, self.pv_nav.btn_next
         self.btn_pv_set = QPushButton(tr("이 쪽으로 확정"))
         self.btn_pv_set.setToolTip(tr("미리보기 중인 쪽을 현재 행의 실제 쪽으로 기록(수동)"))
-        for b in (self.btn_pv_prev, self.btn_pv_next, self.btn_pv_set):
-            b.setAutoDefault(False); b.setDefault(False)
-        self.btn_pv_prev.clicked.connect(lambda: self._pv_step(-1))
-        self.btn_pv_next.clicked.connect(lambda: self._pv_step(+1))
+        self.btn_pv_set.setAutoDefault(False); self.btn_pv_set.setDefault(False)
+        self.pv_nav.stepRequested.connect(self._pv_step)
+        self.pv_nav.pageRequested.connect(lambda p: self._pv_step(p - int(self._pv_page or p)))
         self.btn_pv_set.clicked.connect(self._pv_confirm)
-        # 260904-3: ◀▶ 는 미리보기 폭의 중앙, 확정 버튼은 오른쪽
-        nav.addStretch(1); nav.addWidget(self.btn_pv_prev); nav.addWidget(self.btn_pv_next); nav.addStretch(1)
-        nav.addWidget(self.btn_pv_set)
+        nav = centered_row(self.pv_nav, right=self.btn_pv_set)
         self._nav = nav
         rl.addLayout(nav)
         split.addWidget(right)
@@ -606,7 +606,7 @@ class TocReviewDialog(QDialog):
             self.table.item(i, COL_TITLE).setBackground(QBrush(_OK_BG if ok else _NG_BG))
         self.table.blockSignals(False)
         QMessageBox.information(self, tr("제목 대조"),
-                                tr("{n_ok} / {rowCount} 행에서 실제 쪽에 제목이 확인됐습니다(제목 칸 초록=확인, 빨강=미확인).\n빨간 행은 실제 쪽을 직접 고치거나(미리보기 ◀▶ 후 '이 쪽으로 확정') 삭제하세요.").format(n_ok=n_ok, rowCount=self.table.rowCount()))
+                                tr("{n_ok} / {rowCount} 행에서 실제 쪽에 제목이 확인됐습니다(제목 칸 초록=확인, 빨강=미확인).\n빨간 행은 실제 쪽을 직접 고치거나(미리보기 ❮ ❯ 후 '이 쪽으로 확정') 삭제하세요.").format(n_ok=n_ok, rowCount=self.table.rowCount()))
 
     def _renumber(self):
         """[번호 수정] (260904-8): 선택한 행마다 번호 = 바로 위 같은 레벨 형제 + 1 (위에서부터 차례로)."""
@@ -685,6 +685,7 @@ class TocReviewDialog(QDialog):
         same = (pg == self._pv_page and mode == self._pv_mode and self._pv_rendered)
         self._pv_page = pg; self._pv_mode = mode
         self.btn_pv_set.setEnabled(mode == "body")             # 확정은 내용 보기에서만
+        self.pv_nav.set_state(int(pg) if pg else 0, self._page_count if pg else 0)
         if not pg:
             self._pv_rendered = False
             self.lbl_pv.setText(tr("실제 쪽이 비어 있습니다") if mode == "body" else tr("출처 목차 쪽을 알 수 없습니다"))

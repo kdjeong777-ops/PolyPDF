@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-06 06:00+0900\n"
+"POT-Creation-Date: 2026-11-06 06:11+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -8553,14 +8553,6 @@ msgid ""
 "{get}"
 msgstr ""
 
-#: viewer/widgets/merge_dialog.py viewer/widgets/toc_review_dialog.py
-msgid "◀ 쪽"
-msgstr ""
-
-#: viewer/widgets/merge_dialog.py viewer/widgets/toc_review_dialog.py
-msgid "쪽 ▶"
-msgstr ""
-
 #: viewer/widgets/merge_dialog.py
 msgid "파일을 하나 고르면 여기에 미리 보입니다."
 msgstr ""
@@ -8677,14 +8669,6 @@ msgstr ""
 msgid "가이드:"
 msgstr ""
 
-#: viewer/widgets/merge_preview.py viewer/widgets/view_settings_dialog.py
-msgid "◀ 이전"
-msgstr ""
-
-#: viewer/widgets/merge_preview.py viewer/widgets/view_settings_dialog.py
-msgid "다음 ▶"
-msgstr ""
-
 #: viewer/widgets/merge_preview.py
 msgid "전체 화면으로 보기"
 msgstr ""
@@ -8700,7 +8684,7 @@ msgstr ""
 #: viewer/widgets/merge_preview.py
 msgid ""
 "파란선=여백, 초록선=간격, 주황선=크롭.\n"
-"드래그/숫자로 조정하고 ◀▶로 페이지를 넘겨 확인하세요."
+"드래그/숫자로 조정하고 아래 ❮ ❯ 로 페이지를 넘겨 확인하세요."
 msgstr ""
 
 #: viewer/widgets/merge_preview.py
@@ -9576,6 +9560,10 @@ msgid "다단 인쇄 설정의 '인쇄 면' 을 따릅니다(다단 설정에서
 msgstr ""
 
 #: viewer/widgets/print_dialog.py
+msgid "시트 "
+msgstr ""
+
+#: viewer/widgets/print_dialog.py
 msgid "미리보기 없음"
 msgstr ""
 
@@ -9611,10 +9599,6 @@ msgstr ""
 #: viewer/widgets/print_dialog.py
 #, python-brace-format
 msgid "{v}용지: {currentText} · {orient} · {currentText2} · {v2} · {currentText3}"
-msgstr ""
-
-#: viewer/widgets/print_dialog.py
-msgid "시트 "
 msgstr ""
 
 #: viewer/widgets/print_dialog.py
@@ -12039,7 +12023,7 @@ msgid "이 행을 읽어 온 차례 쪽을 보여 줍니다(제목·쪽번호 �
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py
-msgid "실제 쪽을 보여 줍니다(◀▶ 로 이웃 쪽을 훑고 '이 쪽으로 확정')"
+msgid "실제 쪽을 보여 줍니다(아래 ❮ ❯ 로 이웃 쪽을 훑고 '이 쪽으로 확정')"
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py
@@ -12171,7 +12155,7 @@ msgstr ""
 #, python-brace-format
 msgid ""
 "{n_ok} / {rowCount} 행에서 실제 쪽에 제목이 확인됐습니다(제목 칸 초록=확인, 빨강=미확인).\n"
-"빨간 행은 실제 쪽을 직접 고치거나(미리보기 ◀▶ 후 '이 쪽으로 확정') 삭제하세요."
+"빨간 행은 실제 쪽을 직접 고치거나(미리보기 ❮ ❯ 후 '이 쪽으로 확정') 삭제하세요."
 msgstr ""
 
 #: viewer/widgets/toc_review_dialog.py
@@ -13037,12 +13021,12 @@ msgid "개별 적용된 쪽: {join}"
 msgstr ""
 
 #: viewer/widgets/view_settings_dialog.py
-msgid "표시할 쪽 없음"
+#, python-brace-format
+msgid "{join}쪽"
 msgstr ""
 
 #: viewer/widgets/view_settings_dialog.py
-#, python-brace-format
-msgid "{join}쪽"
+msgid "표시할 쪽 없음"
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py

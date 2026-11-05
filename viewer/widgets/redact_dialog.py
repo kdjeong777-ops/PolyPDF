@@ -70,20 +70,18 @@ class RedactDialog(QDialog):
 
         root = QHBoxLayout(self)
         left = QVBoxLayout()
+        # 261105-27(디자인 SOT §2.20): 쪽 이동은 쪽 그림 아래 가운데(공통 `PageNav`) — 안내 글은 그림 위로
+        left.addWidget(QLabel(tr("쪽 그림 위를 끌어 가릴 영역을 고르세요.")))
         self.view = _PageView(self)
         left.addWidget(self.view, 1)
-        nav = QHBoxLayout()
-        self.btn_prev = QPushButton("◀")
-        self.btn_next = QPushButton("▶")
-        self.lbl_page = QLabel("")
-        for w in (self.btn_prev, self.lbl_page, self.btn_next):
-            nav.addWidget(w)
-        nav.addStretch(1)
-        nav.addWidget(QLabel(tr("쪽 그림 위를 끌어 가릴 영역을 고르세요.")))
-        left.addLayout(nav)
+        from viewer.widgets.page_nav import PageNav, centered_row
+        self.nav = PageNav()
+        self.btn_prev, self.btn_next = self.nav.btn_prev, self.nav.btn_next
+        self.lbl_page = self.nav.lbl_total            # 툴팁(찾은 자리 수)을 다는 자리
+        left.addLayout(centered_row(self.nav))
         root.addLayout(left, 3)
-        self.btn_prev.clicked.connect(lambda: self._go(self._page - 1))
-        self.btn_next.clicked.connect(lambda: self._go(self._page + 1))
+        self.nav.stepRequested.connect(lambda d: self._go(self._page + d))
+        self.nav.pageRequested.connect(lambda p: self._go(p - 1))
 
         right = QVBoxLayout()
         right.addWidget(QLabel(tr("찾아 가리기")))
@@ -153,9 +151,7 @@ class RedactDialog(QDialog):
             if m["page"] == pg:
                 self._draw(m)
         self.view.fitInView(sc.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
-        self.lbl_page.setText(f"{pg + 1} / {n}")
-        self.btn_prev.setEnabled(pg > 0)
-        self.btn_next.setEnabled(pg < n - 1)
+        self.nav.set_state(pg + 1, n)
 
     def showEvent(self, e):
         super().showEvent(e)

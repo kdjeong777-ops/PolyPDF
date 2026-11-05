@@ -261,10 +261,10 @@ h1 = dlg.lbl_pv.pixmap().height(); w1 = dlg.lbl_pv.pixmap().width()
 chk(w1 >= w0 and h1 > h0 and w1 >= dlg.pv_scroll.viewport().width() - 8,
     "③ '가로 꽉 차게' → 폭 맞춤(세로는 스크롤)", f"{w0}x{h0} → {w1}x{h1} vp={dlg.pv_scroll.viewport().width()}")
 dlg.chk_fit_width.setChecked(False); app.processEvents()
-nav = dlg._nav      # ◀▶ 양옆에 stretch 가 있어 중앙에 온다
-chk(nav.itemAt(0).spacerItem() is not None and nav.indexOf(dlg.btn_pv_prev) == 1
-    and nav.itemAt(nav.indexOf(dlg.btn_pv_next) + 1).spacerItem() is not None,
-    "③ ◀▶ 쪽 이동 버튼이 미리보기 폭 중앙(양옆 stretch)")
+nav = dlg._nav      # 261105-27: 공통 쪽 이동(`PageNav`)이 양옆 같은 폭 칸 사이 — 확정 버튼이 있어도 정확히 가운데
+chk(nav.indexOf(dlg.pv_nav) == 1 and dlg.pv_nav.isAncestorOf(dlg.btn_pv_prev)
+    and nav.itemAt(0).widget().minimumWidth() == nav.itemAt(2).widget().minimumWidth(),
+    "③ 쪽 이동 묶음이 미리보기 폭 중앙(양옆 같은 폭 칸)")
 # 260904-8: 가로 꽉 차게에서 ▶ 는 다음 쪽 상단, ◀ 는 이전 쪽 하단
 dlg.table.setCurrentCell(0, COL_TITLE); app.processEvents()
 dlg.chk_fit_width.setChecked(True); app.processEvents()

@@ -218,15 +218,16 @@ class MergePreviewWidget(QWidget):
 
         root = QHBoxLayout(self); root.setContentsMargins(0, 0, 0, 0)
         left = QVBoxLayout()
-        nav = QHBoxLayout()
-        self.b_prev = QPushButton(tr("◀ 이전")); self.b_prev.clicked.connect(self._prev_sheet)
-        self.b_next = QPushButton(tr("다음 ▶")); self.b_next.clicked.connect(self._next_sheet)
-        self.lbl_nav = QLabel("1 / 1"); self.lbl_nav.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        nav.addWidget(self.b_prev); nav.addWidget(self.lbl_nav, 1); nav.addWidget(self.b_next)
-        left.addLayout(nav)
         self.canvas = _PreviewCanvas()
         self.canvas.changed.connect(self._on_drag)
         left.addWidget(self.canvas, 1)
+        # 261105-27(디자인 SOT §2.20): 시트 이동은 미리보기 아래 가운데 — 공통 `PageNav`(칸에 쓰면 그 시트)
+        from viewer.widgets.page_nav import PageNav, centered_row
+        self.nav = PageNav()
+        self.b_prev, self.b_next = self.nav.btn_prev, self.nav.btn_next
+        self.nav.stepRequested.connect(lambda d: self._prev_sheet() if d < 0 else self._next_sheet())
+        self.nav.pageRequested.connect(self._goto_sheet)
+        left.addLayout(centered_row(self.nav))
         b_full = QPushButton(tr("전체 화면으로 보기"))
         b_full.clicked.connect(self._open_fullscreen)
         left.addWidget(b_full)
@@ -250,7 +251,7 @@ class MergePreviewWidget(QWidget):
             fc.addRow(lab + ":", self.sp[key])
         side.addWidget(gc)
         hint = QLabel(tr("파란선=여백, 초록선=간격, 주황선=크롭.\n"
-                      "드래그/숫자로 조정하고 ◀▶로 페이지를 넘겨 확인하세요."))
+                      "드래그/숫자로 조정하고 아래 ❮ ❯ 로 페이지를 넘겨 확인하세요."))
         hint.setWordWrap(True); hint.setStyleSheet("color:#888;font-size:11px;")
         side.addWidget(hint)
         side.addStretch(1)
@@ -303,9 +304,7 @@ class MergePreviewWidget(QWidget):
             self._total = max(1, int(total))
             self._sheet = max(0, min(self._total - 1, self._sheet))
             self.canvas.set_image(png, ow, oh, cells, self.vals)
-            self.lbl_nav.setText(f"{self._sheet + 1} / {self._total}")
-            self.b_prev.setEnabled(self._sheet > 0)
-            self.b_next.setEnabled(self._sheet < self._total - 1)
+            self.nav.set_state(self._sheet + 1, self._total)
         except Exception:
             pass
 
@@ -318,6 +317,11 @@ class MergePreviewWidget(QWidget):
         if self._sheet < self._total - 1:
             self._sheet += 1
             self._recompose()
+
+    def _goto_sheet(self, n: int):
+        """261105-27: 쪽 이동 칸에 쓴 시트(1부터)."""
+        self._sheet = max(0, min(self._total - 1, int(n) - 1))
+        self._recompose()
 
     def _on_spin(self, key, val):
         self.vals[key] = int(val)
