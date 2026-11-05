@@ -9852,7 +9852,7 @@ msgid "<small>인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
-msgid "사진 자동 해시태그 (촬영일·동·장비·스크린샷)"
+msgid "사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

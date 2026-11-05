@@ -10141,8 +10141,8 @@ msgid "<small>인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는
 msgstr "<small>Assigned in the background after indexing. Auto tags are marked ·# and can be undone from the Tools menu.</small>"
 
 #: viewer/widgets/settings_dialog.py
-msgid "사진 자동 해시태그 (촬영일·동·장비·스크린샷)"
-msgstr "Automatic photo hashtags (date taken, neighborhood, device, screenshot)"
+msgid "사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"
+msgstr "Automatic photo hashtags (date taken, region, device, screenshot)"
 
 #: viewer/widgets/settings_dialog.py
 msgid "사진 종류도 구분 (영수증·명함·서류 — 글자 있는 사진만 OCR)"

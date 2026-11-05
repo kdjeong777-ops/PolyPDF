@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""사진 자동 해시태그 — 날짜·촬영 장비·동·종류 (태그 SOT §5.7, 261105-6, 사용자 결정).
+"""사진 자동 해시태그 — 날짜·촬영 장비·지역(시·군·구)·종류 (태그 SOT §5.7, 261105-6, 사용자 결정).
 
 모두 **오프라인**(태그 SOT §1-3) — 사진 머리(EXIF)·동봉 행정동 자료(`kr_dong`)·Tesseract 만 쓴다.
 배경 워커(`photo_controller.PhotoIndexWorker`·`PhotoKindWorker`)에서 부른다. 저장은 메인이 태그 저장소의
 **자동 칸 부분**(`TagStore.set_auto_part`)으로 — 사용자 태그·거절한 태그는 건드리지 않는다.
 
 | 부분 | 값 | 출처 |
-| meta | `YYYY-MM-DD`·장비·동·`스크린샷` | `photo_io.photo_info` (머리만) |
+| meta | `YYYY-MM-DD`·장비·시군구·`스크린샷` | `photo_io.photo_info` (머리만) |
 | kind | `영수증`·`명함`·`서류` | 글이 있어 보이는 사진만 작게 OCR(읽은 글은 판정에만 — 저장·색인하지 않는다, 사진 SOT D15) |
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import re
 
-AUTOTAG_VER = 1                 # 규칙을 바꾸면 올린다 — 다음 색인 훑기가 사진마다 다시 판정한다
+AUTOTAG_VER = 2                 # 규칙을 바꾸면 올린다 — 다음 색인 훑기가 사진마다 다시 판정한다(2: 동 → 시·군·구, 261105-13)
 KIND_VER = 1
 
 SCREENSHOT = "스크린샷"
@@ -109,7 +109,7 @@ def is_screenshot(path: str, info: dict) -> bool:
 
 
 def place_tag(info: dict):
-    """GPS → 국내 행정동 이름('대화동'). 해외·자료 밖·위치 없음은 None."""
+    """GPS → 국내 시·군·구 이름('고양시'·'강남구' — 태그 SOT §5.7, 261105-13). 해외·자료 밖·위치 없음은 None."""
     g = info.get("gps")
     if not g:
         return None
@@ -117,7 +117,7 @@ def place_tag(info: dict):
     if abs(lat) < 1e-6 and abs(lon) < 1e-6:
         return None
     from viewer import kr_dong
-    return kr_dong.dong_name(lat, lon)
+    return kr_dong.region_name(lat, lon)
 
 
 def alias(tag: str, rules=None) -> str:
@@ -132,7 +132,7 @@ def alias(tag: str, rules=None) -> str:
 
 
 def meta_tags(path: str, info: dict, rules=None) -> list:
-    """사진 머리에서 만드는 자동 태그 — 날짜 → 동 → 장비 → 스크린샷 차례."""
+    """사진 머리에서 만드는 자동 태그 — 날짜 → 지역 → 장비 → 스크린샷 차례."""
     out = []
     for t in (date_tag(info), place_tag(info), device_tag(info), SCREENSHOT if is_screenshot(path, info) else None):
         if t:

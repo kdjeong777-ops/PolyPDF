@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import array
 import json
+import re
 import struct
 import sys
 import threading
@@ -159,6 +160,26 @@ def lookup(lat, lon):
                         if dd < bd:
                             bd, best = dd, fi
     return names[best] if best is not None else None
+
+
+_CITY_GU = re.compile(r"^(.+?시).+구$")       # 구가 있는 시 — 자료에는 '고양시일산서구' 처럼 붙어 있다
+
+
+def region_of(full: str):
+    """행정동 전체 이름 → 시·군·구 태그 값(태그 SOT §5.7, 261105-13 사용자 결정).
+    '경기도 고양시일산서구 대화동' → 고양시(구가 있는 시는 시만) · '서울특별시 강남구 역삼1동' → 강남구(자치구) ·
+    '경기도 연천군 연천읍' → 연천군 · '세종특별자치시 세종시 조치원읍' → 세종시."""
+    parts = (full or "").split()
+    if len(parts) < 3:
+        return None
+    sgg = parts[1]
+    m = _CITY_GU.match(sgg)
+    return m.group(1) if m else sgg
+
+
+def region_name(lat, lon):
+    """시·군·구 이름 — 사진 지역 태그 값. 못 찾으면 None."""
+    return region_of(lookup(lat, lon))
 
 
 def dong_name(lat, lon):

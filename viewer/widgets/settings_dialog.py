@@ -230,7 +230,7 @@ class SettingsDialog(QDialog):
         _info_tag.setStyleSheet("color:#666;"); _info_tag.setWordWrap(True)
         gl.addWidget(_info_tag)
         # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그 — 기본 켬. 종류(영수증·명함·서류)는 글이 있어 보이는 사진만 OCR
-        self.chk_photo_tag = QCheckBox(tr("사진 자동 해시태그 (촬영일·동·장비·스크린샷)"))
+        self.chk_photo_tag = QCheckBox(tr("사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"))
         self.chk_photo_tag.setChecked(bool(self._prefs.get("photo_auto_tag", True)))
         gl.addWidget(self.chk_photo_tag)
         self.chk_photo_kind = QCheckBox(tr("사진 종류도 구분 (영수증·명함·서류 — 글자 있는 사진만 OCR)"))

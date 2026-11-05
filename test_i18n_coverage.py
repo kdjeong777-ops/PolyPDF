@@ -43,6 +43,7 @@ DATA = {
     "viewer/kiwi_space.py",                      # 261009-16: 띄어쓰기 도우미 — 한글은 kiwi 에 넘기는 글(데이터)
     "viewer/i18n.py", "viewer/_vendor/",
     "viewer/photo_tags.py",                      # 261105-6(태그 SOT §5.7): 사진 태그 값(스크린샷·영수증 …)·판별 낱말 — auto_tag 형식 이름처럼 저장 데이터
+    "viewer/kr_dong.py",                         # 261105-13(태그 SOT §5.7): 행정동 이름에서 시·군·구를 고르는 정규식 — 화면 문구 아님
 }
 _FONTS = {"맑은 고딕", "굴림", "바탕", "돋움"}
 _REGEX = re.compile(r"\\[sdbwSDW*]|\[[^\]]*가-힣|\(\?[:=!<]")   # \s·\*·[가-힣]·(?: 가 들면 정규식

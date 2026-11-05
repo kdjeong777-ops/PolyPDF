@@ -123,10 +123,16 @@ try:
         [("2026", 3), ("2026-11", 3), ("2025", 1), ("2025-03", 1)], "A '날짜' 묶음 — 해·달, 새 것부터")
 
     # ── B 행정동 ──
-    chk(kr_dong.dong_name(37.6766, 126.7470) == "대화동", "B 고양 일산 → 대화동", str(kr_dong.lookup(37.6766, 126.7470)))
-    chk(kr_dong.dong_name(37.4979, 127.0276) == "서초2동", "B 강남역 → 서초2동", str(kr_dong.lookup(37.4979, 127.0276)))
-    chk(kr_dong.dong_name(35.6762, 139.6503) is None, "B 해외(도쿄) — 없음")
-    chk(kr_dong.dong_name(34.0, 126.0) is None, "B 바다 — 없음")
+    chk(kr_dong.dong_name(37.6766, 126.7470) == "대화동", "B 고양 일산 → 행정동 대화동", str(kr_dong.lookup(37.6766, 126.7470)))
+    # 261105-13(사용자 지시 '동은 너무 세분화'): 태그 값은 시·군·구 — 구가 있는 시는 시만, 특별·광역시는 자치구
+    chk(kr_dong.region_name(37.6766, 126.7470) == "고양시", "B 지역 — 구가 있는 시는 시만(고양시일산서구 → 고양시)",
+        str(kr_dong.region_name(37.6766, 126.7470)))
+    chk(kr_dong.region_name(37.4979, 127.0276) == "서초구", "B 지역 — 특별시는 자치구(서초구)", str(kr_dong.region_name(37.4979, 127.0276)))
+    chk(kr_dong.region_name(37.2636, 127.0286) == "수원시", "B 지역 — 수원시팔달구 → 수원시", str(kr_dong.region_name(37.2636, 127.0286)))
+    chk(kr_dong.region_of("경기도 연천군 연천읍") == "연천군" and kr_dong.region_of("세종특별자치시 세종시 조치원읍") == "세종시"
+        and kr_dong.region_of("부산광역시 중구 남포동") == "중구", "B 지역 — 군·세종시·광역시 자치구")
+    chk(kr_dong.region_name(35.6762, 139.6503) is None, "B 해외(도쿄) — 없음")
+    chk(kr_dong.region_name(34.0, 126.0) is None, "B 바다 — 없음")
     inf = kr_dong.info()
     chk(inf.get("ver") == "20261001" and inf.get("count", 0) > 3000 and "CC BY 4.0" in inf.get("source", ""),
         "B 자료 판·출처(CC BY 4.0)", str(inf))
@@ -203,22 +209,22 @@ try:
     chk(pump(lambda: bool(idx_done), timeout=30), "D 사진 색인 끝")
     wait(0.8)                                   # 태그 꼬리 다시 그리기(0.5초 모음)
     tags = bt._tags
-    chk(tags.get_auto(str(A)) == ["2026-11-05", "대화동", "iPhone15Pro"], "D 촬영일·동·장비", str(tags.get_auto(str(A))))
-    chk(tags.get_auto(str(Bx)) == ["2025-03-02", "SamsungSM-S918N"], "D 해외 위치 — 동 태그 없음", str(tags.get_auto(str(Bx))))
+    chk(tags.get_auto(str(A)) == ["2026-11-05", "고양시", "iPhone15Pro"], "D 촬영일·지역(시·군·구)·장비", str(tags.get_auto(str(A))))
+    chk(tags.get_auto(str(Bx)) == ["2025-03-02", "SamsungSM-S918N"], "D 해외 위치 — 지역 태그 없음", str(tags.get_auto(str(Bx))))
     chk(tags.get_auto(str(SS)) == ["스크린샷"], "D 스크린샷", str(tags.get_auto(str(SS))))
     from viewer.settings_store import settings_dir
     chk((Path(settings_dir()) / "file_tags.bak.json").exists(), "D 붙이기 전에 file_tags.bak.json 백업(태그 SOT §6)")
     names = lambda qq: sorted(x["name"] for x in photo_index.search(qq, folder=pix))
     # 사진 정보 색인은 쓰는 워커(종류 판정)가 도는 동안 잠깐 못 읽을 수 있다(메인은 BUSY_MS_UI 만 기다리고 빈 결과) — 결과로 기다린다
-    pump(lambda: names("#대화동") == ["IMG_1001.jpg"], timeout=10)
-    chk(names("#대화동") == ["IMG_1001.jpg"], "D 사진 모드 검색 — 동 태그", str(names("#대화동")))
+    pump(lambda: names("#고양시") == ["IMG_1001.jpg"], timeout=10)
+    chk(names("#고양시") == ["IMG_1001.jpg"], "D 사진 모드 검색 — 지역 태그", str(names("#고양시")))
     chk(names("#iPhone15Pro") == ["IMG_1001.jpg", "IMG_1004.jpg", "IMG_1005.jpg", "IMG_1006.jpg"], "D 사진 모드 검색 — 장비 태그",
         str(names("#iPhone15Pro")))
     lbl = None
     for it in bt._iter_file_nodes():
         if os.path.normcase(str(it.data(0, bt.DATA_FILE) or "")) == os.path.normcase(str(A)):
             lbl = it.text(0)
-    chk(lbl is not None and "대화동" in lbl, "D 책갈피창 이름 꼬리에 자동 태그", str(lbl))
+    chk(lbl is not None and "고양시" in lbl, "D 책갈피창 이름 꼬리에 자동 태그", str(lbl))
 
     # E 종류 — 종류 워커가 끝날 때까지
     chk(pump(lambda: bool(kind_done) and mw.__dict__.get("_photo_kinder") is None and mw.__dict__.get("_photo_indexer") is None,
@@ -243,9 +249,37 @@ try:
     PC.PhotoIndexWorker._autotag_one = real_one
     pump(lambda: bool(kind_done), timeout=60)
 
+    # K 261105-13 — 옛 판(1, 행정동)으로 붙은 사진: 판이 오르면 다시 훑기가 동 태그를 시·군·구로 바꾼다.
+    #   사용자 태그·📌 고정한 태그는 그대로, 바꾸기 전 file_tags.bak.json
+    tags.set_auto_part(str(A), "meta", ["2026-11-05", "대화동", "iPhone15Pro"])        # 옛 판의 자동 태그
+    tags.set(str(A), ["가족"])
+    tags.set_auto_part(str(Bx), "meta", ["2025-03-02", "서초2동", "SamsungSM-S918N"])
+    tags.promote(str(Bx), ["서초2동"])                                                 # 사용자가 고정한 옛 동 태그
+    import sqlite3
+    _c = photo_index.connect()
+    _c.execute("UPDATE photos SET at_ver=1 WHERE key IN (?, ?)", (os.path.normcase(str(A)), os.path.normcase(str(Bx))))
+    _c.commit(); _c.close()
+    bak = Path(settings_dir()) / "file_tags.bak.json"
+    try:
+        bak.unlink()
+    except OSError:
+        pass
+    idx_done.clear(); kind_done.clear()
+    mw._photo_index_start()
+    chk(pump(lambda: bool(idx_done), timeout=30), "K 다시 훑기 끝")
+    wait(0.8)
+    chk(tags.get_auto(str(A)) == ["2026-11-05", "고양시", "iPhone15Pro"], "K 옛 동 태그 → 시·군·구", str(tags.get_auto(str(A))))
+    chk(tags.get_manual(str(A)) == ["가족"], "K 사용자 태그는 그대로", str(tags.get_manual(str(A))))
+    chk("서초2동" in tags.get_manual(str(Bx)) and tags.get_auto(str(Bx)) == ["2025-03-02", "SamsungSM-S918N"],
+        "K 고정한 옛 동 태그는 그대로", f"{tags.get_manual(str(Bx))} {tags.get_auto(str(Bx))}")
+    chk(bak.exists() and "대화동" in bak.read_text(encoding="utf-8"), "K 바꾸기 전 백업에 옛 태그가 있다")
+    pump(lambda: names("#대화동") == [] and names("#고양시") == ["IMG_1001.jpg"], timeout=10)
+    chk(names("#대화동") == [] and names("#고양시") == ["IMG_1001.jpg"], "K 사진 모드 검색 글도 새 지역으로", f"{names('#대화동')} {names('#고양시')}")
+    pump(lambda: bool(kind_done), timeout=60)
+
     # F OCR 확정 — 머리 태그가 남는다
     mw._photo_ocr_committed([(str(A), "family picnic", None, [])])
-    chk(tags.get_auto(str(A)) == ["2026-11-05", "대화동", "iPhone15Pro"], "F OCR 확정(형식 없음)이 머리 태그를 지우지 않는다", str(tags.get_auto(str(A))))
+    chk(tags.get_auto(str(A)) == ["2026-11-05", "고양시", "iPhone15Pro"], "F OCR 확정(형식 없음)이 머리 태그를 지우지 않는다", str(tags.get_auto(str(A))))
     mw._photo_ocr_committed([(str(R), "영수증 합계", "영수증", [])])
     chk(tags.get_auto(str(R)) == ["2026-11-04", "iPhone15Pro", "영수증"],
         "F OCR 확정 형식 — 다른 부분과 함께", str(tags.get_auto(str(R))))
@@ -292,7 +326,7 @@ try:
     idx_done.clear(); kind_done.clear()
     t0 = time.perf_counter()
     mw.open_folder(big)
-    ok_meta = pump(lambda: bool(idx_done) and all(tags.get_auto(str(big / ("p%04d.jpg" % i)))[:2] == ["2026-10-01", "청운효자동"]
+    ok_meta = pump(lambda: bool(idx_done) and all(tags.get_auto(str(big / ("p%04d.jpg" % i)))[:2] == ["2026-10-01", "종로구"]
                                                    for i in (0, 750, 1499)), timeout=180)
     t_meta = time.perf_counter() - t0
     ok_kind = pump(lambda: all(tags.get_auto_part(str(big / ("r%02d.jpg" % i)), "kind") == ["영수증"] for i in range(5)), timeout=240)
