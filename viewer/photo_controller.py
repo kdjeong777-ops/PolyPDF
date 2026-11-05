@@ -31,10 +31,13 @@ PHOTO_OFF_ATTRS = ()                     # 창에 따로 붙은 액션 — F5 �
 PHOTO_LIST_ATTRS = ("_favorites", "_recent_folders", "_recent_files")   # 모드마다 따로(4.7) — 사진 묶음 키는 앞 _ 를 뺀 이름
 
 
+START_PDF = False                        # main.py 가 창을 만들기 **전에** 켠다 — 파일 인자·인쇄로 뜬 창(D1, 261104-20)
+
+
 class PhotoMixin:
     def _photo_init(self):
         self._photo_mode = False
-        self._photo_forced_pdf = False           # 파일 인자로 뜬 창 — 늘 PDF 모드(D1)
+        self._photo_forced_pdf = bool(START_PDF)  # 파일 인자로 뜬 창 — 늘 PDF 모드(D1). 창 만들 때 알아야 사진 모드 복원을 건너뛴다
         lf = self._ribbon.left_fill
         lay = QHBoxLayout(lf)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -77,7 +80,7 @@ class PhotoMixin:
                 self._set_photo_mode(False)
             return
         if restore and not self._photo_forced_pdf and self._photo_prefs().get("mode") == "photo":
-            self._set_photo_mode(True)
+            self._set_photo_mode(True, load_last=False)
 
     def _photo_force_pdf(self):
         """파일 인자로 뜬 창 — 이 창은 PDF 모드로 시작한다(D1). 시작 복원보다 먼저 부른다."""
@@ -89,7 +92,10 @@ class PhotoMixin:
     def _photo_toggle(self, _checked=False):
         self._set_photo_mode(not self._photo_mode)
 
-    def _set_photo_mode(self, on: bool, remember: bool = True):
+    def _set_photo_mode(self, on: bool, remember: bool = True, load_last: bool = True):
+        """모드를 바꾼다. `load_last=False` — 새 모드의 마지막 문서를 열지 않는다(4.2): ① 창을 만들 때의 모드 복원 — 무엇을 열지는
+        시작 복원 `_restore_session_deferred` 가 정한다(여기서 사진을 열면 그 복원이 '이미 열었다' 로 보고 시작 폴더를 건너뛰었다,
+        261104-20) ② 곧 열 파일이 정해진 전환(`open_pdf`·`open_pdfs`) — 마지막 PDF 를 한 번 더 열지 않는다."""
         on = bool(on) and self._photo_enabled()
         if on == self._photo_mode:
             return
@@ -107,7 +113,8 @@ class PhotoMixin:
         self._photo_swap_lists(on)
         self._photo_refresh_button()
         self._photo_on_mode_changed(on)
-        self._photo_swap_document(on, prev)
+        if load_last:
+            self._photo_swap_document(on, prev)
 
     def _photo_leave_guard(self) -> bool:
         """모드를 바꾸기 전 — 편집 모드의 저장 안 한 꾸밈·쪽 편집은 파일을 옮길 때와 같은 확인 창(`_confirm_edit_save`). 취소면 False."""

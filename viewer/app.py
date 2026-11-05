@@ -2790,7 +2790,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.status.showMessage(tr('PDF 파일이 아닙니다: {name}').format(name=pdf_path.name))
             return
         if getattr(self, "_photo_mode", False):
-            self._set_photo_mode(False)          # 261104-2(사진 보기 SOT D1): PDF 를 열면 PDF 모드로(끌어 놓기·최근·가상 프린터)
+            self._set_photo_mode(False, load_last=False)   # 261104-2(사진 보기 SOT D1): PDF 를 열면 PDF 모드로(끌어 놓기·최근·가상 프린터) — 그 PDF 만 연다(261104-20)
         self._touch_recent_files([pdf_path])
         if getattr(self, "_split_on", False):
             # 2단: 활성 창에만 로드(다른 창·폴더·반대편 책갈피 보존).
@@ -2841,7 +2841,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.open_pdf(files[0])
             return
         if getattr(self, "_photo_mode", False):
-            self._set_photo_mode(False)          # 261104-2(사진 보기 SOT D1): PDF 를 열면 PDF 모드로
+            self._set_photo_mode(False, load_last=False)   # 261104-2(사진 보기 SOT D1): PDF 를 열면 PDF 모드로 — 고른 것만(261104-20)
         self._touch_recent_files(files)
         split = getattr(self, "_split_on", False)
         bt = (self.bookmark_tree_right if split and self._active_pane == 1 else self.bookmark_tree)

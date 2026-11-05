@@ -456,6 +456,12 @@ def main():
     except Exception:
         pass
     from viewer.app import MainWindow
+    if pdf_args or printed:                  # 261104-20(사진 보기 SOT D1): 파일·인쇄로 뜬 창은 PDF 모드 — 창을 만들기 **전에**
+        try:                                 #   알려야 사진 모드 복원(지난 사진 열기·사진 색인)을 하지 않는다
+            from viewer import photo_controller as _pc
+            _pc.START_PDF = True
+        except Exception:
+            pass
     # 261019-1(단어학습 SOT §14.21, 사용자 지시): OCR·단어장은 [저장]할 때만 study.db 에 — 그 전에는 이 창의
     #   보류 저장소. 지난 실행이 저장하지 않고 남긴 보류 파일은 지운다(배경 — 파일 지우기는 백신에 붙들릴 수 있다).
     #   261026-6: 이 실행의 보류 DB 도 같은 배경 스레드가 **먼저** 만든다 — 메인이 첫 쪽에서 새 파일을 만들면 백신에 1.37초 붙들렸다.
