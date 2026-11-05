@@ -113,7 +113,9 @@ def ci_run_id(run_id):
 
 def ci_download(run_id: str, kind: str, dest: Path) -> Path:
     """산출물 하나만(`PolyPDF-main-setup` 또는 `-full`) 받는다 — 셋을 한 묶음으로 받으면 1GB 다(261009-18)."""
-    name = "PolyPDF-main-%s" % kind
+    # 261105: 태그 실행은 산출물 이름이 `PolyPDF-<태그>-…` 다 — 실행의 ref 로 이름을 정한다(main 이면 종전대로)
+    ref = json.loads(gh("run", "view", run_id, "-R", REPO, "--json", "headBranch")).get("headBranch") or "main"
+    name = "PolyPDF-%s-%s" % (ref, kind)
     dest.mkdir(parents=True, exist_ok=True)
     t = time.perf_counter()
     # 261010-17: 가정 Wi-Fi 에서 350MB 를 받다 연결이 끊겨(wsarecv: forcibly closed) 시험이 시작도 못 했다 — 3번까지 다시 받는다
