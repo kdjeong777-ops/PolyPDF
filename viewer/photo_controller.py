@@ -2847,6 +2847,8 @@ class PhotoMixin:
         except Exception:
             pass
         bt.filesRelocated.emit(pairs)                               # 색인·연 폴더 안 사이드카·본문(마스터 §4.7.14 한 길)
+        if not move:
+            bt.filesCopied.emit([[o, nw] for o, nw in done])          # 261105-8: 사본에도 OCR 결과(마스터 §4.7.14)
         new_cur = next((nw for o, nw in done if cur and norm_key(o) == norm_key(str(cur))), None)
         if move and new_cur and not inside(new_cur) and nxt:
             self._on_bookmark_activated(nxt, 0)                      # 보던 사진이 연 폴더 밖으로 — 다음(없으면 앞) 사진(§4.25 와 같다)

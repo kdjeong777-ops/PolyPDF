@@ -2537,6 +2537,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.bookmark_tree_right.bookmarkActivated.connect(self._on_bookmark_activated_right)
         # 260901-2: 하단 트리의 파일 복사/이동도 같은 처리(인덱스·메인뷰 갱신)
         self.bookmark_tree_right.filesRelocated.connect(self._on_files_relocated)
+        self.bookmark_tree_right.filesCopied.connect(self._on_files_copied)   # 261105-8(§4.7.14)
         # 261008-1(§4.7.14): 아래 책갈피창의 이름 변경·삭제도 본문 핸들을 먼저 놓고 다시 연다
         self.bookmark_tree_right.releaseFileRequested.connect(self._on_release_file)
         self.bookmark_tree_right.fileOpCompleted.connect(self._on_file_op_completed)
@@ -2730,6 +2731,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.bookmark_tree.releaseFileRequested.connect(self._on_release_file)
         self.bookmark_tree.fileOpCompleted.connect(self._on_file_op_completed)
         self.bookmark_tree.filesRelocated.connect(self._on_files_relocated)   # 260901-2
+        self.bookmark_tree.filesCopied.connect(self._on_files_copied)         # 261105-8: 복사본에 작업 결과
         self.bookmark_tree.viewModeChanged.connect(self._on_view_mode_changed)  # 260825
         # 260906-1: 큰 폴더는 목록이 **나중에** 찬다(비동기 스캔) — 다 차면 검색 범위를 다시
         #   계산한다. open_folder 직후의 _refresh_search_scope 는 그때 빈 트리를 보고
@@ -3472,6 +3474,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         # 261008-1(§4.7.14): 꾸밈·사진·하이퍼링크 사이드카 키(상대경로)도 새 이름으로
         self._rehome_sidecars([(o, n) for o, n in pairs if o])
+        # 261105-8(§4.7.14): 경로 키 기록(OCR·고른 낱말·고친 글·하이라이트)도 새 이름으로 — 배경
+        self._carry_records([(o, n) for o, n in pairs if o], copy=False)
         try:
             from viewer import sign_drafts             # 보안 SOT §3.10 — 서명 자리 기록도 새 경로로
             sign_drafts.relocate([(o, n) for o, n in pairs if o])
@@ -3507,33 +3511,90 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         self._refresh_search_scope()
 
-    def _rehome_sidecars(self, pairs):
-        """261008-1(마스터 §4.7.14): 옮기거나 이름을 바꾼 파일의 꾸밈·사진(`page_meta.json`)과
-        하이퍼링크(`hyperlinks.json`)를 새 키로 옮긴다. 키가 폴더 기준 상대경로라 옮기지 않으면
-        **사라진 것처럼** 보인다. 폴더 밖으로 나간 파일은 키를 만들 수 없어 그대로 둔다.
+    def _rehome_sidecars(self, pairs, copy: bool = False):
+        """261008-1(마스터 §4.7.14): 옮기거나 이름을 바꾼(261105-8: 복사한) 파일의 꾸밈·사진(`page_meta.json`)과
+        하이퍼링크(`hyperlinks.json`)를 새 키로. 키가 폴더 기준 상대경로라 옮기지 않으면 **사라진 것처럼** 보인다.
+        연 폴더 밖으로 나간 파일은 그 폴더의 사이드카로 옮긴다(261105-8 — 종전에는 그대로 두어 잃었다, 사진은 261105-5 부터).
 
-        저장하지 않은 꾸밈이 있으면(`_edit_dirty`) 디스크에는 쓰지 않는다 — 메모리에서만 옮기고,
+        저장하지 않은 꾸밈이 있으면(`_edit_dirty`) 연 폴더 사이드카는 디스크에 쓰지 않는다 — 메모리에서만 옮기고,
         쓰는 것은 그 편집을 저장할 때다(이름 변경이 편집을 대신 저장하면 안 된다)."""
         if not pairs:
             return
-        for getter in (self._ensure_page_meta_store, self._ensure_hyperlink_store):
+        import os
+        from viewer import file_carry
+        from viewer.pathutil import norm_key
+        from viewer.page_meta import PageMetaStore
+        from viewer.hyperlinks import HyperlinkStore
+        root = str(self._folder) if getattr(self, "_folder", None) else ""
+
+        def inside(p):
+            if not root:
+                return False
+            try:
+                return norm_key(os.path.commonpath([root, str(p)])) == norm_key(root)
+            except ValueError:
+                return False
+        for getter, cls in ((self._ensure_page_meta_store, PageMetaStore), (self._ensure_hyperlink_store, HyperlinkStore)):
             try:
                 st = getter()
             except Exception:
                 st = None
             if st is None or not hasattr(st, "rename_file"):
                 continue
-            changed = False
-            for old, new in pairs:
+            dests = {}
+
+            def dest_for(folder, _cls=cls, _d=dests):
+                if folder not in _d:
+                    _d[folder] = _cls(Path(folder))
+                return _d[folder]
+            for ch in file_carry.carry_sidecars(st, pairs, copy, inside, dest_for):
+                if ch is st and getattr(self, "_edit_dirty", False):
+                    continue
                 try:
-                    changed = st.rename_file(old, new) or changed
+                    ch.save()
                 except Exception:
                     pass
-            if changed and not getattr(self, "_edit_dirty", False):
-                try:
-                    st.save()
-                except Exception:
-                    pass
+
+    def _carry_records(self, pairs, copy: bool):
+        """261105-8(마스터 §4.7.14): 경로 키 기록(OCR·어휘·고른 낱말·고친 글·하이라이트)을 새 경로로 — 배경(`_file_op_bg`).
+        메모리의 'OCR 다시 읽은 쪽'(`_text_force_ocr`)·저장 안 한 OCR 목록도 맞춘다."""
+        pairs = [(str(o), str(n)) for o, n in (pairs or []) if o and n]
+        if not pairs:
+            return
+        from viewer import file_carry
+        e = None
+        try:
+            e = self._file_op_bg(lambda: file_carry.carry_records(pairs, copy=copy),
+                                 tr("OCR·작업 결과 복사 중…") if copy else tr("OCR·작업 결과 옮기는 중…"))
+        except Exception as ex:                        # noqa: BLE001
+            e = ex
+        if e is not None:
+            self.status.showMessage(tr('OCR·작업 결과를 새 파일로 옮기지 못했습니다: {e}').format(e=e), 8000)
+        forced = getattr(self, "_text_force_ocr", None)
+        if forced:
+            for o, n in pairs:
+                hit = {(f, p) for (f, p) in forced if str(f) == o}
+                if not copy:
+                    forced -= hit
+                forced |= {(n, p) for (_f, p) in hit}
+        try:
+            self._pending_refresh()                    # 저장 안 한 OCR 목록 — 새 키로 다시 센다(배경)
+        except Exception:
+            pass
+        try:
+            self._refresh_study_panel(self.main_view.current_page())
+        except Exception:
+            pass
+
+    def _on_files_copied(self, pairs: list):
+        """261105-8(마스터 §4.7.14, 사용자 결정 '작업 결과는 복사, 태그는 지금대로'): 책갈피창·사진 복사가 끝난 뒤 —
+        pairs = [[원본, 사본], ...]. 사본에도 OCR·고친 글·하이라이트·고른 낱말·꾸밈·하이퍼링크를. 색인·본문은 `filesRelocated` 가 맡는다.
+        태그는 물려주지 않는다(태그 SOT §6.1-④ — 사본은 자동 태그로 새로)."""
+        pairs = [(str(o), str(n)) for o, n in (pairs or []) if o and n]
+        if not pairs:
+            return
+        self._rehome_sidecars(pairs, copy=True)
+        self._carry_records(pairs, copy=True)
 
     # ===== 260908-2: 텍스트 창 (텍스트 창 SOT) =====================
     def _wire_text_panel(self):

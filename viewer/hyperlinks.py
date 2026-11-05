@@ -221,6 +221,27 @@ class HyperlinkStore:
         links[kd] = copy.deepcopy(links[ks])
         return True
 
+    # --- 261105-8(마스터 §4.7.14): 연 폴더 **밖으로** 복사·이동한 파일의 링크를 그 폴더 사이드카로(사진 `page_meta` 와 같은 꼴) ---
+    def export_entry(self, file_path):
+        """그 파일의 링크 사본 — 없으면 None. 이 저장소는 바꾸지 않는다."""
+        import copy
+        k = self._rel_key(file_path)
+        v = self._data["links"].get(k) if k else None
+        return copy.deepcopy(v) if v else None
+
+    def import_entry(self, file_path, entry) -> bool:
+        """`export_entry` 가 준 링크를 그 파일 키에(메모리만 — 쓰는 것은 `save`). 키를 못 만들면 False."""
+        import copy
+        k = self._rel_key(file_path)
+        if k is None or not entry:
+            return False
+        self._data["links"][k] = copy.deepcopy(entry)
+        return True
+
+    def drop_entry(self, file_path) -> bool:
+        k = self._rel_key(file_path)
+        return bool(k) and self._data["links"].pop(k, None) is not None
+
     def remap_pages(self, src_path, dst_path, old_keys) -> bool:
         """261017-1(마스터 §4.7.9): 쪽 편집 저장 뒤 링크를 새 쪽 번호로 — `old_keys[i]` 는 새 쪽 i 의 옛 키(자체 쪽 번호·끼운 쪽 합성 번호·None).
         새 이름으로 저장했으면 새 파일 키로 옮기고 원본은 그대로 둔다. 바뀌면 True."""

@@ -362,6 +362,35 @@ class TextFixStore:
             self.save()
             return True
 
+    def carry_file(self, src_path, dst_path, copy: bool = False) -> bool:
+        """261105-8(마스터 §4.7.14): 이름 변경·이동이면 그 파일의 고침·칠·반영 표시를 새 키로 옮기고, 복사면 사본 키에 한 벌 더.
+        옮긴 것이 있으면 True(저장까지 한다)."""
+        import copy as _copy
+        with _LOCK:
+            ks, kd = norm_key(src_path), norm_key(dst_path)
+            if ks == kd or not self._data.get(ks):
+                return False
+            self._data[kd] = _copy.deepcopy(self._data[ks]) if copy else self._data.pop(ks)
+            self.save()
+            return True
+
+    def export_doc(self, file_path):
+        """261105-9(전달 묶음): 그 파일의 기록(고침·칠·반영 표시) 사본 — 없으면 None."""
+        import copy as _copy
+        with _LOCK:
+            d = self._data.get(norm_key(file_path))
+            return _copy.deepcopy(d) if d else None
+
+    def import_doc(self, file_path, doc) -> bool:
+        """261105-9: `export_doc` 이 준 기록을 그 파일 키에(있던 것은 바꾼다). 저장까지."""
+        import copy as _copy
+        if not isinstance(doc, dict) or not doc:
+            return False
+        with _LOCK:
+            self._data[norm_key(file_path)] = _copy.deepcopy(doc)
+            self.save()
+            return True
+
     # ---- 하이라이트 ----------------------------------------------------
     def get_highlights(self, file_path, page: int) -> list:
         d = self._doc(file_path)

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-05 16:55+0900\n"
+"POT-Creation-Date: 2026-11-05 17:20+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -1966,6 +1966,14 @@ msgid "PolyPDF — 목록 조사"
 msgstr "PolyPDF — Checking the list"
 
 #: viewer/app.py
+msgid "OCR·작업 결과 복사 중…"
+msgstr "Copying OCR and work results…"
+
+#: viewer/app.py
+msgid "OCR·작업 결과 옮기는 중…"
+msgstr "Moving OCR and work results…"
+
+#: viewer/app.py
 #, python-brace-format
 msgid "p.{page} · {n}줄 · 잡음 {noise}줄 숨김"
 msgstr "p.{page} · {n} lines · {noise} noise lines hidden"
@@ -2558,6 +2566,11 @@ msgstr "The {n} newly OCR'd page(s) stay unsaved; generating again skips those p
 #, python-brace-format
 msgid "목록 조사 {done} / {total}{v}"
 msgstr "Checking list {done} / {total}{v}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "OCR·작업 결과를 새 파일로 옮기지 못했습니다: {e}"
+msgstr "Could not carry OCR and work results to the new file: {e}"
 
 #: viewer/app.py
 #, python-brace-format

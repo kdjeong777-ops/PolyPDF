@@ -326,6 +326,42 @@ class StudyStore:
             c.execute("DROP TABLE temp._pmap")
         return changed
 
+    # --- 이름 변경·이동·복사 (261105-8, 마스터 §4.7.14 · 단어학습 SOT §14.23) -------------------
+    _CARRY_TABLES = ("ocr_page", "ocr_word", "vocab", "vocab_page", "study_meta")
+
+    def carry_file(self, src_key: str, dst_key: str, new_path: str = "", copy: bool = False) -> bool:
+        """파일 키(경로 해시)가 바뀐 뒤 그 파일의 OCR 쪽·낱말·어휘를 **새 키로** — 이동·이름 변경은 옮기고, 복사는 사본 키에 한 벌 더.
+
+        저장본과 보류 저장소(§14.21) **둘 다** — 보류는 보류로 남는다(사본의 보류도 [저장]해야 확정). 새 키에 남아 있던 기록은
+        먼저 지운다(그 경로의 옛 파일 것이다). 뜻·예문은 파일과 무관해 그대로. 옮긴 것이 있으면 True."""
+        if not src_key or not dst_key or src_key == dst_key:
+            return False
+        c = self.conn
+        plan = [("main", self._CARRY_TABLES)]
+        if self._pend:
+            plan.append(("p", self._CARRY_TABLES + ("vocab_files", "cleared")))
+        has = any(c.execute(f"SELECT 1 FROM {s}.{t} WHERE file_key=? LIMIT 1", (src_key,)).fetchone()
+                  for s, tabs in plan for t in tabs)
+        if not has:
+            return False
+        with c:
+            for s, tabs in plan:
+                for t in tabs:
+                    c.execute(f"DELETE FROM {s}.{t} WHERE file_key=?", (dst_key,))
+                    if copy:
+                        cols = [r[1] for r in c.execute(f"PRAGMA {s}.table_info({t})") if r[1] != "file_key"]
+                        rest = ",".join(cols)
+                        sel = ("," + rest) if rest else ""
+                        c.execute(f"INSERT INTO {s}.{t}(file_key{sel}) SELECT ?{sel} FROM {s}.{t} WHERE file_key=?",
+                                  (dst_key, src_key))
+                    else:
+                        c.execute(f"UPDATE {s}.{t} SET file_key=? WHERE file_key=?", (dst_key, src_key))
+                if new_path:
+                    c.execute(f"UPDATE {s}.study_meta SET path=? WHERE file_key=?", (str(new_path), dst_key))
+        if new_path:
+            _KEY_PATHS[dst_key] = str(new_path)
+        return True
+
     def _init_schema(self) -> None:
         self.conn.executescript(
             """
@@ -621,6 +657,22 @@ class UserStore:
         return [r["date"] for r in self.conn.execute(
             "SELECT DISTINCT date FROM sel_event WHERE file_key=? ORDER BY date DESC",
             (file_key,))]
+
+    def carry_file(self, src_key: str, dst_key: str, copy: bool = False) -> bool:
+        """261105-8: 고른·지운 낱말 기록을 새 파일 키로(이동·이름 변경은 옮기고, 복사는 한 벌 더). 옮긴 것이 있으면 True."""
+        if not src_key or not dst_key or src_key == dst_key:
+            return False
+        c = self.conn
+        if not c.execute("SELECT 1 FROM sel_event WHERE file_key=? LIMIT 1", (src_key,)).fetchone():
+            return False
+        with c:
+            c.execute("DELETE FROM sel_event WHERE file_key=?", (dst_key,))
+            if copy:
+                c.execute("INSERT INTO sel_event(file_key,lemma,date,action,ts)"
+                          " SELECT ?,lemma,date,action,ts FROM sel_event WHERE file_key=?", (dst_key, src_key))
+            else:
+                c.execute("UPDATE sel_event SET file_key=? WHERE file_key=?", (dst_key, src_key))
+        return True
 
     def delete_date(self, file_key: str, date: str) -> None:
         self.conn.execute("DELETE FROM sel_event WHERE file_key=? AND date=?",

@@ -228,6 +228,7 @@ class BookmarkTree(QWidget):
     copyPaneRequested = pyqtSignal()         # 260618-27: 이 책갈피창 기준 반대 창으로 복사
     viewModeChanged = pyqtSignal(bool, str)  # 260825: (is_folder, 폴더|파일 경로) — 파일↔폴더 전환
     filesRelocated = pyqtSignal(list)        # 260901-2: [[old, new], ...] 파일 복사/이동 완료
+    filesCopied = pyqtSignal(list)           # 261105-8: [[원본, 사본], ...] 복사 완료 — 사본에 작업 결과(마스터 §4.7.14)
     viewListModeChanged = pyqtSignal(bool)   # 260901-3: 사용자가 목록 보기를 바꿈(True=트리)
     filesListed = pyqtSignal()               # 260906-1: 폴더 목록 채우기 완료(비동기 스캔 후)
     probeProgress = pyqtSignal(int, int, str)  # 260906-4: 목록 조사 진행(done, total, 파일명)
@@ -3667,6 +3668,7 @@ class BookmarkTree(QWidget):
                     tr('{n}개 파일을 아래 폴더로 이동할까요?\n\n{dst}\n\n디스크상 파일이 실제로 옮겨집니다.').format(n=len(paths), dst=dst)) != QMessageBox.StandardButton.Yes:
                 return
         done, pairs, errors = 0, [], []
+        copied = []                            # 261105-8: [원본, 사본]
         for src in paths:
             if not src.exists():
                 errors.append(tr('{name}: 원본 없음').format(name=src.name))
@@ -3686,12 +3688,15 @@ class BookmarkTree(QWidget):
                     if err is not None:
                         raise err
                     pairs.append(["", str(target)])
+                    copied.append([str(src), str(target)])
                 done += 1
             except Exception as e:
                 errors.append(f"{src.name}: {e}")
         if pairs:
             self._sync_after_transfer(dst)
             self.filesRelocated.emit(pairs)
+        if copied:
+            self.filesCopied.emit(copied)
         msg = tr('{done}개 파일을 {dst} 로 {word}했습니다.').format(done=done, dst=dst, word=word)
         if errors:
             msg += tr('\n실패: {join}').format(join=', '.join(errors[:5]))

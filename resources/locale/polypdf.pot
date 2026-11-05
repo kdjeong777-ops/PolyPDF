@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-05 16:55+0900\n"
+"POT-Creation-Date: 2026-11-05 17:20+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1919,6 +1919,14 @@ msgid "PolyPDF — 목록 조사"
 msgstr ""
 
 #: viewer/app.py
+msgid "OCR·작업 결과 복사 중…"
+msgstr ""
+
+#: viewer/app.py
+msgid "OCR·작업 결과 옮기는 중…"
+msgstr ""
+
+#: viewer/app.py
 #, python-brace-format
 msgid "p.{page} · {n}줄 · 잡음 {noise}줄 숨김"
 msgstr ""
@@ -2486,6 +2494,11 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "목록 조사 {done} / {total}{v}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "OCR·작업 결과를 새 파일로 옮기지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/app.py
