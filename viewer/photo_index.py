@@ -82,7 +82,10 @@ def _init(con) -> None:
         con.execute("ALTER TABLE photos ADD COLUMN at_ver INTEGER")
     if "kind" not in cols:                   # 종류 판정 '판:태그'('1:영수증'·'1:') — NULL 이면 아직(태그 SOT §5.7)
         con.execute("ALTER TABLE photos ADD COLUMN kind TEXT")
-    con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA),))
+    row = con.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
+    if not row or row[0] != str(SCHEMA):             # 같으면 쓰지 않는다 — 열 때마다 쓰면 그 연결이 쓰기 잠금을 쥔 채 남는다(261105-10)
+        con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('schema', ?)", (str(SCHEMA),))
+        con.commit()
 
 
 def norm_folder(folder) -> str:
