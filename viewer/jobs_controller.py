@@ -2,11 +2,13 @@
 """261019-1(사용자 지시): 오래 걸리는 작업 창 + 저장하지 않은 OCR·단어장(보류 저장소).
 
 작업 창 (응답성 SOT §4.6 · 디자인 SOT §2.18)
-  - 상태 표시줄의 진행 바를 누르면 **작업** 창이 열린다 — 지금 도는 작업(책갈피 생성·단어장 만들기·PDF 번역)과
-    [중지]. 중지 = 그 작업이 다음 안전한 지점(쪽 하나·파일 하나가 끝난 뒤)에서 멈춘다. 일시정지는 두지 않는다
+  - 상태 표시줄의 진행 바나 왼쪽 진행 메시지를 누르면 **작업** 창이 열린다(작업이 있을 때만, 261105-25) — 지금 도는 작업과
+    [중단]·[취소], 맨 아래 [계속](기본 — 창만 닫는다). 중단 = 다음 안전한 지점(쪽 하나·파일 하나가 끝난 뒤)에서 멈추고
+    여기까지 한 것은 남긴다. 취소 = 멈추고 그 파일의 저장 안 한 결과를 버린다(버림 함수가 있는 작업만). 일시정지는 두지 않는다
     (멈춘 채 파일을 잡고 있으면 이름 변경·저장·덮어쓰기와 부딪힌다 — 사용자 결정 261019).
   - 이어하기: 읽은 OCR 쪽은 보류 저장소에 남아, 같은 작업을 다시 시작하면 그 쪽은 건너뛴다(이 실행 동안).
-  - 작업은 `job_add(id, 이름, 중지 함수)` → `job_progress(id, 글)` → `job_done(id)` 로만 알린다.
+  - 작업은 `job_add(id, 이름, 중단 함수, 버림 함수)` → `job_progress(id, 글)` → `job_done(id)` 로만 알린다.
+    버림은 `job_done` 때(워커가 끝난 뒤) 부르고, `job_done` 은 취소됐으면 True — 부른 쪽은 끝 처리를 건너뛴다.
 
 저장하지 않은 OCR·단어장 (단어학습 SOT §14.21)
   - OCR·단어장 결과는 [저장] 전까지 보류 저장소에만 있다(`study_store.enable_pending`).
@@ -25,19 +27,24 @@ from viewer.i18n import tr
 
 
 class _ClickFilter(QObject):
-    def __init__(self, fn):
+    """누르면 작업 창. `owner` 를 주면 작업 창에 오른 작업이 있을 때만(상태 표시줄 진행 메시지 — 261105-25)."""
+
+    def __init__(self, fn, owner=None):
         super().__init__()
         self._fn = fn
+        self._owner = owner
 
     def eventFilter(self, obj, ev):
-        if ev.type() == QEvent.Type.MouseButtonRelease:
+        if ev.type() == QEvent.Type.MouseButtonRelease and ev.button() == Qt.MouseButton.LeftButton:
+            if self._owner is not None and not self._owner._jobs:
+                return False
             self._fn()
             return True
         return False
 
 
 class JobsDialog(QDialog):
-    """지금 도는 작업 목록 + [중지]. 모달이 아니다 — 열어 둔 채 다른 일을 해도 된다."""
+    """지금 도는 작업 목록 + [중단]·[취소], 맨 아래 [계속](기본). 모달이 아니다 — 열어 둔 채 다른 일을 해도 된다."""
 
     def __init__(self, owner, parent=None):
         super().__init__(parent)
@@ -47,18 +54,27 @@ class JobsDialog(QDialog):
         self._lay = QVBoxLayout(self)
         self._rows = QVBoxLayout()
         self._lay.addLayout(self._rows)
-        self._empty = QLabel(tr("중지할 수 있는 작업이 없습니다."))
+        self._empty = QLabel(tr("진행 중인 작업이 없습니다."))
         self._lay.addWidget(self._empty)
-        hint = QLabel(tr("<small>중지하면 지금 쪽(또는 파일)을 마친 뒤 멈춥니다. 읽은 OCR 은 저장 안 한 상태로 남아 "
-                         "같은 작업을 다시 시작하면 이어서 합니다.</small>"))
+        hint = QLabel(tr("<small>[계속] 은 창만 닫고 작업은 계속합니다. [중단] 은 지금 쪽(또는 파일)을 마친 뒤 멈추고 "
+                         "여기까지 한 것은 남깁니다 — 같은 작업을 다시 시작하면 이어서 합니다. "
+                         "[취소] 는 멈추고 그 파일의 저장하지 않은 결과를 버립니다.</small>"))
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#888;")
         self._lay.addWidget(hint)
         bb = QHBoxLayout(); bb.addStretch(1)
-        b = QPushButton(tr("닫기")); b.setAutoDefault(False); b.clicked.connect(self.close)
-        bb.addWidget(b)
+        # 261105-25(사용자 결정): 기본 단추는 [계속] — Enter 가 되돌릴 수 없는 [취소] 를 누르지 않게
+        self.btn_continue = QPushButton(tr("계속"))
+        self.btn_continue.setObjectName("job_continue")
+        self.btn_continue.setDefault(True)
+        self.btn_continue.clicked.connect(self.close)
+        bb.addWidget(self.btn_continue)
         self._lay.addLayout(bb)
         self.refresh()
+
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        self.btn_continue.setFocus()
 
     def refresh(self):
         while self._rows.count():
@@ -74,13 +90,30 @@ class JobsDialog(QDialog):
             lab = QLabel(f"<b>{j['label']}</b><br><small>{j.get('msg') or ''}</small>")
             lab.setWordWrap(True)
             h.addWidget(lab, 1)
-            btn = QPushButton(tr("중지") if not j.get("stopping") else tr("멈추는 중…"))
+            busy = j.get("stopping")
+            btn = QPushButton(tr("멈추는 중…") if busy == "stop" else tr("중단"))
             btn.setAutoDefault(False)
-            btn.setEnabled(bool(j.get("cancel")) and not j.get("stopping"))
+            btn.setEnabled(bool(j.get("cancel")) and not busy)
             btn.clicked.connect(lambda _c=False, k=jid: self._owner.job_stop(k))
             btn.setObjectName(f"job_stop_{jid}")
+            self._fit(btn, tr("중단"), tr("멈추는 중…"))
             h.addWidget(btn)
+            if j.get("discard"):
+                bc = QPushButton(tr("취소하는 중…") if busy == "discard" else tr("취소"))
+                bc.setAutoDefault(False)
+                bc.setEnabled(bool(j.get("cancel")) and not busy)
+                bc.setToolTip(tr("멈추고 이 파일의 저장하지 않은 결과를 버립니다"))
+                bc.clicked.connect(lambda _c=False, k=jid: self._owner.job_cancel(k))
+                bc.setObjectName(f"job_cancel_{jid}")
+                self._fit(bc, tr("취소"), tr("취소하는 중…"))
+                h.addWidget(bc)
             self._rows.addWidget(row)
+
+    @staticmethod
+    def _fit(btn, *labels):
+        """단추 폭을 가장 긴 글(누른 뒤의 '…하는 중' 포함)에 맞춘다 — 눌러도 글이 잘리지 않고 줄이 흔들리지 않게."""
+        fm = btn.fontMetrics()
+        btn.setMinimumWidth(max(fm.horizontalAdvance(t) for t in labels) + 24)
 
 
 class JobsMixin:
@@ -90,10 +123,13 @@ class JobsMixin:
         self._jobs_dlg = None
         self._jobs_seq = 0
         try:
-            self.progress.setToolTip(tr("눌러서 진행 중인 작업 보기·중지"))
+            self.progress.setToolTip(tr("눌러서 진행 중인 작업 보기·중단·취소"))
             self.progress.setCursor(Qt.CursorShape.PointingHandCursor)
             self._jobs_click = _ClickFilter(self.open_jobs_window)
             self.progress.installEventFilter(self._jobs_click)
+            # 261105-25(사용자 지시): 왼쪽 진행 메시지(상태 표시줄이 그리는 글·개수 칸)를 눌러도 — 작업이 있을 때만
+            self._jobs_msg_click = _ClickFilter(self.open_jobs_window, owner=self)
+            self.status.installEventFilter(self._jobs_msg_click)
         except Exception:
             pass
         # 저장 안 한 OCR·단어장 단추(있을 때만 보인다)
@@ -107,14 +143,16 @@ class JobsMixin:
         except Exception:
             pass
 
-    def job_add(self, jid: str, label: str, cancel=None) -> str:
-        self._jobs[jid] = {"label": label, "cancel": cancel, "msg": "", "stopping": False}
+    def job_add(self, jid: str, label: str, cancel=None, discard=None) -> str:
+        """cancel = [중단] 때 부를 함수(워커 `request_cancel`), discard = [취소] 때 작업이 끝난 뒤 버릴 함수(있으면 [취소] 단추)."""
+        self._jobs[jid] = {"label": label, "cancel": cancel, "discard": discard, "msg": "", "stopping": False}
         try:
             if not self.progress.isVisible():
                 self.progress.setRange(0, 0)
                 self.progress.setVisible(True)
         except Exception:
             pass
+        self._jobs_entry_hint()
         self._jobs_refresh()
         return jid
 
@@ -125,27 +163,63 @@ class JobsMixin:
             if self._jobs_dlg is not None and self._jobs_dlg.isVisible():
                 self._jobs_refresh()
 
-    def job_done(self, jid: str) -> None:
-        self._jobs.pop(jid, None)
+    def job_done(self, jid: str) -> bool:
+        """작업 끝. [취소] 를 눌렀던 작업이면 이제(워커가 끝난 뒤) 버리고 True — 부른 쪽은 끝 처리를 건너뛴다."""
+        j = self._jobs.pop(jid, None)
+        discarded = bool(j and j.get("stopping") == "discard")
         if self._jobs:                       # 다른 작업이 아직 돈다 — 진행 바(=작업 창 입구)를 남긴다
             try:
                 self.progress.setRange(0, 0); self.progress.setVisible(True)
             except Exception:
                 pass
+        self._jobs_entry_hint()
         self._jobs_refresh()
+        if discarded:
+            try:
+                j["discard"]()               # 배경(_file_op_bg) — 응답성 SOT §4 ⑤
+            except Exception:
+                pass
+            self.status.showMessage(tr("'{label}' 를 취소했습니다 — 저장하지 않은 결과를 버렸습니다.").format(label=j["label"]), 6000)
         self._pending_refresh()
+        return discarded
 
     def job_stop(self, jid: str) -> None:
+        """[중단] — 다음 안전한 경계에서 멈추고 여기까지 한 것은 남긴다."""
         j = self._jobs.get(jid)
         if not j or not j.get("cancel") or j.get("stopping"):
             return
-        j["stopping"] = True
+        j["stopping"] = "stop"
         try:
             j["cancel"]()
         except Exception:
             pass
         self.status.showMessage(tr("'{label}' 를 멈추는 중 — 지금 쪽을 마치면 멈춥니다").format(label=j["label"]), 6000)
         self._jobs_refresh()
+
+    def job_cancel(self, jid: str) -> None:
+        """[취소] — 멈추게 하고, 끝나면(`job_done`) 저장하지 않은 결과를 버린다. 다시 묻지 않는다(261105-25, 사용자 결정)."""
+        j = self._jobs.get(jid)
+        if not j or not j.get("cancel") or not j.get("discard") or j.get("stopping"):
+            return
+        j["stopping"] = "discard"
+        try:
+            j["cancel"]()
+        except Exception:
+            pass
+        self.status.showMessage(tr("'{label}' 를 취소하는 중 — 지금 쪽을 마치면 멈추고 결과를 버립니다").format(label=j["label"]), 6000)
+        self._jobs_refresh()
+
+    def _jobs_entry_hint(self) -> None:
+        """상태 표시줄(진행 메시지 자리)은 작업이 있을 때만 손가락 커서·툴팁 — 누르면 작업 창."""
+        try:
+            if self._jobs:
+                self.status.setCursor(Qt.CursorShape.PointingHandCursor)
+                self.status.setToolTip(tr("눌러서 진행 중인 작업 보기·중단·취소"))
+            else:
+                self.status.unsetCursor()
+                self.status.setToolTip("")
+        except Exception:
+            pass
 
     def _jobs_list(self):
         return list(self._jobs.items())

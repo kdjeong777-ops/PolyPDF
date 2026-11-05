@@ -1002,14 +1002,21 @@ class StudyMixin:
         worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
                                 resume=resume)
+        jid = "study_mp3"                        # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
+        self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
 
         def on_prog(i, n, msg):
             self.progress.setValue(i); self.status.showMessage(f"mp3: {msg}")
+            self.job_progress(jid, msg)
 
         def on_fin(res):
             self.progress.setVisible(False)
+            self.job_done(jid)
             if res.get("error"):
                 QMessageBox.warning(self, "mp3 저장 실패", res["error"])
+            elif res.get("cancelled"):
+                self.status.showMessage(tr("mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다.")
+                                        .format(saved=res.get("saved")), 8000)
             else:
                 self.status.showMessage(
                     f"mp3 저장 완료: {res.get('saved')}/{res.get('total')} 페이지 → "
@@ -1139,14 +1146,21 @@ class StudyMixin:
         worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
                                 resume=resume)
+        jid = "main_mp3"                         # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
+        self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
 
         def on_prog(i, n, msg):
             self.progress.setValue(i); self.status.showMessage(f"mp3: {msg}")
+            self.job_progress(jid, msg)
 
         def on_fin(res):
             self.progress.setVisible(False)
+            self.job_done(jid)
             if res.get("error"):
                 QMessageBox.warning(self, tr("mp3 저장 실패"), res["error"])
+            elif res.get("cancelled"):
+                self.status.showMessage(tr("mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다.")
+                                        .format(saved=res.get("saved")), 8000)
             else:
                 self.status.showMessage(
                     tr('mp3 저장 완료: {get}/{get2} 구간 → {name}').format(get=res.get('saved'), get2=res.get('total'), name=out_dir.name), 6000)
@@ -1685,15 +1699,25 @@ class StudyMixin:
         worker = StudyBuildWorker(path, lang="",
                                   online_prefs=op, online_only=True)
         self._study_worker = worker
+        jid = "study_online"                     # 261105-25(응답성 SOT §4.6): [중단] — 받은 단어는 남아 다시 하면 이어서
+        self.job_add(jid, f"인터넷 사전 보강 — {path.name}", worker.request_cancel)
 
         def on_prog(done, total, m):
             if total:
                 self.progress.setRange(0, total); self.progress.setValue(done)
             self.status.showMessage(m)
+            self.job_progress(jid, m)
 
         def on_done(summary):
             self.study_panel.set_building(False)
             self.progress.setVisible(False)
+            self.job_done(jid)
+            if summary.get("cancelled") and not summary.get("error"):
+                self._spot_terms_cache = None
+                self._refresh_study_panel(self.main_view.current_page())
+                self.status.showMessage(
+                    f"인터넷 사전 보강 중단: {summary.get('online', 0)}개 추가 — 다시 하면 남은 단어부터 이어서 합니다.", 8000)
+                return
             if summary.get("error"):
                 QMessageBox.warning(self, "인터넷 사전 보강", f"실패: {summary['error']}")
                 return
@@ -1705,6 +1729,7 @@ class StudyMixin:
         worker.progress.connect(on_prog)
         worker.finished.connect(on_done)
         worker.error.connect(lambda e: self.status.showMessage(f"인터넷 사전 보강 오류: {e}", 5000))
+        worker.error.connect(lambda _e: self.job_done(jid))
         run_in_thread(worker, self._study_threads)
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
@@ -1828,7 +1853,9 @@ class StudyMixin:
         worker = StudyBuildWorker(path, lang=lang, with_vocab=with_vocab, online_prefs=online_prefs)
         self._study_worker = worker
         jid = "study_build"
-        self.job_add(jid, f"{what} — {path.name}", worker.request_cancel)      # 261019-1: 작업 창에서 중지
+        # 261019-1·261105-25(응답성 SOT §4.6): 작업 창에서 [중단]·[취소] — 취소는 그 파일의 저장 안 한 OCR·단어장을 버린다
+        self.job_add(jid, f"{what} — {path.name}", worker.request_cancel,
+                     discard=lambda p=path: self.study_discard_for(p))
 
         def on_prog(done, total, m):
             if total:
@@ -1841,9 +1868,10 @@ class StudyMixin:
             if with_vocab:
                 self.study_panel.set_building(False)
             self.progress.setVisible(False)
-            self.job_done(jid)
+            if self.job_done(jid):               # [취소] — 결과는 job_done 이 버렸다(261105-25)
+                return
             if summary.get("cancelled") and not summary.get("error"):
-                self.status.showMessage(tr("{what} 중지 — 읽은 {n}쪽은 저장하지 않은 상태로 남아, 다시 시작하면 이어서 합니다.")
+                self.status.showMessage(tr("{what} 중단 — 읽은 {n}쪽은 저장하지 않은 상태로 남아, 다시 시작하면 이어서 합니다.")
                                         .format(what=what, n=summary.get("done") or 0), 8000)
                 return
             if summary.get("error"):
@@ -1900,16 +1928,18 @@ class StudyMixin:
         tree = bt or self.bookmark_tree
         worker = BookmarkerWorker(_P(path), {"mode": "auto", "review": False})
         jid = "study_bookmarks"
-        self.job_add(jid, tr("책갈피 만들기 — {name}").format(name=_P(path).name), worker.request_cancel)
+        self.job_add(jid, tr("책갈피 만들기 — {name}").format(name=_P(path).name), worker.request_cancel,
+                     discard=lambda p=_P(path): self.study_discard_for(p))      # 261105-25: [취소] = 일괄 OCR 결과까지 버림
         worker.progress.connect(lambda m: self.job_progress(jid, m))
 
         def on_done(res):
-            self.job_done(jid)
+            if self.job_done(jid):               # [취소] — 책갈피도 넣지 않고 끝 창도 없다
+                return
             phase = res.get("phase")
             bms = list(res.get("bookmarks") or []) if phase == "done" else []
             n, why = 0, ""
             if phase == "cancelled":
-                why = tr("책갈피 만들기를 중지했습니다.")
+                why = tr("책갈피 만들기를 중단했습니다.")
             elif not bms:
                 why = tr("만들 책갈피를 찾지 못했습니다.")
             # 261019-2(점검): 몇 분 사이에 편집 모드를 껐을 수 있다 — 넣기 직전에 다시 본다(마스터 §4.7.0)

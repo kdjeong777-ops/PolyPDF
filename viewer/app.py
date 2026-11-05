@@ -3013,7 +3013,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.widgets.bookmarker_dialog import BookmarkerDialog
         if getattr(self, "_bookmarker_worker", None) is not None:      # 도는 중이면 결과 창을 바꾸지 않는다
             QMessageBox.information(self, tr("책갈피 자동 생성"),
-                                    tr("책갈피를 만드는 중입니다. 끝나거나 중지한 뒤 다시 시도하세요."))
+                                    tr("책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."))
             return
         bt = bt or self._bm_tree_for_pane()
         # 261019-2(마스터 §4.7.0, 사용자 지시): 책갈피를 만드는 일은 편집 모드에서만 — 아니면 켤지 묻는다
@@ -3055,7 +3055,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _start_bookmarker(self, in_pdf: Path, opts: dict):
         if getattr(self, "_bookmarker_worker", None) is not None:
             QMessageBox.information(self, tr("책갈피 자동 생성"),
-                                    tr("책갈피를 만드는 중입니다. 끝나거나 중지한 뒤 다시 시도하세요."))
+                                    tr("책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."))
             return
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
@@ -3064,7 +3064,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._bookmarker_pdf = in_pdf
         worker = BookmarkerWorker(in_pdf, opts)
         self._bookmarker_worker = worker
-        self.job_add("bookmarker", tr("책갈피 생성 — {name}").format(name=in_pdf.name), worker.request_cancel)
+        # 261105-25(응답성 SOT §4.6): [취소] = 새로 OCR 한 쪽(보류)을 버리고 중단 창 없이 끝
+        self.job_add("bookmarker", tr("책갈피 생성 — {name}").format(name=in_pdf.name), worker.request_cancel,
+                     discard=lambda p=in_pdf: self.study_discard_for(p))
 
         def _prog(m):
             self.status.showMessage(m)
@@ -3076,10 +3078,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if th is not None:
             worker.error.connect(th.quit)             # 오류는 finished 를 내지 않는다 — 스레드가 남지 않게
 
-    def _bookmarker_end(self):
+    def _bookmarker_end(self) -> bool:
+        """끝 정리. 작업 창에서 [취소] 했으면 True(결과는 job_done 이 버렸다 — 261105-25)."""
         self._bookmarker_worker = None
         self.progress.setVisible(False)
-        self.job_done("bookmarker")
+        return self.job_done("bookmarker")
 
     def _on_bookmarker_review(self, result: dict):
         """260904-1(§4.4): 검토 단계 — 표를 띄워 고치게 하고, [확인]이면 책갈피창에 넣는다(261019-1)."""
@@ -3147,12 +3150,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
 
     def _on_bookmarker_done(self, result: dict):
-        self._bookmarker_end()
+        if self._bookmarker_end():
+            return
         phase = result.get("phase")
         if phase == "review":                        # 260904-1
             self._on_bookmarker_review(result)
             return
-        if phase == "cancelled":                     # 261019-1: 중지 — 지금까지 찾은 것으로 검토 / 버리기
+        if phase == "cancelled":                     # 261019-1: 중단 — 지금까지 찾은 것으로 검토 / 버리기
             self._on_bookmarker_cancelled(result)
             return
         self._bookmarks_into_tree(Path(self._bookmarker_pdf), result.get("bookmarks") or [], result)
@@ -3162,7 +3166,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         in_pdf = Path(self._bookmarker_pdf)
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle(tr("책갈피 생성 중지"))
+        box.setWindowTitle(tr("책갈피 생성 중단"))
         ran = int(result.get("ocr_ran") or 0)
         txt = tr("책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다.")
         if rows:
@@ -6867,6 +6871,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         self._index_workers = []
         self._close_indexing_dialog()                 # 260902-6
+        if "index" in (getattr(self, "_jobs", None) or {}):
+            self.job_done("index")                    # 261105-25: 작업 창에서도 내린다
 
     def _start_index_worker(self, worker):
         """260611-89: 이전 인덱싱을 취소하고 새 인덱싱 시작(겹치지 않게)."""
@@ -6882,8 +6888,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         self._cancel_active_indexing()
         self._index_workers.append(worker)
+        # 261105-25(응답성 SOT §4.6, 사용자 결정): 폴더·여러 파일 색인은 작업 창에 — [중단] 하면 다음에 폴더를 열 때
+        #   남은 파일부터(`needs_reindex`). 파일 하나 색인은 짧아 올리지 않는다(진행 창도 없다)
+        if getattr(worker, "single_file", None) is None:
+            what = Path(worker.folder).name if getattr(worker, "folder", None) else tr("파일 {n}개").format(
+                n=len(getattr(worker, "files", None) or []))
+            self.job_add("index", tr("인덱싱 — {what}").format(what=what),
+                         lambda w=worker: self._index_stop_user(w))
 
         def _done(w=worker):
+            if getattr(w, "single_file", None) is None and w in self._index_workers:
+                self._index_user_stopped = False      # 종료 처리기(`_on_index_finished`)가 이미 읽었다 — 다음 색인에 남지 않게
+                if "index" in self._jobs:
+                    self.job_done("index")
             if w in self._index_workers:
                 self._index_workers.remove(w)
                 # 261012-13: 색인 중에 미뤄 둔 파일(이름 변경·이동)을 이제 한 작업으로
@@ -6920,9 +6937,19 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.progress.setValue(done)
         self.status.showMessage(tr('인덱싱 {done}/{total} - {name}').format(done=done, total=total, name=name))
 
+    def _index_stop_user(self, worker):
+        """261105-25: 작업 창 [중단] — 다음 파일 경계에서 멈춘다. 끝낸 파일은 색인에 남는다."""
+        self._index_user_stopped = True
+        worker.request_cancel()
+
     def _on_index_finished(self):
         self._index_recovering = False
         self.progress.setVisible(False)
+        if getattr(self, "_index_user_stopped", False):
+            # 261105-25(응답성 SOT §4.6): 사용자가 중단 — '완료' 라 하지 않고, 이어지는 태그 계산도 걸지 않는다
+            self._index_user_stopped = False
+            self.status.showMessage(tr("인덱싱 중단 — 다음에 폴더를 열면 남은 파일부터 이어서 색인합니다."), 8000)
+            return
         self.status.showMessage(tr("인덱싱 완료"), 3000)
         # 260908-5: 인덱싱 때문에 미뤄 둔 표 인식을 이제 마저 한다(응답성 SOT §4 ①).
         if getattr(self, "_text_tables_deferred", False):

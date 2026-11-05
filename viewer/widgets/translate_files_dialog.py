@@ -397,7 +397,7 @@ class TranslateFilesDialog(QDialog):
         self._worker.one_done.connect(
             lambda p, ok, d: self.log.appendPlainText(("✓ " if ok else "✗ ") + Path(p).name + " — " + d))
         self._worker.all_done.connect(self._on_all_done)
-        # 261019-1(응답성 SOT §4.6): 작업 창에서 중지 — 지금 파일을 마치면 멈추고, 남은 파일은 목록에 남아 이어서 한다
+        # 261019-1·261105-25(응답성 SOT §4.6): 작업 창에서 [중단] — 지금 파일을 마치면 멈추고, 남은 파일은 목록에 남아 이어서 한다
         self._processed = set()
         self._stopped = False
         self._worker.one_done.connect(lambda p, _ok, _d: self._processed.add(str(p)))
@@ -411,7 +411,7 @@ class TranslateFilesDialog(QDialog):
         self._status_msg(tr('PDF 번역 시작… (0/{total})').format(total=self._total))
 
     def _stop_from_jobs(self):
-        """작업 창 [중지] — 번역 요청은 중간에 끊을 수 없어 지금 파일을 마친 뒤 멈춘다."""
+        """작업 창 [중단] — 번역 요청은 중간에 끊을 수 없어 지금 파일을 마친 뒤 멈춘다."""
         self._stopped = True
         if self._worker is not None:
             self._worker.stop()
@@ -448,7 +448,7 @@ class TranslateFilesDialog(QDialog):
             for i in reversed(range(self.right.count())):
                 if str(self.right.item(i).data(self._DATA)) in done:
                     self.right.takeItem(i)
-            self.info.setText(tr("중지: {ok}개 저장. 남은 {n}개 파일은 오른쪽 목록에 있습니다 — [번역 실행]으로 이어서 합니다.")
+            self.info.setText(tr("중단: {ok}개 저장. 남은 {n}개 파일은 오른쪽 목록에 있습니다 — [번역 실행]으로 이어서 합니다.")
                               .format(ok=ok, n=self.right.count()))
         self._status_msg(tr('PDF 번역 완료: {ok}/{total}').format(ok=ok, total=total), 8000)
         # 모든 번역 종료 → 창을 다시 띄워 결과(로그) 표시
