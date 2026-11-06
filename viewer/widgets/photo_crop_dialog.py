@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBo
 from viewer import page_crop as pc
 from viewer import photo_warp as pw
 from viewer.i18n import tr
-from viewer.widgets.crop_dialog import CropCanvas
+from viewer.widgets.crop_dialog import CropCanvas, move_margins  # noqa: F401 — 박스 옮기기는 공통 화면에(261106-9)
 from viewer.widgets.page_nav import PageNav, centered_row
 from viewer.widgets.photo_warp_canvas import WarpCanvas
 
@@ -54,49 +54,8 @@ def _qimage_of(pil) -> QImage:
     return QImage(data, pil.size[0], pil.size[1], pil.size[0] * 3, QImage.Format.Format_RGB888).copy()
 
 
-class PhotoCropCanvas(CropCanvas):
-    """사진 크롭 화면 — PDF 크롭 화면(`CropCanvas`)에 **박스 통째로 옮기기**를 더한 것(261106-7 사용자 지시 '중간을 잡고
-    박스를 이동'). 귀·변 끌기는 그대로, 박스 안쪽을 끌면 크기 그대로 옮기고 사진 밖으로는 나가지 않는다. PDF 크롭 창은 그대로."""
-
-    def mousePressEvent(self, ev):
-        super().mousePressEvent(ev)
-        if self._drag is None and self._editable and self._inside_box(ev.position()):
-            self._drag = "move"
-            self._move_from = (ev.position().x(), ev.position().y(), list(self._m))
-            self.setCursor(Qt.CursorShape.SizeAllCursor)
-
-    def _inside_box(self, pos) -> bool:
-        r = self._img_rect()
-        if r.isNull():
-            return False
-        return self._crop_rect(r).contains(pos)
-
-    def mouseMoveEvent(self, ev):
-        pos = ev.position()
-        if self._drag is None and self._editable and self._hit(pos) is None and self._inside_box(pos):
-            self.setCursor(Qt.CursorShape.SizeAllCursor)   # 이동 모양 — 귀·변 위는 아래(부모)가 정한다
-            return
-        if self._drag != "move":
-            return super().mouseMoveEvent(ev)
-        r = self._img_rect()
-        if r.isNull():
-            return
-        x0, y0, m0 = self._move_from
-        self._m = move_margins(m0, (pos.x() - x0) / r.width() * 100.0, (pos.y() - y0) / r.height() * 100.0)
-        self.update()
-        self.marginsDragged.emit(list(self._m))
-
-
 def r1_list(m) -> list:
     return [round(float(v), 1) for v in m]
-
-
-def move_margins(m, dx: float, dy: float) -> list:
-    """여백 [위, 아래, 왼, 오른] % 의 박스를 크기 그대로 (dx, dy) % 옮긴다 — 사진 밖으로 나가지 않게(각 여백 ≥ 0)."""
-    t, b, l, r = (float(v) for v in m)
-    dx = max(-l, min(r, dx))
-    dy = max(-t, min(b, dy))
-    return [round(t + dy, 1), round(b - dy, 1), round(l + dx, 1), round(r - dx, 1)]
 
 
 class PhotoCropDialog(QDialog):
@@ -122,7 +81,7 @@ class PhotoCropDialog(QDialog):
         self.setSizeGripEnabled(True)
         root = QVBoxLayout(self)
         self.stack = QStackedWidget(self)
-        self.canvas = PhotoCropCanvas(self)
+        self.canvas = CropCanvas(self)        # 박스 안쪽 끌기 = 통째로 옮기기(공통 — 261106-7·-9)
         self.warp = WarpCanvas(self)
         self.stack.addWidget(self.canvas)
         self.stack.addWidget(self.warp)

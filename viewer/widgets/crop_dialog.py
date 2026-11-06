@@ -41,6 +41,14 @@ def _qimage(pix) -> QImage:
     return QImage(pix.samples, pix.width, pix.height, pix.stride, fmt).copy()
 
 
+def move_margins(m, dx: float, dy: float) -> list:
+    """여백 [위, 아래, 왼, 오른] % 의 박스를 크기 그대로 (dx, dy) % 옮긴다 — 쪽(사진) 밖으로 나가지 않게(각 여백 ≥ 0)."""
+    t, b, l, r = (float(v) for v in m)
+    dx = max(-l, min(r, dx))
+    dy = max(-t, min(b, dy))
+    return [round(t + dy, 1), round(b - dy, 1), round(l + dx, 1), round(r - dx, 1)]
+
+
 class CropCanvas(QWidget):
     """쪽 전체 그림 위에 잘릴 곳을 어둡게. 편집 가능하면 네 변을 끌어 여백(%)을 바꾼다."""
     marginsDragged = pyqtSignal(object)        # [위,아래,왼,오른] %
@@ -145,18 +153,33 @@ class CropCanvas(QWidget):
             return 3
         return None
 
+    def _inside_box(self, pos) -> bool:
+        r = self._img_rect()
+        return self._editable and not r.isNull() and self._crop_rect(r).contains(pos)
+
     def mousePressEvent(self, ev):
         self._drag = self._hit(ev.position())
+        if self._drag is None and self._inside_box(ev.position()):
+            # 261106-7·-9(사용자 지시 '중간을 잡고 박스를 이동', 'PDF 에도'): 박스 안쪽을 끌면 크기 그대로 통째로 옮긴다
+            self._drag = "move"
+            self._move_from = (ev.position().x(), ev.position().y(), list(self._m))
 
     def mouseMoveEvent(self, ev):
         pos = ev.position()
         if self._drag is None:
             h = self._hit(pos)
             self.setCursor(Qt.CursorShape.SizeVerCursor if h in (0, 1, "sy") else
-                           Qt.CursorShape.SizeHorCursor if h in (2, 3, "sx") else Qt.CursorShape.ArrowCursor)
+                           Qt.CursorShape.SizeHorCursor if h in (2, 3, "sx") else
+                           Qt.CursorShape.SizeAllCursor if self._inside_box(pos) else Qt.CursorShape.ArrowCursor)
             return
         r = self._img_rect()
         if r.isNull():
+            return
+        if self._drag == "move":
+            x0, y0, m0 = self._move_from
+            self._m = move_margins(m0, (pos.x() - x0) / r.width() * 100.0, (pos.y() - y0) / r.height() * 100.0)
+            self.update()
+            self.marginsDragged.emit(list(self._m))
             return
         if self._drag in ("sx", "sy"):
             c = self._crop_rect(r)
