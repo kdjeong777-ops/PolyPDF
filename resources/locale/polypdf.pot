@@ -1577,7 +1577,7 @@ msgstr ""
 msgid "태그 자동 부여"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "되돌리기"
 msgstr ""
 
@@ -4004,6 +4004,18 @@ msgid "zip 안 PDF 를 사본으로 열었습니다 — 고친 것은 zip 에 �
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "모양 펴기로 바꾼 사진을 백업해 둔 원본으로 되돌립니다 — 지금 파일은 휴지통으로 갑니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리기"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리는 중…"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "방향 저장 중…"
 msgstr ""
 
@@ -4257,6 +4269,18 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "풀 사진을 찾지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리기..."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "지금 파일은 휴지통으로 보내고, 백업해 둔 원본을 제자리로 옮깁니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리지 못했습니다 — 파일은 그대로입니다."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4588,6 +4612,30 @@ msgid "zip 에서 꺼내지 못했습니다: {name}"
 msgstr ""
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "원본으로 되돌리기 ({n}장)..."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "이 사진을 원본으로 되돌릴까요?"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "원본으로 되돌렸습니다: {name} — 바꾼 파일은 휴지통에 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 원본으로 되돌렸습니다 — 바꾼 파일은 휴지통에 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 되돌리고 {m}장은 되돌리지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
@@ -4760,6 +4808,11 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "펼친 사진 {n}장을 어떻게 저장할까요?"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 원본으로 되돌릴까요?"
 msgstr ""
 
 #: viewer/photo_controller.py

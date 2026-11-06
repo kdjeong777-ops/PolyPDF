@@ -2566,6 +2566,9 @@ class PhotoMixin:
             a = self._zip_pick_action(menu, [str(cur)])      # §4.24.1(261106-5) — zip 안 사진 풀기
             if a is not None:
                 extra[a] = "unzip"
+            a = self._photo_restore_action(menu, [str(cur)])  # §4.43(261106-18) — 원본으로 되돌리기(백업이 있을 때만)
+            if a is not None:
+                extra[a] = "restore"
             self._photo_xfer_menu(menu, [str(cur)])          # 4.41 — 폴더로 복사·이동
         _gps = (self.__dict__.get("_photo_info") or {}).get("gps")
         if _gps and not broken:
@@ -2840,6 +2843,106 @@ class PhotoMixin:
         self._load_main(HistoryItem(out, 0, "", "zip"))
         self.status.showMessage(tr("zip 안 PDF 를 사본으로 열었습니다 — 고친 것은 zip 에 들어가지 않습니다(풀어서 고치세요)."), 8000)
 
+    # ── 원본으로 되돌리기(§4.43, 261106-18 사용자 승인 '넣기') ─────────────────
+    def _photo_restore_pairs(self, paths) -> list:
+        from viewer import photo_backup
+        self._photo_sync_backup_dir()
+        out = []
+        for p in paths or []:
+            p = str(p)
+            if not self._is_photo_path(p) or self._photo_any_cached([p]):
+                continue
+            bk = photo_backup.find_backup(p)
+            if bk:
+                out.append((p, bk))
+        return out
+
+    def _photo_restore_action(self, menu, paths):
+        """사진 우클릭 '원본으로 되돌리기' — 백업 자리에 그 사진의 원본이 있을 때만 보인다(없으면 메뉴에 없음)."""
+        pairs = self._photo_restore_pairs(paths)
+        if not pairs:
+            return None
+        a = menu.addAction(tr("원본으로 되돌리기 ({n}장)...").format(n=len(pairs)) if len(pairs) > 1 else tr("원본으로 되돌리기..."))
+        a.setToolTip(tr("모양 펴기로 바꾼 사진을 백업해 둔 원본으로 되돌립니다 — 지금 파일은 휴지통으로 갑니다."))
+        return a
+
+    def _photo_restore(self, paths):
+        from PyQt6.QtWidgets import QMessageBox
+        pairs = self._photo_restore_pairs(paths)
+        if not pairs or self.__dict__.get("_photo_restore_busy"):
+            return
+        n = len(pairs)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("원본으로 되돌리기"))
+        box.setText((tr("이 사진을 원본으로 되돌릴까요?") if n == 1 else tr("사진 {n}장을 원본으로 되돌릴까요?").format(n=n))
+                    + "\n\n" + tr("지금 파일은 휴지통으로 보내고, 백업해 둔 원본을 제자리로 옮깁니다."))
+        b_ok = box.addButton(tr("되돌리기"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(b_ok)
+        box.exec()
+        if box.clickedButton() is not b_ok:
+            return
+        from viewer.workers import run_in_thread
+        self._photo_restore_busy = True
+        w = PhotoRestoreWorker(pairs)
+        w.done.connect(self._photo_restored)
+        self.status.showMessage(tr("원본으로 되돌리는 중…"), 3000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_restored(self, pairs: list, failed: list):
+        """되돌린 뒤 — 사이드카 기록(크롭·보기 회전·꾸밈)을 지우고 썸네일·본문을 새로(대체 뒤 정리와 같은 길, 261106-15)."""
+        self._photo_restore_busy = False
+        st = self._ensure_page_meta_store()
+        if st is not None and pairs:
+            for c, o in pairs:
+                st.drop_entry(c)
+                if os.path.normcase(o) != os.path.normcase(c):
+                    st.drop_entry(o)
+            try:
+                st.save()
+            except Exception:
+                pass
+        renamed = [(c, o) for c, o in pairs if os.path.normcase(o) != os.path.normcase(c)]
+        if renamed:
+            for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                r = getattr(bt, "_root_dir", None) if bt is not None else None
+                if r:
+                    try:
+                        bt.load_folder(r)
+                    except Exception:
+                        pass
+        strip = self._photo_strip_widget(create=False)
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        for c, o in pairs:
+            if strip is not None:
+                try:
+                    strip.refresh(str(o))
+                except Exception:
+                    pass
+            if cur and os.path.normcase(str(cur)) == os.path.normcase(c):
+                if renamed:
+                    try:
+                        self._on_bookmark_activated(o, 0)
+                    except Exception:
+                        pass
+                else:
+                    fit = mv._fit_mode
+                    if mv.load_document(o, 0):
+                        mv._fit_mode = fit
+                        self._photo_after_open(Path(o))
+                        self._photo_words_changed()
+                        mv._render_current()
+        if pairs and not failed:
+            msg = (tr("원본으로 되돌렸습니다: {name} — 바꾼 파일은 휴지통에 있습니다.").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
+                   else tr("사진 {n}장을 원본으로 되돌렸습니다 — 바꾼 파일은 휴지통에 있습니다.").format(n=len(pairs)))
+        elif pairs:
+            msg = tr("사진 {n}장을 되돌리고 {m}장은 되돌리지 못했습니다.").format(n=len(pairs), m=len(failed))
+        else:
+            msg = tr("원본으로 되돌리지 못했습니다 — 파일은 그대로입니다.")
+        self.status.showMessage(msg, 8000)
+
     def _photo_save_orientation(self):
         """보기 회전을 원본 JPEG 의 방향 태그에(D17, 4.17) — 배경 한 길, 끝나면 `_photo_orient_saved`."""
         cur = self.main_view.current_file() if self.main_view else None
@@ -2963,6 +3066,8 @@ class PhotoMixin:
             self._photo_copy_out(paths)
         elif kind == "unzip":
             self._zip_unpack_cached(paths)
+        elif kind == "restore":
+            self._photo_restore(paths)
         elif kind in ("rot_l", "rot_r"):
             self._photo_rotate(-90 if kind == "rot_l" else +90, path=paths[0])
         elif kind == "crop":
@@ -3020,6 +3125,7 @@ class PhotoMixin:
         if any(photo_device.is_cached(p) for p in targets):
             a_out = menu.addAction(tr('PC 로 복사 ({n}장)...').format(n=len(targets)) if many else tr("PC 로 복사..."))   # 4.33
         a_unzip = self._zip_pick_action(menu, targets)            # §4.24.1(261106-5) — zip 안 사진만 골라서 풀기
+        a_restore = self._photo_restore_action(menu, targets)     # §4.43(261106-18) — 백업이 있을 때만
         self._photo_xfer_menu(menu, targets)                     # 4.41(261105-5) — 폴더로 복사·이동
         a_batch = menu.addAction(tr("일괄 작업..."))                 # 4.30(261104-7 B5, F7)
         a_batch.setEnabled(not self._photo_any_cached(targets))
@@ -3045,6 +3151,8 @@ class PhotoMixin:
             self._photo_copy_out(targets)
         elif a_unzip is not None and chosen is a_unzip:
             self._zip_unpack_cached(targets)
+        elif a_restore is not None and chosen is a_restore:
+            self._photo_restore(targets)
         elif chosen is a_batch:
             self._photo_batch_dialog(targets)
         elif chosen is a_all:
@@ -3829,6 +3937,37 @@ class PhotoCopyWorker(QObject):
             img = None
         finally:
             self.done.emit(self.path, img)
+            self.finished.emit()
+
+
+class PhotoRestoreWorker(QObject):
+    """원본으로 되돌리기(사진 보기 SOT §4.43, 261106-18) — 배경: 사진마다 지금 파일을 휴지통으로 보내고 백업을 원래 이름 자리로
+    (`photo_backup.restore_from_backup` — 실패하면 아무것도 바뀌지 않는다)."""
+    done = pyqtSignal(list, list)          # [(지금 파일, 되돌린 원본)], [실패한 지금 파일]
+    finished = pyqtSignal()
+
+    def __init__(self, items):
+        super().__init__()
+        self.items = [(str(c), str(b)) for c, b in items]
+
+    def request_cancel(self):
+        pass
+
+    def run(self):
+        from viewer import pacing, photo_backup
+        ok, bad = [], []
+        try:
+            from send2trash import send2trash
+            for cur, bk in self.items:
+                try:
+                    ok.append((cur, photo_backup.restore_from_backup(cur, bk, send2trash)))
+                except Exception:
+                    bad.append(cur)
+                pacing.pace(self)
+        except Exception:
+            bad = [c for c, _b in self.items if c not in {x for x, _y in ok}]
+        finally:
+            self.done.emit(ok, bad)
             self.finished.emit()
 
 

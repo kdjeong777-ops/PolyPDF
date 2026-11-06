@@ -1624,7 +1624,7 @@ msgstr "Automatic tagging: {get} reviewed, tags added to {n_auto} files"
 msgid "태그 자동 부여"
 msgstr "Automatic Tagging"
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "되돌리기"
 msgstr "Undo"
 
@@ -4142,6 +4142,18 @@ msgid "zip 안 PDF 를 사본으로 열었습니다 — 고친 것은 zip 에 �
 msgstr "Opened a copy of the PDF in the zip — changes do not go into the zip (extract it to edit)."
 
 #: viewer/photo_controller.py
+msgid "모양 펴기로 바꾼 사진을 백업해 둔 원본으로 되돌립니다 — 지금 파일은 휴지통으로 갑니다."
+msgstr "Restores a photo replaced by straightening to its backed-up original — the current file goes to the Recycle Bin."
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리기"
+msgstr "Restore original"
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리는 중…"
+msgstr "Restoring originals…"
+
+#: viewer/photo_controller.py
 msgid "방향 저장 중…"
 msgstr "Saving orientation…"
 
@@ -4396,6 +4408,18 @@ msgstr "Extract this photo..."
 #: viewer/photo_controller.py
 msgid "풀 사진을 찾지 못했습니다."
 msgstr "Could not find the photos to extract."
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리기..."
+msgstr "Restore original..."
+
+#: viewer/photo_controller.py
+msgid "지금 파일은 휴지통으로 보내고, 백업해 둔 원본을 제자리로 옮깁니다."
+msgstr "The current file goes to the Recycle Bin and the backed-up original is moved back into place."
+
+#: viewer/photo_controller.py
+msgid "원본으로 되돌리지 못했습니다 — 파일은 그대로입니다."
+msgstr "Could not restore the original — the files are unchanged."
 
 #: viewer/photo_controller.py
 msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
@@ -4726,6 +4750,30 @@ msgid "zip 에서 꺼내지 못했습니다: {name}"
 msgstr "Could not take it out of the zip: {name}"
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "원본으로 되돌리기 ({n}장)..."
+msgstr "Restore originals ({n})..."
+
+#: viewer/photo_controller.py
+msgid "이 사진을 원본으로 되돌릴까요?"
+msgstr "Restore this photo to its original?"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "원본으로 되돌렸습니다: {name} — 바꾼 파일은 휴지통에 있습니다."
+msgstr "Restored the original: {name} — the replaced file is in the Recycle Bin."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 원본으로 되돌렸습니다 — 바꾼 파일은 휴지통에 있습니다."
+msgstr "Restored {n} photos to their originals — the replaced files are in the Recycle Bin."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 되돌리고 {m}장은 되돌리지 못했습니다."
+msgstr "Restored {n} photos; {m} could not be restored."
+
+#: viewer/photo_controller.py
 msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
 msgstr "Another program is using the photo, so the orientation was not saved — the original is unchanged."
 
@@ -4902,6 +4950,11 @@ msgstr "{stem}_straightened"
 #, python-brace-format
 msgid "펼친 사진 {n}장을 어떻게 저장할까요?"
 msgstr "How should the {n} straightened photos be saved?"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 원본으로 되돌릴까요?"
+msgstr "Restore {n} photos to their originals?"
 
 #: viewer/photo_controller.py
 #, python-brace-format

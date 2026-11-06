@@ -93,3 +93,63 @@ def restore(backup, src) -> None:
     if s.exists():
         raise FileExistsError(str(s))
     _move(b, s)
+
+
+# ── 원본으로 되돌리기(261106-18, 사용자 승인 '넣기') ─────────────────────
+import re as _re
+_NUM = _re.compile(r"^(.*) \((\d+)\)$")
+
+
+def _base_n(stem: str):
+    m = _NUM.match(stem)
+    return (m.group(1), int(m.group(2))) if m else (stem, 1)
+
+
+def original_name(backup) -> str:
+    """백업 파일 이름 → 원래 이름('IMG (2).HEIC' → 'IMG.HEIC')."""
+    b = Path(str(backup))
+    return _base_n(b.stem)[0] + b.suffix
+
+
+def find_backup(path) -> str | None:
+    """지금 사진의 원본 백업 — 백업 자리에서 이름(확장자 빼고)이 같은 것. HEIC 가 .jpg 로 바뀐 경우도 짝을 찾는다.
+    여럿('name', 'name (2)' …)이면 **가장 최근 것**(번호가 가장 큰 것 — 대체할 때마다 하나씩 늘었다). 같은 번호면 같은 확장자를 먼저."""
+    p = Path(str(path))
+    d = backup_dir_for(p)
+    try:
+        entries = [e for e in os.scandir(str(d)) if e.is_file()]
+    except OSError:
+        return None
+    want = os.path.normcase(p.stem)
+    best = None
+    for e in entries:
+        stem, n = _base_n(Path(e.name).stem)
+        if os.path.normcase(stem) != want or e.name.startswith("~"):
+            continue
+        key = (n, os.path.normcase(Path(e.name).suffix) == os.path.normcase(p.suffix))
+        if best is None or key > best[0]:
+            best = (key, e.path)
+    return best[1] if best else None
+
+
+def restore_from_backup(cur, backup, trash) -> str:
+    """지금 파일을 휴지통으로(`trash(경로)`), 백업을 원래 이름 자리로 — 돌려준 경로가 되돌린 원본.
+    순서: 백업을 지금 폴더의 임시 이름으로 옮김 → 지금 파일을 **제 이름 그대로** 휴지통으로 → 임시를 원래 이름으로.
+    휴지통이 실패하면 백업을 제자리로 되돌리고 예외(아무것도 바뀌지 않는다). 배경에서 부른다."""
+    cur, backup = Path(str(cur)), Path(str(backup))
+    target = cur.parent / original_name(backup)
+    if os.path.normcase(str(target)) != os.path.normcase(str(cur)) and target.exists():
+        raise FileExistsError(str(target))
+    tmp = cur.parent / ("~" + target.name + ".polypix-restore")
+    _move(backup, tmp)
+    try:
+        trash(str(cur))
+    except Exception:
+        _move(tmp, backup)                       # 휴지통 실패 — 백업을 제자리로
+        raise
+    try:
+        os.replace(str(tmp), str(target))
+    except Exception:
+        _move(tmp, backup)                       # 드문 실패 — 원본은 백업 자리에 그대로 남긴다(지금 파일은 휴지통에)
+        raise
+    return str(target)
