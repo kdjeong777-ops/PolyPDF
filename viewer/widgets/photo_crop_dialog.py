@@ -280,7 +280,21 @@ class PhotoCropDialog(QDialog):
         if maximized:
             self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
 
+    def accept(self):
+        """[확인] — 쓰는 쪽이 `accept_hook` 을 걸었으면 창을 닫기 **전에** 부른다(펼친 사진 저장 묻기, 261106-16):
+        "back" 이면 창에 그대로 남고(설정 유지), "cancel" 이면 설정을 버리고 닫는다."""
+        hook = self.__dict__.get("accept_hook")
+        if hook is not None:
+            r = hook()
+            if r == "back":
+                return
+            if r == "cancel":
+                self.reject()
+                return
+        super().accept()
+
     def done(self, r):
+        self.done_code = r
         if self.isFullScreen():                          # 전체 화면은 기억하지 않는다 — 푼 뒤의 자리를 남긴다
             self.btn_full.setChecked(False)
         try:

@@ -360,6 +360,23 @@ class SettingsDialog(QDialog):
         row_vk.addWidget(self.sp_slide_s)
         row_vk.addStretch(1)
         pl.addLayout(row_vk)
+        # 261106-15(사진 보기 SOT §4.43, 사용자 결정): 모양 펴기 [저장] 이 원본을 대체할 때 원본을 옮겨 둘 곳 —
+        #   비우면 '사진 폴더 안 _원본'(기본), 고르면 한 곳의 고정 폴더(원래 폴더 구조를 하위 폴더로). 한 줄이 넓어지지 않게 두 줄로.
+        pl.addWidget(QLabel(tr("펼친 사진 저장 때 원본 백업 폴더:")))
+        row_bk = QHBoxLayout()
+        self.ed_warp_backup = QLineEdit(str(_pic.get("warp_backup_dir") or ""))
+        self.ed_warp_backup.setReadOnly(True)
+        from viewer.photo_backup import BACKUP_DIRNAME
+        self.ed_warp_backup.setPlaceholderText(tr("사진 폴더 안 '{name}' (기본)").format(name=BACKUP_DIRNAME))
+        self.ed_warp_backup.setToolTip(tr("모양 펴기로 [저장] 하면 원본 사진을 이 폴더로 옮기고 그 자리에 펼친 사진을 둡니다."))
+        row_bk.addWidget(self.ed_warp_backup, 1)
+        b_pick = QPushButton(tr("고르기..."))
+        b_pick.clicked.connect(self._pick_warp_backup)
+        b_def = QPushButton(tr("기본으로"))
+        b_def.clicked.connect(lambda: self.ed_warp_backup.setText(""))
+        row_bk.addWidget(b_pick)
+        row_bk.addWidget(b_def)
+        pl.addLayout(row_bk)
         info_psm = QLabel(
             tr("<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
             "온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). "
@@ -503,6 +520,12 @@ class SettingsDialog(QDialog):
         self.recording_dialog = open_sub_settings(RecordingSettingsDialog, self._host, self, tr("녹화 설정 저장됨"),
                                                   self._prefs)
 
+    def _pick_warp_backup(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+        d = QFileDialog.getExistingDirectory(self, tr("원본 백업 폴더"), self.ed_warp_backup.text() or "")
+        if d:
+            self.ed_warp_backup.setText(d)
+
     def result_prefs(self) -> dict:
         return {
             "startup_mode": ("path" if self.rb_start_path.isChecked()
@@ -525,7 +548,8 @@ class SettingsDialog(QDialog):
             "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
             "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
             "picture": dict(self._prefs.get("picture") or {}, view_kind=str(self.cmb_view_kind.currentData() or "pdf"),
-                            slide_interval_s=int(self.sp_slide_s.value())),   # 261104-2 · 261104-7 슬라이드쇼 간격
+                            slide_interval_s=int(self.sp_slide_s.value()),    # 261104-2 · 261104-7 슬라이드쇼 간격
+                            warp_backup_dir=self.ed_warp_backup.text().strip()),   # 261106-15 펴기 원본 백업 폴더(빈 글 = 사진 폴더 안 _원본)
             "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
             # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
             # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋

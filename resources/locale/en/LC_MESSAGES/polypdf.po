@@ -4094,12 +4094,20 @@ msgid "펼친 사진 저장"
 msgstr "Save straightened photo"
 
 #: viewer/photo_controller.py
-msgid "원본 옆에 '<이름>_펼침' 으로 저장합니다."
-msgstr "Saves next to the original as '<name>_straightened'."
-
-#: viewer/photo_controller.py
 msgid "다른 폴더에 저장..."
 msgstr "Save to another folder..."
+
+#: viewer/photo_controller.py
+msgid "저장 방법·위치를 고르지 않았습니다. 이대로 닫으면 이 창에서 설정한 크롭·모양 펴기가 모두 취소됩니다 — 아직 아무 사진도 저장하지 않았습니다."
+msgstr "You did not choose how or where to save. If you close now, all crop and straightening settings made in this window are discarded — no photo has been saved yet."
+
+#: viewer/photo_controller.py
+msgid "돌아가기"
+msgstr "Go back"
+
+#: viewer/photo_controller.py
+msgid "설정 취소하고 닫기"
+msgstr "Discard and close"
 
 #: viewer/photo_controller.py
 msgid "펼친 사진 만드는 중…"
@@ -4297,16 +4305,8 @@ msgid "사진을 읽지 못했습니다."
 msgstr "Could not read the photo."
 
 #: viewer/photo_controller.py
-msgid "펼친 사진을 어디에 저장할까요? 원본 사진은 그대로입니다."
-msgstr "Where should the straightened photo be saved? The original photo is unchanged."
-
-#: viewer/photo_controller.py
 msgid "펼친 사진을 넣을 폴더"
 msgstr "Folder for the straightened photos"
-
-#: viewer/photo_controller.py
-msgid "펼친 사진을 만들지 못했습니다 — 원본은 그대로입니다."
-msgstr "Could not make the straightened photo — the original is unchanged."
 
 #: viewer/photo_controller.py
 msgid "크롭을 풀었습니다 — 원본 사진은 그대로입니다."
@@ -4519,6 +4519,24 @@ msgstr "This is the first photo."
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "사진 폴더 안 '{name}' 폴더"
+msgstr "the '{name}' folder inside the photo's folder"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "원본을 펼친 사진으로 바꿉니다 — 원본은 {where}(으)로 옮겨집니다."
+msgstr "Replaces the original with the straightened photo — the original is moved to {where}."
+
+#: viewer/photo_controller.py
+msgid "(HEIC 는 JPEG 로 저장했습니다)"
+msgstr "(HEIC was saved as JPEG)"
+
+#: viewer/photo_controller.py
+msgid "펼친 사진을 만들지 못했습니다 — 원본은 그대로입니다."
+msgstr "Could not make the straightened photo — the original is unchanged."
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "사진 {n}장의 크롭을 바꿨습니다 — 원본 사진은 그대로입니다."
 msgstr "Changed the crop of {n} photos — the original photos are unchanged."
 
@@ -4665,24 +4683,23 @@ msgid "사진 {n}장을 복사했습니다: {dest}"
 msgstr "Copied {n} photos: {dest}"
 
 #: viewer/photo_controller.py
-#, python-brace-format
-msgid "펼친 사진 {n}장을 어디에 저장할까요? 원본 사진은 그대로입니다."
-msgstr "Where should the {n} straightened photos be saved? The original photos are unchanged."
+msgid "펼친 사진을 어떻게 저장할까요?"
+msgstr "How should the straightened photo be saved?"
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "펼친 사진을 저장했습니다: {name} — 원본은 그대로입니다."
-msgstr "Saved the straightened photo: {name} — the original is unchanged."
+msgid "[저장] 은 원본 사진을 펼친 사진으로 바꾸고, 원본은 {where}(으)로 옮겨 둡니다. 다른 이름·다른 폴더는 원본을 그대로 두고 새 사진을 만듭니다."
+msgstr "[Save] replaces the original photo with the straightened one and moves the original to {where}. Another name or another folder keeps the original and makes a new photo."
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "펼친 사진 {n}장을 저장했습니다 — 원본은 그대로입니다."
-msgstr "Saved {n} straightened photos — the originals are unchanged."
+msgid "원본을 펼친 사진으로 바꿨습니다: {name} — 원본은 {where}(으)로 옮겼습니다."
+msgstr "Replaced the original with the straightened photo: {name} — the original was moved to {where}."
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다."
-msgstr "Saved {n} straightened photos; {m} could not be made."
+msgid "{n}장을 펼친 사진으로 바꿨습니다 — 원본은 {where}(으)로 옮겼습니다."
+msgstr "Replaced {n} photos with straightened ones — the originals were moved to {where}."
 
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
@@ -4792,6 +4809,21 @@ msgstr "Copying to PC"
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "펼친 사진을 저장했습니다: {name} — 원본은 그대로입니다."
+msgstr "Saved the straightened photo: {name} — the original is unchanged."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "펼친 사진 {n}장을 저장했습니다 — 원본은 그대로입니다."
+msgstr "Saved {n} straightened photos — the originals are unchanged."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다."
+msgstr "Saved {n} straightened photos; {m} could not be made."
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "{n}개를 풀고 {m}개는 풀지 못했습니다(이름·크기 거름): {folder}"
 msgstr "Extracted {n} files; {m} were not extracted (name or size filter): {folder}"
 
@@ -4865,6 +4897,11 @@ msgstr "Could not copy the photos: {e}"
 #, python-brace-format
 msgid "{stem}_펼침"
 msgstr "{stem}_straightened"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "펼친 사진 {n}장을 어떻게 저장할까요?"
+msgstr "How should the {n} straightened photos be saved?"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -10560,6 +10597,18 @@ msgid "사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격
 msgstr "A slideshow opened with Presentation (F5) in photo mode moves to the next photo at this interval. 0 turns it off."
 
 #: viewer/widgets/settings_dialog.py
+msgid "모양 펴기로 [저장] 하면 원본 사진을 이 폴더로 옮기고 그 자리에 펼친 사진을 둡니다."
+msgstr "When you [Save] a straightened photo, the original is moved to this folder and the straightened photo takes its place."
+
+#: viewer/widgets/settings_dialog.py
+msgid "고르기..."
+msgstr "Choose..."
+
+#: viewer/widgets/settings_dialog.py viewer/widgets/sign_dialogs.py
+msgid "기본으로"
+msgstr "Set as Default"
+
+#: viewer/widgets/settings_dialog.py
 msgid "<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). 2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>"
 msgstr "<small>Continuous view shows the previous/next pages above and below the current one, and the page at the center of the screen becomes the current page (the text panel follows it). Two-page view and screenshot view are single-page.</small>"
 
@@ -10598,6 +10647,10 @@ msgstr "Choose PDF to Open on Startup"
 #: viewer/widgets/settings_dialog.py
 msgid "고급 설정 저장됨"
 msgstr "Advanced settings saved"
+
+#: viewer/widgets/settings_dialog.py
+msgid "원본 백업 폴더"
+msgstr "Original backup folder"
 
 #: viewer/widgets/settings_dialog.py
 msgid "외부 언어팩 사용"
@@ -10833,6 +10886,10 @@ msgid "슬라이드쇼 자동 넘김:"
 msgstr "Slideshow auto-advance:"
 
 #: viewer/widgets/settings_dialog.py
+msgid "펼친 사진 저장 때 원본 백업 폴더:"
+msgstr "Backup folder for originals of straightened photos:"
+
+#: viewer/widgets/settings_dialog.py
 msgid "현재 설정을 기본값으로 저장(배포용)…"
 msgstr "Save Current Settings as Defaults (for distribution)…"
 
@@ -10883,6 +10940,11 @@ msgstr "Audio device"
 #: viewer/widgets/settings_dialog.py
 msgid "오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."
 msgstr "No audio input device found (check ffmpeg)."
+
+#: viewer/widgets/settings_dialog.py
+#, python-brace-format
+msgid "사진 폴더 안 '{name}' (기본)"
+msgstr "'{name}' inside the photo's folder (default)"
 
 #: viewer/widgets/settings_dialog.py
 msgid "모듈 없음"
@@ -11085,10 +11147,6 @@ msgstr "Export Backup…"
 #: viewer/widgets/sign_dialogs.py
 msgid "공개 인증서 내보내기…"
 msgstr "Export Public Certificate…"
-
-#: viewer/widgets/sign_dialogs.py
-msgid "기본으로"
-msgstr "Set as Default"
 
 #: viewer/widgets/sign_dialogs.py
 msgid "Windows Hello 보관"
@@ -14464,4 +14522,13 @@ msgstr "Getting Started"
 
 #~ msgid "이 사진에서는 테두리를 찾지 못했습니다 — 점을 끌어 맞추세요."
 #~ msgstr "Could not find the edges in this photo — drag the points to fit."
+
+#~ msgid "원본 옆에 '<이름>_펼침' 으로 저장합니다."
+#~ msgstr "Saves next to the original as '<name>_straightened'."
+
+#~ msgid "펼친 사진을 어디에 저장할까요? 원본 사진은 그대로입니다."
+#~ msgstr "Where should the straightened photo be saved? The original photo is unchanged."
+
+#~ msgid "사진 폴더 안 '_원본' (기본)"
+#~ msgstr ""
 

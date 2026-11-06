@@ -303,6 +303,10 @@ class BookmarkTree(QWidget):
         photo = self._photo_on()
 
         def keep(p):
+            if photo:
+                from viewer.photo_backup import is_backup_path      # 펴기 원본 백업(261106-15, 사진 보기 SOT §4.43)은 목록에서 뺀다
+                if is_backup_path(p):
+                    return False
             if not str(p).lower().endswith(".zip"):
                 return True
             if photo:

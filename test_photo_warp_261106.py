@@ -160,7 +160,8 @@ try:
         seen["go_c"] = go(self, P.index(c))
         seen["c_on"] = self.chk_warp.isChecked()
         self.chk_warp.setChecked(False)               # c 는 펴지 않는다
-        return QDialog.DialogCode.Accepted
+        self.accept()                                  # 실제 [확인] — 창을 닫기 전에 저장을 묻는다(261106-16)
+        return getattr(self, "done_code", 0)
     PhotoCropDialog.exec = fake_exec
     from PyQt6.QtWidgets import QMessageBox, QFileDialog
     _mb_exec = QMessageBox.exec
@@ -201,18 +202,23 @@ try:
         "D 처음 점 = 크롭 박스(크롭이 없으면 사진 네 귀) — 어림 아님", str(ap[:4]))
     chk(seen.get("go_b") and seen.get("b_on") is False and seen.get("c_on") is False,
         "D ❯ 로 넘긴 사진은 모양 펴기가 꺼진 채 시작(261106-11)", str((seen.get("b_on"), seen.get("c_on"))))
-    outs = sorted(p.name for p in tmp.iterdir() if "_펼침" in p.name)
-    chk(done and outs == ["a_doc_펼침.jpg", "b_book_펼침.jpg"], "D [확인] — 켠 사진마다 '<이름>_펼침' 새 사진, 끈 사진은 없음", str(outs))
-    if (tmp / "a_doc_펼침.jpg").exists():
-        oa = Image.open(tmp / "a_doc_펼침.jpg")
-        chk(max(dark_share(oa, 2), dark_share(oa, oa.size[1] - 3)) < 0.05, "D 펼친 사진에 바탕이 거의 남지 않는다", str(oa.size))
-    if (tmp / "b_book_펼침.jpg").exists():
-        ob = Image.open(tmp / "b_book_펼침.jpg")
-        chk(dark_share(ob, 3) < 0.05, "D 움푹 들어간 종이도 곧게", str(dark_share(ob, 3)))
-    chk(all(md5(p) == sums[p] for p in srcs), "D 원본 사진은 그대로")
-    chk({p: st.photo_crop(p) for p in srcs} == crops_before, "D 크롭(사이드카)은 그대로")
+    bk = tmp / "_원본"
+    chk(done and not [p_ for p_ in tmp.iterdir() if "_펼침" in p_.name], "D [저장] — 새 '_펼침' 파일을 만들지 않는다(원본 대체, 261106-15)")
+    chk(bk.is_dir() and sorted(p_.name for p_ in bk.iterdir()) == ["a_doc.jpg", "b_book.jpg"]
+        and md5(bk / "a_doc.jpg") == sums[a] and md5(bk / "b_book.jpg") == sums[b],
+        "D 원본은 사진 폴더 안 '_원본' 으로 옮겨졌다(바이트 그대로), 끈 사진은 없음", str(bk.is_dir() and list(bk.iterdir())))
+    chk(md5(a) != sums[a] and md5(b) != sums[b] and md5(c) == sums[c], "D 원래 이름 자리에 펼친 사진, 끈 사진은 그대로")
+    oa = Image.open(a)
+    chk(max(dark_share(oa, 2), dark_share(oa, oa.size[1] - 3)) < 0.05, "D 펼친 사진에 바탕이 거의 남지 않는다", str(oa.size))
+    ob = Image.open(b)
+    chk(dark_share(ob, 3) < 0.05, "D 움푹 들어간 종이도 곧게", str(dark_share(ob, 3)))
+    exif_a = Image.open(a).getexif()
+    chk(int(exif_a.get(0x0112, 1) or 1) == 1, "D 방향 태그는 1(픽셀을 세웠다)")
+    chk(st.photo_crop(a) is None and st.photo_rotation(a) == 0 and st.photo_crop(c) == crops_before[c],
+        "D 펼친 사진의 크롭·보기 회전 기록은 지운다(픽셀이 이미 펴졌다)")
+    pump(timeout=1.0)
     names = [Path(bt_p).name for bt_p in (it.data(0, bt.DATA_FILE) for it in bt._iter_file_nodes())]
-    chk("a_doc_펼침.jpg" in names and "b_book_펼침.jpg" in names, "D 책갈피창에 새 줄", str(names))
+    chk(sorted(names) == ["a_doc.jpg", "b_book.jpg", "c_big.jpg"], "D 목록은 그대로 세 장 — '_원본' 은 목록에 안 보인다", str(names))
 
     # F — 다른 폴더·다른 이름·묻는 창 취소
     other = tmp.parent / (tmp.name + "_out")
@@ -222,7 +228,8 @@ try:
         pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         self.chk_warp.setChecked(True)
         self.warp.set_points(QPTS)
-        return QDialog.DialogCode.Accepted
+        self.accept()
+        return getattr(self, "done_code", 0)
     PhotoCropDialog.exec = fake_one
     _gd = QFileDialog.getExistingDirectory
     _gs = QFileDialog.getSaveFileName
@@ -233,7 +240,8 @@ try:
     pump(lambda: (other / "a_doc_펼침.jpg").exists(), timeout=20)
     chk((other / "a_doc_펼침.jpg").exists(), "F [다른 폴더에 저장] — 고른 폴더에 '<이름>_펼침'", str(list(other.iterdir())))
     names = [Path(it.data(0, bt.DATA_FILE)).name for it in bt._iter_file_nodes()]
-    chk(names.count("a_doc_펼침.jpg") == 1 and "a_doc_펼침(2).jpg" not in names, "F 다른 폴더의 것은 보고 있는 목록에 끼우지 않는다", str(names))
+    chk("a_doc_펼침.jpg" not in names, "F 다른 폴더의 것은 보고 있는 목록에 끼우지 않는다", str(names))
+    chk(md5(bk / "a_doc.jpg") == sums[a] and len(list(bk.iterdir())) == 2, "F 다른 폴더 저장은 원본을 옮기지 않는다")
     QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(tmp / "내가고른.jpg"), ""))
     pick["text"] = "다른 이름으로 저장..."
     mw._photo_crop_dialog(a)
@@ -244,19 +252,29 @@ try:
     st.set_photo_crop(b, None)
     pick["text"] = "cancel"
 
-    def fake_both(self):                               # 크롭도 바꾸고 펴기도 켠 채 [확인] → 묻는 창 [취소]
+    def fake_both(self):                               # 크롭도 바꾸고 펴기도 켠 채 [확인] → 묻는 창 [취소] → 안내(261106-16)
         pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         P = mw._photo_crop_paths
         self.spins[0].setValue(25)
         go(self, P.index(b))
         self.chk_warp.setChecked(True)
         self.warp.set_points(CPTS)
-        return QDialog.DialogCode.Accepted
+        asked.clear()
+        pick["text"] = "cancel"                        # 묻는 창 [취소] → 안내 [돌아가기](Esc 자리)
+        self.accept()
+        seen["back"] = (self.isVisible(), not hasattr(self, "done_code"), self.chk_warp.isChecked(),
+                        self.index() == P.index(b), asked.get("buttons"))
+        pick["text"] = "설정 취소하고 닫기"           # 다시 [확인] → 묻는 창에서 아무것도 안 고름 → 안내 [설정 취소하고 닫기]
+        self.accept()
+        return getattr(self, "done_code", 0)
     PhotoCropDialog.exec = fake_both
     mw._photo_crop_dialog(c)
     pump(lambda: not mw.__dict__.get("_photo_crop_busy"), timeout=20)
     pump(timeout=0.8)
-    chk(len(list(tmp.iterdir())) == n0 and st.photo_crop(c) == crops_before[c], "F 묻는 창 [취소] — 펴기도 크롭도 남기지 않는다")
+    sb = seen.get("back") or ()
+    chk(tuple(sb[1:4]) == (True, True, True) and "돌아가기" in (sb[4] or []),
+        "F 묻는 창 [취소] → 안내 [돌아가기] — 크롭 창에 그대로 남고 설정(펴기 켬·지금 사진)이 남는다(261106-16)", str(sb))
+    chk(len(list(tmp.iterdir())) == n0 and st.photo_crop(c) == crops_before[c], "F 안내 [설정 취소하고 닫기] — 펴기도 크롭도 남기지 않는다")
     QFileDialog.getExistingDirectory, QFileDialog.getSaveFileName = _gd, _gs
     pick["text"] = "저장"
 

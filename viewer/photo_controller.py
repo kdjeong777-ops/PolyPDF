@@ -143,8 +143,16 @@ class PhotoMixin:
     def _photo_enabled(self) -> bool:
         return self._photo_view_kind() == VIEW_MIXED
 
+    def _photo_sync_backup_dir(self) -> None:
+        from viewer import photo_backup
+        try:
+            photo_backup.set_custom_dir(str(self._photo_prefs().get("warp_backup_dir") or ""))
+        except Exception:
+            pass
+
     def _photo_apply_view_kind(self, restore: bool = False):
         """보기 종류에 맞춘다 — PDF 전용이면 단추를 숨기고 사진 모드였으면 곧바로 PDF 모드로(4.10)."""
+        self._photo_sync_backup_dir()                    # 환경설정의 백업 폴더(261106-15) — 목록 거르기·대체 저장이 쓴다
         on = self._photo_enabled()
         self._photo_btn.setVisible(on)
         if not on:
@@ -2096,6 +2104,7 @@ class PhotoMixin:
                 self._photo_crop_recent = list(cm)
             self._photo_crop_load(_p[i])
         dlg.photoRequested.connect(want)
+        dlg.accept_hook = lambda _d=dlg, _p=paths: self._photo_warp_accept(_d, _p)   # [확인] 때 저장 묻기(261106-16)
         self._photo_crop_dlg = dlg
         pic = self._photo_prefs()                        # 지난 크롭 창 자리·크기·최대화(261106-8 — 전체 화면은 기억하지 않는다)
         dlg.restore_state(str(pic.get("crop_geom") or ""), bool(pic.get("crop_max")))
@@ -2109,11 +2118,9 @@ class PhotoMixin:
             return                                       # [취소] — 넘기며 고친 것도 남기지 않는다
         todo = {paths[i]: m for i, m in dlg.pending().items() if 0 <= i < len(paths)}
         warps = {paths[i]: pts for i, pts in dlg.pending_warps().items() if 0 <= i < len(paths)}
-        dest = None
-        if warps:                                        # 펼친 사진을 어디에(261106-6 사용자 지시 '확인시 묻기')
-            dest = self._photo_warp_ask(list(warps))
-            if dest is None:
-                return                                   # 묻는 창에서 취소 — 크롭도 펴기도 남기지 않는다
+        dest = dlg.__dict__.get("warp_dest")              # [확인] 때 이미 물었다(`_photo_warp_accept`)
+        if warps and dest is None:
+            return
         cm = dlg.margins()
         if cm and not dlg.chk_warp.isChecked():
             self._photo_crop_recent = list(cm)
@@ -2124,18 +2131,25 @@ class PhotoMixin:
     # ── 모양 펴기(4.43, 261106-6) ─────────────────────────
     WARP_ASK = ("here", "names", "dir")
 
+    def _photo_warp_backup_label(self) -> str:
+        from viewer import photo_backup
+        d = photo_backup.custom_dir()
+        return d if d else tr("사진 폴더 안 '{name}' 폴더").format(name=photo_backup.BACKUP_DIRNAME)
+
     def _photo_warp_ask(self, paths: list):
-        """펼친 사진을 어디에 — [저장](원본 옆 '<이름>_펼침') · [다른 이름으로 저장](사진마다 저장 창) · [다른 폴더에 저장]
-        (폴더 고르기, 이름은 '<이름>_펼침'). 여러 장이면 한 번 묻고 모두에. 돌려줌: `("here", None)`·`("names", {원본: 새 경로})`·
-        `("dir", 폴더)`, 취소면 None."""
+        """펼친 사진을 어디에 — [저장](원본을 대체하고 원본은 백업 폴더로, 261106-15) · [다른 이름으로 저장](사진마다 저장 창) ·
+        [다른 폴더에 저장](폴더 고르기, 이름은 '<이름>_펼침'). 여러 장이면 한 번 묻고 모두에. 돌려줌: `("replace", None)`·
+        `("names", {원본: 새 경로})`·`("dir", 폴더)`, 어디서든 취소하면 None(쓰는 쪽이 안내 — 261106-16)."""
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
         n = len(paths)
+        where = self._photo_warp_backup_label()
         box = QMessageBox(self)
         box.setWindowTitle(tr("펼친 사진 저장"))
-        box.setText(tr("펼친 사진을 어디에 저장할까요? 원본 사진은 그대로입니다.") if n == 1
-                    else tr("펼친 사진 {n}장을 어디에 저장할까요? 원본 사진은 그대로입니다.").format(n=n))
+        box.setText((tr("펼친 사진을 어떻게 저장할까요?") if n == 1 else tr("펼친 사진 {n}장을 어떻게 저장할까요?").format(n=n))
+                    + "\n\n" + tr("[저장] 은 원본 사진을 펼친 사진으로 바꾸고, 원본은 {where}(으)로 옮겨 둡니다. "
+                                    "다른 이름·다른 폴더는 원본을 그대로 두고 새 사진을 만듭니다.").format(where=where))
         b_here = box.addButton(tr("저장"), QMessageBox.ButtonRole.AcceptRole)
-        b_here.setToolTip(tr("원본 옆에 '<이름>_펼침' 으로 저장합니다."))
+        b_here.setToolTip(tr("원본을 펼친 사진으로 바꿉니다 — 원본은 {where}(으)로 옮겨집니다.").format(where=where))
         b_names = box.addButton(tr("다른 이름으로 저장..."), QMessageBox.ButtonRole.ActionRole)
         b_dir = box.addButton(tr("다른 폴더에 저장..."), QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
@@ -2143,7 +2157,7 @@ class PhotoMixin:
         box.exec()
         got = box.clickedButton()
         if got is b_here:
-            return ("here", None)
+            return ("replace", None)
         if got is b_dir:
             start = str(self._photo_prefs().get("warp_dir") or Path(paths[0]).parent)
             d = QFileDialog.getExistingDirectory(self, tr("펼친 사진을 넣을 폴더"), start)
@@ -2158,14 +2172,39 @@ class PhotoMixin:
                 got_p, _f = QFileDialog.getSaveFileName(self, tr("펼친 사진 저장"), str(dst),
                                                         tr("그림 (*{ext})").format(ext=dst.suffix))
                 if not got_p:
-                    continue                             # 이 사진은 건너뛴다
+                    return None                          # 중간에 취소 — 아직 아무것도 쓰지 않았다(261106-16)
                 got_p = str(Path(got_p).with_suffix(dst.suffix)) if not Path(got_p).suffix else got_p
                 if os.path.normcase(os.path.abspath(got_p)) == os.path.normcase(os.path.abspath(p)):
                     self.status.showMessage(tr("원본 자리에는 저장하지 않습니다 — 다른 이름을 고르세요."), 6000)
-                    continue
+                    return None
                 out[p] = got_p
             return ("names", out) if out else None
         return None
+
+    def _photo_warp_accept(self, dlg, paths: list) -> str:
+        """크롭 창 [확인] 을 누른 그 자리에서(창을 닫기 전에) 펼칠 사진의 저장을 묻는다(261106-16 사용자 지시 '다른 이름의 저장을
+        누르고 선택을 안 하고 취소 시 그냥 밖으로 빠져나가 — 설정한 내용이 취소된다고 안내'). 돌려줌 "ok"(dlg.warp_dest 에 답)·
+        "back"(창으로 돌아가 설정 그대로)·"cancel"(설정을 버리고 닫기)."""
+        warps = [paths[i] for i in dlg.pending_warps() if 0 <= i < len(paths)]
+        dlg.warp_dest = None
+        if not warps:
+            return "ok"
+        dest = self._photo_warp_ask(warps)
+        if dest is not None:
+            dlg.warp_dest = dest
+            return "ok"
+        from PyQt6.QtWidgets import QMessageBox
+        box = QMessageBox(dlg)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("펼친 사진 저장"))
+        box.setText(tr("저장 방법·위치를 고르지 않았습니다. 이대로 닫으면 이 창에서 설정한 크롭·모양 펴기가 모두 취소됩니다"
+                       " — 아직 아무 사진도 저장하지 않았습니다."))
+        b_back = box.addButton(tr("돌아가기"), QMessageBox.ButtonRole.RejectRole)
+        b_drop = box.addButton(tr("설정 취소하고 닫기"), QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(b_back)
+        box.setEscapeButton(b_back)
+        box.exec()
+        return "cancel" if box.clickedButton() is b_drop else "back"
 
     def _photo_warp(self, warps: dict, dest=None):
         """크롭 창 [확인] 의 모양 펴기 — {경로: 점 8개}. 배경 워커 하나가 차례로 펼친 새 사진을 만든다(원본 그대로).
@@ -2177,6 +2216,7 @@ class PhotoMixin:
             if not warps:
                 return
         from viewer.workers import run_in_thread
+        self._photo_sync_backup_dir()
         self._photo_warp_busy = True
         w = PhotoWarpWorker([(p, self._photo_rot_for(p), pts) for p, pts in warps.items()], dest=dest)
         w.done.connect(self._photo_warped)
@@ -2184,9 +2224,25 @@ class PhotoMixin:
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
     def _photo_warped(self, pairs: list, failed: list):
+        """펴기 끝 — pairs = [(원본, 새 파일, 백업 경로 또는 "")]. 원본을 대체했으면(261106-15) 그 사진의 보기 상태(크롭·보기 회전·꾸밈 —
+        사이드카 기록 통째)를 지운다: 픽셀이 이미 펴지고 세워졌다. OCR 기록·사진 정보 색인·썸네일은 파일 크기·수정 시각으로 저절로 새로 읽힌다."""
         self._photo_warp_busy = False
-        here = [(s, o) for s, o in pairs
-                if os.path.normcase(str(Path(o).parent)) == os.path.normcase(str(Path(s).parent))]
+        replaced = [(s_, o, b_) for s_, o, b_ in pairs if b_]
+        if replaced:
+            st = self._ensure_page_meta_store()
+            for s_, o, _b in replaced:
+                if st is not None:
+                    st.drop_entry(s_)
+                    if os.path.normcase(o) != os.path.normcase(s_):
+                        st.drop_entry(o)
+            if st is not None:
+                try:
+                    st.save()
+                except Exception:
+                    pass
+        renamed = [(s_, o) for s_, o, b_ in replaced if os.path.normcase(o) != os.path.normcase(s_)]
+        here = [(s_, o) for s_, o, b_ in pairs if not b_
+                and os.path.normcase(str(Path(o).parent)) == os.path.normcase(str(Path(s_).parent))]
         for src, out in here:                            # 다른 폴더에 만든 것은 보고 있는 목록에 끼우지 않는다
             try:
                 for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
@@ -2194,18 +2250,52 @@ class PhotoMixin:
                         bt.add_or_refresh_file(out, after=src)
             except Exception:
                 pass
-        if pairs and not failed:
+        if renamed:                                      # HEIC → 같은 이름 .jpg — 목록을 다시 훑는다(옛 줄이 남지 않게)
+            for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                r = getattr(bt, "_root_dir", None) if bt is not None else None
+                if r:
+                    try:
+                        bt.load_folder(r)
+                    except Exception:
+                        pass
+        strip = self._photo_strip_widget(create=False)
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        for s_, o, _b in replaced:
+            if strip is not None:
+                try:
+                    strip.refresh(str(o))
+                except Exception:
+                    pass
+            if cur and os.path.normcase(str(cur)) == os.path.normcase(s_) and not renamed:
+                fit = mv._fit_mode
+                if mv.load_document(o, 0):               # 같은 이름 — 바뀐 픽셀로 다시 연다
+                    mv._fit_mode = fit
+                    self._photo_after_open(Path(o))
+                    self._photo_words_changed()
+                    mv._render_current()
+        where = self._photo_warp_backup_label()
+        if replaced and not failed:
+            msg = (tr("원본을 펼친 사진으로 바꿨습니다: {name} — 원본은 {where}(으)로 옮겼습니다.").format(name=Path(replaced[0][1]).name, where=where)
+                   if len(pairs) == 1 else tr("{n}장을 펼친 사진으로 바꿨습니다 — 원본은 {where}(으)로 옮겼습니다.").format(n=len(pairs), where=where))
+            if renamed:
+                msg += " " + tr("(HEIC 는 JPEG 로 저장했습니다)")
+        elif pairs and not failed:
             msg = (tr("펼친 사진을 저장했습니다: {name} — 원본은 그대로입니다.").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
                    else tr("펼친 사진 {n}장을 저장했습니다 — 원본은 그대로입니다.").format(n=len(pairs)))
         elif pairs:
             msg = tr("펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다.").format(n=len(pairs), m=len(failed))
         else:
             msg = tr("펼친 사진을 만들지 못했습니다 — 원본은 그대로입니다.")
-        self.status.showMessage(msg, 6000)
-        if len(pairs) == 1 and here and self._photo_mode:   # 한 장이면(같은 폴더) 펼친 사진을 연다
-            out = pairs[0][1]
+        self.status.showMessage(msg, 8000)
+        if len(pairs) == 1 and here and self._photo_mode:   # 새 파일 한 장이면(같은 폴더) 그 사진을 연다
             try:
-                self._on_bookmark_activated(out, 0)
+                self._on_bookmark_activated(here[0][1], 0)
+            except Exception:
+                pass
+        elif len(replaced) == 1 and renamed and self._photo_mode:
+            try:
+                self._on_bookmark_activated(renamed[0][1], 0)
             except Exception:
                 pass
 
@@ -3746,10 +3836,12 @@ WARP_JPEG_QUALITY = 95          # 펼친 사진(모양 펴기 §4.43) JPEG 화�
 
 
 class PhotoWarpWorker(QObject):
-    """모양 펴기(사진 보기 SOT §4.43, 261106-6) — 배경: 사진마다 원본(방향 세움·보기 회전)을 점 8개 테두리로 펴서
-    같은 폴더 임시 파일에 쓰고 **새 이름** '<이름>_펼침' 으로 옮긴다(원본 그대로 — 덮어쓰기 길을 타지 않는다).
-    촬영 정보(EXIF)는 남기고 방향 태그만 1 로(픽셀을 세웠다). HEIC 는 JPEG 로, PNG·TIFF·BMP·WEBP 는 같은 형식으로."""
-    done = pyqtSignal(list, list)          # [(원본, 새 파일)], [실패한 원본]
+    """모양 펴기(사진 보기 SOT §4.43, 261106-6·-15) — 배경: 사진마다 원본(방향 세움·보기 회전)을 점 8개 테두리로 편다.
+    `dest` 가 ("replace", None) 이면(묻는 창 [저장], 261106-15) **원본을 대체**한다: 같은 폴더 임시 파일에 쓰고 열어 확인 →
+    원본을 백업 자리로 옮김(`photo_backup`) → 임시 파일을 원본 이름으로. 옮긴 뒤 바꿔 넣기가 실패하면 백업을 되돌린다 — 어느 단계에서
+    멈춰도 원본이 사라지지 않는다. 그 밖(다른 이름·다른 폴더)은 새 파일 '<이름>_펼침'(원본 그대로).
+    촬영 정보(EXIF)는 남기고 방향 태그만 1 로(픽셀을 세웠다). HEIC 는 JPEG 로(같은 이름 .jpg), PNG·TIFF·BMP·WEBP 는 같은 형식으로."""
+    done = pyqtSignal(list, list)          # [(원본, 새 파일, 백업 경로 또는 "")], [실패한 원본]
     finished = pyqtSignal()
 
     def __init__(self, items, dest=None):
@@ -3773,8 +3865,19 @@ class PhotoWarpWorker(QObject):
         base = Path(folder) if folder else src.parent
         return unique_path(base / (tr('{stem}_펼침').format(stem=src.stem) + ext))
 
+    @staticmethod
+    def replace_name(src: Path) -> Path:
+        """원본 대체 때 쓸 이름 — 쓸 수 있는 형식은 그 이름 그대로, HEIC 등은 같은 이름의 .jpg(있으면 겹치지 않게)."""
+        from viewer import photo_io
+        from viewer.pathutil import unique_path
+        if src.suffix.lower() in (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp") and not photo_io.is_heif(src):
+            return src
+        return unique_path(src.with_suffix(".jpg"))
+
     def _dst(self, src: Path) -> Path:
         d = self.dest
+        if d and d[0] == "replace":
+            return self.replace_name(src)
         if d and d[0] == "names" and str(src) in d[1]:
             p = Path(d[1][str(src)])                 # 사용자가 저장 창에서 고른 이름(덮어쓰기는 창이 물었다)
             known = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp")
@@ -3803,6 +3906,7 @@ class PhotoWarpWorker(QObject):
             pil.load()
         out = photo_warp.unwarp(pil, pts)
         dst = self._dst(src)
+        replace = bool(self.dest and self.dest[0] == "replace")
         tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
         try:
             ext = dst.suffix.lower()
@@ -3814,8 +3918,21 @@ class PhotoWarpWorker(QObject):
             else:
                 fmt = {".png": "PNG", ".tif": "TIFF", ".tiff": "TIFF", ".bmp": "BMP", ".webp": "WEBP"}[ext]
                 out.save(str(tmp), fmt)
-            os.replace(str(tmp), str(dst))
-            return str(dst)
+            if not replace:
+                os.replace(str(tmp), str(dst))
+                return str(dst), ""
+            from viewer import photo_backup
+            with Image.open(str(tmp)) as chk:            # 다 썼는지 열어 확인 — 그 전에는 원본을 건드리지 않는다
+                chk.load()
+                if chk.size != out.size:
+                    raise OSError("verify")
+            bk = photo_backup.move_to_backup(src)        # 실패하면 예외 — 원본 그대로
+            try:
+                os.replace(str(tmp), str(dst))
+            except Exception:
+                photo_backup.restore(bk, src)            # 바꿔 넣기 실패 — 원본을 제자리로
+                raise
+            return str(dst), bk
         finally:
             if tmp.exists():
                 try:
@@ -3831,7 +3948,8 @@ class PhotoWarpWorker(QObject):
                 if self._cancel:
                     break
                 try:
-                    ok.append((p, self._one(Path(p), rot, pts)))
+                    out, bk = self._one(Path(p), rot, pts)
+                    ok.append((p, out, bk))
                 except Exception:
                     bad.append(p)
                 pacing.pace(self)
@@ -4219,6 +4337,7 @@ class PhotoIndexWorker(QObject):
         import os
         from viewer import pacing, photo_index
         from viewer.image_page import PHOTO_EXTS
+        from viewer.photo_backup import BACKUP_DIRNAME as _BACKUP_DIRNAME, is_backup_path as _is_backup
         n_new = n_gone = total = 0
         try:
             root = photo_index.norm_folder(self.folder)
@@ -4252,7 +4371,8 @@ class PhotoIndexWorker(QObject):
                 for dirpath, dirnames, filenames in os.walk(root):
                     if self._cancel:
                         break
-                    dirnames[:] = [d for d in dirnames if not d.startswith((".", "~"))]
+                    dirnames[:] = [d for d in dirnames if not d.startswith((".", "~")) and d != _BACKUP_DIRNAME
+                                   and not _is_backup(os.path.join(dirpath, d, "x"))]   # 펴기 원본 백업(261106-15)은 색인하지 않는다
                     for fn in filenames:
                         if self._cancel:
                             break
