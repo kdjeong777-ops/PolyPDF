@@ -123,6 +123,8 @@ class PhotoCropDialog(QDialog):
         self.warp.pointsDragged.connect(lambda _p: self._prev_timer.start())
         self.nav = PageNav(self)
         self.nav.stepRequested.connect(lambda d: self._go(self._index + d))
+        from viewer.widgets.page_nav import arrow_keys
+        self._arrow_sc = arrow_keys(self, lambda d: self._go(self._index + d))   # ←/→ = ❮ ❯ (261106-13)
         self.nav.pageRequested.connect(lambda n: self._go(n - 1))
         self.nav.setVisible(self._count > 1)
         left = QVBoxLayout()                   # 왼쪽 칸 아래 — 모두 그 칸 가운데(❮ ❯ 와 같은 기준선)
@@ -203,6 +205,7 @@ class PhotoCropDialog(QDialog):
                  tr("박스 안쪽을 끌면 크기 그대로 옮기고, 귀·변을 끌면 크기를 바꿉니다.")]
         if self._count > 1:
             items.append(tr("❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."))
+            items.append(tr("← → 키로도 넘깁니다(숫자 칸을 고치는 중이면 그 칸 안에서 움직입니다)."))
         items.append(tr("모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."))
         return "<ul style='margin:0;'>" + "".join("<li>%s</li>" % t for t in items) + "</ul>"
 

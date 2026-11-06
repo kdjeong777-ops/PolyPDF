@@ -122,3 +122,17 @@ def centered_row(nav: QWidget, left: QWidget | None = None, right: QWidget | Non
     row.addWidget(nav, 0, Qt.AlignmentFlag.AlignVCenter)
     row.addWidget(boxes[1][0], 1)
     return row
+
+
+def arrow_keys(window: QWidget, step) -> list:
+    """창에서 ← = 이전, → = 다음(`step(-1)`·`step(+1)`) — 261106-13 사용자 지시 '크롭에서 좌우 키보드 키로 이전/이후로 이동'.
+    창 단축키라 단추·체크 상자·그림 칸에 포커스가 있어도 넘긴다. 다만 **글자 칸(숫자 칸·쪽 번호 칸)을 고치는 중**이면 그 칸이
+    ←/→ 를 먼저 가져가(칸 안 커서 이동) 넘기지 않는다 — Qt 의 ShortcutOverride 순서 그대로. 만든 단축키 목록을 돌려준다."""
+    from PyQt6.QtGui import QKeySequence, QShortcut
+    out = []
+    for key, d in ((Qt.Key.Key_Left, -1), (Qt.Key.Key_Right, +1)):
+        sc = QShortcut(QKeySequence(key), window)
+        sc.setContext(Qt.ShortcutContext.WindowShortcut)
+        sc.activated.connect(lambda d=d: step(d))
+        out.append(sc)
+    return out

@@ -9054,6 +9054,10 @@ msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] �
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py
+msgid "← → 키로도 넘깁니다(숫자 칸을 고치는 중이면 그 칸 안에서 움직입니다)."
+msgstr ""
+
+#: viewer/widgets/photo_crop_dialog.py
 msgid "사진 크롭"
 msgstr ""
 

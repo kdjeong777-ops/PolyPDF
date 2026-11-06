@@ -9343,6 +9343,10 @@ msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] �
 msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and applied all at once with [OK]. Photos without a crop start with the crop you set most recently."
 
 #: viewer/widgets/photo_crop_dialog.py
+msgid "← → 키로도 넘깁니다(숫자 칸을 고치는 중이면 그 칸 안에서 움직입니다)."
+msgstr "You can also flip with the ← → keys (while editing a number box, they move within that box)."
+
+#: viewer/widgets/photo_crop_dialog.py
 msgid "사진 크롭"
 msgstr "Crop Photo"
 

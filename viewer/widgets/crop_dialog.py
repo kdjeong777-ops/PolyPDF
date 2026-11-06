@@ -412,6 +412,8 @@ class CropDialog(QDialog):
         # ── 연결 ──
         self.btn_prev.clicked.connect(lambda: self._goto(self._cur - 1))
         self.btn_next.clicked.connect(lambda: self._goto(self._cur + 1))
+        from viewer.widgets.page_nav import arrow_keys
+        self._arrow_sc = arrow_keys(self, lambda d: self._goto(self._cur + d))   # ←/→ = ❮ ❯ (261106-13, 사진 크롭과 같게)
         self.spin_page.valueChanged.connect(lambda v: self._goto(v - 1))
         self.list.currentRowChanged.connect(lambda r: self._goto(r) if r >= 0 else None)
         self.list.itemSelectionChanged.connect(self._on_selection)
