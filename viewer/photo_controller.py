@@ -28,6 +28,8 @@ PHOTO_OFF_CMDS = ("file.save_as",                                    # 인쇄·�
                   "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
                   "tools.reindex", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign", "tools.translate")
 PHOTO_OFF_ATTRS = ()                     # 창에 따로 붙은 액션 — F5 발표는 사진 슬라이드쇼로 켠다(261104-7)
+# 사진 모드에서 아예 숨기는 명령(4.13, 261106-1 사용자 지시 '사진 모드 — 전자서명 아이콘 제외') — 끄기(PHOTO_OFF_CMDS)에 더해 리본·모음·메뉴에서 뺀다
+PHOTO_HIDE_CMDS = ("tools.sign",)
 PHOTO_LIST_ATTRS = ("_favorites", "_recent_folders", "_recent_files")   # 모드마다 따로(4.7) — 사진 묶음 키는 앞 _ 를 뺀 이름
 FIT_ACTUAL = "actual"                    # 창 아래 맞춤 콤보의 '원래 크기' — 사진 모드에만(4.16, 261105-16 사용자 결정)
 
@@ -1778,6 +1780,20 @@ class PhotoMixin:
         (`_gate_api_dependent_ui`)을 다시 덧입힌다(그 함수 끝에서 이 함수를 부른다 — 한 길)."""
         acts = [(c, self._cmds.get(c)) for c in PHOTO_OFF_CMDS] + [(n, getattr(self, n, None)) for n in PHOTO_OFF_ATTRS]
         off = self.__dict__.setdefault("_photo_disabled", set())
+        hidden = self.__dict__.setdefault("_photo_hidden", set())
+        for c in PHOTO_HIDE_CMDS:                        # 숨김(261106-1) — 숨긴 것만 기억했다가 PDF 모드에서 되살린다
+            a = self._cmds.get(c)
+            if a is None:
+                continue
+            if self._photo_mode and a.isVisible():
+                a.setVisible(False)
+                hidden.add(c)
+            elif not self._photo_mode and c in hidden:
+                a.setVisible(True)
+                hidden.discard(c)
+        for mv in getattr(self, "_mv", []) or []:       # 편집 모드 툴바의 전자서명 단추(크롭 오른쪽)
+            if hasattr(mv, "set_sign_allowed"):
+                mv.set_sign_allowed(not self._photo_mode)
         if self._photo_mode:
             for k, a in acts:
                 if a is not None and a.isEnabled():
@@ -1986,28 +2002,124 @@ class PhotoMixin:
             return
         if self.__dict__.get("_photo_crop_busy"):
             return
-        from viewer.workers import run_in_thread
+        self._photo_crop_paths = self._photo_crop_range(cur)
         self._photo_crop_busy = True
-        w = PhotoCopyWorker(cur, self._photo_rot_for(cur), max_side=CROP_PREVIEW_SIDE)
+        self._photo_crop_load(cur)
+
+    def _photo_crop_range(self, cur: str) -> list:
+        """크롭 창에서 ❮ ❯ 로 넘길 사진(4.40, 261106-3) — 썸네일 줄에서 고른 사진이 여럿이고 그 안이면 고른 것만,
+        아니면 넘김 차례(`_photo_list` — 썸네일 줄, 없으면 책갈피창). 자를 수 없는 사진(zip·휴대 장치·폴더 밖·열 수 없음)은 뺀다."""
+        strip = self._photo_strip_widget(create=False)
+        sel = strip.selected_paths() if strip is not None else []
+        src = sel if (len(sel) > 1 and any(os.path.normcase(str(p)) == os.path.normcase(cur) for p in sel)) else self._photo_list()
+        st = self._ensure_page_meta_store()
+        out = []
+        for p in src or []:
+            p = str(p)
+            if not self._is_photo_path(p) or self._photo_any_cached([p]):
+                continue
+            if st is None or st._key(p) is None:
+                continue
+            out.append(p)
+        if not any(os.path.normcase(p) == os.path.normcase(cur) for p in out):
+            out = [cur]
+        return out
+
+    def _photo_crop_load(self, path: str):
+        """크롭 창 미리보기 그림은 배경에서(사진 복사와 같은 워커, 응답성 SOT §5) — 끝나면 창을 열거나 그 사진으로 넘긴다."""
+        from viewer.workers import run_in_thread
+        w = PhotoCopyWorker(path, self._photo_rot_for(path), max_side=CROP_PREVIEW_SIDE)
         w.done.connect(self._photo_crop_ready)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
+    def _photo_crop_start_margins(self, path: str):
+        """크롭 창에 처음 걸 여백 — 그 사진의 크롭(보이는 방향 %), 없으면 **최근에 정한 크롭**(261106-3 사용자 지시, 이 실행 동안)."""
+        from viewer import photo_crop
+        boxv = self._photo_view_box(path)
+        if boxv:
+            return photo_crop.margins_of(boxv), True
+        recent = self.__dict__.get("_photo_crop_recent")
+        return (list(recent) if recent else [0.0, 0.0, 0.0, 0.0]), False
+
     def _photo_crop_ready(self, path: str, img):
+        dlg = self.__dict__.get("_photo_crop_dlg")
+        if dlg is not None:                              # 창이 열려 있다(exec 중) — ❮ ❯ 로 넘긴 사진
+            if img is None or img.isNull():
+                dlg.loading_failed()
+                self.status.showMessage(tr("사진을 읽지 못했습니다."), 4000)
+                return
+            paths = self.__dict__.get("_photo_crop_paths") or [path]
+            idx = next((i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path))), dlg.index())
+            m, has = self._photo_crop_start_margins(path)
+            dlg.show_photo(idx, img, m, has, Path(path).name)
+            return
         self._photo_crop_busy = False
         if img is None or img.isNull():
             self.status.showMessage(tr("사진을 읽지 못했습니다."), 4000)
             return
         from PyQt6.QtWidgets import QDialog
-        from viewer import photo_crop
         from viewer.widgets.photo_crop_dialog import PhotoCropDialog
-        boxv = self._photo_view_box(path)
-        dlg = PhotoCropDialog(img, photo_crop.margins_of(boxv), has_crop=bool(boxv), title=Path(path).name, parent=self)
+        paths = self.__dict__.get("_photo_crop_paths") or [str(path)]
+        if not any(os.path.normcase(p) == os.path.normcase(str(path)) for p in paths):
+            paths = self._photo_crop_paths = [str(path)]
+        idx = next(i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path)))
+        m, has = self._photo_crop_start_margins(path)
+        dlg = PhotoCropDialog(img, m, has_crop=has, title=Path(path).name, parent=self, count=len(paths), index=idx)
+
+        def want(i, _d=dlg, _p=paths):
+            cm = _d.current_margins()                    # 떠나는 사진의 여백 — 최근 크롭으로 기억(크롭이 없는 사진에 미리 건다)
+            if any(v > 0 for v in cm):
+                self._photo_crop_recent = list(cm)
+            self._photo_crop_load(_p[i])
+        dlg.photoRequested.connect(want)
         self._photo_crop_dlg = dlg
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        try:
+            ok = dlg.exec() == QDialog.DialogCode.Accepted
+        finally:
+            self._photo_crop_dlg = None
+        if not ok:
+            return                                       # [취소] — 넘기며 고친 것도 남기지 않는다
+        todo = {paths[i]: m for i, m in dlg.pending().items() if 0 <= i < len(paths)}
+        cm = dlg.margins()
+        if cm:
+            self._photo_crop_recent = list(cm)
+        self._photo_set_crops(todo)
+
+    def _photo_set_crops(self, todo: dict):
+        """크롭 창 [확인](261106-3) — {경로: 보이는 방향 여백 % 또는 None} 을 한꺼번에. 사이드카는 한 번만 쓴다."""
+        from viewer import photo_crop
+        st = self._ensure_page_meta_store()
+        if st is None or not todo:
             return
-        m = dlg.margins()
-        box0 = None if m is None else photo_crop.norm(photo_crop.to_rot0(photo_crop.box_of(m), self._photo_rot_for(path)))
-        self._photo_set_crop(path, box0)
+        if len(todo) == 1:
+            (p, m), = todo.items()
+            box0 = None if m is None else photo_crop.norm(photo_crop.to_rot0(photo_crop.box_of(m), self._photo_rot_for(p)))
+            self._photo_set_crop(p, box0)
+            return
+        changed = []
+        for p, m in todo.items():
+            box0 = None if m is None else photo_crop.norm(photo_crop.to_rot0(photo_crop.box_of(m), self._photo_rot_for(p)))
+            if st.photo_crop(p) == (tuple(box0) if box0 else None):
+                continue
+            if st.set_photo_crop(p, box0) is not False:
+                changed.append(p)
+        if not changed:
+            return
+        st.save_photo_rotation()
+        strip = self._photo_strip_widget(create=False)
+        if strip is not None:
+            for p in changed:
+                strip.refresh(str(p))
+        mv = self.main_view
+        cur = mv.current_file() if mv else None
+        if cur and any(os.path.normcase(str(cur)) == os.path.normcase(p) for p in changed):
+            fit = mv._fit_mode
+            if mv.load_document(cur, 0):
+                mv._fit_mode = fit
+                self._photo_after_open(Path(cur))
+                self._photo_words_changed()
+                mv._render_current()
+        self.status.showMessage(tr("사진 {n}장의 크롭을 바꿨습니다 — 원본 사진은 그대로입니다.").format(n=len(changed)), 4000)
 
     def _photo_set_crop(self, path, box0):
         """크롭을 정한다(None 이면 푼다) — 보기 상태라 사진 보기 묶음만 바로 쓰고(4.16 과 같은 길), 썸네일·본문을 다시 그린다."""

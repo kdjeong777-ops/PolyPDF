@@ -3841,11 +3841,16 @@ class MainView(QWidget):
             if i < len(pens):
                 b.setStyleSheet(self._pen_btn_css(pens[i], b.isChecked()))
 
+    def set_sign_allowed(self, ok: bool) -> None:
+        """편집 모드 툴바의 전자서명 단추를 쓸 수 있는가 — 사진 모드면 False(사진 보기 SOT §4.13, 261106-1 사용자 지시 '전자서명 아이콘 제외')."""
+        self._sign_allowed = bool(ok)
+        self.btn_sign.setVisible(bool(ok) and self._draw_bar.isVisibleTo(self))
+
     def set_draw_mode(self, on):
         """편집모드 진입/이탈 — 선긋기 도구 모음 표시·도구 해제."""
         self._draw_bar.setVisible(bool(on))
         self.btn_crop.setVisible(bool(on))       # 261012-11: 크롭·서명 단추는 편집 모드에서만
-        self.btn_sign.setVisible(bool(on))
+        self.btn_sign.setVisible(bool(on) and self.__dict__.get("_sign_allowed", True))   # 사진 모드는 숨김(261106-1)
         if not on:
             # 260907-6: 편집모드를 나가면 **도구 없음**(텍스트 선택)으로 돌아간다.
             self._pen_idx = None; self._draw_kind = None; self._shape_kind = "rect"

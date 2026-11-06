@@ -4464,6 +4464,11 @@ msgid "첫 사진입니다."
 msgstr "This is the first photo."
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장의 크롭을 바꿨습니다 — 원본 사진은 그대로입니다."
+msgstr "Changed the crop of {n} photos — the original photos are unchanged."
+
+#: viewer/photo_controller.py
 msgid "열 수 없는 파일에는 꾸밀 수 없습니다."
 msgstr "A file that cannot be opened cannot be marked up."
 
@@ -9147,6 +9152,10 @@ msgstr "Custom line {i}"
 #: viewer/widgets/photo_crop_dialog.py
 msgid "원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."
 msgstr "The original photo stays unchanged; only the crop is remembered — Photo → PDF, printing, flattening, Copy for Sharing and photo copy also use the crop."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."
+msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and applied all at once with [OK]. Photos without a crop start with the crop you set most recently."
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "사진 크롭"
