@@ -6,6 +6,7 @@ A. 사진 썸네일 줄이 썸네일 칸 **레이아웃 안**에 들어가 칸�
 B. 쪽 칸은 사진 목록 안 순번 i / N(종전 '1 / 1'), 쪽 칸에 번호를 적으면 그 사진으로
 C. 사진을 연 뒤에도 PDF 명령(병합)이 꺼져 있다(종전: 문서 권한 적용이 다시 켰다)
 D. 꺼진 리본 단추는 글 색이 다르다(종전: 글 색이 고정이라 꺼져도 켜진 것과 같아 보였다) — 실제 단추를 그려 비교
+   (261106-4: 사진 모드에서 병합은 숨으므로 잠시 보이게 해 잰다)
 E. 맞춤은 작은 사진을 원본보다 키우지 않는다(120×160 사진이 8배로 늘어 흐렸다), 2장 맞춤에서도 사진은 한 장
 F. (지킴) 미리 풀지 않은 사진을 연 뒤 배경 해독이 끝나면 메인 스레드에서 다시 그려 실제 사진이 보인다 — 수정 전에도 통과(지키는 검사).
    A~E 는 수정 전 코드에서 8건 실패를 확인했다.
@@ -99,7 +100,9 @@ try:
     merge = mw._cmds.get("tools.merge")
     chk(merge is not None and not merge.isEnabled(), "C 사진을 연 뒤에도 병합이 꺼져 있다")
 
-    # D — 같은 리본 줄의 꺼진 단추와 켜진 단추 글 색
+    # D — 같은 리본 줄의 꺼진 단추와 켜진 단추 글 색. 261106-4 부터 사진 모드의 PDF 전용 명령은 숨는다(사진 보기 SOT §4.13) —
+    #   글 색 규칙(디자인 SOT §2.9.3 `BTN_OFF_FG`)만 보려고 꺼진 병합을 잠시 보이게 한다(끝에 다시 숨긴다)
+    merge.setVisible(True); pump(timeout=0.3)
     off_w = on_w = None
     for tb in mw.findChildren(QToolBar):
         for a in tb.actions():
@@ -131,6 +134,7 @@ try:
         chk(ink_off - ink_on >= 60, "D 꺼진 리본 단추 글이 켜진 것보다 옅다", "꺼짐 %d · 켜짐 %d" % (ink_off, ink_on))
     else:
         chk(False, "D 병합 단추를 리본에서 찾았다")
+    merge.setVisible(False); pump(timeout=0.2)
 
     # E
     mw._on_bookmark_activated(lst[0], 0); pump(timeout=1.5)

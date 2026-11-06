@@ -28,8 +28,9 @@ PHOTO_OFF_CMDS = ("file.save_as",                                    # 인쇄·�
                   "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
                   "tools.reindex", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign", "tools.translate")
 PHOTO_OFF_ATTRS = ()                     # 창에 따로 붙은 액션 — F5 발표는 사진 슬라이드쇼로 켠다(261104-7)
-# 사진 모드에서 아예 숨기는 명령(4.13, 261106-1 사용자 지시 '사진 모드 — 전자서명 아이콘 제외') — 끄기(PHOTO_OFF_CMDS)에 더해 리본·모음·메뉴에서 뺀다
-PHOTO_HIDE_CMDS = ("tools.sign",)
+# 사진 모드에서 아예 숨기는 명령(4.13) — 끄기(PHOTO_OFF_CMDS)에 더해 리본·모음·메뉴에서 뺀다. 261106-1 전자서명에 이어
+#   261106-4(사용자 결정 '모두 숨김'): 끄는 명령은 **모두** 숨긴다 — 회색 단추를 남기지 않는다(목록은 PHOTO_OFF_CMDS 하나)
+PHOTO_HIDE_CMDS = PHOTO_OFF_CMDS
 PHOTO_LIST_ATTRS = ("_favorites", "_recent_folders", "_recent_files")   # 모드마다 따로(4.7) — 사진 묶음 키는 앞 _ 를 뺀 이름
 FIT_ACTUAL = "actual"                    # 창 아래 맞춤 콤보의 '원래 크기' — 사진 모드에만(4.16, 261105-16 사용자 결정)
 
@@ -1781,7 +1782,17 @@ class PhotoMixin:
         acts = [(c, self._cmds.get(c)) for c in PHOTO_OFF_CMDS] + [(n, getattr(self, n, None)) for n in PHOTO_OFF_ATTRS]
         off = self.__dict__.setdefault("_photo_disabled", set())
         hidden = self.__dict__.setdefault("_photo_hidden", set())
-        for c in PHOTO_HIDE_CMDS:                        # 숨김(261106-1) — 숨긴 것만 기억했다가 PDF 모드에서 되살린다
+        if self._photo_mode:
+            # 끄기를 숨기기보다 **먼저**, 그리고 숨은 것도 늘 다시 끈다(261106-4) — Qt 는 숨은 액션을 isEnabled()=False 로
+            #   보고하지만 그 사이 권한 적용 등이 setEnabled(True) 를 하면 그 값을 기억해, 다시 보일 때 켜진 채로 나온다
+            for k, a in acts:
+                if a is None:
+                    continue
+                if a.isEnabled():
+                    off.add(k)
+                if k in off:
+                    a.setEnabled(False)
+        for c in PHOTO_HIDE_CMDS:                        # 숨김(261106-1·-4) — 숨긴 것만 기억했다가 PDF 모드에서 되살린다
             a = self._cmds.get(c)
             if a is None:
                 continue
@@ -1795,10 +1806,6 @@ class PhotoMixin:
             if hasattr(mv, "set_sign_allowed"):
                 mv.set_sign_allowed(not self._photo_mode)
         if self._photo_mode:
-            for k, a in acts:
-                if a is not None and a.isEnabled():
-                    a.setEnabled(False)
-                    off.add(k)
             return
         if not off:
             return
