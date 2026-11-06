@@ -2035,7 +2035,7 @@ class PhotoMixin:
     def _photo_crop_load(self, path: str):
         """크롭 창 미리보기 그림은 배경에서(사진 복사와 같은 워커, 응답성 SOT §5) — 끝나면 창을 열거나 그 사진으로 넘긴다."""
         from viewer.workers import run_in_thread
-        w = PhotoCopyWorker(path, self._photo_rot_for(path), max_side=CROP_PREVIEW_SIDE)
+        w = PhotoCropLoadWorker(path, self._photo_rot_for(path), max_side=CROP_PREVIEW_SIDE)   # 테두리 어림도 함께(§4.43)
         w.done.connect(self._photo_crop_ready)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
@@ -2048,7 +2048,7 @@ class PhotoMixin:
         recent = self.__dict__.get("_photo_crop_recent")
         return (list(recent) if recent else [0.0, 0.0, 0.0, 0.0]), False
 
-    def _photo_crop_ready(self, path: str, img):
+    def _photo_crop_ready(self, path: str, img, auto_pts=None):
         dlg = self.__dict__.get("_photo_crop_dlg")
         if dlg is not None:                              # 창이 열려 있다(exec 중) — ❮ ❯ 로 넘긴 사진
             if img is None or img.isNull():
@@ -2058,7 +2058,7 @@ class PhotoMixin:
             paths = self.__dict__.get("_photo_crop_paths") or [path]
             idx = next((i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path))), dlg.index())
             m, has = self._photo_crop_start_margins(path)
-            dlg.show_photo(idx, img, m, has, Path(path).name)
+            dlg.show_photo(idx, img, m, has, Path(path).name, auto_pts)
             return
         self._photo_crop_busy = False
         if img is None or img.isNull():
@@ -2071,7 +2071,8 @@ class PhotoMixin:
             paths = self._photo_crop_paths = [str(path)]
         idx = next(i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path)))
         m, has = self._photo_crop_start_margins(path)
-        dlg = PhotoCropDialog(img, m, has_crop=has, title=Path(path).name, parent=self, count=len(paths), index=idx)
+        dlg = PhotoCropDialog(img, m, has_crop=has, title=Path(path).name, parent=self, count=len(paths), index=idx,
+                              auto_pts=auto_pts)
 
         def want(i, _d=dlg, _p=paths):
             cm = _d.current_margins()                    # 떠나는 사진의 여백 — 최근 크롭으로 기억(크롭이 없는 사진에 미리 건다)
@@ -2087,10 +2088,106 @@ class PhotoMixin:
         if not ok:
             return                                       # [취소] — 넘기며 고친 것도 남기지 않는다
         todo = {paths[i]: m for i, m in dlg.pending().items() if 0 <= i < len(paths)}
+        warps = {paths[i]: pts for i, pts in dlg.pending_warps().items() if 0 <= i < len(paths)}
+        dest = None
+        if warps:                                        # 펼친 사진을 어디에(261106-6 사용자 지시 '확인시 묻기')
+            dest = self._photo_warp_ask(list(warps))
+            if dest is None:
+                return                                   # 묻는 창에서 취소 — 크롭도 펴기도 남기지 않는다
         cm = dlg.margins()
-        if cm:
+        if cm and not dlg.chk_warp.isChecked():
             self._photo_crop_recent = list(cm)
         self._photo_set_crops(todo)
+        if warps:
+            self._photo_warp(warps, dest)
+
+    # ── 모양 펴기(4.43, 261106-6) ─────────────────────────
+    WARP_ASK = ("here", "names", "dir")
+
+    def _photo_warp_ask(self, paths: list):
+        """펼친 사진을 어디에 — [저장](원본 옆 '<이름>_펼침') · [다른 이름으로 저장](사진마다 저장 창) · [다른 폴더에 저장]
+        (폴더 고르기, 이름은 '<이름>_펼침'). 여러 장이면 한 번 묻고 모두에. 돌려줌: `("here", None)`·`("names", {원본: 새 경로})`·
+        `("dir", 폴더)`, 취소면 None."""
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        n = len(paths)
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("펼친 사진 저장"))
+        box.setText(tr("펼친 사진을 어디에 저장할까요? 원본 사진은 그대로입니다.") if n == 1
+                    else tr("펼친 사진 {n}장을 어디에 저장할까요? 원본 사진은 그대로입니다.").format(n=n))
+        b_here = box.addButton(tr("저장"), QMessageBox.ButtonRole.AcceptRole)
+        b_here.setToolTip(tr("원본 옆에 '<이름>_펼침' 으로 저장합니다."))
+        b_names = box.addButton(tr("다른 이름으로 저장..."), QMessageBox.ButtonRole.ActionRole)
+        b_dir = box.addButton(tr("다른 폴더에 저장..."), QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(b_here)
+        box.exec()
+        got = box.clickedButton()
+        if got is b_here:
+            return ("here", None)
+        if got is b_dir:
+            start = str(self._photo_prefs().get("warp_dir") or Path(paths[0]).parent)
+            d = QFileDialog.getExistingDirectory(self, tr("펼친 사진을 넣을 폴더"), start)
+            if not d:
+                return None
+            self._photo_prefs()["warp_dir"] = str(d)
+            return ("dir", str(d))
+        if got is b_names:
+            out = {}
+            for p in paths:
+                dst = PhotoWarpWorker.out_name(Path(p))
+                got_p, _f = QFileDialog.getSaveFileName(self, tr("펼친 사진 저장"), str(dst),
+                                                        tr("그림 (*{ext})").format(ext=dst.suffix))
+                if not got_p:
+                    continue                             # 이 사진은 건너뛴다
+                got_p = str(Path(got_p).with_suffix(dst.suffix)) if not Path(got_p).suffix else got_p
+                if os.path.normcase(os.path.abspath(got_p)) == os.path.normcase(os.path.abspath(p)):
+                    self.status.showMessage(tr("원본 자리에는 저장하지 않습니다 — 다른 이름을 고르세요."), 6000)
+                    continue
+                out[p] = got_p
+            return ("names", out) if out else None
+        return None
+
+    def _photo_warp(self, warps: dict, dest=None):
+        """크롭 창 [확인] 의 모양 펴기 — {경로: 점 8개}. 배경 워커 하나가 차례로 펼친 새 사진을 만든다(원본 그대로).
+        `dest` = `_photo_warp_ask` 의 답(없으면 원본 옆)."""
+        if not warps or self.__dict__.get("_photo_warp_busy"):
+            return
+        if dest and dest[0] == "names":
+            warps = {p: v for p, v in warps.items() if p in dest[1]}
+            if not warps:
+                return
+        from viewer.workers import run_in_thread
+        self._photo_warp_busy = True
+        w = PhotoWarpWorker([(p, self._photo_rot_for(p), pts) for p, pts in warps.items()], dest=dest)
+        w.done.connect(self._photo_warped)
+        self.status.showMessage(tr("펼친 사진 만드는 중…"), 3000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_warped(self, pairs: list, failed: list):
+        self._photo_warp_busy = False
+        here = [(s, o) for s, o in pairs
+                if os.path.normcase(str(Path(o).parent)) == os.path.normcase(str(Path(s).parent))]
+        for src, out in here:                            # 다른 폴더에 만든 것은 보고 있는 목록에 끼우지 않는다
+            try:
+                for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                    if bt is not None and hasattr(bt, "add_or_refresh_file"):
+                        bt.add_or_refresh_file(out, after=src)
+            except Exception:
+                pass
+        if pairs and not failed:
+            msg = (tr("펼친 사진을 저장했습니다: {name} — 원본은 그대로입니다.").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
+                   else tr("펼친 사진 {n}장을 저장했습니다 — 원본은 그대로입니다.").format(n=len(pairs)))
+        elif pairs:
+            msg = tr("펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다.").format(n=len(pairs), m=len(failed))
+        else:
+            msg = tr("펼친 사진을 만들지 못했습니다 — 원본은 그대로입니다.")
+        self.status.showMessage(msg, 6000)
+        if len(pairs) == 1 and here and self._photo_mode:   # 한 장이면(같은 폴더) 펼친 사진을 연다
+            out = pairs[0][1]
+            try:
+                self._on_bookmark_activated(out, 0)
+            except Exception:
+                pass
 
     def _photo_set_crops(self, todo: dict):
         """크롭 창 [확인](261106-3) — {경로: 보이는 방향 여백 % 또는 None} 을 한꺼번에. 사이드카는 한 번만 쓴다."""
@@ -3490,6 +3587,154 @@ class PhotoCopyWorker(QObject):
             img = None
         finally:
             self.done.emit(self.path, img)
+            self.finished.emit()
+
+
+class PhotoCropLoadWorker(QObject):
+    """크롭 창 미리보기(4.40) — 배경에서 풀고(보기 회전까지) 테두리도 어림한다(모양 펴기 §4.43, 261106-6 — 줄인 그림으로)."""
+    done = pyqtSignal(str, object, object)   # 경로, QImage, 점 8개(못 찾으면 None)
+    finished = pyqtSignal()
+
+    def __init__(self, path: str, rot: int = 0, max_side: int = 0):
+        super().__init__()
+        self.path, self.rot = path, int(rot or 0) % 360
+        self.max_side = int(max_side or CROP_PREVIEW_SIDE)
+
+    def request_cancel(self):
+        pass
+
+    def run(self):
+        img, pts = None, None
+        try:
+            from viewer.photo_io import read_scaled
+            img, _w, _h = read_scaled(self.path, self.max_side, auto_transform=True)
+            if self.rot and img is not None and not img.isNull():
+                from PyQt6.QtGui import QTransform
+                img = img.transformed(QTransform().rotate(self.rot))
+            if img is not None and not img.isNull():
+                pts = warp_detect_qimage(img)
+        except Exception:
+            img = img if img is not None else None
+        finally:
+            self.done.emit(self.path, img, pts)
+            self.finished.emit()
+
+
+def warp_detect_qimage(img):
+    """QImage → 테두리 어림(점 8개, 비율) — 줄인 회색 그림으로(`photo_warp.DETECT_SIDE`). 못 찾으면 None."""
+    from PyQt6.QtCore import Qt as _Qt
+    from PyQt6.QtGui import QImage
+    from PIL import Image
+    from viewer import photo_warp
+    side = photo_warp.DETECT_SIDE
+    small = img.scaled(side, side, _Qt.AspectRatioMode.KeepAspectRatio,
+                       _Qt.TransformationMode.SmoothTransformation).convertToFormat(QImage.Format.Format_Grayscale8)
+    w, h = small.width(), small.height()
+    if w < 8 or h < 8:
+        return None
+    buf = bytes(small.constBits().asstring(small.bytesPerLine() * h))
+    pil = Image.frombuffer("L", (w, h), buf, "raw", "L", small.bytesPerLine(), 1)
+    try:
+        return photo_warp.detect(pil)
+    except Exception:
+        return None
+
+
+WARP_JPEG_QUALITY = 95          # 펼친 사진(모양 펴기 §4.43) JPEG 화질 — 픽셀을 새로 만든다
+
+
+class PhotoWarpWorker(QObject):
+    """모양 펴기(사진 보기 SOT §4.43, 261106-6) — 배경: 사진마다 원본(방향 세움·보기 회전)을 점 8개 테두리로 펴서
+    같은 폴더 임시 파일에 쓰고 **새 이름** '<이름>_펼침' 으로 옮긴다(원본 그대로 — 덮어쓰기 길을 타지 않는다).
+    촬영 정보(EXIF)는 남기고 방향 태그만 1 로(픽셀을 세웠다). HEIC 는 JPEG 로, PNG·TIFF·BMP·WEBP 는 같은 형식으로."""
+    done = pyqtSignal(list, list)          # [(원본, 새 파일)], [실패한 원본]
+    finished = pyqtSignal()
+
+    def __init__(self, items, dest=None):
+        super().__init__()
+        self.items = [(str(p), int(r or 0) % 360, list(pts)) for p, r, pts in items]
+        self.dest = dest                     # None·("here", None) 원본 옆 · ("names", {원본: 새 경로}) · ("dir", 폴더)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    @staticmethod
+    def out_name(src: Path, folder=None) -> Path:
+        """'<이름>_펼침' + 형식 확장자 — `folder`(없으면 원본 폴더) 안에서 겹치지 않게."""
+        from viewer import photo_io
+        from viewer.pathutil import unique_path
+        if photo_io.is_jpeg_file(src) or photo_io.is_heif(src):
+            ext = src.suffix if src.suffix.lower() in (".jpg", ".jpeg") else ".jpg"
+        else:
+            ext = src.suffix if src.suffix.lower() in (".png", ".tif", ".tiff", ".bmp", ".webp") else ".png"
+        base = Path(folder) if folder else src.parent
+        return unique_path(base / (tr('{stem}_펼침').format(stem=src.stem) + ext))
+
+    def _dst(self, src: Path) -> Path:
+        d = self.dest
+        if d and d[0] == "names" and str(src) in d[1]:
+            p = Path(d[1][str(src)])                 # 사용자가 저장 창에서 고른 이름(덮어쓰기는 창이 물었다)
+            known = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp")
+            return p if p.suffix.lower() in known else p.with_suffix(self.out_name(src).suffix)
+        if d and d[0] == "dir":
+            Path(d[1]).mkdir(parents=True, exist_ok=True)
+            return self.out_name(src, d[1])
+        return self.out_name(src)
+
+    def _one(self, src: Path, rot: int, pts) -> str:
+        import os
+        from PIL import Image, ImageOps
+        from viewer import photo_doc, photo_io, photo_warp
+        photo_io._prep(src)
+        with Image.open(str(src)) as im:
+            icc = im.info.get("icc_profile")
+            exif = None
+            try:
+                ex = im.getexif()
+                ex[0x0112] = 1
+                exif = ex.tobytes()
+            except Exception:
+                exif = None
+            im = ImageOps.exif_transpose(im)
+            pil = photo_doc._rotate(photo_io.to_srgb(im, icc), rot)
+            pil.load()
+        out = photo_warp.unwarp(pil, pts)
+        dst = self._dst(src)
+        tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
+        try:
+            ext = dst.suffix.lower()
+            if ext in (".jpg", ".jpeg"):
+                kw = {"quality": WARP_JPEG_QUALITY}
+                if exif:
+                    kw["exif"] = exif
+                out.convert("RGB").save(str(tmp), "JPEG", **kw)
+            else:
+                fmt = {".png": "PNG", ".tif": "TIFF", ".tiff": "TIFF", ".bmp": "BMP", ".webp": "WEBP"}[ext]
+                out.save(str(tmp), fmt)
+            os.replace(str(tmp), str(dst))
+            return str(dst)
+        finally:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+
+    def run(self):
+        from viewer import pacing
+        ok, bad = [], []
+        try:
+            for p, rot, pts in self.items:
+                if self._cancel:
+                    break
+                try:
+                    ok.append((p, self._one(Path(p), rot, pts)))
+                except Exception:
+                    bad.append(p)
+                pacing.pace(self)
+        finally:
+            self.done.emit(ok, bad)
             self.finished.emit()
 
 

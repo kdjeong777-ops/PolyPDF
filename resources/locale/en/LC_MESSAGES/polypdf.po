@@ -292,7 +292,7 @@ msgstr "Open File..."
 msgid "새로고침"
 msgstr "Refresh"
 
-#: viewer/app.py viewer/widgets/bookmark_tree.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 msgid "다른 이름으로 저장..."
 msgstr "Save As..."
 
@@ -301,9 +301,10 @@ msgid "책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 �
 msgstr "Save bookmarks, annotations and page edits to a new file — choose the folder and name (default <original>_edited.pdf)."
 
 #: viewer/app.py viewer/convert/__init__.py viewer/edit_controller.py
-#: viewer/jobs_controller.py viewer/redact.py viewer/study_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/encrypt_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/thumbs_list.py
+#: viewer/jobs_controller.py viewer/photo_controller.py viewer/redact.py
+#: viewer/study_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/thumbs_list.py
 msgid "저장"
 msgstr "Save"
 
@@ -4089,6 +4090,22 @@ msgid "사진 모드(PolyPix)로 바꾸기"
 msgstr "Switch to photo mode (PolyPix)"
 
 #: viewer/photo_controller.py
+msgid "펼친 사진 저장"
+msgstr "Save straightened photo"
+
+#: viewer/photo_controller.py
+msgid "원본 옆에 '<이름>_펼침' 으로 저장합니다."
+msgstr "Saves next to the original as '<name>_straightened'."
+
+#: viewer/photo_controller.py
+msgid "다른 폴더에 저장..."
+msgstr "Save to another folder..."
+
+#: viewer/photo_controller.py
+msgid "펼친 사진 만드는 중…"
+msgstr "Making straightened photos…"
+
+#: viewer/photo_controller.py
 msgid "180° 돌리기"
 msgstr "Rotate 180°"
 
@@ -4266,6 +4283,18 @@ msgstr "Only photos selected from an opened folder can be cropped."
 #: viewer/photo_controller.py
 msgid "사진을 읽지 못했습니다."
 msgstr "Could not read the photo."
+
+#: viewer/photo_controller.py
+msgid "펼친 사진을 어디에 저장할까요? 원본 사진은 그대로입니다."
+msgstr "Where should the straightened photo be saved? The original photo is unchanged."
+
+#: viewer/photo_controller.py
+msgid "펼친 사진을 넣을 폴더"
+msgstr "Folder for the straightened photos"
+
+#: viewer/photo_controller.py
+msgid "펼친 사진을 만들지 못했습니다 — 원본은 그대로입니다."
+msgstr "Could not make the straightened photo — the original is unchanged."
 
 #: viewer/photo_controller.py
 msgid "크롭을 풀었습니다 — 원본 사진은 그대로입니다."
@@ -4595,6 +4624,26 @@ msgstr "{dev}: {n} photos (read-only)"
 msgid "사진 {n}장을 복사했습니다: {dest}"
 msgstr "Copied {n} photos: {dest}"
 
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "펼친 사진 {n}장을 어디에 저장할까요? 원본 사진은 그대로입니다."
+msgstr "Where should the {n} straightened photos be saved? The original photos are unchanged."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "펼친 사진을 저장했습니다: {name} — 원본은 그대로입니다."
+msgstr "Saved the straightened photo: {name} — the original is unchanged."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "펼친 사진 {n}장을 저장했습니다 — 원본은 그대로입니다."
+msgstr "Saved {n} straightened photos — the originals are unchanged."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다."
+msgstr "Saved {n} straightened photos; {m} could not be made."
+
 #: viewer/photo_controller.py viewer/photo_doc.py
 msgid "열 수 없는 파일"
 msgstr "Cannot open this file"
@@ -4746,6 +4795,11 @@ msgstr "Could not move the photos: {e}"
 #, python-brace-format
 msgid "사진을 복사하지 못했습니다: {e}"
 msgstr "Could not copy the photos: {e}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{stem}_펼침"
+msgstr "{stem}_straightened"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -9150,6 +9204,30 @@ msgid "사용자선 {i}"
 msgstr "Custom line {i}"
 
 #: viewer/widgets/photo_crop_dialog.py
+msgid "모양 펴기 (원근·휜 테두리)"
+msgstr "Straighten shape (perspective · curved edges)"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 직사각형으로 펼칩니다."
+msgstr "Flattens a photo taken at an angle or curved in the middle into a rectangle, following its edges."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "테두리 찾기"
+msgstr "Find edges"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "점 처음대로"
+msgstr "Reset points"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "점을 사진 네 귀퉁이 가까이로 되돌립니다."
+msgstr "Moves the points back near the four corners of the photo."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다 — [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
+msgstr "Drag the corners (squares) onto the edges, and drag the middle point (circle) of a curved edge — [OK] saves the straightened picture as a new photo (the original is unchanged)."
+
+#: viewer/widgets/photo_crop_dialog.py
 msgid "원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."
 msgstr "The original photo stays unchanged; only the crop is remembered — Photo → PDF, printing, flattening, Copy for Sharing and photo copy also use the crop."
 
@@ -9158,8 +9236,20 @@ msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] �
 msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and applied all at once with [OK]. Photos without a crop start with the crop you set most recently."
 
 #: viewer/widgets/photo_crop_dialog.py
+msgid "결과 미리보기"
+msgstr "Result preview"
+
+#: viewer/widgets/photo_crop_dialog.py
 msgid "사진 크롭"
 msgstr "Crop Photo"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "어림한 테두리로 점을 놓습니다."
+msgstr "Places the points on the estimated edges."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "이 사진에서는 테두리를 찾지 못했습니다 — 점을 끌어 맞추세요."
+msgstr "Could not find the edges in this photo — drag the points to fit."
 
 #: viewer/widgets/photo_label_dialog.py
 msgid "새 스타일..."
