@@ -15,6 +15,13 @@ D. '클립보드로 복사' 컷 하나가 들어간다(종전: 기록 지우기 
 재시도가 길어졌다. 그래서 ① 장치는 실제로 쥐었는지('held'/'nohold') 알리고 못 쥐면 `HOLD_TRIES` 번 다시, 그래도 못 쥐면 그 항목은
 실패가 아니라 **'확인 못 함'** ② 클립보드 넣기 한 번이 `CONTEND_MS` 를 넘거나 전체가 `TOTAL_CAP_S` 를 넘으면 다툼으로 보고 남은 항목을
 '확인 못 함' 으로 넘긴다(늘어지지 않게). '확인 못 함' 만 있으면 종료 코드는 0 — 판정은 실패 항목으로만.
+
+261107-1(스크린샷 SOT §8.3): 11-06 에 단독으로도 실패 — **다른 프로그램이 검사 내내 클립보드를 쥐고 있었다**(A~C 장치가 2초×3번
+못 엶). D 만 이 다툼을 못 알아봤다: ① `reset()` 이 걸린 시간만 봤는데 Qt `setText` 는 못 열면 **곧바로 말없이** 실패한다 →
+이제 넣은 뒤 `ownsClipboard()` 로 본다 ② D 는 '들어갔다' 만 봤다 → 이제 '들어갔거나, 앱이 못 넣었다고 알렸다' 면 앱은 맞게 한 것이고
+(못 넣었으면 다툼 → 확인 못 함, 쥔 프로그램 이름을 적는다), **말없이 빠지면** 실패. E 는 그 조건(창 있는 프로그램이 계속 쥠)을
+일부러 만들어 '클립보드로 복사' 가 실패를 **쥔 프로그램 이름과 함께** 알리는지 본다(수정 전 앱은 이름이 없어 실패).
+사용자 클립보드는 시작 때 글·그림을 받아 두고 끝에 되돌린다.
 """
 import os, sys, json, time, tempfile, subprocess
 sys.stdout.reconfigure(encoding="utf-8")
@@ -68,6 +75,32 @@ HOLDER = (
     "    u.CloseClipboard()\n")
 
 
+# 261107-1: 보통 프로그램처럼 **창으로** 연다(창 없이 연 것은 `OpenClipboard(NULL)` 끼리 서로 막지 않고, 쥔 이름도 알 수 없다).
+# 표준 입력에 한 줄이 올 때까지 쥔다 — 기록 지우기(배경, 길이가 기계마다 다름)가 끝나기 전에 놓아 버리지 않게.
+HOLDER_WIN = (
+    "import ctypes,ctypes.wintypes as wt,sys,time\n"
+    "u=ctypes.windll.user32\n"
+    "u.CreateWindowExW.restype=wt.HWND\n"
+    "u.CreateWindowExW.argtypes=[wt.DWORD,wt.LPCWSTR,wt.LPCWSTR,wt.DWORD,ctypes.c_int,ctypes.c_int,"
+    "ctypes.c_int,ctypes.c_int,wt.HWND,wt.HMENU,wt.HINSTANCE,wt.LPVOID]\n"
+    "u.OpenClipboard.argtypes=[wt.HWND]\n"
+    "w=u.CreateWindowExW(0,'STATIC','polypdf-test-holder',0,0,0,0,0,wt.HWND(-3),None,None,None)\n"
+    "ok=False\n"
+    "for _ in range(200):\n"
+    "    if u.OpenClipboard(w):\n"
+    "        ok=True; break\n"
+    "    time.sleep(0.01)\n"
+    "print('held' if ok else 'nohold',flush=True)\n"
+    "if ok:\n"
+    "    sys.stdin.readline()\n"
+    "    u.CloseClipboard()\n")
+
+
+def holder_why():
+    who = clipboard_util.holder_name()
+    return f"쥐는 장치가 클립보드를 쥐지 못함 — 쥔 프로그램: {who or '알 수 없음(창 없이 열었거나 권한 높음)'}"
+
+
 def hold(seconds):
     """다른 프로세스가 클립보드를 seconds 동안 쥔다 — 쥔 뒤에 돌아온다. 끝내 못 쥐면 None."""
     for _ in range(HOLD_TRIES):
@@ -80,16 +113,44 @@ def hold(seconds):
     return None
 
 
+def hold_win():
+    """창 있는 다른 프로세스가 놓으라 할 때까지 쥔다(E). 못 쥐면 None. 놓기는 release(p)."""
+    p = subprocess.Popen([sys.executable, "-c", HOLDER_WIN], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, text=True, creationflags=0x08000000)
+    if p.stdout.readline().strip() == "held":
+        return p
+    p.kill(); p.wait()
+    return None
+
+
+def release(p):
+    try:
+        p.stdin.write("x\n"); p.stdin.flush()
+    except Exception:
+        p.kill()
+    try:
+        p.wait(5)
+    except Exception:
+        p.kill()
+
+
 def has_image():
     md = cb.mimeData()
     return bool(md is not None and md.hasImage())
 
 
 def reset():
-    """클립보드를 글로 되돌린다. 오래 걸리면(다툼) False."""
+    """클립보드를 글로 되돌린다. 못 넣었거나 오래 걸리면(다툼) False.
+
+    261107-1: Qt `setText` 는 다른 프로그램이 쥐고 있으면 **곧바로 말없이** 실패한다 — 걸린 시간만 보면 다툼을 놓친다.
+    넣은 뒤 `ownsClipboard()` 로 본다(곧바로 답한다, 스크린샷 SOT §8.3). 잠깐 다투는 것은 몇 번 다시."""
     t0 = time.monotonic()
-    cb.setText("before"); app.processEvents()
-    return (time.monotonic() - t0) * 1000 < CONTEND_MS
+    for _ in range(4):
+        cb.setText("before"); app.processEvents()
+        if cb.ownsClipboard():
+            return (time.monotonic() - t0) * 1000 < CONTEND_MS
+        QTest.qWait(300)
+    return False
 
 
 def ready(section):
@@ -98,7 +159,7 @@ def ready(section):
         unver(section, f"전체 {TOTAL_CAP_S}초 넘음")
         return False
     if not reset():
-        unver(section, "클립보드 넣기가 늘어짐 — 다른 프로그램이 다투는 중")
+        unver(section, "클립보드에 넣지 못함·늘어짐 — 다른 프로그램이 다투는 중, " + holder_why().split(" — ")[-1])
         return False
     return True
 
@@ -113,12 +174,19 @@ def wait_until(pred, ms):
 img = QImage(120, 80, QImage.Format.Format_RGB32); img.fill(QColor("red"))
 from viewer import clipboard_util
 
+# 사용자 클립보드를 받아 둔다(끝에 되돌린다, 261107-1)
+_md = cb.mimeData()
+ORIG_TEXT = _md.text() if _md is not None and _md.hasText() else None
+ORIG_IMG = cb.image() if ORIG_TEXT is None and _md is not None and _md.hasImage() else None
+if ORIG_IMG is not None and ORIG_IMG.isNull():
+    ORIG_IMG = None
+
 # A. 쥔 동안 넣기 → 놓은 뒤 들어간다
 if ready("A 쥔 동안 넣기"):
     res = []
     h = hold(0.8)
     if h is None:
-        unver("A 쥔 동안 넣기", "쥐는 장치가 클립보드를 쥐지 못함")
+        unver("A 쥔 동안 넣기", holder_why())
     else:
         clipboard_util.set_image(img, res.append)
         chk(not cb.ownsClipboard(), "A 전제: 다른 프로그램이 쥔 동안 첫 넣기는 실패한다")
@@ -132,7 +200,7 @@ if ready("B 끝내 못 넣음"):
     res = []
     h = hold(HOLD_ALL_S)
     if h is None:
-        unver("B 끝내 못 넣음", "쥐는 장치가 클립보드를 쥐지 못함")
+        unver("B 끝내 못 넣음", holder_why())
     else:
         t = QElapsedTimer(); t.start()
         clipboard_util.set_image(img, res.append)
@@ -152,12 +220,14 @@ mw = MainWindow(); mw.resize(1000, 700)
 mw.open_folder(tmp); app.processEvents()
 mw._on_bookmark_activated(mw.bookmark_tree.ordered_pdf_files()[0], 0)
 QTest.qWait(300)
+seen_all = []      # 상태 표시줄 문구를 모두 모은다(D·E — 다른 알림이 덮어써도 놓치지 않게)
+mw.status.messageChanged.connect(seen_all.append)
 
 # B'. 앱은 실패를 알린다
 if ready("B 앱 알림"):
     h = hold(HOLD_ALL_S)
     if h is None:
-        unver("B 앱 알림", "쥐는 장치가 클립보드를 쥐지 못함")
+        unver("B 앱 알림", holder_why())
     else:
         seen = []      # 다른 알림이 덮어써도 놓치지 않게 상태 표시줄 문구를 모두 모은다
         mw.status.messageChanged.connect(seen.append)
@@ -172,7 +242,7 @@ if ready("B 앱 알림"):
 if ready("C _capture_pages"):
     h = hold(0.6)
     if h is None:
-        unver("C _capture_pages", "쥐는 장치가 클립보드를 쥐지 못함")
+        unver("C _capture_pages", holder_why())
     else:
         mw._capture_pages(mw.main_view, [0])
         chk(wait_until(has_image, 4000), "C _capture_pages 캡처가 클립보드에 들어간다")
@@ -183,16 +253,63 @@ if ready("D 클립보드로 복사"):
     mw.shot_strip.clear() if hasattr(mw.shot_strip, "clear") else None
     mw._capture_pages(mw.main_view, [0]); QTest.qWait(200)
     if not reset():
-        unver("D 클립보드로 복사", "클립보드 넣기가 늘어짐 — 다른 프로그램이 다투는 중")
+        unver("D 클립보드로 복사", "클립보드에 넣지 못함·늘어짐 — 다른 프로그램이 다투는 중, " + holder_why().split(" — ")[-1])
     else:
         t = QElapsedTimer(); t.start()
+        del seen_all[:]
         mw._on_clipboard_save()
         returned_ms = t.elapsed()
         chk(returned_ms < 500, "D 기록 지우기가 메인을 세우지 않는다", f"{returned_ms}ms")
-        chk(wait_until(has_image, 15000), "D '클립보드로 복사' 컷이 클립보드에 들어간다")
-        wait_until(lambda: not getattr(mw, "_clip_busy", False), 10000)
+        # 261107-1: 끝날 때까지(기록 지우기 ≤ HISTORY_CLEAR_TIMEOUT_S + 넣기 다시 시도) 기다린 뒤 가른다
+        wait_until(lambda: not getattr(mw, "_clip_busy", False),
+                   int((clipboard_util.HISTORY_CLEAR_TIMEOUT_S + HOLD_ALL_S + 5) * 1000))
+        got = cb.ownsClipboard() and has_image()
+        told = [m for m in seen_all if "넣지 못했습니다" in m]
+        if got:
+            chk(True, "D '클립보드로 복사' 컷이 클립보드에 들어간다")
+        elif told:
+            # 앱은 맞게 했다(못 넣었다고 알림) — 그동안 다른 프로그램이 쥐고 있었다
+            unver("D 클립보드로 복사", "넣는 동안 다른 프로그램이 쥠, 앱 알림: " + told[-1])
+        else:
+            chk(False, "D '클립보드로 복사' 컷이 들어가거나 못 넣었다고 알린다(말없이 빠지지 않는다)", str(seen_all))
+
+# E. 창 있는 프로그램이 내내 쥐면 '클립보드로 복사' 는 실패를 쥔 프로그램 이름과 함께 알린다 (261107-1)
+if ready("E 계속 쥠 — 알림"):
+    h = hold_win()
+    if h is None:
+        unver("E 계속 쥠 — 알림", holder_why())
+    else:
+        try:
+            chk(clipboard_util.holder_name() == os.path.basename(sys.executable) or
+                (clipboard_util.holder_name() or "").lower().startswith("python"),
+                "E holder_name 이 쥔 프로그램 이름을 안다", str(clipboard_util.holder_name()))
+            del seen_all[:]
+            t = QElapsedTimer(); t.start()
+            mw._on_clipboard_save()
+            chk(t.elapsed() < 500, "E 메인을 세우지 않는다", f"{t.elapsed()}ms")
+            wait_until(lambda: not getattr(mw, "_clip_busy", False),
+                       int((clipboard_util.HISTORY_CLEAR_TIMEOUT_S + HOLD_ALL_S + 5) * 1000))
+            told = [m for m in seen_all if "넣지 못했습니다" in m]
+            chk(bool(told), "E 못 넣었다고 알린다", str(seen_all))
+            chk(any("python" in m.lower() for m in told), "E 알림에 쥔 프로그램 이름이 있다", str(told))
+        finally:
+            release(h)
 
 shutil.rmtree(tmp, ignore_errors=True)
+# 사용자 클립보드 되돌리기 — 시작 때 받아 둔 글·그림
+if ORIG_TEXT is not None or ORIG_IMG is not None:
+    for _ in range(4):
+        if ORIG_TEXT is not None:
+            cb.setText(ORIG_TEXT)
+        else:
+            cb.setImage(ORIG_IMG)
+        app.processEvents()
+        if cb.ownsClipboard():
+            break
+        QTest.qWait(300)
+    print("사용자 클립보드:", "되돌림" if cb.ownsClipboard() else "되돌리지 못함(다른 프로그램이 쥠)")
+else:
+    print("사용자 클립보드: 글·그림이 아니라(비었거나 파일 등) 되돌리지 않음")
 if unverified:
     print("\n확인 못 함(클립보드 다툼 — 실패 아님):", unverified)
 print("\n=== " + ("ALL PASS" if not fails else f"FAILURE {len(fails)}") + " ===")

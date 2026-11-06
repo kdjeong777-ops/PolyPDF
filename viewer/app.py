@@ -867,8 +867,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         def done(ok):
             if not ok:
-                self.status.showMessage(
-                    tr("클립보드에 복사하지 못했습니다 — 다른 프로그램이 클립보드를 쓰고 있습니다."), 6000)
+                # 261107-1(§8.3): 쥔 프로그램을 알면 이름을 — 사용자가 그 프로그램을 닫거나 기다릴 수 있게
+                who = clipboard_util.holder_name()
+                if who:
+                    msg = tr("클립보드에 복사하지 못했습니다 — {name} 프로그램이 클립보드를 쓰고 있습니다.").format(name=who)
+                else:
+                    msg = tr("클립보드에 복사하지 못했습니다 — 다른 프로그램이 클립보드를 쓰고 있습니다.")
+                self.status.showMessage(msg, 6000)
             if on_done:
                 on_done(ok)
         clipboard_util.set_image(img, done)
@@ -899,6 +904,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._clip_queue = list(paths)
         self._clip_total = len(paths)
         self._clip_failed = 0
+        self._clip_holder = None
         self.status.showMessage(tr("클립보드로 복사 중..."), 3000)
         w = clipboard_util.ClipHistoryClearWorker()
         w.finished.connect(self._clip_copy_next)     # 메인 창의 메서드 → 메인 스레드에서 받는다
@@ -913,9 +919,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._clip_busy = False
             done = self._clip_total - self._clip_failed
             if self._clip_failed:
-                self.status.showMessage(
-                    tr('클립보드로 복사: {done}개 — {failed}개는 다른 프로그램이 클립보드를 쓰고 있어 넣지 못했습니다.').format(
-                        done=done, failed=self._clip_failed), 9000)
+                who = getattr(self, "_clip_holder", None)      # 261107-1(§8.3): 쥔 프로그램을 알면 이름을
+                if who:
+                    msg = tr('클립보드로 복사: {done}개 — {failed}개는 {name} 프로그램이 클립보드를 쓰고 있어 넣지 못했습니다.').format(
+                        done=done, failed=self._clip_failed, name=who)
+                else:
+                    msg = tr('클립보드로 복사: {done}개 — {failed}개는 다른 프로그램이 클립보드를 쓰고 있어 넣지 못했습니다.').format(
+                        done=done, failed=self._clip_failed)
+                self.status.showMessage(msg, 9000)
             else:
                 self.status.showMessage(
                     tr('클립보드로 복사 완료: {clip_total}개 — Win+V 로 붙여넣기').format(clip_total=done), 7000)
@@ -925,6 +936,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         def after(ok):
             if not ok:
                 self._clip_failed += 1
+                self._clip_holder = clipboard_util.holder_name() or getattr(self, "_clip_holder", None)
             QTimer.singleShot(self.CLIP_ITEM_GAP_MS, self._clip_copy_next)
         clipboard_util.set_image(img, after)
 

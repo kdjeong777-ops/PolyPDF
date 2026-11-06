@@ -34,6 +34,45 @@ def _took():
         return False
 
 
+def holder_name():
+    """지금 클립보드를 연 채 쥐고 있는 프로그램의 실행 파일 이름(예 'EXCEL.EXE') — 모르면 None (261107-1).
+
+    `GetOpenClipboardWindow` → 창의 프로세스 → 실행 파일. 모두 곧바로 답하는 조회라 메인에서 불러도 된다
+    (클립보드를 열지 않는다). 창 없이 연 프로그램(`OpenClipboard(NULL)`)·권한이 높은 프로세스는 알 수 없다."""
+    if QGuiApplication.platformName() != "windows":
+        return None
+    try:
+        import ctypes
+        import ctypes.wintypes as wt
+        import os
+        u, k = ctypes.windll.user32, ctypes.windll.kernel32
+        u.GetOpenClipboardWindow.restype = wt.HWND
+        u.GetWindowThreadProcessId.argtypes = [wt.HWND, ctypes.POINTER(wt.DWORD)]
+        k.OpenProcess.restype = wt.HANDLE
+        k.QueryFullProcessImageNameW.argtypes = [wt.HANDLE, wt.DWORD, wt.LPWSTR, ctypes.POINTER(wt.DWORD)]
+        k.CloseHandle.argtypes = [wt.HANDLE]
+        hwnd = u.GetOpenClipboardWindow()
+        if not hwnd:
+            return None
+        pid = wt.DWORD()
+        u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if not pid.value or pid.value == os.getpid():
+            return None
+        h = k.OpenProcess(0x1000, False, pid.value)       # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return None
+        try:
+            buf = ctypes.create_unicode_buffer(520)
+            n = wt.DWORD(520)
+            if k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+                return os.path.basename(buf.value) or None
+        finally:
+            k.CloseHandle(h)
+    except Exception:
+        pass
+    return None
+
+
 def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS):
     """그림(QImage·QPixmap)을 클립보드에 넣는다. 끝나면 `on_done(ok)`.
 
