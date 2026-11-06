@@ -3,9 +3,10 @@
 
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3).
 A. 펴기 계산 — 원근 사각형은 원근 변환, 가운데가 움푹 들어간 종이는 변 가운데 점으로 곧게(곧은 점만이면 바깥이 남는다)
-B. 테두리 어림(PIL 만) — 합성 종이 사진의 꼭짓점을 2% 안에서 찾고, 무늬 없는 그림은 못 찾음(None)
+B. 자동 테두리 어림은 없다(261106-11 사용자 지시 '쓸만하지 않아') — 모듈·워커·[테두리 찾기] 모두
 C. 점 끌기 화면 — 꼭짓점을 옮기면 곧은 변의 가운데 점이 따라가고, 옮긴 가운데 점은 그대로, 꼬이는 끌기는 받지 않는다
-D. 크롭 창 — 옵션 '모양 펴기' 를 켜면 점 화면(어림한 점), 여백 칸은 꺼짐. ❯ 로 넘긴 사진은 켬을 이어받고 제 어림 점,
+D. 크롭 창 — 옵션 '모양 펴기' 를 켜면 점 화면(처음 점 = 크롭 박스 — 크롭이 없으면 사진 네 귀), 여백 칸은 꺼짐.
+   ❯ 로 넘긴 사진은 **꺼진 채**(261106-11), 켜고 점을 놓으면 그 사진도 펼친다,
    [확인] = 켠 사진마다 '<이름>_펼침' 새 사진(배경), 원본·크롭 그대로, 책갈피창에 새 줄
 E. [취소] 면 아무것도 만들지 않는다 · 펴는 동안 메인 하트비트 공백 < 0.5초(응답성 SOT §5)
 """
@@ -69,6 +70,11 @@ try:
     bot = [(200 + i * 8, 780 - 60 * (1 - ((i - 50) / 50.0) ** 2)) for i in range(101)]
     ImageDraw.Draw(curved).polygon(top + bot[::-1], fill=(250, 250, 250))
 
+    QPTS = [(x / W, y / H) for x, y in QUAD]
+    QPTS = QPTS + pw.mids_of(QPTS)
+    CPTS = [(200 / W, 150 / H), (1000 / W, 150 / H), (1000 / W, 780 / H), (200 / W, 780 / H),
+            (600 / W, 210 / H), (1000 / W, 465 / H), (600 / W, 720 / H), (200 / W, 465 / H)]
+
     # A
     pts = [(x / W, y / H) for x, y in QUAD]
     pts = pts + pw.mids_of(pts)
@@ -89,14 +95,11 @@ try:
     chk(sz[0] * sz[1] <= W * H and 700 < sz[0] < 950 and 550 < sz[1] < 700, "A 출력 크기 = 변 길이 평균, 원본 넓이 이하", str(sz))
 
     # B
-    got = pw.detect(persp)
-    ok = got is not None and all(abs(g[0] - x / W) < 0.02 and abs(g[1] - y / H) < 0.02 for g, (x, y) in zip(got, QUAD))
-    chk(ok, "B 원근 종이의 꼭짓점을 2% 안에서 어림", str(got and [(round(x * W), round(y * H)) for x, y in got[:4]]))
-    chk(ok and pw.is_straight(got), "B 곧은 변은 곧게(가운데 점 = 꼭짓점 사이 가운데)")
-    g2 = pw.detect(curved)
-    chk(g2 is not None and not pw.is_straight(g2) and abs(g2[4][1] - 210 / H) < 0.02, "B 움푹 들어간 위 변의 가운데를 찾는다",
-        str(g2 and (round(g2[4][0] * W), round(g2[4][1] * H))))
-    chk(pw.detect(Image.new("RGB", (400, 300), (128, 128, 128))) is None, "B 무늬 없는 그림은 못 찾음(None)")
+    import viewer.photo_controller as _pc
+    import viewer.widgets.photo_crop_dialog as _pcd
+    chk(not hasattr(pw, "detect") and not hasattr(_pc, "PhotoCropLoadWorker") and not hasattr(_pc, "warp_detect_qimage"),
+        "B 자동 테두리 어림이 없다(모듈·워커)")
+    chk(not hasattr(_pcd.PhotoCropDialog, "_on_detect"), "B [테두리 찾기] 가 없다")
 
     # C
     from viewer.widgets.photo_warp_canvas import WarpCanvas
@@ -146,13 +149,15 @@ try:
         P = mw._photo_crop_paths
         seen["stack0"] = self.stack.currentWidget() is self.canvas
         self.chk_warp.setChecked(True)
-        seen["on"] = (self.stack.currentWidget() is self.warp, all(not sp.isEnabled() for sp in self.spins),
-                      self.btn_detect.isVisible() or self.btn_detect.isVisibleTo(self))
+        seen["on"] = (self.stack.currentWidget() is self.warp, all(not sp.isEnabled() for sp in self.spins))
         seen["a_pts"] = self.warp.points()
+        self.warp.set_points(QPTS)                    # 사용자가 꼭짓점을 종이에 맞춘다
         seen["go_b"] = go(self, P.index(b))
         seen["b_on"] = self.chk_warp.isChecked()
-        seen["b_pts"] = self.warp.points()
+        self.chk_warp.setChecked(True)
+        self.warp.set_points(CPTS)
         seen["go_c"] = go(self, P.index(c))
+        seen["c_on"] = self.chk_warp.isChecked()
         self.chk_warp.setChecked(False)               # c 는 펴지 않는다
         return QDialog.DialogCode.Accepted
     PhotoCropDialog.exec = fake_exec
@@ -189,12 +194,12 @@ try:
         and asked.get("default") == "저장",
         "D [확인] 이면 묻는다 — [저장]·[다른 이름으로 저장]·[다른 폴더에 저장](기본 [저장])", str(asked))
     chk(seen.get("stack0"), "D 처음엔 크롭 화면(옵션 꺼짐)")
-    chk(seen.get("on") == (True, True, True), "D '모양 펴기' 를 켜면 점 화면 · 여백 칸 꺼짐 · [테두리 찾기]", str(seen.get("on")))
+    chk(seen.get("on") == (True, True), "D '모양 펴기' 를 켜면 점 화면 · 여백 칸 꺼짐", str(seen.get("on")))
     ap = seen.get("a_pts") or []
-    chk(ap and all(abs(g[0] - x / W) < 0.03 and abs(g[1] - y / H) < 0.03 for g, (x, y) in zip(ap, QUAD)),
-        "D 처음 점 = 배경에서 어림한 테두리", str(ap[:4]))
-    chk(seen.get("go_b") and seen.get("b_on") and seen.get("b_pts") and not pw.is_straight(seen["b_pts"]),
-        "D ❯ 로 넘긴 사진은 켬을 이어받고 제 어림 점(휜 위 변)", str(seen.get("b_pts")))
+    chk(ap and all(abs(g[0] - q[0]) < 1e-6 and abs(g[1] - q[1]) < 1e-6 for g, q in zip(ap, pw.default_points())),
+        "D 처음 점 = 크롭 박스(크롭이 없으면 사진 네 귀) — 어림 아님", str(ap[:4]))
+    chk(seen.get("go_b") and seen.get("b_on") is False and seen.get("c_on") is False,
+        "D ❯ 로 넘긴 사진은 모양 펴기가 꺼진 채 시작(261106-11)", str((seen.get("b_on"), seen.get("c_on"))))
     outs = sorted(p.name for p in tmp.iterdir() if "_펼침" in p.name)
     chk(done and outs == ["a_doc_펼침.jpg", "b_book_펼침.jpg"], "D [확인] — 켠 사진마다 '<이름>_펼침' 새 사진, 끈 사진은 없음", str(outs))
     if (tmp / "a_doc_펼침.jpg").exists():
@@ -214,6 +219,7 @@ try:
 
     def fake_one(self):
         self.chk_warp.setChecked(True)
+        self.warp.set_points(QPTS)
         return QDialog.DialogCode.Accepted
     PhotoCropDialog.exec = fake_one
     _gd = QFileDialog.getExistingDirectory
@@ -241,6 +247,7 @@ try:
         self.spins[0].setValue(25)
         go(self, P.index(b))
         self.chk_warp.setChecked(True)
+        self.warp.set_points(CPTS)
         return QDialog.DialogCode.Accepted
     PhotoCropDialog.exec = fake_both
     mw._photo_crop_dialog(c)
@@ -253,7 +260,7 @@ try:
     # G — 오른쪽 결과 미리보기(261106-6 사용자 지시 '일반 크롭이나 펼칠 경우의 모습을 우측 창에')
     from PyQt6.QtGui import QImage
     qa = QImage(str(tmp / "a_doc.jpg"))
-    dlg = PhotoCropDialog(qa, [0, 0, 0, 0], auto_pts=pw.detect(persp), parent=mw)
+    dlg = PhotoCropDialog(qa, [0, 0, 0, 0], parent=mw)
     dlg.show(); pump(timeout=0.3)
     r0 = dlg.result_image()
     dlg.spins[0].setValue(50.0)
@@ -263,7 +270,8 @@ try:
         "G 일반 크롭 — 오른쪽에 자른 모양(위 50% 를 자르면 높이 절반)", str((r0 and r0.size, r1 and r1.size)))
     chk(dlg.result.pixmap() is not None and not dlg.result.pixmap().isNull(), "G 미리보기 칸에 그림이 있다")
     dlg.spins[0].setValue(0.0)
-    dlg.chk_warp.setChecked(True); pump(timeout=0.3)
+    dlg.chk_warp.setChecked(True)
+    dlg._set_warp_points(QPTS); pump(timeout=0.3)
     rw = dlg.result_image()
     chk(rw is not None and max(dark_share(rw, 1), dark_share(rw, rw.size[1] - 2)) < 0.1, "G 펴기 — 오른쪽에 펼친 모양(바탕 없음)",
         str(rw and rw.size))

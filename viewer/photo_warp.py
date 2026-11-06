@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """사진 모양 펴기 — 원근·휜 테두리를 직사각형으로 (사진 보기 SOT §4.43, 261106-6 사용자 지시).
 
-새 라이브러리 없이(사용자 결정 'PIL 간단 인식' — OpenCV·numpy 를 넣지 않는다) 순수 파이썬 + Pillow 로:
+새 라이브러리 없이(OpenCV·numpy 를 넣지 않는다) 순수 파이썬 + Pillow 로:
 
 - 점 8개 — 보이는 방향(보기 회전 뒤) 그림의 비율 좌표(0..1): 꼭짓점 `TL·TR·BR·BL` + 변 중간 `T·R·B·L`.
   변 중간점은 그 변이 지나는 곳(2차 곡선이 그 점을 지난다).
@@ -9,8 +9,7 @@
 - 휘었으면 원근을 먼저 풀고(꼭짓점 → 단위 정사각형) 그 판에서 네 변을 2차 곡선으로 잇는 **Coons 면**으로 펴서
   격자(`MESH_CELLS`)로 나눠 `Image.MESH` — 원근과 휨이 함께 있는 사진(책 가운데가 움푹)도 곧게 편다.
 - 출력 크기 = 마주 보는 두 변 길이의 평균(원본 화소 기준), 넓이는 원본을 넘지 않게.
-- 테두리 어림(`detect`): 줄인 회색 그림을 Otsu 로 둘로 나눠 가장자리에 많은 쪽을 바탕으로 보고, 나머지(종이·사진) 의
-  맨 끝 점을 꼭짓점으로, 변 중간은 그 변의 바깥 경계를 찾는다. 틀리면 손으로 고친다(사용자 결정).
+- 처음 점은 그 사진의 크롭 박스 네 귀(쓰는 쪽) — 자동 테두리 어림은 없앴다(261106-11 사용자 지시 '쓸만하지 않아').
 """
 from __future__ import annotations
 
@@ -19,15 +18,12 @@ import math
 POINT_NAMES = ("TL", "TR", "BR", "BL", "T", "R", "B", "L")
 STRAIGHT_TOL = 0.004        # 중간점이 꼭짓점 사이 가운데에서 이만큼(그림 비율) 안이면 곧은 변
 MESH_CELLS = 24             # 휜 테두리 펴기 격자 — 한 변에 칸 수
-DETECT_SIDE = 256           # 테두리 어림 — 줄인 그림 긴 변
-DETECT_MIN_AREA = 0.06      # 어림한 영역이 그림의 이만큼보다 작거나
-DETECT_MAX_AREA = 0.985     #   이만큼보다 크면 못 찾은 것으로 본다(기본 점)
-DEFAULT_INSET = 0.04        # 못 찾았을 때 기본 점 — 가장자리에서 이만큼 안
 OUT_MIN_SIDE = 16           # 펼친 그림 짧은 변 하한(화소)
 
 
 # ── 점 ────────────────────────────────────────────────
-def default_points(inset: float = DEFAULT_INSET) -> list:
+def default_points(inset: float = 0.0) -> list:
+    """사진 전체(가장자리에서 `inset` 안)의 네 귀 + 곧은 변 가운데 — 크롭이 없는 사진의 처음 점."""
     a, b = inset, 1.0 - inset
     c = [(a, a), (b, a), (b, b), (a, b)]
     return c + mids_of(c)
@@ -200,99 +196,3 @@ def unwarp(im, pts, size=None, cells: int = MESH_CELLS):
             ul, ll, lr, ur = grid[j][i], grid[j + 1][i], grid[j + 1][i + 1], grid[j][i + 1]
             mesh.append(((xs[i], ys[j], xs[i + 1], ys[j + 1]), (ul[0], ul[1], ll[0], ll[1], lr[0], lr[1], ur[0], ur[1])))
     return im.transform((ow, oh), Image.Transform.MESH if hasattr(Image, "Transform") else Image.MESH, mesh, rs.BICUBIC)
-
-
-# ── 테두리 어림 ────────────────────────────────────────
-def _otsu(hist) -> int:
-    total = sum(hist)
-    if not total:
-        return 128
-    sum_all = sum(i * v for i, v in enumerate(hist))
-    wb = sb = 0.0
-    best, th = -1.0, 128
-    for t in range(256):
-        wb += hist[t]
-        if wb == 0:
-            continue
-        wf = total - wb
-        if wf == 0:
-            break
-        sb += t * hist[t]
-        mb, mf = sb / wb, (sum_all - sb) / wf
-        var = wb * wf * (mb - mf) ** 2
-        if var > best:
-            best, th = var, t
-    return th
-
-
-def detect(im) -> list | None:
-    """PIL 그림에서 테두리(점 8개, 비율)를 어림한다 — 못 찾으면 None(쓰는 쪽이 기본 점)."""
-    from PIL import Image, ImageFilter
-    g = im.convert("L")
-    w, h = g.size
-    if w < 8 or h < 8:
-        return None
-    s = DETECT_SIDE / float(max(w, h))
-    sw, sh = max(8, int(w * s)), max(8, int(h * s))
-    g = g.resize((sw, sh), getattr(Image, "Resampling", Image).BILINEAR).filter(ImageFilter.MedianFilter(5))
-    th = _otsu(g.histogram())
-    data = list(g.getdata())
-    bright = [v > th for v in data]
-    border = [bright[x] for x in range(sw)] + [bright[(sh - 1) * sw + x] for x in range(sw)]
-    border += [bright[y * sw] for y in range(sh)] + [bright[y * sw + sw - 1] for y in range(sh)]
-    fg_bright = sum(border) < len(border) / 2.0      # 가장자리에 많은 쪽이 바탕
-    mask = [b == fg_bright for b in bright]
-    n = sum(mask)
-    if not (DETECT_MIN_AREA * sw * sh <= n <= DETECT_MAX_AREA * sw * sh):
-        return None
-    best = {"TL": (None, 1e18), "TR": (None, -1e18), "BR": (None, -1e18), "BL": (None, 1e18)}
-    for y in range(sh):
-        row = y * sw
-        for x in range(sw):
-            if not mask[row + x]:
-                continue
-            a, d = x + y, x - y
-            if a < best["TL"][1]:
-                best["TL"] = ((x, y), a)
-            if a > best["BR"][1]:
-                best["BR"] = ((x, y), a)
-            if d > best["TR"][1]:
-                best["TR"] = ((x, y), d)
-            if d < best["BL"][1]:
-                best["BL"] = ((x, y), d)
-    corners = [best[k][0] for k in ("TL", "TR", "BR", "BL")]
-    if any(c is None for c in corners):
-        return None
-
-    def at(x, y):
-        xi, yi = int(round(x)), int(round(y))
-        return 0 <= xi < sw and 0 <= yi < sh and mask[yi * sw + xi]
-
-    cx = sum(c[0] for c in corners) / 4.0
-    cy = sum(c[1] for c in corners) / 4.0
-    mids = []
-    for p, q in ((corners[0], corners[1]), (corners[1], corners[2]), (corners[2], corners[3]), (corners[3], corners[0])):
-        mx, my = (p[0] + q[0]) / 2.0, (p[1] + q[1]) / 2.0
-        nx, ny = mx - cx, my - cy                     # 바깥쪽
-        ln = math.hypot(nx, ny) or 1.0
-        nx, ny = nx / ln, ny / ln
-        reach = int(max(sw, sh) * 0.25)
-        got = None
-        if at(mx, my):                                # 안에 있다 — 바깥으로 경계까지
-            k = 0
-            while k < reach and at(mx + nx * (k + 1), my + ny * (k + 1)):
-                k += 1
-            got = (mx + nx * k, my + ny * k)
-        else:                                         # 밖 — 안으로 들어가 처음 닿는 곳(움푹 들어간 변)
-            for k in range(1, reach):
-                if at(mx - nx * k, my - ny * k):
-                    got = (mx - nx * k, my - ny * k)
-                    break
-        mids.append(got or (mx, my))
-    pts = [(x / (sw - 1), y / (sh - 1)) for x, y in corners + mids]
-    straight = mids_of(pts[:4])                        # 거의 곧으면 곧게(작은 흔들림을 휨으로 보지 않는다)
-    for i in range(4):
-        if math.hypot(pts[4 + i][0] - straight[i][0], pts[4 + i][1] - straight[i][1]) < 2.5 / DETECT_SIDE:
-            pts[4 + i] = straight[i]
-    pts = clamp_points(pts)
-    return pts if is_valid(pts) else None

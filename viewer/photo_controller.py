@@ -2035,7 +2035,7 @@ class PhotoMixin:
     def _photo_crop_load(self, path: str):
         """크롭 창 미리보기 그림은 배경에서(사진 복사와 같은 워커, 응답성 SOT §5) — 끝나면 창을 열거나 그 사진으로 넘긴다."""
         from viewer.workers import run_in_thread
-        w = PhotoCropLoadWorker(path, self._photo_rot_for(path), max_side=CROP_PREVIEW_SIDE)   # 테두리 어림도 함께(§4.43)
+        w = PhotoCopyWorker(path, self._photo_rot_for(path), max_side=CROP_PREVIEW_SIDE)
         w.done.connect(self._photo_crop_ready)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
@@ -2048,7 +2048,7 @@ class PhotoMixin:
         recent = self.__dict__.get("_photo_crop_recent")
         return (list(recent) if recent else [0.0, 0.0, 0.0, 0.0]), False
 
-    def _photo_crop_ready(self, path: str, img, auto_pts=None):
+    def _photo_crop_ready(self, path: str, img):
         dlg = self.__dict__.get("_photo_crop_dlg")
         if dlg is not None:                              # 창이 열려 있다(exec 중) — ❮ ❯ 로 넘긴 사진
             if img is None or img.isNull():
@@ -2058,7 +2058,7 @@ class PhotoMixin:
             paths = self.__dict__.get("_photo_crop_paths") or [path]
             idx = next((i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path))), dlg.index())
             m, has = self._photo_crop_start_margins(path)
-            dlg.show_photo(idx, img, m, has, Path(path).name, auto_pts)
+            dlg.show_photo(idx, img, m, has, Path(path).name)
             return
         self._photo_crop_busy = False
         if img is None or img.isNull():
@@ -2071,8 +2071,7 @@ class PhotoMixin:
             paths = self._photo_crop_paths = [str(path)]
         idx = next(i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path)))
         m, has = self._photo_crop_start_margins(path)
-        dlg = PhotoCropDialog(img, m, has_crop=has, title=Path(path).name, parent=self, count=len(paths), index=idx,
-                              auto_pts=auto_pts)
+        dlg = PhotoCropDialog(img, m, has_crop=has, title=Path(path).name, parent=self, count=len(paths), index=idx)
 
         def want(i, _d=dlg, _p=paths):
             cm = _d.current_margins()                    # 떠나는 사진의 여백 — 최근 크롭으로 기억(크롭이 없는 사진에 미리 건다)
@@ -3724,56 +3723,6 @@ class PhotoCopyWorker(QObject):
         finally:
             self.done.emit(self.path, img)
             self.finished.emit()
-
-
-class PhotoCropLoadWorker(QObject):
-    """크롭 창 미리보기(4.40) — 배경에서 풀고(보기 회전까지) 테두리도 어림한다(모양 펴기 §4.43, 261106-6 — 줄인 그림으로)."""
-    done = pyqtSignal(str, object, object)   # 경로, QImage, 점 8개(못 찾으면 None)
-    finished = pyqtSignal()
-
-    def __init__(self, path: str, rot: int = 0, max_side: int = 0):
-        super().__init__()
-        self.path, self.rot = path, int(rot or 0) % 360
-        self.max_side = int(max_side or CROP_PREVIEW_SIDE)
-
-    def request_cancel(self):
-        pass
-
-    def run(self):
-        img, pts = None, None
-        try:
-            from viewer.photo_io import read_scaled
-            img, _w, _h = read_scaled(self.path, self.max_side, auto_transform=True)
-            if self.rot and img is not None and not img.isNull():
-                from PyQt6.QtGui import QTransform
-                img = img.transformed(QTransform().rotate(self.rot))
-            if img is not None and not img.isNull():
-                pts = warp_detect_qimage(img)
-        except Exception:
-            img = img if img is not None else None
-        finally:
-            self.done.emit(self.path, img, pts)
-            self.finished.emit()
-
-
-def warp_detect_qimage(img):
-    """QImage → 테두리 어림(점 8개, 비율) — 줄인 회색 그림으로(`photo_warp.DETECT_SIDE`). 못 찾으면 None."""
-    from PyQt6.QtCore import Qt as _Qt
-    from PyQt6.QtGui import QImage
-    from PIL import Image
-    from viewer import photo_warp
-    side = photo_warp.DETECT_SIDE
-    small = img.scaled(side, side, _Qt.AspectRatioMode.KeepAspectRatio,
-                       _Qt.TransformationMode.SmoothTransformation).convertToFormat(QImage.Format.Format_Grayscale8)
-    w, h = small.width(), small.height()
-    if w < 8 or h < 8:
-        return None
-    buf = bytes(small.constBits().asstring(small.bytesPerLine() * h))
-    pil = Image.frombuffer("L", (w, h), buf, "raw", "L", small.bytesPerLine(), 1)
-    try:
-        return photo_warp.detect(pil)
-    except Exception:
-        return None
 
 
 WARP_JPEG_QUALITY = 95          # 펼친 사진(모양 펴기 §4.43) JPEG 화질 — 픽셀을 새로 만든다

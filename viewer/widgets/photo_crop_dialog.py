@@ -10,8 +10,9 @@
 쓰는 쪽이 한꺼번에 적용한다. [취소] 면 아무것도 남지 않는다.
 
 261106-6(사용자 지시 '원근·움푹 들어간 사진은 꼭짓점을 움직여 테두리를 고르고 직사각형으로 펼쳐 저장'): 옵션 **'모양 펴기'** 를
-켜면 미리보기가 점 끌기 화면(`WarpCanvas`)으로 바뀐다 — 꼭짓점 넷 + 변 가운데 넷. 처음 점은 쓰는 쪽이 어림한 테두리
-(`show_photo(..., auto_pts)`, 못 찾으면 기본 점). 켜고 끔·점은 사진마다 기억하고, 처음 보는 사진은 지금 켜고 끔을 이어받는다.
+켜면 미리보기가 점 끌기 화면(`WarpCanvas`)으로 바뀐다 — 꼭짓점 넷 + 변 가운데 넷. 처음 점은 그 사진의 지금 크롭 박스 네 귀
+(크롭이 없으면 사진 네 귀 — 261106-11, 자동 테두리 어림은 없앴다). 켜고 끔·점은 사진마다 기억하고, **처음 보는 사진은 꺼진 채**
+(그 사진의 크롭으로) 연다 — 이 창에서 켜 둔 사진으로 돌아오면 그 켬·점. 'A' 키로 켜고 끈다(261106-11).
 [확인] 때 `pending_warps()` 의 사진은 펼친 새 사진으로 만들고(쓰는 쪽), 그 사진의 크롭은 그대로 둔다(`pending()` 에서 뺀다).
 """
 from __future__ import annotations
@@ -36,6 +37,7 @@ PANE_GAP = 6               # 칸과 ⇒ 사이
 ARROW_MIN = 48             # 가운데 ⇒(옅은 회색 블록 화살표 `color_icon("block_arrow")`, 261106-10) 크기 — 칸 폭의 1/ARROW_DIV,
 ARROW_MAX = 80             #   이 둘 사이(창을 키우면 그림만 커진다 — 칸 폭은 ARROW_MAX+8 로 늘 같다)
 ARROW_DIV = 9
+WARP_KEY = "A"             # '모양 펴기' 켜고 끄기(261106-11 사용자 지시) — 한글 자판(ㅁ)·% 칸 입력 중에도 같은 키 자리로 받는다
 FULL_KEY = "F11"           # 크롭 창 전체 화면 켜고 끄기(앱 단축키와 겹치지 않는다 — 발표 보기는 F5)
 RESULT_DELAY_MS = 60       # 끄는 동안 미리보기를 모아 한 번에(잇단 움직임은 마지막 것만)
 
@@ -64,7 +66,7 @@ class PhotoCropDialog(QDialog):
     photoRequested = pyqtSignal(int)          # 넘길 사진 번호(0부터) — 쓰는 쪽이 그림을 풀어 show_photo
 
     def __init__(self, img, margins, has_crop: bool = False, title: str = "", parent=None,
-                 count: int = 1, index: int = 0, auto_pts=None):
+                 count: int = 1, index: int = 0):
         super().__init__(parent)
         self.resize(1120, 720)
         self._reset = False
@@ -72,9 +74,7 @@ class PhotoCropDialog(QDialog):
         self._pending = {}                     # 번호 → [위, 아래, 왼, 오른] % (넘길 때 기억한 것)
         self._warp_on = {}                     # 번호 → 모양 펴기 켬(261106-6)
         self._warp_pts = {}                    # 번호 → 점 8개(비율)
-        self._auto = None                      # 지금 사진의 어림한 테두리(없으면 None)
         self._has_crop = False
-        self._touched = set()                  # 이 창에서 크롭 박스를 손으로 고친 사진 번호(261106-7)
         self._warp_box = {}                    # 번호 → 점을 놓을 때의 박스(여백 %) — 그 뒤 박스를 고치면 다시 켤 때 새 박스로
         self._loading = False
         self.geometry_state = None             # 닫을 때의 창 자리·최대화(전체 화면은 풀고) — 쓰는 쪽이 기억(261106-8)
@@ -146,16 +146,13 @@ class PhotoCropDialog(QDialog):
         left.addLayout(row)
         wrow = QHBoxLayout()                   # 옵션 — 모양 펴기(261106-6)
         wrow.addStretch(1)
-        self.chk_warp = QCheckBox(tr("모양 펴기 (원근·휜 테두리)"), self)
-        self.chk_warp.setToolTip(tr("비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 직사각형으로 펼칩니다."))
+        self.chk_warp = QCheckBox(tr("모양 펴기 (원근·휜 테두리)") + "  (" + WARP_KEY + ")", self)   # 키 이름은 번역하지 않는다
+        self.chk_warp.setToolTip(tr("비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 직사각형으로 펼칩니다.") + " (" + WARP_KEY + ")")
         self.chk_warp.toggled.connect(self._warp_toggled)
-        self.btn_detect = QPushButton(tr("테두리 찾기"), self)
-        self.btn_detect.clicked.connect(self._on_detect)
         self.btn_corners = QPushButton(tr("점 처음대로"), self)
-        self.btn_corners.setToolTip(tr("점을 처음 자리로 — 크롭 박스를 고쳐 두었으면 그 박스 네 귀, 아니면 사진 네 귀퉁이 가까이."))
-        self.btn_corners.clicked.connect(lambda: self._set_warp_points(self._start_points(box_first=True)))
+        self.btn_corners.setToolTip(tr("점을 처음 자리로 — 지금 크롭 박스 네 귀(크롭이 없으면 사진 네 귀)."))
+        self.btn_corners.clicked.connect(lambda: self._set_warp_points(self._start_points()))
         wrow.addWidget(self.chk_warp)
-        wrow.addWidget(self.btn_detect)
         wrow.addWidget(self.btn_corners)
         wrow.addStretch(1)
         left.addLayout(wrow)
@@ -190,8 +187,9 @@ class PhotoCropDialog(QDialog):
         from PyQt6.QtGui import QShortcut, QKeySequence
         self._sc_full = QShortcut(QKeySequence(FULL_KEY), self)
         self._sc_full.activated.connect(self.btn_full.toggle)
-        self.canvas.marginsDragged.connect(self._box_dragged)
-        self.show_photo(self._index, img, margins, has_crop, title, auto_pts)
+        self.canvas.marginsDragged.connect(self._dragged)
+        self._watch_keys()
+        self.show_photo(self._index, img, margins, has_crop, title)
 
     # ── 창 배치·전체 화면(261106-8) ─────────────────────
     def _paint_arrow(self) -> None:
@@ -229,7 +227,38 @@ class PhotoCropDialog(QDialog):
             self.showNormal()
         self._fit_result()
 
+    @staticmethod
+    def _is_warp_key(ev) -> bool:
+        """'모양 펴기' 키(WARP_KEY = A) — 수정키 없이, 영문 a/A·한글 자판 같은 자리(ㅁ)·키 자리(가상 키 0x41)로."""
+        if ev.modifiers() & ~(Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.KeypadModifier):
+            return False
+        return ev.key() == Qt.Key.Key_A or ev.text() in ("a", "A", "ㅁ") or ev.nativeVirtualKey() == 0x41
+
+    def eventFilter(self, obj, ev):
+        """% 칸·쪽 번호 칸에 글자를 넣는 중에도 A 는 '모양 펴기'(261106-11) — 숫자 칸은 글자를 받지 않으니 빼앗아도 잃는 것이 없다."""
+        from PyQt6.QtCore import QEvent
+        t = ev.type()
+        if t in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress) and self._is_warp_key(ev):
+            if t == QEvent.Type.KeyPress:
+                self.chk_warp.toggle()
+            ev.accept()
+            return True
+        if t == QEvent.Type.InputMethod and (ev.commitString() == "ㅁ" or ev.preeditString() == "ㅁ"):
+            if ev.commitString() == "ㅁ":
+                self.chk_warp.toggle()
+            return True                                  # 한글 입력기 조합 'ㅁ' — 숫자 칸에 글자를 남기지 않는다
+        return super().eventFilter(obj, ev)
+
+    def _watch_keys(self) -> None:
+        from PyQt6.QtWidgets import QAbstractSpinBox, QLineEdit
+        for w in self.findChildren(QAbstractSpinBox) + self.findChildren(QLineEdit):
+            w.installEventFilter(self)
+
     def keyPressEvent(self, ev):
+        if self._is_warp_key(ev):                        # 단추·체크 상자에 포커스가 있어도(그들은 A 를 쓰지 않아 여기로 온다)
+            self.chk_warp.toggle()
+            ev.accept()
+            return
         if ev.key() == Qt.Key.Key_Escape and self.isFullScreen():
             self.btn_full.setChecked(False)              # 전체 화면에서 Esc = 전체 화면만 푼다(창은 그대로)
             ev.accept()
@@ -257,13 +286,13 @@ class PhotoCropDialog(QDialog):
         super().done(r)
 
     # ── 사진 하나 보이기 ──────────────────────────────
-    def show_photo(self, index: int, img, margins, has_crop: bool = False, title: str = "", auto_pts=None) -> None:
+    def show_photo(self, index: int, img, margins, has_crop: bool = False, title: str = "") -> None:
         """`index` 사진을 보인다 — 그 사진에 이 창에서 고친 여백이 있으면 그것, 없으면 `margins`.
-        모양 펴기 — 그 사진에 기억한 켜고 끔·점이 있으면 그것, 처음이면 지금 켜고 끔 그대로·점은 `auto_pts`(어림, 없으면 기본)."""
+        모양 펴기 — 그 사진에 기억한 켜고 끔·점이 있으면 그것, 처음 보는 사진이면 **꺼진 채**(261106-11 사용자 지시 '다른 사진으로
+        넘어가면 처음에는 모양 펴기가 선택되지 않은 상태에서, 기존에 선택한 크롭 상태에서 시작')."""
         self._index = int(index)
         self._loading = False
         self._has_crop = bool(has_crop)
-        self._auto = pw.clamp_points(auto_pts) if auto_pts else None
         self.setWindowTitle(tr("사진 크롭") + (" — " + title if title else ""))
         self.canvas.set_image(img)
         self.warp.set_image(img)
@@ -276,7 +305,7 @@ class PhotoCropDialog(QDialog):
         self._dragged(m)
         self.canvas.set_margins(m)
         self.warp.set_points(self._warp_pts.get(self._index) or self._start_points())
-        on = self._warp_on.get(self._index, self.chk_warp.isChecked())
+        on = self._warp_on.get(self._index, False)
         self.chk_warp.blockSignals(True)
         self.chk_warp.setChecked(on)
         self.chk_warp.blockSignals(False)
@@ -300,25 +329,15 @@ class PhotoCropDialog(QDialog):
             self._warp_pts[self._index] = self.warp.points()
             self._warp_box[self._index] = r1_list(self.current_margins())
 
-    def _box_adjusted(self) -> bool:
-        """지금 사진의 크롭 박스가 '조절해 둔' 것인가(261106-7) — 이 창에서 손으로 고쳤거나 그 사진의 크롭이 있고, 사진 전체가 아닐 때.
-        미리 건 최근 크롭(261106-3)만으로는 아니다 — 그런 사진은 자동 어림."""
-        return ((self._index in self._touched or self._has_crop)
-                and any(v > 0 for v in self.current_margins()))
-
     def _box_points(self) -> list:
         t, b, l, r = (v / 100.0 for v in self.current_margins())
         c = [(l, t), (1.0 - r, t), (1.0 - r, 1.0 - b), (l, 1.0 - b)]
         return c + pw.mids_of(c)                         # 변 가운데 점은 각 변 가운데(곧은 변)
 
-    def _start_points(self, box_first: bool = False) -> list:
-        """모양 펴기의 처음 점(261106-7 사용자 지시 '박스를 조절 후 모양 펴기를 체크하면 조절된 박스의 점 위치를 초기 위치로') —
-        조절해 둔 박스가 있으면 그 네 귀, 없으면 자동 어림(못 찾으면 기본 점). `box_first`([점 처음대로])는 어림 대신 기본 점."""
-        if self._box_adjusted():
-            return self._box_points()
-        if box_first or self._auto is None:
-            return pw.default_points()
-        return list(self._auto)
+    def _start_points(self) -> list:
+        """모양 펴기의 처음 점 — 늘 그 사진의 지금 크롭 박스 네 귀 + 곧은 변 가운데(크롭이 없으면 사진 네 귀).
+        261106-7 사용자 지시 '조절된 박스의 점 위치를 초기 위치로', 261106-11 자동 어림은 없앴다('쓸만하지 않아')."""
+        return self._box_points()
 
     def _set_warp_points(self, pts) -> None:
         self.warp.set_points(pts)
@@ -343,9 +362,6 @@ class PhotoCropDialog(QDialog):
         for sp in self.spins:
             sp.setEnabled(not on)
         # 두 단추는 늘 보이고 켰을 때만 눌린다(261106-8) — 숨기면 켜고 끌 때마다 줄이 옆으로 움직였다
-        self.btn_detect.setEnabled(on and self._auto is not None)
-        self.btn_detect.setToolTip(tr("어림한 테두리로 점을 놓습니다.") if self._auto is not None
-                                   else tr("이 사진에서는 테두리를 찾지 못했습니다 — 점을 끌어 맞추세요."))
         self.btn_corners.setEnabled(on)
         self.note_warp.setVisible(on)
         self.btn_reset.setEnabled(not on and (self._has_crop or any(v > 0 for v in self.current_margins())))
@@ -391,10 +407,6 @@ class PhotoCropDialog(QDialog):
             QTimer.singleShot(0, self._fit_arrow)        # 칸 폭은 레이아웃이 놓은 뒤에 — 다음 차례에 잰다
         self._fit_result()
 
-    def _on_detect(self) -> None:
-        if self._auto is not None:
-            self._set_warp_points(self._auto)            # [테두리 찾기] = 늘 자동 어림(박스와 무관)
-
     def pending_warps(self) -> dict:
         """[확인] 때 펼칠 사진 — {번호: 점 8개}. 모양 펴기를 켠 사진만, 펼 것이 없거나 꼬인 점은 뺀다."""
         self._remember_warp()
@@ -420,12 +432,7 @@ class PhotoCropDialog(QDialog):
         if t is not None:
             t.start()
 
-    def _box_dragged(self, m):
-        self._touched.add(self._index)                   # 손으로 고친 박스(261106-7)
-        self._dragged(m)
-
     def _spin_changed(self, k: int):
-        self._touched.add(self._index)
         m = [round(v, 1) for v in pc.clamp_margins([sp.value() for sp in self.spins], keep=k)]
         self._dragged(m)
         self.canvas.set_margins(m)

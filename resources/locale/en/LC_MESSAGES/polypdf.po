@@ -9302,24 +9302,12 @@ msgid "결과 미리보기"
 msgstr "Result preview"
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "모양 펴기 (원근·휜 테두리)"
-msgstr "Straighten shape (perspective · curved edges)"
-
-#: viewer/widgets/photo_crop_dialog.py
-msgid "비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 직사각형으로 펼칩니다."
-msgstr "Flattens a photo taken at an angle or curved in the middle into a rectangle, following its edges."
-
-#: viewer/widgets/photo_crop_dialog.py
-msgid "테두리 찾기"
-msgstr "Find edges"
-
-#: viewer/widgets/photo_crop_dialog.py
 msgid "점 처음대로"
 msgstr "Reset points"
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "점을 처음 자리로 — 크롭 박스를 고쳐 두었으면 그 박스 네 귀, 아니면 사진 네 귀퉁이 가까이."
-msgstr "Moves the points back to where they start — the four corners of the crop box if you adjusted it, otherwise near the photo's corners."
+msgid "점을 처음 자리로 — 지금 크롭 박스 네 귀(크롭이 없으면 사진 네 귀)."
+msgstr "Moves the points back to the four corners of the current crop box (the photo's corners if there is no crop)."
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다 — [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
@@ -9346,12 +9334,12 @@ msgid "사진 크롭"
 msgstr "Crop Photo"
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "어림한 테두리로 점을 놓습니다."
-msgstr "Places the points on the estimated edges."
+msgid "모양 펴기 (원근·휜 테두리)"
+msgstr "Straighten shape (perspective · curved edges)"
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "이 사진에서는 테두리를 찾지 못했습니다 — 점을 끌어 맞추세요."
-msgstr "Could not find the edges in this photo — drag the points to fit."
+msgid "비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 직사각형으로 펼칩니다."
+msgstr "Flattens a photo taken at an angle or curved in the middle into a rectangle, following its edges."
 
 #: viewer/widgets/photo_label_dialog.py
 msgid "새 스타일..."
@@ -14450,4 +14438,13 @@ msgstr "Getting Started"
 
 #~ msgid "점을 사진 네 귀퉁이 가까이로 되돌립니다."
 #~ msgstr "Moves the points back near the four corners of the photo."
+
+#~ msgid "테두리 찾기"
+#~ msgstr "Find edges"
+
+#~ msgid "어림한 테두리로 점을 놓습니다."
+#~ msgstr "Places the points on the estimated edges."
+
+#~ msgid "이 사진에서는 테두리를 찾지 못했습니다 — 점을 끌어 맞추세요."
+#~ msgstr "Could not find the edges in this photo — drag the points to fit."
 

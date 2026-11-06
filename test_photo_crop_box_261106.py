@@ -4,11 +4,12 @@
 오프스크린, 실제 마우스 이벤트(QTest)로 화면을 끈다. 실제 설정 폴더를 쓰지 않는다(마스터 §14.7.2 의 3).
 A. 크롭 박스 안쪽을 끌면 크기 그대로 옮긴다 — 사진 밖으로는 나가지 않는다(가장자리에서 멈춤), 커서는 이동 모양
 B. 변 끌기는 그대로(크기 바뀜) · 공통 `CropCanvas` 라 PDF 크롭 화면도 같다(261106-9 — 그 창 자체는 test_crop_box_move_261106)
-C. 박스를 조절한 뒤 '모양 펴기' 를 켜면 처음 점 = 그 박스 네 귀(변 가운데는 곧은 변 가운데) — 안 건드렸으면 자동 어림,
-   미리 건 최근 크롭만으로는 어림, 그 사진의 저장된 크롭이 있으면 그 박스
-D. [점 처음대로] = 조절한 박스(없으면 기본 점) · [테두리 찾기] = 늘 어림
+C. '모양 펴기' 를 켜면 처음 점 = 늘 지금 크롭 박스 네 귀(변 가운데는 곧은 변 가운데) — 고친 박스·미리 건 최근 크롭·저장된 크롭
+   모두, 크롭이 없으면 사진 네 귀(261106-11 — 자동 어림 없음)
+D. [점 처음대로] = 지금 박스 · [테두리 찾기] 는 없다
 E. 펴기 화면도 테두리 안쪽을 끌면 점 전체를 옮긴다(사진 밖으로는 안 나감)
-F. ❮ ❯ — 사진마다 같은 규칙(넘긴 사진은 제 박스·어림, 되돌아오면 놓아 둔 점)
+F. ❮ ❯ — 처음 보는 사진은 모양 펴기가 **꺼진 채** 그 사진의 크롭으로(261106-11), 켜 둔 사진으로 돌아오면 그 켬·점
+H. 'A' 키 = 모양 펴기 켜고 끄기 — % 칸에 포커스가 있어도·단추에 있어도·한글 자판(ㅁ)도, Ctrl+A 등 수정키는 아님
 """
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -56,11 +57,9 @@ try:
 
     img = QImage(800, 600, QImage.Format.Format_RGB32)
     img.fill(QColor(200, 200, 200))
-    AUTO = [(0.2, 0.15), (0.8, 0.12), (0.85, 0.9), (0.15, 0.85)]
-    AUTO = AUTO + pw.mids_of(AUTO)
 
     # A
-    dlg = PhotoCropDialog(img, [20, 20, 20, 20], has_crop=False, auto_pts=AUTO)
+    dlg = PhotoCropDialog(img, [20, 20, 20, 20], has_crop=False)
     dlg.resize(1120, 720); dlg.show(); app.processEvents()
     cv = dlg.canvas
     r = cv._img_rect()
@@ -93,43 +92,44 @@ try:
     chk(r1(pdf._m) != [20.0, 20.0, 20.0, 20.0] and abs(sum(pdf._m[:2]) - 40) < 0.2, "B 공통 CropCanvas 라 PDF 크롭 화면도 안쪽 끌기로 옮긴다(261106-9)", str(pdf._m))
     pdf.close()
 
-    # C — 조절한 박스 → 펴기 처음 점
+    # C — 처음 점 = 지금 박스
     dlg.chk_warp.setChecked(True); app.processEvents()
     t, b, l, rr = (v / 100.0 for v in dlg.current_margins())
     box = [(l, t), (1 - rr, t), (1 - rr, 1 - b), (l, 1 - b)]
-    chk(near(dlg.warp.points(), box + pw.mids_of(box), 1e-6), "C 박스를 조절한 뒤 펴기를 켜면 처음 점 = 그 박스 네 귀·곧은 변 가운데",
+    chk(near(dlg.warp.points(), box + pw.mids_of(box), 1e-6), "C 박스를 고친 뒤 펴기를 켜면 처음 점 = 그 박스 네 귀·곧은 변 가운데",
         str(dlg.warp.points()[:4]))
     dlg.close()
-    d2 = PhotoCropDialog(img, [10, 10, 10, 10], has_crop=False, auto_pts=AUTO)   # 미리 건 최근 크롭(손대지 않음)
+    d2 = PhotoCropDialog(img, [10, 10, 10, 10], has_crop=False)    # 미리 건 최근 크롭(손대지 않음)
     d2.chk_warp.setChecked(True)
-    chk(near(d2.warp.points(), AUTO, 1e-6), "C 박스를 안 건드렸으면(미리 건 최근 크롭만) 자동 어림")
+    b2 = [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]
+    chk(near(d2.warp.points(), b2 + pw.mids_of(b2), 1e-6), "C 손대지 않은 박스(미리 건 최근 크롭)도 그 박스 — 어림 없음", str(d2.warp.points()[:4]))
     d2.close()
-    d3 = PhotoCropDialog(img, [5, 5, 30, 5], has_crop=True, auto_pts=AUTO)       # 그 사진의 저장된 크롭
+    d3 = PhotoCropDialog(img, [5, 5, 30, 5], has_crop=True)        # 그 사진의 저장된 크롭
     d3.chk_warp.setChecked(True)
     bx = [(0.30, 0.05), (0.95, 0.05), (0.95, 0.95), (0.30, 0.95)]
     chk(near(d3.warp.points(), bx + pw.mids_of(bx), 1e-6), "C 저장된 크롭이 있는 사진은 그 박스", str(d3.warp.points()[:4]))
     d3.close()
-    d4 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False, auto_pts=None)
+    d4 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False)
     d4.chk_warp.setChecked(True)
-    chk(near(d4.warp.points(), pw.default_points(), 1e-6), "C 어림도 박스도 없으면 기본 점")
+    chk(near(d4.warp.points(), pw.default_points(), 1e-6), "C 크롭이 없으면 사진 네 귀")
     d4.close()
 
     # D — 단추
-    d5 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False, auto_pts=AUTO)
-    d5.spins[0].setValue(20.0)                          # 손으로 고침
+    d5 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False)
+    d5.spins[0].setValue(20.0)
     d5.chk_warp.setChecked(True)
     want = [(0.0, 0.2), (1.0, 0.2), (1.0, 1.0), (0.0, 1.0)]
-    chk(near(d5.warp.points(), want + pw.mids_of(want), 1e-6), "D 여백 칸으로 고친 박스도 '조절한 박스'")
+    chk(near(d5.warp.points(), want + pw.mids_of(want), 1e-6), "D 여백 칸으로 고친 박스도 그 박스")
     d5.warp.move_point(0, (0.1, 0.3))
-    d5.btn_detect.click()
-    chk(near(d5.warp.points(), AUTO, 1e-6), "D [테두리 찾기] = 늘 자동 어림")
     d5.btn_corners.click()
-    chk(near(d5.warp.points(), want + pw.mids_of(want), 1e-6), "D [점 처음대로] = 조절한 박스")
+    chk(near(d5.warp.points(), want + pw.mids_of(want), 1e-6), "D [점 처음대로] = 지금 박스")
+    chk(not hasattr(d5, "btn_detect"), "D [테두리 찾기] 는 없다")
     d5.close()
-    d6 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False, auto_pts=AUTO)
+    d6 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False)
     d6.chk_warp.setChecked(True)
     d6.btn_corners.click()
-    chk(near(d6.warp.points(), pw.default_points(), 1e-6), "D 박스가 없으면 [점 처음대로] = 기본 점(사진 귀퉁이 가까이)")
+    chk(near(d6.warp.points(), pw.default_points(), 1e-6), "D 크롭이 없으면 [점 처음대로] = 사진 네 귀")
+    d6.warp.set_points(pw.default_points(0.1))       # 안쪽을 끌 자리를 남긴다
 
     # E — 펴기 화면 안쪽 끌기
     d6.resize(1120, 720); d6.show(); app.processEvents()
@@ -151,7 +151,7 @@ try:
     d6.close()
 
     # G — 껐다 켜기: 박스 그대로면 놓아 둔 점, 박스를 다시 고쳤으면 새 박스
-    d8 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False, auto_pts=AUTO)
+    d8 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False)
     d8.chk_warp.setChecked(True)
     d8.warp.move_point(0, (0.25, 0.2))
     moved = d8.warp.points()
@@ -166,19 +166,47 @@ try:
 
     # F — ❮ ❯ 사진마다
     img2 = QImage(600, 600, QImage.Format.Format_RGB32); img2.fill(QColor(120, 120, 120))
-    AUTO2 = [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]
-    AUTO2 = AUTO2 + pw.mids_of(AUTO2)
-    d7 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False, auto_pts=AUTO, count=2, index=0)
-    d7.photoRequested.connect(lambda i: d7.show_photo(i, img2 if i == 1 else img, [10, 10, 10, 10] if i == 1 else [0, 0, 0, 0],
-                                                      False, "p%d" % i, AUTO2 if i == 1 else AUTO))
+    d7 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False, count=3, index=0)
+    d7.photoRequested.connect(lambda i: d7.show_photo(i, img2 if i else img, [10, 10, 10, 10] if i == 1 else [0, 0, 0, 0],
+                                                      i == 2, "p%d" % i))
     d7.spins[1].setValue(30.0)                          # 0번 사진 박스를 고친 뒤 켠다
     d7.chk_warp.setChecked(True)
+    d7.warp.move_point(0, (0.2, 0.2))
     p0 = d7.warp.points()
     d7._go(1); app.processEvents()
-    chk(d7.chk_warp.isChecked() and near(d7.warp.points(), AUTO2, 1e-6), "F 넘긴 사진(박스 안 건드림)은 켬을 이어받고 제 어림 점")
+    m1 = r1(d7.current_margins())
+    chk(not d7.chk_warp.isChecked() and d7.stack.currentWidget() is d7.canvas and m1 == [10.0, 10.0, 10.0, 10.0],
+        "F 처음 보는 사진은 모양 펴기 꺼진 채, 그 사진의 크롭(미리 건 최근 크롭)으로 시작", str((d7.chk_warp.isChecked(), m1)))
+    d7.chk_warp.setChecked(True)
+    b1 = [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]
+    chk(near(d7.warp.points(), b1 + pw.mids_of(b1), 1e-6), "F 그 사진에서 켜면 그 사진의 박스로")
+    d7.chk_warp.setChecked(False)
+    d7._go(2); app.processEvents()
+    chk(not d7.chk_warp.isChecked(), "F 앞 사진에서 꺼 두었으면 다음 사진도 꺼진 채")
     d7._go(0); app.processEvents()
-    chk(near(d7.warp.points(), p0, 1e-6), "F 되돌아오면 놓아 둔 점(조절한 박스로 시작한 점)")
+    chk(d7.chk_warp.isChecked() and near(d7.warp.points(), p0, 1e-6), "F 켜 둔 사진으로 돌아오면 그 켬·놓아 둔 점(작업을 잃지 않게)")
     d7.close()
+
+    # H — 'A' 키
+    from PyQt6.QtGui import QKeyEvent
+    from PyQt6.QtCore import QEvent
+    d9 = PhotoCropDialog(img, [0, 0, 0, 0], has_crop=False)
+    d9.resize(1120, 720); d9.show(); app.processEvents()
+    d9.spins[0].setFocus(); app.processEvents()
+    v0 = d9.spins[0].text()
+    QTest.keyClick(d9.spins[0], Qt.Key.Key_A); app.processEvents()
+    chk(d9.chk_warp.isChecked() and d9.spins[0].text() == v0, "H % 칸에 포커스가 있어도 A = 켜기(칸에 글자는 안 들어감)")
+    d9.btn_corners.setFocus(); app.processEvents()
+    QTest.keyClick(d9.btn_corners, Qt.Key.Key_A, Qt.KeyboardModifier.ShiftModifier); app.processEvents()
+    chk(not d9.chk_warp.isChecked(), "H 단추에 포커스가 있어도 A(대문자) = 끄기")
+    d9.chk_warp.setFocus(); app.processEvents()
+    ev = QKeyEvent(QEvent.Type.KeyPress, 0, Qt.KeyboardModifier.NoModifier, 0, 0x41, 0, "ㅁ")
+    QApplication.sendEvent(d9.chk_warp, ev); app.processEvents()
+    chk(d9.chk_warp.isChecked(), "H 한글 자판(ㅁ, 같은 키 자리)도 켜고 끈다")
+    QTest.keyClick(d9.chk_warp, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier); app.processEvents()
+    chk(d9.chk_warp.isChecked(), "H Ctrl+A 는 모양 펴기를 건드리지 않는다")
+    chk(d9.chk_warp.text().endswith("(A)"), "H 체크 상자 글에 (A) 표시", d9.chk_warp.text())
+    d9.close()
 except Exception:
     import traceback
     traceback.print_exc()
