@@ -427,8 +427,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._update_bk_count()
         self.progress = QProgressBar()
         self.progress.setMaximumWidth(220)
-        self.progress.setVisible(False)
-        self.status.addPermanentWidget(self.progress)
+        self.status.addPermanentWidget(self.progress)       # 보임은 jobs_controller 가 정한다(261106-19, 응답성 SOT §4.6)
         self._lite_init()                    # 261021-1(응답성 SOT §4.7): 가벼운 넘김 표시
         self._jobs_init()                    # 261019-1: 진행 바 누르면 작업 창 + 저장 안 한 OCR 단추
         self._build_zoom_buttons()           # 261021-5(입력 SOT §3.2): 맨 오른쪽 + 0 −
@@ -2834,9 +2833,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         finally:
             QApplication.restoreOverrideCursor()
         self._load_main(HistoryItem(str(pdf_path), 0, "", "bookmark"))
-        # 해당 파일만 인덱싱 (폴더 전체 인덱싱 회피)
-        self.progress.setVisible(True)
-        self.progress.setRange(0, 0)
+        # 해당 파일만 인덱싱 (폴더 전체 인덱싱 회피) — 짧아 작업 창·진행 막대 없이 글만(261106-19)
         self.status.showMessage(tr("인덱싱 준비..."))
         worker = IndexWorker(self._db_path, self._folder, single_file=pdf_path)
         worker.progress.connect(self._on_index_progress)
@@ -2957,8 +2954,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not files:
             return
         try:
-            self.progress.setVisible(True)
-            self.progress.setRange(0, 0)
             worker = IndexWorker(self._db_path, Path(files[0]).parent, files=[Path(f) for f in files])
             worker.progress.connect(self._on_index_progress)
             worker.finished.connect(self._on_index_finished)
@@ -3059,8 +3054,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.information(self, tr("책갈피 자동 생성"),
                                     tr("책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."))
             return
-        self.progress.setVisible(True)
-        self.progress.setRange(0, 0)
         self.status.showMessage(tr("책갈피 자동 생성 시작..."))
         self._bookmarker_opts = dict(opts)
         self._bookmarker_pdf = in_pdf
@@ -3083,7 +3076,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _bookmarker_end(self) -> bool:
         """끝 정리. 작업 창에서 [취소] 했으면 True(결과는 job_done 이 버렸다 — 261105-25)."""
         self._bookmarker_worker = None
-        self.progress.setVisible(False)
         return self.job_done("bookmarker")
 
     def _on_bookmarker_review(self, result: dict):
@@ -6882,10 +6874,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261104-3(사진 보기 SOT 4.23, 사용자 지시 '사진 모드에서 PDF 를 인덱싱하고 있어'): 사진 모드에서는 PDF 색인을 걸지 않는다 —
             #   PDF 모드로 돌아오면 그 폴더를 다시 건다(`_photo_resume_index`). 모든 색인 시작이 여기를 지난다
             self._photo_index_skipped = True
-            try:
-                self.progress.setVisible(False)
-            except Exception:
-                pass
             self._photo_index_start()                 # 261104-4(사진 보기 SOT 4.24, D19): 대신 사진 정보 색인
             return
         self._cancel_active_indexing()
@@ -6924,8 +6912,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not self._folder:
             return
         self._close_probe_idx()
-        self.progress.setVisible(True)
-        self.progress.setRange(0, 0)
         self.status.showMessage(tr("인덱싱 준비..."))
         worker = IndexWorker(self._db_path, self._folder, verify=verify)
         worker.progress.connect(self._on_index_progress)
@@ -6946,7 +6932,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _on_index_finished(self):
         self._index_recovering = False
-        self.progress.setVisible(False)
         if getattr(self, "_index_user_stopped", False):
             # 261105-25(응답성 SOT §4.6): 사용자가 중단 — '완료' 라 하지 않고, 이어지는 태그 계산도 걸지 않는다
             self._index_user_stopped = False
@@ -7261,8 +7246,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             p = Path(path)
             if not p.exists() or p.suffix.lower() != ".pdf":
                 return
-            self.progress.setVisible(True)
-            self.progress.setRange(0, 0)
             self.status.showMessage(tr('인덱싱: {name} ...').format(name=p.name))
             worker = IndexWorker(self._db_path, p.parent, single_file=p)
             worker.progress.connect(self._on_index_progress)

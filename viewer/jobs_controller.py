@@ -122,6 +122,7 @@ class JobsMixin:
         self._jobs = {}
         self._jobs_dlg = None
         self._jobs_seq = 0
+        self._jobs_sync_bar()                # 처음에는 작업이 없다 — 막대 숨김
         try:
             self.progress.setToolTip(tr("눌러서 진행 중인 작업 보기·중단·취소"))
             self.progress.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -146,12 +147,7 @@ class JobsMixin:
     def job_add(self, jid: str, label: str, cancel=None, discard=None) -> str:
         """cancel = [중단] 때 부를 함수(워커 `request_cancel`), discard = [취소] 때 작업이 끝난 뒤 버릴 함수(있으면 [취소] 단추)."""
         self._jobs[jid] = {"label": label, "cancel": cancel, "discard": discard, "msg": "", "stopping": False}
-        try:
-            if not self.progress.isVisible():
-                self.progress.setRange(0, 0)
-                self.progress.setVisible(True)
-        except Exception:
-            pass
+        self._jobs_sync_bar()
         self._jobs_entry_hint()
         self._jobs_refresh()
         return jid
@@ -167,11 +163,7 @@ class JobsMixin:
         """작업 끝. [취소] 를 눌렀던 작업이면 이제(워커가 끝난 뒤) 버리고 True — 부른 쪽은 끝 처리를 건너뛴다."""
         j = self._jobs.pop(jid, None)
         discarded = bool(j and j.get("stopping") == "discard")
-        if self._jobs:                       # 다른 작업이 아직 돈다 — 진행 바(=작업 창 입구)를 남긴다
-            try:
-                self.progress.setRange(0, 0); self.progress.setVisible(True)
-            except Exception:
-                pass
+        self._jobs_sync_bar()
         self._jobs_entry_hint()
         self._jobs_refresh()
         if discarded:
@@ -208,6 +200,19 @@ class JobsMixin:
             pass
         self.status.showMessage(tr("'{label}' 를 취소하는 중 — 지금 쪽을 마치면 멈추고 결과를 버립니다").format(label=j["label"]), 6000)
         self._jobs_refresh()
+
+    def _jobs_sync_bar(self) -> None:
+        """261106-19(응답성 SOT §4.6 '진행 막대'): 상태 표시줄 진행 막대는 **작업 창에 오른 작업이 있을 때만** 보인다 —
+        보이고 숨기는 곳은 여기 하나다. 다른 코드는 범위·값(`setRange`·`setValue`)만 바꾼다(`test_tool_cancel_jobs_bar_261106`).
+        종전에는 `job_add` 가 켜고 끄는 것은 부른 쪽 몫이라, 끄지 않은 작업(zip 풀기 등)이 끝나도 막대가 남아
+        눌러 보면 '진행 중인 작업이 없습니다' 였다(사용자 보고)."""
+        try:
+            on = bool(self._jobs)
+            if on and not self.progress.isVisible():
+                self.progress.setRange(0, 0)         # 첫 진행 전에는 바쁨 표시 — 작업이 범위를 주면 그 값으로
+            self.progress.setVisible(on)
+        except Exception:
+            pass
 
     def _jobs_entry_hint(self) -> None:
         """상태 표시줄(진행 메시지 자리)은 작업이 있을 때만 손가락 커서·툴팁 — 누르면 작업 창."""

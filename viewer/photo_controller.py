@@ -376,7 +376,6 @@ class PhotoMixin:
             try:
                 self._cancel_active_indexing()          # 돌던 PDF 색인은 멈춘다(4.23) — PDF 모드로 오면 다시
                 self._photo_index_skipped = True
-                self.progress.setVisible(False)
             except Exception:
                 pass
             self._photo_index_start()                   # 사진 정보 색인(4.24, D19)

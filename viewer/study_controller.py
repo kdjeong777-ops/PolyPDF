@@ -552,13 +552,13 @@ class StudyMixin:
               "stdict_key": self._prefs.get("stdict_key", ""),
               "onterm_key": self._prefs.get("onterm_key", "")}
         from viewer.workers import OnlineDictFetchWorker
-        self.progress.setVisible(True); self.progress.setRange(0, 0)
         self.status.showMessage(f"온용어 재조회 중... ({len(terms)}개)")
         w = OnlineDictFetchWorker(terms, op)
         self._onterm_recl_worker = w
+        self.job_add("onterm_reclassify", f"온용어 다시 분류 — {len(terms)}개")   # 261106-19: 막대 = 작업 창(멈출 수단은 없다)
 
         def on_done(results):
-            self.progress.setVisible(False)
+            self.job_done("onterm_reclassify")
             n = self._write_online_results(dic, results)
             self._spot_terms_cache = None
             self._refresh_study_panel(self.main_view.current_page())
@@ -998,19 +998,18 @@ class StudyMixin:
             return
 
         from viewer.workers import StudyMp3Worker
-        self.progress.setVisible(True); self.progress.setRange(0, len(jobs))
         worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
                                 resume=resume)
         jid = "study_mp3"                        # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
         self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
+        self.progress.setRange(0, len(jobs))       # 막대 보임은 job_add 가, 범위는 여기서
 
         def on_prog(i, n, msg):
             self.progress.setValue(i); self.status.showMessage(f"mp3: {msg}")
             self.job_progress(jid, msg)
 
         def on_fin(res):
-            self.progress.setVisible(False)
             self.job_done(jid)
             if res.get("error"):
                 QMessageBox.warning(self, "mp3 저장 실패", res["error"])
@@ -1142,19 +1141,18 @@ class StudyMixin:
             return
 
         from viewer.workers import StudyMp3Worker
-        self.progress.setVisible(True); self.progress.setRange(0, len(jobs))
         worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
                                 resume=resume)
         jid = "main_mp3"                         # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
         self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
+        self.progress.setRange(0, len(jobs))       # 막대 보임은 job_add 가, 범위는 여기서
 
         def on_prog(i, n, msg):
             self.progress.setValue(i); self.status.showMessage(f"mp3: {msg}")
             self.job_progress(jid, msg)
 
         def on_fin(res):
-            self.progress.setVisible(False)
             self.job_done(jid)
             if res.get("error"):
                 QMessageBox.warning(self, tr("mp3 저장 실패"), res["error"])
@@ -1308,9 +1306,8 @@ class StudyMixin:
         }
         # 백그라운드 저장(대용량에서 UI 멈춤 방지)
         from viewer.workers import StudyExportWorker
-        self.progress.setVisible(True)
-        self.progress.setRange(0, 0)
         worker = StudyExportWorker(store.db_path, fkey, out, opts)
+        self.job_add("study_export", f"단어장 Word 저장 — {Path(out).name}")   # 261106-19: 막대 = 작업 창(멈출 수단은 없다)
 
         def on_prog(i, n, _m):
             if n:
@@ -1318,7 +1315,7 @@ class StudyMixin:
                 self.progress.setValue(i)
 
         def on_fin(res):
-            self.progress.setVisible(False)
+            self.job_done("study_export")
             if res.get("error"):
                 QMessageBox.warning(self, "Word 저장 실패", res["error"])
             else:
@@ -1693,7 +1690,6 @@ class StudyMixin:
               "onterm_key": self._prefs.get("onterm_key", "")}
         path = Path(self._study_pdf)
         self.study_panel.set_building(True)
-        self.progress.setVisible(True); self.progress.setRange(0, 0)
         # 260910(단어학습 SOT §14.8): 언어는 **워커가** 고른다 — 옛 `_detect_study_lang`
         #   은 텍스트층으로 판정해, 글자가 없는 스캔본을 늘 `eng` 로 떨어뜨렸다.
         worker = StudyBuildWorker(path, lang="",
@@ -1710,7 +1706,6 @@ class StudyMixin:
 
         def on_done(summary):
             self.study_panel.set_building(False)
-            self.progress.setVisible(False)
             self.job_done(jid)
             if summary.get("cancelled") and not summary.get("error"):
                 self._spot_terms_cache = None
@@ -1844,8 +1839,6 @@ class StudyMixin:
                 return
         if with_vocab:
             self.study_panel.set_building(True)
-        self.progress.setVisible(True)
-        self.progress.setRange(0, 0)        # busy until first progress
         # 260615-14: 인터넷 사전 포함 옵션이면 빌드 시 각 단어를 온라인 조회·캐시
         online_prefs = {k: self._prefs.get(k) for k in
                         ("online_dict_enabled", "stdict_key",
@@ -1867,7 +1860,6 @@ class StudyMixin:
         def on_done(summary):
             if with_vocab:
                 self.study_panel.set_building(False)
-            self.progress.setVisible(False)
             if self.job_done(jid):               # [취소] — 결과는 job_done 이 버렸다(261105-25)
                 return
             if summary.get("cancelled") and not summary.get("error"):
