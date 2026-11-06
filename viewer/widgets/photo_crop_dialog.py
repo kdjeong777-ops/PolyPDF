@@ -243,13 +243,14 @@ class PhotoCropDialog(QDialog):
         from PyQt6.QtCore import QEvent
         t = ev.type()
         if t in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress) and self._is_warp_key(ev):
-            if t == QEvent.Type.KeyPress:
+            if t == QEvent.Type.KeyPress and not self._loading:   # 그림이 들어오는 동안은 받지 않는다(261106-17 보강)
                 self.chk_warp.toggle()
             ev.accept()
             return True
         if t == QEvent.Type.InputMethod and (ev.commitString() == "ㅁ" or ev.preeditString() == "ㅁ"):
             if ev.commitString() == "ㅁ":
-                self.chk_warp.toggle()
+                if not self._loading:
+                    self.chk_warp.toggle()
             return True                                  # 한글 입력기 조합 'ㅁ' — 숫자 칸에 글자를 남기지 않는다
         return super().eventFilter(obj, ev)
 
@@ -260,7 +261,8 @@ class PhotoCropDialog(QDialog):
 
     def keyPressEvent(self, ev):
         if self._is_warp_key(ev):                        # 단추·체크 상자에 포커스가 있어도(그들은 A 를 쓰지 않아 여기로 온다)
-            self.chk_warp.toggle()
+            if not self._loading:                        # 그림이 들어오는 동안은 받지 않는다(261106-17 보강)
+                self.chk_warp.toggle()
             ev.accept()
             return
         if ev.key() == Qt.Key.Key_Escape and self.isFullScreen():
@@ -327,6 +329,7 @@ class PhotoCropDialog(QDialog):
         self.chk_warp.blockSignals(True)
         self.chk_warp.setChecked(on)
         self.chk_warp.blockSignals(False)
+        self._lock_edit(False)
         self._apply_warp_ui()
         self.nav.set_state(self._index + 1, self._count)
 
@@ -338,6 +341,7 @@ class PhotoCropDialog(QDialog):
         self._loading = True
         self.nav.btn_prev.setEnabled(False)
         self.nav.btn_next.setEnabled(False)
+        self._lock_edit(True)
         self.photoRequested.emit(index)
 
     # ── 모양 펴기(261106-6) ──────────────────────────
@@ -439,10 +443,21 @@ class PhotoCropDialog(QDialog):
         self._loading = True
         self.nav.btn_prev.setEnabled(False)
         self.nav.btn_next.setEnabled(False)
+        self._lock_edit(True)
+
+    def _lock_edit(self, on: bool) -> None:
+        """그림이 들어오는 동안 고치지 못하게(261106-17 보강) — 넘긴 뒤 새 그림이 오기 전에는 화면에 **앞 사진**이 남아 있어,
+        그때 끈 점·박스·켜고 끔이 앞 사진 몫으로 섞일 수 있었다. 그림이 들어오면(`show_photo`) 푼다."""
+        self.stack.setEnabled(not on)
+        self.chk_warp.setEnabled(not on)
+        self.btn_corners.setEnabled(not on and self.chk_warp.isChecked())
+        for sp in self.spins:
+            sp.setEnabled(not on and not self.chk_warp.isChecked())
 
     def loading_failed(self) -> None:
         """쓰는 쪽이 그림을 풀지 못했다 — 지금 사진에 그대로."""
         self._loading = False
+        self._lock_edit(False)
         self.nav.set_state(self._index + 1, self._count)
 
     # ── 여백 ──────────────────────────────────────────
