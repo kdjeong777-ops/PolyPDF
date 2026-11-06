@@ -3,7 +3,8 @@
 
 오프스크린, 실제 설정 폴더를 쓰지 않는다(마스터 §14.7.2 의 3).
 A. 왼쪽(고치는) 칸과 오른쪽(결과) 칸이 같은 폭, 창 가운데를 두고 대칭 — 사이에 ⇒ 그림(글자 '결과 미리보기' 없음)
-B. ❮ ❯·여백 칸·모양 펴기 줄이 왼쪽 칸 가운데(같은 기준선), 안내 글은 오른쪽 칸 아래
+B. ❮ ❯·여백 칸·모양 펴기 줄이 왼쪽 칸 가운데(같은 기준선). 안내 글은 늘 띄우지 않고 동그란 ? 단추(올리면 풍선·누르면 창) —
+   모양 펴기를 켜고 꺼도 두 칸 크기가 그대로(261106-12 사용자 보고 '설명 내용에 따라 창 크기가 줄어든다')
 C. 제목 줄 최대화 단추, F11 = 전체 화면 켜고 끄기, 전체 화면에서 Esc = 전체 화면만 풀기(창은 그대로)
 D. 창을 키우면 두 칸이 함께 커지고(여전히 대칭) 박스 끌기 좌표가 맞다(끈 화소 ÷ 그림 폭 = 여백 %)
 E. 닫을 때 자리·크기·최대화를 남기고(전체 화면은 남기지 않음) 다시 열면 그대로 — 실제 창에서
@@ -94,14 +95,31 @@ try:
     w0_off = dlg.chk_warp.mapTo(dlg, QPoint(0, 0)).x()
     dlg.chk_warp.setChecked(True); pump(timeout=0.2)
     w0 = dlg.chk_warp.mapTo(dlg, QPoint(0, 0)).x()
-    w1 = dlg.btn_corners.mapTo(dlg, QPoint(0, 0)).x() + dlg.btn_corners.width()
+    _last = getattr(dlg, "btn_help", dlg.btn_corners)
+    w1 = _last.mapTo(dlg, QPoint(0, 0)).x() + _last.width()
     warp_c = (w0 + w1) / 2.0
     chk(w0 == w0_off, "B 모양 펴기를 켜고 꺼도 체크 상자 자리가 그대로", "%d → %d" % (w0_off, w0))
     chk(abs(nc - lc) <= 4 and abs(spin_c - lc) <= 8 and abs(warp_c - lc) <= 8,
         "B ❮ ❯·여백 칸·모양 펴기 줄이 왼쪽 칸 가운데", "칸 %.0f · ❮❯ %.0f · 여백 %.0f · 펴기 %.0f" % (lc, nc, spin_c, warp_c))
     dlg.chk_warp.setChecked(False); pump(timeout=0.2)
-    n0 = dlg.note.mapTo(dlg, QPoint(0, 0)).x()
-    chk(n0 >= gx(dlg.result, dlg)[0] - 2, "B 안내 글은 오른쪽 칸 아래", "%d vs %d" % (n0, gx(dlg.result, dlg)[0]))
+    sz_off = (dlg.stack.width(), dlg.stack.height(), dlg.result.height())
+    dlg.chk_warp.setChecked(True); pump(timeout=0.3)
+    sz_on = (dlg.stack.width(), dlg.stack.height(), dlg.result.height())
+    dlg.chk_warp.setChecked(False); pump(timeout=0.3)
+    chk(sz_on == sz_off, "B 모양 펴기를 켜고 꺼도 두 칸 크기가 그대로", "%s → %s" % (sz_off, sz_on))
+    long_labels = [lb.text() for lb in dlg.findChildren(QLabel) if lb.isVisible() and len(lb.text()) > 40]
+    chk(not long_labels, "B 안내 글을 창에 늘 띄우지 않는다", str([t[:20] for t in long_labels]))
+    hb_ = getattr(dlg, "btn_help", None)
+    chk(hb_ is not None and hb_.isVisible() and hb_.text() == "?" and "모양 펴기" in hb_.toolTip()
+        and "두 번" in hb_.toolTip() and hb_.width() == hb_.height(), "B 동그란 ? 단추 — 올리면 안내(풍선)")
+    if hb_ is not None:
+        from PyQt6.QtWidgets import QMessageBox
+        _mx = QMessageBox.exec
+        shown = {}
+        QMessageBox.exec = lambda self_: shown.setdefault("t", self_.text()) and 0
+        hb_.click(); pump(timeout=0.2)
+        QMessageBox.exec = _mx
+        chk("모양 펴기" in shown.get("t", ""), "B ? 를 누르면 같은 안내가 창으로")
 
     # C
     chk(bool(dlg.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint), "C 제목 줄 최대화 단추")

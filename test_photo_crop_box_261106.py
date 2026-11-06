@@ -9,6 +9,7 @@ C. '모양 펴기' 를 켜면 처음 점 = 늘 지금 크롭 박스 네 귀(변 
 D. [점 처음대로] = 지금 박스 · [테두리 찾기] 는 없다
 E. 펴기 화면도 테두리 안쪽을 끌면 점 전체를 옮긴다(사진 밖으로는 안 나감)
 F. ❮ ❯ — 처음 보는 사진은 모양 펴기가 **꺼진 채** 그 사진의 크롭으로(261106-11), 켜 둔 사진으로 돌아오면 그 켬·점
+I. 변 가운데 점을 두 번 누르면 그 변이 다시 곧아진다(261106-12) — 꼭짓점을 두 번 눌러도 그대로
 H. 'A' 키 = 모양 펴기 켜고 끄기 — % 칸에 포커스가 있어도·단추에 있어도·한글 자판(ㅁ)도, Ctrl+A 등 수정키는 아님
 """
 import os, sys
@@ -137,6 +138,7 @@ try:
     before = wv.points()
     wr = wv._img_rect()
     cen = QPoint(int(wr.center().x()), int(wr.center().y()))
+    QTest.mouseMove(wv, QPoint(cen.x() + 7, cen.y() + 5)); app.processEvents()   # 같은 자리면 움직임 이벤트가 안 온다
     QTest.mouseMove(wv, cen); app.processEvents()
     chk(wv.cursor().shape() == Qt.CursorShape.SizeAllCursor, "E 테두리 안쪽 위 커서 = 이동 모양")
     drag(wv, cen, QPoint(cen.x() + int(wr.width() * 0.02), cen.y() + int(wr.height() * 0.03)))
@@ -186,6 +188,25 @@ try:
     d7._go(0); app.processEvents()
     chk(d7.chk_warp.isChecked() and near(d7.warp.points(), p0, 1e-6), "F 켜 둔 사진으로 돌아오면 그 켬·놓아 둔 점(작업을 잃지 않게)")
     d7.close()
+
+    # I — 가운데 점 두 번 누르기
+    d10 = PhotoCropDialog(img, [10, 10, 10, 10], has_crop=False)
+    d10.resize(1120, 720); d10.show(); app.processEvents()
+    d10.chk_warp.setChecked(True); app.processEvents()
+    wv = d10.warp
+    wv.move_point(4, (0.5, 0.25))                       # 위 변 가운데를 끌어 휜다
+    pts_bent = wv.points()
+    wr = wv._img_rect()
+
+    def scr(q):
+        return QPoint(int(wr.left() + q[0] * wr.width()), int(wr.top() + q[1] * wr.height()))
+    QTest.mouseDClick(wv, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, scr(pts_bent[4])); app.processEvents()
+    p_after = wv.points()
+    chk(near([p_after[4]], [pw.mids_of(p_after[:4])[0]], 1e-6) and pw.is_straight(p_after), "I 가운데 점 두 번 누르기 = 그 변이 다시 곧다",
+        str(p_after[4]))
+    QTest.mouseDClick(wv, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, scr(p_after[0])); app.processEvents()
+    chk(near(wv.points(), p_after, 1e-6), "I 꼭짓점을 두 번 눌러도 그대로")
+    d10.close()
 
     # H — 'A' 키
     from PyQt6.QtGui import QKeyEvent

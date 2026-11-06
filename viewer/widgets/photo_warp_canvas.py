@@ -167,3 +167,19 @@ class WarpCanvas(QWidget):
 
     def mouseReleaseEvent(self, ev):
         self._drag = None
+
+    def mouseDoubleClickEvent(self, ev):
+        """변 가운데 점을 두 번 누르면 그 변을 다시 곧게 — 가운데 점을 꼭짓점 사이 가운데로(261106-12 사용자 지시
+        '중간 점을 두 번 클릭하면 중간점 설정 내용 삭제'). 꼭짓점·빈 곳은 아무 일도 하지 않는다."""
+        i = self._hit(ev.position())
+        self._drag = None
+        if i is None or i < 4:
+            return
+        self.reset_mid(i - 4)
+
+    def reset_mid(self, k: int) -> None:
+        pts = list(self._pts)
+        pts[4 + k] = pw.mids_of(pts[:4])[k]
+        self._pts = pts
+        self.update()
+        self.pointsDragged.emit(list(pts))

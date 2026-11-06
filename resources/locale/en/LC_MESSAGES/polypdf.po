@@ -9310,16 +9310,8 @@ msgid "점을 처음 자리로 — 지금 크롭 박스 네 귀(크롭이 없으
 msgstr "Moves the points back to the four corners of the current crop box (the photo's corners if there is no crop)."
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다 — [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
-msgstr "Drag the corners (squares) onto the edges, and drag the middle point (circle) of a curved edge — [OK] saves the straightened picture as a new photo (the original is unchanged)."
-
-#: viewer/widgets/photo_crop_dialog.py
-msgid "원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."
-msgstr "The original photo stays unchanged; only the crop is remembered — Photo → PDF, printing, flattening, Copy for Sharing and photo copy also use the crop."
-
-#: viewer/widgets/photo_crop_dialog.py
-msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."
-msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and applied all at once with [OK]. Photos without a crop start with the crop you set most recently."
+msgid "도움말"
+msgstr "Help"
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "전체 화면 (F11)"
@@ -9328,6 +9320,27 @@ msgstr "Full screen (F11)"
 #: viewer/widgets/photo_crop_dialog.py
 msgid "크롭 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다."
 msgstr "Fills the screen with the crop window — press again, F11 or Esc to return."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."
+msgstr "The original photo stays unchanged; only the crop is remembered — Photo → PDF, printing, flattening, Copy for Sharing and photo copy also use the crop."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "박스 안쪽을 끌면 크기 그대로 옮기고, 귀·변을 끌면 크기를 바꿉니다."
+msgstr "Drag inside the box to move it at the same size; drag a corner or edge to resize it."
+
+# | 저장합니다(원본은 그대로)."
+#: viewer/widgets/photo_crop_dialog.py
+msgid "모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
+msgstr "Straighten shape (A): drag the corners (squares) onto the edges, and drag the middle point (circle) of a curved edge. Double-click a middle point to make that edge straight again. [OK] saves the straightened picture as a new photo (the original is unchanged)."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "사진 크롭 — 도움말"
+msgstr "Photo crop — Help"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."
+msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and applied all at once with [OK]. Photos without a crop start with the crop you set most recently."
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "사진 크롭"

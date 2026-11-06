@@ -20,7 +20,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel,
-                             QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout)
+                             QPushButton, QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout)
 
 from viewer import page_crop as pc
 from viewer import photo_warp as pw
@@ -34,9 +34,10 @@ RESULT_SIDE = 420          # 결과 미리보기 — 줄인 그림 긴 변(펴�
 PANE_MIN_W = 360           # 왼쪽(고치는)·오른쪽(결과) 칸 최소 폭 — 둘이 같다(261106-8, 디자인 SOT §2.21)
 PANE_MIN_H = 360           # 두 칸 최소 높이
 PANE_GAP = 6               # 칸과 ⇒ 사이
-ARROW_MIN = 48             # 가운데 ⇒(옅은 회색 블록 화살표 `color_icon("block_arrow")`, 261106-10) 크기 — 칸 폭의 1/ARROW_DIV,
-ARROW_MAX = 80             #   이 둘 사이(창을 키우면 그림만 커진다 — 칸 폭은 ARROW_MAX+8 로 늘 같다)
-ARROW_DIV = 9
+HELP_PX = 22               # 동그란 ? 단추 지름(261106-12)
+ARROW_MIN = 28             # 가운데 ▶(옅은 회색 둥근 삼각형 `color_icon("tri_right")`, 261106-12 — 종전 블록 화살표의 60%) 크기 — 칸 폭의 1/ARROW_DIV,
+ARROW_MAX = 48             #   이 둘 사이(창을 키우면 그림만 커진다 — 칸 폭은 ARROW_MAX+8 로 늘 같다)
+ARROW_DIV = 15
 WARP_KEY = "A"             # '모양 펴기' 켜고 끄기(261106-11 사용자 지시) — 한글 자판(ㅁ)·% 칸 입력 중에도 같은 키 자리로 받는다
 FULL_KEY = "F11"           # 크롭 창 전체 화면 켜고 끄기(앱 단축키와 겹치지 않는다 — 발표 보기는 F5)
 RESULT_DELAY_MS = 60       # 끄는 동안 미리보기를 모아 한 번에(잇단 움직임은 마지막 것만)
@@ -157,20 +158,19 @@ class PhotoCropDialog(QDialog):
         wrow.addStretch(1)
         left.addLayout(wrow)
         left.addStretch(1)
-        right = QVBoxLayout()                  # 오른쪽 칸 아래 — 안내 글
-        self.note_warp = QLabel(tr("꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다 — [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."), self)
-        self.note_warp.setWordWrap(True)
-        right.addWidget(self.note_warp)
-        self.note = QLabel(tr("원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."), self)
-        self.note.setWordWrap(True)
-        right.addWidget(self.note)
-        self.note_many = QLabel(tr("❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."), self)
-        self.note_many.setWordWrap(True)
-        self.note_many.setVisible(self._count > 1)
-        right.addWidget(self.note_many)
-        right.addStretch(1)
+        # 안내 글은 늘 띄워 두지 않고 동그란 ? 단추로(261106-12 사용자 지시 '설명 내용에 따라 모양 펴기 시 창 크기가 줄어든다 —
+        #   동그란 ? 를 두고, 누르면 호버링되거나 창으로'): 올려 두면 풍선 도움말, 누르면 작은 창. 글 줄이 생겼다 사라지며 칸이 줄던 것이 없다.
+        self.btn_help = QToolButton(self)
+        self.btn_help.setObjectName("cropHelp")
+        self.btn_help.setText("?")
+        self.btn_help.setAccessibleName(tr("도움말"))
+        self.btn_help.setFixedSize(HELP_PX, HELP_PX)
+        self.btn_help.setStyleSheet("QToolButton#cropHelp{border:1px solid palette(mid);border-radius:%dpx;font-weight:bold;}"
+                                    "QToolButton#cropHelp:hover{background:palette(midlight);}" % (HELP_PX // 2))
+        self.btn_help.setToolTip(self.help_html())
+        self.btn_help.clicked.connect(self._show_help)
+        wrow.insertWidget(wrow.count() - 1, self.btn_help)      # 모양 펴기 줄 끝(늘림 앞)
         self.grid.addLayout(left, 1, 0)
-        self.grid.addLayout(right, 1, 2)
         lw = max(left.minimumSize().width(), PANE_MIN_W)
         self.grid.setColumnMinimumWidth(0, lw)             # 두 칸 최소 폭을 같게 — 그래야 늘어도 같은 폭(대칭)
         self.grid.setColumnMinimumWidth(2, lw)
@@ -196,7 +196,7 @@ class PhotoCropDialog(QDialog):
         from viewer.widgets.icons import color_icon
         n = int(self.__dict__.get("_arrow_px", ARROW_MIN))
         dpr = self.devicePixelRatioF() if hasattr(self, "devicePixelRatioF") else 1.0
-        self.arrow.setPixmap(color_icon("block_arrow", size=n, dpr=max(1.0, dpr)).pixmap(n, n))
+        self.arrow.setPixmap(color_icon("tri_right", size=n, dpr=max(1.0, dpr)).pixmap(n, n))
 
     def _fit_arrow(self) -> None:
         """⇒ 크기를 칸 폭에 맞춘다(ARROW_MIN~ARROW_MAX) — 바뀔 때만 다시 그린다."""
@@ -204,6 +204,21 @@ class PhotoCropDialog(QDialog):
         if n != self.__dict__.get("_arrow_px"):
             self._arrow_px = n
             self._paint_arrow()
+
+    def help_html(self) -> str:
+        """? 단추의 안내 — 크롭·여러 장·모양 펴기(점 끌기·가운데 점 두 번 누르기·A 키)."""
+        items = [tr("원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."),
+                 tr("박스 안쪽을 끌면 크기 그대로 옮기고, 귀·변을 끌면 크기를 바꿉니다.")]
+        if self._count > 1:
+            items.append(tr("❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."))
+        items.append(tr("모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."))
+        return "<ul style='margin:0;'>" + "".join("<li>%s</li>" % t for t in items) + "</ul>"
+
+    def _show_help(self) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        box = QMessageBox(QMessageBox.Icon.NoIcon, tr("사진 크롭 — 도움말"), self.help_html(), QMessageBox.StandardButton.Ok, self)
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.exec()
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
@@ -363,7 +378,6 @@ class PhotoCropDialog(QDialog):
             sp.setEnabled(not on)
         # 두 단추는 늘 보이고 켰을 때만 눌린다(261106-8) — 숨기면 켜고 끌 때마다 줄이 옆으로 움직였다
         self.btn_corners.setEnabled(on)
-        self.note_warp.setVisible(on)
         self.btn_reset.setEnabled(not on and (self._has_crop or any(v > 0 for v in self.current_margins())))
         self._prev_timer.start()
 

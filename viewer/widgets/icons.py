@@ -215,23 +215,17 @@ def _stop(p, c):
     p.drawRoundedRect(QRectF(3.0, 3.0, 10.0, 10.0), 1.2, 1.2)
 
 
-# 261106-10(디자인 SOT §2.21·§4.5, 사용자 지시 '중간 이미지를 옅은 회색의 이런 이미지로'): 사진 크롭 창 가운데 ⇒ —
-#   채운 굵은 블록 화살표(몸통 높이 ≈ 머리의 45%, 몸통 길이 ≈ 전체의 45%, 모서리·끝 살짝 둥글게). 은은한 회색 —
-#   밝은 테마는 꺼진 단추 글(`ribbon.BTN_OFF_FG` #a8a8a8)보다 옅게, 다크는 바탕(#2b2b2b 언저리)에서 그만큼만 떠 보이게.
-ACCENT["block_arrow"] = {False: "#cfcfcf", True: "#58585e"}
+# 사진 크롭 창 가운데 '고친 대로 → 결과' 표시(디자인 SOT §2.21·§4.5). 261106-10 블록 화살표 → 261106-12 사용자 지시
+#   '너무 큼. 60% 크기로, 우측 삼각형으로' — 끝이 둥근 채운 삼각형 하나. 은은한 회색(밝은 테마는 꺼진 단추 글보다 옅게).
+ACCENT["tri_right"] = {False: "#cfcfcf", True: "#58585e"}
 
 
-def _block_arrow(p, c):
-    pen = QPen(c, 1.2)
-    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)         # 같은 색 얇은 테로 모서리·끝을 둥글게
+def _tri_right(p, c):
+    pen = QPen(c, 1.8)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)         # 같은 색 테로 세 귀를 둥글게
     p.setPen(pen)
     p.setBrush(c)
-    x0, x1, xm = 0.9, 15.1, 0.9 + 14.2 * 0.45           # 몸통 길이 = 전체의 45%
-    yh0, yh1 = 1.6, 14.4                                 # 머리 높이 12.8
-    bh = (yh1 - yh0) * 0.45                              # 몸통 높이 = 머리의 45%
-    yb0, yb1 = 8.0 - bh / 2, 8.0 + bh / 2
-    p.drawPolygon(QPolygonF([QPointF(x0, yb0), QPointF(xm, yb0), QPointF(xm, yh0), QPointF(x1, 8.0),
-                             QPointF(xm, yh1), QPointF(xm, yb1), QPointF(x0, yb1)]))
+    p.drawPolygon(QPolygonF([QPointF(4.0, 2.4), QPointF(13.4, 8.0), QPointF(4.0, 13.6)]))
 
 
 def _camera(p, c):
@@ -399,7 +393,7 @@ ACCENT["mp3"] = ACCENT["play"]
 #   도구 줄·단어장 머리줄의 26px 단추는 BTN_ICON_PX — 종전 22·24 는 단추를 꽉 채웠다. 16 은 검색결과·메뉴 탭 글자 단추의 아이콘과도 같다.
 ICON_MARGIN = 4          # 이보다 좁으면 답답 — 모든 그림 단추의 최소(검사 test_design_icon_margin)
 BTN_ICON_PX = 16
-_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "block_arrow": _block_arrow, "mp3": _mp3,
+_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "tri_right": _tri_right, "mp3": _mp3,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
 _COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
