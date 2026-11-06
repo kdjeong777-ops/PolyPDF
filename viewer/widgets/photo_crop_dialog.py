@@ -420,6 +420,12 @@ class PhotoCropDialog(QDialog):
                 out[i] = list(pts)
         return out
 
+    def set_loading(self) -> None:
+        """그림이 아직 없다 — 창은 먼저 보이고(261106-14) ❮ ❯ 는 그림이 들어올 때까지 꺼 둔다(`show_photo` 가 푼다)."""
+        self._loading = True
+        self.nav.btn_prev.setEnabled(False)
+        self.nav.btn_next.setEnabled(False)
+
     def loading_failed(self) -> None:
         """쓰는 쪽이 그림을 풀지 못했다 — 지금 사진에 그대로."""
         self._loading = False

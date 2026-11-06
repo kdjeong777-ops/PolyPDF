@@ -207,7 +207,8 @@ try:
         win._photo_set_crop(str(src), None)     # 창은 지금 크롭에서 시작한다 — 빈 데서 시작
         win._photo_rotate(absolute=90)         # 보기 회전 90° 에서 고른 여백 → 회전 0 판으로 남는다
         spin(0.3)
-        win._photo_crop_ready(str(src), QImage(80, 100, QImage.Format.Format_RGB888))
+        win._photo_crop_paths = [str(src)]
+        win._photo_crop_run(str(src))           # 261106-14: 창을 먼저 띄운다(그림은 배경에서 — 여기선 없어도 된다)
         PhotoCropDialog.exec = _exec
         chk(st.photo_crop(str(src)) == (0.0, 0.5, 0.5, 1.0), "E 크롭 창 [확인] → 보이는 방향 여백이 회전 0 판 상자로", str(st.photo_crop(str(src))))
         win._photo_rotate(absolute=0)

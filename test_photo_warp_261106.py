@@ -146,6 +146,7 @@ try:
         return pump(lambda: dlg.index() == i and not dlg._loading, timeout=10)
 
     def fake_exec(self):
+        pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         P = mw._photo_crop_paths
         seen["stack0"] = self.stack.currentWidget() is self.canvas
         self.chk_warp.setChecked(True)
@@ -218,6 +219,7 @@ try:
     other.mkdir(exist_ok=True)
 
     def fake_one(self):
+        pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         self.chk_warp.setChecked(True)
         self.warp.set_points(QPTS)
         return QDialog.DialogCode.Accepted
@@ -243,6 +245,7 @@ try:
     pick["text"] = "cancel"
 
     def fake_both(self):                               # 크롭도 바꾸고 펴기도 켠 채 [확인] → 묻는 창 [취소]
+        pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         P = mw._photo_crop_paths
         self.spins[0].setValue(25)
         go(self, P.index(b))
@@ -287,6 +290,7 @@ try:
 
     # E
     def fake_cancel(self):
+        pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         self.chk_warp.setChecked(True)
         return QDialog.DialogCode.Rejected
     PhotoCropDialog.exec = fake_cancel

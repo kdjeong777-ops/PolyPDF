@@ -99,6 +99,7 @@ try:
         return pump(lambda: dlg.index() == i and not dlg._loading, timeout=10)
 
     def fake_exec(self):                               # p1 위 20% → ❯ p2(미리 건 20% 를 왼 10% 로 바꿈) → ❯ p3(제 것) → ❮❮ p1(기억한 값) → [확인]
+        pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         seen["nav"] = (self.nav.isVisible() or self.nav.isVisibleTo(self), self.nav.text())
         P = mw._photo_crop_paths                       # 넘김 차례(목록 정렬 그대로 — 기본 '수정일 순')
         ix = {q: P.index(q) for q in (p1, p2, p3)}
@@ -133,6 +134,7 @@ try:
         str([r1(st.photo_crop(p)) for p in paths]))
 
     def fake_cancel(self):
+        pump(lambda: not self._loading, timeout=15)   # 261106-14: 창이 먼저 뜨고 그림은 뒤따른다
         self.spins[1].setValue(30)
         go(self, mw._photo_crop_paths.index(p4))
         self.spins[3].setValue(15)

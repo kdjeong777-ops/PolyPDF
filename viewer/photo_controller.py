@@ -1991,7 +1991,8 @@ class PhotoMixin:
         return to_view(box0, self._photo_rot_for(path))
 
     def _photo_crop_dialog(self, path=None):
-        """크롭 창(4.40) — 미리보기 그림은 배경에서 풀고(사진 복사와 같은 워커) 끝나면 창을 연다."""
+        """크롭 창(4.40) — **창을 먼저** 띄우고 미리보기 그림은 배경에서 풀어 들어오면 넣는다(261106-14 사용자 지시 '크롭을 누른 후
+        꽤 많이 있다 열린다' — 종전에는 넘김 목록을 사진마다 디스크를 타며 거르고(7천 장 폴더에서 메인 16초) 그림까지 다 푼 뒤에 열었다)."""
         now = self.main_view.current_file() if self.main_view else None
         cur = str(path) if path else now
         if not cur or not self._is_photo_path(cur):
@@ -2011,7 +2012,11 @@ class PhotoMixin:
             return
         self._photo_crop_paths = self._photo_crop_range(cur)
         self._photo_crop_busy = True
-        self._photo_crop_load(cur)
+        try:
+            self._photo_crop_load(cur)                   # 그림은 배경에서 — 창은 바로
+            self._photo_crop_run(cur)
+        finally:
+            self._photo_crop_busy = False
 
     def _photo_crop_range(self, cur: str) -> list:
         """크롭 창에서 ❮ ❯ 로 넘길 사진(4.40, 261106-3) — 썸네일 줄에서 고른 사진이 여럿이고 그 안이면 고른 것만,
@@ -2019,16 +2024,27 @@ class PhotoMixin:
         strip = self._photo_strip_widget(create=False)
         sel = strip.selected_paths() if strip is not None else []
         src = sel if (len(sel) > 1 and any(os.path.normcase(str(p)) == os.path.normcase(cur) for p in sel)) else self._photo_list()
+        # 261106-14(응답성 SOT §5): 사진마다 디스크를 타는 판정(`_photo_any_cached` 의 설정 폴더 찾기·`st._key` 의 resolve)을
+        #   하지 않는다 — 글자열만으로(캐시 뿌리·폴더 앞부분은 한 번만 구한다). 7천 장 폴더에서 종전 16초 → 수십 ms.
+        from viewer import photo_device, photo_zip
+        from viewer.image_page import PHOTO_EXTS
         st = self._ensure_page_meta_store()
+        base = getattr(st, "base", None) if st is not None else None
+        if base is None:
+            return [cur]
+        norm = os.path.normcase
+        base_n = norm(os.path.abspath(str(base))).rstrip("\\/") + os.sep
+        roots = tuple(norm(os.path.abspath(str(r))).rstrip("\\/") + os.sep for r in (photo_zip.cache_root(), photo_device.cache_root()))
         out = []
         for p in src or []:
             p = str(p)
-            if not self._is_photo_path(p) or self._photo_any_cached([p]):
+            if os.path.splitext(p)[1].lower() not in PHOTO_EXTS:
                 continue
-            if st is None or st._key(p) is None:
+            pn = norm(os.path.abspath(p))
+            if not pn.startswith(base_n) or pn.startswith(roots):
                 continue
             out.append(p)
-        if not any(os.path.normcase(p) == os.path.normcase(cur) for p in out):
+        if not any(norm(p) == norm(cur) for p in out):
             out = [cur]
         return out
 
@@ -2049,21 +2065,21 @@ class PhotoMixin:
         return (list(recent) if recent else [0.0, 0.0, 0.0, 0.0]), False
 
     def _photo_crop_ready(self, path: str, img):
+        """배경에서 푼 크롭 창 그림 — 처음 사진이든 ❮ ❯ 로 넘긴 사진이든 열려 있는 창에 넣는다(창을 닫았으면 버린다)."""
         dlg = self.__dict__.get("_photo_crop_dlg")
-        if dlg is not None:                              # 창이 열려 있다(exec 중) — ❮ ❯ 로 넘긴 사진
-            if img is None or img.isNull():
-                dlg.loading_failed()
-                self.status.showMessage(tr("사진을 읽지 못했습니다."), 4000)
-                return
-            paths = self.__dict__.get("_photo_crop_paths") or [path]
-            idx = next((i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path))), dlg.index())
-            m, has = self._photo_crop_start_margins(path)
-            dlg.show_photo(idx, img, m, has, Path(path).name)
+        if dlg is None:
             return
-        self._photo_crop_busy = False
         if img is None or img.isNull():
+            dlg.loading_failed()
             self.status.showMessage(tr("사진을 읽지 못했습니다."), 4000)
             return
+        paths = self.__dict__.get("_photo_crop_paths") or [path]
+        idx = next((i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path))), dlg.index())
+        m, has = self._photo_crop_start_margins(path)
+        dlg.show_photo(idx, img, m, has, Path(path).name)
+
+    def _photo_crop_run(self, path: str):
+        """크롭 창을 그림 없이 먼저 띄운다(261106-14) — 그림은 `_photo_crop_ready` 가 넣는다. [확인] 이면 크롭·펴기를 적용."""
         from PyQt6.QtWidgets import QDialog
         from viewer.widgets.photo_crop_dialog import PhotoCropDialog
         paths = self.__dict__.get("_photo_crop_paths") or [str(path)]
@@ -2071,7 +2087,8 @@ class PhotoMixin:
             paths = self._photo_crop_paths = [str(path)]
         idx = next(i for i, p in enumerate(paths) if os.path.normcase(p) == os.path.normcase(str(path)))
         m, has = self._photo_crop_start_margins(path)
-        dlg = PhotoCropDialog(img, m, has_crop=has, title=Path(path).name, parent=self, count=len(paths), index=idx)
+        dlg = PhotoCropDialog(None, m, has_crop=has, title=Path(path).name, parent=self, count=len(paths), index=idx)
+        dlg.set_loading()
 
         def want(i, _d=dlg, _p=paths):
             cm = _d.current_margins()                    # 떠나는 사진의 여백 — 최근 크롭으로 기억(크롭이 없는 사진에 미리 건다)
