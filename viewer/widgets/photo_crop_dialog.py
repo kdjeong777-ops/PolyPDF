@@ -33,7 +33,9 @@ RESULT_SIDE = 420          # 결과 미리보기 — 줄인 그림 긴 변(펴�
 PANE_MIN_W = 360           # 왼쪽(고치는)·오른쪽(결과) 칸 최소 폭 — 둘이 같다(261106-8, 디자인 SOT §2.21)
 PANE_MIN_H = 360           # 두 칸 최소 높이
 PANE_GAP = 6               # 칸과 ⇒ 사이
-ARROW_PX = 32              # 가운데 ⇒ 그림 크기(`themed_icon("arrow_right")`)
+ARROW_MIN = 48             # 가운데 ⇒(옅은 회색 블록 화살표 `color_icon("block_arrow")`, 261106-10) 크기 — 칸 폭의 1/ARROW_DIV,
+ARROW_MAX = 80             #   이 둘 사이(창을 키우면 그림만 커진다 — 칸 폭은 ARROW_MAX+8 로 늘 같다)
+ARROW_DIV = 9
 FULL_KEY = "F11"           # 크롭 창 전체 화면 켜고 끄기(앱 단축키와 겹치지 않는다 — 발표 보기는 F5)
 RESULT_DELAY_MS = 60       # 끄는 동안 미리보기를 모아 한 번에(잇단 움직임은 마지막 것만)
 
@@ -97,7 +99,8 @@ class PhotoCropDialog(QDialog):
         self.arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.arrow.setToolTip(tr("왼쪽에서 고친 대로 오른쪽처럼 됩니다"))
         self.arrow.setAccessibleName(tr("결과"))
-        self.arrow.setFixedWidth(ARROW_PX + 8)
+        self._arrow_px = ARROW_MIN
+        self.arrow.setFixedWidth(ARROW_MAX + 8)   # 늘 같은 폭 — 폭을 바꾸면 창 최소 크기가 다시 잡혀 전체 화면이 풀린다(261106-10)
         self._paint_arrow()
         self.grid.addWidget(self.arrow, 0, 1)
         self.result = QLabel(self)
@@ -192,9 +195,17 @@ class PhotoCropDialog(QDialog):
 
     # ── 창 배치·전체 화면(261106-8) ─────────────────────
     def _paint_arrow(self) -> None:
-        from viewer.widgets.icons import themed_icon
+        from viewer.widgets.icons import color_icon
+        n = int(self.__dict__.get("_arrow_px", ARROW_MIN))
         dpr = self.devicePixelRatioF() if hasattr(self, "devicePixelRatioF") else 1.0
-        self.arrow.setPixmap(themed_icon("arrow_right", size=ARROW_PX, dpr=dpr).pixmap(ARROW_PX, ARROW_PX))
+        self.arrow.setPixmap(color_icon("block_arrow", size=n, dpr=max(1.0, dpr)).pixmap(n, n))
+
+    def _fit_arrow(self) -> None:
+        """⇒ 크기를 칸 폭에 맞춘다(ARROW_MIN~ARROW_MAX) — 바뀔 때만 다시 그린다."""
+        n = max(ARROW_MIN, min(ARROW_MAX, int(self.stack.width() / ARROW_DIV)))
+        if n != self.__dict__.get("_arrow_px"):
+            self._arrow_px = n
+            self._paint_arrow()
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
@@ -376,6 +387,8 @@ class PhotoCropDialog(QDialog):
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
+        if hasattr(self, "arrow"):
+            QTimer.singleShot(0, self._fit_arrow)        # 칸 폭은 레이아웃이 놓은 뒤에 — 다음 차례에 잰다
         self._fit_result()
 
     def _on_detect(self) -> None:

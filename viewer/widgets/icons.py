@@ -72,17 +72,6 @@ def _chevron_right(p, c):
     p.drawLine(QPointF(10.5, 8), QPointF(6, 12))
 
 
-def _arrow_right(p, c):
-    """'⇒' — 사진 크롭 창의 고치는 칸 → 결과 칸 사이(261106-8, 디자인 SOT §2.21). 두 줄 몸통 + 꺾쇠 머리."""
-    pen = QPen(c, 1.5)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-    p.setPen(pen)
-    p.drawLine(QPointF(2.0, 6.2), QPointF(10.6, 6.2))
-    p.drawLine(QPointF(2.0, 9.8), QPointF(10.6, 9.8))
-    p.drawPolyline(QPolygonF([QPointF(9.0, 3.2), QPointF(14.0, 8.0), QPointF(9.0, 12.8)]))
-
-
 def _star(p, c):
     p.setPen(QPen(c, 1.3))
     import math
@@ -197,7 +186,7 @@ def _view_single(p, c):
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
-    "chevron_left": _chevron_left, "chevron_right": _chevron_right, "arrow_right": _arrow_right,
+    "chevron_left": _chevron_left, "chevron_right": _chevron_right,
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
@@ -224,6 +213,25 @@ def _stop(p, c):
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(c)
     p.drawRoundedRect(QRectF(3.0, 3.0, 10.0, 10.0), 1.2, 1.2)
+
+
+# 261106-10(디자인 SOT §2.21·§4.5, 사용자 지시 '중간 이미지를 옅은 회색의 이런 이미지로'): 사진 크롭 창 가운데 ⇒ —
+#   채운 굵은 블록 화살표(몸통 높이 ≈ 머리의 45%, 몸통 길이 ≈ 전체의 45%, 모서리·끝 살짝 둥글게). 은은한 회색 —
+#   밝은 테마는 꺼진 단추 글(`ribbon.BTN_OFF_FG` #a8a8a8)보다 옅게, 다크는 바탕(#2b2b2b 언저리)에서 그만큼만 떠 보이게.
+ACCENT["block_arrow"] = {False: "#cfcfcf", True: "#58585e"}
+
+
+def _block_arrow(p, c):
+    pen = QPen(c, 1.2)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)         # 같은 색 얇은 테로 모서리·끝을 둥글게
+    p.setPen(pen)
+    p.setBrush(c)
+    x0, x1, xm = 0.9, 15.1, 0.9 + 14.2 * 0.45           # 몸통 길이 = 전체의 45%
+    yh0, yh1 = 1.6, 14.4                                 # 머리 높이 12.8
+    bh = (yh1 - yh0) * 0.45                              # 몸통 높이 = 머리의 45%
+    yb0, yb1 = 8.0 - bh / 2, 8.0 + bh / 2
+    p.drawPolygon(QPolygonF([QPointF(x0, yb0), QPointF(xm, yb0), QPointF(xm, yh0), QPointF(x1, 8.0),
+                             QPointF(xm, yh1), QPointF(xm, yb1), QPointF(x0, yb1)]))
 
 
 def _camera(p, c):
@@ -391,7 +399,7 @@ ACCENT["mp3"] = ACCENT["play"]
 #   도구 줄·단어장 머리줄의 26px 단추는 BTN_ICON_PX — 종전 22·24 는 단추를 꽉 채웠다. 16 은 검색결과·메뉴 탭 글자 단추의 아이콘과도 같다.
 ICON_MARGIN = 4          # 이보다 좁으면 답답 — 모든 그림 단추의 최소(검사 test_design_icon_margin)
 BTN_ICON_PX = 16
-_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "mp3": _mp3,
+_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "block_arrow": _block_arrow, "mp3": _mp3,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
 _COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
