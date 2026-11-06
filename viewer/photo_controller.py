@@ -2081,10 +2081,14 @@ class PhotoMixin:
             self._photo_crop_load(_p[i])
         dlg.photoRequested.connect(want)
         self._photo_crop_dlg = dlg
+        pic = self._photo_prefs()                        # 지난 크롭 창 자리·크기·최대화(261106-8 — 전체 화면은 기억하지 않는다)
+        dlg.restore_state(str(pic.get("crop_geom") or ""), bool(pic.get("crop_max")))
         try:
             ok = dlg.exec() == QDialog.DialogCode.Accepted
         finally:
             self._photo_crop_dlg = None
+            if dlg.geometry_state:
+                pic["crop_geom"], pic["crop_max"] = dlg.geometry_state
         if not ok:
             return                                       # [취소] — 넘기며 고친 것도 남기지 않는다
         todo = {paths[i]: m for i, m in dlg.pending().items() if 0 <= i < len(paths)}

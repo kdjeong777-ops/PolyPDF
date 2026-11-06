@@ -480,6 +480,17 @@ def run_one(lang: str, out_root: Path, only=None, theme: str = "light"):
         capture("bookmarker", _bookmarker)
         capture("crop", lambda: via_exec(lambda: mw._open_crop_dialog()))     # 261010-7(마스터 §4.7.15)
 
+        def _photo_crop():
+            # 261106-8(사진 보기 SOT §4.40, 디자인 SOT §2.21): 사진 크롭 창 — 두 칸 대칭·가운데 ⇒·❮ ❯(여러 장) 자리를 본다
+            from PyQt6.QtGui import QImage, QColor
+            from viewer.widgets.photo_crop_dialog import PhotoCropDialog
+            im = QImage(1200, 900, QImage.Format.Format_RGB32)
+            im.fill(QColor(170, 180, 190))
+            d = PhotoCropDialog(im, [10, 10, 10, 10], title="sample.jpg", parent=mw, count=5, index=2)
+            d.resize(1120, 720)
+            return d
+        capture("photo_crop", _photo_crop, note="합성 사진·5장 넘김")
+
         pump(0.5)
 
         def _edit():

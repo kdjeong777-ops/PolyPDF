@@ -9290,6 +9290,18 @@ msgid "사용자선 {i}"
 msgstr "Custom line {i}"
 
 #: viewer/widgets/photo_crop_dialog.py
+msgid "왼쪽에서 고친 대로 오른쪽처럼 됩니다"
+msgstr "What you set on the left comes out as shown on the right"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "결과"
+msgstr "Result"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "결과 미리보기"
+msgstr "Result preview"
+
+#: viewer/widgets/photo_crop_dialog.py
 msgid "모양 펴기 (원근·휜 테두리)"
 msgstr "Straighten shape (perspective · curved edges)"
 
@@ -9322,8 +9334,12 @@ msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] �
 msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and applied all at once with [OK]. Photos without a crop start with the crop you set most recently."
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "결과 미리보기"
-msgstr "Result preview"
+msgid "전체 화면 (F11)"
+msgstr "Full screen (F11)"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "크롭 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다."
+msgstr "Fills the screen with the crop window — press again, F11 or Esc to return."
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "사진 크롭"

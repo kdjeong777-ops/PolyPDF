@@ -9002,6 +9002,18 @@ msgid "사용자선 {i}"
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py
+msgid "왼쪽에서 고친 대로 오른쪽처럼 됩니다"
+msgstr ""
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "결과"
+msgstr ""
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "결과 미리보기"
+msgstr ""
+
+#: viewer/widgets/photo_crop_dialog.py
 msgid "모양 펴기 (원근·휜 테두리)"
 msgstr ""
 
@@ -9034,7 +9046,11 @@ msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] �
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "결과 미리보기"
+msgid "전체 화면 (F11)"
+msgstr ""
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "크롭 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다."
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py

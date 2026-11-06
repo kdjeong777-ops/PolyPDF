@@ -72,6 +72,17 @@ def _chevron_right(p, c):
     p.drawLine(QPointF(10.5, 8), QPointF(6, 12))
 
 
+def _arrow_right(p, c):
+    """'⇒' — 사진 크롭 창의 고치는 칸 → 결과 칸 사이(261106-8, 디자인 SOT §2.21). 두 줄 몸통 + 꺾쇠 머리."""
+    pen = QPen(c, 1.5)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.drawLine(QPointF(2.0, 6.2), QPointF(10.6, 6.2))
+    p.drawLine(QPointF(2.0, 9.8), QPointF(10.6, 9.8))
+    p.drawPolyline(QPolygonF([QPointF(9.0, 3.2), QPointF(14.0, 8.0), QPointF(9.0, 12.8)]))
+
+
 def _star(p, c):
     p.setPen(QPen(c, 1.3))
     import math
@@ -186,7 +197,7 @@ def _view_single(p, c):
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
-    "chevron_left": _chevron_left, "chevron_right": _chevron_right,
+    "chevron_left": _chevron_left, "chevron_right": _chevron_right, "arrow_right": _arrow_right,
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,

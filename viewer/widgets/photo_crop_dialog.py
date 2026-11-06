@@ -30,7 +30,11 @@ from viewer.widgets.photo_warp_canvas import WarpCanvas
 
 
 RESULT_SIDE = 420          # 결과 미리보기 — 줄인 그림 긴 변(펴기를 메인에서 짧게: 이 크기에서 수십 ms)
-RESULT_MIN_W = 240         # 결과 미리보기 칸 최소 폭
+PANE_MIN_W = 360           # 왼쪽(고치는)·오른쪽(결과) 칸 최소 폭 — 둘이 같다(261106-8, 디자인 SOT §2.21)
+PANE_MIN_H = 360           # 두 칸 최소 높이
+PANE_GAP = 6               # 칸과 ⇒ 사이
+ARROW_PX = 32              # 가운데 ⇒ 그림 크기(`themed_icon("arrow_right")`)
+FULL_KEY = "F11"           # 크롭 창 전체 화면 켜고 끄기(앱 단축키와 겹치지 않는다 — 발표 보기는 F5)
 RESULT_DELAY_MS = 60       # 끄는 동안 미리보기를 모아 한 번에(잇단 움직임은 마지막 것만)
 
 
@@ -112,24 +116,43 @@ class PhotoCropDialog(QDialog):
         self._touched = set()                  # 이 창에서 크롭 박스를 손으로 고친 사진 번호(261106-7)
         self._warp_box = {}                    # 번호 → 점을 놓을 때의 박스(여백 %) — 그 뒤 박스를 고치면 다시 켤 때 새 박스로
         self._loading = False
+        self.geometry_state = None             # 닫을 때의 창 자리·최대화(전체 화면은 풀고) — 쓰는 쪽이 기억(261106-8)
+        # 261106-8(사용자 지시 '창 배치·⇒ 그림·전체 화면'): 제목 줄 최대화 단추 + 크기 조절 손잡이
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, True)
+        self.setSizeGripEnabled(True)
         root = QVBoxLayout(self)
         self.stack = QStackedWidget(self)
         self.canvas = PhotoCropCanvas(self)
         self.warp = WarpCanvas(self)
         self.stack.addWidget(self.canvas)
         self.stack.addWidget(self.warp)
-        top = QHBoxLayout()                    # 왼쪽 = 고치는 화면, 오른쪽 = 결과 미리보기(261106-6 사용자 지시)
-        top.addWidget(self.stack, 3)
-        side = QVBoxLayout()
-        side.addWidget(QLabel(tr("결과 미리보기"), self))
+        # 배치(디자인 SOT §2.21): [왼쪽 = 고치는 칸] [⇒] [오른쪽 = 결과 칸] — 두 칸은 같은 폭, 창 가운데를 두고 대칭.
+        #   그 아래 왼쪽 칸 폭에 ❮ ❯·여백 칸·모양 펴기 줄을 가운데로, 오른쪽 칸 폭에 안내 글. 단추 줄은 창 폭.
+        self.grid = QGridLayout()
+        self.grid.setHorizontalSpacing(PANE_GAP)
+        for w in (self.stack,):
+            w.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.grid.addWidget(self.stack, 0, 0)
+        self.arrow = QLabel(self)
+        self.arrow.setObjectName("cropArrow")
+        self.arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.arrow.setToolTip(tr("왼쪽에서 고친 대로 오른쪽처럼 됩니다"))
+        self.arrow.setAccessibleName(tr("결과"))
+        self.arrow.setFixedWidth(ARROW_PX + 8)
+        self._paint_arrow()
+        self.grid.addWidget(self.arrow, 0, 1)
         self.result = QLabel(self)
+        self.result.setObjectName("cropResult")
         self.result.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.result.setMinimumWidth(RESULT_MIN_W)
-        self.result.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-        self.result.setStyleSheet("QLabel{border:1px solid palette(mid);}")
-        side.addWidget(self.result, 1)
-        top.addLayout(side, 2)
-        root.addLayout(top, 1)
+        self.result.setToolTip(tr("결과 미리보기"))
+        self.result.setAccessibleName(tr("결과 미리보기"))
+        self.result.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)   # 테두리 없음 — 왼쪽 칸과 같게
+        self.grid.addWidget(self.result, 0, 2)
+        self.grid.setColumnStretch(0, 1)
+        self.grid.setColumnStretch(2, 1)
+        self.grid.setRowStretch(0, 1)
+        self.grid.setRowMinimumHeight(0, PANE_MIN_H)
+        root.addLayout(self.grid, 1)
         self._small = None                     # 미리보기용 줄인 PIL 그림(지금 사진)
         self._prev_timer = QTimer(self)
         self._prev_timer.setSingleShot(True)
@@ -140,7 +163,8 @@ class PhotoCropDialog(QDialog):
         self.nav.stepRequested.connect(lambda d: self._go(self._index + d))
         self.nav.pageRequested.connect(lambda n: self._go(n - 1))
         self.nav.setVisible(self._count > 1)
-        root.addLayout(centered_row(self.nav))
+        left = QVBoxLayout()                   # 왼쪽 칸 아래 — 모두 그 칸 가운데(❮ ❯ 와 같은 기준선)
+        left.addLayout(centered_row(self.nav))
         row = QHBoxLayout()
         grid = QGridLayout()
         self.spins = []
@@ -154,10 +178,12 @@ class PhotoCropDialog(QDialog):
             grid.addWidget(QLabel(name, self), 0, i * 2)
             grid.addWidget(sp, 0, i * 2 + 1)
             self.spins.append(sp)
+        row.addStretch(1)
         row.addLayout(grid)
         row.addStretch(1)
-        root.addLayout(row)
+        left.addLayout(row)
         wrow = QHBoxLayout()                   # 옵션 — 모양 펴기(261106-6)
+        wrow.addStretch(1)
         self.chk_warp = QCheckBox(tr("모양 펴기 (원근·휜 테두리)"), self)
         self.chk_warp.setToolTip(tr("비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 직사각형으로 펼칩니다."))
         self.chk_warp.toggled.connect(self._warp_toggled)
@@ -170,25 +196,95 @@ class PhotoCropDialog(QDialog):
         wrow.addWidget(self.btn_detect)
         wrow.addWidget(self.btn_corners)
         wrow.addStretch(1)
-        root.addLayout(wrow)
+        left.addLayout(wrow)
+        left.addStretch(1)
+        right = QVBoxLayout()                  # 오른쪽 칸 아래 — 안내 글
         self.note_warp = QLabel(tr("꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다 — [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."), self)
         self.note_warp.setWordWrap(True)
-        root.addWidget(self.note_warp)
-        note = QLabel(tr("원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."), self)
-        note.setWordWrap(True)
-        root.addWidget(note)
+        right.addWidget(self.note_warp)
+        self.note = QLabel(tr("원본 사진은 그대로 두고 자른 모양만 기억합니다 — 사진 → PDF·인쇄·평탄화·공유용 사본·사진 복사도 자른 모양으로 나옵니다."), self)
+        self.note.setWordWrap(True)
+        right.addWidget(self.note)
         self.note_many = QLabel(tr("❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."), self)
         self.note_many.setWordWrap(True)
         self.note_many.setVisible(self._count > 1)
-        root.addWidget(self.note_many)
+        right.addWidget(self.note_many)
+        right.addStretch(1)
+        self.grid.addLayout(left, 1, 0)
+        self.grid.addLayout(right, 1, 2)
+        lw = max(left.minimumSize().width(), PANE_MIN_W)
+        self.grid.setColumnMinimumWidth(0, lw)             # 두 칸 최소 폭을 같게 — 그래야 늘어도 같은 폭(대칭)
+        self.grid.setColumnMinimumWidth(2, lw)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        self.btn_full = bb.addButton(tr("전체 화면 (F11)"), QDialogButtonBox.ButtonRole.ResetRole)   # 왼쪽 — [확인]·[취소] 사이에 끼지 않게
+        self.btn_full.setCheckable(True)
+        self.btn_full.setToolTip(tr("크롭 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다."))
+        self.btn_full.toggled.connect(self._set_full)
         self.btn_reset = bb.addButton(tr("크롭 해제"), QDialogButtonBox.ButtonRole.ResetRole)
         self.btn_reset.clicked.connect(self._on_reset)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         root.addWidget(bb)
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        self._sc_full = QShortcut(QKeySequence(FULL_KEY), self)
+        self._sc_full.activated.connect(self.btn_full.toggle)
         self.canvas.marginsDragged.connect(self._box_dragged)
         self.show_photo(self._index, img, margins, has_crop, title, auto_pts)
+
+    # ── 창 배치·전체 화면(261106-8) ─────────────────────
+    def _paint_arrow(self) -> None:
+        from viewer.widgets.icons import themed_icon
+        dpr = self.devicePixelRatioF() if hasattr(self, "devicePixelRatioF") else 1.0
+        self.arrow.setPixmap(themed_icon("arrow_right", size=ARROW_PX, dpr=dpr).pixmap(ARROW_PX, ARROW_PX))
+
+    def changeEvent(self, ev):
+        super().changeEvent(ev)
+        from PyQt6.QtCore import QEvent
+        if ev.type() in (QEvent.Type.PaletteChange, QEvent.Type.StyleChange) and hasattr(self, "arrow"):
+            self._paint_arrow()                          # 테마가 바뀌면 ⇒ 색도(디자인 SOT 아이콘 규칙)
+        if ev.type() == QEvent.Type.WindowStateChange and hasattr(self, "btn_full"):
+            full = self.isFullScreen()
+            if self.btn_full.isChecked() != full:
+                self.btn_full.blockSignals(True)
+                self.btn_full.setChecked(full)
+                self.btn_full.blockSignals(False)
+
+    def _set_full(self, on: bool) -> None:
+        if on:
+            self._pre_full_max = self.isMaximized()
+            self.showFullScreen()
+        elif self.__dict__.get("_pre_full_max"):
+            self.showMaximized()
+        else:
+            self.showNormal()
+        self._fit_result()
+
+    def keyPressEvent(self, ev):
+        if ev.key() == Qt.Key.Key_Escape and self.isFullScreen():
+            self.btn_full.setChecked(False)              # 전체 화면에서 Esc = 전체 화면만 푼다(창은 그대로)
+            ev.accept()
+            return
+        super().keyPressEvent(ev)
+
+    def restore_state(self, geom_hex: str = "", maximized: bool = False) -> None:
+        """지난번 크롭 창 자리·크기·최대화(쓰는 쪽이 기억한 것) — 전체 화면은 다시 열 때 늘 푼 채로."""
+        if geom_hex:
+            try:
+                from PyQt6.QtCore import QByteArray
+                self.restoreGeometry(QByteArray(bytes.fromhex(geom_hex)))
+            except (ValueError, TypeError):
+                pass
+        if maximized:
+            self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
+
+    def done(self, r):
+        if self.isFullScreen():                          # 전체 화면은 기억하지 않는다 — 푼 뒤의 자리를 남긴다
+            self.btn_full.setChecked(False)
+        try:
+            self.geometry_state = (bytes(self.saveGeometry()).hex(), bool(self.isMaximized()))
+        except Exception:
+            self.geometry_state = None
+        super().done(r)
 
     # ── 사진 하나 보이기 ──────────────────────────────
     def show_photo(self, index: int, img, margins, has_crop: bool = False, title: str = "", auto_pts=None) -> None:
@@ -276,11 +372,11 @@ class PhotoCropDialog(QDialog):
         self.stack.setCurrentWidget(self.warp if on else self.canvas)
         for sp in self.spins:
             sp.setEnabled(not on)
-        self.btn_detect.setVisible(on)
-        self.btn_detect.setEnabled(self._auto is not None)
+        # 두 단추는 늘 보이고 켰을 때만 눌린다(261106-8) — 숨기면 켜고 끌 때마다 줄이 옆으로 움직였다
+        self.btn_detect.setEnabled(on and self._auto is not None)
         self.btn_detect.setToolTip(tr("어림한 테두리로 점을 놓습니다.") if self._auto is not None
                                    else tr("이 사진에서는 테두리를 찾지 못했습니다 — 점을 끌어 맞추세요."))
-        self.btn_corners.setVisible(on)
+        self.btn_corners.setEnabled(on)
         self.note_warp.setVisible(on)
         self.btn_reset.setEnabled(not on and (self._has_crop or any(v > 0 for v in self.current_margins())))
         self._prev_timer.start()
