@@ -297,23 +297,36 @@ class BookmarkTree(QWidget):
             return tuple(sorted(PHOTO_EXTS)) + (".zip",)       # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip 도
         return (".pdf", ".zip")                                # 261106-5(사진 보기 SOT §4.24.1): PDF 가 든 zip 도
 
-    def _list_keep(self):
+    def _list_keep(self, unknown=None):
         """목록에 둘지 — zip 은 사진 모드면 사진이 든 것만(4.24), PDF 모드면 PDF 가 든 것만(전달 묶음 .polypdf.zip 은 빼고,
-        §4.24.1). 그 밖은 모두."""
-        photo = self._photo_on()
+        §4.24.1). 그 밖은 모두.
 
-        def keep(p):
+        261106-23(응답성 SOT §4.1 '목록의 파일마다 열지 않는다'): `unknown`(list) 을 주면 **메인용** — zip 을 열지 않고
+        기억한 목차(`zip_unpack.peek_kind`)만 본다. 모르는 zip 은 `unknown` 에 넣고 빼 둔다 → 부른 쪽이 배경 훑기로 넘긴다.
+        주지 않으면 **배경용**(`FolderScanWorker`) — `zip_unpack.scan_keep`(목차를 읽고 기억한다)."""
+        from viewer import zip_unpack
+        photo = self._photo_on()
+        kind = "photo" if photo else "pdf"
+
+        def pre(p):
             if photo:
                 from viewer.photo_backup import is_backup_path      # 펴기 원본 백업(261106-15, 사진 보기 SOT §4.43)은 목록에서 뺀다
                 if is_backup_path(p):
                     return False
+            return True
+        if unknown is None:
+            return zip_unpack.scan_keep(kind, pre)
+
+        def keep(p):
+            if not pre(p):
+                return False
             if not str(p).lower().endswith(".zip"):
                 return True
-            if photo:
-                from viewer.photo_zip import has_photos
-                return has_photos(p)
-            from viewer.zip_unpack import has_pdfs
-            return has_pdfs(p)
+            got = zip_unpack.peek_kind(p, kind)
+            if got is None:
+                unknown.append(p)
+                return False
+            return got
         return keep
 
     # ── 261106-5(사진 보기 SOT §4.24.1): zip 줄 — 풀기·PDF 모드에서 펼쳐 보기 ──
@@ -324,13 +337,43 @@ class BookmarkTree(QWidget):
         return bool(p) and str(p).lower().endswith(".zip")
 
     def _fill_zip_members(self, item) -> None:
-        """PDF 모드 zip 줄을 펼치면 안의 PDF 를 아래 줄로(읽기 전용 — 누르면 그 파일만 캐시로 꺼내 본문에)."""
-        from viewer.zip_unpack import members
-        from viewer.widgets.icons import file_kind_icon
+        """PDF 모드 zip 줄을 펼치면 안의 PDF 를 아래 줄로(읽기 전용 — 누르면 그 파일만 캐시로 꺼내 본문에).
+        261106-23: 목차는 목록을 훑을 때 배경에서 읽어 둔 것(`peek_members`)만 쓴다 — 없으면 '…' 를 두고 배경에서 읽어 채운다."""
+        from viewer import zip_unpack
         zp = str(item.data(0, self.DATA_FILE))
+        got = zip_unpack.peek_members(zp, (".pdf",))
+        if got is None:
+            self._zip_members_bg(item, zp)
+            return
+        self._put_zip_members(item, zp, got)
+
+    def _zip_members_bg(self, item, zp: str) -> None:
+        from viewer.workers import run_in_thread
+        from viewer.zip_unpack import ZipMembersWorker
         while item.childCount():
             item.takeChild(0)
-        for raw, shown in members(zp, (".pdf",)):
+        ph = QTreeWidgetItem(["…"])
+        ph.setData(0, self.DATA_IS_TOC_PLACEHOLDER, True)
+        ph.setDisabled(True)
+        item.addChild(ph)
+        item.setData(0, self.DATA_TOC_LOADED, True)        # 기다리는 동안 다시 펼쳐도 한 번만
+        w = ZipMembersWorker(zp, (".pdf",))
+
+        def _done(z, got, it=item):
+            try:
+                if it.treeWidget() is not self.tree or str(it.data(0, self.DATA_FILE)) != z:
+                    return                                  # 그 사이 목록이 바뀌었다
+                self._put_zip_members(it, z, got)
+            except RuntimeError:
+                return                                      # 행이 이미 지워졌다
+        w.done.connect(_done)
+        run_in_thread(w, self._scan_keep)
+
+    def _put_zip_members(self, item, zp: str, got) -> None:
+        from viewer.widgets.icons import file_kind_icon
+        while item.childCount():
+            item.takeChild(0)
+        for raw, shown in got:
             ch = QTreeWidgetItem([Path(shown).stem])
             ch.setData(0, self.DATA_ZIP_MEMBER, (zp, raw))
             ch.setToolTip(0, shown)
@@ -917,11 +960,13 @@ class BookmarkTree(QWidget):
             return time.monotonic() > deadline
 
         stats: dict = {}
+        unknown: list = []      # 261106-23: 목차를 모르는 zip — 메인에서 열지 않고 배경 훑기로 넘긴다
         try:
-            found = list(iter_pdfs(self._root_dir, should_cancel=_expired, stats=stats, exts=self._list_exts(), keep=self._list_keep()))
+            found = list(iter_pdfs(self._root_dir, should_cancel=_expired, stats=stats, exts=self._list_exts(),
+                                   keep=self._list_keep(unknown)))
         except Exception:
             found = []
-        if not _expired():
+        if not _expired() and not unknown:
             self._pdfs_flat = found
             self._scan_stats = stats
             self._render_flat(after=after)
