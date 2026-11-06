@@ -8428,6 +8428,10 @@ msgstr "No sentences using '{term}' found in the text."
 msgid "사용자 사전 저장 실패: {name__}: {e}"
 msgstr "Failed to save user dictionary: {name__}: {e}"
 
+#: viewer/widgets/help_button.py
+msgid "도움말"
+msgstr "Help"
+
 #: viewer/widgets/help_dialog.py
 msgid "사용법 파일을 찾지 못했습니다."
 msgstr "The user guide file could not be found."
@@ -9310,8 +9314,8 @@ msgid "점을 처음 자리로 — 지금 크롭 박스 네 귀(크롭이 없으
 msgstr "Moves the points back to the four corners of the current crop box (the photo's corners if there is no crop)."
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "도움말"
-msgstr "Help"
+msgid "사진 크롭 — 도움말"
+msgstr "Photo crop — Help"
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "전체 화면 (F11)"
@@ -9333,10 +9337,6 @@ msgstr "Drag inside the box to move it at the same size; drag a corner or edge t
 #: viewer/widgets/photo_crop_dialog.py
 msgid "모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
 msgstr "Straighten shape (A): drag the corners (squares) onto the edges, and drag the middle point (circle) of a curved edge. Double-click a middle point to make that edge straight again. [OK] saves the straightened picture as a new photo (the original is unchanged)."
-
-#: viewer/widgets/photo_crop_dialog.py
-msgid "사진 크롭 — 도움말"
-msgstr "Photo crop — Help"
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."

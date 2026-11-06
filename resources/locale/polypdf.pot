@@ -8163,6 +8163,10 @@ msgstr ""
 msgid "사용자 사전 저장 실패: {name__}: {e}"
 msgstr ""
 
+#: viewer/widgets/help_button.py
+msgid "도움말"
+msgstr ""
+
 #: viewer/widgets/help_dialog.py
 msgid "사용법 파일을 찾지 못했습니다."
 msgstr ""
@@ -9022,7 +9026,7 @@ msgid "점을 처음 자리로 — 지금 크롭 박스 네 귀(크롭이 없으
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "도움말"
+msgid "사진 크롭 — 도움말"
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py
@@ -9043,10 +9047,6 @@ msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
-msgstr ""
-
-#: viewer/widgets/photo_crop_dialog.py
-msgid "사진 크롭 — 도움말"
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py

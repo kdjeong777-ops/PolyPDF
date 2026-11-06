@@ -20,7 +20,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel,
-                             QPushButton, QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout)
+                             QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout)
 
 from viewer import page_crop as pc
 from viewer import photo_warp as pw
@@ -34,7 +34,6 @@ RESULT_SIDE = 420          # 결과 미리보기 — 줄인 그림 긴 변(펴�
 PANE_MIN_W = 360           # 왼쪽(고치는)·오른쪽(결과) 칸 최소 폭 — 둘이 같다(261106-8, 디자인 SOT §2.21)
 PANE_MIN_H = 360           # 두 칸 최소 높이
 PANE_GAP = 6               # 칸과 ⇒ 사이
-HELP_PX = 22               # 동그란 ? 단추 지름(261106-12)
 ARROW_MIN = 28             # 가운데 ▶(옅은 회색 둥근 삼각형 `color_icon("tri_right")`, 261106-12 — 종전 블록 화살표의 60%) 크기 — 칸 폭의 1/ARROW_DIV,
 ARROW_MAX = 48             #   이 둘 사이(창을 키우면 그림만 커진다 — 칸 폭은 ARROW_MAX+8 로 늘 같다)
 ARROW_DIV = 15
@@ -160,15 +159,8 @@ class PhotoCropDialog(QDialog):
         left.addStretch(1)
         # 안내 글은 늘 띄워 두지 않고 동그란 ? 단추로(261106-12 사용자 지시 '설명 내용에 따라 모양 펴기 시 창 크기가 줄어든다 —
         #   동그란 ? 를 두고, 누르면 호버링되거나 창으로'): 올려 두면 풍선 도움말, 누르면 작은 창. 글 줄이 생겼다 사라지며 칸이 줄던 것이 없다.
-        self.btn_help = QToolButton(self)
-        self.btn_help.setObjectName("cropHelp")
-        self.btn_help.setText("?")
-        self.btn_help.setAccessibleName(tr("도움말"))
-        self.btn_help.setFixedSize(HELP_PX, HELP_PX)
-        self.btn_help.setStyleSheet("QToolButton#cropHelp{border:1px solid palette(mid);border-radius:%dpx;font-weight:bold;}"
-                                    "QToolButton#cropHelp:hover{background:palette(midlight);}" % (HELP_PX // 2))
-        self.btn_help.setToolTip(self.help_html())
-        self.btn_help.clicked.connect(self._show_help)
+        from viewer.widgets.help_button import HelpButton      # 공통 ? 단추
+        self.btn_help = HelpButton(self.help_html(), tr("사진 크롭 — 도움말"), self)
         wrow.insertWidget(wrow.count() - 1, self.btn_help)      # 모양 펴기 줄 끝(늘림 앞)
         self.grid.addLayout(left, 1, 0)
         lw = max(left.minimumSize().width(), PANE_MIN_W)
@@ -213,12 +205,6 @@ class PhotoCropDialog(QDialog):
             items.append(tr("❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."))
         items.append(tr("모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."))
         return "<ul style='margin:0;'>" + "".join("<li>%s</li>" % t for t in items) + "</ul>"
-
-    def _show_help(self) -> None:
-        from PyQt6.QtWidgets import QMessageBox
-        box = QMessageBox(QMessageBox.Icon.NoIcon, tr("사진 크롭 — 도움말"), self.help_html(), QMessageBox.StandardButton.Ok, self)
-        box.setTextFormat(Qt.TextFormat.RichText)
-        box.exec()
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
