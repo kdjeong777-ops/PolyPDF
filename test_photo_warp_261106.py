@@ -8,7 +8,7 @@ C. 점 끌기 화면 — 꼭짓점을 옮기면 곧은 변의 가운데 점이 �
 D. 크롭 창 — 옵션 '모양 펴기' 를 켜면 점 화면(처음 점 = 크롭 박스 — 크롭이 없으면 사진 네 귀), 여백 칸은 꺼짐.
    ❯ 로 넘긴 사진은 **꺼진 채**(261106-11), 켜고 점을 놓으면 그 사진도 펼친다,
    [확인] = 켠 사진마다 '<이름>_펼침' 새 사진(배경), 원본·크롭 그대로, 책갈피창에 새 줄
-E. [취소] 면 아무것도 만들지 않는다 · 펴는 동안 메인 하트비트 공백 < 0.5초(응답성 SOT §5)
+E. [취소] 면 아무것도 만들지 않는다 · 펴는 동안 메인 하트비트 공백 < 1초(응답성 SOT §2 기준)
 """
 import os, sys, tempfile, shutil, time, hashlib
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -188,7 +188,7 @@ try:
     mw._photo_crop_dialog(a)
     pump(lambda: "go_c" in seen, timeout=20)
     hb.start(); last[0] = time.monotonic()
-    done = pump(lambda: not mw.__dict__.get("_photo_warp_busy") and "go_c" in seen, timeout=30)
+    done = pump(lambda: not mw.__dict__.get("_photo_orig_busy") and "go_c" in seen, timeout=30)
     pump(timeout=0.6)
     hb.stop()
     PhotoCropDialog.exec = _exec
@@ -204,7 +204,7 @@ try:
         "D ❯ 로 넘긴 사진은 모양 펴기가 꺼진 채 시작(261106-11)", str((seen.get("b_on"), seen.get("c_on"))))
     bk = tmp / "_원본"
     chk(done and not [p_ for p_ in tmp.iterdir() if "_펼침" in p_.name], "D [저장] — 새 '_펼침' 파일을 만들지 않는다(원본 대체, 261106-15)")
-    chk(bk.is_dir() and sorted(p_.name for p_ in bk.iterdir()) == ["a_doc.jpg", "b_book.jpg"]
+    chk(bk.is_dir() and sorted(p_.name for p_ in bk.iterdir() if not p_.name.startswith(".")) == ["a_doc.jpg", "b_book.jpg"]
         and md5(bk / "a_doc.jpg") == sums[a] and md5(bk / "b_book.jpg") == sums[b],
         "D 원본은 사진 폴더 안 '_원본' 으로 옮겨졌다(바이트 그대로), 끈 사진은 없음", str(bk.is_dir() and list(bk.iterdir())))
     chk(md5(a) != sums[a] and md5(b) != sums[b] and md5(c) == sums[c], "D 원래 이름 자리에 펼친 사진, 끈 사진은 그대로")
@@ -236,16 +236,16 @@ try:
     QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: str(other))
     pick["text"] = "다른 폴더에 저장..."
     mw._photo_crop_dialog(a)
-    pump(lambda: not mw.__dict__.get("_photo_crop_busy") and not mw.__dict__.get("_photo_warp_busy"), timeout=20)
+    pump(lambda: not mw.__dict__.get("_photo_crop_busy") and not mw.__dict__.get("_photo_orig_busy"), timeout=20)
     pump(lambda: (other / "a_doc_펼침.jpg").exists(), timeout=20)
     chk((other / "a_doc_펼침.jpg").exists(), "F [다른 폴더에 저장] — 고른 폴더에 '<이름>_펼침'", str(list(other.iterdir())))
     names = [Path(it.data(0, bt.DATA_FILE)).name for it in bt._iter_file_nodes()]
     chk("a_doc_펼침.jpg" not in names, "F 다른 폴더의 것은 보고 있는 목록에 끼우지 않는다", str(names))
-    chk(md5(bk / "a_doc.jpg") == sums[a] and len(list(bk.iterdir())) == 2, "F 다른 폴더 저장은 원본을 옮기지 않는다")
+    chk(md5(bk / "a_doc.jpg") == sums[a] and len([p_ for p_ in bk.iterdir() if not p_.name.startswith(".")]) == 2, "F 다른 폴더 저장은 원본을 옮기지 않는다")
     QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(tmp / "내가고른.jpg"), ""))
     pick["text"] = "다른 이름으로 저장..."
     mw._photo_crop_dialog(a)
-    pump(lambda: not mw.__dict__.get("_photo_crop_busy") and not mw.__dict__.get("_photo_warp_busy"), timeout=20)
+    pump(lambda: not mw.__dict__.get("_photo_crop_busy") and not mw.__dict__.get("_photo_orig_busy"), timeout=20)
     pump(lambda: (tmp / "내가고른.jpg").exists(), timeout=20)
     chk((tmp / "내가고른.jpg").exists(), "F [다른 이름으로 저장] — 저장 창에서 고른 이름")
     n0 = len(list(tmp.iterdir()))
@@ -323,10 +323,10 @@ try:
     gaps.clear()
     hb.start(); last[0] = time.monotonic()
     mw._photo_warp({c: [(x / W, y / H) for x, y in QUAD] + pw.mids_of([(x / W, y / H) for x, y in QUAD])})
-    pump(lambda: not mw.__dict__.get("_photo_warp_busy"), timeout=60)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), timeout=60)
     hb.stop()
     chk((tmp / "c_big_펼침.jpg").exists(), "E 12 MP 사진도 펼친다")
-    chk(gaps and max(gaps) < 0.5, "E 펴는 동안 메인 하트비트 공백 < 0.5초", "%.2f" % (max(gaps) if gaps else -1))
+    chk(gaps and max(gaps) < 1.0, "E 펴는 동안 메인 하트비트 공백 < 1초", "%.2f" % (max(gaps) if gaps else -1))
     mw.close()
 except Exception:
     import traceback

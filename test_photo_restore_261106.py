@@ -3,11 +3,14 @@
 
 실제 MainWindow·실제 워커(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3). 휴지통은 검사용 폴더로 바꿔 친다
 (실제 휴지통에 검사 파일을 넣지 않는다).
-A. 백업 찾기 — 없으면 없음, 여럿('name'·'name (2)')이면 가장 최근(번호 큰 것), HEIC → .jpg 로 바뀐 사진도 짝(이름만으로)
+A. 백업 찾기 — 없으면 없음, 같은 사진을 두 번 바꾸면 가장 최근 것, 기록 없는 옛 백업은 정확히 같은 이름만(HEIC → .jpg 짝 포함)
+A2. (261106-20) 짝 기록 — 'IMG (2).jpg' 와 'IMG.jpg' 를 둘 다 펴기 저장하면 각자 제 원본으로 되돌아온다(이름의 '(n)' 으로 짐작하지 않는다)
 B. 되돌리기 — 지금 파일은 **제 이름 그대로** 휴지통, 원본이 원래 이름 자리로(바이트 그대로), 백업 자리에서 빠짐
 C. 휴지통이 실패하면 아무것도 바뀌지 않는다(지금 파일·백업 그대로)
+C2. (261106-20) 원본을 제자리에 놓는 마지막 단계가 실패해도 아무것도 바뀌지 않는다 — 휴지통에 아무것도 가지 않는다
 D. 실제 창 — 펴기 [저장] 으로 바꾼 사진에만 우클릭 '원본으로 되돌리기' 가 보이고, 고른 여러 장 한꺼번에, 확인 창 [되돌리기] →
    원본 바이트·사이드카 기록 지움·책갈피창 목록 그대로, 고정 백업 폴더(환경설정)에서도
+D2. (261106-20) 원본을 바꾸는 작업은 한 번에 하나 — 펴기 저장이 도는 동안 되돌리기·방향 저장은 막히고 상태 줄에 알린다
 """
 import os, sys, tempfile, shutil, time, hashlib
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -75,13 +78,18 @@ try:
     # A
     a = photo("a.jpg")
     chk(pb.find_backup(a) is None, "A 백업이 없으면 없음")
-    bdir = tmp / "_원본"; bdir.mkdir()
-    (bdir / "a.jpg").write_bytes(b"v1"); (bdir / "a (2).jpg").write_bytes(b"v2"); (bdir / "ab.jpg").write_bytes(b"x")
-    chk(Path(pb.find_backup(a) or "").name == "a (2).jpg", "A 여럿이면 가장 최근(번호 큰 것)", str(pb.find_backup(a)))
-    (bdir / "h.HEIC").write_bytes(b"heic")
-    chk(Path(pb.find_backup(tmp / "h.jpg") or "").name == "h.HEIC", "A HEIC → .jpg 로 바뀐 사진도 이름으로 짝")
-    chk(pb.original_name(bdir / "a (2).jpg") == "a.jpg", "A 원래 이름 = '(n)' 뺀 이름")
+    Path(a).write_bytes(b"v1"); pb.move_to_backup(a)
+    Path(a).write_bytes(b"v2"); pb.move_to_backup(a)
+    Path(a).write_bytes(b"v3")
+    bdir = tmp / "_원본"
+    chk(Path(pb.find_backup(a) or "").read_bytes() == b"v2", "A 두 번 바꾸면 가장 최근 백업", str(pb.find_backup(a)))
     shutil.rmtree(bdir); os.remove(a)
+    bdir.mkdir()                                      # 기록 없는 옛 백업(261106-15~-19)
+    (bdir / "o.jpg").write_bytes(b"old"); (bdir / "o (2).jpg").write_bytes(b"other"); (bdir / "h.HEIC").write_bytes(b"heic")
+    chk(Path(pb.find_backup(tmp / "o.jpg") or "").name == "o.jpg", "A 기록 없는 옛 백업 — 정확히 같은 이름만", str(pb.find_backup(tmp / "o.jpg")))
+    chk(Path(pb.find_backup(tmp / "h.jpg") or "").name == "h.HEIC", "A 기록 없는 옛 백업 — HEIC → .jpg 로 바뀐 사진도 이름으로 짝")
+    chk(pb.original_name(bdir / "o (2).jpg") == "o (2).jpg", "A 기록 없으면 원래 이름 = 백업 이름 그대로")
+    shutil.rmtree(bdir)
 
     # B·C — 실제 워커로 대체한 뒤 되돌리기
     PTS = [(160 / 900, 90 / 700), (760 / 900, 140 / 700), (800 / 900, 620 / 700), (110 / 900, 590 / 700)]
@@ -93,6 +101,20 @@ try:
         w.done.connect(lambda ok, bad, g=got: g.update(ok=ok))
         w.run()
         return got.get("ok")
+    # A2 — 'IMG (2).jpg' 를 먼저, 'IMG.jpg' 를 나중에 바꾼다(옛 짐작은 'IMG.jpg' 에 'IMG (2).jpg' 의 원본을 가져왔다)
+    i2 = photo("IMG (2).jpg", (90, 30, 30)); i1 = photo("IMG.jpg", (30, 90, 30))
+    h2, h1 = md5(i2), md5(i1)
+    replace(i2); replace(i1)
+    f2, f1 = pb.find_backup(i2), pb.find_backup(i1)
+    chk(bool(f2) and md5(f2) == h2 and bool(f1) and md5(f1) == h1, "A2 각 사진의 백업 = 제 원본", "%s %s" % (f2, f1))
+    got = {}
+    rw = pc.PhotoRestoreWorker([(i2, f2), (i1, f1)] if f2 and f1 else [])
+    rw.done.connect(lambda ok, bad: got.update(ok=ok, bad=bad))
+    rw.run()
+    chk(Path(i2).exists() and md5(i2) == h2 and Path(i1).exists() and md5(i1) == h1, "A2 되돌리면 각자 제 원본으로", str(got))
+    chk(not pb.scan([i1, i2]), "A2 되돌린 뒤 짝 기록이 남지 않는다")
+    os.remove(i1); os.remove(i2)
+    trashed.clear()
     b = photo("b.jpg"); hb = md5(b)
     replace(b)
     hw = md5(b)
@@ -128,6 +150,25 @@ try:
     chk(got.get("bad") == [c] and md5(c) == hcw and md5(tmp / "_원본" / "c.jpg") == hc
         and not [x for x in tmp.iterdir() if x.name.startswith("~")], "C 휴지통 실패 — 지금 파일·백업 그대로", str(got))
 
+    # C2 — 마지막 단계(원본을 제 이름 자리로) 실패
+    trashed.clear()
+    _rep = os.replace
+
+    def bad_replace(a_, b_):
+        if str(a_).endswith(".polypix-restore") and Path(str(b_)) == Path(c):
+            raise OSError("locked")
+        return _rep(a_, b_)
+    os.replace = bad_replace
+    got.clear()
+    rw = pc.PhotoRestoreWorker([(c, pb.find_backup(c))])
+    rw.done.connect(lambda ok, bad: got.update(ok=ok, bad=bad))
+    rw.run()
+    os.replace = _rep
+    chk(got.get("bad") == [c] and Path(c).exists() and md5(c) == hcw and md5(tmp / "_원본" / "c.jpg") == hc and not trashed
+        and not [x for x in tmp.iterdir() if x.name.startswith("~")], "C2 마지막 단계 실패 — 지금 파일·백업 그대로, 휴지통에 없음",
+        "%s trashed=%s" % (got, trashed))
+    chk(Path(pb.find_backup(c) or "").name == "c.jpg", "C2 실패 뒤에도 짝 기록 그대로(다시 되돌릴 수 있다)")
+
     # D — 실제 창
     d1, d2 = photo("d1.jpg", (60, 40, 40)), photo("d2.jpg", (40, 60, 40))
     hd1, hd2 = md5(d1), md5(d2)
@@ -141,7 +182,7 @@ try:
     bt = mw.bookmark_tree
     pump(lambda: sum(1 for _ in bt._iter_file_nodes()) >= 4)
     mw._photo_warp({d1: PTS, d2: PTS}, ("replace", None))
-    pump(lambda: not mw.__dict__.get("_photo_warp_busy"), 30); pump(timeout=0.5)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 30); pump(timeout=0.5)
     st = mw._ensure_page_meta_store()
     st.set_photo_crop(d1, (0.0, 0.1, 1.0, 1.0)); st.save()
     m = QMenu()
@@ -161,22 +202,36 @@ try:
     QMessageBox.exec = fake_box
     trashed.clear()
     mw._photo_restore([d1, d2, b])
-    pump(lambda: not mw.__dict__.get("_photo_restore_busy"), 30); pump(timeout=0.5)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 30); pump(timeout=0.5)
     QMessageBox.exec = _mb
     chk("휴지통" in asked.get("text", ""), "D 확인 창 — 지금 파일은 휴지통으로 간다고 알린다")
     chk(md5(d1) == hd1 and md5(d2) == hd2 and sorted(trashed) == ["d1.jpg", "d2.jpg"], "D 2장 모두 원본으로(바이트 그대로), 바꾼 파일은 휴지통", str(trashed))
     chk(st.photo_crop(d1) is None, "D 되돌린 사진의 사이드카 기록(크롭)은 지운다")
     names = sorted(Path(it.data(0, bt.DATA_FILE)).name for it in bt._iter_file_nodes())
     chk("d1.jpg" in names and "d2.jpg" in names and not any("_원본" in n for n in names), "D 책갈피창 목록 그대로", str(names))
+    # D2 — 원본을 바꾸는 작업은 한 번에 하나
+    mw._photo_warp({d1: PTS}, ("replace", None))
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 30); pump(timeout=0.5)
+    asked.clear()
+    QMessageBox.exec = fake_box
+    mw._photo_warp({d2: PTS}, ("replace", None))       # 배경에서 도는 동안(아직 펌프하지 않았다)
+    mw._photo_restore([d1])
+    msg_r = mw.status.currentMessage()
+    chk("text" not in asked and "끝나지 않았" in msg_r, "D2 펴기 저장 중 — 되돌리기는 막히고 상태 줄에 알린다", msg_r)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 30); pump(timeout=0.5)
+    mw._photo_restore([d1, d2])
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 30); pump(timeout=0.5)
+    QMessageBox.exec = _mb
+    chk(md5(d1) == hd1 and md5(d2) == hd2, "D2 막힌 뒤 다시 하면 둘 다 원본으로")
     # 고정 백업 폴더
     mw._prefs["picture"]["warp_backup_dir"] = str(custom)
     mw._photo_apply_view_kind()
     mw._photo_warp({d1: PTS}, ("replace", None))
-    pump(lambda: not mw.__dict__.get("_photo_warp_busy"), 30); pump(timeout=0.5)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 30); pump(timeout=0.5)
     chk(pb.find_backup(d1) and str(pb.find_backup(d1)).startswith(str(custom)), "D 고정 백업 폴더에서도 찾는다", str(pb.find_backup(d1)))
     QMessageBox.exec = fake_box
     mw._photo_restore([d1])
-    pump(lambda: not mw.__dict__.get("_photo_restore_busy"), 30); pump(timeout=0.5)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 30); pump(timeout=0.5)
     QMessageBox.exec = _mb
     chk(md5(d1) == hd1, "D 고정 백업 폴더에서 되돌린다")
     pb.set_custom_dir("")

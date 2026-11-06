@@ -4410,6 +4410,10 @@ msgid "풀 사진을 찾지 못했습니다."
 msgstr "Could not find the photos to extract."
 
 #: viewer/photo_controller.py
+msgid "원본 사진을 바꾸는 작업이 아직 끝나지 않았습니다 — 끝난 뒤 다시 하세요."
+msgstr "A task that changes original photos is still running — try again when it finishes."
+
+#: viewer/photo_controller.py
 msgid "원본으로 되돌리기..."
 msgstr "Restore original..."
 
@@ -4857,13 +4861,13 @@ msgstr "Copying to PC"
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "펼친 사진을 저장했습니다: {name} — 원본은 그대로입니다."
-msgstr "Saved the straightened photo: {name} — the original is unchanged."
+msgid "펼친 사진을 새 파일로 저장했습니다: {name} — 원본은 그대로입니다."
+msgstr "Saved the straightened photo as a new file: {name} — the original is unchanged."
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "펼친 사진 {n}장을 저장했습니다 — 원본은 그대로입니다."
-msgstr "Saved {n} straightened photos — the originals are unchanged."
+msgid "펼친 사진 {n}장을 새 파일로 저장했습니다 — 원본은 그대로입니다."
+msgstr "Saved {n} straightened photos as new files — the originals are unchanged."
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -9408,10 +9412,6 @@ msgid "사진 크롭 — 도움말"
 msgstr "Photo crop — Help"
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "전체 화면 (F11)"
-msgstr "Full screen (F11)"
-
-#: viewer/widgets/photo_crop_dialog.py
 msgid "크롭 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다."
 msgstr "Fills the screen with the crop window — press again, F11 or Esc to return."
 
@@ -9423,11 +9423,6 @@ msgstr "The original photo stays unchanged; only the crop is remembered — Phot
 msgid "박스 안쪽을 끌면 크기 그대로 옮기고, 귀·변을 끌면 크기를 바꿉니다."
 msgstr "Drag inside the box to move it at the same size; drag a corner or edge to resize it."
 
-# | 저장합니다(원본은 그대로)."
-#: viewer/widgets/photo_crop_dialog.py
-msgid "모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
-msgstr "Straighten shape (A): drag the corners (squares) onto the edges, and drag the middle point (circle) of a curved edge. Double-click a middle point to make that edge straight again. [OK] saves the straightened picture as a new photo (the original is unchanged)."
-
 #: viewer/widgets/photo_crop_dialog.py
 msgid "❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."
 msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and applied all at once with [OK]. Photos without a crop start with the crop you set most recently."
@@ -9435,6 +9430,12 @@ msgstr "Use ❮ ❯ to move between photos — each crop you change is kept and 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "← → 키로도 넘깁니다(숫자 칸을 고치는 중이면 그 칸 안에서 움직입니다)."
 msgstr "You can also flip with the ← → keys (while editing a number box, they move within that box)."
+
+# | 저장합니다(원본은 그대로)."
+# | 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
+#: viewer/widgets/photo_crop_dialog.py
+msgid "꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 하면 저장 방법을 묻습니다 — [저장] 은 원본을 펼친 그림으로 바꾸고 원본은 백업 폴더로 옮기며, 다른 이름·다른 폴더는 새 파일로 저장합니다(원본은 그대로)."
+msgstr "drag the corners (squares) onto the edges, and drag the middle point (circle) of a curved edge. Double-click a middle point to make that edge straight again. [OK] asks how to save — [Save] replaces the original with the straightened picture and moves the original to the backup folder; another name or another folder saves a new file (the original is unchanged)."
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "사진 크롭"
@@ -9447,6 +9448,14 @@ msgstr "Straighten shape (perspective · curved edges)"
 #: viewer/widgets/photo_crop_dialog.py
 msgid "비스듬히 찍었거나 가운데가 휜 사진을 테두리에 맞춰 직사각형으로 펼칩니다."
 msgstr "Flattens a photo taken at an angle or curved in the middle into a rectangle, following its edges."
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "전체 화면"
+msgstr "Full Screen"
+
+#: viewer/widgets/photo_crop_dialog.py
+msgid "모양 펴기"
+msgstr "Straighten shape"
 
 #: viewer/widgets/photo_label_dialog.py
 msgid "새 스타일..."
@@ -14584,4 +14593,7 @@ msgstr "Getting Started"
 
 #~ msgid "사진 폴더 안 '_원본' (기본)"
 #~ msgstr ""
+
+#~ msgid "전체 화면 (F11)"
+#~ msgstr "Full screen (F11)"
 

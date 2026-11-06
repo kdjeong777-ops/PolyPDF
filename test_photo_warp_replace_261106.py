@@ -182,7 +182,7 @@ try:
     BPTS = BPTS + pw.mids_of(BPTS)
     hb.start(); last[0] = time.monotonic()
     mw._photo_warp({str(big): BPTS, str(tmp / "p1.jpg"): PTS}, ("replace", None))
-    pump(lambda: not mw.__dict__.get("_photo_warp_busy"), 60)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 60)
     pump(timeout=0.5)
     hb.stop()
     cb = pb.backup_dir_for(big)

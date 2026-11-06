@@ -2128,8 +2128,6 @@ class PhotoMixin:
             self._photo_warp(warps, dest)
 
     # ── 모양 펴기(4.43, 261106-6) ─────────────────────────
-    WARP_ASK = ("here", "names", "dir")
-
     def _photo_warp_backup_label(self) -> str:
         from viewer import photo_backup
         d = photo_backup.custom_dir()
@@ -2206,17 +2204,19 @@ class PhotoMixin:
         return "cancel" if box.clickedButton() is b_drop else "back"
 
     def _photo_warp(self, warps: dict, dest=None):
-        """크롭 창 [확인] 의 모양 펴기 — {경로: 점 8개}. 배경 워커 하나가 차례로 펼친 새 사진을 만든다(원본 그대로).
-        `dest` = `_photo_warp_ask` 의 답(없으면 원본 옆)."""
-        if not warps or self.__dict__.get("_photo_warp_busy"):
+        """크롭 창 [확인] 의 모양 펴기 — {경로: 점 8개}. 배경 워커 하나가 차례로 편다 — [저장] 이면 원본을 대체(원본은 백업),
+        다른 이름·다른 폴더면 새 사진(원본 그대로). `dest` = `_photo_warp_ask` 의 답(없으면 원본 옆 새 사진).
+        원본을 바꾸는 사진 작업 잠금 하나(`_photo_orig_lock`, 261106-20)를 함께 쓴다."""
+        if not warps:
             return
         if dest and dest[0] == "names":
             warps = {p: v for p, v in warps.items() if p in dest[1]}
             if not warps:
                 return
+        if not self._photo_orig_lock():
+            return
         from viewer.workers import run_in_thread
         self._photo_sync_backup_dir()
-        self._photo_warp_busy = True
         w = PhotoWarpWorker([(p, self._photo_rot_for(p), pts) for p, pts in warps.items()], dest=dest)
         w.done.connect(self._photo_warped)
         self.status.showMessage(tr("펼친 사진 만드는 중…"), 3000)
@@ -2225,7 +2225,7 @@ class PhotoMixin:
     def _photo_warped(self, pairs: list, failed: list):
         """펴기 끝 — pairs = [(원본, 새 파일, 백업 경로 또는 "")]. 원본을 대체했으면(261106-15) 그 사진의 보기 상태(크롭·보기 회전·꾸밈 —
         사이드카 기록 통째)를 지운다: 픽셀이 이미 펴지고 세워졌다. OCR 기록·사진 정보 색인·썸네일은 파일 크기·수정 시각으로 저절로 새로 읽힌다."""
-        self._photo_warp_busy = False
+        self._photo_orig_busy = False
         replaced = [(s_, o, b_) for s_, o, b_ in pairs if b_]
         if replaced:
             st = self._ensure_page_meta_store()
@@ -2280,8 +2280,8 @@ class PhotoMixin:
             if renamed:
                 msg += " " + tr("(HEIC 는 JPEG 로 저장했습니다)")
         elif pairs and not failed:
-            msg = (tr("펼친 사진을 저장했습니다: {name} — 원본은 그대로입니다.").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
-                   else tr("펼친 사진 {n}장을 저장했습니다 — 원본은 그대로입니다.").format(n=len(pairs)))
+            msg = (tr("펼친 사진을 새 파일로 저장했습니다: {name} — 원본은 그대로입니다.").format(name=Path(pairs[0][1]).name) if len(pairs) == 1
+                   else tr("펼친 사진 {n}장을 새 파일로 저장했습니다 — 원본은 그대로입니다.").format(n=len(pairs)))
         elif pairs:
             msg = tr("펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다.").format(n=len(pairs), m=len(failed))
         else:
@@ -2538,7 +2538,7 @@ class PhotoMixin:
                 a.setEnabled(False)
         a_save = menu.addAction(tr("방향 저장 (원본 JPEG)"))       # 4.17 — 돌린 JPEG 일 때만
         a_save.setEnabled(self._photo_rot_for(mv.current_file()) != 0
-                          and photo_io_is_jpeg(mv.current_file()) and not self.__dict__.get("_photo_orient_busy"))
+                          and photo_io_is_jpeg(mv.current_file()) and not self.__dict__.get("_photo_orig_busy"))
         a_crop = menu.addAction(tr("크롭..."))                     # 4.40(261105-4) — 보기 크롭, 원본 그대로
         a_uncrop = menu.addAction(tr("크롭 해제"))
         _ro = self._photo_is_broken() or self._photo_any_cached([mv.current_file()])
@@ -2708,6 +2708,8 @@ class PhotoMixin:
     def _photo_zip_opened(self, zip_path: str, paths: list):
         if self.__dict__.get("_photo_zipper") is not None and self._photo_zipper.zip_path != zip_path:
             return                                       # 그새 다른 zip 을 열었다
+        w = self.__dict__.get("_photo_zipper")
+        self._photo_zip_names = dict(getattr(w, "names", None) or {})   # 꺼낸 사진 → zip 안 이름('이 사진 풀기', 261106-21)
         self._photo_zipper = None
         if not paths:
             self.status.showMessage(tr("zip 에서 사진을 꺼내지 못했습니다: {name}").format(name=Path(zip_path).name), 5000)
@@ -2800,15 +2802,17 @@ class PhotoMixin:
         return a
 
     def _zip_unpack_cached(self, paths):
-        """zip 에서 꺼낸 사진(썸네일 줄·본문에서 고른 것) → zip 안 이름 → 고른 폴더에 그것만."""
-        from viewer import photo_zip, zip_unpack
+        """zip 에서 꺼낸 사진(썸네일 줄·본문에서 고른 것) → zip 안 이름 → 고른 폴더에 그것만.
+        이름은 꺼낼 때 배경에서 만든 짝(`PhotoZipWorker.names`)으로 찾는다 — 메인에서 사진마다 zip 을 열지 않는다(261106-21, 응답성 SOT §6)."""
+        from viewer import photo_zip
         zp = self.__dict__.get("_photo_zip_src")
         if not zp:
             return
+        known = self.__dict__.get("_photo_zip_names") or {}
         names = []
         for p in paths or []:
             if photo_zip.is_cached(p):
-                n = zip_unpack.cached_to_member(zp, p)
+                n = known.get(os.path.normcase(os.path.abspath(str(p))))
                 if n:
                     names.append(n)
         if not names:
@@ -2842,19 +2846,28 @@ class PhotoMixin:
         self._load_main(HistoryItem(out, 0, "", "zip"))
         self.status.showMessage(tr("zip 안 PDF 를 사본으로 열었습니다 — 고친 것은 zip 에 들어가지 않습니다(풀어서 고치세요)."), 8000)
 
+    # ── 원본을 바꾸는 사진 작업 잠금 하나(§4.43, 261106-20) ─────────────────
+    def _photo_orig_free(self) -> bool:
+        """원본 사진을 바꾸는 작업(방향 저장·모양 펴기 저장·원본으로 되돌리기)은 **한 번에 하나** — 같은 사진에 겹치면 짝·백업이 엉킨다.
+        이미 하나가 돌고 있으면 상태 줄에 알리고 False."""
+        if self.__dict__.get("_photo_orig_busy"):
+            self.status.showMessage(tr("원본 사진을 바꾸는 작업이 아직 끝나지 않았습니다 — 끝난 뒤 다시 하세요."), 5000)
+            return False
+        return True
+
+    def _photo_orig_lock(self) -> bool:
+        if not self._photo_orig_free():
+            return False
+        self._photo_orig_busy = True
+        return True
+
     # ── 원본으로 되돌리기(§4.43, 261106-18 사용자 승인 '넣기') ─────────────────
     def _photo_restore_pairs(self, paths) -> list:
         from viewer import photo_backup
         self._photo_sync_backup_dir()
-        out = []
-        for p in paths or []:
-            p = str(p)
-            if not self._is_photo_path(p) or self._photo_any_cached([p]):
-                continue
-            bk = photo_backup.find_backup(p)
-            if bk:
-                out.append((p, bk))
-        return out
+        ps = [str(p) for p in paths or [] if self._is_photo_path(str(p)) and not self._photo_any_cached([str(p)])]
+        found = photo_backup.scan(ps)                    # 백업 폴더마다 한 번만 읽는다(261106-21 — 사진마다 폴더를 읽지 않게)
+        return [(p, found[p]) for p in ps if p in found]
 
     def _photo_restore_action(self, menu, paths):
         """사진 우클릭 '원본으로 되돌리기' — 백업 자리에 그 사진의 원본이 있을 때만 보인다(없으면 메뉴에 없음)."""
@@ -2868,7 +2881,7 @@ class PhotoMixin:
     def _photo_restore(self, paths):
         from PyQt6.QtWidgets import QMessageBox
         pairs = self._photo_restore_pairs(paths)
-        if not pairs or self.__dict__.get("_photo_restore_busy"):
+        if not pairs or not self._photo_orig_free():
             return
         n = len(pairs)
         box = QMessageBox(self)
@@ -2882,8 +2895,9 @@ class PhotoMixin:
         box.exec()
         if box.clickedButton() is not b_ok:
             return
+        if not self._photo_orig_lock():
+            return
         from viewer.workers import run_in_thread
-        self._photo_restore_busy = True
         w = PhotoRestoreWorker(pairs)
         w.done.connect(self._photo_restored)
         self.status.showMessage(tr("원본으로 되돌리는 중…"), 3000)
@@ -2891,7 +2905,7 @@ class PhotoMixin:
 
     def _photo_restored(self, pairs: list, failed: list):
         """되돌린 뒤 — 사이드카 기록(크롭·보기 회전·꾸밈)을 지우고 썸네일·본문을 새로(대체 뒤 정리와 같은 길, 261106-15)."""
-        self._photo_restore_busy = False
+        self._photo_orig_busy = False
         st = self._ensure_page_meta_store()
         if st is not None and pairs:
             for c, o in pairs:
@@ -2949,7 +2963,7 @@ class PhotoMixin:
             self._photo_ro_notice()
             return
         rot = self._photo_rot_for(cur) if cur else 0
-        if not cur or not rot or self.__dict__.get("_photo_orient_busy"):
+        if not cur or not rot or not self._photo_orig_free():
             return
         if not photo_io_is_jpeg(cur):
             self.status.showMessage(tr("방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."), 5000)
@@ -2958,8 +2972,9 @@ class PhotoMixin:
             # 꾸밈 좌표를 함께 옮겨 바로 써야 한다(4.19) — 저장 대기 중인 편집을 같이 내보내지 않게 먼저 저장하게 한다
             self.status.showMessage(tr("저장하지 않은 편집이 있습니다 — 먼저 [저장] 한 뒤 방향을 저장하세요."), 6000)
             return
+        if not self._photo_orig_lock():
+            return
         from viewer.workers import run_in_thread
-        self._photo_orient_busy = True
         w = PhotoOrientSaveWorker(cur, rot)
         w.done.connect(self._photo_orient_saved)
         self.status.showMessage(tr("방향 저장 중…"), 2000)
@@ -2967,7 +2982,7 @@ class PhotoMixin:
 
     def _photo_orient_saved(self, path: str, ok: bool, why: str):
         """방향 저장이 끝났다(메인) — 성공이면 보기 회전을 지우고 다시 그린다. 실패면 원본 그대로·보기 회전 그대로."""
-        self._photo_orient_busy = False
+        self._photo_orig_busy = False
         if not ok:
             msg = {"locked": tr("다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."),
                    "jpeg": tr("방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다.")}.get(
@@ -4057,7 +4072,7 @@ class PhotoWarpWorker(QObject):
                 chk.load()
                 if chk.size != out.size:
                     raise OSError("verify")
-            bk = photo_backup.move_to_backup(src)        # 실패하면 예외 — 원본 그대로
+            bk = photo_backup.move_to_backup(src, dst.name)   # 짝 기록까지(261106-20) — 실패하면 예외, 원본 그대로
             try:
                 os.replace(str(tmp), str(dst))
             except Exception:
@@ -4973,6 +4988,7 @@ class PhotoZipWorker(QObject):
     def __init__(self, zip_path: str):
         super().__init__()
         self.zip_path = zip_path
+        self.names = {}                  # 꺼낸 경로(normcase) → zip 안 이름 — '이 사진 풀기' 가 메인에서 zip 을 다시 열지 않게(261106-21)
         self._cancel = False
 
     def request_cancel(self):
@@ -4983,6 +4999,14 @@ class PhotoZipWorker(QObject):
         try:
             from viewer import photo_zip
             out = photo_zip.extract(self.zip_path, should_cancel=lambda: self._cancel)
+            try:
+                d = photo_zip.cache_dir_for(self.zip_path)
+                for n in photo_zip.photo_members(self.zip_path):
+                    rel = photo_zip._safe_rel(n)
+                    if rel:
+                        self.names[os.path.normcase(os.path.abspath(str(d / rel)))] = n
+            except Exception:
+                pass
             try:
                 photo_zip.prune_cache()
             except Exception:

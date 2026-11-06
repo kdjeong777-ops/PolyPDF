@@ -86,6 +86,7 @@ try:
     CHOSEN = {                                         # 사용자가 고른·보는 사진 한 장(또는 고른 것)만 — 내려받는 것이 맞다
         "PhotoOrientSaveWorker", "PhotoCopyWorker", "PhotoShareWorker", "PhotoFlattenWorker", "PhotoInfoWorker",
         "PhotoOcrWorker", "PhotoPreloadWorker", "PhotoZipWorker",
+        "PhotoWarpWorker", "PhotoRestoreWorker",       # 261106-6·-18: 크롭 창에서 고른 사진 펴기·고른 사진 되돌리기(261106-22 분류)
         "PhotoDeviceListWorker", "PhotoDeviceWorker", "PhotoDeviceScanWorker",   # 휴대 장치(클라우드 아님)
         "PhotoWatchScanWorker",                        # stat 만(열지 않는다)
         "PhotoThumbWorker",                            # 보이는 칸만 — 셸 썸네일 후보는 현황 미결 위험(261105-10 보고)

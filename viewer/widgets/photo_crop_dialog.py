@@ -13,7 +13,8 @@
 켜면 미리보기가 점 끌기 화면(`WarpCanvas`)으로 바뀐다 — 꼭짓점 넷 + 변 가운데 넷. 처음 점은 그 사진의 지금 크롭 박스 네 귀
 (크롭이 없으면 사진 네 귀 — 261106-11, 자동 테두리 어림은 없앴다). 켜고 끔·점은 사진마다 기억하고, **처음 보는 사진은 꺼진 채**
 (그 사진의 크롭으로) 연다 — 이 창에서 켜 둔 사진으로 돌아오면 그 켬·점. 'A' 키로 켜고 끈다(261106-11).
-[확인] 때 `pending_warps()` 의 사진은 펼친 새 사진으로 만들고(쓰는 쪽), 그 사진의 크롭은 그대로 둔다(`pending()` 에서 뺀다).
+[확인] 때 `pending_warps()` 의 사진은 쓰는 쪽이 저장 방법을 물어 편다([저장] = 원본 대체·원본은 백업, 다른 이름·다른 폴더 = 새 파일 — 사진 보기 SOT §4.43),
+그 사진의 크롭은 그대로 둔다(`pending()` 에서 뺀다).
 """
 from __future__ import annotations
 
@@ -169,7 +170,7 @@ class PhotoCropDialog(QDialog):
         self.grid.setColumnMinimumWidth(0, lw)             # 두 칸 최소 폭을 같게 — 그래야 늘어도 같은 폭(대칭)
         self.grid.setColumnMinimumWidth(2, lw)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
-        self.btn_full = bb.addButton(tr("전체 화면 (F11)"), QDialogButtonBox.ButtonRole.ResetRole)   # 왼쪽 — [확인]·[취소] 사이에 끼지 않게
+        self.btn_full = bb.addButton(tr("전체 화면") + " (" + FULL_KEY + ")", QDialogButtonBox.ButtonRole.ResetRole)   # 왼쪽 — [확인]·[취소] 사이에 끼지 않게
         self.btn_full.setCheckable(True)
         self.btn_full.setToolTip(tr("크롭 창을 화면 가득 — 다시 누르거나 F11·Esc 로 돌아옵니다."))
         self.btn_full.toggled.connect(self._set_full)
@@ -206,7 +207,7 @@ class PhotoCropDialog(QDialog):
         if self._count > 1:
             items.append(tr("❮ ❯ 로 넘기면 고친 크롭을 기억해 두었다가 [확인] 때 한꺼번에 적용합니다 — 크롭이 없는 사진은 최근에 정한 크롭을 미리 겁니다."))
             items.append(tr("← → 키로도 넘깁니다(숫자 칸을 고치는 중이면 그 칸 안에서 움직입니다)."))
-        items.append(tr("모양 펴기(A): 꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."))
+        items.append(tr("모양 펴기") + " (" + WARP_KEY + "): " + tr("꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다. 가운데 점을 두 번 누르면 그 변이 다시 곧아집니다. [확인] 하면 저장 방법을 묻습니다 — [저장] 은 원본을 펼친 그림으로 바꾸고 원본은 백업 폴더로 옮기며, 다른 이름·다른 폴더는 새 파일로 저장합니다(원본은 그대로)."))
         return "<ul style='margin:0;'>" + "".join("<li>%s</li>" % t for t in items) + "</ul>"
 
     def changeEvent(self, ev):

@@ -6,6 +6,7 @@
 - 같은 이름이 이미 있으면 'name (2).jpg' …(`pathutil.unique_path(first=2)`).
 - 옮기기: 같은 드라이브면 이름 바꾸기(`os.replace`), 아니면 복사 → 크기 확인 → 원본 지우기. 실패하면 원본은 그대로(예외).
 - 되돌리기 `restore`: 대체가 실패하면 백업을 원래 자리로.
+- 짝 기록 `INDEX_NAME`(261106-20): 백업마다 원래 이름·대체한 파일 이름을 백업 폴더에 적고, '원본으로 되돌리기' 는 그 기록으로만 짝을 찾는다.
 - 목록·색인에서 숨김: `is_backup_path` — 경로에 `_원본` 폴더가 있거나 고정 백업 폴더 안이면 True.
 - 이 모듈은 배경 스레드에서 부른다(파일 작업 — 마스터 §4.7.5, 응답성 SOT §5).
 """
@@ -76,80 +77,173 @@ def _move(src: Path, dst: Path) -> None:
     os.remove(str(src))
 
 
-def move_to_backup(src) -> str:
-    """원본을 백업 자리로 옮긴다 — 옮긴 경로. 실패하면 예외(원본은 그대로)."""
+def move_to_backup(src, cur_name=None) -> str:
+    """원본을 백업 자리로 옮기고 짝을 적는다(`record` — `cur_name` = 그 자리를 대신할 파일 이름, 없으면 원본 이름) — 옮긴 경로.
+    실패하면 예외(원본은 그대로 — 짝을 못 적어도 원본을 제자리로 되돌린다)."""
     from viewer.pathutil import unique_path
     src = Path(str(src))
     d = backup_dir_for(src)
     d.mkdir(parents=True, exist_ok=True)
     dst = unique_path(d / src.name, first=2)
     _move(src, dst)
+    try:
+        record(dst, src.name, cur_name or src.name)
+    except Exception:
+        _move(dst, src)
+        raise
     return str(dst)
 
 
 def restore(backup, src) -> None:
-    """백업을 원래 자리로 되돌린다(대체가 실패했을 때). 원래 자리에 무엇이 있으면 지우지 않고 예외."""
+    """백업을 원래 자리로 되돌린다(대체가 실패했을 때) — 짝 기록도 지운다. 원래 자리에 무엇이 있으면 지우지 않고 예외."""
     b, s = Path(str(backup)), Path(str(src))
     if s.exists():
         raise FileExistsError(str(s))
     _move(b, s)
+    forget(b)
 
 
-# ── 원본으로 되돌리기(261106-18, 사용자 승인 '넣기') ─────────────────────
-import re as _re
-_NUM = _re.compile(r"^(.*) \((\d+)\)$")
+# ── 원본으로 되돌리기(261106-18, 사용자 승인 '넣기') · 짝 기록(261106-20) ─────────
+# 백업할 때 '백업 파일 ↔ 원래 이름 ↔ 대체한 파일 이름' 짝을 백업 폴더의 작은 기록(`INDEX_NAME`)에 남기고,
+# 되돌리기는 **그 기록으로만** 짝을 찾는다 — 'IMG (2).jpg' 처럼 원래 이름에 번호가 있는 사진이 'IMG.jpg' 의 두 번째 백업과
+# 엉키지 않게(261106-20, 지휘 점검). 기록이 없는 옛 백업(261106-15~-19 사이에 만든 것)은 **정확히 같은 이름**(확장자 빼고)만 짝으로 본다.
+import json as _json
+
+INDEX_NAME = ".polypix-backup.json"    # 백업 폴더 안 짝 기록 — {백업 파일 이름: {"orig": 원래 이름, "cur": 대체한 파일 이름, "seq": 차례}}
 
 
-def _base_n(stem: str):
-    m = _NUM.match(stem)
-    return (m.group(1), int(m.group(2))) if m else (stem, 1)
+def _read_index(d) -> dict:
+    try:
+        with open(os.path.join(str(d), INDEX_NAME), encoding="utf-8") as f:
+            data = _json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_index(d, data: dict) -> None:
+    """기록을 통째로 — 임시 파일에 쓰고 바꿔 넣는다(반쯤 쓴 기록이 남지 않게). 실패하면 예외."""
+    p = os.path.join(str(d), INDEX_NAME)
+    if not data:
+        if os.path.exists(p):
+            os.remove(p)
+        return
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        _json.dump(data, f, ensure_ascii=False, indent=0)
+    os.replace(tmp, p)
+
+
+def record(backup, orig_name: str, cur_name: str) -> None:
+    """백업 짝을 적는다(배경). `orig_name` = 백업하기 전 이름, `cur_name` = 그 자리를 대신한 파일 이름(HEIC → .jpg 면 다르다)."""
+    b = Path(str(backup))
+    data = _read_index(b.parent)
+    seq = max([int(v.get("seq") or 0) for v in data.values() if isinstance(v, dict)] + [0]) + 1
+    data[b.name] = {"orig": str(orig_name), "cur": str(cur_name), "seq": seq}
+    _write_index(b.parent, data)
+
+
+def forget(backup) -> None:
+    """되돌린 백업(또는 대체를 되돌린 백업)의 짝 기록을 지운다 — 실패해도 조용히(기록에 없는 파일은 짝으로 쓰지 않는다)."""
+    b = Path(str(backup))
+    try:
+        data = _read_index(b.parent)
+        if data.pop(b.name, None) is not None:
+            _write_index(b.parent, data)
+    except OSError:
+        pass
 
 
 def original_name(backup) -> str:
-    """백업 파일 이름 → 원래 이름('IMG (2).HEIC' → 'IMG.HEIC')."""
+    """백업 파일 → 되돌릴 이름. 기록이 있으면 기록의 원래 이름, 없으면(옛 백업) 백업 파일 이름 그대로."""
     b = Path(str(backup))
-    return _base_n(b.stem)[0] + b.suffix
+    rec = _read_index(b.parent).get(b.name)
+    if isinstance(rec, dict) and rec.get("orig"):
+        return str(rec["orig"])
+    return b.name
+
+
+def scan(paths) -> dict:
+    """사진들 → {사진 경로: 그 사진의 원본 백업 경로} (백업이 있는 것만). 백업 폴더마다 **한 번만** 읽는다
+    (폴더 목록 한 번 + 기록 한 번 — 메뉴를 만들 때 사진마다 폴더를 읽지 않게, 261106-21·응답성 SOT §6).
+    기록이 있으면 '대체한 파일 이름 = 지금 사진 이름' 인 것 중 가장 최근(seq 큰 것). 기록에 없는 옛 백업은 확장자를 뺀 이름이 정확히 같은 것
+    (같은 확장자 먼저 — HEIC 를 .jpg 로 바꾼 사진도 짝)."""
+    groups = {}
+    for p in paths or []:
+        p = Path(str(p))
+        groups.setdefault(str(backup_dir_for(p)), []).append(p)
+    out = {}
+    for d, items in groups.items():
+        try:
+            names = {e.name for e in os.scandir(d) if e.is_file() and not e.name.startswith(("~", "."))}
+        except OSError:
+            continue
+        if not names:
+            continue
+        idx = _read_index(d)
+        recorded = {k for k in idx if k in names}
+        for p in items:
+            best = None
+            for k in recorded:
+                v = idx[k]
+                if isinstance(v, dict) and os.path.normcase(str(v.get("cur") or "")) == os.path.normcase(p.name):
+                    s = int(v.get("seq") or 0)
+                    if best is None or s > best[0]:
+                        best = (s, k)
+            if best is None:                              # 기록 없는 옛 백업 — 정확히 같은 이름만
+                want = os.path.normcase(p.stem)
+                for k in sorted(names - set(idx)):
+                    if os.path.normcase(Path(k).stem) != want:
+                        continue
+                    key = (1 if os.path.normcase(Path(k).suffix) == os.path.normcase(p.suffix) else 0, k)
+                    if best is None or key > best:
+                        best = key
+            if best is not None:
+                out[str(p)] = os.path.join(d, best[1])
+    return out
 
 
 def find_backup(path) -> str | None:
-    """지금 사진의 원본 백업 — 백업 자리에서 이름(확장자 빼고)이 같은 것. HEIC 가 .jpg 로 바뀐 경우도 짝을 찾는다.
-    여럿('name', 'name (2)' …)이면 **가장 최근 것**(번호가 가장 큰 것 — 대체할 때마다 하나씩 늘었다). 같은 번호면 같은 확장자를 먼저."""
-    p = Path(str(path))
-    d = backup_dir_for(p)
-    try:
-        entries = [e for e in os.scandir(str(d)) if e.is_file()]
-    except OSError:
-        return None
-    want = os.path.normcase(p.stem)
-    best = None
-    for e in entries:
-        stem, n = _base_n(Path(e.name).stem)
-        if os.path.normcase(stem) != want or e.name.startswith("~"):
-            continue
-        key = (n, os.path.normcase(Path(e.name).suffix) == os.path.normcase(p.suffix))
-        if best is None or key > best[0]:
-            best = (key, e.path)
-    return best[1] if best else None
+    """지금 사진 한 장의 원본 백업(`scan` 한 장짜리)."""
+    return scan([path]).get(str(Path(str(path))))
 
 
 def restore_from_backup(cur, backup, trash) -> str:
-    """지금 파일을 휴지통으로(`trash(경로)`), 백업을 원래 이름 자리로 — 돌려준 경로가 되돌린 원본.
-    순서: 백업을 지금 폴더의 임시 이름으로 옮김 → 지금 파일을 **제 이름 그대로** 휴지통으로 → 임시를 원래 이름으로.
-    휴지통이 실패하면 백업을 제자리로 되돌리고 예외(아무것도 바뀌지 않는다). 배경에서 부른다."""
+    """지금 파일을 휴지통으로(`trash(경로)`), 백업을 원래 이름 자리로 — 돌려준 경로가 되돌린 원본. 배경에서 부른다.
+    **휴지통은 마지막** — 그 전 어느 단계에서 실패해도 모두 되돌려 아무것도 바뀌지 않는다(마스터 §4.7.5 '실패 되돌림', 261106-20):
+    ① 백업을 지금 폴더의 임시 이름으로 ② 되돌릴 이름이 지금 파일과 같으면 지금 파일을 곁 폴더(`~polypix-restore`)로 비켜 둔다(이름 그대로)
+    ③ 임시를 원래 이름으로 ④ 지금 파일(비켜 둔 것)을 휴지통으로 — 실패하면 ③·②·① 을 거꾸로."""
     cur, backup = Path(str(cur)), Path(str(backup))
     target = cur.parent / original_name(backup)
-    if os.path.normcase(str(target)) != os.path.normcase(str(cur)) and target.exists():
+    same = os.path.normcase(str(target)) == os.path.normcase(str(cur))
+    if not same and target.exists():
         raise FileExistsError(str(target))
     tmp = cur.parent / ("~" + target.name + ".polypix-restore")
-    _move(backup, tmp)
+    _move(backup, tmp)                                    # ①
+    aside_dir = cur.parent / "~polypix-restore"
+    aside = aside_dir / cur.name
+    moved_aside = False
+    placed = False
     try:
-        trash(str(cur))
+        if same:                                          # ②
+            aside_dir.mkdir(exist_ok=True)
+            os.replace(str(cur), str(aside))
+            moved_aside = True
+        os.replace(str(tmp), str(target))                 # ③
+        placed = True
+        trash(str(aside if moved_aside else cur))         # ④
     except Exception:
-        _move(tmp, backup)                       # 휴지통 실패 — 백업을 제자리로
+        if placed:
+            os.replace(str(target), str(tmp))
+        if moved_aside:
+            os.replace(str(aside), str(cur))
+        _move(tmp, backup)
         raise
-    try:
-        os.replace(str(tmp), str(target))
-    except Exception:
-        _move(tmp, backup)                       # 드문 실패 — 원본은 백업 자리에 그대로 남긴다(지금 파일은 휴지통에)
-        raise
+    finally:
+        if aside_dir.exists():
+            try:
+                aside_dir.rmdir()
+            except OSError:
+                pass
+    forget(backup)
     return str(target)

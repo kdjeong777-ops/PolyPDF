@@ -135,7 +135,7 @@ try:
     PhotoCropDialog.exec = fake_exec
     mw._photo_crop_dialog(srcs[0])
     pump(lambda: "used" in seen, 60)
-    pump(lambda: not mw.__dict__.get("_photo_warp_busy"), 120)
+    pump(lambda: not mw.__dict__.get("_photo_orig_busy"), 120)
     pump(timeout=1.0)
     PhotoCropDialog.exec = _exec
     QMessageBox.exec = _mb
@@ -156,7 +156,7 @@ try:
         if dd >= 12 or o != 1:
             bad.append((Path(p).name, round(dd, 1), o))
     chk(len(used) == 8 and not bad, "A 8장 모두 그 사진을 제 점으로 편 결과(방향 1·6 섞임, 앞뒤 구분 없이), 방향 1", str(bad))
-    names = sorted(x.name for x in bk.iterdir()) if bk.is_dir() else []
+    names = sorted(x.name for x in bk.iterdir() if not x.name.startswith(".")) if bk.is_dir() else []   # 짝 기록(.polypix-backup.json, 261106-20)은 빼고
     chk(names == sorted(Path(p).name for p in srcs)
         and all(hashlib.md5((bk / Path(p).name).read_bytes()).hexdigest() == sums[p] for p in srcs),
         "B 원본 8장은 모두 '_원본' 에 바이트 그대로(다른 사진에 섞이지 않음)", str(names))

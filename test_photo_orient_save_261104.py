@@ -95,7 +95,7 @@ try:
 
     def save_and_wait():
         mw._photo_save_orientation()
-        pump(lambda: not mw.__dict__.get("_photo_orient_busy"), timeout=10)
+        pump(lambda: not mw.__dict__.get("_photo_orig_busy"), timeout=10)
         pump(timeout=0.3)
 
     # A

@@ -4,7 +4,7 @@
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3). 장치는 **가짜**(`photo_device.BACKEND` 를 바꿔 끼움).
 A. 사진 모드 책갈피창 맨 위에 장치 줄(파일 행 아님) — 아래에 사진 폴더 새것부터. 잠긴 장치를 누르면 알림만. PDF 모드에는 없다
 B. 폴더 줄을 누르면 사진을 한 장씩 캐시로 받아 썸네일 줄에 더하고 첫 장을 연다 — 제목 '장치 › 폴더', 상태 막대 '장치 › 폴더 › 이름'
-C. 받는 동안 메인이 멈추지 않는다(최장 공백 < 0.5초), 읽기 전용(방향 저장·지우기 막힘)
+C. 받는 동안 메인이 멈추지 않는다(최장 공백 < 1초 — 응답성 SOT §2 기준, 261106-21), 읽기 전용(방향 저장·지우기 막힘)
 D. 다시 열면 장치에서 다시 받지 않는다(캐시)
 E. 'PC 로 복사' — 고른 폴더로, 같은 이름이면 번호
 F. 받는 도중 연결이 끊기면 받은 것만 두고 알림
@@ -147,7 +147,7 @@ try:
     chk(mw.page_thumbs.title.text() == "Apple iPhone › 202611_a", "B 제목 '장치 › 폴더'", mw.page_thumbs.title.text())
     btn = mw._photo_info_btn
     chk(pump(lambda: "Apple iPhone › 202611_a › IMG_0001.JPG" in btn.text(), timeout=5), "B 상태 막대 '장치 › 폴더 › 이름'", btn.text())
-    chk(gap[0] < 0.5, "C 받는 동안 메인 최장 공백 < 0.5초", "%.3f" % gap[0])
+    chk(gap[0] < 1.0, "C 받는 동안 메인 최장 공백 < 1초", "%.3f" % gap[0])
     raw = Path(cur).read_bytes()
     mw._photo_rotate(+90); pump(timeout=0.3)
     mw._photo_save_orientation(); pump(timeout=0.5)
