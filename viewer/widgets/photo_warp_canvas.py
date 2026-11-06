@@ -109,16 +109,28 @@ class WarpCanvas(QWidget):
                 best, bd = i, d
         return best
 
+    def _inside(self, pos) -> bool:
+        r = self._img_rect()
+        return not r.isNull() and self._outline(r).contains(pos)
+
     def mousePressEvent(self, ev):
         self._drag = self._hit(ev.position())
+        if self._drag is None and self._inside(ev.position()):     # 테두리 안쪽 — 점 전체를 옮긴다(261106-7, 크롭 박스와 같게)
+            self._drag = "move"
+            self._move_from = (ev.position().x(), ev.position().y(), list(self._pts))
 
     def mouseMoveEvent(self, ev):
         pos = ev.position()
         if self._drag is None:
-            self.setCursor(Qt.CursorShape.SizeAllCursor if self._hit(pos) is not None else Qt.CursorShape.ArrowCursor)
+            self.setCursor(Qt.CursorShape.SizeAllCursor if (self._hit(pos) is not None or self._inside(pos))
+                           else Qt.CursorShape.ArrowCursor)
             return
         r = self._img_rect()
         if r.isNull():
+            return
+        if self._drag == "move":
+            x0, y0, p0 = self._move_from
+            self.move_all(p0, (pos.x() - x0) / r.width(), (pos.y() - y0) / r.height())
             return
         x = min(1.0, max(0.0, (pos.x() - r.left()) / r.width()))
         y = min(1.0, max(0.0, (pos.y() - r.top()) / r.height()))
@@ -143,6 +155,15 @@ class WarpCanvas(QWidget):
         self._pts = pts
         self.update()
         self.pointsDragged.emit(list(pts))
+
+    def move_all(self, base, dx: float, dy: float) -> None:
+        """점 8개를 모양 그대로 (dx, dy)(비율) 옮긴다 — 사진 밖으로 나가지 않게 옮길 거리를 줄인다."""
+        xs, ys = [p[0] for p in base], [p[1] for p in base]
+        dx = max(-min(xs), min(1.0 - max(xs), dx))
+        dy = max(-min(ys), min(1.0 - max(ys), dy))
+        self._pts = [(x + dx, y + dy) for x, y in base]
+        self.update()
+        self.pointsDragged.emit(list(self._pts))
 
     def mouseReleaseEvent(self, ev):
         self._drag = None

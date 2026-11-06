@@ -9018,7 +9018,7 @@ msgid "점 처음대로"
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "점을 사진 네 귀퉁이 가까이로 되돌립니다."
+msgid "점을 처음 자리로 — 크롭 박스를 고쳐 두었으면 그 박스 네 귀, 아니면 사진 네 귀퉁이 가까이."
 msgstr ""
 
 #: viewer/widgets/photo_crop_dialog.py

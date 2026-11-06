@@ -9306,8 +9306,8 @@ msgid "점 처음대로"
 msgstr "Reset points"
 
 #: viewer/widgets/photo_crop_dialog.py
-msgid "점을 사진 네 귀퉁이 가까이로 되돌립니다."
-msgstr "Moves the points back near the four corners of the photo."
+msgid "점을 처음 자리로 — 크롭 박스를 고쳐 두었으면 그 박스 네 귀, 아니면 사진 네 귀퉁이 가까이."
+msgstr "Moves the points back to where they start — the four corners of the crop box if you adjusted it, otherwise near the photo's corners."
 
 #: viewer/widgets/photo_crop_dialog.py
 msgid "꼭짓점(네모)을 끌어 테두리에 맞추고, 휜 변은 가운데 점(동그라미)을 끕니다 — [확인] 이면 펼친 그림을 새 사진으로 저장합니다(원본은 그대로)."
@@ -14431,4 +14431,7 @@ msgstr "Getting Started"
 
 #~ msgid "펼치면 안의 PDF 가 보입니다(읽기 전용) — 우클릭으로 풀기"
 #~ msgstr ""
+
+#~ msgid "점을 사진 네 귀퉁이 가까이로 되돌립니다."
+#~ msgstr "Moves the points back near the four corners of the photo."
 

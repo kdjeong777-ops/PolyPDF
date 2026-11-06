@@ -50,6 +50,51 @@ def _qimage_of(pil) -> QImage:
     return QImage(data, pil.size[0], pil.size[1], pil.size[0] * 3, QImage.Format.Format_RGB888).copy()
 
 
+class PhotoCropCanvas(CropCanvas):
+    """사진 크롭 화면 — PDF 크롭 화면(`CropCanvas`)에 **박스 통째로 옮기기**를 더한 것(261106-7 사용자 지시 '중간을 잡고
+    박스를 이동'). 귀·변 끌기는 그대로, 박스 안쪽을 끌면 크기 그대로 옮기고 사진 밖으로는 나가지 않는다. PDF 크롭 창은 그대로."""
+
+    def mousePressEvent(self, ev):
+        super().mousePressEvent(ev)
+        if self._drag is None and self._editable and self._inside_box(ev.position()):
+            self._drag = "move"
+            self._move_from = (ev.position().x(), ev.position().y(), list(self._m))
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
+
+    def _inside_box(self, pos) -> bool:
+        r = self._img_rect()
+        if r.isNull():
+            return False
+        return self._crop_rect(r).contains(pos)
+
+    def mouseMoveEvent(self, ev):
+        pos = ev.position()
+        if self._drag is None and self._editable and self._hit(pos) is None and self._inside_box(pos):
+            self.setCursor(Qt.CursorShape.SizeAllCursor)   # 이동 모양 — 귀·변 위는 아래(부모)가 정한다
+            return
+        if self._drag != "move":
+            return super().mouseMoveEvent(ev)
+        r = self._img_rect()
+        if r.isNull():
+            return
+        x0, y0, m0 = self._move_from
+        self._m = move_margins(m0, (pos.x() - x0) / r.width() * 100.0, (pos.y() - y0) / r.height() * 100.0)
+        self.update()
+        self.marginsDragged.emit(list(self._m))
+
+
+def r1_list(m) -> list:
+    return [round(float(v), 1) for v in m]
+
+
+def move_margins(m, dx: float, dy: float) -> list:
+    """여백 [위, 아래, 왼, 오른] % 의 박스를 크기 그대로 (dx, dy) % 옮긴다 — 사진 밖으로 나가지 않게(각 여백 ≥ 0)."""
+    t, b, l, r = (float(v) for v in m)
+    dx = max(-l, min(r, dx))
+    dy = max(-t, min(b, dy))
+    return [round(t + dy, 1), round(b - dy, 1), round(l + dx, 1), round(r - dx, 1)]
+
+
 class PhotoCropDialog(QDialog):
     photoRequested = pyqtSignal(int)          # 넘길 사진 번호(0부터) — 쓰는 쪽이 그림을 풀어 show_photo
 
@@ -64,10 +109,12 @@ class PhotoCropDialog(QDialog):
         self._warp_pts = {}                    # 번호 → 점 8개(비율)
         self._auto = None                      # 지금 사진의 어림한 테두리(없으면 None)
         self._has_crop = False
+        self._touched = set()                  # 이 창에서 크롭 박스를 손으로 고친 사진 번호(261106-7)
+        self._warp_box = {}                    # 번호 → 점을 놓을 때의 박스(여백 %) — 그 뒤 박스를 고치면 다시 켤 때 새 박스로
         self._loading = False
         root = QVBoxLayout(self)
         self.stack = QStackedWidget(self)
-        self.canvas = CropCanvas(self)
+        self.canvas = PhotoCropCanvas(self)
         self.warp = WarpCanvas(self)
         self.stack.addWidget(self.canvas)
         self.stack.addWidget(self.warp)
@@ -117,8 +164,8 @@ class PhotoCropDialog(QDialog):
         self.btn_detect = QPushButton(tr("테두리 찾기"), self)
         self.btn_detect.clicked.connect(self._on_detect)
         self.btn_corners = QPushButton(tr("점 처음대로"), self)
-        self.btn_corners.setToolTip(tr("점을 사진 네 귀퉁이 가까이로 되돌립니다."))
-        self.btn_corners.clicked.connect(lambda: self.warp.set_points(pw.default_points()))
+        self.btn_corners.setToolTip(tr("점을 처음 자리로 — 크롭 박스를 고쳐 두었으면 그 박스 네 귀, 아니면 사진 네 귀퉁이 가까이."))
+        self.btn_corners.clicked.connect(lambda: self._set_warp_points(self._start_points(box_first=True)))
         wrow.addWidget(self.chk_warp)
         wrow.addWidget(self.btn_detect)
         wrow.addWidget(self.btn_corners)
@@ -140,7 +187,7 @@ class PhotoCropDialog(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         root.addWidget(bb)
-        self.canvas.marginsDragged.connect(self._dragged)
+        self.canvas.marginsDragged.connect(self._box_dragged)
         self.show_photo(self._index, img, margins, has_crop, title, auto_pts)
 
     # ── 사진 하나 보이기 ──────────────────────────────
@@ -162,7 +209,7 @@ class PhotoCropDialog(QDialog):
         m = [round(v, 1) for v in pc.clamp_margins(list(m or [0.0, 0.0, 0.0, 0.0]))]
         self._dragged(m)
         self.canvas.set_margins(m)
-        self.warp.set_points(self._warp_pts.get(self._index) or self._auto or pw.default_points())
+        self.warp.set_points(self._warp_pts.get(self._index) or self._start_points())
         on = self._warp_on.get(self._index, self.chk_warp.isChecked())
         self.chk_warp.blockSignals(True)
         self.chk_warp.setChecked(on)
@@ -183,10 +230,45 @@ class PhotoCropDialog(QDialog):
     # ── 모양 펴기(261106-6) ──────────────────────────
     def _remember_warp(self) -> None:
         self._warp_on[self._index] = self.chk_warp.isChecked()
-        self._warp_pts[self._index] = self.warp.points()
+        if self.chk_warp.isChecked():                    # 켠 채 놓은 점만 그 사진의 점 — 끈 동안 박스를 고치면 다시 켤 때 박스로
+            self._warp_pts[self._index] = self.warp.points()
+            self._warp_box[self._index] = r1_list(self.current_margins())
+
+    def _box_adjusted(self) -> bool:
+        """지금 사진의 크롭 박스가 '조절해 둔' 것인가(261106-7) — 이 창에서 손으로 고쳤거나 그 사진의 크롭이 있고, 사진 전체가 아닐 때.
+        미리 건 최근 크롭(261106-3)만으로는 아니다 — 그런 사진은 자동 어림."""
+        return ((self._index in self._touched or self._has_crop)
+                and any(v > 0 for v in self.current_margins()))
+
+    def _box_points(self) -> list:
+        t, b, l, r = (v / 100.0 for v in self.current_margins())
+        c = [(l, t), (1.0 - r, t), (1.0 - r, 1.0 - b), (l, 1.0 - b)]
+        return c + pw.mids_of(c)                         # 변 가운데 점은 각 변 가운데(곧은 변)
+
+    def _start_points(self, box_first: bool = False) -> list:
+        """모양 펴기의 처음 점(261106-7 사용자 지시 '박스를 조절 후 모양 펴기를 체크하면 조절된 박스의 점 위치를 초기 위치로') —
+        조절해 둔 박스가 있으면 그 네 귀, 없으면 자동 어림(못 찾으면 기본 점). `box_first`([점 처음대로])는 어림 대신 기본 점."""
+        if self._box_adjusted():
+            return self._box_points()
+        if box_first or self._auto is None:
+            return pw.default_points()
+        return list(self._auto)
+
+    def _set_warp_points(self, pts) -> None:
+        self.warp.set_points(pts)
+        self._prev_timer.start()
 
     def _warp_toggled(self, on: bool) -> None:
         self._warp_on[self._index] = bool(on)
+        box = r1_list(self.current_margins())
+        if on:
+            # 이 사진에서 처음 켜거나, 점을 놓은 뒤 박스를 다시 고쳤으면 — 지금 박스(조절했으면)·어림으로(261106-7)
+            if self._index not in self._warp_pts or self._warp_box.get(self._index) != box:
+                self._set_warp_points(self._start_points())
+            self._warp_box[self._index] = box
+        else:
+            self._warp_pts[self._index] = self.warp.points()   # 끄기 전 점 — 박스를 그대로 두고 다시 켜면 그 점
+            self._warp_box[self._index] = box
         self._apply_warp_ui()
 
     def _apply_warp_ui(self) -> None:
@@ -243,7 +325,7 @@ class PhotoCropDialog(QDialog):
 
     def _on_detect(self) -> None:
         if self._auto is not None:
-            self.warp.set_points(self._auto)
+            self._set_warp_points(self._auto)            # [테두리 찾기] = 늘 자동 어림(박스와 무관)
 
     def pending_warps(self) -> dict:
         """[확인] 때 펼칠 사진 — {번호: 점 8개}. 모양 펴기를 켠 사진만, 펼 것이 없거나 꼬인 점은 뺀다."""
@@ -270,7 +352,12 @@ class PhotoCropDialog(QDialog):
         if t is not None:
             t.start()
 
+    def _box_dragged(self, m):
+        self._touched.add(self._index)                   # 손으로 고친 박스(261106-7)
+        self._dragged(m)
+
     def _spin_changed(self, k: int):
+        self._touched.add(self._index)
         m = [round(v, 1) for v in pc.clamp_margins([sp.value() for sp in self.spins], keep=k)]
         self._dragged(m)
         self.canvas.set_margins(m)
