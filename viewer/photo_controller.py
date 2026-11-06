@@ -3894,14 +3894,7 @@ class PhotoWarpWorker(QObject):
         photo_io._prep(src)
         with Image.open(str(src)) as im:
             icc = im.info.get("icc_profile")
-            exif = None
-            try:
-                ex = im.getexif()
-                ex[0x0112] = 1
-                exif = ex.tobytes()
-            except Exception:
-                exif = None
-            im = ImageOps.exif_transpose(im)
+            im, exif = photo_io.upright_with_exif(im)    # 세우기 먼저, EXIF(방향 1)는 그 뒤 — 261106-17
             pil = photo_doc._rotate(photo_io.to_srgb(im, icc), rot)
             pil.load()
         out = photo_warp.unwarp(pil, pts)
@@ -4017,15 +4010,9 @@ class PhotoShareWorker(QObject):
             from viewer.photo_crop import crop_pil
             with Image.open(str(src)) as im:
                 icc = im.info.get("icc_profile")
+                im, ex_b = photo_io.upright_with_exif(im, drop_gps=True)   # 세우기 먼저(261106-17 — 종전엔 방향을 먼저 1 로 바꿔 세우지 못했다)
                 if jpeg and crop and self.mode != "all":    # 자른 JPEG '위치 지움' — 다른 정보는 남기고 GPS 만 뺀다(방향은 픽셀로 세운다)
-                    try:
-                        ex = im.getexif()
-                        ex.pop(0x8825, None)
-                        ex[0x0112] = 1
-                        exif = ex.tobytes()
-                    except Exception:
-                        exif = None
-                im = ImageOps.exif_transpose(im)
+                    exif = ex_b
                 pil = photo_doc._rotate(crop_pil(photo_io.to_srgb(im, icc), crop), rot)
                 pil.load()
             heif = photo_io.is_heif(src)

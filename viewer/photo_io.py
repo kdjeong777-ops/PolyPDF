@@ -557,6 +557,25 @@ _CMS: dict = {}                 # 프로필 해시 → 변환(또는 None = sRGB
 _CMS_LOCK = None
 
 
+def upright_with_exif(im, drop_gps: bool = False):
+    """EXIF 방향을 적용해 화소를 세운 그림과, 그 그림에 붙일 EXIF 바이트(방향 태그 1, `drop_gps` 면 GPS 뺌)를 돌려준다.
+    ★ 순서가 중요하다(261106-17 결함): Pillow 의 `im.getexif()` 는 그림이 **쥔 바로 그 객체**라, 거기서 방향을 1 로 먼저 바꾸면
+    `ImageOps.exif_transpose` 가 돌릴 것이 없다고 보고 그대로 둔다 — 휴대폰 세로 사진(방향 6)이 가로 화소 그대로 남아,
+    보이는 방향 좌표로 고른 크롭·펴기가 엉뚱한 곳에 걸리고 90° 돈 결과가 나왔다. 세우기를 **먼저**, EXIF 는 그 뒤에 만든다."""
+    from PIL import ImageOps
+    up = ImageOps.exif_transpose(im)
+    exif = None
+    try:
+        ex = im.getexif()
+        if drop_gps:
+            ex.pop(0x8825, None)
+        ex[ORIENT_TAG] = 1
+        exif = ex.tobytes()
+    except Exception:
+        exif = None
+    return up, exif
+
+
 def to_srgb(im, icc: bytes | None = None):
     """Pillow 그림을 sRGB 로 — 프로필이 없거나 sRGB 면 받은 그대로. Adobe RGB·넓은 색역 사진이 물빠져 보이지 않게.
     줄인 뒤의 그림에 부른다(변환 비용은 픽셀 수만큼 — 줄인 그림이면 짧다). 새 의존성 없음(Pillow 동봉 littlecms)."""
