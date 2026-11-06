@@ -3984,6 +3984,18 @@ msgid "크롭..."
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "zip 안 사진을 고른 폴더에 풉니다(원본 zip 은 그대로)."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "풀어 넣을 폴더"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "zip 안 PDF 를 사본으로 열었습니다 — 고친 것은 zip 에 들어가지 않습니다(풀어서 고치세요)."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "방향 저장 중…"
 msgstr ""
 
@@ -4235,6 +4247,19 @@ msgid "zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들�
 msgstr ""
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "zip 풀기: {name}"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "이 사진 풀기..."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "풀 사진을 찾지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "방향 저장은 JPEG 사진만 됩니다 — 이 사진은 보기에서만 돌려 둡니다."
 msgstr ""
 
@@ -4371,6 +4396,21 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "{name}: 사진 {n}장(읽기 전용)"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "zip 푸는 중… {name}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "zip 풀기를 멈췄습니다 — {n}개를 풀었습니다: {folder}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "zip 에서 꺼내는 중… {name}"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4516,6 +4556,21 @@ msgid "zip 에서 사진을 꺼내지 못했습니다: {name}"
 msgstr ""
 
 #: viewer/photo_controller.py
+#, python-brace-format
+msgid "{n}개를 풀었습니다: {folder}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "고른 {n}장 풀기..."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "zip 에서 꺼내지 못했습니다: {name}"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "다른 프로그램이 사진을 쓰고 있어 방향을 저장하지 못했습니다 — 원본은 그대로입니다."
 msgstr ""
 
@@ -4595,6 +4650,16 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "PC 로 복사하는 중"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{n}개를 풀고 {m}개는 풀지 못했습니다(이름·크기 거름): {folder}"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "zip 을 풀지 못했습니다: {name}"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -5188,7 +5253,7 @@ msgstr ""
 msgid "전달 묶음 열기"
 msgstr ""
 
-#: viewer/share_controller.py
+#: viewer/share_controller.py viewer/widgets/bookmark_tree.py
 msgid "여기에 풀기"
 msgstr ""
 
@@ -6564,6 +6629,14 @@ msgid "크기 순"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "zip 이 있는 폴더에 zip 이름으로 폴더를 만들어 모두 풉니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "다른 폴더에 풀기..."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "목록 명칭 검색..."
 msgstr ""
 
@@ -6713,6 +6786,10 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "<small>변경 시 디스크상 파일이 함께 이름이 바뀝니다. 메인 뷰어에서 열려 있으면 잠시 다른 파일로 전환 후 시도하세요.</small>"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "고른 파일만 고른 폴더에 풉니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -6963,6 +7040,10 @@ msgid "변경 실패"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "펼치면 안의 PDF 가 보입니다(누르면 사본으로 엽니다) — 우클릭으로 풀기"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "폴더를 찾을 수 없습니다."
 msgstr ""
 
@@ -7113,6 +7194,11 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피 쓰는 중…"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid "고른 {n}개 풀기..."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

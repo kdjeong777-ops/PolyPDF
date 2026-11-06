@@ -2453,6 +2453,9 @@ class PhotoMixin:
             a = menu.addAction(tr("PC 로 복사..."))          # 4.33 — 휴대 장치 사진
             extra[a] = "copy_out"
         if cur:
+            a = self._zip_pick_action(menu, [str(cur)])      # §4.24.1(261106-5) — zip 안 사진 풀기
+            if a is not None:
+                extra[a] = "unzip"
             self._photo_xfer_menu(menu, [str(cur)])          # 4.41 — 폴더로 복사·이동
         _gps = (self.__dict__.get("_photo_info") or {}).get("gps")
         if _gps and not broken:
@@ -2603,6 +2606,130 @@ class PhotoMixin:
         self._photo_strip_widget().set_paths(paths, current=paths[0])
         self.status.showMessage(tr("{name}: 사진 {n}장(읽기 전용)").format(name=Path(zip_path).name, n=len(paths)), 5000)
 
+    # ── zip 풀기(§4.24.1, 261106-5 사용자 지시) ─────────────────────────
+    def _zip_unpack(self, zip_path: str, names=None, how: str = "here"):
+        """책갈피창 zip 줄·안 줄 — `here` = zip 옆 zip 이름 새 폴더에 모두, `pick` = 폴더를 골라(names 가 있으면 그것만).
+        배경 워커 + 작업 창([중단] 은 파일 하나가 끝난 뒤, 푼 것은 남긴다)."""
+        from PyQt6.QtWidgets import QFileDialog
+        from viewer import zip_unpack
+        zp = str(zip_path)
+        if not zp or not os.path.isfile(zp):
+            return
+        if how == "here":
+            dest = str(zip_unpack.target_dir(zp))
+            strip = False
+        else:
+            start = str(self._photo_prefs().get("unzip_dir") or Path(zp).parent)
+            dest = QFileDialog.getExistingDirectory(self, tr("풀어 넣을 폴더"), start)
+            if not dest:
+                return
+            self._photo_prefs()["unzip_dir"] = str(dest)
+            strip = False
+        self._zip_start(zp, dest, names, strip)
+
+    def _zip_start(self, zp: str, dest: str, names=None, strip: bool = False):
+        from viewer.workers import run_in_thread
+        from viewer.zip_unpack import ZipUnpackWorker
+        w = ZipUnpackWorker(zp, dest, names, strip_dirs=strip)
+        self._zip_seq = self.__dict__.get("_zip_seq", 0) + 1
+        jid = "unzip-%d" % self._zip_seq
+        label = tr("zip 풀기: {name}").format(name=Path(zp).name)
+        try:
+            self.job_add(jid, label, cancel=w.request_cancel)
+        except Exception:
+            jid = None
+        if jid:
+            w.progress.connect(lambda i, n, s, j=jid: self.job_progress(j, "%d / %d  %s" % (i, n, Path(s).name)))
+        w.done.connect(lambda z, d, wr, sk, st, j=jid: self._zip_unpacked(j, z, d, wr, sk, st))
+        self.status.showMessage(tr("zip 푸는 중… {name}").format(name=Path(zp).name), 3000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _zip_unpacked(self, jid, zp: str, dest: str, written: list, skipped: list, stopped: bool):
+        if jid:
+            try:
+                self.job_done(jid)
+            except Exception:
+                pass
+        n, m = len(written), len([s for s in skipped if s != "*"])
+        if stopped:
+            msg = tr("zip 풀기를 멈췄습니다 — {n}개를 풀었습니다: {folder}").format(n=n, folder=Path(dest).name)
+        elif n and not skipped:
+            msg = tr("{n}개를 풀었습니다: {folder}").format(n=n, folder=Path(dest).name)
+        elif n:
+            msg = tr("{n}개를 풀고 {m}개는 풀지 못했습니다(이름·크기 거름): {folder}").format(n=n, m=m, folder=Path(dest).name)
+        else:
+            msg = tr("zip 을 풀지 못했습니다: {name}").format(name=Path(zp).name)
+        self.status.showMessage(msg, 8000)
+        root = getattr(self.bookmark_tree, "_root_dir", None)
+        if n and root:                                   # 보고 있는 폴더 안에 풀었으면 목록을 다시 훑는다(새 폴더가 보이게)
+            try:
+                inside = os.path.commonpath([os.path.normcase(os.path.abspath(str(root))),
+                                             os.path.normcase(os.path.abspath(dest))]) == os.path.normcase(os.path.abspath(str(root)))
+            except ValueError:
+                inside = False
+            if inside:
+                for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                    r = getattr(bt, "_root_dir", None) if bt is not None else None
+                    if r:
+                        try:
+                            bt.load_folder(r)
+                        except Exception:
+                            pass
+
+    def _zip_pick_action(self, menu, paths):
+        """썸네일 줄·본문 우클릭 — zip 에서 꺼낸 사진이면 '골라서 풀기...'(없으면 None)."""
+        from viewer import photo_zip
+        cached = [p for p in paths or [] if photo_zip.is_cached(p)]
+        zp = self.__dict__.get("_photo_zip_src")
+        if not cached or not zp:
+            return None
+        a = menu.addAction(tr("고른 {n}장 풀기...").format(n=len(cached)) if len(cached) > 1 else tr("이 사진 풀기..."))
+        a.setToolTip(tr("zip 안 사진을 고른 폴더에 풉니다(원본 zip 은 그대로)."))
+        return a
+
+    def _zip_unpack_cached(self, paths):
+        """zip 에서 꺼낸 사진(썸네일 줄·본문에서 고른 것) → zip 안 이름 → 고른 폴더에 그것만."""
+        from viewer import photo_zip, zip_unpack
+        zp = self.__dict__.get("_photo_zip_src")
+        if not zp:
+            return
+        names = []
+        for p in paths or []:
+            if photo_zip.is_cached(p):
+                n = zip_unpack.cached_to_member(zp, p)
+                if n:
+                    names.append(n)
+        if not names:
+            self.status.showMessage(tr("풀 사진을 찾지 못했습니다."), 4000)
+            return
+        from PyQt6.QtWidgets import QFileDialog
+        start = str(self._photo_prefs().get("unzip_dir") or Path(zp).parent)
+        dest = QFileDialog.getExistingDirectory(self, tr("풀어 넣을 폴더"), start)
+        if not dest:
+            return
+        self._photo_prefs()["unzip_dir"] = str(dest)
+        self._zip_start(zp, dest, names, strip=True)
+
+    def _zip_open_member(self, zip_path: str, raw: str):
+        """PDF 모드 zip 안 PDF 줄(§4.24.1, 사용자 결정 '펼쳐서 보기') — 그 파일 하나만 배경에서 캐시로 꺼내 본문에(사본)."""
+        from viewer.workers import run_in_thread
+        from viewer.zip_unpack import ZipCacheWorker
+        w = ZipCacheWorker(zip_path, raw)
+        w.done.connect(self._zip_member_ready)
+        self.status.showMessage(tr("zip 에서 꺼내는 중… {name}").format(name=Path(raw).name), 3000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _zip_member_ready(self, zip_path: str, raw: str, out: str):
+        if not out:
+            self.status.showMessage(tr("zip 에서 꺼내지 못했습니다: {name}").format(name=Path(raw).name), 5000)
+            return
+        if self._photo_mode:
+            return                                       # 그새 사진 모드로 — 열지 않는다
+        from viewer.history import HistoryItem
+        self._zip_member_open = out
+        self._load_main(HistoryItem(out, 0, "", "zip"))
+        self.status.showMessage(tr("zip 안 PDF 를 사본으로 열었습니다 — 고친 것은 zip 에 들어가지 않습니다(풀어서 고치세요)."), 8000)
+
     def _photo_save_orientation(self):
         """보기 회전을 원본 JPEG 의 방향 태그에(D17, 4.17) — 배경 한 길, 끝나면 `_photo_orient_saved`."""
         cur = self.main_view.current_file() if self.main_view else None
@@ -2724,6 +2851,8 @@ class PhotoMixin:
             self._on_bookmark_activated(paths[0], 0)
         elif kind == "copy_out":
             self._photo_copy_out(paths)
+        elif kind == "unzip":
+            self._zip_unpack_cached(paths)
         elif kind in ("rot_l", "rot_r"):
             self._photo_rotate(-90 if kind == "rot_l" else +90, path=paths[0])
         elif kind == "crop":
@@ -2780,6 +2909,7 @@ class PhotoMixin:
         a_out = None
         if any(photo_device.is_cached(p) for p in targets):
             a_out = menu.addAction(tr('PC 로 복사 ({n}장)...').format(n=len(targets)) if many else tr("PC 로 복사..."))   # 4.33
+        a_unzip = self._zip_pick_action(menu, targets)            # §4.24.1(261106-5) — zip 안 사진만 골라서 풀기
         self._photo_xfer_menu(menu, targets)                     # 4.41(261105-5) — 폴더로 복사·이동
         a_batch = menu.addAction(tr("일괄 작업..."))                 # 4.30(261104-7 B5, F7)
         a_batch.setEnabled(not self._photo_any_cached(targets))
@@ -2803,6 +2933,8 @@ class PhotoMixin:
             self._photo_delete(targets)
         elif a_out is not None and chosen is a_out:
             self._photo_copy_out(targets)
+        elif a_unzip is not None and chosen is a_unzip:
+            self._zip_unpack_cached(targets)
         elif chosen is a_batch:
             self._photo_batch_dialog(targets)
         elif chosen is a_all:

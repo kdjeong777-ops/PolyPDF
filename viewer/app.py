@@ -2698,6 +2698,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.shareFilesRequested.connect(self.action_share_files)    # 261105-9(§4.7.23) 전달 묶음
             _bt.compareFilesRequested.connect(self.action_compare)      # 261014-23(마스터 §4.11)
             _bt.photoActionRequested.connect(self._photo_action)        # 261104-3(사진 보기 SOT 4.20)
+            _bt.zipUnpackRequested.connect(self._zip_unpack)            # 261106-5(사진 보기 SOT §4.24.1) zip 풀기
+            _bt.zipMemberActivated.connect(self._zip_open_member)       # 261106-5 PDF 모드 zip 안 PDF 보기
             _bt.printFilesRequested.connect(self._on_tree_print)        # 261105-12(§4.7.13) 맨 위 '인쇄…'
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(

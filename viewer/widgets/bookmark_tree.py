@@ -216,6 +216,8 @@ class BookmarkTree(QWidget):
     compressFilesRequested = pyqtSignal(object)      # 261014-21(마스터 §4.7.19): [파일] — PDF 압축
     redactFileRequested = pyqtSignal(str)            # 261014-22(보안 SOT §14): 파일 — 가림(개인정보 지우기)
     shareFilesRequested = pyqtSignal(list)           # 261105-9(마스터 §4.7.23): 파일들 — 전달 묶음(.polypdf.zip)
+    zipUnpackRequested = pyqtSignal(str, object, str)   # 261106-5(사진 보기 SOT §4.24.1): zip, 안 이름 목록|None(모두), "here"|"pick"
+    zipMemberActivated = pyqtSignal(str, str)        # 261106-5: PDF 모드 zip 안 PDF 줄을 눌렀다 — zip, 안 이름
     printFilesRequested = pyqtSignal(object, object)  # 261105-12(마스터 §4.7.13): 맨 위 '인쇄…' — ([파일], (첫 쪽, 끝 쪽|None) 또는 None)
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
@@ -293,19 +295,78 @@ class BookmarkTree(QWidget):
         if self._photo_on():
             from viewer.image_page import PHOTO_EXTS
             return tuple(sorted(PHOTO_EXTS)) + (".zip",)       # 261104-4(사진 보기 SOT 4.24): 사진이 든 zip 도
-        return (".pdf",)
+        return (".pdf", ".zip")                                # 261106-5(사진 보기 SOT §4.24.1): PDF 가 든 zip 도
 
     def _list_keep(self):
-        """목록에 둘지 — 사진 모드의 zip 은 사진이 든 것만(4.24). 그 밖은 모두."""
-        if not self._photo_on():
-            return None
+        """목록에 둘지 — zip 은 사진 모드면 사진이 든 것만(4.24), PDF 모드면 PDF 가 든 것만(전달 묶음 .polypdf.zip 은 빼고,
+        §4.24.1). 그 밖은 모두."""
+        photo = self._photo_on()
 
         def keep(p):
             if not str(p).lower().endswith(".zip"):
                 return True
-            from viewer.photo_zip import has_photos
-            return has_photos(p)
+            if photo:
+                from viewer.photo_zip import has_photos
+                return has_photos(p)
+            from viewer.zip_unpack import has_pdfs
+            return has_pdfs(p)
         return keep
+
+    # ── 261106-5(사진 보기 SOT §4.24.1): zip 줄 — 풀기·PDF 모드에서 펼쳐 보기 ──
+    DATA_ZIP_MEMBER = Qt.ItemDataRole.UserRole + 12   # PDF 모드 zip 줄 아래 PDF 행: (zip 경로, zip 안 이름)
+
+    @staticmethod
+    def _is_zip_path(p) -> bool:
+        return bool(p) and str(p).lower().endswith(".zip")
+
+    def _fill_zip_members(self, item) -> None:
+        """PDF 모드 zip 줄을 펼치면 안의 PDF 를 아래 줄로(읽기 전용 — 누르면 그 파일만 캐시로 꺼내 본문에)."""
+        from viewer.zip_unpack import members
+        from viewer.widgets.icons import file_kind_icon
+        zp = str(item.data(0, self.DATA_FILE))
+        while item.childCount():
+            item.takeChild(0)
+        for raw, shown in members(zp, (".pdf",)):
+            ch = QTreeWidgetItem([Path(shown).stem])
+            ch.setData(0, self.DATA_ZIP_MEMBER, (zp, raw))
+            ch.setToolTip(0, shown)
+            ch.setIcon(0, file_kind_icon(shown))
+            item.addChild(ch)
+        item.setData(0, self.DATA_TOC_LOADED, True)
+
+    def _zip_menu_actions(self, menu, zp: str, members_sel=None) -> None:
+        """zip 줄·zip 안 줄 우클릭 — '여기에 풀기'(zip 이름 새 폴더)·'다른 폴더에 풀기...'·(고른 안 줄) '고른 n개 풀기...'."""
+        if members_sel:
+            a = menu.addAction(tr("고른 {n}개 풀기...").format(n=len(members_sel)))
+            a.setToolTip(tr("고른 파일만 고른 폴더에 풉니다."))
+            a.triggered.connect(lambda _=False, z=zp, m=list(members_sel): QTimer.singleShot(
+                0, lambda: self.zipUnpackRequested.emit(z, m, "pick")))
+        a = menu.addAction(tr("여기에 풀기"))
+        a.setToolTip(tr("zip 이 있는 폴더에 zip 이름으로 폴더를 만들어 모두 풉니다."))
+        a.triggered.connect(lambda _=False, z=zp: QTimer.singleShot(0, lambda: self.zipUnpackRequested.emit(z, None, "here")))
+        a = menu.addAction(tr("다른 폴더에 풀기..."))
+        a.triggered.connect(lambda _=False, z=zp: QTimer.singleShot(0, lambda: self.zipUnpackRequested.emit(z, None, "pick")))
+
+    def _zip_context_menu(self, item, pos) -> bool:
+        """PDF 모드의 zip 줄·zip 안 줄 — 풀기 메뉴만(PDF 저장 묶음은 zip 에 뜻이 없다). 처리했으면 True."""
+        mem = item.data(0, self.DATA_ZIP_MEMBER)
+        zp = mem[0] if mem else item.data(0, self.DATA_FILE)
+        if not mem and (self._photo_on() or not self._is_zip_path(zp)):
+            return False
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        sel = []
+        if mem:
+            sel = [it.data(0, self.DATA_ZIP_MEMBER)[1] for it in self.tree.selectedItems()
+                   if it.data(0, self.DATA_ZIP_MEMBER) and it.data(0, self.DATA_ZIP_MEMBER)[0] == zp]
+            if mem[1] not in sel:
+                sel = [mem[1]]
+        self._zip_menu_actions(menu, str(zp), sel)
+        menu.addSeparator()
+        a = menu.addAction(tr("파일 탐색기 열기"))
+        a.triggered.connect(lambda _=False, z=str(zp): self._reveal_in_explorer(z))
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
+        return True
 
     def set_photo_mode(self, on: bool) -> None:
         """사진 모드를 켜고 끈다 — 그림 파일만 보이고(확장자는 이름에서 빼고 형식 아이콘), 정렬에 '확장자 순'.
@@ -1091,7 +1152,9 @@ class BookmarkTree(QWidget):
         self.tree.clear()
         self.__dict__["_bm_cache"] = {}     # 261012-10: 다시 읽으면 되돌리기 기준도 새로
         pdfs = self._sorted_flat()
-        self._set_count((tr('{n}장') if self._photo_on() else tr('{n}개 PDF')).format(n=len(pdfs)))   # 260618-27: '(bookmarks.json 없음)' 표기 삭제
+        # 260618-27: '(bookmarks.json 없음)' 표기 삭제 · 261106-5(§4.24.1): PDF 수에 zip 줄은 세지 않는다
+        n_pdf = len(pdfs) if self._photo_on() else sum(1 for p in pdfs if not self._is_zip_path(p))
+        self._set_count((tr('{n}장') if self._photo_on() else tr('{n}개 PDF')).format(n=n_pdf))
         self._fill_plan = self._build_fill_plan(pdfs)
         self._fill_pos = 0
         self._fill_folders = {}
@@ -1255,6 +1318,13 @@ class BookmarkTree(QWidget):
             # 261104-2(사진 보기 SOT 4.8): 그림은 형식 아이콘(JPG·PNG·HEIC …) — 형식·테마마다 한 번만 그린 것을 다시 쓴다
             from viewer.widgets.icons import file_kind_icon
             item.setIcon(0, file_kind_icon(pdf))
+        elif self._is_zip_path(pdf):
+            # 261106-5(사진 보기 SOT §4.24.1): PDF 모드의 zip 줄 — 형식 아이콘 ZIP, 펼치면 안의 PDF
+            from viewer.widgets.icons import file_kind_icon
+            item.setIcon(0, file_kind_icon(pdf))
+            item.setToolTip(0, tr("펼치면 안의 PDF 가 보입니다(누르면 사본으로 엽니다) — 우클릭으로 풀기"))
+            self._attach_toc_placeholder(item, pdf)
+            return item
         else:
             item.setIcon(0, self._leaf_icon())          # 260902-5: 파일 표식
         self._decorate_file_node(item, pdf)
@@ -2084,6 +2154,9 @@ class BookmarkTree(QWidget):
         if item.data(0, self.DATA_TOC_LOADED):
             return
         file_path = item.data(0, self.DATA_FILE)
+        if self._is_zip_path(file_path) and not self._photo_on():
+            self._fill_zip_members(item)                 # 261106-5(§4.24.1): 목차 대신 안의 PDF
+            return
         # 261024-4(마스터 §15): 본문에 열린 파일이면 그 문서의 목차를 쓴다 — 쪽을 넘길 때(`select_for_page`) 같은 파일을
         #   메인에서 다시 열어 창이 섰다(빌드 시험 T1 1.25초, 스택 fz_open_file). 없으면(None) 종전대로 연다.
         prov = self.toc_provider
@@ -2338,7 +2411,14 @@ class BookmarkTree(QWidget):
         if (mods & (Qt.KeyboardModifier.ControlModifier
                     | Qt.KeyboardModifier.ShiftModifier)):
             return
+        mem = item.data(0, self.DATA_ZIP_MEMBER)
+        if mem:                                          # 261106-5(§4.24.1): zip 안 PDF — 앱이 캐시로 꺼내 본문에
+            self.zipMemberActivated.emit(str(mem[0]), str(mem[1]))
+            return
         path = item.data(0, self.DATA_FILE)
+        if self._is_zip_path(path) and not self._photo_on():
+            item.setExpanded(not item.isExpanded())      # PDF 모드 zip 줄은 펼치기/접기(본문에 zip 을 열지 않는다)
+            return
         # 260606-4: 편집 모드에서도 선택 시 해당 책갈피 위치로 메인 이동
         if self._edit_mode:
             if path:
@@ -2378,6 +2458,8 @@ class BookmarkTree(QWidget):
                     | Qt.KeyboardModifier.ShiftModifier)):
             return
         path = cur.data(0, self.DATA_FILE)
+        if self._is_zip_path(path) and not self._photo_on():
+            return                                       # 261106-5(§4.24.1): PDF 모드 zip 줄은 본문에 열지 않는다
         if path and not cur.data(0, self.DATA_IS_TOC_PLACEHOLDER):
             self._emit_nav(path, cur.data(0, self.DATA_PAGE) or 0)
 
@@ -2711,6 +2793,8 @@ class BookmarkTree(QWidget):
         item = self.tree.itemAt(pos)
         if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
             return
+        if self._zip_context_menu(item, pos):            # 261106-5(§4.24.1): PDF 모드 zip 줄·안 줄
+            return
         # 260906-1: 메뉴가 암호화 여부(DATA_ENCRYPTED)를 보므로, 아직 검사 전이면 이 행만 즉시.
         self._ensure_probed(item if self._is_file_node(item) else self._file_node_of(item))
         # 260606-13: 편집모드에서 여러 파일 선택 후 우클릭 → 병합 메뉴(선택 유지)
@@ -2737,6 +2821,10 @@ class BookmarkTree(QWidget):
         act_merge = None
         act_translate_sel = None
         pm = self._photo_on()           # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴
+        _zp = self._file_path_of(item)
+        if pm and self._is_zip_path(_zp):              # 261106-5(사진 보기 SOT §4.24.1): 사진 zip 줄 — 맨 위에 풀기
+            self._zip_menu_actions(menu, str(_zp))
+            menu.addSeparator()
         self._add_print_action(menu, item, pm)   # 261105-12(마스터 §4.7.13, 사용자 지시): 맨 위 '인쇄…'
         if sel_files and pm:
             _ps = [str(it.data(0, self.DATA_FILE)) for it in sel_files]
