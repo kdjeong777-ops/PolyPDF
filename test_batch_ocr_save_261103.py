@@ -43,6 +43,19 @@ def _fake_exec(box):
         b.click()
     return 0
 QMessageBox.exec = _fake_exec
+# 261107-30(텍스트 창 SOT §5.4.1): `저장` 이 'OCR 을 PDF 글자층에 넣을까요?' 도 묻는다 — 이 검사는 저장 자체를 보므로
+#   [넣지 않고 저장] 으로 답한다(modal_guard 의 exec 는 아무것도 누르지 않아 창은 [취소] = 저장 안 함으로 남는다)
+from viewer import ocr_layer_save as _ols
+layer_asked = []
+_RealDlg = _ols._dialog_cls()
+
+
+class _SkipDlg(_RealDlg):
+    def exec(self):
+        layer_asked.append(True)
+        self._pick("skip")
+        return 1
+_ols._dialog_cls = lambda: _SkipDlg
 
 root = Path(tempfile.mkdtemp(prefix="polypdf_batch261103_"))
 from viewer.study import study_store as ss
@@ -101,6 +114,7 @@ st = ss.StudyStore()
 left = ss.file_key_for(str(pdf)) in st.pending_keys()
 st.close()
 chk(not left, "C2 `저장` → 보류 OCR 도 확정")
+chk(layer_asked, "C3 `저장` 이 OCR 글자층 창도 거친다(일괄 OCR 뒤 글자층 없는 쪽 — 261107-30)")
 
 # D. 저장할 것이 없으면 창 없음 / 책갈피 없이 보류 OCR 만 — `나중에` 는 아무것도 저장하지 않는다
 boxes.clear(); infos.clear()

@@ -93,6 +93,7 @@ try:
 
         def exec(self):
             return 0
+    ols._real_dialog_cls = ols._dialog_cls
     ols._dialog_cls = lambda: FakeDlg
 
     from viewer.app import MainWindow
@@ -161,6 +162,14 @@ try:
     bt.btn_edit.setChecked(False); spin(1.0)
     chk(seen == [(0, 1)] and bt.is_edit_mode(), "E 편집 모드를 끌 때 [저장] 도 묻고, 취소하면 편집 모드에 남는다", (seen, bt.is_edit_mode()))
     mw.close()
+
+    # G — 실제 창: Esc·닫기는 [취소](저장도 버림도 하지 않는다) — 가짜 창을 쓰는 다른 검사(modal_guard)도 같은 기본값을 본다
+    real = ols.__dict__.get("_real_dialog_cls")
+    dlg = real()(None, "x.pdf", 2, 1) if real else None
+    if dlg is not None:
+        dlg.reject()
+        chk(dlg.choice == "cancel" and dlg.cb_replace.isChecked() and not dlg.cb_remember.isChecked(),
+            "G Esc·닫기 = [취소], 바꾸기 기본 켬·다시 묻지 않음 기본 끔", (dlg.choice,))
 
     # F
     chk(ols.layer_similarity("the harbor captain", "Hcrb0r cap1ain the") < ols.LAYER_DIFF_SIM
