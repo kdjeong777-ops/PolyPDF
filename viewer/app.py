@@ -2044,6 +2044,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("draw_erase_thin",  (tr("지우개(얇게)"), "Ctrl+E", tr("선긋기(편집모드)"))),
             ("draw_erase_thick", (tr("지우개(두껍게)"), "Ctrl+Shift+E", tr("선긋기(편집모드)"))),
             ("draw_clear",    (tr("현재 페이지 선 청소"), "Ctrl+Shift+Backspace", tr("선긋기(편집모드)"))),
+            ("draw_pan",      (tr("손바닥(끌어서 화면 이동)"), "Ctrl+H", tr("선긋기(편집모드)"))),   # 261107-36(입력 SOT §4.1)
             ("edit_undo",     (tr("되돌리기"), "Ctrl+Z", tr("편집모드"))),
             ("edit_redo",     (tr("다시실행"), "Ctrl+Y", tr("편집모드"))),
             ("quit",          (tr("종료"), "Ctrl+Q", tr("기타"))),
@@ -2091,6 +2092,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "draw_erase_thin": ("func", lambda: self._draw_sc_erase(0)),
             "draw_erase_thick": ("func", lambda: self._draw_sc_erase(1)),
             "draw_clear": ("func", self._draw_sc_clear),
+            "draw_pan": ("func", lambda: self._in_edit() and self.main_view and self.main_view._on_draw_pan()),
             "edit_undo": ("func", self.action_edit_undo),          # 261012-7: 창 어디서나(편집 모드)
             "edit_redo": ("func", self.action_edit_redo),
             "settings": ("func", self.action_open_settings),
@@ -2598,7 +2600,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.study_panel.markSelectedRequested.connect(self._on_study_mark_selected)
         self.study_panel.deleteWordRequested.connect(self._on_study_delete_word)
         self.study_panel.mp3Requested.connect(self._on_study_mp3)
-        self.study_panel.fileDictRequested.connect(self._action_dict_file)     # 261107-17·-34 단어장 창 '사전'
+        self.study_panel.sourceToggled.connect(self._on_study_source_toggled)  # P2 출처 on/off
+        self.study_panel.styleChosen.connect(self._on_dict_style_chosen)       # 261103-2 사전 스타일
+        self.study_panel.fileDictRequested.connect(self._action_dict_file)     # 261107-17 이 PDF 사전
         # 260606-3/5: 스크린샷이 모두 삭제되면 창 숨김
         # rowsRemoved=개별 삭제(takeItem), modelReset/clearedAll='전체 삭제'(list.clear())
         self.shot_strip.list.model().rowsRemoved.connect(

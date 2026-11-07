@@ -14395,6 +14395,14 @@ msgstr "'{name}' inside the file's folder (default)"
 msgid "PDF 를 처음 덮어써 저장할 때·펼친 사진으로 원본을 바꿀 때 손대지 않은 원본을 이 폴더에 남깁니다 — 우클릭 '원본으로 되돌리기' 로 되돌립니다."
 msgstr "When a PDF is first overwritten by a save, or a photo is replaced by its straightened version, the untouched original is kept in this folder — restore it with right-click 'Restore original'."
 
+#: viewer/app.py
+msgid "손바닥(끌어서 화면 이동)"
+msgstr "Hand (drag to move the view)"
+
+#: viewer/widgets/main_view.py
+msgid "손바닥 — 끌어서 화면 이동"
+msgstr "Hand — drag to move the view"
+
 #: viewer/widgets/ocr_batch_dialog.py
 #, python-brace-format
 msgid "원본 PDF 에 덮어씁니다 — 처음 덮어쓸 때 손대지 않은 원본을 '{name}' 폴더(또는 환경설정의 원본 백업 폴더)에 남깁니다. 이미 읽은 쪽은 다시 읽지 않습니다. 서명된 PDF·암호 PDF 는 건너뜁니다."

@@ -14062,3 +14062,10 @@ msgstr ""
 msgid "원본 PDF 에 덮어씁니다 — 처음 덮어쓸 때 손대지 않은 원본을 '{name}' 폴더(또는 환경설정의 원본 백업 폴더)에 남깁니다. 이미 읽은 쪽은 다시 읽지 않습니다. 서명된 PDF·암호 PDF 는 건너뜁니다."
 msgstr ""
 
+#: viewer/app.py
+msgid "손바닥(끌어서 화면 이동)"
+msgstr ""
+
+#: viewer/widgets/main_view.py
+msgid "손바닥 — 끌어서 화면 이동"
+msgstr ""

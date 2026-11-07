@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import fitz
-from PyQt6.QtCore import Qt, QRect, QRectF, QPoint, QSize, QEvent, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QRect, QRectF, QPoint, QSize, QEvent, QObject, pyqtSignal, QTimer
 from PyQt6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QPen, QBrush, QIcon, QKeyEvent, QWheelEvent,
     QTransform,
@@ -855,6 +855,31 @@ class _MainDrawOverlay(QWidget):
         super().leaveEvent(e)
 
 
+class _KeyTipFilter(QObject):
+    """261107-36(디자인 SOT §2.9.2): 단추 툴팁 = 이름 + 지금 키 키캡. 키는 보일 때마다 창의 단축키 설정(`_sc_key`)에서 읽는다
+    (단축키 창에서 바꾼 키·테마 색을 따른다 — 사진 모드 토글 단추와 같은 방식). 창에 단축키가 없으면 이름만."""
+
+    def __init__(self, sid, parent):
+        super().__init__(parent)
+        self._sid = sid
+
+    def eventFilter(self, obj, ev):
+        if ev.type() != QEvent.Type.ToolTip:
+            return False
+        from PyQt6.QtWidgets import QToolTip
+        tip = obj.toolTip()
+        w = obj.window()
+        key = w._sc_key(self._sid) if hasattr(w, "_sc_key") else ""
+        if key:
+            import html as _html
+            from viewer.widgets.keycaps import keycap_html
+            pal = obj.palette()
+            img = keycap_html(key, obj.font(), pal.color(pal.ColorRole.ToolTipText))
+            tip = ("<span>%s</span>&nbsp;&nbsp;%s" % (_html.escape(tip), img)) if img else f"{tip} ({key})"
+        QToolTip.showText(ev.globalPos(), tip, obj)
+        return True
+
+
 class _DblTool(QToolButton):
     """260611-71/80: 단일 클릭=토글(singleClick) / 더블 클릭=종류 변경(doubleClick).
 
@@ -1475,6 +1500,11 @@ class _PdfGraphicsView(QGraphicsView):
         k = event.key()
         # 260611-15: 편집모드에서 Ctrl+V → 클립보드 이미지 붙여넣기(선택 불필요)
         ownr = self._owner
+        # 261107-36(입력 SOT §4.1): 손바닥이 켜져 있으면 Esc = 끄기(도구 없음)
+        if k == Qt.Key.Key_Escape and ownr is not None and getattr(ownr, "_draw_kind", None) == "pan":
+            ownr._on_draw_pan()
+            event.accept()
+            return
         if (ownr is not None and getattr(ownr, "_img_edit", False)
                 and (event.modifiers() & Qt.KeyboardModifier.ControlModifier)
                 and k == Qt.Key.Key_V):
@@ -3752,7 +3782,8 @@ class MainView(QWidget):
         """261011-6(디자인 SOT §2.5·§4): 테마 단색 아이콘(크롭·전자서명 단추)을 지금 테마 색으로 다시 그린다.
         창을 만든 **뒤에** 테마가 적용돼 다크 모드에서도 라이트 색(#444)이 남아 거의 안 보였다."""
         from viewer.widgets.icons import themed_icon as _ti
-        for b, name in ((getattr(self, "btn_crop", None), "crop"), (getattr(self, "btn_sign", None), "sign")):
+        for b, name in ((getattr(self, "btn_crop", None), "crop"), (getattr(self, "btn_sign", None), "sign"),
+                        (getattr(self, "_draw_pan_btn", None), "hand")):     # 261107-36(마스터 §4.6.12)
             if b is not None:
                 b.setIcon(_ti(name, dark=dark, size=16))
         self._update_image_button()            # 261101-3: 이미지 단추(테마 단색)
@@ -3837,6 +3868,15 @@ class MainView(QWidget):
             self._draw_select_btn.setText("⤢")
         self._draw_select_btn.clicked.connect(self._on_draw_select)
         hb.addWidget(self._draw_select_btn)
+        # 261107-36(마스터 §4.6.12·입력 SOT §4.1, 사용자 지시): 손바닥 — 끌어서 화면 이동. 개체선택 바로 오른쪽
+        from viewer.widgets.icons import themed_icon as _ti
+        self._draw_pan_btn = QPushButton(); self._draw_pan_btn.setFixedSize(28, H)
+        self._draw_pan_btn.setCheckable(True)
+        self._draw_pan_btn.setIcon(_ti("hand", size=16))
+        self._draw_pan_btn.setToolTip(tr("손바닥 — 끌어서 화면 이동"))
+        self._draw_pan_btn.installEventFilter(_KeyTipFilter("draw_pan", self._draw_pan_btn))
+        self._draw_pan_btn.clicked.connect(self._on_draw_pan)
+        hb.addWidget(self._draw_pan_btn)
         # 260611-1: 지우개 2종(얇게/두껍게)·청소 — 첨부 아이콘 사용(없으면 글리프 폴백)
         self._draw_erase_btns = []
         _ico_sz = QSize(H - 4, H - 4)
@@ -3950,6 +3990,40 @@ class MainView(QWidget):
         self._draw_kind = None if self._draw_kind == "select" else "select"
         self._apply_tool()
 
+    def _on_draw_pan(self):
+        """261107-36(입력 SOT §4.1): 손바닥 토글 — 다른 도구와 배타, 색상버튼 스타일은 보존(개체선택과 같다)."""
+        self._draw_kind = None if self._draw_kind == "pan" else "pan"
+        self._apply_tool()
+
+    def _pan_event(self, t, ev) -> bool:
+        """261107-36(입력 SOT §4.1): 손바닥이 켜졌을 때 본문 뷰포트 마우스 — 왼쪽 끌기 = 스크롤 막대를 끈 만큼.
+        막대 값만 바꾼다(휠·키와 같은 막대 — 이어 보기 옆 쪽 붙이기는 `_on_view_scrolled` 가 예약). 다른 마우스 일은 모두 먹는다."""
+        vp = self.view.viewport()
+        if t == QEvent.Type.MouseButtonPress and ev.button() == Qt.MouseButton.LeftButton:
+            self._pan_last = ev.position().toPoint()
+            vp.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self.view.setFocus()
+            try:
+                self.activated.emit()
+            except Exception:
+                pass
+            return True
+        if t == QEvent.Type.MouseMove:
+            last = getattr(self, "_pan_last", None)
+            if last is not None and (ev.buttons() & Qt.MouseButton.LeftButton):
+                pos = ev.position().toPoint()
+                hsb, vsb = self.view.horizontalScrollBar(), self.view.verticalScrollBar()
+                hsb.setValue(hsb.value() - (pos.x() - last.x()))
+                vsb.setValue(vsb.value() - (pos.y() - last.y()))
+                self._pan_last = pos
+            return True
+        if t == QEvent.Type.MouseButtonRelease and ev.button() == Qt.MouseButton.LeftButton:
+            self._pan_last = None
+            vp.setCursor(Qt.CursorShape.OpenHandCursor)
+            return True
+        return t in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease,
+                     QEvent.Type.MouseButtonDblClick)
+
     # 260611-2: 선 종류 3단계 — 글리프/이름
     _MODE_GLYPH = ("─", "▬", "〜")
     _MODE_NAME = (tr_noop("직선"), tr_noop("하이라이트"), tr_noop("자유곡선"))   # 표시는 tr()
@@ -3995,6 +4069,8 @@ class MainView(QWidget):
             tool = ("select", None)
         elif k == "stamp":
             tool = ("stamp", self._stamp_id)
+        elif k == "pan":
+            tool = ("pan", None)                 # 261107-36(입력 SOT §4.1)
         elif k == "text":
             # 260907-2(사용자 요청): 글쓰기는 **색상버튼(선 종류)을 안 골라도** 쓸 수 있다.
             #   종전에는 펜이 없으면 도구 자체가 꺼져 **텍스트 박스가 아예 안 만들어졌다**.
@@ -4013,6 +4089,18 @@ class MainView(QWidget):
         ov = self._draw_overlay
         if ov is not None:
             ov.set_active(tool is not None)
+        # 261107-36(입력 SOT §4.1): 손바닥이면 펼친 손 포인터·하이퍼링크 단추는 마우스를 통과(끌기가 받는다)
+        pan = tool == ("pan", None)
+        if pan != bool(getattr(self, "_pan_on", False)):
+            self._pan_on = pan
+            self._pan_last = None
+            try:
+                self.view.viewport().setCursor(Qt.CursorShape.OpenHandCursor if pan else Qt.CursorShape.IBeamCursor)
+            except Exception:
+                pass
+            hl = getattr(self, "_hl_overlay", None)
+            if hl is not None:
+                hl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, pan)
         self._sync_draw_buttons()
         self._update_draw_buttons()
 
@@ -4223,6 +4311,9 @@ class MainView(QWidget):
         sb = getattr(self, "_draw_select_btn", None)
         if sb is not None:
             sb.setChecked(self._draw_kind == "select")
+        pb = getattr(self, "_draw_pan_btn", None)
+        if pb is not None:
+            pb.setChecked(self._draw_kind == "pan")
         self._restyle_pen_btns()
 
     @staticmethod
@@ -6524,6 +6615,8 @@ class MainView(QWidget):
                 return super().eventFilter(obj, ev)
             t = ev.type()
             tool = self._draw_tool
+            if tool == ("pan", None):            # 261107-36(입력 SOT §4.1): 손바닥 — 끌기만, 다른 마우스 일은 먹는다
+                return True if self._pan_event(t, ev) else super().eventFilter(obj, ev)
             is_pen_erase = (tool is not None and tool[0] in ("pen", "erase"))
             is_select = (tool == ("select", None))
 

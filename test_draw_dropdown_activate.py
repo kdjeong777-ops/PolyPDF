@@ -106,4 +106,5 @@ finally:
 
 print()
 print("ALL PASS" if not fails else f"{len(fails)} FAIL: {fails}")
-sys.exit(1 if fails else 0)
+sys.stdout.flush()
+os._exit(1 if fails else 0)              # 종료 때 Qt 소멸 크래시를 피한다(다른 입력 검사와 같다)

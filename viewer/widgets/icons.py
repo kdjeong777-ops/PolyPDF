@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QPointF, QRectF
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPainterPath, QPen, QColor, QPolygonF
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPainterPath, QPen, QColor, QPolygonF, QTransform
 
 
 def fg_color(dark: bool | None = None) -> str:
@@ -183,6 +183,23 @@ def _view_single(p, c):
         p.drawLine(QPointF(5.5, y), QPointF(13.8, y))
 
 
+def _hand(p, c):
+    """261107-36(입력 SOT §4.1·마스터 §4.6.12): 손바닥(화면 끌기) — 손가락 넷 + 엄지 + 손바닥을 합친 펼친 손 윤곽."""
+    path = QPainterPath()
+    path.setFillRule(Qt.FillRule.WindingFill)                             # 겹친 곳을 구멍 없이 합친다
+    for x, top in ((4.0, 3.6), (6.4, 1.6), (8.8, 1.6), (11.2, 3.2)):     # 손가락 넷(가운데가 길다)
+        path.addRoundedRect(QRectF(x, top, 2.0, 9.0 - top), 1.0, 1.0)
+    thumb = QPainterPath()
+    thumb.addRoundedRect(QRectF(0.0, 0.0, 2.0, 5.4), 1.0, 1.0)
+    path.addPath(QTransform().translate(1.0, 7.2).rotate(-40).map(thumb))   # 엄지 — 왼쪽에서 비스듬히
+    path.addRoundedRect(QRectF(4.0, 7.0, 9.2, 7.6), 3.2, 3.2)              # 손바닥
+    p.setPen(QPen(c, 1.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(path.simplified())
+    for x, top in ((6.2, 4.4), (8.6, 2.6), (11.0, 4.0)):                  # 손가락 사이 — 작은 크기에서도 손가락이 읽히게
+        p.drawLine(QPointF(x, top), QPointF(x, 7.8))
+
+
 _DRAW = {
     "search": _search, "globe": _globe, "close": _close,
     "chevron_up": _chevron_up, "chevron_down": _chevron_down,
@@ -191,7 +208,7 @@ _DRAW = {
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
     "crop": _crop, "sign": _sign, "image": _image,
-    "view_tree": _view_tree, "view_single": _view_single,
+    "view_tree": _view_tree, "view_single": _view_single, "hand": _hand,
 }
 
 
@@ -389,31 +406,11 @@ def _mp3(p, c):
 
 ACCENT["mp3"] = ACCENT["play"]
 
-
-def _ocr(p, c):
-    """261107-34(디자인 SOT §4.5, 사용자 지시 "'OCR'로 아이콘을 만들어서 사용"): 단어장 생성 — 네 귀퉁이 꺾쇠 + 굵은 OCR, ▶ 색."""
-    pen = QPen(c, 1.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
-    p.setPen(pen)
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    a, b, k = 1.0, 15.0, 3.6
-    for (x, y, dx, dy) in ((a, a, 1, 1), (b, a, -1, 1), (a, b, 1, -1), (b, b, -1, -1)):
-        p.drawPolyline(QPolygonF([QPointF(x, y + dy * k), QPointF(x, y), QPointF(x + dx * k, y)]))
-    from PyQt6.QtGui import QFont
-    f = QFont("Arial")
-    f.setBold(True)
-    f.setPixelSize(6)
-    p.setFont(f)
-    p.setPen(c)
-    p.drawText(QRectF(0.0, 4.0, 16.0, 8.0), int(Qt.AlignmentFlag.AlignCenter), "OCR")
-
-
-ACCENT["ocr"] = ACCENT["play"]
-
 # 261103-3(디자인 SOT §4.6, 사용자 지시 '아이콘이 단추에 꽉 차 답답'): 그림 단추의 아이콘은 단추 높이에서 위아래 ICON_MARGIN 씩 비운다.
 #   도구 줄·단어장 머리줄의 26px 단추는 BTN_ICON_PX — 종전 22·24 는 단추를 꽉 채웠다. 16 은 검색결과·메뉴 탭 글자 단추의 아이콘과도 같다.
 ICON_MARGIN = 4          # 이보다 좁으면 답답 — 모든 그림 단추의 최소(검사 test_design_icon_margin)
 BTN_ICON_PX = 16
-_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "tri_right": _tri_right, "mp3": _mp3, "ocr": _ocr,
+_COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "tri_right": _tri_right, "mp3": _mp3,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
 _COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
