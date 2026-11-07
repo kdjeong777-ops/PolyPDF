@@ -106,7 +106,9 @@ rb.select("tools")
 chk(rb.tab_button("tools").isChecked() and not rb.tab_button(COLLECTION).isChecked(), "도구 탭 고름")
 chk(rb.stack.currentWidget() is rb.row("tools"), "세부 줄 = 도구")
 tnames = [a.iconText() for a in rb.row("tools").actions() if not a.isSeparator() and cmd_id(a)]
-chk(tnames[:3] == ["OCR", "단어장 생성", "책갈피 생성"], "도구 줄 앞부분 = 모음 도구 차례(액션 이름 — 단추 글은 짧은 이름)", str(tnames))
+#   261107-13(단어장 SOT §7): '인터넷 사전 보강' 은 단어장 바로 뒤(모음 기본값에는 없다)
+chk(tnames[:4] == ["OCR", "단어장 생성", "인터넷 사전 보강", "책갈피 생성"],
+    "도구 줄 앞부분 = 모음 도구 차례 + 단어장 뒤 인터넷 사전 보강(액션 이름 — 단추 글은 짧은 이름)", str(tnames))
 sub = [rb.row("tools").widgetForAction(a) for a in rb.row("tools").actions() if a.menu() is not None]
 chk(sub and all(isinstance(w, QToolButton) and w.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
                 for w in sub), "하위 메뉴는 ▾ 단추(누르면 펼침)")
