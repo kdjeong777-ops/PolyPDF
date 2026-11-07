@@ -2625,7 +2625,8 @@ class PhotoMixin:
         # 인쇄 — 맨 위(261105-12·-16) · 여러 장이면 PDF 만들기도 한 번에
         menu.group("print")
         if photos:
-            act(self._kt(tr("인쇄"), "print") if body else (tr('인쇄 ({n}장)').format(n=n) if many else tr("인쇄")),
+            # 261107-26(디자인 SOT §2.9.2·입력 SOT §3.2.3): 키는 포커스 따라 — 책갈피창·썸네일 줄이면 고른 사진, 본문이면 지금 사진
+            act(self._kt(tr('인쇄 ({n}장)').format(n=n) if many else tr("인쇄"), "print"),
                 lambda ps=list(photos): self._photo_print(paths=ps), many or ok, tr("인쇄 창을 엽니다."))
         if many:
             act(tr('고른 사진 {n}장으로 PDF 만들기').format(n=n), lambda ps=list(photos): self._photo_action("to_pdf", ps))
@@ -2644,14 +2645,14 @@ class PhotoMixin:
         if photos:
             menu.group("shape")
             rot_tip = None if not ro else tr("읽기 전용 사진은 돌릴 수 없습니다.")
-            act(self._kt(tr("왼쪽 90° 회전"), "rotate_left") if body else tr("왼쪽 90° 회전"),
+            act(self._kt(tr("왼쪽 90° 회전"), "rotate_left"),
                 each(lambda p: self._photo_rotate(-90, path=p)), not ro, rot_tip)
-            act(self._kt(tr("오른쪽 90° 회전"), "rotate_right") if body else tr("오른쪽 90° 회전"),
+            act(self._kt(tr("오른쪽 90° 회전"), "rotate_right"),
                 each(lambda p: self._photo_rotate(+90, path=p)), not ro, rot_tip)
             act(tr("180° 회전"), each(lambda p: self._photo_rotate(180, path=p)), not ro, rot_tip)
             act(tr("원래 방향"), each(lambda p: self._photo_rotate(absolute=0, path=p)),
                 not ro and any(self._photo_rot_for(p) for p in photos))
-            act(tr("크롭"), lambda p=photos[0]: self._photo_crop_dialog(p), bool(one) and not ro,
+            act(self._kt(tr("크롭"), "crop") if one else tr("크롭"), lambda p=photos[0]: self._photo_crop_dialog(p), bool(one) and not ro,
                 None if one else tr("한 장을 고르면 자릅니다."))
             act(tr("크롭 해제"), each(lambda p: self._photo_set_crop(p, None)),
                 not ro and any(self._photo_crop_for(p) for p in photos))
@@ -2662,13 +2663,13 @@ class PhotoMixin:
         menu.group("file")
         first = (photos or [str(p) for p in (paths or []) if p] or [""])[0]
         if first:
-            act(tr("파일 탐색기 열기"), lambda p=first: self._photo_action("reveal", [p]), not cached)
+            act(self._kt(tr("파일 탐색기 열기"), "reveal"), lambda p=first: self._photo_action("reveal", [p]), not cached)
         if extra.get("new_folder"):
-            act(tr("새 폴더 만들기"), extra["new_folder"])
+            act(self._kt(tr("새 폴더 만들기"), "new_folder"), extra["new_folder"])
         self._photo_xfer_menu(menu, photos)                       # 4.41 — 폴더로 복사·이동
         if photos:
             ren = extra.get("rename") or (lambda p=photos[0]: self._photo_rename(p))
-            act(self._kt(tr("이름 변경"), "rename_item") if where == "tree" else tr("이름 변경"), ren,
+            act(self._kt(tr("이름 변경"), "rename_item") if one else tr("이름 변경"), ren,   # F2 — 썸네일 줄·본문 사진도(key_actions.rename)
                 bool(one) and not cached, None if one else tr("한 장을 고르면 이름을 바꿉니다."))
         a = self._zip_pick_action(menu, photos)                   # §4.24.1(261106-5) — zip 안 사진 풀기
         if a is not None:
@@ -2715,7 +2716,7 @@ class PhotoMixin:
         else:
             act(self._kt(tr("2단 보기"), "toggle_split"), self._view_as_split)
         if photos:
-            act(self._kt(tr("발표보기"), "present") if body else tr("발표보기"),
+            act(self._kt(tr("발표보기"), "present"),
                 lambda p=photos[0]: self._photo_open_then(p, self._open_presentation), ok or many)
         if getattr(self, "_split_on", False):
             a = menu.addAction(tr("2분할 함께 움직이기"))         # 4.28(261104-7 B3, §5.1 F3)
@@ -2725,12 +2726,14 @@ class PhotoMixin:
         # 도구 — OCR 로 읽기(맨 앞) · 사진 정보 · 지도 · 일괄 작업 · 해시태그
         if photos:
             menu.group("tool")
-            act(tr('OCR 로 읽기 ({n}장)').format(n=n) if many else tr("OCR 로 읽기"),
+            # 본문 사진의 Ctrl+Alt+O 는 범위를 고르는 OCR 창이라(하는 일이 다르다) 본문에는 키 칸을 두지 않는다
+            _ocr = tr('OCR 로 읽기 ({n}장)').format(n=n) if many else tr("OCR 로 읽기")
+            act(_ocr if body else self._kt(_ocr, "ocr_read"),
                 (lambda ps=list(photos): self._photo_ocr_many(ps)) if many
                 else (lambda p=photos[0]: self._photo_open_then(p, self._photo_ocr_start)), many or ok,
                 tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다.") if one
                 else tr("고른 사진을 배경에서 차례로 읽습니다 — 작업 창에서 멈출 수 있습니다."))
-            act(tr("사진 정보"), lambda p=photos[0]: self._photo_info_for(p), bool(one) and ok)
+            act(self._kt(tr("사진 정보"), "info") if one else tr("사진 정보"), lambda p=photos[0]: self._photo_info_for(p), bool(one) and ok)
             gps_ok = True
             if body:
                 gps_ok = bool((self.__dict__.get("_photo_info") or {}).get("gps"))
@@ -2745,7 +2748,7 @@ class PhotoMixin:
         act(tr("현재 폴더를 즐겨찾기에 추가"), extra.get("fav_folder") or self._add_current_folder_favorite)
         fav_file = extra.get("fav_file") if where == "tree" else ((lambda p=one: self._add_file_favorite(p)) if one and not cached else None)
         if fav_file is not None:
-            act(tr("현재 파일을 즐겨찾기에 추가"), fav_file)
+            act(self._kt(tr("현재 파일을 즐겨찾기에 추가"), "fav_add_file"), fav_file)
         if where == "tree" and extra.get("label_style"):
             act(tr("보기설정"), extra["label_style"])          # 4.38(261104-13)
         elif where == "strip":

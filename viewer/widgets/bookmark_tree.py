@@ -493,7 +493,6 @@ class BookmarkTree(QWidget):
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
         self.save_first_check = None    # 앱이 주입: (파일들) -> True 면 저장 전 쪽 편집이 있어 알렸다 — 저장 ▸ 사본 넷 앞(261107-21, 마스터 §4.7.13)
-        self.file_action_ready = set()  # 앱이 채움: 켤 수 있는 fileActionRequested 일(예: 'info' — 문서 정보 창이 들어오면)
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
         self._probe_paused = False   # 260906-5(응답성 SOT §4 ①): 인덱싱 중에는 조사를 멈춘다
         self._probe_scan_timer = QTimer(self)     # 260906-4: 보이는 행 걷기를 모아서 1회
@@ -2875,13 +2874,15 @@ class BookmarkTree(QWidget):
             cur = par
         return (start, None)
 
-    def _add_print_action(self, menu, item, pm) -> None:
-        """261105-12(마스터 §4.7.13, 사용자 지시 '책갈피창의 리스트 선택시 옵션창 가장 상단에 인쇄'): 메뉴 맨 위 '인쇄…'.
-        파일 행 = 고른 파일들, 책갈피 행 = 그 책갈피 쪽 범위, 폴더 행 = 그 아래 PDF 전부(사진 모드 폴더 행에는 없다),
-        사진 줄 = 고른 사진. 인쇄 창은 메뉴가 닫힌 뒤(§4.7.11) — 앱이 `printFilesRequested` 를 받아 기존 인쇄 길로."""
+    def print_targets(self, item, pm):
+        """그 줄의 인쇄 대상 (파일들, 쪽 범위|None) — 우클릭 맨 위 '인쇄' 와 키 Ctrl+P(책갈피창 포커스, `key_actions.print_`)가
+        같은 함수(261107-26). 파일 행 = 고른 파일들, 책갈피 행 = 그 책갈피 쪽 범위, 폴더 행 = 그 아래 PDF 전부(사진 모드 폴더 행은 없음),
+        사진 줄 = 고른 사진. 대상이 없으면 ([], None)."""
+        if item is None or item.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+            return [], None
         is_folder = self._is_folder_node(item)
         if is_folder and pm:
-            return
+            return [], None
         files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
         if is_folder:
             mine = [str(f.data(0, self.DATA_FILE)) for f in self._iter_folder_files(item)]
@@ -2889,17 +2890,26 @@ class BookmarkTree(QWidget):
         else:
             own = self._file_path_of(item)
             if not own:
-                return
+                return [], None
             if own not in files:
                 files = [own]
         if not pm:
             files = [f for f in files if f.lower().endswith(".pdf")]
         if not files:
-            return
+            return [], None
         rng = None
         if (len(files) == 1 and not is_folder and not self._is_file_node(item)
                 and item.data(0, self.DATA_PAGE) is not None):
             rng = self._bookmark_page_range(item)          # 책갈피 행 — 그 쪽 범위
+        return files, rng
+
+    def _add_print_action(self, menu, item, pm) -> None:
+        """261105-12(마스터 §4.7.13, 사용자 지시 '책갈피창의 리스트 선택시 옵션창 가장 상단에 인쇄'): 메뉴 맨 위 '인쇄'.
+        대상은 `print_targets`. 인쇄 창은 메뉴가 닫힌 뒤(§4.7.11) — 앱이 `printFilesRequested` 를 받아 기존 인쇄 길로.
+        261107-26: Ctrl+P 도 이 창 포커스면 같은 대상이라 키 칸을 보인다."""
+        files, rng = self.print_targets(item, pm)
+        if not files:
+            return
         n = len(files)
         if n == 1:
             label = tr("인쇄")
@@ -2907,7 +2917,7 @@ class BookmarkTree(QWidget):
             label = tr('인쇄 ({n}장)').format(n=n)
         else:
             label = tr('인쇄 ({n}개 파일)').format(n=n)
-        act = menu.addAction(label)
+        act = menu.addAction(self._kt(label, "print"))
         act.setToolTip(tr("인쇄 창을 엽니다."))
         act.triggered.connect(lambda _=False, fs=list(files), r=rng: QTimer.singleShot(
             0, lambda: self.printFilesRequested.emit(fs, r)))
@@ -2945,7 +2955,7 @@ class BookmarkTree(QWidget):
             self._act(menu, tr("암호 입력"), lambda it=item, p=path: self._prompt_file_password(it, p))
         if not in_sub:
             self._act(menu, tr("OCR 로 읽기"), lambda p=path, r=ocr_range: self._file_action("ocr_read", [p], r),
-                      tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
+                      tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."), key="ocr_read")   # 261107-26: 키도 이 줄 파일 전체
         self._add_ocr_layer_action(menu, files or [path])
         self._act(menu, tr("일괄 OCR"), lambda p=path: self.createStudyBookmarksRequested.emit(p),
                   tip=tr("OCR·단어장·책갈피를 한 번에 만듭니다."))
@@ -2968,22 +2978,21 @@ class BookmarkTree(QWidget):
                       tip=tr("두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."))
         if not in_sub:
             self._act(menu, tr("서명"), lambda p=path: self._file_action("sign", [p]))
-        self._act(menu, tr("문서 정보"), lambda p=path: self._file_action("info", [p]),
-                  enabled="info" in self.file_action_ready)
         self._act(menu, tr("해시태그 편집"), lambda p=path: self._edit_file_tags(p))
 
     def _mi_fav(self, menu, file_path=None) -> None:
         menu.group("end")
         self._act(menu, tr("현재 폴더를 즐겨찾기에 추가"), self.favoriteRequested.emit)
         if file_path:
-            self._act(menu, tr("현재 파일을 즐겨찾기에 추가"), lambda p=file_path: self.addFileFavoriteRequested.emit(p))
+            self._act(menu, tr("현재 파일을 즐겨찾기에 추가"), lambda p=file_path: self.addFileFavoriteRequested.emit(p),
+                      key="fav_add_file")    # 261107-26: Ctrl+D — 책갈피창 = 이 줄 파일, 파일 ▸ = 지금 본문 파일(같은 파일)
 
     def add_file_items(self, menu, path: str) -> None:
         """PDF 썸네일창·본문의 '파일 ▸' — 책갈피창 파일 줄의 파일 단위 항목을 같은 함수·같은 차례로(디자인 SOT §2.9.8 의 4)."""
         node = self._file_node_for_path(str(path))
         # 261107-16(사용자 지시): '경로 복사' 는 메뉴에 두지 않는다 — 키 Ctrl+Shift+C(key_actions)로만, 메뉴는 '파일 탐색기 열기'
         menu.group("file")
-        self._act(menu, tr("파일 탐색기 열기"), lambda p=path: self._reveal_in_explorer(p))
+        self._act(menu, tr("파일 탐색기 열기"), lambda p=path: self._reveal_in_explorer(p), key="reveal")   # 본문·썸네일 키 = 지금 본문 파일
         if self._edit_mode and node is not None:
             self._mi_xfer(menu, [node])
         self._act(menu, self._kt(tr("파일·책갈피 이름 변경"), "rename_item").split("\t")[0],
@@ -3037,7 +3046,7 @@ class BookmarkTree(QWidget):
     def _photo_tree_extra(self, item, paths) -> dict:
         """사진 줄 — 책갈피창만의 줄을 사진 메뉴 채우기(`photo_menu_fill`)에 넘긴다(사진 보기 SOT §4.20)."""
         own = self._file_path_of(item)
-        new_base = Path(own).parent if own else self._root_dir
+        new_base = self.new_folder_base(item)
         ex = {"rename": (lambda it=item: self._edit_item(it)),
               "delete": self._op_delete,
               "split": ((tr("옆 창에 열기"), self.copyPaneRequested.emit) if self._split_on
@@ -3046,9 +3055,20 @@ class BookmarkTree(QWidget):
               "fav_file": (lambda p=own: self.addFileFavoriteRequested.emit(p)) if self._is_file_node(item) else None,
               "tags": (lambda p=own: self._edit_file_tags(p)) if self._is_file_node(item) else None,
               "label_style": lambda: self.photoActionRequested.emit("label_style_tree", [])}
-        if new_base and self._mode == "flat":
+        if new_base is not None:
             ex["new_folder"] = lambda b=new_base: self._new_folder_notice(b)
         return ex
+
+    def new_folder_base(self, item):
+        """우클릭 '새 폴더 만들기' 의 자리 — 폴더 행이면 그 안, 파일·책갈피 행이면 그 파일이 든 폴더, 아니면 열린 폴더.
+        키 Ctrl+Shift+N(책갈피창 포커스, `key_actions.new_folder`)도 이 함수(261107-26). 폴더 목록 모드가 아니면 None(메뉴 줄 없음)."""
+        if self._mode != "flat":
+            return None
+        if item is not None and self._is_folder_node(item) and item.toolTip(0):
+            return Path(item.toolTip(0))
+        own = self._file_path_of(item) if item is not None else None
+        base = Path(own).parent if own else self._root_dir
+        return base or None
 
     def _new_folder_notice(self, base) -> None:
         d = self._ask_new_folder(base=base)
@@ -3132,15 +3152,14 @@ class BookmarkTree(QWidget):
             f = self._file_node_of(item)
             xfer_files = ([f] if f is not None
                           else (list(self._iter_folder_files(item)) if self._is_folder_node(item) else []))
+        # 261107-26(디자인 SOT §2.9.2): 아래 키 칸은 이 창 포커스의 키가 이 줄에 같은 일을 할 때만(`key_actions`)
         if _dir_target:
-            self._act(menu, tr("파일 탐색기 열기"), lambda p=_dir_target: self._reveal_in_explorer(p))
+            self._act(menu, tr("파일 탐색기 열기"), lambda p=_dir_target: self._reveal_in_explorer(p), key="reveal")
         elif _folder_row is not None:
-            self._act(menu, tr("파일 탐색기 열기"), lambda d=_folder_row: self._open_folder_in_explorer(d))
-        # 새 폴더의 자리: 폴더 행이면 그 안, 파일·책갈피 행이면 그 파일이 든 폴더, 아니면 열린 폴더.
-        _new_base = (_folder_row if _folder_row is not None
-                     else (Path(_dir_target).parent if _dir_target else self._root_dir))
-        if _new_base and self._mode == "flat":
-            self._act(menu, tr("새 폴더 만들기"), lambda b=_new_base: self._new_folder_notice(b))
+            self._act(menu, tr("파일 탐색기 열기"), lambda d=_folder_row: self._open_folder_in_explorer(d), key="reveal")
+        _new_base = self.new_folder_base(item)               # 키 Ctrl+Shift+N 과 같은 자리
+        if _new_base is not None:
+            self._act(menu, tr("새 폴더 만들기"), lambda b=_new_base: self._new_folder_notice(b), key="new_folder")
         self._mi_xfer(menu, xfer_files)
         act_rename = menu.addAction(self._kt(tr("파일·책갈피 이름 변경"), "rename_item"))   # 261019-1: 단축키 설정(기본 F2)
         act_delete = menu.addAction(self._kt(tr("파일·책갈피 삭제"), "Del"))   # 261017-1(디자인 SOT §2.9.2): 책갈피창 Del 과 같다
@@ -3164,7 +3183,7 @@ class BookmarkTree(QWidget):
         else:
             self._act(menu, self._kt(tr("2단 보기"), "toggle_split"), lambda: self.splitViewRequested.emit(True))
         if _dir_target and not pm:
-            self._act(menu, tr("발표보기"), lambda p=_dir_target: self._file_action("present", [p]))
+            self._act(menu, tr("발표보기"), lambda p=_dir_target: self._file_action("present", [p]), key="present")
         if not pm:                                   # 사진에는 책갈피가 없다(4.20) — 260908-1 펼치기/접기
             act_exp_all = self._act(menu, tr("책갈피 모두 펼치기"), lambda: self._op_expand_all(True),
                                     tip=tr("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
@@ -3179,7 +3198,7 @@ class BookmarkTree(QWidget):
                 self._act(menu, tr('선택 책갈피 {_n_bm}개 페이지순 정렬').format(_n_bm=_n_bm), self._op_sort_by_page,
                           tip=tr("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"))
             if is_bookmark:                          # 260902-5: 책갈피 행 → '책갈피 수정'(제목·페이지)
-                self._act(menu, tr("책갈피 수정"), lambda it=item: self._edit_item(it))
+                self._act(menu, tr("책갈피 수정"), lambda it=item: self._edit_item(it), key="rename_item")   # F2 와 같은 함수
         # 도구
         if is_file and not pm:
             cmp_pair = None
@@ -3193,7 +3212,7 @@ class BookmarkTree(QWidget):
             menu.group("tool")                       # 책갈피 행 — 그 책갈피 쪽 범위를 읽거나, 그 파일에 글자층
             rng = self._bookmark_page_range(item) if item.data(0, self.DATA_PAGE) is not None else None
             self._act(menu, tr("OCR 로 읽기"), lambda p=_dir_target, r=rng: self._file_action("ocr_read", [p], r),
-                      tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
+                      tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."), key="ocr_read")   # 키도 그 쪽 범위
             self._add_ocr_layer_action(menu, files)
         elif _ff:
             menu.group("tool")                       # 261014-16(텍스트 창 SOT §5.5): 폴더 행 — 그 아래 파일 전체에 OCR 글자층

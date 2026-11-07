@@ -110,7 +110,13 @@ def copy_path(mw) -> None:
 
 
 def reveal(mw) -> None:
-    """Alt+Shift+R — 파일 탐색기 열기(그 파일을 고른 채)."""
+    """Alt+Shift+R — 파일 탐색기 열기(그 파일을 고른 채). 책갈피창 폴더 줄이면 그 폴더를 연다(우클릭과 같다, 261107-26)."""
+    kind, w = focus_kind(mw)
+    if kind == "tree":
+        it = w.tree.currentItem()
+        if it is not None and w._is_folder_node(it) and it.toolTip(0):
+            w._open_folder_in_explorer(Path(it.toolTip(0)))
+            return
     ps = target_paths(mw)
     if not ps:
         _status(mw, tr("열 파일이 없습니다 — 파일을 먼저 여세요."))
@@ -119,19 +125,112 @@ def reveal(mw) -> None:
 
 
 def new_folder(mw) -> None:
-    """Ctrl+Shift+N — 새 폴더 만들기(포커스 책갈피창, 없으면 위 창 — 고른 폴더 아래, 없으면 연 폴더)."""
+    """Ctrl+Shift+N — 새 폴더 만들기. 포커스 책갈피창이면 우클릭 '새 폴더 만들기' 와 같은 자리(261107-26 — 폴더 줄 = 그 안,
+    파일·책갈피 줄 = 그 파일이 든 폴더), 아니면 위 창의 고른 폴더 아래(없으면 연 폴더)."""
     kind, w = focus_kind(mw)
     bt = w if kind == "tree" else mw.bookmark_tree
     if not getattr(bt, "_root_dir", None):
         _status(mw, tr("먼저 폴더를 여세요."))
         return
+    if kind == "tree":
+        base = bt.new_folder_base(bt.tree.currentItem())
+        if base is not None:
+            bt._new_folder_notice(base)
+            return
     bt._ask_new_folder()
 
 
+# ── 261107-26(입력 SOT §3.2.3 '창 키도 포커스 따라', 사용자 지시): 창 키를 그 창 우클릭 줄과 같은 대상에 ──────────
+def _tree_row(w):
+    """책갈피창 지금 줄 → (항목, 파일 경로, 사진 모드 줄인가). 폴더 줄·빈 곳이면 경로 ''."""
+    it = w.tree.currentItem()
+    if it is None or w._is_folder_node(it):
+        return it, "", False
+    return it, str(w._file_path_of(it) or ""), bool(w._photo_on())
+
+
+def _photo_sel(mw, kind, w) -> list:
+    """사진 모드에서 책갈피창·사진 썸네일 줄 포커스면 고른 사진들(없으면 [])."""
+    if not _photo_mode(mw) or kind not in ("tree", "strip"):
+        return []
+    return [p for p in target_paths(mw) if mw._is_photo_path(p)]
+
+
+def print_(mw) -> None:
+    """Ctrl+P — 책갈피창 = 우클릭 맨 위 '인쇄'(고른 파일·책갈피 쪽 범위·폴더 아래 PDF), 사진 = 고른 사진,
+    쪽 썸네일 = '인쇄 (N쪽)', 그 밖은 파일 탭 '인쇄'(종전 그대로)."""
+    kind, w = focus_kind(mw)
+    if kind == "tree":
+        it = w.tree.currentItem()
+        files, rng = w.print_targets(it, w._photo_on()) if it is not None else ([], None)
+        if files:
+            w.printFilesRequested.emit(files, rng)
+            return
+    elif kind == "strip":
+        ps = _photo_sel(mw, kind, w)
+        if ps:
+            mw._photo_print(paths=ps)
+            return
+    elif kind == "thumbs" and not _photo_mode(mw):
+        pages = w.selected_pages()
+        if pages:
+            mw._on_thumb_print_pages(pages)
+            return
+    a = getattr(mw, "_sc_act_print", None)
+    if a is not None and a.isEnabled():
+        a.trigger()
+
+
+def present(mw) -> None:
+    """F5 — 발표보기. 책갈피창 PDF 줄이면 그 파일을, 사진 줄·사진 썸네일 줄이면 그 사진을 연 뒤(우클릭과 같다)."""
+    kind, w = focus_kind(mw)
+    ps = _photo_sel(mw, kind, w)
+    if ps:
+        mw._photo_open_then(ps[0], mw._open_presentation)
+        return
+    if kind == "tree":
+        _it, f, pm = _tree_row(w)
+        if f and not pm and f.lower().endswith(".pdf"):
+            w._file_action("present", [f])
+            return
+    mw._open_presentation()
+
+
+def rotate(mw, delta: int) -> None:
+    """Ctrl+[ · Ctrl+] — 쪽 썸네일 포커스(편집 모드)면 고른 쪽, 사진 줄이면 고른 사진, 그 밖은 지금 쪽·사진(종전)."""
+    kind, w = focus_kind(mw)
+    ps = _photo_sel(mw, kind, w)
+    if ps:
+        for p in ps:
+            mw._photo_rotate(delta, path=p)
+        return
+    if kind == "thumbs" and not _photo_mode(mw) and getattr(w, "_edit_mode", False):
+        pages = w.selected_pages()
+        if pages:
+            w.rotatePages.emit(pages, int(delta))
+            return
+    mw._rotate_current(delta)
+
+
+def _thumb_own_page(w):
+    """쪽 썸네일의 지금(고른) 썸네일 → 이 문서 쪽 번호(붙여넣은 쪽·없으면 None)."""
+    from PyQt6.QtCore import Qt
+    it = w.list.currentItem()
+    if it is None or not it.isSelected():
+        sel = w.list.selectedItems()
+        it = sel[-1] if sel else it
+    v = it.data(Qt.ItemDataRole.UserRole) if it is not None else None
+    return v if isinstance(v, int) else None
+
+
 def info(mw) -> None:
-    """Alt+Enter — 문서 정보(PDF) / 사진 정보(사진)."""
+    """Alt+Enter — 문서 정보(PDF) / 사진 정보(사진 — 책갈피창·사진 썸네일 줄이면 고른 사진, 261107-26)."""
     if _photo_mode(mw):
-        if _current_file(mw):
+        kind, w = focus_kind(mw)
+        ps = _photo_sel(mw, kind, w)
+        if ps:
+            mw._photo_info_for(ps[0])
+        elif _current_file(mw):
             mw._photo_info_dialog()
         return
     fn = getattr(mw, "show_doc_info", None)
@@ -172,7 +271,12 @@ def _cur_page(mw):
 
 
 def new_page(mw) -> None:
-    """Ctrl+Enter — 지금 쪽 아래 흰 쪽(쪽 썸네일 '새 페이지 넣기' 와 같은 함수, 편집 모드)."""
+    """Ctrl+Enter — 지금 쪽 아래 흰 쪽(쪽 썸네일 '새 페이지 넣기' 와 같은 함수, 편집 모드).
+    쪽 썸네일 포커스면 그 메뉴 줄과 같은 자리 — 누른(고른) 썸네일 뒤(`_img_ref_row`, 261107-26)."""
+    kind, w = focus_kind(mw)
+    if kind == "thumbs" and not _photo_mode(mw) and getattr(w, "_doc", None) is not None:
+        w.addBlankPageRequested.emit(w._img_ref_row(None))
+        return
     cur, p0 = _cur_page(mw)
     if cur is None:
         _status(mw, tr("쪽을 넣을 PDF 가 열려 있지 않습니다."))
@@ -189,8 +293,25 @@ def new_page(mw) -> None:
     mw._on_add_blank_page(row)
 
 
+def _thumbs_page_signal(mw, signal_name) -> bool:
+    """쪽 썸네일 포커스면 고른 썸네일의 쪽으로 그 메뉴 줄과 같은 신호(261107-26). 처리했으면 True(붙여넣은 쪽은 아무것도 안 함)."""
+    kind, w = focus_kind(mw)
+    if kind != "thumbs" or _photo_mode(mw) or getattr(w, "_doc", None) is None:
+        return False
+    if not getattr(w, "_edit_mode", False):
+        return False                                   # 그 메뉴 줄은 편집 모드에서만 — 그 밖은 종전(지금 쪽)
+    pg = _thumb_own_page(w)
+    if pg is not None:
+        getattr(w, signal_name).emit(int(pg))
+    else:
+        _status(mw, tr("붙여넣은 쪽은 아직 파일에 없습니다.\n💾 '저장' 한 뒤에 다시 해 주세요.").replace("\n", " "))   # 썸네일 알림과 같은 글
+    return True
+
+
 def add_bookmark(mw) -> None:
-    """Ctrl+B — 지금 쪽에 책갈피 추가(본문 우클릭과 같은 함수)."""
+    """Ctrl+B — 지금 쪽에 책갈피 추가(본문 우클릭과 같은 함수). 쪽 썸네일 포커스면 고른 썸네일의 쪽(261107-26)."""
+    if _thumbs_page_signal(mw, "addBookmarkAtPage"):
+        return
     cur, p0 = _cur_page(mw)
     if cur is None:
         _status(mw, tr("책갈피를 넣을 PDF 가 열려 있지 않습니다."))
@@ -199,7 +320,9 @@ def add_bookmark(mw) -> None:
 
 
 def hyperlink(mw) -> None:
-    """Ctrl+K — 지금 쪽 하이퍼링크 등록(본문 우클릭과 같은 함수)."""
+    """Ctrl+K — 지금 쪽 하이퍼링크 등록(본문 우클릭과 같은 함수). 쪽 썸네일 포커스면 고른 썸네일의 쪽(261107-26)."""
+    if _thumbs_page_signal(mw, "registerHyperlinkAtPage"):
+        return
     cur, p0 = _cur_page(mw)
     if cur is None:
         _status(mw, tr("링크를 넣을 PDF 가 열려 있지 않습니다."))
@@ -208,12 +331,45 @@ def hyperlink(mw) -> None:
 
 
 def fav_add_file(mw) -> None:
-    """Ctrl+D — 즐겨찾기에 추가(현재 파일, 즐겨찾기 탭 '현재 파일 추가' 와 같은 함수)."""
+    """Ctrl+D — 즐겨찾기에 추가(현재 파일, 즐겨찾기 탭 '현재 파일 추가' 와 같은 함수).
+    책갈피창 파일 줄이면 그 파일, 사진 썸네일 줄이면 고른 사진(우클릭 '현재 파일을 즐겨찾기에 추가' 와 같다, 261107-26)."""
+    kind, w = focus_kind(mw)
+    if kind == "tree":
+        it = w.tree.currentItem()
+        if it is not None and w._is_file_node(it) and w._file_path_of(it):
+            w.addFileFavoriteRequested.emit(str(w._file_path_of(it)))
+            return
+    ps = _photo_sel(mw, kind, w) if kind == "strip" else []
+    if len(ps) == 1:
+        mw._add_file_favorite(ps[0])
+        return
     mw._add_current_file_favorite()
 
 
 def ocr_read(mw) -> None:
-    """Ctrl+Alt+O — OCR 로 읽기(리본·우클릭과 같은 함수)."""
+    """Ctrl+Alt+O — OCR 로 읽기(리본·우클릭과 같은 함수). 261107-26: 책갈피창·썸네일 포커스면 그 우클릭 줄과 같은 범위 —
+    PDF 파일 줄 = 그 파일 전체, 책갈피 줄 = 그 쪽 범위, 사진 = 고른 사진(여러 장이면 차례로), 쪽 썸네일 = 고른 쪽 범위."""
+    kind, w = focus_kind(mw)
+    ps = _photo_sel(mw, kind, w)
+    if len(ps) > 1:
+        mw._photo_ocr_many(ps)
+        return
+    if ps:
+        mw._photo_open_then(ps[0], mw._photo_ocr_start)
+        return
+    if kind == "tree" and not w._photo_on():
+        it, f, _pm = _tree_row(w)
+        if f and f.lower().endswith(".pdf"):
+            rng = None
+            if not w._is_file_node(it) and it.data(0, w.DATA_PAGE) is not None:
+                rng = w._bookmark_page_range(it)
+            w._file_action("ocr_read", [f], rng)
+            return
+    if kind == "thumbs" and not _photo_mode(mw):
+        pages = w.selected_pages()
+        if pages:
+            w.ocrPagesRequested.emit(list(pages))
+            return
     mw._action_ocr_read()
 
 

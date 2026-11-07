@@ -1000,11 +1000,13 @@ class PageThumbs(QWidget):
         # 모양 — 새 페이지(261021-3) · 회전(260609-15 A1, 편집모드) · 크롭(261010-7, 편집 모드 무관) · 숨김(260609-14 D5) · 삭제는 묶음 끝
         menu.group("shape")
         if self._doc is not None:
-            act_blank = menu.addAction(tr('새 페이지 넣기 — {w}{v}').format(w=_w, v=_v))
+            # 261107-26(디자인 SOT §2.9.2): 키(Ctrl+Enter·회전·OCR·Ctrl+B·Ctrl+K)도 썸네일 포커스면 고른 썸네일에(key_actions) — 키 칸
+            act_blank = menu.addAction(self._kt(tr('새 페이지 넣기 — {w}{v}').format(w=_w, v=_v), "new_page"))
             act_blank.setEnabled(bool(self._edit_mode))
         if sel_pages or (self._edit_mode and staged_sel):
-            act_rot_l = menu.addAction(tr('왼쪽 90° 회전 ({n}쪽)').format(n=_nsel) + _ns)
-            act_rot_r = menu.addAction(tr('오른쪽 90° 회전 ({n}쪽)').format(n=_nsel) + _ns)
+            _rk = (lambda t, k: t) if _ns else self._kt              # 붙여넣은 쪽이 섞이면 '저장 후' — 키 칸 없음
+            act_rot_l = menu.addAction(_rk(tr('왼쪽 90° 회전 ({n}쪽)').format(n=_nsel) + _ns, "rotate_left"))
+            act_rot_r = menu.addAction(_rk(tr('오른쪽 90° 회전 ({n}쪽)').format(n=_nsel) + _ns, "rotate_right"))
             act_rot_180 = menu.addAction(tr('180° 회전 ({n}쪽)').format(n=_nsel) + _ns)
         if has_sel:
             # 261107-20(디자인 SOT §2.9.2): Ctrl+Shift+X 는 썸네일 포커스면 고른 쪽 크롭(key_actions.crop) — 같은 일. 저장 후 항목엔 없음
@@ -1028,14 +1030,15 @@ class PageThumbs(QWidget):
         # 도구 — OCR 로 읽기(고른 쪽) · 서명 · 책갈피·하이퍼링크(편집모드)
         menu.group("tool")
         if has_sel:
-            act_ocr = menu.addAction(tr("OCR 로 읽기"))
+            act_ocr = menu.addAction(self._kt(tr("OCR 로 읽기"), "ocr_read"))
             act_ocr.setToolTip(tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
         if self._doc is not None:
             hook(menu, "tool", ctx)
         if self._edit_mode and page is not None:
             _pl = (own_page + 1) if own_page is not None else (self.list.row(item) + 1)
-            act_add = menu.addAction(tr('책갈피 추가 (p.{page})').format(page=_pl) + ('' if own_page is not None else tr('  (저장 후)')))
-            act_hl = menu.addAction(tr('하이퍼링크 등록 (p.{page})').format(page=_pl) + ('' if own_page is not None else tr('  (저장 후)')))
+            _pk = self._kt if own_page is not None else (lambda t, k: t)
+            act_add = menu.addAction(_pk(tr('책갈피 추가 (p.{page})').format(page=_pl) + ('' if own_page is not None else tr('  (저장 후)')), "add_bookmark"))
+            act_hl = menu.addAction(_pk(tr('하이퍼링크 등록 (p.{page})').format(page=_pl) + ('' if own_page is not None else tr('  (저장 후)')), "hyperlink"))
         if self._doc is None or menu.isEmpty():
             return
         chosen = menu.exec(self.list.viewport().mapToGlobal(pos))

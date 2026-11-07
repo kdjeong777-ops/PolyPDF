@@ -65,6 +65,7 @@ from viewer.stamp_controller import StampMixin          # 261101-3(마스터 §4
 from viewer.photo_controller import PhotoMixin          # 261104-2(사진 보기 SOT): 사진 모드(PolyPix)
 from viewer.share_controller import ShareMixin          # 261105-9(마스터 §4.7.23): 전달 묶음
 from viewer.doc_info_controller import DocInfoMixin     # 261107-3(마스터 §4.12): 정보 한 줄·문서 정보 창
+from viewer import key_actions as _key_actions           # 261107-26: F5 의 대상(입력 SOT §3.2.3)
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -1810,7 +1811,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 260609-4 (D): 발표 보기 (F5) — 메뉴엔 '보기'로, 단축키 유지 위해 창에 등록
         self.act_present = QAction(tr("📽 발표 보기"), self)
         self.act_present.setShortcut("F5")
-        self.act_present.triggered.connect(self._open_presentation)
+        # 261107-26(입력 SOT §3.2.3 '창 키도 포커스 따라'): 책갈피창·사진 썸네일 줄에 포커스면 그 줄 — 우클릭 '발표보기' 와 같은 대상
+        self.act_present.triggered.connect(lambda _=False: _key_actions.present(self))
         self.addAction(self.act_present)           # 메뉴에 없어도 F5 동작 유지
 
         # 260618-16 → 261031-16: '도구' 메뉴 — 묶음 다섯, 하위 메뉴는 ▾ 단추(디자인 SOT §2.9.1)
@@ -2046,6 +2048,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("edit_redo",     (tr("다시실행"), "Ctrl+Y", tr("편집모드"))),
             ("quit",          (tr("종료"), "Ctrl+Q", tr("기타"))),
         ])
+        from viewer import key_actions as _ka                # 261107-4(입력 SOT §3.2.3)
         targets = {
             "new_window": ("action", self._sc_act_new_window),
             "refresh": ("action", self._sc_act_refresh),
@@ -2053,11 +2056,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "zoom_in": ("func", lambda: self._zoom_step(+1)),
             "zoom_out": ("func", lambda: self._zoom_step(-1)),
             "zoom_reset": ("func", lambda: self._zoom_step(0)),
-            "rotate_left": ("func", lambda: self._rotate_current(-90)),
-            "rotate_right": ("func", lambda: self._rotate_current(+90)),
+            "rotate_left": ("func", lambda: _ka.rotate(self, -90)),     # 261107-26: 썸네일·사진 줄 포커스면 고른 쪽·사진
+            "rotate_right": ("func", lambda: _ka.rotate(self, +90)),
             "open_folder": ("action", self._sc_act_open),
             "open_file": ("action", self._sc_act_open_file),
-            "print": ("action", self._sc_act_print),
+            # 261107-26(입력 SOT §3.2.3): 키는 포커스 따라(책갈피창 줄·사진·고른 쪽) — 탭 단추는 종전 그대로라 액션에서 떼어 창 단축키로
+            "print": ("func", lambda: _ka.print_(self)),
             "merge": ("action", self._sc_act_merge),
             "quit": ("action", self._sc_act_quit),
             "present": ("action", self.act_present),
@@ -2093,7 +2097,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "mode_pdf": ("func", lambda: self._photo_key_mode(False)),     # 261107-18
             "mode_photo": ("func", lambda: self._photo_key_mode(True)),
         }
-        from viewer import key_actions as _ka                # 261107-4(입력 SOT §3.2.3)
         for _sid in ("save_as", "copy_path", "new_folder", "reveal", "info", "fav_add_file",
                      "crop", "new_page", "add_bookmark", "hyperlink", "ocr_read"):
             targets[_sid] = ("func", (lambda f=getattr(_ka, _sid): f(self)))
@@ -2198,6 +2201,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """메뉴 막대에서 단축키가 다른 곳(창·QShortcut)에 걸린 항목 — Qt 가 저절로 보이지 않는 것만.
         261025-1: 보기 탭 키는 항목마다 하는 일이 하나라(입력 SOT §3.2.1) 늘 그 항목에 보인다."""
         va = getattr(self, "_view_acts", {}) or {}
+        a = getattr(self, "_sc_act_print", None)          # 261107-26: 인쇄 키는 창 단축키(포커스 따라) — 파일 탭 항목에 키 칸
+        if a is not None:
+            base = a.property("base_text") or a.text().split("	")[0]
+            a.setProperty("base_text", base)
+            a.setText(self._kt(base, "print"))
         for vid, sid in self._VIEW_KEY_IDS:
             a = va.get(vid)
             if a is None:
@@ -2682,11 +2690,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.zipUnpackRequested.connect(self._zip_unpack)            # 261106-5(사진 보기 SOT §4.24.1) zip 풀기
             _bt.zipMemberActivated.connect(self._zip_open_member)       # 261106-5 PDF 모드 zip 안 PDF 보기
             _bt.printFilesRequested.connect(self._on_tree_print)        # 261105-12(§4.7.13) 맨 위 '인쇄…'
-            _bt.fileActionRequested.connect(lambda k, ps, x, b=_bt: self._on_tree_file_action(k, ps, x, bt=b))   # 261107-2 OCR 로 읽기·발표·서명·문서 정보
+            _bt.fileActionRequested.connect(lambda k, ps, x, b=_bt: self._on_tree_file_action(k, ps, x, bt=b))   # 261107-2 OCR 로 읽기·발표·서명
             _bt.photo_menu_fill = self._photo_menu_fill              # 261107-2(사진 보기 SOT §4.20) — 아래 창도 사진 세 메뉴 한 함수
             _bt.save_first_check = self._copy_blocked                # 261107-21(§4.7.13): 저장 ▸ 사본 넷은 저장 전 쪽 편집이 있으면 먼저 저장
-            if self._ctx_info_ready():
-                _bt.file_action_ready.add("info")
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(
                 files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,
@@ -6111,7 +6117,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _k = (lambda t, sid: t) if staged else self._kt          # 261107-20: 붙여넣은 쪽은 '저장 후' — 키 칸 없음
             add("bm", _k(_pl(tr('책갈피 추가 (p.{page})'), tr("책갈피 추가 (붙여넣은 쪽)")), "add_bookmark"))
             add("hl", _k(_pl(tr('하이퍼링크 등록 (p.{page})'), tr("하이퍼링크 등록 (붙여넣은 쪽)")), "hyperlink"))
-        add("info", self._kt(tr("문서 정보"), "info"), self._ctx_info_ready())
         if edit:
             menu.group("end")
             # 입력 설정 — 같은 창(종전 '선과 텍스트 입력 설정…')의 선긋기·글쓰기 탭
@@ -6188,8 +6193,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._open_hyperlink_dialog(cur, pidx)
         elif key == "ocr":
             later(lambda: self._action_ocr_read(preset=(pidx, pidx)))
-        elif key == "info":
-            later(lambda p=str(cur): self._ctx_doc_info(p))
         elif key == "cfg_line":
             self._open_line_text_settings(tab="line")
         elif key == "cfg_text":
@@ -6258,18 +6261,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             QMessageBox.information(self, "PolyPDF", tr("저장하지 않은 쪽 편집(회전·크롭·삭제·이동·붙여넣은 쪽)이 있어 사본에 들어가지 않습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
         return dirty
 
-    def _ctx_info_ready(self) -> bool:
-        return callable(getattr(self, "show_doc_info", None))      # 문서 정보 창(261107-3) — 들어오면 켠다
-
-    def _ctx_doc_info(self, path: str) -> None:
-        """'문서 정보' — 그 파일이 본문에 없으면 먼저 연다(책갈피창 줄)."""
-        if not self._ctx_info_ready():
-            return
-        cur = self.main_view.current_file() if self.main_view else None
-        if not cur or os.path.normcase(str(cur)) != os.path.normcase(str(path)):
-            self._on_bookmark_activated(str(path), 0)
-        QTimer.singleShot(0, lambda: self.show_doc_info())
-
     def _ctx_pdf_save(self, menu, path, *, pages=None, staged=False, thumbs=False) -> None:
         """PDF 썸네일창·본문의 '저장 ▸'(디자인 SOT §2.9.8 의 3) — 책갈피창 줄과 같은 이름·차례, 본문 파일에."""
         from viewer.widgets.ctx_menu import add_save_menu
@@ -6334,18 +6325,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         elif group == "tool":
             a = menu.addAction(tr("서명"))
             a.triggered.connect(lambda _=False: QTimer.singleShot(0, self.action_sign_pdf))
-            a = menu.addAction(tr("문서 정보"))
-            a.setEnabled(self._ctx_info_ready())
-            a.triggered.connect(lambda _=False, p=path: QTimer.singleShot(0, lambda: self._ctx_doc_info(p)))
+            # 261107-26(사용자 지시 '옵션 메뉴의 문서정보 항목 삭제(하단의 메시지창으로 확인 가능)'): 문서 정보는 정보 한 줄·Alt+Enter
 
     def _on_tree_file_action(self, kind: str, paths: list, extra=None, bt=None) -> None:
-        """책갈피창 PDF 줄의 'OCR 로 읽기'·'발표보기'·'서명'·'문서 정보'(261107-2)·'파일 회전'(261107-8) — 그 파일을 본문에 연 뒤 같은 길로."""
+        """책갈피창 PDF 줄의 'OCR 로 읽기'·'발표보기'·'서명'(261107-2)·'파일 회전'(261107-8) — 그 파일을 본문에 연 뒤 같은 길로.
+        키 F5·Ctrl+Alt+O 도 책갈피창 포커스면 이 신호(261107-26, `key_actions`)."""
         if not paths:
             return
         path = str(paths[0])
-        if kind == "info":
-            self._ctx_doc_info(path)
-            return
         cur = self.main_view.current_file() if self.main_view else None
         first = int(extra[0]) if (kind == "ocr_read" and extra) else 0
         if not cur or os.path.normcase(str(cur)) != os.path.normcase(path):
