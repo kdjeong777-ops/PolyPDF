@@ -212,18 +212,44 @@ class StudyMixin:
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_dict_manager(self, checked: bool = False):
-        """260621-70: 단어장 관리 — 261103-2(단어장 SOT §11.1): 대기·적용 두 목록·스타일·우선순위."""
-        from viewer.widgets.dict_manager_dialog import DictManagerDialog
-        dlg = DictManagerDialog(self._study_get_dict(), self._prefs, host=self, parent=self)
-        dlg.changed.connect(self._refresh_dict_sources_menu)
+        """261107-17(단어장 SOT §11.1): 사전 고르기는 환경설정 `고급 › 사전` — 그 항목으로 연다(종전 사전 관리 창)."""
+        return self.open_settings(page="dict")
+
+    @korea_only
+    def _action_dict_file(self, checked: bool = False):
+        """261107-17(단어장 SOT §11.1): 단어장 창 `이 PDF 사전` — 지금 PDF 에만 쓸 사전."""
+        if not self._dict_file_key():
+            return
+        from viewer.widgets.dict_manager_dialog import DictFileDialog
+        dlg = DictFileDialog(self._study_get_dict(), self._prefs, host=self, parent=self)
+        self._dict_file_dialog = dlg                # 검사용
         dlg.exec()
-        self._refresh_dict_sources_menu()
-        # 261103-2(단어장 SOT §11.1): 고른 사전이 바로 단어장 뜻·용어 인식에 보이게
+        self._after_dict_list_changed()
+
+    def _apply_dict_default(self, use_ids, order_ids) -> None:
+        """환경설정 [적용] — 기본 선택(`enabled`)·우선순위(`priority`)를 dict.db 에. 이 PDF 의 선택(`dict_file_off`)은 그대로."""
+        dic = self._study_get_dict()
+        srcs = dic.list_sources()
+        live = [s["source_id"] for s in srcs]
+        order = [x for x in order_ids if x in live] + [x for x in live if x not in order_ids]
+        if order != live:
+            for k, sid in enumerate(order):
+                dic.set_source_priority(sid, (k + 1) * 10)
+        use = set(use_ids)
+        for s in srcs:
+            if bool(s.get("enabled")) != (s["source_id"] in use):
+                dic.set_source_enabled(s["source_id"], s["source_id"] in use)
+        self._after_dict_list_changed()
+
+    def _clear_dict_file_sel(self) -> None:
+        """이 PDF 의 선택을 지운다 — 기본 선택을 따른다(단어장 창 `이 PDF 사전` [기본 선택 따르기])."""
+        key = self._dict_file_key()
+        sel = dict(self._prefs.get("dict_file_off") or {})
+        if key and key in sel:
+            sel.pop(key)
+            self._prefs["dict_file_off"] = sel
+        self._sync_dict_file_sel()
         self._spot_terms_cache = None
-        try:
-            self._refresh_study_panel(self.main_view.current_page())
-        except Exception:
-            pass
 
     def _study_get_tts(self):
         if self._tts is None:

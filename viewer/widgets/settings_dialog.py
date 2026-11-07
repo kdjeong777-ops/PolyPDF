@@ -120,6 +120,7 @@ PAGES = (
     ("shortcuts", tr_noop("단축키"), "advanced"),
     ("ribbon", tr_noop("리본 메뉴"), "advanced"),
     ("external", tr_noop("외부 연결"), "advanced"),
+    ("dict", tr_noop("사전"), "advanced"),          # 261107-17(단어장 SOT §11.1): 한국 전용 — 외부 연결과 같은 숨김
     ("recording", tr_noop("발표 녹화"), "advanced"),
     ("tuning", tr_noop("세부 조정"), "advanced"),
     ("manage", tr_noop("관리"), "advanced"),
@@ -132,7 +133,7 @@ def page_name(key: str) -> str:
     return {
         "general": trp("settings", "일반"), "view": trp("settings", "보기·넘김"), "photo": trp("settings", "사진"),
         "tags": trp("settings", "해시태그"), "shots": trp("settings", "스크린샷"), "shortcuts": trp("settings", "단축키"),
-        "ribbon": trp("settings", "리본 메뉴"), "external": trp("settings", "외부 연결"), "recording": trp("settings", "발표 녹화"),
+        "ribbon": trp("settings", "리본 메뉴"), "external": trp("settings", "외부 연결"), "dict": trp("settings", "사전"), "recording": trp("settings", "발표 녹화"),
         "tuning": trp("settings", "세부 조정"), "manage": trp("settings", "관리"),
         "g:general": trp("settings", "일반"), "g:advanced": trp("settings", "고급"),
     }[key]
@@ -175,6 +176,16 @@ class AdvancedPanel(QWidget):
         self.ed_onterm_key = _QLe(str(self._prefs.get("onterm_key", "")))
         self.ed_onterm_key.setPlaceholderText(tr("국립국어원 온용어(전문용어) 오픈API 인증키 (무료 발급)"))
         ol.addRow(tr("온용어 키:"), self._keyrow(self.ed_onterm_key, "onterm"))
+        _info_od = QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
+                             "한국어 사전은 위 키 입력 시 사용.</small>"))
+        _info_od.setWordWrap(True)           # 261009-10(디자인 SOT §2.14)
+        ol.addRow(_info_od)
+        layout.addWidget(grp_od)
+        grp_od.setVisible(korea_only_visible())      # 한국 사전 키 — 한국 전용(다국어 SOT §7)
+        # 261107-17(단어장 SOT §11.1): 위 '인터넷 사전 (단어장)' 은 환경설정 '고급 › 사전' 쪽이 옮겨 단다. 법령·KCSC·특허는 여기에
+        grp_lw = QGroupBox(tr("법령·건설기준·특허"))
+        self.grp_law = grp_lw
+        ol = QFormLayout(grp_lw)
         self.ed_law_oc = _QLe(str(self._prefs.get("law_oc", "")))
         self.ed_law_oc.setPlaceholderText(tr("법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)"))
         ol.addRow(tr("법제처 OC:"), self._keyrow(self.ed_law_oc, "law"))
@@ -192,12 +203,8 @@ class AdvancedPanel(QWidget):
         _pbtn.clicked.connect(self._pick_patent_dir)
         _ph.addWidget(self.ed_patent_dir, 1); _ph.addWidget(_pbtn)
         ol.addRow(tr("특허 PDF 저장 폴더:"), _pw)
-        _info_od = QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
-                             "한국어 사전은 위 키 입력 시 사용.</small>"))
-        _info_od.setWordWrap(True)           # 261009-10(디자인 SOT §2.14)
-        ol.addRow(_info_od)
-        layout.addWidget(grp_od)
-        grp_od.setVisible(korea_only_visible())      # 한국 사전·법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
+        layout.addWidget(grp_lw)
+        grp_lw.setVisible(korea_only_visible())      # 법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
 
         # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
         try:
@@ -685,6 +692,7 @@ class SettingsDialog(QDialog):
         self._on_restore_toggled(self.rb_start_last.isChecked())
         self._sync_photo_item()
         self._page_items["external"].setHidden(not self.adv.has_visible())
+        self._page_items["dict"].setHidden(not self.adv.has_visible())     # 261107-17: 한국 전용 — 같은 규칙
         # 261009-14(디자인 SOT §2.14): 콤보는 가장 긴 항목이 아니라 최소 길이만 요구한다
         for _cb in self.findChildren(QComboBox):
             _cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
@@ -932,6 +940,12 @@ class SettingsDialog(QDialog):
         self.adv = AdvancedPanel(self._prefs, self, check_login=False)
         layout.addWidget(self.adv)
 
+    def _build_dict(self, layout):
+        """261107-17(단어장 SOT §11.1): '고급 › 사전' — 인터넷 사전 키(외부 연결 판에서 옮겨 단다) · 기본 선택 판 · 바로 실행 묶음."""
+        layout.addWidget(self.adv.grp_online_dict)
+        from viewer.widgets.dict_manager_dialog import attach_settings
+        attach_settings(self, layout)
+
     def _build_recording(self, layout):
         self.rec = RecordingPanel(self._prefs, self, host=self._host)
         layout.addWidget(self.rec)
@@ -1075,13 +1089,14 @@ class SettingsDialog(QDialog):
             for pid in self.page_ids():
                 self._page_items[pid].setHidden(False)
             self._page_items["external"].setHidden(not self.adv.has_visible())
+            self._page_items["dict"].setHidden(not self.adv.has_visible())
             self._sync_photo_item()
             return
         hl = self.palette().color(self.palette().ColorRole.Highlight)
         css = "background-color: rgba(%d,%d,%d,70);" % (hl.red(), hl.green(), hl.blue())
         first_page = None
         for pid, name, _g in PAGES:
-            visible_ok = not (pid == "external" and not self.adv.has_visible()) and not (
+            visible_ok = not (pid in ("external", "dict") and not self.adv.has_visible()) and not (
                 pid == "photo" and self.cmb_view_kind.currentData() != "mixed")
             hits = self._search_hits(pid, needle) if visible_ok else []
             name_hit = visible_ok and needle in page_name(pid).lower()
@@ -1177,6 +1192,8 @@ class SettingsDialog(QDialog):
         m = self._outer.contentsMargins()
         widest = 0
         for pid in self.page_ids():
+            if pid in ("external", "dict") and not self.adv.has_visible():
+                continue                         # 261107-17: 한국 전용 쪽은 이 화면에서 늘 숨는다 — 폭에 넣지 않는다
             sc = self._scrolls[pid]
             widest = max(widest, sc.widget().minimumSizeHint().width() + sc.verticalScrollBar().sizeHint().width()
                          + 2 * sc.frameWidth())

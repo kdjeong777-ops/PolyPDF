@@ -95,6 +95,12 @@ try:
             poke(d.cmb_view_kind)
         if pid == "ribbon" and d.ribbon_panel is not None:
             d.ribbon_panel._add_sep()
+        if pid == "dict" and getattr(d, "dict_panel", None) is not None:   # 261107-17: 사전 판 — 차례·고름·스타일
+            dp = d.dict_panel
+            if dp.lst_use.count() > 1:
+                dp.lst_use.setCurrentRow(0); dp._move(+1)
+            dp._move_all(False)
+            dp._styles.append({"name": "시험", "sources": []})
         after = flat(d.result_prefs())
         changed = {k for k in set(before) | set(after) if before.get(k) != after.get(k)}
         for k in changed:
@@ -110,7 +116,8 @@ try:
     want = {"language": "general", "theme": "general", "startup_mode": "general", "picture.view_kind": "general",
             "page_scroll_mode": "view", "show_panel_toolbar": "view", "picture.slide_interval_s": "photo",
             "auto_tag_enabled": "tags", "screenshot_max": "shots", "shortcuts": "shortcuts", "capture_global": "shortcuts",
-            "ribbon_collection": "ribbon", "law_oc": "external", "recording_dir": "recording", "lite_flip": "tuning",
+            "ribbon_collection": "ribbon", "law_oc": "external", "online_dict_enabled": "dict", "stdict_key": "dict",
+            "dict_styles": "dict", "recording_dir": "recording", "lite_flip": "tuning",
             "hyperlink_top_offset_px": "tuning", "external_language_packs": "manage"}
     wrong = {k: (owner.get(k), v) for k, v in want.items() if owner.get(k) != v}
     chk(not wrong, "A 키의 자리 = 디자인 SOT §2.14 표", str(wrong))

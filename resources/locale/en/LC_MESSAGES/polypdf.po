@@ -1106,10 +1106,6 @@ msgid "PDF병합"
 msgstr "Merge PDFs"
 
 #: viewer/app.py
-msgid "사전 관리"
-msgstr "Dictionaries"
-
-#: viewer/app.py
 msgid "기본 PDF 앱으로 설정"
 msgstr "Set as Default PDF App"
 
@@ -1867,10 +1863,6 @@ msgstr "Create Empty Signature Field"
 #: viewer/app.py viewer/sign_controller.py viewer/widgets/sign_dialogs.py
 msgid "디지털 ID 관리"
 msgstr "Manage Digital IDs"
-
-#: viewer/app.py
-msgid "사전 관리 — 적용할 사전·스타일·가져오기·내보내기·백업·복원"
-msgstr "Manage Dictionaries — dictionaries to apply, style, import, export, backup, restore"
 
 #: viewer/app.py
 msgid "포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)에 적용합니다"
@@ -10785,6 +10777,10 @@ msgid "리본 메뉴"
 msgstr "Ribbon"
 
 #: viewer/widgets/settings_dialog.py
+msgid "사전"
+msgstr "Dictionaries"
+
+#: viewer/widgets/settings_dialog.py
 msgid "세부 조정"
 msgstr "Fine-tuning"
 
@@ -10838,6 +10834,11 @@ msgstr "External services"
 
 #: viewer/widgets/settings_dialog.py
 msgctxt "settings"
+msgid "사전"
+msgstr "Dictionaries"
+
+#: viewer/widgets/settings_dialog.py
+msgctxt "settings"
 msgid "발표 녹화"
 msgstr "Presentation recording"
 
@@ -10885,6 +10886,14 @@ msgid "온용어 키:"
 msgstr "Onyongeo key:"
 
 #: viewer/widgets/settings_dialog.py
+msgid "<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. 한국어 사전은 위 키 입력 시 사용.</small>"
+msgstr "<small>English Free Dictionary and Tatoeba examples work without a key. The Korean dictionary is used when the key above is entered.</small>"
+
+#: viewer/widgets/settings_dialog.py
+msgid "법령·건설기준·특허"
+msgstr "Laws · construction standards · patents"
+
+#: viewer/widgets/settings_dialog.py
 msgid "법제처 국가법령정보 OPEN API OC(이메일 ID, 무료)"
 msgstr "MOLEG National Law Information OPEN API OC (email ID, free)"
 
@@ -10919,10 +10928,6 @@ msgstr "Browse"
 #: viewer/widgets/settings_dialog.py
 msgid "특허 PDF 저장 폴더:"
 msgstr "Patent PDF folder:"
-
-#: viewer/widgets/settings_dialog.py
-msgid "<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. 한국어 사전은 위 키 입력 시 사용.</small>"
-msgstr "<small>English Free Dictionary and Tatoeba examples work without a key. The Korean dictionary is used when the key above is entered.</small>"
 
 #: viewer/widgets/settings_dialog.py
 msgid "번역 (Claude)"
@@ -12493,6 +12498,14 @@ msgstr "Collapse"
 #: viewer/widgets/study_panel.py
 msgid "표시할 사전 출처를 켜고 끕니다(기본/사용자 용어집)."
 msgstr "Turn dictionary sources on/off for display (default/user glossaries)."
+
+#: viewer/widgets/study_panel.py
+msgid "이 PDF 사전"
+msgstr "Dictionaries for This PDF"
+
+#: viewer/widgets/study_panel.py
+msgid "지금 PDF 에만 쓸 사전을 고릅니다 — 모든 PDF 의 기본은 환경설정 › 고급 › 사전"
+msgstr "Choose dictionaries for this PDF only — the default for all PDFs is in Settings › Advanced › Dictionaries"
 
 #: viewer/widgets/study_panel.py
 msgid "표시할 단어 집합: 전체/선택단어/날짜별/초기"
@@ -15270,4 +15283,10 @@ msgstr "Getting Started"
 
 #~ msgid "한 장을 고르면 읽습니다."
 #~ msgstr "Choose one photo to read."
+
+#~ msgid "사전 관리"
+#~ msgstr "Dictionaries"
+
+#~ msgid "사전 관리 — 적용할 사전·스타일·가져오기·내보내기·백업·복원"
+#~ msgstr "Manage Dictionaries — dictionaries to apply, style, import, export, backup, restore"
 

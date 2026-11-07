@@ -75,7 +75,7 @@ GROUPS = [["tools.ocr", "tools.build_study", "tools.online_enrich",          # 2
            "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag", "tools.reindex"],
           ["tools.img2pdf", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign"],
           ["file.export", "tools.translate"],
-          ["tools.settings", "tools.dict"],
+          ["tools.settings"],                         # 261107-17: 사전 관리 단추 없앰(환경설정 고급 › 사전)
           ["tools.install"]]
 chk(groups == GROUPS, "② 도구 메뉴 묶음 다섯·차례(261031-16)", str(groups))
 marks = [a.text() or a.toolTip() for a in menu.actions() if a.property("ribbonMark")]
@@ -91,16 +91,16 @@ chk(mw._cmds["tools.build_study"].iconText() == "단어장 생성" and mw._cmds[
     "② 모음 단추 이름은 그대로(짧은 이름은 도구 탭에서만)")
 subs = {a.text(): [x.text() for x in a.menu().actions()] for a in menu.actions() if a.menu()}
 names = {cmd_id(a): a.text() for a in menu.actions() if cmd_id(a)}
-chk(names.get("tools.autotag") == "태그" and names.get("tools.reindex") == "인덱스" and names.get("tools.dict") == "사전 관리",
-    "② 이름 바꿈 — 태그 · 인덱스 · 사전 관리(261031-16, RENAMED)", str(names))
+chk(names.get("tools.autotag") == "태그" and names.get("tools.reindex") == "인덱스",
+    "② 이름 바꿈 — 태그 · 인덱스(261031-16, RENAMED)", str(names))
 # 261031-1: 개수(종전 7) 대신 항목 그대로 — '서명 그림...' 을 빼고 '디지털 ID...' → '디지털 ID 관리...'(보안 SOT §3). 개수만 보면
 #   항목이 바뀐 까닭을 실패 글이 말하지 못하고, 이름 바꿈 검사(test_sot_crossref RENAMED I3)도 숫자는 못 본다
 SIGN_SUB = ["서명", "그림만 넣기", "서명 확정", "서명 편집", "빈 서명 칸 만들기", "디지털 ID 관리"]   # 261107-4: '…' 없음
 chk(subs.get("전자서명", []) == SIGN_SUB
     and subs.get("태그", [])[:1] == ["태그 다시 계산"],
     "② 전자서명·태그는 하위 메뉴(▸)", str(subs))
-chk("사전 관리" not in subs and mw._cmds["tools.dict"].menu() is None,      # 261107-13(단어장 SOT §11.1): 단추 하나 → 사전 관리 창
-    "② 사전 관리는 하위 메뉴 없는 단추 하나", str(subs))
+chk("사전 관리" not in subs and "tools.dict" not in mw._cmds,      # 261107-17(단어장 SOT §11.1): 환경설정 '고급 › 사전' 으로만
+    "② 도구 탭에 사전 관리 단추가 없다", str(subs))
 sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
 chk(sec_titles == [], "② 구역 제목은 없다(261031-16 — 구분선·바깥 글자)", str(sec_titles))
 chk("단축키 설정..." not in items, "② 단축키 설정은 환경설정 '스타일' 묶음으로(261025-6 보완)")

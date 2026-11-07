@@ -1907,10 +1907,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act(tr("환경설정"), self.action_open_settings, "tools.settings")        # 260618-18
         # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
         # 📖 사전 관리(261031-16: 종전 '사전 및 용어집 관리') — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25)
-        #   261107-13(단어장 SOT §11.1, 사용자 결정 '단추 하나 + 창으로 모음'): 종전 하위 메뉴 열 개는 사전 관리 창의 단추로.
-        #   명령 id 는 그대로(모음에 넣은 단추가 남는다)
-        self._ko_only_acts.append(_act(tr("사전 관리"), self._action_dict_manager, "tools.dict",
-                                       tip=tr("사전 관리 — 적용할 사전·스타일·가져오기·내보내기·백업·복원")))
+        #   261107-17(단어장 SOT §11.1, 사용자 결정): 도구 탭 단추는 없앴다 — 환경설정 '고급 › 사전'(Ctrl+,)으로만
 
         # 등록·설치
         m_tools.addSeparator()
@@ -2591,6 +2588,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.study_panel.mp3Requested.connect(self._on_study_mp3)
         self.study_panel.sourceToggled.connect(self._on_study_source_toggled)  # P2 출처 on/off
         self.study_panel.styleChosen.connect(self._on_dict_style_chosen)       # 261103-2 사전 스타일
+        self.study_panel.fileDictRequested.connect(self._action_dict_file)     # 261107-17 이 PDF 사전
         # 260606-3/5: 스크린샷이 모두 삭제되면 창 숨김
         # rowsRemoved=개별 삭제(takeItem), modelReset/clearedAll='전체 삭제'(list.clear())
         self.shot_strip.list.model().rowsRemoved.connect(
@@ -9373,6 +9371,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._apply_collection()
         self._save_settings_now()
         self.status.showMessage(tr("설정 저장됨"), 3000)
+        dd = new_prefs.get("dict_default")              # 261107-17(단어장 SOT §11.1): 사전 기본 선택·우선순위 — settings.json 밖, dict.db 에
+        if dd is not None:
+            self._apply_dict_default(dd.get("use") or [], dd.get("order") or [])
         rules = new_prefs.get("tag_rules")              # 261107-10(태그 SOT §5.8): settings.json 이 아니라 tag_rules.json — 바뀌었으면 곧바로 다시 붙인다
         if rules is not None:
             from viewer import tag_rules as _tr

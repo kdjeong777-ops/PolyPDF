@@ -129,6 +129,7 @@ class StudyPanel(QWidget):
     wordFilterChanged = pyqtSignal()         # 표시 필터(전체/선택/날짜/초기) 변경
     sourceToggled = pyqtSignal(str, bool)    # 260611-102(P2): 사전 출처 on/off
     styleChosen = pyqtSignal(str)            # 261103-2(단어장 SOT §11.1): 사전 스타일 고름
+    fileDictRequested = pyqtSignal()         # 261107-17: '이 PDF 사전' 단추
     markSelectedRequested = pyqtSignal()     # ▲ 선택단어 저장
     deleteWordRequested = pyqtSignal()       # ▼ 리스트에서 삭제
     speedChanged = pyqtSignal(int)           # 빠르기(본화면·단어장 공유)
@@ -247,6 +248,12 @@ class StudyPanel(QWidget):
         self.btn_src.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.btn_src.setMenu(_StayOpenMenu(self.btn_src))   # 260615-23: 연속 토글
         flow.addWidget(self.btn_src)
+        # 261107-17(단어장 SOT §11.1): 이 PDF 에만 쓸 사전 — 기본 선택은 환경설정 '고급 › 사전'
+        self.btn_file_dict = QToolButton()
+        self.btn_file_dict.setText(tr("이 PDF 사전"))
+        self.btn_file_dict.setToolTip(tr("지금 PDF 에만 쓸 사전을 고릅니다 — 모든 PDF 의 기본은 환경설정 › 고급 › 사전"))
+        self.btn_file_dict.clicked.connect(lambda _c=False: self.fileDictRequested.emit())
+        flow.addWidget(self.btn_file_dict)
         self.cmb_filter = QComboBox()        # 전체단어/선택단어/날짜/초기
         self.cmb_filter.setToolTip(tr("표시할 단어 집합: 전체/선택단어/날짜별/초기"))
         self._rebuild_filter([])
