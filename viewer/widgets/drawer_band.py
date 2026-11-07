@@ -10,6 +10,8 @@ from PyQt6.QtCore import Qt, pyqtSignal, QRectF
 from PyQt6.QtGui import QColor, QPainter, QFont
 from PyQt6.QtWidgets import QWidget
 
+from viewer.i18n import tr
+
 BAND_W = 10          # 띠 폭(px)
 
 # 디자인 SOT §2.5 — (다크, 라이트)
@@ -43,7 +45,6 @@ class DrawerBand(QWidget):
         self._sync_tip()
 
     def _sync_tip(self):
-        from viewer.i18n import tr
         self.setToolTip(tr("오른쪽 패널 펼치기/접기"))
         self.setAccessibleName(tr("오른쪽 패널 펼치기/접기"))
 
