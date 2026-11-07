@@ -152,7 +152,7 @@ class TranslateFilesDialog(QDialog):
     def __init__(self, all_files: list, preselected: list = None,
                  prefs: dict = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("PDF번역"))
+        self.setWindowTitle(tr("번역"))
         self.setMinimumSize(760, 520)
         self.setAcceptDrops(True)
         self._prefs = prefs or {}

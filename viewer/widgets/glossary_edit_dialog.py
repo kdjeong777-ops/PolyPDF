@@ -170,4 +170,4 @@ class GlossaryEditDialog(QDialog):
                 != QMessageBox.StandardButton.Yes:
             return
         self.accept()
-        par._action_translate_files([self._source_path])   # PDF번역 창에 우측 담아 열기
+        par._action_translate_files([self._source_path])   # 번역 창에 우측 담아 열기

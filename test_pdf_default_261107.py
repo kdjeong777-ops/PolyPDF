@@ -173,7 +173,7 @@ for a in mw.menuBar().actions():
     if m is None:
         continue
     for b in m.actions():
-        if b.menu() is not None and b.text() == "등록·설치":
+        if b.menu() is not None and b.text() == "설치·설정":
             names = [c.text() for c in b.menu().actions()]
 chk(names[:1] == ["기본 PDF 앱으로 설정"], "F 메뉴 이름 '기본 PDF 앱으로 설정'", str(names))
 

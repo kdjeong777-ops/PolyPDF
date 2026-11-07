@@ -236,7 +236,7 @@ class SignDraftLayer(QObject):
 
 
 class SignDraftBand(QFrame):
-    """서명 자리 띠 — '✍ 서명 자리 N개 …' + [서명 확정…] · [모두 지우기] (SOT §3.10, 색은 디자인 SOT §2.16)."""
+    """서명 자리 띠 — '✍ 서명 자리 N개 …' + [서명 확정] · [모두 지우기] (SOT §3.10, 색은 디자인 SOT §2.16)."""
     confirmRequested = pyqtSignal()
     clearRequested = pyqtSignal()
     BG = "#e3f2fd"

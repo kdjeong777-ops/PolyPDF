@@ -2,7 +2,7 @@
 """서명 자리(초안) → 일괄 확정 → 서명 편집 — `MainWindow` 믹스인 (보안 SOT §3.3·§3.4·§3.10·§3.11).
 
   자리 놓기(`_sign_add_draft`) → 본문 위 위젯으로 옮기기·크기·지우기(`SignDraftLayer`)
-  → [서명 확정…](`action_sign_confirm`): 바탕 → 그림만(증분) → 새 자리 전자서명 → 빈 칸 채우기 → 별도 파일 `<이름>_서명.pdf`
+  → [서명 확정](`action_sign_confirm`): 바탕 → 그림만(증분) → 새 자리 전자서명 → 빈 칸 채우기 → 별도 파일 `<이름>_서명.pdf`
   → [서명 편집](`action_sign_edit`): 서명 파일의 바탕을 되살려 자리를 다시 놓는다 → 다시 확정하면 그 서명 파일을 바꾼다.
 
 원본 파일에는 아무것도 쓰지 않는다(§3.4). 무거운 일(서명·그림 넣기·바탕 자르기·미리보기)은 배경(§10).
@@ -189,7 +189,7 @@ class SignDraftMixin:
         b = lay.box_for(d["id"]) if lay is not None else None
         if b is not None:
             b.setFocus()
-        self.status.showMessage(tr("서명 자리를 놓았습니다 — 옮기거나 크기를 바꾼 뒤 [서명 확정…] 을 누르세요."), 8000)
+        self.status.showMessage(tr("서명 자리를 놓았습니다 — 옮기거나 크기를 바꾼 뒤 [서명 확정] 을 누르세요."), 8000)
         return d["id"]
 
     def _sign_draft_moved(self, mv, draft_id: str, rect) -> None:
@@ -451,7 +451,7 @@ class SignDraftMixin:
         cur = str(cur)
         ds = sign_drafts.drafts(cur)
         if not ds:
-            QMessageBox.information(self, tr("서명 확정"), tr("이 파일에 서명 자리가 없습니다. 도구 → 서명 으로 자리를 먼저 놓으세요."))
+            QMessageBox.information(self, tr("서명 확정"), tr("이 파일에 서명 자리가 없습니다. 도구 → 전자서명 ▸ 서명 으로 자리를 먼저 놓으세요."))
             return
         doc = mv._doc.doc
         signs = [d for d in ds if d["kind"] == "sign"]
@@ -856,4 +856,4 @@ class SignDraftMixin:
         except Exception:
             pass
         self._sign_drafts_sync()
-        self.status.showMessage(tr("서명 자리를 되살렸습니다 — 고친 뒤 [서명 확정…] 을 누르면 '{name}' 을 바꿉니다.").format(name=Path(cur).name), 10000)
+        self.status.showMessage(tr("서명 자리를 되살렸습니다 — 고친 뒤 [서명 확정] 을 누르면 '{name}' 을 바꿉니다.").format(name=Path(cur).name), 10000)

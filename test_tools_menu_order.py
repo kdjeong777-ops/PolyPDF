@@ -104,10 +104,10 @@ sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
 chk(sec_titles == [], "② 구역 제목은 없다(261031-16 — 구분선·바깥 글자)", str(sec_titles))
 chk("단축키 설정..." not in items, "② 단축키 설정은 환경설정 '스타일' 묶음으로(261025-6 보완)")
 # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목은 '등록·설치 ▸' 하나로 — 명령 id 는 그대로
-_inst = next((a for a in menu.actions() if a.menu() is not None and a.text() == "등록·설치"), None)
+_inst = next((a for a in menu.actions() if a.menu() is not None and a.text() == "설치·설정"), None)
 inst_items = [a.text() for a in _inst.menu().actions()] if _inst is not None else []
 chk(inst_items == ["기본 PDF 앱으로 설정", "구성요소 설치 (녹화·OCR)", "가상 프린터 설치·제거"],      # 261107-14·-11 개명
-    "② 등록·설치 ▸(PDF 앱 등록 · 구성요소 설치 · 가상 프린터)", str(inst_items))
+    "② 설치·설정 ▸(PDF 앱 등록 · 구성요소 설치 · 가상 프린터)", str(inst_items))
 from viewer.widgets.ribbon import cmd_id as _cid
 chk([_cid(a) for a in (_inst.menu().actions() if _inst else [])] == ["tools.pdf_handler", "tools.components", "tools.vprinter"]
     and "tools.vprinter" in dict(mw.ribbon_catalog()[0])["도구(&T)"],

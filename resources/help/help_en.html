@@ -14,7 +14,7 @@
     If search results look out of date, use <b>Tools → Index</b> (rebuild).</li>
   <li><b>Edit mode / view mode</b>: switch with the <b>Edit</b> button above the bookmark panel (blue pencil = view, red pencil = edit).
     The mode at startup is <b>PolyPDF startup mode</b> under 'General › Startup' in Settings.</li>
-  <li><b>Tools → Register &amp; Install → Set as Default PDF App</b>: opens the Windows Default apps page — choose PolyPDF for .pdf there
+  <li><b>Tools → Install &amp; Setup → Set as Default PDF App</b>: opens the Windows Default apps page — choose PolyPDF for .pdf there
     (Windows does not let an app change the default by itself).</li>
 </ul>
 
@@ -24,7 +24,7 @@
     node (▸) to see the PDF's own bookmarks (TOC). Along the top: the <b>Search list names</b> box · <b>#</b> (hashtags, §13) ·
     <b>Sort</b> (§7) · <b>📁 Folder</b> (file mode ↔ folder mode) · <b>Tree</b> (single ↔ tree) · <b>↻</b> (refresh after files change outside — also in edit mode; asks first if there are unsaved changes).</li>
   <li><b>Right-click</b> a file or bookmark: Print / Rotate file ▸ / Open in File Explorer · New Folder · Rename File/Bookmark · Delete File/Bookmark /
-    Save ▸ (Save · Save As · Flattened copy · Reduced-size copy · Copy without personal info · Transfer bundle · Make PDF · Convert) / Split View · Presentation · Expand/Collapse All Bookmarks /
+    Save ▸ (Save · Save As · Flattened copy · Reduced-size copy · Redacted copy · Transfer bundle · Make PDF · Convert) / Split View · Presentation · Expand/Collapse All Bookmarks /
     Read with OCR · Create text layer with OCR · Batch OCR · Build Bookmarks · Compare two files (with two chosen) · Sign · Document Info · Edit Hashtags / add to Favorites, and so on.
     In edit mode there are also Copy to folder / Move to folder (below New Folder), rename / delete folder, and merging several files into a PDF.</li>
   <li><b>Expand All Bookmarks</b> (right-click): expands the bookmarks of every file
@@ -42,7 +42,7 @@
     The <b>info line</b> at the left end of the bottom bar: file name · number of pages · current page paper (A4 portrait etc.) · file size, plus password · signed · scanned when they apply. Click it for the <b>Document Info</b> window (title · author · creator · created/modified dates · PDF version · permissions · signatures · pages with/without a text layer · bookmark count · attachment count) — right-click 'Document Info' and Alt+Enter do the same. In split view each pane has its own line.
     <b>Right-click</b> the page (or Shift+F10) — the six menus (bookmark panel · thumbnails · page, PDF and photo) share one order:
     Print → Copy (Copy · Copy as Screenshot · Copy Text · Paste …) → Shape (Rotate · Crop · Hide · Delete) → File ▸ →
-    <b>Save ▸</b> (click the label to save at once; ▸ holds Save As · Flattened copy · Reduced-size copy · Copy without personal info · Transfer bundle · Make PDF · Convert) →
+    <b>Save ▸</b> (click the label to save at once; ▸ holds Save As · Flattened copy · Reduced-size copy · Redacted copy · Transfer bundle · Make PDF · Convert) →
     View (Split View · Presentation) → Tools (Read with OCR · Sign · Add Bookmark · Add Hyperlink · Document Info) → Input Settings.
     On a row with ▸, clicking the label or pressing Enter does the main action; hovering ▸ or pressing → opens the submenu.
     In edit mode, pressing <b>Del</b> with no object selected deletes this page (until you save). Menus show each item's shortcut on the right. <b>Paste uses what you copied last</b> — copied pages go below this page, copied objects go where you clicked.
@@ -281,7 +281,7 @@
     <b>Highlight</b> · <b>Show in body too</b> · <b>To bookmarks</b> (turn highlighted spots into bookmarks) · <b>Save Word ▾</b> (current page / page range / whole document).</li>
   <li><b>Read with OCR</b> (Tools tab 'OCR' · Ctrl+Alt+O · right-click · text pane): reads the text of scanned PDFs — current page / page range / whole document, language,
     'Ignore background watermarks', 'Skip pages that already have text'. <b>Apply to PDF</b> writes the text layer into the PDF (the original is backed up).
-    Get the OCR engine from <b>Tools → Register &amp; Install → Install Components (recording · OCR)</b>.</li>
+    Get the OCR engine from <b>Tools → Install &amp; Setup → Install Components (recording · OCR)</b>.</li>
   <li><b>Batch OCR</b> (Tools → Batch OCR · right-click a file): reads every page of the current PDF with OCR
     and makes the bookmarks in one go. If the document has a table of contents, only its entries become bookmarks, plus one 'Contents' bookmark on its first page.
     The result goes into the PDF when you click [Save] in the bookmark panel.</li>
@@ -290,7 +290,7 @@
     A backup is kept next to the original the first time, pages already read are not read again, and signed or password-protected PDFs are skipped.</li>
   <li><b>Reduced-size copy</b> (right-click Save ▸ — in the bookmark panel several files or a folder row too): lowers only image resolution and quality
     (light 200 · medium 150 · strong 100 dpi) and saves a smaller new file <code>&lt;name&gt;_compressed.pdf</code>. Text and the original stay as they are; no file is made unless it shrinks by more than 5%.</li>
-  <li><b>Copy without personal info</b> (right-click Save ▸): in the redaction window, drag on the page to choose areas, or find resident registration,
+  <li><b>Redacted copy</b> (right-click Save ▸): in the redaction window, drag on the page to choose areas, or find resident registration,
     phone, email, card and business numbers or a search term (scanned pages use the OCR results). A new file <code>&lt;name&gt;_redacted.pdf</code> is made
     with the text and images in those places <b>actually removed</b>, and hidden data such as document info and attachments is removed too. The original stays.</li>
   <li><b>Compare two files</b> (select two files in the bookmark panel and right-click): split view shows the older file (modified earlier) on the left and the newer on the right,
@@ -392,8 +392,8 @@
     Pressing [Update] <b>downloads the file first</b>, then closes all open PolyPDF windows and installs
     (if you cancel the download or it fails, nothing is closed).
     At the bottom of that window, <b>Download Updates Automatically</b> (on by default) fetches new versions in advance. <b>Also Receive Beta (Test) Versions</b> (off by default) also fetches test versions before a stable release.</li>
-  <li><b>Tools → Register &amp; Install → Install Components (recording · OCR)</b>: downloads ffmpeg for recording and the OCR engine (installed ✓ / not installed).</li>
-  <li><b>Tools → Register &amp; Install → Install/Remove Virtual Printer</b>: when you print to the <b>'PolyPDF'</b> printer from another program
+  <li><b>Tools → Install &amp; Setup → Install Components (recording · OCR)</b>: downloads ffmpeg for recording and the OCR engine (installed ✓ / not installed).</li>
+  <li><b>Tools → Install &amp; Setup → Install/Remove Virtual Printer</b>: when you print to the <b>'PolyPDF'</b> printer from another program
     (PowerPoint, Word, Notepad …), it saves a PDF without a save dialog and opens it in PolyPDF. It saves next to the original file
     (or in the default save folder if the original can't be found) and adds (1), (2) if the name exists.
     Choose the save folder, black-and-white and the photo/image resolution (only larger images are reduced, to keep the PDF light) in that window. Available in the installed version only (not the portable one); it can also be installed during setup.
@@ -412,7 +412,7 @@
   <li><b>Right-click menu</b> (bookmark panel · thumbnail strip · main view — same order as for PDFs): Print → Copy Photo →
     shape (Rotate 90° left · Rotate 90° right · Rotate 180° · Original Orientation · Crop · Remove Crop · Restore original) →
     file (Open in File Explorer · Copy to Folder ▸ · Move to Folder ▸ · Rename (F2) · Delete (edit mode)) →
-    Save ▸ (Save = save orientation · Flattened copy · Copy without personal info · Make PDF · Convert ▸ JPEG · PNG · WebP) → view (Split View · Presentation) →
+    Save ▸ (Save = save orientation · Flattened copy · Redacted copy · Make PDF · Convert ▸ JPEG · PNG · WebP) → view (Split View · Presentation) →
     tools (Read with OCR · Photo Info · Show Location on Map · Batch · Edit Hashtags).
     Ctrl/Shift+click in the thumbnail strip to choose several photos; the menu then works on all of them.</li>
   <li><b>Rotate</b> (Ctrl+] / Ctrl+[): rotates the view only; the original is unchanged. For a JPEG, <b>Save ▸ Save</b> (save orientation) changes only the orientation tag of the original (the image is not recompressed).</li>

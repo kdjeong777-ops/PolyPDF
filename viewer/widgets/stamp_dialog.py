@@ -459,7 +459,7 @@ class StampManagerDialog(QDialog):
         self.btn_del.setEnabled(e is not None)
         if e is None:
             self.preview.set_image(QPixmap())
-            self.lb_info.setText(tr("등록 이미지가 없습니다 — [추가] 로 파일·클립보드·스크린샷을 등록하거나, 이미지 ▾ 'PDF 에서 영역 등록…' 으로 본문의 영역을 등록합니다."))
+            self.lb_info.setText(tr("등록 이미지가 없습니다 — [추가] 로 파일·클립보드·스크린샷을 등록하거나, 이미지 ▾ 'PDF 에서 영역 등록' 으로 본문의 영역을 등록합니다."))
             return
         try:
             c = stamp_core.compose(e, stamp_store.payload(e))

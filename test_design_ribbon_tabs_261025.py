@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""261025-1·-2(사용자 지시·결정): 보기 탭 차례·Ctrl+Shift+1~9(입력 SOT §3.2.1), 도구 '등록·설치', 설정창 '고급 설정'(디자인 SOT §2.14).
+"""261025-1·-2(사용자 지시·결정): 보기 탭 차례·Ctrl+Shift+1~9(입력 SOT §3.2.1), 도구 '설치·설정', 설정창 '고급 설정'(디자인 SOT §2.14).
 
 A. 보기 탭 세부 줄 차례: 1단·2단·텍스트·단어장·검색·스크린샷 | 법령·고시·특허·건설기준 | 발표보기, 이름 '법령·고시'
 B. 실제 키 입력: Ctrl+Shift+1 → 1단(2단 끔·오른쪽 창 숨김), Ctrl+Shift+2 → 2단 **으로만**(두 번 눌러도 2단),
    Ctrl+Shift+3/5/6 → 텍스트·검색·스크린샷, 키가 없는 법령(Ctrl+Shift+7)은 아무 일도 하지 않는다 · 키가 있으면 연다
 C. 항목 오른쪽 칸에 각자 키(상태와 무관)
-D. 도구 탭: '등록·설치' ▾ 하나(종전 세 단추 없음)
+D. 도구 탭: '설치·설정' ▾ 하나(종전 세 단추 없음)
 E. (261107-12) 외부 연결 쪽 — [적용] 이면 저장·게이팅, [취소] 는 적용 뒤 바꿈만 버림. 종전: '고급 설정...' 단추 — 눌러 [확인] 하면 곧바로 저장·게이팅, 환경설정 [취소] 해도 남는다
 """
 import os, sys, faulthandler, json
@@ -93,10 +93,10 @@ try:
     tacts = [x for x in trow.actions() if not x.isSeparator() and trow.widgetForAction(x)
              and not trow.widgetForAction(x).property("ribbonSpacer")]
     tnames = [x.iconText() for x in tacts]
-    chk("등록·설치" in tnames and not any(t in tnames for t in ("기본 PDF 앱으로 설정", "구성요소 설치", "가상 프린터")),
-        "D 도구 탭: '등록·설치' ▾ 하나", str(tnames))
-    a_inst = [x for x in tacts if x.iconText() == "등록·설치"][0]
-    chk(a_inst.isEnabled() and a_inst.menu() is not None, "D '등록·설치' 는 켜진 ▾ 단추")
+    chk("설치·설정" in tnames and not any(t in tnames for t in ("기본 PDF 앱으로 설정", "구성요소 설치", "가상 프린터")),
+        "D 도구 탭: '설치·설정' ▾ 하나", str(tnames))
+    a_inst = [x for x in tacts if x.iconText() == "설치·설정"][0]
+    chk(a_inst.isEnabled() and a_inst.menu() is not None, "D '설치·설정' 는 켜진 ▾ 단추")
 
     # E 외부 연결(종전 '고급 설정' 창) — 261107-12(디자인 SOT §2.14): 환경설정 한 창의 '고급 › 외부 연결' 쪽, [적용] 한 규칙
     from viewer.widgets import settings_dialog as sd

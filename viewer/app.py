@@ -1573,7 +1573,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             for a in m.actions():
                 if cmd_id(a):
                     ids.append(cmd_id(a))
-                if a.menu() is not None:         # 261025-1: 하위 묶음 안의 명령(도구 `등록·설치` 의 셋)도
+                if a.menu() is not None:         # 261025-1: 하위 묶음 안의 명령(도구 `설치·설정` 의 셋)도
                     ids += [cmd_id(b) for b in a.menu().actions() if cmd_id(b)]
             if ids:
                 cat.append((m.title(), ids))
@@ -1896,7 +1896,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 변환 · 번역(사용자 결정 '변환 옆')
         m_tools.addSeparator()
         m_tools.addAction(self.act_export)       # 261025-5(사용자 지시): '변환' 은 파일·도구 탭 모두에 — 같은 액션(id file.export)
-        self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files, "tools.translate", tr("번역"),
+        self._act_tr_files = _act(tr("번역"), self._action_translate_files, "tools.translate", tr("번역"),
                                   tr("PDF 번역 (목록 창)"))
         # 261016-3(사용자 지시): 'PDF 꾸밈 저장' 은 파일 탭 '평탄화 사본' 과 같은 함수라 뺐다. '검색 및 데이터 구축' 구역(법령·건설기준·특허)은
         #   보기 메뉴에 같은 항목이 있어 뺐다.
@@ -1909,9 +1909,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 📖 사전 관리(261031-16: 종전 '사전 및 용어집 관리') — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25)
         #   261107-17(단어장 SOT §11.1, 사용자 결정): 도구 탭 단추는 없앴다 — 환경설정 '고급 › 사전'(Ctrl+,)으로만
 
-        # 등록·설치 — 261107-17(디자인 SOT §2.9.1, 사용자 지시 '환경설정과 등록.설치를 같은 그룹으로'): 환경설정과 한 묶음 '설정·설치'(구분선 없음)
-        # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목을 `등록·설치 ▾` 하나로 — 명령 id 는 그대로(모음에 넣은 단추가 남는다)
-        _inst = m_tools.addMenu(tr("등록·설치"))
+        # 설치·설정(261107-24, 종전 '등록·설치') — 261107-17(디자인 SOT §2.9.1, 사용자 지시 '환경설정과 등록.설치를 같은 그룹으로'): 환경설정과 한 묶음 '설정·설치'(구분선 없음)
+        # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목을 `설치·설정 ▾`(261107-24 이름) 하나로 — 명령 id 는 그대로(모음에 넣은 단추가 남는다)
+        _inst = m_tools.addMenu(tr("설치·설정"))
         for _t, _s, _cid, _short, _tip in (
                 (tr("기본 PDF 앱으로 설정"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱으로 설정"),
                  tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요")),   # 261107-14(마스터 §14.10)
@@ -9529,7 +9529,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
 
     def _gate_api_dependent_ui(self, prefs: dict):
-        """260621-P3: 외부 API 키가 없으면 관련 툴바 버튼과 메뉴 항목(보기 메뉴·도구 'PDF번역')을 숨긴다(261014-28).
+        """260621-P3: 외부 API 키가 없으면 관련 툴바 버튼과 메뉴 항목(보기 메뉴·도구 '번역')을 숨긴다(261014-28).
         키가 입력되면 다시 보이게/활성화. (법령·고시/건설기준/특허/번역)
         261008(다국어 SOT §7): **한국 전용 숨김도 여기서 함께** — 따로 두면 설정 확인 때 서로를 되돌린다.
         보임 = 한국어, 켜짐 = 보임 그리고 키 있음. 한국어가 아니면 메뉴 항목도 숨긴다(비활성으로 두지 않는다)."""
@@ -9563,7 +9563,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 특허(KIPO)
         _act_vis(va.get("kipo"), has_kipo)
         _act_vis(getattr(self, "_act_kipo", None), has_kipo)
-        # 번역(Claude) — 도구 'PDF번역'(모음 '번역' 단추와 같은 액션, 영→한이라 한국 전용, 사용자 결정 261008-25)
+        # 번역(Claude) — 도구 '번역'(261107-24 — 종전 'PDF번역', 모음 '번역' 단추와 같은 액션, 영→한이라 한국 전용, 사용자 결정 261008-25)
         _act_vis(getattr(self, "_act_tr_files", None), has_tr)
         # 영어단어 학습(단어장) — 보기 '단어장'·도구 '단어장 생성' 등·우측 탭(키와 무관)
         _act_en(va.get("study"), True)

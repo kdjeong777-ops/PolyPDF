@@ -216,7 +216,7 @@ class TwoUpSettingsDialog(QDialog):
 
         # Word 양식 샘플 다운로드
         b_sample = QPushButton(tr("표지·목차 Word 양식 샘플 저장") if self._single
-                               else tr("표지·목차·간지 Word 양식 샘플 저장…"))
+                               else tr("표지·목차·간지 Word 양식 샘플 저장"))
         b_sample.clicked.connect(self._save_samples)
         cv.addWidget(b_sample)
         if self._single:                    # 261021-3: 여러 파일 병합 항목은 숨긴다(값은 그대로)

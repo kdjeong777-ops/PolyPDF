@@ -508,11 +508,11 @@ finally:
 print("\n=== F. 도구 메뉴 ===")
 from PyQt6.QtGui import QAction
 texts = [a.text() for a in mw.findChildren(QAction)]
-# 261025-1(디자인 SOT §2.9.1): 도구 탭 '등록·설치 ▾' 안의 '가상 프린터 설치·제거…'(명령 id tools.vprinter 그대로)
+# 261025-1(디자인 SOT §2.9.1): 도구 탭 '설치·설정 ▾' 안의 '가상 프린터 설치·제거…'(명령 id tools.vprinter 그대로)
 _vp = (getattr(mw, "_cmds", {}) or {}).get("tools.vprinter")
 _inst = (getattr(mw, "_cmds", {}) or {}).get("tools.install")
 chk(_vp is not None and _vp.text().startswith("가상 프린터 설치·제거") and _inst is not None
-    and _vp in _inst.menu().actions(), "F1 도구 탭 '등록·설치 ▾' 에 '가상 프린터 설치·제거…'")
+    and _vp in _inst.menu().actions(), "F1 도구 탭 '설치·설정 ▾' 에 '가상 프린터 설치·제거…'")
 from viewer.widgets.vprinter_dialog import VPrinterDialog
 import viewer.widgets.vprinter_dialog as VD
 VD.read_state = lambda: {"support": "ok", "monitor": False, "dll": False, "port": False, "driver": False,
