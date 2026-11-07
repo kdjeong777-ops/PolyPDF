@@ -336,6 +336,59 @@ class TagStore:
         self._save()
         return True
 
+    def remap_auto(self, fn) -> list:
+        """모든 파일의 **자동** 태그를 `fn(태그) → 새 태그 | None(뺀다)` 으로 옮긴다(§5.8 — 규칙을 바꾼 뒤, 파일을 다시 읽지 않는다).
+        모든 부분(`auto_parts`)·`auto`·`auto_conf` 를 함께. 사용자 태그·거절한 태그와 겹치면 뺀다(§6). 바뀐 키 목록을 돌려준다."""
+        changed = []
+
+        def _map(ts, block):
+            out, low = [], set()
+            for t in ts or []:
+                n = fn(t)
+                if n and n.lower() not in block and n.lower() not in low:
+                    low.add(n.lower())
+                    out.append(n)
+            return out
+        with self.bulk():
+            for k, v in list(self._data.items()):
+                if not isinstance(v, dict) or not v.get("auto"):
+                    continue
+                block = {t.lower() for t in (v.get("rejected") or [])} | {t.lower() for t in (v.get("manual") or [])}
+                new_auto = _map(v["auto"], block)
+                parts = v.get("auto_parts")
+                new_parts = None
+                if isinstance(parts, dict):
+                    new_parts = {p: _map(ts, block) for p, ts in parts.items()}
+                    new_parts = {p: ts for p, ts in new_parts.items() if ts}
+                if new_auto == v["auto"] and (new_parts is None or new_parts == parts):
+                    continue
+                conf = v.get("auto_conf") or {}
+                if conf:
+                    nc = {}
+                    for t, c in conf.items():
+                        n = fn(t)
+                        if n and n.lower() in {x.lower() for x in new_auto}:
+                            nc[n] = c
+                    conf = nc
+                if new_auto:
+                    v["auto"] = new_auto
+                    if conf:
+                        v["auto_conf"] = conf
+                    else:
+                        v.pop("auto_conf", None)
+                    if new_parts:
+                        v["auto_parts"] = new_parts
+                    else:
+                        v.pop("auto_parts", None)
+                else:
+                    for f in AUTO_FIELDS:
+                        v.pop(f, None)
+                changed.append(k)
+                self._collapse(k)
+            if changed:
+                self._dirty = True
+        return changed
+
     @staticmethod
     def _drop_from_parts(v: dict, drop: set):
         parts = v.get("auto_parts")

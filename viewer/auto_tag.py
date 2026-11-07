@@ -350,7 +350,7 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
               and f.aspect < 1.2):                            # 가로 문서는 기본값 제외
             fmt = "보고서"
 
-    if fmt is None:
+    if fmt is None or fmt in set(rules.get("format_off") or ()):     # §5.8 사용자가 끈 형식 — 형식 없음
         return None
     alias = rules.get("alias") or {}
     return str(alias.get(fmt, fmt))

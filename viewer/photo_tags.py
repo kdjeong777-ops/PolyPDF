@@ -134,7 +134,10 @@ def alias(tag: str, rules=None) -> str:
 def meta_tags(path: str, info: dict, rules=None) -> list:
     """사진 머리에서 만드는 자동 태그 — 날짜 → 지역 → 장비 → 스크린샷 차례."""
     out = []
-    for t in (date_tag(info), place_tag(info), device_tag(info), SCREENSHOT if is_screenshot(path, info) else None):
+    off = set((rules or {}).get("photo_off") or ())               # §5.8 사용자가 끈 종류
+    for kind, fn in (("date", lambda: date_tag(info)), ("region", lambda: place_tag(info)), ("device", lambda: device_tag(info)),
+                     ("screenshot", lambda: SCREENSHOT if is_screenshot(path, info) else None)):
+        t = None if kind in off else fn()
         if t:
             t = alias(t, rules)
             if t and t not in out:
