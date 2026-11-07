@@ -729,7 +729,8 @@ class StudyMixin:
                 self.study_panel.set_page(page)
                 self.study_panel.set_page_words(page, [])
                 self.study_panel.set_status(
-                    "이 PDF 의 단어장이 없습니다. [단어장 생성] 을 누르세요.")
+                    "이 PDF 의 단어장이 없습니다. [단어장 생성] 을 누르세요 — "
+                    "고른 사전은 만든 단어에 뜻을 붙입니다.")      # 261107-25(단어장 SOT §11.1)
                 return
             # 260611-104(P5): 사용자 편집은 계층형 사전(dict user)에서 적용 → 여기선 자동만
             rows = store.get_page_study(fkey, page)

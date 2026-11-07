@@ -58,7 +58,8 @@ class DictManagerPanel(QWidget):
              "<small>한 PDF 에만 따로 고르려면 단어장 창의 [이 PDF 사전]. [← 삭제] 는 적용 목록에서 빼기만 합니다.</small>")
             if is_def else
             ("지금 PDF 에만 쓸 사전을 오른쪽으로 옮깁니다 — 다른 PDF·기본 선택은 그대로입니다.<br>"
-             "<small>우선순위는 환경설정 › 고급 › 사전. 스타일은 여기서 바꾸면 바로 저장됩니다.</small>"))
+             "<small>고른 사전은 [단어장 생성] 으로 만든 단어에 뜻을 붙입니다(단어장이 비어 있으면 먼저 [단어장 생성]).<br>"
+             "우선순위는 환경설정 › 고급 › 사전. 스타일은 여기서 바꾸면 바로 저장됩니다.</small>"))
         intro.setWordWrap(True)
         gv.addWidget(intro)
 

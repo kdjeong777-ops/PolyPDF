@@ -180,5 +180,17 @@ chk(host._dict_file_key() not in off if hasattr(host, "_dict_file_key") else Fal
 chk(not found(pdf_c, "포장시험어zq") and found(pdf_c, "골재시험어zq"), "F5 이후 여는 PDF(c) 는 새 기본 사전")
 chk(found(pdf_b, "포장시험어zq") and not found(pdf_b, "골재시험어zq"), "F6 이 PDF 만의 선택이 있는 b 는 그대로")
 
+# ---- G 사전은 단어장 단어에 뜻을 붙인다 — 안내 한 줄(동작은 그대로) ----
+from PyQt6.QtWidgets import QLabel
+dd = open_file(pdf_a)
+chk(any("[단어장 생성]" in w.text() and "사전" in w.text() for w in dd.findChildren(QLabel)),
+    "G1 이 PDF 창 안내 — 고른 사전은 [단어장 생성] 으로 만든 단어에 뜻을 붙인다")
+dd.reject()
+host._study_get_store = lambda: type("S", (), {"vocab_count": lambda _s, _k: 0})()
+host._apply_vocab_marks = lambda *a, **k: None
+StudyMixin._refresh_study_panel(host, 0)
+st = panel.lbl_status.text()
+chk("[단어장 생성]" in st and "사전" in st and "뜻" in st, "G2 빈 패널 상태 줄도 같은 뜻", st)
+
 print("\nALL PASS" if not fails else f"\nFAIL {len(fails)}: {fails}")
 sys.exit(1 if fails else 0)
