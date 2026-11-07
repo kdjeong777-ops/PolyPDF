@@ -2591,6 +2591,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.study_panel.speakRequested.connect(self._on_study_speak)
         self.study_panel.editRequested.connect(self._on_study_edit)
         self.study_panel.addTermRequested.connect(self._on_study_add_term)  # P5 ＋용어추가
+        self.study_panel.userTermsRequested.connect(lambda: self._action_user_terms())  # 261107-34(§11.4) [사용자]
         self.study_panel.exportRequested.connect(self._on_study_export)
         self.study_panel.autoHighlightChanged.connect(self._on_study_auto_highlight)
         self.study_panel.playToggled.connect(self._on_study_autoread)
@@ -6274,6 +6275,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         menu.group("tool")
         add("ocr", tr("OCR 로 읽기"), tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
         add("sign", tr("여기에 서명"))
+        from viewer.i18n import korea_only_visible
+        word_ctx = None
+        if korea_only_visible():          # 261107-34(단어장 SOT §11.4): 누른 낱말(끌어 고른 글)·그 문장 → 사용자 단어장
+            word_ctx = self.main_view.word_context_at(global_pos)
+            add("vocab_add", tr("사용자 단어장에 넣기"), word_ctx is not None,
+                tip=tr("누른 낱말을 사용자 단어장 편집 창에 채워 엽니다 — 그 문장은 예시로."))
         if edit:
             _k = (lambda t, sid: t) if staged else self._kt          # 261107-20: 붙여넣은 쪽은 '저장 후' — 키 칸 없음
             add("bm", _k(_pl(tr('책갈피 추가 (p.{page})'), tr("책갈피 추가 (붙여넣은 쪽)")), "add_bookmark"))
@@ -6354,6 +6361,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._open_hyperlink_dialog(cur, pidx)
         elif key == "ocr":
             later(lambda: self._action_ocr_read(preset=(pidx, pidx)))
+        elif key == "vocab_add" and word_ctx:
+            later(lambda c=word_ctx: self._action_add_user_word(c["word"], c["sentence"], pidx))
         elif key == "cfg_line":
             self._open_line_text_settings(tab="line")
         elif key == "cfg_text":

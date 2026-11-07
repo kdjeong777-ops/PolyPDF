@@ -4,7 +4,7 @@
 실제 창(MainWindow)에서 탭 누르기·쪽 넘김·체크·오른쪽 창 닫기로 본문 장면(scene)의 밑줄을 센다.
 단어장 자료(study.db)만 대역 — 그 PDF 의 단어장 행과 쪽 낱말을 앱 공급자와 같은 꼴로 준다.
 
-A. 단어장 탭을 누르면 그 쪽의 단어장 단어에 밑줄(청록 VOCAB_MARK_COLOR, 낱말 상자 아래 끝)
+A. 단어장 탭을 누르면 그 쪽의 단어장 단어에 밑줄(수준별 색 — 261107-33, 낱말 상자 바로 아래)
 B. 쪽을 넘기면 새 쪽 단어에 밑줄 — 종전에는 쪽 넘김 처리기의 clear_word_highlights 가 곧바로 지웠다
 C. 단어 클릭 강조·텍스트 창 강조를 걸거나 지워도 밑줄은 그대로 · 다시 렌더(확대)해도 그대로
 D. 다른 탭을 누르면 지우고, 돌아오면 다시 · 오른쪽 창을 닫으면 지운다
@@ -39,7 +39,8 @@ def chk(cond, msg, extra=""):
         fails.append(msg)
 
 
-TEAL = QColor("#00897B")
+from viewer.vocab_marks import VOCAB_MARK_COLOR, VOCAB_MARK_COLORS
+MARK_RGB = {QColor(c).rgb() for c in [VOCAB_MARK_COLOR, *VOCAB_MARK_COLORS.values()]}
 PAGES = [["pavement", "design", "asphalt"], ["asphalt", "layer", "pavement", "binder"]]
 LEMMAS = {"pavement", "asphalt", "binder"}
 
@@ -68,10 +69,10 @@ class FakeStore:
 
 
 def marks(m):
-    """장면에서 청록 밑줄 [(x0, y, x1)] (논리 px)."""
+    """장면에서 단어장 밑줄 [(x0, y, x1)] (논리 px) — 수준별 색 어느 것이든(261107-33)."""
     out = []
     for it in m.scene.items():
-        if isinstance(it, QGraphicsLineItem) and it.pen().color().rgb() == TEAL.rgb():
+        if isinstance(it, QGraphicsLineItem) and it.pen().color().rgb() in MARK_RGB:
             ln = it.line()
             out.append((round(ln.x1(), 1), round(ln.y1(), 1), round(ln.x2(), 1)))
     return sorted(out)
@@ -127,13 +128,19 @@ try:
     chk(len(mk) == 2, "A2 그 쪽의 단어장 단어(pavement·asphalt)에 밑줄 2개", str(mk))
     z = m._zoom
     if mk:
-        chk(abs(mk[0][0] - 72.0 * z) < 1.0 and 110.0 * z < mk[0][1] <= 112.0 * z,
-            "A3 밑줄은 낱말 상자 아래 끝(왼쪽 끝 = 상자 왼쪽)", str(mk[0]))
+        chk(abs(mk[0][0] - 72.0 * z) < 1.0 and 112.0 * z < mk[0][1] <= 112.0 * z + 4.0,
+            "A3 밑줄은 낱말 상자 바로 아래(글자를 덮지 않는다 — 261107-33, 왼쪽 끝 = 상자 왼쪽)", str(mk[0]))
+    cols = sorted({(it.pen().color().name(), it.pen().color().alpha()) for it in m.scene.items()
+                   if isinstance(it, QGraphicsLineItem) and it.pen().color().rgb() in MARK_RGB})
+    chk(cols == [(VOCAB_MARK_COLORS["중급"].lower(), 153)], "A4 중급 두 낱말 = 중급 색·반투명(261107-33)", str(cols))
 
     # ---- B ----
     m.go_to_page(1); wait()
     mk = marks(m)
     chk(m.current_page() == 1 and len(mk) == 3, "B1 쪽을 넘기면 새 쪽 단어(asphalt·pavement·binder)에 밑줄 3개", str(mk))
+    n_hi = sum(1 for it in m.scene.items() if isinstance(it, QGraphicsLineItem)
+               and it.pen().color().name() == VOCAB_MARK_COLORS["고급"].lower())
+    chk(n_hi == 1, "B2 고급(binder) 은 고급 색 한 줄(261107-33)", str(n_hi))
 
     # ---- C ----
     mw._on_study_word_activated("asphalt", 1); app.processEvents()

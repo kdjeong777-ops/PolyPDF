@@ -14096,3 +14096,19 @@ msgstr ""
 #: viewer/widgets/main_view.py
 msgid "손바닥 — 끌어서 화면 이동"
 msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "사용자"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "사용자 단어장 고치기·보완 — 직접 넣거나 고친 뜻만 모아 봅니다"
+msgstr ""
+
+#: viewer/app.py
+msgid "사용자 단어장에 넣기"
+msgstr ""
+
+#: viewer/app.py
+msgid "누른 낱말을 사용자 단어장 편집 창에 채워 엽니다 — 그 문장은 예시로."
+msgstr ""

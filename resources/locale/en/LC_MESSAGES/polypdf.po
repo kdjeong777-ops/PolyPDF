@@ -15379,3 +15379,18 @@ msgstr "Overwrites the original PDF — the first time, the untouched original i
 #~ msgid "사전 관리 — 적용할 사전·스타일·가져오기·내보내기·백업·복원"
 #~ msgstr "Manage Dictionaries — dictionaries to apply, style, import, export, backup, restore"
 
+#: viewer/widgets/study_panel.py
+msgid "사용자"
+msgstr "User"
+
+#: viewer/widgets/study_panel.py
+msgid "사용자 단어장 고치기·보완 — 직접 넣거나 고친 뜻만 모아 봅니다"
+msgstr "Edit and extend My Vocabulary — shows only the meanings you added or changed"
+
+#: viewer/app.py
+msgid "사용자 단어장에 넣기"
+msgstr "Add to My Vocabulary"
+
+#: viewer/app.py
+msgid "누른 낱말을 사용자 단어장 편집 창에 채워 엽니다 — 그 문장은 예시로."
+msgstr "Opens the My Vocabulary editor with the clicked word filled in — its sentence becomes the example."

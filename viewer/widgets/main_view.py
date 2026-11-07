@@ -130,8 +130,8 @@ MV_A4_PT_H = 842.0        # 옛 `size`(비율)를 pt 로 환산할 때의 기준
 MV_TEXT_STYLE_MAP = {n: s for n, s in MV_TEXT_STYLES}
 # 260611-74: 지시선 화살표 끝 모양
 MV_LEADER_TIPS = ("arrow", "circle", "plain")
-# 261103-4(디자인 SOT §2.6): 단어장 단어 밑줄 색 — 검색 노랑·텍스트 창 강조와 겹쳐도 구분되게
-VOCAB_MARK_COLOR = "#00897B"
+# 261103-4·261107-33(디자인 SOT §2.6): 단어장 단어 밑줄 — 값은 viewer/vocab_marks.py 한 곳(이 이름은 옛 부르는 곳을 위해 남김)
+from viewer.vocab_marks import VOCAB_MARK_COLOR, vocab_mark_line  # noqa: E402
 
 
 def focus_widgets_in_layout(layout) -> list:
@@ -2468,6 +2468,59 @@ class MainView(QWidget):
         except Exception:
             self._page_words = []
 
+    WORD_SENTENCE_MAX = 300           # 261107-34(단어장 SOT §11.4): 예시로 넣는 문장 최대 글자 수
+
+    def word_context_at(self, global_pos):
+        """261107-34(단어장 SOT §11.4): 우클릭 자리 → {"word", "sentence"} 또는 None.
+        끌어 고른 글이 있으면 그 글, 없으면 누른 자리의 낱말(상자 안). 단어장 단어(호버 상자)면 그 표제어.
+        문장 = 그 낱말이 든 블록의 글을 `. ? ! 。` 뒤에서 끊은 한 문장. 낱말 목록은 끌어 고르기와 같다(`_load_page_words`)."""
+        import re as _re
+        if self._is_image or not self._doc:
+            return None
+        if not self._page_words:
+            self._load_page_words()
+        words = self._page_words or []
+        vp = self.view.viewport().mapFromGlobal(global_pos)
+        sp = self.view.mapToScene(vp)
+        z = self._zoom or 1.0
+        px, py = sp.x() / z, sp.y() / z
+        sel = (getattr(self, "_sel_text", "") or "").strip()
+        idx = next((i for i, w in enumerate(words)
+                    if w[0] <= px <= w[2] and w[1] <= py <= w[3]), -1)
+        if sel:
+            word = " ".join(sel.split())
+            if idx < 0:                       # 고른 글의 첫 낱말이 든 블록에서 문장을 찾는다
+                first = word.split(" ")[0]
+                idx = next((i for i, w in enumerate(words) if w[4] == first), -1)
+        else:
+            if idx < 0:
+                return None
+            word = words[idx][4]
+            hit = self.view._hover_hit(vp)    # 단어장 단어면 그 표제어(영어는 원형)
+            if hit is not None:
+                word = hit[0]
+        word = word.strip(" \t\"'“”‘’()[]{}<>.,;:!?·…。、「」『』")
+        if not word:
+            return None
+        sentence = ""
+        if idx >= 0:
+            def _blk(w):
+                return w[5] if len(w) > 5 else 0
+            blk = _blk(words[idx])
+            same = [i for i, w in enumerate(words) if _blk(w) == blk]
+            text, at = "", 0
+            for i in same:
+                if i == idx:
+                    at = len(text) + (1 if text else 0)
+                text = (text + " " + words[i][4]) if text else words[i][4]
+            starts = [0] + [m.end() for m in _re.finditer(r"(?<=[.?!。])\s+", text)]
+            s0 = max(s for s in starts if s <= at)
+            nxt = [s for s in starts if s > at]
+            sentence = text[s0:(nxt[0] if nxt else len(text))].strip()
+            if len(sentence) > self.WORD_SENTENCE_MAX:
+                sentence = sentence[:self.WORD_SENTENCE_MAX - 1].rstrip() + "…"
+        return {"word": word, "sentence": sentence}
+
     def _clear_sel_items(self):
         for it in getattr(self, "_sel_items", []):
             try:
@@ -3604,9 +3657,10 @@ class MainView(QWidget):
     # 강조(_word_hl_*)와 따로 둔 층 — 검색·단어 클릭·텍스트 창·읽기 강조를 걸거나 지워도,
     # 쪽을 넘길 때의 clear_word_highlights 도 이것을 건드리지 않는다.
     def set_vocab_marks(self, page: int, rects_pt: list):
-        """지금 파일의 `page` 쪽 단어 상자(PDF pt)에 밑줄. 그 파일·그 쪽일 때만 그린다."""
+        """지금 파일의 `page` 쪽 단어 상자(PDF pt)에 밑줄. 그 파일·그 쪽일 때만 그린다.
+        상자는 (x0, y0, x1, y1[, 수준]) — 수준이 있으면 그 색(261107-33, 디자인 SOT §2.6)."""
         self._remove_vocab_items()
-        rects = [tuple(r[:4]) for r in (rects_pt or [])]
+        rects = [tuple(r[:4]) + ((r[4] if len(r) > 4 else None),) for r in (rects_pt or [])]
         self._vocab_marks = (str(self.current_file() or ""), int(page), rects) if rects else None
         self._draw_vocab_marks()
 
@@ -3635,13 +3689,11 @@ class MainView(QWidget):
         if page != self._current_page or fkey != str(self.current_file() or ""):
             return
         z = self._zoom
-        col = QColor(VOCAB_MARK_COLOR)
-        for (x0, y0, x1, y1) in rects:
-            w = max(1.5, min(3.0, (y1 - y0) * z * 0.08))
+        for (x0, y0, x1, y1, level) in rects:
+            col, (lx0, ly, lx1, _ly), w = vocab_mark_line(x0, y0, x1, y1, z, level)
             pen = QPen(col, w)
             pen.setCapStyle(Qt.PenCapStyle.FlatCap)
-            y = y1 * z - w / 2
-            item = QGraphicsLineItem(x0 * z, y, x1 * z, y)
+            item = QGraphicsLineItem(lx0, ly, lx1, ly)
             item.setPen(pen)
             item.setZValue(5)
             self.scene.addItem(item)

@@ -85,7 +85,33 @@ def _clean_markup(s) -> str:
 
 
 _LEVELS = ("초급", "중급", "고급", "전문용어")        # 260611-103(P4): 전문용어 등급
-_BADGE = {"초급": "🟢", "중급": "🟡", "고급": "🔴", "미정": "⚪", "전문용어": "📘"}
+# 261107-33(디자인 SOT §2.6): 머리 글자는 본문 밑줄 색과 같은 뜻 — 초급 호박·중급 녹색·고급 분홍·전문용어 청색
+_BADGE = {"초급": "🟡", "중급": "🟢", "고급": "🩷", "미정": "⚪", "전문용어": "📘"}
+_BADGE_FALLBACK = {"🩷": "🔴"}       # 옛 Windows 10 이모지 글꼴에는 🩷(Emoji 15)이 없다
+
+
+def mark_level(row: dict) -> str:
+    """261107-33(단어장 SOT §11.2): 머리 글자·본문 밑줄이 쓰는 수준 — 사전에 있는 단어는 전문용어(📘)."""
+    if row.get("has_dict"):
+        return "전문용어"
+    return row.get("level") or "미정"
+
+
+_badge_ok: dict = {}
+
+
+def _badge(level: str) -> str:
+    b = _BADGE.get(level, "")
+    alt = _BADGE_FALLBACK.get(b)
+    if alt is None:
+        return b
+    if b not in _badge_ok:
+        try:
+            from PyQt6.QtGui import QFont, QFontMetrics
+            _badge_ok[b] = QFontMetrics(QFont("Segoe UI Emoji")).inFontUcs4(ord(b))
+        except Exception:
+            _badge_ok[b] = False
+    return b if _badge_ok[b] else alt
 _HANGUL = re.compile(r"[가-힣]")
 HOVER_TIP_CHARS = 80        # 261107-32(단어장 SOT §11.3): 뜻 풍선의 뜻 하나 최대 글자 수
 SORT_ORDER = "문장 순서"
@@ -108,6 +134,7 @@ class StudyPanel(QWidget):
     speakRequested = pyqtSignal(str, str)    # (text, lang)
     editRequested = pyqtSignal(str, str)     # (lemma, lang)
     addTermRequested = pyqtSignal()          # 260611-104(P5): ＋ 새 용어 등록
+    userTermsRequested = pyqtSignal()        # 261107-34(§11.4): [사용자] — 사용자 뜻 편집 창
     exportRequested = pyqtSignal()
     mp3Requested = pyqtSignal()              # 재생내용 mp3 저장
     autoHighlightChanged = pyqtSignal(bool)  # 본문 밑줄 옵션(261103-4, 단어장 SOT §11.2)
@@ -165,6 +192,13 @@ class StudyPanel(QWidget):
         self.btn_edit.setToolTip(tr("선택 단어/용어 편집(한글뜻·영어뜻·예시·참고문헌, 삭제)"))
         self.btn_edit.clicked.connect(self._edit_current)
         hdr.addWidget(self.btn_edit)
+        # 261107-34(단어장 SOT §11.4, 사용자 지시 '사용자 단어장을 수정/보완할 수 있도록 단어장창에 버튼 추가'): 사용자 뜻 편집 창
+        self.btn_user_terms = QToolButton()
+        self.btn_user_terms.setText(tr("사용자"))
+        self.btn_user_terms.setToolTip(tr("사용자 단어장 고치기·보완 — 직접 넣거나 고친 뜻만 모아 봅니다"))
+        self.btn_user_terms.setFixedHeight(26)
+        self.btn_user_terms.clicked.connect(lambda _c=False: self.userTermsRequested.emit())
+        hdr.addWidget(self.btn_user_terms)
         self.btn_word = QPushButton("Word")
         self.btn_word.setToolTip(tr("전체 내용을 Word(.docx)로 저장"))
         self.btn_word.clicked.connect(self.exportRequested.emit)
@@ -551,12 +585,20 @@ class StudyPanel(QWidget):
     def tip_for(self, lemma: str) -> str:
         """261107-32(단어장 SOT §11.3): 본문 뜻 풍선 글(HTML) — 이미 받은 행(`_rows`)에서만, DB 를 읽지 않는다.
         창이 안 보이거나 `뜻 풍선` 이 꺼졌거나, 지금 목록에 안 보이는 행·뜻이 없으면 빈 글."""
-        import html
         if not lemma or not self.chk_tip.isChecked() or not self.isVisible():
             return ""
         row = next((r for r in self._shown_rows() if r.get("lemma") == lemma), None)
         if row is None:
             return ""
+        return self.tip_html(row)
+
+    def tip_on(self) -> bool:
+        return self.chk_tip.isChecked()
+
+    def tip_html(self, row: dict) -> str:
+        """261107-33(단어장 SOT §11.3·§11.4 발표 길): 한 행의 뜻 풍선 글 — 창 보임·`뜻 풍선` 체크는 보지 않는다(부르는 쪽이 본다).
+        패널의 `한글뜻`·`영어뜻`·`참고문헌` 체크를 따른다. 뜻이 없으면 빈 글."""
+        import html
         defs = row.get("definitions") or []
         lines = []
 
@@ -630,10 +672,19 @@ class StudyPanel(QWidget):
         self.tree.scrollToItem(it, hint)
 
     # --- 내부 --------------------------------------------------------------
-    def _shown_rows(self) -> list[dict]:
+    def filter_rows(self, rows: list[dict]) -> list[dict]:
+        """'종류' 체크로 거른 행(차례 그대로) — 목록·본문 밑줄·발표 길이 같은 규칙(261107-33)."""
         levels = set(self.selected_levels())
-        rows = [r for r in self._rows if r.get("level") in levels
+        return [r for r in rows or [] if r.get("level") in levels
                 or (r.get("level") == "미정" and "고급" in levels)]
+
+    def level_of(self, lemma: str) -> str:
+        """지금 받은 행에서 그 표제어의 밑줄 수준(`mark_level`). 없으면 '미정'."""
+        row = next((r for r in self._rows if r.get("lemma") == lemma), None)
+        return mark_level(row) if row is not None else "미정"
+
+    def _shown_rows(self) -> list[dict]:
+        rows = self.filter_rows(self._rows)
         mode = self.sort_combo.currentText()
         if mode == SORT_ALPHA:
             rows = sorted(rows, key=lambda r: r["lemma"])
@@ -671,9 +722,7 @@ class StudyPanel(QWidget):
             lv = r.get("level", "미정")
             cnt = r.get("count", 1)
             mark = "✎ " if r.get("user_edited") else ""
-            badge = _BADGE.get(lv, "")
-            if r.get("has_dict"):           # 사전(전문용어) 매칭 표시
-                badge = "📘"
+            badge = _badge(mark_level(r))     # 사전 매칭 = 📘 — 본문 밑줄과 같은 규칙(261107-33)
             top = QTreeWidgetItem([f"{badge} {mark}{r['lemma']}"
                                    + (f"   ×{cnt}" if cnt > 1 else "")])
             top.setFont(0, self._bold)

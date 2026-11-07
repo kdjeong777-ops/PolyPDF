@@ -14,6 +14,7 @@ SOT: `단어장 작업 계획서.md`(총괄) / `단어학습(OCR·어휘) 기능
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from PyQt6.QtWidgets import QMessageBox
@@ -666,6 +667,55 @@ class StudyMixin:
         except Exception:
             return [], {}
 
+    def _study_page_rows(self, store, fkey: str, page: int):
+        """그 쪽의 단어장 행 + 다단어 용어 상자 — 패널과 발표 길(`vocab_overlay_for`)이 같은 길(261107-33)."""
+        # 260611-104(P5): 사용자 편집은 계층형 사전(dict user)에서 적용 → 여기선 자동만
+        rows = store.get_page_study(fkey, page)
+        rows = self._apply_word_filter(fkey, rows)        # 표시 필터(전체/선택/날짜/초기)
+        rows = self._enrich_rows_with_dict(rows)          # 260611-102(P2): 사전(User▶Base) 적용
+        rows = self._accumulate_and_merge_examples(rows)  # 260615-10(P12): 예시 누적·병합
+        # 260611-103(P4): 다단어 전문용어 인식 → 별도 행으로 앞에 추가
+        term_rows, term_rects = self._spot_page_terms(page)
+        return term_rows + rows, term_rects
+
+    def _study_page_rects(self, page: int, rows: list, term_rects: dict) -> list:
+        """낱말 상자 (x0, y0, x1, y1, lemma) — 호버·밑줄·발표 길이 같은 상자. P4: 다단어 용어 영역도(키=용어 표제어)."""
+        rects = self._compute_word_rects(page, rows)
+        return rects + [(x0, y0, x1, y1, key)
+                        for key, rs in term_rects.items() for (x0, y0, x1, y1) in rs]
+
+    def vocab_overlay_for(self, path, page0: int):
+        """261107-33(단어장 SOT §11.2 발표 길, 발표 261107-37): 그 쪽의 밑줄·뜻 풍선 자료.
+        → {"marks": [(x0, y0, x1, y1, lemma, level), …], "tips": {lemma: html}} — 좌표는 회전 반영된 표시 쪽 pt.
+        marks 는 본문 밑줄과 같은 집합(패널 '종류' 체크로 거름), tips 는 패널이 보이든 말든(`뜻 풍선` 꺼짐 → 빈 dict).
+        지금 단어장을 보는 PDF 가 아니거나 그 PDF 단어장이 없으면 None. 쪽이 바뀔 때 한 번(DB 를 읽는다)."""
+        from viewer.pathutil import norm_key
+        from viewer.widgets.study_panel import mark_level
+        if not self._study_pdf or not path or norm_key(str(path)) != norm_key(str(self._study_pdf)):
+            return None
+        try:
+            from viewer.study.study_store import file_key_for
+            store = self._study_get_store()
+            fkey = file_key_for(self._study_pdf)
+            if store.vocab_count(fkey) == 0:
+                return None
+            rows, term_rects = self._study_page_rows(store, fkey, int(page0))
+            panel = self.study_panel
+            shown = panel.filter_rows(rows)
+            by_lemma = {r.get("lemma"): r for r in shown}
+            marks = [(x0, y0, x1, y1, lm, mark_level(by_lemma[lm]))
+                     for (x0, y0, x1, y1, lm) in self._study_page_rects(int(page0), rows, term_rects)
+                     if lm in by_lemma]
+            tips = {}
+            if panel.tip_on():
+                for lm, r in by_lemma.items():
+                    t = panel.tip_html(r)
+                    if t:
+                        tips[lm] = t
+            return {"marks": marks, "tips": tips}
+        except Exception:
+            return None
+
     def _refresh_study_panel(self, page: int):
         """현재 PDF·페이지의 학습단어를 패널에 표시 (데이터 있으면)."""
         if not self._study_pdf:
@@ -682,24 +732,13 @@ class StudyMixin:
                     "이 PDF 의 단어장이 없습니다. [단어장 생성] 을 누르세요 — "
                     "고른 사전은 만든 단어에 뜻을 붙입니다.")      # 261107-25(단어장 SOT §11.1)
                 return
-            # 260611-104(P5): 사용자 편집은 계층형 사전(dict user)에서 적용 → 여기선 자동만
-            rows = store.get_page_study(fkey, page)
-            rows = self._apply_word_filter(fkey, rows)        # 표시 필터(전체/선택/날짜/초기)
-            rows = self._enrich_rows_with_dict(rows)          # 260611-102(P2): 사전(User▶Base) 적용
-            rows = self._accumulate_and_merge_examples(rows)  # 260615-10(P12): 예시 누적·병합
-            # 260611-103(P4): 다단어 전문용어 인식 → 별도 행으로 앞에 추가
-            term_rows, term_rects = self._spot_page_terms(page)
+            rows, term_rects = self._study_page_rows(store, fkey, page)
             self._page_term_rects = term_rects
-            rows = term_rows + rows
             self.study_panel.set_filter_dates(self._study_get_user().event_dates(fkey))
             self.study_panel.set_page_words(page, rows)
             self._maybe_online_enrich(rows, page)   # 260615-13(P11b): 인터넷 사전 자동 보강
             # 호버 영역 설정(메인 뷰어에서 단어 위 → 포인터 변경 + 패널 선택)
-            rects = self._compute_word_rects(page, rows)
-            # P4: 다단어 용어 영역도 호버/강조에 포함(키=용어 표제어)
-            term_hover = [(x0, y0, x1, y1, key)
-                          for key, rs in term_rects.items() for (x0, y0, x1, y1) in rs]
-            rects = rects + term_hover
+            rects = self._study_page_rects(page, rows, term_rects)
             self.main_view.set_hover_words(rects)
             if hasattr(self.main_view, "set_hover_tip_provider"):     # 261107-32(단어장 SOT §11.3): 뜻 풍선 — 패널이 받은 행에서
                 self.main_view.set_hover_tip_provider(self.study_panel.tip_for)
@@ -1156,7 +1195,24 @@ class StudyMixin:
         """260611-104(P5): 빈 양식으로 새 용어 등록(＋)."""
         self._open_term_editor(lemma="", lang="kor")
 
-    def _open_term_editor(self, *, lemma: str, lang: str) -> None:
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 본문 우클릭 '사용자 단어장에 넣기'
+    def _action_add_user_word(self, word: str, sentence: str = "", page0: int = 0) -> None:
+        """261107-34(단어장 SOT §11.4, 사용자 지시 '단어를 찍은 단어는 사용자 단어장에 넣고, 해당 문장은 예시로 포함'):
+        편집 창을 채워서 연다 — 예시 맨 위에 `그 문장 — 문서이름 p.N`. [저장] 해야 사용자 단어장에 들어간다."""
+        word = (word or "").strip()
+        if not word:
+            return
+        lang = "kor" if re.search(r"[가-힣]", word) else "eng"
+        ex = ""
+        if (sentence or "").strip():
+            cur = self.main_view.current_file() if getattr(self, "main_view", None) else None
+            name = Path(str(cur)).stem if cur else ""
+            ex = " ".join(sentence.split())
+            if name:
+                ex += f" — {name} p.{int(page0) + 1}"
+        self._open_term_editor(lemma=word, lang=lang, example=ex)
+
+    def _open_term_editor(self, *, lemma: str, lang: str, example: str = "") -> None:
         from viewer.widgets.study_edit_dialog import StudyEditDialog
         dic = self._study_get_dict()
         # 기존 사용자 항목 찾기(있으면 수정, 없으면 base/auto 로 초기값 채워 새로 생성)
@@ -1185,6 +1241,10 @@ class StudyMixin:
                     else:
                         entry["term_en"] = lemma
                     entry.update(self._auto_def_for(lemma))
+        if example:                            # 261107-34(§11.4): 찍은 문장을 예시 맨 위에(이미 있으면 그대로)
+            olds = [x for x in str(entry.get("examples") or "").split("\n") if x.strip()]
+            if example.strip() not in (x.strip() for x in olds):
+                entry["examples"] = "\n".join([example] + olds)
         online = None
         if self._prefs.get("online_dict_enabled"):
             def online(ko, en):
@@ -1317,7 +1377,8 @@ class StudyMixin:
             shown = {lm for lm, _lang in self.study_panel.shown_lemmas()}
             rects = [r for r in rects if r[4] in shown]
         if rects and self._vocab_marks_on():
-            self.main_view.set_vocab_marks(page, [r[:4] for r in rects])
+            lv = self.study_panel.level_of           # 261107-33(§11.2): 수준마다 색 — 머리 글자와 같은 규칙
+            self.main_view.set_vocab_marks(page, [tuple(r[:4]) + (lv(r[4]),) for r in rects])
         else:
             self.main_view.clear_vocab_marks()
 

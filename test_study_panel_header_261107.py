@@ -3,7 +3,7 @@
 
 사용자 지시: "단어장의 +버튼 왼쪽에 이 PDF 사전 -> '사전'", "'단어장' 아이콘을 '사전' 왼쪽으로 이동('어장'이라고 보이는 버튼은
 검토하니, OCR하는 것이라, 'OCR'로 아이콘을 만들어서 사용", "'출처' 버튼은 '사전'버튼과 기능이 유사하여 삭제".
-A. 머리줄 차례: 제목 · [OCR](단어장 생성) · [사전] · [＋] · [✎] · [Word] · [mp3]
+A. 머리줄 차례: 제목 · [OCR](단어장 생성) · [사전] · [＋] · [✎] · [사용자](261107-34 §11.4) · [Word] · [mp3]
 B. [OCR] 은 그림만(글자 없음·26×26·colorIcon='ocr') — 단어장을 만들고 난 뒤에도 글자가 붙지 않는다(종전 '어장' 으로 잘려 보였다)
 C. `ocr` 그림 — 밝은·어두운 테마 모두 비어 있지 않고 ▶ 색
 D. '출처 ▾' 단추·메뉴가 없다 · [사전] 은 이 PDF 의 사전 창을 연다
@@ -33,9 +33,9 @@ sp.resize(420, 600); sp.show(); app.processEvents()
 # ---- A ----
 hdr = sp.layout().itemAt(0).layout()
 ws = [hdr.itemAt(i).widget() for i in range(hdr.count()) if hdr.itemAt(i).widget() is not None]
-want = [None, sp.btn_build, sp.btn_file_dict, sp.btn_add, sp.btn_edit, sp.btn_word, sp.btn_mp3]
+want = [None, sp.btn_build, sp.btn_file_dict, sp.btn_add, sp.btn_edit, getattr(sp, "btn_user_terms", None), sp.btn_word, sp.btn_mp3]
 chk(len(ws) == len(want) and isinstance(ws[0], QLabel) and ws[1:] == want[1:],
-    "A1 머리줄 차례: 제목 · OCR · 사전 · ＋ · ✎ · Word · mp3",
+    "A1 머리줄 차례: 제목 · OCR · 사전 · ＋ · ✎ · 사용자 · Word · mp3",
     str([type(w).__name__ + ":" + (getattr(w, "text", lambda: "")() or "") for w in ws]))
 chk(sp.btn_file_dict.text() == "사전", "A2 [사전] 이름(종전 '이 PDF 사전')", sp.btn_file_dict.text())
 xs = [w.mapTo(sp, w.rect().topLeft()).x() for w in ws[1:]]
