@@ -232,6 +232,11 @@ class KeycapMenuStyle(QProxyStyle):
                 right = r.right() - self.RIGHT_MARGIN
                 if opt.menuItemType == QStyleOptionMenuItem.MenuItemType.SubMenu:
                     right -= self.SUBMENU_SPACE
+                    # 261107-4 덧붙임: 나눈 항목(저장 ▸·붙여넣기 ▼, ctx_menu)은 ▸ 쪽 나눔선 왼쪽에 — 선과 겹치지 않게
+                    act = w.actionAt(r.center()) if w is not None and hasattr(w, "actionAt") else None
+                    if act is not None and act.property("ctx_split"):
+                        from viewer.widgets.ctx_menu import SPLIT_ARROW_W
+                        right = r.right() - SPLIT_ARROW_W - 6
                 paint_keys(p, right, r.center().y() + 0.5, key, opt.font, fg)
                 return
         super().drawControl(element, opt, p, w)
