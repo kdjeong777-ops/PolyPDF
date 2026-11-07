@@ -1372,6 +1372,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv.wordHovered.connect(
             lambda lemma, i=idx: (i == self._active_pane)
             and self._on_main_word_hovered(lemma))
+        mv.wordClicked.connect(                                      # 261107-39(단어장 SOT §11.5)
+            lambda lemma, i=idx: (i == self._active_pane)
+            and self._on_main_word_clicked(lemma))
         mv.pageClicked.connect(
             lambda x, y, i=idx: (self.read_aloud.is_active()
                                  and getattr(self.read_aloud, "_view", None) is self._mv[i]

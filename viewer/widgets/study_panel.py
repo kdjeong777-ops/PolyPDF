@@ -352,7 +352,7 @@ class StudyPanel(QWidget):
         flow.addWidget(self.btn_content)
         self.chk_speak_sel = QCheckBox(tr("선택시읽기"))
         self.chk_speak_sel.setChecked(True)
-        self.chk_speak_sel.setToolTip(tr("단어 선택(목록/본문)시 그 단어를 읽습니다."))
+        self.chk_speak_sel.setToolTip(tr("목록에서 단어를 고르거나 본문의 단어장 단어를 누르면 그 단어를 읽습니다(마우스만 올려서는 읽지 않음)."))
         flow.addWidget(self.chk_speak_sel)
 
         # 정렬 — '선택단어로 저장(▲)' 버튼 왼쪽으로(260618-2)

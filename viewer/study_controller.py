@@ -863,11 +863,22 @@ class StudyMixin:
             self._stop_autoread()
 
     def _on_main_word_hovered(self, lemma: str) -> None:
-        self.study_panel.select_lemma(lemma)        # 단어장에서 선택(배경 강조)
-        if self.study_panel.is_speak_on_select():   # 260606: 본 화면 선택시 읽기
-            row = next((r for r in self.study_panel._rows if r["lemma"] == lemma), None)
-            lang = row.get("lang", "eng") if row else "eng"
-            self._study_get_tts().speak(lemma, lang)
+        """본문 단어장 단어 위 호버 → 단어장에서 선택(배경 강조)만. 읽지 않는다(261107-39, 단어장 SOT §11.5 —
+        종전에는 지나가기만 해도 '선택시읽기' 로 읽어, 읽기를 켜지 않았는데 소리가 났다)."""
+        self.study_panel.select_lemma(lemma)
+
+    def _on_main_word_clicked(self, lemma: str) -> None:
+        """본문 단어장 단어를 눌렀다 → 선택하고 '선택시읽기' 면 읽는다(261107-39, §11.5).
+        본문 읽기·단어장 자동 읽기 중에는 읽지 않는다 — 그 클릭은 읽기 자리 옮기기다."""
+        self.study_panel.select_lemma(lemma)
+        if not self.study_panel.is_speak_on_select():
+            return
+        ra = getattr(self, "read_aloud", None)
+        if (ra is not None and ra.is_active()) or self.study_panel.is_auto_read():
+            return
+        row = next((r for r in self.study_panel._rows if r["lemma"] == lemma), None)
+        lang = row.get("lang", "eng") if row else "eng"
+        self._study_get_tts().speak(lemma, lang)
 
     # --- 표시 필터 / 선택단어 / mp3 (260606) ----------------------------
     def _apply_word_filter(self, fkey: str, rows: list) -> list:

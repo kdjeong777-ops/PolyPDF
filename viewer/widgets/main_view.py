@@ -913,7 +913,8 @@ class _PdfGraphicsView(QGraphicsView):
     """
     zoomRequested = pyqtSignal(float)      # 부모에게 줌 변경 요청 (factor)
     pageStep = pyqtSignal(int)
-    hoverWord = pyqtSignal(str)            # 260603: 단어장 단어 위 호버 (lemma)
+    hoverWord = pyqtSignal(str)            # 260603: 단어장 단어 위 호버 (lemma) — 단어장 선택·뜻 풍선만, 읽지 않는다(261107-39)
+    clickWord = pyqtSignal(str)            # 261107-39(단어장 SOT §11.5): 단어장 단어를 눌렀다(끌지 않은 왼쪽 클릭) — '선택시읽기' 는 이것만
     pageClicked = pyqtSignal(float, float) # 260606: 페이지 클릭 (PDF point x,y)
     contextMenuRequested = pyqtSignal(object)  # 260606-4: 우클릭 위치(전역 QPoint)
     viewActivated = pyqtSignal()           # 260606-8: 이 뷰를 클릭(활성 창 선택)
@@ -1212,6 +1213,12 @@ class _PdfGraphicsView(QGraphicsView):
                 z = getattr(self._owner, "_zoom", 1.0) or 1.0
                 sp = self.mapToScene(event.position().toPoint())
                 self.pageClicked.emit(sp.x() / z, sp.y() / z)
+            except Exception:
+                pass
+            try:                              # 261107-39: 단어장 단어 위 클릭 → 그 단어(읽기는 앱이 판단)
+                hit = self._hover_hit(event.position().toPoint())
+                if hit is not None:
+                    self.clickWord.emit(hit[0])
             except Exception:
                 pass
             return
@@ -1730,6 +1737,7 @@ class MainView(QWidget):
     pageChanged = pyqtSignal(int)
     matchPositionChanged = pyqtSignal(int, int)
     wordHovered = pyqtSignal(str)                # 260603: 단어장 단어 위 마우스 호버
+    wordClicked = pyqtSignal(str)                # 261107-39: 단어장 단어를 눌렀다(뷰 clickWord 재방출)
     pageClicked = pyqtSignal(float, float)       # 260606: 페이지 클릭(PDF point)
     contextMenuRequested = pyqtSignal(object)    # 260606-4: 뷰어 우클릭(전역 QPoint)
     activated = pyqtSignal()                     # 260606-8: 이 메인뷰 활성화(클릭)
@@ -2099,6 +2107,7 @@ class MainView(QWidget):
         # 260603: 호버 — 뷰가 zoom 조회용으로 owner 참조, hoverWord 재방출
         self.view._owner = self
         self.view.hoverWord.connect(self.wordHovered.emit)
+        self.view.clickWord.connect(self.wordClicked.emit)
         self.view.pageClicked.connect(self.pageClicked.emit)
         self.view.contextMenuRequested.connect(self.contextMenuRequested.emit)
         from PyQt6.QtGui import QShortcut, QKeySequence

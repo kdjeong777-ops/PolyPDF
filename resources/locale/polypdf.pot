@@ -14130,3 +14130,7 @@ msgstr ""
 #, python-brace-format
 msgid "보일 단어 종류와 표시할 내용을 고릅니다 — 꺼짐: {off}"
 msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "목록에서 단어를 고르거나 본문의 단어장 단어를 누르면 그 단어를 읽습니다(마우스만 올려서는 읽지 않음)."
+msgstr ""

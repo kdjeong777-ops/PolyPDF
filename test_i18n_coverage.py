@@ -65,6 +65,7 @@ ALLOW = {
     "viewer/recorder.py": {"마이크", "믹스", "스테레오 믹스"},
     # 내부 키(값) — 표시할 때만 tr(값)
     "viewer/widgets/bookmark_tree.py": {"주제", "형식"},
+    "viewer/vocab_marks.py": {"초급", "중급", "고급", "전문용어"},   # 261107-33: 밑줄 색 표의 키 = study.db 단어 수준 값(데이터 키, 화면 문구 아님)
     "viewer/widgets/main_view.py": {"본문", "쪽 맞춤", "2장 맞춤", "폭 맞춤", "수동 맞춤", "수동",
                                     "선 1", "선 2", "선 3", "선 4", "선 5"},
     "viewer/widgets/read_aloud.py": {"전체"},                 # 읽기 구간 값(정규식은 _REGEX 가 거른다)
