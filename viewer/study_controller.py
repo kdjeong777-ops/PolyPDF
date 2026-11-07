@@ -105,53 +105,20 @@ class StudyMixin:
         self._sync_dict_file_sel()
         self._spot_terms_cache = None
 
-    def _apply_dict_active(self, active_ids):
-        """패널 메뉴·스타일 — 이 PDF 의 선택이 있으면 그것을, 없으면 기본 선택을 바꾼다."""
-        self._set_dict_selection(active_ids, as_default=self._dict_file_off() is None)
-
     # ----- 스타일(settings.json `dict_styles`) -----
     def _dict_styles(self) -> list:
         return [s for s in (self._prefs.get("dict_styles") or [])
                 if isinstance(s, dict) and s.get("name")]
 
     def _set_dict_styles(self, styles) -> None:
-        """261107-25(단어장 SOT §11.1): `이 PDF 의 사전` 창의 스타일 [저장]·[수정]·[삭제] — 바로 settings 에, 패널 메뉴도.
+        """261107-25(단어장 SOT §11.1): `이 PDF 의 사전` 창의 스타일 [저장]·[수정]·[삭제] — 바로 settings 에(261107-34: 패널 출처 메뉴는 없앴다).
         (환경설정 쪽은 [적용] 때 `_settings_apply` 가 같은 키를 넣는다.)"""
         self._prefs["dict_styles"] = [{"name": str(s["name"]), "sources": [str(x) for x in s.get("sources") or []]}
                                       for s in styles or [] if isinstance(s, dict) and s.get("name")]
-        self._refresh_dict_sources_menu()
-
-    def _dict_style_sources(self, name: str) -> list:
-        """스타일의 사전 가운데 지금 있는 것만(단어장 SOT §11.1 — 지운 사전은 건너뛴다)."""
-        st = next((s for s in self._dict_styles() if s["name"] == name), None)
-        if st is None:
-            return []
-        live = {s["source_id"] for s in self._study_get_dict().list_sources()}
-        return [sid for sid in st.get("sources") or [] if sid in live]
-
-    def _on_dict_style_chosen(self, name: str):
-        """패널 '출처 ▾' 맨 위 스타일 — 고르면 바로 적용."""
-        try:
-            self._apply_dict_active(self._dict_style_sources(name))
-        except Exception:
-            pass
-        self._refresh_dict_sources_menu()
-        try:
-            self._refresh_study_panel(self.main_view.current_page())
-        except Exception:
-            pass
-
-    def _refresh_dict_sources_menu(self):
-        try:
-            self.study_panel.set_dict_sources(self._study_get_dict().list_sources(),
-                                              styles=[s["name"] for s in self._dict_styles()])
-        except Exception:
-            pass
 
     def _after_dict_list_changed(self):
         """단어장 관리 창에서 사전을 더하거나 지운 뒤 — 패널 메뉴·뜻·용어 인식을 다시."""
         self._spot_terms_cache = None
-        self._refresh_dict_sources_menu()
         try:
             self._refresh_study_panel(self.main_view.current_page())
         except Exception:
@@ -213,7 +180,7 @@ class StudyMixin:
 
     @korea_only
     def _action_dict_file(self, checked: bool = False):
-        """261107-17(단어장 SOT §11.1): 단어장 창 `이 PDF 사전` — 지금 PDF 에만 쓸 사전."""
+        """261107-17(단어장 SOT §11.1): 단어장 창 `사전`(261107-34, 종전 `이 PDF 사전`) — 지금 PDF 에만 쓸 사전."""
         if not self._dict_file_key():
             return
         from viewer.widgets.dict_manager_dialog import DictFileDialog
@@ -238,7 +205,7 @@ class StudyMixin:
         self._after_dict_list_changed()
 
     def _clear_dict_file_sel(self) -> None:
-        """이 PDF 의 선택을 지운다 — 기본 선택을 따른다(단어장 창 `이 PDF 사전` [기본 선택 따르기])."""
+        """이 PDF 의 선택을 지운다 — 기본 선택을 따른다(단어장 창 `사전` → [기본 선택 따르기])."""
         key = self._dict_file_key()
         sel = dict(self._prefs.get("dict_file_off") or {})
         if key and key in sel:
@@ -589,23 +556,6 @@ class StudyMixin:
         w.done.connect(on_done)
         w.start()
 
-    def _on_study_source_toggled(self, source_id: str, enabled: bool):
-        """260611-102(P2): 사전 출처 on/off → 저장 후 패널 갱신.
-        261103-2(단어장 SOT §11.1): 이 PDF 의 선택이 있으면 그것을, 없으면 기본 선택을 고친다."""
-        try:
-            dic = self._study_get_dict()
-            off = self._dict_file_off()
-            if off is None:
-                dic.set_source_enabled(source_id, enabled)
-            else:
-                active = {s["source_id"] for s in dic.list_sources() if s.get("active")}
-                (active.add if enabled else active.discard)(source_id)
-                self._set_dict_selection(active, as_default=False)
-        except Exception:
-            pass
-        self._spot_terms_cache = None     # 출처 변경 → spotting 목록 무효화
-        self._refresh_study_panel(self.main_view.current_page())
-
     # 261103-12(응답성 SOT §4.4): 용어 인식 목록 캐시 — None 으로 비우면 세대가 올라
     #   배경에서 늦게 온 옛 목록(비우기 전에 읽기 시작한 것)을 버린다.
     @property
@@ -742,7 +692,6 @@ class StudyMixin:
             self._page_term_rects = term_rects
             rows = term_rows + rows
             self.study_panel.set_filter_dates(self._study_get_user().event_dates(fkey))
-            self._refresh_dict_sources_menu()
             self.study_panel.set_page_words(page, rows)
             self._maybe_online_enrich(rows, page)   # 260615-13(P11b): 인터넷 사전 자동 보강
             # 호버 영역 설정(메인 뷰어에서 단어 위 → 포인터 변경 + 패널 선택)

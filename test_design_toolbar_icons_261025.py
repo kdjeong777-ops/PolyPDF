@@ -67,7 +67,7 @@ sp = mw.study_panel
 
 # A. 드롭다운 글자에 ▾ 없음 — 메뉴는 달려 있다(Qt 화살표가 그 하나)
 drops = [("캡쳐 모드", d) for d in mw._cap_menus] + [("재생구간", m) for _b, m in mw._read_btns] + [
-    ("단어장 출처", sp.btn_src), ("단어장 재생구간", sp.btn_readmode), ("단어장 재생내용", sp.btn_content)]
+    ("단어장 재생구간", sp.btn_readmode), ("단어장 재생내용", sp.btn_content)]     # 261107-34: 단어장 출처 ▾ 는 없앴다
 for name, b in drops:
     chk("▾" not in b.text() and "▼" not in b.text() and b.menu() is not None,
         "A '%s' 글자에 ▾ 없음·메뉴 있음" % name, repr(b.text()))

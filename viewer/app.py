@@ -2598,9 +2598,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.study_panel.markSelectedRequested.connect(self._on_study_mark_selected)
         self.study_panel.deleteWordRequested.connect(self._on_study_delete_word)
         self.study_panel.mp3Requested.connect(self._on_study_mp3)
-        self.study_panel.sourceToggled.connect(self._on_study_source_toggled)  # P2 출처 on/off
-        self.study_panel.styleChosen.connect(self._on_dict_style_chosen)       # 261103-2 사전 스타일
-        self.study_panel.fileDictRequested.connect(self._action_dict_file)     # 261107-17 이 PDF 사전
+        self.study_panel.fileDictRequested.connect(self._action_dict_file)     # 261107-17·-34 단어장 창 '사전'
         # 260606-3/5: 스크린샷이 모두 삭제되면 창 숨김
         # rowsRemoved=개별 삭제(takeItem), modelReset/clearedAll='전체 삭제'(list.clear())
         self.shot_strip.list.model().rowsRemoved.connect(

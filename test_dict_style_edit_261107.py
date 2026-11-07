@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """261107-25(사용자 지시 '설정한 사전 스타일을 저장/삭제/수정할 수 있도록') — 단어장 SOT §11.1.
 
-A. 이 PDF 의 사전 창 — 스타일 줄([저장]·[수정]·[삭제])이 보이고, 누르면 바로 settings `dict_styles` 에 + 패널 '출처 ▾' 메뉴
+A. 이 PDF 의 사전 창 — 스타일 줄([저장]·[수정]·[삭제])이 보이고, 누르면 바로 settings `dict_styles` 에(261107-34: 패널 '출처 ▾' 메뉴는 없앴다)
 B. [수정] — 고른 스타일을 지금 오른쪽 목록으로, 이름도 바꿈(옛 이름은 사라짐, 자리 그대로)
 C. [저장] 이 같은 이름이면 덮어쓸지 묻는다 — 아니오면 그대로, 예면 덮어씀
 D. [수정]·[삭제] 는 스타일을 고른 동안만 켜짐 · [삭제] 는 바로 지움
@@ -76,11 +76,6 @@ def select(lst, sids):
 def styles():
     return [(s["name"], sorted(s["sources"])) for s in host._dict_styles()]
 
-def menu_styles():
-    host._refresh_dict_sources_menu()
-    names = [a.text().strip() for a in panel.btn_src.menu().actions()]
-    return [n for n in ("도로만", "도로·건설", "전부") if n in names]
-
 def pick(p, name):
     p.cmb_style.setCurrentIndex(p.cmb_style.findText(name))
 
@@ -94,7 +89,6 @@ select(d.lst_use, {"g2"}); click(d.btn_remove)
 ANSWER["name"] = ("도로만", True)
 click(d.btn_style_save)
 chk(styles() == [("도로만", ["g1", "user"])], "A2 [저장] — 창을 닫기 전에 settings 에", str(styles()))
-chk(menu_styles() == ["도로만"], "A3 패널 '출처 ▾' 메뉴에도 바로", str(menu_styles()))
 
 # ---- D 단추 켜짐 ----
 d.cmb_style.setCurrentIndex(0)
@@ -127,7 +121,6 @@ chk(("전부", ["g2", "user"]) in styles() and len(styles()) == 2, "C2 예면 �
 pick(d, "전부")
 click(d.btn_style_del)
 chk([n for n, _ in styles()] == ["도로·건설"], "D3 [삭제] — 바로 지움", str(styles()))
-chk(menu_styles() == ["도로·건설"], "D4 메뉴에서도 빠짐", str(menu_styles()))
 d.reject()
 
 # ---- E 환경설정 판 — [적용] 때만 ----

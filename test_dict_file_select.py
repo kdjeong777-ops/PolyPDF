@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """261103-2(사용자 지시) 사전(출처) 고르기 — 단어장 SOT §11.1·§13, 디자인 SOT §2.14.
-261107-17: 기본 선택·우선순위·스타일은 환경설정 '고급 › 사전' 판([적용] 때), 이 PDF 만은 단어장 창 '이 PDF 사전' 창.
+261107-17: 기본 선택·우선순위·스타일은 환경설정 '고급 › 사전' 판([적용] 때), 이 PDF 만은 단어장 창 '사전'(261107-34, 종전 '이 PDF 사전') 창.
 
 A. 이 PDF 의 사전 창 — [← 모두 삭제] + 창 X(reject) → 이 PDF 만 사전 없음, 다른 PDF·기본 선택은 그대로
 B. 다시 열면 '이 PDF 만의 선택' · 하나 [추가 →] → 그 PDF 만 · [기본 선택 따르기] → 이 PDF 의 선택을 지움
@@ -65,8 +65,6 @@ class Host(StudyMixin):
 host = Host()
 panel = StudyPanel()
 host.study_panel = panel
-panel.sourceToggled.connect(host._on_study_source_toggled)
-panel.styleChosen.connect(host._on_dict_style_chosen)
 
 def use(pdf):
     host._study_pdf = Path(pdf) if pdf else None
@@ -76,7 +74,7 @@ def found(pdf, term):
     return bool(use(pdf).lookup(term))
 
 def open_dlg(pdf):
-    """단어장 창 '이 PDF 사전' 창."""
+    """단어장 창 '사전' 창."""
     use(pdf)
     d = DictFileDialog(host._study_get_dict(), host._prefs, host=host)
     d.show(); QTest.qWait(10)
@@ -118,7 +116,7 @@ def item_of(lst, sid):
 
 ALL = {"user", "g1", "g2"}
 
-# ---- A 이 PDF 의 사전 창(단어장 창 '이 PDF 사전') ----
+# ---- A 이 PDF 의 사전 창(단어장 창 '사전') ----
 chk(found(pdf_a, "포장시험어zq") and found(pdf_b, "골재시험어zq"), "A0 처음엔 모든 PDF 에 기본 선택(모두 켜짐)")
 d = open_dlg(pdf_a)
 chk(set(d.use_ids()) == ALL and not d.wait_ids(), "A1 오른쪽(적용할 사전)에 지금 쓰는 사전, 왼쪽은 비어 있음")
@@ -181,35 +179,18 @@ apply_def(p)
 chk(not found(pdf_b, "골재시험어zq") and found(pdf_b, "포장시험어zq") and [s["name"] for s in host._dict_styles()] == ["도로만"],
     "D3 [적용] — 그 조합이 기본 선택, 스타일도 저장")
 p = open_def(); click(p.btn_add_all); apply_def(p)      # 다시 모두
-host._refresh_dict_sources_menu()
-sty = [a for a in panel.btn_src.menu().actions() if a.text().strip() == "도로만"]
-chk(bool(sty), "D4 패널 '출처 ▾' 맨 위에 스타일")
-sty and sty[0].trigger()
-chk(not found(pdf_b, "골재시험어zq") and found(pdf_b, "포장시험어zq"), "D5 패널에서 스타일 → 바로 적용(기본 선택)")
+chk(not hasattr(panel, "btn_src") and not hasattr(panel, "set_dict_sources"),
+    "D4 패널 '출처 ▾' 메뉴는 없다(261107-34 — 사전 켜고 끄기·스타일은 [사전] 창)")
 p = open_def()
 p.cmb_style.setCurrentIndex(p.cmb_style.findText("도로만"))
 click(p.btn_style_del)
 click(p.btn_add_all); apply_def(p)
 chk(not host._dict_styles(), "D6 스타일 [삭제] — 스타일만 지움([적용] 뒤)")
 
-# ---- E 패널 메뉴 ----
-def menu_toggle(pdf, sid, on):
-    use(pdf)
-    host._refresh_dict_sources_menu()
-    acts = [a for a in panel.btn_src.menu().actions() if a.isCheckable()]
-    for sub in getattr(panel, "_src_submenus", []):
-        acts += [a for a in sub.actions() if a.isCheckable()]
-    name = dic.get_source(sid)["name"]
-    a = next(a for a in acts if name in a.text())
-    if a.isChecked() != on:
-        a.trigger()
-d = open_dlg(pdf_a); click(d.btn_add_all); d.accept()     # a 만의 선택(모두)
-menu_toggle(pdf_a, "g2", False)
-chk(not found(pdf_a, "골재시험어zq") and found(pdf_b, "골재시험어zq"), "E1 a 만의 선택이 있으면 메뉴는 a 만 고친다")
-menu_toggle(pdf_b, "g1", False)
-chk(not found(pdf_b, "포장시험어zq") and not dic.get_source("g1")["enabled"], "E2 b(선택 없음) → 기본 선택을 고친다(종전 동작)")
-chk(found(pdf_a, "포장시험어zq"), "E3 a 는 자기 선택이라 영향 없음")
-menu_toggle(pdf_b, "g1", True)
+# ---- E (261107-34: 패널 메뉴는 없다) — 다음 절이 쓰는 상태: a 만의 선택(g2 뺌), 기본 선택은 모두 ----
+d = open_dlg(pdf_a); click(d.btn_add_all); select(d.lst_use, {"g2"}); click(d.btn_remove); d.accept()
+chk(not found(pdf_a, "골재시험어zq") and found(pdf_b, "골재시험어zq") and found(pdf_a, "포장시험어zq"),
+    "E1 a 만의 선택은 a 만 고친다")
 
 # ---- F 외부 연결에는 사전 목록이 없다 · 사전 파일 단추는 기본 판의 바로 실행 묶음 ----
 from PyQt6.QtWidgets import QGroupBox
@@ -256,7 +237,7 @@ host._relocate_dict_file_sel([["", str(root / "copy.pdf")]])
 chk(found(str(root / "copy.pdf"), "골재시험어zq"), "H3 복사본은 기본 선택")
 src_app = (Path(__file__).parent / "viewer" / "app.py").read_text(encoding="utf-8")
 chk("self._relocate_dict_file_sel(pairs)" in src_app, "H4 _on_files_relocated 가 부른다")
-chk("self.study_panel.styleChosen.connect(self._on_dict_style_chosen)" in src_app, "H5 앱이 패널 스타일을 잇는다")
+chk("styleChosen" not in src_app and "sourceToggled" not in src_app, "H5 앱이 없어진 패널 메뉴 신호를 잇지 않는다(261107-34)")
 
 # ---- I ----
 from viewer import settings_store

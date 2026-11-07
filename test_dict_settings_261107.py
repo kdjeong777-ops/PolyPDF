@@ -8,7 +8,7 @@ C. [취소] — 기본 선택·우선순위(▲▼)·스타일을 바꾼 뒤 [�
 D. [적용] — 기본 선택·우선순위가 dict.db 에, 스타일이 settings 에 · 이 PDF 의 선택(dict_file_off)은 건드리지 않는다
 E. 바로 실행 — [사전 지우기] 는 누르면 바로(창을 [취소] 해도 지운 그대로)
 F. 도구 탭에 '사전 관리' 단추가 없다(명령 id tools.dict 없음)
-G. 단어장 창 '이 PDF 사전' — 누르면 이 PDF 의 사전 창, 닫으면 이 PDF 의 선택으로 저장
+G. 단어장 창 '사전'(261107-34, 종전 '이 PDF 사전') — 누르면 이 PDF 의 사전 창, 닫으면 이 PDF 의 선택으로 저장
 H. [백업]·[복원] 은 배경 스레드(`_file_op_bg` → `study.dict_backup`) — 261107-13 덧붙임(수정 전 코드는 메인에서 했다)
 """
 import os, sys, tempfile
@@ -143,10 +143,10 @@ chk("tools.dict" not in mw._cmds, "F1 명령 id tools.dict 없음")
 row = [a.text() for a in mw._ribbon.row("tools").actions() if cmd_id(a)]
 chk(not [t for t in row if "사전 관리" in t], "F2 도구 탭 줄에 '사전 관리' 단추 없음", str(row))
 
-# ---- G 단어장 창 '이 PDF 사전' ----
+# ---- G 단어장 창 '사전' ----
 sp = mw.study_panel
 btn = getattr(sp, "btn_file_dict", None)
-chk(btn is not None and btn.text() == "이 PDF 사전", "G1 단어장 창에 '이 PDF 사전' 단추")
+chk(btn is not None and btn.text() == "사전", "G1 단어장 창에 '사전' 단추")
 seen = []
 
 

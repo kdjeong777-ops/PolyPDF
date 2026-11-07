@@ -75,19 +75,6 @@ class _WrapDelegate(QStyledItemDelegate):
         opt.textElideMode = Qt.TextElideMode.ElideNone
         super().paint(painter, opt, index)
 
-class _StayOpenMenu(QMenu):
-    """260615-23: 체크형 항목을 클릭해도 메뉴가 닫히지 않고 토글 — 여러 출처를
-    한 번에 연속 선택/해제할 수 있게. (체크 아닌 항목/하위메뉴는 기본 동작)"""
-
-    def mouseReleaseEvent(self, e):
-        act = self.activeAction()
-        if act is not None and act.isEnabled() and act.isCheckable():
-            act.setChecked(not act.isChecked())   # toggled 시그널 발신 → 핸들러 동작
-            e.accept()
-            return
-        super().mouseReleaseEvent(e)
-
-
 def _clean_markup(s) -> str:
     """260615-16: 뜻/예시의 HTML 엔티티(&#44; 등)·태그(<strong> 등) 제거 — 화면 정리.
     (이미 캐시된 인터넷 사전 정의도 표시 시점에 깨끗하게)"""
@@ -128,9 +115,7 @@ class StudyPanel(QWidget):
     levelsChanged = pyqtSignal()             # 261103-6: '종류' 체크로 목록에 보이는 단어가 바뀜
     playToggled = pyqtSignal(bool)           # ▶/■ 단어장 자동읽기 시작/정지
     wordFilterChanged = pyqtSignal()         # 표시 필터(전체/선택/날짜/초기) 변경
-    sourceToggled = pyqtSignal(str, bool)    # 260611-102(P2): 사전 출처 on/off
-    styleChosen = pyqtSignal(str)            # 261103-2(단어장 SOT §11.1): 사전 스타일 고름
-    fileDictRequested = pyqtSignal()         # 261107-17: '이 PDF 사전' 단추
+    fileDictRequested = pyqtSignal()         # 261107-17·-34: '사전' 단추(종전 '이 PDF 사전')
     markSelectedRequested = pyqtSignal()     # ▲ 선택단어 저장
     deleteWordRequested = pyqtSignal()       # ▼ 리스트에서 삭제
     speedChanged = pyqtSignal(int)           # 빠르기(본화면·단어장 공유)
@@ -157,6 +142,18 @@ class StudyPanel(QWidget):
         hdr = QHBoxLayout()
         hdr.addWidget(QLabel(tr("단어장")))
         hdr.addStretch(1)
+        # 261107-34(디자인 SOT §2.10 단어장 머리줄, 사용자 지시): [OCR](단어장 생성) · [사전] 을 [＋] 왼쪽에
+        self.btn_build = QPushButton(tr("단어장 생성"))
+        self.btn_build.setToolTip(tr("이 PDF 를 OCR·분석해 단어장을 만듭니다 (1회)."))
+        self.btn_build.clicked.connect(self.buildRequested.emit)
+        hdr.addWidget(self.btn_build)
+        # 261107-17·-34(단어장 SOT §11.1): 이 PDF 에만 쓸 사전 — 기본 선택은 환경설정 '고급 › 사전' (종전 이름 '이 PDF 사전')
+        self.btn_file_dict = QToolButton()
+        self.btn_file_dict.setText(tr("사전"))
+        self.btn_file_dict.setToolTip(tr("지금 PDF 에만 쓸 사전을 고릅니다 — 모든 PDF 의 기본은 환경설정 › 고급 › 사전"))
+        self.btn_file_dict.setFixedHeight(26)
+        self.btn_file_dict.clicked.connect(lambda _c=False: self.fileDictRequested.emit())
+        hdr.addWidget(self.btn_file_dict)
         self.btn_add = QPushButton("＋")
         self.btn_add.setToolTip(tr("새 용어 등록(사용자 사전)"))
         self.btn_add.clicked.connect(self.addTermRequested.emit)
@@ -176,10 +173,6 @@ class StudyPanel(QWidget):
         self.btn_mp3.setToolTip(tr("재생내용을 페이지별 mp3로 저장(폴더)"))
         self.btn_mp3.clicked.connect(self.mp3Requested.emit)
         hdr.addWidget(self.btn_mp3)
-        self.btn_build = QPushButton(tr("단어장 생성"))
-        self.btn_build.setToolTip(tr("이 PDF 를 OCR·분석해 단어장을 만듭니다 (1회)."))
-        self.btn_build.clicked.connect(self.buildRequested.emit)
-        hdr.addWidget(self.btn_build)
         # 260611-66: 동작 버튼을 메인 툴바 버튼과 동일 크기(높이 26·아이콘 24)로 통일
         try:
             from PyQt6.QtGui import QIcon
@@ -187,8 +180,7 @@ class StudyPanel(QWidget):
             from viewer.resources_path import resource_path
             from viewer.widgets.icons import color_icon, BTN_ICON_PX     # 디자인 SOT §4.6: 위아래 여백을 둔 크기
             for b, ic in ((self.btn_edit, "icon_edit.png"),
-                          (self.btn_word, "icon_word.png"),
-                          (self.btn_build, "icon_vocab_add.png")):
+                          (self.btn_word, "icon_word.png")):
                 b.setText("")
                 b.setIcon(QIcon(resource_path(ic)))
                 b.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
@@ -201,6 +193,13 @@ class StudyPanel(QWidget):
             self.btn_mp3.setFixedSize(QSize(26, 26))
             self.btn_mp3.setStyleSheet("QPushButton{padding:0px;}")
             self.btn_mp3.setProperty("colorIcon", "mp3")
+            # 261107-34(디자인 SOT §4.5): 단어장 생성 = 'OCR' 색 그림(종전 icon_vocab_add.png 가 '어장' 으로 잘려 보였다)
+            self.btn_build.setText("")
+            self.btn_build.setIcon(color_icon("ocr", size=BTN_ICON_PX))
+            self.btn_build.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
+            self.btn_build.setFixedSize(QSize(26, 26))
+            self.btn_build.setStyleSheet("QPushButton{padding:0px;}")
+            self.btn_build.setProperty("colorIcon", "ocr")
         except Exception:
             pass
         root.addLayout(hdr)
@@ -223,7 +222,7 @@ class StudyPanel(QWidget):
             flow.addWidget(cb)
             self._chk[lv] = cb
 
-        # 표시 토글 + 접기 + 출처 + 표시 필터 + 본문강조
+        # 표시 토글 + 접기 + 표시 필터 + 본문강조
         flow.addWidget(QLabel(tr("표시")))
         self.chk_ko = QCheckBox(tr("한글뜻")); self.chk_ko.setChecked(True)
         self.chk_en = QCheckBox(tr("영어뜻")); self.chk_en.setChecked(True)
@@ -241,20 +240,7 @@ class StudyPanel(QWidget):
         self.btn_expand.setMaximumWidth(48)
         self.btn_expand.clicked.connect(self._toggle_expand)
         flow.addWidget(self.btn_expand)
-        # 260611-102(P2): 사전 출처 선택(일반/○○지침/사용자 …) on/off
-        self.btn_src = QToolButton()
-        self.btn_src.setText(tr("출처"))      # 261025-10(디자인 SOT §2.7): ▾ 는 Qt 메뉴 화살표 하나
-        drop_button(self.btn_src)
-        self.btn_src.setToolTip(tr("표시할 사전 출처를 켜고 끕니다(기본/사용자 용어집)."))
-        self.btn_src.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.btn_src.setMenu(_StayOpenMenu(self.btn_src))   # 260615-23: 연속 토글
-        flow.addWidget(self.btn_src)
-        # 261107-17(단어장 SOT §11.1): 이 PDF 에만 쓸 사전 — 기본 선택은 환경설정 '고급 › 사전'
-        self.btn_file_dict = QToolButton()
-        self.btn_file_dict.setText(tr("이 PDF 사전"))
-        self.btn_file_dict.setToolTip(tr("지금 PDF 에만 쓸 사전을 고릅니다 — 모든 PDF 의 기본은 환경설정 › 고급 › 사전"))
-        self.btn_file_dict.clicked.connect(lambda _c=False: self.fileDictRequested.emit())
-        flow.addWidget(self.btn_file_dict)
+        # 261107-34(단어장 SOT §11.1, 사용자 지시): '출처 ▾' 는 [사전] 과 같은 일이라 없앴다 · [사전] 은 머리줄로
         self.cmb_filter = QComboBox()        # 전체단어/선택단어/날짜/초기
         self.cmb_filter.setToolTip(tr("표시할 단어 집합: 전체/선택단어/날짜별/초기"))
         self._rebuild_filter([])
@@ -396,7 +382,8 @@ class StudyPanel(QWidget):
 
     def set_building(self, on: bool) -> None:
         self.btn_build.setEnabled(not on)
-        self.btn_build.setText(tr("⏳ 생성 중...") if on else tr("단어장 생성"))
+        # 261107-34: 그림 단추라 글자를 넣지 않는다 — 종전 setText('단어장 생성') 이 26px 단추에 붙어 '어장' 으로 잘려 보였다
+        self.btn_build.setToolTip(tr("⏳ 생성 중...") if on else tr("이 PDF 를 OCR·분석해 단어장을 만듭니다 (1회)."))
 
     def set_page(self, page: int) -> None:
         self._page = page
@@ -460,48 +447,6 @@ class StudyPanel(QWidget):
 
     def set_filter_dates(self, dates: list) -> None:
         self._rebuild_filter(list(dates))
-
-    def set_dict_sources(self, sources: list, styles: list | None = None) -> None:
-        """260611-102(P2)/260615-7(P9): '출처 ▾' 메뉴 — 구분(category)별 그룹.
-        sources: [{source_id,name,category,kind,enabled,active,n_entries}].
-        261103-2(단어장 SOT §11.1): 맨 위 스타일 목록(styleChosen)."""
-        menu = self.btn_src.menu()
-        # 260615-23: 메뉴가 열려 있는 동안(연속 토글 중)에는 재구성하지 않음(아이템 파괴 방지)
-        if menu.isVisible():
-            return
-        menu.clear()
-        self._src_submenus = []          # 하위메뉴 참조 유지(GC 방지)
-        if styles:
-            hdr = menu.addAction(tr("스타일")); hdr.setEnabled(False)
-            for name in styles:
-                a = menu.addAction(f"  {name}")
-                a.triggered.connect(lambda _c=False, _n=name: self.styleChosen.emit(_n))
-            menu.addSeparator()
-        if not sources:
-            a = menu.addAction(tr("(사전 없음)")); a.setEnabled(False)
-            return
-
-        def _add(parent, s):
-            tag = "👤" if s.get("kind") == "user" else "📘"
-            a = QAction(f"{tag} {s.get('name', s['source_id'])}"
-                        f"  ({s.get('n_entries', 0)})", parent, checkable=True)
-            a.setChecked(bool(s.get("active", s.get("enabled", 1))))   # 261103-2: 이 PDF 에 쓰는 출처(단어장 SOT §11.1)
-            sid = s["source_id"]
-            a.toggled.connect(lambda on, _sid=sid: self.sourceToggled.emit(_sid, on))
-            parent.addAction(a)
-
-        # 구분(category)별로 묶음. 구분 없으면 최상위에.
-        cats = {}
-        for s in sources:
-            cats.setdefault((s.get("category") or "").strip(), []).append(s)
-        for cat in sorted(k for k in cats if k):
-            sub = _StayOpenMenu(f"📂 {cat}", menu)   # 하위메뉴도 연속 토글
-            self._src_submenus.append(sub)
-            menu.addMenu(sub)
-            for s in cats[cat]:
-                _add(sub, s)
-        for s in cats.get("", []):       # 구분 미지정
-            _add(menu, s)
 
     def word_filter(self) -> str:
         return self.cmb_filter.currentText() or FILTER_ALL

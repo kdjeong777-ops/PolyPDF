@@ -5,7 +5,7 @@ SOT: `단어장 작업 계획서.md` §11.1 (261103-2, 261107-13·-17, 사용자
 - 환경설정 `고급 › 사전`(mode="default") — **기본 선택**·우선순위·스타일. 저장은 환경설정 [적용]·[확인] 때
   (`result_default()` → 결과 키 `dict_default`·`dict_styles`, `MainWindow._settings_apply`). [취소] 면 버린다.
   아래 '바로 실행' 묶음 — 가져오기·내보내기·백업·복원·고급 ▾·지우기·되살리기·폴더·양식 CSV·사용자 뜻 편집 — 은 누르면 바로 dict.db 에 쓴다.
-- 단어장 창 `이 PDF 사전` 단추 → `DictFileDialog`(mode="file") — **이 PDF 의 선택**. 창을 닫을 때 저장(`dict_file_off`).
+- 단어장 창 `사전` 단추(261107-34, 종전 `이 PDF 사전`) → `DictFileDialog`(mode="file") — **이 PDF 의 선택**. 창을 닫을 때 저장(`dict_file_off`).
 스타일 줄([저장]·[수정]·[삭제])은 두 판 모두 — 기본 판은 [적용] 때, 이 PDF 판은 누르면 바로 `dict_styles` 에(261107-25).
 '삭제' 는 적용 목록에서 빼기 — 사전은 지우지 않는다. 지운 사전은 `dict_meta.deleted_sources` 에 기억 — 동봉 용어집·폴더 CSV 도 다시 싣지 않는다.
 (261107-17: 종전 '사전 관리' 창·도구 탭 단추는 없앴다 — 사용자 결정 '환경설정의 외부 연결 아래에')
@@ -55,7 +55,7 @@ class DictManagerPanel(QWidget):
         intro = QLabel(
             ("따로 고르지 않은 <b>모든 PDF</b> 에 쓸 사전을 오른쪽으로 옮깁니다. 오른쪽 차례가 <b>우선순위</b>입니다"
              "(사용자 ▶ 사전/용어집 ▶ 자동/인터넷 안에서 위부터).<br>"
-             "<small>한 PDF 에만 따로 고르려면 단어장 창의 [이 PDF 사전]. [← 삭제] 는 적용 목록에서 빼기만 합니다.</small>")
+             "<small>한 PDF 에만 따로 고르려면 단어장 창의 [사전]. [← 삭제] 는 적용 목록에서 빼기만 합니다.</small>")
             if is_def else
             ("지금 PDF 에만 쓸 사전을 오른쪽으로 옮깁니다 — 다른 PDF·기본 선택은 그대로입니다.<br>"
              "<small>고른 사전은 [단어장 생성] 으로 만든 단어에 뜻을 붙입니다(단어장이 비어 있으면 먼저 [단어장 생성]).<br>"
@@ -560,7 +560,7 @@ def attach_settings(dlg, layout) -> DictManagerPanel | None:
 
 
 class DictFileDialog(QDialog):
-    """단어장 창 `이 PDF 사전` — 지금 PDF 에만 쓸 사전(단어장 SOT §11.1). 어느 길로 닫아도 저장한다.
+    """단어장 창 `사전` — 지금 PDF 에만 쓸 사전(단어장 SOT §11.1). 어느 길로 닫아도 저장한다.
     [기본 선택 따르기] = 이 PDF 의 선택을 지우고 닫는다."""
 
     def __init__(self, store, prefs: dict = None, host=None, parent=None):
