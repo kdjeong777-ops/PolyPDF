@@ -9983,7 +9983,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer import ocr_layer_save as ols
         return ols.ask_for_save(self, path, prefs=self._prefs, save_prefs=self._save_settings_now,
                                 run_bg=lambda fn, label: self._file_op_bg(fn, label, tr("저장")),
-                                fix_store=self._text_store())
+                                fix_store=self._text_store(),
+                                notify=lambda m: self.status.showMessage(m, 10000))   # 261107-40: 확인 기록 알림
 
     def _save_settings_now(self):
         settings_store.save(self._build_settings_payload(), self.SETTINGS_FILE)

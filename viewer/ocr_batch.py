@@ -29,7 +29,8 @@ def run_file(path, *, lang: str, drop_watermark: bool, tick, cancelled, db_path=
     """파일 하나: 글자층 없는 쪽을 OCR(이미 읽은 쪽은 건너뜀) → 글자층 다시 쓰기 → 임시 PDF.
 
     `tick(했음, 전체, 글)` — 진행(중지면 예외를 던져도 된다). `cancelled() -> bool`.
-    반환 `{"status": "ok"|"skip", "why": 까닭, "tmp": 임시 PDF, "ocr": 새로 읽은 쪽 수, "stats": 글자층 통계}`.
+    반환 `{"status": "ok"|"skip", "why": 까닭, "tmp": 임시 PDF, "ocr": 새로 읽은 쪽 수, "stats": 글자층 통계,
+    "kind": "same"(쓴 쪽 없이 확인 기록만, 261107-40), "same": 층이 앱 OCR 과 같은 쪽 수, "sigs": {쪽: OCR 서명}}`.
     중지 예외는 그대로 올린다 — 하던 파일의 임시 폴더는 지운다(읽은 쪽은 study.db 에 남는다)."""
     import fitz
     from viewer import sign_core
@@ -86,15 +87,25 @@ def run_file(path, *, lang: str, drop_watermark: bool, tick, cancelled, db_path=
         fs = fix_store()
         tmpdir = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
         out = tmpdir / Path(path).name
+        # 261107-40(SOT §5.5 '쓰는 쪽'): [저장](§5.4.1)과 같은 세기 — 넣을·다른 쪽만 다시 쓰고, 같은 쪽은 확인 기록
+        from viewer import ocr_layer_save as ols
+        cnt =ols.count_pages(path, db_path=db_path, fix_store=fs, cancelled=cancelled)
+        pages = sorted(set(cnt["missing"]) | set(cnt["differs"]))
+        res["same"], res["sigs"] = len(cnt["same"]), dict(cnt["sigs"])
+        if not pages and cnt["same"]:
+            res.update(status="ok", kind="same", tmp=ta.check_tmp_for(path, len(cnt["same"]), out=str(out)))
+            tmpdir = None
+            return res
 
         def layer_tick(k, total, p):
             if p >= 0:
                 tick(len(todo) + k, n, step(tr(STAGE_LAYER), k + 1, total, p + 1, npg))
         tmp, stats = ta.build_layer_pdf(
-            path, scan, rows_for=ta.layer_rows_for(path, look),
+            path, pages, rows_for=ta.layer_rows_for(path, look),
             fixes_for=lambda p, rows: fs.apply_to_rows(path, p, rows),
             items_for=lambda p: fs.get_items(path, p),
-            progress=layer_tick, cancelled=cancelled, out=str(out))   # 처음 원본은 저장 길이 `_원본` 에(261107-29)
+            progress=layer_tick, cancelled=cancelled, out=str(out),
+            same=len(cnt["same"]))                # 처음 원본은 저장 길이 `_원본` 에(261107-29)
         if cancelled():
             raise _Stop()
         res["stats"] = stats

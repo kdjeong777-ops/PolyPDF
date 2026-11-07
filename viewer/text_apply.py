@@ -289,9 +289,10 @@ def layer_rows_for(doc_path, look, forced=()):
 TEXT_LAYER_KEY = "PolyPDFTextLayer"    # PDF 정보(Info)의 글자층 저장 기록 — 값 `D:YYYYMMDDHHmmSS+09'00' ocr|fix 쪽수` (SOT §5.4.2)
 
 
-def stamp_text_layer(doc, kind: str, pages: int) -> None:
-    """글자층을 쓴 일시·무엇을(`ocr` 앱 OCR 만 / `fix` 고침 반영 포함)·쪽 수를 PDF 정보에 적는다(SOT §5.4.2, 261107-30 D6).
-    다른 정보 키는 그대로 둔다 — `set_metadata` 는 정보 사전을 통째로 바꾸므로 이 키 하나만 `xref_set_key` 로."""
+TEXT_LAYER_CHECK_KEY = "PolyPDFTextLayerCheck"   # 층이 이미 앱 OCR 과 같다고 확인한 기록 — 값 `D:… same 쪽수` (SOT §5.4.2 '확인 기록', 261107-40)
+
+
+def _stamp_key(doc, key: str, kind: str, pages: int) -> None:
     import datetime
     import fitz
     now = datetime.datetime.now().astimezone()
@@ -302,21 +303,20 @@ def stamp_text_layer(doc, kind: str, pages: int) -> None:
         doc.set_metadata(dict(doc.metadata or {}))     # 정보 사전이 없으면 만든다(있던 표준 항목 그대로)
         info = doc.xref_get_key(-1, "Info")
     if info[0] == "xref":
-        doc.xref_set_key(int(info[1].split()[0]), TEXT_LAYER_KEY, fitz.get_pdf_str(val))
+        doc.xref_set_key(int(info[1].split()[0]), key, fitz.get_pdf_str(val))
 
 
-def read_text_layer_stamp(doc):
-    """`stamp_text_layer` 가 적은 것 → `{"when": datetime, "kind": "ocr"|"fix", "pages": int}` 또는 None(문서 정보가 읽기만 한다)."""
+def _read_key(doc, key: str, kinds: str):
     import datetime
     import re
     try:
         info = doc.xref_get_key(-1, "Info")
         if info[0] != "xref":
             return None
-        t, v = doc.xref_get_key(int(info[1].split()[0]), TEXT_LAYER_KEY)
+        t, v = doc.xref_get_key(int(info[1].split()[0]), key)
     except Exception:
         return None
-    m = re.match(r"\(?D:(\d{14})([+-]\d\d)'(\d\d)'\s+(ocr|fix)\s+(\d+)\)?$", (v or "").strip())
+    m = re.match(r"\(?D:(\d{14})([+-]\d\d)'(\d\d)'\s+(%s)\s+(\d+)\)?$" % kinds, (v or "").strip())
     if t != "string" or not m:
         return None
     tz = datetime.timezone(datetime.timedelta(hours=int(m.group(2)), minutes=int(m.group(3)) * (1 if m.group(2)[0] == "+" else -1)))
@@ -324,8 +324,45 @@ def read_text_layer_stamp(doc):
     return {"when": when, "kind": m.group(4), "pages": int(m.group(5))}
 
 
+def stamp_text_layer(doc, kind: str, pages: int) -> None:
+    """글자층을 쓴 일시·무엇을(`ocr` 앱 OCR 만 / `fix` 고침 반영 포함)·쪽 수를 PDF 정보에 적는다(SOT §5.4.2, 261107-30 D6).
+    다른 정보 키는 그대로 둔다 — `set_metadata` 는 정보 사전을 통째로 바꾸므로 이 키 하나만 `xref_set_key` 로."""
+    _stamp_key(doc, TEXT_LAYER_KEY, kind, pages)
+
+
+def read_text_layer_stamp(doc):
+    """`stamp_text_layer` 가 적은 것 → `{"when": datetime, "kind": "ocr"|"fix", "pages": int}` 또는 None(문서 정보가 읽기만 한다)."""
+    return _read_key(doc, TEXT_LAYER_KEY, "ocr|fix")
+
+
+def stamp_text_layer_check(doc, pages: int) -> None:
+    """층이 앱 OCR 과 같은 쪽 수와 확인 일시(SOT §5.4.2 '확인 기록') — 쓴 기록(`TEXT_LAYER_KEY`)과 다른 키라 덮지 않는다."""
+    _stamp_key(doc, TEXT_LAYER_CHECK_KEY, "same", pages)
+
+
+def read_text_layer_check(doc):
+    """`stamp_text_layer_check` 가 적은 것 → `{"when", "kind": "same", "pages"}` 또는 None."""
+    return _read_key(doc, TEXT_LAYER_CHECK_KEY, "same")
+
+
+def check_tmp_for(src, same: int, out=None) -> str:
+    """원본 사본에 확인 기록 하나만 덧붙여 저장한 **임시 파일**(SOT §5.4.2) — 배경에서 부른다. 원본 덮어쓰기는 저장 길이."""
+    import shutil
+    import fitz
+    src = Path(src)
+    tmp = Path(out) if out else src.with_name(src.stem + "_ocrcheck_tmp.pdf")
+    shutil.copyfile(str(src), str(tmp))
+    d = fitz.open(str(tmp))
+    try:
+        stamp_text_layer_check(d, same)
+        d.save(str(tmp), incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+    finally:
+        d.close()
+    return str(tmp)
+
+
 def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
-                    progress=None, cancelled=None, out=None, backup=None) -> tuple:
+                    progress=None, cancelled=None, out=None, backup=None, same: int = 0) -> tuple:
     """고른 쪽들의 보이지 않는 글자층을 다시 써 **임시 파일**을 만든다 (SOT §5.4).
 
     원본 덮어쓰기는 부르는 쪽(메인)이 한다 — 핸들을 쥔 곳이 메인이다.
@@ -384,6 +421,8 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
         fixed = bool(items_for) and any(items_for(p) for p in done)
         try:
             stamp_text_layer(doc, "fix" if fixed else "ocr", len(done))
+            if same:                              # 261107-40: 쓰지 않은 같은 쪽은 확인 기록(§5.4.2)
+                stamp_text_layer_check(doc, same)
         except Exception:
             pass
         doc.save(str(tmp), garbage=3, deflate=True)
@@ -392,7 +431,7 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
     return str(tmp), stats
 
 
-def layer_tmp_for(src, pages, *, db_path=None, progress=None, cancelled=None) -> tuple:
+def layer_tmp_for(src, pages, *, db_path=None, progress=None, cancelled=None, same: int = 0) -> tuple:
     """[저장] 때 OCR 을 글자층에 넣기(SOT §5.4.1) — `TextLayerWorker` 와 같은 원천(`layer_rows_for`)·고침·안전 조건으로
     **임시 파일까지만**(배경에서 부른다). 원본 옆에 백업을 만들지 않는다 — 원본 보존은 저장 길(`_finalize_save`)이 맡는다.
     반환 `(임시 파일 | "", 통계)` — `build_layer_pdf` 와 같다."""
@@ -412,7 +451,7 @@ def layer_tmp_for(src, pages, *, db_path=None, progress=None, cancelled=None) ->
         return build_layer_pdf(src, list(pages), rows_for=layer_rows_for(str(src), look),
                                fixes_for=lambda p, rows: fs.apply_to_rows(str(src), p, rows),
                                items_for=lambda p: fs.get_items(str(src), p),
-                               progress=progress, cancelled=cancelled, out=out, backup=False)
+                               progress=progress, cancelled=cancelled, out=out, backup=False, same=same)
     finally:
         st.close()
 

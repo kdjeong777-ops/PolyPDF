@@ -74,6 +74,7 @@ class OcrBatchMixin:
         except Exception:
             cur_page = 0
         done, skipped, failed, pages, ocred = [], [], [], 0, 0
+        same_files = []                                  # 261107-40: 층이 이미 앱 OCR 과 같아 확인 기록만 넣은 파일
         for src, r in results:
             if isinstance(r, str):
                 failed.append((src, r))
@@ -84,7 +85,16 @@ class OcrBatchMixin:
                 continue
             try:
                 out = str(self._finalize_save(src, r["tmp"]))
+                if r.get("kind") == "same":
+                    same_files.append((src, int(r.get("same") or 0), out))
+                    self.study_commit_for(src)
+                    continue
                 rewritten, fallback = self._mark_layer_written(src, r.get("stats") or {})
+                try:                                     # §5.4.1 과 같게 — 쓴 쪽의 OCR 서명(다음 [저장] 이 같은 층으로 본다)
+                    sigs = r.get("sigs") or {}
+                    self._text_store().set_layer_sigs(out, {p: sigs.get(p, "") for p in rewritten if p in sigs})
+                except Exception:
+                    pass
                 pages += len(rewritten) + len(fallback)
                 done.append((src, out))
                 self.study_commit_for(src)            # 261019-1: 원본에 넣었으면(=저장) 읽은 OCR 도 확정
@@ -94,14 +104,17 @@ class OcrBatchMixin:
                 failed.append((src, str(e)))
             finally:
                 ocr_batch.cleanup(r.get("tmp"))
-        if done and cur:
+        if (done or same_files) and cur:
             # 덮어쓰기가 본문을 닫는다(§4.7.5) — 보던 파일·쪽으로 다시 연다
-            back = next((o for s, o in done if s == cur), cur)
+            back = next((o for s, o in done + [(s, o) for s, _k, o in same_files] if s == cur), cur)
             try:
                 self._reload_after_text_apply(back, cur_page, src=cur)
             except Exception:
                 pass
         lines = [tr('글자층을 넣은 파일: {n}개 · {p}쪽 (새로 읽은 쪽 {o}쪽)').format(n=len(done), p=pages, o=ocred)]
+        if same_files:
+            lines.append(tr("앱 OCR 과 같은 글자층 — 확인 일시를 PDF 정보에 적었습니다:")
+                         + "".join("\n· %s — %s" % (Path(s).name, tr("{n}쪽").format(n=k)) for s, k, _o in same_files[:10]))
         if cancelled:
             lines.append(tr('중단했습니다 — {k}개 파일은 손대지 않았습니다(읽은 쪽은 이 실행 동안 남아 다시 읽지 않습니다 — 남기려면 상태 표시줄 \'저장 안 한 OCR\' 에서 저장).').format(
                 k=max(0, n_files - len(results))))
@@ -109,10 +122,14 @@ class OcrBatchMixin:
             lines.append(tr("건너뛴 파일:") + "".join("\n· %s — %s" % (Path(s).name, w) for s, w in skipped[:10]))
         if failed:
             lines.append(tr("실패:") + "".join("\n· %s — %s" % (Path(s).name, w) for s, w in failed[:10]))
-        renamed = [(s, o) for s, o in done if Path(o).name != Path(s).name]
+        renamed = [(s, o) for s, o in done + [(s, o) for s, _k, o in same_files] if Path(o).name != Path(s).name]
         if renamed:
             lines.append(tr("다른 이름으로 저장된 파일:") + "".join("\n· %s" % Path(o).name for _s, o in renamed[:10]))
         QMessageBox.information(self, tr("OCR 글자층 넣기"), "\n\n".join(lines))
-        self.status.showMessage(tr('OCR 글자층: {n}개 파일 · {p}쪽').format(n=len(done), p=pages), 8000)
+        if same_files and not done:
+            from viewer.ocr_layer_save import same_notice
+            self.status.showMessage(same_notice(sum(k for _s, k, _o in same_files)), 10000)
+        else:
+            self.status.showMessage(tr('OCR 글자층: {n}개 파일 · {p}쪽').format(n=len(done), p=pages), 8000)
         self._pending_refresh()
-        return bool(done)
+        return bool(done or same_files)

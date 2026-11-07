@@ -135,6 +135,34 @@ def _read_layer_saved(d) -> str:
         return ""
 
 
+def _read_layer_check(d) -> dict:
+    """확인 기록(텍스트 창 SOT §5.4.2) → {"when": 'YYYY-MM-DD HH:MM', "pages": N} 또는 {}."""
+    try:
+        from viewer import text_apply
+        fn = getattr(text_apply, "read_text_layer_check", None)
+        st = fn(d) if callable(fn) else None
+        if not st:
+            return {}
+        return {"when": st["when"].strftime("%Y-%m-%d %H:%M"), "pages": int(st["pages"])}
+    except Exception:
+        return {}
+
+
+def _has_words(d, i) -> bool:
+    try:
+        return any(ch.isalnum() for ch in (d.load_page(i).get_text("text") or ""))
+    except Exception:
+        return False
+
+
+def layer_check_text(info: dict | None) -> str:
+    """확인 기록 → '앱 OCR 과 같음 N쪽 · YYYY-MM-DD HH:MM 확인'."""
+    c = (info or {}).get("layer_check") or {}
+    if not c.get("when"):
+        return ""
+    return tr("앱 OCR 과 같음 {n}쪽").format(n=c.get("pages", 0)) + SEP + tr("{when} 확인").format(when=c["when"])
+
+
 def doc_info_rows(facts: dict, info: dict | None, pending: dict | None = None) -> list:
     """문서 정보 창의 (항목, 값). 배경 값이 아직이면(info None) 그 행은 '읽는 중…'.
     `pending`(261107-31, `doc_meta.pending`) — 저장 안 한 고침이 있으면 그 값을 보이고 항목 이름 뒤에 '(저장 안 됨)'."""
@@ -172,12 +200,16 @@ def doc_info_rows(facts: dict, info: dict | None, pending: dict | None = None) -
     elif info.get("pages_checked"):
         n_all = int(info["pages_checked"])
         n_no = int(info.get("pages_no_text") or 0)
-        text_s = tr("있는 쪽 {a} · 없는 쪽 {b}").format(a=n_all - n_no, b=n_no)
+        n_ocr = int(info.get("pages_ocr_layer") or 0)
+        if n_ocr:                                       # 261107-40(마스터 §4.12 '글자층 세기')
+            text_s = tr("있는 쪽 {a}(OCR 층 {c}) · 없는 쪽 {b}").format(a=n_all - n_no + n_ocr, c=n_ocr, b=n_no - n_ocr)
+        else:
+            text_s = tr("있는 쪽 {a} · 없는 쪽 {b}").format(a=n_all - n_no, b=n_no)
     else:
         text_s = none
-    saved = layer_saved_text(info)
-    if saved and info is not None:
-        text_s = (text_s + SEP + saved) if text_s != none else saved
+    for extra in (layer_saved_text(info), layer_check_text(info)):
+        if extra and info is not None:
+            text_s = (text_s + SEP + extra) if text_s != none else extra
 
     def ed(f):
         if f in pending:                                  # 저장 안 한 고침 — 고친 값을 보이고 항목에 표시
@@ -265,17 +297,21 @@ def read_info(path: str, password: str | None = None, cancelled=lambda: False, p
             out["signed"] = bool(doc_is_signed(d))
         except Exception:
             out["signed"] = False
+        out["layer_check"] = _read_layer_check(d)          # 261107-40: 앱 OCR 과 같다고 확인한 일시·쪽 수
         from viewer.text_extract2 import has_text_layer     # 쪽 판정은 단어학습 SOT §14.18 그대로
-        n_no = 0
+        n_no = n_ocr = 0
         for i in range(d.page_count):
             if cancelled():
                 return out                          # 덜 읽은 것은 캐시에 넣지 않는다
             if not has_text_layer(d, i):
                 n_no += 1
+                if _has_words(d, i):                # 261107-40(마스터 §4.12 '글자층 세기'): 그림 위의 보이지 않는 OCR 층도 글자층이다
+                    n_ocr += 1
             if pace is not None:
                 pace()
         out["pages_checked"] = d.page_count
-        out["pages_no_text"] = n_no
+        out["pages_no_text"] = n_no                 # 쓸 만한 글자층이 없는 쪽(스캔 판정 — OCR 층 쪽 포함)
+        out["pages_ocr_layer"] = n_ocr
     finally:
         try:
             d.close()

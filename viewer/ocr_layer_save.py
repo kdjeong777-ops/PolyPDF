@@ -49,11 +49,13 @@ def count_pages(path, *, db_path=None, fix_store=None, cancelled=None) -> dict:
     """그 파일에서 글자층에 넣을 쪽(`missing`)·앱 OCR 과 다른 층의 쪽(`differs`)을 센다 — **배경에서** 부른다.
 
     앱 OCR 쪽(보류·저장본) 중 쓸 만한 글자층이 없고(`has_text_layer` 거짓)·돌리지 않았고·보이는 글자가 없는 쪽만 본다.
-    층이 비었으면 missing, 있으면 우리가 쓴 서명이 지금 OCR 과 같으면 건너뛰고, 아니면 닮음도가 `LAYER_DIFF_SIM` 아래일 때 differs."""
+    층이 비었으면 missing, 있으면 우리가 쓴 서명이 지금 OCR 과 같거나 닮음도가 `LAYER_DIFF_SIM` 이상이면 same(261107-40 — 확인 기록),
+    아니면 differs. `checked` = 이미 있는 확인 기록의 쪽 수(없으면 -1)."""
     import fitz
     from viewer import text_extract2 as tx
+    from viewer import text_apply as ta
     from viewer.study.study_store import StudyStore, file_key_for
-    out = {"missing": [], "differs": [], "sigs": {}}
+    out = {"missing": [], "differs": [], "same": [], "sigs": {}, "checked": -1}
     st = StudyStore(db_path)
     try:
         texts = {int(p): t for p, t in st.iter_all_text(file_key_for(str(path))) if (t or "").strip()}
@@ -68,6 +70,8 @@ def count_pages(path, *, db_path=None, fix_store=None, cancelled=None) -> dict:
     try:
         if doc.needs_pass:
             return out
+        chk = ta.read_text_layer_check(doc)
+        out["checked"] = int(chk["pages"]) if chk else -1
         for p in sorted(texts):
             if cancelled is not None and cancelled():
                 break
@@ -82,9 +86,11 @@ def count_pages(path, *, db_path=None, fix_store=None, cancelled=None) -> dict:
             if not _TOK.search(layer.lower()):
                 out["missing"].append(p)
             elif fix_store is not None and fix_store.layer_sig(str(path), p) == sig:
-                continue
+                out["same"].append(p)
             elif layer_similarity(layer, texts[p]) < LAYER_DIFF_SIM:
                 out["differs"].append(p)
+            else:
+                out["same"].append(p)
     finally:
         doc.close()
     return out
@@ -93,14 +99,20 @@ def count_pages(path, *, db_path=None, fix_store=None, cancelled=None) -> dict:
 class LayerPlan:
     """창에서 넣기로 한 결과 — `tmp` 는 글자층을 넣은 임시 PDF. 저장이 끝나면 `done(최종 경로)`, 아니면 `discard()`."""
 
-    def __init__(self, path, tmp, pages, sigs, fix_store=None):
+    def __init__(self, path, tmp, pages, sigs, fix_store=None, notice="", notify=None):
         self.path, self.tmp, self.pages, self.sigs, self._fs = str(path), str(tmp), list(pages), dict(sigs), fix_store
+        self.notice, self._notify = notice, notify      # 261107-40: 저장이 끝나면 상태 표시줄에(확인 기록)
 
     def done(self, final) -> None:
         if self._fs is not None and self.pages:
             try:
                 self._fs.set_layer_sigs(str(final), {p: self.sigs.get(p, "") for p in self.pages})
                 self._fs.mark_applied(str(final), self.pages)
+            except Exception:
+                pass
+        if self.notice and self._notify is not None:
+            try:
+                self._notify(self.notice)
             except Exception:
                 pass
         self.discard()
@@ -154,16 +166,33 @@ def _dialog_cls():
     return OcrLayerSaveDialog
 
 
-def ask_for_save(parent, path, *, prefs: dict, save_prefs=None, run_bg, fix_store=None, db_path=None):
+def same_notice(n: int) -> str:
+    """층이 이미 앱 OCR 과 같을 때의 상태 표시줄 글(SOT §5.4.2 '확인 기록')."""
+    return tr("PDF 글자층이 이미 앱 OCR 과 같습니다 — {n}쪽 (확인 일시를 PDF 정보에 적었습니다)").format(n=n)
+
+
+def ask_for_save(parent, path, *, prefs: dict, save_prefs=None, run_bg, fix_store=None, db_path=None, notify=None):
     """[저장] 진입에서 부른다(메인). 돌려주는 것: `"cancel"` · `None`(넣지 않음 — 종전 저장) · `LayerPlan`.
 
-    `run_bg(fn, 안내)` 는 앱의 배경 파일 작업(`_file_op_bg` — 진행창, 실패면 예외를 돌려준다)."""
+    `run_bg(fn, 안내)` 는 앱의 배경 파일 작업(`_file_op_bg` — 진행창, 실패면 예외를 돌려준다).
+    261107-40: 넣을·다른 쪽이 없고 같은 쪽만 있으면 확인 기록을 넣은 임시 파일로 `LayerPlan`(쓴 쪽 없음) — 이미 같은 쪽 수로
+    확인했으면 None. `notify(글)` 은 저장이 끝난 뒤 상태 표시줄."""
     from viewer.pathutil import norm_key
+    from viewer import text_apply as ta
     got = {}
     err = run_bg(lambda: got.update(count_pages(path, db_path=db_path, fix_store=fix_store)),
                  tr("OCR 쪽 세는 중…"))
-    if err is not None or not (got.get("missing") or got.get("differs")):
+    if err is not None:
         return None
+    same = list(got.get("same") or [])
+    if not (got.get("missing") or got.get("differs")):
+        if not same or got.get("checked") == len(same):
+            return None
+        res = {}
+        err = run_bg(lambda: res.update(tmp=ta.check_tmp_for(path, len(same))), tr("OCR 글자층 확인 기록 중…"))
+        if err is not None or not res.get("tmp"):
+            return None
+        return LayerPlan(path, res["tmp"], [], {}, fix_store, notice=same_notice(len(same)), notify=notify)
     missing, differs = got["missing"], got["differs"]
     key = norm_key(str(path))
     memo = (prefs.get(PREF_KEY) or {}).get(key)
@@ -187,7 +216,7 @@ def ask_for_save(parent, path, *, prefs: dict, save_prefs=None, run_bg, fix_stor
         return None
     from viewer import text_apply as ta
     res = {}
-    err = run_bg(lambda: res.update(zip(("tmp", "stats"), ta.layer_tmp_for(path, pages, db_path=db_path))),
+    err = run_bg(lambda: res.update(zip(("tmp", "stats"), ta.layer_tmp_for(path, pages, db_path=db_path, same=len(same)))),
                  tr("OCR 글자층 쓰는 중…"))
     if err is not None:
         raise err
