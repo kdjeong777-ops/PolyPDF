@@ -1568,7 +1568,6 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "사전 정리", f"실패: {e}")
 
-    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _dict_file_job(self, fn, label: str, title: str):
         """사전 파일 일을 배경에서(`_file_op_bg` — 진행창, 응답성 SOT §5). 실패면 그 예외, 성공이면 None.
         창 없는 대역(검사)에는 `_file_op_bg` 가 없어 그 자리에서 한다."""
@@ -1581,6 +1580,7 @@ class StudyMixin:
             return None
         return run(fn, label, title)
 
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다(261107-22: 공용 도우미가 아니라 처리기에)
     def _action_backup_dict(self, checked: bool = False):
         """260615-15: 사전 백업 — dict.db + user_dict.db + dict_images/ 를 zip 으로(여러 PC 이전·동기화).
         261107-13: 압축·DB 복사는 배경(`study.dict_backup`, SQLite 백업 API)."""
