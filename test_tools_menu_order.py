@@ -75,9 +75,8 @@ GROUPS = [["tools.ocr", "tools.build_study", "tools.online_enrich",          # 2
            "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag", "tools.reindex"],
           ["tools.img2pdf", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign"],
           ["file.export", "tools.translate"],
-          ["tools.settings"],                         # 261107-17: 사전 관리 단추 없앰(환경설정 고급 › 사전)
-          ["tools.install"]]
-chk(groups == GROUPS, "② 도구 메뉴 묶음 다섯·차례(261031-16)", str(groups))
+          ["tools.settings", "tools.install"]]        # 261107-17: 사전 관리 단추 없앰 · 환경설정과 등록·설치 ▾ 는 한 묶음 '설정·설치'
+chk(groups == GROUPS, "② 도구 메뉴 묶음 넷·차례(261031-16 → 261107-17)", str(groups))
 marks = [a.text() or a.toolTip() for a in menu.actions() if a.property("ribbonMark")]
 _row_t = mw._ribbon.row("tools")
 mark_txt = [w.text() for w in (_row_t.widgetForAction(a) for a in _row_t.actions() if a.property("ribbonMark")) if w is not None]
