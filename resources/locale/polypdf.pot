@@ -12159,6 +12159,14 @@ msgid "단어장 창이 보이는 동안 이 쪽의 단어장 단어에 본문 �
 msgstr ""
 
 #: viewer/widgets/study_panel.py
+msgid "뜻 풍선"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "본문의 단어장 단어에 마우스를 올리면 뜻을 풍선으로 보입니다."
+msgstr ""
+
+#: viewer/widgets/study_panel.py
 msgid "단어장 자동 읽기 시작/정지"
 msgstr ""
 

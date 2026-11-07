@@ -100,6 +100,7 @@ def _clean_markup(s) -> str:
 _LEVELS = ("초급", "중급", "고급", "전문용어")        # 260611-103(P4): 전문용어 등급
 _BADGE = {"초급": "🟢", "중급": "🟡", "고급": "🔴", "미정": "⚪", "전문용어": "📘"}
 _HANGUL = re.compile(r"[가-힣]")
+HOVER_TIP_CHARS = 80        # 261107-32(단어장 SOT §11.3): 뜻 풍선의 뜻 하나 최대 글자 수
 SORT_ORDER = "문장 순서"
 SORT_ALPHA = "가나다·ABC"
 SORT_FREQ = "빈도순"
@@ -264,6 +265,10 @@ class StudyPanel(QWidget):
         self.chk_hl.setToolTip(tr("단어장 창이 보이는 동안 이 쪽의 단어장 단어에 본문 밑줄을 긋습니다."))
         self.chk_hl.toggled.connect(self.autoHighlightChanged.emit)
         flow.addWidget(self.chk_hl)
+        self.chk_tip = QCheckBox(tr("뜻 풍선"))        # 261107-32(단어장 SOT §11.3): 기본 켬
+        self.chk_tip.setChecked(True)
+        self.chk_tip.setToolTip(tr("본문의 단어장 단어에 마우스를 올리면 뜻을 풍선으로 보입니다."))
+        flow.addWidget(self.chk_tip)
 
         # 읽기 — ▶/■ 토글 + 재생구간 + 재생내용 + 선택시읽기
         flow.addWidget(QLabel(tr("읽기")))
@@ -552,6 +557,7 @@ class StudyPanel(QWidget):
             "show_img": self.chk_img.isChecked(),
             "sort": self.sort_combo.currentText(),
             "body_highlight": self.chk_hl.isChecked(),     # 261103-4: 옛 auto_highlight 는 읽지 않는다
+            "hover_tip": self.chk_tip.isChecked(),         # 261107-32(§11.3)
             "read_mode": self._read_mode,
             "speak_on_select": self.chk_speak_sel.isChecked(),
             "play_ko": self.act_play_ko.isChecked(),
@@ -571,7 +577,8 @@ class StudyPanel(QWidget):
         for key, cb in (("show_ko", self.chk_ko), ("show_en", self.chk_en),
                         ("show_ex", self.chk_ex), ("show_ref", self.chk_ref),
                         ("show_img", self.chk_img),
-                        ("speak_on_select", self.chk_speak_sel)):
+                        ("speak_on_select", self.chk_speak_sel),
+                        ("hover_tip", self.chk_tip)):
             if key in d:
                 cb.setChecked(bool(d[key]))
         for key, a in (("play_ko", self.act_play_ko), ("play_en", self.act_play_en),
@@ -595,6 +602,37 @@ class StudyPanel(QWidget):
 
     def is_auto_highlight(self) -> bool:
         return self.chk_hl.isChecked()
+
+    def tip_for(self, lemma: str) -> str:
+        """261107-32(단어장 SOT §11.3): 본문 뜻 풍선 글(HTML) — 이미 받은 행(`_rows`)에서만, DB 를 읽지 않는다.
+        창이 안 보이거나 `뜻 풍선` 이 꺼졌거나, 지금 목록에 안 보이는 행·뜻이 없으면 빈 글."""
+        import html
+        if not lemma or not self.chk_tip.isChecked() or not self.isVisible():
+            return ""
+        row = next((r for r in self._shown_rows() if r.get("lemma") == lemma), None)
+        if row is None:
+            return ""
+        defs = row.get("definitions") or []
+        lines = []
+
+        def _one(pick):
+            d = next((d for d in defs if pick(d["definition"])), None)
+            if d is None:
+                return
+            txt = _clean_markup(d["definition"]).replace("\n", " ").strip()
+            if len(txt) > HOVER_TIP_CHARS:
+                txt = txt[:HOVER_TIP_CHARS - 1].rstrip() + "…"
+            src = d.get("source") or ""
+            if self.chk_ref.isChecked() and d.get("is_dict") and src:
+                txt = f"{txt}  — {src}"
+            lines.append(html.escape(txt))
+        if self.chk_ko.isChecked():
+            _one(lambda t: bool(_HANGUL.search(t)))
+        if self.chk_en.isChecked():
+            _one(lambda t: not _HANGUL.search(t))
+        if not lines:
+            return ""
+        return f"<b>{html.escape(row['lemma'])}</b><br>" + "<br>".join(lines)
 
     # 261103-4(단어장 SOT §11.2): 탭 바꾸기·오른쪽 창 닫기를 알린다. 최소화(spontaneous)는 '안 보임' 이 아니다.
     def showEvent(self, e):

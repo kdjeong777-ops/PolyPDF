@@ -1063,6 +1063,44 @@ class _PdfGraphicsView(QGraphicsView):
         if not self._hover_words:
             self._last_hover = None
 
+    def _hover_hit(self, vpos):
+        """뷰포트 좌표 → (lemma, 그 단어 상자의 뷰포트 QRect) 또는 None."""
+        if not self._hover_words or self._owner is None:
+            return None
+        z = getattr(self._owner, "_zoom", 1.0) or 1.0
+        sp = self.mapToScene(vpos)
+        px, py = sp.x() / z, sp.y() / z
+        for (x0, y0, x1, y1, lemma) in self._hover_words:
+            if x0 <= px <= x1 and y0 <= py <= y1:
+                r = self.mapFromScene(QRectF(x0 * z, y0 * z, (x1 - x0) * z, (y1 - y0) * z)).boundingRect()
+                return lemma, r
+        return None
+
+    def viewportEvent(self, event):
+        # 261107-32(단어장 SOT §11.3): 단어장 단어 뜻 풍선 — Qt 툴팁 이벤트(늦춤·모양은 앱의 보통 툴팁 그대로).
+        #   글은 owner 가 준 공급자(`MainView.set_hover_tip_provider` — 패널이 이미 받은 행)에서. 마우스 이동 때는 아무것도 읽지 않는다.
+        if event.type() == QEvent.Type.ToolTip:
+            prov = getattr(self._owner, "_hover_tip_provider", None)
+            if prov is not None and self._hover_words:
+                from PyQt6.QtWidgets import QApplication, QToolTip
+                busy = (QApplication.mouseButtons() != Qt.MouseButton.NoButton or self._dragging
+                        or self._edge_hover or self._edge_drag
+                        or getattr(self._owner, "_draw_tool", None) is not None)
+                hit = None if busy else self._hover_hit(event.pos())
+                text = ""
+                if hit is not None:
+                    try:
+                        text = prov(hit[0]) or ""
+                    except Exception:
+                        text = ""
+                if text:
+                    QToolTip.showText(event.globalPos(), text, self.viewport(), hit[1])
+                    return True
+                if hit is not None or busy:
+                    QToolTip.hideText()
+                    return True
+        return super().viewportEvent(event)
+
     def mousePressEvent(self, event):
         self._press_pos = event.position().toPoint()
         # 261103-15(텍스트 창 SOT §5.1.5): 텍스트 창이 건 줄 상자의 왼·오른 끝 → 끌어 늘리기(단어 선택보다 우선).
@@ -2046,6 +2084,10 @@ class MainView(QWidget):
     def set_hover_words(self, items) -> None:
         """단어장 단어 호버 영역 설정. items=[(x0,y0,x1,y1,lemma)] (PDF point)."""
         self.view.set_hover_words(items)
+
+    def set_hover_tip_provider(self, fn) -> None:
+        """261107-32(단어장 SOT §11.3): 뜻 풍선 글 공급자 fn(lemma)->str(HTML, 빈 글이면 띄우지 않음). None = 끔."""
+        self._hover_tip_provider = fn
 
     # --- 공개 API --------------------------------------------------------
     def _prompt_pdf_password(self, file_path, doc) -> bool:

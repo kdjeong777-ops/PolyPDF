@@ -752,6 +752,8 @@ class StudyMixin:
                           for key, rs in term_rects.items() for (x0, y0, x1, y1) in rs]
             rects = rects + term_hover
             self.main_view.set_hover_words(rects)
+            if hasattr(self.main_view, "set_hover_tip_provider"):     # 261107-32(단어장 SOT §11.3): 뜻 풍선 — 패널이 받은 행에서
+                self.main_view.set_hover_tip_provider(self.study_panel.tip_for)
             # 261103-4(단어장 SOT §11.2): 본문 밑줄 — 목록에 보이는 행 그대로(호버와 같은 상자)
             self._apply_vocab_marks(page, rects)
             # 자동 읽기: 리더가 넘긴 페이지가 아니고(사용자 이동) 새 페이지면 그 페이지부터 읽기 시작
