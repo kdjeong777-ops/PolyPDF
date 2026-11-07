@@ -284,6 +284,29 @@ def tokens_ko(text: str) -> list[tuple[str, str]]:
 _KO_OOV: set = set()
 
 
+VOCAB_KO_SHARE = 0.3        # 읽은 글의 낱말 중 한글 낱말 몫이 이 이상이면 한국어 단어장(단어학습 SOT §15.0)
+_WORD_KO = re.compile(r"[가-힣]+")
+
+
+def vocab_lang(texts, lang: str) -> str:
+    """단어장 언어 — **읽은 글**로 정한다(단어학습 SOT §15.0, 261107-28 사용자 보고 'HM 단어장이 없다').
+
+    OCR 언어(`kor+eng`)는 글을 읽을 때의 설정이지 글의 언어가 아니다 — 영문 스캔본을 `kor+eng` 로 시작하면 그 값이
+    그대로 와서 영문 글이 한국어 형태소 분석(`tokens_ko`)으로 가 낱말이 하나도 남지 않았다. 글의 한글 낱말 몫이
+    `VOCAB_KO_SHARE` 이상이면 한국어, 아니면 영어. 받은 값이 그 판정과 같은 쪽이면 **받은 값을 그대로** 돌려준다(표에 적히는
+    `lang` 이 바뀌지 않게 — 사용자 뜻 고침이 `(표제어, lang)` 으로 붙어 있다). 글자가 없으면 받은 값 그대로."""
+    lang = str(lang or "eng")
+    han = sum(len(_WORD_KO.findall(t or "")) for t in texts)
+    lat = sum(len(_WORD_EN.findall(t or "")) for t in texts)
+    if han + lat == 0:
+        return lang
+    ko_text = han >= VOCAB_KO_SHARE * (han + lat)
+    ko_lang = lang.startswith("kor") or lang == "ko"
+    if ko_text == ko_lang:
+        return lang
+    return "kor" if ko_text else "eng"
+
+
 # --- 빌드 ------------------------------------------------------------------
 def build_vocab(store, file_key: str, lang: str = "eng",
                 progress=None, pages_text=None) -> dict:
@@ -300,6 +323,7 @@ def build_vocab(store, file_key: str, lang: str = "eng",
 
     page_idx = [p for p, _ in pages]
     texts = [t or "" for _, t in pages]
+    lang = vocab_lang(texts, lang)          # 261107-28(§15.0): OCR 언어가 아니라 읽은 글로
     ko = lang.startswith("kor") or lang == "ko"
     texts = strip_repeated_lines(texts)                 # 머리말/꼬리말 제거
     texts = [dehyphenate(t) for t in texts]             # 줄바꿈 하이픈 복원
@@ -401,5 +425,5 @@ def build_vocab(store, file_key: str, lang: str = "eng",
     store.save_defs(def_rows)
     store.save_examples(ex_rows)
     return {"vocab": len(vocab_rows), "pages": len(pages),
-            "defs": len(def_rows), "examples": len(ex_rows),
+            "defs": len(def_rows), "examples": len(ex_rows), "lang": lang,
             "ko_levels_loaded": len(_load_ko_levels()) if ko else None}
