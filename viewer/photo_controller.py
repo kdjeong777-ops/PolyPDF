@@ -25,7 +25,8 @@ MODE_ICON_PX = 20                # 탭 줄 높이 안 — 탭 글자보다 크�
 PHOTO_OFF_CMDS = ("file.save_as",                                    # 인쇄·평탄화는 사진용으로 켠다(261104-3, 4.21) · 변환은 사진 → Word·HWPX·텍스트(261104-10 P4-b, 4.35)
                   "fav.recent_searches", "fav.searches", "fav.add_search",
                   "view.study", "view.search",       # 발표 = 사진 슬라이드쇼(261104-7, 4.12) · 텍스트 창·도구 OCR = 사진 한 장 OCR(261104-10, 4.34)
-                  "tools.build_study", "tools.online_enrich", "tools.bookmarker",   # online_enrich: 열린 PDF 단어장 작업(261107-13) "tools.study_and_bookmarks", "tools.autotag",
+                  # online_enrich: 열린 PDF 단어장 작업(261107-13)
+                  "tools.build_study", "tools.online_enrich", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag",
                   "tools.reindex", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign", "tools.translate")
 PHOTO_OFF_ATTRS = ()                     # 창에 따로 붙은 액션 — F5 발표는 사진 슬라이드쇼로 켠다(261104-7)
 # 사진 모드에서 아예 숨기는 명령(4.13) — 끄기(PHOTO_OFF_CMDS)에 더해 리본·모음·메뉴에서 뺀다. 261106-1 전자서명에 이어
