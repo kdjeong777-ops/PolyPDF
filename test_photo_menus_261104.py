@@ -124,7 +124,7 @@ try:
     bt.set_sort_mode(bt.SORT_NAME); pump()
     tx = tree_menu("a 가로.jpg")
     chk(tx[:1] == ["인쇄"], "A 사진 행 메뉴 맨 위 '인쇄'(261105-12 — 261107-2 '…' 뗌)", str(tx[:3]))
-    for want in ("사진 복사", "경로 복사", "해시태그 편집", "파일 탐색기 열기"):
+    for want in ("사진 복사", "해시태그 편집", "파일 탐색기 열기"):   # 261107-16: 경로 복사는 키로만
         chk(want in tx, "A 사진 행 메뉴에 '%s'" % want, str(tx))
     chk("PDF 만들기" in seen["all"], "A 사진 행 저장 ▸ 에 'PDF 만들기'(261107-2)", str(seen["all"]))
     for gone in ("다른 이름으로 저장", "평탄화해서 내보내기...", "책갈피 생성", "일괄 OCR", "책갈피 모두 펼치기", "용량 줄인 사본", "전달 묶음"):
@@ -164,7 +164,7 @@ try:
     seen["pick"] = "인쇄"
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     chk(printed and printed[-1] == [b], "D 썸네일 '인쇄' — 누른 사진을 사진 인쇄 길로(_photo_print paths)", str(printed))
-    for want in ("왼쪽 90° 회전", "오른쪽 90° 회전", "사진 복사", "경로 복사", "파일 탐색기 열기", "PDF 만들기",
+    for want in ("왼쪽 90° 회전", "오른쪽 90° 회전", "사진 복사", "파일 탐색기 열기", "PDF 만들기",
                  "줄의 사진 3장 모두로 PDF 만들기"):
         chk(want in seen["all"], "D 썸네일 줄 메뉴에 '%s'" % want, str(seen["all"]))
     seen["pick"] = "오른쪽 90° 회전"
@@ -185,7 +185,7 @@ try:
     # E
     mw._photo_context_menu(QPoint(10, 10))
     tx = list(seen["texts"])
-    for want in ("사진 복사", "경로 복사", "파일 탐색기 열기", "사진 정보", "PDF 만들기", "왼쪽 90° 회전"):
+    for want in ("사진 복사", "파일 탐색기 열기", "사진 정보", "PDF 만들기", "왼쪽 90° 회전"):
         chk(want in seen["all"], "E 본문 사진 메뉴에 '%s'" % want, str(seen["all"]))
     for gone in ("쪽 맞춤", "폭 맞춤", "원래 크기 (100%)"):           # 261105-16 — 맞춤은 창 아래 콤보
         chk(gone not in tx, "E 본문 사진 메뉴에 '%s' 없음(261105-16)" % gone, str(tx))

@@ -2600,7 +2600,7 @@ class PhotoMixin:
         if photos:
             act(tr("사진 복사"), lambda p=photos[0]: self._photo_action("copy_image", [p]), bool(one) and ok,
                 None if one else tr("한 장을 고르면 복사합니다."))
-        act(tr("경로 복사"), lambda ps=list(paths or []): self._photo_action("copy_path", ps), bool(paths))
+        # 261107-16(사용자 지시): '경로 복사' 줄은 두지 않는다 — 키 Ctrl+Shift+C(key_actions)로만
         if body and one:
             act(tr("텍스트 복사"), self._photo_copy_text, ok, tr("OCR 로 읽은 글에서 고른 블럭(없으면 사진 전체)의 글을 복사합니다."))
             act(tr("블럭설정 후 텍스트 복사"), self._photo_arm_text, ok)

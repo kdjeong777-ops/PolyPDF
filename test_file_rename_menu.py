@@ -201,7 +201,8 @@ try:
     bt._on_tree_context_menu(pos)
     t = [x for x in seen.get("texts", []) if x]
     # 261014-1 → 261107-2(디자인 SOT §2.9.8): 인쇄 / 복사 / 파일 / 저장 ▸ / 보기 / 도구 / 끝
-    want_order = ["인쇄", "경로 복사", "파일 탐색기 열기", "새 폴더 만들기", "폴더로 복사", "폴더로 이동",
+    want_order = ["인쇄", "파일 탐색기 열기",   # 261107-16: '경로 복사' 줄 뺌
+                  "새 폴더 만들기", "폴더로 복사", "폴더로 이동",
                   "파일·책갈피 이름 변경", "파일·책갈피 삭제", "저장", "2단 보기", "책갈피 모두 펼치기", "책갈피 모두 접기"]
     pos_of = [t.index(w) if w in t else -1 for w in want_order]
     chk(-1 not in pos_of and pos_of == sorted(pos_of), "D 메뉴 순서(사용자 지시 → 261107-2 한 틀)", str(t))

@@ -2901,13 +2901,6 @@ class BookmarkTree(QWidget):
     def _file_action(self, kind: str, paths, extra=None) -> None:
         self.fileActionRequested.emit(kind, [str(p) for p in paths], extra)
 
-    def _mi_copy_path(self, menu, paths) -> None:
-        def go(ps=list(paths)):
-            from PyQt6.QtWidgets import QApplication
-            QApplication.clipboard().setText("\n".join(str(p) for p in ps))
-            self._notice(tr("경로를 복사했습니다."))
-        self._act(menu, tr("경로 복사"), go, enabled=bool(paths))
-
     def _mi_xfer(self, menu, nodes) -> None:
         """'폴더로 복사 ▸'·'폴더로 이동 ▸'(261107-2 — 옛 '파일 복사 (N개)'·'파일 이동 (N개)', 사진과 같은 이름). 편집 모드."""
         if not nodes:
@@ -2963,8 +2956,7 @@ class BookmarkTree(QWidget):
     def add_file_items(self, menu, path: str) -> None:
         """PDF 썸네일창·본문의 '파일 ▸' — 책갈피창 파일 줄의 파일 단위 항목을 같은 함수·같은 차례로(디자인 SOT §2.9.8 의 4)."""
         node = self._file_node_for_path(str(path))
-        menu.group("copy")
-        self._mi_copy_path(menu, [path])
+        # 261107-16(사용자 지시): '경로 복사' 는 메뉴에 두지 않는다 — 키 Ctrl+Shift+C(key_actions)로만, 메뉴는 '파일 탐색기 열기'
         menu.group("file")
         self._act(menu, tr("파일 탐색기 열기"), lambda p=path: self._reveal_in_explorer(p))
         if self._edit_mode and node is not None:
@@ -3094,10 +3086,6 @@ class BookmarkTree(QWidget):
         if merge:
             self._act(menu, tr("고른 {n}개 병합해 PDF 만들기").format(n=len(merge)),
                       lambda fs=list(merge): self.mergeFilesRequested.emit(fs))
-        # 복사
-        if _dir_target and not pm:
-            menu.group("copy")
-            self._mi_copy_path(menu, files)
         # 모양 — 261107-8(마스터 §4.7.13): 파일 통째 회전(모든 쪽, 저장 전 회전 → 💾 저장 한 길)
         if is_file and _dir_target and not pm:
             menu.group("shape")
