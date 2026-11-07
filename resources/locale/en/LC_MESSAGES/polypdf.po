@@ -14483,6 +14483,19 @@ msgstr "Rotate file"
 msgid "이 파일의 모든 쪽을 돌립니다 — [저장] 하면 PDF 에 들어갑니다."
 msgstr "Rotates every page of this file — Save writes it into the PDF."
 
+#: viewer/photo_controller.py
+msgid "JPEG·PNG·WebP 로 바꾼 새 파일을 원본 옆에 만듭니다(원본은 그대로)."
+msgstr "Makes a new JPEG, PNG or WebP file next to the original (the original is unchanged)."
+
+#: viewer/photo_controller.py
+msgid "이미 이 형식입니다."
+msgstr "Already in this format."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{fmt} 로 바꾼 새 파일 — 원본은 그대로"
+msgstr "New file in {fmt} — the original is unchanged"
+
 #~ msgid "PolyPDF_특허"
 #~ msgstr "PolyPDF_Patents"
 
