@@ -492,6 +492,7 @@ class BookmarkTree(QWidget):
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
+        self.save_first_check = None    # 앱이 주입: (파일들) -> True 면 저장 전 쪽 편집이 있어 알렸다 — 저장 ▸ 사본 넷 앞(261107-21, 마스터 §4.7.13)
         self.file_action_ready = set()  # 앱이 채움: 켤 수 있는 fileActionRequested 일(예: 'info' — 문서 정보 창이 들어오면)
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
         self._probe_paused = False   # 260906-5(응답성 SOT §4 ①): 인덱싱 중에는 조사를 멈춘다
@@ -2991,13 +2992,18 @@ class BookmarkTree(QWidget):
         self._mi_pdf_tools(menu, path, [path], in_sub=True, item=node)
         self._mi_fav(menu, path)
 
+    def _copy_ok(self, files) -> bool:
+        """사본 넷 앞 — 저장 전 쪽 편집이 있으면 앱이 알리고 False(261107-21)."""
+        chk = self.save_first_check
+        return not (chk is not None and chk(list(files or [])))
+
     def _tree_save_menu(self, menu, target, files, *, folder_files=None, merge=None) -> None:
         """책갈피창 PDF 줄의 '저장 ▸'(디자인 SOT §2.9.8 의 3) — 모두 **누른 줄의 파일**에(260930-2·261008-1)."""
         from viewer.widgets.ctx_menu import add_save_menu
         if folder_files:
             n = len(folder_files)
             add_save_menu(menu, copies=[{"text": tr("용량 줄인 사본 ({n}개 파일)").format(n=n),
-                                         "cb": lambda fs=list(folder_files): self.compressFilesRequested.emit(fs),
+                                         "cb": lambda fs=list(folder_files): self._copy_ok(fs) and self.compressFilesRequested.emit(fs),
                                          "tip": tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로.")}])
             return
         n = len(files)
@@ -3015,13 +3021,13 @@ class BookmarkTree(QWidget):
                   "tip": tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작).")},
             save_as={"text": tr("다른 이름으로 저장"), "cb": lambda f=target: self.saveAsFileRequested.emit(f),
                      "tip": tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},
-            copies=[{"text": tr("평탄화 사본"), "cb": lambda f=target: self.flattenFileRequested.emit(f),
+            copies=[{"text": tr("평탄화 사본"), "cb": lambda f=target: self._copy_ok([f]) and self.flattenFileRequested.emit(f),
                      "tip": tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")},
-                    {"text": tr("용량 줄인 사본") + nn, "cb": lambda fs=list(files): self.compressFilesRequested.emit(fs),
+                    {"text": tr("용량 줄인 사본") + nn, "cb": lambda fs=list(files): self._copy_ok(fs) and self.compressFilesRequested.emit(fs),
                      "tip": tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로.")},
-                    {"text": tr("개인정보 지운 사본"), "cb": lambda f=target: self.redactFileRequested.emit(str(f)),
+                    {"text": tr("개인정보 지운 사본"), "cb": lambda f=target: self._copy_ok([f]) and self.redactFileRequested.emit(str(f)),
                      "tip": tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로).")},
-                    {"text": tr("전달 묶음") + nn, "cb": lambda fs=list(files): self.shareFilesRequested.emit(fs),
+                    {"text": tr("전달 묶음") + nn, "cb": lambda fs=list(files): self._copy_ok(fs) and self.shareFilesRequested.emit(fs),
                      "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다.")}],
             make=[mk,
                   {"text": tr("변환") + nn, "cb": lambda fs=list(files): self.convertFilesRequested.emit(fs, ""),

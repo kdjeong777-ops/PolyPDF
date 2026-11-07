@@ -2684,6 +2684,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.printFilesRequested.connect(self._on_tree_print)        # 261105-12(§4.7.13) 맨 위 '인쇄…'
             _bt.fileActionRequested.connect(lambda k, ps, x, b=_bt: self._on_tree_file_action(k, ps, x, bt=b))   # 261107-2 OCR 로 읽기·발표·서명·문서 정보
             _bt.photo_menu_fill = self._photo_menu_fill              # 261107-2(사진 보기 SOT §4.20) — 아래 창도 사진 세 메뉴 한 함수
+            _bt.save_first_check = self._copy_blocked                # 261107-21(§4.7.13): 저장 ▸ 사본 넷은 저장 전 쪽 편집이 있으면 먼저 저장
             if self._ctx_info_ready():
                 _bt.file_action_ready.add("info")
         self.page_thumbs.convertPagesRequested.connect(
@@ -6230,6 +6231,30 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             import traceback
             traceback.print_exc()
 
+    def _copy_blocked(self, paths) -> bool:
+        """우클릭 저장 ▸ 사본 넷(평탄화·용량·개인정보·전달 묶음)의 앞 — 그 파일에 **저장 전 쪽 편집**이 있으면 알리고 True(만들지 않음).
+        사본은 디스크 파일로 만들어 그 편집이 빠진다(261107-21, 마스터 §4.7.13, 사용자 결정 '먼저 저장하라고 알림').
+        본문 파일이면 `_page_edits_dirty`(썸네일 쪽 편집·저장 전 크롭·회전), 다른 파일이면 그 파일의 저장 전 크롭·회전."""
+        cur = self.main_view.current_file() if self.main_view else None
+        ck = os.path.normcase(os.path.abspath(str(cur))) if cur else ""
+        dirty = False
+        for p in paths or []:
+            if not p:
+                continue
+            if ck and os.path.normcase(os.path.abspath(str(p))) == ck:
+                dirty = self._page_edits_dirty()
+            else:
+                try:
+                    from viewer import page_crop as _pc, page_rotate as _pr
+                    dirty = _pc.has_pending(str(p)) or _pr.has_pending(str(p))
+                except Exception:
+                    dirty = False
+            if dirty:
+                break
+        if dirty:
+            QMessageBox.information(self, "PolyPDF", tr("저장하지 않은 쪽 편집(회전·크롭·삭제·이동·붙여넣은 쪽)이 있어 사본에 들어가지 않습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
+        return dirty
+
     def _ctx_info_ready(self) -> bool:
         return callable(getattr(self, "show_doc_info", None))      # 문서 정보 창(261107-3) — 들어오면 켠다
 
@@ -6261,13 +6286,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             save={"cb": self._save_current_file, "tip": tr("쪽 편집·꾸밈·책갈피를 이 파일에 저장합니다(💾 와 같음).")},
             save_as={"text": tr("다른 이름으로 저장"), "cb": lambda: self._action_save_as(bt=self.bookmark_tree, file_path=f),
                      "tip": tr("쪽 편집·꾸밈·책갈피를 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},
-            copies=[{"text": tr("평탄화 사본"), "cb": lambda: self._action_save_decorated_pdf(file_path=f),
+            # 261107-21(마스터 §4.7.13): 사본 넷은 저장 전 쪽 편집이 있으면 만들지 않고 '먼저 저장' — 디스크 파일로 만들어 그 편집이 빠진다
+            copies=[{"text": tr("평탄화 사본"), "cb": lambda: self._copy_blocked([f]) or self._action_save_decorated_pdf(file_path=f),
                      "tip": tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")},
-                    {"text": tr("용량 줄인 사본"), "cb": lambda: self.action_compress([f]),
+                    {"text": tr("용량 줄인 사본"), "cb": lambda: self._copy_blocked([f]) or self.action_compress([f]),
                      "tip": tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로.")},
-                    {"text": tr("개인정보 지운 사본"), "cb": lambda: self.action_redact(f),
+                    {"text": tr("개인정보 지운 사본"), "cb": lambda: self._copy_blocked([f]) or self.action_redact(f),
                      "tip": tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로).")},
-                    {"text": tr("전달 묶음"), "cb": lambda: self.action_share_files([f]),
+                    {"text": tr("전달 묶음"), "cb": lambda: self._copy_blocked([f]) or self.action_share_files([f]),
                      "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다.")}],
             make=[{"text": tr("PDF 만들기") + (" " + tr("({n}쪽)").format(n=len(pages)) if len(pages) > 1 else ""),
                    "cb": (lambda ps=list(pages): self.action_pages_to_pdf(f, ps)) if mk_ok else None,

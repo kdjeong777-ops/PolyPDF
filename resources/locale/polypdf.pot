@@ -14028,3 +14028,9 @@ msgctxt "installer"
 msgid "사용 안내 (API 키)"
 msgstr ""
 
+#: viewer/app.py
+msgid ""
+"저장하지 않은 쪽 편집(회전·크롭·삭제·이동·붙여넣은 쪽)이 있어 사본에 들어가지 않습니다.\n"
+"💾 '저장' 한 뒤에 다시 해 주세요."
+msgstr ""
+
