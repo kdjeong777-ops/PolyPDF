@@ -2406,65 +2406,46 @@ class PhotoMixin:
     def _photo_is_broken(self) -> bool:
         return bool(getattr(getattr(self.main_view, "_doc", None), "is_broken", False))
 
-    # ── 사진 정보 — 상태 막대 가운데·세부 정보 창 (4.18, 261104-3 사용자 지시) ─────────
+    # ── 사진 정보 — 본문 창 왼쪽 끝 정보 한 줄·세부 정보 창 (4.18, 261104-3 → 261107-3 사용자 지시) ─────────
     def _photo_info_button(self, create: bool = True):
-        b = getattr(self, "_photo_info_btn", None)
-        if b is None and create:
-            from PyQt6.QtCore import QEvent, QObject as _QO
-            b = QToolButton(self.status)
-            b.setObjectName("photoInfo")
-            b.setAutoRaise(True)
-            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            b.setToolTip(tr("누르면 사진의 세부 정보를 봅니다."))
-            b.clicked.connect(self._photo_info_dialog)
-            b.hide()
-            owner = self
-            host = getattr(self, "page_nav_host", None)
-            if host is not None:            # 261105-26(디자인 SOT §2.9.2): 쪽 이동 바로 오른쪽 — 가운데는 쪽 이동 자리라 겹쳤다
-                host.set_side_widget(b)
-                self._photo_info_btn = b
-                return b
-
-            class _Center(_QO):                          # 상태 막대 가운데에 둔다 — 상태 글(왼쪽)·단추(오른쪽) 자리와 따로
-                def eventFilter(self, obj, ev):
-                    if ev.type() in (QEvent.Type.Resize, QEvent.Type.Show):
-                        owner._photo_info_place()
-                    return False
-            self._photo_info_filter = _Center(self)
-            self.status.installEventFilter(self._photo_info_filter)
-            self._photo_info_btn = b
+        """사진을 보이는 본문 창의 정보 한 줄(`PageNavHost.info_line` — 디자인 SOT §2.8.6.1). PDF 정보와 같은 단추·같은 자리."""
+        host = getattr(self, "page_nav_host", None)
+        if host is None:
+            return None
+        if not create and getattr(self, "_photo_info_btn", None) is None:
+            return None
+        try:
+            i = self._mv.index(self.main_view)
+        except (AttributeError, ValueError):
+            i = 0
+        b = host.info_line(i)
+        old = getattr(self, "_photo_info_btn", None)
+        if old is not None and old is not b:
+            old.set_info(None)                          # 사진을 보이던 창이 바뀌었다 — 앞 창 줄은 비운다
+        self._photo_info_btn = b
         return b
 
-    def _photo_info_place(self):
-        b = getattr(self, "_photo_info_btn", None)
-        if b is None:
-            return
-        b.adjustSize()
-        if b.parentWidget() is getattr(self, "page_nav_host", None):
-            return                          # 261105-26: 쪽 이동 칸의 레이아웃이 자리를 정한다
-        sb = self.status
-        b.move(max(0, (sb.width() - b.width()) // 2), max(0, (sb.height() - b.height()) // 2))
-        b.raise_()
+    def _photo_info_set(self, text):
+        b = self._photo_info_button()
+        if b is not None:
+            b.set_info(text, tr("누르면 사진의 세부 정보를 봅니다."))
 
     def _photo_info_hide(self):
         b = self._photo_info_button(create=False)
         if b is not None:
-            b.hide()
+            b.set_info(None)
         self._photo_info = None
 
     def _photo_info_request(self, path):
-        """지금 사진의 정보를 배경에서 읽는다(머리만) — 끝나면 상태 막대 가운데에 한 줄."""
+        """지금 사진의 정보를 배경에서 읽는다(머리만) — 끝나면 본문 창 왼쪽 끝 정보 한 줄에."""
         from viewer.workers import run_in_thread
         self._photo_info_gen = getattr(self, "_photo_info_gen", 0) + 1
         self._photo_info = None
-        b = self._photo_info_button()
         if self._photo_is_broken():
             from viewer.photo_doc import broken_reason_text
-            b.setText(tr("열 수 없는 파일") + " · " + broken_reason_text(self.main_view._doc.reason))
-            b.show(); self._photo_info_place()
+            self._photo_info_set(tr("열 수 없는 파일") + " · " + broken_reason_text(self.main_view._doc.reason))
             return
-        b.setText(self._photo_display_name(path))
-        b.show(); self._photo_info_place()
+        self._photo_info_set(self._photo_display_name(path))
         w = PhotoInfoWorker(self._photo_info_gen, str(path))
         w.done.connect(self._photo_info_done)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
@@ -2473,9 +2454,7 @@ class PhotoMixin:
         if gen != getattr(self, "_photo_info_gen", 0) or not info:
             return
         self._photo_info = dict(info, path=path)
-        b = self._photo_info_button()
-        b.setText(photo_info_line(info, self._photo_display_name(path)))
-        self._photo_info_place()
+        self._photo_info_set(photo_info_line(info, self._photo_display_name(path)))
 
     def _photo_display_name(self, path) -> str:
         """상태 막대에 보일 파일 이름 — zip 안 사진이면 'zip 이름 › 안쪽 사진 이름'(4.18·4.32, 사용자 지시)."""

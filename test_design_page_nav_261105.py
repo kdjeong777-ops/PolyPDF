@@ -59,7 +59,7 @@ def right_fixed(mw):
     from PyQt6.QtWidgets import QWidget
     for w in mw.status.findChildren(QWidget):
         if w.parentWidget() is mw.status and w is not host and w.isVisible() and w is not mw._bk_count \
-                and w.x() > host.x():
+                and not isinstance(w, page_nav_bar.InfoLine) and w.x() > host.x():   # 정보 한 줄(261107-3)은 고정 칸이 아니다
             out.append(w)
     return out
 

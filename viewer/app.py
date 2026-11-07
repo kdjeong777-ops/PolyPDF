@@ -64,6 +64,7 @@ from viewer.lite_controller import LiteMixin            # 261021-1(응답성 SOT
 from viewer.stamp_controller import StampMixin          # 261101-3(마스터 §4.6.11): 이미지 넣기·등록 이미지
 from viewer.photo_controller import PhotoMixin          # 261104-2(사진 보기 SOT): 사진 모드(PolyPix)
 from viewer.share_controller import ShareMixin          # 261105-9(마스터 §4.7.23): 전달 묶음
+from viewer.doc_info_controller import DocInfoMixin     # 261107-3(마스터 §4.12): 정보 한 줄·문서 정보 창
 from viewer import settings_store, __version__
 # v1.6.2: 히스토리 패널 제거. HistoryItem 만 last_main 직렬화용으로 남김.
 from viewer.history import HistoryItem
@@ -155,7 +156,7 @@ class _UpdateSignals(QObject):
     dl_progress = pyqtSignal(int, int)  # 261008-17(U13): 받는 중 (받은 바이트, 전체)
 
 
-class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, ShareMixin, QMainWindow):
+class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, ShareMixin, DocInfoMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
@@ -433,6 +434,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._build_zoom_buttons()           # 261021-5(입력 SOT §3.2): 맨 오른쪽 + 0 −
         from viewer.widgets.page_nav_bar import PageNavHost   # 261105-26(디자인 SOT §2.9.2): 쪽 이동 = 본문 창 가운데 아래
         self.page_nav_host = PageNavHost(self.status, self._mv, self._panes)
+        self._doc_info_init()                # 261107-3(디자인 SOT §2.8.6.1): 본문 창 왼쪽 끝 정보 한 줄
 
         self.setCentralWidget(central)
         self._central = central
@@ -7609,6 +7611,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 except Exception:
                     pass
             self._current_main = item
+            self._doc_info_refresh(self._active_pane)          # 261107-3: 그림 보기(load_image)는 쪽 신호가 없다
             self.status.showMessage(tr('로드 완료: {name}').format(name=path.name), 2500)
             self._update_title()                               # 260825: 현재 파일명 제목 반영
             self._refresh_page_hyperlinks(self._active_pane)   # 260609-3

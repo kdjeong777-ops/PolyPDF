@@ -13673,3 +13673,96 @@ msgctxt "installer"
 msgid "사용 안내 (API 키)"
 msgstr ""
 
+#: viewer/app.py viewer/doc_info_controller.py viewer/widgets/bookmark_tree.py
+msgid "문서 정보"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "읽는 중…"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "스캔"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "스캔 일부"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "암호"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "있음"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "쪽 수"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "지금 쪽 용지"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "작성자"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "키워드"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "만든 프로그램"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "PDF 변환기"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "만든 날짜"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "고친 날짜"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "PDF 판"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "권한"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "글자층"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "책갈피 수"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "첨부 수"
+msgstr ""
+
+#: viewer/doc_info.py
+#, python-brace-format
+msgid "{n}쪽"
+msgstr ""
+
+#: viewer/doc_info.py
+#, python-brace-format
+msgid "있는 쪽 {a} · 없는 쪽 {b}"
+msgstr ""
+
+#: viewer/doc_info_controller.py
+msgid "누르면 문서의 세부 정보를 봅니다."
+msgstr ""
+
+#: viewer/doc_info_controller.py
+msgid "열린 PDF 가 없습니다."
+msgstr ""

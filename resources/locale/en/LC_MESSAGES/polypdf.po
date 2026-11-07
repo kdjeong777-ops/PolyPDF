@@ -14607,3 +14607,96 @@ msgstr "Getting Started"
 #~ msgid "전체 화면 (F11)"
 #~ msgstr "Full screen (F11)"
 
+#: viewer/app.py viewer/doc_info_controller.py viewer/widgets/bookmark_tree.py
+msgid "문서 정보"
+msgstr "Document Info"
+
+#: viewer/doc_info.py
+msgid "읽는 중…"
+msgstr "Reading…"
+
+#: viewer/doc_info.py
+msgid "스캔"
+msgstr "Scanned"
+
+#: viewer/doc_info.py
+msgid "스캔 일부"
+msgstr "Partly scanned"
+
+#: viewer/doc_info.py
+msgid "암호"
+msgstr "Password"
+
+#: viewer/doc_info.py
+msgid "있음"
+msgstr "Yes"
+
+#: viewer/doc_info.py
+msgid "쪽 수"
+msgstr "Pages"
+
+#: viewer/doc_info.py
+msgid "지금 쪽 용지"
+msgstr "Current page paper"
+
+#: viewer/doc_info.py
+msgid "작성자"
+msgstr "Author"
+
+#: viewer/doc_info.py
+msgid "키워드"
+msgstr "Keywords"
+
+#: viewer/doc_info.py
+msgid "만든 프로그램"
+msgstr "Creator"
+
+#: viewer/doc_info.py
+msgid "PDF 변환기"
+msgstr "PDF producer"
+
+#: viewer/doc_info.py
+msgid "만든 날짜"
+msgstr "Created"
+
+#: viewer/doc_info.py
+msgid "고친 날짜"
+msgstr "Modified"
+
+#: viewer/doc_info.py
+msgid "PDF 판"
+msgstr "PDF version"
+
+#: viewer/doc_info.py
+msgid "권한"
+msgstr "Permissions"
+
+#: viewer/doc_info.py
+msgid "글자층"
+msgstr "Text layer"
+
+#: viewer/doc_info.py
+msgid "책갈피 수"
+msgstr "Bookmarks"
+
+#: viewer/doc_info.py
+msgid "첨부 수"
+msgstr "Attachments"
+
+#: viewer/doc_info.py
+#, python-brace-format
+msgid "{n}쪽"
+msgstr "{n} pages"
+
+#: viewer/doc_info.py
+#, python-brace-format
+msgid "있는 쪽 {a} · 없는 쪽 {b}"
+msgstr "With text {a} · without {b}"
+
+#: viewer/doc_info_controller.py
+msgid "누르면 문서의 세부 정보를 봅니다."
+msgstr "Click to see the document details."
+
+#: viewer/doc_info_controller.py
+msgid "열린 PDF 가 없습니다."
+msgstr "There is no open PDF."

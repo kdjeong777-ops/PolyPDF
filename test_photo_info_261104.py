@@ -3,7 +3,7 @@
 
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3).
 A. 사진 썸네일 줄 칸 아래 이름 다음 줄에 원본 픽셀 크기(EXIF 방향 뒤) — 썸네일만 보고 원본 크기를 안다
-B. 상태 막대 쪽 이동 바로 오른쪽(261105-26 — 종전 '가운데')에 촬영일 · 크기 · 파일 크기 · 카메라 한 줄, 누르면 세부 정보(항목 표)
+B. 상태 막대 본문 창 왼쪽 끝(261107-3 — 종전 쪽 이동 바로 오른쪽)에 촬영일 · 크기 · 파일 크기 · 카메라 한 줄, 누르면 세부 정보(항목 표)
 C. 열 수 없는 파일(그림 이름의 QuickTime 동영상)을 고르면 본문은 알림 쪽(까닭 = 동영상), 앞 사진에 머물지 않는다 — 쪽 칸 순번도 그 파일,
    돌리기는 하지 않는다, 썸네일 칸은 '열 수 없음'
 D. 그 자리에서 다음·이전 넘김이 묻지 않고 그대로 이어진다
@@ -86,12 +86,14 @@ try:
         repr(b.text() if b else None))
     txt = b.text() if b else ""
     chk("400 × 800" in txt and "PolyCam Z1" in txt and "KB" in txt, "B 크기 · 파일 크기 · 카메라", repr(txt))
-    # 261105-26(디자인 SOT §2.9.2): 상태 막대 가운데는 쪽 이동(본문 창 가운데 아래) 자리 — 사진 정보는 그 바로 오른쪽, 겹치지 않는다
+    # 261107-3(디자인 SOT §2.8.6.1): 사진 정보는 본문 창 왼쪽 끝에서 — 쪽 이동(가운데) 앞에서 끝난다
     from PyQt6.QtCore import QPoint as _QP
     nv = mw.main_view.page_nav
-    nx = nv.mapTo(mw, _QP(0, 0)).x() + nv.width() if b else -1
+    nx = nv.mapTo(mw, _QP(0, 0)).x() if b else -1
     bx = b.mapTo(mw, _QP(0, 0)).x() if b else -1
-    chk(b is not None and b.isVisible() and 0 < bx - nx <= 20, "B 상태 막대 쪽 이동 바로 오른쪽에(겹치지 않게)", "%d vs %d" % (bx, nx))
+    vx = mw.main_view.mapTo(mw, _QP(0, 0)).x()
+    chk(b is not None and b.isVisible() and abs(bx - vx) <= 1 and bx + b.width() < nx,
+        "B 본문 창 왼쪽 끝에서 시작, 쪽 이동과 겹치지 않게", "%d vs %d (쪽 이동 %d)" % (bx, vx, nx))
     rows = dict(pc.photo_info_rows(mw._photo_info))
     chk(rows.get("촬영일") == "2026-10-30 14:22" and rows.get("카메라") == "PolyCam Z1" and rows.get("방향(EXIF)") == "6",
         "B 누르면 보이는 세부 정보 표", str(rows))
