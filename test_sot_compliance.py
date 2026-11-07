@@ -219,8 +219,11 @@ for p in sorted((ROOT / "scripts").glob("*.py")):
 chk(not (_enc_bad - ENC_KNOWN), "§14.7.2-21 한글·'—' 를 찍는 scripts 는 stdout(·stderr) 를 utf-8 로 바꾼다", str(sorted(_enc_bad - ENC_KNOWN)))
 chk(not (ENC_KNOWN - _enc_bad), "§14.7.2-21 고친 scripts 는 ENC_KNOWN 에서 뺀다", str(sorted(ENC_KNOWN - _enc_bad)))
 
-print(NL + "=== 마스터 §14.7.1 — 검사 색인(이름 규칙으로 소유를 정한다) ===")
-# ★ 이 표는 마스터 §14.7.1 의 표와 **같은 내용**이다. 한쪽만 고치지 말 것.
+print(NL + "=== 검사 작성 SOT §14.7.1 — 검사 색인(이름 규칙으로 소유를 정한다) ===")
+# ★ 이 표는 검사 작성 SOT §14.7.1 의 표와 **같은 내용**이다. 한쪽만 고치지 말 것. (261108-1: 마스터 §14.7 을 그 문서로 옮김 — 번호 그대로)
+TEST_SOT = "검사 작성 작업 계획서.md"
+# 마스터 소유('그 밖의 전부') 검사의 이름이 있어야 하는 곳 — 마스터와 거기서 떨어진 절(261108-1)
+MASTER_FAMILY = ("PolyPDF 뷰어 통합 작업 계획서.md", "책갈피창·저장 작업 계획서.md", TEST_SOT, "릴리스 작업 계획서.md")
 OWNER_RULES = [
     (("test_text_",), "텍스트 창"),
     (("test_study_", "test_vocab_", "test_ocr_", "test_dict_"), "단어장/단어학습"),
@@ -235,7 +238,8 @@ OWNER_RULES = [
     (("test_img2pdf", "test_image_pdf"), "이미지 PDF 변환"),
     (("test_media_", "test_tts_", "test_record_"), "영상 및 음성"),
     (("test_folder_scan", "test_ui_stall", "test_perf_", "test_prefs_allowlist",
-      "test_tool_cancel", "test_startup_open", "test_kiwi_", "test_sot_"), "응답성"),
+      "test_tool_cancel", "test_startup_open", "test_kiwi_"), "응답성"),
+    (("test_sot_",), "검사 작성"),                   # 261108-1: 응답성 SOT → 검사 작성 SOT §14.7.5
     (("test_input_", "test_wheel_"), "입력 장치"),
     (("test_theme_", "test_design_", "test_draw_tools"), "화면 디자인"),
     (("test_i18n_",), "다국어(언어팩)"),
@@ -260,8 +264,8 @@ for t in tests:
 chk(all(owner_of(t.name) for t in tests), "모든 검사에 소유 SOT 가 정해진다")
 print("     " + " / ".join("%s %d" % (k, len(v)) for k, v in sorted(buckets.items())))
 if HAVE_SOT:
-    idx = SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", "")
-    chk("### 14.7.1" in idx, "§14.7.1 검사 색인이 마스터에 있다")
+    idx = SOTS.get(TEST_SOT, "")
+    chk("### 14.7.1" in idx, "§14.7.1 검사 색인이 검사 작성 SOT 에 있다")
     # 261012-13: 표에만 줄을 넣고 위 OWNER_RULES 를 잊은 적이 있다(`test_kiwi_`·`test_security_`) — 두 벌이 같은지 본다
     s1471 = idx[idx.find("### 14.7.1"):]
     s1471 = s1471[:s1471.find("**그 밖의 전부**")]
@@ -289,15 +293,17 @@ if HAVE_SOT:
         "형식 변환": "형식 변환 작업 계획서.md",
         "가상 프린터": "가상 프린터 작업 계획서.md",
         "사진 보기": "사진 보기(PolyPix) 작업 계획서.md",
+        "검사 작성": TEST_SOT,
     }
     for owner, sot_name in NAMED.items():
         txt = SOTS.get(sot_name, "")
         miss = [n for n in buckets.get(owner, []) if n not in txt and n[:-3] not in txt]
         chk(not miss, "%s 소유 검사가 그 SOT §검증 표에 있다" % owner, str(miss))
     # 마스터 소유(접두에 안 걸린 것)는 마스터 본문(§0 밖) 어딘가에 이름이 있어야 한다 — 261012-13 점검에서 37개가 아무 데도 없었다
-    mbody = re.sub(r"^## 0\..*?(?=^## [1-9])", "", idx, flags=re.S | re.M)
+    mbody = NL.join(re.sub(r"^## 0\..*?(?=^## [1-9])", "", SOTS.get(n, ""), flags=re.S | re.M) for n in MASTER_FAMILY)
     miss = [n for n in buckets.get("마스터", []) if n not in mbody and n[:-3] not in mbody]
-    chk(not miss, "마스터 소유 검사가 마스터 본문에 있다(없으면 §14.7.1 '그 밖의 마스터 검사' 표에)", "%d개 %s" % (len(miss), miss[:40]))
+    chk(not miss, "마스터 소유 검사가 마스터(·책갈피창·저장·검사 작성·릴리스 SOT) 본문에 있다(없으면 검사 작성 SOT §14.7.1 '그 밖의 마스터 검사' 표에)",
+        "%d개 %s" % (len(miss), miss[:40]))
 
     # 260913-9(§14.7.1): SOT 본문에는 검사 항목 수를 적지 않는다 — 숫자는 곧 낡는다. §0 이력만 예외.
     def _body(txt):
@@ -525,7 +531,7 @@ bat = read(ROOT / "build_ci.bat")
 chk("--collect-submodules viewer" in bat,
     "`viewer.*` 는 자동 포함 — 새 모듈에 별도 등재가 필요 없다")
 
-print(NL + "=== 마스터 §14.5 U9 — 릴리스 보존 개수가 한 곳과 일치 (260913-14) ===")
+print(NL + "=== 릴리스 SOT §14.5 U9 — 릴리스 보존 개수가 한 곳과 일치 (260913-14, 261108-1 마스터에서 옮김) ===")
 rel = read(ROOT / ".github" / "workflows" / "release.yml")
 pr = read(ROOT / "scripts" / "prune_releases.ps1")
 mk = re.search(r"prune_releases\.ps1\s+-Keep\s+(\d+)", rel)
@@ -534,18 +540,18 @@ pr_code = "\n".join(l for l in pr.splitlines() if not l.lstrip().startswith("#")
 chk("gh release delete" in pr_code and "--cleanup-tag" not in pr_code,
     "정리 스크립트가 git 태그를 지우지 않는다(--cleanup-tag 없음)")
 if HAVE_SOT and mk:
-    u9 = re.search(r"U9 — 버전 릴리스는 최근 (\d+)개", SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", ""))
+    u9 = re.search(r"U9 — 버전 릴리스는 최근 (\d+)개", SOTS.get("릴리스 작업 계획서.md", ""))
     chk(bool(u9) and u9.group(1) == mk.group(1), "SOT U9 보존 개수 = release.yml -Keep",
         "%s / %s" % (u9.group(1) if u9 else None, mk.group(1)))
 
-print(NL + "=== 마스터 §14.5 U16 — 구성요소 릴리스 태그·자산 이름 (260913-15) ===")
+print(NL + "=== 릴리스 SOT §14.5 U16 — 구성요소 릴리스 태그·자산 이름 (260913-15) ===")
 comp = read(ROOT / "viewer" / "components.py")
 ct = re.search(r'COMPONENTS_TAG\s*=\s*"([^"]+)"', comp)
 chk(bool(ct), "components.py 에 COMPONENTS_TAG 가 있다")
 chk('get("ffmpeg.exe")' in comp and 'get("tesseract.zip")' in comp,
     "설치가 자산 이름 ffmpeg.exe·tesseract.zip 으로 찾는다")
 if HAVE_SOT and ct:
-    mst16 = SOTS.get("PolyPDF 뷰어 통합 작업 계획서.md", "")
+    mst16 = SOTS.get("릴리스 작업 계획서.md", "")
     m16 = re.search(r"U16 — .*?고정 태그 `([^`]+)`", mst16)
     chk(bool(m16) and m16.group(1) == ct.group(1), "SOT U16 태그 = COMPONENTS_TAG",
         "%s / %s" % (m16.group(1) if m16 else None, ct.group(1)))
