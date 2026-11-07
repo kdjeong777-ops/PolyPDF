@@ -14172,3 +14172,41 @@ msgstr ""
 msgid "{fmt} 로 바꾼 새 파일 — 원본은 그대로"
 msgstr ""
 
+#: viewer/photo_controller.py
+msgid "여러 사진을 읽는 중입니다 — 끝난 뒤 다시 하세요."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 읽는 중…"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 OCR 을 멈췄습니다 — {n}장을 읽었습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "고른 사진을 배경에서 차례로 읽습니다 — 작업 창에서 멈출 수 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 OCR ({n}장)"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 읽고 {m}장은 읽지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "사진 {n}장을 읽었습니다 — 남기려면 '저장 안 한 OCR' 을 저장하세요."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "OCR 로 읽기 ({n}장)"
+msgstr ""
+

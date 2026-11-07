@@ -87,6 +87,7 @@ try:
         "PhotoOrientSaveWorker", "PhotoCopyWorker", "PhotoShareWorker", "PhotoFlattenWorker", "PhotoInfoWorker",
         "PhotoOcrWorker", "PhotoPreloadWorker", "PhotoZipWorker",
         "PhotoWarpWorker", "PhotoRestoreWorker",       # 261106-6·-18: 크롭 창에서 고른 사진 펴기·고른 사진 되돌리기(261106-22 분류)
+        "PhotoOcrBatchWorker",                         # 261107-6: 고른 사진 여러 장 OCR(사진 보기 SOT §4.44)
         "PhotoDeviceListWorker", "PhotoDeviceWorker", "PhotoDeviceScanWorker",   # 휴대 장치(클라우드 아님)
         "PhotoWatchScanWorker",                        # stat 만(열지 않는다)
         "RulesSaveWorker", "PhotoTextWorker",          # 사진을 열지 않는다(규칙 파일·색인 글만, 261107-10)

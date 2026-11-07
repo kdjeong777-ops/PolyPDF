@@ -1631,6 +1631,60 @@ class PhotoMixin:
         self.status.showMessage(tr("사진 글자를 읽는 중… {name}").format(name=Path(str(cur)).name), 4000)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
+    def _photo_ocr_many(self, paths):
+        """사진 여러 장 OCR(4.44, 261107-6) — 배경 한 워커가 차례로, 작업 창 [중단], 결과는 사진마다 보류 저장소."""
+        from viewer.workers import run_in_thread
+        paths = [str(p) for p in (paths or []) if p and self._is_photo_path(str(p))]
+        if not paths:
+            return
+        if self.__dict__.get("_photo_ocr_batch") is not None:
+            self.status.showMessage(tr("여러 사진을 읽는 중입니다 — 끝난 뒤 다시 하세요."), 4000)
+            return
+        w = PhotoOcrBatchWorker(paths, {p: self._photo_rot_for(p) for p in paths})
+        self._photo_ocr_batch = w
+        self._photo_ocr_seq = self.__dict__.get("_photo_ocr_seq", 0) + 1
+        jid = "photo-ocr-%d" % self._photo_ocr_seq
+        try:
+            self.job_add(jid, tr('사진 OCR ({n}장)').format(n=len(paths)), cancel=w.request_cancel)
+        except Exception:
+            jid = None
+        if jid:
+            w.progress.connect(lambda i, n, p, j=jid: self.job_progress(j, "%d / %d  %s" % (i, n, Path(p).name)))
+        w.one.connect(self._photo_ocr_one)
+        w.done.connect(lambda ok, bad, stopped, j=jid: self._photo_ocr_many_done(j, ok, bad, stopped))
+        try:
+            self._vm_text()
+        except Exception:
+            pass
+        self.status.showMessage(tr("사진 {n}장을 읽는 중…").format(n=len(paths)), 4000)
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_ocr_one(self, path: str, n: int):
+        """한 장 끝 — 지금 본문 사진이면 낱말·텍스트 창을 다시(메인은 이것뿐)."""
+        cur = self.main_view.current_file() if self.main_view else None
+        if n >= 0 and cur and os.path.normcase(str(cur)) == os.path.normcase(path):
+            self._photo_words_changed()
+            self._reload_text_panel()
+
+    def _photo_ocr_many_done(self, jid, ok: int, bad: int, stopped: bool):
+        self._photo_ocr_batch = None
+        if jid:
+            try:
+                self.job_done(jid)
+            except Exception:
+                pass
+        try:
+            self._pending_refresh()                      # 상태 줄 '💾 저장 안 한 OCR'
+        except Exception:
+            pass
+        if stopped:
+            msg = tr("사진 OCR 을 멈췄습니다 — {n}장을 읽었습니다.").format(n=ok)
+        elif bad:
+            msg = tr("사진 {n}장을 읽고 {m}장은 읽지 못했습니다.").format(n=ok, m=bad)
+        else:
+            msg = tr("사진 {n}장을 읽었습니다 — 남기려면 '저장 안 한 OCR' 을 저장하세요.").format(n=ok)
+        self.status.showMessage(msg, 8000)
+
     def _photo_ocr_done(self, path: str, n: int):
         cur = self.main_view.current_file() if self.main_view else None
         if cur and os.path.normcase(str(cur)) == os.path.normcase(path):
@@ -2637,8 +2691,11 @@ class PhotoMixin:
         # 도구 — OCR 로 읽기(맨 앞) · 사진 정보 · 지도 · 일괄 작업 · 해시태그
         if photos:
             menu.group("tool")
-            act(tr("OCR 로 읽기"), lambda p=photos[0]: self._photo_open_then(p, self._photo_ocr_start), bool(one) and ok,
-                tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다.") if one else tr("한 장을 고르면 읽습니다."))
+            act(tr('OCR 로 읽기 ({n}장)').format(n=n) if many else tr("OCR 로 읽기"),
+                (lambda ps=list(photos): self._photo_ocr_many(ps)) if many
+                else (lambda p=photos[0]: self._photo_open_then(p, self._photo_ocr_start)), many or ok,
+                tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다.") if one
+                else tr("고른 사진을 배경에서 차례로 읽습니다 — 작업 창에서 멈출 수 있습니다."))
             act(tr("사진 정보"), lambda p=photos[0]: self._photo_info_for(p), bool(one) and ok)
             gps_ok = True
             if body:
@@ -4896,6 +4953,68 @@ class PhotoDateWorker(QObject):
         self._emit(out, 1)
 
 
+def photo_ocr_save(path: str, rot: int = 0, lang: str = "", picker=None) -> int:
+    """사진 한 장을 읽어 보류 저장소에(사진 보기 SOT 4.34·4.44, 단어학습 SOT §14.22) — 배경 스레드에서만 부른다. 낱말 수."""
+    from viewer.study import ocr
+    from viewer.study.study_store import StudyStore, file_key_for
+    picker = picker or ocr.LangPicker(lang or ocr.default_lang())
+    res = picker.read_photo(path, rot=int(rot or 0))
+    words = res.get("words") or []
+    st = StudyStore()                                # 보류가 켜져 있으면 보류 DB 로(단어학습 SOT §14.21)
+    try:
+        key = file_key_for(path)
+        st.save_page(key, 0, res.get("text", "") or "", dpi=72, engine=res.get("engine", "tesseract"),
+                     source="ocr", conf=float(res.get("conf", 0) or 0), words=words, lang=res.get("lang", ""))
+        st.set_meta(key, path, 1, res.get("lang", ""))
+    finally:
+        st.close()
+    return len(words)
+
+
+class PhotoOcrBatchWorker(QObject):
+    """사진 여러 장 OCR(사진 보기 SOT 4.44, 261107-6) — 배경 한 워커가 차례로, 사진 사이 `pacing.pace`·[중단].
+    결과는 사진마다 보류 저장소(한 장과 같은 `photo_ocr_save`). 응답성 SOT 감사표의 한 행."""
+    one = pyqtSignal(str, int)                   # 끝난 사진, 낱말 수(못 읽으면 -1)
+    progress = pyqtSignal(int, int, str)         # 몇째, 모두, 경로
+    done = pyqtSignal(int, int, bool)            # 읽음, 못 읽음, 멈춤
+    finished = pyqtSignal()
+
+    def __init__(self, paths, rots: dict, lang: str = ""):
+        super().__init__()
+        self.paths, self.rots, self.lang = [str(p) for p in paths], dict(rots or {}), lang
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        ok = bad = 0
+        stopped = False
+        try:
+            from viewer import pacing
+            picker = None
+            n = len(self.paths)
+            for i, p in enumerate(self.paths):
+                if self._cancel:
+                    stopped = True
+                    break
+                self.progress.emit(i + 1, n, p)
+                try:
+                    if picker is None:
+                        from viewer.study import ocr
+                        picker = ocr.LangPicker(self.lang or ocr.default_lang())
+                    k = photo_ocr_save(p, self.rots.get(p, 0), self.lang, picker=picker)
+                    ok += 1
+                    self.one.emit(p, k)
+                except Exception:                        # noqa: BLE001 — 동영상·깨진 파일·Tesseract 없음
+                    bad += 1
+                    self.one.emit(p, -1)
+                pacing.pace(self)
+        finally:
+            self.done.emit(ok, bad, stopped)
+            self.finished.emit()
+
+
 class PhotoOcrWorker(QObject):
     """사진 한 장 OCR(사진 보기 SOT 4.34, 단어학습 SOT §14.22) — 배경, 결과는 보류 저장소. 응답성 SOT 감사표의 한 행."""
     done = pyqtSignal(str, int)                  # 사진 경로, 낱말 수
@@ -4908,19 +5027,7 @@ class PhotoOcrWorker(QObject):
 
     def run(self):
         try:
-            from viewer.study import ocr
-            from viewer.study.study_store import StudyStore, file_key_for
-            res = ocr.LangPicker(self.lang or ocr.default_lang()).read_photo(self.path, rot=self.rot)
-            words = res.get("words") or []
-            st = StudyStore()                        # 보류가 켜져 있으면 보류 DB 로(단어학습 SOT §14.21)
-            try:
-                key = file_key_for(self.path)
-                st.save_page(key, 0, res.get("text", "") or "", dpi=72, engine=res.get("engine", "tesseract"),
-                             source="ocr", conf=float(res.get("conf", 0) or 0), words=words, lang=res.get("lang", ""))
-                st.set_meta(key, self.path, 1, res.get("lang", ""))
-            finally:
-                st.close()
-            self.done.emit(self.path, len(words))
+            self.done.emit(self.path, photo_ocr_save(self.path, self.rot, self.lang))
         except Exception as e:                   # noqa: BLE001 — Tesseract 없음·못 여는 사진
             self.error.emit(self.path, str(e))
         finally:
