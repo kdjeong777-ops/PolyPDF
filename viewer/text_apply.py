@@ -287,6 +287,44 @@ def layer_rows_for(doc_path, look, forced=()):
     return rows_for
 
 
+TEXT_LAYER_KEY = "PolyPDFTextLayer"    # PDF 정보(Info)의 글자층 저장 기록 — 값 `D:YYYYMMDDHHmmSS+09'00' ocr|fix 쪽수` (SOT §5.4.2)
+
+
+def stamp_text_layer(doc, kind: str, pages: int) -> None:
+    """글자층을 쓴 일시·무엇을(`ocr` 앱 OCR 만 / `fix` 고침 반영 포함)·쪽 수를 PDF 정보에 적는다(SOT §5.4.2, 261107-30 D6).
+    다른 정보 키는 그대로 둔다 — `set_metadata` 는 정보 사전을 통째로 바꾸므로 이 키 하나만 `xref_set_key` 로."""
+    import datetime
+    import fitz
+    now = datetime.datetime.now().astimezone()
+    off = now.strftime("%z") or "+0000"
+    val = "D:%s%s'%s' %s %d" % (now.strftime("%Y%m%d%H%M%S"), off[:3], off[3:], kind, int(pages))
+    info = doc.xref_get_key(-1, "Info")
+    if info[0] != "xref":
+        doc.set_metadata(dict(doc.metadata or {}))     # 정보 사전이 없으면 만든다(있던 표준 항목 그대로)
+        info = doc.xref_get_key(-1, "Info")
+    if info[0] == "xref":
+        doc.xref_set_key(int(info[1].split()[0]), TEXT_LAYER_KEY, fitz.get_pdf_str(val))
+
+
+def read_text_layer_stamp(doc):
+    """`stamp_text_layer` 가 적은 것 → `{"when": datetime, "kind": "ocr"|"fix", "pages": int}` 또는 None(문서 정보가 읽기만 한다)."""
+    import datetime
+    import re
+    try:
+        info = doc.xref_get_key(-1, "Info")
+        if info[0] != "xref":
+            return None
+        t, v = doc.xref_get_key(int(info[1].split()[0]), TEXT_LAYER_KEY)
+    except Exception:
+        return None
+    m = re.match(r"\(?D:(\d{14})([+-]\d\d)'(\d\d)'\s+(ocr|fix)\s+(\d+)\)?$", (v or "").strip())
+    if t != "string" or not m:
+        return None
+    tz = datetime.timezone(datetime.timedelta(hours=int(m.group(2)), minutes=int(m.group(3)) * (1 if m.group(2)[0] == "+" else -1)))
+    when = datetime.datetime.strptime(m.group(1), "%Y%m%d%H%M%S").replace(tzinfo=tz)
+    return {"when": when, "kind": m.group(4), "pages": int(m.group(5))}
+
+
 def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
                     progress=None, cancelled=None, out=None, backup=None) -> tuple:
     """고른 쪽들의 보이지 않는 글자층을 다시 써 **임시 파일**을 만든다 (SOT §5.4).
@@ -342,6 +380,13 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
         if stats["cancelled"] or not (stats["rewritten"] or stats["fallback"]):
             return "", stats
         subset_fonts_safely(doc)                 # 마스터 §4.5.10 ①
+        # 261107-30 D6(SOT §5.4.2): 글자층을 쓰는 모든 길(저장 때 넣기·[PDF 에 반영]·일괄)이 여기를 지난다 — 일시·내용을 PDF 정보에
+        done = stats["rewritten"] + stats["fallback"]
+        fixed = bool(items_for) and any(items_for(p) for p in done)
+        try:
+            stamp_text_layer(doc, "fix" if fixed else "ocr", len(done))
+        except Exception:
+            pass
         doc.save(str(tmp), garbage=3, deflate=True)
     finally:
         doc.close()
@@ -354,6 +399,31 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
         except Exception:
             pass
     return str(tmp), stats
+
+
+def layer_tmp_for(src, pages, *, db_path=None, progress=None, cancelled=None) -> tuple:
+    """[저장] 때 OCR 을 글자층에 넣기(SOT §5.4.1) — `TextLayerWorker` 와 같은 원천(`layer_rows_for`)·고침·안전 조건으로
+    **임시 파일까지만**(배경에서 부른다). 원본 옆에 백업을 만들지 않는다 — 원본 보존은 저장 길(`_finalize_save`)이 맡는다.
+    반환 `(임시 파일 | "", 통계)` — `build_layer_pdf` 와 같다."""
+    from viewer.text_fix_store import store as fix_store
+    from viewer.study.study_store import StudyStore, file_key_for
+    st = StudyStore(db_path)
+    try:
+        fkey = file_key_for(str(src))
+
+        def look(p):
+            try:
+                return (st.get_page_words(fkey, int(p)) or [], int(st.get_page_dpi(fkey, int(p)) or 0))
+            except Exception:
+                return ([], 0)
+        fs = fix_store()
+        out = Path(src).with_name(Path(src).stem + "_ocrlayer_tmp.pdf")
+        return build_layer_pdf(src, list(pages), rows_for=layer_rows_for(str(src), look),
+                               fixes_for=lambda p, rows: fs.apply_to_rows(str(src), p, rows),
+                               items_for=lambda p: fs.get_items(str(src), p),
+                               progress=progress, cancelled=cancelled, out=out, backup=False)
+    finally:
+        st.close()
 
 
 def apply_fixes_by_page(src, fixes_by_page: dict, *, rows_by_page=None,

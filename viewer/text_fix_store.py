@@ -348,7 +348,7 @@ class TextFixStore:
             kd = norm_key(dst_path)
             if not any(docs.values()) and not self._data.get(kd):
                 return False
-            out = {"fix": {}, "hl": {}, "applied": {}}
+            out = {"fix": {}, "hl": {}, "applied": {}, "layer": {}}
             for i, s in enumerate(sources or []):
                 if not s:
                     continue
@@ -390,6 +390,20 @@ class TextFixStore:
             self._data[norm_key(file_path)] = _copy.deepcopy(doc)
             self.save()
             return True
+
+    # ---- 우리가 쓴 글자층의 OCR 서명 (SOT §5.4.1, 261107-30) ----------------
+    def layer_sig(self, file_path, page: int) -> str:
+        d = self._doc(file_path)
+        return str(((d or {}).get("layer") or {}).get(str(int(page))) or "")
+
+    def set_layer_sigs(self, file_path, sigs: dict) -> None:
+        """[저장] 때 글자층에 넣은 쪽마다 그 OCR 의 서명 — 다음 [저장] 에서 '다른 층' 으로 다시 세지 않게."""
+        d = self._doc(file_path, create=True)
+        ly = d.setdefault("layer", {})
+        for p, sig in (sigs or {}).items():
+            if sig:
+                ly[str(int(p))] = str(sig)
+        self.save()
 
     # ---- 하이라이트 ----------------------------------------------------
     def get_highlights(self, file_path, page: int) -> list:

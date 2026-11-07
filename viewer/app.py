@@ -2646,6 +2646,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.set_meta_hooks(lambda: bool(self._edit_dirty),
                                self._save_meta_from_button)
             _bt.set_study_hooks(self.study_commit_for, self.study_pending_for, self.study_discard_for)   # 261019-1·6
+            _bt.set_ocr_layer_hook(self._ocr_layer_for_save)   # 261107-30(텍스트 창 SOT §5.4.1): [저장] 때 OCR 을 글자층에 넣을지
             # 260821/260822: 썸네일 페이지 편집을 💾 저장에 통합 + 저장 목적지(덮어쓰기/Shift=_edited)
             #   쪽 편집은 본문(활성 창) 파일일 때만 — 책갈피창이 `_is_main_file` 로 가른다
             _bt.set_page_edit_hooks(self._page_edits_dirty, self._page_edit_save,
@@ -9312,6 +9313,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "dict_file_off": dict(prefs.get("dict_file_off",
                                             old.get("dict_file_off", {})) or {}),
             "dict_styles": list(prefs.get("dict_styles", old.get("dict_styles", [])) or []),   # 사전 스타일
+            # 261107-30(텍스트 창 SOT §5.4.1): [저장] 때 OCR 글자층 — 파일별 '다시 묻지 않음' 답
+            "ocr_layer_save": dict(prefs.get("ocr_layer_save", old.get("ocr_layer_save", {})) or {}),
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),
@@ -9791,6 +9794,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "voice": self.read_aloud.voice_name or "",
             },
         }
+
+    def _ocr_layer_for_save(self, path):
+        """261107-30(텍스트 창 SOT §5.4.1): 책갈피창 [저장] 이 부른다 — 세기·쓰기는 배경(`_file_op_bg`), 창·기억은 `ocr_layer_save`."""
+        from viewer import ocr_layer_save as ols
+        return ols.ask_for_save(self, path, prefs=self._prefs, save_prefs=self._save_settings_now,
+                                run_bg=lambda fn, label: self._file_op_bg(fn, label, tr("저장")),
+                                fix_store=self._text_store())
 
     def _save_settings_now(self):
         settings_store.save(self._build_settings_payload(), self.SETTINGS_FILE)

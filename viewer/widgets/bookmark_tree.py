@@ -542,6 +542,11 @@ class BookmarkTree(QWidget):
         self._study_pending_fn = pending_fn
         self._study_discard_fn = discard_fn
 
+    def set_ocr_layer_hook(self, fn):
+        """261107-30(텍스트 창 SOT §5.4.1): [저장] 전에 그 파일의 앱 OCR 을 PDF 글자층에 넣을지 묻는다(앱이 주입).
+        `fn(경로)` → `"cancel"` · `None`(넣지 않음) · 계획(`.tmp` 글자층을 넣은 임시 PDF, `.done(최종)`, `.discard()`)."""
+        self._ocr_layer_fn = fn
+
     def _study_pending_path(self):
         """편집 대상 파일에 저장 안 한 OCR·단어장이 있으면 그 경로, 없으면 None."""
         fn = getattr(self, "_study_pending_fn", None)
@@ -3276,7 +3281,12 @@ class BookmarkTree(QWidget):
                         self.btn_edit.blockSignals(False)
                         return
                 elif pend:
-                    self._commit_study(pend)
+                    # 261107-30(텍스트 창 SOT §5.4.1): [저장] 과 같은 길 — 그 파일의 OCR 을 글자층에 넣을지도 묻는다
+                    if self._op_save(str(pend), quiet=True) is False:
+                        self.btn_edit.blockSignals(True)
+                        self.btn_edit.setChecked(True)
+                        self.btn_edit.blockSignals(False)
+                        return
             else:
                 if self._dirty:
                     if self._reload_fn is not None:  # 261019-3(점검): 고친 창도 디스크 책갈피로 되돌린다
@@ -4679,8 +4689,9 @@ class BookmarkTree(QWidget):
         self.tree.scrollToItem(items[0])
 
     # ---- 저장: 평탄화 → apply_bookmarks_to_pdf -------------------------
-    def _op_save(self, file_path: str = None):
-        """💾 저장. `file_path` 를 주면 그 파일(261008-1: 책갈피창 우클릭 '저장' — 옛 '저장(PolyPDF용)')."""
+    def _op_save(self, file_path: str = None, quiet: bool = False):
+        """💾 저장. `file_path` 를 주면 그 파일(261008-1: 책갈피창 우클릭 '저장' — 옛 '저장(PolyPDF용)').
+        `quiet` — 편집 모드를 끌 때의 [저장](바뀐 것이 없어도 알리지 않는다). 사용자가 취소하면 False."""
         # 260611-18(A4): 책갈피 변경이 없어도 개체/주석(page_meta) 변경이 있으면 저장.
         meta_dirty = bool(self._meta_is_dirty and self._meta_is_dirty())
         target = self._file_node_for_path(file_path) if file_path else self._target_file_item()
@@ -4722,15 +4733,38 @@ class BookmarkTree(QWidget):
             #   저장이 미뤄 둔 안내 창이 저장 도중에 뜨지 않게)
             QTimer.singleShot(0, lambda s=src: self._commit_study(s))
             return
+        # 261107-30(텍스트 창 SOT §5.4.1): 앱 OCR 을 PDF 글자층에 넣을지 묻는다 — 넣으면 그 임시 파일을 바탕으로 저장(한 번).
+        #   쪽 편집이 함께 있는 저장(위)은 이번에는 묻지 않는다 — 쪽 번호가 바뀌므로 다음 [저장] 때 묻는다
+        layer = None
+        fn = getattr(self, "_ocr_layer_fn", None)
+        if callable(fn):
+            try:
+                layer = fn(str(src))
+            except Exception as e:
+                QMessageBox.warning(self, tr("저장"), tr("OCR 글자층을 만들지 못했습니다 — 넣지 않고 저장합니다.\n\n원인: {e}").format(e=e))
+                layer = None
+            if layer == "cancel":
+                return False
+        try:
+            return self._op_save_write(src, bookmarks_raw, orig, meta_dirty, layer, quiet)
+        finally:
+            if layer is not None and hasattr(layer, "discard"):
+                layer.discard()
+
+    def _op_save_write(self, src, bookmarks_raw, orig, meta_dirty, layer, quiet):
+        """`_op_save` 의 쓰기 — `layer` 가 있으면 글자층을 넣은 임시 PDF 를 바탕으로 책갈피를 얹어 저장한다(§5.4.1)."""
+        base = Path(layer.tmp) if layer is not None else src
         # 261017-15(§4.7.13, 점검): '다른 이름으로 저장' 이면 책갈피가 그대로여도 새 파일을 만든다(아래 길) —
         #   종전엔 이 가지에서 사본을 원본에 넣고 끝나 **원본을 덮어썼다**
         save_as = bool(self._is_save_as())
-        if bookmarks_raw == orig and not save_as:
+        if bookmarks_raw == orig and not save_as and layer is None:
             self._dirty = False
             self._commit_meta()          # 개체/주석 등 page_meta 변경은 저장
             mirrored = self._run_after_save(str(src))
             studied = self._commit_study(src)    # 261019-1: 책갈피는 그대로여도 OCR·단어장은 확정
-            if studied:
+            if quiet:
+                pass
+            elif studied:
                 QMessageBox.information(self, tr("저장"), tr("저장하지 않았던 OCR·단어장 결과를 저장했습니다."))
             elif not meta_dirty and not mirrored:
                 QMessageBox.information(self, tr("책갈피 저장"), tr("변경 사항이 없습니다."))
@@ -4755,7 +4789,7 @@ class BookmarkTree(QWidget):
                     raise RuntimeError(bridge.get_status())
                 import pdf_bookmarker as pb  # alias 등록됨
                 bms = [pb.Bookmark(title=t, page=p, level=l) for (t, p, l) in bookmarks_raw]
-                return bridge.apply_to_pdf(src, tmp, bms)
+                return bridge.apply_to_pdf(base, tmp, bms)
             # 261019-1(응답성 SOT §4.4): pypdf 로 파일 전체를 다시 쓰는 일이라 배경에서(앱의 `_file_op_bg`) —
             #   책갈피 자동 생성 결과도 이제 이 [저장] 으로 쓰여 큰 문서가 흔해졌다
             if self._file_op is not None:
@@ -4785,6 +4819,8 @@ class BookmarkTree(QWidget):
                 msg += "\n\n" + tr("OCR·단어장 결과는 따로 저장했습니다.")
             QMessageBox.warning(self, tr("저장 실패"), msg)
             return
+        if layer is not None:
+            layer.done(str(out))         # 261107-30: 넣은 쪽의 OCR 서명·반영 표시
         self._dirty = False
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
         QTimer.singleShot(0, lambda s=src: self._commit_study(s))   # 261019-1: OCR·단어장 확정은 저장이 끝난 뒤(위와 같은 까닭)
