@@ -5,6 +5,7 @@
 `PolyPDFTextLayer`(글자층 저장 기록, 텍스트 창 SOT §5.4.2)·`PolyPDFHash` 가 쪽 하나만 지워 저장해도 사라졌다.
   A  쪽 하나를 지우고 실제 앱 [저장](`_page_edit_save` → `_finalize_save`) → 표준 항목·사용자 키·XMP·ModDate 그대로
   B  다른 PDF 쪽을 끼워도 이 파일의 정보만(끼운 파일의 제목·키는 들어오지 않는다) — `build` 를 바로
+261108-5: 글자층 확인 기록(`PolyPDFTextLayerCheck`)은 지금 쪽의 상태라 옮기지 않는다(A6) — 쓴 기록은 옮긴다(A2·A3).
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -51,6 +52,7 @@ def make(path, tag, n, *, info=True):
         ix = int(d.xref_get_key(-1, "Info")[1].split()[0])
         d.xref_set_key(ix, "PolyPDFHash", fitz.get_pdf_str("%s-hash" % tag))
         d.xref_set_key(ix, "PolyPDFTextLayer", fitz.get_pdf_str("D:20251107120000+09'00' ocr 3"))
+        d.xref_set_key(ix, "PolyPDFTextLayerCheck", fitz.get_pdf_str("D:20251108120000+09'00' same 4"))
         d.set_xml_metadata(XMP)
     d.save(str(path)); d.close()
 
@@ -99,6 +101,9 @@ try:
     from viewer import text_apply as ta
     d = fitz.open(str(a)); st = ta.read_text_layer_stamp(d); d.close()
     chk(st is not None and st["pages"] == 3, "A3 글자층 저장 기록을 그대로 읽는다(D6 '파일을 넘겨도 따라간다')", st)
+    d = fitz.open(str(a)); ck = ta.read_text_layer_check(d); d.close()
+    chk(ck is None and "PolyPDFTextLayerCheck" not in keys,
+        "A6 글자층 확인 기록(지금 쪽의 상태 'same 4')은 쪽 편집 저장 뒤 남지 않는다(261108-5, 텍스트 창 SOT §5.4.2)", (ck, keys))
     chk("XMP 제목" in xmp, "A4 XMP 도 옮긴다", xmp[:80])
     chk(md.get("modDate") == "D:20250101120000+09'00'", "A5 ModDate 는 원본 그대로(다른 저장 길과 같다)", md.get("modDate"))
     mw.close()

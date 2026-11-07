@@ -72,8 +72,10 @@ def copy_info(sdoc, odoc) -> int:
 
     새 문서(`fitz.open()` + `insert_pdf`)는 정보 사전이 비어 제목·작성자·Producer 와 PolyPDF 키(`PolyPDFTextLayer`·`PolyPDFHash`)가
     사라졌다. **키마다** 옮긴다 — `set_metadata` 는 사전을 통째로 바꾼다. 날짜(ModDate)도 원본 그대로 — 다른 저장 길(책갈피 [저장]·
-    `_finalize_save`)도 바꾸지 않는다. 끼운 다른 PDF 의 정보는 가져오지 않는다(이 파일의 정보만)."""
+    `_finalize_save`)도 바꾸지 않는다. 끼운 다른 PDF 의 정보는 가져오지 않는다(이 파일의 정보만).
+    261108-5(텍스트 창 SOT §5.4.2 '쪽 편집 저장 뒤'): 글자층 **확인 기록**은 지금 쪽들의 상태라 옮기지 않는다 — 쓴 기록은 옮긴다."""
     import fitz
+    from viewer.text_apply import TEXT_LAYER_CHECK_KEY
     n = 0
     try:
         si = sdoc.xref_get_key(-1, "Info")
@@ -88,6 +90,8 @@ def copy_info(sdoc, odoc) -> int:
             if oi[0] == "xref":
                 ox = int(oi[1].split()[0])
                 for k in sdoc.xref_get_keys(sx):
+                    if k == TEXT_LAYER_CHECK_KEY:
+                        continue
                     t, v = sdoc.xref_get_key(sx, k)
                     if t == "xref":                       # 간접 객체 — 값(문자열 등)을 그대로
                         v = sdoc.xref_object(int(v.split()[0]), compressed=True)
