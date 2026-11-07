@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-08 01:21+0900\n"
+"POT-Creation-Date: 2026-11-08 03:33+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8724,6 +8724,7 @@ msgid "제한 해제암호:"
 msgstr "Permissions password:"
 
 #: viewer/widgets/encrypt_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/study_panel.py
 msgid "고급"
 msgstr "Advanced"
 
@@ -12606,6 +12607,18 @@ msgid "선택 {n}개 삭제"
 msgstr "Delete {n} selected"
 
 #: viewer/widgets/study_panel.py
+msgid "초급"
+msgstr "Beginner"
+
+#: viewer/widgets/study_panel.py
+msgid "중급"
+msgstr "Intermediate"
+
+#: viewer/widgets/study_panel.py
+msgid "전문용어"
+msgstr "Technical term"
+
+#: viewer/widgets/study_panel.py
 msgid "이 PDF 를 OCR·분석해 단어장을 만듭니다 (1회)."
 msgstr "Build a vocabulary by running OCR and analysis on this PDF (once)."
 
@@ -15541,14 +15554,3 @@ msgstr "Getting Started"
 #~ msgid "단어 선택(목록/본문)시 그 단어를 읽습니다."
 #~ msgstr "Read the word aloud when you select it (list/body)."
 
-#: viewer/widgets/study_panel.py
-msgid "초급"
-msgstr "Beginner"
-
-#: viewer/widgets/study_panel.py
-msgid "중급"
-msgstr "Intermediate"
-
-#: viewer/widgets/study_panel.py
-msgid "전문용어"
-msgstr "Technical term"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-08 01:21+0900\n"
+"POT-Creation-Date: 2026-11-08 03:33+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -8445,6 +8445,7 @@ msgid "제한 해제암호:"
 msgstr ""
 
 #: viewer/widgets/encrypt_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/study_panel.py
 msgid "고급"
 msgstr ""
 
@@ -12286,6 +12287,18 @@ msgid "선택 {n}개 삭제"
 msgstr ""
 
 #: viewer/widgets/study_panel.py
+msgid "초급"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "중급"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "전문용어"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
 msgid "이 PDF 를 OCR·분석해 단어장을 만듭니다 (1회)."
 msgstr ""
 
@@ -14179,14 +14192,3 @@ msgctxt "installer"
 msgid "사용 안내 (API 키)"
 msgstr ""
 
-#: viewer/widgets/study_panel.py
-msgid "초급"
-msgstr ""
-
-#: viewer/widgets/study_panel.py
-msgid "중급"
-msgstr ""
-
-#: viewer/widgets/study_panel.py
-msgid "전문용어"
-msgstr ""
