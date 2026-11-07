@@ -101,10 +101,46 @@ def doc_info_line(facts: dict, info: dict | None = None) -> str:
     return SEP.join(p for p in parts if p)
 
 
-def doc_info_rows(facts: dict, info: dict | None) -> list:
-    """문서 정보 창의 (항목, 값). 배경 값이 아직이면(info None) 그 행은 '읽는 중…'."""
+EDIT_FIELDS = ("title", "author", "subject", "keywords")   # 261107-31: 창에서 고칠 수 있는 값(= `doc_meta.FIELDS`)
+
+
+def field_label(f: str) -> str:
+    return {"title": tr("제목"), "author": tr("작성자"), "subject": tr("주제"), "keywords": tr("키워드")}[f]
+
+
+def field_of_label(label: str):
+    """창 행 이름(`(저장 안 됨)` 붙은 것 포함) → 고칠 수 있는 필드 이름, 아니면 None."""
+    for f in EDIT_FIELDS:
+        lab = field_label(f)
+        if label == lab or label.startswith(lab + " "):
+            return f
+    return None
+
+
+def layer_saved_text(info: dict | None) -> str:
+    """글자층 저장 일시(`read_info` 가 읽은 `layer_saved` = 'YYYY-MM-DD HH:MM') → 'YYYY-MM-DD HH:MM 저장'."""
+    when = str((info or {}).get("layer_saved") or "").strip()
+    return tr("{when} 저장").format(when=when) if when else ""
+
+
+def _read_layer_saved(d) -> str:
+    """글자층 저장 일시 — 키·형식은 텍스트 창 SOT §5.4.2 가 소유하고 읽기도 그 모듈의 함수 하나로(형식을 두 곳에서 풀지 않는다)."""
+    try:
+        from viewer import text_apply
+        fn = getattr(text_apply, "read_text_layer_stamp", None)
+        st = fn(d) if callable(fn) else None
+        when = (st or {}).get("when")
+        return when.strftime("%Y-%m-%d %H:%M") if when is not None else ""
+    except Exception:
+        return ""
+
+
+def doc_info_rows(facts: dict, info: dict | None, pending: dict | None = None) -> list:
+    """문서 정보 창의 (항목, 값). 배경 값이 아직이면(info None) 그 행은 '읽는 중…'.
+    `pending`(261107-31, `doc_meta.pending`) — 저장 안 한 고침이 있으면 그 값을 보이고 항목 이름 뒤에 '(저장 안 됨)'."""
     wait = tr("읽는 중…")
     none = "—"
+    pending = pending or {}
 
     def bg(key, fmt=str):
         if info is None:
@@ -139,15 +175,20 @@ def doc_info_rows(facts: dict, info: dict | None) -> list:
         text_s = tr("있는 쪽 {a} · 없는 쪽 {b}").format(a=n_all - n_no, b=n_no)
     else:
         text_s = none
+    saved = layer_saved_text(info)
+    if saved and info is not None:
+        text_s = (text_s + SEP + saved) if text_s != none else saved
+
+    def ed(f):
+        if f in pending:                                  # 저장 안 한 고침 — 고친 값을 보이고 항목에 표시
+            return (field_label(f) + " " + tr("(저장 안 됨)"), pending[f] or none)
+        return (field_label(f), mv(f))
     return [
         (tr("파일"), facts.get("path") or ""),
         (tr("파일 크기"), bg("bytes", fmt_bytes)),
         (tr("쪽 수"), str(facts.get("pages") or none)),
         (tr("지금 쪽 용지"), facts.get("paper") or none),
-        (tr("제목"), mv("title")),
-        (tr("작성자"), mv("author")),
-        (tr("주제"), mv("subject")),
-        (tr("키워드"), mv("keywords")),
+        *[ed(f) for f in EDIT_FIELDS],
         (tr("만든 프로그램"), mv("creator")),
         (tr("PDF 변환기"), mv("producer")),
         (tr("만든 날짜"), mv("creationDate", fmt_pdf_date)),
@@ -204,6 +245,7 @@ def read_info(path: str, password: str | None = None, cancelled=lambda: False, p
         if d.needs_pass and not (password and d.authenticate(password)):
             return out                              # 열 수 없다 — 크기·암호만
         out["meta"] = dict(d.metadata or {})
+        out["layer_saved"] = _read_layer_saved(d)          # 261107-31(D6): 글자층 저장 일시 — 읽기만
         try:
             p = int(d.permissions)
             out["perm"] = {"print": bool(p & fitz.PDF_PERM_PRINT), "copy": bool(p & fitz.PDF_PERM_COPY),

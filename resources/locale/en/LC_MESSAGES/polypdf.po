@@ -3165,6 +3165,15 @@ msgstr "Reopened '{name}' (saved)."
 
 #: viewer/app.py
 #, python-brace-format
+msgid ""
+"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n"
+"그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?"
+msgstr ""
+"'{name}' is open in {n} other PolyPDF window(s).\n"
+"Close it there for a moment, restore it, and reopen it?"
+
+#: viewer/app.py
+#, python-brace-format
 msgid "{p}쪽({r})"
 msgstr "p.{p} ({r})"
 
@@ -3518,6 +3527,18 @@ msgid "암호"
 msgstr "Password"
 
 #: viewer/doc_info.py
+msgid "작성자"
+msgstr "Author"
+
+#: viewer/doc_info.py viewer/widgets/bookmark_tree.py
+msgid "주제"
+msgstr "Topic"
+
+#: viewer/doc_info.py
+msgid "키워드"
+msgstr "Keywords"
+
+#: viewer/doc_info.py
 msgid "있음"
 msgstr "Yes"
 
@@ -3537,18 +3558,6 @@ msgstr "Pages"
 #: viewer/doc_info.py
 msgid "지금 쪽 용지"
 msgstr "Current page paper"
-
-#: viewer/doc_info.py
-msgid "작성자"
-msgstr "Author"
-
-#: viewer/doc_info.py viewer/widgets/bookmark_tree.py
-msgid "주제"
-msgstr "Topic"
-
-#: viewer/doc_info.py
-msgid "키워드"
-msgstr "Keywords"
 
 #: viewer/doc_info.py
 msgid "만든 프로그램"
@@ -3588,6 +3597,11 @@ msgstr "Attachments"
 
 #: viewer/doc_info.py
 #, python-brace-format
+msgid "{when} 저장"
+msgstr "saved {when}"
+
+#: viewer/doc_info.py
+#, python-brace-format
 msgid "{n}쪽"
 msgstr "{n} pages"
 
@@ -3604,6 +3618,10 @@ msgstr "Comments"
 #, python-brace-format
 msgid "있는 쪽 {a} · 없는 쪽 {b}"
 msgstr "With text {a} · without {b}"
+
+#: viewer/doc_info.py
+msgid "(저장 안 됨)"
+msgstr "(not saved)"
 
 #: viewer/doc_info_controller.py
 msgid "누르면 문서의 세부 정보를 봅니다."

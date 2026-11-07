@@ -81,7 +81,8 @@ class DocInfoMixin:
             return
         path = str(doc.path)
         facts = doc_info.main_facts(doc, self._mv[i].current_page())
-        if st.get("path") != path:
+        # 261107-31: 같은 경로라도 다시 연 문서(저장 뒤 `_open_saved_file`)면 다시 읽는다 — 고친 제목 등이 바로 보이게
+        if st.get("path") != path or st.get("doc") is not doc:
             old = st.get("worker")
             if old is not None:
                 try:
@@ -90,7 +91,8 @@ class DocInfoMixin:
                     pass
             st.clear()
             st["path"] = path
-            st["info"] = doc_info.cached(path)
+            st["doc"] = doc
+            st["info"] = doc_info.cached(path)                  # 지난 값으로 먼저 — 배경 값이 오면 바꾼다
             self._doc_info_gen += 1
             st["gen"] = self._doc_info_gen
             from viewer.workers import run_in_thread
@@ -138,15 +140,23 @@ class DocInfoMixin:
             t = QTableWidget(0, 2, dlg)
             t.setHorizontalHeaderLabels([tr("항목"), tr("값")])
             t.verticalHeader().setVisible(False)
-            t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+            # 261107-31(§4.12 '고치기'): 제목·작성자·주제·키워드 칸만 고칠 수 있다(칸마다 깃발) — 두 번 누르기·F2
+            t.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
             t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
             t.horizontalHeader().setStretchLastSection(True)
+            t.itemChanged.connect(self._doc_info_item_changed)
             lay.addWidget(t)
+            from PyQt6.QtWidgets import QLabel
+            note = QLabel(dlg)
+            note.setObjectName("docInfoNote")
+            note.setWordWrap(True)
+            lay.addWidget(note)
             bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dlg)
             bb.rejected.connect(dlg.close)
             lay.addWidget(bb)
-            dlg.resize(560, 560)
+            dlg.resize(560, 600)
             dlg._table = t
+            dlg._note = note
             self._doc_info_dlg = dlg
         dlg._pane = i
         self._doc_info_dialog_refresh(i)
@@ -158,13 +168,73 @@ class DocInfoMixin:
         dlg = getattr(self, "_doc_info_dlg", None)
         if dlg is None or getattr(dlg, "_pane", None) != i:
             return
+        from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QTableWidgetItem
+        from viewer import doc_meta
         st = self._doc_info_state[i]
         facts = st.get("facts") or {}
-        rows = doc_info.doc_info_rows(facts, st.get("info"))
+        path = facts.get("path") or ""
+        info = st.get("info")
+        pend = doc_meta.pending(path) if path else {}
+        rows = doc_info.doc_info_rows(facts, info, pend)
         t = dlg._table
-        t.setRowCount(len(rows))
-        for r, (k, v) in enumerate(rows):
-            t.setItem(r, 0, QTableWidgetItem(k))
-            t.setItem(r, 1, QTableWidgetItem(v))
-        dlg.setWindowTitle(tr("문서 정보") + " — " + Path(facts.get("path") or "").name)
+        t.blockSignals(True)                         # 채우기는 고침이 아니다
+        try:
+            t.setRowCount(len(rows))
+            for r, (k, v) in enumerate(rows):
+                a, b = QTableWidgetItem(k), QTableWidgetItem(v)
+                a.setFlags(a.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                f = doc_info.field_of_label(k)
+                # 배경 값을 읽은 뒤에만(지금 값을 알아야 고쳤는지 안다), 암호를 못 연 파일은 고치지 않는다
+                if f is None or info is None or "meta" not in info:
+                    b.setFlags(b.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                else:
+                    b.setData(Qt.ItemDataRole.UserRole, f)
+                    if v == "—" and f not in pend:
+                        b.setText("")
+                    b.setToolTip(tr("두 번 눌러 고칩니다 — 편집 모드 💾 저장 때 PDF 에 들어갑니다."))
+                t.setItem(r, 0, a)
+                t.setItem(r, 1, b)
+        finally:
+            t.blockSignals(False)
+        note = getattr(dlg, "_note", None)
+        if note is not None:
+            note.setText(tr("저장 안 한 고침이 있습니다 — 편집 모드 💾 저장 때 PDF 에 들어갑니다.") if pend
+                         else tr("제목·작성자·주제·키워드는 두 번 눌러 고칠 수 있습니다."))
+        dlg.setWindowTitle(tr("문서 정보") + " — " + Path(path).name)
+
+    def _doc_info_item_changed(self, item):
+        """261107-31(§4.12 '고치기'): 고친 값을 보류에 — 편집 모드가 아니면 텍스트 창 SOT §5.2.1 꼴로 묻는다."""
+        from PyQt6.QtCore import Qt, QTimer
+        from PyQt6.QtWidgets import QMessageBox
+        from viewer import doc_meta
+        f = item.data(Qt.ItemDataRole.UserRole)
+        dlg = getattr(self, "_doc_info_dlg", None)
+        if not f or dlg is None:
+            return
+        i = getattr(dlg, "_pane", 0)
+        st = self._doc_info_state[i]
+        path = (st.get("facts") or {}).get("path") or ""
+        info = st.get("info") or {}
+        if not path or "meta" not in info:
+            return
+        value = item.text().strip()
+        original = str((info.get("meta") or {}).get(f) or "").strip()
+        # 같은 값이 아니면 편집 모드가 필요하다
+        cur = doc_meta.pending(path).get(f, original)
+        if value != cur:
+            bt = self.bookmark_tree
+            if not bt.is_edit_mode():
+                ret = QMessageBox.question(
+                    dlg, tr("문서 정보"),
+                    tr("PDF 의 문서 정보를 고치므로 편집모드로 바꾼 뒤 고칩니다.\n고친 값은 편집 모드 💾 저장 때 PDF 에 들어갑니다."),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if ret != QMessageBox.StandardButton.Yes:
+                    QTimer.singleShot(0, lambda k=i: self._doc_info_dialog_refresh(k))   # 고친 칸을 되돌린다
+                    return
+                bt.btn_edit.setChecked(True)          # toggled → 편집 모드 진입 처리(§5.2.1 과 같은 길)
+                if not bt.is_edit_mode():
+                    QTimer.singleShot(0, lambda k=i: self._doc_info_dialog_refresh(k))
+                    return
+            doc_meta.set_pending(path, f, value, original)
+        QTimer.singleShot(0, lambda k=i: self._doc_info_dialog_refresh(k))   # 편집기가 닫힌 뒤 다시 채운다

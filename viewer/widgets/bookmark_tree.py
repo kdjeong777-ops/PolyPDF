@@ -857,6 +857,8 @@ class BookmarkTree(QWidget):
             except Exception:
                 pass
         self._dirty = False
+        from viewer import doc_meta as _dm
+        _dm.clear_pending()              # 261107-31(마스터 §4.12): 문서 정보 고침도 되돌린다
         self._sync_selection_mode()
         self.editCancelled.emit()        # app: 숨김/회전/선긋기/하이퍼링크 스냅샷 복원
         self.bookmarksReverted.emit()
@@ -3270,7 +3272,9 @@ class BookmarkTree(QWidget):
         # 260606-4: 편집 모드를 끌 때 변경분이 있으면 저장 여부 확인
         # 261019-6: 그 파일의 저장 안 한 OCR·단어장도 같은 창에서(편집 모드 [저장] 이 기준)
         pend = self._study_pending_path() if (not on and self._edit_mode) else None
-        if not on and self._edit_mode and (self._dirty or pend):
+        from viewer import doc_meta as _dm      # 261107-31(마스터 §4.12): 저장 안 한 문서 정보 고침도 센다
+        info_pend = bool(not on and self._edit_mode and _dm.has_pending())
+        if not on and self._edit_mode and (self._dirty or pend or info_pend):
             msg = (tr("수정한 내용(저장하지 않은 OCR·단어장 포함)이 있습니다. 저장할까요?") if pend
                    else tr("수정한 내용이 있습니다. 저장할까요?"))
             ret = QMessageBox.question(
@@ -3298,7 +3302,13 @@ class BookmarkTree(QWidget):
                         self.btn_edit.setChecked(True)
                         self.btn_edit.blockSignals(False)
                         return
+                if info_pend and not self.save_doc_meta_pending():
+                    self.btn_edit.blockSignals(True)     # 261107-31: 문서 정보를 쓰지 못했다 — 고침을 잃지 않게 편집 모드 유지
+                    self.btn_edit.setChecked(True)
+                    self.btn_edit.blockSignals(False)
+                    return
             else:
+                _dm.clear_pending()                      # 261107-31: 버림 — 문서 정보 고침도
                 if self._dirty:
                     if self._reload_fn is not None:  # 261019-3(점검): 고친 창도 디스크 책갈피로 되돌린다
                         try:
@@ -4768,7 +4778,9 @@ class BookmarkTree(QWidget):
         # 261017-15(§4.7.13, 점검): '다른 이름으로 저장' 이면 책갈피가 그대로여도 새 파일을 만든다(아래 길) —
         #   종전엔 이 가지에서 사본을 원본에 넣고 끝나 **원본을 덮어썼다**
         save_as = bool(self._is_save_as())
-        if bookmarks_raw == orig and not save_as and layer is None:
+        from viewer import doc_meta as _dm
+        info_fields = _dm.pending(src)   # 261107-31(마스터 §4.12): 문서 정보 고침이 있으면 책갈피가 그대로여도 쓴다
+        if bookmarks_raw == orig and not save_as and layer is None and not info_fields:
             self._dirty = False
             self._commit_meta()          # 개체/주석 등 page_meta 변경은 저장
             mirrored = self._run_after_save(str(src))
@@ -4800,7 +4812,10 @@ class BookmarkTree(QWidget):
                     raise RuntimeError(bridge.get_status())
                 import pdf_bookmarker as pb  # alias 등록됨
                 bms = [pb.Bookmark(title=t, page=p, level=l) for (t, p, l) in bookmarks_raw]
-                return bridge.apply_to_pdf(base, tmp, bms)
+                o = bridge.apply_to_pdf(base, tmp, bms)
+                if info_fields:                         # 261107-31(마스터 §4.12): 문서 정보 고침도 같은 임시 파일에
+                    _dm.write_info(o, info_fields, source=src)
+                return o
             # 261019-1(응답성 SOT §4.4): pypdf 로 파일 전체를 다시 쓰는 일이라 배경에서(앱의 `_file_op_bg`) —
             #   책갈피 자동 생성 결과도 이제 이 [저장] 으로 쓰여 큰 문서가 흔해졌다
             if self._file_op is not None:
@@ -4832,6 +4847,8 @@ class BookmarkTree(QWidget):
             return
         if layer is not None:
             layer.done(str(out))         # 261107-30: 넣은 쪽의 OCR 서명·반영 표시
+        if info_fields:
+            _dm.clear_pending(src)       # 261107-31: 문서 정보 고침이 들어갔다
         self._dirty = False
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
         QTimer.singleShot(0, lambda s=src: self._commit_study(s))   # 261019-1: OCR·단어장 확정은 저장이 끝난 뒤(위와 같은 까닭)
@@ -4867,6 +4884,17 @@ class BookmarkTree(QWidget):
             return True
         from viewer.pathutil import norm_key
         return norm_key(str(cur)) == norm_key(str(path))
+
+    def save_doc_meta_pending(self) -> bool:
+        """261107-31(마스터 §4.12): 남은 문서 정보 고침을 파일마다 [저장] 길로(편집 모드 끌 때·종료 창). 모두 들어갔으면 True."""
+        from viewer import doc_meta as _dm
+        for p in _dm.pending_paths():
+            if not Path(p).exists():
+                _dm.clear_pending(p)                 # 지운 파일 — 쓸 곳이 없다
+                continue
+            if self._op_save(str(p), quiet=True) is False:
+                return False
+        return not _dm.has_pending()
 
     def _commit_meta(self):
         """260611-18(A4): page_meta 미저장 변경을 디스크에 저장(+썸네일 반영)."""

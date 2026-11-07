@@ -3508,6 +3508,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 from viewer import secure_store, page_crop
                 secure_store.relocate(old, new)
                 page_crop.relocate(old, new)
+                from viewer import doc_meta                  # 261107-31(§4.12): 저장 안 한 문서 정보 고침도
+                doc_meta.relocate(old, new)
             except Exception:
                 pass
         # 메인 뷰어가 옮겨진 파일을 보고 있었으면 새 경로로 재로드
@@ -5129,12 +5131,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             else:
                 meta_keys.append(None)
 
+        from viewer import doc_meta as _dm
+        meta_fields = _dm.pending(src)             # 261107-31(§4.12): 문서 정보 고침(보류)도 같은 임시 파일에
+
         def _job(progress):
             try:
                 built.update(_peb.build(src, plan, raw_bm, recon, book_tmp, progress, crops=crops, rotations=rots,
                                         alias=alias))
             except _peb.Cancelled:
                 raise MergeCancelled()
+            if meta_fields:
+                _dm.write_info(built["path"], meta_fields, source=src)
         # 261014-1(§4.7.5): 저장 뒤에도 **보던 쪽**에 남는다 — 새 파일에서 그 쪽은 썸네일 순서의 자리다.
         try:
             _nav = pt.current_nav_ids()
@@ -5169,6 +5176,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         QApplication.restoreOverrideCursor()
         _pcr.clear_pending(src)                    # 썼으니 덧입히기 끝(새 이름이면 원본은 그대로 남는다)
+        if meta_fields:
+            _dm.clear_pending(src)                 # 261107-31: 문서 정보 고침도 들어갔다
         if rots:                                   # 261011-2: 회전도 PDF 에 들어갔다 — 두 번 돌지 않게 비운다
             try:
                 st = self._ensure_page_meta_store()
@@ -10586,7 +10595,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             bm_dirty = bool(self.bookmark_tree._dirty)
         except Exception:
             bm_dirty = False
-        if not (meta_dirty or bm_dirty):
+        from viewer import doc_meta as _dm               # 261107-31(§4.12): 저장 안 한 문서 정보 고침도 센다
+        info_dirty = _dm.has_pending()
+        if not (meta_dirty or bm_dirty or info_dirty):
             return True
 
         box = QMessageBox(self)
@@ -10609,12 +10620,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception:
                 pass
             try:
+                if info_dirty:
+                    self.bookmark_tree.save_doc_meta_pending()   # 남은 문서 정보 고침 — 파일마다 [저장] 길
+            except Exception:
+                pass
+            try:
                 if meta_dirty:
                     self._commit_edit()                # page_meta/하이퍼링크 디스크 저장
             except Exception:
                 pass
         # '저장 안 하고 종료' = 보류 중 변경을 커밋하지 않은 채 종료(자동 폐기)
         self._edit_dirty = False
+        _dm.clear_pending()
         return True
 
     # ===== 260618-11: 업데이트(GitHub Releases) =========================

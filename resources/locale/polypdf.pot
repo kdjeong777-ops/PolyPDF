@@ -3058,6 +3058,13 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
+msgid ""
+"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n"
+"그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
 msgid "{p}쪽({r})"
 msgstr ""
 
@@ -3408,6 +3415,18 @@ msgid "암호"
 msgstr ""
 
 #: viewer/doc_info.py
+msgid "작성자"
+msgstr ""
+
+#: viewer/doc_info.py viewer/widgets/bookmark_tree.py
+msgid "주제"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "키워드"
+msgstr ""
+
+#: viewer/doc_info.py
 msgid "있음"
 msgstr ""
 
@@ -3426,18 +3445,6 @@ msgstr ""
 
 #: viewer/doc_info.py
 msgid "지금 쪽 용지"
-msgstr ""
-
-#: viewer/doc_info.py
-msgid "작성자"
-msgstr ""
-
-#: viewer/doc_info.py viewer/widgets/bookmark_tree.py
-msgid "주제"
-msgstr ""
-
-#: viewer/doc_info.py
-msgid "키워드"
 msgstr ""
 
 #: viewer/doc_info.py
@@ -3478,6 +3485,11 @@ msgstr ""
 
 #: viewer/doc_info.py
 #, python-brace-format
+msgid "{when} 저장"
+msgstr ""
+
+#: viewer/doc_info.py
+#, python-brace-format
 msgid "{n}쪽"
 msgstr ""
 
@@ -3493,6 +3505,10 @@ msgstr ""
 #: viewer/doc_info.py
 #, python-brace-format
 msgid "있는 쪽 {a} · 없는 쪽 {b}"
+msgstr ""
+
+#: viewer/doc_info.py
+msgid "(저장 안 됨)"
 msgstr ""
 
 #: viewer/doc_info_controller.py
