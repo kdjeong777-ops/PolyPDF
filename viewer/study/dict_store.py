@@ -129,6 +129,8 @@ class DictStore:
             CREATE INDEX IF NOT EXISTS ix_entry_normko  ON dict_entry(norm_ko);
             CREATE INDEX IF NOT EXISTS ix_entry_normen  ON dict_entry(norm_en);
             CREATE INDEX IF NOT EXISTS ix_entry_source  ON dict_entry(source_id);
+            -- 261107-27(단어장 SOT §12): 출처별 항목 수를 색인만으로 — 큰 사전(Wiktionary 70만)에서 list_sources 가 1.35초 섰다
+            CREATE INDEX IF NOT EXISTS ix_entry_src_en  ON dict_entry(source_id, enabled);
             -- 260615-10(P12): 예시(예문) 누적 — 단어장 생성 시 축적, 이후 재사용
             CREATE TABLE IF NOT EXISTS dict_example(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -294,12 +296,26 @@ class DictStore:
 
     def list_sources(self) -> list[dict]:
         """출처 목록. `enabled` = 기본 선택, `active` = 이 연결이 지금 쓰는지(단어장 SOT §11.1)."""
+        # 261107-27(단어장 SOT §12): 항목 수는 두 표에서 바로(색인 ix_entry_src_en) — 보기(dict_entry)를 거치면 큰 사전에서 1초 넘게 섰다
+        #   쪽을 넘길 때마다 불리므로 바뀌지 않았으면 다시 세지 않는다 — 이 연결의 쓰기(total_changes)·다른 연결의 쓰기(data_version)
+        stamp = (self.conn.total_changes,
+                 self.conn.execute("PRAGMA main.data_version").fetchone()[0],
+                 self.conn.execute("PRAGMA u.data_version").fetchone()[0])
+        cached = self.__dict__.get("_count_cache")
+        if cached and cached[0] == stamp:
+            counts = cached[1]
+        else:
+            counts = {}
+            for tbl in ("main.dict_entry", "u.dict_entry"):
+                for sid, n in self.conn.execute(
+                        f"SELECT source_id, COUNT(*) FROM {tbl} WHERE enabled=1 GROUP BY source_id"):
+                    counts[sid] = counts.get(sid, 0) + int(n)
+            self._count_cache = (stamp, counts)
         rows = [dict(r) for r in self.conn.execute(
-            "SELECT s.*, (SELECT COUNT(*) FROM dict_entry e"
-            "  WHERE e.source_id=s.source_id AND e.enabled=1) AS n_entries"
-            " FROM dict_source s ORDER BY"
+            "SELECT s.* FROM dict_source s ORDER BY"
             " CASE s.kind WHEN 'user' THEN 0 WHEN 'base' THEN 1 ELSE 2 END, s.priority")]
         for r in rows:
+            r["n_entries"] = counts.get(r["source_id"], 0)
             r["active"] = (bool(r.get("enabled")) if self._file_off is None
                            else r["source_id"] not in self._file_off)
         return rows
@@ -490,11 +506,13 @@ class DictStore:
         rows = self._join_rows("(e.norm_ko LIKE ? OR e.norm_en LIKE ?)", [like, like])
         return rows[:limit]
 
-    def all_terms(self, *, kind: Optional[str] = None) -> list[dict]:
-        """term spotting(P4)용 — 활성 출처의 항목 전체(우선순위 정렬)."""
-        if kind:
-            return self._join_rows("s.kind=?", [kind])
-        return self._join_rows("1=1", [])
+    def all_terms(self, *, kind: Optional[str] = None, multiword: bool = False) -> list[dict]:
+        """term spotting(P4)용 — 활성 출처의 항목 전체(우선순위 정렬).
+        multiword=True — 띄어쓰기 있는 표제어만(스포팅 `term_list` 가 쓰는 것만, 261107-27 단어장 SOT §5.1: 한 낱말 큰 사전을 끌어오지 않게)."""
+        where, args = ("s.kind=?", [kind]) if kind else ("1=1", [])
+        if multiword:
+            where += " AND (instr(e.term_ko,' ')>0 OR instr(e.term_en,' ')>0)"
+        return self._join_rows(where, args)
 
     def export_rows(self, source_id: Optional[str] = None) -> list[dict]:
         """260611-106(P7): 내보내기용 항목 — 출처 enabled 무관, 항목 enabled 만(삭제 제외).

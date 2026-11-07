@@ -631,7 +631,7 @@ class StudyMixin:
         if db_path is None:                # 파일 없는 사전(검사의 가짜) — 그 자리에서
             from viewer.study.term_spotter import term_list
             try:
-                self._spot_terms_cache = term_list(dic.all_terms())
+                self._spot_terms_cache = term_list(dic.all_terms(multiword=True))
             except Exception:
                 self._spot_terms_cache = []
             return self._spot_terms_cache
@@ -1513,8 +1513,15 @@ class StudyMixin:
         from PyQt6.QtWidgets import QFileDialog
         fn, _ = QFileDialog.getOpenFileName(
             self, "용어집 파일 선택", "",
-            "용어집 (*.pdf *.csv *.tsv *.txt);;모든 파일 (*.*)")
+            "용어집 (*.pdf *.csv *.tsv *.txt *.jsonl *.gz);;모든 파일 (*.*)")
         if not fn:
+            return
+        if fn.lower().endswith((".jsonl", ".gz", ".json")):    # 261107-27(단어장 SOT §5.1): Wiktionary 는 그 길로
+            from viewer.study import wiktionary_import as _wi
+            if _wi.is_wiktextract(fn):
+                return self._import_wiktionary(fn)
+            QMessageBox.warning(self, "용어집 가져오기",
+                                "Wiktionary(kaikki.org) JSONL 형식이 아닙니다.")
             return
         # 260615-7(P9): 구분(일반/도로/IT 등) — 기존 구분 목록 + 새로 입력
         try:
@@ -1552,6 +1559,55 @@ class StudyMixin:
             self._refresh_study_panel(self.main_view.current_page())
         except Exception as e:
             QMessageBox.warning(self, "용어집 가져오기", f"실패: {e}")
+
+    def _import_wiktionary(self, fn: str):
+        """261107-27(단어장 SOT §5.1): kaikki.org Wiktionary JSONL → 일반 사전. 확인 한 번 뒤 **배경**(진행·취소, 응답성 SOT §4.3)."""
+        import os
+        from viewer.study import wiktionary_import as _wi
+        mb = os.path.getsize(fn) / 1e6
+        if QMessageBox.question(
+                self, "Wiktionary 가져오기",
+                f"{os.path.basename(fn)} ({mb:,.0f}MB)\n\n"
+                "영어 한 낱말 표제어만 골라 일반 사전으로 넣습니다 — 영어 풀이·예문, 있으면 한국어 번역·풀이.\n"
+                "큰 파일은 몇 분 걸리고 사전 파일(dict.db)이 커집니다. 도중에 [취소] 하면 아무것도 남지 않습니다.\n\n"
+                "출처 표기: " + _wi.WIKTIONARY_REFERENCE) != QMessageBox.StandardButton.Yes:
+            return None
+        db_path = getattr(self._study_get_dict(), "db_path", None)
+        out = {}
+
+        def _job(progress):
+            from viewer.twoup import MergeCancelled
+            try:
+                out["stats"] = _wi.import_file(
+                    db_path, fn, lambda d, t: progress(d, t, "Wiktionary 읽는 중"))
+            except _wi.ImportCancelled:
+                raise MergeCancelled()
+        run = getattr(self, "_run_merge_job", None)
+        if run is not None:
+            res = run(_job, "Wiktionary 가져오기", counts=False)
+        else:                                        # 창 없는 대역(검사) — 그 자리에서
+            from viewer.twoup import MergeCancelled
+            res = {"ok": False, "cancelled": False, "err": None}
+            try:
+                _job(getattr(self, "_wiktionary_progress", lambda d, t, _l: True))
+                res["ok"] = True
+            except MergeCancelled:
+                res["cancelled"] = True
+            except Exception as e:                   # noqa: BLE001
+                res["err"] = str(e)
+        self._spot_terms_cache = None
+        self._after_dict_list_changed()
+        st = out.get("stats")
+        if res.get("ok") and st:
+            pct = (100.0 * st["with_ko"] / st["words"]) if st["words"] else 0.0
+            QMessageBox.information(
+                self, "Wiktionary 가져오기",
+                f"{st['words']:,}개 낱말을 넣었습니다 — 한국어가 있는 낱말 {st['with_ko']:,}개({pct:.1f}%), "
+                f"영어 풀이 {st['with_en']:,}개.\n고른 사전은 [단어장 생성] 으로 만든 단어에 뜻을 붙입니다.")
+        elif res.get("err"):
+            QMessageBox.warning(self, "Wiktionary 가져오기", f"실패: {res['err']}")
+        self._wiktionary_result = (res, st)           # 검사용
+        return res
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_sanitize_dict(self, checked: bool = False):

@@ -43,6 +43,8 @@ OSS = (
     ("NLTK", "Apache 2.0", "NLTK Project", ("nltk",)),
     ("WordNet", "WordNet License", "Princeton University", ()),
     (tr_noop("kengdic 한영사전"), "CC BY-SA 3.0", "kengdic contributors (garfieldnate/kengdic)", ()),
+    # 261107-27(단어장 SOT §5.1): 사용자가 받아 [가져오기] 한 경우만 — 앱에 들어 있지 않다
+    ("Wiktionary (kaikki.org)", "CC BY-SA 4.0", "Wiktionary contributors · wiktextract (Tatu Ylönen) · kaikki.org", ()),
     # 261105-6(태그 SOT §5.7): 사진 위치 → 행정동 — resources/geo/kr_dong.bin(단순화·압축해 넣음). CC BY 4.0 출처 표시
     (tr_noop("행정동 경계 (admdongkor ver20261001)"), "CC BY 4.0",
      tr_noop("통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPDF 가 단순화"), ()),

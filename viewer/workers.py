@@ -1214,7 +1214,7 @@ class SpotTermsWorker(QObject):
             dic = DictStore(db_path)
             try:
                 dic.set_file_off(file_off)
-                terms = term_list(dic.all_terms())
+                terms = term_list(dic.all_terms(multiword=True))   # 261107-27: 띄어쓰기 있는 표제어만
             finally:
                 dic.close()
         except Exception:
