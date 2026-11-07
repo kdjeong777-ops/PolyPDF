@@ -6714,9 +6714,7 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
-msgid ""
-"‘{q}’ 에 맞는 파일이 이 목록에 없습니다.\n"
-"본문·썸네일은 앞서 연 파일 그대로입니다."
+msgid "‘{q}’ 에 맞는 파일이 이 목록에 없습니다."
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

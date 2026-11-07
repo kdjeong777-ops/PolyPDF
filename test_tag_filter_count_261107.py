@@ -7,6 +7,7 @@
 A. 풀다운 개수 — 지금 목록의 파일만 센다, 목록에 없는 태그는 늘어놓지 않는다(검색 칸에 있으면 (0) 으로 남겨 풀 수 있게)
 B. 고른 개수만큼 목록에 남는다(실제 체크 상자 → 검색 칸 → _on_filter)
 C. 결과가 비면 목록 자리에 알림, 다시 보이면 사라진다
+D. 실제 창 — 결과가 비면 본문·썸네일도 비우고 '맞는 파일 없음'(사용자 결정 '비우기'), 다시 생기면 앞서 보던 파일이 결과에 있을 때만 그 파일·쪽으로
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -99,6 +100,45 @@ try:
     chk(lbl.isVisible(), "C 글자 거르기도 비면 알림")
     bt.search_edit.setText(""); spin(100)
     chk(not lbl.isVisible(), "C 검색 칸을 비우면 알림 없음")
+    bt.close()
+
+    # D 실제 창 — 결과가 비면 본문·썸네일도 비운다(사용자 결정 '비우기'), 다시 생기면 앞서 보던 파일이 결과에 있을 때만 되돌린다
+    import modal_guard
+    modal_guard.install(label=lambda: "거르기 비우기", echo=False)
+    for n in ("a.pdf", "b.pdf", "c.pdf"):                  # 3쪽짜리로
+        d = fitz.open()
+        for _ in range(3):
+            d.new_page()
+        d.save(os.path.join(here, n)); d.close()
+    from viewer.app import MainWindow
+    mw = MainWindow(); mw._skip_save_on_close = True
+    mw.resize(1100, 700); mw.show(); spin(300)
+    mt = mw.bookmark_tree
+    st = mt._tags
+    st.set(os.path.join(here, "a.pdf"), ["보고서"]); st.set(os.path.join(here, "b.pdf"), ["보고서", "기사"])
+    st.set_auto_part(os.path.join(other, "IMG_0.jpg"), "kind", ["영수증"])
+    mw.open_folder(here); spin(1200)
+    A = os.path.join(here, "a.pdf")
+    mw.open_pdf(A); spin(500)
+    mw.main_view.go_to_page(2); spin(300)
+    norm = lambda p: os.path.normcase(str(p or ""))
+    chk(norm(mw.main_view.current_file()) == norm(A), "D 준비 — a.pdf 3쪽", str(mw.main_view.current_file()))
+    th = mw.page_thumbs
+    th_doc = lambda: getattr(th, "_doc", None)
+    mt.search_edit.setText("#영수증"); spin(400)
+    chk(mw.main_view.current_file() is None and th_doc() is None, "D 결과가 비면 본문·썸네일을 비운다",
+        f"{mw.main_view.current_file()} {th_doc()}")
+    el = mw.main_view._empty_label
+    chk(el.isVisible() and el.text() == "맞는 파일 없음", "D 본문 자리에 '맞는 파일 없음'", el.text())
+    mt.search_edit.setText("#보고서"); spin(800)
+    chk(norm(mw.main_view.current_file()) == norm(A) and mw.main_view.current_page() == 2,
+        "D 다시 결과가 생기고 앞서 보던 파일이 있으면 그 파일·쪽으로", f"{mw.main_view.current_file()} {mw.main_view.current_page()}")
+    chk(el.text() != "맞는 파일 없음", "D 안내 글은 원래대로", el.text())
+    mt.search_edit.setText("#영수증"); spin(400)
+    mt.search_edit.setText("#기사"); spin(800)
+    chk(mw.main_view.current_file() is None, "D 앞서 보던 파일이 결과에 없으면 빈 채로(줄을 눌러 연다)", str(mw.main_view.current_file()))
+    mt.search_edit.setText(""); spin(300)
+    mw.close()
 except Exception:
     import traceback
     traceback.print_exc()

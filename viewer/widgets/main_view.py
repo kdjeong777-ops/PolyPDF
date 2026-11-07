@@ -3672,6 +3672,16 @@ class MainView(QWidget):
         self._update_hidden_band()         # 260609-14(D5): 숨김 띠 위치/표시
         self._position_draw_overlay()      # 260609-22(J3): 선긋기 오버레이 위치
 
+    def set_empty_hint(self, text=None) -> None:
+        """빈 화면 안내 글을 잠시 바꾼다 — None 이면 원래 글(책갈피창 거르기 결과 없음, 검색 SOT §5.1, 261107-9)."""
+        lab = getattr(self, "_empty_label", None)
+        if lab is None:
+            return
+        if not hasattr(self, "_empty_text0"):
+            self._empty_text0 = lab.text()
+        lab.setText(text if text else self._empty_text0)
+        self._update_empty_label()
+
     def _update_empty_label(self):
         """260606-30: 문서/이미지 없을 때만 중앙 안내 라벨 표시·중앙 배치."""
         lab = getattr(self, "_empty_label", None)

@@ -2573,6 +2573,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _wire_signals(self):
         self.bookmark_tree.bookmarkActivated.connect(self._on_bookmark_activated)
+        self.bookmark_tree.filterEmptied.connect(self._on_tree_filter_empty)     # 261107-9(검색 SOT §5.1)
         # 260618-22: 하단(우측) 책갈피 → 우측 창에 열기
         self.bookmark_tree_right.bookmarkActivated.connect(self._on_bookmark_activated_right)
         # 260901-2: 하단 트리의 파일 복사/이동도 같은 처리(인덱스·메인뷰 갱신)
@@ -7041,6 +7042,27 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         w.finished.connect(self._on_autotag_finished)
         w.error.connect(self._on_autotag_error)
         run_in_thread(w, self._thread_keep)
+
+    def _on_tree_filter_empty(self, empty: bool):
+        """책갈피창 거르기 결과가 비면 본문·썸네일도 비우고 '맞는 파일 없음'(사용자 결정 '비우기', 검색 SOT §5.1, 261107-9).
+        결과가 다시 생기면 앞서 보던 파일이 결과에 있을 때만 그 파일·쪽으로 되돌린다 — 없으면 빈 채로(줄을 눌러 연다)."""
+        bt = self.bookmark_tree
+        if empty:
+            cur = self.main_view.current_file()            # 지금 보이는 파일·쪽(_current_main 은 쪽 넘김을 따라가지 않는다)
+            if self.__dict__.get("_filter_hidden") is None and cur:
+                self._filter_hidden = (str(cur), int(self.main_view.current_page() or 0))
+            self._photo_clear_document()
+            self.main_view.set_empty_hint(tr("맞는 파일 없음"))
+            return
+        self.main_view.set_empty_hint(None)
+        prev = self.__dict__.pop("_filter_hidden", None)
+        if not prev or self.main_view.current_file():
+            return
+        key = os.path.normcase(prev[0])
+        for it in bt._iter_file_nodes():
+            if not it.isHidden() and os.path.normcase(str(it.data(0, bt.DATA_FILE) or "")) == key:
+                bt._emit_nav(prev[0], prev[1])
+                return
 
     def _on_autotag_error(self, msg):
         self._autotag_worker = None

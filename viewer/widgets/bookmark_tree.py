@@ -222,6 +222,7 @@ class BookmarkTree(QWidget):
     translateFilesRequested = pyqtSignal(list)  # 260621-P0: 선택 파일들 번역(경로 리스트)
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
     photoActionRequested = pyqtSignal(str, list)  # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴 — (일 이름, 사진 경로들)
+    filterEmptied = pyqtSignal(bool)                 # 261107-9(검색 SOT §5.1): 거르기 결과가 비었다(True)·다시 생겼다(False) — 앱이 본문·썸네일을 비우고 되돌린다
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
@@ -2461,15 +2462,19 @@ class BookmarkTree(QWidget):
 
         for i in range(self.tree.topLevelItemCount()):
             apply_row(self.tree.topLevelItem(i))
-        self._show_no_match(bool(tagq or textq) and not any(not it.isHidden() for it in self._iter_file_nodes()),
+        files = list(self._iter_file_nodes())             # 파일이 하나도 없는 목록(빈 폴더·읽는 중)은 '거르기 결과 없음' 이 아니다
+        self._show_no_match(bool(tagq or textq) and bool(files) and not any(not it.isHidden() for it in files),
                             (text or "").strip())
 
-    NO_MATCH_TEXT = tr_noop("‘{q}’ 에 맞는 파일이 이 목록에 없습니다.\n본문·썸네일은 앞서 연 파일 그대로입니다.")
+    NO_MATCH_TEXT = tr_noop("‘{q}’ 에 맞는 파일이 이 목록에 없습니다.")
 
     def _show_no_match(self, on: bool, query: str = ""):
         """거르기 결과가 비면 목록 자리에 알림 한 줄(261107-9, 검색 SOT §5.1) — 빈 목록 옆에 앞서 연 파일이 남아 있어
-        '못 찾았는데 화면은 그대로' 로 보였다. 본문·썸네일은 닫지 않는다(거르기는 목록만 바꾼다)."""
+        '못 찾았는데 화면은 그대로' 로 보였다. 바뀔 때 `filterEmptied` — 앱이 본문·썸네일을 비우고(사용자 결정 '비우기') 결과가 생기면 되돌린다."""
         lbl = self.__dict__.get("_no_match_lbl")
+        if bool(on) != bool(self.__dict__.get("_no_match_on")):
+            self._no_match_on = bool(on)
+            self.filterEmptied.emit(bool(on))
         if not on:
             if lbl is not None:
                 lbl.hide()
