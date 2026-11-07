@@ -39,7 +39,8 @@ class CtxMenu(QMenu):
     def group(self, name: str) -> "CtxMenu":
         assert name in GROUPS, name
         if self._group is not None and GROUPS.index(name) < GROUPS.index(self._group):
-            raise AssertionError("메뉴 묶음 차례가 거꾸로: %s → %s" % (self._group, name))
+            # 개발용 단언(화면에 나오지 않는다) — 화면 문구가 아니라 영문 그대로(다국어 SOT §6, test_i18n_coverage)
+            raise AssertionError("ctx menu group order reversed: %s -> %s" % (self._group, name))
         if self._group != name and not self.isEmpty():
             self.addSeparator()
         self._group = name
