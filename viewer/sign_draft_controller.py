@@ -716,7 +716,7 @@ class SignDraftMixin:
                 box.setWindowTitle(tr("서명 확정"))
                 box.setText(tr("'{name}' 이(가) 이미 있습니다 — 바꿀까요?").format(name=Path(out).name))
                 b_rep = box.addButton(tr("바꾸기"), QMessageBox.ButtonRole.AcceptRole)
-                b_as = box.addButton(tr("다른 이름으로…"), QMessageBox.ButtonRole.ActionRole)
+                b_as = box.addButton(tr("다른 이름으로"), QMessageBox.ButtonRole.ActionRole)
                 box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
                 box.setDefaultButton(b_rep)
                 box.exec()

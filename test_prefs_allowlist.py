@@ -42,10 +42,14 @@ ORIG = io.open(SPATH, encoding="utf-8").read() if SPATH.exists() else None
 src = io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "viewer", "widgets", "settings_dialog.py"),
               encoding="utf-8").read()
-seg = src[src.index("def result_prefs"):]
-seg = seg[:seg.index("\n    def ", 10)] if "\n    def " in seg[10:] else seg
-KEYS = sorted(set(re.findall(r'"([a-z0-9_]+)"\s*:', seg))
-              | set(re.findall(r'out\["([a-z0-9_]+)"\]', seg)))
+# 261107-12: 판(외부 연결·발표 녹화)마다 result_prefs 가 있다 — 모두 모은다
+_keys = set()
+for _m in re.finditer(r"def result_prefs", src):
+    seg = src[_m.start():]
+    seg = seg[:seg.index("\n    def ", 10)] if "\n    def " in seg[10:] else seg
+    seg = seg[:seg.index("\nclass ", 10)] if "\nclass " in seg[10:] else seg
+    _keys |= set(re.findall(r'"([a-z0-9_]+)"\s*:', seg)) | set(re.findall(r'out\["([a-z0-9_]+)"\]', seg))
+KEYS = sorted(_keys)
 
 try:
     mw = MainWindow()

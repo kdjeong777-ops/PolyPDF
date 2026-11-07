@@ -305,7 +305,7 @@ class MergeFilesDialog(QDialog):
         trow = QHBoxLayout()
         self.chk_twoup = QCheckBox(tr("다단 생성 (쪽번호·목차·표지)"))
         self.chk_twoup.toggled.connect(self._on_twoup_toggled)
-        self.btn_twoup = QPushButton(tr("배치 설정…"))
+        self.btn_twoup = QPushButton(tr("배치 설정"))
         self.btn_twoup.setEnabled(False)
         self.btn_twoup.clicked.connect(self._open_twoup_settings)
         trow.addWidget(self.chk_twoup); trow.addWidget(self.btn_twoup); trow.addStretch(1)

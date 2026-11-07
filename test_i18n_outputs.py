@@ -74,7 +74,7 @@ try:
     hidden = [w for w in ("Vocabulary", "vocabulary", "KCSC", "KIPO", "Laws", "patent", "Translate", "translation")
               if w in text]
     chk(not hidden, "B 영어 도움말이 숨긴 한국 전용 기능을 말하지 않는다", str(hidden))
-    for ko_name in ("사용법", "정보", "단축키 설정...", "책갈피 자동 생성", "책갈피 생성",
+    for ko_name in ("사용법", "정보", "단축키 설정", "책갈피 자동 생성", "책갈피 생성",
                     "책갈피 모두 펼치기", "책갈피 모두 접기", "클립보드로 복사", "클립보드 가져오기",
                     "사용자 크기 설정", "책갈피 추가"):
         en_name = i18n.tr(ko_name).replace("...", "")

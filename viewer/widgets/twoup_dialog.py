@@ -49,7 +49,7 @@ class TwoUpSettingsDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.cmb_preset.setMinimumContentsLength(6)
         self._reload_presets()
-        b_save = QPushButton(tr("저장…")); b_save.clicked.connect(self._save_preset)
+        b_save = QPushButton(tr("저장")); b_save.clicked.connect(self._save_preset)
         b_del = QPushButton(tr("삭제")); b_del.clicked.connect(self._delete_preset)
         # 261008-4(마스터 §11.10, 사용자 요청): 스타일 목록 순서 바꾸기 — 고른 스타일을 한 칸 위/아래로.
         self.btn_preset_up = QPushButton("▲"); self.btn_preset_up.setFixedWidth(28)
@@ -180,7 +180,7 @@ class TwoUpSettingsDialog(QDialog):
         cf.addRow(tr("회사명:"), self.ed_comp); cf.addRow(tr("성명:"), self.ed_name)
         self.ed_cov_tpl = QLineEdit(s.get("cover_template", ""))
         self.ed_cov_tpl.setPlaceholderText(tr("비우면 기본 양식"))
-        bc = QPushButton(tr("양식…")); bc.clicked.connect(lambda: self._pick(self.ed_cov_tpl))
+        bc = QPushButton(tr("양식")); bc.clicked.connect(lambda: self._pick(self.ed_cov_tpl))
         rc = QHBoxLayout(); rc.addWidget(self.ed_cov_tpl, 1); rc.addWidget(bc)
         cf.addRow(tr("표지 Word 양식:"), self._wrap(rc))
         cv.addWidget(grp_c)
@@ -193,7 +193,7 @@ class TwoUpSettingsDialog(QDialog):
         tf.addRow(self.chk_toc)
         self.ed_toc_tpl = QLineEdit(s.get("toc_template", ""))
         self.ed_toc_tpl.setPlaceholderText(tr("비우면 기본 양식"))
-        bt = QPushButton(tr("양식…")); bt.clicked.connect(lambda: self._pick(self.ed_toc_tpl))
+        bt = QPushButton(tr("양식")); bt.clicked.connect(lambda: self._pick(self.ed_toc_tpl))
         rt = QHBoxLayout(); rt.addWidget(self.ed_toc_tpl, 1); rt.addWidget(bt)
         tf.addRow(tr("목차 Word 양식:"), self._wrap(rt))
         cv.addWidget(grp_t)
@@ -206,7 +206,7 @@ class TwoUpSettingsDialog(QDialog):
         df.addRow(self.chk_div)
         self.ed_div_tpl = QLineEdit(s.get("divider_template", ""))
         self.ed_div_tpl.setPlaceholderText(tr("비우면 기본 양식"))
-        bd = QPushButton(tr("양식…")); bd.clicked.connect(lambda: self._pick(self.ed_div_tpl))
+        bd = QPushButton(tr("양식")); bd.clicked.connect(lambda: self._pick(self.ed_div_tpl))
         rd = QHBoxLayout(); rd.addWidget(self.ed_div_tpl, 1); rd.addWidget(bd)
         df.addRow(tr("간지 Word 양식:"), self._wrap(rd))
         self.bt_div_bg = self._color_btn(s.get("divider_bg", "#eef2f7"))
@@ -215,7 +215,7 @@ class TwoUpSettingsDialog(QDialog):
         self.grp_divider = grp_d
 
         # Word 양식 샘플 다운로드
-        b_sample = QPushButton(tr("표지·목차 Word 양식 샘플 저장…") if self._single
+        b_sample = QPushButton(tr("표지·목차 Word 양식 샘플 저장") if self._single
                                else tr("표지·목차·간지 Word 양식 샘플 저장…"))
         b_sample.clicked.connect(self._save_samples)
         cv.addWidget(b_sample)

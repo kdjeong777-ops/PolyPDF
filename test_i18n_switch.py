@@ -117,8 +117,8 @@ try:
     d = SettingsDialog(dict(mw._prefs), parent=mw, host=mw); d.show(); app.processEvents()
     grp_titles = [g.title() for g in d.findChildren(QGroupBox) if g.isVisible()]
     ko_grps = [t for t in grp_titles if t in (i18n.tr("인터넷 사전 (단어장)"), i18n.tr("번역 (Claude)"))]
-    chk(not ko_grps and not d.btn_advanced.isVisible(),
-        "G en 설정 창의 한국 사전·키·번역 묶음과 '고급 설정' 단추 숨김(261025-2)", str(ko_grps))
+    chk(not ko_grps and d._page_items["external"].isHidden(),
+        "G en 설정 창의 한국 사전·키·번역 묶음과 '외부 연결' 항목 숨김(261025-2 → 261107-12)", str(ko_grps))
     d.close()
     from viewer.widgets.merge_dialog import MergeFilesDialog
     md = MergeFilesDialog([], parent=mw); md.show(); app.processEvents()

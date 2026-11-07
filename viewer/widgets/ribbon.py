@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from PyQt6.QtCore import QEvent, QObject, QRectF, Qt, QTimer
+from PyQt6.QtCore import QEvent, QObject, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QKeySequence, QPainter
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
                              QListWidget, QListWidgetItem, QPushButton, QSizePolicy, QStackedWidget,
@@ -538,20 +538,21 @@ class Ribbon(QWidget):
             r.update()
 
 
-class RibbonCustomizeDialog(QDialog):
-    """`모음` 사용자 지정(디자인 SOT §2.9.4) — 왼쪽 탭별 명령, 오른쪽 모음 차례."""
+class RibbonCustomizePanel(QWidget):
+    """`모음` 사용자 지정(디자인 SOT §2.9.4) — 왼쪽 탭별 명령, 오른쪽 모음 차례.
+    261107-12(디자인 SOT §2.14): 환경설정 '고급 › 리본 메뉴' 쪽의 판. 차례가 바뀌면 `changed`."""
 
     SEP_LABEL = "──── " + "{sep}" + " ────"
+    changed = pyqtSignal()
 
     def __init__(self, catalog, current, labels, parent=None):
         """catalog: [(탭 이름, [명령 id, ...]), ...] · current: 지금 모음(id·SEP) · labels: id → 단추 이름."""
         super().__init__(parent)
-        self.setWindowTitle(tr("모음 메뉴 관리"))          # 261025-5 보완: 단추·우클릭 이름 '모음 메뉴 관리...' 와 같게
-        self.resize(640, 480)
         self._labels = dict(labels)
         self._sep_text = self.SEP_LABEL.format(sep=tr("구분선"))
 
         v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
         info = QLabel(tr("왼쪽에서 명령을 골라 '모음' 탭에 넣습니다. 차례는 오른쪽 목록 차례입니다."))
         info.setWordWrap(True)
         v.addWidget(info)
@@ -562,6 +563,7 @@ class RibbonCustomizeDialog(QDialog):
         lv.addWidget(QLabel(tr("명령 고르기")))
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
+        self.tree.setMinimumHeight(260)
         for title, ids in catalog:
             top = QTreeWidgetItem([short_text(title)])
             top.setFlags(top.flags() & ~Qt.ItemFlag.ItemIsSelectable)
@@ -596,16 +598,20 @@ class RibbonCustomizeDialog(QDialog):
         self.list = QListWidget()
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.list.setMinimumHeight(260)
         rv.addWidget(self.list, 1)
         h.addLayout(rv, 1)
         self._load(current)
+        m = self.list.model()
+        for sig in (m.rowsInserted, m.rowsRemoved, m.rowsMoved):
+            sig.connect(lambda *_: self.changed.emit())
 
-        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.btn_default = bb.addButton(tr("기본값으로"), QDialogButtonBox.ButtonRole.ResetRole)
+        row = QHBoxLayout()
+        self.btn_default = QPushButton(tr("기본값으로"))
         self.btn_default.clicked.connect(lambda: self._load(DEFAULT_COLLECTION))
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
-        v.addWidget(bb)
+        row.addWidget(self.btn_default)
+        row.addStretch(1)
+        v.addLayout(row)
 
     def _item(self, cid: str) -> QListWidgetItem:
         it = QListWidgetItem(self._sep_text if cid == SEP else self._labels.get(cid, cid))
@@ -653,3 +659,39 @@ class RibbonCustomizeDialog(QDialog):
 
     def result_ids(self) -> list:
         return self._ids_in_list()
+
+
+class RibbonCustomizeDialog(QDialog):
+    """`RibbonCustomizePanel` 을 담은 창 — 앱은 환경설정 '리본 메뉴' 쪽을 쓴다(`open_settings(page="ribbon")`)."""
+
+    def __init__(self, catalog, current, labels, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("모음 메뉴 관리"))
+        self.resize(640, 480)
+        v = QVBoxLayout(self)
+        self.panel = RibbonCustomizePanel(catalog, current, labels, self)
+        v.addWidget(self.panel, 1)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        for name in ("tree", "list", "btn_add", "btn_remove", "btn_sep", "btn_up", "btn_down", "btn_default"):
+            setattr(self, name, getattr(self.panel, name))     # 종전 이름 그대로(검사)
+
+    def _load(self, ids) -> None:
+        self.panel._load(ids)
+
+    def _add(self) -> None:
+        self.panel._add()
+
+    def _add_sep(self) -> None:
+        self.panel._add_sep()
+
+    def _remove(self) -> None:
+        self.panel._remove()
+
+    def _move(self, d: int) -> None:
+        self.panel._move(d)
+
+    def result_ids(self) -> list:
+        return self.panel.result_ids()

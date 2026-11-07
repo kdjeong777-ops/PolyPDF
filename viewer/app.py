@@ -1561,14 +1561,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._save_settings_now()
 
     def _manage_collection(self) -> None:
-        """'모음 메뉴 관리' — 환경설정의 같은 단추와 같은 창(§2.9.4). [확인] 하면 곧바로 저장·적용."""
-        from viewer.widgets.ribbon import RibbonCustomizeDialog
-        cat, labels = self.ribbon_catalog()
-        dlg = RibbonCustomizeDialog(cat, self._collection_ids(), labels, self)
-        if dlg.exec() == dlg.DialogCode.Accepted:
-            self._prefs["ribbon_collection"] = [str(x) for x in dlg.result_ids()]
-            self._apply_collection()
-            self._save_settings_now()
+        """'모음 메뉴 관리' — 261107-12(디자인 SOT §2.14): 환경설정 '고급 › 리본 메뉴' 쪽으로 연다."""
+        self.open_settings(page="ribbon")
 
     def ribbon_catalog(self):
         """모음 사용자 지정 창의 왼쪽 목록 — [(탭 이름, [명령 id…])], id → 단추 이름(§2.9.4)."""
@@ -2035,6 +2029,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("add_bookmark",  (tr("책갈피 추가"), "Ctrl+B", tr("쪽 편집"))),
             ("hyperlink",     (tr("하이퍼링크 등록"), "Ctrl+K", tr("쪽 편집"))),
             ("ocr_read",      (tr("OCR 로 읽기"), "Ctrl+Alt+O", tr("도구"))),
+            ("settings",      (tr("환경설정"), "Ctrl+,", tr("도구"))),       # 261107-12(디자인 SOT §2.14): VS Code·Chrome 관례
             ("capture",       (tr("화면 캡처"), "Ctrl+Shift+S", tr("캡처·저장"))),
             # 261021-5(사용자 결정): Ctrl+S 는 파일 저장 — 옛 설정 값은 settings_store v12 가 옮긴다
             ("save_shots_pdf", (tr("스크린샷 PDF 저장"), "Ctrl+Alt+S", tr("캡처·저장"))),
@@ -2095,6 +2090,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "draw_clear": ("func", self._draw_sc_clear),
             "edit_undo": ("func", self.action_edit_undo),          # 261012-7: 창 어디서나(편집 모드)
             "edit_redo": ("func", self.action_edit_redo),
+            "settings": ("func", self.action_open_settings),
         }
         from viewer import key_actions as _ka                # 261107-4(입력 SOT §3.2.3)
         for _sid in ("save_as", "copy_path", "new_folder", "reveal", "info", "fav_add_file",
@@ -2220,24 +2216,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return out
 
     def _edit_shortcuts(self, parent=None):
-        """단축키 설정 창 — 261025-6 보완: 환경설정 '스타일' 묶음의 단추가 연다(parent = 환경설정 창). [확인] 이면 곧바로 저장."""
-        from viewer.widgets.shortcuts_dialog import ShortcutsDialog
-        cur = (self._prefs or {}).get("shortcuts", {})
-        d = ShortcutsDialog(self._sc_defs, cur, parent or self,
-                            capture_global=bool(self._prefs.get("capture_global", False)))
-        if d.exec():
-            self._prefs["shortcuts"] = d.result_shortcuts()
-            self._prefs["capture_global"] = bool(d.result_capture_global())
-            self._apply_shortcuts(self._prefs["shortcuts"])
-            try:
-                self._refresh_global_capture_hotkey(notify=True)  # 260611-3(6): 전역 핫키 갱신+알림
-            except Exception:
-                pass
-            try:
-                self._save_settings_now()
-            except Exception:
-                pass
-            self.status.showMessage(tr("단축키 저장됨"), 3000)
+        """단축키 설정 — 261107-12(디자인 SOT §2.14): 환경설정 '고급 › 단축키' 쪽으로 연다."""
+        return self.open_settings(page="shortcuts", parent=parent)
 
     # ===== 261021-5(입력 SOT §3.2, 사용자 지시·결정): 크롬식 창 단축키 =====================
     def action_new_window(self):
@@ -7204,7 +7184,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             undo = box.addButton(tr("되돌리기"), QMessageBox.ButtonRole.DestructiveRole)
             review = None
             if stats.get("new_candidates"):
-                review = box.addButton(tr("새 태그 후보 검토…"),
+                review = box.addButton(tr("새 태그 후보 검토"),
                                        QMessageBox.ButtonRole.ActionRole)
             box.addButton(tr("확인"), QMessageBox.ButtonRole.AcceptRole)
             box.exec()
@@ -9352,25 +9332,47 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     # ===== 설정 (v1.5.1) ===============================================
     def action_open_settings(self):
-        # 260628(FIX): `SettingsDialog` 가 어디에서도 import 되지 않아 이 메서드를 호출하면
-        #   NameError 로 **앱이 그대로 종료**됐다(설정 창을 못 여는 치명적 결함).
-        #   같은 클래스의 `_open_recording_settings` 는 자기 안에서 지역 import 를 하고 있어
-        #   문제가 없었고, 그 지역 import 는 이 메서드의 이름 해석에 아무 영향이 없다.
-        #   ※ 배포본 beta.79(HEAD)에도 동일하게 존재하던 기존 결함(pyflakes 로 확인).
+        """도구 탭 '환경설정'·Ctrl+, — 마지막에 본 항목으로(261107-12, 디자인 SOT §2.14)."""
+        return self.open_settings()
+
+    def open_settings(self, page=None, parent=None):
+        """261107-12(디자인 SOT §2.14, 사용자 결정): 환경설정을 여는 **한 길** — `page` 는 목록 id
+        (general·view·photo·tags·shots·shortcuts·ribbon·external·recording·tuning·manage), 없으면 마지막 항목.
+        저장은 창의 [적용]·[확인] 이 `_settings_apply` 로. 화면 언어를 바꿨으면 닫을 때 다시 시작할지 묻는다."""
+        # 260628(FIX): `SettingsDialog` 는 지역 import — 이름이 모듈에 없어 앱이 끝난 적이 있다
         from viewer.widgets.settings_dialog import SettingsDialog
-        dlg = SettingsDialog(self._prefs, self, host=self)
-        if dlg.exec() == dlg.DialogCode.Accepted:
-            new_prefs = dlg.result_prefs()
-            _lang_before = (str(self._prefs.get("language", "ko")),
-                            bool(self._prefs.get("external_language_packs", False)))
-            self._apply_prefs(new_prefs)
-            self._photo_apply_view_kind()          # 261104-2(사진 보기 SOT 4.10): 바로 적용 — 재시작 없음
-            # 즉시 settings.json 저장
-            self._save_settings_now()
-            self.status.showMessage(tr("설정 저장됨"), 3000)
-            if (str(self._prefs.get("language", "ko")),
-                    bool(self._prefs.get("external_language_packs", False))) != _lang_before:
-                self._offer_language_restart()
+        _lang_before = (str(self._prefs.get("language", "ko")),
+                        bool(self._prefs.get("external_language_packs", False)))
+        dlg = SettingsDialog(self._prefs, parent or self, host=self, page=page)
+        self._settings_dialog = dlg                 # 검사용(마지막에 연 창)
+        dlg.exec()
+        try:
+            self._save_settings_now()               # 창 크기·마지막 항목(settings_window)
+        except Exception:
+            pass
+        if (str(self._prefs.get("language", "ko")),
+                bool(self._prefs.get("external_language_packs", False))) != _lang_before:
+            self._offer_language_restart()
+        return dlg
+
+    def _settings_apply(self, new_prefs: dict) -> None:
+        """환경설정 [적용]·[확인] — 저장 길은 종전 그대로(허용목록 `_apply_prefs` → `_save_settings_now`, 키 보호 마스터 §8.2.0).
+        단축키·리본 모음·보기 종류는 곧바로 따라간다(디자인 SOT §2.14)."""
+        sc_before = dict((self._prefs or {}).get("shortcuts") or {})
+        cap_before = bool((self._prefs or {}).get("capture_global", False))
+        col_before = list((self._prefs or {}).get("ribbon_collection") or [])
+        self._apply_prefs(new_prefs)
+        self._photo_apply_view_kind()          # 261104-2(사진 보기 SOT 4.10): 바로 적용 — 재시작 없음
+        if dict(self._prefs.get("shortcuts") or {}) != sc_before or bool(self._prefs.get("capture_global")) != cap_before:
+            self._apply_shortcuts(self._prefs.get("shortcuts") or {})
+            try:
+                self._refresh_global_capture_hotkey(notify=True)  # 260611-3(6): 전역 핫키 갱신+알림
+            except Exception:
+                pass
+        if list(self._prefs.get("ribbon_collection") or []) != col_before:
+            self._apply_collection()
+        self._save_settings_now()
+        self.status.showMessage(tr("설정 저장됨"), 3000)
 
     def _offer_language_restart(self):
         """261008(다국어 SOT §4): 화면 언어는 재시작 뒤 적용 — 지금 언어와 새 언어로 함께 안내."""
@@ -9418,6 +9420,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),
             "view_scales": prefs.get("view_scales", old.get("view_scales")),   # 261021-5(입력 SOT §3.2): Ctrl++/−/0 배율
+            "settings_window": prefs.get("settings_window", old.get("settings_window")),   # 261107-12: 환경설정 창 크기·마지막 항목
             "crop_styles": prefs.get("crop_styles", old.get("crop_styles")),
             "crop_auto": prefs.get("crop_auto", old.get("crop_auto")),
             "crop_style_last": prefs.get("crop_style_last", old.get("crop_style_last")),

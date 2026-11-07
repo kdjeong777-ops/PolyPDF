@@ -171,7 +171,8 @@ dlg.close()
 from viewer.widgets.settings_dialog import SettingsDialog
 mw._prefs["ribbon_collection"] = ["view.text"]
 sd = SettingsDialog(mw._prefs, mw, host=mw)
-chk(sd.btn_edit_collection.isEnabled(), "설정: 모음 메뉴 편집 단추")
+chk(sd.ribbon_panel is not None and sd._scrolls["ribbon"].widget().isAncestorOf(sd.ribbon_panel),
+    "설정: '고급 › 리본 메뉴' 쪽에 모음 메뉴 관리(261107-12)")
 chk(sd.result_prefs().get("ribbon_collection") == ["view.text"], "설정: 모음 값 보존")
 sd.close()
 mw._prefs["ribbon_collection"] = []

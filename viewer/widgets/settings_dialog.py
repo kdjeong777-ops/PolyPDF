@@ -1,11 +1,14 @@
-"""설정 다이얼로그.
+"""환경설정 창.
 
 v1.6.2: 히스토리 패널 제거 — 관련 옵션(`restore_history`, `history_max`) 삭제.
+261107-12(디자인 SOT §2.14, 사용자 결정): 왼쪽 목록(일반/고급) + 쪽 · 설정 찾기 · [확인][적용][취소] —
+따로 뜨던 고급(외부 연결)·발표 녹화·단축키·모음 메뉴 관리 창은 이 한 창의 쪽(`AdvancedPanel`·`RecordingPanel`·
+`ShortcutsPanel`·`RibbonCustomizePanel`). 설정 키 이름은 그대로.
 """
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from viewer.i18n import tr, tr_noop, korea_only_visible
+from viewer.i18n import tr, trp, tr_noop, korea_only_visible
 
 
 class _AntLoginWorker(QThread):
@@ -96,6 +99,10 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QKeySequenceEdit,
     QMessageBox,
+    QListWidget,
+    QListWidgetItem,
+    QStackedWidget,
+    QAbstractItemView,
 )
 from PyQt6.QtGui import QKeySequence
 
@@ -103,515 +110,63 @@ from PyQt6.QtGui import QKeySequence
 THEME_LABELS = [("auto", tr_noop("자동 (시스템 설정 따름)")), ("light", tr_noop("밝게 (화이트)")),
                 ("dark", tr_noop("어둡게 (다크)"))]
 
-
-class SettingsDialog(QDialog):
-    """설정 메뉴: 시작 동작 + 스크린샷 한도."""
-
-    def __init__(self, prefs: dict, parent=None, host=None):
-        super().__init__(parent)
-        self.setWindowTitle(tr("설정"))
-        self.setMinimumWidth(440)
-        self._prefs = dict(prefs)
-        self._host = host       # 260609-17(F4): 녹화 테스트·장치 조회용
-        self.resize(480, 640)
-
-        # 내용이 길어 스크롤 영역에 담음
-        _outer = QVBoxLayout(self)
-        _scroll = QScrollArea(); _scroll.setWidgetResizable(True)
-        _content = QWidget(); _scroll.setWidget(_content)
-        _outer.addWidget(_scroll, 1)
-        self._outer = _outer
-        self._scroll = _scroll          # 260611-25: 녹화 설정으로 스크롤 이동용
-        layout = QVBoxLayout(_content)
-
-        # ── 언어 / Language ── 261009-10(다국어 SOT §4, 사용자 결정): 창 **맨 위** 따로 묶음.
-        #   종전에는 '화면 스타일' 안(스크롤 약 900px 아래)이라 찾지 못했다. 묶음 이름을 두 언어로 적어
-        #   어느 언어 화면에서도 읽힌다.
-        grp_lang = QGroupBox(tr("언어 / Language"))
-        ll = QFormLayout(grp_lang)
-        # 261008(다국어 SOT §4): 화면 언어 — 항목은 언어팩에서(자기 언어 이름), 재시작 뒤 적용.
-        from viewer import i18n as _i18n
-        self.cmb_language = QComboBox()
-        for _code, _name, _status in _i18n.available_languages():
-            self.cmb_language.addItem(_name if _status == "complete" else _name + " (β)", _code)
-        _cur_lang = str(self._prefs.get("language") or _i18n.language())
-        _li = self.cmb_language.findData(_cur_lang)
-        self.cmb_language.setCurrentIndex(_li if _li >= 0 else 0)
-        ll.addRow(tr("화면 언어:"), self.cmb_language)
-        # 261008-29(다국어 SOT §3.4, 사용자 결정): 외부 언어팩 — 기본 꺼짐. 켜면 다시 시작할 때
-        #   설정 폴더의 locale\<코드>\ 팩을 읽는다(같은 코드면 내장을 덮는다). 형식이 틀린 팩은 무시.
-        self.chk_ext_lang = QCheckBox(tr("외부 언어팩 사용 (다시 시작하면 적용)"))
-        self.chk_ext_lang.setToolTip(tr("설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. "
-                                        "같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."))
-        self.chk_ext_lang.setChecked(bool(self._prefs.get("external_language_packs", False)))
-        self.chk_ext_lang.toggled.connect(self._on_ext_lang_toggled)   # 처음 값을 넣은 뒤 — 켤 때만 확인
-        btn_ext = QPushButton(tr("폴더 열기"))
-        btn_ext.setToolTip(str(_i18n.external_dir()))
-        btn_ext.clicked.connect(self._open_external_lang_dir)
-        _row_ext = QHBoxLayout(); _row_ext.setContentsMargins(0, 0, 0, 0)
-        _row_ext.addWidget(self.chk_ext_lang); _row_ext.addWidget(btn_ext); _row_ext.addStretch(1)
-        ll.addRow(_row_ext)                  # 이름 칸 없이 두 칸 폭 — 영어 글자가 길다(디자인 SOT §2.14)
-        layout.addWidget(grp_lang)
-
-        # ── 스타일(테마·단축키) ── 261025-6(디자인 SOT §2.14, 사용자 지시): '언어' 바로 아래. 이름은 종전 '화면 스타일' ──
-        grp_theme = QGroupBox(tr("스타일"))
-        tl = QFormLayout(grp_theme)
-        self.cmb_theme = QComboBox()
-        for _val, _lbl in THEME_LABELS:
-            self.cmb_theme.addItem(tr(_lbl), _val)
-        cur = str(self._prefs.get("theme", "auto"))
-        idx = max(0, [v for v, _ in THEME_LABELS].index(cur)
-                  if cur in [v for v, _ in THEME_LABELS] else 0)
-        self.cmb_theme.setCurrentIndex(idx)
-        tl.addRow(tr("테마:"), self.cmb_theme)
-        # 261025-6 보완(사용자 지시): 도구 탭의 '단축키 설정...' 을 여기 테마 아래 단추로 옮겼다 — 단축키 창은 종전처럼 [확인] 때 곧바로 저장
-        self.btn_shortcuts = QPushButton(tr("단축키 설정..."))
-        self.btn_shortcuts.clicked.connect(lambda: self._host._edit_shortcuts(self))
-        self.btn_shortcuts.setEnabled(hasattr(self._host, "_edit_shortcuts"))
-        _row_sc = QHBoxLayout(); _row_sc.setContentsMargins(0, 0, 0, 0)
-        _row_sc.addWidget(self.btn_shortcuts); _row_sc.addStretch(1)
-        tl.addRow(_row_sc)
-        layout.addWidget(grp_theme)
+# 261107-12(디자인 SOT §2.14, 사용자 결정): 왼쪽 목록 — (id, 이름, 묶음). 묶음 머리글 '일반'·'고급' 은 고를 수 없다.
+PAGES = (
+    ("general", tr_noop("일반"), "general"),
+    ("view", tr_noop("보기·넘김"), "general"),
+    ("photo", tr_noop("사진"), "general"),
+    ("tags", tr_noop("해시태그"), "general"),
+    ("shots", tr_noop("스크린샷"), "general"),
+    ("shortcuts", tr_noop("단축키"), "advanced"),
+    ("ribbon", tr_noop("리본 메뉴"), "advanced"),
+    ("external", tr_noop("외부 연결"), "advanced"),
+    ("recording", tr_noop("발표 녹화"), "advanced"),
+    ("tuning", tr_noop("세부 조정"), "advanced"),
+    ("manage", tr_noop("관리"), "advanced"),
+)
+GROUP_NAMES = {"general": tr_noop("일반"), "advanced": tr_noop("고급")}
 
 
-        # ── 시작 시 동작 ─────────────────────────────────
-        grp_start = QGroupBox(tr("시작 시 동작"))
-        gl = QVBoxLayout(grp_start)
-
-        # 260906-3(사용자 결정): 파일·폴더를 지정하지 않고 실행했을 때 무엇을 열지 — 3택.
-        #   '마지막'은 1번째 뷰어가 보던 **형태 그대로**(폴더면 폴더, 파일이면 그 파일만) 연다.
-        from PyQt6.QtWidgets import QRadioButton, QButtonGroup
-        self.rb_start_last = QRadioButton(tr("마지막에 열었던 폴더·파일 열기 (기본)"))
-        self.rb_start_path = QRadioButton(tr("지정한 폴더·파일 열기:"))
-        self.rb_start_none = QRadioButton(tr("아무것도 열지 않고 빈 화면으로 시작"))
-        self._start_group = QButtonGroup(self)
-        for _rb in (self.rb_start_last, self.rb_start_path, self.rb_start_none):
-            self._start_group.addButton(_rb)
-        _sm = str(self._prefs.get("startup_mode", "last"))
-        {"path": self.rb_start_path, "none": self.rb_start_none}.get(
-            _sm, self.rb_start_last).setChecked(True)
-        gl.addWidget(self.rb_start_last)
-
-        prow = QHBoxLayout()
-        prow.addWidget(self.rb_start_path)
-        self.ed_startup_path = QLineEdit(str(self._prefs.get("startup_path", "") or ""))
-        self.ed_startup_path.setPlaceholderText(tr("폴더 또는 PDF 파일 경로"))
-        prow.addWidget(self.ed_startup_path, 1)
-        _bf = QPushButton(tr("폴더…")); _bf.clicked.connect(self._pick_startup_folder)
-        _bp = QPushButton(tr("파일…")); _bp.clicked.connect(self._pick_startup_file)
-        prow.addWidget(_bf); prow.addWidget(_bp)
-        gl.addLayout(prow)
-        gl.addWidget(self.rb_start_none)
-
-        # 종전 키(`restore_session`)는 다운그레이드 호환으로만 저장한다 — 화면에는 없다.
-        self.rb_start_last.toggled.connect(self._on_restore_toggled)
-
-        self.chk_last_page = QCheckBox(
-            tr("복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)")   # 260618-18: 앞 공백·└ 제거
-        )
-        self.chk_last_page.setChecked(bool(self._prefs.get("restore_last_page", True)))
-        gl.addWidget(self.chk_last_page)
-
-        # 260906-3(사용자 결정): 스크린샷 복원 항목 삭제 — 시작은 **항상 빈 목록**이고,
-        #   종료할 때 목록이 있으면 PDF로 저장할지 묻는다(스크린샷 SOT).
-        _info_cap = QLabel(tr("<small>캡처 목록은 항상 빈 상태로 시작합니다. "
-                              "종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.</small>"))
-        _info_cap.setWordWrap(True)          # 261009-10(디자인 SOT §2.14): 가로 스크롤을 만들지 않게
-        gl.addWidget(_info_cap)
-
-        # 260830(태그 SOT §3.5, 사용자 결정): 태그 자동 부여는 옵트인 — 기본 꺼짐.
-        # 261009-10(디자인 SOT §2.14): 체크박스 글자는 줄바꿈이 안 돼 긴 설명이 창을 652px(영어 758px)로
-        #   벌렸다 — 이름만 두고 설명은 아래 작은 글씨(줄바꿈)로.
-        self.chk_auto_tag = QCheckBox(tr("파일 해시태그·키워드 자동 부여"))
-        self.chk_auto_tag.setChecked(bool(self._prefs.get("auto_tag_enabled", False)))
-        gl.addWidget(self.chk_auto_tag)
-        _info_tag = QLabel(tr("<small>인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, "
-                              "도구 메뉴에서 되돌릴 수 있습니다.</small>"))
-        _info_tag.setStyleSheet("color:#666;"); _info_tag.setWordWrap(True)
-        gl.addWidget(_info_tag)
-        # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그 — 기본 켬. 종류(영수증·명함·서류)는 글이 있어 보이는 사진만 OCR
-        self.chk_photo_tag = QCheckBox(tr("사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"))
-        self.chk_photo_tag.setChecked(bool(self._prefs.get("photo_auto_tag", True)))
-        gl.addWidget(self.chk_photo_tag)
-        self.chk_photo_kind = QCheckBox(tr("사진 종류도 구분 (영수증·명함·서류 — 글자 있는 사진만 OCR)"))
-        self.chk_photo_kind.setChecked(bool(self._prefs.get("photo_kind_ocr", True)))
-        self.chk_photo_kind.setEnabled(self.chk_photo_tag.isChecked())
-        self.chk_photo_tag.toggled.connect(self.chk_photo_kind.setEnabled)
-        gl.addWidget(self.chk_photo_kind)
-        _info_ptag = QLabel(tr("<small>사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 "
-                               "찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다.</small>"))
-        _info_ptag.setStyleSheet("color:#666;"); _info_ptag.setWordWrap(True)
-        gl.addWidget(_info_ptag)
-
-        # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
-        mrow = QHBoxLayout()
-        mrow.addWidget(QLabel(tr("PolyPDF 시작 모드:")))
-        self.cmb_open_mode = QComboBox()
-        self.cmb_open_mode.addItem(tr("편집 모드 (수정·저장 가능)"), "edit")
-        self.cmb_open_mode.addItem(tr("보기 모드 (읽기 전용)"), "view")
-        _om = "edit" if bool(self._prefs.get("open_edit_mode", True)) else "view"
-        self.cmb_open_mode.setCurrentIndex(0 if _om == "edit" else 1)
-        mrow.addWidget(self.cmb_open_mode, 1)
-        gl.addLayout(mrow)
-
-        layout.addWidget(grp_start)
-
-        # ── 스크린샷 한도 ─────────────────────────────────
-        grp_hist = QGroupBox(tr("스크린샷 한도 (썸네일 갯수)"))
-        fl = QFormLayout(grp_hist)
-
-        self.spin_screenshot = QSpinBox()
-        self.spin_screenshot.setRange(5, 1000)   # v1.6.2: 일괄 캡쳐 시 자동 확장 대비 상한 ↑
-        self.spin_screenshot.setValue(int(self._prefs.get("screenshot_max", 30)))
-        self.spin_screenshot.setSuffix(tr(" 개"))
-        fl.addRow(tr("스크린샷 리스트:"), self.spin_screenshot)
-
-        layout.addWidget(grp_hist)
-
-        # ── 메뉴 탭 세부 줄 · 모음 (v1.6.23 패널 툴바 → 261024-1, 디자인 SOT §2.9·§2.9.4) ──
-        # 261025-5(디자인 SOT §2.9.6, 사용자 지시): '세부 줄' → '리본 메뉴'
-        grp_panels = QGroupBox(tr("리본 메뉴"))
-        pl = QVBoxLayout(grp_panels)
-        self.chk_show_panel_toolbar = QCheckBox(tr("리본 메뉴 보이기"))
-        self.chk_show_panel_toolbar.setChecked(
-            bool(self._prefs.get("show_panel_toolbar", True)))
-        pl.addWidget(self.chk_show_panel_toolbar)
-        info_tb = QLabel(
-            tr("<small>해제하면 메인 뷰어 세로 공간이 늘어납니다. 메뉴 탭을 누르면 리본이 잠깐 보이고, "
-                "명령을 고르거나 다른 곳을 누르면 다시 숨습니다. 탭 줄을 우클릭해도 바꿀 수 있습니다.</small>"))
-        info_tb.setStyleSheet("color:#666;"); info_tb.setWordWrap(True)
-        pl.addWidget(info_tb)
-        self._collection = [str(x) for x in (self._prefs.get("ribbon_collection") or [])]
-        _crow = QHBoxLayout(); _crow.setContentsMargins(0, 0, 0, 0)
-        self.btn_edit_collection = QPushButton(tr("모음 메뉴 관리..."))      # 261025-5: 우클릭 메뉴와 같은 이름
-        self.btn_edit_collection.setToolTip(tr("'모음' 탭에 보일 명령과 차례를 고릅니다"))
-        self.btn_edit_collection.clicked.connect(self._edit_collection)
-        self.btn_edit_collection.setEnabled(hasattr(self._host, "ribbon_catalog"))
-        _crow.addWidget(self.btn_edit_collection); _crow.addStretch(1)
-        pl.addLayout(_crow)
-        # 260609-2: 페이지 경계에서 다음/이전 파일로 이동
-        # 260912-6(입력 SOT §2.4): 이제 **물고 나서** 움직인다 — '자동 이동' 이라는
-        #   문구가 낡았다. 설정은 경계 이동 자체를 켜고 끄는 스위치고, 물음은 그 안에서의 확인이다.
-        self.chk_cross_file_nav = QCheckBox(
-            tr("마지막/첫 페이지에서 다음·이전 파일로 이동 (책갈피창 순서)")
-        )
-        self.chk_cross_file_nav.setChecked(
-            self._prefs.get("cross_file_nav", True) is not False)   # 260609-28: 미설정=켜짐
-        pl.addWidget(self.chk_cross_file_nav)
-        info_cfn = QLabel(
-            tr("<small>켜면 마지막 페이지에서 '다음'을 누를 때 다음 파일의 이름과 첫 쪽을 "
-            "보여 주고 물은 뒤에 옮깁니다(첫 페이지에서 '이전' 도 같습니다). "
-            "책갈피창에서 항목을 골라 옮길 때는 물지 않습니다. 끄면 경계에서 아예 옮기지 않습니다.</small>")
-        )
-        info_cfn.setStyleSheet("color:#666;"); info_cfn.setWordWrap(True)
-        pl.addWidget(info_cfn)
-        # 260914-1(입력 SOT §2.9·§2.10): 페이지 이동 방식 · 쪽 넘김 애니메이션
-        row_psm = QHBoxLayout()
-        row_psm.addWidget(QLabel(tr("페이지 이동 방식:")))
-        self.cmb_page_scroll_mode = QComboBox()
-        self.cmb_page_scroll_mode.addItem(tr("한 쪽씩"), "page")
-        self.cmb_page_scroll_mode.addItem(tr("이어 보기 (앞뒤 쪽을 붙여 조금씩 스크롤)"), "continuous")
-        self.cmb_page_scroll_mode.setCurrentIndex(
-            1 if self._prefs.get("page_scroll_mode", "page") == "continuous" else 0)
-        row_psm.addWidget(self.cmb_page_scroll_mode, 1)
-        pl.addLayout(row_psm)
-        self.chk_page_flip_anim = QCheckBox(tr("쪽 넘김 애니메이션 (한 쪽씩일 때 위아래로 밀기)"))
-        self.chk_page_flip_anim.setChecked(
-            self._prefs.get("page_flip_anim", True) is not False)
-        pl.addWidget(self.chk_page_flip_anim)
-        # 261021-1(응답성 SOT §4.7): 가벼운 넘김 — 느린 컴퓨터·절전 모드
-        row_lite = QHBoxLayout()
-        row_lite.addWidget(QLabel(tr("가벼운 넘김(느린 컴퓨터):")))
-        self.cmb_lite_flip = QComboBox()
-        self.cmb_lite_flip.addItem(tr("자동 (절전 모드이거나 넘김이 느릴 때)"), "auto")
-        self.cmb_lite_flip.addItem(tr("항상"), "on")
-        self.cmb_lite_flip.addItem(tr("끄기"), "off")
-        _li = self.cmb_lite_flip.findData(str(self._prefs.get("lite_flip", "auto")))
-        self.cmb_lite_flip.setCurrentIndex(_li if _li >= 0 else 0)
-        self.cmb_lite_flip.setToolTip(tr("켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, "
-                                         "텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다."))
-        row_lite.addWidget(self.cmb_lite_flip, 1)
-        pl.addLayout(row_lite)
-        # 261104-2(사진 보기 SOT 4.10, 사용자 결정 D12): 보기 종류 — PDF 전용(사진 모드 없음)·혼용(PDF ↔ 사진 모드 토글)
-        row_vk = QHBoxLayout()
-        row_vk.addWidget(QLabel(tr("보기 종류:")))
-        self.cmb_view_kind = QComboBox()
-        self.cmb_view_kind.addItem(tr("PDF 전용"), "pdf")
-        self.cmb_view_kind.addItem(tr("혼용 (PDF 모드 ↔ 사진 모드)"), "mixed")
-        _pic = self._prefs.get("picture") if isinstance(self._prefs.get("picture"), dict) else {}
-        self.cmb_view_kind.setCurrentIndex(1 if _pic.get("view_kind") == "mixed" else 0)
-        self.cmb_view_kind.setToolTip(tr("혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. "
-                                         "PDF 전용이면 사진 모드를 쓰지 않습니다."))
-        row_vk.addWidget(self.cmb_view_kind, 1)
-        pl.addLayout(row_vk)
-        # 261104-7(사진 보기 SOT 4.12): 슬라이드쇼 자동 넘김 간격(초, 0 = 끔) — 사진 묶음 하나에.
-        #   보기 종류와 한 줄이면 창 기본 폭이 480 을 넘는다(261104-19, test_i18n_settings_layout C) — 따로 한 줄
-        row_vk = QHBoxLayout()
-        row_vk.addWidget(QLabel(tr("슬라이드쇼 자동 넘김:")))
-        self.sp_slide_s = QSpinBox()
-        self.sp_slide_s.setRange(0, 600)
-        self.sp_slide_s.setSuffix(tr(" 초"))
-        self.sp_slide_s.setSpecialValueText(tr("끔"))
-        try:
-            self.sp_slide_s.setValue(int(_pic.get("slide_interval_s", 0) or 0))
-        except (TypeError, ValueError):
-            self.sp_slide_s.setValue(0)
-        self.sp_slide_s.setToolTip(tr("사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격마다 다음 사진으로 넘어갑니다. 0 이면 넘기지 않습니다."))
-        row_vk.addWidget(self.sp_slide_s)
-        row_vk.addStretch(1)
-        pl.addLayout(row_vk)
-        # 261106-15(사진 보기 SOT §4.43, 사용자 결정): 모양 펴기 [저장] 이 원본을 대체할 때 원본을 옮겨 둘 곳 —
-        #   비우면 '사진 폴더 안 _원본'(기본), 고르면 한 곳의 고정 폴더(원래 폴더 구조를 하위 폴더로). 한 줄이 넓어지지 않게 두 줄로.
-        pl.addWidget(QLabel(tr("펼친 사진 저장 때 원본 백업 폴더:")))
-        row_bk = QHBoxLayout()
-        self.ed_warp_backup = QLineEdit(str(_pic.get("warp_backup_dir") or ""))
-        self.ed_warp_backup.setReadOnly(True)
-        from viewer.photo_backup import BACKUP_DIRNAME
-        self.ed_warp_backup.setPlaceholderText(tr("사진 폴더 안 '{name}' (기본)").format(name=BACKUP_DIRNAME))
-        self.ed_warp_backup.setToolTip(tr("모양 펴기로 [저장] 하면 원본 사진을 이 폴더로 옮기고 그 자리에 펼친 사진을 둡니다."))
-        row_bk.addWidget(self.ed_warp_backup, 1)
-        b_pick = QPushButton(tr("고르기..."))
-        b_pick.clicked.connect(self._pick_warp_backup)
-        b_def = QPushButton(tr("기본으로"))
-        b_def.clicked.connect(lambda: self.ed_warp_backup.setText(""))
-        row_bk.addWidget(b_pick)
-        row_bk.addWidget(b_def)
-        pl.addLayout(row_bk)
-        info_psm = QLabel(
-            tr("<small>이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
-            "온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). "
-            "2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.</small>")
-        )
-        info_psm.setStyleSheet("color:#666;"); info_psm.setWordWrap(True)
-        pl.addWidget(info_psm)
-        layout.addWidget(grp_panels)
-
-        # 260611-25: '발표(전체화면) 보기' 설정은 전체화면 우클릭 옵션으로 이동(여기서 제거).
-
-        # ── 하이퍼링크 ── 260609-11(C8) ─────────────────
-        grp_hl = QGroupBox(tr("하이퍼링크"))
-        hlf = QFormLayout(grp_hl)
-        self.spin_hl_offset = QSpinBox()
-        self.spin_hl_offset.setRange(0, 200)
-        self.spin_hl_offset.setSuffix(" px")
-        self.spin_hl_offset.setValue(int(self._prefs.get("hyperlink_top_offset_px", 10)))
-        hlf.addRow(tr("페이지 내 버튼 상단 오프셋:"), self.spin_hl_offset)
-        layout.addWidget(grp_hl)
-
-        # ── 고급 설정 ── 261025-2(디자인 SOT §2.14, 사용자 지시): 외부 API 설정(사전·법제처·KCSC·특허·번역 키)은 별도 창.
-        #   두 묶음 모두 한국 전용이라(다국어 SOT §7) 한국어 화면이 아니면 단추도 숨긴다.
-        _row_adv = QHBoxLayout(); _row_adv.setContentsMargins(0, 0, 0, 0)
-        self.btn_advanced = QPushButton(tr("고급 설정..."))
-        self.btn_advanced.setToolTip(tr("인터넷 사전·법제처·건설기준·특허·번역(Claude) API 키 — 확인하면 바로 저장됩니다"))
-        self.btn_advanced.clicked.connect(self._open_advanced)
-        _row_adv.addWidget(self.btn_advanced); _row_adv.addStretch(1)
-        layout.addLayout(_row_adv)
-        self.btn_advanced.setVisible(korea_only_visible())
-        self.advanced_dialog = None          # 마지막으로 연 고급 창(검사용)
-        # 261025-6(디자인 SOT §2.14, 사용자 지시): 종전 '화면+음성 녹화' 묶음 → 고급 설정 아래 '발표화면 녹화 설정...' 단추(별도 창)
-        _row_rec = QHBoxLayout(); _row_rec.setContentsMargins(0, 0, 0, 0)
-        self.btn_recording = QPushButton(tr("발표화면 녹화 설정..."))
-        self.btn_recording.setToolTip(tr("발표(전체화면) 녹화 — 저장 위치·오디오·장치·단축키·녹화 테스트. 확인하면 바로 저장됩니다"))
-        self.btn_recording.clicked.connect(self._open_recording)
-        _row_rec.addWidget(self.btn_recording); _row_rec.addStretch(1)
-        layout.addLayout(_row_rec)
-        self.recording_dialog = None
+def page_name(key: str) -> str:
+    """목록 이름 — 문맥 'settings'(같은 원문 '일반' 이 파일 탭에서는 '저장 일반' 이라 번역이 다르다)."""
+    return {
+        "general": trp("settings", "일반"), "view": trp("settings", "보기·넘김"), "photo": trp("settings", "사진"),
+        "tags": trp("settings", "해시태그"), "shots": trp("settings", "스크린샷"), "shortcuts": trp("settings", "단축키"),
+        "ribbon": trp("settings", "리본 메뉴"), "external": trp("settings", "외부 연결"), "recording": trp("settings", "발표 녹화"),
+        "tuning": trp("settings", "세부 조정"), "manage": trp("settings", "관리"),
+        "g:general": trp("settings", "일반"), "g:advanced": trp("settings", "고급"),
+    }[key]
+MIN_W, MIN_H = 640, 480
+PAGE_ROLE = Qt.ItemDataRole.UserRole
 
 
-        info = QLabel(
-            tr("<small>한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
-            "검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>")
-        )
-        info.setStyleSheet("color:#666;")
-        layout.addWidget(info)
-
-        # 261016-3(사용자 지시): 도구 메뉴에 있던 두 항목을 **환경설정 창 맨 아래**로 — 기본값 저장(배포용) 아래 설정 초기화.
-        #   둘 다 지금 **저장된** 설정을 다룬다(이 창에서 고친 것은 [확인] 뒤에 들어간다). 초기화는 다시 시작하므로 창을 닫고 한다.
-        if host is not None:
-            from PyQt6.QtWidgets import QPushButton as _QPb
-            from PyQt6.QtCore import QTimer as _QT
-            _row_def = QHBoxLayout()
-            self.btn_save_default = _QPb(tr("현재 설정을 기본값으로 저장(배포용)…"))
-            self.btn_save_default.clicked.connect(lambda: host._save_current_as_default())
-            self.btn_reset_default = _QPb(tr("설정 초기화(기본값으로 되돌리기)…"))
-            self.btn_reset_default.clicked.connect(lambda: (self.reject(), _QT.singleShot(0, host._reset_to_defaults)))
-            _col_def = QVBoxLayout()
-            _col_def.addWidget(self.btn_save_default)
-            _col_def.addWidget(self.btn_reset_default)
-            _row_def.addLayout(_col_def); _row_def.addStretch(1)
-            layout.addLayout(_row_def)
-
-        # ── 버튼(스크롤 밖, 항상 보이게) ────────────────────
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
-            self,
-        )
-        btns.accepted.connect(self.accept)
-        btns.rejected.connect(self.reject)
-        self._outer.addWidget(btns)
-
-        self._on_restore_toggled(self.rb_start_last.isChecked())
-        # 261009-14(디자인 SOT §2.14): 콤보는 **가장 긴 항목**만큼 넓어진다 — 실제 PC 의 녹화 장치 이름
-        #   ('마이크 배열(Realtek(R) Audio)' 등)이 창 전체를 밀어 설치본 화면에서만 가로 스크롤이 생겼다
-        #   (오프스크린·검사 PC 는 장치가 없어 재현되지 않았다). 폭은 레이아웃이 정하고 콤보는 최소 길이만 요구한다.
-        from PyQt6.QtWidgets import QComboBox as _QCb2
-        for _cb in self.findChildren(_QCb2):
-            _cb.setSizeAdjustPolicy(_QCb2.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-            _cb.setMinimumContentsLength(14)
-        self._fit_width_to_content()
-        self._fitted_on_show = False
-
-    def showEvent(self, e):
-        super().showEvent(e)
-        # 처음 보일 때 한 번 더 — 스타일·글꼴이 실제 화면 것으로 입혀진 뒤의 크기로(261009-14)
-        if not getattr(self, "_fitted_on_show", True):
-            self._fitted_on_show = True
-            self._fit_width_to_content()
-
-    def _fit_width_to_content(self):
-        """261009-10(디자인 SOT §2.14): 세로로 긴 설정 창에 **가로 스크롤바가 생기지 않게** 폭을 내용에 맞춘다.
-        기본 480 은 그대로 두고(한국어는 종전과 같다), 언어에 따라 내용 최소 폭이 더 넓으면 그만큼만 넓힌다.
-        영어는 체크박스 글자가 길어 내용이 453px 인데 보이는 폭이 442px 이라 가로로 밀렸다."""
-        sc = self._scroll
-        m = self._outer.contentsMargins()
-        need = (sc.widget().minimumSizeHint().width() + sc.verticalScrollBar().sizeHint().width()
-                + 2 * sc.frameWidth() + m.left() + m.right())
-        self.setMinimumWidth(max(440, need))
-        if self.width() < need:
-            self.resize(need, self.height())
-
-    def _on_restore_toggled(self, on: bool):
-        """'마지막에 열었던 …' 일 때만 '마지막 페이지' 항목이 뜻을 가진다."""
-        self.chk_last_page.setEnabled(bool(on))
-
-    def _edit_collection(self):
-        """261024-1(디자인 SOT §2.9.4): '모음' 탭 사용자 지정 — 확인한 차례는 이 창의 [확인] 때 저장·적용된다."""
-        from viewer.widgets.ribbon import RibbonCustomizeDialog
-        catalog, labels = self._host.ribbon_catalog()
-        current = self._collection or list(self._host._collection_ids())
-        dlg = RibbonCustomizeDialog(catalog, current, labels, self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self._collection = dlg.result_ids()
-
-    def _pick_startup_folder(self):
-        from PyQt6.QtWidgets import QFileDialog
-        d = QFileDialog.getExistingDirectory(self, tr("시작 시 열 폴더 선택"),
-                                             self.ed_startup_path.text() or "")
-        if d:
-            self.ed_startup_path.setText(d)
-            self.rb_start_path.setChecked(True)
-
-    def _pick_startup_file(self):
-        from PyQt6.QtWidgets import QFileDialog
-        f, _ = QFileDialog.getOpenFileName(self, tr("시작 시 열 PDF 선택"),
-                                           self.ed_startup_path.text() or "", "PDF (*.pdf)")
-        if f:
-            self.ed_startup_path.setText(f)
-            self.rb_start_path.setChecked(True)
-
-    def _open_advanced(self):
-        """261025-2(디자인 SOT §2.14, 사용자 결정): 고급 창 [확인] 이면 **곧바로** 저장·적용 — 키 게이팅이 바로 따라간다.
-        이 창을 [취소] 해도 남는다. 저장 길은 종전 그대로(`_apply_prefs` → `_save_settings_now`, 키 보호 마스터 §8.2.0)."""
-        self.advanced_dialog = open_sub_settings(AdvancedSettingsDialog, self._host, self, tr("고급 설정 저장됨"),
-                                                 self._prefs)
-
-    def _open_recording(self):
-        """261025-6(사용자 결정): 발표화면 녹화 설정 창 — 고급 설정과 같이 [확인] 이면 곧바로 저장."""
-        self.recording_dialog = open_sub_settings(RecordingSettingsDialog, self._host, self, tr("녹화 설정 저장됨"),
-                                                  self._prefs)
-
-    def _pick_warp_backup(self) -> None:
-        from PyQt6.QtWidgets import QFileDialog
-        d = QFileDialog.getExistingDirectory(self, tr("원본 백업 폴더"), self.ed_warp_backup.text() or "")
-        if d:
-            self.ed_warp_backup.setText(d)
-
-    def result_prefs(self) -> dict:
-        return {
-            "startup_mode": ("path" if self.rb_start_path.isChecked()
-                             else "none" if self.rb_start_none.isChecked() else "last"),
-            "startup_path": self.ed_startup_path.text().strip(),
-            # 다운그레이드 호환 — 구버전은 이 키만 본다(있으면 '마지막 것 열기'로 동작).
-            "restore_session": not self.rb_start_none.isChecked(),
-            "restore_last_page": self.chk_last_page.isChecked(),
-            "restore_screenshots": False,          # 260906-3: 시작은 항상 빈 목록
-            "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
-            "photo_auto_tag": self.chk_photo_tag.isChecked(),       # 261105-6(태그 SOT §5.7): 기본 켬
-            "photo_kind_ocr": self.chk_photo_kind.isChecked(),
-            "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
-            "screenshot_max": int(self.spin_screenshot.value()),
-            # v1.6.23: 패널 토글 툴바 가시성
-            "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),
-            "ribbon_collection": list(self._collection),     # 261024-1(디자인 SOT §2.9.4) — 비면 기본값
-            # 260609-2: 페이지 경계 파일 이동
-            "cross_file_nav": self.chk_cross_file_nav.isChecked(),
-            "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
-            "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
-            "picture": dict(self._prefs.get("picture") or {}, view_kind=str(self.cmb_view_kind.currentData() or "pdf"),
-                            slide_interval_s=int(self.sp_slide_s.value()),    # 261104-2 · 261104-7 슬라이드쇼 간격
-                            warp_backup_dir=self.ed_warp_backup.text().strip()),   # 261106-15 펴기 원본 백업 폴더(빈 글 = 사진 폴더 안 _원본)
-            "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
-            # 260611-25: 발표 보기 옵션은 전체화면 우클릭 옵션에서 설정(여기서 제외)
-            # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋
-            "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),
-            # 260606-13: 화면 스타일(테마)
-            "theme": self.cmb_theme.currentData(),
-            "language": self.cmb_language.currentData(),     # 261008(다국어 SOT §4)
-            "external_language_packs": self.chk_ext_lang.isChecked(),   # 261008-29(다국어 SOT §3.4)
-            # 261025-2: 외부 API 키는 고급 설정 창(AdvancedSettingsDialog)이 따로 저장한다 — 여기서 빼면
-            #   `_apply_prefs` 가 지금 값으로 둔다(허용목록 old 폴백).
-        }
-
-    def _on_ext_lang_toggled(self, on: bool):
-        """외부 언어팩을 켤 때 한 번 확인한다(다국어 SOT §13 '외부 팩의 신뢰' — 팩은 코드를 실행하지 못하지만
-        단추·안내 문구를 바꿔 사용자를 속일 수는 있다). 끌 때는 묻지 않는다."""
-        if not on:
-            return
-        ans = QMessageBox.question(
-            self, tr("외부 언어팩 사용"),
-            tr("외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
-               "프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
-               "믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n\n켤까요?"),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No)
-        if ans != QMessageBox.StandardButton.Yes:
-            self.chk_ext_lang.setChecked(False)
-
-    def _open_external_lang_dir(self):
-        """외부 언어팩 폴더를 만들고(없으면) 탐색기로 연다(다국어 SOT §3.4)."""
-        from viewer import i18n as _i18n
-        from PyQt6.QtGui import QDesktopServices
-        from PyQt6.QtCore import QUrl
-        d = _i18n.external_dir()
-        try:
-            d.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(d)))
+def _small(text: str) -> QLabel:
+    """묶음 아래 작은 글씨 풀이(디자인 SOT §2.14 — 체크박스 글자에 긴 설명 금지)."""
+    lab = QLabel("<small>%s</small>" % text)
+    lab.setWordWrap(True)
+    lab.setStyleSheet("color:#666;")
+    lab.setProperty("settingsInfo", True)
+    return lab
 
 
-class AdvancedSettingsDialog(QDialog):
-    """261025-2(디자인 SOT §2.14, 사용자 지시): 환경설정의 `고급 설정...` — 외부 API 설정.
+class AdvancedPanel(QWidget):
+    """261025-2 → 261107-12(디자인 SOT §2.14): '고급 › 외부 연결' 쪽 — 외부 API 설정.
     인터넷 사전(표준국어대사전·온용어·법제처·KCSC·특허 키, 특허 PDF 저장 폴더)·번역(Claude)·API 키 표시.
-    값 모양·저장·키 보호는 종전 환경설정과 같다(마스터 §8.2.0) — 키 이름도 그대로."""
+    값 모양·저장·키 보호는 종전과 같다(마스터 §8.2.0) — 키 이름도 그대로. 둘 다 한국 전용(다국어 SOT §7)."""
 
-    def __init__(self, prefs: dict, parent=None):
+    def __init__(self, prefs: dict, parent=None, check_login: bool = True):
         super().__init__(parent)
-        self.setWindowTitle(tr("고급 설정"))
-        self.setMinimumWidth(440)
         self._prefs = dict(prefs)
-        self.resize(520, 600)
-        _outer = QVBoxLayout(self)
-        _scroll = QScrollArea(); _scroll.setWidgetResizable(True)
-        _content = QWidget(); _scroll.setWidget(_content)
-        _outer.addWidget(_scroll, 1)
-        layout = QVBoxLayout(_content)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # ── 인터넷 사전(단어장) ─────────────────────────── 260615-9(P11)
         from PyQt6.QtWidgets import QCheckBox as _QCb, QLineEdit as _QLe
         grp_od = QGroupBox(tr("인터넷 사전 (단어장)"))
+        self.grp_online_dict = grp_od
         ol = QFormLayout(grp_od)
-        self.chk_online_dict = _QCb(tr("인터넷 사전 포함 (켜면 단어 편집기에서 온라인 조회)"))
+        self.chk_online_dict = _QCb(tr("인터넷 사전 포함"))
+        self.chk_online_dict.setToolTip(tr("켜면 단어 편집기에서 온라인으로 조회합니다."))
         self.chk_online_dict.setChecked(bool(self._prefs.get("online_dict_enabled", False)))
         ol.addRow(self.chk_online_dict)
         self.ed_stdict_key = _QLe(str(self._prefs.get("stdict_key", "")))
@@ -630,18 +185,11 @@ class AdvancedSettingsDialog(QDialog):
         self.ed_kipo_key.setPlaceholderText(tr("KIPRIS Plus ServiceKey (특허 명칭·내용 검색)"))
         ol.addRow(tr("특허(KIPRIS) 키:"), self._keyrow(self.ed_kipo_key, "kipo"))
         # 260618-47: 특허(전자명세서) PDF 저장 폴더 + 찾아보기
-        from PyQt6.QtWidgets import QHBoxLayout as _HB, QWidget as _QW, QPushButton as _QPb, QFileDialog as _QFD
         self.ed_patent_dir = _QLe(str(self._prefs.get("patent_save_dir", "")))
         self.ed_patent_dir.setPlaceholderText(tr("비우면 문서\\PolyPDF_특허"))
-        _pw = _QW(); _ph = _HB(_pw); _ph.setContentsMargins(0, 0, 0, 0)
-        _pbtn = _QPb(tr("찾아보기…"))
-
-        def _pick_dir():
-            d = _QFD.getExistingDirectory(self, tr("특허 PDF 저장 폴더 선택"),
-                                          self.ed_patent_dir.text().strip() or "")
-            if d:
-                self.ed_patent_dir.setText(d)
-        _pbtn.clicked.connect(_pick_dir)
+        _pw = QWidget(); _ph = QHBoxLayout(_pw); _ph.setContentsMargins(0, 0, 0, 0)
+        _pbtn = QPushButton(tr("찾아보기"))
+        _pbtn.clicked.connect(self._pick_patent_dir)
         _ph.addWidget(self.ed_patent_dir, 1); _ph.addWidget(_pbtn)
         ol.addRow(tr("특허 PDF 저장 폴더:"), _pw)
         _info_od = QLabel(tr("<small>영어 Free Dictionary·Tatoeba 예문은 키 없이 동작. "
@@ -652,7 +200,6 @@ class AdvancedSettingsDialog(QDialog):
         grp_od.setVisible(korea_only_visible())      # 한국 사전·법령·KCSC·KIPO 키 — 한국 전용(다국어 SOT §7)
 
         # ── 번역 (Claude) ─────────────────────────── 260621-P0 (PDF 번역·요약)
-        from PyQt6.QtWidgets import QComboBox as _QCmb
         try:
             from ..study import translate_api as _tapi
             _MODELS = _tapi.MODELS
@@ -661,8 +208,9 @@ class AdvancedSettingsDialog(QDialog):
             _MODELS = [("claude-opus-4-8", "Claude Opus 4.8", 5.0, 25.0)]
             _DEFMODEL = "claude-opus-4-8"
         grp_tr = QGroupBox(tr("번역 (Claude)"))
+        self.grp_translate = grp_tr
         trl = QFormLayout(grp_tr)
-        self.cmb_translate_auth = _QCmb()
+        self.cmb_translate_auth = QComboBox()
         self.cmb_translate_auth.addItem(tr("API 키"), "api")
         self.cmb_translate_auth.addItem(tr("Claude 로그인 (구독·OAuth)"), "login")
         _cur_a = str(self._prefs.get("translate_auth", "api"))
@@ -671,12 +219,8 @@ class AdvancedSettingsDialog(QDialog):
         trl.addRow(tr("인증 방식:"), self.cmb_translate_auth)
         self.ed_anthropic_key = _QLe(str(self._prefs.get("anthropic_api_key", "")))
         self.ed_anthropic_key.setPlaceholderText(tr("sk-ant-… (로그인 모드면 비워둠)"))
-        try:
-            self.ed_anthropic_key.setEchoMode(_QLe.EchoMode.Password)
-        except Exception:
-            pass
         trl.addRow(tr("Claude API 키:"), self.ed_anthropic_key)
-        self.cmb_translate_model = _QCmb()
+        self.cmb_translate_model = QComboBox()
         for mid, label, *_ in _MODELS:
             self.cmb_translate_model.addItem(tr(label), mid)
         _cur_m = str(self._prefs.get("translate_model", _DEFMODEL))
@@ -684,11 +228,10 @@ class AdvancedSettingsDialog(QDialog):
         self.cmb_translate_model.setCurrentIndex(_mi if _mi >= 0 else 0)
         trl.addRow(tr("번역 모델:"), self.cmb_translate_model)
         # 260621-P3: 구독 로그인 — 앱 내 'Claude 로그인' 버튼(ant 자동설치+브라우저)
-        from PyQt6.QtWidgets import QHBoxLayout as _HB2, QWidget as _QW2, QPushButton as _QPb2
-        _lw = _QW2(); _lh = _HB2(_lw); _lh.setContentsMargins(0, 0, 0, 0)
+        _lw = QWidget(); _lh = QHBoxLayout(_lw); _lh.setContentsMargins(0, 0, 0, 0)
         self.lbl_login_status = QLabel("")
-        self.btn_ant_login = _QPb2(tr("Claude 로그인"))
-        self.btn_ant_logout = _QPb2(tr("로그아웃"))
+        self.btn_ant_login = QPushButton(tr("Claude 로그인"))
+        self.btn_ant_logout = QPushButton(tr("로그아웃"))
         self.btn_ant_login.clicked.connect(self._ant_login)
         self.btn_ant_logout.clicked.connect(self._ant_logout)
         _lh.addWidget(self.lbl_login_status, 1)
@@ -697,65 +240,71 @@ class AdvancedSettingsDialog(QDialog):
         trl.addRow(tr("구독 로그인:"), _lw)
 
         # 260621-P3: 연결·인증 확인(무료 count_tokens — 크레딧 없이 토큰/인증 점검)
-        _cw = _QW2(); _ch = _HB2(_cw); _ch.setContentsMargins(0, 0, 0, 0)
+        _cw = QWidget(); _ch = QHBoxLayout(_cw); _ch.setContentsMargins(0, 0, 0, 0)
         self.lbl_conn_status = QLabel("")
-        self.btn_test_conn = _QPb2(tr("연결 확인"))
+        self.btn_test_conn = QPushButton(tr("연결 확인"))
         self.btn_test_conn.setToolTip(tr("입력한 키/로그인으로 Claude 에 연결·인증되는지 확인(무료)"))
         self.btn_test_conn.clicked.connect(self._test_translate_conn)
         _ch.addWidget(self.lbl_conn_status, 1)
         _ch.addWidget(self.btn_test_conn)
         trl.addRow(tr("연결 확인:"), _cw)
 
-        self.chk_translate_consent = _QCb(
-            tr("번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의"))
+        self.chk_translate_consent = _QCb(tr("번역 시 본문 전송에 동의"))
+        self.chk_translate_consent.setToolTip(tr("번역 시 논문 본문이 Anthropic(Claude) 서버로 전송됨에 동의"))
         self.chk_translate_consent.setChecked(bool(self._prefs.get("translate_consent", False)))
         trl.addRow(self.chk_translate_consent)
         _hlp_tr = QLabel(
             tr("<small><b>API 키</b>: 콘솔(console.anthropic.com)에서 발급·과금 설정. 가장 안정적.<br>"
-            "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 "
-            "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요).<br>"
-            "<b>주의</b>: 번역(Messages API)은 <b>API 크레딧</b>이 필요합니다 — Claude 구독(Pro/Max)은 "
-            "API 사용에 적용되지 않으니, console.anthropic.com → Billing 에서 크레딧을 충전하세요. "
-            "민감 문서 전송에 주의.</small>"))
+               "<b>Claude 로그인</b>: 콘솔 키 없이 구독 계정 사용 — 위 <b>[Claude 로그인]</b> 버튼을 누르면 "
+               "필요 시 Anthropic CLI 를 자동 설치하고 <b>브라우저로 로그인</b>합니다(터미널 불필요).<br>"
+               "<b>주의</b>: 번역(Messages API)은 <b>API 크레딧</b>이 필요합니다 — Claude 구독(Pro/Max)은 "
+               "API 사용에 적용되지 않으니, console.anthropic.com → Billing 에서 크레딧을 충전하세요. "
+               "민감 문서 전송에 주의.</small>"))
         _hlp_tr.setWordWrap(True)
         trl.addRow(_hlp_tr)
         layout.addWidget(grp_tr)
         grp_tr.setVisible(korea_only_visible())      # 영→한 번역 — 한국 전용(사용자 결정 261008-25)
         self.cmb_translate_auth.currentIndexChanged.connect(self._on_translate_auth_changed)
+        self._login_checked = False
         self._on_translate_auth_changed()
-        self._refresh_login_status()
+        if check_login:
+            self.check_login_once()
 
         # 260621-P3: 모든 API 키를 *** 로 가림 + '키 표시' 토글
         self._key_edits = [self.ed_stdict_key, self.ed_onterm_key,
                            self.ed_law_oc, self.ed_kcsc_key, self.ed_kipo_key,
                            self.ed_anthropic_key]
         for _e in self._key_edits:
-            try:
-                _e.setEchoMode(_QLe.EchoMode.Password)
-            except Exception:
-                pass
-        self.chk_show_keys = _QCb(tr("API 키 표시 (체크 해제 시 *** 로 가림)"))
+            _e.setEchoMode(_QLe.EchoMode.Password)
+        self.chk_show_keys = _QCb(tr("API 키 표시"))
+        self.chk_show_keys.setToolTip(tr("체크를 풀면 키를 *** 로 가립니다."))
         self.chk_show_keys.setChecked(False)
-
-        def _toggle_show_keys(on):
-            m = _QLe.EchoMode.Normal if on else _QLe.EchoMode.Password
-            for _e in self._key_edits:
-                try:
-                    _e.setEchoMode(m)
-                except Exception:
-                    pass
-        self.chk_show_keys.toggled.connect(_toggle_show_keys)
+        self.chk_show_keys.toggled.connect(self._toggle_show_keys)
         layout.addWidget(self.chk_show_keys)
+        self.chk_show_keys.setVisible(korea_only_visible())
         layout.addStretch(1)
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
-        btns.accepted.connect(self.accept)
-        btns.rejected.connect(self.reject)
-        _outer.addWidget(btns)
-        from PyQt6.QtWidgets import QComboBox as _QCb2
-        for _cb in self.findChildren(_QCb2):          # 디자인 SOT §2.14 — 콤보가 창을 밀지 않게
-            _cb.setSizeAdjustPolicy(_QCb2.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-            _cb.setMinimumContentsLength(14)
+
+    def has_visible(self) -> bool:
+        """한국 전용 묶음이 숨으면 남는 것이 없다 — 환경설정 목록에서 '외부 연결' 을 숨긴다(디자인 SOT §2.14)."""
+        return korea_only_visible()
+
+    def _toggle_show_keys(self, on):
+        from PyQt6.QtWidgets import QLineEdit as _QLe
+        m = _QLe.EchoMode.Normal if on else _QLe.EchoMode.Password
+        for _e in self._key_edits:
+            _e.setEchoMode(m)
+
+    def _pick_patent_dir(self):
+        d = QFileDialog.getExistingDirectory(self, tr("특허 PDF 저장 폴더 선택"), self.ed_patent_dir.text().strip() or "")
+        if d:
+            self.ed_patent_dir.setText(d)
+
+    def check_login_once(self) -> None:
+        """로그인 상태 조회는 쪽을 처음 볼 때 한 번(응답성 SOT §5 — `ant_cli` 조회가 메인을 잡지 않게 미룬다)."""
+        if self._login_checked:
+            return
+        self._login_checked = True
+        self._refresh_login_status()
 
     # ── 번역 구독 로그인(ant) ──────────────────────────── 260621-P3
     def _on_translate_auth_changed(self):
@@ -763,12 +312,15 @@ class AdvancedSettingsDialog(QDialog):
         for w in (self.lbl_login_status, self.btn_ant_login, self.btn_ant_logout):
             w.setEnabled(login)
         self.ed_anthropic_key.setEnabled(not login)
-        if login:
+        if login and self._login_checked:
             self._refresh_login_status()
-        else:
+        elif not login:
             self.lbl_login_status.setText("")
 
     def _refresh_login_status(self):
+        if self.cmb_translate_auth.currentData() != "login":
+            self.lbl_login_status.setText("")
+            return
         try:
             from ..study import ant_cli
         except Exception:
@@ -791,11 +343,11 @@ class AdvancedSettingsDialog(QDialog):
 
     def _on_ant_login_done(self, ok: bool, msg: str):
         self.btn_ant_login.setEnabled(True)
-        from PyQt6.QtWidgets import QMessageBox
         if ok:
             QMessageBox.information(self, tr("Claude 로그인"), tr("로그인되었습니다. 이제 번역을 사용할 수 있습니다."))
         else:
             QMessageBox.warning(self, tr("Claude 로그인"), tr('로그인하지 못했습니다.\n{msg}').format(msg=msg or ''))
+        self._login_checked = True
         self._refresh_login_status()
 
     def _ant_logout(self):
@@ -808,7 +360,6 @@ class AdvancedSettingsDialog(QDialog):
 
     def _keyrow(self, edit, kind):
         """260621-P3: [키 입력칸 | 확인 버튼 | 상태] 한 줄 위젯(외부 API 키 확인용)."""
-        from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel
         w = QWidget(); h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0); h.setSpacing(4)
         btn = QPushButton(tr("확인")); btn.setFixedWidth(46)
@@ -880,47 +431,18 @@ class AdvancedSettingsDialog(QDialog):
         }
 
 
-def open_sub_settings(cls, host, parent, saved_msg: str, local_prefs=None):
-    """261025-6(디자인 SOT §2.14): 환경설정에서 여는 별도 창(고급·녹화) — [확인] 이면 곧바로 `host._apply_prefs` → 저장.
-    `local_prefs`(부른 환경설정 창의 사본)도 맞춘다. 연 창을 돌려준다(검사용)."""
-    base = dict(host._prefs) if host is not None else dict(local_prefs or {})
-    dlg = cls(base, parent, host=host) if cls is RecordingSettingsDialog else cls(base, parent)
-    if dlg.exec() != QDialog.DialogCode.Accepted:
-        return dlg
-    new = dlg.result_prefs()
-    if local_prefs is not None:
-        local_prefs.update(new)
-    if host is not None:
-        merged = dict(host._prefs)
-        merged.update(new)
-        host._apply_prefs(merged)
-        host._save_settings_now()
-        try:
-            host.status.showMessage(saved_msg, 3000)
-        except Exception:
-            pass
-    return dlg
-
-
-class RecordingSettingsDialog(QDialog):
-    """261025-6(디자인 SOT §2.14, 사용자 지시): '발표화면 녹화 설정' — 종전 환경설정의 '화면+음성 녹화 (발표 전체화면)' 묶음.
-    키 이름·값 모양은 그대로(영상·음성 SOT). 발표 중 '녹화 설정' 도 이 창을 연다(`_open_recording_settings`)."""
+class RecordingPanel(QWidget):
+    """261025-6 → 261107-12(디자인 SOT §2.14): '고급 › 발표 녹화' 쪽 — 종전 '화면+음성 녹화 (발표 전체화면)' 묶음.
+    키 이름·값 모양은 그대로(영상·음성 SOT)."""
 
     def __init__(self, prefs: dict, parent=None, host=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("발표화면 녹화 설정"))
-        self.setMinimumWidth(440)
         self._prefs = dict(prefs)
         self._host = host
         v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
         self._build_recording_group(v)
-        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
-        btns.accepted.connect(self.accept)
-        btns.rejected.connect(self.reject)
-        v.addWidget(btns)
-        for _cb in self.findChildren(QComboBox):          # 디자인 SOT §2.14 — 장치 이름이 창을 밀지 않게
-            _cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-            _cb.setMinimumContentsLength(14)
+        v.addStretch(1)
 
     # ── 260609-17(F4): 화면+음성 녹화 설정 ───────────────────
     def _build_recording_group(self, layout):
@@ -930,10 +452,8 @@ class RecordingSettingsDialog(QDialog):
 
         self.ed_rec_dir = QLineEdit(str(self._prefs.get("recording_dir", "")))
         self.ed_rec_dir.setPlaceholderText(tr("비우면 현재 책갈피 폴더에 저장"))
-        b_dir = QPushButton(tr("찾기…")); b_dir.clicked.connect(self._pick_rec_dir)
-        # 260628(UI): 래퍼 QWidget 의 **기본 여백(약 9px)** 때문에 입력칸이 안쪽으로 밀리고
-        #   행 높이도 아래 콤보들과 달라 보였다 → 여백 0·간격 4 로 맞춰 다른 행과 정렬 통일
-        #   (같은 목적의 `_keyrow` 는 이미 이렇게 되어 있었고 이 행만 누락).
+        b_dir = QPushButton(tr("찾기")); b_dir.clicked.connect(self._pick_rec_dir)
+        # 260628(UI): 래퍼 QWidget 의 기본 여백 때문에 입력칸이 안쪽으로 밀렸다 → 여백 0·간격 4
         _w1 = QWidget()
         rd = QHBoxLayout(_w1)
         rd.setContentsMargins(0, 0, 0, 0); rd.setSpacing(4)
@@ -945,10 +465,8 @@ class RecordingSettingsDialog(QDialog):
                      ("system", tr("시스템 소리")), ("both", tr("마이크 + 시스템"))]:
             self.cmb_audio.addItem(t, v)
         am = str(self._prefs.get("recording_audio_mode", "mic"))
-        self.cmb_audio.setCurrentIndex(max(0, [self.cmb_audio.itemData(i)
-                                               for i in range(self.cmb_audio.count())].index(am)
-                                            if am in [self.cmb_audio.itemData(i)
-                                                      for i in range(self.cmb_audio.count())] else 1))
+        _ai = self.cmb_audio.findData(am)
+        self.cmb_audio.setCurrentIndex(_ai if _ai >= 0 else 1)
         f.addRow(tr("오디오:"), self.cmb_audio)
 
         self.cmb_mic = QComboBox(); self.cmb_mic.setEditable(True)
@@ -972,7 +490,7 @@ class RecordingSettingsDialog(QDialog):
         b_test = QPushButton(tr("녹화 테스트 (3초)")); b_test.clicked.connect(self._on_rec_test)
         f.addRow("", b_test)
         info = QLabel(tr("<small>코덱 H.264/AAC·192kbps·30fps·CQ23 고정. 시스템 소리는 "
-                      "Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"))
+                         "Stereo Mix 또는 가상 오디오 장치가 있어야 녹음됩니다.</small>"))
         info.setWordWrap(True); info.setStyleSheet("color:#666;")
         f.addRow(info)
         layout.addWidget(grp)
@@ -1006,11 +524,10 @@ class RecordingSettingsDialog(QDialog):
     def _on_rec_test(self):
         if self._host is None or not hasattr(self._host, "_test_recording"):
             return
-        # 현재 다이얼로그 값으로 임시 반영 후 테스트
+        # 현재 값으로 임시 반영 후 테스트
         self._host._prefs["recording_audio_mode"] = self.cmb_audio.currentData()
         self._host._prefs["recording_mic"] = self.cmb_mic.currentText().strip()
         self._host._prefs["recording_system"] = self.cmb_sys.currentText().strip()
-        # 260618-26: 사전 확인 없이 바로 테스트 녹화 진행(요청) — 결과만 아래에 표시.
         ok, msg = self._host._test_recording(self)
         # 260611-25: 합격 결과 기록(녹화 시작 전 게이트에서 확인)
         self._host._prefs["recording_test_ok"] = bool(ok)
@@ -1031,3 +548,729 @@ class RecordingSettingsDialog(QDialog):
                                self.ks_recstop.keySequence().toString()],
             "ffmpeg_path": str(self._prefs.get("ffmpeg_path", "")),   # 260618-18: UI 제거, 기존값 보존
         }
+
+
+class _PanelDialog(QDialog):
+    """판 하나를 담은 창(호환 — 앱은 환경설정 한 창을 쓴다, `open_sub_settings`). 속성은 판으로 넘긴다."""
+
+    _title = ""
+
+    def __init__(self, panel: QWidget, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr(self._title))
+        self.setMinimumWidth(440)
+        self.panel = panel
+        v = QVBoxLayout(self)
+        area = QScrollArea(); area.setWidgetResizable(True)
+        area.setWidget(panel)
+        v.addWidget(area, 1)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.resize(520, 600)
+
+    def __getattr__(self, name):
+        panel = self.__dict__.get("panel")
+        if panel is not None and not name.startswith("__"):
+            return getattr(panel, name)
+        raise AttributeError(name)
+
+    def result_prefs(self) -> dict:
+        return self.panel.result_prefs()
+
+
+class AdvancedSettingsDialog(_PanelDialog):
+    _title = tr_noop("외부 연결")
+
+    def __init__(self, prefs: dict, parent=None):
+        super().__init__(AdvancedPanel(prefs), parent)
+
+
+class RecordingSettingsDialog(_PanelDialog):
+    _title = tr_noop("발표 녹화")
+
+    def __init__(self, prefs: dict, parent=None, host=None):
+        super().__init__(RecordingPanel(prefs, host=host), parent)
+
+
+def open_sub_settings(cls, host, parent, saved_msg: str = "", local_prefs=None):
+    """261107-12(디자인 SOT §2.14): 따로 뜨던 창은 없다 — 환경설정 한 창의 그 항목으로 연다(`open_settings(page=…)`).
+    host 가 없으면(검사) 종전처럼 판 하나를 담은 창. 연 창을 돌려준다."""
+    page = "recording" if cls is RecordingSettingsDialog else "external"
+    if host is not None and hasattr(host, "open_settings"):
+        return host.open_settings(page=page, parent=parent)
+    base = dict(local_prefs or {})
+    dlg = cls(base, parent, host=host) if cls is RecordingSettingsDialog else cls(base, parent)
+    if dlg.exec() == QDialog.DialogCode.Accepted and local_prefs is not None:
+        local_prefs.update(dlg.result_prefs())
+    return dlg
+
+
+class SettingsDialog(QDialog):
+    """261107-12(디자인 SOT §2.14, 사용자 결정): 환경설정 — 왼쪽 목록(일반/고급) + 쪽, 위에 '설정 찾기', 아래 [확인][적용][취소].
+    설정 키는 하나도 바꾸지 않는다(배치만). 저장은 host 의 `_settings_apply` 한 길."""
+
+    def __init__(self, prefs: dict, parent=None, host=None, page: str | None = None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("환경설정"))
+        self._prefs = dict(prefs)
+        self._host = host       # 260609-17(F4): 녹화 테스트·장치 조회·저장용
+        self._extra_results = []         # 해시태그 내용 등 — add_result_fn
+        self._hits = {}                  # 찾기로 강조한 위젯 → 원래 스타일
+        self.setMinimumSize(MIN_W, MIN_H)
+
+        outer = QVBoxLayout(self)
+        self._outer = outer
+        # ── 설정 찾기 ──
+        self.ed_search = QLineEdit()
+        self.ed_search.setPlaceholderText(tr("설정 찾기"))
+        self.ed_search.setClearButtonEnabled(True)
+        self.ed_search.textChanged.connect(self._on_search)
+        outer.addWidget(self.ed_search)
+
+        body = QHBoxLayout()
+        outer.addLayout(body, 1)
+        self.nav = QListWidget()
+        self.nav.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        body.addWidget(self.nav)
+        self.stack = QStackedWidget()
+        body.addWidget(self.stack, 1)
+
+        self._page_index = {}            # id → stack 번호
+        self._page_items = {}            # id → 목록 줄
+        self._scrolls = {}               # id → QScrollArea
+        self._group_items = {}
+        last_group = None
+        for pid, name, group in PAGES:
+            if group != last_group:
+                hi = QListWidgetItem(page_name("g:" + group))
+                hi.setFlags(Qt.ItemFlag.NoItemFlags)       # 머리글 — 고를 수 없다
+                f = hi.font(); f.setBold(True); hi.setFont(f)
+                self.nav.addItem(hi)
+                self._group_items[group] = hi
+                last_group = group
+            it = QListWidgetItem("   " + page_name(pid))
+            it.setData(PAGE_ROLE, pid)
+            self.nav.addItem(it)
+            self._page_items[pid] = it
+            sc = QScrollArea(); sc.setWidgetResizable(True)
+            sc.setFrameShape(QScrollArea.Shape.NoFrame)
+            content = QWidget(); lay = QVBoxLayout(content)
+            sc.setWidget(content)
+            self._scrolls[pid] = sc
+            self._page_index[pid] = self.stack.addWidget(sc)
+            getattr(self, "_build_" + pid)(lay)
+            lay.addStretch(1)
+        fm = self.nav.fontMetrics()
+        self.nav.setFixedWidth(max(fm.horizontalAdvance(self.nav.item(i).text()) for i in range(self.nav.count())) + 36)
+        self.nav.currentItemChanged.connect(self._on_nav)
+
+        # ── 단추 ──
+        self.btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Apply
+                                     | QDialogButtonBox.StandardButton.Cancel, self)
+        self.btn_ok = self.btns.button(QDialogButtonBox.StandardButton.Ok)
+        self.btn_apply = self.btns.button(QDialogButtonBox.StandardButton.Apply)
+        self.btn_cancel = self.btns.button(QDialogButtonBox.StandardButton.Cancel)
+        self.btns.accepted.connect(self.accept)
+        self.btns.rejected.connect(self.reject)
+        self.btn_apply.clicked.connect(self.apply)
+        outer.addWidget(self.btns)
+
+        from PyQt6.QtGui import QShortcut
+        QShortcut(QKeySequence("Ctrl+F"), self, activated=lambda: (self.ed_search.setFocus(), self.ed_search.selectAll()))
+        QShortcut(QKeySequence("Ctrl+Tab"), self, activated=lambda: self._step_page(+1))
+        QShortcut(QKeySequence("Ctrl+Shift+Tab"), self, activated=lambda: self._step_page(-1))
+
+        self._on_restore_toggled(self.rb_start_last.isChecked())
+        self._sync_photo_item()
+        self._page_items["external"].setHidden(not self.adv.has_visible())
+        # 261009-14(디자인 SOT §2.14): 콤보는 가장 긴 항목이 아니라 최소 길이만 요구한다
+        for _cb in self.findChildren(QComboBox):
+            _cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            _cb.setMinimumContentsLength(14)
+        self._connect_changes()
+        self._applied = self.result_prefs()
+        self._update_dirty()
+
+        mem = (host._prefs.get("settings_window") if host is not None and isinstance(getattr(host, "_prefs", None), dict)
+               else None) or {}
+        try:
+            self.resize(max(MIN_W, int(mem.get("w", 760))), max(MIN_H, int(mem.get("h", 560))))
+        except (TypeError, ValueError):
+            self.resize(760, 560)
+        self.open_page(page or mem.get("page") or "general")
+        self._fit_width_to_content()
+        self._fitted_on_show = False
+
+    # ── 쪽 만들기 ──────────────────────────────────────────────
+    def _build_general(self, layout):
+        # 언어 — 261009-10(다국어 SOT §4): 묶음 이름을 두 언어로(어느 언어 화면에서도 읽힌다)
+        grp_lang = QGroupBox(tr("언어 / Language"))
+        ll = QFormLayout(grp_lang)
+        from viewer import i18n as _i18n
+        self.cmb_language = QComboBox()
+        for _code, _name, _status in _i18n.available_languages():
+            self.cmb_language.addItem(_name if _status == "complete" else _name + " (β)", _code)
+        _cur_lang = str(self._prefs.get("language") or _i18n.language())
+        _li = self.cmb_language.findData(_cur_lang)
+        self.cmb_language.setCurrentIndex(_li if _li >= 0 else 0)
+        ll.addRow(tr("화면 언어 (다시 시작 뒤):"), self.cmb_language)
+        layout.addWidget(grp_lang)
+
+        grp_theme = QGroupBox(tr("테마"))
+        tl = QFormLayout(grp_theme)
+        self.cmb_theme = QComboBox()
+        for _val, _lbl in THEME_LABELS:
+            self.cmb_theme.addItem(tr(_lbl), _val)
+        cur = str(self._prefs.get("theme", "auto"))
+        vals = [v for v, _ in THEME_LABELS]
+        self.cmb_theme.setCurrentIndex(vals.index(cur) if cur in vals else 0)
+        tl.addRow(tr("테마:"), self.cmb_theme)
+        layout.addWidget(grp_theme)
+
+        # 시작 — 260906-3(사용자 결정): 파일·폴더를 지정하지 않고 실행했을 때 무엇을 열지 — 3택
+        grp_start = QGroupBox(tr("시작"))
+        gl = QVBoxLayout(grp_start)
+        from PyQt6.QtWidgets import QRadioButton, QButtonGroup
+        self.rb_start_last = QRadioButton(tr("마지막에 열었던 폴더·파일 열기 (기본)"))
+        self.rb_start_path = QRadioButton(tr("지정한 폴더·파일 열기:"))
+        self.rb_start_none = QRadioButton(tr("아무것도 열지 않고 빈 화면으로 시작"))
+        self._start_group = QButtonGroup(self)
+        for _rb in (self.rb_start_last, self.rb_start_path, self.rb_start_none):
+            self._start_group.addButton(_rb)
+        _sm = str(self._prefs.get("startup_mode", "last"))
+        {"path": self.rb_start_path, "none": self.rb_start_none}.get(_sm, self.rb_start_last).setChecked(True)
+        gl.addWidget(self.rb_start_last)
+        prow = QHBoxLayout()
+        prow.addWidget(self.rb_start_path)
+        self.ed_startup_path = QLineEdit(str(self._prefs.get("startup_path", "") or ""))
+        self.ed_startup_path.setPlaceholderText(tr("폴더 또는 PDF 파일 경로"))
+        prow.addWidget(self.ed_startup_path, 1)
+        _bf = QPushButton(tr("폴더")); _bf.clicked.connect(self._pick_startup_folder)
+        _bf.setToolTip(tr("시작 시 열 폴더 선택"))
+        _bp = QPushButton(tr("파일")); _bp.clicked.connect(self._pick_startup_file)
+        _bp.setToolTip(tr("시작 시 열 PDF 선택"))
+        prow.addWidget(_bf); prow.addWidget(_bp)
+        gl.addLayout(prow)
+        gl.addWidget(self.rb_start_none)
+        # 종전 키(`restore_session`)는 다운그레이드 호환으로만 저장한다 — 화면에는 없다.
+        self.rb_start_last.toggled.connect(self._on_restore_toggled)
+        self.chk_last_page = QCheckBox(tr("복원 시 마지막으로 본 페이지 열기 (해제 = 첫 페이지)"))
+        self.chk_last_page.setChecked(bool(self._prefs.get("restore_last_page", True)))
+        gl.addWidget(self.chk_last_page)
+        # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
+        mrow = QHBoxLayout()
+        mrow.addWidget(QLabel(tr("PolyPDF 시작 모드:")))
+        self.cmb_open_mode = QComboBox()
+        self.cmb_open_mode.addItem(tr("편집 모드 (수정·저장 가능)"), "edit")
+        self.cmb_open_mode.addItem(tr("보기 모드 (읽기 전용)"), "view")
+        self.cmb_open_mode.setCurrentIndex(0 if bool(self._prefs.get("open_edit_mode", True)) else 1)
+        mrow.addWidget(self.cmb_open_mode, 1)
+        gl.addLayout(mrow)
+        layout.addWidget(grp_start)
+
+        # 보기 종류 — 261104-2(사진 보기 SOT 4.10, 사용자 결정 D12): PDF 전용 / 혼용(PDF ↔ 사진 모드 토글)
+        grp_vk = QGroupBox(tr("보기 종류"))
+        vl = QFormLayout(grp_vk)
+        self.cmb_view_kind = QComboBox()
+        self.cmb_view_kind.addItem(tr("PDF 전용"), "pdf")
+        self.cmb_view_kind.addItem(tr("혼용 (PDF 모드 ↔ 사진 모드)"), "mixed")
+        self._pic = self._prefs.get("picture") if isinstance(self._prefs.get("picture"), dict) else {}
+        self.cmb_view_kind.setCurrentIndex(1 if self._pic.get("view_kind") == "mixed" else 0)
+        self.cmb_view_kind.setToolTip(tr("혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. "
+                                         "PDF 전용이면 사진 모드를 쓰지 않습니다."))
+        self.cmb_view_kind.currentIndexChanged.connect(lambda *_: self._sync_photo_item())
+        vl.addRow(tr("보기 종류:"), self.cmb_view_kind)
+        layout.addWidget(grp_vk)
+
+    def _build_view(self, layout):
+        grp = QGroupBox(tr("넘김"))
+        pl = QVBoxLayout(grp)
+        # 260914-1(입력 SOT §2.9·§2.10): 페이지 이동 방식 · 쪽 넘김 애니메이션
+        row_psm = QHBoxLayout()
+        row_psm.addWidget(QLabel(tr("페이지 이동 방식:")))
+        self.cmb_page_scroll_mode = QComboBox()
+        self.cmb_page_scroll_mode.addItem(tr("한 쪽씩"), "page")
+        self.cmb_page_scroll_mode.addItem(tr("이어 보기 (앞뒤 쪽을 붙여 조금씩 스크롤)"), "continuous")
+        self.cmb_page_scroll_mode.setCurrentIndex(
+            1 if self._prefs.get("page_scroll_mode", "page") == "continuous" else 0)
+        row_psm.addWidget(self.cmb_page_scroll_mode, 1)
+        pl.addLayout(row_psm)
+        pl.addWidget(_small(tr("이어 보기는 지금 쪽 위아래에 이전·다음 쪽을 붙여 보여 주고, 화면 가운데에 "
+                               "온 쪽을 지금 쪽으로 삼습니다(텍스트 창도 그 쪽을 따라갑니다). "
+                               "2쪽 보기와 스크린샷 보기는 한 쪽씩입니다.")))
+        self.chk_page_flip_anim = QCheckBox(tr("쪽 넘김 애니메이션 (한 쪽씩일 때 위아래로 밀기)"))
+        self.chk_page_flip_anim.setChecked(self._prefs.get("page_flip_anim", True) is not False)
+        pl.addWidget(self.chk_page_flip_anim)
+        # 260609-2 · 260912-6(입력 SOT §2.4): 경계 이동 스위치 — 물음은 그 안의 확인
+        self.chk_cross_file_nav = QCheckBox(tr("마지막/첫 페이지에서 다음·이전 파일로 이동 (책갈피창 순서)"))
+        self.chk_cross_file_nav.setChecked(self._prefs.get("cross_file_nav", True) is not False)   # 미설정=켜짐
+        pl.addWidget(self.chk_cross_file_nav)
+        pl.addWidget(_small(tr("켜면 마지막 페이지에서 '다음'을 누를 때 다음 파일의 이름과 첫 쪽을 "
+                               "보여 주고 물은 뒤에 옮깁니다(첫 페이지에서 '이전' 도 같습니다). "
+                               "책갈피창에서 항목을 골라 옮길 때는 물지 않습니다. 끄면 경계에서 아예 옮기지 않습니다.")))
+        layout.addWidget(grp)
+
+        grp_rb = QGroupBox(tr("리본"))
+        rl = QVBoxLayout(grp_rb)
+        self.chk_show_panel_toolbar = QCheckBox(tr("리본 메뉴 보이기"))
+        self.chk_show_panel_toolbar.setChecked(bool(self._prefs.get("show_panel_toolbar", True)))
+        rl.addWidget(self.chk_show_panel_toolbar)
+        rl.addWidget(_small(tr("해제하면 메인 뷰어 세로 공간이 늘어납니다. 메뉴 탭을 누르면 리본이 잠깐 보이고, "
+                               "명령을 고르거나 다른 곳을 누르면 다시 숨습니다. 탭 줄을 우클릭해도 바꿀 수 있습니다.")))
+        layout.addWidget(grp_rb)
+
+    def _build_photo(self, layout):
+        grp = QGroupBox(tr("사진 모드"))
+        pl = QVBoxLayout(grp)
+        # 261104-7(사진 보기 SOT 4.12): 슬라이드쇼 자동 넘김 간격(초, 0 = 끔)
+        row = QHBoxLayout()
+        row.addWidget(QLabel(tr("슬라이드쇼 자동 넘김:")))
+        self.sp_slide_s = QSpinBox()
+        self.sp_slide_s.setRange(0, 600)
+        self.sp_slide_s.setSuffix(tr(" 초"))
+        self.sp_slide_s.setSpecialValueText(tr("끔"))
+        try:
+            self.sp_slide_s.setValue(int(self._pic.get("slide_interval_s", 0) or 0))
+        except (TypeError, ValueError):
+            self.sp_slide_s.setValue(0)
+        self.sp_slide_s.setToolTip(tr("사진 모드에서 발표보기(F5)로 연 슬라이드쇼가 이 간격마다 다음 사진으로 넘어갑니다. 0 이면 넘기지 않습니다."))
+        row.addWidget(self.sp_slide_s)
+        row.addStretch(1)
+        pl.addLayout(row)
+        # 261106-15(사진 보기 SOT §4.43, 사용자 결정): 모양 펴기 [저장] 이 원본을 대체할 때 원본을 옮겨 둘 곳
+        pl.addWidget(QLabel(tr("펼친 사진 저장 때 원본 백업 폴더:")))
+        row_bk = QHBoxLayout()
+        self.ed_warp_backup = QLineEdit(str(self._pic.get("warp_backup_dir") or ""))
+        self.ed_warp_backup.setReadOnly(True)
+        from viewer.photo_backup import BACKUP_DIRNAME
+        self.ed_warp_backup.setPlaceholderText(tr("사진 폴더 안 '{name}' (기본)").format(name=BACKUP_DIRNAME))
+        self.ed_warp_backup.setToolTip(tr("모양 펴기로 [저장] 하면 원본 사진을 이 폴더로 옮기고 그 자리에 펼친 사진을 둡니다."))
+        row_bk.addWidget(self.ed_warp_backup, 1)
+        b_pick = QPushButton(tr("고르기"))
+        b_pick.setToolTip(tr("원본 백업 폴더"))
+        b_pick.clicked.connect(self._pick_warp_backup)
+        b_def = QPushButton(tr("기본으로"))
+        b_def.clicked.connect(lambda: self.ed_warp_backup.setText(""))
+        row_bk.addWidget(b_pick)
+        row_bk.addWidget(b_def)
+        pl.addLayout(row_bk)
+        layout.addWidget(grp)
+
+    def _build_tags(self, layout):
+        grp = QGroupBox(tr("자동 해시태그"))
+        gl = QVBoxLayout(grp)
+        # 260830(태그 SOT §3.5, 사용자 결정): 태그 자동 부여는 옵트인 — 기본 꺼짐
+        self.chk_auto_tag = QCheckBox(tr("파일 해시태그·키워드 자동 부여"))
+        self.chk_auto_tag.setChecked(bool(self._prefs.get("auto_tag_enabled", False)))
+        gl.addWidget(self.chk_auto_tag)
+        gl.addWidget(_small(tr("인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, "
+                               "도구 탭 '태그 ▾' 에서 되돌릴 수 있습니다.")))
+        # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그 — 기본 켬
+        self.chk_photo_tag = QCheckBox(tr("사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"))
+        self.chk_photo_tag.setChecked(bool(self._prefs.get("photo_auto_tag", True)))
+        gl.addWidget(self.chk_photo_tag)
+        self.chk_photo_kind = QCheckBox(tr("사진 종류도 구분 (영수증·명함·서류 — 글자 있는 사진만 OCR)"))
+        self.chk_photo_kind.setChecked(bool(self._prefs.get("photo_kind_ocr", True)))
+        self.chk_photo_kind.setEnabled(self.chk_photo_tag.isChecked())
+        self.chk_photo_tag.toggled.connect(self.chk_photo_kind.setEnabled)
+        gl.addWidget(self.chk_photo_kind)
+        gl.addWidget(_small(tr("사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 "
+                               "찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다.")))
+        layout.addWidget(grp)
+        # 해시태그 내용(261107-10 태그 세션이 붙인다 — 디자인 SOT §2.14 '해시태그 내용 자리')
+        self.tag_content_box = QWidget()
+        self.tag_content_layout = QVBoxLayout(self.tag_content_box)
+        self.tag_content_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.tag_content_box)
+
+    def _build_shots(self, layout):
+        grp = QGroupBox(tr("스크린샷"))
+        fl = QFormLayout(grp)
+        self.spin_screenshot = QSpinBox()
+        self.spin_screenshot.setRange(5, 1000)   # v1.6.2: 일괄 캡쳐 시 자동 확장 대비 상한 ↑
+        self.spin_screenshot.setValue(int(self._prefs.get("screenshot_max", 30)))
+        self.spin_screenshot.setSuffix(tr(" 개"))
+        fl.addRow(tr("스크린샷 리스트:"), self.spin_screenshot)
+        fl.addRow(_small(tr("한도 변경은 즉시 반영됩니다. 줄이면 가장 오래된 항목부터 자동 제거됩니다.<br>"
+                            "검색결과 일괄 캡쳐 시 결과 수가 한도를 넘으면 자동으로 한도가 늘어납니다.")))
+        # 260906-3(사용자 결정): 시작은 항상 빈 목록, 종료 때 목록이 있으면 PDF 저장 여부를 묻는다(스크린샷 SOT)
+        fl.addRow(_small(tr("캡처 목록은 항상 빈 상태로 시작합니다. 종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.")))
+        layout.addWidget(grp)
+
+    def _build_shortcuts(self, layout):
+        defs = getattr(self._host, "_sc_defs", None)
+        if not defs:
+            self.sc_panel = None
+            layout.addWidget(QLabel(tr("단축키 표가 없습니다.")))
+            return
+        from viewer.widgets.shortcuts_dialog import ShortcutsPanel
+        self.sc_panel = ShortcutsPanel(defs, dict(self._prefs.get("shortcuts") or {}), self,
+                                       capture_global=bool(self._prefs.get("capture_global", False)), scroll=False)
+        self.sc_panel.changed.connect(self.mark_changed)
+        layout.addWidget(self.sc_panel)
+
+    def _build_ribbon(self, layout):
+        if self._host is None or not hasattr(self._host, "ribbon_catalog"):
+            self.ribbon_panel = None
+            layout.addWidget(QLabel(tr("모음 메뉴 정보가 없습니다.")))
+            return
+        from viewer.widgets.ribbon import RibbonCustomizePanel
+        catalog, labels = self._host.ribbon_catalog()
+        current = [str(x) for x in (self._prefs.get("ribbon_collection") or [])] or list(self._host._collection_ids())
+        self.ribbon_panel = RibbonCustomizePanel(catalog, current, labels, self)
+        self.ribbon_panel.changed.connect(self.mark_changed)
+        grp = QGroupBox(tr("모음 메뉴 관리"))
+        gl = QVBoxLayout(grp)
+        gl.addWidget(self.ribbon_panel)
+        layout.addWidget(grp)
+
+    def _build_external(self, layout):
+        self.adv = AdvancedPanel(self._prefs, self, check_login=False)
+        layout.addWidget(self.adv)
+
+    def _build_recording(self, layout):
+        self.rec = RecordingPanel(self._prefs, self, host=self._host)
+        layout.addWidget(self.rec)
+
+    def _build_tuning(self, layout):
+        grp = QGroupBox(tr("넘김"))
+        fl = QFormLayout(grp)
+        # 261021-1(응답성 SOT §4.7): 가벼운 넘김 — 느린 컴퓨터·절전 모드
+        self.cmb_lite_flip = QComboBox()
+        self.cmb_lite_flip.addItem(tr("자동 (절전 모드이거나 넘김이 느릴 때)"), "auto")
+        self.cmb_lite_flip.addItem(tr("항상"), "on")
+        self.cmb_lite_flip.addItem(tr("끄기"), "off")
+        _li = self.cmb_lite_flip.findData(str(self._prefs.get("lite_flip", "auto")))
+        self.cmb_lite_flip.setCurrentIndex(_li if _li >= 0 else 0)
+        self.cmb_lite_flip.setToolTip(tr("켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, "
+                                         "텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다."))
+        fl.addRow(tr("가벼운 넘김(느린 컴퓨터):"), self.cmb_lite_flip)
+        layout.addWidget(grp)
+        # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋
+        grp_hl = QGroupBox(tr("하이퍼링크"))
+        hlf = QFormLayout(grp_hl)
+        self.spin_hl_offset = QSpinBox()
+        self.spin_hl_offset.setRange(0, 200)
+        self.spin_hl_offset.setSuffix(" px")
+        self.spin_hl_offset.setValue(int(self._prefs.get("hyperlink_top_offset_px", 10)))
+        hlf.addRow(tr("페이지 내 버튼 상단 오프셋:"), self.spin_hl_offset)
+        layout.addWidget(grp_hl)
+
+    def _build_manage(self, layout):
+        grp = QGroupBox(tr("언어팩"))
+        gl = QVBoxLayout(grp)
+        # 261008-29(다국어 SOT §3.4, 사용자 결정): 외부 언어팩 — 기본 꺼짐, 다시 시작할 때 읽는다
+        from viewer import i18n as _i18n
+        self.chk_ext_lang = QCheckBox(tr("외부 언어팩 사용 (다시 시작 뒤)"))
+        self.chk_ext_lang.setToolTip(tr("설정 폴더의 locale\\<코드>\\ 에 둔 언어팩(.mo·pack.json)을 언어 목록에 더합니다. "
+                                        "같은 코드면 내장 팩 대신 씁니다. 번역자가 릴리스 없이 시험할 때 씁니다."))
+        self.chk_ext_lang.setChecked(bool(self._prefs.get("external_language_packs", False)))
+        self.chk_ext_lang.toggled.connect(self._on_ext_lang_toggled)   # 처음 값을 넣은 뒤 — 켤 때만 확인
+        btn_ext = QPushButton(tr("폴더 열기"))
+        btn_ext.setToolTip(str(_i18n.external_dir()))
+        btn_ext.clicked.connect(self._open_external_lang_dir)
+        row = QHBoxLayout(); row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self.chk_ext_lang); row.addWidget(btn_ext); row.addStretch(1)
+        gl.addLayout(row)
+        layout.addWidget(grp)
+        # 261016-3(사용자 지시): 기본값 저장(배포용) 아래 설정 초기화 — 둘 다 지금 **저장된** 설정을 다룬다
+        grp_def = QGroupBox(tr("설정 값"))
+        dl = QVBoxLayout(grp_def)
+        self.btn_save_default = QPushButton(tr("현재 설정을 기본값으로 저장(배포용)"))
+        self.btn_reset_default = QPushButton(tr("설정 초기화(기본값으로 되돌리기)"))
+        dl.addWidget(self.btn_save_default)
+        dl.addWidget(self.btn_reset_default)
+        dl.addWidget(_small(tr("둘 다 지금 저장된 설정을 다룹니다 — 이 창에서 바꾼 것은 [적용] 뒤에 들어갑니다. "
+                               "초기화하면 PolyPDF 를 다시 시작합니다.")))
+        host = self._host
+        if host is not None:
+            from PyQt6.QtCore import QTimer as _QT
+            self.btn_save_default.clicked.connect(lambda: host._save_current_as_default())
+            self.btn_reset_default.clicked.connect(lambda: (self.reject(), _QT.singleShot(0, host._reset_to_defaults)))
+        else:
+            self.btn_save_default.setEnabled(False)
+            self.btn_reset_default.setEnabled(False)
+        layout.addWidget(grp_def)
+
+    # ── 목록·쪽 ──────────────────────────────────────────────
+    def page_ids(self) -> list:
+        return [p for p, _n, _g in PAGES]
+
+    def current_page(self) -> str:
+        it = self.nav.currentItem()
+        return it.data(PAGE_ROLE) if it is not None else ""
+
+    def open_page(self, pid: str) -> None:
+        it = self._page_items.get(pid)
+        if it is None or it.isHidden():
+            it = next((self._page_items[p] for p in self.page_ids() if not self._page_items[p].isHidden()), None)
+        if it is not None:
+            self.nav.setCurrentItem(it)
+
+    def _on_nav(self, cur, _prev):
+        pid = cur.data(PAGE_ROLE) if cur is not None else None
+        if not pid:
+            return
+        self.stack.setCurrentIndex(self._page_index[pid])
+        if pid == "external":
+            self.adv.check_login_once()          # 느린 조회는 이 쪽을 처음 볼 때(응답성 SOT §5)
+
+    def _step_page(self, d: int) -> None:
+        ids = [p for p in self.page_ids() if not self._page_items[p].isHidden()]
+        cur = self.current_page()
+        if cur in ids:
+            self.open_page(ids[(ids.index(cur) + d) % len(ids)])
+
+    def _sync_photo_item(self) -> None:
+        """'사진' 은 보기 종류가 혼용일 때만 목록에(디자인 SOT §2.14)."""
+        on = (self.cmb_view_kind.currentData() == "mixed")
+        self._page_items["photo"].setHidden(not on)
+        if not on and self.current_page() == "photo":
+            self.open_page("general")
+
+    # ── 찾기 ────────────────────────────────────────────────
+    @staticmethod
+    def _texts_of(w) -> list:
+        import re as _re
+        out = []
+        for getter in ("text", "title", "toolTip", "placeholderText"):
+            fn = getattr(w, getter, None)
+            if callable(fn):
+                try:
+                    t = fn()
+                except TypeError:
+                    continue
+                if isinstance(t, str) and t:
+                    out.append(_re.sub(r"<[^>]+>", " ", t))
+        if isinstance(w, QComboBox):
+            out += [w.itemText(i) for i in range(w.count())]
+        return out
+
+    def _search_hits(self, pid: str, needle: str) -> list:
+        content = self._scrolls[pid].widget()
+        hits = []
+        for w in content.findChildren(QWidget):
+            if not w.isVisibleTo(content) or isinstance(w, (QScrollArea,)):
+                continue
+            if any(needle in t.lower() for t in self._texts_of(w)):
+                hits.append(w)
+        return hits
+
+    def _clear_hits(self) -> None:
+        for w, ss in list(self._hits.items()):
+            try:
+                w.setStyleSheet(ss)
+            except RuntimeError:
+                pass
+        self._hits = {}
+
+    def _on_search(self, text: str) -> None:
+        self._clear_hits()
+        needle = (text or "").strip().lower()
+        if not needle:
+            for pid in self.page_ids():
+                self._page_items[pid].setHidden(False)
+            self._page_items["external"].setHidden(not self.adv.has_visible())
+            self._sync_photo_item()
+            return
+        hl = self.palette().color(self.palette().ColorRole.Highlight)
+        css = "background-color: rgba(%d,%d,%d,70);" % (hl.red(), hl.green(), hl.blue())
+        first_page = None
+        for pid, name, _g in PAGES:
+            visible_ok = not (pid == "external" and not self.adv.has_visible()) and not (
+                pid == "photo" and self.cmb_view_kind.currentData() != "mixed")
+            hits = self._search_hits(pid, needle) if visible_ok else []
+            name_hit = visible_ok and needle in page_name(pid).lower()
+            self._page_items[pid].setHidden(not (hits or name_hit))
+            for w in hits:
+                self._hits[w] = w.styleSheet()
+                w.setStyleSheet((w.styleSheet() or "") + css)
+            if (hits or name_hit) and first_page is None:
+                first_page = (pid, hits)
+        if first_page is not None:
+            pid, hits = first_page
+            if self.current_page() != pid and (self._page_items.get(self.current_page()) is None
+                                               or self._page_items[self.current_page()].isHidden()):
+                self.open_page(pid)
+            cur = self.current_page()
+            cur_hits = [w for w in self._hits if self._scrolls[cur].widget().isAncestorOf(w)]
+            if cur_hits:
+                self._scrolls[cur].ensureWidgetVisible(cur_hits[0])
+
+    # ── 바뀜·저장 ────────────────────────────────────────────
+    def _connect_changes(self) -> None:
+        from PyQt6.QtWidgets import QAbstractButton
+        for w in self.stack.findChildren(QLineEdit):
+            w.textChanged.connect(self.mark_changed)
+        for w in self.stack.findChildren(QAbstractButton):
+            if w.isCheckable():
+                w.toggled.connect(self.mark_changed)
+        for w in self.stack.findChildren(QComboBox):
+            w.currentIndexChanged.connect(self.mark_changed)
+            if w.isEditable():
+                w.editTextChanged.connect(self.mark_changed)
+        for w in self.stack.findChildren(QSpinBox):
+            w.valueChanged.connect(self.mark_changed)
+        for w in self.stack.findChildren(QKeySequenceEdit):
+            w.keySequenceChanged.connect(self.mark_changed)
+
+    def mark_changed(self, *_a) -> None:
+        """값이 바뀌었을 수 있다 — [적용] 을 켜고 끈다(붙인 위젯도 이 함수를 잇는다)."""
+        self._update_dirty()
+
+    def add_result_fn(self, fn) -> None:
+        """저장할 값을 더 내는 함수(fn() → dict)를 건다 — 해시태그 내용(261107-10) 등."""
+        self._extra_results.append(fn)
+        self._applied = self.result_prefs()
+        self._update_dirty()
+
+    def is_dirty(self) -> bool:
+        return getattr(self, "_applied", None) != self.result_prefs()
+
+    def _update_dirty(self) -> None:
+        if hasattr(self, "btn_apply"):
+            self.btn_apply.setEnabled(self.is_dirty())
+
+    def apply(self) -> bool:
+        """[적용] — 저장하고 창은 그대로. 바뀐 것이 없으면 아무 일도 하지 않는다."""
+        if not self.is_dirty():
+            return False
+        new = self.result_prefs()
+        fn = getattr(self._host, "_settings_apply", None)
+        if callable(fn):
+            fn(new)
+        self._applied = new
+        self._prefs.update(new)
+        self._update_dirty()
+        return True
+
+    def _remember(self) -> None:
+        host = self._host
+        if host is not None and isinstance(getattr(host, "_prefs", None), dict):
+            host._prefs["settings_window"] = {"page": self.current_page() or "general",
+                                              "w": int(self.width()), "h": int(self.height())}
+
+    def accept(self):
+        self.apply()
+        self._remember()
+        super().accept()
+
+    def reject(self):
+        """[취소] — 마지막 [적용] 뒤의 바꿈은 버린다(저장하지 않는다)."""
+        self._remember()
+        super().reject()
+
+    # ── 그 밖 ───────────────────────────────────────────────
+    def showEvent(self, e):
+        super().showEvent(e)
+        # 처음 보일 때 한 번 더 — 스타일·글꼴이 실제 화면 것으로 입혀진 뒤의 크기로(261009-14)
+        if not getattr(self, "_fitted_on_show", True):
+            self._fitted_on_show = True
+            self._fit_width_to_content()
+
+    def _fit_width_to_content(self):
+        """261009-10(디자인 SOT §2.14): 쪽에 **가로 스크롤바가 생기지 않게** 창 폭을 가장 넓은 쪽 내용에 맞춘다(그만큼만)."""
+        m = self._outer.contentsMargins()
+        widest = 0
+        for pid in self.page_ids():
+            sc = self._scrolls[pid]
+            widest = max(widest, sc.widget().minimumSizeHint().width() + sc.verticalScrollBar().sizeHint().width()
+                         + 2 * sc.frameWidth())
+        need = widest + self.nav.width() + self._outer.spacing() + 12 + m.left() + m.right()
+        self.setMinimumWidth(max(MIN_W, need))
+        if self.width() < need:
+            self.resize(need, self.height())
+
+    def _on_restore_toggled(self, on: bool):
+        """'마지막에 열었던 …' 일 때만 '마지막 페이지' 항목이 뜻을 가진다."""
+        self.chk_last_page.setEnabled(bool(on))
+
+    def _pick_startup_folder(self):
+        d = QFileDialog.getExistingDirectory(self, tr("시작 시 열 폴더 선택"), self.ed_startup_path.text() or "")
+        if d:
+            self.ed_startup_path.setText(d)
+            self.rb_start_path.setChecked(True)
+
+    def _pick_startup_file(self):
+        f, _ = QFileDialog.getOpenFileName(self, tr("시작 시 열 PDF 선택"), self.ed_startup_path.text() or "", "PDF (*.pdf)")
+        if f:
+            self.ed_startup_path.setText(f)
+            self.rb_start_path.setChecked(True)
+
+    def _pick_warp_backup(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, tr("원본 백업 폴더"), self.ed_warp_backup.text() or "")
+        if d:
+            self.ed_warp_backup.setText(d)
+
+    def result_prefs(self) -> dict:
+        out = {
+            "startup_mode": ("path" if self.rb_start_path.isChecked()
+                             else "none" if self.rb_start_none.isChecked() else "last"),
+            "startup_path": self.ed_startup_path.text().strip(),
+            # 다운그레이드 호환 — 구버전은 이 키만 본다(있으면 '마지막 것 열기'로 동작).
+            "restore_session": not self.rb_start_none.isChecked(),
+            "restore_last_page": self.chk_last_page.isChecked(),
+            "restore_screenshots": False,          # 260906-3: 시작은 항상 빈 목록
+            "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
+            "photo_auto_tag": self.chk_photo_tag.isChecked(),       # 261105-6(태그 SOT §5.7): 기본 켬
+            "photo_kind_ocr": self.chk_photo_kind.isChecked(),
+            "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),
+            "screenshot_max": int(self.spin_screenshot.value()),
+            "show_panel_toolbar": self.chk_show_panel_toolbar.isChecked(),
+            "cross_file_nav": self.chk_cross_file_nav.isChecked(),
+            "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
+            "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
+            "picture": dict(self._pic, view_kind=str(self.cmb_view_kind.currentData() or "pdf"),
+                            slide_interval_s=int(self.sp_slide_s.value()),    # 261104-2 · 261104-7
+                            warp_backup_dir=self.ed_warp_backup.text().strip()),   # 261106-15
+            "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",
+            "hyperlink_top_offset_px": int(self.spin_hl_offset.value()),   # 260609-11(C8)
+            "theme": self.cmb_theme.currentData(),                          # 260606-13
+            "language": self.cmb_language.currentData(),     # 261008(다국어 SOT §4)
+            "external_language_packs": self.chk_ext_lang.isChecked(),   # 261008-29(다국어 SOT §3.4)
+        }
+        if getattr(self, "ribbon_panel", None) is not None:
+            from viewer.widgets.ribbon import DEFAULT_COLLECTION
+            ids = [str(x) for x in self.ribbon_panel.result_ids()]
+            out["ribbon_collection"] = [] if ids == [str(x) for x in DEFAULT_COLLECTION] else ids   # 빈 값 = 기본값
+        else:
+            out["ribbon_collection"] = [str(x) for x in (self._prefs.get("ribbon_collection") or [])]
+        if getattr(self, "sc_panel", None) is not None:
+            out["shortcuts"] = self.sc_panel.result_shortcuts()
+            out["capture_global"] = bool(self.sc_panel.result_capture_global())
+        out.update(self.adv.result_prefs())
+        out.update(self.rec.result_prefs())
+        for fn in self._extra_results:
+            try:
+                out.update(fn() or {})
+            except Exception:
+                pass
+        return out
+
+    def _on_ext_lang_toggled(self, on: bool):
+        """외부 언어팩을 켤 때 한 번 확인한다(다국어 SOT §13 '외부 팩의 신뢰'). 끌 때는 묻지 않는다."""
+        if not on:
+            return
+        ans = QMessageBox.question(
+            self, tr("외부 언어팩 사용"),
+            tr("외부 언어팩은 릴리스와 함께 검사받지 않은 번역입니다.\n"
+               "프로그램을 바꾸지는 못하지만 단추·안내 문구를 다르게 보이게 할 수 있습니다.\n"
+               "믿을 수 있는 곳에서 받은 언어팩만 쓰세요.\n\n켤까요?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if ans != QMessageBox.StandardButton.Yes:
+            self.chk_ext_lang.setChecked(False)
+
+    def _open_external_lang_dir(self):
+        """외부 언어팩 폴더를 만들고(없으면) 탐색기로 연다(다국어 SOT §3.4)."""
+        from viewer import i18n as _i18n
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        d = _i18n.external_dir()
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(d)))

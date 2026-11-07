@@ -246,7 +246,7 @@ class SignDraftBand(QFrame):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 2, 4, 2)
         self.label = QLabel("")
-        self.btn_confirm = QPushButton(tr("서명 확정…"))
+        self.btn_confirm = QPushButton(tr("서명 확정"))
         self.btn_clear = QPushButton(tr("모두 지우기"))
         self.btn_confirm.clicked.connect(self.confirmRequested.emit)
         self.btn_clear.clicked.connect(self.clearRequested.emit)

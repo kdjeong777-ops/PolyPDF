@@ -415,7 +415,7 @@ class StampManagerDialog(QDialog):
         self._m_shot = m.addMenu(tr("스크린샷에서"))
         self._m_shot.aboutToShow.connect(self._fill_shots)
         self.btn_add.setMenu(m)
-        self.btn_edit = QPushButton(tr("고치기…"))
+        self.btn_edit = QPushButton(tr("고치기"))
         self.btn_edit.clicked.connect(self._edit)
         self.btn_del = QPushButton(tr("지우기"))
         self.btn_del.clicked.connect(self._delete)

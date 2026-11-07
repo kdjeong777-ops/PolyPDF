@@ -116,13 +116,14 @@ chk([_cid(a) for a in (_inst.menu().actions() if _inst else [])] == ["tools.pdf_
 chk(not any(t and ("기본값으로 저장" in t or t.startswith("설정 초기화")) for t in items),
     "② 기본값 저장·설정 초기화는 도구 메뉴에서 뺐다(환경설정 창 맨 아래)")
 from viewer.widgets.settings_dialog import SettingsDialog
-_dlg = SettingsDialog(mw._prefs, mw, host=mw)
+_dlg = SettingsDialog(mw._prefs, mw, host=mw, page="manage")   # 261107-12(디자인 SOT §2.14): '고급 › 관리' 쪽
 _dlg.show(); app.processEvents()                 # 배치가 잡혀야 위치를 잴 수 있다
-chk(_dlg.btn_save_default.text() == "현재 설정을 기본값으로 저장(배포용)…"
-    and _dlg.btn_reset_default.text() == "설정 초기화(기본값으로 되돌리기)…"
+chk(_dlg.btn_save_default.text() == "현재 설정을 기본값으로 저장(배포용)"
+    and _dlg.btn_reset_default.text() == "설정 초기화(기본값으로 되돌리기)"
+    and _dlg._scrolls["manage"].widget().isAncestorOf(_dlg.btn_save_default)
     and _dlg.btn_save_default.mapTo(_dlg, _dlg.btn_save_default.rect().topLeft()).y()
     < _dlg.btn_reset_default.mapTo(_dlg, _dlg.btn_reset_default.rect().topLeft()).y(),
-    "② 환경설정 창 맨 아래 — 기본값 저장(배포용) 아래 설정 초기화")
+    "② 환경설정 '고급 › 관리' — 기본값 저장(배포용) 아래 설정 초기화")
 _dlg.close(); _dlg.deleteLater()
 m_file = next(a.menu() for a in mw.menuBar().actions() if a.text().startswith("파일"))
 fa = [a for a in m_file.actions() if a.text() == "변환"]

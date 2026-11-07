@@ -81,7 +81,7 @@ class HyperlinkDialog(QDialog):
         self.lbl_pending = QLabel(tr("선택된 파일: (없음)"))
         self.lbl_pending.setStyleSheet("color:#444;")
         fr.addWidget(self.lbl_pending, 1)
-        btn_pick = QPushButton(tr("파일 선택…"))
+        btn_pick = QPushButton(tr("파일 선택"))
         btn_pick.clicked.connect(self._on_pick_file)
         fr.addWidget(btn_pick)
         fl.addLayout(fr)

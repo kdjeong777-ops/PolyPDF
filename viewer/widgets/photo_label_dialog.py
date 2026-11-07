@@ -28,7 +28,7 @@ class PhotoLabelDialog(QDialog):
         self.cb = QComboBox()
         self.cb.setObjectName("labelStyle")
         row.addWidget(self.cb, 1)
-        self.b_new = QPushButton(tr("새 스타일..."))
+        self.b_new = QPushButton(tr("새 스타일"))
         self.b_del = QPushButton(tr("지우기"))
         row.addWidget(self.b_new)
         row.addWidget(self.b_del)

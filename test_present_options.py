@@ -28,10 +28,10 @@ chk(not hasattr(sd, "spin_overlap"), "본화면 설정에서 '겹침%' 위젯 �
 rp = sd.result_prefs()
 chk("presentation_overlap_pct" not in rp
     and "presentation_dual" not in rp, "result_prefs 에 발표 보기 키 없음")
-# 261025-6(디자인 SOT §2.14): 녹화 묶음은 '발표화면 녹화 설정' 별도 창 — 환경설정 창에는 단추만
+# 261107-12(디자인 SOT §2.14): 녹화는 환경설정 한 창의 '고급 › 발표 녹화' 쪽 — 같은 [확인]·[적용] 으로 저장
 from viewer.widgets.settings_dialog import RecordingSettingsDialog
-chk(hasattr(sd, "btn_recording") and not hasattr(sd, "cmb_mic") and "recording_dir" not in rp,
-    "환경설정에는 '발표화면 녹화 설정...' 단추만(녹화 칸·키 없음)")
+chk(sd._scrolls["recording"].widget().isAncestorOf(sd.rec.cmb_mic) and "recording_dir" in rp and "recording_keys" in rp,
+    "환경설정 '발표 녹화' 쪽에 녹화 칸·키(결과에도)")
 _rd = RecordingSettingsDialog({"recording_dir": "D:/rec", "recording_keys": ["Ctrl+R", "Ctrl+Shift+R"]})
 _rp = _rd.result_prefs()
 chk(_rp.get("recording_dir") == "D:/rec" and _rp.get("recording_keys") == ["Ctrl+R", "Ctrl+Shift+R"],

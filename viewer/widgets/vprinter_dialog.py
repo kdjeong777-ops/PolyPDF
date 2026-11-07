@@ -109,7 +109,7 @@ class VPrinterDialog(QDialog):
         from viewer.vprinter_recv import default_save_dir
         self.ed_dir = QLineEdit(self._prefs.get("default_dir") or default_save_dir())
         drow.addWidget(self.ed_dir, 1)
-        b = QPushButton(tr("찾아보기…"))
+        b = QPushButton(tr("찾아보기"))
         b.clicked.connect(self._browse)
         drow.addWidget(b)
         g.addLayout(drow)

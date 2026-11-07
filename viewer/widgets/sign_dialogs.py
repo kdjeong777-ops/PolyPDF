@@ -159,9 +159,9 @@ class SignImageDialog(QDialog):
         self.result_image = None
         v = QVBoxLayout(self)
         row = QHBoxLayout()
-        b_open = QPushButton(tr("그림 불러오기…"))
+        b_open = QPushButton(tr("그림 불러오기"))
         b_clip = QPushButton(tr("클립보드에서"))
-        b_draw = QPushButton(tr("손으로 그리기…"))
+        b_draw = QPushButton(tr("손으로 그리기"))
         b_open.clicked.connect(self._open_file)
         b_clip.clicked.connect(self._from_clipboard)
         b_draw.clicked.connect(self._draw)
@@ -518,27 +518,27 @@ class DigitalIdDialog(QDialog):
         self._img_pil = None
         self.sp_mm.valueChanged.connect(self._mm_changed)
         grid = QHBoxLayout()
-        self.b_new = QPushButton(tr("새로 만들기…"))
-        self.b_imp = QPushButton(tr("가져오기…"))
-        self.b_bak = QPushButton(tr("백업 내보내기…"))
-        self.b_cer = QPushButton(tr("공개 인증서 내보내기…"))
+        self.b_new = QPushButton(tr("새로 만들기"))
+        self.b_imp = QPushButton(tr("가져오기"))
+        self.b_bak = QPushButton(tr("백업 내보내기"))
+        self.b_cer = QPushButton(tr("공개 인증서 내보내기"))
         for b in (self.b_new, self.b_imp, self.b_bak, self.b_cer):
             grid.addWidget(b)
         v.addLayout(grid)
         grid2 = QHBoxLayout()
         self.b_def = QPushButton(tr("기본으로"))
         self.b_hello = QPushButton(tr("Windows Hello 보관"))
-        self.b_img = QPushButton(tr("서명 그림…"))          # 261031-1: 고른 ID 의 서명 그림 넣기·바꾸기·빼기
-        self.b_edit = QPushButton(tr("내용 고치기…"))       # 261031-6: 만들 때 넣은 것을 모두 고침 = 새 인증서로 발급
-        self.b_del = QPushButton(tr("지우기…"))
+        self.b_img = QPushButton(tr("서명 그림"))          # 261031-1: 고른 ID 의 서명 그림 넣기·바꾸기·빼기
+        self.b_edit = QPushButton(tr("내용 고치기"))       # 261031-6: 만들 때 넣은 것을 모두 고침 = 새 인증서로 발급
+        self.b_del = QPushButton(tr("지우기"))
         for b in (self.b_def, self.b_hello, self.b_img, self.b_edit, self.b_del):
             grid2.addWidget(b)
         grid2.addStretch(1)
         v.addLayout(grid2)
         # 3단계(보안 SOT §3.8·§3.9): 공동인증서 · Windows 인증서 저장소
         grid3 = QHBoxLayout()
-        self.b_npki = QPushButton(tr("공동인증서 가져오기…"))
-        self.b_store = QPushButton(tr("Windows 인증서 저장소에서…"))
+        self.b_npki = QPushButton(tr("공동인증서 가져오기"))
+        self.b_store = QPushButton(tr("Windows 인증서 저장소에서"))
         from viewer import sign_winstore
         self.b_store.setVisible(sign_winstore.available())
         grid3.addWidget(self.b_npki)
@@ -859,7 +859,7 @@ class DigitalIdDialog(QDialog):
             box.setIcon(QMessageBox.Icon.Question)
             box.setWindowTitle(tr("서명 그림"))
             box.setText(tr("이 디지털 ID 에는 서명 그림이 있습니다."))
-            b_new = box.addButton(tr("바꾸기…"), QMessageBox.ButtonRole.AcceptRole)
+            b_new = box.addButton(tr("바꾸기"), QMessageBox.ButtonRole.AcceptRole)
             b_rm = box.addButton(tr("빼기"), QMessageBox.ButtonRole.DestructiveRole)
             box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
             box.exec()
@@ -912,7 +912,7 @@ class DigitalIdDialog(QDialog):
             box.setWindowTitle(title)
             box.setText(tr("새 인증서로 발급하고 기존 디지털 ID '{name}' 은 지웁니다. 이미 서명한 문서는 그대로 유효합니다"
                            "(옛 인증서는 신뢰 목록에 남습니다). 받는 사람에게 준 공개 인증서(.cer)는 다시 보내야 합니다.").format(name=e.get("name", "")))
-            b_bak = box.addButton(tr("백업 후 고치기…"), QMessageBox.ButtonRole.AcceptRole)
+            b_bak = box.addButton(tr("백업 후 고치기"), QMessageBox.ButtonRole.AcceptRole)
             b_go = box.addButton(tr("고치기"), QMessageBox.ButtonRole.DestructiveRole)
             box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
             box.exec()
@@ -975,7 +975,7 @@ class DigitalIdDialog(QDialog):
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle(tr("디지털 ID 지우기"))
         box.setText(tr("'{name}' 을 지우면 이 ID 로 다시 서명할 수 없습니다. 이미 서명한 문서는 그대로 유효합니다.").format(name=e.get("name", "")))
-        b_bak = box.addButton(tr("백업 후 지우기…"), QMessageBox.ButtonRole.AcceptRole)
+        b_bak = box.addButton(tr("백업 후 지우기"), QMessageBox.ButtonRole.AcceptRole)
         b_del = box.addButton(tr("지우기"), QMessageBox.ButtonRole.DestructiveRole)
         box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
@@ -1022,7 +1022,7 @@ class NpkiDialog(QDialog):
             self.lst.addItem(QListWidgetItem(tr("(찾은 공동인증서가 없습니다 — [폴더 고르기…] 로 signCert.der 가 있는 폴더를 고르세요)")))
             self.lst.item(0).setFlags(Qt.ItemFlag.NoItemFlags)
         r = QHBoxLayout()
-        b_dir = QPushButton(tr("폴더 고르기…"))
+        b_dir = QPushButton(tr("폴더 고르기"))
         b_dir.clicked.connect(self._pick_dir)
         r.addWidget(b_dir)
         r.addStretch(1)
@@ -1453,7 +1453,7 @@ class SignDialog(QDialog):
         v.addWidget(note)
         bb = QDialogButtonBox()
         self.b_sign = bb.addButton(tr("서명 확정"), QDialogButtonBox.ButtonRole.AcceptRole)
-        self.b_saveas = bb.addButton(tr("다른 이름으로…"), QDialogButtonBox.ButtonRole.ActionRole)
+        self.b_saveas = bb.addButton(tr("다른 이름으로"), QDialogButtonBox.ButtonRole.ActionRole)
         bb.addButton(QDialogButtonBox.StandardButton.Cancel)
         self.b_sign.clicked.connect(self._sign)
         self.b_saveas.clicked.connect(self._sign_as)
@@ -1656,7 +1656,7 @@ class SignPanelDialog(QDialog):
         self.b_trust.clicked.connect(self._trust)
         row.addWidget(self.b_trust)
         # 2단계(보안 SOT §3.6): 서명할 때의 파일 그대로
-        self.b_rev = QPushButton(tr("서명 시점 판 저장…"))
+        self.b_rev = QPushButton(tr("서명 시점 판 저장"))
         self.b_rev.setToolTip(tr("이 서명이 덮는 판 — 서명할 때의 파일 그대로를 새 PDF 로 저장합니다."))
         self.b_rev.clicked.connect(self._save_revision)
         self.b_rev.setEnabled(bool(self._path))

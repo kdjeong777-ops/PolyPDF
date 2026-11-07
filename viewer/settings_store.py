@@ -347,7 +347,8 @@ def _migrate_v11_to_v12(d: dict) -> dict:
 # 261107-4(입력 SOT §3.2.3): v13 에 새로 생긴 단축키 id 와 기본 키 — 사용자가 이미 다른 id 에 준 키와 겹치면 비운다
 NEW_KEYS_V13 = {"save_as": "F12", "copy_path": "Ctrl+Shift+C", "new_folder": "Ctrl+Shift+N", "reveal": "Alt+Shift+R",
                 "info": "Alt+Enter", "fav_add_file": "Ctrl+D", "crop": "Ctrl+Shift+X", "new_page": "Ctrl+Enter",
-                "add_bookmark": "Ctrl+B", "hyperlink": "Ctrl+K", "ocr_read": "Ctrl+Alt+O"}
+                "add_bookmark": "Ctrl+B", "hyperlink": "Ctrl+K", "ocr_read": "Ctrl+Alt+O",
+                "settings": "Ctrl+,"}   # 261107-12: 환경설정 열기
 
 
 def _key_norm(k) -> str:

@@ -192,7 +192,7 @@ try:
     pump(timeout=0.6)
     hb.stop()
     PhotoCropDialog.exec = _exec
-    chk({"저장", "다른 이름으로 저장...", "다른 폴더에 저장..."} <= set(asked.get("buttons", [])) and len(asked.get("buttons", [])) == 4
+    chk({"저장", "다른 이름으로 저장", "다른 폴더에 저장"} <= set(asked.get("buttons", [])) and len(asked.get("buttons", [])) == 4
         and asked.get("default") == "저장",
         "D [확인] 이면 묻는다 — [저장]·[다른 이름으로 저장]·[다른 폴더에 저장](기본 [저장])", str(asked))
     chk(seen.get("stack0"), "D 처음엔 크롭 화면(옵션 꺼짐)")
@@ -234,7 +234,7 @@ try:
     _gd = QFileDialog.getExistingDirectory
     _gs = QFileDialog.getSaveFileName
     QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: str(other))
-    pick["text"] = "다른 폴더에 저장..."
+    pick["text"] = "다른 폴더에 저장"
     mw._photo_crop_dialog(a)
     pump(lambda: not mw.__dict__.get("_photo_crop_busy") and not mw.__dict__.get("_photo_orig_busy"), timeout=20)
     pump(lambda: (other / "a_doc_펼침.jpg").exists(), timeout=20)
@@ -243,7 +243,7 @@ try:
     chk("a_doc_펼침.jpg" not in names, "F 다른 폴더의 것은 보고 있는 목록에 끼우지 않는다", str(names))
     chk(md5(bk / "a_doc.jpg") == sums[a] and len([p_ for p_ in bk.iterdir() if not p_.name.startswith(".")]) == 2, "F 다른 폴더 저장은 원본을 옮기지 않는다")
     QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(tmp / "내가고른.jpg"), ""))
-    pick["text"] = "다른 이름으로 저장..."
+    pick["text"] = "다른 이름으로 저장"
     mw._photo_crop_dialog(a)
     pump(lambda: not mw.__dict__.get("_photo_crop_busy") and not mw.__dict__.get("_photo_orig_busy"), timeout=20)
     pump(lambda: (tmp / "내가고른.jpg").exists(), timeout=20)

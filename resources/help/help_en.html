@@ -13,7 +13,7 @@
   <li>The first time you open a folder, its text is indexed in the background (progress in the status bar).
     If search results look out of date, use <b>Tools → Index</b> (rebuild).</li>
   <li><b>Edit mode / view mode</b>: switch with the <b>Edit</b> button above the bookmark panel (blue pencil = view, red pencil = edit).
-    The mode at startup is <b>PolyPDF startup mode</b> under 'On startup' in Settings.</li>
+    The mode at startup is <b>PolyPDF startup mode</b> under 'General › Startup' in Settings.</li>
   <li><b>Tools → Register &amp; Install → Set as Default PDF App</b>: opens the Windows Default apps page — choose PolyPDF for .pdf there
     (Windows does not let an app change the default by itself).</li>
 </ul>
@@ -47,7 +47,7 @@
     In edit mode, pressing <b>Del</b> with no object selected deletes this page (until you save). Menus show each item's shortcut on the right. <b>Paste uses what you copied last</b> — copied pages go below this page, copied objects go where you clicked.
     Paste from Clipboard pastes pages and pictures as a picture and text as a text box.</li>
   <li><b>Menu tabs</b>: click <b>Quick Access · File · Favorites · View · Tools · Help</b> at the top of the window and the tab's commands appear in one row below it (Alt+C·F·V·B·T·H also switch tabs).
-    <b>Quick Access</b> holds the buttons you use most and is shown at start; add, remove or reorder them with <b>Manage Quick Access...</b> in Settings or by right-clicking the tab bar (Alt+C opens the tab). Turn off <b>Show Ribbon</b> there and the ribbon only appears briefly when you click a tab. The search box is at the right end of the tab row.</li>
+    <b>Quick Access</b> holds the buttons you use most and is shown at start; add, remove or reorder them with <b>Manage Quick Access</b> (Settings › Advanced › Ribbon) or by right-clicking the tab bar (Alt+C opens the tab). Turn off <b>Show Ribbon</b> there and the ribbon only appears briefly when you click a tab. The search box is at the right end of the tab row.</li>
   <li><b>View buttons</b> (Quick Access · View tab): <b>Single</b> (hide the right panel) · <b>Split</b> · <b>Text</b> · <b>Search</b> ·
     <b>Screenshots</b> · <b>Presentation</b> (§12).</li>
   <li><b>Split View</b> (Ctrl+Shift+2): splits the main viewer into <b>two panes</b> so you can view
@@ -307,7 +307,7 @@
     Fill Screen, View Settings (cropping), Presentation Timer Settings (preparation text · duration · alarms), Start Recording with Timer, and the screen (monitor).</li>
   <li><b>🖥 To Screen 2 / 🖥 To Main Screen</b> (where a click takes you) at the far right of the top bar moves the presentation to another monitor or back to the viewer's monitor. The choice is remembered for the next presentation (disabled with a single monitor).</li>
   <li>With 'Apply to Main View' on, when you finish you are asked where to keep the lines you drew: the main view, a PDF, or both.</li>
-  <li><b>Recording</b> (Ctrl+R record/resume, Ctrl+Shift+R stop): screen + audio to mp4. In Settings → <b>Screen + Audio Recording</b> choose the save location ·
+  <li><b>Recording</b> (Ctrl+R record/resume, Ctrl+Shift+R stop): screen + audio to mp4. In Settings → <b>Advanced › Presentation Recording</b> choose the save location ·
     audio (video only / microphone / system sound / microphone + system) · devices · shortcuts, and check with <b>Test Recording (3 s)</b>.
     ffmpeg is installed from <b>Install Components</b>.</li>
 </ul>
@@ -330,6 +330,7 @@
 <tr><td>Ctrl+R</td><td>Refresh (🔄 of the bookmark pane that has focus)</td></tr>
 <tr><td>Ctrl+S</td><td>Save (same as 💾 in the bookmark pane)</td></tr>
 <tr><td>F12</td><td>Save As</td></tr>
+<tr><td>Ctrl+,</td><td>Settings</td></tr>
 <tr><td>Ctrl+Shift+C</td><td>Copy path (where the focus is — the chosen files in the bookmark pane · the chosen photos in the thumbnail strip · the current file)</td></tr>
 <tr><td>Ctrl+Shift+N</td><td>New folder</td></tr>
 <tr><td>Alt+Shift+R</td><td>Open in File Explorer</td></tr>
@@ -364,19 +365,21 @@
 <tr><td>Ctrl+R / Ctrl+Shift+R</td><td>Record/resume / stop (during a presentation; change them in Settings)</td></tr>
 <tr><td>Ctrl+Q</td><td>Exit (File tab 'Exit')</td></tr>
 </table>
-<p><small>You can change any shortcut in <b>Tools → Settings... → Style → Keyboard Shortcuts...</b>, and
+<p><small>You can change any shortcut in <b>Tools → Settings (Ctrl+,) → Advanced › Keyboard Shortcuts</b>, and
 'Restore Defaults' puts them back.</small></p>
 
-<h3>15. Settings (Tools → Settings...)</h3>
+<h3>15. Settings (Tools → Settings · Ctrl+,)</h3>
+<p>Type in the <b>Search settings</b> box at the top to keep only the matching items and highlight the matching rows. The list on the left is split into
+<b>General</b> and <b>Advanced</b>; at the bottom, <b>[OK]</b> (save and close) · <b>[Apply]</b> (save, keep the window) · <b>[Cancel]</b> (discard changes since the last Apply).</p>
 <ul>
-  <li><b>Language</b> (top of the window): Korean / English — applied after restarting. Use external language packs.</li>
-  <li><b>Style</b>: theme auto (system) / light / dark · <b>Keyboard Shortcuts...</b>.</li>
-  <li><b>On startup</b>: open the last folder/file / a chosen folder/file / a blank screen · open the last viewed page ·
-    automatic hashtags · PolyPDF startup mode (edit / view).</li>
-  <li><b>Screenshot limit</b> (5–1000; raised automatically for batch captures)</li>
-  <li><b>Ribbon</b>: Show Ribbon · Manage Quick Access · go to the next/previous file from the last/first page · page navigation · page-turn animation · light page turning (automatic/always/off).</li>
-  <li><b>Hyperlinks</b>: top offset of the buttons on the page. <b>Presentation Recording Settings...</b>: save folder, audio, devices, shortcuts and test recording (§12) — a separate window.</li>
-  <li>Tools menu: <b>Dictionaries and Glossaries ▸</b>. At the bottom of the Settings window: <b>Save Current Settings as Defaults (for distribution)…</b> · <b>Reset Settings (restore defaults)…</b>.</li>
+  <li><b>General › General</b>: Language (after restarting) · theme auto (system) / light / dark · startup (the last folder/file / a chosen folder/file / a blank screen · the last viewed page · PolyPDF startup mode) · view type (PDF only / mixed).</li>
+  <li><b>General › View &amp; Paging</b>: page navigation · page-turn animation · go to the next/previous file from the last/first page · Show Ribbon.</li>
+  <li><b>General › Photos</b> (mixed view type): slideshow auto-advance · backup folder for originals of flattened photos.</li>
+  <li><b>General › Hashtags</b>: auto-assign file hashtags/keywords · automatic photo hashtags · photo kinds.</li>
+  <li><b>General › Screenshots</b>: screenshot list limit (5–1000; raised automatically for batch captures).</li>
+  <li><b>Advanced › Keyboard Shortcuts</b>: change any shortcut · restore defaults · global screen-capture shortcut. <b>Advanced › Ribbon</b>: Manage Quick Access.</li>
+  <li><b>Advanced › Presentation Recording</b>: save folder, audio, devices, shortcuts and test recording (§12).</li>
+  <li><b>Advanced › Fine-tuning</b>: light page turning (automatic/always/off) · top offset of the hyperlink buttons. <b>Advanced › Maintenance</b>: external language packs · <b>Save Current Settings as Defaults (for distribution)</b> · <b>Reset Settings (restore defaults)</b>.</li>
 </ul>
 
 <h3>16. Help · updates · components</h3>

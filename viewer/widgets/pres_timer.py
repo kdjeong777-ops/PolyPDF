@@ -489,7 +489,7 @@ class PresTimerDialog:
         # 배경 그림(첨부) — 박스 크기에 cover-crop, 박스 투명도를 그림 투명도로 적용
         irow = QHBoxLayout()
         irow.addWidget(QLabel(tr("배경 그림")))
-        bt_img = QPushButton(tr("그림 첨부…"))
+        bt_img = QPushButton(tr("그림 첨부"))
         bt_img.clicked.connect(self._pick_standby_image)
         bt_paste = QPushButton(tr("클립보드 붙여넣기"))
         bt_paste.clicked.connect(self._paste_standby_image)

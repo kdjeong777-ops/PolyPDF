@@ -148,8 +148,8 @@ try:
     seen = []
     mw._offer_language_restart = lambda: seen.append(1)
     from viewer.widgets import settings_dialog as _sd
-    _sd.SettingsDialog.exec = lambda self: (self.cmb_language.setCurrentIndex(
-        self.cmb_language.findData("ko")), self.DialogCode.Accepted)[1]
+    _sd.SettingsDialog.exec = lambda self: (self.cmb_language.setCurrentIndex(      # 261107-12: [확인] 을 누르는 길(accept)
+        self.cmb_language.findData("ko")), self.accept(), self.DialogCode.Accepted)[2]
     mw._save_settings_now = lambda: None
     mw.action_open_settings()
     chk(seen == [1] and mw._prefs.get("language") == "ko", "H 언어를 바꾸면 재시작 안내")

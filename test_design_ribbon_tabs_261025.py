@@ -6,7 +6,7 @@ B. 실제 키 입력: Ctrl+Shift+1 → 1단(2단 끔·오른쪽 창 숨김), Ctr
    Ctrl+Shift+3/5/6 → 텍스트·검색·스크린샷, 키가 없는 법령(Ctrl+Shift+7)은 아무 일도 하지 않는다 · 키가 있으면 연다
 C. 항목 오른쪽 칸에 각자 키(상태와 무관)
 D. 도구 탭: '등록·설치' ▾ 하나(종전 세 단추 없음)
-E. 환경설정 창에 API 키 칸이 없고 '고급 설정...' 단추 — 눌러 [확인] 하면 곧바로 저장·게이팅, 환경설정 [취소] 해도 남는다
+E. (261107-12) 외부 연결 쪽 — [적용] 이면 저장·게이팅, [취소] 는 적용 뒤 바꿈만 버림. 종전: '고급 설정...' 단추 — 눌러 [확인] 하면 곧바로 저장·게이팅, 환경설정 [취소] 해도 남는다
 """
 import os, sys, faulthandler, json
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -98,36 +98,29 @@ try:
     a_inst = [x for x in tacts if x.iconText() == "등록·설치"][0]
     chk(a_inst.isEnabled() and a_inst.menu() is not None, "D '등록·설치' 는 켜진 ▾ 단추")
 
-    # E 고급 설정
+    # E 외부 연결(종전 '고급 설정' 창) — 261107-12(디자인 SOT §2.14): 환경설정 한 창의 '고급 › 외부 연결' 쪽, [적용] 한 규칙
     from viewer.widgets import settings_dialog as sd
     saved = []
     orig_save = mw._save_settings_now
     mw._save_settings_now = lambda *a, **k: saved.append(dict(mw._prefs))
     mw._prefs.update({"law_oc": "", "kcsc_key": ""}); mw._gate_api_dependent_ui(mw._prefs)
-    d = sd.SettingsDialog(dict(mw._prefs), parent=mw, host=mw); d.show(); QTest.qWait(50)
-    chk(not hasattr(d, "ed_law_oc") and not hasattr(d, "chk_show_keys"), "E 환경설정 창에 API 키 칸이 없다")
-    chk(d.btn_advanced.isVisible(), "E '고급 설정...' 단추가 보인다(한국어)")
-
-    def _fake_exec(self):
-        self.ed_law_oc.setText("NEWOC")
-        self.ed_kcsc_key.setText("KC")
-        pw = [e for e in self._key_edits if e.echoMode() == QLineEdit.EchoMode.Password]
-        chk(len(pw) == len(self._key_edits), "E 고급 창의 키는 *** 로 가린다")
-        return QDialog.DialogCode.Accepted
-    orig_exec = sd.AdvancedSettingsDialog.exec
-    sd.AdvancedSettingsDialog.exec = _fake_exec
-    try:
-        QTest.mouseClick(d.btn_advanced, Qt.MouseButton.LeftButton); QTest.qWait(50)
-    finally:
-        sd.AdvancedSettingsDialog.exec = orig_exec
-    chk(mw._prefs.get("law_oc") == "NEWOC" and mw._prefs.get("kcsc_key") == "KC" and saved,
-        "E 고급 창 [확인] → 곧바로 저장", str((mw._prefs.get("law_oc"), len(saved))))
+    d = sd.SettingsDialog(dict(mw._prefs), parent=mw, host=mw, page="external"); d.show(); QTest.qWait(50)
+    chk(d.current_page() == "external" and not d._page_items["external"].isHidden(), "E 외부 연결 쪽이 보인다(한국어)")
+    pw = [e for e in d.adv._key_edits if e.echoMode() == QLineEdit.EchoMode.Password]
+    chk(len(pw) == len(d.adv._key_edits), "E 외부 연결의 키는 *** 로 가린다")
+    chk(not d.btn_apply.isEnabled(), "E 바뀐 것이 없으면 [적용] 은 꺼짐")
+    d.adv.ed_law_oc.setText("NEWOC"); d.adv.ed_kcsc_key.setText("KC")
+    chk(d.btn_apply.isEnabled(), "E 값을 바꾸면 [적용] 이 켜진다")
+    QTest.mouseClick(d.btn_apply, Qt.MouseButton.LeftButton); QTest.qWait(50)
+    chk(mw._prefs.get("law_oc") == "NEWOC" and mw._prefs.get("kcsc_key") == "KC" and saved and d.isVisible(),
+        "E [적용] → 곧바로 저장, 창은 그대로", str((mw._prefs.get("law_oc"), len(saved))))
     chk(mw._view_acts["law"].isVisible() and mw._view_acts["kcsc"].isVisible(), "E 키 게이팅이 바로 따라간다")
+    d.adv.ed_law_oc.setText("CANCELLED")
     d.reject()
-    chk(mw._prefs.get("law_oc") == "NEWOC", "E 환경설정 [취소] 해도 고급 값은 남는다")
+    chk(mw._prefs.get("law_oc") == "NEWOC", "E [취소] 는 마지막 [적용] 뒤의 바꿈만 버린다")
     d2 = sd.SettingsDialog(dict(mw._prefs), parent=mw, host=mw)
-    mw._apply_prefs(d2.result_prefs())                     # 환경설정 [확인] 경로 — 키를 지우지 않는다(허용목록 old 폴백)
-    chk(mw._prefs.get("law_oc") == "NEWOC" and mw._prefs.get("kcsc_key") == "KC", "E 환경설정 [확인] 이 고급 값을 지우지 않는다")
+    mw._apply_prefs(d2.result_prefs())
+    chk(mw._prefs.get("law_oc") == "NEWOC" and mw._prefs.get("kcsc_key") == "KC", "E 환경설정 [확인] 이 키 값을 지우지 않는다")
     d2.done(0)
 
     # ── 261025-5·261025-6 (사용자 지시·결정) ─────────────────────────────────────────────
@@ -188,55 +181,40 @@ try:
     chk(seen and seen[0] == ["리본 메뉴 보이기", "모음 메뉴 관리"], "H 탭 줄 우클릭 메뉴", str(seen))
     chk(rb.stack.isVisible() and mw._prefs.get("show_panel_toolbar") is True, "H 우클릭 '리본 메뉴 보이기' 로 다시 보인다")
 
-    # I 설정창 배치 — 화면 스타일이 언어 바로 아래, 고급 설정 아래 '발표화면 녹화 설정...'
-    from PyQt6.QtWidgets import QGroupBox, QScrollArea
-    d3 = sd.SettingsDialog(dict(mw._prefs), parent=mw, host=mw); d3.show(); QTest.qWait(50)
-    content = d3.findChild(QScrollArea).widget()
-    titles = [g.title() for g in sorted((g for g in content.findChildren(QGroupBox) if g.parent() is content and g.isVisibleTo(d3)),
-                                         key=lambda g: g.y())]
-    chk(titles[:2] == ["언어 / Language", "스타일"], "I '스타일' 묶음은 언어 바로 아래", str(titles))
-    _grp_style = [g for g in content.findChildren(QGroupBox) if g.title() == "스타일"][0]
-    chk(_grp_style.isAncestorOf(d3.btn_shortcuts) and d3.btn_shortcuts.mapTo(d3, d3.btn_shortcuts.rect().topLeft()).y()
-        > d3.cmb_theme.mapTo(d3, d3.cmb_theme.rect().topLeft()).y(), "I '단축키 설정...' 단추는 스타일 묶음의 테마 아래")
-    from viewer.widgets import shortcuts_dialog as _scd
-    _sc_par = []
-    _orig_scexec = _scd.ShortcutsDialog.exec
-    _scd.ShortcutsDialog.exec = lambda self: (_sc_par.append(self.parent()), 0)[1]
-    try:
-        QTest.mouseClick(d3.btn_shortcuts, Qt.MouseButton.LeftButton); QTest.qWait(50)
-    finally:
-        _scd.ShortcutsDialog.exec = _orig_scexec
-    chk(_sc_par == [d3], "I 단추를 누르면 단축키 설정 창이 환경설정 창 위에 뜬다", str(_sc_par))
+    # I 환경설정 배치 — 261107-12(디자인 SOT §2.14, 사용자 결정): 왼쪽 목록 일반/고급, 따로 뜨던 창 넷은 한 창의 쪽
+    d3 = sd.SettingsDialog(dict(mw._prefs), parent=mw, host=mw, page="general"); d3.show(); QTest.qWait(50)
+    nav = [d3.nav.item(k) for k in range(d3.nav.count())]
+    heads = [it.text().strip() for it in nav if not it.data(sd.PAGE_ROLE)]
+    pages = [it.data(sd.PAGE_ROLE) for it in nav if it.data(sd.PAGE_ROLE)]
+    chk(heads == ["일반", "고급"] and pages == [p for p, _n, _g in sd.PAGES], "I 목록 = 일반/고급 머리글 + 항목 차례", str((heads, pages)))
+    chk(all(not (it.flags() & Qt.ItemFlag.ItemIsSelectable) for it in nav if not it.data(sd.PAGE_ROLE)), "I 머리글은 고를 수 없다")
+    chk(d3.windowTitle() == "환경설정", "I 창 제목은 메뉴 이름과 같은 '환경설정'", d3.windowTitle())
+    chk(d3.sc_panel is not None and d3._scrolls["shortcuts"].widget().isAncestorOf(d3.sc_panel)
+        and d3.ribbon_panel is not None and d3._scrolls["ribbon"].widget().isAncestorOf(d3.ribbon_panel)
+        and d3._scrolls["recording"].widget().isAncestorOf(d3.rec) and d3._scrolls["external"].widget().isAncestorOf(d3.adv),
+        "I 단축키·리본 메뉴·발표 녹화·외부 연결은 한 창의 쪽")
     chk("tools.shortcuts" not in mw._cmds, "I 도구 탭에서 '단축키 설정' 을 뺐다")
-    chk("리본 메뉴" in titles and d3.chk_show_panel_toolbar.text() == "리본 메뉴 보이기"
-        and d3.btn_edit_collection.text() == "모음 메뉴 관리...", "I '리본 메뉴 보이기'·'모음 메뉴 관리...' 이름", str(titles))
-    chk(d3.btn_recording.mapTo(d3, d3.btn_recording.rect().topLeft()).y()
-        > d3.btn_advanced.mapTo(d3, d3.btn_advanced.rect().topLeft()).y(), "I '발표화면 녹화 설정...' 은 고급 설정 아래")
-    got = []
-    _orig_rexec = sd.RecordingSettingsDialog.exec
-
-    def _rexec(self):
-        self.ed_rec_dir.setText("D:/녹화")
-        got.append(self.windowTitle())
-        return QDialog.DialogCode.Accepted
-    sd.RecordingSettingsDialog.exec = _rexec
+    chk(d3.chk_show_panel_toolbar.text() == "리본 메뉴 보이기" and d3._scrolls["view"].widget().isAncestorOf(d3.chk_show_panel_toolbar),
+        "I '리본 메뉴 보이기' 는 보기·넘김 쪽")
+    d3.rec.ed_rec_dir.setText("D:/녹화")
     saved.clear(); mw._save_settings_now = lambda *a, **k: saved.append(1)
     try:
-        QTest.mouseClick(d3.btn_recording, Qt.MouseButton.LeftButton); QTest.qWait(50)
+        QTest.mouseClick(d3.btn_ok, Qt.MouseButton.LeftButton); QTest.qWait(50)
     finally:
-        sd.RecordingSettingsDialog.exec = _orig_rexec
         mw._save_settings_now = lambda *a, **k: None   # 공유 시험 설정에 고급 키를 남기지 않는다(다른 검사로 샌다)
-    chk(got == ["발표화면 녹화 설정"] and mw._prefs.get("recording_dir") == "D:/녹화" and saved,
-        "I 녹화 설정 창 [확인] → 곧바로 저장", str((got, mw._prefs.get("recording_dir"))))
-    d3.reject()
+    chk(mw._prefs.get("recording_dir") == "D:/녹화" and saved and not d3.isVisible(),
+        "I 발표 녹화 값도 [확인] 한 번으로 저장", str(mw._prefs.get("recording_dir")))
     called = []
-    _orig_rexec2 = sd.RecordingSettingsDialog.exec
-    sd.RecordingSettingsDialog.exec = lambda self: (called.append(self.windowTitle()), QDialog.DialogCode.Rejected)[1]
+    _orig_sexec = sd.SettingsDialog.exec
+    sd.SettingsDialog.exec = lambda self: (called.append((self.windowTitle(), self.current_page())), 0)[1]
     try:
         mw._open_recording_settings()            # 발표 중 '녹화 설정'
+        mw._edit_shortcuts()                     # 단축키 설정을 찾는 길
+        mw._manage_collection()                  # 우클릭 '모음 메뉴 관리'
     finally:
-        sd.RecordingSettingsDialog.exec = _orig_rexec2
-    chk(called == ["발표화면 녹화 설정"], "I 발표 중 녹화 설정도 이 창을 바로 연다", str(called))
+        sd.SettingsDialog.exec = _orig_sexec
+    chk(called == [("환경설정", "recording"), ("환경설정", "shortcuts"), ("환경설정", "ribbon")],
+        "I 녹화 설정·단축키·모음 메뉴 관리는 환경설정 그 항목으로 바로", str(called))
 
     # J '변환' — 파일·도구 탭 모두, 도구는 이미지→PDF 오른쪽 · K 모음 탭 Alt+C
     tn = [a.iconText() for a in rb.row("tools").actions() if a.iconText()]
