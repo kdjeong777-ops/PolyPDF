@@ -145,6 +145,115 @@ class ConvertMixin:
             QMessageBox.information(self, tr("변환"), msg)
         return bool(ok)
 
+    def action_pages_to_pdf(self, path, pages) -> str | None:
+        """고른 쪽(썸네일)·지금 쪽(본문)으로 새 PDF — 보이는 그대로 구워서(형식 변환 SOT §2.4, 261107-7 사용자 결정 A).
+
+        `pages` 는 0부터 원본 쪽 번호, 받은 차례대로. 만든 파일 경로(취소·실패면 None)."""
+        import os as _os
+        import fitz
+        from PyQt6.QtWidgets import QFileDialog
+        from viewer import page_crop as _pc, page_rotate as _pr, pdf_mirror as _pm
+        title = tr("PDF 만들기")
+        path = str(path or "")
+        if not path.lower().endswith(".pdf") or not Path(path).exists():
+            return None
+        if not pages or any(isinstance(p, bool) or not isinstance(p, int) for p in pages):
+            self._need_save_first()                    # 붙여넣은 쪽(저장 전)은 파일의 쪽 번호가 없다
+            return None
+        pages = list(dict.fromkeys(int(p) for p in pages))
+        try:
+            with fitz.open(path) as d:
+                locked = bool(d.needs_pass or d.is_encrypted)
+                n = d.page_count
+        except Exception as e:                             # noqa: BLE001
+            QMessageBox.warning(self, title, str(e))
+            return None
+        if locked:
+            QMessageBox.information(self, title, tr("암호 PDF 입니다 — 새 파일이 암호 없이 저장되므로 만들지 않습니다."))
+            return None
+        if any(p < 0 or p >= n for p in pages):
+            return None
+        src = Path(path)
+        lo, hi = min(pages) + 1, max(pages) + 1
+        name = (tr('{stem}_{n}쪽.pdf').format(stem=src.stem, n=lo) if lo == hi
+                else tr('{stem}_{a}-{b}쪽.pdf').format(stem=src.stem, a=lo, b=hi))
+        out, _ = QFileDialog.getSaveFileName(self, title, str(src.with_name(name)), "PDF (*.pdf)")
+        if not out:
+            return None
+        if not out.lower().endswith(".pdf"):
+            out += ".pdf"
+        if _os.path.normcase(_os.path.abspath(out)) == _os.path.normcase(_os.path.abspath(path)):
+            QMessageBox.information(self, title, tr("원본과 다른 이름으로 저장하세요 — 원본은 그대로 둡니다."))
+            return None
+        # 굽기(Qt 그림)는 메인 — 평탄화해서 내보내기와 같은 길(마스터 §4.7.16), 고른 쪽의 꾸밈만
+        try:
+            doc = fitz.open(path)
+            _pr.apply_pending(doc, path)
+            _pc.apply_pending(doc, path)
+            _pm.remove_layer(doc)                      # '저장' 사본은 지운다 — 구운 것과 두 번 보이지 않게
+            _pm.remove_links(doc)
+            keep = set(pages)
+            norm = {p: v for p, v in (self._decorations_norm_for(path) or {}).items() if int(p) in keep}
+            self._bake_decorations(doc, path, norm=norm, links=True)
+        except Exception as e:                             # noqa: BLE001
+            QMessageBox.warning(self, title, str(e))
+            return None
+        tmp = str(Path(out).with_name("~" + Path(out).stem + ".polypdf-tmp"))
+        got = {}
+
+        def _job(progress):
+            from viewer.pdf_font import subset_fonts_safely
+            from viewer.progress_text import step
+            from viewer.twoup import MergeCancelled
+            total = len(pages) + 1
+            for k, p in enumerate(pages):
+                if progress(k, total, step(tr("쪽 담기"), k + 1, len(pages), p + 1, n)) is False:
+                    raise MergeCancelled()
+                try:
+                    _pc.cut_outside(doc[p])            # 크롭 바깥을 실제로 지운다(보이는 그대로)
+                except Exception:
+                    pass
+            doc.select(pages)
+            dropped = 0
+            for page in doc:                           # 서명 값이 든 칸은 뺀다 — 고른 쪽만으로는 맞지 않는다
+                for w in list(page.widgets(types=[fitz.PDF_WIDGET_TYPE_SIGNATURE]) or []):
+                    if w.is_signed:
+                        page.delete_widget(w)
+                        dropped += 1
+            got["dropped"] = dropped
+            if progress(len(pages), total, tr("저장 중")) is False:
+                raise MergeCancelled()
+            subset_fonts_safely(doc)
+            doc.save(tmp, garbage=4, deflate=True)
+        res = self._run_merge_job(_job, title, counts=False)
+        doc.close()
+        if not res.get("ok"):
+            try:
+                _os.remove(tmp)
+            except OSError:
+                pass
+            if res.get("err"):
+                QMessageBox.warning(self, title, res.get("err"))
+            return None
+        err = self._file_op_bg(lambda: _os.replace(tmp, out), tr("저장 중: {name}").format(name=Path(out).name))
+        if err is not None:
+            try:
+                _os.remove(tmp)
+            except OSError:
+                pass
+            QMessageBox.warning(self, title, str(err))
+            return None
+        try:
+            self.bookmark_tree.add_or_refresh_file(str(out), after=path)
+        except Exception:
+            pass
+        self.status.showMessage(tr('PDF 만들기: {name} ({n}쪽)').format(name=Path(out).name, n=len(pages)), 6000)
+        if got.get("dropped"):
+            QMessageBox.information(self, title, tr("원본의 서명 {n}개는 고른 쪽만 담은 새 파일에서 맞지 않아 뺐습니다.").format(
+                n=got["dropped"]))
+        self._open_saved_file(str(out))                # 색인 먼저 걸고 연다(마스터 §4.7.10)
+        return str(out)
+
     def _reveal_converted(self, path) -> None:
         """탐색기로 결과를 짚어 연다 — 책갈피창 '파일 탐색기 열기' 와 같은 함수."""
         try:
