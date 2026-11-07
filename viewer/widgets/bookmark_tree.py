@@ -681,7 +681,7 @@ class BookmarkTree(QWidget):
             self.btn_save.setIcon(QIcon(_sp)); self.btn_save.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
         else:
             self.btn_save.setText(tr("💾 저장"))
-        self.btn_save.setToolTip(tr("저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."))
+        self.btn_save.setToolTip(tr("저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화 사본'."))
         self.btn_save.clicked.connect(lambda: self._op_save())   # 261031-3: clicked(checked) 가 file_path 자리로 들어가지 않게(디자인 SOT §2.9)
         self.btn_save.setVisible(False)
         edit_row.addWidget(self.btn_save)
@@ -1850,7 +1850,7 @@ class BookmarkTree(QWidget):
                 act = sub.addAction("·#" + t)
                 act.triggered.connect(lambda _=False, tag=t: self._revoke_auto_tag(tag))
         if callable(getattr(self, "review_provider", None)):
-            rv = self._tag_menu.addAction(tr("새 태그 후보 검토…"))    # §8.5
+            rv = self._tag_menu.addAction(tr("새 태그 후보 검토"))    # §8.5
             rv.triggered.connect(lambda: self.review_provider())
 
     def _revoke_auto_tag(self, tag: str):
@@ -3019,7 +3019,8 @@ class BookmarkTree(QWidget):
             menu,
             save={"cb": lambda f=target: self._op_save(file_path=f),
                   "tip": tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작).")},
-            save_as={"text": tr("다른 이름으로 저장"), "cb": lambda f=target: self.saveAsFileRequested.emit(f),
+            save_as={"text": self._kt(tr("다른 이름으로 저장"), "save_as"),     # 261107-20: F12 도 이 창의 지금 줄 파일(key_actions.save_as)
+                     "cb": lambda f=target: self.saveAsFileRequested.emit(f),
                      "tip": tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},
             copies=[{"text": tr("평탄화 사본"), "cb": lambda f=target: self._copy_ok([f]) and self.flattenFileRequested.emit(f),
                      "tip": tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")},

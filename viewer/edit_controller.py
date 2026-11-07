@@ -316,14 +316,14 @@ class EditMixin:
         src = Path(file_path)
         from PyQt6.QtWidgets import QFileDialog
         out, _ = QFileDialog.getSaveFileName(
-            self, tr("평탄화해서 내보내기 — 새 PDF로"),
+            self, tr("평탄화 사본 — 새 PDF로"),
             str(src.with_name(tr('{stem}_평탄화.pdf').format(stem=src.stem))), "PDF (*.pdf)")
         if not out:
             return
         if not out.lower().endswith(".pdf"):
             out += ".pdf"
         if _os.path.normcase(_os.path.abspath(out)) == _os.path.normcase(_os.path.abspath(str(src))):
-            QMessageBox.information(self, tr("평탄화해서 내보내기"),
+            QMessageBox.information(self, tr("평탄화 사본"),
                                     tr("원본과 다른 이름으로 내보내세요 — 원본은 PolyPDF 에서 계속 고칠 수 있게 그대로 둡니다."))
             return
         plan = self._resign_prepare(str(src))          # 서명된 원본: 확인·키 열기(보안 SOT §4.1). None = 취소
@@ -363,7 +363,7 @@ class EditMixin:
             progress(2, 3, tr("저장 중"))
             doc.save(tmp, garbage=4, deflate=True)
             progress(3, 3, tr("완료"))
-        res = self._run_merge_job(_job, tr("평탄화해서 내보내기"), cancellable=False)
+        res = self._run_merge_job(_job, tr("평탄화 사본"), cancellable=False)
         doc.close()
         if not res.get("ok"):
             self._sign_unlink(tmp)
@@ -377,7 +377,7 @@ class EditMixin:
             return
         cut = int(got.get("cut") or 0)
         self.status.showMessage(tr('평탄화해서 내보냈습니다: {name}').format(name=Path(out).name), 4000)
-        QMessageBox.information(self, tr("평탄화해서 내보내기"),
+        QMessageBox.information(self, tr("평탄화 사본"),
                                 tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out))
                                 + (tr("\n크롭한 {n}쪽은 바깥 내용을 지우고 쪽 크기를 줄였습니다.").format(n=cut) if cut else "")
                                 + (tr("\n서명 {n}개를 같은 자리에 다시 했습니다(서명 시각은 지금).").format(n=signed) if signed else "")
@@ -676,7 +676,7 @@ class EditMixin:
                     and str(tp._doc.path) == str(cur))
             if same and tp.is_page_dirty():
                 if QMessageBox.question(
-                        self, tr("평탄화해서 내보내기"),
+                        self, tr("평탄화 사본"),
                         tr("저장하지 않은 쪽 편집(순서·삭제·끼워 넣은 쪽)이 있습니다. "
                         "지금 구우면 그 편집은 빠집니다. 계속할까요?")
                 ) != QMessageBox.StandardButton.Yes:
@@ -784,7 +784,7 @@ class EditMixin:
         except Exception:
             return False
         if why == "signed":
-            self.status.showMessage(tr("서명된 문서라 다른 뷰어용 사본(꾸밈·링크·태그)은 넣지 않았습니다 — 평탄화해서 내보내기를 쓰세요."), 8000)
+            self.status.showMessage(tr("서명된 문서라 다른 뷰어용 사본(꾸밈·링크·태그)은 넣지 않았습니다 — 평탄화 사본을 쓰세요."), 8000)
             return False
         if why == "locked":
             self.status.showMessage(tr("편집 권한이 없는 암호 문서라 다른 뷰어용 사본은 넣지 않았습니다."), 8000)

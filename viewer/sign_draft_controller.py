@@ -273,9 +273,9 @@ class SignDraftMixin:
             a.setChecked(e.get("fp") == cur_fp)
             id_acts[a] = e["fp"]
         sub.addSeparator()
-        a_more = sub.addAction(tr("다른 디지털 ID 열기…"))
+        a_more = sub.addAction(tr("다른 디지털 ID 열기"))
         # 261031-10(사용자 지시): 서명 그림·폭·ID 내용은 디지털 ID 관리에서만 — 지금 ID 를 골라 연다(닫으면 이 서명에 반영)
-        a_manage = sub.addAction(tr("디지털 ID 관리…"))
+        a_manage = sub.addAction(tr("디지털 ID 관리"))
         has_img = bool(sign_store.id_image_path(cur_fp))
         a_show_img = m.addAction(tr("서명 그림"))
         a_show_img.setCheckable(True)
@@ -289,7 +289,7 @@ class SignDraftMixin:
             a.setEnabled(d["kind"] == "sign")
             txt_acts[a] = k
         m.addSeparator()
-        a_copy = m.addAction(tr("다른 쪽에도 놓기…"))
+        a_copy = m.addAction(tr("다른 쪽에도 놓기"))
         a_copy.setEnabled(not d["field"])
         m.addSeparator()
         a_del = m.addAction(tr("지우기"))
@@ -451,7 +451,7 @@ class SignDraftMixin:
         cur = str(cur)
         ds = sign_drafts.drafts(cur)
         if not ds:
-            QMessageBox.information(self, tr("서명 확정"), tr("이 파일에 서명 자리가 없습니다. 도구 → 서명... 으로 자리를 먼저 놓으세요."))
+            QMessageBox.information(self, tr("서명 확정"), tr("이 파일에 서명 자리가 없습니다. 도구 → 서명 으로 자리를 먼저 놓으세요."))
             return
         doc = mv._doc.doc
         signs = [d for d in ds if d["kind"] == "sign"]
@@ -585,7 +585,7 @@ class SignDraftMixin:
         img_items = [(d["page"], tuple(d["rect"]), self._sign_draft_image(d) or sign_store.id_image_path(self._sign_current_fp()))
                      for d in images]
         if any(not ip for _p, _r, ip in img_items):
-            QMessageBox.information(self, tr("그림만 넣기"), tr("서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리…' 에서 넣은 뒤 다시 확정하세요."))
+            QMessageBox.information(self, tr("그림만 넣기"), tr("서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리' 에서 넣은 뒤 다시 확정하세요."))
             return "fail"
         tmps = []
 

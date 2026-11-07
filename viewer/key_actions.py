@@ -79,7 +79,20 @@ def target_paths(mw) -> list:
 # ── 키 하나에 함수 하나 ─────────────────────────────────────────────────────
 
 def save_as(mw) -> None:
-    """F12 — 다른 이름으로 저장(파일 탭과 같은 길, 포커스 책갈피창)."""
+    """F12 — 다른 이름으로 저장(파일 탭과 같은 길). 261107-20: 우클릭 '저장 ▸ 다른 이름으로 저장' 과 같은 대상 —
+    책갈피창에 포커스면 **그 창의 지금 줄 PDF**(우클릭한 줄이 지금 줄), 그 밖은 **지금 본문 PDF**. 그런 PDF 가 없으면 종전 길(선택 기준)."""
+    kind, w = focus_kind(mw)
+    if kind == "tree":
+        it = w.tree.currentItem()
+        f = w._file_path_of(it) if it is not None and not w._is_folder_node(it) else ""
+        if f and str(f).lower().endswith(".pdf"):
+            mw._action_save_as(bt=w, file_path=str(f))
+            return
+    elif not _photo_mode(mw):
+        cur = _current_file(mw)
+        if cur.lower().endswith(".pdf"):
+            mw._action_save_as(bt=mw.bookmark_tree, file_path=cur)
+            return
     mw._action_save_as()
 
 

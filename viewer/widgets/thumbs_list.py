@@ -1007,7 +1007,9 @@ class PageThumbs(QWidget):
             act_rot_r = menu.addAction(tr('오른쪽 90° 회전 ({n}쪽)').format(n=_nsel) + _ns)
             act_rot_180 = menu.addAction(tr('180° 회전 ({n}쪽)').format(n=_nsel) + _ns)
         if has_sel:
-            act_crop = menu.addAction(tr('크롭 ({n}쪽)').format(n=_nsel) + _ns)
+            # 261107-20(디자인 SOT §2.9.2): Ctrl+Shift+X 는 썸네일 포커스면 고른 쪽 크롭(key_actions.crop) — 같은 일. 저장 후 항목엔 없음
+            act_crop = menu.addAction((tr('크롭 ({n}쪽)').format(n=_nsel) + _ns) if _ns
+                                      else self._kt(tr('크롭 ({n}쪽)').format(n=_nsel), "crop"))
             act_uncrop = menu.addAction(tr('크롭 해제 ({n}쪽)').format(n=_nsel) + _ns)
         if sel_pages or (self._edit_mode and staged_sel):
             act_hide = menu.addAction(tr('숨김 ({n}쪽)').format(n=_nsel) + _ns)

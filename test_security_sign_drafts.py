@@ -601,7 +601,7 @@ try:
         _QM.exec = _orig_mexec
         sdlg.DigitalIdDialog.exec = _orig_iexec
     chk(not any("서명 그림 바꾸기" in t or "서명 그림 넣기" in t for t in wseen.get("top", []))
-        and wseen.get("sub_tail") == ["다른 디지털 ID 열기…", "디지털 ID 관리…"],
+        and wseen.get("sub_tail") == ["다른 디지털 ID 열기", "디지털 ID 관리"],   # 261107-20: 글 끝 '…' 없음(디자인 SOT §2.7)
         "W1 자리 옵션에 '서명 그림 바꾸기/넣기' 없음 · '디지털 ID ▸' 의 '다른 디지털 ID 열기…' 아래 '디지털 ID 관리…'", str(wseen))
     wr = next(x for x in sdr.drafts(plain) if x["id"] == wd["id"])["rect"]
     chk(opened.get("fp") == cur_w and abs((wr[2] - wr[0]) - 60 * MMPT) < 0.5 and abs(wr[0] - 120) < 0.5,

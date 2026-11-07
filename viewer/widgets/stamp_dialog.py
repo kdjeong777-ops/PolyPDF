@@ -410,7 +410,7 @@ class StampManagerDialog(QDialog):
         row = QHBoxLayout()
         self.btn_add = QPushButton(tr("추가"))
         m = QMenu(self.btn_add)
-        m.addAction(tr("파일에서…"), self._add_file)
+        m.addAction(tr("파일에서"), self._add_file)
         m.addAction(tr("클립보드에서"), self._add_clip)
         self._m_shot = m.addMenu(tr("스크린샷에서"))
         self._m_shot.aboutToShow.connect(self._fill_shots)

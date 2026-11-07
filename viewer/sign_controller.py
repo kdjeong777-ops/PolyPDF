@@ -708,7 +708,7 @@ class SignMixin(SignDraftMixin):
         if others:
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Icon.Warning)
-            box.setWindowTitle(tr("평탄화해서 내보내기"))
+            box.setWindowTitle(tr("평탄화 사본"))
             box.setText(tr("이 문서에는 전자서명 {n}개가 있습니다. 평탄화하면 파일을 새로 쓰므로 서명을 그대로 둘 수 없습니다.").format(n=len(sigs)))
             box.setInformativeText(
                 (tr("내 디지털 ID 로 한 {m}개는 내보낸 파일의 같은 자리에 다시 서명합니다(서명 시각은 지금, 겉모양은 지금 서명 설정).\n").format(m=len(mine)) if mine else "")

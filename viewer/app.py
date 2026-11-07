@@ -716,7 +716,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             cg.addAction(a)
             a.triggered.connect(lambda _=False, k=key: self._set_cap_copy(k))
         m.addSeparator()
-        a = m.addAction(tr("사용자 크기 설정..."))
+        a = m.addAction(tr("사용자 크기 설정"))
         a.triggered.connect(self._edit_capture_sizes)
         dd.setMenu(m)
         dd.setText(self._capture_mode_label())       # 261025-10(디자인 SOT §2.7): ▾ 는 Qt 메뉴 화살표 하나
@@ -1824,7 +1824,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._reg_cmd(cid, a, short=short, tip=tip)
             return a
 
-        # 261031-16(디자인 SOT §2.9.1, 사용자 지시·결정): 묶음 다섯 — 생성 | PDF | 변환·번역 | 환경설정·사전 관리 | 등록·설치.
+        # 261031-16(디자인 SOT §2.9.1, 사용자 지시·결정) → 261107-17: 묶음 넷 — 생성 | PDF | 변환·번역 | 설정·설치(환경설정 + 등록·설치 ▾).
         #   앞 둘은 바깥 왼쪽 글자(RibbonIconMark). 탭 단추의 짧은 이름은 `ribbonShort`(도구 탭에서만 — 모음·메뉴 글자는 그대로).
         #   종전 구역 제목(🧰·⚙️·💻)은 없앴다 — 세부 줄에서 구역은 구분선·바깥 글자로 보인다.
         from viewer.widgets.ribbon import RibbonIconMark
@@ -1898,14 +1898,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         m_tools.addAction(self.act_export)       # 261025-5(사용자 지시): '변환' 은 파일·도구 탭 모두에 — 같은 액션(id file.export)
         self._act_tr_files = _act(tr("PDF번역"), self._action_translate_files, "tools.translate", tr("번역"),
                                   tr("PDF 번역 (목록 창)"))
-        # 261016-3(사용자 지시): 'PDF 꾸밈 저장' 은 파일 메뉴 '평탄화해서 내보내기...' 와 같은 함수라 뺐다. '검색 및 데이터 구축' 구역(법령·건설기준·특허)은
+        # 261016-3(사용자 지시): 'PDF 꾸밈 저장' 은 파일 탭 '평탄화 사본' 과 같은 함수라 뺐다. '검색 및 데이터 구축' 구역(법령·건설기준·특허)은
         #   보기 메뉴에 같은 항목이 있어 뺐다.
         self._act_law = self._act_kcsc = self._act_kipo = None    # 보기 메뉴(`_view_acts`)에만 — 게이팅은 None 을 건너뛴다
 
-        # 환경설정 · 사전 관리 — '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
+        # 설정·설치 — 환경설정. '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
         m_tools.addSeparator()
         _act(tr("환경설정"), self.action_open_settings, "tools.settings")        # 260618-18
-        # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
+        # 261025-6 보완 → 261107-12: 단축키 설정은 환경설정 '고급 › 단축키' 쪽(도구 탭에는 없다, 디자인 SOT §2.14)
         # 📖 사전 관리(261031-16: 종전 '사전 및 용어집 관리') — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25)
         #   261107-17(단어장 SOT §11.1, 사용자 결정): 도구 탭 단추는 없앴다 — 환경설정 '고급 › 사전'(Ctrl+,)으로만
 
@@ -1916,9 +1916,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 (tr("기본 PDF 앱으로 설정"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱으로 설정"),
                  tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요")),   # 261107-14(마스터 §14.10)
                 (tr("구성요소 설치 (녹화·OCR)"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
-                 tr("구성요소 설치(녹화·OCR)…")),
+                 tr("구성요소 설치(녹화·OCR)")),
                 (tr("가상 프린터 설치·제거"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
-                 tr("가상 프린터(PolyPDF) 설치·제거…"))):
+                 tr("가상 프린터(PolyPDF) 설치·제거"))):
             _a = QAction(_t, self)
             _a.triggered.connect(_no_checked(_s))
             _inst.addAction(_a)
@@ -6078,11 +6078,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._ctx_paste_items(menu, A)
         menu.group("shape")
         if edit:
-            add("blank", tr("새 페이지 넣기"), tip=tr("지금 쪽 크기의 흰 쪽을 그 아래에 넣습니다."))
+            # 261107-20(디자인 SOT §2.9.2): 키(`key_actions`)가 본문 포커스에서 같은 쪽에 같은 일 — 붙여넣은 쪽은 '저장 후' 라 키를 보이지 않는다
+            add("blank", self._kt(tr("새 페이지 넣기"), "new_page") if not staged else tr("새 페이지 넣기"),
+                tip=tr("지금 쪽 크기의 흰 쪽을 그 아래에 넣습니다."))
         add("rot_l", self._kt(_pl(tr('왼쪽 90° 회전 (p.{page})'), tr("왼쪽 90° 회전 (붙여넣은 쪽)")), "rotate_left"))
         add("rot_r", self._kt(_pl(tr('오른쪽 90° 회전 (p.{page})'), tr("오른쪽 90° 회전 (붙여넣은 쪽)")), "rotate_right"))
         add("rot_180", _pl(tr('180° 회전 (p.{page})'), tr("180° 회전 (붙여넣은 쪽)")))
-        add("crop", _pl(tr('크롭 (p.{page})'), tr("크롭 (붙여넣은 쪽)")))
+        add("crop", _pl(tr('크롭 (p.{page})'), tr("크롭 (붙여넣은 쪽)")) if staged else self._kt(_pl(tr('크롭 (p.{page})'), ""), "crop"))
         add("uncrop", _pl(tr('크롭 해제 (p.{page})'), tr("크롭 해제 (붙여넣은 쪽)")))
         if edit:
             # 숨김(260609-14 D5) — 둘 다 보이고 지금 상태에 맞는 쪽만 켠다
@@ -6106,9 +6108,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         add("ocr", tr("OCR 로 읽기"), tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
         add("sign", tr("여기에 서명"))
         if edit:
-            add("bm", _pl(tr('책갈피 추가 (p.{page})'), tr("책갈피 추가 (붙여넣은 쪽)")))
-            add("hl", _pl(tr('하이퍼링크 등록 (p.{page})'), tr("하이퍼링크 등록 (붙여넣은 쪽)")))
-        add("info", tr("문서 정보"), self._ctx_info_ready())
+            _k = (lambda t, sid: t) if staged else self._kt          # 261107-20: 붙여넣은 쪽은 '저장 후' — 키 칸 없음
+            add("bm", _k(_pl(tr('책갈피 추가 (p.{page})'), tr("책갈피 추가 (붙여넣은 쪽)")), "add_bookmark"))
+            add("hl", _k(_pl(tr('하이퍼링크 등록 (p.{page})'), tr("하이퍼링크 등록 (붙여넣은 쪽)")), "hyperlink"))
+        add("info", self._kt(tr("문서 정보"), "info"), self._ctx_info_ready())
         if edit:
             menu.group("end")
             # 입력 설정 — 같은 창(종전 '선과 텍스트 입력 설정…')의 선긋기·글쓰기 탭
@@ -6284,7 +6287,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         add_save_menu(
             menu, key=self._sc_key("save"),
             save={"cb": self._save_current_file, "tip": tr("쪽 편집·꾸밈·책갈피를 이 파일에 저장합니다(💾 와 같음).")},
-            save_as={"text": tr("다른 이름으로 저장"), "cb": lambda: self._action_save_as(bt=self.bookmark_tree, file_path=f),
+            save_as={"text": self._kt(tr("다른 이름으로 저장"), "save_as"),     # 261107-20: F12 도 본문 파일에(key_actions.save_as)
+                     "cb": lambda: self._action_save_as(bt=self.bookmark_tree, file_path=f),
                      "tip": tr("쪽 편집·꾸밈·책갈피를 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},
             # 261107-21(마스터 §4.7.13): 사본 넷은 저장 전 쪽 편집이 있으면 만들지 않고 '먼저 저장' — 디스크 파일로 만들어 그 편집이 빠진다
             copies=[{"text": tr("평탄화 사본"), "cb": lambda: self._copy_blocked([f]) or self._action_save_decorated_pdf(file_path=f),
@@ -6526,138 +6530,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             p.drawRect(r)
         p.end()
         return QIcon(pm)
-
-    def _open_text_style_dialog(self, idx=None, kind=None):
-        """260611-76/77: 글쓰기/지시선 박스 설정 — 폰트·글자색·크기·박스선 on/off(스타일=색상버튼)·
-        배경색(투명도)·정렬, 지시선이면 선 끝모양(화살표/원/직선, 아이콘).
-        idx>=0 = 선택 박스 편집 / kind('text'|'leader') = 신규 박스 기본값 편집."""
-        editing = idx is not None and idx >= 0
-        if editing:
-            st = self.main_view.selected_text_stroke()
-            if st is None:
-                return
-            is_leader = bool(st.get("leader"))
-        else:
-            is_leader = (kind == "leader")
-            st = self.main_view.text_defaults(is_leader)
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-                                     QPushButton, QCheckBox, QDoubleSpinBox, QComboBox,
-                                     QColorDialog, QDialogButtonBox, QSpinBox, QLabel)
-        from PyQt6.QtGui import QColor
-        dlg = QDialog(self)
-        _t = tr("지시선 글쓰기 박스") if is_leader else tr("글쓰기 박스")
-        dlg.setWindowTitle(_t + (tr(" 설정") if editing else tr(" 기본 설정(신규)")))
-        form = QFormLayout()
-        state = {"color": st.get("color") or "#111111", "bg": st.get("bg") or "#fff7c0"}
-
-        def _swatch(btn, col):
-            c = QColor(col)
-            yiq = (c.red() * 299 + c.green() * 587 + c.blue() * 114) / 1000
-            btn.setStyleSheet(f"background:{c.name()};color:{'#000' if yiq>=140 else '#fff'};")
-            btn.setText(c.name())
-
-        def _pick(key, btn):
-            c = QColorDialog.getColor(QColor(state[key]), dlg, tr("색 선택"))
-            if c.isValid():
-                state[key] = c.name(); _swatch(btn, state[key])
-
-        # 폰트 — 260913-7(마스터 §4.5.11): 맑은 고딕 하나, 선택 없이 표시만
-        from viewer.pdf_font import TEXT_FAMILY
-        lbl_font = QLabel(TEXT_FAMILY)
-        cb_bold = QCheckBox(tr("굵게")); cb_bold.setChecked(bool(st.get("bold", False)))
-        cb_italic = QCheckBox(tr("기울임")); cb_italic.setChecked(bool(st.get("italic", False)))
-        row_f = QHBoxLayout(); row_f.addWidget(lbl_font, 1)
-        row_f.addWidget(cb_bold); row_f.addWidget(cb_italic)
-        form.addRow(tr("문자 폰트"), self._wrap_row(row_f))
-
-        # 글자색
-        b_color = QPushButton(); _swatch(b_color, state["color"])
-        b_color.clicked.connect(lambda: _pick("color", b_color))
-        form.addRow(tr("문자 색상"), b_color)
-
-        # 크기·자간 — 260907-1: 단위 pt(인쇄했을 때의 실제 크기). 종전 '페이지 대비 %' 는
-        #   값을 봐도 결과를 가늠할 수 없었다. 옛 값은 A4 기준으로 1회 환산해 보여 준다.
-        _spt = st.get("size_pt")
-        if _spt is None:
-            _spt = float(st.get("size", 0.022)) * 842.0
-        sp_size = QDoubleSpinBox(); sp_size.setRange(4.0, 200.0); sp_size.setSingleStep(1.0)
-        sp_size.setDecimals(1); sp_size.setSuffix(" pt")
-        sp_size.setValue(max(4.0, min(200.0, float(_spt))))
-        form.addRow(tr("문자 크기"), sp_size)
-        sp_spacing = QDoubleSpinBox(); sp_spacing.setRange(-3.0, 30.0)
-        sp_spacing.setSingleStep(0.5); sp_spacing.setDecimals(1); sp_spacing.setSuffix(" pt")
-        sp_spacing.setValue(float(st.get("spacing_pt", 0.0) or 0.0))
-        sp_spacing.setToolTip(tr("글자 사이 간격. 0 = 폰트 기본값"))
-        form.addRow(tr("글자 간격(자간)"), sp_spacing)
-
-        # 박스선 on/off (색·굵기·투명도는 색상버튼 스타일)
-        cb_boxline = QCheckBox(tr("적용 (색·굵기·투명도는 색상버튼 스타일)"))
-        cb_boxline.setChecked(bool(st.get("box_line", False)))
-        form.addRow(tr("텍스트 박스선"), cb_boxline)
-
-        # 배경색 + 투명도
-        cb_bg = QCheckBox(tr("적용")); cb_bg.setChecked(st.get("bg") is not None)
-        b_bg = QPushButton(); _swatch(b_bg, state["bg"])
-        b_bg.clicked.connect(lambda: _pick("bg", b_bg))
-        sp_bga = QSpinBox(); sp_bga.setRange(0, 100); sp_bga.setSuffix(" %")
-        sp_bga.setValue(int(st.get("bg_alpha", 100)))
-        row_bg = QHBoxLayout(); row_bg.addWidget(cb_bg); row_bg.addWidget(b_bg, 1)
-        row_bg.addWidget(sp_bga)
-        form.addRow(tr("텍스트 박스 배경"), self._wrap_row(row_bg))
-
-        # 정렬
-        cmb_align = QComboBox(); cmb_align.addItems([tr("왼쪽"), tr("가운데"), tr("오른쪽")])
-        cmb_align.setCurrentIndex(int(st.get("align", 0)))
-        form.addRow(tr("정렬"), cmb_align)
-
-        # 지시선 끝 모양 — 아이콘 토글 버튼
-        tip_state = {"v": st.get("tip", "arrow")}
-        tip_btns = {}
-        if is_leader:
-            row_tip = QHBoxLayout()
-
-            def _set_tip(v):
-                tip_state["v"] = v
-                for k, b in tip_btns.items():
-                    b.setChecked(k == v)
-            for key, glyph, tipname in (("arrow", "→", tr("뾰족한 화살표")),
-                                        ("circle", "●", tr("끝 원형")),
-                                        ("plain", "—", tr("일반 선"))):
-                b = QPushButton(glyph); b.setCheckable(True); b.setFixedWidth(46)
-                b.setToolTip(tipname)
-                b.setChecked(tip_state["v"] == key)
-                b.clicked.connect(lambda _=False, v=key: _set_tip(v))
-                tip_btns[key] = b; row_tip.addWidget(b)
-            row_tip.addStretch(1)
-            form.addRow(tr("선 끝모양"), self._wrap_row(row_tip))
-
-        lay = QVBoxLayout(dlg); lay.addLayout(form)
-        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
-                              | QDialogButtonBox.StandardButton.Cancel)
-        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject)
-        lay.addWidget(bb)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-        fields = {"family": TEXT_FAMILY, "color": state["color"],
-                  "size_pt": float(sp_size.value()),
-                  "spacing_pt": float(sp_spacing.value()),
-                  "bold": cb_bold.isChecked(), "italic": cb_italic.isChecked(),
-                  "box_line": cb_boxline.isChecked(),
-                  "bg": state["bg"] if cb_bg.isChecked() else None,
-                  "bg_alpha": sp_bga.value(),
-                  "align": cmb_align.currentIndex()}
-        if is_leader:
-            fields["tip"] = tip_state["v"]
-        if editing:
-            self.main_view.set_textbox_style(idx, **fields)
-        else:
-            self.main_view.set_text_defaults(is_leader, **fields)
-
-    @staticmethod
-    def _wrap_row(layout):
-        from PyQt6.QtWidgets import QWidget
-        w = QWidget(); layout.setContentsMargins(0, 0, 0, 0); w.setLayout(layout)
-        return w
 
     def _cancel_draw_tools(self, then_select: bool = False) -> None:
         """260907-3(사용자 요청): 선긋기·하이라이트·글쓰기 등 **그리기 도구를 끈다**.
@@ -9365,7 +9237,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def open_settings(self, page=None, parent=None):
         """261107-12(디자인 SOT §2.14, 사용자 결정): 환경설정을 여는 **한 길** — `page` 는 목록 id
-        (general·view·photo·tags·shots·shortcuts·ribbon·external·recording·tuning·manage), 없으면 마지막 항목.
+        (`settings_dialog.PAGES` — general·view·photo·tags·shots·shortcuts·ribbon·external·dict·recording·tuning·manage), 없으면 마지막 항목.
         저장은 창의 [적용]·[확인] 이 `_settings_apply` 로. 화면 언어를 바꿨으면 닫을 때 다시 시작할지 묻는다."""
         # 260628(FIX): `SettingsDialog` 는 지역 import — 이름이 모듈에 없어 앱이 끝난 적이 있다
         from viewer.widgets.settings_dialog import SettingsDialog
@@ -10076,9 +9948,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             m.addAction(a)
             acts[cid] = a
         self._fav_add_acts = {k: acts[k] for k in ("fav.add_folder", "fav.add_file", "fav.add_search")}
-        self._reg_cmd("fav.add_folder", acts["fav.add_folder"], tip=tr("현재 폴더를 즐겨찾기에 추가..."))
-        self._reg_cmd("fav.add_file", acts["fav.add_file"], tip=tr("현재 파일을 즐겨찾기에 추가..."))
-        self._reg_cmd("fav.add_search", acts["fav.add_search"], tip=tr("현재 검색어를 즐겨찾기에 추가..."))
+        self._reg_cmd("fav.add_folder", acts["fav.add_folder"], tip=tr("현재 폴더를 즐겨찾기에 추가"))
+        self._reg_cmd("fav.add_file", acts["fav.add_file"], tip=tr("현재 파일을 즐겨찾기에 추가"))
+        self._reg_cmd("fav.add_search", acts["fav.add_search"], tip=tr("현재 검색어를 즐겨찾기에 추가"))
         self._reg_cmd("fav.manage", acts["fav.manage"], tip=tr("폴더·파일·검색어·법령·고시·특허·건설기준 즐겨찾기를 고칩니다"))
         for cid, menu in (("file.recent", self.menu_recent), ("fav.folders", self.menu_fav_folders),
                           ("file.recent_files", self.menu_recent_files), ("fav.files", self.menu_fav_files),

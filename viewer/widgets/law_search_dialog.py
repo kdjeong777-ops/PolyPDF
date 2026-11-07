@@ -442,7 +442,7 @@ class LawSearchPanel(QWidget):
                 act = self._fav_menu.addAction(label)
                 act.triggered.connect(lambda _=False, ff=f: self.show_saved(ff))
         self._fav_menu.addSeparator()
-        mng = self._fav_menu.addAction("즐겨찾기 관리...")
+        mng = self._fav_menu.addAction("즐겨찾기 관리")
         mng.triggered.connect(self._manage_favs)
 
     def _manage_favs(self):

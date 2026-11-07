@@ -2291,7 +2291,7 @@ class PresentationWindow(QWidget):
             a.setChecked(i == self._ptr_active)
             ptr_acts.append(a)
         pm.addSeparator()
-        act_ptr_set = pm.addAction(tr("포인터 설정…"))
+        act_ptr_set = pm.addAction(tr("포인터 설정"))
         # 260609-16(F3): 펜(선) 선택 + 설정
         pn = menu.addMenu(tr("선(펜)"))
         pn.setStyleSheet(_MENU_CSS)
@@ -2308,7 +2308,7 @@ class PresentationWindow(QWidget):
             a.setCheckable(True); a.setChecked(mi == self._line_mode)
             mode_acts.append(a)
         pn.addSeparator()
-        act_pen_set = pn.addAction(tr("선 설정…"))
+        act_pen_set = pn.addAction(tr("선 설정"))
         # 260611-26: '청소'→'선 지우기'
         act_clear = menu.addAction(tr("선 지우기"))
         menu.addSeparator()
@@ -2369,7 +2369,7 @@ class PresentationWindow(QWidget):
         cb_dual.toggled.connect(lambda on: on and cb_split.setChecked(False))
         menu.addSeparator()
         # 260611-26: '발표 보기 설정'→'보기 설정'(상단 띠 높이 + 크롭)
-        act_view_set = menu.addAction(tr("보기 설정…"))
+        act_view_set = menu.addAction(tr("보기 설정"))
         menu.addSeparator()
         # 260611-26: '발표시간'→'발표시간 설정', '발표시간 표시' 제거(상단 시계 아이콘으로 실행)
         tm = menu.addMenu(tr("발표시간 설정"))
@@ -2381,7 +2381,7 @@ class PresentationWindow(QWidget):
         act_tm_mute.setCheckable(True)
         act_tm_mute.setChecked(self._alarm_muted)
         tm.addSeparator()
-        act_tm_set = tm.addAction(tr("발표시간 설정…"))
+        act_tm_set = tm.addAction(tr("발표시간 설정"))
         # 260611-28: 타이머 시작시 녹화시작(기본 체크) — '발표시간 설정' 바로 아래
         act_rec_on = menu.addAction(tr("타이머 시작시 녹화시작"))
         act_rec_on.setCheckable(True)

@@ -6279,10 +6279,10 @@ class MainView(QWidget):
             a.setChecked(e["id"] == cur)
             a.triggered.connect(lambda _=False, s=e["id"]: self.pick_stamp(s))
         if not its:
-            m.addAction(tr("등록 이미지 없음 — 아래 '등록 이미지 관리…' 에서 추가")).setEnabled(False)
+            m.addAction(tr("등록 이미지 없음 — 아래 '등록 이미지 관리' 에서 추가")).setEnabled(False)
         m.addSeparator()
-        for key, label in (("file", tr("파일에서…")), ("clip", tr("클립보드에서")),
-                           (None, None), ("region", tr("PDF 에서 영역 등록…")), ("manage", tr("등록 이미지 관리…"))):
+        for key, label in (("file", tr("파일에서")), ("clip", tr("클립보드에서")),
+                           (None, None), ("region", tr("PDF 에서 영역 등록")), ("manage", tr("등록 이미지 관리"))):
             if key is None:
                 m.addSeparator()
                 continue

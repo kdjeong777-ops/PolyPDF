@@ -158,7 +158,7 @@ try:
     got = []
     mv.imageMenuRequested.connect(got.append)
     for a in mv._image_menu.actions():
-        if a.text() in ("PDF 에서 영역 등록…", "등록 이미지 관리…"):
+        if a.text() in ("PDF 에서 영역 등록", "등록 이미지 관리"):   # 261107-20: 글 끝 '…' 없음
             a.trigger()
     chk(got == ["region", "manage"], "C13 ▾ 의 영역 등록·관리는 앱으로 알린다", str(got))
     # 등록 이미지가 없으면 단추가 메뉴를 연다

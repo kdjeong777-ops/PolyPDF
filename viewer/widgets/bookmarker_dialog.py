@@ -57,8 +57,7 @@ class BookmarkerDialog(QDialog):
 
         self.edit_input = QLineEdit(str(default_pdf) if default_pdf else "")
         self.edit_input.setPlaceholderText(tr("PDF 파일 경로"))
-        btn_browse_in = QPushButton("...")
-        btn_browse_in.setFixedWidth(32)
+        btn_browse_in = QPushButton(tr("찾아보기"))     # 261107-20(디자인 SOT §2.7): 글자 끝 '…' 없이 — 다른 창의 경로 단추와 같은 이름
         btn_browse_in.clicked.connect(self._browse_input)
         row_in = QHBoxLayout()
         row_in.addWidget(self.edit_input, 1)
@@ -185,8 +184,7 @@ class BookmarkerDialog(QDialog):
             str(default_pdf.parent) if default_pdf else ""
         )
         self.edit_outdir.setPlaceholderText(tr("(비우면 PDF 파일과 같은 폴더)"))
-        self.btn_browse_out = QPushButton("...")
-        self.btn_browse_out.setFixedWidth(32)
+        self.btn_browse_out = QPushButton(tr("찾아보기"))
         self.btn_browse_out.clicked.connect(self._browse_outdir)
         row_out = QHBoxLayout()
         row_out.addWidget(QLabel(tr("출력 폴더:")))

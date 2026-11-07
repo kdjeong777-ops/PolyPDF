@@ -41,8 +41,8 @@ class UserTermsDialog(QDialog):
         self.table.cellDoubleClicked.connect(lambda r, _c: self._edit())
         v.addWidget(self.table, 1)
         row = QHBoxLayout()
-        self.btn_new = QPushButton("새 뜻…")
-        self.btn_edit = QPushButton("수정…")
+        self.btn_new = QPushButton("새 뜻")
+        self.btn_edit = QPushButton("수정")
         self.btn_del = QPushButton("삭제")
         for b, fn in ((self.btn_new, self._new), (self.btn_edit, self._edit), (self.btn_del, self._delete)):
             b.setAutoDefault(False); b.setDefault(False)

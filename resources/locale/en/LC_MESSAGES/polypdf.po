@@ -204,9 +204,9 @@ msgstr "Region capture"
 msgid "캡쳐 화질 설정"
 msgstr "Capture quality"
 
-#: viewer/app.py
-msgid "사용자 크기 설정..."
-msgstr "Custom sizes..."
+#: viewer/app.py viewer/widgets/capture_settings.py
+msgid "사용자 크기 설정"
+msgstr "Custom Size Settings"
 
 #: viewer/app.py
 msgid "영역 캡쳐 저장"
@@ -705,10 +705,6 @@ msgstr "Copy Text After Selecting a Block"
 msgid "여기에 서명"
 msgstr "Sign here"
 
-#: viewer/app.py viewer/doc_info_controller.py viewer/widgets/bookmark_tree.py
-msgid "문서 정보"
-msgstr "Document Info"
-
 #: viewer/app.py viewer/widgets/pres_timer.py viewer/widgets/thumbs_list.py
 msgid "클립보드 붙여넣기"
 msgstr "Paste from Clipboard"
@@ -737,67 +733,6 @@ msgstr ""
 #: viewer/app.py
 msgid "클립보드에 붙일 그림·글·쪽이 없습니다."
 msgstr "There is no picture, text or page on the clipboard to paste."
-
-#: viewer/app.py
-msgid "지시선 글쓰기 박스"
-msgstr "Callout Text Box"
-
-#: viewer/app.py
-msgid "글쓰기 박스"
-msgstr "Text Box"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/pres_timer.py viewer/widgets/text_panel.py
-#: viewer/widgets/twoup_dialog.py
-msgid "굵게"
-msgstr "Bold"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "기울임"
-msgstr "Italic"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "문자 폰트"
-msgstr "Font"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "문자 색상"
-msgstr "Text Color"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "문자 크기"
-msgstr "Text Size"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "글자 사이 간격. 0 = 폰트 기본값"
-msgstr "Spacing between letters. 0 = font default"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "글자 간격(자간)"
-msgstr "Letter Spacing"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "적용 (색·굵기·투명도는 색상버튼 스타일)"
-msgstr "Apply (color, weight and opacity follow the color button style)"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "텍스트 박스선"
-msgstr "Text Box Border"
-
-#: viewer/app.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/photo_label_dialog.py viewer/widgets/view_settings_dialog.py
-msgid "적용"
-msgstr "Apply"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "텍스트 박스 배경"
-msgstr "Text Box Background"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/search_panel.py viewer/widgets/study_panel.py
-msgid "정렬"
-msgstr "Alignment"
 
 #: viewer/app.py
 msgid "삽입할 이미지 선택"
@@ -1122,8 +1057,8 @@ msgid "구성요소 설치"
 msgstr "Install Components"
 
 #: viewer/app.py
-msgid "구성요소 설치(녹화·OCR)…"
-msgstr "Install Components (recording · OCR)…"
+msgid "구성요소 설치(녹화·OCR)"
+msgstr "Install Components (recording · OCR)"
 
 #: viewer/app.py
 msgid "가상 프린터 설치·제거"
@@ -1134,8 +1069,8 @@ msgid "가상 프린터"
 msgstr "Virtual Printer"
 
 #: viewer/app.py
-msgid "가상 프린터(PolyPDF) 설치·제거…"
-msgstr "Virtual Printer (PolyPDF) Install/Remove…"
+msgid "가상 프린터(PolyPDF) 설치·제거"
+msgstr "Virtual Printer (PolyPDF) Install/Remove"
 
 #: viewer/app.py
 msgid "새 창을 열지 못했습니다."
@@ -1476,10 +1411,6 @@ msgid "붙여넣기"
 msgstr "Paste"
 
 #: viewer/app.py
-msgid "새 페이지 넣기"
-msgstr "Insert new page"
-
-#: viewer/app.py
 #, python-brace-format
 msgid "180° 회전 (p.{page})"
 msgstr "Rotate 180° (p.{page})"
@@ -1487,15 +1418,6 @@ msgstr "Rotate 180° (p.{page})"
 #: viewer/app.py
 msgid "180° 회전 (붙여넣은 쪽)"
 msgstr "Rotate 180° (pasted page)"
-
-#: viewer/app.py
-#, python-brace-format
-msgid "크롭 (p.{page})"
-msgstr "Crop (p.{page})"
-
-#: viewer/app.py
-msgid "크롭 (붙여넣은 쪽)"
-msgstr "Crop (pasted page)"
 
 #: viewer/app.py
 #, python-brace-format
@@ -1518,6 +1440,10 @@ msgstr "Open in Other Pane"
 #: viewer/widgets/thumbs_list.py
 msgid "파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."
 msgstr "The file is not changed; the text read is shown in the text panel."
+
+#: viewer/app.py viewer/doc_info_controller.py viewer/widgets/bookmark_tree.py
+msgid "문서 정보"
+msgstr "Document Info"
 
 #: viewer/app.py viewer/photo_controller.py
 msgid "도형 입력 설정"
@@ -1558,30 +1484,6 @@ msgstr "Rounded Rectangle"
 #: viewer/app.py
 msgid "원형"
 msgstr "Circle"
-
-#: viewer/app.py viewer/widgets/pointer_settings_dialog.py
-msgid "색 선택"
-msgstr "Choose Color"
-
-#: viewer/app.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/photo_crop_dialog.py
-msgid "왼쪽"
-msgstr "Left"
-
-#: viewer/app.py viewer/widgets/line_text_settings_dialog.py
-msgid "가운데"
-msgstr "Center"
-
-#: viewer/app.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/photo_crop_dialog.py
-msgid "오른쪽"
-msgstr "Right"
-
-#: viewer/app.py
-msgid "선 끝모양"
-msgstr "Line End"
 
 #: viewer/app.py
 msgid "(최근 폴더 없음)"
@@ -1739,17 +1641,17 @@ msgstr "Add Current Search"
 msgid "항목 관리"
 msgstr "Manage Items"
 
-#: viewer/app.py
-msgid "현재 폴더를 즐겨찾기에 추가..."
-msgstr "Add Current Folder to Favorites..."
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "현재 폴더를 즐겨찾기에 추가"
+msgstr "Add Current Folder to Favorites"
 
-#: viewer/app.py
-msgid "현재 파일을 즐겨찾기에 추가..."
-msgstr "Add Current File to Favorites..."
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "현재 파일을 즐겨찾기에 추가"
+msgstr "Add Current File to Favorites"
 
-#: viewer/app.py
-msgid "현재 검색어를 즐겨찾기에 추가..."
-msgstr "Add Current Search to Favorites..."
+#: viewer/app.py viewer/widgets/search_panel.py
+msgid "현재 검색어를 즐겨찾기에 추가"
+msgstr "Add current search to favorites"
 
 #: viewer/app.py
 msgid "폴더·파일·검색어·법령·고시·특허·건설기준 즐겨찾기를 고칩니다"
@@ -2117,6 +2019,10 @@ msgid "저장 중…"
 msgstr "Saving…"
 
 #: viewer/app.py
+msgid "새 페이지 넣기"
+msgstr "Insert new page"
+
+#: viewer/app.py
 msgid "지금 쪽 크기의 흰 쪽을 그 아래에 넣습니다."
 msgstr "Inserts a blank page of the current page size below it."
 
@@ -2137,6 +2043,15 @@ msgstr "Rotate Right 90° (p.{page})"
 #: viewer/app.py
 msgid "오른쪽 90° 회전 (붙여넣은 쪽)"
 msgstr "Rotate Right 90° (pasted page)"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "크롭 (p.{page})"
+msgstr "Crop (p.{page})"
+
+#: viewer/app.py
+msgid "크롭 (붙여넣은 쪽)"
+msgstr "Crop (pasted page)"
 
 #: viewer/app.py
 #, python-brace-format
@@ -2164,24 +2079,6 @@ msgstr "Unhide All"
 msgid "2단 보기"
 msgstr "Split View"
 
-#: viewer/app.py viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "책갈피 추가 (p.{page})"
-msgstr "Add Bookmark (p.{page})"
-
-#: viewer/app.py
-msgid "책갈피 추가 (붙여넣은 쪽)"
-msgstr "Add Bookmark (pasted page)"
-
-#: viewer/app.py viewer/widgets/thumbs_list.py
-#, python-brace-format
-msgid "하이퍼링크 등록 (p.{page})"
-msgstr "Register hyperlink (p.{page})"
-
-#: viewer/app.py
-msgid "하이퍼링크 등록 (붙여넣은 쪽)"
-msgstr "Register hyperlink (pasted page)"
-
 #: viewer/app.py
 msgid "쪽 편집·꾸밈·책갈피를 이 파일에 저장합니다(💾 와 같음)."
 msgstr "Saves page edits, markups and bookmarks to this file (same as 💾)."
@@ -2206,14 +2103,6 @@ msgstr "Plain line"
 #, python-brace-format
 msgid "{text} — 누르면 지금 모양으로 붙입니다(모양은 ▸ 에서 골라 바로 붙임)"
 msgstr "{text} — click to paste in the current style (choose a style from ▸ to paste right away)"
-
-#: viewer/app.py
-msgid " 설정"
-msgstr " Settings"
-
-#: viewer/app.py
-msgid " 기본 설정(신규)"
-msgstr " Defaults (new)"
 
 #: viewer/app.py
 #, python-brace-format
@@ -2781,6 +2670,24 @@ msgstr "Please try again after the current task finishes."
 #: viewer/widgets/twoup_dialog.py
 msgid "삭제"
 msgstr "Delete"
+
+#: viewer/app.py viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "책갈피 추가 (p.{page})"
+msgstr "Add Bookmark (p.{page})"
+
+#: viewer/app.py
+msgid "책갈피 추가 (붙여넣은 쪽)"
+msgstr "Add Bookmark (pasted page)"
+
+#: viewer/app.py viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "하이퍼링크 등록 (p.{page})"
+msgstr "Register hyperlink (p.{page})"
+
+#: viewer/app.py
+msgid "하이퍼링크 등록 (붙여넣은 쪽)"
+msgstr "Register hyperlink (pasted page)"
 
 #: viewer/app.py
 #, python-brace-format
@@ -3743,12 +3650,8 @@ msgid "선긋기를 본화면에 적용했습니다."
 msgstr "Lines applied to the main view."
 
 #: viewer/edit_controller.py
-msgid "평탄화해서 내보내기 — 새 PDF로"
-msgstr "Flatten and Export — New PDF"
-
-#: viewer/edit_controller.py viewer/sign_controller.py
-msgid "평탄화해서 내보내기"
-msgstr "Flatten and Export"
+msgid "평탄화 사본 — 새 PDF로"
+msgstr "Flattened copy — New PDF"
 
 #: viewer/edit_controller.py
 msgid "되돌리기(저장 안 함)"
@@ -3775,8 +3678,8 @@ msgid "이 파일에 구울 꾸밈(선·도형·글)·사진·하이퍼링크·�
 msgstr "This file has no annotations (lines, shapes, text), images, hyperlinks, crop or rotation to flatten."
 
 #: viewer/edit_controller.py
-msgid "서명된 문서라 다른 뷰어용 사본(꾸밈·링크·태그)은 넣지 않았습니다 — 평탄화해서 내보내기를 쓰세요."
-msgstr "This document is signed, so the copy for other viewers (annotations, links, tags) was not added — use Flatten and Export."
+msgid "서명된 문서라 다른 뷰어용 사본(꾸밈·링크·태그)은 넣지 않았습니다 — 평탄화 사본을 쓰세요."
+msgstr "This document is signed, so the copy for other viewers (annotations, links, tags) was not added — use Flattened copy."
 
 #: viewer/edit_controller.py
 msgid "편집 권한이 없는 암호 문서라 다른 뷰어용 사본은 넣지 않았습니다."
@@ -4366,10 +4269,6 @@ msgstr "Discard and close"
 msgid "펼친 사진 만드는 중…"
 msgstr "Making straightened photos…"
 
-#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
-msgid "현재 폴더를 즐겨찾기에 추가"
-msgstr "Add Current Folder to Favorites"
-
 #: viewer/photo_controller.py
 msgid "zip 안 사진을 고른 폴더에 풉니다(원본 zip 은 그대로)."
 msgstr "Extracts the photos in the zip to a folder you choose (the zip itself is unchanged)."
@@ -4601,10 +4500,6 @@ msgstr "Move Split Panes Together"
 #: viewer/widgets/tag_edit_dialog.py
 msgid "해시태그 편집"
 msgstr "Edit Hashtags"
-
-#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
-msgid "현재 파일을 즐겨찾기에 추가"
-msgstr "Add Current File to Favorites"
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 msgid "보기설정"
@@ -6213,29 +6108,21 @@ msgid "디지털 ID"
 msgstr "Digital IDs"
 
 #: viewer/sign_draft_controller.py
-msgid "다른 디지털 ID 열기…"
-msgstr "Open Another Digital ID…"
-
-#: viewer/sign_draft_controller.py
-msgid "디지털 ID 관리…"
-msgstr "Manage Digital IDs…"
+msgid "다른 디지털 ID 열기"
+msgstr "Open Another Digital ID"
 
 #: viewer/sign_draft_controller.py viewer/widgets/sign_dialogs.py
 msgid "서명 그림"
 msgstr "Signature image"
 
 #: viewer/sign_draft_controller.py
-msgid "다른 쪽에도 놓기…"
-msgstr "Place on Other Pages…"
+msgid "다른 쪽에도 놓기"
+msgstr "Place on Other Pages"
 
 #: viewer/sign_draft_controller.py viewer/widgets/photo_label_dialog.py
 #: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
 msgid "지우기"
 msgstr "Delete"
-
-#: viewer/sign_draft_controller.py
-msgid "다른 쪽에도 놓기"
-msgstr "Place on Other Pages"
 
 #: viewer/sign_draft_controller.py
 msgid "_서명"
@@ -6259,8 +6146,8 @@ msgid "쪽 범위를 읽지 못했습니다. 예: 1-3, 5"
 msgstr "Could not read the page range. Example: 1-3, 5"
 
 #: viewer/sign_draft_controller.py
-msgid "이 파일에 서명 자리가 없습니다. 도구 → 서명... 으로 자리를 먼저 놓으세요."
-msgstr "This file has no signature places. Place one first with Tools → Sign...."
+msgid "이 파일에 서명 자리가 없습니다. 도구 → 서명 으로 자리를 먼저 놓으세요."
+msgstr "This file has no signature places. Place one first with Tools → Sign."
 
 #: viewer/sign_draft_controller.py
 msgid "작성자가 인증한 문서에는 그림을 넣을 수 없습니다(인증이 허용하지 않는 변경)."
@@ -6271,9 +6158,10 @@ msgstr "You cannot insert images into a document certified by its author (a chan
 msgid "전자서명 {a}개 · 그림만 {b}개 (p.{pages})"
 msgstr "{a} digital signature(s) · {b} image(s) only (p.{pages})"
 
+# | 확정하세요."
 #: viewer/sign_draft_controller.py
-msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리…' 에서 넣은 뒤 다시 확정하세요."
-msgstr "An image-only place has no signature image — add one via its right-click menu 'Digital ID ▸ Manage Digital IDs…', then confirm again."
+msgid "서명 그림이 없는 그림만 자리가 있습니다 — 자리 우클릭 '디지털 ID ▸ 디지털 ID 관리' 에서 넣은 뒤 다시 확정하세요."
+msgstr "An image-only place has no signature image — add one via its right-click menu 'Digital ID ▸ Manage Digital IDs', then confirm again."
 
 #: viewer/sign_draft_controller.py
 msgid "서명된 PDF를 먼저 여세요."
@@ -7335,9 +7223,10 @@ msgstr "Cancel (revert) all changes made since editing began"
 msgid " 저장"
 msgstr " Save"
 
+# | 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."
 #: viewer/widgets/bookmark_tree.py
-msgid "저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화해서 내보내기'."
-msgstr "Save — bookmarks, page edits, rotation and crop go into the original PDF; annotations, hyperlinks and tags are also put into the PDF so other viewers show them. To flatten them or remove content outside a crop, use 'Flatten and Export'."
+msgid "저장 — 책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다. 굽거나 크롭 바깥을 지우려면 '평탄화 사본'."
+msgstr "Save — bookmarks, page edits, rotation and crop go into the original PDF; annotations, hyperlinks and tags are also put into the PDF so other viewers show them. To flatten them or remove content outside a crop, use 'Flattened copy'."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "🗑️ 삭제"
@@ -7526,10 +7415,6 @@ msgstr "(No hashtags on files in this list — right-click a file → Edit Hasht
 #: viewer/widgets/bookmark_tree.py
 msgid "자동 부여 취소"
 msgstr "Cancel Automatic Tag"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "새 태그 후보 검토…"
-msgstr "Review New Tag Candidates…"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
 msgid "암호가 올바르지 않습니다."
@@ -8130,6 +8015,11 @@ msgstr "Input"
 msgid "PDF 파일 경로"
 msgstr "PDF file path"
 
+#: viewer/widgets/bookmarker_dialog.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/vprinter_dialog.py
+msgid "찾아보기"
+msgstr "Browse"
+
 #: viewer/widgets/bookmarker_dialog.py
 msgid "PDF 파일:"
 msgstr "PDF file:"
@@ -8282,10 +8172,6 @@ msgstr "<b>Could not load the pdf_bookmarker library.</b><br><small>{get_status}
 #, python-brace-format
 msgid "이 PDF에는 이미 책갈피 <b>{n}개</b>가 있습니다. 어떻게 할지 고르세요."
 msgstr "This PDF already has <b>{n} bookmarks</b>. Choose what to do."
-
-#: viewer/widgets/capture_settings.py
-msgid "사용자 크기 설정"
-msgstr "Custom Size Settings"
 
 #: viewer/widgets/capture_settings.py
 msgid "캡쳐 박스의 사용자 크기 5개 (이름·가로·세로 픽셀)"
@@ -8481,6 +8367,11 @@ msgstr "The area left after cropping is split at the split lines. Drag the blue 
 msgid "적용할 쪽을 원래 쪽 크기로 되돌립니다"
 msgstr "Restores the target pages to their original size"
 
+#: viewer/widgets/crop_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_label_dialog.py viewer/widgets/view_settings_dialog.py
+msgid "적용"
+msgstr "Apply"
+
 #: viewer/widgets/crop_dialog.py
 msgid "내용이 없어 자르지 않습니다"
 msgstr "No content — not cropped"
@@ -8496,6 +8387,16 @@ msgstr "Top"
 #: viewer/widgets/crop_dialog.py viewer/widgets/photo_crop_dialog.py
 msgid "아래"
 msgstr "Bottom"
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
+msgid "왼쪽"
+msgstr "Left"
+
+#: viewer/widgets/crop_dialog.py viewer/widgets/line_text_settings_dialog.py
+#: viewer/widgets/photo_crop_dialog.py
+msgid "오른쪽"
+msgstr "Right"
 
 #: viewer/widgets/crop_dialog.py
 msgid "나누지 않음"
@@ -9055,6 +8956,52 @@ msgstr "Highlight"
 msgid "지우개 면적(px)"
 msgstr "Eraser size (px)"
 
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/pres_timer.py
+#: viewer/widgets/text_panel.py viewer/widgets/twoup_dialog.py
+msgid "굵게"
+msgstr "Bold"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "기울임"
+msgstr "Italic"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "문자 폰트"
+msgstr "Font"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "문자 색상"
+msgstr "Text Color"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "문자 크기"
+msgstr "Text Size"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "글자 사이 간격. 0 = 폰트 기본값"
+msgstr "Spacing between letters. 0 = font default"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "글자 간격(자간)"
+msgstr "Letter Spacing"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "적용 (색·굵기·투명도는 색상버튼 스타일)"
+msgstr "Apply (color, weight and opacity follow the color button style)"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "텍스트 박스선"
+msgstr "Text Box Border"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "텍스트 박스 배경"
+msgstr "Text Box Background"
+
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/search_panel.py
+#: viewer/widgets/study_panel.py
+msgid "정렬"
+msgstr "Alignment"
+
 #: viewer/widgets/line_text_settings_dialog.py
 msgid "지시선 끝모양"
 msgstr "Callout end style"
@@ -9106,6 +9053,10 @@ msgstr "Name:"
 #: viewer/widgets/line_text_settings_dialog.py
 msgid "불투명도:"
 msgstr "Opacity:"
+
+#: viewer/widgets/line_text_settings_dialog.py
+msgid "가운데"
+msgstr "Center"
 
 #: viewer/widgets/line_text_settings_dialog.py
 msgid "스타일 이름을 입력하세요."
@@ -9287,8 +9238,8 @@ msgid "청소"
 msgstr "Clear"
 
 #: viewer/widgets/main_view.py viewer/widgets/stamp_dialog.py
-msgid "파일에서…"
-msgstr "From File…"
+msgid "파일에서"
+msgstr "From File"
 
 #: viewer/widgets/main_view.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/stamp_dialog.py
@@ -9296,12 +9247,12 @@ msgid "클립보드에서"
 msgstr "From Clipboard"
 
 #: viewer/widgets/main_view.py
-msgid "PDF 에서 영역 등록…"
-msgstr "Register Area from PDF…"
+msgid "PDF 에서 영역 등록"
+msgstr "Register Area from PDF"
 
-#: viewer/widgets/main_view.py
-msgid "등록 이미지 관리…"
-msgstr "Manage Saved Images…"
+#: viewer/widgets/main_view.py viewer/widgets/stamp_dialog.py
+msgid "등록 이미지 관리"
+msgstr "Manage Saved Images"
 
 #: viewer/widgets/main_view.py
 #, python-brace-format
@@ -9319,8 +9270,8 @@ msgid "{name} · 폭 {mm} mm"
 msgstr "{name} · width {mm} mm"
 
 #: viewer/widgets/main_view.py
-msgid "등록 이미지 없음 — 아래 '등록 이미지 관리…' 에서 추가"
-msgstr "No saved images — add them in 'Manage Saved Images…' below"
+msgid "등록 이미지 없음 — 아래 '등록 이미지 관리' 에서 추가"
+msgstr "No saved images — add them in 'Manage Saved Images' below"
 
 #: viewer/widgets/main_view.py
 #, python-brace-format
@@ -9810,6 +9761,10 @@ msgid "'{name}' 스타일을 지울까요?"
 msgstr "Delete the style '{name}'?"
 
 #: viewer/widgets/pointer_settings_dialog.py
+msgid "색 선택"
+msgstr "Choose Color"
+
+#: viewer/widgets/pointer_settings_dialog.py
 msgid "발표 포인터 설정"
 msgstr "Presentation Pointer Settings"
 
@@ -10126,16 +10081,16 @@ msgid "포인터"
 msgstr "Pointer"
 
 #: viewer/widgets/presentation.py
-msgid "포인터 설정…"
-msgstr "Pointer Settings…"
+msgid "포인터 설정"
+msgstr "Pointer Settings"
 
 #: viewer/widgets/presentation.py
 msgid "선(펜)"
 msgstr "Line (Pen)"
 
 #: viewer/widgets/presentation.py
-msgid "선 설정…"
-msgstr "Line Settings…"
+msgid "선 설정"
+msgstr "Line Settings"
 
 #: viewer/widgets/presentation.py
 msgid "선 지우기"
@@ -10169,9 +10124,9 @@ msgstr "Fill Screen (Stretch)"
 msgid "페이지 비율을 무시하고 화면을 꽉 채웁니다. 저장하지 않습니다(기본 꺼짐)."
 msgstr "Ignores the page aspect ratio and fills the screen. Not saved (off by default)."
 
-#: viewer/widgets/presentation.py
-msgid "보기 설정…"
-msgstr "View Settings…"
+#: viewer/widgets/presentation.py viewer/widgets/view_settings_dialog.py
+msgid "보기 설정"
+msgstr "View Settings"
 
 #: viewer/widgets/presentation.py
 msgid "시계 숨기기"
@@ -10180,10 +10135,6 @@ msgstr "Hide Clock"
 #: viewer/widgets/presentation.py
 msgid "전체 알람 끄기"
 msgstr "Mute All Alarms"
-
-#: viewer/widgets/presentation.py
-msgid "발표시간 설정…"
-msgstr "Presentation Timer Settings…"
 
 #: viewer/widgets/presentation.py
 msgid "타이머 시작시 녹화시작"
@@ -10699,10 +10650,6 @@ msgid "다음 매치 (F3)"
 msgstr "Next match (F3)"
 
 #: viewer/widgets/search_panel.py
-msgid "현재 검색어를 즐겨찾기에 추가"
-msgstr "Add current search to favorites"
-
-#: viewer/widgets/search_panel.py
 msgid "현재 결과를 엑셀(.xlsx)로 저장"
 msgstr "Save current results to Excel (.xlsx)"
 
@@ -10924,10 +10871,6 @@ msgstr "Patent (KIPRIS) key:"
 #: viewer/widgets/settings_dialog.py
 msgid "비우면 문서\\PolyPDF_특허"
 msgstr "Leave blank for Documents\\PolyPDF_Patents"
-
-#: viewer/widgets/settings_dialog.py viewer/widgets/vprinter_dialog.py
-msgid "찾아보기"
-msgstr "Browse"
 
 #: viewer/widgets/settings_dialog.py
 msgid "특허 PDF 저장 폴더:"
@@ -12361,10 +12304,6 @@ msgid "날짜 글자 색"
 msgstr "Date text color"
 
 #: viewer/widgets/stamp_dialog.py
-msgid "등록 이미지 관리"
-msgstr "Manage Saved Images"
-
-#: viewer/widgets/stamp_dialog.py
 msgid "스크린샷에서"
 msgstr "From Screenshot"
 
@@ -12939,11 +12878,6 @@ msgstr "Rotate 180° ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
-msgid "크롭 ({n}쪽)"
-msgstr "Crop ({n} pages)"
-
-#: viewer/widgets/thumbs_list.py
-#, python-brace-format
 msgid "크롭 해제 ({n}쪽)"
 msgstr "Remove Crop ({n} page(s))"
 
@@ -12966,6 +12900,11 @@ msgstr "Print ({n} pages)"
 #, python-brace-format
 msgid "스크린샷 붙여넣기 ({n}쪽) — {w}"
 msgstr "Paste Screenshots ({n} pages) — {w}"
+
+#: viewer/widgets/thumbs_list.py
+#, python-brace-format
+msgid "크롭 ({n}쪽)"
+msgstr "Crop ({n} pages)"
 
 #: viewer/widgets/thumbs_list.py
 #, python-brace-format
@@ -13922,10 +13861,6 @@ msgstr "Upgrade and Exit"
 #: viewer/widgets/update_dialog.py
 msgid "그냥 종료"
 msgstr "Just Exit"
-
-#: viewer/widgets/view_settings_dialog.py
-msgid "보기 설정"
-msgstr "View Settings"
 
 #: viewer/widgets/view_settings_dialog.py
 msgid "크롭 — 전체 페이지(전역)"
