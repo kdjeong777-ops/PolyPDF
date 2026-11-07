@@ -18,6 +18,12 @@ WIKTIONARY_REFERENCE = ("Wiktionary (CC BY-SA 4.0, Wiktionary contributors) — 
 SOURCE_EN = "wiktionary_en"          # 영어판·전체 원자료 — 영어 풀이 + 한국어 번역
 SOURCE_KO = "wiktionary_ko"          # 한국어판 — 한글 풀이
 PRIORITY = 70                        # 동봉 전문사전(50·60) 뒤
+# 261107-27(단어장 SOT §5.1): [Wiktionary 받기] — 주소는 여기 한 곳(kaikki 경로가 바뀌면 여기만). 한국어판만
+KO_EDITION_URL = "https://kaikki.org/dictionary/downloads/ko/ko-extract.jsonl.gz"
+KO_EDITION_FILE = "ko-extract.jsonl.gz"
+KO_EDITION_APPROX_MB = 26
+MIN_DOWNLOAD_BYTES = 1_000_000
+_CHUNK = 256 * 1024
 BATCH = 5000
 MAX_GLOSSES = 6
 MAX_EXAMPLES = 2
@@ -92,7 +98,7 @@ def entry_from_obj(obj: dict) -> Optional[dict]:
     trans = _ko_translations(obj)
     if not (en_defs or ko_defs or trans):
         return None
-    tag = f"({pos}) " if pos else ""
+    tag = f"({pos}) " if pos and pos != "unknown" else ""
     def_en = "\n".join(tag + d for d in en_defs[:MAX_GLOSSES])
     ko_lines = [tag + d for d in ko_defs[:MAX_GLOSSES]]
     if trans:
@@ -165,6 +171,71 @@ def import_file(db_path, path, progress: Callable[[int, int], bool] = None) -> d
         raise
     finally:
         store.close()
+
+
+class DownloadError(Exception):
+    """받기 실패 — offline=True 면 인터넷 연결 없음."""
+    def __init__(self, msg: str, offline: bool = False):
+        super().__init__(msg)
+        self.offline = offline
+
+
+def _urlopen(url, timeout=30):                 # 검사가 바꿔 끼운다(가짜 네트워크)
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "PolyPDF dictionary import"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def download(url: str, dest_dir, progress: Callable[[int, int], bool] = None) -> Path:
+    """배경에서 — `dest_dir/<파일>.part` 로 받고 크기·gzip·형식을 확인한 뒤에만 이름을 바꾼다.
+    취소·끊김·크기 다름이면 .part 를 지우고 ImportCancelled / DownloadError. 반환: 받은 파일 경로."""
+    import urllib.error
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    name = url.rsplit("/", 1)[-1] or KO_EDITION_FILE
+    part = dest_dir / (name + ".part")
+    final = dest_dir / name
+    got = 0
+    try:
+        try:
+            resp = _urlopen(url)
+        except urllib.error.HTTPError as e:
+            raise DownloadError(f"받기 실패: HTTP {e.code}")
+        except (urllib.error.URLError, OSError) as e:
+            raise DownloadError(f"인터넷에 연결할 수 없습니다 ({e})", offline=True)
+        try:
+            total = int(resp.headers.get("Content-Length") or 0)
+        except Exception:
+            total = 0
+        with resp, open(part, "wb") as out:
+            while True:
+                if progress is not None and not progress(got, total or max(got, 1)):
+                    raise ImportCancelled()
+                try:
+                    buf = resp.read(_CHUNK)
+                except OSError as e:
+                    raise DownloadError(f"받는 중에 연결이 끊겼습니다 ({e})", offline=True)
+                if not buf:
+                    break
+                out.write(buf)
+                got += len(buf)
+        if total and got != total:
+            raise DownloadError(f"받은 크기가 맞지 않습니다({got:,} / {total:,} 바이트) — 넣지 않았습니다")
+        if got < MIN_DOWNLOAD_BYTES:
+            raise DownloadError(f"받은 파일이 너무 작습니다({got:,} 바이트) — 넣지 않았습니다")
+        with open(part, "rb") as fh:
+            if name.endswith(".gz") and fh.read(2) != b"\x1f\x8b":
+                raise DownloadError("받은 파일이 gzip 이 아닙니다 — 넣지 않았습니다")
+        if not is_wiktextract(part):
+            raise DownloadError("받은 파일이 Wiktionary(wiktextract) 형식이 아닙니다 — 넣지 않았습니다")
+        os.replace(part, final)
+        return final
+    finally:
+        try:
+            if part.exists():
+                part.unlink()               # 반쯤 받은 파일은 남기지 않는다
+        except OSError:
+            pass
 
 
 def scan_stats(path, limit_bytes: int = 0) -> dict:

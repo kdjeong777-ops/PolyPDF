@@ -1560,28 +1560,53 @@ class StudyMixin:
         except Exception as e:
             QMessageBox.warning(self, "용어집 가져오기", f"실패: {e}")
 
-    def _import_wiktionary(self, fn: str):
-        """261107-27(단어장 SOT §5.1): kaikki.org Wiktionary JSONL → 일반 사전. 확인 한 번 뒤 **배경**(진행·취소, 응답성 SOT §4.3)."""
+    @korea_only                 # 한국 전용(다국어 SOT §7) — 처리기에(공용 도우미 `_import_wiktionary` 가 아니라)
+    def _action_download_wiktionary(self, checked: bool = False):
+        """261107-27(단어장 SOT §5.1, 사용자 결정 '그렇게 해'): [Wiktionary 받기] — 한국어판을 받아 같은 흐름으로 넣는다."""
+        return self._import_wiktionary(None, download=True)
+
+    def _import_wiktionary(self, fn, download: bool = False):
+        """261107-27(단어장 SOT §5.1): kaikki.org Wiktionary JSONL → 일반 사전. 확인 한 번 뒤 **배경**(진행·취소, 응답성 SOT §4.3).
+        download=True — 먼저 한국어판(`KO_EDITION_URL`)을 사전 폴더 `_download/` 에 받고(확인된 파일만), 넣은 뒤 지운다."""
         import os
         from viewer.study import wiktionary_import as _wi
-        mb = os.path.getsize(fn) / 1e6
-        if QMessageBox.question(
-                self, "Wiktionary 가져오기",
-                f"{os.path.basename(fn)} ({mb:,.0f}MB)\n\n"
-                "영어 한 낱말 표제어만 골라 일반 사전으로 넣습니다 — 영어 풀이·예문, 있으면 한국어 번역·풀이.\n"
-                "큰 파일은 몇 분 걸리고 사전 파일(dict.db)이 커집니다. 도중에 [취소] 하면 아무것도 남지 않습니다.\n\n"
-                "출처 표기: " + _wi.WIKTIONARY_REFERENCE) != QMessageBox.StandardButton.Yes:
+        what = ("영어 한 낱말 표제어만 골라 일반 사전으로 넣습니다 — 영어 풀이·예문, 있으면 한국어 번역·풀이.\n"
+                "도중에 [취소] 하면 아무것도 남지 않습니다.\n\n"
+                "출처 표기: " + _wi.WIKTIONARY_REFERENCE)
+        if download:
+            head = (f"Wiktionary 한국어판을 받아 넣을까요?\n\n파일: {_wi.KO_EDITION_FILE} (약 {_wi.KO_EDITION_APPROX_MB}MB)\n"
+                    f"출처: {_wi.KO_EDITION_URL}\n\n")
+        else:
+            head = (f"{os.path.basename(fn)} ({os.path.getsize(fn) / 1e6:,.0f}MB)\n\n"
+                    "큰 파일은 몇 분 걸리고 사전 파일(dict.db)이 커집니다.\n")
+        if QMessageBox.question(self, "Wiktionary 받기" if download else "Wiktionary 가져오기",
+                                head + what) != QMessageBox.StandardButton.Yes:
             return None
         db_path = getattr(self._study_get_dict(), "db_path", None)
         out = {}
 
         def _job(progress):
             from viewer.twoup import MergeCancelled
+            got = None
             try:
+                src = fn
+                if download:
+                    got = _wi.download(_wi.KO_EDITION_URL, Path(str(db_path)).parent / "_download",
+                                       lambda d, t: progress(d, t, f"받는 중 {d / 1e6:,.1f} / {t / 1e6:,.1f}MB"))
+                    src = got
                 out["stats"] = _wi.import_file(
-                    db_path, fn, lambda d, t: progress(d, t, "Wiktionary 읽는 중"))
+                    db_path, src, lambda d, t: progress(d, t, "Wiktionary 읽는 중"))
             except _wi.ImportCancelled:
                 raise MergeCancelled()
+            except _wi.DownloadError as e:
+                out["offline"] = e.offline
+                raise
+            finally:
+                if got is not None:
+                    try:
+                        os.remove(str(got))          # 넣었든 아니든 받은 파일은 지운다
+                    except OSError:
+                        pass
         run = getattr(self, "_run_merge_job", None)
         if run is not None:
             res = run(_job, "Wiktionary 가져오기", counts=False)
@@ -1605,7 +1630,9 @@ class StudyMixin:
                 f"{st['words']:,}개 낱말을 넣었습니다 — 한국어가 있는 낱말 {st['with_ko']:,}개({pct:.1f}%), "
                 f"영어 풀이 {st['with_en']:,}개.\n고른 사전은 [단어장 생성] 으로 만든 단어에 뜻을 붙입니다.")
         elif res.get("err"):
-            QMessageBox.warning(self, "Wiktionary 가져오기", f"실패: {res['err']}")
+            QMessageBox.warning(self, "Wiktionary 받기" if download else "Wiktionary 가져오기",
+                                ("인터넷에 연결할 수 없습니다 — 연결을 확인한 뒤 다시 하세요.\n\n" if out.get("offline") else "")
+                                + f"실패: {res['err']}")
         self._wiktionary_result = (res, st)           # 검사용
         return res
 

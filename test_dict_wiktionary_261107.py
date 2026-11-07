@@ -191,6 +191,90 @@ QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (str(root / "bad.json
 infos.clear()
 host._action_import_glossary()
 chk(any(x.startswith("WARN") for x in infos) and not opened, "H5 wiktextract 가 아닌 JSONL 은 알리고 멈춘다", str(infos))
+# ---- J [Wiktionary 받기] — 가짜 네트워크(실제로 받지 않는다) ----
+import io as _io, urllib.error
+ko_lines = [{"word": f"word{chr(97 + i % 26)}{chr(97 + i // 26 % 26)}", "lang": "영어", "lang_code": "en", "pos": "noun",
+             "senses": [{"glosses": [f"낱말 {i}"]}]} for i in range(300)]
+GZ = gzip.compress("".join(json.dumps(o, ensure_ascii=False) + "\n" for o in ko_lines).encode("utf-8"))
+wi.MIN_DOWNLOAD_BYTES = 100                   # 합성 파일은 작다
+urls = []
+
+class FakeResp:
+    def __init__(self, data, length=None):
+        self._b = _io.BytesIO(data)
+        self.headers = {"Content-Length": str(len(data) if length is None else length)}
+    def read(self, n):
+        return self._b.read(min(n, 1000))
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+def serve(data, length=None, exc=None):
+    def _open(url, timeout=30):
+        urls.append(url)
+        if exc is not None:
+            raise exc
+        return FakeResp(data, length)
+    wi._urlopen = _open
+
+dl_dir = root / "_download"
+def leftovers():
+    return sorted(p.name for p in dl_dir.glob("*")) if dl_dir.exists() else []
+
+for sid in ("wiktionary_ko", "wiktionary_en"):
+    ui.delete_source(sid)
+asked.clear(); infos.clear()
+serve(GZ)
+host._action_download_wiktionary()
+chk(urls == [wi.KO_EDITION_URL] and "ko-extract.jsonl.gz" in wi.KO_EDITION_URL, "J1 상수 주소 한 곳(한국어판)", str(urls))
+chk(asked and "약 26MB" in asked[-1] and wi.KO_EDITION_URL in asked[-1] and "CC BY-SA" in asked[-1],
+    "J2 받기 전에 무엇을(이름·출처·크기·출처 표기) 묻는다", str(asked)[:160])
+chk(ui.count("wiktionary_ko") == 300 and leftovers() == [], "J3 받아 넣고 받은 파일은 지운다", f"{ui.count('wiktionary_ko')} {leftovers()}")
+
+def fresh():
+    ui.delete_source("wiktionary_ko"); infos.clear()
+
+fresh()
+host._wiktionary_progress = lambda d, t, _l: False      # 곧바로 [취소]
+serve(GZ)
+r = host._action_download_wiktionary()
+del host._wiktionary_progress
+chk(r and r.get("cancelled") and ui.get_source("wiktionary_ko") is None and leftovers() == [], "J4 취소 — 넣지 않고 반쯤 받은 파일도 없다", str(r))
+
+fresh()
+serve(GZ, length=len(GZ) + 5000)                         # 끊김: 덜 받음
+r = host._action_download_wiktionary()
+chk(r and r.get("err") and ui.get_source("wiktionary_ko") is None and leftovers() == [] and any("크기" in x for x in infos),
+    "J5 받은 크기가 다르면 넣지 않는다", str(infos)[:160])
+
+fresh()
+serve(b"<html>not found</html>" * 20)
+r = host._action_download_wiktionary()
+chk(r and r.get("err") and ui.get_source("wiktionary_ko") is None and leftovers() == [] and any("gzip" in x for x in infos),
+    "J6 gzip 이 아니면 넣지 않는다", str(infos)[:160])
+
+fresh()
+serve(None, exc=urllib.error.URLError("getaddrinfo failed"))
+r = host._action_download_wiktionary()
+chk(r and r.get("err") and ui.get_source("wiktionary_ko") is None and any("인터넷에 연결할 수 없습니다" in x for x in infos),
+    "J7 인터넷이 없으면 그렇게 알린다", str(infos)[:160])
+
+from viewer import i18n
+fresh(); asked.clear(); urls.clear()
+i18n._lang = "en"
+serve(GZ)
+host._action_download_wiktionary()
+i18n._lang = "ko"
+chk(not asked and not urls and ui.get_source("wiktionary_ko") is None, "J8 한국어 화면이 아니면 아무것도 하지 않는다(@korea_only 처리기)")
+
+from viewer.widgets.dict_manager_dialog import DictManagerPanel
+called = []
+host._action_download_wiktionary = lambda *a, **k: called.append(1)
+pnl = DictManagerPanel(ui, {}, host=host, mode="default")
+btn = getattr(pnl, "btn_wikt", None)
+btn is not None and btn.click()
+chk(btn is not None and called == [1] and "CC BY-SA" in btn.toolTip(), "J9 사전 쪽 [Wiktionary 받기] 단추(출처 표기 포함)")
 ui.close()
 
 print("\nALL PASS" if not fails else f"\nFAIL {len(fails)}: {fails}")

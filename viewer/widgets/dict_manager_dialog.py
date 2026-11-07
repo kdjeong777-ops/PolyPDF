@@ -155,7 +155,11 @@ class DictManagerPanel(QWidget):
         self.btn_backup.setToolTip("사전 전체(용어·사용자 뜻·그림·인터넷 캐시)를 zip 한 파일로 저장합니다 — 다른 PC 로 옮길 때.")
         self.btn_restore_all = QPushButton("복원")
         self.btn_restore_all.setToolTip("[백업] 한 zip 으로 지금 사전 전체를 바꿉니다(옛 것은 .bak 으로 둡니다).")
-        for b, fn in ((self.btn_import, self._import), (self.btn_export, self._export),
+        self.btn_wikt = QPushButton("Wiktionary 받기")       # 261107-27(단어장 SOT §5.1)
+        self.btn_wikt.setToolTip("영한 사전(Wiktionary 한국어판, 약 26MB)을 kaikki.org 에서 받아 넣습니다 — 받기 전에 묻습니다.\n"
+                                 "출처 표기: Wiktionary (CC BY-SA 4.0, Wiktionary contributors) — kaikki.org · wiktextract")
+        for b, fn in ((self.btn_import, self._import), (self.btn_wikt, self._download_wiktionary),
+                      (self.btn_export, self._export),
                       (self.btn_backup, self._backup), (self.btn_restore_all, self._restore_all)):
             b.clicked.connect(fn); r0.addWidget(b)
         self.btn_adv = QPushButton("고급 ▾")
@@ -189,7 +193,7 @@ class DictManagerPanel(QWidget):
         gv.addWidget(self.info)
         v.addWidget(grp)
         has_host = self._host is not None
-        for w in (self.btn_import, self.btn_export, self.btn_backup, self.btn_restore_all, self.btn_adv, self.btn_user):
+        for w in (self.btn_import, self.btn_wikt, self.btn_export, self.btn_backup, self.btn_restore_all, self.btn_adv, self.btn_user):
             w.setEnabled(has_host)
 
     # ----- 목록 -----
@@ -413,6 +417,15 @@ class DictManagerPanel(QWidget):
 
     def _import(self):
         self._host_call("_action_import_glossary")
+
+    def _download_wiktionary(self):
+        self._host_call("_action_download_wiktionary")
+        try:
+            from viewer.study.wiktionary_import import WIKTIONARY_REFERENCE
+            if any(str(s.get("source_id", "")).startswith("wiktionary_") for s in self._srcs):
+                self.info.setText("출처 표기: " + WIKTIONARY_REFERENCE)       # 창에도 라이선스를 보인다
+        except Exception:
+            pass
 
     def _export(self):
         self._host_call("_action_export_dict")
