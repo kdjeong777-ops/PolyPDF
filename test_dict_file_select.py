@@ -123,8 +123,8 @@ chk(found(pdf_a, "포장시험어zq") and found(pdf_b, "골재시험어zq"), "A0
 d = open_dlg(pdf_a)
 chk(set(d.use_ids()) == ALL and not d.wait_ids(), "A1 오른쪽(적용할 사전)에 지금 쓰는 사전, 왼쪽은 비어 있음")
 chk("기본 선택을 따름" in d.lbl_file.text(), "A2 이 PDF 의 선택이 없으면 '기본 선택을 따름'", d.lbl_file.text())
-chk(d.btn_remove.text() == "← 삭제" and not d.btn_up.isVisibleTo(d) and not d.btn_style_save.isVisibleTo(d),
-    "A3 이 PDF 창 — 빼기는 [← 삭제], 우선순위 ▲▼·스타일 저장은 없다(환경설정에서)")
+chk(d.btn_remove.text() == "← 삭제" and not d.btn_up.isVisibleTo(d) and d.btn_style_save.isVisibleTo(d),
+    "A3 이 PDF 창 — 빼기는 [← 삭제], 우선순위 ▲▼ 는 없다(환경설정에서), 스타일 줄은 있다(261107-25)")
 click(d.btn_remove_all)
 chk(not d.use_ids() and set(d.wait_ids()) == ALL, "A4 [← 모두 삭제] → 모두 대기 사전으로")
 d.reject()                         # 창 X·Esc 와 같은 길

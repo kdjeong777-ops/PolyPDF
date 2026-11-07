@@ -114,16 +114,12 @@ class StudyMixin:
         return [s for s in (self._prefs.get("dict_styles") or [])
                 if isinstance(s, dict) and s.get("name")]
 
-    def _save_dict_style(self, name: str, source_ids) -> None:
-        name = (name or "").strip()
-        if not name:
-            return
-        styles = [s for s in self._dict_styles() if s["name"] != name]
-        styles.append({"name": name, "sources": [str(x) for x in source_ids]})
-        self._prefs["dict_styles"] = styles
-
-    def _delete_dict_style(self, name: str) -> None:
-        self._prefs["dict_styles"] = [s for s in self._dict_styles() if s["name"] != name]
+    def _set_dict_styles(self, styles) -> None:
+        """261107-25(단어장 SOT §11.1): `이 PDF 의 사전` 창의 스타일 [저장]·[수정]·[삭제] — 바로 settings 에, 패널 메뉴도.
+        (환경설정 쪽은 [적용] 때 `_settings_apply` 가 같은 키를 넣는다.)"""
+        self._prefs["dict_styles"] = [{"name": str(s["name"]), "sources": [str(x) for x in s.get("sources") or []]}
+                                      for s in styles or [] if isinstance(s, dict) and s.get("name")]
+        self._refresh_dict_sources_menu()
 
     def _dict_style_sources(self, name: str) -> list:
         """스타일의 사전 가운데 지금 있는 것만(단어장 SOT §11.1 — 지운 사전은 건너뛴다)."""

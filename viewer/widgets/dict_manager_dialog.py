@@ -6,6 +6,7 @@ SOT: `단어장 작업 계획서.md` §11.1 (261103-2, 261107-13·-17, 사용자
   (`result_default()` → 결과 키 `dict_default`·`dict_styles`, `MainWindow._settings_apply`). [취소] 면 버린다.
   아래 '바로 실행' 묶음 — 가져오기·내보내기·백업·복원·고급 ▾·지우기·되살리기·폴더·양식 CSV·사용자 뜻 편집 — 은 누르면 바로 dict.db 에 쓴다.
 - 단어장 창 `이 PDF 사전` 단추 → `DictFileDialog`(mode="file") — **이 PDF 의 선택**. 창을 닫을 때 저장(`dict_file_off`).
+스타일 줄([저장]·[수정]·[삭제])은 두 판 모두 — 기본 판은 [적용] 때, 이 PDF 판은 누르면 바로 `dict_styles` 에(261107-25).
 '삭제' 는 적용 목록에서 빼기 — 사전은 지우지 않는다. 지운 사전은 `dict_meta.deleted_sources` 에 기억 — 동봉 용어집·폴더 CSV 도 다시 싣지 않는다.
 (261107-17: 종전 '사전 관리' 창·도구 탭 단추는 없앴다 — 사용자 결정 '환경설정의 외부 연결 아래에')
 """
@@ -57,7 +58,7 @@ class DictManagerPanel(QWidget):
              "<small>한 PDF 에만 따로 고르려면 단어장 창의 [이 PDF 사전]. [← 삭제] 는 적용 목록에서 빼기만 합니다.</small>")
             if is_def else
             ("지금 PDF 에만 쓸 사전을 오른쪽으로 옮깁니다 — 다른 PDF·기본 선택은 그대로입니다.<br>"
-             "<small>우선순위·스타일 저장은 환경설정 › 고급 › 사전.</small>"))
+             "<small>우선순위는 환경설정 › 고급 › 사전. 스타일은 여기서 바꾸면 바로 저장됩니다.</small>"))
         intro.setWordWrap(True)
         gv.addWidget(intro)
 
@@ -69,13 +70,17 @@ class DictManagerPanel(QWidget):
         self.cmb_style.activated.connect(self._on_style_chosen)
         st.addWidget(self.cmb_style, 1)
         self.btn_style_save = QPushButton("저장")
-        self.btn_style_save.setToolTip("오른쪽 목록의 조합을 스타일로 저장합니다(같은 이름이면 덮어씁니다).")
+        self.btn_style_save.setToolTip("오른쪽 목록의 조합을 새 스타일로 저장합니다.")
         self.btn_style_save.clicked.connect(self._style_save)
+        self.btn_style_edit = QPushButton("수정")            # 261107-25
+        self.btn_style_edit.setToolTip("고른 스타일을 지금 오른쪽 목록으로 바꿉니다(이름도 고칠 수 있습니다).")
+        self.btn_style_edit.clicked.connect(self._style_edit)
         self.btn_style_del = QPushButton("삭제")
         self.btn_style_del.setToolTip("고른 스타일을 지웁니다(사전은 그대로).")
         self.btn_style_del.clicked.connect(self._style_delete)
-        st.addWidget(self.btn_style_save); st.addWidget(self.btn_style_del)
-        self.btn_style_save.setVisible(is_def); self.btn_style_del.setVisible(is_def)
+        for b in (self.btn_style_save, self.btn_style_edit, self.btn_style_del):
+            st.addWidget(b)
+        self.cmb_style.currentIndexChanged.connect(lambda _i: self._style_buttons())
         gv.addLayout(st)
 
         # ── 두 목록 ──
@@ -301,7 +306,41 @@ class DictManagerPanel(QWidget):
         i = self.cmb_style.findText(current) if current else -1
         self.cmb_style.setCurrentIndex(i if i > 0 else 0)
         self.cmb_style.blockSignals(False)
-        self.btn_style_del.setEnabled(bool(self._styles))
+        self._style_buttons()
+
+    def _style_buttons(self):
+        """[수정]·[삭제] 는 스타일을 고른 동안만."""
+        on = self.cmb_style.currentIndex() > 0
+        self.btn_style_edit.setEnabled(on)
+        self.btn_style_del.setEnabled(on)
+
+    def _style_names(self) -> list:
+        return [s["name"] for s in self._styles]
+
+    def _ask_overwrite(self, name: str) -> bool:
+        return QMessageBox.question(self, "스타일 저장", f"'{name}' 스타일이 이미 있습니다. 덮어쓸까요?")             == QMessageBox.StandardButton.Yes
+
+    def _put_style(self, name: str, old: str = ""):
+        """이름 `name` 으로 오른쪽 목록을 넣는다 — `old` 가 있으면 그 자리에서 바꾼다(수정)."""
+        item = {"name": name, "sources": self.use_ids()}
+        out, placed = [], False
+        for s in self._styles:
+            if s["name"] == (old or name):
+                out.append(item); placed = True
+            elif s["name"] != name:
+                out.append(s)
+        if not placed:
+            out.append(item)
+        self._styles = out
+        self._commit_styles(name)
+
+    def _commit_styles(self, current: str = ""):
+        """기본 판: [적용] 때 저장(판 안의 사본만). 이 PDF 판: 바로 settings `dict_styles` 에(단어장 SOT §11.1)."""
+        self._reload_styles(current)
+        if self.mode != "default" and self._host is not None and hasattr(self._host, "_set_dict_styles"):
+            self._host._set_dict_styles(self.styles())
+        else:
+            self._changed()
 
     def _on_style_chosen(self, index: int):
         if index <= 0:
@@ -315,13 +354,27 @@ class DictManagerPanel(QWidget):
 
     def _style_save(self):
         cur = self.cmb_style.currentText() if self.cmb_style.currentIndex() > 0 else ""
-        name, ok = QInputDialog.getText(self, "스타일 저장", "스타일 이름:", text=cur)
+        name, ok = QInputDialog.getText(self, "스타일 저장", "새 스타일 이름:", text=cur)
         name = (name or "").strip()
         if not ok or not name:
             return
-        self._styles = [s for s in self._styles if s["name"] != name] + [{"name": name, "sources": self.use_ids()}]
-        self._reload_styles(name)
-        self._changed()
+        if name in self._style_names() and not self._ask_overwrite(name):
+            return
+        self._put_style(name)
+
+    def _style_edit(self):
+        """고른 스타일을 지금 오른쪽 목록으로 — 이름 칸을 고치면 이름도 바뀐다(261107-25)."""
+        if self.cmb_style.currentIndex() <= 0:
+            return
+        old = self.cmb_style.currentText()
+        name, ok = QInputDialog.getText(self, "스타일 수정",
+                                        "스타일 이름(지금 오른쪽 목록으로 바꿉니다):", text=old)
+        name = (name or "").strip()
+        if not ok or not name:
+            return
+        if name != old and name in self._style_names() and not self._ask_overwrite(name):
+            return
+        self._put_style(name, old=old)
 
     def _style_delete(self):
         if self.cmb_style.currentIndex() <= 0:
@@ -331,8 +384,7 @@ class DictManagerPanel(QWidget):
                 != QMessageBox.StandardButton.Yes:
             return
         self._styles = [s for s in self._styles if s["name"] != name]
-        self._reload_styles()
-        self._changed()
+        self._commit_styles()
 
     # ----- 바로 실행 — 누르면 바로 dict.db 에 쓴다 -----
     def _files_changed(self, reset: bool = False):
