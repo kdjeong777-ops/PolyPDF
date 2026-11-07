@@ -6929,6 +6929,15 @@ msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입�
 msgstr "Digitally signed — open it to see the verification result in the band above the page."
 
 #: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid ""
+"‘{q}’ 에 맞는 파일이 이 목록에 없습니다.\n"
+"본문·썸네일은 앞서 연 파일 그대로입니다."
+msgstr ""
+"No file in this list matches ‘{q}’.\n"
+"The body and thumbnails still show the file opened before."
+
+#: viewer/widgets/bookmark_tree.py
 msgid "암호화 설정 파일"
 msgstr "Encrypted file"
 
@@ -7221,8 +7230,8 @@ msgid "📄 파일"
 msgstr "📄 File"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "(등록된 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
-msgstr "(No hashtags yet — right-click a file → Edit Hashtags)"
+msgid "(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
+msgstr "(No hashtags on files in this list — right-click a file → Edit Hashtags)"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "자동 부여 취소"

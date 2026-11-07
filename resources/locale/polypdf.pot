@@ -6713,6 +6713,13 @@ msgid "전자서명 있음 — 열면 본문 위 띠에 검증 결과가 보입�
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+#, python-brace-format
+msgid ""
+"‘{q}’ 에 맞는 파일이 이 목록에 없습니다.\n"
+"본문·썸네일은 앞서 연 파일 그대로입니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "암호화 설정 파일"
 msgstr ""
 
@@ -6995,7 +7002,7 @@ msgid "📄 파일"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "(등록된 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
+msgid "(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py

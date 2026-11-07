@@ -1746,16 +1746,48 @@ class BookmarkTree(QWidget):
                     self._apply_tag_label(it, p)
         self._on_filter(self.search_edit.text())
 
+    def _list_tag_counts(self) -> dict:
+        """{태그: 지금 목록의 파일 수} — 거르기(`_on_filter` 의 `file_has_tags`)와 **같은 줄·같은 태그**(`TagStore.get`).
+        태그 저장소 전체(`tag_counts` — 다른 폴더·다른 모드의 파일까지)로 세면 고른 개수와 남는 줄이 어긋난다(261107-9, 검색 SOT §5.1)."""
+        import os
+        cnt = {}
+        if self._tags is None:
+            return cnt
+        seen = set()
+        for it in self._iter_file_nodes():
+            path = it.data(0, self.DATA_FILE)
+            if not path:
+                continue
+            k = os.path.normcase(str(path))
+            if k in seen:
+                continue
+            seen.add(k)
+            try:
+                ts = self._tags.get(path)
+            except Exception:
+                ts = []
+            for t in {x for x in ts}:
+                cnt[t] = cnt.get(t, 0) + 1
+        return cnt
+
     def _rebuild_tag_menu(self):
         """'#' 버튼 — 체크형 패널 풀다운(검색 SOT §5.1, 260830 P4).
 
         ★ 풀다운은 입력 수단일 뿐, 진실은 검색박스 텍스트다: 체크/해제 =
         `#태그` 토큰 추가/제거와 완전히 같은 행위(양방향 — 열 때 토큰으로 체크 복원).
-        체크해도 닫히지 않는다(QWidgetAction). 개수 = tag_counts(연도 불포함 §3.6)."""
+        체크해도 닫히지 않는다(QWidgetAction). 개수 = **지금 목록의 파일** 기준(`_list_tag_counts`, 261107-9) —
+        거르기(`_on_filter`)가 보는 것과 같은 줄이라, 고르면 그 개수만큼 남는다. 연도 불포함(태그 SOT §3.6)."""
         self._tag_menu.clear()
-        tags = self._tags.all_tags() if self._tags else []
+        counts = self._list_tag_counts()
+        active = {c.lstrip("#").lower() for c in self.search_edit.text().split()
+                  if c.startswith("#")}
+        known = {t.lower(): t for t in (self._tags.all_tags() if self._tags else [])}
+        for a in active:                      # 목록에 없는 태그라도 검색 칸에 있으면 보여 준다 — 풀어 줄 수 있게(0)
+            if a not in {t.lower() for t in counts} and a in known:
+                counts[known[a]] = 0
+        tags = sorted(counts, key=lambda t: (-counts[t], t.lower()))
         if not tags:
-            a = self._tag_menu.addAction(tr("(등록된 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"))
+            a = self._tag_menu.addAction(tr("(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"))
             a.setEnabled(False)
             return
         from PyQt6.QtWidgets import (QCheckBox, QLabel as _QL, QScrollArea,
@@ -1765,13 +1797,6 @@ class BookmarkTree(QWidget):
         except Exception:
             def axis_of(_t):
                 return tr("주제")
-        counts = {}
-        try:
-            counts = self._tags.tag_counts()
-        except Exception:
-            pass
-        active = {c.lstrip("#").lower() for c in self.search_edit.text().split()
-                  if c.startswith("#")}
         panel = QWidget()
         lay = QVBoxLayout(panel)
         lay.setContentsMargins(8, 6, 8, 6)
@@ -2436,6 +2461,33 @@ class BookmarkTree(QWidget):
 
         for i in range(self.tree.topLevelItemCount()):
             apply_row(self.tree.topLevelItem(i))
+        self._show_no_match(bool(tagq or textq) and not any(not it.isHidden() for it in self._iter_file_nodes()),
+                            (text or "").strip())
+
+    NO_MATCH_TEXT = tr_noop("‘{q}’ 에 맞는 파일이 이 목록에 없습니다.\n본문·썸네일은 앞서 연 파일 그대로입니다.")
+
+    def _show_no_match(self, on: bool, query: str = ""):
+        """거르기 결과가 비면 목록 자리에 알림 한 줄(261107-9, 검색 SOT §5.1) — 빈 목록 옆에 앞서 연 파일이 남아 있어
+        '못 찾았는데 화면은 그대로' 로 보였다. 본문·썸네일은 닫지 않는다(거르기는 목록만 바꾼다)."""
+        lbl = self.__dict__.get("_no_match_lbl")
+        if not on:
+            if lbl is not None:
+                lbl.hide()
+            return
+        if lbl is None:
+            from PyQt6.QtWidgets import QLabel
+            lbl = QLabel(self.tree.viewport())
+            lbl.setObjectName("treeNoMatch")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl.setWordWrap(True)
+            lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            lbl.setStyleSheet("color: palette(placeholder-text); padding: 12px;")
+            self._no_match_lbl = lbl
+        lbl.setText(tr(self.NO_MATCH_TEXT).format(q=query))
+        vp = self.tree.viewport()
+        lbl.setGeometry(0, 0, vp.width(), max(60, min(vp.height(), 120)))
+        lbl.show()
+        lbl.raise_()
 
     def _filter_text_recursive(self, item: QTreeWidgetItem, textq: str) -> bool:
         ok = (not textq) or (textq in item.text(0).lower())
