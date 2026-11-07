@@ -1957,7 +1957,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _t, _s, _cid, _short, _tip in (
                 (tr("기본 PDF 앱으로 설정"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱으로 설정"),
                  tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요")),   # 261107-14(마스터 §14.10)
-                (tr("구성요소 설치"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
+                (tr("구성요소 설치 (녹화·OCR)"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
                  tr("구성요소 설치(녹화·OCR)…")),
                 (tr("가상 프린터 설치·제거"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
                  tr("가상 프린터(PolyPDF) 설치·제거…"))):
