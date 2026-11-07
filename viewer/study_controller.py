@@ -1487,31 +1487,12 @@ class StudyMixin:
 
         PDF: 'Ÿ' 불릿 `한글명(English)` 형식. CSV: 첫 행 헤더(term_ko/term_en/def_ko/
         def_en/examples/reference/level) 자동 매핑. 기본/사용자 출처로 적재(멱등)."""
-        from PyQt6.QtWidgets import QFileDialog, QInputDialog
+        from PyQt6.QtWidgets import QFileDialog
         fn, _ = QFileDialog.getOpenFileName(
             self, "용어집 파일 선택", "",
             "용어집 (*.pdf *.csv *.tsv *.txt);;모든 파일 (*.*)")
         if not fn:
             return
-        name, ok = QInputDialog.getText(
-            self, "용어집 이름", "사전(출처) 표시명:",
-            text=Path(fn).stem)
-        if not ok or not name.strip():
-            return
-        ref, _ = QInputDialog.getText(
-            self, "참고문헌", "참고문헌/출처 인용 (선택):", text=name.strip())
-        kind_label, ok = QInputDialog.getItem(
-            self, "사전 구분", "어느 사전으로 넣을까요?",
-            ["기본 사전(Base)", "내 사전(User)"], 0, False)
-        if not ok:
-            return
-        kind = "user" if kind_label.startswith("내") else "base"
-        tb_label, ok = QInputDialog.getItem(
-            self, "사전 종류", "용어 난이도 분류:",
-            ["전문 용어집(전문용어로 분류)", "일반 사전(난이도 분류 안 함)"], 0, False)
-        if not ok:
-            return
-        is_termbase = tb_label.startswith("전문")
         # 260615-7(P9): 구분(일반/도로/IT 등) — 기존 구분 목록 + 새로 입력
         try:
             cats = sorted({(s.get("category") or "").strip()
@@ -1519,12 +1500,16 @@ class StudyMixin:
                            if (s.get("category") or "").strip()})
         except Exception:
             cats = []
-        cat_label, ok = QInputDialog.getItem(
-            self, "구분", "구분(분류) — 선택하거나 새로 입력:",
-            (cats + ["(구분 없음)"]) or ["(구분 없음)"], 0, True)
-        if not ok:
+        # 261107-13(단어장 SOT §11.1): 이름·참고문헌·넣을 곳·종류·구분을 한 창에서(종전 입력 창 다섯 번)
+        from PyQt6.QtWidgets import QDialog
+        from viewer.widgets.glossary_import_dialog import GlossaryImportDialog
+        dlg = GlossaryImportDialog(fn, cats, parent=self)
+        self._glossary_import_dialog = dlg          # 검사가 잡을 수 있게
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        category = "" if cat_label.strip() in ("", "(구분 없음)") else cat_label.strip()
+        val = dlg.values()
+        name, ref, kind, kind_label = val["name"], val["reference"], val["kind"], val["kind_label"]
+        is_termbase, category = val["is_termbase"], val["category"]
         import re as _re
         sid = _re.sub(r"[^0-9a-z]+", "_", Path(fn).stem.lower()).strip("_") or "glossary"
         try:
@@ -1544,33 +1529,6 @@ class StudyMixin:
             self._refresh_study_panel(self.main_view.current_page())
         except Exception as e:
             QMessageBox.warning(self, "용어집 가져오기", f"실패: {e}")
-
-    @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
-    def _action_save_csv_sample(self, checked: bool = False):
-        """260615-6: ⑦ 사용자 CSV 사전 양식 예제를 저장(헤더+예시 행)."""
-        from PyQt6.QtWidgets import QFileDialog
-        from viewer.resources_path import resource_path
-        import shutil
-        src = resource_path("dict/sample_glossary.csv")
-        out, _ = QFileDialog.getSaveFileName(
-            self, "용어집 CSV 양식 예제 저장", "용어집_양식_예제.csv", "CSV (*.csv)")
-        if not out:
-            return
-        try:
-            if src:
-                shutil.copyfile(src, out)
-            else:   # 동봉본이 없으면 헤더만이라도 기록
-                Path(out).write_text(
-                    "term_ko,term_en,def_ko,def_en,examples,reference,level,hanja\n",
-                    encoding="utf-8-sig")
-            QMessageBox.information(
-                self, "CSV 양식 예제",
-                f"양식 예제를 저장했습니다.\n{out}\n\n"
-                "열: term_ko(한글표제어), term_en(영문표제어), def_ko(한글뜻), "
-                "def_en(영어뜻), examples(예시), reference(참고문헌), level(난이도), hanja(한자)\n"
-                "엑셀에서 편집 후 '용어집 가져오기'로 불러오세요.")
-        except Exception as e:
-            QMessageBox.warning(self, "CSV 양식 예제", f"저장 실패: {e}")
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_sanitize_dict(self, checked: bool = False):
@@ -1602,14 +1560,29 @@ class StudyMixin:
         except Exception:
             pass
         try:
+            import sqlite3, tempfile
             dbp = default_db_path()
             imgs = dict_images_dir()
+
+            def _snap(path, z, name):
+                # 261107-13: 파일을 그대로 담으면 다른 연결(배경 워커 등)이 남긴 WAL 의 최근 변경이 빠진다 —
+                #   SQLite 백업 API 로 한 시점의 온전한 사본을 만들어 담는다
+                with tempfile.TemporaryDirectory() as td:
+                    tmp = Path(td) / name
+                    src = sqlite3.connect(str(path))
+                    dst = sqlite3.connect(str(tmp))
+                    try:
+                        src.backup(dst)
+                    finally:
+                        dst.close(); src.close()
+                    z.write(str(tmp), name)
+
             with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
                 if dbp.exists():
-                    z.write(str(dbp), "dict.db")
+                    _snap(dbp, z, "dict.db")
                 udb = dbp.parent / "user_dict.db"          # 261019-5: 사용자 뜻은 따로 — 함께 담는다
                 if udb.exists():
-                    z.write(str(udb), "user_dict.db")
+                    _snap(udb, z, "user_dict.db")
                 for f in imgs.glob("*"):
                     if f.is_file():
                         z.write(str(f), f"dict_images/{f.name}")
@@ -1642,23 +1615,33 @@ class StudyMixin:
         except Exception:
             pass
         try:
+            import sqlite3, tempfile
             dbp = default_db_path()
             imgs = dict_images_dir()
-            if dbp.exists():
-                shutil.copyfile(str(dbp), str(dbp) + ".bak")
             udb = dbp.parent / "user_dict.db"
-            with zipfile.ZipFile(fn, "r") as z:
+
+            def _copy_db(src_path, dst_path):
+                # 261107-13: 파일을 덮어쓰면 다른 연결이 남긴 WAL 이 다시 열 때 그 위에 되감겨 복원이 사라진다 —
+                #   SQLite 백업 API 로 넣는다(열린 연결·WAL 을 SQLite 가 맞춘다)
+                src = sqlite3.connect(str(src_path))
+                dst = sqlite3.connect(str(dst_path))
+                try:
+                    src.backup(dst)
+                finally:
+                    dst.close(); src.close()
+
+            with zipfile.ZipFile(fn, "r") as z, tempfile.TemporaryDirectory() as td:
                 names = z.namelist()
                 if "dict.db" in names:
-                    with z.open("dict.db") as src, open(dbp, "wb") as dst:
-                        shutil.copyfileobj(src, dst)
+                    if dbp.exists():
+                        _copy_db(dbp, str(dbp) + ".bak")
+                    _copy_db(z.extract("dict.db", td), dbp)
                 # 261019-5: 사용자 뜻 파일이 든 백업이면 그것으로(기존은 .bak). 옛 백업(dict.db 안의 사용자 항목)은
                 #   다음에 열 때 지금 사용자 뜻에 **겹치지 않게 더해진다**(DictStore._attach_user)
                 if "user_dict.db" in names:
                     if udb.exists():
-                        shutil.copyfile(str(udb), str(udb) + ".bak")
-                    with z.open("user_dict.db") as src, open(udb, "wb") as dst:
-                        shutil.copyfileobj(src, dst)
+                        _copy_db(udb, str(udb) + ".bak")
+                    _copy_db(z.extract("user_dict.db", td), udb)
                 for nm in names:
                     if nm.startswith("dict_images/") and not nm.endswith("/"):
                         target = imgs / Path(nm).name

@@ -1,4 +1,5 @@
-"""단어장 관리 다이얼로그 — 적용할 사전 고르기 · 스타일 · 우선순위(▲▼) · 사전 더하기·지우기.
+"""사전 관리 창 — 적용할 사전 고르기 · 스타일 · 우선순위(▲▼) · 사전 파일(가져오기·내보내기·백업·복원·고급·지우기).
+261107-13: 창 이름 '사전 관리'(종전 '단어장 관리'), 도구 탭 '사전 관리' 단추 하나가 연다.
 
 SOT: `단어장 작업 계획서.md` §11.1 (261103-2, 사용자 지시·결정).
 - 왼쪽 '대기 사전'(있는 사전 가운데 지금 PDF 에 안 쓰는 것) ↔ 오른쪽 '적용할 사전'(지금 PDF 에 쓰는 것).
@@ -6,7 +7,8 @@ SOT: `단어장 작업 계획서.md` §11.1 (261103-2, 사용자 지시·결정)
 - 오른쪽 차례 = 우선순위(▲▼ → priority 재배정, 모든 PDF 공통, 바로 저장).
 - 스타일(settings.json `dict_styles`): 오른쪽 조합에 이름을 붙여 저장·삭제·고르기.
 - '이후 PDF 에도 계속 적용' 켜짐 = 기본 선택 `enabled`, 꺼짐 = 이 PDF 의 선택(`dict_file_off`). 어느 길로 닫아도 저장.
-- 사전 파일 줄: [가져오기...]·[사전 지우기]·[지운 사전 되살리기...]·[폴더 열기]·[새로고침]·[양식 CSV] — 누르면 바로 dict.db 에 쓴다.
+- 사전 파일 두 줄: [가져오기]·[내보내기]·[백업]·[복원]·[고급 ▾] / [사전 지우기]·[지운 사전 되살리기]·[폴더 열기]·[새로고침]·[양식 CSV]
+  — 누르면 바로 dict.db 에 쓴다.
   지운 사전은 `dict_meta.deleted_sources` 에 기억 — 동봉 용어집·폴더 CSV 도 다시 싣지 않는다.
   (261103-8: 고급 설정 '사전 목록' 묶음을 없애고 이리로 옮겼다 — 사용자 지시 '단어장 관리로 충분')
 """
@@ -18,7 +20,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QCheckBox, QComboBox,
     QListWidget, QListWidgetItem, QAbstractItemView, QMessageBox, QInputDialog,
-    QDialogButtonBox,
+    QDialogButtonBox, QMenu,
 )
 
 _KIND_LABEL = {"user": "사용자", "base": "사전/용어집", "auto": "자동(번역)",
@@ -39,7 +41,7 @@ class DictManagerDialog(QDialog):
 
     def __init__(self, store, prefs: dict = None, host=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("단어장 관리")
+        self.setWindowTitle("사전 관리")
         self.setMinimumSize(720, 460)
         self._store = store
         self._prefs = prefs or {}
@@ -60,7 +62,7 @@ class DictManagerDialog(QDialog):
         self.cmb_style.setToolTip("저장해 둔 사전 조합 — 고르면 오른쪽 목록이 그 조합으로 바뀝니다.")
         self.cmb_style.activated.connect(self._on_style_chosen)
         st.addWidget(self.cmb_style, 1)
-        self.btn_style_save = QPushButton("저장...")
+        self.btn_style_save = QPushButton("저장")
         self.btn_style_save.setToolTip("오른쪽 목록의 조합을 스타일로 저장합니다(같은 이름이면 덮어씁니다).")
         self.btn_style_save.clicked.connect(self._style_save)
         self.btn_style_del = QPushButton("삭제")
@@ -114,21 +116,46 @@ class DictManagerDialog(QDialog):
         body.addLayout(col)
         v.addLayout(body, 1)
 
-        # ── 사전 파일 ── 더하기·지우기·되살리기·폴더(누르면 바로 저장)
+        # ── 사전 파일 ── 누르면 바로 저장(단어장 SOT §11.1 '사전 파일', 261107-13: 종전 도구 탭 사전 관리 ▾ 열 개를 여기로)
+        r0 = QHBoxLayout()
+        self.btn_import = QPushButton("가져오기")
+        self.btn_import.setToolTip("용어집 파일 하나(PDF·CSV)를 새 사전으로 더합니다.")
+        self.btn_export = QPushButton("내보내기")
+        self.btn_export.setToolTip("사전 하나 또는 전체를 다른 프로그램용 파일(TBX·CSV)로 저장합니다.")
+        self.btn_backup = QPushButton("백업")
+        self.btn_backup.setToolTip("사전 전체(용어·사용자 뜻·그림·인터넷 캐시)를 zip 한 파일로 저장합니다 — 다른 PC 로 옮길 때.")
+        self.btn_restore_all = QPushButton("복원")
+        self.btn_restore_all.setToolTip("[백업] 한 zip 으로 지금 사전 전체를 바꿉니다(옛 것은 .bak 으로 둡니다).")
+        for b, fn in ((self.btn_import, self._import), (self.btn_export, self._export),
+                      (self.btn_backup, self._backup), (self.btn_restore_all, self._restore_all)):
+            b.clicked.connect(fn); r0.addWidget(b)
+        self.btn_adv = QPushButton("고급 ▾")
+        self.btn_adv.setToolTip("고치거나 다시 받을 때만 쓰는 일")
+        adv = QMenu(self.btn_adv)
+        self.act_sanitize = adv.addAction("사전 정리 (HTML 마크업 제거)")
+        self.act_sanitize.triggered.connect(lambda _c=False: self._host_call("_action_sanitize_dict"))
+        self.act_reclassify = adv.addAction("온용어 다시 분류")
+        self.act_reclassify.setToolTip("인터넷 온용어 캐시를 비우고 다시 받아 용어집별로 나눕니다(인터넷 사용)")
+        self.act_reclassify.triggered.connect(lambda _c=False: self._host_call("_action_reclassify_onterm"))
+        self.btn_adv.setMenu(adv)
+        r0.addWidget(self.btn_adv)
+        r0.addStretch(1)
+        v.addLayout(r0)
         r1 = QHBoxLayout()
-        self.btn_import = QPushButton("가져오기...")
-        self.btn_import.setToolTip("용어집 파일(PDF·CSV)을 사전으로 불러옵니다.")
         self.btn_delete = QPushButton("사전 지우기")
         self.btn_delete.setToolTip("고른 사전과 그 항목을 지웁니다(어느 목록에서 골라도) — 사용자 단어장은 지울 수 없습니다.")
-        self.btn_restore = QPushButton("지운 사전 되살리기...")
-        for b, fn in ((self.btn_import, self._import), (self.btn_delete, self._delete),
-                      (self.btn_restore, self._restore)):
+        self.btn_restore = QPushButton("지운 사전 되살리기")
+        for b, fn in ((self.btn_delete, self._delete), (self.btn_restore, self._restore)):
             b.clicked.connect(fn); r1.addWidget(b)
         r1.addStretch(1)
-        for txt, fn in (("폴더 열기", self._open_folder), ("새로고침", self._refresh_folder),
-                        ("양식 CSV", self._write_sample)):
-            b = QPushButton(txt); b.clicked.connect(fn); r1.addWidget(b)
+        for txt, fn, tip in (("폴더 열기", self._open_folder, "단어장 폴더 — 여기 둔 CSV 는 [새로고침] 때 사전이 됩니다"),
+                             ("새로고침", self._refresh_folder, "단어장 폴더의 CSV 를 다시 읽습니다"),
+                             ("양식 CSV", self._write_sample, "양식 예제 CSV 를 단어장 폴더에 만들고 폴더를 엽니다")):
+            b = QPushButton(txt); b.setToolTip(tip); b.clicked.connect(fn); r1.addWidget(b)
         v.addLayout(r1)
+        has_host = host is not None
+        for w in (self.btn_import, self.btn_export, self.btn_backup, self.btn_restore_all, self.btn_adv):
+            w.setEnabled(has_host)
         self.info = QLabel("")
         self.info.setStyleSheet("color:#666;")
         self.info.setWordWrap(True)
@@ -156,7 +183,7 @@ class DictManagerDialog(QDialog):
         self._applied = False
 
         row2 = QHBoxLayout()
-        b_user = QPushButton("사용자 뜻 편집…")          # 261019-5
+        b_user = QPushButton("사용자 뜻 편집")          # 261019-5
         b_user.clicked.connect(self._user_terms)
         row2.addWidget(b_user)
         row2.addStretch(1)
@@ -338,7 +365,7 @@ class DictManagerDialog(QDialog):
                 self, "사전 지우기",
                 f"다음 사전과 그 항목을 지울까요?\n\n{lines}\n\n"
                 "지운 사전은 프로그램을 다시 켜거나 [새로고침] 해도 다시 생기지 않습니다.\n"
-                "되살리려면 [지운 사전 되살리기...] 를 누르세요(원본 파일은 그대로입니다).") \
+                "되살리려면 [지운 사전 되살리기] 를 누르세요(원본 파일은 그대로입니다).") \
                 != QMessageBox.StandardButton.Yes:
             return
         for sid, _n in picked:
@@ -356,7 +383,7 @@ class DictManagerDialog(QDialog):
         dlg.setWindowTitle("지운 사전 되살리기")
         lv = QVBoxLayout(dlg)
         lv.addWidget(QLabel("되살릴 사전을 고르세요. 동봉 용어집·단어장 폴더의 사전은 다시 싣고,\n"
-                            "[가져오기...] 로 불러온 사전은 원본 파일을 다시 가져와야 합니다."))
+                            "[가져오기] 로 불러온 사전은 원본 파일을 다시 가져와야 합니다."))
         lst = QListWidget()
         for sid, name in gone.items():
             it = QListWidgetItem(str(name))
@@ -392,10 +419,30 @@ class DictManagerDialog(QDialog):
         if need:
             self.info.setText("원본 파일을 다시 가져와야 하는 사전: " + ", ".join(map(str, need)))
 
+    def _host_call(self, name: str, reopen: bool = False):
+        """앱의 사전 동작을 부르고 목록을 고친다. reopen — 백업·복원은 화면 스레드 사전 연결을 닫으므로 다시 연다."""
+        fn = getattr(self._host, name, None) if self._host is not None else None
+        if fn is None:
+            return
+        fn()
+        if reopen and hasattr(self._host, "_study_get_dict"):
+            try:
+                self._store = self._host._study_get_dict()
+            except Exception:
+                pass
+        self._files_changed()
+
     def _import(self):
-        if self._host is not None and hasattr(self._host, "_action_import_glossary"):
-            self._host._action_import_glossary()
-            self._files_changed()
+        self._host_call("_action_import_glossary")
+
+    def _export(self):
+        self._host_call("_action_export_dict")
+
+    def _backup(self):
+        self._host_call("_action_backup_dict", reopen=True)
+
+    def _restore_all(self):
+        self._host_call("_action_restore_dict", reopen=True)
 
     def _open_folder(self):
         from viewer.study import glossary_folder as gf
@@ -420,7 +467,9 @@ class DictManagerDialog(QDialog):
         from viewer.study import glossary_folder as gf
         try:
             p = gf.write_sample(prefs=self._prefs)
-            self.info.setText(f"양식 저장: {p}")
+            # 261107-13(단어장 SOT §11.1): 양식은 이 한 길 — 종전 메뉴의 동봉 예제 저장은 없앴다
+            self.info.setText(f"양식 저장: {p}\n열: term_ko(한글 표제어)·term_en(영문 표제어)·def_ko·def_en(뜻)·"
+                              "examples(예시)·reference(참고문헌)·level(난이도)·hanja(한자) — 고쳐 넣고 [새로고침]")
             os.startfile(str(p.parent))
         except Exception as e:
             self.info.setText(f"양식 저장 실패: {e}")

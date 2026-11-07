@@ -97,7 +97,7 @@ try:
                "_action_translate_files", "_action_dict_manager", "_action_import_glossary",
                "_action_export_dict", "_action_backup_dict", "_action_restore_dict",
                "_action_online_enrich", "_action_sanitize_dict", "_action_reclassify_onterm",
-               "_action_save_csv_sample", "_action_translate_pdf"):
+               "_action_translate_pdf"):      # 261107-13: _action_save_csv_sample 없앰(양식은 사전 관리 창 한 길)
         getattr(mw, nm)()
     mw._on_create_study_requested("C:/x.pdf")
     mw._action_edit_glossary("C:/x.pdf")

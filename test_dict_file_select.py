@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """261103-2(사용자 지시) 사전(출처) 고르기 — 단어장 SOT §11.1·§13, 디자인 SOT §2.14.
 
-A. 단어장 관리 창 — [← 모두 삭제] + '이후 PDF 에도' 끔 + 창 X(reject) → 이 PDF 만 사전 없음, 다른 PDF·기본 선택은 그대로
+A. 사전 관리 창(261107-13 종전 '단어장 관리') — [← 모두 삭제] + '이후 PDF 에도' 끔 + 창 X(reject) → 이 PDF 만 사전 없음, 다른 PDF·기본 선택은 그대로
 B. 다시 열면 '이 PDF 만의 선택' · 왼쪽에서 하나 [추가 →] + '이후' 켬 → 기본 선택이 되고 이 PDF 의 선택은 지워진다
 C. [모두 추가 →] + Esc → 모든 PDF 에 모든 사전 · 두 번 누르기로 옮기기 · ▲▼ = 우선순위
 D. 스타일 — 저장·고르기·삭제, 패널 '출처 ▾' 맨 위 스타일로 바로 적용
 E. 패널 메뉴 — 이 PDF 의 선택이 있으면 그것만, 없으면 기본 선택을 고친다
-F. 고급 설정에는 '사전 목록' 이 없다 — 가져오기·지우기·되살리기·폴더 단추는 단어장 관리 창에(261103-8, 사용자 지시)
-G. 관리 창 [사전 지우기] — 다시 생기지 않음(폴더 CSV·동봉 시드) · [지운 사전 되살리기...]
+F. 고급 설정에는 '사전 목록' 이 없다 — 가져오기·지우기·되살리기·폴더 단추는 사전 관리 창에(261103-8, 사용자 지시)
+G. 관리 창 [사전 지우기] — 다시 생기지 않음(폴더 CSV·동봉 시드) · [지운 사전 되살리기]
 H. 이름 변경(filesRelocated) → 이 PDF 의 선택이 새 경로를 따라간다 · 복사는 따라가지 않는다
 I. settings.json — 허용목록·개인 항목(배포 기본값에서 뺌)
 """
@@ -189,7 +189,7 @@ chk(not found(pdf_b, "포장시험어zq") and not dic.get_source("g1")["enabled"
 chk(found(pdf_a, "포장시험어zq"), "E3 a 는 자기 선택이라 영향 없음")
 menu_toggle(pdf_b, "g1", True)
 
-# ---- F 고급 설정에는 사전 목록이 없다(단어장 관리로 옮김) ----
+# ---- F 고급 설정에는 사전 목록이 없다(사전 관리 창으로 옮김) ----
 from PyQt6.QtWidgets import QGroupBox
 adv = AdvancedSettingsDialog(dict(host._prefs), None)
 adv.show(); QTest.qWait(10)
@@ -197,7 +197,7 @@ chk(not [g for g in adv.findChildren(QGroupBox) if g.title() == "사전 목록"]
     "F0 고급 설정에 '사전 목록' 묶음이 없다")
 adv.reject()
 d = open_dlg(pdf_b)
-chk(all(hasattr(d, n) for n in ("btn_import", "btn_delete", "btn_restore")), "F1 관리 창에 [가져오기...]·[사전 지우기]·[지운 사전 되살리기...]")
+chk(all(hasattr(d, n) for n in ("btn_import", "btn_delete", "btn_restore")), "F1 관리 창에 [가져오기]·[사전 지우기]·[지운 사전 되살리기]")
 chk({"폴더 열기", "새로고침", "양식 CSV"} <= {b.text() for b in d.findChildren(QPushButton)}, "F2 관리 창에 [폴더 열기]·[새로고침]·[양식 CSV]")
 d.reject()
 
@@ -218,7 +218,7 @@ chk(fid not in {s["source_id"] for s in dic.list_sources()}, "G2 폴더에 파�
 chk(not dic.seed_source_if_newer("g1", "도로 용어집", reference="", version=99,
                                  rows=[{"term_ko": "포장시험어zq"}]), "G3 동봉 시드도 지운 사전은 건너뜀")
 chk((root / "gl" / "예제_단어장.csv").exists(), "G4 원본 파일은 그대로")
-chk(d.btn_restore.isEnabled(), "G5 [지운 사전 되살리기...] 켜짐")
+chk(d.btn_restore.isEnabled(), "G5 [지운 사전 되살리기] 켜짐")
 QTimer.singleShot(50, lambda: d._restore_dialog.accept())
 click(d.btn_restore)
 ids = {s["source_id"] for s in dic.list_sources()}

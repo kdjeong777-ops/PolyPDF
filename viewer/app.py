@@ -1887,6 +1887,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._ko_only_acts = []
         self._ko_only_acts.append(_short(_act(tr("단어장 생성 (OCR·어휘)"), self._action_build_study,
                                               "tools.build_study", tr("단어장 생성")), tr("단어장")))
+        # 261107-13(단어장 SOT §7): 사전이 아니라 열린 PDF 의 단어장 작업이라 '단어장' 옆으로(종전 사전 관리 ▾ 안)
+        self._ko_only_acts.append(_act(tr("인터넷 사전 보강"), self._action_online_enrich, "tools.online_enrich",
+                                       tip=tr("열린 PDF 의 단어장 단어를 인터넷 사전에서 찾아 더합니다 — 끊겨도 다시 하면 이어서")))
         _short(_act(tr("책갈피 자동 생성"), self.action_open_bookmarker, "tools.bookmarker", tr("책갈피 생성")), tr("책갈피"))
         # 261102-6(사용자 지시): 종전 '단어장·책갈피 동시 생성' → 일괄 OCR — 모든 언어(단어장 단계는 한국어 화면만).
         #   명령 id 는 그대로(사용자 단축키·모음 설정이 이 id 로 저장돼 있다)
@@ -1937,18 +1940,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _act(tr("환경설정"), self.action_open_settings, "tools.settings")        # 260618-18
         # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
         # 📖 사전 관리(261031-16: 종전 '사전 및 용어집 관리') — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25)
-        _dict = _sub(tr("사전 관리"), (
-            (tr("단어장 관리 (적용 사전·스타일)"), self._action_dict_manager),
-            (tr("사용자 뜻 편집"), self._action_user_terms),          # 261019-5(단어장 SOT §4.1)
-            (tr("용어집 가져오기 (PDF·CSV)"), self._action_import_glossary),
-            (tr("사전 복원 (가져오기)"), self._action_restore_dict),
-            (tr("용어집 CSV 양식 예제 저장"), self._action_save_csv_sample),
-            (tr("인터넷 사전 보강 (이어하기)"), self._action_online_enrich),
-            (tr("사전 내보내기 (TBX·CSV)"), self._action_export_dict),
-            (tr("사전 백업 (내보내기)"), self._action_backup_dict),
-            (tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict),
-            (tr("온용어 다시 분류 (용어집별·재조회)"), self._action_reclassify_onterm)), "tools.dict")
-        self._ko_only_acts.append(_dict.menuAction())
+        #   261107-13(단어장 SOT §11.1, 사용자 결정 '단추 하나 + 창으로 모음'): 종전 하위 메뉴 열 개는 사전 관리 창의 단추로.
+        #   명령 id 는 그대로(모음에 넣은 단추가 남는다)
+        self._ko_only_acts.append(_act(tr("사전 관리"), self._action_dict_manager, "tools.dict",
+                                       tip=tr("사전 관리 — 적용할 사전·스타일·가져오기·내보내기·백업·복원")))
 
         # 등록·설치
         m_tools.addSeparator()

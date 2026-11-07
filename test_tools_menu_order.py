@@ -71,7 +71,8 @@ groups.append(cur)
 groups = [g for g in groups if g]
 # 261031-16(디자인 SOT §2.9.1, 사용자 지시·결정): 묶음 다섯 — 생성 | PDF | 변환·번역 | 환경설정·사전 관리 | 등록·설치
 # 마스터 §14.7.2 의 19: 메뉴 항목은 이름이 아니라 명령 id 목록으로 견준다
-GROUPS = [["tools.ocr", "tools.build_study", "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag", "tools.reindex"],
+GROUPS = [["tools.ocr", "tools.build_study", "tools.online_enrich",          # 261107-13: 인터넷 사전 보강은 단어장 옆
+           "tools.bookmarker", "tools.study_and_bookmarks", "tools.autotag", "tools.reindex"],
           ["tools.img2pdf", "tools.merge", "tools.nup", "tools.encrypt", "tools.sign"],
           ["file.export", "tools.translate"],
           ["tools.settings", "tools.dict"],
@@ -96,8 +97,10 @@ chk(names.get("tools.autotag") == "태그" and names.get("tools.reindex") == "�
 #   항목이 바뀐 까닭을 실패 글이 말하지 못하고, 이름 바꿈 검사(test_sot_crossref RENAMED I3)도 숫자는 못 본다
 SIGN_SUB = ["서명", "그림만 넣기", "서명 확정", "서명 편집", "빈 서명 칸 만들기", "디지털 ID 관리"]   # 261107-4: '…' 없음
 chk(subs.get("전자서명", []) == SIGN_SUB
-    and subs.get("태그", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 관리", [])) == 10,   # 261019-5: '사용자 뜻 편집' 더함
-    "② 전자서명·태그·사전 관리는 하위 메뉴(▸)", str(subs))
+    and subs.get("태그", [])[:1] == ["태그 다시 계산"],
+    "② 전자서명·태그는 하위 메뉴(▸)", str(subs))
+chk("사전 관리" not in subs and mw._cmds["tools.dict"].menu() is None,      # 261107-13(단어장 SOT §11.1): 단추 하나 → 사전 관리 창
+    "② 사전 관리는 하위 메뉴 없는 단추 하나", str(subs))
 sec_titles = [a.text() for a in menu.actions() if a.isSeparator() and a.text()]
 chk(sec_titles == [], "② 구역 제목은 없다(261031-16 — 구분선·바깥 글자)", str(sec_titles))
 chk("단축키 설정..." not in items, "② 단축키 설정은 환경설정 '스타일' 묶음으로(261025-6 보완)")
