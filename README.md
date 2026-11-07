@@ -105,6 +105,13 @@ git add -A; git commit -m "fix: ..."; git push      # 소스 갱신(설정/스�
 | Ctrl+O | 폴더 열기 |
 | Ctrl+R | 새로고침 (책갈피창) |
 | Ctrl+S | 저장 |
+| F12 | 다른 이름으로 저장 |
+| Ctrl+Shift+C | 경로 복사 |
+| Ctrl+Shift+N / Alt+Shift+R | 새 폴더 / 파일 탐색기 열기 |
+| Alt+Enter | 문서 정보·사진 정보 |
+| Ctrl+B / Ctrl+K / Ctrl+D | 책갈피 추가 / 하이퍼링크 / 즐겨찾기에 추가 |
+| Ctrl+Shift+X / Ctrl+Enter | 크롭 / 새 페이지 넣기 |
+| Ctrl+Alt+O | OCR 로 읽기 |
 | Ctrl+F | 검색바 포커스 |
 | F3 / Shift+F3 | 다음/이전 매치 |
 | ↓ / ↑ / PgDn / PgUp | 페이지 이동 (2장 보기 ±2) |
@@ -113,6 +120,7 @@ git add -A; git commit -m "fix: ..."; git push      # 소스 갱신(설정/스�
 | Ctrl++ / Ctrl+- / Ctrl+0 | 확대 / 축소 / 기본 크기 (포커스가 있는 창 — 본문·썸네일·책갈피창·텍스트 창) |
 | Ctrl+Shift+S | 스크린샷 캡처 |
 | Ctrl+Alt+S | 스크린샷 PDF 일괄 저장 |
+| Ctrl+Alt+C | 스크린샷 클립보드로 복사 |
 | F5 | 발표 보기(전체화면) |
 | S / D (발표 중) | 상하 2분할 보기 / 좌우 2쪽 보기 토글 |
 | Ctrl+Q | 종료 |

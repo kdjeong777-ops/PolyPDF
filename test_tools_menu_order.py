@@ -94,7 +94,7 @@ chk(names.get("tools.autotag") == "태그" and names.get("tools.reindex") == "�
     "② 이름 바꿈 — 태그 · 인덱스 · 사전 관리(261031-16, RENAMED)", str(names))
 # 261031-1: 개수(종전 7) 대신 항목 그대로 — '서명 그림...' 을 빼고 '디지털 ID...' → '디지털 ID 관리...'(보안 SOT §3). 개수만 보면
 #   항목이 바뀐 까닭을 실패 글이 말하지 못하고, 이름 바꿈 검사(test_sot_crossref RENAMED I3)도 숫자는 못 본다
-SIGN_SUB = ["서명...", "그림만 넣기...", "서명 확정...", "서명 편집", "빈 서명 칸 만들기...", "디지털 ID 관리..."]
+SIGN_SUB = ["서명", "그림만 넣기", "서명 확정", "서명 편집", "빈 서명 칸 만들기", "디지털 ID 관리"]   # 261107-4: '…' 없음
 chk(subs.get("전자서명", []) == SIGN_SUB
     and subs.get("태그", [])[:1] == ["태그 다시 계산"] and len(subs.get("사전 관리", [])) == 10,   # 261019-5: '사용자 뜻 편집' 더함
     "② 전자서명·태그·사전 관리는 하위 메뉴(▸)", str(subs))
@@ -104,7 +104,7 @@ chk("단축키 설정..." not in items, "② 단축키 설정은 환경설정 '�
 # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목은 '등록·설치 ▸' 하나로 — 명령 id 는 그대로
 _inst = next((a for a in menu.actions() if a.menu() is not None and a.text() == "등록·설치"), None)
 inst_items = [a.text() for a in _inst.menu().actions()] if _inst is not None else []
-chk(inst_items == ["기본 PDF 앱 등록…", "구성요소 설치…", "가상 프린터 설치·제거…"],
+chk(inst_items == ["기본 PDF 앱 등록", "구성요소 설치", "가상 프린터 설치·제거"],
     "② 등록·설치 ▸(PDF 앱 등록 · 구성요소 설치 · 가상 프린터)", str(inst_items))
 from viewer.widgets.ribbon import cmd_id as _cid
 chk([_cid(a) for a in (_inst.menu().actions() if _inst else [])] == ["tools.pdf_handler", "tools.components", "tools.vprinter"]
@@ -122,8 +122,8 @@ chk(_dlg.btn_save_default.text() == "현재 설정을 기본값으로 저장(배
     "② 환경설정 창 맨 아래 — 기본값 저장(배포용) 아래 설정 초기화")
 _dlg.close(); _dlg.deleteLater()
 m_file = next(a.menu() for a in mw.menuBar().actions() if a.text().startswith("파일"))
-fa = [a for a in m_file.actions() if a.text() == "변환..."]
-chk(fa and [a for a in menu.actions() if a.text() == "변환..."] == fa,
+fa = [a for a in m_file.actions() if a.text() == "변환"]
+chk(fa and [a for a in menu.actions() if a.text() == "변환"] == fa,
     "② '변환...' 은 파일·도구 메뉴에 같은 액션(261025-5 사용자 지시)", str(items))
 chk(len(fa) == 1 and fa[0].menu() is None, "② 파일 메뉴 '변환...' — 하위 메뉴 없음",
     str([a.text() for a in m_file.actions()]))
@@ -152,13 +152,13 @@ chk(all(a.isVisible() and a.isEnabled() for a in va) == korea_only_visible(), "�
 all_items = [t for t in items if t]
 chk("스크린샷 PDF 저장..." not in items, "③ 도구 메뉴에 '스크린샷 PDF 저장...' 이 없다(261014-28 — 스크린샷 창·Ctrl+S)")
 chk(callable(getattr(mw, "action_save_screenshot_pdf", None)), "③ Ctrl+S 의 스크린샷 PDF 저장은 남는다")
-for name in ("OCR 로 읽기 (쪽 범위·언어·워터마크)...",
-             "암호화 (암호·권한 설정)..."):
+for name in ("OCR 로 읽기",                  # 261107-4(기획 §5.2 의 4): 괄호 설명은 툴팁으로
+             "암호화 (암호·권한 설정)"):
     chk(name in all_items, "③ 예전 메뉴에는 없던 항목이 들어왔다: %s" % name)
 
 # 261016-3: 'PDF 꾸밈 저장' 은 뺐다(파일 메뉴 '평탄화해서 내보내기...' 와 같은 함수)
 chk("PDF 꾸밈 저장 (선·도형·글·하이퍼링크)..." not in all_items, "④ 'PDF 꾸밈 저장' 은 도구 메뉴에 없다")
-chk(any(a.text() == "평탄화해서 내보내기..." for a in m_file.actions()), "④ 같은 기능은 파일 메뉴 '평탄화해서 내보내기...'")
+chk(any(a.text() == "평탄화 사본" for a in m_file.actions()), "④ 같은 기능은 파일 메뉴 '평탄화 사본'(261107-4, 종전 '평탄화해서 내보내기')")
 
 # ── 단축키·권한이 잡는 손잡이이 살아 있는가 ───────────────
 chk(getattr(mw, "_sc_act_merge", None) is not None, "⑤ PDF 병합 손잡이(_sc_act_merge) 유지")

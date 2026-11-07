@@ -91,11 +91,11 @@ try:
 
     # B 드롭다운
     items = lambda m: [a.text() for a in m.actions() if not a.isSeparator()]
-    chk(items(mw.menu_fav_folders) == ["📁 폴더1", "📁 옛폴더", "항목 관리..."], "B 등록 폴더 목록(옛 항목은 폴더) + 항목 관리",
+    chk(items(mw.menu_fav_folders) == ["📁 폴더1", "📁 옛폴더", "항목 관리"], "B 등록 폴더 목록(옛 항목은 폴더) + 항목 관리",
         str(items(mw.menu_fav_folders)))
-    chk(items(mw.menu_fav_files) == ["📄 파일1", "📄 아주긴파일이름입니다정말로긴", "📄 없는파일", "항목 관리..."],
+    chk(items(mw.menu_fav_files) == ["📄 파일1", "📄 아주긴파일이름입니다정말로긴", "📄 없는파일", "항목 관리"],
         "B 등록 파일 목록은 등록 순서", str(items(mw.menu_fav_files)))
-    chk(items(mw.menu_fav_searches) == ["🔍 검색", "항목 관리..."], "B 등록 검색어", str(items(mw.menu_fav_searches)))
+    chk(items(mw.menu_fav_searches) == ["🔍 검색", "항목 관리"], "B 등록 검색어", str(items(mw.menu_fav_searches)))
 
     # D 있는지 보지 않는다 — 없는 파일도 켜짐, 누르면 알린다
     a_missing = [a for a in mw.menu_fav_files.actions() if a.text() == "📄 없는파일"][0]
@@ -155,14 +155,14 @@ try:
     chk(_iw == FAV_ICON_PX and mw._ribbon.row("fav").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         and mw._ribbon.row("view").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextOnly,
         "C 즐겨찾기 줄은 작은 아이콘 + 글자(보기 탭 등은 글자만 — 파일 탭도 그림 줄, 261031-13)", str(_iw))
-    chk(items(mw.menu_fav_files) == ["(등록된 항목 없음)", "항목 관리..."], "B 빈 목록은 '(등록된 항목 없음)'", str(items(mw.menu_fav_files)))
+    chk(items(mw.menu_fav_files) == ["(등록된 항목 없음)", "항목 관리"], "B 빈 목록은 '(등록된 항목 없음)'", str(items(mw.menu_fav_files)))
 
     # E 기타 — 법령 키만 있으면 법령 구역만
     mw._prefs.update({"law_oc": "x"})
     mw._gate_api_dependent_ui(mw._prefs); QTest.qWait(80)
     chk(mw.menu_fav_other.menuAction().isVisible(), "E 키가 있으면 기타가 보인다")
     ot = [a.text() for a in mw.menu_fav_other.actions() if not a.isSeparator() or a.text()]
-    chk(ot == ["법령·고시", "⚖ 도로법  (법률)", "항목 관리..."], "E 꺼진 구역(건설기준·특허)은 뺀다", str(ot))
+    chk(ot == ["법령·고시", "⚖ 도로법  (법률)", "항목 관리"], "E 꺼진 구역(건설기준·특허)은 뺀다", str(ot))
     seen_kinds = []
     from viewer.widgets import favorites_dialog as _fd
     orig_exec = _fd.FavoritesManagerDialog.exec

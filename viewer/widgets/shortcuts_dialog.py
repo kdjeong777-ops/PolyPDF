@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox, QPushButton, QHBoxLayout, QScrollArea, QWidget, QCheckBox,
 )
 from viewer.i18n import tr
+from viewer.widgets.keycaps import KeycapLabel
 
 
 class ShortcutsDialog(QDialog):
@@ -34,12 +35,19 @@ class ShortcutsDialog(QDialog):
             group = meta[2] if len(meta) > 2 else tr("기타")
             if group != last_group:
                 hdr = QLabel(f"<b>― {group} ―</b>")
-                g.addWidget(hdr, row, 0, 1, 2); row += 1
+                g.addWidget(hdr, row, 0, 1, 3); row += 1
                 last_group = group
             g.addWidget(QLabel(label), row, 0)
             ed = QKeySequenceEdit(QKeySequence(current.get(sid, default)))
             self._edits[sid] = ed
-            g.addWidget(ed, row, 1); row += 1
+            g.addWidget(ed, row, 1)
+            # 261107-4(디자인 SOT §2.9.2): 메뉴에 보일 모양 그대로 — 키캡 그림(같은 그리기)
+            cap = KeycapLabel(ed.keySequence().toString(QKeySequence.SequenceFormat.NativeText))
+            ed.keySequenceChanged.connect(
+                lambda ks, c=cap: c.set_keys(ks.toString(QKeySequence.SequenceFormat.NativeText)))
+            self._caps = getattr(self, "_caps", {})
+            self._caps[sid] = cap
+            g.addWidget(cap, row, 2); row += 1
         area.setWidget(inner)
         v.addWidget(area, 1)
 
@@ -73,8 +81,11 @@ class ShortcutsDialog(QDialog):
         out = {}
         for sid, ed in self._edits.items():
             seq = ed.keySequence().toString()
+            meta = self._defs.get(sid)
             if seq:
                 out[sid] = seq
+            elif meta and meta[1]:
+                out[sid] = ""          # 261107-4: 지운 키는 빈 값으로 남긴다 — 빼면 다음 실행에 기본 키가 되살아난다
         return out
 
     def result_capture_global(self) -> bool:

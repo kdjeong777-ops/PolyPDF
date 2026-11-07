@@ -8,7 +8,7 @@ from typing import Any, Optional
 from PyQt6.QtCore import QStandardPaths
 
 
-CURRENT_SCHEMA = 12
+CURRENT_SCHEMA = 13
 
 # 260611-91: 배포용 기본값 프로파일 — '설정/스타일'만 담고 개인·머신 항목은 제외.
 #   설정 키(이 항목들만 기본값에 포함/초기화 대상):
@@ -344,6 +344,33 @@ def _migrate_v11_to_v12(d: dict) -> dict:
     return d
 
 
+# 261107-4(입력 SOT §3.2.3): v13 에 새로 생긴 단축키 id 와 기본 키 — 사용자가 이미 다른 id 에 준 키와 겹치면 비운다
+NEW_KEYS_V13 = {"save_as": "F12", "copy_path": "Ctrl+Shift+C", "new_folder": "Ctrl+Shift+N", "reveal": "Alt+Shift+R",
+                "info": "Alt+Enter", "fav_add_file": "Ctrl+D", "crop": "Ctrl+Shift+X", "new_page": "Ctrl+Enter",
+                "add_bookmark": "Ctrl+B", "hyperlink": "Ctrl+K", "ocr_read": "Ctrl+Alt+O"}
+
+
+def _key_norm(k) -> str:
+    return str(k or "").replace(" ", "").lower()
+
+
+def _migrate_v12_to_v13(d: dict) -> dict:
+    """261107-4(마스터 §8.2, 입력 SOT §3.2.3): 경로 복사가 Ctrl+Shift+C 를 갖는다 — 클립보드로 복사는 Ctrl+Alt+C.
+
+    v12 와 같은 까닭(단축키 창은 [확인] 때 모든 키를 저장)으로 값이 **정확히 옛 기본값**일 때만 옮긴다(사용자 결정
+    '기본값을 쓰던 사람만'). 새 키가 사용자가 다른 id 에 둔 키와 같으면 그 새 id 를 비운다 — 사용자 키를 빼앗지 않는다. idempotent."""
+    sc = (d.get("preferences") or {}).get("shortcuts")
+    if isinstance(sc, dict):
+        if _key_norm(sc.get("clipboard_save")) == "ctrl+shift+c":
+            sc["clipboard_save"] = "Ctrl+Alt+C"
+        used = {_key_norm(v) for k, v in sc.items() if k not in NEW_KEYS_V13 and v}
+        for sid, key in NEW_KEYS_V13.items():
+            if sid not in sc and _key_norm(key) in used:
+                sc[sid] = ""
+    d["schema_version"] = 13
+    return d
+
+
 def _migrate(d: dict) -> dict:
     v = d.get("schema_version", 1)
     if v < 2:
@@ -368,6 +395,8 @@ def _migrate(d: dict) -> dict:
         d = _migrate_v10_to_v11(d)
     if v < 12:
         d = _migrate_v11_to_v12(d)
+    if v < 13:
+        d = _migrate_v12_to_v13(d)
     return d
 
 

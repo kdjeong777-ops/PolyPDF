@@ -185,7 +185,7 @@ try:
         QTest.qWait(50)
     finally:
         QMenu.exec = _orig_mexec
-    chk(seen and seen[0] == ["리본 메뉴 보이기", "모음 메뉴 관리..."], "H 탭 줄 우클릭 메뉴", str(seen))
+    chk(seen and seen[0] == ["리본 메뉴 보이기", "모음 메뉴 관리"], "H 탭 줄 우클릭 메뉴", str(seen))
     chk(rb.stack.isVisible() and mw._prefs.get("show_panel_toolbar") is True, "H 우클릭 '리본 메뉴 보이기' 로 다시 보인다")
 
     # I 설정창 배치 — 화면 스타일이 언어 바로 아래, 고급 설정 아래 '발표화면 녹화 설정...'

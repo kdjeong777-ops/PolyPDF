@@ -1577,7 +1577,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_show.setChecked(bool((self._prefs or {}).get("show_panel_toolbar", True)))
         a_show.toggled.connect(self._set_ribbon_visible)
         m.addSeparator()
-        a_col = m.addAction(tr("모음 메뉴 관리..."))
+        a_col = m.addAction(tr("모음 메뉴 관리"))
         a_col.triggered.connect(self._manage_collection)
         return m
 
@@ -1721,12 +1721,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_new_win = self._sc_act_new_window = QAction(tr("새 창"), self)
         a_new_win.triggered.connect(self.action_new_window)
         m_file.addAction(a_new_win)
-        a_open = self._sc_act_open = QAction(tr("폴더 열기..."), self)
+        a_open = self._sc_act_open = QAction(tr("폴더 열기"), self)
         a_open.triggered.connect(self.action_open_folder)
         m_file.addAction(a_open)
 
         # v1.6.11 I1: 단일 PDF 열기
-        a_open_file = self._sc_act_open_file = QAction(tr("파일 열기..."), self)
+        a_open_file = self._sc_act_open_file = QAction(tr("파일 열기"), self)
         a_open_file.triggered.connect(self.action_open_pdf)
         m_file.addAction(a_open_file)
         # 261021-5(입력 SOT §3.2, 사용자 결정): 새로고침 Ctrl+R — 포커스가 있는 책갈피창의 🔄 와 같은 일
@@ -1741,7 +1741,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261008-1(§4.7.13, 사용자 결정): 이름·순서를 책갈피창 우클릭 메뉴와 같게 맞춘다.
         #   261031-13(디자인 SOT §2.9.7): 탭에서는 바깥 왼쪽 '저장' 그림 + 저장(일반)·다른 이름·평탄화·변환
         m_file.addAction(self._file_marks["save"])
-        a_save_as = QAction(tr("다른 이름으로 저장..."), self)
+        a_save_as = QAction(tr("다른 이름으로 저장"), self)
         a_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf)."))
         a_save_as.triggered.connect(self._action_save_as)
         # 261011-2(§4.7.16): '저장(PolyPDF용)' → '저장' — 다른 뷰어에서도 보이게 PDF 에 사본을 넣는다
@@ -1750,18 +1750,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_save.triggered.connect(lambda: self.action_save())       # 261024-5: 포커스 책갈피창(Ctrl+R 과 같게)
         m_file.addAction(a_save)
         m_file.addAction(a_save_as)                 # 261031-13: 차례는 책갈피창 우클릭 저장 그룹과 같게(저장 · 다른 이름)
-        a_flat = QAction(tr("평탄화해서 내보내기..."), self)     # 261011-2: 옛 '저장(일반뷰어용)...' — 새 파일로만
+        a_flat = QAction(tr("평탄화 사본"), self)     # 261011-2: 옛 '저장(일반뷰어용)...' — 새 파일로만. 261107-4(기획 §4): 종전 '평탄화해서 내보내기'
         a_flat.setToolTip(tr("꾸밈·사진·하이퍼링크를 쪽 내용으로 굽고 크롭 바깥을 실제로 지운 새 PDF 로 내보냅니다(원본은 그대로). 서명된 문서는 같은 자리에 다시 서명합니다."))
         a_flat.triggered.connect(lambda: self._action_save_decorated_pdf())
         m_file.addAction(a_flat)
         # 261014-28(형식 변환 SOT §2.1, 사용자 지시): 하위 메뉴 없이 누르면 변환 창 — 본문에 열린 파일
-        self.act_export = QAction(tr("변환..."), self)          # 261025-5(사용자 지시): 종전 '변환해서 내보내기...'. 도구 탭에도(이미지→PDF 오른쪽)
+        self.act_export = QAction(tr("변환"), self)          # 261025-5(사용자 지시): 종전 '변환해서 내보내기...'. 도구 탭에도(이미지→PDF 오른쪽)
         self.act_export.triggered.connect(lambda: self.action_convert())
         m_file.addAction(self.act_export)
         m_file.addSeparator()
 
         # 260603-3: 인쇄
-        a_print = self._sc_act_print = QAction(tr("인쇄..."), self)
+        a_print = self._sc_act_print = QAction(tr("인쇄"), self)
         a_print.triggered.connect(_no_checked(self.action_print))     # 261031-3: preset_scope 에 checked(False) 가 들어가지 않게
         m_file.addAction(a_print)
 
@@ -1880,24 +1880,24 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 생성
         _mk_create = RibbonIconMark(self, None, tr("OCR·단어장·책갈피·태그·인덱스 만들기"), tr("생성"))
         m_tools.addAction(_mk_create)
-        _act(tr("OCR 로 읽기 (쪽 범위·언어·워터마크)..."), self._action_ocr_read, "tools.ocr", "OCR",
+        _act(tr("OCR 로 읽기"), self._action_ocr_read, "tools.ocr", "OCR",          # 261107-4(기획 §5.2 의 4): 괄호 설명은 툴팁으로
              tr("이 문서를 OCR 로 읽기 (쪽 범위·언어·워터마크 선택)"))
         # 261008(다국어 SOT §7): 한국 전용 메뉴 항목 — `_gate_api_dependent_ui` 가 언어에 따라 숨긴다
         self._ko_only_acts = []
-        self._ko_only_acts.append(_short(_act(tr("단어장 생성 (OCR·어휘)..."), self._action_build_study,
+        self._ko_only_acts.append(_short(_act(tr("단어장 생성 (OCR·어휘)"), self._action_build_study,
                                               "tools.build_study", tr("단어장 생성")), tr("단어장")))
-        _short(_act(tr("책갈피 자동 생성..."), self.action_open_bookmarker, "tools.bookmarker", tr("책갈피 생성")), tr("책갈피"))
+        _short(_act(tr("책갈피 자동 생성"), self.action_open_bookmarker, "tools.bookmarker", tr("책갈피 생성")), tr("책갈피"))
         # 261102-6(사용자 지시): 종전 '단어장·책갈피 동시 생성' → 일괄 OCR — 모든 언어(단어장 단계는 한국어 화면만).
         #   명령 id 는 그대로(사용자 단축키·모음 설정이 이 id 로 저장돼 있다)
-        _short(_act(tr("일괄 OCR (OCR·단어장·책갈피)..."), self._action_batch_ocr,
+        _short(_act(tr("일괄 OCR (OCR·단어장·책갈피)"), self._action_batch_ocr,
                     "tools.study_and_bookmarks", tr("일괄 OCR"),
                     tip=tr("OCR 로 모든 쪽을 읽고 단어장(한국어 화면)과 책갈피를 한 번에 만듭니다")), tr("일괄 OCR"))
         _sub(tr("태그"), (                               # 태그 SOT §8.2·§8.5(260829 P2) — 261031-16: 종전 '태그 자동 부여'
             (tr("태그 다시 계산"), lambda: self._start_autotag_scan(force=True)),
-            (tr("새 태그 후보 검토…"), self._autotag_review_candidates),
+            (tr("새 태그 후보 검토"), self._autotag_review_candidates),
             (tr("직전 자동 부여 되돌리기"), self._autotag_undo),
             (tr("자동 태그 전체 삭제"), self._autotag_clear_all),
-            (tr("없는 파일 항목 정리…"), self._autotag_prune_missing)), "tools.autotag")
+            (tr("없는 파일 항목 정리"), self._autotag_prune_missing)), "tools.autotag")
         _act(tr("인덱스"), self.action_reindex, "tools.reindex", tip=tr("인덱스 재구축 — 열린 폴더의 검색 색인을 처음부터 다시 만듭니다"))   # 261031-16: 종전 '인덱스 재구축'
         # PDF
         m_tools.addSeparator()
@@ -1908,20 +1908,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                        "mark.create": _mk_create, "mark.pdf": _mk_pdf}
         for _mid, _mk in self._marks.items():
             _mk.setProperty("mark_id", _mid)          # 자리 표(ui_layout)·검사가 표시를 id 로 읽는다
-        _short(_act(tr("이미지 → PDF 변환..."), lambda: self.action_image_to_pdf(), "tools.img2pdf",  # 260825-13
+        _short(_act(tr("이미지 → PDF 변환"), lambda: self.action_image_to_pdf(), "tools.img2pdf",  # 260825-13
                     tr("이미지→PDF"), tr("이미지 파일 → PDF 변환")), tr("이미지"))
-        a_merge = self._sc_act_merge = _short(_act(tr("PDF 병합..."), lambda: self._on_merge_files(None),
+        a_merge = self._sc_act_merge = _short(_act(tr("PDF 병합"), lambda: self._on_merge_files(None),
                                                    "tools.merge", tr("PDF병합")), tr("병합"))
-        _short(_act(tr("다단 생성..."), self.action_nup_create, "tools.nup"), tr("다단"))   # 261021-3(마스터 §11.10.2)
-        _act(tr("암호화 (암호·권한 설정)..."), self.action_encrypt_pdf, "tools.encrypt", tr("암호화"),
+        _short(_act(tr("다단 생성"), self.action_nup_create, "tools.nup"), tr("다단"))   # 261021-3(마스터 §11.10.2)
+        _act(tr("암호화 (암호·권한 설정)"), self.action_encrypt_pdf, "tools.encrypt", tr("암호화"),
              tr("현재 PDF에 암호·권한 설정(암호화 저장)"))
         _sub(tr("전자서명"), (                          # 보안 SOT §3(261010-21) — 261031-16(사용자 결정): PDF 묶음
-            (tr("서명..."), self.action_sign_pdf),
-            (tr("그림만 넣기..."), self.action_sign_image_only),       # 보안 SOT §3.11
-            (tr("서명 확정..."), self.action_sign_confirm),           # 보안 SOT §3.10
+            (tr("서명"), self.action_sign_pdf),
+            (tr("그림만 넣기"), self.action_sign_image_only),       # 보안 SOT §3.11
+            (tr("서명 확정"), self.action_sign_confirm),           # 보안 SOT §3.10
             (tr("서명 편집"), self.action_sign_edit),
-            (tr("빈 서명 칸 만들기..."), self.action_sign_field),
-            (tr("디지털 ID 관리..."), self.action_digital_ids)), "tools.sign")   # 261031-1: 서명 그림은 디지털 ID 가 갖는다
+            (tr("빈 서명 칸 만들기"), self.action_sign_field),
+            (tr("디지털 ID 관리"), self.action_digital_ids)), "tools.sign")   # 261031-1: 서명 그림은 디지털 ID 가 갖는다
         # 변환 · 번역(사용자 결정 '변환 옆')
         m_tools.addSeparator()
         m_tools.addAction(self.act_export)       # 261025-5(사용자 지시): '변환' 은 파일·도구 탭 모두에 — 같은 액션(id file.export)
@@ -1933,20 +1933,20 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         # 환경설정 · 사전 관리 — '기본값으로 저장(배포용)'·'설정 초기화' 는 환경설정 창 맨 아래로(261016-3, 사용자 지시)
         m_tools.addSeparator()
-        _act(tr("환경설정..."), self.action_open_settings, "tools.settings")        # 260618-18
+        _act(tr("환경설정"), self.action_open_settings, "tools.settings")        # 260618-18
         # 261025-6 보완(사용자 지시): '단축키 설정...' 은 환경설정 '스타일' 묶음의 단추로 옮겼다(도구 탭에서는 뺐다, 디자인 SOT §2.14)
         # 📖 사전 관리(261031-16: 종전 '사전 및 용어집 관리') — 단어장·영→한 번역이 쓴다, 한국 전용(사용자 결정 261008-25)
         _dict = _sub(tr("사전 관리"), (
-            (tr("단어장 관리 (적용 사전·스타일)..."), self._action_dict_manager),
-            (tr("사용자 뜻 편집..."), self._action_user_terms),          # 261019-5(단어장 SOT §4.1)
-            (tr("용어집 가져오기 (PDF·CSV)..."), self._action_import_glossary),
-            (tr("사전 복원 (가져오기)..."), self._action_restore_dict),
-            (tr("용어집 CSV 양식 예제 저장..."), self._action_save_csv_sample),
-            (tr("인터넷 사전 보강 (이어하기)..."), self._action_online_enrich),
-            (tr("사전 내보내기 (TBX·CSV)..."), self._action_export_dict),
-            (tr("사전 백업 (내보내기)..."), self._action_backup_dict),
+            (tr("단어장 관리 (적용 사전·스타일)"), self._action_dict_manager),
+            (tr("사용자 뜻 편집"), self._action_user_terms),          # 261019-5(단어장 SOT §4.1)
+            (tr("용어집 가져오기 (PDF·CSV)"), self._action_import_glossary),
+            (tr("사전 복원 (가져오기)"), self._action_restore_dict),
+            (tr("용어집 CSV 양식 예제 저장"), self._action_save_csv_sample),
+            (tr("인터넷 사전 보강 (이어하기)"), self._action_online_enrich),
+            (tr("사전 내보내기 (TBX·CSV)"), self._action_export_dict),
+            (tr("사전 백업 (내보내기)"), self._action_backup_dict),
             (tr("사전 정리 (HTML 마크업 제거)"), self._action_sanitize_dict),
-            (tr("온용어 다시 분류 (용어집별·재조회)..."), self._action_reclassify_onterm)), "tools.dict")
+            (tr("온용어 다시 분류 (용어집별·재조회)"), self._action_reclassify_onterm)), "tools.dict")
         self._ko_only_acts.append(_dict.menuAction())
 
         # 등록·설치
@@ -1954,11 +1954,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목을 `등록·설치 ▾` 하나로 — 명령 id 는 그대로(모음에 넣은 단추가 남는다)
         _inst = m_tools.addMenu(tr("등록·설치"))
         for _t, _s, _cid, _short, _tip in (
-                (tr("기본 PDF 앱 등록…"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱 등록"),
+                (tr("기본 PDF 앱 등록"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱 등록"),
                  tr("Windows 기본 PDF 앱으로 등록…")),
-                (tr("구성요소 설치…"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
+                (tr("구성요소 설치"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
                  tr("구성요소 설치(녹화·OCR)…")),
-                (tr("가상 프린터 설치·제거…"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
+                (tr("가상 프린터 설치·제거"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
                  tr("가상 프린터(PolyPDF) 설치·제거…"))):
             _a = QAction(_t, self)
             _a.triggered.connect(_no_checked(_s))
@@ -1972,7 +1972,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_usage.triggered.connect(self._show_usage)
         m_help.addAction(a_usage)
         # 260618-11: 업데이트 확인(GitHub Releases)
-        a_update = QAction(tr("업데이트 확인…"), self)
+        a_update = QAction(tr("업데이트 확인"), self)
         a_update.triggered.connect(lambda: self._check_for_updates(manual=True))
         m_help.addAction(a_update)
         # 261026-5(사용자 지시): '업데이트 자동 다운로드'·'베타(테스트) 버전도 받기' 체크 항목은 리본 단추로는 체크를 다룰 수 없어
@@ -2030,6 +2030,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("open_file",     (tr("파일 열기"), "Ctrl+Shift+O", tr("파일"))),
             ("refresh",       (tr("새로고침"), "Ctrl+R", tr("파일"))),
             ("save",          (tr("저장"), "Ctrl+S", tr("파일"))),
+            # 261107-4(입력 SOT §3.2.3, 사용자 지시·결정): 흔한 프로그램 관례 키 — 대상은 포커스(`viewer/key_actions.py`)
+            ("save_as",       (tr("다른 이름으로 저장"), "F12", tr("파일"))),
+            ("copy_path",     (tr("경로 복사"), "Ctrl+Shift+C", tr("파일"))),
+            ("new_folder",    (tr("새 폴더 만들기"), "Ctrl+Shift+N", tr("파일"))),
+            ("reveal",        (tr("파일 탐색기 열기"), "Alt+Shift+R", tr("파일"))),
+            ("info",          (tr("문서 정보 · 사진 정보"), "Alt+Enter", tr("파일"))),
+            ("fav_add_file",  (tr("즐겨찾기에 추가 (현재 파일)"), "Ctrl+D", tr("파일"))),
             ("print",         (tr("인쇄"), "Ctrl+P", tr("파일"))),
             ("merge",         (tr("PDF 병합"), "Ctrl+M", tr("파일"))),
             ("search_focus",  (tr("검색바 포커스"), "Ctrl+F", tr("탐색"))),
@@ -2052,12 +2059,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             ("zoom_out",      (tr("축소"), "Ctrl+-", tr("보기"))),
             ("zoom_reset",    (tr("기본 크기"), "Ctrl+0", tr("보기"))),
             # 261104-3(입력 SOT §3.2.2·사진 보기 SOT 4.16): 본문 돌리기 — 사진은 보기 회전, PDF 는 지금 쪽 회전
-            ("rotate_left",   (tr("왼쪽으로 90° 돌리기"), "Ctrl+[", tr("보기"))),
-            ("rotate_right",  (tr("오른쪽으로 90° 돌리기"), "Ctrl+]", tr("보기"))),
+            ("rotate_left",   (tr("왼쪽 90° 회전"), "Ctrl+[", tr("보기"))),     # 261107-4: 메뉴와 같은 이름(기획 §4)
+            ("rotate_right",  (tr("오른쪽 90° 회전"), "Ctrl+]", tr("보기"))),
+            ("crop",          (tr("크롭"), "Ctrl+Shift+X", tr("쪽 편집"))),
+            ("new_page",      (tr("새 페이지 넣기"), "Ctrl+Enter", tr("쪽 편집"))),
+            ("add_bookmark",  (tr("책갈피 추가"), "Ctrl+B", tr("쪽 편집"))),
+            ("hyperlink",     (tr("하이퍼링크 등록"), "Ctrl+K", tr("쪽 편집"))),
+            ("ocr_read",      (tr("OCR 로 읽기"), "Ctrl+Alt+O", tr("도구"))),
             ("capture",       (tr("화면 캡처"), "Ctrl+Shift+S", tr("캡처·저장"))),
             # 261021-5(사용자 결정): Ctrl+S 는 파일 저장 — 옛 설정 값은 settings_store v12 가 옮긴다
             ("save_shots_pdf", (tr("스크린샷 PDF 저장"), "Ctrl+Alt+S", tr("캡처·저장"))),
-            ("clipboard_save", (tr("클립보드로 복사"), "Ctrl+Shift+C", tr("캡처·저장"))),
+            ("clipboard_save", (tr("클립보드로 복사"), "Ctrl+Alt+C", tr("캡처·저장"))),   # 261107-4: Ctrl+Shift+C 는 경로 복사(설정 v13 이 옮긴다)
             ("draw_pen_1",    (tr("선 1 선택"), "Ctrl+1", tr("선긋기(편집모드)"))),
             ("draw_pen_2",    (tr("선 2 선택"), "Ctrl+2", tr("선긋기(편집모드)"))),
             ("draw_pen_3",    (tr("선 3 선택"), "Ctrl+3", tr("선긋기(편집모드)"))),
@@ -2115,6 +2127,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "edit_undo": ("func", self.action_edit_undo),          # 261012-7: 창 어디서나(편집 모드)
             "edit_redo": ("func", self.action_edit_redo),
         }
+        from viewer import key_actions as _ka                # 261107-4(입력 SOT §3.2.3)
+        for _sid in ("save_as", "copy_path", "new_folder", "reveal", "info", "fav_add_file",
+                     "crop", "new_page", "add_bookmark", "hyperlink", "ocr_read"):
+            targets[_sid] = ("func", (lambda f=getattr(_ka, _sid): f(self)))
         self._sc_objs = {}
         overrides = (getattr(self, "_prefs", {}) or {}).get("shortcuts", {})
         for sid, (label, default, group) in self._sc_defs.items():
@@ -2139,6 +2155,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         alt = self._SC_ALT_KEYS.get(sid)
         if alt and not ks.isEmpty() and ks == QKeySequence(alt[0]):
             return [ks, QKeySequence(alt[1])]
+        # 261107-4(입력 SOT §3.2.3): Qt 의 'Enter' 는 숫자판 키 — 본 키(Return)도 같이 듣는다(표기는 Enter 그대로)
+        txt = ks.toString()
+        if txt.endswith("+Enter") or txt == "Enter":
+            return [ks, QKeySequence(txt[:-len("Enter")] + "Return")]
         return [ks]
 
     def _sc_rename_item(self):
@@ -2150,6 +2170,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if tw is not None and fw is not None and (fw is tw or tw.isAncestorOf(fw)):
                 bt._edit_item(tw.currentItem())
                 return
+        from viewer import key_actions as _ka                # 261107-4(입력 SOT §3.2.3): 사진 썸네일 줄·사진 본문에서도
+        _ka.rename(self)
 
     # 260611-3: 선긋기 단축키 — 편집모드의 활성 메인뷰에 적용
     def _draw_sc_pen(self, idx):
@@ -9589,7 +9611,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             dark = (mode == "dark")
         from viewer import theme as _theme
         _theme.set_dark(dark)
-        app.setStyle(QStyleFactory.create("Fusion"))
+        from viewer.widgets.keycaps import app_style as _keycap_style   # 261107-4(디자인 SOT §2.9.2): 메뉴 단축키 칸은 키캡 그림
+        app.setStyle(_keycap_style("Fusion"))
         # 260618-16: Qt6.5+ 에서 시스템이 다크면 standardPalette() 가 다크를 반환 →
         #   '밝게'를 골라도 대부분 검게 보이던 문제. 라이트는 **명시적 라이트 팔레트** 강제.
         if not dark:
@@ -10027,7 +10050,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 ph.setEnabled(False)
                 menu.addAction(ph)
             menu.addSeparator()
-            mg = QAction(tr("항목 관리..."), menu)
+            mg = QAction(tr("항목 관리"), menu)
             mg.triggered.connect(lambda _c=False, k=kind: self._open_favorites_manager(k))
             menu.addAction(mg)
 
@@ -10057,7 +10080,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             mo.addAction(ph)
         if on:
             mo.addSeparator()
-            mg = QAction(tr("항목 관리..."), mo)
+            mg = QAction(tr("항목 관리"), mo)
             mg.triggered.connect(lambda _c=False, k=on[0]: self._open_favorites_manager(k))
             mo.addAction(mg)
         mo.menuAction().setVisible(bool(on))

@@ -272,8 +272,8 @@ try:
             # 261016-3(디자인 SOT §2.9.1): '전자서명 ▸' 하위 메뉴
             sub = next((a.menu() for a in act.menu().actions() if a.text() == "전자서명" and a.menu()), None)
             labels = [a.text() for a in sub.actions()] if sub else []
-    chk("서명..." in labels and "디지털 ID 관리..." in labels and "서명 그림..." not in labels,
-        "D1 도구 메뉴에 '전자서명 ▸' 하위 메뉴 — '디지털 ID 관리...', '서명 그림...' 은 없다(261031-1, ID 가 그림을 갖는다)", str(labels))
+    chk("서명" in labels and "디지털 ID 관리" in labels and "서명 그림..." not in labels,
+        "D1 도구 메뉴에 '전자서명 ▸' 하위 메뉴 — '디지털 ID 관리', '서명 그림...' 은 없다(261031-1, ID 가 그림을 갖는다)", str(labels))
     chk(not mv.sign_band.isVisible(), "D2 서명 없는 문서에는 검증 띠가 없다")
 
     picked = {}
@@ -728,7 +728,7 @@ try:
     z = mv._zoom or 1.0
     mv.signRegionSelected.emit(QRectF(100 * z, 100 * z, 200 * z, 60 * z)); spin(1.2)
     _d = fitz.open(str(fd_path)); ef = sc.empty_fields(_d); _d.close()
-    chk("빈 서명 칸 만들기..." in labels and armed and [f.name for f in ef] == ["승인자"] and not list(root.glob("~*.polypdf-sign")),
+    chk("빈 서명 칸 만들기" in labels and armed and [f.name for f in ef] == ["승인자"] and not list(root.glob("~*.polypdf-sign")),
         "O5 도구 '빈 서명 칸 만들기...' → 끌기 → 이름 → 현재 파일에 칸", str(ef))
     mv = mw.main_view
     spin(0.3)

@@ -415,7 +415,7 @@ try:
     _labels = [a.text() for a in mw._cmds["tools.sign"].menu().actions()]
     idd = sdlg.DigitalIdDialog(mw, runner=mw._sign_bg, hello_ok=False)
     cdl = sdlg._CreateIdDialog(mw)
-    chk("디지털 ID 관리..." in _labels and "서명 그림..." not in _labels and idd.windowTitle() == "디지털 ID 관리"
+    chk("디지털 ID 관리" in _labels and "서명 그림..." not in _labels and idd.windowTitle() == "디지털 ID 관리"
         and idd.b_img.text().startswith("서명 그림") and cdl.b_image.text() == "서명 그림 넣기"
         and any("서명 그림" in idd.lst.item(i).text() for i in range(idd.lst.count())),
         "U5 '디지털 ID 관리' — 메뉴 이름·서명 그림 항목 없음·새 ID 창 [서명 그림 넣기]·목록 '· 서명 그림'", str(_labels))

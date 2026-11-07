@@ -164,8 +164,8 @@ try:
     # A — 메뉴 자리
     m_tools = next(x.menu() for x in mw.menuBar().actions() if x.text().startswith("도구"))
     names = [x.text() for x in m_tools.actions() if not x.isSeparator()]
-    chk("다단 생성..." in names and names.index("다단 생성...") == names.index("PDF 병합...") + 1,
-        "A 도구 메뉴 '다단 생성...' 은 'PDF 병합...' 바로 아래", str(names[:12]))
+    chk("다단 생성" in names and names.index("다단 생성") == names.index("PDF 병합") + 1,
+        "A 도구 메뉴 '다단 생성' 은 'PDF 병합' 바로 아래(261107-4: 메뉴 이름에 '…' 없음)", str(names[:12]))
     mw.open_folder(str(folder)); spin(0.8)
     mw._on_bookmark_activated(str(src), 0); spin(1.0)
     QMessageBox.information = staticmethod(lambda *a_, **k: None)

@@ -108,7 +108,12 @@ class _TipFilter(QObject):
                 if not key and "\t" in a.text():
                     key = a.text().split("\t", 1)[1].strip()
                 if key and key not in tip:
-                    tip = f"{tip} ({key})"
+                    # 261107-4(디자인 SOT §2.9.2): 키는 키캡 그림 — 메뉴 단축키 칸과 같은 그리기(`keycaps`)
+                    import html as _html
+                    from viewer.widgets.keycaps import keycap_html
+                    pal = obj.palette()
+                    img = keycap_html(key, obj.font(), pal.color(pal.ColorRole.ToolTipText))
+                    tip = ("<span>%s</span>&nbsp;&nbsp;%s" % (_html.escape(tip), img)) if img else f"{tip} ({key})"
                 QToolTip.showText(ev.globalPos(), tip, obj)
                 return True
         return False

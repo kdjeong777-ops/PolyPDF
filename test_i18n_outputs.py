@@ -74,7 +74,7 @@ try:
     hidden = [w for w in ("Vocabulary", "vocabulary", "KCSC", "KIPO", "Laws", "patent", "Translate", "translation")
               if w in text]
     chk(not hidden, "B 영어 도움말이 숨긴 한국 전용 기능을 말하지 않는다", str(hidden))
-    for ko_name in ("사용법", "정보", "단축키 설정...", "책갈피 자동 생성...", "책갈피 생성",
+    for ko_name in ("사용법", "정보", "단축키 설정...", "책갈피 자동 생성", "책갈피 생성",
                     "책갈피 모두 펼치기", "책갈피 모두 접기", "클립보드로 복사", "클립보드 가져오기",
                     "사용자 크기 설정", "책갈피 추가"):
         en_name = i18n.tr(ko_name).replace("...", "")
@@ -132,9 +132,9 @@ try:
     chk("Restore the screenshot list on startup" not in en_html, "F en 도움말에 없어진 설정이 없다")
     i18n.install(None, "en")
     # 261024-1(디자인 SOT §2.9): 패널의 '도구' 라벨은 없어졌다 — 화면의 이름은 탭 `도구(&T)`(니모닉 & 는 뺀다)
-    for ko_name in ("도구(&T)", "환경설정...", "인덱스", "구성요소 설치…", "기본 PDF 앱 등록…",   # 261025-5: 등록·설치 ▾ 안의 이름
+    for ko_name in ("도구(&T)", "환경설정", "인덱스", "구성요소 설치", "기본 PDF 앱 등록",   # 261025-5: 등록·설치 ▾ 안의 이름
                     "현재 검색어 추가", "항목 관리",          # 261025-1(디자인 SOT §2.9.5) "선과 텍스트 입력 설정…", "2단 보기",
-                    "평탄화해서 내보내기...", "PDF로 인쇄", "다단 인쇄", "OCR 로 읽기", "해시태그 편집...", "녹화 테스트 (3초)",
+                    "평탄화 사본", "PDF로 인쇄", "다단 인쇄", "OCR 로 읽기", "해시태그 편집", "녹화 테스트 (3초)",   # 261107-2: 우클릭 이름 '…' 뗌
                     "업데이트 자동 다운로드", "베타(테스트) 버전도 받기", "계속 편집"):
         en_name = i18n.tr(ko_name).replace("...", "").replace("…", "").replace("&", "")
         chk(en_name in en_html, "F en 도움말의 이름이 실제 영어 화면과 같다: %s" % en_name)

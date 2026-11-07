@@ -47,7 +47,7 @@ try:
 
     # A
     help_items = [a.text() for a in mw._tab_menus["help"].actions() if not a.isSeparator()]
-    chk(help_items == ["사용법", "업데이트 확인…", "정보"], "A 도움말 탭에 두 체크 항목이 없다", str(help_items))
+    chk(help_items == ["사용법", "업데이트 확인", "정보"], "A 도움말 탭에 두 체크 항목이 없다", str(help_items))
 
     # B·C — 결과가 늦게 오는 확인(실제 스레드·시그널 길)
     boxes = []
