@@ -25,7 +25,7 @@ ALLOWED = {
     "viewer/edit_controller.py:EditMixin._apply_drawings_to_pdf":
         "배경 — 안쪽 `_job` 이 `_run_merge_job`(`_MergeThread`)에서 돈다",
     "viewer/edit_controller.py:EditMixin._action_save_decorated_pdf":
-        "일회성 작업 — '평탄화해서 내보내기' 를 누를 때 한 번, 쪽마다 크롭 상자만 견준다(598쪽 0.08초, 261025 실측)",
+        "일회성 작업 — '평탄화 사본' 을 누를 때 한 번, 쪽마다 크롭 상자만 견준다(598쪽 0.08초, 261025 실측)",
     "viewer/convert_controller.py:ConvertMixin.action_pages_to_pdf":
         "배경 — 안쪽 `_job` 이 `_run_merge_job`(`_MergeThread`)에서 돈다, 고른 쪽만 남긴 뒤 서명 칸만 본다(261107-7)",
     "viewer/app.py:MainWindow._remap_page_text":

@@ -127,7 +127,7 @@ try:
     for want in ("사진 복사", "해시태그 편집", "파일 탐색기 열기"):   # 261107-16: 경로 복사는 키로만
         chk(want in tx, "A 사진 행 메뉴에 '%s'" % want, str(tx))
     chk("PDF 만들기" in seen["all"], "A 사진 행 저장 ▸ 에 'PDF 만들기'(261107-2)", str(seen["all"]))
-    for gone in ("다른 이름으로 저장", "평탄화해서 내보내기...", "책갈피 생성", "일괄 OCR", "책갈피 모두 펼치기", "용량 줄인 사본", "전달 묶음"):
+    for gone in ("다른 이름으로 저장", "평탄화해서 내보내기...", "책갈피 생성", "일괄 OCR", "책갈피 모두 펼치기", "용량 줄인 사본", "전달 묶음"):   # 옛 이름 포함 — 없어야 한다
         chk(gone not in seen["all"], "A 사진 행 메뉴에 '%s' 없음" % gone, str(seen["all"]))
     bt._edit_mode_saved = bt._edit_mode
     bt._edit_mode = True
