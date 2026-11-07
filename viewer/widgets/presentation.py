@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QEvent, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QEvent, QSize, QRectF, QPointF
 from PyQt6.QtGui import (QImage, QPixmap, QPainter, QColor, QCursor, QPen,
                          QPalette, QTransform, QIcon, QKeySequence)
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QMenu, QLineEdit
@@ -34,6 +34,8 @@ BACK_ZONE_DEFAULT = 20
 BACK_ZONE_MIN = 5
 BACK_ZONE_MAX = 50
 BACK_HINT_MS = 800
+# 261107-37(발표 SOT §6.2): 단어 위에 이만큼 머물면 뜻 풍선(사용자 결정)
+VOCAB_TIP_DELAY_MS = 400
 
 # 260609-16(F3): 발표 펜(드래그 그리기) 기본 프리셋·단축키
 DEFAULT_PENS = [
@@ -319,6 +321,7 @@ class _DrawOverlay(QWidget):
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        self._owner._paint_vocab_marks(p)    # 261107-37(§6.2): 단어장 밑줄 — 그린 선보다 먼저(아래)
         # 260905(§4.1.2): 좌우 2쪽이면 보이는 두 쪽의 선을 모두 그린다(한 쪽만 보면
         #   오른쪽 칸에 그린 선이 사라진다).
         strokes = []
@@ -418,6 +421,7 @@ class PresentationWindow(QWidget):
     overlapChanged = pyqtSignal(int)            # 260611-26: 중앙겹침(%) 변경(메뉴 입력박스)
     otherScreenChanged = pyqtSignal(bool)       # 261021-3(발표 SOT §6.1): 본화면(거짓)/다른 화면(참) — 영속
     backZoneChanged = pyqtSignal(int)           # 261025-3(발표 SOT §3.1): 뒤로 가기 영역 폭(%) — 영속
+    vocabChanged = pyqtSignal(bool)             # 261107-37(발표 SOT §6.2): 띠 '단어장' — 영속
 
     def __init__(self, file_path, page0: int = 0, parent=None,
                  pointers=None, pointer_active: int = 0,
@@ -430,7 +434,8 @@ class PresentationWindow(QWidget):
                  pen_straight: bool = True, eraser_widths=None,
                  line_mode: int = 0, highlight_alpha: int = 35, timer_cfg=None,
                  render_source=None, other_screen: bool = False,
-                 back_zone_pct: int = BACK_ZONE_DEFAULT, photo: bool = False):
+                 back_zone_pct: int = BACK_ZONE_DEFAULT, photo: bool = False,
+                 vocab: bool = False, vocab_resolver=None):
         super().__init__(parent)
         # 261104-7(사진 보기 SOT 4.12 슬라이드쇼, 발표 SOT §6.4): 사진이면 사진 문서로 열고(Pillow 줄여 읽기 — 화면 크기만큼),
         #   세로 사진에서 상하 2분할을 저절로 켜지 않고, 파일 경계는 무장 없이 바로 넘기고, DPI 하한(72)을 걸지 않는다
@@ -459,6 +464,13 @@ class PresentationWindow(QWidget):
         self._overlap_frac = max(0.0, min(0.4, float(overlap_pct) / 100.0))
         # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역(창 폭 비율)
         self._back_zone_frac = self._clamp_back_zone(back_zone_pct) / 100.0
+        # 261107-37(발표 SOT §6.2): 단어장 밑줄·뜻 풍선 — 쪽 pt → 화면 px 변환 하나로 그리고 맞힌다
+        self._vocab_on = bool(vocab)
+        self._vocab_resolver = vocab_resolver
+        self._vocab_data = {}                 # {(path, page0): {"marks": […], "tips": {…}} | None}
+        self._crop_meta = {}                  # {page0: QTransform 쪽 pt → 크롭된 렌더 픽스맵 px}
+        self._page_xf = {}                    # {page0: (QTransform 쪽 pt → 창 px, 보이는 QRectF)}
+        self._vocab_tip_word = None           # 풍선을 띄운(띄울) (page0, lemma, 화면 QRectF)
         # 260905(발표 SOT §4.1): 좌우 2쪽 보기 · 맞쪽 — 상하 2분할과 **상호배타**.
         #   상하분할과 달리 사용자가 명시적으로 켜는 모드라 **설정에 저장**하고,
         #   켜져 있는 동안에는 상하분할 자동판정(_orient_split_default)을 건너뛴다.
@@ -579,6 +591,19 @@ class PresentationWindow(QWidget):
         self._back_hint_timer.setSingleShot(True)
         self._back_hint_timer.setInterval(BACK_HINT_MS)
         self._back_hint_timer.timeout.connect(self._back_hint.hide)
+        # 261107-37(§6.2): 단어장 뜻 풍선 — 창 안 위젯(녹화에 잡힌다, 사용자 결정), 마우스는 통과
+        self._vocab_tip = QLabel(self)
+        self._vocab_tip.setTextFormat(Qt.TextFormat.RichText)
+        self._vocab_tip.setWordWrap(True)
+        self._vocab_tip.setStyleSheet(
+            "background:rgba(20,20,24,0.92);color:#fff;font-size:18px;"
+            "padding:6px 10px;border:1px solid #888;border-radius:6px;")
+        self._vocab_tip.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._vocab_tip.hide()
+        self._vocab_tip_timer = QTimer(self)
+        self._vocab_tip_timer.setSingleShot(True)
+        self._vocab_tip_timer.setInterval(VOCAB_TIP_DELAY_MS)
+        self._vocab_tip_timer.timeout.connect(self._show_vocab_tip)
 
         self._build_topbar()
         # 260609-16(F3): 그리기 오버레이(투명, 마우스 통과 → 창이 드래그 수신)
@@ -592,6 +617,7 @@ class PresentationWindow(QWidget):
         self._topbar.raise_()
         self._hint.raise_()
         self._back_hint.raise_()
+        self._vocab_tip.raise_()
         self._watch_screens(True)             # 261025-3(§6.1): 모니터 꽂기·빼기
         # 260611-7: 툴바 버튼·썸네일 리스트가 키보드 포커스를 가져가면 방향키가
         #   페이지 이동 대신 위젯 탐색에 쓰여 '방향키 이동'이 안 먹힌다.
@@ -715,6 +741,14 @@ class PresentationWindow(QWidget):
         self._tb_apply.toggled.connect(self._on_apply_toggled)
         row1.addWidget(self._tb_apply)
         self._update_apply_button()
+        # 261107-37(§6.2, 사용자 결정): '단어장' — 켜면 단어장 단어 밑줄·뜻 풍선(기본 꺼짐, 기억)
+        self._tb_vocab = QPushButton(tr("단어장"))
+        self._tb_vocab.setCheckable(True); self._tb_vocab.setChecked(self._vocab_on)
+        self._paint_toggle(self._tb_vocab, self._vocab_on)
+        self._tb_vocab.setToolTip(tr("켜면 이 쪽의 단어장 단어에 밑줄을 긋고, 단어 위에 마우스를 올리면 뜻을 풍선으로 보입니다."))
+        self._tb_vocab.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tb_vocab.toggled.connect(self.set_vocab)
+        row1.addWidget(self._tb_vocab)
         # 260611-85/86: '링크실행' — 페이지의 사진·동영상 링크를 전체화면으로 순서대로
         #   (미디어 링크 없는 페이지에선 비활성)
         self._tb_linkplay = QPushButton(tr("링크실행"))
@@ -1412,21 +1446,41 @@ class PresentationWindow(QWidget):
             cache = self._pm_cache = {}
         hit = cache.get(key)
         if hit is not None:
-            return hit
+            self._crop_meta[p] = hit[1]
+            return hit[0]
         pm = self._render_pixmap(dpi, p)
+        # 261107-37(§6.2): 표시 쪽 pt → 이 픽스맵 px 변환(렌더 배율·앱 회전·크롭으로 잘린 위·왼쪽)
+        W, H = pm.width(), pm.height()
+        cx = cy = 0
         if ct > 0 or cb > 0 or cl > 0 or cr > 0:
-            W, H = pm.width(), pm.height()
             t = int(H * ct / 100.0)
             b = int(H * cb / 100.0)
             x = int(W * cl / 100.0)
             rr = int(W * cr / 100.0)
             h2 = max(1, H - t - b)
             w2 = max(1, W - x - rr)
-            pm = pm.copy(min(x, W - 1), min(t, H - 1), w2, h2)
+            cx, cy = min(x, W - 1), min(t, H - 1)
+            pm = pm.copy(cx, cy, w2, h2)
+        xf = self._render_xf(p, W, H, rot) * QTransform.fromTranslate(-cx, -cy)
         if len(cache) >= 4:                 # 오래된 항목부터 제거(삽입 순서)
             cache.pop(next(iter(cache)), None)
-        cache[key] = pm
+        cache[key] = (pm, xf)
+        self._crop_meta[p] = xf
         return pm
+
+    def _render_xf(self, page0, W, H, rot) -> QTransform:
+        """261107-37(§6.2): 표시 쪽 pt → 회전까지 마친 렌더 픽스맵(W×H) px. 렌더는 쪽 pt × dpi/72 를
+        그린 뒤 앱 회전(`_rotation`)으로 돌리므로, 배율은 **실제 픽스맵 크기 ÷ 쪽 pt** 로(반올림까지 맞게)."""
+        try:
+            r = self._doc.doc.load_page(int(page0)).rect
+            pw, ph = float(r.width), float(r.height)
+        except Exception:
+            pw, ph = self._page_points(page0)
+        w0, h0 = (H, W) if rot in (90, 270) else (W, H)     # 돌리기 전 크기
+        t = QTransform.fromScale(w0 / max(1e-6, pw), h0 / max(1e-6, ph))
+        if rot:
+            t = t * QPixmap.trueMatrix(QTransform().rotate(rot), w0, h0)
+        return t
 
     # 260905(§4): 중앙 겹침 띠 — 하부(이미 본 곳)는 진하게, 상부(다음에 다시 볼 곳)는 연하게.
     #   두 값을 같게 만들지 말 것(사용자가 명시적으로 구분을 요구했다).
@@ -1441,9 +1495,11 @@ class PresentationWindow(QWidget):
         if self._dual_mode:
             return self._dual_pixmap_fit(sw, sh)
         vw, vh = self._crop_points()
+        self._page_xf = {}
         if vw <= 0 or vh <= 0:
             return None
         try:
+            split_y = 0                      # 261107-37(§6.2): 하부 반쪽이면 잘린 위쪽 px
             if self._page_is_split():
                 dpi = max(self._dpi_min, min(400, int(sw * 72.0 / vw)))      # 크롭 후 폭맞춤
                 pm = self._render_cropped(dpi)
@@ -1460,6 +1516,7 @@ class PresentationWindow(QWidget):
                         _p.end()
                 else:
                     y0 = max(0, mid - ov // 2)
+                    split_y = y0
                     pm = pm.copy(0, y0, pm.width(), H - y0)
                     # 260609-16(F2): 하단 볼 때, 상단에서 이미 본 겹침부를 반투명 띠로
                     if ov > 0:
@@ -1471,6 +1528,7 @@ class PresentationWindow(QWidget):
                 dpi = min(sw * 72.0 / vw, sh * 72.0 / vh)
                 dpi = max(self._dpi_min, min(400, int(dpi)))
                 pm = self._render_cropped(dpi)
+            pre_w, pre_h = pm.width(), pm.height()
             # 260615-2 / 260905(§4.1.3): 화면 채움 — 비율 무시하고 sw×sh 로 늘려 전체 채움.
             #   종전에는 `not self._page_is_split()` 조건 탓에 상하 2분할(세로 페이지 기본 ON)
             #   에서 통째로 건너뛰어져 사실상 동작하지 않았다 → 분할 반쪽에도 적용한다.
@@ -1480,6 +1538,11 @@ class PresentationWindow(QWidget):
             elif pm.width() > sw or pm.height() > sh:
                 pm = pm.scaled(sw, sh, Qt.AspectRatioMode.KeepAspectRatio,
                                Qt.TransformationMode.SmoothTransformation)
+            # 261107-37(§6.2): 라벨은 픽스맵을 가운데에 놓는다(AlignCenter) — 그 자리까지 한 변환에
+            ox, oy = (sw - pm.width()) // 2, (sh - pm.height()) // 2
+            self._record_xf(self._page, self._crop_meta.get(self._page),
+                            0, -split_y, pm.width() / max(1, pre_w), pm.height() / max(1, pre_h),
+                            ox, oy, QRectF(ox, oy, pm.width(), pm.height()))
             return pm
         except Exception:
             return None
@@ -1571,6 +1634,7 @@ class PresentationWindow(QWidget):
     def _dual_pixmap_fit(self, sw, sh):
         """두 쪽을 각자의 크롭으로 자른 뒤 나란히 합성(§4.1.2). 쪽별 화면 사각형을 기록."""
         self._dual_rects = {}
+        self._page_xf = {}
         left, right = self._dual_pages()
         if left is None and right is None:
             return None
@@ -1614,6 +1678,9 @@ class PresentationWindow(QWidget):
                 # ★ 쪽별 사각형에도 같은 배율을 곱한다 — 빠뜨리면 그리기 좌표가 어긋난다.
                 self._dual_rects[int(pg)] = (ox + x * sx, oy + y * sy,
                                              pm.width() * sx, pm.height() * sy)
+                # 261107-37(§6.2): 같은 숫자로 쪽 pt → 화면 px 변환을 기록
+                self._record_xf(pg, self._crop_meta.get(pg), x, y, sx, sy, ox, oy,
+                                QRectF(*self._dual_rects[int(pg)]))
             p.end()
             if abs(sx - 1.0) > 1e-6 or abs(sy - 1.0) > 1e-6:
                 canvas = canvas.scaled(max(1, int(cw * sx)), max(1, int(ch * sy)),
@@ -1640,6 +1707,10 @@ class PresentationWindow(QWidget):
         if getattr(self, "_rendered_page", -2) != self._page:
             self._rendered_page = self._page
             self._autoshown_page = -1
+        # 261107-37(§6.2): 다시 그렸으면(쪽·반쪽·크기) 풍선은 숨기고, 새로 보이는 쪽의 단어장 자료를 한 번 받는다
+        if getattr(self, "_vocab_tip", None) is not None:
+            self._vocab_hover(None)
+            self._vocab_load()
         if getattr(self, "_draw_overlay", None) is not None:
             self._draw_overlay.update()
         # 260609-8: 상단 띠가 보이면 페이지/링크 갱신
@@ -2065,6 +2136,8 @@ class PresentationWindow(QWidget):
                 self._draw_overlay.update()
                 super().mouseMoveEvent(e)
                 return
+        # 261107-37(§6.2): 단어장 뜻 풍선 — 누르지 않은 채 움직일 때만(보관한 상자만 본다)
+        self._vocab_hover(pos if e.buttons() == Qt.MouseButton.NoButton else None)
         # 260609-5: 움직이면 포인터 복귀 + 2초 타이머 재시작
         if self._ptr_hidden:
             self._apply_pointer()
@@ -2101,6 +2174,7 @@ class PresentationWindow(QWidget):
         return best if best is not None else int(self._page)
 
     def mousePressEvent(self, e):
+        self._vocab_hover(None)               # 261107-37(§6.2): 누르면 풍선을 숨긴다
         if e.button() == Qt.MouseButton.LeftButton:
             pos = self._evt_pos(e)
             self._press_pos = pos
@@ -2274,6 +2348,128 @@ class PresentationWindow(QWidget):
         self._back_zone_frac = v / 100.0
         if emit:
             self.backZoneChanged.emit(v)
+
+    # --- 261107-37(발표 SOT §6.2): 단어장 밑줄·뜻 풍선 — 쪽 pt → 화면 px 변환 하나 ---
+    def _record_xf(self, page0, crop_xf, dx, dy, fx, fy, ox, oy, clip) -> None:
+        """렌더가 픽스맵을 놓은 숫자 그대로: (크롭된 렌더 px) → +dx,dy(분할로 잘린 위쪽·2쪽 자리) → ×fx,fy(맞춤·채움) → +ox,oy(가운데)."""
+        if crop_xf is None:
+            return
+        t = (crop_xf * QTransform.fromTranslate(dx, dy) * QTransform.fromScale(fx, fy)
+             * QTransform.fromTranslate(ox, oy))
+        self._page_xf[int(page0)] = (t, QRectF(clip))
+
+    def set_vocab(self, on, emit: bool = True) -> None:
+        """띠 '단어장' 켜기/끄기(기억 — `vocabChanged`). 켤 때 보관한 자료를 비워 새로 받는다."""
+        self._vocab_on = bool(on)
+        self._vocab_data = {}
+        b = getattr(self, "_tb_vocab", None)
+        if b is not None:
+            if b.isChecked() != self._vocab_on:
+                b.blockSignals(True); b.setChecked(self._vocab_on); b.blockSignals(False)
+            self._paint_toggle(b, self._vocab_on)
+        self._vocab_hover(None)
+        self._vocab_load()
+        if getattr(self, "_draw_overlay", None) is not None:
+            self._draw_overlay.update()
+        if emit:
+            self.vocabChanged.emit(self._vocab_on)
+
+    def _vocab_active(self) -> bool:
+        return (self._vocab_on and self._vocab_resolver is not None and not self._armed
+                and not getattr(self, "_photo", False))
+
+    def _vocab_load(self) -> None:
+        """보이는 쪽의 자료를 **쪽이 바뀔 때 한 번** 받아 둔다 — 마우스 이동 때는 부르지 않는다(응답성 SOT §4)."""
+        if not self._vocab_active():
+            return
+        for pg in self._shown_pages():
+            key = (str(self._path), int(pg))
+            if key in self._vocab_data:
+                continue
+            try:
+                self._vocab_data[key] = self._vocab_resolver(str(self._path), int(pg))
+            except Exception:
+                self._vocab_data[key] = None
+
+    def _vocab_boxes(self):
+        """보이는 쪽의 단어 상자를 화면으로 — [(page0, lemma, level, 화면 QRectF)], 보이는 영역 밖은 뺀다."""
+        if not self._vocab_active():
+            return []
+        out = []
+        for pg in self._shown_pages():
+            data = self._vocab_data.get((str(self._path), int(pg)))
+            xf = self._page_xf.get(int(pg))
+            if not data or xf is None:
+                continue
+            t, clip = xf
+            for m in data.get("marks") or ():
+                x0, y0, x1, y1, lemma = m[:5]
+                r = t.mapRect(QRectF(float(x0), float(y0), float(x1) - float(x0), float(y1) - float(y0)))
+                if clip.intersects(r):
+                    out.append((int(pg), lemma, (m[5] if len(m) > 5 else None), r))
+        return out
+
+    def _paint_vocab_marks(self, p) -> None:
+        """그리기 오버레이가 선보다 먼저 부른다. 모양(수준별 색·반투명·상자 바로 아래)은 본문과 **같은 함수**
+        `vocab_marks.vocab_mark_line`(단어장 SOT §11.2) — 상자는 이미 화면 px 라 배율 1 로 넘긴다."""
+        boxes = self._vocab_boxes()
+        if not boxes:
+            return
+        from viewer.vocab_marks import vocab_mark_line
+        p.save()
+        for pg, _lemma, level, r in boxes:
+            col, (lx0, ly, lx1, _ly), w = vocab_mark_line(r.left(), r.top(), r.right(), r.bottom(), 1.0, level)
+            pen = QPen(col, w)
+            pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+            p.setPen(pen)
+            p.setClipRect(self._page_xf[pg][1])
+            p.drawLine(QPointF(lx0, ly), QPointF(lx1, ly))
+        p.restore()
+
+    def _vocab_hit(self, pos):
+        """화면 좌표 → (page0, lemma, 화면 QRectF) 또는 None — 밑줄과 **같은 변환**(`_vocab_boxes`)으로 맞힌다."""
+        x, y = float(pos.x()), float(pos.y())
+        for pg, lemma, _level, r in self._vocab_boxes():
+            if r.contains(QPointF(x, y)) and self._page_xf[pg][1].contains(QPointF(x, y)):
+                return pg, lemma, r
+        return None
+
+    def _vocab_hover(self, pos) -> None:
+        """pos=None 이면 숨긴다. 같은 단어 위에서는 타이머를 다시 걸지 않는다(머문 시간으로 띄운다)."""
+        hit = self._vocab_hit(pos) if (pos is not None and self._vocab_active()) else None
+        cur = self._vocab_tip_word
+        if hit is None:
+            self._vocab_tip_word = None
+            self._vocab_tip_timer.stop()
+            self._vocab_tip.hide()
+            return
+        if cur is not None and cur[0] == hit[0] and cur[1] == hit[1] and cur[2] == hit[2]:
+            return
+        self._vocab_tip_word = hit
+        self._vocab_tip.hide()
+        self._vocab_tip_timer.start()
+
+    def _show_vocab_tip(self) -> None:
+        w = self._vocab_tip_word
+        if w is None or not self._vocab_active():
+            return
+        pg, lemma, r = w
+        data = self._vocab_data.get((str(self._path), int(pg))) or {}
+        text = (data.get("tips") or {}).get(lemma) or ""
+        if not text:
+            return
+        tip = self._vocab_tip
+        tip.setText(text)
+        tip.setMaximumWidth(max(200, self.width() // 3))
+        tip.adjustSize()
+        gap = 6
+        x = int(max(0, min(self.width() - tip.width(), r.left())))
+        y = int(r.bottom() + gap)                      # 단어 바로 아래
+        if y + tip.height() > self.height():           # 아래가 모자라면 위
+            y = int(max(0, r.top() - gap - tip.height()))
+        tip.move(x, y)
+        tip.show()
+        tip.raise_()
 
     def contextMenuEvent(self, e):
         menu = QMenu(self)
@@ -2585,10 +2781,15 @@ class PresentationWindow(QWidget):
         if b is None:
             return
         on = self._apply_on_exit
+        b.setText(tr("본화면 적용 ✓") if on else tr("본화면 적용"))
+        self._paint_toggle(b, on)
+
+    @staticmethod
+    def _paint_toggle(b, on: bool) -> None:
+        """띠의 켜고 끄는 단추 색(켜짐=초록) — '본화면 적용'·'단어장'(261107-37) 한 벌."""
         # 260611-84: hover 색도 상태를 반영(켜짐=초록) → 클릭 직후 커서가 위에 있어도 토글이 바로 보임
         base = "rgba(40,165,85,0.97)" if on else "rgba(255,255,255,0.12)"
         hover = "rgba(60,200,110,1.0)" if on else "rgba(255,255,255,0.28)"
-        b.setText(tr("본화면 적용 ✓") if on else tr("본화면 적용"))
         b.setStyleSheet(
             f"QPushButton{{background:{base};color:#fff;border:none;border-radius:6px;"
             "padding:4px 10px;font-weight:bold;}"

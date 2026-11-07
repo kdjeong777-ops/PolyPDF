@@ -14112,3 +14112,7 @@ msgstr ""
 #: viewer/app.py
 msgid "누른 낱말을 사용자 단어장 편집 창에 채워 엽니다 — 그 문장은 예시로."
 msgstr ""
+
+#: viewer/widgets/presentation.py
+msgid "켜면 이 쪽의 단어장 단어에 밑줄을 긋고, 단어 위에 마우스를 올리면 뜻을 풍선으로 보입니다."
+msgstr ""

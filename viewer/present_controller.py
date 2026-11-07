@@ -335,6 +335,22 @@ class PresentMixin:
             pass
         return []
 
+    def _presentation_vocab(self, path: str, page0: int):
+        """261107-37(발표 SOT §6.2): 발표 쪽의 단어장 밑줄 상자·뜻 풍선 글 — 그 쪽이 보일 때 한 번 부른다(DB 허용).
+        무엇을·어떤 글로는 단어장 쪽(단어장 SOT §11.2·§11.3)이 정한다 — 여기는 넘겨만 준다."""
+        fn = getattr(self, "vocab_overlay_for", None)
+        if fn is None:
+            return None
+        try:
+            return fn(str(path), int(page0))
+        except Exception:
+            return None
+
+    def _on_present_vocab(self, on: bool):
+        """261107-37(발표 SOT §6.2): 띠 '단어장' — 다음 발표에도."""
+        self._prefs["presentation_vocab"] = bool(on)
+        self._save_settings_now()
+
     def _on_presentation_closed(self):
         """발표 창을 닫으면 마지막 파일·페이지를 메인 뷰에 동기화."""
         # 260609-17(F4): 녹화 중이면 안전 종료(파일 마감)

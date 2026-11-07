@@ -255,6 +255,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "presentation_facing": False,
             "presentation_other_screen": False,     # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면'
             "presentation_back_zone_pct": None,     # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%). None = 기본값(presentation.BACK_ZONE_DEFAULT — 261025-5 보완, 값은 한 곳)
+            "presentation_vocab": False,            # 261107-37(발표 SOT §6.2): 띠 '단어장' — 밑줄·뜻 풍선
             # 260609-16(F3): 발표 펜(빈 값이면 모듈 기본)·활성·단축키
             "presentation_pens": [],
             "presentation_pen_active": 0,
@@ -7977,9 +7978,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                            # 261021-3(발표 SOT §6.1): 띠 '본화면/다른 화면' 기억
                                            other_screen=bool(self._prefs.get("presentation_other_screen", False)),
                                            # 261025-3(발표 SOT §3.1): 왼쪽 뒤로 가기 영역 폭(%)
-                                           back_zone_pct=self._back_zone_pct(BACK_ZONE_DEFAULT))
+                                           back_zone_pct=self._back_zone_pct(BACK_ZONE_DEFAULT),
+                                           # 261107-37(발표 SOT §6.2): 띠 '단어장' — 쪽마다 단어장 상자·뜻 풍선 글
+                                           vocab=bool(self._prefs.get("presentation_vocab", False)),
+                                           vocab_resolver=(None if photo else self._presentation_vocab))
         self._present.otherScreenChanged.connect(self._on_present_other_screen)
         self._present.backZoneChanged.connect(self._on_present_back_zone)
+        self._present.vocabChanged.connect(self._on_present_vocab)
         self._present.splitModeChanged.connect(self._on_present_split_changed)
         self._present.dualModeChanged.connect(self._on_present_dual_changed)    # 260905
         self._present.facingChanged.connect(self._on_present_facing_changed)    # 260905
@@ -9118,6 +9123,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._prefs.setdefault("presentation_facing", False)      # 260905(§4.1)
         self._prefs.setdefault("presentation_other_screen", False)  # 261021-3(발표 SOT §6.1)
         self._prefs.setdefault("presentation_back_zone_pct", None)  # 261025-3(발표 SOT §3.1) — None = presentation.BACK_ZONE_DEFAULT
+        self._prefs.setdefault("presentation_vocab", False)  # 261107-37(발표 SOT §6.2)
         self._prefs.setdefault("presentation_pens", [])           # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_active", 0)      # 260609-16(F3)
         self._prefs.setdefault("presentation_pen_keys", [])       # 260609-16(F3)
@@ -9582,6 +9588,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "presentation_other_screen", old.get("presentation_other_screen", False))),
             "presentation_back_zone_pct": prefs.get(              # 261025-3(발표 SOT §3.1) — None = 기본값, 숫자로 읽는 것은 발표를 열 때
                 "presentation_back_zone_pct", old.get("presentation_back_zone_pct")),
+            "presentation_vocab": bool(prefs.get(                   # 261107-37(발표 SOT §6.2)
+                "presentation_vocab", old.get("presentation_vocab", False))),
             # 260609-16(F3): 발표 펜
             "presentation_pens": list(prefs.get(
                 "presentation_pens", old.get("presentation_pens", []))),
