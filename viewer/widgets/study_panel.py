@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from viewer.i18n import tr                   # 261008: 화면 문구(다국어 SOT §6)
+from viewer.i18n import tr, tr_noop          # 261008: 화면 문구(다국어 SOT §6)
 from viewer.widgets.read_aloud import set_play_state
 from viewer.widgets.icons import drop_button
 from typing import Optional
@@ -95,7 +95,8 @@ def _clean_markup(s) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
-_LEVELS = ("초급", "중급", "고급", "전문용어")        # 260611-103(P4): 전문용어 등급
+# 260611-103(P4): 전문용어 등급. 값은 study.db 수준 키(한국어 그대로) — 화면에는 tr(값)(261107-38, 다국어 SOT §5)
+_LEVELS = (tr_noop("초급"), tr_noop("중급"), tr_noop("고급"), tr_noop("전문용어"))
 # 261107-33(디자인 SOT §2.6): 머리 글자는 본문 밑줄 색과 같은 뜻 — 초급 호박·중급 녹색·고급 분홍·전문용어 청색
 _BADGE = {"초급": "🟡", "중급": "🟢", "고급": "🩷", "미정": "⚪", "전문용어": "📘"}
 _BADGE_FALLBACK = {"🩷": "🔴"}       # 옛 Windows 10 이모지 글꼴에는 🩷(Emoji 15)이 없다
@@ -280,7 +281,7 @@ class StudyPanel(QWidget):
         _default_on = {"초급": False, "중급": True, "고급": True,
                        "전문용어": True}                          # 초급 기본 해제
         for lv in _LEVELS:
-            cb = QCheckBox(lv)
+            cb = QCheckBox(tr(lv))                     # 값(키)은 lv 그대로 — self._chk[lv]
             cb.setChecked(_default_on[lv])
             cb.stateChanged.connect(self._render)
             cb.stateChanged.connect(lambda _s: self.levelsChanged.emit())   # 본문 밑줄도 같은 단어로

@@ -15541,3 +15541,14 @@ msgstr "Getting Started"
 #~ msgid "단어 선택(목록/본문)시 그 단어를 읽습니다."
 #~ msgstr "Read the word aloud when you select it (list/body)."
 
+#: viewer/widgets/study_panel.py
+msgid "초급"
+msgstr "Beginner"
+
+#: viewer/widgets/study_panel.py
+msgid "중급"
+msgstr "Intermediate"
+
+#: viewer/widgets/study_panel.py
+msgid "전문용어"
+msgstr "Technical term"

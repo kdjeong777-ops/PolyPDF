@@ -14179,3 +14179,14 @@ msgctxt "installer"
 msgid "사용 안내 (API 키)"
 msgstr ""
 
+#: viewer/widgets/study_panel.py
+msgid "초급"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "중급"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "전문용어"
+msgstr ""
