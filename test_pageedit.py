@@ -64,7 +64,10 @@ for idx in seq:
 with open(out, "wb") as f: w.write(f)
 dd = fitz.open(out); npg = dd.page_count; dd.close()
 ck("적용 새 PDF 페이지수=시퀀스", npg == len(seq), f"npg={npg} seq={len(seq)}")
-ck("_on_apply_page_edits 메서드", callable(getattr(mw, "_on_apply_page_edits", None)))
+# 261107-2(마스터 §4.7.7): 옛 '변경 적용 — 새 PDF로 저장'(_on_apply_page_edits — 쪽 순서만, 메인에서)은 저장 ▸ '다른 이름으로 저장'
+#   (_action_save_as — 쪽 편집·꾸밈·책갈피까지 같은 저장 길)으로 합쳤다. 메뉴 길은 test_ctx_menu_order G 가 본다.
+ck("쪽 편집을 새 PDF 로 = 다른 이름으로 저장(_action_save_as), 옛 따로 길 없음",
+   callable(getattr(mw, "_action_save_as", None)) and not hasattr(mw, "_on_apply_page_edits"))
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
 # 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.
