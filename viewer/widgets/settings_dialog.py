@@ -690,6 +690,8 @@ class SettingsDialog(QDialog):
             _cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
             _cb.setMinimumContentsLength(14)
         self._connect_changes()
+        from viewer.widgets.tag_rules_panel import attach as _attach_tag_rules
+        _attach_tag_rules(self)              # 261107-10(태그 SOT §5.8): '해시태그 내용 자리' — 형식 낱말·별칭·사진 종류
         self._applied = self.result_prefs()
         self._update_dirty()
 

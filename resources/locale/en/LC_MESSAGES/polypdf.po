@@ -12389,6 +12389,55 @@ msgstr " (confidence {sc:.2f})"
 msgid " — 점수 {sc:.2f}"
 msgstr " — score {sc:.2f}"
 
+#: viewer/widgets/tag_rules_panel.py
+msgid "지역"
+msgstr "Region"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "촬영 장비"
+msgstr "Camera"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "형식 낱말 (PDF 자동 해시태그)"
+msgstr "Format words (PDF automatic hashtags)"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "별칭 — 이 태그 대신 붙일 이름"
+msgstr "Aliases — name to use instead of this tag"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "줄 더하기"
+msgstr "Add row"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "고른 줄 빼기"
+msgstr "Remove selected rows"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "사진 자동 해시태그 종류"
+msgstr "Photo automatic hashtag types"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "원래 태그"
+msgstr "Original tag"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "붙일 태그"
+msgstr "Tag to use"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "예: SamsungSM-S918N → GalaxyS23. 사진 장비·지역·종류 태그에도 쓰입니다."
+msgstr "E.g. SamsungSM-S918N → GalaxyS23. Also applies to photo camera, region and type tags."
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "저장하면 이미 붙은 자동 해시태그도 곧바로 새 규칙으로 바꿉니다(백그라운드, 작업 창에서 멈춤). 직접 붙인 해시태그는 그대로입니다."
+msgstr "Saving also updates automatic hashtags already assigned to the new rules right away (in the background; stop it from the Jobs window). Hashtags you added yourself stay as they are."
+
+#: viewer/widgets/tag_rules_panel.py
+#, python-brace-format
+msgid "붙일 이름 — 비우면 '{f}' 그대로"
+msgstr "Name to use — leave empty to keep '{f}'"
+
 #: viewer/widgets/text_panel.py
 msgid "고른 줄의 스타일 / 아래 값이 적용될 스타일"
 msgstr "Style of the selected line / style the values below apply to"

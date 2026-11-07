@@ -216,7 +216,9 @@ class TagRulesJob(QObject):
         self._rid += 1
         self._cancel = False
         self._changed = set()
-        self.old, self.new = load_rules(), normalize(new_rules)
+        self.old = load_rules()
+        keep = {k: v for k, v in (self.old or {}).items() if k not in ("alias", "format_off", "photo_off")}
+        self.new = normalize({**keep, **normalize(new_rules)})    # 사용자가 손으로 넣은 다른 키는 남긴다
         self.d = diff(self.old, self.new)
         self._job(True)
         self._status(tr("해시태그 규칙 적용 시작 — 이미 붙은 자동 태그를 새 규칙으로 바꿉니다"))

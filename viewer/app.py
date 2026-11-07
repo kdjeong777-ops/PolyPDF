@@ -9373,6 +9373,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._apply_collection()
         self._save_settings_now()
         self.status.showMessage(tr("설정 저장됨"), 3000)
+        rules = new_prefs.get("tag_rules")              # 261107-10(태그 SOT §5.8): settings.json 이 아니라 tag_rules.json — 바뀌었으면 곧바로 다시 붙인다
+        if rules is not None:
+            from viewer import tag_rules as _tr
+            from viewer.auto_tag import load_rules
+            if _tr.normalize(rules) != _tr.normalize(load_rules()):
+                _tr.apply(self, rules)
 
     def _offer_language_restart(self):
         """261008(다국어 SOT §4): 화면 언어는 재시작 뒤 적용 — 지금 언어와 새 언어로 함께 안내."""
