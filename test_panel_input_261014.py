@@ -112,7 +112,7 @@ try:
 
     def pick_new(self, *a, **k):
         for x in self.actions():
-            if x.text() == "새 폴더 만들기":
+            if x.text().split("\t")[0] == "새 폴더 만들기":   # 261107-26: 키 칸('\tCtrl+Shift+N')은 빼고 이름만
                 return x
         return None
     QMenu.exec = pick_new
