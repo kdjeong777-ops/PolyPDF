@@ -2395,6 +2395,18 @@ msgstr ""
 msgid "오른쪽 90° 회전"
 msgstr ""
 
+#: viewer/app.py viewer/photo_controller.py
+msgid "PDF 모드로 바꾸기"
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF·사진 모드 (보기 종류 '혼용' 일 때만)"
+msgstr ""
+
+#: viewer/app.py viewer/photo_controller.py
+msgid "사진 모드(PolyPix)로 바꾸기"
+msgstr ""
+
 #: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
 #: viewer/widgets/merge_preview.py
 msgid "크롭"
@@ -4195,14 +4207,6 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "PC 로 복사"
-msgstr ""
-
-#: viewer/photo_controller.py
-msgid "PDF 모드로 바꾸기"
-msgstr ""
-
-#: viewer/photo_controller.py
-msgid "사진 모드(PolyPix)로 바꾸기"
 msgstr ""
 
 #: viewer/photo_controller.py

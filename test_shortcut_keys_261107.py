@@ -8,7 +8,8 @@ C. 실제 키 입력 → 메뉴와 같은 함수(대상은 포커스): F12·Ctrl
    Ctrl+Shift+X·Ctrl+Enter·Ctrl+B·Ctrl+K·Ctrl+D·Ctrl+Alt+O
 D. 키캡 — 'Ctrl++' 나누기, 작은 글자 최소 크기, 키캡 줄 폭 ≤ 글자 'Ctrl+Shift+S' 폭 + 여유, 메뉴 항목 글은 글자 그대로(낭독기), 앱 스타일이 키캡 메뉴 스타일
 E. 단축키 창에서 지운 키는 빈 값으로 남는다(빼면 다음 실행에 기본 키가 되살아난다), 키캡 미리 보기 칸
-종전 코드로 실패한다(새 id·v13·키캡 모듈이 없다).
+M. 261107-18: Alt+1 = PDF 모드·Alt+2 = 사진 모드(토글 아님, 단추와 같은 함수), PDF 전용이면 아무 일 없음, 토글 단추 툴팁 키캡
+종전 코드로 실패한다(새 id·v13·키캡 모듈이 없다 — M 은 mode_pdf·mode_photo 가 없다).
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -53,7 +54,7 @@ def focus(w):
 WANT = {"save_as": "F12", "copy_path": "Ctrl+Shift+C", "clipboard_save": "Ctrl+Alt+C", "rename_item": "F2",
         "new_folder": "Ctrl+Shift+N", "reveal": "Alt+Shift+R", "info": "Alt+Enter", "crop": "Ctrl+Shift+X",
         "new_page": "Ctrl+Enter", "add_bookmark": "Ctrl+B", "hyperlink": "Ctrl+K", "fav_add_file": "Ctrl+D",
-        "ocr_read": "Ctrl+Alt+O"}
+        "ocr_read": "Ctrl+Alt+O", "mode_pdf": "Alt+1", "mode_photo": "Alt+2"}
 
 root = Path(tempfile.mkdtemp(prefix="keys261107_"))
 try:
@@ -176,6 +177,43 @@ try:
     dlg._edits["save_as"].setKeySequence(QKeySequence("Ctrl+F12")); spin(0.05)
     chk(cap.keys() == QKeySequence("Ctrl+F12").toString(QKeySequence.SequenceFormat.NativeText), "E3 키를 바꾸면 키캡도 따라온다", cap.keys())
     dlg.close()
+
+    # M — Alt+1·Alt+2 = PDF·사진 모드로(261107-18, 입력 SOT §3.2.3 · 사진 보기 SOT 4.1)
+    def mtgt():
+        v = mw.main_view
+        return v.view if hasattr(v, "view") else v
+
+    def press_mode(key):
+        focus(mtgt())
+        QTest.keyClick(mtgt(), key, ALT); spin(0.6)
+        return mw._photo_mode
+
+    pic = mw._photo_prefs()
+    pic["view_kind"] = "mixed"; mw._photo_apply_view_kind(); spin(0.2)
+    chk(not mw._photo_mode, "M0 혼용 · PDF 모드에서 시작")
+    calls = []
+    _orig_set = mw._set_photo_mode
+    mw._set_photo_mode = lambda on, *a_, **k: (calls.append(bool(on)), _orig_set(on, *a_, **k))
+    chk(press_mode(Qt.Key.Key_2) is True, "M1 Alt+2 → 사진 모드")
+    chk(press_mode(Qt.Key.Key_2) is True, "M2 Alt+2 다시 → 그대로 사진 모드(토글이 아니다)")
+    chk(press_mode(Qt.Key.Key_1) is False, "M3 Alt+1 → PDF 모드")
+    chk(press_mode(Qt.Key.Key_1) is False, "M4 Alt+1 다시 → 그대로 PDF 모드")
+    chk(calls and all(c in (True, False) for c in calls), "M5 단추와 같은 함수(_set_photo_mode)", str(calls))
+    pic["view_kind"] = "pdf"; mw._photo_apply_view_kind(); spin(0.2)
+    calls.clear()
+    chk(press_mode(Qt.Key.Key_2) is False and not calls, "M6 PDF 전용이면 Alt+2 는 아무 일도 하지 않는다", str(calls))
+    pic["view_kind"] = "mixed"; mw._photo_apply_view_kind(); spin(0.2)
+    mw._set_photo_mode = _orig_set
+    from PyQt6.QtGui import QHelpEvent
+    from PyQt6.QtCore import QEvent, QPoint
+    from PyQt6.QtWidgets import QToolTip
+    b = mw._photo_btn
+    ev = QHelpEvent(QEvent.Type.ToolTip, QPoint(4, 4), b.mapToGlobal(QPoint(4, 4)))
+    QApplication.sendEvent(b, ev); spin(0.1)
+    tip = QToolTip.text()
+    chk("data:image/png;base64," in tip and b.toolTip() in tip, "M7 토글 단추 툴팁 끝에 누르면 될 모드의 키캡", tip[:80])
+    chk(mw._sc_key("mode_photo") == QKeySequence("Alt+2").toString(QKeySequence.SequenceFormat.NativeText),
+        "M8 사진 모드 키 = Alt+2")
 except Exception:
     import traceback
     traceback.print_exc()

@@ -113,6 +113,7 @@ git add -A; git commit -m "fix: ..."; git push      # 소스 갱신(설정/스�
 | Ctrl+Shift+X / Ctrl+Enter | 크롭 / 새 페이지 넣기 |
 | Ctrl+Alt+O | OCR 로 읽기 |
 | Ctrl+, | 환경설정 |
+| Alt+1 / Alt+2 | PDF 모드로 / 사진 모드로 (보기 종류 '혼용' 일 때만) |
 | Ctrl+F | 검색바 포커스 |
 | F3 / Shift+F3 | 다음/이전 매치 |
 | ↓ / ↑ / PgDn / PgUp | 페이지 이동 (2장 보기 ±2) |

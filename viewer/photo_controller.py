@@ -39,6 +39,32 @@ FIT_ACTUAL = "actual"                    # 창 아래 맞춤 콤보의 '원래 �
 START_PDF = False                        # main.py 가 창을 만들기 **전에** 켠다 — 파일 인자·인쇄로 뜬 창(D1, 261104-20)
 
 
+class _ModeTipFilter(QObject):
+    """모드 토글 단추 툴팁 = '…로 바꾸기' + 누르면 될 모드의 지금 키(4.1, 261107-18) — 리본 세부 줄 툴팁과 같은 키캡(디자인 SOT §2.9.2).
+    보일 때마다 키를 읽어 단축키 창에서 바꾼 키·테마 색을 따른다."""
+
+    def __init__(self, win, parent):
+        super().__init__(parent)
+        self._win = win
+
+    def eventFilter(self, obj, ev):
+        from PyQt6.QtCore import QEvent
+        if ev.type() != QEvent.Type.ToolTip:
+            return False
+        from PyQt6.QtWidgets import QToolTip
+        w = self._win
+        tip = obj.toolTip()
+        key = w._sc_key("mode_pdf" if w._photo_mode else "mode_photo") if hasattr(w, "_sc_key") else ""
+        if key:
+            import html as _html
+            from viewer.widgets.keycaps import keycap_html
+            pal = obj.palette()
+            img = keycap_html(key, obj.font(), pal.color(pal.ColorRole.ToolTipText))
+            tip = ("<span>%s</span>&nbsp;&nbsp;%s" % (_html.escape(tip), img)) if img else f"{tip} ({key})"
+        QToolTip.showText(ev.globalPos(), tip, obj)
+        return True
+
+
 class PhotoMixin:
     def _photo_init(self):
         self._photo_mode = False
@@ -53,6 +79,7 @@ class PhotoMixin:
         b.setIconSize(QSize(MODE_ICON_PX, MODE_ICON_PX))
         b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         b.clicked.connect(self._photo_toggle)
+        b.installEventFilter(_ModeTipFilter(self, b))   # 261107-18: 툴팁 끝에 누르면 될 모드의 키캡(Alt+1·Alt+2)
         lay.addWidget(b)
         lay.addStretch(1)                         # 빈 칸은 단추 뒤에서 늘어난다 — 탭 줄 가운데는 그대로(디자인 SOT §2.9.3)
         self._photo_btn = b
@@ -172,6 +199,12 @@ class PhotoMixin:
     # ── 모드 ─────────────────────────────────────────
     def _photo_toggle(self, _checked=False):
         self._set_photo_mode(not self._photo_mode)
+
+    def _photo_key_mode(self, on: bool):
+        """Alt+1 = PDF 모드, Alt+2 = 사진 모드(4.1, 261107-18) — 단추와 같은 함수. PDF 전용이면 아무 일도 하지 않고,
+        이미 그 모드면 `_set_photo_mode` 가 그냥 돌아온다."""
+        if self._photo_enabled():
+            self._set_photo_mode(bool(on))
 
     def _set_photo_mode(self, on: bool, remember: bool = True, load_last: bool = True):
         """모드를 바꾼다. `load_last=False` — 새 모드의 마지막 문서를 열지 않는다(4.2): ① 창을 만들 때의 모드 복원 — 무엇을 열지는

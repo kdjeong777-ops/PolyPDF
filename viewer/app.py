@@ -2020,6 +2020,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 261104-3(입력 SOT §3.2.2·사진 보기 SOT 4.16): 본문 돌리기 — 사진은 보기 회전, PDF 는 지금 쪽 회전
             ("rotate_left",   (tr("왼쪽 90° 회전"), "Ctrl+[", tr("보기"))),     # 261107-4: 메뉴와 같은 이름(기획 §4)
             ("rotate_right",  (tr("오른쪽 90° 회전"), "Ctrl+]", tr("보기"))),
+            # 261107-18(입력 SOT §3.2.3·사진 보기 SOT 4.1, 사용자 결정): 그 모드로 바로 — 보기 종류 '혼용' 일 때만
+            ("mode_pdf",      (tr("PDF 모드로 바꾸기"), "Alt+1", tr("PDF·사진 모드 (보기 종류 '혼용' 일 때만)"))),
+            ("mode_photo",    (tr("사진 모드(PolyPix)로 바꾸기"), "Alt+2", tr("PDF·사진 모드 (보기 종류 '혼용' 일 때만)"))),
             ("crop",          (tr("크롭"), "Ctrl+Shift+X", tr("쪽 편집"))),
             ("new_page",      (tr("새 페이지 넣기"), "Ctrl+Enter", tr("쪽 편집"))),
             ("add_bookmark",  (tr("책갈피 추가"), "Ctrl+B", tr("쪽 편집"))),
@@ -2087,6 +2090,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "edit_undo": ("func", self.action_edit_undo),          # 261012-7: 창 어디서나(편집 모드)
             "edit_redo": ("func", self.action_edit_redo),
             "settings": ("func", self.action_open_settings),
+            "mode_pdf": ("func", lambda: self._photo_key_mode(False)),     # 261107-18
+            "mode_photo": ("func", lambda: self._photo_key_mode(True)),
         }
         from viewer import key_actions as _ka                # 261107-4(입력 SOT §3.2.3)
         for _sid in ("save_as", "copy_path", "new_folder", "reveal", "info", "fav_add_file",

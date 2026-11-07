@@ -348,7 +348,8 @@ def _migrate_v11_to_v12(d: dict) -> dict:
 NEW_KEYS_V13 = {"save_as": "F12", "copy_path": "Ctrl+Shift+C", "new_folder": "Ctrl+Shift+N", "reveal": "Alt+Shift+R",
                 "info": "Alt+Enter", "fav_add_file": "Ctrl+D", "crop": "Ctrl+Shift+X", "new_page": "Ctrl+Enter",
                 "add_bookmark": "Ctrl+B", "hyperlink": "Ctrl+K", "ocr_read": "Ctrl+Alt+O",
-                "settings": "Ctrl+,"}   # 261107-12: 환경설정 열기
+                "settings": "Ctrl+,",   # 261107-12: 환경설정 열기
+                "mode_pdf": "Alt+1", "mode_photo": "Alt+2"}   # 261107-18: PDF·사진 모드로
 
 
 def _key_norm(k) -> str:
