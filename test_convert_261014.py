@@ -176,7 +176,10 @@ try:
     _orig = QMenu.exec
 
     def cap(self, *aa, **kk):
-        menus.append([(x.text(), [y.text() for y in x.menu().actions()] if x.menu() else None) for x in self.actions()])
+        # 261107-2(디자인 SOT §2.9.8): 변환은 '저장 ▸' 안 — 그 하위의 (글, 하위 글 목록|None)
+        sv = next((x for x in self.actions() if x.property("ctx_save")), None)
+        menus.append([(x.text(), [y.text() for y in x.menu().actions()] if x.menu() else None)
+                      for x in (sv.menu().actions() if sv is not None else [])])
         return None
     QMenu.exec = cap
     try:
@@ -189,11 +192,11 @@ try:
         mw.page_thumbs._on_list_menu(L.visualItemRect(L.item(0)).center()); spin(2)
     finally:
         QMenu.exec = _orig
-    # 261016-1(사용자 지시): 책갈피창은 하위 메뉴 없이 '변환...'(261025-5 이름) — 형식은 변환 창에서
-    tree_it = [s for t, s in (menus[0] if menus else []) if t == "변환..."]
-    chk(tree_it == [None], "I 책갈피창 우클릭 '변환...'(하위 메뉴 없음)", str(menus[:1]))
-    th_sub = [s for t, s in (menus[1] if len(menus) > 1 else []) if t.startswith("선택한 쪽 변환")]
-    chk(th_sub and th_sub[0] == want_fmt, "I 썸네일 우클릭 '선택한 쪽 변환 ▸'",
+    # 261016-1(사용자 지시): 책갈피창은 하위 메뉴 없이 '변환'(261025-5 이름) — 형식은 변환 창에서. 261107-2: 저장 ▸ 안
+    tree_it = [s for t, s in (menus[0] if menus else []) if t == "변환"]
+    chk(tree_it == [None], "I 책갈피창 우클릭 저장 ▸ '변환'(하위 메뉴 없음)", str(menus[:1]))
+    th_sub = [s for t, s in (menus[1] if len(menus) > 1 else []) if t.startswith("변환 (")]
+    chk(th_sub and th_sub[0] == want_fmt, "I 썸네일 우클릭 저장 ▸ '변환 (N쪽) ▸'(고른 쪽 형식)",
         str(menus[1:2]))
 finally:
     try:
