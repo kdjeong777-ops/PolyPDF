@@ -1955,8 +1955,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목을 `등록·설치 ▾` 하나로 — 명령 id 는 그대로(모음에 넣은 단추가 남는다)
         _inst = m_tools.addMenu(tr("등록·설치"))
         for _t, _s, _cid, _short, _tip in (
-                (tr("기본 PDF 앱 등록"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱 등록"),
-                 tr("Windows 기본 PDF 앱으로 등록…")),
+                (tr("기본 PDF 앱으로 설정"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱으로 설정"),
+                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요")),   # 261107-14(마스터 §14.10)
                 (tr("구성요소 설치"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
                  tr("구성요소 설치(녹화·OCR)…")),
                 (tr("가상 프린터 설치·제거"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
@@ -2409,41 +2409,35 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             b.setToolTip((name + " (" + k + ")" if k else name) + "\n"
                          + tr("포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)에 적용합니다"))
 
-    # ===== 260611-11: Windows 기본 PDF 앱 등록(연결 프로그램) ============
-    def _register_pdf_handler(self):
-        """HKCU 에 ProgID·연결 프로그램 등록 → PDF '다른 앱으로 열기' 목록에 PolyPDF.
-        (Windows 보안상 '기본 앱' 최종 지정은 사용자 확인 필요 — 안내 표시.)"""
+    # ===== 261107-14(마스터 §14.10): 기본 PDF 앱으로 설정 — Windows 기본 앱 화면을 연다 ============
+    def _register_pdf_handler(self, reg=None, opener=None):
+        """설치판이면 설치 프로그램의 HKLM 등록 그대로(옛 HKCU 키는 지운다), 설치 정보가 없으면(휴대용·zip) HKCU 에
+        같은 꼴을 쓰고 → `ms-settings:defaultapps?registeredApp…=PolyPDF` 를 연다. reg·opener 는 검사용(가짜)."""
         import sys as _sys, os as _os
+        from viewer import pdf_default
         if not getattr(_sys, "frozen", False):
             QMessageBox.information(
                 self, tr("안내"),
-                tr("개발 실행(파이썬)에서는 등록할 수 없습니다.\n"
+                tr("개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
                 "빌드된 PolyPDF.exe 에서 실행해 주세요."))
             return
         exe = _os.path.abspath(_sys.executable)
+        manual = tr("PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'")
         try:
-            import winreg
-            prog = "PolyPDF.pdf"
-            def setk(path, name, val, typ=winreg.REG_SZ):
-                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, path) as k:
-                    winreg.SetValueEx(k, name, 0, typ, val)
-            setk(rf"Software\Classes\{prog}", "", tr("PDF 문서 (PolyPDF)"))
-            setk(rf"Software\Classes\{prog}\DefaultIcon", "", f'"{exe}",0')
-            setk(rf"Software\Classes\{prog}\shell\open\command", "", f'"{exe}" "%1"')
-            setk(r"Software\Classes\.pdf\OpenWithProgids", prog, b"", winreg.REG_NONE)
-            base = _os.path.basename(exe)
-            setk(rf"Software\Classes\Applications\{base}\shell\open\command",
-                 "", f'"{exe}" "%1"')
-            setk(rf"Software\Classes\Applications\{base}", "FriendlyAppName", "PolyPDF")
-            QMessageBox.information(
-                self, tr("등록 완료"),
-                tr("PolyPDF 를 PDF '연결 프로그램' 목록에 등록했습니다.\n\n"
-                "■ 기본 앱으로 지정하려면(둘 중 하나):\n"
-                "  1) PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'\n"
-                "  2) Windows 설정 → 앱 → 기본 앱 → '.pdf' 에서 PolyPDF 선택\n\n"
-                "※ Windows 보안 정책상 기본 앱의 최종 지정은 사용자가 직접 확인해야 합니다."))
+            plan = pdf_default.prepare(exe, True, reg if reg is not None else pdf_default.Reg(),
+                                       desc=tr("PDF 문서 (PolyPDF)"), app_desc=tr("PDF 뷰어"))
         except Exception as e:
-            QMessageBox.warning(self, tr("등록 실패"), str(e))
+            QMessageBox.warning(self, tr("기본 앱으로 설정하지 못했습니다"), str(e) + "\n\n" + manual)
+            return
+        if opener is None:
+            from PyQt6.QtCore import QUrl
+            from PyQt6.QtGui import QDesktopServices
+            opener = lambda u: QDesktopServices.openUrl(QUrl(u))
+        if pdf_default.open_settings(plan["uris"], opener):
+            self.status.showMessage(tr("Windows 기본 앱 화면에서 PolyPDF 를 고르세요."), 8000)
+        else:
+            QMessageBox.information(self, tr("기본 PDF 앱으로 설정"),
+                                    tr("Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:") + "\n" + manual)
 
     # ===== 260611-3(6): 화면 캡처 전역 단축키 ============================
     def _capture_key(self) -> str:

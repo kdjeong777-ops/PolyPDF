@@ -14117,3 +14117,36 @@ msgstr ""
 msgid "환경설정"
 msgstr ""
 
+#: viewer/app.py
+msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'"
+msgstr ""
+
+#: viewer/app.py
+msgid "기본 PDF 앱으로 설정"
+msgstr ""
+
+#: viewer/app.py
+msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요"
+msgstr ""
+
+#: viewer/app.py
+msgid ""
+"개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
+"빌드된 PolyPDF.exe 에서 실행해 주세요."
+msgstr ""
+
+#: viewer/app.py
+msgid "Windows 기본 앱 화면에서 PolyPDF 를 고르세요."
+msgstr ""
+
+#: viewer/app.py
+msgid "PDF 뷰어"
+msgstr ""
+
+#: viewer/app.py
+msgid "기본 앱으로 설정하지 못했습니다"
+msgstr ""
+
+#: viewer/app.py
+msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
+msgstr ""

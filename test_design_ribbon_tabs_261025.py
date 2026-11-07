@@ -93,7 +93,7 @@ try:
     tacts = [x for x in trow.actions() if not x.isSeparator() and trow.widgetForAction(x)
              and not trow.widgetForAction(x).property("ribbonSpacer")]
     tnames = [x.iconText() for x in tacts]
-    chk("등록·설치" in tnames and not any(t in tnames for t in ("기본 PDF 앱 등록", "구성요소 설치", "가상 프린터")),
+    chk("등록·설치" in tnames and not any(t in tnames for t in ("기본 PDF 앱으로 설정", "구성요소 설치", "가상 프린터")),
         "D 도구 탭: '등록·설치' ▾ 하나", str(tnames))
     a_inst = [x for x in tacts if x.iconText() == "등록·설치"][0]
     chk(a_inst.isEnabled() and a_inst.menu() is not None, "D '등록·설치' 는 켜진 ▾ 단추")
