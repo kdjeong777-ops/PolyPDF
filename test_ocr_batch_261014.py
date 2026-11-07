@@ -138,6 +138,12 @@ try:
     left = {p.name for p in Path(tempfile.gettempdir()).glob("polypdf_ocrb_*")} - tmp_before
     chk(threads == {False} and not left, "E OCR 은 배경 스레드에서, 임시 폴더를 남기지 않는다", f"{threads} {left}")
     chk("2개" in msg, "A 알림 — 넣은 파일 2개", msg[:120])
+    # 261107-40(텍스트 창 SOT §5.4.2·§5.5): 이 길도 글자층 기록(`/PolyPDFTextLayer`)을 남기고 문서 정보 '글자층 저장' 줄에 보인다
+    from viewer import text_apply as ta, doc_info
+    dd = fitz.open(str(a)); stamp = ta.read_text_layer_stamp(dd); dd.close()
+    chk(stamp is not None and stamp["kind"] == "ocr" and stamp["pages"] == 1
+        and bool(doc_info.read_info(str(a)).get("layer_saved")),
+        "H 일괄 글자층도 PDF 정보에 저장 일시·내용(ocr 1쪽) — 문서 정보 줄에 보인다", f"{stamp}")
 
     # ── F. 중지 ─────────────────────────────────────────────────
     c = sub / "C.pdf"
