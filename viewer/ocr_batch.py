@@ -94,7 +94,7 @@ def run_file(path, *, lang: str, drop_watermark: bool, tick, cancelled, db_path=
             path, scan, rows_for=ta.layer_rows_for(path, look),
             fixes_for=lambda p, rows: fs.apply_to_rows(path, p, rows),
             items_for=lambda p: fs.get_items(path, p),
-            progress=layer_tick, cancelled=cancelled, out=str(out), backup=True)
+            progress=layer_tick, cancelled=cancelled, out=str(out))   # 처음 원본은 저장 길이 `_원본` 에(261107-29)
         if cancelled():
             raise _Stop()
         res["stats"] = stats

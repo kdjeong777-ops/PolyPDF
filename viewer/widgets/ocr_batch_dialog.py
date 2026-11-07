@@ -28,8 +28,9 @@ class OcrBatchDialog(QDialog):
         lb = QLabel(head)
         lb.setWordWrap(True)
         v.addWidget(lb)
-        note = QLabel(tr("원본 PDF 에 덮어쓰고, 처음 한 번 원본 옆에 백업(.textfix.bak.pdf)을 남깁니다. "
-                         "이미 읽은 쪽은 다시 읽지 않습니다. 서명된 PDF·암호 PDF 는 건너뜁니다."))
+        from viewer.photo_backup import BACKUP_DIRNAME     # 261107-29(마스터 §4.7.5): 처음 원본은 저장 길이 `_원본` 에 한 번
+        note = QLabel(tr("원본 PDF 에 덮어씁니다 — 처음 덮어쓸 때 손대지 않은 원본을 '{name}' 폴더(또는 환경설정의 원본 백업 폴더)에 남깁니다. "
+                         "이미 읽은 쪽은 다시 읽지 않습니다. 서명된 PDF·암호 PDF 는 건너뜁니다.").format(name=BACKUP_DIRNAME))
         note.setWordWrap(True)
         v.addWidget(note)
 

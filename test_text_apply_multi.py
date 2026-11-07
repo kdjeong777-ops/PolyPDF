@@ -166,7 +166,8 @@ try:
     chk("alpha first line p2" in t1, "C 고침이 없는 쪽은 그대로")
     grow = os.path.getsize(str(s3)) - size0
     chk(grow < 1_000_000, "C 글꼴 **전체**가 들어가지 않는다(맑은 고딕 ≈ 7MB)", "%d bytes" % grow)
-    chk(Path(str(s3) + ".textfix.bak.pdf").exists(), "C 백업은 한 번 남긴다")
+    chk(not Path(str(s3) + ".textfix.bak.pdf").exists(),
+        "C 원본 옆 백업은 만들지 않는다(261107-29 — 처음 원본은 저장 길이 `_원본` 에, 텍스트 창 SOT §5.4)")
     # 한 번 반영한 쪽에 **새 글자**로 다시 반영 — 부분집합 글꼴을 재사용하면 빠진다(§4.5.10 ②)
     out2, err2 = apply_fixes_by_page(str(s3), {
         0: [{"line": 2, "text": "다시 반영 흙쫓뷁", "rect": r0[2]["rect"]}]})

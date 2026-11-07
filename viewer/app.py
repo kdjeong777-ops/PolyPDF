@@ -2694,6 +2694,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.fileActionRequested.connect(lambda k, ps, x, b=_bt: self._on_tree_file_action(k, ps, x, bt=b))   # 261107-2 OCR 로 읽기·발표·서명
             _bt.photo_menu_fill = self._photo_menu_fill              # 261107-2(사진 보기 SOT §4.20) — 아래 창도 사진 세 메뉴 한 함수
             _bt.save_first_check = self._copy_blocked                # 261107-21(§4.7.13): 저장 ▸ 사본 넷은 저장 전 쪽 편집이 있으면 먼저 저장
+            _bt.pdf_backup_of = self._pdf_backup_of                  # 261107-29(§4.7.5): '원본으로 되돌리기' 는 처음 원본 백업이 있을 때만
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(
                 files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,
@@ -4884,6 +4885,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from pathlib import Path as _P
         import os as _os
         import time as _t
+        made = self._first_backup(dst, produced)    # 261107-29(§4.7.5): 첫 덮어쓰기면 처음 원본을 `_원본` 에 — 못 만들면 저장하지 않는다
         self._close_main_view_doc()                  # 원본 잠금 해제(뷰어·썸네일·표 찾기 핸들) — 메인에서
         QApplication.processEvents()
         last = self._file_op_bg(lambda: _os.replace(str(produced), str(dst)), tr('원본에 놓는 중: {name}').format(name=dst.name))
@@ -4915,6 +4917,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   **알린다**. 알림은 호출측이 책갈피창을 갱신하고 새 파일로 옮긴 **뒤에** 뜨게 미룬다.
         fb, _ = self._edit_save_dst(src, True, ask=False)     # 261031-14: 오류 복구 길은 묻지 않는다
         err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)), tr('새 이름으로 저장 중: {name}').format(name=fb.name))
+        if made:                                     # 261107-29: 원본이 그대로다 — 이 저장에서 만든 백업은 거둔다
+            from viewer import photo_backup as _pb
+            self._file_op_bg(lambda b=made: _pb.drop_backup(b), tr('원본에 놓는 중: {name}').format(name=dst.name))
         if err is not None:
             raise err
         msg = (tr('원본을 덮어쓰지 못해 다른 이름으로 저장했습니다.\n\n저장한 파일: {name}\n원본: {name2}\n\n원인: {last}\n\n다른 프로그램이 원본을 열고 있거나 읽기 전용이면, 닫거나 해제한 뒤 다시 저장해 주세요.').format(name=fb.name, name2=src.name, last=last))
@@ -4932,6 +4937,152 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 pass
         QTimer.singleShot(0, _warn)
         return str(fb)
+
+    # ── 261107-29(마스터 §4.7.5, 사용자 결정 D1·D2): 처음 원본은 `_원본` 에 · PDF 원본으로 되돌리기 ──────────
+    def _first_backup(self, dst, produced):
+        """원본 자리에 놓기 전 — 그 PDF 의 첫 덮어쓰기면 손대지 않은 원본을 백업 자리에 복사(배경). 만든 백업 경로(이미 있으면 None).
+        원본을 바꾸는 다른 작업(되돌리기)이 돌거나 백업을 못 만들면 임시 산출물을 지우고 예외 — 원본은 그대로, 편집은 남는다."""
+        from viewer import photo_backup
+
+        def _drop_produced():
+            try:
+                Path(str(produced)).unlink(missing_ok=True)
+            except Exception:
+                pass
+        if self.__dict__.get("_photo_orig_busy"):
+            _drop_produced()
+            raise OSError(tr("원본을 바꾸는 다른 작업(원본으로 되돌리기 등)이 아직 끝나지 않아 저장하지 않았습니다 — 원본은 그대로입니다."))
+        self._photo_sync_backup_dir()                # 환경설정 '원본 백업 폴더 (사진·PDF)'
+        out = {}
+        err = self._file_op_bg(lambda: out.update(b=photo_backup.ensure_backup(dst)),
+                               tr("원본 백업 중: {name}").format(name=Path(str(dst)).name))
+        if err is not None:
+            _drop_produced()
+            raise OSError(tr("처음 원본을 백업하지 못해 저장하지 않았습니다 — 원본은 그대로입니다.\n\n백업 자리: {where}\n원인: {e}").format(
+                where=photo_backup.backup_dir_for(dst), e=err))
+        return out.get("b")
+
+    def _pdf_backup_of(self, path):
+        """그 PDF 의 처음 원본 백업(없으면 None) — 책갈피창·'파일 ▸' 메뉴가 '원본으로 되돌리기' 를 보일지 묻는다(백업 폴더 한 번 읽기)."""
+        if not path or not str(path).lower().endswith(".pdf"):
+            return None
+        try:
+            from viewer import photo_backup
+            self._photo_sync_backup_dir()
+            return photo_backup.find_backup(str(path), same_ext=True)
+        except Exception:
+            return None
+
+    def _pdf_restore_ask(self, path) -> None:
+        """우클릭 '원본으로 되돌리기'(PDF) — 확인 창 [되돌리기] 뒤 `_pdf_restore_original`."""
+        bk = self._pdf_backup_of(path)
+        if not bk:
+            self.status.showMessage(tr("이 파일의 원본 백업이 없습니다."), 5000)
+            return
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("원본으로 되돌리기"))
+        box.setText(tr("'{name}' 을(를) 처음 원본으로 되돌릴까요?").format(name=Path(str(path)).name) + "\n\n"
+                    + tr("지금 파일은 휴지통으로 보내고, 처음 덮어쓸 때 백업해 둔 원본을 제자리로 옮깁니다. "
+                         "이 파일의 꾸밈·하이퍼링크 기록도 지웁니다."))
+        b_ok = box.addButton(tr("되돌리기"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(b_ok)
+        box.exec()
+        if box.clickedButton() is b_ok:
+            self._pdf_restore_original(str(path), bk)
+
+    def _pdf_restore_original(self, path: str, backup: str) -> bool:
+        """처음 원본으로 되돌리기(마스터 §4.7.5) — 저장 안 한 편집 확인 → 다른 창 놓기(§4.7.8) → 핸들 놓기 → 배경에서
+        `restore_from_backup`(휴지통은 마지막·실패하면 모두 되돌림) → 쪽 구조 기록 지움·암호 옮김·색인 → `_open_saved_file`. 잠금은 사진과 하나."""
+        from viewer import photo_backup
+        from viewer.instance_link import same_file
+        path = str(path)
+        title = tr("원본으로 되돌리기")
+        shown = [mv for mv in getattr(self, "_mv", []) if mv.current_file() and same_file(mv.current_file(), path)]
+        if shown and self._on_instance_request("query", path).get("dirty"):
+            QMessageBox.information(self, title, tr("이 파일에 저장하지 않은 편집이 있습니다 — 먼저 💾 저장하거나 되돌린 뒤 다시 해 주세요."))
+            return False
+        if not self._photo_orig_lock():
+            return False
+        link = getattr(self, "_instance_link", None)
+        released = []
+        try:
+            if link is not None:
+                holders = self._peer_bg(lambda: link.holders(path), tr("다른 PolyPDF 창 확인 중…")) or []
+                if holders:
+                    if any(h.get("dirty") for h in holders):
+                        QMessageBox.information(self, title, tr("다른 PolyPDF 창에 이 파일의 저장하지 않은 편집이 있습니다 — 그 창에서 저장하거나 되돌린 뒤 다시 해 주세요."))
+                        return False
+                    if QMessageBox.question(self, title, tr("'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?").format(
+                            name=Path(path).name, n=len(holders))) != QMessageBox.StandardButton.Yes:
+                        return False
+                    released = self._peer_bg(lambda: link.release(holders, path), tr("다른 PolyPDF 창이 파일을 놓기를 기다리는 중…")) or []
+            pw, remembered = None, False
+            try:
+                from viewer import secure_store
+                pw = secure_store.recall_any(path)
+                remembered = bool(pw) and bool(secure_store.recall_password(path))
+            except Exception:
+                pass
+            if shown:
+                self._close_main_view_doc()          # 원본 잠금 해제 — 메인에서
+                QApplication.processEvents()
+            out = {}
+
+            def _job():
+                from send2trash import send2trash
+                from viewer.pathutil import rename_when_free
+                out["p"] = photo_backup.restore_from_backup(path, backup, send2trash, rename=rename_when_free)
+            err = self._file_op_bg(_job, tr("원본으로 되돌리는 중: {name}").format(name=Path(path).name), title=title)
+            if err is not None:
+                if shown:
+                    self._open_saved_file(path)
+                QMessageBox.warning(self, title, tr("원본으로 되돌리지 못했습니다 — 아무것도 바뀌지 않았습니다.\n\n원인: {e}").format(e=err))
+                return False
+            restored = out["p"]
+            self._pdf_drop_page_records(restored)
+            if pw:
+                try:
+                    from viewer import secure_store
+                    secure_store.set_session(restored, pw)
+                    if remembered:
+                        secure_store.remember_password(restored, pw)
+                except Exception:
+                    pass
+            for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                try:
+                    if bt is not None and getattr(bt, "_root_dir", None):
+                        bt.add_or_refresh_file(restored)   # 원본의 책갈피로 다시 읽는다
+                except Exception:
+                    pass
+            if shown:
+                self._save_keep_page = None
+                self._open_saved_file(restored, 0)  # 색인 먼저(크기가 달라 다시 색인된다)
+            else:
+                self._index_single_file(Path(restored))
+            self.status.showMessage(tr("'{name}' 을(를) 처음 원본으로 되돌렸습니다 — 바꾼 파일은 휴지통에 있습니다.").format(name=Path(restored).name), 8000)
+            return True
+        finally:
+            self._photo_orig_busy = False
+            if released:
+                self._peer_bg(lambda: link.reload(released, path), tr("다른 PolyPDF 창에 다시 열게 하는 중…"))
+
+    def _pdf_drop_page_records(self, path: str) -> None:
+        """되돌린 PDF 의 쪽 구조에 묶인 앱 기록 — 꾸밈·숨김(`page_meta`)·하이퍼링크 사이드카, 저장 전 크롭·회전 — 을 지운다(처음 원본에는 없던 것)."""
+        for get in (getattr(self, "_ensure_page_meta_store", None), getattr(self, "_ensure_hyperlink_store", None)):
+            try:
+                st = get() if get is not None else None
+                if st is not None and st.drop_entry(path):
+                    st.save()
+            except Exception:
+                pass
+        try:
+            from viewer import page_crop, page_rotate
+            page_crop.clear_pending(path)
+            page_rotate.bump(path)
+        except Exception:
+            pass
 
     def _page_edit_save(self, src_str: str, bookmarks_raw):
         """260821/260822: 💾 저장 — 썸네일의 페이지 순서/삭제로 PDF 재구성 + 책갈피 remap.
@@ -6334,6 +6485,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if not paths:
             return
         path = str(paths[0])
+        if kind == "restore":                            # 261107-29(§4.7.5): 처음 원본으로 — 열지 않고 그 파일에
+            self._pdf_restore_ask(path)
+            return
         cur = self.main_view.current_file() if self.main_view else None
         first = int(extra[0]) if (kind == "ocr_read" and extra) else 0
         if not cur or os.path.normcase(str(cur)) != os.path.normcase(path):

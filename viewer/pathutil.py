@@ -85,7 +85,11 @@ def iter_pdfs(folder, should_cancel=None, stats=None, exts=(".pdf",), keep=None)
     - 261104-2(사진 보기 SOT §3.7·4.3): `exts` — 고를 확장자(소문자 튜플). 사진 모드가 그림 확장자로 같은 길을 쓴다.
       색인은 기본값(PDF 만) 그대로다.
     - 261104-4(사진 보기 SOT 4.24): `keep(경로)` 를 주면 그것이 False 인 항목은 뺀다(사진 모드 — 사진이 없는 zip).
+    - 261107-29(마스터 §4.7.5, 사진 보기 SOT §4.43): 원본 백업 폴더 `_원본`(`photo_backup.BACKUP_DIRNAME`)으로는 **내려가지 않는다** —
+      PDF 목록·색인(자식 프로세스 포함)·사진 목록이 모두 이 함수라 백업이 한 곳에서 숨는다.
     """
+    from viewer.photo_backup import BACKUP_DIRNAME
+    skip = os.path.normcase(BACKUP_DIRNAME)
     stack = [str(folder)]
     while stack:
         if should_cancel is not None and should_cancel():
@@ -96,7 +100,8 @@ def iter_pdfs(folder, should_cancel=None, stats=None, exts=(".pdf",), keep=None)
                 for entry in it:
                     try:
                         if entry.is_dir(follow_symlinks=False):
-                            stack.append(entry.path)
+                            if os.path.normcase(entry.name) != skip:
+                                stack.append(entry.path)
                         elif entry.name.lower().endswith(exts):
                             if keep is not None and not keep(entry.path):
                                 continue

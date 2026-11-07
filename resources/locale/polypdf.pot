@@ -13972,3 +13972,93 @@ msgid ""
 "💾 '저장' 한 뒤에 다시 해 주세요."
 msgstr ""
 
+#: viewer/app.py
+msgid "원본을 바꾸는 다른 작업(원본으로 되돌리기 등)이 아직 끝나지 않아 저장하지 않았습니다 — 원본은 그대로입니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "원본 백업 중: {name}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
+"처음 원본을 백업하지 못해 저장하지 않았습니다 — 원본은 그대로입니다.\n"
+"\n"
+"백업 자리: {where}\n"
+"원인: {e}"
+msgstr ""
+
+#: viewer/app.py
+msgid "이 파일의 원본 백업이 없습니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "'{name}' 을(를) 처음 원본으로 되돌릴까요?"
+msgstr ""
+
+#: viewer/app.py
+msgid "지금 파일은 휴지통으로 보내고, 처음 덮어쓸 때 백업해 둔 원본을 제자리로 옮깁니다. 이 파일의 꾸밈·하이퍼링크 기록도 지웁니다."
+msgstr ""
+
+#: viewer/app.py
+msgid "이 파일에 저장하지 않은 편집이 있습니다 — 먼저 💾 저장하거나 되돌린 뒤 다시 해 주세요."
+msgstr ""
+
+#: viewer/app.py
+msgid "다른 PolyPDF 창에 이 파일의 저장하지 않은 편집이 있습니다 — 그 창에서 저장하거나 되돌린 뒤 다시 해 주세요."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
+"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n"
+"그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "원본으로 되돌리는 중: {name}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
+"원본으로 되돌리지 못했습니다 — 아무것도 바뀌지 않았습니다.\n"
+"\n"
+"원인: {e}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "'{name}' 을(를) 처음 원본으로 되돌렸습니다 — 바꾼 파일은 휴지통에 있습니다."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "처음 덮어쓸 때 백업해 둔 원본으로 되돌립니다 — 지금 파일은 휴지통으로 갑니다."
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "원본 백업"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "원본 백업 폴더 (사진·PDF):"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+#, python-brace-format
+msgid "그 파일 폴더 안 '{name}' (기본)"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgid "PDF 를 처음 덮어써 저장할 때·펼친 사진으로 원본을 바꿀 때 손대지 않은 원본을 이 폴더에 남깁니다 — 우클릭 '원본으로 되돌리기' 로 되돌립니다."
+msgstr ""
+
+#: viewer/widgets/ocr_batch_dialog.py
+#, python-brace-format
+msgid "원본 PDF 에 덮어씁니다 — 처음 덮어쓸 때 손대지 않은 원본을 '{name}' 폴더(또는 환경설정의 원본 백업 폴더)에 남깁니다. 이미 읽은 쪽은 다시 읽지 않습니다. 서명된 PDF·암호 PDF 는 건너뜁니다."
+msgstr ""
+

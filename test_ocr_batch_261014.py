@@ -5,7 +5,7 @@
 A. 스캔 PDF 둘에 보이지 않는 글자층이 생겨 다른 프로그램(PyMuPDF)이 글을 뽑는다 — 하나는 실제 Tesseract 로 읽었다
 B. 이미 읽은 쪽(study.db)은 다시 읽지 않는다
 C. 글자층이 있는 PDF·서명된 PDF 는 건너뛰고(원본 그대로) 알린다
-D. 원본 옆 백업(.textfix.bak.pdf)은 넣은 파일마다 한 번
+D. 처음 원본은 넣은 파일마다 `_원본` 에 한 번(261107-29 — 원본 옆 .textfix.bak.pdf 는 없다)
 E. OCR 은 배경 스레드에서(메인이 아니다), 임시 폴더를 남기지 않는다
 F. 중지 — 하던 파일 원본은 그대로, 읽은 쪽은 study.db 에 남고 임시 폴더는 없다
 G. 책갈피창 폴더 행 우클릭에 'OCR 로 글자층 생성 (N개 파일)' 이 있다
@@ -130,9 +130,11 @@ try:
     chk(calls.count("B.pdf") == 1 and calls.count("A.pdf") == 0, "B 이미 읽은 쪽은 다시 읽지 않는다", str(calls))
     chk(digest(t) == t_hash and digest(s) == s_hash and "T.pdf" in msg and "S.pdf" in msg,
         "C 글자층 있는 PDF·서명된 PDF 는 건너뛰고 알린다(원본 그대로)", msg[-300:])
-    chk((sub / "A.pdf.textfix.bak.pdf").exists() and (sub / "B.pdf.textfix.bak.pdf").exists()
-        and not (sub / "T.pdf.textfix.bak.pdf").exists(), "D 넣은 파일마다 백업 한 번",
-        str(sorted(p.name for p in sub.iterdir())))
+    # 261107-29(마스터 §4.7.5): 처음 원본은 저장 길이 `_원본` 에 — 원본 옆 `.textfix.bak.pdf` 는 더 만들지 않는다
+    bk = sub / "_원본"
+    chk((bk / "A.pdf").exists() and (bk / "B.pdf").exists() and not (bk / "T.pdf").exists()
+        and not list(sub.glob("*.textfix.bak.pdf")), "D 넣은 파일마다 처음 원본을 `_원본` 에 한 번(원본 옆 백업 없음)",
+        str(sorted(p.name for p in sub.iterdir())) + " / " + str(sorted(p.name for p in bk.iterdir()) if bk.exists() else []))
     left = {p.name for p in Path(tempfile.gettempdir()).glob("polypdf_ocrb_*")} - tmp_before
     chk(threads == {False} and not left, "E OCR 은 배경 스레드에서, 임시 폴더를 남기지 않는다", f"{threads} {left}")
     chk("2개" in msg, "A 알림 — 넣은 파일 2개", msg[:120])

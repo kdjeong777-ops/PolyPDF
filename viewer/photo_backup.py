@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""펼친 사진으로 원본을 대체할 때 원본 백업 (사진 보기 SOT §4.43, 261106-15 사용자 지시·결정).
+"""원본 백업 — 사진·PDF 공용 (사진 보기 SOT §4.43, 261106-15 사용자 지시·결정 · 261107-29 PDF 도, 마스터 §4.7.5).
+
+- 사진: 펼친 사진으로 원본을 대체할 때 원본을 **옮긴다**(`move_to_backup`, 대체할 때마다).
+- PDF: 원본 자리 덮어쓰기 저장의 **첫** 번에만 손대지 않은 원본을 **복사**한다(`ensure_backup` — 짝이 있으면 아무것도 하지 않음,
+  261107-29 사용자 결정 '처음 원본 하나만'). 자리·짝 기록·숨김·되돌리기(`restore_from_backup`)는 사진과 하나.
 
 - 백업 자리: 기본은 **사진이 있는 폴더 안 `_원본`**(`BACKUP_DIRNAME`). 환경설정에서 한 곳의 고정 폴더로 바꾸면(`picture.warp_backup_dir`)
   그 아래에 원래 폴더 구조를 하위 폴더로 보존한다(`<고정 폴더>/<드라이브>/<경로…>/이름`) — 다른 폴더의 같은 이름이 겹치지 않게.
@@ -94,6 +98,50 @@ def move_to_backup(src, cur_name=None) -> str:
     return str(dst)
 
 
+def ensure_backup(src) -> str | None:
+    """PDF 첫 덮어쓰기 전(261107-29, 마스터 §4.7.5): 그 파일의 짝이 없으면 손대지 않은 원본을 백업 자리에 **복사**하고 짝을 적는다 —
+    만든 백업 경로. 짝이 이미 있으면 None(처음 원본 한 벌만). 옮기지 않는 것은 배경 읽기 핸들이 있어도 되게(제자리 쓰기는 원본이 제자리에
+    있어야 한다). 실패하면 예외 — 반쯤 만든 것은 남기지 않는다. 배경에서 부른다."""
+    from viewer.pathutil import unique_path
+    src = Path(str(src))
+    if find_backup(src, same_ext=True):
+        return None
+    d = backup_dir_for(src)
+    d.mkdir(parents=True, exist_ok=True)
+    dst = unique_path(d / src.name, first=2)
+    tmp = dst.with_name("~" + dst.name + ".part")
+    try:
+        shutil.copy2(str(src), str(tmp))
+        if os.path.getsize(str(tmp)) != os.path.getsize(str(src)):
+            raise OSError("copy size mismatch")
+        os.replace(str(tmp), str(dst))
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+    try:
+        record(dst, src.name, src.name)
+    except Exception:
+        try:
+            dst.unlink()
+        except OSError:
+            pass
+        raise
+    return str(dst)
+
+
+def drop_backup(backup) -> None:
+    """이 저장에서 만든 백업을 거둔다(원본을 덮어쓰지 못하고 새 이름으로 갔을 때 — 원본이 그대로라 백업이 필요 없다). 실패해도 조용히."""
+    b = Path(str(backup))
+    try:
+        b.unlink(missing_ok=True)
+    except OSError:
+        return
+    forget(b)
+
+
 def restore(backup, src) -> None:
     """백업을 원래 자리로 되돌린다(대체가 실패했을 때) — 짝 기록도 지운다. 원래 자리에 무엇이 있으면 지우지 않고 예외."""
     b, s = Path(str(backup)), Path(str(src))
@@ -163,11 +211,12 @@ def original_name(backup) -> str:
     return b.name
 
 
-def scan(paths) -> dict:
+def scan(paths, same_ext: bool = False) -> dict:
     """사진들 → {사진 경로: 그 사진의 원본 백업 경로} (백업이 있는 것만). 백업 폴더마다 **한 번만** 읽는다
     (폴더 목록 한 번 + 기록 한 번 — 메뉴를 만들 때 사진마다 폴더를 읽지 않게, 261106-21·응답성 SOT §6).
     기록이 있으면 '대체한 파일 이름 = 지금 사진 이름' 인 것 중 가장 최근(seq 큰 것). 기록에 없는 옛 백업은 확장자를 뺀 이름이 정확히 같은 것
-    (같은 확장자 먼저 — HEIC 를 .jpg 로 바꾼 사진도 짝)."""
+    (같은 확장자 먼저 — HEIC 를 .jpg 로 바꾼 사진도 짝). `same_ext`(PDF, 261107-29): 기록 없는 것은 확장자까지 같은 것만 —
+    같은 `_원본` 의 'doc.jpg' 사진 백업이 'doc.pdf' 의 짝이 되지 않게."""
     groups = {}
     for p in paths or []:
         p = Path(str(p))
@@ -195,6 +244,8 @@ def scan(paths) -> dict:
                 for k in sorted(names - set(idx)):
                     if os.path.normcase(Path(k).stem) != want:
                         continue
+                    if same_ext and os.path.normcase(Path(k).suffix) != os.path.normcase(p.suffix):
+                        continue
                     key = (1 if os.path.normcase(Path(k).suffix) == os.path.normcase(p.suffix) else 0, k)
                     if best is None or key > best:
                         best = key
@@ -203,16 +254,18 @@ def scan(paths) -> dict:
     return out
 
 
-def find_backup(path) -> str | None:
-    """지금 사진 한 장의 원본 백업(`scan` 한 장짜리)."""
-    return scan([path]).get(str(Path(str(path))))
+def find_backup(path, same_ext: bool = False) -> str | None:
+    """지금 파일 하나의 원본 백업(`scan` 한 장짜리)."""
+    return scan([path], same_ext=same_ext).get(str(Path(str(path))))
 
 
-def restore_from_backup(cur, backup, trash) -> str:
+def restore_from_backup(cur, backup, trash, rename=None) -> str:
     """지금 파일을 휴지통으로(`trash(경로)`), 백업을 원래 이름 자리로 — 돌려준 경로가 되돌린 원본. 배경에서 부른다.
     **휴지통은 마지막** — 그 전 어느 단계에서 실패해도 모두 되돌려 아무것도 바뀌지 않는다(마스터 §4.7.5 '실패 되돌림', 261106-20):
     ① 백업을 지금 폴더의 임시 이름으로 ② 되돌릴 이름이 지금 파일과 같으면 지금 파일을 곁 폴더(`~polypix-restore`)로 비켜 둔다(이름 그대로)
-    ③ 임시를 원래 이름으로 ④ 지금 파일(비켜 둔 것)을 휴지통으로 — 실패하면 ③·②·① 을 거꾸로."""
+    ③ 임시를 원래 이름으로 ④ 지금 파일(비켜 둔 것)을 휴지통으로 — 실패하면 ③·②·① 을 거꾸로.
+    `rename(a, b)`(PDF, 261107-29): ② 비켜 두기에 쓸 이름 바꾸기 — 배경 색인이 잠깐 쥔 PDF 를 기다리게(`pathutil.rename_when_free`). 기본 `os.replace`."""
+    mv = rename or os.replace
     cur, backup = Path(str(cur)), Path(str(backup))
     target = cur.parent / original_name(backup)
     same = os.path.normcase(str(target)) == os.path.normcase(str(cur))
@@ -227,7 +280,7 @@ def restore_from_backup(cur, backup, trash) -> str:
     try:
         if same:                                          # ②
             aside_dir.mkdir(exist_ok=True)
-            os.replace(str(cur), str(aside))
+            mv(str(cur), str(aside))
             moved_aside = True
         os.replace(str(tmp), str(target))                 # ③
         placed = True

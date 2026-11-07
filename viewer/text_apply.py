@@ -6,7 +6,7 @@
 복사 결과만 고쳐진다.
 
 절차
-  1) 원본 백업 `<이름>.textfix.bak.pdf`
+  1) 원본 백업은 저장 길이 처음 한 번 `_원본` 에(261107-29, 마스터 §4.7.5 — 종전 `<이름>.textfix.bak.pdf` 는 더 만들지 않는다)
   2) 고친 줄의 사각형에 redact 를 걸어 **글자만** 지운다
      (`images=PDF_REDACT_IMAGE_NONE` — 그림은 건드리지 않는다)
   3) 같은 자리에 `render_mode=3`(보이지 않음)으로 고친 글을 적는다
@@ -25,7 +25,6 @@ from pathlib import Path
 from viewer.pdf_font import fresh_font_name, subset_fonts_safely
 from viewer.i18n import tr
 
-BACKUP_SUFFIX = ".textfix.bak.pdf"
 # 260913-6(SOT §5.4): 글자층 다시 쓰기 — 줄 높이 대비 글자 크기와 밑줄(글자 바닥) 자리
 LAYER_FS = 0.9
 LAYER_BASE = 0.18
@@ -335,8 +334,8 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
       `items_for(쪽) -> 고침목록`       물러설 길(줄 바꿔 끼우기)에 쓸 고침
     반환 `(임시 파일, 통계)` — 통계 `{rewritten, fallback, skipped, lines, unwritten, cancelled}`.
     중지되거나 바꾼 쪽이 없으면 임시 파일을 지우고 `""`.
-    `backup` — 원본 옆 `.textfix.bak.pdf`(처음 한 번). 기본은 `out` 이 없을 때만(원본에 덮어쓸 반영) —
-    임시 사본만 만드는 변환은 원본 옆에 아무것도 남기지 않는다(SOT §5.4 '백업', 261014-16)."""
+    `backup` — 받기만 하고 쓰지 않는다(261107-29, SOT §5.4 '백업'): 원본 옆 `.textfix.bak.pdf` 는 더 만들지 않고, 처음 원본은
+    저장 길(`_finalize_save`)이 `_원본` 에 한 번 남긴다(마스터 §4.7.5)."""
     import fitz
     src = Path(src)
     stats = {"rewritten": [], "fallback": [], "skipped": [], "lines": 0,
@@ -390,14 +389,6 @@ def build_layer_pdf(src, pages, *, rows_for, fixes_for, items_for=None,
         doc.save(str(tmp), garbage=3, deflate=True)
     finally:
         doc.close()
-    if backup if backup is not None else not out:
-        try:
-            bak = src.with_name(src.name + BACKUP_SUFFIX)
-            if not bak.exists():
-                import shutil
-                shutil.copy2(str(src), str(bak))
-        except Exception:
-            pass
     return str(tmp), stats
 
 
@@ -443,13 +434,7 @@ def apply_fixes_by_page(src, fixes_by_page: dict, *, rows_by_page=None,
     fixes_by_page = {int(k): v for k, v in (fixes_by_page or {}).items() if v}
     if not fixes_by_page:
         return str(src), ""
-    try:
-        bak = src.with_name(src.name + BACKUP_SUFFIX)
-        if not bak.exists():
-            import shutil
-            shutil.copy2(str(src), str(bak))
-    except Exception:
-        pass                                     # 백업 실패가 반영을 막지는 않는다
+    # 261107-29(SOT §5.4 '백업'): 원본 옆 백업은 없다 — 처음 원본은 저장 길(`finalize` = `_finalize_save`)이 `_원본` 에
 
     tmp = src.with_name(src.stem + "_textfix_tmp.pdf")
     unwritten = 0

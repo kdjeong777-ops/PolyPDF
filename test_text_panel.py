@@ -136,7 +136,9 @@ try:
     chk("add_redact_annot" in ap and "PDF_REDACT_IMAGE_NONE" in ap,
         "⑥-b 글자만 지우고 그림은 건드리지 않는다")
     chk("render_mode" in ap, "⑥-b 보이지 않는 글자로 다시 적는다(모양 유지)")
-    chk("BACKUP_SUFFIX" in ap, "⑥-b 원본을 백업한다")
+    # 261107-29(텍스트 창 SOT §5.4 '백업'): 원본 옆 `.textfix.bak.pdf` 는 없다 — 처음 원본은 저장 길(`_finalize_save`)이 `_원본` 에
+    #   (실제로 남는지는 test_pdf_backup_261107.py·test_ocr_batch_261014.py D 가 본다)
+    chk("copy2" not in ap and "BACKUP_SUFFIX" not in ap, "⑥-b 원본 옆에 백업을 따로 만들지 않는다(저장 길이 `_원본` 에)")
 
     # ── ⑦ 하이라이트 → 책갈피 ───────────────────────────────────────────
     tp.set_page(str(pdf), 4, rows)

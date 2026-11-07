@@ -223,7 +223,7 @@ class BookmarkTree(QWidget):
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
     photoActionRequested = pyqtSignal(str, list)  # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴 — (일 이름, 사진 경로들)
     filterEmptied = pyqtSignal(bool)                 # 261107-9(검색 SOT §5.1): 거르기 결과가 비었다(True)·다시 생겼다(False) — 앱이 본문·썸네일을 비우고 되돌린다
-    fileActionRequested = pyqtSignal(str, list, object)  # 261107-2(디자인 SOT §2.9.8): 'ocr_read'·'present'·'sign'·'info'·'rotate'(-8) — (일, [파일], 쪽 범위|각도|None)
+    fileActionRequested = pyqtSignal(str, list, object)  # 261107-2(디자인 SOT §2.9.8): 'ocr_read'·'present'·'sign'·'info'·'rotate'(-8)·'restore'(-29) — (일, [파일], 쪽 범위|각도|None)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
@@ -311,11 +311,10 @@ class BookmarkTree(QWidget):
         kind = "photo" if photo else "pdf"
 
         def pre(p):
-            if photo:
-                from viewer.photo_backup import is_backup_path      # 펴기 원본 백업(261106-15, 사진 보기 SOT §4.43)은 목록에서 뺀다
-                if is_backup_path(p):
-                    return False
-            return True
+            # 원본 백업(사진 펴기 261106-15 · PDF 처음 원본 261107-29, 사진 보기 SOT §4.43)은 목록에서 뺀다 — `_원본` 폴더는
+            #   `iter_pdfs` 가 내려가지 않으니, 여기서는 환경설정의 고정 백업 폴더를 고른 때만 본다(파일마다 경로를 풀지 않게)
+            from viewer import photo_backup
+            return not (photo_backup.custom_dir() and photo_backup.is_backup_path(p))
         if unknown is None:
             return zip_unpack.scan_keep(kind, pre)
 
@@ -493,6 +492,7 @@ class BookmarkTree(QWidget):
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
         self.save_first_check = None    # 앱이 주입: (파일들) -> True 면 저장 전 쪽 편집이 있어 알렸다 — 저장 ▸ 사본 넷 앞(261107-21, 마스터 §4.7.13)
+        self.pdf_backup_of = None       # 앱이 주입: (PDF) -> 처음 원본 백업 경로|None — '원본으로 되돌리기' 를 보일지(261107-29, 마스터 §4.7.5)
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
         self._probe_paused = False   # 260906-5(응답성 SOT §4 ①): 인덱싱 중에는 조사를 멈춘다
         self._probe_scan_timer = QTimer(self)     # 260906-4: 보이는 행 걷기를 모아서 1회
@@ -2941,6 +2941,15 @@ class BookmarkTree(QWidget):
     def _file_action(self, kind: str, paths, extra=None) -> None:
         self.fileActionRequested.emit(kind, [str(p) for p in paths], extra)
 
+    def _mi_restore(self, menu, path) -> None:
+        """'원본으로 되돌리기'(PDF, 261107-29 — 마스터 §4.7.5) — 처음 덮어쓸 때 남긴 원본 백업이 **있을 때만**(모양 묶음, 사진과 같은 이름)."""
+        chk = self.pdf_backup_of
+        if not path or chk is None or not chk(str(path)):
+            return
+        menu.group("shape")
+        self._act(menu, tr("원본으로 되돌리기"), lambda p=str(path): self._file_action("restore", [p]),
+                  tip=tr("처음 덮어쓸 때 백업해 둔 원본으로 되돌립니다 — 지금 파일은 휴지통으로 갑니다."))
+
     def _mi_xfer(self, menu, nodes) -> None:
         """'폴더로 복사 ▸'·'폴더로 이동 ▸'(261107-2 — 옛 '파일 복사 (N개)'·'파일 이동 (N개)', 사진과 같은 이름). 편집 모드."""
         if not nodes:
@@ -2995,6 +3004,7 @@ class BookmarkTree(QWidget):
     def add_file_items(self, menu, path: str) -> None:
         """PDF 썸네일창·본문의 '파일 ▸' — 책갈피창 파일 줄의 파일 단위 항목을 같은 함수·같은 차례로(디자인 SOT §2.9.8 의 4)."""
         node = self._file_node_for_path(str(path))
+        self._mi_restore(menu, path)                     # 261107-29: 모양 — 처음 원본 백업이 있을 때만
         # 261107-16(사용자 지시): '경로 복사' 는 메뉴에 두지 않는다 — 키 Ctrl+Shift+C(key_actions)로만, 메뉴는 '파일 탐색기 열기'
         menu.group("file")
         self._act(menu, tr("파일 탐색기 열기"), lambda p=path: self._reveal_in_explorer(p), key="reveal")   # 본문·썸네일 키 = 지금 본문 파일
@@ -3150,6 +3160,7 @@ class BookmarkTree(QWidget):
             for _lbl, _d in ((tr("왼쪽 90° 회전"), -90), (tr("오른쪽 90° 회전"), 90), (tr("180° 회전"), 180)):
                 self._act(rm, _lbl, lambda p=_dir_target, d=_d: self._file_action("rotate", [p], d),
                           tip=tr("이 파일의 모든 쪽을 돌립니다 — [저장] 하면 PDF 에 들어갑니다."))
+            self._mi_restore(menu, _dir_target)          # 261107-29(§4.7.5): 처음 원본 백업이 있을 때만
         # 파일 — 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
         menu.group("file")
         xfer_files = self._selected_file_nodes() if self._edit_mode else []

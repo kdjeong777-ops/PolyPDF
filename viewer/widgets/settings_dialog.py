@@ -794,6 +794,29 @@ class SettingsDialog(QDialog):
         vl.addRow(tr("보기 종류:"), self.cmb_view_kind)
         layout.addWidget(grp_vk)
 
+        # 원본 백업 — 261106-15(사진 펴기 [저장] 이 원본을 대체할 때)·261107-29(PDF 첫 덮어쓰기 저장 때) 사진·PDF 공용(사진 보기 SOT §4.43,
+        #   마스터 §4.7.5). 보기 종류가 PDF 전용이어도 보이게 사진 쪽에서 일반 쪽으로 옮겼다(키 `picture.warp_backup_dir` 그대로)
+        grp_bk = QGroupBox(tr("원본 백업"))
+        bl = QVBoxLayout(grp_bk)
+        bl.addWidget(QLabel(tr("원본 백업 폴더 (사진·PDF):")))
+        row_bk = QHBoxLayout()
+        self.ed_warp_backup = QLineEdit(str(self._pic.get("warp_backup_dir") or ""))
+        self.ed_warp_backup.setReadOnly(True)
+        from viewer.photo_backup import BACKUP_DIRNAME
+        self.ed_warp_backup.setPlaceholderText(tr("그 파일 폴더 안 '{name}' (기본)").format(name=BACKUP_DIRNAME))
+        self.ed_warp_backup.setToolTip(tr("PDF 를 처음 덮어써 저장할 때·펼친 사진으로 원본을 바꿀 때 손대지 않은 원본을 이 폴더에 남깁니다 — "
+                                          "우클릭 '원본으로 되돌리기' 로 되돌립니다."))
+        row_bk.addWidget(self.ed_warp_backup, 1)
+        b_pick = QPushButton(tr("고르기"))
+        b_pick.setToolTip(tr("원본 백업 폴더"))
+        b_pick.clicked.connect(self._pick_warp_backup)
+        b_def = QPushButton(tr("기본으로"))
+        b_def.clicked.connect(lambda: self.ed_warp_backup.setText(""))
+        row_bk.addWidget(b_pick)
+        row_bk.addWidget(b_def)
+        bl.addLayout(row_bk)
+        layout.addWidget(grp_bk)
+
     def _build_view(self, layout):
         grp = QGroupBox(tr("넘김"))
         pl = QVBoxLayout(grp)
@@ -849,23 +872,6 @@ class SettingsDialog(QDialog):
         row.addWidget(self.sp_slide_s)
         row.addStretch(1)
         pl.addLayout(row)
-        # 261106-15(사진 보기 SOT §4.43, 사용자 결정): 모양 펴기 [저장] 이 원본을 대체할 때 원본을 옮겨 둘 곳
-        pl.addWidget(QLabel(tr("펼친 사진 저장 때 원본 백업 폴더:")))
-        row_bk = QHBoxLayout()
-        self.ed_warp_backup = QLineEdit(str(self._pic.get("warp_backup_dir") or ""))
-        self.ed_warp_backup.setReadOnly(True)
-        from viewer.photo_backup import BACKUP_DIRNAME
-        self.ed_warp_backup.setPlaceholderText(tr("사진 폴더 안 '{name}' (기본)").format(name=BACKUP_DIRNAME))
-        self.ed_warp_backup.setToolTip(tr("모양 펴기로 [저장] 하면 원본 사진을 이 폴더로 옮기고 그 자리에 펼친 사진을 둡니다."))
-        row_bk.addWidget(self.ed_warp_backup, 1)
-        b_pick = QPushButton(tr("고르기"))
-        b_pick.setToolTip(tr("원본 백업 폴더"))
-        b_pick.clicked.connect(self._pick_warp_backup)
-        b_def = QPushButton(tr("기본으로"))
-        b_def.clicked.connect(lambda: self.ed_warp_backup.setText(""))
-        row_bk.addWidget(b_pick)
-        row_bk.addWidget(b_def)
-        pl.addLayout(row_bk)
         layout.addWidget(grp)
 
     def _build_tags(self, layout):
