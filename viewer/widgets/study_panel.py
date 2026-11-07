@@ -23,6 +23,17 @@ from PyQt6.QtWidgets import (
 )
 
 
+class _MenuPage(QWidget):
+    """메뉴 안 체크 칸 판(261107-38) — 체크 칸 옆 빈 곳·머리 글자를 눌러도 메뉴가 닫히지 않게 누름을 여기서 받는다.
+    받지 않으면 놓는 순간 QMenu 까지 올라가 QWidgetAction 을 누른 것으로 보고 메뉴를 닫는다(실측)."""
+
+    def mousePressEvent(self, e):
+        e.accept()
+
+    def mouseReleaseEvent(self, e):
+        e.accept()
+
+
 class _WrapDelegate(QStyledItemDelegate):
     """260615-11: 단어장 항목 텍스트를 창 폭에 맞춰 자동 줄바꿈 — '...' 생략 방지.
     기본 델리게이트는 한 줄로 생략(elide)하므로, 줄바꿈 그리기 + 줄바꿈 높이 계산을 직접 처리."""
@@ -243,8 +254,28 @@ class StudyPanel(QWidget):
         self._ctrl_widget = QWidget()
         flow = FlowLayout(self._ctrl_widget, spacing=4, center=False)
 
-        # 종류
-        flow.addWidget(QLabel(tr("종류")))
+        # 261107-38(단어장 SOT §11, 디자인 SOT §2.7, 사용자 지시 '종류 … 드롭다운 버튼으로 … 지금 너무 길어'):
+        # 종류 넷 + 표시 다섯 체크를 '종류 ▾' 단추 하나의 체크 메뉴로 — 체크 칸은 그대로(값·신호 같음), 메뉴 판에 둔다
+        from PyQt6.QtWidgets import QWidgetAction
+        self.btn_kind = QToolButton()
+        self.btn_kind.setText(tr("종류"))
+        drop_button(self.btn_kind)
+        self.btn_kind.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._kind_menu = QMenu(self.btn_kind)
+        flow.addWidget(self.btn_kind)
+
+        def _kind_page(title: str) -> QVBoxLayout:
+            page = _MenuPage()
+            lay = QVBoxLayout(page)
+            lay.setContentsMargins(8, 4, 8, 4)
+            lay.setSpacing(2)
+            lay.addWidget(QLabel("<b>%s</b>" % title))
+            wa = QWidgetAction(self._kind_menu)
+            wa.setDefaultWidget(page)            # 체크 칸을 눌러도 메뉴가 닫히지 않는다
+            self._kind_menu.addAction(wa)
+            return lay
+
+        kind_lay = _kind_page(tr("종류"))
         self._chk: dict[str, QCheckBox] = {}
         _default_on = {"초급": False, "중급": True, "고급": True,
                        "전문용어": True}                          # 초급 기본 해제
@@ -253,11 +284,12 @@ class StudyPanel(QWidget):
             cb.setChecked(_default_on[lv])
             cb.stateChanged.connect(self._render)
             cb.stateChanged.connect(lambda _s: self.levelsChanged.emit())   # 본문 밑줄도 같은 단어로
-            flow.addWidget(cb)
+            kind_lay.addWidget(cb)
             self._chk[lv] = cb
+        self._kind_menu.addSeparator()
 
-        # 표시 토글 + 접기 + 표시 필터 + 본문강조
-        flow.addWidget(QLabel(tr("표시")))
+        # 표시 토글(메뉴 둘째 묶음) + 접기 + 표시 필터 + 본문강조
+        show_lay = _kind_page(tr("표시"))
         self.chk_ko = QCheckBox(tr("한글뜻")); self.chk_ko.setChecked(True)
         self.chk_en = QCheckBox(tr("영어뜻")); self.chk_en.setChecked(True)
         self.chk_ex = QCheckBox(tr("예시")); self.chk_ex.setChecked(True)
@@ -269,7 +301,11 @@ class StudyPanel(QWidget):
         self.chk_img.setToolTip(tr("사전에 그림이 있으면 단어 옆에 표시합니다."))
         for c in (self.chk_ko, self.chk_en, self.chk_ex, self.chk_ref, self.chk_img):
             c.stateChanged.connect(self._render)
-            flow.addWidget(c)
+            show_lay.addWidget(c)
+        self.btn_kind.setMenu(self._kind_menu)
+        for c in self._kind_checks():
+            c.toggled.connect(lambda _on: self._update_kind_button())
+        self._update_kind_button()
         self.btn_expand = QPushButton(tr("접기"))     # 260606-2: 표시 오른쪽으로 이동
         self.btn_expand.setMaximumWidth(48)
         self.btn_expand.clicked.connect(self._toggle_expand)
@@ -577,7 +613,24 @@ class StudyPanel(QWidget):
         if "expanded" in d:
             self._expanded = bool(d["expanded"])
             self.btn_expand.setText(tr("접기") if self._expanded else tr("펼치기"))
+        self._update_kind_button()          # 종류 체크는 신호를 막고 넣었다
         self._render()
+
+    def _kind_checks(self) -> list:
+        """'종류 ▾' 메뉴의 체크 칸 아홉 — 종류 넷, 표시 다섯 차례(261107-38)."""
+        return [self._chk[lv] for lv in _LEVELS] + [
+            self.chk_ko, self.chk_en, self.chk_ex, self.chk_ref, self.chk_img]
+
+    def _update_kind_button(self) -> None:
+        """하나라도 꺼지면 단추 글자 `종류 n/9`, 꺼진 이름은 툴팁(단어장 SOT §11, 261107-38)."""
+        cs = self._kind_checks()
+        off = [c.text() for c in cs if not c.isChecked()]
+        if off:
+            self.btn_kind.setText(tr("종류 {on}/{all}").format(on=len(cs) - len(off), all=len(cs)))
+            self.btn_kind.setToolTip(tr("보일 단어 종류와 표시할 내용을 고릅니다 — 꺼짐: {off}").format(off=", ".join(off)))
+        else:
+            self.btn_kind.setText(tr("종류"))
+            self.btn_kind.setToolTip(tr("보일 단어 종류와 표시할 내용을 고릅니다"))
 
     def is_auto_highlight(self) -> bool:
         return self.chk_hl.isChecked()

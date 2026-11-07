@@ -14116,3 +14116,17 @@ msgstr ""
 #: viewer/widgets/presentation.py
 msgid "켜면 이 쪽의 단어장 단어에 밑줄을 긋고, 단어 위에 마우스를 올리면 뜻을 풍선으로 보입니다."
 msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "보일 단어 종류와 표시할 내용을 고릅니다"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+#, python-brace-format
+msgid "종류 {on}/{all}"
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+#, python-brace-format
+msgid "보일 단어 종류와 표시할 내용을 고릅니다 — 꺼짐: {off}"
+msgstr ""

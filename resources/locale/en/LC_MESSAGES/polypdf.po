@@ -15398,3 +15398,17 @@ msgstr "Opens the My Vocabulary editor with the clicked word filled in — its s
 #: viewer/widgets/presentation.py
 msgid "켜면 이 쪽의 단어장 단어에 밑줄을 긋고, 단어 위에 마우스를 올리면 뜻을 풍선으로 보입니다."
 msgstr "When on, vocabulary words on this page are underlined, and hovering over a word shows its meaning in a tooltip."
+
+#: viewer/widgets/study_panel.py
+msgid "보일 단어 종류와 표시할 내용을 고릅니다"
+msgstr "Choose which word types to show and what to display"
+
+#: viewer/widgets/study_panel.py
+#, python-brace-format
+msgid "종류 {on}/{all}"
+msgstr "Type {on}/{all}"
+
+#: viewer/widgets/study_panel.py
+#, python-brace-format
+msgid "보일 단어 종류와 표시할 내용을 고릅니다 — 꺼짐: {off}"
+msgstr "Choose which word types to show and what to display — off: {off}"
