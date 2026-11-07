@@ -5,7 +5,7 @@
 A. 붙여넣은 쪽(저장 전)에 그린 꾸밈과 옮겨진 자체 쪽의 꾸밈이 [저장] 뒤 **새 쪽 번호**에 그대로 있다(사용자 보고 '저장하면 사라짐')
 B. 그 저장에서 본문을 다시 여는 것은 **한 번**(사용자 보고 '2번 깜박임' — 종전엔 사본 저장이 한 번 더 열었다)
 C. 편집모드·고른 개체 없음에서 본문 Del → 지금 쪽이 쪽 편집으로 지워진다. 보기 모드에서는 아무 일 없음
-D. 메뉴 오른쪽 단축키 칸: 본문 우클릭 '인쇄…' Ctrl+P·'삭제' Del·'발표보기' F5, 보기 메뉴 2단·발표, 썸네일 '복사' Ctrl+C
+D. 메뉴 오른쪽 단축키 칸: 본문 우클릭 '인쇄' Ctrl+P·'삭제' Del·'발표보기' F5, 보기 메뉴 2단·발표, 썸네일 '복사' Ctrl+C
 E. 보기 메뉴에 '옵션 메뉴' 항목이 없고 단축키(Shift+F10)는 그대로 창에 있다
 F. 캡처 모드를 고르면 그 창을 곧바로 캡처한다
 G. 읽기 모드 풀다운 폭은 고정이 아니다(글자에 맞춤)
@@ -119,7 +119,7 @@ try:
     g = mv.view.viewport().mapToGlobal(mv._norm_to_view(0.7, 0.8, pr))
     mw._on_viewer_context_menu(g); spin(0.1)
     L = seen[-1]
-    chk(any(t.startswith("인쇄…") and t.endswith("\tCtrl+P") for t in L)
+    chk(any(t.startswith("인쇄") and t.endswith("\tCtrl+P") for t in L)
         and any(t.startswith("삭제") and t.endswith("\tDel") for t in L)
         and any(t.startswith("발표보기") and t.endswith("\tF5") for t in L)
         and any(t.startswith("2단 보기") and t.endswith("\tCtrl+Shift+2") for t in L),

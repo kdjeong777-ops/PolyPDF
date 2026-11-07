@@ -155,7 +155,7 @@ try:
     # E
     chk(mw._cmds["file.print"].isEnabled() and mw._cmds["file.flatten"].isEnabled(), "E 사진 모드에서 인쇄·평탄화 켜짐")
     mw._photo_context_menu(QPoint(5, 5))
-    chk("인쇄…" in menu_texts and "평탄화..." in menu_texts, "E 본문 사진 메뉴에 인쇄·평탄화", str(menu_texts))
+    chk("인쇄" in menu_texts and "저장" in menu_texts, "E 본문 사진 메뉴에 인쇄·저장 ▸(평탄화 사본은 그 안 — 261107-2, test_ctx_menu_order)", str(menu_texts))
     mw.close()
 except Exception:
     import traceback

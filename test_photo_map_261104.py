@@ -72,6 +72,8 @@ _orig_exec = QMenu.exec
 def _fake_exec(self, *a, **k):
     menu_texts.clear()
     menu_texts.extend(x.text().split("\t")[0] if not x.isSeparator() else "-" for x in self.actions())
+    menu_off.clear()
+    menu_off.update(x.text().split("\t")[0] for x in self.actions() if not x.isSeparator() and not x.isEnabled())
     want = menu_pick["v"]
     if want:
         for x in self.actions():
@@ -81,6 +83,7 @@ def _fake_exec(self, *a, **k):
     return None
 
 
+menu_off = set()
 QMenu.exec = _fake_exec
 asked, informed = [], []
 answer = {"v": QMessageBox.StandardButton.No}
@@ -135,7 +138,8 @@ try:
     mw._on_bookmark_activated(str(B), 0)
     pump(lambda: (mw.__dict__.get("_photo_info") or {}).get("path") == str(B), timeout=5)
     mw._photo_context_menu(QPoint(5, 5))
-    chk("지도에서 위치 보기" not in menu_texts, "A GPS 없는 사진의 본문 메뉴에는 지도 항목이 없다")
+    chk("지도에서 위치 보기" not in menu_texts or "지도에서 위치 보기" in menu_off,
+        "A GPS 없는 사진의 본문 메뉴에는 지도 항목이 꺼져 있다(261107-2 — 할 수 없는 항목은 끈 채로, 디자인 SOT §2.9.8)")
     mw._on_bookmark_activated(str(A), 0)
     pump(lambda: (mw.__dict__.get("_photo_info") or {}).get("gps") is not None, timeout=5)
     mw._photo_context_menu(QPoint(5, 5))

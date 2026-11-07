@@ -445,8 +445,8 @@ from viewer.widgets.bookmark_tree import BookmarkTree
 chk(hasattr(BookmarkTree, "_file_path_of"), "(8) 행에서 파일 경로를 얻는다")
 chk(hasattr(BookmarkTree, "_reveal_in_explorer"), "(8) 탐색기로 여는 길이 있다")
 m = inspect.getsource(BookmarkTree._on_tree_context_menu)
-i, j = m.find("파일 탐색기 열기"), m.find("파일 복사")   # 261014-1: 이름 '파일 폴더 열기' → '파일 탐색기 열기'
-chk(0 <= i < j, "(8) '파일 복사' **위에** 있다", "%d < %d" % (i, j))
+i, j = m.find('tr("파일 탐색기 열기")'), m.find("self._mi_xfer(")   # 261107-2: '폴더로 복사·이동 ▸'(옛 '파일 복사 (N개)') 를 다는 줄 · 261014-1: '파일 폴더 열기' → '파일 탐색기 열기'
+chk(0 <= i < j, "(8) '폴더로 복사·이동' **위에** 있다", "%d < %d" % (i, j))
 chk("_edit_mode" not in m[max(0, i - 220):i],
     "(8) 편집모드가 아니어도 보인다 — 읽기만 하는 동작이다")
 r = inspect.getsource(BookmarkTree._reveal_in_explorer)

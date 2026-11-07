@@ -169,7 +169,8 @@ try:
     mw._photo_context_menu(QPoint(5, 5))
     t3 = list(menu_texts)
     for name, tx in (("책갈피창", t1), ("썸네일 줄", t2), ("본문", t3)):
-        chk("공유용 사본 (위치 지움)" in tx and "공유용 사본 (정보 모두 지움)" in tx, "F %s 메뉴에 공유용 사본 두 항목" % name, str(tx))
+        chk("저장" in tx and not any(t.startswith("공유용 사본") for t in tx),
+            "F %s 메뉴 — 사본은 저장 ▸ 안('개인정보 지운 사본', 위치 지움은 뺌 — 261107-2, test_ctx_menu_order)" % name, str(tx))
 
     # G
     chk(on_main and not any(on_main), "G 바꿔치기는 메인에서 하지 않는다", str(on_main))

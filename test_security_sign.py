@@ -440,14 +440,14 @@ try:
 
     def _pick_sign_here(self, *a, **k):
         labels_seen.extend(x.text() for x in self.actions())
-        return next((x for x in self.actions() if x.text() == "여기에 서명…"), None)
+        return next((x for x in self.actions() if x.text() == "여기에 서명"), None)
     QMenu.exec = _pick_sign_here
     picked["text"] = "그림 없이"
     try:
         mw._on_viewer_context_menu(gpos); spin(0.5)
     finally:
         QMenu.exec = _orig_menu_exec
-    chk("여기에 서명…" in labels_seen, "I1 본문 우클릭 메뉴에 '여기에 서명…'", str(labels_seen[:8]))
+    chk("여기에 서명" in labels_seen, "I1 본문 우클릭 메뉴에 '여기에 서명'(261107-2 '…' 뗌)", str(labels_seen[:8]))
     here_plain, here = here, confirm(mw, picked)
     dh = fitz.open(str(here))
     ws = [w.rect for w in dh[0].widgets()]

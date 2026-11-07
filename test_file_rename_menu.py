@@ -179,36 +179,41 @@ try:
     # ── D. 우클릭 메뉴 ───────────────────────────────────────────────
     seen = {}
 
-    def fake_menu_exec(menu, *a, **k):
-        seen["texts"] = [x.text().split("\t")[0] for x in menu.actions()]  # 261017-1: 메뉴 글의 '\t' 뒤는 단축키 칸(디자인 SOT §2.9.2) — 이름만 본다
-        want = seen.get("pick")
+    def _find(menu, want):
+        """하위(저장 ▸ 등)까지 — 하위 메뉴를 여는 줄 자체는 고르지 않는다."""
         for x in menu.actions():
-            if want and x.text().split("\t")[0] == want:
+            if x.menu() is not None:
+                r = _find(x.menu(), want)
+                if r is not None:
+                    return r
+            elif want and x.text().split("	")[0] == want:
                 return x
         return None
+
+    def fake_menu_exec(menu, *a, **k):
+        seen["texts"] = [x.text().split("	")[0] for x in menu.actions()]  # 261017-1: 메뉴 글의 '	' 뒤는 단축키 칸(디자인 SOT §2.9.2) — 이름만 본다
+        seen["menu"] = menu
+        return _find(menu, seen.get("pick"))
     QMenu.exec = fake_menu_exec
     bt.btn_edit.setChecked(True); spin(3)
     f0 = bt.tree.topLevelItem(0)
     pos = bt.tree.visualItemRect(f0).center()
     bt._on_tree_context_menu(pos)
     t = [x for x in seen.get("texts", []) if x]
-    # 261014-1(사용자 요청): 파일 그룹(탐색기·새 폴더·복사·이동·이름 변경·삭제) / 저장 그룹 / 보기 그룹(2단 보기·펼치기)
-    want_order = ["인쇄…", "파일 탐색기 열기", "새 폴더 만들기...",   # 261105-12: 맨 위 인쇄 "파일 복사 (1개)", "파일 이동 (1개)",
-                  "파일·책갈피 이름 변경", "파일·책갈피 삭제", "저장", "다른 이름으로 저장...",
-                  "평탄화해서 내보내기...", "2단 보기", "책갈피 모두 펼치기", "책갈피 모두 접기"]
+    # 261014-1 → 261107-2(디자인 SOT §2.9.8): 인쇄 / 복사 / 파일 / 저장 ▸ / 보기 / 도구 / 끝
+    want_order = ["인쇄", "경로 복사", "파일 탐색기 열기", "새 폴더 만들기", "폴더로 복사", "폴더로 이동",
+                  "파일·책갈피 이름 변경", "파일·책갈피 삭제", "저장", "2단 보기", "책갈피 모두 펼치기", "책갈피 모두 접기"]
     pos_of = [t.index(w) if w in t else -1 for w in want_order]
-    chk(-1 not in pos_of and pos_of == sorted(pos_of), "D 메뉴 순서(사용자 지시)", str(t))
+    chk(-1 not in pos_of and pos_of == sorted(pos_of), "D 메뉴 순서(사용자 지시 → 261107-2 한 틀)", str(t))
     raw = seen.get("texts", [])
     try:
-        i_rn, i_sv, i_fl, i_2 = (raw.index("파일·책갈피 이름 변경"), raw.index("저장"),
-                                 raw.index("평탄화해서 내보내기..."), raw.index("2단 보기"))
-        # 261016-1(마스터 §4.7.13, 사용자 지시): 저장 그룹 끝에 변환·용량 줄이기·개인정보 지우기 — OCR 은 '책갈피 생성' 아래
-        extras = ["변환...", "용량 줄여 내보내기...", "개인정보 지우고 별도 저장...", "전달..."]   # 261105-9 전달
-        i_end = i_fl + 1 + len(extras)
-        chk(raw[i_rn + 2] == "" and i_sv == i_rn + 3 and raw[i_fl + 1:i_end] == extras and raw[i_end] == ""
-            and i_2 == i_end + 1,
-            "D 파일 그룹 / 저장 그룹 / 보기 그룹이 구분선으로 나뉜다", str(raw))
-    except ValueError:
+        i_dl, i_sv, i_2 = raw.index("파일·책갈피 삭제"), raw.index("저장"), raw.index("2단 보기")
+        sub = [x.text().split("	")[0] for x in seen["menu"].actions()[i_sv].menu().actions()]
+        chk(raw[i_dl + 1] == "" and i_sv == i_dl + 2 and raw[i_sv + 1] == "" and i_2 == i_sv + 2
+            and sub == ["저장", "다른 이름으로 저장", "", "평탄화 사본", "용량 줄인 사본", "개인정보 지운 사본", "전달 묶음", "",
+                        "PDF 만들기", "변환"],
+            "D 파일 묶음 / 저장 ▸ / 보기 묶음이 구분선으로 나뉘고 저장 ▸ 안 차례", str((raw, sub)))
+    except (ValueError, AttributeError, IndexError):
         chk(False, "D 그룹 구분", str(raw))
     chk("이름 변경" not in t and "삭제" not in t and "파일 폴더 열기" not in t and "일반뷰어용으로 저장 (꾸밈·사진 굽기)..." not in t
         and "저장(일반뷰어용)..." not in t and "저장(PolyPDF용)" not in t,
@@ -224,13 +229,13 @@ try:
     called = []
     real_op_save = bt._op_save
     bt._op_save = lambda file_path=None: called.append(file_path)
-    for pick in ("다른 이름으로 저장...", "저장", "평탄화해서 내보내기..."):
+    for pick in ("다른 이름으로 저장", "저장", "평탄화 사본"):
         seen["pick"] = pick
         bt._on_tree_context_menu(bt.tree.visualItemRect(f1).center())
+        spin(3)                                     # 일은 메뉴가 닫힌 뒤(singleShot)
     bt._op_save = real_op_save
     seen["pick"] = None
-    # '다른 이름으로' 도 같은 저장 함수에 깃발만 세워 들어간다(§4.7.13) — 그래서 두 번
-    chk(got.get("as") == f1_path and got.get("flat") == f1_path and called == [f1_path, f1_path],
+    chk(got.get("as") == f1_path and got.get("flat") == f1_path and called == [f1_path, f1_path],   # '다른 이름으로' 도 같은 저장 함수에 깃발만(§4.7.13)
         "D 저장 셋이 모두 **누른 그 파일**에 작용한다", f"{got} {called}")
 
     # 본문이 아닌 파일을 '저장(PolyPDF용)' 하면 본문의 쪽 편집을 가져가지 않는다
@@ -264,7 +269,7 @@ try:
 
     # 파일 메뉴 이름도 같다(사용자 결정)
     labels = [a.text() for a in mw.menuBar().actions()[0].menu().actions()]
-    chk(all(x in labels for x in ("다른 이름으로 저장...", "저장", "평탄화해서 내보내기...")),
+    chk(all(x in labels for x in ("다른 이름으로 저장", "저장", "평탄화 사본")),      # 261107-2·-4: 우클릭 저장 ▸ 와 같은 이름('…' 없음)
         "D 파일 메뉴도 같은 이름", str(labels))
 
     # ── F. 폴더 색인이 도는 중의 이름 변경(261012-13) ──────────────────────

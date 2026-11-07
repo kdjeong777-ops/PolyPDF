@@ -267,11 +267,12 @@ try:
     def _menu_labels(edit_on):
         """우클릭 메뉴를 실제로 만들어 항목 이름을 본다(만들고 곧바로 닫는다)."""
         from PyQt6.QtCore import QTimer, QPoint
+        from PyQt6.QtWidgets import QMenu
         pt.set_edit_mode(edit_on)
         out = {}
         def _grab():
             for w in QApplication.topLevelWidgets():
-                if w.__class__.__name__ == "QMenu" and w.isVisible():
+                if isinstance(w, QMenu) and w.isVisible():          # 261107-2: 우클릭 메뉴는 QMenu 의 하위 클래스(ctx_menu.CtxMenu)
                     out["items"] = [(a.text(), a.isEnabled()) for a in w.actions()]
                     w.close()
         QTimer.singleShot(0, _grab)

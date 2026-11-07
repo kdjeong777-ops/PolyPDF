@@ -55,15 +55,29 @@ seen = {"texts": [], "pick": None}
 _orig_exec = QMenu.exec
 
 
+def _all(menu):
+    """하위(저장 ▸ 등)까지 — 하위를 여는 줄 자체는 빼고(261107-2)."""
+    out = []
+    for x in menu.actions():
+        if x.isSeparator():
+            continue
+        if x.menu() is not None:
+            out.extend(_all(x.menu()))
+        else:
+            out.append(x)
+    return out
+
+
 def fake_exec(self, *a, **k):
     acts = [x for x in self.actions() if not x.isSeparator()]
     seen["texts"] = [x.text().split("\t")[0] for x in acts]
+    seen["all"] = [x.text().split("\t")[0] for x in _all(self)]
     pick = seen["pick"]
     seen["pick"] = None
     if pick:
-        for x in acts:
+        for x in _all(self):
             if x.text().split("\t")[0] == pick:
-                return x
+                return x                   # 메뉴(ctx_menu.CtxMenu.exec)가 눌러 준다
     return None
 
 
@@ -102,18 +116,19 @@ try:
     # B — PDF 모드
     pump(lambda: node("c 문서.pdf") is not None)
     tx = tree_menu("c 문서.pdf")
-    chk("책갈피 생성" in tx and "평탄화해서 내보내기..." in tx and "사진 복사" not in tx, "B PDF 행 메뉴는 종전 그대로", str(tx))
+    chk("책갈피 생성" in tx and "평탄화 사본" in seen["all"] and "사진 복사" not in tx, "B PDF 행 메뉴는 PDF 항목(평탄화 사본은 저장 ▸ 안, 261107-2)", str(tx))
 
     # A — 사진 모드
     mw._set_photo_mode(True)
     pump(lambda: node("a 가로.jpg") is not None and node("b 가로.jpg") is not None and node("c3 가로.jpg") is not None)
     bt.set_sort_mode(bt.SORT_NAME); pump()
     tx = tree_menu("a 가로.jpg")
-    chk(tx[:1] == ["인쇄…"], "A 사진 행 메뉴 맨 위 '인쇄…'(261105-12)", str(tx[:3]))
-    for want in ("사진 복사", "경로 복사", "PDF 로 만들기...", "해시태그 편집...", "파일 탐색기 열기"):
+    chk(tx[:1] == ["인쇄"], "A 사진 행 메뉴 맨 위 '인쇄'(261105-12 — 261107-2 '…' 뗌)", str(tx[:3]))
+    for want in ("사진 복사", "경로 복사", "해시태그 편집", "파일 탐색기 열기"):
         chk(want in tx, "A 사진 행 메뉴에 '%s'" % want, str(tx))
-    for gone in ("저장", "평탄화해서 내보내기...", "변환...", "책갈피 생성", "일괄 OCR", "책갈피 모두 펼치기", "개인정보 지우고 별도 저장..."):
-        chk(gone not in tx, "A 사진 행 메뉴에 '%s' 없음" % gone, str(tx))
+    chk("PDF 만들기" in seen["all"], "A 사진 행 저장 ▸ 에 'PDF 만들기'(261107-2)", str(seen["all"]))
+    for gone in ("다른 이름으로 저장", "평탄화해서 내보내기...", "책갈피 생성", "일괄 OCR", "책갈피 모두 펼치기", "용량 줄인 사본", "전달 묶음"):
+        chk(gone not in seen["all"], "A 사진 행 메뉴에 '%s' 없음" % gone, str(seen["all"]))
     bt._edit_mode_saved = bt._edit_mode
     bt._edit_mode = True
     bt.tree.clearSelection()
@@ -121,7 +136,7 @@ try:
     it = node("a 가로.jpg")
     bt._on_tree_context_menu(bt.tree.visualItemRect(it).center())
     tx = list(seen["texts"])
-    chk("고른 사진 2장으로 PDF 만들기..." in tx and not any("병합" in t for t in tx), "A 여러 장 — PDF 만들기(병합 없음)", str(tx))
+    chk("고른 사진 2장으로 PDF 만들기" in tx and not any("병합" in t for t in tx), "A 여러 장 — PDF 만들기(병합 없음)", str(tx))
     bt._edit_mode = bt._edit_mode_saved
     bt.tree.clearSelection()                       # 책갈피창 여러 장 고르기를 풀어 썸네일 줄이 폴더 전체(D3)
 
@@ -142,17 +157,17 @@ try:
     chk(pump(lambda: len(strip._done) >= 2, timeout=8), "D 썸네일 다 만듦")
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     tx = list(seen["texts"])
-    chk(tx[:2] == ["인쇄…", "열기"], "D 썸네일 줄 메뉴 맨 위 '인쇄…'(261105-16)", str(tx[:3]))
+    chk(tx[:2] == ["인쇄", "사진 복사"] and "열기" not in tx, "D 썸네일 줄 메뉴 맨 위 '인쇄'(261105-16), '열기' 없음(261107-2)", str(tx[:3]))
     printed = []
     _orig_pp = mw._photo_print
     mw._photo_print = lambda preset_scope=None, paths=None: printed.append(list(paths or []))
-    seen["pick"] = "인쇄…"
+    seen["pick"] = "인쇄"
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
-    chk(printed and printed[-1] == [b], "D 썸네일 '인쇄…' — 누른 사진을 사진 인쇄 길로(_photo_print paths)", str(printed))
-    for want in ("열기", "왼쪽으로 90° 돌리기", "오른쪽으로 90° 돌리기", "사진 복사", "경로 복사", "파일 탐색기 열기", "PDF 로 만들기...",
-                 "줄의 사진 3장으로 PDF 만들기..."):
-        chk(want in tx, "D 썸네일 줄 메뉴에 '%s'" % want, str(tx))
-    seen["pick"] = "오른쪽으로 90° 돌리기"
+    chk(printed and printed[-1] == [b], "D 썸네일 '인쇄' — 누른 사진을 사진 인쇄 길로(_photo_print paths)", str(printed))
+    for want in ("왼쪽 90° 회전", "오른쪽 90° 회전", "사진 복사", "경로 복사", "파일 탐색기 열기", "PDF 만들기",
+                 "줄의 사진 3장 모두로 PDF 만들기"):
+        chk(want in seen["all"], "D 썸네일 줄 메뉴에 '%s'" % want, str(seen["all"]))
+    seen["pick"] = "오른쪽 90° 회전"
     strip.menuRequested.emit(b, QPoint(10, 10))
     pump(lambda: b in strip._done, timeout=5); pump(timeout=0.5)
     st = mw._ensure_page_meta_store()
@@ -170,17 +185,17 @@ try:
     # E
     mw._photo_context_menu(QPoint(10, 10))
     tx = list(seen["texts"])
-    for want in ("사진 복사", "경로 복사", "파일 탐색기 열기", "사진 정보...", "PDF 로 만들기...", "왼쪽으로 90° 돌리기"):
-        chk(want in tx, "E 본문 사진 메뉴에 '%s'" % want, str(tx))
+    for want in ("사진 복사", "경로 복사", "파일 탐색기 열기", "사진 정보", "PDF 만들기", "왼쪽 90° 회전"):
+        chk(want in seen["all"], "E 본문 사진 메뉴에 '%s'" % want, str(seen["all"]))
     for gone in ("쪽 맞춤", "폭 맞춤", "원래 크기 (100%)"):           # 261105-16 — 맞춤은 창 아래 콤보
         chk(gone not in tx, "E 본문 사진 메뉴에 '%s' 없음(261105-16)" % gone, str(tx))
-    chk("인쇄…" in tx and "사진 복사" in tx and tx.index("인쇄…") + 1 == tx.index("사진 복사"),
-        "E '인쇄…' 가 '사진 복사' 바로 위(261105-16)", str(tx))
+    chk("인쇄" in tx and "사진 복사" in tx and tx.index("인쇄") + 1 == tx.index("사진 복사"),
+        "E '인쇄' 가 '사진 복사' 바로 위(261105-16)", str(tx))
 
     # F
     got = []
     mw.action_image_to_pdf = lambda initial_paths=None: got.append(list(initial_paths or []))
-    seen["pick"] = "줄의 사진 3장으로 PDF 만들기..."
+    seen["pick"] = "줄의 사진 3장 모두로 PDF 만들기"
     strip.menuRequested.emit(a, QPoint(10, 10)); pump()
     chk(got and len(got[-1]) == 3, "F 줄 전체로 PDF 만들기 — 이미지 → PDF 창에 세 장", str(got))
 
@@ -201,16 +216,16 @@ try:
     chk(Path(mw.main_view.current_file()).name == "a 가로.jpg", "G Ctrl+클릭은 본문을 바꾸지 않는다", str(mw.main_view.current_file()))
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     tx = list(seen["texts"])
-    chk("고른 사진 3장으로 PDF 만들기..." in tx and "고른 사진 3장 오른쪽으로 90° 돌리기" in tx, "G 고른 칸 우클릭 — 고른 사진 모두에", str(tx))
-    chk(tx[:1] == ["인쇄 (3장)…"], "G 고른 칸 우클릭 맨 위 '인쇄 (3장)…'(261105-16)", str(tx[:2]))
-    seen["pick"] = "인쇄 (3장)…"
+    chk("고른 사진 3장으로 PDF 만들기" in tx and "오른쪽 90° 회전" in tx, "G 고른 칸 우클릭 — 고른 사진 모두에", str(tx))
+    chk(tx[:1] == ["인쇄 (3장)"], "G 고른 칸 우클릭 맨 위 '인쇄 (3장)'(261105-16)", str(tx[:2]))
+    seen["pick"] = "인쇄 (3장)"
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
-    chk(printed and sorted(printed[-1]) == sorted([a, b, c3]), "G '인쇄 (3장)…' — 고른 세 장을 사진 인쇄로", str(printed[-1:]))
+    chk(printed and sorted(printed[-1]) == sorted([a, b, c3]), "G '인쇄 (3장)' — 고른 세 장을 사진 인쇄로", str(printed[-1:]))
     mw._photo_print = _orig_pp
-    seen["pick"] = "고른 사진 3장으로 PDF 만들기..."
+    seen["pick"] = "고른 사진 3장으로 PDF 만들기"
     strip.menuRequested.emit(b, QPoint(10, 10)); pump()
     chk(got and sorted(got[-1]) == sorted([a, b, c3]), "G 고른 세 장으로 PDF 만들기", str(got[-1:]))
-    seen["pick"] = "고른 사진 3장 오른쪽으로 90° 돌리기"
+    seen["pick"] = "오른쪽 90° 회전"
     strip.menuRequested.emit(b, QPoint(10, 10)); pump(timeout=1.0)
     chk(st.photo_rotation(c3) == 90 and st.photo_rotation(a) == 90, "G 고른 사진 모두 돌린다", "%s %s" % (st.photo_rotation(a), st.photo_rotation(c3)))
     chk(len(strip.selected_paths()) == 3, "G 지금 사진을 다시 열어도 고른 것이 남는다", str(strip.selected_paths()))

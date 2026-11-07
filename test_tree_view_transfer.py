@@ -152,14 +152,14 @@ chk(nd is not None and nd.exists() and nd.name == "새자료", "④ 새 폴더 �
 menu = QMenu()
 node = next(iter(bt._iter_file_nodes()))
 bt.tree.setCurrentItem(node); node.setSelected(True)
-bt._add_transfer_submenu(menu, "파일 복사 (1개)", [node], False)
+bt._add_transfer_submenu(menu, "폴더로 복사", [node], False)
 sub = [ac.menu() for ac in menu.actions() if ac.menu()][0]
 labels = [ac.text() for ac in sub.actions() if ac.text()]
 chk(any("sub_b" in s for s in labels), "④ 서브메뉴에 하위 폴더 후보", f"{labels[:4]}")
-chk("새 폴더 만들기..." in labels and "다른 폴더 선택..." in labels,
+chk("새 폴더 만들기" in labels and "다른 폴더 선택" in labels,
     "④ 서브메뉴에 '새 폴더 만들기'·'다른 폴더 선택'")
 # 260901-4: 두 항목이 **맨 위** 두 줄
-chk(labels[:2] == ["새 폴더 만들기...", "다른 폴더 선택..."],
+chk(labels[:2] == ["새 폴더 만들기", "다른 폴더 선택"],
     "④ '새 폴더 만들기'·'다른 폴더 선택'이 맨 위", f"{labels[:3]}")
 
 # 260901-4: 기준 폴더 = 선택한 파일이 있는 세부 폴더
@@ -299,7 +299,7 @@ bt._on_tree_context_menu(bt.tree.visualItemRect(ft).center())
 chk("책갈피 편집" not in captured["labels"] and "책갈피 생성" in captured["labels"],
     "⑨ 파일 우클릭 — '책갈피 편집' 삭제(생성은 유지)", f"{captured['labels'][:6]}")
 bt._on_tree_context_menu(bt.tree.visualItemRect(bms[0]).center())
-chk("책갈피 수정..." in captured["labels"], "⑨ 책갈피 우클릭 — '책갈피 수정...' 추가", f"{captured['labels'][:4]}")
+chk("책갈피 수정" in captured["labels"], "⑨ 책갈피 우클릭 — '책갈피 수정' 추가", f"{captured['labels'][:4]}")
 
 # ▲▼ 단일 이동 후 커서 유지
 bt.tree.clearSelection(); bt.tree.setCurrentItem(bms[0]); bms[0].setSelected(True)

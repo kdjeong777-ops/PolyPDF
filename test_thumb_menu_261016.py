@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """261016-1: 책갈피창·썸네일 우클릭 메뉴 이름·차례, '스크린샷 붙여넣기' (마스터 §4.7.7·§4.7.11·§4.7.13, 사용자 지시).
 
-A. 책갈피창 파일 행 — 저장 그룹: … 평탄화해서 내보내기 · 변환(하위 메뉴 없음, 261025-5 이름) · 용량 줄여 내보내기 ·
-   개인정보 지우고 별도 저장 / 'OCR로 글자층 생성...' 은 '책갈피 생성' 바로 아래 / 옛 이름 없음
-   A5 '변환...' 을 누르면 변환 창이 형식 없이(창에서 고른다)
+A. 책갈피창 파일 행 — 저장 ▸(261107-2): 저장 · 다른 이름으로 저장 ─ 평탄화 사본 · 용량 줄인 사본 ·
+   개인정보 지운 사본 · 전달 묶음 ─ PDF 만들기 · 변환(하위 메뉴 없음) / 도구 맨 앞 OCR 로 읽기 · OCR 로 글자층 생성 · 일괄 OCR / 옛 이름 없음
+   A5 '변환' 을 누르면 변환 창이 형식 없이(창에서 고른다)
 B. 썸네일 우클릭(편집 모드, 붙일 것 없음) — 그룹과 차례가 사용자 지시대로, 붙여넣기 셋은 **끈 채로** 보인다
 C. 쪽 복사 · 스크린샷 컷 · 클립보드 그림이 있으면 붙여넣기 셋이 켜진다 · 편집 모드가 아니면 보이되 꺼진다
 D. '스크린샷 붙여넣기' 를 누르면 스트립의 그림 컷들이 누른 썸네일 아래 새 쪽으로(실제 처리기 — 미저장 끼운 쪽)
@@ -37,16 +37,37 @@ def spin(sec=0.2):
         app.processEvents(); time.sleep(0.01)
 
 
-seen, pick = [], {"t": None, "trigger": False}
+seen, pick = [], {"t": None}
+
+
+subs = {}
+
+
+def _rows(menu):
+    return [("-", True, False) if x.isSeparator() else (x.text().split("\t")[0], x.isEnabled(), x.menu() is not None)
+            for x in menu.actions()]
+
+
+def _find(menu, t):
+    """하위 메뉴(저장 ▸ 등)까지 — 하위를 여는 줄 자체는 고르지 않는다(261107-2)."""
+    for x in menu.actions():
+        if x.menu() is not None:
+            r = _find(x.menu(), t)
+            if r is not None:
+                return r
+        elif t and x.text().split("\t")[0].startswith(t):
+            return x
+    return None
 
 
 def fake_exec(self, *a, **k):
-    seen.append([("-", True, False) if x.isSeparator() else (x.text().split("\t")[0], x.isEnabled(), x.menu() is not None)
-                 for x in self.actions()])
-    hit = next((x for x in self.actions() if pick["t"] and x.text().startswith(pick["t"])), None)
-    if hit is not None and pick["trigger"]:
-        hit.trigger()                      # triggered 로 잇는 항목(책갈피창 저장 그룹)
-    return hit
+    seen.append(_rows(self))
+    subs.clear()
+    for x in self.actions():
+        if x.menu() is not None:
+            subs[x.text().split("\t")[0]] = _rows(x.menu())
+    # 돌려준 항목은 메뉴(ctx_menu.CtxMenu.exec)가 눌러 준다 — triggered 로 잇는 항목도 같은 길
+    return _find(self, pick["t"])
 
 
 def labels(m):
@@ -90,21 +111,22 @@ try:
     bt._on_tree_context_menu(bt.tree.visualItemRect(anode).center()); spin(0.3)
     m = seen[-1] if seen else []
     L = labels(m)
-    chk(L[:2] == ["인쇄…", "-"], "A0 맨 위 '인쇄…'(261105-12, 마스터 §4.7.13)", str(L[:3]))
-    i_fl = L.index("평탄화해서 내보내기...") if "평탄화해서 내보내기..." in L else -1
-    chk(i_fl >= 0 and L[i_fl + 1:i_fl + 6] == ["변환...", "용량 줄여 내보내기...", "개인정보 지우고 별도 저장...", "전달...", "-"],
-        "A1 저장 그룹 끝 — 변환 · 용량 줄여 내보내기 · 개인정보 지우고 별도 저장 · 전달(261105-9)", str(L))
-    conv = [x for x in m if x[0] == "변환..."]
-    chk(conv and conv[0][2] is False, "A2 '변환...' 에 하위 메뉴가 없다", str(conv))
-    i_bc = L.index("책갈피 생성") if "책갈피 생성" in L else -1
-    chk(i_bc >= 0 and L[i_bc + 1] == "OCR로 글자층 생성...", "A3 'OCR로 글자층 생성...' 은 '책갈피 생성' 바로 아래", str(L))
-    old = ["변환", "OCR 글자층 넣기...", "PDF 압축...", "가림(개인정보 지우기)..."]
-    chk(not any(o in L for o in old), "A4 옛 이름이 남지 않는다", str([o for o in old if o in L]))
+    chk(L[:2] == ["인쇄", "-"], "A0 맨 위 '인쇄'(261105-12, 마스터 §4.7.13 — 261107-2 '…' 뗌)", str(L[:3]))
+    sv = labels(subs.get("저장", []))
+    chk(sv == ["저장", "다른 이름으로 저장", "-", "평탄화 사본", "용량 줄인 사본", "개인정보 지운 사본", "전달 묶음", "-",
+               "PDF 만들기", "변환"], "A1 저장 ▸ — 저장 · 다른 이름 ─ 사본 넷 ─ PDF 만들기 · 변환(261107-2, 디자인 SOT §2.9.8)", str(sv))
+    conv = [x for x in subs.get("저장", []) if x[0] == "변환"]
+    chk(conv and conv[0][2] is False, "A2 '변환' 에 하위 메뉴가 없다", str(conv))
+    i_oc = L.index("OCR 로 읽기") if "OCR 로 읽기" in L else -1
+    chk(i_oc >= 0 and L[i_oc + 1:i_oc + 4] == ["OCR 로 글자층 생성", "일괄 OCR", "책갈피 생성"],
+        "A3 도구 맨 앞 OCR 셋 — 읽기 · 글자층 생성 · 일괄 OCR, 그다음 책갈피 생성(261107-2)", str(L))
+    old = ["변환...", "OCR 글자층 넣기...", "PDF 압축...", "가림(개인정보 지우기)...", "평탄화해서 내보내기...", "용량 줄여 내보내기..."]   # 옛 이름들
+    chk(not any(o in L + sv for o in old), "A4 옛 이름이 남지 않는다", str([o for o in old if o in L + sv]))
     opened = []
     mw.action_convert = lambda files=None, fmt=None, pages=None: opened.append((files, fmt))
-    pick["t"], pick["trigger"] = "변환", True
+    pick["t"] = "변환"
     bt._on_tree_context_menu(bt.tree.visualItemRect(anode).center()); spin(0.3)
-    pick["t"], pick["trigger"] = None, False
+    pick["t"] = None
     chk(opened and opened[0][0] == [str(a)] and not opened[0][1], "A5 누르면 변환 창이 형식 없이(그 파일)", str(opened))
 
     # B — 썸네일, 붙일 것 없음
@@ -117,14 +139,16 @@ try:
     pt._on_list_menu(r1); spin(0.1)
     m = seen[-1]
     L = labels(m)
-    want = ["인쇄 (1쪽)…", "복사 (1쪽)", "붙여넣기", "스크린샷으로 복사 (1쪽)", "스크린샷 붙여넣기", "클립보드 붙여넣기",
-            "새 페이지 넣기 — p.2 뒤",                                   # 261021-3(§4.7.11): 클립보드 붙여넣기 아래
-            "삭제 (1쪽)", "저장", "-",                                  # 261016-2: '인쇄…' 는 인쇄 창, '삭제' 아래 '저장'
-            "왼쪽 90° 회전 (1쪽)", "오른쪽 90° 회전 (1쪽)", "-",
-            "크롭… (1쪽)", "크롭 해제 (1쪽)", "숨김 (1쪽)", "숨김 해제 (1쪽)", "-",
-            "책갈피 추가 (p.2)", "하이퍼링크 등록… (p.2)", "-"]
-    chk(L[:len(want)] == want, "B1 썸네일 우클릭 — 그룹·차례가 사용자 지시대로", str(L))
-    chk(any(t.startswith("선택한 쪽 변환") for t in L[len(want):]), "B2 지시에 없던 '선택한 쪽 변환 ▸' 은 맨 아래 그룹에 남는다", str(L))
+    # 261107-2(디자인 SOT §2.9.8): 인쇄 / 복사 / 모양(삭제는 끝) / 파일 ▸ / 저장 ▸ / 보기 / 도구
+    want = ["인쇄 (1쪽)", "-",
+            "복사 (1쪽)", "스크린샷으로 복사 (1쪽)", "붙여넣기", "스크린샷 붙여넣기", "클립보드 붙여넣기", "-",
+            "새 페이지 넣기 — p.2 뒤", "왼쪽 90° 회전 (1쪽)", "오른쪽 90° 회전 (1쪽)", "180° 회전 (1쪽)",
+            "크롭 (1쪽)", "크롭 해제 (1쪽)", "숨김 (1쪽)", "숨김 해제 (1쪽)", "삭제 (1쪽)", "-",
+            "파일", "-", "저장", "-", "2단 보기", "발표보기", "-",
+            "OCR 로 읽기", "서명", "문서 정보", "책갈피 추가 (p.2)", "하이퍼링크 등록 (p.2)"]
+    chk(L == want, "B1 썸네일 우클릭 — 묶음·차례(261107-2 한 틀)", str(L))
+    chk(any(t.startswith("변환") and has_sub for t, _e, has_sub in subs.get("저장", [])),
+        "B2 '변환 ▸'(고른 쪽) 은 저장 ▸ 안", str(subs.get("저장")))
     en = {t: e for t, e, _s in m}
     chk(en.get("붙여넣기") is False and en.get("스크린샷 붙여넣기") is False and en.get("클립보드 붙여넣기") is False,
         "B3 붙일 것이 없으면 붙여넣기 셋은 **보이되 꺼져** 있다", str(en))

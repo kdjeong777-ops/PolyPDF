@@ -74,7 +74,7 @@ try:
     # E
     mw._on_bookmark_activated(P("가.jpg"), 0); pump(timeout=1.0)
     mw._photo_strip.menuRequested.emit(P("가.jpg"), QPoint(5, 5)); pump()
-    chk("일괄 작업..." in menu_texts, "E 썸네일 줄 메뉴에 '일괄 작업...'", str(menu_texts))
+    chk("일괄 작업" in menu_texts, "E 썸네일 줄 메뉴에 '일괄 작업'", str(menu_texts))
 
     # C (이름 바꾸기 전에 — 가.jpg 를 돌려 둔다)
     mw._photo_rotate(+90); pump(timeout=0.5)

@@ -56,7 +56,7 @@ class PhotoMixin:
         lay.addStretch(1)                         # 빈 칸은 단추 뒤에서 늘어난다 — 탭 줄 가운데는 그대로(디자인 SOT §2.9.3)
         self._photo_btn = b
         self.bookmark_tree.filesListed.connect(self._photo_on_listed)
-        self.bookmark_tree.photo_menu_extra = self._photo_xfer_menu   # 4.41 — 책갈피창 사진 줄의 폴더로 복사·이동
+        self.bookmark_tree.photo_menu_fill = self._photo_menu_fill   # 4.20(261107-2) — 사진 세 메뉴 한 함수(아래 창은 app 이 잇는다)
         from viewer import photo_doc
         photo_doc.set_decode_requester(self._photo_request_decode)
         photo_doc.set_rotation_provider(self._photo_rot_for)     # 261104-3: 보기 회전(사이드카 `photo_rot`)
@@ -2502,93 +2502,210 @@ class PhotoMixin:
             bar.setEnabled(bool(ok))
             bar.setToolTip("" if ok else tr("열 수 없는 파일에는 꾸밀 수 없습니다."))
 
-    def _photo_context_menu(self, global_pos):
-        """사진 본문 우클릭 — 돌리기·맞춤(4.16). PDF 의 쪽 메뉴(쪽 번호·숨김·책갈피 …)는 사진에 뜻이 없다."""
-        from PyQt6.QtWidgets import QMenu
-        mv = self.main_view
-        menu = QMenu(self)
-        a_l = menu.addAction(self._kt(tr("왼쪽으로 90° 돌리기"), "rotate_left"))
-        a_r = menu.addAction(self._kt(tr("오른쪽으로 90° 돌리기"), "rotate_right"))
-        a_180 = menu.addAction(tr("180° 돌리기"))
-        a_0 = menu.addAction(tr("원래 방향"))
-        a_0.setEnabled(self._photo_rot_for(mv.current_file()) != 0)
-        if self._photo_is_broken():                      # 4.18 — 열 수 없는 파일은 돌리지 않는다
-            for a in (a_l, a_r, a_180, a_0):
-                a.setEnabled(False)
-        a_save = menu.addAction(tr("방향 저장 (원본 JPEG)"))       # 4.17 — 돌린 JPEG 일 때만
-        a_save.setEnabled(self._photo_rot_for(mv.current_file()) != 0
-                          and photo_io_is_jpeg(mv.current_file()) and not self.__dict__.get("_photo_orig_busy"))
-        a_crop = menu.addAction(tr("크롭..."))                     # 4.40(261105-4) — 보기 크롭, 원본 그대로
-        a_uncrop = menu.addAction(tr("크롭 해제"))
-        _ro = self._photo_is_broken() or self._photo_any_cached([mv.current_file()])
-        a_crop.setEnabled(not _ro)
-        a_uncrop.setEnabled(not _ro and bool(self._photo_crop_for(mv.current_file())))
-        menu.addSeparator()
-        # 261105-16(4.16·4.20, 사용자 지시): 맞춤(쪽·폭·원래 크기)은 이 메뉴에서 뺐다 — 창 아래 맞춤 콤보(`_photo_fit_combo`).
-        #   '인쇄…' 는 '사진 복사' 바로 위.
-        cur = mv.current_file()
-        broken = self._photo_is_broken()
-        extra = {}
-        for key, label in (("print", tr("인쇄…")), ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
-                           ("reveal", tr("파일 탐색기 열기")), ("info", tr("사진 정보...")),
-                           ("to_pdf", tr("PDF 로 만들기...")), ("flatten", tr("평탄화...")),
-                           ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))):
-            a = menu.addAction(label)
-            a.setEnabled(not broken or key in ("copy_path", "reveal"))
-            extra[a] = key
+    # ── 사진 세 메뉴 한 함수 — 책갈피창·썸네일 줄·본문(사진 보기 SOT §4.20, 디자인 SOT §2.9.8, 261107-2) ──────
+    def _photo_menu_fill(self, menu, paths, where: str, extra=None, *, ok: bool = True, all_paths=None) -> None:
+        """사진 메뉴를 PDF 메뉴와 같은 묶음 차례로 채운다 — `where` 는 'tree'·'strip'·'body'.
+        `extra` 는 책갈피창만의 줄(새 폴더·이름 변경·삭제·2단·즐겨찾기·해시태그·보기설정 — `BookmarkTree._photo_tree_extra`).
+        `ok` = 열 수 있는 사진(본문 깨진 파일·썸네일 머리 못 읽음이면 False — 경로 복사·탐색기만)."""
         from viewer import photo_device
-        if cur and photo_device.is_cached(cur):
-            a = menu.addAction(tr("PC 로 복사..."))          # 4.33 — 휴대 장치 사진
-            extra[a] = "copy_out"
-        if cur:
-            a = self._zip_pick_action(menu, [str(cur)])      # §4.24.1(261106-5) — zip 안 사진 풀기
+        from viewer.widgets.ctx_menu import add_save_menu
+        extra = extra or {}
+        mv = self.main_view
+        now = mv.current_file() if mv else None
+        photos = [str(p) for p in (paths or []) if p and self._is_photo_path(str(p))]
+        n = len(photos)
+        one = photos[0] if n == 1 else None
+        many = n > 1
+        cached = self._photo_any_cached(photos)
+        ro = cached or not ok
+        edit = self.bookmark_tree.is_edit_mode()
+        body = where == "body"
+
+        def act(text, cb, enabled=True, tip=None):
+            a = menu.addAction(text)
+            a.setEnabled(bool(enabled))
+            if tip:
+                a.setToolTip(tip)
+            if cb is not None:
+                a.triggered.connect(lambda _=False, f=cb: QTimer.singleShot(0, f))
+            return a
+        each = lambda f: (lambda ps=list(photos): [f(p) for p in ps])     # noqa: E731 — 여러 장이면 사진마다
+        # 인쇄 — 맨 위(261105-12·-16) · 여러 장이면 PDF 만들기도 한 번에
+        menu.group("print")
+        if photos:
+            act(self._kt(tr("인쇄"), "print") if body else (tr('인쇄 ({n}장)').format(n=n) if many else tr("인쇄")),
+                lambda ps=list(photos): self._photo_print(paths=ps), many or ok, tr("인쇄 창을 엽니다."))
+        if many:
+            act(tr('고른 사진 {n}장으로 PDF 만들기').format(n=n), lambda ps=list(photos): self._photo_action("to_pdf", ps))
+        # 복사
+        menu.group("copy")
+        if photos:
+            act(tr("사진 복사"), lambda p=photos[0]: self._photo_action("copy_image", [p]), bool(one) and ok,
+                None if one else tr("한 장을 고르면 복사합니다."))
+        act(tr("경로 복사"), lambda ps=list(paths or []): self._photo_action("copy_path", ps), bool(paths))
+        if body and one:
+            act(tr("텍스트 복사"), self._photo_copy_text, ok, tr("OCR 로 읽은 글에서 고른 블럭(없으면 사진 전체)의 글을 복사합니다."))
+            act(tr("블럭설정 후 텍스트 복사"), self._photo_arm_text, ok)
+            if edit:
+                self._ctx_paste_items(menu)                       # 꾸밈으로 붙이기(마스터 §4.7.20 과 같은 줄)
+        # 모양 — 회전·크롭·원본으로 되돌리기
+        if photos:
+            menu.group("shape")
+            rot_tip = None if not ro else tr("읽기 전용 사진은 돌릴 수 없습니다.")
+            act(self._kt(tr("왼쪽 90° 회전"), "rotate_left") if body else tr("왼쪽 90° 회전"),
+                each(lambda p: self._photo_rotate(-90, path=p)), not ro, rot_tip)
+            act(self._kt(tr("오른쪽 90° 회전"), "rotate_right") if body else tr("오른쪽 90° 회전"),
+                each(lambda p: self._photo_rotate(+90, path=p)), not ro, rot_tip)
+            act(tr("180° 회전"), each(lambda p: self._photo_rotate(180, path=p)), not ro, rot_tip)
+            act(tr("원래 방향"), each(lambda p: self._photo_rotate(absolute=0, path=p)),
+                not ro and any(self._photo_rot_for(p) for p in photos))
+            act(tr("크롭"), lambda p=photos[0]: self._photo_crop_dialog(p), bool(one) and not ro,
+                None if one else tr("한 장을 고르면 자릅니다."))
+            act(tr("크롭 해제"), each(lambda p: self._photo_set_crop(p, None)),
+                not ro and any(self._photo_crop_for(p) for p in photos))
+            a = self._photo_restore_action(menu, photos)          # §4.43(261106-18) — 백업이 있을 때만
             if a is not None:
-                extra[a] = "unzip"
-            a = self._photo_restore_action(menu, [str(cur)])  # §4.43(261106-18) — 원본으로 되돌리기(백업이 있을 때만)
-            if a is not None:
-                extra[a] = "restore"
-            self._photo_xfer_menu(menu, [str(cur)])          # 4.41 — 폴더로 복사·이동
-        _gps = (self.__dict__.get("_photo_info") or {}).get("gps")
-        if _gps and not broken:
-            a = menu.addAction(tr("지도에서 위치 보기"))      # 4.29 — GPS 가 있는 사진만
-            extra[a] = "map"
-        a_pair = None
+                a.triggered.connect(lambda _=False, ps=list(photos): QTimer.singleShot(0, lambda: self._photo_restore(ps)))
+        # 파일
+        menu.group("file")
+        first = (photos or [str(p) for p in (paths or []) if p] or [""])[0]
+        if first:
+            act(tr("파일 탐색기 열기"), lambda p=first: self._photo_action("reveal", [p]), not cached)
+        if extra.get("new_folder"):
+            act(tr("새 폴더 만들기"), extra["new_folder"])
+        self._photo_xfer_menu(menu, photos)                       # 4.41 — 폴더로 복사·이동
+        if photos:
+            ren = extra.get("rename") or (lambda p=photos[0]: self._photo_rename(p))
+            act(self._kt(tr("이름 변경"), "rename_item") if where == "tree" else tr("이름 변경"), ren,
+                bool(one) and not cached, None if one else tr("한 장을 고르면 이름을 바꿉니다."))
+        a = self._zip_pick_action(menu, photos)                   # §4.24.1(261106-5) — zip 안 사진 풀기
+        if a is not None:
+            a.triggered.connect(lambda _=False, ps=list(photos): QTimer.singleShot(0, lambda: self._zip_unpack_cached(ps)))
+        if any(photo_device.is_cached(p) for p in photos):
+            act(tr('PC 로 복사 ({n}장)').format(n=n) if many else tr("PC 로 복사"),
+                lambda ps=list(photos): self._photo_copy_out(ps))  # 4.33 — 휴대 장치 사진
+        if extra.get("delete"):
+            a = act(self._kt(tr("삭제"), "Del"), extra["delete"])  # 책갈피창 Del 과 같다
+        elif photos:
+            a = act(self._kt(tr('삭제 ({n}장)').format(n=n) if many else tr("삭제"), "Del"),
+                    lambda ps=list(photos): self._photo_delete(ps), edit and not cached)
+            if not edit:
+                a.setToolTip(tr("편집 모드에서 지울 수 있습니다."))
+        # 저장 ▸ — 글자 = 방향 저장(돌린 JPEG, 지금 사진), 할 수 없으면 하위를 연다
+        if photos:
+            can_orient = (bool(one) and bool(now) and os.path.normcase(str(now)) == os.path.normcase(one)
+                          and not ro and bool(self._photo_rot_for(one)) and photo_io_is_jpeg(one)
+                          and not self.__dict__.get("_photo_orig_busy"))
+            mk = [{"text": tr("PDF 만들기") + (" " + tr("({n}장)").format(n=n) if many else ""),
+                   "cb": lambda ps=list(photos): self._photo_action("to_pdf", ps), "enabled": many or ok}]
+            if all_paths and len(all_paths) > 1:
+                mk.append({"text": tr('줄의 사진 {n}장 모두로 PDF 만들기').format(n=len(all_paths)),
+                           "cb": lambda ps=list(all_paths): self._photo_action("to_pdf", ps)})
+            mk.append({"text": tr("변환"), "cb": None, "enabled": False})       # 형식 변환(261107-5)
+            add_save_menu(
+                menu,
+                save={"cb": self._photo_save_orientation, "enabled": can_orient,
+                      "tip": tr("방향 저장 — 보기에서 돌린 방향을 원본 JPEG 에 씁니다(지금 사진, 돌린 JPEG 일 때).")},
+                copies=[{"text": tr("평탄화 사본"), "cb": lambda p=photos[0]: self._photo_action("flatten", [p]),
+                         "enabled": bool(one) and not ro,
+                         "tip": tr("꾸밈·돌린 방향·자른 모양을 구운 새 그림 파일을 원본 옆에 만듭니다(원본은 그대로).")},
+                        {"text": tr("개인정보 지운 사본"), "cb": lambda ps=list(photos): self._photo_action("share_all", ps),
+                         "enabled": not ro,
+                         "tip": tr("촬영 정보·위치를 모두 지운 사본을 만듭니다(원본은 그대로).")}],
+                make=mk)
+        # 보기
+        menu.group("view")
+        if extra.get("split"):
+            act(extra["split"][0], extra["split"][1])
+        elif getattr(self, "_split_on", False):
+            act(tr("옆 창에 열기"), lambda: self._copy_pane_to(self._active_pane, 1 - self._active_pane))
+        else:
+            act(self._kt(tr("2단 보기"), "toggle_split"), self._view_as_split)
+        if photos:
+            act(self._kt(tr("발표보기"), "present") if body else tr("발표보기"),
+                lambda p=photos[0]: self._photo_open_then(p, self._open_presentation), ok or many)
         if getattr(self, "_split_on", False):
-            menu.addSeparator()
-            a_pair = menu.addAction(tr("2분할 함께 움직이기"))     # 4.28(261104-7 B3, §5.1 F3)
-            a_pair.setCheckable(True)
-            a_pair.setChecked(bool(self.__dict__.get("_photo_pair_on")))
-        menu.addSeparator()
-        a_del = menu.addAction(self._kt(tr("삭제"), "Del"))
-        a_del.setEnabled(self.bookmark_tree.is_edit_mode() and bool(cur) and not self._photo_any_cached([cur]))
-        if not self.bookmark_tree.is_edit_mode():
-            a_del.setToolTip(tr("편집 모드에서 지울 수 있습니다."))
-        chosen = menu.exec(global_pos)
-        if a_pair is not None and chosen is a_pair:
-            self._photo_pair_set(a_pair.isChecked())
+            a = menu.addAction(tr("2분할 함께 움직이기"))         # 4.28(261104-7 B3, §5.1 F3)
+            a.setCheckable(True)
+            a.setChecked(bool(self.__dict__.get("_photo_pair_on")))
+            a.triggered.connect(lambda chk=False: self._photo_pair_set(bool(chk)))
+        # 도구 — OCR 로 읽기(맨 앞) · 사진 정보 · 지도 · 일괄 작업 · 해시태그
+        if photos:
+            menu.group("tool")
+            act(tr("OCR 로 읽기"), lambda p=photos[0]: self._photo_open_then(p, self._photo_ocr_start), bool(one) and ok,
+                tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다.") if one else tr("한 장을 고르면 읽습니다."))
+            act(tr("사진 정보"), lambda p=photos[0]: self._photo_info_for(p), bool(one) and ok)
+            gps_ok = True
+            if body:
+                gps_ok = bool((self.__dict__.get("_photo_info") or {}).get("gps"))
+            act(tr('지도에서 위치 보기 ({n}장)').format(n=n) if many else tr("지도에서 위치 보기"),
+                lambda ps=list(photos): self._photo_action("map", ps), gps_ok and ok or many,
+                None if gps_ok else tr("이 사진에는 위치 정보가 없습니다."))
+            act(tr("일괄 작업"), lambda ps=list(photos): self._photo_batch_dialog(ps), not cached)
+            tags = extra.get("tags") or ((lambda p=photos[0]: self.bookmark_tree._edit_file_tags(p)) if one and not cached else None)
+            act(tr("해시태그 편집"), tags, tags is not None)
+        # 끝 — 즐겨찾기 · 보기설정 · (본문 편집) 입력 설정
+        menu.group("end")
+        act(tr("현재 폴더를 즐겨찾기에 추가"), extra.get("fav_folder") or self._add_current_folder_favorite)
+        fav_file = extra.get("fav_file") if where == "tree" else ((lambda p=one: self._add_file_favorite(p)) if one and not cached else None)
+        if fav_file is not None:
+            act(tr("현재 파일을 즐겨찾기에 추가"), fav_file)
+        if where == "tree" and extra.get("label_style"):
+            act(tr("보기설정"), extra["label_style"])          # 4.38(261104-13)
+        elif where == "strip":
+            act(tr("보기설정"), lambda: self._photo_label_dialog("strip"))
+        if body and edit:
+            act(tr("도형 입력 설정"), lambda: self._open_line_text_settings(tab="line"))
+            act(tr("글쓰기 입력 설정"), lambda: self._open_line_text_settings(tab="text"))
+
+    def _photo_open_then(self, path, fn) -> None:
+        """그 사진을 본문에 띄운 뒤 `fn`(썸네일·책갈피창 줄이 지금 사진이 아닐 때 — OCR 로 읽기·발표보기)."""
+        now = self.main_view.current_file() if self.main_view else None
+        if not now or os.path.normcase(str(now)) != os.path.normcase(str(path)):
+            self._on_bookmark_activated(str(path), 0)
+        QTimer.singleShot(0, fn)
+
+    def _photo_info_for(self, path, _tries: int = 0) -> None:
+        """'사진 정보' — 지금 사진이 아니면 먼저 띄우고, 정보(배경 `PhotoInfoWorker`)가 오면 창을 연다(3초까지 기다림)."""
+        now = self.main_view.current_file() if self.main_view else None
+        if _tries == 0 and (not now or os.path.normcase(str(now)) != os.path.normcase(str(path))):
+            self._on_bookmark_activated(str(path), 0)
+        info = self.__dict__.get("_photo_info") or {}
+        if info and os.path.normcase(str(info.get("path", ""))) == os.path.normcase(str(path)):
+            self._photo_info_dialog()
+        elif _tries < 30:
+            QTimer.singleShot(100, lambda: self._photo_info_for(path, _tries + 1))
+
+    def _photo_rename(self, path) -> None:
+        """썸네일·본문 '이름 변경' — 책갈피창의 그 줄 이름 칸을 연다(이름 변경 뒤 길은 마스터 §4.7.14 한 길)."""
+        bt = self.bookmark_tree
+        node = bt._file_node_for_path(str(path))
+        if node is None:
+            self.status.showMessage(tr("책갈피창 목록에 없는 사진은 이름을 바꿀 수 없습니다."), 4000)
             return
-        if chosen is a_del:
-            self._photo_delete([str(cur)])
+        bt.tree.setCurrentItem(node)
+        bt.tree.scrollToItem(node)
+        bt._edit_item(node)
+
+    def _photo_copy_text(self) -> None:
+        self._cancel_draw_tools()
+        if not self.main_view.copy_selection():
+            self.status.showMessage(tr("복사할 글이 없습니다 — 먼저 'OCR 로 읽기' 를 하세요."), 4000)
+
+    def _photo_arm_text(self) -> None:
+        self._cancel_draw_tools()
+        self.main_view.arm_text_selection()
+        self.status.showMessage(tr("블럭 좌상점을 누르고 우하점까지 드래그하면 그 영역 텍스트가 복사됩니다."), 5000)
+
+    def _photo_context_menu(self, global_pos):
+        """사진 본문 우클릭 — 사진 세 메뉴 한 함수(4.20). 맞춤(쪽·폭·원래 크기)은 창 아래 맞춤 콤보(4.16, 261105-16)."""
+        from viewer.widgets.ctx_menu import CtxMenu
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur:
             return
-        if chosen in extra:
-            self._photo_action(extra[chosen], [str(cur)])
-            return
-        if chosen is None:
-            return
-        if chosen is a_l:
-            self._photo_rotate(-90)
-        elif chosen is a_r:
-            self._photo_rotate(+90)
-        elif chosen is a_180:
-            self._photo_rotate(180)
-        elif chosen is a_0:
-            self._photo_rotate(absolute=0)
-        elif chosen is a_save:
-            self._photo_save_orientation()
-        elif chosen is a_crop:
-            self._photo_crop_dialog()
-        elif chosen is a_uncrop:
-            self._photo_set_crop(mv.current_file(), None)
+        menu = CtxMenu(self)
+        self._photo_menu_fill(menu, [str(cur)], "body", ok=not self._photo_is_broken())
+        menu.exec(global_pos)
 
     def _photo_sync_tree(self, path):
         """본문 사진이 바뀌면(썸네일 줄·넘김·검색·지운 뒤) 책갈피창의 그 줄을 고른다 — 신호 없이(다시 열지 않게).
@@ -2776,7 +2893,7 @@ class PhotoMixin:
         zp = self.__dict__.get("_photo_zip_src")
         if not cached or not zp:
             return None
-        a = menu.addAction(tr("고른 {n}장 풀기...").format(n=len(cached)) if len(cached) > 1 else tr("이 사진 풀기..."))
+        a = menu.addAction(tr("고른 {n}장 풀기").format(n=len(cached)) if len(cached) > 1 else tr("이 사진 풀기"))
         a.setToolTip(tr("zip 안 사진을 고른 폴더에 풉니다(원본 zip 은 그대로)."))
         return a
 
@@ -2853,7 +2970,7 @@ class PhotoMixin:
         pairs = self._photo_restore_pairs(paths)
         if not pairs:
             return None
-        a = menu.addAction(tr("원본으로 되돌리기 ({n}장)...").format(n=len(pairs)) if len(pairs) > 1 else tr("원본으로 되돌리기..."))
+        a = menu.addAction(tr("원본으로 되돌리기 ({n}장)").format(n=len(pairs)) if len(pairs) > 1 else tr("원본으로 되돌리기"))
         a.setToolTip(tr("모양 펴기로 바꾼 사진을 백업해 둔 원본으로 되돌립니다 — 지금 파일은 휴지통으로 갑니다."))
         return a
 
@@ -3075,8 +3192,8 @@ class PhotoMixin:
         self.status.showMessage(tr("사진을 복사했습니다: {name}").format(name=Path(path).name), 3000)
 
     def _photo_strip_menu(self, path: str, global_pos):
-        """썸네일 줄 우클릭(4.20) — 누른 사진에. 줄 전체로 PDF 만들기도."""
-        from PyQt6.QtWidgets import QMenu
+        """썸네일 줄 우클릭(4.20) — 누른 사진(고른 칸 위면 고른 사진 모두)에. 사진 세 메뉴 한 함수, 저장 ▸ 에 '줄의 사진 모두로 PDF'."""
+        from viewer.widgets.ctx_menu import CtxMenu
         from viewer.photo_io import oriented_size
         ok = bool(oriented_size(path)[0])
         strip = self._photo_strip_widget(create=False)
@@ -3084,79 +3201,9 @@ class PhotoMixin:
         sel = strip.selected_paths() if strip is not None else []
         many = path in sel and len(sel) > 1          # 고른 칸 위를 눌렀으면 고른 사진 모두에(사용자 지시 261104-3)
         targets = sel if many else [path]
-        menu = QMenu(self)
-        # 261105-16(4.20, 사용자 지시 '썸네일 옵션 제일 위에도 인쇄'): 맨 위 — 책갈피창 사진 행(261105-12)과 같은 길·같은 이름
-        a_print = menu.addAction(tr('인쇄 ({n}장)…').format(n=len(targets)) if many else tr("인쇄…"))
-        a_print.setEnabled(many or ok)
-        menu.addSeparator()
-        items = [("open", tr("열기")), (None, None),
-                 ("rot_l", tr("왼쪽으로 90° 돌리기")), ("rot_r", tr("오른쪽으로 90° 돌리기")), ("crop", tr("크롭...")), (None, None),
-                 ("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")), ("reveal", tr("파일 탐색기 열기")),
-                 ("map", tr("지도에서 위치 보기")), (None, None),             # 4.29(261105-17)
-                 ("to_pdf", tr("PDF 로 만들기...")), (None, None),
-                 ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
-        if many:
-            n = len(targets)
-            items = [("rot_l", tr('고른 사진 {n}장 왼쪽으로 90° 돌리기').format(n=n)),
-                     ("rot_r", tr('고른 사진 {n}장 오른쪽으로 90° 돌리기').format(n=n)), (None, None),
-                     ("copy_path", tr("경로 복사")), ("map", tr('지도에서 위치 보기 ({n}장)').format(n=n)), (None, None),
-                     ("to_pdf", tr('고른 사진 {n}장으로 PDF 만들기...').format(n=n)), (None, None),
-                     ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)"))]
-        acts = {}
-        for key, label in items:
-            if key is None:
-                menu.addSeparator()
-                continue
-            a = menu.addAction(label)
-            a.setEnabled(many or ok or key in ("open", "copy_path", "reveal", "map"))
-            acts[a] = key
-        a_all = None
-        if len(allp) > 1:
-            a_all = menu.addAction(tr('줄의 사진 {n}장으로 PDF 만들기...').format(n=len(allp)))
-        from viewer import photo_device
-        a_out = None
-        if any(photo_device.is_cached(p) for p in targets):
-            a_out = menu.addAction(tr('PC 로 복사 ({n}장)...').format(n=len(targets)) if many else tr("PC 로 복사..."))   # 4.33
-        a_unzip = self._zip_pick_action(menu, targets)            # §4.24.1(261106-5) — zip 안 사진만 골라서 풀기
-        a_restore = self._photo_restore_action(menu, targets)     # §4.43(261106-18) — 백업이 있을 때만
-        self._photo_xfer_menu(menu, targets)                     # 4.41(261105-5) — 폴더로 복사·이동
-        a_batch = menu.addAction(tr("일괄 작업..."))                 # 4.30(261104-7 B5, F7)
-        a_batch.setEnabled(not self._photo_any_cached(targets))
-        menu.addSeparator()
-        a_del = menu.addAction(self._kt(tr('삭제 ({n}장)').format(n=len(targets)) if many else tr("삭제"), "Del"))
-        a_del.setEnabled(self.bookmark_tree.is_edit_mode() and not self._photo_any_cached(targets))
-        if not self.bookmark_tree.is_edit_mode():
-            a_del.setToolTip(tr("편집 모드에서 지울 수 있습니다."))
-        menu.addSeparator()
-        a_style = menu.addAction(tr("보기설정..."))            # 4.38(261104-13) — 메뉴 끝
-        chosen = menu.exec(global_pos)
-        if chosen is None:
-            return
-        if chosen is a_style:
-            self._photo_label_dialog("strip")
-            return
-        if chosen is a_print:
-            self._photo_print(paths=targets)
-            return
-        if chosen is a_del:
-            self._photo_delete(targets)
-        elif a_out is not None and chosen is a_out:
-            self._photo_copy_out(targets)
-        elif a_unzip is not None and chosen is a_unzip:
-            self._zip_unpack_cached(targets)
-        elif a_restore is not None and chosen is a_restore:
-            self._photo_restore(targets)
-        elif chosen is a_batch:
-            self._photo_batch_dialog(targets)
-        elif chosen is a_all:
-            self._photo_action("to_pdf", allp)
-        elif chosen in acts:
-            k = acts[chosen]
-            if k in ("rot_l", "rot_r"):
-                for p in targets:                    # 여러 장이면 한 장씩(돌리기는 사진마다)
-                    self._photo_action(k, [p])
-            else:
-                self._photo_action(k, targets)
+        menu = CtxMenu(self)
+        self._photo_menu_fill(menu, list(targets), "strip", ok=ok or many, all_paths=list(allp))
+        menu.exec(global_pos)
 
     # ── 사진 → PDF·인쇄·평탄화 (P2 ④, 4.21) ─────────────────────────────
     def _photo_needs_bake(self, path) -> tuple:
@@ -3476,8 +3523,9 @@ class PhotoMixin:
                 title = (tr('폴더로 이동 ({n}장)') if move else tr('폴더로 복사 ({n}장)')).format(n=k)
             else:
                 title = tr("폴더로 이동") if move else tr("폴더로 복사")
-            sub = menu.addMenu(title)
-            sub.setToolTipsVisible(True)
+            from viewer.widgets.ctx_menu import CtxMenu
+            sub = CtxMenu(menu, title)
+            menu.addMenu(sub)
             if move and cached:
                 sub.setEnabled(False)
                 continue
@@ -3488,7 +3536,7 @@ class PhotoMixin:
                                     QTimer.singleShot(0, lambda: self._photo_transfer(ps, dd, mv)))
             if dirs:
                 sub.addSeparator()
-            a = sub.addAction(tr("다른 폴더..."))
+            a = sub.addAction(tr("다른 폴더"))
             a.triggered.connect(lambda _=False, mv=move, ps=list(paths):
                                 QTimer.singleShot(0, lambda: self._photo_transfer(ps, self._photo_xfer_pick(mv, ps), mv)))
 

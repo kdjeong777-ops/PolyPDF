@@ -80,13 +80,13 @@ try:
     import viewer.widgets.line_text_settings_dialog as ltd
     _orig_lexec = ltd.LineTextSettingsDialog.exec
     ltd.LineTextSettingsDialog.exec = lambda self: (tabs.setdefault("i", self._tabs.currentIndex()), 0)[1]
-    pick["t"] = "선과 텍스트 입력 설정…"
+    pick["t"] = "글쓰기 입력 설정"          # 261107-2: 옛 '선과 텍스트 입력 설정…' — 글상자면 이 이름
     mw._on_viewer_context_menu(g); spin(0.1)
     labels = seen[-1] if seen else []
     chk(mv._stroke_selected == 0 and "복사" in labels and "선택 글상자 삭제" in labels
-        and "텍스트 복사" not in labels and "발표보기" not in labels and "여기에 서명…" not in labels,
+        and "텍스트 복사" not in labels and "발표보기" not in labels and "여기에 서명" not in labels,
         "B1 글상자 우클릭 → 그 옵션만(텍스트 복사·발표·서명 등 없음)", str(labels))
-    chk(tabs.get("i") == 1, "B2 '선과 텍스트 입력 설정…' 은 글쓰기 탭으로 연다", str(tabs))
+    chk(tabs.get("i") == 1, "B2 '글쓰기 입력 설정' 은 글쓰기 탭으로 연다", str(tabs))
     pick["t"] = None
     pix = QPixmap(40, 20); pix.fill(QColor("blue"))
     mv._page_strokes = []; mv._save_page_strokes()
@@ -96,7 +96,7 @@ try:
     g = mv.view.viewport().mapToGlobal(mv._norm_to_view(rc[0] + rc[2] / 2, rc[1] + rc[3] / 2, pr))
     mw._on_viewer_context_menu(g); spin(0.1)
     labels = seen[-1] if seen else []
-    chk("선택 사진 모양 변경" in labels and "선택 이미지 삭제" in labels and "선과 텍스트 입력 설정…" not in labels,
+    chk("선택 사진 모양 변경" in labels and "선택 이미지 삭제" in labels and "글쓰기 입력 설정" not in labels and "도형 입력 설정" not in labels,
         "B3 사진 우클릭 → 사진 옵션", str(labels))
     mv._img_objects = []; mv._save_page_images(); mv._img_selected = -1
     mv._multi_clear(); mv._stroke_selected = -1

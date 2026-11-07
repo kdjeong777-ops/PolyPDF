@@ -96,7 +96,7 @@ try:
     mw._photo_strip_menu(str(a), strip.mapToGlobal(strip.rect().center()))
     QMenu.exec = real_exec
     ms = seen.get("menus", [])
-    chk(len(ms) >= 2 and ms[0][-1] == "보기설정..." and ms[-1][-1] == "보기설정...", "B 두 창 메뉴 끝에 '보기설정...'",
+    chk(len(ms) >= 2 and ms[0][-1] == "보기설정" and ms[-1][-1] == "보기설정", "B 두 창 메뉴 끝에 '보기설정...'",
         str([m[-3:] for m in ms]))
 
     # C — 대화상자로 구문 만들고 적용(책갈피창)

@@ -158,8 +158,8 @@ try:
     bt._on_tree_context_menu(rect.center())
     QMenu.exec = _exec
     m0 = menus[0] if menus else []
-    chk(m0[:2] == ["여기에 풀기", "다른 폴더에 풀기..."] and not any("저장" in t for t in m0), "B zip 줄 우클릭 = 풀기 메뉴(저장 묶음 없음)", str(m0))
-    chk(len(menus) > 1 and menus[1][0] == "고른 1개 풀기...", "B 안 줄 우클릭 = '고른 1개 풀기...' 먼저", str(menus[1:] and menus[1]))
+    chk(m0[:2] == ["여기에 풀기", "다른 폴더에 풀기"] and not any("저장" in t for t in m0), "B zip 줄 우클릭 = 풀기 메뉴(저장 묶음 없음)", str(m0))
+    chk(len(menus) > 1 and menus[1][0] == "고른 1개 풀기", "B 안 줄 우클릭 = '고른 1개 풀기' 먼저", str(menus[1:] and menus[1]))
 
     # C — 여기에 풀기 + 하트비트
     gaps = []
@@ -207,7 +207,7 @@ try:
     QMenu.exec = cap
     bt._on_tree_context_menu(bt.tree.visualItemRect(pnode).center())
     QMenu.exec = _exec
-    chk(menus and menus[0][:2] == ["여기에 풀기", "다른 폴더에 풀기..."], "E 사진 zip 줄 우클릭 맨 위 = 풀기", str(menus[:1]))
+    chk(menus and menus[0][:2] == ["여기에 풀기", "다른 폴더에 풀기"], "E 사진 zip 줄 우클릭 맨 위 = 풀기", str(menus[:1]))
     mw._on_bookmark_activated(str(tmp / "pics.zip"), 0)
     strip = mw._photo_strip_widget()
     pump(lambda: len(strip.paths()) == 3, timeout=20)
@@ -217,13 +217,13 @@ try:
     menus.clear()
     m = QMenu()
     a = mw._zip_pick_action(m, sel)
-    chk(a is not None and a.text() == "고른 2장 풀기...", "E 썸네일 줄 우클릭 — '고른 2장 풀기...'", a.text() if a else "")
+    chk(a is not None and a.text() == "고른 2장 풀기", "E 썸네일 줄 우클릭 — '고른 2장 풀기'", a.text() if a else "")
     mw._zip_unpack_cached(sel)
     chk(pump(lambda: len(os.listdir(out / "e")) == 2 and not mw._jobs, timeout=30)
         and sorted(os.listdir(out / "e")) == sorted(Path(p).name for p in sel), "E 고른 사진만 고른 폴더에", str(os.listdir(out / "e")))
     m1 = QMenu()
     a1 = mw._zip_pick_action(m1, [strip.paths()[0]])
-    chk(a1 is not None and a1.text() == "이 사진 풀기...", "E 본문(사진 한 장) 우클릭 — '이 사진 풀기...'")
+    chk(a1 is not None and a1.text() == "이 사진 풀기", "E 본문(사진 한 장) 우클릭 — '이 사진 풀기'")
     m2 = QMenu()
     chk(mw._zip_pick_action(m2, [str(tmp / "plain.pdf")]) is None, "E zip 밖 파일에는 풀기가 없다")
     QFileDialog.getExistingDirectory = _gd

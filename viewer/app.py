@@ -1670,14 +1670,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.search_tabs.setCurrentWidget(self.text_panel)
         self._sync_right_layout()
 
-    def _action_ocr_read(self):
+    def _action_ocr_read(self, _checked=False, preset=None):
         """260910(사용자 지시): 도구 패널의 [OCR] — 텍스트 창을 켜고 그 대화상자를 연다.
 
         읽은 결과를 보여 줄 곳이 텍스트 창이므로, 창을 먼저 켜고 부른다.
         범위·언어·워터마크는 그 대화상자가 정한다(텍스트 창 SOT §3.1.2).
+        `preset` — 우클릭 'OCR 로 읽기'(261107-2, 디자인 SOT §2.9.8)가 미리 고른 범위: (첫 쪽, 끝 쪽)(0부터) 또는 'all'.
         """
         self._vm_text()
-        self._on_text_need_ocr()
+        self._on_text_need_ocr(preset=preset)
 
     def _vm_shot(self):
         if self.act_split.isChecked():
@@ -2737,6 +2738,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.zipUnpackRequested.connect(self._zip_unpack)            # 261106-5(사진 보기 SOT §4.24.1) zip 풀기
             _bt.zipMemberActivated.connect(self._zip_open_member)       # 261106-5 PDF 모드 zip 안 PDF 보기
             _bt.printFilesRequested.connect(self._on_tree_print)        # 261105-12(§4.7.13) 맨 위 '인쇄…'
+            _bt.fileActionRequested.connect(lambda k, ps, x, b=_bt: self._on_tree_file_action(k, ps, x, bt=b))   # 261107-2 OCR 로 읽기·발표·서명·문서 정보
+            _bt.photo_menu_fill = self._photo_menu_fill              # 261107-2(사진 보기 SOT §4.20) — 아래 창도 사진 세 메뉴 한 함수
+            if self._ctx_info_ready():
+                _bt.file_action_ready.add("info")
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(
                 files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,
@@ -2749,7 +2754,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _i, _bt in enumerate((self.bookmark_tree, getattr(self, "bookmark_tree_right", None))):
             if _bt is not None:
                 _bt.bookmarksUndoable.connect(lambda path, b, a, i=_i: self._hist_note("bookmarks", (i, path), b, a))
-        self.page_thumbs.applyPageEditsRequested.connect(self._on_apply_page_edits)
+        # 261107-2(디자인 SOT §2.9.8): 썸네일 메뉴의 파일 ▸·저장 ▸·보기·도구 줄은 본문 메뉴와 같은 함수 — 옛 '변경 적용' 은 '다른 이름으로 저장' 으로 합쳤다
+        self.page_thumbs.menu_hook = self._thumb_menu_hook
+        self.page_thumbs.ocrPagesRequested.connect(
+            lambda ps: self._action_ocr_read(preset=(min(ps), max(ps)) if ps else None))
         # 260821: 썸네일 복사/붙여넣기(다른 PDF 로도)
         self._thumb_clip = None       # {"items": [(파일, 쪽)…], "pages": [쪽…], "token": str} — 261016-2(§4.7.20)
         self.page_thumbs.copyPagesRequested.connect(self._on_copy_pages)
@@ -3945,7 +3953,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if cur:
             self._text_store().add_highlight(cur, page, line, a, b, color)
 
-    def _on_text_need_ocr(self):
+    def _on_text_need_ocr(self, preset=None):
         """260908-8/260909: [OCR 다시 읽기] — 범위·언어·워터마크를 고른 뒤 읽는다.
 
         텍스트 창 SOT §3.1.1·§3.1.2. 한 쪽이면 조용히, 여러 쪽이면 진행창 + 취소
@@ -3970,7 +3978,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from PyQt6.QtWidgets import QDialog, QProgressDialog
         from viewer.widgets.ocr_options_dialog import OcrOptionsDialog
         dlg = OcrOptionsDialog(self, page=page, page_count=n_pages,
-                               last=getattr(self, '_ocr_opts', None))
+                               last=getattr(self, '_ocr_opts', None), preset=preset)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         opts = dlg.values()
@@ -5557,52 +5565,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             traceback.print_exc()
             self.status.showMessage(tr("새 페이지를 만들지 못했습니다: %s") % e, 8000)
 
-    def _on_apply_page_edits(self):
-        """260606-22: 썸네일에서 편집한 페이지 순서/삭제를 새 PDF로 저장."""
-        pt = self.page_thumbs
-        if not getattr(pt, "_doc", None):
-            return
-        src = Path(str(pt._doc.path))
-        seq = pt.current_page_sequence()
-        if not pt.is_page_dirty():
-            QMessageBox.information(self, tr("페이지 편집"), tr("변경 사항이 없습니다."))
-            return
-        if not seq:
-            QMessageBox.warning(self, tr("페이지 편집"), tr("최소 1쪽은 남겨야 합니다."))
-            return
-        from PyQt6.QtWidgets import QFileDialog
-        default = str(src.with_name(src.stem + "_pages.pdf"))
-        out, _ = QFileDialog.getSaveFileName(self, tr("페이지 편집 저장"), default, "PDF (*.pdf)")
-        if not out:
-            return
-        if not out.lower().endswith(".pdf"):
-            out += ".pdf"
-        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
-        try:
-            # 260606-23: fitz 로 페이지 재구성(손상 PDF 자동 복구)
-            import fitz
-            src_doc = fitz.open(str(src))
-            out_doc = fitz.open()
-            try:
-                for idx in seq:
-                    if 0 <= idx < src_doc.page_count:
-                        out_doc.insert_pdf(src_doc, from_page=idx, to_page=idx)
-                out_doc.save(out, garbage=4, deflate=True)
-            finally:
-                out_doc.close(); src_doc.close()
-        except Exception as e:
-            QApplication.restoreOverrideCursor()
-            QMessageBox.warning(self, tr("페이지 편집 저장 실패"), str(e))
-            return
-        QApplication.restoreOverrideCursor()
-        self.status.showMessage(
-            tr('페이지 편집 저장: {n}쪽 → {name}').format(n=len(seq), name=Path(out).name), 6000)
-        try:
-            self.bookmark_tree.add_or_refresh_file(out)
-        except Exception:
-            pass
-        self._open_saved_file(out)                  # 색인 먼저 걸고 연다 — 260915-10
-
     def _on_merge_files(self, preselected: list = None):
         """260606-15: PDF 병합 — 좌(전체)/우(대상) 다이얼로그. 스크린샷·드롭·정렬·자동생성."""
         all_files = []
@@ -6110,28 +6072,27 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._on_viewer_context_menu(gp)
 
     def _on_viewer_context_menu(self, global_pos):
-        """260606-4: 뷰어 우클릭 메뉴. 책갈피 추가(편집모드) + 하이퍼링크 등록(260609-3)."""
+        """본문 우클릭 — 여섯 메뉴 한 틀(디자인 SOT §2.9.8, 마스터 §4.7.20, 261107-2).
+        인쇄 → 복사 → 모양 → 파일 ▸ → 저장 ▸ → 보기 → 도구 → 끝. 개체를 골랐거나 개체 위면 개체 메뉴(§4.6.9) — 사진 본문도."""
         cur = self.main_view.current_file() if self.main_view else None
-        if cur and getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
-            self._photo_context_menu(global_pos)          # 261104-3(사진 보기 SOT 4.16): 사진은 돌리기·맞춤 메뉴
+        if not cur:
             return
-        if not cur or not str(cur).lower().endswith(".pdf"):
-            return
-        page = self.main_view.current_page() + 1
-        from PyQt6.QtWidgets import QMenu
         edit = self.bookmark_tree.is_edit_mode()
-        # 261012-11(마스터 §4.6.9, 사용자 지시): 꾸밈이 골라져 있거나 개체 위를 우클릭하면 **그 개체의 옵션만**
+        # 261012-11(마스터 §4.6.9, 사용자 지시): 꾸밈이 골라져 있거나 개체 위를 우클릭하면 **그 개체의 옵션만**.
+        #   261107-2: 사진 본문도 먼저 본다 — 종전에는 사진 메뉴가 먼저 떠 개체 메뉴가 나오지 않았다.
         if edit:
             kind = self.main_view.deco_menu_target(global_pos)
             if kind:
                 self._deco_context_menu(global_pos, kind)
                 return
-        # 261016-2(마스터 §4.7.20, 사용자 지시·결정): 차례 —
-        #   ① 인쇄… · 복사 · 텍스트 복사 · 블럭설정 후 텍스트 복사 · 붙여넣기 · 스크린샷 붙여넣기 · 클립보드 붙여넣기 ▼ · 사진 붙여넣기 ▼ · 삭제 · 저장
-        #   ② 2단 보기(2단이면 1단 보기 · 옆 창에 열기) · 발표보기  ③ 회전 · 여기에 서명…  ④ 숨김 · 숨김 해제
-        #   ⑤ 책갈피 추가 · 하이퍼링크 등록  ⑥ 도형 입력 설정… · 글쓰기 입력 설정…
-        #   편집모드가 아니면 같은 차례에서 편집 항목만 빠진다. 끼운 쪽(저장 전)이면 쪽 번호로 일하는 항목은 '(저장 후)' 를 붙이고, 누르면 `_need_save_first` 로 알린다(261016-3).
-        menu = QMenu(self)
+        if getattr(self, "_photo_mode", False) and self._is_photo_path(cur):
+            self._photo_context_menu(global_pos)          # 사진 보기 SOT §4.20 — 사진 세 메뉴 한 함수
+            return
+        if not str(cur).lower().endswith(".pdf"):
+            return
+        page = self.main_view.current_page() + 1
+        from viewer.widgets.ctx_menu import CtxMenu
+        menu = CtxMenu(self)
         pt = self.page_thumbs
         pidx = page - 1
         staged = bool(pt.is_staged_page(pidx))
@@ -6141,17 +6102,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
         def _pl(label, staged_text):
             return label.format(page=page) if not staged else staged_text + _ns
-        need_save = {"print", "rot_l", "rot_r", "hide", "unhide", "bm", "hl"} if staged else set()
+        need_save = {"print", "shot", "rot_l", "rot_r", "rot_180", "crop", "uncrop", "hide", "unhide",
+                     "bm", "hl", "ocr"} if staged else set()
         can_copy = getattr(self, "_perm_can_copy", True)
         can_print = getattr(self, "_perm_can_print", True)
         A = {}                                              # 이름 → 항목(고른 뒤 가르기)
 
-        def add(key, text, enabled=True):
+        def add(key, text, enabled=True, tip=None):
             A[key] = menu.addAction(text)
             A[key].setEnabled(bool(enabled))
+            if tip:
+                A[key].setToolTip(tip)
             return A[key]
-        add("print", self._kt(tr("인쇄…") + _ns, "print"), can_print)   # 261017-1: 단축키 칸(디자인 SOT §2.9.2)
+        menu.group("print")
+        add("print", self._kt(tr("인쇄") + _ns, "print"), can_print)   # 261017-1: 단축키 칸(디자인 SOT §2.9.2)
+        menu.group("copy")
         add("copy_page", tr("복사"))                         # 개체를 고르지 않았을 때 = 지금 쪽(사용자 결정)
+        add("shot", _pl(tr('스크린샷으로 복사 (p.{page})'), tr("스크린샷으로 복사 (붙여넣은 쪽)")), can_copy)
         add("copy_text", tr("텍스트 복사"), can_copy)          # 선택 블럭(없으면 페이지)
         add("sel_text", tr("블럭설정 후 텍스트 복사"), can_copy)
         deco_at = None
@@ -6163,59 +6130,45 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             n_pages = len(self._thumb_clip["pages"]) if self._thumb_clip else 0
             add("paste", tr("붙여넣기"), can_deco or n_pages > 0)
             A["paste"].setData("deco" if can_deco else "pages")
-            shots = self._shot_image_paths()
-            add("shot_paste", tr('스크린샷 붙여넣기 ({n}장)').format(n=len(shots)) if shots else tr("스크린샷 붙여넣기"),
-                bool(shots))
-            # 260611-73: 분할 컨트롤 — 본문 클릭=현재 모양으로 즉시, ▼=모양 고르기(사각형·둥근·원형)
-            self._add_insert_split(
-                menu, tr("클립보드 붙여넣기"),
-                lambda: getattr(self, "_ins_paste_shape", None)
-                or getattr(self.main_view, "_img_shape", "rect") or "rect",
-                lambda k: setattr(self, "_ins_paste_shape", k),
-                lambda: (setattr(self.main_view, "_img_shape",
-                                 getattr(self, "_ins_paste_shape", None)
-                                 or getattr(self.main_view, "_img_shape", "rect") or "rect"),
-                         self._paste_clipboard_on_page()))
-            self._add_insert_split(
-                menu, tr("사진 붙여넣기"),
-                lambda: getattr(self, "_ins_file_shape", None)
-                or getattr(self.main_view, "_img_shape", "rect") or "rect",
-                lambda k: setattr(self, "_ins_file_shape", k),
-                lambda: (setattr(self.main_view, "_img_shape",
-                                 getattr(self, "_ins_file_shape", None)
-                                 or getattr(self.main_view, "_img_shape", "rect") or "rect"),
-                         # 260907-3: 도구 끄기·개체선택 전환은 공통 삽입 지점(`main_view.add_image_from_pixmap`)
-                         self._insert_image_from_file()))
+            self._ctx_paste_items(menu, A)
+        menu.group("shape")
+        if edit:
+            add("blank", tr("새 페이지 넣기"), tip=tr("지금 쪽 크기의 흰 쪽을 그 아래에 넣습니다."))
+        add("rot_l", self._kt(_pl(tr('왼쪽 90° 회전 (p.{page})'), tr("왼쪽 90° 회전 (붙여넣은 쪽)")), "rotate_left"))
+        add("rot_r", self._kt(_pl(tr('오른쪽 90° 회전 (p.{page})'), tr("오른쪽 90° 회전 (붙여넣은 쪽)")), "rotate_right"))
+        add("rot_180", _pl(tr('180° 회전 (p.{page})'), tr("180° 회전 (붙여넣은 쪽)")))
+        add("crop", _pl(tr('크롭 (p.{page})'), tr("크롭 (붙여넣은 쪽)")))
+        add("uncrop", _pl(tr('크롭 해제 (p.{page})'), tr("크롭 해제 (붙여넣은 쪽)")))
+        if edit:
+            # 숨김(260609-14 D5) — 둘 다 보이고 지금 상태에 맞는 쪽만 켠다
+            st = self._ensure_page_meta_store()
+            is_hidden = bool(st and not staged and st.is_hidden(cur, pidx))
+            add("hide", _pl(tr('숨김 (p.{page})'), tr("숨김 (붙여넣은 쪽)")), staged or not is_hidden)
+            add("unhide", _pl(tr('숨김 해제 (p.{page})'), tr("숨김 해제 (붙여넣은 쪽)")), staged or is_hidden)
+            if getattr(pt, "_hidden_pages", None):
+                add("hreset", tr("숨김 전체 해제"))
             add("delete", self._kt(tr('삭제 (p.{page})').format(page=page) if not staged else tr("삭제"), "Del"))   # 261017-1: 본문 Del 과 같다
-            add("save", tr("저장"))
-        menu.addSeparator()
-        # ② 보기
+        self._ctx_file_sub(menu, cur)
+        self._ctx_pdf_save(menu, cur, pages=[pidx], staged=staged)
+        menu.group("view")
         if getattr(self, "_split_on", False):
             add("single", tr("1단 보기"))      # 261025-1: Ctrl+Shift+1 은 보기 탭 `1단`(오른쪽 창도 숨김) — 하는 일이 달라 키를 보이지 않는다
             add("other", tr("옆 창에 열기"))               # 옛 '1창으로 복사'·'2창으로 복사'
         else:
             add("dual", self._kt(tr("2단 보기"), "toggle_split"))
         add("present", self._kt(tr("발표보기"), "present"))   # 260905: F5 와 같은 경로
-        menu.addSeparator()
-        # ③ 회전(260908-1 — 편집모드 무관, 종전 그대로) · 서명(261010-26)
-        add("rot_l", _pl(tr('왼쪽 90° 회전 (p.{page})'), tr("왼쪽 90° 회전 (붙여넣은 쪽)")))
-        add("rot_r", _pl(tr('오른쪽 90° 회전 (p.{page})'), tr("오른쪽 90° 회전 (붙여넣은 쪽)")))
-        add("sign", tr("여기에 서명…"))
+        menu.group("tool")
+        add("ocr", tr("OCR 로 읽기"), tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
+        add("sign", tr("여기에 서명"))
         if edit:
-            menu.addSeparator()
-            # ④ 숨김(260609-14 D5) — 둘 다 보이고 지금 상태에 맞는 쪽만 켠다
-            st = self._ensure_page_meta_store()
-            is_hidden = bool(st and not staged and st.is_hidden(cur, pidx))
-            add("hide", _pl(tr('숨김 (p.{page})'), tr("숨김 (붙여넣은 쪽)")), staged or not is_hidden)
-            add("unhide", _pl(tr('숨김 해제 (p.{page})'), tr("숨김 해제 (붙여넣은 쪽)")), staged or is_hidden)
-            menu.addSeparator()
-            # ⑤ 책갈피·하이퍼링크(260606-4·260609-3)
             add("bm", _pl(tr('책갈피 추가 (p.{page})'), tr("책갈피 추가 (붙여넣은 쪽)")))
-            add("hl", _pl(tr('하이퍼링크 등록… (p.{page})'), tr("하이퍼링크 등록… (붙여넣은 쪽)")))
-            menu.addSeparator()
-            # ⑥ 입력 설정 — 같은 창(종전 '선과 텍스트 입력 설정…')의 선긋기·글쓰기 탭
-            add("cfg_line", tr("도형 입력 설정…"))
-            add("cfg_text", tr("글쓰기 입력 설정…"))
+            add("hl", _pl(tr('하이퍼링크 등록 (p.{page})'), tr("하이퍼링크 등록 (붙여넣은 쪽)")))
+        add("info", tr("문서 정보"), self._ctx_info_ready())
+        if edit:
+            menu.group("end")
+            # 입력 설정 — 같은 창(종전 '선과 텍스트 입력 설정…')의 선긋기·글쓰기 탭
+            add("cfg_line", tr("도형 입력 설정"))
+            add("cfg_text", tr("글쓰기 입력 설정"))
         chosen = menu.exec(global_pos)
         if chosen is None:
             return
@@ -6226,12 +6179,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._need_save_first()
             return
         mv = self.main_view
+        later = lambda f: QTimer.singleShot(0, f)          # noqa: E731 — 창은 메뉴가 닫힌 뒤(마스터 §4.7.11)
         if key == "print":
             self.action_print(preset_scope="current")
         elif key == "copy_page":
             src = pt.staged_source(pidx) if staged else (str(cur), pidx)
             if src:
                 self._on_copy_pages([src])
+        elif key == "shot":
+            later(lambda: self._on_thumb_screenshot_pages([pidx]))
         elif key == "copy_text":
             self._cancel_draw_tools()          # 260907-3: 그리기 중이면 끄고 복사
             mv.copy_selection()
@@ -6248,10 +6204,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         elif key == "shot_paste":
             for f in self._shot_image_paths():
                 mv.add_image_from_file(f)
+        elif key == "blank":
+            later(lambda r=pt.row_of_page(pidx): self._on_add_blank_page(r))
         elif key == "delete":
             self._delete_current_page()
-        elif key == "save":
-            QTimer.singleShot(0, self._save_current_file)   # 저장은 모달 진행창을 연다 — 메뉴가 닫힌 뒤에
         elif key == "dual":
             self._view_as_split()
         elif key == "single":
@@ -6260,8 +6216,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._copy_pane_to(self._active_pane, 1 - self._active_pane)
         elif key == "present":
             self._open_presentation()
-        elif key in ("rot_l", "rot_r"):
-            self._rotate_pages([pidx], -90 if key == "rot_l" else +90)
+        elif key in ("rot_l", "rot_r", "rot_180"):
+            self._rotate_pages([pidx], {"rot_l": -90, "rot_r": +90, "rot_180": 180}[key])
+        elif key == "crop":
+            later(lambda: self._open_crop_dialog(pages=[pidx]))
+        elif key == "uncrop":
+            self._uncrop_pages([pidx])
         elif key == "sign":
             try:
                 vp = mv.view.viewport().mapFromGlobal(global_pos)
@@ -6272,14 +6232,167 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._set_pages_hidden([pidx], True)
         elif key == "unhide":
             self._set_pages_hidden([pidx], False)
+        elif key == "hreset":
+            self._set_pages_hidden(sorted(getattr(pt, "_hidden_pages", None) or []), False)
         elif key == "bm":
             self._prompt_add_bookmark(cur, page)
         elif key == "hl":
             self._open_hyperlink_dialog(cur, pidx)
+        elif key == "ocr":
+            later(lambda: self._action_ocr_read(preset=(pidx, pidx)))
+        elif key == "info":
+            later(lambda p=str(cur): self._ctx_doc_info(p))
         elif key == "cfg_line":
             self._open_line_text_settings(tab="line")
         elif key == "cfg_text":
             self._open_line_text_settings(tab="text")
+
+    # ── 우클릭 메뉴 공통 줄 — PDF 썸네일창·본문이 같이 쓴다(디자인 SOT §2.9.8, 261107-2) ────────
+    def _ctx_paste_items(self, menu, A=None) -> None:
+        """'스크린샷 붙여넣기 (N장)' · '클립보드 붙여넣기 ▸' · '사진 붙여넣기 ▸' — 본문(PDF·사진, 편집 모드)이 꾸밈으로 붙인다."""
+        mv = self.main_view
+        shots = self._shot_image_paths()
+        a = menu.addAction(tr('스크린샷 붙여넣기 ({n}장)').format(n=len(shots)) if shots else tr("스크린샷 붙여넣기"))
+        a.setEnabled(bool(shots))
+        if A is not None:
+            A["shot_paste"] = a
+        else:
+            a.triggered.connect(lambda _=False: [mv.add_image_from_file(f) for f in self._shot_image_paths()])
+        # 260611-73 → 261107-2(디자인 SOT §2.9.8 의 3): 나눈 항목 — 글자 = 지금 모양으로 즉시, ▸ = 모양 골라 바로
+        self._add_insert_split(
+            menu, tr("클립보드 붙여넣기"),
+            lambda: getattr(self, "_ins_paste_shape", None) or getattr(mv, "_img_shape", "rect") or "rect",
+            lambda k: setattr(self, "_ins_paste_shape", k),
+            lambda: (setattr(self.main_view, "_img_shape",
+                             getattr(self, "_ins_paste_shape", None) or getattr(self.main_view, "_img_shape", "rect") or "rect"),
+                     self._paste_clipboard_on_page()))
+        self._add_insert_split(
+            menu, tr("사진 붙여넣기"),
+            lambda: getattr(self, "_ins_file_shape", None) or getattr(mv, "_img_shape", "rect") or "rect",
+            lambda k: setattr(self, "_ins_file_shape", k),
+            lambda: (setattr(self.main_view, "_img_shape",
+                             getattr(self, "_ins_file_shape", None) or getattr(self.main_view, "_img_shape", "rect") or "rect"),
+                     # 260907-3: 도구 끄기·개체선택 전환은 공통 삽입 지점(`main_view.add_image_from_pixmap`)
+                     self._insert_image_from_file()))
+
+    def _ctx_file_sub(self, menu, path) -> None:
+        """'파일 ▸' — 책갈피창 파일 줄의 파일 단위 항목(같은 함수 `BookmarkTree.add_file_items`)."""
+        menu.group("file")
+        sub = menu.sub(tr("파일"))
+        bt = self._bm_tree_for_pane(self._active_pane) if hasattr(self, "_bm_tree_for_pane") else self.bookmark_tree
+        try:
+            (bt or self.bookmark_tree).add_file_items(sub, str(path))
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    def _ctx_info_ready(self) -> bool:
+        return callable(getattr(self, "show_doc_info", None))      # 문서 정보 창(261107-3) — 들어오면 켠다
+
+    def _ctx_doc_info(self, path: str) -> None:
+        """'문서 정보' — 그 파일이 본문에 없으면 먼저 연다(책갈피창 줄)."""
+        if not self._ctx_info_ready():
+            return
+        cur = self.main_view.current_file() if self.main_view else None
+        if not cur or os.path.normcase(str(cur)) != os.path.normcase(str(path)):
+            self._on_bookmark_activated(str(path), 0)
+        QTimer.singleShot(0, lambda: self.show_doc_info())
+
+    def _ctx_pdf_save(self, menu, path, *, pages=None, staged=False, thumbs=False) -> None:
+        """PDF 썸네일창·본문의 '저장 ▸'(디자인 SOT §2.9.8 의 3) — 책갈피창 줄과 같은 이름·차례, 본문 파일에."""
+        from viewer.widgets.ctx_menu import add_save_menu
+        f = str(path)
+        pages = [int(p) for p in (pages or [])]
+        mk_ok = callable(getattr(self, "action_pages_to_pdf", None)) and bool(pages) and not staged
+        conv = {"text": tr("변환"), "cb": lambda: self.action_convert(files=[f]),
+                "tip": tr("Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다.")}
+        if thumbs:
+            try:
+                conv = {"text": tr('변환 ({n}쪽)').format(n=len(pages)), "menu": self.page_thumbs.convert_menu(pages, staged),
+                        "enabled": bool(pages) or staged}
+            except Exception:
+                pass
+        add_save_menu(
+            menu, key=self._sc_key("save"),
+            save={"cb": self._save_current_file, "tip": tr("쪽 편집·꾸밈·책갈피를 이 파일에 저장합니다(💾 와 같음).")},
+            save_as={"text": tr("다른 이름으로 저장"), "cb": lambda: self._action_save_as(bt=self.bookmark_tree, file_path=f),
+                     "tip": tr("쪽 편집·꾸밈·책갈피를 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},
+            copies=[{"text": tr("평탄화 사본"), "cb": lambda: self._action_save_decorated_pdf(file_path=f),
+                     "tip": tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")},
+                    {"text": tr("용량 줄인 사본"), "cb": lambda: self.action_compress([f]),
+                     "tip": tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로.")},
+                    {"text": tr("개인정보 지운 사본"), "cb": lambda: self.action_redact(f),
+                     "tip": tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로).")},
+                    {"text": tr("전달 묶음"), "cb": lambda: self.action_share_files([f]),
+                     "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다.")}],
+            make=[{"text": tr("PDF 만들기") + (" " + tr("({n}쪽)").format(n=len(pages)) if len(pages) > 1 else ""),
+                   "cb": (lambda ps=list(pages): self.action_pages_to_pdf(f, ps)) if mk_ok else None,
+                   "enabled": mk_ok,
+                   "tip": tr("고른 쪽으로 새 PDF 를 만듭니다 — 원본은 그대로.") if not staged
+                   else tr("붙여넣은 쪽은 저장한 뒤에 할 수 있습니다.")},
+                  conv])
+
+    def _ctx_pdf_view(self, menu) -> None:
+        menu.group("view")
+        if getattr(self, "_split_on", False):
+            a = menu.addAction(tr("1단 보기"))
+            a.triggered.connect(lambda _=False: self._view_single_keep(self._active_pane))
+            a = menu.addAction(tr("옆 창에 열기"))
+            a.triggered.connect(lambda _=False: self._copy_pane_to(self._active_pane, 1 - self._active_pane))
+        else:
+            a = menu.addAction(self._kt(tr("2단 보기"), "toggle_split"))
+            a.triggered.connect(lambda _=False: self._view_as_split())
+        a = menu.addAction(self._kt(tr("발표보기"), "present"))
+        a.triggered.connect(lambda _=False: QTimer.singleShot(0, self._open_presentation))
+
+    def _thumb_menu_hook(self, menu, group, ctx) -> None:
+        """썸네일창 메뉴의 파일 ▸·저장 ▸·보기·도구 줄(디자인 SOT §2.9.8) — 본문 메뉴와 같은 함수."""
+        doc = getattr(self.page_thumbs, "_doc", None)
+        if doc is None:
+            return
+        path = str(doc.path)
+        if group == "file":
+            self._ctx_file_sub(menu, path)
+        elif group == "save":
+            self._ctx_pdf_save(menu, path, pages=ctx.get("pages"), staged=ctx.get("staged"), thumbs=True)
+        elif group == "view":
+            self._ctx_pdf_view(menu)
+        elif group == "tool":
+            a = menu.addAction(tr("서명"))
+            a.triggered.connect(lambda _=False: QTimer.singleShot(0, self.action_sign_pdf))
+            a = menu.addAction(tr("문서 정보"))
+            a.setEnabled(self._ctx_info_ready())
+            a.triggered.connect(lambda _=False, p=path: QTimer.singleShot(0, lambda: self._ctx_doc_info(p)))
+
+    def _on_tree_file_action(self, kind: str, paths: list, extra=None, bt=None) -> None:
+        """책갈피창 PDF 줄의 'OCR 로 읽기'·'발표보기'·'서명'·'문서 정보'(261107-2) — 그 파일을 본문에 연 뒤 같은 길로."""
+        if not paths:
+            return
+        path = str(paths[0])
+        if kind == "info":
+            self._ctx_doc_info(path)
+            return
+        cur = self.main_view.current_file() if self.main_view else None
+        first = int(extra[0]) if (kind == "ocr_read" and extra) else 0
+        if not cur or os.path.normcase(str(cur)) != os.path.normcase(path):
+            self._on_bookmark_activated(path, first)
+
+        def go():
+            now = self.main_view.current_file() if self.main_view else None
+            if not now or os.path.normcase(str(now)) != os.path.normcase(path):
+                return                                   # 열지 못했다(암호 취소 등)
+            if kind == "ocr_read":
+                rng = None
+                if extra:
+                    a = int(extra[0])
+                    b = extra[1] if extra[1] is not None else (int(getattr(self.main_view._doc, "page_count", a + 1) or a + 1) - 1)
+                    rng = (a, int(b))
+                self._action_ocr_read(preset=rng or "all")
+            elif kind == "present":
+                self._open_presentation()
+            elif kind == "sign":
+                self.action_sign_pdf()
+        QTimer.singleShot(0, go)
 
     def _delete_current_page(self, mv=None) -> None:
         """본문 우클릭 '삭제'·본문 Del(261017-1, 입력 SOT §3) — 지금 쪽을 썸네일 쪽 편집으로 지운다(미저장). 편집모드에서만."""
@@ -6343,38 +6456,43 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._sync_split_menu_state()
 
     def _deco_context_menu(self, global_pos, kind: str) -> None:
-        """고른 꾸밈의 메뉴 — 복사·붙여넣기·(종류별)·삭제·설정. 설정 창은 글상자면 '글쓰기', 선·도형이면 '선긋기' 탭으로."""
-        from PyQt6.QtWidgets import QMenu
+        """고른 꾸밈의 메뉴(마스터 §4.6.9) — 묶음 차례는 디자인 SOT §2.9.8(261107-2): 복사 → 모양(종류별·삭제) → 도구 → 끝(입력 설정).
+        설정 창은 글상자·지시선이면 '글쓰기 입력 설정', 선·도형이면 '도형 입력 설정' — 본문 메뉴와 같은 이름. PDF·사진 본문 공통."""
+        from viewer.widgets.ctx_menu import CtxMenu
         mv = self.main_view
         at = mv.deco_point_at(global_pos)
-        menu = QMenu(self)
+        menu = CtxMenu(self)
+        menu.group("copy")
         a_copy = menu.addAction(self._kt(tr("복사"), "Ctrl+C"))          # 261017-1(디자인 SOT §2.9.2): 키는 오른쪽 칸
         a_paste = menu.addAction(self._kt(tr("붙여넣기"), "Ctrl+V"))
         a_paste.setEnabled(mv.can_paste_decorations() and at is not None)
-        menu.addSeparator()
+        menu.group("shape")
         tip_acts, shape_acts = {}, {}
+        a_more = a_reg = None
         if kind == "leader":
             sel = mv.selected_text_stroke() or {}
-            m_tip = menu.addMenu(tr("선택 지시선 끝 모양"))
+            m_tip = menu.sub(tr("선택 지시선 끝 모양"))
             for key, label in (("arrow", tr("뾰족한 화살표")), ("circle", tr("끝 원형")), ("plain", tr("일반 선"))):
                 ta = m_tip.addAction(label); ta.setCheckable(True)
                 ta.setChecked(sel.get("tip", "arrow") == key)
                 tip_acts[ta] = key
         if kind == "image":
-            m_chg = menu.addMenu(tr("선택 사진 모양 변경"))
+            m_chg = menu.sub(tr("선택 사진 모양 변경"))
             for key, label in (("rect", tr("사각형")), ("round", tr("둥근 사각형")), ("circle", tr("원형"))):
                 ca = m_chg.addAction(self._shape_icon(key), label)
                 ca.setCheckable(True)
                 shape_acts[ca] = key
-            a_more = menu.addAction(tr("다른 쪽에도 넣기…"))          # 261101-3(§4.6.11)
-            a_reg = menu.addAction(tr("등록 이미지로 등록…"))
         a_del = menu.addAction(self._kt({"text": tr("선택 글상자 삭제"), "leader": tr("선택 글상자 삭제"),
                                          "image": tr("선택 이미지 삭제"), "line": tr("선택 개체 삭제"),
                                          "multi": tr("고른 개체 삭제")}[kind], "Del"))
+        if kind == "image":
+            menu.group("tool")
+            a_more = menu.addAction(tr("다른 쪽에도 넣기"))          # 261101-3(§4.6.11)
+            a_reg = menu.addAction(tr("등록 이미지로 등록"))
         a_cfg = None
         if kind in ("text", "leader", "line"):
-            menu.addSeparator()
-            a_cfg = menu.addAction(tr("선과 텍스트 입력 설정…"))
+            menu.group("end")
+            a_cfg = menu.addAction(tr("글쓰기 입력 설정") if kind in ("text", "leader") else tr("도형 입력 설정"))
         chosen = menu.exec(global_pos)
         if chosen is None:
             return
@@ -6386,9 +6504,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             mv.set_leader_tip(tip_acts[chosen])
         elif chosen in shape_acts:
             mv.set_image_shape(shape_acts[chosen])
-        elif kind == "image" and chosen is a_more:
+        elif a_more is not None and chosen is a_more:
             self._stamp_to_pages(mv)
-        elif kind == "image" and chosen is a_reg:
+        elif a_reg is not None and chosen is a_reg:
             self._stamp_register_selected(mv)
         elif chosen is a_del:
             mv.delete_deco_selection()
@@ -6396,53 +6514,26 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._open_line_text_settings(tab="text" if kind in ("text", "leader") else "line")
 
     def _add_insert_split(self, menu, text, get_shape, set_shape, do_insert):
-        """260611-73: 컨텍스트 메뉴 안의 분할(삽입) 항목.
-        본문(왼쪽) 클릭 = 현재 선택 모양으로 즉시 삽입,
-        오른쪽 ▼ = 삽입 모양 옵션버튼(라디오: 사각형/둥근/원형) 선택.
-        get_shape()->key, set_shape(key), do_insert() 를 콜백으로 받는다."""
-        from PyQt6.QtWidgets import (QWidgetAction, QWidget, QHBoxLayout,
-                                     QToolButton, QMenu, QSizePolicy)
+        """붙여넣기 나눈 항목(260611-73 → 261107-2, 디자인 SOT §2.9.8 의 3) — 글자(클릭·Enter) = 지금 모양으로 즉시 붙이기,
+        ▸(→·마우스 올림) = 모양(사각형·둥근 사각형·원형)을 골라 **그 모양으로 바로** 붙이기. 줄 아이콘은 지금 모양.
+        get_shape()->key, set_shape(key), do_insert() 를 콜백으로 받는다. 붙이기는 메뉴가 닫힌 뒤(파일 대화상자 등)."""
+        from viewer.widgets.ctx_menu import CtxMenu
         from PyQt6.QtGui import QActionGroup
-        from PyQt6.QtCore import Qt as _Qt, QTimer
-        _shapes = (("rect", tr("사각형")), ("round", tr("둥근 사각형")), ("circle", tr("원형")))
         cur = get_shape()
-        wa = QWidgetAction(menu)
-        w = QWidget()
-        lay = QHBoxLayout(w)
-        lay.setContentsMargins(6, 1, 6, 1); lay.setSpacing(2)
-        main_btn = QToolButton(w)
-        main_btn.setToolButtonStyle(_Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        main_btn.setText(text)
-        main_btn.setIcon(self._shape_icon(cur))
-        main_btn.setAutoRaise(True)
-        main_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        main_btn.setToolTip(tr('{text} — 클릭하면 선택된 모양으로 삽입 (모양은 오른쪽 ▼)').format(text=text))
-        arrow = QToolButton(w)
-        arrow.setText("▼")
-        arrow.setAutoRaise(True)
-        arrow.setToolTip(tr("삽입 모양 선택"))
-        arrow.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        sub = QMenu(arrow)
-        grp = QActionGroup(sub); grp.setExclusive(True)
-        for key, label in _shapes:
+        sub = CtxMenu(menu)
+        grp = QActionGroup(sub)
+        grp.setExclusive(True)
+        a_now = QAction(text, sub)                     # 글자가 하는 일(하위에는 보이지 않는다)
+        a_now.triggered.connect(lambda _=False: QTimer.singleShot(0, do_insert))
+        for key, label in (("rect", tr("사각형")), ("round", tr("둥근 사각형")), ("circle", tr("원형"))):
             a = sub.addAction(self._shape_icon(key), label)
-            a.setCheckable(True); a.setChecked(key == cur)
+            a.setCheckable(True)
+            a.setChecked(key == cur)
             grp.addAction(a)
-
-            def _pick(_chk=False, k=key):
-                set_shape(k)
-                main_btn.setIcon(self._shape_icon(k))
-            a.triggered.connect(_pick)
-        arrow.setMenu(sub)
-
-        def _go():
-            menu.close()                       # 컨텍스트 메뉴 닫고
-            QTimer.singleShot(0, do_insert)    # 닫힌 뒤 삽입(파일 대화상자 등)
-        main_btn.clicked.connect(_go)
-        lay.addWidget(main_btn, 1)
-        lay.addWidget(arrow, 0)
-        wa.setDefaultWidget(w)
-        menu.addAction(wa)
+            a.triggered.connect(lambda _=False, k=key: (set_shape(k), QTimer.singleShot(0, do_insert)))
+        wa = menu.add_split(text, sub, a_now, icon=self._shape_icon(cur))
+        wa.setToolTip(tr('{text} — 누르면 지금 모양으로 붙입니다(모양은 ▸ 에서 골라 바로 붙임)').format(text=text))
+        wa.setProperty("ctx_paste_split", True)
         return wa
 
     def _shape_icon(self, kind):

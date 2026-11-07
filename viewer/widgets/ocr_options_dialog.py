@@ -27,7 +27,7 @@ class OcrOptionsDialog(QDialog):
     """반환값은 `values()` — {"pages": [0-based…], "lang": str, "watermark": bool}."""
 
     def __init__(self, parent=None, *, page: int = 0, page_count: int = 1,
-                 last=None):
+                 last=None, preset=None):
         super().__init__(parent)
         self.setWindowTitle(tr("OCR 다시 읽기"))
         self._page = int(page)
@@ -70,6 +70,17 @@ class OcrOptionsDialog(QDialog):
         v.addLayout(row)
         self.rb_range.toggled.connect(self.sp_from.setEnabled)
         self.rb_range.toggled.connect(self.sp_to.setEnabled)
+        # 261107-2(디자인 SOT §2.9.8, 텍스트 창 SOT §3.1.2): 우클릭 'OCR 로 읽기' 가 미리 고른 범위 — (첫 쪽, 끝 쪽)(0부터)·'all'
+        if isinstance(preset, (tuple, list)) and len(preset) == 2:
+            a, b = sorted((max(0, int(preset[0])), min(self._count - 1, int(preset[1]))))
+            if a == b == self._page:
+                self.rb_one.setChecked(True)
+            elif a == 0 and b == self._count - 1:
+                self.rb_all.setChecked(True)
+            else:
+                self.rb_range.setChecked(True)
+                self.sp_from.setValue(a + 1)
+                self.sp_to.setValue(b + 1)
 
         row2 = QHBoxLayout()
         row2.addWidget(QLabel(tr("언어")))

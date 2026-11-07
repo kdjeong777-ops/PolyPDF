@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""261105-12: 책갈피창 우클릭 메뉴 맨 위 '인쇄…' (마스터 §4.7.13 '맨 위 인쇄', 사진 보기 SOT 4.20·4.21).
+"""261105-12: 책갈피창 우클릭 메뉴 맨 위 '인쇄' (마스터 §4.7.13 '맨 위 인쇄', 사진 보기 SOT 4.20·4.21).
 
 사용자 지시: "책갈피창의 리스트 선택시 옵션창 가장 상단에 '인쇄'를 넣어".
 사용자 결정: 책갈피 행 = 그 책갈피 쪽 범위, 폴더 행 = 그 아래 PDF 전부, 사진 줄 = 사진 인쇄.
 
 실제 MainWindow·실제 메뉴 함수(`_on_tree_context_menu`)로 — `QMenu.exec` 를 가로채 항목을 보고 '인쇄' 를 누르며,
 인쇄 창(`PrintScopeDialog.exec`)은 가짜로 바꿔 열린 창의 상태(문서·범위 단추·쪽 범위·파일 목록)만 본다.
-A. 파일 행 — 맨 위가 '인쇄…' 이고 바로 아래 구분선. 누르면 인쇄 창의 문서가 **그 파일**(본문 파일이 아니어도), '전체' 가 골라짐
+A. 파일 행 — 맨 위가 '인쇄' 이고 바로 아래 구분선. 누르면 인쇄 창의 문서가 **그 파일**(본문 파일이 아니어도), '전체' 가 골라짐
 B. 책갈피 행 — 그 책갈피 쪽 ~ 다음 책갈피 앞 쪽이 '페이지 범위' 에(하위 책갈피는 위층의 다음까지, 끝 책갈피는 끝 쪽까지)
-C. 여러 파일 — '인쇄 (2개 파일)…', 창은 '선택한 책갈피 파일 인쇄' 가 그 두 파일로
-D. 폴더 행 — '인쇄 (N개 파일)…' 그 아래 PDF 전부
+C. 여러 파일 — '인쇄 (2개 파일)', 창은 '선택한 책갈피 파일 인쇄' 가 그 두 파일로
+D. 폴더 행 — '인쇄 (N개 파일)' 그 아래 PDF 전부
 E. 아래(2창) 책갈피창의 신호도 앱에 이어져 있다
-F. 사진 모드 사진 줄 — '인쇄…'/'인쇄 (2장)…' 이 사진 인쇄 길(그 사진들로 만든 임시 PDF)로, 사진 모드 폴더 행에는 없다
+F. 사진 모드 사진 줄 — '인쇄'/'인쇄 (2장)' 이 사진 인쇄 길(그 사진들로 만든 임시 PDF)로, 사진 모드 폴더 행에는 없다
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -121,7 +121,7 @@ try:
     # A — 파일 행
     an = fnode(a)
     tx = menu_on(an)
-    chk(tx[:2] == ["인쇄…", "-"], "A 맨 위가 '인쇄…' 이고 그 아래 구분선", str(tx[:4]))
+    chk(tx[:2] == ["인쇄", "-"], "A 맨 위가 '인쇄' 이고 그 아래 구분선", str(tx[:4]))
     menu_on(an, "인쇄")
     g = dlgs[-1] if dlgs else {}
     chk(g.get("sample") == str(a) and g.get("pc") == 6 and g.get("all"),
@@ -144,7 +144,7 @@ try:
             chk(False, "B 책갈피 '%s' 행이 있다" % title, str([an.child(i).text(0) for i in range(an.childCount())]))
             continue
         tx = menu_on(it)
-        chk(tx[:1] == ["인쇄…"], "B 책갈피 행 '%s' 메뉴 맨 위 '인쇄…'" % title, str(tx[:3]))
+        chk(tx[:1] == ["인쇄"], "B 책갈피 행 '%s' 메뉴 맨 위 '인쇄'" % title, str(tx[:3]))
         menu_on(it, "인쇄")
         g = dlgs[-1] if dlgs else {}
         chk(g.get("sample") == str(a) and g.get("rng") and (g.get("frm"), g.get("to")) == want,
@@ -156,7 +156,7 @@ try:
     bn = fnode(b)
     bt.tree.clearSelection(); an.setSelected(True); bn.setSelected(True)
     tx = menu_on(an)
-    chk(tx[:2] == ["인쇄 (2개 파일)…", "-"], "C 여러 파일 — '인쇄 (2개 파일)…' 맨 위", str(tx[:3]))
+    chk(tx[:1] == ["인쇄 (2개 파일)"] and "-" in tx[1:3], "C 여러 파일 — '인쇄 (2개 파일)' 맨 위(인쇄 묶음 — 편집 모드면 병합도, 261107-2)", str(tx[:3]))
     an.setSelected(True); bn.setSelected(True)
     menu_on(an, "인쇄")
     g = dlgs[-1] if dlgs else {}
@@ -172,7 +172,7 @@ try:
         chk(False, "D 폴더 행이 있다(트리 보기)")
     else:
         tx = menu_on(fo)
-        chk(tx[:2] == ["인쇄…", "-"], "D 폴더 행(PDF 1개) 맨 위 '인쇄…'", str(tx[:3]))
+        chk(tx[:2] == ["인쇄", "-"], "D 폴더 행(PDF 1개) 맨 위 '인쇄'", str(tx[:3]))
         menu_on(fo, "인쇄")
         g = dlgs[-1] if dlgs else {}
         chk(g.get("sample") == str(c) and g.get("all"), "D 폴더 행 → 그 아래 PDF", str(g))
@@ -200,7 +200,7 @@ try:
         chk(False, "F 사진 줄이 있다")
     else:
         tx = menu_on(p1n)
-        chk(tx[:2] == ["인쇄…", "-"], "F 사진 줄 맨 위 '인쇄…'", str(tx[:3]))
+        chk(tx[:2] == ["인쇄", "-"], "F 사진 줄 맨 위 '인쇄'", str(tx[:3]))
         menu_on(p1n, "인쇄")
         g = dlgs[-1] if dlgs else {}
         chk(g.get("pc") == 1 and str(g.get("sample", "")).lower().endswith(".pdf") and g.get("sample") != str(pix / "p1.jpg"),
@@ -208,7 +208,7 @@ try:
         bt.btn_edit.setChecked(True); pump(timeout=0.3)
         bt.tree.clearSelection(); p1n.setSelected(True); p2n.setSelected(True)
         tx = menu_on(p1n)
-        chk(tx[:1] == ["인쇄 (2장)…"], "F 사진 두 장 — '인쇄 (2장)…'", str(tx[:3]))
+        chk(tx[:1] == ["인쇄 (2장)"], "F 사진 두 장 — '인쇄 (2장)'", str(tx[:3]))
         p1n.setSelected(True); p2n.setSelected(True)
         menu_on(p1n, "인쇄")
         g = dlgs[-1] if dlgs else {}

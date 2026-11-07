@@ -475,6 +475,13 @@ RENAMED = [
     # 261105-25·-28(응답성 SOT §4.6): 작업을 멈추는 단추 '중지' → '중단'. 녹화·재생·시계의 '중지' 는 다른 뜻이라
     #   단추 꼴([중지])·창 이름(…생성 중지)만 본다
     ("[중지]", "[중단]", "261105-28"), ("생성 중지", "생성 중단", "261105-28"),
+    # 261107-2(디자인 SOT §2.9.8 의 5): 우클릭 메뉴 이름 — 창 제목·기능 이름으로도 쓰이는 '평탄화해서 내보내기'·'선과 텍스트 입력 설정' 은 넣지 않는다
+    ("왼쪽으로 90° 돌리기", "왼쪽 90° 회전", "261107-2"), ("오른쪽으로 90° 돌리기", "오른쪽 90° 회전", "261107-2"),
+    ("180° 돌리기", "180° 회전", "261107-2"), ("용량 줄여 내보내기", "용량 줄인 사본", "261107-2"),
+    ("개인정보 지우고 별도 저장", "개인정보 지운 사본", "261107-2"), ("공유용 사본 (정보 모두 지움)", "개인정보 지운 사본", "261107-2"),
+    ("공유용 사본 (위치 지움)", "(메뉴에서 뺌)", "261107-2"), ("변경 적용 — 새 PDF로 저장", "다른 이름으로 저장", "261107-2"),
+    ("방향 저장 (원본 JPEG)", "저장 ▸ 저장", "261107-2"), ("OCR로 글자층 생성", "OCR 로 글자층 생성", "261107-2"),
+    ("파일 복사 (N개)", "폴더로 복사 (N개)", "261107-2"), ("파일 이동 (N개)", "폴더로 이동 (N개)", "261107-2"),
 ]
 # 화면 문구(tr("옛 이름…"))가 아직 남은 것 — 코드 결함으로 보고했고 고칠 세션이 이 줄을 지운다. 고쳤는데 남아 있으면 실패(목록은 줄기만).
 RENAMED_CODE_PENDING = set()                   # 261025-9 보고분(ribbon.py 모음 창 제목)은 261025-5 보완에서 고쳤다
@@ -580,7 +587,7 @@ for c in tab_emit & set(cls_sigs):
 # 표에 이미 나오는 위젯(BookmarkTree·PageThumbs·MainView …)의 신호 중 아직 표에 없는 것 — 260628 이후 쌓였다. **줄기만 한다**:
 #   새로 연결한 신호는 표에 행을 넣는다(이 목록에 더하지 않는다). 표에 넣으면 여기서 뺀다.
 SIG_KNOWN_UNDOC = {
-    "activated", "addBlankPageRequested", "addBookmarkAtPage", "addFileFavoriteRequested", "addImagePagesRequested", "applyPageEditsRequested",
+    "activated", "addBlankPageRequested", "addBookmarkAtPage", "addFileFavoriteRequested", "addImagePagesRequested",
     "bookmarksChanged", "bookmarksEdited", "bookmarksReverted", "bookmarksUndoable", "clearedAll", "compareFilesRequested",
     "compressFilesRequested", "contextMenuRequested", "convertFilesRequested", "convertPagesRequested", "copyPagesRequested", "copyPaneRequested",
     "createBookmarksRequested", "createStudyBookmarksRequested", "createStudyRequested", "cropPagesRequested", "cropRequested", "dragHoverOpen",

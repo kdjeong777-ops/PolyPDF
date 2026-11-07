@@ -100,7 +100,7 @@ try:
         win._photo_xfer_menu(m, [str(A)])
         subs = [a.menu() for a in m.actions() if a.menu() is not None]
         labels = [[x.text() for x in s.actions() if not x.isSeparator()] for s in subs]
-        chk(len(subs) == 2 and labels[0] == ["out", "다른 폴더..."] and labels[1] == ["out", "다른 폴더..."],
+        chk(len(subs) == 2 and labels[0] == ["out", "다른 폴더"] and labels[1] == ["out", "다른 폴더"],
             "A 복사·이동 하위 메뉴 — 최근 폴더 + 다른 폴더…", str([s.title() for s in subs]) + str(labels))
         _cached = win._photo_any_cached
         win._photo_any_cached = lambda ps: True

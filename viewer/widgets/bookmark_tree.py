@@ -223,6 +223,7 @@ class BookmarkTree(QWidget):
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
     photoActionRequested = pyqtSignal(str, list)  # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴 — (일 이름, 사진 경로들)
     filterEmptied = pyqtSignal(bool)                 # 261107-9(검색 SOT §5.1): 거르기 결과가 비었다(True)·다시 생겼다(False) — 앱이 본문·썸네일을 비우고 되돌린다
+    fileActionRequested = pyqtSignal(str, list, object)  # 261107-2(디자인 SOT §2.9.8): 'ocr_read'·'present'·'sign'·'info' — (일, [파일], 쪽 범위|None)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
@@ -385,14 +386,15 @@ class BookmarkTree(QWidget):
     def _zip_menu_actions(self, menu, zp: str, members_sel=None) -> None:
         """zip 줄·zip 안 줄 우클릭 — '여기에 풀기'(zip 이름 새 폴더)·'다른 폴더에 풀기...'·(고른 안 줄) '고른 n개 풀기...'."""
         if members_sel:
-            a = menu.addAction(tr("고른 {n}개 풀기...").format(n=len(members_sel)))
+            a = menu.addAction(tr("고른 {n}개 풀기").format(n=len(members_sel)))
             a.setToolTip(tr("고른 파일만 고른 폴더에 풉니다."))
             a.triggered.connect(lambda _=False, z=zp, m=list(members_sel): QTimer.singleShot(
                 0, lambda: self.zipUnpackRequested.emit(z, m, "pick")))
         a = menu.addAction(tr("여기에 풀기"))
         a.setToolTip(tr("zip 이 있는 폴더에 zip 이름으로 폴더를 만들어 모두 풉니다."))
         a.triggered.connect(lambda _=False, z=zp: QTimer.singleShot(0, lambda: self.zipUnpackRequested.emit(z, None, "here")))
-        a = menu.addAction(tr("다른 폴더에 풀기..."))
+        a = menu.addAction(tr("다른 폴더에 풀기"))
+        a.setToolTip(tr("풀어 넣을 폴더를 고릅니다."))
         a.triggered.connect(lambda _=False, z=zp: QTimer.singleShot(0, lambda: self.zipUnpackRequested.emit(z, None, "pick")))
 
     def _zip_context_menu(self, item, pos) -> bool:
@@ -401,8 +403,9 @@ class BookmarkTree(QWidget):
         zp = mem[0] if mem else item.data(0, self.DATA_FILE)
         if not mem and (self._photo_on() or not self._is_zip_path(zp)):
             return False
-        from PyQt6.QtWidgets import QMenu
-        menu = QMenu(self)
+        from viewer.widgets.ctx_menu import CtxMenu
+        menu = CtxMenu(self)
+        menu.group("zip")
         sel = []
         if mem:
             sel = [it.data(0, self.DATA_ZIP_MEMBER)[1] for it in self.tree.selectedItems()
@@ -410,7 +413,7 @@ class BookmarkTree(QWidget):
             if mem[1] not in sel:
                 sel = [mem[1]]
         self._zip_menu_actions(menu, str(zp), sel)
-        menu.addSeparator()
+        menu.group("file")
         a = menu.addAction(tr("파일 탐색기 열기"))
         a.triggered.connect(lambda _=False, z=str(zp): self._reveal_in_explorer(z))
         menu.exec(self.tree.viewport().mapToGlobal(pos))
@@ -488,7 +491,8 @@ class BookmarkTree(QWidget):
         self._probe_total = 0        # 260906-4: 이번 묶음 진행 표시용
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
-        self.photo_menu_extra = None  # 앱이 주입: (메뉴, 사진 경로들) — 사진 줄의 '폴더로 복사·이동 ▸'(사진 보기 SOT §4.41)
+        self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
+        self.file_action_ready = set()  # 앱이 채움: 켤 수 있는 fileActionRequested 일(예: 'info' — 문서 정보 창이 들어오면)
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
         self._probe_paused = False   # 260906-5(응답성 SOT §4 ①): 인덱싱 중에는 조사를 멈춘다
         self._probe_scan_timer = QTimer(self)     # 260906-4: 보이는 행 걷기를 모아서 1회
@@ -1113,28 +1117,16 @@ class BookmarkTree(QWidget):
             return ""
 
     def _add_ocr_layer_action(self, menu, files) -> bool:
-        """'OCR로 글자층 생성...'(261016-1 개명, 옛 'OCR 글자층 넣기...') — 스캔 PDF 에 우리 OCR 로 보이지 않는 글자층(텍스트 창 SOT §5.5). 창은 메뉴가 닫힌 뒤에."""
+        """'OCR 로 글자층 생성'(261016-1 개명, 옛 'OCR 글자층 넣기...' — 261107-2 'OCR 로' 띄어 씀·'…' 뗌) — 스캔 PDF 에 우리 OCR 로 보이지 않는 글자층(텍스트 창 SOT §5.5). 창은 메뉴가 닫힌 뒤에."""
         files = [f for f in (files or []) if f]
         if not files:
             return False
-        a = menu.addAction(tr("OCR로 글자층 생성...") if len(files) == 1
-                           else tr('OCR로 글자층 생성 ({n}개 파일)...').format(n=len(files)))
+        a = menu.addAction(tr("OCR 로 글자층 생성") if len(files) == 1
+                           else tr('OCR 로 글자층 생성 ({n}개 파일)').format(n=len(files)))
         a.setToolTip(tr("글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자층을 원본 PDF 에 넣습니다 — "
                         "다른 프로그램에서도 검색·복사가 됩니다(처음 한 번 백업을 남깁니다)."))
         a.triggered.connect(lambda _=False, fs=list(files): QTimer.singleShot(
             0, lambda: self.ocrLayerFilesRequested.emit(fs)))
-        return True
-
-    def _add_compress_action(self, menu, files) -> bool:
-        """'용량 줄여 내보내기...'(261016-1 개명, 옛 'PDF 압축...') — 그림만 줄여 새 파일 `<이름>_압축.pdf`(마스터 §4.7.19). 창은 메뉴가 닫힌 뒤에."""
-        files = [f for f in (files or []) if f]
-        if not files:
-            return False
-        a = menu.addAction(tr("용량 줄여 내보내기...") if len(files) == 1
-                           else tr('용량 줄여 내보내기 ({n}개 파일)...').format(n=len(files)))
-        a.setToolTip(tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로."))
-        a.triggered.connect(lambda _=False, fs=list(files): QTimer.singleShot(
-            0, lambda: self.compressFilesRequested.emit(fs)))
         return True
 
     def _selected_file_nodes(self) -> list:
@@ -2885,15 +2877,161 @@ class BookmarkTree(QWidget):
             rng = self._bookmark_page_range(item)          # 책갈피 행 — 그 쪽 범위
         n = len(files)
         if n == 1:
-            label = tr("인쇄…")
+            label = tr("인쇄")
         elif pm:
-            label = tr('인쇄 ({n}장)…').format(n=n)
+            label = tr('인쇄 ({n}장)').format(n=n)
         else:
-            label = tr('인쇄 ({n}개 파일)…').format(n=n)
+            label = tr('인쇄 ({n}개 파일)').format(n=n)
         act = menu.addAction(label)
+        act.setToolTip(tr("인쇄 창을 엽니다."))
         act.triggered.connect(lambda _=False, fs=list(files), r=rng: QTimer.singleShot(
             0, lambda: self.printFilesRequested.emit(fs, r)))
-        menu.addSeparator()
+
+    # ── 우클릭 메뉴 — 여섯 메뉴 한 틀(디자인 SOT §2.9.8, 261107-2) ──────────────
+    def _act(self, menu, text, cb, *, tip=None, enabled=True, key=None):
+        """메뉴 항목 하나 — 일은 메뉴가 닫힌 뒤(마스터 §4.7.11 '메뉴 안에서 모달 창')."""
+        a = menu.addAction(self._kt(text, key) if key else text)
+        if tip:
+            a.setToolTip(tip)
+        a.setEnabled(bool(enabled))
+        if cb is not None:
+            a.triggered.connect(lambda _=False, f=cb: QTimer.singleShot(0, f))
+        return a
+
+    def _file_action(self, kind: str, paths, extra=None) -> None:
+        self.fileActionRequested.emit(kind, [str(p) for p in paths], extra)
+
+    def _mi_copy_path(self, menu, paths) -> None:
+        def go(ps=list(paths)):
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText("\n".join(str(p) for p in ps))
+            self._notice(tr("경로를 복사했습니다."))
+        self._act(menu, tr("경로 복사"), go, enabled=bool(paths))
+
+    def _mi_xfer(self, menu, nodes) -> None:
+        """'폴더로 복사 ▸'·'폴더로 이동 ▸'(261107-2 — 옛 '파일 복사 (N개)'·'파일 이동 (N개)', 사진과 같은 이름). 편집 모드."""
+        if not nodes:
+            return
+        n = len(nodes)
+        try:
+            self._add_transfer_submenu(menu, tr("폴더로 복사") if n == 1 else tr("폴더로 복사 ({n}개)").format(n=n), nodes, False)
+            self._add_transfer_submenu(menu, tr("폴더로 이동") if n == 1 else tr("폴더로 이동 ({n}개)").format(n=n), nodes, True)
+        except Exception:
+            pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
+
+    def _mi_pdf_tools(self, menu, path, files, *, in_sub=False, item=None, ocr_range=None, compare=None) -> None:
+        """PDF 파일의 도구 묶음 — 책갈피창 파일 줄과 '파일 ▸' 가 같은 차례·이름(디자인 SOT §2.9.8 의 4).
+        `in_sub` 면 밖에 따로 있는 OCR 로 읽기·서명은 빼고 파일 단위 것만."""
+        menu.group("tool")
+        if item is not None and item.data(0, self.DATA_ENCRYPTED):         # 260618-1: 암호 걸린 파일이면 맨 앞
+            self._act(menu, tr("암호 입력"), lambda it=item, p=path: self._prompt_file_password(it, p))
+        if not in_sub:
+            self._act(menu, tr("OCR 로 읽기"), lambda p=path, r=ocr_range: self._file_action("ocr_read", [p], r),
+                      tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
+        self._add_ocr_layer_action(menu, files or [path])
+        self._act(menu, tr("일괄 OCR"), lambda p=path: self.createStudyBookmarksRequested.emit(p),
+                  tip=tr("OCR·단어장·책갈피를 한 번에 만듭니다."))
+        self._act(menu, tr("책갈피 생성"), lambda p=path: self.createBookmarksRequested.emit(p))
+        if korea_only_visible():                    # 단어장·영→한 번역은 한국 전용(다국어 SOT §7)
+            self._act(menu, tr("단어장 생성"), lambda p=path: self.createStudyRequested.emit(p))
+            fs = list(files or [path])
+            self._act(menu, tr("번역") if len(fs) == 1 else tr("번역 ({n}개 파일)").format(n=len(fs)),
+                      lambda f=fs: self.translateFilesRequested.emit(f))
+            ok_g, tip_g = True, None
+            try:
+                from viewer.study.export_translation import resolve_glossary_sidecar
+                if not resolve_glossary_sidecar(path):
+                    ok_g, tip_g = False, tr("이 PDF 의 번역 용어집이 없습니다(먼저 번역).")
+            except Exception:
+                pass
+            self._act(menu, tr("번역 용어집 교정"), lambda p=path: self.editGlossaryRequested.emit(p), enabled=ok_g, tip=tip_g)
+        if compare:
+            self._act(menu, tr("두 파일 비교"), lambda a=compare[0], b=compare[1]: self.compareFilesRequested.emit(a, b),
+                      tip=tr("두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."))
+        if not in_sub:
+            self._act(menu, tr("서명"), lambda p=path: self._file_action("sign", [p]))
+        self._act(menu, tr("문서 정보"), lambda p=path: self._file_action("info", [p]),
+                  enabled="info" in self.file_action_ready)
+        self._act(menu, tr("해시태그 편집"), lambda p=path: self._edit_file_tags(p))
+
+    def _mi_fav(self, menu, file_path=None) -> None:
+        menu.group("end")
+        self._act(menu, tr("현재 폴더를 즐겨찾기에 추가"), self.favoriteRequested.emit)
+        if file_path:
+            self._act(menu, tr("현재 파일을 즐겨찾기에 추가"), lambda p=file_path: self.addFileFavoriteRequested.emit(p))
+
+    def add_file_items(self, menu, path: str) -> None:
+        """PDF 썸네일창·본문의 '파일 ▸' — 책갈피창 파일 줄의 파일 단위 항목을 같은 함수·같은 차례로(디자인 SOT §2.9.8 의 4)."""
+        node = self._file_node_for_path(str(path))
+        menu.group("copy")
+        self._mi_copy_path(menu, [path])
+        menu.group("file")
+        self._act(menu, tr("파일 탐색기 열기"), lambda p=path: self._reveal_in_explorer(p))
+        if self._edit_mode and node is not None:
+            self._mi_xfer(menu, [node])
+        self._act(menu, self._kt(tr("파일·책갈피 이름 변경"), "rename_item").split("\t")[0],
+                  (lambda n=node: self._edit_item(n)) if node is not None else None, enabled=node is not None,
+                  tip=None if node is not None else tr("책갈피창 목록에 있는 파일만 이름을 바꿀 수 있습니다."))
+        self._mi_pdf_tools(menu, path, [path], in_sub=True, item=node)
+        self._mi_fav(menu, path)
+
+    def _tree_save_menu(self, menu, target, files, *, folder_files=None, merge=None) -> None:
+        """책갈피창 PDF 줄의 '저장 ▸'(디자인 SOT §2.9.8 의 3) — 모두 **누른 줄의 파일**에(260930-2·261008-1)."""
+        from viewer.widgets.ctx_menu import add_save_menu
+        if folder_files:
+            n = len(folder_files)
+            add_save_menu(menu, copies=[{"text": tr("용량 줄인 사본 ({n}개 파일)").format(n=n),
+                                         "cb": lambda fs=list(folder_files): self.compressFilesRequested.emit(fs),
+                                         "tip": tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로.")}])
+            return
+        n = len(files)
+        nn = "" if n == 1 else " " + tr("({n}개 파일)").format(n=n)
+        mk = None
+        if merge is not None:
+            mk = {"text": tr("PDF 만들기") + (" " + tr("({n}개 병합)").format(n=len(merge)) if len(merge) > 1 else ""),
+                  "cb": (lambda fs=list(merge): self.mergeFilesRequested.emit(fs)) if len(merge) > 1 else None,
+                  "enabled": len(merge) > 1,
+                  "tip": tr("고른 PDF 들을 차례대로 합친 새 PDF 를 만듭니다.") if len(merge) > 1
+                  else tr("편집 모드에서 파일을 둘 이상 고르면 고른 파일을 병합합니다.")}
+        add_save_menu(
+            menu,
+            save={"cb": lambda f=target: self._op_save(file_path=f),
+                  "tip": tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작).")},
+            save_as={"text": tr("다른 이름으로 저장"), "cb": lambda f=target: self.saveAsFileRequested.emit(f),
+                     "tip": tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},
+            copies=[{"text": tr("평탄화 사본"), "cb": lambda f=target: self.flattenFileRequested.emit(f),
+                     "tip": tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다.")},
+                    {"text": tr("용량 줄인 사본") + nn, "cb": lambda fs=list(files): self.compressFilesRequested.emit(fs),
+                     "tip": tr("그림 해상도·품질을 낮춰 용량을 줄인 새 파일을 만듭니다 — 글자는 그대로, 원본은 그대로.")},
+                    {"text": tr("개인정보 지운 사본"), "cb": lambda f=target: self.redactFileRequested.emit(str(f)),
+                     "tip": tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로).")},
+                    {"text": tr("전달 묶음") + nn, "cb": lambda fs=list(files): self.shareFilesRequested.emit(fs),
+                     "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다.")}],
+            make=[mk,
+                  {"text": tr("변환") + nn, "cb": lambda fs=list(files): self.convertFilesRequested.emit(fs, ""),
+                   "tip": tr("Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다.")}])
+
+    def _photo_tree_extra(self, item, paths) -> dict:
+        """사진 줄 — 책갈피창만의 줄을 사진 메뉴 채우기(`photo_menu_fill`)에 넘긴다(사진 보기 SOT §4.20)."""
+        own = self._file_path_of(item)
+        new_base = Path(own).parent if own else self._root_dir
+        ex = {"rename": (lambda it=item: self._edit_item(it)),
+              "delete": self._op_delete,
+              "split": ((tr("옆 창에 열기"), self.copyPaneRequested.emit) if self._split_on
+                        else (self._kt(tr("2단 보기"), "toggle_split"), lambda: self.splitViewRequested.emit(True))),
+              "fav_folder": self.favoriteRequested.emit,
+              "fav_file": (lambda p=own: self.addFileFavoriteRequested.emit(p)) if self._is_file_node(item) else None,
+              "tags": (lambda p=own: self._edit_file_tags(p)) if self._is_file_node(item) else None,
+              "label_style": lambda: self.photoActionRequested.emit("label_style_tree", [])}
+        if new_base and self._mode == "flat":
+            ex["new_folder"] = lambda b=new_base: self._new_folder_notice(b)
+        return ex
+
+    def _new_folder_notice(self, base) -> None:
+        d = self._ask_new_folder(base=base)
+        if d is not None:
+            # 다시 훑지 않는다 — 빈 폴더는 트리에 행이 없다(PDF 가 든 폴더만 보인다) — 만든 것을 글로 알린다.
+            self._notice(tr('새 폴더: {name} — 폴더로 복사·이동의 대상으로 고를 수 있습니다.').format(name=d.name))
 
     def _on_tree_context_menu(self, pos):
         item = self.tree.itemAt(pos)
@@ -2910,9 +3048,7 @@ class BookmarkTree(QWidget):
             if not item.isSelected():
                 # 260902-3(사용자 보고 — 편집모드 우클릭 무반응·'2단 보기'로 튐): 종전
                 #   setCurrentItem 이 currentItemChanged → 네비게이션(파일 열기)을 일으켜,
-                #   **메뉴가 떠 있는 동안** 다른 PDF 가 로드됐다. 큰 파일이면 메뉴 아래에서
-                #   로딩이 돌다 팝업이 닫히고(무반응), 그 사이 한 번 더 누르면 첫 항목
-                #   '2단 보기'가 눌렸다. 우클릭은 **선택만** 바꾼다 — 이동은 좌클릭/Enter 의 몫.
+                #   **메뉴가 떠 있는 동안** 다른 PDF 가 로드됐다. 우클릭은 **선택만** 바꾼다 — 이동은 좌클릭/Enter 의 몫.
                 self.tree.blockSignals(True)
                 try:
                     self.tree.clearSelection()
@@ -2922,291 +3058,124 @@ class BookmarkTree(QWidget):
                     self.tree.blockSignals(False)
                 self._pending_nav = None            # 직전에 예약된 이동도 취소
             sel_files = []
-        from PyQt6.QtWidgets import QMenu
-        menu = QMenu(self)
-        act_merge = None
-        act_translate_sel = None
+        from viewer.widgets.ctx_menu import CtxMenu
+        menu = CtxMenu(self)
         pm = self._photo_on()           # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴
-        _zp = self._file_path_of(item)
-        if pm and self._is_zip_path(_zp):              # 261106-5(사진 보기 SOT §4.24.1): 사진 zip 줄 — 맨 위에 풀기
-            self._zip_menu_actions(menu, str(_zp))
-            menu.addSeparator()
-        self._add_print_action(menu, item, pm)   # 261105-12(마스터 §4.7.13, 사용자 지시): 맨 위 '인쇄…'
-        if sel_files and pm:
-            _ps = [str(it.data(0, self.DATA_FILE)) for it in sel_files]
-            _pa = menu.addAction(tr('고른 사진 {n}장으로 PDF 만들기...').format(n=len(_ps)))
-            _pa.triggered.connect(lambda _=False, fs=_ps: QTimer.singleShot(0, lambda: self.photoActionRequested.emit("to_pdf", fs)))
-            menu.addSeparator()
-        elif sel_files and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
-            act_merge = menu.addAction(tr('선택 {n}개 파일 병합...').format(n=len(sel_files)))
-            if korea_only_visible():                # 영→한 번역은 한국 전용(다국어 SOT §7)
-                act_translate_sel = menu.addAction(tr('선택 {n}개 파일 번역...').format(n=len(sel_files)))  # 260621-P0
-            if len(sel_files) == 2:                 # 261014-23(마스터 §4.11): 꼭 두 개일 때
-                _cf = [str(it.data(0, self.DATA_FILE)) for it in sel_files]
-                _ca = menu.addAction(tr("두 파일 비교..."))
-                _ca.setToolTip(tr("두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."))
-                _ca.triggered.connect(lambda _=False, a=_cf[0], b=_cf[1]: QTimer.singleShot(
-                    0, lambda: self.compareFilesRequested.emit(a, b)))
-            menu.addSeparator()
-        # 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
+        _dir_target = self._file_path_of(item)
+        _folder_row = Path(item.toolTip(0)) if self._is_folder_node(item) else None
+        gpos = self.tree.viewport().mapToGlobal(pos)
+        # ── 사진 모드 사진 줄·zip 줄 — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20) ──
+        if pm and _dir_target and self.photo_menu_fill is not None:
+            if self._is_zip_path(_dir_target):               # 261106-5(§4.24.1): 사진 zip 줄 — 맨 위에 풀기
+                menu.group("zip")
+                self._zip_menu_actions(menu, str(_dir_target))
+            _ps = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
+            if _dir_target not in _ps:
+                _ps = [_dir_target]
+            try:
+                self.photo_menu_fill(menu, list(_ps), "tree", self._photo_tree_extra(item, _ps))
+            except Exception:
+                import traceback
+                traceback.print_exc()
+            menu.exec(gpos)
+            return
+        # ── PDF 모드(·사진 모드 폴더 줄) ──
+        is_file = self._is_file_node(item)
+        is_bookmark = (not is_file and not self._is_folder_node(item) and bool(item.data(0, self.DATA_FILE)))
+        files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
+        if _dir_target and _dir_target not in files:
+            files = [_dir_target]
+        merge = None
+        if sel_files and not pm and getattr(self, "_merge_allowed", True):   # 260618-1: 권한 없으면 숨김
+            merge = [str(it.data(0, self.DATA_FILE)) for it in sel_files]
+        # 인쇄 — 맨 위(261105-12) · 여러 파일이면 병합도 한 번에(디자인 SOT §2.9.8 의 1)
+        menu.group("print")
+        self._add_print_action(menu, item, pm)
+        if merge:
+            self._act(menu, tr("고른 {n}개 병합해 PDF 만들기").format(n=len(merge)),
+                      lambda fs=list(merge): self.mergeFilesRequested.emit(fs))
+        # 복사
+        if _dir_target and not pm:
+            menu.group("copy")
+            self._mi_copy_path(menu, files)
+        # 파일 — 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
+        menu.group("file")
         xfer_files = self._selected_file_nodes() if self._edit_mode else []
         if item.isSelected() is False and self._edit_mode:
             f = self._file_node_of(item)
             xfer_files = ([f] if f is not None
-                          else (list(self._iter_folder_files(item))
-                                if self._is_folder_node(item) else []))
-        # 261014-1(마스터 §4.7.13, 사용자 요청) 메뉴 순서 — 파일 그룹:
-        #   파일 탐색기 열기 · 새 폴더 만들기 · 파일 복사 · 파일 이동 · 이름 변경 · 삭제
-        #   ─ 저장 그룹: 저장 · 다른 이름으로 저장 · 평탄화해서 내보내기 · 변환(261025-5) · 용량 줄여 내보내기 · 개인정보 지우고 별도 저장(261016-1)
-        #   ─ 보기 그룹: 2단 보기 · 책갈피 모두 펼치기 · 모두 접기 (· 페이지순 정렬)
-        # '파일 탐색기 열기'(260910-8 '파일 폴더 열기') 는 편집모드가 아니어도 쓴다 — `xfer_files` 와 따로.
-        act_open_dir = None
-        _dir_target = self._file_path_of(item)
-        _folder_row = Path(item.toolTip(0)) if self._is_folder_node(item) else None
+                          else (list(self._iter_folder_files(item)) if self._is_folder_node(item) else []))
         if _dir_target:
-            act_open_dir = menu.addAction(tr("파일 탐색기 열기"))
+            self._act(menu, tr("파일 탐색기 열기"), lambda p=_dir_target: self._reveal_in_explorer(p))
         elif _folder_row is not None:
-            act_open_dir = menu.addAction(tr("파일 탐색기 열기"))
+            self._act(menu, tr("파일 탐색기 열기"), lambda d=_folder_row: self._open_folder_in_explorer(d))
         # 새 폴더의 자리: 폴더 행이면 그 안, 파일·책갈피 행이면 그 파일이 든 폴더, 아니면 열린 폴더.
         _new_base = (_folder_row if _folder_row is not None
                      else (Path(_dir_target).parent if _dir_target else self._root_dir))
-        act_fold_new = None
         if _new_base and self._mode == "flat":
-            act_fold_new = menu.addAction(tr("새 폴더 만들기..."))
-        if xfer_files and not (pm and _dir_target):      # 사진 줄은 사진 길(폴더로 복사·이동 — 사진 보기 SOT §4.41)만
-            n = len(xfer_files)
-            # 항목은 각자 triggered 로 처리 — 아래 chosen 분기와 겹치지 않는다.
-            try:
-                self._add_transfer_submenu(menu, tr('파일 복사 ({n}개)').format(n=n), xfer_files, False)
-                self._add_transfer_submenu(menu, tr('파일 이동 ({n}개)').format(n=n), xfer_files, True)
-            except Exception:
-                pass                       # 260902-1: 서브메뉴 실패가 메뉴 전체를 막지 않게
+            self._act(menu, tr("새 폴더 만들기"), lambda b=_new_base: self._new_folder_notice(b))
+        self._mi_xfer(menu, xfer_files)
         act_rename = menu.addAction(self._kt(tr("파일·책갈피 이름 변경"), "rename_item"))   # 261019-1: 단축키 설정(기본 F2)
         act_delete = menu.addAction(self._kt(tr("파일·책갈피 삭제"), "Del"))   # 261017-1(디자인 SOT §2.9.2): 책갈피창 Del 과 같다
-        menu.addSeparator()
-        # 저장 셋 — 모두 **누른 행이 속한 파일**에 작용한다(260930-2 '일반뷰어용' 과 같은 방식).
-        act_save_as = act_save_poly = act_flatten = None
-        _conv_files = []
-        if _dir_target and pm:
-            # 사진 — PDF 저장 묶음(저장·평탄화·변환·용량·개인정보)은 뜻이 없다. 사진에 바로 쓰는 것만(4.20)
-            _ps = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
-            if _dir_target not in _ps:
-                _ps = [_dir_target]
-            for _key, _label in (("copy_image", tr("사진 복사")), ("copy_path", tr("경로 복사")),
-                                 ("to_pdf", tr("PDF 로 만들기...") if len(_ps) == 1
-                                  else tr('고른 사진 {n}장으로 PDF 만들기...').format(n=len(_ps))),
-                                 ("map", tr("지도에서 위치 보기") if len(_ps) == 1         # 261105-17(사진 보기 SOT §4.29)
-                                  else tr('지도에서 위치 보기 ({n}장)').format(n=len(_ps))),
-                                 ("share_gps", tr("공유용 사본 (위치 지움)")), ("share_all", tr("공유용 사본 (정보 모두 지움)")),
-                                 ("batch", tr("일괄 작업..."))):
-                if _key == "copy_image" and len(_ps) != 1:
-                    continue
-                _pa = menu.addAction(_label)
-                _pa.triggered.connect(lambda _=False, k=_key, fs=list(_ps): QTimer.singleShot(
-                    0, lambda: self.photoActionRequested.emit(k, fs)))
-            if self.photo_menu_extra is not None:
-                try:
-                    self.photo_menu_extra(menu, list(_ps))
-                except Exception:
-                    pass
-            menu.addSeparator()
-        elif _dir_target:
-            act_save_poly = menu.addAction(tr("저장"))
-            act_save_poly.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
-            act_save_as = menu.addAction(tr("다른 이름으로 저장..."))
-            act_save_as.setToolTip(tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf)."))
-            act_flatten = menu.addAction(tr("평탄화해서 내보내기..."))
-            act_flatten.setToolTip(
-                tr("꾸밈·삽입 사진을 쪽 내용으로 구워 다른 프로그램에서도 보이게 합니다."))
-            # 261014-11(형식 변환 SOT §2.1) → 261016-1(사용자 지시): '변환해서 내보내기...' — 형식 하위 메뉴 없이 변환 창에서 고른다
-            #   (파일 메뉴와 같은 이름·같은 창, 261016-6). 여러 파일을 골랐으면 그 파일들 일괄.
-            _conv_files = [str(it.data(0, self.DATA_FILE)) for it in self._selected_file_nodes()]
-            if _dir_target not in _conv_files:
-                _conv_files = [_dir_target]
-            _ca = menu.addAction(tr("변환...") if len(_conv_files) == 1          # 261025-5: 파일·도구 탭과 같은 이름 '변환'
-                                 else tr('변환 ({n}개 파일)...').format(n=len(_conv_files)))
-            _ca.setToolTip(tr("Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다."))
-            # 변환 창은 메뉴가 닫힌 뒤에(§4.7.11 '메뉴 안에서 모달 창')
-            _ca.triggered.connect(lambda _=False, fs=list(_conv_files): QTimer.singleShot(
-                0, lambda: self.convertFilesRequested.emit(fs, "")))
-            self._add_compress_action(menu, _conv_files)
-            _ra = menu.addAction(tr("개인정보 지우고 별도 저장..."))
-            _ra.setToolTip(tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로)."))
-            _ra.triggered.connect(lambda _=False, f=_dir_target: QTimer.singleShot(
-                0, lambda: self.redactFileRequested.emit(str(f))))
-            # 261105-9(마스터 §4.7.23, 사용자 지시 '전달'): PDF + PolyPDF 자료(OCR·고친 글·꾸밈·링크) 묶음
-            _sa = menu.addAction(tr("전달...") if len(_conv_files) == 1
-                                 else tr('전달 ({n}개 파일)...').format(n=len(_conv_files)))
-            _sa.setToolTip(tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다."))
-            _sa.triggered.connect(lambda _=False, fs=list(_conv_files): QTimer.singleShot(
-                0, lambda: self.shareFilesRequested.emit(fs)))
-            menu.addSeparator()
-        elif _folder_row is not None:
-            # 261014-16(텍스트 창 SOT §5.5): 폴더 행 — 그 아래 파일 전체에 OCR 글자층
+        act_rename.triggered.connect(lambda _=False, it=item: self._edit_item(it))
+        act_delete.triggered.connect(lambda _=False: self._op_delete())
+        if self._edit_mode and _folder_row is not None:   # 260901-3: 폴더 행 — 이름 변경 / 삭제(빈 폴더만)
+            self._act(menu, tr("폴더 이름 변경"), lambda d=_folder_row: self._rename_folder(d))
+            self._act(menu, tr("폴더 삭제"), lambda d=_folder_row: self._delete_folder(d))
+        # 저장 ▸ — 모두 누른 행이 속한 파일에(260930-2 '일반뷰어용' 과 같은 방식)
+        _ff = []
+        if _folder_row is not None and not pm:
             _ff = [str(f.data(0, self.DATA_FILE)) for f in self._iter_folder_files(item)]
-            if _ff and self._add_ocr_layer_action(menu, _ff):
-                self._add_compress_action(menu, _ff)
-                menu.addSeparator()
-        # 260618-27: 1단=‘2단 보기’(진입), 2단=이 창의 파일·쪽을 반대 창에 연다('옆 창에 열기', 261016-2)
+        if _dir_target and not pm:
+            self._tree_save_menu(menu, _dir_target, files, merge=merge if merge else [_dir_target])
+        elif _ff:
+            self._tree_save_menu(menu, None, [], folder_files=_ff)
+        # 보기 — 260618-27: 1단=‘2단 보기’(진입), 2단=이 창의 파일·쪽을 반대 창에 연다('옆 창에 열기', 261016-2)
+        menu.group("view")
         if self._split_on:
-            # 261016-2(마스터 §4.7.20, 사용자 지시): 이름 '옆 창에 열기'(옛 '1창으로 복사'·'2창으로 복사', 기능 같음)
-            act_split_view = menu.addAction(tr("옆 창에 열기"))
-            _is_copy = True
+            self._act(menu, tr("옆 창에 열기"), self.copyPaneRequested.emit)
         else:
-            act_split_view = menu.addAction(tr("2단 보기"))
-            _is_copy = False
-        # 260908-1(사용자 요청): 책갈피 펼치기/접기 · 페이지순 정렬
-        act_exp_all = act_col_all = None
-        if not pm:                                   # 사진에는 책갈피가 없다(4.20)
-            act_exp_all = menu.addAction(tr("책갈피 모두 펼치기"))
-            # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크로 보인다(보이는 파일이 계속 펼쳐진다)
-            act_exp_all.setCheckable(True)
+            self._act(menu, self._kt(tr("2단 보기"), "toggle_split"), lambda: self.splitViewRequested.emit(True))
+        if _dir_target and not pm:
+            self._act(menu, tr("발표보기"), lambda p=_dir_target: self._file_action("present", [p]))
+        if not pm:                                   # 사진에는 책갈피가 없다(4.20) — 260908-1 펼치기/접기
+            act_exp_all = self._act(menu, tr("책갈피 모두 펼치기"), lambda: self._op_expand_all(True),
+                                    tip=tr("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
+                                           "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."))
+            act_exp_all.setCheckable(True)           # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크
             act_exp_all.setChecked(self._expand_all_mode)
-            act_exp_all.setToolTip(tr("책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. "
-                                   "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."))
-            act_col_all = menu.addAction(tr("책갈피 모두 접기"))
-        act_sort_pg = None
+            self._act(menu, tr("책갈피 모두 접기"), lambda: self._op_expand_all(False))
         if self._edit_mode:
             _n_bm = len([it for it in self.tree.selectedItems()
-                         if it.data(0, self.DATA_PAGE) is not None
-                         and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)])
+                         if it.data(0, self.DATA_PAGE) is not None and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)])
             if _n_bm:
-                act_sort_pg = menu.addAction(tr('선택 책갈피 {_n_bm}개 페이지순 정렬').format(_n_bm=_n_bm))
-                act_sort_pg.setToolTip(tr("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 "
-                                       "레벨을 윗 책갈피에 맞춥니다"))
-        menu.addSeparator()
-        # 260901-3: 폴더 행 우클릭 — 폴더 이름 변경 / 삭제(빈 폴더만)
-        # 261014-1: '이 폴더 안에 새 폴더...' 는 위 '새 폴더 만들기' 와 같은 일이라 합쳤다.
-        act_fold_ren = act_fold_del = None
-        if self._edit_mode and self._is_folder_node(item):
-            act_fold_ren = menu.addAction(tr("폴더 이름 변경..."))
-            act_fold_del = menu.addAction(tr("폴더 삭제"))
-            menu.addSeparator()
-        # 260606-4: 파일(최상위) 노드면 (책갈피 생성, 책갈피 편집)도 제공
-        is_file = self._is_file_node(item)
-        act_create = None
-        act_bm_edit = None
-        act_study = act_study_bm = None
-        # 260902-5(사용자 요청): 책갈피 행 우클릭 → '책갈피 수정...'(제목·페이지). 편집모드 전용.
-        is_bookmark = (not is_file and not self._is_folder_node(item)
-                       and bool(item.data(0, self.DATA_FILE)))
-        if is_bookmark and self._edit_mode:
-            act_bm_edit = menu.addAction(tr("책갈피 수정..."))
-            menu.addSeparator()
-        if is_bookmark and _dir_target:                 # 261016-1: 책갈피 행에는 '책갈피 생성' 이 없다 — 같은 자리에
-            if self._add_ocr_layer_action(menu, _conv_files):
-                menu.addSeparator()
-        act_translate = None
-        act_edit_gloss = None
-        act_tags = None
-        act_password = None
-        if is_file and pm:
-            act_tags = menu.addAction(tr("해시태그 편집..."))   # 사진도 경로를 키로 — 그대로(4.20)
-            menu.addSeparator()
-        elif is_file:
-            # 260618-1: 암호화 파일이면 '암호 입력'(마스터/제한 무관 새 암호)
-            if item.data(0, self.DATA_ENCRYPTED):
-                act_password = menu.addAction(tr("암호 입력"))
-                menu.addSeparator()
-            act_create = menu.addAction(tr("책갈피 생성"))
-            # 261016-1(사용자 지시): 'OCR로 글자층 생성...' 은 '책갈피 생성' 아래 — 저장 그룹과 같은 고르기(여러 파일이면 일괄)
-            self._add_ocr_layer_action(menu, _conv_files if _dir_target else [])
-            # 260902-5: '책갈피 편집'(편집모드 진입) 삭제 — 편집 버튼과 중복이고 책갈피 수정과 혼동.
-            if korea_only_visible():                # 단어장은 한국 전용(다국어 SOT §7)
-                act_study = menu.addAction(tr("단어장 생성"))
-            # 261102-6(사용자 지시): 종전 '단어장·책갈피 동시 생성' — 모든 언어(단어장 단계만 한국어 화면)
-            act_study_bm = menu.addAction(tr("일괄 OCR"))
-            act_tags = menu.addAction(tr("해시태그 편집..."))   # 260623: 파일 분류 태그
-            # 260930-2 '일반뷰어용으로 저장' 은 261008-1 에 위쪽 저장 그룹으로 옮겼다.
-            menu.addSeparator()
-            if korea_only_visible():                    # 영→한 번역은 한국 전용(다국어 SOT §7)
-                act_translate = menu.addAction(tr("번역..."))   # 260621-P0: 단일 파일 번역
-                act_edit_gloss = menu.addAction(tr("번역 용어집 교정..."))  # 260623: 오역 용어 수정
-                try:                                     # 용어집 사이드카 없으면 비활성화
-                    from viewer.study.export_translation import resolve_glossary_sidecar
-                    if not resolve_glossary_sidecar(item.data(0, self.DATA_FILE)):
-                        act_edit_gloss.setEnabled(False)
-                        act_edit_gloss.setToolTip(tr("이 PDF 의 번역 용어집이 없습니다(먼저 번역)."))
-                except Exception:
-                    pass
-                menu.addSeparator()
-        # 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
-        act_fav_folder = menu.addAction(tr("현재 폴더를 즐겨찾기에 추가"))
-        act_fav_file = menu.addAction(tr("현재 파일을 즐겨찾기에 추가")) if is_file else None
-        if pm:                                          # 261104-13(사진 보기 SOT 4.38): 사진 모드 줄 표기 — 메뉴 끝
-            menu.addSeparator()
-            _ls = menu.addAction(tr("보기설정..."))
-            _ls.triggered.connect(lambda _=False: QTimer.singleShot(0, lambda: self.photoActionRequested.emit("label_style_tree", [])))
-        chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
-        if act_open_dir is not None and chosen is act_open_dir:
-            if _dir_target:
-                self._reveal_in_explorer(_dir_target)
-            else:
-                self._open_folder_in_explorer(_folder_row)
-            return
-        if act_fold_new is not None and chosen is act_fold_new:
-            d = self._ask_new_folder(base=_new_base)
-            if d is not None:
-                # 다시 훑지 않는다 — 빈 폴더는 트리에 행이 없다(PDF 가 든 폴더만 보인다) — 만든 것을 글로 알린다.
-                self._notice(tr('새 폴더: {name} — 파일 복사·이동의 대상으로 고를 수 있습니다.')
-                             .format(name=d.name))
-            return
-        if chosen is None:
-            return
-        if chosen == act_exp_all:                       # 260908-1
-            self._op_expand_all(True); return
-        if chosen == act_col_all:
-            self._op_expand_all(False); return
-        if act_sort_pg is not None and chosen == act_sort_pg:
-            self._op_sort_by_page(); return
-        if chosen == act_split_view:
-            if _is_copy:
-                self.copyPaneRequested.emit()
-            else:
-                self.splitViewRequested.emit(True)
-            return
-        if act_fold_ren is not None and chosen in (act_fold_ren, act_fold_del):
-            folder = Path(item.toolTip(0))          # 폴더 행은 툴팁에 실제 경로를 담는다
-            if chosen == act_fold_ren:
-                self._rename_folder(folder)
-            else:
-                self._delete_folder(folder)
-            return
-        if chosen == act_merge:
-            self.mergeFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
-        elif act_translate_sel is not None and chosen == act_translate_sel:
-            self.translateFilesRequested.emit([it.data(0, self.DATA_FILE) for it in sel_files])
-        elif act_translate is not None and chosen == act_translate:
-            # 'PDF번역' 창을 열고 이 파일을 우측(번역 대상)에 담는다
-            self.translateFilesRequested.emit([item.data(0, self.DATA_FILE)])
-        elif act_flatten is not None and chosen == act_flatten:      # 260930-2
-            self.flattenFileRequested.emit(_dir_target)              # 261008-1: 책갈피 행이면 그 파일
-        elif act_save_as is not None and chosen == act_save_as:      # 261008-1
-            self.saveAsFileRequested.emit(_dir_target)
-        elif act_save_poly is not None and chosen == act_save_poly:  # 261008-1
-            self._op_save(file_path=_dir_target)
-        elif act_edit_gloss is not None and chosen == act_edit_gloss:
-            self.editGlossaryRequested.emit(item.data(0, self.DATA_FILE))
-        elif act_tags is not None and chosen == act_tags:
-            self._edit_file_tags(item.data(0, self.DATA_FILE))
-        elif act_password is not None and chosen == act_password:
-            self._prompt_file_password(item, item.data(0, self.DATA_FILE))
-        elif chosen == act_create:
-            self.createBookmarksRequested.emit(item.data(0, self.DATA_FILE))
-        elif act_bm_edit is not None and chosen == act_bm_edit:
-            self._edit_item(item)                    # 책갈피 제목·페이지 편집 창
-        elif act_study is not None and chosen == act_study:
-            self.createStudyRequested.emit(item.data(0, self.DATA_FILE))
-        elif act_study_bm is not None and chosen == act_study_bm:
-            self.createStudyBookmarksRequested.emit(item.data(0, self.DATA_FILE))
-        elif chosen == act_fav_folder:
-            self.favoriteRequested.emit()
-        elif act_fav_file is not None and chosen == act_fav_file:
-            self.addFileFavoriteRequested.emit(item.data(0, self.DATA_FILE))
-        elif chosen == act_rename:
-            self._edit_item(item)
-        elif chosen == act_delete:
-            self._op_delete()
+                self._act(menu, tr('선택 책갈피 {_n_bm}개 페이지순 정렬').format(_n_bm=_n_bm), self._op_sort_by_page,
+                          tip=tr("고른 책갈피와 그 하위를 페이지 순서로 늘어놓고 레벨을 윗 책갈피에 맞춥니다"))
+            if is_bookmark:                          # 260902-5: 책갈피 행 → '책갈피 수정'(제목·페이지)
+                self._act(menu, tr("책갈피 수정"), lambda it=item: self._edit_item(it))
+        # 도구
+        if is_file and not pm:
+            cmp_pair = None
+            if merge and len(merge) == 2:            # 261014-23(마스터 §4.11): 꼭 두 개일 때
+                cmp_pair = (merge[0], merge[1])
+            if merge and korea_only_visible():
+                pass                                 # 여러 파일 번역은 아래 '번역 (N개 파일)'
+            self._mi_pdf_tools(menu, _dir_target, merge or files, item=item,
+                               ocr_range=None, compare=cmp_pair)
+        elif is_bookmark and _dir_target and not pm:
+            menu.group("tool")                       # 책갈피 행 — 그 책갈피 쪽 범위를 읽거나, 그 파일에 글자층
+            rng = self._bookmark_page_range(item) if item.data(0, self.DATA_PAGE) is not None else None
+            self._act(menu, tr("OCR 로 읽기"), lambda p=_dir_target, r=rng: self._file_action("ocr_read", [p], r),
+                      tip=tr("파일은 바꾸지 않고, 읽은 글을 텍스트 창에 보입니다."))
+            self._add_ocr_layer_action(menu, files)
+        elif _ff:
+            menu.group("tool")                       # 261014-16(텍스트 창 SOT §5.5): 폴더 행 — 그 아래 파일 전체에 OCR 글자층
+            self._add_ocr_layer_action(menu, _ff)
+        # 끝 — 260615-4: ⑫ 즐겨찾기 등록(현재 폴더 / 현재 파일)
+        self._mi_fav(menu, _dir_target if is_file else None)
+        if pm:                                       # 261104-13(사진 보기 SOT 4.38): 사진 모드 줄 표기 — 메뉴 끝
+            self._act(menu, tr("보기설정"), lambda: self.photoActionRequested.emit("label_style_tree", []))
+        menu.exec(gpos)
 
     # ===== v1.6.18: 책갈피 편집 모드 ========================================
     def _apply_edit_row_stretch(self, on: bool):
@@ -3730,8 +3699,8 @@ class BookmarkTree(QWidget):
         내려가야 닿던 문제를 없애기 위함이고, 둘 다 **선택한 파일이 있는 세부 폴더**를
         기준으로 연다(`_source_folder_of`).
         각 항목은 자체 `triggered` 로 실행한다(바깥 chosen 분기와 무관)."""
-        from PyQt6.QtWidgets import QMenu
-        sub = QMenu(title, menu)
+        from viewer.widgets.ctx_menu import CtxMenu
+        sub = CtxMenu(menu, title)
         paths = [Path(it.data(0, self.DATA_FILE)) for it in file_items]
         src = self._source_folder_of(paths)
 
@@ -3743,10 +3712,10 @@ class BookmarkTree(QWidget):
             a = sub.addAction(label)
             a.triggered.connect(later(lambda d=folder: self._transfer_files(paths, d, move)))
 
-        a_new = sub.addAction(tr("새 폴더 만들기..."))     # ①
+        a_new = sub.addAction(tr("새 폴더 만들기"))     # ①
         a_new.triggered.connect(
             later(lambda: self._transfer_files(paths, self._ask_new_folder(base=src), move)))
-        a_pick = sub.addAction(tr("다른 폴더 선택..."))    # ②
+        a_pick = sub.addAction(tr("다른 폴더 선택"))    # ②
         a_pick.triggered.connect(
             later(lambda: self._transfer_files(paths, self._ask_pick_folder(move, start=src), move)))
         sub.addSeparator()
