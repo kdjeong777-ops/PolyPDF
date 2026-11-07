@@ -145,7 +145,9 @@ try:
         "⑦ 책갈피 우클릭에 저장 항목")
     # 261008-1: 책갈피 행이면 그 파일 — 261107-2 부터 저장 ▸ 를 `_tree_save_menu(메뉴, 누른 파일, …)` 한 곳이 만든다.
     #   실제로 눌러 그 파일에 가는지는 test_file_rename_menu D '저장 셋이 모두 누른 그 파일에' 가 본다.
-    chk("self._tree_save_menu(menu, _dir_target" in s_bt and "lambda f=target: self.flattenFileRequested.emit(f)" in s_bt,
+    #   261107-21: 사본 앞에 '먼저 저장' 확인(`_copy_ok`)이 끼었다 — 대상은 그대로 누른 파일(target)
+    chk("self._tree_save_menu(menu, _dir_target" in s_bt
+        and "lambda f=target: self._copy_ok([f]) and self.flattenFileRequested.emit(f)" in s_bt,
         "⑦ ★ **누른 그 파일**에 작용한다(사용자 결정)")
 
 except Exception:
