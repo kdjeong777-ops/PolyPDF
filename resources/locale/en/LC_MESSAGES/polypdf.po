@@ -14709,3 +14709,13 @@ msgstr "Click to see the document details."
 #: viewer/doc_info_controller.py
 msgid "열린 PDF 가 없습니다."
 msgstr "There is no open PDF."
+
+#: viewer/update_controller.py
+#, python-brace-format
+msgid "구성요소 설치: {title}"
+msgstr "Install component: {title}"
+
+#: viewer/update_controller.py
+#, python-brace-format
+msgid "{title} 내려받기를 중단했습니다 — 아무것도 바꾸지 않았습니다."
+msgstr "Stopped downloading {title} — nothing was changed."

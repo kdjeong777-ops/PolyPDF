@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from viewer.i18n import tr
 
@@ -341,69 +341,201 @@ class UpdateMixin:
             self._updating = True
         return ok
 
-    def _open_components_installer(self):
-        """260618-12: 녹화(ffmpeg)·OCR(Tesseract) 구성요소를 릴리스에서 설치 폴더로 받기."""
+    # ── 구성요소 설치 (마스터 §14.5 U16, 261107-11 — 확인·내려받기는 배경, 응답성 SOT §4.4) ──────────
+    def _comp_specs(self):
         from viewer import components
+        return {"ffmpeg": (tr("녹화 (ffmpeg)"), components.ffmpeg_installed, components.install_ffmpeg),
+                "tess": ("OCR (Tesseract)", components.tesseract_installed, components.install_tesseract)}
+
+    def _open_components_installer(self):
+        """260618-12: 녹화(ffmpeg)·OCR(Tesseract) 구성요소를 릴리스에서 설치 폴더로 받기.
+        261107-11: 모달 아님·하나만. 확인·내려받기는 배경 워커 — 받는 중 창을 닫아도 계속(작업 창에 남는다)."""
         from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                       QPushButton, QProgressBar)
-        repo = (self._prefs.get("update_repo") or "").strip() or components.DEFAULT_REPO
+        dlg = getattr(self, "_comp_dlg", None)
+        if dlg is not None:
+            try:
+                dlg.show(); dlg.raise_(); dlg.activateWindow()
+                return
+            except RuntimeError:
+                self._comp_dlg = None
         dlg = QDialog(self)
+        dlg.setObjectName("componentsDialog")
         dlg.setWindowTitle(tr("구성요소 설치 (녹화·OCR)"))
         dlg.resize(460, 200)
         v = QVBoxLayout(dlg)
         v.addWidget(QLabel(tr("필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
                            "(녹화=ffmpeg, OCR=Tesseract · 재시작 불필요)")))
-        bar = QProgressBar(); bar.setRange(0, 100); bar.setValue(0); bar.setVisible(False)
-
-        rows = {}
-
-        def make_row(key, title, installed_fn, install_fn):
+        dlg._rows = {}
+        for key, (title, _inst, _fn) in self._comp_specs().items():
             row = QHBoxLayout()
-            lab = QLabel(title)
-            st = QLabel()
-            btn = QPushButton()
-            row.addWidget(lab, 1)
+            st, btn = QLabel(tr("확인 중…")), QPushButton(tr("다운로드"))
+            btn.setEnabled(False)
+            row.addWidget(QLabel(title), 1)
             row.addWidget(st)
             row.addWidget(btn)
             v.addLayout(row)
-            rows[key] = (st, btn)
-
-            def refresh():
-                ok = installed_fn()
-                st.setText(tr("설치됨 ✓") if ok else tr("미설치"))
-                st.setStyleSheet("color:#2a7;" if ok else "color:#c33;")
-                btn.setText(tr("재설치") if ok else tr("다운로드"))
-
-            def do():
-                bar.setVisible(True); bar.setValue(0)
-                for _s, b in rows.values():
-                    b.setEnabled(False)
-
-                def prog(done, total):
-                    if total > 0:
-                        bar.setValue(int(done * 100 / total))
-                    QApplication.processEvents()
-                    return True
-                ok, info = install_fn(repo, prog)
-                bar.setVisible(False)
-                for _s, b in rows.values():
-                    b.setEnabled(True)
-                if ok:
-                    QMessageBox.information(dlg, tr("구성요소 설치"), tr('{title} 설치 완료.').format(title=title))
-                else:
-                    QMessageBox.warning(dlg, tr("구성요소 설치"), tr('{title} 설치 실패:\n{info}').format(title=title, info=info))
-                refresh()
-
-            btn.clicked.connect(do)
-            refresh()
-
-        make_row("ffmpeg", tr("녹화 (ffmpeg)"),
-                 components.ffmpeg_installed, components.install_ffmpeg)
-        make_row("tess", "OCR (Tesseract)",
-                 components.tesseract_installed, components.install_tesseract)
-        v.addWidget(bar)
+            dlg._rows[key] = (st, btn)
+            btn.clicked.connect(lambda _=False, k=key: self._comp_button(k))
+        dlg._bar = QProgressBar(); dlg._bar.setRange(0, 100); dlg._bar.setVisible(False)
+        v.addWidget(dlg._bar)
         v.addStretch(1)
-        close = QPushButton(tr("닫기")); close.clicked.connect(dlg.accept)
+        close = QPushButton(tr("닫기")); close.clicked.connect(dlg.close)
         h = QHBoxLayout(); h.addStretch(1); h.addWidget(close)
         v.addLayout(h)
-        dlg.exec()
+        self._comp_dlg = dlg
+        self._comp_check()
+        dlg.show()
+
+    def _comp_check(self):
+        """설치 여부를 배경에서(tesseract --version 실행 — 메인에서 부르면 선다)."""
+        from viewer.workers import run_in_thread
+        w = ComponentStatusWorker({k: s[1] for k, s in self._comp_specs().items()})
+        w.done.connect(self._comp_status)
+        run_in_thread(w, self.__dict__.setdefault("_comp_keep", []))
+
+    def _comp_dialog(self):
+        dlg = getattr(self, "_comp_dlg", None)
+        try:
+            return dlg if (dlg is not None and dlg.isVisible()) else None
+        except RuntimeError:
+            self._comp_dlg = None
+            return None
+
+    def _comp_status(self, res: dict):
+        from viewer import theme
+        from viewer.widgets import icons
+        dlg = self._comp_dialog()
+        if dlg is None:
+            return
+        dark = theme.is_dark()
+        busy = getattr(self, "_comp_worker", None)
+        for key, (st, btn) in dlg._rows.items():
+            ok = bool(res.get(key))
+            st.setText(tr("설치됨 ✓") if ok else tr("미설치"))
+            st.setStyleSheet("color:%s;" % (icons.OK_GREEN[dark] if ok else icons.ACCENT["stop"][dark]))
+            if busy is not None and busy.key == key:
+                btn.setText(tr("중단")); btn.setEnabled(True)
+            else:
+                btn.setText(tr("재설치") if ok else tr("다운로드")); btn.setEnabled(busy is None)
+
+    def _comp_button(self, key: str):
+        w = getattr(self, "_comp_worker", None)
+        if w is not None:
+            if w.key == key:
+                w.request_cancel()                     # [중단]
+            return
+        self._comp_start(key)
+
+    def _comp_start(self, key: str):
+        from viewer import components
+        from viewer.workers import run_in_thread
+        title, _inst, fn = self._comp_specs()[key]
+        repo = (self._prefs.get("update_repo") or "").strip() or components.DEFAULT_REPO
+        w = ComponentInstallWorker(key, title, fn, repo)
+        self._comp_worker = w
+        jid = "components:" + key
+        w.jid = jid
+        self.job_add(jid, tr("구성요소 설치: {title}").format(title=title), cancel=w.request_cancel)
+        w.progress.connect(self._comp_progress)
+        w.done.connect(self._comp_done)
+        dlg = self._comp_dialog()
+        if dlg is not None:
+            dlg._bar.setValue(0); dlg._bar.setVisible(True)
+            for k, (_st, b) in dlg._rows.items():
+                b.setEnabled(k == key)
+                if k == key:
+                    b.setText(tr("중단"))
+        run_in_thread(w, self.__dict__.setdefault("_comp_keep", []))
+
+    def _comp_progress(self, pct: int, msg: str):
+        w = getattr(self, "_comp_worker", None)
+        if w is not None:
+            self.job_progress(w.jid, msg)
+        dlg = self._comp_dialog()
+        if dlg is not None and pct >= 0:
+            dlg._bar.setValue(pct)
+
+    def _comp_done(self, key: str, ok: bool, info: str, cancelled: bool):
+        w = getattr(self, "_comp_worker", None)
+        self._comp_worker = None
+        if w is not None:
+            self.job_done(w.jid)
+        title = self._comp_specs()[key][0]
+        if cancelled:
+            text = tr("{title} 내려받기를 중단했습니다 — 아무것도 바꾸지 않았습니다.").format(title=title)
+        elif ok:
+            text = tr('{title} 설치 완료.').format(title=title)
+        else:
+            text = tr('{title} 설치 실패:\n{info}').format(title=title, info=info)
+        dlg = self._comp_dialog()
+        if dlg is None:                                # 창을 닫은 뒤 끝남 — 상태 표시줄로 알린다
+            self.status.showMessage(text.replace("\n", " "), 8000)
+            return
+        dlg._bar.setVisible(False)
+        self.status.showMessage(text.replace("\n", " "), 8000)
+        if not ok and not cancelled:
+            QMessageBox.warning(dlg, tr("구성요소 설치"), text)
+        self._comp_check()
+
+
+class ComponentStatusWorker(QObject):
+    """구성요소 설치 여부(배경) — `tesseract_installed` 는 `tesseract --version` 을 실행한다(응답성 SOT §4.4)."""
+    done = pyqtSignal(dict)
+    finished = pyqtSignal()
+
+    def __init__(self, checks: dict):
+        super().__init__()
+        self.checks = dict(checks)
+
+    def request_cancel(self):
+        pass
+
+    def run(self):
+        out = {}
+        try:
+            for k, fn in self.checks.items():
+                try:
+                    out[k] = bool(fn())
+                except Exception:
+                    out[k] = False
+            self.done.emit(out)
+        finally:
+            self.finished.emit()
+
+
+class ComponentInstallWorker(QObject):
+    """구성요소 내려받기·설치(배경) — progress(퍼센트, 글), done(키, 성공, 정보, 중단됨). [중단] 은 다음 조각에서 멈춘다."""
+    progress = pyqtSignal(int, str)
+    done = pyqtSignal(str, bool, str, bool)
+    finished = pyqtSignal()
+
+    def __init__(self, key: str, title: str, install_fn, repo: str):
+        super().__init__()
+        self.key, self.title, self.install_fn, self.repo = key, title, install_fn, repo
+        self._cancel = False
+        self._last = -1
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def _prog(self, done, total):
+        if self._cancel:
+            return False                               # components._download 가 None 을 돌려준다 — 아무것도 쓰지 않는다
+        pct = int(done * 100 / total) if total > 0 else -1
+        if pct != self._last:
+            self._last = pct
+            mb = done / 1048576.0
+            self.progress.emit(pct, ("%d%% · %.0f MB" % (pct, mb)) if pct >= 0 else ("%.0f MB" % mb))
+        return True
+
+    def run(self):
+        try:
+            try:
+                ok, info = self.install_fn(self.repo, self._prog)
+            except Exception as e:
+                ok, info = False, str(e)
+            stopped = self._cancel and not ok              # 다 받은 뒤 누른 중단은 늦었다 — 이미 설치됐다
+            self.done.emit(self.key, bool(ok), str(info or ""), bool(stopped))
+        finally:
+            self.finished.emit()
