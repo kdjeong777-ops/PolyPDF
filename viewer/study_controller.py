@@ -1569,10 +1569,23 @@ class StudyMixin:
             QMessageBox.warning(self, "사전 정리", f"실패: {e}")
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
+    def _dict_file_job(self, fn, label: str, title: str):
+        """사전 파일 일을 배경에서(`_file_op_bg` — 진행창, 응답성 SOT §5). 실패면 그 예외, 성공이면 None.
+        창 없는 대역(검사)에는 `_file_op_bg` 가 없어 그 자리에서 한다."""
+        run = getattr(self, "_file_op_bg", None)
+        if run is None:
+            try:
+                fn()
+            except Exception as e:                   # noqa: BLE001
+                return e
+            return None
+        return run(fn, label, title)
+
     def _action_backup_dict(self, checked: bool = False):
-        """260615-15: 사전 백업 — dict.db + dict_images/ 를 zip 으로(여러 PC 이전·동기화)."""
+        """260615-15: 사전 백업 — dict.db + user_dict.db + dict_images/ 를 zip 으로(여러 PC 이전·동기화).
+        261107-13: 압축·DB 복사는 배경(`study.dict_backup`, SQLite 백업 API)."""
         from PyQt6.QtWidgets import QFileDialog
-        import zipfile
+        from viewer.study import dict_backup
         from viewer.study.dict_store import default_db_path
         from viewer.study.image_fetch import dict_images_dir
         out, _ = QFileDialog.getSaveFileName(
@@ -1585,44 +1598,21 @@ class StudyMixin:
                 self._dict_store.close(); self._dict_store = None
         except Exception:
             pass
-        try:
-            import sqlite3, tempfile
-            dbp = default_db_path()
-            imgs = dict_images_dir()
-
-            def _snap(path, z, name):
-                # 261107-13: 파일을 그대로 담으면 다른 연결(배경 워커 등)이 남긴 WAL 의 최근 변경이 빠진다 —
-                #   SQLite 백업 API 로 한 시점의 온전한 사본을 만들어 담는다
-                with tempfile.TemporaryDirectory() as td:
-                    tmp = Path(td) / name
-                    src = sqlite3.connect(str(path))
-                    dst = sqlite3.connect(str(tmp))
-                    try:
-                        src.backup(dst)
-                    finally:
-                        dst.close(); src.close()
-                    z.write(str(tmp), name)
-
-            with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-                if dbp.exists():
-                    _snap(dbp, z, "dict.db")
-                udb = dbp.parent / "user_dict.db"          # 261019-5: 사용자 뜻은 따로 — 함께 담는다
-                if udb.exists():
-                    _snap(udb, z, "user_dict.db")
-                for f in imgs.glob("*"):
-                    if f.is_file():
-                        z.write(str(f), f"dict_images/{f.name}")
+        dbp, imgs = default_db_path(), dict_images_dir()
+        err = self._dict_file_job(lambda: dict_backup.backup_to(out, dbp, imgs), "사전 백업 중…", "사전 백업")
+        if err is None:
             QMessageBox.information(self, "사전 백업",
                                    f"사전(용어·그림·인터넷 캐시)을 백업했습니다.\n{out}\n\n"
-                                   "다른 PC에서 '사전 복원'으로 불러오세요.")
-        except Exception as e:
-            QMessageBox.warning(self, "사전 백업", f"실패: {e}")
+                                   "다른 PC에서 [복원] 으로 불러오세요.")
+        else:
+            QMessageBox.warning(self, "사전 백업", f"실패: {err}")
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_restore_dict(self, checked: bool = False):
-        """260615-15: 사전 복원 — 백업 zip 의 dict.db + dict_images/ 로 교체(기존은 .bak)."""
+        """260615-15: 사전 복원 — 백업 zip 의 dict.db + user_dict.db + dict_images/ 로 교체(기존은 .bak).
+        261107-13: 풀기·DB 넣기는 배경(`study.dict_backup`, SQLite 백업 API)."""
         from PyQt6.QtWidgets import QFileDialog
-        import zipfile, shutil
+        from viewer.study import dict_backup
         from viewer.study.dict_store import default_db_path
         from viewer.study.image_fetch import dict_images_dir
         fn, _ = QFileDialog.getOpenFileName(
@@ -1640,45 +1630,15 @@ class StudyMixin:
                 self._dict_store.close(); self._dict_store = None
         except Exception:
             pass
-        try:
-            import sqlite3, tempfile
-            dbp = default_db_path()
-            imgs = dict_images_dir()
-            udb = dbp.parent / "user_dict.db"
-
-            def _copy_db(src_path, dst_path):
-                # 261107-13: 파일을 덮어쓰면 다른 연결이 남긴 WAL 이 다시 열 때 그 위에 되감겨 복원이 사라진다 —
-                #   SQLite 백업 API 로 넣는다(열린 연결·WAL 을 SQLite 가 맞춘다)
-                src = sqlite3.connect(str(src_path))
-                dst = sqlite3.connect(str(dst_path))
-                try:
-                    src.backup(dst)
-                finally:
-                    dst.close(); src.close()
-
-            with zipfile.ZipFile(fn, "r") as z, tempfile.TemporaryDirectory() as td:
-                names = z.namelist()
-                if "dict.db" in names:
-                    if dbp.exists():
-                        _copy_db(dbp, str(dbp) + ".bak")
-                    _copy_db(z.extract("dict.db", td), dbp)
-                # 261019-5: 사용자 뜻 파일이 든 백업이면 그것으로(기존은 .bak). 옛 백업(dict.db 안의 사용자 항목)은
-                #   다음에 열 때 지금 사용자 뜻에 **겹치지 않게 더해진다**(DictStore._attach_user)
-                if "user_dict.db" in names:
-                    if udb.exists():
-                        _copy_db(udb, str(udb) + ".bak")
-                    _copy_db(z.extract("user_dict.db", td), udb)
-                for nm in names:
-                    if nm.startswith("dict_images/") and not nm.endswith("/"):
-                        target = imgs / Path(nm).name
-                        with z.open(nm) as src, open(target, "wb") as dst:
-                            shutil.copyfileobj(src, dst)
+        dbp, imgs = default_db_path(), dict_images_dir()
+        err = self._dict_file_job(lambda: dict_backup.restore_from(fn, dbp, imgs), "사전 복원 중…", "사전 복원")
+        if err is None:
             self._spot_terms_cache = None
             self._refresh_study_panel(self.main_view.current_page())
             QMessageBox.information(self, "사전 복원",
                                    "사전을 복원했습니다. (기존 dict.db → dict.db.bak)")
-        except Exception as e:
-            QMessageBox.warning(self, "사전 복원", f"실패: {e}")
+        else:
+            QMessageBox.warning(self, "사전 복원", f"실패: {err}")
 
     @korea_only                 # 한국 전용(다국어 SOT §7) — 단축키·우클릭·자동 호출도 막는다
     def _action_online_enrich(self, checked: bool = False):

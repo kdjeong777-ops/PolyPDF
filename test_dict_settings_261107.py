@@ -9,6 +9,7 @@ D. [적용] — 기본 선택·우선순위가 dict.db 에, 스타일이 setting
 E. 바로 실행 — [사전 지우기] 는 누르면 바로(창을 [취소] 해도 지운 그대로)
 F. 도구 탭에 '사전 관리' 단추가 없다(명령 id tools.dict 없음)
 G. 단어장 창 '이 PDF 사전' — 누르면 이 PDF 의 사전 창, 닫으면 이 PDF 의 선택으로 저장
+H. [백업]·[복원] 은 배경 스레드(`_file_op_bg` → `study.dict_backup`) — 261107-13 덧붙임(수정 전 코드는 메인에서 했다)
 """
 import os, sys, tempfile
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -167,6 +168,23 @@ chk(seen == ["이 PDF 의 사전"], "G2 누르면 '이 PDF 의 사전' 창", str
 chk("g1" in (mw._prefs.get("dict_file_off") or {}).get(key, []), "G3 닫으면 이 PDF 의 선택으로 저장(g1 꺼짐)",
     str(mw._prefs.get("dict_file_off")))
 chk(enabled().get("g1") is True, "G4 기본 선택은 그대로")
+
+# ---- H 백업·복원은 배경 스레드(응답성 SOT §5 — 사전이 크면 압축·DB 복사가 메인을 세운다) ----
+import threading
+from PyQt6.QtWidgets import QFileDialog
+from viewer.study import dict_backup
+threads = []
+_ob, _or = dict_backup.backup_to, dict_backup.restore_from
+dict_backup.backup_to = lambda *a, **k: (threads.append(threading.current_thread() is threading.main_thread()), _ob(*a, **k))
+dict_backup.restore_from = lambda *a, **k: (threads.append(threading.current_thread() is threading.main_thread()), _or(*a, **k))
+zp = str(root / "bk.zip")
+QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (zp, ""))
+QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (zp, ""))
+mw._action_backup_dict()
+mw._action_restore_dict()
+dict_backup.backup_to, dict_backup.restore_from = _ob, _or
+chk(threads == [False, False] and Path(zp).exists(), "H1 [백업]·[복원] 은 메인이 아닌 배경 스레드에서", str(threads))
+chk("g1" in enabled(), "H2 복원 뒤 사전이 그대로 열린다")
 
 mw._skip_save_on_close = True
 mw.close()
