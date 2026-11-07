@@ -23,9 +23,9 @@
   <li><b>Bookmarks panel (left)</b>: click to load the file in the main viewer. Expand a file
     node (▸) to see the PDF's own bookmarks (TOC). Along the top: the <b>Search list names</b> box · <b>#</b> (hashtags, §13) ·
     <b>Sort</b> (§7) · <b>📁 Folder</b> (file mode ↔ folder mode) · <b>Tree</b> (single ↔ tree) · <b>↻</b> (refresh after files change outside — also in edit mode; asks first if there are unsaved changes).</li>
-  <li><b>Right-click</b> a file or bookmark: Print / Open in File Explorer · New Folder · Rename File/Bookmark · Delete File/Bookmark /
+  <li><b>Right-click</b> a file or bookmark: Print / Rotate file ▸ / Open in File Explorer · New Folder · Rename File/Bookmark · Delete File/Bookmark /
     Save ▸ (Save · Save As · Flattened copy · Reduced-size copy · Copy without personal info · Transfer bundle · Make PDF · Convert) / Split View · Presentation · Expand/Collapse All Bookmarks /
-    Read with OCR · Create text layer with OCR · Batch OCR · Build Bookmarks · Edit Hashtags / add to Favorites, and so on.
+    Read with OCR · Create text layer with OCR · Batch OCR · Build Bookmarks · Compare two files (with two chosen) · Sign · Document Info · Edit Hashtags / add to Favorites, and so on.
     In edit mode there are also Copy to folder / Move to folder (below New Folder), rename / delete folder, and merging several files into a PDF.</li>
   <li><b>Expand All Bookmarks</b> (right-click): expands the bookmarks of every file
     <b>visible</b> in the panel. While it is on (checked in the menu), files that appear as you
@@ -33,12 +33,13 @@
     <b>Collapse All Bookmarks</b> turns this off and collapses back to the file rows.</li>
   <li><b>Page thumbnails (second column)</b>: every page of the current PDF. Click to jump. Filter with the buttons on top:
     <b>All · Shown</b> (pages not hidden) · <b>Marked</b> (pages with lines, shapes, text or photos) · <b>Hidden</b>.
-    <b>Right-click</b> a thumbnail → 'Add Bookmark' (to the current file in the tree) · print · copy to screenshots · page editing (§9).</li>
-  <li><b>Main viewer (center)</b>: toolbar = ‹ [page] /N › ·
+    <b>Right-click</b> a thumbnail → print · copy to screenshots · page editing (§9) · (edit mode) 'Add Bookmark' (to the current file in the tree) · 'Add Hyperlink'.</li>
+  <li><b>Main viewer (center)</b>: toolbar =
     <b>screen capture</b> · read aloud <b>▶</b> + <b>Range ▾</b> ·
-    <b>mp3</b>. In edit mode the annotation tools (§8) follow.
+    <b>mp3</b>. In edit mode the annotation tools (§8) follow. Page navigation (‹ [page] /N ›) is at the <b>bottom centre</b> of the window.
     The fit combo (fit page / two pages / fit width / manual) is at the <b>bottom right</b>, left of <b>+ 0 −</b> — it applies to the main view (the active pane in split view).
     The vertical scrollbar on the right shows your <b>progress through the whole document</b> (drag to move).
+    The <b>info line</b> at the left end of the bottom bar: file name · number of pages · current page paper (A4 portrait etc.) · file size, plus password · signed · scanned when they apply. Click it for the <b>Document Info</b> window (title · author · creator · created/modified dates · PDF version · permissions · signatures · pages with/without a text layer · bookmark count · attachment count) — right-click 'Document Info' and Alt+Enter do the same. In split view each pane has its own line.
     <b>Right-click</b> the page (or Shift+F10) — the six menus (bookmark panel · thumbnails · page, PDF and photo) share one order:
     Print → Copy (Copy · Copy as Screenshot · Copy Text · Paste …) → Shape (Rotate · Crop · Hide · Delete) → File ▸ →
     <b>Save ▸</b> (click the label to save at once; ▸ holds Save As · Flattened copy · Reduced-size copy · Copy without personal info · Transfer bundle · Make PDF · Convert) →
@@ -133,7 +134,7 @@
   <li>The screenshot list <b>always starts empty</b>; on exit, if it has cards, you are asked whether to save them as a PDF.</li>
 </ul>
 
-<h3>5. Build bookmarks automatically (Tools → Generate Bookmarks Automatically... / right-click a file → 'Build Bookmarks')</h3>
+<h3>5. Build bookmarks automatically (Tools → Generate Bookmarks Automatically / right-click a file → 'Build Bookmarks')</h3>
 <ul>
   <li>Analyzes the current PDF (or the file you right-clicked in the tree) and builds bookmarks.</li>
   <li>Modes: <b>Auto</b> (TOC if present, otherwise font; <b>OCR automatically for scanned images</b>) ·
@@ -155,13 +156,13 @@
 <ul>
   <li>Turning <b>Edit</b> (pencil icon) on shows <b>Cancel</b> (undo every change since the last save) · <b>Save</b> and two rows of edit buttons.
     While editing, clicking a bookmark <b>moves the main viewer there</b>, and <b>double-clicking</b>
-    opens the edit window. <b>Right-click</b> an item → Rename File/Bookmark / Delete File/Bookmark / Edit Bookmark... /
+    opens the edit window. <b>Right-click</b> an item → Rename File/Bookmark / Delete File/Bookmark / Edit bookmark /
     Sort Selected Bookmarks by Page.
     Changing bookmarks (rename, delete, add, build automatically) works <b>only in edit mode</b> — in view mode you are asked whether to turn edit mode on (renaming or deleting files works any time).
     In split view, new bookmarks go into <b>that bookmark panel</b>; if both panels show the same file, <b>both</b> change.</li>
   <li><b>◀ / ▶</b>: outdent / indent. <b>▲ / ▼</b>: move up / down. You can also drag with the mouse.</li>
   <li><b>🗑️ Delete</b> (bookmark = remove from tree · file = Recycle Bin), <b>Shift + 🗑️ Delete</b> (keep only the selected bookmarks and delete the file's others, after confirming),
-    <b>📋 Copy</b> (copy the selected files to another folder), <b>💾 Save</b> (&lt;original&gt;_edited.pdf).
+    <b>📋 Copy</b> (copy the selected files to another folder), <b>💾 Save</b> (into the original PDF — for a new file use 'Save As' (F12), default name &lt;original&gt;_edited.pdf).
     You can also add a bookmark at the current page by <b>right-clicking the viewer</b>.</li>
   <li>If you turn editing off with unsaved changes, you are asked <b>Save / Revert (Don't Save) / Keep Editing</b>.</li>
 </ul>
@@ -181,19 +182,19 @@
     <b>Select objects</b> (move · resize · delete; drag a box to select several) · <b>Eraser</b> (thin Ctrl+E / thick Ctrl+Shift+E) ·
     <b>Clear</b> (all lines on this page, Ctrl+Shift+Backspace) · <b>↶ Undo</b> (Ctrl+Z) / <b>↷ Redo</b> (Ctrl+Y) — undoes what you did in edit mode (decorations, photos, bookmarks, moving/deleting/splitting pages, hiding, rotation, hyperlinks, crop) in order, from anywhere in the window and across pages.</li>
   <li>While typing, ▲▼ change the font size and ◀▶ the letter spacing. Move a selected object with the arrow keys (Shift = 1px); Del deletes it.</li>
-  <li><b>Right-click on a selected object</b>: with a text box, line or photo selected, the right-click menu shows only its options (Line and Text Input Settings… opens on the Text tab for a text box). The crop and digital signature buttons appear only in edit mode.</li>
+  <li><b>Right-click on a selected object</b>: with a text box, line or photo selected, the right-click menu shows only its options (for a text box, 'Text input settings' opens the input settings window on its Text tab). The crop and digital signature buttons appear only in edit mode.</li>
   <li><b>Copy and paste</b>: Ctrl+C → Ctrl+V copies selected text boxes, lines, shapes and photos (several selected with a box, too) — slightly offset on the same page, at the same place on another page or file.
     Right-click 'Copy' / 'Paste' pastes where you clicked. <b>Drag with Shift held</b> to move a copy and leave the original.</li>
-  <li>Right-click the page → <b>Shape Input Settings… / Text Input Settings…</b>: set pens 1–5, highlight opacity and eraser size, and text styles (font · size · colour ·
+  <li>Right-click the page → <b>Shape input settings / Text input settings</b>: set pens 1–5, highlight opacity and eraser size, and text styles (font · size · colour ·
     letter spacing · box line · background · alignment · callout end), and save them.</li>
-  <li><b>Photos</b>: right-click 'Paste Photo' · 'Paste from Clipboard' (▼ Rectangle / Rounded Rectangle / Circle) · 'Paste Screenshots' (selected screenshots, or all), Ctrl+V, or drop an image file.
+  <li><b>Photos</b>: right-click 'Paste Photo' · 'Paste from Clipboard' (▼ Rectangle / Rounded Rectangle / Circle) · 'Paste Screenshots' (the cards selected in the screenshot pane, or all), Ctrl+V, or drop an image file.
     Ctrl+↑/↓ change a selected photo's opacity.</li>
-  <li><b>Add Hyperlink…</b> (right-click the page or a thumbnail): give it a label and either a <b>file</b> (a document, image, video etc. in the
+  <li><b>Add Hyperlink</b> (right-click the page or a thumbnail, Ctrl+K): give it a label and either a <b>file</b> (a document, image, video etc. in the
     bookmark folder) or an <b>external link (URL)</b> (https, allowed domains). It shows as a blue button on the page. Executables are blocked.
     Hyperlinks are kept in N-up printing and exports.</li>
   <li><b>Save</b> (💾) = bookmarks, page edits, rotation and crop go into the original PDF, and annotations (lines, shapes, text, photos), hyperlinks and tags
     are also put into the PDF <b>so other PDF viewers show them</b> (a 'PolyPDF' layer you can hide in another viewer's layer panel). Keep editing in PolyPDF and save again. Signed documents do not get the annotation copy ·
-    <b>Save As...</b> · <b>Flatten and Export...</b> = a <b>new file</b> (<code>_flattened.pdf</code>) with annotations, photos and hyperlinks
+    <b>Save As</b> (F12) · <b>Flattened copy</b> (Save ▸) = a <b>new file</b> (<code>_flattened.pdf</code>) with annotations, photos and hyperlinks
     flattened into the page and the content outside a crop really removed (text stays searchable; the original is untouched). Use it for programs that ignore annotations, for submissions, or to remove cropped-out content.
     Signed documents are <b>signed again</b> at the same places (your digital ID is confirmed — cancel and that signature is left out).</li>
   <li>If <b>another PolyPDF window</b> has the file open when you save, you are asked <b>Close and Save / Save with New Name / Cancel</b>.</li>
@@ -217,22 +218,22 @@
   <li><b>File → Print...</b> (Ctrl+P): range (whole document · current page · selected thumbnails · selected bookmark files · page range · screenshots) ·
     preview · printer · paper · print size (fit / actual size / scale) · colour (colour / black and white) · single/double-sided ·
     include (Document + annotations / Document only) · copies. <b>Print to PDF</b> saves to a file.</li>
-  <li><b>Create N-up PDF...</b> (Tools → Create N-up PDF...): turns the PDF open in the viewer into a new N-up file (1-up included). Same settings and styles as N-up printing,
+  <li><b>Create N-up PDF</b> (Tools → Create N-up PDF): turns the PDF open in the viewer into a new N-up file (1-up included). Same settings and styles as N-up printing,
     without the multi-file items such as dividers or a new page per document. The table of contents lists the top-level bookmarks; bookmarks are carried over as they are.</li>
   <li><b>N-up printing</b> (the print dialog's 'N-up printing' → settings): 1·2·4·6·8 pages per sheet, fit mode, sides (single/double), <b>gutter</b>,
     <b>facing pages</b> (adds 1 blank page at the front), each document / odd page start, page numbers (position · font · background block), lines,
     <b>cover · contents · divider pages</b> (Word templates; samples can be saved). Save the settings as a <b>style</b>.</li>
-  <li><b>Convert</b> (File and Tools tabs 'Convert' · bookmark panel right-click 'Convert...' · thumbnail right-click 'Convert selected pages'): turns the PDF into Word, Hangul HWPX, PowerPoint, Excel (tables), text or images. Both Word/HWPX modes give editable text — <b>editable</b> joins broken lines into paragraphs; <b>keep appearance</b> keeps the original lines, indents, spacing, font sizes and letter spacing so it looks like the original. On a PC with Word installed you can also choose <b>Word (using Microsoft Word)</b>, which lets Word do the conversion. Pictures stay pictures; captions are text; running headers and footers go into the format's own header/footer (page numbers become automatic page numbers — Hangul's page numbering). Saved next to the PDF with the same name; if that name exists, (2) is added. Choose the whole document, a page range or the selected pages; select several files in the bookmark panel to convert them together.</li>
-  <li><b>Merge PDFs</b> (Tools → Merge PDFs..., Ctrl+M · right-click several files in the bookmark panel): joins the files in the order of the right-hand list.
+  <li><b>Convert</b> (File and Tools tabs 'Convert' · right-click 'Save ▸ Convert' in the bookmark panel, thumbnails or page): turns the PDF into Word, Hangul HWPX, PowerPoint, Excel (tables), text or images. Both Word/HWPX modes give editable text — <b>editable</b> joins broken lines into paragraphs; <b>keep appearance</b> keeps the original lines, indents, spacing, font sizes and letter spacing so it looks like the original. On a PC with Word installed you can also choose <b>Word (using Microsoft Word)</b>, which lets Word do the conversion. Pictures stay pictures; captions are text; running headers and footers go into the format's own header/footer (page numbers become automatic page numbers — Hangul's page numbering). Saved next to the PDF with the same name; if that name exists, (2) is added. Choose the whole document, a page range or the selected pages; select several files in the bookmark panel to convert them together.</li>
+  <li><b>Merge PDFs</b> (Tools → Merge PDFs, Ctrl+M · right-click several files in the bookmark panel → 'Merge {n} chosen into a PDF'): joins the files in the order of the right-hand list.
     You can add the screenshot list too; there is a preview and options to reduce file size and make an N-up copy. When done it asks whether to open the result in a new window.</li>
-  <li><b>Convert Images → PDF...</b>: picture list (top to bottom = page order, drag to reorder) · preview · save as N-up · save as PDF.</li>
-  <li><b>Encrypt (password · permissions)...</b>: an open password, a permissions password (what printing, changes and copying are allowed), 256-bit AES (recommended) / 128-bit AES.
+  <li><b>Images to PDF</b> (Tools tab): picture list (top to bottom = page order, drag to reorder) · preview · save as N-up · save as PDF.</li>
+  <li><b>Encrypt (password · permissions)</b> (Tools tab): an open password, a permissions password (what printing, changes and copying are allowed), 256-bit AES (recommended) / 128-bit AES.
     Open an encrypted file with right-click 'Enter Password' in the bookmark panel.</li>
 </ul>
 
 <h3>10-1. Digital signature (button to the right of Crop on the page toolbar · Tools → Digital Signature ▸)</h3>
 <ul>
-  <li><b>Manage Digital IDs...</b>: create a new digital ID (name · email · validity · password) or import an existing .pfx/.p12.
+  <li><b>Manage Digital IDs</b> (Tools → Digital Signature ▸): create a new digital ID (name · email · validity · password) or import an existing .pfx/.p12.
     Each digital ID holds one <b>signature image</b> — <b>Add Signature Image</b> at the bottom of the new-ID window, or <b>Signature Image…</b> in the manager later.
     Enter the image's <b>actual width (mm)</b> — the height follows the image's proportions, and clicking on a document places the signature at that size.
     The manager shows the selected ID's details (including the image). <b>Edit Details…</b> changes a self-made ID's name · email · organization · validity · password · image by
@@ -242,21 +243,21 @@
     Give the <b>public certificate</b> (.cer, Export Public Certificate) to the people who receive your documents.
     <b>Import Korean Certificate (NPKI)…</b> finds Korean certificates in NPKI folders on the PC or a USB drive and imports one with its certificate password (the original folder is unchanged; the password stays the same).
     <b>From Windows Certificate Store…</b> uses a certificate held by Windows (including smart cards and USB tokens) without copying the key — Windows may ask for a PIN when you sign.</li>
-  <li><b>Signing — place, then confirm once</b>: press the digital signature button to the right of Crop (or Tools → Sign...). First you <b>confirm it is you</b> once —
+  <li><b>Signing — place, then confirm once</b>: press the digital signature button to the right of Crop (or Tools → Digital Signature ▸ Sign). First you <b>confirm it is you</b> once —
     if a digital ID is stored with Windows Hello, the <b>Windows Hello</b> prompt (fingerprint · face · PIN) appears right away; cancel it to enter a digital ID password instead. The IDs that password opens are the ones you can sign with; with several, the default ID (or the first) is used
-    (if none opens, enter it again or create a digital ID). Then drag on the page where the signature image goes (a single click puts the signature image at its actual size with its top-left at that spot — switching the ID resizes it to that ID's size). <b>Right-click → Sign Here…</b> works the same.
+    (if none opens, enter it again or create a digital ID). Then drag on the page where the signature image goes (a single click puts the signature image at its actual size with its top-left at that spot — switching the ID resizes it to that ID's size). <b>Right-click → Sign here</b> works the same.
     Dragging does not sign yet — it makes a <b>signature place</b> (dashed box; the page shows through): drag it to move, use the bottom-right corner to resize (keeps the image ratio; hold Shift for free), press Delete to remove. You can put several on one page.
     Its right-click menu switches the <b>digital ID</b> (one of the opened ones — 'Manage Digital IDs…' below it edits the current ID's signature image, width and details; the image is changed only there) and turns the <b>signature image</b>, <b>name</b> and <b>date</b> on or off, and offers 'Image only (not a digital signature)' and 'Place on Other Pages…' — your choices are kept for next time. Drawing tools of edit mode are turned off when you press the signature button.
-    When done, press <b>Confirm Signatures…</b> in the band above the page, check the digital ID, signature image and appearance text (name · date · reason) and press <b>Confirm Signatures</b> (no password again).
+    When done, press <b>Confirm Signatures</b> in the band above the page (or Tools → Digital Signature ▸ Confirm Signatures), check the digital ID, signature image and appearance text (name · date · reason) and press <b>Confirm Signatures</b> (no password again).
     If both the image and all text are off, nothing is signed ('nothing to show'). Image and text sit at the left of the signature box. All places are signed at once into a <b>new file 'name_signed.pdf'</b>; the original stays unchanged.
     You cannot place signatures in two-page view. Rotated pages are signed in the text direction.</li>
-  <li><b>Changing a signature</b>: a signed file shows <b>Edit Signatures</b> in the band above the page (for signatures made with your digital ID). It turns the signatures back into places — move, resize or delete them, then <b>Confirm Signatures…</b> replaces that signed file.
+  <li><b>Changing a signature</b>: a signed file shows <b>Edit Signatures</b> in the band above the page (for signatures made with your digital ID). It turns the signatures back into places — move, resize or delete them, then <b>Confirm Signatures</b> replaces that signed file.
     It is not possible when someone else's signature comes after yours.</li>
-  <li><b>Image only</b>: <b>Tools → Insert Image Only...</b> puts only the digital ID's signature image, without a digital signature (the image has no signature effect; the same identity check applies). The image keeps its ratio at the top-left of the box you drag; the rest stays empty. Placing and confirming work as for signatures.</li>
+  <li><b>Image only</b>: <b>Tools → Digital Signature ▸ Insert Image Only</b> puts only the digital ID's signature image, without a digital signature (the image has no signature effect; the same identity check applies). The image keeps its ratio at the top-left of the box you drag; the rest stays empty. Placing and confirming work as for signatures.</li>
   <li><b>More choices in the signing window</b>: <b>Signature type</b> — approval signature (default) or certification (no changes / form filling and signing allowed / comments, forms and signing allowed; only as the document's first signature) ·
     <b>Text layout</b> — image above, text below (default — the image fills the dragged box, the text goes below it and wraps so it is never cut off) / over the image / image left, text right ·
     <b>Timestamp</b> — enter a timestamp authority (TSA) address and turn it on to add the authority's time (internet needed, off by default).</li>
-  <li><b>Empty signature fields</b>: <b>Tools → Create Empty Signature Field...</b> lets you drag a place on the page and name it (e.g. Approver); the recipient then signs in that field.
+  <li><b>Empty signature fields</b>: <b>Tools → Digital Signature ▸ Create Empty Signature Field</b> lets you drag a place on the page and name it (e.g. Approver); the recipient then signs in that field.
     A document with empty fields shows 'empty signature field' in the band above the page, and the signature button offers <b>Sign in an empty field</b> (dragging inside a field or right-clicking in it also signs that field).
     A document certified by its author can be signed only in its empty fields.
     When creating a field you can designate the <b>signer</b> by that person's public certificate (.cer), and <b>Lock all fields in the document when this field is signed</b> prevents any further change or signature after that signature (use it on the last signature field).</li>
@@ -278,10 +279,10 @@
     Styles (font · size · bold · letter spacing · line spacing for titles and body), <b>Skip tables</b>, <b>Join sentences</b>.</li>
   <li>You can fix the text line by line; selecting a line marks that spot on the page.
     <b>Highlight</b> · <b>Show in body too</b> · <b>To bookmarks</b> (turn highlighted spots into bookmarks) · <b>Save Word ▾</b> (current page / page range / whole document).</li>
-  <li><b>Read with OCR</b> (Quick Access 'OCR' · Tools tab · text pane): reads the text of scanned PDFs — current page / page range / whole document, language,
+  <li><b>Read with OCR</b> (Tools tab 'OCR' · Ctrl+Alt+O · right-click · text pane): reads the text of scanned PDFs — current page / page range / whole document, language,
     'Ignore background watermarks', 'Skip pages that already have text'. <b>Apply to PDF</b> writes the text layer into the PDF (the original is backed up).
     Get the OCR engine from <b>Tools → Register &amp; Install → Install Components (recording · OCR)</b>.</li>
-  <li><b>Batch OCR</b> (Tools → Batch OCR (OCR, Bookmarks)... · right-click a file): reads every page of the current PDF with OCR
+  <li><b>Batch OCR</b> (Tools → Batch OCR · right-click a file): reads every page of the current PDF with OCR
     and makes the bookmarks in one go. If the document has a table of contents, only its entries become bookmarks, plus one 'Contents' bookmark on its first page.
     The result goes into the PDF when you click [Save] in the bookmark panel.</li>
   <li><b>Create text layer with OCR</b> (select several files or a folder row in the bookmark panel and right-click): reads the scanned pages without a text layer
@@ -301,9 +302,9 @@
   <li><b>Presentation</b> (F5 · Quick Access · View tab · page right-click): full screen. Move the mouse to the top of the screen for the <b>top bar</b>
     (page · pens 1–N · line type · partial erase · clear · Apply to Main View · Open Links · ⏱ presentation timer · ● record · ✕ exit · 🖥 Main/Other Screen),
     and to the left edge for <b>thumbnails</b>. Lines, shapes, text and photos added in the main view are shown too.</li>
-  <li>Mouse: left-drag = draw, click in the left 10% = previous page, click elsewhere = next page. Keys: → Space PgDn ↓ next · ← PgUp ↑ previous ·
+  <li>Mouse: left-drag = draw, click in the left 20% of the screen (change the width with right-click 'Back zone') = previous page, click elsewhere = next page. Keys: → Space PgDn ↓ next · ← PgUp ↑ previous ·
     Home/End · digits + Enter go to a page · <b>S</b> top/bottom split · <b>D</b> two pages · Esc exits. At the last page it moves on to the next file.</li>
-  <li>Right-click: pointers and Pointer Settings, pens and Line Settings, Clear Lines, Top/Bottom Split View (centre overlap %), Two-Page View (facing pages),
+  <li>Right-click: pointers and Pointer Settings, pens and Line Settings, Clear Lines, Top/Bottom Split View (centre overlap %), Back zone (%), Two-Page View (facing pages),
     Fill Screen, View Settings (cropping), Presentation Timer Settings (preparation text · duration · alarms), Start Recording with Timer, and the screen (monitor).</li>
   <li><b>🖥 To Screen 2 / 🖥 To Main Screen</b> (where a click takes you) at the far right of the top bar moves the presentation to another monitor or back to the viewer's monitor. The choice is remembered for the next presentation (disabled with a single monitor).</li>
   <li>With 'Apply to Main View' on, when you finish you are asked where to keep the lines you drew: the main view, a PDF, or both.</li>
@@ -316,10 +317,10 @@
 <ul>
   <li><b>Favorites</b> tab: add with <b>Add Current Folder · Add Current File · Add Current Search</b> and open them from the <b>Saved Folders · Saved Files · Saved Searches</b> lists. The first 3 saved folders and files also appear as buttons (the first of each group shows a folder or file icon). Reorder, rename, set button names or delete them by kind in <b>Manage Items</b>.
     You can also add from the bookmark panel's right-click menu.</li>
-  <li><b>Hashtags</b>: tag a file with right-click <b>Edit Hashtags...</b>, then pick tags by type and topic from the <b>#</b> button in the bookmark panel
+  <li><b>Hashtags</b>: tag a file with right-click <b>Edit Hashtags</b>, then pick tags by type and topic from the <b>#</b> button in the bookmark panel
     to search with <code>#tag</code>.</li>
   <li><b>Automatic tagging</b> (Settings 'Auto-assign file hashtags/keywords', off by default): after indexing, tags are added from the content (shown as <code>·#</code>).
-    The 🏷️ section of the Tools menu has Recalculate Tags · Review New Tag Candidates · Undo Last Automatic Tagging · Delete All Automatic Tags · Clean Up Missing File Entries.</li>
+    Tools → Tags ▸ has Recalculate Tags · Review New Tag Candidates · Undo Last Automatic Tagging · Delete All Automatic Tags · Clean Up Missing File Entries.</li>
 </ul>
 
 <h3>14. Keyboard shortcuts</h3>
@@ -375,7 +376,7 @@
 <ul>
   <li><b>General › General</b>: Language (after restarting) · theme auto (system) / light / dark · startup (the last folder/file / a chosen folder/file / a blank screen · the last viewed page · PolyPDF startup mode) · view type (PDF only / mixed).</li>
   <li><b>General › View &amp; Paging</b>: page navigation · page-turn animation · go to the next/previous file from the last/first page · Show Ribbon.</li>
-  <li><b>General › Photos</b> (mixed view type): slideshow auto-advance · backup folder for originals of flattened photos.</li>
+  <li><b>General › Photos</b> (mixed view type): slideshow auto-advance · backup folder for originals of straightened photos.</li>
   <li><b>General › Hashtags</b>: auto-assign file hashtags/keywords · automatic photo hashtags · photo kinds.</li>
   <li><b>General › Screenshots</b>: screenshot list limit (5–1000; raised automatically for batch captures).</li>
   <li><b>Advanced › Keyboard Shortcuts</b>: change any shortcut · restore defaults · global screen-capture shortcut. <b>Advanced › Ribbon</b>: Manage Quick Access.</li>
@@ -390,12 +391,48 @@
   <li><b>Check for Updates</b>: if a new version is available, it shows <b>what changes</b> in each version.
     Pressing [Update] <b>downloads the file first</b>, then closes all open PolyPDF windows and installs
     (if you cancel the download or it fails, nothing is closed).
-    At the bottom of that window, <b>Download Updates Automatically</b> (on by default) fetches new versions in advance. <b>Also Receive Beta (Test) Versions</b> is always on before 1.0.</li>
+    At the bottom of that window, <b>Download Updates Automatically</b> (on by default) fetches new versions in advance. <b>Also Receive Beta (Test) Versions</b> (off by default) also fetches test versions before a stable release.</li>
   <li><b>Tools → Register &amp; Install → Install Components (recording · OCR)</b>: downloads ffmpeg for recording and the OCR engine (installed ✓ / not installed).</li>
-  <li><b>Tools → Register &amp; Install → Install/Remove Virtual Printer…</b>: when you print to the <b>'PolyPDF'</b> printer from another program
+  <li><b>Tools → Register &amp; Install → Install/Remove Virtual Printer</b>: when you print to the <b>'PolyPDF'</b> printer from another program
     (PowerPoint, Word, Notepad …), it saves a PDF without a save dialog and opens it in PolyPDF. It saves next to the original file
     (or in the default save folder if the original can't be found) and adds (1), (2) if the name exists.
-    Choose the save folder and black-and-white in that window. Available in the installed version only (not the portable one); it can also be installed during setup.
+    Choose the save folder, black-and-white and the photo/image resolution (only larger images are reduced, to keep the PDF light) in that window. Available in the installed version only (not the portable one); it can also be installed during setup.
     Because it goes through printing, <b>hyperlinks and bookmarks are not kept</b> — use the program's own 'Save as PDF' if you need them.
     If your Windows default printer changes after printing, that is the Windows setting 'Let Windows manage my default printer'.</li>
+</ul>
+
+<h3>17. Photo mode (PolyPix)</h3>
+<p><small>Available when <b>View type</b> under 'General › General' in Settings is set to <b>Mixed</b> (with the default 'PDF only' there is no photo mode).</small></p>
+<ul>
+  <li><b>Switching modes</b>: the TV button at the far left of the ribbon (click to switch to the other mode) · <b>Alt+1</b> = PDF mode, <b>Alt+2</b> = photo mode.
+    Each mode remembers its own last folder and last viewed photo (PDF and page in PDF mode). If there are unsaved edits you are asked first.</li>
+  <li><b>Screen</b>: bookmark panel = the picture files in the folder (a zip with photos is one row) · thumbnails = the chosen photos (choose one and you get the whole folder) · main view = one chosen photo.
+    ◀ ▶ · wheel · PgUp/PgDn go to the previous/next photo in the thumbnail strip. The search box finds photos by their info (name · date taken · camera · tags · saved OCR text).
+    The info line at the bottom shows name · date · size · camera; click it for <b>Photo Info</b> (Alt+Enter does the same).</li>
+  <li><b>Right-click menu</b> (bookmark panel · thumbnail strip · main view — same order as for PDFs): Print → Copy Photo →
+    shape (Rotate 90° left · Rotate 90° right · Rotate 180° · Original Orientation · Crop · Remove Crop · Restore original) →
+    file (Open in File Explorer · Copy to Folder ▸ · Move to Folder ▸ · Rename (F2) · Delete (edit mode)) →
+    Save ▸ (Save = save orientation · Flattened copy · Copy without personal info · Make PDF · Convert ▸ JPEG · PNG · WebP) → view (Split View · Presentation) →
+    tools (Read with OCR · Photo Info · Show Location on Map · Batch · Edit Hashtags).
+    Ctrl/Shift+click in the thumbnail strip to choose several photos; the menu then works on all of them.</li>
+  <li><b>Rotate</b> (Ctrl+] / Ctrl+[): rotates the view only; the original is unchanged. For a JPEG, <b>Save ▸ Save</b> (save orientation) changes only the orientation tag of the original (the image is not recompressed).</li>
+  <li><b>Crop</b> (Ctrl+Shift+X): view and export the cropped shape — the original is unchanged. ❮ ❯ in the crop window carry on with the next photos, and [OK] applies them all at once.
+    <b>Straighten shape (perspective · curved edges)</b> (key A): drag 8 points (4 corners and 4 edge midpoints) to turn a document shot at an angle or curved paper into a rectangle ([Reset points]).
+    On [OK] you are asked <b>[Save]</b> (replace the original with the straightened photo; the original goes to a backup folder inside the photo folder, or the one set in Settings 'General › Photos') · <b>[Save As]</b> · <b>[Save to another folder]</b>.
+    Undo a replaced photo with right-click <b>Restore original</b> (the current file goes to the Recycle Bin).</li>
+  <li><b>Presentation · slideshow</b> (F5): shows the photos of the thumbnail strip full screen. Set the auto-advance interval in Settings 'General › Photos'.</li>
+  <li><b>OCR</b>: the text pane's [Read with OCR] · Tools tab OCR (Ctrl+Alt+O) read the current photo and show it in the text pane — you can then drag over the text on the photo to select and copy it.
+    Choose several photos and right-click <b>Read with OCR (N)</b> to read them one after another in the background (status bar progress bar → Tasks window [Stop]).
+    As with PDFs, the results are <b>kept only when saved</b> (status bar '💾 Unsaved OCR').</li>
+  <li><b>Format conversion</b>: the File tab's 'Convert' makes Word · Hangul HWPX · text from the text read (OCR first). Right-click 'Save ▸ Convert ▸ JPEG · PNG · WebP' saves a new file in another picture format (the original is unchanged).</li>
+  <li><b>Photos → PDF</b>: right-click 'Save ▸ Make PDF' opens the Images to PDF window with the chosen photos (the thumbnail strip also offers all photos in the strip). Annotations, view rotation and crop go in as they are shown. Printing works the same way.</li>
+  <li><b>Show Location on Map</b>: shows the photos that have a GPS position on a map (OpenStreetMap) in your default browser — nearby photos are grouped with their count and dates,
+    and [Select in PolyPDF] selects those photos in the app. Before map images are fetched you are told that the rough location of the visible area is sent to the map server.</li>
+  <li><b>Batch</b>: rename the chosen photos (<code>new name_001</code> …) · reduce size · change format — size and format make new files; the originals are unchanged.</li>
+  <li><b>Hashtags</b>: <b>automatic photo hashtags</b> in Settings 'General › Hashtags' (on by default) add date-taken, region, device and screenshot tags, and <b>photo kinds</b> adds receipt · business card · document.
+    Filter with <b>#</b> in the bookmark panel (also by the start, like <code>#2026</code> or <code>#2026-11</code>).</li>
+  <li><b>zip</b>: click a zip with photos to view the photos inside (read-only — the zip itself is unchanged). Right-click <b>Extract here</b> · <b>Extract to another folder</b>; in the thumbnail strip you can extract just the chosen photos.
+    In PDF mode, a zip with PDFs can be expanded too.</li>
+  <li><b>Portable devices</b> (iPhone · Android): connect with USB, unlock and tap 'Trust This Computer', and a 📱 row appears at the top of the bookmark panel.
+    Click a photo folder to fetch and view its photos one by one (the device is only read); scrolling past the end of the thumbnail strip fetches the next folder. Right-click <b>Copy to PC</b> saves them on the PC.</li>
 </ul>
