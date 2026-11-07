@@ -247,17 +247,10 @@ try:
     chk(imgs[0] != imgs[1] and imgs[1] != imgs[2] and imgs[0] != imgs[2],
         "⑤ 세 도형 아이콘이 서로 다르다")
 
-    # ── ⑥ 숨긴 패널 손잡이는 스크롤바보다 좁다 (260908-4) ───────────────
-    from PyQt6.QtWidgets import QStyle
-    from viewer.app import MainWindow as _MW
-    mw2 = _MW(); mw2._skip_save_on_close = True
-    ext = mw2.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
-    hw = mw2._drawer_handle_w()
-    chk(hw < ext, "⑥ 손잡이가 스크롤바보다 좁다(안쪽으로 들어가 보인다)",
-        f"손잡이 {hw}px < 스크롤바 {ext}px")
-    chk(hw >= 8, "⑥ 그래도 잡을 수 있을 만큼은 된다", f"{hw}px")
-    chk("PM_ScrollBarExtent" in _in.getsource(_MW._drawer_handle_w),
-        "⑥ 스크롤바 폭을 스타일에서 물어 본다(테마·DPI 마다 다르다)")
+    # ── ⑥ 숨긴 패널 손잡이 — 260908-4 '스크롤바보다 좁게, 스크롤바 위에' 는 261107-15 에 '스크롤바 밖 띠' 로 바뀌었다
+    #   (디자인 SOT §2.4.1). 자리·겹침·색은 test_design_drawer_band_261107.py 가 본다 — 여기서는 잡을 수 있는 폭만.
+    from viewer.widgets.drawer_band import BAND_W
+    chk(BAND_W >= 8, "⑥ 열고 닫기 띠는 잡을 수 있을 만큼은 된다", f"{BAND_W}px")
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

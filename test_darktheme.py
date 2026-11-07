@@ -24,7 +24,7 @@ mw.apply_theme("dark")
 check("theme.is_dark True", theme.is_dark())
 bg = mw._mv[0].scene.backgroundBrush().color()
 check("메인뷰 배경 어두움", bg.lightness() < 60, f"L={bg.lightness()}")
-check("드로어 다크 스타일", "2d2d30" in mw._drawer.styleSheet().lower())
+check("드로어 다크 스타일(디자인 SOT §2.5 '패널 배경', 261107-15)", "#484848" in mw._drawer.styleSheet().lower())
 
 # 261011-6(디자인 SOT §2.5): 창보다 테마가 나중에 적용돼도 테마 단색 아이콘·안내 글자가 다크 색이다
 def _icon_lightness(btn):

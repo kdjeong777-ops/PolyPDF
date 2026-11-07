@@ -167,7 +167,7 @@ MODAL_KNOWN = {
     "test_deco_copy_paste.py", "test_design_bk_status_count.py", "test_design_ribbon_tabs_261025.py",
     "test_design_toolbar_icons_261025.py", "test_draw_paint.py", "test_draw_unify.py", "test_dualpane.py", "test_edit_undo.py",
     "test_edit_undo2.py", "test_favorites_menu_groups.py", "test_file_rename_menu.py", "test_folder_scan.py",
-    "test_fullwidth.py", "test_global_capture_mode.py", "test_handle_scroll.py", "test_hyperlink_integration.py",
+    "test_fullwidth.py", "test_global_capture_mode.py", "test_hyperlink_integration.py",
     "test_i18n_core.py", "test_i18n_external.py", "test_i18n_keys.py", "test_i18n_packs.py", "test_i18n_panel_layout.py",
     "test_i18n_settings_layout.py", "test_i18n_switch.py", "test_image_annot.py", "test_image_geom.py", "test_image_tools.py",
     "test_index_corrupt_recover.py", "test_index_newfile.py", "test_input_highlight.py", "test_input_view_source.py",

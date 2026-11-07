@@ -405,7 +405,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # M1: 좌1을 좌우로 조절해도 좌2/우4 폭 유지, 메인 뷰어만 신축
         for i in range(self.splitter.count()):
             self.splitter.setStretchFactor(i, 1 if i == 2 else 0)
-        layout.addWidget(self.splitter)
+        # 261107-15(디자인 SOT §2.4.1): 오른쪽 패널이 드로어일 때 본문 오른쪽 끝 바깥에 열고 닫기 띠 자리(`_drawer_gap`)를 둔다 —
+        #   본문이 그만큼 좁아지고, 띠(`DrawerBand`)는 그 위에 놓여 스크롤바와 겹치지 않는다.
+        from viewer.widgets.drawer_band import BAND_W as _BAND_W
+        _row = QHBoxLayout()
+        _row.setContentsMargins(0, 0, 0, 0)
+        _row.setSpacing(0)
+        _row.addWidget(self.splitter, 1)
+        self._drawer_gap = QWidget()
+        self._drawer_gap.setFixedWidth(_BAND_W)
+        self._drawer_gap.hide()
+        _row.addWidget(self._drawer_gap)
+        layout.addLayout(_row)
 
         # 상태바
         self.status = QStatusBar()
@@ -442,22 +453,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     # ===== 260606-9: 2분할 시 검색·스크린샷 슬라이딩 드로어(오버레이) =======
     def _build_drawer(self, central):
-        from PyQt6.QtWidgets import QToolButton as _TB, QVBoxLayout as _VB
+        from PyQt6.QtWidgets import QVBoxLayout as _VB
         from PyQt6.QtCore import QPropertyAnimation
+        from viewer.widgets.drawer_band import DrawerBand
         self._drawer = QWidget(central)
         self._drawer.setObjectName("drawer")
         self._drawer.setAutoFillBackground(True)
-        self._drawer.setStyleSheet(
-            "QWidget#drawer{background:#f3f3f3; border-left:1px solid #aaa;}")
+        self._style_drawer()                 # 261107-15: 바탕·테두리는 디자인 SOT §2.5 토큰(테마를 따른다)
         _dl = _VB(self._drawer)
         _dl.setContentsMargins(0, 0, 0, 0)
         self._drawer_lay = _dl
         self._drawer.hide()
         self._drawer_open = False
-        self._drawer_btn = _TB(central)
-        self._drawer_btn.setToolTip(tr("오른쪽 패널 펼치기/접기"))
-        self._drawer_btn.setText("‹")
-        self._drawer_btn.clicked.connect(self._toggle_drawer)
+        # 261107-15(디자인 SOT §2.4.1, 사용자 결정 '스크롤바 밖 옅은 띠'): 종전 손잡이(스크롤바 위에 겹친 QToolButton)를 띠로
+        self._drawer_btn = DrawerBand(central)
+        self._drawer_btn.toggled.connect(self._toggle_drawer)
         self._drawer_btn.hide()
         self._drawer_anim = QPropertyAnimation(self._drawer, b"geometry", self)
         self._drawer_anim.setDuration(180)
@@ -474,14 +484,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._idle_release_timer.setSingleShot(True)
         self._idle_release_timer.setInterval(15 * 60 * 1000)
         self._idle_release_timer.timeout.connect(self._release_render_memory)
-        self._handle_offset = 0              # 260606-20: 손잡이 세로 비킴 오프셋
-        self._last_scroll_val = 0
-        for mv in self._mv:                  # 뷰어 스크롤 시 손잡이 위치 갱신
-            try:
-                mv.doc_scroll.valueChanged.connect(
-                    lambda _v, m=mv: self._update_handle_for_scroll(m))
-            except Exception:
-                pass
+
+    def _style_drawer(self, dark=None) -> None:
+        """드로어 바탕·왼쪽 테두리 — 디자인 SOT §2.5 '패널 배경'·'테두리'(261107-15, 종전 테마마다 따로 적은 고정 값)."""
+        from viewer.widgets.drawer_band import PANEL_BG, HOVER_BG, _tok
+        d = getattr(self, "_drawer", None)
+        if d is not None:
+            bg, line = ((PANEL_BG[0], HOVER_BG[0]) if dark else (PANEL_BG[1], HOVER_BG[1])) if dark is not None \
+                else (_tok(PANEL_BG), _tok(HOVER_BG))
+            d.setStyleSheet("QWidget#drawer{background:%s; border-left:1px solid %s;}" % (bg, line))
+        b = getattr(self, "_drawer_btn", None)
+        if b is not None:
+            b.update()
 
     def _drawer_auto_show(self):
         """캡쳐 시 드로어를 슬라이드로 펼치고 1.5초 자동 접기 타이머 시작."""
@@ -508,59 +522,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _drawer_width(self) -> int:
         return min(360, max(220, self._central.width() // 2))
 
-    def _drawer_handle_w(self) -> int:
-        """260908-4(사용자 요청): 숨긴 패널의 손잡이 폭 — **스크롤바보다 조금 좁게**.
-
-        종전 20px 는 스크롤바(윈도우 기본 17px)보다 넓어 손잡이가 밖으로 튀어나와
-        보였다. 스크롤바 폭에서 4px 를 뺀 값을 쓰면 **한 칸 안쪽으로 들어가** 보인다.
-        스크롤바 폭은 테마·DPI 마다 다르므로 스타일에서 직접 물어 본다."""
-        try:
-            from PyQt6.QtWidgets import QStyle
-            ext = self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
-        except Exception:
-            ext = 17
-        return max(8, int(ext) - 4)
-
     def _position_handle(self):
+        """261107-15(디자인 SOT §2.4.1): 열고 닫기 띠 — 접힌 때는 본문 바깥 자기 자리(`_drawer_gap`) 위, 펼친 때는 패널 왼쪽 가장자리.
+        창 높이 전부라 스크롤 손잡이와 비킬 일이 없다(종전 260606-20 비킴은 없앴다)."""
         W = self._central.width(); H = self._central.height()
-        bw, bh = self._drawer_handle_w(), 96
+        bw = self._drawer_btn.width()
         dw = self._drawer_width()
         hx = (W - dw - bw) if self._drawer_open else (W - bw)
-        # 260606-20: 스크롤바와 겹치면 손잡이를 위/아래로 비킴(_handle_offset)
-        off = getattr(self, "_handle_offset", 0)
-        hy = max(0, min(H - bh, (H - bh) // 2 + off))
-        self._drawer_btn.setGeometry(max(0, hx), hy, bw, bh)
-        self._drawer_btn.setText("›" if self._drawer_open else "‹")
+        self._drawer_btn.setGeometry(max(0, hx), 0, bw, H)
+        self._drawer_btn.set_open(self._drawer_open)
         self._drawer_btn.raise_()
-
-    def _update_handle_for_scroll(self, view):
-        """260606-20: 닫힌 손잡이가 뷰어 스크롤 위치(중앙 부근)와 겹치면 스크롤 방향에
-        따라 위/아래로 비킨다. 겹치지 않으면 중앙 복귀."""
-        try:
-            if not self._panel_in_drawer or self._drawer_open:
-                return
-            # 손잡이는 우측 가장자리 → 관련 창: 분할이면 오른쪽 창, 아니면 활성 창
-            relevant = self._mv[1] if self._split_on else self.main_view
-            if view is not relevant:
-                return
-            sb = view.doc_scroll
-            mx = sb.maximum()
-            val = sb.value()
-            H = self._central.height()
-            bh = 96
-            frac = (val / mx) if mx > 0 else 0.0
-            thumb_y = frac * H                 # 스크롤 썸 대략 위치(중앙 기준)
-            center_y = H / 2.0
-            overlap = abs(thumb_y - center_y) < (bh * 0.85)
-            if overlap:
-                down = val > getattr(self, "_last_scroll_val", 0)
-                self._handle_offset = -bh if down else bh
-            else:
-                self._handle_offset = 0
-            self._last_scroll_val = val
-            self._position_handle()
-        except Exception:
-            pass
 
     def _position_drawer(self):
         W = self._central.width(); H = self._central.height()
@@ -1313,12 +1284,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     self._panel_in_drawer = True
                     self._drawer_open = False
                     self._drawer.hide()
+                    self._drawer_gap.show()        # 261107-15: 띠 자리만큼 본문을 좁힌다(§2.4.1)
                     self._drawer_btn.show()
                     self._position_drawer()
             else:
                 if self._panel_in_drawer:
                     self._drawer.hide()
                     self._drawer_btn.hide()
+                    self._drawer_gap.hide()
                     self._drawer_open = False
                     self.splitter.insertWidget(3, self.right_panel)
                     self.right_panel.setVisible(True)
@@ -9826,13 +9799,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
         try:
-            if getattr(self, "_drawer", None) is not None:
-                if dark:
-                    self._drawer.setStyleSheet(
-                        "QWidget#drawer{background:#2d2d30; border-left:1px solid #555;}")
-                else:
-                    self._drawer.setStyleSheet(
-                        "QWidget#drawer{background:#f3f3f3; border-left:1px solid #aaa;}")
+            self._style_drawer(dark)          # 261107-15(디자인 SOT §2.4.1): 드로어·열고 닫기 띠 — §2.5 토큰
         except Exception:
             pass
         try:
