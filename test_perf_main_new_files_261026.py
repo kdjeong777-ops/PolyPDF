@@ -45,8 +45,8 @@ ALLOWED = {
         "배경 — `_file_op_bg` 에서 쪽 편집 뒤 OCR·단어장 쪽 번호 옮김(261103-16)",
     "viewer/photo_controller.py:PhotoIndexWorker.run":
         "배경 — `run_in_thread` 워커가 사진 정보 색인 훑기(261104-4)",
-    "viewer/photo_controller.py:PhotoOcrWorker.run":
-        "배경 — `run_in_thread` 워커가 사진 OCR 보류 저장(261104-10)",
+    "viewer/photo_controller.py:photo_ocr_save":
+        "배경 — `PhotoOcrWorker`·`PhotoOcrBatchWorker`(run_in_thread)만 부르는 사진 OCR 보류 저장(261104-10 → 261107-6 함수로 뺌)",
 }
 
 fails = []
