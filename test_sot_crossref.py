@@ -74,9 +74,6 @@ ALIAS = [
     ("형식 변환", "형식 변환 작업 계획서.md"),          # 261014-10 신설
     ("가상 프린터", "가상 프린터 작업 계획서.md"),      # 261017 신설
     ("사진 보기", "사진 보기(PolyPix) 작업 계획서.md"),   # 261103-17 신설
-    ("책갈피창·저장", "책갈피창·저장 작업 계획서.md"),   # 261108-1 신설(마스터 §4.7~§4.9)
-    ("검사 작성", "검사 작성 작업 계획서.md"),          # 261108-1 신설(마스터 §14.6~§14.7.4)
-    ("작업 절차", "작업 절차 계획서.md"),              # 261108-2 신설(CLAUDE.md §1.6·§4·§5 를 옮김)
     ("CLAUDE.md", "CLAUDE.md"),
 ]
 ALIAS_RE = "|".join(re.escape(a) for a, _ in sorted(ALIAS, key=lambda x: -len(x[0])))
@@ -101,31 +98,12 @@ def headings(txt):
 HEADS = {n: {h[2] for h in headings(t)} for n, t in SOTS.items()}
 
 
-def has_sec(doc, num, moved=True):
+def has_sec(doc, num):
     nums = HEADS.get(doc, set())
-    if moved:
-        tgt = moved_to(doc, num)
-        if tgt:
-            doc, nums = tgt, HEADS.get(tgt, set())
     if num in nums:
         return True
     # §14.5 처럼 위 절만 가리키는 것은 그 아래 절이 있으면 된다. §4 처럼 장 번호면 장이 있으면 된다
     return any(h.startswith(num + ".") for h in nums)
-
-
-# 261108-1: 마스터에서 옮긴 절 — **번호 그대로** 새 문서에 있고, 마스터 옛 자리에는 이정표(`### 4.7 … → 책갈피창·저장 SOT §4.7`)만 남는다.
-#   다른 문서·코드 주석의 '마스터 §4.7.5' 는 새 문서의 같은 절로 찾는다. 마스터 자신의 맨 `§4.7.5` 는 대응하지 않는다(문서 이름을 붙여 쓴다 — A2).
-MOVED = {MASTER: [("4.7", "책갈피창·저장 작업 계획서.md"), ("4.8", "책갈피창·저장 작업 계획서.md"), ("4.9", "책갈피창·저장 작업 계획서.md"),
-                  ("14.0", "릴리스 작업 계획서.md"), ("14.1", "릴리스 작업 계획서.md"), ("14.2", "릴리스 작업 계획서.md"),
-                  ("14.3", "릴리스 작업 계획서.md"), ("14.4", "릴리스 작업 계획서.md"), ("14.5", "릴리스 작업 계획서.md"),
-                  ("14.6", "검사 작성 작업 계획서.md"), ("14.7", "검사 작성 작업 계획서.md")]}
-
-
-def moved_to(doc, num):
-    for pfx, tgt in MOVED.get(doc, ()):
-        if num == pfx or num.startswith(pfx + "."):
-            return tgt
-    return None
 
 
 def body(txt):
@@ -183,7 +161,7 @@ for name, txt in LIVE.items():
             if chain and re.fullmatch(r"\s*[·/]\s*", l[chain[0]:m.start()]):
                 cdoc = chain[1]
                 chain = (m.end(), cdoc)
-                if cdoc in SOTS and not has_sec(cdoc, num, moved=(cdoc != name)) and not any(has_sec(a, num) for a in ARCHIVE_OF.get(cdoc, ())) \
+                if cdoc in SOTS and not has_sec(cdoc, num) and not any(has_sec(a, num) for a in ARCHIVE_OF.get(cdoc, ())) \
                         and not re.search(r"없다|없는|어디에도|존재하지", l):
                     bad.append("%s → %s §%s(이어 쓴 §: …%s)" % (name[:8], cdoc[:8], num, l[max(0, m.start() - 30):m.end()]))
                 continue
@@ -203,13 +181,13 @@ for name, txt in LIVE.items():
             chain = (m.end(), mf.group(1) if mf and mf.group(1) in SOTS else ALIAS_MAP[mt.group(1)] if mt else doc)
             if doc not in SOTS:
                 continue
-            if has_sec(doc, num, moved=(doc != name)):
+            if has_sec(doc, num):
                 continue
             # 못 찾으면 — 같은 줄 앞쪽에 나온 다른 문서 이름(목록 '입력 SOT §2.2 · §2.3' 처럼 이어 쓴 것),
             #   또는 이 문서의 아카이브(번호를 그대로 둔 옛 장)에서 찾는다
             alts = [ALIAS_MAP[x] for x in re.findall(ALIAS_RE, before + " " + l[:m.start()])][::-1]   # 앞 줄에서 이어진 인용도 — 가까운 이름부터
             alts += [name] + [a for a in ARCHIVE_OF.get(name, ())]
-            hit = [d for d in alts if has_sec(d, num, moved=(d != name))]
+            hit = [d for d in alts if has_sec(d, num)]
             if hit:
                 chain = (m.end(), hit[0])
                 continue
@@ -217,21 +195,6 @@ for name, txt in LIVE.items():
                 continue
             bad.append("%s → %s §%s" % (name[:8], doc[:8], num))
 chk(not bad, "A2 SOT 본문(§0 밖)의 절 참조가 그 문서에 있다", "%d건 %s" % (len(set(bad)), sorted(set(bad))[:999 if "-v" in sys.argv else 15]))
-
-# 261108-1: 옮긴 절의 대응이 살아 있다 — 마스터 옛 자리에 이정표(`→ ○○ SOT §x`), 새 문서에 같은 번호. 한쪽만 고치면 대응이 끊긴다.
-bad = []
-for src, pairs in MOVED.items():
-    for pfx, tgt in pairs:
-        if not has_sec(tgt, pfx, moved=False):
-            bad.append("%s 에 §%s 가 없다" % (tgt[:8], pfx))
-        stub = [l for l in SOTS[src].splitlines() if re.match(r"^#{3,4} %s " % re.escape(pfx), l)]
-        if not stub or ("→ %s §%s" % (next(a for a, d in ALIAS if d == tgt), pfx)) not in stub[0] and ("SOT §%s" % pfx) not in stub[0]:
-            bad.append("마스터 §%s 이정표 없음" % pfx)
-        under = [h for ln, _d, h in headings(SOTS[src]) if h.startswith(pfx + ".")
-                 and "SOT §" + h not in SOTS[src].splitlines()[ln - 1]]          # 아래 절도 이정표면 된다(§14.2.1)
-        if under:
-            bad.append("마스터에 §%s 아래 절이 남음 %s" % (pfx, sorted(under)[:3]))
-chk(not bad, "A3 마스터에서 옮긴 절 — 옛 자리는 이정표 하나, 새 문서에 같은 번호", str(bad[:8]))
 
 # ── B. 절 번호 ─────────────────────────────────────────────────────────
 print(NL + "=== B. 절 번호 — 겹치지 않고 제 부모 아래 ===")
@@ -257,11 +220,9 @@ chk(not dup, "B1 한 문서 안에 같은 절 번호가 둘 없다", str(dup[:10
 chk(not orphan, "B2 하위 절이 제 부모 절 아래에 있다", str(orphan[:10]))
 
 # ── C. U 번호 ──────────────────────────────────────────────────────────
-print(NL + "=== C. §14.5 U 번호(릴리스 SOT — 261108-1 에 마스터에서 옮김) ===")
+print(NL + "=== C. 마스터 §14.5 U 번호 ===")
 mst = SOTS[MASTER]
-rel = SOTS.get("릴리스 작업 계획서.md", "")
-udefs = re.findall(r"^\|\s*(U\d+)\s*\|", rel, re.M) + re.findall(r"^>\s*\*\*★\s*(U\d+)\s*—", rel, re.M)
-chk(not re.findall(r"^\|\s*(U\d+)\s*\|", mst, re.M), "C0 U 번호는 마스터가 아니라 릴리스 SOT §14.5 에 정의한다")
+udefs = re.findall(r"^\|\s*(U\d+)\s*\|", mst, re.M) + re.findall(r"^>\s*\*\*★\s*(U\d+)\s*—", mst, re.M)
 dups = sorted({u for u in udefs if udefs.count(u) > 1})
 chk(not dups, "C1 U 번호가 하나씩만 정의된다", str(dups))
 refs = set()
@@ -518,9 +479,7 @@ RENAMED = [
     # 261105-25·-28(응답성 SOT §4.6): 작업을 멈추는 단추 '중지' → '중단'. 녹화·재생·시계의 '중지' 는 다른 뜻이라
     #   단추 꼴([중지])·창 이름(…생성 중지)만 본다
     ("[중지]", "[중단]", "261105-28"), ("생성 중지", "생성 중단", "261105-28"),
-    # 261107-2(디자인 SOT §2.9.8 의 5): 우클릭 메뉴 이름 — 창 제목·기능 이름으로도 쓰이는 '선과 텍스트 입력 설정' 은 넣지 않는다
-    #   261108-2: '평탄화해서 내보내기' 는 261107-20 에 창 제목·안내 글도 '평탄화 사본' 이 되어 넣는다(디자인 SOT 바뀐 이름 표)
-    ("평탄화해서 내보내기", "평탄화 사본", "261107-20"),
+    # 261107-2(디자인 SOT §2.9.8 의 5): 우클릭 메뉴 이름 — 창 제목·기능 이름으로도 쓰이는 '평탄화해서 내보내기'·'선과 텍스트 입력 설정' 은 넣지 않는다
     ("왼쪽으로 90° 돌리기", "왼쪽 90° 회전", "261107-2"), ("오른쪽으로 90° 돌리기", "오른쪽 90° 회전", "261107-2"),
     ("180° 돌리기", "180° 회전", "261107-2"), ("용량 줄여 내보내기", "용량 줄인 사본", "261107-2"),
     ("개인정보 지우고 별도 저장", "개인정보 지운 사본", "261107-2"), ("공유용 사본 (정보 모두 지움)", "개인정보 지운 사본", "261107-2"),
