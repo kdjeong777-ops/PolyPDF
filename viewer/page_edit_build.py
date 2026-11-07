@@ -67,6 +67,47 @@ def apply_toc(doc, bms) -> int:
     return len(toc)
 
 
+def copy_info(sdoc, odoc) -> int:
+    """원본 PDF 정보(Info)·XMP 를 새 문서로 그대로 옮긴다 (마스터 §4.7.9, 261107-35). 옮긴 Info 키 수.
+
+    새 문서(`fitz.open()` + `insert_pdf`)는 정보 사전이 비어 제목·작성자·Producer 와 PolyPDF 키(`PolyPDFTextLayer`·`PolyPDFHash`)가
+    사라졌다. **키마다** 옮긴다 — `set_metadata` 는 사전을 통째로 바꾼다. 날짜(ModDate)도 원본 그대로 — 다른 저장 길(책갈피 [저장]·
+    `_finalize_save`)도 바꾸지 않는다. 끼운 다른 PDF 의 정보는 가져오지 않는다(이 파일의 정보만)."""
+    import fitz
+    n = 0
+    try:
+        si = sdoc.xref_get_key(-1, "Info")
+        if si[0] == "xref":
+            sx = int(si[1].split()[0])
+            oi = odoc.xref_get_key(-1, "Info")
+            if oi[0] != "xref":                           # 빈 정보 사전을 만든다(`set_metadata({})` 는 만들지 않는다)
+                nx = odoc.get_new_xref()
+                odoc.update_object(nx, "<<>>")
+                odoc.xref_set_key(-1, "Info", "%d 0 R" % nx)
+                oi = odoc.xref_get_key(-1, "Info")
+            if oi[0] == "xref":
+                ox = int(oi[1].split()[0])
+                for k in sdoc.xref_get_keys(sx):
+                    t, v = sdoc.xref_get_key(sx, k)
+                    if t == "xref":                       # 간접 객체 — 값(문자열 등)을 그대로
+                        v = sdoc.xref_object(int(v.split()[0]), compressed=True)
+                    if t in ("null",) or not v:
+                        continue
+                    if t == "string":                     # 읽으면 풀린 글이 온다 — PDF 문자열로 다시 싸서
+                        v = fitz.get_pdf_str(v)
+                    odoc.xref_set_key(ox, k, v)
+                    n += 1
+    except Exception:
+        pass
+    try:
+        xml = sdoc.get_xml_metadata()
+        if xml:
+            odoc.set_xml_metadata(xml)
+    except Exception:
+        pass
+    return n
+
+
 def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, rotations=None, alias=None) -> dict:
     """새 PDF 를 만들고 {"path": 만든 임시 파일, "pages": 쪽수, "calls": insert_pdf 호출 수} 를 돌려준다.
 
@@ -130,6 +171,7 @@ def build(src, plan, bookmarks_raw, recon, book_tmp, progress=None, crops=None, 
             bms = [(t, posmap[p1 - 1] + 1, lv) for (t, p1, lv) in (bookmarks_raw or []) if (p1 - 1) in posmap]
             if bms:
                 apply_toc(odoc, bms)
+            copy_info(sdoc, odoc)                         # 261107-35(§4.7.9): 원본 정보·XMP 를 그대로
             tick(outc, total, tr("저장 중"))
             odoc.save(str(recon), garbage=4, deflate=True)
         finally:
