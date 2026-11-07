@@ -3165,15 +3165,6 @@ msgstr "Reopened '{name}' (saved)."
 
 #: viewer/app.py
 #, python-brace-format
-msgid ""
-"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n"
-"그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?"
-msgstr ""
-"'{name}' is open in {n} other PolyPDF window(s).\n"
-"Close it there for a moment, restore it, and reopen it?"
-
-#: viewer/app.py
-#, python-brace-format
 msgid "{p}쪽({r})"
 msgstr "p.{p} ({r})"
 
@@ -3638,6 +3629,26 @@ msgstr "Item"
 #: viewer/doc_info_controller.py viewer/photo_controller.py
 msgid "값"
 msgstr "Value"
+
+#: viewer/doc_info_controller.py
+msgid "저장 안 한 고침이 있습니다 — 편집 모드 💾 저장 때 PDF 에 들어갑니다."
+msgstr "There are unsaved changes — they go into the PDF when you press 💾 Save in edit mode."
+
+#: viewer/doc_info_controller.py
+msgid "제목·작성자·주제·키워드는 두 번 눌러 고칠 수 있습니다."
+msgstr "Double-click title, author, subject or keywords to edit them."
+
+#: viewer/doc_info_controller.py
+msgid ""
+"PDF 의 문서 정보를 고치므로 편집모드로 바꾼 뒤 고칩니다.\n"
+"고친 값은 편집 모드 💾 저장 때 PDF 에 들어갑니다."
+msgstr ""
+"Editing the PDF's document info switches to edit mode first.\n"
+"Your changes go into the PDF when you press 💾 Save in edit mode."
+
+#: viewer/doc_info_controller.py
+msgid "두 번 눌러 고칩니다 — 편집 모드 💾 저장 때 PDF 에 들어갑니다."
+msgstr "Double-click to edit — goes into the PDF when you press 💾 Save in edit mode."
 
 #: viewer/edit_controller.py
 msgid "선긋기 적용"
