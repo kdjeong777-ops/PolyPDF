@@ -102,9 +102,9 @@ _BADGE_FALLBACK = {"🩷": "🔴"}       # 옛 Windows 10 이모지 글꼴에는
 
 
 def mark_level(row: dict) -> str:
-    """261107-33(단어장 SOT §11.2): 머리 글자·본문 밑줄이 쓰는 수준 — 사전에 있는 단어는 전문용어(📘)."""
-    if row.get("has_dict"):
-        return "전문용어"
+    """단어장 창의 수준 하나 — `종류` 거르기·머리 글자·본문/발표 밑줄이 모두 이것(단어학습 SOT §15.2, 261108-4).
+    행 `level` 그대로: 빈도 등급, 전문 용어집(is_termbase)·다단어 용어면 '전문용어'(`_enrich_rows_with_dict`·`_spot_page_terms` 가 넣는다).
+    일반 사전에 뜻이 있다(`has_dict`)고 바꾸지 않는다 — 종전(261107-33)에는 그래서 거르기와 밑줄이 어긋났다."""
     return row.get("level") or "미정"
 
 
@@ -726,10 +726,15 @@ class StudyPanel(QWidget):
 
     # --- 내부 --------------------------------------------------------------
     def filter_rows(self, rows: list[dict]) -> list[dict]:
-        """'종류' 체크로 거른 행(차례 그대로) — 목록·본문 밑줄·발표 길이 같은 규칙(261107-33)."""
+        """'종류' 체크로 거른 행(차례 그대로) — 목록·본문 밑줄·발표 길이 같은 규칙(261107-33).
+        수준은 `mark_level` 하나(261108-4 — 머리 글자·밑줄 색과 같은 값). `미정` 은 `고급` 체크를 따른다."""
         levels = set(self.selected_levels())
-        return [r for r in rows or [] if r.get("level") in levels
-                or (r.get("level") == "미정" and "고급" in levels)]
+        out = []
+        for r in rows or []:
+            lv = mark_level(r)
+            if lv in levels or (lv == "미정" and "고급" in levels):
+                out.append(r)
+        return out
 
     def level_of(self, lemma: str) -> str:
         """지금 받은 행에서 그 표제어의 밑줄 수준(`mark_level`). 없으면 '미정'."""
@@ -775,7 +780,7 @@ class StudyPanel(QWidget):
             lv = r.get("level", "미정")
             cnt = r.get("count", 1)
             mark = "✎ " if r.get("user_edited") else ""
-            badge = _badge(mark_level(r))     # 사전 매칭 = 📘 — 본문 밑줄과 같은 규칙(261107-33)
+            badge = _badge(mark_level(r))     # 수준 하나 — 거르기·본문 밑줄과 같은 값(261108-4)
             top = QTreeWidgetItem([f"{badge} {mark}{r['lemma']}"
                                    + (f"   ×{cnt}" if cnt > 1 else "")])
             top.setFont(0, self._bold)
