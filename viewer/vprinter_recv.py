@@ -270,7 +270,8 @@ def text_rotation(page) -> int | None:
     """쪽의 글 줄 방향(글자 수로 가중)으로 바로 세울 회전(시계 방향 0·90·180·270). 글이 없으면 None.
     아래로 흐르는 글(0,1)은 270°, 위로(0,-1)는 90°, 거꾸로(-1,0)는 180°(가상 프린터 SOT §4.1, 261017-16)."""
     votes = {}
-    for b in page.get_text("dict").get("blocks", []):
+    from viewer.text_extract2 import text_dict              # 261107-19: 그림을 풀지 않는다(응답성 SOT §6)
+    for b in text_dict(page, raw=False).get("blocks", []):
         for ln in b.get("lines", []):
             n = sum(len(s.get("text", "").strip()) for s in ln.get("spans", []))
             key = tuple(int(round(v)) for v in ln.get("dir", (1, 0)))

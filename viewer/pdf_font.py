@@ -79,7 +79,8 @@ def insert_textbox_styled(fitz, page, rect, text, *, bold=False, italic=False, *
         rc = tp.insert_textbox(rect, text, **lay)
         if rc < 0:
             return rc
-        spans = [(s["origin"], s["text"]) for b in tp.get_text("dict")["blocks"]
+        from viewer.text_extract2 import text_dict          # 261107-19(응답성 SOT §6) — 빈 쪽이라 비용은 없지만 한 길로
+        spans = [(s["origin"], s["text"]) for b in text_dict(tp, raw=False)["blocks"]
                  for ln in b.get("lines", []) for s in ln["spans"] if s["text"].strip()]
     finally:
         tmp.close()

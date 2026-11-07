@@ -198,7 +198,7 @@ class ProbeWorker(QObject):
             except Exception:
                 continue
             if size > self.MAX_MB * 1024 * 1024:
-                # ③ 큰 파일은 배경에서 건너뛴다 — 펼치거나 우클릭할 때 그 자리에서 연다.
+                # ③ 큰 파일은 배경에서 건너뛴다 — 펼칠 때 그 자리에서 연다(우클릭은 색인이 적어 둔 것만, 261107-19).
                 continue
             enc, has_toc, auth, signed = False, False, None, False
             try:

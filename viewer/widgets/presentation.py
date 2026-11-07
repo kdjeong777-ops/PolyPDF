@@ -2185,7 +2185,8 @@ class PresentationWindow(QWidget):
                 return cache[key]
             pg = self._doc.doc.load_page(self._page)
             hs = []
-            for blk in pg.get_text("dict").get("blocks", []):
+            from viewer.text_extract2 import text_dict              # 261107-19: 그림을 풀지 않는다(응답성 SOT §6)
+            for blk in text_dict(pg, raw=False).get("blocks", []):
                 for ln in blk.get("lines", []):
                     b = ln.get("bbox", (0, 0, 0, 0))
                     if b[3] > b[1]:

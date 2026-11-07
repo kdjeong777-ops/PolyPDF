@@ -96,7 +96,8 @@ def _text_in(page, r) -> str:
     rr = fitz.Rect(r)
     out = []
     try:
-        d = page.get_text("rawdict")
+        from viewer.text_extract2 import text_dict          # 261107-19: 그림을 풀지 않는다(응답성 SOT §6)
+        d = text_dict(page)
     except Exception:
         return ""
     for b in d.get("blocks", []):

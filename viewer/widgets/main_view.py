@@ -4304,7 +4304,8 @@ class MainView(QWidget):
                 page = self._page_for(self._current_page)
                 pw, ph = page.rect.width, page.rect.height
                 if pw > 0 and ph > 0:
-                    d = page.get_text("dict")
+                    from viewer.text_extract2 import text_dict      # 261107-19: 그림을 풀지 않는다(응답성 SOT §6)
+                    d = text_dict(page, raw=False)
                     for blk in d.get("blocks", []):
                         for ln in blk.get("lines", []):
                             x0, y0, x1, y1 = ln.get("bbox", (0, 0, 0, 0))
@@ -4373,7 +4374,8 @@ class MainView(QWidget):
                 return None
             py = fy * ph
             best = None; bestd = ph * 0.5
-            d = page.get_text("dict")
+            from viewer.text_extract2 import text_dict              # 261107-19: 그림을 풀지 않는다(응답성 SOT §6)
+            d = text_dict(page, raw=False)
             for blk in d.get("blocks", []):
                 for ln in blk.get("lines", []):
                     x0, y0, x1, y1 = ln.get("bbox", (0, 0, 0, 0))

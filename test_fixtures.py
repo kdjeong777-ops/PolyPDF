@@ -14,6 +14,7 @@
                  (`_pdf_is_scanned` → False, `_read_orig_toc`/`load_single_pdf` 용)
   scanned_pdf()  스캔 모사 — 페이지가 **이미지 뿐**이라 텍스트 레이어가 없음, 14쪽
                  (`_pdf_is_scanned` → True. 앞 12쪽 표본의 60% 이상이 'ocr' 로 판정되면 참)
+  image_strips_pdf() 그림 전용 — 가상 프린터·사진→PDF 꼴, 쪽마다 2048px Flate 그림 띠(261107-19, 응답성 SOT §7.5)
   ruled_table_pdf()  괘선이 **선으로 그려진** 3열 표 — pdfplumber 가 표로 인식한다
                  (텍스트 창 SOT §3.3 — 칸을 놓쳐도 글을 잃지 않는지)
   scanned_form_pdf() 스캔 서식 모사 — 그림 위에 **보이지 않는 글자**(render mode 3)로
@@ -95,6 +96,52 @@ def _build_scanned_pdf(dst: Path) -> None:
     src.close()
     out.save(str(dst))
     out.close()
+
+
+_STRIP_PAGES = 3
+
+
+def _build_image_strips_pdf(dst: Path) -> None:
+    """261107-19(응답성 SOT §7.5): **그림 전용 PDF** — 가상 프린터(Ghostscript)·사진→PDF 가 만드는 꼴.
+    A4 3쪽, 쪽마다 폭 2048px 그림 띠 4개(FlateDecode, 글자층 없음). 그림에 무늬를 그려 넣어 실제 사진처럼 압축이 덜 되게 한다."""
+    import fitz
+    out = fitz.open()
+    W, H = 595.0, 842.0
+    band = H / 4
+    for i in range(_STRIP_PAGES):
+        src = fitz.open()
+        sp = src.new_page(width=W, height=H)
+        for k in range(60):                              # 색 무늬(띠마다 다르게)
+            x = (k * 37 + i * 11) % int(W); y = (k * 53 + i * 7) % int(H)
+            sp.draw_circle((x, y), 20 + (k * 13) % 70, color=None,
+                           fill=(((k * 7) % 10) / 10.0, ((k * 3 + i) % 10) / 10.0, ((k * 5) % 10) / 10.0))
+            sp.insert_text((20 + (k * 29) % 500, 20 + (k * 41) % 800), "photo %d-%d" % (i, k), fontsize=9 + k % 12)
+        p = out.new_page(width=W, height=H)
+        for s in range(4):
+            r = fitz.Rect(0, s * band, W, (s + 1) * band)
+            z = 2048.0 / W
+            pix = sp.get_pixmap(matrix=fitz.Matrix(z, z), clip=r)
+            # 사진 같은 잡음(아래 1비트, 띠 둘에 하나) — 큰 정수 XOR 로 한 번에. 압축이 덜 돼 실제 산출물(쪽당 ~2MB)과 비슷한 무게가 된다
+            if s % 2:
+                p.insert_image(r, pixmap=pix)
+                continue
+            raw = pix.samples
+            noise = int.from_bytes(os.urandom(len(raw)), "little") & int.from_bytes(b"\x01" * len(raw), "little")
+            mixed = (int.from_bytes(raw, "little") ^ noise).to_bytes(len(raw), "little")
+            pix = fitz.Pixmap(fitz.csRGB, pix.width, pix.height, mixed, False)
+            p.insert_image(r, pixmap=pix)
+        src.close()
+    out.save(str(dst), deflate=True)
+    out.close()
+
+
+def image_strips_pdf() -> str:
+    """그림 전용 PDF(가상 프린터·사진→PDF 꼴, 3쪽 · 쪽마다 2048px Flate 띠 4개) 경로 — 측정 묶음 T7 도 이것을 쓴다."""
+    d = _ensure_dir()
+    p = d / "sample_image_strips.pdf"
+    if not p.exists() or p.stat().st_size == 0:
+        _build_image_strips_pdf(p)
+    return str(p)
 
 
 def text_pdf() -> str:

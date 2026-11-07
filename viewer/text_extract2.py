@@ -249,6 +249,16 @@ def _is_ocr_layer(page) -> bool:
     return inv >= len(traces) * 0.9
 
 
+def text_dict(page, raw: bool = True, **kw) -> dict:
+    """글·글자 자리만 쓰는 `get_text("rawdict"|"dict")` — **그림을 풀지 않는다** (261107-19, 응답성 SOT §6).
+
+    기본 플래그(`TEXT_PRESERVE_IMAGES`)는 쪽의 그림을 모두 풀어 블록에 담는다 — 그림 전용 PDF(가상 프린터·사진→PDF)에서
+    쪽당 0.8~1.4초였고, 그림을 빼면 0~1ms. 나머지 기본 플래그는 그대로라 글 블록은 같다. 그림 블록이 필요하면 `get_image_info`."""
+    import fitz
+    base = fitz.TEXTFLAGS_RAWDICT if raw else fitz.TEXTFLAGS_DICT
+    return page.get_text("rawdict" if raw else "dict", flags=base & ~fitz.TEXT_PRESERVE_IMAGES, **kw)
+
+
 def _line_items(page, edges_out=None):
     """PyMuPDF 줄 → [(rect, 글, 대표크기)] — 빈 줄 제외, 블록 읽기 순서.
 
@@ -260,11 +270,11 @@ def _line_items(page, edges_out=None):
     #   빨라졌지 느려지지는 않는다(13.3 → 10.7 ms/쪽). 안 되면 `dict` 로 물러선다.
     raw = True
     try:
-        d = page.get_text("rawdict")
+        d = text_dict(page)
     except Exception:
         raw = False
         try:
-            d = page.get_text("dict")
+            d = text_dict(page, raw=False)
         except Exception:
             return []
     ocr_layer = _is_ocr_layer(page)
@@ -599,7 +609,7 @@ def _edge_peer_texts(page):
             ph2 = float(pg.rect.height)
             if ph2 <= 0:
                 continue
-            for b in pg.get_text("dict").get("blocks", []):
+            for b in text_dict(pg, raw=False).get("blocks", []):
                 if b.get("type") != 0:
                     continue
                 for ln in b.get("lines", []):

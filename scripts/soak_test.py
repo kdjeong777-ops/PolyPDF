@@ -116,7 +116,7 @@ def main():
 
     d = json.loads((WORK / "release_test_suite.json").read_text(encoding="utf-8"))
     base = Path(d.get("samples") or (WORK / "_samples"))
-    cases = {c["name"][:2]: base / c["target"] for c in d.get("cases") or []}
+    cases = {c["name"][:2]: base / c["target"] for c in d.get("cases") or [] if c.get("target")}   # 합성(fixture) 대상은 빼고
     pdfs = [cases[k] for k in ("T1", "T2", "T3") if k in cases and cases[k].exists()]
     folder = cases.get("T4") if cases.get("T4") and cases["T4"].exists() else suite_targets()[0]
 

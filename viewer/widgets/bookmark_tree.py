@@ -2050,11 +2050,35 @@ class BookmarkTree(QWidget):
         except RuntimeError:
             pass
 
-    def _ensure_probed(self, item, force: bool = False) -> None:
-        """그 행 하나를 **지금 바로** 검사(우클릭 메뉴처럼 결과가 즉시 필요한 경우).
+    def _probe_for_menu(self, item) -> None:
+        """261107-19(응답성 SOT §4 ③): 우클릭 — 그 행의 조사 결과를 **아는 것만** 붙이고, 모르면 배경 검사 줄에 넣는다.
+        파일을 열지 않는다. 결과가 오면(`_on_probe_result`) 표식이 붙고 다음 우클릭부터 '암호 입력' 줄이 있다."""
+        try:
+            if item is None or not self._is_file_node(item):
+                return
+            path = item.data(0, self.DATA_FILE)
+            if not path or not str(path).lower().endswith(".pdf"):
+                return
+            path = str(path)
+            known = self._known_probe(path)
+            if known is not None:
+                item.setData(0, self.DATA_PROBED, True)
+                self._apply_probe(item, path, known)
+                return
+            queued = any(p == path for _it, p in self._probe_queue) or path in (self._probe_pending or {})
+            item.setData(0, self.DATA_PROBED, True)
+            if not queued:
+                self._probe_queue.append((item, path))
+            if not self._probe_timer.isActive() and self._probe_worker is None:
+                self._probe_timer.start()
+        except RuntimeError:
+            pass
 
-        보이는 행만 검사하므로, 아직 차례가 오지 않은 행에서도 암호화 여부를 알아야 하는
-        곳은 이것을 부른다. 파일 1개라 비용은 fitz.open 한 번(실측 20ms).
+    def _ensure_probed(self, item, force: bool = False) -> None:
+        """그 행 하나를 **지금 바로** 검사(펼칠 때처럼 결과가 즉시 필요한 경우 — 우클릭은 `_probe_for_menu`).
+
+        보이는 행만 검사하므로, 아직 차례가 오지 않은 행에서도 책갈피 여부를 알아야 하는
+        곳은 이것을 부른다. 파일 1개라 비용은 fitz.open 한 번(따뜻하면 20ms, 처음 여는 파일은 백신 검사로 1초+).
 
         `DATA_PROBED` 는 **큐에 넣었다**는 뜻이지 검사가 끝났다는 뜻이 아니다 — 큐에만 들어간
         행에서 결과가 당장 필요하면 `force=True`(결과는 `_probe_cache` 가 받쳐 준다)."""
@@ -3031,8 +3055,9 @@ class BookmarkTree(QWidget):
             return
         if self._zip_context_menu(item, pos):            # 261106-5(§4.24.1): PDF 모드 zip 줄·안 줄
             return
-        # 260906-1: 메뉴가 암호화 여부(DATA_ENCRYPTED)를 보므로, 아직 검사 전이면 이 행만 즉시.
-        self._ensure_probed(item if self._is_file_node(item) else self._file_node_of(item))
+        # 261107-19(응답성 SOT §4 ③): 메뉴는 암호화 여부(DATA_ENCRYPTED)를 **아는 것만** 본다 — 모르면 배경 검사 줄에 넣고
+        #   기다리지 않는다. 종전 `_ensure_probed` 는 처음 보는 파일을 메인에서 열어 백신 검사로 1초+ 섰다.
+        self._probe_for_menu(item if self._is_file_node(item) else self._file_node_of(item))
         # 260606-13: 편집모드에서 여러 파일 선택 후 우클릭 → 병합 메뉴(선택 유지)
         sel_files = [it for it in self.tree.selectedItems()
                      if self._is_file_node(it)]

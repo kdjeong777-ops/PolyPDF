@@ -706,7 +706,13 @@ def run_suite(exe: Path, out: Path, only, rec: dict, watch=None):
             probe.restore(bk)
             if c.get("clear_index"):
                 probe.clear_index()
-            target = base / c["target"]
+            if c.get("fixture"):
+                # 261107-19(응답성 SOT §7.5): 합성 대상 — test_fixtures 가 만든다(업무 파일 아님, 예: 그림 전용 PDF)
+                sys.path.insert(0, str(ROOT))
+                import test_fixtures
+                target = Path(getattr(test_fixtures, c["fixture"])())
+            else:
+                target = base / c["target"]
             if not target.exists():
                 rec["fail"].append("%s 대상이 없다: %s" % (c["name"], target))
                 continue
@@ -860,4 +866,5 @@ if __name__ == "__main__":
 # release_test_suite.json 예시(공개 저장소 밖, <작업 폴더> 에):
 # {"samples": "C:/My/PolyPDF/_samples",
 #  "cases": [{"name": "T1_small", "target": "작은 문서.pdf", "seconds": 45},
-#            {"name": "T5_std", "target": "PDF/기준 폴더", "seconds": 300, "clear_index": true}]}
+#            {"name": "T5_std", "target": "PDF/기준 폴더", "seconds": 300, "clear_index": true},
+#            {"name": "T7_imgonly", "fixture": "image_strips_pdf", "seconds": 45}]}   # 합성(test_fixtures 함수 이름)

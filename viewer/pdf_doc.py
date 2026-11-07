@@ -70,7 +70,8 @@ def flat_hits(page, query: str, ocr=None, flat_txt=None) -> list:
     if qf in flat_txt:
         chars = []
         try:
-            for b in page.get_text("rawdict").get("blocks", []):
+            from viewer.text_extract2 import text_dict      # 261107-19: 그림을 풀지 않는다(응답성 SOT §6)
+            for b in text_dict(page).get("blocks", []):
                 for ln in b.get("lines", []):
                     for sp in ln.get("spans", []):
                         for ch in sp.get("chars", []):

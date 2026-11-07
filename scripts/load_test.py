@@ -36,7 +36,7 @@ LEAK_LIMIT_MB = 20.0
 def suite_targets():
     d = json.loads((WORK / "release_test_suite.json").read_text(encoding="utf-8"))
     base = Path(d.get("samples") or (WORK / "_samples"))
-    cases = d.get("cases") or []
+    cases = [c for c in d.get("cases") or [] if c.get("target")]     # 합성(fixture) 대상은 빼고(261107-19)
     folders = [c for c in cases if c.get("clear_index")]
     folder = base / (folders[-1]["target"] if folders else cases[-1]["target"])
     pdfs = [c for c in cases if str(c.get("target", "")).lower().endswith(".pdf")]

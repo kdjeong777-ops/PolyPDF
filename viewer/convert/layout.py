@@ -44,7 +44,8 @@ def _span_styles(page) -> list:
     """`[(자리, 굵음, 세리프, 글자 수, 글)]` — 줄의 굵기·글꼴 갈래와 나란한 조각의 자리를 읽는 데만 쓴다."""
     out = []
     try:
-        d = page.get_text("dict")
+        from viewer.text_extract2 import text_dict          # 261107-19: 그림을 풀지 않는다(응답성 SOT §6)
+        d = text_dict(page, raw=False)
     except Exception:
         return out
     for b in d.get("blocks", []):
@@ -286,7 +287,8 @@ def _size_in(page, rect) -> float:
     import statistics
     sizes = []
     try:
-        for b in page.get_text("dict", clip=rect).get("blocks", []):
+        from viewer.text_extract2 import text_dict
+        for b in text_dict(page, raw=False, clip=rect).get("blocks", []):
             for ln in b.get("lines", []) or []:
                 for sp in ln.get("spans", []) or []:
                     if str(sp.get("text", "")).strip():
