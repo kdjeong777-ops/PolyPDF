@@ -6,6 +6,7 @@ B. [수정] — 고른 스타일을 지금 오른쪽 목록으로, 이름도 바
 C. [저장] 이 같은 이름이면 덮어쓸지 묻는다 — 아니오면 그대로, 예면 덮어씀
 D. [수정]·[삭제] 는 스타일을 고른 동안만 켜짐 · [삭제] 는 바로 지움
 E. 환경설정 판 — 저장·수정·삭제는 판 안에만, [적용] 때 settings 에([취소] = 적용 안 함이면 그대로)
+F. [기본 사전으로] — 묻고(아니오면 그대로), 예면 기본 선택이 오른쪽 목록으로·이 PDF 의 선택 지움·다른 PDF 의 선택은 그대로(이후 여는 PDF 는 새 기본)
 수정 전 코드: 이 PDF 창에 스타일 단추가 숨어 있고 [수정] 이 없다 → A·B·D 실패.
 """
 import os, sys, tempfile
@@ -143,6 +144,41 @@ chk([s["name"] for s in p.styles()] == ["도로만", "전부"], "E2 판 안에�
 host._prefs["dict_styles"] = p.styles()          # [적용] 과 같은 길(_settings_apply → _apply_prefs)
 chk(styles() == [("도로만", ["g1", "user"]), ("전부", ["g1", "g2", "user"])], "E3 [적용] 뒤 settings 에", str(styles()))
 p.close()
+
+# ---- F [기본 사전으로] (사용자 지시 '선택한 사전을 기본사전으로 변경 도 추가') ----
+pdf_b = str(root / "b.pdf"); pdf_c = str(root / "c.pdf")
+def use(pdf):
+    host._study_pdf = Path(pdf)
+    return host._study_get_dict()
+def found(pdf, term):
+    return bool(use(pdf).lookup(term))
+def open_file(pdf):
+    use(pdf)
+    dd = DictFileDialog(host._study_get_dict(), host._prefs, host=host)
+    dd.show(); QTest.qWait(10)
+    return dd
+# b 는 이 PDF 만의 선택(g2 만 끔)
+dd = open_file(pdf_b); select(dd.lst_use, {"g2"}); click(dd.btn_remove); dd.accept()
+chk(found(pdf_b, "포장시험어zq") and not found(pdf_b, "골재시험어zq"), "F0 b: 이 PDF 만의 선택(g1 만)")
+dd = open_file(pdf_a)
+btn = getattr(dd, "btn_make_default", None)
+chk(btn is not None and btn.isVisibleTo(dd), "F1 이 PDF 창에 [기본 사전으로]")
+select(dd.lst_use, {"g1"}); click(dd.btn_remove)             # a: g2·user 만
+en0 = {s["source_id"]: bool(s["enabled"]) for s in dic.list_sources()}
+ANSWER["q"] = QMessageBox.StandardButton.No; ANSWER["asked"] = 0
+if btn is not None:
+    click(btn)
+chk(ANSWER["asked"] == 1 and dd.isVisible() and {s["source_id"]: bool(s["enabled"]) for s in dic.list_sources()} == en0,
+    "F2 먼저 묻는다 — 아니오면 기본 선택 그대로, 창도 그대로")
+ANSWER["q"] = QMessageBox.StandardButton.Yes
+if btn is not None:
+    click(btn)
+en1 = {s["source_id"]: bool(s["enabled"]) for s in dic.list_sources()}
+chk(not dd.isVisible() and en1.get("g1") is False and en1.get("g2") is True, "F3 예 — 기본 선택이 오른쪽 목록으로, 창 닫힘", str(en1))
+off = host._prefs.get("dict_file_off") or {}
+chk(host._dict_file_key() not in off if hasattr(host, "_dict_file_key") else False, "F4 지금 PDF(a) 는 이 PDF 의 선택이 지워져 기본을 따른다", str(off))
+chk(not found(pdf_c, "포장시험어zq") and found(pdf_c, "골재시험어zq"), "F5 이후 여는 PDF(c) 는 새 기본 사전")
+chk(found(pdf_b, "포장시험어zq") and not found(pdf_b, "골재시험어zq"), "F6 이 PDF 만의 선택이 있는 b 는 그대로")
 
 print("\nALL PASS" if not fails else f"\nFAIL {len(fails)}: {fails}")
 sys.exit(1 if fails else 0)

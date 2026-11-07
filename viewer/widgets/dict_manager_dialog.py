@@ -564,6 +564,10 @@ class DictFileDialog(QDialog):
         self.panel = DictManagerPanel(store, prefs, host=host, mode="file", parent=self)
         v.addWidget(self.panel, 1)
         row = QHBoxLayout()
+        self.btn_make_default = QPushButton("기본 사전으로")       # 261107-25
+        self.btn_make_default.setToolTip("오른쪽 목록을 모든 PDF 의 기본 사전으로 바꿉니다 — 따로 고르지 않은 PDF 가 이 조합을 씁니다.")
+        self.btn_make_default.clicked.connect(self._make_default)
+        row.addWidget(self.btn_make_default)
         self.btn_follow = QPushButton("기본 선택 따르기")
         self.btn_follow.setToolTip("이 PDF 만의 선택을 지웁니다 — 환경설정 › 고급 › 사전의 기본 선택을 씁니다.")
         self.btn_follow.clicked.connect(self._follow_default)
@@ -574,6 +578,24 @@ class DictFileDialog(QDialog):
         row.addWidget(self.btn_close)
         v.addLayout(row)
         self._saved = False
+
+    def _make_default(self):
+        """261107-25(단어장 SOT §11.1): 오른쪽 목록 → 기본 선택. 환경설정 [적용]/[취소] 밖이라 먼저 묻는다.
+        이 PDF 의 선택은 지우고(기본을 따름), 다른 PDF 의 선택·우선순위는 그대로."""
+        if self._host is None or not hasattr(self._host, "_set_dict_selection"):
+            return
+        if QMessageBox.question(
+                self, "기본 사전으로",
+                "지금 오른쪽 목록을 기본 사전으로 바꿀까요?\n\n"
+                "앞으로 따로 고르지 않은 PDF 는 모두 이 사전을 씁니다(지금 PDF 도 기본을 따릅니다).\n"
+                "이 PDF 만의 선택이 있는 다른 PDF 는 그대로입니다.") != QMessageBox.StandardButton.Yes:
+            return
+        self._saved = True
+        try:
+            self._host._set_dict_selection(self.panel.use_ids(), as_default=True)
+        except Exception:
+            pass
+        self.accept()
 
     def _follow_default(self):
         self._saved = True
