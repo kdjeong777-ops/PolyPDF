@@ -14150,3 +14150,12 @@ msgstr ""
 #: viewer/app.py
 msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
 msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "파일 회전"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "이 파일의 모든 쪽을 돌립니다 — [저장] 하면 PDF 에 들어갑니다."
+msgstr ""
+

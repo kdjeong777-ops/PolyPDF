@@ -223,7 +223,7 @@ class BookmarkTree(QWidget):
     compareFilesRequested = pyqtSignal(str, str)  # 261014-23(마스터 §4.11): 두 파일 비교
     photoActionRequested = pyqtSignal(str, list)  # 261104-3(사진 보기 SOT 4.20): 사진 모드 메뉴 — (일 이름, 사진 경로들)
     filterEmptied = pyqtSignal(bool)                 # 261107-9(검색 SOT §5.1): 거르기 결과가 비었다(True)·다시 생겼다(False) — 앱이 본문·썸네일을 비우고 되돌린다
-    fileActionRequested = pyqtSignal(str, list, object)  # 261107-2(디자인 SOT §2.9.8): 'ocr_read'·'present'·'sign'·'info' — (일, [파일], 쪽 범위|None)
+    fileActionRequested = pyqtSignal(str, list, object)  # 261107-2(디자인 SOT §2.9.8): 'ocr_read'·'present'·'sign'·'info'·'rotate'(-8) — (일, [파일], 쪽 범위|각도|None)
     editGlossaryRequested = pyqtSignal(str)      # 260623: 그 PDF 번역 용어집 교정
     filePasswordEntered = pyqtSignal(str)    # 260618-1: 우클릭 '암호 입력' 성공 — 앱이 재로드
     releaseFileRequested = pyqtSignal(str)   # v1.6.21: 파일 작업 직전 — 앱이 핸들 해제
@@ -3098,6 +3098,13 @@ class BookmarkTree(QWidget):
         if _dir_target and not pm:
             menu.group("copy")
             self._mi_copy_path(menu, files)
+        # 모양 — 261107-8(마스터 §4.7.13): 파일 통째 회전(모든 쪽, 저장 전 회전 → 💾 저장 한 길)
+        if is_file and _dir_target and not pm:
+            menu.group("shape")
+            rm = menu.sub(tr("파일 회전"))
+            for _lbl, _d in ((tr("왼쪽 90° 회전"), -90), (tr("오른쪽 90° 회전"), 90), (tr("180° 회전"), 180)):
+                self._act(rm, _lbl, lambda p=_dir_target, d=_d: self._file_action("rotate", [p], d),
+                          tip=tr("이 파일의 모든 쪽을 돌립니다 — [저장] 하면 PDF 에 들어갑니다."))
         # 파일 — 260901-2: 편집모드 — 선택한 파일들을 폴더로 복사/이동(대상: 선택된 폴더·하위 폴더·새 폴더)
         menu.group("file")
         xfer_files = self._selected_file_nodes() if self._edit_mode else []

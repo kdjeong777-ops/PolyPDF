@@ -14439,6 +14439,50 @@ msgstr "Choose one photo to crop."
 msgid "환경설정"
 msgstr "Settings"
 
+#: viewer/app.py
+msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'"
+msgstr "Right-click a PDF file → 'Open with' → 'Choose another app' → PolyPDF → 'Always'"
+
+#: viewer/app.py
+msgid "기본 PDF 앱으로 설정"
+msgstr "Set as Default PDF App"
+
+#: viewer/app.py
+msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요"
+msgstr "Opens the Windows Default apps page — choose PolyPDF for .pdf there"
+
+#: viewer/app.py
+msgid ""
+"개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
+"빌드된 PolyPDF.exe 에서 실행해 주세요."
+msgstr ""
+"PolyPDF can't be set as the default app when running from source (Python).\n"
+"Please run the built PolyPDF.exe."
+
+#: viewer/app.py
+msgid "Windows 기본 앱 화면에서 PolyPDF 를 고르세요."
+msgstr "Choose PolyPDF on the Windows Default apps page."
+
+#: viewer/app.py
+msgid "PDF 뷰어"
+msgstr "PDF viewer"
+
+#: viewer/app.py
+msgid "기본 앱으로 설정하지 못했습니다"
+msgstr "Could not set as the default app"
+
+#: viewer/app.py
+msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
+msgstr "Could not open the Windows Default apps page. Choose it yourself like this:"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "파일 회전"
+msgstr "Rotate file"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "이 파일의 모든 쪽을 돌립니다 — [저장] 하면 PDF 에 들어갑니다."
+msgstr "Rotates every page of this file — Save writes it into the PDF."
+
 #~ msgid "PolyPDF_특허"
 #~ msgstr "PolyPDF_Patents"
 
@@ -15051,38 +15095,3 @@ msgstr "Settings"
 #~ msgid "전체 화면 (F11)"
 #~ msgstr "Full screen (F11)"
 
-#: viewer/app.py
-msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'"
-msgstr "Right-click a PDF file → 'Open with' → 'Choose another app' → PolyPDF → 'Always'"
-
-#: viewer/app.py
-msgid "기본 PDF 앱으로 설정"
-msgstr "Set as Default PDF App"
-
-#: viewer/app.py
-msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요"
-msgstr "Opens the Windows Default apps page — choose PolyPDF for .pdf there"
-
-#: viewer/app.py
-msgid ""
-"개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
-"빌드된 PolyPDF.exe 에서 실행해 주세요."
-msgstr ""
-"PolyPDF can't be set as the default app when running from source (Python).\n"
-"Please run the built PolyPDF.exe."
-
-#: viewer/app.py
-msgid "Windows 기본 앱 화면에서 PolyPDF 를 고르세요."
-msgstr "Choose PolyPDF on the Windows Default apps page."
-
-#: viewer/app.py
-msgid "PDF 뷰어"
-msgstr "PDF viewer"
-
-#: viewer/app.py
-msgid "기본 앱으로 설정하지 못했습니다"
-msgstr "Could not set as the default app"
-
-#: viewer/app.py
-msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
-msgstr "Could not open the Windows Default apps page. Choose it yourself like this:"

@@ -6327,7 +6327,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             a.triggered.connect(lambda _=False, p=path: QTimer.singleShot(0, lambda: self._ctx_doc_info(p)))
 
     def _on_tree_file_action(self, kind: str, paths: list, extra=None, bt=None) -> None:
-        """책갈피창 PDF 줄의 'OCR 로 읽기'·'발표보기'·'서명'·'문서 정보'(261107-2) — 그 파일을 본문에 연 뒤 같은 길로."""
+        """책갈피창 PDF 줄의 'OCR 로 읽기'·'발표보기'·'서명'·'문서 정보'(261107-2)·'파일 회전'(261107-8) — 그 파일을 본문에 연 뒤 같은 길로."""
         if not paths:
             return
         path = str(paths[0])
@@ -6354,6 +6354,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._open_presentation()
             elif kind == "sign":
                 self.action_sign_pdf()
+            elif kind == "rotate":                       # 261107-8(마스터 §4.7.13): 모든 쪽 — 쪽 회전과 같은 길, 💾 저장이 PDF 에
+                n = int(getattr(self.main_view._doc, "page_count", 0) or 0)
+                if n > 0:
+                    self._rotate_pages(list(range(n)), int(extra or 90))
         QTimer.singleShot(0, go)
 
     def _delete_current_page(self, mv=None) -> None:
