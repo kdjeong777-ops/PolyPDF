@@ -165,22 +165,24 @@ class OcrPages:
         merged = _merge_toc_lines(a, b)
         if img is not None and int(dpi) == DPI and "kor" in str(self._picker.lang).split("+"):
             # 261102-2(단어학습 SOT §14.8.4): 목차 제목의 잡글 낱말(`Ds Fi`=`1. 서 론`, `OB`=`1.3`)을 `kor` 로 다시 읽는다
-            for m in merged:
-                if self.should_cancel():
-                    break
-                try:
-                    fixed = reread_toc_title(self._ocr, img, m.get("ws") or [])
-                except Exception:
-                    fixed = None
-                if fixed:
-                    m["title"] = fixed
-                try:
-                    longer = extend_spaced_title(self._ocr, img, m["title"], m.get("ws") or [])
-                except Exception:
-                    longer = None
-                if longer:
-                    m["title"] = longer
-                m["title"] = _tidy_toc_title(m["title"])
+            with _batch(self._ocr, img) as rd:         # 261108-18(§14.24): 줄마다 처음 읽는 자리는 한 번에
+                _toc_prefetch(self._ocr, rd, [m.get("ws") or [] for m in merged])
+                for m in merged:
+                    if self.should_cancel():
+                        break
+                    try:
+                        fixed = reread_toc_title(self._ocr, img, m.get("ws") or [])
+                    except Exception:
+                        fixed = None
+                    if fixed:
+                        m["title"] = fixed
+                    try:
+                        longer = extend_spaced_title(self._ocr, img, m["title"], m.get("ws") or [])
+                    except Exception:
+                        longer = None
+                    if longer:
+                        m["title"] = longer
+                    m["title"] = _tidy_toc_title(m["title"])
         out = []
         for m in merged:
             title = m["title"]
@@ -364,6 +366,46 @@ def reread_toc_title(ocr_mod, img, ws: list):
     return (_tidy_toc_title(_join(new)) or None) if new is not None else None
 
 
+_TOC_PAD = 6                # 목차 줄 다시 읽기 — 자를 때 낱말 둘레(px)
+
+
+def _toc_flags(ws: list) -> list:
+    """목차 줄 제목 낱말마다 다시 읽을 종류(`junk`·`caps`·`num`·'')."""
+    flags = []
+    for k, w in enumerate(ws):
+        s = str(w["surface"])
+        kind = ("caps" if _caps(s) else "junk") if _toc_junk(s) else ("num" if (k == 0 and _num_like(s)) else ("caps" if _caps(s) else ""))
+        flags.append(kind)
+    return flags
+
+
+def _toc_line_box(img, ws: list):
+    """목차 줄 제목 낱말 전체를 `kor` 한 줄로 읽을 자리(쪽 그림 픽셀)."""
+    W, H = img.size
+    pad = _TOC_PAD
+    return (max(0, int(min(float(w["x0"]) for w in ws)) - pad), max(0, int(min(float(w["y0"]) for w in ws)) - pad),
+            min(W, int(max(float(w["x1"]) for w in ws)) + pad), min(H, int(max(float(w["y1"]) for w in ws)) + pad))
+
+
+def _toc_prefetch(ocr_mod, rd, ws_list) -> None:
+    """목차 줄마다 처음 읽는 제목 자리(`kor` 한 줄)를 tesseract 한 번에 미리 읽어 둔다(단어학습 SOT §14.24) — 결과는 같다."""
+    if rd is None:
+        return
+    reqs = [("data", "kor", "--psm 7", ocr_mod._key_box(_toc_line_box(rd.img, ws)))
+            for ws in ws_list if ws and any(_toc_flags(ws))]
+    try:
+        rd.prefetch(reqs)
+    except Exception:
+        pass                                      # 미리 읽기가 안 되면 그때그때 읽는다(종전 길)
+
+
+def _batch(ocr_mod, img):
+    """`ocr.batch_reads(img)` — 그것이 없는 대역(검사)이면 빈 블록."""
+    import contextlib
+    fn = getattr(ocr_mod, "batch_reads", None)
+    return fn(img) if callable(fn) and img is not None else contextlib.nullcontext(None)
+
+
 def _reread_toc_words(ocr_mod, img, ws: list, drop_tail: bool = True):
     """목차 줄 제목 낱말(`ws`, 쪽 그림 픽셀) 중 잡글을 `kor` 한 줄 읽기로 바꾼다 → 새 낱말 목록 또는 None(바꿀 것 없음).
 
@@ -376,11 +418,7 @@ def _reread_toc_words(ocr_mod, img, ws: list, drop_tail: bool = True):
       - 끝에 남은 잡글(점선 리더 조각 `PoC`)은 `kor` 로도 글이 없으면 뗀다"""
     if not ws:
         return None
-    flags = []
-    for k, w in enumerate(ws):
-        s = str(w["surface"])
-        kind = ("caps" if _caps(s) else "junk") if _toc_junk(s) else ("num" if (k == 0 and _num_like(s)) else ("caps" if _caps(s) else ""))
-        flags.append(kind)
+    flags = _toc_flags(ws)
     if not any(flags):
         return None
     groups, k = [], 0
@@ -394,9 +432,8 @@ def _reread_toc_words(ocr_mod, img, ws: list, drop_tail: bool = True):
         else:
             k += 1
     W, H = img.size
-    pad = 6
-    box = (max(0, int(min(float(w["x0"]) for w in ws)) - pad), max(0, int(min(float(w["y0"]) for w in ws)) - pad),
-           min(W, int(max(float(w["x1"]) for w in ws)) + pad), min(H, int(max(float(w["y1"]) for w in ws)) + pad))
+    pad = _TOC_PAD
+    box = _toc_line_box(img, ws)
     kor = [q for q in ocr_mod.read_line_words(img, box, "kor")                 # 점만 있는 낱말(티)은 뺀다
            if re.fullmatch(r"[가-힣0-9.<>()]+", q["surface"]) and not re.fullmatch(r"\.+", q["surface"])]
     new = list(ws)
@@ -748,16 +785,19 @@ def fix_toc_page(ocr_mod, img, res: dict, dpi: int, lang: str = "kor+eng") -> bo
         return True
 
     changed = False
-    for ln in lines:                    # 먼저 `kor` 다시 읽기 — 흩어진 글 판독의 번호 고침이 `Ds Fi`(=`1. 서 론`)의 `Ds` 만 `1.` 로 바꾸지 않게
-        ln["words"] = list(ln["words"])
-        changed = reread(ln) or changed
-    try:
-        sparse = group_lines(ocr_mod.ocr_image(img, lang=lang, psm=TOC_PSM, dpi=dpi).get("words") or [], dpi, raw=True)
-    except Exception:
-        sparse = []
-    filled, extra = _fill_toc_from_sparse(lines, sparse, width) if sparse else (False, [])
-    for ln in extra:
-        reread(ln)
+    with _batch(ocr_mod, img) as rd:    # 261108-18(단어학습 SOT §14.24): 줄마다 처음 읽는 제목 자리는 tesseract 한 번에
+        _toc_prefetch(ocr_mod, rd, [_toc_parts(ln, width)["ws"] for ln in lines])
+        for ln in lines:                # 먼저 `kor` 다시 읽기 — 흩어진 글 판독의 번호 고침이 `Ds Fi`(=`1. 서 론`)의 `Ds` 만 `1.` 로 바꾸지 않게
+            ln["words"] = list(ln["words"])
+            changed = reread(ln) or changed
+        try:
+            sparse = group_lines(ocr_mod.ocr_image(img, lang=lang, psm=TOC_PSM, dpi=dpi).get("words") or [], dpi, raw=True)
+        except Exception:
+            sparse = []
+        filled, extra = _fill_toc_from_sparse(lines, sparse, width) if sparse else (False, [])
+        _toc_prefetch(ocr_mod, rd, [_toc_parts(ln, width)["ws"] for ln in extra])
+        for ln in extra:
+            reread(ln)
     changed = changed or filled
     out = []
     for ln in sorted(lines + extra, key=lambda ln: ln["cy"]):

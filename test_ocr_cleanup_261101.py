@@ -50,7 +50,8 @@ try:
     fr = [((72, 100, 97, 110), "will", 10.0), ((97.5, 100, 122, 110), "power", 10.0)]
     chk(tx._merge_rows(fr)[0][1] == "willpower", "① 글자층 조각은 종전대로 붙인다", tx._merge_rows(fr)[0][1])
     # study.db 본문(검색·단어장)도 같은 규칙 — `image_to_data` 를 흉내 내어 실제 `ocr_image` 를 태운다
-    import pytesseract
+    import pytesseract  # noqa: F401
+    from viewer.study import tess_run as _tr   # 261108-18(단어학습 SOT §14.24): 판독은 tess_run 으로
     seq = [("Can't", 3), ("say", 3), ("|", 3), ("like", 3), ("the", 3), ("look", 3), ("of", 3), ("that.", 3),
            ("Dang", 4), ("it.", 4), ("What's", 4), ("two?", 4)]
     data = {k: [] for k in ("text", "conf", "left", "top", "width", "height", "block_num", "par_num", "line_num")}
@@ -64,13 +65,13 @@ try:
         data["conf"].append(5 if s == "What's" else 90)
         data["block_num"].append(1); data["par_num"].append(1); data["line_num"].append(ln)
         x += w + 7                                      # 빈틈 7px ÷ 높이 30 = 0.23 < 0.25(종전 문턱)
-    _old = (ocr.ensure_tesseract, pytesseract.image_to_data)
+    _old = (ocr.ensure_tesseract, _tr.data)
     ocr.ensure_tesseract = lambda: {"ok": True}
-    pytesseract.image_to_data = lambda *a, **k: data
+    _tr.data = lambda ims, *a, **k: [data for _ in ims]
     try:
         res = ocr.ocr_image(None, lang="eng", dpi=300)
     finally:
-        ocr.ensure_tesseract, pytesseract.image_to_data = _old
+        ocr.ensure_tesseract, _tr.data = _old
     txt = res["text"]
     chk("look of that." in txt and "lookofthat" not in txt, "① study.db 본문도 OCR 라틴 낱말 사이는 빈칸", txt)
     # ── ② 문장 속 `|` → `I`, 낮은 신뢰도 사전 낱말은 남긴다(§3.5.3) ──────────────────
@@ -124,13 +125,13 @@ try:
         if "--psm 7" in config and lang == "kor":
             return {"text": ["음", "식", "을"], "conf": [92, 93, 94], "top": [0, 0, 0], "height": [30] * 3, "left": [0, 20, 40]}
         return {"text": [], "conf": [], "top": [], "height": [], "left": []}
-    _old = (ocr.ensure_tesseract, pytesseract.image_to_data)
+    _old = (ocr.ensure_tesseract, _tr.data)
     ocr.ensure_tesseract = lambda: {"ok": True}
-    pytesseract.image_to_data = fake_itd
+    _tr.data = lambda ims, lang, config="": [fake_itd(im, lang=lang, config=config) for im in ims]
     try:
         txt = ocr.ocr_image(Image.new("RGB", (800, 300), "white"), lang="kor+eng", dpi=300)["text"]
     finally:
-        ocr.ensure_tesseract, pytesseract.image_to_data = _old
+        ocr.ensure_tesseract, _tr.data = _old
     chk("음식을" in txt and "SAS" not in txt, "②s 한글 줄의 영문 잡글을 그 자리만 `kor` 로 다시 읽는다(§14.8.2)", txt)
     chk("초점" in txt and "을" in txt.split("초점", 1)[1][:3], "②s 납작한 `을` 이 사라지지 않는다", txt)
     chk(not tx._starts_list("1.00 g.") and tx._starts_list("【주2】소성") and tx._starts_list("1. 개요"),
@@ -155,13 +156,13 @@ try:
         bd["text"].append(s); bd["left"].append(x); bd["top"].append(100 * ln + (40 - h) // 2); bd["width"].append(w)
         bd["height"].append(h); bd["conf"].append(cf); bd["block_num"].append(1); bd["par_num"].append(1)
         bd["line_num"].append(ln)
-    _old = (ocr.ensure_tesseract, pytesseract.image_to_data)
+    _old = (ocr.ensure_tesseract, _tr.data)
     ocr.ensure_tesseract = lambda: {"ok": True}
-    pytesseract.image_to_data = lambda *a, **k: bd
+    _tr.data = lambda ims, *a, **k: [bd for _ in ims]
     try:
         res = ocr.ocr_image(None, lang="kor+eng", dpi=300)
     finally:
-        ocr.ensure_tesseract, pytesseract.image_to_data = _old
+        ocr.ensure_tesseract, _tr.data = _old
     rows = tx.lines_from_words(res["words"], dpi=300)
     chk(res["text"].startswith("• 사회적") and "\n• 화를" in res["text"], "남② study.db 본문에 목록 기호가 남는다", res["text"])
     chk([r["text"][:5] for r in rows] == ["• 사회적", "• 화를 "[:5]], "남② 텍스트 창 줄에도 `• ` 로 남는다",

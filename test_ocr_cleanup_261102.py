@@ -49,13 +49,16 @@ def run_ocr(page, kor_line=None, eng_chars=""):
 
     def itb(im, lang="", config=""):
         return "\n".join(f"{ch} {x - 10} 5 {x + 10} 40 0" for ch, x in eng_chars)
-    old = (ocr.ensure_tesseract, pytesseract.image_to_data, pytesseract.image_to_boxes)
+    # 261108-18(단어학습 SOT §14.24): 판독은 `tess_run` 이 여러 그림을 한 번에 — 그림마다 위 대역으로
+    from viewer.study import tess_run
+    old = (ocr.ensure_tesseract, tess_run.data, tess_run.boxes)
     ocr.ensure_tesseract = lambda: {"ok": True}
-    pytesseract.image_to_data, pytesseract.image_to_boxes = itd, itb
+    tess_run.data = lambda ims, lang, config="": [itd(im, lang=lang, config=config) for im in ims]
+    tess_run.boxes = lambda ims, lang, config="": [itb(im, lang=lang, config=config) for im in ims]
     try:
         return ocr.ocr_image(Image.new("RGB", (1600, 600), "white"), lang="kor+eng", dpi=300)["text"]
     finally:
-        ocr.ensure_tesseract, pytesseract.image_to_data, pytesseract.image_to_boxes = old
+        ocr.ensure_tesseract, tess_run.data, tess_run.boxes = old
 
 
 # ── ① 줄 첫머리 번호의 점(§14.8.3) — `45.2 배합설계` 를 `kor` 로 다시 읽으면 `4.5.2` ───────────────

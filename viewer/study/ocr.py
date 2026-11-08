@@ -9,9 +9,11 @@ Tesseract 미설치/로드 실패 시 OCR 함수는 RuntimeError — 호출자(�
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import sys
+import threading
 from collections import Counter
 from pathlib import Path
 from typing import Optional
@@ -291,11 +293,15 @@ def available_langs() -> list:
     except Exception:
         return []
     have = set()
-    try:
-        import pytesseract
-        have.update(pytesseract.get_languages(config=""))
-    except Exception:
-        pass
+    # 261108-18(§14.24): `--list-langs` 는 `ensure_tesseract` 가 한 번 읽어 둔 것을 쓴다 — 종전에는 `resolve_lang` 마다
+    #   tesseract 를 한 번 더 띄워(쪽마다 2~3번) 백신 검사·시간이 들었다. 언어 자료를 받으면 `reset_cache` 가 다시 읽게 한다
+    have.update(info.get("langs") or [])
+    if not have:
+        try:
+            import pytesseract
+            have.update(pytesseract.get_languages(config=""))
+        except Exception:
+            pass
     try:
         td = info.get("tessdata") or ""
         if td:
@@ -671,16 +677,103 @@ def _reread_kind(s: str, lang: str) -> str:
     return ""
 
 
-def _read_stack(img, boxes, lang):
-    """잘라낸 자리들을 **한 장에 세로로 쌓아** 한 번에 읽는다 → 자리마다 `(글, 평균 신뢰도)`.
+_STACK_GAP = 24             # 쌓아 읽기의 자리 사이 빈칸(px)
+_TLS = threading.local()
 
-    자리마다 Tesseract 를 따로 부르면 한 번에 0.1초 남짓 프로세스 값이 들어 쪽당 2~4초가 늘었다(실측 성격심리)."""
-    import pytesseract
+
+def _stack_sheet(img, boxes):
+    """잘라낸 자리들을 한 장에 세로로 쌓은 그림과 자리마다의 세로 구간."""
     from PIL import Image
     crops = [img.crop(b) for b in boxes]
-    if len(crops) == 1:
+    gap = _STACK_GAP
+    W = max(c.size[0] for c in crops) + 2 * gap
+    H = sum(c.size[1] + gap for c in crops) + gap
+    sheet = Image.new(img.mode, (W, H), "white")
+    spans, y = [], gap
+    for c in crops:
+        sheet.paste(c, (gap, y))
+        spans.append((y, y + c.size[1]))
+        y += c.size[1] + gap
+    return sheet, spans
+
+
+class _Reads:
+    """한 쪽 그림의 자른 자리 판독을 모아 **tesseract 한 번에** 읽고 기억한다 (§14.24, 261108-18).
+
+    요청 `(종류, 언어, 설정, 자리)` — 종류 `data`(낱말 TSV)·`boxes`(글자 상자), 자리는 `(x0, y0, x1, y1)` 또는
+    `("sheet", 자리들)`(쌓아 읽기 한 장). 같은 (종류·언어·설정) 끼리 한 번에 읽는다 — 그림마다 따로 읽으므로 한 장씩 읽은 것과 같다."""
+
+    def __init__(self, img):
+        self.img = img
+        self.memo = {}
+
+    def _image(self, box):
+        if box and box[0] == "sheet":
+            return _stack_sheet(self.img, list(box[1]))[0]
+        return self.img.crop(box)
+
+    def prefetch(self, reqs) -> None:
+        from viewer.study import tess_run
+        groups = {}
+        for kind, lang, cfg, box in reqs:
+            if (kind, lang, cfg, box) in self.memo:
+                continue
+            bxs = groups.setdefault((kind, lang, cfg), [])
+            if box not in bxs:
+                bxs.append(box)
+        for (kind, lang, cfg), bxs in groups.items():
+            fn = tess_run.data if kind == "data" else tess_run.boxes
+            for b, r in zip(bxs, fn([self._image(b) for b in bxs], lang, cfg)):
+                self.memo[(kind, lang, cfg, b)] = r
+
+    def get(self, kind, lang, cfg, box):
+        key = (kind, lang, cfg, box)
+        if key not in self.memo:
+            self.prefetch([key])
+        return self.memo[key]
+
+
+def _reads_for(img, rd=None):
+    """부르는 쪽이 넘긴 묶음 → 이 스레드에서 그 그림에 열어 둔 묶음(`batch_reads`) → 없으면 새 것(=종전처럼 한 장씩)."""
+    if rd is not None and rd.img is img:
+        return rd
+    cur = getattr(_TLS, "reads", None)
+    if cur is not None and cur.img is img:
+        return cur
+    return _Reads(img)
+
+
+@contextlib.contextmanager
+def batch_reads(img):
+    """이 블록 안에서 그 그림의 `read_line_words` 등이 판독을 기억·묶어 쓴다(목차 쪽 다시 읽기, §14.24)."""
+    prev = getattr(_TLS, "reads", None)
+    _TLS.reads = _Reads(img)
+    try:
+        yield _TLS.reads
+    finally:
+        _TLS.reads = prev
+
+
+def _key_box(b) -> tuple:
+    return tuple(int(v) for v in b)
+
+
+def _stack_reqs(boxes, lang) -> list:
+    """`_read_stack` 이 읽을 것 — 미리 모아 두기(§14.24)."""
+    if len(boxes) == 1:
+        return [("data", lang, "--psm 7", _key_box(boxes[0]))]
+    return [("data", lang, "--psm 6", ("sheet", tuple(_key_box(b) for b in boxes)))]
+
+
+def _read_stack(img, boxes, lang, rd=None):
+    """잘라낸 자리들을 **한 장에 세로로 쌓아** 한 번에 읽는다 → 자리마다 `(글, 평균 신뢰도)`.
+
+    자리마다 Tesseract 를 따로 부르면 한 번에 0.1초 남짓 프로세스 값이 들어 쪽당 2~4초가 늘었다(실측 성격심리).
+    261108-18: 판독은 `_Reads` 로 — 같은 쪽의 다른 다시 읽기와 함께 tesseract 한 번에(§14.24)."""
+    rd = _reads_for(img, rd)
+    if len(boxes) == 1:
         # 한 자리는 쌓지 않고 한 줄로 읽는다(psm 7) — 실험에서 가장 잘 읽힌 방식
-        r = pytesseract.image_to_data(crops[0], lang=lang, config="--psm 7", output_type=pytesseract.Output.DICT)
+        r = rd.get(*_stack_reqs(boxes, lang)[0])
         ws = []
         for t, c in zip(r["text"], r["conf"]):
             try:
@@ -690,16 +783,13 @@ def _read_stack(img, boxes, lang):
             if str(t).strip() and c >= 0:
                 ws.append((str(t).strip(), c))
         return [(" ".join(t for t, _ in ws), (sum(c for _, c in ws) / len(ws)) if ws else 0.0)]
-    gap = 24
-    W = max(c.size[0] for c in crops) + 2 * gap
-    H = sum(c.size[1] + gap for c in crops) + gap
-    sheet = Image.new(img.mode, (W, H), "white")
+    gap = _STACK_GAP
     spans, y = [], gap
-    for c in crops:
-        sheet.paste(c, (gap, y))
-        spans.append((y, y + c.size[1]))
-        y += c.size[1] + gap
-    r = pytesseract.image_to_data(sheet, lang=lang, config="--psm 6", output_type=pytesseract.Output.DICT)
+    for b in boxes:
+        h = int(b[3]) - int(b[1])
+        spans.append((y, y + h))
+        y += h + gap
+    r = rd.get(*_stack_reqs(boxes, lang)[0])
     got = [[] for _ in boxes]
     for t, c, top, hh, left in zip(r["text"], r["conf"], r["top"], r["height"], r["left"]):
         try:
@@ -734,20 +824,49 @@ def _reread_words(img, items):
         W, H = img.size
         boxes = [(max(0, int(x) - REREAD_PAD), max(0, int(y) - REREAD_PAD),
                   min(W, int(x + w) + REREAD_PAD), min(H, int(y + h) + REREAD_PAD)) for _i, (x, y, w, h), _k, _s in items]
+        # 261108-18(§14.24): 아래 판독은 모두 `rd` 로 — 먼저 한꺼번에 모아 (종류·언어·설정)마다 tesseract 한 번에 읽고,
+        #   차례·판정은 종전 그대로 기억해 둔 결과를 쓴다(결과가 같다). 다시 읽기(retry)는 앞 결과로 정해지므로 두 번째 묶음
+        rd = _Reads(img)
+        kor_idx = [n for n, it in enumerate(items) if it[2] == "kor" or (it[2] == "mix" and _LATIN_JUNK.fullmatch(it[3]))]
+        eng_idx = [n for n, it in enumerate(items) if it[2] == "eng"]
+        kor_need = kor_idx + [n for n in eng_idx if re.search(r"\)[^)\s]|[^(\s]\(", items[n][3])]
+        reqs = []
+        for n, (_i, _b, kind, _s) in enumerate(items):
+            if kind in ("num", "mix", "grp"):
+                reqs += _one_reqs(boxes[n], kind)
+        if kor_need:
+            reqs += _stack_reqs([boxes[n] for n in kor_need], "kor")
+        if eng_idx:
+            reqs += _stack_reqs([boxes[n] for n in eng_idx], "eng")
+        rd.prefetch(reqs)
         # 261102-2(§14.8.3): 번호·섞인 낱말·갈린 영문은 한 자리씩 한 줄로(psm 7) 읽는다 — 드물고(쪽당 몇 곳) 쌓으면 점이 뭉개진다
         for n, (i, _b, kind, s) in enumerate(items):
             if kind in ("num", "mix", "grp"):
-                got = _reread_one(img, boxes[n], kind, s)
+                got = _reread_one(img, boxes[n], kind, s, rd=rd)
                 if got:
                     out[i] = got
         # 종전에 `kor` 로 읽던 꼴(`_LATIN_JUNK`)의 섞인 낱말은 쌓아 읽기에도 그대로 넣는다 — 쌓은 묶음이 바뀌면 이웃 자리의
         #   결과도 바뀐다(실측 성격심리 401쪽 `변화를`→`번화를`). 영문 머리를 못 가른 자리는 그 결과(종전 규칙)를 쓴다
-        kor_idx = [n for n, it in enumerate(items) if it[2] == "kor" or (it[2] == "mix" and _LATIN_JUNK.fullmatch(it[3]))]
-        eng_idx = [n for n, it in enumerate(items) if it[2] == "eng"]
-        kor_need = kor_idx + [n for n in eng_idx if re.search(r"\)[^)\s]|[^(\s]\(", items[n][3])]
-        kres = dict(zip(kor_need, _read_stack(img, [boxes[n] for n in kor_need], "kor"))) if kor_need else {}
-        eres = dict(zip(eng_idx, _read_stack(img, [boxes[n] for n in eng_idx], "eng"))) if eng_idx else {}
+        kres = dict(zip(kor_need, _read_stack(img, [boxes[n] for n in kor_need], "kor", rd=rd))) if kor_need else {}
+        eres = dict(zip(eng_idx, _read_stack(img, [boxes[n] for n in eng_idx], "eng", rd=rd))) if eng_idx else {}
         # 쌓아 읽으면 몇 자리는 옆 자리에 휩쓸린다(실측 성격심리 300쪽 14곳 중 3곳) — 문턱을 못 넘은 자리만 따로 한 번 더
+        #   (아래 두 고리와 같은 판정으로 먼저 고른 자리를 한 번에 읽어 둔다)
+        retry, again = 0, []
+        for n in kor_idx:
+            if retry >= REREAD_RETRY:
+                break
+            if items[n][0] in out:
+                continue
+            if kres.get(n, ("", 0.0))[1] < REREAD_KOR_CONF:
+                again += _stack_reqs([boxes[n]], "kor")
+                retry += 1
+        for n in eng_idx:
+            if retry >= REREAD_RETRY:
+                break
+            if eres.get(n, ("", 0.0))[1] < REREAD_ENG_CONF or not re.search(r"[A-Za-z]{3,}", eres.get(n, ("", 0))[0]):
+                again += _stack_reqs([boxes[n]], "eng")
+                retry += 1
+        rd.prefetch(again)
         retry = 0
         for n in kor_idx:
             if retry >= REREAD_RETRY:
@@ -755,13 +874,13 @@ def _reread_words(img, items):
             if items[n][0] in out:
                 continue
             if kres.get(n, ("", 0.0))[1] < REREAD_KOR_CONF:
-                kres[n] = _read_stack(img, [boxes[n]], "kor")[0]
+                kres[n] = _read_stack(img, [boxes[n]], "kor", rd=rd)[0]
                 retry += 1
         for n in eng_idx:
             if retry >= REREAD_RETRY:
                 break
             if eres.get(n, ("", 0.0))[1] < REREAD_ENG_CONF or not re.search(r"[A-Za-z]{3,}", eres.get(n, ("", 0))[0]):
-                eres[n] = _read_stack(img, [boxes[n]], "eng")[0]
+                eres[n] = _read_stack(img, [boxes[n]], "eng", rd=rd)[0]
                 retry += 1
         from viewer.study.wordfreq_fast import zipf_frequency
         for n, (i, _b, kind, s) in enumerate(items):
@@ -792,7 +911,15 @@ def _reread_words(img, items):
     return out
 
 
-def _reread_one(img, box, kind, s):
+def _one_reqs(box, kind) -> list:
+    """`_reread_one` 이 읽을 것 — 미리 모아 두기(§14.24)."""
+    b = _key_box(box)
+    if kind == "num":
+        return _stack_reqs([b], "kor")
+    return [("data", "kor", "--psm 7", b), ("boxes", "eng", "--psm 7", b)]
+
+
+def _reread_one(img, box, kind, s, rd=None):
     """한 자리를 한 줄로 다시 읽어 받을 글을 고른다(§14.8.3) → `(글, 신뢰도)` 또는 None.
 
     `num`: `kor` 로 읽은 번호가 **숫자는 같고 점이 더 많을 때만**(`45.2`→`4.5.2`) — 숫자를 바꾸지 않는다.
@@ -802,14 +929,14 @@ def _reread_one(img, box, kind, s):
     `grp`: 갈린 토막을 묶은 상자를 `eng` 로 — 대문자 3자 이상(`WASHO`), 뒤 한글은 `mix` 와 같이."""
     crop = [box]
     if kind == "num":
-        t, c = _read_stack(img, crop, "kor")[0]
+        t, c = _read_stack(img, crop, "kor", rd=rd)[0]
         t = t.replace(" ", "")
         digits = lambda x: re.sub(r"\D", "", x)   # noqa: E731
         if (re.fullmatch(r"\d+(?:\.\d+)+\.?", t) and digits(t) == digits(s) and t.count(".") > s.count(".")):
             return (t, max(c, float(MIN_CONF_PCT)))
         return None
     # mix·grp: 한글이 시작하는 자리(`kor` 낱말 상자)에서 가른다 — 그 앞의 대문자는 `eng` 글자, 그 뒤는 `kor` 한글 낱말
-    kws = _read_line_words(img, box, "kor")
+    kws = _read_line_words(img, box, "kor", rd=rd)
     han = [(t, c, x) for t, c, x in kws if re.fullmatch(r"[가-힣]+[.,]?", t)]
     cut = han[0][2] if han else float("inf")
     tail = [(t, c) for t, c, x in han if x >= cut]
@@ -817,7 +944,7 @@ def _reread_one(img, box, kind, s):
     #   (둘이면 낮은 쪽 — 옆 낱말 음절이 걸려 든 `WAIS-IV는연` 의 `연` 을 받지 않게)
     tail_ok = bool(tail) and sorted(c for _t, c in tail)[(len(tail) - 1) // 2] >= REREAD_KOR_CONF
     head = ""
-    for ch, cx in _read_line_chars(img, box, "eng"):
+    for ch, cx in _read_line_chars(img, box, "eng", rd=rd):
         if cx >= cut or not ("A" <= ch <= "Z" or (ch == "-" and head)):
             break
         head += ch
@@ -872,10 +999,9 @@ def _caption_open(texts, idx, key, conf):
             texts[ids[start]] = "<" + str(texts[ids[start]]).strip()
 
 
-def _read_line_words(img, box, lang):
+def _read_line_words(img, box, lang, rd=None):
     """한 자리를 한 줄로(psm 7) 읽어 낱말마다 `(글, 신뢰도, 왼쪽 x)` — 자른 그림 좌표."""
-    import pytesseract
-    r = pytesseract.image_to_data(img.crop(box), lang=lang, config="--psm 7", output_type=pytesseract.Output.DICT)
+    r = _reads_for(img, rd).get("data", lang, "--psm 7", _key_box(box))
     out = []
     for t, c, x in zip(r["text"], r["conf"], r["left"]):
         try:
@@ -889,10 +1015,9 @@ def _read_line_words(img, box, lang):
 
 def read_line_words(img, box, lang, psm=7):
     """한 자리를 한 줄로 읽어 낱말 상자 목록 — `{surface, x0, y0, x1, y1, conf(0~1)}`, **쪽 그림 좌표**(`box` 의 왼쪽 위를 더한다).
-    목차 줄 다시 읽기(마스터 §4.4.2·단어학습 SOT §14.8.3)처럼 부르는 쪽이 낱말 자리로 맞춰 쓸 때."""
-    import pytesseract
-    r = pytesseract.image_to_data(img.crop(box), lang=lang, config=f"--psm {int(psm)}",
-                                  output_type=pytesseract.Output.DICT)
+    목차 줄 다시 읽기(마스터 §4.4.2·단어학습 SOT §14.8.3)처럼 부르는 쪽이 낱말 자리로 맞춰 쓸 때.
+    `batch_reads(img)` 안이면 미리 모은 판독을 쓴다(§14.24)."""
+    r = _reads_for(img).get("data", lang, f"--psm {int(psm)}", _key_box(box))
     out = []
     for t, c, x, y, w, h in zip(r["text"], r["conf"], r["left"], r["top"], r["width"], r["height"]):
         try:
@@ -905,11 +1030,10 @@ def read_line_words(img, box, lang, psm=7):
     return out
 
 
-def _read_line_chars(img, box, lang):
+def _read_line_chars(img, box, lang, rd=None):
     """한 자리를 한 줄로(psm 7) 읽어 글자마다 `(글자, 가운데 x)` — 자른 그림 좌표, 왼쪽부터."""
-    import pytesseract
     out = []
-    for ln in pytesseract.image_to_boxes(img.crop(box), lang=lang, config="--psm 7").splitlines():
+    for ln in _reads_for(img, rd).get("boxes", lang, "--psm 7", _key_box(box)).splitlines():
         f = ln.split(" ")
         if len(f) >= 5:
             try:
@@ -940,10 +1064,9 @@ def ocr_image(img, lang: str = "eng", psm: int = 0, dpi: int = 300) -> dict:
     info = ensure_tesseract()
     if not info.get("ok"):
         raise RuntimeError(f"Tesseract 사용 불가: {info.get('error')}")
-    import pytesseract
+    from viewer.study import tess_run
     cfg = f"--psm {int(psm) or DEFAULT_PSM}"
-    data = pytesseract.image_to_data(img, lang=lang, config=cfg,
-                                     output_type=pytesseract.Output.DICT)
+    data = tess_run.data([img], lang, cfg)[0]          # 261108-18(§14.24): 임시 파일 없이(표준 입출력)
     words = []
     confs = []
     parts = []
