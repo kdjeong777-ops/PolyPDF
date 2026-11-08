@@ -1931,6 +1931,16 @@ def join_sentences(rows, why_out=None) -> list:
             _ny = max(1.0, r.get('size') or 10.0) * JOIN_NEAR_Y
             _near = [q for q in body[_lo:_hi]
                      if abs(q['rect'][0] - r['rect'][0]) <= 24.0 and abs(q['rect'][1] - r['rect'][1]) <= _ny]
+            # 261108-31 보완(SOT §3.7.16): 그 끝에 한 줄만 닿으면(대개 잇기를 따지는 앞 줄 자신) **숫자가 낀 짝**에는 쓰지 않는다 —
+            #   들쭉날쭉한 짧은 줄 무리(차례·표의 수)에서 ④ 가 늘 '찼다' 가 됐다(`…같다` + `12 34 56 78`). §3.7.14 의 숫자 예외와 같다.
+            #   글은 살린다 — 좁은 글머리표 항목(`…asphalt mixture` ⏎ `production rate.`, NAPA 8·10쪽)은 이웃 여백으로 잇는다.
+            if _near and prev is not None:
+                _loc = max(q['rect'][2] for q in _near)
+                _tol = max(1.0, r.get('size') or 10.0) * JOIN_FILL
+                _pt = (prev.get('_tail') or prev.get('text') or '').rstrip()
+                if (sum(1 for q in _near if _loc - q['rect'][2] <= _tol) < 2
+                        and (re.search(r"\d$", _pt) or re.match(r"\s*\d", r.get('text') or ''))):
+                    _near = None
         margin, span = _extent_for(cols, r, _near)
         rg = bool(r.get('rect')) and any(g0 - 0.5 <= r['rect'][0] <= g1 + 0.5 for g0, g1 in ragged)
         _why = [] if why_out is not None else None
