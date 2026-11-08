@@ -578,13 +578,13 @@ msgid "있는 언어로 진행"
 msgstr "Continue with Available Languages"
 
 #: viewer/app.py viewer/jobs_controller.py viewer/ocr_layer_save.py
-#: viewer/present_controller.py viewer/share_controller.py
-#: viewer/sign_controller.py viewer/sign_draft_controller.py
-#: viewer/study_controller.py viewer/update_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/crop_dialog.py
-#: viewer/widgets/encrypt_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/main_view.py viewer/widgets/merge_dialog.py
-#: viewer/widgets/pen_settings_dialog.py
+#: viewer/present_controller.py viewer/read_ocr_offer.py
+#: viewer/share_controller.py viewer/sign_controller.py
+#: viewer/sign_draft_controller.py viewer/study_controller.py
+#: viewer/update_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/crop_dialog.py viewer/widgets/encrypt_dialog.py
+#: viewer/widgets/line_text_settings_dialog.py viewer/widgets/main_view.py
+#: viewer/widgets/merge_dialog.py viewer/widgets/pen_settings_dialog.py
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/update_dialog.py
 msgid "취소"
@@ -1273,18 +1273,6 @@ msgid "먼저 PDF를 여세요."
 msgstr "Open a PDF first."
 
 #: viewer/app.py
-msgid "문서 인식(OCR)"
-msgstr "Document Recognition (OCR)"
-
-#: viewer/app.py
-msgid ""
-"읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
-"문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"
-msgstr ""
-"There is no readable text (scanned/image document).\n"
-"Run document recognition (OCR) to build the vocabulary and bookmarks together?"
-
-#: viewer/app.py
 msgid "저장을 취소했습니다 — 원본은 그대로입니다."
 msgstr "Save canceled — the original is unchanged."
 
@@ -1963,14 +1951,6 @@ msgstr "Unknown error"
 #, python-brace-format
 msgid "책갈피 추가됨: {title}  (p.{page_1based}) — 책갈피창 편집(✏)에서 저장(💾)해야 PDF에 반영됩니다."
 msgstr "Bookmark added: {title}  (p.{page_1based}) — save (💾) in the bookmarks panel edit mode (✏) to apply it to the PDF."
-
-#: viewer/app.py
-msgid ""
-"읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
-"문서 인식(OCR)으로 읽을까요?"
-msgstr ""
-"There is no readable text (scanned/image document).\n"
-"Read it with OCR?"
 
 #: viewer/app.py
 #, python-brace-format
@@ -4343,7 +4323,7 @@ msgstr "Recording the OCR text layer check…"
 msgid "저장 — OCR 글자층"
 msgstr "Save — OCR text layer"
 
-#: viewer/ocr_layer_save.py
+#: viewer/ocr_layer_save.py viewer/read_ocr_offer.py
 msgid "이 파일은 다시 묻지 않음"
 msgstr "Don't ask again for this file"
 
@@ -5795,6 +5775,43 @@ msgstr "File {count} · {name}"
 #, python-brace-format
 msgid "원본 {page}쪽"
 msgstr "source p.{page}"
+
+#: viewer/read_ocr_offer.py
+msgid "본문 읽기"
+msgstr "Read Aloud"
+
+#: viewer/read_ocr_offer.py
+msgid "OCR 하고 읽기"
+msgstr "OCR, Then Read"
+
+#: viewer/read_ocr_offer.py
+msgid "그대로 읽기"
+msgstr "Read As Is"
+
+#: viewer/read_ocr_offer.py
+msgid "읽을 쪽의 글자층 살피는 중…"
+msgstr "Checking the text layer of the pages to read…"
+
+#: viewer/read_ocr_offer.py
+msgid "OCR 이 끝나면 지금 쪽부터 읽습니다."
+msgstr "Reading will start from this page when OCR finishes."
+
+#: viewer/read_ocr_offer.py
+msgid "이 쪽에는 글자층이 없습니다(스캔한 그림)."
+msgstr "This page has no text layer (scanned image)."
+
+#: viewer/read_ocr_offer.py
+msgid "이 쪽의 글자층은 다른 프로그램이 만든 것입니다."
+msgstr "The text layer on this page was made by another program."
+
+#: viewer/read_ocr_offer.py
+#, python-brace-format
+msgid "OCR 을 먼저 하면 더 정확히 읽습니다 — OCR 할 쪽 {n}쪽(지금 쪽부터)."
+msgstr "Running OCR first gives more accurate reading — {n} page(s) to OCR (from this page)."
+
+#: viewer/read_ocr_offer.py
+msgid "지금 쪽 OCR 이 끝나면 읽기 시작하고, 나머지 쪽은 읽는 동안 이어서 OCR 합니다."
+msgstr "Reading starts when this page is done; the remaining pages are OCR'd while reading."
 
 #: viewer/recorder.py
 msgid "이미 녹화 중입니다."
@@ -15675,4 +15692,21 @@ msgstr "Getting Started"
 
 #~ msgid "사전 정리 중…"
 #~ msgstr "Cleaning dictionary…"
+
+#~ msgid "문서 인식(OCR)"
+#~ msgstr "Document Recognition (OCR)"
+
+#~ msgid ""
+#~ "읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
+#~ "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"
+#~ msgstr ""
+#~ "There is no readable text (scanned/image document).\n"
+#~ "Run document recognition (OCR) to build the vocabulary and bookmarks together?"
+
+#~ msgid ""
+#~ "읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
+#~ "문서 인식(OCR)으로 읽을까요?"
+#~ msgstr ""
+#~ "There is no readable text (scanned/image document).\n"
+#~ "Read it with OCR?"
 

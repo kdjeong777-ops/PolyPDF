@@ -4512,42 +4512,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         run()
 
     def _maybe_offer_ocr(self, view) -> bool:
-        """260606-11: 읽을 텍스트가 없고 스캔/이미지면 OCR(단어장+책갈피) 제안.
-        실행하면 True(읽기 중단). 이미 단어장/텍스트가 있으면 False."""
+        """읽기 ▶ 를 누를 때 — 시작 쪽이 우리 글자층이 아니면 OCR 을 먼저 권한다(261108-30, 영상·음성 SOT §1.11).
+        True = 여기서 맡았다(취소했거나 OCR 뒤에 읽기 시작), False = 곧바로 읽는다.
+        종전(260606-11)에는 단어장이 없고 글이 20자 아래일 때만 물었고, 한국 화면은 단어장·책갈피 일괄 OCR 을 권했다 —
+        스캐너가 만든 보이지 않는 층이 있으면 묻지 않고 그 층을 읽었다. 판정은 배경(`read_ocr_offer.judge`)."""
         try:
-            f = view.current_file()
-            if not f or not str(f).lower().endswith(".pdf"):
-                return False
-            from viewer.study.study_store import file_key_for
-            store = self._study_get_store()
-            if store.vocab_count(file_key_for(f)) > 0:
-                return False                      # 이미 단어장 있음
-            txt = ""
-            try:
-                txt = (view._doc.extract_text(view.current_page()) or "")
-                if len(txt.strip()) < 20:
-                    txt = (view._doc.extract_text(0) or "")
-            except Exception:
-                txt = ""
-            if len(txt.strip()) >= 20:
-                return False                      # 텍스트 레이어로 읽기 가능
-            if not korea_only_visible():
-                # 단어장은 한국 전용(다국어 SOT §7) — 다른 언어에서는 OCR 로 글자층만 만든다
-                ret = QMessageBox.question(
-                    self, tr("문서 인식(OCR)"),
-                    tr("읽을 텍스트가 없습니다(스캔/이미지 문서).\n문서 인식(OCR)으로 읽을까요?"))
-                if ret == QMessageBox.StandardButton.Yes:
-                    self._action_ocr_read()
-                    return True
-                return False
-            ret = QMessageBox.question(
-                self, tr("문서 인식(OCR)"),
-                tr("읽을 텍스트가 없습니다(스캔/이미지 문서).\n"
-                "문서 인식(OCR)을 하여 단어장과 책갈피를 함께 만들까요?"))
-            if ret == QMessageBox.StandardButton.Yes:
-                self._action_batch_ocr(file_path=f)
-                return True
-            return False
+            from viewer import read_ocr_offer
+            return read_ocr_offer.offer(self, view)
         except Exception:
             return False
 
@@ -9573,6 +9544,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "dict_styles": list(prefs.get("dict_styles", old.get("dict_styles", [])) or []),   # 사전 스타일
             # 261107-30(텍스트 창 SOT §5.4.1): [저장] 때 OCR 글자층 — 파일별 '다시 묻지 않음' 답
             "ocr_layer_save": dict(prefs.get("ocr_layer_save", old.get("ocr_layer_save", {})) or {}),
+            # 261108-30(영상·음성 SOT §1.11): 읽기 ▶ 의 OCR 권하기 — 파일별 '다시 묻지 않음' 답
+            "read_ocr_offer": dict(prefs.get("read_ocr_offer", old.get("read_ocr_offer", {})) or {}),
             # 261108-28(영상·음성 SOT §1.10): 읽기 엔진·목소리·음질 — 허용목록에 없으면 조용히 사라진다
             "tts_voice": dict(prefs.get("tts_voice", old.get("tts_voice", {})) or {}),
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.

@@ -133,8 +133,10 @@ try:
     src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer", "app.py"), encoding="utf-8").read()
     i0 = src.index("def _maybe_offer_ocr")
     body = src[i0:src.index("\n    def ", i0 + 10)]
-    chk("korea_only_visible()" in body and "self._action_ocr_read()" in body,
-        "H en 스캔 문서 제안은 단어장 없이 OCR 만(_maybe_offer_ocr)")
+    # 261108-30(영상·음성 SOT §1.11): ▶ 의 OCR 권하기는 모든 언어에서 텍스트 창 OCR 하나 — 단어장 일괄 OCR 을 권하지 않는다
+    roo = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer", "read_ocr_offer.py"), encoding="utf-8").read()
+    chk("read_ocr_offer.offer" in body and "_start_text_ocr" in roo and "_action_batch_ocr" not in roo + body,
+        "H en 스캔 문서 제안은 단어장 없이 OCR 만(_maybe_offer_ocr → read_ocr_offer)")
     mw.close()
 
     # ── ko ──
