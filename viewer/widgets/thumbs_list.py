@@ -163,35 +163,18 @@ class PageThumbs(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self.title = QLabel(tr("페이지"))
-        self.title.setStyleSheet("padding: 4px; font-weight: bold;")
-        self.title.setWordWrap(True)
-        # 3줄 고정 (글자 크기에 따라 약간 다름)
-        fm = self.title.fontMetrics()
-        self.title.setMaximumHeight(fm.height() * 3 + 8)
-        self.title.setMinimumHeight(fm.height() * 3 + 8)
-        # 261104-8(사진 보기 SOT 4.32, 사용자 지시): 제목 앞 파일 종류 아이콘 — 책갈피창 줄과 같은 그림(icons.file_kind_icon)
-        from PyQt6.QtWidgets import QHBoxLayout as _QHBt
-        self._title_kind = None
-        self._title_icon = QLabel()
-        self._title_icon.setObjectName("thumbsTitleIcon")
-        _off = 4 + max(0, (fm.height() - 16) // 2)     # 제목 칸 안쪽 여백(4) + 첫 줄 높이 가운데
-        self._title_icon.setFixedSize(16, 16 + _off)
-        self._title_icon.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
-        self._title_icon.setVisible(False)
-        # 이름은 아이콘 오른쪽 **같은 줄**에서 시작한다(위 맞춤) — 가운데 맞춤이면 한 줄 이름이 칸 가운데(둘째 줄)에 떠
-        #   아이콘 아래 줄로 보였다(261104-8 사용자 보고). 아이콘은 첫 줄 높이의 가운데에.
-        self.title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        tr_row = _QHBt(); tr_row.setContentsMargins(4, 2, 0, 0); tr_row.setSpacing(0)
-        tr_row.addWidget(self._title_icon, 0, Qt.AlignmentFlag.AlignTop)
-        tr_row.addWidget(self.title, 1)
-        layout.addLayout(tr_row)
+        # 261108-23(디자인 SOT §2.8.7, 사용자 지시): 맨 위 파일 이름 줄(종전 3줄 제목·종류 아이콘, 261104-8)은 없다 —
+        #   이름은 본문 아래 정보 한 줄에 있다. 필터 단추 줄이 패널 맨 위 — 위 끝이 본문 창 위 끝과 같다.
 
         # 260609-21(J4): 필터 버튼 — 전체/보임/꾸밈/숨김
         from PyQt6.QtWidgets import QHBoxLayout as _QHB, QPushButton as _QPB
         self._filter = "all"
         self._filter_btns = {}
-        fr = _QHB(); fr.setContentsMargins(2, 0, 2, 2); fr.setSpacing(2)
+        # 261108-23(디자인 SOT §2.8.7): 단추 높이 = 본문 도구 줄 높이(MainView.TOOLBAR_H), 아래 여백 0 — 썸네일 목록 위 끝이
+        #   본문 쪽 보기 위 끝과 같다(둘 다 패널 위 + TOOLBAR_H + 레이아웃 간격).
+        from viewer.widgets.main_view import MainView as _MV
+        _bar_h = _MV.TOOLBAR_H
+        fr = _QHB(); fr.setContentsMargins(2, 0, 2, 0); fr.setSpacing(2)
         # 261008(다국어): 칸이 좁아(단추 하나 약 35px) 다른 언어는 짧게 쓰고, 뜻은 도움말로 알린다
         for key, label, tip in [("all", tr("전체"), tr("모든 쪽")),
                                 ("visible", tr("보임"), tr("숨기지 않은 쪽")),
@@ -199,7 +182,7 @@ class PageThumbs(QWidget):
                                 ("hidden", tr("숨김"), tr("숨긴 쪽"))]:
             b = _QPB(label); b.setCheckable(True); b.setChecked(key == "all")
             b.setToolTip(tip)
-            b.setFixedHeight(22)
+            b.setFixedHeight(_bar_h)
             b.setMinimumWidth(0)
             # 260610-1: 클릭해도 키보드 포커스를 뺏지 않게(뷰어 키 이동 유지)
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -1120,44 +1103,6 @@ class PageThumbs(QWidget):
                     0, lambda: self.convertPagesRequested.emit(ps, k)))
         return cm
 
-    def _format_title(self, name_with_ext: str) -> str:
-        """v1.6.1 M2: 패널의 실제 폭 기준으로 한글 wrap + ... elide.
-
-        QFontMetrics 로 픽셀 단위 측정 → 한 줄 들어가는 글자수 계산 → 3줄 분할.
-        분할 기준이 폭에 동적이라 사용자가 패널을 좁히거나 넓히면 적절히 조정됨.
-        """
-        stem = Path(name_with_ext).stem
-        if not stem:
-            return ""
-        fm = self.title.fontMetrics()
-        avail_w = max(60, self.title.width() - 12)   # 좌우 여백
-        # 한 줄 안에 들어갈 글자수 추정 (한글: 평균 ~12px, 영숫자 ~7px)
-        avg = max(10, fm.horizontalAdvance("한") or 14)
-        cpl = max(4, avail_w // avg)
-        max_total = cpl * 3
-        if len(stem) > max_total:
-            return "..." + stem[-(max_total - 3):]
-        return stem
-
-    def set_title(self, name_with_ext: str, kind: str | None = None) -> None:
-        """261104-8(사진 보기 SOT 4.32): 제목(확장자 뺀 이름) + 앞에 파일 종류 아이콘. kind 가 없으면 이름의 확장자로.
-        모르는 형식이면 아이콘을 숨긴다(빈 자리를 남기지 않는다)."""
-        from viewer.widgets.icons import file_kind, file_kind_icon
-        k = kind or file_kind(name_with_ext)
-        self._title_kind = k
-        self._title_name = name_with_ext
-        if k:
-            self._title_icon.setPixmap(file_kind_icon(k).pixmap(16, 16))
-        self._title_icon.setVisible(bool(k))
-        self.title.setText(self._format_title(name_with_ext))
-
-    def changeEvent(self, ev):
-        super().changeEvent(ev)
-        from PyQt6.QtCore import QEvent
-        if ev.type() == QEvent.Type.PaletteChange and getattr(self, "_title_kind", None):
-            from viewer.widgets.icons import file_kind_icon       # 테마가 바뀌면 아이콘도 그 테마 색으로
-            self._title_icon.setPixmap(file_kind_icon(self._title_kind).pixmap(16, 16))
-
     def _card_h_for(self, pw, ph):
         """260611-12: 페이지 종횡비(pw×ph)의 썸네일 카드 높이(썸네일 높이+번호띠)."""
         tw, th = self._thumb_size.width(), self._thumb_size.height()
@@ -1239,12 +1184,10 @@ class PageThumbs(QWidget):
         self._iconed = {}
 
         if not path.exists() or path.suffix.lower() != ".pdf":
-            self.set_title(path.name)
             self._doc_path = None; self._doc_mtime = None
             return
         self._doc_path = str(path); self._doc_mtime = mt
 
-        self.set_title(path.name)
         try:
             self._doc = PdfDocument(file_path)
             if self._doc.needs_password:        # 260611-61: 암호화 파일 썸네일 인증
@@ -1633,9 +1576,3 @@ class PageThumbs(QWidget):
         super().resizeEvent(event)
         self._sync_icon_width()       # 260606-30: 가운데 정렬 폭 동기화
         self._render_timer.start()
-        # v1.6.1 M2: 패널 폭이 바뀌면 라벨 재포맷
-        if self._doc is not None:
-            full_name = Path(str(self._doc.path)).name
-            self.title.setText(self._format_title(full_name))
-        elif getattr(self, "_title_kind", None) and getattr(self, "_title_name", None):
-            self.title.setText(self._format_title(self._title_name))    # 사진 모드 제목도 폭에 맞춰(261104-8)

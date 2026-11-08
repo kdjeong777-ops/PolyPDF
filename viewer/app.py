@@ -7757,10 +7757,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 # 260901: 리스트만 비우면 '같은 파일' 가드에 걸려, 원본 PDF 로 돌아왔을 때
                 #   썸네일이 영영 비어 있었다 → 상태까지 초기화(핸들도 해제).
                 self.page_thumbs.clear_document()
-                try:
-                    self.page_thumbs.set_title(path.name)      # 261104-8: 이름 앞 종류 아이콘
-                except Exception:
-                    pass
             self._current_main = item
             self._doc_info_refresh(self._active_pane)          # 261107-3: 그림 보기(load_image)는 쪽 신호가 없다
             self.status.showMessage(tr('로드 완료: {name}').format(name=path.name), 2500)

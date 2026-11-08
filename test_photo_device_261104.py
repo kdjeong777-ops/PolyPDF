@@ -144,7 +144,6 @@ try:
     hb.stop()
     cur = mw.main_view.current_file()
     chk(cur and Path(cur).name == "IMG_0001.JPG" and pd.is_cached(cur), "B 첫 장을 연다(캐시 사진)", str(cur))
-    chk(mw.page_thumbs.title.text() == "Apple iPhone › 202611_a", "B 제목 '장치 › 폴더'", mw.page_thumbs.title.text())
     btn = mw._photo_info_btn
     chk(pump(lambda: "Apple iPhone › 202611_a › IMG_0001.JPG" in btn.text(), timeout=5), "B 상태 막대 '장치 › 폴더 › 이름'", btn.text())
     chk(gap[0] < 1.0, "C 받는 동안 메인 최장 공백 < 1초", "%.3f" % gap[0])
@@ -224,7 +223,8 @@ try:
              and mw.main_view.current_file() and Path(mw.main_view.current_file()).name == "IMG_0100.JPG", timeout=5),
         "I 끝에서 넘기면 다음 폴더를 이어 받아 그 첫 장", str(names()))
     pump(lambda: mw.__dict__.get("_photo_dev_worker") is None, timeout=5)
-    chk(mw.page_thumbs.title.text() == "Apple iPhone", "I 두 폴더를 이으면 제목은 장치 이름", mw.page_thumbs.title.text())
+    chk((mw.__dict__.get("_photo_group") or ("",))[0] == "Apple iPhone", "I 두 폴더를 이으면 정보 한 줄 앞 이름은 장치 이름",
+        str(mw.__dict__.get("_photo_group")))   # 261108-23: 썸네일 칸 제목은 없앴다
     hits = []
     strip.nearEnd.connect(lambda: hits.append(1))
     from PyQt6.QtTest import QTest

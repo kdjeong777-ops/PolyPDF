@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""썸네일 칸 제목·zip 보기 (사진 보기 SOT 4.32, 261104-8 사용자 지시).
+"""zip 보기 (사진 보기 SOT 4.32, 261104-8 사용자 지시) — 썸네일 칸 제목은 261108-23 에 없앴다(디자인 SOT §2.8.7).
 
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3).
-A. 사진을 보면 썸네일 칸 제목 앞에 그 형식 아이콘(JPG), PDF 모드의 PDF 는 PDF 아이콘
-B. zip 줄을 누르면 곧바로 제목 = zip 이름·ZIP 아이콘, 썸네일 줄은 비운다(꺼내는 동안 폴더 사진이 남지 않게)
-C. 꺼낸 뒤 제목은 계속 zip 이름(안쪽 사진 이름이 아니다), 썸네일 줄은 그 zip 사진만 — 책갈피창에서 사진 여럿을 함께 골라 둔 채라도
-D. zip 안에서 넘겨도 제목은 zip 이름·줄은 zip 사진만
-E. zip 밖 사진을 누르면 종전대로(제목 = 그 사진, 줄 = 폴더 사진)
+A. 썸네일 칸에 이름 줄(제목·종류 아이콘)이 없다 — PDF 모드·사진 모드 모두
+B. zip 줄을 누르면 곧바로 앞 이름 = zip 이름, 썸네일 줄은 비운다(꺼내는 동안 폴더 사진이 남지 않게)
+C. 꺼낸 뒤 정보 한 줄은 'zip 이름 › 안쪽 사진', 썸네일 줄은 그 zip 사진만 — 책갈피창에서 사진 여럿을 함께 골라 둔 채라도
+D. zip 안에서 넘겨도 줄은 zip 사진만·정보 한 줄은 zip 이름과 함께
+E. zip 밖 사진을 누르면 종전대로(정보 한 줄 = 그 사진 이름, 줄 = 폴더 사진)
 """
 import os, sys, tempfile, shutil, time, zipfile, io
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -65,8 +65,9 @@ try:
     mw.resize(1200, 800); mw.show(); pump()
     bt = mw.bookmark_tree
     pt = mw.page_thumbs
-    kind = lambda: getattr(pt, "_title_kind", None)
-    icon_on = lambda: getattr(pt, "_title_icon", None) is not None and pt._title_icon.isVisible()
+    no_title = lambda: not hasattr(pt, "title") and not hasattr(pt, "_title_icon")
+    grp = lambda: (mw.__dict__.get("_photo_group") or ("",))[0]
+    info = lambda: mw._photo_info_btn.text()
     mw._prefs.setdefault("picture", {})["view_kind"] = "mixed"
     mw._photo_apply_view_kind()
     mw.open_folder(tmp)
@@ -74,20 +75,12 @@ try:
 
     # A — PDF 모드
     mw._on_bookmark_activated(str(tmp / "보고서.pdf"), 0); pump(timeout=0.8)
-    chk(kind() == "PDF" and icon_on() and pt.title.text() == "보고서", "A PDF 모드 제목 앞 PDF 아이콘", f"{kind()} {pt.title.text()}")
+    chk(no_title(), "A PDF 모드 — 썸네일 칸 이름 줄 없음")
     mw._set_photo_mode(True)
     names = lambda: sorted(Path(str(it.data(0, bt.DATA_FILE))).name for it in bt._iter_file_nodes())
     pump(lambda: names() == ["밖 둘.jpg", "밖 하나.jpg", "여행 사진.zip"])
     mw._on_bookmark_activated(str(tmp / "밖 하나.jpg"), 0); pump(timeout=0.8)
-    chk(kind() == "JPG" and icon_on() and pt.title.text() == "밖 하나", "A 사진 제목 앞 JPG 아이콘", f"{kind()} {pt.title.text()}")
-    # A2 — 이름은 아이콘 오른쪽 같은 줄(사용자 보고: 아래 줄로 보였다). 첫 줄 글자 띠 = 제목 위 + 4px 여백 + 한 줄 높이
-    from PyQt6.QtCore import Qt as _Qt
-    ic, tl = pt._title_icon.geometry(), pt.title.geometry()
-    line_top = tl.top() + 4
-    line_bot = line_top + pt.title.fontMetrics().height()
-    chk(bool(pt.title.alignment() & _Qt.AlignmentFlag.AlignTop) and line_top <= ic.bottom() - 8 <= line_bot
-        and ic.right() < tl.left() + 6,
-        "A2 이름은 아이콘 오른쪽 같은 줄에서 시작", f"icon={ic} title={tl} align={pt.title.alignment()}")
+    chk(no_title() and pump(lambda: "밖 하나" in info(), timeout=3), "A 사진 모드 — 이름 줄 없음, 이름은 정보 한 줄", info())
     if os.environ.get("ZT_SHOT"):                  # 눈으로 볼 때만(사진 폴더 안에 쓰면 폴더 감시가 목록에 넣는다)
         pt.grab().save(os.environ["ZT_SHOT"])
     strip = mw._photo_strip
@@ -96,24 +89,24 @@ try:
     for it in bt._iter_file_nodes():
         it.setSelected(True)
     mw._on_bookmark_activated(zp, 0)
-    chk(kind() == "ZIP" and pt.title.text() == "여행 사진", "B 누르자마자 제목 = zip 이름·ZIP 아이콘", f"{kind()} {pt.title.text()}")
+    chk(grp() == "여행 사진.zip", "B 누르자마자 앞 이름 = zip 이름", grp())
     chk(not any(Path(p).name.startswith("밖") for p in strip.paths()), "B 꺼내는 동안 폴더 사진이 줄에 남지 않는다", str(strip.paths()))
     zipped = lambda: sorted(Path(p).name for p in strip.paths()) == ["가 해변.jpg", "나 산.jpg"]
     chk(pump(zipped, timeout=10), "C 썸네일 줄은 zip 사진만(여럿 고름이 있어도)", str([Path(p).name for p in strip.paths()]))
     pump(timeout=0.5)
     chk(zipped(), "C 열고 난 뒤에도 zip 사진만", str([Path(p).name for p in strip.paths()]))
-    chk(kind() == "ZIP" and pt.title.text() == "여행 사진", "C 제목은 안쪽 사진이 아니라 zip 이름", f"{kind()} {pt.title.text()}")
+    chk(pump(lambda: "여행 사진.zip › " in info(), timeout=3), "C 정보 한 줄은 'zip 이름 › 안쪽 사진'", info())
 
     # D
     mw._on_file_boundary(+1, mw._active_pane); pump(timeout=0.6)
-    chk(Path(mw.main_view.current_file()).name == "나 산.jpg" and zipped() and pt.title.text() == "여행 사진",
-        "D zip 안에서 넘겨도 제목·줄 그대로", f"{mw.main_view.current_file()} {pt.title.text()}")
+    chk(Path(mw.main_view.current_file()).name == "나 산.jpg" and zipped() and pump(lambda: "여행 사진.zip › 나 산.jpg" in info(), timeout=3),
+        "D zip 안에서 넘겨도 줄·zip 이름 그대로", f"{mw.main_view.current_file()} {info()}")
 
     # E
     for it in bt._iter_file_nodes():
         it.setSelected(False)
     mw._on_bookmark_activated(str(tmp / "밖 둘.jpg"), 0); pump(timeout=0.8)
-    chk(kind() == "JPG" and pt.title.text() == "밖 둘", "E zip 밖 사진 — 제목은 그 사진", f"{kind()} {pt.title.text()}")
+    chk(pump(lambda: "밖 둘" in info() and "여행 사진.zip" not in info(), timeout=3), "E zip 밖 사진 — 정보 한 줄은 그 사진", info())
     chk(sorted(Path(p).name for p in strip.paths()) == ["밖 둘.jpg", "밖 하나.jpg"], "E 줄은 다시 폴더 사진",
         str([Path(p).name for p in strip.paths()]))
     mw.close()

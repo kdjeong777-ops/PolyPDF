@@ -315,7 +315,6 @@ class PhotoMixin:
         try:
             self.main_view.close_document()
             self.page_thumbs.clear_document()
-            self.page_thumbs.set_title("")
         except Exception:
             pass
         self._current_main = None
@@ -1539,10 +1538,6 @@ class PhotoMixin:
             self._photo_group = (dev, None)
             self._photo_dev_want = None
             self._photo_dev_first = bool(open_first)
-            try:
-                self.page_thumbs.set_title(dev, None)
-            except Exception:
-                pass
             fi = self._photo_device_folder_item(dev, folder) if self.bookmark_tree.is_tree_view() else None
             if fi is not None:
                 fi.setExpanded(True)
@@ -1570,7 +1565,6 @@ class PhotoMixin:
                 fi.setExpanded(True)
         try:
             self._photo_strip_widget().set_paths([])
-            self.page_thumbs.set_title(self._photo_group[0], None)
         except Exception:
             pass
         self._photo_device_start(dev, folder, Path(want).name if want else None)
@@ -1968,14 +1962,6 @@ class PhotoMixin:
         found = self.__dict__.get("_photo_search_paths")
         if found and str(path) not in found:
             self._photo_search_paths = None             # 검색 결과·zip 밖 사진을 열었다 — 원천은 다시 책갈피창(4.24)
-        try:
-            grp = self.__dict__.get("_photo_group")
-            if zipped and grp:
-                self.page_thumbs.set_title(grp[0], grp[1])    # 261104-8(4.32): zip 안 사진이면 제목은 zip 이름(장치 사진이면 '장치 › 폴더', 4.33)
-            else:
-                self.page_thumbs.set_title(Path(str(path)).name)
-        except Exception:
-            pass
         strip = self._photo_strip_widget()
         self.page_thumbs.set_alt_view(strip, True)
         strip.set_paths(self._photo_strip_source(), current=str(path))
@@ -2920,7 +2906,6 @@ class PhotoMixin:
         self._photo_zipper = w
         try:                                             # 꺼내는 동안에도 줄은 그 zip 것만(4.32) — 앞 폴더 사진을 지운다
             self._photo_strip_widget().set_paths([])
-            self.page_thumbs.set_title(Path(str(zip_path)).name, "ZIP")
         except Exception:
             pass
         self.status.showMessage(tr("zip 여는 중… {name}").format(name=Path(str(zip_path)).name), 3000)
