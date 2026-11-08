@@ -56,13 +56,15 @@ _SENT_END_RE = re.compile(r'[.?!。？！]"?\s*$')
 class ReadAloud(QObject):
     """본문 읽기 상태 머신. mw 에서 main_view·study store·tts 접근."""
     stateChanged = pyqtSignal(bool)
+    # 261108-26(SOT §1.5): 재생 구간이 바뀌면(메뉴·설정 복원·다른 창 단추) 모든 읽기 단추 글자·체크가 따라온다
+    modeChanged = pyqtSignal(str)
 
     def __init__(self, mw):
         super().__init__(mw)
         self.mw = mw
         self._view = None           # 260606-11: 읽기 대상 메인뷰(2분할 창별). 없으면 활성창
         self._pane = 0
-        self.mode = "전체"          # 1회/연속(현재페이지) · 전체/전체연속(현재→끝)
+        self._mode = "전체"         # 1회/연속(현재페이지) · 전체/전체연속(현재→끝) — `mode` 속성으로만 바꾼다
         self.repeat = False
         self.rate = 0
         self.voice_name = None      # 성우(빈값=언어 자동). 본화면·단어장 공유
@@ -113,6 +115,22 @@ class ReadAloud(QObject):
     def set_voice(self, name: Optional[str]):
         self.voice_name = name or None
         self.mw._study_get_tts().set_voice_name(name)
+
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    @mode.setter
+    def mode(self, v: str) -> None:
+        """261108-26(사용자 보고 "'전체' 는 전체 페이지를 읽는 건데, 현재 페이지만 읽고 마쳐"):
+        설정 복원(`_restore_settings`)은 단추를 만든 **뒤에** 저장된 구간을 넣는다. 종전에는 값만 바뀌고
+        단추 글자·메뉴 체크는 만들 때의 기본값('전체')에 남아, 단추엔 '전체' 가 보이는데 '1회' 로 읽었다.
+        이제 값이 바뀌면 `modeChanged` 로 모든 단추가 따라온다."""
+        v = str(v or "전체")
+        changed = (v != getattr(self, "_mode", None))
+        self._mode = v
+        if changed:
+            self.modeChanged.emit(v)
 
     def is_active(self) -> bool:
         return self._active
@@ -735,11 +753,29 @@ def make_read_button(controller: ReadAloud, parent=None):
     menu.aboutToShow.connect(build_voices)
     menu_btn.setMenu(menu)
 
-    def on_mode_text():
-        menu_btn.setText(tr(controller.mode))     # 값(한글 키)은 그대로, 표시만 번역
+    def sync_checks():
+        """261108-26: 메뉴 체크를 지금 값으로 — 설정 복원·다른 창 단추가 바꾼 값도 보이게(구간·빠르기·성우)."""
+        for a, label in zip(g_mode.actions(), (tr_noop("1회"), tr_noop("연속"), tr_noop("전체"), tr_noop("전체연속"))):
+            a.setChecked(controller.mode == label)
+        for a, (_l, rate) in zip(g_r.actions(), RATES):
+            a.setChecked(controller.rate == rate)
+        vm = next((x.menu() for x in menu.actions() if x.menu() is not None and x.menu() is not rm), None)
+        if vm is not None:
+            want = controller.voice_name
+            for a in vm.actions():
+                if a.isCheckable():
+                    a.setChecked((a.text() == want) if want else (a is vm.actions()[0]))
+    menu.aboutToShow.connect(sync_checks)
+
+    def on_mode_text(*_):
+        try:
+            menu_btn.setText(tr(controller.mode))     # 값(한글 키)은 그대로, 표시만 번역
+            sync_checks()
+        except RuntimeError:                          # 단추가 이미 지워졌다(창 닫힘) — 신호만 남은 것
+            pass
     on_mode_text()
-    for a in g_mode.actions():
-        a.triggered.connect(lambda *_: on_mode_text())
+    # 261108-26(SOT §1.5): 메뉴에서 고를 때만이 아니라 값이 바뀌면 늘(설정 복원·다른 창 단추)
+    controller.modeChanged.connect(on_mode_text)
 
     def on_state(active):
         set_play_state(btn, active)
