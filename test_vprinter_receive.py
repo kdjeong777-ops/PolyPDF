@@ -168,6 +168,37 @@ chk(R.clean_title("Microsoft PowerPoint - 계획.pptx [읽기 전용]") == "계�
 chk(R.safe_stem("..\\a/b:c") == "_a_b_c" or "\\" not in R.safe_stem("..\\a/b:c") and "/" not in R.safe_stem("..\\a/b:c"), "C2 경로 문자 걸러냄", R.safe_stem("..\\a/b:c"))
 chk(R.job_title("C:\\s\\7-0001 Microsoft Word - 보고.docx.ps") == "Microsoft Word - 보고.docx", "C3 이름 규칙에서 문서 이름")
 
+print("\n=== M. 원래 파일 찾기 — Windows 최근 항목만(261108-19, 사용자 결정) ===")
+# 백신 오인 줄이기: Office 최근 파일 목록(레지스트리) 읽기는 정보 수집처럼 보여 뺐다. 최근 항목 바로가기는 셸 링크 API 로(스크립트 호스트 COM 아님)
+import winreg as _wr
+import inspect as _insp
+_ok, reg_open = _wr.OpenKey, []
+_wr.OpenKey = lambda *a, **k: (reg_open.append(a[1] if len(a) > 1 else a), _ok(*a, **k))[1]
+_appdata = os.environ.get("APPDATA", "")
+try:
+    os.environ["APPDATA"] = str(root / "appdata")         # 빈 최근 항목 — 레지스트리로 넘어가지 않아야 한다
+    got = R.find_original("없는문서_vptest.pptx")
+finally:
+    _wr.OpenKey = _ok
+    os.environ["APPDATA"] = _appdata
+chk(got is None and not any("Office" in str(k) for k in reg_open), "M1 최근 항목에 없으면 Office 최근 목록(레지스트리)을 읽지 않고 기본 저장 폴더로", str(reg_open))
+rec = root / "appdata2" / "Microsoft" / "Windows" / "Recent"
+rec.mkdir(parents=True)
+tgt = orig_dir / "최근문서.pptx"; tgt.write_bytes(b"x")
+import pythoncom as _pc
+from win32com.shell import shell as _sh
+_pc.CoInitialize()
+_lk = _pc.CoCreateInstance(_sh.CLSID_ShellLink, None, _pc.CLSCTX_INPROC_SERVER, _sh.IID_IShellLink)
+_lk.SetPath(str(tgt))
+_lk.QueryInterface(_pc.IID_IPersistFile).Save(str(rec / "최근문서.pptx.lnk"), 0)
+try:
+    os.environ["APPDATA"] = str(root / "appdata2")
+    got2 = R.find_original("최근문서.pptx")
+finally:
+    os.environ["APPDATA"] = _appdata
+chk(got2 and os.path.normcase(got2) == os.path.normcase(str(tgt)) and 'Dispatch("WScript' not in _insp.getsource(R._recent_lnk_target),
+    "M2 최근 항목 바로가기는 셸 링크 API 로 읽는다(WScript.Shell 아님)", str(got2))
+
 print("\n=== B·D·E. 창 흐름 ===")
 from viewer.app import MainWindow
 mw = MainWindow(); mw._skip_save_on_close = True
@@ -290,33 +321,38 @@ print("\n=== Q. 연이어 인쇄 — 예약 작업은 겹쳐 실행(261031-2) ==
 #   두 번째 인쇄의 작업이 그 창이 닫힐 때까지 줄에서 기다려 PDF 가 만들어지지 않았다(이 PC 작업이 실제로 Queue 였다)
 xml = R._task_xml(r"C:\Program Files\PolyPDF\PolyPDF.exe", "--printed")
 chk("<MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>" in xml, "Q1 새 예약 작업은 'Parallel' — 두 번째 실행이 곧바로 받는 창에 넘긴다")
-_run, _lc = R.subprocess.run, R.launch_command
-calls = []
+# 261108-19(백신 오인 줄이기): 작업은 작업 스케줄러 COM 으로 — %TEMP% XML·schtasks 프로세스 없이, 숨기지 않고 무엇을 하는지 설명과 함께
+_run, _lc, _mk = R.subprocess.run, R.launch_command, R.tempfile.mkstemp
+_gx, _rg = getattr(R, "_task_get_xml", None), getattr(R, "_task_register", None)
+calls, regs, have = [], [], {"xml": None}
 
 
 class _R:
-    def __init__(self, rc=0, out=b""):
+    def __init__(self, rc=1, out=b""):
         self.returncode, self.stdout = rc, out
 
 
-def _fake_run(args, **k):
-    calls.append(list(args))
-    if "/query" in args:
-        return _R(0, R._task_xml(r"C:\P\PolyPDF.exe", "--printed").replace("Parallel", "Queue").encode("utf-16"))
-    return _R(0)
-
-
-R.subprocess.run = _fake_run
+R.subprocess.run = lambda args, **k: (calls.append(list(args)), _R(1))[1]          # 종전 길이면 여기로 온다(없음 = 실패)
+R.tempfile.mkstemp = lambda *a, **k: (calls.append(["mkstemp"]), _mk(*a, **k))[1]
+R._task_get_xml = lambda name: have["xml"]
+R._task_register = lambda name, x: (regs.append((name, x)), True)[1]
 R.launch_command = lambda: (r"C:\P\PolyPDF.exe", "--printed")
 try:
+    have["xml"] = R._task_xml(r"C:\P\PolyPDF.exe", "--printed").replace("Parallel", "Queue")
     changed = R.ensure_task()
-    chk(changed and any("/create" in c for c in calls), "Q2 이미 있는 옛 'Queue' 작업은 명령이 같아도 다시 만든다(업데이트한 설치본)", str(calls))
-    calls.clear()
-    R.subprocess.run = lambda args, **k: (calls.append(list(args)),
-                                          _R(0, R._task_xml(r"C:\P\PolyPDF.exe", "--printed").encode("utf-16")) if "/query" in args else _R(0))[1]
-    chk(not R.ensure_task() and not any("/create" in c for c in calls), "Q3 이미 'Parallel' 이면 건드리지 않는다", str(calls))
+    chk(changed and len(regs) == 1, "Q2 이미 있는 옛 'Queue' 작업은 명령이 같아도 다시 만든다(업데이트한 설치본)", str(regs[:1])[:200])
+    chk(not calls, "Q4 작업 조회·등록에 schtasks 프로세스·임시 XML 파일을 쓰지 않는다(작업 스케줄러 COM, 261108-19)", str(calls))
+    regs.clear()
+    have["xml"] = R._task_xml(r"C:\P\PolyPDF.exe", "--printed")
+    chk(not R.ensure_task() and not regs, "Q3 이미 'Parallel'·보이는 작업이면 건드리지 않는다", str(regs)[:200])
+    have["xml"] = R._task_xml(r"C:\P\PolyPDF.exe", "--printed").replace("<Hidden>false</Hidden>", "<Hidden>true</Hidden>")
+    chk(R.ensure_task() and len(regs) == 1, "Q5 옛 숨김 작업은 보이는 작업으로 다시 만든다", str(regs)[:200])
+    chk("<Hidden>false</Hidden>" in xml and getattr(R, "TASK_DESCRIPTION", "") and getattr(R, "TASK_DESCRIPTION", "x") in xml.replace("&apos;", "'"),
+        "Q6 새 작업은 숨기지 않고 무엇을 하는지 설명을 단다", xml[:300])
 finally:
-    R.subprocess.run, R.launch_command = _run, _lc
+    R.subprocess.run, R.launch_command, R.tempfile.mkstemp = _run, _lc, _mk
+    if _gx:
+        R._task_get_xml, R._task_register = _gx, _rg
 
 print("\n=== W. 같은 폴더면 같은 창 — 아래 책갈피창·다른 PolyPDF 창(261031-4) ===")
 # 사용자 결정 261017-6 '폴더 = 창': 종전에는 받는 창의 위 책갈피창만 봐서, 아래 책갈피창이나 다른 창이 그 폴더를 보고 있어도 새 창이 떴다

@@ -51,6 +51,37 @@ dlg.deleteLater()
 src = io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer", "vprinter_recv.py"), encoding="utf-8").read()
 chk("'수리' 하세요" not in src and src.count("PolyPDF 를 다시 설치하세요") == 2, "C Ghostscript 가 없으면 '다시 설치' 를 권한다(수리 아님)")
 
+# D — 261108-19(백신 오인 줄이기): 설치본은 권한 올린 설치 도구를 '숨긴 창' 으로 띄우지 않는다(창을 만들지 않는 실행이라 보이는 것은 같다)
+import win32con
+from win32com.shell import shell as _sh
+_see, seen = _sh.ShellExecuteEx, []
+
+
+class _Cancel(Exception):
+    winerror = vd.ERROR_CANCELLED
+
+
+def _fake_see(**k):
+    seen.append(k.get("nShow"))
+    raise _Cancel()
+
+
+_sh.ShellExecuteEx = _fake_see
+_fz = getattr(sys, "frozen", None)
+try:
+    sys.frozen = True
+    rc1 = vd.run_elevated("check", timeout_ms=10)
+    del sys.frozen
+    rc2 = vd.run_elevated("check", timeout_ms=10)
+finally:
+    _sh.ShellExecuteEx = _see
+    if _fz is not None:
+        sys.frozen = _fz
+    elif hasattr(sys, "frozen"):
+        del sys.frozen
+chk(seen == [win32con.SW_SHOWNORMAL, win32con.SW_HIDE] and rc1 == rc2 == vd.ERROR_CANCELLED,
+    "D 설치본은 SW_SHOWNORMAL(숨긴 창으로 권한 올리기 아님), 개발 실행 콘솔만 숨긴다", str(seen))
+
 print("\n=== " + ("ALL PASS" if not fails else f"FAILURE ({len(fails)})") + " ===")
 for m in fails:
     print(" -", m)

@@ -82,12 +82,15 @@ def _recent_lnk_target(file_name: str):
     lnk = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Recent", file_name + ".lnk")
     if not os.path.isfile(lnk):
         return None
+    # 261108-19: 셸 링크 API(IShellLink)로 읽는다 — 종전 스크립트 호스트 COM(WScript.Shell)은 백신이 의심하는 모양
     try:
         import pythoncom
-        import win32com.client
+        from win32com.shell import shell
         pythoncom.CoInitialize()
         try:
-            t = win32com.client.Dispatch("WScript.Shell").CreateShortcut(lnk).TargetPath
+            link = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None, pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
+            link.QueryInterface(pythoncom.IID_IPersistFile).Load(lnk)
+            t = link.GetPath(shell.SLGP_UNCPRIORITY)[0]
         finally:
             pythoncom.CoUninitialize()
         return t or None
@@ -95,63 +98,17 @@ def _recent_lnk_target(file_name: str):
         return None
 
 
-def _office_mru(file_name: str):
-    """Office 최근 파일 목록(HKCU\\…\\Office\\<판>\\<앱>\\User MRU\\*\\File MRU) 에서 같은 이름의 가장 최근 경로."""
-    import winreg
-    best, best_t = None, -1
-    try:
-        root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Office")
-    except OSError:
-        return None
-
-    def _subkeys(k):
-        i = 0
-        while True:
-            try:
-                yield winreg.EnumKey(k, i)
-            except OSError:
-                return
-            i += 1
-
-    for ver in list(_subkeys(root)):
-        if not re.match(r"^\d+\.\d+$", ver):
-            continue
-        for app in ("PowerPoint", "Word", "Excel"):
-            try:
-                mru_root = winreg.OpenKey(root, "%s\\%s\\User MRU" % (ver, app))
-            except OSError:
-                continue
-            for ident in list(_subkeys(mru_root)):
-                try:
-                    k = winreg.OpenKey(mru_root, ident + r"\File MRU")
-                except OSError:
-                    continue
-                i = 0
-                while True:
-                    try:
-                        _n, v, _t = winreg.EnumValue(k, i)
-                    except OSError:
-                        break
-                    i += 1
-                    m = re.match(r"^\[F[0-9A-F]+\]\[T([0-9A-F]+)\](?:\[O\d+\])?\*(.+)$", str(v))
-                    if m and os.path.basename(m.group(2)).lower() == file_name.lower():
-                        t = int(m.group(1), 16)
-                        if t > best_t:
-                            best, best_t = m.group(2), t
-    return best
-
-
 def find_original(file_name: str):
-    """원래 파일의 전체 경로 — 확장자가 있는 이름일 때만 찾는다. 실제로 있어야 한다."""
+    """원래 파일의 전체 경로 — 확장자가 있는 이름일 때만, Windows 최근 항목에서만 찾는다. 실제로 있어야 한다.
+    261108-19(사용자 결정): Office 최근 파일 목록(레지스트리)은 읽지 않는다 — 정보 수집처럼 보이는 모양이라. 못 찾으면 기본 저장 폴더."""
     if not file_name or not re.search(r"\.\w{2,5}$", file_name):
         return None
-    for fn in (_recent_lnk_target, _office_mru):
-        try:
-            p = fn(file_name)
-        except Exception:
-            p = None
-        if p and os.path.isfile(p) and os.path.basename(p).lower() == file_name.lower():
-            return p
+    try:
+        p = _recent_lnk_target(file_name)
+    except Exception:
+        p = None
+    if p and os.path.isfile(p) and os.path.basename(p).lower() == file_name.lower():
+        return p
     return None
 
 
@@ -581,17 +538,59 @@ def task_name() -> str:
 TASK_POLICY = "Parallel"
 
 
+# 261108-19(SOT §4.4): 작업은 **보이게**(작업 스케줄러에 그대로 보이고 설명이 무엇을 하는지 말한다) — 종전 `<Hidden>true` 는 숨은 지속 실행처럼 보였다.
+TASK_DESCRIPTION = ("PolyPDF virtual printer: when you print to the 'PolyPDF' printer, the printer port starts this task "
+                    "to open the printed document as a PDF in PolyPDF. Removed when PolyPDF is uninstalled.")
+
+
 def _task_xml(exe_cmd: str, args: str) -> str:
     from xml.sax.saxutils import escape
     return ("<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n"
             "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n"
-            "  <RegistrationInfo><Description>PolyPDF virtual printer - opens printed PDFs</Description></RegistrationInfo>\n"
+            "  <RegistrationInfo><Author>PolyPDF</Author><Description>" + escape(TASK_DESCRIPTION) + "</Description></RegistrationInfo>\n"
             "  <Principals><Principal id=\"Author\"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\n"
             "  <Settings><MultipleInstancesPolicy>" + TASK_POLICY + "</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"
             "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><AllowStartOnDemand>true</AllowStartOnDemand>"
-            "<Hidden>true</Hidden></Settings>\n"
+            "<Hidden>false</Hidden></Settings>\n"
             "  <Actions Context=\"Author\"><Exec><Command>%s</Command><Arguments>%s</Arguments></Exec></Actions>\n"
             "</Task>\n") % (escape(exe_cmd), escape(args))
+
+
+# 261108-19: 작업 조회·등록은 작업 스케줄러 COM(`Schedule.Service`)으로 이 프로세스 안에서 — 종전 `schtasks /create /xml <%TEMP% 파일>`
+#   (임시 폴더에 XML 을 쓰고 콘솔 도구를 띄움)은 백신이 의심하는 모양이고, 창이 뜰 때마다 `schtasks /query` 프로세스를 하나 띄웠다.
+TASK_CREATE_OR_UPDATE = 6
+TASK_LOGON_INTERACTIVE_TOKEN = 3
+
+
+def _task_service():
+    import win32com.client
+    svc = win32com.client.Dispatch("Schedule.Service")
+    svc.Connect()
+    return svc
+
+
+def _task_get_xml(name: str):
+    """등록된 작업의 XML — 없으면 None. 부르는 스레드에서 COM 을 연다."""
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        return _task_service().GetFolder("\\").GetTask(name).Xml
+    except Exception:
+        return None
+    finally:
+        pythoncom.CoUninitialize()
+
+
+def _task_register(name: str, xml: str) -> bool:
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        _task_service().GetFolder("\\").RegisterTask(name, xml, TASK_CREATE_OR_UPDATE, None, None, TASK_LOGON_INTERACTIVE_TOKEN)
+        return True
+    except Exception:
+        return False
+    finally:
+        pythoncom.CoUninitialize()
 
 
 def launch_command() -> tuple:
@@ -603,20 +602,16 @@ def launch_command() -> tuple:
 
 
 def task_command():
-    """지금 등록된 작업의 (명령, 인자, 여러 실행 정책) — 없으면 None."""
-    r = subprocess.run(["schtasks", "/query", "/tn", task_name(), "/xml"], capture_output=True, creationflags=_NO_WINDOW)
-    if r.returncode != 0:
+    """지금 등록된 작업의 (명령, 인자, 여러 실행 정책, 숨김) — 없으면 None."""
+    txt = _task_get_xml(task_name())
+    if not txt:
         return None
-    raw = r.stdout
-    try:
-        txt = raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("mbcs", "replace")
-    except Exception:
-        txt = raw.decode("utf-8", "replace")
     c = re.search(r"<Command>(.*?)</Command>", txt, re.S)
     a = re.search(r"<Arguments>(.*?)</Arguments>", txt, re.S)
     m = re.search(r"<MultipleInstancesPolicy>(.*?)</MultipleInstancesPolicy>", txt, re.S)
+    h = re.search(r"<Hidden>\s*true\s*</Hidden>", txt, re.S | re.I)
     from xml.sax.saxutils import unescape
-    return (unescape(c.group(1)) if c else "", unescape(a.group(1)) if a else "", m.group(1).strip() if m else "")
+    return (unescape(c.group(1)) if c else "", unescape(a.group(1)) if a else "", m.group(1).strip() if m else "", bool(h))
 
 
 def task_owner() -> bool:
@@ -633,22 +628,11 @@ def task_owner() -> bool:
 
 
 def ensure_task() -> bool:
-    """사용자별 예약 작업을 지금 실행 파일·정책으로 맞춘다(없거나 다르면 만든다 — 옛 'Queue' 작업도 여기서 바뀐다). 바꿨으면 True.
-    부르는 쪽이 `task_owner()` 를 먼저 본다."""
+    """사용자별 예약 작업을 지금 실행 파일·정책으로 맞춘다(없거나 다르면 만든다 — 옛 'Queue' 작업·옛 숨김 작업도 여기서 바뀐다). 바꿨으면 True.
+    부르는 쪽이 `task_owner()` 를 먼저 본다. 임시 파일·`schtasks` 없이 작업 스케줄러 COM 으로(261108-19)."""
     exe, args = launch_command()
     cur = task_command()
-    if cur and os.path.normcase(cur[0]) == os.path.normcase(exe) and cur[1] == args and cur[2] == TASK_POLICY:
+    if (cur and os.path.normcase(cur[0]) == os.path.normcase(exe) and cur[1] == args and cur[2] == TASK_POLICY
+            and not cur[3]):
         return False
-    fd, xml = tempfile.mkstemp(suffix=".xml", prefix="polypdf_task_")
-    os.close(fd)
-    try:
-        with open(xml, "w", encoding="utf-16") as f:
-            f.write(_task_xml(exe, args))
-        r = subprocess.run(["schtasks", "/create", "/tn", task_name(), "/xml", xml, "/f"],
-                           capture_output=True, creationflags=_NO_WINDOW)
-        return r.returncode == 0
-    finally:
-        try:
-            os.remove(xml)
-        except OSError:
-            pass
+    return _task_register(task_name(), _task_xml(exe, args))

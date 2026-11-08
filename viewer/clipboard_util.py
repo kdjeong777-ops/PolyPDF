@@ -6,7 +6,9 @@ Windows 클립보드는 한 번에 한 프로그램만 연다. 다른 프로그�
 남기고 **다시 시도하지 않는다** — 예외도 없어 부르는 쪽은 성공한 줄 안다. 그래서 넣은 뒤
 정말 들어갔는지 보고, 아니면 타이머로 몇 번 더 넣는다(메인에서 기다리지 않는다).
 """
-import subprocess
+import ctypes
+import uuid
+from ctypes import wintypes
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtGui import QGuiApplication, QImage, QPixmap
@@ -14,11 +16,73 @@ from PyQt6.QtWidgets import QApplication
 
 RETRY_MS = 250        # 다시 넣기 간격
 RETRY_TRIES = 8       # 첫 시도 포함. 실패한 넣기 한 번이 Qt 안에서 약 0.33초 서서, 모두 약 4.5초
-HISTORY_CLEAR_TIMEOUT_S = 8
+HISTORY_CLEAR_TIMEOUT_S = 8   # 기록 지우기를 기다리는 상한(검사가 쓴다) — 지금은 같은 프로세스 안 호출이라 곧바로 끝난다
 
-_PS_CLEAR_HISTORY = (
-    "try{[Windows.ApplicationModel.DataTransfer.Clipboard,Windows.ApplicationModel.DataTransfer,"
-    "ContentType=WindowsRuntime]::ClearHistory()}catch{}")
+# 261108-19(스크린샷 SOT §8.1): Win+V 기록 지우기는 WinRT `Clipboard`(IClipboardStatics2)를 **이 프로세스 안에서** 부른다.
+#   종전 PowerShell `-Command` 자식 프로세스는 백신이 의심하는 모양이고 한 번에 1.5~2.2초 걸렸다.
+_CLIP_CLASS = "Windows.ApplicationModel.DataTransfer.Clipboard"
+_IID_CLIP_STATICS2 = "{D2AC1B6A-D29F-554B-B303-F0452345FE02}"
+_VT_CLEAR_HISTORY = 7          # IInspectable 6 + GetHistoryItemsAsync 다음
+_VT_IS_HISTORY_ENABLED = 10    # … DeleteItemFromHistory · SetHistoryItemAsContent 다음(261108-19 실측: 레지스트리 값과 같음)
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [("d1", wintypes.DWORD), ("d2", wintypes.WORD), ("d3", wintypes.WORD), ("d4", ctypes.c_ubyte * 8)]
+
+
+def _clip_statics_call(index: int):
+    """IClipboardStatics2 의 `HRESULT f(this, boolean*)` 꼴 함수를 부르고 (hr, 값). 이 스레드를 STA 로 연다 —
+    MTA 에서는 RO_E_UNSUPPORTED_FROM_MTA(0x8000001D, 실측). 실패하면 (None, None)."""
+    try:
+        combase = ctypes.WinDLL("combase")
+    except OSError:
+        return None, None
+    combase.RoInitialize.argtypes = [ctypes.c_int]
+    combase.RoInitialize.restype = ctypes.c_long
+    combase.WindowsCreateString.argtypes = [wintypes.LPCWSTR, ctypes.c_uint32, ctypes.POINTER(ctypes.c_void_p)]
+    combase.WindowsCreateString.restype = ctypes.c_long
+    combase.WindowsDeleteString.argtypes = [ctypes.c_void_p]
+    combase.RoGetActivationFactory.argtypes = [ctypes.c_void_p, ctypes.POINTER(_GUID), ctypes.POINTER(ctypes.c_void_p)]
+    combase.RoGetActivationFactory.restype = ctypes.c_long
+    init = combase.RoInitialize(0)                          # RO_INIT_SINGLETHREADED
+    hs, fac = ctypes.c_void_p(), ctypes.c_void_p()
+    try:
+        if combase.WindowsCreateString(_CLIP_CLASS, len(_CLIP_CLASS), ctypes.byref(hs)) != 0:
+            return None, None
+        u = uuid.UUID(_IID_CLIP_STATICS2)
+        iid = _GUID(u.fields[0], u.fields[1], u.fields[2], (ctypes.c_ubyte * 8)(*u.bytes[8:]))
+        if combase.RoGetActivationFactory(hs, ctypes.byref(iid), ctypes.byref(fac)) != 0 or not fac.value:
+            return None, None
+        vt = ctypes.cast(ctypes.cast(fac, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+        fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_ubyte))(vt[index])
+        out = ctypes.c_ubyte(0)
+        hr = fn(fac, ctypes.byref(out))
+        return hr, bool(out.value)
+    except Exception:
+        return None, None
+    finally:
+        if fac.value:
+            release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(
+                ctypes.cast(ctypes.cast(fac, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))[2])
+            release(fac)
+        if hs.value:
+            combase.WindowsDeleteString(hs)
+        if init in (0, 1):                                  # S_OK·S_FALSE 면 짝을 맞춘다
+            combase.RoUninitialize()
+
+
+def history_enabled():
+    """Win+V 기록이 켜져 있나(WinRT `IsHistoryEnabled`) — 모르면 None."""
+    hr, val = _clip_statics_call(_VT_IS_HISTORY_ENABLED)
+    return val if hr == 0 else None
+
+
+def clear_history() -> bool:
+    """Win+V 기록 지우기(WinRT `ClearHistory`) — 기록이 꺼져 있으면 부르지 않는다. 지웠으면 True. 배경 스레드에서 부른다."""
+    if history_enabled() is False:
+        return False
+    hr, val = _clip_statics_call(_VT_CLEAR_HISTORY)
+    return hr == 0 and bool(val)
 
 
 def _took():
@@ -103,14 +167,13 @@ def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS):
 
 
 class ClipHistoryClearWorker(QObject):
-    """Win+V 기록 지우기(스크린샷 SOT §8.1, 응답성 SOT §4.4) — PowerShell 자식 프로세스라
-    메인에서 돌리면 창이 1.5~2.2초 선다. `workers.run_in_thread` 로 돌린다."""
+    """Win+V 기록 지우기(스크린샷 SOT §8.1, 응답성 SOT §4.4) — `clear_history`(WinRT, 같은 프로세스).
+    STA 를 여는 호출이라 메인 스레드(Qt 가 연 OLE)와 섞지 않게 `workers.run_in_thread` 로 돌린다."""
     finished = pyqtSignal()
 
     def run(self):
         try:
-            subprocess.run(["powershell", "-NoProfile", "-Command", _PS_CLEAR_HISTORY],
-                           creationflags=0x08000000, timeout=HISTORY_CLEAR_TIMEOUT_S)
+            clear_history()
         except Exception:
             pass
         self.finished.emit()

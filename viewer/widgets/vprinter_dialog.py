@@ -28,15 +28,18 @@ def vprinter_command(action: str) -> tuple:
 
 
 def run_elevated(action: str, timeout_ms: int = 180000) -> int:
-    """설치 도구를 관리자로(UAC) 숨긴 창에서 — 종료 코드. 배경 스레드에서 부른다."""
+    """설치 도구를 관리자로(UAC) — 종료 코드. 배경 스레드에서 부른다.
+    261108-19: 설치본은 창을 숨기라고 하지 않는다(`SW_SHOWNORMAL`) — `--vprinter` 는 창을 만들지 않는 실행이라 보이는 것은 같고,
+    '숨긴 창으로 스스로 권한 올리기' 모양만 없어진다. 개발 실행(python.exe 콘솔)만 숨긴다."""
     import win32con
     import win32event
     import win32process
     from win32com.shell import shell, shellcon
     exe, args = vprinter_command(action)
+    show = win32con.SW_SHOWNORMAL if getattr(sys, "frozen", False) else win32con.SW_HIDE
     try:
         info = shell.ShellExecuteEx(fMask=shellcon.SEE_MASK_NOCLOSEPROCESS, lpVerb="runas", lpFile=exe,
-                                    lpParameters=args, nShow=win32con.SW_HIDE)
+                                    lpParameters=args, nShow=show)
     except Exception as e:                               # noqa: BLE001 — UAC 취소는 pywintypes.error(1223)
         return getattr(e, "winerror", None) or (e.args[0] if e.args else 1)
     h = info["hProcess"]
