@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import fitz
 from PyQt6.QtWidgets import QApplication
+from test_fixtures import wait_main_open   # 261108-22: 처음 보는 PDF 는 데운 뒤 열린다
 from PyQt6.QtCore import QStandardPaths, QCoreApplication, Qt, QPointF
 from PyQt6.QtTest import QTest
 
@@ -61,7 +62,7 @@ try:
     from viewer.app import MainWindow
     from viewer.history import HistoryItem
     mw = MainWindow(); mw.resize(1200, 900); mw.show(); app.processEvents()
-    mw._load_main(HistoryItem(src, 0, "", "bookmark")); app.processEvents()
+    mw._load_main(HistoryItem(src, 0, "", "bookmark")); wait_main_open(mw); app.processEvents()
     m = mw.main_view
     m.set_ocr_words_provider(lambda path, page: (ocr_words(), DPI))
     m._page_words = []

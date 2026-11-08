@@ -2167,6 +2167,11 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
+msgid "여는 중: {name}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
 msgid "로딩 중: {name}"
 msgstr ""
 
@@ -3002,6 +3007,13 @@ msgstr ""
 #: viewer/app.py
 #, python-brace-format
 msgid "일괄 캡쳐 완료: {done} 장"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
+"여는 중…\n"
+"{name}"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/presentation.py

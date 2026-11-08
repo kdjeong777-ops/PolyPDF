@@ -238,6 +238,19 @@ def toc_entries():
     return list(_TOC)
 
 
+def wait_main_open(mw, timeout: float = 10.0) -> bool:
+    """261108-22(응답성 SOT §4.9): 처음 보는 PDF 의 본문 열기는 배경에서 데운 뒤 일어난다 — 끝날 때까지 이벤트를 돌린다.
+    `open_pdf`·`_load_main` 바로 뒤에 본문을 보는 검사가 부른다(실제 길 그대로, 기다리기만). 다 열렸으면 True."""
+    import time
+    from PyQt6.QtWidgets import QApplication
+    t0 = time.perf_counter()
+    while mw._main_opening() and time.perf_counter() - t0 < timeout:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    QApplication.processEvents()
+    return not mw._main_opening()
+
+
 if __name__ == "__main__":                                 # 수동 점검용
     import sys
     sys.stdout.reconfigure(encoding="utf-8")

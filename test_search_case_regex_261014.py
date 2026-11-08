@@ -18,6 +18,7 @@ from pathlib import Path
 
 import fitz
 from PyQt6.QtCore import QStandardPaths
+from test_fixtures import wait_main_open   # 261108-22: 처음 보는 PDF 는 데운 뒤 열린다
 QStandardPaths.setTestModeEnabled(True)
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
@@ -61,7 +62,7 @@ try:
     mw.open_folder(root)
     wait_until(lambda: not getattr(mw, "_index_worker", None) and not getattr(mw, "_indexing", False), 30000)
     spin(20)
-    mw._load_main(HistoryItem(str(root / "A.pdf"), 0, "", "bookmark")); spin(10)
+    mw._load_main(HistoryItem(str(root / "A.pdf"), 0, "", "bookmark")); wait_main_open(mw); spin(10)
     sb, mv = mw.search_bar, mw.main_view
 
     def search(q):

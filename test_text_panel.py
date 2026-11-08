@@ -22,6 +22,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
+from test_fixtures import wait_main_open   # 261108-22: 처음 보는 PDF 는 데운 뒤 열린다
 
 fails = []
 
@@ -186,7 +187,7 @@ try:
     chk(len(tabs) >= 3 and "텍스트" in tabs[0] and "단어장" in tabs[1]
         and "검색" in tabs[2],
         "① 탭 순서가 텍스트 / 단어장 / 검색", str(tabs))
-    mw.open_pdf(pdf); app.processEvents()
+    mw.open_pdf(pdf); wait_main_open(mw); app.processEvents()
     mw.search_tabs.setCurrentWidget(mw.text_panel)
     mw._reload_text_panel(); app.processEvents()
     _txt = " ".join(r["text"] for r in mw.text_panel.rows())

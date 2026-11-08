@@ -2220,6 +2220,11 @@ msgstr ""
 
 #: viewer/app.py
 #, python-brace-format
+msgid "여는 중: {name}"
+msgstr "Opening: {name}"
+
+#: viewer/app.py
+#, python-brace-format
 msgid "로딩 중: {name}"
 msgstr "Loading: {name}"
 
@@ -3110,6 +3115,15 @@ msgstr "Batch capture canceled: {done} pages"
 #, python-brace-format
 msgid "일괄 캡쳐 완료: {done} 장"
 msgstr "Batch capture complete: {done} pages"
+
+#: viewer/app.py
+#, python-brace-format
+msgid ""
+"여는 중…\n"
+"{name}"
+msgstr ""
+"Opening…\n"
+"{name}"
 
 #: viewer/app.py viewer/widgets/presentation.py
 msgid "다음"

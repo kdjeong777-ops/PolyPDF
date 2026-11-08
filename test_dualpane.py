@@ -10,6 +10,7 @@ def check(n, c, e=""):
     global ok; print(("  OK  " if c else " FAIL ") + n + (f"  {e}" if e else "")); ok = ok and bool(c)
 
 from PyQt6.QtWidgets import QApplication
+from test_fixtures import wait_main_open   # 261108-22: 처음 보는 PDF 는 데운 뒤 열린다
 app = QApplication.instance() or QApplication(sys.argv)
 # 261025-7: 사용자 실제 설정 폴더(색인·settings.json)를 쓰지 않는다 — 마스터 §14.7.2 의 3
 from PyQt6.QtCore import QStandardPaths, QCoreApplication
@@ -55,9 +56,9 @@ B = _fx.scanned_pdf()
 import os.path as _p
 if _p.exists(A) and _p.exists(B):
     mw._set_active_pane(0)
-    mw._load_main(HistoryItem(A, 0, "", "bookmark"))
+    mw._load_main(HistoryItem(A, 0, "", "bookmark")); wait_main_open(mw)
     mw._set_active_pane(1)
-    mw._load_main(HistoryItem(B, 0, "", "bookmark"))
+    mw._load_main(HistoryItem(B, 0, "", "bookmark")); wait_main_open(mw)
     app.processEvents()
     f0 = mw._mv[0].current_file(); f1 = mw._mv[1].current_file()
     check("왼쪽 창 = A", f0 and _p.basename(f0) == _p.basename(A), f0)

@@ -203,6 +203,7 @@ class ProbeWorker(QObject):
             enc, has_toc, auth, signed = False, False, None, False
             try:
                 doc = fitz.open(path)
+                note_warm(path)             # 261108-22(§4.9): 이 프로세스가 연 파일 — 본문은 데우지 않고 곧바로 연다
                 try:
                     enc = bool(doc.needs_pass)
                     if enc:
@@ -239,6 +240,88 @@ class ProbeWorker(QObject):
             _pacing.pace(self)                # ②·⑦ 메인에 GIL 조각을 넘긴다(점유율 조절)
 
 
+import threading as _threading
+from collections import OrderedDict as _OrderedDict
+
+WARM_KEEP = 256                       # 261108-22: 데운 파일 기억 개수(경로·크기·시각)
+_warm_lock = _threading.Lock()
+_warm_keys: "_OrderedDict[tuple, bool]" = _OrderedDict()
+
+
+def _warm_key(path):
+    import os
+    st = os.stat(str(path))
+    return (os.path.normcase(os.path.abspath(str(path))), int(st.st_size), int(st.st_mtime_ns))
+
+
+def note_warm(path) -> None:
+    """261108-22(응답성 SOT §4.9): 이 프로세스가 이 파일(지금 크기·시각)을 **이미 한 번 열었다** — 백신 검사를 치렀다."""
+    try:
+        k = _warm_key(path)
+    except OSError:
+        return
+    with _warm_lock:
+        _warm_keys[k] = True
+        _warm_keys.move_to_end(k)
+        while len(_warm_keys) > WARM_KEEP:
+            _warm_keys.popitem(last=False)
+
+
+def is_warm(path) -> bool:
+    """261108-22: `note_warm` 뒤로 바뀌지 않은 파일이면 True — 메인이 열어도 백신을 기다리지 않는다(약 20ms)."""
+    try:
+        k = _warm_key(path)
+    except OSError:
+        return True                   # 없는 파일 — 데울 것이 없다(여는 쪽이 종전대로 실패를 알린다)
+    with _warm_lock:
+        return k in _warm_keys
+
+
+WARM_LIMIT = 8 * 1024 * 1024          # 261108-22: 열기 전 데우기는 앞 8MB 까지 — 검사는 여는 순간(CreateFile)에 치르고,
+                                      #   232MB 를 다 읽고 나서야 열면 고른 뒤 첫 쪽이 오히려 늦다(저장 뒤 훑기는 끝까지)
+
+
+def warm_read(path: str, chunk: int = 4 * 1024 * 1024, limit: Optional[int] = None) -> bool:
+    """261102-4·261108-22(응답성 SOT §6·§4.9): 파일을 파이썬 `read()` 로 한 번 훑는다(내용은 버린다) — **배경 스레드에서** 부른다.
+    백신의 첫 열기 검사를 여기서 치르게 해, 뒤의 `fitz.open` 이 GIL 을 쥔 채 기다리지 않게 한다
+    (PyMuPDF 는 디스크·검사를 기다리는 동안에도 GIL 을 놓지 않는다 — **배경 스레드의** `fitz.open` 도 메인을 세운다,
+    파이썬 `open`·`read` 는 GIL 을 놓는다). 다 읽으면 `note_warm`."""
+    try:
+        got = 0
+        with open(path, "rb", buffering=0) as f:
+            while True:
+                b = f.read(chunk)
+                if not b:
+                    break
+                got += len(b)
+                if limit is not None and got >= limit:
+                    break
+    except OSError:
+        return False
+    note_warm(path)
+    return True
+
+
+class WarmReadWorker(QObject):
+    """261108-22(응답성 SOT §4.9): 본문에 열 처음 보는 PDF 를 배경에서 데운다(`warm_read`). 결과는 `done(token)` 하나 —
+    받는 쪽(`MainWindow._open_cold`)이 token 이 낡았으면 버리고, 아니면 메인에서 종전대로 연다(문서 객체는 넘기지 않는다)."""
+    done = pyqtSignal(int)
+    finished = pyqtSignal()
+
+    def __init__(self, path: str, token: int):
+        super().__init__()
+        self.path, self.token = str(path), int(token)
+
+    def run(self):
+        try:
+            warm_read(self.path, limit=WARM_LIMIT)
+        finally:
+            try:
+                self.done.emit(self.token)
+            finally:
+                self.finished.emit()
+
+
 class PdfPeekWorker(QObject):
     """261108-17(응답성 SOT §4.9): 책갈피창이 **지금 그 파일 하나**의 표식·목차가 필요할 때(단일 파일 열기·펼치기·
     '모두 펼치기') 메인 대신 여는 배경 읽기. 처음 보는 파일은 백신이 검사하는 동안 `fitz.open` 이 1초 넘게 선다 —
@@ -261,6 +344,7 @@ class PdfPeekWorker(QObject):
             import fitz
             st = Path(self.path).stat()
             r["size"], r["mtime"] = int(st.st_size), int(st.st_mtime)
+            warm_read(self.path, limit=WARM_LIMIT)                      # 261108-22: 배경의 fitz.open 도 GIL 을 쥔다 — 검사는 먼저 read 로
             doc = fitz.open(self.path)
             try:
                 r["page_count"] = int(doc.page_count)
@@ -315,6 +399,7 @@ class PdfOpenWorker(QObject):
         doc, msg = None, ""
         try:
             import fitz
+            warm_read(self.path, limit=WARM_LIMIT)                          # 261108-22: 배경의 fitz.open 도 GIL 을 쥔다 — 검사는 먼저 read 로
             doc = fitz.open(self.path)
             if doc.needs_pass:
                 try:

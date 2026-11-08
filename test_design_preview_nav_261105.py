@@ -6,7 +6,7 @@ A. 쪽 이동이 공통 `PageNav` 하나다
 B. 그 묶음이 미리보기 **아래**에 있고, 가운데 = 미리보기 가운데(±2px) — 옆에 다른 단추가 있어도
 C. ❯ 를 누르면 다음 쪽(시트), 칸에 쓰면 그 쪽으로 간다(칸을 쓰지 않는 발표 보기 설정은 ❯ 만)
 """
-import os, sys, tempfile
+import os, sys, tempfile, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 if os.path.isdir(r"C:\Windows\Fonts"):
     os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
@@ -67,7 +67,14 @@ check("인쇄", d, d.preview)
 
 from viewer.widgets import merge_dialog as md
 d = md.MergeFilesDialog([pdf], [], [], None)
-check("병합 파일 미리보기", d, d.preview.canvas, ready=lambda: d.left.item(0).setSelected(True))
+def _merge_ready():
+    d.left.item(0).setSelected(True)
+    t0 = time.monotonic()                     # 261108-17: 미리보기 문서는 배경에서 열린다 — 받을 때까지 기다린다
+    while d.preview._doc is None and time.monotonic() - t0 < 10:
+        app.processEvents(); time.sleep(0.01)
+
+
+check("병합 파일 미리보기", d, d.preview.canvas, ready=_merge_ready)
 
 from viewer.widgets.twoup_dialog import TwoUpSettingsDialog
 d = TwoUpSettingsDialog({}, None, sample=pdf)

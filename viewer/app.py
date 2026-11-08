@@ -109,13 +109,10 @@ def _warm_read(path: str, chunk: int = 4 * 1024 * 1024) -> None:
     """261102-4(응답성 SOT §6): 파일을 파이썬 `read()` 로 한 번 훑는다(내용은 버린다) — **배경 스레드에서** 부른다.
     백신의 첫 열기 검사를 여기서 치르게 해, 뒤에 메인의 `fitz.open` 이 GIL 을 쥔 채 기다리지 않게 한다
     (PyMuPDF 는 디스크·검사를 기다리는 동안에도 GIL 을 놓지 않는다, §4 ③ — 색인의 `_prefetch` 와 같은 생각).
-    설치본은 서명 없는 새 exe 가 쓴 파일이라 검사가 더 길다."""
-    try:
-        with open(path, "rb", buffering=0) as f:
-            while f.read(chunk):
-                pass
-    except OSError:
-        pass
+    설치본은 서명 없는 새 exe 가 쓴 파일이라 검사가 더 길다.
+    261108-22(§4.9): 몸체는 `workers.warm_read` 하나 — 데운 파일로 적혀 저장 뒤 다시 열기가 곧바로 열린다."""
+    from viewer.workers import warm_read
+    warm_read(path, chunk)
 
 
 class _MergeThread(QThread):
@@ -2791,13 +2788,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         elif fn:
             self.open_pdf(Path(fn))
 
-    def open_pdf(self, pdf_path: Path):
+    def open_pdf(self, pdf_path: Path, page: int = 0, then=None):
         """v1.6.11 I1/I2: 단일 PDF 를 열고 그 파일만 인덱싱.
         260618-20: 2단 보기에서는 워크스페이스(다른 창·상단 책갈피·폴더)를 비우지 않고
         **활성 창에만** 로드 → 옆 창 내용 유지, 상단 책갈피 유지, 다른 폴더면 하단에 표시(#7)."""
         pdf_path = Path(pdf_path)
         if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
             self.status.showMessage(tr('PDF 파일이 아닙니다: {name}').format(name=pdf_path.name))
+            if then is not None:
+                then()                       # 261108-22: 뒤처리(시작 보기 등)는 열지 못해도 한다(종전 차례 그대로)
             return
         if getattr(self, "_photo_mode", False):
             self._set_photo_mode(False, load_last=False)   # 261104-2(사진 보기 SOT D1): PDF 를 열면 PDF 모드로(끌어 놓기·최근·가상 프린터) — 그 PDF 만 연다(261104-20)
@@ -2806,7 +2805,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             # 2단: 활성 창에만 로드(다른 창·폴더·반대편 책갈피 보존).
             #   260618-23: 단독 파일을 '열기'(드롭/즐겨찾기/파일열기)한 것이므로 그 창의 폴더를
             #   이 파일의 폴더로 설정(상=좌/하=우 트리에 반영). 책갈피 클릭은 _load_main 만 호출해 폴더 불변.
-            self._load_main(HistoryItem(str(pdf_path), 0, "", "bookmark"))
+            self._load_main(HistoryItem(str(pdf_path), int(page or 0), "", "bookmark"), then=then)   # 261108-22: page·then
             self._set_pane_folder(self._active_pane, pdf_path.parent)
             try:
                 self._cancel_active_indexing()
@@ -2829,7 +2828,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.status.showMessage(tr('파일 로드: {pdf_path}').format(pdf_path=pdf_path))
         finally:
             QApplication.restoreOverrideCursor()
-        self._load_main(HistoryItem(str(pdf_path), 0, "", "bookmark"))
+        self._load_main(HistoryItem(str(pdf_path), int(page or 0), "", "bookmark"), then=then)   # 261108-22(§4.9): 처음 보는 파일은 데운 뒤
         # 해당 파일만 인덱싱 (폴더 전체 인덱싱 회피) — 짧아 작업 창·진행 막대 없이 글만(261106-19)
         self.status.showMessage(tr("인덱싱 준비..."))
         worker = IndexWorker(self._db_path, self._folder, single_file=pdf_path)
@@ -4488,7 +4487,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             same = False
         if not same:
             # 메인 로드 → _study_pdf 가 이 파일로 설정됨
-            self._load_main(HistoryItem(str(p), 0, "", "bookmark"))
+            self._load_main(HistoryItem(str(p), 0, "", "bookmark"), then=self._action_build_study)   # 261108-22: 연 뒤에
+            return
         self._action_build_study()
 
     def _action_batch_ocr(self, checked: bool = False, file_path: str = None, bt=None):
@@ -4505,9 +4505,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             same = cur and Path(cur).resolve() == p.resolve()
         except Exception:
             same = False
+        run = lambda: self._study_build_run(also_bookmarks=True, with_vocab=korea_only_visible())
         if not same:
-            self._load_main(HistoryItem(str(p), 0, "", "bookmark"))
-        self._study_build_run(also_bookmarks=True, with_vocab=korea_only_visible())
+            self._load_main(HistoryItem(str(p), 0, "", "bookmark"), then=run)   # 261108-22(§4.9): 연 뒤에
+            return
+        run()
 
     def _maybe_offer_ocr(self, view) -> bool:
         """260606-11: 읽을 텍스트가 없고 스캔/이미지면 OCR(단어장+책갈피) 제안.
@@ -5555,19 +5557,22 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 return
             mv = self.main_view
             cur = mv.current_file() if mv else None
+
+            def _thumbs(pg=int(page)):
+                pt = self.page_thumbs
+                pt.select_page(pg)
+                row = pt.row_of_page(pg)
+                if row >= 0:
+                    pt.list.scrollToItem(pt.list.item(row))
             if not (cur and os.path.normcase(str(cur)) == os.path.normcase(str(path))):
                 dirty = bool(getattr(self, "_edit_dirty", False) or self._page_edits_dirty())
                 if self._in_edit() and dirty:
                     self.status.showMessage(tr("저장하지 않은 편집이 있어 다른 파일을 열지 않았습니다 — 먼저 저장하세요."), 5000)
                     return
-                self._load_main(HistoryItem(str(path), int(page), "", "bookmark"))
-            else:
-                mv.go_to_page(int(page))
-            pt = self.page_thumbs
-            pt.select_page(int(page))
-            row = pt.row_of_page(int(page))
-            if row >= 0:
-                pt.list.scrollToItem(pt.list.item(row))
+                self._load_main(HistoryItem(str(path), int(page), "", "bookmark"), then=_thumbs)   # 261108-22: 연 뒤에
+                return
+            mv.go_to_page(int(page))
+            _thumbs()
         except Exception:                                     # 슬롯 — 끌기 중 예외로 앱이 끝나지 않게
             import traceback
             traceback.print_exc()
@@ -7628,7 +7633,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 if dlg.wasCanceled():
                     break
                 item = HistoryItem(r.file_path, r.page_index, q, "search")
-                self._load_main(item)
+                self._load_main(item, sync=True)       # 261108-22(§4.9): 열고 곧바로 찍는다 — 데우지 않는다
                 self.action_screenshot()
                 done = i
                 dlg.setLabelText(tr('일괄 캡쳐 {i} / {n}\n{name}').format(i=i, n=len(results), name=Path(r.file_path).name))
@@ -7655,8 +7660,82 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             label=self._current_main.label,
         )
 
-    def _load_main(self, item: HistoryItem):
-        """메인 뷰어에 항목 로드 (BusyCursor)."""
+    def _load_main(self, item: HistoryItem, then=None, sync: bool = False):
+        """메인 뷰어(활성 창)에 항목 로드 — 열기 길 하나(파일 열기·최근·끌어 놓기·명령줄·책갈피·저장 뒤 다시 열기).
+
+        261108-22(응답성 SOT §4.9): **처음 보는 PDF** 는 메인에서 바로 열지 않는다 — 백신이 막 보게 된 파일을 검사하는
+        동안 `fitz.open` 이 GIL 을 쥔 채 1초 넘게 선다(beta.8 설치본 T1 1.72초). 배경에서 파이썬 `read` 로 한 번 훑어(데우기)
+        검사를 먼저 치르고, 끝나면 **그 창에** 종전대로 연다(`_load_main_now`). 그동안 창·책갈피창은 그대로 움직이고
+        본문은 '여는 중'(빈 창이면 안내 글, 앞 문서가 있으면 그대로 둔다). 그 사이 같은 창에 다른 것을 열면 앞 것은 버린다.
+        `then` 은 열기를 마친 뒤(바로 열었으면 곧바로) 부른다 — 연 문서에 기대는 뒤처리는 여기에.
+        `sync=True` 는 데우지 않고 바로 연다(차례대로 열고 곧바로 찍는 일괄 캡쳐 — §4.9 '고치지 않은 곳')."""
+        pane = self._active_pane if self._active_pane in (0, 1) else 0
+        toks = self.__dict__.setdefault("_cold_tok", [0, 0])
+        toks[pane] += 1                                   # 이 창의 앞 '여는 중' 은 낡았다
+        pend = self.__dict__.setdefault("_cold_pending", {})
+        if pend.pop(pane, None) is not None:
+            try:
+                self._mv[pane].set_empty_hint(None)
+            except Exception:
+                pass
+        path = Path(item.file_path)
+        if not sync and path.suffix.lower() == ".pdf":
+            from viewer.workers import is_warm
+            if not is_warm(path):
+                self._open_cold(pane, toks[pane], item, then)
+                return
+        self._load_main_now(item)
+        if then is not None:
+            then()
+
+    def _main_opening(self) -> bool:
+        """261108-22: 어느 창이든 처음 보는 PDF 를 데우는 중(아직 본문에 열지 않음)이면 True."""
+        return bool(getattr(self, "_cold_pending", None))
+
+    def _open_cold(self, pane: int, tok: int, item: HistoryItem, then) -> None:
+        """261108-22(§4.9): 배경 데우기를 걸고 돌아온다 — 끝나면 `_on_cold_warmed`."""
+        from viewer.workers import WarmReadWorker, run_in_thread
+        name = Path(item.file_path).name
+        self._cold_pending[pane] = (item, then, bool(getattr(self, "_photo_mode", False)))
+        mv = self._mv[pane]
+        try:
+            if not mv.current_file():
+                mv.set_empty_hint(tr("여는 중…\n{name}").format(name=name))
+        except Exception:
+            pass
+        self.status.showMessage(tr('여는 중: {name}').format(name=name))
+        w = WarmReadWorker(str(item.file_path), tok)
+        w.done.connect(lambda t, p=pane: self._on_cold_warmed(p, t))
+        run_in_thread(w, self.__dict__.setdefault("_cold_keep", []))
+
+    def _on_cold_warmed(self, pane: int, tok: int) -> None:
+        """261108-22(§4.9): 데우기가 끝났다 — 낡았으면(그 창에 다른 것을 열었다·창이 사라졌다·모드가 바뀌었다) 버리고,
+        아니면 **그 창에** 종전대로 연다(활성 창이 바뀌었으면 잠깐 그 창으로 갔다가 되돌린다)."""
+        if self._cold_tok[pane] != tok:
+            return
+        rec = self._cold_pending.pop(pane, None)
+        if rec is None:
+            return
+        item, then, photo = rec
+        try:
+            self._mv[pane].set_empty_hint(None)
+        except Exception:
+            pass
+        if (pane == 1 and not getattr(self, "_split_on", False)) or photo != bool(getattr(self, "_photo_mode", False)):
+            return
+        act = self._active_pane
+        if act != pane:
+            self._set_active_pane(pane)
+        try:
+            self._load_main_now(item)
+            if then is not None:
+                then()
+        finally:
+            if act != pane and self._active_pane == pane:
+                self._set_active_pane(act)
+
+    def _load_main_now(self, item: HistoryItem):
+        """메인 뷰어에 항목 로드 (BusyCursor). 261108-22: 직접 부르지 않는다 — `_load_main` 이 데운 PDF·그림·`sync=True` 만 보낸다."""
         # 260609-23(J2): 편집모드 미저장 변경 + 다른 파일 이동 → 저장 확인
         try:
             # 260902-6(사용자 보고): 썸네일 페이지 삭제/이동(page edits)도 미저장 변경이다 —
@@ -7707,6 +7786,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 if ok is False:                  # 260611-64: 암호 입력 취소 → 기존 화면 유지
                     self.status.showMessage(tr("암호 입력이 취소되었습니다."), 2500)
                     return
+                try:
+                    from viewer.workers import note_warm
+                    note_warm(path)              # 261108-22(§4.9): 연 파일 — 다시 열 때는 데우지 않는다
+                except Exception:
+                    pass
                 self.page_thumbs.load_document(path)
                 self._hist_pages_baseline()            # 261012-10(§4.6.8): 쪽 편집 되돌리기 기준
                 # 260902-6(사용자 보고): 이전 파일로 넘어가면 본문은 마지막 쪽인데 썸네일은
@@ -8674,14 +8758,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         target = target_results[0] if direction > 0 else target_results[-1]
         query = self.main_view.current_query()
         item = HistoryItem(target.file_path, target.page_index, query, "search")
-        self._load_main(item)
-
-        # 다음 파일로 갔을 때 첫/마지막 매치로 위치 보정
-        QApplication.processEvents()
-        if direction < 0 and self.main_view._matches:
-            # 261025-11(검색창 SOT §8): 연 쪽(그 파일의 마지막 결과 쪽)의 마지막 매치 — 문서 전체를 다 모으기를 기다리지 않는다
-            self.main_view.select_last_match_on_page()
-        # direction > 0 이면 main_view 가 결과 쪽의 첫 매치로 시작
+        # 다음 파일로 갔을 때 첫/마지막 매치로 위치 보정 — 261108-22(§4.9): 연 뒤에(처음 보는 파일은 배경에서 데운 뒤 열린다)
+        def _fix():
+            QApplication.processEvents()
+            if direction < 0 and self.main_view._matches:
+                # 261025-11(검색창 SOT §8): 연 쪽(그 파일의 마지막 결과 쪽)의 마지막 매치 — 문서 전체를 다 모으기를 기다리지 않는다
+                self.main_view.select_last_match_on_page()
+            # direction > 0 이면 main_view 가 결과 쪽의 첫 매치로 시작
+        self._load_main(item, then=_fix)
 
     # ===== 스크린샷 ====================================================
     # ===== 인쇄 (260603-3) =============================================
@@ -9327,8 +9411,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             opened = any(mv.current_file() for mv in getattr(self, "_mv", []))
         except Exception:
             opened = False
-        if self._folder is not None or self._current_main is not None or opened:
-            return
+        if self._folder is not None or self._current_main is not None or opened or self._main_opening():
+            return                              # 261108-22: 배경에서 데우는 중(아직 본문에 안 열림)도 '이미 열었다'
         if self._photo_restore_start():         # 사진 모드로 켰으면 사진 모드의 마지막 폴더·사진(사진 보기 SOT §6.1, 261105-1)
             self._apply_start_view()
             return
@@ -9337,12 +9421,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if target is None:
             return                              # 빈 화면 그대로 (260906-3)
 
-        if kind == "file":
-            self.open_pdf(target)               # 그 파일만 — 상위 폴더를 훑지 않는다
-        else:
-            self.open_folder(target)
-
         # 마지막 메인 문서·페이지 복원 — **지금 연 대상 안의 문서일 때만**.
+        #   261108-22(응답성 SOT §4.9): 처음 보는 PDF 는 배경에서 데운 뒤 열린다 — 쪽은 여는 항목에 실어 보내고,
+        #   시작 보기(`_apply_start_view`)는 **연 뒤에**(먼저 부르면 문서를 열면서 맞춤이 다시 잡혀 덮어써진다).
+        restore = None
         last_main = data.get("last_main")
         if isinstance(last_main, dict) and last_main.get("file_path"):
             try:
@@ -9350,20 +9432,25 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 keep_page = bool(self._prefs.get("restore_last_page", True))
                 inside = (fp == target) if kind == "file" else (target in fp.parents)
                 if fp.exists() and inside:
-                    if kind == "file" and keep_page:
-                        # open_pdf 가 이미 그 파일을 열었으므로 페이지만 맞춘다.
-                        self.main_view.go_to_page(int(last_main.get("page_index") or 0))
-                    elif kind == "folder":
-                        self._load_main(HistoryItem(
-                            file_path=str(fp),
-                            page_index=(int(last_main.get("page_index") or 0) if keep_page else 0),
-                            query=last_main.get("query", ""),
-                            origin=last_main.get("origin", "bookmark"),
-                            label=last_main.get("label", ""),
-                        ))
+                    restore = HistoryItem(
+                        file_path=str(fp),
+                        page_index=(int(last_main.get("page_index") or 0) if keep_page else 0),
+                        query=last_main.get("query", ""),
+                        origin=last_main.get("origin", "bookmark"),
+                        label=last_main.get("label", ""),
+                    )
             except Exception:
-                pass
+                restore = None
 
+        if kind == "file":
+            # 그 파일만 — 상위 폴더를 훑지 않는다. 쪽은 지난 쪽(맞출 때만)
+            self.open_pdf(target, page=(restore.page_index if restore is not None else 0),
+                          then=self._apply_start_view)
+            return
+        self.open_folder(target)
+        if restore is not None:
+            self._load_main(restore, then=self._apply_start_view)
+            return
         self._apply_start_view()      # 260628-13: 시작 보기 상태(1단 + 쪽 맞춤)
 
     def _apply_start_view(self):

@@ -23,6 +23,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
+from test_fixtures import wait_main_open   # 261108-22: 처음 보는 PDF 는 데운 뒤 열린다
 from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent, QPixmap
 
@@ -52,7 +53,7 @@ try:
     mw._skip_save_on_close = True
     mw.resize(1000, 900)
     mw.show()
-    mw.open_pdf(pdf)
+    mw.open_pdf(pdf); wait_main_open(mw)
     app.processEvents()
     mv = mw.main_view
     mv._img_edit = True                      # 편집모드(그리기 도구가 사는 조건)

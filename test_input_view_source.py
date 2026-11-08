@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import fitz
 from PyQt6.QtWidgets import QApplication
+from test_fixtures import wait_main_open   # 261108-22: 처음 보는 PDF 는 데운 뒤 열린다
 from viewer import text_extract2 as tx
 
 app = QApplication.instance() or QApplication(sys.argv)
@@ -45,7 +46,7 @@ try:
     from viewer.app import MainWindow
     from viewer.history import HistoryItem
     mw = MainWindow(); mw.resize(1200, 800); mw.show(); app.processEvents()
-    mw._load_main(HistoryItem(two, 0, "", "bookmark")); app.processEvents()
+    mw._load_main(HistoryItem(two, 0, "", "bookmark")); wait_main_open(mw); app.processEvents()
     m = mw.main_view
 
     # ── ① 본문 줄 = 텍스트 창 줄 ──────────────────────────────────────
