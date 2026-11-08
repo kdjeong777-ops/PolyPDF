@@ -93,14 +93,13 @@ def run_job(job: dict, on_progress, should_cancel, *, server_arg: str = SERVER_A
     if not ENABLED and server_arg == SERVER_ARG:
         return None
     # 261108-15(응답성 SOT §6): 자식은 설정 폴더의 `text_fix.json` 등을 디스크에서 읽는다 — 배경 줄에 맡긴 쓰기를 먼저 비운다
-    #   (이 함수는 배경 워커에서 돈다 — 메인이면 기다리지 않는다)
-    import threading
-    if threading.current_thread() is not threading.main_thread():
-        try:
-            from viewer import bg_write
-            bg_write.flush()
-        except Exception:
-            pass
+    #   앱의 부르는 곳(IndexWorker·형식 변환·압축)은 모두 배경 워커다. 메인에서 불려도 비운다 — 안 비우면 자식이 옛 파일을 읽는다
+    #   (261108-15 처음엔 메인이면 건너뛰어, 메인에서 바로 부르는 test_index_proc B 가 CI 에서 0.3초 지연에 걸렸다)
+    try:
+        from viewer import bg_write
+        bg_write.flush()
+    except Exception:
+        pass
     for _n in range(MAX_RECYCLE + 1):
         r = _run_once(job, on_progress, should_cancel, server_arg=server_arg, key_env=key_env, what=what)
         if r != "recycle":

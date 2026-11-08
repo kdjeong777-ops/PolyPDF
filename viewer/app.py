@@ -10042,6 +10042,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """260611-91: 앱 재시작(설정 초기화 적용)."""
         import sys
         from PyQt6.QtCore import QProcess
+        try:                                    # 261108-15: 새 프로세스가 방금 저장한 settings.json 을 읽게 배경 쓰기를 먼저 비운다
+            from viewer import bg_write
+            bg_write.flush()
+        except Exception:
+            pass
         try:
             if getattr(sys, "frozen", False):
                 QProcess.startDetached(sys.executable)
