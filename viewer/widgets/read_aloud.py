@@ -107,10 +107,28 @@ class ReadAloud(QObject):
         self._view = view
         self._pane = int(pane)
 
+    # --- 엔진 (261108-28, 영상·음성 SOT §1.10) ---
+    def _tts(self):
+        """지금 읽기 엔진 — 읽는 중에는 시작할 때 고른 것(자연 음성 / SAPI), 아니면 설정대로 고른다."""
+        eng = getattr(self, "_eng", None)
+        if self._active and eng is not None:
+            return eng
+        from viewer.study import tts_engine
+        return tts_engine.reader_for(self.mw)
+
+    def _engines(self):
+        """빠르기·멈춤은 SAPI 와 (만들어 둔) 자연 음성 둘 다에."""
+        out = [self.mw._study_get_tts()]
+        nr = getattr(self.mw, "_neural_reader", None)
+        if nr is not None:
+            out.append(nr)
+        return out
+
     # --- 옵션 ---
     def set_rate(self, r: int):
         self.rate = r
-        self.mw._study_get_tts().set_rate(r)
+        for e in self._engines():
+            e.set_rate(r)
 
     def set_voice(self, name: Optional[str]):
         self.voice_name = name or None
@@ -166,7 +184,8 @@ class ReadAloud(QObject):
         self.stop() if self._active else self.start()
 
     def start(self):
-        tts = self.mw._study_get_tts()
+        self._eng = None
+        tts = self._tts()
         if not tts.available():
             self.mw.status.showMessage(tr("음성(SAPI)을 사용할 수 없습니다."), 3000)
             return
@@ -181,6 +200,10 @@ class ReadAloud(QObject):
         self._home_page = start_page
         self._pages, self._pi = self._page_plan(start_page)
         tts.set_rate(self.rate)
+        self._eng = tts                    # 261108-28: 읽는 동안 이 엔진으로(설정을 바꿔도 다음 읽기부터)
+        warm = getattr(tts, "warm_up", None)
+        if callable(warm):
+            warm()                         # 자연 음성 — 모델을 배경에서 미리 싣는다(첫 소리 줄이기)
         self._active = True
         self.stateChanged.emit(True)
         # 읽기 중에는 '본문강조'(단어장 밑줄, 261103-4)를 끄고 카라오케(읽는 단어)만 표시
@@ -198,10 +221,11 @@ class ReadAloud(QObject):
         self._restart_timer.stop()        # 260618-29
         self._pending_restart_page = None
         self._reading_page = -1
-        try:
-            self.mw._study_get_tts().stop()
-        except Exception:
-            pass
+        for e in self._engines():          # 261108-28: SAPI·자연 음성 둘 다 멈춘다(대기열 버리기)
+            try:
+                e.stop()
+            except Exception:
+                pass
         self.stateChanged.emit(False)
         # 카라오케 강조 제거 + (옵션이면) 본문강조 복원
         try:
@@ -295,7 +319,7 @@ class ReadAloud(QObject):
     def _restart_at_page(self, page: int):
         """현재 읽기 모드·범위를 유지한 채 page 부터 다시 읽기(기존 발화 중단)."""
         try:
-            self.mw._study_get_tts().stop()
+            self._tts().stop()
         except Exception:
             pass
         self._pages, self._pi = self._page_plan(page)
@@ -503,9 +527,18 @@ class ReadAloud(QObject):
             # 260618-25: speak() 실패(False)는 종전엔 무시되어 '무음'으로만 보였음 →
             #   사용자에게 원인을 알려 진단 가능하게 함(엔진은 재초기화 후 재시도까지 수행).
             # 261108-25(SOT §1.8): 표시 글은 그대로, 읽는 글(숫자·단위 풀기·한영 조각)은 엔진 쪽 한 길
-            tts = self.mw._study_get_tts()
+            tts = self._tts()
             sr = getattr(tts, "speak_reading", None)
             ok = sr(s) if callable(sr) else tts.speak(s, lang)
+            if not ok and tts is not self.mw._study_get_tts():
+                # 261108-28(SOT §1.10): 자연 음성이 안 되면 SAPI 로 — 읽기는 멈추지 않는다
+                tts = self._fallback_to_sapi()
+                sr = getattr(tts, "speak_reading", None)
+                ok = sr(s) if callable(sr) else tts.speak(s, lang)
+            pf = getattr(tts, "prefetch", None)
+            if ok and callable(pf):
+                from viewer.study.neural_tts import PREFETCH
+                pf(self._sents[self._si + 1:self._si + 1 + PREFETCH])   # 다음 문장 미리 합성
             if not ok:
                 try:
                     self.mw.status.showMessage(
@@ -513,10 +546,25 @@ class ReadAloud(QObject):
                 except Exception:
                     pass
 
+    def _fallback_to_sapi(self):
+        """261108-28(SOT §1.10): 자연 음성 → SAPI. 이번 읽기의 남은 문장은 SAPI 가 읽는다."""
+        self._eng = self.mw._study_get_tts()
+        try:
+            self._eng.set_rate(self.rate)
+            self.mw.status.showMessage(tr("자연 음성을 쓸 수 없어 Windows 기본 음성으로 읽습니다."), 5000)
+        except Exception:
+            pass
+        return self._eng
+
     def _tick(self):
         if not self._active:
             self._timer.stop(); return
-        tts = self.mw._study_get_tts()
+        tts = self._tts()
+        if getattr(tts, "_failed", False) and tts is not self.mw._study_get_tts():
+            # 261108-28: 합성이 배경에서 실패했다 — 그 문장부터 SAPI 로 다시(건너뛰지 않는다)
+            self._fallback_to_sapi()
+            self._speak_cur()
+            return
         if tts.is_speaking():
             return                                      # 문장 단위 강조라 폴링 중 갱신 불필요
         # 260618-26: 엔진이 'speaking' 을 한 번도 보고하지 않은 경우(상태 보고 불가 환경)

@@ -461,7 +461,9 @@ class UpdateMixin:
     def _comp_specs(self):
         from viewer import components
         return {"ffmpeg": (tr("녹화 (ffmpeg)"), components.ffmpeg_installed, components.install_ffmpeg),
-                "tess": ("OCR (Tesseract)", components.tesseract_installed, components.install_tesseract)}
+                "tess": ("OCR (Tesseract)", components.tesseract_installed, components.install_tesseract),
+                # 261108-28(영상·음성 SOT §1.10): 자연 음성 모델 123MB — 고정 URL·SHA-256, 풀기까지 배경
+                "voice": (tr("자연 음성 (한국어·영어)"), components.voice_installed, components.install_voice)}
 
     def _open_components_installer(self):
         """260618-12: 녹화(ffmpeg)·OCR(Tesseract) 구성요소를 릴리스에서 설치 폴더로 받기.
@@ -481,7 +483,7 @@ class UpdateMixin:
         dlg.resize(460, 200)
         v = QVBoxLayout(dlg)
         v.addWidget(QLabel(tr("필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
-                           "(녹화=ffmpeg, OCR=Tesseract · 재시작 불필요)")))
+                           "(녹화=ffmpeg, OCR=Tesseract, 자연 음성=Supertonic 3 약 123MB · 재시작 불필요)")))
         dlg._rows = {}
         for key, (title, _inst, _fn) in self._comp_specs().items():
             row = QHBoxLayout()

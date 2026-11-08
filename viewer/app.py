@@ -9573,6 +9573,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "dict_styles": list(prefs.get("dict_styles", old.get("dict_styles", [])) or []),   # 사전 스타일
             # 261107-30(텍스트 창 SOT §5.4.1): [저장] 때 OCR 글자층 — 파일별 '다시 묻지 않음' 답
             "ocr_layer_save": dict(prefs.get("ocr_layer_save", old.get("ocr_layer_save", {})) or {}),
+            # 261108-28(영상·음성 SOT §1.10): 읽기 엔진·목소리·음질 — 허용목록에 없으면 조용히 사라진다
+            "tts_voice": dict(prefs.get("tts_voice", old.get("tts_voice", {})) or {}),
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),

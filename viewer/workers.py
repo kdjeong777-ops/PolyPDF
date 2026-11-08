@@ -1326,13 +1326,28 @@ class StudyMp3Worker(QObject):
     error = pyqtSignal(str)
 
     def __init__(self, jobs: list, rate: int = 0, voice_name: str = None,
-                 resume: bool = False):
+                 resume: bool = False, tts_cfg: dict = None):
         super().__init__()
         self.jobs = jobs              # [(mp3_path, lrc_path, segments)]
         self.rate = rate
         self.voice_name = voice_name
         self.resume = resume          # 이미 있는 파일은 건너뜀(이어서 저장)
+        self.tts_cfg = dict(tts_cfg or {})   # 261108-28: tts_engine.export_choice — 자연 음성이면 {'neural': True, sid, quality}
         self._cancel = False
+
+    def _neural(self):
+        """261108-28(영상·음성 SOT §1.10): 자연 음성 모델을 **이 배경 스레드에서** 싣는다. 안 되면 None(SAPI 로)."""
+        if not self.tts_cfg.get("neural"):
+            return None, {}
+        try:
+            from viewer.study import neural_tts
+            syn = neural_tts.Synth()
+            syn.load()
+            return syn, {"sid": int(self.tts_cfg.get("sid", 0)),
+                         "steps": neural_tts.STEPS.get(self.tts_cfg.get("quality"), neural_tts.STEPS["fast"]),
+                         "speed": neural_tts.rate_to_speed(self.rate)}
+        except Exception:
+            return None, {}
 
     def request_cancel(self):
         self._cancel = True
@@ -1346,6 +1361,7 @@ class StudyMp3Worker(QObject):
             voice, tok = _make_voice(self.rate)        # 1회 생성·재사용(빠름)
             # 261108-25(영상·음성 SOT §1.8 의 4): 화면 읽기와 같은 성우 목록(OneCore 포함)에서 찾는다
             forced = _find_voice(voice, self.voice_name)
+            neural, nopts = self._neural()
             n = len(self.jobs)
             done = skipped = 0
             for i, (mp3, lrc, segs) in enumerate(self.jobs):
@@ -1357,10 +1373,17 @@ class StudyMp3Worker(QObject):
                     continue
                 try:
                     synth_to_mp3(segs, mp3, lrc_path=lrc,
-                                 voice=voice, tok=tok, forced=forced)
+                                 voice=voice, tok=tok, forced=forced, neural=neural, neural_opts=nopts)
                     done += 1
                 except Exception:
-                    pass
+                    if neural is None:
+                        continue
+                    neural = None                      # 자연 음성이 실패하면 남은 것은 SAPI 로
+                    try:
+                        synth_to_mp3(segs, mp3, lrc_path=lrc, voice=voice, tok=tok, forced=forced)
+                        done += 1
+                    except Exception:
+                        pass
             self.progress.emit(n, n, tr("완료"))
             self.finished.emit({"saved": done, "skipped": skipped, "total": n,
                                 "cancelled": self._cancel})

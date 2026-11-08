@@ -24,6 +24,7 @@ python-hwpx==6.6.0       # 261014-14: 한글 HWPX 변환(형식 변환 SOT §4.2
 python-pptx==1.0.2       # 261014-19: PowerPoint 변환(형식 변환 SOT §4.3 — 고정 판, MIT)
 XlsxWriter==3.2.9        # 261014-19: python-pptx 의 의존성(BSD-2-Clause)
 lameenc>=1.7              # 260606: 재생내용 mp3 저장(libmp3lame 내장)
+sherpa-onnx==2.0.1        # 261108-28: 자연 음성(Supertonic 3) 엔진 — 휠 안 onnxruntime.dll 1.28.2(무서명, 릴리스 SOT §8 A8). 고정 판
 pi-heif==1.4.0            # 261104-2: 사진 모드 HEIC 읽기 — pillow-heif 의 읽기 전용 판(인코더 x265 GPL 없음, 동봉 libheif·libde265 LGPL v3)
                           #   고정 판 — 올릴 때 pi_heif.libheif_version() 과 휠 라이선스를 다시 본다(사진 보기 SOT 4.9·§8.1 ④)
 pywin32>=306             # 260603: 음성 읽기(Windows SAPI, win32com) — Windows 전용

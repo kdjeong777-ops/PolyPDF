@@ -23,6 +23,8 @@ PolyPDF.spec
 ffmpeg.exe
 ffmpeg*.zip
 tesseract/
+# 261108-28: 자연 음성 모델(구성요소 설치가 설치 폴더 voices/ 에 받는다 — 개발 실행은 public/voices/)
+voices/
 nltk_data/
 # 261017(가상 프린터 SOT §4.2): 포트 모니터 빌드 결과·Ghostscript 동봉본 — CI 가 만든다
 printer/bin/

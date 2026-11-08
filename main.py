@@ -82,8 +82,14 @@ if __name__ == "__main__" and len(sys.argv) >= 3 and sys.argv[1] == "--selftest"
                 raise RuntimeError("Qt 그림 플러그인 없음: " + _fmt)
             _ok.append(_fmt)
         _qimg = "qimg " + ",".join(_ok)
+        # 261108-28(영상·음성 SOT §1.10, 릴리스 SOT §5): 자연 음성 엔진 — sherpa_onnx 를 실으면 onnxruntime.dll 까지 실린다.
+        #   빌드 묶음에 DLL 이 빠지면 여기서 실패한다(261020-2 같은 '켜자마자 꺼짐' 을 빌드본에서 먼저 잡는다)
+        import sherpa_onnx as _so
+        _so.OfflineTtsConfig()
+        _sherpa = "sherpa %s" % getattr(_so, "__version__", "?")
         with open(_out, "w", encoding="utf-8") as _f:
-            _f.write("ok %s pymupdf %s %s %s %s\n" % (_ver, _fz.VersionBind, _heif, _qimg, "text" if "selftest" in _txt else "notext"))
+            _f.write("ok %s pymupdf %s %s %s %s %s\n" % (_ver, _fz.VersionBind, _heif, _qimg, _sherpa,
+                                                      "text" if "selftest" in _txt else "notext"))
         os._exit(0)
     except BaseException:
         import traceback as _tb

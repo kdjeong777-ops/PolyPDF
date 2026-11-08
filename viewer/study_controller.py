@@ -1024,9 +1024,10 @@ class StudyMixin:
             return
 
         from viewer.workers import StudyMp3Worker
+        from viewer.study import tts_engine as _tts_engine
         worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
-                                resume=resume)
+                                resume=resume, tts_cfg=_tts_engine.export_choice(self))   # 261108-28: 자연 음성이면 그것으로
         jid = "study_mp3"                        # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
         self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
         self.progress.setRange(0, len(jobs))       # 막대 보임은 job_add 가, 범위는 여기서
@@ -1167,9 +1168,10 @@ class StudyMixin:
             return
 
         from viewer.workers import StudyMp3Worker
+        from viewer.study import tts_engine as _tts_engine
         worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
-                                resume=resume)
+                                resume=resume, tts_cfg=_tts_engine.export_choice(self))   # 261108-28: 자연 음성이면 그것으로
         jid = "main_mp3"                         # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
         self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
         self.progress.setRange(0, len(jobs))       # 막대 보임은 job_add 가, 범위는 여기서

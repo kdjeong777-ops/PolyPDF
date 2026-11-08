@@ -104,11 +104,55 @@ def _download(url: str, progress=None, timeout: float = 60.0):
         return None
 
 
+def _download_to(url: str, dest: Path, progress=None, timeout: float = 60.0):
+    """261108-28: 큰 자산(자연 음성 모델 123MB)은 메모리 대신 파일로 — 받으며 SHA-256 을 센다.
+    돌려줌: 16진 해시(성공) / None(실패·취소 — dest 는 지운다)."""
+    import hashlib
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    h = hashlib.sha256()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as f:
+            total = int(r.headers.get("Content-Length") or 0)
+            done = 0
+            while True:
+                chunk = r.read(262144)
+                if not chunk:
+                    break
+                f.write(chunk)
+                h.update(chunk)
+                done += len(chunk)
+                if progress is not None:
+                    try:
+                        if progress(done, total) is False:
+                            raise InterruptedError("cancelled")
+                    except InterruptedError:
+                        raise
+                    except Exception:
+                        pass
+        return h.hexdigest()
+    except BaseException:
+        try:
+            Path(dest).unlink()
+        except OSError:
+            pass
+        return None
+
+
 # --- 상태 ---------------------------------------------------------------
 def ffmpeg_installed() -> bool:
     try:
         from viewer.recorder import find_ffmpeg
         return bool(find_ffmpeg(""))
+    except Exception:
+        return False
+
+
+def voice_installed() -> bool:
+    """261108-28: 자연 음성(Supertonic 3) 모델과 엔진이 있는가."""
+    try:
+        from viewer.study import neural_tts
+        return neural_tts.engine_importable() and neural_tts.model_ready()
     except Exception:
         return False
 
@@ -171,6 +215,62 @@ def install_tesseract(repo: str = "", progress=None) -> tuple[bool, str]:
     except Exception:
         pass
     return True, str(base / "tesseract")
+
+
+def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str = "") -> tuple[bool, str]:
+    """261108-28(영상·음성 SOT §1.10, 릴리스 SOT §14.5 U16): 자연 음성 모델 — **고정 URL·고정 SHA-256**.
+
+    받기 → 해시 확인 → 임시 폴더에 풀기(tar 'data' 거르개) → 파일 7개 확인 → 제자리로 옮기기. 어느 단계든 실패하면
+    받은 것·푼 것을 지우고 **설치 폴더의 기존 모델은 그대로** 둔다. 지금 출처는 sherpa-onnx 릴리스 원본
+    (우리 `components` 릴리스에 사본을 두는 것은 사용자 결정 — SOT §1.10 '할 일'). url·sha256 인자는 검사용.
+    """
+    import shutil
+    import tarfile
+    from viewer.study import neural_tts
+    url = url or neural_tts.MODEL_URL
+    want = (sha256 or neural_tts.MODEL_SHA256).lower()
+    base = neural_tts.voices_dir()
+    final = neural_tts.model_dir()
+    try:
+        base.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        return False, tr('저장 실패: {e}').format(e=e)
+    part = base / (neural_tts.MODEL_ARCHIVE + ".part")
+    tmp = base / (".unpack_" + neural_tts.MODEL_DIRNAME)
+    try:
+        got = _download_to(url, part, progress)
+        if got is None:
+            return False, tr("다운로드가 취소되었거나 실패했습니다.")
+        if got.lower() != want:                                  # 맞지 않으면 아무것도 쓰지 않는다
+            return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        try:
+            with tarfile.open(part, "r:bz2") as t:
+                t.extractall(tmp, filter="data")                 # 절대 경로·위로 올라가는 이름·링크를 막는다
+        except Exception as e:
+            return False, tr('압축 해제 실패: {e}').format(e=e)
+        src = tmp / neural_tts.MODEL_INNER
+        if not neural_tts.model_ready(src):
+            return False, tr("받은 묶음에 음성 모델 파일이 모두 있지 않습니다. 설치하지 않았습니다.")
+        old = base / (".old_" + neural_tts.MODEL_DIRNAME)
+        shutil.rmtree(old, ignore_errors=True)
+        if final.exists():
+            os.replace(final, old)
+        os.replace(src, final)
+        shutil.rmtree(old, ignore_errors=True)
+    finally:
+        try:
+            part.unlink()
+        except OSError:
+            pass
+        shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        from viewer.study import tts_engine
+        tts_engine.invalidate()                                  # 다음 읽기부터 자연 음성(자동)
+    except Exception:
+        pass
+    return True, str(final)
 
 
 if __name__ == "__main__":                               # CI: python -m viewer.components verify <이름> <파일>

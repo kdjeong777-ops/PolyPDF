@@ -117,6 +117,7 @@ PAGES = (
     ("photo", tr_noop("사진"), "general"),
     ("tags", tr_noop("해시태그"), "general"),
     ("shots", tr_noop("스크린샷"), "general"),
+    ("voice", tr_noop("읽기 음성"), "general"),     # 261108-28(영상·음성 SOT §1.10): 엔진·목소리·음질
     ("shortcuts", tr_noop("단축키"), "advanced"),
     ("ribbon", tr_noop("리본 메뉴"), "advanced"),
     ("external", tr_noop("외부 연결"), "advanced"),
@@ -132,7 +133,7 @@ def page_name(key: str) -> str:
     """목록 이름 — 문맥 'settings'(같은 원문 '일반' 이 파일 탭에서는 '저장 일반' 이라 번역이 다르다)."""
     return {
         "general": trp("settings", "일반"), "view": trp("settings", "보기·넘김"), "photo": trp("settings", "사진"),
-        "tags": trp("settings", "해시태그"), "shots": trp("settings", "스크린샷"), "shortcuts": trp("settings", "단축키"),
+        "tags": trp("settings", "해시태그"), "shots": trp("settings", "스크린샷"), "voice": trp("settings", "읽기 음성"), "shortcuts": trp("settings", "단축키"),
         "ribbon": trp("settings", "리본 메뉴"), "external": trp("settings", "외부 연결"), "dict": trp("settings", "사전"), "recording": trp("settings", "발표 녹화"),
         "tuning": trp("settings", "세부 조정"), "manage": trp("settings", "관리"),
         "g:general": trp("settings", "일반"), "g:advanced": trp("settings", "고급"),
@@ -914,6 +915,11 @@ class SettingsDialog(QDialog):
         # 260906-3(사용자 결정): 시작은 항상 빈 목록, 종료 때 목록이 있으면 PDF 저장 여부를 묻는다(스크린샷 SOT)
         fl.addRow(_small(tr("캡처 목록은 항상 빈 상태로 시작합니다. 종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다.")))
         layout.addWidget(grp)
+
+    def _build_voice(self, layout):
+        """261108-28(영상·음성 SOT §1.10): '일반 › 읽기 음성' — 내용은 voice_settings(결과는 _extra_results)."""
+        from viewer.widgets.voice_settings import attach
+        attach(self, layout)
 
     def _build_shortcuts(self, layout):
         defs = getattr(self._host, "_sc_defs", None)

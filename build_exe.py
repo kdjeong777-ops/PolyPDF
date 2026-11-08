@@ -29,6 +29,7 @@ args = [
     "--collect-all", "kiwipiepy_model",     # ★ 한국어 모델(별도 103MB 패키지) — 없으면 Kiwi() 크래시
     "--collect-all", "docx",                # 260603: Word 내보내기(템플릿 데이터 포함)
     "--collect-all", "lameenc",
+    "--collect-all", "sherpa_onnx",          # 261108-28: 자연 음성 — lib 의 onnxruntime.dll·sherpa-onnx-c-api.dll·pyd
     "--collect-submodules", "viewer",
     "--add-data", f"resources{SEP}resources",
     "--add-data", f"viewer{SEP}viewer",

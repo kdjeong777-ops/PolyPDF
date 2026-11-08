@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-08 16:19+0900\n"
+"POT-Creation-Date: 2026-11-08 23:24+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -92,6 +92,18 @@ msgstr ""
 
 #: viewer/about.py
 msgid "Chris Cooper · LAME 프로젝트"
+msgstr ""
+
+#: viewer/about.py
+msgid "Microsoft — sherpa-onnx 휠에 든 onnxruntime.dll"
+msgstr ""
+
+#: viewer/about.py
+msgid "Supertonic 3 음성 모델 (자연 음성 구성요소)"
+msgstr ""
+
+#: viewer/about.py
+msgid "Supertone Inc. — 받을 때만, 만든 소리는 AI 합성 음성이다. 사용 제한 조항을 따른다"
 msgstr ""
 
 #: viewer/about.py
@@ -1046,7 +1058,7 @@ msgstr ""
 msgid "구성요소 설치 (녹화·OCR)"
 msgstr ""
 
-#: viewer/app.py viewer/update_controller.py
+#: viewer/app.py viewer/update_controller.py viewer/widgets/voice_settings.py
 msgid "구성요소 설치"
 msgstr ""
 
@@ -3283,6 +3295,10 @@ msgstr ""
 
 #: viewer/components.py
 msgid "릴리스에서 tesseract.zip 자산을 찾지 못했습니다."
+msgstr ""
+
+#: viewer/components.py
+msgid "받은 묶음에 음성 모델 파일이 모두 있지 않습니다. 설치하지 않았습니다."
 msgstr ""
 
 #: viewer/components.py
@@ -6871,9 +6887,13 @@ msgid "녹화 (ffmpeg)"
 msgstr ""
 
 #: viewer/update_controller.py
+msgid "자연 음성 (한국어·영어)"
+msgstr ""
+
+#: viewer/update_controller.py
 msgid ""
 "필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
-"(녹화=ffmpeg, OCR=Tesseract · 재시작 불필요)"
+"(녹화=ffmpeg, OCR=Tesseract, 자연 음성=Supertonic 3 약 123MB · 재시작 불필요)"
 msgstr ""
 
 #: viewer/update_controller.py
@@ -10406,6 +10426,10 @@ msgid "먼저 PDF 를 여세요."
 msgstr ""
 
 #: viewer/widgets/read_aloud.py
+msgid "자연 음성을 쓸 수 없어 Windows 기본 음성으로 읽습니다."
+msgstr ""
+
+#: viewer/widgets/read_aloud.py
 msgid "본문 읽기/정지 (머리말·표·수식·그림 제외)"
 msgstr ""
 
@@ -10647,6 +10671,10 @@ msgstr ""
 msgid "해시태그"
 msgstr ""
 
+#: viewer/widgets/settings_dialog.py viewer/widgets/voice_settings.py
+msgid "읽기 음성"
+msgstr ""
+
 #: viewer/widgets/settings_dialog.py
 msgid "단축키"
 msgstr ""
@@ -10694,6 +10722,11 @@ msgstr ""
 #: viewer/widgets/settings_dialog.py
 msgctxt "settings"
 msgid "스크린샷"
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
+msgctxt "settings"
+msgid "읽기 음성"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
@@ -13900,6 +13933,55 @@ msgstr ""
 
 #: viewer/widgets/view_settings_dialog.py
 msgid "표시할 쪽 없음"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "엔진"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "목소리"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "빠름 (기본)"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "고음질 (첫 소리가 늦다)"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "음질"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "자동 (자연 음성이 있으면 그것)"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "자연 음성 (Supertonic 3)"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "Windows 기본 음성 (SAPI)"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "자연 음성 설치됨 ✓"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습니다"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). 목소리·음질은 자연 음성에만 쓰입니다."
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+#, python-brace-format
+msgid "목소리 {n}"
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py

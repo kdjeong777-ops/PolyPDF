@@ -40,9 +40,9 @@ def _find_voice(voice, name):
     return enumerate_voices(voice, win32com.client)[0].get(name)
 
 
-def _silence(ms: int) -> bytes:
-    """쉼 — 0 으로 채운 PCM(22kHz 16bit mono)."""
-    n = int(_SR * max(0, int(ms)) / 1000) * _CH * _SW
+def _silence(ms: int, sr: int = 0) -> bytes:
+    """쉼 — 0 으로 채운 PCM(16bit mono, 기본 22kHz)."""
+    n = int((sr or _SR) * max(0, int(ms)) / 1000) * _CH * _SW
     return bytes(n)
 
 
@@ -88,6 +88,36 @@ def _segments_pcm(voice, tok, forced, segments):
     return bytes(pcm), lrc
 
 
+def _neural_segments_pcm(neural, segments, *, sid=0, steps=4, speed=1.0):
+    """261108-28(SOT §1.10): 자연 음성 — 배경 스레드의 `neural_tts.Synth` 로 44.1kHz int16 PCM + 가사."""
+    from viewer.study import tts_text, neural_tts
+    sr = int(getattr(neural, "sample_rate", neural_tts.SAMPLE_RATE) or neural_tts.SAMPLE_RATE)
+    bps = float(sr * _CH * _SW)
+    pcm, lrc, t_acc = bytearray(), [], 0.0
+    for i, (text, _lang) in enumerate(segments):
+        lead = _silence(tts_text.SENT_PAUSE_MS, sr) if i > 0 else b""
+        seg = bytearray(lead)
+        for t, lg in neural_tts.pieces_for(text):
+            seg += neural.generate(t, lg, sid, steps, speed)
+        pcm += seg
+        lrc.append(_fmt_ts(t_acc + len(lead) / bps) + text)
+        t_acc += len(seg) / bps
+    return bytes(pcm), lrc, sr
+
+
+def id3_comment(text: str) -> bytes:
+    """ID3v2.3 꼬리표 하나(COMM, UTF-16) — mp3 앞에 붙인다. '생성 음성' 표기(SOT §1.10, 모델 라이선스 고지)."""
+    import struct
+    body = b"\x01" + b"kor" + b"\xff\xfe\x00\x00" + b"\xff\xfe" + text.encode("utf-16-le")
+    frame = b"COMM" + struct.pack(">I", len(body)) + b"\x00\x00" + body
+    size = len(frame)
+    syn = bytes([(size >> 21) & 0x7F, (size >> 14) & 0x7F, (size >> 7) & 0x7F, size & 0x7F])
+    return b"ID3\x03\x00\x00" + syn + frame
+
+
+GENERATED_NOTE = "생성 음성(AI 합성): Supertonic 3 — OpenRAIL-M"
+
+
 def _make_voice(rate: int):
     import win32com.client
     voice = win32com.client.Dispatch("SAPI.SpVoice")
@@ -100,22 +130,30 @@ def _make_voice(rate: int):
 
 def synth_to_mp3(segments, mp3_path, *, rate: int = 0, voice_name: str = None,
                  lrc_path=None, bitrate: int = 96,
-                 voice=None, tok=None, forced=None) -> Path:
-    """segments → mp3(+lrc). voice/tok/forced 를 넘기면 재사용(반복 호출 빠름)."""
+                 voice=None, tok=None, forced=None, neural=None, neural_opts=None) -> Path:
+    """segments → mp3(+lrc). voice/tok/forced 를 넘기면 재사용(반복 호출 빠름).
+    261108-28: neural(배경 스레드의 `neural_tts.Synth`)을 넘기면 자연 음성 — 44.1kHz, ID3 에 '생성 음성' 표기."""
     import lameenc
     mp3_path = Path(mp3_path)
     segments = [(t, l) for (t, l) in segments if t and str(t).strip()]
     if not segments:
         raise RuntimeError("저장할 내용이 없습니다.")
-    if voice is None:
-        voice, tok = _make_voice(rate)
-        forced = _find_voice(voice, voice_name)
-
-    pcm, lrc = _segments_pcm(voice, tok, forced, segments)
+    tag = b""
+    if neural is not None:
+        o = dict(neural_opts or {})
+        pcm, lrc, sr = _neural_segments_pcm(neural, segments, sid=o.get("sid", 0),
+                                            steps=o.get("steps", 4), speed=o.get("speed", 1.0))
+        tag = id3_comment(GENERATED_NOTE)
+    else:
+        if voice is None:
+            voice, tok = _make_voice(rate)
+            forced = _find_voice(voice, voice_name)
+        pcm, lrc = _segments_pcm(voice, tok, forced, segments)
+        sr = _SR
     enc = lameenc.Encoder()
-    enc.set_channels(_CH); enc.set_in_sample_rate(_SR)
+    enc.set_channels(_CH); enc.set_in_sample_rate(sr)
     enc.set_bit_rate(bitrate); enc.set_quality(2)
-    mp3_path.write_bytes(enc.encode(pcm) + enc.flush())
+    mp3_path.write_bytes(tag + enc.encode(pcm) + enc.flush())
     if lrc_path:
         Path(lrc_path).write_text("\n".join(lrc), encoding="utf-8")
     return mp3_path
