@@ -168,7 +168,8 @@ chk(b5 is not None and b5.isEnabled(), "D 자연 음성 줄마다 [들어 보기
 if b5 is not None:
     QTest.mouseClick(b5, Qt.MouseButton.LeftButton)
     t0 = time.time()
-    while time.time() - t0 < 3 and not any(c[0] == "gen" for c in FakeSynth.calls):
+    # 합성(배경) 뒤 결과가 메인으로 돌아와 재생기에 들어갈 때까지 기다린다 — 'gen' 만 보면 부하 때 재생기가 아직 없다(beta.9 전체 검사)
+    while time.time() - t0 < 10 and not (nr._player is not None and nr._player.fed):
         QTest.qWait(20)
     gens = [c for c in FakeSynth.calls if c[0] == "gen"]
     chk(gens and gens[0][1] == 5 and gens[0][2] == neural_tts.STEPS["high"],

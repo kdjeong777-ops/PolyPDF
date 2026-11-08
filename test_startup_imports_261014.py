@@ -39,6 +39,8 @@ class FakeTts:
         calls.append(1)
         return ["Fake Voice A", "Fake Voice B"]
 mw._study_get_tts = lambda: FakeTts()
+from viewer.study import tts_engine as _te
+_te._ready = False      # 개발 폴더에 자연 음성 모델이 있어도 SAPI 목록을 보게(beta.9 전체 검사)
 names = []
 for btn in mw._read_btns:                 # 261108-24: 읽기 분할 단추의 ▾ 메뉴
     m = btn.menu()

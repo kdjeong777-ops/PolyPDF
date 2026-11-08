@@ -140,6 +140,8 @@ try:
     mw = MainWindow(); mw.resize(1600, 1000); mw.show(); app.processEvents()
     tts = FakeTts()
     mw._study_get_tts = lambda: tts
+    from viewer.study import tts_engine as _te
+    _te._ready = False          # 개발 폴더에 자연 음성 모델이 있어도 가짜 SAPI 를 쓰게(beta.9 전체 검사)
     ra = mw.read_aloud
     btn = mw.btn_read
 
