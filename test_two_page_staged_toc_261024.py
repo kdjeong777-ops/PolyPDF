@@ -83,8 +83,12 @@ try:
     nb = next(it for it in bt._iter_file_nodes() if Path(it.data(0, bt.DATA_FILE)).name == "b.pdf")
     opened.clear()
     nb.setExpanded(True); spin(0.2)
-    #   (표식 검사가 아직이면 검사와 목차 읽기로 두 번 연다 — 종전 그대로)
-    chk(opened and {Path(p).name for p in opened} == {"b.pdf"} and nb.childCount() == 1, "C3 본문에 없는 파일을 펼치면 종전대로 연다",
+    #   261108-17(응답성 SOT §4.9): 본문에 없는 파일은 **배경에서** 한 번 연다 — 책갈피창 모듈(메인)의 fitz.open 은 없다
+    for _ in range(50):
+        if nb.data(0, bt.DATA_TOC_LOADED):
+            break
+        spin(0.1)
+    chk(not opened and nb.childCount() == 1 and nb.child(0).text(0) == "B 하나", "C3 본문에 없는 파일을 펼치면 배경에서 읽어 단다(메인 open 0)",
         str((opened, nb.childCount())))
 
     # A — 끼운 흰 쪽이 2장 맞춤에서

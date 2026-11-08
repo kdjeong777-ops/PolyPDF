@@ -239,6 +239,104 @@ class ProbeWorker(QObject):
             _pacing.pace(self)                # ②·⑦ 메인에 GIL 조각을 넘긴다(점유율 조절)
 
 
+class PdfPeekWorker(QObject):
+    """261108-17(응답성 SOT §4.9): 책갈피창이 **지금 그 파일 하나**의 표식·목차가 필요할 때(단일 파일 열기·펼치기·
+    '모두 펼치기') 메인 대신 여는 배경 읽기. 처음 보는 파일은 백신이 검사하는 동안 `fitz.open` 이 1초 넘게 선다 —
+    종전에는 메인에서 열었다(`_ensure_probed`·`_on_item_expanded`).
+
+    `ProbeWorker` 와 달리 크기 상한이 없다(사용자가 고른 그 파일 하나라 건너뛸 수 없다). 위젯은 만지지 않고
+    결과는 `done(dict)` 하나 — {path, size, mtime, enc, has_toc, auth, signed, toc, page_count, ok}.
+    `toc` 는 암호로 열지 못했으면 [](종전 펼치기와 같다)."""
+    done = pyqtSignal(dict)
+    finished = pyqtSignal()
+
+    def __init__(self, path: str):
+        super().__init__()
+        self.path = str(path)
+
+    def run(self):
+        r = {"path": self.path, "size": -1, "mtime": -1, "enc": False, "has_toc": False,
+             "auth": None, "signed": False, "toc": [], "page_count": 0, "ok": False}
+        try:
+            import fitz
+            st = Path(self.path).stat()
+            r["size"], r["mtime"] = int(st.st_size), int(st.st_mtime)
+            doc = fitz.open(self.path)
+            try:
+                r["page_count"] = int(doc.page_count)
+                enc = bool(doc.needs_pass)
+                r["enc"] = enc
+                authed = True
+                if enc:
+                    r["auth"] = "locked"
+                    try:
+                        from viewer import secure_store
+                        pw = secure_store.recall_any(self.path)
+                    except Exception:
+                        pw = None
+                    lvl = doc.authenticate(pw) if pw else 0
+                    authed = bool(lvl)
+                    if lvl:
+                        r["auth"] = "owner" if (lvl & 4) else "user"
+                if authed:
+                    r["toc"] = doc.get_toc() or []
+                    r["has_toc"] = bool(r["toc"])
+                else:
+                    r["has_toc"] = None                 # 미상(잠김) — `_probe_pdf` 와 같은 뜻
+                try:
+                    from viewer.sign_core import probe_signed
+                    r["signed"] = bool(probe_signed(doc))
+                except Exception:
+                    pass
+                r["ok"] = True
+            finally:
+                doc.close()
+        except Exception:
+            pass
+        try:
+            self.done.emit(r)
+        finally:
+            self.finished.emit()
+
+
+class PdfOpenWorker(QObject):
+    """261108-17(응답성 SOT §4.9): 창이 **문서를 들고 있을** 때(합치기 미리보기 등) 처음 보는 파일을 배경에서 연다.
+
+    저장된 암호로 풀기까지 하고 연 문서를 `done(token, doc, msg)` 로 넘긴다 — 받은 뒤에는 메인만 쓴다(넘긴 뒤 이 스레드는
+    문서를 만지지 않는다). 못 열면 doc=None·msg 는 'locked' 또는 오류 글. 받는 쪽은 token 이 낡았으면 **닫고 버린다**."""
+    done = pyqtSignal(int, object, str)
+    finished = pyqtSignal()
+
+    def __init__(self, path: str, token: int):
+        super().__init__()
+        self.path, self.token = str(path), int(token)
+
+    def run(self):
+        doc, msg = None, ""
+        try:
+            import fitz
+            doc = fitz.open(self.path)
+            if doc.needs_pass:
+                try:
+                    from viewer import secure_store
+                    pw = secure_store.recall_any(self.path)
+                    if pw:
+                        doc.authenticate(pw)
+                except Exception:
+                    pass
+            if doc.needs_pass:
+                doc.close()
+                doc, msg = None, "locked"
+            else:
+                doc.page_count                              # 쪽 표를 여기서 읽어 둔다(메인 첫 그리기가 가볍게)
+        except Exception as e:                              # noqa: BLE001
+            doc, msg = None, str(e) or type(e).__name__
+        try:
+            self.done.emit(self.token, doc, msg)
+        finally:
+            self.finished.emit()
+
+
 def _pdf_is_scanned(pdf_path, sample: int = 12, ratio: float = 0.6) -> bool:
     """앞부분 표본 페이지를 보고 스캔 이미지 PDF인지 판정(260606-4 자동 분기용)."""
     try:

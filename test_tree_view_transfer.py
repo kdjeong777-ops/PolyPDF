@@ -222,6 +222,9 @@ _d.set_toc([[1, "첫째", 1], [1, "둘째", 1], [1, "셋째", 2]]); _d.save(str(
 bt._sync_after_transfer(root); app.processEvents()
 ft = [n for n in bt._iter_file_nodes() if n.text(0).startswith("toc")][0]
 ft.setExpanded(True); app.processEvents()
+import time as _t; _t0 = _t.perf_counter()
+while not ft.data(0, bt.DATA_TOC_LOADED) and _t.perf_counter() - _t0 < 5:   # 261108-17: 목차는 배경에서 읽는다
+    app.processEvents(); _t.sleep(0.01)
 bms = [ft.child(i) for i in range(ft.childCount())]
 chk(len(bms) == 3 and not any(bt._is_file_node(b) for b in bms),
     "⑦ 책갈피 자식은 파일 노드가 아님(DATA_FILE 있어도)", f"{[b.text(0) for b in bms]}")
@@ -282,6 +285,9 @@ bt.set_edit_mode(True)
 ft = [n for n in bt._iter_file_nodes() if n.text(0).startswith("toc")][0]
 chk(not ft.icon(0).isNull(), "⑨ 파일 행 앞 문서 아이콘")
 ft.setExpanded(True); app.processEvents()
+import time as _t; _t0 = _t.perf_counter()
+while not ft.data(0, bt.DATA_TOC_LOADED) and _t.perf_counter() - _t0 < 5:   # 261108-17: 목차는 배경에서 읽는다
+    app.processEvents(); _t.sleep(0.01)
 bms = [ft.child(i) for i in range(ft.childCount())]
 chk(all(b.icon(0).isNull() for b in bms), "⑨ 책갈피 행에는 아이콘 없음(구분)")
 r1 = bt.edit_ops.layout()

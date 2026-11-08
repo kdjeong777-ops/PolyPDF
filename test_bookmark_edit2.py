@@ -55,6 +55,9 @@ try:
     fn = next(iter(bt._iter_file_nodes()))
     fn.setExpanded(True)
     app.processEvents()
+    import time as _t; _t0 = _t.perf_counter()
+    while not fn.data(0, bt.DATA_TOC_LOADED) and _t.perf_counter() - _t0 < 5:   # 261108-17: 목차는 배경에서 읽는다
+        app.processEvents(); _t.sleep(0.01)
     bt._edit_mode = True
     chk(fn.childCount() > 0, "파일 노드에 책갈피가 있다", f"{fn.childCount()}개")
 

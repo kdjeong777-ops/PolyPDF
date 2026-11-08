@@ -94,6 +94,7 @@ class FilePreview(QWidget):
         self._doc = None
 
     def clear(self, msg: str = ""):
+        self._open_token = getattr(self, "_open_token", 0) + 1     # 261108-17: 배경에서 여는 중인 것은 버린다
         self._close_doc()
         self._key, self._images, self._page, self._count = None, None, 0, 0
         self.lbl_title.setText(tr("미리보기"))
@@ -107,25 +108,29 @@ class FilePreview(QWidget):
         self.clear()
         self._key = ("pdf", str(path))
         self.lbl_title.setText(Path(path).name)
-        try:
-            import fitz
-            doc = fitz.open(str(path))
-            if doc.needs_pass:
+        # 261108-17(응답성 SOT §4.9): 고른 파일은 대개 처음 보는 파일 — 메인에서 열면 백신 검사 동안 1초 넘게 선다.
+        #   배경에서 열어(저장된 암호 풀기까지) 문서를 받는다. 그 사이 다른 파일을 고르면 앞 결과는 닫고 버린다.
+        from viewer.workers import PdfOpenWorker, run_in_thread
+        self._open_token = getattr(self, "_open_token", 0) + 1
+        if not hasattr(self, "_open_keep"):
+            self._open_keep = []
+        w = PdfOpenWorker(str(path), self._open_token)
+        w.done.connect(self._on_pdf_opened)
+        run_in_thread(w, self._open_keep)
+
+    def _on_pdf_opened(self, token: int, doc, msg: str):
+        if token != getattr(self, "_open_token", 0) or self._doc is not None:
+            if doc is not None:                          # 낡은 결과(그 사이 다른 대상·비우기) — 닫고 버린다
                 try:
-                    from viewer import secure_store
-                    pw = secure_store.recall_any(str(path))
-                    if pw:
-                        doc.authenticate(pw)
+                    doc.close()
                 except Exception:
                     pass
-            if doc.needs_pass:
-                doc.close()
-                self.canvas.setText(tr("암호가 걸린 문서라 미리 볼 수 없습니다."))
-                return
-            self._doc, self._count = doc, doc.page_count
-        except Exception as e:           # noqa: BLE001
-            self.canvas.setText(tr('미리 볼 수 없습니다.\n{e}').format(e=e))
             return
+        if doc is None:
+            self.canvas.setText(tr("암호가 걸린 문서라 미리 볼 수 없습니다.") if msg == "locked"
+                                else tr('미리 볼 수 없습니다.\n{e}').format(e=msg))
+            return
+        self._doc, self._count = doc, doc.page_count
         self._render()
 
     def show_images(self, paths: list, name: str):

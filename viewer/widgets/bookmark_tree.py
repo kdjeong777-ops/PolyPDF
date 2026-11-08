@@ -1538,8 +1538,9 @@ class BookmarkTree(QWidget):
         item.setExpanded(False)
         self._set_count(tr('{name} (단일 파일)').format(name=p.name))
         self._update_mode_button()
-        # 260906-1: 파일 1개뿐이라 비용이 없다 — 표식(암호화·책갈피 ▸)을 바로 확정한다.
-        self._ensure_probed(item, force=True)
+        # 260906-1: 파일 1개뿐이라 표식(암호화·책갈피 ▸)을 바로 확정한다.
+        # 261108-17(응답성 SOT §4.9): 단 메인에서 열지 않는다 — 처음 보는 파일은 백신 검사 동안 1초 넘게 섰다. 배경에서 그 하나만.
+        self._probe_one_bg(item)
         return True
 
     def load_pdf_files(self, paths) -> list:
@@ -1942,6 +1943,7 @@ class BookmarkTree(QWidget):
         self._probe_timer.stop()
         self._probe_pending = {}
         self._probe_token = getattr(self, "_probe_token", 0) + 1
+        self._tree_gen = getattr(self, "_tree_gen", 0) + 1     # 261108-17: 배경 한 파일 읽기(`_peek_bg`)의 낡은 결과 버리기
         w, self._probe_worker = getattr(self, "_probe_worker", None), None
         if w is not None:
             try:
@@ -2107,6 +2109,88 @@ class BookmarkTree(QWidget):
         except Exception:
             pass
 
+    # ── 261108-17(응답성 SOT §4.9): 그 파일 하나를 **지금** 알아야 할 때도 메인에서 열지 않는다 ──
+    PEEK_TOC_KEEP = 16          # 배경에서 읽은 목차를 몇 파일까지 들고 있나(단일 파일 열기 → 곧 펼치기)
+
+    def _peek_bg(self, item, path: str, then) -> None:
+        """그 파일 하나를 배경(`PdfPeekWorker`)에서 열어 표식·목차를 읽고, 메인에서 `then(item, r)` 을 부른다.
+
+        종전 `_ensure_probed`·펼치기는 메인에서 `fitz.open` 했다 — 처음 보는 파일은 백신이 검사하는 동안 1초 넘게 섰다.
+        같은 파일을 읽는 중이면 기다리는 줄에만 더한다(두 번 열지 않는다). 그 사이 목록을 다시 만들었으면(`_tree_gen`)
+        결과를 버리고, 행이 지워졌거나 다른 파일이 됐으면 그 행은 건너뛴다."""
+        from viewer.workers import PdfPeekWorker, run_in_thread
+        k = (getattr(self, "_tree_gen", 0), str(path))
+        waits = self.__dict__.setdefault("_peek_waits", {})
+        if k in waits:
+            waits[k].append((item, then))
+            return
+        waits[k] = [(item, then)]
+        w = PdfPeekWorker(str(path))
+        w.done.connect(lambda r, k=k: self._on_peek_done(k, r))
+        run_in_thread(w, self._probe_keep)
+
+    def _on_peek_done(self, k, r: dict) -> None:
+        try:
+            waits = self.__dict__.get("_peek_waits") or {}
+            lst = waits.pop(k, [])
+            if k[0] != getattr(self, "_tree_gen", 0):
+                return                                      # 목록이 바뀌었다 — 낡은 결과
+            path = k[1]
+            if r.get("ok"):
+                key = (path, int(r["size"]), int(r["mtime"]))
+                cache = self.__dict__.setdefault("_probe_cache", None)
+                if cache is None:
+                    cache = self._probe_cache = {}
+                cache[key] = (r["enc"], r["has_toc"], r["auth"], bool(r.get("signed", False)))
+                tocs = self.__dict__.setdefault("_peek_tocs", {})
+                tocs.pop(key, None)
+                tocs[key] = list(r.get("toc") or [])
+                while len(tocs) > self.PEEK_TOC_KEEP:
+                    tocs.pop(next(iter(tocs)))
+            for item, then in lst:
+                try:
+                    if item.treeWidget() is not self.tree or str(item.data(0, self.DATA_FILE)) != path:
+                        continue                            # 그 사이 행이 지워졌거나 다른 파일이 됐다
+                    then(item, r)
+                except RuntimeError:
+                    continue
+            self.tree.viewport().update()
+        except RuntimeError:
+            return                                          # 창이 이미 닫혔다
+
+    def _peek_toc_known(self, path: str):
+        """배경에서 읽어 둔 그 파일의 목차(크기·수정 시각이 같을 때만) 또는 None — 파일을 열지 않는다."""
+        tocs = self.__dict__.get("_peek_tocs")
+        if not tocs:
+            return None
+        try:
+            st = Path(path).stat()
+        except Exception:
+            return None
+        got = tocs.get((str(path), int(st.st_size), int(st.st_mtime)))
+        return list(got) if got is not None else None
+
+    def _probe_one_bg(self, item) -> None:
+        """그 행 하나의 표식(암호화·서명·책갈피 ▸)을 **곧바로** — 아는 것은 바로 붙이고, 모르면 배경에서 그 하나만 연다.
+        검사 줄(`_probe_tick`)과 달리 인덱싱 중 멈춤·크기 상한을 따르지 않는다(사용자가 지금 연 그 파일)."""
+        try:
+            path = item.data(0, self.DATA_FILE)
+            if not path or not str(path).lower().endswith(".pdf"):
+                return
+            path = str(path)
+            item.setData(0, self.DATA_PROBED, True)
+            known = self._known_probe(path)
+            if known is not None:
+                self._apply_probe(item, path, known)
+                return
+
+            def _then(it, r):
+                if r.get("ok"):
+                    self._apply_probe(it, r["path"], (r["enc"], r["has_toc"], r["auth"], bool(r.get("signed"))))
+            self._peek_bg(item, path, _then)
+        except RuntimeError:
+            pass
+
     def set_probe_paused(self, on: bool) -> None:
         """260906-5(응답성 SOT §4 ①): 파일을 여는 배경 작업은 **한 번에 하나만**.
 
@@ -2247,7 +2331,10 @@ class BookmarkTree(QWidget):
         ph.setDisabled(True)
         leaf_item.addChild(ph)
 
-    def _on_item_expanded(self, item: QTreeWidgetItem):
+    def _on_item_expanded(self, item: QTreeWidgetItem, sync: bool = False):
+        """펼친 파일 행의 책갈피를 단다. 261108-17(응답성 SOT §4.9): 디스크에서 읽어야 하면 **배경에서**(`_peek_bg`) —
+        읽는 동안 '…' 가 보이고 결과가 오면 채운다. 결과를 그 자리에서 써야 하는 편집 길(책갈피 넣기·통째 바꾸기·
+        쪽에 맞는 책갈피 고르기)만 `sync=True` 로 종전처럼 그 자리에서 읽는다(그 길은 대개 본문에 열린 파일 → `toc_provider`)."""
         # 이미 로드한 적 있으면 패스
         if item.data(0, self.DATA_TOC_LOADED):
             return
@@ -2264,14 +2351,15 @@ class BookmarkTree(QWidget):
                 toc = prov(file_path)
             except Exception:
                 toc = None
-        # 261025-4: 목차를 받았으면 아래 표식 검사(`_ensure_probed` → fitz.open)도 먼저 하지 않는다 — 배경 검사가
-        #   아직 캐시를 못 채웠을 때(바쁜 기계) 그 검사가 같은 파일을 메인에서 다시 열었다. 표식은 배경 검사 큐가 단다.
-        if toc is not None and self._is_file_node(item) and item.childCount() == 0:
+        if toc is None and file_path:
+            toc = self._peek_toc_known(str(file_path))      # 261108-17: 배경에서 막 읽어 둔 것(단일 파일 열기 등)
+        # 261025-4: 목차를 받았으면 표식 검사도 먼저 하지 않는다 — 표식은 배경 검사 큐가 단다.
+        # 260906-1: 표식 검사는 보이는 행만 하므로, 아직 차례가 오지 않은 행을 펼쳤을 수 있다(placeholder 가 없다).
+        #   261108-17: 종전에는 이때 그 행을 메인에서 검사(`_ensure_probed` → fitz.open)한 뒤 목차를 또 열었다(두 번).
+        #   → '…' 를 먼저 달고 아래 목차 읽기 한 번으로 끝낸다(책갈피가 없으면 `_fill_toc` 이 '…' 를 뗀다).
+        if (self._is_file_node(item) and item.childCount() == 0 and file_path
+                and (toc is not None or str(file_path).lower().endswith(".pdf"))):   # 사진 등은 열지 않는다(261103-20)
             self._attach_toc_placeholder(item, Path(file_path))
-        # 260906-1: 표식 검사는 보이는 행만 하므로, 아직 차례가 오지 않은 행을 펼쳤을 수 있다.
-        #   그 경우 placeholder 가 없어 **책갈피가 안 펼쳐진 것처럼** 보인다 → 이 행만 즉시 검사.
-        if toc is None and self._is_file_node(item):
-            self._ensure_probed(item, force=True)
         # 자식 중 placeholder 가 있는지 확인
         ph_idx = -1
         for i in range(item.childCount()):
@@ -2290,8 +2378,11 @@ class BookmarkTree(QWidget):
         if toc is not None:
             self._fill_toc(item, ph_idx, file_path, list(toc))
             return
+        if not sync:
+            self._peek_bg(item, str(file_path), self._on_toc_peeked)    # 261108-17: 배경에서 읽어 채운다
+            return
 
-        # TOC 읽기 (암호화 파일은 저장된 암호로 해제 시도)
+        # (sync) TOC 읽기 (암호화 파일은 저장된 암호로 해제 시도)
         toc = []
         try:
             doc = fitz.open(file_path)
@@ -2311,6 +2402,26 @@ class BookmarkTree(QWidget):
         except Exception:
             toc = []
         self._fill_toc(item, ph_idx, file_path, toc)
+
+    def _on_toc_peeked(self, item, r: dict) -> None:
+        """261108-17: 배경에서 읽은 목차를 펼친 행에 단다(메인). 그 사이 편집 길이 그 자리에서 읽었으면(이미 LOADED) 둔다."""
+        if item.data(0, self.DATA_TOC_LOADED):
+            return
+        if r.get("ok"):
+            self._apply_probe(item, r["path"], (r["enc"], r["has_toc"], r["auth"], bool(r.get("signed"))))
+        ph_idx = next((i for i in range(item.childCount())
+                       if item.child(i).data(0, self.DATA_IS_TOC_PLACEHOLDER)), -1)
+        if ph_idx < 0:
+            return
+        self._fill_toc(item, ph_idx, r["path"], list(r.get("toc") or []))
+        # '모두 펼치기' 중이면 읽어 단 책갈피도 펼친다(`_apply_expand_mode` 는 읽기를 기다리지 않는다)
+        if getattr(self, "_expand_all_mode", False) and item.data(0, self.DATA_ALL_EXPANDED) and item.childCount():
+            self.tree.setUpdatesEnabled(False)
+            try:
+                with self._quiet_tree():
+                    self._set_subtree_expanded(item, True)
+            finally:
+                self.tree.setUpdatesEnabled(True)
 
     def _fill_toc(self, item: QTreeWidgetItem, ph_idx: int, file_path, toc: list) -> None:
         """placeholder 를 떼고 평탄한 목차(level, title, page1based)를 그 파일 행 아래 나무로 단다."""
@@ -4351,8 +4462,9 @@ class BookmarkTree(QWidget):
         target = self._file_node_for_path(file_path)
         if target is None:
             return
-        # placeholder 가 남아있으면 한 번 펼쳐서 lazy load 시키기
+        # placeholder 가 남아있으면 지금 읽는다(261108-17: 펼치기는 배경 읽기라 넣을 자리를 정하려면 그 자리에서)
         if not target.data(0, self.DATA_TOC_LOADED):
+            self._on_item_expanded(target, sync=True)
             target.setExpanded(True)
         title = (title or "").strip() or tr("(제목 없음)")
         ch = QTreeWidgetItem([f"{title}  (p.{int(page_1based)})"])
@@ -4391,7 +4503,7 @@ class BookmarkTree(QWidget):
             if target is None:
                 return False
         if not target.data(0, self.DATA_TOC_LOADED):
-            self._on_item_expanded(target)         # 지금 책갈피를 읽어 둔다 — 되돌리기 '전' 모양
+            self._on_item_expanded(target, sync=True)   # 지금 책갈피를 읽어 둔다 — 되돌리기 '전' 모양
         self.tree.setCurrentItem(target)
         self._bm_cache_unit(target)
         with self._quiet_tree():
@@ -4606,6 +4718,7 @@ class BookmarkTree(QWidget):
         if top is None:
             return
         if not top.data(0, self.DATA_TOC_LOADED):
+            self._on_item_expanded(top, sync=True)   # 261108-17: 아래에서 바로 걷는다 — 그 자리에서(대개 열린 문서 → toc_provider)
             top.setExpanded(True)          # TOC lazy load
         best = [None, -1]                  # [item, page]
 
