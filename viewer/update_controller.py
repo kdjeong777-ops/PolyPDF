@@ -465,19 +465,24 @@ class UpdateMixin:
                 # 261108-28(영상·음성 SOT §1.10): 자연 음성 모델 123MB — 고정 URL·SHA-256, 풀기까지 배경
                 "voice": (tr("자연 음성 (한국어·영어)"), components.voice_installed, components.install_voice)}
 
-    def _open_components_installer(self):
+    def _open_components_installer(self, *_a, parent=None):
         """260618-12: 녹화(ffmpeg)·OCR(Tesseract) 구성요소를 릴리스에서 설치 폴더로 받기.
-        261107-11: 모달 아님·하나만. 확인·내려받기는 배경 워커 — 받는 중 창을 닫아도 계속(작업 창에 남는다)."""
+        261107-11: 모달 아님·하나만. 확인·내려받기는 배경 워커 — 받는 중 창을 닫아도 계속(작업 창에 남는다).
+        261108-32(디자인 SOT §2.14 '모달 위 창'): 환경설정(모달)에서 열면 `parent`=그 창 — 메인을 부모로 띄우면 모달인
+        환경설정이 다시 앞으로 와 이 창이 뒤에 숨었다(사용자 보고). 메뉴에서 열면 종전처럼 메인 창(인자 없음)."""
         from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                       QPushButton, QProgressBar)
+        owner = parent if parent is not None else self
         dlg = getattr(self, "_comp_dlg", None)
         if dlg is not None:
             try:
+                if dlg.parent() is not owner:              # 이미 열린 창 — 지금 부르는 창 위로 옮겨 단다
+                    dlg.setParent(owner, dlg.windowFlags())
                 dlg.show(); dlg.raise_(); dlg.activateWindow()
                 return
             except RuntimeError:
                 self._comp_dlg = None
-        dlg = QDialog(self)
+        dlg = QDialog(owner)
         dlg.setObjectName("componentsDialog")
         dlg.setWindowTitle(tr("구성요소 설치 (녹화·OCR)"))
         dlg.resize(460, 200)
@@ -589,12 +594,25 @@ class UpdateMixin:
         dlg = self._comp_dialog()
         if dlg is None:                                # 창을 닫은 뒤 끝남 — 상태 표시줄로 알린다
             self.status.showMessage(text.replace("\n", " "), 8000)
+            self._comp_notify(key, ok)
             return
         dlg._bar.setVisible(False)
         self.status.showMessage(text.replace("\n", " "), 8000)
         if not ok and not cancelled:
             QMessageBox.warning(dlg, tr("구성요소 설치"), text)
         self._comp_check()
+        self._comp_notify(key, ok)
+
+    def _comp_notify(self, key: str, ok: bool):
+        """261108-32: 설치가 끝나면 듣는 쪽(환경설정 '읽기 음성' 의 설치 상태 글 등)에 알린다. 지워진 위젯은 빼낸다."""
+        keep = []
+        for fn in list(getattr(self, "_comp_listeners", []) or []):
+            try:
+                fn(key, ok)
+                keep.append(fn)
+            except RuntimeError:
+                pass
+        self._comp_listeners = keep
 
 
 class ComponentStatusWorker(QObject):

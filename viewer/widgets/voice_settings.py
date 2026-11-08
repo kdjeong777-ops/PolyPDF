@@ -53,15 +53,45 @@ def attach(dlg, layout) -> None:
     row = QWidget()
     h = QHBoxLayout(row)
     h.setContentsMargins(0, 0, 0, 0)
-    ready = tts_engine.neural_ready()
-    st = QLabel(tr("자연 음성 설치됨 ✓") if ready else tr("자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습니다"))
+    st = QLabel()
     st.setObjectName("lblTtsNeuralState")
+
+    def _show_state():
+        st.setText(tr("자연 음성 설치됨 ✓") if tts_engine.neural_ready()
+                   else tr("자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습니다"))
+    _show_state()
     h.addWidget(st, 1)
     btn = QPushButton(tr("구성요소 설치"))
+    btn.setObjectName("btnTtsComponents")
     host = getattr(dlg, "_host", None)
     btn.setEnabled(host is not None and hasattr(host, "_open_components_installer"))
-    btn.clicked.connect(lambda: host._open_components_installer())
+    # 261108-32(디자인 SOT §2.14 '모달 위 창'): 환경설정(모달) 위에 뜨도록 이 창을 부모로 — 메인을 부모로 띄우면 뒤에 숨었다
+    btn.clicked.connect(lambda: host._open_components_installer(parent=dlg))
     h.addWidget(btn)
+    if host is not None:
+        def _on_comp_done(key, ok):                    # 설치가 끝나면 상태 글을 곧바로
+            if key == "voice":
+                tts_engine.invalidate()
+                _show_state()
+        host.__dict__.setdefault("_comp_listeners", []).append(_on_comp_done)
+
+        def _on_closed(*_):
+            """환경설정을 닫을 때 그 위에 단 구성요소 창은 메인 창으로 옮겨 단다(받는 중이면 계속 보이게)."""
+            try:
+                host._comp_listeners.remove(_on_comp_done)
+            except (AttributeError, ValueError):
+                pass
+            cd = getattr(host, "_comp_dlg", None)
+            try:
+                if cd is not None and cd.parent() is dlg:
+                    vis = cd.isVisible()
+                    cd.setParent(host, cd.windowFlags())
+                    if vis:
+                        cd.show()
+            except RuntimeError:
+                pass
+        if hasattr(dlg, "finished"):
+            dlg.finished.connect(_on_closed)
     f.addRow(row)
     note = QLabel("<small>%s</small>" % tr("자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). "
                                           "목소리·음질과 위의 두 칸은 자연 음성에만 쓰입니다."))
