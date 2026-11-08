@@ -740,8 +740,8 @@ def run_suite(exe: Path, out: Path, only, rec: dict, watch=None):
                 rec["fail"].append("%s 대상이 없다: %s" % (c["name"], target))
                 continue
             r = probe.run(c["name"], target, int(c.get("seconds", 60)), out / "runs")
-            if watch is not None:
-                watch.check(c["name"])                       # 이 대상을 재는 동안 다른 무거운 작업이 돌았나
+            if watch is not None:                            # 이 대상을 재는 동안 다른 무거운 작업이 돌았나 — 잰 앱·자손은 뺀다(261108-20 덧붙임 2)
+                watch.check(c["name"], exclude=[r.get("app_pid")] + list(r.get("descendant_pids") or []))
             rec["runs"].append({k: r.get(k) for k in ("name", "t_window", "t_loaded", "max_hang_sec", "peak_ws_mb",
                                                       "max_private_mb", "helper_max_ws_mb", "helper_left",
                                                       "close_sec", "exit", "indexed_files")} | {"hangs": len(r["hangs"])})

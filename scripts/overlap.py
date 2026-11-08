@@ -112,9 +112,21 @@ class Watch:
         self.start_busy = None
         self._last = None
 
-    def _others(self) -> dict:
+    def _others(self, exclude=()) -> dict:
         ps = procs()
         mine = _tree(ps, self.root)
+        # 261108-20 덧붙임 2: 잰 앱과 그 모든 대 자손은 '다른' 것이 아니다 — 잰 앱이 닫혀 목록에서 사라지면 root 에서 내려가는
+        #   나무가 끊겨, 아직 목록에 남은 색인 자식(끝났지만 핸들이 남은 것 포함)을 남으로 셌다(beta.6·beta.8 T5 겹침 'PolyPDF.exe←앱 pid')
+        ex = set(exclude)
+        if ex:
+            grew = True
+            while grew:
+                grew = False
+                for pid, pp, _n in ps:
+                    if pp in ex and pid not in ex:
+                        ex.add(pid)
+                        grew = True
+            mine |= ex
         # 261108-20: 이름에 부모 pid 를 붙인다 — 잰 앱의 자식이 부모가 끝난 뒤 남은 것인지(부모 pid 가 잰 앱) 사용자의 다른 창인지 가린다
         return {pid: ("%s←%d" % (name, pp), _cpu_s(pid)) for pid, pp, name in ps if name.lower() in HEAVY and pid not in mine}
 
@@ -123,12 +135,13 @@ class Watch:
         self._last = (time.time(), self._others())
         return self
 
-    def check(self, label: str) -> bool:
-        """지난 점검 뒤 다른 무거운 프로세스가 쓴 CPU — 넘으면 events 에 적고 True."""
+    def check(self, label: str, exclude=()) -> bool:
+        """지난 점검 뒤 다른 무거운 프로세스가 쓴 CPU — 넘으면 events 에 적고 True.
+        `exclude`: 이 구간에 잰 앱 pid 와 그 자손 pid(측정 도구가 본 것) — 그 아래 자손까지 뺀다."""
         if self._last is None:
             self.start()
         t0, o0 = self._last
-        now, o1 = time.time(), self._others()
+        now, o1 = time.time(), (self._others(exclude) if exclude else self._others())
         dt = max(1e-3, now - t0)
         busy = []
         for pid, (name, cpu) in o1.items():

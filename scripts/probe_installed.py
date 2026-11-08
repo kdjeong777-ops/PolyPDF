@@ -299,6 +299,8 @@ def run(name, target, seconds, out):
     #   '남음 0' 인데 무엇이 index.db 를 쥐어 시험 프로필 지우기가 WinError 32 로 죽었다(빌드 시험은 같은 때 '겹침 PolyPDF.exe')
     helpers.update(_descendants(proc.pid, known=helpers))
     SPAWNED.update(helpers)
+    rec["app_pid"] = proc.pid                       # 261108-20 덧붙임 2: 겹침 감시가 잰 앱·자손을 빼고, 겹침 줄의 pid 와 대조되게
+    rec["descendant_pids"] = sorted(helpers)
     if helpers:
         t_h = time.perf_counter()
         while time.perf_counter() - t_h < LEFT_WAIT_S and any(_alive(x) for x in helpers):
