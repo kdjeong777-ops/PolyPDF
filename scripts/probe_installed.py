@@ -98,6 +98,58 @@ def _children(pid):
     return out
 
 
+APP_NAMES = ("polypdf.exe",)
+LEFT_WAIT_S = 10       # 261108-20: 닫은 뒤 앱의 자손(색인·변환 자식, 띄어쓰기 도우미)이 끝나기를 기다리는 한도
+DROP_WAIT_S = 30       # 시험 프로필을 지우기 전 남은 시험 프로세스를 기다리는 한도 — 넘으면 끝내고 지운다
+SPAWNED = set()        # 이 측정(release_test 한 번)이 띄운 앱과 그 자손 pid — `drop` 이 남은 것을 기다린다
+
+
+def _snapshot():
+    out = []
+    snap = k32.CreateToolhelp32Snapshot(0x2, 0)
+    if snap in (0, -1, 0xFFFFFFFF, 0xFFFFFFFFFFFFFFFF):
+        return out
+    try:
+        e = PE32(); e.dwSize = ctypes.sizeof(PE32)
+        ok = k32.Process32FirstW(snap, ctypes.byref(e))
+        while ok:
+            out.append((e.th32ProcessID, e.th32ParentProcessID, e.szExeFile.lower()))
+            ok = k32.Process32NextW(snap, ctypes.byref(e))
+    finally:
+        k32.CloseHandle(snap)
+    return out
+
+
+def _descendants(pid, names=APP_NAMES, known=()):
+    """261108-20: pid 의 **모든 대**의 자손 중 이름이 names 인 것. 자식의 부모 pid 기록은 부모가 끝나도 남으므로 닫은 뒤에도
+    찾는다 — 끝난 가운데 대는 목록에서 사라지니 앞서 본 자손(`known`)에서도 찾아 내려간다.
+    종전 `_children` 은 직계만, 표본 때 본 것만 세서 색인 자식이 띄운 도우미나 닫는 동안 새로 뜬 자식을 놓쳤다."""
+    ps = _snapshot()
+    kids, todo = set(known), [pid] + list(known)
+    while todo:
+        p = todo.pop()
+        for c, pp, _n in ps:
+            if pp == p and c not in kids and c != pid:
+                kids.add(c)
+                todo.append(c)
+    return {c for c, _pp, n in ps if c in kids and n in names} | set(known)
+
+
+def leftovers():
+    """이 측정이 띄운 프로세스 중 아직 살아 있는 것."""
+    return sorted(p for p in SPAWNED if _alive(p))
+
+
+def _terminate(pid):
+    h = k32.OpenProcess(0x0001 | 0x00100000, False, pid)     # PROCESS_TERMINATE | SYNCHRONIZE
+    if h:
+        try:
+            k32.TerminateProcess(h, 1)
+            k32.WaitForSingleObject(h, 5000)
+        finally:
+            k32.CloseHandle(h)
+
+
 def _alive(pid):
     h = k32.OpenProcess(0x1000, False, pid)
     if not h:
@@ -216,6 +268,7 @@ def run(name, target, seconds, out):
                 last_cpu, last_t = cpu, now
                 s = {"t": round(now - t0, 1), "cpu_pct": round(pct, 1)}
                 s.update({k: round(v, 1) for k, v in _mem(h).items()})
+                helpers.update(_descendants(proc.pid, known=helpers))  # 261108-20: 모든 대의 자손을 남음 판정에 — 메모리는 직계만(종전과 견준다)
                 for cp in _children(proc.pid):          # 261009-16: 띄어쓰기 도우미
                     helpers.add(cp)
                     hc = k32.OpenProcess(PROCESS_QUERY, False, cp)
@@ -228,6 +281,7 @@ def run(name, target, seconds, out):
             time.sleep(0.25)
         # 정상 종료: WM_CLOSE → 10초 기다림 → 안 닫히면 강제
         if proc.poll() is None:
+            helpers.update(_descendants(proc.pid, known=helpers))
             if hwnd:
                 u32.PostMessageW(hwnd, 0x0010, 0, 0)
             t_close = time.perf_counter()
@@ -239,19 +293,33 @@ def run(name, target, seconds, out):
                 proc.kill(); rec["close_sec"] = None; rec["exit"] = "닫히지 않아 강제 종료"
     finally:
         k32.CloseHandle(h)
-    if helpers:                                     # 261009-16: 닫은 뒤 도우미가 남았나(파이프가 닫히면 스스로 끝난다)
+        SPAWNED.add(proc.pid)
+    # 261009-16: 닫은 뒤 도우미가 남았나(파이프가 닫히면 스스로 끝난다)
+    # 261108-20: 닫는 동안 새로 뜬 자손까지(부모 pid 기록으로) 다시 찾고, 남은 것은 pid 를 적는다 — beta.8 설치 시험 T5 에서
+    #   '남음 0' 인데 무엇이 index.db 를 쥐어 시험 프로필 지우기가 WinError 32 로 죽었다(빌드 시험은 같은 때 '겹침 PolyPDF.exe')
+    helpers.update(_descendants(proc.pid, known=helpers))
+    SPAWNED.update(helpers)
+    if helpers:
         t_h = time.perf_counter()
-        while time.perf_counter() - t_h < 5 and any(_alive(x) for x in helpers):
+        while time.perf_counter() - t_h < LEFT_WAIT_S and any(_alive(x) for x in helpers):
             time.sleep(0.2)
-        rec["helper_left"] = sum(1 for x in helpers if _alive(x))
+        left = sorted(x for x in helpers if _alive(x))
+        rec["helper_left"] = len(left)
+        if left:
+            rec["left_pids"] = left
     # 261009-19: 그 시간 안에 색인을 마친 파일 수(시험 프로필의 index.db) — 첫 색인 속도를 견준다
+    # 261108-20: 읽지 못하면 까닭을 남기고, 연결은 꼭 닫는다(이 프로세스가 index.db 를 쥐면 시험 프로필을 못 지운다)
+    import sqlite3
+    c = None
     try:
-        import sqlite3
-        c = sqlite3.connect(str(CFG / "index.db"))
+        c = sqlite3.connect(str(CFG / "index.db"), timeout=5)
         rec["indexed_files"] = c.execute("select count(*) from files where page_count >= 0").fetchone()[0]
-        c.close()
-    except Exception:
+    except Exception as e:
         rec["indexed_files"] = None
+        rec["index_read_error"] = repr(e)[:200]
+    finally:
+        if c is not None:
+            c.close()
     sm = rec["samples"]
     rec["peak_ws_mb"] = max((s.get("peak_ws_mb", 0) for s in sm), default=None)
     rec["max_private_mb"] = max((s.get("private_mb", 0) for s in sm), default=None)
@@ -302,8 +370,17 @@ def seed():
 
 
 def drop():
+    """261108-20: 이 측정이 띄운 프로세스가 남았으면 `DROP_WAIT_S` 기다리고, 그래도 남으면 끝낸 뒤 지운다(지우기도 몇 번 다시).
+    종전에는 바로 `rmtree` 해서, 닫은 뒤 남은 프로세스가 index.db 를 쥐면 WinError 32 로 측정 전체가 요약 없이 죽었다.
+    남은 것 자체는 `run` 이 `helper_left` 로 실패로 적는다."""
+    t = time.perf_counter()
+    while leftovers() and time.perf_counter() - t < DROP_WAIT_S:
+        time.sleep(0.5)
+    for p in leftovers():
+        print("남은 시험 프로세스를 끝냄:", p)
+        _terminate(p)
     if CFG.exists():
-        shutil.rmtree(CFG)
+        _remove_retry(CFG, tries=20, wait=0.5)
         print("시험 프로필 지움:", CFG)
 
 

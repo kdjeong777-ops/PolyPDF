@@ -728,11 +728,18 @@ def run_suite(exe: Path, out: Path, only, rec: dict, watch=None):
                 rec["fail"].append("%s 1초+ 정지 %d회(최장 %ss)" % (c["name"], len(r["hangs"]), r["max_hang_sec"]))
             rec.setdefault("stalls", []).extend(stall_tops(out / "runs", c["name"]))
             if r.get("helper_left"):
-                rec["fail"].append("%s 닫은 뒤 도우미 %s개 남음" % (c["name"], r["helper_left"]))
+                rec["fail"].append("%s 닫은 뒤 도우미 %s개 남음(pid %s)" % (c["name"], r["helper_left"], r.get("left_pids")))
             if r["exit"] or r.get("close_sec") is None:
                 rec["fail"].append("%s 종료 이상: %s" % (c["name"], r["exit"] or "닫히지 않음"))
+            if r.get("index_read_error"):
+                rec["fail"].append("%s 닫은 뒤 index.db 를 읽지 못함: %s" % (c["name"], r["index_read_error"]))
     finally:
-        restore_dir(out)
+        # 261108-20: 시험 프로필을 못 지워도 요약은 남긴다(종전에는 여기서 예외로 요약 없이 끝났다) — 표식은 남아 다음 시험이 되돌리기를 요구
+        try:
+            restore_dir(out)
+        except Exception as e:
+            rec["fail"].append("시험 프로필을 지우지 못함: %r — 남은 시험 프로세스 %s, `release_test.py restore \"%s\"` 로 다시"
+                               % (e, probe.leftovers(), out))
 
 
 STALL_TOP = 6       # summary 에 옮겨 적는 정지 스택의 메인 스레드 맨 위 줄 수(전체는 runs\<대상>_stall*.txt)

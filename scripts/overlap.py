@@ -115,7 +115,8 @@ class Watch:
     def _others(self) -> dict:
         ps = procs()
         mine = _tree(ps, self.root)
-        return {pid: (name, _cpu_s(pid)) for pid, _pp, name in ps if name.lower() in HEAVY and pid not in mine}
+        # 261108-20: 이름에 부모 pid 를 붙인다 — 잰 앱의 자식이 부모가 끝난 뒤 남은 것인지(부모 pid 가 잰 앱) 사용자의 다른 창인지 가린다
+        return {pid: ("%s←%d" % (name, pp), _cpu_s(pid)) for pid, pp, name in ps if name.lower() in HEAVY and pid not in mine}
 
     def start(self) -> "Watch":
         self.start_busy = system_busy_pct()          # 적기만 한다 — 평소 부하는 PC 마다 다르다(위 설명)
