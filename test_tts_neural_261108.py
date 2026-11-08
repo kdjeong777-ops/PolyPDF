@@ -290,20 +290,33 @@ if tts_engine is not None:
             return p, hashlib.sha256(bio.getvalue()).hexdigest()
         good, good_sha = make_tar()
         url = "file:///" + good.replace("\\", "/")
-        ok, info = components.install_voice(url=url, sha256="0" * 64)
+        licp = os.path.join(root, "LICENSE.txt")
+        open(licp, "wb").write(b"fake Open RAIL-M license text")
+        lic_sha = hashlib.sha256(b"fake Open RAIL-M license text").hexdigest()
+        LIC = dict(license_url="file:///" + licp.replace("\\", "/"), license_sha256=lic_sha)
+        ok, info = components.install_voice(url=url, sha256=good_sha, license_url=LIC["license_url"],
+                                            license_sha256="0" * 64)
+        chk(not ok and not neural_tts.model_dir().exists(), "(D) 라이선스 원문 해시가 틀려도 설치하지 않는다", info)
+        ok, info = components.install_voice(url=url, sha256="0" * 64, **LIC)
         chk(not ok and not neural_tts.model_dir().exists(), "(D) 해시가 틀리면 설치하지 않는다(아무것도 안 씀)", info)
         left = os.listdir(neural_tts.voices_dir()) if neural_tts.voices_dir().exists() else []
         chk(left == [], "(D) 받던 파일·푼 폴더도 남기지 않는다", str(left))
-        ok, info = components.install_voice(url=url, sha256=good_sha)
+        ok, info = components.install_voice(url=url, sha256=good_sha, **LIC)
         chk(ok and neural_tts.model_ready(), "(D) 해시가 맞으면 풀어 제자리(파일 7개)", info)
+        chk((neural_tts.model_dir() / neural_tts.LICENSE_LOCAL).read_bytes() == b"fake Open RAIL-M license text",
+            "(D) 모델 라이선스 원문을 모델 곁에 둔다(사본 동봉)")
         evil, evil_sha = make_tar(evil=True)
-        ok, info = components.install_voice(url="file:///" + evil.replace("\\", "/"), sha256=evil_sha)
+        ok, info = components.install_voice(url="file:///" + evil.replace("\\", "/"), sha256=evil_sha, **LIC)
         chk(not ok and not os.path.exists(os.path.join(root, "evil.txt")) and neural_tts.model_ready(),
             "(D) 위로 올라가는 이름은 막고 기존 모델은 그대로", info)
         chk(components.sha256_ok("x", b"") is False and neural_tts.MODEL_SHA256 ==
             "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427",
             "(D) 앱에 박은 모델 해시 = 실측 묶음 해시")
-        chk(neural_tts.MODEL_URL.startswith("https://github.com/"), "(D) 내려받는 곳은 GitHub(믿는 곳)")
+        base = "https://github.com/kdjeong777-ops/PolyPDF/releases/download/components/"
+        chk(neural_tts.MODEL_URL == base + neural_tts.MODEL_ARCHIVE and neural_tts.LICENSE_URL == base + neural_tts.LICENSE_ASSET,
+            "(D) 받는 곳은 우리 components 릴리스 사본(모델·라이선스)", neural_tts.MODEL_URL)
+        chk(neural_tts.LICENSE_SHA256 == "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f",
+            "(D) 라이선스 원문 해시도 앱에 박는다")
     finally:
         neural_tts.voices_dir = orig_vd
         shutil.rmtree(root, ignore_errors=True)

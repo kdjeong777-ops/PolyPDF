@@ -15,7 +15,17 @@ from pathlib import Path
 
 # ── 모델 묶음(고정) — 바꾸면 SOT §1.10 표·릴리스 SOT §8 A5 도 함께 ──
 MODEL_ARCHIVE = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2"
-MODEL_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/" + MODEL_ARCHIVE)
+# 받는 곳: 우리 공개 저장소의 고정 태그 `components` 릴리스 사본(261108-28 덧붙임 2, 사용자 결정 '우리 릴리스에 사본').
+#   원본 출처는 k2-fsa/sherpa-onnx 릴리스 tts-models(상류 보관 상태) — 같은 바이트(해시 같음). 앱은 먼저 components 태그에서
+#   이름으로 찾고(`components._assets`, 다른 구성요소와 같은 길), 못 찾으면 아래 고정 주소로.
+COMPONENTS_BASE = "https://github.com/kdjeong777-ops/PolyPDF/releases/download/components/"
+MODEL_URL = COMPONENTS_BASE + MODEL_ARCHIVE
+MODEL_SOURCE_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/" + MODEL_ARCHIVE)
+# 모델 라이선스 원문(BigScience Open RAIL-M, HF Supertone/supertonic-3 의 LICENSE) — 모델 폴더에 함께 둔다(사본 동봉 의무)
+LICENSE_ASSET = "Supertonic-3-LICENSE.txt"
+LICENSE_URL = COMPONENTS_BASE + LICENSE_ASSET
+LICENSE_SHA256 = "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f"
+LICENSE_LOCAL = "LICENSE-model-OpenRAIL-M.txt"
 MODEL_SHA256 = "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427"
 MODEL_BYTES = 128774318
 MODEL_INNER = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"     # 묶음 안 폴더 이름

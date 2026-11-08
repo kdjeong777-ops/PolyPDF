@@ -217,18 +217,26 @@ def install_tesseract(repo: str = "", progress=None) -> tuple[bool, str]:
     return True, str(base / "tesseract")
 
 
-def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str = "") -> tuple[bool, str]:
+def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str = "",
+                  license_url: str = "", license_sha256: str = "") -> tuple[bool, str]:
     """261108-28(영상·음성 SOT §1.10, 릴리스 SOT §14.5 U16): 자연 음성 모델 — **고정 URL·고정 SHA-256**.
 
     받기 → 해시 확인 → 임시 폴더에 풀기(tar 'data' 거르개) → 파일 7개 확인 → 제자리로 옮기기. 어느 단계든 실패하면
-    받은 것·푼 것을 지우고 **설치 폴더의 기존 모델은 그대로** 둔다. 지금 출처는 sherpa-onnx 릴리스 원본
-    (우리 `components` 릴리스에 사본을 두는 것은 사용자 결정 — SOT §1.10 '할 일'). url·sha256 인자는 검사용.
+    받은 것·푼 것을 지우고 **설치 폴더의 기존 모델은 그대로** 둔다.
+    261108-28 덧붙임 2(사용자 결정 '우리 릴리스에 사본'): 받는 곳은 우리 `components` 릴리스 — 다른 구성요소처럼 그 태그에서
+    이름으로 찾고, 못 찾으면 `neural_tts.MODEL_URL`(같은 사본의 고정 주소). 모델 라이선스 원문(OpenRAIL-M, 고정 SHA-256)도
+    받아 모델 폴더에 둔다(사본 동봉 의무) — 못 받거나 해시가 다르면 설치하지 않는다. url·sha256·license_* 인자는 검사용.
     """
+    import hashlib
     import shutil
     import tarfile
     from viewer.study import neural_tts
-    url = url or neural_tts.MODEL_URL
+    if not url or not license_url:
+        assets = _assets(repo_or_default(repo))
+        url = url or assets.get(neural_tts.MODEL_ARCHIVE) or neural_tts.MODEL_URL
+        license_url = license_url or assets.get(neural_tts.LICENSE_ASSET) or neural_tts.LICENSE_URL
     want = (sha256 or neural_tts.MODEL_SHA256).lower()
+    lic_want = (license_sha256 or neural_tts.LICENSE_SHA256).lower()
     base = neural_tts.voices_dir()
     final = neural_tts.model_dir()
     try:
@@ -243,6 +251,9 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
             return False, tr("다운로드가 취소되었거나 실패했습니다.")
         if got.lower() != want:                                  # 맞지 않으면 아무것도 쓰지 않는다
             return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
+        lic = _download(license_url)
+        if lic is None or hashlib.sha256(lic).hexdigest() != lic_want:
+            return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
         shutil.rmtree(tmp, ignore_errors=True)
         tmp.mkdir(parents=True)
         try:
@@ -253,6 +264,7 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
         src = tmp / neural_tts.MODEL_INNER
         if not neural_tts.model_ready(src):
             return False, tr("받은 묶음에 음성 모델 파일이 모두 있지 않습니다. 설치하지 않았습니다.")
+        (src / neural_tts.LICENSE_LOCAL).write_bytes(lic)       # 모델 라이선스 사본을 모델 곁에
         old = base / (".old_" + neural_tts.MODEL_DIRNAME)
         shutil.rmtree(old, ignore_errors=True)
         if final.exists():
