@@ -239,8 +239,9 @@ def exe_for_install(a, out: Path, rec: dict) -> Path:
 # 판정 경로의 **정확한 목록은 여기 한 곳**이 소유한다 — SOT 는 까닭과 영역만 적고 이 상수를 가리킨다.
 # 261017-18: 가상 프린터 설치 도구(viewer/vprinter.py — 설치 끝에 설치 프로그램이 부른다)·동봉 파일(printer/)도 설치 경로다
 # 261020-2(긴급): requirements.txt 도 — 이 PC 빌드는 이 PC 의 패키지를 쓰므로 CI 가 받는 판(beta.293 의 PyMuPDF 2.0)을 못 본다
+# 261108-13: 업데이트 컨트롤러도 — 설치본 길(U24)·다른 창 닫기(U1·U2)를 고른다
 INSTALL_PATHS = ("installer/", "build_ci.bat", "scripts/i18n.py", ".github/workflows/release.yml", "viewer/updater.py",
-                 "viewer/vprinter.py", "printer/", "requirements.txt")
+                 "viewer/update_controller.py", "viewer/vprinter.py", "printer/", "requirements.txt")
 BUILD_PATHS = ("main.py", "viewer/workers.py", "viewer/index_proc.py", "viewer/kiwi_space.py",
                "viewer/child_job.py", "viewer/indexer.py", "viewer/settings_store.py", "viewer/open_gather.py",
                "viewer/widgets/thumbs_list.py")
@@ -262,7 +263,8 @@ FOCUS = [   # (경로 앞부분, 볼 것, 측정 대상) — 상시 점검 목�
     (("viewer/child_job.py",), "자식 프로세스 — 모든 대상 '도우미 남음' 0", None),
     (("installer/", "build_ci.bat", "scripts/i18n.py"),
      "설치 결과 — 종료 코드·버전·언어 유지(다국어 SOT §10.5), 작업 표시줄 아이콘은 사용자에게 확인", None),
-    (("viewer/updater.py",), "앱 안 업데이트 — 이 시험으로는 못 본다(못 한 것으로 적는다)", None),
+    (("viewer/updater.py", "viewer/update_controller.py"), "앱 안 업데이트 — 이 시험으로는 못 본다(못 한 것으로 적는다). "
+     "설치본 길(U24)은 /SILENT /WAITPID /RELAUNCH=1 /APPLANG 로 설치본을 손으로 한 번 돌려 본다", None),
     ((".github/workflows/release.yml",), "릴리스 자산 — 태그 뒤 자산 목록·설치 프로그램·휴대용 zip", None),
     (("viewer/vprinter.py", "viewer/vprinter_recv.py", "viewer/vprinter_controller.py", "viewer/widgets/vprinter_dialog.py", "printer/"),
      "가상 프린터 — `scripts\\vprinter_check.py install <설치 파일>`·`e2e`(앱 코드만이면 `compare`·`e2e --dev`, 가상 프린터 SOT §6.4)", None),

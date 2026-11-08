@@ -40,7 +40,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download components -R $env:GITHUB_REPOSITORY -p ffmpeg.exe -D .\_ff --clobber
-          if (Test-Path .\_ff\ffmpeg.exe) { Copy-Item .\_ff\ffmpeg.exe .\ffmpeg.exe -Force; Remove-Item .\_ff -Recurse -Force }
+          # 261108-12(U16): 앱과 같은 고정 SHA-256 으로 확인 — 맞지 않으면 쓰지 않고 choco 로
+          if (Test-Path .\_ff\ffmpeg.exe) {
+            python -m viewer.components verify ffmpeg.exe .\_ff\ffmpeg.exe
+            if ($LASTEXITCODE -eq 0) { Copy-Item .\_ff\ffmpeg.exe .\ffmpeg.exe -Force } else { echo "::warning::components ffmpeg.exe SHA-256 불일치 — 쓰지 않는다" }
+            Remove-Item .\_ff -Recurse -Force
+          }
           if (-not (Test-Path .\ffmpeg.exe)) {
             choco install ffmpeg -y --no-progress
             $real = Get-ChildItem "C:\ProgramData\chocolatey\lib\ffmpeg" -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue |
@@ -79,6 +84,8 @@ jobs:
           $have = @(".\\tesseract\\tesseract.exe", ".\\tesseract\\Library\\bin\\tesseract.exe") | Where-Object { Test-Path $_ }
           if ($have) { echo "tesseract already staged"; exit 0 }
           gh release download components -R $env:GITHUB_REPOSITORY -p tesseract.zip -D .\_comp --clobber
+          python -m viewer.components verify tesseract.zip .\_comp\tesseract.zip      # 261108-12(U16)
+          if ($LASTEXITCODE -ne 0) { throw "components tesseract.zip SHA-256 불일치" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $z = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path ".\_comp\tesseract.zip"))
           $rooted = ($z.Entries | Where-Object { $_.FullName.Trim() } | ForEach-Object { $_.FullName.Replace('\','/') } |
@@ -268,7 +275,13 @@ jobs:
           $ver = (Select-String -Path "viewer\__init__.py" -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
           & $iscc "/DMyAppVersion=$ver" "installer\PolyPDF.iss"
           $setup = "PolyPDF-Setup-v$ver.exe"
-          if (Test-Path $setup) { echo "setup=$setup" >> $env:GITHUB_OUTPUT; echo "installer built: $setup" }
+          # 261108-13(U24): 앱 안 업데이트는 이 설치본을 받아 조용히 실행한다 — 실행 전에 맞춰 볼 '<설치본>.sha256' 을 함께 올린다.
+          #   없으면 앱은 설치본 길을 쓰지 않고 update zip 길로 간다(해시 없는 설치본은 관리자 권한으로 돌리지 않는다).
+          # (코드 서명 자리 — 261108-14 보류: 서명을 넣으면 ISCC 의 SignTool= 로 설치본을 서명한 **뒤에** 이 해시를 만든다)
+          if (Test-Path $setup) {
+            $h = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLower()
+            "$h  $setup" | Out-File -FilePath "$setup.sha256" -Encoding ascii -NoNewline
+            echo "setup=$setup" >> $env:GITHUB_OUTPUT; echo "setupsha=$setup.sha256" >> $env:GITHUB_OUTPUT; echo "installer built: $setup" }
           else { echo "installer NOT built" }
 
       # 261009-18(마스터 §14.5 U19): 산출물을 셋으로 나눈다 — 한 묶음(1GB)이면 설치 시험에 설치 프로그램(350MB)만 필요해도
@@ -304,12 +317,14 @@ jobs:
           $full = "${{ steps.pkg.outputs.full }}"
           $upd  = "${{ steps.pkg.outputs.upd }}"
           $setup = "${{ steps.inst.outputs.setup }}"
+          $setupsha = "${{ steps.inst.outputs.setupsha }}"
           # 자산 목록(설치본은 빌드된 경우에만 포함)
           # 260628(A): .sha256 자산도 함께 게시 — 없으면 앱이 무결성 검증을 생략한다.
           $assets = @($full, $upd, "${{ steps.pkg.outputs.fullsha }}", "${{ steps.pkg.outputs.updsha }}",
                       "${{ steps.pkg.outputs.manifest }}",   # 260628-12(U8)
                       "${{ steps.pkg.outputs.port }}", "${{ steps.pkg.outputs.portsha }}")   # 261009-22(마스터 §14.9) 휴대용
           if ($setup -and (Test-Path $setup)) { $assets += $setup }
+          if ($setupsha -and (Test-Path $setupsha)) { $assets += $setupsha }     # 261108-13(U24)
           # 이미 릴리스가 있으면 없는 자산만 보충(수동 자산 보존). 없으면 새로 생성.
           # 260628-6: 태그에 -beta/-rc 등 접미사가 있으면 **GitHub prerelease 로 표시**한다.
           #   앱의 업데이트 채널 판정은 '태그 접미사'로 하고 이 플래그는 보지 않으므로

@@ -71,6 +71,10 @@ class UpdateMixin:
             pass
 
         def work():
+            try:
+                updater.cleanup_pending()        # 261108-13: 이미 깐 판의 받아 둔 파일(설치본 340MB) — 배경에서 지운다
+            except Exception:
+                pass
             info = updater.check_latest(repo, channel=channel)
             try:
                 sig.done.emit(info, bool(manual))
@@ -148,11 +152,13 @@ class UpdateMixin:
         """260618-24: 한가할 때 백그라운드로 업데이트 zip 을 미리 받아 둠(설정 폴더 캐시).
         261008-17: 업그레이드 직전 앞쪽 받기(`_ensure_update_zip`)도 이 함수를 쓴다(force=True)."""
         from viewer import updater
-        url = info.get("asset_url")
+        # 261108-13(릴리스 SOT §14.5 U24): 설치 프로그램으로 깐 판은 설치본을 받는다(받은 뒤 조용히 실행), 아니면 종전 zip
+        kind = self._update_kind(info)
+        url = info.get("setup_url") if kind == "setup" else info.get("asset_url")
         ver = info.get("version", "")
         if not url:
             return
-        dest = updater.pending_zip_path()
+        dest = updater.pending_path(kind)
         verf = dest.with_suffix(".ver")
         try:
             if dest.exists() and verf.exists() and verf.read_text(encoding="utf-8").strip() == ver:
@@ -178,7 +184,13 @@ class UpdateMixin:
             out = ""
             try:
                 # 260628(A): 릴리스에 '<자산>.sha256' 이 있으면 받은 zip 을 검증(불일치=폐기).
-                exp = updater.fetch_expected_sha256(info)
+                # 261108-13(U24): 설치본은 해시가 **반드시** 있어야 받는다(관리자 권한으로 돌리는 파일)
+                if kind == "setup":
+                    exp = updater.fetch_sha256(info.get("setup_sha_url", ""))
+                    if not exp:
+                        raise RuntimeError("no setup sha256")
+                else:
+                    exp = updater.fetch_expected_sha256(info)
                 def prog(done, total):
                     try:
                         sig.dl_progress.emit(int(done), int(total))
@@ -214,10 +226,24 @@ class UpdateMixin:
             self._pending_zip = path
             self.status.showMessage(tr("업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다."), 5000)
 
-    def _update_zip_ready(self, info) -> bool:
-        """받아 둔 zip 이 **이 버전** 것인가(.ver 사이드카)."""
+    def _update_kind(self, info) -> str:
+        """261108-13(U24): 'setup' 또는 'zip' — 한 업데이트 안에서는 한 번 정한 길을 그대로 쓴다(레지스트리는 한 번만 읽는다)."""
         from viewer import updater
-        dest = updater.pending_zip_path()
+        key = str((info or {}).get("version", ""))
+        got = getattr(self, "_update_kind_cache", None)
+        if got and got[0] == key:
+            return got[1]
+        try:
+            kind = updater.update_kind(info)
+        except Exception:
+            kind = "zip"
+        self._update_kind_cache = (key, kind)
+        return kind
+
+    def _update_zip_ready(self, info) -> bool:
+        """받아 둔 zip(또는 설치본)이 **이 버전** 것인가(.ver 사이드카)."""
+        from viewer import updater
+        dest = updater.pending_path(self._update_kind(info))
         try:
             return (dest.is_file() and dest.with_suffix(".ver").is_file()
                     and dest.with_suffix(".ver").read_text(encoding="utf-8").strip()
@@ -233,7 +259,7 @@ class UpdateMixin:
         from PyQt6.QtCore import QEventLoop, Qt as _Qt
         from PyQt6.QtWidgets import QProgressDialog, QPushButton
         if self._update_zip_ready(info):
-            self._pending_zip = str(updater.pending_zip_path())
+            self._pending_zip = str(updater.pending_path(self._update_kind(info)))
             return True
         sig = self._update_sig
         loop = QEventLoop()
@@ -316,6 +342,8 @@ class UpdateMixin:
             return False
         z = getattr(self, "_pending_zip", None)
         zp = z if (z and os.path.isfile(z)) else None
+        if self._update_kind(info) == "setup":
+            return self._begin_setup_upgrade(info, zp)
         # 260628(A): 무결성 해시를 설치 도우미에 전달 — 승격(UAC) 인스턴스가 **압축 해제
         #   직전 다시 검증**해, 승인 대기 중 zip 바꿔치기(TOCTOU/권한상승)를 차단한다.
         sha = ""
@@ -340,6 +368,94 @@ class UpdateMixin:
         if ok:
             self._updating = True
         return ok
+
+    def _begin_setup_upgrade(self, info, setup_path) -> bool:
+        """261108-13(릴리스 SOT §14.5 U24): 받아 둔 설치본을 조용히 실행. 그 전에 **다른 PolyPDF 창을 닫는다**(U1·U2 —
+        종전 PowerShell 도우미가 하던 일: 정상 종료 요청 → 최대 60초 기다림 → 남으면 강제로 닫을지 묻기).
+        설치본은 이 앱이 끝나기를 기다린 뒤(/WAITPID) 남은 PolyPDF(도우미)를 닫고 옛 판을 지우고 깐다."""
+        from viewer import updater
+        from viewer.i18n import language
+        self._upgrade_declined = False
+        if not setup_path:
+            return False
+        if not self._close_other_windows():
+            self._upgrade_declined = True
+            QMessageBox.information(self, tr("업데이트"), tr("업데이트를 취소했습니다. 다음에 다시 시도할 수 있습니다."))
+            return False
+        sha = ""
+        try:
+            side = updater.pending_path("setup").with_suffix(".sha256")
+            if side.exists():
+                sha = side.read_text(encoding="utf-8").strip()
+        except Exception:
+            sha = ""
+        try:
+            lang = language()
+        except Exception:
+            lang = ""
+        # 실행 직전 해시(340MB, 약 0.5초+디스크)는 배경에서 — 메인은 이벤트를 돌리며 기다린다(응답성 SOT)
+        import threading
+        from PyQt6.QtCore import QEventLoop
+        res = {"ok": False}
+        loop = QEventLoop()
+
+        def work():
+            try:
+                res["ok"] = bool(updater.apply_setup(setup_path, sha, lang))
+            except Exception:
+                res["ok"] = False
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+        while th.is_alive():
+            QTimer.singleShot(50, loop.quit)
+            loop.exec()
+        ok = res["ok"]
+        if ok:
+            self._updating = True
+        return ok
+
+    _OTHER_WIN_WAIT_S = 60.0                  # 저장 여부 응답 시간 포함(종전 도우미와 같다)
+
+    def _close_other_windows(self) -> bool:
+        """다른 PolyPDF 창에 닫기를 요청하고 기다린다. 다 닫혔거나 사용자가 '강제로 닫고 계속' 이면 True, 취소면 False."""
+        from viewer import updater
+        import time
+        from PyQt6.QtCore import QEventLoop
+        wait_s = float(self._OTHER_WIN_WAIT_S)
+        wins = updater.other_windows()
+        if not wins:
+            return True
+        updater.request_close(wins)
+        from PyQt6.QtWidgets import QProgressDialog
+        dlg = QProgressDialog(tr("다른 PolyPDF 창을 닫는 중... ({n}개)").format(n=len(wins)), "", 0, 0, self)
+        dlg.setWindowTitle(tr("PolyPDF 업데이트"))
+        dlg.setCancelButton(None)
+        dlg.setMinimumDuration(0)
+        dlg.show()
+        loop = QEventLoop()
+        t_end = time.monotonic() + wait_s
+        left = wins
+        try:
+            while time.monotonic() < t_end:
+                left = updater.other_windows()
+                if not left:
+                    break
+                dlg.setLabelText(tr("다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)").format(n=len(left)))
+                QTimer.singleShot(400, loop.quit)
+                loop.exec()
+        finally:
+            dlg.close()
+        if not left:
+            return True
+        ans = QMessageBox.warning(
+            self, tr("PolyPDF 업데이트"),
+            tr("다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
+               "열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 "
+               "업데이트가 실패합니다.\n\n"
+               "[예] 남은 창을 강제로 닫고 계속\n"
+               "[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)").format(n=len(left)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        return ans == QMessageBox.StandardButton.Yes       # 예 → 설치본이 남은 PolyPDF 를 닫는다(PrepareToInstall)
 
     # ── 구성요소 설치 (마스터 §14.5 U16, 261107-11 — 확인·내려받기는 배경, 응답성 SOT §4.4) ──────────
     def _comp_specs(self):

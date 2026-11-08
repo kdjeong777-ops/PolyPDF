@@ -16,6 +16,7 @@ args = [
     "--noconfirm", "--clean",
     "--name", "PolyPDF",
     "--windowed", "--onedir",      # onefile 추출 오류(charset_normalizer __mypyc) 회피·빠른 시작
+    "--noupx",                     # 261108-11: UPX 압축은 백신 오인을 부른다(릴리스 SOT §14.2)
     "--paths", ".",
     "--collect-all", "PyQt6",
     "--collect-all", "fitz",

@@ -10521,8 +10521,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if choice == "update":
                 if not self._begin_upgrade():
                     self._upgrade_requested = False
-                    QMessageBox.warning(self, tr("업그레이드"),
-                                        tr("업그레이드 시작에 실패했습니다. 그냥 종료합니다."))
+                    if not getattr(self, "_upgrade_declined", False):     # 261108-13: 다른 창 강제 닫기를 거절 — 실패 아님
+                        QMessageBox.warning(self, tr("업그레이드"),
+                                            tr("업그레이드 시작에 실패했습니다. 그냥 종료합니다."))
             # "quit" → 그냥 종료(업그레이드 안 함)
 
         # 260628(발표 SOT §9): ★ 종료 전 **녹화 안전 종료**. 이 처리가 없으면 발표 녹화 중

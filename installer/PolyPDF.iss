@@ -40,6 +40,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Program Files 쓰기 → 관리자 권한 필요
 PrivilegesRequired=admin
+; 코드 서명 자리(261108-14 보류, 릴리스 SOT §14.5 U24): 서명을 넣게 되면 여기 SignTool=<이름> 과 ISCC 의 /S<이름>=signtool … 로
+;   설치본·제거 프로그램을 서명한다(release.yml 은 서명한 설치본으로 .sha256 을 만든다).
 WizardStyle=modern
 ChangesAssociations=yes
 ; 261008-27: Inno 표준 언어 창은 쓰지 않는다 — 마법사 언어는 Windows 화면 언어로 고르고(업그레이드는 이전 마법사 언어),
@@ -91,6 +93,8 @@ Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runasoriginaluser ru
 Filename: "{app}\{#MyAppExe}"; Parameters: "--vprinter install"; StatusMsg: "{cm:VPrinterInstalling}"; Flags: runhidden waituntilterminated; Tasks: vprinter
 ; 설치 직후 실행(선택)
 Filename: "{app}\{#MyAppExe}"; Description: "{cm:RunApp}"; Flags: nowait postinstall skipifsilent
+; 261108-13(릴리스 SOT §14.5 U24): 앱 안 업데이트(/SILENT /RELAUNCH=1)는 끝나면 원래 사용자 권한으로 다시 띄운다(관리자로 뜨지 않게)
+Filename: "{app}\{#MyAppExe}"; Flags: nowait runasoriginaluser; Check: ShouldRelaunch
 ; PDF 기본 앱 체크 시 — Windows '기본 앱' 설정 열기(사용자가 .pdf → PolyPDF 선택)
 Filename: "ms-settings:defaultapps"; Description: "{cm:OpenDefaultApps}"; Flags: shellexec postinstall skipifsilent; Tasks: pdfdefault
 
@@ -388,6 +392,35 @@ begin
     gAppLang := ListItem(APP_LANG_CODES, gLangPage.SelectedValueIndex);
 end;
 
+{ 261108-13(릴리스 SOT §14.5 U24): 앱 안 업데이트 — 설치본을 띄운 앱이 끝나기를 기다린다(/WAITPID=<pid>, 최대 60초).
+  기다리지 않으면 아래 taskkill /F 가 닫는 중인 앱(녹화 마무리·설정 저장)을 끊는다. 다른 창은 앱이 먼저 닫고 물었다(U1·U2). }
+function OpenProcess(dwDesiredAccess: Cardinal; bInheritHandle: Boolean; dwProcessId: Cardinal): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(hHandle: THandle; dwMilliseconds: Cardinal): Cardinal;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(hObject: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+procedure WaitForCaller();
+var
+  pid: Integer;
+  h: THandle;
+begin
+  pid := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
+  if pid <= 0 then Exit;
+  h := OpenProcess($00100000, False, pid);                 { SYNCHRONIZE }
+  if h <> 0 then
+  begin
+    WaitForSingleObject(h, 60000);
+    CloseHandle(h);
+  end;
+end;
+
+function ShouldRelaunch(): Boolean;
+begin
+  Result := WizardSilent() and (ExpandConstant('{param:RELAUNCH|0}') = '1');
+end;
+
 { 파일 복사 직전: 실행 중인 앱 종료 → 기존 버전 제거(대기) → 설치 진행. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
@@ -395,6 +428,7 @@ var
   uninstExe, oldDir: String;
 begin
   Result := '';
+  WaitForCaller();
   if gPrevUninst = '' then Exit;
 
   { 1) 실행 중인 PolyPDF 종료(파일 잠금 방지) }

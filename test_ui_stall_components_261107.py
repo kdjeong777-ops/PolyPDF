@@ -81,6 +81,9 @@ def fake_download(url, progress=None, timeout=60.0):
 
 
 comp._download = fake_download
+# 261108-12(U16): 받은 바이트는 고정 SHA-256 과 맞아야 설치된다 — 가짜 바이트의 해시로
+import hashlib
+comp.PINNED_SHA256["ffmpeg.exe"] = hashlib.sha256(b"\0" * (20 * 65536)).hexdigest()
 comp.ffmpeg_installed = lambda: (time.sleep(1.5), (tmp / "ffmpeg.exe").exists())[1]
 comp.tesseract_installed = lambda: False
 

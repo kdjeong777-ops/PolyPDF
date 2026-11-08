@@ -24,6 +24,30 @@ from viewer.i18n import tr
 
 COMPONENTS_TAG = "components"
 
+# 261108-12(릴리스 SOT §14.5 U16): 받은 구성요소는 **고정 SHA-256** 과 맞아야 설치 폴더에 둔다 — 종전에는 확인 없이
+#   ffmpeg.exe 를 두고 숨김 실행했다(기획 '백신 오인·멈춤 줄이기' F4). 릴리스 쪽 값을 믿지 않고 앱에 박는다 —
+#   `components` 릴리스가 바뀌면(make_components.ps1 → gh release upload) 이 값도 함께 고친다(U16).
+#   CI 의 구성요소 마련 단계도 같은 값으로 확인한다(`python -m viewer.components verify <이름> <파일>`).
+PINNED_SHA256 = {
+    "ffmpeg.exe": "228d7a8556258de907fdb55f36850078ebc7680b84ec30d84ea02e99bec1d1eb",
+    "tesseract.zip": "68bad8e98438ed02d800295893d55c9617b08f4cd0b6aef9025286d2f5641364",
+}
+
+
+def sha256_ok(name: str, data: bytes) -> bool:
+    """받은 바이트가 `name` 의 고정 해시와 같은가. 고정 값이 없는 이름은 거절한다."""
+    import hashlib
+    want = PINNED_SHA256.get(name, "")
+    return bool(want) and hashlib.sha256(data or b"").hexdigest() == want
+
+
+def verify_file(name: str, path) -> bool:
+    """파일이 `name` 의 고정 해시와 같은가(CI 확인용)."""
+    try:
+        return sha256_ok(name, Path(path).read_bytes())
+    except OSError:
+        return False
+
 
 def repo_or_default(repo: str = "") -> str:
     repo = (repo or "").strip()
@@ -106,6 +130,8 @@ def install_ffmpeg(repo: str = "", progress=None) -> tuple[bool, str]:
     data = _download(url, progress)
     if data is None:
         return False, tr("다운로드가 취소되었거나 실패했습니다.")
+    if not sha256_ok("ffmpeg.exe", data):                # 261108-12: 맞지 않으면 아무것도 쓰지 않는다
+        return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
     dest = install_dir() / "ffmpeg.exe"
     try:
         tmp = str(dest) + ".part"
@@ -125,6 +151,8 @@ def install_tesseract(repo: str = "", progress=None) -> tuple[bool, str]:
     data = _download(url, progress)
     if data is None:
         return False, tr("다운로드가 취소되었거나 실패했습니다.")
+    if not sha256_ok("tesseract.zip", data):             # 261108-12: 풀기 전에 확인
+        return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
     base = install_dir()
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -143,3 +171,13 @@ def install_tesseract(repo: str = "", progress=None) -> tuple[bool, str]:
     except Exception:
         pass
     return True, str(base / "tesseract")
+
+
+if __name__ == "__main__":                               # CI: python -m viewer.components verify <이름> <파일>
+    import sys
+    if len(sys.argv) == 4 and sys.argv[1] == "verify":
+        ok = verify_file(sys.argv[2], sys.argv[3])
+        print("%s SHA-256 %s" % (sys.argv[2], "ok" if ok else "MISMATCH"))
+        sys.exit(0 if ok else 1)
+    print("usage: python -m viewer.components verify <name> <file>")
+    sys.exit(2)

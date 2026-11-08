@@ -180,13 +180,17 @@ def _to_info(rel):
     if man_url and not is_trusted_asset_url(man_url):
         man_url = ""
     if asset_name:
-        want = (asset_name + ".sha256").lower()
-        for a in assets:
-            if str(a.get("name") or "").lower() == want:
-                u = a.get("browser_download_url")
-                if is_trusted_asset_url(u):
-                    sha_url = u
-                break
+        sha_url = _sha_url_for(assets, asset_name)
+    # 261108-13(U24): 설치 프로그램 `PolyPDF-Setup-v<판>.exe` 와 그 `.sha256` — 둘 다 있어야 설치본 길을 쓴다.
+    setup_url, setup_name, setup_sha_url = "", "", ""
+    for a in assets:
+        n = str(a.get("name") or "")
+        if n.lower().startswith("polypdf-setup-") and n.lower().endswith(".exe"):
+            u = a.get("browser_download_url") or ""
+            if is_trusted_asset_url(u):
+                setup_url, setup_name = u, n
+                setup_sha_url = _sha_url_for(assets, n)
+            break
     return {
         "tag": tag,
         "version": tag.lstrip("vV"),
@@ -195,8 +199,21 @@ def _to_info(rel):
         "asset_name": asset_name,
         "sha_url": sha_url,
         "manifest_url": man_url,        # 260628-12(U8)
+        "setup_url": setup_url,         # 261108-13(U24)
+        "setup_name": setup_name,
+        "setup_sha_url": setup_sha_url,
         "html_url": str(rel.get("html_url") or ""),
     }
+
+
+def _sha_url_for(assets, name: str) -> str:
+    """같은 릴리스의 `<name>.sha256` 자산 주소(신뢰 호스트만). 없으면 ''."""
+    want = (str(name) + ".sha256").lower()
+    for a in assets or []:
+        if str(a.get("name") or "").lower() == want:
+            u = a.get("browser_download_url") or ""
+            return u if is_trusted_asset_url(u) else ""
+    return ""
 
 
 def fetch_manifest(info: dict, timeout: float = 20.0) -> str:
@@ -227,8 +244,12 @@ def fetch_expected_sha256(info: dict, timeout: float = 10.0) -> str:
     """릴리스의 `<자산명>.sha256` 을 읽어 기대 해시(소문자 hex) 반환. 없으면 ''.
 
     파일 형식은 `sha256sum` 관례(`<hex>  <파일명>`)와 hex 단독 모두 허용."""
+    return fetch_sha256((info or {}).get("sha_url") or "", timeout)
+
+
+def fetch_sha256(url: str, timeout: float = 10.0) -> str:
+    """`.sha256` 자산 주소에서 기대 해시(소문자 hex). 없거나 형식이 틀리면 ''."""
     import urllib.request
-    url = (info or {}).get("sha_url") or ""
     if not url or not is_trusted_asset_url(url):
         return ""
     try:
@@ -857,6 +878,199 @@ def apply_update(zip_path: str = None, url: str = "", sha256: str = "",
             ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-WindowStyle", "Hidden", "-File", ps1],
             creationflags=CREATE_NO_WINDOW, close_fds=True)
+        return True
+    except Exception:
+        return False
+
+
+# ── 261108-13(릴리스 SOT §14.5 U24): 설치본으로 올리기 ────────────────────────────────────────────
+#   설치 프로그램으로 깐 PolyPDF 는 앱 안 업데이트도 **받은 설치본(`PolyPDF-Setup-v<판>.exe`)을 조용히 실행**한다.
+#   종전 길(%TEMP% 의 .ps1 을 `powershell -ExecutionPolicy Bypass -WindowStyle Hidden` 으로 — 그 안에서 RunAs 권한 올리기·
+#   다른 PolyPDF 강제 종료·Program Files 에 zip 풀기·HKLM 고치기·스스로 지우기)은 백신 휴리스틱에 가장 걸리는 모양이었다
+#   (기획 '백신 오인·멈춤 줄이기' F3). 설치본은 이 일을 이미 한다 — 권한(PrivilegesRequired=admin)·옛 판 제거 뒤 설치·
+#   Uninstall 키·PolyPDF 언어 유지(다국어 SOT §10.2)·아이콘 캐시. 휴대용(zip) 판과 설치본 자산·해시가 없는 릴리스는 종전 zip 길.
+
+INNO_APP_ID = "{8E7B5A30-6E2C-4E2B-9C1A-1A2B3C4D5E6F}"      # installer/PolyPDF.iss [Setup] AppId
+SETUP_LOG_NAME = "polypdf_update_setup.log"
+
+
+def _norm_dir(p) -> str:
+    try:
+        return os.path.normcase(os.path.abspath(str(p))).rstrip("\\/")
+    except Exception:
+        return ""
+
+
+def setup_install_location() -> str:
+    """설치 프로그램이 남긴 Uninstall 항목의 설치 폴더(HKLM 64·32 보기, HKCU). 없으면 ''."""
+    if os.name != "nt":
+        return ""
+    import winreg
+    sub = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\%s_is1" % INNO_APP_ID
+    for root, view in ((winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_64KEY),
+                       (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_32KEY),
+                       (winreg.HKEY_CURRENT_USER, 0)):
+        try:
+            with winreg.OpenKey(root, sub, 0, winreg.KEY_READ | view) as k:
+                for name in ("InstallLocation", "Inno Setup: App Path"):
+                    try:
+                        v = str(winreg.QueryValueEx(k, name)[0] or "")
+                    except OSError:
+                        v = ""
+                    if v:
+                        return v
+        except OSError:
+            continue
+    return ""
+
+
+def installed_by_setup(inst=None) -> bool:
+    """이 실행본이 설치 프로그램으로 깐 것인가 — Uninstall 항목의 설치 폴더 = 이 폴더, 휴대용 표식 없음."""
+    inst = Path(inst) if inst else install_dir()
+    try:
+        from viewer.settings_store import PORTABLE_MARKER
+    except Exception:
+        PORTABLE_MARKER = "PolyPDF.portable"
+    if (inst / PORTABLE_MARKER).exists():
+        return False
+    loc = setup_install_location()
+    return bool(loc) and _norm_dir(loc) == _norm_dir(inst)
+
+
+def update_kind(info: dict, inst=None) -> str:
+    """'setup'(설치본 조용히 실행) 또는 'zip'(종전 설치 도우미). 설치본·그 해시가 모두 있고 설치본으로 깐 경우만 'setup'."""
+    info = info or {}
+    if info.get("setup_url") and info.get("setup_sha_url") and installed_by_setup(inst):
+        return "setup"
+    return "zip"
+
+
+def pending_path(kind: str) -> Path:
+    """미리 받아 둘 파일 — zip 은 종전 이름, 설치본은 `.exe` 로 끝나야 실행된다."""
+    z = pending_zip_path()
+    return z if kind != "setup" else z.with_name("PolyPDF-update-setup.exe")
+
+
+def cleanup_pending(current: str = "") -> int:
+    """지금 판보다 새롭지 않은 받아 둔 업데이트(zip·설치본과 곁 파일)를 지운다 — 설치본은 340MB 라 남기지 않는다.
+    배경 스레드에서 부른다(파일 지우기 — 응답성 SOT). 지운 파일 수."""
+    cur = current or current_version()
+    n = 0
+    for kind in ("zip", "setup"):
+        p = pending_path(kind)
+        verf = p.with_suffix(".ver")
+        try:
+            ver = verf.read_text(encoding="utf-8").strip() if verf.is_file() else ""
+        except Exception:
+            continue
+        if not ver or is_newer(ver, cur):
+            continue
+        for f in (p, verf, p.with_suffix(".sha256")):
+            try:
+                if f.is_file():
+                    f.unlink()
+                    n += 1
+            except Exception:
+                pass
+    return n
+
+
+def setup_args(lang: str = "", pid: int = 0, log_path: str = "") -> list:
+    """설치본 명령줄(installer/PolyPDF.iss 가 읽는 인자).
+    /SILENT — 마법사 쪽은 없이 진행 창만(설치 중임이 보이고, 오류는 상자로 — 'VERYSILENT+SUPPRESSMSGBOXES' 는 실패해도 아무것도 안 보여
+    앱이 닫힌 채 끝난 까닭을 알 수 없다, U3 거짓 성공 금지). /WAITPID — 이 앱이 끝날 때까지 기다린 뒤 남은 PolyPDF 를 닫는다.
+    /RELAUNCH=1 — 설치가 끝나면 원래 사용자 권한으로 다시 띄운다. /APPLANG — 지금 화면 언어 유지(다국어 SOT §10.2)."""
+    args = ["/SILENT", "/NORESTART", "/CLOSEAPPLICATIONS", "/RELAUNCH=1"]
+    if pid:
+        args.append("/WAITPID=%d" % int(pid))
+    lang = str(lang or "").strip()
+    if lang and re.fullmatch(r"[A-Za-z]{2,3}([_-][A-Za-z0-9]{2,8})?", lang):
+        args.append("/APPLANG=" + lang)
+    if log_path:
+        args.append('/LOG=' + str(log_path))
+    return args
+
+
+def other_windows(exe: str = "") -> dict:
+    """같은 실행 파일로 뜬 **다른** PolyPDF 의 주 창 {pid: [hwnd…]} — 보이는, 주인 없는 최상위 창만
+    (창 없는 띄어쓰기 도우미 `--kiwi-space-server` 는 들지 않는다 — U2). U1·U2 를 설치본 길에서는 앱이 맡는다."""
+    if os.name != "nt":
+        return {}
+    import ctypes
+    from ctypes import wintypes as wt
+    exe = _norm_dir(exe or sys.executable)
+    me = os.getpid()
+    u32 = ctypes.WinDLL("user32", use_last_error=True)
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.restype = wt.HANDLE
+    k32.QueryFullProcessImageNameW.argtypes = [wt.HANDLE, wt.DWORD, wt.LPWSTR, ctypes.POINTER(wt.DWORD)]
+    u32.GetWindow.restype = wt.HWND
+    u32.GetWindow.argtypes = [wt.HWND, wt.UINT]
+    found: dict = {}
+    paths: dict = {}
+
+    def image(pid):
+        if pid not in paths:
+            p = ""
+            h = k32.OpenProcess(0x1000, False, pid)              # PROCESS_QUERY_LIMITED_INFORMATION
+            if h:
+                buf = ctypes.create_unicode_buffer(1024)
+                n = wt.DWORD(1024)
+                if k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+                    p = _norm_dir(buf.value)
+                k32.CloseHandle(h)
+            paths[pid] = p
+        return paths[pid]
+
+    @ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+    def cb(hwnd, _lp):
+        try:
+            if u32.IsWindowVisible(hwnd) and not u32.GetWindow(hwnd, 4):     # GW_OWNER
+                pid = wt.DWORD()
+                u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value and pid.value != me and image(pid.value) == exe:
+                    found.setdefault(pid.value, []).append(hwnd)
+        except Exception:
+            pass
+        return True
+    u32.EnumWindows(cb, 0)
+    return found
+
+
+def request_close(wins: dict) -> None:
+    """각 창에 정상 종료 요청(WM_CLOSE — PowerShell `CloseMainWindow` 과 같은 일). 저장 확인은 그 창이 묻는다."""
+    if os.name != "nt":
+        return
+    import ctypes
+    u32 = ctypes.WinDLL("user32")
+    for hwnds in (wins or {}).values():
+        for h in hwnds:
+            try:
+                u32.PostMessageW(h, 0x0010, 0, 0)                # WM_CLOSE
+            except Exception:
+                pass
+
+
+def _launch_setup(path: str, args: list) -> None:
+    """ShellExecute 로 띄운다 — 설치본이 관리자 권한을 요구해도(UAC) CreateProcess 처럼 740 으로 실패하지 않는다."""
+    os.startfile(path, "open", subprocess.list2cmdline(args))      # noqa: S606 — 해시를 맞춘 설치본만
+
+
+def apply_setup(setup_path: str, sha256: str, lang: str = "") -> bool:
+    """받은 설치본을 **실행 직전에 다시 해시 확인**하고 조용히 실행한다(U7 의 ② 와 같은 자리). 성공이면 True — 호출측이 앱을 닫는다.
+    해시가 없거나 다르면 실행하지 않는다(해시 없는 설치본은 관리자 권한으로 돌리지 않는다)."""
+    want = str(sha256 or "").strip().lower()
+    if not (setup_path and os.path.isfile(setup_path) and len(want) == 64):
+        return False
+    if sha256_file(setup_path) != want:
+        try:
+            os.remove(setup_path)
+        except Exception:
+            pass
+        return False
+    log = os.path.join(tempfile.gettempdir(), SETUP_LOG_NAME)
+    try:
+        _launch_setup(setup_path, setup_args(lang, os.getpid(), log))
         return True
     except Exception:
         return False

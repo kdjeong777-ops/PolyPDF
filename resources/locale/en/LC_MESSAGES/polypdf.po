@@ -3378,6 +3378,10 @@ msgid "다운로드가 취소되었거나 실패했습니다."
 msgstr "Download was canceled or failed."
 
 #: viewer/components.py
+msgid "받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다."
+msgstr "The downloaded file is damaged or has been altered (integrity check failed). It was not installed."
+
+#: viewer/components.py
 msgid "릴리스에서 tesseract.zip 자산을 찾지 못했습니다."
 msgstr "tesseract.zip asset not found in the release."
 
@@ -7033,6 +7037,10 @@ msgstr "Checking for updates…"
 #: viewer/update_controller.py
 msgid "업데이트 다운로드 완료 — 종료 시 설치할 수 있습니다."
 msgstr "Update downloaded — it can be installed when you quit."
+
+#: viewer/update_controller.py
+msgid "업데이트를 취소했습니다. 다음에 다시 시도할 수 있습니다."
+msgstr "The update was canceled. You can try again later."
 
 #: viewer/update_controller.py
 msgid "녹화 (ffmpeg)"

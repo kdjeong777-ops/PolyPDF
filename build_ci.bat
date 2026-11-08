@@ -168,10 +168,13 @@ if errorlevel 1 ( echo [ERROR] installer\languages.iss 생성 실패. & exit /b 
 REM 261010-21(보안 SOT §8): 전자서명 — pyHanko·certvalidator 는 데이터 파일(기본 글꼴·스키마)까지, winrt 는 하위 모듈 전부
 REM   (Windows Hello). 모두 viewer 밖이라 수동 등재. 처음 서명·검증할 때 배경에서 import 한다(시작 시간 영향 없음).
 REM 261010-30(보안 SOT §3.8): 공동인증서 SEED — cryptography 의 decrepit 묶음은 함수 안에서 가져오므로 따로 적는다
+REM 261108-11(릴리스 SOT §14.2): --noupx — UPX 압축 실행 파일은 백신 휴리스틱이 악성으로 오인하기 쉽다.
+REM   PATH 에 upx 가 있으면 PyInstaller 가 저절로 압축하므로 명시해 끈다(빌드 끝에 check_no_upx.py 가 확인).
 python -m PyInstaller ^
     --name "PolyPDF" ^
     --windowed ^
     --onedir ^
+    --noupx ^
     --paths "%cd%" ^
     --collect-all PyQt6 ^
     --hidden-import PyQt6.QtMultimedia ^
@@ -227,6 +230,9 @@ REM 261014-27(마스터 §14.5 U23): 쓰지 않는 Qt 모듈(Quick·QML·3D·Des
 REM   남은 모든 .dll/.pyd 의 가져오기가 풀리는지 확인 — 못 풀리면 빌드 실패.
 python scripts\prune_dist.py dist\PolyPDF
 if errorlevel 1 ( echo [ERROR] prune_dist: 뺀 DLL 을 부르는 파일이 남았습니다. & exit /b 1 )
+REM 261108-11(릴리스 SOT §14.2): exe·dll·pyd 가 UPX 로 압축되지 않았는지(PE 구획 이름 UPX*) — 있으면 빌드 실패.
+python scripts\check_no_upx.py dist\PolyPDF
+if errorlevel 1 ( echo [ERROR] UPX 로 압축된 실행 파일이 있습니다. & exit /b 1 )
 
 REM 260603: build\ 정리 — build\PolyPDF\PolyPDF.exe(불완전 부트로더, python DLL 누락) 오실행 방지.
 REM   실제 실행 파일은 dist\PolyPDF\PolyPDF.exe 하나뿐이 되도록.
