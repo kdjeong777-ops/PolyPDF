@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-09 00:46+0900\n"
+"POT-Creation-Date: 2026-11-09 01:04+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -545,11 +545,11 @@ msgstr "Bookmark generation failed"
 msgid "늘린 자리를 읽는 중…"
 msgstr "Reading the extended area…"
 
-#: viewer/app.py viewer/study/ocr.py
+#: viewer/app.py viewer/study/ocr.py viewer/widgets/voice_settings.py
 msgid "한국어"
 msgstr "Korean"
 
-#: viewer/app.py viewer/study/ocr.py
+#: viewer/app.py viewer/study/ocr.py viewer/widgets/voice_settings.py
 msgid "영어"
 msgstr "English"
 
@@ -697,6 +697,7 @@ msgid "다단 생성"
 msgstr "Create N-up PDF"
 
 #: viewer/app.py viewer/study_controller.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/voice_settings.py
 msgid "준비 중…"
 msgstr "Preparing…"
 
@@ -6735,6 +6736,11 @@ msgstr "Claude Sonnet 4.6 (balanced · lower cost)"
 msgid "Claude Haiku 4.5 (저가·간단)"
 msgstr "Claude Haiku 4.5 (low cost · simple)"
 
+#: viewer/study/tts_engine.py viewer/widgets/voice_settings.py
+#, python-brace-format
+msgid "목소리 {n}"
+msgstr "Voice {n}"
+
 #: viewer/study_controller.py
 msgid "mp3 저장 폴더 선택"
 msgstr "Choose mp3 Save Folder"
@@ -10750,10 +10756,6 @@ msgid "재생 구간 / 빠르기 / 성우"
 msgstr "Range / speed / voice"
 
 #: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
-msgid "성우"
-msgstr "Voice"
-
-#: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
 msgid "자동(언어별)"
 msgstr "Automatic (by language)"
 
@@ -10772,6 +10774,10 @@ msgstr "The natural voice is not available, so the Windows default voice is used
 #: viewer/widgets/read_aloud.py
 msgid "본문 읽기/정지 (머리말·표·수식·그림 제외)"
 msgstr "Read body aloud / stop (excluding headers, tables, formulas, figures)"
+
+#: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
+msgid "성우"
+msgstr "Voice"
 
 #: viewer/widgets/read_aloud.py
 msgid "읽기 완료"
@@ -14340,6 +14346,18 @@ msgid "한국어 문장 속 긴 영어 구절은 영어로 읽기"
 msgstr "Read long English phrases in Korean sentences in English"
 
 #: viewer/widgets/voice_settings.py
+msgid "자연 음성 목소리 — 이름 붙이기·미리 듣기"
+msgstr "Natural voices — names and preview"
+
+#: viewer/widgets/voice_settings.py
+msgid "Windows 음성 — 쓰지 않을 성우 끄기·미리 듣기"
+msgstr "Windows voices — turn off voices you don't use, and preview"
+
+#: viewer/widgets/voice_settings.py
+msgid "미리 듣기 글"
+msgstr "Preview text"
+
+#: viewer/widgets/voice_settings.py
 msgid "자동 (자연 음성이 있으면 그것)"
 msgstr "Automatic (natural voice if installed)"
 
@@ -14358,6 +14376,26 @@ msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRA
 msgstr "The natural voice is AI-generated sound (model license OpenRAIL-M — see the notice in About). Voice, quality and the two options above apply only to the natural voice."
 
 #: viewer/widgets/voice_settings.py
+msgid "이름 (비우면 '목소리 N')"
+msgstr "Name (empty = 'Voice N')"
+
+#: viewer/widgets/voice_settings.py
+msgid "들어 보기"
+msgstr "Preview"
+
+#: viewer/widgets/voice_settings.py
+msgid "사용"
+msgstr "Use"
+
+#: viewer/widgets/voice_settings.py
+msgid "끈 성우는 읽기 메뉴의 성우 목록과 언어별 기본 음성에서 빠집니다. 시스템에 설치된 음성 자체는 지우지 않습니다(Windows 설정 › 시간 및 언어 › 음성). 한 언어의 성우를 모두 끄면 자연 음성이 없거나 실패할 때만 그중 하나로 읽습니다."
+msgstr "Voices you turn off are removed from the reading menu's voice list and from the default voice for each language. The voices installed in Windows are not deleted (Windows Settings › Time & language › Speech). If you turn off every voice for a language, one of them is still used when the natural voice is missing or fails."
+
+#: viewer/widgets/voice_settings.py
+msgid "자연 음성은 글 전체를, Windows 성우는 그 성우 언어의 줄만 읽습니다. 지금 고른 음질로 읽습니다."
+msgstr "The natural voice reads the whole text; a Windows voice reads only the lines in its language. The quality chosen above is used."
+
+#: viewer/widgets/voice_settings.py
 msgid "자연 음성 설치됨 ✓"
 msgstr "Natural voice installed ✓"
 
@@ -14366,9 +14404,8 @@ msgid "자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습�
 msgstr "Natural voice not installed — the Windows default voice is used for now"
 
 #: viewer/widgets/voice_settings.py
-#, python-brace-format
-msgid "목소리 {n}"
-msgstr "Voice {n}"
+msgid "재생 중"
+msgstr "Playing"
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "가상 프린터 (PolyPDF)"
@@ -15722,4 +15759,7 @@ msgstr "Getting Started"
 #~ msgstr ""
 #~ "There is no readable text (scanned/image document).\n"
 #~ "Read it with OCR?"
+
+#~ msgid "쓰기"
+#~ msgstr "Text"
 

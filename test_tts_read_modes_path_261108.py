@@ -74,6 +74,8 @@ try:
     d.save(src); d.close()
 
     from viewer.app import MainWindow
+    from viewer.study import tts_engine as _te
+    _te._ready = False          # 261108-33: 개발 폴더에 자연 음성이 설치돼 있어도 이 검사는 가짜 SAPI 로(엔진 고르기는 test_tts_neural)
     from viewer.history import HistoryItem
     mw = MainWindow(); mw.resize(1800, 1000); mw.show(); app.processEvents()
     tts = FakeTts()

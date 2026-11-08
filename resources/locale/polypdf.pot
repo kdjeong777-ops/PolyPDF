@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-09 00:46+0900\n"
+"POT-Creation-Date: 2026-11-09 01:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -545,11 +545,11 @@ msgstr ""
 msgid "늘린 자리를 읽는 중…"
 msgstr ""
 
-#: viewer/app.py viewer/study/ocr.py
+#: viewer/app.py viewer/study/ocr.py viewer/widgets/voice_settings.py
 msgid "한국어"
 msgstr ""
 
-#: viewer/app.py viewer/study/ocr.py
+#: viewer/app.py viewer/study/ocr.py viewer/widgets/voice_settings.py
 msgid "영어"
 msgstr ""
 
@@ -693,6 +693,7 @@ msgid "다단 생성"
 msgstr ""
 
 #: viewer/app.py viewer/study_controller.py viewer/widgets/settings_dialog.py
+#: viewer/widgets/voice_settings.py
 msgid "준비 중…"
 msgstr ""
 
@@ -6554,6 +6555,11 @@ msgstr ""
 msgid "Claude Haiku 4.5 (저가·간단)"
 msgstr ""
 
+#: viewer/study/tts_engine.py viewer/widgets/voice_settings.py
+#, python-brace-format
+msgid "목소리 {n}"
+msgstr ""
+
 #: viewer/study_controller.py
 msgid "mp3 저장 폴더 선택"
 msgstr ""
@@ -10444,10 +10450,6 @@ msgid "재생 구간 / 빠르기 / 성우"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
-msgid "성우"
-msgstr ""
-
-#: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
 msgid "자동(언어별)"
 msgstr ""
 
@@ -10465,6 +10467,10 @@ msgstr ""
 
 #: viewer/widgets/read_aloud.py
 msgid "본문 읽기/정지 (머리말·표·수식·그림 제외)"
+msgstr ""
+
+#: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
+msgid "성우"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py
@@ -13998,6 +14004,18 @@ msgid "한국어 문장 속 긴 영어 구절은 영어로 읽기"
 msgstr ""
 
 #: viewer/widgets/voice_settings.py
+msgid "자연 음성 목소리 — 이름 붙이기·미리 듣기"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "Windows 음성 — 쓰지 않을 성우 끄기·미리 듣기"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "미리 듣기 글"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
 msgid "자동 (자연 음성이 있으면 그것)"
 msgstr ""
 
@@ -14014,6 +14032,26 @@ msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRA
 msgstr ""
 
 #: viewer/widgets/voice_settings.py
+msgid "이름 (비우면 '목소리 N')"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "들어 보기"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "사용"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "끈 성우는 읽기 메뉴의 성우 목록과 언어별 기본 음성에서 빠집니다. 시스템에 설치된 음성 자체는 지우지 않습니다(Windows 설정 › 시간 및 언어 › 음성). 한 언어의 성우를 모두 끄면 자연 음성이 없거나 실패할 때만 그중 하나로 읽습니다."
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "자연 음성은 글 전체를, Windows 성우는 그 성우 언어의 줄만 읽습니다. 지금 고른 음질로 읽습니다."
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
 msgid "자연 음성 설치됨 ✓"
 msgstr ""
 
@@ -14022,8 +14060,7 @@ msgid "자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습�
 msgstr ""
 
 #: viewer/widgets/voice_settings.py
-#, python-brace-format
-msgid "목소리 {n}"
+msgid "재생 중"
 msgstr ""
 
 #: viewer/widgets/vprinter_dialog.py

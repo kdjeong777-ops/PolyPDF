@@ -417,18 +417,18 @@ class NeuralReader(_QObject):
         from PyQt6.QtCore import QMetaObject, Qt
         QMetaObject.invokeMethod(self._worker, "warm", Qt.ConnectionType.QueuedConnection)
 
-    def _key(self, text, lang):
-        return (text, lang, self.sid, self.steps, self.speed)
+    def _key(self, text, lang, sid=None):
+        return (text, lang, self.sid if sid is None else int(sid), self.steps, self.speed)
 
-    def _request(self, text, lang):
-        k = self._key(text, lang)
+    def _request(self, text, lang, sid=None):
+        k = self._key(text, lang, sid)
         if k in self._cache or k in self._pending:
             return k
         self._ensure_thread()
         self._pending.add(k)
         from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
         QMetaObject.invokeMethod(self._worker, "request", Qt.ConnectionType.QueuedConnection,
-                                 Q_ARG(object, (k, text, lang, self.sid, self.steps, self.speed)))
+                                 Q_ARG(object, (k, text, lang, k[2], self.steps, self.speed)))
         return k
 
     def _on_ready(self, key, pcm):
@@ -471,7 +471,8 @@ class NeuralReader(_QObject):
             self._fed += 1
 
     # --- SAPI 모양 ---
-    def speak_reading(self, text: str) -> bool:
+    def speak_reading(self, text: str, sid: int | None = None) -> bool:
+        """sid 를 주면 그 목소리로(환경설정 미리 듣기 — 읽기 목소리는 그대로, 261108-33)."""
         if not (text or "").strip() or not self.available():
             return False
         if self._player is not None and self._player.busy():
@@ -482,7 +483,7 @@ class NeuralReader(_QObject):
             t0, lg0 = ps[0]
             ps = [(x, lg0) for x in split_first(t0)] + ps[1:]
         self._first = False
-        self._queue = [self._request(t, lg) for t, lg in ps]
+        self._queue = [self._request(t, lg, sid) for t, lg in ps]
         self._fed = 0
         self._feed()
         return bool(self._queue)

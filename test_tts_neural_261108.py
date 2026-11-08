@@ -130,9 +130,9 @@ class FakeSynth:
 if tts_engine is not None:
     print("=== (A) 엔진 고르기 ===")
     nc = tts_engine.normalize_cfg
-    chk(nc(None) == {"engine": "auto", "sid": 0, "quality": "fast", "normalize": True, "split_lang": True},
+    chk({k: nc(None)[k] for k in ("engine", "sid", "quality", "normalize", "split_lang")} == {"engine": "auto", "sid": 0, "quality": "fast", "normalize": True, "split_lang": True},
         "(A) 기본값 자동·목소리 1·빠름·숫자 풀기 켬·영어 구절 나눔 켬", str(nc(None)))
-    chk(nc({"engine": "x", "sid": 42, "quality": "?"}) == {"engine": "auto", "sid": 9, "quality": "fast",
+    chk({k: nc({"engine": "x", "sid": 42, "quality": "?"})[k] for k in ("engine", "sid", "quality", "normalize", "split_lang")} == {"engine": "auto", "sid": 9, "quality": "fast",
                                                            "normalize": True, "split_lang": True},
         "(A) 틀린 값은 기본·범위로", str(nc({"engine": "x", "sid": 42, "quality": "?"})))
 
@@ -160,7 +160,7 @@ if tts_engine is not None:
             "(A) 자동이면 모델이 있을 때 자연 음성(목소리·음질 반영)", repr(r))
         chk(tts_engine.reader_for(mw) is r, "(A) 같은 창은 같은 자연 음성 읽개를 다시 쓴다")
         ex = tts_engine.export_choice(mw)
-        chk(ex == {"neural": True, "sid": 3, "quality": "high", "normalize": True, "split_lang": True},
+        chk({k: ex[k] for k in ("neural", "sid", "quality", "normalize", "split_lang")} == {"neural": True, "sid": 3, "quality": "high", "normalize": True, "split_lang": True},
             "(A) mp3 에 넘길 값", str(ex))
         mw._prefs["tts_voice"].update(normalize=False, split_lang=False)
         r2 = tts_engine.reader_for(mw)
@@ -395,7 +395,7 @@ if tts_engine is not None:
     dlg.cmb_tts_engine.setCurrentIndex(dlg.cmb_tts_engine.findData("neural"))
     dlg.cmb_tts_voice.setCurrentIndex(7)
     rp = dlg.result_prefs()
-    chk(rp.get("tts_voice") == {"engine": "neural", "sid": 7, "quality": "high", "normalize": True, "split_lang": True},
+    chk({k: rp.get("tts_voice", {}).get(k) for k in ("engine", "sid", "quality", "normalize", "split_lang")} == {"engine": "neural", "sid": 7, "quality": "high", "normalize": True, "split_lang": True},
         "(F) 고친 값이 결과로", str(rp.get("tts_voice")))
     dlg.chk_tts_normalize.setChecked(False)
     chk(dlg.result_prefs()["tts_voice"]["normalize"] is False, "(F) '숫자·단위 풀어 읽기' 끄기가 결과로")

@@ -221,6 +221,9 @@ class StudyMixin:
         if self._tts is None:
             from viewer.study.tts import get_tts
             self._tts = get_tts()
+        # 261108-33(영상·음성 SOT §1.10 '성우 숨김'): 환경설정에서 '쓰지 않음' 으로 둔 Windows 성우는 목록·기본 음성에서 뺀다
+        from viewer.study import tts_engine as _te
+        _te.apply_sapi_hidden(self, self._tts)
         return self._tts
 
     def _detect_study_lang(self, path: Path) -> str:

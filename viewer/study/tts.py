@@ -11,7 +11,7 @@ _PURGE = 2          # SVSFPurgeBeforeSpeak — 이전 발화 중단
 _IS_SPEAKING = 2    # SpeechRunState.SRSEIsSpeaking
 
 
-def enumerate_voices(voice, wc):
+def enumerate_voices(voice, wc, hidden=()):
     """음성 목록 한 길 (영상·음성 SOT §1.1·§1.8 의 4, 261108-25) — 화면 읽기·mp3 저장이 함께 쓴다.
 
     ① 클래식 SAPI5(`GetVoices`) ② OneCore(레지스트리 토큰). 표시명에서 ' Desktop' 을 뺀 기준명으로
@@ -44,7 +44,28 @@ def enumerate_voices(voice, wc):
     for t in voice.GetVoices():
         _add(t)
     TTS._add_onecore_voices(wc, _add)
+    if hidden:
+        tok = pick_tokens(by_name, hidden)
     return by_name, tok
+
+
+def _lang_of(t) -> str:
+    try:
+        return (t.GetAttribute("Language") or "").lower()
+    except Exception:
+        return ""
+
+
+def pick_tokens(by_name: dict, hidden=()) -> dict:
+    """261108-33(영상·음성 SOT §1.10 '성우 숨김'): 언어별 기본 음성 — 숨긴 성우는 건너뛴다. 그 언어 음성을 다 숨겼으면
+    숨긴 것 중 첫째로 물러선다(소리가 안 나는 것보다 낫다 — 자연 음성이 없거나 실패할 때의 대체)."""
+    hidden = set(hidden or ())
+    out = {}
+    for key, code in (("kor", "412"), ("eng", "409")):
+        cands = [(n, t) for n, t in by_name.items() if code in _lang_of(t)]
+        vis = [t for n, t in cands if n not in hidden]
+        out[key] = vis[0] if vis else (cands[0][1] if cands else None)
+    return out
 
 
 class TTS:
@@ -77,7 +98,7 @@ class TTS:
             self._voice = win32com.client.Dispatch("SAPI.SpVoice")
             # 1) 클래식 SAPI5 음성 2) 260618-31: OneCore(최신·추가 설치) 음성 — 클래식 GetVoices 에는
             #    안 나오는 음성(예: Mark, Windows '음성' 설정에서 추가한 언어 음성). 한 길: enumerate_voices.
-            self._by_name, self._tok = enumerate_voices(self._voice, win32com.client)
+            self._by_name, self._tok = enumerate_voices(self._voice, win32com.client, getattr(self, "_hidden", ()))
             self._ok = True
         except Exception:
             self._ok = False
@@ -111,8 +132,33 @@ class TTS:
             pass
 
     def voice_names(self) -> list[str]:
+        """고를 수 있는 성우 — 숨긴 것은 뺀다(261108-33)."""
+        self._ensure()
+        hid = getattr(self, "_hidden", set())
+        return [n for n in self._by_name.keys() if n not in hid]
+
+    def all_voice_names(self) -> list[str]:
+        """설치된 성우 전부(환경설정 '쓰지 않음' 표가 쓴다)."""
         self._ensure()
         return list(self._by_name.keys())
+
+    def voice_lang(self, name: str) -> str:
+        """'ko' / 'en' / '' — 미리 듣기 글을 고르는 데 쓴다."""
+        t = self._by_name.get(name)
+        code = _lang_of(t) if t is not None else ""
+        return "ko" if "412" in code else ("en" if code else "")
+
+    def set_hidden(self, names) -> None:
+        """261108-33: 환경설정에서 '쓰지 않음' 으로 둔 성우 — 목록에서 빼고 언어별 기본 음성으로도 쓰지 않는다
+        (그 언어를 다 숨겼으면 대체로 하나는 쓴다 — `pick_tokens`). 시스템 음성 자체를 지우는 것은 앱이 할 일이 아니다."""
+        new = set(names or ())
+        if new == getattr(self, "_hidden", set()):
+            return
+        self._hidden = new
+        if self._ok:
+            self._tok = pick_tokens(self._by_name, new)
+            if self._forced_name in new:
+                self._forced, self._forced_name = None, None
 
     def set_voice_name(self, name: Optional[str]) -> None:
         """성우 고정(None 이면 언어 자동)."""

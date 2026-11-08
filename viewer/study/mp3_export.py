@@ -24,11 +24,11 @@ def unique_dir(base: Path) -> Path:
         i += 1
 
 
-def _voice_tokens(voice):
+def _voice_tokens(voice, hidden=()):
     """언어별 기본 음성 — 화면 읽기와 같은 목록(클래식 + OneCore, `tts.enumerate_voices`)."""
     import win32com.client
     from viewer.study.tts import enumerate_voices
-    return enumerate_voices(voice, win32com.client)[1]
+    return enumerate_voices(voice, win32com.client, hidden)[1]     # 261108-33: '쓰지 않음' 성우는 건너뛴다
 
 
 def _find_voice(voice, name):
@@ -118,14 +118,14 @@ def id3_comment(text: str) -> bytes:
 GENERATED_NOTE = "생성 음성(AI 합성): Supertonic 3 — OpenRAIL-M"
 
 
-def _make_voice(rate: int):
+def _make_voice(rate: int, hidden=()):
     import win32com.client
     voice = win32com.client.Dispatch("SAPI.SpVoice")
     try:
         voice.Rate = max(-10, min(10, int(rate)))
     except Exception:
         pass
-    return voice, _voice_tokens(voice)
+    return voice, _voice_tokens(voice, hidden)
 
 
 def synth_to_mp3(segments, mp3_path, *, rate: int = 0, voice_name: str = None,
@@ -144,7 +144,7 @@ def synth_to_mp3(segments, mp3_path, *, rate: int = 0, voice_name: str = None,
         pcm, lrc, sr = _neural_segments_pcm(neural, segments, sid=o.get("sid", 0),
                                             steps=o.get("steps", 4), speed=o.get("speed", 1.0),
                                             normalize=o.get("normalize"), split_lang=o.get("split_lang"))
-        tag = id3_comment(GENERATED_NOTE)
+        tag = id3_comment(GENERATED_NOTE + ((" — " + o["voice_label"]) if o.get("voice_label") else ""))   # 261108-33: 목소리 이름
     else:
         if voice is None:
             voice, tok = _make_voice(rate)

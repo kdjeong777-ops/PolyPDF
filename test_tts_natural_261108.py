@@ -275,6 +275,8 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QObject
 app = QApplication.instance() or QApplication([])
 from viewer.widgets.read_aloud import ReadAloud
+from viewer.study import tts_engine as _te
+_te._ready = False          # 261108-33: 개발 폴더에 자연 음성이 설치돼 있어도 이 검사는 가짜 SAPI 로(엔진 고르기는 test_tts_neural)
 
 
 class _FakeTts:

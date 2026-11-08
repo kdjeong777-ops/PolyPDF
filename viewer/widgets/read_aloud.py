@@ -785,26 +785,52 @@ def make_read_button(controller: ReadAloud, parent=None):
         g_r.addAction(a); rm.addAction(a)
     # 성우 — 메뉴를 처음 열 때 채운다(261014-26, 마스터 §5 시작 import): 성우 목록은 SAPI(COM)를 띄워야 해서
     #   창을 만들 때 부르면 win32com 싣기·COM 생성이 시작 시간에 들어간다(두 창 단추라 두 번).
-    built = {"v": False}
+    # 261108-33(영상·음성 SOT §1.10 '성우', 사용자 보고 "본문 읽은데서는 성우설정의 변경이 없었고, 환경설정에는 자연어엔진
+    #   선택시 성우1 등으로 되어 있었어"): 종전에는 처음 열 때 SAPI 목록을 한 번 채우고 끝이라, 자연 음성을 쓰는 동안에도
+    #   Windows 성우만 보였다. 이제 **열 때마다 엔진에 맞게** 다시 채운다 — 자연 음성이면 목소리 1~10(사용자 이름),
+    #   고르면 설정 `tts_voice.sid`(환경설정 '목소리' 와 같은 값 하나). SAPI 면 숨기지 않은 Windows 성우.
+    holder = {"m": None}
 
     def build_voices():
-        if built["v"]:
-            return
-        built["v"] = True
+        from viewer.study import tts_engine
+        mw = controller.mw
+        cfg = tts_engine.cfg_of(mw)
+        neural = tts_engine.wants_neural(cfg)
         voices = []
-        try:
-            voices = controller.mw._study_get_tts().voice_names()
-        except Exception:
-            pass
-        if not voices:
+        if not neural:
+            try:
+                voices = mw._study_get_tts().voice_names()
+            except Exception:
+                voices = []
+        vm = holder["m"]
+        if not neural and not voices:
+            if vm is not None:
+                vm.menuAction().setVisible(False)
             return
-        vm = menu.addMenu(tr("성우"))
+        if vm is None:
+            vm = menu.addMenu(tr("성우"))
+            vm.setObjectName("menuReadVoices")
+            holder["m"] = vm
+        vm.menuAction().setVisible(True)
+        vm.clear()
         g_v = QActionGroup(vm); g_v.setExclusive(True)
-        a0 = QAction(tr("자동(언어별)"), vm, checkable=True); a0.setChecked(True)
+        if neural:
+            for sid in range(tts_engine.SPEAKERS):
+                a = QAction(tts_engine.voice_label(cfg, sid), vm, checkable=True)
+                a.setData(("neural", sid))
+                a.setChecked(sid == cfg["sid"])
+                a.triggered.connect(lambda _c, s=sid: tts_engine.set_sid(mw, s))
+                g_v.addAction(a); vm.addAction(a)
+            return
+        a0 = QAction(tr("자동(언어별)"), vm, checkable=True)
+        a0.setData(("sapi", None))
+        a0.setChecked(not controller.voice_name)
         a0.triggered.connect(lambda: controller.set_voice(None))
         g_v.addAction(a0); vm.addAction(a0)
         for name in voices:
             a = QAction(name, vm, checkable=True)
+            a.setData(("sapi", name))
+            a.setChecked(controller.voice_name == name)
             a.triggered.connect(lambda _c, n=name: controller.set_voice(n))
             g_v.addAction(a); vm.addAction(a)
     menu.aboutToShow.connect(build_voices)
@@ -816,12 +842,7 @@ def make_read_button(controller: ReadAloud, parent=None):
             a.setChecked(controller.mode == label)
         for a, (_l, rate) in zip(g_r.actions(), RATES):
             a.setChecked(controller.rate == rate)
-        vm = next((x.menu() for x in menu.actions() if x.menu() is not None and x.menu() is not rm), None)
-        if vm is not None:
-            want = controller.voice_name
-            for a in vm.actions():
-                if a.isCheckable():
-                    a.setChecked((a.text() == want) if want else (a is vm.actions()[0]))
+        # 성우 체크는 build_voices 가 열 때마다 엔진에 맞게 다시 채우며 맞춘다(261108-33)
     menu.aboutToShow.connect(sync_checks)
 
     def on_mode_text(*_):

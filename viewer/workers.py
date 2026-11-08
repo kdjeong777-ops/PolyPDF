@@ -1346,6 +1346,7 @@ class StudyMp3Worker(QObject):
             return syn, {"sid": int(self.tts_cfg.get("sid", 0)),
                          "steps": neural_tts.STEPS.get(self.tts_cfg.get("quality"), neural_tts.STEPS["fast"]),
                          "speed": neural_tts.rate_to_speed(self.rate),
+                         "voice_label": self.tts_cfg.get("voice_label", ""),
                          "normalize": self.tts_cfg.get("normalize"), "split_lang": self.tts_cfg.get("split_lang")}
         except Exception:
             return None, {}
@@ -1359,7 +1360,7 @@ class StudyMp3Worker(QObject):
             from viewer.study.mp3_export import synth_to_mp3, _make_voice, _find_voice
             import pythoncom, win32com.client
             pythoncom.CoInitialize()
-            voice, tok = _make_voice(self.rate)        # 1회 생성·재사용(빠름)
+            voice, tok = _make_voice(self.rate, self.tts_cfg.get("hidden_sapi") or ())   # 1회 생성·재사용 · 261108-33 숨긴 성우 빼기
             # 261108-25(영상·음성 SOT §1.8 의 4): 화면 읽기와 같은 성우 목록(OneCore 포함)에서 찾는다
             forced = _find_voice(voice, self.voice_name)
             neural, nopts = self._neural()
