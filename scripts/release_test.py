@@ -235,6 +235,27 @@ def exe_for_install(a, out: Path, rec: dict) -> Path:
     return exe
 
 
+def exe_skip_install(out: Path, rec: dict, prev: str = None) -> Path:
+    """261108-20 덧붙임(사용자 결정 '설치본 그대로 재기', 릴리스 SOT §3.1): 설치를 건너뛰고 **지금 설치된** exe 를 잰다 —
+    원격 접속이라 UAC(보안 화면)에 답할 수 없어 다시 잴 때마다 설치 단계에서 멈췄다(_261108-2013, 126초 뒤 종료 코드 '?').
+    설치 정보·앱 파일 버전이 둘 다 요구 판(소스 버전)일 때만 — 아니면 멈춘다. 설치한 시험(이전 결과 폴더)을 기록한다."""
+    want = source_version()
+    dv, exe = installed_info()
+    av = exe_version(exe)
+    if dv != want or av != want:
+        raise SystemExit("--skip-install: 설치된 판(설치 정보 %s · 앱 파일 %s)이 요구 판 %s 가 아니다 — 설치부터 한다"
+                         % (dv or "없음", av or "없음", want))
+    if not prev:                                   # 같은 판을 설치한 가장 최근 설치 시험(setup.log 가 있는 것)
+        cands = sorted((d for d in REVIEW.glob("install_%s_*" % want) if d != out and (d / "setup.log").exists()),
+                       key=lambda d: d.name)
+        prev = str(cands[-1]) if cands else ""
+    rec["install"] = {"exit": "건너뜀", "sec": 0, "display_version": dv, "app_version": av, "setup": "(건너뜀)",
+                      "skipped": True, "installed_by": prev or None}
+    rec["before"] = {"display_version": dv, "app_version": av}
+    say("설치 건너뜀 — 설치된 판 %s 를 잰다(설치는 %s)" % (want, prev or "알 수 없음"))
+    return exe
+
+
 # ── 시험 계획 — 등급 판정(릴리스 SOT §3·§4, 261010-4) ─────────────
 # 판정 경로의 **정확한 목록은 여기 한 곳**이 소유한다 — SOT 는 까닭과 영역만 적고 이 상수를 가리킨다.
 # 261017-18: 가상 프린터 설치 도구(viewer/vprinter.py — 설치 끝에 설치 프로그램이 부른다)·동봉 파일(printer/)도 설치 경로다
@@ -761,7 +782,11 @@ def stall_tops(runs: Path, name: str) -> list:
 def write_summary(out: Path, rec: dict):
     L = ["# %s 시험 — %s (%s)" % ("빌드" if rec["mode"] == "build" else "설치", rec["version"], rec["source"]), "",
          "- 커밋 `%s` · exe `%s`" % (rec["commit"][:7], rec["exe"])]
-    if "install" in rec:
+    if rec.get("install", {}).get("skipped"):
+        i = rec["install"]
+        L.append("- 설치 건너뜀 — 설치는 `%s` · 설치 정보 %s · 앱 파일 %s(지금 설치된 판을 잼)"
+                 % (i.get("installed_by") or "알 수 없음", i["display_version"], i["app_version"]))
+    elif "install" in rec:
         i, b = rec["install"], rec["before"]
         L.append("- 설치: %s → 종료 코드 %s · %s초 · 설치 정보 %s → %s · 앱 파일 %s → %s"
                  % (i["setup"], i["exit"], i["sec"], b["display_version"] or "-", i["display_version"],
@@ -808,6 +833,9 @@ def main():
             p.add_argument("--rebuild", action="store_true", help="build_ci.bat 부터(--source local)")
         else:
             p.add_argument("--no-suite", action="store_true", help="설치·버전 확인만")
+            p.add_argument("--skip-install", nargs="?", const="", default=None, metavar="이전_결과_폴더",
+                           help="설치를 건너뛰고 지금 설치된 exe 를 잰다 — 설치 정보·앱 파일이 소스 버전일 때만"
+                                "(폴더를 안 주면 같은 판의 가장 최근 설치 시험)")
     p = sub.add_parser("restore")
     p.add_argument("out")
     p = sub.add_parser("plan", help="기준점부터의 변경으로 시험 등급·확인 항목을 정한다(릴리스 SOT §3·§4)")
@@ -833,6 +861,8 @@ def main():
     try:
         if a.mode == "build":
             exe = exe_for_build(a, out)
+        elif a.skip_install is not None:
+            exe = exe_skip_install(out, rec, a.skip_install)
         else:
             exe = exe_for_install(a, out, rec)
         rec["exe"] = str(exe)
