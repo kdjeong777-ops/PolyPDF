@@ -181,6 +181,9 @@ _CITE_RX = re.compile(r"\s?\[\s*\d+(?:\s*[-–,]\s*\d+)*\s*\]")
 _RANGE_RX = re.compile(r"(?<=\d)\s*[~～∼–]\s*(?=\d)")
 _DATE_RX = re.compile(r"(?<!\d)((?:19|20)\d{2})[-./](\d{1,2})[-./](\d{1,2})\.?(?!\d)")
 _KO_THOUSANDS_RX = re.compile(r"(?<!\d)\d{1,3}(?:,\d{3})+(?!\d)")
+# 범위 + 셈 단위('2~3시간'·'3~5개') — 양쪽을 같은 규칙(고유어)으로, 셈 단위를 되풀이해 '두 시간에서 세 시간'
+_RANGE_COUNTER_RX = re.compile(r"(?<![\d.,])(\d{1,2})\s*[~～∼–]\s*(\d{1,2})\s?(" + "|".join(NATIVE_COUNTERS)
+                               + r")(?!월)")
 _COUNTER_RX = re.compile(r"(?<![\d.,])(\d{1,2})\s?(" + "|".join(NATIVE_COUNTERS) + r")(?!월)")   # '3개월' 은 한자어(삼 개월)
 _EN_ABBR_RX = re.compile(r"(?<![A-Za-z])(" + "|".join(re.escape(a) for a, _ in
                          sorted(EN_ABBREV, key=lambda x: len(x[0]), reverse=True)) + r")")
@@ -199,6 +202,15 @@ def normalize(text: str, lang: str, *, offset: int = 0) -> SpokenText:
     ko = (lang or "").lower().startswith("ko")
     chunks = [_Chunk(text, 0, len(text), False)]
     chunks = _apply(chunks, _CITE_RX, lambda m: "")             # [12] — 읽지 않음
+    if ko:
+        # 261108-25 덧붙임: 범위 + 셈 단위는 범위 규칙보다 먼저 — 종전 '2~3시간' 은 '2에서 세 시간'(앞은 숫자, 뒤만 고유어)
+        def _range_counter(m):
+            a, b = native_number(int(m.group(1))), native_number(int(m.group(2)))
+            if not (a and b):
+                return None
+            c = m.group(3)
+            return f"{a} {c}에서 {b} {c}"
+        chunks = _apply(chunks, _RANGE_COUNTER_RX, _range_counter)
 
     def _date(m):
         y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
