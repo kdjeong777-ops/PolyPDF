@@ -47,6 +47,8 @@ ALLOWED = {
         "배경 — `run_in_thread` 워커가 사진 정보 색인 훑기(261104-4)",
     "viewer/photo_controller.py:photo_ocr_save":
         "배경 — `PhotoOcrWorker`·`PhotoOcrBatchWorker`(run_in_thread)만 부르는 사진 OCR 보류 저장(261104-10 → 261107-6 함수로 뺌)",
+    "viewer/study_controller.py:StudyMixin._study_clear_file._clear":
+        "배경 — `_dict_file_job` 에서 자기 연결로 이 파일 캐시 지우기(261108-16)",
 }
 
 fails = []
