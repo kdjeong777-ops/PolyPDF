@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-08 03:33+0900\n"
+"POT-Creation-Date: 2026-11-08 16:19+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -684,7 +684,7 @@ msgstr ""
 msgid "다단 생성"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/settings_dialog.py
+#: viewer/app.py viewer/study_controller.py viewer/widgets/settings_dialog.py
 msgid "준비 중…"
 msgstr ""
 
@@ -2832,12 +2832,10 @@ msgid ""
 "{get}"
 msgstr ""
 
-#: viewer/app.py
-msgid "업그레이드"
-msgstr ""
-
-#: viewer/app.py
-msgid "업그레이드 시작에 실패했습니다. 그냥 종료합니다."
+#: viewer/app.py viewer/sign_controller.py viewer/sign_draft_controller.py
+#: viewer/widgets/sign_dialogs.py
+#, python-brace-format
+msgid "저장하지 못했습니다: {e}"
 msgstr ""
 
 #: viewer/app.py
@@ -3060,6 +3058,14 @@ msgstr ""
 msgid ""
 "설정 초기화에 실패했습니다.\n"
 "{e}"
+msgstr ""
+
+#: viewer/app.py
+msgid "업그레이드"
+msgstr ""
+
+#: viewer/app.py
+msgid "업그레이드 시작에 실패했습니다. 그냥 종료합니다."
 msgstr ""
 
 #: viewer/app.py
@@ -6094,12 +6100,6 @@ msgstr ""
 msgid "이 칸에 서명하면 문서의 모든 칸이 잠겨 남은 빈 서명 칸 {n}개에 더 서명할 수 없습니다. 계속할까요?"
 msgstr ""
 
-#: viewer/sign_controller.py viewer/sign_draft_controller.py
-#: viewer/widgets/sign_dialogs.py
-#, python-brace-format
-msgid "저장하지 못했습니다: {e}"
-msgstr ""
-
 #: viewer/sign_controller.py
 #, python-brace-format
 msgid "내 디지털 ID 로 한 {m}개는 내보낸 파일의 같은 자리에 다시 서명합니다(서명 시각은 지금, 겉모양은 지금 서명 설정).\n"
@@ -6826,6 +6826,10 @@ msgstr ""
 msgid "업데이트"
 msgstr ""
 
+#: viewer/update_controller.py viewer/updater.py
+msgid "PolyPDF 업데이트"
+msgstr ""
+
 #: viewer/update_controller.py
 msgid "업데이트 저장소 설정"
 msgstr ""
@@ -6866,6 +6870,21 @@ msgstr ""
 msgid ""
 "업데이트 파일을 받지 못했습니다(연결·무결성 검증 실패).\n"
 "프로그램은 닫지 않았습니다. 잠시 뒤 다시 시도해 주세요."
+msgstr ""
+
+#: viewer/update_controller.py viewer/updater.py
+#, python-brace-format
+msgid "다른 PolyPDF 창을 닫는 중... ({n}개)"
+msgstr ""
+
+#: viewer/update_controller.py viewer/updater.py
+#, python-brace-format
+msgid ""
+"다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
+"열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 업데이트가 실패합니다.\n"
+"\n"
+"[예] 남은 창을 강제로 닫고 계속\n"
+"[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)"
 msgstr ""
 
 #: viewer/update_controller.py viewer/widgets/settings_dialog.py
@@ -6940,12 +6959,13 @@ msgstr ""
 msgid "새 {kind} v{latest} 사용 가능 — 도움말 → 업데이트 확인"
 msgstr ""
 
-#: viewer/updater.py
-msgid "PolyPDF 업데이트 설치"
+#: viewer/update_controller.py viewer/updater.py
+#, python-brace-format
+msgid "다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)"
 msgstr ""
 
 #: viewer/updater.py
-msgid "PolyPDF 업데이트"
+msgid "PolyPDF 업데이트 설치"
 msgstr ""
 
 #: viewer/updater.py
@@ -7001,26 +7021,6 @@ msgstr ""
 #: viewer/updater.py
 #, python-brace-format
 msgid "다운로드 실패: {msg}"
-msgstr ""
-
-#: viewer/updater.py
-#, python-brace-format
-msgid "다른 PolyPDF 창을 닫는 중... ({n}개)"
-msgstr ""
-
-#: viewer/updater.py
-#, python-brace-format
-msgid "다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)"
-msgstr ""
-
-#: viewer/updater.py
-#, python-brace-format
-msgid ""
-"다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
-"열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 업데이트가 실패합니다.\n"
-"\n"
-"[예] 남은 창을 강제로 닫고 계속\n"
-"[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)"
 msgstr ""
 
 #: viewer/updater.py
