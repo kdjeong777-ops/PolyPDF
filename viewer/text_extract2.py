@@ -69,6 +69,7 @@ COL_FULL = 0.60
 # 한쪽 단이 다른 쪽보다 이 비율보다 좁으면 **단이 아니라 값 칸**이다(목차의 쪽번호 등).
 #   실측: 목차 0.06~0.09 / 진짜 2단 0.45~1.87.
 COL_WIDTH_MIN = 0.25
+COL_WIDE_SHARE = 0.5     # 261108-31(§3.6.4): 단 정렬·폭은 그 쪽 가장 넓은 조각의 이 비율 이상인 조각으로 잰다
 # 260910-9(SOT §3.6.5): 표의 **가로 줄**로 행을 가른다. 그 행 안의 어느 칸이든
 #   두 줄 이상이면 **칸 단위로** 읽는다 — 줄 단위로 이으면 칸끼리 뒤섞인다.
 CELL_GAP = 6.0          # 칸 사이 가로 빈틈(pt). 이보다 벌어지면 다른 칸
@@ -96,6 +97,7 @@ EDGE_GAP = 1.5           # 본문과 이만큼(줄 높이 배) 떨어져 있어�
 #   ② 머리말·꼬리말은 자리만으로 가를 수 없다 — **옆 쪽에도 같은 것이 있어야** 한다.
 #     자리로만 가르니 단 마지막 줄(`demanding conditions.`)까지 꼬리말로 봤다.
 SIDE_SPREAD = 0.02       # 띠 조각들이 차지하는 가로 폭이 이 이내여야 '한 줄기'
+SIDE_VLINE_CHARS = 10    # 261108-31(§3.5.2 (가-2)): 세로로 쓴 한 줄 — 이만큼 글자가 있어야(가로 줄이 이렇게 좁고 길 수 없다)
 #   실측: 진짜 세로 띠 **0.014~0.015** / 쪽 가장자의 표 칸 **0.024~0.059**.
 #   사이가 넉넉해 0.02 로 둔다 — 표 칸을 버리면 본문을 잃는다.
 EDGE_PEERS = 2           # 옆 쪽 이만큼을 둘러본다
@@ -291,7 +293,11 @@ def _line_items(page, edges_out=None):
             txt = _line_text(ln, restore)
             if not txt.strip():
                 continue
-            size = max((float(sp.get("size", 0) or 0) for sp in spans), default=0.0)
+            # 261108-31(SOT §3.7.16): 글머리표 한 글자뿐인 조각(`•` 12pt + 본문 8.8pt)은 크기에서 뺀다 — 그 줄만 커 보여
+            #   ⑧(글자 크기)이 항목의 둘째 줄을 막았다(NAPA 6쪽 40곳). 다른 조각이 없으면 그대로.
+            _sz = [sp for sp in spans if not _MARK_ONLY.match(
+                sp.get("text") or "".join(str(c.get("c") or "") for c in (sp.get("chars") or [])))] or spans
+            size = max((float(sp.get("size", 0) or 0) for sp in _sz), default=0.0)
             x0, y0, x1, y1 = ln.get("bbox", (0, 0, 0, 0))
             if x1 <= x0 or y1 <= y0:            # 뒤집히거나 납작한 상자 — 글자가 아니다
                 noise += 1
@@ -404,6 +410,17 @@ def drop_edge_frags(frags, page, *, side: bool = True, edge: bool = True,
         # **한 줄기**여야 한다 — 가로로 퍼져 있으면 표 칸이지 띠가 아니다(실측)
         if (max(ys) - min(ys)) >= SIDE_SPAN and (max(xs) - min(xs)) <= SIDE_SPREAD:
             side.update(cand)
+    # (가-2) 261108-31(SOT §3.5.2·§3.7.16): **세로로 쓴 한 줄**(돌린 글 — 논문 왼쪽 가장자리의 `Downloaded from …`) — 조각 하나가
+    #   바깥 여백에서 좁고 쪽 높이의 `SIDE_SPAN` 넘게 길다. (가) 는 짧은 조각이 여럿 쌓인 띠(스캔 OCR)만 보아 이 꼴을 못 잡았고,
+    #   그 키 큰 상자가 같은 높이의 모든 본문 줄을 한 줄로 끌어 모았다(cao 1쪽 — 2단 본문 60줄이 한 줄 3,234자).
+    if do_side:
+        for i, (r, t, _s) in enumerate(frags):
+            if i in side:
+                continue
+            w, h = r[2] - r[0], r[3] - r[1]
+            outer = (r[2] / pw) <= SIDE_MARGIN or (r[0] / pw) >= 1.0 - SIDE_MARGIN
+            if outer and w <= pw * SIDE_WIDTH and h >= ph * SIDE_SPAN and len(t.strip()) >= SIDE_VLINE_CHARS:
+                side.add(i)
 
     rest = [i for i in range(len(frags)) if i not in side]
     if not rest:
@@ -710,6 +727,16 @@ def _gutter_x(bands, page, x0=None, x1=None):
     #   글의 단은 왼쪽 여백이 일정하다(실측 100%). 표·서식은 칸마다 제각각이다(5~9%).
     #   가운데 빈 띠만 보고 판단하면 **칸이 두 무리로 놓인 서식을 2단으로 잘못 본다**
     #   — 실제로 배합설계 서식이 그렇게 갈라져 한 행이 두 줄이 됐다(260908-7).
+    # 261108-31(SOT §3.6.4·§3.7.16): 정렬·폭은 그 쪽의 **넓은 조각**(그 쪽 가장 넓은 조각 폭의 절반 이상)으로 잰다 — 반 단짜리
+    #   표가 본문 옆에 있으면(cao 3·5쪽 왼쪽 단의 표) 칸 조각이 왼쪽 끝 비율·중앙 폭을 끌어내려 2단 쪽을 1단으로 봤다. 넓은
+    #   조각이 다섯이 안 되면 종전대로 모든 조각. 비율이라 목차(쪽번호 쪽은 모두 좁다)는 그대로 걸린다.
+    def _wide(fs):
+        if not fs:
+            return fs
+        mx = max(f[0][2] - f[0][0] for f in fs)
+        w = [f for f in fs if (f[0][2] - f[0][0]) >= mx * COL_WIDE_SHARE]
+        return w if len(w) >= 5 else fs
+    left, right = _wide(left), _wide(right)
     if _left_edge_share(left) < COL_ALIGN or _left_edge_share(right) < COL_ALIGN:
         return None
     # 260910-8(SOT §3.6.4): **한쪽이 지나치게 좁으면 단이 아니다.** 목차는 왼쪽에 제목,
@@ -821,8 +848,12 @@ def _table_cells(frags, page):
     above = [f for f in outside if (f[0][1] + f[0][3]) / 2.0 <= rules[0]]
     below = [f for f in outside if (f[0][1] + f[0][3]) / 2.0 >= rules[-1]]
     groups, multi = [], False
+    # 261108-31(SOT §3.6.5·§3.7.16): 표 **바깥**(위·아래)은 단 가르기(`_by_column`)를 거친다 — 종전에는 한 묶음으로 내보내
+    #   2단 논문의 본문 좌·우 단 줄이 한 줄로 붙었다(cao 1쪽: 초록을 두른 가로 줄 아래의 2단 본문, 2~5쪽: 표 위의 2단 본문).
+    def _cols(fs):
+        return [g for g in _by_column([(None, fs)], page) if g]
     if above:
-        groups.append(above)
+        groups.extend(_cols(above))
     for k in range(len(rules) - 1):
         y0, y1 = rules[k], rules[k + 1]
         band = [f for f in inner if y0 < (f[0][1] + f[0][3]) / 2.0 < y1]
@@ -835,8 +866,15 @@ def _table_cells(frags, page):
         else:
             groups.append(band)          # 한 줄짜리 행은 종전대로
     if below:
-        groups.append(below)
-    return groups if multi else None
+        groups.extend(_cols(below))
+    if not multi:
+        # 표 칸 차례가 필요 없어도 바깥이 2단이면 그 차례를 쓴다(가운데 띠는 한 묶음 그대로)
+        if len([g for g in groups if g]) > (1 if above else 0) + (1 if below else 0) + sum(
+                1 for k in range(len(rules) - 1)
+                if any(rules[k] < (f[0][1] + f[0][3]) / 2.0 < rules[k + 1] for f in inner)):
+            return groups
+        return None
+    return groups
 
 
 def _line_pieces(frags):
@@ -1535,6 +1573,11 @@ PARA_INDENT_LO, PARA_INDENT_HI, PARA_INDENT_MIN, PARA_FLUSH =0.015, 0.08, 2, 0.0
 _TOC_TAIL = re.compile(r"\s\d{1,4}$")     # 차례 항목의 끝(빈칸 + 쪽 번호) — SOT §3.7.11
 _CAPTION_HEAD = None
 _LIST_HEAD = None
+_NUM_ONLY = re.compile(r"^(?=.*\d)[\d\s.,%+\-–−/=()×·~]*$")   # 261108-31(§3.7.2 ⑩): 수만 있는 줄(표 칸)
+_MARK_ONLY = re.compile(r"^\s*[^\w\s]\s*$")     # 261108-31: 글자 하나뿐인 표시 조각(`•`·U+F0B7 …) — 줄 크기에서 뺀다
+# 261108-31(SOT §3.7.16): 여러 단 항목 번호(`1.2.1 “감독자”라 함은 …`)로 시작하는 줄 — ⑤ 에서만 목록 첫 줄처럼 내어쓰기를 받는다.
+#   ⑦(뒷줄 목록 표시)에는 넣지 않는다 — 점 하나짜리 `3.5 MPa` 같은 값으로 시작하는 이어지는 줄을 막게 된다(점 둘 이상만).
+_HANG_HEAD = re.compile(r"^\s*\d{1,3}(?:\.\d{1,3}){2,4}\.?\s+\S")
 
 
 def _starts_list(text) -> bool:
@@ -1543,7 +1586,8 @@ def _starts_list(text) -> bool:
     if _LIST_HEAD is None:
         import re
         _LIST_HEAD = re.compile(
-            r'^\s*(?:\(?\d+[.)](?!\d)|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—■□]\s|○|※|【|§)')   # `1.00 g` 는 목록이 아니다(261101-1)
+            r'^\s*(?:\(?\d+[.)](?!\d)|\(?[' + KO_LIST_ORDER + r'][.)]|[①-⑳]|[•·▶◊▊☞*\-–—■□-]\s|○|※|【|§)')   # `1.00 g` 는 목록이 아니다(261101-1)
+    # 261108-31(SOT §3.7.16): 사용자 영역 글자(U+E000~F8FF)는 Symbol·Wingdings 글꼴의 글머리표 — 글자층이 그 글자 그대로 준다
     return bool(_LIST_HEAD.match(text or ''))
 
 
@@ -1768,6 +1812,24 @@ def _join_sep(a_text, b_text, wrapped: bool = False) -> str:
     return ' '
 
 
+def join_text(a_text, b_text, wrapped: bool = False) -> str:
+    """두 글을 §3.7.3 의 규칙 **그대로** 잇는다 — 빈칸 / 붙임 / 분철 떼기(`_join_sep`·`_dehyphen_ligature`).
+
+    261108-31(영상·음성 SOT §1.8 의 1): 본문 읽기는 창이 잇지 않은 줄(문장부호로 끝나지 않음)을 한 문장으로 한 번 더 잇는데,
+    종전에는 늘 빈칸으로 이어 한글 낱말이 줄 끝에서 갈린 곳(`취사` + `선택`)을 '취사 선택' 으로 읽었다. 잇는 규칙은 이 하나다."""
+    a = (a_text or "").rstrip()
+    b = (b_text or "").lstrip()
+    if not a:
+        return b
+    if not b:
+        return a
+    sep = _join_sep(a_text or "", b, wrapped)
+    if sep == '-drop':
+        a = a[:-1]
+        return a + _dehyphen_ligature(a, b)
+    return a + sep + b
+
+
 def _is_toc_rows(rows) -> bool:
     """목차 쪽인가(SOT §3.7.15) — 여러 단 번호 목차(`toc_text_lines`, 단어학습 SOT §14.8.4) 또는 한 단계 번호 목차(`toc_tail_lines`).
     261103-13(사용자 보고): 교재 목차(`1. 아이젱크의 … 151`)는 앞의 판정에 걸리지 않아 `…모델 158` 과 `요약 162` 가 한 줄로 이어졌다."""
@@ -1824,8 +1886,10 @@ def fix_toc_numbers(rows) -> list:
     return rows
 
 
-def join_sentences(rows) -> list:
+def join_sentences(rows, why_out=None) -> list:
     """종이 때문에 끊긴 줄을 **한 문장으로** 잇는다 (SOT §3.7).
+
+    `why_out`(261108-31, 측정 도구 `scripts/join_gaps.py`)에 list 를 주면 잇지 않은 이웃 줄마다 (앞 줄, 뒷줄, 막은 조건들)을 덧붙인다 — 잇는 결과는 같다.
 
     문장부호만으로 판단하지 않는다 — 제목·표 제목·그림 제목도 부호로 끝나지 않는다.
     가장 강한 신호는 **줄이 오른쪽 여백까지 찼는가** 다(실측: 이어지는 본문 1.00,
@@ -1845,25 +1909,32 @@ def join_sentences(rows) -> list:
     #   실측 1쪽: 쪽 전체 90분위 556.9 인데 왼쪽 단은 **가장 긴 줄도 300.2** 라
     #   ④(오른쪽까지 찼는가)가 언제나 거짓이었다.
     cols = _column_extents(body)
-    med_pitch = _median_pitch(body)
+    med_pitch = _median_pitch(body, cols)          # 261108-31(SOT §3.7.16): 단마다
     indents = _para_indents(cols, body)
     ragged = _ragged_cols(cols, body)
     idx = {id(q): i for i, q in enumerate(body)}
     out = []
-    for r in rows:
-        r = dict(r)
+    for r0 in rows:
+        r = dict(r0)
         r.setdefault('rects', [r['rect']] if r.get('rect') else [])
         prev = out[-1] if out else None
         # 260910-12: 이웃한 줄(같은 단, 앞뒤 4줄)로 **그 자리의** 여백을 본다.
-        _k = idx.get(id(r))
+        # 261108-31(SOT §3.7.16): 찾기는 **원래 줄**로 — 종전에는 위에서 만든 사본(`dict(r)`)의 id 로 찾아 늘 못 찾았고,
+        #   그래서 이 이웃 여백이 한 번도 쓰이지 않았다(단 전체 여백만). cao 1쪽은 전폭 초록이 왼쪽 단과 같은 무리라
+        #   왼쪽 단 여백이 569 로 잡혀 왼쪽 단 줄이 하나도 이어지지 않았다(실제 끝 294).
+        _k = idx.get(id(r0))
         _near = None
         if _k is not None:
             _lo, _hi = max(0, _k - 4), min(len(body), _k + 5)
+            # 261108-31(SOT §3.7.16): 높이로도 가까운 줄만 — 차례로만 이웃이고 멀리 떨어진 줄(가로 줄 위의 전폭 초록·DOI 줄)이
+            #   그 자리 여백을 넓히지 않게. 글자 크기의 `JOIN_NEAR_Y` 배(줄 넷 남짓) 안.
+            _ny = max(1.0, r.get('size') or 10.0) * JOIN_NEAR_Y
             _near = [q for q in body[_lo:_hi]
-                     if abs(q['rect'][0] - r['rect'][0]) <= 24.0]
+                     if abs(q['rect'][0] - r['rect'][0]) <= 24.0 and abs(q['rect'][1] - r['rect'][1]) <= _ny]
         margin, span = _extent_for(cols, r, _near)
         rg = bool(r.get('rect')) and any(g0 - 0.5 <= r['rect'][0] <= g1 + 0.5 for g0, g1 in ragged)
-        if prev is not None and (_can_join(prev, r, margin, span, med_pitch, ragged=rg)
+        _why = [] if why_out is not None else None
+        if prev is not None and (_can_join(prev, r, margin, span, med_pitch, ragged=rg, why=_why)
                                  or (r.get('ocr') and prev.get('ocr') and _continues_para(r, indents)
                                      and _can_join(prev, r, margin, span, med_pitch, para=True))):
             # ★ 조건 판정은 **마지막에 붙인 줄**로 한다(`_can_join` 안에서 `_last`).
@@ -1889,11 +1960,73 @@ def join_sentences(rows) -> list:
             prev['_last'] = rr           # 다음 판정의 기준
             prev['_tail'] = r['text']    # 끝의 빈칸도 마지막 줄의 것
             continue
+        if why_out is not None and prev is not None:
+            why_out.append((dict(prev), dict(r), list(_why or [])))
         out.append(r)
     for r in out:
         r['text'] = r['text'].rstrip()
         r.pop('_last', None)
         r.pop('_tail', None)
+    return out
+
+
+# 261108-31(SOT §3.7.16): 단을 넘어 이을 앞 줄을 찾을 때의 글자 크기 허용 — ⑧ 의 20% 보다 좁다. 사이에 낀 각주(8.5pt)를
+#   본문(9.5pt, 차 10.5%)으로 보지 않게(cao 1쪽).
+JOIN_COL_SIZE_TOL = 0.05
+JOIN_NEAR_Y = 5.0        # 261108-31(§3.7.16): 이웃 여백을 볼 줄 — 위아래로 글자 크기의 이 배 안
+
+
+def join_columns(rows) -> list:
+    """**왼쪽 단 끝 → 오른쪽 단 처음**으로 넘어간 문장을 잇는다 (SOT §3.7.16, 261108-31).
+
+    `join_sentences` 는 바로 앞 줄과만 잇는다. 단을 넘어간 문장은 사이에 각주·꼬리 글이 끼어(그 단의 아래쪽)
+    이웃이 아니다 — 실측 cao 1쪽 `…Ministry of Com-` ⏎(각주 넷)⏎ `munications 2004. With …`.
+    뒷줄 B 가 **단의 첫 줄**(앞 줄보다 위로 올라가고 오른쪽으로 옮김)이면, 그 앞의 **본문 줄 A**(B 와 글자 크기가 비슷한 마지막 줄)와
+    잇는다. 조건: A 가 문장 끝 부호로 끝나지 않고, A 의 마지막 줄이 그 단 오른쪽 끝까지 찼고, B 가 목록·표·그림 제목으로
+    시작하지 않으며, ㄱ) A 가 `-` 로 끝나거나 ㄴ) B 가 라틴 소문자로 시작하거나 ㄷ) 앞뒤가 한글·한자. 잇는 법은 §3.7.3(`join_text`)."""
+    out = [dict(r) for r in rows]
+    i = 1
+    while i < len(out):
+        b, p = out[i], out[i - 1]
+        rb = b.get('rect')
+        rp = (p.get('rects') or [p.get('rect')])[-1] if p.get('rect') else None    # 이은 줄이면 그 마지막 줄 자리로
+        if not (rb and rp and b.get('kind') == 'text' and b.get('style') == 'body'):
+            i += 1
+            continue
+        if not (rb[1] < rp[1] - 2 * max(1.0, b.get('size') or 10) and rb[0] > rp[0] + 0.25 * max(1.0, rp[2] - rp[0])):
+            i += 1
+            continue
+        sb = max(1.0, b.get('size') or (rb[3] - rb[1]))
+        j = i - 1
+        while j >= 0:
+            q = out[j]
+            if q.get('kind') == 'text' and q.get('style') == 'body' and q.get('rect') \
+                    and abs(max(1.0, q.get('size') or 0) - sb) <= max(0.3, sb * JOIN_COL_SIZE_TOL) \
+                    and ' | ' not in (q.get('text') or ''):
+                break
+            j -= 1
+        if j < 0:
+            i += 1
+            continue
+        a = out[j]
+        ta = (a.get('line_texts') or [a.get('text') or ''])[-1].rstrip()
+        tb = (b.get('text') or '').lstrip()
+        la = (a.get('rects') or [a['rect']])[-1]
+        # A 의 단 오른쪽 끝 — 같은 왼쪽 끝이면서 B 의 단보다 왼쪽에서 끝나는 줄만(전폭 초록·제목은 빼고)
+        same_col = [q for q in out[:i] if q.get('rect') and abs(q['rect'][0] - a['rect'][0]) <= 2 * sb
+                    and q['rect'][2] <= rb[0]]
+        right = max(q['rect'][2] for q in same_col) if same_col else la[2]
+        ok = (ta and tb and ta[-1] not in SENT_END and ta.rstrip(_CLOSERS)[-1:] not in SENT_END
+              and right - la[2] <= sb * JOIN_FILL and not _starts_list(tb) and not _is_caption(tb)
+              and ' | ' not in tb
+              and (ta.endswith('-') or re.match(r"[a-z]", tb) or (_is_cjk(ta[-1]) and _is_cjk(tb[0]))))
+        if not ok:
+            i += 1
+            continue
+        a['text'] = join_text(a.get('text') or '', tb)
+        a['line_texts'] = list(a.get('line_texts') or [a.get('text')]) + list(b.get('line_texts') or [tb])
+        a['rects'] = list(a.get('rects') or [a['rect']]) + list(b.get('rects') or [rb])
+        del out[i]                                  # B 는 A 에 들어갔다 — 그 자리는 비운다(자리는 A 의 rects 에)
     return out
 
 
@@ -2006,17 +2139,26 @@ def _continues_para(b, indents) -> bool:
     return False
 
 
-def _median_pitch(body) -> float:
+def _median_pitch(body, cols=None) -> float:
     """그 쪽 본문의 **보통 줄 거리**(위끝~위끝의 중앙값) (SOT §3.7.9, 260916-1).
 
     줄이 `JOIN_PITCH_MIN_N` 에 못 미치면 0 을 준다 — 부르는 쪽이 종전 크기 기준을 쓴다.
+    `cols`(`_column_extents`)를 주면 **단마다** 위아래 이웃 줄끼리만 잰다(261108-31, SOT §3.7.16) — 쪽 전체를 높이로만
+    늘어놓으면 2단 쪽에서 왼쪽·오른쪽 단 줄이 번갈아 와(높이 차 0.1pt·12.9pt) 중앙값이 본문 줄 거리보다 작게 나왔다
+    (NAPA 1쪽 8.5 대 13.0 — 본문 줄이 ⑥ 에 막혀 한 쪽에서 161곳이 끊겼다).
     """
     if len(body) < JOIN_PITCH_MIN_N:
         return 0.0
-    rows = sorted(body, key=lambda r: (r['rect'][1], r['rect'][0]))
-    ps = sorted(b['rect'][1] - a['rect'][1]
-                for a, b in zip(rows, rows[1:])
-                if b['rect'][1] - a['rect'][1] > 0)
+    groups = [body]
+    if cols:
+        groups = [[r for r in body if g0 - 0.5 <= r['rect'][0] <= g1 + 0.5] for g0, g1, _m, _s in cols]
+    ps = []
+    for g in groups:
+        rows = sorted(g, key=lambda r: (r['rect'][1], r['rect'][0]))
+        ps.extend(b['rect'][1] - a['rect'][1]
+                  for a, b in zip(rows, rows[1:])
+                  if b['rect'][1] - a['rect'][1] > 0)
+    ps.sort()
     if len(ps) < JOIN_PITCH_MIN_N - 1:
         return 0.0
     return ps[len(ps) // 2]
@@ -2152,8 +2294,15 @@ def _ragged_cols(cols, body) -> list:
     return out
 
 
+def _no(why, tag: str) -> bool:
+    """`_can_join` 이 잇지 않을 때 — `why` 가 list 면 막은 조건을 적는다(261108-31, 측정 도구 `scripts/join_gaps.py`)."""
+    if why is not None:
+        why.append(tag)
+    return False
+
+
 def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: bool = False,
-              ragged: bool = False) -> bool:
+              ragged: bool = False, why=None) -> bool:
     """SOT §3.7 의 여덟 조건을 모두 본다.
 
     `para=True`(§3.7.13): 들여쓰기 문단 단에서 뒷줄이 들여쓰지 않았다 — ③(문장 끝)을 보지 않는 대신 앞 줄이
@@ -2163,25 +2312,25 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: boo
     ra = a.get('_last') or a.get('rect')
     rb = b.get('rect')
     if not ra or not rb:
-        return False
+        return _no(why, 'rect')
     ta = a.get('_tail', a.get('text', ''))
     tb = b.get('text', '')
     if a.get('style') != 'body' or b.get('style') != 'body':
-        return False                                    # ①
+        return _no(why, '①')                                    # ①
     if a.get('kind') != 'text' or b.get('kind') != 'text':
-        return False                                    # ①
+        return _no(why, '①')                                    # ①
     if ' | ' in ta or ' | ' in tb:
-        return False                                    # ②
+        return _no(why, '②')                                    # ②
     core = ta.rstrip()
     # 261101-1(SOT §3.7.11): 닫는 따옴표·괄호 **앞**의 부호로 본다 — `…two-i-pi.”` 다음 문단이 붙었다
     if not core:
-        return False
+        return _no(why, 'empty')
     if not para and (core[-1] in SENT_END or core.rstrip(_CLOSERS)[-1:] in SENT_END):
-        return False                                    # ③
+        return _no(why, '③')                                    # ③
     sa = max(1.0, a.get('size') or (ra[3] - ra[1]))
     sb = max(1.0, b.get('size') or (rb[3] - rb[1]))
     if para and margin - ra[2] > sa * JOIN_FILL:
-        return False                                    # ③ 대신: 앞 줄이 끝까지 찼어야 같은 문단
+        return _no(why, '③')                                    # ③ 대신: 앞 줄이 끝까지 찼어야 같은 문단
     # ④ 오른쪽이 찼는가. 260910-4(SOT §3.7.6 가): 고정 문턱만 보면 **11.4pt 모자란**
     #   줄이 탈락했는데, 뒷줄 첫 어절은 18pt 라 애초에 들어갈 수 없었다 — 문단이 끝난 게
     #   아니라 자리가 없어 넘어간 것이다. 그래서 거의 찼으면 통과, 덜 찼으면
@@ -2189,53 +2338,60 @@ def _can_join(a, b, margin, span: float = 0.0, med_pitch: float = 0.0, para: boo
     gap = margin - ra[2]
     if gap > sa * JOIN_FILL:
         if span > 0 and gap > span * JOIN_GAP_MAX:
-            return False            # 너무 많이 남았다 — 어떤 어절이 와도 문단 끝
+            return _no(why, '④')            # 너무 많이 남았다 — 어떤 어절이 와도 문단 끝
         w = _first_word_width(b)
         # 261102-2(SOT §3.7.14): 왼쪽 정렬 단은 줄 끝이 원래 들쭉날쭉하다 — '어절이 들어갔겠는가' 를 묻지 않는다
         #   다만 숫자로 끝나거나(차례 `…주요 문제 39`) 숫자로 시작하는(표의 수 줄) 줄은 그 완화를 받지 않는다
         rag_ok = ragged and not re.search(r"\d$", core) and not re.match(r"\s*\d", tb)
         if not rag_ok and (w <= 0 or gap >= w * JOIN_WORD_SLACK):
-            return False            # 넉넉히 들어갔을 텐데 넘어갔다 → 문단이 끝났다
+            return _no(why, '④')            # 넉넉히 들어갔을 텐데 넘어갔다 → 문단이 끝났다
     # ⑤ 왼쪽 여백. 뒷줄이 들여써져 있으면 보통 **새 문단**이지만, 앞줄이 목록 항목의
     #   첫 줄이면(`(3) …`) 그 다음 줄들은 표시 아래로 들여쓰는 것이 정상이다
     #   (내어쓰기). 실측 지침 41쪽: 첫 줄 x=68.0, 이어지는 줄 x=86.8.
-    if rb[0] > ra[0] + sa and not _starts_list(ta):
-        return False
+    # 261108-31(SOT §3.7.2 ⑤·§3.7.16): 뒷줄이 들여썼어도 **앞 줄이 `-` 로 끝나거나 뒷줄이 라틴 소문자로 시작하면** 이어지는 글이다 —
+    #   새 문단은 소문자로 시작하지 않는다. 참고문헌의 내어쓰기(`… porous asphalt pave-` ⏎ `ment, Maruzen …`, cao 5·6쪽)
+    _cont = core.endswith('-') or bool(re.match(r"[a-z]", tb.lstrip()))
+    if rb[0] > ra[0] + sa and not (_starts_list(ta) or _HANG_HEAD.match(ta) or _cont):
+        return _no(why, '⑤')
     if rb[0] > ra[0] + sa * 4:
-        return False                                    # 너무 많이 들여썼다 — 다른 글
+        return _no(why, '⑤')                                    # 너무 많이 들여썼다 — 다른 글
     # 261101-1(SOT §3.7.11): **앞 줄이 한참 오른쪽에서 시작**하면(가운데·오른쪽 머리말 `PROJECT HAIL MARY 5`)
     #   다른 글이다 — 첫 줄 들여쓰기는 본문 폭의 몇 % 다. ⑧ 을 OCR 줄에서 빼자 지우지 못한 머리말이 본문에 붙었다.
     #   OCR 줄에만 — 글자층은 한 줄이 여러 조각으로 오고 조각이 줄 가운데서 시작할 수 있다(NAPA 2쪽 `of an asphalt`).
     if a.get('ocr') and span > 0 and ra[0] - rb[0] > span * JOIN_LEFT_MAX:
-        return False
+        return _no(why, '⑤')
     pitch = rb[1] - ra[1]                               # ⑥ 줄 사이 거리
     if pitch <= 0:
-        return False
+        return _no(why, '⑥')
     # 260916-1(SOT §3.7.9): 그 쪽의 **보통 줄 거리**로 잰다 — 없거나 쪽이 성기면 크기로.
     if med_pitch > 0 and med_pitch <= max(sa, sb) * JOIN_PITCH_SPARSE:
         if pitch > med_pitch * JOIN_PITCH_REL:
-            return False
+            return _no(why, '⑥')
     elif pitch > max(sa, sb) * JOIN_PITCH:
-        return False
+        return _no(why, '⑥')
     # ⑦ 260910-4(SOT §3.7.6 나): 앞줄에 닫히지 않은 `(` 가 있으면 뒷줄의 `)` 는
     #   목록 표시가 아니라 그 괄호를 닫는 이어지는 글이다.
     # 261101-1(SOT §3.7.2 ⑦): 앞 줄이 오른쪽 끝까지 찬 **한글**로 끝나면 뒷줄의 `다.`·`가.` 는 목록 번호가 아니라
     #   이어지는 낱말 끝이다 — 글자층 보고서에서 `…하고 있` + `다. 또한` 이 갈렸다(5곳). 목록 앞 줄은 끝까지 차지 않는다.
     if (_starts_list(tb) and not _unclosed_paren(ta)
             and not (_KO_LIST_HEAD.match(tb) and _is_cjk(core[-1]) and (margin - ra[2]) <= sa * JOIN_FILL)):
-        return False                                    # ⑦
+        return _no(why, '⑦')                                    # ⑦
     # ⑧ 261101-1(SOT §3.7.11): OCR 줄의 `size` 는 잉크 높이라 **줄에 든 글자**로 달라진다
     #   (`two?”` 7.0 / `plus` 가 든 줄 10.8) — 글꼴 크기를 잴 수 없어 OCR 줄에는 보지 않는다.
     if not (a.get('ocr') or b.get('ocr')) and abs(sa - sb) > max(sa, sb) * JOIN_SIZE_TOL:
-        return False                                    # ⑧
+        return _no(why, '⑧')                                    # ⑧
     #   ⑧ 을 빼자 차례 쪽의 두 항목(`…자극 추구 165` + `성격 연습 9 성실성 167`)이 이어졌다 — 종전에는 ⑧ 이
     #   우연히 막고 있었다. **두 줄 다 쪽 번호 같은 수로 끝나면** 차례로 보고 잇지 않는다(OCR 줄만).
     if (a.get('ocr') or b.get('ocr')) and _TOC_TAIL.search(ta.rstrip()) and _TOC_TAIL.search(tb.rstrip()):
-        return False
+        return _no(why, 'toc')
     # ⑨ 260910-4(SOT §3.7.6 다): 표·그림 제목은 **첫머리로** 알아본다.
     #   캡션은 부호로 끝나지 않고 길이도 본문과 비슷할 수 있어 ④ 로는 안 갈린다.
     if _is_caption(ta):
-        return False
+        return _no(why, '⑨')
+    # ⑩ 261108-31(SOT §3.7.2 ⑩): **숫자만 있는 줄끼리**는 잇지 않는다 — 세로 줄 없는 표의 수 칸(가로 줄로만 나뉜 표, §3.6.5)이
+    #   한 칸 안의 여러 줄로 묶여 `5.6 8.6 …`·`100 100 100 …` 으로 이어졌다(cao 2~4쪽).
+    if _NUM_ONLY.match(core) and _NUM_ONLY.match(tb.strip()):
+        return _no(why, '⑩')
     return True
 
 def _classify(items):
@@ -2277,7 +2433,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
         if rows:
             _NOISE["n"] = 0
             if join_lines:
-                rows = join_hyphens(join_sentences(rows))   # 261101-1(SOT §3.7.4): 남은 분철도
+                rows = join_hyphens(join_columns(join_sentences(rows)))   # 261101-1(SOT §3.7.4): 남은 분철도 · 261108-31(§3.7.16): 단 넘김
             if not has_text_layer(doc, page_index):
                 if edges_out is not None:
                     edges_out.extend(_ocr_edges)
@@ -2329,7 +2485,7 @@ def page_lines(doc, pdf_path, page_index: int, *, tables: str = "lines",
                     r["kind"] = "table"
     _NOISE["n"] = noise          # 표 처리가 `_line_items` 를 다시 부르지 않음을 명시
     if join_lines:               # 260910(SOT §3.7): 종이 때문에 끊긴 문장을 잇는다
-        rows_out = join_hyphens(join_sentences(rows_out))   # 261101-1(SOT §3.7.4): 남은 분철도
+        rows_out = join_hyphens(join_columns(join_sentences(rows_out)))   # 261101-1(SOT §3.7.4): 남은 분철도 · 261108-31(§3.7.16): 단 넘김
     # 261103-14(SOT §3.6.17): 목차 쪽 항목 번호 오독(`A 성격 평가기법` → `4.`)
     return fix_toc_numbers(rows_out)
 

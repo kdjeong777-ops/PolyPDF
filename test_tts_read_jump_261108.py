@@ -105,6 +105,8 @@ class MW(QObject):
     def __init__(self, path, words):
         super().__init__()
         self.tts, self.store, self.main_view = TTS(), Store(words), View(path)
+        # 261108-28 뒤로 읽기 엔진은 설정(`tts_voice`)이 고른다 — 자연 음성 모델이 깔린 기계에서도 가짜 SAPI 로 듣게
+        self._prefs = {"tts_voice": {"engine": "sapi"}}
         class _S:
             def showMessage(self, *a): pass
         self.status = _S()

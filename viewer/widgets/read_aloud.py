@@ -663,7 +663,9 @@ class ReadAloud(QObject):
             rcs = list(r.get("rects") or [])
             ss = sentences_of(t) or [t]
             if pend_t:
-                ss[0] = (pend_t + " " + ss[0]).strip()
+                # 261108-31(SOT §1.8 의 1): 창이 잇지 않은 줄을 이을 때도 창의 잇는 규칙 그대로(텍스트 창 SOT §3.7.3) —
+                #   종전에는 늘 빈칸이라 한글 낱말이 줄 끝에서 갈린 곳(`취사` + `선택`)을 '취사 선택' 으로 읽었다
+                ss[0] = tx.join_text(pend_t, ss[0]).strip()
                 rcs = pend_r + rcs
                 pend_t, pend_r = "", []
             cont = False
