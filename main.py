@@ -543,6 +543,12 @@ def main():
     #     Qt teardown 을 타기 때문이다. → **일괄 실행하지 않는다.**
     #     우리 쪽 정리(인쇄 임시폴더)는 closeEvent 에서 이미 끝낸다.
     try:
+        # 261108-15(응답성 SOT §6): 설정·사이드카·태그·고친 글은 배경 줄(`bg_write`)이 쓴다 — 끝나기 전에 비우고 기다린다
+        from viewer import bg_write
+        bg_write.flush()
+    except Exception:
+        pass
+    try:
         sys.stdout.flush()
         sys.stderr.flush()
     except Exception:

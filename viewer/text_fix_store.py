@@ -18,6 +18,7 @@ import json
 import threading
 from pathlib import Path
 
+from viewer import bg_write
 from viewer.pathutil import norm_key
 
 _LOCK = threading.RLock()
@@ -43,7 +44,7 @@ class TextFixStore:
     def load(self) -> None:
         with _LOCK:
             try:
-                self._data = json.loads(io.open(self.path, encoding="utf-8").read())
+                self._data = json.loads(bg_write.read_text(self.path))     # 261108-15: 맡겨 둔 쓰기가 있으면 그 글
             except Exception:
                 self._data = {}
             if not isinstance(self._data, dict):
@@ -52,9 +53,8 @@ class TextFixStore:
     def save(self) -> None:
         with _LOCK:
             try:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                io.open(self.path, "w", encoding="utf-8", newline="\n").write(
-                    json.dumps(self._data, ensure_ascii=False, indent=1))
+                # 261108-15(응답성 SOT §6): 배경 줄(`bg_write`) — tmp·os.replace 로 원자적(종전 제자리 쓰기), 메인은 직렬화만
+                bg_write.submit(self.path, json.dumps(self._data, ensure_ascii=False, indent=1))
             except Exception:
                 pass                # 저장 실패가 본 기능을 막지는 않는다
 

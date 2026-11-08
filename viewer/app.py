@@ -159,6 +159,7 @@ class _UpdateSignals(QObject):
 
 class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, SignMixin, ConvertMixin, OcrBatchMixin, CompressMixin, RedactMixin, CompareMixin, VPrinterMixin, JobsMixin, LiteMixin, StampMixin, PhotoMixin, ShareMixin, DocInfoMixin, QMainWindow):
     SETTINGS_FILE = "settings.json"
+    bgWriteFailed = pyqtSignal(str, str)     # 261108-15: 배경 쓰기 줄(`bg_write`)의 실패 — 배경 스레드에서 보내 메인에서 알림
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
 
@@ -423,6 +424,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 상태바
         self.status = QStatusBar()
         self.setStatusBar(self.status)
+        # 261108-15(응답성 SOT §6): 설정·사이드카·태그·고친 글은 배경 줄이 쓴다 — 실패하면 메인에서 한 줄 알림(까닭은 error.log)
+        from viewer import bg_write as _bgw
+        self.bgWriteFailed.connect(lambda p, why: self.status.showMessage(
+            tr("저장하지 못했습니다: {e}").format(e="%s — %s" % (os.path.basename(p), why)), 10000))
+        _bgw.on_error = self.bgWriteFailed.emit
         # 261008-29(다국어 SOT §3.4): 고른 언어의 팩을 찾지 못해 물러났으면 한 번 알린다(설정 값은 그대로)
         from viewer import i18n as _i18n_fb
         if _i18n_fb.fallback_from():

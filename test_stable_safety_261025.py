@@ -55,6 +55,8 @@ try:
     p = settings_store.settings_path(name)
     settings_store.save({"favorites": ["가", "나"], "preferences": {"theme": "dark"}}, name)
     check("A1 저장 → 읽기", settings_store.load(name).get("favorites") == ["가", "나"])
+    from viewer import bg_write              # 261108-15: 파일 쓰기는 배경 쓰기 줄 — 디스크를 보기 전에 비운다
+    bg_write.flush()
     check("A1 임시 파일이 남지 않음", not list(SD.glob(name + ".*.tmp")))
 
     # 쓰는 도중 실패(디스크 가득·강제 종료 모사): 파일에 반쯤 쓰고 예외 — 원래 파일이 그대로여야 한다
@@ -87,6 +89,7 @@ try:
     try:
         try:
             settings_store.save({"favorites": ["새 값"] * 50}, name)
+            bg_write.flush()                     # 쓰기(배경)가 바꿔치기한 open 을 타게 — 이 안에서 끝낸다
         except Exception:
             pass
     finally:

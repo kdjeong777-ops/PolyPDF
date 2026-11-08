@@ -1827,6 +1827,13 @@ class PhotoMixin:
             con = photo_index.connect(busy_ms=dbutil.BUSY_MS_UI)
         except Exception:
             con = None
+        import contextlib
+        # 261108-15(응답성 SOT §6): 사진마다 태그 JSON 전체를 다시 쓰지 않게 묶어서 한 번 — 종전 N~2N번 메인 쓰기
+        with (tags.bulk() if tags is not None else contextlib.nullcontext()):
+            self._photo_ocr_commit_rows(found, tags, con)
+
+    def _photo_ocr_commit_rows(self, found, tags, con):
+        from viewer import photo_index
         try:
             for path, text, fmt, kws in found:
                 if tags is not None:

@@ -107,22 +107,26 @@ check("★ 연도가 태그에 안 섞임(§3.6)",
 
 # ── §12-59) 원자적 쓰기 + §12-60) 일괄 저장 1회 ─────────────────────────
 check("tmp 잔재 없음", not os.path.exists(STORE + ".tmp"))
-orig_replace = os.replace
+# 261108-15: 파일 쓰기는 배경 쓰기 줄(bg_write) — 저장 횟수는 맡긴(submit) 횟수로 센다
+from viewer import bg_write
+orig_submit = bg_write.submit
 n_writes = {"n": 0}
 
 
-def counting_replace(src, dst):
-    n_writes["n"] += 1
-    return orig_replace(src, dst)
+def counting_submit(path, text, **k):
+    if os.path.normcase(str(path)) == os.path.normcase(STORE):
+        n_writes["n"] += 1
+    return orig_submit(path, text, **k)
 
 
-os.replace = counting_replace
+bg_write.submit = counting_submit
 try:
     with st.bulk():
         for i in range(50):
             st.set(os.path.join(WORK, f"bulk{i}.pdf"), ["논문"])
 finally:
-    os.replace = orig_replace
+    bg_write.submit = orig_submit
+bg_write.flush()
 check("★ 일괄 50건 = 디스크 쓰기 1회", n_writes["n"] == 1, f"writes={n_writes['n']}")
 check("일괄 후 데이터 유효", TagStore(STORE).get(os.path.join(WORK, "bulk49.pdf")) == ["논문"])
 with st.bulk():

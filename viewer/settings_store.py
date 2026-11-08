@@ -201,7 +201,8 @@ def peek_pref(key: str, name: str = "settings.json"):
     마이그레이션하므로 여기서 부르면 그 일을 두 번 하게 된다 — 파싱만 하고, 실패하면 None.
     앱 이름(`setApplicationName`)을 정한 **뒤**에 불러야 올바른 폴더를 본다(마스터 §14.2.1)."""
     try:
-        d = json.loads(settings_path(name).read_text(encoding="utf-8"))
+        from viewer import bg_write
+        d = json.loads(bg_write.read_text(settings_path(name)))      # 261108-15: 맡겨 둔 쓰기가 있으면 그 글
         prefs = d.get("preferences") if isinstance(d, dict) else None
         return prefs.get(key) if isinstance(prefs, dict) else None
     except Exception:
@@ -403,8 +404,9 @@ def _migrate(d: dict) -> dict:
 
 
 def load(name: str = "settings.json") -> dict:
+    from viewer import bg_write
     p = settings_path(name)
-    if not p.exists():
+    if not bg_write.exists(p):
         base = {
             "schema_version": CURRENT_SCHEMA,
             "recent_folders": [],
@@ -425,7 +427,7 @@ def load(name: str = "settings.json") -> dict:
         #   정상이지만, 구 프로파일이 남아 있어도 일관되게 처리 — SOT §8.2.0).
         return _decrypt_secrets(_migrate(base))
     try:
-        raw = p.read_text(encoding="utf-8")
+        raw = bg_write.read_text(p)              # 261108-15: 맡겨 둔 쓰기가 있으면 그 글
         d = json.loads(raw)
         if not isinstance(d, dict):
             raise ValueError("최상위가 객체가 아님")
@@ -472,12 +474,14 @@ def save(data: dict, name: str = "settings.json") -> None:
         text = json.dumps(payload, ensure_ascii=False, indent=2)
     except Exception:
         return
-    _write_atomic(p, text)
+    # 261108-15(응답성 SOT §6): 쓰기는 배경 줄 — tmp·fsync·os.replace·잠김 다시·실패 기록은 `bg_write._write`
+    #   (종전 `_write_atomic` 을 메인에서 60곳이 불렀다). 앱 종료 전 `bg_write.flush()`(main.py).
+    from viewer import bg_write
+    bg_write.submit(p, text, fsync=True)
 
 
 ERROR_LOG_NAME = "error.log"        # main.ERROR_LOG_NAME 과 같은 파일(마스터 §14.7.3 안전망)
 ERROR_LOG_MAX = 1_000_000           # main.ERROR_LOG_MAX 와 같은 규칙 — 넘으면 비우고 새로
-REPLACE_TRIES = 3                   # 다른 창·백신이 잠깐 쥐었을 때 os.replace 를 다시 해 보는 수(50ms 간격)
 
 
 def _log_error(text: str) -> None:
@@ -503,43 +507,3 @@ def _keep_broken(p: Path, err) -> None:
         size, where = -1, f"옮기지 못함({type(e2).__name__})"
     _log_error(f"[설정 읽기 실패] {p.name} {type(err).__name__}: {' '.join(str(err).split())[:200]} "
                f"크기={size} → {where} (기본값으로 시작)")
-
-
-def _write_atomic(p: Path, text: str) -> None:
-    """261025-8(마스터 §8.2.0 '안전 저장'): 임시 파일에 다 쓰고(fsync) 바꿔 끼운다.
-
-    종전 `write_text` 는 파일을 먼저 비우고 썼다 — 쓰는 도중 꺼지면(정전·강제 종료·디스크 가득) 반쯤 쓴 JSON 이
-    남고, 다음 시작의 load() 가 기본값으로 돌아가 사용자 설정 전체를 잃었다. 임시 파일 이름에 pid 를 넣어
-    여러 창이 함께 저장해도 서로의 임시 파일을 밟지 않는다. 바꿔 끼우기가 끝내 안 되면(잠김) 종전처럼 바로 쓴다."""
-    import os
-    import time
-    tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-    except Exception as e:      # noqa: BLE001
-        _log_error(f"[설정 저장 실패] 임시 파일 {type(e).__name__}: {e}")
-        try:
-            tmp.unlink()
-        except Exception:
-            pass
-        return
-    for i in range(REPLACE_TRIES):
-        try:
-            os.replace(tmp, p)
-            return
-        except PermissionError:
-            if i + 1 < REPLACE_TRIES:
-                time.sleep(0.05)
-        except Exception:
-            break
-    try:
-        p.write_text(text, encoding="utf-8")
-    except Exception as e:      # noqa: BLE001
-        _log_error(f"[설정 저장 실패] {p.name} {type(e).__name__}: {e}")
-    try:
-        tmp.unlink()
-    except Exception:
-        pass

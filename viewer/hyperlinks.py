@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 from viewer.i18n import tr
+from viewer import bg_write
 from viewer.pathutil import rel_key
 
 # 작업 파일 화이트리스트(문서·미디어). 소문자 확장자(점 제외).
@@ -176,9 +177,9 @@ class HyperlinkStore:
     # --- IO ---
     def _load(self):
         p = self._sidecar_path()
-        if p and p.exists():
+        if p and bg_write.exists(p):
             try:
-                d = json.loads(p.read_text(encoding="utf-8"))
+                d = json.loads(bg_write.read_text(p))                     # 261108-15: 맡겨 둔 쓰기가 있으면 그 글
                 if isinstance(d, dict) and isinstance(d.get("links"), dict):
                     self._data = {"version": int(d.get("version", SCHEMA_VERSION)),
                                   "links": d["links"]}
@@ -190,10 +191,8 @@ class HyperlinkStore:
         if not p:
             return False
         try:
-            tmp = p.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(self._data, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
-            os.replace(str(tmp), str(p))
+            # 261108-15(응답성 SOT §6): 쓰기는 배경 줄(`bg_write`) — 메인은 직렬화만
+            bg_write.submit(p, json.dumps(self._data, ensure_ascii=False, indent=2))
             return True
         except Exception:
             return False

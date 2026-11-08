@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from viewer import bg_write
 from viewer.pathutil import rel_key
 
 SIDECAR_NAME = "page_meta.json"
@@ -209,9 +210,9 @@ class PageMetaStore:
     # --- IO ---
     def _load(self):
         p = self._sidecar()
-        if p and p.exists():
+        if p and bg_write.exists(p):
             try:
-                d = json.loads(p.read_text(encoding="utf-8"))
+                d = json.loads(bg_write.read_text(p))                     # 261108-15: 맡겨 둔 쓰기가 있으면 그 글
                 if isinstance(d, dict) and isinstance(d.get("files"), dict):
                     self._data = {"version": int(d.get("version", SCHEMA_VERSION)),
                                   "files": d["files"]}
@@ -240,10 +241,8 @@ class PageMetaStore:
             return False
         self._gc_blobs()
         try:
-            tmp = p.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(self._data, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
-            os.replace(str(tmp), str(p))
+            # 261108-15(응답성 SOT §6): 쓰기는 배경 줄(`bg_write`) — 메인은 직렬화만
+            bg_write.submit(p, json.dumps(self._data, ensure_ascii=False, indent=2))
             return True
         except Exception:
             return False
@@ -420,7 +419,7 @@ class PageMetaStore:
         if not p:
             return False
         try:
-            d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+            d = json.loads(bg_write.read_text(p)) if bg_write.exists(p) else {}
             if not isinstance(d, dict):
                 d = {}
         except Exception:
@@ -435,12 +434,10 @@ class PageMetaStore:
                 any_sec = True
             else:
                 d.pop(name, None)
-        if not any_sec and not p.exists():
+        if not any_sec and not bg_write.exists(p):
             return True                          # 쓸 것이 없다 — 사진 폴더에 파일을 만들지 않는다
         try:
-            tmp = p.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
-            os.replace(str(tmp), str(p))
+            bg_write.submit(p, json.dumps(d, ensure_ascii=False, indent=2))   # 261108-15: 배경 줄
             return True
         except Exception:
             return False

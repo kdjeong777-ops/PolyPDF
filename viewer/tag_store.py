@@ -35,6 +35,8 @@ from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 
+from viewer import bg_write
+
 
 MAX_KEYWORDS = 10          # §9.1 — 파일당 키워드 상한
 AUTO_FIELDS = ("auto", "auto_conf", "auto_at", "auto_src", "auto_parts")   # 자동 칸 — 지울 때 함께(§6, auto_parts 는 §5.7)
@@ -110,7 +112,7 @@ class TagStore:
     # ── 로드/저장 ─────────────────────────────────────────────────────────
     def _load(self):
         try:
-            self._data = json.loads(self._path.read_text(encoding="utf-8")) or {}
+            self._data = json.loads(bg_write.read_text(self._path)) or {}     # 261108-15: 맡겨 둔 쓰기가 있으면 그 글
         except Exception:
             self._data = {}
 
@@ -121,11 +123,8 @@ class TagStore:
             self._dirty = True
             return
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self._path.with_name(self._path.name + ".tmp")
-            tmp.write_text(
-                json.dumps(self._data, ensure_ascii=False, indent=0), encoding="utf-8")
-            os.replace(tmp, self._path)
+            # 261108-15(응답성 SOT §6): 쓰기는 배경 줄(`bg_write` — tmp·os.replace·실패 알림), 메인은 직렬화만
+            bg_write.submit(self._path, json.dumps(self._data, ensure_ascii=False, indent=0))
             self._dirty = False
         except Exception:
             pass
@@ -145,21 +144,19 @@ class TagStore:
     def backup(self) -> bool:
         """일괄 자동 부여 직전 스냅샷(1세대). 실패 시 False — 호출자는 일괄을 시작하면 안 된다."""
         try:
-            import shutil
-            if not self._path.exists():          # 파일이 아직 없으면 빈 스냅샷
-                self._save()
-            shutil.copy2(self._path, self._bak_path())
-            return self._bak_path().exists()
+            # 261108-15: 지금 메모리 값을 백업 이름으로 맡긴다(메인에서 파일을 복사하지 않는다 — 종전 copy2)
+            bg_write.submit(self._bak_path(), json.dumps(self._data, ensure_ascii=False, indent=0), delay=0)
+            return True
         except Exception:
             return False
 
     def restore_backup(self) -> bool:
         try:
-            import shutil
-            if not self._bak_path().exists():
+            if not bg_write.exists(self._bak_path()):
                 return False
-            shutil.copy2(self._bak_path(), self._path)
-            self._load()
+            d = json.loads(bg_write.read_text(self._bak_path())) or {}
+            self._data = d if isinstance(d, dict) else {}
+            self._save()                         # 261108-15: 배경 줄로(종전 copy2)
             return True
         except Exception:
             return False

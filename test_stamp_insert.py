@@ -187,11 +187,14 @@ try:
     for p in (0, 1, 2):
         st.set_images(f, p, [{"data": big, "rect": [0.1, 0.1, 0.2, 0.1], "shape": "rect", "alpha": 100, "rot": 0}])
     st.save()
+    from viewer import bg_write              # 261108-15: 파일 쓰기는 배경 쓰기 줄 — 디스크를 보기 전에 비운다
+    bg_write.flush()
     text = (root / "page_meta.json").read_text(encoding="utf-8")
     chk(text.count(big) == 1, "D4 같은 그림을 세 쪽에 넣어도 파일에는 한 번", str(text.count(big)))
     for p in (0, 1, 2):
         st.set_images(f, p, [])
     st.save()
+    bg_write.flush()
     chk("blobs" not in json.loads((root / "page_meta.json").read_text(encoding="utf-8"))["files"]["doc.pdf"],
         "D5 아무도 안 쓰는 blobs 는 저장 때 지운다")
     st.copy_file(f, str(root / "copy.pdf"))      # rename·copy 는 파일 항목째 — blobs 도 따라간다(전제)

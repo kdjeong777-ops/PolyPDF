@@ -93,6 +93,8 @@ finally:
 
 # 저장/재로드
 chk(st.save(), "사이드카 저장")
+from viewer import bg_write                  # 261108-15: 파일 쓰기는 배경 쓰기 줄 — 디스크를 보기 전에 비운다
+bg_write.flush()
 chk((folder / "hyperlinks.json").exists(), "hyperlinks.json 생성")
 
 print()
