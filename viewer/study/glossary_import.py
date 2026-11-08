@@ -148,7 +148,7 @@ def start_dict_prep() -> None:
     """`main.py` 가 부른다 — 배경 스레드 하나가 `DictStore()`(자기 연결)로 dict.db 를 만들고 동봉 용어집을 넣는다."""
     import threading
     ev = threading.Event()
-    _PREP.update(ev=ev, seeded=None)
+    _PREP.update(ev=ev, seeded=None, synced=False)
 
     def _run():
         try:
@@ -156,6 +156,13 @@ def start_dict_prep() -> None:
             ds = DictStore()
             try:
                 _PREP["seeded"] = load_bundled_glossaries(ds)
+                try:                                 # 단어장 폴더 → 출처 동기화도 여기서(바뀐 파일이 있으면 큰 일괄 쓰기)
+                    from viewer import settings_store
+                    from viewer.study import glossary_folder as _gf
+                    _gf.sync_folder(ds, dict(settings_store.load().get("preferences") or {}))
+                    _PREP["synced"] = True
+                except Exception:
+                    _PREP["synced"] = False
             finally:
                 ds.conn.close()
         except Exception:
@@ -176,6 +183,13 @@ def dict_prep_result(wait_s: float = DICT_PREP_WAIT_S):
     r = _PREP["seeded"] if ev.is_set() else None
     _PREP.update(ev=None, seeded=None)
     return r
+
+
+def dict_prep_synced() -> bool:
+    """배경 준비가 단어장 폴더 동기화까지 했나 — 했으면 메인은 다시 하지 않는다(`dict_prep_result` 다음에 묻는다)."""
+    v = bool(_PREP.get("synced"))
+    _PREP["synced"] = False
+    return v
 
 
 def import_glossary_file(store, path: str, *, source_id: str, name: str,

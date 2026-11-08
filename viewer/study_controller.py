@@ -55,10 +55,11 @@ class StudyMixin:
                         "기본 용어집 적재: " + ", ".join(seeded), 4000)
             except Exception:
                 pass
-            # 단어장 폴더 → dict.db 출처 동기화(하이브리드)
+            # 단어장 폴더 → dict.db 출처 동기화(하이브리드) — 261108-16: 시작 때 배경 준비가 했으면 다시 하지 않는다
             try:
-                from viewer.study import glossary_folder as _gf
-                _gf.sync_folder(self._dict_store, self._prefs)
+                if not (prep is not None and _gi.dict_prep_synced()):
+                    from viewer.study import glossary_folder as _gf
+                    _gf.sync_folder(self._dict_store, self._prefs)
             except Exception:
                 pass
         self._sync_dict_file_sel()
@@ -1664,7 +1665,22 @@ class StudyMixin:
     def _action_sanitize_dict(self, checked: bool = False):
         """260615-17: 사전(dict.db)의 HTML 마크업(&#44;·<strong> 등) 일괄 제거."""
         try:
-            n = self._study_get_dict().sanitize_markup()
+            # 261108-16(응답성 SOT §4.8): 사전 전체를 고치는 큰 일괄 쓰기 — 배경에서 자기 연결로(진행 창, `_dict_file_job`)
+            self._study_get_dict()
+            out = {}
+
+            def _sanitize():
+                from viewer.study.dict_store import DictStore
+                ds = DictStore()
+                try:
+                    out["n"] = ds.sanitize_markup()
+                finally:
+                    ds.conn.close()
+
+            err = self._dict_file_job(_sanitize, "사전 정리 중…", "사전 정리")     # 한국 전용 처리기(이웃 백업·복원과 같이 tr 없음)
+            if err is not None:
+                raise err
+            n = out.get("n", 0)
             self._spot_terms_cache = None
             self._refresh_study_panel(self.main_view.current_page())
             QMessageBox.information(self, "사전 정리",
@@ -1850,6 +1866,21 @@ class StudyMixin:
         also_bookmarks=True 면 같은 OCR 결과(study.db)를 재사용해 책갈피까지 동시 생성."""
         self._study_build_run(also_bookmarks=also_bookmarks, with_vocab=True)
 
+    def _study_clear_file(self, fkey: str) -> None:
+        """261108-16(응답성 SOT §4.8): 이 파일의 OCR·어휘 캐시 지우기 — 배경에서 자기 연결로(진행 창, `_dict_file_job`).
+        메인 연결은 WAL 이라 끝난 뒤 바로 지운 상태를 읽는다."""
+        def _clear():
+            from viewer.study.study_store import StudyStore
+            st = StudyStore()
+            try:
+                st.clear_file(fkey)
+            finally:
+                st.conn.close()
+
+        err = self._dict_file_job(_clear, tr("준비 중…"), tr("단어장 생성"))
+        if err is not None:
+            raise err
+
     def _study_build_run(self, *, also_bookmarks: bool, with_vocab: bool):
         """단어장 생성·일괄 OCR 의 공용 속 — 모든 언어가 쓴다(다국어 SOT §7 SHARED, 261102-6).
 
@@ -1895,7 +1926,7 @@ class StudyMixin:
             box.exec()
             c = box.clickedButton()
             if c is b_new:
-                store.clear_file(fkey)
+                self._study_clear_file(fkey)
             elif c is not b_resume:
                 return
         elif already:
@@ -1904,7 +1935,7 @@ class StudyMixin:
             if QMessageBox.question(self, tr("{what} — 다시 만들기").format(what=what), msg) \
                     != QMessageBox.StandardButton.Yes:
                 return
-            store.clear_file(fkey)        # 재생성 위해 기존 OCR·어휘 캐시 삭제
+            self._study_clear_file(fkey)  # 재생성 위해 기존 OCR·어휘 캐시 삭제(261108-16: 배경 연결로)
         else:
             msg = tr("'{name}' 을(를) OCR·분석합니다.\n감지 언어: {lang}.  분량에 따라 수 분 걸릴 수 있습니다.{extra}\n계속할까요?") \
                 .format(name=path.name, lang=lang, extra=extra)
