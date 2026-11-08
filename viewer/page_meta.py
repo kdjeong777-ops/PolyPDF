@@ -17,6 +17,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from viewer.pathutil import rel_key
+
 SIDECAR_NAME = "page_meta.json"
 SCHEMA_VERSION = 2
 PHOTO_VIEW_KEYS = ("photo_rot", "photo_crop")   # 사진 보기 상태 — 파일 기록 밖 맨 위 묶음(사진 보기 SOT §4.16·§4.40)
@@ -70,7 +72,9 @@ class PageMetaStore:
     def _key(self, file_path) -> Optional[str]:
         """사이드카 키(기준 폴더에 대한 상대 경로). 261009-21(응답성 SOT §4.5·§12): **같은 경로 문자열은 다시 계산하지 않는다** —
         `resolve()` 는 부를 때마다 파일시스템을 타서(`nt._getfinalpathname`), 문서를 열 때 숨김·회전·꾸밈을 묻느라 메인에서 10번,
-        다른 스레드가 바쁘면 한 번에 수십 ms 였다(598쪽 문서 첫 열기 1.51초 정지의 일부). 기준 폴더는 이 객체에서 바뀌지 않는다."""
+        다른 스레드가 바쁘면 한 번에 수십 ms 였다(598쪽 문서 첫 열기 1.51초 정지의 일부). 기준 폴더는 이 객체에서 바뀌지 않는다.
+        261108-10: 키는 `pathutil.rel_key` 하나로 — **파일 자체는 `resolve()` 하지 않는다**(막 연 큰 PDF 의 핸들을 열어
+        첫 쪽 표시가 1.24초 섰다, beta.7 설치 시험 T3). `hyperlinks.HyperlinkStore._rel_key` 와 같은 함수."""
         if not self.base:
             return None
         ck = str(file_path)
@@ -78,13 +82,7 @@ class PageMetaStore:
         if ck in cache:
             return cache[ck]
         try:
-            base = Path(self.base).resolve(strict=False)
-            f = Path(file_path).resolve(strict=False)
-            common = os.path.commonpath([str(base), str(f)])
-            if os.path.normcase(common) != os.path.normcase(str(base)):
-                key = None
-            else:
-                key = os.path.relpath(str(f), str(base)).replace("\\", "/")
+            key = rel_key(self.base, file_path, self._data.get("files"))
         except Exception:
             return None
         if len(cache) > 4096:

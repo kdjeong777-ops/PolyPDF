@@ -22,7 +22,7 @@ import os
 import re
 from pathlib import Path
 
-__all__ = ["norm_key", "unique_path", "safe_name", "iter_pdfs"]
+__all__ = ["norm_key", "real_dir", "rel_key", "unique_path", "safe_name", "iter_pdfs"]
 
 # 파일명 금지문자(Windows) — 치환 대상
 _BAD_CHARS = re.compile(r'[\\/:*?"<>|]+')
@@ -38,6 +38,40 @@ def norm_key(p) -> str:
         return os.path.normcase(os.path.normpath(str(p)))
     except Exception:
         return str(p)
+
+
+_REAL_DIRS: dict = {}
+
+
+def real_dir(d) -> str:
+    """폴더의 실제 경로(`resolve` — 정션·대소문자 풀기), 폴더 문자열마다 한 번만(261108-10). 파일 핸들은 열지 않는다."""
+    k = str(d)
+    r = _REAL_DIRS.get(k)
+    if r is None:
+        r = str(Path(k).resolve(strict=False))
+        if len(_REAL_DIRS) > 2048:
+            _REAL_DIRS.clear()
+        _REAL_DIRS[k] = r
+    return r
+
+
+def rel_key(base, file_path, known=None):
+    """사이드카 키 — `base` 폴더에 대한 `file_path` 의 상대 경로('/' 구분), 폴더 밖이면 None (261108-10, 응답성 SOT §6).
+
+    `hyperlinks.json`·`page_meta.json` 이 함께 쓴다. **파일 자체는 `resolve()` 하지 않는다** — Windows `realpath` 는 그 파일의
+    핸들을 두 번 열어(`_getfinalpathname`) 막 연 큰 PDF 의 첫 쪽 표시가 1.24초 섰다(beta.7 설치 시험 T3). 폴더만 풀고
+    이름을 붙인다(`tag_store._tag_key` 의 260908-5 방식). 종전 키는 디스크의 대소문자였으므로 `known`(저장된 키들)에
+    대소문자만 다른 키가 있으면 그것을 돌려준다. 예외는 부르는 쪽이 받는다."""
+    b = real_dir(base)
+    p = Path(os.path.abspath(str(file_path)))
+    f = os.path.join(real_dir(p.parent), p.name)
+    if os.path.normcase(os.path.commonpath([b, f])) != os.path.normcase(b):
+        return None
+    key = os.path.relpath(f, b).replace("\\", "/")
+    if known and key not in known:
+        low = key.lower()
+        key = next((k for k in known if k.lower() == low), key)
+    return key
 
 
 def unique_path(target, first: int = 1) -> Path:
