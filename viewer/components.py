@@ -152,7 +152,9 @@ def voice_installed() -> bool:
     """261108-28: 자연 음성(Supertonic 3) 모델과 엔진이 있는가."""
     try:
         from viewer.study import neural_tts
-        return neural_tts.engine_importable() and neural_tts.model_ready()
+        # 261108-32 덧붙임: 디스크로 판정 — 모델 7개 + 라이선스 사본(마지막에 쓰는 것이라 다 끝났다는 표시)
+        return (neural_tts.engine_importable() and neural_tts.model_ready()
+                and (neural_tts.model_dir() / neural_tts.LICENSE_LOCAL).is_file())
     except Exception:
         return False
 
@@ -245,27 +247,68 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
         return False, tr('저장 실패: {e}').format(e=e)
     part = base / (neural_tts.MODEL_ARCHIVE + ".part")
     tmp = base / (".unpack_" + neural_tts.MODEL_DIRNAME)
+    old = base / (".old_" + neural_tts.MODEL_DIRNAME)
+    # 261108-32 덧붙임(사용자 보고 '중단된 채 100%'): 내려받기 100% 뒤에도 라이선스·풀기(123MB bz2 — 수십 초)가 남는데
+    #   그동안 알림이 없어 멈춘 듯 보였다. 단계마다 `progress.phase(글, 퍼센트)` 로 알리고, 풀기 중에도 [중단] 을 듣는다.
+    phase = getattr(progress, "phase", None)
+
+    def _ph(text, pct=-1):
+        if phase is not None:
+            try:
+                phase(text, pct)
+            except Exception:
+                pass
+    # 지난번에 받다 말거나 풀다 만 것(앱이 꺼진 경우 등)은 먼저 치운다 — 새 설치가 깨끗이 시작하게
+    for leftover in (tmp, old):
+        shutil.rmtree(leftover, ignore_errors=True)
+    try:
+        part.unlink()
+    except OSError:
+        pass
     try:
         got = _download_to(url, part, progress)
         if got is None:
             return False, tr("다운로드가 취소되었거나 실패했습니다.")
+        _ph(tr("무결성 확인 중…"), 100)
         if got.lower() != want:                                  # 맞지 않으면 아무것도 쓰지 않는다
             return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
         lic = _download(license_url)
         if lic is None or hashlib.sha256(lic).hexdigest() != lic_want:
             return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
-        shutil.rmtree(tmp, ignore_errors=True)
         tmp.mkdir(parents=True)
+        total = max(1, part.stat().st_size)
+
+        class _Counting(io.RawIOBase):
+            """풀기 진행률 — 압축 파일을 읽은 만큼(퍼센트). [중단] 이면 읽기를 멈춘다."""
+            def __init__(self, f):
+                self.f, self.n, self.last = f, 0, -1
+
+            def readable(self):
+                return True
+
+            def readinto(self, b):
+                if progress is not None and progress(-1, 0) is False:
+                    raise InterruptedError("cancelled")
+                k = self.f.readinto(b)
+                self.n += k or 0
+                pct = int(self.n * 100 / total)
+                if pct != self.last:
+                    self.last = pct
+                    _ph(tr("압축 푸는 중… {pct}%").format(pct=pct), pct)
+                return k
         try:
-            with tarfile.open(part, "r:bz2") as t:
-                t.extractall(tmp, filter="data")                 # 절대 경로·위로 올라가는 이름·링크를 막는다
+            with open(part, "rb") as raw:
+                with tarfile.open(fileobj=io.BufferedReader(_Counting(raw), 1 << 20), mode="r|bz2") as t:   # 흐름 모드 — 읽은 만큼 진행률
+                    t.extractall(tmp, filter="data")             # 절대 경로·위로 올라가는 이름·링크를 막는다
+        except InterruptedError:
+            return False, tr("다운로드가 취소되었거나 실패했습니다.")
         except Exception as e:
             return False, tr('압축 해제 실패: {e}').format(e=e)
+        _ph(tr("파일 확인 중…"), 100)
         src = tmp / neural_tts.MODEL_INNER
         if not neural_tts.model_ready(src):
             return False, tr("받은 묶음에 음성 모델 파일이 모두 있지 않습니다. 설치하지 않았습니다.")
         (src / neural_tts.LICENSE_LOCAL).write_bytes(lic)       # 모델 라이선스 사본을 모델 곁에
-        old = base / (".old_" + neural_tts.MODEL_DIRNAME)
         shutil.rmtree(old, ignore_errors=True)
         if final.exists():
             os.replace(final, old)

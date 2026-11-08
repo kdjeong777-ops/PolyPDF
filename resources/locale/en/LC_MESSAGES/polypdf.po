@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-08 23:34+0900\n"
+"POT-Creation-Date: 2026-11-09 00:46+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3402,6 +3402,14 @@ msgid "릴리스에서 tesseract.zip 자산을 찾지 못했습니다."
 msgstr "tesseract.zip asset not found in the release."
 
 #: viewer/components.py
+msgid "무결성 확인 중…"
+msgstr "Verifying integrity…"
+
+#: viewer/components.py
+msgid "파일 확인 중…"
+msgstr "Checking files…"
+
+#: viewer/components.py
 msgid "받은 묶음에 음성 모델 파일이 모두 있지 않습니다. 설치하지 않았습니다."
 msgstr "The downloaded package does not contain all the voice model files. Nothing was installed."
 
@@ -3409,6 +3417,11 @@ msgstr "The downloaded package does not contain all the voice model files. Nothi
 #, python-brace-format
 msgid "압축 해제 실패: {e}"
 msgstr "Extraction failed: {e}"
+
+#: viewer/components.py
+#, python-brace-format
+msgid "압축 푸는 중… {pct}%"
+msgstr "Extracting… {pct}%"
 
 #: viewer/compress_controller.py
 msgid "PDF 압축"
@@ -14338,6 +14351,12 @@ msgstr "Natural voice (Supertonic 3)"
 msgid "Windows 기본 음성 (SAPI)"
 msgstr "Windows default voice (SAPI)"
 
+# | 쓰입니다."
+# | 자연 음성에만 쓰입니다."
+#: viewer/widgets/voice_settings.py
+msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). 목소리·음질과 위의 두 칸은 자연 음성에만 쓰입니다."
+msgstr "The natural voice is AI-generated sound (model license OpenRAIL-M — see the notice in About). Voice, quality and the two options above apply only to the natural voice."
+
 #: viewer/widgets/voice_settings.py
 msgid "자연 음성 설치됨 ✓"
 msgstr "Natural voice installed ✓"
@@ -14345,12 +14364,6 @@ msgstr "Natural voice installed ✓"
 #: viewer/widgets/voice_settings.py
 msgid "자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습니다"
 msgstr "Natural voice not installed — the Windows default voice is used for now"
-
-# | 쓰입니다."
-# | 자연 음성에만 쓰입니다."
-#: viewer/widgets/voice_settings.py
-msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). 목소리·음질과 위의 두 칸은 자연 음성에만 쓰입니다."
-msgstr "The natural voice is AI-generated sound (model license OpenRAIL-M — see the notice in About). Voice, quality and the two options above apply only to the natural voice."
 
 #: viewer/widgets/voice_settings.py
 #, python-brace-format

@@ -112,6 +112,25 @@ QTest.qWait(200)
 cd2 = getattr(mw, "_comp_dlg", None)
 chk(cd2 is not None and cd2.parent() is mw and cd2.isVisible(), "D 메뉴에서 열면 종전처럼 메인 창이 부모")
 if cd2 is not None:
+    # E(261108-32 덧붙임, 사용자 보고 '중단된 채 100%'): 받는 중 창을 다시 열면 지금 단계 — 막대·단계 글·'중단',
+    #   끝나면(일꾼 없음) 디스크 판정으로 '다운로드'/'재설치' 와 막대 숨김
+    class _W:
+        key = "voice"
+        jid = "components:voice"
+
+        def request_cancel(self):
+            pass
+    mw._comp_worker = _W()
+    mw._comp_last = (40, "압축 푸는 중… 40%")
+    mw._comp_status({"ffmpeg": True, "tess": True, "voice": False})
+    st, b = cd2._rows["voice"]
+    chk(b.text() == "중단" and cd2._bar.isVisible() and cd2._bar.format() == "압축 푸는 중… 40%",
+        "E 받는 중 다시 열면 '중단'·막대·단계 글", "%s %s %r" % (b.text(), cd2._bar.isVisible(), cd2._bar.format()))
+    mw._comp_worker = None
+    mw._comp_status({"ffmpeg": True, "tess": True, "voice": False})
+    chk(b.text() == "다운로드" and not cd2._bar.isVisible(), "E 일이 없으면 디스크 판정대로 '다운로드'·막대 숨김", b.text())
+    mw._comp_status({"ffmpeg": True, "tess": True, "voice": True})
+    chk(b.text() == "재설치" and "설치됨" in st.text(), "E 설치돼 있으면 '설치됨 ✓ [재설치]'", b.text())
     cd2.close()
 chk(not [s for s in guard.seen if s[1] != "exec"], "뜬 확인 창 없음", guard.report())
 mw.close()

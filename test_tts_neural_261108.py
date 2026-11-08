@@ -305,6 +305,35 @@ if tts_engine is not None:
         chk(ok and neural_tts.model_ready(), "(D) 해시가 맞으면 풀어 제자리(파일 7개)", info)
         chk((neural_tts.model_dir() / neural_tts.LICENSE_LOCAL).read_bytes() == b"fake Open RAIL-M license text",
             "(D) 모델 라이선스 원문을 모델 곁에 둔다(사본 동봉)")
+        # 261108-32 덧붙임: 100% 뒤 단계 알림 · 풀기 중 중단 · 남은 조각 치우기
+        phases = []
+
+        def prog(done, total):
+            return True
+        prog.phase = lambda text, pct=-1: phases.append(text)
+        vd = neural_tts.voices_dir()
+        (vd / (neural_tts.MODEL_ARCHIVE + ".part")).write_bytes(b"half")
+        (vd / (".unpack_" + neural_tts.MODEL_DIRNAME)).mkdir(exist_ok=True)
+        ok, info = components.install_voice(url=url, sha256=good_sha, progress=prog, **LIC)
+        chk(ok and any("무결성" in p for p in phases) and any("압축 푸는 중" in p for p in phases)
+            and any("파일 확인" in p for p in phases), "(D) 내려받기 뒤 단계(확인·풀기·파일 확인)를 알린다", str(phases[:4]))
+        chk(sorted(os.listdir(vd)) == [neural_tts.MODEL_DIRNAME], "(D) 받다 만 .part·풀다 만 폴더를 치우고 깨끗이",
+            str(os.listdir(vd)))
+        chk(components.voice_installed() == neural_tts.engine_importable(), "(D) 설치 판정은 디스크(모델+라이선스 사본)")
+        shutil.rmtree(neural_tts.model_dir())
+
+        def cancel_in_unpack(done, total):
+            return done >= 0                         # 내려받기는 두고, 풀기 단계의 중단 물음에 '중단'
+        ok, info = components.install_voice(url=url, sha256=good_sha, progress=cancel_in_unpack, **LIC)
+        chk(not ok and os.listdir(vd) == [], "(D) 풀기 중에 누른 [중단] 도 듣는다 — 아무것도 남기지 않는다", str(os.listdir(vd)))
+        ok, info = components.install_voice(url=url, sha256=good_sha, **LIC)
+        from viewer.update_controller import ComponentInstallWorker
+        w = ComponentInstallWorker("voice", "t", None, "")
+        got = []
+        w.progress.connect(lambda p, m: got.append((p, m)))
+        chk(w._prog(-1, 0) is True and not got, "(D) 일꾼 — 중단 물음(-1)은 진행 글을 내지 않는다")
+        w.request_cancel()
+        chk(w._prog(-1, 0) is False, "(D) 일꾼 — [중단] 뒤 물음에는 '멈춤'")
         evil, evil_sha = make_tar(evil=True)
         ok, info = components.install_voice(url="file:///" + evil.replace("\\", "/"), sha256=evil_sha, **LIC)
         chk(not ok and not os.path.exists(os.path.join(root, "evil.txt")) and neural_tts.model_ready(),

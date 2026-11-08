@@ -541,6 +541,7 @@ class UpdateMixin:
                 btn.setText(tr("중단")); btn.setEnabled(True)
             else:
                 btn.setText(tr("재설치") if ok else tr("다운로드")); btn.setEnabled(busy is None)
+        self._comp_show_bar(dlg)                           # 261108-32 덧붙임: 다시 열어도 지금 단계를 보인다
 
     def _comp_button(self, key: str):
         w = getattr(self, "_comp_worker", None)
@@ -557,6 +558,7 @@ class UpdateMixin:
         repo = (self._prefs.get("update_repo") or "").strip() or components.DEFAULT_REPO
         w = ComponentInstallWorker(key, title, fn, repo)
         self._comp_worker = w
+        self._comp_last = (0, "")
         jid = "components:" + key
         w.jid = jid
         self.job_add(jid, tr("구성요소 설치: {title}").format(title=title), cancel=w.request_cancel)
@@ -575,9 +577,21 @@ class UpdateMixin:
         w = getattr(self, "_comp_worker", None)
         if w is not None:
             self.job_progress(w.jid, msg)
+        self._comp_last = (pct, msg)                   # 261108-32 덧붙임: 창을 다시 열 때 지금 단계를 그대로 보인다
         dlg = self._comp_dialog()
-        if dlg is not None and pct >= 0:
+        if dlg is not None:
+            self._comp_show_bar(dlg)
+
+    def _comp_show_bar(self, dlg):
+        """진행 막대 — 받는 중이면 보이고 퍼센트·단계 글(예 '압축 푸는 중… 40%')을, 아니면 숨긴다."""
+        busy = getattr(self, "_comp_worker", None) is not None
+        dlg._bar.setVisible(busy)
+        if not busy:
+            return
+        pct, msg = getattr(self, "_comp_last", (0, ""))
+        if pct >= 0:
             dlg._bar.setValue(pct)
+        dlg._bar.setFormat(msg or "%p%")
 
     def _comp_done(self, key: str, ok: bool, info: str, cancelled: bool):
         w = getattr(self, "_comp_worker", None)
@@ -658,6 +672,8 @@ class ComponentInstallWorker(QObject):
     def _prog(self, done, total):
         if self._cancel:
             return False                               # components._download 가 None 을 돌려준다 — 아무것도 쓰지 않는다
+        if done < 0:
+            return True                                # 중단 물음만(풀기 단계, components.install_voice)
         pct = int(done * 100 / total) if total > 0 else -1
         if pct != self._last:
             self._last = pct
@@ -665,10 +681,17 @@ class ComponentInstallWorker(QObject):
             self.progress.emit(pct, ("%d%% · %.0f MB" % (pct, mb)) if pct >= 0 else ("%.0f MB" % mb))
         return True
 
+    def _phase(self, text: str, pct: int = -1):
+        """261108-32 덧붙임: 내려받기 뒤 단계(무결성 확인·풀기·파일 확인)를 알린다 — 100% 에서 멈춘 듯 보이지 않게."""
+        self.progress.emit(int(pct), str(text))
+
     def run(self):
         try:
+            def prog(done, total):
+                return self._prog(done, total)
+            prog.phase = self._phase
             try:
-                ok, info = self.install_fn(self.repo, self._prog)
+                ok, info = self.install_fn(self.repo, prog)
             except Exception as e:
                 ok, info = False, str(e)
             stopped = self._cancel and not ok              # 다 받은 뒤 누른 중단은 늦었다 — 이미 설치됐다
