@@ -471,6 +471,12 @@ def main():
         _ss.start_pending_prep()
     except Exception:
         pass
+    # 261108-16(단어장 SOT §5·응답성 SOT §4.8): dict.db 만들기·동봉 용어집 넣기도 배경에서 먼저(첫 실행 메인 1.16초였다)
+    try:
+        from viewer.study import glossary_import as _gi
+        _gi.start_dict_prep()
+    except Exception:
+        pass
 
     win = MainWindow()
     # 261009-14(응답성 SOT §4.2·§12): 인자로 받은 PDF 가 있으면 지난 세션을 복원하지 않는다. 복원이 인자 열기보다 먼저

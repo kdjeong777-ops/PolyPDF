@@ -138,6 +138,46 @@ def load_bundled_glossaries(store) -> list[str]:
     return seeded
 
 
+# 261108-16(단어장 SOT §5·응답성 SOT §4.8): dict.db 만들기·동봉 용어집 넣기는 앱 시작 때 배경에서 — 메인이 새 DB 파일을 만들고
+#   13,500 용어를 넣어 첫 실행 1.16초 섰다(그 뒤 실행도 동봉 JSON 읽기·비교 84ms).
+DICT_PREP_WAIT_S = 5.0
+_PREP: dict = {"ev": None, "seeded": None}
+
+
+def start_dict_prep() -> None:
+    """`main.py` 가 부른다 — 배경 스레드 하나가 `DictStore()`(자기 연결)로 dict.db 를 만들고 동봉 용어집을 넣는다."""
+    import threading
+    ev = threading.Event()
+    _PREP.update(ev=ev, seeded=None)
+
+    def _run():
+        try:
+            from viewer.study.dict_store import DictStore
+            ds = DictStore()
+            try:
+                _PREP["seeded"] = load_bundled_glossaries(ds)
+            finally:
+                ds.conn.close()
+        except Exception:
+            _PREP["seeded"] = None
+        finally:
+            ev.set()
+
+    threading.Thread(target=_run, name="dict-prep", daemon=True).start()
+
+
+def dict_prep_result(wait_s: float = DICT_PREP_WAIT_S):
+    """배경 준비가 넣은 용어집 이름 목록(이미 최신이면 빈 목록). 준비를 띄우지 않았거나 못 끝냈으면 None — 부르는 쪽이 종전대로 넣는다.
+    한 번만 쓴다(그 뒤 다시 만드는 저장소는 종전대로)."""
+    ev = _PREP.get("ev")
+    if ev is None:
+        return None
+    ev.wait(wait_s)
+    r = _PREP["seeded"] if ev.is_set() else None
+    _PREP.update(ev=None, seeded=None)
+    return r
+
+
 def import_glossary_file(store, path: str, *, source_id: str, name: str,
                          reference: str = "", kind: str = "base",
                          csv_mapping: Optional[dict] = None,

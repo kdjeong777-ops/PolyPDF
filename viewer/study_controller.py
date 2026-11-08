@@ -45,10 +45,11 @@ class StudyMixin:
         260611-101(P3): 최초 생성 시 동봉 기본 용어집(resources/dict/*.json) 시드."""
         if getattr(self, "_dict_store", None) is None:
             from viewer.study.dict_store import DictStore
+            from viewer.study import glossary_import as _gi
+            prep = _gi.dict_prep_result()         # 261108-16(단어장 SOT §5): 시작 때 배경이 dict.db·동봉 용어집을 준비했으면 그 결과
             self._dict_store = DictStore()        # settings_dir()/dict.db
             try:
-                from viewer.study.glossary_import import load_bundled_glossaries
-                seeded = load_bundled_glossaries(self._dict_store)
+                seeded = prep if prep is not None else _gi.load_bundled_glossaries(self._dict_store)
                 if seeded:
                     self.status.showMessage(
                         "기본 용어집 적재: " + ", ".join(seeded), 4000)
