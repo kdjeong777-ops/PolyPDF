@@ -26,7 +26,7 @@ check("2단 메뉴명 '🗗 2단 보기'", mw.act_split.text() == "🗗 2단 보
 check("두 창 읽기 버튼 구성", len(mw._read_btns) == 2)
 for i in range(2):
     tb = mw._mv[i]._toolbar
-    grp = mw._read_btns[i][0].parent()   # ▶ 버튼은 그룹 위젯 안
+    grp = mw._read_btns[i].parent()      # ▶ 분할 단추는 그룹 위젯 안(261108-24)
     check(f"창{i} 읽기 그룹 툴바 포함", tb.indexOf(grp) >= 0)
 
 # ReadAloud 타깃 전환

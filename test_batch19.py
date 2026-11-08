@@ -22,8 +22,10 @@ mv = mw._mv[0]
 ck("2장 맞춤", mv.FIT_LABELS[mv.FIT_PAGE_TWO] == "2장 맞춤", mv.FIT_LABELS[mv.FIT_PAGE_TWO])
 # 260628-2: v2.27.0(260618-16)에서 맞춤 콤보 '수동' → '수동 맞춤' 으로 개명됨
 ck("수동 맞춤", mv.FIT_LABELS[mv.FIT_NONE] == "수동 맞춤", mv.FIT_LABELS[mv.FIT_NONE])
-ck("캡쳐 버튼 글자 삭제·폭<=36", mw.btn_capture.text() == "" and mw.btn_capture.maximumWidth() <= 36)
-ck("읽기메뉴 폭은 글자에 맞춤(261017-1 — 고정 아님)", mw.btn_read_menu.maximumWidth() > 1000)
+# 261108-24(디자인 SOT §2.10): 캡처·읽기는 아이콘 + 글자 분할 단추 하나 — 폭은 내용에 맞춤(종전 캡처 34 글자 없음·읽기 메뉴 따로)
+ck("캡쳐 단추 아이콘 + 모드 글자·폭은 내용에 맞춤", mw.btn_capture.text() != "" and not mw.btn_capture.icon().isNull()
+   and mw.btn_capture.maximumWidth() > 1000)
+ck("읽기 단추 폭은 글자에 맞춤(261017-1 — 고정 아님)", mw.btn_read.maximumWidth() > 1000)
 from viewer.widgets.capture_settings import CaptureSizesDialog
 _dn = CaptureSizesDialog([]).result_sizes()[0]["name"]
 ck("사용자 명칭 단축(기본)", _dn == "사용자1", _dn)

@@ -40,8 +40,8 @@ class FakeTts:
         return ["Fake Voice A", "Fake Voice B"]
 mw._study_get_tts = lambda: FakeTts()
 names = []
-for btn, menu_btn in mw._read_btns:
-    m = menu_btn.menu()
+for btn in mw._read_btns:                 # 261108-24: 읽기 분할 단추의 ▾ 메뉴
+    m = btn.menu()
     m.aboutToShow.emit()
     names.append(sorted(a.text() for sub in m.actions() if sub.menu() for a in sub.menu().actions()))
 mw.study_panel._voice_menu.aboutToShow.emit()

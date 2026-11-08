@@ -148,8 +148,8 @@ try:
     mw._set_cap_mode("full", capture_pane=0); spin(0.3)
     chk(caps and caps[-1] is mw._mv[0], "F 캡처 모드를 고르면 그 창을 곧바로 캡처")
 
-    # G — 읽기 모드 풀다운 폭
-    rb = mw.btn_read_menu
+    # G — 읽기 모드 풀다운 폭(261108-24: 읽기 분할 단추 하나 — 그 단추 폭)
+    rb = mw.btn_read
     chk(rb.minimumWidth() != rb.maximumWidth() or rb.width() != 78, "G 읽기 모드 풀다운 폭은 고정 78 이 아니다",
         str((rb.minimumWidth(), rb.maximumWidth(), rb.width())))
 except Exception:

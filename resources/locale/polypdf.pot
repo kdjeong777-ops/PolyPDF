@@ -198,10 +198,6 @@ msgid "이 창의 PDF를 책갈피 기준으로 나눠 mp3(+가사)로 저장"
 msgstr ""
 
 #: viewer/app.py
-msgid "이 창 캡처 (활성 창은 Ctrl+Shift+S)"
-msgstr ""
-
-#: viewer/app.py
 msgid "영역 캡처"
 msgstr ""
 
@@ -881,6 +877,10 @@ msgstr ""
 
 #: viewer/app.py viewer/jobs_controller.py
 msgid "저장 안 하고 종료"
+msgstr ""
+
+#: viewer/app.py
+msgid "캡처 모드 · 화질 · 사용자 크기"
 msgstr ""
 
 #: viewer/app.py
@@ -1676,6 +1676,10 @@ msgid "오류"
 msgstr ""
 
 #: viewer/app.py
+msgid "이 창 캡처 (활성 창은 Ctrl+Shift+S)"
+msgstr ""
+
+#: viewer/app.py
 msgid "클립보드에 복사하지 못했습니다 — 다른 프로그램이 클립보드를 쓰고 있습니다."
 msgstr ""
 
@@ -2138,7 +2142,7 @@ msgid ""
 "pip install openpyxl"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/search_panel.py viewer/widgets/thumbs_list.py
+#: viewer/app.py viewer/widgets/search_panel.py
 msgid "페이지"
 msgstr ""
 
@@ -10354,18 +10358,6 @@ msgid "매우 빠름"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py
-msgid "본문 읽기/정지 (머리말·표·수식·그림 제외)"
-msgstr ""
-
-#: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
-msgid "재생구간"
-msgstr ""
-
-#: viewer/widgets/read_aloud.py
-msgid "재생 구간 / 빠르기 / 성우"
-msgstr ""
-
-#: viewer/widgets/read_aloud.py
 msgid "1회"
 msgstr ""
 
@@ -10379,6 +10371,10 @@ msgstr ""
 
 #: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
 msgid "빠르기"
+msgstr ""
+
+#: viewer/widgets/read_aloud.py
+msgid "재생 구간 / 빠르기 / 성우"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py viewer/widgets/study_panel.py
@@ -10395,6 +10391,10 @@ msgstr ""
 
 #: viewer/widgets/read_aloud.py
 msgid "먼저 PDF 를 여세요."
+msgstr ""
+
+#: viewer/widgets/read_aloud.py
+msgid "본문 읽기/정지 (머리말·표·수식·그림 제외)"
 msgstr ""
 
 #: viewer/widgets/read_aloud.py
@@ -12420,6 +12420,10 @@ msgstr ""
 
 #: viewer/widgets/study_panel.py
 msgid "단어장이 없습니다. [단어장 생성] 을 누르세요."
+msgstr ""
+
+#: viewer/widgets/study_panel.py
+msgid "재생구간"
 msgstr ""
 
 #: viewer/widgets/study_panel.py

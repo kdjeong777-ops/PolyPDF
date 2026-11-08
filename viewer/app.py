@@ -386,16 +386,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._cap_copy = "visible"
         self._cap_sizes = [{"name": tr('사용자{i}').format(i=i + 1), "w": 300, "h": 200}
                            for i in range(5)]
-        self._cap_menus = []
-        self._cap_btns = []       # 261025-10: 두 창의 캡쳐 단추 — 테마를 바꾸면 카메라를 다시 그린다
+        self._cap_btns = []       # 261025-10: 두 창의 캡쳐 단추 — 테마를 바꾸면 카메라를 다시 그린다(261108-24: 모드 메뉴도 이 단추)
         from viewer.widgets.read_aloud import ReadAloud
         self.read_aloud = ReadAloud(self)
         self._read_btns = [self._build_pane_controls(0),
                            self._build_pane_controls(1)]
-        self.btn_read, self.btn_read_menu = self._read_btns[0]
+        self.btn_read = self._read_btns[0]          # 261108-24: 읽기 분할 단추 하나(재생 구간 메뉴는 ▾ 칸)
         # 260606-12: ▶/■ 표시는 '그 창이 읽는 중'일 때만 — 두 창 동기화 버그 방지
         try:
-            self.read_aloud.stateChanged.disconnect()   # make_read_buttons 의 기본 on_state 제거
+            self.read_aloud.stateChanged.disconnect()   # make_read_button 의 기본 on_state 제거
         except Exception:
             pass
         self.read_aloud.stateChanged.connect(lambda _=False: self._update_read_buttons())
@@ -582,17 +581,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _build_pane_controls(self, idx: int):
         """260606-11: 한 메인 창(idx)의 툴바에 읽기 ▶/■+풀다운, mp3, 캡쳐 버튼을 구성.
-        읽기/ mp3 는 '그 창'을 대상으로 동작. (좌→우: [캡쳐][▶ 전체▾][mp3])"""
-        from viewer.widgets.read_aloud import make_read_buttons
+        읽기/ mp3 는 '그 창'을 대상으로 동작. (좌→우: [📷 전체|▾][▶ 전체|▾][mp3] — 261108-24 분할 단추, 디자인 SOT §2.10)"""
+        from viewer.widgets.read_aloud import make_read_button
         from PyQt6.QtWidgets import QWidget as _QW, QHBoxLayout as _HB, QToolButton as _TB
         from PyQt6.QtGui import QIcon as _QIcon
         from PyQt6.QtCore import QSize as _QSize
         mv = self._mv[idx]
         H = mv.TOOLBAR_H
-        btn_read, btn_read_menu = make_read_buttons(self.read_aloud, self)
-        btn_read.setFixedSize(26, H)
-        btn_read_menu.setFixedHeight(H)           # 261017-1(디자인 SOT §2.10): 폭은 글자에 맞춤 — 캡쳐 모드 드롭다운과 같게
-        btn_read_menu.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        btn_read = make_read_button(self.read_aloud, self)
+        btn_read.setFixedHeight(H)                # 폭은 아이콘 + 글자 + ▾ 칸에 맞춤(261017-1·261108-24)
         try:
             btn_read.clicked.disconnect()        # 기본 controller.toggle 해제
         except Exception:
@@ -601,7 +598,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         grp = _QW()
         # 260606-18: 캡쳐 드롭다운과 읽기 ▶ 사이 구분 여백
         gl = _HB(grp); gl.setContentsMargins(10, 0, 0, 0); gl.setSpacing(1)
-        gl.addWidget(btn_read); gl.addWidget(btn_read_menu)
+        gl.addWidget(btn_read)
         # mp3(이 창 대상)
         mp3 = _TB(self)
         mp3.setToolTip(tr("이 창의 PDF를 책갈피 기준으로 나눠 mp3(+가사)로 저장"))
@@ -614,12 +611,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             mp3.setProperty("colorIcon", "mp3")
         except Exception:
             mp3.setText("mp3")
-        cap = self._make_capture_button(idx)
-        cap_dd = self._make_capture_dropdown(idx)        # 260606-17: 캡쳐 모드 드롭다운
+        cap = self._make_capture_button(idx)             # 261108-24: 카메라 + 모드 글자 + ▾ 한 단추
         cap_grp = _QW()
         # 260606-18: › 와 캡쳐 버튼 사이 구분 여백
         cgl = _HB(cap_grp); cgl.setContentsMargins(10, 0, 0, 0); cgl.setSpacing(1)
-        cgl.addWidget(cap); cgl.addWidget(cap_dd)
+        cgl.addWidget(cap)
         if idx == 0:
             self.btn_capture = cap
             self.btn_main_mp3 = mp3
@@ -627,12 +623,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         mv.add_main_button(mp3)
         mv.add_main_button(grp)
         mv.add_main_button(cap_grp)
-        return btn_read, btn_read_menu
+        return btn_read
 
     def _update_read_buttons(self):
         """260606-12: 각 창의 ▶/■ 는 '그 창이 읽는 중'일 때만 ■(빨강). 261025-10: 색 아이콘(디자인 SOT §4.5)."""
         from viewer.widgets.read_aloud import set_play_state
-        for i, (btn, _menu) in enumerate(getattr(self, "_read_btns", [])):
+        for i, btn in enumerate(getattr(self, "_read_btns", [])):
             on = (self.read_aloud.is_active()
                   and getattr(self.read_aloud, "_view", None) is self._mv[i])
             set_play_state(btn, on)
@@ -660,36 +656,28 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         b.setIcon(color_icon("camera", dark, self.CAPTURE_ICON_PX))
         b.setIconSize(QSize(self.CAPTURE_ICON_PX, self.CAPTURE_ICON_PX))
 
+    # ===== 260606-17: 캡쳐 모드(전체화면/지정/사용자크기) + 복사크기 =========
     def _make_capture_button(self, idx: int):
-        b = QPushButton()
+        """261108-24(디자인 SOT §2.10, 사용자 결정 '분할 단추'): [📷 전체 | ▾] 한 단추 — 카메라·글자를 누르면 그 창 캡처,
+        ▾ 칸은 모드·화질·사용자 크기 메뉴(모드를 고르면 곧바로 캡처, 261017-1). 글자는 지금 모드.
+        종전에는 카메라 단추(34px, 글자 없음)와 '전체 ▾' 드롭다운이 따로였다."""
+        from PyQt6.QtWidgets import QToolButton
+        b = QToolButton(self)
+        b._pane_idx = idx                         # 261017-1: 모드를 고르면 이 창을 캡처한다
+        from viewer.widgets.icons import split_button
+        split_button(b)                           # ▾ 칸 메뉴 · Alt+↓/F4
         self._set_capture_icon(b)
         self._cap_btns.append(b)
-        b.setToolTip(tr("이 창 캡처 (활성 창은 Ctrl+Shift+S)"))
-        try:                                      # 260606-19: 캡쳐 글자 삭제·폭 최소
-            b.setFixedSize(34, self._mv[idx].TOOLBAR_H)
+        b.setToolTip(tr("이 창 캡처 (활성 창은 Ctrl+Shift+S)") + "\n▾ " + tr("캡처 모드 · 화질 · 사용자 크기"))
+        try:
+            b.setFixedHeight(self._mv[idx].TOOLBAR_H)
         except Exception:
-            b.setFixedWidth(34)
+            pass
         b.clicked.connect(
             lambda _=False, i=idx: (self._set_active_pane(i),
                                     self._do_capture(self._mv[i])))
+        self._rebuild_capture_menu(b)
         return b
-
-    # ===== 260606-17: 캡쳐 모드(전체화면/지정/사용자크기) + 복사크기 =========
-    def _make_capture_dropdown(self, idx: int):
-        from PyQt6.QtWidgets import QToolButton
-        dd = QToolButton(self)
-        dd._pane_idx = idx                        # 261017-1: 모드를 고르면 이 창을 캡처한다
-        dd.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        dd.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        from viewer.widgets.icons import drop_button
-        drop_button(dd)
-        try:
-            dd.setFixedHeight(self._mv[idx].TOOLBAR_H)
-        except Exception:
-            pass
-        self._cap_menus.append(dd)
-        self._rebuild_capture_menu(dd)
-        return dd
 
     def _capture_mode_label(self) -> str:
         m = self._cap_mode
@@ -730,7 +718,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         dd.setText(self._capture_mode_label())       # 261025-10(디자인 SOT §2.7): ▾ 는 Qt 메뉴 화살표 하나
 
     def _refresh_capture_labels(self):
-        for dd in getattr(self, "_cap_menus", []):
+        for dd in getattr(self, "_cap_btns", []):
             self._rebuild_capture_menu(dd)
 
     def _set_cap_mode(self, k, capture_pane=None):

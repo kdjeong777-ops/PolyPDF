@@ -33,22 +33,24 @@ check("FlowLayout 세로 중앙(라벨이 위로 안 뜸)", gy_lab > gy_big and 
 # 창별 ▶/■: 그 창이 읽는 중일 때만 ■
 from viewer.app import MainWindow
 mw = MainWindow()
-b0 = mw._read_btns[0][0]; b1 = mw._read_btns[1][0]
+b0 = mw._read_btns[0]; b1 = mw._read_btns[1]
+# 261108-24: 분할 단추 글자는 재생 구간 — ▶/■ 상태는 아이콘과 `playing` 표시로 본다
+st = lambda b: "■" if b.property("playing") else "▶"
 # 비활성 → 둘 다 ▶
 mw.read_aloud._active = False
 mw._update_read_buttons()
-check("비활성 → 둘 다 ▶", b0.text() == "▶" and b1.text() == "▶")
+check("비활성 → 둘 다 ▶", st(b0) == "▶" and st(b1) == "▶")
 # 1번창 읽는 중 → b0 ■, b1 ▶
 mw.read_aloud._active = True
 mw.read_aloud._view = mw._mv[0]
 mw._update_read_buttons()
-check("1번창 재생 → b0=■, b1=▶", b0.text() == "■" and b1.text() == "▶",
-      f"b0={b0.text()} b1={b1.text()}")
+check("1번창 재생 → b0=■, b1=▶", st(b0) == "■" and st(b1) == "▶",
+      f"b0={st(b0)} b1={st(b1)}")
 # 2번창으로 전환 → b1 ■, b0 ▶
 mw.read_aloud._view = mw._mv[1]
 mw._update_read_buttons()
-check("2번창 재생 → b1=■, b0=▶", b1.text() == "■" and b0.text() == "▶",
-      f"b0={b0.text()} b1={b1.text()}")
+check("2번창 재생 → b1=■, b0=▶", st(b1) == "■" and st(b0) == "▶",
+      f"b0={st(b0)} b1={st(b1)}")
 
 print("\n=== " + ("ALL PASS" if ok else "FAILURE") + " ===")
 # 260628-2 (§14.7): sys.exit 는 Qt teardown 에서 0xC0000409 로 죽어 종료코드가 무의미해진다 → os._exit.

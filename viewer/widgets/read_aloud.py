@@ -664,30 +664,32 @@ PLAY_ICON_PX = 14      # 261025-10(디자인 SOT §2.10): 읽기 ▶/■ 그림 
 
 def set_play_state(btn, active: bool, dark=None) -> None:
     """읽기 단추 ▶/■ — 글자는 상태 표시(보이지 않는다), 보이는 것은 색 아이콘(디자인 SOT §4.5).
-    종전 글리프 ▶ 는 글꼴 기준선 탓에 아래로 처졌다(261025-10). 테마를 바꾸면 다시 부른다."""
+    종전 글리프 ▶ 는 글꼴 기준선 탓에 아래로 처졌다(261025-10). 테마를 바꾸면 다시 부른다.
+    261108-24: 본문 도구 줄의 분할 단추(`splitPlay` 표시)는 글자가 재생 구간 이름이라 아이콘만 바꾼다."""
     from PyQt6.QtCore import QSize
     from viewer.widgets.icons import color_icon
-    btn.setText("■" if active else "▶")
+    split = bool(btn.property("splitPlay"))
+    btn.setProperty("playing", bool(active))   # 상태(분할 단추는 글자로 알 수 없다 — 검사·접근성)
+    if not split:
+        btn.setText("■" if active else "▶")
     btn.setIcon(color_icon("stop" if active else "play", dark))
     btn.setIconSize(QSize(PLAY_ICON_PX, PLAY_ICON_PX))
-    btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    if not split:
+        btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
 
-def make_read_buttons(controller: ReadAloud, parent=None):
-    """본문 읽기 — (1) 파란 ▶/■ 토글 버튼  (2) 별도 풀다운 메뉴 버튼.
-    메뉴: (1회, 연속, 전체, 전체연속) | 빠르기 | 성우. 빠르기·성우는 단어장과 공유."""
+def make_read_button(controller: ReadAloud, parent=None):
+    """본문 읽기 — 분할 단추 하나(261108-24, 디자인 SOT §2.10, 사용자 결정 '분할 단추'): [▶ 전체 | ▾].
+    아이콘·글자를 누르면 읽기/정지(▶/■ 는 아이콘으로), ▾ 칸은 메뉴 — (1회, 연속, 전체, 전체연속) | 빠르기 | 성우.
+    글자는 지금 재생 구간. 빠르기·성우는 단어장과 공유. 종전에는 ▶ 단추와 '전체 ▾' 메뉴 단추가 따로였다."""
     btn = QToolButton(parent)
+    btn.setProperty("splitPlay", True)
+    from viewer.widgets.icons import split_button
+    split_button(btn)                           # ▾ 칸 메뉴 · Alt+↓/F4
     set_play_state(btn, False)
-    btn.setToolTip(tr("본문 읽기/정지 (머리말·표·수식·그림 제외)"))
+    btn.setToolTip(tr("본문 읽기/정지 (머리말·표·수식·그림 제외)") + "\n▾ " + tr("재생 구간 / 빠르기 / 성우"))
     btn.clicked.connect(controller.toggle)
-
-    menu_btn = QToolButton(parent)
-    # 261025-10(디자인 SOT §2.7): 드롭다운 표시는 Qt 메뉴 화살표 하나 — 글자에 ▾ 를 붙이지 않는다
-    menu_btn.setText(tr("재생구간"))
-    from viewer.widgets.icons import drop_button
-    drop_button(menu_btn)
-    menu_btn.setToolTip(tr("재생 구간 / 빠르기 / 성우"))
-    menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    menu_btn = btn
     menu = QMenu(menu_btn)
     # 재생 구간
     g_mode = QActionGroup(menu); g_mode.setExclusive(True)
@@ -742,4 +744,4 @@ def make_read_buttons(controller: ReadAloud, parent=None):
     def on_state(active):
         set_play_state(btn, active)
     controller.stateChanged.connect(on_state)
-    return btn, menu_btn
+    return btn

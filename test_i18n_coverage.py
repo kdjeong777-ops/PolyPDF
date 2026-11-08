@@ -69,7 +69,6 @@ ALLOW = {
     "viewer/widgets/main_view.py": {"본문", "쪽 맞춤", "2장 맞춤", "폭 맞춤", "수동 맞춤", "수동",
                                     "선 1", "선 2", "선 3", "선 4", "선 5"},
     "viewer/widgets/read_aloud.py": {"전체"},                 # 읽기 구간 값(정규식은 _REGEX 가 거른다)
-    "viewer/widgets/thumbs_list.py": {"한"},                  # 글자 폭을 재는 표본
     # 261101-2(마스터 §4.4.3 H2): 목차 없는 스캔본의 장 이름 — 책 본문의 장 머리(`제N장`)를 그대로 적는 **문서의 언어**
     #   (다국어 SOT §7: 문서 처리는 화면 언어와 무관). 영문 책은 `CHAPTER n` 이 그대로 나온다
     "viewer/study/ocr_headings.py": {"제", "장"},

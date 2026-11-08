@@ -68,7 +68,7 @@ widths = {
 }
 heights = [mv.btn_prev_page.minimumHeight(), mv.btn_next_page.minimumHeight(),
            mv.spin_page.minimumHeight(),          # 261031-11: 맞춤 콤보·− + 단추는 본문 툴바에 없다
-           mw.btn_read.minimumHeight(), mw.btn_read_menu.minimumHeight(),
+           mw.btn_read.minimumHeight(),          # 261108-24: 읽기 메뉴는 같은 단추
            mw.btn_main_mp3.minimumHeight(), mw.btn_capture.minimumHeight()]
 check("모든 툴바 버튼 높이 통일(=H)", all(h == H for h in heights), f"H={H} hs={heights}")
 

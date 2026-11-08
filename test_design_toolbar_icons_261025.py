@@ -66,8 +66,10 @@ mw.show(); pump()
 sp = mw.study_panel
 
 # A. 드롭다운 글자에 ▾ 없음 — 메뉴는 달려 있다(Qt 화살표가 그 하나)
-drops = [("캡쳐 모드", d) for d in mw._cap_menus] + [("재생구간", m) for _b, m in mw._read_btns] + [
-    ("단어장 재생구간", sp.btn_readmode), ("단어장 재생내용", sp.btn_content)]     # 261107-34: 단어장 출처 ▾ 는 없앴다
+# 261108-24: 본문 캡처·읽기는 분할 단추(▾ 칸을 Qt 가 따로 그림 — drop_button 여백 없음, test_design_split_buttons_261108)
+drops = [("단어장 재생구간", sp.btn_readmode), ("단어장 재생내용", sp.btn_content)]     # 261107-34: 단어장 출처 ▾ 는 없앴다
+for name, b in [("캡쳐 모드", d) for d in mw._cap_btns] + [("재생구간", r) for r in mw._read_btns]:
+    chk("▾" not in b.text() and "▼" not in b.text() and b.menu() is not None, "A '%s' 분할 단추 글자에 ▾ 없음·메뉴 있음" % name, repr(b.text()))
 for name, b in drops:
     chk("▾" not in b.text() and "▼" not in b.text() and b.menu() is not None,
         "A '%s' 글자에 ▾ 없음·메뉴 있음" % name, repr(b.text()))
@@ -98,7 +100,7 @@ chk(box is not None and box[1] - box[0] + 1 >= 12, "B 카메라 색 픽셀 높�
 chk(cam.iconSize().height() == icons.BTN_ICON_PX, "B 카메라 아이콘 크기 = BTN_ICON_PX", str(cam.iconSize()))
 
 # C. ▶ 세로 가운데
-play = mw._read_btns[0][0]
+play = mw._read_btns[0]
 box = color_box(play)
 if box is None:
     chk(False, "C ▶ 색 픽셀이 보인다")
@@ -122,7 +124,7 @@ for theme, dark in (("dark", True), ("light", False)):
     mw._update_read_buttons()
     box = color_box(play)
     want = icons.ACCENT["stop"][dark]
-    chk(play.text() == "■" and box is not None and near(box[3], want), "D [%s] 읽는 중 ■ 색 %s" % (tag, want),
+    chk(play.property("playing") and box is not None and near(box[3], want), "D [%s] 읽는 중 ■ 색 %s" % (tag, want),
         box[3].name() if box else "없음")
     mw.read_aloud._active = False
     mw._update_read_buttons()

@@ -36,15 +36,15 @@ check("좁아지면 툴바 2단(높이 증가)", narrow > wide, f"wide={wide} na
 # 위젯 폭 축소
 check("페이지칸 폭 ≤ 48", mv.spin_page.maximumWidth() <= 48 or mv.spin_page.width() <= 48)
 check("보기콤보 폭 ≤ 90(창 아래, 261031-11)", mw.cmb_fit.maximumWidth() <= 90 and not hasattr(mv, "cmb_fit"))
-# 캡쳐 버튼: v1.25.0(260606-19)에서 **글자 삭제 → 아이콘만·폭 34**(그 전 260606-9 의 '캡쳐' 라벨은 폐기)
-check("캡쳐 버튼 아이콘만(글자 없음)", mw.btn_capture.text() == "" and not mw.btn_capture.icon().isNull(),
+# 캡쳐 버튼: 260606-19 아이콘만·폭 34 → 261108-24(디자인 SOT §2.10, 사용자 결정) [📷 모드 | ▾] 분할 단추 하나 — 폭은 내용에 맞춤
+check("캡쳐 버튼 카메라 + 모드 글자", mw.btn_capture.text() == mw._capture_mode_label() and not mw.btn_capture.icon().isNull(),
       f"text={mw.btn_capture.text()!r}")
-check("캡쳐 버튼 폭 34", mw.btn_capture.width() == 34, f"w={mw.btn_capture.width()}")
+check("캡쳐 버튼 폭 = 내용(sizeHint)", mw.btn_capture.width() >= mw.btn_capture.sizeHint().width() - 1, f"w={mw.btn_capture.width()}")
 check("캡쳐 툴팁에 '캡처'", "캡처" in mw.btn_capture.toolTip(), mw.btn_capture.toolTip())
 # 툴바 순서: › 의 옛 자리(261105-26: 쪽 이동은 상태 줄로 — 툴바에는 보이지 않는 표시 `_nav_anchor`) 다음 캡쳐
 tb = mv._toolbar
 i_next = tb.indexOf(mv._nav_anchor)
-i_cap = tb.indexOf(mw.btn_capture.parent())   # 260606-17: 캡쳐는 캡쳐그룹(버튼+드롭다운) 안
+i_cap = tb.indexOf(mw.btn_capture.parent())   # 260606-17: 캡쳐는 캡쳐그룹 안(261108-24 부터 분할 단추 하나)
 check("› 옛 자리 다음에 캡쳐그룹(툴바 맨 앞)", i_next == 0 and i_cap == i_next + 1 and tb.indexOf(mv.btn_next_page) < 0,
       f"anchor={i_next} cap={i_cap}")
 

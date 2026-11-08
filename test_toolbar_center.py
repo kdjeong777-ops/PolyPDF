@@ -33,7 +33,7 @@ check("두 버튼 간격=spacing", b2.geometry().x() - (b1.geometry().x() + 50) 
 # 캡쳐 화질 용어 + 그룹 여백
 from viewer.app import MainWindow
 mw = MainWindow()
-mw._cap_menus[0].menu()  # 메뉴 빌드됨
+mw._cap_btns[0].menu()  # 메뉴 빌드됨
 # 메뉴 텍스트 수집
 def menu_texts(menu):
     out = []
@@ -42,7 +42,7 @@ def menu_texts(menu):
         if a.menu():
             out += menu_texts(a.menu())
     return out
-mt = menu_texts(mw._cap_menus[0].menu())
+mt = menu_texts(mw._cap_btns[0].menu())
 check("'캡쳐 화질 설정' 메뉴", "캡쳐 화질 설정" in mt, f"{mt}")
 check("'보이는 화질'", "보이는 화질" in mt)
 check("'원본 화질'", "원본 화질" in mt)

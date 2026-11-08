@@ -445,6 +445,32 @@ def drop_button(btn) -> None:
     btn.setStyleSheet("QToolButton{padding-right:%dpx;}" % DROP_PAD_RIGHT)
 
 
+_split_key_filter = None
+
+
+def split_button(btn) -> None:
+    """261108-24(디자인 SOT §2.10): 아이콘 + 이름 분할 단추 — 본체를 누르면 실행, ▾ 칸은 메뉴(`MenuButtonPopup`).
+    종전에는 메뉴가 따로 단추라 Tab 으로 가서 Space 로 열었다 — 한 단추가 되면 Space 는 실행이므로
+    **Alt+↓ · F4** 로 메뉴를 연다(콤보와 같은 키). `drop_button` 여백은 쓰지 않는다 — ▾ 칸은 Qt 가 따로 그린다."""
+    from PyQt6.QtCore import QObject, QEvent
+    from PyQt6.QtWidgets import QToolButton
+    global _split_key_filter
+    if _split_key_filter is None:
+        class _SplitKeys(QObject):
+            def eventFilter(self, obj, ev):
+                if ev.type() == QEvent.Type.KeyPress and (
+                        ev.key() == Qt.Key.Key_F4 or (ev.key() == Qt.Key.Key_Down
+                                                      and ev.modifiers() & Qt.KeyboardModifier.AltModifier)):
+                    if obj.menu() is not None:
+                        obj.showMenu()
+                        return True
+                return False
+        _split_key_filter = _SplitKeys()
+    btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+    btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+    btn.installEventFilter(_split_key_filter)
+
+
 def corner_arrow_rect(widget):
     """Qt 가 메뉴 단추(InstantPopup)에 그리는 작은 ▾ 의 자리 — QCommonStyle 의 CC_ToolButton 계산 그대로."""
     from PyQt6.QtCore import QRect
