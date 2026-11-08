@@ -140,33 +140,21 @@ class ReadAloud(QObject):
         if not self._active or not self._owords:
             return False
         s = self._oscale
-        # 클릭 지점에 가장 가까운 ocr_word 인덱스
-        best, bestd = None, 1e18
+        # 261108-29(SOT §1.9): 찍은 점이 **상자 안**인 낱말이 먼저, 없으면 상자까지 가장 가까운 낱말.
+        #   종전에는 상자 **가운데**까지의 거리라, 한글 OCR 처럼 글자 하나짜리 작은 상자가 촘촘하면
+        #   옆 줄의 긴 낱말보다 멀게 재어지기도 했다. 읽는 문장에 맞춘 낱말(`_wsent`)만 고른다.
+        wsent = getattr(self, "_wsent", None) or [None] * len(self._owords)
+        target, bestd = None, 1e18
         for j, w in enumerate(self._owords):
-            cx = (w["x0"] + w["x1"]) / 2 * s
-            cy = (w["y0"] + w["y1"]) / 2 * s
-            d = (cx - px) ** 2 + (cy - py) ** 2
-            if d < bestd:
-                bestd, best = d, j
-        if best is None:
-            return False
-        # 그 단어를 포함하는 문장(없으면 시작이 best 이하인 가장 가까운 문장)
-        spans = getattr(self, "_spans", [])
-        target = None
-        for si, (a, b) in enumerate(spans):
-            if a is None or b is None:
+            if j >= len(wsent) or wsent[j] is None:
                 continue
-            if a <= best <= b:
-                target = si
-                break
-            if a <= best:
-                target = si               # best 를 지난 마지막 문장(폴백)
-        if target is None:
-            for si, (a, b) in enumerate(spans):
-                if a is not None:
-                    target = si           # 첫 유효 문장
-                    break
-        if target is None:
+            x0, y0, x1, y1 = w["x0"] * s, w["y0"] * s, w["x1"] * s, w["y1"] * s
+            dx = max(x0 - px, 0.0, px - x1)
+            dy = max(y0 - py, 0.0, py - y1)
+            d = dx * dx + dy * dy
+            if d < bestd:
+                bestd, target = d, wsent[j]
+        if target is None:                # 어느 낱말도 읽는 글에 맞지 않았다
             return False
         self.mw._study_get_tts().stop()
         self._si = target
@@ -373,31 +361,50 @@ class ReadAloud(QObject):
             pass
         return out
 
-    _ALIGN_WINDOW = 10     # 문장 정렬 시 ocr_word 전방 탐색 폭
+    _ALIGN_MIN = 2         # 261108-29: 글자 맞춤에서 이보다 짧게 겹친 조각은 우연으로 본다
+
+    @staticmethod
+    def _norm(t: str) -> str:
+        return re.sub(r"[^0-9A-Za-z가-힣]", "", (t or "").lower())
 
     def _build_spans(self):
-        """문장(speak 단위)을 ocr_word 구간 [start, end] 으로 한 번에 정렬.
-        OCR 페이지는 text=단어surface 공백조인이라 1:1 정렬이 잘 맞음.
-        문장 단위 강조라 단어 매칭 표류에 강함(엉뚱한 단어 점프 없음)."""
-        self._spans = []
-        ow = [re.sub(r"[^0-9A-Za-z가-힣]", "", (x.get("surface") or "").lower())
-              for x in self._owords]
-        N = len(ow)
-        p = 0
-        for sent in self._sents:
-            words = [re.sub(r"[^0-9A-Za-z가-힣]", "", t.lower())
-                     for t in re.findall(r"[0-9A-Za-z가-힣]+", sent)]
-            words = [w for w in words if w]
-            start = last = None
-            for w in words:
-                for j in range(p, min(N, p + self._ALIGN_WINDOW)):
-                    if ow[j] == w:
-                        if start is None:
-                            start = j
-                        last = j
-                        p = j + 1
-                        break
-            self._spans.append((start, last) if start is not None else (p, p - 1))
+        """문장(읽는 단위)마다 그 문장에 든 낱말 구간 [start, end] 와, 낱말마다 그 문장(`_wsent`).
+
+        261108-29(사용자 보고 "성격심리책은 한글인데, 내가 찍은 곳을 제대로 찾지 못하고, 엉뚱한 곳부터
+        읽어", SOT §1.9): 종전에는 **낱말이 글자까지 똑같아야** 맞췄고, 앞으로 10 낱말 안에서만 찾았다.
+        한글 OCR 낱말은 글자 조각('성'·'격'·'론')이 많고, 읽는 글은 텍스트 창 글이라 띄어쓰기를
+        고쳐 놓았다('성격이론의') — 첫 문장 뒤로 하나도 맞지 않아, 찍은 곳 대부분이 마지막 문장으로 갔다.
+        영어는 낱말이 OCR 그대로라 맞았다. 이제 띄어쓰기·문장부호를 뺀 **글자 줄**끼리 맞춘다 —
+        조각으로 갈리든 띄어쓰기가 고쳐지든 글자 차례는 같다. 낱말은 그 글자들이 가장 많이 든 문장으로."""
+        from difflib import SequenceMatcher
+        ow = [self._norm(x.get("surface")) for x in self._owords]
+        a_chars, a_word = [], []
+        for j, c in enumerate(ow):
+            a_chars.append(c)
+            a_word.extend([j] * len(c))
+        b_chars, b_sent = [], []
+        for si, sent in enumerate(self._sents):
+            c = self._norm(sent)
+            b_chars.append(c)
+            b_sent.extend([si] * len(c))
+        votes = [dict() for _ in ow]
+        sm = SequenceMatcher(None, "".join(a_chars), "".join(b_chars), autojunk=False)
+        for ai, bi, n in sm.get_matching_blocks():
+            if n < self._ALIGN_MIN:
+                continue
+            for k in range(n):
+                v = votes[a_word[ai + k]]
+                si = b_sent[bi + k]
+                v[si] = v.get(si, 0) + 1
+        self._wsent = [max(v, key=v.get) if v else None for v in votes]
+        first, last = {}, {}
+        for j, si in enumerate(self._wsent):
+            if si is None:
+                continue
+            first.setdefault(si, j)
+            last[si] = j
+        self._spans = [(first[si], last[si]) if si in first else (None, None)
+                       for si in range(len(self._sents))]
 
     def _highlight_sentence(self, si: int):
         """현재 문장 구간 전체를 강조(읽는 위치=문장). 단어장 단어는 주황으로 구분,
