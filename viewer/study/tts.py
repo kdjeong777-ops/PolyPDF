@@ -11,6 +11,42 @@ _PURGE = 2          # SVSFPurgeBeforeSpeak — 이전 발화 중단
 _IS_SPEAKING = 2    # SpeechRunState.SRSEIsSpeaking
 
 
+def enumerate_voices(voice, wc):
+    """음성 목록 한 길 (영상·음성 SOT §1.1·§1.8 의 4, 261108-25) — 화면 읽기·mp3 저장이 함께 쓴다.
+
+    ① 클래식 SAPI5(`GetVoices`) ② OneCore(레지스트리 토큰). 표시명에서 ' Desktop' 을 뺀 기준명으로
+    겹침을 없앤다(클래식 우선). 돌려줌: (이름→토큰, {'kor': 토큰, 'eng': 토큰}).
+    종전 mp3 저장은 ① 만 보아, 화면 읽기에서 고른 OneCore 음성(예: Mark)이 mp3 에서는 무시됐다.
+    """
+    by_name, tok, seen = {}, {"kor": None, "eng": None}, set()
+
+    def _add(t):
+        try:
+            name = (t.GetAttribute("Name") or "")
+        except Exception:
+            return
+        if not name:
+            return
+        base = name.replace(" Desktop", "").strip().lower()
+        if base in seen:
+            return
+        seen.add(base)
+        by_name[name] = t
+        try:
+            lang = (t.GetAttribute("Language") or "").lower()
+        except Exception:
+            lang = ""
+        if "412" in lang and tok["kor"] is None:   # 412 = Korean
+            tok["kor"] = t
+        elif "409" in lang and tok["eng"] is None:  # 409 = English(US)
+            tok["eng"] = t
+
+    for t in voice.GetVoices():
+        _add(t)
+    TTS._add_onecore_voices(wc, _add)
+    return by_name, tok
+
+
 class TTS:
     def __init__(self):
         self._voice = None
@@ -24,6 +60,10 @@ class TTS:
         self._spk_t0 = 0.0        # 마지막 speak 시각
         self._spk_issued = False  # speak 후 아직 완료 확인 전
         self._spk_seen = False    # 이번 발화에서 RunningState==speaking 을 본 적 있는지
+        # 261108-25(SOT §1.8 의 5): 읽는 글 ↔ 표시 글 위치 맵 — SAPI 흐름 번호(Speak 가 돌려줌)마다
+        self._maps = {}           # stream_no -> tts_text.SpokenText
+        self._multi = False       # 이번 문장을 여러 조각으로 넘겼는지(조각 사이 상태 보강용)
+        self._last_stream = 0     # 마지막 Speak 의 흐름 번호
 
     def available(self) -> bool:
         self._ensure()
@@ -35,33 +75,9 @@ class TTS:
         try:
             import win32com.client
             self._voice = win32com.client.Dispatch("SAPI.SpVoice")
-            seen = set()    # 260618-31: 표시명(Desktop 접미 제거) 기준 중복 방지
-
-            def _add(tok):
-                try:
-                    name = (tok.GetAttribute("Name") or "")
-                except Exception:
-                    return
-                if not name:
-                    return
-                base = name.replace(" Desktop", "").strip().lower()
-                if base in seen:
-                    return
-                seen.add(base)
-                self._by_name[name] = tok
-                lang = (tok.GetAttribute("Language") or "").lower()
-                if "412" in lang and self._tok["kor"] is None:   # 412 = Korean
-                    self._tok["kor"] = tok
-                elif "409" in lang and self._tok["eng"] is None:  # 409 = English(US)
-                    self._tok["eng"] = tok
-
-            # 1) 클래식 SAPI5 음성
-            for tok in self._voice.GetVoices():
-                _add(tok)
-            # 2) 260618-31: OneCore(최신·추가 설치) 음성도 포함 — 클래식 GetVoices 에는
-            #    안 나오는 음성(예: Mark, 한국어 SunHi, Windows '음성' 설정에서 추가한 언어
-            #    음성)을 레지스트리 토큰으로 등록해 성우 목록·언어 자동선택에 사용.
-            self._add_onecore_voices(win32com.client, _add)
+            # 1) 클래식 SAPI5 음성 2) 260618-31: OneCore(최신·추가 설치) 음성 — 클래식 GetVoices 에는
+            #    안 나오는 음성(예: Mark, Windows '음성' 설정에서 추가한 언어 음성). 한 길: enumerate_voices.
+            self._by_name, self._tok = enumerate_voices(self._voice, win32com.client)
             self._ok = True
         except Exception:
             self._ok = False
@@ -136,6 +152,14 @@ class TTS:
         if running:
             self._spk_seen = True
             return True
+        # 261108-25: 한 문장을 한·영 조각 여럿으로 넘기면 조각 사이에 잠깐 'Done' 으로 보일 수 있다 —
+        #   대기열이 다 끝났는지(WaitUntilDone(0) = 기다리지 않고 묻기)로 한 번 더 본다.
+        if self._multi and self._spk_seen:
+            try:
+                if not self._voice.WaitUntilDone(0):
+                    return True
+            except Exception:
+                pass
         # 260618-7: 발화 직후 SAPI 가 아직 RunningState==speaking 으로 전환되기 전
         #   (비동기 시작 레이스)에는 '말하는 중'으로 간주해 폴링 루프가 첫 발화를
         #   퍼지·건너뛰지 않게 한다. 한 번이라도 speaking 을 본 뒤 Done 이면 진짜 종료.
@@ -162,9 +186,15 @@ class TTS:
             return None
         try:
             st = self._voice.Status
-            return (int(st.InputWordPosition), int(st.InputWordLength))
+            pos, ln = int(st.InputWordPosition), int(st.InputWordLength)
+            sno = int(st.CurrentStreamNumber)
         except Exception:
             return None
+        # 261108-25(SOT §1.8 의 5): speak_reading 으로 넘긴 글은 읽는 글 기준 위치 → 표시 글 위치로
+        sp = self._maps.get(sno)
+        if sp is not None:
+            return sp.to_display(pos, ln)
+        return (pos, ln)
 
     def _select(self, lang: str):
         if self._forced is not None:
@@ -194,12 +224,14 @@ class TTS:
                         self._voice.Voice = tok
                     except Exception:
                         pass
-            self._voice.Speak(text, flags)
+            self._last_stream = self._voice.Speak(text, flags)
             import time as _t
             self._spk_t0 = _t.time()
             self._spk_issued = True
             if not queue:
                 self._spk_seen = False
+                self._maps = {}
+                self._multi = False
             return True
 
         try:
@@ -213,7 +245,41 @@ class TTS:
                 pass
             return False
 
+    def speak_reading(self, text: str) -> bool:
+        """본문 읽기·mp3 와 같은 규칙으로 문장 하나를 읽는다 (영상·음성 SOT §1.8, 261108-25).
+
+        표시 글은 그대로 두고 `tts_text.reading_pieces` 가 만든 **읽는 글**(숫자·단위 풀기)을
+        한·영 조각마다 그 언어 음성으로 차례로 넘긴다. 성우를 고정했으면 조각을 나누지 않는다
+        (한 음성이 다 읽으니 나눌 까닭이 없다). `word_span` 은 표시 글 위치를 돌려준다.
+        """
+        from viewer.study import tts_text
+        if not text or not text.strip():
+            return False
+        self._ensure()
+        if self._forced is not None:
+            lg = tts_text.base_lang(text)
+            pieces = [(tts_text.normalize(text, lg), lg)]
+        else:
+            pieces = tts_text.reading_pieces(text)
+        pieces = [(sp, lg) for sp, lg in pieces if sp.text.strip()]
+        if not pieces:
+            return False
+        ok_any = False
+        for i, (sp, lg) in enumerate(pieces):
+            ok = self.speak(sp.text, "kor" if lg == "ko" else "eng", queue=(i > 0))
+            if not ok:
+                return ok_any
+            ok_any = True
+            try:
+                self._maps[int(self._last_stream)] = sp
+            except Exception:
+                pass
+        self._multi = len(pieces) > 1
+        return ok_any
+
     def stop(self) -> None:
+        self._maps = {}
+        self._multi = False
         self._spk_issued = False
         self._spk_seen = False
         if self._voice is not None:

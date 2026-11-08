@@ -1255,12 +1255,12 @@ class StudyMp3Worker(QObject):
     def run(self):
         from pathlib import Path as _P
         try:
-            from viewer.study.mp3_export import synth_to_mp3, _make_voice
+            from viewer.study.mp3_export import synth_to_mp3, _make_voice, _find_voice
             import pythoncom, win32com.client
             pythoncom.CoInitialize()
             voice, tok = _make_voice(self.rate)        # 1회 생성·재사용(빠름)
-            by = {t.GetAttribute("Name"): t for t in voice.GetVoices()}
-            forced = by.get(self.voice_name) if self.voice_name else None
+            # 261108-25(영상·음성 SOT §1.8 의 4): 화면 읽기와 같은 성우 목록(OneCore 포함)에서 찾는다
+            forced = _find_voice(voice, self.voice_name)
             n = len(self.jobs)
             done = skipped = 0
             for i, (mp3, lrc, segs) in enumerate(self.jobs):

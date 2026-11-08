@@ -81,6 +81,8 @@ class ReadAloud(QObject):
         #   _reading_page=리더가 현재 읽는 페이지(리더 자신의 페이지 넘김과 사용자 이동 구분).
         self._reading_page = -1
         self._srects: list = []      # 260911: 문장마다의 자리(텍스트 창과 같은 범위)
+        self._para_end: list = []    # 261108-25(SOT §1.8 의 1): 문장마다 '그 줄 묶음(문단)의 끝인가'
+        self._pause_until = 0.0      # 261108-25: 문장이 끝난 뒤 다음 문장까지 쉬는 끝 시각
         self._home_page = None       # 260911: 읽기를 시작한 쪽(끝나면 여기로)
         self._pending_restart_page = None
         self._restart_timer = QTimer(self)
@@ -253,9 +255,12 @@ class ReadAloud(QObject):
         if units:
             self._sents = [u[0] for u in units]
             self._srects = [u[1] for u in units]
+            self._para_end = [bool(u[2]) if len(u) > 2 else False for u in units]
         else:
             self._sents = sentences_of(self._page_text(page))
             self._srects = []
+            self._para_end = []
+        self._pause_until = 0.0
         self._si = 0
         self._load_owords(page)
         self._build_spans()
@@ -462,6 +467,7 @@ class ReadAloud(QObject):
         return max(0.5, n / cps)
 
     def _speak_cur(self):
+        self._pause_until = 0.0                         # 261108-25: 자리를 옮겨 읽을 때 남은 쉼은 버린다
         if 0 <= self._si < len(self._sents):
             import time
             s = self._sents[self._si]
@@ -471,7 +477,10 @@ class ReadAloud(QObject):
             self._cur_min_dur = self._estimate_dur(s)  # 260618-26: 최소 보장 시간
             # 260618-25: speak() 실패(False)는 종전엔 무시되어 '무음'으로만 보였음 →
             #   사용자에게 원인을 알려 진단 가능하게 함(엔진은 재초기화 후 재시도까지 수행).
-            ok = self.mw._study_get_tts().speak(s, lang)
+            # 261108-25(SOT §1.8): 표시 글은 그대로, 읽는 글(숫자·단위 풀기·한영 조각)은 엔진 쪽 한 길
+            tts = self.mw._study_get_tts()
+            sr = getattr(tts, "speak_reading", None)
+            ok = sr(s) if callable(sr) else tts.speak(s, lang)
             if not ok:
                 try:
                     self.mw.status.showMessage(
@@ -496,6 +505,17 @@ class ReadAloud(QObject):
                     return
         except Exception:
             pass
+        # 261108-25(SOT §1.8 의 1): 문장 사이 쉼 — 문단(줄 묶음) 끝이면 더 길게. 타이머가 120ms 마다 오므로
+        #   기다림은 시각 비교뿐(메인 스레드를 막지 않는다, 응답성 SOT §4.8).
+        import time as _t
+        if self._pause_until <= 0.0:
+            from viewer.study.tts_text import SENT_PAUSE_MS, PARA_PAUSE_MS
+            pe = 0 <= self._si < len(self._para_end) and self._para_end[self._si]
+            self._pause_until = _t.time() + (PARA_PAUSE_MS if pe else SENT_PAUSE_MS) / 1000.0
+            return
+        if _t.time() < self._pause_until:
+            return
+        self._pause_until = 0.0
         # 현재 문장 끝 → 다음
         self._si += 1
         if self._si < len(self._sents):
@@ -561,6 +581,7 @@ class ReadAloud(QObject):
             rows = tx.display_rows(cur, int(page), words_lookup=look)
         except Exception:
             return []
+        # 261108-25(SOT §1.8 의 1): 셋째 값 = 그 줄(텍스트 창의 이은 줄 = 문단 꼴)의 마지막 문장인가 — 쉼을 길게
         units, pend_t, pend_r = [], "", []
         for r in rows:
             t = (r.get("text") or "").strip()
@@ -572,13 +593,15 @@ class ReadAloud(QObject):
                 ss[0] = (pend_t + " " + ss[0]).strip()
                 rcs = pend_r + rcs
                 pend_t, pend_r = "", []
+            cont = False
             if ss and not _SENT_END_RE.search(ss[-1]):
                 pend_t, pend_r = ss[-1], list(rcs)   # 다음 줄로 이어진다
                 ss = ss[:-1]
-            for one in ss:
-                units.append((one, list(rcs)))
+                cont = True
+            for k, one in enumerate(ss):
+                units.append((one, list(rcs), (k == len(ss) - 1) and not cont))
         if pend_t:
-            units.append((pend_t, list(pend_r)))
+            units.append((pend_t, list(pend_r), True))
         return units
 
     def _page_text(self, page: int) -> str:

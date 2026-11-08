@@ -1,5 +1,9 @@
 """재생내용을 mp3 로 저장 — Windows SAPI(SpMemoryStream, 인메모리) → lameenc.
-디스크 임시파일 없이 합성(40x 빠름)·세그먼트별 정확한 길이로 가사(.lrc). segments=[(text,lang)]."""
+디스크 임시파일 없이 합성(40x 빠름)·세그먼트별 정확한 길이로 가사(.lrc). segments=[(text,lang)].
+
+261108-25(영상·음성 SOT §1.8): 화면 읽기와 **같은 규칙** — 음성 목록은 `tts.enumerate_voices`(OneCore 포함),
+읽는 글은 `tts_text.reading_pieces`(숫자·단위 풀기·한영 조각), 문장 사이 쉼 `SENT_PAUSE_MS`.
+가사(.lrc)는 표시 글 그대로 남긴다."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,14 +25,25 @@ def unique_dir(base: Path) -> Path:
 
 
 def _voice_tokens(voice):
-    tok = {"kor": None, "eng": None}
-    for t in voice.GetVoices():
-        lang = (t.GetAttribute("Language") or "").lower()
-        if "412" in lang and tok["kor"] is None:
-            tok["kor"] = t
-        elif "409" in lang and tok["eng"] is None:
-            tok["eng"] = t
-    return tok
+    """언어별 기본 음성 — 화면 읽기와 같은 목록(클래식 + OneCore, `tts.enumerate_voices`)."""
+    import win32com.client
+    from viewer.study.tts import enumerate_voices
+    return enumerate_voices(voice, win32com.client)[1]
+
+
+def _find_voice(voice, name):
+    """고른 성우 이름 → 토큰(없거나 이름이 비면 None). 화면 읽기 성우 목록과 같은 이름들이다."""
+    if not name:
+        return None
+    import win32com.client
+    from viewer.study.tts import enumerate_voices
+    return enumerate_voices(voice, win32com.client)[0].get(name)
+
+
+def _silence(ms: int) -> bytes:
+    """쉼 — 0 으로 채운 PCM(22kHz 16bit mono)."""
+    n = int(_SR * max(0, int(ms)) / 1000) * _CH * _SW
+    return bytes(n)
 
 
 def _fmt_ts(sec: float) -> str:
@@ -42,20 +57,34 @@ def _segments_pcm(voice, tok, forced, segments):
     pcm = bytearray()
     lrc = []
     t_acc = 0.0
-    for text, lang in segments:
-        ms = win32com.client.Dispatch("SAPI.SpMemoryStream")
-        ms.Format.Type = _SAFT_22k16bitMono
-        voice.AudioOutputStream = ms
-        tk = forced or (tok["kor"] if (lang or "").startswith("ko") else tok["eng"]) \
-            or tok["eng"] or tok["kor"]
-        if tk is not None:
-            voice.Voice = tk
-        voice.Speak(text, 0)
-        voice.AudioOutputStream = None
-        seg = bytes(bytearray(ms.GetData()))
+    from viewer.study import tts_text
+    bps = float(_SR * _CH * _SW)
+    for i, (text, lang) in enumerate(segments):
+        if forced is not None:              # 성우 고정 — 조각을 나누지 않는다(화면 읽기와 같다)
+            lg = tts_text.base_lang(text)
+            pieces = [(tts_text.normalize(text, lg), lg)]
+        else:
+            pieces = tts_text.reading_pieces(text)
+        seg = bytearray()
+        lead = _silence(tts_text.SENT_PAUSE_MS) if i > 0 else b""
+        seg += lead
+        for sp, lg in pieces:
+            if not sp.text.strip():
+                continue
+            ms = win32com.client.Dispatch("SAPI.SpMemoryStream")
+            ms.Format.Type = _SAFT_22k16bitMono
+            voice.AudioOutputStream = ms
+            tk = forced or (tok["kor"] if lg == "ko" else tok["eng"]) \
+                or tok["eng"] or tok["kor"]
+            if tk is not None:
+                voice.Voice = tk
+            voice.Speak(sp.text, 0)
+            voice.AudioOutputStream = None
+            seg += bytes(bytearray(ms.GetData()))
         pcm += seg
-        lrc.append(_fmt_ts(t_acc) + text)
-        t_acc += len(seg) / float(_SR * _CH * _SW)
+        # 가사는 표시 글 그대로, 시각은 쉼 뒤(그 문장 소리가 시작하는 때)
+        lrc.append(_fmt_ts(t_acc + len(lead) / bps) + text)
+        t_acc += len(seg) / bps
     return bytes(pcm), lrc
 
 
@@ -80,9 +109,7 @@ def synth_to_mp3(segments, mp3_path, *, rate: int = 0, voice_name: str = None,
         raise RuntimeError("저장할 내용이 없습니다.")
     if voice is None:
         voice, tok = _make_voice(rate)
-        import win32com.client
-        by = {t.GetAttribute("Name"): t for t in voice.GetVoices()}
-        forced = by.get(voice_name) if voice_name else None
+        forced = _find_voice(voice, voice_name)
 
     pcm, lrc = _segments_pcm(voice, tok, forced, segments)
     enc = lameenc.Encoder()
