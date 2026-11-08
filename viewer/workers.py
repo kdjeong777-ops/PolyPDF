@@ -1345,7 +1345,8 @@ class StudyMp3Worker(QObject):
             syn.load()
             return syn, {"sid": int(self.tts_cfg.get("sid", 0)),
                          "steps": neural_tts.STEPS.get(self.tts_cfg.get("quality"), neural_tts.STEPS["fast"]),
-                         "speed": neural_tts.rate_to_speed(self.rate)}
+                         "speed": neural_tts.rate_to_speed(self.rate),
+                         "normalize": self.tts_cfg.get("normalize"), "split_lang": self.tts_cfg.get("split_lang")}
         except Exception:
             return None, {}
 

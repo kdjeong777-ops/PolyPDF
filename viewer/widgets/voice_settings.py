@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QPushButton, QWidget
+from PyQt6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QPushButton, QWidget
 
 from viewer.i18n import tr
 
@@ -40,6 +40,16 @@ def attach(dlg, layout) -> None:
     cb_q.setCurrentIndex(max(0, cb_q.findData(cur["quality"])))
     f.addRow(tr("음질"), cb_q)
 
+    # 261108-28(SOT §1.10 '앞단'): 사용자가 들어 보고 고른다 — 기본 둘 다 켬
+    ck_norm = QCheckBox(tr("숫자·단위 풀어 읽기 (25 mm → 25 밀리미터, 3개 → 세 개)"))
+    ck_norm.setObjectName("chkTtsNormalize")
+    ck_norm.setChecked(cur["normalize"])
+    f.addRow(ck_norm)
+    ck_split = QCheckBox(tr("한국어 문장 속 긴 영어 구절은 영어로 읽기"))
+    ck_split.setObjectName("chkTtsSplitLang")
+    ck_split.setChecked(cur["split_lang"])
+    f.addRow(ck_split)
+
     row = QWidget()
     h = QHBoxLayout(row)
     h.setContentsMargins(0, 0, 0, 0)
@@ -54,7 +64,7 @@ def attach(dlg, layout) -> None:
     h.addWidget(btn)
     f.addRow(row)
     note = QLabel("<small>%s</small>" % tr("자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). "
-                                          "목소리·음질은 자연 음성에만 쓰입니다."))
+                                          "목소리·음질과 위의 두 칸은 자연 음성에만 쓰입니다."))
     note.setWordWrap(True)
     f.addRow(note)
     layout.addWidget(grp)
@@ -63,11 +73,15 @@ def attach(dlg, layout) -> None:
         on = cb_eng.currentData() != "sapi"
         cb_sid.setEnabled(on)
         cb_q.setEnabled(on)
+        ck_norm.setEnabled(on)
+        ck_split.setEnabled(on)
     cb_eng.currentIndexChanged.connect(lambda *_: _sync())
     _sync()
     dlg.cmb_tts_engine, dlg.cmb_tts_voice, dlg.cmb_tts_quality = cb_eng, cb_sid, cb_q
+    dlg.chk_tts_normalize, dlg.chk_tts_split = ck_norm, ck_split
 
     def result():
         return {"tts_voice": {"engine": cb_eng.currentData(), "sid": int(cb_sid.currentData()),
-                              "quality": cb_q.currentData()}}
+                              "quality": cb_q.currentData(), "normalize": ck_norm.isChecked(),
+                              "split_lang": ck_split.isChecked()}}
     dlg._extra_results.append(result)

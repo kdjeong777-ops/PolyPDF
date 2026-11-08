@@ -149,17 +149,20 @@ def float_to_int16(x) -> bytes:
 
 # ── 앞단 ──────────────────────────────────────────────────────────
 
-def pieces_for(text: str) -> list:
-    """자연 음성에 넘길 조각 [(글, 'ko'|'en')] — 앞단 규칙(NEURAL_NORMALIZE·NEURAL_SPLIT_LANG)."""
+def pieces_for(text: str, normalize: bool | None = None, split_lang: bool | None = None) -> list:
+    """자연 음성에 넘길 조각 [(글, 'ko'|'en')] — 앞단 규칙. 261108-28: 설정 '숫자·단위 풀어 읽기'·'긴 영어 구절은 영어로'
+    (`tts_voice.normalize`·`split_lang`)로 고른다 — None 이면 기본(NEURAL_NORMALIZE·NEURAL_SPLIT_LANG)."""
     from viewer.study import tts_text
     if not (text or "").strip():
         return []
-    if NEURAL_SPLIT_LANG:
+    norm = NEURAL_NORMALIZE if normalize is None else bool(normalize)
+    split = NEURAL_SPLIT_LANG if split_lang is None else bool(split_lang)
+    if split:
         ps = tts_text.reading_pieces(text)
-        out = [(sp.text if NEURAL_NORMALIZE else sp.display, lg) for sp, lg in ps]
+        out = [(sp.text if norm else sp.display, lg) for sp, lg in ps]
     else:
         lg = tts_text.base_lang(text)
-        out = [(tts_text.normalize(text, lg).text if NEURAL_NORMALIZE else text, lg)]
+        out = [(tts_text.normalize(text, lg).text if norm else text, lg)]
     return [(t.strip(), lg) for t, lg in out if t.strip()]
 
 
@@ -340,6 +343,8 @@ class NeuralReader(_QObject):
         super().__init__(parent)          # QObject — 배경 일꾼의 신호가 메인 스레드로(대기열 연결) 오게
         self.sid = int(sid)
         self.steps = STEPS.get(quality, STEPS["fast"])
+        self.normalize = NEURAL_NORMALIZE      # 설정 '숫자·단위 풀어 읽기'
+        self.split_lang = NEURAL_SPLIT_LANG    # 설정 '긴 영어 구절은 영어로'
         self.speed = 1.0
         self._synth_factory = synth_factory or (lambda: Synth())
         self._player_factory = player_factory
@@ -362,10 +367,10 @@ class NeuralReader(_QObject):
     def available(self) -> bool:
         return engine_importable() and model_ready() and not self._failed
 
-    def configure(self, sid: int, quality: str):
-        if int(sid) != self.sid or STEPS.get(quality, STEPS["fast"]) != self.steps:
-            self.sid = int(sid)
-            self.steps = STEPS.get(quality, STEPS["fast"])
+    def configure(self, sid: int, quality: str, normalize: bool = NEURAL_NORMALIZE, split_lang: bool = NEURAL_SPLIT_LANG):
+        new = (int(sid), STEPS.get(quality, STEPS["fast"]), bool(normalize), bool(split_lang))
+        if new != (self.sid, self.steps, self.normalize, self.split_lang):
+            self.sid, self.steps, self.normalize, self.split_lang = new
             self._cache.clear(); self._order.clear()
 
     def set_rate(self, rate: int):
@@ -462,7 +467,7 @@ class NeuralReader(_QObject):
         if self._player is not None and self._player.busy():
             self._player.stop()           # 아직 소리 나는 앞 문장을 끊는다(SAPI 의 PURGE 와 같다 — 찍은 곳부터 읽기 등)
         self._cur_text = text
-        ps = pieces_for(text)
+        ps = pieces_for(text, self.normalize, self.split_lang)
         if self._first and ps:
             t0, lg0 = ps[0]
             ps = [(x, lg0) for x in split_first(t0)] + ps[1:]
@@ -480,7 +485,7 @@ class NeuralReader(_QObject):
         if not self.available():
             return
         for t in list(texts or [])[:PREFETCH]:
-            for x, lg in pieces_for(t):
+            for x, lg in pieces_for(t, self.normalize, self.split_lang):
                 self._request(x, lg)
 
     def is_speaking(self) -> bool:

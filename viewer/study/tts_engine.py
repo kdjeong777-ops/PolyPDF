@@ -10,7 +10,7 @@ from __future__ import annotations
 
 ENGINES = ("auto", "sapi", "neural")
 QUALITIES = ("fast", "high")
-DEFAULT = {"engine": "auto", "sid": 0, "quality": "fast"}
+DEFAULT = {"engine": "auto", "sid": 0, "quality": "fast", "normalize": True, "split_lang": True}
 
 _ready = None          # 자연 음성을 쓸 수 있나(엔진+모델) — 처음 한 번 본다
 
@@ -23,7 +23,10 @@ def normalize_cfg(v) -> dict:
     except (TypeError, ValueError):
         sid = 0
     q = v.get("quality") if v.get("quality") in QUALITIES else DEFAULT["quality"]
-    return {"engine": eng, "sid": sid, "quality": q}
+    # 261108-28: 자연 음성 앞단 — 사용자가 들어 보고 고른다(기본 둘 다 켬, 영상·음성 SOT §1.10 '앞단')
+    nz = bool(v.get("normalize", DEFAULT["normalize"]))
+    sl = bool(v.get("split_lang", DEFAULT["split_lang"]))
+    return {"engine": eng, "sid": sid, "quality": q, "normalize": nz, "split_lang": sl}
 
 
 def cfg_of(mw) -> dict:
@@ -60,8 +63,7 @@ def reader_for(mw):
             from viewer.study.neural_tts import NeuralReader
             r = NeuralReader(mw, sid=c["sid"], quality=c["quality"])
             mw._neural_reader = r
-        else:
-            r.configure(c["sid"], c["quality"])
+        r.configure(c["sid"], c["quality"], c["normalize"], c["split_lang"])
         if r.available():
             return r
     return mw._study_get_tts()
@@ -70,4 +72,5 @@ def reader_for(mw):
 def export_choice(mw) -> dict:
     """mp3 저장(배경 일꾼)에 넘길 값 — 그 자리에서 엔진을 고른다(일꾼은 창을 모른다)."""
     c = cfg_of(mw)
-    return {"neural": wants_neural(c), "sid": c["sid"], "quality": c["quality"]}
+    return {"neural": wants_neural(c), "sid": c["sid"], "quality": c["quality"],
+            "normalize": c["normalize"], "split_lang": c["split_lang"]}

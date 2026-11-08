@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-08 23:24+0900\n"
+"POT-Creation-Date: 2026-11-08 23:34+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -14302,6 +14302,14 @@ msgid "음질"
 msgstr "Quality"
 
 #: viewer/widgets/voice_settings.py
+msgid "숫자·단위 풀어 읽기 (25 mm → 25 밀리미터, 3개 → 세 개)"
+msgstr "Read numbers and units in words (25 mm → 25 millimeters)"
+
+#: viewer/widgets/voice_settings.py
+msgid "한국어 문장 속 긴 영어 구절은 영어로 읽기"
+msgstr "Read long English phrases in Korean sentences in English"
+
+#: viewer/widgets/voice_settings.py
 msgid "자동 (자연 음성이 있으면 그것)"
 msgstr "Automatic (natural voice if installed)"
 
@@ -14321,9 +14329,11 @@ msgstr "Natural voice installed ✓"
 msgid "자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습니다"
 msgstr "Natural voice not installed — the Windows default voice is used for now"
 
+# | 쓰입니다."
+# | 자연 음성에만 쓰입니다."
 #: viewer/widgets/voice_settings.py
-msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). 목소리·음질은 자연 음성에만 쓰입니다."
-msgstr "The natural voice is AI-generated sound (model license OpenRAIL-M — see the notice in About). Voice and quality apply only to the natural voice."
+msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). 목소리·음질과 위의 두 칸은 자연 음성에만 쓰입니다."
+msgstr "The natural voice is AI-generated sound (model license OpenRAIL-M — see the notice in About). Voice, quality and the two options above apply only to the natural voice."
 
 #: viewer/widgets/voice_settings.py
 #, python-brace-format

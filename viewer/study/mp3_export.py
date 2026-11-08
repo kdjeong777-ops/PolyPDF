@@ -88,7 +88,7 @@ def _segments_pcm(voice, tok, forced, segments):
     return bytes(pcm), lrc
 
 
-def _neural_segments_pcm(neural, segments, *, sid=0, steps=4, speed=1.0):
+def _neural_segments_pcm(neural, segments, *, sid=0, steps=4, speed=1.0, normalize=None, split_lang=None):
     """261108-28(SOT §1.10): 자연 음성 — 배경 스레드의 `neural_tts.Synth` 로 44.1kHz int16 PCM + 가사."""
     from viewer.study import tts_text, neural_tts
     sr = int(getattr(neural, "sample_rate", neural_tts.SAMPLE_RATE) or neural_tts.SAMPLE_RATE)
@@ -97,7 +97,7 @@ def _neural_segments_pcm(neural, segments, *, sid=0, steps=4, speed=1.0):
     for i, (text, _lang) in enumerate(segments):
         lead = _silence(tts_text.SENT_PAUSE_MS, sr) if i > 0 else b""
         seg = bytearray(lead)
-        for t, lg in neural_tts.pieces_for(text):
+        for t, lg in neural_tts.pieces_for(text, normalize, split_lang):
             seg += neural.generate(t, lg, sid, steps, speed)
         pcm += seg
         lrc.append(_fmt_ts(t_acc + len(lead) / bps) + text)
@@ -142,7 +142,8 @@ def synth_to_mp3(segments, mp3_path, *, rate: int = 0, voice_name: str = None,
     if neural is not None:
         o = dict(neural_opts or {})
         pcm, lrc, sr = _neural_segments_pcm(neural, segments, sid=o.get("sid", 0),
-                                            steps=o.get("steps", 4), speed=o.get("speed", 1.0))
+                                            steps=o.get("steps", 4), speed=o.get("speed", 1.0),
+                                            normalize=o.get("normalize"), split_lang=o.get("split_lang"))
         tag = id3_comment(GENERATED_NOTE)
     else:
         if voice is None:

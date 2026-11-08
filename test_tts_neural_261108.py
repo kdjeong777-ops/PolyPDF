@@ -130,8 +130,10 @@ class FakeSynth:
 if tts_engine is not None:
     print("=== (A) 엔진 고르기 ===")
     nc = tts_engine.normalize_cfg
-    chk(nc(None) == {"engine": "auto", "sid": 0, "quality": "fast"}, "(A) 기본값 자동·목소리 1·빠름", str(nc(None)))
-    chk(nc({"engine": "x", "sid": 42, "quality": "?"}) == {"engine": "auto", "sid": 9, "quality": "fast"},
+    chk(nc(None) == {"engine": "auto", "sid": 0, "quality": "fast", "normalize": True, "split_lang": True},
+        "(A) 기본값 자동·목소리 1·빠름·숫자 풀기 켬·영어 구절 나눔 켬", str(nc(None)))
+    chk(nc({"engine": "x", "sid": 42, "quality": "?"}) == {"engine": "auto", "sid": 9, "quality": "fast",
+                                                           "normalize": True, "split_lang": True},
         "(A) 틀린 값은 기본·범위로", str(nc({"engine": "x", "sid": 42, "quality": "?"})))
 
     class _MW(QObject):
@@ -158,9 +160,21 @@ if tts_engine is not None:
             "(A) 자동이면 모델이 있을 때 자연 음성(목소리·음질 반영)", repr(r))
         chk(tts_engine.reader_for(mw) is r, "(A) 같은 창은 같은 자연 음성 읽개를 다시 쓴다")
         ex = tts_engine.export_choice(mw)
-        chk(ex == {"neural": True, "sid": 3, "quality": "high"}, "(A) mp3 에 넘길 값", str(ex))
+        chk(ex == {"neural": True, "sid": 3, "quality": "high", "normalize": True, "split_lang": True},
+            "(A) mp3 에 넘길 값", str(ex))
+        mw._prefs["tts_voice"].update(normalize=False, split_lang=False)
+        r2 = tts_engine.reader_for(mw)
+        chk(r2 is r and not r.normalize and not r.split_lang, "(A) 앞단 설정이 읽개에 들어간다")
+        chk(tts_engine.export_choice(mw)["normalize"] is False, "(A) 앞단 설정이 mp3 에도")
     finally:
         neural_tts.NeuralReader.available = orig_avail
+    s_mix = "이 방법은 Superpave mix design method 에 따라 25 mm 로 정한다."
+    p1 = neural_tts.pieces_for(s_mix, True, True)
+    p2 = neural_tts.pieces_for(s_mix, False, True)
+    p3 = neural_tts.pieces_for(s_mix, True, False)
+    chk([lg for _t, lg in p1] == ["ko", "en", "ko"] and "밀리미터" in p1[2][0], "(A) 기본 앞단 — 정규화·영어 구절 나눔", str(p1))
+    chk("25 mm" in p2[2][0] and "밀리미터" not in "".join(t for t, _ in p2), "(A) '숫자·단위 풀어 읽기' 끄면 원문", str(p2))
+    chk(len(p3) == 1 and p3[0][1] == "ko" and "밀리미터" in p3[0][0], "(A) '영어로 읽기' 끄면 한 문장 통째 ko", str(p3))
 
     print()
     print("=== (B) 메인 스레드에서 싣기·합성 0 ===")
@@ -339,7 +353,12 @@ if tts_engine is not None:
     dlg.cmb_tts_engine.setCurrentIndex(dlg.cmb_tts_engine.findData("neural"))
     dlg.cmb_tts_voice.setCurrentIndex(7)
     rp = dlg.result_prefs()
-    chk(rp.get("tts_voice") == {"engine": "neural", "sid": 7, "quality": "high"}, "(F) 고친 값이 결과로", str(rp.get("tts_voice")))
+    chk(rp.get("tts_voice") == {"engine": "neural", "sid": 7, "quality": "high", "normalize": True, "split_lang": True},
+        "(F) 고친 값이 결과로", str(rp.get("tts_voice")))
+    dlg.chk_tts_normalize.setChecked(False)
+    chk(dlg.result_prefs()["tts_voice"]["normalize"] is False, "(F) '숫자·단위 풀어 읽기' 끄기가 결과로")
+    dlg.cmb_tts_engine.setCurrentIndex(dlg.cmb_tts_engine.findData("sapi"))
+    chk(not dlg.chk_tts_split.isEnabled(), "(F) Windows 기본 음성이면 자연 음성 칸은 끈다")
     dlg.close()
     from viewer import app as _app
     src = __import__("inspect").getsource(_app.MainWindow._apply_prefs)

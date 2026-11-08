@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-08 23:24+0900\n"
+"POT-Creation-Date: 2026-11-08 23:34+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -13956,6 +13956,14 @@ msgid "음질"
 msgstr ""
 
 #: viewer/widgets/voice_settings.py
+msgid "숫자·단위 풀어 읽기 (25 mm → 25 밀리미터, 3개 → 세 개)"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
+msgid "한국어 문장 속 긴 영어 구절은 영어로 읽기"
+msgstr ""
+
+#: viewer/widgets/voice_settings.py
 msgid "자동 (자연 음성이 있으면 그것)"
 msgstr ""
 
@@ -13976,7 +13984,7 @@ msgid "자연 음성 미설치 — 지금은 Windows 기본 음성으로 읽습�
 msgstr ""
 
 #: viewer/widgets/voice_settings.py
-msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). 목소리·음질은 자연 음성에만 쓰입니다."
+msgid "자연 음성은 AI 로 만든 소리입니다(모델 라이선스 OpenRAIL-M — 정보 창의 고지). 목소리·음질과 위의 두 칸은 자연 음성에만 쓰입니다."
 msgstr ""
 
 #: viewer/widgets/voice_settings.py
