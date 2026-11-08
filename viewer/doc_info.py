@@ -24,6 +24,11 @@ PAPERS = (
 )
 SEP = "  ·  "                     # 사진 정보 줄(`photo_controller.photo_info_line`)과 같은 구분
 CACHE_MAX = 64
+# 261108-8(응답성 SOT §9.2): 쪽마다 글자층 판정(`get_texttrace`)이 MuPDF 저장소에 쪽당 ~0.5 MB 를 남기고 그 문서를
+# 닫을 때야 놓는다 — 스캔본 HM(490쪽)이 연 직후 +225 MB(설치 시험 T2 347→576 MB). 이 쪽 수마다 **자기 문서를 닫고
+# 다시 연다** — 저장소의 이 문서 몫만 놓인다. 전역 `store_shrink(100)` 도 같은 효과지만 본문 렌더 몫까지 비우고,
+# `store_shrink(50)` 은 거의 줄지 않는다(실측). 실측 쪽 반복 최대 +225 → +16 MB, 시간 차이 없음(다시 열기 ~1 ms).
+REOPEN_PAGES = 32
 
 
 def paper_name(w_pt: float, h_pt: float) -> str:
@@ -258,6 +263,23 @@ def cached(path: str):
     return None
 
 
+def _reopen(d, path: str, password: str | None):
+    """문서를 닫고 다시 연다(261108-8, `REOPEN_PAGES`) — MuPDF 저장소의 이 문서 몫을 놓는다. 못 열면 None."""
+    try:
+        d.close()
+    except Exception:
+        pass
+    try:
+        import fitz
+        d2 = fitz.open(str(path))
+        if d2.needs_pass and not (password and d2.authenticate(password)):
+            d2.close()
+            return None
+        return d2
+    except Exception:
+        return None
+
+
 def read_info(path: str, password: str | None = None, cancelled=lambda: False, pace=None) -> dict:
     """파일을 따로 열어 문서 정보 창의 값을 모은다 — **배경 스레드에서만**. 같은 크기·수정 시각이면 캐시."""
     key = _cache_key(path)
@@ -300,16 +322,21 @@ def read_info(path: str, password: str | None = None, cancelled=lambda: False, p
         out["layer_check"] = _read_layer_check(d)          # 261107-40: 앱 OCR 과 같다고 확인한 일시·쪽 수
         from viewer.text_extract2 import has_text_layer     # 쪽 판정은 단어학습 SOT §14.18 그대로
         n_no = n_ocr = 0
-        for i in range(d.page_count):
+        n_pages = d.page_count
+        for i in range(n_pages):
             if cancelled():
                 return out                          # 덜 읽은 것은 캐시에 넣지 않는다
             if not has_text_layer(d, i):
                 n_no += 1
                 if _has_words(d, i):                # 261107-40(마스터 §4.12 '글자층 세기'): 그림 위의 보이지 않는 OCR 층도 글자층이다
                     n_ocr += 1
+            if i % REOPEN_PAGES == REOPEN_PAGES - 1 and i + 1 < n_pages:
+                d = _reopen(d, path, password)
+                if d is None:
+                    return out                      # 다시 못 열면 덜 읽은 것 — 캐시에 넣지 않는다
             if pace is not None:
                 pace()
-        out["pages_checked"] = d.page_count
+        out["pages_checked"] = n_pages
         out["pages_no_text"] = n_no                 # 쓸 만한 글자층이 없는 쪽(스캔 판정 — OCR 층 쪽 포함)
         out["pages_ocr_layer"] = n_ocr
     finally:
