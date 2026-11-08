@@ -20,10 +20,16 @@ import fitz
 from PyQt6.QtCore import QStandardPaths
 from test_fixtures import wait_main_open   # 261108-22: 처음 보는 PDF 는 데운 뒤 열린다
 QStandardPaths.setTestModeEnabled(True)
+# 261108-22 보완: 시험 설정 폴더를 프로세스마다 따로 — 이름이 없으면 공용 'qttest/python' 을 다른 검사와 함께 써서
+#   지난 실행의 즐겨찾기(지운 임시 폴더)를 집어 '대상을 찾을 수 없습니다' 모달에 멈추고, 함께 도는 검사의 색인과 섞였다.
+from PyQt6.QtCore import QCoreApplication
+QCoreApplication.setApplicationName("polypdf_srch_case_%d" % os.getpid())
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
+import modal_guard
+modal_guard.install(label=lambda: "검색 대소문자·정규식", echo=False)   # 뜨는 모달은 닫는다(멈춤 → 실패로)
 fails = []
 
 
