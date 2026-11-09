@@ -68,6 +68,7 @@ try:
 
     from viewer.study import mp3_export
     SAVED = []
+    _real_synth = mp3_export.synth_to_mp3
 
     def fake_synth(segs, mp3, **k):
         SAVED.append((mp3, [s for s, _l in segs]))
@@ -125,6 +126,89 @@ try:
     print()
     print("=== D. 작업 창 길 ===")
     chk("main_mp3" in jobs_added, "D 진행·[중단] 은 job_add('main_mp3')", str(jobs_added))
+
+    # --- E·F·G: 진짜 synth_to_mp3·lameenc 로(합성 엔진만 가짜 — 소리 장치·모델 없이) ---
+    from PyQt6.QtWidgets import QMessageBox
+    from viewer import workers as _wk
+    import importlib
+    mp3_export.synth_to_mp3 = _real_synth
+    WARN, PROG = [], []
+    QMessageBox.warning = staticmethod(lambda *a, **k: WARN.append(a[1:3]) or QMessageBox.StandardButton.Ok)
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.No)    # 이미 있는 폴더 → 새 폴더
+    _st = mw.status.showMessage
+    mw.status.showMessage = lambda m, *a: (PROG.append(m), _st(m, *a))[1]
+
+    class FakeNeural:
+        sample_rate = 44100
+        fail = False
+        gate = None
+
+        def generate(self, t, lg, sid, steps, speed):
+            if FakeNeural.fail:
+                raise RuntimeError("합성 실패(시험)")
+            if FakeNeural.gate is not None:
+                FakeNeural.gate()
+            time.sleep(0.02)
+            return b"\x10\x00" * 2205
+    _wk.StudyMp3Worker._neural = lambda self: (FakeNeural(), {"sid": 0, "steps": 4, "speed": 1.0})
+    _te.export_choice = lambda mw_: {"neural": True, "sid": 0, "quality": "fast", "hidden_sapi": []}
+
+    def run_save(timeout=60):
+        n0 = len(mw._study_threads)
+        mw.btn_main_mp3.click()
+        t0 = time.time()
+        QTest.qWait(200)
+        while time.time() - t0 < timeout and mw._study_threads:
+            QTest.qWait(50)
+        QTest.qWait(200)
+
+    def mp3s():
+        out = []
+        for dp, _dn, fns in os.walk(out_parent):
+            out += [os.path.join(dp, f) for f in fns]
+        return out
+
+    print()
+    print("=== E. 저장 뒤 파일이 실제로 있다·진행은 문장 단위 ===")
+    for f in mp3s():
+        os.remove(f)
+    run_save()
+    got = [f for f in mp3s() if f.endswith(".mp3")]
+    chk(len(got) == 1 and os.path.getsize(got[0]) > 1000, "E mp3 파일이 생겼다(진짜 lameenc)", str([(os.path.basename(f), os.path.getsize(f)) for f in got]))
+    chk(not [f for f in mp3s() if f.endswith(".part")], "E 임시 .part 가 남지 않는다")
+    chk(any("문장" in m for m in PROG), "E 진행은 문장 단위(긴 구간도 움직인다)", str([m for m in PROG if m.startswith("mp3")][-3:]))
+    chk(any("남은 시간" in m for m in PROG), "E 남은 시간을 보인다", "")
+    chk(not WARN, "E 성공이면 경고창 없음", str(WARN))
+
+    print()
+    print("=== F. 실패는 창으로 알린다 ===")
+    WARN.clear()
+    FakeNeural.fail = True                             # 자연 음성 실패 → SAPI 로 물러섬 → SAPI 도 없음(가짜 voice None)
+    run_save()
+    FakeNeural.fail = False
+    chk(WARN and "mp3" in str(WARN[0][0]) and "만들지 못했습니다" in str(WARN[0][1]),
+        "F 하나도 못 만들면 경고창(까닭·폴더)", str(WARN)[:300])
+
+    print()
+    print("=== G. 구간 중간에도 [중단] 이 듣는다 ===")
+    WARN.clear(); PROG.clear()
+    for f in mp3s():
+        os.remove(f)
+    calls = {"n": 0}
+
+    def _gate():
+        calls["n"] += 1
+        if calls["n"] == 10:
+            for t in list(mw._study_threads):
+                w = t if hasattr(t, "request_cancel") else None
+                if w is not None:
+                    w.request_cancel()
+    FakeNeural.gate = _gate
+    run_save()
+    FakeNeural.gate = None
+    chk(calls["n"] < 40, "G 문장 사이에서 멈춘다(80 문장 다 만들지 않는다)", "합성 %d번" % calls["n"])
+    chk(not [f for f in mp3s() if f.endswith(".mp3") or f.endswith(".part")], "G 끊긴 구간은 파일을 남기지 않는다", str(mp3s()))
+    chk(not WARN, "G 중단은 경고창이 아니다", str(WARN))
 
     hb.stop()
     mw.close()

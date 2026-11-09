@@ -51,8 +51,12 @@ def _fmt_ts(sec: float) -> str:
     return f"[{m:02d}:{sec - m * 60:05.2f}]"
 
 
-def _segments_pcm(voice, tok, forced, segments):
-    """세그먼트들을 인메모리 합성 → (PCM bytes, lrc 라인 목록)."""
+class Mp3Cancelled(Exception):
+    """261109-5: 문장 사이에서 [중단] — 만들던 구간은 버린다(파일을 남기지 않는다)."""
+
+
+def _segments_pcm(voice, tok, forced, segments, on_seg=None):
+    """세그먼트들을 인메모리 합성 → (PCM bytes, lrc 라인 목록). `on_seg(끝낸 문장 수)` — 중단이면 `Mp3Cancelled`."""
     import win32com.client
     pcm = bytearray()
     lrc = []
@@ -85,10 +89,13 @@ def _segments_pcm(voice, tok, forced, segments):
         # 가사는 표시 글 그대로, 시각은 쉼 뒤(그 문장 소리가 시작하는 때)
         lrc.append(_fmt_ts(t_acc + len(lead) / bps) + text)
         t_acc += len(seg) / bps
+        if on_seg is not None:
+            on_seg(i + 1)
     return bytes(pcm), lrc
 
 
-def _neural_segments_pcm(neural, segments, *, sid=0, steps=4, speed=1.0, normalize=None, split_lang=None):
+def _neural_segments_pcm(neural, segments, *, sid=0, steps=4, speed=1.0, normalize=None, split_lang=None,
+                         on_seg=None):
     """261108-28(SOT §1.10): 자연 음성 — 배경 스레드의 `neural_tts.Synth` 로 44.1kHz int16 PCM + 가사."""
     from viewer.study import tts_text, neural_tts
     sr = int(getattr(neural, "sample_rate", neural_tts.SAMPLE_RATE) or neural_tts.SAMPLE_RATE)
@@ -102,6 +109,8 @@ def _neural_segments_pcm(neural, segments, *, sid=0, steps=4, speed=1.0, normali
         pcm += seg
         lrc.append(_fmt_ts(t_acc + len(lead) / bps) + text)
         t_acc += len(seg) / bps
+        if on_seg is not None:
+            on_seg(i + 1)
     return bytes(pcm), lrc, sr
 
 
@@ -130,8 +139,9 @@ def _make_voice(rate: int, hidden=()):
 
 def synth_to_mp3(segments, mp3_path, *, rate: int = 0, voice_name: str = None,
                  lrc_path=None, bitrate: int = 96,
-                 voice=None, tok=None, forced=None, neural=None, neural_opts=None) -> Path:
+                 voice=None, tok=None, forced=None, neural=None, neural_opts=None, on_seg=None) -> Path:
     """segments → mp3(+lrc). voice/tok/forced 를 넘기면 재사용(반복 호출 빠름).
+    261109-5: `on_seg(끝낸 문장 수)` — 문장마다 진행·중단(`Mp3Cancelled` 를 던지면 이 파일은 만들지 않는다).
     261108-28: neural(배경 스레드의 `neural_tts.Synth`)을 넘기면 자연 음성 — 44.1kHz, ID3 에 '생성 음성' 표기."""
     import lameenc
     mp3_path = Path(mp3_path)
@@ -143,18 +153,25 @@ def synth_to_mp3(segments, mp3_path, *, rate: int = 0, voice_name: str = None,
         o = dict(neural_opts or {})
         pcm, lrc, sr = _neural_segments_pcm(neural, segments, sid=o.get("sid", 0),
                                             steps=o.get("steps", 4), speed=o.get("speed", 1.0),
-                                            normalize=o.get("normalize"), split_lang=o.get("split_lang"))
+                                            normalize=o.get("normalize"), split_lang=o.get("split_lang"),
+                                            on_seg=on_seg)
         tag = id3_comment(GENERATED_NOTE + ((" — " + o["voice_label"]) if o.get("voice_label") else ""))   # 261108-33: 목소리 이름
     else:
         if voice is None:
             voice, tok = _make_voice(rate)
             forced = _find_voice(voice, voice_name)
-        pcm, lrc = _segments_pcm(voice, tok, forced, segments)
+        pcm, lrc = _segments_pcm(voice, tok, forced, segments, on_seg=on_seg)
         sr = _SR
     enc = lameenc.Encoder()
     enc.set_channels(_CH); enc.set_in_sample_rate(sr)
     enc.set_bit_rate(bitrate); enc.set_quality(2)
-    mp3_path.write_bytes(tag + enc.encode(pcm) + enc.flush())
+    # 261109-5: 임시 이름으로 다 쓴 뒤 바꿔 끼운다 — 끊긴 파일이 '이어서 저장' 에서 다 된 것으로 보이지 않게(배경 스레드)
+    import os
+    part = mp3_path.with_name(mp3_path.name + ".part")
+    part.write_bytes(tag + enc.encode(pcm) + enc.flush())
+    os.replace(part, mp3_path)
     if lrc_path:
         Path(lrc_path).write_text("\n".join(lrc), encoding="utf-8")
+    if not (mp3_path.exists() and mp3_path.stat().st_size > 0):
+        raise RuntimeError("mp3 파일이 만들어지지 않았습니다: %s" % mp3_path)
     return mp3_path

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-09 20:17+0900\n"
+"POT-Creation-Date: 2026-11-09 20:38+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -6583,6 +6583,10 @@ msgid "저장하지 않았습니다 — 책갈피창에서 확인한 뒤 [저장
 msgstr ""
 
 #: viewer/study_controller.py
+msgid "mp3 저장 실패"
+msgstr ""
+
+#: viewer/study_controller.py
 msgid "mp3 분할 기준"
 msgstr ""
 
@@ -6626,11 +6630,12 @@ msgid "mp3 저장 — {name}"
 msgstr ""
 
 #: viewer/study_controller.py
-msgid "PDF 문서를 찾을 수 없습니다."
+#, python-brace-format
+msgid "mp3 저장 완료: {get}/{get2} 구간 → {name}"
 msgstr ""
 
 #: viewer/study_controller.py
-msgid "mp3 저장 실패"
+msgid "PDF 문서를 찾을 수 없습니다."
 msgstr ""
 
 #: viewer/study_controller.py
@@ -6645,6 +6650,11 @@ msgstr ""
 #: viewer/study_controller.py
 #, python-brace-format
 msgid "'{name}' 의 일괄 OCR 이 끝났습니다."
+msgstr ""
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다."
 msgstr ""
 
 #: viewer/study_controller.py
@@ -6702,6 +6712,18 @@ msgstr ""
 
 #: viewer/study_controller.py
 #, python-brace-format
+msgid "외 {n}개"
+msgstr ""
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid ""
+"mp3 {saved}개를 저장했고 {failed}개는 만들지 못했습니다.\n"
+"폴더: {path}"
+msgstr ""
+
+#: viewer/study_controller.py
+#, python-brace-format
 msgid "{what} 중단 — 읽은 {n}쪽은 저장하지 않은 상태로 남아, 다시 시작하면 이어서 합니다."
 msgstr ""
 
@@ -6728,16 +6750,6 @@ msgstr ""
 #: viewer/study_controller.py
 #, python-brace-format
 msgid "'{name}' — {why}"
-msgstr ""
-
-#: viewer/study_controller.py
-#, python-brace-format
-msgid "mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다."
-msgstr ""
-
-#: viewer/study_controller.py
-#, python-brace-format
-msgid "mp3 저장 완료: {get}/{get2} 구간 → {name}"
 msgstr ""
 
 #: viewer/study_controller.py
@@ -14229,6 +14241,11 @@ msgstr ""
 
 #: viewer/workers.py
 #, python-brace-format
+msgid "{i}/{n} 구간 · 문장 {c}/{t}"
+msgstr ""
+
+#: viewer/workers.py
+#, python-brace-format
 msgid "{pg}쪽"
 msgstr ""
 
@@ -14253,6 +14270,11 @@ msgstr ""
 #: viewer/workers.py
 #, python-brace-format
 msgid "{p}쪽 글자층 쓰는 중…"
+msgstr ""
+
+#: viewer/workers.py
+#, python-brace-format
+msgid "남은 시간 약 {m}분"
 msgstr ""
 
 #: viewer/workers.py

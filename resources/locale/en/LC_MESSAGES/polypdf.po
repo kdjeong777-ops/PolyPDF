@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-09 20:17+0900\n"
+"POT-Creation-Date: 2026-11-09 20:38+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -6766,6 +6766,10 @@ msgid "저장하지 않았습니다 — 책갈피창에서 확인한 뒤 [저장
 msgstr "Not saved — check them in the Bookmarks panel, then press [Save]."
 
 #: viewer/study_controller.py
+msgid "mp3 저장 실패"
+msgstr "mp3 Save Failed"
+
+#: viewer/study_controller.py
 msgid "mp3 분할 기준"
 msgstr "mp3 Split By"
 
@@ -6811,12 +6815,13 @@ msgid "mp3 저장 — {name}"
 msgstr "Save mp3 — {name}"
 
 #: viewer/study_controller.py
-msgid "PDF 문서를 찾을 수 없습니다."
-msgstr "PDF document not found."
+#, python-brace-format
+msgid "mp3 저장 완료: {get}/{get2} 구간 → {name}"
+msgstr "mp3 saved: {get}/{get2} sections → {name}"
 
 #: viewer/study_controller.py
-msgid "mp3 저장 실패"
-msgstr "mp3 Save Failed"
+msgid "PDF 문서를 찾을 수 없습니다."
+msgstr "PDF document not found."
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -6831,6 +6836,11 @@ msgstr "No bookmarks were found."
 #, python-brace-format
 msgid "'{name}' 의 일괄 OCR 이 끝났습니다."
 msgstr "Batch OCR of '{name}' is finished."
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다."
+msgstr "mp3 saving stopped: {saved} saved — 'Continue saving' picks up the rest."
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -6896,6 +6906,20 @@ msgstr "Added {n} bookmarks to the Bookmarks panel (not saved)."
 
 #: viewer/study_controller.py
 #, python-brace-format
+msgid "외 {n}개"
+msgstr "and {n} more"
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid ""
+"mp3 {saved}개를 저장했고 {failed}개는 만들지 못했습니다.\n"
+"폴더: {path}"
+msgstr ""
+"Saved {saved} mp3 file(s); {failed} could not be created.\n"
+"Folder: {path}"
+
+#: viewer/study_controller.py
+#, python-brace-format
 msgid "{what} 중단 — 읽은 {n}쪽은 저장하지 않은 상태로 남아, 다시 시작하면 이어서 합니다."
 msgstr "{what} stopped — the {n} page(s) read stay unsaved, and starting again continues from there."
 
@@ -6923,16 +6947,6 @@ msgstr "{what} error: {e}"
 #, python-brace-format
 msgid "'{name}' — {why}"
 msgstr "'{name}' — {why}"
-
-#: viewer/study_controller.py
-#, python-brace-format
-msgid "mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다."
-msgstr "mp3 saving stopped: {saved} saved — 'Continue saving' picks up the rest."
-
-#: viewer/study_controller.py
-#, python-brace-format
-msgid "mp3 저장 완료: {get}/{get2} 구간 → {name}"
-msgstr "mp3 saved: {get}/{get2} sections → {name}"
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -14574,6 +14588,11 @@ msgstr "Collecting text to read: page {i}/{n}"
 
 #: viewer/workers.py
 #, python-brace-format
+msgid "{i}/{n} 구간 · 문장 {c}/{t}"
+msgstr "Section {i}/{n} · sentence {c}/{t}"
+
+#: viewer/workers.py
+#, python-brace-format
 msgid "{pg}쪽"
 msgstr "Page {pg}"
 
@@ -14599,6 +14618,11 @@ msgstr "Reading page {pg}…"
 #, python-brace-format
 msgid "{p}쪽 글자층 쓰는 중…"
 msgstr "Writing text layer on page {p}…"
+
+#: viewer/workers.py
+#, python-brace-format
+msgid "남은 시간 약 {m}분"
+msgstr "about {m} min left"
 
 #: viewer/workers.py
 #, python-brace-format

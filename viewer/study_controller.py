@@ -1036,20 +1036,13 @@ class StudyMixin:
         self.progress.setRange(0, len(jobs))       # 막대 보임은 job_add 가, 범위는 여기서
 
         def on_prog(i, n, msg):
+            self.progress.setRange(0, max(1, n))   # 261109-5: 진행은 문장 단위
             self.progress.setValue(i); self.status.showMessage(f"mp3: {msg}")
             self.job_progress(jid, msg)
 
         def on_fin(res):
             self.job_done(jid)
-            if res.get("error"):
-                QMessageBox.warning(self, "mp3 저장 실패", res["error"])
-            elif res.get("cancelled"):
-                self.status.showMessage(tr("mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다.")
-                                        .format(saved=res.get("saved")), 8000)
-            else:
-                self.status.showMessage(
-                    f"mp3 저장 완료: {res.get('saved')}/{res.get('total')} 페이지 → "
-                    f"{out_dir.name}", 6000)
+            self._mp3_report(res, out_dir)
 
         worker.progress.connect(on_prog)
         worker.finished.connect(on_fin)
@@ -1091,6 +1084,31 @@ class StudyMixin:
                 end = p0 + 1
             secs.append((title, p0, end))
         return secs
+
+    def _mp3_report(self, res: dict, out_dir) -> None:
+        """261109-5(영상·음성 SOT §1.8 의 4): mp3 저장 끝 — 실패는 **창으로** 알린다(종전에는 구간마다 예외를 삼키고 상태 줄에
+        '완료: 0/N' 만 6초 — 사용자 보고 '폴더에 저장된 mp3가 없었음'). 까닭은 error.log 에도(일꾼이 남김)."""
+        failed = list(res.get("failed") or [])
+        if res.get("error"):
+            QMessageBox.warning(self, tr("mp3 저장 실패"), res["error"])
+            return
+        if failed or (not res.get("cancelled") and not res.get("saved") and not res.get("skipped")):
+            lines = "\n".join("• %s — %s" % (nm, why[:200]) for nm, why in failed[:5])
+            more = len(failed) - 5
+            if more > 0:
+                lines += "\n" + tr("외 {n}개").format(n=more)
+            QMessageBox.warning(self, tr("mp3 저장 실패"),
+                                tr("mp3 {saved}개를 저장했고 {failed}개는 만들지 못했습니다.\n폴더: {path}")
+                                .format(saved=res.get("saved") or 0, failed=len(failed) or res.get("total") or 0,
+                                        path=str(out_dir)) + ("\n\n" + lines if lines else ""))
+            return
+        if res.get("cancelled"):
+            self.status.showMessage(tr("mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다.")
+                                    .format(saved=res.get("saved")), 8000)
+            return
+        self.status.showMessage(
+            tr('mp3 저장 완료: {get}/{get2} 구간 → {name}').format(get=res.get('saved'), get2=res.get('total'),
+                                                              name=str(out_dir)), 15000)
 
     def _on_main_mp3(self, checked: bool = False, view=None) -> None:
         view = view or self.main_view
@@ -1180,14 +1198,7 @@ class StudyMixin:
 
         def on_fin(res):
             self.job_done(jid)
-            if res.get("error"):
-                QMessageBox.warning(self, tr("mp3 저장 실패"), res["error"])
-            elif res.get("cancelled"):
-                self.status.showMessage(tr("mp3 저장 중단: {saved}개 저장 — '이어서 저장' 으로 남은 것부터 합니다.")
-                                        .format(saved=res.get("saved")), 8000)
-            else:
-                self.status.showMessage(
-                    tr('mp3 저장 완료: {get}/{get2} 구간 → {name}').format(get=res.get('saved'), get2=res.get('total'), name=out_dir.name), 6000)
+            self._mp3_report(res, out_dir)
 
         worker.progress.connect(on_prog)
         worker.finished.connect(on_fin)

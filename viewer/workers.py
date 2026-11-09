@@ -1394,36 +1394,69 @@ class StudyMp3Worker(QObject):
                 if not self.jobs:
                     self.finished.emit({"error": tr("읽을 본문을 찾지 못했습니다.")})
                     return
-            from viewer.study.mp3_export import synth_to_mp3, _make_voice, _find_voice
+            import time
+            from viewer.study.mp3_export import synth_to_mp3, _make_voice, _find_voice, Mp3Cancelled
             voice, tok = _make_voice(self.rate, self.tts_cfg.get("hidden_sapi") or ())   # 1회 생성·재사용 · 261108-33 숨긴 성우 빼기
             # 261108-25(영상·음성 SOT §1.8 의 4): 화면 읽기와 같은 성우 목록(OneCore 포함)에서 찾는다
             forced = _find_voice(voice, self.voice_name)
             neural, nopts = self._neural()
             n = len(self.jobs)
             done = skipped = 0
+            failed = []                                # 261109-5: [(파일 이름, 까닭)] — 조용히 묻지 않고 알린다
+            # 261109-5(영상·음성 SOT §1.8 의 4): 진행은 **문장** 단위·남은 시간 — 자연 음성은 쪽당 약 1분이라
+            #   구간(책갈피 한 장) 단위 '1/12' 만으로는 몇 시간 멈춘 것처럼 보였고, 첫 파일은 첫 구간이 끝나야 생긴다
+            total_s = max(1, sum(len(j[2]) for j in self.jobs))
+            st = {"base": 0, "t0": time.time(), "done0": 0, "last": 0.0, "i": 0}
+
+            def _on_seg(k):
+                if self._cancel:
+                    raise Mp3Cancelled()
+                now = time.time()
+                if now - st["last"] < 0.5:
+                    return
+                st["last"] = now
+                cur = st["base"] + k
+                msg = tr("{i}/{n} 구간 · 문장 {c}/{t}").format(i=st["i"] + 1, n=n, c=cur, t=total_s)
+                did = cur - st["done0"]
+                if did >= 3:
+                    left = (now - st["t0"]) / did * (total_s - cur)
+                    msg += " · " + tr("남은 시간 약 {m}분").format(m=max(1, int(left / 60 + 0.5)))
+                self.progress.emit(cur, total_s, msg)
+
             for i, (mp3, lrc, segs) in enumerate(self.jobs):
                 if self._cancel:
                     break
-                self.progress.emit(i, n, f"{i+1}/{n}")
+                st["i"] = i
+                self.progress.emit(st["base"], total_s, f"{i+1}/{n}")
                 if self.resume and _P(mp3).exists() and _P(mp3).stat().st_size > 0:
                     skipped += 1
+                    st["base"] += len(segs); st["done0"] += len(segs)
                     continue
                 try:
-                    synth_to_mp3(segs, mp3, lrc_path=lrc,
-                                 voice=voice, tok=tok, forced=forced, neural=neural, neural_opts=nopts)
-                    done += 1
-                except Exception:
-                    if neural is None:
-                        continue
-                    neural = None                      # 자연 음성이 실패하면 남은 것은 SAPI 로
                     try:
-                        synth_to_mp3(segs, mp3, lrc_path=lrc, voice=voice, tok=tok, forced=forced)
-                        done += 1
+                        synth_to_mp3(segs, mp3, lrc_path=lrc, voice=voice, tok=tok, forced=forced,
+                                     neural=neural, neural_opts=nopts, on_seg=_on_seg)
+                    except Mp3Cancelled:
+                        raise
+                    except Exception:
+                        if neural is None:
+                            raise
+                        neural = None                      # 자연 음성이 실패하면 남은 것은 SAPI 로
+                        synth_to_mp3(segs, mp3, lrc_path=lrc, voice=voice, tok=tok, forced=forced, on_seg=_on_seg)
+                    done += 1
+                except Mp3Cancelled:
+                    break
+                except Exception as e:
+                    failed.append((_P(mp3).name, str(e) or type(e).__name__))
+                    try:
+                        from viewer.settings_store import _log_error
+                        _log_error("[mp3 저장 실패] %s %s" % (mp3, e))
                     except Exception:
                         pass
-            self.progress.emit(n, n, tr("완료"))
+                st["base"] += len(segs)
+            self.progress.emit(total_s, total_s, tr("완료"))
             self.finished.emit({"saved": done, "skipped": skipped, "total": n,
-                                "cancelled": self._cancel})
+                                "cancelled": self._cancel, "failed": failed})
         except Exception as e:
             self.error.emit(str(e))
             self.finished.emit({"error": str(e)})
