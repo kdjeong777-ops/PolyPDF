@@ -122,26 +122,38 @@ var
   gSettingsLang: String;   { 사용자 설정 파일의 언어(있으면 — 첫 설치 페이지의 기본값으로도) }
   gLangPage: TInputOptionWizardPage;
 
-{ ── 쉼표 목록 ── }
-function ListItem(list: String; idx: Integer): String;
+{ ── 글자 단위 찾기 ── 261109-1(다국어 SOT §10.1): 이 [Code] 는 Pos 를 쓰지 않는다.
+  Inno 6.7 의 Pos 는 한글을 2바이트(ANSI)로 세어 Copy·Delete(글자 단위)와 어긋났다 —
+  '한국어,English' 의 쉼표를 7로 돌려 언어 페이지가 '한국어,En' / 'lish' 로 깨졌다. }
+function UPos(const sub, s: String): Integer;
 var
-  i, p: Integer;
+  i, n: Integer;
+begin
+  Result := 0;
+  n := Length(sub);
+  for i := 1 to Length(s) - n + 1 do
+    if Copy(s, i, n) = sub then
+    begin
+      Result := i;
+      Exit;
+    end;
+end;
+
+{ ── 쉼표 목록 ── }
+function ListItem(const list: String; idx: Integer): String;
+var
+  i, n: Integer;
 begin
   Result := '';
-  for i := 0 to idx do
-  begin
-    p := Pos(',', list);
-    if p > 0 then
+  n := 0;
+  for i := 1 to Length(list) do
+    if list[i] = ',' then
     begin
-      Result := Copy(list, 1, p - 1);
-      Delete(list, 1, p);
+      if n = idx then Exit;
+      n := n + 1;
     end
-    else
-    begin
-      Result := list;
-      list := '';
-    end;
-  end;
+    else if n = idx then
+      Result := Result + list[i];
 end;
 
 function ListCount(const list: String): Integer;
@@ -217,13 +229,13 @@ begin
   if not Exists then Exit;
   if not LoadStringFromFile(path, raw) then Exit;
   s := String(raw);
-  p := Pos('"language"', s);
+  p := UPos('"language"', s);
   if p = 0 then Exit;
   s := Copy(s, p + 10, 64);
-  p := Pos('"', s);
+  p := UPos('"', s);
   if p = 0 then Exit;
   Delete(s, 1, p);
-  q := Pos('"', s);
+  q := UPos('"', s);
   if q = 0 then Exit;
   Result := NormLang(Copy(s, 1, q - 1));
 end;
@@ -253,7 +265,7 @@ var
   p: Integer;
 begin
   if (Length(v) > 0) and ((v[1] = 'v') or (v[1] = 'V')) then Delete(v, 1, 1);
-  p := Pos('-', v);
+  p := UPos('-', v);
   if p > 0 then Result := Copy(v, 1, p - 1) else Result := v;
 end;
 
@@ -261,7 +273,7 @@ function VerPreStr(const v: String): String;
 var
   p: Integer;
 begin
-  p := Pos('-', v);
+  p := UPos('-', v);
   if p > 0 then Result := Copy(v, p + 1, Length(v)) else Result := '';
 end;
 
@@ -275,7 +287,7 @@ begin
   tok := '';
   for i := 0 to idx do
   begin
-    p := Pos('.', s);
+    p := UPos('.', s);
     if p > 0 then
     begin
       tok := Copy(s, 1, p - 1);
@@ -441,7 +453,7 @@ begin
   if (Length(uninstExe) > 0) and (uninstExe[1] = '"') then
   begin
     Delete(uninstExe, 1, 1);
-    i := Pos('"', uninstExe);
+    i := UPos('"', uninstExe);
     if i > 0 then uninstExe := Copy(uninstExe, 1, i - 1);
   end;
 
@@ -481,6 +493,6 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   rc: Integer;
 begin
-  if (CurUninstallStep = usUninstall) and (Pos('/KEEPPRINTER', Uppercase(GetCmdTail())) = 0) then
+  if (CurUninstallStep = usUninstall) and (UPos('/KEEPPRINTER', Uppercase(GetCmdTail())) = 0) then
     Exec(ExpandConstant('{app}\{#MyAppExe}'), '--vprinter remove', '', SW_HIDE, ewWaitUntilTerminated, rc);
 end;

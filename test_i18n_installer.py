@@ -8,6 +8,8 @@ C. PolyPDF.iss 는 문구를 직접 쓰지 않는다(주석 밖 한글 없음) �
 D. ISCC 가 있으면 작은 가짜 dist 로 **실제 컴파일**(문법·[Code] 검증) — 없으면 건너뛴다
 E. 업데이트 설치 도우미: 화면 문구는 실행 때의 언어로 채운 표($T)만 쓰고(스크립트 안 한글은 주석뿐),
    표의 키와 스크립트가 쓰는 키가 같다 · 잔존 파일 정리는 _internal\\ 아래만(§10.3 ①) · PowerShell 문법 오류 없음
+F. (261109-1) [Code] 는 Pos 를 쓰지 않는다 · ISCC 가 있으면 실제 .iss 의 ListItem 을 작은 설치본으로 돌려
+   언어 이름 목록('한국어,English')이 글자 그대로 나뉘는지 본다(종전 '한국어,En' / 'lish')
 """
 import os, sys, re, json, shutil, subprocess, tempfile, importlib.util
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -125,6 +127,39 @@ try:
             "D ISCC 실제 컴파일(문법·[Code])", (r.stdout + r.stderr)[-600:])
     else:
         print("SKIP - D ISCC 없음(Inno Setup 6) — 컴파일 검사 생략")
+
+    # ── F (261109-1) ── 언어 페이지 목록 나누기: [Code] 는 Pos 를 쓰지 않고(한글을 바이트로 센다),
+    # 실제 .iss 의 ListItem·ListCount·UPos 를 Inno 엔진에서 돌려 생성된 이름 목록이 글자 그대로 나뉘는지 본다.
+    code_only = iss[code_at:]
+    chk(not re.findall(r"(?<![A-Za-z_])Pos\(", re.sub(r"\{[^}]*\}", "", code_only)),
+        "F [Code] 가 Pos 를 쓰지 않는다(UPos — 한글 목록이 '한국어,En'/'lish' 로 깨짐)")
+    if iscc:
+        def _func(name):
+            m = re.search(r"^function %s\(.*?^end;\r?$" % name, code_only, re.M | re.S)
+            return m.group(0) if m else ""
+        names = defs.get("AppLangNames", "")
+        parts = names.split(",")
+        probe = "\n".join(
+            ["#define AppLangNames \"%s\"" % names,
+             "[Setup]", "AppName=LangProbe", "AppVersion=1", "CreateAppDir=no", "Uninstallable=no",
+             "PrivilegesRequired=lowest", "OutputDir=" + str(tmp / "probe"), "OutputBaseFilename=probe",
+             "[Code]", "const", "  NAMES = '{#AppLangNames}';",
+             _func("UPos"), _func("ListItem"), _func("ListCount"),
+             "function InitializeSetup(): Boolean;", "var", "  i: Integer;", "begin",
+             "  Log('PROBE COUNT=' + IntToStr(ListCount(NAMES)));",
+             "  for i := 0 to ListCount(NAMES) - 1 do",
+             "    Log('PROBE ITEM' + IntToStr(i) + '=[' + ListItem(NAMES, i) + ']');",
+             "  Result := False;", "end;", ""])
+        pf = tmp / "probe.iss"
+        pf.write_bytes(b"\xef\xbb\xbf" + probe.encode("utf-8"))
+        r = subprocess.run([iscc, "/Q", str(pf)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        exe = tmp / "probe" / "probe.exe"
+        log = tmp / "probe.log"
+        if r.returncode == 0 and exe.is_file():
+            subprocess.run([str(exe), "/VERYSILENT", "/LOG=" + str(log)], timeout=60)
+        got = re.findall(r"PROBE ITEM\d+=\[(.*)\]", log.read_text(encoding="utf-8", errors="replace")) if log.is_file() else []
+        chk(len(parts) >= 2 and got == parts, "F 언어 페이지 항목이 목록 그대로 나뉜다(실제 Inno 엔진)",
+            "기대 %r, 실제 %r %s" % (parts, got, (r.stdout + r.stderr)[-300:]))
 
     # ── E ──
     from viewer import updater
