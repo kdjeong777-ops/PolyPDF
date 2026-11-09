@@ -126,6 +126,22 @@ jobs:
           }
           echo "OCR bundle ok: $exe"
 
+      # 261109-3(릴리스 SOT §14.5 U16, 사용자 결정 A): 자연 음성 모델도 설치본·휴대용에 넣는다 — 방화벽 PC 는 구성요소 창으로 받을 수 없다.
+      #   components 릴리스의 두 자산을 앱과 같은 고정 SHA-256 으로 확인하고 public\voices\ 에 푼다(구성요소 창과 같은 풀기 함수).
+      #   build_ci.bat 이 그 모델 폴더를 dist\PolyPDF\voices 로 옮기고, 아래 'Verify voice bundle' 이 없으면 릴리스를 막는다.
+      - name: Stage natural voice (Supertonic 3 model)
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download components -R $env:GITHUB_REPOSITORY -p "sherpa-onnx-supertonic-3-tts-int8-*.tar.bz2" -p "Supertonic-3-LICENSE.txt" -D .\_voice --clobber
+          $arc = Get-ChildItem .\_voice -Filter "sherpa-onnx-supertonic-3-tts-int8-*.tar.bz2" | Select-Object -First 1
+          if (-not $arc) { throw "components 릴리스에 자연 음성 모델 묶음이 없다" }
+          python -m viewer.components stage-voice $arc.FullName .\_voice\Supertonic-3-LICENSE.txt .\voices
+          if ($LASTEXITCODE -ne 0) { throw "자연 음성 모델 확인·풀기 실패(SHA-256 불일치 등)" }
+          Remove-Item .\_voice -Recurse -Force
+
       - name: Stage NLTK WordNet (vocab) — optional
         continue-on-error: true
         run: python -m nltk.downloader -d nltk_data wordnet omw-1.4
@@ -182,6 +198,13 @@ jobs:
       - name: Build (PyInstaller via build_ci.bat)
         run: cmd /c build_ci.bat
 
+      # 261109-3(릴리스 SOT §14.5 U16): 자연 음성 모델이 빠진 배포본은 내지 않는다(OCR 과 같은 까닭 — 조용히 빠진다)
+      - name: Verify voice bundle (fail the release if missing)
+        shell: pwsh
+        run: |
+          python -m viewer.components check-voice dist\PolyPDF\voices
+          if ($LASTEXITCODE -ne 0) { throw "dist\PolyPDF\voices 에 자연 음성 모델이 없습니다 - 자연 음성 없는 배포본은 내지 않는다" }
+
       # 261020-2(긴급, 릴리스 SOT §5): 빌드본이 실제로 뜨는지 — 시작 때 싣는 모듈을 그대로 싣는 자가 시험.
       #   beta.293 은 PyMuPDF 2.0(빠진 레이아웃 모델 파일)으로 설치본이 시작하자마자 꺼졌는데 CI 는 성공으로 끝났다.
       - name: Self-test built exe (fail the release if it cannot start)
@@ -216,6 +239,8 @@ jobs:
             $t = Join-Path "$stage\_internal" $p
             if (Test-Path $t) { Remove-Item $t -Recurse -Force }
           }
+          # 261109-3(U16): 자연 음성 모델(설치 폴더\voices)도 뺀다 — 무겁고 안 바뀐다. 휴대용은 zip 을 덮어써 기존 voices\ 가 남는다.
+          if (Test-Path "$stage\voices") { Remove-Item "$stage\voices" -Recurse -Force }
           $tess = Join-Path "$stage\_internal" "tesseract"
           if (Test-Path $tess) {
             Get-ChildItem $tess -Force | Where-Object { $_.Name -ne "tessdata" } |

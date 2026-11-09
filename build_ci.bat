@@ -234,6 +234,10 @@ if errorlevel 1 ( echo [ERROR] prune_dist: 뺀 DLL 을 부르는 파일이 남�
 REM 261108-11(릴리스 SOT §14.2): exe·dll·pyd 가 UPX 로 압축되지 않았는지(PE 구획 이름 UPX*) — 있으면 빌드 실패.
 python scripts\check_no_upx.py dist\PolyPDF
 if errorlevel 1 ( echo [ERROR] UPX 로 압축된 실행 파일이 있습니다. & exit /b 1 )
+REM 261109-3(릴리스 SOT §14.5 U16): 자연 음성 모델을 dist\PolyPDF\voices 에 — 구성요소 창이 받는 자리와 같다(install_dir()\voices).
+REM   voices\ 는 CI 'Stage natural voice' 가 고정 SHA-256 으로 마련한다(로컬은 개발 폴더의 모델). 없으면 경고만 — CI 는 'Verify voice bundle' 이 막는다.
+python -m viewer.components bundle-voice voices dist\PolyPDF\voices
+if errorlevel 1 echo     ^^! 자연 음성 모델을 넣지 못했다 — 이 빌드의 설치본에는 자연 음성이 없다(구성요소 창으로 받아야 한다).
 
 REM 260603: build\ 정리 — build\PolyPDF\PolyPDF.exe(불완전 부트로더, python DLL 누락) 오실행 방지.
 REM   실제 실행 파일은 dist\PolyPDF\PolyPDF.exe 하나뿐이 되도록.

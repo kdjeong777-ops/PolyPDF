@@ -54,11 +54,11 @@ OSS = (
     (tr_noop("OpenStreetMap 지도 그림"), "ODbL", tr_noop("© OpenStreetMap contributors — 지도 페이지에 출처를 보인다"), ()),
     ("FFmpeg", "GPL v3", tr_noop("FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"), ()),
     ("lameenc · LAME", "LGPL", tr_noop("Chris Cooper · LAME 프로젝트"), ("lameenc",)),
-    # 261108-28(영상·음성 SOT §1.10): 자연 음성 — 엔진은 앱에 들고, 모델은 구성요소로 받을 때만(앱에 들어 있지 않다)
+    # 261108-28(영상·음성 SOT §1.10): 자연 음성 — 엔진은 앱에 든다. 모델은 261109-3 부터 설치본·휴대용에도 든다(모델 폴더에 라이선스 사본)
     ("sherpa-onnx 2.0.1", "Apache 2.0", "Xiaomi Corporation · k2-fsa", ("sherpa-onnx",)),
     ("ONNX Runtime 1.28.2", "MIT", tr_noop("Microsoft — sherpa-onnx 휠에 든 onnxruntime.dll"), ()),
-    (tr_noop("Supertonic 3 음성 모델 (자연 음성 구성요소)"), "OpenRAIL-M",
-     tr_noop("Supertone Inc. — 받을 때만, 만든 소리는 AI 합성 음성이다. 사용 제한 조항을 따른다"), ()),
+    (tr_noop("Supertonic 3 음성 모델 (자연 음성)"), "OpenRAIL-M",
+     tr_noop("Supertone Inc. — 설치 폴더 voices 에 라이선스 원문과 함께, 만든 소리는 AI 합성 음성이다. 사용 제한 조항을 따른다"), ()),
     # 261104-2(사진 보기 SOT 4.9): HEIC 읽기 — 동적 링크 DLL(libheif·libde265 LGPL v3, MinGW libstdc++ GCC 런타임 예외)
     ("pi-heif · libheif · libde265", "BSD-3-Clause / LGPL v3", "Pillow-Heif contributors · struktur AG", ("pi-heif",)),
     # 261017(가상 프린터 SOT §4.2): 가상 프린터 — 포트 모니터(원본을 고쳐 우리 이름으로 빌드)·PS→PDF 변환기

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-09 01:04+0900\n"
+"POT-Creation-Date: 2026-11-09 16:04+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -98,12 +98,12 @@ msgid "Microsoft — sherpa-onnx 휠에 든 onnxruntime.dll"
 msgstr "Microsoft — onnxruntime.dll inside the sherpa-onnx wheel"
 
 #: viewer/about.py
-msgid "Supertonic 3 음성 모델 (자연 음성 구성요소)"
-msgstr "Supertonic 3 voice model (natural voice component)"
+msgid "Supertonic 3 음성 모델 (자연 음성)"
+msgstr "Supertonic 3 voice model (natural voice)"
 
 #: viewer/about.py
-msgid "Supertone Inc. — 받을 때만, 만든 소리는 AI 합성 음성이다. 사용 제한 조항을 따른다"
-msgstr "Supertone Inc. — only when downloaded; the sound it makes is AI-synthesized speech. Its use restrictions apply"
+msgid "Supertone Inc. — 설치 폴더 voices 에 라이선스 원문과 함께, 만든 소리는 AI 합성 음성이다. 사용 제한 조항을 따른다"
+msgstr "Supertone Inc. — in the voices folder of the installation, with the license text; the sound it makes is AI-synthesized speech. Its use restrictions apply"
 
 #: viewer/about.py
 msgid "Lorenzo Monti — 고쳐 빌드한 포트 모니터(printer/monitor_src)"
@@ -7125,12 +7125,13 @@ msgid "자연 음성 (한국어·영어)"
 msgstr "Natural voice (Korean · English)"
 
 # | 불필요)"
+# | 음성=Supertonic 3 약 123MB · 재시작 불필요)"
 #: viewer/update_controller.py
 msgid ""
-"필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
+"설치본에는 세 구성요소가 모두 들어 있습니다. 빠졌거나 손상됐을 때 설치 폴더에 다시 내려받습니다.\n"
 "(녹화=ffmpeg, OCR=Tesseract, 자연 음성=Supertonic 3 약 123MB · 재시작 불필요)"
 msgstr ""
-"Downloads components for the features you need into the installation folder.\n"
+"The installer already includes all three components. Download one again into the installation folder if it is missing or damaged.\n"
 "(Recording = ffmpeg, OCR = Tesseract, Natural voice = Supertonic 3 about 123 MB · no restart needed)"
 
 #: viewer/update_controller.py

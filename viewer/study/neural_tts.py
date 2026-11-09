@@ -1,6 +1,6 @@
 """자연 음성(신경망 TTS) — Supertonic 3 int8 + sherpa-onnx (영상·음성 SOT §1.10, 261108-28).
 
-- 모델은 선택 구성요소('자연 음성(한국어·영어)', `components.install_voice`)로 **설치 폴더\\voices\\** 에 받는다 — 설치본에는 없다.
+- 모델은 선택 구성요소('자연 음성(한국어·영어)', `components.install_voice`)로 **설치 폴더\\voices\\** 에 받는다 — 261109-3 부터 설치본·휴대용 zip 에도 같은 자리로 들어 있다(릴리스 SOT §14.5 U16).
 - 엔진(sherpa_onnx·onnxruntime.dll)은 앱 묶음에 든다. 없거나 모델이 없거나 실패하면 부르는 쪽이 SAPI 로 물러선다(`tts_engine`).
 - ★ 모델 싣기·합성은 **배경 스레드에서만**(응답성 SOT §4.8). `Synth` 는 메인 스레드에서 부르면 예외를 던진다.
   화면 읽기는 `NeuralReader`(메인) → `_SynthWorker`(전용 QThread) → 결과 PCM 을 메인의 `_PcmPlayer`(QAudioSink) 에 넣는다.

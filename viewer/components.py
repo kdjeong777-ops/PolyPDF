@@ -228,10 +228,10 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
     261108-28 덧붙임 2(사용자 결정 '우리 릴리스에 사본'): 받는 곳은 우리 `components` 릴리스 — 다른 구성요소처럼 그 태그에서
     이름으로 찾고, 못 찾으면 `neural_tts.MODEL_URL`(같은 사본의 고정 주소). 모델 라이선스 원문(OpenRAIL-M, 고정 SHA-256)도
     받아 모델 폴더에 둔다(사본 동봉 의무) — 못 받거나 해시가 다르면 설치하지 않는다. url·sha256·license_* 인자는 검사용.
+    261109-3: 풀기부터는 `_place_voice` — CI 가 설치본에 넣을 때(`stage_voice`)와 한 길.
     """
     import hashlib
     import shutil
-    import tarfile
     from viewer.study import neural_tts
     if not url or not license_url:
         assets = _assets(repo_or_default(repo))
@@ -240,26 +240,16 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
     want = (sha256 or neural_tts.MODEL_SHA256).lower()
     lic_want = (license_sha256 or neural_tts.LICENSE_SHA256).lower()
     base = neural_tts.voices_dir()
-    final = neural_tts.model_dir()
     try:
         base.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         return False, tr('저장 실패: {e}').format(e=e)
     part = base / (neural_tts.MODEL_ARCHIVE + ".part")
-    tmp = base / (".unpack_" + neural_tts.MODEL_DIRNAME)
-    old = base / (".old_" + neural_tts.MODEL_DIRNAME)
     # 261108-32 덧붙임(사용자 보고 '중단된 채 100%'): 내려받기 100% 뒤에도 라이선스·풀기(123MB bz2 — 수십 초)가 남는데
     #   그동안 알림이 없어 멈춘 듯 보였다. 단계마다 `progress.phase(글, 퍼센트)` 로 알리고, 풀기 중에도 [중단] 을 듣는다.
-    phase = getattr(progress, "phase", None)
-
-    def _ph(text, pct=-1):
-        if phase is not None:
-            try:
-                phase(text, pct)
-            except Exception:
-                pass
+    _ph = _phase_fn(progress)
     # 지난번에 받다 말거나 풀다 만 것(앱이 꺼진 경우 등)은 먼저 치운다 — 새 설치가 깨끗이 시작하게
-    for leftover in (tmp, old):
+    for leftover in (base / (".unpack_" + neural_tts.MODEL_DIRNAME), base / (".old_" + neural_tts.MODEL_DIRNAME)):
         shutil.rmtree(leftover, ignore_errors=True)
     try:
         part.unlink()
@@ -275,8 +265,49 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
         lic = _download(license_url)
         if lic is None or hashlib.sha256(lic).hexdigest() != lic_want:
             return False, tr("받은 파일이 손상되었거나 바뀌었습니다(무결성 검증 실패). 설치하지 않았습니다.")
+        ok, msg = _place_voice(part, lic, base, progress)
+    finally:
+        try:
+            part.unlink()
+        except OSError:
+            pass
+    if not ok:
+        return ok, msg
+    try:
+        from viewer.study import tts_engine
+        tts_engine.invalidate()                                  # 다음 읽기부터 자연 음성(자동)
+    except Exception:
+        pass
+    return True, msg
+
+
+def _phase_fn(progress):
+    phase = getattr(progress, "phase", None)
+
+    def _ph(text, pct=-1):
+        if phase is not None:
+            try:
+                phase(text, pct)
+            except Exception:
+                pass
+    return _ph
+
+
+def _place_voice(archive: Path, lic: bytes, base: Path, progress=None) -> tuple[bool, str]:
+    """해시를 이미 확인한 모델 묶음(tar.bz2)과 라이선스 원문 → `base\\supertonic-3-int8\\`.
+    임시 폴더에 풀기(tar 'data' 거르개) → 파일 7개 확인 → 라이선스 사본 → 바꿔치기. 실패하면 기존 모델은 그대로."""
+    import shutil
+    import tarfile
+    from viewer.study import neural_tts
+    _ph = _phase_fn(progress)
+    tmp = base / (".unpack_" + neural_tts.MODEL_DIRNAME)
+    old = base / (".old_" + neural_tts.MODEL_DIRNAME)
+    final = base / neural_tts.MODEL_DIRNAME
+    for leftover in (tmp, old):
+        shutil.rmtree(leftover, ignore_errors=True)
+    try:
         tmp.mkdir(parents=True)
-        total = max(1, part.stat().st_size)
+        total = max(1, Path(archive).stat().st_size)
 
         class _Counting(io.RawIOBase):
             """풀기 진행률 — 압축 파일을 읽은 만큼(퍼센트). [중단] 이면 읽기를 멈춘다."""
@@ -297,7 +328,7 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
                     _ph(tr("압축 푸는 중… {pct}%").format(pct=pct), pct)
                 return k
         try:
-            with open(part, "rb") as raw:
+            with open(archive, "rb") as raw:
                 with tarfile.open(fileobj=io.BufferedReader(_Counting(raw), 1 << 20), mode="r|bz2") as t:   # 흐름 모드 — 읽은 만큼 진행률
                     t.extractall(tmp, filter="data")             # 절대 경로·위로 올라가는 이름·링크를 막는다
         except InterruptedError:
@@ -309,30 +340,89 @@ def install_voice(repo: str = "", progress=None, *, url: str = "", sha256: str =
         if not neural_tts.model_ready(src):
             return False, tr("받은 묶음에 음성 모델 파일이 모두 있지 않습니다. 설치하지 않았습니다.")
         (src / neural_tts.LICENSE_LOCAL).write_bytes(lic)       # 모델 라이선스 사본을 모델 곁에
-        shutil.rmtree(old, ignore_errors=True)
         if final.exists():
             os.replace(final, old)
         os.replace(src, final)
         shutil.rmtree(old, ignore_errors=True)
+    except OSError as e:
+        return False, tr('저장 실패: {e}').format(e=e)
     finally:
-        try:
-            part.unlink()
-        except OSError:
-            pass
         shutil.rmtree(tmp, ignore_errors=True)
-    try:
-        from viewer.study import tts_engine
-        tts_engine.invalidate()                                  # 다음 읽기부터 자연 음성(자동)
-    except Exception:
-        pass
     return True, str(final)
 
 
-if __name__ == "__main__":                               # CI: python -m viewer.components verify <이름> <파일>
+# --- 설치본에 넣기 (261109-3, 릴리스 SOT §14.5 U16 — CI·build_ci.bat) -------------
+def _file_sha256(path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def check_voice(voices: Path) -> bool:
+    """`voices\\supertonic-3-int8` 에 모델 7개와 라이선스 사본이 있는가(설치본·휴대용에 든 것의 확인)."""
+    from viewer.study import neural_tts
+    d = Path(voices) / neural_tts.MODEL_DIRNAME
+    return neural_tts.model_ready(d) and (d / neural_tts.LICENSE_LOCAL).is_file()
+
+
+def stage_voice(archive, license_file, voices, *, sha256: str = "", license_sha256: str = "") -> tuple[bool, str]:
+    """components 릴리스에서 받은 두 자산을 **고정 SHA-256** 으로 확인하고 `voices` 아래에 푼다(CI 'Stage natural voice').
+    해시가 다르면 아무것도 쓰지 않는다. 풀기는 구성요소 창과 같은 `_place_voice`."""
+    from viewer.study import neural_tts
+    want = (sha256 or neural_tts.MODEL_SHA256).lower()
+    lic_want = (license_sha256 or neural_tts.LICENSE_SHA256).lower()
+    try:
+        if _file_sha256(archive) != want:
+            return False, "model archive SHA-256 mismatch"
+        lic = Path(license_file).read_bytes()
+    except OSError as e:
+        return False, "read failed: %s" % e
+    import hashlib
+    if hashlib.sha256(lic).hexdigest() != lic_want:
+        return False, "license SHA-256 mismatch"
+    base = Path(voices)
+    base.mkdir(parents=True, exist_ok=True)
+    return _place_voice(Path(archive), lic, base)
+
+
+def bundle_voice(src_voices, dest_voices) -> int:
+    """빌드 끝에 모델 폴더 하나만 `dist\\PolyPDF\\voices` 로 복사(build_ci.bat). 0 복사함 · 3 원본 없음(경고) · 1 실패."""
+    import shutil
+    from viewer.study import neural_tts
+    if not check_voice(src_voices):
+        return 3
+    src = Path(src_voices) / neural_tts.MODEL_DIRNAME
+    dst = Path(dest_voices) / neural_tts.MODEL_DIRNAME
+    try:
+        shutil.rmtree(dst, ignore_errors=True)
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".*", "*.part"))
+    except OSError:
+        return 1
+    return 0 if check_voice(dest_voices) else 1
+
+
+if __name__ == "__main__":                               # CI·build_ci.bat 가 부른다
     import sys
-    if len(sys.argv) == 4 and sys.argv[1] == "verify":
-        ok = verify_file(sys.argv[2], sys.argv[3])
-        print("%s SHA-256 %s" % (sys.argv[2], "ok" if ok else "MISMATCH"))
+    a = sys.argv[1:]
+    if len(a) == 3 and a[0] == "verify":                  # 261108-12: verify <이름> <파일>
+        ok = verify_file(a[1], a[2])
+        print("%s SHA-256 %s" % (a[1], "ok" if ok else "MISMATCH"))
         sys.exit(0 if ok else 1)
-    print("usage: python -m viewer.components verify <name> <file>")
+    if len(a) == 4 and a[0] == "stage-voice":             # 261109-3: stage-voice <묶음> <라이선스> <voices 폴더>
+        ok, msg = stage_voice(a[1], a[2], a[3])
+        print("stage-voice %s: %s" % ("ok" if ok else "FAILED", msg))
+        sys.exit(0 if ok else 1)
+    if len(a) == 3 and a[0] == "bundle-voice":            # 261109-3: bundle-voice <원본 voices> <dist voices>
+        rc = bundle_voice(a[1], a[2])
+        print("bundle-voice %s" % {0: "ok", 3: "SKIPPED (no model in %s)" % a[1]}.get(rc, "FAILED"))
+        sys.exit(rc)
+    if len(a) == 2 and a[0] == "check-voice":             # 261109-3: check-voice <voices 폴더>
+        ok = check_voice(a[1])
+        print("check-voice %s: %s" % ("ok" if ok else "MISSING", a[1]))
+        sys.exit(0 if ok else 1)
+    print("usage: python -m viewer.components verify <name> <file> | stage-voice <archive> <license> <voices>"
+          " | bundle-voice <src voices> <dest voices> | check-voice <voices>")
     sys.exit(2)

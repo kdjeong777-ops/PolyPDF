@@ -91,6 +91,12 @@ if _ff.exists() and _distdir.exists():
 elif not _ff.exists():
     print("[!] ffmpeg.exe 없음 — 녹화 기능은 ffmpeg 경로 지정 필요.")
 
+# 261109-3(릴리스 SOT §14.5 U16): 자연 음성 모델을 dist/PolyPDF/voices 에(build_ci.bat 과 같은 한 길)
+if _distdir.exists():
+    from viewer import components as _comp
+    _rc = _comp.bundle_voice(HERE / "voices", _distdir / "voices")
+    print("[+] 자연 음성 모델 넣음" if _rc == 0 else "[!] 자연 음성 모델 없음 — 이 빌드에는 자연 음성이 없다(구성요소 창으로).")
+
 # 빌드 후 build/ 정리 — build\PolyPDF\PolyPDF.exe(불완전 부트로더) 오실행 방지
 bdir = HERE / "build"
 if bdir.exists():

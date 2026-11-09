@@ -487,7 +487,8 @@ class UpdateMixin:
         dlg.setWindowTitle(tr("구성요소 설치 (녹화·OCR)"))
         dlg.resize(460, 200)
         v = QVBoxLayout(dlg)
-        v.addWidget(QLabel(tr("필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
+        # 261109-3(릴리스 SOT §14.5 U16): 설치본·휴대용에는 셋 다 들어 있다 — 이 창은 빠졌거나 손상됐을 때 다시 받는 길
+        v.addWidget(QLabel(tr("설치본에는 세 구성요소가 모두 들어 있습니다. 빠졌거나 손상됐을 때 설치 폴더에 다시 내려받습니다.\n"
                            "(녹화=ffmpeg, OCR=Tesseract, 자연 음성=Supertonic 3 약 123MB · 재시작 불필요)")))
         dlg._rows = {}
         for key, (title, _inst, _fn) in self._comp_specs().items():

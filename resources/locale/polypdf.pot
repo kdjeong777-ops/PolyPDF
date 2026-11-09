@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-09 01:04+0900\n"
+"POT-Creation-Date: 2026-11-09 16:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -99,11 +99,11 @@ msgid "Microsoft — sherpa-onnx 휠에 든 onnxruntime.dll"
 msgstr ""
 
 #: viewer/about.py
-msgid "Supertonic 3 음성 모델 (자연 음성 구성요소)"
+msgid "Supertonic 3 음성 모델 (자연 음성)"
 msgstr ""
 
 #: viewer/about.py
-msgid "Supertone Inc. — 받을 때만, 만든 소리는 AI 합성 음성이다. 사용 제한 조항을 따른다"
+msgid "Supertone Inc. — 설치 폴더 voices 에 라이선스 원문과 함께, 만든 소리는 AI 합성 음성이다. 사용 제한 조항을 따른다"
 msgstr ""
 
 #: viewer/about.py
@@ -6932,7 +6932,7 @@ msgstr ""
 
 #: viewer/update_controller.py
 msgid ""
-"필요한 기능의 구성요소를 설치 폴더에 내려받습니다.\n"
+"설치본에는 세 구성요소가 모두 들어 있습니다. 빠졌거나 손상됐을 때 설치 폴더에 다시 내려받습니다.\n"
 "(녹화=ffmpeg, OCR=Tesseract, 자연 음성=Supertonic 3 약 123MB · 재시작 불필요)"
 msgstr ""
 
