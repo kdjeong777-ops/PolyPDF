@@ -171,6 +171,8 @@ def start_ocr_then_read(mw, view, path, pages, start) -> bool:
     if w is None:
         return True                             # 언어 자료 창에서 그만뒀다 — 읽지 않는다
     state = {"started": False, "stopped": False}
+    order = [int(p) for p in pages]               # OCR 일꾼이 하는 차례
+    ready = set()                                  # 결과가 온 쪽(건너뛴 쪽 포함)
 
     def _go():
         if state["started"] or state["stopped"]:
@@ -187,16 +189,41 @@ def start_ocr_then_read(mw, view, path, pages, start) -> bool:
         except Exception:
             return
         ra.start()
+        # 261109-6(영상·음성 SOT §1.11 '아직 OCR 이 안 된 쪽'): 결과가 아직 없는 쪽에 닿으면 건너뛰지 않고 기다린다
+        if ra.is_active() and not state["stopped"]:
+            ra.wait_for_ocr([p for p in order if p not in ready and p != int(start)])
+
+    def _reading():
+        ra = mw.read_aloud
+        return state["started"] and ra.is_active() and getattr(ra, "_view", None) is view
 
     def _on_done(page, words, dpi, token):
-        if int(page) == int(start):
+        p = int(page)
+        # 일꾼은 차례로 한다 — 이 쪽 앞에서 결과 없이 지나간 쪽(글자층이 멀쩡해 건너뜀)도 이제 끝났다
+        i = order.index(p) if p in order else -1
+        for q in (order[:i + 1] if i >= 0 else [p]):
+            if q not in ready:
+                ready.add(q)
+                if _reading():
+                    mw.read_aloud.ocr_page_ready(q)
+        if p == int(start):
             _go()
 
     def _on_cancel(*_a):
+        if _reading():
+            mw.read_aloud.ocr_wait_end()           # 남은 쪽은 있는 글로 — 기다려 매달리지 않는다
         state["stopped"] = True
+
+    def _on_finished():
+        if _reading():
+            mw.read_aloud.ocr_wait_end()
 
     w.done.connect(_on_done)
     w.error.connect(_on_cancel)
+    try:
+        w.finished.connect(_on_finished)
+    except Exception:
+        pass
     try:
         prog = getattr(mw, "_ocr_progress", None)
         if prog is not None and len(pages) > 1:

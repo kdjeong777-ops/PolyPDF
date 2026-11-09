@@ -49,6 +49,8 @@ ALLOWED = {
         "배경 — `PhotoOcrWorker`·`PhotoOcrBatchWorker`(run_in_thread)만 부르는 사진 OCR 보류 저장(261104-10 → 261107-6 함수로 뺌)",
     "viewer/study_controller.py:StudyMixin._study_clear_file._clear":
         "배경 — `_dict_file_job` 에서 자기 연결로 이 파일 캐시 지우기(261108-16)",
+    "viewer/widgets/read_aloud.py:page_texts_bg":
+        "배경 — `StudyMp3Worker`(run_in_thread)만 부르는 본문 mp3 읽을 글 모으기, 자기 연결(261109-5)",
 }
 
 fails = []

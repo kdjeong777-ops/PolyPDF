@@ -1326,9 +1326,12 @@ class StudyMp3Worker(QObject):
     error = pyqtSignal(str)
 
     def __init__(self, jobs: list, rate: int = 0, voice_name: str = None,
-                 resume: bool = False, tts_cfg: dict = None):
+                 resume: bool = False, tts_cfg: dict = None, collect: dict = None):
         super().__init__()
         self.jobs = jobs              # [(mp3_path, lrc_path, segments)]
+        # 261109-5(영상·음성 SOT §1.1): 본문 mp3 — 메인은 구간만, 읽을 글은 여기(배경)서 모은다.
+        #   {'path', 'sections': [(mp3, lrc, p0, p1)], 'db_path'} — 있으면 run 이 jobs 를 만든다
+        self.collect = dict(collect) if collect else None
         self.rate = rate
         self.voice_name = voice_name
         self.resume = resume          # 이미 있는 파일은 건너뜀(이어서 저장)
@@ -1354,12 +1357,44 @@ class StudyMp3Worker(QObject):
     def request_cancel(self):
         self._cancel = True
 
+    def _collect_jobs(self) -> list:
+        """261109-5: 구간마다 쪽 글을 모아 문장 세그먼트로 — 화면 읽기와 같은 글(`read_aloud.page_texts_bg`)."""
+        import re as _re
+        from viewer.widgets.read_aloud import page_texts_bg, sentences_of
+        c = self.collect
+        secs = list(c.get("sections") or [])
+        pages = sorted({p for (_m, _l, p0, p1) in secs for p in range(int(p0), int(p1))})
+        n = len(pages)
+
+        def _prog(i, total):
+            self.progress.emit(0, max(1, len(secs)), tr("읽을 글 모으는 중 {i}/{n}쪽").format(i=i + 1, n=total))
+        texts = page_texts_bg(c["path"], pages, db_path=c.get("db_path"),
+                              cancelled=lambda: self._cancel, progress=_prog)
+        jobs = []
+        for mp3, lrc, p0, p1 in secs:
+            segs = []
+            for p in range(int(p0), int(p1)):
+                for s in sentences_of(texts.get(p, "")):
+                    segs.append((s, "ko" if _re.search(r"[가-힣]", s) else "en"))
+            if segs:
+                jobs.append((mp3, lrc, segs))
+        return jobs
+
     def run(self):
         from pathlib import Path as _P
         try:
-            from viewer.study.mp3_export import synth_to_mp3, _make_voice, _find_voice
             import pythoncom, win32com.client
-            pythoncom.CoInitialize()
+            pythoncom.CoInitialize()           # finally 의 CoUninitialize 와 짝(글 모으기에서 돌아가도)
+            if self.collect is not None:
+                self.jobs = self._collect_jobs()
+                if self._cancel:
+                    self.finished.emit({"saved": 0, "skipped": 0, "total": len(self.collect.get("sections") or []),
+                                        "cancelled": True})
+                    return
+                if not self.jobs:
+                    self.finished.emit({"error": tr("읽을 본문을 찾지 못했습니다.")})
+                    return
+            from viewer.study.mp3_export import synth_to_mp3, _make_voice, _find_voice
             voice, tok = _make_voice(self.rate, self.tts_cfg.get("hidden_sapi") or ())   # 1회 생성·재사용 · 261108-33 숨긴 성우 빼기
             # 261108-25(영상·음성 SOT §1.8 의 4): 화면 읽기와 같은 성우 목록(OneCore 포함)에서 찾는다
             forced = _find_voice(voice, self.voice_name)

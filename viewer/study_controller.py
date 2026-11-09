@@ -1148,38 +1148,33 @@ class StudyMixin:
             out_dir = base
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # 구간 → 세그먼트
-        from viewer.widgets.read_aloud import sentences_of
+        # 구간(쪽 범위)만 정한다 — 261109-5(영상·음성 SOT §1.1): 읽을 글 모으기는 일꾼(배경)이 한다.
+        #   종전에는 여기서 모든 쪽의 `_page_text` 를 불러(쪽마다 PDF 를 새로 열기) 큰 책이면 '(응답 없음)' 이었다.
         secs = self._doc_sections(doc, level)
         if secs is None:
             secs = [(stem, 0, doc.page_count)]
         width = max(2, len(str(len(secs))))
-        jobs = []
+        sections = []
         for i, (title, p0, p1) in enumerate(secs):
-            segs = []
-            for p in range(p0, p1):
-                txt = self.read_aloud._page_text(p)
-                for s in sentences_of(txt):
-                    segs.append((s, self._seg_lang(s)))
-            if not segs:
-                continue
             nm = f"{i + 1:0{width}d}_{self._safe_name(title, stem)}"
-            jobs.append((str(out_dir / f"{nm}.mp3"),
-                         str(out_dir / f"{nm}.lrc"), segs))
-        if not jobs:
-            QMessageBox.information(self, "mp3", tr("읽을 본문을 찾지 못했습니다."))
-            return
+            sections.append((str(out_dir / f"{nm}.mp3"), str(out_dir / f"{nm}.lrc"), int(p0), int(p1)))
+        try:
+            db_path = str(self._study_get_store().db_path)
+        except Exception:
+            db_path = None
 
         from viewer.workers import StudyMp3Worker
         from viewer.study import tts_engine as _tts_engine
-        worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
+        worker = StudyMp3Worker([], rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
-                                resume=resume, tts_cfg=_tts_engine.export_choice(self))   # 261108-28: 자연 음성이면 그것으로
+                                resume=resume, tts_cfg=_tts_engine.export_choice(self),   # 261108-28: 자연 음성이면 그것으로
+                                collect={"path": str(path), "sections": sections, "db_path": db_path})
         jid = "main_mp3"                         # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
         self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
-        self.progress.setRange(0, len(jobs))       # 막대 보임은 job_add 가, 범위는 여기서
+        self.progress.setRange(0, len(sections))   # 막대 보임은 job_add 가, 범위는 여기서
 
         def on_prog(i, n, msg):
+            self.progress.setRange(0, max(1, n))   # 글을 모은 뒤 빈 구간이 빠지면 줄어든다
             self.progress.setValue(i); self.status.showMessage(f"mp3: {msg}")
             self.job_progress(jid, msg)
 

@@ -71,6 +71,9 @@ class ReadAloud(QObject):
         self._active = False
         self._pages: list[int] = []
         self._pi = 0
+        # 261109-6(SOT §1.11 '아직 OCR 이 안 된 쪽'): [OCR 하고 읽기] 뒤 결과가 아직 없는 쪽 · 지금 기다리는 쪽
+        self._ocr_wait: set = set()
+        self._ocr_waiting = None
         self._sents: list[str] = []
         self._si = 0
         self._owords: list = []      # 현재 페이지 ocr_word (읽기순서, bbox)
@@ -183,8 +186,33 @@ class ReadAloud(QObject):
     def toggle(self):
         self.stop() if self._active else self.start()
 
+    # --- 261109-6(SOT §1.11): OCR 이 아직 안 된 쪽은 건너뛰지 않고 기다린다 ---
+    def wait_for_ocr(self, pages) -> None:
+        """[OCR 하고 읽기] 로 시작한 읽기 — `pages` 는 OCR 결과가 아직 오지 않은 쪽들."""
+        self._ocr_wait = {int(p) for p in (pages or ())}
+
+    def ocr_page_ready(self, page: int) -> None:
+        """그 쪽 OCR 결과가 왔다 — 그 쪽에서 기다리던 중이면 이제 읽는다."""
+        self._ocr_wait.discard(int(page))
+        self._resume_ocr_wait()
+
+    def ocr_wait_end(self) -> None:
+        """OCR 이 끝났다(또는 중단·실패) — 기다림을 모두 풀고 남은 쪽은 있는 글로 읽는다."""
+        self._ocr_wait = set()
+        self._resume_ocr_wait()
+
+    def _resume_ocr_wait(self) -> None:
+        w = self._ocr_waiting
+        if w is None or w in self._ocr_wait:
+            return
+        self._ocr_waiting = None
+        if self._active and self._pages and self._pages[self._pi] == w:
+            self._load_page()
+
     def start(self):
         self._eng = None
+        self._ocr_wait = set()
+        self._ocr_waiting = None
         tts = self._tts()
         if not tts.available():
             self.mw.status.showMessage(tr("음성(SAPI)을 사용할 수 없습니다."), 3000)
@@ -221,6 +249,8 @@ class ReadAloud(QObject):
         self._restart_timer.stop()        # 260618-29
         self._pending_restart_page = None
         self._reading_page = -1
+        self._ocr_wait = set()               # 261109-6: ■ 면 OCR 기다림도 버린다
+        self._ocr_waiting = None
         for e in self._engines():          # 261108-28: SAPI·자연 음성 둘 다 멈춘다(대기열 버리기)
             try:
                 e.stop()
@@ -279,6 +309,17 @@ class ReadAloud(QObject):
         page = self._pages[self._pi]
         self._reading_page = page       # 260618-29: 리더가 읽는 페이지(사용자 이동 구분용)
         self._v.go_to_page(page)        # 읽는 페이지로 화면 자동 이동
+        if page in self._ocr_wait:
+            # 261109-6(SOT §1.11): 아직 OCR 결과가 없다 — 빈 쪽으로 보고 넘기지 않고 기다린다(`_tick` 은 시각만 본다)
+            self._ocr_waiting = page
+            self._sents, self._srects, self._para_end = [], [], []
+            self._si = 0
+            try:
+                self.mw.status.showMessage(tr("OCR 이 끝나기를 기다리는 중: {page}쪽").format(page=page + 1), 5000)
+            except Exception:
+                pass
+            return
+        self._ocr_waiting = None
         # 260911(SOT §1.3): 글과 **자리**를 함께 얻는다 — 강조 범위를 텍스트 창과 맞추려면
         #   낱말이 아니라 줄의 자리가 필요하다. 자리를 못 얻으면 종전 길로 물러선다.
         units = self._page_units(page)
@@ -559,6 +600,8 @@ class ReadAloud(QObject):
     def _tick(self):
         if not self._active:
             self._timer.stop(); return
+        if self._ocr_waiting is not None:
+            return                                      # 261109-6: 그 쪽 OCR 결과를 기다리는 중
         tts = self._tts()
         if getattr(tts, "_failed", False) and tts is not self.mw._study_get_tts():
             # 261108-28: 합성이 배경에서 실패했다 — 그 문장부터 SAPI 로 다시(건너뛰지 않는다)
@@ -732,6 +775,72 @@ class ReadAloud(QObject):
             return self._v._doc.extract_text(page)
         except Exception:
             return ""
+
+
+PAGE_TEXT_CHUNK = 32   # 261109-5: 배경 쪽 글 모으기 — 이만큼씩 한 번에(문서를 한 번 연다)·사이마다 중단 확인
+
+
+def page_texts_bg(path, pages, *, db_path=None, cancelled=None, progress=None) -> dict:
+    """261109-5(영상·음성 SOT §1.1): 여러 쪽의 읽을 글 {쪽: 글} — **배경 스레드**에서 부른다(본문 mp3).
+
+    `ReadAloud._page_text` 와 같은 차례: 텍스트 창 글(`clean_page_texts`) → 보류 포함 OCR 글(study.db) → 글자층.
+    종전 mp3 는 메인이 `_page_text` 를 쪽마다 불러 PDF 를 쪽마다 새로 열었다('응답 없음'). 여기서는 study.db 는 자기 연결,
+    `clean_page_texts` 는 `PAGE_TEXT_CHUNK` 쪽씩 한 번에."""
+    from viewer import text_extract2 as tx
+    from viewer.study.study_store import StudyStore, file_key_for
+    pages = [int(p) for p in pages]
+    out = {}
+    try:
+        store = StudyStore(db_path)
+    except Exception:
+        store = None
+    fk = file_key_for(str(path))
+    doc = None
+    try:
+        def _look(pno):
+            try:
+                return (store.get_page_words(fk, pno), store.get_page_dpi(fk, pno))
+            except Exception:
+                return (None, 0)
+        for i in range(0, len(pages), PAGE_TEXT_CHUNK):
+            if cancelled is not None and cancelled():
+                break
+            part = pages[i:i + PAGE_TEXT_CHUNK]
+            if progress is not None:
+                progress(i, len(pages))
+            got = {}
+            try:
+                got = {int(p): (t or "").strip()
+                       for p, t in tx.clean_page_texts(str(path), part, words_lookup=_look if store else None)}
+            except Exception:
+                got = {}
+            for p in part:
+                t = got.get(p, "")
+                if len(t) > 20:
+                    out[p] = t
+                    continue
+                try:
+                    t2 = store.get_page_text(fk, p) if store is not None else ""
+                except Exception:
+                    t2 = ""
+                if t2 and len(t2.strip()) > 20:
+                    out[p] = t2
+                    continue
+                try:
+                    if doc is None:
+                        import fitz
+                        doc = fitz.open(str(path))
+                    out[p] = doc.load_page(p).get_text("text")
+                except Exception:
+                    out[p] = ""
+    finally:
+        for o in (doc, store):
+            try:
+                if o is not None:
+                    o.close()
+            except Exception:
+                pass
+    return out
 
 
 PLAY_ICON_PX = 14      # 261025-10(디자인 SOT §2.10): 읽기 ▶/■ 그림 크기

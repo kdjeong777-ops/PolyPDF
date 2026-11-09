@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-09 16:04+0900\n"
+"POT-Creation-Date: 2026-11-09 20:17+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -6778,10 +6778,6 @@ msgid "이어서 저장"
 msgstr "Continue Saving"
 
 #: viewer/study_controller.py
-msgid "읽을 본문을 찾지 못했습니다."
-msgstr "No body text to read was found."
-
-#: viewer/study_controller.py
 msgid ""
 "\n"
 "(OCR 한 번으로 글자층과 책갈피를 함께 만듭니다.)"
@@ -10793,6 +10789,11 @@ msgstr "Speech output failed (check the SAPI voice). Please try again."
 msgid "읽는 중: {pages} 페이지"
 msgstr "Reading: page {pages}"
 
+#: viewer/widgets/read_aloud.py
+#, python-brace-format
+msgid "OCR 이 끝나기를 기다리는 중: {page}쪽"
+msgstr "Waiting for OCR to finish: page {page}"
+
 #: viewer/widgets/redact_dialog.py
 msgid "검색어(이름 등)"
 msgstr "Search term (names etc.)"
@@ -14568,6 +14569,11 @@ msgstr "Resuming: {done0}/{total} done"
 
 #: viewer/workers.py
 #, python-brace-format
+msgid "읽을 글 모으는 중 {i}/{n}쪽"
+msgstr "Collecting text to read: page {i}/{n}"
+
+#: viewer/workers.py
+#, python-brace-format
 msgid "{pg}쪽"
 msgstr "Page {pg}"
 
@@ -14579,6 +14585,10 @@ msgstr "Online dictionary lookup {idx}/{total}"
 #: viewer/workers.py
 msgid "Word 저장 중..."
 msgstr "Saving Word..."
+
+#: viewer/workers.py
+msgid "읽을 본문을 찾지 못했습니다."
+msgstr "No body text to read was found."
 
 #: viewer/workers.py
 #, python-brace-format
