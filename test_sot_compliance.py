@@ -146,7 +146,7 @@ APPNAME_KNOWN = {
     "test_ocr_batch_261014.py", "test_open_multi_files.py", "test_page_edit_save_bg.py", "test_page_nav_261014.py",
     "test_panel_input_261014.py", "test_pdf_compress_261014.py", "test_recent_files.py",
     "test_rename_locked_261014.py", "test_reopen_after_save.py", "test_save_overwrite_locked.py", "test_screenshot_pdf_bake_261014.py",
-    "test_search_case_regex_261014.py", "test_security_redact_261014.py", "test_shot_clipboard_copy_261024.py", "test_shot_clipboard_pdf_open.py",
+    "test_security_redact_261014.py", "test_shot_clipboard_copy_261024.py", "test_shot_clipboard_pdf_open.py",
     "test_sot_ui_layout.py", "test_temp_sweep_261014.py", "test_text_word_bg_261014.py",
     "test_thumb_move_staged.py", "test_ui_stall_peer_table_261014.py", "test_update_order.py"
 }
@@ -182,7 +182,7 @@ MODAL_KNOWN = {
     "test_present_screen_261021.py", "test_recent_files.py", "test_recording_rotate.py", "test_rename_locked_261014.py",
     "test_render_cache.py", "test_reopen_after_save.py", "test_review_fixes_261024.py", "test_revise8.py",
     "test_revise_bm4.py", "test_revise_bm4b.py", "test_revise_bm4c.py", "test_revise_bm4d.py", "test_save_as_261017.py",
-    "test_save_overwrite_locked.py", "test_screenshot_pdf_bake_261014.py", "test_search_case_regex_261014.py",
+    "test_save_overwrite_locked.py", "test_screenshot_pdf_bake_261014.py",
     "test_security_redact_261014.py", "test_security_resign.py", "test_security_sign.py", "test_security_sign_drafts.py",
     "test_shortcuts_capture.py", "test_shortcuts_chrome_261021.py", "test_shot_clipboard_copy_261024.py",
     "test_shot_clipboard_pdf_open.py", "test_side_panels.py", "test_split_drawer.py", "test_start_view.py",
