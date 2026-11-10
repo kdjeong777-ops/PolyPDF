@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-09 20:38+0900\n"
+"POT-Creation-Date: 2026-11-11 06:54+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -6742,6 +6742,18 @@ msgid "목소리 {n}"
 msgstr "Voice {n}"
 
 #: viewer/study_controller.py
+msgid "mp3 저장"
+msgstr "Save mp3"
+
+#: viewer/study_controller.py
+msgid "자연 음성으로 계속"
+msgstr "Continue with natural voice"
+
+#: viewer/study_controller.py
+msgid "Windows 기본 음성으로 빠르게"
+msgstr "Faster with Windows voice"
+
+#: viewer/study_controller.py
 msgid "mp3 저장 폴더 선택"
 msgstr "Choose mp3 Save Folder"
 
@@ -6766,8 +6778,16 @@ msgid "저장하지 않았습니다 — 책갈피창에서 확인한 뒤 [저장
 msgstr "Not saved — check them in the Bookmarks panel, then press [Save]."
 
 #: viewer/study_controller.py
+msgid "저장하는 동안에도 다른 일을 할 수 있고, [중단] 하면 다 만든 파일은 남습니다."
+msgstr "You can keep working while it saves. If you click [Stop], the finished files are kept."
+
+#: viewer/study_controller.py
 msgid "mp3 저장 실패"
 msgstr "mp3 Save Failed"
+
+#: viewer/study_controller.py
+msgid "mp3 저장을 취소했습니다."
+msgstr "mp3 save cancelled."
 
 #: viewer/study_controller.py
 msgid "mp3 분할 기준"
@@ -6813,6 +6833,26 @@ msgstr "The OCR results are not saved yet either."
 #, python-brace-format
 msgid "mp3 저장 — {name}"
 msgstr "Save mp3 — {name}"
+
+#: viewer/study_controller.py viewer/widgets/pres_timer.py
+#, python-brace-format
+msgid "{m}분"
+msgstr "{m} min"
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "{h}시간 {m}분"
+msgstr "{h} h {m} min"
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "{h}시간"
+msgstr "{h} h"
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "자연 음성으로 저장하면 약 {t} 걸립니다."
+msgstr "Saving with the natural voice will take about {t}."
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -6903,6 +6943,11 @@ msgstr "Making bookmarks failed: {e}"
 #, python-brace-format
 msgid "책갈피 {n}개를 책갈피창에 넣었습니다(저장 안 됨)."
 msgstr "Added {n} bookmarks to the Bookmarks panel (not saved)."
+
+#: viewer/study_controller.py
+#, python-brace-format
+msgid "글 {chars}자 · 파일 {files}개. Windows 기본 음성이면 약 {t}."
+msgstr "{chars} characters · {files} file(s). With the Windows voice, about {t}."
 
 #: viewer/study_controller.py
 #, python-brace-format
@@ -10310,11 +10355,6 @@ msgstr "Attached ✓"
 #: viewer/widgets/pres_timer.py
 msgid "클립보드에 이미지가 없습니다."
 msgstr "No image on the clipboard."
-
-#: viewer/widgets/pres_timer.py
-#, python-brace-format
-msgid "{m}분"
-msgstr "{m} min"
 
 #: viewer/widgets/pres_timer.py
 #, python-brace-format

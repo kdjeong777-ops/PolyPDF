@@ -126,6 +126,41 @@ def id3_comment(text: str) -> bytes:
 
 GENERATED_NOTE = "생성 음성(AI 합성): Supertonic 3 — OpenRAIL-M"
 
+# 261111-1(영상·음성 SOT §1.1 '예상 시간 묻기'): 저장 전 예상 시간 — 글자 수 ÷ 엔진별 속도(글자/초).
+#   기본값은 2026-11-09 개발 PC 실측(성격심리 2쪽 1,898자: 자연 음성 빠른 음질 112초, SAPI 10초). 고음질은 단계가 두 배.
+#   PC 마다 다르므로 끝까지 저장하면 그 속도를 설정 `mp3_speed` 에 기억해 다음 예상에 쓴다(`speed_after`).
+DEFAULT_CPS = {"neural_fast": 17.0, "neural_high": 9.0, "sapi": 190.0}
+ASK_MIN_S = 600          # 자연 음성 예상이 이보다 짧으면 묻지 않고 곧바로(10분)
+
+
+def speed_key(neural: bool, quality: str = "fast") -> str:
+    return ("neural_" + ("high" if quality == "high" else "fast")) if neural else "sapi"
+
+
+def estimate_s(chars: int, key: str, memo=None) -> float:
+    """글자 수 → 예상 초. `memo` = 설정 `mp3_speed`(지난 저장의 글자/초)."""
+    try:
+        cps = float((memo or {}).get(key) or 0)
+    except (TypeError, ValueError):
+        cps = 0.0
+    if cps <= 0:
+        cps = DEFAULT_CPS.get(key, DEFAULT_CPS["sapi"])
+    return max(0, int(chars)) / max(0.1, cps)
+
+
+def speed_after(memo, key: str, chars: int, secs: float) -> dict:
+    """끝까지 저장한 실측(글자·합성 초)을 기억값에 섞는다(반반) — 짧은 저장(200자 미만·1초 미만)은 흔들려서 쓰지 않는다."""
+    out = dict(memo or {}) if isinstance(memo, dict) else {}
+    if chars < 200 or secs < 1.0:
+        return out
+    cps = chars / secs
+    old = out.get(key)
+    try:
+        out[key] = round((float(old) + cps) / 2, 2) if old else round(cps, 2)
+    except (TypeError, ValueError):
+        out[key] = round(cps, 2)
+    return out
+
 
 def _make_voice(rate: int, hidden=()):
     import win32com.client

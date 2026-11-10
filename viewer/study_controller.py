@@ -1030,7 +1030,8 @@ class StudyMixin:
         from viewer.study import tts_engine as _tts_engine
         worker = StudyMp3Worker(jobs, rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
-                                resume=resume, tts_cfg=_tts_engine.export_choice(self))   # 261108-28: 자연 음성이면 그것으로
+                                resume=resume, tts_cfg=_tts_engine.export_choice(self),   # 261108-28: 자연 음성이면 그것으로
+                                speed=self._prefs.get("mp3_speed"))
         jid = "study_mp3"                        # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
         self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
         self.progress.setRange(0, len(jobs))       # 막대 보임은 job_add 가, 범위는 여기서
@@ -1044,6 +1045,7 @@ class StudyMixin:
             self.job_done(jid)
             self._mp3_report(res, out_dir)
 
+        worker.askEngine.connect(lambda info, w=worker: w.answer(self._mp3_ask(info)))   # 261111-1
         worker.progress.connect(on_prog)
         worker.finished.connect(on_fin)
         run_in_thread(worker, self._study_threads)
@@ -1085,12 +1087,47 @@ class StudyMixin:
             secs.append((title, p0, end))
         return secs
 
+    @staticmethod
+    def _fmt_dur(sec: float) -> str:
+        m = max(1, int(sec / 60 + 0.5))
+        if m < 60:
+            return tr("{m}분").format(m=m)
+        h, mm = divmod(m, 60)
+        return tr("{h}시간 {m}분").format(h=h, m=mm) if mm else tr("{h}시간").format(h=h)
+
+    def _mp3_ask(self, info: dict) -> str:
+        """261111-1(영상·음성 SOT §1.1 '예상 시간 묻기', 사용자 결정): 자연 음성 mp3 가 오래 걸리면 저장 전에 묻는다.
+        일꾼은 글을 다 모은 뒤 이 답을 기다린다(메인은 막히지 않는다 — 창이 떠 있는 동안 이벤트는 돈다).
+        'neural'(계속, 기본) · 'sapi'(이 저장만 Windows 기본 음성 — 설정의 읽기 엔진은 그대로) · 'cancel'."""
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("mp3 저장"))
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setText(tr("자연 음성으로 저장하면 약 {t} 걸립니다.").format(t=self._fmt_dur(info.get("neural_s", 0))))
+        box.setInformativeText(
+            tr("글 {chars}자 · 파일 {files}개. Windows 기본 음성이면 약 {t}.").format(
+                chars=f"{int(info.get('chars', 0)):,}", files=int(info.get("files", 0)),
+                t=self._fmt_dur(info.get("sapi_s", 0)))
+            + "\n" + tr("저장하는 동안에도 다른 일을 할 수 있고, [중단] 하면 다 만든 파일은 남습니다."))
+        b_n = box.addButton(tr("자연 음성으로 계속"), QMessageBox.ButtonRole.AcceptRole)
+        b_s = box.addButton(tr("Windows 기본 음성으로 빠르게"), QMessageBox.ButtonRole.ActionRole)
+        b_c = box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_n)            # 디자인 SOT §2.7 예외 — 입력칸 없는 확인 창은 긍정 단추가 기본, Esc 는 취소
+        box.setEscapeButton(b_c)
+        box.exec()
+        c = box.clickedButton()
+        return "neural" if c is b_n else ("sapi" if c is b_s else "cancel")
+
     def _mp3_report(self, res: dict, out_dir) -> None:
         """261109-5(영상·음성 SOT §1.8 의 4): mp3 저장 끝 — 실패는 **창으로** 알린다(종전에는 구간마다 예외를 삼키고 상태 줄에
         '완료: 0/N' 만 6초 — 사용자 보고 '폴더에 저장된 mp3가 없었음'). 까닭은 error.log 에도(일꾼이 남김)."""
         failed = list(res.get("failed") or [])
+        if isinstance(res.get("speed"), dict):          # 261111-1: 다음 예상에 쓸 실측 속도
+            self._prefs["mp3_speed"] = res["speed"]
         if res.get("error"):
             QMessageBox.warning(self, tr("mp3 저장 실패"), res["error"])
+            return
+        if res.get("declined"):
+            self.status.showMessage(tr("mp3 저장을 취소했습니다."), 6000)
             return
         if failed or (not res.get("cancelled") and not res.get("saved") and not res.get("skipped")):
             lines = "\n".join("• %s — %s" % (nm, why[:200]) for nm, why in failed[:5])
@@ -1186,6 +1223,7 @@ class StudyMixin:
         worker = StudyMp3Worker([], rate=self.read_aloud.rate,
                                 voice_name=getattr(self.read_aloud, "voice_name", None),
                                 resume=resume, tts_cfg=_tts_engine.export_choice(self),   # 261108-28: 자연 음성이면 그것으로
+                                speed=self._prefs.get("mp3_speed"),       # 261111-1: 지난 저장 속도로 예상
                                 collect={"path": str(path), "sections": sections, "db_path": db_path})
         jid = "main_mp3"                         # 261105-25(응답성 SOT §4.6): [중단] — 만든 파일은 남고 '이어서 저장' 이 건너뛴다
         self.job_add(jid, tr("mp3 저장 — {name}").format(name=out_dir.name), worker.request_cancel)
@@ -1200,6 +1238,7 @@ class StudyMixin:
             self.job_done(jid)
             self._mp3_report(res, out_dir)
 
+        worker.askEngine.connect(lambda info, w=worker: w.answer(self._mp3_ask(info)))   # 261111-1
         worker.progress.connect(on_prog)
         worker.finished.connect(on_fin)
         run_in_thread(worker, self._study_threads)

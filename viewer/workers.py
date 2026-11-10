@@ -1324,10 +1324,15 @@ class StudyMp3Worker(QObject):
     progress = pyqtSignal(int, int, str)
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
+    # 261111-1(영상·음성 SOT §1.1 '예상 시간 묻기'): 자연 음성 예상이 길면 메인에 묻는다 — 메인은 `answer()` 로 답한다
+    askEngine = pyqtSignal(dict)
 
     def __init__(self, jobs: list, rate: int = 0, voice_name: str = None,
-                 resume: bool = False, tts_cfg: dict = None, collect: dict = None):
+                 resume: bool = False, tts_cfg: dict = None, collect: dict = None, speed: dict = None):
         super().__init__()
+        self.speed = dict(speed or {})        # 설정 `mp3_speed` — 지난 저장의 글자/초
+        self._answer = None
+        self._answered = _threading.Event()
         self.jobs = jobs              # [(mp3_path, lrc_path, segments)]
         # 261109-5(영상·음성 SOT §1.1): 본문 mp3 — 메인은 구간만, 읽을 글은 여기(배경)서 모은다.
         #   {'path', 'sections': [(mp3, lrc, p0, p1)], 'db_path'} — 있으면 run 이 jobs 를 만든다
@@ -1356,6 +1361,34 @@ class StudyMp3Worker(QObject):
 
     def request_cancel(self):
         self._cancel = True
+        self._answered.set()
+
+    def answer(self, choice: str) -> None:
+        """메인이 고른 엔진 — 'neural'(계속) · 'sapi'(이 저장만 빠르게) · 'cancel'."""
+        self._answer = choice
+        if choice == "cancel":
+            self._cancel = True
+        self._answered.set()
+
+    def _ask_engine(self) -> bool:
+        """261111-1: 자연 음성이고 예상이 `ASK_MIN_S` 이상이면 묻고 기다린다. 이 저장을 SAPI 로 하면 True."""
+        import os as _os
+        from viewer.study.mp3_export import estimate_s, speed_key, ASK_MIN_S
+        if not self.tts_cfg.get("neural"):
+            return False
+        todo = [j for j in self.jobs
+                if not (self.resume and _os.path.exists(j[0]) and _os.path.getsize(j[0]) > 0)]
+        chars = sum(len(t) for j in todo for (t, _l) in j[2])
+        n_s = estimate_s(chars, speed_key(True, self.tts_cfg.get("quality")), self.speed)
+        if n_s < ASK_MIN_S:
+            return False
+        self._answered.clear()
+        self.askEngine.emit({"chars": chars, "files": len(todo), "neural_s": n_s,
+                             "sapi_s": estimate_s(chars, "sapi", self.speed)})
+        while not self._answered.wait(0.2):
+            if self._cancel:
+                break
+        return self._answer == "sapi"
 
     def _collect_jobs(self) -> list:
         """261109-5: 구간마다 쪽 글을 모아 문장 세그먼트로 — 화면 읽기와 같은 글(`read_aloud.page_texts_bg`)."""
@@ -1399,7 +1432,14 @@ class StudyMp3Worker(QObject):
             voice, tok = _make_voice(self.rate, self.tts_cfg.get("hidden_sapi") or ())   # 1회 생성·재사용 · 261108-33 숨긴 성우 빼기
             # 261108-25(영상·음성 SOT §1.8 의 4): 화면 읽기와 같은 성우 목록(OneCore 포함)에서 찾는다
             forced = _find_voice(voice, self.voice_name)
-            neural, nopts = self._neural()
+            use_sapi = self._ask_engine()             # 261111-1: 모델을 싣기 전에 묻는다
+            if self._cancel:
+                self.finished.emit({"saved": 0, "skipped": 0, "total": len(self.jobs), "cancelled": True,
+                                    "failed": [], "declined": self._answer == "cancel"})
+                return
+            neural, nopts = (None, {}) if use_sapi else self._neural()
+            synth_secs = {"neural": 0.0, "sapi": 0.0}
+            synth_chars = {"neural": 0, "sapi": 0}
             n = len(self.jobs)
             done = skipped = 0
             failed = []                                # 261109-5: [(파일 이름, 까닭)] — 조용히 묻지 않고 알린다
@@ -1433,6 +1473,8 @@ class StudyMp3Worker(QObject):
                     st["base"] += len(segs); st["done0"] += len(segs)
                     continue
                 try:
+                    eng = "neural" if neural is not None else "sapi"
+                    t_job = time.time()
                     try:
                         synth_to_mp3(segs, mp3, lrc_path=lrc, voice=voice, tok=tok, forced=forced,
                                      neural=neural, neural_opts=nopts, on_seg=_on_seg)
@@ -1442,7 +1484,10 @@ class StudyMp3Worker(QObject):
                         if neural is None:
                             raise
                         neural = None                      # 자연 음성이 실패하면 남은 것은 SAPI 로
+                        eng, t_job = "sapi", time.time()
                         synth_to_mp3(segs, mp3, lrc_path=lrc, voice=voice, tok=tok, forced=forced, on_seg=_on_seg)
+                    synth_secs[eng] += time.time() - t_job          # 261111-1: 다음 예상에 쓸 실측
+                    synth_chars[eng] += sum(len(t) for (t, _l) in segs)
                     done += 1
                 except Mp3Cancelled:
                     break
@@ -1455,8 +1500,13 @@ class StudyMp3Worker(QObject):
                         pass
                 st["base"] += len(segs)
             self.progress.emit(total_s, total_s, tr("완료"))
+            from viewer.study.mp3_export import speed_after, speed_key
+            spd = dict(self.speed)
+            for eng in ("neural", "sapi"):
+                spd = speed_after(spd, speed_key(eng == "neural", self.tts_cfg.get("quality")),
+                                  synth_chars[eng], synth_secs[eng])
             self.finished.emit({"saved": done, "skipped": skipped, "total": n,
-                                "cancelled": self._cancel, "failed": failed})
+                                "cancelled": self._cancel, "failed": failed, "speed": spd})
         except Exception as e:
             self.error.emit(str(e))
             self.finished.emit({"error": str(e)})

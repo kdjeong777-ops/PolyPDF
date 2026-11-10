@@ -9548,6 +9548,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "read_ocr_offer": dict(prefs.get("read_ocr_offer", old.get("read_ocr_offer", {})) or {}),
             # 261108-28(영상·음성 SOT §1.10): 읽기 엔진·목소리·음질 — 허용목록에 없으면 조용히 사라진다
             "tts_voice": dict(prefs.get("tts_voice", old.get("tts_voice", {})) or {}),
+            # 261111-1(영상·음성 SOT §1.1): mp3 저장 예상 시간에 쓰는 지난 저장 속도(글자/초)
+            "mp3_speed": dict(prefs.get("mp3_speed", old.get("mp3_speed", {})) or {}),
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),
