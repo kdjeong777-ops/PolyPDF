@@ -191,11 +191,14 @@ def _view_single(p, c):
 
 
 def _hand(p, c):
-    """261107-36(입력 SOT §4.1·마스터 §4.6.12): 손바닥(화면 끌기) — 손가락 넷 + 엄지 + 손바닥을 합친 펼친 손 윤곽."""
+    """261107-36(입력 SOT §4.1·마스터 §4.6.12): 손바닥(화면 끌기) — 손가락 넷 + 엄지 + 손바닥을 합친 펼친 손 **윤곽만**.
+    261111-9(사용자 결정 'A 윤곽만'): 손가락 사이 선을 없앴다 — 종전에는 손가락 막대를 0.4 띄워 그 사이마다 테 두 줄이 붙고
+    (거기에 사이 선 한 줄까지) 굵은 줄로 갈라져 보였다. 지금은 손가락 막대를 겹쳐 합친 **바깥선 하나**뿐이고, 손가락은 윗변의 굴곡
+    넷으로 읽힌다(선 굵기는 다른 라인 아이콘과 같게 둔다)."""
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)                             # 겹친 곳을 구멍 없이 합친다
-    for x, top in ((4.0, 3.6), (6.4, 1.6), (8.8, 1.6), (11.2, 3.2)):     # 손가락 넷(가운데가 길다)
-        path.addRoundedRect(QRectF(x, top, 2.0, 9.0 - top), 1.0, 1.0)
+    for x, top in ((4.0, 3.6), (6.3, 1.6), (8.6, 1.6), (10.9, 3.2)):     # 손가락 넷(가운데가 길다) — 서로 겹쳐 바깥선 하나
+        path.addRoundedRect(QRectF(x, top, 2.3, 9.0 - top), 1.15, 1.15)  #   종전엔 0.4 띄워 사이마다 테 두 줄이 붙어 굵은 줄이 됐다
     thumb = QPainterPath()
     thumb.addRoundedRect(QRectF(0.0, 0.0, 2.0, 5.4), 1.0, 1.0)
     path.addPath(QTransform().translate(1.0, 7.2).rotate(-40).map(thumb))   # 엄지 — 왼쪽에서 비스듬히
@@ -203,8 +206,6 @@ def _hand(p, c):
     p.setPen(QPen(c, 1.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
     p.setBrush(Qt.BrushStyle.NoBrush)
     p.drawPath(path.simplified())
-    for x, top in ((6.2, 4.4), (8.6, 2.6), (11.0, 4.0)):                  # 손가락 사이 — 작은 크기에서도 손가락이 읽히게
-        p.drawLine(QPointF(x, top), QPointF(x, 7.8))
 
 
 _DRAW = {
