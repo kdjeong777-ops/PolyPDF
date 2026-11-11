@@ -4286,7 +4286,23 @@ msgid "{stem}_압축"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "행정동을 찾지 못함"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "사진 정보"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "찾는 중…"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "국외 — 행정동 자료 밖(온라인 상세 주소로 찾을 수 있음)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "찾지 못했습니다 — 인터넷 연결·방화벽을 확인하세요"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4375,6 +4391,14 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "펼친 사진 만드는 중…"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "상세 주소 찾기(온라인)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "지번·도로명 주소를 찾으려면 이 사진의 촬영 위치(위도·경도)가 OpenStreetMap Nominatim 서버로 보내집니다. 찾을까요?"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4479,6 +4503,14 @@ msgid "위치(GPS)"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "주소"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "상세 주소(온라인)"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "소프트웨어"
 msgstr ""
 
@@ -4570,6 +4602,14 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "누르면 사진의 세부 정보를 봅니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "촬영 위치를 OpenStreetMap Nominatim 서버로 보내 지번·도로명 주소를 찾습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "주소 복사"
 msgstr ""
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
@@ -5158,6 +5198,11 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "주소를 복사했습니다: {a}"
 msgstr ""
 
 #: viewer/photo_controller.py

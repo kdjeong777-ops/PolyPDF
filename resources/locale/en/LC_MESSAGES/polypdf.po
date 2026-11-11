@@ -4431,8 +4431,24 @@ msgid "{stem}_압축"
 msgstr "{stem}_compressed"
 
 #: viewer/photo_controller.py
+msgid "행정동을 찾지 못함"
+msgstr "Administrative area not found"
+
+#: viewer/photo_controller.py
 msgid "사진 정보"
 msgstr "Photo Info"
+
+#: viewer/photo_controller.py
+msgid "찾는 중…"
+msgstr "Looking up…"
+
+#: viewer/photo_controller.py
+msgid "국외 — 행정동 자료 밖(온라인 상세 주소로 찾을 수 있음)"
+msgstr "Outside Korea — not in the administrative area data (you can look it up with the online detailed address)"
+
+#: viewer/photo_controller.py
+msgid "찾지 못했습니다 — 인터넷 연결·방화벽을 확인하세요"
+msgstr "Could not look it up — check your internet connection and firewall"
 
 #: viewer/photo_controller.py
 msgid "폴더가 바뀌어 사진 목록을 새로 읽었습니다."
@@ -4521,6 +4537,14 @@ msgstr "Discard and close"
 #: viewer/photo_controller.py
 msgid "펼친 사진 만드는 중…"
 msgstr "Making straightened photos…"
+
+#: viewer/photo_controller.py
+msgid "상세 주소 찾기(온라인)"
+msgstr "Look Up Detailed Address (Online)"
+
+#: viewer/photo_controller.py
+msgid "지번·도로명 주소를 찾으려면 이 사진의 촬영 위치(위도·경도)가 OpenStreetMap Nominatim 서버로 보내집니다. 찾을까요?"
+msgstr "To look up the street address, this photo's location (latitude and longitude) will be sent to the OpenStreetMap Nominatim server. Look it up?"
 
 #: viewer/photo_controller.py
 msgid "zip 안 사진을 고른 폴더에 풉니다(원본 zip 은 그대로)."
@@ -4624,6 +4648,14 @@ msgid "위치(GPS)"
 msgstr "Location (GPS)"
 
 #: viewer/photo_controller.py
+msgid "주소"
+msgstr "Address"
+
+#: viewer/photo_controller.py
+msgid "상세 주소(온라인)"
+msgstr "Detailed address (online)"
+
+#: viewer/photo_controller.py
 msgid "소프트웨어"
 msgstr "Software"
 
@@ -4716,6 +4748,14 @@ msgstr "Only photos selected from an opened folder can be rotated."
 #: viewer/photo_controller.py
 msgid "누르면 사진의 세부 정보를 봅니다."
 msgstr "Click to see the photo details."
+
+#: viewer/photo_controller.py
+msgid "촬영 위치를 OpenStreetMap Nominatim 서버로 보내 지번·도로명 주소를 찾습니다."
+msgstr "Sends the photo location to the OpenStreetMap Nominatim server to look up the street address."
+
+#: viewer/photo_controller.py
+msgid "주소 복사"
+msgstr "Copy Address"
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
 msgid "인쇄 창을 엽니다."
@@ -5304,6 +5344,11 @@ msgstr "Saved {n} straightened photos as new files — the originals are unchang
 #, python-brace-format
 msgid "펼친 사진 {n}장을 저장하고 {m}장은 만들지 못했습니다."
 msgstr "Saved {n} straightened photos; {m} could not be made."
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "주소를 복사했습니다: {a}"
+msgstr "Address copied: {a}"
 
 #: viewer/photo_controller.py
 #, python-brace-format

@@ -2533,6 +2533,7 @@ class PhotoMixin:
         self._photo_info_set(self._photo_display_name(path))
         w = PhotoInfoWorker(self._photo_info_gen, str(path))
         w.done.connect(self._photo_info_done)
+        w.addr.connect(self._photo_addr_done)
         run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
 
     def _photo_info_done(self, gen: int, path: str, info: dict):
@@ -2540,6 +2541,14 @@ class PhotoMixin:
             return
         self._photo_info = dict(info, path=path)
         self._photo_info_set(photo_info_line(info, self._photo_display_name(path)))
+
+    def _photo_addr_done(self, gen: int, path: str, text: str, why: str):
+        """행정동 주소(4.18 주소, 261111-21) — 정보 뒤 둘째 신호. 세부 정보 창이 열려 있으면 '찾는 중…' 을 바꾼다."""
+        info = getattr(self, "_photo_info", None)
+        if gen != getattr(self, "_photo_info_gen", 0) or not info or info.get("path") != path:
+            return
+        info["address"], info["address_why"] = text, why
+        self._photo_info_dlg_fill()
 
     def _photo_display_name(self, path) -> str:
         """상태 막대에 보일 파일 이름 — zip 안 사진이면 'zip 이름 › 안쪽 사진 이름'(4.18·4.32, 사용자 지시)."""
@@ -2556,29 +2565,95 @@ class PhotoMixin:
             return
         from PyQt6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QHeaderView, QTableWidget,
                                      QTableWidgetItem, QVBoxLayout)
-        rows = photo_info_rows(info)
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("사진 정보") + " — " + Path(info["path"]).name)
         lay = QVBoxLayout(dlg)
-        t = QTableWidget(len(rows), 2, dlg)
+        t = QTableWidget(0, 2, dlg)
         t.setHorizontalHeaderLabels([tr("항목"), tr("값")])
         t.verticalHeader().setVisible(False)
         t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        for i, (k, v) in enumerate(rows):
-            t.setItem(i, 0, QTableWidgetItem(k))
-            t.setItem(i, 1, QTableWidgetItem(v))
         t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         t.horizontalHeader().setStretchLastSection(True)
         lay.addWidget(t)
+        dlg._table = t
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dlg)
         bb.rejected.connect(dlg.reject)
+        dlg._b_copy = dlg._b_online = None
         if info.get("gps"):                                # 4.29(261104-7 B4, F6·D18): 지도에서 위치 보기 — 매번 확인
             b_map = bb.addButton(tr("지도에서 위치 보기"), QDialogButtonBox.ButtonRole.ActionRole)
             b_map.clicked.connect(lambda _=False, pth=str(info["path"]): self._photo_map_show([pth]))
+            # 4.18 주소(261111-21, D20): 상세 주소는 누를 때마다 확인 뒤 온라인 · 주소 복사
+            dlg._b_online = bb.addButton(tr("상세 주소 찾기(온라인)"), QDialogButtonBox.ButtonRole.ActionRole)
+            dlg._b_online.setToolTip(tr("촬영 위치를 OpenStreetMap Nominatim 서버로 보내 지번·도로명 주소를 찾습니다."))
+            dlg._b_online.clicked.connect(lambda _=False: self._photo_addr_online())
+            dlg._b_copy = bb.addButton(tr("주소 복사"), QDialogButtonBox.ButtonRole.ActionRole)
+            dlg._b_copy.clicked.connect(lambda _=False: self._photo_addr_copy())
         lay.addWidget(bb)
         dlg.resize(560, 420)
         self._photo_info_dlg = dlg
-        dlg.exec()
+        self._photo_info_dlg_fill()
+        try:
+            dlg.exec()
+        finally:
+            self._photo_info_dlg = None
+
+    def _photo_info_dlg_fill(self):
+        """세부 정보 창 표를 지금 정보로 다시 채운다 — 주소가 늦게 와도(4.18 주소) 같은 함수."""
+        from PyQt6.QtWidgets import QTableWidgetItem
+        dlg = getattr(self, "_photo_info_dlg", None)
+        info = getattr(self, "_photo_info", None)
+        if dlg is None or not info:
+            return
+        rows = photo_info_rows(info)
+        t = dlg._table
+        t.setRowCount(len(rows))
+        for i, (k, v) in enumerate(rows):
+            t.setItem(i, 0, QTableWidgetItem(k))
+            t.setItem(i, 1, QTableWidgetItem(v))
+        if dlg._b_copy is not None:
+            dlg._b_copy.setEnabled(bool(photo_address_text(info)))
+        if dlg._b_online is not None:
+            dlg._b_online.setEnabled(info.get("address_online") != "")    # '' = 찾는 중
+
+    def _photo_addr_copy(self):
+        from PyQt6.QtWidgets import QApplication
+        text =photo_address_text(getattr(self, "_photo_info", None) or {})
+        if text:
+            QApplication.clipboard().setText(text)
+            try:
+                self.statusBar().showMessage(tr("주소를 복사했습니다: {a}").format(a=text), 3000)
+            except Exception:
+                pass
+
+    def _photo_addr_online(self):
+        """상세 주소(온라인) — 매번 확인(D20), 배경 `PhotoAddressWorker` 한 번. 사진이 바뀌면 결과를 버린다."""
+        from viewer import i18n
+        from viewer.photo_address import PhotoAddressWorker
+        from viewer.workers import run_in_thread
+        info = getattr(self, "_photo_info", None)
+        if not info or not info.get("gps"):
+            return
+        ans = QMessageBox.question(
+            getattr(self, "_photo_info_dlg", None) or self, tr("상세 주소 찾기(온라인)"),
+            tr("지번·도로명 주소를 찾으려면 이 사진의 촬영 위치(위도·경도)가 OpenStreetMap Nominatim 서버로 보내집니다. 찾을까요?"))
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        info["address_online"] = ""                       # 찾는 중
+        info.pop("address_online_err", None)
+        self._photo_info_dlg_fill()
+        lat, lon = info["gps"]
+        w = PhotoAddressWorker(getattr(self, "_photo_info_gen", 0), lat, lon, i18n.language() or "ko")
+        w.done.connect(lambda tok, text, err, p=info.get("path"): self._photo_addr_online_done(tok, p, text, err))
+        run_in_thread(w, self.__dict__.setdefault("_photo_keep", []))
+
+    def _photo_addr_online_done(self, token: int, path, text: str, err: bool):
+        info = getattr(self, "_photo_info", None)
+        if token != getattr(self, "_photo_info_gen", 0) or not info or info.get("path") != path:
+            return                                       # 사진이 바뀌었다
+        info["address_online"] = text or None
+        if err:
+            info["address_online_err"] = True
+        self._photo_info_dlg_fill()
 
     def _photo_deco_gate(self, ok: bool):
         """꾸미기 도구 줄을 켜고 끈다 — 돌린 사진에서는 끈다(4.16, 그려도 남지 않으면 고장으로 보인다)."""
@@ -4467,13 +4542,45 @@ def photo_info_rows(info: dict) -> list:
             (tr("방향(EXIF)"), ex.get("Orientation", "")),
             (tr("색 프로필"), info.get("icc", "")),
             (tr("위치(GPS)"), "%.6f, %.6f" % info["gps"] if info.get("gps") else ""),
+            (tr("주소"), _address_cell(info)),
+            (tr("상세 주소(온라인)"), _address_online_cell(info)),
             (tr("소프트웨어"), ex.get("Software", ""))]
     return [(k, v) for k, v in rows if v]
 
 
+def _address_cell(info: dict) -> str:
+    """주소 행(4.18, 261111-21) — 위치가 없으면 빈 글(행 없음). 값(행정동 이름)은 자료 그대로, 까닭만 화면 언어."""
+    if not info.get("gps"):
+        return ""
+    if "address" not in info:
+        return tr("찾는 중…")
+    if info["address"]:
+        return info["address"]
+    from viewer.photo_address import ABROAD
+    if info.get("address_why") == ABROAD:
+        return tr("국외 — 행정동 자료 밖(온라인 상세 주소로 찾을 수 있음)")
+    return tr("행정동을 찾지 못함")
+
+
+def _address_online_cell(info: dict) -> str:
+    if info.get("address_online_err"):
+        return tr("찾지 못했습니다 — 인터넷 연결·방화벽을 확인하세요")
+    v = info.get("address_online")
+    if v is None:
+        return ""
+    return v or tr("찾는 중…")
+
+
+def photo_address_text(info: dict) -> str:
+    """[주소 복사] 할 글 — 상세 주소가 있으면 그것, 없으면 행정동 주소, 둘 다 없으면 ''."""
+    return (info.get("address_online") or info.get("address") or "").strip()
+
+
 class PhotoInfoWorker(QObject):
-    """지금 사진의 정보(머리만)를 배경에서 읽는다 — 응답성 SOT §4.4 감사표의 한 행."""
+    """지금 사진의 정보(머리만)를 배경에서 읽는다 — 응답성 SOT §4.4 감사표의 한 행.
+    위치가 있으면 정보를 보낸 **뒤** 행정동 주소를 찾아 `addr`(세대, 경로, 주소, 까닭)로 — 정보 한 줄은 주소를 기다리지 않는다(261111-21)."""
     done = pyqtSignal(int, str, dict)
+    addr = pyqtSignal(int, str, str, str)
     finished = pyqtSignal()
 
     def __init__(self, gen: int, path: str):
@@ -4491,6 +4598,13 @@ class PhotoInfoWorker(QObject):
             except Exception:
                 info = {}
             self.done.emit(self.gen, self.path, info)
+            if info.get("gps"):
+                from viewer.photo_address import NOT_FOUND, offline_address
+                try:
+                    text, why = offline_address(*info["gps"])
+                except Exception:
+                    text, why = "", NOT_FOUND
+                self.addr.emit(self.gen, self.path, text, why)
         finally:
             self.finished.emit()
 
