@@ -1118,7 +1118,7 @@ class StudyMixin:
         return "neural" if c is b_n else ("sapi" if c is b_s else "cancel")
 
     def _mp3_report(self, res: dict, out_dir) -> None:
-        """261109-5(영상·음성 SOT §1.8 의 4): mp3 저장 끝 — 실패는 **창으로** 알린다(종전에는 구간마다 예외를 삼키고 상태 줄에
+        """261109-5(영상·음성 SOT §1.1 '진행·실패 알림'): mp3 저장 끝 — 실패는 **창으로** 알린다(종전에는 구간마다 예외를 삼키고 상태 줄에
         '완료: 0/N' 만 6초 — 사용자 보고 '폴더에 저장된 mp3가 없었음'). 까닭은 error.log 에도(일꾼이 남김)."""
         failed = list(res.get("failed") or [])
         if isinstance(res.get("speed"), dict):          # 261111-1: 다음 예상에 쓸 실측 속도
