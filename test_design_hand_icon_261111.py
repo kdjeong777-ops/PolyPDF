@@ -5,6 +5,7 @@ A. 손가락 높이(16칸의 5.5)를 가로로 지나면 잉크는 바깥 테 �
 B. 선 굵기는 다른 라인 아이콘과 같다 — 바깥 테 한 줄 두께가 1.4px(64px 그림에서 5~7px)
 C. 손 모양은 남는다 — 손가락 끝 높이가 다르다(가운데 둘이 바깥 둘보다 높다 — 윗변 굴곡)
 D. 실제 단추(본문 그리기 줄 `_draw_pan_btn`)에 그 그림이 들어간다
+E. 엄지가 손바닥에서 벌어져 있다 — 엄지 테와 손바닥 테 사이 빈 틈(261111-12, 사용자 지시)
 """
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -57,9 +58,17 @@ def top_of(xu):
         if ink(x, y):
             return y
     return S
-outer = (top_of(5.0), top_of(12.2))
-inner = (top_of(7.4), top_of(9.8))
+x0, fw = getattr(icons, "HAND_X0", 4.0), getattr(icons, "HAND_FW", 2.3)   # 손가락 자리(261111-12 부터 상수)
+cx = [x0 + fw * (k + 0.5) for k in range(4)]
+outer = (top_of(cx[0]), top_of(cx[3]))
+inner = (top_of(cx[1]), top_of(cx[2]))
 chk(max(inner) + 3 < min(outer), "C 가운데 손가락 둘이 바깥 둘보다 높다(손 윤곽)", "안 %s 바깥 %s" % (inner, outer))
+
+# E — 엄지는 손바닥에서 벌어져 있다(261111-12, 사용자 지시 '엄지손가락을 … 손바닥에서 좀더 멀리 떨어뜨려야 손바닥처럼 보여'):
+#   엄지 끝 아래 높이(16칸의 9.2)를 가로로 지나면 엄지 테와 손바닥 테 사이에 빈 틈이 16칸의 1 이상
+gap_row = runs_row(int(9.2 / 16 * S))
+gap = (gap_row[1][0] - (gap_row[0][0] + gap_row[0][1])) if len(gap_row) >= 2 else 0
+chk(len(gap_row) >= 3 and gap >= S // 16, "E 엄지와 손바닥 사이 틈 ≥ 1/16(엄지가 벌어져 있다)", "%s 틈 %dpx" % (gap_row, gap))
 
 from viewer.widgets.main_view import MainView
 mv = MainView(); mv.resize(900, 500); mv.show(); app.processEvents()

@@ -190,6 +190,13 @@ def _view_single(p, c):
         p.drawLine(QPointF(5.5, y), QPointF(13.8, y))
 
 
+HAND_X0 = 6.4            # 손가락·손바닥 왼쪽 끝(16칸) — 왼쪽은 벌린 엄지 자리
+HAND_FW = 2.1            # 손가락 하나 폭(넷을 겹쳐 바깥선 하나)
+HAND_THUMB_BASE_Y = 12.6  # 엄지 밑동 높이(손바닥 아래쪽)
+HAND_THUMB_DEG = 45      # 엄지를 세로에서 바깥(왼쪽)으로 벌린 각
+HAND_THUMB_LEN = 6.4     # 엄지 길이
+
+
 def _hand(p, c):
     """261107-36(입력 SOT §4.1·마스터 §4.6.12): 손바닥(화면 끌기) — 손가락 넷 + 엄지 + 손바닥을 합친 펼친 손 **윤곽만**.
     261111-9(사용자 결정 'A 윤곽만'): 손가락 사이 선을 없앴다 — 종전에는 손가락 막대를 0.4 띄워 그 사이마다 테 두 줄이 붙고
@@ -197,12 +204,15 @@ def _hand(p, c):
     넷으로 읽힌다(선 굵기는 다른 라인 아이콘과 같게 둔다)."""
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)                             # 겹친 곳을 구멍 없이 합친다
-    for x, top in ((4.0, 3.6), (6.3, 1.6), (8.6, 1.6), (10.9, 3.2)):     # 손가락 넷(가운데가 길다) — 서로 겹쳐 바깥선 하나
-        path.addRoundedRect(QRectF(x, top, 2.3, 9.0 - top), 1.15, 1.15)  #   종전엔 0.4 띄워 사이마다 테 두 줄이 붙어 굵은 줄이 됐다
+    x0 = HAND_X0                                                          # 손가락·손바닥 왼쪽 끝 — 엄지 자리만큼 오른쪽으로
+    for k, top in enumerate((3.4, 1.4, 1.4, 3.0)):                        # 손가락 넷(가운데가 길다) — 서로 겹쳐 바깥선 하나
+        path.addRoundedRect(QRectF(x0 + HAND_FW * k, top, HAND_FW, 9.0 - top), HAND_FW / 2, HAND_FW / 2)  # 종전엔 0.4 띄워 사이마다 테 두 줄이 붙어 굵은 줄이 됐다
     thumb = QPainterPath()
-    thumb.addRoundedRect(QRectF(0.0, 0.0, 2.0, 5.4), 1.0, 1.0)
-    path.addPath(QTransform().translate(1.0, 7.2).rotate(-40).map(thumb))   # 엄지 — 왼쪽에서 비스듬히
-    path.addRoundedRect(QRectF(4.0, 7.0, 9.2, 7.6), 3.2, 3.2)              # 손바닥
+    thumb.addRoundedRect(QRectF(-HAND_FW / 2, -HAND_THUMB_LEN, HAND_FW, HAND_THUMB_LEN + 1.0), HAND_FW / 2, HAND_FW / 2)   # 밑동(0,0)에서 위로
+    # 261111-12(사용자 지시 '엄지손가락을 … 손바닥에서 좀더 멀리 떨어뜨려야 손바닥처럼 보여'): 엄지는 손바닥 왼쪽 **아래쪽**에서
+    #   바깥으로 `HAND_THUMB_DEG` 만큼 크게 벌린다 — 검지와 사이에 V 자 틈이 생긴다(종전엔 검지 밑동에 붙어 손가락 하나처럼 보였다).
+    path.addPath(QTransform().translate(x0 + 0.8, HAND_THUMB_BASE_Y).rotate(-HAND_THUMB_DEG).map(thumb))
+    path.addRoundedRect(QRectF(x0, 7.0, HAND_FW * 4, 7.6), 3.0, 3.0)        # 손바닥
     p.setPen(QPen(c, 1.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
     p.setBrush(Qt.BrushStyle.NoBrush)
     p.drawPath(path.simplified())
