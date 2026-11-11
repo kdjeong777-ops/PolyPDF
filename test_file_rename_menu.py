@@ -212,7 +212,7 @@ try:
         sub = [x.text().split("	")[0] for x in seen["menu"].actions()[i_sv].menu().actions()]
         chk(raw[i_dl + 1] == "" and i_sv == i_dl + 2 and raw[i_sv + 1] == "" and i_2 == i_sv + 2
             and sub == ["저장", "다른 이름으로 저장", "", "평탄화 사본", "용량 줄인 사본", "개인정보 지운 사본", "전달 묶음", "",
-                        "PDF 만들기", "변환"],
+                        "PDF 저장", "변환"],
             "D 파일 묶음 / 저장 ▸ / 보기 묶음이 구분선으로 나뉘고 저장 ▸ 안 차례", str((raw, sub)))
     except (ValueError, AttributeError, IndexError):
         chk(False, "D 그룹 구분", str(raw))

@@ -3147,7 +3147,7 @@ class BookmarkTree(QWidget):
         nn = "" if n == 1 else " " + tr("({n}개 파일)").format(n=n)
         mk = None
         if merge is not None:
-            mk = {"text": tr("PDF 만들기") + (" " + tr("({n}개 병합)").format(n=len(merge)) if len(merge) > 1 else ""),
+            mk = {"text": tr("PDF 저장") + (" " + tr("({n}개 병합)").format(n=len(merge)) if len(merge) > 1 else ""),
                   "cb": (lambda fs=list(merge): self.mergeFilesRequested.emit(fs)) if len(merge) > 1 else None,
                   "enabled": len(merge) > 1,
                   "tip": tr("고른 PDF 들을 차례대로 합친 새 PDF 를 만듭니다.") if len(merge) > 1

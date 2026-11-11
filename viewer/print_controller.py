@@ -240,6 +240,8 @@ class PrintMixin:
             from viewer import photo_io
             if downscale:
                 try:
+                    if photo_io.is_heif(p):                  # 261111-2: HEIC 도 줄여 넣는다(해독기는 처음 만날 때 등록)
+                        photo_io.heif_ready()
                     from PIL import Image, ImageOps
                     with Image.open(str(p)) as im:
                         im = ImageOps.exif_transpose(im)
@@ -280,9 +282,14 @@ class PrintMixin:
         (`_run_merge_job`) → 대량/대형 이미지에서도 '응답 없음' 없이 진행·취소.
         """
         from viewer.widgets.image_to_pdf_dialog import ImageToPdfDialog
+        # 261111-3(이미지 PDF SOT §2): 목록 보기 [이름 | 썸네일] — 기본 썸네일, 고른 것은 기억(취소해도)
+        ui = self._prefs.setdefault("img2pdf", {})
         dlg = ImageToPdfDialog(self, initial_paths=initial_paths,
-                               preset_api=self._merge_preset_api())
-        if not dlg.exec():
+                               preset_api=self._merge_preset_api(), view=ui.get("list_view") or "thumb")
+        accepted = dlg.exec()
+        if dlg.view_mode() != ui.get("list_view"):
+            ui["list_view"] = dlg.view_mode()
+        if not accepted:
             return
         paths = dlg.result_paths()
         if not paths:

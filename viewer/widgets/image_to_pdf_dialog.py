@@ -1,6 +1,7 @@
 """이미지 파일 → PDF 변환 다이얼로그 (260825-13).
 
 좌측: 파일 목록(다중선택/드래그앤드롭 추가·순서변경·삭제), 우측: 선택 파일 미리보기.
+목록은 [이름 | 썸네일] 로 바꿔 본다(261111-3, 기본 썸네일 — 이미지 PDF SOT §2).
 다단(N-up) 저장은 인쇄·PDF병합과 동일한 twoup 엔진을 재사용.
 """
 from __future__ import annotations
@@ -13,15 +14,20 @@ from PyQt6.QtGui import QPixmap, QIcon, QImage
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QLabel,
     QPushButton, QDialogButtonBox, QCheckBox, QComboBox, QWidget, QFileDialog,
-    QAbstractItemView,
+    QAbstractItemView, QListView, QToolButton, QButtonGroup,
 )
 
 from viewer.widgets.nup_preset import NupPresetMixin   # 260628: 다단 프리셋 공통(SOT §11.10)
 from viewer.i18n import tr
 
-from viewer.image_page import IMAGE_EXTS_T as IMAGE_EXTS   # 261104-2(사진 보기 SOT §3.3): 확장자 표 하나
+# 261111-2(사진 보기 SOT §4.21): 사진 모드가 넘기는 HEIC·HEIF 도 받는다 — 종전 IMAGE_EXTS 는 그것을 조용히 버려
+#   아이폰 사진만 고르면 창 목록이 비었다('변환할 이미지를 추가하세요'). 읽기·넣기는 photo_io 가 HEIC 를 안다.
+from viewer.image_page import PHOTO_EXTS
+IMAGE_EXTS = tuple(sorted(PHOTO_EXTS))
 _PATH_ROLE = Qt.ItemDataRole.UserRole
-ICON_PX = 56                    # 목록 아이콘
+ICON_PX = 56                    # 목록 아이콘(이름 보기)
+THUMB_PX = 112                  # 썸네일 보기 칸 그림(261111-3)
+VIEW_NAME, VIEW_THUMB = "name", "thumb"
 PREVIEW_DELAY_MS = 120          # 창 크기를 끄는 동안 미리보기를 매번 다시 읽지 않게 모은다
 
 
@@ -104,7 +110,7 @@ class _DropList(QListWidget):
 
 
 class ImageToPdfDialog(NupPresetMixin, QDialog):
-    def __init__(self, parent=None, initial_paths=None, preset_api=None, sample=None):
+    def __init__(self, parent=None, initial_paths=None, preset_api=None, sample=None, view=VIEW_THUMB):
         super().__init__(parent)
         self.setWindowTitle(tr("이미지 → PDF 변환"))
         self.resize(860, 580)
@@ -118,7 +124,24 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
 
         # ── 좌측: 목록 + 조작 버튼 ──
         left = QVBoxLayout()
-        left.addWidget(QLabel(tr("이미지 목록 (위→아래 = 페이지 순서, 드래그로 순서 변경)")))
+        head = QHBoxLayout()
+        self.lbl_list = QLabel()
+        head.addWidget(self.lbl_list, 1)
+        # 261111-3(사용자 결정 '전환 단추, 기본 썸네일'): [이름 | 썸네일] — 고른 쪽은 부르는 쪽이 기억한다(view_mode)
+        self._view_group = QButtonGroup(self)
+        self._view_group.setExclusive(True)
+        self.btn_view = {}
+        for key, txt, tip in ((VIEW_NAME, tr("이름"), tr("파일 이름 목록으로 봅니다.")),
+                              (VIEW_THUMB, tr("썸네일"), tr("썸네일로 봅니다."))):
+            b = QToolButton()
+            b.setText(txt)
+            b.setToolTip(tip)
+            b.setCheckable(True)
+            b.setAutoRaise(False)
+            self._view_group.addButton(b)
+            self.btn_view[key] = b
+            head.addWidget(b)
+        left.addLayout(head)
         self.lst = _DropList(self._add_files, self)
         self.lst.currentItemChanged.connect(lambda *_: self._update_preview())
         left.addWidget(self.lst, 1)
@@ -190,8 +213,49 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
         self._prev_timer.setInterval(PREVIEW_DELAY_MS)
         self._prev_timer.timeout.connect(self._start_preview)
 
+        self._view = None
+        self.set_view_mode(view)
+        self.btn_view[VIEW_NAME].clicked.connect(lambda: self.set_view_mode(VIEW_NAME))
+        self.btn_view[VIEW_THUMB].clicked.connect(lambda: self.set_view_mode(VIEW_THUMB))
+
         if initial_paths:
             self._add_files(initial_paths)
+
+    # ----- 목록 보기(261111-3) -----
+    def view_mode(self) -> str:
+        return self._view
+
+    def set_view_mode(self, mode) -> None:
+        """이름 = 한 줄씩(작은 아이콘 + 파일 이름), 썸네일 = 칸 격자(이름은 그림 아래). 순서는 둘 다 목록 차례 그대로."""
+        mode = VIEW_NAME if mode == VIEW_NAME else VIEW_THUMB
+        self.btn_view[mode].setChecked(True)
+        if mode == self._view:
+            return
+        self._view = mode
+        lst = self.lst
+        if mode == VIEW_THUMB:
+            lst.setViewMode(QListView.ViewMode.IconMode)
+            lst.setIconSize(QSize(THUMB_PX, THUMB_PX))
+            lst.setGridSize(QSize(THUMB_PX + 28, THUMB_PX + 44))
+            lst.setWordWrap(True)
+            lst.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+            lst.setResizeMode(QListView.ResizeMode.Adjust)
+            lst.setWrapping(True)
+            self.lbl_list.setText(tr("이미지 목록 (왼쪽→오른쪽·위→아래 = 페이지 순서, 드래그로 순서 변경)"))
+        else:
+            lst.setViewMode(QListView.ViewMode.ListMode)
+            lst.setIconSize(QSize(ICON_PX, ICON_PX))
+            lst.setGridSize(QSize())
+            lst.setWordWrap(False)
+            lst.setTextElideMode(Qt.TextElideMode.ElideRight)
+            lst.setWrapping(False)
+            self.lbl_list.setText(tr("이미지 목록 (위→아래 = 페이지 순서, 드래그로 순서 변경)"))
+        # IconMode 는 끌기를 '자리 옮기기'(Free)로 바꾼다 — 목록 차례 = 쪽 차례이므로 줄 옮기기로 되돌린다
+        #   (썸네일 = Snap + InternalMove — 쪽 썸네일 편집모드·스트립과 같은 조합, 이름 = Static)
+        lst.setMovement(QListView.Movement.Snap if mode == VIEW_THUMB else QListView.Movement.Static)
+        lst.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        lst.setDragEnabled(True)
+        lst.setAcceptDrops(True)
 
     # ----- 목록 조작 -----
     def _existing(self) -> set:
@@ -215,7 +279,7 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
             self.lst.addItem(it)
         if news:
             self._icon_gen += 1
-            self._run_reader(self._icon_gen, news, ICON_PX * 2, self._on_icon)   # 고해상도 화면 2배
+            self._run_reader(self._icon_gen, news, THUMB_PX * 2, self._on_icon)   # 고해상도 화면 2배 — 두 보기가 같은 그림
         if news and self.lst.currentRow() < 0:
             self.lst.setCurrentRow(0)
 
@@ -232,8 +296,8 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
         if it is None or img.isNull() or self.lst.row(it) < 0:
             return                           # 지운 항목·못 읽은 그림
         it.setIcon(QIcon(QPixmap.fromImage(img).scaled(
-            ICON_PX, ICON_PX, Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation)))
+            THUMB_PX * 2, THUMB_PX * 2, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)))    # 보기를 바꿔도 다시 읽지 않는다 — 칸 크기는 목록 iconSize
 
     def done(self, r):
         for w in list(self._readers):        # 창을 닫으면 읽던 것을 멈춘다
@@ -242,9 +306,9 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
         super().done(r)
 
     def _pick_files(self):
+        pats = " ".join("*" + e for e in IMAGE_EXTS)          # 261111-2: HEIC·HEIF 도(확장자 표 한 곳)
         paths, _ = QFileDialog.getOpenFileNames(
-            self, tr("이미지 파일 선택"), "",
-            tr("이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp)"))
+            self, tr("이미지 파일 선택"), "", tr("이미지") + f" ({pats})")
         if paths:
             self._add_files(paths)
 

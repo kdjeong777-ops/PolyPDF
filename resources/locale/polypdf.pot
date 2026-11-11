@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-11 06:54+0900\n"
+"POT-Creation-Date: 2026-11-11 20:11+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -435,7 +435,7 @@ msgstr ""
 msgid "PDF"
 msgstr ""
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "이미지"
 msgstr ""
 
@@ -2961,9 +2961,8 @@ msgstr ""
 msgid "변환 ({n}쪽)"
 msgstr ""
 
-#: viewer/app.py viewer/convert_controller.py viewer/photo_controller.py
-#: viewer/widgets/bookmark_tree.py
-msgid "PDF 만들기"
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "PDF 저장"
 msgstr ""
 
 #: viewer/app.py
@@ -3418,6 +3417,10 @@ msgstr ""
 
 #: viewer/convert/writers.py
 msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요"
+msgstr ""
+
+#: viewer/convert_controller.py
+msgid "PDF 만들기"
 msgstr ""
 
 #: viewer/convert_controller.py
@@ -4597,11 +4600,11 @@ msgid "복사할 글이 없습니다 — 먼저 'OCR 로 읽기' 를 하세요."
 msgstr ""
 
 #: viewer/photo_controller.py
-msgid "휴대 장치 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄·PC 로 복사만 됩니다."
+msgid "휴대 장치 사진은 읽기 전용입니다 — 보기·복사·PDF 저장·인쇄·PC 로 복사만 됩니다."
 msgstr ""
 
 #: viewer/photo_controller.py
-msgid "zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."
+msgid "zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 저장·인쇄만 됩니다."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4996,7 +4999,7 @@ msgstr ""
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "고른 사진 {n}장으로 PDF 만들기"
+msgid "고른 사진 {n}장으로 PDF 저장"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -5217,7 +5220,7 @@ msgstr ""
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "줄의 사진 {n}장 모두로 PDF 만들기"
+msgid "줄의 사진 {n}장 모두로 PDF 저장"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -6223,7 +6226,8 @@ msgid "이 파일의 서명 자리를 모두 지울까요?"
 msgstr ""
 
 #: viewer/sign_draft_controller.py viewer/widgets/capture_settings.py
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/image_to_pdf_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "이름"
 msgstr ""
 
@@ -8915,11 +8919,15 @@ msgid "이미지 파일 선택"
 msgstr ""
 
 #: viewer/widgets/image_to_pdf_dialog.py
-msgid "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp)"
+msgid "파일 이름 목록으로 봅니다."
 msgstr ""
 
 #: viewer/widgets/image_to_pdf_dialog.py
-msgid "이미지 목록 (위→아래 = 페이지 순서, 드래그로 순서 변경)"
+msgid "썸네일"
+msgstr ""
+
+#: viewer/widgets/image_to_pdf_dialog.py
+msgid "썸네일로 봅니다."
 msgstr ""
 
 #: viewer/widgets/image_to_pdf_dialog.py
@@ -8955,6 +8963,14 @@ msgstr ""
 #: viewer/widgets/image_to_pdf_dialog.py viewer/widgets/print_dialog.py
 #: viewer/widgets/twoup_dialog.py
 msgid "스타일:"
+msgstr ""
+
+#: viewer/widgets/image_to_pdf_dialog.py
+msgid "이미지 목록 (왼쪽→오른쪽·위→아래 = 페이지 순서, 드래그로 순서 변경)"
+msgstr ""
+
+#: viewer/widgets/image_to_pdf_dialog.py
+msgid "이미지 목록 (위→아래 = 페이지 순서, 드래그로 순서 변경)"
 msgstr ""
 
 #: viewer/widgets/image_to_pdf_dialog.py

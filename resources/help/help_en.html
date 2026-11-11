@@ -24,7 +24,7 @@
     node (▸) to see the PDF's own bookmarks (TOC). Along the top: the <b>Search list names</b> box · <b>#</b> (hashtags, §13) ·
     <b>Sort</b> (§7) · <b>📁 Folder</b> (file mode ↔ folder mode) · <b>Tree</b> (single ↔ tree) · <b>↻</b> (refresh after files change outside — also in edit mode; asks first if there are unsaved changes).</li>
   <li><b>Right-click</b> a file or bookmark: Print / Rotate file ▸ / Open in File Explorer · New Folder · Rename File/Bookmark · Delete File/Bookmark /
-    Save ▸ (Save · Save As · Flattened copy · Reduced-size copy · Redacted copy · Transfer bundle · Make PDF · Convert) / Split View · Presentation · Expand/Collapse All Bookmarks /
+    Save ▸ (Save · Save As · Flattened copy · Reduced-size copy · Redacted copy · Transfer bundle · Save as PDF · Convert) / Split View · Presentation · Expand/Collapse All Bookmarks /
     Read with OCR · Create text layer with OCR · Batch OCR · Build Bookmarks · Compare two files (with two chosen) · Sign · Edit Hashtags / add to Favorites, and so on.
     When a menu line shows a key, that key does the same thing to <b>that row</b> while the bookmark panel has focus (e.g. Ctrl+P Print · F5 Presentation · Ctrl+Alt+O Read with OCR act on the row's file or bookmark pages).
     In edit mode there are also Copy to folder / Move to folder (below New Folder), rename / delete folder, and merging several files into a PDF.</li>
@@ -44,7 +44,7 @@
     The <b>info line</b> at the left end of the bottom bar: file name · number of pages · current page paper (A4 portrait etc.) · file size, plus password · signed · scanned when they apply. Click it for the <b>Document Info</b> window (title · author · creator · created/modified dates · PDF version · permissions · signatures · pages with/without a text layer · bookmark count · attachment count) — Alt+Enter does the same (it is not in the right-click menus). In split view each pane has its own line.
     <b>Right-click</b> the page (or Shift+F10) — the six menus (bookmark panel · thumbnails · page, PDF and photo) share one order:
     Print → Copy (Copy · Copy as Screenshot · Copy Text · Paste …) → Shape (Rotate · Crop · Hide · Delete) → File ▸ →
-    <b>Save ▸</b> (click the label to save at once; ▸ holds Save As · Flattened copy · Reduced-size copy · Redacted copy · Transfer bundle · Make PDF · Convert) →
+    <b>Save ▸</b> (click the label to save at once; ▸ holds Save As · Flattened copy · Reduced-size copy · Redacted copy · Transfer bundle · Save as PDF · Convert) →
     View (Split View · Presentation) → Tools (Read with OCR · Sign · Add Bookmark · Add Hyperlink) → Input Settings.
     On a row with ▸, clicking the label or pressing Enter does the main action; hovering ▸ or pressing → opens the submenu.
     In edit mode, pressing <b>Del</b> with no object selected deletes this page (until you save). Menus show each item's shortcut on the right. <b>Paste uses what you copied last</b> — copied pages go below this page, copied objects go where you clicked.
@@ -415,7 +415,7 @@
   <li><b>Right-click menu</b> (bookmark panel · thumbnail strip · main view — same order as for PDFs): Print → Copy Photo →
     shape (Rotate 90° left · Rotate 90° right · Rotate 180° · Original Orientation · Crop · Remove Crop · Restore original) →
     file (Open in File Explorer · Copy to Folder ▸ · Move to Folder ▸ · Rename (F2) · Delete (edit mode)) →
-    Save ▸ (Save = save orientation · Flattened copy · Redacted copy · Make PDF · Convert ▸ JPEG · PNG · WebP) → view (Split View · Presentation) →
+    Save ▸ (Save = save orientation · Flattened copy · Redacted copy · Save as PDF · Convert ▸ JPEG · PNG · WebP) → view (Split View · Presentation) →
     tools (Read with OCR · Photo Info · Show Location on Map · Batch · Edit Hashtags).
     Ctrl/Shift+click in the thumbnail strip to choose several photos; the menu then works on all of them.</li>
   <li><b>Rotate</b> (Ctrl+] / Ctrl+[): rotates the view only; the original is unchanged. For a JPEG, <b>Save ▸ Save</b> (save orientation) changes only the orientation tag of the original (the image is not recompressed).</li>
@@ -428,7 +428,7 @@
     Choose several photos and right-click <b>Read with OCR (N)</b> to read them one after another in the background (status bar progress bar → Tasks window [Stop]).
     As with PDFs, the results are <b>kept only when saved</b> (status bar '💾 Unsaved OCR').</li>
   <li><b>Format conversion</b>: the File tab's 'Convert' makes Word · Hangul HWPX · text from the text read (OCR first). Right-click 'Save ▸ Convert ▸ JPEG · PNG · WebP' saves a new file in another picture format (the original is unchanged).</li>
-  <li><b>Photos → PDF</b>: right-click 'Save ▸ Make PDF' opens the Images to PDF window with the chosen photos (the thumbnail strip also offers all photos in the strip). Annotations, view rotation and crop go in as they are shown. Printing works the same way.</li>
+  <li><b>Photos → PDF</b>: right-click 'Save ▸ Save as PDF' opens the Images to PDF window with the chosen photos (the thumbnail strip also offers all photos in the strip). Annotations, view rotation and crop go in as they are shown. Printing works the same way.</li>
   <li><b>Show Location on Map</b>: shows the photos that have a GPS position on a map (OpenStreetMap) in your default browser — nearby photos are grouped with their count and dates,
     and [Select in PolyPDF] selects those photos in the app. Before map images are fetched you are told that the rough location of the visible area is sent to the map server.</li>
   <li><b>Batch</b>: rename the chosen photos (<code>new name_001</code> …) · reduce size · change format — size and format make new files; the originals are unchanged.</li>

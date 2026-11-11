@@ -2615,14 +2615,14 @@ class PhotoMixin:
                 a.triggered.connect(lambda _=False, f=cb: QTimer.singleShot(0, f))
             return a
         each = lambda f: (lambda ps=list(photos): [f(p) for p in ps])     # noqa: E731 — 여러 장이면 사진마다
-        # 인쇄 — 맨 위(261105-12·-16) · 여러 장이면 PDF 만들기도 한 번에
+        # 인쇄 — 맨 위(261105-12·-16) · 여러 장이면 PDF 저장도 한 번에(261111-4 'PDF 만들기' → 'PDF 저장')
         menu.group("print")
         if photos:
             # 261107-26(디자인 SOT §2.9.2·입력 SOT §3.2.3): 키는 포커스 따라 — 책갈피창·썸네일 줄이면 고른 사진, 본문이면 지금 사진
             act(self._kt(tr('인쇄 ({n}장)').format(n=n) if many else tr("인쇄"), "print"),
                 lambda ps=list(photos): self._photo_print(paths=ps), many or ok, tr("인쇄 창을 엽니다."))
         if many:
-            act(tr('고른 사진 {n}장으로 PDF 만들기').format(n=n), lambda ps=list(photos): self._photo_action("to_pdf", ps))
+            act(tr('고른 사진 {n}장으로 PDF 저장').format(n=n), lambda ps=list(photos): self._photo_action("to_pdf", ps))
         # 복사
         menu.group("copy")
         if photos:
@@ -2682,10 +2682,10 @@ class PhotoMixin:
             can_orient = (bool(one) and bool(now) and os.path.normcase(str(now)) == os.path.normcase(one)
                           and not ro and bool(self._photo_rot_for(one)) and photo_io_is_jpeg(one)
                           and not self.__dict__.get("_photo_orig_busy"))
-            mk = [{"text": tr("PDF 만들기") + (" " + tr("({n}장)").format(n=n) if many else ""),
+            mk = [{"text": tr("PDF 저장") + (" " + tr("({n}장)").format(n=n) if many else ""),
                    "cb": lambda ps=list(photos): self._photo_action("to_pdf", ps), "enabled": many or ok}]
             if all_paths and len(all_paths) > 1:
-                mk.append({"text": tr('줄의 사진 {n}장 모두로 PDF 만들기').format(n=len(all_paths)),
+                mk.append({"text": tr('줄의 사진 {n}장 모두로 PDF 저장').format(n=len(all_paths)),
                            "cb": lambda ps=list(all_paths): self._photo_action("to_pdf", ps)})
             mk.append({"text": tr("변환"), "menu": self._photo_convert_menu(menu, photos), "enabled": not ro,
                        "tip": tr("JPEG·PNG·WebP 로 바꾼 새 파일을 원본 옆에 만듭니다(원본은 그대로).")})   # 261107-5(4.30)
@@ -2887,9 +2887,9 @@ class PhotoMixin:
         cur = self.main_view.current_file() if self.main_view else None
         from viewer import photo_device
         if cur and photo_device.is_cached(cur):
-            self.status.showMessage(tr("휴대 장치 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄·PC 로 복사만 됩니다."), 5000)
+            self.status.showMessage(tr("휴대 장치 사진은 읽기 전용입니다 — 보기·복사·PDF 저장·인쇄·PC 로 복사만 됩니다."), 5000)
         else:
-            self.status.showMessage(tr("zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 만들기·인쇄만 됩니다."), 5000)
+            self.status.showMessage(tr("zip 안 사진은 읽기 전용입니다 — 보기·복사·PDF 저장·인쇄만 됩니다."), 5000)
 
     def _photo_open_zip(self, zip_path):
         """사진이 든 zip(4.24) — 배경에서 캐시로 꺼내 썸네일 줄에 보이고 첫 장을 연다. 넘김은 zip 안에서."""

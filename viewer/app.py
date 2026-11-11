@@ -6434,7 +6434,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                      "tip": tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로).")},
                     {"text": tr("전달 묶음"), "cb": lambda: self._copy_blocked([f]) or self.action_share_files([f]),
                      "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다.")}],
-            make=[{"text": tr("PDF 만들기") + (" " + tr("({n}쪽)").format(n=len(pages)) if len(pages) > 1 else ""),
+            make=[{"text": tr("PDF 저장") + (" " + tr("({n}쪽)").format(n=len(pages)) if len(pages) > 1 else ""),
                    "cb": (lambda ps=list(pages): self.action_pages_to_pdf(f, ps)) if mk_ok else None,
                    "enabled": mk_ok,
                    "tip": tr("고른 쪽으로 새 PDF 를 만듭니다 — 원본은 그대로.") if not staged
@@ -9546,6 +9546,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "ocr_layer_save": dict(prefs.get("ocr_layer_save", old.get("ocr_layer_save", {})) or {}),
             # 261108-30(영상·음성 SOT §1.11): 읽기 ▶ 의 OCR 권하기 — 파일별 '다시 묻지 않음' 답
             "read_ocr_offer": dict(prefs.get("read_ocr_offer", old.get("read_ocr_offer", {})) or {}),
+            # 261111-3(이미지 PDF SOT §2): 이미지 → PDF 창 목록 보기(이름·썸네일)
+            "img2pdf": dict(prefs.get("img2pdf", old.get("img2pdf", {})) or {}),
             # 261108-28(영상·음성 SOT §1.10): 읽기 엔진·목소리·음질 — 허용목록에 없으면 조용히 사라진다
             "tts_voice": dict(prefs.get("tts_voice", old.get("tts_voice", {})) or {}),
             # 261111-1(영상·음성 SOT §1.1): mp3 저장 예상 시간에 쓰는 지난 저장 속도(글자/초)
