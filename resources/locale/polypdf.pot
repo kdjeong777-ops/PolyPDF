@@ -760,6 +760,10 @@ msgstr ""
 msgid "인덱싱 완료"
 msgstr ""
 
+#: viewer/app.py viewer/widgets/tag_export_dialog.py
+msgid "해시태그 폴더로 사본 저장"
+msgstr ""
+
 #: viewer/app.py
 msgid "자동 태그를 전부 지웠습니다(수동 태그는 유지)"
 msgstr ""
@@ -1516,6 +1520,10 @@ msgstr ""
 #: viewer/widgets/pointer_settings_dialog.py viewer/widgets/settings_dialog.py
 #: viewer/widgets/toc_review_dialog.py
 msgid "확인"
+msgstr ""
+
+#: viewer/app.py
+msgid "고른 해시태그를 가진 파일이 없습니다."
 msgstr ""
 
 #: viewer/app.py
@@ -2753,6 +2761,16 @@ msgid ""
 "· 새 태그 후보 {get3}건은 붙이지 않았습니다\n"
 "\n"
 "자동 태그는 목록에 ·# 로 표시되며, 도구 메뉴에서 언제든 되돌리거나 전체 삭제할 수 있습니다."
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "사본을 저장하지 못했습니다: {e}"
+msgstr ""
+
+#: viewer/app.py
+#, python-brace-format
+msgid "해시태그 폴더로 사본 {n}개를 저장했습니다: {dst}"
 msgstr ""
 
 #: viewer/app.py
@@ -7508,6 +7526,14 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "자동 부여 취소"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "해시태그 넣기…"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
+msgid "해시태그 폴더로 사본 저장…"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
@@ -12621,6 +12647,60 @@ msgstr ""
 msgid "예) {clean_markup}"
 msgstr ""
 
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해시태그 넣기"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "다시 실행"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "현재 태그"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "태그 추가"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "새 태그 이름"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "새 태그 후보"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 후보 무시"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py viewer/widgets/tag_batch_dialog.py
+msgid "전역 기록 — 다시 적립되지 않습니다"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그를 고른 파일 모두에 붙입니다"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해제"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "고른 파일 {n}개 / 모두 {m}개"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "#{tag}  ({n}건)"
+msgstr ""
+
 #: viewer/widgets/tag_batch_dialog.py
 msgid ""
 "자동으로 붙이지 않고 모아 둔 새 태그 후보입니다.\n"
@@ -12633,10 +12713,6 @@ msgstr ""
 
 #: viewer/widgets/tag_batch_dialog.py
 msgid "무시"
-msgstr ""
-
-#: viewer/widgets/tag_batch_dialog.py
-msgid "전역 기록 — 다시 적립되지 않습니다"
 msgstr ""
 
 #: viewer/widgets/tag_batch_dialog.py
@@ -12707,6 +12783,27 @@ msgstr ""
 #: viewer/widgets/tag_edit_dialog.py
 #, python-brace-format
 msgid " — 점수 {sc:.2f}"
+msgstr ""
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "찾아보기…"
+msgstr ""
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "저장할 폴더"
+msgstr ""
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "저장할 해시태그를 고르세요. 고른 태그마다 폴더를 만들고 그 태그를 가진 파일의 사본을 넣습니다."
+msgstr ""
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "같은 이름이 있으면 '이름 (2)' 로 저장합니다. 사본에도 해시태그·OCR 결과가 따라갑니다."
+msgstr ""
+
+#: viewer/widgets/tag_export_dialog.py
+#, python-brace-format
+msgid "#{tag}  ({n}개)"
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py

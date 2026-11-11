@@ -11,7 +11,7 @@
 | 텍스트 창 고침·하이라이트·반영 표시(`text_fix.json`) | `norm_key` | `TextFixStore.carry_file` |
 
 폴더 사이드카(꾸밈 `page_meta.json`·`hyperlinks.json`)·메모리 상태는 앱이 메인에서 맞춘다(`_on_files_relocated`·`_on_files_copied`).
-태그는 이 길이 아니다 — 이동은 `TagStore.rehome`, 복사는 물려주지 않는다(태그 SOT §6.1-④).
+태그는 이 길이 아니다 — 이동은 `TagStore.rehome`, 복사는 `TagStore.copy_tags`(`MainWindow._on_files_copied`, 태그 SOT §6.1-⑥).
 """
 from __future__ import annotations
 

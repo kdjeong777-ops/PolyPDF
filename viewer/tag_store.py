@@ -689,6 +689,56 @@ class TagStore:
         self._save()
         return "moved"
 
+    def copy_tags(self, src_path, dst_path) -> bool:
+        """앱 안에서 복사한 사본에 태그를 따라붙인다(§6.1-⑥, 261111-7) — 직접·자동·거절·키워드·연도.
+        지문(`fp`·`size`)은 빼고(같은 지문 둘이면 재연결이 모호해진다), 사본에 기록이 있으면 합친다. 바뀌었으면 True."""
+        import copy as _copy
+        ks, kd = self._key(src_path), self._key(dst_path)
+        v = self._data.get(ks)
+        if v is None or ks == kd:
+            return False
+        src = {"manual": list(v)} if isinstance(v, list) else _copy.deepcopy(v)
+        src.pop("fp", None)
+        src.pop("size", None)
+        cur = self._data.get(kd)
+        if cur is None:
+            self._data[kd] = src
+        else:
+            d = self._dictify(kd)
+            for f in ("manual", "auto", "rejected", "keywords"):
+                have = list(d.get(f) or [])
+                low = {str(t).lower() for t in have}
+                add = [t for t in (src.get(f) or []) if str(t).lower() not in low]
+                if add:
+                    d[f] = have + add
+            parts = src.get("auto_parts")
+            if isinstance(parts, dict):
+                dp = d.setdefault("auto_parts", {})
+                for p_, ts in parts.items():
+                    have = dp.get(p_) or []
+                    dp[p_] = have + [t for t in ts if t not in have]
+            for f in ("year", "year_src", "year_conf", "auto_conf", "auto_at", "auto_src", "kw_edited"):
+                if f in src and f not in d:
+                    d[f] = src[f]
+        self._save()
+        return True
+
+    def record(self, path):
+        """그 파일의 태그 기록 사본(없으면 None) — '해시태그 넣기' 되돌리기용(§8.7)."""
+        import copy as _copy
+        v = self._data.get(self._key(path))
+        return None if v is None else _copy.deepcopy(v)
+
+    def put_record(self, path, rec):
+        """`record` 로 받은 기록을 그대로 되돌려 놓는다(None = 기록 없음)."""
+        import copy as _copy
+        k = self._key(path)
+        if rec is None:
+            self._data.pop(k, None)
+        else:
+            self._data[k] = _copy.deepcopy(rec)
+        self._save()
+
     def rehome(self, old_path, new_path):
         """앱이 직접 옮긴 경우(§8.6 폴더 정리) — 지문 계산 없이 키만 이동."""
         ko, kn = self._key(old_path), self._key(new_path)

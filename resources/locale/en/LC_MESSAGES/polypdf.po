@@ -766,6 +766,10 @@ msgstr "The search index is damaged and is being rebuilt. Please search again wh
 msgid "인덱싱 완료"
 msgstr "Indexing complete"
 
+#: viewer/app.py viewer/widgets/tag_export_dialog.py
+msgid "해시태그 폴더로 사본 저장"
+msgstr "Save Copies to Hashtag Folders"
+
 #: viewer/app.py
 msgid "자동 태그를 전부 지웠습니다(수동 태그는 유지)"
 msgstr "All automatic tags were deleted (manual tags are kept)"
@@ -1557,6 +1561,10 @@ msgstr "Automatic Tagging"
 #: viewer/widgets/toc_review_dialog.py
 msgid "확인"
 msgstr "OK"
+
+#: viewer/app.py
+msgid "고른 해시태그를 가진 파일이 없습니다."
+msgstr "No files have the selected hashtags."
 
 #: viewer/app.py
 msgid "직전 자동 부여를 되돌렸습니다"
@@ -2837,6 +2845,16 @@ msgstr ""
 "· {get3} new tag candidates were not applied\n"
 "\n"
 "Automatic tags are shown as ·# in the list and can be undone or deleted at any time from the Tools menu."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "사본을 저장하지 못했습니다: {e}"
+msgstr "Could not save the copies: {e}"
+
+#: viewer/app.py
+#, python-brace-format
+msgid "해시태그 폴더로 사본 {n}개를 저장했습니다: {dst}"
+msgstr "Saved {n} copies to hashtag folders: {dst}"
 
 #: viewer/app.py
 #, python-brace-format
@@ -7748,6 +7766,14 @@ msgstr "(No hashtags on files in this list — right-click a file → Edit Hasht
 #: viewer/widgets/bookmark_tree.py
 msgid "자동 부여 취소"
 msgstr "Cancel Automatic Tag"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "해시태그 넣기…"
+msgstr "Add Hashtags…"
+
+#: viewer/widgets/bookmark_tree.py
+msgid "해시태그 폴더로 사본 저장…"
+msgstr "Save Copies to Hashtag Folders…"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
 msgid "암호가 올바르지 않습니다."
@@ -12943,6 +12969,60 @@ msgstr "p{page}: {n}/{total} words"
 msgid "예) {clean_markup}"
 msgstr "e.g. {clean_markup}"
 
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해시태그 넣기"
+msgstr "Add Hashtags"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "다시 실행"
+msgstr "Redo"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "현재 태그"
+msgstr "Current tags"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "태그 추가"
+msgstr "Add tag"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "새 태그 이름"
+msgstr "New tag name"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "새 태그 후보"
+msgstr "New tag candidates"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 후보 무시"
+msgstr "Ignore selected candidates"
+
+#: viewer/widgets/tag_apply_dialog.py viewer/widgets/tag_batch_dialog.py
+msgid "전역 기록 — 다시 적립되지 않습니다"
+msgstr "Global record — will not be collected again"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그를 고른 파일 모두에 붙입니다"
+msgstr "Adds the selected tags to all selected files"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해제"
+msgstr "Remove"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"
+msgstr "Removes the selected tags from all selected files — automatic tags are recorded as rejected so they are not added again"
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "고른 파일 {n}개 / 모두 {m}개"
+msgstr "{n} selected / {m} files"
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "#{tag}  ({n}건)"
+msgstr "#{tag}  ({n})"
+
 # | 태그로 붙고, 이후 계산부터 기존 태그로 쓰입니다."
 #: viewer/widgets/tag_batch_dialog.py
 msgid ""
@@ -12959,10 +13039,6 @@ msgstr "Adopt"
 #: viewer/widgets/tag_batch_dialog.py
 msgid "무시"
 msgstr "Ignore"
-
-#: viewer/widgets/tag_batch_dialog.py
-msgid "전역 기록 — 다시 적립되지 않습니다"
-msgstr "Global record — will not be collected again"
 
 #: viewer/widgets/tag_batch_dialog.py
 msgid "(검토할 후보가 없습니다.)"
@@ -13033,6 +13109,27 @@ msgstr " (confidence {sc:.2f})"
 #, python-brace-format
 msgid " — 점수 {sc:.2f}"
 msgstr " — score {sc:.2f}"
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "찾아보기…"
+msgstr "Browse…"
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "저장할 폴더"
+msgstr "Folder to Save In"
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "저장할 해시태그를 고르세요. 고른 태그마다 폴더를 만들고 그 태그를 가진 파일의 사본을 넣습니다."
+msgstr "Choose the hashtags to save. A folder is created for each selected tag and copies of the files with that tag are put in it."
+
+#: viewer/widgets/tag_export_dialog.py
+msgid "같은 이름이 있으면 '이름 (2)' 로 저장합니다. 사본에도 해시태그·OCR 결과가 따라갑니다."
+msgstr "If the name is taken, the copy is saved as 'name (2)'. Hashtags and OCR results go with the copies."
+
+#: viewer/widgets/tag_export_dialog.py
+#, python-brace-format
+msgid "#{tag}  ({n}개)"
+msgstr "#{tag}  ({n})"
 
 #: viewer/widgets/tag_rules_panel.py
 msgid "지역"

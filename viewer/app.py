@@ -330,7 +330,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   (상=현재 폴더 책갈피, 하=우측 2단 창이 '다른 폴더' 파일일 때 그 파일 표시).
         self.bookmark_tree = BookmarkTree()         # 상단 = 좌측 창 폴더 목록
         self.bookmark_tree.suggest_provider = self._autotag_suggest_single  # 260830 P3(§8.1)
-        self.bookmark_tree.review_provider = self._autotag_review_candidates  # 260830 P5(§8.5)
+        self.bookmark_tree.tag_apply_provider = self.open_tag_apply     # 261111-6(태그 SOT §8.7): '#' 메뉴 '해시태그 넣기…'
+        self.bookmark_tree.tag_export_provider = self.open_tag_export   # 261111-8(태그 SOT §8.8): '해시태그 폴더로 사본 저장…'
         self.bookmark_tree.setMinimumWidth(150)
         self.bookmark_tree_right = BookmarkTree()   # 260618-22: 하단 = 우측 창 폴더 목록(2단·다른폴더)
         self.bookmark_tree_right.setMinimumWidth(150)
@@ -3601,12 +3602,23 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _on_files_copied(self, pairs: list):
         """261105-8(마스터 §4.7.14, 사용자 결정 '작업 결과는 복사, 태그는 지금대로'): 책갈피창·사진 복사가 끝난 뒤 —
         pairs = [[원본, 사본], ...]. 사본에도 OCR·고친 글·하이라이트·고른 낱말·꾸밈·하이퍼링크를. 색인·본문은 `filesRelocated` 가 맡는다.
-        태그는 물려주지 않는다(태그 SOT §6.1-④ — 사본은 자동 태그로 새로)."""
+        태그도 따라간다(태그 SOT §6.1-⑥, 261111-7 사용자 지시 — 종전 '물려주지 않음' 을 바꿈)."""
         pairs = [(str(o), str(n)) for o, n in (pairs or []) if o and n]
         if not pairs:
             return
         self._rehome_sidecars(pairs, copy=True)
         self._carry_records(pairs, copy=True)
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is not None:
+            changed = False
+            with store.bulk():
+                for o, n in pairs:
+                    changed = store.copy_tags(o, n) or changed
+            if changed:
+                try:
+                    self.bookmark_tree.refresh_tag_labels()
+                except Exception:
+                    pass
 
     # ===== 260908-2: 텍스트 창 (텍스트 창 SOT) =====================
     def _wire_text_panel(self):
@@ -7230,18 +7242,78 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
 
     def _autotag_review_candidates(self):
-        """§8.5 새 태그 후보 검토 — 채택하면 근거 파일들에 auto 부여(어휘 편입),
-        무시하면 전역 재적립 금지."""
+        """§8.5 새 태그 후보 — 도구 메뉴 '태그 ▸'·첫 실행 요약 단추. 261111-6(태그 SOT §8.7): '해시태그 넣기' 창을 후보를 펼친 채로."""
+        self.open_tag_apply(candidates=True)
+
+    def _tag_list_paths(self) -> tuple:
+        """'해시태그 넣기'·'사본 저장' 의 대상 — 지금 책갈피창 목록에서 보이는 파일 줄(zip 줄 빼고)과 고른 파일(태그 SOT §8.7)."""
+        bt = self.bookmark_tree
+        paths, seen = [], set()
+        for it in bt._iter_file_nodes():
+            p = it.data(0, bt.DATA_FILE)
+            if not p or it.isHidden() or str(p).lower().endswith(".zip") or it.data(0, bt.DATA_ZIP_MEMBER):
+                continue
+            k = os.path.normcase(str(p))
+            if k not in seen:
+                seen.add(k)
+                paths.append(str(p))
+        sel = []
+        for it in bt.tree.selectedItems():
+            fn = bt._file_node_of(it)
+            if fn is not None and fn.data(0, bt.DATA_FILE):
+                sel.append(str(fn.data(0, bt.DATA_FILE)))
+        return paths, sel
+
+    def open_tag_apply(self, candidates: bool = False):
+        """261111-6(태그 SOT §8.7): 해시태그 넣기 — 넓은 창, 왼쪽 태그·추가·후보, 오른쪽 썸네일 여러 장."""
         store = getattr(self.bookmark_tree, "_tags", None)
         if store is None:
-            return
+            return None
+        from viewer.widgets.tag_apply_dialog import TagApplyDialog
+        paths, sel = self._tag_list_paths()
+        dlg = TagApplyDialog(store, paths, sel, self, show_candidates=candidates,
+                             keep=self.__dict__.setdefault("_thread_keep", []))
+        self._tag_apply_dialog = dlg                # 검사용(마지막에 연 창)
+        dlg.exec()
         try:
-            from viewer.widgets.tag_batch_dialog import CandidateReviewDialog
-            dlg = CandidateReviewDialog(store, self)
-            dlg.exec()
             self.bookmark_tree.refresh_tag_labels()
         except Exception:
             pass
+        return dlg
+
+    def open_tag_export(self):
+        """261111-8(태그 SOT §8.8): 해시태그 폴더로 사본 저장 — 고르면 배경에서 사본, 끝나면 앱 안 복사와 같은 한 길."""
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None:
+            return None
+        from PyQt6.QtWidgets import QDialog
+        from viewer.widgets.tag_export_dialog import TagExportDialog
+        paths, _sel = self._tag_list_paths()
+        dlg = TagExportDialog(store, paths, self, start_dir=str(self.__dict__.get("_tag_export_last") or ""))
+        self._tag_export_dialog = dlg
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return dlg
+        self._tag_export_last = dlg.dest()           # 이 실행 동안 다음에 열 때 그 폴더로
+        self._tag_export_run(store, paths, dlg.tags(), dlg.dest())
+        return dlg
+
+    def _tag_export_run(self, store, paths, tags, dest) -> list:
+        from viewer.widgets import tag_export_dialog as TE
+        items = TE.plan(store, paths, tags)
+        if not items:
+            self.status.showMessage(tr("고른 해시태그를 가진 파일이 없습니다."), 5000)
+            return []
+        done = []
+        res = self._run_merge_job(lambda progress: TE.copy_job(items, dest, progress, done), tr("해시태그 폴더로 사본 저장"))
+        if res.get("err"):
+            self.status.showMessage(tr("사본을 저장하지 못했습니다: {e}").format(e=res["err"]), 8000)
+        if done:
+            bt = self.bookmark_tree
+            pairs = [[o, n] for o, n in done]
+            bt.filesRelocated.emit([["", n] for _o, n in done])     # 색인(책갈피창·저장 SOT §4.7.14 한 길)
+            bt.filesCopied.emit(pairs)                               # 태그·OCR 기록·사이드카(태그 SOT §6.1-⑥)
+            self.status.showMessage(tr("해시태그 폴더로 사본 {n}개를 저장했습니다: {dst}").format(n=len(done), dst=dest), 8000)
+        return done
 
     def _autotag_suggest_single(self, path):
         """260830 P3(§8.1): 편집 다이얼로그의 즉석 제안 — 세션 캐시(프로파일·DF)로

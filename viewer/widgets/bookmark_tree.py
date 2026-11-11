@@ -1790,6 +1790,7 @@ class BookmarkTree(QWidget):
         if not tags:
             a = self._tag_menu.addAction(tr("(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"))
             a.setEnabled(False)
+            self._add_tag_tool_items()
             return
         from PyQt6.QtWidgets import (QCheckBox, QLabel as _QL, QScrollArea,
                                      QVBoxLayout, QWidget, QWidgetAction)
@@ -1856,9 +1857,21 @@ class BookmarkTree(QWidget):
             for t in auto_ts[:30]:
                 act = sub.addAction("·#" + t)
                 act.triggered.connect(lambda _=False, tag=t: self._revoke_auto_tag(tag))
-        if callable(getattr(self, "review_provider", None)):
-            rv = self._tag_menu.addAction(tr("새 태그 후보 검토"))    # §8.5
-            rv.triggered.connect(lambda: self.review_provider())
+        self._add_tag_tool_items()
+
+    def _add_tag_tool_items(self):
+        """'#' 메뉴 끝 — '해시태그 넣기…'(태그 SOT §8.7)·'해시태그 폴더로 사본 저장…'(§8.8). 261111-6: '새 태그 후보 검토' 는
+        없앴다(그 기능은 '해시태그 넣기' 창 왼쪽 '새 태그 후보'). 태그가 하나도 없어도 보인다 — 처음 붙이는 길."""
+        ap, ex = getattr(self, "tag_apply_provider", None), getattr(self, "tag_export_provider", None)
+        if not callable(ap) and not callable(ex):
+            return
+        self._tag_menu.addSeparator()
+        if callable(ap):
+            a = self._tag_menu.addAction(tr("해시태그 넣기…"))
+            a.triggered.connect(lambda: self.tag_apply_provider())
+        if callable(ex):
+            b = self._tag_menu.addAction(tr("해시태그 폴더로 사본 저장…"))
+            b.triggered.connect(lambda: self.tag_export_provider())
 
     def _revoke_auto_tag(self, tag: str):
         """§8.5 '이 태그의 자동 부여만 취소' — 수동·다른 태그는 그대로."""
