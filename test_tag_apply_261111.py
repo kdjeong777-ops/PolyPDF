@@ -103,7 +103,9 @@ try:
     bt.search_edit.setText(""); pump(lambda: False, 0.2)
     if dlg is not None:
         chk(not dlg.g3.isChecked(), "C '#' 메뉴로 열면 새 태그 후보는 접힌 채")
-        chk(pump(lambda: all(not dlg.lst_files.item(i).icon().isNull() for i in range(dlg.lst_files.count())), 15), "C 썸네일 그림(배경)")
+        dlg.show()                                       # 보이는 칸만 그린다(261111-15) — 보여야 그린다
+        bk = dlg._blank.cacheKey()
+        chk(pump(lambda: all(dlg.lst_files.item(i).icon().cacheKey() != bk for i in range(dlg.lst_files.count())), 15), "C 썸네일 그림(배경)")
         dlg.lst_files.selectAll(); pump(lambda: False, 0.1)
         marks = {dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole): dlg.lst_tags.item(i).text() for i in range(dlg.lst_tags.count())}
         chk(marks.get("가족", "").startswith("☑") and marks.get("여행", "").startswith("◐") and "(1/2)" in marks.get("여행", ""),

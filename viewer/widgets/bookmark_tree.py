@@ -1920,7 +1920,8 @@ class BookmarkTree(QWidget):
                 sugg = None
         dlg = TagEditDialog(Path(path).stem, self._tags.get_manual(path),
                             self._tags.all_tags(), self,
-                            auto_tags=auto, auto_conf=conf, suggestions=sugg)
+                            auto_tags=auto, auto_conf=conf, suggestions=sugg,
+                            locked_tags=self._tags.get_auto_part(path, "meta"))   # 261111-16: 사진 기본 정보는 잠금(태그 SOT §8.1)
         if dlg.exec():
             # ★ 순서 고정: set(수동 교체) → promote(auto→manual 추가) → reject.
             #   promote 를 set 앞에 두면 입력줄이 manual 을 덮어써 승격이 사라진다.

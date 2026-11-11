@@ -12982,6 +12982,18 @@ msgid "현재 태그"
 msgstr "Current tags"
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "태그 찾기"
+msgstr "Find tags"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "찾는 글자를 새 태그로 넣습니다(목록에 없을 때)"
+msgstr "Adds the search text as a new tag (when it is not in the list)"
+
+#: viewer/widgets/tag_apply_dialog.py viewer/widgets/translate_files_dialog.py
+msgid "이름순"
+msgstr "Name"
+
+#: viewer/widgets/tag_apply_dialog.py
 msgid "태그 추가"
 msgstr "Add tag"
 
@@ -13073,6 +13085,10 @@ msgstr "(No tags yet — type above to create one.)"
 #, python-brace-format
 msgid "<b>{file_name}</b> 의 해시태그"
 msgstr "Hashtags for <b>{file_name}</b>"
+
+#: viewer/widgets/tag_edit_dialog.py
+msgid "사진 기본 정보(촬영일·지역·장비·스크린샷)로 붙은 태그 — 사진에서 다시 읽어 붙으므로 고치거나 지울 수 없습니다"
+msgstr "Tag from the photo's basic information (date taken, region, camera, screenshot) — it is read from the photo again, so it cannot be edited or removed"
 
 #: viewer/widgets/tag_edit_dialog.py
 msgid "제안 — 기존 태그(클릭하면 추가):"

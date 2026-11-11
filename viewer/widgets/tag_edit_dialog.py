@@ -38,13 +38,15 @@ _PIN = ("QPushButton{border:1px solid #ddd;border-radius:9px;padding:1px 5px;"
 
 class TagEditDialog(QDialog):
     def __init__(self, file_name: str, manual_tags, existing_tags, parent=None,
-                 auto_tags=None, auto_conf=None, suggestions=None):
+                 auto_tags=None, auto_conf=None, suggestions=None, locked_tags=None):
         """manual_tags=입력줄 초기값(수동만!), auto_tags=[태그…], auto_conf={태그:점수},
-        suggestions=[{tag, score, kind}] | None(세션 캐시 없음 — 구획 숨김)."""
+        suggestions=[{tag, score, kind}] | None(세션 캐시 없음 — 구획 숨김).
+        locked_tags = 고치거나 지울 수 없는 자동 태그 — 사진 기본 정보(촬영일·지역·장비·스크린샷, 태그 SOT §8.1, 261111-16)."""
         super().__init__(parent)
         self.setWindowTitle(tr("해시태그 편집"))
         self.resize(500, 360)
         self._auto = list(auto_tags or [])
+        self._locked = {t.lower() for t in (locked_tags or [])}
         self._rej_btns = {}
         self._pin_btns = {}
         v = QVBoxLayout(self)
@@ -65,6 +67,13 @@ class TagEditDialog(QDialog):
             h.setSpacing(4)
             conf = auto_conf or {}
             for t in self._auto:
+                if t.lower() in self._locked:       # 사진 기본 정보 — 보이기만(✕·📌 없음)
+                    lk = QPushButton("·#" + t)
+                    lk.setEnabled(False)
+                    lk.setStyleSheet(_CHIP_AUTO)
+                    lk.setToolTip(tr("사진 기본 정보(촬영일·지역·장비·스크린샷)로 붙은 태그 — 사진에서 다시 읽어 붙으므로 고치거나 지울 수 없습니다"))
+                    h.addWidget(lk)
+                    continue
                 chip = QPushButton("·#" + t)
                 chip.setCheckable(True)               # 체크 = 거절(✕)
                 chip.setStyleSheet(_CHIP_AUTO)

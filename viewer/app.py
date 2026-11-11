@@ -7283,9 +7283,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         from viewer.widgets.tag_apply_dialog import TagApplyDialog
         paths, sel = self._tag_list_paths()
         dlg = TagApplyDialog(store, paths, sel, self, show_candidates=candidates,
-                             keep=self.__dict__.setdefault("_thread_keep", []))
+                             keep=self.__dict__.setdefault("_thread_keep", []),
+                             state=(self._prefs or {}).get("tag_apply_window"))
         self._tag_apply_dialog = dlg                # 검사용(마지막에 연 창)
         dlg.exec()
+        if isinstance(self._prefs, dict) and dlg.state_out != (self._prefs.get("tag_apply_window") or {}):
+            self._prefs["tag_apply_window"] = dict(dlg.state_out)   # 261111-17: 크기·최대화·정렬 기억(태그 SOT §8.7)
+            try:
+                self._save_settings_now()
+            except Exception:
+                pass
         try:
             self.bookmark_tree.refresh_tag_labels()
         except Exception:
@@ -9640,6 +9647,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "vprinter": prefs.get("vprinter", old.get("vprinter")),
             "view_scales": prefs.get("view_scales", old.get("view_scales")),   # 261021-5(입력 SOT §3.2): Ctrl++/−/0 배율
             "settings_window": prefs.get("settings_window", old.get("settings_window")),   # 261107-12: 환경설정 창 크기·마지막 항목
+            "tag_apply_window": prefs.get("tag_apply_window", old.get("tag_apply_window")),   # 261111-17: 해시태그 넣기 창 크기·최대화·정렬
             "crop_styles": prefs.get("crop_styles", old.get("crop_styles")),
             "crop_auto": prefs.get("crop_auto", old.get("crop_auto")),
             "crop_style_last": prefs.get("crop_style_last", old.get("crop_style_last")),
