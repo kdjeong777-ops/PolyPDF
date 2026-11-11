@@ -52,6 +52,9 @@ OSS = (
     ("Leaflet 1.9.4", "BSD-2-Clause", "Volodymyr Agafonkin", ()),
     ("Leaflet.markercluster 1.5.3", "MIT", "David Leaver", ()),
     (tr_noop("OpenStreetMap 지도 그림"), "ODbL", tr_noop("© OpenStreetMap contributors — 지도 페이지에 출처를 보인다"), ()),
+    # 261111-25(사진 보기 SOT §4.18·D20, 문서 보안 SOT 외부 전송 절): 사진 정보 '상세 주소(온라인)' — 누를 때마다 확인 뒤 한 번
+    (tr_noop("OpenStreetMap Nominatim 주소 찾기"), "ODbL",
+     tr_noop("© OpenStreetMap contributors — 사진 정보 창 상세 주소 옆에 출처를 보인다"), ()),
     ("FFmpeg", "GPL v3", tr_noop("FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"), ()),
     ("lameenc · LAME", "LGPL", tr_noop("Chris Cooper · LAME 프로젝트"), ("lameenc",)),
     # 261108-28(영상·음성 SOT §1.10): 자연 음성 — 엔진은 앱에 든다. 모델은 261109-3 부터 설치본·휴대용에도 든다(모델 폴더에 라이선스 사본)

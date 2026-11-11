@@ -2576,6 +2576,12 @@ class PhotoMixin:
         t.horizontalHeader().setStretchLastSection(True)
         lay.addWidget(t)
         dlg._table = t
+        from PyQt6.QtWidgets import QLabel
+        from viewer.photo_address import OSM_CREDIT
+        dlg._osm = QLabel(OSM_CREDIT, dlg)                 # 261111-25: 상세 주소(온라인)가 보일 때만 출처(ODbL)
+        dlg._osm.setAlignment(Qt.AlignmentFlag.AlignRight)
+        dlg._osm.setVisible(False)
+        lay.addWidget(dlg._osm)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dlg)
         bb.rejected.connect(dlg.reject)
         dlg._b_copy = dlg._b_online = None
@@ -2614,6 +2620,7 @@ class PhotoMixin:
             if k in tips:
                 it.setToolTip(tips[k])
             t.setItem(i, 1, it)
+        dlg._osm.setVisible(bool(info.get("address_online")))
         if dlg._b_copy is not None:
             dlg._b_copy.setEnabled(bool(photo_address_text(info)))
         if dlg._b_online is not None:
@@ -2621,7 +2628,7 @@ class PhotoMixin:
 
     def _photo_addr_copy(self):
         from PyQt6.QtWidgets import QApplication
-        text =photo_address_text(getattr(self, "_photo_info", None) or {})
+        text = photo_address_text(getattr(self, "_photo_info", None) or {})
         if text:
             QApplication.clipboard().setText(text)
             try:
@@ -4634,6 +4641,9 @@ def photo_info_tips(info: dict) -> dict:
     v = _exif_float((info.get("exif") or {}).get("ExposureTime"))
     if v and v > 0:
         tips[tr("노출 시간")] = tr("기록 값 {v}초").format(v=_trim(v, 6))
+    if info.get("address_online"):                      # 261111-25 — 출처(ODbL)
+        from viewer.photo_address import OSM_CREDIT
+        tips[tr("상세 주소(온라인)")] = OSM_CREDIT
     return tips
 
 

@@ -153,7 +153,7 @@ class ConvertMixin:
         import fitz
         from PyQt6.QtWidgets import QFileDialog
         from viewer import page_crop as _pc, page_rotate as _pr, pdf_mirror as _pm
-        title = tr("PDF 만들기")
+        title = tr("PDF 저장")                       # 261111-24 — 메뉴 이름과 같게
         path = str(path or "")
         if not path.lower().endswith(".pdf") or not Path(path).exists():
             return None
@@ -247,7 +247,7 @@ class ConvertMixin:
             self.bookmark_tree.add_or_refresh_file(str(out), after=path)
         except Exception:
             pass
-        self.status.showMessage(tr('PDF 만들기: {name} ({n}쪽)').format(name=Path(out).name, n=len(pages)), 6000)
+        self.status.showMessage(tr('PDF 저장: {name} ({n}쪽)').format(name=Path(out).name, n=len(pages)), 6000)
         if got.get("dropped"):
             QMessageBox.information(self, title, tr("원본의 서명 {n}개는 고른 쪽만 담은 새 파일에서 맞지 않아 뺐습니다.").format(
                 n=got["dropped"]))

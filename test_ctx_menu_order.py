@@ -10,6 +10,7 @@ E. 나눈 항목 — 실제 메뉴를 띄워(가로채지 않고) Enter = 글자
    글자 일을 할 수 없으면 글자 클릭이 하위를 연다(사진 '저장')
 F. 꾸밈 개체 메뉴 — 묶음 차례·'글쓰기 입력 설정'/'도형 입력 설정' 이름, **사진 본문도 개체 메뉴가 먼저**(종전에는 사진 메뉴가 먼저 떴다)
 G. 썸네일 '다른 이름으로 저장' 은 책갈피창과 같은 저장 길(`_action_save_as`) — 옛 '변경 적용 — 새 PDF로 저장' 따로 길은 없다
+H. 책갈피창 여러 파일 — 인쇄 묶음 병합 줄도 저장 ▸ 와 같은 'PDF 저장 (N개 병합)'(261111-24 사용자 결정, 옛 '고른 N개 병합해 PDF 만들기')
 수정 전 코드로 실패한다(묶음 속성 없음·'…' 이름·저장 ▸ 없음·사진 개체 메뉴 안 뜸).
 """
 import os, sys, tempfile, shutil, time
@@ -140,6 +141,8 @@ try:
     from viewer.i18n import korea_only_visible
     pdf = tmp / "가 문서.pdf"
     shutil.copy(test_fixtures.text_pdf(), pdf)
+    pdf2 = tmp / "나 문서.pdf"
+    shutil.copy(test_fixtures.text_pdf(), pdf2)
     Image.new("RGB", (800, 400), (200, 60, 60)).save(tmp / "a 사진.jpg", "JPEG")
     Image.new("RGB", (600, 300), (60, 160, 60)).save(tmp / "b 사진.jpg", "JPEG")
     pa, pb = str(tmp / "a 사진.jpg"), str(tmp / "b 사진.jpg")
@@ -189,6 +192,20 @@ try:
         labs = [label(a) for a in tops(m)]
         tl = [t for t in labs if t.startswith("OCR") or t in ("일괄 OCR", "책갈피 생성")]
         chk(tl[:4] == ["OCR 로 읽기", "OCR 로 글자층 생성", "일괄 OCR", "책갈피 생성"], "B PDF 책갈피창 도구 맨 앞 OCR 셋 차례(§5.2 의 3)", str(tl))
+
+    # ── H. 여러 파일 병합 줄 이름(261111-24) ──
+    n1, n2 = node(pdf.name), node(pdf2.name)
+    if n1 is not None and n2 is not None:
+        bt.tree.clearSelection(); n1.setSelected(True); n2.setSelected(True)
+        seen["menu"] = None
+        bt._on_tree_context_menu(bt.tree.visualItemRect(n1).center())
+        mm = seen["menu"]
+        labs = [label(a) for a in tops(mm)] if mm is not None else []
+        chk("PDF 저장 (2개 병합)" in labs and not any("병합해" in x or "PDF 만들기" in x for x in labs),
+            "H 여러 파일 인쇄 묶음 병합 줄 = 'PDF 저장 (2개 병합)'(저장 ▸ 와 같은 이름)", str(labs))
+        bt.tree.clearSelection()
+    else:
+        chk(False, "H 두 PDF 줄")
 
     # ── PDF 썸네일창 ──
     pt = mw.page_thumbs

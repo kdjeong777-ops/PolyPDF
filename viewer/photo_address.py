@@ -17,6 +17,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 PHOTO_ADDR_URL = "https://nominatim.openstreetmap.org/reverse"
 PHOTO_ADDR_TIMEOUT = 8                    # 초
+OSM_CREDIT = "© OpenStreetMap contributors"   # 261111-25 — 상세 주소 결과 옆 출처(ODbL), 정보 창 고지는 about.py
 _UA = "PolyPDF photo viewer"
 
 ABROAD, NOT_FOUND = "abroad", "not_found"  # offline_address 의 두 번째 값(주소가 없을 때 까닭)

@@ -8,6 +8,7 @@ C. 보이는 그대로 — 저장 전 회전은 `/Rotate` 에 더하고, 꾸밈�
 D. 저장 창 기본 이름 `<원본>_<첫쪽>-<끝쪽>쪽.pdf` · 한 쪽이면 `<원본>_<n>쪽.pdf`, 원본과 같은 이름은 받지 않는다
 E. 붙여넣은 쪽(정수 아닌 쪽)·암호 PDF 는 만들지 않고 알린다
 F. 쪽 고르기·저장은 배경 스레드, 끝나면 그 파일을 연다
+G. 저장 창 제목은 메뉴와 같은 'PDF 저장'(261111-24 사용자 결정 '둘 다 PDF 저장으로', 옛 'PDF 만들기')
 수정 전 코드(함수 없음)로 실패 확인.
 """
 import os, sys, tempfile, shutil, time, hashlib, threading
@@ -84,6 +85,7 @@ try:
 
     def save_dlg(*a, **k):
         asked["default"] = a[2] if len(a) > 2 else k.get("directory", "")
+        asked["caption"] = a[1] if len(a) > 1 else k.get("caption", "")
         return (asked.get("answer", str(out)), "PDF (*.pdf)")
     QFileDialog.getSaveFileName = staticmethod(save_dlg)
     seen_threads = []
@@ -111,6 +113,7 @@ try:
             chk(bool(o[0].search_for("PAGE05")), "C 글자층은 그대로(검색·복사)")
     with fitz.open(str(src)) as s:
         chk(s.page_count == 8 and hashlib.sha256(src.read_bytes()).hexdigest() == digest, "B 원본은 그대로")
+    chk(asked.get("caption") == "PDF 저장", "G 저장 창 제목 'PDF 저장'(261111-24)", repr(asked.get("caption")))
     chk(Path(asked.get("default", "")).name == "지침_3-7쪽.pdf", "D 기본 이름 <원본>_<첫쪽>-<끝쪽>쪽.pdf", asked.get("default"))
     chk(seen_threads and not any(seen_threads), "F 쪽 고르기·저장은 배경 스레드에서", str(seen_threads))
     cur = mw.main_view.current_file() if mw.main_view else None

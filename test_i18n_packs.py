@@ -224,6 +224,14 @@ try:
             if m.id and isinstance(m.id, str) and m.string and T.menu_count_tail(m.id, m.string):
                 tails.append("%s → %s" % (m.id, m.string))
         chk(not tails, "F %s 메뉴 끝 장수 꼴이 용어표대로 '({n})'" % d.name, str(tails[:5]))
+        # 261111-27(다국어 SOT §12.2 용어표 'PDF 저장 = Save as PDF'): 새 PDF 를 만드는 저장은 한 이름 — 'Make PDF' 가 섞였다
+        if d.name == "en":
+            live = {(m.id if isinstance(m.id, str) else m.id[0]): (m.string if isinstance(m.string, str) else "") for m in cat if m.id}
+            make = sorted(k for k, s in live.items() if s.startswith("Make PDF") or k.startswith("PDF 만들기") and k != "PDF 만들기·합치기·암호·서명")
+            chk(live.get("PDF 저장") == "Save as PDF" and not make,
+                "F en 용어표 'PDF 저장 = Save as PDF', 살아 있는 'Make PDF'·'PDF 만들기' 문구 없음(261111-27)", str(make[:5]))
+            chk(live.get("해시태그 넣기") == "Add Hashtags" and live.get("새 태그 후보") == "New tag candidates",
+                "F en 용어표 '해시태그 넣기 = Add Hashtags'·'새 태그 후보 = New tag candidates'(261111-27)")
     chk(T.menu_count_tail("인쇄 ({n}장)…", "Print ({n} photos)…") and not T.menu_count_tail("인쇄 ({n}장)…", "Print ({n})…")
         and not T.menu_count_tail("사진 위치를 읽는 중… ({n}장)", "Reading photo locations… ({n} photos)"),
         "F 메뉴 끝 장수 규칙 — 섞인 꼴은 잡고, 맞는 꼴·진행 글은 통과")

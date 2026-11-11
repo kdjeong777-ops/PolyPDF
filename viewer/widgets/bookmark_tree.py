@@ -3278,7 +3278,7 @@ class BookmarkTree(QWidget):
         menu.group("print")
         self._add_print_action(menu, item, pm)
         if merge:
-            self._act(menu, tr("고른 {n}개 병합해 PDF 만들기").format(n=len(merge)),
+            self._act(menu, tr("PDF 저장") + " " + tr("({n}개 병합)").format(n=len(merge)),   # 261111-24 — 저장 ▸ 와 같은 일·같은 이름
                       lambda fs=list(merge): self.mergeFilesRequested.emit(fs))
         # 모양 — 261107-8(마스터 §4.7.13): 파일 통째 회전(모든 쪽, 저장 전 회전 → 💾 저장 한 길)
         if is_file and _dir_target and not pm:

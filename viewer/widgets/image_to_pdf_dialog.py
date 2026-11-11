@@ -23,7 +23,7 @@ from viewer.i18n import tr
 # 261111-2(사진 보기 SOT §4.21): 사진 모드가 넘기는 HEIC·HEIF 도 받는다 — 종전 IMAGE_EXTS 는 그것을 조용히 버려
 #   아이폰 사진만 고르면 창 목록이 비었다('변환할 이미지를 추가하세요'). 읽기·넣기는 photo_io 가 HEIC 를 안다.
 from viewer.image_page import PHOTO_EXTS
-IMAGE_EXTS = tuple(sorted(PHOTO_EXTS))
+ACCEPT_EXTS = tuple(sorted(PHOTO_EXTS))   # 261111-29: 이 창이 받는 확장자 — image_page.IMAGE_EXTS(HEIC 없음)와 이름이 겹치지 않게
 _PATH_ROLE = Qt.ItemDataRole.UserRole
 ICON_PX = 56                    # 목록 아이콘(이름 보기)
 THUMB_PX = 112                  # 썸네일 보기 칸 그림(261111-3)
@@ -266,7 +266,7 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
         news = []
         for p in (paths or []):
             p = str(p)
-            if (p and p.lower().endswith(IMAGE_EXTS) and os.path.isfile(p)
+            if (p and p.lower().endswith(ACCEPT_EXTS) and os.path.isfile(p)
                     and p not in exist):
                 news.append(p)
                 exist.add(p)
@@ -306,7 +306,7 @@ class ImageToPdfDialog(NupPresetMixin, QDialog):
         super().done(r)
 
     def _pick_files(self):
-        pats = " ".join("*" + e for e in IMAGE_EXTS)          # 261111-2: HEIC·HEIF 도(확장자 표 한 곳)
+        pats = " ".join("*" + e for e in ACCEPT_EXTS)          # 261111-2: HEIC·HEIF 도(확장자 표 한 곳)
         paths, _ = QFileDialog.getOpenFileNames(
             self, tr("이미지 파일 선택"), "", tr("이미지") + f" ({pats})")
         if paths:

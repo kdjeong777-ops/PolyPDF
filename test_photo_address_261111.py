@@ -10,6 +10,7 @@ C. 세부 정보 창 — [주소 복사] 가 행정동 주소를 클립보드에
 D. 보내는 것은 위도·경도뿐 — 주소(URL)에 파일 이름·경로가 없고 User-Agent 는 앱 이름
 E. 온라인 실패(방화벽) — '찾지 못했습니다' 행, 창은 그대로
 F. 주소가 늦게 오면 창의 '찾는 중…' 이 그 주소로 바뀐다
+G. 출처(261111-25) — 상세 주소가 보일 때만 창에 '© OpenStreetMap contributors'(칸 툴팁도), 정보 창 오픈소스 고지에 Nominatim
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -158,6 +159,9 @@ try:
     pump(lambda: "address" in (mw._photo_info or {}), timeout=10)
 
     def insp_c(dlg):
+        from PyQt6.QtWidgets import QLabel as _QL
+        _c0 = [w for w in dlg.findChildren(_QL) if "OpenStreetMap contributors" in w.text()]
+        chk(all(w.isHidden() for w in _c0), "G 상세 주소 전에는 출처 줄을 보이지 않는다")
         r = table_rows(dlg)
         chk(r.get("주소") == want, "C 창에 주소 행", str(r))
         b_copy, b_on = button(dlg, "주소 복사"), button(dlg, "상세 주소 찾기(온라인)")
@@ -178,6 +182,11 @@ try:
         chk(ok and r.get("상세 주소(온라인)") == "서울특별시 강남구 역삼동 테헤란로 152",
             "C '예' — 상세 주소 행(국내는 큰 단위부터)", str(r))
         chk(len(sent) == 1, "C 한 번만 보냄", str(sent))
+        from PyQt6.QtWidgets import QLabel as _QL
+        _credit = [w for w in dlg.findChildren(_QL) if "OpenStreetMap contributors" in w.text()]
+        chk(bool(_credit) and not _credit[0].isHidden(), "G 상세 주소 옆 출처 '© OpenStreetMap contributors'")
+        _tp = dlg._table.findItems("서울특별시 강남구 역삼동 테헤란로 152", __import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.MatchFlag.MatchExactly) if hasattr(dlg, "_table") else []
+        chk(bool(_tp) and "OpenStreetMap" in _tp[0].toolTip(), "G 상세 주소 칸 툴팁에 출처")
         b_copy.click(); pump(timeout=0.2)
         chk(QApplication.clipboard().text() == "서울특별시 강남구 역삼동 테헤란로 152", "C 상세 주소가 있으면 [주소 복사] 는 상세 주소",
             repr(QApplication.clipboard().text()))
@@ -190,6 +199,9 @@ try:
         chk(photo_address is not None and "PolyPDF" in photo_address._UA and "@" not in photo_address._UA, "D User-Agent 는 앱 이름만")
 
     run_dialog(insp_c)
+    from viewer import about as _ab
+    chk(any("Nominatim" in str(row[0]) for row in getattr(_ab, "OSS", []) or [] ) or "Nominatim" in open(_ab.__file__, encoding="utf-8").read(),
+        "G 정보 창 오픈소스 고지에 Nominatim")
 
     # E
     open_photo(lst[1])

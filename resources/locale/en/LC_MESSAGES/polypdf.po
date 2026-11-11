@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-11 20:11+0900\n"
+"POT-Creation-Date: 2026-11-12 00:00+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -84,6 +84,14 @@ msgstr "OpenStreetMap map tiles"
 #: viewer/about.py
 msgid "© OpenStreetMap contributors — 지도 페이지에 출처를 보인다"
 msgstr "© OpenStreetMap contributors — credited on the map page"
+
+#: viewer/about.py
+msgid "OpenStreetMap Nominatim 주소 찾기"
+msgstr "OpenStreetMap Nominatim address lookup"
+
+#: viewer/about.py
+msgid "© OpenStreetMap contributors — 사진 정보 창 상세 주소 옆에 출처를 보인다"
+msgstr "© OpenStreetMap contributors — credited next to the detailed address in the photo info window"
 
 #: viewer/about.py
 msgid "FFmpeg developers — 별도 실행 파일(gyan.dev 빌드)"
@@ -176,7 +184,7 @@ msgid "버전 v{version}"
 msgstr "Version v{version}"
 
 #: viewer/app.py viewer/widgets/crop_dialog.py viewer/widgets/read_aloud.py
-#: viewer/widgets/thumbs_list.py
+#: viewer/widgets/tag_apply_dialog.py viewer/widgets/thumbs_list.py
 msgid "전체"
 msgstr "All"
 
@@ -531,9 +539,9 @@ msgstr "Bookmark Generation Stopped"
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
 #: viewer/print_controller.py viewer/update_controller.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
-#: viewer/widgets/stamp_dialog.py viewer/widgets/translate_dialog.py
-#: viewer/widgets/translate_files_dialog.py viewer/widgets/update_dialog.py
-#: viewer/widgets/vprinter_dialog.py
+#: viewer/widgets/stamp_dialog.py viewer/widgets/tag_apply_dialog.py
+#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
+#: viewer/widgets/update_dialog.py viewer/widgets/vprinter_dialog.py
 msgid "닫기"
 msgstr "Close"
 
@@ -655,7 +663,7 @@ msgstr "Save with New Name"
 msgid "다른 PolyPDF 창"
 msgstr "Other PolyPDF windows"
 
-#: viewer/app.py viewer/photo_controller.py
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/tag_apply_dialog.py
 msgid "되돌리기"
 msgstr "Undo"
 
@@ -1659,6 +1667,7 @@ msgid "지금 연 폴더·파일·검색어를 등록"
 msgstr "Save the current folder, file or search"
 
 #: viewer/app.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/tag_apply_dialog.py
 msgid "추가"
 msgstr "Add"
 
@@ -1764,8 +1773,7 @@ msgstr "Reads every page with OCR and makes the bookmarks in one go"
 msgid "태그 다시 계산"
 msgstr "Recalculate Tags"
 
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/tag_batch_dialog.py
+#: viewer/app.py viewer/widgets/tag_batch_dialog.py
 msgid "새 태그 후보 검토"
 msgstr "Review New Tag Candidates"
 
@@ -3080,7 +3088,8 @@ msgstr "Canceling…"
 msgid "변환 ({n}쪽)"
 msgstr "Convert ({n} pages)"
 
-#: viewer/app.py viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+#: viewer/app.py viewer/convert_controller.py viewer/photo_controller.py
+#: viewer/widgets/bookmark_tree.py
 msgid "PDF 저장"
 msgstr "Save as PDF"
 
@@ -3558,10 +3567,6 @@ msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (�
 msgstr "Word turned the text of this PDF into pictures only — use 'Word (editable)' or 'Word (keep appearance)'"
 
 #: viewer/convert_controller.py
-msgid "PDF 만들기"
-msgstr "Make PDF"
-
-#: viewer/convert_controller.py
 msgid "변환할 PDF 를 먼저 여세요."
 msgstr "Open a PDF to convert first."
 
@@ -3611,8 +3616,8 @@ msgstr "Saving"
 
 #: viewer/convert_controller.py
 #, python-brace-format
-msgid "PDF 만들기: {name} ({n}쪽)"
-msgstr "PDF made: {name} ({n} pages)"
+msgid "PDF 저장: {name} ({n}쪽)"
+msgstr "Saved PDF: {name} ({n} pages)"
 
 #: viewer/convert_controller.py
 #, python-brace-format
@@ -4438,6 +4443,30 @@ msgstr "Normal"
 msgid "좌우 뒤집힘"
 msgstr "Flipped horizontally"
 
+#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
+msgid "180° 회전"
+msgstr "Rotate 180°"
+
+#: viewer/photo_controller.py
+msgid "상하 뒤집힘"
+msgstr "Flipped vertically"
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘 + 반시계 90°"
+msgstr "Flipped horizontally + 90° counterclockwise"
+
+#: viewer/photo_controller.py
+msgid "시계 방향 90° 회전"
+msgstr "Rotated 90° clockwise"
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘 + 시계 90°"
+msgstr "Flipped horizontally + 90° clockwise"
+
+#: viewer/photo_controller.py
+msgid "반시계 방향 90° 회전"
+msgstr "Rotated 90° counterclockwise"
+
 #: viewer/photo_controller.py
 msgid "행정동을 찾지 못함"
 msgstr "Administrative area not found"
@@ -4788,30 +4817,6 @@ msgstr "Copies the text of the chosen block (or the whole photo if none) from th
 #: viewer/photo_controller.py
 msgid "읽기 전용 사진은 돌릴 수 없습니다."
 msgstr "A read-only photo cannot be rotated."
-
-#: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
-msgid "180° 회전"
-msgstr "Rotate 180°"
-
-#: viewer/photo_controller.py
-msgid "상하 뒤집힘"
-msgstr "Flipped vertically"
-
-#: viewer/photo_controller.py
-msgid "좌우 뒤집힘 + 반시계 90°"
-msgstr "Flipped horizontally + 90° counterclockwise"
-
-#: viewer/photo_controller.py
-msgid "시계 방향 90° 회전"
-msgstr "Rotated 90° clockwise"
-
-#: viewer/photo_controller.py
-msgid "좌우 뒤집힘 + 시계 90°"
-msgstr "Flipped horizontally + 90° clockwise"
-
-#: viewer/photo_controller.py
-msgid "반시계 방향 90° 회전"
-msgstr "Rotated 90° counterclockwise"
 
 #: viewer/photo_controller.py
 msgid "원래 방향"
@@ -8213,11 +8218,6 @@ msgid "새 폴더: {name} — 폴더로 복사·이동의 대상으로 고를 �
 msgstr "New folder: {name} — you can choose it as the target of copy or move to folder."
 
 #: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "고른 {n}개 병합해 PDF 만들기"
-msgstr "Merge {n} chosen into a PDF"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "이 파일의 모든 쪽을 돌립니다 — [저장] 하면 PDF 에 들어갑니다."
 msgstr "Rotates every page of this file — Save writes it into the PDF."
 
@@ -8389,6 +8389,11 @@ msgstr "Translate ({n} files)"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
+msgid "({n}개 병합)"
+msgstr "({n} merged)"
+
+#: viewer/widgets/bookmark_tree.py
+#, python-brace-format
 msgid "선택 책갈피 {_n_bm}개 페이지순 정렬"
 msgstr "Sort {_n_bm} Selected Bookmarks by Page"
 
@@ -8461,11 +8466,6 @@ msgstr ""
 #, python-brace-format
 msgid "용량 줄인 사본 ({n}개 파일)"
 msgstr "Reduced-size copy ({n} files)"
-
-#: viewer/widgets/bookmark_tree.py
-#, python-brace-format
-msgid "({n}개 병합)"
-msgstr "({n} merged)"
 
 #: viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -8838,7 +8838,8 @@ msgid "적용할 쪽을 원래 쪽 크기로 되돌립니다"
 msgstr "Restores the target pages to their original size"
 
 #: viewer/widgets/crop_dialog.py viewer/widgets/line_text_settings_dialog.py
-#: viewer/widgets/photo_label_dialog.py viewer/widgets/view_settings_dialog.py
+#: viewer/widgets/photo_label_dialog.py viewer/widgets/tag_apply_dialog.py
+#: viewer/widgets/view_settings_dialog.py
 msgid "적용"
 msgstr "Apply"
 
@@ -9808,7 +9809,7 @@ msgstr "Select a file to preview it here."
 msgid "선택 파일을 오른쪽(병합 대상)으로"
 msgstr "Move selected files to the right (merge list)"
 
-#: viewer/widgets/merge_dialog.py
+#: viewer/widgets/merge_dialog.py viewer/widgets/tag_apply_dialog.py
 msgid "등록순"
 msgstr "Order added"
 
@@ -14019,10 +14020,6 @@ msgid "표 번역 중… ({n}/{min})"
 msgstr "Translating tables… ({n}/{min})"
 
 #: viewer/widgets/translate_files_dialog.py
-msgid "이름순"
-msgstr "Name"
-
-#: viewer/widgets/translate_files_dialog.py
 msgid "수정일순"
 msgstr "Date Modified"
 
@@ -16097,4 +16094,13 @@ msgstr "Getting Started"
 
 #~ msgid "이미지 (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp)"
 #~ msgstr "Images (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp)"
+
+#~ msgid "PDF 만들기"
+#~ msgstr "Make PDF"
+
+#~ msgid "PDF 만들기: {name} ({n}쪽)"
+#~ msgstr "PDF made: {name} ({n} pages)"
+
+#~ msgid "고른 {n}개 병합해 PDF 만들기"
+#~ msgstr "Merge {n} chosen into a PDF"
 

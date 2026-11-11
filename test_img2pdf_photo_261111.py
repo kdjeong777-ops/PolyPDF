@@ -11,6 +11,7 @@ B. HEIC 도 PDF 쪽이 된다 — 원본 그대로·줄여 넣기 두 길
 C. 목록 보기 [이름 | 썸네일] — 기본 썸네일(칸 격자), 이름이면 한 줄씩, 두 보기 모두 끌기 = 줄 옮기기(InternalMove)
 D. 고른 보기는 기억한다(취소해도) — 다음에 연 창이 그 보기
 E. 이름 'PDF 만들기' → 'PDF 저장'(사진 줄·저장 ▸), 옛 이름 없음
+F. 창이 받는 확장자 이름은 ACCEPT_EXTS — image_page.IMAGE_EXTS(HEIC 없음)와 겹치지 않는다(261111-29)
 """
 import os, sys, tempfile, shutil, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -120,6 +121,13 @@ try:
         pump(timeout=0.4)
     click(b); click(c)
     chk(sorted(strip.selected_paths()) == sorted([a, b, c]), "준비 — 썸네일 줄 Ctrl+클릭으로 세 장(.jpg·.png·.heic)", str(strip.selected_paths()))
+
+    # ── F. 창이 받는 확장자 이름(261111-29) — image_page.IMAGE_EXTS(HEIC 없음)와 같은 이름·다른 내용이면 헷갈린다 ──
+    from viewer.widgets import image_to_pdf_dialog as _dmod
+    from viewer import image_page as _ip
+    chk(not hasattr(_dmod, "IMAGE_EXTS") and ".heic" in getattr(_dmod, "ACCEPT_EXTS", ()) and ".heic" not in _ip.IMAGE_EXTS,
+        "F 창의 받는 확장자는 ACCEPT_EXTS(HEIC 포함) — image_page.IMAGE_EXTS 와 이름이 겹치지 않는다",
+        str(sorted(k for k in vars(_dmod) if k.endswith("_EXTS"))))
 
     # ── E. 이름 ──────────────────────────────────────────────────────
     strip.menuRequested.emit(c, QPoint(10, 10)); pump()
