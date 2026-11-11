@@ -3522,7 +3522,7 @@ class PhotoMixin:
                     bt.add_or_refresh_file(out, after=src)
         except Exception:
             pass
-        self._carry_tags([(src, out)])                   # 261111-10(태그 SOT §6.1-⑥): 평탄화 사본에도 태그
+        self._carry_tags([(src, out)], drop_meta=True)   # 261111-10(태그 SOT §6.1-⑥): 평탄화 사본에도 태그 — 정보(EXIF)를 싣지 않으니 기본 정보 태그는 빼고(261111-26)
         self.status.showMessage(tr("평탄화한 새 사진: {name}").format(name=Path(out).name), 6000)
 
     def _photo_share(self, paths, mode: str = "gps"):
@@ -3609,7 +3609,7 @@ class PhotoMixin:
 
     def _photo_shared(self, pairs: list, failed: list):
         self._photo_share_busy = False
-        self._carry_tags(pairs)                          # 261111-10(태그 SOT §6.1-⑥, 사용자 결정 '모두 따라감'): 공유용·정보 지운 사본에도 태그
+        self._carry_tags(pairs, drop_meta=True)          # 261111-10(태그 SOT §6.1-⑥): 공유용 사본에도 태그 — 정보를 지운 사본이라 기본 정보 태그는 빼고(261111-26)
         for src, out in pairs:
             if os.path.normcase(str(Path(out).parent)) != os.path.normcase(str(Path(src).parent)):
                 continue                                 # 다른 폴더에 만든 사본 — 보고 있는 목록에 끼우지 않는다

@@ -463,13 +463,16 @@ class TagStore:
             self._dirty = True
 
     def clear_auto_tag(self, tag: str):
-        """특정 태그의 자동 부여만 전 파일에서 회수(§8.5 — 한 태그가 잘못 퍼졌을 때)."""
+        """특정 태그의 자동 부여만 전 파일에서 회수(§8.5 — 한 태그가 잘못 퍼졌을 때). 사진 기본 정보(meta 부분)로 붙은 파일은
+        건드리지 않는다 — 기본 정보는 사진 머리에서 오고 사용자가 지우는 태그가 아니다(§8.1, 261111-26)."""
         tl = (tag or "").lower()
         if not tl:
             return
         with self.bulk():
             for k, v in list(self._data.items()):
                 if isinstance(v, dict) and v.get("auto"):
+                    if tl in {t.lower() for t in ((v.get("auto_parts") or {}).get("meta") or [])}:
+                        continue
                     v["auto"] = [t for t in v["auto"] if t.lower() != tl]
                     self._drop_from_parts(v, {tl})
                     if v.get("auto_conf"):
@@ -626,12 +629,15 @@ class TagStore:
             self._save()
 
     def auto_tag_set(self) -> list:
-        """자동 부여된 태그의 어휘(§8.5 '이 태그의 자동 부여만 취소' 메뉴용) — 빈도 내림차순."""
+        """자동 부여된 태그의 어휘(§8.5 '이 태그의 자동 부여만 취소' 메뉴용) — 빈도 내림차순.
+        사진 기본 정보(meta 부분)로 붙은 것은 세지 않는다 — 취소할 수 없는 태그라 메뉴에 늘어놓지 않는다(§8.1, 261111-26)."""
         cnt = {}
         for v in self._data.values():
             if isinstance(v, dict):
+                meta = {t.lower() for t in ((v.get("auto_parts") or {}).get("meta") or [])}
                 for t in (v.get("auto") or []):
-                    cnt[t] = cnt.get(t, 0) + 1
+                    if t.lower() not in meta:
+                        cnt[t] = cnt.get(t, 0) + 1
         return sorted(cnt, key=lambda t: (-cnt[t], t.lower()))
 
     def rehome_missing(self, new_path, fp: str | None = None,
@@ -689,9 +695,11 @@ class TagStore:
         self._save()
         return "moved"
 
-    def copy_tags(self, src_path, dst_path) -> bool:
+    def copy_tags(self, src_path, dst_path, drop_meta: bool = False) -> bool:
         """앱 안에서 복사한 사본에 태그를 따라붙인다(§6.1-⑥, 261111-7) — 직접·자동·거절·키워드·연도.
-        지문(`fp`·`size`)은 빼고(같은 지문 둘이면 재연결이 모호해진다), 사본에 기록이 있으면 합친다. 바뀌었으면 True."""
+        지문(`fp`·`size`)은 빼고(같은 지문 둘이면 재연결이 모호해진다), 사본에 기록이 있으면 합친다. 바뀌었으면 True.
+        `drop_meta` — 정보를 지운 사본(공유용·평탄화 사진·PDF 가림)은 사진 기본 정보(meta 부분 — 지역·장비·날짜·스크린샷)를
+        넘기지 않는다(261111-26). 사본의 기본 정보는 사진 정보 색인이 사본 머리에서 다시 만든다(§5.7)."""
         import copy as _copy
         ks, kd = self._key(src_path), self._key(dst_path)
         v = self._data.get(ks)
@@ -700,6 +708,19 @@ class TagStore:
         src = {"manual": list(v)} if isinstance(v, list) else _copy.deepcopy(v)
         src.pop("fp", None)
         src.pop("size", None)
+        parts0 = src.get("auto_parts")
+        if drop_meta and isinstance(parts0, dict) and parts0.get("meta"):
+            meta = parts0.pop("meta")
+            keep = {t.lower() for ts in parts0.values() for t in ts}      # 다른 부분에도 있는 태그는 남긴다
+            gone = {t.lower() for t in meta} - keep
+            src["auto"] = [t for t in (src.get("auto") or []) if t.lower() not in gone]
+            if src.get("auto_conf"):
+                src["auto_conf"] = {t: c for t, c in src["auto_conf"].items() if t.lower() not in gone}
+            if not parts0:
+                src.pop("auto_parts", None)
+            if not src["auto"]:
+                for f in AUTO_FIELDS:
+                    src.pop(f, None)
         cur = self._data.get(kd)
         if cur is None:
             self._data[kd] = src
@@ -773,7 +794,7 @@ def load_candidates(path=None) -> dict:
     """{"cand": {태그: {"n": 건수, "files": [예시…]}}, "rejected": [태그…]}"""
     p = Path(path) if path else _candidates_path()
     try:
-        d = json.loads(p.read_text(encoding="utf-8")) or {}
+        d = json.loads(bg_write.read_text(p)) or {}    # 맡겨 둔 쓰기가 있으면 그 글(261111-28)
     except Exception:
         d = {}
     d.setdefault("cand", {})
@@ -782,13 +803,11 @@ def load_candidates(path=None) -> dict:
 
 
 def save_candidates(data: dict, path=None):
+    """261111-28(응답성 SOT §4.8 '메인은 파일을 쓰지 않는다'): 쓰기는 배경 줄(`bg_write` — tmp·os.replace·실패 알림),
+    부르는 쪽은 직렬화만. 종전엔 '해시태그 넣기' 창 [무시]·후보 [적용]·후보 적립이 메인에서 tmp + os.replace 를 했다."""
     p = Path(path) if path else _candidates_path()
     try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(p.name + ".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=0),
-                       encoding="utf-8")
-        os.replace(tmp, p)                       # 원자적(§6)
+        bg_write.submit(p, json.dumps(data, ensure_ascii=False, indent=0))
     except Exception:
         pass
 

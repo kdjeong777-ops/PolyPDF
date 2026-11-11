@@ -42,7 +42,7 @@ try:
     st.set_auto_part(P, "meta", ["2026-11-05", "고양시", "iPhone13Pro"])
     st.set_auto_part(P, "kind", ["영수증"])
     st.set(P, ["가족"])
-    save_candidates({"cand": {"보수": {"n": 2, "files": []}, "아스팔트": {"n": 1, "files": []}}, "rejected": []})
+    save_candidates({"cand": {"보수": {"n": 2, "files": [Q]}, "아스팔트": {"n": 1, "files": [Q]}}, "rejected": []})   # 근거 파일이 목록에 있어야 늘어놓는다(261111-20 덧붙임)
     dlg = TagApplyDialog(st, [P, Q], [P, Q])
     names = lambda: [dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole) for i in range(dlg.lst_tags.count())]
     chk(sorted(names()) == sorted(["가족", "영수증", "배수성", "보고서"]), "A 사진 기본 정보 태그(촬영일·지역·장비)는 목록에 없다", str(names()))

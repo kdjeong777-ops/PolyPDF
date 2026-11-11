@@ -75,11 +75,11 @@ try:
     for p in (ph, ph_flat):
         Path(p).write_bytes(b"x")
     Path(ph_share).parent.mkdir(); Path(ph_share).write_bytes(b"x")
-    st.set_auto_part(ph, "meta", ["2026-11-05", "고양시"])
+    st.set(ph, ["가족"]); st.set_auto_part(ph, "meta", ["2026-11-05", "고양시"]); st.set_auto_part(ph, "kind", ["영수증"])
     mw._photo_flattened(ph, ph_flat, "")
-    chk(st.get_auto(ph_flat) == ["2026-11-05", "고양시"], "B 사진 평탄화 사본에 태그", str(st.get(ph_flat)))
+    chk(st.get_manual(ph_flat) == ["가족"] and st.get_auto(ph_flat) == ["영수증"], "B 사진 평탄화 사본에 태그(기본 정보는 빼고 — 261111-26)", str(st.get(ph_flat)))
     mw._photo_shared([(ph, ph_share)], [])
-    chk(st.get_auto(ph_share) == ["2026-11-05", "고양시"], "B 공유용·정보 지운 사본에도 태그(사용자 결정 '모두 따라감')", str(st.get(ph_share)))
+    chk(st.get_manual(ph_share) == ["가족"] and st.get_auto(ph_share) == ["영수증"], "B 공유용·정보 지운 사본에도 태그(사용자 결정 '모두 따라감', 기본 정보는 빼고)", str(st.get(ph_share)))
     chk(mw._carry_tags([(src, src)]) == 0, "B 같은 경로는 건너뛴다")
     mw.close()
 
