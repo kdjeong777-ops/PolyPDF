@@ -2977,7 +2977,7 @@ class MainView(QWidget):
             self.view.setBackgroundBrush(QColor("#f5f5f5"))
         # 260615-5: ④ 편집모드 도구(선종류/도형/글쓰기) 버튼 색을 테마에 맞춰 재적용
         for fn in ("_update_line_button", "_update_shape_button",
-                   "_update_text_button"):
+                   "_update_text_button", "_update_draw_buttons"):     # 261111-9 보완: 지우개·개체선택·손바닥 강조도 테마색
             try:
                 getattr(self, fn)()
             except Exception:
@@ -3848,6 +3848,7 @@ class MainView(QWidget):
             if b is not None:
                 b.setIcon(_ti(name, dark=dark, size=16))
         self._update_image_button()            # 261101-3: 이미지 단추(테마 단색)
+        self._update_draw_buttons()            # 261111-9 보완: 켜진 손바닥은 주황 바탕용 어두운 그림
 
     def set_rotations(self, rotations):
         """260609-15(A1): {page0: deg} — 현재 페이지 회전 반영."""
@@ -4372,14 +4373,23 @@ class MainView(QWidget):
         # 260611-76: 색상버튼=스타일(_pen_idx, 모드와 독립), 지우개/개체선택=모드(_draw_kind)
         for i, b in enumerate(getattr(self, "_draw_pen_btns", [])):
             b.setChecked(self._pen_idx == i)
+        # 261111-9 보완(사용자 결정 '선긋기 단추처럼 주황'): 지우개·개체선택·손바닥도 켜지면 선긋기·도형·글쓰기 단추와 같은
+        #   주황 강조(`_dbl_css(True)`) — 종전 Qt 기본 체크 바탕은 다크에서 꺼짐(#3d3d40)과 거의 같아(#333336) 켜졌는지 안 보였다.
+        def _mode(b, on):
+            b.setChecked(on)
+            b.setStyleSheet(self._dbl_css(on).replace("QToolButton", "QPushButton"))   # 이 셋은 QPushButton
         for k, b in enumerate(getattr(self, "_draw_erase_btns", [])):
-            b.setChecked(self._draw_kind == "erase" and self._erase_k == k)
+            _mode(b, self._draw_kind == "erase" and self._erase_k == k)
         sb = getattr(self, "_draw_select_btn", None)
         if sb is not None:
-            sb.setChecked(self._draw_kind == "select")
+            _mode(sb, self._draw_kind == "select")
         pb = getattr(self, "_draw_pan_btn", None)
         if pb is not None:
-            pb.setChecked(self._draw_kind == "pan")
+            on = self._draw_kind == "pan"
+            _mode(pb, on)
+            from viewer.widgets.icons import themed_icon as _ti
+            from viewer import theme as _theme       # 켜지면(살구색 바탕) 테마와 상관없이 어두운 그림 — 도형 단추와 같은 규칙
+            pb.setIcon(_ti("hand", dark=(_theme.is_dark() and not on), size=16))
         self._restyle_pen_btns()
 
     @staticmethod
