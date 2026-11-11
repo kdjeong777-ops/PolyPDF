@@ -708,6 +708,21 @@ n_doc = sum(len(g) for g in doc_groups)
 m_n = re.search(r"기본값 — (\d+)개", seg)
 chk(not m_n or int(m_n.group(1)) == n_doc, "L2 모음 표 앞 글의 개수가 표와 같다", str((m_n.group(1) if m_n else None, n_doc)))
 
+# ── M. 마스터 §6 모듈 지도의 'Qt 없음' ─────────────────────────────────────
+# 261111-23(SOT 점검): `photo_address.py` 를 '(Qt 없음)' 이라 적었는데 모듈 머리에서 PyQt6 를 가져와 배경 워커를 두었다.
+#   'Qt 없음' 은 '배경 스레드·자식 프로세스에서 불러도 된다' 는 약속이라, 틀리면 그 모듈을 Qt 없는 곳에서 부르는 사람이 깨진다.
+print(NL + "=== M. 마스터 §6 'Qt 없음' 모듈은 머리에서 PyQt6 를 가져오지 않는다 ===")
+s6 = mst[mst.find("## 6."):mst.find("## 7.")]
+bad = []
+for m in re.finditer(r"^\|\s*`((?:viewer|widgets|study)/[A-Za-z0-9_/]+\.py)`\s*\|([^|\n]*)\|", s6, re.M):
+    if "Qt 없음" not in m.group(2):
+        continue
+    rel = m.group(1) if m.group(1).startswith("viewer/") else "viewer/" + m.group(1)
+    p = ROOT / rel
+    if p.exists() and re.search(r"^(?:from PyQt6|import PyQt6)", read(p), re.M):
+        bad.append(m.group(1))
+chk(not bad, "M1 '(Qt 없음)' 이라 적은 모듈이 머리(들여쓰기 없는 줄)에서 PyQt6 를 가져오지 않는다", str(bad))
+
 print(NL + "=== " + ("ALL PASS" if not fails else "FAILURE (%d)" % len(fails)) + " ===")
 for msg in fails:
     print(" -", msg)
