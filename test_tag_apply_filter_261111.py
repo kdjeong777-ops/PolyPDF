@@ -6,6 +6,7 @@
 작업시 현재 태그 리스트의 활성화 해제. 그 반대도 적용 · 다중선택 가능". 사용자 결정: 거르기 상자·콤보 + 직접 기간·근거 파일만 자동 선택.
 A. 태그 줄 체크 = 있는 것, 해제 = 없는 것 — 여러 줄은 모두 만족, 고른 줄 없으면 전체, 숨은 칸은 적용 대상이 아니다
 B. 기간 — 사진은 사진 정보 색인의 촬영일(없으면 파일 날짜), PDF 는 파일 날짜 · 최근 7일·직접 기간
+D. 새 태그 후보 개수·목록은 지금 책갈피창 목록 기준(261111-20 덧붙임)
 C. 새 태그 후보를 고르면 근거 파일만 보이고 모두 고른 채로, 현재 태그는 고름이 풀리고 흐려진다 — 반대도
 """
 import os, sys, tempfile, shutil, time
@@ -54,7 +55,8 @@ try:
     con.commit(); con.close()
     st = TagStore(tmp / "tags.json")
     st.set(A, ["가족"]); st.set(B, ["가족", "여행"])
-    save_candidates({"cand": {"보수": {"n": 2, "files": [B, C]}}, "rejected": []})
+    X = str(tmp / "other" / "x.pdf")                       # 다른 폴더(지금 목록 밖)
+    save_candidates({"cand": {"보수": {"n": 57, "files": [B, C, X]}, "외부": {"n": 9, "files": [X]}}, "rejected": []})
     dlg = TagApplyDialog(st, [A, B, C, P], [], show_candidates=True)
     dlg.resize(1100, 700); dlg.show()
     lw = dlg.lst_files
@@ -96,6 +98,12 @@ try:
     chk(vis() == [], "B 태그 거르기와 기간을 함께", str(vis()))
     dlg.cmb_period.setCurrentIndex(dlg.cmb_period.findData("all")); app.processEvents()
     chk(vis() == ["a.pdf", "b.pdf"], "B 전체로 돌리면 태그 거르기만", str(vis()))
+
+    # D 261111-20 덧붙임 — 후보는 지금 목록 기준(근거 파일 중 목록에 있는 것만 센다, 없으면 늘어놓지 않는다)
+    ctext = {dlg.lst_cand.item(i).data(Qt.ItemDataRole.UserRole): dlg.lst_cand.item(i).text() for i in range(dlg.lst_cand.count())}
+    chk(ctext == {"보수": "#보수  (2건)"}, "D 후보 개수 = 근거 파일 중 지금 목록에 있는 수, 목록에 없는 후보는 없다", str(ctext))
+    from viewer import tag_store as TS
+    chk(getattr(TS, "CAND_FILES_MAX", 8) >= 100, "D 후보 근거 파일 기록이 8개에 막히지 않는다", str(getattr(TS, "CAND_FILES_MAX", 8)))
 
     # C 후보 ↔ 현재 태그
     dlg.lst_cand.item(0).setSelected(True); app.processEvents()

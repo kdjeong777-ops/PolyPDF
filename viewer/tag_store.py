@@ -793,6 +793,10 @@ def save_candidates(data: dict, path=None):
         pass
 
 
+# 후보마다 남기는 근거 파일 수 — '해시태그 넣기' 가 후보를 지금 목록의 근거 파일로 센다(태그 SOT §8.7, 261111-20 덧붙임). 종전 8개는 개수가 모자랐다
+CAND_FILES_MAX = 200
+
+
 def merge_candidates(new_items: dict, path=None) -> dict:
     """워커가 모은 신규 후보를 적립 파일에 병합(전역 rejected 는 재적립 금지)."""
     data = load_candidates(path)
@@ -804,6 +808,6 @@ def merge_candidates(new_items: dict, path=None) -> dict:
         cur["n"] = int(cur.get("n", 0)) + int(info.get("n", 1))
         for f in info.get("files", []):
             if f not in cur["files"]:
-                cur["files"] = (cur["files"] + [f])[:8]
+                cur["files"] = (cur["files"] + [f])[:CAND_FILES_MAX]
     save_candidates(data, path)
     return data

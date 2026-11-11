@@ -503,14 +503,23 @@ class TagApplyDialog(QDialog):
         self.lst_cand.blockSignals(True)
         self.lst_cand.clear()
         self.lst_cand.blockSignals(False)
-        cand = sorted((self._cand.get("cand") or {}).items(), key=lambda kv: -int(kv[1].get("n", 0)))
+        # 261111-20 덧붙임(사용자 지시 '책갈피창 리스트에 있는 것을 기반으로 후보를 만들어야해. 만일 없으면 안만들어도 되'):
+        #   후보마다 근거 파일 중 **지금 목록에 있는 것**만 세고, 하나도 없으면 늘어놓지 않는다 — 종전 개수는 모든 폴더에서
+        #   적립한 횟수라 오른쪽에 보이는 근거 파일 수와 맞지 않았다
+        in_list = {_norm(p) for p in self._paths}
+        cand = []
+        for t, info in (self._cand.get("cand") or {}).items():
+            here = [f for f in (info.get("files") or []) if _norm(f) in in_list]
+            if here:
+                cand.append((t, here))
+        cand.sort(key=lambda kv: (-len(kv[1]), kv[0].lower()))
         q = self._find_text()
         if q:
-            cand = [(t, i) for t, i in cand if q in t.lower()]
-        for t, info in cand[:200]:
-            it = QListWidgetItem(tr("#{tag}  ({n}건)").format(tag=t, n=int(info.get("n", 0))))
+            cand = [(t, h) for t, h in cand if q in t.lower()]
+        for t, here in cand[:200]:
+            it = QListWidgetItem(tr("#{tag}  ({n}건)").format(tag=t, n=len(here)))
             it.setData(Qt.ItemDataRole.UserRole, t)
-            it.setToolTip("\n".join(info.get("files", [])))
+            it.setToolTip("\n".join(here))
             self.lst_cand.addItem(it)
 
     def _refresh_marks(self):

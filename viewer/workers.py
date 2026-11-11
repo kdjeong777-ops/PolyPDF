@@ -1788,7 +1788,7 @@ class AutoTagWorker(QObject):
                                          extract_year, new_tag_candidates,
                                          partition, suggest_keywords,
                                          suggest_tags)
-            from viewer.tag_store import TagStore
+            from viewer.tag_store import TagStore, CAND_FILES_MAX
             try:
                 ix = PdfIndex(self.db_path)
             except Exception:
@@ -1882,7 +1882,7 @@ class AutoTagWorker(QObject):
                                             ko_lookup=ko_lookup):
                     cur = candidates.setdefault(c["tag"], {"n": 0, "files": []})
                     cur["n"] += 1
-                    if len(cur["files"]) < 8:
+                    if len(cur["files"]) < CAND_FILES_MAX:     # 261111-20 덧붙임(태그 SOT §8.7): 종전 8
                         cur["files"].append(p)
                 auto = [(s["tag"], s["score"]) for s in part["auto"]]
                 if auto:
