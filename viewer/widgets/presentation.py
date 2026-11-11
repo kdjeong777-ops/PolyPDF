@@ -2727,7 +2727,9 @@ class PresentationWindow(QWidget):
         b = getattr(self, "_tb_mode", None)
         if b is None:
             return
-        b.setText(self._MODE_GLYPH[self._line_mode])
+        # 261111-5(디자인 SOT §4.5): 하이라이트는 본문과 같은 형광펜 그림 — 발표 띠는 늘 어두운 바탕이라 다크 꼴
+        from viewer.widgets.icons import set_line_mode_face
+        set_line_mode_face(b, self._line_mode, self._MODE_GLYPH, dark=True)
         b.setToolTip(tr('선 종류: {MODE_NAME} (클릭해 전환)').format(MODE_NAME=tr(self._MODE_NAME[self._line_mode])))
         b.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,0.14);color:#fff;border:none;"

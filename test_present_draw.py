@@ -32,7 +32,8 @@ pw.resize(800, 600); pw.show(); app.processEvents()
 # 1) 초기 직선 모드 + 순환
 chk(pw._line_mode == 0 and pw._tb_mode.text() == "─", "발표 초기 직선(─)")
 pw._cycle_line_mode(); app.processEvents()
-chk(pw._line_mode == 1 and pw._tb_mode.text() == "▬", "발표 순환1 하이라이트(▬)")
+chk(pw._line_mode == 1 and pw._tb_mode.text() == "" and not pw._tb_mode.icon().isNull(),
+    "발표 순환1 하이라이트(형광펜 그림 — 261111-5)")
 pw._cycle_line_mode(); app.processEvents()
 chk(pw._line_mode == 2 and pw._tb_mode.text() == "〜", "발표 순환2 자유(〜)")
 pw._cycle_line_mode(); app.processEvents()

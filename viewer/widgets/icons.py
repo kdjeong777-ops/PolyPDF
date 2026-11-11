@@ -426,14 +426,43 @@ def _ocr(p, c):
 
 ACCENT["ocr"] = ACCENT["play"]
 
+# 261111-5(디자인 SOT §4.5, 사용자 지시 "'하이라이트' 하이라이트로 인식하기 어려운 이미지 … 약간 더 두껍고, 투명도가 있는 듯한 이미지"):
+#   선긋기 단추의 하이라이트 모드 — 글자 줄(아이콘 전경) 위를 지나는 굵은 반투명 노랑 띠. 띠 밑으로 글자 줄이 비쳐 '투명' 이 보인다.
+ACCENT["highlighter"] = {False: "#ffd000", True: "#ffe066"}
+HL_ALPHA = 0.65          # 띠 불투명도 — 밑 글자 줄이 비쳐 보이는 정도
+HL_TEXT = {False: "#444444", True: "#e8e8e8"}      # 디자인 SOT §2.5 '아이콘 전경'
+
+
+def set_line_mode_face(btn, mode: int, glyphs, dark=None) -> None:
+    """선긋기 단추 얼굴 — 하이라이트(1)는 형광펜 그림, 직선(0)·자유곡선(2)은 종전 글리프(본문 도구 줄·발표 보기가 함께 쓴다)."""
+    from PyQt6.QtCore import QSize
+    if int(mode) == 1:
+        btn.setText("")
+        btn.setIcon(color_icon("highlighter", dark=dark, size=BTN_ICON_PX))
+        btn.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
+    else:
+        btn.setIcon(QIcon())
+        btn.setText(glyphs[int(mode) % len(glyphs)])
+
+
+def _highlighter(p, c, dark=False):
+    """굵은 반투명 형광펜 띠(살짝 기운 둥근 끝) + 그 밑에 비치는 글자 줄 하나."""
+    p.setPen(QPen(QColor(HL_TEXT[bool(dark)]), 1.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(3.0, 8.5), QPointF(13.0, 8.5))          # 글자 줄
+    band = QColor(c)
+    band.setAlphaF(HL_ALPHA)
+    p.setPen(QPen(band, 6.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawLine(QPointF(3.2, 9.6), QPointF(12.8, 7.4))          # 형광펜 띠 — 굵고 반투명
+
 # 261103-3(디자인 SOT §4.6, 사용자 지시 '아이콘이 단추에 꽉 차 답답'): 그림 단추의 아이콘은 단추 높이에서 위아래 ICON_MARGIN 씩 비운다.
 #   도구 줄·단어장 머리줄의 26px 단추는 BTN_ICON_PX — 종전 22·24 는 단추를 꽉 채웠다. 16 은 검색결과·메뉴 탭 글자 단추의 아이콘과도 같다.
 ICON_MARGIN = 4          # 이보다 좁으면 답답 — 모든 그림 단추의 최소(검사 test_design_icon_margin)
 BTN_ICON_PX = 16
 _COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "tri_right": _tri_right, "mp3": _mp3, "ocr": _ocr,
+               "highlighter": _highlighter,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
                "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
-_COLOR_NEEDS_DARK = {"fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
+_COLOR_NEEDS_DARK = {"highlighter", "fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
 
 # 261025-10(디자인 SOT §2.7): 글자 + 메뉴 단추의 드롭다운 표시는 **Qt 메뉴 화살표 하나**(오른쪽 아래) — 글자에 ▾ 를 붙이지 않는다.
 #   글자가 화살표에 붙지 않게 오른쪽 안쪽 여백만 준다(바탕·테두리는 기본 스타일 그대로).

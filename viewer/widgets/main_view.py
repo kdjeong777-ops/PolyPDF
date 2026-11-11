@@ -4214,7 +4214,9 @@ class MainView(QWidget):
         if not hasattr(self, "_draw_mode_btn"):
             return
         on = self._draw_kind == "line"
-        self._draw_mode_btn.setText(self._MODE_GLYPH[self._draw_line_mode])
+        from viewer.widgets.icons import set_line_mode_face   # 261111-5: 하이라이트는 형광펜 그림(디자인 SOT §4.5)
+        from viewer import theme as _theme       # 활성(주황 바탕)이면 테마와 상관없이 밝은 바탕용 그림 — 도형 단추와 같은 규칙
+        set_line_mode_face(self._draw_mode_btn, self._draw_line_mode, self._MODE_GLYPH, dark=_theme.is_dark() and not on)
         self._draw_mode_btn.setStyleSheet(self._dbl_css(on))
 
     @staticmethod
@@ -4355,7 +4357,10 @@ class MainView(QWidget):
         """260611-2: 0=직선 / 1=하이라이트 / 2=자유곡선. 버튼 글리프·툴팁 갱신."""
         self._draw_line_mode = int(mode) % 3
         if hasattr(self, "_draw_mode_btn"):
-            self._draw_mode_btn.setText(self._MODE_GLYPH[self._draw_line_mode])
+            from viewer.widgets.icons import set_line_mode_face   # 261111-5: 하이라이트는 형광펜 그림(디자인 SOT §4.5)
+            from viewer import theme as _theme
+            set_line_mode_face(self._draw_mode_btn, self._draw_line_mode, self._MODE_GLYPH,
+                               dark=_theme.is_dark() and self._draw_kind != "line")   # 활성(주황 바탕)이면 밝은 바탕용
             self._draw_mode_btn.setToolTip(
                 tr('선 종류: {MODE_NAME} (클릭해 전환)').format(MODE_NAME=tr(self._MODE_NAME[self._draw_line_mode])))
 
