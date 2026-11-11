@@ -91,6 +91,7 @@ try:
         "PhotoDeviceListWorker", "PhotoDeviceWorker", "PhotoDeviceScanWorker",   # 휴대 장치(클라우드 아님)
         "PhotoWatchScanWorker",                        # stat 만(열지 않는다)
         "RulesSaveWorker", "PhotoTextWorker",          # 사진을 열지 않는다(규칙 파일·색인 글만, 261107-10)
+        "PhotoAddressWorker",                          # 261112-2: 고른 사진 한 장의 좌표만(파일을 열지 않는다) — 온라인 주소 찾기(사진 보기 SOT §4.18)
         "PhotoThumbWorker",                            # 보이는 칸만 — 셸 썸네일 후보는 현황 미결 위험(261105-10 보고)
     }
     root = Path(__file__).resolve().parent / "viewer"
