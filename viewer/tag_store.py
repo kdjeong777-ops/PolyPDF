@@ -698,7 +698,7 @@ class TagStore:
     def copy_tags(self, src_path, dst_path, drop_meta: bool = False) -> bool:
         """앱 안에서 복사한 사본에 태그를 따라붙인다(§6.1-⑥, 261111-7) — 직접·자동·거절·키워드·연도.
         지문(`fp`·`size`)은 빼고(같은 지문 둘이면 재연결이 모호해진다), 사본에 기록이 있으면 합친다. 바뀌었으면 True.
-        `drop_meta` — 정보를 지운 사본(공유용·평탄화 사진·PDF 가림)은 사진 기본 정보(meta 부분 — 지역·장비·날짜·스크린샷)를
+        `drop_meta` — 정보를 지운 사본(공유용·PDF 가림)은 사진 기본 정보(meta 부분 — 지역·장비·날짜·스크린샷)를
         넘기지 않는다(261111-26). 사본의 기본 정보는 사진 정보 색인이 사본 머리에서 다시 만든다(§5.7)."""
         import copy as _copy
         ks, kd = self._key(src_path), self._key(dst_path)

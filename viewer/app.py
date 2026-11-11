@@ -3614,7 +3614,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _carry_tags(self, pairs, drop_meta: bool = False) -> int:
         """앱 안에서 만든 새 파일에 원본의 해시태그를 따라붙인다(태그 SOT §6.1-⑥) — 복사(`_on_files_copied`)와 새 파일을 만드는
         저장·사본(다른 이름으로 저장·평탄화·용량 줄인·개인정보 지운·공유용 사본, 261111-10) 모두 이 한 길. 바뀐 파일 수.
-        `drop_meta` — 정보를 지운 사본(공유용·사진 평탄화·PDF 가림)은 사진 기본 정보 태그를 넘기지 않는다(261111-26)."""
+        `drop_meta` — 정보를 지운 사본(공유용·PDF 가림 — 사진 평탄화는 따라감, 261111-26 덧붙임)은 사진 기본 정보 태그를 넘기지 않는다(261111-26)."""
         store = getattr(getattr(self, "bookmark_tree", None), "_tags", None)
         pairs = [(str(o), str(n)) for o, n in (pairs or []) if o and n and os.path.normcase(str(o)) != os.path.normcase(str(n))]
         if store is None or not pairs:

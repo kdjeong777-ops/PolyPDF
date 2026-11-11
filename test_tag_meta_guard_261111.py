@@ -4,8 +4,8 @@
 261111-26 (SOT 점검 D·D', 사용자 답 '둘 다 막기'):
 A. '#' 메뉴 '자동 부여 취소 ▸' 에 사진 기본 정보 태그(지역·장비·날짜·스크린샷)가 없다 — 실제 메뉴를 만들어 본다.
    다른 부분(kind 등)에도 같은 태그가 있으면 그 부분만 회수하고, 기본 정보로 붙은 파일은 그대로.
-B. 정보를 지운 사본(공유용 — 위치만·정보 모두, 사진 평탄화, PDF 가림)은 기본 정보 태그를 넘기지 않는다 — 직접 붙인 태그·다른
-   자동 태그는 그대로 따라간다(261111-10). 보통 사본(복사·다른 이름으로 저장)은 종전대로 모두 따라간다.
+B. 정보를 지운 사본(공유용 — 위치만·정보 모두, PDF 가림)은 기본 정보 태그를 넘기지 않는다 — 직접 붙인 태그·다른
+   자동 태그는 그대로 따라간다(261111-10). 보통 사본(복사·다른 이름으로 저장)과 사진 평탄화 사본(261111-26 덧붙임, 사용자 답 '평탄화는 따라가게')은 종전대로 모두 따라간다.
 261111-28 (SOT 점검 결함 1):
 C. '해시태그 넣기' 창 [무시]·후보 [적용]과 후보 적립(`merge_candidates`)이 `tag_candidates.json` 을 메인에서 쓰지 않는다
    — 백신이 바꿔 끼우기를 2초 붙드는 상황을 흉내 내 메인 정지를 잰다(기준 1초, 응답성 SOT §5).
@@ -69,8 +69,8 @@ try:
     flat, share = str(tmp / "s_flat.jpg"), str(tmp / "share" / "s.jpg")
     Path(flat).write_bytes(b"x"); Path(share).parent.mkdir(); Path(share).write_bytes(b"x")
     mw._photo_flattened(src, flat, "")
-    chk(st.get_manual(flat) == ["가족"] and st.get_auto(flat) == ["영수증"] and not st.get_auto_part(flat, "meta"),
-        "B 사진 평탄화 사본(정보를 싣지 않음) — 직접·종류 태그만, 기본 정보는 넘기지 않는다", str(st.record(flat)))
+    chk(st.get_manual(flat) == ["가족"] and st.get_auto_part(flat, "meta") == ["2026-11-05", "고양시"] and "영수증" in st.get_auto(flat),
+        "B 사진 평탄화 사본은 기본 정보까지 따라간다(261111-26 덧붙임, 사용자 답 '평탄화는 따라가게')", str(st.record(flat)))
     mw._photo_shared([(src, share)], [])
     chk(st.get_manual(share) == ["가족"] and st.get_auto(share) == ["영수증"] and not st.get_auto_part(share, "meta"),
         "B 공유용 사본 — 기본 정보 태그는 넘기지 않는다", str(st.record(share)))

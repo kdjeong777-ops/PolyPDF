@@ -3522,7 +3522,7 @@ class PhotoMixin:
                     bt.add_or_refresh_file(out, after=src)
         except Exception:
             pass
-        self._carry_tags([(src, out)], drop_meta=True)   # 261111-10(태그 SOT §6.1-⑥): 평탄화 사본에도 태그 — 정보(EXIF)를 싣지 않으니 기본 정보 태그는 빼고(261111-26)
+        self._carry_tags([(src, out)])                   # 261111-10(태그 SOT §6.1-⑥): 평탄화 사본에도 태그 — 기본 정보까지(261111-26 덧붙임, 사용자 답 '평탄화는 따라가게')
         self.status.showMessage(tr("평탄화한 새 사진: {name}").format(name=Path(out).name), 6000)
 
     def _photo_share(self, paths, mode: str = "gps"):
