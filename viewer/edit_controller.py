@@ -376,6 +376,7 @@ class EditMixin:
             QMessageBox.warning(self, tr("저장 실패"), str(err))
             return
         cut = int(got.get("cut") or 0)
+        self._carry_tags([(file_path, out)])            # 261111-10(태그 SOT §6.1-⑥): 평탄화 사본에도 태그
         self.status.showMessage(tr('평탄화해서 내보냈습니다: {name}').format(name=Path(out).name), 4000)
         QMessageBox.information(self, tr("평탄화 사본"),
                                 tr('꾸밈·사진·하이퍼링크를 구운 PDF를 저장했습니다. 다른 프로그램에서도 그대로 보이고, 글자 검색·복사도 됩니다.\n{out}').format(out=str(out))

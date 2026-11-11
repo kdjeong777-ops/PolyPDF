@@ -3608,17 +3608,25 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         self._rehome_sidecars(pairs, copy=True)
         self._carry_records(pairs, copy=True)
-        store = getattr(self.bookmark_tree, "_tags", None)
-        if store is not None:
-            changed = False
-            with store.bulk():
-                for o, n in pairs:
-                    changed = store.copy_tags(o, n) or changed
-            if changed:
-                try:
-                    self.bookmark_tree.refresh_tag_labels()
-                except Exception:
-                    pass
+        self._carry_tags(pairs)
+
+    def _carry_tags(self, pairs) -> int:
+        """앱 안에서 만든 새 파일에 원본의 해시태그를 따라붙인다(태그 SOT §6.1-⑥) — 복사(`_on_files_copied`)와 새 파일을 만드는
+        저장·사본(다른 이름으로 저장·평탄화·용량 줄인·개인정보 지운·공유용 사본, 261111-10) 모두 이 한 길. 바뀐 파일 수."""
+        store = getattr(getattr(self, "bookmark_tree", None), "_tags", None)
+        pairs = [(str(o), str(n)) for o, n in (pairs or []) if o and n and os.path.normcase(str(o)) != os.path.normcase(str(n))]
+        if store is None or not pairs:
+            return 0
+        n_changed = 0
+        with store.bulk():
+            for o, n in pairs:
+                n_changed += 1 if store.copy_tags(o, n) else 0
+        if n_changed:
+            try:
+                self.bookmark_tree.refresh_tag_labels()
+            except Exception:
+                pass
+        return n_changed
 
     # ===== 260908-2: 텍스트 창 (텍스트 창 SOT) =====================
     def _wire_text_panel(self):
@@ -4705,6 +4713,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         keep_page = self._page_to_keep(src)                 # 261014-1(§4.7.5): 바꿔치기가 본문을 닫기 **전에**
         final = self._finalize_save_place(src, produced, shift)
+        if final and os.path.normcase(str(final)) != os.path.normcase(str(src)):
+            self._carry_tags([(src, final)])                # 261111-10(태그 SOT §6.1-⑥): 다른 이름으로·잠겨 새 이름으로 저장 — 태그도
         self._save_keep_page = (os.path.normcase(str(final)), keep_page) if keep_page is not None else None
         # 261102-4(응답성 SOT §6, 사용자 보고 '저장한 후 빈 화면이 표시되고 응답 없음이었다가 돌아왔다'): 놓은 파일을
         #   메인이 다시 열기 전에(책갈피창 새로 고침·본문) 배경에서 한 번 훑어 백신 검사를 먼저 치른다 — `_warm_read`

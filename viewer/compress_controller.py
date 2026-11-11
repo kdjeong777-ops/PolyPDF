@@ -102,6 +102,7 @@ class CompressMixin:
             msg.append(tr("실패:") + "".join("\n· %s — %s" % (Path(s).name, w) for s, w in failed[:10]))
         if cancelled:
             msg.append(tr("중단했습니다 — 만들던 파일은 지웠습니다."))
+        self._carry_tags([(s, r[1]) for s, r in ok])     # 261111-10(태그 SOT §6.1-⑥): 용량 줄인 사본에도 태그
         for s, r in ok:                                   # 새 파일을 책갈피창에(원본 바로 아래)
             try:
                 self.bookmark_tree.add_or_refresh_file(str(r[1]), after=str(s))

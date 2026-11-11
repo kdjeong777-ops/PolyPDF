@@ -48,6 +48,7 @@ class RedactMixin:
                 QMessageBox.warning(self, tr("가림(개인정보 지우기)"), str(res.get("err")))
             return None
         out, left = box["out"]
+        self._carry_tags([(path, out)])                  # 261111-10(태그 SOT §6.1-⑥, 사용자 결정 '모두 따라감'): 개인정보 지운 사본에도 태그
         try:
             self.bookmark_tree.add_or_refresh_file(str(out), after=path)
         except Exception:
