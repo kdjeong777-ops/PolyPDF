@@ -4468,9 +4468,11 @@ class PhotoFlattenWorker(QObject):
             from viewer.pathutil import unique_path
             src = Path(self.path)
             photo_io._prep(src)
-            with Image.open(str(src)) as im:
-                icc = im.info.get("icc_profile")
-                im = ImageOps.exif_transpose(im)
+            with Image.open(str(src)) as im0:
+                icc = im0.info.get("icc_profile")
+                im = ImageOps.exif_transpose(im0)               # 세우기 먼저 — 그 뒤 원본 EXIF 를 읽는다(photo_io.flat_exif)
+                src_ex = im0.getexif()
+                src_ex.get_ifd(0x8769), src_ex.get_ifd(0x8825)   # 하위 묶음을 파일이 열려 있을 때 읽어 둔다
                 im = photo_io.to_srgb(im, icc).convert("RGBA")
             if self.overlay:
                 import fitz
@@ -4489,10 +4491,15 @@ class PhotoFlattenWorker(QObject):
             ext = ".jpg" if jpeg else ".png"
             dst = unique_path(src.with_name(tr('{stem}_평탄화').format(stem=src.stem) + ext))
             tmp = dst.with_name("~" + dst.name + ".polypix-tmp")
+            # 261111-32(사용자 결정 '평탄화가 원본 EXIF 를 싣게'): 촬영일·장비·GPS 를 그대로 — 방향 1·크기는 새 그림·썸네일 뺌
+            kw = {}
+            exb = photo_io.flat_exif(src_ex, im.size)
+            if exb:
+                kw["exif"] = exb
             if jpeg:
-                im.convert("RGB").save(str(tmp), "JPEG", quality=FLAT_JPEG_QUALITY)   # EXIF·GPS 는 싣지 않는다
+                im.convert("RGB").save(str(tmp), "JPEG", quality=FLAT_JPEG_QUALITY, **kw)
             else:
-                im.save(str(tmp), "PNG")
+                im.save(str(tmp), "PNG", **kw)
             os.replace(str(tmp), str(dst))
             tmp, out = None, str(dst)
         except Exception as e:                                   # noqa: BLE001 — 원본은 손대지 않았다

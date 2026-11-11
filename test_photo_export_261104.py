@@ -4,7 +4,7 @@
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3). 창(인쇄·이미지→PDF·저장)은 가짜로 바꿔 받은 값만 본다.
 A. 사진들 → PDF: 한 장 = 한 쪽, 돌린 사진은 `/Rotate`(보이는 방향), 꾸밈이 있는 사진은 쪽에 구워진다, 꾸밈 없는 사진은 그대로
 B. 사진 모드 인쇄: 같은 인쇄 창을 사진으로 만든 PDF(쪽 수·지금 쪽)로 연다 — 종전엔 리본 인쇄가 꺼져 있었다
-C. 평탄화: 꾸밈을 굽고 보기 회전까지 적용한 **새 그림**이 원본 옆에(원본 그대로·EXIF 없음), 임시 파일이 남지 않는다
+C. 평탄화: 꾸밈을 굽고 보기 회전까지 적용한 **새 그림**이 원본 옆에(원본 그대로·원본 EXIF 실음 — 261111-32), 임시 파일이 남지 않는다
 D. 이미지 → PDF 창(사진 모드): 만든 PDF 에 꾸밈·회전이 들어가고 **새 창**(PDF 모드)으로 연다
 E. 사진 모드에서 인쇄·평탄화 명령이 켜져 있고, 본문 사진 메뉴에 '인쇄…'·'평탄화...'
 """
@@ -112,7 +112,7 @@ try:
     if outs:
         with Image.open(tmp / outs[0]) as im:
             chk(im.size == (400, 800), "C 보기 회전까지 적용(400×800)", str(im.size))
-            chk(not im.getexif().get_ifd(0x8825), "C 평탄화한 그림에 GPS 없음")
+            chk(bool(im.getexif().get_ifd(0x8825)) and im.getexif().get(0x0112, 1) == 1, "C 평탄화 그림에 원본 EXIF(GPS)·방향 1 — 261111-32")
             px = im.convert("RGB").getpixel((int(0.1 * 400), 400))
             bg = im.convert("RGB").getpixel((200, 400))
             chk(px != bg and abs(px[1] - bg[1]) > 40, "C 꾸밈(선)이 그림에 구워짐", "%s vs %s" % (px, bg))
@@ -135,6 +135,9 @@ try:
 
         def nup_enabled(self):
             return False
+
+        def view_mode(self):                          # 261111-3: 창이 고른 목록 보기(기억)
+            return "thumb"
     _idm.ImageToPdfDialog = FakeImg
     dst = str(tmp / "out" / "모음.pdf"); Path(dst).parent.mkdir()
     mw._save_pdf_dialog = lambda name: dst

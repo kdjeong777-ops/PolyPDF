@@ -582,6 +582,31 @@ def upright_with_exif(im, drop_gps: bool = False):
     return up, exif
 
 
+def flat_exif(ex, size) -> bytes | None:
+    """평탄화 사본에 실을 EXIF 바이트(사진 보기 SOT §4.21, 261111-32) — 원본 EXIF(촬영일·장비·GPS …) 그대로에
+    방향 1(화소는 이미 세웠다 — 이중 회전 막기)·크기 태그는 새 그림(`size` = 폭, 높이)·EXIF 썸네일(IFD1)은 뺀다.
+    `ex` 는 원본 `im.getexif()` — ★ 세우기(`exif_transpose`)를 **먼저** 한 뒤 부른다(`upright_with_exif` 와 같은 까닭). 못 만들면 None."""
+    try:
+        from PIL import Image
+        sub = dict(ex.get_ifd(_EXIF_IFD) or {})
+        gps = dict(ex.get_ifd(GPS_TAG) or {})
+        out = Image.Exif()
+        for k, v in ex.items():
+            if k in (_EXIF_IFD, GPS_TAG, 0x0100, 0x0101, 0xA005):    # 하위 묶음은 아래에서 · IFD0 크기 태그는 뺀다
+                continue
+            out[k] = v
+        out[ORIENT_TAG] = 1
+        if sub:
+            sub.pop(0xA005, None)                                     # 호환 IFD 오프셋 — 다시 쓰면 틀린 자리를 가리킨다
+            sub[0xA002], sub[0xA003] = int(size[0]), int(size[1])
+            out[_EXIF_IFD] = sub
+        if gps:
+            out[GPS_TAG] = gps
+        return out.tobytes()
+    except Exception:
+        return None
+
+
 def to_srgb(im, icc: bytes | None = None):
     """Pillow 그림을 sRGB 로 — 프로필이 없거나 sRGB 면 받은 그대로. Adobe RGB·넓은 색역 사진이 물빠져 보이지 않게.
     줄인 뒤의 그림에 부른다(변환 비용은 픽셀 수만큼 — 줄인 그림이면 짧다). 새 의존성 없음(Pillow 동봉 littlecms)."""
