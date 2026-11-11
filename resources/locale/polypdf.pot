@@ -12704,8 +12704,40 @@ msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그�
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "날짜 읽는 중…"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "기간"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "오늘"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "최근 7일"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "최근 30일"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "올해"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "직접"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "체크하면 이 태그가 있는 파일, 체크를 풀면 없는 파일을 오른쪽에 보입니다(줄을 고를 때)"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
-msgid "고른 파일 {n}개 / 모두 {m}개"
+msgid "고른 파일 {n}개 / 보이는 {v}개 / 모두 {m}개"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py

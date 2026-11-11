@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import os
 
-from PyQt6.QtCore import QObject, QPoint, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QDate, QObject, QPoint, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QImage, QKeySequence, QPixmap, QShortcut
-from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView,
+from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDateEdit, QDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView,
                              QListWidget, QListWidgetItem, QPushButton, QSplitter, QVBoxLayout, QWidget)
 
 from viewer.i18n import tr
@@ -98,6 +98,54 @@ class ThumbWorker(QObject):
         return load_thumb(str(p), self.box)
 
 
+class DateWorker(QObject):
+    """파일 → 'YYYY-MM-DD'(배경, 261111-19) — 사진은 사진 정보 색인의 촬영일(없으면 파일 날짜), PDF 는 파일 수정 날짜.
+    책갈피창 날짜와 같은 기준(사진 보기 SOT §4.37). 사진 머리를 새로 읽지 않는다(8,694장 — 색인과 stat 만)."""
+    ready = pyqtSignal(dict)
+    finished = pyqtSignal()
+
+    def __init__(self, paths):
+        super().__init__()
+        self.paths = list(paths)
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        import time as _t
+        from viewer import pacing
+        out = {}
+        try:
+            taken = {}
+            try:
+                from viewer import photo_index
+                con = photo_index.connect_read()
+                try:
+                    for k, d in con.execute("SELECT key, taken FROM photos WHERE zip IS NULL AND taken IS NOT NULL AND taken<>''"):
+                        taken[k] = str(d)[:10]
+                finally:
+                    con.close()
+            except Exception:
+                pass
+            for i, p in enumerate(self.paths):
+                if self._cancel:
+                    break
+                k = _norm(p)
+                d = taken.get(k)
+                if not d:
+                    try:
+                        d = _t.strftime("%Y-%m-%d", _t.localtime(os.stat(p).st_mtime))
+                    except (OSError, ValueError, OverflowError):
+                        d = ""
+                out[k] = d
+                if i % 500 == 499:
+                    pacing.pace(self)
+        finally:
+            self.ready.emit(out)
+            self.finished.emit()
+
+
 class TagApplyDialog(QDialog):
     changed = pyqtSignal()                      # 태그를 바꿨다 — 검사·부른 쪽
 
@@ -122,6 +170,9 @@ class TagApplyDialog(QDialog):
         self._undo, self._redo = [], []
         self._keep = keep if keep is not None else []
         self._added = []                        # 태그 추가로 넣고 아직 붙이지 않은 태그
+        self._mode = "tags"                     # 261111-20: 지금 쓰는 목록 — "tags"(현재 태그) | "cand"(새 태그 후보)
+        self._has = {}                          # 261111-18: 태그(소문자) → 체크(True = 있는 것, False = 없는 것) — 기본 체크
+        self._dates = None                      # 261111-19: 경로(정규화) → 'YYYY-MM-DD' — 배경에서 읽는다
         from viewer.tag_store import load_candidates
         self._cand = load_candidates()
 
@@ -230,7 +281,36 @@ class TagApplyDialog(QDialog):
             if _norm(p) in want:
                 it.setSelected(True)
         self.lst_files.setUpdatesEnabled(True)
-        sp.addWidget(self.lst_files)
+        # 261111-19: 오른쪽 위 '기간' — 사진은 촬영일(없으면 파일 날짜), PDF 는 파일 수정 날짜(책갈피창 날짜와 같은 기준)
+        right = QWidget()
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(0, 0, 0, 0)
+        pb = QHBoxLayout()
+        pb.addWidget(QLabel(tr("기간")))
+        self.cmb_period = QComboBox()
+        for key, label in (("all", tr("전체")), ("today", tr("오늘")), ("7", tr("최근 7일")), ("30", tr("최근 30일")),
+                           ("year", tr("올해")), ("custom", tr("직접"))):
+            self.cmb_period.addItem(label, key)
+        self.d_from, self.d_to = QDateEdit(), QDateEdit()
+        for de in (self.d_from, self.d_to):
+            de.setCalendarPopup(True)
+            de.setDisplayFormat("yyyy-MM-dd")
+            de.setDate(QDate.currentDate())
+            de.setVisible(False)
+        self.d_from.setDate(QDate.currentDate().addMonths(-1))
+        self.lbl_dash = QLabel("~")
+        self.lbl_dash.setVisible(False)
+        self.lbl_dates = QLabel(tr("날짜 읽는 중…"))
+        self.cmb_period.setEnabled(False)
+        pb.addWidget(self.cmb_period)
+        pb.addWidget(self.d_from)
+        pb.addWidget(self.lbl_dash)
+        pb.addWidget(self.d_to)
+        pb.addWidget(self.lbl_dates)
+        pb.addStretch(1)
+        rv.addLayout(pb)
+        rv.addWidget(self.lst_files, 1)
+        sp.addWidget(right)
         sp.setStretchFactor(0, 0)
         sp.setStretchFactor(1, 1)
         sp.setSizes([320, 780])
@@ -246,14 +326,129 @@ class TagApplyDialog(QDialog):
         self.ed_find.textChanged.connect(self._on_find)
         self.ed_find.returnPressed.connect(self._find_add)
         self.cmb_sort.currentIndexChanged.connect(self._on_sort)
+        # 261111-18: 태그를 고르면 오른쪽을 거른다(체크 = 있는 것, 해제 = 없는 것), 후보 ↔ 현재 태그는 한쪽만 활성
+        self.lst_tags.itemSelectionChanged.connect(lambda: self._on_list_pick("tags"))
+        self.lst_tags.itemChanged.connect(self._on_tag_check)
+        self.lst_cand.itemSelectionChanged.connect(lambda: self._on_list_pick("cand"))
+        self.cmb_period.currentIndexChanged.connect(self._on_period)
+        self.d_from.dateChanged.connect(lambda *_: self._apply_filter())
+        self.d_to.dateChanged.connect(lambda *_: self._apply_filter())
         self._fill_tags()
         self._fill_cand()
         self._refresh_marks()
         self._start_thumbs()
+        self._start_dates()
 
     # ── 목록 ──────────────────────────────────────────────
     def selected_paths(self) -> list:
-        return [it.data(Qt.ItemDataRole.UserRole) for it in self.lst_files.selectedItems()]
+        """고른 파일 — 거르기로 숨은 칸은 빼고(보이는 것만 적용·해제한다)."""
+        lw = self.lst_files
+        return [it.data(Qt.ItemDataRole.UserRole) for it in lw.selectedItems() if not lw.isRowHidden(lw.row(it))]
+
+    # ── 거르기(261111-18·-19·-20) ──────────────────────────
+    def _on_list_pick(self, which: str):
+        """한쪽 목록에서 고르면 그쪽이 활성 — 다른 쪽은 고름을 풀고 흐리게(사용자 지시 '새태그 후보 작업시 현재 태그 리스트의 활성화 해제. 그 반대도')."""
+        src = self.lst_tags if which == "tags" else self.lst_cand
+        if not src.selectedItems():
+            if which == self._mode:
+                self._apply_filter()
+            return
+        other = self.lst_cand if which == "tags" else self.lst_tags
+        self._mode = which
+        other.blockSignals(True)
+        other.clearSelection()
+        other.blockSignals(False)
+        other.setStyleSheet("QListWidget{color: palette(placeholder-text);}")
+        src.setStyleSheet("")
+        self._apply_filter(select_cand=(which == "cand"))
+
+    def _on_tag_check(self, it):
+        t = it.data(Qt.ItemDataRole.UserRole)
+        if t:
+            self._has[t.lower()] = it.checkState() == Qt.CheckState.Checked
+            if it.isSelected():
+                self._apply_filter()
+
+    def _cand_files(self, tags) -> set:
+        out = set()
+        for t in tags:
+            for f in ((self._cand.get("cand") or {}).get(t) or {}).get("files", []):
+                out.add(_norm(f))
+        return out
+
+    def _period(self):
+        """(시작, 끝) 'YYYY-MM-DD' 또는 None(전체)."""
+        import datetime as _dt
+        key = self.cmb_period.currentData()
+        today = _dt.date.today()
+        if key == "today":
+            return today.isoformat(), today.isoformat()
+        if key in ("7", "30"):
+            return (today - _dt.timedelta(days=int(key) - 1)).isoformat(), today.isoformat()
+        if key == "year":
+            return "%04d-01-01" % today.year, today.isoformat()
+        if key == "custom":
+            a, b = self.d_from.date().toString("yyyy-MM-dd"), self.d_to.date().toString("yyyy-MM-dd")
+            return (a, b) if a <= b else (b, a)
+        return None
+
+    def _on_period(self, *_a):
+        custom = self.cmb_period.currentData() == "custom"
+        for w in (self.d_from, self.lbl_dash, self.d_to):
+            w.setVisible(custom)
+        self._apply_filter()
+
+    def _apply_filter(self, select_cand: bool = False):
+        """오른쪽 칸을 거른다 — 현재 태그 줄을 골랐으면 태그마다 (체크 = 있는 것 · 해제 = 없는 것) 모두 만족, 후보를 골랐으면
+        그 후보의 근거 파일만(모두 고른 채로), 그리고 기간. 고른 것이 없으면 전체."""
+        lw = self.lst_files
+        if self._mode == "cand" and self.lst_cand.selectedItems():
+            keys = self._cand_files([it.data(Qt.ItemDataRole.UserRole) for it in self.lst_cand.selectedItems()])
+            conds = None
+        else:
+            keys = None
+            conds = [(it.data(Qt.ItemDataRole.UserRole).lower(), it.checkState() == Qt.CheckState.Checked)
+                     for it in self.lst_tags.selectedItems()]
+        per = self._period()
+        dates = self._dates or {}
+        lw.setUpdatesEnabled(False)
+        try:
+            for i in range(lw.count()):
+                it = lw.item(i)
+                p = it.data(Qt.ItemDataRole.UserRole)
+                show = True
+                if keys is not None:
+                    show = _norm(p) in keys
+                elif conds:
+                    have = {t.lower() for t in self.shown_tags(p)}
+                    show = all((t in have) == want for t, want in conds)
+                if show and per is not None:
+                    d = dates.get(_norm(p), "")
+                    show = bool(d) and per[0] <= d <= per[1]
+                lw.setRowHidden(i, not show)
+                if not show and it.isSelected():
+                    it.setSelected(False)
+                elif show and select_cand and keys is not None:
+                    it.setSelected(True)
+        finally:
+            lw.setUpdatesEnabled(True)
+        self._refresh_marks()
+        w = self.__dict__.get("_vis_timer")
+        if w is not None:
+            w.start()
+
+    def _start_dates(self):
+        from viewer.workers import run_in_thread
+        self._dater = DateWorker(self._paths)
+        self._dater.ready.connect(self._on_dates)
+        run_in_thread(self._dater, self._keep)
+
+    def _on_dates(self, d: dict):
+        self._dates = d
+        self.cmb_period.setEnabled(True)
+        self.lbl_dates.setText("")
+        if self.cmb_period.currentData() != "all":
+            self._apply_filter()
 
     def shown_tags(self, p) -> list:
         """이 창에서 다루는 태그 — 사진 기본 정보(머리에서 만든 촬영일·지역·장비·스크린샷 — `meta` 부분)는 뺀다(261111-16,
@@ -294,15 +489,20 @@ class TagApplyDialog(QDialog):
         self.lst_tags.blockSignals(True)
         self.lst_tags.clear()
         for t in order:
-            it = QListWidgetItem("#" + t)
+            it = QListWidgetItem("#%s  (%d)" % (t, counts[t]))
             it.setData(Qt.ItemDataRole.UserRole, t)
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked if self._has.get(t.lower(), True) else Qt.CheckState.Unchecked)
+            it.setToolTip(tr("체크하면 이 태그가 있는 파일, 체크를 풀면 없는 파일을 오른쪽에 보입니다(줄을 고를 때)"))
             self.lst_tags.addItem(it)
             if t in keep:
                 it.setSelected(True)
         self.lst_tags.blockSignals(False)
 
     def _fill_cand(self):
+        self.lst_cand.blockSignals(True)
         self.lst_cand.clear()
+        self.lst_cand.blockSignals(False)
         cand = sorted((self._cand.get("cand") or {}).items(), key=lambda kv: -int(kv[1].get("n", 0)))
         q = self._find_text()
         if q:
@@ -314,19 +514,9 @@ class TagApplyDialog(QDialog):
             self.lst_cand.addItem(it)
 
     def _refresh_marks(self):
-        sel = self.selected_paths()
-        n = len(sel)
-        self.lbl_sel.setText(tr("고른 파일 {n}개 / 모두 {m}개").format(n=n, m=len(self._paths)))
-        have = {}
-        for p in sel:
-            for t in {x.lower() for x in self.shown_tags(p)}:
-                have[t] = have.get(t, 0) + 1
-        for i in range(self.lst_tags.count()):
-            it = self.lst_tags.item(i)
-            t = it.data(Qt.ItemDataRole.UserRole)
-            k = have.get(t.lower(), 0)
-            mark = MARK_NONE if not n or not k else (MARK_ALL if k == n else MARK_SOME)
-            it.setText("%s #%s%s" % (mark, t, ("  (%d/%d)" % (k, n)) if mark == MARK_SOME else ""))
+        n = len(self.selected_paths())
+        vis = sum(1 for i in range(self.lst_files.count()) if not self.lst_files.isRowHidden(i))
+        self.lbl_sel.setText(tr("고른 파일 {n}개 / 보이는 {v}개 / 모두 {m}개").format(n=n, v=vis, m=len(self._paths)))
         self.btn_undo.setEnabled(bool(self._undo))
         self.btn_redo.setEnabled(bool(self._redo))
         q = self._find_text()
@@ -358,6 +548,7 @@ class TagApplyDialog(QDialog):
         t = ts[0]
         if t.lower() not in {x.lower() for x in self._added}:
             self._added.append(t)
+        self._has.setdefault(t.lower(), False)         # 새 태그는 '없는 것' 으로 — 고르면 아직 안 붙은 파일이 보인다(261111-18)
         self.ed_new.clear()
         self._fill_tags()
         for i in range(self.lst_tags.count()):
@@ -378,9 +569,10 @@ class TagApplyDialog(QDialog):
 
     # ── 적용·해제·되돌리기 ─────────────────────────────────
     def chosen_tags(self) -> list:
-        out = [it.data(Qt.ItemDataRole.UserRole) for it in self.lst_tags.selectedItems()]
-        if self.g3.isChecked():
-            out += [it.data(Qt.ItemDataRole.UserRole) for it in self.lst_cand.selectedItems()]
+        if self._mode == "cand" and self.g3.isChecked():         # 261111-20: 활성 목록 한쪽에서만
+            out = [it.data(Qt.ItemDataRole.UserRole) for it in self.lst_cand.selectedItems()]
+        else:
+            out = [it.data(Qt.ItemDataRole.UserRole) for it in self.lst_tags.selectedItems()]
         seen, res = set(), []
         for t in out:
             if t.lower() not in seen:
@@ -434,6 +626,7 @@ class TagApplyDialog(QDialog):
             self._added = [t for t in self._added if t.lower() not in tl] if on else self._added
             self._fill_tags()
             self.changed.emit()
+            self._apply_filter()                 # 태그가 바뀌면 거르기 결과도(있는 것/없는 것)
         self._refresh_marks()
         return len(changed)
 
@@ -443,7 +636,7 @@ class TagApplyDialog(QDialog):
                 self._store.put_record(p, rec)
         self._fill_tags()
         self.changed.emit()
-        self._refresh_marks()
+        self._apply_filter()
 
     def undo(self):
         if self._undo:
@@ -487,7 +680,12 @@ class TagApplyDialog(QDialog):
         if last < 0:
             last = n - 1 if lw.verticalScrollBar().maximum() == 0 else min(n - 1, first + 200)
         span = max(1, last - first + 1)
-        return list(range(first, min(n, last + 1 + span)))
+        out, i = [], first
+        while i < n and len(out) < 2 * span:                 # 거르기로 숨은 칸은 건너뛴다(261111-18)
+            if not lw.isRowHidden(i):
+                out.append(i)
+            i += 1
+        return out
 
     def _want_visible(self):
         w = self.__dict__.get("_thumber")
@@ -515,7 +713,8 @@ class TagApplyDialog(QDialog):
         self.state_out = {"max": bool(self.isMaximized()), "sort": self._sort}
         g = self.normalGeometry() if self.isMaximized() else self.geometry()
         self.state_out.update({"w": int(g.width()), "h": int(g.height())})
-        w = self.__dict__.get("_thumber")
-        if w is not None:
-            w.request_cancel()
+        for name in ("_thumber", "_dater"):
+            w = self.__dict__.get(name)
+            if w is not None:
+                w.request_cancel()
         super().done(r)

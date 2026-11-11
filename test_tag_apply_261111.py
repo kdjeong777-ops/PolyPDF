@@ -106,17 +106,19 @@ try:
         dlg.show()                                       # 보이는 칸만 그린다(261111-15) — 보여야 그린다
         bk = dlg._blank.cacheKey()
         chk(pump(lambda: all(dlg.lst_files.item(i).icon().cacheKey() != bk for i in range(dlg.lst_files.count())), 15), "C 썸네일 그림(배경)")
-        dlg.lst_files.selectAll(); pump(lambda: False, 0.1)
         marks = {dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole): dlg.lst_tags.item(i).text() for i in range(dlg.lst_tags.count())}
-        chk(marks.get("가족", "").startswith("☑") and marks.get("여행", "").startswith("◐") and "(1/2)" in marks.get("여행", ""),
-            "C 고른 파일 기준 ☑ 모두 / ◐ 일부(n/고른 수)", str(marks))
-        def pick(tag):
+        chk(marks.get("가족") == "#가족  (2)" and marks.get("여행") == "#여행  (1)", "C 태그 줄 — 파일 수(261111-18: ☑◐☐ 대신 거르기 상자)", str(marks))
+        def pick(tag, has=True):
             dlg.lst_tags.clearSelection()
             for i in range(dlg.lst_tags.count()):
-                if dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole) == tag:
-                    dlg.lst_tags.item(i).setSelected(True)
-        pick("여행"); dlg.btn_apply.click()
-        chk("여행" in st.get_manual(A) and "여행" in st.get_manual(B), "C [적용] — 고른 파일 모두에 붙인다", f"{st.get(A)} {st.get(B)}")
+                it = dlg.lst_tags.item(i)
+                if it.data(Qt.ItemDataRole.UserRole) == tag:
+                    it.setCheckState(Qt.CheckState.Checked if has else Qt.CheckState.Unchecked)
+                    it.setSelected(True)
+            dlg.lst_files.selectAll(); pump(lambda: False, 0.05)
+        pick("여행", has=False)                          # 여행이 없는 파일(A)만 보인다 → 모두 골라 [적용]
+        dlg.btn_apply.click()
+        chk("여행" in st.get_manual(A) and "여행" in st.get_manual(B), "C [적용] — 보이는(고른) 파일 모두에 붙인다", f"{st.get(A)} {st.get(B)}")
         pick("보고서"); dlg.btn_clear.click()
         chk("보고서" not in st.get(A) and "보고서" in st.get_rejected(A), "C [해제] — 자동 태그는 거절로 기록", f"{st.get(A)} {st.get_rejected(A)}")
         pick("가족"); dlg.btn_clear.click()
@@ -133,9 +135,10 @@ try:
         p0 = dlg.lst_files.item(0).data(Qt.ItemDataRole.UserRole)
         chk("새태그" in st.get_manual(p0), "C 태그 추가 → 고른 파일에 [적용]", str(st.get(p0)))
         dlg.g3.setChecked(True)
-        dlg.lst_tags.clearSelection(); dlg.lst_cand.item(0).setSelected(True)
+        dlg.lst_cand.item(0).setSelected(True)           # 후보를 고르면 근거 파일(A)만 고른 채로(261111-20)
         dlg.btn_apply.click()
-        chk("배수성" in st.get_manual(p0) and "배수성" not in (load_candidates().get("cand") or {}), "C 새 태그 후보 [적용] — 붙고 후보에서 빠진다")
+        chk("배수성" in st.get_manual(A) and "배수성" not in (load_candidates().get("cand") or {}), "C 새 태그 후보 [적용] — 근거 파일에 붙고 후보에서 빠진다",
+            str(st.get(A)))
         dlg.reject()
     chk(callable(getattr(mw, "_autotag_review_candidates", None)), "C 도구 메뉴 진입점은 남아 있다")
     shown.clear()
