@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-12 00:00+0900\n"
+"POT-Creation-Date: 2026-11-12 01:36+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -774,7 +774,8 @@ msgstr "The search index is damaged and is being rebuilt. Please search again wh
 msgid "인덱싱 완료"
 msgstr "Indexing complete"
 
-#: viewer/app.py viewer/widgets/tag_export_dialog.py
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/tag_export_dialog.py
 msgid "해시태그 폴더로 사본 저장"
 msgstr "Save Copies to Hashtag Folders"
 
@@ -7868,13 +7869,9 @@ msgstr "(No hashtags on files in this list — right-click a file → Edit Hasht
 msgid "자동 부여 취소"
 msgstr "Cancel Automatic Tag"
 
-#: viewer/widgets/bookmark_tree.py
-msgid "해시태그 넣기…"
-msgstr "Add Hashtags…"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "해시태그 폴더로 사본 저장…"
-msgstr "Save Copies to Hashtag Folders…"
+#: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
+msgid "해시태그 넣기"
+msgstr "Add Hashtags"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
 msgid "암호가 올바르지 않습니다."
@@ -8486,7 +8483,7 @@ msgid "PDF 파일 경로"
 msgstr "PDF file path"
 
 #: viewer/widgets/bookmarker_dialog.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/vprinter_dialog.py
+#: viewer/widgets/tag_export_dialog.py viewer/widgets/vprinter_dialog.py
 msgid "찾아보기"
 msgstr "Browse"
 
@@ -13067,10 +13064,6 @@ msgid "예) {clean_markup}"
 msgstr "e.g. {clean_markup}"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "해시태그 넣기"
-msgstr "Add Hashtags"
-
-#: viewer/widgets/tag_apply_dialog.py
 msgid "다시 실행"
 msgstr "Redo"
 
@@ -13254,10 +13247,6 @@ msgstr " (confidence {sc:.2f})"
 #, python-brace-format
 msgid " — 점수 {sc:.2f}"
 msgstr " — score {sc:.2f}"
-
-#: viewer/widgets/tag_export_dialog.py
-msgid "찾아보기…"
-msgstr "Browse…"
 
 #: viewer/widgets/tag_export_dialog.py
 msgid "저장할 폴더"
@@ -16103,4 +16092,10 @@ msgstr "Getting Started"
 
 #~ msgid "고른 {n}개 병합해 PDF 만들기"
 #~ msgstr "Merge {n} chosen into a PDF"
+
+#~ msgid "해시태그 넣기…"
+#~ msgstr "Add Hashtags…"
+
+#~ msgid "해시태그 폴더로 사본 저장…"
+#~ msgstr "Save Copies to Hashtag Folders…"
 

@@ -133,7 +133,8 @@ try:
             and bool(os_.get_drawings(str(oa), 0)), "B 대상 폴더 사이드카에 크롭·회전·꾸밈")
         chk(irow(oa) == ("hello",) and irow(A) == ("hello",), "B 사진 정보 색인 행 복사(OCR 글)", str((irow(oa), irow(A))))
         chk(win._photo_prefs().get("transfer_dirs", [None])[0] == str(out), "B 최근 폴더 맨 앞")
-        chk(bt._tags is None or not bt._tags.get(str(oa)), "B 태그는 복사하지 않는다(PDF 복사와 같다)")
+        chk(bt._tags is None or (bt._tags.get_manual(str(oa)) == ["여행"] and bt._tags.get_manual(str(A)) == ["여행"]),
+            "B 태그가 사본에도 따라간다 — 원본도 그대로(태그 SOT §6.1-⑥, 261111-7)", str(bt._tags.get(str(oa)) if bt._tags else None))
 
         # C. 같은 이름
         win._photo_transfer([str(A)], str(out), False)

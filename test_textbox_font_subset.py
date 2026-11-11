@@ -49,6 +49,9 @@ class _Host(EditMixin):
     _resign_mark, _resign_take = staticmethod(_SM._resign_mark), staticmethod(_SM._resign_take)
     _sign_unlink = staticmethod(_SM._sign_unlink)
 
+    def _carry_tags(self, pairs, drop_meta=False):   # 261111-10(태그 SOT §6.1-⑥): 평탄화 사본 태그 — 이 검사는 글꼴만 본다
+        return 0
+
     def _run_merge_job(self, job, title, cancellable=True):
         try:
             job(lambda *a: True)

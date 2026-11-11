@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-12 00:00+0900\n"
+"POT-Creation-Date: 2026-11-12 01:36+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -768,7 +768,8 @@ msgstr ""
 msgid "인덱싱 완료"
 msgstr ""
 
-#: viewer/app.py viewer/widgets/tag_export_dialog.py
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+#: viewer/widgets/tag_export_dialog.py
 msgid "해시태그 폴더로 사본 저장"
 msgstr ""
 
@@ -7629,12 +7630,8 @@ msgstr ""
 msgid "자동 부여 취소"
 msgstr ""
 
-#: viewer/widgets/bookmark_tree.py
-msgid "해시태그 넣기…"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-msgid "해시태그 폴더로 사본 저장…"
+#: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
+msgid "해시태그 넣기"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
@@ -8211,7 +8208,7 @@ msgid "PDF 파일 경로"
 msgstr ""
 
 #: viewer/widgets/bookmarker_dialog.py viewer/widgets/settings_dialog.py
-#: viewer/widgets/vprinter_dialog.py
+#: viewer/widgets/tag_export_dialog.py viewer/widgets/vprinter_dialog.py
 msgid "찾아보기"
 msgstr ""
 
@@ -12745,10 +12742,6 @@ msgid "예) {clean_markup}"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "해시태그 넣기"
-msgstr ""
-
-#: viewer/widgets/tag_apply_dialog.py
 msgid "다시 실행"
 msgstr ""
 
@@ -12928,10 +12921,6 @@ msgstr ""
 #: viewer/widgets/tag_edit_dialog.py
 #, python-brace-format
 msgid " — 점수 {sc:.2f}"
-msgstr ""
-
-#: viewer/widgets/tag_export_dialog.py
-msgid "찾아보기…"
 msgstr ""
 
 #: viewer/widgets/tag_export_dialog.py

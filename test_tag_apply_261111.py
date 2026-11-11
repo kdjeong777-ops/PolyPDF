@@ -2,7 +2,7 @@
 """해시태그 넣기 창·복사 때 태그 따라가기·해시태그 폴더로 사본 저장 (태그 SOT §8.7·§6.1-⑥·§8.8, 261111-6·-7·-8).
 
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 검사 작성 SOT §14.7.2 의 3).
-A. '#' 메뉴 — 끝에 '해시태그 넣기…'·'해시태그 폴더로 사본 저장…', '새 태그 후보 검토' 는 없다(태그가 없어도 두 항목)
+A. '#' 메뉴 — 끝에 '해시태그 넣기'·'해시태그 폴더로 사본 저장', '새 태그 후보 검토' 는 없다(태그가 없어도 두 항목)
 B. 복사(책갈피창 '폴더로 복사' 실제 길) — 사본에 직접·자동 태그가 따라간다(지문은 빼고), 이동은 전처럼 따라간다
 C. 해시태그 넣기 창 — 썸네일 범위(보이는 줄만), 고른 파일 기준 ☑/◐/☐, [적용]=모두에 붙임, [해제]=모두에서 뗌(자동은 거절),
    태그 추가, 새 태그 후보 적용 → 후보에서 빠짐, 되돌리기·다시 실행, 썸네일 그림(배경)
@@ -63,11 +63,11 @@ try:
     from PyQt6.QtWidgets import QWidgetAction
     bt._rebuild_tag_menu()
     texts = [a.text() for a in bt._tag_menu.actions() if not isinstance(a, QWidgetAction)]
-    chk(texts[-2:] == ["해시태그 넣기…", "해시태그 폴더로 사본 저장…"], "A '#' 메뉴 끝 — 해시태그 넣기·사본 저장 (태그 없어도)", str(texts))
+    chk(texts[-2:] == ["해시태그 넣기", "해시태그 폴더로 사본 저장"], "A '#' 메뉴 끝 — 해시태그 넣기·사본 저장 (태그 없어도)", str(texts))
     st.set(A, ["가족"]); st.set_auto(A, ["보고서"]); st.set(B, ["가족", "여행"])
     bt._rebuild_tag_menu()
     texts = [a.text() for a in bt._tag_menu.actions() if not isinstance(a, QWidgetAction)]
-    chk(texts[-2:] == ["해시태그 넣기…", "해시태그 폴더로 사본 저장…"] and not any("새 태그 후보 검토" in t for t in texts),
+    chk(texts[-2:] == ["해시태그 넣기", "해시태그 폴더로 사본 저장"] and not any("새 태그 후보 검토" in t for t in texts),
         "A 태그가 있어도 끝 두 항목, '새 태그 후보 검토' 없음", str(texts))
 
     # B 복사·이동

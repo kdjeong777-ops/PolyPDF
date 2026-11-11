@@ -79,7 +79,7 @@ class TagExportDialog(QDialog):
         v.addWidget(QLabel(tr("저장할 폴더")))
         h = QHBoxLayout()
         self.ed_dir = QLineEdit(start_dir)
-        b = QPushButton(tr("찾아보기…"))
+        b = QPushButton(tr("찾아보기"))
         b.clicked.connect(self._pick)
         h.addWidget(self.ed_dir, 1)
         h.addWidget(b)

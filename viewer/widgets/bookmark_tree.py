@@ -1860,17 +1860,17 @@ class BookmarkTree(QWidget):
         self._add_tag_tool_items()
 
     def _add_tag_tool_items(self):
-        """'#' 메뉴 끝 — '해시태그 넣기…'(태그 SOT §8.7)·'해시태그 폴더로 사본 저장…'(§8.8). 261111-6: '새 태그 후보 검토' 는
+        """'#' 메뉴 끝 — '해시태그 넣기'(태그 SOT §8.7)·'해시태그 폴더로 사본 저장'(§8.8) — 글 끝 '…' 없음(디자인 SOT §2.7, 261112-1). 261111-6: '새 태그 후보 검토' 는
         없앴다(그 기능은 '해시태그 넣기' 창 왼쪽 '새 태그 후보'). 태그가 하나도 없어도 보인다 — 처음 붙이는 길."""
         ap, ex = getattr(self, "tag_apply_provider", None), getattr(self, "tag_export_provider", None)
         if not callable(ap) and not callable(ex):
             return
         self._tag_menu.addSeparator()
         if callable(ap):
-            a = self._tag_menu.addAction(tr("해시태그 넣기…"))
+            a = self._tag_menu.addAction(tr("해시태그 넣기"))
             a.triggered.connect(lambda: self.tag_apply_provider())
         if callable(ex):
-            b = self._tag_menu.addAction(tr("해시태그 폴더로 사본 저장…"))
+            b = self._tag_menu.addAction(tr("해시태그 폴더로 사본 저장"))
             b.triggered.connect(lambda: self.tag_export_provider())
 
     def _revoke_auto_tag(self, tag: str):

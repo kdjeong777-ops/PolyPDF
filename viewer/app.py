@@ -330,8 +330,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   (상=현재 폴더 책갈피, 하=우측 2단 창이 '다른 폴더' 파일일 때 그 파일 표시).
         self.bookmark_tree = BookmarkTree()         # 상단 = 좌측 창 폴더 목록
         self.bookmark_tree.suggest_provider = self._autotag_suggest_single  # 260830 P3(§8.1)
-        self.bookmark_tree.tag_apply_provider = self.open_tag_apply     # 261111-6(태그 SOT §8.7): '#' 메뉴 '해시태그 넣기…'
-        self.bookmark_tree.tag_export_provider = self.open_tag_export   # 261111-8(태그 SOT §8.8): '해시태그 폴더로 사본 저장…'
+        self.bookmark_tree.tag_apply_provider = self.open_tag_apply     # 261111-6(태그 SOT §8.7): '#' 메뉴 '해시태그 넣기'
+        self.bookmark_tree.tag_export_provider = self.open_tag_export   # 261111-8(태그 SOT §8.8): '해시태그 폴더로 사본 저장'
         self.bookmark_tree.setMinimumWidth(150)
         self.bookmark_tree_right = BookmarkTree()   # 260618-22: 하단 = 우측 창 폴더 목록(2단·다른폴더)
         self.bookmark_tree_right.setMinimumWidth(150)
