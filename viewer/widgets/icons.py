@@ -190,32 +190,30 @@ def _view_single(p, c):
         p.drawLine(QPointF(5.5, y), QPointF(13.8, y))
 
 
-HAND_X0 = 6.4            # 손가락·손바닥 왼쪽 끝(16칸) — 왼쪽은 벌린 엄지 자리
-HAND_FW = 2.1            # 손가락 하나 폭(넷을 겹쳐 바깥선 하나)
-HAND_THUMB_BASE_Y = 12.6  # 엄지 밑동 높이(손바닥 아래쪽)
-HAND_THUMB_DEG = 45      # 엄지를 세로에서 바깥(왼쪽)으로 벌린 각
-HAND_THUMB_LEN = 6.4     # 엄지 길이
+HAND_FINGERS = ((4.0, 3.6), (6.4, 1.6), (8.8, 1.6), (11.2, 3.2))   # 손가락 넷 (왼쪽 x, 끝 높이) — 폭 HAND_FW, 가운데가 길다
+HAND_FW = 2.4            # 손가락 하나 폭 — 이웃과 맞닿아 바깥선 하나(종전 2.0 은 0.4 떠서 사이마다 테 두 줄이 붙었다)
+HAND_SEP_W = 0.7         # 손가락 사이 선 굵기 — 바깥선(1.4)의 절반(사용자 지시 '손가락 사이를 얇은 선으로')
 
 
 def _hand(p, c):
-    """261107-36(입력 SOT §4.1·마스터 §4.6.12): 손바닥(화면 끌기) — 손가락 넷 + 엄지 + 손바닥을 합친 펼친 손 **윤곽만**.
-    261111-9(사용자 결정 'A 윤곽만'): 손가락 사이 선을 없앴다 — 종전에는 손가락 막대를 0.4 띄워 그 사이마다 테 두 줄이 붙고
-    (거기에 사이 선 한 줄까지) 굵은 줄로 갈라져 보였다. 지금은 손가락 막대를 겹쳐 합친 **바깥선 하나**뿐이고, 손가락은 윗변의 굴곡
-    넷으로 읽힌다(선 굵기는 다른 라인 아이콘과 같게 둔다)."""
+    """261107-36(입력 SOT §4.1·마스터 §4.6.12): 손바닥(화면 끌기) — 손가락 넷 + 엄지 + 손바닥을 합친 펼친 손 윤곽.
+    261111-14(사용자 지시 '손바닥은 원래(오늘 수정전) 아이콘에서 손가락 사이를 얇은 선으로 바꿔'): 모양은 261107-36 그대로(엄지도),
+    손가락은 맞닿게 이어 **바깥선 하나**(굵기 1.4)로 두르고, 손가락 사이는 **얇은 선 하나**(`HAND_SEP_W`). 종전에는 손가락 막대를
+    0.4 띄워 사이마다 테 두 줄 + 사이 선이 겹쳐 굵은 줄로 보였다(오늘 261111-9 윤곽만·-12 엄지 벌림은 이 지시로 되돌렸다)."""
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)                             # 겹친 곳을 구멍 없이 합친다
-    x0 = HAND_X0                                                          # 손가락·손바닥 왼쪽 끝 — 엄지 자리만큼 오른쪽으로
-    for k, top in enumerate((3.4, 1.4, 1.4, 3.0)):                        # 손가락 넷(가운데가 길다) — 서로 겹쳐 바깥선 하나
-        path.addRoundedRect(QRectF(x0 + HAND_FW * k, top, HAND_FW, 9.0 - top), HAND_FW / 2, HAND_FW / 2)  # 종전엔 0.4 띄워 사이마다 테 두 줄이 붙어 굵은 줄이 됐다
+    for x, top in HAND_FINGERS:
+        path.addRoundedRect(QRectF(x, top, HAND_FW, 9.0 - top), 1.0, 1.0)
     thumb = QPainterPath()
-    thumb.addRoundedRect(QRectF(-HAND_FW / 2, -HAND_THUMB_LEN, HAND_FW, HAND_THUMB_LEN + 1.0), HAND_FW / 2, HAND_FW / 2)   # 밑동(0,0)에서 위로
-    # 261111-12(사용자 지시 '엄지손가락을 … 손바닥에서 좀더 멀리 떨어뜨려야 손바닥처럼 보여'): 엄지는 손바닥 왼쪽 **아래쪽**에서
-    #   바깥으로 `HAND_THUMB_DEG` 만큼 크게 벌린다 — 검지와 사이에 V 자 틈이 생긴다(종전엔 검지 밑동에 붙어 손가락 하나처럼 보였다).
-    path.addPath(QTransform().translate(x0 + 0.8, HAND_THUMB_BASE_Y).rotate(-HAND_THUMB_DEG).map(thumb))
-    path.addRoundedRect(QRectF(x0, 7.0, HAND_FW * 4, 7.6), 3.0, 3.0)        # 손바닥
+    thumb.addRoundedRect(QRectF(0.0, 0.0, 2.0, 5.4), 1.0, 1.0)
+    path.addPath(QTransform().translate(1.0, 7.2).rotate(-40).map(thumb))   # 엄지 — 왼쪽에서 비스듬히
+    path.addRoundedRect(QRectF(4.0, 7.0, 9.6, 7.6), 3.2, 3.2)              # 손바닥
     p.setPen(QPen(c, 1.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
     p.setBrush(Qt.BrushStyle.NoBrush)
     p.drawPath(path.simplified())
+    p.setPen(QPen(c, HAND_SEP_W, Qt.PenStyle.SolidLine, Qt.PenCapStyle.FlatCap))
+    for (xa, ta), (xb, tb) in zip(HAND_FINGERS, HAND_FINGERS[1:]):        # 손가락 사이 — 얇은 선 하나, 짧은 손가락 끝 조금 아래에서 손바닥까지
+        p.drawLine(QPointF(xb, max(ta, tb) + 0.9), QPointF(xb, 7.6))
 
 
 _DRAW = {
@@ -323,7 +321,7 @@ OK_GREEN = {False: "#2e9b4f", True: "#4cc06f"}       # 새 창 ⊕·인쇄 표�
 EXIT_RED = ACCENT["stop"]                             # 종료 → (정지 ■ 와 같은 빨강)
 FILE_GRAY = {False: "#5f6b78", True: "#c4ccd6"}      # 인쇄 몸체·문 테
 PAPER_WHITE = {False: "#ffffff", True: "#f2f2f2"}
-for _k in ("open", "new_window", "save", "print", "exit"):
+for _k in ("open", "open_folder", "open_file", "new_window", "save", "print", "exit"):
     ACCENT[_k] = ACCENT["play"]
 
 
@@ -340,6 +338,42 @@ def _open(p, c, dark=False):
     p.drawLine(QPointF(11.5, 6.5), QPointF(11.5, 1.2))
     p.drawLine(QPointF(11.5, 1.2), QPointF(9.2, 3.5))
     p.drawLine(QPointF(11.5, 1.2), QPointF(13.8, 3.5))
+
+
+def _open_folder_body(p, dark, front_only=False):
+    """열린 노란 폴더 — 뒤판(탭) + 비스듬히 열린 앞판. front_only 면 앞판만(그 사이에 서류를 넣을 때)."""
+    back, front = FAV_YELLOW[bool(dark)]
+    p.setPen(Qt.PenStyle.NoPen)
+    if not front_only:
+        p.setBrush(QColor(back))
+        p.drawRoundedRect(QRectF(1.0, 2.5, 6.0, 3.0), 1.0, 1.0)
+        p.drawRoundedRect(QRectF(1.0, 4.0, 12.5, 10.5), 1.4, 1.4)
+    p.setBrush(QColor(front))
+    p.drawPolygon(QPolygonF([QPointF(3.6, 8.0), QPointF(15.5, 8.0), QPointF(13.0, 14.5), QPointF(1.0, 14.5)]))
+
+
+def _open_folder(p, c, dark=False):
+    """261111-13(사용자 지시 '폴더열기 … 첫번째 사진을 참조'): 파일 탭 '폴더 열기' — 앞판이 비스듬히 열린 노란 폴더.
+    등록 폴더(▾, `fav_folder` — 닫힌 폴더 + 파란 면)와 다르게."""
+    _open_folder_body(p, dark)
+
+
+def _open_file(p, c, dark=False):
+    """261111-13(사용자 지시 '파일열기는 열린 폴더에서 서류가 나오는 이미지'): 파일 탭 '파일 열기' — 열린 폴더에서 위로 나오는 파란 서류.
+    등록 파일(▾, `fav_file` — 파란 서류만)과 다르게."""
+    back, _front = FAV_YELLOW[bool(dark)]
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(back))
+    p.drawRoundedRect(QRectF(1.0, 4.0, 6.0, 3.0), 1.0, 1.0)                  # 탭
+    p.drawRoundedRect(QRectF(1.0, 5.5, 12.5, 9.0), 1.4, 1.4)                 # 뒤판
+    p.setBrush(c)                                                             # 서류 — 폴더에서 위로 나온다
+    p.drawPolygon(QPolygonF([QPointF(5.0, 0.8), QPointF(10.2, 0.8), QPointF(12.6, 3.2), QPointF(12.6, 11.0), QPointF(5.0, 11.0)]))
+    p.setBrush(QColor(FAV_FILE_FOLD[bool(dark)]))
+    p.drawPolygon(QPolygonF([QPointF(10.2, 0.8), QPointF(12.6, 3.2), QPointF(10.2, 3.2)]))
+    p.setBrush(QColor(PAPER_WHITE[bool(dark)]))
+    for y in (4.4, 6.6):
+        p.drawRect(QRectF(6.6, y, 4.4, 1.0))
+    _open_folder_body(p, dark, front_only=True)                               # 앞판이 서류 아래를 덮는다
 
 
 def _new_window(p, c, dark=False):
@@ -498,8 +532,9 @@ BTN_ICON_PX = 16
 _COLOR_DRAW = {"play": _play, "stop": _stop, "camera": _camera, "tri_right": _tri_right, "mp3": _mp3, "ocr": _ocr,
                "highlighter": _highlighter,
                "fav_folder": _fav_folder, "fav_file": _fav_file, "fav_search": _fav_search,
+               "open_folder": _open_folder, "open_file": _open_file,
                "open": _open, "new_window": _new_window, "save": _save, "print": _print, "exit": _exit}
-_COLOR_NEEDS_DARK = {"highlighter", "fav_folder", "fav_file", "fav_search", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
+_COLOR_NEEDS_DARK = {"highlighter", "fav_folder", "fav_file", "fav_search", "open_folder", "open_file", "open", "new_window", "save", "print", "exit"}   # 두 색 이상 — 테마도 넘긴다
 
 # 261025-10(디자인 SOT §2.7): 글자 + 메뉴 단추의 드롭다운 표시는 **Qt 메뉴 화살표 하나**(오른쪽 아래) — 글자에 ▾ 를 붙이지 않는다.
 #   글자가 화살표에 붙지 않게 오른쪽 안쪽 여백만 준다(바탕·테두리는 기본 스타일 그대로).

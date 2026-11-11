@@ -1752,7 +1752,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_save.setProperty("ribbonShort", tr("일반"))
         a_save_as.setProperty("ribbonShort", tr("다른 이름"))
         a_flat.setProperty("ribbonShort", tr("평탄화"))
-        self._file_icon_acts = ((a_new_win, "new_window"), (a_open, "fav_folder"), (a_open_file, "fav_file"),
+        # 261111-13(디자인 SOT §4.5, 사용자 지시): 폴더 열기·파일 열기는 열린 폴더 그림 — 등록 폴더·등록 파일(▾, fav_folder·fav_file)과 다르게
+        self._file_icon_acts = ((a_new_win, "new_window"), (a_open, "open_folder"), (a_open_file, "open_file"),
                                 (a_print, "print"), (a_quit, "exit"))
 
         # v1.6.1 F1: 즐겨찾기 메뉴 (파일 ↔ 보기 사이)
