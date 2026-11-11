@@ -102,6 +102,11 @@ try:
 
     # D — 같은 리본 줄의 꺼진 단추와 켜진 단추 글 색. 261106-4 부터 사진 모드의 PDF 전용 명령은 숨는다(사진 보기 SOT §4.13) —
     #   글 색 규칙(디자인 SOT §2.9.3 `BTN_OFF_FG`)만 보려고 꺼진 병합을 잠시 보이게 한다(끝에 다시 숨긴다)
+    #   켜진 쪽은 **글이 보이는** 단추만 고른다(261112-3) — 종전에는 줄 첫 단추(그림만 있는 '폴더 열기')가 골려 그 그림의 가장 진한
+    #   픽셀(옛 등록 폴더 그림의 어두운 테)을 글 색으로 잘못 쟀다. 열린 폴더 그림(261111-13)은 가장 진한 픽셀이 노랑이라 가짜 실패.
+    from PyQt6.QtCore import Qt as _Qt
+    def _shows_text(w):
+        return getattr(w, "toolButtonStyle", lambda: None)() != _Qt.ToolButtonStyle.ToolButtonIconOnly
     merge.setVisible(True); pump(timeout=0.3)
     off_w = on_w = None
     for tb in mw.findChildren(QToolBar):
@@ -111,7 +116,7 @@ try:
                 continue
             if a is merge:
                 off_w = w
-            elif a.isEnabled() and on_w is None and a.menu() is None and tb.isAncestorOf(w):
+            elif a.isEnabled() and on_w is None and a.menu() is None and tb.isAncestorOf(w) and _shows_text(w):
                 on_w = (tb, w)
         if off_w is not None and on_w is not None and on_w[0].isAncestorOf(off_w):
             break
@@ -125,7 +130,7 @@ try:
                 off_w = w
                 for a in tb.actions():
                     ww = tb.widgetForAction(a)
-                    if ww is not None and ww.isVisible() and a.isEnabled() and a.text() and a.menu() is None and not a.isSeparator():
+                    if ww is not None and ww.isVisible() and a.isEnabled() and a.text() and a.menu() is None and not a.isSeparator() and _shows_text(ww):
                         on_w = (tb, ww)
                         break
                 break
