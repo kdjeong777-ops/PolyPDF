@@ -95,7 +95,7 @@ try:
     chk(b is not None and b.isVisible() and abs(bx - vx) <= 1 and bx + b.width() < nx,
         "B 본문 창 왼쪽 끝에서 시작, 쪽 이동과 겹치지 않게", "%d vs %d (쪽 이동 %d)" % (bx, vx, nx))
     rows = dict(pc.photo_info_rows(mw._photo_info))
-    chk(rows.get("촬영일") == "2026-10-30 14:22" and rows.get("카메라") == "PolyCam Z1" and rows.get("방향(EXIF)") == "6",
+    chk(rows.get("촬영일") == "2026-10-30 14:22" and rows.get("카메라") == "PolyCam Z1" and rows.get("방향(EXIF)") == "시계 방향 90° 회전 (6)",   # 261111-22 — 뜻 + 코드
         "B 누르면 보이는 세부 정보 표", str(rows))
 
     # C

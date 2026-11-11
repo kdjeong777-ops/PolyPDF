@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton
 
 from pathlib import Path
 
-from viewer.i18n import tr
+from viewer.i18n import tr, tr_noop
 
 VIEW_PDF = "pdf"                 # 'PDF 전용' — 사진 모드 없음(기본)
 VIEW_MIXED = "mixed"             # '혼용' — PDF 모드 ↔ 사진 모드
@@ -2605,11 +2605,15 @@ class PhotoMixin:
         if dlg is None or not info:
             return
         rows = photo_info_rows(info)
+        tips = photo_info_tips(info)                     # 261111-22 — 노출 시간 칸은 정확한 기록 값
         t = dlg._table
         t.setRowCount(len(rows))
         for i, (k, v) in enumerate(rows):
             t.setItem(i, 0, QTableWidgetItem(k))
-            t.setItem(i, 1, QTableWidgetItem(v))
+            it = QTableWidgetItem(v)
+            if k in tips:
+                it.setToolTip(tips[k])
+            t.setItem(i, 1, it)
         if dlg._b_copy is not None:
             dlg._b_copy.setEnabled(bool(photo_address_text(info)))
         if dlg._b_online is not None:
@@ -4535,17 +4539,102 @@ def photo_info_rows(info: dict) -> list:
             (tr("파일 날짜"), _fmt_taken(info.get("file_time", ""))),
             (tr("카메라"), info.get("camera", "")),
             (tr("렌즈"), ex.get("LensModel", "")),
-            (tr("노출 시간"), ex.get("ExposureTime", "")),
-            (tr("조리개"), ex.get("FNumber", "")),
-            (tr("ISO"), ex.get("ISOSpeedRatings", "")),
-            (tr("초점 거리"), ex.get("FocalLength", "")),
-            (tr("방향(EXIF)"), ex.get("Orientation", "")),
+            (tr("노출 시간"), exif_display("ExposureTime", ex)),       # 261111-22 — 표기 함수 하나
+            (tr("조리개"), exif_display("FNumber", ex)),
+            (tr("ISO"), exif_display("ISOSpeedRatings", ex)),
+            (tr("노출 보정"), exif_display("ExposureBiasValue", ex)),
+            (tr("초점 거리"), exif_display("FocalLength", ex)),
+            (tr("방향(EXIF)"), exif_display("Orientation", ex)),
             (tr("색 프로필"), info.get("icc", "")),
             (tr("위치(GPS)"), "%.6f, %.6f" % info["gps"] if info.get("gps") else ""),
+            (tr("고도"), exif_display("GPSAltitude", ex)),
             (tr("주소"), _address_cell(info)),
             (tr("상세 주소(온라인)"), _address_online_cell(info)),
             (tr("소프트웨어"), ex.get("Software", ""))]
     return [(k, v) for k, v in rows if v]
+
+
+# ── 촬영 값 표기 (사진 보기 SOT 4.18 '촬영 값 표기', 261111-22) — EXIF 유리수를 사람이 읽는 꼴로, 함수 하나 ──
+# 카메라 표준 셔터 값(초) — 1/3 스톱 계열
+STD_SHUTTER = tuple(1.0 / d for d in (8000, 6400, 5000, 4000, 3200, 2500, 2000, 1600, 1250, 1000, 800, 640, 500, 400,
+                                      320, 250, 200, 160, 125, 100, 80, 60, 50, 40, 30, 25, 20, 15, 13, 10, 8, 6, 5,
+                                      4, 3, 2.5, 2, 1.6, 1.3)) + \
+              (1.0, 1.3, 1.6, 2.0, 2.5, 3.2, 4.0, 5.0, 6.0, 8.0, 10.0, 13.0, 15.0, 20.0, 25.0, 30.0)
+_ORIENT_TEXT = {1: tr_noop("정상"), 2: tr_noop("좌우 뒤집힘"), 3: tr_noop("180° 회전"), 4: tr_noop("상하 뒤집힘"),
+                5: tr_noop("좌우 뒤집힘 + 반시계 90°"),
+                6: tr_noop("시계 방향 90° 회전"), 7: tr_noop("좌우 뒤집힘 + 시계 90°"), 8: tr_noop("반시계 방향 90° 회전")}
+
+
+def _exif_float(v):
+    """EXIF 값 글('0.0101…'·'(125,)'·'1/100') → 수, 못 읽으면 None."""
+    s = str(v if v is not None else "").strip().strip("()").rstrip(",").strip()
+    if not s:
+        return None
+    try:
+        if "/" in s:
+            a, b = s.split("/", 1)
+            return float(a) / float(b)
+        return float(s.split(",")[0])
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def _trim(x: float, nd: int) -> str:
+    s = ("%." + str(nd) + "f") % x
+    return s.rstrip("0").rstrip(".") if "." in s else s
+
+
+def _shutter(t: float) -> str:
+    import math
+    best = min(STD_SHUTTER, key=lambda s: abs(math.log2(t / s)))
+    if abs(math.log2(t / best)) <= 1.0 / 3:
+        t = best
+    else:
+        best = None
+    if t < 1:
+        d = 1.0 / t
+        dd = _trim(d, 1) if best is not None and abs(d - round(d)) > 0.05 else str(int(round(d)))
+        return "1/" + dd
+    return _trim(t, 1)
+
+
+def exif_display(name: str, ex: dict) -> str:
+    """세부 정보 창 한 칸의 값 — 못 읽으면 기록 값 그대로, 없으면 ''(행 없음)."""
+    raw = (ex or {}).get(name, "")
+    if raw in (None, ""):
+        return ""
+    v = _exif_float(raw)
+    if name == "Orientation":
+        k = int(v) if v is not None and v == int(v) else None
+        return "%s (%d)" % (tr(_ORIENT_TEXT[k]), k) if k in _ORIENT_TEXT else str(raw)
+    if v is None:
+        return str(raw)
+    if name == "ExposureTime":
+        return tr("{v}초").format(v=_shutter(v)) if v > 0 else str(raw)
+    if name == "FNumber":
+        return "f/" + _trim(v, 1) if v > 0 else str(raw)
+    if name == "FocalLength":
+        if v <= 0:
+            return str(raw)
+        e = _exif_float((ex or {}).get("FocalLengthIn35mmFilm"))
+        mm = _trim(v, 2) + " mm"
+        return tr("{mm} (35mm 환산 {e} mm)").format(mm=mm, e=int(round(e))) if e and e > 0 else mm
+    if name == "ISOSpeedRatings":
+        return str(int(round(v)))
+    if name == "ExposureBiasValue":
+        return "" if abs(v) < 0.05 else "%+.1f EV" % v
+    if name == "GPSAltitude":
+        return _trim(v, 1) + " m"
+    return _trim(v, 4)
+
+
+def photo_info_tips(info: dict) -> dict:
+    """세부 정보 창 칸 툴팁 {항목: 글} — 노출 시간은 정확한 기록 값(261111-22)."""
+    tips = {}
+    v = _exif_float((info.get("exif") or {}).get("ExposureTime"))
+    if v and v > 0:
+        tips[tr("노출 시간")] = tr("기록 값 {v}초").format(v=_trim(v, 6))
+    return tips
 
 
 def _address_cell(info: dict) -> str:

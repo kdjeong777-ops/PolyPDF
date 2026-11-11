@@ -4286,6 +4286,14 @@ msgid "{stem}_압축"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "정상"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "행정동을 찾지 못함"
 msgstr ""
 
@@ -4487,6 +4495,10 @@ msgid "ISO"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "노출 보정"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "초점 거리"
 msgstr ""
 
@@ -4500,6 +4512,10 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "위치(GPS)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "고도"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4633,6 +4649,26 @@ msgid "180° 회전"
 msgstr ""
 
 #: viewer/photo_controller.py
+msgid "상하 뒤집힘"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘 + 반시계 90°"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "시계 방향 90° 회전"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘 + 시계 90°"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "반시계 방향 90° 회전"
+msgstr ""
+
+#: viewer/photo_controller.py
 msgid "원래 방향"
 msgstr ""
 
@@ -4756,6 +4792,11 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "사진 이동"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "기록 값 {v}초"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4960,6 +5001,16 @@ msgstr ""
 #: viewer/photo_controller.py
 #, python-brace-format
 msgid "{stem}_공유"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{v}초"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{mm} (35mm 환산 {e} mm)"
 msgstr ""
 
 #: viewer/photo_controller.py

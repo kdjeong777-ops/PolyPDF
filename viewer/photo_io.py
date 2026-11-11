@@ -411,7 +411,8 @@ _EXIF_IFD = 0x8769
 _TAG_NAMES = {0x010F: "Make", 0x0110: "Model", 0x0131: "Software", 0x0132: "DateTime", 0x9003: "DateTimeOriginal",
               0x829A: "ExposureTime", 0x829D: "FNumber", 0x8827: "ISOSpeedRatings", 0x920A: "FocalLength",
               0xA405: "FocalLengthIn35mmFilm", 0xA434: "LensModel", 0x9209: "Flash", 0xA402: "ExposureMode",
-              0xA403: "WhiteBalance", 0x0112: "Orientation", 0xA001: "ColorSpace"}
+              0xA403: "WhiteBalance", 0x0112: "Orientation", 0xA001: "ColorSpace",
+              0x9204: "ExposureBiasValue"}          # 261111-22 — 노출 보정(표기는 photo_controller.exif_display)
 
 
 def _num(v):
@@ -477,6 +478,11 @@ def photo_info(path, data: bytes | None = None) -> dict:
                 lat = dms(g[2]) * (-1 if g.get(1) == "S" else 1)
                 lon = dms(g[4]) * (-1 if g.get(3) == "W" else 1)
                 info["gps"] = (round(lat, 6), round(lon, 6))
+            alt = _num(g.get(6)) if g.get(6) is not None else None
+            if alt is not None:                  # 261111-22 — 고도(m), 기준 1 = 해수면 아래
+                ref = g.get(5)
+                below = (ref[0] if isinstance(ref, (bytes, bytearray)) and ref else ref) == 1
+                info["exif"]["GPSAltitude"] = str(-alt if below else alt)
         except Exception:
             pass
         icc = im.info.get("icc_profile")

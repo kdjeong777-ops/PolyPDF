@@ -4431,6 +4431,14 @@ msgid "{stem}_압축"
 msgstr "{stem}_compressed"
 
 #: viewer/photo_controller.py
+msgid "정상"
+msgstr "Normal"
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘"
+msgstr "Flipped horizontally"
+
+#: viewer/photo_controller.py
 msgid "행정동을 찾지 못함"
 msgstr "Administrative area not found"
 
@@ -4632,6 +4640,10 @@ msgid "ISO"
 msgstr "ISO"
 
 #: viewer/photo_controller.py
+msgid "노출 보정"
+msgstr "Exposure compensation"
+
+#: viewer/photo_controller.py
 msgid "초점 거리"
 msgstr "Focal length"
 
@@ -4646,6 +4658,10 @@ msgstr "Color profile"
 #: viewer/photo_controller.py
 msgid "위치(GPS)"
 msgstr "Location (GPS)"
+
+#: viewer/photo_controller.py
+msgid "고도"
+msgstr "Altitude"
 
 #: viewer/photo_controller.py
 msgid "주소"
@@ -4778,6 +4794,26 @@ msgid "180° 회전"
 msgstr "Rotate 180°"
 
 #: viewer/photo_controller.py
+msgid "상하 뒤집힘"
+msgstr "Flipped vertically"
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘 + 반시계 90°"
+msgstr "Flipped horizontally + 90° counterclockwise"
+
+#: viewer/photo_controller.py
+msgid "시계 방향 90° 회전"
+msgstr "Rotated 90° clockwise"
+
+#: viewer/photo_controller.py
+msgid "좌우 뒤집힘 + 시계 90°"
+msgstr "Flipped horizontally + 90° clockwise"
+
+#: viewer/photo_controller.py
+msgid "반시계 방향 90° 회전"
+msgstr "Rotated 90° counterclockwise"
+
+#: viewer/photo_controller.py
 msgid "원래 방향"
 msgstr "Original Orientation"
 
@@ -4902,6 +4938,11 @@ msgstr "Copy/Move Photos"
 #: viewer/photo_controller.py
 msgid "사진 이동"
 msgstr "Move Photos"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "기록 값 {v}초"
+msgstr "Recorded value {v} s"
 
 #: viewer/photo_controller.py
 msgid "태그 백업 실패 — 사진 자동 태그를 건너뜀"
@@ -5106,6 +5147,16 @@ msgstr "Actual Size"
 #, python-brace-format
 msgid "{stem}_공유"
 msgstr "{stem}_share"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{v}초"
+msgstr "{v} s"
+
+#: viewer/photo_controller.py
+#, python-brace-format
+msgid "{mm} (35mm 환산 {e} mm)"
+msgstr "{mm} ({e} mm in 35mm equivalent)"
 
 #: viewer/photo_controller.py
 #, python-brace-format
