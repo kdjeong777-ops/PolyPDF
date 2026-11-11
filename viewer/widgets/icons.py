@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QPointF, QRectF
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPainterPath, QPen, QColor, QPolygonF, QTransform
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPainterPath, QPainterPathStroker, QPen, QColor, QPolygonF, QTransform
 
 
 def fg_color(dark: bool | None = None) -> str:
@@ -431,6 +431,7 @@ ACCENT["ocr"] = ACCENT["play"]
 ACCENT["highlighter"] = {False: "#ffd000", True: "#ffe066"}
 HL_ALPHA = 0.65          # 띠 불투명도 — 밑 글자 줄이 비쳐 보이는 정도
 HL_TEXT = {False: "#444444", True: "#e8e8e8"}      # 디자인 SOT §2.5 '아이콘 전경'
+HL_EDGE = {False: "#9a6b00", True: "#d9a400"}      # 띠 테 — 켜진 단추의 살구색 바탕에서도 띠가 보이게
 
 
 def set_line_mode_face(btn, mode: int, glyphs, dark=None) -> None:
@@ -451,8 +452,20 @@ def _highlighter(p, c, dark=False):
     p.drawLine(QPointF(3.0, 8.5), QPointF(13.0, 8.5))          # 글자 줄
     band = QColor(c)
     band.setAlphaF(HL_ALPHA)
-    p.setPen(QPen(band, 6.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-    p.drawLine(QPointF(3.2, 9.6), QPointF(12.8, 7.4))          # 형광펜 띠 — 굵고 반투명
+    line = QPainterPath(QPointF(3.2, 9.6))
+    line.lineTo(QPointF(12.8, 7.4))
+    st = QPainterPathStroker()
+    st.setWidth(6.0)
+    st.setCapStyle(Qt.PenCapStyle.RoundCap)
+    shape = st.createStroke(line).simplified()                 # 형광펜 띠 — 굵고 반투명
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(band)
+    p.drawPath(shape)
+    # 261111-5 보완(사용자 지시 '아이콘이 선택되어 있을 때 하이라이트가 오히려 잘 안보여'): 켜진 단추의 살구색 바탕(#ffce99)이
+    #   노랑과 가까워 띠가 묻혔다 — 띠 가장자리에 진한 호박색 테(`HL_EDGE`)를 둘러 어느 바탕에서도 띠 모양이 선다.
+    p.setPen(QPen(QColor(HL_EDGE[bool(dark)]), 0.9))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(shape)
 
 # 261103-3(디자인 SOT §4.6, 사용자 지시 '아이콘이 단추에 꽉 차 답답'): 그림 단추의 아이콘은 단추 높이에서 위아래 ICON_MARGIN 씩 비운다.
 #   도구 줄·단어장 머리줄의 26px 단추는 BTN_ICON_PX — 종전 22·24 는 단추를 꽉 채웠다. 16 은 검색결과·메뉴 탭 글자 단추의 아이콘과도 같다.

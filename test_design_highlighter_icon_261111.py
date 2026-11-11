@@ -5,6 +5,7 @@ A. 하이라이트 모드면 단추에 글자 대신 그림(`color_icon("highlig
 B. 그림에 노란 띠가 있고 **반투명**(알파 HL_ALPHA 근처), 띠 두께 ≥ 16px 칸의 5px — 종전 '▬' 글리프는 얇은 검은 막대였다
 C. 띠 밑으로 글자 줄이 비친다 — 띠 가운데 픽셀이 순수 노랑보다 어둡다(라이트) / 섞인 색(다크)
 D. 실제 단추를 그리면(grab) 노란 띠가 보인다 — 본문 도구 줄(라이트·다크)·발표 띠
+E. 켜진 단추(살구색 바탕)에서도 띠가 묻히지 않는다 — 띠 가장자리 진한 호박색 테 `HL_EDGE`(261111-5 보완, 사용자 보고)
 """
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -70,6 +71,22 @@ for dark in (False, True):
     chk(t0 == "─" and t2 == "〜" and b.text() == "" and not b.icon().isNull(),
         "A %s 본문 단추 — 직선 ─·자유곡선 〜 글리프, 하이라이트는 그림" % tag, "%r %r %r" % (t0, t2, b.text()))
     chk(ys >= 25, "D %s 본문 단추를 그리면 노란 띠가 보인다" % tag, "노란 픽셀 %d" % ys)
+    mv.close()
+theme.set_dark(False)
+
+# E — 켜진 단추(살구색 바탕 #ffce99)에서도 띠가 선다: 띠 가장자리에 진한 호박색 테(사용자 보고 '선택되어 있을 때 오히려 잘 안보여')
+def amber_edge(c: QColor) -> bool:
+    return 30 <= c.hsvHue() <= 50 and c.hsvSaturation() > 150 and c.value() < 190
+for dark in (False, True):
+    theme.set_dark(dark)
+    mv = MainView(); mv.apply_theme(dark); mv.resize(900, 600); mv.show(); app.processEvents()
+    mv._draw_kind = "line"
+    mv.set_draw_line_mode(1); mv._update_line_button(); app.processEvents()
+    b = mv._draw_mode_btn
+    b.show(); b.resize(30, 26); app.processEvents()
+    g = b.grab().toImage()
+    edge = sum(1 for y in range(4, g.height() - 4) for x in range(4, g.width() - 4) if amber_edge(g.pixelColor(x, y)))
+    chk(edge >= 12, "E %s 켜진 단추(살구색 바탕)에서 띠 테가 보인다" % ("다크" if dark else "라이트"), "테 픽셀 %d" % edge)
     mv.close()
 theme.set_dark(False)
 
