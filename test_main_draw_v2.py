@@ -53,7 +53,8 @@ mv.set_draw_mode(True); app.processEvents()
 #   직전 실행 상태에 좌우된다 → 순환을 검사하기 전에 기준을 명시적으로 확정한다
 #   (§3.1 '레이아웃 테스트 작성 규칙'과 같은 취지).
 mv.set_draw_line_mode(0); app.processEvents()
-chk(mv._draw_line_mode == 0 and mv._draw_mode_btn.text() == "─", "초기 직선 모드(─)")
+chk(mv._draw_line_mode == 0 and mv._draw_mode_btn.text() == "" and not mv._draw_mode_btn.icon().isNull(),
+    "초기 직선 모드(직선 그림 — 261111-5 보완)")
 mv._cycle_draw_mode(); app.processEvents()
 chk(mv._draw_line_mode == 1 and mv._draw_mode_btn.text() == "" and not mv._draw_mode_btn.icon().isNull(),
     "순환1 하이라이트(형광펜 그림 — 261111-5)")

@@ -134,6 +134,13 @@ def _shape_circle(p, c):
     p.drawEllipse(QPointF(8, 8), 6.3, 6.3)
 
 
+def _line_straight(p, c):
+    """261111-5 보완(사용자 지시 '직선 버튼의 직선이 너무 얇아. 옆의 직사각형의 선굵기와 동일하게'): 선긋기 단추의 직선 —
+    글리프 ─ 는 글꼴 획이라 얇았다. 도형(직사각형) 단추와 같은 굵기·같은 그림 크기(`LINE_ICON_PX`)로 그린다."""
+    p.setPen(QPen(c, 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.FlatCap))
+    p.drawLine(QPointF(0.8, 8.0), QPointF(15.2, 8.0))
+
+
 def _crop(p, c):
     """261010-7: 크롭 — 네모(왼·위 변) + 대각선 + 오른쪽 아래 재단 표시(오른 변·아래 변이 모서리 밖으로 나간다)."""
     p.setPen(QPen(c, 1.6))
@@ -207,7 +214,7 @@ _DRAW = {
     "star": _star, "bookmark": _bookmark, "refresh": _refresh,
     "folder": _folder, "file": _file,
     "shape_rect": _shape_rect, "shape_round": _shape_round, "shape_circle": _shape_circle,
-    "crop": _crop, "sign": _sign, "image": _image,
+    "crop": _crop, "sign": _sign, "image": _image, "line_straight": _line_straight,
     "view_tree": _view_tree, "view_single": _view_single, "hand": _hand,
 }
 
@@ -429,18 +436,24 @@ ACCENT["ocr"] = ACCENT["play"]
 # 261111-5(디자인 SOT §4.5, 사용자 지시 "'하이라이트' 하이라이트로 인식하기 어려운 이미지 … 약간 더 두껍고, 투명도가 있는 듯한 이미지"):
 #   선긋기 단추의 하이라이트 모드 — 글자 줄(아이콘 전경) 위를 지나는 굵은 반투명 노랑 띠. 띠 밑으로 글자 줄이 비쳐 '투명' 이 보인다.
 ACCENT["highlighter"] = {False: "#ffd000", True: "#ffe066"}
-HL_ALPHA = 0.65          # 띠 불투명도 — 밑 글자 줄이 비쳐 보이는 정도
+LINE_ICON_PX = 18        # 직선 그림 크기 = 도형 단추 그림(`MainView._shape_kind_icon` size 18) — 같은 굵기로 보이게
+HL_ALPHA = 0.65         # 띠 불투명도 — 밑 글자 줄이 비쳐 보이는 정도
 HL_TEXT = {False: "#444444", True: "#e8e8e8"}      # 디자인 SOT §2.5 '아이콘 전경'
 HL_EDGE = {False: "#9a6b00", True: "#d9a400"}      # 띠 테 — 켜진 단추의 살구색 바탕에서도 띠가 보이게
 
 
 def set_line_mode_face(btn, mode: int, glyphs, dark=None) -> None:
-    """선긋기 단추 얼굴 — 하이라이트(1)는 형광펜 그림, 직선(0)·자유곡선(2)은 종전 글리프(본문 도구 줄·발표 보기가 함께 쓴다)."""
+    """선긋기 단추 얼굴 — 하이라이트(1)는 형광펜 그림, 직선(0)은 도형 단추와 같은 굵기의 그림(`line_straight`, 크기 `LINE_ICON_PX`),
+    자유곡선(2)은 종전 글리프(본문 도구 줄·발표 보기가 함께 쓴다)."""
     from PyQt6.QtCore import QSize
     if int(mode) == 1:
         btn.setText("")
         btn.setIcon(color_icon("highlighter", dark=dark, size=BTN_ICON_PX))
         btn.setIconSize(QSize(BTN_ICON_PX, BTN_ICON_PX))
+    elif int(mode) == 0:
+        btn.setText("")
+        btn.setIcon(themed_icon("line_straight", dark=dark, size=LINE_ICON_PX, dpr=2.0))   # 도형 단추와 같은 dpr
+        btn.setIconSize(QSize(LINE_ICON_PX, LINE_ICON_PX))
     else:
         btn.setIcon(QIcon())
         btn.setText(glyphs[int(mode) % len(glyphs)])

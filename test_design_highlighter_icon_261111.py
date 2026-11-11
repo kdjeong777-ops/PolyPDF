@@ -59,7 +59,7 @@ for dark in (False, True):
     theme.set_dark(dark)
     mv = MainView(); mv.apply_theme(dark); mv.resize(900, 600); mv.show(); app.processEvents()
     mv.set_draw_line_mode(0); app.processEvents()
-    t0 = mv._draw_mode_btn.text()
+    t0 = "직선 그림" if (mv._draw_mode_btn.text() == "" and not mv._draw_mode_btn.icon().isNull()) else mv._draw_mode_btn.text()
     mv.set_draw_line_mode(2); app.processEvents()
     t2 = mv._draw_mode_btn.text()
     mv.set_draw_line_mode(1); mv._update_line_button(); app.processEvents()
@@ -68,8 +68,8 @@ for dark in (False, True):
     g = b.grab().toImage()
     ys = sum(1 for y in range(g.height()) for x in range(g.width()) if yellowish(g.pixelColor(x, y)))
     tag = "다크" if dark else "라이트"
-    chk(t0 == "─" and t2 == "〜" and b.text() == "" and not b.icon().isNull(),
-        "A %s 본문 단추 — 직선 ─·자유곡선 〜 글리프, 하이라이트는 그림" % tag, "%r %r %r" % (t0, t2, b.text()))
+    chk(t0 == "직선 그림" and t2 == "〜" and b.text() == "" and not b.icon().isNull(),
+        "A %s 본문 단추 — 직선 그림·자유곡선 〜 글리프, 하이라이트는 그림" % tag, "%r %r %r" % (t0, t2, b.text()))
     chk(ys >= 25, "D %s 본문 단추를 그리면 노란 띠가 보인다" % tag, "노란 픽셀 %d" % ys)
     mv.close()
 theme.set_dark(False)
@@ -89,6 +89,27 @@ for dark in (False, True):
     chk(edge >= 12, "E %s 켜진 단추(살구색 바탕)에서 띠 테가 보인다" % ("다크" if dark else "라이트"), "테 픽셀 %d" % edge)
     mv.close()
 theme.set_dark(False)
+
+# F — 직선 단추의 선 굵기 = 옆 직사각형(도형) 단추의 선 굵기(사용자 지시 '직선이 너무 얇아. 옆의 직사각형의 선굵기와 동일하게')
+def ink_rows(img, x):
+    """x 열에서 진한(글자색) 픽셀이 이어진 가장 긴 세로 길이."""
+    best = run = 0
+    for y in range(img.height()):
+        c = img.pixelColor(x, y)
+        if c.alpha() > 100 and c.value() < 110:
+            run += 1; best = max(best, run)
+        else:
+            run = 0
+    return best
+mv = MainView(); mv.apply_theme(False); mv.resize(900, 600); mv.show(); app.processEvents()
+mv._draw_kind = None
+mv.set_draw_line_mode(0); mv._update_line_button(); mv._update_shape_button(); app.processEvents()
+li = mv._draw_mode_btn.icon().pixmap(18, 18).toImage()
+si = mv._shape_btn.icon().pixmap(28, 18).toImage()
+lt = ink_rows(li, li.width() // 2)
+st_top = ink_rows(si.copy(0, 0, si.width(), si.height() // 2), 9)     # 직사각형 윗변(왼쪽 18 안 가운데 열)
+chk(lt >= 2 and abs(lt - st_top) <= 0, "F 직선 굵기 = 직사각형 선 굵기", "직선 %dpx · 직사각형 %dpx" % (lt, st_top))
+mv.close()
 
 from viewer.widgets.presentation import PresentationWindow
 from viewer.widgets.main_view import MV_DEFAULT_PENS
