@@ -23,7 +23,9 @@ _BAD = re.compile(r'[\\/:*?"<>|]+')
 # 261112-5(마스터 §4.6.11 '기본 항목'): 앱이 동봉한 일반 도장 — 첫 실행 때 한 번 넣고(`seeded`), 지우면 다시 생기지 않는다.
 #   그림은 동봉 파일을 가리킨다(`builtin:` — 설정 폴더로 복사하지 않는다). 이름은 사용자 데이터 기본 이름(고칠 수 있다)
 BUILTIN_PREFIX = "builtin:"
-BUILTIN = ({"key": "original_copy", "name": "원본대조필", "res": "stamps/original_copy.png", "width_mm": 40.0},)
+#   `ko`: 한국어 화면에서만 넣는다(다국어 SOT §7, 사용자 지시 '원본대조필은 한글판만') — 다른 언어로 시작하면 `seeded` 에도
+#   적지 않아, 나중에 한국어로 바꾸면 그때 한 번 넣는다. 이미 넣은 것은 사용자 데이터라 언어를 바꿔도 지우지 않는다
+BUILTIN = ({"key": "original_copy", "name": "원본대조필", "res": "stamps/original_copy.png", "width_mm": 40.0, "ko": True},)
 
 
 def root() -> Path:
@@ -40,10 +42,14 @@ def _empty() -> dict:
 def _seed(data: dict) -> bool:
     """아직 넣지 않은 기본 항목을 목록 맨 앞에. 같은 이름이 이미 있으면(사용자가 먼저 등록) 넣은 것으로만 적는다. 바꿨으면 True."""
     from viewer.resources_path import resource_path
+    from viewer.i18n import korea_only_visible
     changed = False
     for b in BUILTIN:
         if b["key"] in data["seeded"] or not resource_path(b["res"]):
             continue
+        if b.get("ko") and not korea_only_visible():
+            continue                              # 한국어 화면이 아니면 넣지도, 넣은 것으로 적지도 않는다
+
         data["seeded"].append(b["key"])
         changed = True
         if any(x.get("name") == b["name"] for x in data["items"]):

@@ -346,6 +346,21 @@ try:
         chk(Path(stamp_store.abspath(stamp_store.BUILTIN[0]["res"].join(["builtin:", ""]))).exists(),
             "H9 지워도 동봉 파일은 그대로")
     chk(not any(x["name"] == "원본대조필" for x in stamp_store.items()), "H10 지운 기본 항목은 다시 생기지 않는다")
+    # 한글판만(261112-5 덧붙임) — 영어 화면 첫 실행은 넣지 않고 seeded 에도 안 적음, 한국어로 바꾸면 그때 한 번, 다시 영어여도 남는다
+    from viewer import i18n as _i18n
+    ko0 = _i18n._lang
+    try:
+        _i18n._lang = "en"
+        stamp_store.save({"items": [], "last": "", "seeded": []})
+        d_en = stamp_store.load()
+        chk(not d_en["items"] and d_en["seeded"] == [], "H12 영어 화면 첫 실행 — '원본대조필' 을 넣지 않고 넣은 것으로 적지도 않는다",
+            str([x["name"] for x in d_en["items"]]) + str(d_en["seeded"]))
+        _i18n._lang = ko0
+        chk([x["name"] for x in stamp_store.items()] == ["원본대조필"], "H13 나중에 한국어로 바꾸면 그때 한 번 넣는다")
+        _i18n._lang = "en"
+        chk([x["name"] for x in stamp_store.items()] == ["원본대조필"], "H14 이미 넣은 것은 영어로 바꿔도 지우지 않는다(사용자 데이터)")
+    finally:
+        _i18n._lang = ko0
     stamp_store.save({"items": [{"id": "u1", "name": "원본대조필", "kind": "png", "file": "u1.png", "width_mm": 30, "date": {}}],
                       "last": "u1", "seeded": []})
     chk([x["id"] for x in stamp_store.items() if x["name"] == "원본대조필"] == ["u1"],
