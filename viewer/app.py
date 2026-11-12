@@ -2653,7 +2653,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                     self._finalize_save)
             _bt._after_save = self._mirror_to_pdf     # 261011-2(§4.7.16): 저장 뒤 다른 뷰어용 사본
             _bt._is_save_as = lambda: bool(getattr(self, "_force_save_as", False))
-            _bt._carry_meta = lambda s, d: self._remap_page_keys(s, d, None)
             # 260822: 폴더 모드 → 파일 모드 전환 시 대상 = 현재 본문 파일
             _bt.set_current_file_getter(
                 lambda: (self.main_view.current_file() if self.main_view else None))
@@ -4707,9 +4706,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         finally:
             self._force_save_as = False
 
-    def _finalize_save(self, src, produced, shift=None) -> str:
+    def _finalize_save(self, src, produced, shift=None, carry=True) -> str:
         """원본 덮어쓰기 저장의 단일 길(마스터 §4.7.5). 261010-28(보안 SOT §7.2·S11): 암호 PDF 의 기억·세션 암호를
-        저장한 파일로 옮긴다 — 키가 SHA-256(경로+크기)라 크기가 바뀌면 다시 열 때 암호를 또 물었다."""
+        저장한 파일로 옮긴다 — 키가 SHA-256(경로+크기)라 크기가 바뀌면 다시 열 때 암호를 또 물었다.
+        261112-12(책갈피창·저장 SOT §4.7.5 의 3): 새 이름이 되면 꾸밈·링크·OCR 옆 파일도 여기서 새 이름에 복사 —
+        `carry=False` 는 쪽 번호를 직접 다시 매기는 쪽 편집 저장뿐."""
         pw, remembered = None, False
         try:
             from viewer import secure_store
@@ -4721,6 +4722,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         final = self._finalize_save_place(src, produced, shift)
         if final and os.path.normcase(str(final)) != os.path.normcase(str(src)):
             self._carry_tags([(src, final)])                # 261111-10(태그 SOT §6.1-⑥): 다른 이름으로·잠겨 새 이름으로 저장 — 태그도
+            if carry and str(src).lower().endswith(".pdf"):
+                # 261112-12: 꾸밈·숨김·링크·OCR·텍스트 창 고침도 — 길마다 따로 옮기면 빠지는 길이 생긴다(텍스트 창 반영·빈 서명 칸·
+                #   OCR 묶음이 빠져 새 파일을 열면 꾸밈이 사라졌다). 사진 → 새 PDF 는 해당 없음
+                self._remap_page_keys(str(src), str(final), None)
         self._save_keep_page = (os.path.normcase(str(final)), keep_page) if keep_page is not None else None
         # 261102-4(응답성 SOT §6, 사용자 보고 '저장한 후 빈 화면이 표시되고 응답 없음이었다가 돌아왔다'): 놓은 파일을
         #   메인이 다시 열기 전에(책갈피창 새로 고침·본문) 배경에서 한 번 훑어 백신 검사를 먼저 치른다 — `_warm_read`
@@ -5157,7 +5162,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         saved_n = int(built.get("pages") or 0)
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.BusyCursor))
         try:
-            final = self._finalize_save(src, produced, shift)
+            final = self._finalize_save(src, produced, shift, carry=False)   # 261112-12: 옆 파일은 아래 새 쪽 번호로 직접
         except Exception as e:
             QApplication.restoreOverrideCursor()
             for t in (recon, book_tmp):

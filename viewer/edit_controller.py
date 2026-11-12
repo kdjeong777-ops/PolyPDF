@@ -842,12 +842,8 @@ class EditMixin:
             if not isinstance(e, SaveCancelled):
                 QMessageBox.warning(self, tr("저장 실패"), str(e))
             return False
-        if _os.path.normcase(str(final)) != _os.path.normcase(str(src)):
-            # 261112-9(책갈피창·저장 SOT §4.7.5, 사용자 보고 '병합본에 꾸밈을 하고 저장해도 사라졌다'): 원본이 잠겨(다른 프로그램이 엶)
-            #   새 이름으로 빠지면 꾸밈·링크·OCR 옆 파일도 새 이름 키로 복사한다 — 안 하면 새 파일을 열 때 옆 파일이 비고,
-            #   PDF 사본 레이어는 PolyPDF 가 꺼서 꾸밈이 사라진 것처럼 보였다(재현 test_deco_merged_save_261112 R2)
-            self._remap_page_keys(str(src), str(final), None)
-        if was_open and reopen:                        # 261017-1: 쪽 편집 저장은 사본을 넣은 뒤 한 번만 연다(§4.7.9)
+        # 261112-9·-12: 원본이 잠겨 새 이름으로 빠지면 꾸밈 옆 파일은 `_finalize_save` 가 새 이름에 복사한다(책갈피창·저장 SOT §4.7.5 의 3)
+        if was_open and reopen:                       # 261017-1: 쪽 편집 저장은 사본을 넣은 뒤 한 번만 연다(§4.7.9)
             try:
                 self._open_saved_file(final, cur_page)
             except Exception:

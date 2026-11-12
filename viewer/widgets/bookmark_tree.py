@@ -471,7 +471,6 @@ class BookmarkTree(QWidget):
         self._finalize_save = None                   # 260822: (src, produced) -> final_path (덮어쓰기/_edited)
         self._after_save = None                      # 261011-2(§4.7.16): (path, reopen=) -> bool — 다른 뷰어용 사본을 PDF 에
         self._is_save_as = lambda: False             # 261017-15(§4.7.13): 앱의 '다른 이름으로 저장' 깃발
-        self._carry_meta = None                      # 261017-15(§4.7.9): (src, final) — 새 이름이면 꾸밈·숨김·링크를 새 파일 키로
         self._file_op = None                         # 261014-4(§4.7.14): (fn, label) -> 예외|None — 배경 파일 작업(앱의 `_file_op_bg`)
         # 260611-61: 네비게이션 합치기 — 선택 클릭이 click+currentChanged 로 2번 발화하는 것을
         #   1회로 합치고, 트리 선택 하이라이트가 먼저 그려진 뒤(지연) 이동/암호창이 뜨게 함.
@@ -4979,13 +4978,8 @@ class BookmarkTree(QWidget):
         self._dirty = False
         self._commit_meta()              # 260611-18(A4): 책갈피+개체 동시 저장
         QTimer.singleShot(0, lambda s=src: self._commit_study(s))   # 261019-1: OCR·단어장 확정은 저장이 끝난 뒤(위와 같은 까닭)
-        # 261017-15(§4.7.9, 점검): 새 이름이면 꾸밈·숨김·링크를 새 파일 키로, 사본은 **다시 열기 전에** 넣고(reopen=False)
-        #   여는 것은 bookmarksEdited 한 번 — 종전엔 사본이 한 번 더 열어 두 번 깜빡였고, 새 파일엔 꾸밈이 없었다
-        if self._carry_meta is not None and str(out) != str(src):
-            try:
-                self._carry_meta(str(src), str(out))
-            except Exception:
-                pass
+        # 261017-15(§4.7.9, 점검): 사본은 **다시 열기 전에** 넣고(reopen=False) 여는 것은 bookmarksEdited 한 번 —
+        #   종전엔 사본이 한 번 더 열어 두 번 깜빡였다. 새 이름이면 꾸밈·숨김·링크는 `_finalize_save` 가 이미 옮겼다(261112-12, §4.7.5 의 3)
         self._run_after_save(str(out), reopen=False)
         self.bookmarksEdited.emit(str(src), str(out))
 
