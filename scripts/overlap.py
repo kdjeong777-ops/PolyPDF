@@ -103,6 +103,47 @@ def system_busy_pct(sec: float = 1.0) -> float:
     return round(100.0 * (1 - idle / total), 1) if total > 0 else 0.0
 
 
+# 261113-5(릴리스 SOT §4.3 의 4): 전원 상태 — beta.12 부하 시험 회전 1.1~1.3초 실패가 배터리 동작 탓이었다(261113-1, beta.11 코드도 같은 값).
+#   전원 모드는 Windows 의 오버레이 GUID(설정 > 전원 > 전원 모드).
+POWER_MODES = {"961cc777-2547-4f9d-8174-7d86181b8a7a": "best_eff", "3af9b8d9-7c97-431d-ad78-34a8bfea439f": "better_batt",
+               "00000000-0000-0000-0000-000000000000": "balanced", "ded574b5-45a0-4f42-8737-46345c09c238": "best_perf"}
+POWER_NAMES = {"best_eff": "최고의 전력 효율", "better_batt": "배터리 절약", "balanced": "균형", "best_perf": "최고 성능", "?": "모름"}
+
+
+class _SPS(ctypes.Structure):
+    _fields_ = [("ACLineStatus", ctypes.c_ubyte), ("BatteryFlag", ctypes.c_ubyte), ("BatteryLifePercent", ctypes.c_ubyte),
+                ("SystemStatusFlag", ctypes.c_ubyte), ("BatteryLifeTime", wt.DWORD), ("BatteryFullLifeTime", wt.DWORD)]
+
+
+def power_raw() -> tuple:
+    """(충전기 연결 여부 — 모르면 True, 배터리 % — 없으면 -1, 전원 모드 키)."""
+    ac, pct, mode = True, -1, "?"
+    try:
+        s = _SPS()
+        if k32.GetSystemPowerStatus(ctypes.byref(s)):
+            ac = s.ACLineStatus != 0                 # 0 배터리, 1 충전기, 255 모름
+            pct = -1 if s.BatteryLifePercent == 255 or s.BatteryFlag & 128 else s.BatteryLifePercent
+    except Exception:                                # noqa: BLE001 — 적기만 한다
+        pass
+    try:
+        import uuid
+        g = (ctypes.c_byte * 16)()
+        if ctypes.WinDLL("powrprof").PowerGetEffectiveOverlayScheme(ctypes.byref(g)) == 0:
+            mode = POWER_MODES.get(str(uuid.UUID(bytes_le=bytes(g))), "?")
+    except Exception:                                # noqa: BLE001 — 옛 Windows·함수 없음
+        pass
+    return ac, pct, mode
+
+
+def power_text(ac: bool, pct: int, mode: str) -> str:
+    """summary 줄 — 배터리이거나 절전 쪽 전원 모드면 경고(판정은 그대로)."""
+    src = "충전기" if ac else ("**배터리**%s" % (" %d%%" % pct if pct >= 0 else ""))
+    line = "- 전원: %s · 전원 모드 %s" % (src, POWER_NAMES.get(mode, mode))
+    if not ac or mode in ("best_eff", "better_batt"):
+        line += " — **⚠ 배터리·절전 상태라 느리게 잴 수 있다(판정은 그대로) — 충전기를 꽂고 전원 모드를 올린 뒤 다시 잰다**(릴리스 SOT §4.3 의 4)"
+    return line
+
+
 class Watch:
     """측정 동안 다른 무거운 작업을 지켜본다 — `start()` 를 측정 전에, `check(이름)` 을 구간마다(대상 사이·표본마다), `lines()` 를 요약에."""
 
@@ -110,6 +151,7 @@ class Watch:
         self.root = root or os.getpid()
         self.events = []          # (구간 이름, 설명)
         self.start_busy = None
+        self.power = ""           # 시작 때 전원 줄(261113-5)
         self._last = None
 
     def _others(self, exclude=()) -> dict:
@@ -132,6 +174,7 @@ class Watch:
 
     def start(self) -> "Watch":
         self.start_busy = system_busy_pct()          # 적기만 한다 — 평소 부하는 PC 마다 다르다(위 설명)
+        self.power = power_text(*power_raw())
         self._last = (time.time(), self._others())
         return self
 
@@ -165,10 +208,11 @@ class Watch:
     def lines(self) -> list:
         head = "- 겹침 감시(릴리스 SOT §4.3 의 8): 시작 전 시스템 CPU %s%%(참고 — 판정은 다른 무거운 프로세스로만)" % (
             self.start_busy if self.start_busy is not None else "?")
+        pw = [self.power] if self.power else []
         if not self.events:
-            return [head + " · 다른 무거운 작업 없음"]
+            return [head + " · 다른 무거운 작업 없음"] + pw
         return [head + " · **겹침 %d번 — 판정 보류, 기준점을 옮기지 않는다**" % len(self.events)] + \
-               ["  - %s: %s" % e for e in self.events]
+               ["  - %s: %s" % e for e in self.events] + pw
 
 
 if __name__ == "__main__":        # 지금 겹칠 것이 있는지 한 번 보기: python scripts/overlap.py

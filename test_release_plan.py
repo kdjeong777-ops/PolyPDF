@@ -237,5 +237,37 @@ chk(len(st) == 1 and st[0][2][0].startswith("_attach_pending") and len(st[0][2])
     "M 정지 스택 파일에서 메인 스레드 맨 위 줄만 옮긴다", st)
 chk(rt.stall_tops(_runs, "T2_HM") == [], "M 정지 파일이 없는 대상은 비어 있다")
 
+# N. 261113-5(릴리스 SOT §4.1 의 2·3, 사용자 결정): 베타 묶음은 속도를 한 번만 — 측정은 CI 설치 시험 하나, 부하 시험은 닿을 때만.
+#   재기 전 전원 상태를 적고 배터리·절전이면 경고(261113-1: beta.12 부하 실패가 배터리 동작 탓).
+chk(callable(getattr(rt, "is_beta", None)) and rt.is_beta("1.1.0-beta.12") and not rt.is_beta("1.1.0")
+    and not rt.is_beta("1.0.1"), "N 베타 판별(1.1.0-beta.12 예, 정식 아니오)")
+_ch = rt._changes
+try:
+    rt._changes = lambda base: ([("M", "viewer/convert/docx_writer.py", 30)], diff("viewer/convert/docx_writer.py", "+x"))
+    bl = getattr(rt, "bundle_lines", lambda *a: [])("1.1.0-beta.12", "v1.1.0-beta.11")
+    txt = "\n".join(bl)
+    chk("설치 시험" in txt and "부하 시험" in txt and "건너뜀" in txt and "load_test" not in txt.split("부하 시험", 1)[1].split("\n")[0],
+        "N 베타 묶음 — 변환 코드만 바뀌면 부하 시험 건너뜀(까닭), 측정은 설치 시험 하나", txt)
+    rt._changes = lambda base: ([("M", "viewer/widgets/bookmark_tree.py", 3)], diff("viewer/widgets/bookmark_tree.py", "+x"))
+    txt = "\n".join(getattr(rt, "bundle_lines", lambda *a: [])("1.1.0-beta.12", "v1.1.0-beta.11"))
+    chk("**한다**" in txt and "bookmark_tree.py" in txt, "N 베타 묶음 — 책갈피 트리를 바꾸면 부하 시험 한다(닿은 곳)", txt)
+    txt = "\n".join(getattr(rt, "bundle_lines", lambda *a: [])("1.1.0", "v1.0.1"))
+    chk("**한다**" in txt and "건너뜀" not in txt, "N 정식판은 부하 시험 늘(§4.5)", txt)
+finally:
+    rt._changes = _ch
+lv = getattr(rt, "beta_level", lambda ver, level, urgent: (level, ""))
+chk(lv("1.1.0-beta.12", "build", False)[0] == "install" and lv("1.1.0-beta.12", "build", False)[1],
+    "N 베타 묶음은 빌드 시험 등급을 설치 시험으로 올린다(까닭 줄)")
+chk(lv("1.1.0-beta.12", "build", True)[0] == "build" and lv("1.1.0", "build", False)[0] == "build"
+    and lv("1.1.0-beta.12", "skip", False)[0] == "skip", "N 긴급·정식·생략 후보는 그대로")
+pt = getattr(overlap, "power_text", None)
+chk(pt is not None and "⚠" in pt(False, 55, "best_eff") and "⚠" in pt(False, 80, "balanced")
+    and "⚠" in pt(True, 100, "best_eff") and "⚠" not in pt(True, 100, "best_perf") and "⚠" not in pt(True, -1, "?"),
+    "N 전원 줄 — 배터리·절전 모드면 경고, 충전기·성능이면 경고 없음",
+    [pt(*a) for a in ((False, 55, "best_eff"), (True, 100, "best_perf"))] if pt else None)
+w3 = overlap.Watch()
+w3.start_busy, w3.power = 5.0, (pt(False, 55, "balanced") if pt else "")
+chk(any("⚠" in l and "배터리" in l for l in w3.lines()), "N summary(Watch.lines)에 배터리 경고 줄", w3.lines())
+
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)

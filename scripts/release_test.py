@@ -309,6 +309,33 @@ def is_stable_patch(ver: str) -> bool:
     return bool(m) and int(m.group(3)) > 0
 
 
+def is_beta(ver: str) -> bool:
+    """접미사 있는 X.Y.Z-… — 베타(릴리스 SOT §2.3)."""
+    return bool(re.fullmatch(r"\d+\.\d+\.\d+-.+", ver or ""))
+
+
+def beta_level(ver: str, level: str, urgent: bool) -> tuple:
+    """261113-5(릴리스 SOT §4.1 의 2, 사용자 결정): 베타 묶음의 속도 판정은 CI 설치 시험 하나 — 빌드 시험 등급을 설치 시험으로.
+    돌려줌 (등급, 까닭 또는 ''). 긴급·정식·생략 후보는 그대로."""
+    if is_beta(ver) and not urgent and level == "build":
+        return "install", "베타 묶음 — 속도는 CI 설치본 한 번(설치 시험)으로 잰다, 이 PC 빌드 시험은 따로 하지 않는다(릴리스 SOT §4.1 의 2, 261113-5)"
+    return level, ""
+
+
+def bundle_lines(ver: str, last_tag: str) -> list:
+    """261113-5(릴리스 SOT §4.1 의 2·3): 묶음 범위의 측정·부하 시험 줄 — 베타는 부하 시험을 닿을 때만(§4.5.1 과 같은 판별), 정식판은 늘."""
+    meas = "- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)" + (" — **베타의 속도 판정은 이 설치 시험 하나**, 실패하면 한 번 더 잰다(§4.1)"
+                                                         if is_beta(ver) else "")
+    cmd = "`python scripts\\load_test.py` — 큰 폴더 색인 중 테마·정렬·보기·편집·쪽 넘기기 정지 < 1초, 테마 왕복 누수 없음(261011-7)"
+    if not is_beta(ver):
+        return [meas, "- 부하 시험: **한다** " + cmd]
+    if not last_tag:
+        return [meas, "- 부하 시험: **한다** %s — 견줄 마지막 릴리스 태그가 없다" % cmd]
+    hit = patch_checks(*_changes(last_tag))["load"]
+    return [meas, ("- 부하 시험: **한다** %s — 마지막 릴리스 `%s` 뒤 닿은 곳: %s" % (cmd, last_tag, hit)) if hit else
+            ("- 부하 시험: 건너뜀 — 마지막 릴리스 `%s` 뒤 색인 중 화면 조작 코드(`LOAD_PATHS`·`BUILD_TOKENS` 줄)가 바뀌지 않았다(§4.1 의 3)" % last_tag)]
+
+
 def patch_checks(changes: list, diff_text: str) -> dict:
     """261026-4(릴리스 SOT §4.5.1): 패치 정식판에서 조건부 셋(soak·프린터 설치·부하)을 할지 — {이름: 까닭 또는 ''}."""
     paths = [p for _, p, _ in changes if not NO_BUILD.search(p)]
@@ -612,6 +639,9 @@ def plan(base_arg, urgent=False) -> int:
         if inst:
             c["level"] = "install"
             c["reasons"].append("마지막 릴리스 %s 뒤 설치 관련 변경: %s" % (u["tag"], ", ".join(inst)))
+    c["level"], why = beta_level(source_version(), c["level"], urgent)
+    if why:
+        c["reasons"].append(why)
     dirty = [l for l in git("status", "--porcelain", "--untracked-files=no").splitlines() if l]
     name = {"install": "설치 시험", "build": "빌드 시험", "skip": "생략 후보 — 사용자에게 묻는다"}[c["level"]]
     cmd = {"install": "python scripts\\release_test.py install --source ci",
@@ -633,8 +663,7 @@ def plan(base_arg, urgent=False) -> int:
     if not urgent and not (is_stable_patch(source_version()) and u["tag"]):   # 패치 정식판은 §4.5.1 목록이 대신한다(아래)
         L += ["", "## 묶음 릴리스 — 최대 범위(릴리스 SOT §4.1)", "",
               "- 전체 검사: `python scripts\\release_test.py checks --ui` (CI 가 돌리지 않는 것까지 `test_*.py` 전부 + 화면 점검 ko·en)",
-              "- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)",
-              "- 부하 시험: `python scripts\\load_test.py` — 큰 폴더 색인 중 테마·정렬·보기·편집·쪽 넘기기 정지 < 1초, 테마 왕복 누수 없음(261011-7)",
+              *bundle_lines(source_version(), u["tag"]),
               "- 다크 화면 점검: `python scripts\\ui_check.py --theme dark --out <폴더>` — 아이콘·글자가 보이는지 눈으로(261011-6)",
               "- 기능 점검표(릴리스 SOT §4.2) — 시험 프로필로 띄운 빌드본에서 주요 기능을 차례로"]
         if c["level"] == "skip":
