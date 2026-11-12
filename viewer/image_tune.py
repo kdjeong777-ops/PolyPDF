@@ -106,8 +106,10 @@ def apply(img, p: dict, upto: int = 99):
     if upto > ST_MASK and p["masks"]:
         cell = max(4, int(max(w, h) / MOSAIC_CELLS))
         for box in _mask_boxes(w, h, p["masks"]):
-            if p["mask_mode"] == "black":
-                img.paste((0, 0, 0, 255), box)
+            mode = str(p["mask_mode"] or "mosaic")
+            if mode != "mosaic":                 # 'black'(옛 값) 또는 '#rrggbb' — 가리기 색 막대(SOT §4.46, 261113-4)
+                c = _hex("#000000" if mode == "black" else mode) or (0, 0, 0)
+                img.paste(tuple(c[:3]) + (255,), box)
             else:
                 part = img.crop(box)
                 sw, sh = max(1, part.width // cell), max(1, part.height // cell)

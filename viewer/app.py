@@ -5711,7 +5711,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.status.showMessage(tr("다듬을 스크린샷이 없습니다."), 4000)
             return
         dlg = ImageTuneDialog(self, paths, kind="shot", start_dir=self._shot_start_dir(),
-                              copy_fn=lambda img, png, done: self._copy_image_to_clipboard(img, done, png=png))
+                              copy_fn=lambda img, png, done: self._copy_image_to_clipboard(img, done, png=png),
+                              prefs=self._prefs.setdefault("image_tune", {}))
         self._image_tune_dlg = dlg
         try:
             dlg.exec()
@@ -9830,6 +9831,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "mp3_speed": dict(prefs.get("mp3_speed", old.get("mp3_speed", {})) or {}),
             # 261112-22(스크린샷 SOT §4.1): 컷 [💾 새 파일로 저장] 이 마지막에 쓴 폴더 — 허용목록에 없으면 [확인] 뒤 사라졌다
             "shot_save_dir": str(prefs.get("shot_save_dir", old.get("shot_save_dir", "")) or ""),
+            # 261113-4(사진 보기 SOT §4.46 '창 배치·기억'): 변환·다듬기 창 — 바탕 지우기 마지막 값(bg_photo·bg_shot)·가리기 색 막대(mask_bar)
+            "image_tune": dict(prefs.get("image_tune", old.get("image_tune", {})) or {}),
             # 261017-15(§8.2, 점검): 환경설정 창이 모르는 기능 설정 — 빠져 있어 재시작·[확인] 뒤 사라졌다.
             #   값 모양은 그 기능이 소유(가상 프린터 SOT §4.3·마스터 §4.7.15) — 여기서는 그대로 넘긴다
             "vprinter": prefs.get("vprinter", old.get("vprinter")),

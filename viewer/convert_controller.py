@@ -90,7 +90,8 @@ class ConvertMixin:
                               rots={f: self._photo_rot_for(f) for f in files}, crops={f: self._photo_crop_for(f) for f in files},
                               on_saved=saved, doc_fn=lambda fs=list(files): self._photo_convert_doc(fs),
                               copy_fn=lambda img, png, done: self._copy_image_to_clipboard(img, done, png=png),
-                              can_save=not self._photo_any_cached(files))
+                              can_save=not self._photo_any_cached(files),
+                              prefs=self._prefs.setdefault("image_tune", {}))
         self._image_tune_dlg = dlg
         try:
             dlg.exec()

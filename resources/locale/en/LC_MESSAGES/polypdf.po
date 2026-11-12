@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-12 22:43+0900\n"
+"POT-Creation-Date: 2026-11-13 07:54+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8715,6 +8715,19 @@ msgstr "Width (px)"
 msgid "세로(px)"
 msgstr "Height (px)"
 
+#: viewer/widgets/color_bar.py
+msgid "색 지정"
+msgstr "Pick a color"
+
+#: viewer/widgets/color_bar.py
+msgid "색 지정…"
+msgstr "Pick a color…"
+
+#: viewer/widgets/color_bar.py
+#, python-brace-format
+msgid "{name} — 끌어서 차례를 바꿉니다"
+msgstr "{name} — drag to reorder"
+
 #: viewer/widgets/content_find_overlay.py
 msgid "본문 내용 검색"
 msgstr "Search content"
@@ -9446,6 +9459,14 @@ msgid "그림으로 저장"
 msgstr "Save as Image"
 
 #: viewer/widgets/image_tune_dialog.py
+msgid "꾸미기"
+msgstr "Touch-ups"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "바탕 정리"
+msgstr "Background"
+
+#: viewer/widgets/image_tune_dialog.py
 msgid "바탕 누르기"
 msgstr "Pick Background"
 
@@ -9460,6 +9481,18 @@ msgstr "Trim empty margins"
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
 msgid "바탕 지우기"
 msgstr "Remove background"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "가릴 곳 끌기"
+msgstr "Drag Area to Hide"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "가림 지우기"
+msgstr "Clear Hidden Areas"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "색 고치기"
+msgstr "Color"
 
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/print_dialog.py
 msgid "흑백"
@@ -9486,6 +9519,10 @@ msgid "색 바꾸기"
 msgstr "Change color"
 
 #: viewer/widgets/image_tune_dialog.py
+msgid "밝기 보정"
+msgstr "Brightness"
+
+#: viewer/widgets/image_tune_dialog.py
 msgid "문서 스캔처럼"
 msgstr "Like a document scan"
 
@@ -9496,23 +9533,6 @@ msgstr "Auto brightness & contrast"
 #: viewer/widgets/image_tune_dialog.py
 msgid "밝기·대비"
 msgstr "Brightness & contrast"
-
-#: viewer/widgets/image_tune_dialog.py
-msgid "가릴 곳 끌기"
-msgstr "Drag Area to Hide"
-
-#: viewer/widgets/image_tune_dialog.py
-msgid "모자이크"
-msgstr "Pixelate"
-
-#: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
-msgid "검정"
-msgstr "Black"
-
-#: viewer/widgets/image_tune_dialog.py
-msgid "가림 지우기"
-msgstr "Clear Hidden Areas"
 
 #: viewer/widgets/image_tune_dialog.py
 msgid "새 파일로 저장"
@@ -9547,6 +9567,10 @@ msgid "허용 범위"
 msgstr "Tolerance"
 
 #: viewer/widgets/image_tune_dialog.py
+msgid "가릴 색"
+msgstr "Redaction color"
+
+#: viewer/widgets/image_tune_dialog.py
 msgid "회색조"
 msgstr "Grayscale"
 
@@ -9557,6 +9581,11 @@ msgstr "Black & white (two colors)"
 #: viewer/widgets/image_tune_dialog.py
 msgid "그대로"
 msgstr "As is"
+
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
+msgid "검정"
+msgstr "Black"
 
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
 #: viewer/widgets/stamp_dialog.py
@@ -9602,6 +9631,18 @@ msgstr "Nothing is left — lower the background removal threshold (tolerance)."
 #: viewer/widgets/image_tune_dialog.py
 msgid "zip·휴대 장치 사진은 'PC 로 복사' 한 뒤 저장하세요 — 클립보드로 복사는 됩니다."
 msgstr "For photos in a zip or on a portable device, use 'Copy to PC' first, then save — copying to the clipboard works."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "흰색"
+msgstr "White"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "회색"
+msgstr "Gray"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "모자이크"
+msgstr "Pixelate"
 
 #: viewer/widgets/image_tune_dialog.py
 msgid "투명을 담지 못합니다"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-12 22:43+0900\n"
+"POT-Creation-Date: 2026-11-13 07:54+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -8434,6 +8434,19 @@ msgstr ""
 msgid "세로(px)"
 msgstr ""
 
+#: viewer/widgets/color_bar.py
+msgid "색 지정"
+msgstr ""
+
+#: viewer/widgets/color_bar.py
+msgid "색 지정…"
+msgstr ""
+
+#: viewer/widgets/color_bar.py
+#, python-brace-format
+msgid "{name} — 끌어서 차례를 바꿉니다"
+msgstr ""
+
 #: viewer/widgets/content_find_overlay.py
 msgid "본문 내용 검색"
 msgstr ""
@@ -9165,6 +9178,14 @@ msgid "그림으로 저장"
 msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py
+msgid "꾸미기"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "바탕 정리"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
 msgid "바탕 누르기"
 msgstr ""
 
@@ -9178,6 +9199,18 @@ msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
 msgid "바탕 지우기"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "가릴 곳 끌기"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "가림 지우기"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "색 고치기"
 msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/print_dialog.py
@@ -9205,6 +9238,10 @@ msgid "색 바꾸기"
 msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py
+msgid "밝기 보정"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
 msgid "문서 스캔처럼"
 msgstr ""
 
@@ -9214,23 +9251,6 @@ msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py
 msgid "밝기·대비"
-msgstr ""
-
-#: viewer/widgets/image_tune_dialog.py
-msgid "가릴 곳 끌기"
-msgstr ""
-
-#: viewer/widgets/image_tune_dialog.py
-msgid "모자이크"
-msgstr ""
-
-#: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
-#: viewer/widgets/stamp_dialog.py
-msgid "검정"
-msgstr ""
-
-#: viewer/widgets/image_tune_dialog.py
-msgid "가림 지우기"
 msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py
@@ -9266,6 +9286,10 @@ msgid "허용 범위"
 msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py
+msgid "가릴 색"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
 msgid "회색조"
 msgstr ""
 
@@ -9275,6 +9299,11 @@ msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py
 msgid "그대로"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
+msgid "검정"
 msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
@@ -9320,6 +9349,18 @@ msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py
 msgid "zip·휴대 장치 사진은 'PC 로 복사' 한 뒤 저장하세요 — 클립보드로 복사는 됩니다."
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "흰색"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "회색"
+msgstr ""
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "모자이크"
 msgstr ""
 
 #: viewer/widgets/image_tune_dialog.py

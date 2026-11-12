@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (QButtonGroup, QCheckBox, QColorDialog, QComboBox, Q
 
 from viewer import image_tune as it
 from viewer.i18n import tr
+from viewer.widgets.color_bar import ColorBar
 
 
 PREVIEW_W = 560          # 처음 열 때 미리보기 폭(화면이 좁으면 줄인다)
@@ -132,13 +133,33 @@ class _Preview(QWidget):
             self.rectDrawn.emit(a[0], a[1], b[0], b[1])
 
 
+_THREADS: list = []                      # 변환·다듬기 창의 배경 일 — 창이 닫혀 지워져도 스레드가 끝날 때까지 붙잡는다(run_in_thread 가 끝나면 뺀다)
+
+MASK_FIXED = ("#000000", "#ffffff", "#808080", "mosaic")   # 가리기 색 막대의 주요색(처음 차례) — SOT §4.46
+MASK_USER_MAX = 6                                         # 사용자 색 — 오른쪽 칸 폭 안 한 줄(11단추 × 25px)
+
+
+def _mosaic_icon():
+    from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
+    pm = QPixmap(16, 16)
+    pm.fill(QColor("#d0d0d0"))
+    qp = QPainter(pm)
+    for y in range(0, 16, 4):
+        for x in range(0, 16, 4):
+            if (x + y) // 4 % 2 == 0:
+                qp.fillRect(x, y, 4, 4, QColor("#707070"))
+    qp.end()
+    return QIcon(pm)
+
+
 class ImageTuneDialog(QDialog):
     """paths: 그림 파일들. kind 'photo'(사진 모드 '변환' — 문서로 묶음·원본 옆 저장) · 'shot'(스크린샷 '다듬기' — 다른 이름으로 저장).
     rots·crops: 사진의 보기 회전·보기 크롭. on_saved(src, dst): 새 파일 뒤(책갈피창 줄). doc_fn(fmt): '문서로' 단추.
-    copy_fn(qimage, png_bytes): 클립보드(없으면 clipboard_util). can_save=False 면 저장 단추는 알림만(zip·휴대 장치)."""
+    copy_fn(qimage, png_bytes): 클립보드(없으면 clipboard_util). can_save=False 면 저장 단추는 알림만(zip·휴대 장치).
+    prefs: 설정의 `image_tune` 묶음 dict — 바탕 지우기 마지막 값(`bg_photo`·`bg_shot`)·가리기 색 막대 차례(`mask_bar`)를 여기에 쓴다."""
 
     def __init__(self, parent, paths, *, kind: str = "photo", rots=None, crops=None, on_saved=None, doc_fn=None,
-                 copy_fn=None, can_save: bool = True, start_dir: str = ""):
+                 copy_fn=None, can_save: bool = True, start_dir: str = "", prefs=None):
         super().__init__(parent)
         self.setWindowTitle(tr("변환") if kind == "photo" else tr("다듬기"))
         self._paths = [str(p) for p in paths]
@@ -147,13 +168,16 @@ class ImageTuneDialog(QDialog):
         self._on_saved, self._doc_fn, self._copy_fn = on_saved, doc_fn, copy_fn
         self._can_save = can_save
         self._start_dir = start_dir
+        self._prefs = prefs if prefs is not None else {}   # 설정 image_tune 묶음(부르는 쪽 dict — 바탕 지우기·가리기 색 막대 기억)
         self._p = it.default_params()
         self._masks = {}                         # 경로 → 가림 네모들(사진마다)
         self._small = {}                         # 경로 → 줄인 원본(PIL)
         self._idx = 0
         self._tok = 0
-        self._keep = []
+        self._keep = _THREADS                    # 배경 일은 창보다 오래 산다 — 모듈 목록(아래 _THREADS)
+        self._mine = set()                       # 이 창이 띄운 일(busy)
         self._busy = False
+        self._closed = False
         self.saved = []                          # [(원본, 새 파일)]
         self._last_preview = None                # 마지막 미리보기 결과(PIL) — 검사
         self._timer = QTimer(self)
@@ -161,6 +185,8 @@ class ImageTuneDialog(QDialog):
         self._timer.setInterval(it.PREVIEW_DELAY_MS)
         self._timer.timeout.connect(self._run_preview)
         self._build()
+        self._changed()                          # 처음 고른 바탕 지우기(기억한 값)를 설정에 — 첫 미리보기부터
+        self._built = True
         self._fit_size()
         self._show_path()
 
@@ -198,14 +224,25 @@ class ImageTuneDialog(QDialog):
         self.cmb_fmt.setCurrentIndex(max(0, self.cmb_fmt.findData(it.fmt_of_path(first) if self._kind == "photo" else "png")))
         self.cmb_fmt.currentIndexChanged.connect(self._changed)
         f.addRow(tr("형식"), self.cmb_fmt)
+        sv.addWidget(g)
 
-        # 바탕 지우기
+        # 꾸미기 — 종류별 구역 셋(사진 보기 SOT §4.46 '창 배치·기억', 디자인 SOT §2.23, 261113-4). 적용 차례는 image_tune.apply 그대로
+        self.lb_deco = QLabel(tr("꾸미기"))
+        fnt = self.lb_deco.font(); fnt.setBold(True); self.lb_deco.setFont(fnt)
+        sv.addSpacing(4)
+        sv.addWidget(self.lb_deco)
+
+        # ① 바탕 정리 — 바탕 지우기 · 가리기
+        self.box_bg = QGroupBox(tr("바탕 정리"))
+        f = QFormLayout(self.box_bg)
         bgw = QWidget(); bv = QVBoxLayout(bgw); bv.setContentsMargins(0, 0, 0, 0)
         self.rb_none, self.rb_thr, self.rb_col = QRadioButton(tr("없음")), QRadioButton(tr("밝은 바탕(문턱)")), QRadioButton(tr("누른 색"))
         self._bg_grp = QButtonGroup(self)
         for i, rb in enumerate((self.rb_none, self.rb_thr, self.rb_col)):
             self._bg_grp.addButton(rb, i)
-        self.rb_none.setChecked(True)
+        # 처음 한 번은 사진 '밝은 바탕'·스크린샷 '없음', 그 뒤로는 마지막 고른 값(따로 기억 — bg_photo·bg_shot)
+        bg0 = str(self._prefs.get(self._bg_pref_key()) or ("threshold" if self._kind == "photo" else "none"))
+        {"threshold": self.rb_thr, "color": self.rb_col}.get(bg0, self.rb_none).setChecked(True)
         rr = QHBoxLayout(); rr.addWidget(self.rb_none); rr.addWidget(self.rb_thr); rr.addWidget(self.rb_col); rr.addStretch(1)
         bv.addLayout(rr)
         tr_row = QHBoxLayout()
@@ -227,6 +264,25 @@ class ImageTuneDialog(QDialog):
         bv.addWidget(self.cb_trim)
         f.addRow(tr("바탕 지우기"), bgw)
 
+        mw_ = QWidget(); mv = QVBoxLayout(mw_); mv.setContentsMargins(0, 0, 0, 0)
+        mh = QHBoxLayout()
+        self.btn_mask = QPushButton(tr("가릴 곳 끌기")); self.btn_mask.setCheckable(True)
+        self.btn_mask_clear = QPushButton(tr("가림 지우기"))
+        mh.addWidget(self.btn_mask); mh.addWidget(self.btn_mask_clear); mh.addStretch(1)
+        mv.addLayout(mh)
+        # 가리기 색 막대 — 검정·흰색·회색·모자이크 + 사용자가 고른 색, 끌어서 차례 바꿈(기억 mask_bar — 사진·스크린샷 같이)
+        self.bar_mask = ColorBar(MASK_FIXED, order=self._prefs.get("mask_bar"), current="mosaic", user_max=MASK_USER_MAX,
+                                 names={"#000000": tr("검정"), "#ffffff": tr("흰색"), "#808080": tr("회색"), "mosaic": tr("모자이크")},
+                                 patterns={"mosaic": _mosaic_icon}, pick_title=tr("가릴 색"))
+        self.bar_mask.picked.connect(self._changed)
+        self.bar_mask.orderChanged.connect(lambda order: self._prefs.__setitem__("mask_bar", list(order)))
+        mv.addWidget(self.bar_mask)
+        f.addRow(tr("가리기"), mw_)
+        sv.addWidget(self.box_bg)
+
+        # ② 색 고치기 — 흑백 · 글씨·선 색 · 색 바꾸기
+        self.box_color = QGroupBox(tr("색 고치기"))
+        f = QFormLayout(self.box_color)
         self.cmb_gray = QComboBox()
         for k, t in (("none", tr("없음")), ("gray", tr("회색조")), ("bw", tr("흑백 (두 색)"))):
             self.cmb_gray.addItem(t, k)
@@ -254,7 +310,11 @@ class ImageTuneDialog(QDialog):
         s2.addWidget(self.sl_sw_tol, 1)
         sl.addLayout(s2)
         f.addRow(tr("색 바꾸기"), sw)
+        sv.addWidget(self.box_color)
 
+        # ③ 밝기 보정 — 문서 스캔처럼 · 밝기·대비
+        self.box_tone = QGroupBox(tr("밝기 보정"))
+        f = QFormLayout(self.box_tone)
         tw = QWidget(); tv = QVBoxLayout(tw); tv.setContentsMargins(0, 0, 0, 0)
         t1 = QHBoxLayout()
         self.cb_scan = QCheckBox(tr("문서 스캔처럼")); self.cb_level = QCheckBox(tr("밝기·대비 자동"))
@@ -266,14 +326,7 @@ class ImageTuneDialog(QDialog):
             row = QHBoxLayout(); row.addWidget(QLabel(lab)); row.addWidget(s, 1)
             tv.addLayout(row)
         f.addRow(tr("밝기·대비"), tw)
-
-        mw_ = QWidget(); mh = QHBoxLayout(mw_); mh.setContentsMargins(0, 0, 0, 0)
-        self.btn_mask = QPushButton(tr("가릴 곳 끌기")); self.btn_mask.setCheckable(True)
-        self.cmb_mask = QComboBox(); self.cmb_mask.addItem(tr("모자이크"), "mosaic"); self.cmb_mask.addItem(tr("검정"), "black")
-        self.btn_mask_clear = QPushButton(tr("가림 지우기"))
-        mh.addWidget(self.btn_mask); mh.addWidget(self.cmb_mask); mh.addWidget(self.btn_mask_clear); mh.addStretch(1)
-        f.addRow(tr("가리기"), mw_)
-        sv.addWidget(g)
+        sv.addWidget(self.box_tone)
 
         self.btn_save = QPushButton(tr("새 파일로 저장"))
         self.btn_copy = QPushButton(tr("클립보드로 복사"))
@@ -313,7 +366,6 @@ class ImageTuneDialog(QDialog):
         for s in (self.sl_thr, self.sl_bg_tol, self.sl_sw_tol, self.sl_bri, self.sl_con):
             s.valueChanged.connect(self._changed)
         self.cmb_gray.currentIndexChanged.connect(self._changed)
-        self.cmb_mask.currentIndexChanged.connect(self._changed)
         self.cmb_ink.activated.connect(self._ink_chosen)
         self.btn_bg_clear.clicked.connect(self._bg_clear)
         self.btn_sw_to.clicked.connect(self._swap_to)
@@ -347,6 +399,9 @@ class ImageTuneDialog(QDialog):
         h = min(max_h, max(hint.height() + bar_h + m.top() + m.bottom(), 560))
         self.resize(w, h)
 
+    def _bg_pref_key(self) -> str:
+        return "bg_photo" if self._kind == "photo" else "bg_shot"
+
     def _root_spacing(self) -> int:
         lay = self.layout().itemAt(0).layout()
         return max(0, lay.spacing()) if lay is not None else 6
@@ -372,7 +427,9 @@ class ImageTuneDialog(QDialog):
         p["scan"] = self.cb_scan.isChecked()
         p["auto_level"] = self.cb_level.isChecked()
         p["brightness"], p["contrast"] = int(self.sl_bri.value()), int(self.sl_con.value())
-        p["mask_mode"] = self.cmb_mask.currentData()
+        p["mask_mode"] = self.bar_mask.current() or "mosaic"
+        if p["bg"] != self._prefs.get(self._bg_pref_key()) and getattr(self, "_built", False):
+            self._prefs[self._bg_pref_key()] = p["bg"]          # 마지막 고른 바탕 지우기(261113-4)
         alpha = it.makes_alpha(p)
         self.cb_trim.setEnabled(p["bg"] != "none")
         # 투명이면 PNG·WebP 만(SOT §4.46 '형식')
@@ -506,19 +563,49 @@ class ImageTuneDialog(QDialog):
         self._tok += 1
         tok = self._tok
         w = ImageTuneWorker(tok, fn)
-        w.done.connect(lambda t, r, e, c=cb: c(r, e) if t == self._tok else None)
+        w.done.connect(lambda t, r, e, c=cb: c(r, e) if t == self._tok and self._alive() else None)
+        self._track(w)
         run_in_thread(w, self._keep)
 
     def _start_job(self, fn, cb):
         """저장·복사 — 미리보기 토큰과 따로(미리보기가 새로 돌아도 버리지 않는다)."""
         from viewer.workers import run_in_thread
         w = ImageTuneWorker(-1, fn)
-        w.done.connect(lambda _t, r, e: cb(r, e))
+        w.done.connect(lambda _t, r, e: self._job_done(cb, r, e))
+        self._track(w)
         run_in_thread(w, self._keep)
+
+    def _track(self, w):
+        k = id(w)
+        self._mine.add(k)
+        w.done.connect(lambda *_a, kk=k: self._mine.discard(kk))
+
+    def _alive(self) -> bool:
+        """창이 아직 살아 있나 — 닫혔거나(done) 위젯이 지워졌으면 늦게 온 결과를 버린다. 지워진 위젯을 만지면 슬롯 예외 →
+        PyQt6 는 앱을 끈다(0xC0000409, 261113-4 검사 test_photo_tune_size 가 잡음)."""
+        from PyQt6 import sip
+        return not self._closed and not sip.isdeleted(self)
+
+    def _job_done(self, cb, r, e):
+        from PyQt6 import sip
+        if sip.isdeleted(self):
+            return                               # 창(위젯)이 이미 지워졌다 — 결과만 버린다(저장은 이미 끝났다)
+        try:
+            cb(r, e)
+        except RuntimeError:
+            pass
+
+    def done(self, r):
+        """닫힘 — 늦게 오는 미리보기는 버린다. 돌던 스레드는 모듈 목록에 남아 끝까지 돈다(261113-4: 창과 함께 QThread 가
+        지워져 앱이 꺼졌다 — 0xC0000409, 응답성 SOT §4.4)."""
+        self._closed = True
+        self._tok += 1
+        self._timer.stop()
+        super().done(r)
 
     def busy(self) -> bool:
         """배경 일(미리보기·저장·복사)이 남았나 — 검사가 기다릴 때 본다."""
-        return bool(self._keep) or self._timer.isActive()
+        return bool(self._mine) or self._timer.isActive()
 
     # ── 저장·복사 ───────────────────────────────────
     def _full(self, path, p):
