@@ -137,7 +137,32 @@ class _Stop(Exception):
 Stopped = _Stop
 
 
+def _own_tmpdir(d: Path) -> bool:
+    """`run_file` 이 만든 전용 임시 폴더인가 — 이름이 `TEMP_PREFIX` 로 시작하고 시스템 임시 폴더 **바로 아래**(실제 경로로)."""
+    import os
+    if not d.name.startswith(TEMP_PREFIX):
+        return False
+    try:
+        root = os.path.normcase(os.path.realpath(tempfile.gettempdir()))
+        par = os.path.normcase(os.path.realpath(str(d.parent)))
+    except (OSError, ValueError):
+        return False
+    return par == root
+
+
 def cleanup(tmp) -> None:
-    """원본에 놓은 뒤(또는 놓지 못했을 때) 임시 폴더를 지운다."""
-    if tmp:
-        shutil.rmtree(Path(tmp).parent, ignore_errors=True)
+    """원본에 놓은 뒤(또는 놓지 못했을 때) 임시 폴더를 지운다.
+
+    261112-13(텍스트 창 SOT §5.5 '임시 폴더'): **전용 임시 폴더일 때만** 지운다 — 종전에는 부모를 묻지 않고 지워,
+    다른 경로가 들어가면 그 폴더 전체가 지워졌다. 아니면 아무것도 지우지 않고 오류 출력에 한 줄만 남긴다."""
+    if not tmp:
+        return
+    d = Path(tmp).parent
+    if not _own_tmpdir(d):
+        try:                                     # 창 모드 exe 는 stderr 가 없을 수 있다
+            import sys
+            print("ocr_batch.cleanup: not an OCR batch temp dir, kept:", d, file=sys.stderr)
+        except Exception:
+            pass
+        return
+    shutil.rmtree(d, ignore_errors=True)
