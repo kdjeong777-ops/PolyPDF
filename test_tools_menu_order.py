@@ -106,10 +106,10 @@ chk("단축키 설정..." not in items, "② 단축키 설정은 환경설정 '�
 # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목은 '등록·설치 ▸' 하나로 — 명령 id 는 그대로
 _inst = next((a for a in menu.actions() if a.menu() is not None and a.text() == "설치·설정"), None)
 inst_items = [a.text() for a in _inst.menu().actions()] if _inst is not None else []
-chk(inst_items == ["기본 PDF 앱으로 설정", "구성요소 설치 (녹화·OCR)", "가상 프린터 설치·제거"],      # 261107-14·-11 개명
-    "② 설치·설정 ▸(PDF 앱 등록 · 구성요소 설치 · 가상 프린터)", str(inst_items))
+chk(inst_items == ["기본 PDF 앱으로 설정", "기본 사진 앱으로 설정", "구성요소 설치 (녹화·OCR)", "가상 프린터 설치·제거"],      # 261107-14·-11 개명 · 261112-10 사진 앱
+    "② 설치·설정 ▸(PDF 앱 · 사진 앱 등록 · 구성요소 설치 · 가상 프린터)", str(inst_items))
 from viewer.widgets.ribbon import cmd_id as _cid
-chk([_cid(a) for a in (_inst.menu().actions() if _inst else [])] == ["tools.pdf_handler", "tools.components", "tools.vprinter"]
+chk([_cid(a) for a in (_inst.menu().actions() if _inst else [])] == ["tools.pdf_handler", "tools.photo_handler", "tools.components", "tools.vprinter"]
     and "tools.vprinter" in dict(mw.ribbon_catalog()[0])["도구(&T)"],
     "② 세 명령 id 는 그대로 — 모음 편집 목록에도 남는다(§2.9.4)")
 chk(not any(t and ("기본값으로 저장" in t or t.startswith("설정 초기화")) for t in items),

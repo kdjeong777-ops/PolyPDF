@@ -7,7 +7,8 @@
 - 창마다 `QLocalServer` 하나(이름 `polypdf-<사용자>-<pid>-<n>`)를 열고, 설정 폴더의
   `instances/<이름>.json` 에 적어 서로 찾는다. 연결되지 않는 항목(죽은 프로세스)은 지운다.
 - 요청·응답은 JSON 한 줄. `query`(열고 있나·저장 안 한 편집이 있나) / `release`(놓기) /
-  `reload`(다시 열기) / `show`(그 폴더를 보고 있으면 목록에 더하고 열기 — 가상 프린터, 261031-4).
+  `reload`(다시 열기) / `show`(그 폴더를 보고 있으면 목록에 더하고 열기 — 가상 프린터, 261031-4) /
+  `photo`(사진 모드인 창이면 그 사진의 폴더·사진을 열기 — 기본 사진 앱으로 두 번 누름, 261112-10, 사진 보기 SOT §4.45).
   창 쪽 동작은 `handler(op, path, page)` 가 한다(앱이 넣는다).
 - 기다림은 짧다(연결 0.3초·응답 3초) — 응답하지 않는 창 하나 때문에 저장이 멈추지 않게.
 """
@@ -77,6 +78,76 @@ def same_file(a, b) -> bool:
         return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
 
 
+def _peer_entries(skip=None):
+    """등록된 다른 창 → [(서버 이름, 등록 파일)]. 끝난 프로세스의 등록은 연결해 보지 않고 치운다."""
+    try:
+        entries = sorted(_registry_dir().glob("polypdf-*.json"))
+    except Exception:
+        return []
+    out = []
+    for f in entries:
+        try:
+            info = json.loads(f.read_text(encoding="utf-8"))
+            name = info.get("server")
+        except Exception:
+            info, name = {}, None
+        if not name or name == skip:
+            continue
+        if not _pid_alive(info.get("pid")):
+            try:
+                f.unlink(missing_ok=True)
+            except Exception:
+                pass
+            continue
+        out.append((name, f))
+    return out
+
+
+def _request(name, msg, timeout=REPLY_MS):
+    sock = QLocalSocket()
+    sock.connectToServer(name)
+    if not sock.waitForConnected(CONNECT_MS):
+        return None
+    try:
+        sock.write((json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8"))
+        sock.flush()
+        buf = b""
+        while b"\n" not in buf:
+            if not sock.waitForReadyRead(timeout):
+                return {"error": "응답 없음"}
+            buf += bytes(sock.readAll())
+        return json.loads(buf.split(b"\n", 1)[0].decode("utf-8"))
+    except Exception as e:                      # noqa: BLE001
+        return {"error": str(e)}
+    finally:
+        sock.disconnectFromServer()
+
+
+def send_photo(path) -> bool:
+    """261112-10(사진 보기 SOT §4.45): 기본 사진 앱으로 두 번 누른 사진을 **사진 모드인** 다른 창에 넘긴다 — 받은 창이 있으면 True.
+    창이 없는 시작 단계(main.py)에서 부른다 — 서버를 열지 않는다. 받은 창이 앞으로 나올 수 있게 전경 허락을 먼저 준다."""
+    peers = _peer_entries()
+    if not peers:
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)      # ASFW_ANY
+        except Exception:
+            pass
+    for name, f in peers:
+        res = _request(name, {"op": "photo", "path": str(path)})
+        if res is None:
+            try:
+                f.unlink(missing_ok=True)
+            except Exception:
+                pass
+            continue
+        if res.get("ok"):
+            return True
+    return False
+
+
 class InstanceLink(QObject):
     def __init__(self, handler, parent=None):
         super().__init__(parent)
@@ -130,48 +201,11 @@ class InstanceLink(QObject):
 
     # ── 묻는 쪽 ───────────────────────────────────────────
     def _peers(self):
-        try:
-            entries = sorted(_registry_dir().glob("polypdf-*.json"))
-        except Exception:
-            return []
-        out = []
-        for f in entries:
-            try:
-                info = json.loads(f.read_text(encoding="utf-8"))
-                name = info.get("server")
-            except Exception:
-                info, name = {}, None
-            if not name or name == self.name:
-                continue
-            if not _pid_alive(info.get("pid")):
-                try:
-                    f.unlink(missing_ok=True)            # 끝난 프로세스 — 연결해 보지 않고 치운다
-                except Exception:
-                    pass
-                continue
-            out.append((name, f))
-        return out
+        return _peer_entries(self.name)
 
     @staticmethod
     def _request(name, msg, timeout=REPLY_MS):
-        sock = QLocalSocket()
-        sock.connectToServer(name)
-        if not sock.waitForConnected(CONNECT_MS):
-            return None
-        try:
-            sock.write((json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8"))
-            sock.flush()
-            buf = b""
-            while b"\n" not in buf:
-                if not sock.waitForReadyRead(timeout):
-                    return {"error": "응답 없음"}
-                buf += bytes(sock.readAll())
-            return json.loads(buf.split(b"\n", 1)[0].decode("utf-8"))
-        except Exception as e:                      # noqa: BLE001
-            return {"error": str(e)}
-        finally:
-            sock.disconnectFromServer()
-
+        return _request(name, msg, timeout)
     def holders(self, path) -> list:
         """이 PDF 를 열고 있는 다른 창 → [{server, title, dirty}]. 죽은 등록은 지운다."""
         found = []

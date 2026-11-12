@@ -793,6 +793,12 @@ class SettingsDialog(QDialog):
                                          "PDF 전용이면 사진 모드를 쓰지 않습니다."))
         self.cmb_view_kind.currentIndexChanged.connect(lambda *_: self._sync_photo_item())
         vl.addRow(tr("보기 종류:"), self.cmb_view_kind)
+        # 261112-10(사진 보기 SOT §4.45, 사용자 지시): 기본 사진 앱으로 설정 — 도구 탭 `설치·설정 ▾` 의 같은 항목과 같은 함수
+        self.btn_photo_default = QPushButton(tr("기본 사진 앱으로 설정"))
+        self.btn_photo_default.setToolTip(tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPDF 로 고르세요"))
+        self.btn_photo_default.setEnabled(hasattr(self._host, "_register_photo_handler"))
+        self.btn_photo_default.clicked.connect(lambda _=False: self._host._register_photo_handler())
+        vl.addRow("", self.btn_photo_default)
         layout.addWidget(grp_vk)
 
         # 원본 백업 — 261106-15(사진 펴기 [저장] 이 원본을 대체할 때)·261107-29(PDF 첫 덮어쓰기 저장 때) 사진·PDF 공용(사진 보기 SOT §4.43,

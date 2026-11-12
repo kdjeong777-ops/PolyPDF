@@ -1914,6 +1914,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for _t, _s, _cid, _short, _tip in (
                 (tr("기본 PDF 앱으로 설정"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱으로 설정"),
                  tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요")),   # 261107-14(마스터 §14.10)
+                (tr("기본 사진 앱으로 설정"), self._register_photo_handler, "tools.photo_handler", tr("기본 사진 앱으로 설정"),
+                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPDF 로 고르세요")),   # 261112-10(사진 보기 SOT §4.45)
                 (tr("구성요소 설치 (녹화·OCR)"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
                  tr("구성요소 설치(녹화·OCR)")),
                 (tr("가상 프린터 설치·제거"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
@@ -4659,6 +4661,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return {"ok": True}
         if op == "show":                               # 261031-4: 가상 프린터 받는 창이 넘긴 파일(가상 프린터 SOT §4.4)
             return self._vprinter_peer_show(path)
+        if op == "photo":                              # 261112-10: 기본 사진 앱으로 두 번 누른 사진 — 사진 모드인 창만 받는다(사진 보기 SOT §4.45)
+            return self._photo_peer_open(path)
         return {"error": tr('알 수 없는 요청: {op}').format(op=op)}
 
     def _ask_peer_release(self, name: str, holders: list) -> str:

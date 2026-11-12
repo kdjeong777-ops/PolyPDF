@@ -1082,6 +1082,14 @@ msgstr "Set as Default PDF App"
 msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요"
 msgstr "Opens the Windows Default apps page — choose PolyPDF for .pdf there"
 
+#: viewer/app.py viewer/photo_controller.py viewer/widgets/settings_dialog.py
+msgid "기본 사진 앱으로 설정"
+msgstr "Set as Default Photo App"
+
+#: viewer/app.py viewer/widgets/settings_dialog.py
+msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPDF 로 고르세요"
+msgstr "Opens the Windows Default apps page — choose PolyPDF there for photo extensions (.jpg, .png, .heic, etc.)"
+
 #: viewer/app.py viewer/update_controller.py
 msgid "구성요소 설치 (녹화·OCR)"
 msgstr "Install Components (recording · OCR)"
@@ -4473,6 +4481,10 @@ msgid "행정동을 찾지 못함"
 msgstr "Administrative area not found"
 
 #: viewer/photo_controller.py
+msgid "사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'"
+msgstr "Right-click a photo file → 'Open with' → 'Choose another app' → PolyPDF → 'Always'"
+
+#: viewer/photo_controller.py
 msgid "사진 정보"
 msgstr "Photo Info"
 
@@ -4739,6 +4751,14 @@ msgid "움직이는 그림 재생·멈춤"
 msgstr "Play / stop animation"
 
 #: viewer/photo_controller.py
+msgid "사진을 열려고 보기 종류를 '혼용'으로 바꿨습니다 — 환경설정에서 되돌릴 수 있습니다."
+msgstr "View type was changed to 'Mixed' to open the photo — you can change it back in Settings."
+
+#: viewer/photo_controller.py
+msgid "Windows 기본 앱 화면에서 사진 확장자마다 PolyPDF 를 고르세요."
+msgstr "Choose PolyPDF for each photo extension on the Windows Default apps page."
+
+#: viewer/photo_controller.py
 msgid "사진 이름"
 msgstr "Photo name"
 
@@ -4968,6 +4988,18 @@ msgstr "Batch — {n} photos"
 #, python-brace-format
 msgid "사진 {n}장의 이름을 바꿨습니다."
 msgstr "Renamed {n} photos."
+
+#: viewer/photo_controller.py
+msgid "사진 (PolyPDF)"
+msgstr "Photo (PolyPDF)"
+
+#: viewer/photo_controller.py
+msgid "PolyPDF 사진"
+msgstr "PolyPDF Photo"
+
+#: viewer/photo_controller.py
+msgid "사진 뷰어"
+msgstr "Photo viewer"
 
 #: viewer/photo_controller.py
 #, python-brace-format

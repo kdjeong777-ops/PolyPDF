@@ -1072,6 +1072,69 @@ class PhotoMixin:
             self.open_folder(p.parent)
         self._on_bookmark_activated(str(p), 0)
 
+    # ── 261112-10(4.45, 사용자 지시·결정): 기본 사진 앱 — 등록·사진 인자 열기·다른 창이 넘긴 사진 ──
+    def _photo_open_arg(self, path: str) -> bool:
+        """기본 사진 앱으로 두 번 누른 사진 — **사진 모드로 바로** 그 폴더·그 사진. 보기 종류가 PDF 전용이면 혼용으로 바꾼다
+        (사진을 두 번 누른 뜻이 사진 보기다). 모드 전환이 막히면(저장 안 한 편집 → 취소) False."""
+        p = Path(str(path))
+        if not p.is_file() or not self._is_photo_path(p):
+            return False
+        if not self._photo_enabled():
+            self._photo_prefs()["view_kind"] = VIEW_MIXED
+            self._photo_apply_view_kind()
+            self.status.showMessage(tr("사진을 열려고 보기 종류를 '혼용'으로 바꿨습니다 — 환경설정에서 되돌릴 수 있습니다."), 8000)
+        if not self._photo_mode:
+            self._photo_forced_pdf = False
+            self._set_photo_mode(True, load_last=False)
+            if not self._photo_mode:
+                return False
+        self._photo_open_file(str(p))
+        return True
+
+    def _photo_peer_open(self, path) -> dict:
+        """다른 실행이 넘긴 사진(`instance_link.send_photo`) — **사진 모드인 창만** 받는다(PDF 모드 창의 문서·편집을 바꾸지 않게)."""
+        if not getattr(self, "_photo_mode", False) or not path or not os.path.isfile(str(path)) or not self._is_photo_path(path):
+            return {"ok": False}
+
+        def _go(p=str(path)):
+            if self.isMinimized():
+                self.showNormal()
+            self.raise_()
+            self.activateWindow()
+            self._photo_open_arg(p)
+
+        QTimer.singleShot(0, _go)
+        return {"ok": True}
+
+    def _register_photo_handler(self, reg=None, opener=None):
+        """도구 탭 `설치·설정 ▾ › 기본 사진 앱으로 설정`·환경설정 보기 종류 옆 단추 — HKCU 에 사진 후보를 쓰고
+        `ms-settings:defaultapps?registeredAppUser=PolyPDFPhoto` 를 연다(설치판도 HKCU — 설치 프로그램은 그대로). reg·opener 는 검사용(가짜)."""
+        import sys as _sys
+        from viewer import photo_default, pdf_default
+        if not getattr(_sys, "frozen", False):
+            QMessageBox.information(
+                self, tr("안내"),
+                tr("개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
+                   "빌드된 PolyPDF.exe 에서 실행해 주세요."))
+            return
+        exe = os.path.abspath(_sys.executable)
+        manual = tr("사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'")
+        try:
+            plan = photo_default.prepare(exe, True, reg if reg is not None else pdf_default.Reg(),
+                                         desc=tr("사진 (PolyPDF)"), app_name=tr("PolyPDF 사진"), app_desc=tr("사진 뷰어"))
+        except Exception as e:
+            QMessageBox.warning(self, tr("기본 앱으로 설정하지 못했습니다"), str(e) + "\n\n" + manual)
+            return
+        if opener is None:
+            from PyQt6.QtCore import QUrl
+            from PyQt6.QtGui import QDesktopServices
+            opener = lambda u: QDesktopServices.openUrl(QUrl(u))
+        if photo_default.open_settings(plan["uris"], opener):
+            self.status.showMessage(tr("Windows 기본 앱 화면에서 사진 확장자마다 PolyPDF 를 고르세요."), 8000)
+        else:
+            QMessageBox.information(self, tr("기본 사진 앱으로 설정"),
+                                    tr("Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:") + "\n" + manual)
+
     def _root_folder_differs(self, folder) -> bool:
         cur = getattr(self.bookmark_tree, "_root_dir", None)
         try:
