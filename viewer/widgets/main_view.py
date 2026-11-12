@@ -367,8 +367,10 @@ class _MainDrawOverlay(QWidget):
                 self._paint_leader(p, st, pr, with_box=(si_idx != edit_idx), skip_bg=bg_trans)
                 continue
             if st.get("text_box"):
-                if si_idx != edit_idx:    # 편집 중인 박스는 인라인 편집기가 표시
+                if si_idx != edit_idx:    # 편집 중인 박스는 인라인 편집기가 글을 표시
                     self._draw_text_box(p, st, pr, skip_bg=bg_trans)
+                else:                     # 261112-8(§4.6.13): 바탕·박스선은 여기서 — 입력칸은 투명(글자·커서만)
+                    self._draw_text_box(p, st, pr, skip_bg=bg_trans, text=False)
                 continue
             pts = st.get("points", [])
             if len(pts) < 2:
@@ -638,8 +640,11 @@ class _MainDrawOverlay(QWidget):
         p.setPen(Qt.PenStyle.NoPen); p.setBrush(bc); p.drawRect(local)
         p.restore()
 
-    def _draw_text_box(self, p, st, pr, skip_bg=False):
-        """260611-74/76/82: 텍스트 박스 — 배경/박스선/여러 줄 텍스트. skip_bg=배경은 평탄화에서 처리."""
+    EDIT_FILL = QColor(255, 255, 255, 217)   # 261112-8: 쓰는 중인 글상자 바탕(배경색이 없을 때, 종전 입력칸 rgba(255,255,255,0.85))
+
+    def _draw_text_box(self, p, st, pr, skip_bg=False, text=True):
+        """260611-74/76/82: 텍스트 박스 — 배경/박스선/여러 줄 텍스트. skip_bg=배경은 평탄화에서 처리.
+        text=False — 쓰는 중(261112-8): 글은 입력칸이 그리고, 배경색이 없으면 흰 85% 바탕을 깐다."""
         from PyQt6.QtCore import QRectF
         cx, cy, hw, hh, rot = self._owner._shape_geom(st, pr)
         local = QRectF(-hw, -hh, 2 * hw, 2 * hh)
@@ -650,11 +655,15 @@ class _MainDrawOverlay(QWidget):
         if bg and not skip_bg:
             bc = QColor(bg); bc.setAlpha(int(round(float(st.get("bg_alpha", 100)) * 2.55)))
             p.setPen(Qt.PenStyle.NoPen); p.setBrush(bc); p.drawRect(local)
+        elif not bg and not text:
+            p.setPen(Qt.PenStyle.NoPen); p.setBrush(self.EDIT_FILL); p.drawRect(local)
         if st.get("box_line"):
             bdc = QColor(st.get("border_color", "#333333"))
             bdc.setAlpha(int(round(float(st.get("border_alpha", 100)) * 2.55)))
             pen = QPen(bdc); pen.setWidth(max(1, int(st.get("border_w", 1))))
             p.setPen(pen); p.setBrush(Qt.BrushStyle.NoBrush); p.drawRect(local)
+        if not text:
+            p.restore(); return
         # 260907-3: **재는 것과 같은 문서로 그린다**(`_text_doc`). 종전 `drawText` 는
         #   띄어쓰기에서만 줄을 바꿔, 띄어쓰기 없는 한글이 한 줄로 붙어 잘려 보였다.
         # 260907-1: 박스가 글에 맞춰 자라므로 **위 정렬**이다. 여백은 입력칸과 같은 값.
@@ -5144,7 +5153,7 @@ class MainView(QWidget):
             ys.append(rc[1])
         return (min(xs), min(ys)) if xs else None
 
-    def _deco_add(self, strokes, images, dx: float, dy: float) -> None:
+    def _deco_add(self, strokes, images, dx: float, dy: float, save: bool = True) -> None:
         """복사본을 더하고 그것들을 고른다(하나면 단일 선택 — 크기·회전 핸들을 그대로 쓰도록, §4.6.3)."""
         import copy
         s0, i0 = len(self._page_strokes), len(self._img_objects)
@@ -5168,9 +5177,9 @@ class MainView(QWidget):
                 self._img_selected = new_i[0]
         else:
             self._multi_strokes, self._multi_images = new_s, new_i
-        if strokes:
+        if strokes and save:
             self._save_page_strokes()
-        if images:
+        if images and save:
             self._save_page_images()
         if self._draw_overlay is not None:
             self._draw_overlay.update()
@@ -5269,12 +5278,40 @@ class MainView(QWidget):
                 self._draw_overlay.update()
         return ((vp.x() - pr.left()) / pr.width(), (vp.y() - pr.top()) / pr.height())
 
-    def _deco_dup_in_place(self, strokes_idx, images_idx) -> None:
-        """Shift + 끌기 — 원본은 두고 그 자리에 복사본을 만들어 고른다(끄는 것은 복사본)."""
+    def _deco_dup_in_place(self, strokes_idx, images_idx, save=True) -> None:
+        """원본은 두고 그 자리에 복사본을 만들어 고른다(끄는 것은 복사본). 끌기 복사는 save=False — 놓을 때 한 단계로."""
         strokes = [self._page_strokes[i] for i in strokes_idx if 0 <= i < len(self._page_strokes)]
         images = [self._img_objects[i] for i in images_idx if 0 <= i < len(self._img_objects)]
         if strokes or images:
-            self._deco_add(strokes, images, 0.0, 0.0)
+            self._deco_add(strokes, images, 0.0, 0.0, save=save)
+
+    # ===== 261112-7(마스터 §4.6.7, 사용자 지시): 끌기 세 가지 — Ctrl 복사·Ctrl+Shift 가로세로 복사·Shift 가로세로 이동 =====
+    DRAG_COPY_PX = 3          # 누른 자리에서 이만큼 움직여야 복사본을 만든다(Ctrl 로 누르기만 하면 복사 없음)
+
+    def _drag_begin(self, pos, ev, strokes_idx=(), images_idx=()) -> None:
+        """꾸밈 끌기를 시작할 때 — 누른 자리와(축 고정 기준) Ctrl 이면 복사 대기를 적는다."""
+        self._drag_origin = QPoint(pos)
+        ctrl = bool(ev.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        self._drag_dup = (list(strokes_idx), list(images_idx)) if ctrl and (strokes_idx or images_idx) else None
+
+    def _drag_pos(self, pos, ev) -> QPoint:
+        """끄는 중 — Ctrl 대기 복사를 처음 움직일 때 만들고, Shift 면 누른 자리에서 더 움직인 축 하나만 남긴 자리."""
+        o = getattr(self, "_drag_origin", None)
+        if o is None:
+            return pos
+        dx, dy = pos.x() - o.x(), pos.y() - o.y()
+        dup = getattr(self, "_drag_dup", None)
+        if dup is not None and abs(dx) + abs(dy) >= self.DRAG_COPY_PX:
+            self._drag_dup = None
+            if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                self._deco_dup_in_place(dup[0], dup[1], save=False)
+        if ev.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            return QPoint(pos.x(), o.y()) if abs(dx) >= abs(dy) else QPoint(o.x(), pos.y())
+        return pos
+
+    def _drag_end(self) -> None:
+        self._drag_origin = None
+        self._drag_dup = None
 
     def _stroke_delete_selected(self):
         if 0 <= self._stroke_selected < len(self._page_strokes):
@@ -5384,13 +5421,16 @@ class MainView(QWidget):
         self._xform_size0 = (self._style_size_pt(st)
                              if (st.get("text_box") or st.get("leader")) else 0.0)
 
-    def _shape_transform_move(self, pos, pr, shift=False):
+    def _shape_transform_move(self, pos, pr, shift=False, ev=None):
         import math
         st = self._selected_xform()
         if st is None or self._shape_drag is None:
             return
-        cx0, cy0, hw0, hh0, rot0 = self._shape_press_geom
         drag = self._shape_drag
+        if drag == "move" and ev is not None:    # 261112-7(§4.6.7): Ctrl 복사(복사본으로 바뀜)·Shift 가로세로
+            pos = self._drag_pos(pos, ev)
+            st = self._selected_xform() or st
+        cx0, cy0, hw0, hh0, rot0 = self._shape_press_geom
         if drag == "move":
             self._shape_set_geom(st, cx0 + (pos.x() - self._shape_press.x()),
                                  cy0 + (pos.y() - self._shape_press.y()), hw0, hh0, rot0, pr)
@@ -5749,9 +5789,10 @@ class MainView(QWidget):
         c = QColor(st.get("color", "#111111"))
         bg = st.get("bg")
         ed.setStyleSheet(
-            "QTextEdit{color:%s;background:%s;border:1px dashed #ff7a00;padding:%dpx;}"
-            % (c.name(), (QColor(bg).name() if bg else "rgba(255,255,255,0.85)"),
-               self.TEXT_PAD))
+            # 261112-8(§4.6.13): 테두리 없이 투명 — 고른 표시는 오버레이의 파란 상자 하나, 바탕도 오버레이가 깐다
+            "QTextEdit{color:%s;background:transparent;border:none;padding:%dpx;}"
+            % (c.name(), self.TEXT_PAD))
+        ed.viewport().setAutoFillBackground(False)
         ed.setPlainText(st.get("text", ""))
         ed.installEventFilter(self)
         ed.textChanged.connect(self._on_text_changed)
@@ -6049,10 +6090,10 @@ class MainView(QWidget):
             # 1) 활성 텍스트/지시선 박스의 핸들 → 변형(이동/크기/회전)
             if self._selected_textbox() is not None:
                 h = self._shape_handle_at(pos, pr)
-                if h == "move" and (ev.modifiers() & Qt.KeyboardModifier.ShiftModifier):
-                    self._deco_dup_in_place([self._stroke_selected], [])     # 261012-4(§4.6.7)
                 if h is not None:
                     self._shape_transform_press(pos, pr, h)
+                    # 261112-7(§4.6.7): '이동' 손잡이 — Ctrl 복사·Shift 가로세로
+                    self._drag_begin(pos, ev, [self._stroke_selected] if h == "move" else (), ())
                     self.view.setFocus(); return True
             # 2) 기존 박스 본문 클릭 → 편집
             hi = self._textbox_hit_index(pos, pr)
@@ -6077,7 +6118,7 @@ class MainView(QWidget):
             if self._shape_drag is not None and held:
                 self._shape_transform_move(
                     ev.position().toPoint(), pr,
-                    bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier))
+                    bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier), ev)
                 return True
             ld = self._leader_drag
             if ld is not None:
@@ -6102,7 +6143,7 @@ class MainView(QWidget):
             return None
         if t == QEvent.Type.MouseButtonRelease and ev.button() == Qt.MouseButton.LeftButton:
             if self._shape_drag is not None:
-                self._shape_drag = None; self._save_page_strokes(); return True
+                self._shape_drag = None; self._drag_end(); self._save_page_strokes(); return True
             ld = self._leader_drag
             if ld is not None:
                 ph = ld.get("phase")
@@ -6677,18 +6718,19 @@ class MainView(QWidget):
                         if h is not None:
                             self._text_edit_drag = True
                             self._shape_transform_press(vpos, pr, h)
+                            self._drag_begin(vpos, ev)        # 261112-7: 쓰는 중엔 가로세로만(복사 없음)
                             return True
                     elif tt == QEvent.Type.MouseMove \
                             and getattr(self, "_text_edit_drag", False) \
                             and (ev.buttons() & Qt.MouseButton.LeftButton):
                         self._shape_transform_move(
                             vpos, pr,
-                            bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier))
+                            bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier), ev)
                         return True
                     elif tt == QEvent.Type.MouseButtonRelease \
                             and getattr(self, "_text_edit_drag", False):
                         self._text_edit_drag = False
-                        self._shape_drag = None
+                        self._shape_drag = None; self._drag_end()
                         self._save_page_strokes()
                         try:
                             self._text_editor.setFocus()
@@ -6729,14 +6771,10 @@ class MainView(QWidget):
                         except Exception:
                             pass
                         idx, _h = self._img_hit(pos, pr)
-                        shift_dup = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-                        if (idx >= 0 and shift_dup and _h in (None, "move")
-                                and not (is_select and self._has_multi() and self._multi_hit(pos, pr))):
-                            # 261012-4(§4.6.7): Shift + 끌기 = 원본은 두고 복사본을 옮긴다
-                            self._deco_dup_in_place([], [idx])
-                            idx, _h = self._img_hit(pos, pr)
                         if idx >= 0 and not (is_select and self._has_multi() and self._multi_hit(pos, pr)):
                             self._img_mouse_press(pos, pr)   # 선택 + 이동/리사이즈 시작
+                            # 261112-7(§4.6.7): 몸통 끌기 — Ctrl 복사·Shift 가로세로(손잡이는 종전대로)
+                            self._drag_begin(pos, ev, (), [idx] if _h in (None, "move") else ())
                             self.view.setFocus()
                             return True                       # 이미지 우선 → 소비
                         # 빈 곳
@@ -6754,18 +6792,16 @@ class MainView(QWidget):
                         if is_select:
                             # 260907-5: 이미 범위로 고른 것 위를 누르면 **함께 이동**
                             if self._has_multi() and self._multi_hit(pos, pr):
-                                if shift_dup:                # 261012-4: Shift = 고른 것들의 복사본을 옮긴다
-                                    self._deco_dup_in_place(list(self._multi_strokes), list(self._multi_images))
+                                # 261112-7: Ctrl = 고른 것들의 복사본을 옮긴다·Shift = 가로세로
+                                self._drag_begin(pos, ev, list(self._multi_strokes), list(self._multi_images))
                                 self._multi_drag = {"last": pos}
                                 self.view.setFocus(); return True
                             # 260611-70: 그린 선/도형을 클릭하면 선택+이동 시작
                             si = self._stroke_hit_index(pos, pr)
                             if si >= 0:
                                 self._multi_clear()
-                                if shift_dup:                # 261012-4: Shift = 복사본을 옮긴다
-                                    self._deco_dup_in_place([si], [])
-                                    si = self._stroke_selected
                                 self._stroke_selected = si
+                                self._drag_begin(pos, ev, [si], ())   # 261112-7
                                 self._stroke_drag = {"last": pos}
                                 self.view.setFocus(); ov.repaint()  # 260611-79: 선택 즉시 표시
                                 return True
@@ -6783,18 +6819,23 @@ class MainView(QWidget):
                             and (ev.buttons() & Qt.MouseButton.LeftButton) \
                             and self._img_drag is not None:
                         shift = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-                        self._img_mouse_move(ev.position().toPoint(), pr, shift)
+                        cur = ev.position().toPoint()
+                        if self._img_drag == "move":         # 261112-7: Ctrl 복사·Shift 가로세로
+                            cur = self._drag_pos(cur, ev)
+                        self._img_mouse_move(cur, pr, shift)
                         return True
                     elif t == QEvent.Type.MouseButtonRelease \
                             and ev.button() == Qt.MouseButton.LeftButton \
                             and self._img_drag is not None:
+                        self._drag_end()
                         self._img_mouse_release()
                         return True
                     # 260907-5: 여러 개 함께 이동 / 범위 선택(고무줄) 진행·확정
                     elif t == QEvent.Type.MouseMove and (
                             ev.buttons() & Qt.MouseButton.LeftButton) and getattr(
                             self, "_multi_drag", None) is not None:
-                        cur = ev.position().toPoint(); last = self._multi_drag["last"]
+                        cur = self._drag_pos(ev.position().toPoint(), ev)   # 261112-7
+                        last = self._multi_drag["last"]
                         self._multi_translate(
                             (cur.x() - last.x()) / max(1.0, pr.width()),
                             (cur.y() - last.y()) / max(1.0, pr.height()))
@@ -6803,7 +6844,7 @@ class MainView(QWidget):
                     elif t == QEvent.Type.MouseButtonRelease and (
                             ev.button() == Qt.MouseButton.LeftButton) and getattr(
                             self, "_multi_drag", None) is not None:
-                        self._multi_drag = None
+                        self._multi_drag = None; self._drag_end()
                         self._save_page_strokes(); self._save_page_images()
                         return True
                     elif t == QEvent.Type.MouseMove and (
@@ -6827,7 +6868,8 @@ class MainView(QWidget):
                     elif t == QEvent.Type.MouseMove \
                             and (ev.buttons() & Qt.MouseButton.LeftButton) \
                             and self._stroke_drag is not None:
-                        cur = ev.position().toPoint(); last = self._stroke_drag["last"]
+                        cur = self._drag_pos(ev.position().toPoint(), ev)   # 261112-7
+                        last = self._stroke_drag["last"]
                         self._stroke_translate(
                             self._stroke_selected,
                             (cur.x() - last.x()) / max(1.0, pr.width()),
@@ -6837,7 +6879,7 @@ class MainView(QWidget):
                     elif t == QEvent.Type.MouseButtonRelease \
                             and ev.button() == Qt.MouseButton.LeftButton \
                             and self._stroke_drag is not None:
-                        self._stroke_drag = None; self._save_page_strokes()
+                        self._stroke_drag = None; self._drag_end(); self._save_page_strokes()
                         return True
                     elif t == QEvent.Type.MouseMove \
                             and not (ev.buttons() & Qt.MouseButton.LeftButton):
@@ -6860,6 +6902,8 @@ class MainView(QWidget):
                         h = self._shape_handle_at(ev.position().toPoint(), pr2)
                         if h is not None:
                             self._shape_transform_press(ev.position().toPoint(), pr2, h)
+                            self._drag_begin(ev.position().toPoint(), ev,       # 261112-7
+                                             [self._stroke_selected] if h == "move" else (), ())
                             self.view.setFocus(); return True
                         self._stroke_selected = -1; ov.update()   # 빈 곳 → 해제(새 도형)
                     ov.mousePressEvent(ev)
@@ -6870,7 +6914,7 @@ class MainView(QWidget):
                     if self._shape_drag is not None and held and pr2 is not None:
                         self._shape_transform_move(
                             ev.position().toPoint(), pr2,
-                            bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier))
+                            bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier), ev)
                         return True
                     if held or is_erase:
                         ov.mouseMoveEvent(ev)
@@ -6878,7 +6922,7 @@ class MainView(QWidget):
                 if (t == QEvent.Type.MouseButtonRelease
                         and ev.button() == Qt.MouseButton.LeftButton):
                     if self._shape_drag is not None:
-                        self._shape_drag = None; self._save_page_strokes()
+                        self._shape_drag = None; self._drag_end(); self._save_page_strokes()
                         return True
                     ov.mouseReleaseEvent(ev)
                     return True

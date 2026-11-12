@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""261012-4: 꾸밈 개체 복사·붙여넣기·Shift 끌어 복사 (마스터 §4.6.7) · 261012-3 책갈피창 ↻ 편집 모드에서도.
+"""261012-4: 꾸밈 개체 복사·붙여넣기·Ctrl 끌어 복사 (마스터 §4.6.7, 261112-7 에 Shift → Ctrl) · 261012-3 책갈피창 ↻ 편집 모드에서도.
 
 A. 글상자를 고르고 Ctrl+C → Ctrl+V(실제 키): 같은 쪽은 조금 비켜, 거듭 붙이면 또 비켜, 다른 쪽은 같은 자리
 B. 그 뒤 다른 프로그램에서 그림을 복사하면 Ctrl+V 는 종전대로 그림 붙여넣기(마지막에 복사한 것)
 C. 우클릭 '복사'·'붙여넣기' — 붙여넣기는 누른 자리에
-D. Shift + 끌기(실제 마우스) — 원본은 그대로, 복사본이 옮겨진다(선·글상자·사진·범위 선택)
+D. Ctrl + 끌기(실제 마우스) — 원본은 그대로, 복사본이 옮겨진다(선·글상자·사진·범위 선택)
 E. 붙인 것은 꾸밈 옆 파일(page_meta)에 남는다
 F. 책갈피창 ↻ — 편집 모드에서도 보이고, 저장 안 한 수정이 있으면 묻는다(취소면 그대로)
 """
@@ -62,20 +62,20 @@ try:
     vp = mv.view.viewport()
     pr = mv._page_view_rect()
 
-    def ev(kind, nx, ny, btn=Qt.MouseButton.LeftButton, shift=False):
+    def ev(kind, nx, ny, btn=Qt.MouseButton.LeftButton, ctrl=False):
         p = mv._norm_to_view(nx, ny, pr)
         buttons = btn if kind != QEvent.Type.MouseButtonRelease else Qt.MouseButton.NoButton
-        mods = Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier
+        mods = Qt.KeyboardModifier.ControlModifier if ctrl else Qt.KeyboardModifier.NoModifier
         return mv.eventFilter(vp, QMouseEvent(kind, QPointF(p), btn, buttons, mods))
 
     def click(nx, ny):
         ev(QEvent.Type.MouseButtonPress, nx, ny); ev(QEvent.Type.MouseButtonRelease, nx, ny)
 
-    def drag(a, b, shift=False):
-        ev(QEvent.Type.MouseButtonPress, a[0], a[1], shift=shift)
-        ev(QEvent.Type.MouseMove, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, shift=shift)
-        ev(QEvent.Type.MouseMove, b[0], b[1], shift=shift)
-        ev(QEvent.Type.MouseButtonRelease, b[0], b[1], shift=shift)
+    def drag(a, b, ctrl=False):
+        ev(QEvent.Type.MouseButtonPress, a[0], a[1], ctrl=ctrl)
+        ev(QEvent.Type.MouseMove, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, ctrl=ctrl)
+        ev(QEvent.Type.MouseMove, b[0], b[1], ctrl=ctrl)
+        ev(QEvent.Type.MouseButtonRelease, b[0], b[1], ctrl=ctrl)
 
     click(0.25, 0.13)
     chk(mv._stroke_selected == 0, "A0 개체선택으로 글상자를 고른다(실제 마우스)", str(mv._stroke_selected))
@@ -135,33 +135,33 @@ try:
     chk(new is not None and tl and abs(tl[0] - 0.50) < 0.01 and abs(tl[1] - 0.60) < 0.01,
         "C2 우클릭 '붙여넣기' — 누른 자리에 붙인다", str(tl))
 
-    # D — Shift + 끌기 = 복사본을 옮긴다
+    # D — Ctrl + 끌기 = 복사본을 옮긴다(261112-7, 종전 Shift)
     mv._page_strokes = [dict(TB)]; mv._img_objects = []; mv._save_page_strokes()
     mv._multi_clear(); mv._stroke_selected = -1
-    drag((0.25, 0.13), (0.25, 0.33), shift=True)
+    drag((0.25, 0.13), (0.25, 0.33), ctrl=True)
     rs = [s["rect"] for s in mv._page_strokes]
     chk(len(rs) == 2 and rs[0] == TB["rect"] and abs(rs[1][1] - 0.30) < 0.01,
-        "D1 Shift + 끌기 — 원본은 그대로, 복사본이 옮겨진다(글상자)", str(rs))
+        "D1 Ctrl + 끌기 — 원본은 그대로, 복사본이 옮겨진다(글상자)", str(rs))
     drag((0.25, 0.33), (0.25, 0.43))
     rs = [s["rect"] for s in mv._page_strokes]
-    chk(len(rs) == 2 and abs(rs[1][1] - 0.40) < 0.01, "D2 Shift 없이 끌면 종전대로 옮기기만", str(rs))
+    chk(len(rs) == 2 and abs(rs[1][1] - 0.40) < 0.01, "D2 Ctrl 없이 끌면 종전대로 옮기기만", str(rs))
     pix = QPixmap(40, 20); pix.fill(QColor("blue"))
     mv._img_objects = [{"pix": pix, "data": None, "rect": [0.6, 0.6, 0.1, 0.05], "shape": "rect", "alpha": 100, "rot": 0.0}]
     mv._img_selected = -1
-    drag((0.65, 0.625), (0.65, 0.725), shift=True)
+    drag((0.65, 0.625), (0.65, 0.725), ctrl=True)
     ri = [o["rect"] for o in mv._img_objects]
     chk(len(ri) == 2 and abs(ri[0][1] - 0.6) < 1e-6 and abs(ri[1][1] - 0.7) < 0.01,
-        "D3 사진도 Shift + 끌기 = 복사본", str(ri))
-    # 범위 선택(둘) → Shift + 끌기
+        "D3 사진도 Ctrl + 끌기 = 복사본", str(ri))
+    # 범위 선택(둘) → Ctrl + 끌기
     mv._page_strokes = [dict(TB), dict(TB, rect=[0.10, 0.20, 0.40, 0.26])]
     mv._img_objects = []
     mv._multi_clear(); mv._stroke_selected = -1; mv._img_selected = -1
     drag((0.05, 0.05), (0.45, 0.30))                    # 고무줄
     chk(sorted(mv._multi_strokes) == [0, 1], "D4a 고무줄로 둘을 고른다", str(mv._multi_strokes))
-    drag((0.25, 0.13), (0.55, 0.13), shift=True)
+    drag((0.25, 0.13), (0.55, 0.13), ctrl=True)
     rs = [s["rect"] for s in mv._page_strokes]
     chk(len(rs) == 4 and rs[0][0] == 0.10 and rs[1][0] == 0.10 and abs(rs[2][0] - 0.40) < 0.01 and abs(rs[3][0] - 0.40) < 0.01,
-        "D4 범위 선택도 Shift + 끌기 = 고른 것 모두의 복사본", str(rs))
+        "D4 범위 선택도 Ctrl + 끌기 = 고른 것 모두의 복사본", str(rs))
 
     # E — 옆 파일에 남는다
     st = mw._ensure_page_meta_store()
