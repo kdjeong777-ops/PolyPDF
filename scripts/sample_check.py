@@ -301,7 +301,7 @@ def main(argv) -> int:
     suite_p = Path(opt("--suite", str(HERE.parent / "sample_check_suite.json")))
     suite = json.loads(suite_p.read_text(encoding="utf-8"))
     only = set(filter(None, (opt("--only", "") or "").split(",")))
-    keys = (opt("--formats") or "").split(",") if opt("--formats") else [f.key for f in convert.ready_formats()]
+    keys = (opt("--formats") or "").split(",") if opt("--formats") else [f.key for f in convert.ready_formats() if convert.available(f.key)]
     use_com = "--no-com" not in argv
     stamp = time.strftime("%y%m%d-%H%M")
     out_dir = HERE.parent / "_review" / f"samples_{__version__}_{stamp}"

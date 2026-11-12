@@ -1094,8 +1094,12 @@ class PageThumbs(QWidget):
         from viewer.widgets.ctx_menu import CtxMenu
         from viewer import convert as _cv
         cm = CtxMenu(self)
+        cm.setToolTipsVisible(True)
         for _f in _cv.ready_formats():
             _a = cm.addAction(tr(_f.label))
+            if not _cv.available(_f.key):         # 261113-3(형식 변환 SOT §5): Word 가 없으면 흐리게 + 까닭
+                _a.setEnabled(False)
+                _a.setToolTip(tr(_cv.WORD_REQUIRED))
             if staged:
                 _a.triggered.connect(lambda _=False: QTimer.singleShot(0, self._need_save_first))
             else:

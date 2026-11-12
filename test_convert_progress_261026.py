@@ -61,7 +61,8 @@ try:
     keys = [f.key for f in convert.FORMATS]
     chk(keys.index("docx_shape") < keys.index("docx_edit") and keys.index("hwpx_shape") < keys.index("hwpx_edit"),
         "A 형식마다 '모양 그대로' 가 '편집 가능' 위", str(keys))
-    chk(keys.index("docx_word") == keys.index("docx_shape") + 1, "A 'Word (Microsoft Word 사용)' 은 'Word (모양 그대로)' 바로 아래", str(keys))
+    chk(keys.index("docx_edit") == keys.index("docx_shape") + 1 and keys.index("docx_word") == keys.index("docx_edit") + 1,
+        "A Word 차례 = 모양 그대로 → 편집 가능 → Microsoft Word 사용(261113-3)", str(keys))
     from viewer.widgets.convert_dialog import ConvertDialog
     dlg0 = ConvertDialog(None, files=[str(src)], page_count=60)
     chk(dlg0.format_key() == "docx_shape", "A 변환 창의 처음 고른 형식 = Word (모양 그대로)", str(dlg0.format_key()))

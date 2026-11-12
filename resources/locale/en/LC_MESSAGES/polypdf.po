@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-13 07:54+0900\n"
+"POT-Creation-Date: 2026-11-13 08:15+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -3554,6 +3554,14 @@ msgid "압축한 파일: {n}개"
 msgstr "Compressed files: {n}"
 
 #: viewer/convert/__init__.py
+msgid "Microsoft Word 가 설치된 PC 에서만 작동합니다."
+msgstr "Works only on a PC with Microsoft Word installed."
+
+#: viewer/convert/__init__.py
+msgid "Microsoft Word 가 PDF 를 다시 흘려 Word 문서로 만듭니다. Microsoft Word 가 설치된 PC 에서만 작동합니다(쪽 맞춤은 하지 않습니다)."
+msgstr "Microsoft Word reflows the PDF into a Word document. Works only on a PC with Microsoft Word installed (pages are not fitted)."
+
+#: viewer/convert/__init__.py
 msgid "쪽 변환"
 msgstr "Converting page"
 
@@ -3578,28 +3586,28 @@ msgid "Word 로 변환"
 msgstr "Converting with Word"
 
 #: viewer/convert/__init__.py
-msgid "Word (모양 그대로)"
-msgstr "Word (keep appearance)"
+msgid "Word (원본 모양)"
+msgstr "Word (Original layout)"
 
 #: viewer/convert/__init__.py
-msgid "Word (Microsoft Word 사용)"
-msgstr "Word (using Microsoft Word)"
+msgid "Word (줄잇기)"
+msgstr "Word (Joined lines)"
 
 #: viewer/convert/__init__.py
-msgid "Word (편집 가능)"
-msgstr "Word (editable)"
+msgid "Word (MS Word 모듈 적용)"
+msgstr "Word (MS Word engine)"
 
 #: viewer/convert/__init__.py
-msgid "한글 HWPX (모양 그대로)"
-msgstr "Hangul HWPX (keep appearance)"
+msgid "한글 HWPX (원본 모양)"
+msgstr "Hangul HWPX (Original layout)"
 
 #: viewer/convert/__init__.py
-msgid "한글 HWPX (편집 가능)"
-msgstr "Hangul HWPX (editable)"
+msgid "한글 HWPX (줄잇기)"
+msgstr "Hangul HWPX (Joined lines)"
 
 #: viewer/convert/__init__.py
-msgid "PowerPoint (모양 그대로)"
-msgstr "PowerPoint (keep appearance)"
+msgid "PowerPoint (원본 모양)"
+msgstr "PowerPoint (Original layout)"
 
 #: viewer/convert/__init__.py
 msgid "Excel (표)"
@@ -3618,8 +3626,8 @@ msgid "Word 파일을 만들지 못했습니다"
 msgstr "Could not create the Word file"
 
 #: viewer/convert/writers.py
-msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요"
-msgstr "Word turned the text of this PDF into pictures only — use 'Word (editable)' or 'Word (keep appearance)'"
+msgid "Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (줄잇기)' 나 'Word (원본 모양)' 을 쓰세요"
+msgstr "Word turned the text of this PDF into pictures only — use 'Word (Joined lines)' or 'Word (Original layout)'"
 
 #: viewer/convert_controller.py
 msgid "변환할 PDF 를 먼저 여세요."

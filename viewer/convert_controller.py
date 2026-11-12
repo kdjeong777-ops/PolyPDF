@@ -21,8 +21,12 @@ class ConvertMixin:
         """형식 하위 메뉴 — 다 만든 형식만(SOT §1). `on_pick(형식 키)`."""
         from viewer import convert
         m = QMenu(title, parent)
+        m.setToolTipsVisible(True)
         for f in convert.ready_formats():
             a = m.addAction(tr(f.label))
+            if not convert.available(f.key):      # 261113-3(§5): Word 가 없으면 흐리게 + 까닭
+                a.setEnabled(False)
+                a.setToolTip(tr(convert.WORD_REQUIRED))
             a.triggered.connect(lambda _=False, k=f.key: on_pick(k))
         return m
 

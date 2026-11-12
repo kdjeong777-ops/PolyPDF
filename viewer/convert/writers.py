@@ -83,7 +83,7 @@ def write_pptx_shape(ps, pages, dst: Path, tick) -> None:
     _w(ps, pages, dst, tick)
 
 
-WORD_IMAGES_ONLY = tr_noop("Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (편집 가능)' 이나 'Word (모양 그대로)' 를 쓰세요")
+WORD_IMAGES_ONLY = tr_noop("Word 가 이 PDF 의 글을 그림으로만 바꿨습니다 — 'Word (줄잇기)' 나 'Word (원본 모양)' 을 쓰세요")
 WORD_TEXT_MIN = 0.05       # 원본 글 대비 결과 글이 이보다 적으면 Word 가 쪽을 그림으로 바꾼 것으로 본다
 
 

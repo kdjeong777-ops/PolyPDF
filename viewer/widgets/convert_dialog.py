@@ -40,9 +40,24 @@ class ConvertDialog(QDialog):
             b = QRadioButton(tr(f.label))
             b.setObjectName("fmt_" + f.key)
             self.fmt_group.addButton(b)
-            fl.addWidget(b)
+            help_html = convert.help_text(f.key)
+            if help_html:                         # 261113-3(형식 변환 SOT §5): '?' 설명 — 지금은 'MS Word 모듈 적용' 만
+                from viewer.widgets.help_button import HelpButton
+                row_f = QHBoxLayout()
+                row_f.addWidget(b)
+                hb = HelpButton(help_html, tr(f.label), self)
+                hb.setObjectName("help_" + f.key)
+                row_f.addWidget(hb)
+                row_f.addStretch(1)
+                fl.addLayout(row_f)
+            else:
+                fl.addWidget(b)
+            if not convert.available(f.key):      # Word 가 없는 PC — 흐리게, 까닭은 풍선 도움말·'?' 로
+                b.setEnabled(False)
+                b.setToolTip(tr(convert.WORD_REQUIRED))
             self._fmt_btn[f.key] = b
-        first = preset if preset in self._fmt_btn else next(iter(self._fmt_btn), None)
+        usable = [k for k, b in self._fmt_btn.items() if b.isEnabled()]
+        first = preset if preset in usable else next(iter(usable), None)
         if first:
             self._fmt_btn[first].setChecked(True)
         lay.addWidget(g_fmt)

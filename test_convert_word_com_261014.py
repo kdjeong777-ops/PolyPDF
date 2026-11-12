@@ -2,7 +2,7 @@
 """261014-20: Word(Microsoft Word 사용) 변환 (형식 변환 SOT §4.4, 개선 로드맵 P3-2).
 
 Word 가 없는 PC 에서는 A·F 만 본다(나머지는 SKIP — Word 가 있는 PC 에서 의미가 있다).
-A. Word 가 있으면 형식 목록에 있고, F. 없으면 없다
+A. Word 가 있으면 고를 수 있고, F. 없으면 목록에 흐리게(까닭 풍선·'?' 설명, 변환을 부르면 까닭 알림 — 261113-3)
 B. 실제 처리기로 변환 — pdfreflow 안내 창에 막히지 않는다, docx 에 글
 C. Word 설정(`DisableConvertPdfWarning`)을 바꾸지 않는다
 D. 고른 쪽만
@@ -35,10 +35,30 @@ from viewer import convert
 from viewer.convert import word_com
 
 word_com._CACHE["installed"] = False
-chk("docx_word" not in [f.key for f in convert.ready_formats()], "F Word 가 없으면 형식 목록에 없다")
+# 261113-3(형식 변환 SOT §5, 사용자 결정): Word 가 없어도 목록에 두되 흐리게 + 까닭('?' 설명·풍선 도움말)
+chk("docx_word" in [f.key for f in convert.ready_formats()] and not convert.available("docx_word"),
+    "F Word 가 없으면 'MS Word 모듈 적용' 은 목록에 있되 고를 수 없다")
+from viewer.widgets.convert_dialog import ConvertDialog
+from viewer.widgets.help_button import HelpButton
+_dlg = ConvertDialog(None, files=["a.pdf"], page_count=3, preset="docx_word")
+_b = _dlg._fmt_btn.get("docx_word")
+_hb = _dlg.findChild(HelpButton, "help_docx_word")
+chk(_b is not None and not _b.isEnabled() and "설치된 PC 에서만" in _b.toolTip() and _dlg.format_key() == "docx_shape",
+    "F 변환 창 — 흐리게·까닭 풍선, 미리 고른 형식이어도 고르지 않고 맨 위(원본 모양)", str(_dlg.format_key()))
+chk(_hb is not None and "설치된 PC 에서만" in _hb.html(), "F 'MS Word 모듈 적용' 옆 '?' — Word 가 설치된 PC 에서만 작동")
+try:
+    convert.run("a.pdf", "docx_word"); _raised = ""
+except RuntimeError as _e:
+    _raised = str(_e)
+chk("설치된 PC 에서만" in _raised, "F Word 없이 변환을 부르면 까닭을 알리고 멈춘다", _raised)
+_dlg.deleteLater()
 word_com._CACHE.pop("installed", None)
 have = word_com.word_installed()
-chk(("docx_word" in [f.key for f in convert.ready_formats()]) == have, "A Word 가 있으면 형식 목록에 있다", str(have))
+chk(convert.available("docx_word") == have, "A Word 가 있으면 고를 수 있다", str(have))
+_dlg = ConvertDialog(None, files=["a.pdf"], page_count=3, preset="docx_word")
+chk(_dlg._fmt_btn["docx_word"].isEnabled() == have and (_dlg.format_key() == "docx_word") == have,
+    "A 변환 창 — Word 가 있으면 고를 수 있다")
+_dlg.deleteLater()
 
 
 def opt():
