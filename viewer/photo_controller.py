@@ -3743,14 +3743,11 @@ class PhotoMixin:
 
     # ── 폴더로 복사·이동 (4.41, 261105-5 — 파일 통째로, 최근 폴더 + 다른 폴더) ─────────────
     def _photo_xfer_dirs(self) -> list:
-        """최근 쓴 대상 폴더(맨 앞이 최근) — 없어진 폴더는 뺀다."""
-        lst = [str(d) for d in (self._photo_prefs().get("transfer_dirs") or []) if d]
-        return [d for d in lst if os.path.isdir(d)][:PHOTO_XFER_RECENT]
+        """최근 쓴 대상 폴더(맨 앞이 최근) — 없어진 폴더는 뺀다. 261112-18: 두 모드 한 함수(`_xfer_recent_dirs`, 모드마다 따로 목록)."""
+        return self._xfer_recent_dirs()
 
     def _photo_xfer_remember(self, d) -> None:
-        pic = self._photo_prefs()
-        old = [str(x) for x in (pic.get("transfer_dirs") or []) if os.path.normcase(str(x)) != os.path.normcase(str(d))]
-        pic["transfer_dirs"] = ([str(d)] + old)[:PHOTO_XFER_RECENT]
+        self._xfer_remember(d)
 
     def _photo_xfer_menu(self, menu, paths) -> None:
         """우클릭 메뉴에 '폴더로 복사 ▸'·'폴더로 이동 ▸' — 최근 폴더 `PHOTO_XFER_RECENT` 개 + '다른 폴더…'. zip·휴대 장치 사진은 복사만."""
@@ -3759,7 +3756,6 @@ class PhotoMixin:
         if not paths:
             return
         cached = self._photo_any_cached(paths)
-        dirs = self._photo_xfer_dirs()
         k = len(paths)
         for move in (False, True):
             if k > 1:
@@ -3772,12 +3768,8 @@ class PhotoMixin:
             if move and cached:
                 sub.setEnabled(False)
                 continue
-            for d in dirs:
-                a = sub.addAction(Path(d).name or d)
-                a.setToolTip(d)
-                a.triggered.connect(lambda _=False, dd=d, mv=move, ps=list(paths):
-                                    QTimer.singleShot(0, lambda: self._photo_transfer(ps, dd, mv)))
-            if dirs:
+            # 261112-18: 맨 위 ⭐ 즐겨찾기 폴더 + 최근 폴더 — PDF 메뉴와 한 함수
+            if self._xfer_fill_quick(sub, lambda d, mv=move, ps=list(paths): self._photo_transfer(ps, d, mv)):
                 sub.addSeparator()
             a = sub.addAction(tr("다른 폴더"))
             a.triggered.connect(lambda _=False, mv=move, ps=list(paths):

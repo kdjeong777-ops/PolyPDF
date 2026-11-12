@@ -490,6 +490,8 @@ class BookmarkTree(QWidget):
         self._probe_done = 0
         self.probe_provider = None   # 앱이 주입: (path,size,mtime) -> (enc,has_toc,auth)|None
         self.photo_menu_fill = None   # 앱이 주입: (메뉴, 사진 경로들, 'tree', 책갈피창 줄) — 사진 세 메뉴 한 함수(사진 보기 SOT §4.20, 261107-2)
+        self.xfer_quick = None          # 앱이 주입: (하위 메뉴, run(폴더)) -> bool — 폴더로 복사·이동 맨 위 즐겨찾기·최근 폴더(261112-18)
+        self.xfer_done = None           # 앱이 주입: (대상 폴더) — 복사·이동이 되면 최근 폴더 맨 앞에(261112-18)
         self.save_first_check = None    # 앱이 주입: (파일들) -> True 면 저장 전 쪽 편집이 있어 알렸다 — 저장 ▸ 사본 넷 앞(261107-21, 마스터 §4.7.13)
         self.pdf_backup_of = None       # 앱이 주입: (PDF) -> 처음 원본 백업 경로|None — '원본으로 되돌리기' 를 보일지(261107-29, 마스터 §4.7.5)
         self.probe_db_path = None    # 앱이 주입: 조사 결과를 적어 둘 인덱스 DB
@@ -3913,6 +3915,13 @@ class BookmarkTree(QWidget):
             a = sub.addAction(label)
             a.triggered.connect(later(lambda d=folder: self._transfer_files(paths, d, move)))
 
+        # 261112-18(사용자 지시·결정): 맨 위 ⭐ 즐겨찾기 폴더 + 최근 폴더 — 사진 메뉴와 같은 함수(앱 `_xfer_fill_quick`)
+        if self.xfer_quick is not None:
+            try:
+                if self.xfer_quick(sub, lambda d: self._transfer_files(paths, d, move)):
+                    sub.addSeparator()
+            except Exception:
+                pass
         a_new = sub.addAction(tr("새 폴더 만들기"))     # ①
         a_new.triggered.connect(
             later(lambda: self._transfer_files(paths, self._ask_new_folder(base=src), move)))
@@ -4124,6 +4133,11 @@ class BookmarkTree(QWidget):
                 done += 1
             except Exception as e:
                 errors.append(f"{src.name}: {e}")
+        if done and self.xfer_done is not None:
+            try:
+                self.xfer_done(str(dst))          # 261112-18: 최근 복사·이동 폴더(모드마다 따로)
+            except Exception:
+                pass
         if pairs:
             self._sync_after_transfer(dst)
             self.filesRelocated.emit(pairs)

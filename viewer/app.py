@@ -2700,6 +2700,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             _bt.photo_menu_fill = self._photo_menu_fill              # 261107-2(사진 보기 SOT §4.20) — 아래 창도 사진 세 메뉴 한 함수
             _bt.save_first_check = self._copy_blocked                # 261107-21(§4.7.13): 저장 ▸ 사본 넷은 저장 전 쪽 편집이 있으면 먼저 저장
             _bt.pdf_backup_of = self._pdf_backup_of                  # 261107-29(§4.7.5): '원본으로 되돌리기' 는 처음 원본 백업이 있을 때만
+            _bt.xfer_quick = self._xfer_fill_quick                   # 261112-18: 폴더로 복사·이동 맨 위 즐겨찾기 폴더 + 최근 폴더(사진과 한 함수)
+            _bt.xfer_done = self._xfer_remember
         self.page_thumbs.convertPagesRequested.connect(
             lambda pages, k: self.action_convert(
                 files=[str(self.page_thumbs._doc.path)] if getattr(self.page_thumbs, "_doc", None) else None,
@@ -10582,6 +10584,55 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         for a in getattr(self, "_fav_btn_acts", []):
             if hasattr(a, "refresh"):              # 무리 바깥 왼쪽 그림 표시(RibbonIconMark)
                 a.refresh()
+
+    # ── 261112-18(책갈피창·저장 SOT '폴더로 복사·이동 의 맨 위', 사진 보기 SOT §4.41): 즐겨찾기 폴더 + 최근 폴더 — 두 모드 한 함수 ──
+    def _xfer_prefs(self) -> dict:
+        """최근 복사·이동 폴더를 담는 설정 묶음 — 모드마다 따로(사용자 결정): 사진 모드 `picture`, PDF 모드 맨 위."""
+        return self._photo_prefs() if getattr(self, "_photo_mode", False) else self._prefs
+
+    def _xfer_recent_dirs(self) -> list:
+        from viewer.photo_controller import PHOTO_XFER_RECENT
+        lst = [str(d) for d in (self._xfer_prefs().get("transfer_dirs") or []) if d]
+        return [d for d in lst if os.path.isdir(d)][:PHOTO_XFER_RECENT]
+
+    def _xfer_remember(self, d) -> None:
+        from viewer.photo_controller import PHOTO_XFER_RECENT
+        pr = self._xfer_prefs()
+        old = [str(x) for x in (pr.get("transfer_dirs") or []) if os.path.normcase(str(x)) != os.path.normcase(str(d))]
+        pr["transfer_dirs"] = ([str(d)] + old)[:PHOTO_XFER_RECENT]
+
+    def _xfer_fill_quick(self, sub, run) -> bool:
+        """'폴더로 복사 ▸'·'폴더로 이동 ▸' 맨 위 — ⭐ 지금 모드의 즐겨찾기 폴더(등록 차례) → 최근 폴더. 더한 것이 있으면 True.
+        즐겨찾기는 만들 때 있는지 보지 않는다(즐겨찾기 메뉴와 같은 규칙) — 누를 때 `_fav_resolve`. `run(폴더)` 는 메뉴가 닫힌 뒤에 부른다."""
+        from viewer.widgets.favorites_dialog import fav_kind
+        seen, n = set(), 0
+
+        def later(fn):
+            return lambda _=False: QTimer.singleShot(0, fn)
+        for f in list(self._favorites or []):
+            if fav_kind(f) != "folder":
+                continue
+            folder = str(f.get("folder") or "")
+            a = sub.addAction("⭐ " + str(f.get("name") or Path(folder).name or folder))
+            a.setToolTip(folder)
+            a.triggered.connect(later(lambda ff=f: self._xfer_fav_run(ff, run)))
+            seen.add(os.path.normcase(folder))
+            n += 1
+        for d in self._xfer_recent_dirs():
+            if os.path.normcase(d) in seen:
+                continue
+            a = sub.addAction(Path(d).name or d)
+            a.setToolTip(d)
+            a.triggered.connect(later(lambda dd=d: run(dd)))
+            n += 1
+        return n > 0
+
+    def _xfer_fav_run(self, fav, run) -> None:
+        target = self._fav_resolve(fav)
+        if target is None or not Path(str(target)).is_dir():
+            QMessageBox.warning(self, tr("오류"), tr('대상을 찾을 수 없습니다:\n{get}').format(get=fav.get('folder')))
+            return
+        run(str(target))
 
     def _add_current_folder_favorite(self):
         if not self._folder:
