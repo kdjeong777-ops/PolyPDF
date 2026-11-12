@@ -10,6 +10,8 @@ D. 쪽 복사: 표식 + 첫 쪽 그림, PolyPDF 안 판정은 'pages' 그대로
 E. 꾸밈 복사: 표식 + 고른 꾸밈만 그린 투명 그림, 판정은 'deco' 그대로
 F. 사진 복사(`_photo_copied`): 그림
 G. Word 가 있으면 새 Word(보이지 않음)에 B·E 가 그림으로 붙는다 — 수정 전 코드(Qt 그림 + "PNG")는 '명령을 정상적으로 종료할 수 없습니다'
+H. (261113-6) 글·파일 복사도 즉시 데이터 — 앱 메인이 3초 바쁜 동안 다른 프로세스가 경로 글을 곧바로 받는다(수정 전 Qt setText 는 섰다),
+   파일은 CF_HDROP·Preferred DropEffect, 앱 코드에 clipboard_util 밖 Qt 직접 넣기 없음. '확인 못 함' 줄에 진단(clipboard_util.diag)
 수정 전 코드는 A(군더더기)·B(DIB 흰 바탕 아님)·D·E(그림 없음)·G 가 실패한다.
 다른 프로그램이 클립보드를 쥐어 넣지 못하면 그 항목은 '확인 못 함'(스크린샷 SOT §8.3 판정법). 끝에 사용자 클립보드의 글·그림을 되돌린다.
 """
@@ -111,7 +113,10 @@ def wait_owned(ms=5000):
 
 
 def contended(section):
-    unver(section, "다른 프로그램이 클립보드를 쥠 — 쥔 프로그램: " + str(clipboard_util.holder_name() or "알 수 없음"))
+    # 261113-6(스크린샷 SOT §8.3 의 5): 진단 줄 — 연 창·내용 주인·순번·열기까지 시간
+    d = getattr(clipboard_util, "diag", lambda: "")()
+    unver(section, "다른 프로그램이 클립보드를 쥠 — 쥔 프로그램: " + str(clipboard_util.holder_name() or "알 수 없음")
+          + (" · 진단: " + d if d else ""))
 
 
 JUNK = ("image/bmp", "image/tiff", "image/ico", "image/jpeg")
@@ -242,6 +247,62 @@ else:
     chk(len(fm.get("CF_DIB", b"")) > 40 and not any(j in fm for j in JUNK), "F 사진 복사 — CF_DIB(군더더기 없이)", str(sorted(fm)))
 
 
+# H. 261113-6(스크린샷 SOT §8.4·응답성 SOT): 글·파일도 즉시 데이터 — 앱이 넣은 뒤 메인이 바빠도 다른 프로세스가 곧바로 받는다.
+#   수정 전(Qt setText = 지연 렌더링)은 다른 프로세스의 GetClipboardData 가 앱이 그려 줄 때까지(메인이 쉴 때까지) 섰다.
+READER = ("import ctypes,ctypes.wintypes as wt,time\n"
+          "u=ctypes.windll.user32;k=ctypes.windll.kernel32\n"
+          "u.GetClipboardData.restype=wt.HANDLE;k.GlobalLock.restype=ctypes.c_void_p;k.GlobalLock.argtypes=[wt.HANDLE]\n"
+          "k.GlobalUnlock.argtypes=[wt.HANDLE]\n"
+          "time.sleep(0.3);t=time.perf_counter()\n"
+          "while not u.OpenClipboard(None):\n time.sleep(0.005)\n"
+          "h=u.GetClipboardData(13);s=ctypes.wstring_at(k.GlobalLock(h)) if h else '';h and k.GlobalUnlock(h)\n"
+          "u.CloseClipboard()\nprint('%.3f|%s'%(time.perf_counter()-t,s[-200:]),flush=True)\n")
+from viewer import key_actions
+mw.open_pdfs([str(pdf)]); spin(0.3)
+key_actions.copy_path(mw)
+rd = subprocess.Popen([sys.executable, "-c", READER], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                      encoding="utf-8", errors="replace", creationflags=0x08000000,
+                      env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+time.sleep(3.0)                                   # 앱 메인이 바쁘다(메시지를 처리하지 않음)
+out_r = (rd.communicate(timeout=30)[0] or "").strip()
+print("   다른 프로세스가 읽음:", out_r[-160:])
+spin(0.2)
+try:
+    sec, txt = out_r.split("|", 1)
+    sec = float(sec)
+except Exception:
+    sec, txt = 99.0, out_r
+if pdf.name not in txt and sec >= 99:
+    contended("H 글 복사 — 다른 프로세스")
+else:
+    chk(pdf.name in txt, "H 경로 복사 글을 다른 프로세스가 받는다(CF_UNICODETEXT)", repr(txt))
+    chk(sec < 1.0, "H 앱 메인이 바쁜 동안에도 다른 프로세스가 곧바로 받는다(지연 렌더링 아님)", "%.2f초" % sec)
+fm = formats() or {}
+chk(not any(m.startswith("application/x-qt") for m in fm), "H 글 복사에 Qt 전용 형식이 없다", str(sorted(fm)))
+if hasattr(clipboard_util, "set_files"):
+    clipboard_util.set_files([str(pdf)]); spin(0.2)
+    fm = formats() or {}
+    if fm is None or "CF_HDROP" not in fm:
+        if not wait_owned(2000):
+            contended("H 파일 복사")
+    else:
+        chk(str(pdf).encode("utf-16-le") in fm["CF_HDROP"], "H 파일 복사 — CF_HDROP 에 그 경로", str(sorted(fm)))
+        chk("Preferred DropEffect" in fm, "H 파일 복사 — Preferred DropEffect(복사)", str(sorted(fm)))
+        md = cb.mimeData()
+        chk(md is not None and md.hasUrls() and Path(md.urls()[0].toLocalFile()) == pdf, "H PolyPDF(Qt)도 파일로 읽는다")
+else:
+    chk(False, "H clipboard_util.set_files 가 있다")
+import re as _re
+_bad = []
+for _p in Path(HERE, "viewer").rglob("*.py"):
+    if _p.name == "clipboard_util.py":
+        continue
+    for _i, _l in enumerate(_p.read_text(encoding="utf-8").splitlines(), 1):
+        if _re.search(r"clipboard\(\)\.(setText|setMimeData|setImage|setPixmap)\(", _l):
+            _bad.append("%s:%d" % (_p.relative_to(HERE), _i))
+chk(not _bad, "H 앱 코드는 clipboard_util 밖에서 Qt 로 클립보드에 넣지 않는다", _bad)
+
+
 # G. Word 에 붙이기(있을 때만)
 def word_paste():
     code = ("import sys,pythoncom,win32com.client as w\n"
@@ -280,7 +341,7 @@ else:
 shutil.rmtree(tmp, ignore_errors=True)
 # 사용자 클립보드 되돌리기
 if ORIG_TEXT is not None:
-    cb.setText(ORIG_TEXT)
+    (getattr(clipboard_util, "set_text", None) or cb.setText)(ORIG_TEXT)
 elif ORIG_IMG is not None and not ORIG_IMG.isNull():
     clipboard_util.set_image(ORIG_IMG, None)
 spin(0.3)

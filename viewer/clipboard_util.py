@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""클립보드에 그림 넣기 — 한 곳 (261024-2, 스크린샷 SOT §8.3).
+"""클립보드에 넣기 — 한 곳: 그림 `set_image`·글 `set_text`·파일 `set_files`·표식 `set_data` (261024-2·261113-6, 스크린샷 SOT §8.3·§8.4).
 
 Windows 클립보드는 한 번에 한 프로그램만 연다. 다른 프로그램(클립보드 기록 서비스·메신저·
 캡처 도구 등)이 쥐고 있으면 Qt 의 `setImage` 는 `OpenClipboard` 실패(0x800401D0)를 경고로만
@@ -252,6 +252,149 @@ def _write_win(formats) -> bool:
     finally:
         u.CloseClipboard()
     return ok
+
+
+CF_UNICODETEXT, CF_HDROP = 13, 15
+
+
+def _reg(name: str) -> int:
+    u = ctypes.windll.user32
+    u.RegisterClipboardFormatW.restype = wintypes.UINT
+    u.RegisterClipboardFormatW.argtypes = [wintypes.LPCWSTR]
+    return u.RegisterClipboardFormatW(name)
+
+
+def _put(fmts_fn, qt_fill, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS):
+    """261113-6(스크린샷 SOT §8.4): 넣기 한 길 — Windows 는 `fmts_fn()` 이 낸 [(형식, 바이트)] 를 Win32 **즉시 데이터**로,
+    다른 플랫폼은 `qt_fill(QMimeData)` 로 Qt 에. 못 열면 타이머로 다시(§8.3). Qt 의 지연 렌더링은 앱이 바쁜 동안
+    Win+V 기록 서비스가 클립보드를 쥔 채 기다려 다른 모든 프로그램을 막았다(실측 5.5초) — Windows 에서는 쓰지 않는다."""
+    state = {"left": max(1, int(tries))}
+    win = QGuiApplication.platformName() == "windows"
+    fmts = []
+    if win:
+        try:
+            fmts = fmts_fn()
+        except Exception:
+            win = False
+
+    def attempt():
+        state["left"] -= 1
+        done = False
+        try:
+            if win:
+                done = _write_win(fmts)
+            else:
+                from PyQt6.QtCore import QMimeData
+                md = QMimeData()
+                qt_fill(md)
+                QApplication.clipboard().setMimeData(md)
+                done = True                               # 다른 플랫폼은 프로그램 안 클립보드 — 곧바로 들어간다
+        except Exception:
+            pass
+        if done:
+            if on_done:
+                on_done(True)
+        elif state["left"] > 0:
+            QTimer.singleShot(interval_ms, attempt)
+        elif on_done:
+            on_done(False)
+
+    attempt()
+
+
+def _extra_fmts(extra) -> list:
+    return [(_reg(m), bytes(v)) for m, v in (extra or {}).items()]
+
+
+def set_text(text: str, on_done=None, extra: dict | None = None):
+    """글을 클립보드에 — Windows 는 `CF_UNICODETEXT` 즉시 데이터(`CF_TEXT` 는 Windows 가 만들어 준다). 261113-6."""
+    text = str(text or "")
+
+    def qt_fill(md):
+        md.setText(text)
+        for m, v in (extra or {}).items():
+            md.setData(m, bytes(v))
+    _put(lambda: [(CF_UNICODETEXT, text.encode("utf-16-le") + b"\0\0")] + _extra_fmts(extra), qt_fill, on_done)
+
+
+def set_files(paths, on_done=None):
+    """파일들을 클립보드에(탐색기·메일·메신저에 붙이면 첨부) — `CF_HDROP` + `Preferred DropEffect`=복사. 261113-6."""
+    import os
+    import struct
+    paths = [os.path.abspath(str(p)) for p in paths]
+
+    def fmts():
+        body = "".join(p + "\0" for p in paths) + "\0"
+        drop = struct.pack("<IiiII", 20, 0, 0, 0, 1) + body.encode("utf-16-le")       # DROPFILES(pFiles=20, fWide)
+        return [(CF_HDROP, drop), (_reg("Preferred DropEffect"), struct.pack("<I", 1))]
+
+    def qt_fill(md):
+        from PyQt6.QtCore import QUrl
+        md.setUrls([QUrl.fromLocalFile(p) for p in paths])
+    _put(fmts, qt_fill, on_done)
+
+
+def set_data(extra: dict, on_done=None):
+    """앱 안 전용 표식만(그림을 만들지 못했을 때) — 형식 이름 = MIME. 261113-6."""
+    def qt_fill(md):
+        for m, v in (extra or {}).items():
+            md.setData(m, bytes(v))
+    _put(lambda: _extra_fmts(extra), qt_fill, on_done)
+
+
+def diag() -> str:
+    """261113-6(스크린샷 SOT §8.3 의 5): '확인 못 함' 진단 한 줄 — 연 창의 프로세스·내용 주인·순번·지금 열기까지 걸린 시간.
+    클립보드 내용은 바꾸지 않는다(열었다 닫기만)."""
+    if QGuiApplication.platformName() != "windows":
+        return "Windows 아님"
+    try:
+        import os
+        import time
+        u, k = ctypes.windll.user32, ctypes.windll.kernel32
+        u.GetOpenClipboardWindow.restype = wintypes.HWND
+        u.GetClipboardOwner.restype = wintypes.HWND
+        u.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        u.OpenClipboard.argtypes = [wintypes.HWND]
+        k.OpenProcess.restype = wintypes.HANDLE
+        k.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        k.CloseHandle.argtypes = [wintypes.HANDLE]
+
+        def who(hwnd):
+            if not hwnd:
+                return None
+            if hwnd == _owner["hwnd"]:
+                return "이 앱"
+            pid = wintypes.DWORD()
+            u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value == os.getpid():
+                return "이 앱(Qt 창)"
+            h = k.OpenProcess(0x1000, False, pid.value)
+            if not h:
+                return "pid %d(권한)" % pid.value
+            try:
+                buf = ctypes.create_unicode_buffer(520)
+                n = wintypes.DWORD(520)
+                ok = k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n))
+                return "%s(pid %d)" % (os.path.basename(buf.value), pid.value) if ok else "pid %d" % pid.value
+            finally:
+                k.CloseHandle(h)
+        opener = u.GetOpenClipboardWindow()
+        seq0 = u.GetClipboardSequenceNumber()
+        t0 = time.perf_counter()
+        opened = False
+        while time.perf_counter() - t0 < 1.0:
+            if u.OpenClipboard(None):
+                u.CloseClipboard()
+                opened = True
+                break
+            time.sleep(0.01)
+        wait = time.perf_counter() - t0
+        return "연 창 %s · 내용 주인 %s · 순번 %d→%d · 지금 열기 %s" % (
+            who(opener) or ("없음" if opened and wait < 0.02 else "알 수 없음(창 없이 염)"),
+            who(u.GetClipboardOwner()) or "없음", seq0, u.GetClipboardSequenceNumber(),
+            ("%.0fms" % (wait * 1000)) if opened else "1초 넘게 막힘")
+    except Exception as e:
+        return "진단 실패 %r" % e
 
 
 def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS, png: bytes | None = None,

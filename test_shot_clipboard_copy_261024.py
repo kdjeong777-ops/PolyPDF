@@ -98,7 +98,8 @@ HOLDER_WIN = (
 
 def holder_why():
     who = clipboard_util.holder_name()
-    return f"쥐는 장치가 클립보드를 쥐지 못함 — 쥔 프로그램: {who or '알 수 없음(창 없이 열었거나 권한 높음)'}"
+    d = getattr(clipboard_util, "diag", lambda: "")()        # 261113-6(스크린샷 SOT §8.3 의 5): 연 창·내용 주인·순번·열기 시간
+    return f"쥐는 장치가 클립보드를 쥐지 못함 — 쥔 프로그램: {who or '알 수 없음(창 없이 열었거나 권한 높음)'}" + (f" · 진단: {d}" if d else "")
 
 
 def hold(seconds):

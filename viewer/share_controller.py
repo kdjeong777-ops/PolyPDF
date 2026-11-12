@@ -151,11 +151,8 @@ class ShareMixin:
 
     def _share_to_clipboard(self, path):
         """묶음 **파일**을 클립보드에 — 탐색기·메신저·메일 창에 붙여넣으면 첨부된다."""
-        from PyQt6.QtCore import QMimeData, QUrl
-        from PyQt6.QtWidgets import QApplication
-        md = QMimeData()
-        md.setUrls([QUrl.fromLocalFile(str(path))])
-        QApplication.clipboard().setMimeData(md)
+        from viewer import clipboard_util        # 261113-6(스크린샷 SOT §8.4): CF_HDROP 즉시 데이터
+        clipboard_util.set_files([path])
 
     # ── 받기 ──
     def open_share_bundle(self, zip_path) -> list:

@@ -2416,7 +2416,8 @@ class MainView(QWidget):
         txt = self._region_text(scene_rect)
         n = len((txt or "").strip())
         if n:
-            QApplication.clipboard().setText(txt)
+            from viewer import clipboard_util    # 261113-6(스크린샷 SOT §8.4): 즉시 데이터 한 길
+            clipboard_util.set_text(txt)
         self.textCopied.emit(n)
         return n
 
@@ -2448,7 +2449,8 @@ class MainView(QWidget):
         txt = self._apply_text_fixes(txt)          # 260908-2
         n = len((txt or "").strip())
         if n:
-            QApplication.clipboard().setText(txt)
+            from viewer import clipboard_util    # 261113-6(스크린샷 SOT §8.4): 즉시 데이터 한 길
+            clipboard_util.set_text(txt)
         self.textCopied.emit(n)
         return n
 
@@ -2468,7 +2470,8 @@ class MainView(QWidget):
         txt = self._apply_text_fixes(txt)          # 260908-2
         n = len((txt or "").strip())
         if n:
-            QApplication.clipboard().setText(txt)
+            from viewer import clipboard_util    # 261113-6(스크린샷 SOT §8.4): 즉시 데이터 한 길
+            clipboard_util.set_text(txt)
         self.textCopied.emit(n)
         return n
 
@@ -5107,8 +5110,6 @@ class MainView(QWidget):
         """고른 꾸밈을 담는다. 담은 개수."""
         import copy
         import uuid
-        from PyQt6.QtCore import QByteArray, QMimeData
-        from PyQt6.QtWidgets import QApplication
         if not self._img_edit or self._is_image:
             return 0
         self._commit_text_editor()
@@ -5125,12 +5126,8 @@ class MainView(QWidget):
             from viewer import clipboard_util
             clipboard_util.set_image(img, None, extra={self.DECO_MIME: token.encode("ascii")})
         else:
-            md = QMimeData()
-            md.setData(self.DECO_MIME, QByteArray(token.encode("ascii")))
-            try:
-                QApplication.clipboard().setMimeData(md)
-            except Exception:
-                pass
+            from viewer import clipboard_util    # 261113-6(스크린샷 SOT §8.4): 표식만 — 즉시 데이터
+            clipboard_util.set_data({self.DECO_MIME: token.encode("ascii")})
         return len(ms) + len(mi)
 
     def _deco_image(self, ms, mi):

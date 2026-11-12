@@ -105,7 +105,8 @@ def copy_path(mw) -> None:
     if _photo_mode(mw):
         mw._photo_action("copy_path", ps)
         return
-    QApplication.clipboard().setText("\n".join(ps))
+    from viewer import clipboard_util            # 261113-6(스크린샷 SOT §8.4): 즉시 데이터 한 길
+    clipboard_util.set_text("\n".join(ps))
     _status(mw, tr("경로를 복사했습니다."), 2500)
 
 

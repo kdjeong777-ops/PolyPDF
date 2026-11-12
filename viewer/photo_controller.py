@@ -2693,7 +2693,8 @@ class PhotoMixin:
         from PyQt6.QtWidgets import QApplication
         text = photo_address_text(getattr(self, "_photo_info", None) or {})
         if text:
-            QApplication.clipboard().setText(text)
+            from viewer import clipboard_util    # 261113-6(스크린샷 SOT §8.4): 즉시 데이터 한 길
+            clipboard_util.set_text(text)
             try:
                 self.statusBar().showMessage(tr("주소를 복사했습니다: {a}").format(a=text), 3000)
             except Exception:
@@ -3384,7 +3385,8 @@ class PhotoMixin:
             return
         from PyQt6.QtWidgets import QApplication
         if kind == "copy_path":
-            QApplication.clipboard().setText("\n".join(paths))
+            from viewer import clipboard_util    # 261113-6(스크린샷 SOT §8.4)
+            clipboard_util.set_text("\n".join(paths))
             self.status.showMessage(tr("경로를 복사했습니다."), 2500)
         elif kind == "copy_image":
             from viewer.workers import run_in_thread

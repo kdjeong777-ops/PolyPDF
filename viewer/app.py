@@ -5481,12 +5481,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             from viewer import clipboard_util
             clipboard_util.set_image(img, None, extra={PAGES_CLIP_MIME: token.encode("ascii")})
         else:
-            try:
-                md = QMimeData()
-                md.setData(PAGES_CLIP_MIME, QByteArray(token.encode("ascii")))
-                QApplication.clipboard().setMimeData(md)
-            except Exception:
-                pass
+            from viewer import clipboard_util    # 261113-6(스크린샷 SOT §8.4): 표식만 — 즉시 데이터
+            clipboard_util.set_data({PAGES_CLIP_MIME: token.encode("ascii")})
         self.status.showMessage(
             tr('썸네일 {n}쪽 복사됨 — 다른 PDF 썸네일에서 붙여넣기(Ctrl+V)').format(n=len(items)), 5000)
 
