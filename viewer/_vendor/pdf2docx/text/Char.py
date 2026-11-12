@@ -24,7 +24,14 @@ class Char(Element):
 
         # Note to filter control character avoiding error when making docx, #126
         c = raw.get('c', '')
-        if c in INVALID_CHARS: c = ''
+        self.pp_ctrl = False
+        if c and c in INVALID_CHARS:
+            # POLYPDF 고침 8: 앱이 걸이를 걸었으면 지우지 않고 '�'(알 수 없는 글자 표시) — 앱의 다른 변환과 같게
+            from ..polypdf_fit import HOOK as _pp_hook
+            if _pp_hook is not None:
+                c, self.pp_ctrl = '�', True
+            else:
+                c = ''
         self.c = c
         self.origin = raw.get('origin', None)
 

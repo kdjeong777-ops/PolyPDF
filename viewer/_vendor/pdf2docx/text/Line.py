@@ -172,7 +172,11 @@ class Line(Element):
             for _ in range(self.tab_stop): p.add_run().add_tab()
 
         # create span -> run in paragraph
-        for span in self.spans: span.make_docx(p)            
+        for span in self.spans: span.make_docx(p)
+
+        # POLYPDF 고침 8: 이어지는 줄 사이 빈칸(텍스트 창이 이을 때 넣은 것)
+        if not self.line_break and getattr(self, 'pp_sep', '') and p.runs:
+            p.runs[-1].text = p.runs[-1].text + self.pp_sep
 
         # line break
         if self.line_break: p.add_run('\n')

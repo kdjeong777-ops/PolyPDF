@@ -57,15 +57,15 @@ def write_png(ps, pages, dst: Path, tick) -> None:
 
 
 def write_docx_edit(ps, pages, dst: Path, tick) -> None:
-    """Word(편집 가능) — 이은 문단·표·그림을 python-docx 로(§1)."""
-    from viewer.convert.docx_writer import write_docx_edit as _w
-    _w(ps, pages, dst, tick)
+    """Word(편집 가능) — 모양 그대로와 같은 pdf2docx 길에 텍스트 창이 이은 문장 줄만 잇는다(§1, 261113-3)."""
+    from viewer.convert.proc import convert_docx
+    convert_docx(ps, pages, dst, tick, mode="edit")
 
 
 def write_docx_shape(ps, pages, dst: Path, tick) -> None:
-    """Word(모양 그대로) — pdf2docx 를 **보조 프로세스**에서(§4.1)."""
+    """Word(모양 그대로) — pdf2docx 를 **보조 프로세스**에서(§4.1), 원본 줄마다 끊는다(고침 8)."""
     from viewer.convert.proc import convert_docx
-    convert_docx(ps, pages, dst, tick)
+    convert_docx(ps, pages, dst, tick, mode="shape")
 
 
 def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:

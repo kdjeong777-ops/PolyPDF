@@ -52,17 +52,22 @@ def _layered_copy(ps, pages, tick) -> str | None:
     return tmp or None
 
 
-def convert_docx(ps, pages, dst: Path, tick) -> None:
-    """부모 쪽 — 배경 스레드에서 부른다. `tick` 이 `Cancelled` 를 던지면 자식을 멈추고 결과를 지운다(부르는 쪽이)."""
+def convert_docx(ps, pages, dst: Path, tick, mode: str = "shape") -> None:
+    """부모 쪽 — 배경 스레드에서 부른다. `tick` 이 `Cancelled` 를 던지면 자식을 멈추고 결과를 지운다(부르는 쪽이).
+    `mode` — "shape"(모양 그대로: 원본 줄마다 끊음) / "edit"(편집 가능: 텍스트 창이 이은 줄만 잇는다) — §1·§4.1 고침 8(261113-3)."""
     from viewer import index_proc
     from viewer.convert import Cancelled, step_text
+    from viewer.convert import word_fit
     src = _layered_copy(ps, pages, tick) or ps.path
     # 머리말·꼬리말(§1.1): 사본에서 그 글을 지우고 변환한 뒤 Word 머리글·바닥글 기능으로 다시 넣는다
     from viewer.convert import layout
     per_page = {}
+    plan = {"mode": mode, "pages": {}}
     for k, pg in enumerate(pages):
         tick(0, 1, step_text("edges", k + 1, len(pages), int(pg) + 1, ps.page_count))
         per_page[int(pg)] = layout.page_edges(ps, pg)
+        if mode == "edit":
+            plan["pages"][int(pg)] = word_fit.page_plan(ps, pg)
     if any(per_page.values()):
         src = _without_edges(src, ps.path, per_page)
     state = {"cancel": False, "err": None}
@@ -72,7 +77,8 @@ def convert_docx(ps, pages, dst: Path, tick) -> None:
             tick(int(done), max(1, int(total)), _child_step(done, total, label, ps.page_count))
         except Cancelled:
             state["cancel"] = True
-    job = {"src": str(src), "dst": str(dst), "pages": [int(p) for p in pages]}
+    job = {"src": str(src), "dst": str(dst), "pages": [int(p) for p in pages],
+           "plan": plan, "settings": dict(word_fit.MARGIN_SETTINGS)}
     try:
         ok = index_proc.run_job(job, on_progress, lambda: state["cancel"],
                                 server_arg=SERVER_ARG, key_env=KEY_ENV, what="Word")
@@ -127,22 +133,91 @@ def _without_edges(src: str, orig: str, per_page: dict) -> str:
     return str(out)
 
 
+def _blank_part(part) -> None:
+    """빈 머리글·바닥글 — 빈 문단도 기본 글꼴 높이를 차지해 Word 가 본문을 민다. 1 pt 로."""
+    from docx.enum.text import WD_LINE_SPACING
+    from docx.shared import Pt
+    part.is_linked_to_previous = False
+    for p in part.paragraphs:
+        pf = p.paragraph_format
+        pf.space_before = pf.space_after = Pt(0)
+        pf.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        pf.line_spacing = Pt(1)
+        for r in p.runs:
+            r.font.size = Pt(1)
+
+
 def _put_header_footer(dst, plan, per_page) -> None:
-    """pdf2docx 가 만든 docx 의 첫 구역에 머리글·바닥글(뒤 구역은 앞을 따른다). 머리글 자리는 원본 머리말 자리."""
+    """pdf2docx 가 만든 docx 에 머리글·바닥글 — **원본에 머리말·꼬리말이 있던 쪽의 구역에만**, 자리는 그 쪽의 자리로(§1.1·§1.2).
+    pdf2docx 는 쪽마다 새 쪽 구역 하나 + 단 나눔용 이어지는 구역을 만든다 — 새 쪽 구역의 차례 = 변환한 쪽의 차례.
+    261113-3: 종전에는 첫 구역 틀을 모든 구역이 따라, 머리말 없던 표지·목차 쪽(위 여백 22 pt)에도 머리글(거리 63 pt)이 들어가
+    Word 가 본문을 밀었고 쪽마다 한 쪽씩 넘쳤다(별첨4 37 → 71쪽)."""
     from docx import Document
+    from docx.enum.section import WD_SECTION
+    from docx.shared import Pt
     from viewer.convert.docx_writer import _header_footer, set_hf_distance
     out = Document(str(dst))
-    secs = out.sections
+    secs = list(out.sections)
     if not secs:
         return
-    sec = secs[0]
-    _header_footer(out, sec, plan)
-    for k, s2 in enumerate(secs):
-        if k:                                  # 뒤 구역은 첫 구역을 따른다(구역 개체는 꺼낼 때마다 새것 — 번호로 가른다)
-            s2.header.is_linked_to_previous = True
-            s2.footer.is_linked_to_previous = True
-        set_hf_distance(s2, per_page)
+    pages = sorted(int(p) for p in per_page)
+    k = -1
+    for i, s in enumerate(secs):
+        if i == 0 or s.start_type != WD_SECTION.CONTINUOUS:
+            k += 1
+        pg = pages[min(k, len(pages) - 1)] if pages else None
+        edges = per_page.get(pg) or []
+        has = {w: any(e["where"] == w for e in edges) for w in ("head", "foot")}
+        sub = {"head": plan["head"] if has["head"] else {}, "foot": plan["foot"] if has["foot"] else {},
+               "start": plan.get("start") if i == 0 else None}
+        _header_footer(out, s, sub)
+        for where, parts in (("head", (s.header, s.even_page_header)), ("foot", (s.footer, s.even_page_footer))):
+            if not has[where]:
+                for part in parts:
+                    _blank_part(part)
+                if where == "head":
+                    s.header_distance = Pt(0)
+                else:
+                    s.footer_distance = Pt(0)
+        set_hf_distance(s, {pg: edges} if pg is not None else per_page)
+        _bottom_slack(s, edges, has["foot"])
+    for p in out.paragraphs:                    # 구역 끝 빈 문단(pdf2docx 가 쪽 끝에 둔다) — 넘치면 빈 쪽이 생긴다(§1.2)
+        ppr = p._p.pPr
+        if ppr is not None and ppr.sectPr is not None and not p.text.strip():
+            _blank_para(p)
+    if out.paragraphs and not out.paragraphs[-1].text.strip():
+        _blank_para(out.paragraphs[-1])
     out.save(str(dst))
+
+
+BOTTOM_FLOOR_PT = 20.0      # 꼬리말 없는 쪽의 아래 여백 하한(§1.2 — 본문 아래에 남기는 여유)
+
+
+def _blank_para(p) -> None:
+    from docx.enum.text import WD_LINE_SPACING
+    from docx.shared import Pt
+    pf = p.paragraph_format
+    pf.space_before = pf.space_after = Pt(0)
+    pf.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+    pf.line_spacing = Pt(1)
+
+
+def _bottom_slack(sec, edges, has_foot) -> None:
+    """아래 여백을 꼬리말 위(없으면 `BOTTOM_FLOOR_PT`)까지 낮춘다 — 본문 자리는 위에서부터 정해져 아무것도 움직이지 않고,
+    마지막 줄이 몇 pt 넘쳐 한 쪽이 더 생기던 것만 막는다(§1.2, 261113-3)."""
+    from docx.shared import Pt
+    try:
+        ph = sec.page_height.pt
+        cur = sec.bottom_margin.pt
+        if has_foot:
+            top = min(e["rect"][1] for e in edges if e["where"] == "foot")
+            want = ph * (1.0 - top / float(edges[0].get("ph") or ph)) + 2.0
+        else:
+            want = BOTTOM_FLOOR_PT
+        if want < cur:
+            sec.bottom_margin = Pt(max(0.0, want))
+    except Exception:
+        pass
 
 
 def serve(address: str) -> None:
@@ -178,9 +253,13 @@ def serve(address: str) -> None:
                 return False
             conn.send(("progress", done, total, label))
             return True
+        # 고침 8(261113-3): 줄 잇기·쪽 맞춤·글꼴 걸이 — 계획이 없는 옛 일감도 모양 그대로(줄마다 끊음)로
+        from viewer._vendor.pdf2docx import polypdf_fit
+        from viewer.convert.word_fit import Hook
+        polypdf_fit.HOOK = Hook(job.get("plan"))
         cv = Converter(job["src"])
         try:
-            cv.convert(job["dst"], pages=job.get("pages") or None, progress=progress)
+            cv.convert(job["dst"], pages=job.get("pages") or None, progress=progress, **(job.get("settings") or {}))
         except ConversionCancelled:
             try:
                 os.remove(job["dst"])

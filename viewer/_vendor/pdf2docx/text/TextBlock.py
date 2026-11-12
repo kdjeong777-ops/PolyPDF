@@ -182,7 +182,8 @@ class TextBlock(Block):
         # NOTE: in PyMuPDF CS, horizontal text direction is same with positive x-axis,
         # while vertical text is on the contrary, so use f = -1 here
         idx0, idx1, f = (0, 2, 1.0) if self.is_horizontal_text else (3, 1, -1.0)
-        
+        self._pp_layout_w = abs(bbox[idx1] - bbox[idx0])     # POLYPDF 고침 8: 쪽 맞춤이 쓰는 칸 너비
+
         # text alignment
         self.alignment = self._parse_alignment(bbox, 
             (idx0, idx1, f),
@@ -299,6 +300,10 @@ class TextBlock(Block):
         .. note::
             The left position of paragraph is set by paragraph indent, rather than ``TAB`` stop.
         '''
+        # POLYPDF 고침 8: 원본 줄 수 안에 — 자간 → 줄 간격 → 글자 크기(걸이가 없으면 그대로)
+        from ..polypdf_fit import fit_block
+        fit_block(self, getattr(self, '_pp_layout_w', None))
+
         pf = docx.reset_paragraph_format(p)
 
         # ------------------------------------

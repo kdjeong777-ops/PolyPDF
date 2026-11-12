@@ -15,6 +15,7 @@
   scanned_pdf()  스캔 모사 — 페이지가 **이미지 뿐**이라 텍스트 레이어가 없음, 14쪽
                  (`_pdf_is_scanned` → True. 앞 12쪽 표본의 60% 이상이 'ocr' 로 판정되면 참)
   image_strips_pdf() 그림 전용 — 가상 프린터·사진→PDF 꼴, 쪽마다 2048px Flate 그림 띠(261107-19, 응답성 SOT §7.5)
+  paragraph_pdf()  양쪽 맞춤 한글 문단으로 꽉 찬 3쪽 + 제목·목록 줄, 설치 안 된 CJK 글꼴(261113-3, 형식 변환 쪽 맞춤·줄 잇기)
   ruled_table_pdf()  괘선이 **선으로 그려진** 3열 표 — pdfplumber 가 표로 인식한다
                  (텍스트 창 SOT §3.3 — 칸을 놓쳐도 글을 잃지 않는지)
   scanned_form_pdf() 스캔 서식 모사 — 그림 위에 **보이지 않는 글자**(render mode 3)로
@@ -141,6 +142,45 @@ def image_strips_pdf() -> str:
     p = d / "sample_image_strips.pdf"
     if not p.exists() or p.stat().st_size == 0:
         _build_image_strips_pdf(p)
+    return str(p)
+
+
+_PARA_PAGES = 3
+_PARA_BODY = ("중대재해를 줄이기 위한 위험성평가는 노사가 함께 사업장의 유해 위험요인을 스스로 찾아 개선 대책을 세우고 이행하는 "
+              "제도이며 현장에 맞게 자리 잡도록 기준과 지원을 함께 마련한다. ")
+
+
+def _build_paragraph_pdf(dst: Path) -> None:
+    """261113-3(형식 변환 SOT §1.2): 쪽을 채운 **한글 문단**(여러 줄, 오른쪽 끝 가까이까지) + 제목 + 목록 줄 + 꼬리말 — 3쪽.
+    글꼴은 PDF 기본 CJK(`korea` — Windows 에 설치되지 않은 이름)라 Word 가 다른 글꼴로 바꿔 그리는 길을 탄다."""
+    import fitz
+    doc = fitz.open()
+    for i in range(_PARA_PAGES):
+        pg = doc.new_page(width=595, height=842)
+        y = 70.0
+        pg.insert_text((72, y + 16), f"제{i + 1}장 추진 배경", fontsize=18, fontname="korea")
+        y += 40
+        for k in range(3):                                   # 문단 셋 — 줄마다 오른쪽 끝까지(양쪽 맞춤), 문단 사이 빈 자리
+            r = fitz.Rect(72, y, 523, y + 200)
+            left = pg.insert_textbox(r, _PARA_BODY * 3, fontsize=12, fontname="korea", align=fitz.TEXT_ALIGN_JUSTIFY,
+                                     lineheight=1.4)
+            y += (200 - left) + 14
+            if k == 1:
+                for j, t in enumerate(("○ 첫째 목록 줄", "○ 둘째 목록 줄", "○ 셋째 목록 줄")):
+                    pg.insert_text((90, y + 12), t, fontsize=12, fontname="korea")
+                    y += 18
+                y += 8
+        pg.insert_text((290, 815), f"- {i + 1} -", fontsize=9, fontname="korea")
+    doc.save(str(dst))
+    doc.close()
+
+
+def paragraph_pdf() -> str:
+    """양쪽 맞춤 한글 문단으로 쪽을 채운 PDF(3쪽, 설치 안 된 글꼴) 경로 — 형식 변환 쪽 맞춤·줄 잇기 검사(261113-3)."""
+    d = _ensure_dir()
+    p = d / "sample_paragraphs.pdf"
+    if not p.exists() or p.stat().st_size == 0:
+        _build_paragraph_pdf(p)
     return str(p)
 
 

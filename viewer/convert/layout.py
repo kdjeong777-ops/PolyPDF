@@ -54,12 +54,7 @@ def _span_styles(page) -> list:
                 t = (sp.get("text") or "").strip()
                 if not t:
                     continue
-                fl = int(sp.get("flags", 0) or 0)
-                name = str(sp.get("font", "")).lower()
-                bold = bool(fl & 16) or "bold" in name or name.endswith(",b") or "-b" in name[-3:]
-                serif = bool(fl & 4) or any(k in name for k in ("batang", "myeongjo", "myungjo", "times", "serif", "명조", "바탕"))
-                if any(k in name for k in ("gothic", "dotum", "gulim", "arial", "helvetica", "sans", "고딕", "돋움", "굴림")):
-                    serif = False
+                bold, serif = font_kind(sp.get("font", ""), sp.get("flags", 0))
                 out.append((tuple(sp.get("bbox", (0, 0, 0, 0))), bold, serif, len(t), t))
     return out
 
@@ -388,6 +383,112 @@ def measure(text: str, size: float, serif: bool):
         return float(f.text_length(text, fontsize=size))
     except Exception:
         return None
+
+
+def measure_fit(text: str, size: float, serif: bool):
+    """쪽 맞춤(§1.2)용 너비 — 결과 글꼴에 없는 글자(`‧`·`➊`·`｢` …)는 다른 글꼴로 그려지므로 **전각(글자 크기)** 으로 친다.
+    모자라게 재면 줄이 꺾여 쪽이 넘는다(261113-3 별첨4 실측). 글꼴 파일이 없으면 None."""
+    f = _font(serif)
+    m = measure(text, size, serif)
+    if f is None or m is None:
+        return m
+    try:
+        miss = {c: max(0.0, size - f.text_length(c, fontsize=size)) for c in set(text) if not f.has_glyph(ord(c))}
+        return m + sum(miss.get(c, 0.0) for c in text)
+    except Exception:
+        return m
+
+
+def font_kind(name: str, flags: int = 0) -> tuple:
+    """글꼴 이름·PyMuPDF 플래그 → (굵음, 세리프). 변환이 글꼴 갈래를 정하는 한 곳(HWPX 줄·Word 글꼴 바꾸기 — 형식 변환 SOT §1.2)."""
+    fl = int(flags or 0)
+    name = str(name or "").lower()
+    bold = bool(fl & 16) or "bold" in name or name.endswith(",b") or "-b" in name[-3:]
+    serif = bool(fl & 4) or any(k in name for k in ("batang", "myeongjo", "myungjo", "times", "serif", "명조", "바탕"))
+    if any(k in name for k in ("gothic", "dotum", "gulim", "arial", "helvetica", "sans", "고딕", "돋움", "굴림")):
+        serif = False
+    return bold, serif
+
+
+# ---- 쪽 맞춤(형식 변환 SOT §1.2, 261113-3) --------------------------------------------
+FIT_SPACING_MIN = -0.10    # ① 자간으로 줄일 수 있는 너비(원본 너비에 대한 비율)
+FIT_LINE_MIN = 1.0         # ② 줄 간격 하한(글자 크기의 배)
+FIT_SIZE_K = 0.85          # ③ 글자 크기 하한(원본의 비율)
+FIT_SIZE_MIN_PT = 7.0      # ③ 글자 크기 하한(pt) — 원본이 이보다 작으면 줄이지 않는다
+FIT_FILL = 0.95            # 이은 문단의 줄이 평균으로 차는 비율(줄 끝에서 낱말이 넘어가 남는 자리)
+
+
+def fit_plan(width: float, n_rows: int, avail: float, size: float, pitch: float | None = None, indent: float = 0.0) -> dict:
+    """문단 하나를 원본 줄 수(`n_rows`) 안에 넣는 계획 — 자간 → 줄 간격 → 글자 크기(사용자 결정, §1.2).
+
+    `width` = 결과 글꼴로 잰 문단 글 너비(pt, 자간 0 — `measure_fit`), `avail` = 문단 너비, `pitch` = 원본 줄 간격(이은 문단만 —
+    끊은 한 줄은 None), `indent` = 첫 줄 들여쓰기(양수) 또는 내어쓰기(음수)의 크기 — 그만큼 어느 한 줄이 짧다.
+    반환 `{"shrink": 너비를 줄인 비율(≤0, 자간 몫), "pitch": 줄 간격 또는 None, "scale": 글자 크기 배율, "rows": 어림 줄 수}`."""
+    n = max(1, int(n_rows))
+    out = {"shrink": 0.0, "pitch": pitch, "scale": 1.0, "rows": n}
+    if not width or width <= 0 or not avail or avail <= 0:
+        return out
+    joined = pitch is not None and n > 1
+    ind = float(indent or 0.0)
+    first_w = (avail - max(0.0, ind)) * FIT_FILL               # 들여쓰기면 첫 줄이 짧고
+    rest_w = max(1.0, (avail - max(0.0, -ind)) * FIT_FILL)     # 내어쓰기면 둘째 줄부터 짧다
+    cap = first_w + (n - 1) * rest_w if joined else avail
+
+    def rows(w):
+        if joined:
+            import math
+            return 1 if w <= first_w else 1 + max(1, math.ceil((w - first_w) / rest_w - 1e-9))
+        return 1 if w <= avail + 1e-6 else 2
+    if width <= cap:
+        out["rows"] = rows(width)
+        return out
+    shrink = max(FIT_SPACING_MIN, cap / width - 1.0)           # ① 자간
+    out["shrink"] = shrink
+    w1 = width * (1.0 + shrink)
+    if w1 <= cap + 1e-6:
+        out["rows"] = rows(w1)
+        return out
+    smin = 1.0 if size <= FIT_SIZE_MIN_PT else max(FIT_SIZE_K, FIT_SIZE_MIN_PT / size)
+    if not joined:                                             # 끊은 한 줄 — ③ 만
+        out["scale"] = max(smin, min(1.0, cap / w1))
+        out["rows"] = rows(w1 * out["scale"])
+        return out
+    floor = size * FIT_LINE_MIN
+    total = n * pitch                                          # 원본 문단 높이
+    s = 1.0
+    while True:                                                # ② 줄 간격, 모자라면 ③ 글자 크기를 조금씩
+        r = rows(w1 * s)
+        p = min(pitch, total / r)
+        if p >= floor * s - 1e-6 or s <= smin + 1e-9:
+            out.update(pitch=max(p, floor * s), scale=s, rows=r)
+            return out
+        s = max(smin, round(s - 0.01, 2))
+
+
+def join_groups(ps, pg, lines) -> list:
+    """텍스트 창이 이은 줄 묶음(형식 변환 SOT §1 'HWPX 편집 가능', 261113-3) — `lines` 는 `page_blocks(join=False)` 의 줄 블록.
+    반환: `[(이은 글, [줄 블록 …])]`(위에서 아래, 둘 이상만). 원본 줄 상자의 가운데가 이은 줄의 `rects` 안에 드는 것끼리 —
+    이은 줄의 상자마다 줄 블록이 하나 이상 있어야 한다(아니면 글이 두 번 나온다)."""
+    try:
+        rows = ps.lines(pg, tables="omit", join=True)
+    except Exception:
+        return []
+    out, used = [], set()
+    for r in rows:
+        rects = [tuple(x) for x in (r.get("rects") or [])]
+        if len(rects) < 2 or r.get("kind", "text") != "text":
+            continue
+        grp, every = [], True
+        for rc in rects:
+            got = [b for b in lines if b.get("rect") and id(b) not in used
+                   and rc[0] - 1 <= (b["rect"][0] + b["rect"][2]) / 2 <= rc[2] + 1
+                   and rc[1] - 1 <= (b["rect"][1] + b["rect"][3]) / 2 <= rc[3] + 1]
+            every = every and bool(got)
+            grp += got
+        if every and len(grp) >= 2:
+            used.update(id(b) for b in grp)
+            out.append((str(r.get("text", "")), sorted(grp, key=lambda b: (b["rect"][1], b["rect"][0]))))
+    return out
 
 
 # ---- 머리말·꼬리말(§1.1) -----------------------------------------------------

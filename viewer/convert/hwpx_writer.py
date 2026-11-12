@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """한글 HWPX 쓰기 (형식 변환 SOT §1, 261014-14) — python-hwpx(Apache-2.0, 고정 판 의존성 §4.2).
 
-- 편집 가능: 쪽마다 문단(이은 줄)·표·그림을 읽는 차례로. 제목 줄은 '개요 1'. 쪽 사이는 쪽 나눔.
+- 편집 가능(261113-3): 모양 그대로 배치 쓰기 + 텍스트 창이 이은 문장 줄만 한 문단으로(줄을 꺾는다, 쪽 맞춤 §1.2).
 - 모양 그대로(배치 쓰기): 쪽마다 구역 하나(쪽 크기 = PDF 쪽, 여백 0). 원본 줄마다 문단 — 왼쪽 여백·위 간격·글자 크기·굵기·
   자간을 원본에 맞춘다. 그림·표는 쪽에 띄워 원본 자리에(글의 흐름을 밀지 않는다).
 단위는 HWPUNIT(1 pt = 100).
@@ -14,9 +14,6 @@ from viewer.convert import layout
 from viewer.convert import page_step, step_text  # 진행 창 글(형식 변환 SOT §5, 261026-2)
 
 HWPUNIT_PER_PT = 100
-TITLE_STYLE = "개요 1"     # 한글 기본 스타일 이름(문서 안의 스타일 키 — 화면 문구가 아니다)
-EDIT_PAGE_W_PT = 595       # 편집 가능의 기본 쪽(A4) 너비
-EDIT_TEXT_W_PT = 425       # 기본 쪽(A4, 좌우 여백 30 mm)의 글 너비 — 편집 가능의 그림을 이 너비에 맞춘다
 LINE_PCT = 100             # 모양 그대로의 줄 간격(%) — 줄 높이 = 글자 크기 × LINE_PCT / 100
 SPACING_MIN, SPACING_MAX = -50, 50      # 한글 자간 범위(%)
 HWP_WIDTH_K = 1.055        # 한글이 그리는 너비 ÷ 같은 글꼴 파일로 잰 너비(실측 261014-15: 바탕 영문 1.060·한글 1.047, 맑은 고딕 1.057·1.042)
@@ -87,68 +84,10 @@ def _fill_table(t, rows) -> None:
                 t.set_cell_text(ri, ci, str(c))
 
 
-# ---- 편집 가능 -------------------------------------------------------------
+# ---- 편집 가능 = 모양 그대로 + 이은 문단(형식 변환 SOT §1, 261113-3) --------------------------------
 def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:
-    from hwpx import HwpxDocument
-    doc = HwpxDocument.new()
-    per_page = {}
-    for i, pg in enumerate(pages):
-        tick(i, len(pages), page_step(ps, pages, i))
-        first_on_page = i > 0
-        edges = per_page.setdefault(pg, [])
-        for b in layout.page_blocks(ps, pg, join=True, edges=edges):
-            brk = {"pageBreak": "1"} if first_on_page else {}
-            if b["kind"] == "line":
-                if b.get("style") == "title":
-                    try:
-                        doc.add_paragraph(b["text"], style=TITLE_STYLE, **brk)
-                    except Exception:
-                        doc.add_paragraph(b["text"], **brk)
-                else:
-                    doc.add_paragraph(b["text"], **brk)
-            elif b["kind"] == "table":
-                if brk:
-                    doc.add_paragraph("", **brk)
-                rows = b["rows"]
-                _fill_table(doc.add_table(len(rows), max(len(r) for r in rows)), rows)
-            else:
-                got = _pic(doc, b)
-                if got is None:
-                    continue
-                data, fmt, w, h = got
-                if w > EDIT_TEXT_W_PT:                    # 글 너비를 넘으면 비율대로 줄인다
-                    w, h = EDIT_TEXT_W_PT, h * EDIT_TEXT_W_PT / w
-                if brk:
-                    doc.add_paragraph("", **brk)
-                doc.add_picture(data, fmt, width=_u(w), height=_u(h))
-            first_on_page = False
-        if first_on_page:                       # 빈 쪽이어도 쪽은 나눈다
-            doc.add_paragraph("", pageBreak="1")
-    _edit_header_footer(doc, layout.edge_plan(per_page))
-    tick(len(pages), len(pages), step_text("save"))
-    _sync_manifest(doc)                         # 그림이 manifest 에서 빠지지 않게(§4.2, 261112-17)
-    doc.save_to_path(str(dst))
-
-
-def _hf_content(lines) -> list:
-    """머리말·꼬리말 줄 → python-hwpx 내용 명세. 쪽 번호 자리(`NUM_TOKEN`)는 쪽 번호 필드로(§1.1)."""
-    out = []
-    for ln in lines:
-        left = (EDIT_PAGE_W_PT - EDIT_TEXT_W_PT) / 2
-        text, align, _ind = layout.compose(ln, EDIT_PAGE_W_PT, left, left + EDIT_TEXT_W_PT, spaces=True)
-        face = layout.SERIF_FACE if ln["serif"] else layout.SANS_FACE
-        kids = []
-        parts = text.split(layout.NUM_TOKEN)
-        for k, part in enumerate(parts):
-            if part:
-                kids.append({"type": "run", "text": part, "size": round(ln["size"] * 2) / 2,
-                             "bold": bool(ln["bold"]), "font": face})
-            if k < len(parts) - 1:
-                # 쪽 번호 '자리 표시'(pageNum)는 끈다 — 켜 두면 한글이 쪽 아래에 번호를 또 그린다. 글 안의 번호(autoNum)만
-                kids.append({"page_number": "page", "position": "NONE"})
-        if kids:
-            out.append({"align": align, "children": kids})
-    return out
+    """모양 그대로 배치 쓰기에서 텍스트 창이 이은 문장 줄만 한 문단으로(줄을 꺾는다). 쪽·그림·표·머리말은 모양 그대로와 같다."""
+    write_hwpx_shape(ps, pages, dst, tick, join=True)
 
 
 def _hf_content_at(lines, left: float, right: float) -> list:
@@ -174,69 +113,6 @@ def _page_num_ctrl(paragraph, pos: str, side: str, char_pr="0") -> None:
     ctrl.append(ctrl.makeelement(_HP + "pageNum", {"pos": pos, "formatType": "DIGIT", "sideChar": side}))
     run.append(ctrl)
     p.append(run)
-
-
-def _num_pos(where: str, lines_by_kind: dict) -> tuple | None:
-    """쪽 번호뿐인 줄들 → (한글 쪽 번호 자리, 양옆 글자). 홀수 쪽 오른쪽·짝수 쪽 왼쪽이면 바깥쪽(OUTSIDE)."""
-    found = {}
-    for kind, lines in lines_by_kind.items():
-        for ln in lines:
-            side = layout.number_only(ln["pieces"][0][2], layout.NUM_TOKEN) if len(ln["pieces"]) == 1 else None
-            if side is not None:
-                left = (EDIT_PAGE_W_PT - EDIT_TEXT_W_PT) / 2
-                _t, align, _i = layout.compose(ln, EDIT_PAGE_W_PT, left, left + EDIT_TEXT_W_PT)
-                found[kind] = (align, side, ln)
-    if not found:
-        return None
-    vert = "TOP" if where == "head" else "BOTTOM"
-    odd, even = found.get("ODD"), found.get("EVEN")
-    if odd and even and odd[0] != even[0] and "CENTER" not in (odd[0], even[0]):
-        return ("OUTSIDE_" if odd[0] == "RIGHT" else "INSIDE_") + vert, odd[1], odd[2]
-    align, side, ln = found.get("BOTH") or odd or even
-    return vert + "_" + align, side, ln
-
-
-def _edit_header_footer(doc, plan) -> None:
-    """편집 가능 — 문서 하나에 머리말·꼬리말(쪽 번호는 필드, 홀·짝이 다르면 따로).
-    쪽 번호뿐인 줄은 머리말·꼬리말 글이 아니라 한글 '쪽 번호 매기기' 로(§1.1)."""
-    put = {"head": doc.page.set_header, "foot": doc.page.set_footer}
-    for where in ("head", "foot"):
-        pn = _num_pos(where, plan[where])
-        if pn is not None:
-            pos, side, ln = pn
-            cp = doc.styles.ensure_run(size=round(ln["size"] * 2) / 2, bold=bool(ln["bold"]),
-                                       font=layout.SERIF_FACE if ln["serif"] else layout.SANS_FACE)
-            _page_num_ctrl(doc.sections[0].paragraphs[0], pos, side, cp)
-        for kind, lines in plan[where].items():
-            if pn is not None:
-                lines = [ln for ln in lines if not (len(ln["pieces"]) == 1 and layout.number_only(
-                    ln["pieces"][0][2], layout.NUM_TOKEN) is not None)]
-            content = _hf_content(lines)
-            if content:
-                put[where](content=content, page_type=kind)
-    start = plan.get("start")
-    if start and int(start) > 1:
-        try:
-            doc.page.restart_page_number(doc.sections[0].paragraphs[0], number=int(start))
-        except Exception:
-            pass
-    _num_runs_like_text(doc)
-
-
-def _num_runs_like_text(doc) -> None:
-    """쪽 번호 필드가 든 런의 글자 모양을 옆 글 런과 같게 — python-hwpx 는 기본 모양(10 pt)으로 넣는다."""
-    for sec in doc.sections:
-        for p in sec.element.iter():
-            if not p.tag.endswith("}p"):
-                continue
-            runs = [r for r in p if r.tag.endswith("}run")]
-            text_cp = next((r.get("charPrIDRef") for r in runs if any(c.tag.endswith("}t") for c in r)), None)
-            if text_cp is None:
-                continue
-            for r in runs:
-                if any(e.tag.endswith("}autoNum") or e.tag.endswith("}pageNum") for e in r.iter()):
-                    r.set("charPrIDRef", text_cp)
-        sec.mark_dirty()
 
 
 # ---- 모양 그대로(배치 쓰기) ---------------------------------------------------
@@ -275,14 +151,21 @@ class _Styles:
         """표 칸 문단 — 줄 간격은 본문과 같고(`LINE_PCT`), 칸 너비에서 **줄을 꺾는다**(본문의 SQUEEZE 와 다르다, 261014-30)."""
         return self.para(0, 0, wrap=True)
 
-    def para(self, left_pt: float, prev_pt: float, wrap: bool = False) -> str:
-        key = (_u0(left_pt) // 50 * 50, _u0(prev_pt) // 10 * 10, bool(wrap))
+    def para(self, left_pt: float, prev_pt: float, wrap: bool = False, *, right_pt: float = 0.0, intent_pt: float = 0.0,
+             line_pct: int = LINE_PCT) -> str:
+        """문단 서식 id. 이은 문단(편집 가능, 261113-3)은 `wrap`·오른쪽 여백·첫 줄 들여쓰기(음수 = 내어쓰기)·줄 간격(%)도."""
+        key = (_u0(left_pt) // 50 * 50, _u0(prev_pt) // 10 * 10, bool(wrap),
+               _u0(right_pt) // 50 * 50, int(round(intent_pt * HWPUNIT_PER_PT)) // 50 * 50, int(line_pct))
         if key not in self._para:
             # 바탕을 복제해 직접 붙인다 — python-hwpx 의 `ensure_paragraph_format` 은 만들 때마다 있는 것 전부와
             # 구조를 비교해(같은 것 되쓰기) 줄이 많은 문서에서 O(n²)이다(실측 10쪽 4.3초). 같은 값은 위 사전이 되쓴다.
             from copy import deepcopy
             el = deepcopy(self._base_el)
-            self.hdr._apply_paragraph_margins(el, {"left": key[0], "prev": key[1]})
+            self.hdr._apply_paragraph_margins(el, {"left": key[0], "prev": key[1], "right": key[3], "intent": key[4]})
+            if key[5] != LINE_PCT:
+                for e in el.iter():
+                    if e.tag.endswith("}lineSpacing"):
+                        e.set("value", str(key[5]))
             if wrap:
                 for e in el.iter():
                     if e.tag.endswith("}breakSetting"):
@@ -405,7 +288,24 @@ def _spacing(text: str, width: float, size: float, serif: bool) -> int:
     return int(max(SPACING_MIN, min(SPACING_MAX, round(sp))))
 
 
-def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
+def _joined_para(text, grp, size_pt, serif):
+    """이은 문단 하나의 자리·크기 계획(형식 변환 SOT §1 'HWPX 편집 가능'·§1.2 쪽 맞춤, 261113-3).
+    반환 (왼쪽 x, 첫 줄 들여쓰기, 오른쪽 끝 x, 첫 줄 가운데 y, 계획)."""
+    first, rest = grp[0]["rect"], [b["rect"] for b in grp[1:]]
+    rest_x = min(r[0] for r in rest)
+    x0 = min(first[0], rest_x)
+    intent = first[0] - rest_x                    # 양수 = 들여쓰기, 음수 = 내어쓰기(첫 줄이 왼쪽)
+    x1 = max(b["rect"][2] for b in grp)
+    cys = [(b["rect"][1] + b["rect"][3]) / 2 for b in grp]
+    gaps = sorted(b - a for a, b in zip(cys, cys[1:]) if b > a)
+    pitch = gaps[len(gaps) // 2] if gaps else size_pt * 1.2
+    m = layout.measure_fit(text, size_pt, serif)
+    width = (m * HWP_WIDTH_K) if m else 0.0
+    plan = layout.fit_plan(width, len(grp), max(1.0, x1 - x0), size_pt, pitch, indent=intent)
+    return x0, intent, x1, cys[0], plan
+
+
+def write_hwpx_shape(ps, pages, dst: Path, tick, join: bool = False) -> None:
     from hwpx import HwpxDocument
     doc = HwpxDocument.new()
     st = _Styles(doc)
@@ -497,7 +397,37 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
                         pass
                 _shape_cells(t, st.run(float(b.get("size") or layout.TABLE_PT_DEFAULT), 0, False, True), st.cell_para())
                 _float(t.element, x0, y0)
-        for band in layout.bands([b for b in blocks if b["kind"] == "line"]):
+        line_blocks = [b for b in blocks if b["kind"] == "line"]
+        all_bands = layout.bands(line_blocks)
+        first_of, skip = {}, set()
+        if join:                     # 편집 가능 — 텍스트 창이 이은 줄 묶음 중 줄마다 홀로 선 것(옆 단과 나란하지 않은 것)만
+            band_of = {id(q): k for k, bd in enumerate(all_bands) for q in bd}
+            for jtext, grp in layout.join_groups(ps, pg, line_blocks):
+                ks = sorted(band_of.get(id(q), -1) for q in grp)
+                if ks[0] < 0 or any(len(all_bands[k]) != 1 for k in ks) or ks != list(range(ks[0], ks[0] + len(ks))):
+                    continue
+                first_of[ks[0]] = (jtext, grp)
+                skip.update(ks[1:])
+        for k_band, band in enumerate(all_bands):
+            if k_band in skip:
+                continue
+            if k_band in first_of:
+                jtext, grp = first_of[k_band]
+                _t, _x, _w, size, bold, serif = layout.band_text(grp)
+                jx0, intent, jx1, cy0, plan = _joined_para(jtext, grp, size, serif)
+                fsize = size * plan["scale"]
+                pitch = plan["pitch"] * 1.0
+                rows = max(1, int(plan["rows"]))
+                top = min(cy0 - pitch / 2, body_bottom - pitch * rows)
+                prev = max(0.0, top - cur)
+                cur = max(cur, top) + pitch * rows
+                lpct = max(50, int(round(pitch / max(1.0, fsize) * 100)))
+                spacing = int(max(SPACING_MIN, min(0, round(plan["shrink"] * 100))))
+                # 왼쪽 여백 = 줄들의 가장 왼쪽. 들여쓰기(양수)면 첫 줄이 더 들어가고, 내어쓰기(음수)면 둘째 줄부터 |intent| 들어간다
+                doc.add_paragraph(jtext, section=sec, para_pr_id_ref=st.para(
+                    jx0 - left, prev, wrap=True, right_pt=max(0.0, (w - right) - jx1 - 0.5), intent_pt=intent, line_pct=lpct),
+                    char_pr_id_ref=st.run(fsize, spacing, bold, serif))
+                continue
             text, x0, width, size, bold, serif = layout.band_text(band)
             lh = size * LINE_PCT / 100.0
             cy = sum((q["rect"][1] + q["rect"][3]) / 2 for q in band) / len(band)

@@ -184,6 +184,8 @@ class Converter:
             logging.info('(%d/%d) Page %d', i, num_pages, pid)
             if progress is not None and progress(i - 1, 2 * num_pages, 'parse %d' % pid) is False:
                 raise ConversionCancelled('cancelled')
+            from . import polypdf_fit                  # POLYPDF 고침 8: 이 쪽의 줄 잇기 계획
+            polypdf_fit.begin_page(page.id)
             try:
                 page.parse(**kwargs)
             except Exception as e:

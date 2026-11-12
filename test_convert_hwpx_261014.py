@@ -2,8 +2,10 @@
 """261014-14: Word(편집 가능)·한글 HWPX(편집 가능·모양 그대로) (형식 변환 SOT §1, 개선 로드맵 P2-4·P2-5).
 
 두 방식 모두 **고칠 수 있는 글**이다 — 쪽 그림 한 장이 아니다(사용자 지시 261014-14).
-A. Word 편집 가능 — 제목 'Heading 1', 문단, 표(칸 글), 그림(박힌 그림 + 선 그림), 그림 제목은 글, 선 그림 안 글은 그림 안에, 쪽 나눔
-B. HWPX 편집 가능(실제 처리기 `action_convert`) — 개요 1, 문단, 표, 그림, 위에서 아래 차례, 쪽 나눔, 표 자리 표시 줄이 글로 새지 않는다
+A. Word 편집 가능 — 261113-3 부터 모양 그대로(pdf2docx) 기반: 쪽마다 구역, 문단, 표(칸 글), 그림(박힌 그림 + 선 그림), 그림 제목은 글,
+   선 그림 안 글은 그림 안에 (종전 Heading 1·쪽 나눔 흐르는 문서는 없앴다 — 줄 잇기·쪽 맞춤은 test_convert_pagefit_261113)
+B. HWPX 편집 가능(실제 처리기 `action_convert`) — 261113-3 부터 모양 그대로 배치 쓰기 기반: 쪽마다 구역·원본 쪽 크기, 문단, 표, 그림,
+   표 자리 표시 줄이 글로 새지 않는다
 C. HWPX 모양 그대로 — 쪽마다 구역(쪽 크기 = PDF 쪽), 원본 줄마다 문단, 왼쪽 여백 = 줄의 x, 위 간격, 글자 크기·굵기, 자간,
    나란한 줄은 한 문단에 빈칸으로, 그림·표는 종이 기준 원본 자리에 띄움, 바탕 그림은 뺌
 D. 만든 HWPX 를 python-hwpx 로 다시 열 수 있다(한글에서 여는 확인은 사용자 PC — 형식 변환 SOT §7)
@@ -82,21 +84,22 @@ try:
     make_pdf(src)
     from viewer import convert
 
-    # ── A. Word 편집 가능 ──────────────────────────────────────────
+    # ── A. Word 편집 가능 — 261113-3: 모양 그대로(pdf2docx) 기반, 이어지는 문장 줄만 잇는다(형식 변환 SOT §1) ─────
     out_a = convert.run(str(src), "docx_edit")
     from docx import Document
+    from docx.enum.section import WD_SECTION
     dd = Document(str(out_a))
-    paras = [(p.style.name, p.text) for p in dd.paragraphs]
-    texts = [t for _s, t in paras]
-    chk(("Heading 1", "Mixture Design Title") in paras, "A 제목은 Heading 1", str(paras[:3]))
-    chk("Body text before the table." in texts and "Landscape page text" in texts, "A 문단 글")
+    texts = [p.text for p in dd.paragraphs]
+    alltext = "\n".join(texts)
+    newpage = [s for i, s in enumerate(dd.sections) if i == 0 or s.start_type != WD_SECTION.CONTINUOUS]
+    chk(len(newpage) == 2, "A 쪽마다 구역(모양 그대로 기반 — 종전 A4 흐르는 문서 아님)", str(len(newpage)))
+    chk("Body text before the table." in alltext and "Landscape page text" in alltext, "A 문단 글")
     cells = [c.text for t in dd.tables for row in t.rows for c in row.cells]
-    chk(len(dd.tables) == 1 and "R1C1" in cells and "R2C2" in cells, "A 표는 Word 표로", str(cells[:9]))
+    chk("R1C1" in cells and "R2C2" in cells, "A 표는 Word 표로", str(cells[:9]))
     chk(not any("R1C1" in t or "[표" in t for t in texts), "A 표 글·표 자리 표시가 문단으로 새지 않는다")
-    chk(len(dd.inline_shapes) == 2, "A 그림 둘(선 그림 + 박힌 그림, 바탕 그림은 뺌)", str(len(dd.inline_shapes)))
-    chk("Figure 1. Vector chart caption" in texts and "Figure 2. Raster image caption" in texts, "A 그림 제목은 글")
-    chk(not any("axislabel" in t for t in texts), "A 선 그림 안의 글은 그림 안에(글로 따로 넣지 않는다)")
-    chk(any('w:type="page"' in p._p.xml for p in dd.paragraphs), "A 쪽 사이 쪽 나눔")
+    chk(dd.element.body.xml.count("<pic:pic") >= 2, "A 그림(선 그림 + 박힌 그림)", str(dd.element.body.xml.count("<pic:pic")))
+    chk("Figure 1. Vector chart caption" in alltext and "Figure 2. Raster image caption" in alltext, "A 그림 제목은 글")
+    chk("axislabel" not in alltext, "A 선 그림 안의 글은 그림 안에(글로 따로 넣지 않는다)")
 
     # ── B. HWPX 편집 가능(실제 처리기) ───────────────────────────────
     QMessageBox.question = staticmethod(lambda *x, **k: QMessageBox.StandardButton.No)
@@ -114,17 +117,19 @@ try:
     out_b = root / "H.hwpx"
     chk(ok and out_b.exists(), "B HWPX 가 같은 폴더·같은 이름으로", str(infos[-1:]))
     if out_b.exists():
-        x = "".join(section_xml(out_b))
-        i_title, i_tbl, i_after = x.find("Mixture Design Title"), x.find("<hp:tbl"), x.find("Body text after the table.")
-        chk(i_title >= 0 and "Body text before the table." in x, "B 제목·문단 글")
+        xs_b = section_xml(out_b)
+        x = "".join(xs_b)
+        chk("Mixture Design Title" in x and "Body text before the table." in x, "B 제목·문단 글")
         chk(x.count("<hp:tbl") == 1 and all(f"R{r}C{c}" in x for r in range(3) for c in range(3)), "B 표 칸 글",
             str(x.count("<hp:tbl")))
-        chk("R1C1" not in x[:i_tbl] if i_tbl >= 0 else False, "B 표 글이 문단으로 겹쳐 나오지 않는다(표 글은 표로만)")
+        body_txt = re.sub(r"<hp:tbl .*?</hp:tbl>", "", x, flags=re.S)
+        chk("R1C1" not in body_txt, "B 표 글이 문단으로 겹쳐 나오지 않는다(표 글은 표로만)")
         chk("[표" not in x, "B 표 자리 표시 줄이 글로 새지 않는다")
-        chk(0 <= i_title < i_tbl < i_after, "B 위에서 아래 차례(제목 → 표 → 표 뒤 문단)", f"{i_title} {i_tbl} {i_after}")
+        # 261113-3: 편집 가능 = 모양 그대로 배치 쓰기 + 이은 문단 — 쪽마다 구역·원본 쪽 크기, 그림·표는 원본 자리에 띄움
+        chk(len(xs_b) == 2 and re.findall(r'<hp:pagePr[^>]*width="(\d+)"', x) == ["59500", "84200"],
+            "B 쪽마다 구역·원본 쪽 크기(모양 그대로 기반)", str(len(xs_b)))
         chk(x.count("<hp:pic") == 2, "B 그림 둘(바탕 그림은 뺌)", str(x.count("<hp:pic")))
         chk("Figure 1. Vector chart caption" in x and "axislabel" not in x, "B 그림 제목은 글, 선 그림 안 글은 그림 안에")
-        chk(x.count('pageBreak="1"') >= 1, "B 쪽 사이 쪽 나눔")
         from hwpx import HwpxDocument
         try:
             HwpxDocument.open(str(out_b)); reopened = True
@@ -227,8 +232,12 @@ try:
     chk("Asphalt Design Guide" not in body_t and "- 12 -" not in body_t, "E 본문에는 머리말·꼬리말 글이 없다")
     chk(abs(s0.header_distance.pt - 30.5) < 2 and abs(s0.footer_distance.pt - 24.5) < 2,
         "E 머리글·바닥글 자리 = 원본 자리", f"{s0.header_distance.pt} {s0.footer_distance.pt}")
-    hp = s0.header.paragraphs[0].paragraph_format.left_indent
-    chk(hp is not None and abs(hp.pt - (400 - 56.7)) < 3, "E 머리말 가로 자리(들여쓰기)도 원본대로", str(hp.pt if hp else None))
+    hpar = s0.header.paragraphs[0]
+    hp = hpar.paragraph_format.left_indent
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    chk((hp is not None and abs(hp.pt - (400 - s0.left_margin.pt)) < 3) or hpar.alignment == WD_ALIGN_PARAGRAPH.RIGHT,
+        "E 머리말 가로 자리도 원본대로(들여쓰기, 또는 글 영역 오른쪽 끝이면 오른쪽 맞춤)",
+        f"{hp.pt if hp else None} {s0.left_margin.pt} {hpar.alignment}")
     # Word 모양 그대로(pdf2docx) — 머리말·꼬리말을 지운 사본을 변환하고 머리글·바닥글로
     es = convert.run(str(hf), "docx_shape")
     wd2 = Document(str(es))
@@ -236,23 +245,19 @@ try:
     chk([p.text for p in wd2.sections[0].header.paragraphs] == ["Asphalt Design Guide p.1"]
         and "PAGE" in wd2.sections[0].footer._element.xml, "E Word 모양 그대로도 머리글·바닥글(쪽 번호 필드)")
     chk("Asphalt Design Guide" not in body2 and "- 12 -" not in body2, "E pdf2docx 본문에 머리말·꼬리말이 남지 않는다", body2[:100])
-    chk(all(s.header.is_linked_to_previous for s in list(wd2.sections)[1:]) and not wd2.sections[0].header.is_linked_to_previous,
-        "E 뒤 구역은 첫 구역 머리글을 따른다")
-    # HWPX 편집 가능
+    # 261113-3(§1.2): 머리글은 원본에 머리말이 있던 쪽의 구역마다 따로(없던 쪽은 비운다) — 이 문서는 모든 쪽에 있다
+    chk(all("Asphalt Design Guide" in "".join(p.text for p in s.header.paragraphs) for s in wd2.sections),
+        "E 머리말이 있던 쪽의 구역마다 머리글")
+    # HWPX 편집 가능 — 261113-3: 모양 그대로 기반이라 머리말·꼬리말도 모양 그대로와 같다(쪽마다 그 쪽 글, 번호뿐인 줄은 '쪽 번호 매기기')
     eh = convert.run(str(hf), "hwpx_edit")
-    x = "".join(section_xml(eh))
-    hdr_ = re.search(r"<hp:header .*?</hp:header>", x, re.S)
-    ftr_ = re.search(r"<hp:footer .*?</hp:footer>", x, re.S)
-    chk(hdr_ and "Asphalt Design Guide" in hdr_.group(0), "E HWPX 머리말 기능에 머리말 글")
-    chk(hdr_ and 'numType="PAGE"' in hdr_.group(0) and 'pos="NONE"' in hdr_.group(0),
-        "E HWPX 머리말 글 안 번호는 번호 필드(쪽 번호 위치 표시는 끔 — 두 번 그리지 않는다)")
-    pnums = re.findall(r'<hp:pageNum [^>]*pos="(?!NONE)[^"]*"[^>]*>', re.sub(r"<hp:(header|footer) .*?</hp:\1>", "", x, flags=re.S))
-    chk(len(pnums) == 1 and 'pos="BOTTOM_CENTER"' in pnums[0] and 'sideChar="-"' in pnums[0],
-        "E HWPX 번호뿐인 꼬리말(- 12 -)은 한글 '쪽 번호 매기기'(아래 가운데, 줄표)로", str(pnums))
-    chk(not ftr_ or "- " not in re.sub(r"<[^>]+>", "", ftr_.group(0)),
-        "E HWPX 번호뿐인 꼬리말을 꼬리말 글로 또 넣지 않는다")
-    chk('<hp:newNum num="11" numType="PAGE"' in x, "E HWPX 쪽 번호는 원본 번호(11)부터")
-    body_x = re.sub(r"<hp:(header|footer) .*?</hp:\1>", "", x, flags=re.S)
+    xe = section_xml(eh)
+    chk(len(xe) == 4 and all(f"Asphalt Design Guide p.{i + 11}" in re.search(r"<hp:header .*?</hp:header>", xe[i], re.S).group(0)
+                             for i in range(4) if re.search(r"<hp:header .*?</hp:header>", xe[i], re.S)),
+        "E HWPX 편집 가능 — 쪽마다 그 쪽 머리말 글(머리말 기능)")
+    chk(all(re.search(r'<hp:pageNum [^>]*pos="BOTTOM_CENTER"[^>]*sideChar="-"', xe[i]) for i in range(len(xe))),
+        "E HWPX 편집 가능 — 번호뿐인 꼬리말(- 12 -)은 한글 '쪽 번호 매기기'(아래 가운데, 줄표)로")
+    chk('<hp:newNum num="11" numType="PAGE"' in xe[0], "E HWPX 편집 가능 — 쪽 번호는 원본 번호(11)부터")
+    body_x = re.sub(r"<hp:(header|footer) .*?</hp:\1>", "", "".join(xe), flags=re.S)
     chk("Asphalt Design Guide" not in body_x and "- 12 -" not in body_x, "E HWPX 본문에는 머리말·꼬리말 글이 없다")
     # HWPX 모양 그대로 — 쪽마다 그 쪽 글 그대로, 머리말·꼬리말 영역 = 원본 자리
     esh = convert.run(str(hf), "hwpx_shape")

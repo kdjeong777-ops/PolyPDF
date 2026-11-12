@@ -48,7 +48,7 @@ class TextSpan(Element):
         # filter empty chars
         chars = [Char(c) for c in raw.get('chars', [])] # type: list[Char]
         # ignore replacement character, see issue#256
-        self.chars = [char for char in chars if char.c not in ('', '\ufffd')]
+        self.chars = [char for char in chars if char.c not in ('', '\ufffd') or getattr(char, 'pp_ctrl', False)]   # POLYPDF \uace0\uce68 8
         self._text = raw.get('text', '') # not an original key from PyMuPDF
 
         # font metrics
@@ -367,13 +367,16 @@ class TextSpan(Element):
             hyperlink with an underline, the text and uri is parsed as hyperlink itself, while the
             underline is treated as a normal text style.
         '''
+        # POLYPDF 고침 8: XML 에 못 넣는 제어 문자는 '�' 로(앱의 다른 변환과 같게 — 그냥 두면 사라져 '25–30' 이 '2530' 이 된다)
+        from ..polypdf_fit import safe_text
+        text = safe_text(self.text)
         # Create hyperlink in particular, otherwise add a run directly
         for style in self.style:
-            if style['type']==RectType.HYPERLINK.value and self.text.strip():
-                docx_run = docx.add_hyperlink(paragraph, style['uri'], self.text)
+            if style['type']==RectType.HYPERLINK.value and text.strip():
+                docx_run = docx.add_hyperlink(paragraph, style['uri'], text)
                 break
         else:
-            docx_run = paragraph.add_run(self.text)
+            docx_run = paragraph.add_run(text)
 
         # set text style, e.g. font, underline and highlight
         self._set_text_format(docx_run)
@@ -399,8 +402,11 @@ class TextSpan(Element):
         docx_run.italic = bool(self.flags & 2**1)
         docx_run.bold = bool(self.flags & 2**4)
 
-        # font name
-        font_name = self.font
+        # font name — POLYPDF 고침 8: 설치 안 된 글꼴은 바탕/맑은 고딕, 설치된 글꼴은 Word 가 찾는 이름으로
+        from ..polypdf_fit import font_name as _pp_font, font_bold as _pp_bold
+        font_name = _pp_font(self)
+        if _pp_bold(self):                   # 이름에만 굵기가 든 글꼴(MalgunGothicBold) — 이름을 바꾸면 굵기를 잃지 않게
+            docx_run.bold = True
         docx_run.font.name = font_name
         docx_run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name) # for CJK characters
         docx_run.font.color.rgb = RGBColor(*rgb_component(self.color))

@@ -237,6 +237,10 @@ class Lines(ElementCollection):
         # no break for last row
         for line in rows[-1]: line.line_break = 0
 
+        # POLYPDF 고침 8: 앱의 쪽 계획이 있으면 줄 끝 끊기를 그대로(모양 그대로 = 줄마다, 편집 가능 = 이어지는 줄만 잇는다)
+        from ..polypdf_fit import decide_breaks
+        decide_breaks(rows)
+
 
     def parse_tab_stop(self, line_separate_threshold:float):
         '''Calculate tab stops for parent block and whether add TAB stop before each line. 

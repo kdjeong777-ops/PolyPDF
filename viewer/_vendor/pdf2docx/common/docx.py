@@ -158,8 +158,9 @@ def set_char_spacing(p_run, space:float=0.0):
         p_run (docx.text.run.Run): Proxy object wrapping <w:r> element.
         space (float, optional): Spacing value in Pt. Expand if positive else condense. Defaults to 0.0.
     '''
-    p_run._r.get_or_add_rPr().insert(0, 
-        parse_xml(r'<w:spacing {} w:val="{}"/>'.format(nsdecls('w'), 20*space)))
+    # POLYPDF 고침 8: w:val 은 정수 트윕(1/20 pt) — 실수를 그대로 쓰면 Word 가 잘못된 값으로 본다
+    p_run._r.get_or_add_rPr().insert(0,
+        parse_xml(r'<w:spacing {} w:val="{}"/>'.format(nsdecls('w'), int(round(20*space)))))
 
 
 def set_char_shading(p_run, srgb:int):
