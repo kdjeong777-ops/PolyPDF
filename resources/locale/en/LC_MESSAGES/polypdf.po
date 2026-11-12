@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-12 01:36+0900\n"
+"POT-Creation-Date: 2026-11-12 22:43+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -353,6 +353,7 @@ msgstr "Exports a new PDF with annotations, photos and hyperlinks flattened into
 
 #: viewer/app.py viewer/convert_controller.py viewer/photo_controller.py
 #: viewer/widgets/bookmark_tree.py viewer/widgets/convert_dialog.py
+#: viewer/widgets/image_tune_dialog.py
 msgid "변환"
 msgstr "Convert"
 
@@ -547,9 +548,10 @@ msgstr "Bookmark Generation Stopped"
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
 #: viewer/print_controller.py viewer/update_controller.py
 #: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
-#: viewer/widgets/stamp_dialog.py viewer/widgets/tag_apply_dialog.py
-#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
-#: viewer/widgets/update_dialog.py viewer/widgets/vprinter_dialog.py
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/tag_apply_dialog.py viewer/widgets/translate_dialog.py
+#: viewer/widgets/translate_files_dialog.py viewer/widgets/update_dialog.py
+#: viewer/widgets/vprinter_dialog.py
 msgid "닫기"
 msgstr "Close"
 
@@ -687,6 +689,10 @@ msgstr "Moving OCR and vocabulary to the new page numbers…"
 #: viewer/widgets/photo_crop_dialog.py
 msgid "크롭 해제"
 msgstr "Remove Crop"
+
+#: viewer/app.py viewer/widgets/image_tune_dialog.py
+msgid "클립보드로 복사"
+msgstr "Copy to Clipboard"
 
 #: viewer/app.py viewer/widgets/image_tune_dialog.py
 msgid "다듬기"
@@ -942,10 +948,6 @@ msgid "원본 화질"
 msgstr "Original quality"
 
 #: viewer/app.py
-msgid "클립보드로 복사"
-msgstr "Copy to Clipboard"
-
-#: viewer/app.py
 msgid "복사할 스크린샷이 없습니다."
 msgstr "There are no screenshots to copy."
 
@@ -1142,12 +1144,12 @@ msgstr "Default Size"
 msgid "축소"
 msgstr "Zoom Out"
 
-#: viewer/app.py viewer/edit_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/hyperlink_dialog.py
+#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
 msgid "안내"
 msgstr "Information"
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid ""
 "개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
 "빌드된 PolyPDF.exe 에서 실행해 주세요."
@@ -1409,6 +1411,11 @@ msgstr "Paste works only in edit mode (✏)."
 #: viewer/app.py viewer/widgets/image_tune_dialog.py
 msgid "사진으로 저장"
 msgstr "Save as Image"
+
+#: viewer/app.py viewer/widgets/image_tune_dialog.py
+#: viewer/widgets/stamp_dialog.py
+msgid "그림을 열 수 없습니다."
+msgstr "Cannot open the image."
 
 #: viewer/app.py
 msgid "다듬을 스크린샷이 없습니다."
@@ -1740,6 +1747,10 @@ msgstr "(No recent searches)"
 msgid "(등록된 항목 없음)"
 msgstr "(No items)"
 
+#: viewer/app.py viewer/widgets/bookmark_tree.py
+msgid "오류"
+msgstr "Error"
+
 #: viewer/app.py viewer/key_actions.py
 msgid "먼저 폴더를 여세요."
 msgstr "Open a folder first."
@@ -1759,10 +1770,6 @@ msgstr "The search term is empty."
 #: viewer/app.py
 msgid "검색은 폴더 컨텍스트에서만 등록됩니다."
 msgstr "Searches can only be added while a folder is open."
-
-#: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "오류"
-msgstr "Error"
 
 #: viewer/app.py
 msgid "이 창 캡처 (활성 창은 Ctrl+Shift+S)"
@@ -1858,7 +1865,7 @@ msgstr "PDF Document (PolyPDF)"
 msgid "PDF 뷰어"
 msgstr "PDF viewer"
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "기본 앱으로 설정하지 못했습니다"
 msgstr "Could not set as the default app"
 
@@ -2531,7 +2538,7 @@ msgstr "Redo"
 msgid "종료"
 msgstr "Exit"
 
-#: viewer/app.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
 msgstr "Could not open the Windows Default apps page. Choose it yourself like this:"
 
@@ -3296,6 +3303,16 @@ msgstr ""
 msgid "실패: {m}"
 msgstr "Failed: {m}"
 
+#: viewer/app.py viewer/photo_controller.py
+#, python-brace-format
+msgid "({n}장)"
+msgstr "({n})"
+
+#: viewer/app.py viewer/vprinter_controller.py
+#, python-brace-format
+msgid "저장하지 못했습니다: {err}"
+msgstr "Could not save: {err}"
+
 #: viewer/app.py
 #, python-brace-format
 msgid "병합 중: {get}"
@@ -3657,6 +3674,12 @@ msgstr "Saving"
 msgid "PDF 저장: {name} ({n}쪽)"
 msgstr "Saved PDF: {name} ({n} pages)"
 
+#: viewer/convert_controller.py viewer/photo_controller.py
+#: viewer/widgets/image_tune_dialog.py
+#, python-brace-format
+msgid "새 파일 {n}장을 만들었습니다."
+msgstr "Made {n} new files."
+
 #: viewer/convert_controller.py
 #, python-brace-format
 msgid "사진의 글자를 먼저 읽으세요 — 텍스트 창 [OCR 로 읽기]: {name}"
@@ -3734,8 +3757,9 @@ msgstr "Keywords"
 msgid "있음"
 msgstr "Yes"
 
-#: viewer/doc_info.py viewer/widgets/pres_timer.py
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/doc_info.py viewer/widgets/image_tune_dialog.py
+#: viewer/widgets/pres_timer.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "없음"
 msgstr "None"
 
@@ -4674,7 +4698,7 @@ msgid "다시 물으려면 Shift 를 누른 채 공유용 사본을 고르세요
 msgstr "To be asked again, hold Shift while choosing Sharing copy."
 
 #: viewer/photo_controller.py viewer/widgets/bookmark_tree.py
-#: viewer/widgets/convert_dialog.py
+#: viewer/widgets/convert_dialog.py viewer/widgets/image_tune_dialog.py
 msgid "형식"
 msgstr "Format"
 
@@ -5121,20 +5145,12 @@ msgid "변환 창 — 형식 바꾸기·바탕 지우기(투명)·흑백·색 �
 msgstr "Convert window — change format, remove background (transparent), black & white, change colors, hide areas and more, to a new file or the clipboard (the original is kept)"
 
 #: viewer/photo_controller.py
-msgid "JPEG·PNG·WebP 로 바꾼 새 파일을 원본 옆에 만듭니다(원본은 그대로)."
-msgstr "Makes a new JPEG, PNG or WebP file next to the original (the original is unchanged)."
-
-#: viewer/photo_controller.py
 msgid "고른 사진을 배경에서 차례로 읽습니다 — 작업 창에서 멈출 수 있습니다."
 msgstr "Reads the chosen photos one by one in the background — you can stop it in the Jobs window."
 
 #: viewer/photo_controller.py
 msgid "이 사진에는 위치 정보가 없습니다."
 msgstr "This photo has no location information."
-
-#: viewer/photo_controller.py
-msgid "이미 이 형식입니다."
-msgstr "Already in this format."
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -5169,11 +5185,6 @@ msgstr "Orientation saved to the original photo: {name}"
 #: viewer/photo_controller.py
 msgid "사진 복사 중…"
 msgstr "Copying photo…"
-
-#: viewer/photo_controller.py
-#, python-brace-format
-msgid "사진을 복사했습니다: {name}"
-msgstr "Photo copied: {name}"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -5268,11 +5279,6 @@ msgstr "Left out: {list}"
 #, python-brace-format
 msgid "이미 있는 이름이 있어 바꾸지 않았습니다: {name}"
 msgstr "A name already exists, so nothing was renamed: {name}"
-
-#: viewer/photo_controller.py
-#, python-brace-format
-msgid "새 파일 {n}장을 만들었습니다."
-msgstr "Made {n} new files."
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -5492,11 +5498,6 @@ msgstr "Show Location on Map ({n})"
 
 #: viewer/photo_controller.py
 #, python-brace-format
-msgid "{fmt} 로 바꾼 새 파일 — 원본은 그대로"
-msgstr "New file in {fmt} — the original is unchanged"
-
-#: viewer/photo_controller.py
-#, python-brace-format
 msgid "{n}개를 풀고 {m}개는 풀지 못했습니다(이름·크기 거름): {folder}"
 msgstr "Extracted {n} files; {m} were not extracted (name or size filter): {folder}"
 
@@ -5563,6 +5564,11 @@ msgstr "Restore {n} photos to their originals?"
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid "사진을 복사했습니다: {name}"
+msgstr "Photo copied: {name}"
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "{stem}_평탄화"
 msgstr "{stem}_flattened"
 
@@ -5570,11 +5576,6 @@ msgstr "{stem}_flattened"
 #, python-brace-format
 msgid "삭제 ({n}장)"
 msgstr "Delete ({n})"
-
-#: viewer/photo_controller.py
-#, python-brace-format
-msgid "({n}장)"
-msgstr "({n})"
 
 #: viewer/photo_doc.py
 msgid "그림 형식이 아니거나 파일이 깨졌습니다."
@@ -6048,7 +6049,7 @@ msgstr "This PDF is password-protected — the copy would be saved without a pas
 msgid "자리 찾기"
 msgstr "Finding places"
 
-#: viewer/redact.py
+#: viewer/redact.py viewer/widgets/image_tune_dialog.py
 msgid "가리기"
 msgstr "Redacting"
 
@@ -6566,8 +6567,9 @@ msgstr "Signature image"
 msgid "다른 쪽에도 놓기"
 msgstr "Place on Other Pages"
 
-#: viewer/sign_draft_controller.py viewer/widgets/photo_label_dialog.py
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/sign_draft_controller.py viewer/widgets/image_tune_dialog.py
+#: viewer/widgets/photo_label_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "지우기"
 msgstr "Delete"
 
@@ -7603,7 +7605,7 @@ msgstr "PolyPDF Printer"
 msgid "받은 문서를 PDF 로 바꾸는 중…"
 msgstr "Converting the printed document to PDF…"
 
-#: viewer/vprinter_controller.py
+#: viewer/vprinter_controller.py viewer/widgets/image_tune_dialog.py
 msgid "저장하는 중…"
 msgstr "Saving…"
 
@@ -7619,11 +7621,6 @@ msgstr "The received print file was kept — PolyPDF will try converting it agai
 #, python-brace-format
 msgid "PolyPDF 프린터 — 저장: {path}"
 msgstr "PolyPDF Printer — saved: {path}"
-
-#: viewer/vprinter_controller.py
-#, python-brace-format
-msgid "저장하지 못했습니다: {err}"
-msgstr "Could not save: {err}"
 
 #: viewer/vprinter_controller.py
 #, python-brace-format
@@ -8642,8 +8639,9 @@ msgstr "<small>If the TOC isn't detected (e.g. scans), enter its pages. The revi
 msgid "TOC 오프셋 (목차 표기 페이지 → 실제 페이지 보정)"
 msgstr "TOC offset (adjust printed TOC page → actual page)"
 
-#: viewer/widgets/bookmarker_dialog.py viewer/widgets/ocr_options_dialog.py
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
+#: viewer/widgets/bookmarker_dialog.py viewer/widgets/image_tune_dialog.py
+#: viewer/widgets/ocr_options_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
 msgid "자동"
 msgstr "Auto"
 
@@ -9093,11 +9091,11 @@ msgstr "Target: {file_name}"
 msgid "폴더"
 msgstr "Folders"
 
-#: viewer/widgets/favorites_dialog.py
+#: viewer/widgets/favorites_dialog.py viewer/widgets/stamp_dialog.py
 msgid "↑ 위로"
 msgstr "↑ Up"
 
-#: viewer/widgets/favorites_dialog.py
+#: viewer/widgets/favorites_dialog.py viewer/widgets/stamp_dialog.py
 msgid "↓ 아래로"
 msgstr "↓ Down"
 
@@ -9459,6 +9457,14 @@ msgstr "Then click the background to remove in the preview — click again to ad
 msgid "빈 여백 자르기"
 msgstr "Trim empty margins"
 
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
+msgid "바탕 지우기"
+msgstr "Remove background"
+
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/print_dialog.py
+msgid "흑백"
+msgstr "Grayscale"
+
 #: viewer/widgets/image_tune_dialog.py
 msgid "글씨·선 색"
 msgstr "Text & line color"
@@ -9498,6 +9504,11 @@ msgstr "Drag Area to Hide"
 #: viewer/widgets/image_tune_dialog.py
 msgid "모자이크"
 msgstr "Pixelate"
+
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
+msgid "검정"
+msgstr "Black"
 
 #: viewer/widgets/image_tune_dialog.py
 msgid "가림 지우기"
@@ -9546,6 +9557,15 @@ msgstr "Black & white (two colors)"
 #: viewer/widgets/image_tune_dialog.py
 msgid "그대로"
 msgstr "As is"
+
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/sign_dialogs.py
+#: viewer/widgets/stamp_dialog.py
+msgid "파랑"
+msgstr "Blue"
+
+#: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
+msgid "빨강"
+msgstr "Red"
 
 #: viewer/widgets/image_tune_dialog.py
 msgid "고른 색…"
@@ -9868,6 +9888,10 @@ msgid "전자서명 — 서명 자리를 두고 확정하면 서명한 새 파�
 msgstr "Digital signature — place signature fields, then confirm to save a signed new file (the original stays as is)"
 
 #: viewer/widgets/main_view.py
+msgid "손바닥 — 끌어서 화면 이동"
+msgstr "Hand — drag to move the view"
+
+#: viewer/widgets/main_view.py
 msgid ""
 "이 창을 선택 후\n"
 "책갈피를 선택하세요"
@@ -9902,10 +9926,6 @@ msgstr "Insert image — click: place the saved image where you click (actual si
 #: viewer/widgets/main_view.py
 msgid "개체 선택(이미지 이동·크기·삭제)"
 msgstr "Select objects (move · resize · delete images)"
-
-#: viewer/widgets/main_view.py
-msgid "손바닥 — 끌어서 화면 이동"
-msgstr "Hand — drag to move the view"
 
 #: viewer/widgets/main_view.py
 msgid "청소(현재 페이지 선긋기 지움)"
@@ -11065,10 +11085,6 @@ msgstr "Printer default"
 #: viewer/widgets/print_dialog.py
 msgid "컬러"
 msgstr "Color"
-
-#: viewer/widgets/print_dialog.py
-msgid "흑백"
-msgstr "Grayscale"
 
 #: viewer/widgets/print_dialog.py
 msgid "문서 + 주석·꾸미기"
@@ -12500,14 +12516,6 @@ msgstr "Draw your signature with the mouse or a pen."
 msgid "원래 색"
 msgstr "Original"
 
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
-msgid "검정"
-msgstr "Black"
-
-#: viewer/widgets/sign_dialogs.py viewer/widgets/stamp_dialog.py
-msgid "파랑"
-msgstr "Blue"
-
 #: viewer/widgets/sign_dialogs.py
 msgid "잉크가 보이지 않습니다 — '자동' 을 끄고 배경 지우기 값을 조정하세요."
 msgstr "No ink is visible — turn off 'Auto' and adjust the background removal."
@@ -12993,10 +13001,6 @@ msgid " · 확정하면 '{name}' 을 바꿉니다"
 msgstr " · confirming replaces '{name}'"
 
 #: viewer/widgets/stamp_dialog.py
-msgid "빨강"
-msgstr "Red"
-
-#: viewer/widgets/stamp_dialog.py
 msgid "선명하게 (PDF 그대로 — 글자가 글자로 남는다)"
 msgstr "Sharp (as PDF — text stays text)"
 
@@ -13011,10 +13015,6 @@ msgstr "Crop"
 #: viewer/widgets/stamp_dialog.py
 msgid "누른 뒤 미리보기에서 남길 부분을 끌어 고릅니다 — 다시 누르면 적용"
 msgstr "Press, then drag in the preview to choose the part to keep — press again to apply"
-
-#: viewer/widgets/stamp_dialog.py
-msgid "바탕 지우기"
-msgstr "Remove background"
 
 #: viewer/widgets/stamp_dialog.py
 msgid "실제 폭"
@@ -13059,10 +13059,6 @@ msgstr "Color: ink"
 #: viewer/widgets/stamp_dialog.py
 msgid "남은 그림이 없습니다 — 바탕 지우기 문턱을 낮추세요."
 msgstr "Nothing is left — lower the background removal threshold."
-
-#: viewer/widgets/stamp_dialog.py
-msgid "그림을 열 수 없습니다."
-msgstr "Cannot open the image."
 
 # | 본문의 영역을 등록합니다."
 #: viewer/widgets/stamp_dialog.py
@@ -16345,4 +16341,16 @@ msgstr "Getting Started"
 
 #~ msgid "해시태그 폴더로 사본 저장…"
 #~ msgstr "Save Copies to Hashtag Folders…"
+
+#~ msgid "사진 보기"
+#~ msgstr "View Photos"
+
+#~ msgid "JPEG·PNG·WebP 로 바꾼 새 파일을 원본 옆에 만듭니다(원본은 그대로)."
+#~ msgstr "Makes a new JPEG, PNG or WebP file next to the original (the original is unchanged)."
+
+#~ msgid "이미 이 형식입니다."
+#~ msgstr "Already in this format."
+
+#~ msgid "{fmt} 로 바꾼 새 파일 — 원본은 그대로"
+#~ msgstr "New file in {fmt} — the original is unchanged"
 
