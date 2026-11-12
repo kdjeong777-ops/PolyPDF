@@ -237,8 +237,8 @@ chk(len(st) == 1 and st[0][2][0].startswith("_attach_pending") and len(st[0][2])
     "M 정지 스택 파일에서 메인 스레드 맨 위 줄만 옮긴다", st)
 chk(rt.stall_tops(_runs, "T2_HM") == [], "M 정지 파일이 없는 대상은 비어 있다")
 
-# N. 261113-5(릴리스 SOT §4.1 의 2·3, 사용자 결정): 베타 묶음은 속도를 한 번만 — 측정은 CI 설치 시험 하나, 부하 시험은 닿을 때만.
-#   재기 전 전원 상태를 적고 배터리·절전이면 경고(261113-1: beta.12 부하 실패가 배터리 동작 탓).
+# N. 261113-5(릴리스 SOT §4.1 의 2·3, 사용자 최신 결정): 베타는 속도를 설치본 전에 개발 코드로 한 번 — 부하 시험(늘) →
+#   통과하면 태그·CI 설치본 → 설치 확인(설치·자가 시험·창 뜸·종료·도우미, 속도 비교 없음). 재기 전 전원 상태(261113-1: 배터리 탓 실패).
 chk(callable(getattr(rt, "is_beta", None)) and rt.is_beta("1.1.0-beta.12") and not rt.is_beta("1.1.0")
     and not rt.is_beta("1.0.1"), "N 베타 판별(1.1.0-beta.12 예, 정식 아니오)")
 _ch = rt._changes
@@ -246,18 +246,35 @@ try:
     rt._changes = lambda base: ([("M", "viewer/convert/docx_writer.py", 30)], diff("viewer/convert/docx_writer.py", "+x"))
     bl = getattr(rt, "bundle_lines", lambda *a: [])("1.1.0-beta.12", "v1.1.0-beta.11")
     txt = "\n".join(bl)
-    chk("설치 시험" in txt and "부하 시험" in txt and "건너뜀" in txt and "load_test" not in txt.split("부하 시험", 1)[1].split("\n")[0],
-        "N 베타 묶음 — 변환 코드만 바뀌면 부하 시험 건너뜀(까닭), 측정은 설치 시험 하나", txt)
-    rt._changes = lambda base: ([("M", "viewer/widgets/bookmark_tree.py", 3)], diff("viewer/widgets/bookmark_tree.py", "+x"))
-    txt = "\n".join(getattr(rt, "bundle_lines", lambda *a: [])("1.1.0-beta.12", "v1.1.0-beta.11"))
-    chk("**한다**" in txt and "bookmark_tree.py" in txt, "N 베타 묶음 — 책갈피 트리를 바꾸면 부하 시험 한다(닿은 곳)", txt)
+    i_load, i_inst = txt.find("load_test"), txt.find("--check-only")
+    chk("건너뜀" not in txt and 0 <= i_load < i_inst and "측정 묶음 전체" not in txt,
+        "N 베타 — 변환 코드만 바뀌어도 부하 시험 늘, 설치본 전(부하 → 설치 확인 차례), 측정 묶음 없음", txt)
     txt = "\n".join(getattr(rt, "bundle_lines", lambda *a: [])("1.1.0", "v1.0.1"))
-    chk("**한다**" in txt and "건너뜀" not in txt, "N 정식판은 부하 시험 늘(§4.5)", txt)
+    chk("측정 묶음 전체" in txt and "**한다**" in txt and "--check-only" not in txt, "N 정식판은 측정 묶음 + 부하 시험(§4.5)", txt)
 finally:
     rt._changes = _ch
+chk(getattr(rt, "CHECK_ONLY_CMD", "").endswith("install --source ci --check-only"), "N 베타 설치 확인 명령")
+_src = Path(rt.__file__).read_text(encoding="utf-8")
+chk('"--check-only"' in _src and "judge_stall=False" in _src and "selftest(exe, out, rec)" in _src,
+    "N install --check-only — 자가 시험 + 작은 대상 하나, 정지는 판정하지 않는다")
+_bl_orig = rt.BASELINE
+try:
+    rt.BASELINE = Path(tempfile.mkdtemp()) / "baseline.json"
+    rt.BASELINE.write_text(json.dumps({"commit": "old", "version": "1.1.0-beta.11", "mode": "install", "result": "install_A",
+                                       "results": {"build": "build_B", "install": "install_A"}}), encoding="utf-8")
+    try:
+        rt.save_baseline({"commit": "new", "version": "1.1.0-beta.12", "mode": "install", "source": "ci"},
+                         Path("install_C"), keep_results=True)
+    except TypeError:
+        pass
+    b2 = json.loads(rt.BASELINE.read_text(encoding="utf-8"))
+    chk(b2["commit"] == "new" and b2["results"] == {"build": "build_B", "install": "install_A"} and b2["result"] == "install_A",
+        "N 설치 확인 통과는 기준점 커밋만 옮기고 견줄 결과는 그대로(릴리스 SOT §3.2)", b2)
+finally:
+    rt.BASELINE = _bl_orig
 lv = getattr(rt, "beta_level", lambda ver, level, urgent: (level, ""))
-chk(lv("1.1.0-beta.12", "build", False)[0] == "install" and lv("1.1.0-beta.12", "build", False)[1],
-    "N 베타 묶음은 빌드 시험 등급을 설치 시험으로 올린다(까닭 줄)")
+chk(lv("1.1.0-beta.12", "build", False)[0] == "install" and "check-only" in lv("1.1.0-beta.12", "build", False)[1],
+    "N 베타 묶음은 빌드 시험 대신 설치 확인(까닭 줄)")
 chk(lv("1.1.0-beta.12", "build", True)[0] == "build" and lv("1.1.0", "build", False)[0] == "build"
     and lv("1.1.0-beta.12", "skip", False)[0] == "skip", "N 긴급·정식·생략 후보는 그대로")
 pt = getattr(overlap, "power_text", None)

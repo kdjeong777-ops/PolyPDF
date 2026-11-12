@@ -314,26 +314,28 @@ def is_beta(ver: str) -> bool:
     return bool(re.fullmatch(r"\d+\.\d+\.\d+-.+", ver or ""))
 
 
+CHECK_ONLY_CMD = "python scripts\\release_test.py install --source ci --check-only"
+
+
 def beta_level(ver: str, level: str, urgent: bool) -> tuple:
-    """261113-5(릴리스 SOT §4.1 의 2, 사용자 결정): 베타 묶음의 속도 판정은 CI 설치 시험 하나 — 빌드 시험 등급을 설치 시험으로.
-    돌려줌 (등급, 까닭 또는 ''). 긴급·정식·생략 후보는 그대로."""
+    """261113-5(릴리스 SOT §4.1 의 2·3, 사용자 결정): 베타 묶음은 속도를 설치본 전에 개발 코드(부하 시험)로 한 번 재고,
+    설치본은 '설치 확인' 만 — 빌드 시험 등급을 설치 확인으로. 돌려줌 (등급, 까닭 또는 ''). 긴급·정식·생략 후보는 그대로."""
     if is_beta(ver) and not urgent and level == "build":
-        return "install", "베타 묶음 — 속도는 CI 설치본 한 번(설치 시험)으로 잰다, 이 PC 빌드 시험은 따로 하지 않는다(릴리스 SOT §4.1 의 2, 261113-5)"
+        return "install", ("베타 묶음 — 속도는 설치본 전에 개발 코드로 부하 시험 한 번, 설치본은 설치·실행·종료만 확인(`--check-only`), "
+                           "이 PC 빌드 시험은 하지 않는다(릴리스 SOT §4.1 의 2·3, 261113-5)")
     return level, ""
 
 
-def bundle_lines(ver: str, last_tag: str) -> list:
-    """261113-5(릴리스 SOT §4.1 의 2·3): 묶음 범위의 측정·부하 시험 줄 — 베타는 부하 시험을 닿을 때만(§4.5.1 과 같은 판별), 정식판은 늘."""
-    meas = "- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)" + (" — **베타의 속도 판정은 이 설치 시험 하나**, 실패하면 한 번 더 잰다(§4.1)"
-                                                         if is_beta(ver) else "")
-    cmd = "`python scripts\\load_test.py` — 큰 폴더 색인 중 테마·정렬·보기·편집·쪽 넘기기 정지 < 1초, 테마 왕복 누수 없음(261011-7)"
+def bundle_lines(ver: str, last_tag: str = "") -> list:
+    """261113-5(릴리스 SOT §4.1 의 2·3): 묶음 범위의 측정·부하 시험 줄 — 베타는 ① 검사 → ② 부하 시험(개발 코드, 늘 한 번) →
+    ③ 태그·CI 설치본 → ④ 설치 확인(속도 비교 없음). 정식판은 측정 묶음 + 부하 시험. `last_tag` 는 옛 호출과 맞추려고 받기만 한다."""
+    load = ("`python scripts\\load_test.py` — 큰 폴더 색인 중 테마·정렬·보기·편집·쪽 넘기기·큰 PDF 열기 정지 < 1초, "
+            "테마 왕복 누수 없음(261011-7)")
     if not is_beta(ver):
-        return [meas, "- 부하 시험: **한다** " + cmd]
-    if not last_tag:
-        return [meas, "- 부하 시험: **한다** %s — 견줄 마지막 릴리스 태그가 없다" % cmd]
-    hit = patch_checks(*_changes(last_tag))["load"]
-    return [meas, ("- 부하 시험: **한다** %s — 마지막 릴리스 `%s` 뒤 닿은 곳: %s" % (cmd, last_tag, hit)) if hit else
-            ("- 부하 시험: 건너뜀 — 마지막 릴리스 `%s` 뒤 색인 중 화면 조작 코드(`LOAD_PATHS`·`BUILD_TOKENS` 줄)가 바뀌지 않았다(§4.1 의 3)" % last_tag)]
+        return ["- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)", "- 부하 시험: **한다** " + load]
+    return ["- 부하 시험: **한다** — **베타의 속도 판정은 이것 하나**, 전체 검사 뒤 **설치본을 만들기 전에** 개발 코드(.venv)로 한 번. "
+            "실패하면 한 번 더 재고, 남으면 A/B 로 원인 → 사람 판단(§4.1) — " + load,
+            "- 통과하면 태그·CI 설치본 → **설치 확인**(속도 비교 없음): `%s` — 설치·자가 시험·창 뜸·정상 종료·도우미 남음 0" % CHECK_ONLY_CMD]
 
 
 def patch_checks(changes: list, diff_text: str) -> dict:
@@ -646,6 +648,8 @@ def plan(base_arg, urgent=False) -> int:
     name = {"install": "설치 시험", "build": "빌드 시험", "skip": "생략 후보 — 사용자에게 묻는다"}[c["level"]]
     cmd = {"install": "python scripts\\release_test.py install --source ci",
            "build": "python scripts\\release_test.py build --source local --rebuild", "skip": "(CI tests 성공만 확인)"}
+    if is_beta(source_version()) and not urgent and c["level"] == "install":     # 261113-5: 베타 설치본은 설치 확인만
+        name, cmd["install"] = "설치 확인(속도 비교 없음 — 속도는 부하 시험)", CHECK_ONLY_CMD
     L = ["# 시험 계획 — %s" % source_version(), "",
          "- 기준점: `%s`%s" % (base[:9] if re.fullmatch(r"[0-9a-f]{10,}", base) else base, (" (%s, %s 통과)" % (bl.get("version"), bl.get("mode")) if bl and not base_arg else "")),
          "- 릴리스 종류: %s" % ("**긴급**" if urgent else "묶음"),
@@ -672,6 +676,10 @@ def plan(base_arg, urgent=False) -> int:
     L += ["", "## 상시 항목", ""]
     if c["level"] == "skip":
         L.append("- 측정 묶음을 돌리지 않는다 — 정지·자식 남음·색인 속도는 이번 판에서 보지 않는다(못 한 것)")
+    elif is_beta(source_version()) and not urgent:                   # 261113-5(릴리스 SOT §4.1 의 2·3)
+        L += ["- 부하 시험(개발 코드, 설치본 전): 조작마다 정지 < 1초 · 색인 중 · 큰 PDF 열기 · 테마 왕복 누수 없음",
+              "- 설치 확인(CI 설치본): 설치 종료 코드·버전 · 자가 시험 · 창 뜸 · 정상 종료 · 도우미 남음 0 — 속도 기준점 비교 없음",
+              "- 끝난 뒤 실제 설정 폴더(`%APPDATA%\\LocalTools\\PolyPDF`)를 탐색기로 확인"]
     else:
         L += ["- 측정 묶음 전체: 대상마다 1초+ 정지 0 · 닫은 뒤 도우미 0 · 정상 종료",
               "- 기준점 결과와 자동 비교(창·열림 시간, 메모리, 색인한 파일 수 — 20% 넘게 나빠지면 '회귀 의심')",
@@ -710,14 +718,18 @@ def compare(rec: dict, base_rec: dict) -> list:
     return rows
 
 
-def save_baseline(rec: dict, out: Path):
+def save_baseline(rec: dict, out: Path, keep_results: bool = False):
     # 261010-15(릴리스 SOT §3.2): 비교용 결과는 **시험 종류마다** 따로 둔다(`results`) — 설치본은 빌드본보다 창이 늦게 뜨고
     #   색인 수도 캐시에 따라 달라, 설치 시험을 빌드 시험 결과와 견주면 '회귀 의심' 이 과하게 나왔다(beta.229 6건).
+    # 261113-5: keep_results — 베타 설치 확인은 속도를 재지 않으므로 커밋·판만 옮기고 견줄 결과(results·result·mode)는 그대로
     prev = load_baseline() or {}
     results = dict(prev.get("results") or {})
-    results[rec["mode"]] = out.name
-    BASELINE.write_text(json.dumps({"commit": rec["commit"], "version": rec["version"], "mode": rec["mode"],
-                                    "source": rec["source"], "result": out.name, "results": results,
+    if not keep_results:
+        results[rec["mode"]] = out.name
+    BASELINE.write_text(json.dumps({"commit": rec["commit"], "version": rec["version"],
+                                    "mode": prev.get("mode", rec["mode"]) if keep_results else rec["mode"],
+                                    "source": rec["source"],
+                                    "result": prev.get("result", out.name) if keep_results else out.name, "results": results,
                                     "date": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False, indent=1),
                         encoding="utf-8")
 
@@ -745,7 +757,31 @@ def load_suite(only):
     return base, cases
 
 
-def run_suite(exe: Path, out: Path, only, rec: dict, watch=None):
+def check_only_case() -> str:
+    """261113-5: 베타 '설치 확인' 이 띄워 볼 대상 하나 — 색인을 비우지 않는 첫 대상(작은 문서). 없으면 첫 대상."""
+    _base, cases = load_suite(None)
+    c = next((c for c in cases if not c.get("clear_index")), cases[0] if cases else None)
+    if c is None:
+        raise SystemExit("측정 대상 목록이 비었다: %s" % SUITE)
+    return c["name"]
+
+
+def selftest(exe: Path, out: Path, rec: dict):
+    """261113-5(릴리스 SOT §4.1 의 2): 설치본 자가 시험 — CI 가 빌드 직후 돌리는 `--selftest` 를 **설치된 exe** 로.
+    결과 첫 줄이 'ok <소스 버전>' 이 아니면 실패(설치본이 켜자마자 꺼짐·빠진 DLL — 261020-2)."""
+    f = out / "selftest.txt"
+    try:
+        subprocess.run([str(exe), "--selftest", str(f)], timeout=180, capture_output=True)
+    except subprocess.TimeoutExpired:
+        rec["fail"].append("자가 시험이 3분 안에 끝나지 않음")
+        return
+    txt = f.read_text(encoding="utf-8", errors="replace") if f.exists() else ""
+    rec["selftest"] = (txt.splitlines() or ["(결과 없음)"])[0][:200]
+    if not txt.startswith("ok %s " % source_version()):
+        rec["fail"].append("자가 시험 실패: %s" % rec["selftest"])
+
+
+def run_suite(exe: Path, out: Path, only, rec: dict, watch=None, judge_stall=True):
     base, cases = load_suite(only)
     probe.EXE = exe
     # 261009-19: 실제 설정은 **읽어서** 시험 프로필로 복사만 — 대상마다 그 복사본(cfg_seed)으로 되돌린다
@@ -774,7 +810,10 @@ def run_suite(exe: Path, out: Path, only, rec: dict, watch=None):
             rec["runs"].append({k: r.get(k) for k in ("name", "t_window", "t_loaded", "max_hang_sec", "peak_ws_mb",
                                                       "max_private_mb", "helper_max_ws_mb", "helper_left",
                                                       "close_sec", "exit", "indexed_files")} | {"hangs": len(r["hangs"])})
-            if r["max_hang_sec"] >= 1.0:
+            if r["max_hang_sec"] >= 1.0 and not judge_stall:      # 261113-5 베타 설치 확인 — 속도는 부하 시험이 판정, 적기만
+                rec.setdefault("notes", []).append("%s 1초+ 정지 %d회(최장 %ss) — 적기만(속도 판정은 부하 시험)"
+                                                   % (c["name"], len(r["hangs"]), r["max_hang_sec"]))
+            elif r["max_hang_sec"] >= 1.0:
                 rec["fail"].append("%s 1초+ 정지 %d회(최장 %ss)" % (c["name"], len(r["hangs"]), r["max_hang_sec"]))
             rec.setdefault("stalls", []).extend(stall_tops(out / "runs", c["name"]))
             if r.get("helper_left"):
@@ -809,8 +848,14 @@ def stall_tops(runs: Path, name: str) -> list:
 
 
 def write_summary(out: Path, rec: dict):
-    L = ["# %s 시험 — %s (%s)" % ("빌드" if rec["mode"] == "build" else "설치", rec["version"], rec["source"]), "",
+    L = ["# %s — %s (%s)" % ("빌드 시험" if rec["mode"] == "build" else
+                             ("설치 확인(속도 비교 없음)" if rec.get("check_only") else "설치 시험"), rec["version"], rec["source"]), "",
          "- 커밋 `%s` · exe `%s`" % (rec["commit"][:7], rec["exe"])]
+    if rec.get("check_only"):
+        L.append("- 베타 설치 확인(릴리스 SOT §4.1 의 2, 261113-5) — 설치·자가 시험·창 뜸·정상 종료·도우미 남음만 판정, 속도는 부하 시험이 판정")
+    if rec.get("selftest"):
+        L.append("- 자가 시험(설치된 exe `--selftest`): `%s`" % rec["selftest"])
+    L += ["- " + x for x in rec.get("notes", [])]
     if rec.get("install", {}).get("skipped"):
         i = rec["install"]
         L.append("- 설치 건너뜀 — 설치는 `%s` · 설치 정보 %s · 앱 파일 %s(지금 설치된 판을 잼)"
@@ -862,6 +907,8 @@ def main():
             p.add_argument("--rebuild", action="store_true", help="build_ci.bat 부터(--source local)")
         else:
             p.add_argument("--no-suite", action="store_true", help="설치·버전 확인만")
+            p.add_argument("--check-only", action="store_true",
+                           help="베타 설치 확인 — 설치·자가 시험·작은 대상 하나로 창 뜸·종료·도우미만, 속도 비교 없음(릴리스 SOT §4.1 의 2)")
             p.add_argument("--skip-install", nargs="?", const="", default=None, metavar="이전_결과_폴더",
                            help="설치를 건너뛰고 지금 설치된 exe 를 잰다 — 설치 정보·앱 파일이 소스 버전일 때만"
                                 "(폴더를 안 주면 같은 판의 가장 최근 설치 시험)")
@@ -887,6 +934,9 @@ def main():
     out = REVIEW / ("%s_%s_%s" % (a.mode, ver, time.strftime("%y%m%d-%H%M")))
     out.mkdir(parents=True, exist_ok=False)
     rec = {"mode": a.mode, "source": a.source, "version": ver, "commit": git_head(), "runs": [], "fail": []}
+    check_only = a.mode == "install" and getattr(a, "check_only", False)
+    if check_only:
+        rec["check_only"] = True
     try:
         if a.mode == "build":
             exe = exe_for_build(a, out)
@@ -895,7 +945,13 @@ def main():
         else:
             exe = exe_for_install(a, out, rec)
         rec["exe"] = str(exe)
-        if not (a.mode == "install" and a.no_suite) and not rec["fail"]:
+        if check_only and not rec["fail"]:
+            # 261113-5(릴리스 SOT §4.1 의 2): 베타 설치본은 설치·실행·종료만 — 자가 시험 + 작은 대상 하나(정지는 적기만)
+            selftest(exe, out, rec)
+            watch = overlap.Watch().start()
+            run_suite(exe, out, check_only_case(), rec, watch, judge_stall=False)
+            rec["overlap"] = watch.lines()                   # 전원·겹침은 적기만 — 속도를 판정하지 않으니 보류도 없다
+        elif not (a.mode == "install" and a.no_suite) and not rec["fail"]:
             watch = overlap.Watch().start()                  # 빌드·설치 뒤, 재기 직전부터(그 전의 빌드는 이 측정의 자손이라 세지 않는다)
             run_suite(exe, out, a.cases, rec, watch)
             rec["overlap"], rec["overlapped"] = watch.lines(), watch.overlapped
@@ -903,8 +959,10 @@ def main():
         rec["fail"].append(str(e))
         rec.setdefault("exe", "-")
     bl = load_baseline()
-    cmp_dir = compare_base(bl, a.mode)
-    if cmp_dir and rec["runs"]:
+    cmp_dir = None if check_only else compare_base(bl, a.mode)     # 설치 확인은 속도를 견주지 않는다
+    if check_only:
+        pass
+    elif cmp_dir and rec["runs"]:
         try:
             base_rec = json.loads((REVIEW / cmp_dir / "result.json").read_text(encoding="utf-8"))
             rec["baseline"], rec["baseline_version"] = cmp_dir, base_rec.get("version")
@@ -918,9 +976,14 @@ def main():
     full = not a.cases and not (a.mode == "install" and a.no_suite)
     # 261026-6 보완(릴리스 SOT §3.2): '회귀 의심' 이 있는 결과는 통과여도 기준점이 되지 않는다 — 느린 T6 결과(1809)가 기준점이 되어
     #   다음 시험이 흔들린 값과 견주게 됐다. 사람이 가려(§4.3) 깨끗하다고 보면 같은 명령으로 다시 재서 옮긴다.
-    if not rec["fail"] and full and rec["runs"] and not rec.get("overlapped") and not rec.get("regress"):
+    if not check_only and not rec["fail"] and full and rec["runs"] and not rec.get("overlapped") and not rec.get("regress"):
         save_baseline(rec, out)
         say("기준점 갱신:", BASELINE)
+    elif check_only:
+        # 261113-5(릴리스 SOT §3.2): 통과하면 기준점 커밋·판만 옮긴다 — 견줄 결과(results)는 마지막으로 속도를 잰 시험 그대로
+        if not rec["fail"] and rec["runs"]:
+            save_baseline(rec, out, keep_results=True)
+            say("기준점 커밋 갱신(견줄 결과는 그대로):", BASELINE)
     elif rec.get("overlapped"):
         say("겹침 — 기준점을 옮기지 않는다(릴리스 SOT §4.3 의 8)")
     elif rec.get("regress"):
