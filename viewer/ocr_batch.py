@@ -138,16 +138,10 @@ Stopped = _Stop
 
 
 def _own_tmpdir(d: Path) -> bool:
-    """`run_file` 이 만든 전용 임시 폴더인가 — 이름이 `TEMP_PREFIX` 로 시작하고 시스템 임시 폴더 **바로 아래**(실제 경로로)."""
-    import os
-    if not d.name.startswith(TEMP_PREFIX):
-        return False
-    try:
-        root = os.path.normcase(os.path.realpath(tempfile.gettempdir()))
-        par = os.path.normcase(os.path.realpath(str(d.parent)))
-    except (OSError, ValueError):
-        return False
-    return par == root
+    """`run_file` 이 만든 전용 임시 폴더인가 — 이름이 `TEMP_PREFIX` 로 시작하고 시스템 임시 폴더 **바로 아래**(실제 경로로).
+    판정은 앱 공용 `temp_sweep.is_own_temp_dir` 하나(마스터 §14.8.1, 261112-14)."""
+    from viewer.temp_sweep import is_own_temp_dir
+    return is_own_temp_dir(d, TEMP_PREFIX)
 
 
 def cleanup(tmp) -> None:

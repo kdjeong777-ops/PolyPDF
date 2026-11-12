@@ -27,6 +27,45 @@ APP_TEMP_PREFIXES = (
 STALE_HOURS = 24
 
 
+def same_path(a, b) -> bool:
+    """두 경로가 같은 파일인가 — 실제 경로(`normcase(realpath)`)로. str·Path·대소문자·슬래시·짧은 이름이 달라도 같다고 본다."""
+    try:
+        return os.path.normcase(os.path.realpath(str(a))) == os.path.normcase(os.path.realpath(str(b)))
+    except (OSError, ValueError):
+        return False
+
+
+def is_own_temp_dir(d, prefix: str) -> bool:
+    """`d` 가 앱이 만든 전용 임시 폴더인가 — 이름이 `prefix` 로 시작하고 **시스템 임시 폴더 바로 아래**(실제 경로로).
+    넘겨받은 경로의 부모를 지우기 전에 부른다(마스터 §14.8.1, 261112-13·14)."""
+    if not prefix or not d:
+        return False
+    try:
+        real = os.path.realpath(str(d))
+        if not os.path.basename(real).startswith(prefix):
+            return False
+        root = os.path.normcase(os.path.realpath(tempfile.gettempdir()))
+        return os.path.normcase(os.path.dirname(real)) == root
+    except (OSError, ValueError):
+        return False
+
+
+def remove_own_temp_dir(d, prefix: str, who: str = "") -> bool:
+    """전용 임시 폴더일 때만 통째로 지운다. 아니면 아무것도 지우지 않고 오류 출력에 한 줄(창 모드 exe 는 stderr 가 없을 수 있다).
+    지웠으면 True."""
+    if not d:
+        return False
+    if not is_own_temp_dir(d, prefix):
+        try:
+            import sys
+            print(f"{who or 'temp_sweep'}: not an app temp dir ({prefix}), kept:", d, file=sys.stderr)
+        except Exception:
+            pass
+        return False
+    shutil.rmtree(str(d), ignore_errors=True)
+    return True
+
+
 def sweep(tmp=None, max_age_h: float = STALE_HOURS, now=None) -> int:
     """낡은 앱 임시 폴더를 지운다. 지운 폴더 수. 실패한 것은 건너뛴다(다음 시작 때 다시)."""
     tmp = tmp or tempfile.gettempdir()

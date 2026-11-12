@@ -108,8 +108,8 @@ def _press_ok(pids) -> int:
 def convert_word(ps, pages, dst: Path, tick) -> None:
     """배경 스레드에서. `tick` 이 `Cancelled` 를 던지면 Word 를 끝내고 다시 던진다(부르는 쪽이 결과를 지운다)."""
     from viewer.convert import Cancelled, step_text
-    from viewer.convert.proc import _layered_copy
-    tmpdir = Path(tempfile.mkdtemp(prefix="polypdf_conv_"))
+    from viewer.convert.proc import TEMP_PREFIX, _layered_copy, remove_copy
+    tmpdir = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
     layered = None
     try:
         layered = _layered_copy(ps, pages, tick)              # 스캔 쪽은 우리 OCR 글자층(§4.1 과 같은 길)
@@ -186,6 +186,5 @@ def convert_word(ps, pages, dst: Path, tick) -> None:
         if state["cancel"]:
             raise Cancelled()
     finally:
-        if layered:
-            shutil.rmtree(Path(layered).parent, ignore_errors=True)
-        shutil.rmtree(tmpdir, ignore_errors=True)
+        remove_copy(layered, ps.path)                          # 전용 임시 폴더일 때만(형식 변환 SOT §4.1, 261112-14)
+        shutil.rmtree(tmpdir, ignore_errors=True)              # 이 함수가 방금 만든 폴더(마스터 §14.8.1 규칙 1)

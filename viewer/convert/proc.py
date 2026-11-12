@@ -18,6 +18,21 @@ from viewer.i18n import tr
 
 SERVER_ARG = "--convert-server"
 KEY_ENV = "POLYPDF_CONVERT_KEY"
+TEMP_PREFIX = "polypdf_conv_"      # 스캔 쪽·머리말 가린 사본의 전용 임시 폴더(temp_sweep.APP_TEMP_PREFIXES 에도 있다)
+
+
+def _is_original(src, orig) -> bool:
+    """변환할 것이 원본 그 자체인가 — 실제 경로로(형식 변환 SOT §4.1 '임시 폴더 지우기', 261112-14)."""
+    from viewer.temp_sweep import same_path
+    return same_path(src, orig)
+
+
+def remove_copy(src, orig) -> None:
+    """사본이면 그 전용 임시 폴더를 지운다 — 전용 폴더일 때만(마스터 §14.8.1). 원본이면 아무것도 하지 않는다."""
+    if not src or _is_original(src, orig):
+        return
+    from viewer.temp_sweep import remove_own_temp_dir
+    remove_own_temp_dir(Path(src).parent, TEMP_PREFIX, who="convert")
 
 
 def _layered_copy(ps, pages, tick) -> str | None:
@@ -28,7 +43,7 @@ def _layered_copy(ps, pages, tick) -> str | None:
         return None
     from viewer import text_apply
     from viewer.convert import step_text
-    out = Path(tempfile.mkdtemp(prefix="polypdf_conv_")) / "layered.pdf"
+    out = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX)) / "layered.pdf"
     tmp, _stats = text_apply.build_layer_pdf(
         ps.path, scan,
         rows_for=lambda _doc, pg: ps.lines(pg), fixes_for=lambda _pg, rows: rows,   # ps.lines 가 이미 고침을 얹었다
@@ -62,9 +77,7 @@ def convert_docx(ps, pages, dst: Path, tick) -> None:
         ok = index_proc.run_job(job, on_progress, lambda: state["cancel"],
                                 server_arg=SERVER_ARG, key_env=KEY_ENV, what="Word")
     finally:
-        if src != ps.path:
-            import shutil
-            shutil.rmtree(Path(src).parent, ignore_errors=True)
+        remove_copy(src, ps.path)
     if state["cancel"]:
         raise Cancelled()
     if ok is None:
@@ -92,8 +105,8 @@ def _child_step(done, total, label, doc_pages) -> str:
 def _without_edges(src: str, orig: str, per_page: dict) -> str:
     """머리말·꼬리말 글을 지운 임시 사본(그림·선은 그대로). `src` 가 이미 임시 사본이면 그것을 고친다."""
     import fitz
-    if src == orig:
-        out = Path(tempfile.mkdtemp(prefix="polypdf_conv_")) / "noedge.pdf"
+    if _is_original(src, orig):
+        out = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX)) / "noedge.pdf"
     else:
         out = Path(src).with_name("noedge.pdf")
     doc = fitz.open(src)
