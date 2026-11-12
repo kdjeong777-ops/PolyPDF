@@ -51,6 +51,35 @@ def _to_png(data: bytes):
         return None
 
 
+def _sync_manifest(doc) -> int:
+    """저장 직전 — 패키지 manifest 의 그림 항목(`BinData/`)을 문서 개체의 manifest 에 채운다(형식 변환 SOT §4.2, 261112-17).
+
+    python-hwpx 6.6.0 은 구역을 더한 문서를 저장할 때 문서 개체가 처음 잡은 manifest 로 `content.hpf` 를 덮어쓴다 —
+    그 사이 패키지가 새로 읽은 manifest 에만 적힌 그림(첫 그림 뒤 모두)이 빠지고, 한글은 등록 안 된 그림을 빼고 연다.
+    더한 항목 수."""
+    try:
+        root = doc._root
+        mine = root._manifest
+        ns = "http://www.idpf.org/2007/opf/"
+        man_el = mine.find(f"{{{ns}}}manifest")
+        if man_el is None:
+            return 0
+        have = {e.get("id") for e in man_el.findall(f"{{{ns}}}item")}
+        added = 0
+        for it in doc._package._manifest_items():
+            iid, href = str(it.get("id", "")).strip(), str(it.get("href", "")).strip()
+            if not iid or iid in have or not href.startswith("BinData/"):
+                continue
+            man_el.append(man_el.makeelement(f"{{{ns}}}item", {k: str(v) for k, v in it.items()}))
+            have.add(iid)
+            added += 1
+        if added:
+            root._manifest_dirty = True
+        return added
+    except Exception:                                  # 라이브러리 내부가 바뀌면 — 아래 저장은 그대로(검사가 잡는다)
+        return 0
+
+
 def _fill_table(t, rows) -> None:
     for ri, r in enumerate(rows):
         for ci, c in enumerate(r):
@@ -97,6 +126,7 @@ def write_hwpx_edit(ps, pages, dst: Path, tick) -> None:
             doc.add_paragraph("", pageBreak="1")
     _edit_header_footer(doc, layout.edge_plan(per_page))
     tick(len(pages), len(pages), step_text("save"))
+    _sync_manifest(doc)                         # 그림이 manifest 에서 빠지지 않게(§4.2, 261112-17)
     doc.save_to_path(str(dst))
 
 
@@ -484,4 +514,5 @@ def write_hwpx_shape(ps, pages, dst: Path, tick) -> None:
                                   char_pr_id_ref=st.run(b["size"], 0, b["bold"], b["serif"]))
     st.finish()
     tick(len(pages), len(pages), step_text("save"))
+    _sync_manifest(doc)                         # 쪽마다 구역 — 저장이 낡은 manifest 로 덮어써 그림이 빠졌다(§4.2, 261112-17)
     doc.save_to_path(str(dst))
