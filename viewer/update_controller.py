@@ -340,6 +340,7 @@ class UpdateMixin:
         info = getattr(self, "_pending_update", None)
         if not info:
             return False
+        self._tell_peers_updating()            # 261113-2(U25): 닫기 요청 전에 — 다른 창이 업데이트 창을 다시 띄우지 않게
         z = getattr(self, "_pending_zip", None)
         zp = z if (z and os.path.isfile(z)) else None
         if self._update_kind(info) == "setup":
@@ -413,6 +414,33 @@ class UpdateMixin:
         if ok:
             self._updating = True
         return ok
+
+    # ── 261113-2(릴리스 SOT §14.5 U25): 업데이트로 닫히는 다른 창은 업데이트 창을 다시 띄우지 않는다 ──
+    _PEER_UPDATE_REPLY_MS = 800               # 창마다 알림 응답 기다림(응답성 SOT 1초 안)
+    _PEER_UPDATE_HOLD_S = 120.0               # 알림을 받은 뒤 이 시간 안의 닫기만 업데이트 창을 건너뛴다(U2 기다림 60초 + 여유)
+
+    def _tell_peers_updating(self) -> int:
+        """다른 PolyPDF 창 모두에 '업데이트하려고 곧 닫는다'(`update_quit`)를 알린다 → 받은 창 수.
+        닫기 요청(WM_CLOSE·도우미 CloseMainWindow)보다 **먼저** 불러야 그 창의 closeEvent 가 알림을 본다."""
+        link = getattr(self, "_instance_link", None)
+        if link is None:
+            return 0
+        try:
+            return int(link.broadcast({"op": "update_quit"}, self._PEER_UPDATE_REPLY_MS))
+        except Exception:
+            return 0
+
+    def _on_peer_update_quit(self) -> dict:
+        """받는 쪽 — 다른 창이 업데이트를 시작했다. 닫기는 그 창이 보내는 닫기 요청으로 온다(여기서 닫지 않는다 — 두 번 닫기 방지)."""
+        import time
+        self._peer_update_at = time.monotonic()
+        return {"ok": True}
+
+    def _peer_updating(self) -> bool:
+        """방금(`_PEER_UPDATE_HOLD_S` 안) 다른 창이 업데이트를 알렸나 — closeEvent 가 업데이트 창을 건너뛸지."""
+        import time
+        t = getattr(self, "_peer_update_at", None)
+        return t is not None and (time.monotonic() - t) < self._PEER_UPDATE_HOLD_S
 
     _OTHER_WIN_WAIT_S = 60.0                  # 저장 여부 응답 시간 포함(종전 도우미와 같다)
 

@@ -4686,6 +4686,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return self._vprinter_peer_show(path)
         if op == "photo":                              # 261112-10: 기본 사진 앱으로 두 번 누른 사진 — 사진 모드인 창만 받는다(사진 보기 SOT §4.45)
             return self._photo_peer_open(path)
+        if op == "update_quit":                        # 261113-2: 다른 창이 업데이트하려고 곧 닫는다(릴리스 SOT §14.5 U25)
+            return self._on_peer_update_quit()
         return {"error": tr('알 수 없는 요청: {op}').format(op=op)}
 
     def _ask_peer_release(self, name: str, holders: list) -> str:
@@ -10889,7 +10891,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261008-17·-18(마스터 §14.5 U13·U14): 바뀐 내용을 보이는 업데이트 창에서 고르고,
         #   '업그레이드 후 종료' 면 **닫기 전에 받는다**(실패·취소면 닫지 않는다).
         #   도움말 → 업데이트에서 이미 받고 닫기를 요청했으면(_upgrade_requested) 묻지 않는다.
-        if getattr(self, "_pending_update", None) and not getattr(self, "_updating", False):
+        #   261113-2(릴리스 SOT §14.5 U25): 다른 창이 업데이트하려고 이 창을 닫는 중이면 묻지 않는다(업데이트는 그 창이 한다).
+        if (getattr(self, "_pending_update", None) and not getattr(self, "_updating", False)
+                and not self._peer_updating()):
             info = self._pending_update
             if getattr(self, "_upgrade_requested", False):
                 choice = "update"

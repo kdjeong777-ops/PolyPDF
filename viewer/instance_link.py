@@ -8,7 +8,8 @@
   `instances/<이름>.json` 에 적어 서로 찾는다. 연결되지 않는 항목(죽은 프로세스)은 지운다.
 - 요청·응답은 JSON 한 줄. `query`(열고 있나·저장 안 한 편집이 있나) / `release`(놓기) /
   `reload`(다시 열기) / `show`(그 폴더를 보고 있으면 목록에 더하고 열기 — 가상 프린터, 261031-4) /
-  `photo`(사진 모드인 창이면 그 사진의 폴더·사진을 열기 — 기본 사진 앱으로 두 번 누름, 261112-10, 사진 보기 SOT §4.45).
+  `photo`(사진 모드인 창이면 그 사진의 폴더·사진을 열기 — 기본 사진 앱으로 두 번 누름, 261112-10, 사진 보기 SOT §4.45) /
+  `update_quit`(다른 창이 업데이트하려고 곧 이 창을 닫는다 — 업데이트 창을 다시 띄우지 않기, 261113-2, 릴리스 SOT §14.5 U25).
   창 쪽 동작은 `handler(op, path, page)` 가 한다(앱이 넣는다).
 - 기다림은 짧다(연결 0.3초·응답 3초) — 응답하지 않는 창 하나 때문에 저장이 멈추지 않게.
 """
@@ -234,6 +235,22 @@ class InstanceLink(QObject):
     def reload(self, released, path):
         for r in released:
             self._request(r["server"], {"op": "reload", "path": str(path), "page": r["page"]})
+
+    def broadcast(self, msg, timeout=REPLY_MS) -> int:
+        """모든 다른 창에 같은 요청을 보낸다 → `ok` 로 답한 창 수. 연결 안 되는 등록은 지운다
+        (261113-2, 릴리스 SOT §14.5 U25 — 업데이트로 닫기 전에 `update_quit` 알림)."""
+        n = 0
+        for name, f in self._peers():
+            res = self._request(name, msg, timeout)
+            if res is None:
+                try:
+                    f.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                continue
+            if res.get("ok"):
+                n += 1
+        return n
 
     def show_file(self, path) -> bool:
         """261031-4(가상 프린터 SOT §4.4): 그 PDF 의 폴더를 책갈피창에 보고 있는 다른 창에 넘긴다(`show`) —
