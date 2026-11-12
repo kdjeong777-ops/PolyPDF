@@ -460,7 +460,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _build_drawer(self, central):
         from PyQt6.QtWidgets import QVBoxLayout as _VB
         from PyQt6.QtCore import QPropertyAnimation
-        from viewer.widgets.drawer_band import DrawerBand
+        from viewer.widgets.drawer_band import DrawerBand, OutsideClickCloser
         self._drawer = QWidget(central)
         self._drawer.setObjectName("drawer")
         self._drawer.setAutoFillBackground(True)
@@ -472,8 +472,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._drawer_open = False
         # 261107-15(디자인 SOT §2.4.1, 사용자 결정 '스크롤바 밖 옅은 띠'): 종전 손잡이(스크롤바 위에 겹친 QToolButton)를 띠로
         self._drawer_btn = DrawerBand(central)
-        self._drawer_btn.toggled.connect(self._toggle_drawer)
+        self._drawer_btn.toggled.connect(self._on_drawer_band)
         self._drawer_btn.hide()
+        # 261112-21(디자인 SOT §2.4.1, 사용자 지시): 띠로 펼친 드로어는 바깥을 누르면 접는다 — 감시는 펼쳐 둔 동안만
+        self._drawer_closer = OutsideClickCloser(self, (self._drawer, self._drawer_btn), self._drawer_close_outside)
         self._drawer_anim = QPropertyAnimation(self._drawer, b"geometry", self)
         self._drawer_anim.setDuration(180)
         self._drawer_anim.finished.connect(self._on_drawer_anim_done)
@@ -524,6 +526,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
         self._toggle_drawer()      # 접기
 
+    def _on_drawer_band(self):
+        """띠 누름·Enter — 사용자가 펼치면 바깥 누름 감시를 건다(261112-21). 캡처 자동 펼침(`_drawer_auto_show`)은 걸지 않는다."""
+        self._toggle_drawer()
+        if self._drawer_open:
+            self._drawer_closer.arm()
+
+    def _drawer_close_outside(self):
+        if getattr(self, "_panel_in_drawer", False) and self._drawer_open:
+            self._drawer_timer.stop()
+            self._toggle_drawer()
+
     def _drawer_width(self) -> int:
         return min(360, max(220, self._central.width() // 2))
 
@@ -550,6 +563,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         from PyQt6.QtCore import QRect
         self._drawer_open = not self._drawer_open
+        if not self._drawer_open:
+            self._drawer_closer.disarm()       # 261112-21: 접히면 감시를 뗀다(어느 길로 접히든)
         W = self._central.width(); H = self._central.height()
         dw = self._drawer_width()
         self._drawer.show(); self._drawer.raise_()
@@ -1288,6 +1303,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     self._drawer_btn.hide()
                     self._drawer_gap.hide()
                     self._drawer_open = False
+                    self._drawer_closer.disarm()       # 261112-21
                     self.splitter.insertWidget(3, self.right_panel)
                     self.right_panel.setVisible(True)
                     self._panel_in_drawer = False

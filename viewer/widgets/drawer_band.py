@@ -6,9 +6,9 @@
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal, QRectF
+from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QObject, QEvent
 from PyQt6.QtGui import QColor, QPainter, QFont
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QWidget, QApplication
 
 from viewer.i18n import tr
 
@@ -102,3 +102,50 @@ class DrawerBand(QWidget):
             ev.accept()
             return
         super().keyPressEvent(ev)
+
+
+class OutsideClickCloser(QObject):
+    """261112-21(디자인 SOT §2.4.1): 띠로 펼친 드로어 — 창 안 드로어·띠 **밖**을 누르면 `close_cb()`.
+
+    앱 이벤트 필터지만 **펼쳐 둔 동안만** 건다(`arm`/`disarm`) — 늘 도는 전역 필터를 두지 않는다(응답성 SOT).
+    누름은 먹지 않는다(False 를 돌려 누른 곳에 그대로 간다). 다른 최상위 창(대화상자·메뉴·콤보 목록)의 누름은 보지 않는다.
+    """
+
+    def __init__(self, window: QWidget, keep: tuple, close_cb):
+        super().__init__(window)
+        self._win = window
+        self._keep = keep            # 누르면 접지 않을 위젯들(드로어·띠) — 그 자손도
+        self._close = close_cb
+        self._armed = False
+
+    def arm(self) -> None:
+        if not self._armed:
+            app = QApplication.instance()
+            if app is not None:
+                app.installEventFilter(self)
+                self._armed = True
+
+    def disarm(self) -> None:
+        if self._armed:
+            app = QApplication.instance()
+            if app is not None:
+                app.removeEventFilter(self)
+            self._armed = False
+
+    def is_armed(self) -> bool:
+        return self._armed
+
+    def eventFilter(self, obj, ev):
+        if ev.type() != QEvent.Type.MouseButtonPress or not isinstance(obj, QWidget):
+            return False
+        try:
+            if obj.window() is not self._win:
+                return False
+            for k in self._keep:
+                if k is not None and (obj is k or k.isAncestorOf(obj)):
+                    return False
+        except RuntimeError:            # 지워진 위젯
+            return False
+        self.disarm()                    # 한 번만 — 같은 누름이 부모로 다시 와도 두 번 닫지 않게
+        self._close()
+        return False
