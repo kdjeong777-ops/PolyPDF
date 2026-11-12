@@ -68,6 +68,39 @@ class ConvertMixin:
         return self._run_convert(files, key, sel)
 
     def _photo_convert(self, files, fmt=None) -> bool:
+        """사진 모드 '변환'(사진 보기 SOT §4.46, 261112-15 사용자 결정 '창 하나에 두 묶음') — 변환 창: 그림으로 저장(형식·바탕 지우기·
+        흑백·색 바꾸기·가리기·보정) + 문서로(아래 `_photo_convert_doc`). 문서 형식이 정해져 오면 곧바로 문서로."""
+        from viewer import convert
+        from viewer.widgets.image_tune_dialog import ImageTuneDialog
+        if fmt in convert.PHOTO_KEYS:
+            return self._photo_convert_doc(files, fmt)
+        files = [str(f) for f in files if f and self._is_photo_path(f) and Path(f).exists()]
+        if not files:
+            QMessageBox.information(self, tr("변환"), tr("변환할 사진을 먼저 여세요."))
+            return False
+
+        def saved(src, dst):
+            for bt in (self.bookmark_tree, getattr(self, "bookmark_tree_right", None)):
+                if bt is not None:
+                    try:
+                        bt.add_or_refresh_file(dst, after=src)
+                    except Exception:
+                        pass
+        dlg = ImageTuneDialog(self, files, kind="photo",
+                              rots={f: self._photo_rot_for(f) for f in files}, crops={f: self._photo_crop_for(f) for f in files},
+                              on_saved=saved, doc_fn=lambda fs=list(files): self._photo_convert_doc(fs),
+                              copy_fn=lambda img, png, done: self._copy_image_to_clipboard(img, done, png=png),
+                              can_save=not self._photo_any_cached(files))
+        self._image_tune_dlg = dlg
+        try:
+            dlg.exec()
+        finally:
+            self._image_tune_dlg = None
+        if dlg.saved:
+            self.status.showMessage(tr("새 파일 {n}장을 만들었습니다.").format(n=len(dlg.saved)), 5000)
+        return bool(dlg.saved)
+
+    def _photo_convert_doc(self, files, fmt=None) -> bool:
         """사진 → Word·HWPX·텍스트(사진 보기 SOT §4.35). 글은 사진 한 장 OCR(§4.34)의 결과 — 읽지 않은 사진은 먼저 읽으라고 알린다.
         zip·휴대 장치 사진(캐시)은 결과가 캐시에 생기므로 PC 로 복사한 뒤에."""
         from viewer import convert

@@ -827,9 +827,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         else:
             self._ensure_shots_visible()
 
-    def _copy_image_to_clipboard(self, img, on_done=None):
+    def _copy_image_to_clipboard(self, img, on_done=None, png=None):
         """261024-2(스크린샷 SOT §8.3): 캡처 그림을 클립보드에 — 다른 프로그램이 쥐고 있으면
-        다시 시도하고, 끝내 못 넣으면 상태 표시줄에 알린다(종전에는 말없이 빠졌다)."""
+        다시 시도하고, 끝내 못 넣으면 상태 표시줄에 알린다(종전에는 말없이 빠졌다).
+        png: 투명 그림의 PNG 바이트(261112-15·-16 — 'PNG' 형식도 함께, §8.3)."""
         from viewer import clipboard_util
 
         def done(ok):
@@ -843,7 +844,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self.status.showMessage(msg, 6000)
             if on_done:
                 on_done(ok)
-        clipboard_util.set_image(img, done)
+        clipboard_util.set_image(img, done, png=png)
 
     CLIP_ITEM_GAP_MS = 350   # 컷 사이 간격 — 있어야 Win+V 기록에 따로 쌓인다
 
@@ -1428,12 +1429,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.btn_clip_in = QPushButton(tr("📥 클립보드 가져오기"))
         self.btn_clip_in.setToolTip(tr("클립보드의 그림(캡처·탐색기에서 복사한 그림 파일)을 스크린샷 목록에 넣습니다"))
         self.btn_clip_in.clicked.connect(self._on_clipboard_import)
+        # 261112-16(스크린샷 SOT §4.1, 사용자 결정 '컷 우클릭 + 머리 단추 하나'): 고른 컷(없으면 지금 컷)을 다듬기 창으로
+        self.btn_shot_tune = QPushButton(tr("🖌 다듬기"))
+        self.btn_shot_tune.setToolTip(tr("고른 스크린샷의 바탕 지우기(투명)·흑백·색 바꾸기 등 — 새 사진 파일·클립보드로"))
+        self.btn_shot_tune.clicked.connect(lambda: self._shot_tune(self._shot_targets()))
 
         self.shot_strip = MiniStrip(
             tr("🖼 스크린샷"), max_items=int(self._prefs.get("screenshot_max", 30)),
             draggable=True,
-            extra_widgets=[self.btn_clip_in, self.btn_clip, self.btn_save_pdf],
+            extra_widgets=[self.btn_clip_in, self.btn_clip, self.btn_shot_tune, self.btn_save_pdf],
         )
+        self.shot_strip.menu_hook = self._shot_menu_extras
 
         self.search_area = self._build_search_area()
 
@@ -5552,6 +5558,112 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     if p and is_image_path(str(p)) and Path(str(p)).exists()]
         except Exception:
             return []
+
+    # ── 261112-16(스크린샷 SOT §4.1): 컷 사진으로 저장·한 컷 클립보드·다듬기 ──────────────
+    def _shot_targets(self) -> list:
+        """고른 컷(그림 파일) → 없으면 본문에 띄운 컷 → 없으면 맨 앞 컷."""
+        from viewer.image_page import is_image_path
+        L = self.shot_strip.list
+        if L.selectedItems():
+            return self._shot_image_paths()
+        allp = [str(p) for p in self.shot_strip.all_paths() if p and is_image_path(str(p)) and Path(str(p)).exists()]
+        cur = self.main_view.current_file() if self.main_view else None
+        if cur and any(os.path.normcase(str(cur)) == os.path.normcase(p) for p in allp):
+            return [str(cur)]
+        return allp[:1]
+
+    def _shot_menu_extras(self, menu, paths) -> None:
+        from viewer.image_page import is_image_path
+        imgs = [str(p) for p in paths if p and is_image_path(str(p)) and Path(str(p)).exists()]
+        n = len(imgs)
+        a = menu.addAction(tr("사진으로 저장") + (" " + tr("({n}장)").format(n=n) if n > 1 else ""))
+        a.setEnabled(bool(imgs))
+        a.triggered.connect(lambda _=False, ps=imgs: QTimer.singleShot(0, lambda: self._shot_save_photo(ps)))
+        a = menu.addAction(tr("클립보드로 복사"))
+        a.setEnabled(n == 1)
+        a.triggered.connect(lambda _=False, ps=imgs: self._shot_copy_one(ps[0]) if ps else None)
+        a = menu.addAction(tr("다듬기"))
+        a.setEnabled(bool(imgs))
+        a.triggered.connect(lambda _=False, ps=imgs: QTimer.singleShot(0, lambda: self._shot_tune(ps)))
+
+    def _shot_start_dir(self) -> str:
+        d = str(self._prefs.get("shot_save_dir") or "")
+        if d and os.path.isdir(d):
+            return d
+        from PyQt6.QtCore import QStandardPaths
+        return QStandardPaths.writableLocation(QStandardPaths.StandardLocation.PicturesLocation) or self._dialog_start_dir()
+
+    def _shot_save_photo(self, paths) -> list:
+        """다듬지 않은 그대로 — 한 장이면 다른 이름으로 저장 창(PNG 기본), 여럿이면 폴더."""
+        import shutil
+        from viewer.pathutil import unique_path
+        if not paths:
+            return []
+        if len(paths) == 1:
+            p = Path(paths[0])
+            dst, _ = QFileDialog.getSaveFileName(self, tr("사진으로 저장"), os.path.join(self._shot_start_dir(), p.stem + ".png"),
+                                                 "PNG (*.png);;JPEG (*.jpg);;WebP (*.webp)")
+            if not dst:
+                return []
+            pairs = [(str(p), dst)]
+        else:
+            d = QFileDialog.getExistingDirectory(self, tr("사진으로 저장"), self._shot_start_dir())
+            if not d:
+                return []
+            pairs = [(s, str(unique_path(Path(d) / (Path(s).stem + ".png")))) for s in paths]
+        out = []
+        for s, dst in pairs:
+            try:
+                ext = Path(dst).suffix.lower()
+                if ext == Path(s).suffix.lower() or ext not in (".jpg", ".jpeg", ".webp", ".png"):
+                    shutil.copyfile(s, dst)
+                else:
+                    from PIL import Image
+                    from viewer import image_tune
+                    with Image.open(s) as im:
+                        data = image_tune.encode(im.convert("RGBA"), image_tune.fmt_of_path(dst))
+                    with open(dst, "wb") as fh:
+                        fh.write(data)
+                out.append(dst)
+            except Exception as e:
+                self.status.showMessage(tr("저장하지 못했습니다: {err}").format(err=e), 6000)
+        if out:
+            self._prefs["shot_save_dir"] = str(Path(out[-1]).parent)
+            self.status.showMessage(tr("사진 {n}장을 저장했습니다: {path}").format(n=len(out), path=Path(out[-1]).parent), 6000)
+        return out
+
+    def _shot_copy_one(self, path) -> None:
+        from PyQt6.QtGui import QImage
+        img = QImage(str(path))
+        if img.isNull():
+            self.status.showMessage(tr("그림을 열 수 없습니다."), 4000)
+            return
+        png = None
+        if img.hasAlphaChannel() and str(path).lower().endswith(".png"):
+            try:
+                png = Path(path).read_bytes()
+            except Exception:
+                png = None
+
+        def done(ok):
+            if ok:
+                self.status.showMessage(tr("클립보드에 복사했습니다."), 3000)
+        self._copy_image_to_clipboard(img, done, png=png)
+
+    def _shot_tune(self, paths) -> None:
+        from viewer.widgets.image_tune_dialog import ImageTuneDialog
+        if not paths:
+            self.status.showMessage(tr("다듬을 스크린샷이 없습니다."), 4000)
+            return
+        dlg = ImageTuneDialog(self, paths, kind="shot", start_dir=self._shot_start_dir(),
+                              copy_fn=lambda img, png, done: self._copy_image_to_clipboard(img, done, png=png))
+        self._image_tune_dlg = dlg
+        try:
+            dlg.exec()
+        finally:
+            self._image_tune_dlg = None
+        if dlg.saved:
+            self._prefs["shot_save_dir"] = str(Path(dlg.saved[-1][1]).parent)
 
     def _on_drag_hover_open(self, path: str, page: int) -> None:
         """261012-12(§4.7.18): 끌고 있는 채 책갈피창의 파일·책갈피에 머묾 — 그 파일의 그 쪽을 본문·썸네일에.

@@ -54,7 +54,7 @@ try:
     chk(hasattr(mw, "btn_clip_in") and "클립보드 가져오기" in mw.btn_clip_in.text(),
         "A '클립보드 가져오기' 단추가 있다")
     order = [w for w in strip._extra_widgets]
-    chk(order == [mw.btn_clip_in, mw.btn_clip, mw.btn_save_pdf], "A 순서: 가져오기 · 복사 · PDF 저장")
+    chk(order == [mw.btn_clip_in, mw.btn_clip, mw.btn_shot_tune, mw.btn_save_pdf], "A 순서: 가져오기 · 복사 · 다듬기(261112-16) · PDF 저장")
     from viewer import app as appmod
     import inspect
     chk('("clipboard_save", (tr("클립보드로 복사")' in inspect.getsource(appmod), "A 단축키 목록 이름도 같다")

@@ -206,6 +206,8 @@ class MiniStrip(QWidget):
         self._max = max_items
         self._draggable = draggable
         self._extra_widgets = extra_widgets or []
+        # 261112-16(스크린샷 SOT §4.1): 우클릭 메뉴의 앞 항목을 앱이 넣는다 — menu_hook(menu, [고른 경로]) · '삭제' 앞에
+        self.menu_hook = None
         self._build_ui()
 
     def _build_ui(self):
@@ -545,6 +547,13 @@ class MiniStrip(QWidget):
         if item not in sel:
             sel = [item]
         menu = QMenu(self.list)
+        if self.menu_hook is not None:
+            try:
+                self.menu_hook(menu, [it.data(self.DATA_PATH) for it in sel])
+                if menu.actions():
+                    menu.addSeparator()
+            except Exception:
+                pass
         if len(sel) > 1:
             act = QAction(tr('선택 {n}개 삭제').format(n=len(sel)), menu)
             keys = [(it.data(self.DATA_PATH), int(it.data(self.DATA_PAGE) or 0))

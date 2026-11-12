@@ -137,10 +137,15 @@ def holder_name():
     return None
 
 
-def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS):
+PNG_MIME = 'application/x-qt-windows-mime;value="PNG"'     # Windows 의 'PNG' 클립보드 형식(투명이 사는 형식)
+
+
+def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS, png: bytes | None = None):
     """그림(QImage·QPixmap)을 클립보드에 넣는다. 끝나면 `on_done(ok)`.
 
-    첫 시도는 곧바로 한다 — 대개 여기서 끝나고 `on_done` 도 곧바로 불린다."""
+    첫 시도는 곧바로 한다 — 대개 여기서 끝나고 `on_done` 도 곧바로 불린다.
+    `png`(261112-16, 스크린샷 SOT §8.3·사진 보기 SOT §4.46): 투명 그림이면 PNG 바이트를 함께 — 그림 형식(DIB)만으로는
+    Office·메신저 등에서 투명이 검은 바탕이 된다. 'PNG' 형식과 `image/png` 를 그림과 함께 올린다."""
     if isinstance(img, QPixmap):
         img = img.toImage()
     if img is None or not isinstance(img, QImage) or img.isNull():
@@ -152,7 +157,15 @@ def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS):
     def attempt():
         state["left"] -= 1
         try:
-            QApplication.clipboard().setImage(img)
+            if png:
+                from PyQt6.QtCore import QMimeData
+                md = QMimeData()
+                md.setImageData(img)
+                md.setData(PNG_MIME, png)
+                md.setData("image/png", png)
+                QApplication.clipboard().setMimeData(md)
+            else:
+                QApplication.clipboard().setImage(img)
         except Exception:
             pass
         if _took():

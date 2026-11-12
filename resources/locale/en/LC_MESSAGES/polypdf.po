@@ -261,6 +261,14 @@ msgid "클립보드의 그림(캡처·탐색기에서 복사한 그림 파일)�
 msgstr "Add the clipboard image (captures or image files copied in Explorer) to the screenshot list"
 
 #: viewer/app.py
+msgid "🖌 다듬기"
+msgstr "🖌 Touch Up"
+
+#: viewer/app.py
+msgid "고른 스크린샷의 바탕 지우기(투명)·흑백·색 바꾸기 등 — 새 사진 파일·클립보드로"
+msgstr "Remove background (transparent), black & white, change colors and more for the selected screenshots — to a new image file or the clipboard"
+
+#: viewer/app.py
 msgid "🖼 스크린샷"
 msgstr "🖼 Screenshots"
 
@@ -679,6 +687,10 @@ msgstr "Moving OCR and vocabulary to the new page numbers…"
 #: viewer/widgets/photo_crop_dialog.py
 msgid "크롭 해제"
 msgstr "Remove Crop"
+
+#: viewer/app.py viewer/widgets/image_tune_dialog.py
+msgid "다듬기"
+msgstr "Touch Up"
 
 #: viewer/app.py
 msgid "사진을 쪽으로"
@@ -1394,6 +1406,14 @@ msgstr "Crop cancelled."
 msgid "붙여넣기는 편집모드(✏)에서만 됩니다."
 msgstr "Paste works only in edit mode (✏)."
 
+#: viewer/app.py viewer/widgets/image_tune_dialog.py
+msgid "사진으로 저장"
+msgstr "Save as Image"
+
+#: viewer/app.py
+msgid "다듬을 스크린샷이 없습니다."
+msgstr "There are no screenshots to touch up."
+
 #: viewer/app.py
 msgid "쪽 추가는 편집모드(✏)에서만 됩니다."
 msgstr "Adding pages works only in edit mode (✏)."
@@ -2043,6 +2063,10 @@ msgstr "Copied {n} thumbnail pages — paste (Ctrl+V) in another PDF's thumbnail
 #, python-brace-format
 msgid "붙여넣기 {n}쪽 삽입(미저장) — 💾 ‘저장’을 눌러 반영하세요."
 msgstr "Pasted {n} pages (unsaved) — press 💾 'Save' to apply."
+
+#: viewer/app.py
+msgid "클립보드에 복사했습니다."
+msgstr "Copied to the clipboard."
 
 #: viewer/app.py
 #, python-brace-format
@@ -2725,6 +2749,11 @@ msgstr "Crop removed from {n} page(s) — press [Save] to write it to the PDF (C
 #, python-brace-format
 msgid "크롭 {n}쪽 — [저장] 을 누르면 PDF 에 들어갑니다(취소하면 되돌립니다)."
 msgstr "Cropped {n} page(s) — press [Save] to write it to the PDF (Cancel undoes it)."
+
+#: viewer/app.py
+#, python-brace-format
+msgid "사진 {n}장을 저장했습니다: {path}"
+msgstr "Saved {n} images: {path}"
 
 # | 주세요."
 #: viewer/app.py
@@ -5086,6 +5115,10 @@ msgstr "Rename"
 #: viewer/photo_controller.py
 msgid "한 장을 고르면 이름을 바꿉니다."
 msgstr "Choose one photo to rename."
+
+#: viewer/photo_controller.py
+msgid "변환 창 — 형식 바꾸기·바탕 지우기(투명)·흑백·색 바꾸기·가리기 등을 새 파일·클립보드로(원본은 그대로)"
+msgstr "Convert window — change format, remove background (transparent), black & white, change colors, hide areas and more, to a new file or the clipboard (the original is kept)"
 
 #: viewer/photo_controller.py
 msgid "JPEG·PNG·WebP 로 바꾼 새 파일을 원본 옆에 만듭니다(원본은 그대로)."
@@ -9409,6 +9442,163 @@ msgstr "Image list (top → bottom = page order; drag to reorder)"
 #: viewer/widgets/image_to_pdf_dialog.py
 msgid "미리보기를 불러올 수 없습니다."
 msgstr "Cannot load preview."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "그림으로 저장"
+msgstr "Save as Image"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "바탕 누르기"
+msgstr "Pick Background"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "누른 뒤 미리보기에서 지울 바탕을 누르세요 — 여러 번 누르면 더해집니다"
+msgstr "Then click the background to remove in the preview — click again to add more colors"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "빈 여백 자르기"
+msgstr "Trim empty margins"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "글씨·선 색"
+msgstr "Text & line color"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "바꿀 색 누르기"
+msgstr "Pick Color to Change"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "새 색"
+msgstr "New Color"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "없애기"
+msgstr "Clear"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "색 바꾸기"
+msgstr "Change color"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "문서 스캔처럼"
+msgstr "Like a document scan"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "밝기·대비 자동"
+msgstr "Auto brightness & contrast"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "밝기·대비"
+msgstr "Brightness & contrast"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "가릴 곳 끌기"
+msgstr "Drag Area to Hide"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "모자이크"
+msgstr "Pixelate"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "가림 지우기"
+msgstr "Clear Hidden Areas"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "새 파일로 저장"
+msgstr "Save to New File"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "미리보기에서 지울 바탕을 누르세요."
+msgstr "Click the background to remove in the preview."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "미리보기에서 바꿀 색을 누르세요."
+msgstr "Click the color to change in the preview."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "미리보기에서 가릴 곳을 끌어 네모로 고르세요."
+msgstr "Drag a rectangle in the preview over the area to hide."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "복사하는 중…"
+msgstr "Copying…"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "밝은 바탕(문턱)"
+msgstr "Light background (threshold)"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "누른 색"
+msgstr "Picked color"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "허용 범위"
+msgstr "Tolerance"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "회색조"
+msgstr "Grayscale"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "흑백 (두 색)"
+msgstr "Black & white (two colors)"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "그대로"
+msgstr "As is"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "고른 색…"
+msgstr "Custom Color…"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "밝기"
+msgstr "Brightness"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "대비"
+msgstr "Contrast"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "문서로 (OCR 글)"
+msgstr "To document (OCR text)"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "Word·HWPX·텍스트로"
+msgstr "To Word, HWPX or Text"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "사진의 OCR 글로 문서를 만듭니다 — 형식은 다음 창에서 고릅니다"
+msgstr "Creates a document from the photo's OCR text — choose the format in the next window"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "바탕을 지우면 투명이 남아 PNG 로 저장합니다(JPEG 은 투명을 담지 못합니다)."
+msgstr "Removing the background leaves transparency, so the image is saved as PNG (JPEG cannot hold transparency)."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "남은 그림이 없습니다 — 바탕 지우기 문턱(허용 범위)을 낮추세요."
+msgstr "Nothing is left — lower the background removal threshold (tolerance)."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "zip·휴대 장치 사진은 'PC 로 복사' 한 뒤 저장하세요 — 클립보드로 복사는 됩니다."
+msgstr "For photos in a zip or on a portable device, use 'Copy to PC' first, then save — copying to the clipboard works."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "투명을 담지 못합니다"
+msgstr "Cannot hold transparency"
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "클립보드에 복사했습니다(투명 PNG 포함)."
+msgstr "Copied to the clipboard (with transparent PNG)."
+
+#: viewer/widgets/image_tune_dialog.py
+msgid "클립보드에 복사하지 못했습니다."
+msgstr "Could not copy to the clipboard."
+
+#: viewer/widgets/image_tune_dialog.py
+#, python-brace-format
+msgid "{n}가지 색"
+msgstr "{n} colors"
 
 #: viewer/widgets/indexing_dialog.py
 msgid "PolyPDF — 인덱싱"

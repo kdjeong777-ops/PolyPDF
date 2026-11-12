@@ -2836,8 +2836,9 @@ class PhotoMixin:
             if all_paths and len(all_paths) > 1:
                 mk.append({"text": tr('줄의 사진 {n}장 모두로 PDF 저장').format(n=len(all_paths)),
                            "cb": lambda ps=list(all_paths): self._photo_action("to_pdf", ps)})
-            mk.append({"text": tr("변환"), "menu": self._photo_convert_menu(menu, photos), "enabled": not ro,
-                       "tip": tr("JPEG·PNG·WebP 로 바꾼 새 파일을 원본 옆에 만듭니다(원본은 그대로).")})   # 261107-5(4.30)
+            # 261112-15(4.46, 사용자 결정 '창 하나에 두 묶음'): 종전 '변환 ▸' JPEG·PNG·WebP 하위 메뉴 → 변환 창(형식은 창 안에서)
+            mk.append({"text": tr("변환"), "cb": lambda ps=list(photos): QTimer.singleShot(0, lambda: self._photo_convert(ps)),
+                       "tip": tr("변환 창 — 형식 바꾸기·바탕 지우기(투명)·흑백·색 바꾸기·가리기 등을 새 파일·클립보드로(원본은 그대로)")})
             add_save_menu(
                 menu,
                 save={"cb": self._photo_save_orientation, "enabled": can_orient,
@@ -2898,25 +2899,6 @@ class PhotoMixin:
         if body and edit:
             act(tr("도형 입력 설정"), lambda: self._open_line_text_settings(tab="line"))
             act(tr("글쓰기 입력 설정"), lambda: self._open_line_text_settings(tab="text"))
-
-    PHOTO_CONVERT_FORMATS = (("jpg", "JPEG", (".jpg", ".jpeg")), ("png", "PNG", (".png",)), ("webp", "WebP", (".webp",)))
-
-    def _photo_convert_menu(self, parent, photos):
-        """저장 ▸ '변환 ▸'(4.30, 261107-5) — 형식마다 새 파일(일괄 작업 '형식 바꾸기' 와 같은 함수). 모두 지금 그 형식이면 끈다."""
-        from viewer.widgets.ctx_menu import CtxMenu
-        from viewer import photo_io as _pio
-        from PyQt6.QtCore import QTimer
-        cm = CtxMenu(parent)
-        for key, label, exts in self.PHOTO_CONVERT_FORMATS:
-            # 머리 읽기(HEIC 를 .JPG 이름으로)는 한 장일 때만 — 여러 장을 메인에서 사진마다 읽지 않는다(응답성 SOT §6, 261106-21)
-            same = (bool(photos) and all(Path(p).suffix.lower() in exts for p in photos)
-                    and not (len(photos) == 1 and _pio.is_heif(photos[0])))
-            a = cm.addAction(label)
-            a.setEnabled(not same)
-            a.setToolTip(tr("이미 이 형식입니다.") if same else tr("{fmt} 로 바꾼 새 파일 — 원본은 그대로").format(fmt=label))
-            a.triggered.connect(lambda _=False, k=key, ps=list(photos): QTimer.singleShot(
-                0, lambda: self._photo_batch_convert(ps, "format", fmt=k)))
-        return cm
 
     def _photo_open_then(self, path, fn) -> None:
         """그 사진을 본문에 띄운 뒤 `fn`(썸네일·책갈피창 줄이 지금 사진이 아닐 때 — OCR 로 읽기·발표보기)."""

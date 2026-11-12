@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""261107-5: 사진 형식 변환 — 우클릭 저장 ▸ '변환 ▸' JPEG·PNG·WebP 사본 (사진 보기 SOT §4.30·§4.20, 디자인 SOT §2.9.8).
+"""261107-5: 사진 형식 변환 — 우클릭 저장 ▸ '변환' (사진 보기 SOT §4.30·§4.20·§4.46, 디자인 SOT §2.9.8).
 
-실제 MainWindow(오프스크린, 시험 프로필 — 마스터 §14.7.2 의 3). 메뉴는 `QMenu.exec` 를 가로채 하위 항목을 고른다(일은 실제 처리기).
-A. 세 사진 메뉴(책갈피창·썸네일 줄·본문)의 저장 ▸ 에 '변환 ▸' — 켜져 있고 하위는 JPEG·PNG·WebP, 지금 형식(JPEG)은 꺼짐
-B. 'WebP' → 원본 옆에 새 .webp(Pillow 로 열리고 WEBP), 원본은 바이트 그대로 — 종전 함수는 임시 파일 이름 때문에 WebP 를 쓰지 못했다
-C. 여러 장(썸네일 줄에서 둘 고름) 'PNG' → 두 장 모두 새 .png
+261112-15(사진 보기 SOT §4.46, 사용자 결정 '창 하나에 두 묶음'): 종전 '변환 ▸' JPEG·PNG·WebP 하위 메뉴는 **변환 창**으로 — 형식은 창에서 고른다.
+실제 MainWindow(오프스크린, 시험 프로필 — 마스터 §14.7.2 의 3). 메뉴는 `QMenu.exec` 를 가로채 항목을 고르고, 변환 창은 `exec` 를 가로채 실제 창을 다룬다.
+A. 세 사진 메뉴(책갈피창·썸네일 줄·본문)의 저장 ▸ 에 '변환' — 켜져 있고 누르면 변환 창(그 사진)
+B. 창에서 'WebP' → 원본 옆에 새 .webp(Pillow 로 열리고 WEBP), 원본은 바이트 그대로
+C. 여러 장(썸네일 줄에서 둘 고름) → 창에 두 장, 'PNG' 저장 → 두 장 모두 새 .png
 D. 일괄 작업 창 '형식 바꾸기' 에도 WebP
-수정 전 코드로 실패한다('변환' 이 꺼져 하위가 없다·WebP 를 쓰지 못한다).
 """
 import os, sys, tempfile, shutil, time, hashlib
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -24,6 +24,17 @@ QCoreApplication.setApplicationName("polypdf_photo_fmt_%d" % os.getpid())
 import modal_guard
 modal_guard.install(label=lambda: "사진 형식 변환", echo=False)   # 마스터 §14.7.2 의 6
 fails = []
+
+
+def wait_idle(dlg, timeout_s=10.0):
+    """변환 창의 배경 일(미리보기·저장·복사)이 끝날 때까지 이벤트를 돌린다 — 검사 쪽 기다림(앱 코드에는 두지 않는다, 응답성 SOT §6)."""
+    t = time.monotonic()
+    while time.monotonic() - t < timeout_s:
+        QApplication.processEvents()
+        if not dlg.busy():
+            return True
+        time.sleep(0.01)
+    return False
 
 
 def chk(cond, msg, extra=""):
@@ -71,6 +82,23 @@ def conv_sub(menu):
     return cv
 
 
+from viewer.widgets.image_tune_dialog import ImageTuneDialog
+_orig_tune_exec = ImageTuneDialog.exec
+tune = {"plan": None, "seen": []}
+
+
+def tune_exec(self):
+    """변환 창 — 실제 창을 다룬다: plan = 고를 형식(없으면 그냥 닫기)."""
+    tune["seen"].append(list(self._paths))
+    fmt = tune["plan"]
+    if fmt:
+        wait_idle(self)
+        self.cmb_fmt.setCurrentIndex(self.cmb_fmt.findData(fmt))
+        self.btn_save.click()
+        wait_idle(self, 20)
+    return 0
+
+
 def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
@@ -96,6 +124,7 @@ try:
     pump(lambda: node("a 사진.jpg") is not None and node("b 사진.jpg") is not None)
     mw._on_bookmark_activated(a, 0); pump(timeout=0.8)
     QMenu.exec = fake_exec
+    ImageTuneDialog.exec = tune_exec
 
     # A
     it = node("a 사진.jpg")
@@ -108,16 +137,19 @@ try:
     mw._photo_context_menu(QPoint(5, 5))
     cv_body = conv_sub(seen["menu"])
     for name, cv in (("책갈피창", cv_tree), ("썸네일 줄", cv_strip), ("본문", cv_body)):
-        subs = [(x.text(), x.isEnabled()) for x in cv.menu().actions()] if cv is not None and cv.menu() else []
-        chk(cv is not None and cv.isEnabled() and [t for t, _e in subs] == ["JPEG", "PNG", "WebP"],
-            "A %s 저장 ▸ '변환 ▸' — JPEG·PNG·WebP" % name, str(subs))
-        chk(subs and subs[0][1] is False and subs[1][1] and subs[2][1], "A %s 지금 형식(JPEG)은 꺼짐" % name, str(subs))
+        chk(cv is not None and cv.isEnabled() and cv.menu() is None, "A %s 저장 ▸ '변환' — 하위 메뉴 없이 창" % name,
+            str(cv.menu() if cv is not None else None))
+    tune["plan"] = None
+    seen["pick"] = ("저장", "변환")
+    mw._photo_context_menu(QPoint(5, 5))
+    chk(pump(lambda: bool(tune["seen"]), timeout=5) and tune["seen"][-1] == [a], "A 누르면 그 사진의 변환 창", str(tune["seen"]))
 
     # B
-    seen["pick"] = ("저장", "변환", "WebP")
+    tune["plan"] = "webp"
+    seen["pick"] = ("저장", "변환")
     mw._photo_context_menu(QPoint(5, 5))
-    w = tmp / "a 사진.webp"
-    chk(pump(lambda: w.exists(), timeout=10), "B 원본 옆에 새 .webp")
+    w = tmp / "a 사진_변환.webp"
+    chk(pump(lambda: w.exists(), timeout=10), "B 원본 옆에 새 .webp", str(os.listdir(tmp)))
     if w.exists():
         with Image.open(str(w)) as im:
             chk(im.format == "WEBP" and im.size == (640, 320), "B WEBP 로 열리고 크기 그대로", "%s %s" % (im.format, im.size))
@@ -127,9 +159,11 @@ try:
     strip.clearSelection()
     for p in (a, b):
         strip._items[p].setSelected(True)
-    seen["pick"] = ("저장", "변환", "PNG")
+    tune["plan"] = "png"
+    seen["pick"] = ("저장", "변환")
     mw._photo_strip_menu(b, QPoint(5, 5))
-    chk(pump(lambda: (tmp / "a 사진.png").exists() and (tmp / "b 사진.png").exists(), timeout=10), "C 여러 장 — 두 장 모두 새 .png")
+    chk(pump(lambda: (tmp / "a 사진_변환.png").exists() and (tmp / "b 사진_변환.png").exists(), timeout=10)
+        and sorted(tune["seen"][-1]) == sorted([a, b]), "C 여러 장 — 창에 두 장, 두 장 모두 새 .png", str(os.listdir(tmp)))
 
     # D
     QMenu.exec = _orig_exec
@@ -154,6 +188,7 @@ except Exception:
     fails.append("예외")
 finally:
     QMenu.exec = _orig_exec
+    ImageTuneDialog.exec = _orig_tune_exec
     shutil.rmtree(tmp, ignore_errors=True)
 
 print("ALL PASS" if not fails else "FAILURES: %d" % len(fails))
