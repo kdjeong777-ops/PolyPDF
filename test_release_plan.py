@@ -262,16 +262,25 @@ try:
     rt.BASELINE = Path(tempfile.mkdtemp()) / "baseline.json"
     rt.BASELINE.write_text(json.dumps({"commit": "old", "version": "1.1.0-beta.11", "mode": "install", "result": "install_A",
                                        "results": {"build": "build_B", "install": "install_A"}}), encoding="utf-8")
-    try:
-        rt.save_baseline({"commit": "new", "version": "1.1.0-beta.12", "mode": "install", "source": "ci"},
-                         Path("install_C"), keep_results=True)
-    except TypeError:
-        pass
-    b2 = json.loads(rt.BASELINE.read_text(encoding="utf-8"))
-    chk(b2["commit"] == "new" and b2["results"] == {"build": "build_B", "install": "install_A"} and b2["result"] == "install_A",
-        "N 설치 확인 통과는 기준점 커밋만 옮기고 견줄 결과는 그대로(릴리스 SOT §3.2)", b2)
+    _main = _src.split("def main")[1]
+    chk("elif check_only:" in _main and "save_baseline" not in _main.split("elif check_only:")[1].split("return 1 if")[0],
+        "N 베타 설치 확인은 기준점을 건드리지 않는다(릴리스 SOT §3.2 — 열기 속도 비교는 정식판에서만)")
 finally:
     rt.BASELINE = _bl_orig
+# N2. 261113-5(사용자 결정 ②): 부하 시험이 실패하면 실패한 항목만 한 번 더 — load_test --retry <결과 폴더>·--only
+import load_test  # noqa: E402
+_prev = Path(tempfile.mkdtemp())
+(_prev / "result.json").write_text(json.dumps({"mem": [290.0, 275.0], "rows": [
+    {"op": "정렬 2", "max_stall_s": 1.185, "err": ""}, {"op": "정렬 3", "max_stall_s": 0.4, "err": ""},
+    {"op": "회전 되돌리기", "max_stall_s": 0.2, "err": "ValueError: x"}, {"op": "테마 40번 왕복", "max_stall_s": 0.3, "err": ""}]}),
+    encoding="utf-8")
+rk = getattr(load_test, "retry_keys", lambda p: [])(_prev)
+chk(rk == ["정렬 2", "회전 되돌리기"], "N2 실패한 항목(정지 ≥ 1초·오류)만 다시 잰다 — 통과·누수 없는 테마 왕복은 빼고", rk)
+(_prev / "result.json").write_text(json.dumps({"mem": [290.0, 320.0], "rows": [{"op": "테마 40번 왕복", "max_stall_s": 0.3, "err": ""}]}),
+                                   encoding="utf-8")
+chk(getattr(load_test, "retry_keys", lambda p: [])(_prev) == ["테마 40번 왕복"], "N2 누수가 한도를 넘으면 테마 왕복을 다시")
+_ls = Path(load_test.__file__).read_text(encoding="utf-8")
+chk('"--only"' in _ls and '"--retry"' in _ls and "need=True" in _ls, "N2 load_test --only·--retry, 준비 조작(폴더 열기)은 늘")
 lv = getattr(rt, "beta_level", lambda ver, level, urgent: (level, ""))
 chk(lv("1.1.0-beta.12", "build", False)[0] == "install" and "check-only" in lv("1.1.0-beta.12", "build", False)[1],
     "N 베타 묶음은 빌드 시험 대신 설치 확인(까닭 줄)")

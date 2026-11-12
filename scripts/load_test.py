@@ -78,12 +78,32 @@ def indexed_count():
         return -1
 
 
+def retry_keys(prev: Path) -> list:
+    """261113-5: 이전 부하 시험(result.json)에서 실패한 조작 이름 — 정지 ≥ 한도·오류, 테마 왕복 누수 ≥ 한도."""
+    d = json.loads((prev / "result.json").read_text(encoding="utf-8"))
+    keys = [r["op"] for r in d.get("rows", []) if r.get("max_stall_s", 0) >= STALL_LIMIT or r.get("err")]
+    m1, m2 = (d.get("mem") or [0, 0])[:2]
+    if m1 > 0 and m2 > 0 and m2 - m1 >= LEAK_LIMIT_MB:
+        keys += [r["op"] for r in d.get("rows", []) if r["op"].startswith("테마 ") and r["op"] not in keys]
+    return keys
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--theme-rounds", type=int, default=40, help="누수 확인용 테마 왕복 수")
     ap.add_argument("--out", default="")
+    # 261113-5(릴리스 SOT §4.1 의 3, 사용자 결정): 실패하면 **실패한 항목만 한 번 더** — 준비 조작(폴더·큰 PDF 열기)은 늘 하고 고른 것만 판정
+    ap.add_argument("--only", default="", help="이 글자가 든 조작만 판정(쉼표로 여럿) — 예: '쪽 회전,회전 되돌리기'")
+    ap.add_argument("--retry", default="", metavar="이전_결과_폴더", help="그 부하 시험(result.json)에서 실패한 조작만 다시 잰다")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # 261103: cp949 콘솔에서 '—' 출력이 끝에 터져 종료 코드 1
+    keys = retry_keys(Path(a.retry)) if a.retry else [k.strip() for k in a.only.split(",") if k.strip()]
+    if a.retry and not keys:
+        print("다시 잴 실패 항목이 없다:", a.retry)
+        return 0
+
+    def want(name):
+        return not keys or any(k in name for k in keys)
     folder, bigpdf = suite_targets()
 
     from PyQt6.QtCore import QStandardPaths, QCoreApplication, QTimer
@@ -116,7 +136,10 @@ def main():
 
     rows = []
 
-    def op(name, fn, settle=1.0):
+    def op(name, fn, settle=1.0, need=False):
+        """need: 고르지 않았어도 뒤 조작의 준비라 돌린다(판정 줄에는 고른 것만)."""
+        if not want(name) and not need:
+            return
         cur["op"] = name
         spin(0.3)
         beat["last"] = time.perf_counter()
@@ -130,7 +153,8 @@ def main():
         dur = time.perf_counter() - t0
         spin(settle)
         tick()
-        rows.append({"op": name, "max_stall_s": round(beat["max"], 3), "op_s": round(dur, 3), "err": err})
+        if want(name):
+            rows.append({"op": name, "max_stall_s": round(beat["max"], 3), "op_s": round(dur, 3), "err": err})
         print("%-30s 최장 정지 %.3fs%s" % (name, beat["max"], ("  " + err) if err else ""), flush=True)
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -151,7 +175,7 @@ def main():
     mw.show()
     spin(1.0)
     bt = mw.bookmark_tree
-    op("폴더 열기(색인 시작)", lambda: mw.open_folder(str(folder)), settle=8.0)
+    op("폴더 열기(색인 시작)", lambda: mw.open_folder(str(folder)), settle=8.0, need=True)    # 부하(색인)의 시작 — 늘
     files = sum(1 for _ in bt._iter_file_nodes())
     idx0 = indexed_count()
 
@@ -185,27 +209,31 @@ def main():
         op("패널 넓히기", lambda: sp.setSizes([320] + [max(100, (1400 - 320) // max(1, n - 1))] * (n - 1)))
         op("패널 좁히기", lambda: sp.setSizes([185] + [max(100, (1400 - 185) // max(1, n - 1))] * (n - 1)))
     if bigpdf is not None and bigpdf.exists():
-        op("큰 PDF 열기", lambda: mw.open_pdf(str(bigpdf)), settle=3.0)
+        pdf_ops = ("쪽 넘기기 ×20", "쪽 회전(저장 전)", "회전 되돌리기")
+        op("큰 PDF 열기", lambda: mw.open_pdf(str(bigpdf)), settle=3.0, need=any(want(n) for n in pdf_ops))
         mv = mw.main_view
         op("쪽 넘기기 ×20", lambda: [mv.go_to_page(p) or app.processEvents() for p in range(0, 200, 10)])
-        op("쪽 회전(저장 전)", lambda: mw._rotate_pages([5], +90), settle=2.0)
+        op("쪽 회전(저장 전)", lambda: mw._rotate_pages([5], +90), settle=2.0, need=want("회전 되돌리기"))
         op("회전 되돌리기", lambda: mw._rotate_pages([5], -90), settle=2.0)
-    gc.collect()
-    spin(1.0)
-    m1 = private_mb()
-    worst = 0.0
-    for k in range(a.theme_rounds):
-        beat["last"] = time.perf_counter()
-        beat["max"] = 0.0
-        mw.apply_theme("dark" if k % 2 == 0 else "light")
-        spin(0.1)
-        tick()
-        worst = max(worst, beat["max"])
-    gc.collect()
-    spin(1.0)
-    m2 = private_mb()
-    rows.append({"op": "테마 %d번 왕복" % a.theme_rounds, "max_stall_s": round(worst, 3), "op_s": 0, "err": "",
-                 "mem_before_mb": m1, "mem_after_mb": m2})
+    m1 = m2 = 0.0
+    theme_name = "테마 %d번 왕복" % a.theme_rounds
+    if want(theme_name):
+        gc.collect()
+        spin(1.0)
+        m1 = private_mb()
+        worst = 0.0
+        for k in range(a.theme_rounds):
+            beat["last"] = time.perf_counter()
+            beat["max"] = 0.0
+            mw.apply_theme("dark" if k % 2 == 0 else "light")
+            spin(0.1)
+            tick()
+            worst = max(worst, beat["max"])
+        gc.collect()
+        spin(1.0)
+        m2 = private_mb()
+        rows.append({"op": theme_name, "max_stall_s": round(worst, 3), "op_s": 0, "err": "",
+                     "mem_before_mb": m1, "mem_after_mb": m2})
     idx1 = indexed_count()
 
     bad = [r for r in rows if r["max_stall_s"] >= STALL_LIMIT or r["err"]]
@@ -215,7 +243,10 @@ def main():
     L = ["# 부하 시험 — %s" % ver, "",
          "- 폴더: `%s` (파일 %d개) · 큰 PDF: `%s`" % (folder.name, files, bigpdf.name if bigpdf else "-"),
          "- 색인 파일 수: 시작 %s → 끝 %s (부하가 실제로 있었는지)" % (idx0, idx1),
-         "- 테마 %d번 왕복 전용 메모리: %.1f → %.1f MB (증가 %.1f, 한도 %.0f)" % (a.theme_rounds, m1, m2, leak, LEAK_LIMIT_MB), "",
+         ("- 테마 %d번 왕복 전용 메모리: %.1f → %.1f MB (증가 %.1f, 한도 %.0f)" % (a.theme_rounds, m1, m2, leak, LEAK_LIMIT_MB))
+         if want(theme_name) else "- 테마 왕복: 이번에는 재지 않음(고른 항목만)",
+         *(["- **고른 항목만 다시 잼**(릴리스 SOT §4.1 의 3 — 실패한 항목만 한 번 더): %s%s" % (
+             ", ".join(keys), (" — 이전 결과 `%s`" % a.retry) if a.retry else "")] if keys else []), "",
          "| 조작 | 최장 정지 | 판정 |", "| --- | --- | --- |"]
     for r in rows:
         L.append("| %s | %.3fs | %s |" % (r["op"], r["max_stall_s"], "실패" if (r["max_stall_s"] >= STALL_LIMIT or r["err"]) else "통과"))

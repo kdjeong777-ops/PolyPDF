@@ -334,8 +334,8 @@ def bundle_lines(ver: str, last_tag: str = "") -> list:
     if not is_beta(ver):
         return ["- 측정 묶음 전체(위 등급의 명령, `--cases` 없이)", "- 부하 시험: **한다** " + load]
     return ["- 부하 시험: **한다** — **베타의 속도 판정은 이것 하나**, 전체 검사 뒤 **설치본을 만들기 전에** 개발 코드(.venv)로 한 번. "
-            "실패하면 한 번 더 재고, 남으면 A/B 로 원인 → 사람 판단(§4.1) — " + load,
-            "- 통과하면 태그·CI 설치본 → **설치 확인**(속도 비교 없음): `%s` — 설치·자가 시험·창 뜸·정상 종료·도우미 남음 0" % CHECK_ONLY_CMD]
+            "실패하면 **실패한 항목만 한 번 더**(`python scripts\\load_test.py --retry <그 결과 폴더>`), 또 실패하면 직전 판과 A/B → 사람 판단(§4.1) — " + load,
+            "- 통과하면 태그·CI 설치본 → **설치 확인**(속도 비교 없음, 기준점 그대로): `%s` — 설치·버전 표시·자가 시험·창 뜸·정상 종료·도우미 남음 0" % CHECK_ONLY_CMD]
 
 
 def patch_checks(changes: list, diff_text: str) -> dict:
@@ -718,18 +718,14 @@ def compare(rec: dict, base_rec: dict) -> list:
     return rows
 
 
-def save_baseline(rec: dict, out: Path, keep_results: bool = False):
+def save_baseline(rec: dict, out: Path):
     # 261010-15(릴리스 SOT §3.2): 비교용 결과는 **시험 종류마다** 따로 둔다(`results`) — 설치본은 빌드본보다 창이 늦게 뜨고
     #   색인 수도 캐시에 따라 달라, 설치 시험을 빌드 시험 결과와 견주면 '회귀 의심' 이 과하게 나왔다(beta.229 6건).
-    # 261113-5: keep_results — 베타 설치 확인은 속도를 재지 않으므로 커밋·판만 옮기고 견줄 결과(results·result·mode)는 그대로
     prev = load_baseline() or {}
     results = dict(prev.get("results") or {})
-    if not keep_results:
-        results[rec["mode"]] = out.name
-    BASELINE.write_text(json.dumps({"commit": rec["commit"], "version": rec["version"],
-                                    "mode": prev.get("mode", rec["mode"]) if keep_results else rec["mode"],
-                                    "source": rec["source"],
-                                    "result": prev.get("result", out.name) if keep_results else out.name, "results": results,
+    results[rec["mode"]] = out.name
+    BASELINE.write_text(json.dumps({"commit": rec["commit"], "version": rec["version"], "mode": rec["mode"],
+                                    "source": rec["source"], "result": out.name, "results": results,
                                     "date": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False, indent=1),
                         encoding="utf-8")
 
@@ -980,10 +976,8 @@ def main():
         save_baseline(rec, out)
         say("기준점 갱신:", BASELINE)
     elif check_only:
-        # 261113-5(릴리스 SOT §3.2): 통과하면 기준점 커밋·판만 옮긴다 — 견줄 결과(results)는 마지막으로 속도를 잰 시험 그대로
-        if not rec["fail"] and rec["runs"]:
-            save_baseline(rec, out, keep_results=True)
-            say("기준점 커밋 갱신(견줄 결과는 그대로):", BASELINE)
+        # 261113-5(릴리스 SOT §3.2, 사용자 결정): 베타 설치 확인은 기준점을 건드리지 않는다 — 열기 속도 비교(T1~T6)는 정식판에서만
+        say("설치 확인 — 기준점은 그대로(릴리스 SOT §3.2)")
     elif rec.get("overlapped"):
         say("겹침 — 기준점을 옮기지 않는다(릴리스 SOT §4.3 의 8)")
     elif rec.get("regress"):
