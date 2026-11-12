@@ -137,7 +137,16 @@ try:
         chk(abs(o["rect"][0] - (at.x() - pr.left()) / pr.width()) < 0.01
             and abs(o["rect"][1] - (at.y() - pr.top()) / pr.height()) < 0.01, "C7 누른 자리가 왼쪽 위", str(o["rect"][:2]))
         chk("pdf" in (o.get("extra") or {}), "C8 벡터 조각을 꾸밈에 함께 든다")
-    chk(mv._draw_tool == ("select", None), "C9 넣은 뒤 개체선택으로(바로 옮길 수 있게)", str(mv._draw_tool))
+    # 261112-5 반복 찍기 — 넣은 뒤에도 도구는 켜진 채, 다시 누르면 같은 항목을 또 찍고, Esc 로 끈다
+    chk(mv._draw_tool == ("stamp", e_pdf["id"]), "C9 넣은 뒤에도 이미지 넣기가 켜져 있다(261112-5)", str(mv._draw_tool))
+    QTest.mouseClick(mv.view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                     QPoint(int(pr.left() + pr.width() * 0.1), int(pr.top() + pr.height() * 0.1)))
+    app.processEvents()
+    chk(len(mv._img_objects) == 2 and mv._img_objects[1].get("extra", {}).get("stamp") == "원본대조필",
+        "C9b 다시 누르면 직전 항목을 또 찍는다", str(len(mv._img_objects)))
+    QTest.keyClick(mv.view, Qt.Key.Key_Escape)
+    app.processEvents()
+    chk(mv._draw_kind != "stamp", "C9c Esc 로 이미지 넣기를 끈다", str(mv._draw_kind))
     # 큰 등록 이미지 — 쪽 밖이면 줄여 안으로
     e_big = stamp_store.add("png", stamp_core.png_bytes(seal), "큰 것", 280, {})
     mv.pick_stamp(e_big["id"])
@@ -167,7 +176,7 @@ try:
     shown = []
     mv._image_btn.showMenu = lambda: shown.append(1)
     saved = json.loads((stamp_store.root() / stamp_store.INDEX).read_text(encoding="utf-8"))
-    stamp_store.save({"items": [], "last": ""})
+    stamp_store.save({"items": [], "last": "", "seeded": saved.get("seeded", [])})
     mv._draw_kind = None; mv._apply_tool(); mv._stamp_id = ""
     mv._image_btn.click(); app.processEvents()
     chk(shown == [1] and mv._draw_kind != "stamp", "C14 등록 이미지가 없으면 단추가 ▾ 메뉴를 연다")
@@ -177,7 +186,7 @@ try:
     f = str(pdf)
     raw = st._data["files"]["doc.pdf"]["images"]["0"]
     chk(str(raw[0].get("data", "")).startswith("@") and str(raw[0].get("pdf", "")).startswith("@")
-        and not str(raw[1].get("data", "")).startswith("@"),
+        and not str(raw[-1].get("data", "")).startswith("@"),
         "D1 큰 값(BLOB_MIN 넘음)은 blobs 에 두고 항목에는 @sha1, 작은 값은 그대로", str([str(d.get("data"))[:6] for d in raw]))
     chk(st.get_images(f, 0)[0]["pdf"] == mv._img_objects[0]["extra"]["pdf"], "D2 읽을 때 풀어 준다")
     mv._load_page_images()
@@ -305,6 +314,42 @@ try:
     chk(im3.width < 200 and im3.width > 100, "G5 자르기 — 사진의 두 도장 중 하나만 남긴다", str(im3.size))
     man = StampManagerDialog(None, shots=lambda: [])
     chk(man.lst.count() == len(stamp_store.items()) and man.btn_edit.isEnabled(), "G4 관리 창 목록·미리보기", str(man.lst.count()))
+
+    # ── H 261112-5 — 차례 바꾸기 · 기본 항목 ───────────────────────────────
+    ids0 = [x["id"] for x in stamp_store.items()]
+    man.lst.setCurrentRow(1); app.processEvents()
+    QTest.mouseClick(man.btn_up, Qt.MouseButton.LeftButton); app.processEvents()
+    ids1 = [x["id"] for x in stamp_store.items()]
+    chk(ids1[0] == ids0[1] and ids1[1] == ids0[0] and man.lst.currentRow() == 0,
+        "H1 [↑ 위로] — 저장된 차례가 바뀌고 고른 줄을 따라간다", f"{ids0[:3]} → {ids1[:3]}")
+    chk(not man.btn_up.isEnabled() and man.btn_down.isEnabled(), "H2 맨 위에서는 [↑ 위로] 꺼짐")
+    QTest.mouseClick(man.btn_down, Qt.MouseButton.LeftButton); app.processEvents()
+    chk([x["id"] for x in stamp_store.items()] == ids0, "H3 [↓ 아래로] — 되돌아온다")
+    mv._rebuild_image_menu()
+    menu_names = [a.text().split(" · ")[0] for a in mv._image_menu.actions() if " · " in a.text()]
+    chk(menu_names == [x["name"] for x in stamp_store.items()], "H4 이미지 ▾ 목록 차례 = 관리 창 차례", str(menu_names))
+    it = man.lst.takeItem(0); man.lst.insertItem(man.lst.count(), it)   # 끌어 놓은 결과
+    man.lst.dropped.emit(); app.processEvents()
+    chk([x["id"] for x in stamp_store.items()] == ids0[1:] + ids0[:1], "H5 끌어 놓은 차례도 저장된다(종전 rowsMoved 는 오지 않았다)")
+    # 기본 항목 — 새 목록에 '원본대조필' 이 맨 앞, 지우면 다시 안 생김, 같은 이름이 있으면 넣지 않음
+    stamp_store.save({"items": [], "last": "", "seeded": []})
+    its = stamp_store.items()
+    chk(bool(its) and its[0]["name"] == "원본대조필" and its[0]["file"].startswith(stamp_store.BUILTIN_PREFIX),
+        "H6 첫 실행 — 동봉 '원본대조필' 이 맨 앞에", str([x["name"] for x in its]))
+    if its:
+        bi = Image.open(stamp_store.abspath(its[0]["file"]))
+        chk(bi.mode == "RGBA" and bi.getchannel("A").getextrema()[0] == 0 and abs(its[0]["width_mm"] - 40) < 0.01,
+            "H7 동봉 그림은 바탕 투명·폭 40 mm", f"{bi.mode} {its[0]['width_mm']}")
+        c = stamp_core.compose(its[0], stamp_store.payload(its[0]))
+        chk(c["png"][:4] == b"\x89PNG", "H8 동봉 항목도 넣을 그림을 만든다")
+        stamp_store.remove(its[0]["id"])
+        chk(Path(stamp_store.abspath(stamp_store.BUILTIN[0]["res"].join(["builtin:", ""]))).exists(),
+            "H9 지워도 동봉 파일은 그대로")
+    chk(not any(x["name"] == "원본대조필" for x in stamp_store.items()), "H10 지운 기본 항목은 다시 생기지 않는다")
+    stamp_store.save({"items": [{"id": "u1", "name": "원본대조필", "kind": "png", "file": "u1.png", "width_mm": 30, "date": {}}],
+                      "last": "u1", "seeded": []})
+    chk([x["id"] for x in stamp_store.items() if x["name"] == "원본대조필"] == ["u1"],
+        "H11 사용자가 먼저 등록한 같은 이름이 있으면 기본 항목을 더하지 않는다")
     doc.close()
 finally:
     shutil.rmtree(root, ignore_errors=True)

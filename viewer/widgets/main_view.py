@@ -1512,6 +1512,11 @@ class _PdfGraphicsView(QGraphicsView):
             ownr._on_draw_pan()
             event.accept()
             return
+        # 261112-5(마스터 §4.6.11 '반복 찍기'): 이미지 넣기가 켜져 있으면 Esc = 끄기
+        if k == Qt.Key.Key_Escape and ownr is not None and getattr(ownr, "_draw_kind", None) == "stamp":
+            ownr._toggle_stamp()
+            event.accept()
+            return
         if (ownr is not None and getattr(ownr, "_img_edit", False)
                 and (event.modifiers() & Qt.KeyboardModifier.ControlModifier)
                 and k == Qt.Key.Key_V):
@@ -6600,9 +6605,8 @@ class MainView(QWidget):
             rect = stamp_core.real_rect(fx, fy, e.get("width_mm", stamp_store.MM_DEFAULT), c["aspect"], pw, ph)
         self._img_objects.append(self.stamp_object(e, c, rect))
         self._img_selected = len(self._img_objects) - 1
-        try:                                   # 넣은 것을 바로 옮길 수 있게 개체선택으로(§4.5.9)
+        try:                                   # 261112-5(§4.6.11 '반복 찍기'): 도구는 켜진 채 — 누를 때마다 같은 항목을 또 찍는다
             self._commit_text_editor()
-            self.set_draw_tool(("select", None))
         except Exception:
             pass
         self._save_page_images()

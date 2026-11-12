@@ -20,6 +20,10 @@ MM_MAX = 300.0
 DATE_FORMATS = ("%Y-%m-%d", "%Y. %#m. %#d.", "%Y년 %#m월 %#d일", "%Y.%m.%d")
 DATE_BOX_DEFAULT = [0.0, 0.75, 1.0, 0.25]          # 이미지 안 정규화 상자 [x, y, w, h] — 아래 25%
 _BAD = re.compile(r'[\\/:*?"<>|]+')
+# 261112-5(마스터 §4.6.11 '기본 항목'): 앱이 동봉한 일반 도장 — 첫 실행 때 한 번 넣고(`seeded`), 지우면 다시 생기지 않는다.
+#   그림은 동봉 파일을 가리킨다(`builtin:` — 설정 폴더로 복사하지 않는다). 이름은 사용자 데이터 기본 이름(고칠 수 있다)
+BUILTIN_PREFIX = "builtin:"
+BUILTIN = ({"key": "original_copy", "name": "원본대조필", "res": "stamps/original_copy.png", "width_mm": 40.0},)
 
 
 def root() -> Path:
@@ -30,7 +34,26 @@ def root() -> Path:
 
 
 def _empty() -> dict:
-    return {"items": [], "last": ""}
+    return {"items": [], "last": "", "seeded": []}
+
+
+def _seed(data: dict) -> bool:
+    """아직 넣지 않은 기본 항목을 목록 맨 앞에. 같은 이름이 이미 있으면(사용자가 먼저 등록) 넣은 것으로만 적는다. 바꿨으면 True."""
+    from viewer.resources_path import resource_path
+    changed = False
+    for b in BUILTIN:
+        if b["key"] in data["seeded"] or not resource_path(b["res"]):
+            continue
+        data["seeded"].append(b["key"])
+        changed = True
+        if any(x.get("name") == b["name"] for x in data["items"]):
+            continue
+        sid = "b_" + b["key"]
+        data["items"].insert(0, {"id": sid, "name": b["name"], "kind": "png", "file": BUILTIN_PREFIX + b["res"],
+                                 "width_mm": b["width_mm"], "date": norm_date(None)})
+        if not data["last"]:
+            data["last"] = sid
+    return changed
 
 
 def load() -> dict:
@@ -43,11 +66,18 @@ def load() -> dict:
                 data["items"] = [x for x in raw["items"] if isinstance(x, dict) and x.get("id")]
             if isinstance(raw.get("last"), str):
                 data["last"] = raw["last"]
+            if isinstance(raw.get("seeded"), list):
+                data["seeded"] = [str(k) for k in raw["seeded"]]
     except FileNotFoundError:
         pass
     except Exception:
         try:                                     # 깨진 목록 — 지우지 않고 옆에 보관(그림 파일은 그대로)
             p.replace(p.with_suffix(".broken.json"))
+        except Exception:
+            pass
+    if _seed(data):
+        try:                                     # 한 번만(작은 json) — 다음부터는 seeded 가 막는다
+            save(data)
         except Exception:
             pass
     return data
@@ -61,7 +91,33 @@ def save(data: dict) -> None:
 
 
 def abspath(rel: str) -> Path:
+    if rel.startswith(BUILTIN_PREFIX):            # 동봉 기본 항목
+        from viewer.resources_path import resource_path
+        return Path(resource_path(rel[len(BUILTIN_PREFIX):]) or rel)
     return root() / rel
+
+
+def _unlink(rel: str) -> None:
+    if rel and not rel.startswith(BUILTIN_PREFIX):  # 동봉 파일은 지우지 않는다
+        try:
+            abspath(rel).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def move(sid: str, delta: int) -> bool:
+    """차례를 delta(−1 위로 · +1 아래로)만큼. 옮겼으면 True."""
+    d = load()
+    ids = [x["id"] for x in d["items"]]
+    if sid not in ids:
+        return False
+    i = ids.index(sid)
+    j = max(0, min(len(ids) - 1, i + int(delta)))
+    if i == j:
+        return False
+    d["items"].insert(j, d["items"].pop(i))
+    save(d)
+    return True
 
 
 def items() -> list:
@@ -122,10 +178,7 @@ def update(sid: str, **fields) -> dict | None:
         rel = f"{sid}.{'pdf' if kind == 'pdf' else 'png'}"
         abspath(rel).write_bytes(fields["payload"])
         if rel != e.get("file"):
-            try:
-                abspath(e["file"]).unlink(missing_ok=True)
-            except Exception:
-                pass
+            _unlink(e.get("file", ""))
         e["file"], e["kind"] = rel, kind
     if "name" in fields:
         e["name"] = clean_name(fields["name"])
@@ -142,10 +195,7 @@ def remove(sid: str) -> None:
     e = next((x for x in d["items"] if x.get("id") == sid), None)
     if e is None:
         return
-    try:
-        abspath(e["file"]).unlink(missing_ok=True)
-    except Exception:
-        pass
+    _unlink(e.get("file", ""))
     d["items"] = [x for x in d["items"] if x.get("id") != sid]
     if d["last"] == sid:
         d["last"] = d["items"][0]["id"] if d["items"] else ""

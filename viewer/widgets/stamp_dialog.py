@@ -387,6 +387,16 @@ def load_from_file(parent, path: str):
     return edit_from_image(parent, img, name=Path(path).stem)
 
 
+class _OrderList(QListWidget):
+    """끌어 놓아 차례를 바꾸는 목록 — 놓은 뒤 `dropped`. QListWidget 의 InternalMove 는 `rowsMoved` 를 내지 않아
+    (지우고 새로 넣는다) 종전 연결로는 바뀐 차례가 저장되지 않았다(261112-5)."""
+    dropped = pyqtSignal()
+
+    def dropEvent(self, e):
+        super().dropEvent(e)
+        self.dropped.emit()
+
+
 class StampManagerDialog(QDialog):
     """'등록 이미지 관리' — 목록·미리보기·추가·고치기·지우기. `shots()` = 스크린샷 그림 경로 목록(새 것 먼저)."""
 
@@ -395,12 +405,24 @@ class StampManagerDialog(QDialog):
         self.setWindowTitle(tr("등록 이미지 관리"))
         self._shots = shots or (lambda: [])
         lay = QHBoxLayout(self)
-        self.lst = QListWidget()
+        self.lst = _OrderList()
         self.lst.setIconSize(QSize(64, 40))
         self.lst.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-        self.lst.model().rowsMoved.connect(lambda *_: stamp_store.reorder(self._ids()))
+        self.lst.dropped.connect(lambda: stamp_store.reorder(self._ids()))
         self.lst.currentRowChanged.connect(self._show)
-        lay.addWidget(self.lst, 1)
+        # 261112-5(마스터 §4.6.11 '차례'): ↑ 위로 · ↓ 아래로 — 즐겨찾기 항목 관리와 같은 방식(디자인 SOT §2.9.5)
+        left = QVBoxLayout()
+        left.addWidget(self.lst, 1)
+        mv_row = QHBoxLayout()
+        self.btn_up = QPushButton(tr("↑ 위로"))
+        self.btn_up.clicked.connect(lambda: self._move(-1))
+        self.btn_down = QPushButton(tr("↓ 아래로"))
+        self.btn_down.clicked.connect(lambda: self._move(+1))
+        mv_row.addWidget(self.btn_up)
+        mv_row.addWidget(self.btn_down)
+        mv_row.addStretch(1)
+        left.addLayout(mv_row)
+        lay.addLayout(left, 1)
         right = QVBoxLayout()
         self.preview = _Preview(self)
         right.addWidget(self.preview, 1)
@@ -433,6 +455,11 @@ class StampManagerDialog(QDialog):
     def _ids(self):
         return [self.lst.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.lst.count())]
 
+    def _move(self, delta: int):
+        e = self._cur()
+        if e is not None and stamp_store.move(e["id"], delta):
+            self._reload(e["id"])
+
     def _reload(self, select: str = ""):
         self.lst.blockSignals(True)
         self.lst.clear()
@@ -457,6 +484,9 @@ class StampManagerDialog(QDialog):
         e = self._cur()
         self.btn_edit.setEnabled(e is not None)
         self.btn_del.setEnabled(e is not None)
+        row = self.lst.currentRow()
+        self.btn_up.setEnabled(e is not None and row > 0)
+        self.btn_down.setEnabled(e is not None and 0 <= row < self.lst.count() - 1)
         if e is None:
             self.preview.set_image(QPixmap())
             self.lb_info.setText(tr("등록 이미지가 없습니다 — [추가] 로 파일·클립보드·스크린샷을 등록하거나, 이미지 ▾ 'PDF 에서 영역 등록' 으로 본문의 영역을 등록합니다."))
