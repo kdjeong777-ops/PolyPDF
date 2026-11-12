@@ -189,7 +189,7 @@ if ready("A 쥔 동안 넣기"):
         unver("A 쥔 동안 넣기", holder_why())
     else:
         clipboard_util.set_image(img, res.append)
-        chk(not cb.ownsClipboard(), "A 전제: 다른 프로그램이 쥔 동안 첫 넣기는 실패한다")
+        chk(not res and not clipboard_util.owns(), "A 전제: 다른 프로그램이 쥔 동안 첫 넣기는 실패한다")   # 261112-19: 그림은 Win32 로 — 주인은 clipboard_util 의 창
         wait_until(lambda: res, 4000); h.wait()
         chk(res == [True], "A 놓은 뒤 다시 넣어 on_done(True)", f"{res}")
         chk(has_image(), "A 클립보드에 그림이 있다")
@@ -263,7 +263,7 @@ if ready("D 클립보드로 복사"):
         # 261107-1: 끝날 때까지(기록 지우기 ≤ HISTORY_CLEAR_TIMEOUT_S + 넣기 다시 시도) 기다린 뒤 가른다
         wait_until(lambda: not getattr(mw, "_clip_busy", False),
                    int((clipboard_util.HISTORY_CLEAR_TIMEOUT_S + HOLD_ALL_S + 5) * 1000))
-        got = cb.ownsClipboard() and has_image()
+        got = clipboard_util.owns() and has_image()
         told = [m for m in seen_all if "넣지 못했습니다" in m]
         if got:
             chk(True, "D '클립보드로 복사' 컷이 클립보드에 들어간다")

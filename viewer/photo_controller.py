@@ -3425,12 +3425,13 @@ class PhotoMixin:
             self._photo_crop_dialog(paths[0])
 
     def _photo_copied(self, path: str, img):
-        from PyQt6.QtWidgets import QApplication
         if img is None or img.isNull():
             self.status.showMessage(tr("사진을 복사하지 못했습니다."), 4000)
             return
-        QApplication.clipboard().setImage(img)
-        self.status.showMessage(tr("사진을 복사했습니다: {name}").format(name=Path(path).name), 3000)
+        # 261112-19(스크린샷 SOT §8.4): 다른 프로그램이 받는 형식으로 — 넣기 한 곳(다시 시도·실패 알림)
+        name = Path(path).name
+        self._copy_image_to_clipboard(img, lambda ok: ok and self.status.showMessage(
+            tr("사진을 복사했습니다: {name}").format(name=name), 3000))
 
     def _photo_strip_menu(self, path: str, global_pos):
         """썸네일 줄 우클릭(4.20) — 누른 사진(고른 칸 위면 고른 사진 모두)에. 사진 세 메뉴 한 함수, 저장 ▸ 에 '줄의 사진 모두로 PDF'."""

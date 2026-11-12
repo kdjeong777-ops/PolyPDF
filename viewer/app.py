@@ -5457,14 +5457,49 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         items = [(str(x[0]), int(x[1])) if isinstance(x, (tuple, list)) else (src, int(x)) for x in pages]
         token = uuid.uuid4().hex
         self._thumb_clip = {"items": items, "pages": [pg for _f, pg in items], "token": token}
-        try:
-            md = QMimeData()
-            md.setData(PAGES_CLIP_MIME, QByteArray(token.encode("ascii")))
-            QApplication.clipboard().setMimeData(md)
-        except Exception:
-            pass
+        # 261112-19(스크린샷 SOT §8.4, 사용자 결정): 표식과 함께 첫 쪽 그림도 — 다른 프로그램에서는 그림으로 붙는다
+        img = self._clip_page_image(*items[0])
+        if img is not None:
+            from viewer import clipboard_util
+            clipboard_util.set_image(img, None, extra={PAGES_CLIP_MIME: token.encode("ascii")})
+        else:
+            try:
+                md = QMimeData()
+                md.setData(PAGES_CLIP_MIME, QByteArray(token.encode("ascii")))
+                QApplication.clipboard().setMimeData(md)
+            except Exception:
+                pass
         self.status.showMessage(
             tr('썸네일 {n}쪽 복사됨 — 다른 PDF 썸네일에서 붙여넣기(Ctrl+V)').format(n=len(items)), 5000)
+
+    CLIP_PAGE_DPI = 150          # 쪽 복사 때 다른 프로그램용 첫 쪽 그림(스크린샷 SOT §8.4)
+    CLIP_PAGE_MAX_PX = 3000      # 긴 변 상한 — 큰 쪽(도면)이 수백 MB 가 되지 않게
+
+    def _clip_page_image(self, path, page):
+        """쪽 하나를 그림(QImage)으로 — 열린 문서면 그것을, 아니면 잠깐 연다. 못 그리면 None(표식만 올린다)."""
+        try:
+            import fitz
+            from PyQt6.QtGui import QImage
+            from viewer.pathutil import norm_key
+            doc, own = None, False
+            for holder in (getattr(self.page_thumbs, "_doc", None), getattr(self.main_view, "_doc", None)):
+                d = getattr(holder, "doc", None)
+                if d is not None and norm_key(str(getattr(holder, "path", ""))) == norm_key(str(path)):
+                    doc = d
+                    break
+            if doc is None:
+                doc, own = fitz.open(str(path)), True
+            try:
+                pg = doc.load_page(int(page))
+                r = pg.rect
+                z = min(self.CLIP_PAGE_DPI / 72.0, self.CLIP_PAGE_MAX_PX / max(1.0, r.width, r.height))
+                pix = pg.get_pixmap(matrix=fitz.Matrix(z, z), alpha=False)
+                return QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888).copy()
+            finally:
+                if own:
+                    doc.close()
+        except Exception:
+            return None
 
     def _clipboard_kind(self):
         """261016-2(마스터 §4.7.20): 마지막에 복사한 것 — 'pages'(우리 쪽 복사)·'deco'(꾸밈 개체)·'image'·'text'·None."""

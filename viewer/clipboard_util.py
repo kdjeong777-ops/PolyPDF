@@ -137,15 +137,131 @@ def holder_name():
     return None
 
 
-PNG_MIME = 'application/x-qt-windows-mime;value="PNG"'     # Windows 의 'PNG' 클립보드 형식(투명이 사는 형식)
+PNG_MIME = 'application/x-qt-windows-mime;value="PNG"'     # Windows 의 'PNG' 클립보드 형식(투명이 사는 형식) — Qt 를 쓰는 다른 플랫폼용
+CF_DIB, CF_DIBV5 = 8, 17
+_owner = {"hwnd": None}
 
 
-def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS, png: bytes | None = None):
+def _owner_hwnd():
+    """클립보드 주인으로 쓸 메시지 전용 창(부르는 스레드 = 메인). `OpenClipboard(NULL)` 이면 `SetClipboardData` 가 실패한다."""
+    if _owner["hwnd"]:
+        return _owner["hwnd"]
+    u = ctypes.windll.user32
+    u.CreateWindowExW.restype = wintypes.HWND
+    u.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_int,
+                                  ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, wintypes.HMENU,
+                                  wintypes.HINSTANCE, wintypes.LPVOID]
+    _owner["hwnd"] = u.CreateWindowExW(0, "STATIC", "PolyPDF clipboard", 0, 0, 0, 0, 0,
+                                       wintypes.HWND(-3), None, None, None)      # HWND_MESSAGE
+    return _owner["hwnd"]
+
+
+def owns() -> bool:
+    """마지막으로 올린 것이 아직 클립보드에 있나 — 주인이 앱의 창인지(곧바로 답한다, 클립보드를 열지 않는다)."""
+    if QGuiApplication.platformName() != "windows":
+        return _took()
+    try:
+        u = ctypes.windll.user32
+        u.GetClipboardOwner.restype = wintypes.HWND
+        h = _owner["hwnd"]
+        return bool(h) and u.GetClipboardOwner() == h
+    except Exception:
+        return False
+
+
+def _bits(img: QImage) -> bytes:
+    """QImage 의 픽셀 바이트(줄 끝 4바이트 맞춤 그대로)."""
+    ptr = img.constBits()
+    ptr.setsize(img.sizeInBytes())
+    return bytes(ptr)
+
+
+def _dib(img: QImage) -> bytes:
+    """CF_DIB — 24비트 BGR, 아래에서 위로. 투명은 흰 바탕에 합성(그림판·한글이 검게 보지 않게)."""
+    import struct
+    if img.hasAlphaChannel():
+        from PyQt6.QtGui import QColor, QPainter
+        base = QImage(img.size(), QImage.Format.Format_RGB32)
+        base.fill(QColor("white"))
+        p = QPainter(base)
+        p.drawImage(0, 0, img)
+        p.end()
+        img = base
+    im = img.convertToFormat(QImage.Format.Format_BGR888).mirrored(False, True)
+    w, h, bpl = im.width(), im.height(), im.bytesPerLine()
+    head = struct.pack("<IiiHHIIiiII", 40, w, h, 1, 24, 0, bpl * h, 3780, 3780, 0, 0)
+    return head + _bits(im)
+
+
+def _dibv5(img: QImage) -> bytes:
+    """CF_DIBV5 — 32비트 BGRA(곱하지 않은 알파), BI_BITFIELDS, 아래에서 위로, sRGB."""
+    import struct
+    im = img.convertToFormat(QImage.Format.Format_ARGB32).mirrored(False, True)
+    w, h = im.width(), im.height()
+    head = struct.pack("<IiiHHIIiiIIIIIII36sIIIIIII", 124, w, h, 1, 32, 3, w * 4 * h, 3780, 3780, 0, 0,
+                       0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000, 0x73524742, b"\0" * 36,
+                       0, 0, 0, 4, 0, 0, 0)
+    return head + _bits(im)
+
+
+def _png(img: QImage) -> bytes:
+    from PyQt6.QtCore import QBuffer, QIODevice
+    buf = QBuffer()
+    buf.open(QIODevice.OpenModeFlag.WriteOnly)
+    img.save(buf, "PNG")
+    return bytes(buf.data())
+
+
+def image_formats(img: QImage, png: bytes | None = None) -> list:
+    """그림 하나를 올릴 Windows 형식 [(형식 번호, 바이트)…] — 스크린샷 SOT §8.4 표."""
+    u = ctypes.windll.user32
+    u.RegisterClipboardFormatW.restype = wintypes.UINT
+    if img.hasAlphaChannel() or png:
+        return [(u.RegisterClipboardFormatW("PNG"), png or _png(img)), (CF_DIBV5, _dibv5(img)), (CF_DIB, _dib(img))]
+    return [(CF_DIB, _dib(img))]
+
+
+def _write_win(formats) -> bool:
+    """Win32 로 즉시 데이터 올리기 — 앱을 닫아도 남는다. 못 열면(다른 프로그램이 쥠) False."""
+    u, k = ctypes.windll.user32, ctypes.windll.kernel32
+    u.OpenClipboard.argtypes = [wintypes.HWND]
+    u.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    u.SetClipboardData.restype = wintypes.HANDLE
+    k.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    k.GlobalAlloc.restype = wintypes.HGLOBAL
+    k.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    k.GlobalLock.restype = ctypes.c_void_p
+    k.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    k.GlobalFree.argtypes = [wintypes.HGLOBAL]
+    if not u.OpenClipboard(_owner_hwnd()):
+        return False
+    ok = True
+    try:
+        u.EmptyClipboard()
+        for cf, data in formats:
+            h = k.GlobalAlloc(0x0002, max(1, len(data)))           # GMEM_MOVEABLE
+            if not h:
+                ok = False
+                continue
+            p = k.GlobalLock(h)
+            ctypes.memmove(p, data, len(data))
+            k.GlobalUnlock(h)
+            if not u.SetClipboardData(cf, h):
+                k.GlobalFree(h)
+                ok = False
+    finally:
+        u.CloseClipboard()
+    return ok
+
+
+def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS, png: bytes | None = None,
+              extra: dict | None = None):
     """그림(QImage·QPixmap)을 클립보드에 넣는다. 끝나면 `on_done(ok)`.
 
     첫 시도는 곧바로 한다 — 대개 여기서 끝나고 `on_done` 도 곧바로 불린다.
-    `png`(261112-16, 스크린샷 SOT §8.3·사진 보기 SOT §4.46): 투명 그림이면 PNG 바이트를 함께 — 그림 형식(DIB)만으로는
-    Office·메신저 등에서 투명이 검은 바탕이 된다. 'PNG' 형식과 `image/png` 를 그림과 함께 올린다."""
+    261112-19(스크린샷 SOT §8.4): Windows 는 Win32 로 다른 프로그램이 받는 형식을 직접 — 불투명 `CF_DIB`, 투명이면 `"PNG"`
+    (`png` 로 이미 만든 바이트를 넘길 수 있다)·`CF_DIBV5`·흰 바탕 `CF_DIB`. `extra` = {MIME: 바이트} 앱 안 표식(꾸밈·쪽)을 함께.
+    ★ Qt 로 그림과 "PNG" 를 함께 올리면 Word·PowerPoint 붙여넣기가 실패한다(Qt 변환기가 PNG 요청을 가로챔)."""
     if isinstance(img, QPixmap):
         img = img.toImage()
     if img is None or not isinstance(img, QImage) or img.isNull():
@@ -153,22 +269,36 @@ def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS, png: b
             on_done(False)
         return
     state = {"left": max(1, int(tries))}
+    win = QGuiApplication.platformName() == "windows"
+    fmts = []
+    if win:
+        try:
+            u = ctypes.windll.user32
+            u.RegisterClipboardFormatW.restype = wintypes.UINT
+            fmts = image_formats(img, png)
+            fmts += [(u.RegisterClipboardFormatW(m), bytes(v)) for m, v in (extra or {}).items()]
+        except Exception:
+            win = False
 
     def attempt():
         state["left"] -= 1
+        done = False
         try:
-            if png:
+            if win:
+                done = _write_win(fmts)
+            else:
                 from PyQt6.QtCore import QMimeData
                 md = QMimeData()
                 md.setImageData(img)
-                md.setData(PNG_MIME, png)
-                md.setData("image/png", png)
+                if png:                                   # 종전대로(Windows 가 아닌 길 — Office 결함은 Windows Qt 변환기에서만)
+                    md.setData(PNG_MIME, png)
+                    md.setData("image/png", png)
+                for m, v in (extra or {}).items():
+                    md.setData(m, bytes(v))
                 QApplication.clipboard().setMimeData(md)
-            else:
-                QApplication.clipboard().setImage(img)
         except Exception:
             pass
-        if _took():
+        if done or (not win and _took()):
             if on_done:
                 on_done(True)
         elif state["left"] > 0:

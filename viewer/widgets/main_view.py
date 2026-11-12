@@ -5119,13 +5119,63 @@ class MainView(QWidget):
         MainView._deco_clip = {"strokes": [copy.deepcopy(self._page_strokes[i]) for i in ms],
                                "images": [self._img_clone(self._img_objects[i]) for i in mi],
                                "key": (str(self.current_file() or ""), int(self._current_page)), "token": token}
-        md = QMimeData()
-        md.setData(self.DECO_MIME, QByteArray(token.encode("ascii")))
-        try:
-            QApplication.clipboard().setMimeData(md)
-        except Exception:
-            pass
+        # 261112-19(스크린샷 SOT §8.4, 사용자 결정): 표식과 함께 고른 꾸밈만 그린 투명 그림 — 다른 프로그램에서는 그림으로 붙는다
+        img = self._deco_image(ms, mi)
+        if img is not None:
+            from viewer import clipboard_util
+            clipboard_util.set_image(img, None, extra={self.DECO_MIME: token.encode("ascii")})
+        else:
+            md = QMimeData()
+            md.setData(self.DECO_MIME, QByteArray(token.encode("ascii")))
+            try:
+                QApplication.clipboard().setMimeData(md)
+            except Exception:
+                pass
         return len(ms) + len(mi)
+
+    def _deco_image(self, ms, mi):
+        """고른 꾸밈만 투명 바탕에 그린 그림(화면 배율) — 꾸밈 층을 그 개체들만 남긴 채 한 번 그려 받는다. 못 그리면 None."""
+        from PyQt6.QtCore import QRectF
+        ov, pr = self._draw_overlay, self._page_view_rect()
+        if ov is None or pr is None or pr.width() <= 0:
+            return None
+        rect = None
+        for i in ms:
+            st = self._page_strokes[i]
+            bb = self._stroke_bbox_view_any(st, pr)
+            if bb is not None:
+                w = float(st.get("width", 3)) + 2
+                bb = QRectF(bb).adjusted(-w, -w, w, w)
+                rect = bb if rect is None else rect.united(bb)
+        for i in mi:
+            pts = self._img_handle_points(self._img_objects[i], pr)
+            xs = [pts[k].x() for k in ("tl", "tr", "br", "bl")]
+            ys = [pts[k].y() for k in ("tl", "tr", "br", "bl")]
+            bb = QRectF(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)).adjusted(-1, -1, 1, 1)
+            rect = bb if rect is None else rect.united(bb)
+        if rect is None:
+            return None
+        r = rect.toAlignedRect().intersected(ov.rect())
+        if r.isEmpty():
+            return None
+        keep = (self._page_strokes, self._img_objects, self._stroke_selected, self._img_selected,
+                getattr(self, "_multi_strokes", []), getattr(self, "_multi_images", []), self._text_edit_idx,
+                self._rubber, self._leader_drag, ov._cur, ov._cursor_pt)
+        try:
+            self._page_strokes = [self._page_strokes[i] for i in ms]
+            self._img_objects = [self._img_objects[i] for i in mi]
+            self._stroke_selected = self._img_selected = self._text_edit_idx = -1
+            self._multi_strokes, self._multi_images = [], []
+            self._rubber = self._leader_drag = ov._cur = ov._cursor_pt = None
+            img = ov.grab(r).toImage()
+        except Exception:
+            img = None
+        finally:
+            (self._page_strokes, self._img_objects, self._stroke_selected, self._img_selected,
+             self._multi_strokes, self._multi_images, self._text_edit_idx,
+             self._rubber, self._leader_drag, ov._cur, ov._cursor_pt) = keep
+            ov.update()
+        return img if img is not None and not img.isNull() else None
 
     def can_paste_decorations(self) -> bool:
         from PyQt6.QtWidgets import QApplication
