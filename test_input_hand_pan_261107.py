@@ -3,6 +3,8 @@
 
 사용자 지시(261107): "본화면 위 꾸미기 버튼에 화면을 잡고 원하는 부분으로 화면을 이동시키는 손바닥 아이콘 추가.
 개체선택 버튼 오른쪽".
+261112-6(사용자 지시): "손바닥 버튼을 전자서명 오른쪽으로 옮기고, 편집모드 뿐만 아니라 보기모드에서도 보이게" —
+본문 툴바 전자서명 바로 오른쪽, 보기 모드에서도 보이고 끌기·Ctrl+H 가 돈다, 모드를 바꿔도 켜짐이 그대로(입력 SOT §4.1).
 마우스는 실제 QMouseEvent 를 본문 뷰포트에 보낸다(MainView.eventFilter 가 받는 길 그대로, 마스터 §14.7.2).
 """
 import os, sys, tempfile, shutil
@@ -70,7 +72,6 @@ try:
     mv.show()
     mv.load_document(pdf, 0)
     app.processEvents()
-    mv.set_draw_mode(True)
     mv._zoom_by(3.0)                   # 가로·세로 모두 스크롤 자리가 생기게
     app.processEvents()
     hsb, vsb = mv.view.horizontalScrollBar(), mv.view.verticalScrollBar()
@@ -79,13 +80,27 @@ try:
     hsb.setValue(hsb.maximum() // 2); vsb.setValue(vsb.maximum() // 2)
     app.processEvents()
 
-    # ── 단추 자리: 개체선택 바로 오른쪽 ────────────────────────────────
+    # ── 261112-6: 단추 자리 = 본문 툴바 전자서명 바로 오른쪽, 보기 모드에서도 보인다 ──
     pb = getattr(mv, "_draw_pan_btn", None)
     chk(pb is not None, "손바닥 단추가 있다")
-    lay = mv._draw_select_btn.parentWidget().layout()
-    idx = [lay.itemAt(i).widget() for i in range(lay.count())]
-    chk(pb in idx and idx.index(pb) == idx.index(mv._draw_select_btn) + 1, "손바닥 단추는 개체선택 바로 오른쪽이다")
+    tb = mv._toolbar
+    items = [tb.itemAt(i).widget() for i in range(tb.count())]
+    chk(pb in items and items.index(pb) == items.index(mv.btn_sign) + 1,
+        "손바닥 단추는 본문 툴바 전자서명 바로 오른쪽이다(261112-6 — 종전 꾸미기 줄 개체선택 오른쪽)")
     chk(pb is not None and not pb.icon().isNull() and pb.text() == "", "손바닥 단추는 글자가 아니라 아이콘이다")
+    chk(pb is not None and pb.isVisible() and not mv._draw_bar.isVisible(), "보기 모드(꾸미기 줄 없음)에서도 손바닥 단추가 보인다")
+    if pb is not None:
+        b0 = bars(mv)
+        pb.click(); app.processEvents()
+        drag(mv, 60, 40)
+        chk(mv._draw_kind == "pan" and bars(mv) == (b0[0] - 60, b0[1] - 40),
+            "보기 모드에서 손바닥을 켜고 끌면 화면이 따라온다", f"{b0}→{bars(mv)}")
+        mv.set_draw_mode(True); app.processEvents()
+        chk(mv._draw_kind == "pan" and pb.isChecked() and pb.isVisible() and mv._draw_bar.isVisible(),
+            "보기 모드에서 켠 손바닥은 편집 모드로 가도 켜진 채(단추 켜짐도 같다)")
+        pb.click(); app.processEvents()
+    mv.set_draw_mode(True); app.processEvents()
+    chk(pb.isVisible(), "편집 모드에서도 손바닥 단추가 보인다")
 
     # ── 꺼져 있으면 같은 끌기는 막대를 안 움직인다(대조) ──────────────
     b0 = bars(mv)
@@ -147,10 +162,18 @@ try:
     app.processEvents()
     chk(mv._draw_kind is None and mv._draw_tool is None and not pb.isChecked(), "Esc 를 누르면 손바닥이 꺼진다")
 
-    # ── 편집 모드를 나가면 꺼진다 ─────────────────────────────────────
+    # ── 261112-6: 편집 모드를 나가도 손바닥은 켜진 채(다른 꾸미기 도구는 꺼진다) ──
     pb.click(); app.processEvents()
     mv.set_draw_mode(False); app.processEvents()
-    chk(mv._draw_tool is None, "편집 모드를 나가면 손바닥이 꺼진다")
+    chk(mv._draw_tool == ("pan", None) and pb.isChecked() and pb.isVisible()
+        and cursor(mv) == Qt.CursorShape.OpenHandCursor,
+        "편집 모드를 나가도 손바닥은 켜진 채 — 단추 켜짐·포인터도 같다(261112-6)", f"{mv._draw_tool}")
+    pb.click(); app.processEvents()
+    chk(mv._draw_tool is None and not pb.isChecked(), "보기 모드에서 다시 누르면 꺼진다")
+    mv.set_draw_mode(True); app.processEvents()
+    mv._toggle_line(); app.processEvents()
+    mv.set_draw_mode(False); app.processEvents()
+    chk(mv._draw_tool is None, "편집 모드를 나가면 선긋기 같은 꾸미기 도구는 꺼진다(종전 그대로)")
     mv.set_draw_mode(True); app.processEvents()
 
     # ── 이어 보기: 아래로 계속 밀면(위로 끌면) 다음 쪽이 지금 쪽이 된다 ──
@@ -177,6 +200,23 @@ try:
     keys = dict(defs)
     chk(keys.get("draw_pan") == "Ctrl+H", "단축키 설정에 손바닥(draw_pan) Ctrl+H 가 있다", str(keys.get("draw_pan")))
     chk(list(keys.values()).count("Ctrl+H") == 1, "Ctrl+H 는 다른 기본 키와 겹치지 않는다")
+
+    # ── 261112-6: 실제 창 — 보기 모드에서 Ctrl+H(단축키 객체)로 켜지고, 묶음은 '보기' ──
+    import modal_guard
+    modal_guard.install(label=lambda: "손바닥", echo=False)   # 검사 작성 SOT §14.7.2 의 6
+    from viewer.app import MainWindow
+    mw = MainWindow(); mw._skip_save_on_close = True
+    mw.resize(1300, 800); mw.show(); app.processEvents()
+    chk(not mw._in_edit(), "실제 창은 보기 모드로 시작한다(전제)")
+    chk(mw._sc_defs["draw_pan"][2] == mw._sc_defs["view_single"][2], "단축키 묶음은 '보기'(두 모드)", str(mw._sc_defs["draw_pan"]))
+    kind, sh = mw._sc_objs["draw_pan"]
+    sh.activated.emit(); app.processEvents()
+    wv = mw.main_view
+    chk(wv._draw_kind == "pan" and wv._draw_pan_btn.isChecked() and wv._draw_pan_btn.isVisible(),
+        "보기 모드에서 Ctrl+H 로 손바닥이 켜진다(종전 편집 모드에서만)", str(wv._draw_kind))
+    sh.activated.emit(); app.processEvents()
+    chk(wv._draw_kind is None and not wv._draw_pan_btn.isChecked(), "Ctrl+H 다시 → 꺼진다")
+    mw.close()
 finally:
     shutil.rmtree(root, ignore_errors=True)
 

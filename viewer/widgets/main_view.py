@@ -1933,6 +1933,16 @@ class MainView(QWidget):
         #   본문 우클릭 '여기에 서명…' 은 그대로.
         self.btn_crop.setVisible(False)
         self.btn_sign.setVisible(False)
+        # 261112-6(사용자 지시 '손바닥 버튼을 전자서명 오른쪽으로 옮기고, 편집모드 뿐만 아니라 보기모드에서도 보이게',
+        #   디자인 SOT §2.10·입력 SOT §4.1): 손바닥 — 끌어서 화면 이동. 전자서명 바로 오른쪽, 두 모드 모두 보인다
+        #   (종전 261107-36 은 꾸미기 줄 개체선택 오른쪽이라 편집 모드에서만). 도구 값은 꾸미기 도구와 같은 `_draw_kind`.
+        self._draw_pan_btn = QPushButton(); self._draw_pan_btn.setFixedSize(28, H)
+        self._draw_pan_btn.setCheckable(True)
+        self._draw_pan_btn.setIcon(_ti("hand", size=16))
+        self._draw_pan_btn.setToolTip(tr("손바닥 — 끌어서 화면 이동"))
+        self._draw_pan_btn.installEventFilter(_KeyTipFilter("draw_pan", self._draw_pan_btn))
+        self._draw_pan_btn.clicked.connect(self._on_draw_pan)
+        bar.addWidget(self._draw_pan_btn)
         # 260609-22(J3): 편집모드 전용 선긋기 도구 모음
         self._draw_bar = self._build_draw_bar(H)
         bar.addWidget(self._draw_bar)
@@ -3935,15 +3945,7 @@ class MainView(QWidget):
             self._draw_select_btn.setText("⤢")
         self._draw_select_btn.clicked.connect(self._on_draw_select)
         hb.addWidget(self._draw_select_btn)
-        # 261107-36(마스터 §4.6.12·입력 SOT §4.1, 사용자 지시): 손바닥 — 끌어서 화면 이동. 개체선택 바로 오른쪽
-        from viewer.widgets.icons import themed_icon as _ti
-        self._draw_pan_btn = QPushButton(); self._draw_pan_btn.setFixedSize(28, H)
-        self._draw_pan_btn.setCheckable(True)
-        self._draw_pan_btn.setIcon(_ti("hand", size=16))
-        self._draw_pan_btn.setToolTip(tr("손바닥 — 끌어서 화면 이동"))
-        self._draw_pan_btn.installEventFilter(_KeyTipFilter("draw_pan", self._draw_pan_btn))
-        self._draw_pan_btn.clicked.connect(self._on_draw_pan)
-        hb.addWidget(self._draw_pan_btn)
+        # 손바닥 단추는 261112-6 부터 이 줄 밖 — 본문 툴바 전자서명 오른쪽(_build_ui, 디자인 SOT §2.10)
         # 260611-1: 지우개 2종(얇게/두껍게)·청소 — 첨부 아이콘 사용(없으면 글리프 폴백)
         self._draw_erase_btns = []
         _ico_sz = QSize(H - 4, H - 4)
@@ -4012,7 +4014,10 @@ class MainView(QWidget):
         self.btn_sign.setVisible(bool(on) and self.__dict__.get("_sign_allowed", True))   # 사진 모드는 숨김(261106-1)
         if not on:
             # 260907-6: 편집모드를 나가면 **도구 없음**(텍스트 선택)으로 돌아간다.
-            self._pen_idx = None; self._draw_kind = None; self._shape_kind = "rect"
+            #   261112-6(입력 SOT §4.1): 손바닥은 보기 모드에도 있는 도구라 켜진 채 남는다(단추 켜짐 표시도 그대로).
+            self._pen_idx = None; self._shape_kind = "rect"
+            if self._draw_kind != "pan":
+                self._draw_kind = None
             self._stroke_selected = -1
             self._multi_clear(); self._rubber = None; self._rubber_from = None
             self._apply_tool()           # 260611-76: 편집 종료 시 모드/펜 해제·복귀
