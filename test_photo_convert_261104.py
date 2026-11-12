@@ -3,7 +3,9 @@
 
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3). OCR 낱말은 사진 한 장 OCR 과 같은 꼴로
 study.db 에 직접 넣는다(Tesseract 없이 — 읽는 길은 test_photo_ocr_261104 가 본다).
-A. 사진 모드에서 '변환...' 이 켜진다, 형식은 사진에 뜻 있는 것만
+261112-22: '변환' 은 변환 창(그림으로 저장 + 문서로, §4.46)을 먼저 연다 — 문서 길은 그 창의 [Word·HWPX·텍스트로] 단추로 간다.
+검사도 그 길로(창의 exec 를 '문서로 단추 누름' 으로 바꾼다 — 단추가 없으면 문서 길에 못 닿아 실패).
+A. 사진 모드에서 '변환...' 이 켜진다, 변환 창에 '문서로' 단추, 형식은 사진에 뜻 있는 것만
 B. 읽지 않은 사진 — 알림만(파일을 만들지 않는다)
 C. 텍스트 · Word(편집 가능) · Word(모양 그대로) · HWPX(편집 가능) — 사진 옆에 같은 이름으로, 글이 들어간다
 D. 보기 회전 90° — 돈 판으로 구워 글 차례가 맞다
@@ -103,20 +105,45 @@ try:
             return pick["key"]
     convert_dialog.ConvertDialog = FakeDlg
 
+    # 변환 창(§4.46) — 창을 띄우는 대신 [Word·HWPX·텍스트로] 를 누른다(실제 단추의 click → _doc → doc_fn)
+    from viewer.widgets import image_tune_dialog
+    tune_seen, doc_ok = [], []
+
+    def _tune_exec(self):
+        tune_seen.append(sorted(self.doc_buttons))
+        b = self.doc_buttons.get("doc")
+        if b is not None:
+            b.click()
+        return 0
+    image_tune_dialog.ImageTuneDialog.exec = _tune_exec
+    _orig_doc = mw._photo_convert_doc
+
+    def _doc_spy(files, fmt=None):
+        doc_ok.append(_orig_doc(files, fmt))
+        return doc_ok[-1]
+    mw._photo_convert_doc = _doc_spy
+
+    def to_doc(files):
+        n = len(doc_ok)
+        mw.action_convert(files=files)
+        pump(lambda: len(doc_ok) > n, timeout=5)
+        return doc_ok[-1] if len(doc_ok) > n else None
+
     # A
     mw._on_bookmark_activated(str(a), 0); pump(timeout=0.5)
     act = mw._cmds.get("file.export")
     chk(act is not None and act.isEnabled(), "A 사진 모드에서 '변환...' 켜짐")
 
     # B
-    mw.action_convert(files=[str(b)]); pump(timeout=0.3)
+    to_doc([str(b)]); pump(timeout=0.3)
+    chk(tune_seen and tune_seen[-1] == ["doc"], "A 변환 창에 '문서로' 단추", str(tune_seen[-1:]))
     chk(notes and "먼저" in notes[-1] and not list(tmp.glob("b 안읽음.*[!g]")), "B 읽지 않은 사진 — 알림만", str(notes[-1:]))
 
     # C
     def conv(key, path=a):
         pick["key"] = key
         before = set(os.listdir(tmp))
-        ok = mw.action_convert(files=[str(path)])
+        ok = to_doc([str(path)])
         pump(timeout=0.3)
         new = sorted(set(os.listdir(tmp)) - before)
         return ok, new
@@ -174,9 +201,9 @@ try:
     from viewer import photo_zip
     inner = photo_zip.extract(zp)[0]
     n0 = len(notes)
-    ok = mw.action_convert(files=[inner]); pump(timeout=0.3)
+    ok = to_doc([inner]); pump(timeout=0.3)
     chk(not ok and len(notes) > n0 and "PC 로 복사" in notes[-1], "F zip 안 사진 — 알림만", str(notes[-1:]))
-    pick["key"] = "txt"; mw.action_convert(files=[str(c)]); pump(timeout=0.3)   # 다음 변환이 앞에 남은 것을 거둔다
+    pick["key"] = "txt"; to_doc([str(c)]); pump(timeout=0.3)   # 다음 변환이 앞에 남은 것을 거둔다
     left = glob.glob(os.path.join(tempfile.gettempdir(), "polypdf_photosrc_*", "*.pdf"))
     chk(not left, "F 임시 PDF 는 남지 않는다", str(left[:3]))
     mw.close()
