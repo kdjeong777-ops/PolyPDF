@@ -8612,12 +8612,21 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # v1.6.7 E1: 표시는 임시 PNG 일 수 있으므로, ◀▶/순번 조회용으로
         #            카드 원본 path 를 별도 보관 (_current_main 은 disp 가 됨).
         self._current_shot_path = path
+        # 261112-20(스크린샷 SOT §5, 사용자 결정): 늘 2단 오른쪽 창에 — 1단이면 2단을 켜고(왼쪽을 복사하지 않는다),
+        #   활성 창은 오른쪽(◀▶ 컷 넘김이 활성 창에서만 받는다). 1단 복귀는 기존 단추.
+        if not getattr(self, "_split_on", False):
+            act = getattr(self, "act_split", None)
+            if act is not None:
+                act.setChecked(True)                     # toggled → _toggle_split(True)
+            if not getattr(self, "_split_on", False):
+                self._toggle_split(True)
+        self._set_active_pane(1)
         self._load_main(HistoryItem(file_path=disp, page_index=0, origin="screenshot"))
         # D1: 리스트 순번/총수 (조회는 항상 카드 원본 path 기준)
         i = self.shot_strip.index_of_path(path)
         n = self.shot_strip.list.count()
         if i >= 0:
-            self.main_view.set_image_position(i + 1, n)
+            self._mv[1].set_image_position(i + 1, n)
 
     def _on_image_step(self, direction: int):
         """v1.6.4 C2: 스크린샷 표시 중 ◀▶ → 리스트 인접 카드 (끝에서 멈춤).
