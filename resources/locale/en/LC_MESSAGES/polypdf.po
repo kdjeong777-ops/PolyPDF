@@ -12006,7 +12006,7 @@ msgstr "Confirm password"
 msgid "Windows Hello 로 비밀번호 보관(서명할 때 지문·PIN 으로 확인)"
 msgstr "Store the password with Windows Hello (confirm with fingerprint or PIN when signing)"
 
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/tag_rules_panel.py
 msgid "빼기"
 msgstr "Remove"
 
@@ -13278,6 +13278,10 @@ msgid "형식 낱말 (PDF 자동 해시태그)"
 msgstr "Format words (PDF automatic hashtags)"
 
 #: viewer/widgets/tag_rules_panel.py
+msgid "분류 더하기"
+msgstr "Add category"
+
+#: viewer/widgets/tag_rules_panel.py
 msgid "별칭 — 이 태그 대신 붙일 이름"
 msgstr "Aliases — name to use instead of this tag"
 
@@ -13292,6 +13296,18 @@ msgstr "Remove selected rows"
 #: viewer/widgets/tag_rules_panel.py
 msgid "사진 자동 해시태그 종류"
 msgstr "Photo automatic hashtag types"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "찾을 낱말 (쉼표로)"
+msgstr "Words to find (comma-separated)"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "파일 이름·PDF 제목에 이 낱말이 있어도 이 분류를 붙입니다 — 쉼표로 나눠 여러 개"
+msgstr "This category is also applied when these words appear in the file name or PDF title — separate several with commas"
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "더한 분류는 이름이나 찾을 낱말이 파일 이름·PDF 제목에 있으면 붙습니다."
+msgstr "An added category is applied when its name or words to find appear in the file name or PDF title."
 
 #: viewer/widgets/tag_rules_panel.py
 msgid "원래 태그"
@@ -13310,9 +13326,18 @@ msgid "저장하면 이미 붙은 자동 해시태그도 곧바로 새 규칙으
 msgstr "Saving also updates automatic hashtags already assigned to the new rules right away (in the background; stop it from the Jobs window). Hashtags you added yourself stay as they are."
 
 #: viewer/widgets/tag_rules_panel.py
+msgid "분류 이름"
+msgstr "Category name"
+
+#: viewer/widgets/tag_rules_panel.py
 #, python-brace-format
-msgid "붙일 이름 — 비우면 '{f}' 그대로"
-msgstr "Name to use — leave empty to keep '{f}'"
+msgid "붙일 이름 — 비우면 '{f}'"
+msgstr "Name to apply — leave empty for '{f}'"
+
+#: viewer/widgets/tag_rules_panel.py
+#, python-brace-format
+msgid "'{f}' 붙이기"
+msgstr "Apply '{f}'"
 
 #: viewer/widgets/text_panel.py
 msgid "고른 줄의 스타일 / 아래 값이 적용될 스타일"

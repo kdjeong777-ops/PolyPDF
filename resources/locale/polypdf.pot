@@ -11688,7 +11688,7 @@ msgstr ""
 msgid "Windows Hello 로 비밀번호 보관(서명할 때 지문·PIN 으로 확인)"
 msgstr ""
 
-#: viewer/widgets/sign_dialogs.py
+#: viewer/widgets/sign_dialogs.py viewer/widgets/tag_rules_panel.py
 msgid "빼기"
 msgstr ""
 
@@ -12953,6 +12953,10 @@ msgid "형식 낱말 (PDF 자동 해시태그)"
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
+msgid "분류 더하기"
+msgstr ""
+
+#: viewer/widgets/tag_rules_panel.py
 msgid "별칭 — 이 태그 대신 붙일 이름"
 msgstr ""
 
@@ -12966,6 +12970,18 @@ msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
 msgid "사진 자동 해시태그 종류"
+msgstr ""
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "찾을 낱말 (쉼표로)"
+msgstr ""
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "파일 이름·PDF 제목에 이 낱말이 있어도 이 분류를 붙입니다 — 쉼표로 나눠 여러 개"
+msgstr ""
+
+#: viewer/widgets/tag_rules_panel.py
+msgid "더한 분류는 이름이나 찾을 낱말이 파일 이름·PDF 제목에 있으면 붙습니다."
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
@@ -12985,8 +13001,17 @@ msgid "저장하면 이미 붙은 자동 해시태그도 곧바로 새 규칙으
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
+msgid "분류 이름"
+msgstr ""
+
+#: viewer/widgets/tag_rules_panel.py
 #, python-brace-format
-msgid "붙일 이름 — 비우면 '{f}' 그대로"
+msgid "붙일 이름 — 비우면 '{f}'"
+msgstr ""
+
+#: viewer/widgets/tag_rules_panel.py
+#, python-brace-format
+msgid "'{f}' 붙이기"
 msgstr ""
 
 #: viewer/widgets/text_panel.py

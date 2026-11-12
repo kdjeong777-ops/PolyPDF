@@ -72,6 +72,7 @@ def axis_of(tag: str, rules: dict | None = None) -> str:
     fmt = {v.lower() for v in FORMAT_VOCAB} | {k.lower() for k in FORMAT_ALIAS}
     alias = (rules or {}).get("alias") or {}
     fmt |= {str(v).lower() for v in alias.values()}
+    fmt |= {str(c.get("name") or "").lower() for c in (rules or {}).get("format_custom") or () if isinstance(c, dict)}   # 261112-11
     return "형식" if tl in fmt else "주제"
 
 
@@ -302,8 +303,15 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
     txt = f.struct_text[:20000].lower()      # ★ 원문 기준(위 보강) — 스캔이면 자연히 빈 문자열
     fmt = None
 
-    # ① 명시어 — 사람이 이름에 써 둔 것이 가장 확실
-    for tag, keys in _EXPLICIT:
+    # ① 명시어 — 사람이 이름에 써 둔 것이 가장 확실. 사용자가 더한 분류가 먼저(§5.8 `format_custom`, 261112-11)
+    for c in rules.get("format_custom") or ():
+        if not isinstance(c, dict) or not str(c.get("name") or "").strip():
+            continue
+        nm = str(c["name"]).strip()
+        if any(len(k) >= 2 and k.lower() in name for k in [nm] + [str(w) for w in c.get("words") or ()]):
+            fmt = nm
+            break
+    for tag, keys in (_EXPLICIT if fmt is None else ()):
         if any(k in name for k in keys):
             fmt = tag
             break

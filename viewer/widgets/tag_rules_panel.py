@@ -28,23 +28,36 @@ class TagRulesPanel(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        # 형식 낱말 — 켜고 끄기·붙일 이름(형식 이름은 저장 데이터라 번역하지 않는다 — 다국어 SOT §5)
+        # 형식 낱말 — 줄마다 체크 상자(켜고 끄기) + 이름 글 상자 하나(261112-11 — 고칠 수 없는 이름 글을 뺐다).
+        #   글 상자에는 지금 붙는 이름, 비우면 표준 이름. 형식 이름은 저장 데이터라 번역하지 않는다 — 다국어 SOT §5
         g1 = QGroupBox(tr("형식 낱말 (PDF 자동 해시태그)"))
-        gl = QGridLayout(g1)
+        v1 = QVBoxLayout(g1)
+        gl = QGridLayout()
         gl.setHorizontalSpacing(8)
         self.fmt_chk, self.fmt_name = {}, {}
         for i, f in enumerate(FORMAT_VOCAB):
-            cb = QCheckBox(f)
-            cb.setChecked(f not in off)
-            ed = QLineEdit(alias.pop(f, ""))
-            ed.setPlaceholderText(f)
-            ed.setToolTip(tr("붙일 이름 — 비우면 '{f}' 그대로").format(f=f))
-            cb.toggled.connect(ed.setEnabled)
-            ed.setEnabled(cb.isChecked())
+            cb, ed = self._fmt_pair(f, alias.pop(f, "") or f, f not in off)
             row, col = divmod(i, 2)
             gl.addWidget(cb, row, col * 2)
             gl.addWidget(ed, row, col * 2 + 1)
+            gl.setColumnStretch(col * 2 + 1, 1)
             self.fmt_chk[f], self.fmt_name[f] = cb, ed
+        v1.addLayout(gl)
+        # 사용자가 더한 분류(태그 SOT §5.8 `format_custom`) — 체크 + 이름 + 찾을 낱말 + [빼기]
+        self.cust_lay = QVBoxLayout()
+        self.cust_lay.setContentsMargins(0, 0, 0, 0)
+        self.cust_rows = []
+        v1.addLayout(self.cust_lay)
+        for c in r.get("format_custom") or ():
+            self._add_custom(c["name"], alias.pop(c["name"], "") or c["name"], ", ".join(c.get("words") or ()),
+                             c["name"] not in off)
+        hb1 = QHBoxLayout()
+        self.btn_fmt_add = QPushButton(tr("분류 더하기"))
+        self.btn_fmt_add.clicked.connect(lambda: self._add_custom(None, "", "", True, focus=True))
+        hb1.addWidget(self.btn_fmt_add)
+        hb1.addStretch(1)
+        v1.addLayout(hb1)
+        v1.addWidget(_small(tr("더한 분류는 이름이나 찾을 낱말이 파일 이름·PDF 제목에 있으면 붙습니다.")))
         lay.addWidget(g1)
 
         # 별칭 표 — 형식 이름 바꾸기와 같은 표(§5.8) — 여기에는 형식이 아닌 태그만
@@ -84,6 +97,55 @@ class TagRulesPanel(QWidget):
         lay.addWidget(_small(tr("저장하면 이미 붙은 자동 해시태그도 곧바로 새 규칙으로 바꿉니다(백그라운드, 작업 창에서 멈춤). "
                                 "직접 붙인 해시태그는 그대로입니다.")))
 
+    def _fmt_pair(self, std: str | None, text: str, on: bool):
+        """체크 상자(글 없음) + 이름 글 상자 — 끄면 글 상자가 잠긴다. std 가 있으면 비울 때 그 이름(자리표시)."""
+        cb = QCheckBox()
+        cb.setChecked(on)
+        ed = QLineEdit(text)
+        if std:
+            ed.setPlaceholderText(std)
+            ed.setToolTip(tr("붙일 이름 — 비우면 '{f}'").format(f=std))
+            cb.setToolTip(tr("'{f}' 붙이기").format(f=std))
+            cb.setAccessibleName(std)
+        else:
+            ed.setPlaceholderText(tr("분류 이름"))
+        cb.toggled.connect(ed.setEnabled)
+        ed.setEnabled(on)
+        return cb, ed
+
+    def _add_custom(self, std, text: str, words: str, on: bool, focus: bool = False):
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(0, 0, 0, 0)
+        cb, ed = self._fmt_pair(std, text, on)
+        wd = QLineEdit(words)
+        wd.setPlaceholderText(tr("찾을 낱말 (쉼표로)"))
+        wd.setToolTip(tr("파일 이름·PDF 제목에 이 낱말이 있어도 이 분류를 붙입니다 — 쉼표로 나눠 여러 개"))
+        cb.toggled.connect(wd.setEnabled)
+        wd.setEnabled(on)
+        bx = QPushButton(tr("빼기"))
+        row = {"std": std, "cb": cb, "name": ed, "words": wd, "w": w}
+        bx.clicked.connect(lambda: self._del_custom(row))
+        h.addWidget(cb)
+        h.addWidget(ed, 1)
+        h.addWidget(wd, 2)
+        h.addWidget(bx)
+        self.cust_lay.addWidget(w)
+        self.cust_rows.append(row)
+        for sig in (cb.toggled, ed.textChanged, wd.textChanged):
+            sig.connect(lambda *_: self.changed_hook())
+        if focus:
+            ed.setFocus()
+            self.changed_hook()
+        return row
+
+    def _del_custom(self, row: dict):
+        if row in self.cust_rows:
+            self.cust_rows.remove(row)
+            row["w"].setParent(None)
+            row["w"].deleteLater()
+            self.changed_hook()
+
     def _add_row(self, k: str, v: str):
         r = self.tbl.rowCount()
         self.tbl.insertRow(r)
@@ -107,12 +169,25 @@ class TagRulesPanel(QWidget):
             k, v = (a.text() if a else "").strip(), (b.text() if b else "").strip()
             if k and v:
                 alias[k] = v
+        off = [f for f, cb in self.fmt_chk.items() if not cb.isChecked()]
         for f, ed in self.fmt_name.items():
             if ed.text().strip():
                 alias[f] = ed.text().strip()
+        custom = []
+        for row in self.cust_rows:
+            nm = row["name"].text().strip().lstrip("#").strip()
+            std = row["std"] or nm                    # 새 줄은 처음 저장 때의 이름이 표준 이름(§5.8)
+            if not std:
+                continue                              # 이름 없는 새 줄은 버린다
+            if nm and nm != std:
+                alias[std] = nm
+            custom.append({"name": std, "words": TR.split_words(row["words"].text())})
+            if not row["cb"].isChecked():
+                off.append(std)
         return TR.normalize({
             "alias": alias,
-            "format_off": [f for f, cb in self.fmt_chk.items() if not cb.isChecked()],
+            "format_custom": custom,
+            "format_off": off,
             "photo_off": [k for k, cb in self.photo_chk.items() if not cb.isChecked()],
         })
 

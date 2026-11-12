@@ -3,7 +3,9 @@
 
 저장은 `settings_dir()/tag_rules.json`(읽기는 `auto_tag.load_rules`). 키:
 - `alias` {원래 태그: 붙일 태그} — 형식 이름 바꾸기와 별칭 표가 같은 표
-- `format_off` [표준 형식 이름] — 붙이지 않는 형식
+- `format_off` [표준 형식 이름] — 붙이지 않는 형식(내장 13종과 `format_custom` 의 이름)
+- `format_custom` [{"name": 표준 이름, "words": [찾을 낱말]}] — 사용자가 더한 형식 분류(261112-11). 파일 이름·PDF 제목에
+  이름이나 낱말이 있으면 그 형식(`auto_tag.classify_format` ①). `name` 은 처음 저장 때의 이름으로 고정, 그 뒤 이름 고치기는 `alias`
 - `photo_off` ["date", "region", "device", "screenshot"] 중 — 붙이지 않는 사진 머리 태그
 
 저장하면 곧바로 다시 붙인다(`TagRulesJob`) — 규칙 파일 쓰기·사진 색인 글·사진 머리 다시 읽기는 배경, 태그 저장소는 메인이 한 번에.
@@ -26,6 +28,37 @@ def rules_path() -> Path:
     return Path(settings_dir()) / "tag_rules.json"
 
 
+def custom_formats(raw) -> list:
+    """`format_custom` 정리 — 이름 없는 줄은 버리고, 같은 이름(대소문자 무시)은 낱말을 합쳐 하나로, 낱말은 2글자 이상(261112-11)."""
+    out, seen = [], {}
+    for e in raw or ():
+        if not isinstance(e, dict):
+            continue
+        name = str(e.get("name") or "").strip().lstrip("#").strip()
+        if not name:
+            continue
+        ws = e.get("words") or ()
+        if isinstance(ws, str):
+            ws = split_words(ws)
+        words = []
+        for w in ws:
+            w = str(w or "").strip().lstrip("#").strip()
+            if len(w) >= 2 and w.lower() != name.lower() and w.lower() not in {x.lower() for x in words}:
+                words.append(w)
+        ent = seen.get(name.lower())
+        if ent is None:
+            ent = seen[name.lower()] = {"name": name, "words": []}
+            out.append(ent)
+        ent["words"] += [w for w in words if w.lower() not in {x.lower() for x in ent["words"]}]
+    return out
+
+
+def split_words(text: str) -> list:
+    """'찾을 낱말' 칸 — 쉼표(, ，)·세미콜론으로 나눈다."""
+    import re
+    return [w.strip() for w in re.split(r"[,，;]", text or "") if w.strip()]
+
+
 def normalize(rules: dict | None) -> dict:
     """알 수 없는 값을 걸러 낸 규칙. 다른 키(사용자가 손으로 넣은 것)는 그대로 둔다."""
     from viewer.auto_tag import FORMAT_VOCAB
@@ -36,9 +69,11 @@ def normalize(rules: dict | None) -> dict:
         if k and v and k != v:
             alias[k] = v
     r["alias"] = alias
-    r["format_off"] = [f for f in FORMAT_VOCAB if f in set(r.get("format_off") or ())]
+    r["format_custom"] = custom_formats(r.get("format_custom"))
+    names = list(FORMAT_VOCAB) + [c["name"] for c in r["format_custom"] if c["name"] not in FORMAT_VOCAB]
+    r["format_off"] = [f for f in names if f in set(r.get("format_off") or ())]
     r["photo_off"] = [k for k in PHOTO_KINDS if k in set(r.get("photo_off") or ())]
-    for key in ("alias", "format_off", "photo_off"):
+    for key in ("alias", "format_custom", "format_off", "photo_off"):
         if not r[key]:
             r.pop(key)
     return r
@@ -65,21 +100,28 @@ def remapper(old: dict | None, new: dict | None):
     nal = {k.lower(): v for k, v in (new.get("alias") or {}).items()}
     off = {f.lower() for f in new.get("format_off") or ()}
     vocab = {f.lower() for f in FORMAT_VOCAB}
+    cnew = {c["name"].lower() for c in new.get("format_custom") or ()}
+    gone = {c["name"].lower() for c in old.get("format_custom") or ()} - cnew - vocab     # 뺀 분류(261112-11)
 
     def fn(tag: str):
         std = rev.get((tag or "").lower(), tag)
-        if std.lower() in vocab and std.lower() in off:
+        sl = std.lower()
+        if sl in gone or ((sl in vocab or sl in cnew) and sl in off):
             return None
-        return nal.get(std.lower(), std)
+        return nal.get(sl, std)
     return fn
 
 
 def diff(old: dict | None, new: dict | None) -> dict:
     """바뀐 것 — names(이름·끄기: 저장소만 옮기면 된다), formats_on(다시 켠 형식: 다시 판정), photo(사진 종류: 머리 다시 읽기)."""
     old, new = normalize(old), normalize(new)
+    oc = {c["name"]: c["words"] for c in old.get("format_custom") or ()}
+    nc = {c["name"]: c["words"] for c in new.get("format_custom") or ()}
+    added = {n for n, w in nc.items() if oc.get(n) != w}           # 더한 분류·낱말을 바꾼 분류 — 다시 판정(261112-11)
     return {
-        "names": old.get("alias") != new.get("alias") or old.get("format_off") != new.get("format_off"),
-        "formats_on": sorted(set(old.get("format_off") or ()) - set(new.get("format_off") or ())),
+        "names": (old.get("alias") != new.get("alias") or old.get("format_off") != new.get("format_off")
+                  or set(oc) != set(nc)),
+        "formats_on": sorted((set(old.get("format_off") or ()) - set(new.get("format_off") or ())) | added),
         "photo": old.get("photo_off") != new.get("photo_off"),
     }
 
@@ -217,7 +259,7 @@ class TagRulesJob(QObject):
         self._cancel = False
         self._changed = set()
         self.old = load_rules()
-        keep = {k: v for k, v in (self.old or {}).items() if k not in ("alias", "format_off", "photo_off")}
+        keep = {k: v for k, v in (self.old or {}).items() if k not in ("alias", "format_custom", "format_off", "photo_off")}
         self.new = normalize({**keep, **normalize(new_rules)})    # 사용자가 손으로 넣은 다른 키는 남긴다
         self.d = diff(self.old, self.new)
         self._job(True)
