@@ -19,6 +19,10 @@ from viewer import image_tune as it
 from viewer.i18n import tr
 
 
+PREVIEW_W = 560          # 처음 열 때 미리보기 폭(화면이 좁으면 줄인다)
+PREVIEW_MIN = 240        # 미리보기 최소 폭
+
+
 class ImageTuneWorker(QObject):
     """함수 하나를 배경에서 — done(토큰, 결과, 오류 글)."""
     done = pyqtSignal(int, object, str)
@@ -157,12 +161,14 @@ class ImageTuneDialog(QDialog):
         self._timer.setInterval(it.PREVIEW_DELAY_MS)
         self._timer.timeout.connect(self._run_preview)
         self._build()
-        self.resize(980, 640)
+        self._fit_size()
         self._show_path()
 
     # ── 화면 ────────────────────────────────────────
     def _build(self):
-        root = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
+        root = QHBoxLayout()
+        outer.addLayout(root, 1)
         left = QVBoxLayout()
         nav = QHBoxLayout()
         self.btn_prev, self.btn_next = QToolButton(), QToolButton()
@@ -178,7 +184,7 @@ class ImageTuneDialog(QDialog):
         self.lb_hint = QLabel()
         self.lb_hint.setWordWrap(True)
         left.addWidget(self.lb_hint)
-        root.addLayout(left, 3)
+        root.addLayout(left, 1)                  # 남는 폭은 미리보기에(오른쪽 칸은 제 폭 — 디자인 SOT §2.22)
 
         side = QWidget()
         sv = QVBoxLayout(side)
@@ -269,11 +275,8 @@ class ImageTuneDialog(QDialog):
         f.addRow(tr("가리기"), mw_)
         sv.addWidget(g)
 
-        btns = QHBoxLayout()
         self.btn_save = QPushButton(tr("새 파일로 저장"))
         self.btn_copy = QPushButton(tr("클립보드로 복사"))
-        btns.addWidget(self.btn_save); btns.addWidget(self.btn_copy); btns.addStretch(1)
-        sv.addLayout(btns)
         self.btn_save.clicked.connect(self._save)
         self.btn_copy.clicked.connect(self._copy)
 
@@ -292,13 +295,17 @@ class ImageTuneDialog(QDialog):
         self.lb_status = QLabel()
         self.lb_status.setWordWrap(True)
         sv.addWidget(self.lb_status)
-        close = QPushButton(tr("닫기"))
-        close.clicked.connect(self.reject)
-        cl = QHBoxLayout(); cl.addStretch(1); cl.addWidget(close)
-        sv.addLayout(cl)
+        self.btn_close = QPushButton(tr("닫기"))
+        self.btn_close.clicked.connect(self.reject)
         sc = QScrollArea(); sc.setWidgetResizable(True); sc.setWidget(side); sc.setFrameShape(QScrollArea.Shape.NoFrame)
-        sc.setMinimumWidth(420)
-        root.addWidget(sc, 2)
+        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)   # 가로 스크롤 금지 — 칸 폭을 내용에 맞춘다(261112-15 덧붙임)
+        root.addWidget(sc, 0)
+        self._side, self._sc = side, sc
+        # 아래 단추 줄은 스크롤 칸 **밖** — 창이 낮아 오른쪽 칸이 세로로 넘쳐도 [저장]·[복사]·[닫기] 는 늘 보인다(디자인 SOT §2.22)
+        bar = QHBoxLayout()
+        bar.addWidget(self.btn_save); bar.addWidget(self.btn_copy); bar.addStretch(1); bar.addWidget(self.btn_close)
+        outer.addLayout(bar)
+        self._bar = bar
 
         for w_ in (self.cb_auto, self.cb_trim, self.cb_scan, self.cb_level):
             w_.toggled.connect(self._changed)
@@ -314,6 +321,35 @@ class ImageTuneDialog(QDialog):
         self.btn_mask_clear.clicked.connect(self._mask_clear)
         for b, m in ((self.btn_bg_pick, "bg"), (self.btn_sw_pick, "swap"), (self.btn_mask, "mask")):
             b.toggled.connect(lambda on, mm=m: self._arm(mm, on))
+
+    def _fit_size(self):
+        """오른쪽 칸은 **제 폭(sizeHint) 그대로** — 가로 스크롤 없이 [닫기]까지 보이게. 창은 미리보기 `PREVIEW_W` 를 더한 크기,
+        화면(사용 가능 영역)보다 크면 **미리보기부터** 줄인다(최소 `PREVIEW_MIN`). 높이는 오른쪽 칸 높이(넘치면 세로 스크롤만).
+        디자인 SOT §2.22(261112-15 덧붙임 — 100% 배율에서 오른쪽 칸이 잘려 가로 막대가 생기고 [닫기]가 반쯤 가려졌다)."""
+        from PyQt6.QtWidgets import QApplication
+        side, sc = self._side, self._sc
+        side.adjustSize()
+        hint = side.sizeHint()
+        bar = sc.verticalScrollBar().sizeHint().width()
+        side_w = hint.width() + bar + 2 * sc.frameWidth() + 2
+        sc.setMinimumWidth(side_w)
+        lay = self.layout()
+        m = lay.contentsMargins()
+        extra_w = m.left() + m.right() + self._root_spacing()
+        scr = self.screen() or QApplication.primaryScreen()
+        avail = scr.availableGeometry() if scr is not None else None
+        max_w = int(avail.width() * 0.95) if avail is not None else 10 ** 6
+        max_h = int(avail.height() * 0.9) if avail is not None else 10 ** 6
+        pw = max(PREVIEW_MIN, min(PREVIEW_W, max_w - side_w - extra_w))
+        self.preview.setMinimumSize(min(pw, 360), 240)
+        w = min(max_w, side_w + extra_w + pw)
+        bar_h = self._bar.sizeHint().height() + lay.spacing()
+        h = min(max_h, max(hint.height() + bar_h + m.top() + m.bottom(), 560))
+        self.resize(w, h)
+
+    def _root_spacing(self) -> int:
+        lay = self.layout().itemAt(0).layout()
+        return max(0, lay.spacing()) if lay is not None else 6
 
     # ── 설정 ────────────────────────────────────────
     def params(self) -> dict:
