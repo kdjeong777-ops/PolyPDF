@@ -13332,12 +13332,12 @@ msgstr "Category name"
 #: viewer/widgets/tag_rules_panel.py
 #, python-brace-format
 msgid "붙일 이름 — 비우면 '{f}'"
-msgstr "Name to apply — leave empty for '{f}'"
+msgstr "Name to use — leave empty for '{f}'"
 
 #: viewer/widgets/tag_rules_panel.py
 #, python-brace-format
 msgid "'{f}' 붙이기"
-msgstr "Apply '{f}'"
+msgstr "Tag files as '{f}'"
 
 #: viewer/widgets/text_panel.py
 msgid "고른 줄의 스타일 / 아래 값이 적용될 스타일"
