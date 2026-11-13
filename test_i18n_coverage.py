@@ -64,7 +64,8 @@ ALLOW = {
     # 장치 이름 짐작(실제 장치 이름과 맞춰 본다)
     "viewer/recorder.py": {"마이크", "믹스", "스테레오 믹스"},
     # 내부 키(값) — 표시할 때만 tr(값)
-    "viewer/widgets/bookmark_tree.py": {"주제", "형식"},
+    "viewer/widgets/bookmark_tree.py": {"주제", "형식", "속성"},          # 261113-10: 축 이름(태그 데이터 키 — 머리글만 tr)
+    "viewer/widgets/tag_apply_dialog.py": {"한글", "영어", "스캔문서", "텍스트문서"},   # 261114-2: 자동 해시태그 속성 이름(태그 데이터, 다국어 SOT §5)
     "viewer/vocab_marks.py": {"초급", "중급", "고급", "전문용어"},   # 261107-33: 밑줄 색 표의 키 = study.db 단어 수준 값(데이터 키, 화면 문구 아님)
     "viewer/widgets/main_view.py": {"본문", "쪽 맞춤", "2장 맞춤", "폭 맞춤", "수동 맞춤", "수동",
                                     "선 1", "선 2", "선 3", "선 4", "선 5"},

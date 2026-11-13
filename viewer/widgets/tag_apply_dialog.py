@@ -14,7 +14,7 @@ from PyQt6.QtGui import QIcon, QImage, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDateEdit, QDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView,
                              QListWidget, QListWidgetItem, QPushButton, QSplitter, QVBoxLayout, QWidget)
 
-from viewer.i18n import tr
+from viewer.i18n import tr, trp
 
 THUMB = 128
 MARK_ALL, MARK_SOME, MARK_NONE = "☑", "◐", "☐"
@@ -386,7 +386,6 @@ class TagApplyDialog(QDialog):
         self.cmb_tagf = QComboBox()
         self.cmb_tagf.setMinimumWidth(140)
         self.cmb_has = QComboBox()
-        from viewer.i18n import trp
         self.cmb_has.addItem(trp("태그 거르기", "있음"))     # 문맥 — '있음/없음' 의 다른 쓰임(Yes/None)과 번역이 다르다
         self.cmb_has.addItem(trp("태그 거르기", "없음"))
         pb.addWidget(self.cmb_tagf)
