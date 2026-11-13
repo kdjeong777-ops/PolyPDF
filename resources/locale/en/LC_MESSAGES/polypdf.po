@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-14 06:49+0900\n"
+"POT-Creation-Date: 2026-11-14 07:01+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -8147,6 +8147,10 @@ msgstr "In edit mode, choosing two or more files merges the chosen files."
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피 창에 보이는 파일들의 책갈피를 모두 펼칩니다. 스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."
 msgstr "Expand the bookmarks of all files visible in the bookmarks panel. Files that appear when you scroll are expanded too (until 'Collapse All')."
+
+#: viewer/widgets/bookmark_tree.py
+msgid "모든 파일의 책갈피를 접습니다. 위아래 키로 파일을 옮겨 다녀도 펼치지 않고 표지만 보여 줍니다 — Enter·마우스 누름·→ 키로 그 파일을 펼칩니다('모두 펼치기' 까지)."
+msgstr "Collapses the bookmarks of all files. Moving between files with the Up/Down keys shows just the cover without expanding — press Enter, click, or → to expand that file (until 'Expand All Bookmarks')."
 
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피 수정"

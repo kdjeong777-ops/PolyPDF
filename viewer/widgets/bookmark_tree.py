@@ -504,6 +504,9 @@ class BookmarkTree(QWidget):
         # 261008-6(마스터 §4.7.3, 사용자 지시): '모두 펼치기' 상태 — 켜져 있는 동안 **보이는 파일**의
         #   책갈피를 펼친다. 목록 전체를 한꺼번에 읽으면 수 초~수십 초 선다(실측 157개 11.8초).
         self._expand_all_mode = False
+        # 261114-3(§4.7.3, 사용자 지시): '모두 접기' 상태 — ↑↓ 로 접힌 파일 줄에 와도 펼치지 않는다(표지만 빠르게).
+        #   Enter·마우스 누름·→ 때만 펼친다. '모두 펼치기' 를 고르면 꺼진다.
+        self._collapse_all_mode = False
         self._expand_timer = QTimer(self)
         self._expand_timer.setSingleShot(True)
         self._expand_timer.setInterval(self.EXPAND_INTERVAL_MS)
@@ -2682,6 +2685,8 @@ class BookmarkTree(QWidget):
         if self._is_zip_path(path) and not self._photo_on():
             item.setExpanded(not item.isExpanded())      # PDF 모드 zip 줄은 펼치기/접기(본문에 zip 을 열지 않는다)
             return
+        if not self._photo_on() and self._keep_collapsed(item):
+            item.setExpanded(True)                       # 261114-3(§4.7.3): 모두 접기 상태 — Enter·마우스 누름 때만 펼친다(→ 는 Qt 기본)
         # 260606-4: 편집 모드에서도 선택 시 해당 책갈피 위치로 메인 이동
         if self._edit_mode:
             if path:
@@ -3356,7 +3361,11 @@ class BookmarkTree(QWidget):
                                            "스크롤해서 새로 보이는 파일도 펼칩니다('모두 접기' 까지)."))
             act_exp_all.setCheckable(True)           # 261008-6: '모두 펼치기' 는 상태다 — 켜져 있으면 체크
             act_exp_all.setChecked(self._expand_all_mode)
-            self._act(menu, tr("책갈피 모두 접기"), lambda: self._op_expand_all(False))
+            act_col_all = self._act(menu, tr("책갈피 모두 접기"), lambda: self._op_expand_all(False),
+                                    tip=tr("모든 파일의 책갈피를 접습니다. 위아래 키로 파일을 옮겨 다녀도 펼치지 않고 표지만 보여 줍니다 — "
+                                           "Enter·마우스 누름·→ 키로 그 파일을 펼칩니다('모두 펼치기' 까지)."))
+            act_col_all.setCheckable(True)           # 261114-3: '모두 접기' 도 상태다 — 켜져 있으면 체크
+            act_col_all.setChecked(self._collapse_all_mode)
         if self._edit_mode:
             _n_bm = len([it for it in self.tree.selectedItems()
                          if it.data(0, self.DATA_PAGE) is not None and not it.data(0, self.DATA_IS_TOC_PLACEHOLDER)])
@@ -3631,6 +3640,7 @@ class BookmarkTree(QWidget):
         바꿨다: 2단 이하만 접으니 1~2단짜리 파일이 많은 목록은 접어도 거의 그대로여서 '작동 안 한다' 고 보였다.
         실측 62줄 → 56줄). 폴더 줄(트리 보기)은 책갈피가 아니라 건드리지 않는다."""
         self._expand_all_mode = bool(on)
+        self._collapse_all_mode = not on                 # 261114-3: 접기 상태 — ↑↓ 로 와도 펼치지 않는다
         if on:
             self._apply_expand_mode()
             return
@@ -3709,6 +3719,14 @@ class BookmarkTree(QWidget):
 
     def is_expand_all_mode(self) -> bool:
         return bool(self._expand_all_mode)
+
+    def is_collapse_all_mode(self) -> bool:
+        return bool(self.__dict__.get("_collapse_all_mode"))
+
+    def _keep_collapsed(self, node) -> bool:
+        """261114-3(§4.7.3): '모두 접기' 상태에서 접힌 파일 줄인가 — 본문만 따라가고 줄은 접힌 채 둔다."""
+        return (self.is_collapse_all_mode() and node is not None and not node.isExpanded()
+                and self._is_file_node(node))
 
     # ---- 260908-1(사용자 요청): 선택 책갈피를 페이지순으로 정렬 ----------
     def _op_sort_by_page(self):
@@ -4765,6 +4783,15 @@ class BookmarkTree(QWidget):
                 top = it
                 break
         if top is None:
+            return
+        if self._keep_collapsed(top):
+            # 261114-3(§4.7.3, 사용자 지시 '빠르게 위아래 파일을 이동하며 표지만'): 모두 접기 상태의 접힌 파일 줄은
+            #   책갈피를 읽지도 펼치지도 않고 **파일 줄**을 고른다 — 안쪽 책갈피를 고르면 scrollToItem 이 부모를 펼친다.
+            if len(self.tree.selectedItems()) <= 1 and self.tree.currentItem() is not top:
+                self.tree.blockSignals(True)
+                self.tree.setCurrentItem(top)
+                self.tree.blockSignals(False)
+            self.tree.scrollToItem(top)
             return
         if not top.data(0, self.DATA_TOC_LOADED):
             self._on_item_expanded(top, sync=True)   # 261108-17: 아래에서 바로 걷는다 — 그 자리에서(대개 열린 문서 → toc_provider)
