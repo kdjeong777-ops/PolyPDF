@@ -40,11 +40,12 @@ try:
     chk(callable(fn), "0 main._set_app_user_model_id 가 있다")
     if callable(fn):
         got = fn()
-        chk(got == "LocalTools.PolyPDF" and current_id() == "LocalTools.PolyPDF",
-            "A 작업 표시줄 앱 ID = LocalTools.PolyPDF", str((got, current_id())))
+        from viewer import branding as _b0                 # 261114-8: 이사 스위치가 정한다(꺼짐 LocalTools.PolyPDF)
+        chk(got == _b0.AUMID and current_id() == _b0.AUMID,
+            "A 작업 표시줄 앱 ID = branding.AUMID", str((got, current_id())))
         os.environ["POLYPDF_PROFILE"] = "test"
         got = fn()
-        chk(got == "LocalTools.PolyPDF.test" and current_id() == "LocalTools.PolyPDF.test",
+        chk(got == _b0.AUMID + ".test" and current_id() == _b0.AUMID + ".test",
             "B 시험 프로필은 다른 ID", str((got, current_id())))
         os.environ.pop("POLYPDF_PROFILE", None)
     iss = open(os.path.join(HERE, "installer", "PolyPDF.iss"), encoding="utf-8").read()
@@ -53,7 +54,8 @@ try:
     # 261114-8: 설치 프로그램은 `LocalTools.{#MyAppId}` — MyAppId 는 이사 스위치가 꺼져 있으면 PolyPDF(앱의 branding.AUMID 와 같다)
     from viewer import branding as _br
     want = 'AppUserModelID: "LocalTools.{#MyAppId}"'
-    my_id = re.search(r'^\s*#define MyAppId "([^"]+)"', iss[iss.index("#else"):], re.M).group(1)
+    blk = iss[iss.index("#ifdef MOVED"):iss.index("#else")] if _br.MOVED else iss[iss.index("#else"):]   # 빌드가 /DMOVED 를 넘기면 위 블록
+    my_id = re.search(r'^\s*#define MyAppId "([^"]+)"', blk, re.M).group(1)
     chk(app_lines and all(want in ln for ln in app_lines) and "LocalTools." + my_id == getattr(main, "APP_USER_MODEL_ID", "?") == _br.AUMID,
         "C 앱 바로가기(시작 메뉴·바탕 화면)에 같은 ID", str(app_lines))
     src = inspect.getsource(main.main)

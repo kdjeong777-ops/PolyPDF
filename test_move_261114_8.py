@@ -41,8 +41,13 @@ try:
     ids = getattr(b, "ids", None)
     chk(callable(ids), "0 branding.ids 가 있다")
     # ── A ──
-    chk(getattr(b, "MOVED", None) is False, "A 스위치는 꺼져 있다(beta.13 은 이사 없이)")
+    # 스위치는 bool. 꺼짐(beta.13)이면 모듈 값 = ids(False), 켜짐(이사 판)이면 = ids(True) — 켜는 커밋이 한 줄이게 두 상태 모두 맞는 검사
+    chk(isinstance(getattr(b, "MOVED", None), bool), "A 스위치 MOVED 는 참/거짓 하나")
     if callable(ids):
+        cur = ids(b.MOVED)
+        chk((b.APP_ID, b.EXE_STEM, b.AUMID, b.SETUP_PREFIX, b.UPDATE_REPO, b.PORTABLE_MARKER, b.PHOTO_PROG_ID)
+            == (cur["APP_ID"], cur["EXE_STEM"], cur["AUMID"], cur["SETUP_PREFIX"], cur["UPDATE_REPO"], cur["PORTABLE_MARKER"], cur["PHOTO_PROG_ID"]),
+            "A 모듈 값 = ids(MOVED)")
         off = ids(False)
         chk(off == {"APP_ID": "PolyPDF", "EXE_STEM": "PolyPDF", "AUMID": "LocalTools.PolyPDF", "SETUP_PREFIX": "PolyPDF-Setup-v",
                     "ASSET_PREFIX": "PolyPDF", "UPDATE_REPO": "kdjeong777-ops/PolyPDF", "PORTABLE_MARKER": "PolyPDF.portable",
@@ -59,6 +64,8 @@ try:
     # ── K ── 스위치가 꺼져 있으면 이사 길이 한 번도 돌지 않는다(지휘 조건 ①)
     calls = []
     _orig = (main.move_profile, main.copy_reg_tree) if hasattr(main, "move_profile") else None
+    _was = main._branding.MOVED
+    main._branding.MOVED = False                           # 이사 판(켜짐)에서도 '꺼짐이면 돌지 않는다' 를 본다
     if _orig:
         main.move_profile = lambda *a, **k: calls.append(("move", a)) or "moved"
         main.copy_reg_tree = lambda *a, **k: calls.append(("reg", a)) or 0
@@ -78,6 +85,7 @@ try:
             else:
                 sys.frozen = _frozen
         chk(not calls, "K 스위치 꺼짐 — 설정 폴더 이사·레지스트리 복사·ProgID 고치기가 한 번도 돌지 않는다", str(calls))
+    main._branding.MOVED = _was
     # ── L ── 정보 창 소스코드 주소·구성요소 저장소
     ab = importlib.import_module("viewer.about")
     chk(ab.SOURCE_URL == "https://github.com/" + b.UPDATE_REPO, "L 정보 창 소스코드 주소 = 지금 저장소(이사 판부터 새 저장소)", ab.SOURCE_URL)

@@ -49,7 +49,8 @@ try:
         chk(False, "V1 viewer/branding.py 가 있다", repr(ex))
     if branding:
         chk(getattr(branding, "APP_NAME", None) == "PolyPinax", "V1 보이는 이름 APP_NAME = PolyPinax", str(getattr(branding, "APP_NAME", None)))
-        chk(getattr(branding, "APP_ID", None) == "PolyPDF", "V1 내부 ID APP_ID = PolyPDF", str(getattr(branding, "APP_ID", None)))
+        chk(getattr(branding, "APP_ID", None) == branding.ids(branding.MOVED)["APP_ID"] and branding.ids(False)["APP_ID"] == "PolyPDF",
+            "V1 내부 ID APP_ID = 이사 스위치 값(꺼짐 PolyPDF)", str(getattr(branding, "APP_ID", None)))
 
     # ── V2 ── 화면 문구
     pot = read("resources/locale/polypdf.pot")
@@ -125,10 +126,11 @@ try:
     chk(iss.count('AppUserModelID: "LocalTools.{#MyAppId}"') == 2, "F 바로가기 작업 표시줄 앱 ID(앱과 같은 MyAppId)")
     chk("{userappdata}\\LocalTools\\PolyPDF\\settings.json" in iss, "F 설치 프로그램이 읽는 설정 파일 자리")
     ss = importlib.import_module("viewer.settings_store")
-    chk(ss.PORTABLE_MARKER == "PolyPDF.portable", "F 휴대용 표식 PolyPDF.portable")
-    chk(str(ss.local_data_dir()).endswith("PolyPDF") or ss.PORTABLE, "F 도구 자료 폴더 %LOCALAPPDATA%\\PolyPDF", str(ss.local_data_dir()))
+    chk(ss.PORTABLE_MARKER == branding.PORTABLE_MARKER and "PolyPDF.portable" in branding.OLD_PORTABLE_MARKERS, "F 휴대용 표식(옛 PolyPDF.portable 도 안다)")
+    chk(str(ss.local_data_dir()).endswith(branding.APP_ID) or ss.PORTABLE, "F 도구 자료 폴더 %LOCALAPPDATA%\\<APP_ID>", str(ss.local_data_dir()))
     pdfd = importlib.import_module("viewer.pdf_default")
-    chk((pdfd.APP, pdfd.PROG_ID, pdfd.CAPS) == ("PolyPDF", "PolyPDF.pdf", r"Software\PolyPDF\Capabilities"), "F 기본 PDF 앱 등록 이름")
+    chk((pdfd.APP, pdfd.PROG_ID, pdfd.CAPS) == (branding.APP_ID, "PolyPDF.pdf", r"Software\%s\Capabilities" % branding.APP_ID),
+        "F 기본 PDF 앱 등록 이름(ProgID 는 PDF 모드 이름 PolyPDF.pdf 그대로)")
     phd = importlib.import_module("viewer.photo_default")
     chk((phd.APP, phd.PROG_ID, phd.CAPS) == (branding.PHOTO_APP, branding.PHOTO_PROG_ID, r"Software\%s\PhotoCapabilities" % branding.APP_ID)
         and branding.ids(False)["PHOTO_PROG_ID"] == "PolyPDF.photo", "F 기본 사진 앱 등록 이름 — branding(이사 전 PolyPDF.photo)")

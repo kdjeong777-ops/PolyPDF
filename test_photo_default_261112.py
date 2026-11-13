@@ -139,17 +139,17 @@ try:
     # A
     if phd is not None:
         r = FakeReg()
-        r.set("HKLM", pdd.REG_APPS, "PolyPDF", pdd.CAPS)                                      # 설치판 PDF 등록
+        r.set("HKLM", pdd.REG_APPS, pdd.APP, pdd.CAPS)                                      # 설치판 PDF 등록
         r.set("HKLM", pdd.PROG_KEY + r"\shell\open\command", "", '"%s" "%%1"' % EXE)
         r.writes.clear()
         plan = phd.prepare(EXE, True, r)
-        chk(plan["uris"][:1] == [phd.URI_USER] and phd.URI_USER.endswith("registeredAppUser=PolyPDFPhoto"),
+        chk(plan["uris"][:1] == [phd.URI_USER] and phd.URI_USER.endswith("registeredAppUser=" + phd.APP),
             "A registeredAppUser=PolyPDFPhoto 화면", str(plan))
         chk(photo_ok(r, EXE), "A HKCU 에 ProgID·확장자 전부·PhotoCapabilities·RegisteredApplications(설치판에서도)")
         chk(set(PHOTO_EXTS) >= {".jpg", ".jpeg", ".png", ".heic", ".heif"} and set(phd.EXTS) == set(PHOTO_EXTS),
             "A 후보 확장자 = PHOTO_EXTS 전부(HEIC 포함)", str(phd.EXTS))
         bad = [w for w in r.writes if w[0] != "HKCU" or "polypdf.pdf" in w[1].lower()
-               or w[1].lower() == pdd.CAPS.lower() or (w[1].lower() == pdd.REG_APPS.lower() and w[2] == "PolyPDF")]
+               or w[1].lower() == pdd.CAPS.lower() or (w[1].lower() == pdd.REG_APPS.lower() and w[2] == pdd.APP)]
         chk(not bad, "A PDF 이름·HKLM 에는 쓰지 않는다", str(bad))
 
         # B
@@ -167,7 +167,7 @@ try:
     if fn is not None:
         with Frozen(frozen=False):
             fn()
-        chk(not fake["reg"].writes and not opened and any("PolyPDF.exe" in t for t in infos),
+        chk(not fake["reg"].writes and not opened and any(__import__("viewer.branding", fromlist=["x"]).EXE_NAME in t for t in infos),
             "C 개발 실행은 쓰지도 열지도 않고 안내만", "%s %s %s" % (fake["reg"].writes, opened, infos))
 
     # D

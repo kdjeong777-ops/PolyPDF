@@ -116,7 +116,7 @@ def run(reg, opener_ok=lambda u: True, exe=EXE, frozen=True):
 if safe and pdd is not None:
     # A
     r = FakeReg()
-    r.set("HKLM", pdd.REG_APPS, "PolyPDF", pdd.CAPS)
+    r.set("HKLM", pdd.REG_APPS, pdd.APP, pdd.CAPS)
     r.set("HKLM", pdd.PROG_KEY + r"\shell\open\command", "", '"%s" "%%1"' % EXE)
     r.set("HKCU", pdd.PROG_KEY + r"\shell\open\command", "", '"C:\\old\\PolyPDF.exe" "%1"')   # 예전 앱이 쓴 키
     r.set("HKCU", pdd.OPEN_WITH, pdd.PROG_ID, None, none_type=True)
@@ -130,11 +130,11 @@ if safe and pdd is not None:
         and not r.has_key("HKCU", r"Software\Classes\Applications\PolyPDF.exe"), "A 옛 HKCU PolyPDF 키를 지운다")
     chk(r.get("HKCU", pdd.OPEN_WITH, "Acrobat.Document.DC") == b"" and r.has_key("HKCU", pdd.OPEN_WITH),
         "A 다른 앱의 값·.pdf 키는 그대로")
-    chk(r.get("HKLM", pdd.REG_APPS, "PolyPDF") == pdd.CAPS, "A HKLM 은 그대로")
+    chk(r.get("HKLM", pdd.REG_APPS, pdd.APP) == pdd.CAPS, "A HKLM 은 그대로")
 
     # B
     r = FakeReg()
-    r.set("HKLM", pdd.REG_APPS, "PolyPDF", pdd.CAPS)
+    r.set("HKLM", pdd.REG_APPS, pdd.APP, pdd.CAPS)
     r.set("HKLM", pdd.PROG_KEY + r"\shell\open\command", "", '"%s" "%%1"' % EXE)
     op = run(r, exe=EXE2)
     chk(op[:1] == [pdd.URI_USER] and r.get("HKCU", pdd.PROG_KEY + r"\shell\open\command", "") == '"%s" "%%1"' % EXE2,
@@ -147,7 +147,7 @@ if safe and pdd is not None:
     chk(r.get("HKCU", pdd.PROG_KEY + r"\shell\open\command", "") == '"%s" "%%1"' % EXE2
         and r.get("HKCU", pdd.OPEN_WITH, pdd.PROG_ID) == b""
         and r.get("HKCU", pdd.CAPS + r"\FileAssociations", ".pdf") == pdd.PROG_ID
-        and r.get("HKCU", pdd.REG_APPS, "PolyPDF") == pdd.CAPS, "C HKCU 에 설치 프로그램과 같은 꼴")
+        and r.get("HKCU", pdd.REG_APPS, pdd.APP) == pdd.CAPS, "C HKCU 에 설치 프로그램과 같은 꼴")
     chk(not [w for w in r.writes if w[0] == "HKLM"], "C HKLM 에는 쓰지 않는다")
 
     # D
