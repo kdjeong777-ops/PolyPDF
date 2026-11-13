@@ -124,7 +124,9 @@ try:
     chk(mv._draw_bar.isEnabled(), "D 다른 사진에서도 꾸미기 줄이 켜져 있다")
     mw._on_bookmark_activated(a_path, 0); pump(timeout=0.5)
     chk(tuple(map(round, mv._doc.doc[0].rect[2:])) == (400, 800), "C 다른 사진을 갔다 와도 회전 그대로")
-    mw._photo_rotate(absolute=0); pump(timeout=0.5)
+    mw._photo_rotate(absolute=0)
+    # 261113-7(검사 작성 SOT §14.7.6): 고정 0.5초 대신 조건을 기다린다 — 병렬 전체 검사에서 0.5초 안에 끝나지 않아 흔들렸다
+    pump(lambda: "photo_rot" not in sidecar(tmp) and tuple(map(round, mv._doc.doc[0].rect[2:])) == (800, 400), timeout=10)
     chk("photo_rot" not in sidecar(tmp) and tuple(map(round, mv._doc.doc[0].rect[2:])) == (800, 400), "C 원래 방향이면 키가 지워지고 쪽도 원래대로")
     chk(len(mv._page_strokes) >= 1 and mv._draw_bar.isEnabled(), "D 원래 방향이면 회전 0 판 그대로 보인다")
 

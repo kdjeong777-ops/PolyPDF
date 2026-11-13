@@ -31,12 +31,14 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -427,7 +429,7 @@ def git(*args) -> str:
 
 
 PENDING_DAYS, PENDING_COUNT = 14, 5     # 묶음 릴리스 제안 기준(릴리스 SOT §2.2)
-CHECK_TIMEOUT = 600                     # 검사 하나의 상한(초)
+CHECK_TIMEOUT = 300                     # 검사 하나의 상한(초) — 261113-7: 600 → 300(정상 검사 최장 144초의 두 배 남짓, 병렬로 느려질 몫)
 
 
 NATIVE_RC = {3221225477: "0xC0000005 접근 위반", 3221226505: "0xC0000409 스택 버퍼", 3221225725: "0xC00000FD 스택 넘침",
@@ -472,7 +474,99 @@ def crash_lines(runs: list, events: list) -> list:
     return L
 
 
-def checks(ui: bool, only=None) -> int:
+# 261113-7(릴리스 SOT §4.1, 사용자 결정): 전체 검사 병렬 — 보통 검사는 CHECK_JOBS 개씩 동시에, 아래에 걸리는 검사는 그 뒤 혼자 차례로.
+CHECK_JOBS = 4
+SOLO_MARKS = re.compile(
+    r'QT_QPA_PLATFORM"\]\s*=\s*"windows"'           # 실제 Windows 클립보드·창(검사 작성 SOT §14.7 예외)
+    r"|DispatchEx|win32com"                          # Word·한글·PowerPoint COM(프로그램 하나를 같이 쓴다)
+    r"|하트비트|heartbeat|최장 공백|최장 정지|STALL_LIMIT|max_stall|< 0\.5초|< 1초"   # 시간 기준 판정 — 다른 검사의 CPU 가 흔든다
+    r"|vprinter")                                    # 가상 프린터·스풀러(시스템 전역)
+SOLO_TESTS = {            # 표시 글자로 못 잡는데 병렬에서 흔들린 검사 — 이름을 더한다(까닭은 검사 작성 SOT §14.7.6 표)
+    "test_i18n_core.py",  # 저장소의 resources/locale/en/polypdf.mo 를 다시 만든다(compile) — 그 사이 읽는 test_i18n_external 이 흔들렸다
+    "test_photo_color_cache_261104.py",   # 시간 비율 판정('0.3초 미만 더') — 표시 글자에 안 걸려 병렬에서 1.47 vs 1.00 으로 흔들렸다
+}
+
+
+def is_solo(path) -> bool:
+    """혼자 돌릴 검사인가 — 이름이 SOLO_TESTS 에 있거나 본문이 SOLO_MARKS 에 걸린다."""
+    p = Path(path)
+    if p.name in SOLO_TESTS:
+        return True
+    try:
+        return bool(SOLO_MARKS.search(p.read_text(encoding="utf-8", errors="replace")))
+    except OSError:
+        return True
+
+
+def _kill_on_close_job(proc):
+    """261113-7(검사 작성 SOT §14.7.6): 검사 프로세스를 '닫으면 모두 끝내는' 작업 개체에 넣는다 — 검사가 끝난 뒤
+    그 자손(검사가 띄운 자식)이 고아로 남지 않게. 검사 H 의 읽기 자식이 클립보드를 연 채 남아 다음 실행의 클립보드 검사를 모두 막았다.
+    돌려준 핸들을 `CloseHandle` 하면 남은 자손이 끝난다. 실패하면 None(종전과 같다)."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        import ctypes.wintypes as wt
+        k = ctypes.windll.kernel32
+
+        class _Basic(ctypes.Structure):
+            _fields_ = [("a", ctypes.c_int64), ("b", ctypes.c_int64), ("LimitFlags", wt.DWORD), ("c", ctypes.c_size_t),
+                        ("d", ctypes.c_size_t), ("e", wt.DWORD), ("f", ctypes.c_size_t), ("g", wt.DWORD), ("h", wt.DWORD)]
+
+        class _Ext(ctypes.Structure):
+            _fields_ = [("Basic", _Basic), ("Io", ctypes.c_uint64 * 6), ("i", ctypes.c_size_t), ("j", ctypes.c_size_t),
+                        ("l", ctypes.c_size_t), ("m", ctypes.c_size_t)]
+        k.CreateJobObjectW.restype = wt.HANDLE
+        k.CreateJobObjectW.argtypes = [ctypes.c_void_p, wt.LPCWSTR]
+        k.SetInformationJobObject.argtypes = [wt.HANDLE, ctypes.c_int, ctypes.c_void_p, wt.DWORD]
+        k.AssignProcessToJobObject.argtypes = [wt.HANDLE, wt.HANDLE]
+        job = k.CreateJobObjectW(None, None)
+        if not job:
+            return None
+        info = _Ext()
+        info.Basic.LimitFlags = 0x2000                                   # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not k.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)) or \
+                not k.AssignProcessToJobObject(job, wt.HANDLE(int(proc._handle))):
+            k.CloseHandle(job)
+            return None
+        return job
+    except Exception:
+        return None
+
+
+def _close_job(job):
+    if job:
+        try:
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(job)
+        except Exception:
+            pass
+
+
+def last_durations() -> dict:
+    """가장 최근 전체 검사(검사 100개 넘게)의 durations.json — 병렬 차례(긴 것부터)에 쓴다. 없으면 {}."""
+    for d in sorted(REVIEW.glob("checks_*/durations.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            v = json.loads(d.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if len(v) > 100:
+            return v
+    return {}
+
+
+def drop_check_dirs(stem: str):
+    """검사가 쓴 Qt 시험 모드 설정 폴더(`%APPDATA%\\qttest\\…\\polypdf_chk_<검사>_<pid>`, check_boot.py)를 지운다."""
+    for root in (os.environ.get("APPDATA"), os.environ.get("LOCALAPPDATA")):
+        if not root:
+            continue
+        q = Path(root) / "qttest"
+        for pat in ("polypdf_chk_%s_*" % stem, "*/polypdf_chk_%s_*" % stem):
+            for d in q.glob(pat):
+                shutil.rmtree(d, ignore_errors=True)
+
+
+def checks(ui: bool, only=None, jobs=None) -> int:
     """묶음 릴리스의 전체 검사(릴리스 SOT §4.1) — CI 는 일부만 돌리므로 `test_*.py` **전부**를 개발 venv 로,
     판정은 **종료 코드**(출력 문자열 아님 — 'ALL PASS' 대신 '전부 통과' 로 끝나는 검사가 있다). `--ui` 면 화면 점검 ko·en 도."""
     py = ROOT / ".venv" / "Scripts" / "python.exe"
@@ -493,41 +587,77 @@ def checks(ui: bool, only=None) -> int:
     fails, flaky, t0, durs = [], [], time.perf_counter(), {}
     runs, since = [], time.strftime("%Y-%m-%d %H:%M:%S")
     env = dict(os.environ, PYTHONUNBUFFERED="1")    # 걸렸을 때 로그에 어디까지 갔는지 남게
-    for i, t in enumerate(tests, 1):
-        s = time.perf_counter()
-        s_wall = time.strftime("%Y-%m-%d %H:%M:%S")
-        rcs = []
-        for k in range(2):                            # 실패하면 한 번 더 — 다시 통과하면 '불안정' 으로 따로 적는다
-            log = out / "logs" / (t.stem + ("" if k == 0 else ".retry") + ".log")
-            # 261014-3(마스터 §14.8.1): 검사마다 제 임시 폴더(TEMP·TMP)를 주고 끝나면 통째로 지운다 — 검사가
-            #   `os._exit` 로 정리 전에 끝나도 남지 않는다(사용자 임시 폴더에 18,869개·16.5GB 가 쌓였었다).
-            ttmp = out / "tmp" / ("t%03d" % i)
-            ttmp.mkdir(parents=True, exist_ok=True)
-            # TMPDIR 가 먼저다 — 파이썬 `tempfile` 은 TMPDIR → TEMP → TMP 차례로 본다(이 기계는 TMPDIR 이 시스템에 잡혀 있다)
-            tenv = dict(env, TMPDIR=str(ttmp), TEMP=str(ttmp), TMP=str(ttmp))
-            with open(log, "w", encoding="utf-8", errors="replace") as f:
-                try:
-                    rc = subprocess.run([str(py), "-I", t.name], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT,
-                                        timeout=CHECK_TIMEOUT, env=tenv).returncode
-                except subprocess.TimeoutExpired:
-                    rc = "시간 초과"
-            shutil.rmtree(ttmp, ignore_errors=True)
-            rcs.append(rc)
-            if rc == 0 or rc == "시간 초과":          # 261012-13: 멈춘 검사(모달 등)는 다시 돌려도 또 멈춘다 — 10분을 두 번 쓰지 않는다
-                break
+    jobs = max(1, int(jobs or CHECK_JOBS))
+    overlap.keep_awake()                              # 261113-7(릴리스 SOT §4.3 의 4): 검사 동안 절전 막기 — 절전에 걸친 검사가 944초로 적혔다
+    watch = overlap.Watch().start()                   # 261113-7: 다른 무거운 작업이 겹쳤나(전체 시간이 25 → 48분으로 흔들림) — 적기만, 판정은 종료 코드
+    solo = [t for t in tests if is_solo(t)] if jobs > 1 else list(tests)
+    par = [t for t in tests if t not in solo]
+    last = last_durations()                           # 261113-7: 긴 검사부터 — 끝에 긴 것이 혼자 남아 꼬리를 늘이지 않게
+    par.sort(key=lambda t: -last.get(t.name, 30.0))
+    idx = {t: i for i, t in enumerate(tests, 1)}
+    lock = threading.Lock()
+    done = {"n": 0}
+
+    def run_one(t, retry=False):
+        """검사 하나 — (rc, 초, 시작, 끝). 261113-7: 시작 스크립트(`check_boot.py`)로 감싼다 — 판정 뒤 종료 멈춤 막기·검사마다 설정 폴더."""
+        log = out / "logs" / (t.stem + (".retry" if retry else "") + ".log")
+        # 261014-3(마스터 §14.8.1): 검사마다 제 임시 폴더(TEMP·TMP)를 주고 끝나면 통째로 지운다 — 검사가
+        #   `os._exit` 로 정리 전에 끝나도 남지 않는다(사용자 임시 폴더에 18,869개·16.5GB 가 쌓였었다).
+        ttmp = out / "tmp" / ("t%03d%s" % (idx[t], "r" if retry else ""))
+        ttmp.mkdir(parents=True, exist_ok=True)
+        # TMPDIR 가 먼저다 — 파이썬 `tempfile` 은 TMPDIR → TEMP → TMP 차례로 본다(이 기계는 TMPDIR 이 시스템에 잡혀 있다)
+        tenv = dict(env, TMPDIR=str(ttmp), TEMP=str(ttmp), TMP=str(ttmp))
+        s, s_wall = time.perf_counter(), time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(log, "w", encoding="utf-8", errors="replace") as f:
+            p = subprocess.Popen([str(py), "-I", str(ROOT / "scripts" / "check_boot.py"), t.name], cwd=ROOT, stdout=f,
+                                 stderr=subprocess.STDOUT, env=tenv)
+            job = _kill_on_close_job(p)               # 끝나면 그 검사의 자손까지 끝낸다(고아 막기)
+            try:
+                rc = p.wait(timeout=CHECK_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.wait()
+                rc = "시간 초과"
+            finally:
+                _close_job(job)
+        shutil.rmtree(ttmp, ignore_errors=True)
+        drop_check_dirs(t.stem)
+        sec = round(time.perf_counter() - s, 1)
+        with lock:
+            done["n"] += 1
+            say("[%d/%d] %s%s %s %.0fs" % (done["n"], len(tests), "통과" if rc == 0 else "실패",
+                                          " (다시)" if retry else "", t.name, sec))
+        return rc, sec, s_wall, time.strftime("%Y-%m-%d %H:%M:%S")
+
+    res = {}
+    if par:                                           # 261113-7(릴리스 SOT §4.1): 보통 검사는 jobs 개씩 동시에
+        say("병렬 %d개(동시 %d) → 혼자 %d개 차례로" % (len(par), jobs, len(solo)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
+            for t, r in zip(par, ex.map(run_one, par)):
+                res[t] = [r]
+    for t in solo:                                    # 클립보드·속도·Word COM·프린터 — 혼자(`is_solo`)
+        res[t] = [run_one(t)]
         time.sleep(1.0)                               # 끝난 뒤 오류 보고 기록이 이 검사의 시간 안에 들게
-        runs.append((t.name, s_wall, time.strftime("%Y-%m-%d %H:%M:%S"), rcs[-1]))
+    for t in tests:                                   # 실패하면 **혼자** 한 번 더 — 다시 통과하면 '불안정' 으로 따로 적는다
+        rc = res[t][0][0]
+        if rc != 0 and rc != "시간 초과":             # 261012-13: 멈춘 검사(모달 등)는 다시 돌려도 또 멈춘다 — 상한을 두 번 쓰지 않는다
+            res[t].append(run_one(t, retry=True))
+    for t in tests:
+        rcs = [r[0] for r in res[t]]
+        runs.append((t.name, res[t][0][2], res[t][-1][3], rcs[-1]))
         if rcs[-1] != 0:
             fails.append("%s (rc=%s%s)" % (t.name, "·".join(map(str, rcs)),
                                            (" — " + NATIVE_RC[rcs[-1]]) if rcs[-1] in NATIVE_RC else ""))
         elif len(rcs) > 1:
-            flaky.append("%s (처음 rc=%s, 다시 통과)" % (t.name, rcs[0]))
-        durs[t.name] = round(time.perf_counter() - s, 1)
-        say("[%d/%d] %s %s %.0fs" % (i, len(tests), "통과" if rcs[-1] == 0 else "실패", t.name, durs[t.name]))
+            flaky.append("%s (처음 rc=%s%s, 혼자 다시 통과)" % (t.name, rcs[0], " — 병렬" if t in par else ""))
+        durs[t.name] = res[t][0][1]
     L = ["# 전체 검사 — %s" % source_version(), "",
-         "- 검사 %d개 · 통과 %d · 실패 %d · 불안정 %d · %.0f분" % (
-             len(tests), len(tests) - len(fails), len(fails), len(flaky), (time.perf_counter() - t0) / 60)]
+         "- 검사 %d개 · 통과 %d · 실패 %d · 불안정 %d · %.0f분 · 동시 %d(혼자 %d개 — `is_solo`)" % (
+             len(tests), len(tests) - len(fails), len(fails), len(flaky), (time.perf_counter() - t0) / 60,
+             jobs, len(solo) if jobs > 1 else len(tests))]
     L += ["- 실패: " + f for f in fails] + ["- 불안정(원인을 찾는다): " + f for f in flaky]
+    watch.check("전체 검사 동안")
+    L += watch.lines()                                # 겹침·전원 — 시간이 길어졌을 때 까닭(판정은 그대로)
     # 261012-13(릴리스 SOT §4.1): 오래 걸린 검사 — 과한 검사·멈춤 후보를 다음 검토에서 고른다(durations.json 에 전부)
     slow = sorted(durs.items(), key=lambda kv: -kv[1])[:10]
     L += ["- 오래 걸린 검사: " + " · ".join("%s %.0fs" % kv for kv in slow)]
@@ -916,10 +1046,11 @@ def main():
     p = sub.add_parser("checks", help="묶음 릴리스의 전체 검사 — test_*.py 전부(종료 코드로 판정)")
     p.add_argument("--ui", action="store_true", help="화면 점검(scripts/ui_check.py) ko·en 도")
     p.add_argument("--only", help="이름에 이 글자가 든 검사만(쉼표로 여럿) — 실패한 것 다시 보기")
+    p.add_argument("--jobs", type=int, default=None, help="동시에 돌릴 검사 수(기본 CHECK_JOBS, 1 이면 종전처럼 차례로)")
     a = ap.parse_args()
 
     if a.mode == "checks":
-        return checks(a.ui, a.only)
+        return checks(a.ui, a.only, a.jobs)
     if a.mode == "restore":
         restore_dir(Path(a.out))
         return 0

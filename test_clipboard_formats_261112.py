@@ -249,34 +249,61 @@ else:
 
 # H. 261113-6(스크린샷 SOT §8.4·응답성 SOT): 글·파일도 즉시 데이터 — 앱이 넣은 뒤 메인이 바빠도 다른 프로세스가 곧바로 받는다.
 #   수정 전(Qt setText = 지연 렌더링)은 다른 프로세스의 GetClipboardData 가 앱이 그려 줄 때까지(메인이 쉴 때까지) 섰다.
-READER = ("import ctypes,ctypes.wintypes as wt,time\n"
+READER = ("import ctypes,ctypes.wintypes as wt,time,threading\n"
           "u=ctypes.windll.user32;k=ctypes.windll.kernel32\n"
+          # 261113-7: 스스로 25초 뒤 끝난다 — 부모가 먼저 죽으면 고아가 클립보드를 연 채 남아 다음 실행의 클립보드 검사를 모두 막았다
+          "k.GetCurrentProcess.restype=ctypes.c_void_p;k.TerminateProcess.argtypes=[ctypes.c_void_p,ctypes.c_uint]\n"
+          "threading.Timer(25,lambda:k.TerminateProcess(k.GetCurrentProcess(),3)).start()\n"
           "u.GetClipboardData.restype=wt.HANDLE;k.GlobalLock.restype=ctypes.c_void_p;k.GlobalLock.argtypes=[wt.HANDLE]\n"
           "k.GlobalUnlock.argtypes=[wt.HANDLE]\n"
-          "time.sleep(0.3);t=time.perf_counter()\n"
+          "time.sleep(0.3);t0=time.perf_counter()\n"
           "while not u.OpenClipboard(None):\n time.sleep(0.005)\n"
+          "t=time.perf_counter()\n"     # 261113-7: 열기까지 기다린 시간(다른 프로그램이 쥠)과 받기 시간(지연 렌더링)을 가른다
           "h=u.GetClipboardData(13);s=ctypes.wstring_at(k.GlobalLock(h)) if h else '';h and k.GlobalUnlock(h)\n"
-          "u.CloseClipboard()\nprint('%.3f|%s'%(time.perf_counter()-t,s[-200:]),flush=True)\n")
+          "u.CloseClipboard()\nprint('%.3f|%.3f|%s'%(time.perf_counter()-t,t-t0,s[-200:]),flush=True)\n")
 from viewer import key_actions
 mw.open_pdfs([str(pdf)]); spin(0.3)
+
+def clip_free(ms=300):
+    """지금 클립보드가 곧바로 열리나(다른 프로그램이 쥐고 있지 않나) — 열었다 닫기만."""
+    t0 = time.monotonic()
+    while (time.monotonic() - t0) * 1000 < ms:
+        if u.OpenClipboard(None):
+            u.CloseClipboard()
+            return True
+        time.sleep(0.01)
+    return False
+
+
+free_before = clip_free()                         # 261113-7: 시작 전에 이미 다른 프로그램이 쥐었으면 다툼 — 판정하지 않는다
 key_actions.copy_path(mw)
 rd = subprocess.Popen([sys.executable, "-c", READER], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                       encoding="utf-8", errors="replace", creationflags=0x08000000,
                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
 time.sleep(3.0)                                   # 앱 메인이 바쁘다(메시지를 처리하지 않음)
-out_r = (rd.communicate(timeout=30)[0] or "").strip()
+_t = time.monotonic()
+while rd.poll() is None and time.monotonic() - _t < 40:   # 그 뒤로는 메시지를 처리하며 기다린다(지연 렌더링이면 이때 그려 준다)
+    spin(0.05)
+try:
+    out_r = (rd.communicate(timeout=10)[0] or "").strip()
+except subprocess.TimeoutExpired:                 # 261113-7: 다른 프로그램이 40초 넘게 쥠(전체 검사에서 실제로 겪음) — 죽지 않고 다툼으로
+    rd.kill()
+    out_r = ""
 print("   다른 프로세스가 읽음:", out_r[-160:])
 spin(0.2)
 try:
-    sec, txt = out_r.split("|", 1)
-    sec = float(sec)
+    sec, wait_open, txt = out_r.split("|", 2)
+    sec, wait_open = float(sec), float(wait_open)
 except Exception:
-    sec, txt = 99.0, out_r
-if pdf.name not in txt and sec >= 99:
+    sec, wait_open, txt = 99.0, 0.0, out_r
+if not free_before or (pdf.name not in txt and sec >= 99):
+    # 시작 전에 이미 다른 프로그램이 클립보드를 쥐고 있었다 — 다툼('확인 못 함')
     contended("H 글 복사 — 다른 프로세스")
 else:
     chk(pdf.name in txt, "H 경로 복사 글을 다른 프로세스가 받는다(CF_UNICODETEXT)", repr(txt))
-    chk(sec < 1.0, "H 앱 메인이 바쁜 동안에도 다른 프로세스가 곧바로 받는다(지연 렌더링 아님)", "%.2f초" % sec)
+    # 지연 렌더링이면 기록 서비스가 우리 그림을 기다리며 클립보드를 쥐어 다른 프로세스는 **열기부터** 선다(수정 전 실측 29.9초)
+    chk(sec + wait_open < 1.0, "H 앱 메인이 바쁜 동안에도 다른 프로세스가 곧바로 받는다(지연 렌더링 아님)",
+        "열기까지 %.2f초 · 받기 %.2f초" % (wait_open, sec))
 fm = formats() or {}
 chk(not any(m.startswith("application/x-qt") for m in fm), "H 글 복사에 Qt 전용 형식이 없다", str(sorted(fm)))
 if hasattr(clipboard_util, "set_files"):

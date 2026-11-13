@@ -135,6 +135,17 @@ def power_raw() -> tuple:
     return ac, pct, mode
 
 
+def keep_awake() -> bool:
+    """261113-7(릴리스 SOT §4.3 의 4): 재는 동안 PC 가 절전에 들지 않게 — 이 프로세스가 사는 동안만(끝나면 Windows 가 푼다).
+    beta.12 설치 확인 '닫기 5529.9초'(10:38 절전 → 12:10 깨어남)·전체 검사 test_auto_tag 944초(09:01 → 09:16)가 절전에 걸친 값이었다."""
+    try:
+        k32.SetThreadExecutionState.restype = wt.DWORD
+        k32.SetThreadExecutionState.argtypes = [wt.DWORD]
+        return bool(k32.SetThreadExecutionState(0x80000000 | 0x00000001))     # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    except Exception:                                # noqa: BLE001
+        return False
+
+
 def power_text(ac: bool, pct: int, mode: str) -> str:
     """summary 줄 — 배터리이거나 절전 쪽 전원 모드면 경고(판정은 그대로)."""
     src = "충전기" if ac else ("**배터리**%s" % (" %d%%" % pct if pct >= 0 else ""))
@@ -175,6 +186,7 @@ class Watch:
     def start(self) -> "Watch":
         self.start_busy = system_busy_pct()          # 적기만 한다 — 평소 부하는 PC 마다 다르다(위 설명)
         self.power = power_text(*power_raw())
+        keep_awake()                                  # 261113-7: 재는 동안 절전 막기
         self._last = (time.time(), self._others())
         return self
 

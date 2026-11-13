@@ -3,9 +3,11 @@
 
 git 없이 바뀐 파일 목록과 diff 글을 직접 넣어, 경로·줄 규칙이 등급을 바르게 내는지 본다.
 """
+import os
 import sys
 from pathlib import Path
 
+os.environ["QT_QPA_PLATFORM"] = "offscreen"        # O 의 시작 스크립트 시험이 Qt 를 쓴다(검사 작성 SOT §14.7)
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -294,6 +296,50 @@ chk(pt is not None and "⚠" in pt(False, 55, "best_eff") and "⚠" in pt(False,
 w3 = overlap.Watch()
 w3.start_busy, w3.power = 5.0, (pt(False, 55, "balanced") if pt else "")
 chk(any("⚠" in l and "배터리" in l for l in w3.lines()), "N summary(Watch.lines)에 배터리 경고 줄", w3.lines())
+
+# O. 261113-7(릴리스 SOT §4.1, 검사 작성 SOT §14.7.6): 전체 검사 병렬 — '혼자' 판별·시작 스크립트·상한
+_isolo = getattr(rt, "is_solo", None)
+chk(_isolo is not None and _isolo(ROOT / "test_clipboard_formats_261112.py") and _isolo(ROOT / "test_i18n_core.py")
+    and _isolo(ROOT / "test_vprinter_cli.py") and not _isolo(ROOT / "test_about_notice.py"),
+    "O '혼자' 판별 — 실제 클립보드·SOLO_TESTS·가상 프린터는 혼자, 보통 검사는 병렬")
+chk(getattr(rt, "CHECK_JOBS", 1) > 1 and rt.CHECK_TIMEOUT <= 300, "O 동시 개수 > 1 · 상한 ≤ 300초", (getattr(rt, "CHECK_JOBS", None), rt.CHECK_TIMEOUT))
+_boot = ROOT / "scripts" / "check_boot.py"
+_bs = _boot.read_text(encoding="utf-8") if _boot.exists() else ""
+chk("TerminateProcess" in _bs and "os._exit = _hard_exit" in _bs and "setTestModeEnabled(True)" in _bs
+    and "check_boot.py" in Path(rt.__file__).read_text(encoding="utf-8"),
+    "O 시작 스크립트 — os._exit → TerminateProcess·검사마다 Qt 설정 폴더, 실행기가 그것으로 감싼다")
+import subprocess as _sp  # noqa: E402
+_t = Path(tempfile.mkdtemp()) / "test_boot_probe.py"
+_t.write_text("import os,sys\nfrom PyQt6.QtCore import QCoreApplication as Q\nprint(Q.applicationName())\nsys.stdout.flush()\nos._exit(7)\n",
+              encoding="utf-8")
+if _boot.exists():
+    _r = _sp.run([sys.executable, "-I", str(_boot), str(_t)], capture_output=True, text=True, timeout=60)
+    chk(_r.returncode == 7 and _r.stdout.strip().startswith("polypdf_chk_test_boot_probe_"),
+        "O 시작 스크립트로 돌린 검사 — 종료 코드 그대로(7)·제 설정 이름", (_r.returncode, _r.stdout.strip()[:60]))
+
+# O2. 261113-7: 검사가 끝나면 그 자손도 끝난다(작업 개체) — 검사 H 의 읽기 자식이 고아로 남아 클립보드를 쥔 채 다음 실행을 막았다
+if sys.platform == "win32" and hasattr(rt, "_kill_on_close_job"):
+    import ctypes as _ct  # noqa: E402
+    _par = ("import subprocess,sys\n"
+            "c=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])\n"
+            "print(c.pid,flush=True)\n")
+    _pp = _sp.Popen([sys.executable, "-c", _par], stdout=_sp.PIPE, text=True)
+    _job = rt._kill_on_close_job(_pp)
+    _cpid = int((_pp.stdout.readline() or "0").strip() or 0)
+    _pp.wait(30)
+    _k = _ct.windll.kernel32
+    _k.OpenProcess.restype = _ct.c_void_p
+    _k.WaitForSingleObject.argtypes = [_ct.c_void_p, _ct.c_uint]
+    _h = _k.OpenProcess(0x00100000, False, _cpid)          # SYNCHRONIZE
+    _alive_before = bool(_h) and _k.WaitForSingleObject(_h, 0) == 0x102
+    rt._close_job(_job)
+    _gone = bool(_h) and _k.WaitForSingleObject(_h, 5000) == 0
+    if _h:
+        _k.CloseHandle(_ct.c_void_p(_h))
+    chk(_job is not None and _alive_before and _gone, "O 검사 프로세스가 끝나도 남은 자식은 작업 개체를 닫으면 끝난다(고아 없음)",
+        (_job is not None, _alive_before, _gone))
+else:
+    chk(sys.platform != "win32", "O 실행기에 작업 개체(_kill_on_close_job)가 있다")
 
 print("\n=== ALL PASS ===" if not fails else "\n%d FAIL" % len(fails))
 sys.exit(1 if fails else 0)
