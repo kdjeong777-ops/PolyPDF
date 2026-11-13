@@ -369,9 +369,9 @@ jobs:
             exit 0
           } else {
             if ($isPre) {
-              gh release create $tag $assets --title "PolyPDF $tag" --notes-file notes.md --prerelease
+              gh release create $tag $assets --title "PolyPinax $tag" --notes-file notes.md --prerelease
             } else {
-              gh release create $tag $assets --title "PolyPDF $tag" --notes-file notes.md --latest
+              gh release create $tag $assets --title "PolyPinax $tag" --notes-file notes.md --latest
             }
           }
 
