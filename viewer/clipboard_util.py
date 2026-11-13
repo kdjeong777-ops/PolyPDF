@@ -344,9 +344,9 @@ def set_data(extra: dict, on_done=None):
 
 def diag() -> str:
     """261113-6(스크린샷 SOT §8.3 의 5): '확인 못 함' 진단 한 줄 — 연 창의 프로세스·내용 주인·순번·지금 열기까지 걸린 시간.
-    클립보드 내용은 바꾸지 않는다(열었다 닫기만)."""
+    클립보드 내용은 바꾸지 않는다(열었다 닫기만). 검사 로그에만 찍는 개발용 진단이라 **영어로** 쓴다 — 화면 문구가 아니다(다국어 SOT §5 '감싸지 않는 것')."""
     if QGuiApplication.platformName() != "windows":
-        return "Windows 아님"
+        return "not Windows"
     try:
         import os
         import time
@@ -363,14 +363,14 @@ def diag() -> str:
             if not hwnd:
                 return None
             if hwnd == _owner["hwnd"]:
-                return "이 앱"
+                return "this app"
             pid = wintypes.DWORD()
             u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
             if pid.value == os.getpid():
-                return "이 앱(Qt 창)"
+                return "this app (Qt window)"
             h = k.OpenProcess(0x1000, False, pid.value)
             if not h:
-                return "pid %d(권한)" % pid.value
+                return "pid %d (no access)" % pid.value
             try:
                 buf = ctypes.create_unicode_buffer(520)
                 n = wintypes.DWORD(520)
@@ -389,12 +389,12 @@ def diag() -> str:
                 break
             time.sleep(0.01)
         wait = time.perf_counter() - t0
-        return "연 창 %s · 내용 주인 %s · 순번 %d→%d · 지금 열기 %s" % (
-            who(opener) or ("없음" if opened and wait < 0.02 else "알 수 없음(창 없이 염)"),
-            who(u.GetClipboardOwner()) or "없음", seq0, u.GetClipboardSequenceNumber(),
-            ("%.0fms" % (wait * 1000)) if opened else "1초 넘게 막힘")
+        return "opener %s · owner %s · seq %d->%d · open now %s" % (
+            who(opener) or ("none" if opened and wait < 0.02 else "unknown (opened without a window)"),
+            who(u.GetClipboardOwner()) or "none", seq0, u.GetClipboardSequenceNumber(),
+            ("%.0fms" % (wait * 1000)) if opened else "blocked > 1s")
     except Exception as e:
-        return "진단 실패 %r" % e
+        return "diag failed %r" % e
 
 
 def set_image(img, on_done=None, tries=RETRY_TRIES, interval_ms=RETRY_MS, png: bytes | None = None,
