@@ -6,7 +6,7 @@
 사용자 결정: 태그 편집 창에서도 막기 · 정렬 기본 이름순·전환·기억 · 검색은 담은 태그만(후보도)·없으면 바로 추가 · 최대화 + 크기 기억.
 A. 사진 기본 정보 태그(meta 부분)는 목록에 없다 — 사진 종류·PDF 자동·직접 태그는 있다, [해제] 가 기본 정보 태그를 거절하지 않는다
 B. 정렬 — 기본 이름순, 등록순(처음 붙은 차례)
-C. 검색창 — 담은 태그만(대소문자 무시)·후보도 거름·없으면 [추가]
+C. 검색창 — 두 목록 모두 담은 태그만(대소문자 무시)·후보도 거름·없으면 [추가] 로 곧바로 붙임(261114-2 덧붙임)
 D. 태그 편집 창 — 사진 기본 정보 태그는 ✕·📌 없이 잠김
 E. 최대화 단추·크기·최대화·정렬을 기억(실제 MainWindow.open_tag_apply)
 """
@@ -45,19 +45,22 @@ try:
     save_candidates({"cand": {"보수": {"n": 2, "files": [Q]}, "아스팔트": {"n": 1, "files": [Q]}}, "rejected": []})   # 근거 파일이 목록에 있어야 늘어놓는다(261111-20 덧붙임)
     dlg = TagApplyDialog(st, [P, Q], [P, Q])
     names = lambda: [dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole) for i in range(dlg.lst_tags.count())]
-    chk(sorted(names()) == sorted(["가족", "영수증", "배수성", "보고서"]), "A 사진 기본 정보 태그(촬영일·지역·장비)는 목록에 없다", str(names()))
+    avail = lambda kind=None: [dlg.lst_avail.item(i).data(Qt.ItemDataRole.UserRole) for i in range(dlg.lst_avail.count())
+                               if dlg.lst_avail.item(i).data(Qt.ItemDataRole.UserRole)
+                               and (kind is None or dlg.lst_avail.item(i).data(Qt.ItemDataRole.UserRole + 1) == kind)]
+    chk(sorted(names()) == sorted(["가족", "영수증", "배수성", "보고서"]), "A 사진 기본 정보 태그(촬영일·지역·장비)는 붙은 태그에 없다", str(names()))
+    chk(not {"고양시", "iPhone13Pro", "2026-11-05"} & set(avail()), "A 붙일 수 있는 태그에도 없다(261114-2 덧붙임)", str(avail()))
     chk(names() == sorted(names(), key=str.lower), "B 기본 이름순", str(names()))
     dlg.cmb_sort.setCurrentIndex(1)
     chk(names()[:2] == ["배수성", "보고서"], "B 등록순 — 먼저 붙은 태그 먼저", str(names()))
     dlg.ed_find.setText("보")
-    cands = [dlg.lst_cand.item(i).data(Qt.ItemDataRole.UserRole) for i in range(dlg.lst_cand.count())]
-    chk(names() == ["보고서"] and cands == ["보수"], "C 검색 — 담은 태그만, 후보도 거름", f"{names()} {cands}")
+    chk(names() == ["보고서"] and avail("cand") == ["보수"], "C 검색 — 두 목록 모두 담은 태그만(후보도)", f"{names()} {avail('cand')}")
     chk(dlg.btn_find_add.isEnabled(), "C 같은 이름이 없으면 [추가] 켜짐")
     dlg.ed_find.setText("보고서")
     chk(not dlg.btn_find_add.isEnabled(), "C 같은 이름이 있으면 [추가] 꺼짐")
     dlg.ed_find.setText("새것"); dlg._find_add()
-    chk("새것" in names() and any(it.data(Qt.ItemDataRole.UserRole) == "새것" for it in dlg.lst_tags.selectedItems()),
-        "C 찾는 글자로 바로 추가하고 고른다", str(names()))
+    chk("새것" in names() and "새것" in st.get_manual(P) and "새것" in st.get_manual(Q),
+        "C 찾는 글자로 바로 고른 파일에 붙인다(261114-2 덧붙임)", str(names()))
     dlg.ed_find.setText("")
     st.set(P, ["가족", "고양시"])                                            # 같은 이름을 직접도 붙였다
     dlg._fill_tags()
@@ -90,7 +93,7 @@ try:
         seen.append(self_)
         chk(bool(self_.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint), "E 최대화 단추") if len(seen) == 1 else None
         if len(seen) == 1:
-            self_.show(); self_.resize(900, 640); self_.cmb_sort.setCurrentIndex(1); app.processEvents()
+            self_.show(); self_.resize(1000, 640); self_.cmb_sort.setCurrentIndex(1); app.processEvents()   # 261114-2 덧붙임: 두 목록이라 최소 너비가 900 보다 넓다
             self_.showMaximized(); app.processEvents()
         else:
             self_.show(); app.processEvents(); app.processEvents()
@@ -99,7 +102,7 @@ try:
     TAD.TagApplyDialog.exec = fake_exec
     mw.open_tag_apply()
     stv = (mw._prefs or {}).get("tag_apply_window") or {}
-    chk(stv.get("max") is True and stv.get("sort") == "reg" and stv.get("w") == 900 and stv.get("h") == 640,
+    chk(stv.get("max") is True and stv.get("sort") == "reg" and stv.get("w") == 1000 and stv.get("h") == 640,
         "E 닫을 때 크기·최대화·정렬을 설정에 기억", str(stv))
     mw.open_tag_apply()
     d2 = seen[-1]

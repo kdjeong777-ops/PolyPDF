@@ -129,18 +129,19 @@ try:
         # D
         dlg = TagApplyDialog(st, P, [P[2]], keep=mw._thread_keep)
         dlg.show(); app.processEvents()
-        dlg.ed_new.setText(ko)
+        dlg.ed_find.setText(ko)                         # 261114-2 덧붙임: 찾기 칸(종전 '태그 추가' 칸)
         chk(pump(lambda: en in [w.lower() for w in (getattr(dlg, "pair_words", None) or [])]), "D '태그 추가' 칸에 쓰면 짝 낱말 추천(배경)",
             str(getattr(dlg, "pair_words", None)))
         chk(dlg.cmb_pair.currentText().strip() != "" and dlg.btn_link.isEnabled(), "D 첫 추천이 글 상자에 — [잇기] 켜짐")
         dlg.cmb_pair.setEditText(en)
         QTest.mouseClick(dlg.btn_link, Qt.MouseButton.LeftButton); app.processEvents()
         chk((TP.shared().partner(ko) or "").lower() == en, "D [잇기] — 쌍이 생긴다", str(TP.shared().partner(ko)))
-        dlg.ed_new.clear(); app.processEvents()
-        it = [dlg.lst_tags.item(i) for i in range(dlg.lst_tags.count()) if dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole) == "균열"]
-        chk(it and "⇄ crack" in it[0].text(), "D 현재 태그 줄 '태그 ⇄ 짝'", it[0].text() if it else "")
+        dlg.ed_find.clear(); app.processEvents()
+        lwp = dlg.lst_avail                              # 261114-2 덧붙임: 고른 파일(c.pdf)에 없는 '균열' 은 '붙일 수 있는 태그' 에
+        it = [lwp.item(i) for i in range(lwp.count()) if lwp.item(i).data(Qt.ItemDataRole.UserRole) == "균열"]
+        chk(it and "⇄ crack" in it[0].text(), "D 태그 줄 '태그 ⇄ 짝'", it[0].text() if it else "")
         if it:
-            dlg.lst_tags.clearSelection(); it[0].setSelected(True); app.processEvents()
+            lwp.clearSelection(); it[0].setSelected(True); app.processEvents()
             chk(dlg.cmb_pair.currentText() == "crack" and dlg.btn_unlink.isEnabled(), "D 줄을 고르면 그 짝이 보이고 [끊기] 켜짐",
                 dlg.cmb_pair.currentText())
             before = {p: st.get(p) for p in P}

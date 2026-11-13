@@ -4,7 +4,7 @@
 실제 MainWindow 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 검사 작성 SOT §14.7.2 의 3).
 A. '#' 메뉴 — 끝에 '해시태그 수정'(261113-9 — 종전 '해시태그 넣기')·'해시태그 폴더로 사본 저장', '새 태그 후보 검토' 는 없다(태그가 없어도 두 항목)
 B. 복사(책갈피창 '폴더로 복사' 실제 길) — 사본에 직접·자동 태그가 따라간다(지문은 빼고), 이동은 전처럼 따라간다
-C. 해시태그 수정 창 — 썸네일 범위(보이는 줄만), 고른 파일 기준 ☑/◐/☐, [적용]=모두에 붙임, [해제]=모두에서 뗌(자동은 거절),
+C. 해시태그 수정 창 — 썸네일 범위(보이는 줄만), 두 목록(붙은 태그 n/m·◐ — 261114-2 덧붙임), [적용]=모두에 붙임, [해제]=모두에서 뗌(자동은 거절),
    태그 추가, 새 태그 후보 적용 → 후보에서 빠짐, 되돌리기·다시 실행, 썸네일 그림(배경)
 D. 해시태그 폴더로 사본 저장 — 태그마다 폴더·여러 태그면 폴더마다·'이름 (2)'·사본에 태그
 """
@@ -102,26 +102,29 @@ try:
         str(dlg and dlg._paths))
     bt.search_edit.setText(""); pump(lambda: False, 0.2)
     if dlg is not None:
-        chk(not dlg.g3.isChecked(), "C '#' 메뉴로 열면 새 태그 후보는 접힌 채")
+        chk(not dlg._show_cand_first, "C '#' 메뉴로 열면 새 태그 후보는 맨 아래 묶음(261114-2 덧붙임 — 종전 접힌 묶음)")
         dlg.show()                                       # 보이는 칸만 그린다(261111-15) — 보여야 그린다
         bk = dlg._blank.cacheKey()
         chk(pump(lambda: all(dlg.lst_files.item(i).icon().cacheKey() != bk for i in range(dlg.lst_files.count())), 15), "C 썸네일 그림(배경)")
-        marks = {dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole): dlg.lst_tags.item(i).text() for i in range(dlg.lst_tags.count())}
-        chk(marks.get("가족") == "#가족  (2)" and marks.get("여행") == "#여행  (1)", "C 태그 줄 — 파일 수(261111-18: ☑◐☐ 대신 거르기 상자)", str(marks))
-        def pick(tag, has=True):
-            dlg.lst_tags.clearSelection()
-            for i in range(dlg.lst_tags.count()):
-                it = dlg.lst_tags.item(i)
-                if it.data(Qt.ItemDataRole.UserRole) == tag:
-                    it.setCheckState(Qt.CheckState.Checked if has else Qt.CheckState.Unchecked)
-                    it.setSelected(True)
-            dlg.lst_files.selectAll(); pump(lambda: False, 0.05)
-        pick("여행", has=False)                          # 여행이 없는 파일(A)만 보인다 → 모두 골라 [적용]
+        dlg.lst_files.selectAll(); pump(lambda: False, 0.05)
+
+        def rows(lw):
+            return {lw.item(i).data(Qt.ItemDataRole.UserRole): lw.item(i).text() for i in range(lw.count()) if lw.item(i).data(Qt.ItemDataRole.UserRole)}
+
+        def pick(lw, tag):
+            lw.clearSelection()
+            for i in range(lw.count()):
+                if lw.item(i).data(Qt.ItemDataRole.UserRole) == tag:
+                    lw.item(i).setSelected(True)
+            pump(lambda: False, 0.05)
+        marks = rows(dlg.lst_tags)
+        chk(marks.get("가족", "").endswith("2/2") and "◐ 1/2" in marks.get("여행", ""), "C 붙은 태그 줄 — 고른 파일 기준 n/m·◐(261114-2 덧붙임)", str(marks))
+        pick(dlg.lst_tags, "여행")                       # ◐ 줄 [적용] — 나머지 파일에도
         dlg.btn_apply.click()
-        chk("여행" in st.get_manual(A) and "여행" in st.get_manual(B), "C [적용] — 보이는(고른) 파일 모두에 붙인다", f"{st.get(A)} {st.get(B)}")
-        pick("보고서"); dlg.btn_clear.click()
+        chk("여행" in st.get_manual(A) and "여행" in st.get_manual(B), "C [적용] — 고른 파일 모두에 붙인다", f"{st.get(A)} {st.get(B)}")
+        pick(dlg.lst_tags, "보고서"); dlg.btn_clear.click()
         chk("보고서" not in st.get(A) and "보고서" in st.get_rejected(A), "C [해제] — 자동 태그는 거절로 기록", f"{st.get(A)} {st.get_rejected(A)}")
-        pick("가족"); dlg.btn_clear.click()
+        pick(dlg.lst_tags, "가족"); dlg.btn_clear.click()
         chk("가족" not in st.get(A) and "가족" not in st.get(B), "C [해제] — 직접 태그는 모두에서 뗀다")
         dlg.undo()
         chk(st.get_manual(A) == ["가족", "여행"] and "가족" in st.get(B), "C 되돌리기 — 직접 태그 해제가 돌아온다", f"{st.get(A)} {st.get(B)}")
@@ -129,13 +132,11 @@ try:
         chk("보고서" in st.get_auto(A) and "보고서" not in st.get_rejected(A), "C 되돌리기 두 번 — 자동 태그·거절도 그대로", f"{st.get(A)} {st.get_rejected(A)}")
         dlg.redo()
         chk("보고서" not in st.get(A), "C 다시 실행")
-        dlg.ed_new.setText("새태그"); dlg.btn_add.click()
         dlg.lst_files.clearSelection(); dlg.lst_files.item(0).setSelected(True)
-        dlg.btn_apply.click()
+        dlg.ed_find.setText("새태그"); dlg.btn_find_add.click()
         p0 = dlg.lst_files.item(0).data(Qt.ItemDataRole.UserRole)
-        chk("새태그" in st.get_manual(p0), "C 태그 추가 → 고른 파일에 [적용]", str(st.get(p0)))
-        dlg.g3.setChecked(True)
-        dlg.lst_cand.item(0).setSelected(True)           # 후보를 고르면 근거 파일(A)만 고른 채로(261111-20)
+        chk("새태그" in st.get_manual(p0), "C 찾기 칸 새 이름 [추가] → 고른 파일에 곧바로", str(st.get(p0)))
+        pick(dlg.lst_avail, "배수성")                    # 후보를 고르면 근거 파일(A)만 고른 채로(261111-20)
         dlg.btn_apply.click()
         chk("배수성" in st.get_manual(A) and "배수성" not in (load_candidates().get("cand") or {}), "C 새 태그 후보 [적용] — 근거 파일에 붙고 후보에서 빠진다",
             str(st.get(A)))
@@ -143,9 +144,12 @@ try:
     chk(callable(getattr(mw, "_autotag_review_candidates", None)), "C 도구 메뉴 진입점은 남아 있다")
     shown.clear()
     TAD.TagApplyDialog.exec = lambda self_: (shown.append(self_), 0)[1]
+    save_candidates({"cand": {"포장재": {"n": 2, "files": [A]}}, "rejected": []})
     mw._autotag_review_candidates()
     TAD.TagApplyDialog.exec = real_exec
-    chk(bool(shown) and shown[0].g3.isChecked(), "C 도구 메뉴 '새 태그 후보 검토' 는 이 창을 후보를 펼친 채로")
+    heads = [shown[0].lst_avail.item(i).text() for i in range(shown[0].lst_avail.count())
+             if not shown[0].lst_avail.item(i).data(Qt.ItemDataRole.UserRole)] if shown else []
+    chk(bool(shown) and heads[:1] == ["새 태그 후보"], "C 도구 메뉴 '새 태그 후보 검토' 는 이 창을 후보 묶음이 맨 위인 채로", str(heads))
     if shown:
         shown[0].reject()
 

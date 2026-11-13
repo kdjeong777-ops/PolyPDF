@@ -98,15 +98,16 @@ try:
     try:
         dlg = TagApplyDialog(st, [p1, p2, p3], [], show_candidates=True)
         dlg.show(); app.processEvents()
-        it = [dlg.lst_cand.item(i) for i in range(dlg.lst_cand.count()) if dlg.lst_cand.item(i).data(Qt.ItemDataRole.UserRole) == "포장"]
+        la = dlg.lst_avail                                 # 261114-2 덧붙임: 후보는 '붙일 수 있는 태그' 의 '새 태그 후보' 묶음
+        it = [la.item(i) for i in range(la.count()) if la.item(i).data(Qt.ItemDataRole.UserRole) == "포장"]
         chk(bool(it), "C 준비 — 후보 '포장' 이 보인다")
         if it:
             it[0].setSelected(True); app.processEvents()
         t0 = time.perf_counter(); dlg._dismiss(); dt = time.perf_counter() - t0
         chk(dt < 1.0, "C [무시] 가 메인에서 파일을 쓰지 않는다(정지 < 1초)", "%.2fs" % dt)
         chk("포장" in TS.load_candidates()["rejected"], "C 쓰기 전에 다시 읽어도 무시한 것이 보인다")
-        for i in range(dlg.lst_cand.count()):
-            dlg.lst_cand.item(i).setSelected(dlg.lst_cand.item(i).data(Qt.ItemDataRole.UserRole) == "보수")
+        for i in range(la.count()):
+            la.item(i).setSelected(la.item(i).data(Qt.ItemDataRole.UserRole) == "보수")
         app.processEvents()
         dlg.lst_files.selectAll(); app.processEvents()
         t0 = time.perf_counter(); dlg.apply_tags(True); dt = time.perf_counter() - t0

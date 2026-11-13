@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-14 07:01+0900\n"
+"POT-Creation-Date: 2026-11-14 07:15+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -436,7 +436,7 @@ msgstr "Bookmarks"
 msgid "일괄 OCR"
 msgstr "Batch OCR"
 
-#: viewer/app.py
+#: viewer/app.py viewer/widgets/tag_apply_dialog.py
 msgid "태그"
 msgstr "Tags"
 
@@ -13355,28 +13355,40 @@ msgid "고른 PDF 의 문서 종류를 바꿉니다 — 잘못 붙은 자동 종
 msgstr "Changes the document type of the chosen PDFs — a wrong automatic type won't be added again"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "현재 태그"
-msgstr "Current tags"
+msgid "태그 찾기 · 새 태그 이름"
+msgstr "Find tag · new tag name"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "태그 찾기"
-msgstr "Find tags"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "찾는 글자를 새 태그로 넣습니다(목록에 없을 때)"
-msgstr "Adds the search text as a new tag (when it is not in the list)"
+msgid "찾는 글자를 새 태그로 고른 파일에 붙입니다(목록에 없을 때)"
+msgstr "Adds the typed text as a new tag to the chosen files (when it is not in the lists)"
 
 #: viewer/widgets/tag_apply_dialog.py viewer/widgets/translate_files_dialog.py
 msgid "이름순"
 msgstr "Name"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "태그 추가"
-msgstr "Add tag"
+msgid "붙일 수 있는 태그"
+msgstr "Tags you can add"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "새 태그 이름"
-msgstr "New tag name"
+msgid "두 번 누르거나 오른쪽으로 끌면 고른 파일에 붙입니다"
+msgstr "Double-click or drag to the right to add to the chosen files"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 후보 무시"
+msgstr "Ignore selected candidates"
+
+#: viewer/widgets/tag_apply_dialog.py viewer/widgets/tag_batch_dialog.py
+msgid "전역 기록 — 다시 적립되지 않습니다"
+msgstr "Global record — will not be collected again"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "붙은 태그"
+msgstr "Tags on files"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "두 번 누르거나 왼쪽으로 끌면 고른 파일에서 뗍니다 — ◐ 는 일부 파일에만"
+msgstr "Double-click or drag to the left to remove from the chosen files — ◐ = on some files only"
 
 #: viewer/widgets/tag_apply_dialog.py
 msgid "한글이면 영어, 영어면 한글"
@@ -13395,24 +13407,34 @@ msgid "끊기"
 msgstr "Unlink"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "새 태그 후보"
-msgstr "New tag candidates"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "고른 후보 무시"
-msgstr "Ignore selected candidates"
-
-#: viewer/widgets/tag_apply_dialog.py viewer/widgets/tag_batch_dialog.py
-msgid "전역 기록 — 다시 적립되지 않습니다"
-msgstr "Global record — will not be collected again"
-
-#: viewer/widgets/tag_apply_dialog.py
 msgid "날짜 읽는 중…"
 msgstr "Reading dates…"
 
 #: viewer/widgets/tag_apply_dialog.py
+msgctxt "태그 거르기"
+msgid "있음"
+msgstr "With tag"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgctxt "태그 거르기"
+msgid "없음"
+msgstr "Without tag"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "(모두)"
+msgstr "(All)"
+
+#: viewer/widgets/tag_apply_dialog.py
 msgid "다시 실행 (Ctrl+Y)"
 msgstr "Redo (Ctrl+Y)"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "붙이기 — 고른 태그를 고른 파일 모두에"
+msgstr "Add — the chosen tags to all chosen files"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "떼기 — 고른 태그를 고른 파일 모두에서(자동 태그는 거절)"
+msgstr "Remove — the chosen tags from all chosen files (automatic tags are rejected)"
 
 #: viewer/widgets/tag_apply_dialog.py
 msgid "짝 낱말"
@@ -13443,8 +13465,12 @@ msgid "직접"
 msgstr "Custom"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "체크하면 이 태그가 있는 파일, 체크를 풀면 없는 파일을 오른쪽에 보입니다(줄을 고를 때)"
-msgstr "When the row is selected, checked shows files with this tag on the right and unchecked shows files without it"
+msgid "기존 태그"
+msgstr "Existing tags"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "새 태그 후보"
+msgstr "New tag candidates"
 
 #: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
@@ -13453,13 +13479,27 @@ msgstr "{n} selected / {v} shown / {m} files"
 
 #: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
-msgid "#{tag}  ({n}건)"
-msgstr "#{tag}  ({n})"
+msgid "붙은 태그 — 고른 파일 {n}개"
+msgstr "Tags on files — {n} chosen"
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "붙은 태그 — 보이는 파일 {n}개"
+msgstr "Tags on files — {n} shown"
 
 #: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
 msgid "자동 {a} · 직접 {m}"
 msgstr "Automatic {a} · Manual {m}"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "문서 종류 — 붙이면 고른 PDF 의 종류가 이것 하나로 바뀝니다"
+msgstr "Document type — adding it makes this the only type of the chosen PDFs"
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "  ({n}건)"
+msgstr "  ({n})"
 
 # | 태그로 붙고, 이후 계산부터 기존 태그로 쓰입니다."
 #: viewer/widgets/tag_batch_dialog.py
@@ -16452,4 +16492,19 @@ msgstr "Getting Started"
 
 #~ msgid "자동 부여 취소"
 #~ msgstr "Cancel Automatic Tag"
+
+#~ msgid "현재 태그"
+#~ msgstr "Current tags"
+
+#~ msgid "태그 찾기"
+#~ msgstr "Find tags"
+
+#~ msgid "태그 추가"
+#~ msgstr "Add tag"
+
+#~ msgid "체크하면 이 태그가 있는 파일, 체크를 풀면 없는 파일을 오른쪽에 보입니다(줄을 고를 때)"
+#~ msgstr "When the row is selected, checked shows files with this tag on the right and unchecked shows files without it"
+
+#~ msgid "#{tag}  ({n}건)"
+#~ msgstr "#{tag}  ({n})"
 

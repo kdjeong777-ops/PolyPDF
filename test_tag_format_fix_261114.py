@@ -97,8 +97,10 @@ try:
     st.set_auto(P[1], ["발표자료", "스캔문서"]); st.set(P[2], ["발표자료"])
     dlg = TagApplyDialog(st, [P[1], P[2]], [P[1]], keep=mw.__dict__.setdefault("_thread_keep", []))
     dlg.show(); pump()
+    dlg.lst_files.selectAll(); pump()                  # 261114-2 덧붙임: 붙은 태그는 고른 파일 기준
     rows = {dlg.lst_tags.item(i).data(Qt.ItemDataRole.UserRole): dlg.lst_tags.item(i).text() for i in range(dlg.lst_tags.count())}
     chk(rows.get("스캔문서", "").startswith("·#") and rows.get("발표자료", "").startswith("#"), "C 자동으로만 붙은 태그 줄은 '·#', 직접 태그가 있으면 '#'", str(rows))
+    dlg.lst_files.clearSelection(); dlg.lst_files.item(0).setSelected(True); pump()
     m = dlg.btn_format.menu()
     acts = [a for a in m.actions() if a.text() == "설명서"] if m else []
     chk(bool(acts) and dlg.btn_format.parent() is dlg and dlg.btn_format.y() < dlg.lst_tags.mapTo(dlg, dlg.lst_tags.rect().topLeft()).y(),
