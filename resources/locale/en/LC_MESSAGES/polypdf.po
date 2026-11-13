@@ -1156,10 +1156,10 @@ msgstr "Information"
 #: viewer/app.py viewer/photo_controller.py
 msgid ""
 "개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
-"빌드된 PolyPDF.exe 에서 실행해 주세요."
+"빌드된 {exe} 에서 실행해 주세요."
 msgstr ""
-"PolyPDF can't be set as the default app when running from source (Python).\n"
-"Please run the built PolyPDF.exe."
+"PolyPinax can't be set as the default app when running from source (Python).\n"
+"Please run the built {exe}."
 
 #: viewer/app.py
 msgid "Windows 기본 앱 화면에서 PolyPinax 를 고르세요."
@@ -7548,10 +7548,10 @@ msgstr "Applying the update with administrator rights..."
 #: viewer/updater.py
 msgid ""
 "업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.\n"
-"최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
+"최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 "Administrator rights are needed to apply the update. The request was canceled, so the update was not applied.\n"
-"Download the latest installer (PolyPDF-Setup-*.exe) and 'Run as administrator'."
+"Download the latest installer ({setup}) and 'Run as administrator'."
 
 #: viewer/updater.py
 msgid ""
@@ -7600,19 +7600,19 @@ msgstr ""
 #, python-brace-format
 msgid ""
 "일부 폴더에 쓰기 권한이 없어 업데이트를 마치지 못했습니다({n}개). 관리자 권한 요청이 취소되었습니다.\n"
-"최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
+"최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 "The update could not be finished because some folders are not writable ({n}). The administrator request was canceled.\n"
-"Download the latest installer (PolyPDF-Setup-*.exe) and 'Run as administrator'."
+"Download the latest installer ({setup}) and 'Run as administrator'."
 
 #: viewer/updater.py
 #, python-brace-format
 msgid ""
 "업데이트를 완료하지 못했습니다. {n}개 파일을 교체하지 못했습니다(권한 문제일 수 있음).\n"
-"최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."
+"최신 설치본({setup})을 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 "The update could not be completed. {n} file(s) could not be replaced (possibly a permission problem).\n"
-"Run the latest installer (PolyPDF-Setup-*.exe) as administrator."
+"Run the latest installer ({setup}) as administrator."
 
 #: viewer/vprinter_controller.py
 msgid "PolyPinax 프린터"

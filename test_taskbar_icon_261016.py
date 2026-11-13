@@ -50,7 +50,11 @@ try:
     iss = open(os.path.join(HERE, "installer", "PolyPDF.iss"), encoding="utf-8").read()
     icons = iss[iss.index("\n[Icons]"):iss.index("\n[Registry]")]      # 줄 머리의 섹션(주석 속 '[Icons]' 글자가 아니라)
     app_lines = [ln for ln in icons.splitlines() if "{#MyAppExe}" in ln and not ln.lstrip().startswith(";")]
-    chk(app_lines and all('AppUserModelID: "%s"' % getattr(main, "APP_USER_MODEL_ID", "?") in ln for ln in app_lines),
+    # 261114-8: 설치 프로그램은 `LocalTools.{#MyAppId}` — MyAppId 는 이사 스위치가 꺼져 있으면 PolyPDF(앱의 branding.AUMID 와 같다)
+    from viewer import branding as _br
+    want = 'AppUserModelID: "LocalTools.{#MyAppId}"'
+    my_id = re.search(r'^\s*#define MyAppId "([^"]+)"', iss[iss.index("#else"):], re.M).group(1)
+    chk(app_lines and all(want in ln for ln in app_lines) and "LocalTools." + my_id == getattr(main, "APP_USER_MODEL_ID", "?") == _br.AUMID,
         "C 앱 바로가기(시작 메뉴·바탕 화면)에 같은 ID", str(app_lines))
     src = inspect.getsource(main.main)
     i_set, i_app = src.find("_set_app_user_model_id()"), src.find("QApplication(sys.argv)")

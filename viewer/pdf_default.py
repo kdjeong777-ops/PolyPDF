@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import os
 
-from viewer.branding import APP_NAME
+from viewer.branding import APP_NAME, APP_ID, ALL_PHOTO_PROG_IDS
 
-APP = "PolyPDF"                             # 내부 ID — 등록 키·값 이름·기본 앱 화면 URI(261114-6, 마스터 §1.1: 바꾸지 않는다)
+# 261114-8(마스터 §1.1): 등록 키·값 이름·기본 앱 화면 URI 는 제품 단위 내부 ID(이사 판부터 PolyPinax — installer MyAppId 와 같다).
+#   ProgID 는 PDF 모드 이름이라 PolyPDF.pdf 그대로(바꾸면 사용자가 고른 기본 PDF 앱이 풀린다).
+APP = APP_ID
 PROG_ID = "PolyPDF.pdf"                     # installer/PolyPDF.iss MyProgId 와 같다
-CAPS = r"Software\PolyPDF\Capabilities"
+CAPS = r"Software\%s\Capabilities" % APP
 REG_APPS = r"Software\RegisteredApplications"
 OPEN_WITH = r"Software\Classes\.pdf\OpenWithProgids"
 PROG_KEY = r"Software\Classes\%s" % PROG_ID
@@ -112,7 +114,7 @@ def remove_user_keys(reg, exe_name: str = "PolyPDF.exe") -> list:
         done.append(OPEN_WITH + "\\" + PROG_ID)
     if reg.delete_value(HKCU, REG_APPS, APP):
         done.append(REG_APPS + "\\" + APP)
-    if reg.delete_tree(HKCU, r"Software\PolyPDF\Capabilities"):
+    if reg.delete_tree(HKCU, CAPS):
         done.append(CAPS)
     if reg.delete_tree(HKCU, r"Software\Classes\Applications\%s" % exe_name):
         done.append(r"Software\Classes\Applications\%s" % exe_name)
@@ -143,6 +145,27 @@ def prepare(exe: str, frozen: bool, reg, desc: str = "PDF (" + APP_NAME + ")", a
                 "removed": remove_user_keys(reg, os.path.basename(exe))}
     write_user_keys(reg, exe, desc, app_desc)
     return {"kind": "user", "uris": [URI_USER, URI_PLAIN], "removed": []}
+
+
+def repair_user_progids(reg, exe: str, exists=os.path.exists) -> list:
+    """261114-8(이사 판): HKCU 에 앱이 쓴 ProgID(PDF `PolyPDF.pdf`·사진 `PolyPix.photo`/옛 `PolyPDF.photo`)의 열기 명령이
+    **없는 실행 파일**을 가리키면 지금 실행 파일로 고친다 — 실행 파일 이름·설치 폴더가 바뀌어도 사용자가 고른 기본 앱이 그대로 열리게.
+    있는 실행 파일(다른 휴대용 폴더 등)을 가리키면 건드리지 않는다. 고친 키 목록."""
+    done = []
+    for pid in (PROG_ID,) + tuple(ALL_PHOTO_PROG_IDS):
+        key = r"Software\Classes\%s\shell\open\command" % pid
+        cur = reg.get(HKCU, key)
+        if not cur:
+            continue
+        c = str(cur).strip()
+        first = c[1:c.find('"', 1)] if c.startswith('"') else c.split(" ")[0]
+        if first and not exists(first) and not _same_exe(cur, exe):
+            reg.set(HKCU, key, "", _cmd(exe))
+            icon = r"Software\Classes\%s\DefaultIcon" % pid
+            if reg.get(HKCU, icon):
+                reg.set(HKCU, icon, "", '"%s",0' % exe)
+            done.append(key)
+    return done
 
 
 def open_settings(uris, opener) -> str:

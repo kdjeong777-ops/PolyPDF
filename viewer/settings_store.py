@@ -91,15 +91,20 @@ def _strip_secrets(data: dict) -> dict:
 
 _DIR_OVERRIDE = None     # 261009-19: 색인 자식 프로세스(Qt 앱 이름이 없다)가 부모의 설정 폴더를 그대로 쓰게
 PORTABLE = False         # 261009-22(마스터 §14.9): 휴대용(무설치) 모드 — exe 옆 `PolyPDF.portable` 이 있으면 main.py 가 켠다
-PORTABLE_MARKER = "PolyPDF.portable"
+from viewer.branding import PORTABLE_MARKER, OLD_PORTABLE_MARKERS, APP_ID as _APP_ID   # 261114-8: 이사 판부터 PolyPinax.portable(옛 표식도 안다)
+
+
+def has_portable_marker(base) -> bool:
+    b = Path(base)
+    return any((b / m).exists() for m in OLD_PORTABLE_MARKERS)
 
 
 def portable_dir(base, profile: str = ""):
-    """261009-22(마스터 §14.9): `base`(exe 폴더) 옆에 `PolyPDF.portable` 이 있으면 데이터 폴더 `<base>\\Data`
+    """261009-22(마스터 §14.9): `base`(exe 폴더) 옆에 휴대용 표식(`PORTABLE_MARKER`, 옛 이름 표식도)이 있으면 데이터 폴더 `<base>\\Data`
     (시험 프로필이면 `Data-<프로필>`)를, 없거나 **쓸 수 없으면** None(그때는 %APPDATA% — 부르는 쪽이 알린다)."""
     try:
         b = Path(base)
-        if not (b / PORTABLE_MARKER).exists():
+        if not has_portable_marker(b):
             return None
         d = b / ("Data-" + profile if profile else "Data")
         d.mkdir(parents=True, exist_ok=True)
@@ -116,7 +121,7 @@ def local_data_dir() -> Path:
     if PORTABLE:
         return settings_dir()
     import os
-    return Path(os.environ.get("LOCALAPPDATA") or str(Path.home())) / "PolyPDF"
+    return Path(os.environ.get("LOCALAPPDATA") or str(Path.home())) / _APP_ID     # 261114-8: 이사 판부터 PolyPinax(main 이 옮긴다)
 
 
 def settings_dir() -> Path:

@@ -23,7 +23,9 @@ import re
 import subprocess
 import sys
 
-REPO_URL = "https://github.com/kdjeong777-ops/PolyPDF"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from viewer.branding import UPDATE_REPO as _REPO      # noqa: E402 — 261114-8: 저장소 주소(이사 스위치)
+REPO_URL = "https://github.com/" + _REPO
 KIND = {"feat": "기능", "fix": "수정", "docs": "문서", "perf": "성능", "refactor": "정리",
         "build": "빌드", "ci": "빌드", "chore": "정리", "test": "검사"}
 _HEAD = re.compile(r"^(\w+)(?:\([^)]*\))?!?:\s*")

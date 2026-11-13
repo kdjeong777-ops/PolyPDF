@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QMessageBox, QToolButton
 from pathlib import Path
 
 from viewer.i18n import tr, tr_noop
+from viewer import branding as _br          # 261114-8(마스터 §1.1): 실행 파일 이름
 
 VIEW_PDF = "pdf"                 # 'PDF 전용' — 사진 모드 없음(기본)
 VIEW_MIXED = "mixed"             # '혼용' — PDF 모드 ↔ 사진 모드
@@ -1115,7 +1116,7 @@ class PhotoMixin:
             QMessageBox.information(
                 self, tr("안내"),
                 tr("개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
-                   "빌드된 PolyPDF.exe 에서 실행해 주세요."))
+                   "빌드된 {exe} 에서 실행해 주세요.").format(exe=_br.EXE_NAME))   # 261114-8: 실행 파일 이름은 branding(이사 스위치)
             return
         exe = os.path.abspath(_sys.executable)
         manual = tr("사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'")

@@ -11,10 +11,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 os.chdir(HERE)
 SEP = ";"  # Windows add-data 구분자
+sys.path.insert(0, str(HERE))
+from viewer.branding import EXE_STEM   # 261114-8(마스터 §1.1): 실행 파일·dist 이름 — 이사 스위치(MOVED)가 정한다
 
 args = [
     "--noconfirm", "--clean",
-    "--name", "PolyPDF",
+    "--name", EXE_STEM,
     "--windowed", "--onedir",      # onefile 추출 오류(charset_normalizer __mypyc) 회피·빠른 시작
     "--noupx",                     # 261108-11: UPX 압축은 백신 오인을 부른다(릴리스 SOT §14.2)
     "--paths", ".",
@@ -81,11 +83,11 @@ PyInstaller.__main__.run(args)
 # 260609-17(F4): ffmpeg.exe 를 EXE 옆(외부)에 복사 — 녹화 기능에서 사용
 import shutil
 _ff = HERE / "ffmpeg.exe"
-_distdir = HERE / "dist" / "PolyPDF"
+_distdir = HERE / "dist" / EXE_STEM
 if _ff.exists() and _distdir.exists():
     try:
         shutil.copy2(str(_ff), str(_distdir / "ffmpeg.exe"))
-        print("[+] ffmpeg.exe 를 dist/PolyPDF 에 복사(녹화용).")
+        print(f"[+] ffmpeg.exe 를 dist/{EXE_STEM} 에 복사(녹화용).")
     except Exception as e:
         print(f"ffmpeg 복사 실패(무시): {e}")
 elif not _ff.exists():
@@ -105,4 +107,4 @@ if bdir.exists():
         print("build/ 정리됨(중간 산출물).")
     except Exception as e:
         print(f"build/ 정리 실패(무시): {e}")
-print(f"빌드 종료. 실행: dist\\PolyPDF\\PolyPDF.exe")
+print(f"빌드 종료. 실행: dist\\{EXE_STEM}\\{EXE_STEM}.exe")

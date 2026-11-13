@@ -56,7 +56,8 @@ import importlib.util
 spec = importlib.util.spec_from_file_location("polypdf_main", os.path.join(HERE, "main.py"))
 os.environ["POLYPDF_PROFILE"] = "..\\..\\evil/x"
 src = Path(os.path.join(HERE, "main.py")).read_text(encoding="utf-8")
-ns = {"os": os}
+from viewer import branding as _branding   # 261114-8: 잘라 돌리는 main.py 구간이 branding 값을 쓴다(작업 표시줄 앱 ID 등)
+ns = {"os": os, "sys": sys, "Path": Path, "_branding": _branding}
 exec(src[src.index("def _profile()"):src.index("def _migrate_appdata()")], ns)
 chk(ns["_profile"]() == "evilx", "D 프로필 이름은 영문·숫자·-_ 만", repr(ns["_profile"]()))
 

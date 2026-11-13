@@ -48,8 +48,10 @@ WORK = ROOT.parent                                      # 비공개 작업 폴�
 SUITE = WORK / "release_test_suite.json"
 REVIEW = WORK / "_review"
 PENDING = ".restore_pending"                            # 이 파일이 있으면 설정을 아직 되돌리지 않았다
-REPO = "kdjeong777-ops/PolyPDF"
-DEFAULT_EXE = Path(r"C:\Program Files\PolyPDF\PolyPDF.exe")
+sys.path.insert(0, str(ROOT))
+from viewer import branding as _br                       # noqa: E402 — 261114-8: 이름은 branding 하나에서(이사 스위치 MOVED)
+REPO = _br.UPDATE_REPO
+DEFAULT_EXE = Path(r"C:\Program Files") / _br.EXE_STEM / _br.EXE_NAME
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_installed as probe                          # noqa: E402
@@ -165,7 +167,7 @@ def exe_for_build(a, out: Path) -> Path:
     if a.source == "local":
         if a.rebuild:
             local_build()
-        exe = ROOT / "dist" / "PolyPDF" / "PolyPDF.exe"
+        exe = ROOT / "dist" / _br.EXE_STEM / _br.EXE_NAME
         if not exe.exists():
             raise SystemExit("빌드본이 없다: %s (--rebuild 로 빌드부터)" % exe)
         stale = newer_sources(exe)
@@ -177,7 +179,7 @@ def exe_for_build(a, out: Path) -> Path:
         app = out / "app"
         with zipfile.ZipFile(z) as zf:
             zf.extractall(app)
-        exe = next(app.rglob("PolyPDF.exe"))
+        exe = next(app.rglob(_br.EXE_NAME))
     v, want = exe_version(exe), source_version()
     if v != want:
         raise SystemExit("빌드본 버전 %s ≠ 소스 %s — 낡은 빌드를 재는 것을 막는다" % (v or "?", want))
@@ -191,7 +193,7 @@ def installed_info():
           " if ($k) { $k.DisplayVersion + '|' + $k.InstallLocation }")
     r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
     dv, _, loc = r.stdout.strip().partition("|")
-    exe = (Path(loc) / "PolyPDF.exe") if loc else DEFAULT_EXE
+    exe = next((Path(loc) / n for n in _br.ALL_EXE_NAMES if (Path(loc) / n).exists()), Path(loc) / _br.EXE_NAME) if loc else DEFAULT_EXE   # 261114-8: 이사 전 판(옛 이름)도
     return dv, exe
 
 
@@ -199,18 +201,18 @@ def exe_for_install(a, out: Path, rec: dict) -> Path:
     want = source_version()
     if a.source == "ci":
         d = ci_download(ci_run_id(a.run_id), "setup", out / "artifact")
-        setup = next(d.rglob("PolyPDF-Setup-v*.exe"))
+        setup = next(d.rglob(_br.SETUP_PREFIX + "*.exe"))
     else:
-        exe = ROOT / "dist" / "PolyPDF" / "PolyPDF.exe"
+        exe = ROOT / "dist" / _br.EXE_STEM / _br.EXE_NAME
         if exe_version(exe) != want:
             raise SystemExit("dist 빌드본이 소스 버전(%s)이 아니다 — build --source local --rebuild 먼저" % want)
         iscc = next((p for p in (Path(os.environ.get("ProgramFiles(x86)", "")) / "Inno Setup 6" / "ISCC.exe",
                                  Path(os.environ.get("ProgramFiles", "")) / "Inno Setup 6" / "ISCC.exe") if p.exists()), None)
         if iscc is None:
             raise SystemExit("ISCC.exe 가 없다(Inno Setup 6)")
-        r = subprocess.run([str(iscc), "/DMyAppVersion=%s" % want, str(ROOT / "installer" / "PolyPDF.iss")],
+        r = subprocess.run([str(iscc), "/DMyAppVersion=%s" % want] + (["/DMOVED"] if _br.MOVED else []) + [str(ROOT / "installer" / "PolyPDF.iss")],
                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        setup = ROOT / ("PolyPDF-Setup-v%s.exe" % want)
+        setup = ROOT / ("%s%s.exe" % (_br.SETUP_PREFIX, want))
         if r.returncode != 0 or not setup.exists():
             (out / "iscc.log").write_text(r.stdout + r.stderr, encoding="utf-8")
             raise SystemExit("ISCC 실패 — %s" % (out / "iscc.log"))
@@ -909,7 +911,7 @@ def selftest(exe: Path, out: Path, rec: dict):
 
 def run_suite(exe: Path, out: Path, only, rec: dict, watch=None, judge_stall=True):
     base, cases = load_suite(only)
-    probe.EXE = exe
+    probe.set_exe(exe)          # 261114-8: 실행 파일 이름에 맞는 설정·시험 프로필 폴더(옛 판 기준점·이사 판)
     # 261009-19: 실제 설정은 **읽어서** 시험 프로필로 복사만 — 대상마다 그 복사본(cfg_seed)으로 되돌린다
     probe.seed()
     bk = out / "cfg_seed"

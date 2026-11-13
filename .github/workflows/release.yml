@@ -128,7 +128,7 @@ jobs:
 
       # 261109-3(릴리스 SOT §14.5 U16, 사용자 결정 A): 자연 음성 모델도 설치본·휴대용에 넣는다 — 방화벽 PC 는 구성요소 창으로 받을 수 없다.
       #   components 릴리스의 두 자산을 앱과 같은 고정 SHA-256 으로 확인하고 public\voices\ 에 푼다(구성요소 창과 같은 풀기 함수).
-      #   build_ci.bat 이 그 모델 폴더를 dist\PolyPDF\voices 로 옮기고, 아래 'Verify voice bundle' 이 없으면 릴리스를 막는다.
+      #   build_ci.bat 이 그 모델 폴더를 dist\<EXE_STEM>\voices 로 옮기고, 아래 'Verify voice bundle' 이 없으면 릴리스를 막는다.
       - name: Stage natural voice (Supertonic 3 model)
         continue-on-error: true
         shell: pwsh
@@ -195,6 +195,22 @@ jobs:
             if (Test-Path $f) { echo "OK $f $((Get-Item $f).Length)" } else { echo "::warning::가상 프린터 구성요소 없음: $f" }
           }
 
+      # 261114-8(마스터 §1.1·릴리스 SOT §14.5 U26): 이름은 viewer/branding.py 하나에서 — 이사 스위치(MOVED)가 실행 파일·자산 이름을 정한다.
+      #   bridge(다리 판) = 이사 판을 **옛 저장소**(kdjeong777-ops/PolyPDF)에서 낼 때: 옛 판이 찾는 옛 자산 이름(PolyPDF-…)으로만 올린다.
+      #   그 판의 코드는 새 저장소·새 자산 이름을 보므로 옛 사용자는 이 판 하나를 거쳐 새 저장소로 넘어간다.
+      - name: Names from branding (EXE_STEM · MOVED · bridge)
+        shell: pwsh
+        run: |
+          $stem = python -c "from viewer.branding import EXE_STEM;print(EXE_STEM)"
+          $moved = python -c "from viewer.branding import MOVED;print(1 if MOVED else 0)"
+          $bridge = if ($moved -eq '1' -and '${{ github.repository }}' -eq 'kdjeong777-ops/PolyPDF') { '1' } else { '0' }
+          $pfx = if ($bridge -eq '1') { 'PolyPDF' } else { $stem }
+          echo "APP_EXE=$stem" >> $env:GITHUB_ENV
+          echo "APP_MOVED=$moved" >> $env:GITHUB_ENV
+          echo "APP_BRIDGE=$bridge" >> $env:GITHUB_ENV
+          echo "ASSET_PFX=$pfx" >> $env:GITHUB_ENV
+          echo "exe=$stem moved=$moved bridge=$bridge asset-prefix=$pfx"
+
       - name: Build (PyInstaller via build_ci.bat)
         run: cmd /c build_ci.bat
 
@@ -202,8 +218,8 @@ jobs:
       - name: Verify voice bundle (fail the release if missing)
         shell: pwsh
         run: |
-          python -m viewer.components check-voice dist\PolyPDF\voices
-          if ($LASTEXITCODE -ne 0) { throw "dist\PolyPDF\voices 에 자연 음성 모델이 없습니다 - 자연 음성 없는 배포본은 내지 않는다" }
+          python -m viewer.components check-voice "dist\$env:APP_EXE\voices"
+          if ($LASTEXITCODE -ne 0) { throw "dist\$env:APP_EXE\voices 에 자연 음성 모델이 없습니다 - 자연 음성 없는 배포본은 내지 않는다" }
 
       # 261020-2(긴급, 릴리스 SOT §5): 빌드본이 실제로 뜨는지 — 시작 때 싣는 모듈을 그대로 싣는 자가 시험.
       #   beta.293 은 PyMuPDF 2.0(빠진 레이아웃 모델 파일)으로 설치본이 시작하자마자 꺼졌는데 CI 는 성공으로 끝났다.
@@ -211,7 +227,7 @@ jobs:
         shell: pwsh
         run: |
           $out = Join-Path $PWD 'selftest.txt'
-          $p = Start-Process -FilePath .\dist\PolyPDF\PolyPDF.exe -ArgumentList '--selftest', "`"$out`"" -PassThru
+          $p = Start-Process -FilePath ".\dist\$env:APP_EXE\$env:APP_EXE.exe" -ArgumentList '--selftest', "`"$out`"" -PassThru
           if (-not $p.WaitForExit(180000)) { $p.Kill(); throw "selftest 3분 안에 끝나지 않음" }
           if (Test-Path $out) { Get-Content $out -Encoding UTF8 }
           if ($p.ExitCode -ne 0 -or -not (Test-Path $out) -or -not ((Get-Content $out -Encoding UTF8 -TotalCount 1) -like 'ok *')) {
@@ -223,12 +239,12 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           if (-not $tag) { $tag = "dev" }
-          $full = "PolyPDF-$tag-win64.zip"
-          Compress-Archive -Path "dist\PolyPDF\*" -DestinationPath $full -Force
+          $full = "$env:ASSET_PFX-$tag-win64.zip"
+          Compress-Archive -Path "dist\$env:APP_EXE\*" -DestinationPath $full -Force
           # 260618-14: 업데이트용 zip — 안 바뀌는 무거운 부분 제외(앱이 우선 사용, 기존 설치분 보존)
           $stage = "$env:TEMP\polypdf_upd"
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
-          Copy-Item "dist\PolyPDF" $stage -Recurse
+          Copy-Item "dist\$env:APP_EXE" $stage -Recurse
           # 260910-6(사용자 보고 "설치본에 아직 kor 이 없다", 단어학습 SOT §14.17):
           #   무거운 자산은 '안 바뀐다' 는 가정으로 빼 왔는데, `kor` 은 beta.142 에서
           #   **새로 들어온 파일**이었다. 그래서 한 번이라도 앱 안에서 업데이트한
@@ -251,21 +267,26 @@ jobs:
               Get-ChildItem $kept -Filter *.traineddata | Select-Object Name, Length
             }
           }
-          $upd = "PolyPDF-$tag-win64-update.zip"
+          # 261114-8(U26 다리 판): 옛 판의 zip 길(휴대용·zip 설치)은 풀고 나서 **옛 실행 파일 이름(PolyPDF.exe)** 을 다시 띄운다 —
+          #   그 이름의 새 실행 파일을 함께 넣어 옛 판이 새 코드로 다시 뜨게 한다(새 코드가 설정 폴더를 옮기고 다음부터 새 저장소를 본다).
+          if ($env:APP_BRIDGE -eq '1' -and $env:APP_EXE -ne 'PolyPDF') {
+            Copy-Item "$stage\$env:APP_EXE.exe" "$stage\PolyPDF.exe" -Force
+          }
+          $upd = "$env:ASSET_PFX-$tag-win64-update.zip"
           Compress-Archive -Path "$stage\*" -DestinationPath $upd -Force
-          # 261009-22(마스터 §14.9): 휴대용(무설치) zip — 맨 위 PolyPDF\ 폴더 + exe 옆 표식 PolyPDF.portable.
+          # 261009-22(마스터 §14.9): 휴대용(무설치) zip — 맨 위 <EXE_STEM>\ 폴더 + exe 옆 표식 <EXE_STEM>.portable.
           #   표식이 있으면 앱이 설정·색인을 그 폴더의 Data\ 에 둔다. 업데이트는 update zip 그대로(updater 가 portable 을 고르지 않는다).
-          $port = "PolyPDF-$tag-win64-portable.zip"
+          $port = "$env:ASSET_PFX-$tag-win64-portable.zip"
           $pst = "$env:TEMP\polypdf_port"
           if (Test-Path $pst) { Remove-Item $pst -Recurse -Force }
           New-Item -ItemType Directory $pst | Out-Null
-          Copy-Item "dist\PolyPDF" "$pst\PolyPDF" -Recurse
+          Copy-Item "dist\$env:APP_EXE" "$pst\$env:APP_EXE" -Recurse
           # 261010-2: 표식 글은 ASCII 만 — 한글 줄이 CI 에서 깨졌다(릴리스 portable zip 을 내려받아 실측). 한글 안내는 README.
-          @("PolyPDF portable mode marker.",
-            "If this file exists next to PolyPDF.exe, settings and the search index are stored in the Data folder here.",
+          @("$env:APP_EXE portable mode marker.",
+            "If this file exists next to $env:APP_EXE.exe, settings and the search index are stored in the Data folder here.",
             "Delete it to use the user folder (%APPDATA%) instead.") |
-            Out-File -FilePath "$pst\PolyPDF\PolyPDF.portable" -Encoding utf8
-          Compress-Archive -Path "$pst\PolyPDF" -DestinationPath $port -Force
+            Out-File -FilePath "$pst\$env:APP_EXE\$env:APP_EXE.portable" -Encoding utf8
+          Compress-Archive -Path "$pst\$env:APP_EXE" -DestinationPath $port -Force
           # 260628(보안 A): 자동 업데이트 무결성 검증용 SHA-256 자산.
           #   앱은 '<자산명>.sha256' 을 찾아 다운로드 직후 + **압축 해제 직전(승격 인스턴스 포함)**
           #   다시 검증한다. 형식은 sha256sum 관례(`<hex>  <파일명>`).
@@ -276,11 +297,13 @@ jobs:
           # 260628-12(U8): 잔존 파일 정리용 **정식 파일목록**. full 빌드 기준 상대경로.
           #   업데이트 zip 은 무거운 자산을 빼므로 목록은 반드시 **full 빌드**에서 뽑아야 한다
           #   (update zip 기준으로 만들면 ffmpeg·tesseract 가 지워진다).
-          $man = "PolyPDF-$tag-win64.manifest.txt"
-          $base = (Resolve-Path 'dist\PolyPDF').Path.TrimEnd('\') + '\'
-          Get-ChildItem -LiteralPath 'dist\PolyPDF' -Recurse -File -Force |
-            ForEach-Object { $_.FullName.Substring($base.Length) } |
-            Sort-Object | Out-File -FilePath $man -Encoding utf8
+          $man = "$env:ASSET_PFX-$tag-win64.manifest.txt"
+          $base = (Resolve-Path "dist\$env:APP_EXE").Path.TrimEnd('\') + '\'
+          $files = @(Get-ChildItem -LiteralPath "dist\$env:APP_EXE" -Recurse -File -Force |
+            ForEach-Object { $_.FullName.Substring($base.Length) })
+          # 261114-8(U26 다리 판): 다리 판 zip 에 넣은 옛 이름 실행 파일도 목록에 — 옛 판의 남은 파일 정리가 지우지 않게
+          if ($env:APP_BRIDGE -eq '1' -and $env:APP_EXE -ne 'PolyPDF') { $files += 'PolyPDF.exe' }
+          $files | Sort-Object | Out-File -FilePath $man -Encoding utf8
           echo "manifest=$man" >> $env:GITHUB_OUTPUT
           echo "full=$full" >> $env:GITHUB_OUTPUT
           echo "upd=$upd" >> $env:GITHUB_OUTPUT
@@ -298,8 +321,16 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { $iscc = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe" }
           $ver = (Select-String -Path "viewer\__init__.py" -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
-          & $iscc "/DMyAppVersion=$ver" "installer\PolyPDF.iss"
-          $setup = "PolyPDF-Setup-v$ver.exe"
+          # 261114-8(마스터 §1.1): 이사 스위치가 켜지면 /DMOVED — 실행 파일·설치 폴더·설치 파일 이름·작업 표시줄 ID 가 PolyPinax
+          $isccArgs = @("/DMyAppVersion=$ver")
+          if ($env:APP_MOVED -eq '1') { $isccArgs += "/DMOVED" }
+          & $iscc @isccArgs "installer\PolyPDF.iss"
+          $setup = "$env:APP_EXE-Setup-v$ver.exe"
+          # 261114-8(U26 다리 판): 옛 저장소에는 옛 판이 찾는 이름(PolyPDF-Setup-v…)으로 — 내용은 같은 이사 판 설치본
+          if ($env:APP_BRIDGE -eq '1' -and (Test-Path $setup) -and $env:APP_EXE -ne 'PolyPDF') {
+            Move-Item $setup "PolyPDF-Setup-v$ver.exe" -Force
+            $setup = "PolyPDF-Setup-v$ver.exe"
+          }
           # 261108-13(U24): 앱 안 업데이트는 이 설치본을 받아 조용히 실행한다 — 실행 전에 맞춰 볼 '<설치본>.sha256' 을 함께 올린다.
           #   없으면 앱은 설치본 길을 쓰지 않고 update zip 길로 간다(해시 없는 설치본은 관리자 권한으로 돌리지 않는다).
           # (코드 서명 자리 — 261108-14 보류: 서명을 넣으면 ISCC 의 SignTool= 로 설치본을 서명한 **뒤에** 이 해시를 만든다)
@@ -359,6 +390,12 @@ jobs:
           # 261008-18(마스터 §14.5 U14): --generate-notes 는 PR 기준이라 'Full Changelog' 한 줄만 남았다
           #   → 이전 버전 태그부터의 커밋 메시지로 설명을 만든다(앱 업데이트 창이 보여 준다).
           python scripts/release_notes.py $tag notes.md        # 파일로 직접(UTF-8) — 파이프는 한글이 깨질 수 있다
+          # 261114-8(U26 다리 판): 옛 저장소의 마지막 릴리스 — 맨 앞에 '새 이름·새 GitHub 로 옮김' 두 줄
+          if ($env:APP_BRIDGE -eq '1') {
+            $move = "**PolyPDF 는 PolyPinax 로 이름을 바꾸고 https://github.com/kdjeong777-ops/PolyPinax 로 옮겼습니다.** 설치한 앱은 이 업데이트로 새 이름·새 주소로 넘어가며, 설정·검색 색인은 그대로 이어집니다.`n`n" +
+                    "**PolyPDF is now PolyPinax and has moved to https://github.com/kdjeong777-ops/PolyPinax.** This update moves your installed app to the new name and address; your settings and search index carry over.`n`n"
+            $move + (Get-Content notes.md -Raw -Encoding UTF8) | Out-File -FilePath notes.md -Encoding utf8
+          }
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             # 260618-35: --clobber 필수 — 릴리스가 이미 있고(수동 생성 등) 같은 이름 자산이

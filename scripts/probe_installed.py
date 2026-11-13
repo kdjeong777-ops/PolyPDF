@@ -34,12 +34,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import real_profile                                     # noqa: E402  261102-1: 실제 폴더는 패키지 가상화 밖에서 읽는다
 
-EXE =Path(os.environ.get("POLYPDF_EXE", r"C:\Program Files\PolyPDF\PolyPDF.exe"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from viewer import branding as _br                      # noqa: E402  261114-8: 이름은 branding 하나에서(이사 스위치 MOVED)
+
 PROFILE = os.environ.get("POLYPDF_TEST_PROFILE", "test")
-REAL = Path(os.environ["APPDATA"]) / "LocalTools" / "PolyPDF"          # 사용자 실제 설정 — 읽기만
-CFG = Path(os.environ["APPDATA"]) / "LocalTools" / ("PolyPDF-" + PROFILE)   # 시험 프로필 — 여기만 쓰고 지운다
-if not PROFILE or CFG.resolve() == REAL.resolve():
-    raise SystemExit("시험 프로필이 실제 설정 폴더와 같다 — 쓰지 않는다")
+_LT = Path(os.environ["APPDATA"]) / "LocalTools"
+
+
+def set_exe(exe) -> None:
+    """261114-8: 재는 실행 파일에 따라 설정 폴더 이름이 갈린다 — 옛 판(PolyPDF.exe → LocalTools\\PolyPDF)·이사 판(PolyPinax.exe →
+    LocalTools\\PolyPinax). 실행 파일 이름(stem) = 그 판의 앱 이름. 실제 설정은 그 이름 폴더, 없으면 다른 이름(이사 전 기준점)."""
+    global EXE, REAL, CFG
+    EXE = Path(exe)
+    stem = EXE.stem if EXE.stem in (_br.NEW_ID, _br.OLD_ID) else _br.APP_ID
+    REAL = _LT / stem                                       # 사용자 실제 설정 — 읽기만
+    if not REAL.exists():
+        other = _LT / (_br.OLD_ID if stem == _br.NEW_ID else _br.NEW_ID)
+        REAL = other if other.exists() else REAL
+    CFG = _LT / (stem + "-" + PROFILE)                      # 시험 프로필 — 여기만 쓰고 지운다
+    if not PROFILE or CFG.resolve() == REAL.resolve():
+        raise SystemExit("시험 프로필이 실제 설정 폴더와 같다 — 쓰지 않는다")
+
+
+set_exe(os.environ.get("POLYPDF_EXE", str(Path(r"C:\Program Files") / _br.EXE_STEM / _br.EXE_NAME)))
 # 백업에서 빼는 것: 받아 둔 업데이트 zip(300MB)·실행 중 인스턴스 표식
 SKIP = {"PolyPDF-update.zip", "instances"}
 INDEX = ("index.db", "index.db-wal", "index.db-shm")
@@ -90,7 +107,7 @@ def _children(pid):
         e = PE32(); e.dwSize = ctypes.sizeof(PE32)
         ok = k32.Process32FirstW(snap, ctypes.byref(e))
         while ok:
-            if e.th32ParentProcessID == pid and e.szExeFile.lower() == "polypdf.exe":
+            if e.th32ParentProcessID == pid and e.szExeFile.lower() in APP_NAMES:
                 out.append(e.th32ProcessID)
             ok = k32.Process32NextW(snap, ctypes.byref(e))
     finally:
@@ -98,7 +115,7 @@ def _children(pid):
     return out
 
 
-APP_NAMES = ("polypdf.exe",)
+APP_NAMES = tuple(n.lower() for n in _br.ALL_EXE_NAMES)   # 261114-8: 새·옛 실행 파일
 LEFT_WAIT_S = 10       # 261108-20: 닫은 뒤 앱의 자손(색인·변환 자식, 띄어쓰기 도우미)이 끝나기를 기다리는 한도
 DROP_WAIT_S = 30       # 시험 프로필을 지우기 전 남은 시험 프로세스를 기다리는 한도 — 넘으면 끝내고 지운다
 SPAWNED = set()        # 이 측정(release_test 한 번)이 띄운 앱과 그 자손 pid — `drop` 이 남은 것을 기다린다

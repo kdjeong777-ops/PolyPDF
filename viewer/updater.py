@@ -23,9 +23,13 @@ from pathlib import Path
 
 from viewer.i18n import tr                      # 설치 도우미 문구(다국어 SOT §10.4)
 
+from viewer import branding as _br
+
 ASSET_NAME = "PolyPDF-windows.zip"
 # 260618-11: 기본 업데이트 저장소(설정 update_repo 가 비어 있으면 이 값 사용 — 입력 불필요).
-DEFAULT_REPO = "kdjeong777-ops/PolyPDF"
+#   261114-8(마스터 §1.1): 이사 스위치(branding.MOVED)가 정한다 — 이사 판부터 kdjeong777-ops/PolyPinax.
+#   옛 판은 옛 저장소만 본다 → 이사 판을 옛 저장소에도 옛 자산 이름으로 올린다(다리 판, 릴리스 SOT §14.5 U26).
+DEFAULT_REPO = _br.UPDATE_REPO
 _API_LATEST = "https://api.github.com/repos/{repo}/releases/latest"
 _UA = "PolyPDF-Updater"
 CREATE_NO_WINDOW = 0x08000000
@@ -162,7 +166,9 @@ def _to_info(rel):
     def _score(a):
         n = str(a.get("name") or "").lower()
         # 261009-22(마스터 §14.9): 휴대용 zip(맨 위 PolyPDF\ 폴더 + 표식)은 업데이트 자산이 아니다
-        return (0 if "portable" in n else 1, 1 if "update" in n else 0, 1 if "win" in n else 0)
+        # 261114-8: 다리 판은 새·옛 이름 zip 이 함께 있다 — 이 판의 이름(ASSET_PREFIX)을 먼저
+        return (0 if "portable" in n else 1, 1 if "update" in n else 0, 1 if "win" in n else 0,
+                1 if n.startswith(_br.ASSET_PREFIX.lower() + "-") else 0)
     pick = max(zips, key=_score) if zips else None
     asset_url = pick.get("browser_download_url") if pick else None
     asset_name = str(pick.get("name") or "") if pick else ""
@@ -182,15 +188,19 @@ def _to_info(rel):
     if asset_name:
         sha_url = _sha_url_for(assets, asset_name)
     # 261108-13(U24): 설치 프로그램 `PolyPDF-Setup-v<판>.exe` 와 그 `.sha256` — 둘 다 있어야 설치본 길을 쓴다.
+    #   261114-8: 접두는 새·옛 이름 모두(`branding.ALL_SETUP_PREFIXES`) — 이 판의 이름(SETUP_PREFIX)을 먼저 고른다(다리 판엔 둘 다 있다)
     setup_url, setup_name, setup_sha_url = "", "", ""
-    for a in assets:
+    prefixes = [_br.SETUP_PREFIX.lower()] + [p.lower() for p in _br.ALL_SETUP_PREFIXES if p != _br.SETUP_PREFIX]
+    cands = [a for a in assets if str(a.get("name") or "").lower().endswith(".exe")
+             and any(str(a.get("name") or "").lower().startswith(p) for p in prefixes)]
+    cands.sort(key=lambda a: next(i for i, p in enumerate(prefixes) if str(a.get("name") or "").lower().startswith(p)))
+    if cands:
+        a = cands[0]
         n = str(a.get("name") or "")
-        if n.lower().startswith("polypdf-setup-") and n.lower().endswith(".exe"):
-            u = a.get("browser_download_url") or ""
-            if is_trusted_asset_url(u):
-                setup_url, setup_name = u, n
-                setup_sha_url = _sha_url_for(assets, n)
-            break
+        u = a.get("browser_download_url") or ""
+        if is_trusted_asset_url(u):
+            setup_url, setup_name = u, n
+            setup_sha_url = _sha_url_for(assets, n)
     return {
         "tag": tag,
         "version": tag.lstrip("vV"),
@@ -475,7 +485,8 @@ function Get-KiwiHelperIds {
     #   제 부모 창이 끝나면 스스로 끝난다 — **창으로 세지 않고**, 기다리기는 함께 한다(도우미도 `_internal` 을 잠근다).
     $ids = @()
     try {
-        foreach ($c in (Get-CimInstance Win32_Process -Filter "Name='PolyPDF.exe'" -ErrorAction SilentlyContinue)) {
+        # 261114-8(마스터 §1.1): 실행 파일 이름은 이사 판부터 PolyPinax.exe — 새·옛 이름 모두
+        foreach ($c in (Get-CimInstance Win32_Process -Filter "Name='PolyPinax.exe' OR Name='PolyPDF.exe'" -ErrorAction SilentlyContinue)) {
             if ([string]$c.CommandLine -like '*--kiwi-space-server*') { $ids += [int]$c.ProcessId }
         }
     } catch {}
@@ -632,7 +643,8 @@ try {
     $total = [Math]::Max(1, $arc.Entries.Count); $n = 0
     foreach ($e in $arc.Entries) {
         $rel = $e.FullName.Replace('/', '\')
-        if ($rel -like 'PolyPDF\*') { $rel = $rel.Substring(8) }
+        if ($rel -like 'PolyPinax\*') { $rel = $rel.Substring(10) }      # 261114-8: 맨 위 폴더 — 새·옛 이름 모두
+        elseif ($rel -like 'PolyPDF\*') { $rel = $rel.Substring(8) }
         $n++
         if (-not [string]::IsNullOrEmpty($rel)) {
             $dest = Join-Path $install $rel
@@ -804,6 +816,7 @@ def installer_texts() -> dict:
         for i, nm in enumerate(names):
             text = text.replace("{%s}" % nm, "{%d}" % i)
         return text
+    setup = _br.SETUP_PREFIX + "*.exe"          # 261114-8: 설치 파일 이름(이사 스위치) — 문구에는 {setup} 자리
     return {
         "title_install": tr("PolyPinax 업데이트 설치"),
         "title_update": tr("PolyPinax 업데이트"),
@@ -822,7 +835,7 @@ def installer_texts() -> dict:
         "closing_left": tr("남은 창을 닫는 중..."),
         "elevating": tr("관리자 권한으로 업데이트를 적용합니다..."),
         "elevate_cancel": tr("업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.\n"
-                             "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."),
+                             "최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요.").replace("{setup}", setup),
         "bad_hash": tr("업데이트 파일이 손상되었거나 변조되었습니다(무결성 검증 실패).\n"
                        "안전을 위해 설치를 중단했습니다.\n\n"
                        "잠시 후 다시 시도하거나, 공식 릴리스에서 설치본을 내려받아 주세요."),
@@ -832,10 +845,10 @@ def installer_texts() -> dict:
         "reelevate": tr("일부 폴더에 권한이 없어 관리자 권한으로 다시 적용합니다..."),
         "reelevate_cancel": ps(tr("일부 폴더에 쓰기 권한이 없어 업데이트를 마치지 못했습니다({n}개). "
                                   "관리자 권한 요청이 취소되었습니다.\n"
-                                  "최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."), "n"),
+                                  "최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요.").replace("{setup}", setup), "n"),
         "done": tr("설치 완료 — 프로그램을 다시 시작합니다."),
         "partial_fail": ps(tr("업데이트를 완료하지 못했습니다. {n}개 파일을 교체하지 못했습니다(권한 문제일 수 있음).\n"
-                              "최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."), "n"),
+                              "최신 설치본({setup})을 '관리자 권한으로 실행'해 주세요.").replace("{setup}", setup), "n"),
     }
 
 
@@ -851,7 +864,7 @@ def apply_update(zip_path: str = None, url: str = "", sha256: str = "",
     if url and not is_trusted_asset_url(url):
         return False
     inst = str(install_dir())
-    exe = sys.executable if is_frozen() else os.path.join(inst, "PolyPDF.exe")
+    exe = sys.executable if is_frozen() else os.path.join(inst, _br.EXE_NAME)
     pid = os.getpid()
     ps1 = os.path.join(tempfile.gettempdir(), f"polypdf_update_{pid}.ps1")
 
@@ -929,11 +942,12 @@ def installed_by_setup(inst=None) -> bool:
     """이 실행본이 설치 프로그램으로 깐 것인가 — Uninstall 항목의 설치 폴더 = 이 폴더, 휴대용 표식 없음."""
     inst = Path(inst) if inst else install_dir()
     try:
-        from viewer.settings_store import PORTABLE_MARKER
+        from viewer.settings_store import has_portable_marker
+        if has_portable_marker(inst):                          # 261114-8: 새·옛 표식 모두
+            return False
     except Exception:
-        PORTABLE_MARKER = "PolyPDF.portable"
-    if (inst / PORTABLE_MARKER).exists():
-        return False
+        if (inst / "PolyPDF.portable").exists():
+            return False
     loc = setup_install_location()
     return bool(loc) and _norm_dir(loc) == _norm_dir(inst)
 

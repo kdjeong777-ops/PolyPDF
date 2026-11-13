@@ -50,8 +50,11 @@ def verify_file(name: str, path) -> bool:
 
 
 def repo_or_default(repo: str = "") -> str:
+    """261114-8(마스터 §1.1): 구성요소(`components` 릴리스)는 **옛 저장소에 둔다**(`branding.COMPONENTS_REPO`) — 이사 판 뒤에도
+    옛 저장소를 보관(archive)만 하므로 받을 수 있다. 새 저장소로 옮기면 그 값 한 줄을 바꾼다."""
+    from viewer.branding import COMPONENTS_REPO
     repo = (repo or "").strip()
-    return repo if valid_repo(repo) else DEFAULT_REPO
+    return repo if valid_repo(repo) else COMPONENTS_REPO
 
 
 def _assets(repo: str, timeout: float = 8.0) -> dict:

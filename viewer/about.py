@@ -14,7 +14,8 @@ from viewer.branding import APP_NAME          # 261114-6(마스터 §1.1): 보�
 COPYRIGHT_YEAR = "2026"
 AUTHOR = "KDJ"
 EMAIL = "kdjeong777@gmail.com"
-SOURCE_URL = "https://github.com/kdjeong777-ops/PolyPDF"
+from viewer.branding import UPDATE_REPO as _REPO
+SOURCE_URL = "https://github.com/" + _REPO     # 261114-8: 소스코드 주소 = 지금 저장소(이사 스위치 — 이사 판부터 kdjeong777-ops/PolyPinax)
 LICENSE_NAME = "GNU Affero General Public License v3.0 (AGPL-3.0)"
 LICENSE_URL = "https://www.gnu.org/licenses/agpl-3.0.html"
 

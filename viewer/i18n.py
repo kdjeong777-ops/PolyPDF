@@ -291,15 +291,18 @@ def _registry_install_language() -> str:
         import winreg
     except Exception:
         return ""
-    for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
-        try:
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"Software\PolyPDF", 0,
-                                winreg.KEY_READ | view) as k:
-                v, _t = winreg.QueryValueEx(k, "InstallLanguage")
-                if v:
-                    return normalize(v)
-        except OSError:
-            continue
+    from viewer.branding import APP_ID, OLD_ID
+    _INSTALL_KEYS = tuple(dict.fromkeys(("Software\\" + APP_ID, "Software\\" + OLD_ID)))   # 261114-8: 새 키(설치본 MyAppId) → 옛 키
+    for key in _INSTALL_KEYS:
+        for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0,
+                                    winreg.KEY_READ | view) as k:
+                    v, _t = winreg.QueryValueEx(k, "InstallLanguage")
+                    if v:
+                        return normalize(v)
+            except OSError:
+                continue
     return ""
 
 

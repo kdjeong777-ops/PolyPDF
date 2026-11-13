@@ -14,9 +14,13 @@ from __future__ import annotations
 from viewer.image_page import PHOTO_EXTS
 from viewer.pdf_default import HKCU, REG_APPS, _cmd, open_settings  # noqa: F401 — open_settings 는 창 쪽이 이 모듈로 부른다
 
-APP = "PolyPDFPhoto"                         # RegisteredApplications 값 이름 = 기본 앱 화면 URI 의 앱 이름(빈칸 없이)
-PROG_ID = "PolyPDF.photo"
-CAPS = r"Software\PolyPDF\PhotoCapabilities"
+from viewer import branding as _br
+
+# 261114-8(마스터 §1.1): 사진 ProgID 는 사진 모드 이름 — 이사 판부터 PolyPix.photo·PolyPixPhoto(옛 PolyPDF.photo 명령은
+#   pdf_default.repair_user_progids 가 지금 실행 파일로 고쳐 사용자가 고른 기본 사진 앱이 그대로 열린다). 등록 키는 제품 단위 APP_ID.
+APP = _br.PHOTO_APP                          # RegisteredApplications 값 이름 = 기본 앱 화면 URI 의 앱 이름(빈칸 없이)
+PROG_ID = _br.PHOTO_PROG_ID
+CAPS = r"Software\%s\PhotoCapabilities" % _br.APP_ID
 PROG_KEY = r"Software\Classes\%s" % PROG_ID
 URI_USER = "ms-settings:defaultapps?registeredAppUser=" + APP
 URI_PLAIN = "ms-settings:defaultapps"

@@ -7,17 +7,24 @@
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
-; dist 산출물 위치(.iss 기준 상대) — CI/로컬 모두 ..\dist\PolyPDF
-#ifndef DistDir
-  #define DistDir "..\dist\PolyPDF"
+; 261114-6·261114-8(마스터 §1.1): MyAppName = 보이는 제품 이름(마법사·바로가기·제거 목록·기본 앱 화면),
+;   MyAppId = 제품 단위 내부 ID(실행 파일·설치 폴더·설치 파일 이름·작업 표시줄 앱 ID·레지스트리 키·등록 값 이름).
+;   ★ 이사 스위치: viewer/branding.py 의 MOVED 가 True 면 빌드가 /DMOVED 를 넘긴다(build_ci.bat·release.yml) — 그때만 PolyPinax.
+;   AppId(GUID)·ProgID PolyPDF.pdf(PDF 모드 이름)는 그대로 — 덮어 설치·사용자가 고른 기본 PDF 앱.
+#ifdef MOVED
+  #define MyAppId "PolyPinax"
+  #define MyAppURL "https://github.com/kdjeong777-ops/PolyPinax"
+#else
+  #define MyAppId "PolyPDF"
+  #define MyAppURL "https://github.com/kdjeong777-ops/PolyPDF"
 #endif
-; 261114-6(마스터 §1.1, 사용자 결정 'A안: 보이는 이름만'): MyAppName = 보이는 이름(마법사·바로가기·제거 목록·기본 앱 화면),
-;   MyAppId = 내부 ID(설치 폴더·레지스트리 키·등록 값 이름 — 바꾸지 않는다). AppId·ProgID·실행 파일·설치 파일 이름도 그대로.
+; dist 산출물 위치(.iss 기준 상대) — CI/로컬 모두 ..\dist\<MyAppId>
+#ifndef DistDir
+  #define DistDir "..\dist\" + MyAppId
+#endif
 #define MyAppName "PolyPinax"
-#define MyAppId "PolyPDF"
 #define MyAppPublisher "kdjeong777-ops"
-#define MyAppURL "https://github.com/kdjeong777-ops/PolyPDF"
-#define MyAppExe "PolyPDF.exe"
+#define MyAppExe MyAppId + ".exe"
 #define MyProgId "PolyPDF.pdf"
 
 [Setup]
@@ -32,10 +39,14 @@ AppUpdatesURL={#MyAppURL}/releases
 DefaultDirName={autopf}\{#MyAppId}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-; 261114-6: 업그레이드도 시작 메뉴 폴더를 새 이름으로(옛 'PolyPDF' 폴더는 옛 제거 프로그램이 지운다). 설치 폴더는 이어 쓴다(UsePreviousAppDir 기본)
+; 261114-6: 업그레이드도 시작 메뉴 폴더를 새 이름으로(옛 'PolyPDF' 폴더는 옛 제거 프로그램이 지운다).
 UsePreviousGroup=no
+#ifdef MOVED
+; 261114-8(이사 판): 설치 폴더도 새 이름(Program Files\PolyPinax) — 옛 판은 아래 PrepareToInstall 이 먼저 제거한다(지금도 하는 단계)
+UsePreviousAppDir=no
+#endif
 OutputDir=..\
-OutputBaseFilename=PolyPDF-Setup-v{#MyAppVersion}
+OutputBaseFilename={#MyAppId}-Setup-v{#MyAppVersion}
 SetupIconFile=..\resources\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExe}
 Compression=lzma2/max
@@ -71,9 +82,9 @@ Source: "{#DistDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
 [Icons]
 ; 261016-7(마스터 §14.2): 앱이 정하는 작업 표시줄 앱 ID(main.py APP_USER_MODEL_ID)와 같게 — 바로가기로 띄운 창·고정 단추가 한 단추로 묶인다
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.PolyPDF"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.{#MyAppId}"
 Name: "{group}\{cm:UninstallIcon}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.PolyPDF"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelID: "LocalTools.{#MyAppId}"; Tasks: desktopicon
 
 [Registry]
 ; ── 261008-27: PolyPDF 언어 — 앱이 처음 켜질 때 이 값으로 초기 설정한다(다국어 SOT §4·§10.1). 제거 때 지운다 ──
@@ -231,7 +242,10 @@ var
   p, q: Integer;
 begin
   Result := '';
-  path := ExpandConstant('{userappdata}\LocalTools\PolyPDF\settings.json');
+  { 261114-8(이사 판): 새 이름 폴더 → 없으면 옛 이름 폴더(앱이 처음 켜질 때 옮기므로 업그레이드 때는 아직 옛 폴더다) }
+  path := ExpandConstant('{userappdata}\LocalTools\{#MyAppId}\settings.json');
+  if not FileExists(path) then
+    path := ExpandConstant('{userappdata}\LocalTools\PolyPDF\settings.json');
   Exists := FileExists(path);
   if not Exists then Exit;
   if not LoadStringFromFile(path, raw) then Exit;
@@ -258,7 +272,8 @@ begin
   if Result <> '' then Exit;
   ReadSettingsLanguage(exists);
   if exists then begin Result := 'ko'; Exit; end;           { 2) 설정은 있는데 language 없음 = 이 기능 전의 앱 }
-  if RegQueryStringValue(HKLM, 'Software\{#MyAppId}', 'InstallLanguage', v) and (v <> '') then
+  if (RegQueryStringValue(HKLM, 'Software\{#MyAppId}', 'InstallLanguage', v) and (v <> '')) or
+     (RegQueryStringValue(HKLM, 'Software\PolyPDF', 'InstallLanguage', v) and (v <> '')) then   { 261114-8: 옛 키도 }
   begin
     Result := NormLang(v); Exit;                             { 3) 설치만 하고 앱을 안 켠 경우 }
   end;
@@ -451,7 +466,7 @@ begin
   if gPrevUninst = '' then Exit;
 
   { 1) 실행 중인 PolyPDF 종료(파일 잠금 방지) }
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM PolyPDF.exe', '',
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM PolyPinax.exe /IM PolyPDF.exe', '',   { 261114-8: 새·옛 실행 파일 }
        SW_HIDE, ewWaitUntilTerminated, rc);
   Sleep(500);
 

@@ -104,7 +104,8 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
 from viewer.resources_path import resource_path
-from viewer.branding import APP_ID, APP_NAME   # 261114-6(마스터 §1.1): 보이는 이름 / 내부 ID(설정 폴더 이름 — 바꾸지 않는다)
+from viewer.branding import APP_ID, APP_NAME   # 261114-6(마스터 §1.1): 보이는 이름 / 내부 ID(설정 폴더 이름 — 이사 스위치 MOVED 가 정한다)
+from viewer import branding as _branding
 
 
 def _profile() -> str:
@@ -115,7 +116,7 @@ def _profile() -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "", os.environ.get("POLYPDF_PROFILE", ""))[:32]
 
 
-APP_USER_MODEL_ID = "LocalTools.PolyPDF"
+APP_USER_MODEL_ID = _branding.AUMID     # 261114-8: 이사 판부터 LocalTools.PolyPinax(설치본 바로가기와 같게)
 
 
 def _set_app_user_model_id() -> str:
@@ -145,7 +146,7 @@ def _setup_portable() -> str:
         else Path(os.path.abspath(__file__)).parent
     try:
         from viewer import settings_store
-        if not (base / settings_store.PORTABLE_MARKER).exists():
+        if not settings_store.has_portable_marker(base):          # 261114-8: 새·옛 표식 모두
             return ""
         d = settings_store.portable_dir(base, _profile())
         if d is None:
@@ -158,6 +159,102 @@ def _setup_portable() -> str:
         return "portable"
     except Exception:
         return ""
+
+
+def move_profile(old: Path, new: Path) -> str:
+    """261114-8(마스터 §1.1, 이사 판): 옛 설정 폴더 → 새 이름. 'none'(옛 폴더 없음) · 'skip'(새 폴더에 설정이 이미 있음 — 둘 다 그대로) ·
+    'moved'(이름 바꿈 — 같은 드라이브라 큰 색인도 즉시, 복사하지 않는다) · 'fail'(열린 파일 등 — 옛 폴더 그대로, 부르는 쪽이 옛 폴더를 쓴다).
+    옛 폴더를 지우는 일은 없다(이름만 바뀐다) — 사용자 색인을 지운 사고(마스터 §14.2.1)를 되풀이하지 않게."""
+    old, new = Path(old), Path(new)
+    if not old.is_dir():
+        return "none"
+    if (new / "settings.json").exists():
+        return "skip"
+    try:
+        if new.exists():
+            if any(new.iterdir()):
+                return "skip"                    # 새 폴더에 무엇이 있으면 섞지 않는다
+            new.rmdir()
+        new.parent.mkdir(parents=True, exist_ok=True)
+        os.rename(old, new)
+        return "moved"
+    except OSError:
+        return "fail"
+
+
+def copy_reg_tree(src: str, dst: str) -> int:
+    """261114-8: HKCU 의 `src` 키(옛 QSettings — 창 위치 등)를 `dst` 로 복사 → 복사한 값 수. `dst` 가 이미 있으면 0(덮지 않는다)."""
+    if sys.platform != "win32":
+        return 0
+    import winreg
+    H = winreg.HKEY_CURRENT_USER
+    try:
+        winreg.CloseKey(winreg.OpenKey(H, dst))
+        return 0
+    except OSError:
+        pass
+    n = 0
+
+    def _copy(s, d):
+        nonlocal n
+        try:
+            sk = winreg.OpenKey(H, s)
+        except OSError:
+            return
+        with sk, winreg.CreateKey(H, d) as dk:
+            i = 0
+            while True:
+                try:
+                    name, val, typ = winreg.EnumValue(sk, i)
+                except OSError:
+                    break
+                winreg.SetValueEx(dk, name, 0, typ, val)
+                n += 1
+                i += 1
+            subs, i = [], 0
+            while True:
+                try:
+                    subs.append(winreg.EnumKey(sk, i))
+                except OSError:
+                    break
+                i += 1
+        for sub in subs:
+            _copy(s + "\\" + sub, d + "\\" + sub)
+    _copy(src, dst)
+    return n
+
+
+def _move_to_new_name() -> None:
+    """261114-8(이사 판, `branding.MOVED`): 옛 이름(PolyPDF)의 설정 폴더·도구 자료 폴더·창 위치(QSettings)를 새 이름으로 한 번 옮긴다.
+    스위치가 꺼져 있거나 시험 프로필·휴대용이면 하지 않는다. 옮기지 못한 설정 폴더는 그 실행에서 옛 폴더를 쓴다(`_DIR_OVERRIDE`)."""
+    if not _branding.MOVED or _profile():
+        return
+    try:
+        from viewer import settings_store as _ss
+        if _ss.PORTABLE:
+            return
+        from PyQt6.QtCore import QStandardPaths
+        new_dir = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation))
+        old_dir = new_dir.parent / _branding.OLD_ID
+        if move_profile(old_dir, new_dir) == "fail":
+            _ss._DIR_OVERRIDE = str(old_dir)     # 이번 실행은 옛 폴더로 — 다음 실행에서 다시 옮겨 본다
+        la = Path(os.environ.get("LOCALAPPDATA") or str(Path.home()))
+        move_profile(la / _branding.OLD_ID, la / _branding.APP_ID)
+        copy_reg_tree(r"Software\LocalTools\%s" % _branding.OLD_ID, r"Software\LocalTools\%s" % _branding.APP_ID)
+    except Exception:
+        pass
+
+
+def _repair_progids() -> None:
+    """261114-8(이사 판): HKCU 의 옛 ProgID 명령이 없어진 실행 파일(옛 이름·옛 폴더)을 가리키면 지금 실행 파일로 — 휴대용 포함.
+    빌드된 실행본·이사 스위치가 켜졌을 때만, 레지스트리 값 몇 개라 가볍다."""
+    if not _branding.MOVED or _profile() or not getattr(sys, "frozen", False):
+        return
+    try:
+        from viewer.pdf_default import Reg, repair_user_progids
+        repair_user_progids(Reg(), sys.executable)
+    except Exception:
+        pass
 
 
 def _migrate_appdata() -> None:
@@ -471,6 +568,8 @@ def main():
     if _ico:
         app.setWindowIcon(QIcon(_ico))    # v1.6.1 G1: 작업표시줄/타이틀바 아이콘
 
+    _move_to_new_name()      # 261114-8: 이사 판 — 옛 이름(PolyPDF) 설정 폴더를 새 이름으로(스위치가 꺼져 있으면 아무것도 안 함)
+    _repair_progids()        # 261114-8: 이사 판 — 옛 HKCU ProgID 명령을 지금 실행 파일로
     _migrate_appdata()       # v1.6.15: 구 'Smart PDF Viewer' AppData 1회 이전
     _install_excepthook()    # 261008-1(§14.7.3): 처리 안 된 예외로 창이 사라지지 않게(앱 이름 뒤 — 기록 폴더)
     _install_crash_log()     # 261025-8(§14.7.3): 네이티브 크래시의 스택을 crash.log 에

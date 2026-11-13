@@ -123,7 +123,7 @@ def crash_entries(p: Path, since: str, fatal: bool = True) -> list:
 
 def event_crashes(since: str) -> list:
     ps = ("$s=[datetime]'%s'; Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1002; StartTime=$s} "
-          "-ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'PolyPDF\\.exe' } | ForEach-Object { "
+          "-ErrorAction SilentlyContinue | Where-Object { $_.Message -match '(PolyPDF|PolyPinax)\\.exe' } | ForEach-Object { "
           "$_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss') + ' | ' + $_.Id + ' | ' + (($_.Message -split \"`n\")[0..3] -join ' ; ') }") % since
     r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, encoding="utf-8",
                        errors="replace")
@@ -144,7 +144,7 @@ def cmd_fresh(exe: Path, out: Path) -> int:
     """빈 시험 프로필로 첫 실행 — 설정 파일이 없는 사용자(첫 설치)의 길."""
     out.mkdir(parents=True, exist_ok=True)
     prof = "fresh%s" % time.strftime("%H%M%S")
-    cfg = LT / ("PolyPDF-" + prof)
+    cfg = LT / (Path(exe).stem + "-" + prof)        # 261114-8: 재는 실행 파일 이름 = 그 판의 앱 이름(PolyPDF / 이사 판 PolyPinax)
     if cfg.exists():
         shutil.rmtree(cfg)
     d = json.loads((WORK / "release_test_suite.json").read_text(encoding="utf-8"))
@@ -185,7 +185,7 @@ def cmd_report(out: Path, online: bool) -> int:
     after = stat_real()
     ev = event_crashes(since)
     prof_rows, bad = [], []
-    for cfg in sorted(LT.glob("PolyPDF-*")):
+    for cfg in sorted(list(LT.glob("PolyPDF-*")) + list(LT.glob("PolyPinax-*"))):   # 261114-8: 옛·이사 판 시험 프로필
         if not cfg.is_dir():
             continue
         errs = log_entries(cfg / "error.log", since)

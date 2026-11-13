@@ -156,6 +156,12 @@ REM   - PYTHONPATH 환경변수 + 절대 경로 --paths "%cd%" 로 양쪽 모두
 REM   - 추가로 viewer/ 폴더 전체를 --add-data 로 데이터 동봉 (런타임 sys.path 폴백용).
 set "PYTHONPATH=%cd%;%PYTHONPATH%"
 
+REM 261114-8(마스터 §1.1): 실행 파일·dist 폴더 이름은 viewer\branding.py 의 EXE_STEM — 이사 스위치(MOVED)가 정한다(PolyPDF / 이사 판 PolyPinax).
+for /f "usebackq delims=" %%n in (`python -c "from viewer.branding import EXE_STEM;print(EXE_STEM)"`) do set "APP_EXE=%%n"
+if not defined APP_EXE ( echo [ERROR] viewer\branding.py 의 EXE_STEM 을 읽지 못했습니다. & exit /b 1 )
+echo     실행 파일 이름: %APP_EXE%.exe
+if exist "%APP_EXE%.spec" del "%APP_EXE%.spec"
+
 REM 261008(다국어 SOT §3.5·§3.7): 언어팩 .po → .mo (resources\locale 은 --add-data resources 로 실린다).
 REM   가짜 언어(qps_ploc)는 개발·검사 전용이라 빌드 전에 지운다.
 python scripts\i18n.py clean-pseudo
@@ -171,7 +177,7 @@ REM 261010-30(보안 SOT §3.8): 공동인증서 SEED — cryptography 의 decre
 REM 261108-11(릴리스 SOT §14.2): --noupx — UPX 압축 실행 파일은 백신 휴리스틱이 악성으로 오인하기 쉽다.
 REM   PATH 에 upx 가 있으면 PyInstaller 가 저절로 압축하므로 명시해 끈다(빌드 끝에 check_no_upx.py 가 확인).
 python -m PyInstaller ^
-    --name "PolyPDF" ^
+    --name "%APP_EXE%" ^
     --windowed ^
     --onedir ^
     --noupx ^
@@ -229,27 +235,27 @@ if errorlevel 1 ( echo [ERROR] PyInstaller build failed. & exit /b 1 )
 
 REM 261014-27(마스터 §14.5 U23): 쓰지 않는 Qt 모듈(Quick·QML·3D·Designer…)·wordfreq 다른 언어 사전을 뺀다(약 160MB).
 REM   남은 모든 .dll/.pyd 의 가져오기가 풀리는지 확인 — 못 풀리면 빌드 실패.
-python scripts\prune_dist.py dist\PolyPDF
+python scripts\prune_dist.py dist\%APP_EXE%
 if errorlevel 1 ( echo [ERROR] prune_dist: 뺀 DLL 을 부르는 파일이 남았습니다. & exit /b 1 )
 REM 261108-11(릴리스 SOT §14.2): exe·dll·pyd 가 UPX 로 압축되지 않았는지(PE 구획 이름 UPX*) — 있으면 빌드 실패.
-python scripts\check_no_upx.py dist\PolyPDF
+python scripts\check_no_upx.py dist\%APP_EXE%
 if errorlevel 1 ( echo [ERROR] UPX 로 압축된 실행 파일이 있습니다. & exit /b 1 )
-REM 261109-3(릴리스 SOT §14.5 U16): 자연 음성 모델을 dist\PolyPDF\voices 에 — 구성요소 창이 받는 자리와 같다(install_dir()\voices).
+REM 261109-3(릴리스 SOT §14.5 U16): 자연 음성 모델을 dist\%APP_EXE%\voices 에 — 구성요소 창이 받는 자리와 같다(install_dir()\voices).
 REM   voices\ 는 CI 'Stage natural voice' 가 고정 SHA-256 으로 마련한다(로컬은 개발 폴더의 모델). 없으면 경고만 — CI 는 'Verify voice bundle' 이 막는다.
-python -m viewer.components bundle-voice voices dist\PolyPDF\voices
+python -m viewer.components bundle-voice voices dist\%APP_EXE%\voices
 if errorlevel 1 echo     ^^! 자연 음성 모델을 넣지 못했다 — 이 빌드의 설치본에는 자연 음성이 없다(구성요소 창으로 받아야 한다).
 
-REM 260603: build\ 정리 — build\PolyPDF\PolyPDF.exe(불완전 부트로더, python DLL 누락) 오실행 방지.
-REM   실제 실행 파일은 dist\PolyPDF\PolyPDF.exe 하나뿐이 되도록.
+REM 260603: build\ 정리 — build\%APP_EXE%\%APP_EXE%.exe(불완전 부트로더, python DLL 누락) 오실행 방지.
+REM   실제 실행 파일은 dist\%APP_EXE%\%APP_EXE%.exe 하나뿐이 되도록.
 if exist "build" rmdir /s /q "build"
 
 REM 261009-21: exe 수정 시각을 빌드 시각으로. PyInstaller 는 부트로더 파일의 날짜를 그대로 둬 모든 빌드의 exe 가 같은 시각이다 -
 REM   업그레이드 뒤 Windows 아이콘 캐시가 같은 경로+같은 시각이라 설치 중에 잡은 빈(흰) 아이콘을 계속 썼다(사용자 보고).
-powershell -NoProfile -Command "(Get-Item 'dist\PolyPDF\PolyPDF.exe').LastWriteTime = Get-Date"
+powershell -NoProfile -Command "(Get-Item 'dist\%APP_EXE%\%APP_EXE%.exe').LastWriteTime = Get-Date"
 echo.
 echo ============================================================
 echo   BUILD SUCCESS !
-echo   Output: dist\PolyPDF.exe
+echo   Output: dist\%APP_EXE%\%APP_EXE%.exe
 echo ============================================================
 echo.
 rem start (CI)

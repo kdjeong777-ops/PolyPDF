@@ -1138,7 +1138,7 @@ msgstr ""
 #: viewer/app.py viewer/photo_controller.py
 msgid ""
 "개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
-"빌드된 PolyPDF.exe 에서 실행해 주세요."
+"빌드된 {exe} 에서 실행해 주세요."
 msgstr ""
 
 #: viewer/app.py
@@ -7323,7 +7323,7 @@ msgstr ""
 #: viewer/updater.py
 msgid ""
 "업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.\n"
-"최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
+"최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 
 #: viewer/updater.py
@@ -7367,14 +7367,14 @@ msgstr ""
 #, python-brace-format
 msgid ""
 "일부 폴더에 쓰기 권한이 없어 업데이트를 마치지 못했습니다({n}개). 관리자 권한 요청이 취소되었습니다.\n"
-"최신 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
+"최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 
 #: viewer/updater.py
 #, python-brace-format
 msgid ""
 "업데이트를 완료하지 못했습니다. {n}개 파일을 교체하지 못했습니다(권한 문제일 수 있음).\n"
-"최신 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."
+"최신 설치본({setup})을 '관리자 권한으로 실행'해 주세요."
 msgstr ""
 
 #: viewer/vprinter_controller.py

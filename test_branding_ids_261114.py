@@ -60,7 +60,8 @@ try:
     # ── V3 ── 설치 프로그램
     iss = read("installer/PolyPDF.iss")
     chk(re.search(r'^#define MyAppName "PolyPinax"$', iss, re.M) is not None, "V3 설치 프로그램 보이는 이름 MyAppName = PolyPinax")
-    chk(re.search(r'^#define MyAppId "PolyPDF"$', iss, re.M) is not None, "V3 설치 프로그램 내부 ID MyAppId = PolyPDF")
+    chk(re.search(r'^\s*#define MyAppId "PolyPDF"$', iss, re.M) is not None and re.search(r'^\s*#define MyAppId "PolyPinax"$', iss, re.M) is not None,
+        "V3 설치 프로그램 내부 ID MyAppId = PolyPDF(이사 판 /DMOVED 면 PolyPinax — 261114-8)")
     chk(re.search(r"^DefaultDirName=\{autopf\}\\\{#MyAppId\}$", iss, re.M) is not None, "V3 설치 폴더는 내부 ID(Program Files\\PolyPDF)")
     chk(re.search(r"^UsePreviousGroup=no$", iss, re.M) is not None, "V3 시작 메뉴 폴더는 새 이름(옛 폴더 이어 쓰지 않음)")
     reg = iss[iss.index("\n[Registry]"):iss.index("\n[Run]")]
@@ -107,23 +108,30 @@ try:
 
     # ── F ── 내부 ID 표(바꾸면 사용자 자료·설정을 잃는다 — 마스터 §1.1)
     main_src = read("main.py")
-    chk('APP_USER_MODEL_ID = "LocalTools.PolyPDF"' in main_src, "F 작업 표시줄 앱 ID LocalTools.PolyPDF(고정·묶음)")
+    import main as _main
+    chk(_main.APP_USER_MODEL_ID == branding.AUMID and branding.ids(False)["AUMID"] == "LocalTools.PolyPDF",
+        "F 작업 표시줄 앱 ID — branding.AUMID(이사 전 LocalTools.PolyPDF)")
     chk(len(re.findall(r'setApplicationName\(APP_ID \+', main_src)) == 2 and "from viewer.branding import APP_ID" in main_src,
         "F 설정 폴더 이름(앱 이름)은 내부 ID — %APPDATA%\\LocalTools\\PolyPDF")
+    # 261114-6 결함: 줄을 지우다 다음 줄(조직 이름)이 앞 줄 주석 끝에 붙어 실행되지 않았다 → 설정 폴더가 %APPDATA%\PolyPDF 로 갈렸다
+    org_lines = [ln for ln in main_src.splitlines() if 'setOrganizationName("LocalTools")' in ln]
+    chk(len(org_lines) == 2 and all(ln.split("#", 1)[0].strip().startswith("app.setOrganizationName") for ln in org_lines),
+        "F 앱 이름 다음 조직 이름(LocalTools)이 실제 코드 줄로 두 번 — 주석에 붙지 않았다", str(org_lines))
     chk(re.search(r"^AppId=\{\{8E7B5A30-6E2C-4E2B-9C1A-1A2B3C4D5E6F\}$", iss, re.M) is not None, "F 설치 프로그램 AppId(업그레이드 = 같은 앱)")
     chk(re.search(r'^#define MyProgId "PolyPDF.pdf"$', iss, re.M) is not None, "F ProgID PolyPDF.pdf(사용자가 고른 기본 앱)")
-    chk(re.search(r'^#define MyAppExe "PolyPDF.exe"$', iss, re.M) is not None, "F 실행 파일 이름 PolyPDF.exe")
-    chk(re.search(r"^OutputBaseFilename=PolyPDF-Setup-v\{#MyAppVersion\}$", iss, re.M) is not None, "F 설치 파일 이름 PolyPDF-Setup-v…(옛 판 업데이트가 찾는다)")
-    chk(iss.count('AppUserModelID: "LocalTools.PolyPDF"') == 2, "F 바로가기 작업 표시줄 앱 ID")
+    chk(re.search(r'^#define MyAppExe MyAppId \+ "\.exe"$', iss, re.M) is not None, "F 실행 파일 이름 = MyAppId.exe(이사 전 PolyPDF.exe)")
+    chk(re.search(r"^OutputBaseFilename=\{#MyAppId\}-Setup-v\{#MyAppVersion\}$", iss, re.M) is not None
+        and "PolyPDF-Setup-v" in branding.ALL_SETUP_PREFIXES, "F 설치 파일 이름 MyAppId-Setup-v…(옛 판이 찾는 PolyPDF-Setup-v 도 알아본다)")
+    chk(iss.count('AppUserModelID: "LocalTools.{#MyAppId}"') == 2, "F 바로가기 작업 표시줄 앱 ID(앱과 같은 MyAppId)")
     chk("{userappdata}\\LocalTools\\PolyPDF\\settings.json" in iss, "F 설치 프로그램이 읽는 설정 파일 자리")
     ss = importlib.import_module("viewer.settings_store")
     chk(ss.PORTABLE_MARKER == "PolyPDF.portable", "F 휴대용 표식 PolyPDF.portable")
     chk(str(ss.local_data_dir()).endswith("PolyPDF") or ss.PORTABLE, "F 도구 자료 폴더 %LOCALAPPDATA%\\PolyPDF", str(ss.local_data_dir()))
     pdfd = importlib.import_module("viewer.pdf_default")
     chk((pdfd.APP, pdfd.PROG_ID, pdfd.CAPS) == ("PolyPDF", "PolyPDF.pdf", r"Software\PolyPDF\Capabilities"), "F 기본 PDF 앱 등록 이름")
-    src = read("viewer/photo_default.py")
-    chk('APP = "PolyPDFPhoto"' in src and 'PROG_ID = "PolyPDF.photo"' in src and r'CAPS = r"Software\PolyPDF\PhotoCapabilities"' in src,
-        "F 기본 사진 앱 등록 이름")
+    phd = importlib.import_module("viewer.photo_default")
+    chk((phd.APP, phd.PROG_ID, phd.CAPS) == (branding.PHOTO_APP, branding.PHOTO_PROG_ID, "Software\%s\PhotoCapabilities" % branding.APP_ID)
+        and branding.ids(False)["PHOTO_PROG_ID"] == "PolyPDF.photo", "F 기본 사진 앱 등록 이름 — branding(이사 전 PolyPDF.photo)")
     sh = importlib.import_module("viewer.sign_hello")
     chk((sh.KEY_NAME, sh._INFO) == ("PolyPDF.sign", b"PolyPDF sign password v1"), "F Windows Hello 키 이름(바꾸면 서명 비밀번호를 못 연다)")
     pm = importlib.import_module("viewer.pdf_mirror")
@@ -137,11 +145,11 @@ try:
         "F 폴더 옆 사전 파일 이름")
     sb = importlib.import_module("viewer.share_bundle")
     chk((sb.FORMAT, sb.SUFFIX, sb.MANIFEST) == ("polypdf-share", ".polypdf.zip", "polypdf_share.json"), "F 전달 묶음 형식·확장자")
-    chk((up.DEFAULT_REPO, up.ASSET_NAME) == ("kdjeong777-ops/PolyPDF", "PolyPDF-windows.zip") and '"polypdf-setup-"' in read("viewer/updater.py"),
-        "F 업데이트 저장소·자산 이름(옛 판이 찾는다)")
+    chk(up.DEFAULT_REPO == branding.UPDATE_REPO and branding.ids(False)["UPDATE_REPO"] == "kdjeong777-ops/PolyPDF"
+        and up.ASSET_NAME == "PolyPDF-windows.zip", "F 업데이트 저장소 — branding(이사 전 kdjeong777-ops/PolyPDF)")
     chk(up.INNO_APP_ID == "{8E7B5A30-6E2C-4E2B-9C1A-1A2B3C4D5E6F}", "F 업데이트의 설치 프로그램 AppId")
     i18 = read("viewer/i18n.py")
-    chk('DOMAIN = "polypdf"' in i18 and r'r"Software\PolyPDF"' in i18, "F 번역 도메인·설치 언어 레지스트리 키")
+    chk('DOMAIN = "polypdf"' in i18 and "_INSTALL_KEYS" in i18 and "OLD_ID" in i18, "F 번역 도메인·설치 언어 레지스트리 키(새 키·옛 키)")
     chk((vp.DRIVER_NAME, vp.PORT_NAME, vp.MONITOR_NAME, vp.MONITOR_DLL, vp.TASK_PREFIX) ==
         ("PolyPDF", "PolyPDF Port", "PolyPDF Port Monitor", "polypdfmon.dll", "PolyPDF Print Receiver - "), "F 가상 프린터 드라이버·포트·모니터·예약 작업 이름")
     chk('"application/x-polypdf-pages"' in read("viewer/widgets/thumbs_list.py") and '"application/x-polypdf-deco"' in read("viewer/widgets/main_view.py"),

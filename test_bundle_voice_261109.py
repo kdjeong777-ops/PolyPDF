@@ -114,7 +114,7 @@ try:
     # ── E ──
     bat = (HERE / "build_ci.bat").read_text(encoding="utf-8")
     i_upx = bat.index("python scripts\\check_no_upx.py")
-    i_bv = bat.find("python -m viewer.components bundle-voice voices dist\\PolyPDF\\voices")
+    i_bv = bat.find("python -m viewer.components bundle-voice voices dist\\%APP_EXE%\\voices")   # 261114-8: dist 이름은 branding.EXE_STEM
     chk(i_bv > i_upx and i_bv < bat.index("BUILD SUCCESS"), "E build_ci.bat 가 빌드 끝(UPX 검사 뒤)에 bundle-voice")
     chk("bundle_voice(" in (HERE / "build_exe.py").read_text(encoding="utf-8"), "E build_exe.py 도 같은 bundle_voice")
     yml = (HERE / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
@@ -126,13 +126,13 @@ try:
     chk(stg and "stage-voice" in stg and "Supertonic-3-LICENSE.txt" in stg
         and yml.index("- name: Stage natural voice") < yml.index("- name: Build (PyInstaller"),
         "E release.yml 'Stage natural voice' 가 빌드 전에 stage-voice(고정 해시)")
-    chk(ver and "check-voice dist\\PolyPDF\\voices" in ver and "continue-on-error" not in ver and "throw" in ver
+    chk(ver and 'check-voice "dist\\$env:APP_EXE\\voices"' in ver and "continue-on-error" not in ver and "throw" in ver
         and yml.index("- name: Build (PyInstaller") < yml.index("- name: Verify voice bundle") < yml.index("- name: Package zips"),
         "E 'Verify voice bundle' — 빌드 뒤·묶기 전, 없으면 릴리스 실패")
     pkg = step("Package zips")
     chk('Remove-Item "$stage\\voices"' in pkg, "E update zip 은 voices 를 뺀다(휴대용은 덮어써 남는다)")
     port_i = pkg.index("$port = ")
-    chk('Copy-Item "dist\\PolyPDF" "$pst\\PolyPDF" -Recurse' in pkg[port_i:], "E 휴대용 zip 은 dist 통째(voices 포함)")
+    chk('Copy-Item "dist\\$env:APP_EXE" "$pst\\$env:APP_EXE" -Recurse' in pkg[port_i:], "E 휴대용 zip 은 dist 통째(voices 포함)")
 
     # ── F ──
     chk(nt.voices_dir() == updater.install_dir() / "voices" and nt.model_dir() == nt.voices_dir() / nt.MODEL_DIRNAME,
