@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""해시태그 넣기 — 썸네일 여러 장에 태그 붙이고 떼기 (태그 SOT §8.7, 261111-6).
+"""해시태그 수정 — 썸네일 여러 장에 태그 붙이고 떼기, 한영 쌍 (태그 SOT §8.7·§8.9, 261111-6·261113-9).
 
-왼쪽: 현재 태그(고른 파일 기준 ☑ 모두 / ◐ 일부 / ☐ 없음) · 태그 추가 · 새 태그 후보 · [적용]·[해제]
-오른쪽: 지금 책갈피창 목록의 썸네일(여러 장 고르기). 위: [되돌리기]·[다시 실행].
+위: '해시태그' · [↶]·[↷] · [적용]·[해제](261113-9). 왼쪽: 현재 태그(거르기 상자·짝 표시) · 태그 추가 + 짝 낱말 · 새 태그 후보.
+오른쪽: 책갈피창에서 고른 파일(없으면 지금 목록)의 썸네일(여러 장 고르기).
 썸네일 그림은 배경(`ThumbWorker`), 태그 저장소에는 메인이 쓴다.
 """
 from __future__ import annotations
@@ -153,7 +153,7 @@ class TagApplyDialog(QDialog):
 
     def __init__(self, store, paths, selected=(), parent=None, show_candidates: bool = False, keep=None, state=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("해시태그 넣기"))
+        self.setWindowTitle(tr("해시태그 수정"))           # 261113-9(태그 SOT §8.7): 종전 '해시태그 넣기'
         # 261111-17: 최대화 단추 + 크기·최대화·정렬을 기억(`state` — 부른 쪽이 설정 'tag_apply_window' 에)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         st0 = dict(state or {})
@@ -177,13 +177,32 @@ class TagApplyDialog(QDialog):
         self._cand = load_candidates()
 
         v = QVBoxLayout(self)
+        # 261113-9(태그 SOT §8.7, 사용자 지시): 위 줄 = '해시태그' · [↶][↷](꾸밈 도구 줄과 같은 그림 글자) · 조금 띄워 [적용][해제]
         top = QHBoxLayout()
-        self.btn_undo = QPushButton(tr("되돌리기"))
-        self.btn_redo = QPushButton(tr("다시 실행"))
+        lbl_tag = QLabel(tr("해시태그"))
+        f0 = lbl_tag.font()
+        f0.setBold(True)
+        lbl_tag.setFont(f0)
+        top.addWidget(lbl_tag)
+        self.btn_undo = QPushButton("↶")
+        self.btn_redo = QPushButton("↷")
+        for b, tip in ((self.btn_undo, tr("되돌리기 (Ctrl+Z)")), (self.btn_redo, tr("다시 실행 (Ctrl+Y)"))):
+            b.setFixedWidth(28)
+            b.setToolTip(tip)
+            b.setAccessibleName(tip)
         self.btn_undo.clicked.connect(self.undo)
         self.btn_redo.clicked.connect(self.redo)
         top.addWidget(self.btn_undo)
         top.addWidget(self.btn_redo)
+        top.addSpacing(16)
+        self.btn_apply = QPushButton(tr("적용"))
+        self.btn_apply.setToolTip(tr("고른 태그를 고른 파일 모두에 붙입니다"))
+        self.btn_clear = QPushButton(tr("해제"))
+        self.btn_clear.setToolTip(tr("고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"))
+        self.btn_apply.clicked.connect(lambda: self.apply_tags(True))
+        self.btn_clear.clicked.connect(lambda: self.apply_tags(False))
+        top.addWidget(self.btn_apply)
+        top.addWidget(self.btn_clear)
         top.addStretch(1)
         self.lbl_sel = QLabel()
         top.addWidget(self.lbl_sel)
@@ -218,7 +237,8 @@ class TagApplyDialog(QDialog):
         g1l.addWidget(self.lst_tags)
         lv.addWidget(g1, 3)
         g2 = QGroupBox(tr("태그 추가"))
-        g2l = QHBoxLayout(g2)
+        g2v = QVBoxLayout(g2)
+        g2l = QHBoxLayout()
         self.ed_new = QLineEdit()
         self.ed_new.setPlaceholderText(tr("새 태그 이름"))
         self.btn_add = QPushButton(tr("추가"))
@@ -226,7 +246,26 @@ class TagApplyDialog(QDialog):
         self.ed_new.returnPressed.connect(self._add_tag)
         g2l.addWidget(self.ed_new, 1)
         g2l.addWidget(self.btn_add)
+        g2v.addLayout(g2l)
+        # 261113-9(태그 SOT §8.9): 한영 쌍 — 짝 낱말(추천이 펼쳐지는 콤보, 고쳐 쓸 수 있다) + [잇기]·[끊기]
+        pr = QHBoxLayout()
+        pr.addWidget(QLabel(tr("짝 낱말")))
+        self.cmb_pair = QComboBox()
+        self.cmb_pair.setEditable(True)
+        self.cmb_pair.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.cmb_pair.lineEdit().setPlaceholderText(tr("한글이면 영어, 영어면 한글"))
+        self.cmb_pair.setToolTip(tr("고른 태그와 쌍으로 이을 낱말 — #태그 거르기가 짝도 함께 찾습니다"))
+        self.btn_link = QPushButton(tr("잇기"))
+        self.btn_unlink = QPushButton(tr("끊기"))
+        self.btn_link.clicked.connect(self._link_pair)
+        self.btn_unlink.clicked.connect(self._unlink_pair)
+        pr.addWidget(self.cmb_pair, 1)
+        pr.addWidget(self.btn_link)
+        pr.addWidget(self.btn_unlink)
+        g2v.addLayout(pr)
         lv.addWidget(g2)
+        self._pair_for = None                   # 짝 줄이 지금 가리키는 태그
+        self._pair_req = 0
         self.g3 = QGroupBox(tr("새 태그 후보"))
         self.g3.setCheckable(True)                # 접고 펴기
         g3l = QVBoxLayout(self.g3)
@@ -242,16 +281,6 @@ class TagApplyDialog(QDialog):
         self.lst_cand.setVisible(bool(show_candidates))
         self.btn_dismiss.setVisible(bool(show_candidates))
         lv.addWidget(self.g3, 2)
-        hb = QHBoxLayout()
-        self.btn_apply = QPushButton(tr("적용"))
-        self.btn_apply.setToolTip(tr("고른 태그를 고른 파일 모두에 붙입니다"))
-        self.btn_clear = QPushButton(tr("해제"))
-        self.btn_clear.setToolTip(tr("고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"))
-        self.btn_apply.clicked.connect(lambda: self.apply_tags(True))
-        self.btn_clear.clicked.connect(lambda: self.apply_tags(False))
-        hb.addWidget(self.btn_apply)
-        hb.addWidget(self.btn_clear)
-        lv.addLayout(hb)
         sp.addWidget(left)
 
         self.lst_files = QListWidget()
@@ -328,6 +357,9 @@ class TagApplyDialog(QDialog):
         self.cmb_sort.currentIndexChanged.connect(self._on_sort)
         # 261111-18: 태그를 고르면 오른쪽을 거른다(체크 = 있는 것, 해제 = 없는 것), 후보 ↔ 현재 태그는 한쪽만 활성
         self.lst_tags.itemSelectionChanged.connect(lambda: self._on_list_pick("tags"))
+        self.lst_tags.itemSelectionChanged.connect(self._refresh_pair)       # 261113-9(§8.9)
+        self.ed_new.textChanged.connect(self._refresh_pair)
+        self.cmb_pair.editTextChanged.connect(lambda _t: self.btn_link.setEnabled(bool(self._pair_target() and _t.strip())))
         self.lst_tags.itemChanged.connect(self._on_tag_check)
         self.lst_cand.itemSelectionChanged.connect(lambda: self._on_list_pick("cand"))
         self.cmb_period.currentIndexChanged.connect(self._on_period)
@@ -338,6 +370,7 @@ class TagApplyDialog(QDialog):
         self._refresh_marks()
         self._start_thumbs()
         self._start_dates()
+        self._refresh_pair()
 
     # ── 목록 ──────────────────────────────────────────────
     def selected_paths(self) -> list:
@@ -437,6 +470,69 @@ class TagApplyDialog(QDialog):
         if w is not None:
             w.start()
 
+    # ── 한영 쌍(261113-9, 태그 SOT §8.9) ────────────────────
+    def _pair_target(self) -> str:
+        """짝 줄이 다루는 태그 — '태그 추가' 칸에 쓴 글, 아니면 현재 태그에서 하나만 고른 줄."""
+        t = self.ed_new.text().strip().lstrip("#").strip()
+        if t:
+            return t
+        sel = self.lst_tags.selectedItems()
+        return sel[0].data(Qt.ItemDataRole.UserRole) if len(sel) == 1 else ""
+
+    def _refresh_pair(self, *_a):
+        from viewer.tag_pairs import shared
+        t = self._pair_target()
+        mate = shared().partner(t) if t else None
+        self.btn_unlink.setEnabled(bool(mate))
+        if t == self._pair_for:
+            self.btn_link.setEnabled(bool(t and self.cmb_pair.currentText().strip()))
+            return
+        self._pair_for = t
+        self.cmb_pair.blockSignals(True)
+        self.cmb_pair.clear()
+        self.cmb_pair.setEditText(mate or "")
+        self.cmb_pair.blockSignals(False)
+        self.cmb_pair.setEnabled(bool(t))
+        self.btn_link.setEnabled(bool(t and mate))
+        if t:
+            from viewer.tag_pairs import PairSuggestWorker
+            from viewer.workers import run_in_thread
+            self._pair_req += 1
+            rid = self._pair_req
+            w = PairSuggestWorker(t)
+            w.found.connect(lambda tag, words, _r=rid: self._on_pair_words(_r, tag, words))
+            self._pair_worker = w
+            run_in_thread(w, self._keep)
+
+    def _on_pair_words(self, rid: int, tag: str, words: list):
+        if rid != self._pair_req or tag != self._pair_for:
+            return                                  # 앞 요청 — 버린다
+        cur = self.cmb_pair.currentText()
+        self.cmb_pair.blockSignals(True)
+        self.cmb_pair.clear()
+        self.cmb_pair.addItems(words)
+        self.cmb_pair.setEditText(cur or (words[0] if words else ""))
+        self.cmb_pair.blockSignals(False)
+        self.btn_link.setEnabled(bool(self.cmb_pair.currentText().strip()))
+        self.pair_words = list(words)               # 검사용
+
+    def _link_pair(self):
+        from viewer.tag_pairs import shared
+        t, w = self._pair_target(), self.cmb_pair.currentText().strip().lstrip("#").strip()
+        if not t or not w:
+            return
+        if shared().link(t, w):
+            self._fill_tags()
+            self._refresh_pair()
+
+    def _unlink_pair(self):
+        from viewer.tag_pairs import shared
+        t = self._pair_target()
+        if t and shared().unlink(t):
+            self._pair_for = None
+            self._fill_tags()
+            self._refresh_pair()
+
     def _start_dates(self):
         from viewer.workers import run_in_thread
         self._dater = DateWorker(self._paths)
@@ -488,8 +584,11 @@ class TagApplyDialog(QDialog):
             order = sorted(counts, key=lambda t: t.lower())
         self.lst_tags.blockSignals(True)
         self.lst_tags.clear()
+        from viewer.tag_pairs import shared as _pairs
+        pt = _pairs()
         for t in order:
-            it = QListWidgetItem("#%s  (%d)" % (t, counts[t]))
+            mate = pt.partner(t)                        # 261113-9(§8.9): 짝이 있으면 '태그 ⇄ 짝'
+            it = QListWidgetItem(("#%s ⇄ %s  (%d)" % (t, mate, counts[t])) if mate else ("#%s  (%d)" % (t, counts[t])))
             it.setData(Qt.ItemDataRole.UserRole, t)
             it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             it.setCheckState(Qt.CheckState.Checked if self._has.get(t.lower(), True) else Qt.CheckState.Unchecked)

@@ -40,16 +40,18 @@ TUNING = {
     "SCAN_MIN_CHARS": 40,      # 페이지당 이 미만이면 스캔(텍스트 레이어 없음) 판정
 }
 
-# ── 형식 어휘(§5.3 — 닫힌 13종) + 별칭 ──────────────────────────────────
-FORMAT_VOCAB = ("영수증", "시험성적서", "공문", "논문", "발표자료", "브로셔",
-                "기사", "설명서", "지침", "시방서", "기준", "법령", "보고서")
+# ── PDF 자동 해시태그(§5.3·§5.3.1 — 261113-10 사용자 지시: 정해진 항목, 이름 고정, 켜고 끄기만) ──────
+FORMAT_VOCAB = ("설명서", "영수증", "공문", "견적서", "보고서", "발표자료", "논문")      # 형식(문서 종류) — 파일당 1개
+PDF_ATTR_ITEMS = ("날짜", "한글", "영어", "스크린샷", "스캔문서", "텍스트문서")          # 속성(§5.3.1) — 갈래마다 0~1개
+PDF_AUTO_ITEMS = PDF_ATTR_ITEMS + FORMAT_VOCAB                                          # 환경설정 차례(§5.8)
+REMOVED_FORMATS = ("시험성적서", "브로셔", "기사", "지침", "시방서", "기준", "법령")    # 261113-10 에 뺀 종전 형식 — 한 번 정리(§5.8 의 6)
 FORMAT_ALIAS = {   # 별칭 → 표준명(§5.3 '뭉쳐 두는 쪽')
     "세금계산서": "영수증", "거래명세서": "영수증", "계산서": "영수증", "invoice": "영수증",
-    "성적서": "시험성적서", "검사성적서": "시험성적서", "품질성적서": "시험성적서",
-    "시험결과보고서": "시험성적서", "test report": "시험성적서",
+    "견적": "견적서", "quotation": "견적서",
     "협조요청": "공문", "통보": "공문", "회신": "공문", "공람": "공문",
     "ppt": "발표자료", "보고자료": "발표자료", "프레젠테이션": "발표자료",
 }
+_DATE_TAG = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # §4.2-2 불용어(문서 상투어 — 실측 보강은 §9.3 사다리)
 _STOP_KO = {"그림", "페이지", "목차", "서론", "결론", "참고문헌", "작성", "제출",
@@ -67,12 +69,12 @@ _STOP_EN = {"the", "and", "for", "with", "that", "this", "are", "was", "were",
 
 
 def axis_of(tag: str, rules: dict | None = None) -> str:
-    """§5.1: 축은 저장하지 않고 유도 — 형식 어휘(별칭·사용자 alias 포함) 소속이면 '형식'."""
+    """§5.1: 축은 저장하지 않고 유도 — PDF 속성(§5.3.1 — 날짜 꼴 포함)이면 '속성', 형식 어휘(별칭 포함)면 '형식'.
+    261113-10: 형식 이름은 바꿀 수 없다 — 사용자 alias 의 값은 더는 형식으로 세지 않는다."""
     tl = (tag or "").strip().lower()
+    if tl in {a.lower() for a in PDF_ATTR_ITEMS} or _DATE_TAG.match(tl):
+        return "속성"
     fmt = {v.lower() for v in FORMAT_VOCAB} | {k.lower() for k in FORMAT_ALIAS}
-    alias = (rules or {}).get("alias") or {}
-    fmt |= {str(v).lower() for v in alias.values()}
-    fmt |= {str(c.get("name") or "").lower() for c in (rules or {}).get("format_custom") or () if isinstance(c, dict)}   # 261112-11
     return "형식" if tl in fmt else "주제"
 
 
@@ -102,6 +104,7 @@ class Features:
     full_text: str = ""            # 전처리 후 전체(표본) 텍스트
     struct_text: str = ""          # ★ 원문(제거 전) 앞 3p+뒤 2p — 형식 판정 전용
     scanned: bool = False          # 텍스트 레이어 없음(§4.2 각주)
+    img_pages: list = field(default_factory=list)   # 앞 3쪽 [(그림 하나의 면적비, 짧은 변 px, 긴 변 px) | None] — 스크린샷(§5.3.1)
     aspect: float = 0.0            # 종횡비 중앙값(w/h)
     text_per_page: float = 0.0     # 페이지당 문자 수
     image_ratio: float = 0.0       # 이미지 면적비(표본)
@@ -188,7 +191,7 @@ def _fallback_pages(path) -> list:
 def _layout_metrics(path, page_texts) -> tuple:
     """레이아웃 신호(§4.1) — 종횡비·페이지수·이미지 면적비·메타·TOC.
     표본은 결정적 간격(§12 — SOT 의 '무작위 3p' 대신 고정 스트라이드; 랜덤 금지)."""
-    meta, toc, n, aspect, img_ratio = {}, [], 0, 0.0, 0.0
+    meta, toc, n, aspect, img_ratio, img_pages = {}, [], 0, 0.0, 0.0, []
     try:
         import fitz
         d = fitz.open(str(path))
@@ -223,12 +226,28 @@ def _layout_metrics(path, page_texts) -> tuple:
             ars.sort()
             aspect = ars[len(ars) // 2] if ars else 0.0
             img_ratio = sum(irs) / len(irs) if irs else 0.0
+            for i in range(min(3, n)):                 # 261113-10(§5.3.1): 쪽을 채운 그림 하나 — 스크린샷 판정
+                img_pages.append(_one_image(d.load_page(i)))
         finally:
             d.close()
     except Exception:
         if page_texts:
             n = len(page_texts)
-    return n, aspect, img_ratio, meta, toc
+    return n, aspect, img_ratio, meta, toc, img_pages
+
+
+def _one_image(pg):
+    """쪽에 그림이 하나뿐이면 (쪽 면적 대비, 픽셀 짧은 변, 긴 변), 아니면 None."""
+    try:
+        infos = [x for x in pg.get_image_info() if x.get("bbox")]
+        if len(infos) != 1:
+            return None
+        bx, r = infos[0]["bbox"], pg.rect
+        cov = max(0.0, (bx[2] - bx[0]) * (bx[3] - bx[1])) / ((r.width * r.height) or 1.0)
+        w, h = int(infos[0].get("width") or 0), int(infos[0].get("height") or 0)
+        return (min(1.0, cov), min(w, h), max(w, h))
+    except Exception:
+        return None
 
 
 def extract_features(path, page_texts=None, folder_names=None,
@@ -242,7 +261,7 @@ def extract_features(path, page_texts=None, folder_names=None,
     page_texts = page_texts or []
 
     if open_pdf:
-        (f.page_count, f.aspect, f.image_ratio, f.meta, f.toc_titles) = \
+        (f.page_count, f.aspect, f.image_ratio, f.meta, f.toc_titles, f.img_pages) = \
             _layout_metrics(path, page_texts)
     if not f.page_count:
         f.page_count = len(page_texts)
@@ -282,20 +301,16 @@ def extract_features(path, page_texts=None, folder_names=None,
 # §5.3 — L2 자료 형식 분류기 (닫힌 13종, 파일당 1개)
 # ═══════════════════════════════════════════════════════════════════════
 
-_EXPLICIT = [   # ① 파일명/표제 명시어 — 순서 = 판정 순서
-    ("지침", ("지침", "편람", "요령")),
-    ("시방서", ("시방서", "specification")),
-    ("기준", ("기준",)),
-    ("법령", ("고시", "공고", "훈령", "예규", "법률", "시행령")),
+_EXPLICIT = [   # ① 파일명/표제 명시어 — 순서 = 판정 순서(261113-10: 지침·시방서·기준·법령·시험성적서는 뺐다, 견적서 더함)
     ("설명서", ("설명서", "매뉴얼", "사용자", "manual", "mnl", "guide", "_um_")),
+    ("견적서", ("견적", "quotation")),
     ("영수증", ("영수증", "세금계산서", "거래명세서", "invoice")),
-    ("시험성적서", ("시험성적서", "성적서", "검사성적서", "test report")),
     ("공문", ("공문", "협조요청", "공람")),
 ]
 
 
 def classify_format(f: Features, rules: dict | None = None) -> str | None:
-    """§5.3 판정 순서: ①명시어 ②구조(영수증▶시험성적서▶공문▶논문) ③레이아웃 ④기본값.
+    """§5.3 판정 순서: ①명시어 ②구조(견적서▶영수증▶공문▶논문) ③레이아웃(발표자료) ④기본값.
     확신 없으면 None(형식 태그 없음 — 틀린 형식보다 없는 편이 낫다 §3.5-A).
     반환은 alias(§5.3 사용자 어휘 접합) 적용 후 표시명."""
     rules = rules or {}
@@ -303,27 +318,18 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
     txt = f.struct_text[:20000].lower()      # ★ 원문 기준(위 보강) — 스캔이면 자연히 빈 문자열
     fmt = None
 
-    # ① 명시어 — 사람이 이름에 써 둔 것이 가장 확실. 사용자가 더한 분류가 먼저(§5.8 `format_custom`, 261112-11)
-    for c in rules.get("format_custom") or ():
-        if not isinstance(c, dict) or not str(c.get("name") or "").strip():
-            continue
-        nm = str(c["name"]).strip()
-        if any(len(k) >= 2 and k.lower() in name for k in [nm] + [str(w) for w in c.get("words") or ()]):
-            fmt = nm
-            break
-    for tag, keys in (_EXPLICIT if fmt is None else ()):
+    # ① 명시어 — 사람이 이름에 써 둔 것이 가장 확실
+    for tag, keys in _EXPLICIT:
         if any(k in name for k in keys):
             fmt = tag
             break
-    if fmt is None and re.search(r"k[cd]s\s?\d{2}\s?\d{2}\s?\d{2}", name + " " + txt[:3000]):
-        fmt = "기준"                    # KCS/KDS 6자리 코드(§5.3 결정적 신호)
 
     # ② 강한 구조 신호 — 토큰이 특이한 순(§5.3 — ③보다 먼저: 짧은 문서 오분류 방지)
     if fmt is None and txt:
-        if "사업자등록번호" in txt and ("합계" in txt or "공급가액" in txt):
+        if "견적서" in txt or ("견적" in txt and any(k in txt for k in ("견적금액", "공급가액", "합계"))):
+            fmt = "견적서"              # 261113-10 — 영수증보다 먼저(둘 다 사업자등록번호·합계가 있다)
+        elif "사업자등록번호" in txt and ("합계" in txt or "공급가액" in txt):
             fmt = "영수증"
-        elif (("시험항목" in txt or "시험결과" in txt) and "판정" in txt):
-            fmt = "시험성적서"
         elif ("수신" in txt and ("발신" in txt or "참조" in txt
                                 or re.search(r"제\s?\d{2,4}\s?[-–]\s?\d+\s?호", txt))):
             fmt = "공문"
@@ -332,18 +338,11 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
               or re.search(r"\bet\s+al\b", txt)):
             fmt = "논문"
 
-    # ③ 레이아웃 신호(텍스트 불요 — 스캔 PDF 에도 동작 §4.2 각주)
+    # ③ 레이아웃 신호(텍스트 불요 — 스캔 PDF 에도 동작 §4.2 각주). 261113-10: 브로셔·기사는 뺐다
     if fmt is None and f.page_count:
         if (f.aspect >= TUNING["PRESENT_MIN_AR"]
                 and f.text_per_page < TUNING["PRESENT_MAX_CHARS"]):
             fmt = "발표자료"
-        elif (f.page_count <= TUNING["BROCHURE_MAX_PAGES"]
-              and f.image_ratio >= TUNING["BROCHURE_IMG_RATIO"]
-              and f.text_per_page < TUNING["PRESENT_MAX_CHARS"]):
-            fmt = "브로셔"
-        elif (f.page_count <= TUNING["ARTICLE_MAX_PAGES"] and txt
-              and re.search(r"\d{4}\s?[.\-/년]\s?\d{1,2}\s?[.\-/월]", txt)):
-            fmt = "기사"
 
     # ④ 기본값 — 보고서(조건 못 맞추면 형식 없음).
     #   260830 시정: SOT §5.3 의 '보고서 = 이름 + 목차 + ≥20p' 에서 **목차 조건이 구현에서
@@ -360,8 +359,68 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
 
     if fmt is None or fmt in set(rules.get("format_off") or ()):     # §5.8 사용자가 끈 형식 — 형식 없음
         return None
-    alias = rules.get("alias") or {}
-    return str(alias.get(fmt, fmt))
+    return fmt                                       # 261113-10: 이름은 고정(별칭 표로 바꾸지 않는다)
+
+
+# ── §5.3.1 PDF 속성 — 날짜·한글/영어·스캔문서/텍스트문서·스크린샷 (261113-10) ──────────
+ATTR_KO_MIN, ATTR_EN_MAX, ATTR_MIN_LETTERS = 0.30, 0.05, 100   # 한글 비율 ≥ → 한글, ≤ → 영어(글자 100개 이상)
+ATTR_SCAN_IMG = 0.85            # 표본 쪽 평균 그림 면적 ≥ → 스캔문서(OCR 글자층을 얹은 스캔 포함)
+ATTR_SHOT_COVER = 0.95          # 스크린샷: 쪽을 거의 채운 그림 하나
+
+
+def pdf_date_tag(f: Features):
+    """PDF 메타 만든 날(`D:YYYYMMDD…`) → 'YYYY-MM-DD'(사진 촬영일 태그와 같은 꼴). 1990년~오늘만."""
+    import datetime as _dt
+    m = re.match(r"D:((?:19|20)\d{2})(\d{2})(\d{2})", str(f.meta.get("creationDate") or ""))
+    if not m:
+        return None
+    try:
+        d = _dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+    return d.isoformat() if _dt.date(1990, 1, 1) <= d <= _dt.date.today() else None
+
+
+def pdf_lang_tag(f: Features):
+    txt = f.struct_text or f.full_text or ""
+    h = len(re.findall(r"[가-힣]", txt))
+    l = len(re.findall(r"[A-Za-z]", txt))
+    if h + l < ATTR_MIN_LETTERS:
+        return None
+    r = h / (h + l)
+    return "한글" if r >= ATTR_KO_MIN else ("영어" if r <= ATTR_EN_MAX else None)
+
+
+def pdf_is_screenshot(f: Features) -> bool:
+    from viewer.photo_tags import _NAME_SHOT, SCREEN_SHORT
+    if _NAME_SHOT.search(f.stem or "") or _NAME_SHOT.search(str(f.meta.get("title") or "")):
+        return True
+    if not f.page_count or f.page_count > 3 or not f.img_pages:
+        return False
+    for ip in f.img_pages:
+        if not ip or ip[0] < ATTR_SHOT_COVER or ip[1] not in SCREEN_SHORT or not (1.3 <= ip[2] / max(1, ip[1]) <= 2.4):
+            return False
+    return True
+
+
+def pdf_attr_tags(f: Features, rules: dict | None = None) -> list:
+    """§5.3.1 — 날짜 → 언어 → 매체 → 스크린샷 차례. 끈 항목(`format_off`)은 뺀다."""
+    off = set((rules or {}).get("format_off") or ())
+    out = []
+    if "날짜" not in off:
+        d = pdf_date_tag(f)
+        if d:
+            out.append(d)
+    lang = pdf_lang_tag(f)
+    if lang and lang not in off:
+        out.append(lang)
+    if f.page_count:
+        med = "스캔문서" if (f.scanned or f.image_ratio >= ATTR_SCAN_IMG) else "텍스트문서"
+        if med not in off:
+            out.append(med)
+    if "스크린샷" not in off and pdf_is_screenshot(f):
+        out.append("스크린샷")
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -493,6 +552,9 @@ def suggest_tags(f: Features, profiles: dict, df: dict, n_docs: int,
     형식은 판정 서면 score 없이도 자동 대상(§5.6 표 1행) — score 는 표시용 1.0."""
     known = {t.lower() for t in (known_tags or [])}
     out = []
+    for t in pdf_attr_tags(f, rules):                 # 261113-10 §5.3.1 — 점수 없이 자동
+        out.append({"tag": t, "score": 1.0, "axis": "속성",
+                    "kind": "existing" if t.lower() in known else "new", "why": "PDF 속성(§5.3.1)"})
     fmt = classify_format(f, rules)
     if fmt:
         out.append({"tag": fmt, "score": 1.0, "axis": "형식",
@@ -540,7 +602,9 @@ def partition(suggestions: list) -> dict:
     auto, sugg = [], []
     n_fmt = n_topic = 0
     for s in sorted(suggestions, key=lambda x: -x["score"]):
-        if s.get("axis") == "형식":
+        if s.get("axis") == "속성":                 # 261113-10 §5.3.1 — 갈래마다 하나, 판정 서면 자동
+            auto.append(s)
+        elif s.get("axis") == "형식":
             if n_fmt < TUNING["MAX_AUTO_FORMAT"]:
                 auto.append(s)
                 n_fmt += 1

@@ -290,8 +290,9 @@ os.makedirs(WORK, exist_ok=True)
 present = _mk_pdf("발표.pdf", [(960, 540, f"슬라이드 {i}") for i in range(12)])
 check("§12-25 발표자료(가로+저텍스트)", _fmt(present) == "발표자료")
 
-guide_land = _mk_pdf("포장 지침.pdf", [(960, 540, "요약") for _ in range(12)])
-check("§12-23 명시어가 레이아웃을 이김", _fmt(guide_land) == "지침")
+guide_land = _mk_pdf("포장 설명서.pdf", [(960, 540, "요약") for _ in range(12)])
+check("§12-23 명시어가 레이아웃을 이김", _fmt(guide_land) == "설명서")
+check("261113-10 지침은 뺀 형식 — 이름에 있어도 형식 없음", _fmt(_mk_pdf("포장 지침.pdf", [(595, 842, "요약")])) is None)
 
 receipt = _mk_pdf("거래.pdf", [(595, 842,
     "공급자 (주)도로자재\n사업자등록번호 123-45-67890\n공급가액 1,200,000\n합계 1,320,000")])
@@ -305,7 +306,11 @@ _c_txt = ["시험항목: 압축강도 시험결과: 32.5 MPa 판정: 합격 발�
           "시료명 아스팔트 혼합물 채취일 규격 밀도 안정도 흐름값 공극률 포화도",
           "시험기관: 한국건설시험원 주소 경기도 고양시 시험자 홍길동 심의자 김철수 "
           "시험일자 비고 본 성적서는 시험 시료에 한하며 무단 복제를 금합니다"]
-check("§12-29b 시험성적서(수수료 금액 있어도)", _fmt(cert, _c_txt) == "시험성적서")
+check("261113-10 시험성적서는 뺀 형식 — 형식 없음(영수증으로도 안 샘)", _fmt(cert, _c_txt) is None)
+quote = _mk_pdf("A사_자재.pdf", [(595, 842, "견적")])
+_q_txt = ["견 적 서 공급자 (주)도로자재 사업자등록번호 123-45-67890 견적금액 1,200,000 공급가액 1,200,000 합계 1,320,000"]
+check("261113-10 견적서(구조) — 영수증보다 먼저", _fmt(quote, ["견적 " + _q_txt[0]]) == "견적서")
+check("261113-10 견적서(이름)", _fmt(_mk_pdf("2026 견적_포장.pdf", [(595, 842, "내역")])) == "견적서")
 
 official = _mk_pdf("점검안내.pdf", [(595, 842,
     "수신 서울시설공단\n발신 안전보건실\n문서번호 제2025-123호\n합동점검을 안내합니다."),
@@ -330,12 +335,12 @@ check("§12 논문(구조 신호)", _fmt(paper, _p_txt) == "논문")
 
 brochure = _mk_pdf("홍보물.pdf", [(595, 842, "신제품") for _ in range(4)],
                    image_pages=(0, 1, 2, 3))
-check("§12-26 브로셔(≤8p·이미지 비중)", _fmt(brochure) == "브로셔")
+check("261113-10 브로셔는 뺀 형식 — 형식 없음", _fmt(brochure) is None)
 
 article = _mk_pdf("스크랩.pdf", [(595, 842,
     "도로신문 2024.03.15\n배수성 포장 확대" + " 본문" * 200) for _ in range(3)])
 _a_txt = ["도로신문 2024.03.15 배수성 포장 확대" + " 본문" * 200] * 3
-check("§12-26 기사(≤4p+발행일)", _fmt(article, _a_txt) == "기사")
+check("261113-10 기사는 뺀 형식 — 형식 없음", _fmt(article, _a_txt) is None)
 
 unknown = _mk_pdf("메모.pdf", [(595, 842, "회의 메모" + " 항목" * 300) for _ in range(3)])
 _u_txt = ["회의 메모" + " 항목" * 300] * 3
@@ -347,8 +352,8 @@ plain25 = _mk_pdf("연구자료.pdf", [(595, 842, f"내용 {i}" + " 본문" * 30
 check("★ 무목차 25p → 보고서 아님(보수화)", _fmt(plain25) is None)
 named_rep = _mk_pdf("연구 보고서.pdf", [(595, 842, "내용" + " 본문" * 300)] * 5)
 check("이름 '보고서' → 보고서", _fmt(named_rep) == "보고서")
-check("§12-29 alias 매핑(보고서→외국보고서)",
-      _fmt(named_rep, rules={"alias": {"보고서": "외국보고서"}}) == "외국보고서")
+check("261113-10 형식 이름은 고정 — 별칭이 있어도 '보고서'",
+      _fmt(named_rep, rules={"alias": {"보고서": "외국보고서"}}) == "보고서")
 # 목차 있는 25p 세로 → 보고서 / 같은 조건 가로 → 제외(발표자료 오분류 실사용 보고 대응)
 toc_rep = os.path.join(WORK, "목차문서.pdf")
 _d = fitz.open()
@@ -368,29 +373,30 @@ check("형식은 파일당 1개(§12-24) — 반환형 str",
       isinstance(_fmt(receipt, _r_txt), str))
 
 # 스캔 PDF(§12-28): 텍스트 0 — 형식(파일명)·연도는 나오고 주제는 억제
-scan_guide = os.path.join(WORK, "스캔 포장지침 2021.pdf")
+scan_guide = os.path.join(WORK, "스캔 포장 설명서 2021.pdf")
 shutil.copy2(PDF2, scan_guide)
 sf = extract_features(scan_guide)
 check("§12-28 스캔 감지", sf.scanned)
-check("§12-28 스캔에도 형식(파일명)", classify_format(sf) == "지침")
+check("§12-28 스캔에도 형식(파일명)", classify_format(sf) == "설명서")
 sy, ssrc, _ = extract_year(sf, today_year=2026)
 check("§12-28 스캔에도 연도(파일명)", sy == 2021 and ssrc == "name")
 sugg = suggest_tags(sf, {"배수성": {"porous": 1.0}}, {}, 1)
-check("§12-28 스캔 → 주제 억제", all(s["axis"] == "형식" for s in sugg))
+check("§12-28 스캔 → 주제 억제", all(s["axis"] in ("형식", "속성") for s in sugg))
+check("261113-10 스캔 PDF → 속성 '스캔문서'", "스캔문서" in [s["tag"] for s in sugg])
 
 # ── 260829 보강: 형식·스캔 판정은 머리말 제거 '전' 원문 기준 ─────────────
 # 여러 페이지 성적서 철 — 구조 토큰(시험항목·판정)이 전 페이지에 정당하게 반복.
 # 제거 후 텍스트로 판정하면 미분류로 빠지던 실결함의 회귀 테스트.
-_book_pg = ("시험항목: 압축강도 시험결과: 32.5 MPa 판정: 합격 "
-            "시험기관 한국건설시험원 시료 아스팔트 혼합물 공극률 밀도 안정도")
-_book = [_book_pg] * 6                       # 6/6 페이지 반복 = 머리말 제거 대상
-cert_book = _mk_pdf("성적서철.pdf", [(595, 842, t) for t in _book])
-check("★ 반복 구조 성적서 철 → 시험성적서(원문 판정)",
-      _fmt(cert_book, _book) == "시험성적서")
+_book_pg = ("수신 서울시설공단 발신 안전보건실 문서번호 제2025-123호 "
+            "합동점검 안내 협조 요청 일정 참석 대상 준비 서류")
+_book = [_book_pg] * 6                       # 6/6 페이지 반복 = 머리말 제거 대상(261113-10: 성적서 철 → 공문 철)
+cert_book = _mk_pdf("공문철.pdf", [(595, 842, t) for t in _book])
+check("★ 반복 구조 공문 철 → 공문(원문 판정)",
+      _fmt(cert_book, _book) == "공문")
 bf = extract_features(cert_book, page_texts=_book)
 check("★ 반복 제거가 스캔 판정을 왜곡하지 않음", not bf.scanned)
-check("특징어는 제거본 기준(머리말 반복어 소거)", bf.terms.get("시험항목") is None
-      or bf.terms.get("시험항목", 0) <= AT.TUNING["W_NAME"])
+check("특징어는 제거본 기준(머리말 반복어 소거)", bf.terms.get("합동점검") is None
+      or bf.terms.get("합동점검", 0) <= AT.TUNING["W_NAME"])
 check("SCAN_MIN_CHARS 가 TUNING 에 있음(§9.3)", "SCAN_MIN_CHARS" in AT.TUNING)
 
 # ── 머리말 제거 (§12-6) ─────────────────────────────────────────────────
@@ -471,7 +477,8 @@ check("제안 목록에 잔여 보존", {s["tag"] for s in res["suggest"]}
 
 # 축 유도(§5.1 — auto_axis 필드 없이)
 check("axis_of 유도", AT.axis_of("논문") == "형식" and AT.axis_of("배수성") == "주제"
-      and AT.axis_of("외국보고서", {"alias": {"보고서": "외국보고서"}}) == "형식")
+      and AT.axis_of("견적서") == "형식" and AT.axis_of("한글") == "속성" and AT.axis_of("2025-03-01") == "속성"
+      and AT.axis_of("지침") == "주제")
 
 # 프로파일 캐시(§5.2 — mtime 무효화)
 cachep = os.path.join(WORK, "tag_profile.json")
@@ -496,7 +503,7 @@ P2DIR = os.path.join(WORK, "p2폴더")
 os.makedirs(P2DIR, exist_ok=True)
 # 시나리오 폴더: 지침(파일명)·발표(레이아웃)·영문 porous 논문 4건(3 태그 + 1 신규)
 p2_files = {}
-p2_files["지침"] = _mk_pdf(os.path.join("p2폴더", "포장 관리 지침.pdf"),
+p2_files["지침"] = _mk_pdf(os.path.join("p2폴더", "포장 관리 설명서.pdf"),
                            [(595, 842, "content page " + "word " * 30)] * 3)
 p2_files["발표"] = _mk_pdf(os.path.join("p2폴더", "성과 발표.pdf"),
                            [(960, 540, f"slide {i}") for i in range(12)])
@@ -538,7 +545,8 @@ def _auto_tags_of(key_):
     return [t for t, _ in r.get("auto", [])]
 
 
-check("P2 형식 자동(지침·파일명)", "지침" in _auto_tags_of("지침"))
+check("P2 형식 자동(설명서·파일명)", "설명서" in _auto_tags_of("지침"))
+check("P2 속성 자동(텍스트문서)", "텍스트문서" in _auto_tags_of("지침"), str(_auto_tags_of("지침")))
 check("P2 형식 자동(발표자료·레이아웃)", "발표자료" in _auto_tags_of("발표"))
 check("P2 ★ L1 주제 자동 — 4번째 porous 논문에 배수성",
       "배수성" in _auto_tags_of("논문4"), f"auto={_auto_tags_of('논문4')}")

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""해시태그 사용자 규칙 — 형식 낱말 켜고 끄기·이름 바꾸기·별칭 표·사진 태그 종류 (태그 SOT §5.8, 261107-10).
+"""해시태그 사용자 규칙 — PDF 자동 해시태그 켜고 끄기·별칭 표·사진 자동 해시태그 (태그 SOT §5.8, 261107-10·261113-10).
 
 저장은 `settings_dir()/tag_rules.json`(읽기는 `auto_tag.load_rules`). 키:
-- `alias` {원래 태그: 붙일 태그} — 형식 이름 바꾸기와 별칭 표가 같은 표
-- `format_off` [표준 형식 이름] — 붙이지 않는 형식(내장 13종과 `format_custom` 의 이름)
-- `format_custom` [{"name": 표준 이름, "words": [찾을 낱말]}] — 사용자가 더한 형식 분류(261112-11). 파일 이름·PDF 제목에
-  이름이나 낱말이 있으면 그 형식(`auto_tag.classify_format` ①). `name` 은 처음 저장 때의 이름으로 고정, 그 뒤 이름 고치기는 `alias`
+- `alias` {원래 태그: 붙일 태그} — 별칭 표(사진·주제 태그). PDF 자동 해시태그 이름은 바꿀 수 없다(261113-10 — 그 이름의 줄은 버린다)
+- `format_off` [PDF 자동 해시태그 이름] — 붙이지 않는 항목(`auto_tag.PDF_AUTO_ITEMS`)
 - `photo_off` ["date", "region", "device", "screenshot"] 중 — 붙이지 않는 사진 머리 태그
+- `pdf_auto_v` 2 — 261113-10 한 번 정리를 마친 표시(없으면 앱 시작 뒤 정리, `migrate_if_needed`)
+종전 `format_custom`(261112-11 '분류 더하기')은 없앴다 — 정리 때 그 분류의 자동 태그를 뗀다.
 
 저장하면 곧바로 다시 붙인다(`TagRulesJob`) — 규칙 파일 쓰기·사진 색인 글·사진 머리 다시 읽기는 배경, 태그 저장소는 메인이 한 번에.
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -21,6 +22,9 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from viewer.i18n import tr
 
 PHOTO_KINDS = ("date", "region", "device", "screenshot")      # 사진 종류(영수증·명함·서류)는 설정 photo_kind_ocr 이 켜고 끈다
+PDF_AUTO_V = 2
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+RULE_KEYS = ("alias", "format_off", "photo_off", "format_custom", "pdf_auto_v")
 
 
 def rules_path() -> Path:
@@ -28,52 +32,23 @@ def rules_path() -> Path:
     return Path(settings_dir()) / "tag_rules.json"
 
 
-def custom_formats(raw) -> list:
-    """`format_custom` 정리 — 이름 없는 줄은 버리고, 같은 이름(대소문자 무시)은 낱말을 합쳐 하나로, 낱말은 2글자 이상(261112-11)."""
-    out, seen = [], {}
-    for e in raw or ():
-        if not isinstance(e, dict):
-            continue
-        name = str(e.get("name") or "").strip().lstrip("#").strip()
-        if not name:
-            continue
-        ws = e.get("words") or ()
-        if isinstance(ws, str):
-            ws = split_words(ws)
-        words = []
-        for w in ws:
-            w = str(w or "").strip().lstrip("#").strip()
-            if len(w) >= 2 and w.lower() != name.lower() and w.lower() not in {x.lower() for x in words}:
-                words.append(w)
-        ent = seen.get(name.lower())
-        if ent is None:
-            ent = seen[name.lower()] = {"name": name, "words": []}
-            out.append(ent)
-        ent["words"] += [w for w in words if w.lower() not in {x.lower() for x in ent["words"]}]
-    return out
-
-
-def split_words(text: str) -> list:
-    """'찾을 낱말' 칸 — 쉼표(, ，)·세미콜론으로 나눈다."""
-    import re
-    return [w.strip() for w in re.split(r"[,，;]", text or "") if w.strip()]
-
-
 def normalize(rules: dict | None) -> dict:
     """알 수 없는 값을 걸러 낸 규칙. 다른 키(사용자가 손으로 넣은 것)는 그대로 둔다."""
-    from viewer.auto_tag import FORMAT_VOCAB
+    from viewer.auto_tag import PDF_AUTO_ITEMS
     r = dict(rules or {})
+    fixed = {f.lower() for f in PDF_AUTO_ITEMS}
     alias = {}
     for k, v in dict(r.get("alias") or {}).items():
         k, v = str(k or "").strip().lstrip("#"), str(v or "").strip().lstrip("#")
-        if k and v and k != v:
+        if k and v and k != v and k.lower() not in fixed:     # 261113-10: PDF 자동 해시태그 이름은 고정
             alias[k] = v
     r["alias"] = alias
-    r["format_custom"] = custom_formats(r.get("format_custom"))
-    names = list(FORMAT_VOCAB) + [c["name"] for c in r["format_custom"] if c["name"] not in FORMAT_VOCAB]
-    r["format_off"] = [f for f in names if f in set(r.get("format_off") or ())]
+    r.pop("format_custom", None)                              # 261113-10: '분류 더하기' 없앰
+    r["format_off"] = [f for f in PDF_AUTO_ITEMS if f in set(r.get("format_off") or ())]
     r["photo_off"] = [k for k in PHOTO_KINDS if k in set(r.get("photo_off") or ())]
-    for key in ("alias", "format_custom", "format_off", "photo_off"):
+    if r.get("pdf_auto_v") != PDF_AUTO_V:
+        r.pop("pdf_auto_v", None)
+    for key in ("alias", "format_off", "photo_off"):
         if not r[key]:
             r.pop(key)
     return r
@@ -92,36 +67,48 @@ def save_rules(rules: dict, path=None) -> bool:
         return False
 
 
-def remapper(old: dict | None, new: dict | None):
-    """옛 규칙으로 붙은 자동 태그 → 새 규칙의 태그(None = 뺀다). 옛 붙일 이름 → 원래 이름 → 새 규칙."""
-    from viewer.auto_tag import FORMAT_VOCAB
-    old, new = normalize(old), normalize(new)
-    rev = {v.lower(): k for k, v in (old.get("alias") or {}).items()}
+def needs_migration(rules: dict | None) -> bool:
+    return (rules or {}).get("pdf_auto_v") != PDF_AUTO_V
+
+
+def remapper(old: dict | None, new: dict | None, migrate: bool = False):
+    """옛 규칙으로 붙은 자동 태그 → 새 규칙의 태그(None = 뺀다) — `fn(태그, 파일 키)`.
+    옛 붙일 이름 → 원래 이름 → 새 규칙. 끈 PDF 자동 해시태그는 **PDF 파일에서만** 뺀다(§5.8 의 7 — 사진의 같은 이름은 사진 설정 몫).
+    migrate(§5.8 의 6): 빠진 종전 형식·사용자 분류(`format_custom`)의 자동 태그도 PDF 에서 뗀다."""
+    from viewer.auto_tag import REMOVED_FORMATS, FORMAT_VOCAB
+    raw_old = dict(old or {})
+    new = normalize(new)
+    rev = {}
+    for k, v in dict(raw_old.get("alias") or {}).items():     # 정규화 전 — 종전 '형식 이름 바꾸기' 도 원래 이름으로
+        k, v = str(k or "").strip().lstrip("#"), str(v or "").strip().lstrip("#")
+        if k and v and k != v:
+            rev[v.lower()] = k
     nal = {k.lower(): v for k, v in (new.get("alias") or {}).items()}
     off = {f.lower() for f in new.get("format_off") or ()}
-    vocab = {f.lower() for f in FORMAT_VOCAB}
-    cnew = {c["name"].lower() for c in new.get("format_custom") or ()}
-    gone = {c["name"].lower() for c in old.get("format_custom") or ()} - cnew - vocab     # 뺀 분류(261112-11)
+    gone = set()
+    if migrate:
+        gone = {f.lower() for f in REMOVED_FORMATS}
+        gone |= {str(c.get("name") or "").strip().lower() for c in raw_old.get("format_custom") or () if isinstance(c, dict)}
+        gone -= {f.lower() for f in FORMAT_VOCAB}
+        gone.discard("")
 
-    def fn(tag: str):
+    def fn(tag: str, key: str = ""):
         std = rev.get((tag or "").lower(), tag)
         sl = std.lower()
-        if sl in gone or ((sl in vocab or sl in cnew) and sl in off):
-            return None
+        if str(key or "").lower().endswith(".pdf"):
+            if sl in gone or sl in off or ("날짜" in off and _DATE.match(sl)):
+                return None
         return nal.get(sl, std)
+    fn.wants_key = True
     return fn
 
 
 def diff(old: dict | None, new: dict | None) -> dict:
-    """바뀐 것 — names(이름·끄기: 저장소만 옮기면 된다), formats_on(다시 켠 형식: 다시 판정), photo(사진 종류: 머리 다시 읽기)."""
+    """바뀐 것 — names(이름·끄기: 저장소만 옮기면 된다), formats_on(다시 켠 항목: 다시 판정), photo(사진 종류: 머리 다시 읽기)."""
     old, new = normalize(old), normalize(new)
-    oc = {c["name"]: c["words"] for c in old.get("format_custom") or ()}
-    nc = {c["name"]: c["words"] for c in new.get("format_custom") or ()}
-    added = {n for n, w in nc.items() if oc.get(n) != w}           # 더한 분류·낱말을 바꾼 분류 — 다시 판정(261112-11)
     return {
-        "names": (old.get("alias") != new.get("alias") or old.get("format_off") != new.get("format_off")
-                  or set(oc) != set(nc)),
-        "formats_on": sorted((set(old.get("format_off") or ()) - set(new.get("format_off") or ())) | added),
+        "names": old.get("alias") != new.get("alias") or old.get("format_off") != new.get("format_off"),
+        "formats_on": sorted(set(old.get("format_off") or ()) - set(new.get("format_off") or ())),
         "photo": old.get("photo_off") != new.get("photo_off"),
     }
 
@@ -259,9 +246,12 @@ class TagRulesJob(QObject):
         self._cancel = False
         self._changed = set()
         self.old = load_rules()
-        keep = {k: v for k, v in (self.old or {}).items() if k not in ("alias", "format_custom", "format_off", "photo_off")}
-        self.new = normalize({**keep, **normalize(new_rules)})    # 사용자가 손으로 넣은 다른 키는 남긴다
+        self.migrate = needs_migration(self.old)                 # 261113-10 한 번 정리(§5.8 의 6)
+        keep = {k: v for k, v in (self.old or {}).items() if k not in RULE_KEYS}
+        self.new = normalize({**keep, **normalize(new_rules), "pdf_auto_v": PDF_AUTO_V})    # 사용자가 손으로 넣은 다른 키는 남긴다
         self.d = diff(self.old, self.new)
+        if self.migrate:
+            self.d["names"] = True
         self._job(True)
         self._status(tr("해시태그 규칙 적용 시작 — 이미 붙은 자동 태그를 새 규칙으로 바꿉니다"))
         w = RulesSaveWorker(self.new)
@@ -313,7 +303,7 @@ class TagRulesJob(QObject):
                 self._job(False)
                 self._status(tr("태그 백업 실패 — 해시태그 규칙 적용을 건너뜀"))
                 return
-            keys = store.remap_auto(remapper(self.old, self.new))
+            keys = store.remap_auto(remapper(self.old, self.new, self.migrate))
             self._changed |= set(keys)
             try:
                 self.mw.bookmark_tree.refresh_tag_labels()
@@ -375,6 +365,16 @@ class TagRulesJob(QObject):
         else:
             self._status(tr("해시태그 규칙 적용 끝 — {n}개 파일").format(n=n))
         self.ended.emit(n)
+
+
+def migrate_if_needed(mw):
+    """261113-10(§5.8 의 6): 규칙 파일에 `pdf_auto_v` 가 없으면 지금 규칙 그대로 한 번 적용 — 빠진 형식·사용자 분류의 자동 태그를 떼고
+    종전 형식 이름 바꾸기를 원래 이름으로. 앱 시작 뒤 한 번(MainWindow)."""
+    from viewer.auto_tag import load_rules
+    cur = load_rules()
+    if not needs_migration(cur):
+        return None
+    return apply(mw, cur)
 
 
 def apply(mw, new_rules: dict) -> TagRulesJob:

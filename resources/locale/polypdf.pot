@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-13 08:15+0900\n"
+"POT-Creation-Date: 2026-11-13 23:02+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -669,7 +669,7 @@ msgstr ""
 msgid "다른 PolyPDF 창"
 msgstr ""
 
-#: viewer/app.py viewer/photo_controller.py viewer/widgets/tag_apply_dialog.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "되돌리기"
 msgstr ""
 
@@ -7535,6 +7535,10 @@ msgid "글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자�
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
+msgid "속성"
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py
 msgid "모두 해제"
 msgstr ""
 
@@ -7701,7 +7705,7 @@ msgid "자동 부여 취소"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
-msgid "해시태그 넣기"
+msgid "해시태그 수정"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
@@ -9691,7 +9695,7 @@ msgstr ""
 msgid "청소(현재 페이지 선긋기 지움)"
 msgstr ""
 
-#: viewer/widgets/main_view.py
+#: viewer/widgets/main_view.py viewer/widgets/tag_apply_dialog.py
 msgid "되돌리기 (Ctrl+Z)"
 msgstr ""
 
@@ -11183,7 +11187,7 @@ msgstr ""
 msgid "보기·넘김"
 msgstr ""
 
-#: viewer/widgets/settings_dialog.py
+#: viewer/widgets/settings_dialog.py viewer/widgets/tag_apply_dialog.py
 msgid "해시태그"
 msgstr ""
 
@@ -11975,7 +11979,7 @@ msgstr ""
 msgid "Windows Hello 로 비밀번호 보관(서명할 때 지문·PIN 으로 확인)"
 msgstr ""
 
-#: viewer/widgets/sign_dialogs.py viewer/widgets/tag_rules_panel.py
+#: viewer/widgets/sign_dialogs.py
 msgid "빼기"
 msgstr ""
 
@@ -13009,7 +13013,15 @@ msgid "예) {clean_markup}"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "다시 실행"
+msgid "고른 태그를 고른 파일 모두에 붙입니다"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해제"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
@@ -13037,6 +13049,22 @@ msgid "새 태그 이름"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "한글이면 영어, 영어면 한글"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그와 쌍으로 이을 낱말 — #태그 거르기가 짝도 함께 찾습니다"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "잇기"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "끊기"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
 msgid "새 태그 후보"
 msgstr ""
 
@@ -13049,19 +13077,15 @@ msgid "전역 기록 — 다시 적립되지 않습니다"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "고른 태그를 고른 파일 모두에 붙입니다"
-msgstr ""
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "해제"
-msgstr ""
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"
-msgstr ""
-
-#: viewer/widgets/tag_apply_dialog.py
 msgid "날짜 읽는 중…"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "다시 실행 (Ctrl+Y)"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "짝 낱말"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
@@ -13216,11 +13240,7 @@ msgid "촬영 장비"
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
-msgid "형식 낱말 (PDF 자동 해시태그)"
-msgstr ""
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "분류 더하기"
+msgid "자동 해시태그 (PDF 모드)"
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
@@ -13236,19 +13256,11 @@ msgid "고른 줄 빼기"
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
-msgid "사진 자동 해시태그 종류"
+msgid "자동 해시태그 (사진 모드)"
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
-msgid "찾을 낱말 (쉼표로)"
-msgstr ""
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "파일 이름·PDF 제목에 이 낱말이 있어도 이 분류를 붙입니다 — 쉼표로 나눠 여러 개"
-msgstr ""
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "더한 분류는 이름이나 찾을 낱말이 파일 이름·PDF 제목에 있으면 붙습니다."
+msgid "켜고 끄기만 합니다 — 이름은 고칠 수 없습니다."
 msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
@@ -13265,20 +13277,6 @@ msgstr ""
 
 #: viewer/widgets/tag_rules_panel.py
 msgid "저장하면 이미 붙은 자동 해시태그도 곧바로 새 규칙으로 바꿉니다(백그라운드, 작업 창에서 멈춤). 직접 붙인 해시태그는 그대로입니다."
-msgstr ""
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "분류 이름"
-msgstr ""
-
-#: viewer/widgets/tag_rules_panel.py
-#, python-brace-format
-msgid "붙일 이름 — 비우면 '{f}'"
-msgstr ""
-
-#: viewer/widgets/tag_rules_panel.py
-#, python-brace-format
-msgid "'{f}' 붙이기"
 msgstr ""
 
 #: viewer/widgets/text_panel.py

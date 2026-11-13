@@ -41,32 +41,32 @@ def pump(cond, timeout=20.0):
 tmp = Path(tempfile.mkdtemp(prefix="polypdf_tagset_"))
 try:
     from viewer.settings_store import settings_dir
-    from viewer.auto_tag import FORMAT_VOCAB
+    from viewer.auto_tag import PDF_AUTO_ITEMS
     rp = Path(settings_dir()) / "tag_rules.json"
     rp.parent.mkdir(parents=True, exist_ok=True)
-    rp.write_text(json.dumps({"alias": {"공문": "공문서"}, "format_off": ["브로셔"], "mine": 1}, ensure_ascii=False), encoding="utf-8")
+    rp.write_text(json.dumps({"alias": {"공문": "공문서"}, "format_off": ["논문"], "mine": 1}, ensure_ascii=False), encoding="utf-8")
     from viewer.app import MainWindow
     from viewer.widgets.settings_dialog import SettingsDialog
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.show(); pump(lambda: False, 0.3)
     store = mw.bookmark_tree._tags
     A, B = str(tmp / "a.pdf"), str(tmp / "b.pdf")
-    store.set_auto(A, ["공문서"]); store.set_auto(B, ["기사", "아스팔트"])
+    store.set_auto(A, ["공문서"]); store.set_auto(B, ["보고서", "아스팔트"])
     dlg = SettingsDialog(mw._prefs, mw, host=mw, page="tags")
     pn = getattr(dlg, "tag_rules_panel", None)
     chk(pn is not None, "A 해시태그 쪽에 해시태그 내용이 붙었다")
     if pn is not None:
         page_w = dlg._scrolls["tags"].widget()
         chk(page_w.isAncestorOf(pn), "A '일반 › 해시태그' 쪽 안에 있다")
-        chk(list(pn.fmt_chk) == list(FORMAT_VOCAB) and not pn.fmt_chk["브로셔"].isChecked() and pn.fmt_chk["기사"].isChecked(),
-            "A 형식 낱말 13개 — 지금 규칙(브로셔 끔)")
-        chk(pn.fmt_name["공문"].text() == "공문서", "A 형식 붙일 이름 — 지금 규칙", pn.fmt_name["공문"].text())
+        chk(list(pn.fmt_chk) == list(PDF_AUTO_ITEMS) and not pn.fmt_chk["논문"].isChecked() and pn.fmt_chk["보고서"].isChecked(),
+            "A 자동 해시태그 (PDF 모드) 13 항목 — 지금 규칙(논문 끔)")
+        chk(all(pn.fmt_chk[f].text() == f for f in PDF_AUTO_ITEMS) and not hasattr(pn, "fmt_name"),
+            "A 이름은 체크 상자 글 — 고칠 글 상자 없음(261113-10)")
         chk(set(pn.photo_chk) == {"date", "region", "device", "screenshot"} and all(c.isChecked() for c in pn.photo_chk.values()),
             "A 사진 종류 4개 켬")
         chk(not dlg.btn_apply.isEnabled(), "B 바꾸기 전 [적용] 꺼짐")
-        pn.fmt_chk["기사"].setChecked(False)
+        pn.fmt_chk["보고서"].setChecked(False)
         pn._add_row("SamsungSM-S918N", "GalaxyS23")
-        pn.fmt_name["공문"].setText("")
         chk(dlg.btn_apply.isEnabled(), "B 바꾸면 [적용] 켜짐")
         ends = []
         dlg.apply()
@@ -77,8 +77,8 @@ try:
             pump(lambda: bool(ends) or not job._workers, 20)
             pump(lambda: False, 0.3)
         saved = json.loads(rp.read_text(encoding="utf-8"))
-        chk(sorted(saved.get("format_off") or []) == sorted(["기사", "브로셔"]) and saved.get("alias") == {"SamsungSM-S918N": "GalaxyS23"} and saved.get("mine") == 1,
-            "B tag_rules.json — 형식 끄기·별칭, 손으로 넣은 다른 키는 남는다", str(saved))
+        chk(sorted(saved.get("format_off") or []) == sorted(["논문", "보고서"]) and saved.get("alias") == {"SamsungSM-S918N": "GalaxyS23"} and saved.get("mine") == 1,
+            "B tag_rules.json — 끄기·별칭, 손으로 넣은 다른 키는 남는다", str(saved))
         chk(store.get_auto(A) == ["공문"] and store.get_auto(B) == ["아스팔트"], "B 이미 붙은 자동 태그가 곧바로 — 이름 되돌림·끈 형식 뺌",
             f"{store.get_auto(A)} {store.get_auto(B)}")
         chk("tag_rules" not in mw._prefs, "C settings.json(설정)에는 넣지 않는다", str([k for k in mw._prefs if "tag" in k]))

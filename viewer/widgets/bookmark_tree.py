@@ -1804,14 +1804,14 @@ class BookmarkTree(QWidget):
         lay = QVBoxLayout(panel)
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
-        groups = {"형식": [], "주제": []}
+        groups = {"형식": [], "속성": [], "주제": []}      # 261113-10: PDF 속성(한글·스캔문서 …, 태그 SOT §5.3.1)
         from viewer import photo_tags as _pt
         for t in tags:
             if _pt.is_date_tag(t):
                 continue                      # 사진 촬영일 — 아래 '날짜' 묶음에 해·달로(태그 SOT §5.7, 검색 SOT §5.1)
             groups[axis_of(t) if axis_of(t) in groups else "주제"].append(t)
         # 축 이름은 태그 데이터의 내부 값(한글)이다 — 키는 그대로, 머리글만 번역(다국어 SOT §5)
-        for gname in (tr_noop("형식"), tr_noop("주제")):
+        for gname in (tr_noop("형식"), tr_noop("속성"), tr_noop("주제")):
             if not groups[gname]:
                 continue
             hd = _QL("<b>%s</b>" % tr(gname))
@@ -1861,14 +1861,14 @@ class BookmarkTree(QWidget):
         self._add_tag_tool_items()
 
     def _add_tag_tool_items(self):
-        """'#' 메뉴 끝 — '해시태그 넣기'(태그 SOT §8.7)·'해시태그 폴더로 사본 저장'(§8.8) — 글 끝 '…' 없음(디자인 SOT §2.7, 261112-1). 261111-6: '새 태그 후보 검토' 는
-        없앴다(그 기능은 '해시태그 넣기' 창 왼쪽 '새 태그 후보'). 태그가 하나도 없어도 보인다 — 처음 붙이는 길."""
+        """'#' 메뉴 끝 — '해시태그 수정'(태그 SOT §8.7, 261113-9 — 종전 '해시태그 넣기')·'해시태그 폴더로 사본 저장'(§8.8) — 글 끝 '…' 없음(디자인 SOT §2.7, 261112-1). 261111-6: '새 태그 후보 검토' 는
+        없앴다(그 기능은 '해시태그 수정' 창 왼쪽 '새 태그 후보'). 태그가 하나도 없어도 보인다 — 처음 붙이는 길."""
         ap, ex = getattr(self, "tag_apply_provider", None), getattr(self, "tag_export_provider", None)
         if not callable(ap) and not callable(ex):
             return
         self._tag_menu.addSeparator()
         if callable(ap):
-            a = self._tag_menu.addAction(tr("해시태그 넣기"))
+            a = self._tag_menu.addAction(tr("해시태그 수정"))
             a.triggered.connect(lambda: self.tag_apply_provider())
         if callable(ex):
             b = self._tag_menu.addAction(tr("해시태그 폴더로 사본 저장"))
@@ -2565,11 +2565,19 @@ class BookmarkTree(QWidget):
             child = any(text_match(item.child(i)) for i in range(item.childCount()))
             return ok or child
 
+        # 261113-9(태그 SOT §8.9, 사용자 결정 '#태그 거르기만'): `#균열` 은 짝 `#crack` 도 — 짝은 이름 그대로 같을 때만
+        try:
+            from viewer.tag_pairs import shared as _pairs
+            _pt = _pairs()
+            mates = {q: (_pt.partner(q) or "").lower() for q in tagq}
+        except Exception:
+            mates = {}
+
         def file_has_tags(path) -> bool:
             if not tagq:
                 return True
             ftags = [t.lower() for t in (self._tags.get(path) if (self._tags and path) else [])]
-            return all(any(ft == q or ft.startswith(q) for ft in ftags) for q in tagq)
+            return all(any(ft == q or ft.startswith(q) or (mates.get(q) and ft == mates[q]) for ft in ftags) for q in tagq)
 
         def file_text_match(item, path) -> bool:
             """260830 P4(태그 SOT §8.4): 파일 항목은 키워드·연도도 일반 텍스트 검색에

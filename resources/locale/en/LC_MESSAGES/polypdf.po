@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-13 08:15+0900\n"
+"POT-Creation-Date: 2026-11-13 23:02+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -673,7 +673,7 @@ msgstr "Save with New Name"
 msgid "다른 PolyPDF 창"
 msgstr "Other PolyPDF windows"
 
-#: viewer/app.py viewer/photo_controller.py viewer/widgets/tag_apply_dialog.py
+#: viewer/app.py viewer/photo_controller.py
 msgid "되돌리기"
 msgstr "Undo"
 
@@ -7772,6 +7772,10 @@ msgid "글자층이 없는 스캔 쪽을 OCR 로 읽어 보이지 않는 글자�
 msgstr "Reads scanned pages without a text layer with OCR and adds an invisible text layer to the original PDF — other programs can then search and copy the text (a backup is kept the first time)."
 
 #: viewer/widgets/bookmark_tree.py
+msgid "속성"
+msgstr "Attribute"
+
+#: viewer/widgets/bookmark_tree.py
 msgid "모두 해제"
 msgstr "Clear All"
 
@@ -7940,8 +7944,8 @@ msgid "자동 부여 취소"
 msgstr "Cancel Automatic Tag"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
-msgid "해시태그 넣기"
-msgstr "Add Hashtags"
+msgid "해시태그 수정"
+msgstr "Modify Hashtags"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/main_view.py
 msgid "암호가 올바르지 않습니다."
@@ -9980,7 +9984,7 @@ msgstr "Select objects (move · resize · delete images)"
 msgid "청소(현재 페이지 선긋기 지움)"
 msgstr "Clear (erase lines on current page)"
 
-#: viewer/widgets/main_view.py
+#: viewer/widgets/main_view.py viewer/widgets/tag_apply_dialog.py
 msgid "되돌리기 (Ctrl+Z)"
 msgstr "Undo (Ctrl+Z)"
 
@@ -11492,7 +11496,7 @@ msgstr "Dark"
 msgid "보기·넘김"
 msgstr "View & Paging"
 
-#: viewer/widgets/settings_dialog.py
+#: viewer/widgets/settings_dialog.py viewer/widgets/tag_apply_dialog.py
 msgid "해시태그"
 msgstr "Hashtags"
 
@@ -12293,7 +12297,7 @@ msgstr "Confirm password"
 msgid "Windows Hello 로 비밀번호 보관(서명할 때 지문·PIN 으로 확인)"
 msgstr "Store the password with Windows Hello (confirm with fingerprint or PIN when signing)"
 
-#: viewer/widgets/sign_dialogs.py viewer/widgets/tag_rules_panel.py
+#: viewer/widgets/sign_dialogs.py
 msgid "빼기"
 msgstr "Remove"
 
@@ -13331,8 +13335,16 @@ msgid "예) {clean_markup}"
 msgstr "e.g. {clean_markup}"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "다시 실행"
-msgstr "Redo"
+msgid "고른 태그를 고른 파일 모두에 붙입니다"
+msgstr "Adds the selected tags to all selected files"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "해제"
+msgstr "Remove"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"
+msgstr "Removes the selected tags from all selected files — automatic tags are recorded as rejected so they are not added again"
 
 #: viewer/widgets/tag_apply_dialog.py
 msgid "현재 태그"
@@ -13359,6 +13371,22 @@ msgid "새 태그 이름"
 msgstr "New tag name"
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "한글이면 영어, 영어면 한글"
+msgstr "English for a Korean tag, Korean for an English one"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "고른 태그와 쌍으로 이을 낱말 — #태그 거르기가 짝도 함께 찾습니다"
+msgstr "Word to pair with the chosen tag — #tag filters also find its pair"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "잇기"
+msgstr "Link"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "끊기"
+msgstr "Unlink"
+
+#: viewer/widgets/tag_apply_dialog.py
 msgid "새 태그 후보"
 msgstr "New tag candidates"
 
@@ -13371,20 +13399,16 @@ msgid "전역 기록 — 다시 적립되지 않습니다"
 msgstr "Global record — will not be collected again"
 
 #: viewer/widgets/tag_apply_dialog.py
-msgid "고른 태그를 고른 파일 모두에 붙입니다"
-msgstr "Adds the selected tags to all selected files"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "해제"
-msgstr "Remove"
-
-#: viewer/widgets/tag_apply_dialog.py
-msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그는 다시 붙지 않게 거절로 기록"
-msgstr "Removes the selected tags from all selected files — automatic tags are recorded as rejected so they are not added again"
-
-#: viewer/widgets/tag_apply_dialog.py
 msgid "날짜 읽는 중…"
 msgstr "Reading dates…"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "다시 실행 (Ctrl+Y)"
+msgstr "Redo (Ctrl+Y)"
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "짝 낱말"
+msgstr "Paired word"
 
 #: viewer/widgets/tag_apply_dialog.py
 msgid "기간"
@@ -13541,12 +13565,8 @@ msgid "촬영 장비"
 msgstr "Camera"
 
 #: viewer/widgets/tag_rules_panel.py
-msgid "형식 낱말 (PDF 자동 해시태그)"
-msgstr "Format words (PDF automatic hashtags)"
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "분류 더하기"
-msgstr "Add category"
+msgid "자동 해시태그 (PDF 모드)"
+msgstr "Automatic hashtags (PDF mode)"
 
 #: viewer/widgets/tag_rules_panel.py
 msgid "별칭 — 이 태그 대신 붙일 이름"
@@ -13561,20 +13581,12 @@ msgid "고른 줄 빼기"
 msgstr "Remove selected rows"
 
 #: viewer/widgets/tag_rules_panel.py
-msgid "사진 자동 해시태그 종류"
-msgstr "Photo automatic hashtag types"
+msgid "자동 해시태그 (사진 모드)"
+msgstr "Automatic hashtags (Photo mode)"
 
 #: viewer/widgets/tag_rules_panel.py
-msgid "찾을 낱말 (쉼표로)"
-msgstr "Words to find (comma-separated)"
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "파일 이름·PDF 제목에 이 낱말이 있어도 이 분류를 붙입니다 — 쉼표로 나눠 여러 개"
-msgstr "This category is also applied when these words appear in the file name or PDF title — separate several with commas"
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "더한 분류는 이름이나 찾을 낱말이 파일 이름·PDF 제목에 있으면 붙습니다."
-msgstr "An added category is applied when its name or words to find appear in the file name or PDF title."
+msgid "켜고 끄기만 합니다 — 이름은 고칠 수 없습니다."
+msgstr "Turn items on or off only — names can't be changed."
 
 #: viewer/widgets/tag_rules_panel.py
 msgid "원래 태그"
@@ -13591,20 +13603,6 @@ msgstr "E.g. SamsungSM-S918N → GalaxyS23. Also applies to photo camera, region
 #: viewer/widgets/tag_rules_panel.py
 msgid "저장하면 이미 붙은 자동 해시태그도 곧바로 새 규칙으로 바꿉니다(백그라운드, 작업 창에서 멈춤). 직접 붙인 해시태그는 그대로입니다."
 msgstr "Saving also updates automatic hashtags already assigned to the new rules right away (in the background; stop it from the Jobs window). Hashtags you added yourself stay as they are."
-
-#: viewer/widgets/tag_rules_panel.py
-msgid "분류 이름"
-msgstr "Category name"
-
-#: viewer/widgets/tag_rules_panel.py
-#, python-brace-format
-msgid "붙일 이름 — 비우면 '{f}'"
-msgstr "Name to use — leave empty for '{f}'"
-
-#: viewer/widgets/tag_rules_panel.py
-#, python-brace-format
-msgid "'{f}' 붙이기"
-msgstr "Tag files as '{f}'"
 
 #: viewer/widgets/text_panel.py
 msgid "고른 줄의 스타일 / 아래 값이 적용될 스타일"
@@ -16402,4 +16400,37 @@ msgstr "Getting Started"
 
 #~ msgid "{fmt} 로 바꾼 새 파일 — 원본은 그대로"
 #~ msgstr "New file in {fmt} — the original is unchanged"
+
+#~ msgid "해시태그 넣기"
+#~ msgstr "Add Hashtags"
+
+#~ msgid "다시 실행"
+#~ msgstr "Redo"
+
+#~ msgid "형식 낱말 (PDF 자동 해시태그)"
+#~ msgstr "Format words (PDF automatic hashtags)"
+
+#~ msgid "분류 더하기"
+#~ msgstr "Add category"
+
+#~ msgid "사진 자동 해시태그 종류"
+#~ msgstr "Photo automatic hashtag types"
+
+#~ msgid "찾을 낱말 (쉼표로)"
+#~ msgstr "Words to find (comma-separated)"
+
+#~ msgid "파일 이름·PDF 제목에 이 낱말이 있어도 이 분류를 붙입니다 — 쉼표로 나눠 여러 개"
+#~ msgstr "This category is also applied when these words appear in the file name or PDF title — separate several with commas"
+
+#~ msgid "더한 분류는 이름이나 찾을 낱말이 파일 이름·PDF 제목에 있으면 붙습니다."
+#~ msgstr "An added category is applied when its name or words to find appear in the file name or PDF title."
+
+#~ msgid "분류 이름"
+#~ msgstr "Category name"
+
+#~ msgid "붙일 이름 — 비우면 '{f}'"
+#~ msgstr "Name to use — leave empty for '{f}'"
+
+#~ msgid "'{f}' 붙이기"
+#~ msgstr "Tag files as '{f}'"
 

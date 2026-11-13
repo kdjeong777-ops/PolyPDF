@@ -330,7 +330,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         #   (상=현재 폴더 책갈피, 하=우측 2단 창이 '다른 폴더' 파일일 때 그 파일 표시).
         self.bookmark_tree = BookmarkTree()         # 상단 = 좌측 창 폴더 목록
         self.bookmark_tree.suggest_provider = self._autotag_suggest_single  # 260830 P3(§8.1)
-        self.bookmark_tree.tag_apply_provider = self.open_tag_apply     # 261111-6(태그 SOT §8.7): '#' 메뉴 '해시태그 넣기'
+        self.bookmark_tree.tag_apply_provider = self.open_tag_apply     # 261111-6(태그 SOT §8.7): '#' 메뉴 '해시태그 수정'(261113-9)
         self.bookmark_tree.tag_export_provider = self.open_tag_export   # 261111-8(태그 SOT §8.8): '해시태그 폴더로 사본 저장'
         self.bookmark_tree.setMinimumWidth(150)
         self.bookmark_tree_right = BookmarkTree()   # 260618-22: 하단 = 우측 창 폴더 목록(2단·다른폴더)
@@ -7260,6 +7260,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     # ── 태그 자동 부여 파이프라인 (260829 P2 — 태그 SOT §8.2·§8.5) ─────────
     def _start_autotag_scan(self, force: bool = False):
         """전 파일 태그·연도 계산 워커 시작. force=메뉴 '다시 계산'(§3.5-C)."""
+        if not self.__dict__.get("_pdf_auto_migrated"):
+            self._pdf_auto_migrated = True              # 261113-10(태그 SOT §5.8 의 6): 첫 태그 계산 전에 한 번 정리
+            try:
+                from viewer import tag_rules as _trm
+                _trm.migrate_if_needed(self)
+            except Exception:
+                pass
         if not self._prefs.get("auto_tag_enabled", True) and not force:
             return                                    # §3.5 각주 — 끄면 제안만(다이얼로그)
         # 260906-8(응답성 SOT §4 ① '한 번에 하나만'): 태그 계산도 색인에 없는 파일에서는
@@ -7427,11 +7434,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             pass
 
     def _autotag_review_candidates(self):
-        """§8.5 새 태그 후보 — 도구 메뉴 '태그 ▸'·첫 실행 요약 단추. 261111-6(태그 SOT §8.7): '해시태그 넣기' 창을 후보를 펼친 채로."""
+        """§8.5 새 태그 후보 — 도구 메뉴 '태그 ▸'·첫 실행 요약 단추. 261111-6(태그 SOT §8.7): '해시태그 수정' 창을 후보를 펼친 채로."""
         self.open_tag_apply(candidates=True)
 
     def _tag_list_paths(self) -> tuple:
-        """'해시태그 넣기'·'사본 저장' 의 대상 — 지금 책갈피창 목록에서 보이는 파일 줄(zip 줄 빼고)과 고른 파일(태그 SOT §8.7)."""
+        """'해시태그 수정'·'사본 저장' 의 대상 — 지금 책갈피창 목록에서 보이는 파일 줄(zip 줄 빼고)과 고른 파일(태그 SOT §8.7)."""
         bt = self.bookmark_tree
         paths, seen = [], set()
         for it in bt._iter_file_nodes():
@@ -7450,12 +7457,16 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         return paths, sel
 
     def open_tag_apply(self, candidates: bool = False):
-        """261111-6(태그 SOT §8.7): 해시태그 넣기 — 넓은 창, 왼쪽 태그·추가·후보, 오른쪽 썸네일 여러 장."""
+        """261111-6·261113-9(태그 SOT §8.7): 해시태그 수정 — 넓은 창, 왼쪽 태그·추가·후보, 오른쪽 썸네일 여러 장."""
         store = getattr(self.bookmark_tree, "_tags", None)
         if store is None:
             return None
         from viewer.widgets.tag_apply_dialog import TagApplyDialog
         paths, sel = self._tag_list_paths()
+        inlist = {os.path.normcase(p) for p in paths}
+        pick = list(dict.fromkeys(p for p in sel if os.path.normcase(p) in inlist))
+        if pick and not candidates:
+            paths = pick                               # 261113-9(태그 SOT §8.7): 책갈피창에서 고른 파일이 있으면 그 파일만(후보 검토는 목록 전체)
         dlg = TagApplyDialog(store, paths, sel, self, show_candidates=candidates,
                              keep=self.__dict__.setdefault("_thread_keep", []),
                              state=(self._prefs or {}).get("tag_apply_window"))
@@ -9834,7 +9845,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             "vprinter": prefs.get("vprinter", old.get("vprinter")),
             "view_scales": prefs.get("view_scales", old.get("view_scales")),   # 261021-5(입력 SOT §3.2): Ctrl++/−/0 배율
             "settings_window": prefs.get("settings_window", old.get("settings_window")),   # 261107-12: 환경설정 창 크기·마지막 항목
-            "tag_apply_window": prefs.get("tag_apply_window", old.get("tag_apply_window")),   # 261111-17: 해시태그 넣기 창 크기·최대화·정렬
+            "tag_apply_window": prefs.get("tag_apply_window", old.get("tag_apply_window")),   # 261111-17: 해시태그 수정 창 크기·최대화·정렬
             "crop_styles": prefs.get("crop_styles", old.get("crop_styles")),
             "crop_auto": prefs.get("crop_auto", old.get("crop_auto")),
             "crop_style_last": prefs.get("crop_style_last", old.get("crop_style_last")),

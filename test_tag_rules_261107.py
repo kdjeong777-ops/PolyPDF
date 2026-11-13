@@ -73,22 +73,23 @@ try:
     # A
     if TR:
         old = {"alias": {"보고서": "외국보고서"}}
-        new = {"alias": {"SamsungSM-S918N": "GalaxyS23"}, "format_off": ["기사", "없는형식"], "photo_off": ["region", "x"]}
+        new = {"alias": {"SamsungSM-S918N": "GalaxyS23"}, "format_off": ["논문", "기사", "없는형식"], "photo_off": ["region", "x"]}
         n = TR.normalize(new)
-        chk(n["format_off"] == ["기사"] and n["photo_off"] == ["region"], "A 알 수 없는 형식·사진 종류는 걸러 낸다", str(n))
+        chk(n["format_off"] == ["논문"] and n["photo_off"] == ["region"], "A 알 수 없는 항목(261113-10 에 뺀 기사 포함)·사진 종류는 걸러 낸다", str(n))
         fn = TR.remapper(old, new)
-        chk(fn("외국보고서") == "보고서" and fn("기사") is None and fn("SamsungSM-S918N") == "GalaxyS23" and fn("가족") == "가족",
-            "A 옮기기 — 옛 붙일 이름 → 원래 이름, 끈 형식은 뺀다, 별칭, 관계없는 태그는 그대로",
-            str([fn("외국보고서"), fn("기사"), fn("SamsungSM-S918N"), fn("가족")]))
+        chk(fn("외국보고서", "a.pdf") == "보고서" and fn("논문", "a.pdf") is None and fn("논문", "a.jpg") == "논문"
+            and fn("SamsungSM-S918N", "a.jpg") == "GalaxyS23" and fn("가족", "a.pdf") == "가족",
+            "A 옮기기 — 옛 붙일 이름 → 원래 이름, 끈 항목은 PDF 에서만 뺀다, 별칭, 관계없는 태그는 그대로",
+            str([fn("외국보고서", "a.pdf"), fn("논문", "a.pdf"), fn("논문", "a.jpg"), fn("SamsungSM-S918N", "a.jpg"), fn("가족", "a.pdf")]))
         dd = TR.diff(old, new)
         chk(dd["names"] and dd["photo"] and dd["formats_on"] == [], "A 바뀐 것 — 이름·사진 종류", str(dd))
-        chk(TR.diff({"format_off": ["기사"]}, {})["formats_on"] == ["기사"], "A 다시 켠 형식은 다시 판정 대상")
+        chk(TR.diff({"format_off": ["논문"]}, {})["formats_on"] == ["논문"], "A 다시 켠 형식은 다시 판정 대상")
 
     # B
     f = auto_tag.Features(stem="2025 연차 보고서", page_count=30, toc_titles=["1장"], aspect=0.7)
     chk(auto_tag.classify_format(f, {}) == "보고서", "B 준비 — 보고서로 판정", str(auto_tag.classify_format(f, {})))
     chk(auto_tag.classify_format(f, {"format_off": ["보고서"]}) is None, "B 끈 형식은 형식 없음")
-    chk(auto_tag.classify_format(f, {"alias": {"보고서": "외국보고서"}}) == "외국보고서", "B 이름 바꾸기")
+    chk(auto_tag.classify_format(f, {"alias": {"보고서": "외국보고서"}}) == "보고서", "B 형식 이름은 고정(261113-10)")
     P1 = tmp / "pix" / "IMG_0001.jpg"
     P1.parent.mkdir()
     photo(P1, gps=(37.6766, 126.7470))
@@ -105,7 +106,9 @@ try:
         store = mw.bookmark_tree._tags
         docs = tmp / "docs"; docs.mkdir()
         A, B, C = str(docs / "a.pdf"), str(docs / "b.pdf"), str(docs / "c.pdf")
-        store.set_auto(A, ["보고서"]); store.set_auto(B, ["기사", "아스팔트"]); store.set(C, ["보고서"])
+        # 261113-10: 종전 규칙 파일(형식 이름 바꾸기·정리 표시 없음) — 적용하면 한 번 정리도 함께(§5.8 의 6)
+        (Path(settings_dir()) / "tag_rules.json").write_text(json.dumps({"alias": {"보고서": "외국보고서"}}, ensure_ascii=False), encoding="utf-8")
+        store.set_auto(A, ["외국보고서"]); store.set_auto(B, ["기사", "논문", "아스팔트"]); store.set(C, ["보고서"])
         store.set_auto_part(str(P1), "meta", ["2026-11-05", "고양시", "SamsungSM-S918N"])
         con = photo_index.connect()
         photo_index.upsert(con, os.path.normcase(str(P1)), str(P1), photo_index.norm_folder(P1.parent), P1.name, ".jpg",
@@ -123,15 +126,16 @@ try:
             pass
 
         # C
-        rules = {"alias": {"보고서": "외국보고서", "SamsungSM-S918N": "GalaxyS23"}, "format_off": ["기사"]}
+        rules = {"alias": {"보고서": "외국보고서", "SamsungSM-S918N": "GalaxyS23"}, "format_off": ["논문"]}
         job = TR.apply(mw, rules)
         job.ended.connect(lambda n: ends.append(n))
         chk(pump(lambda: bool(ends)), "C 저장하면 곧바로 — 끝났다")
         saved = json.loads((Path(settings_dir()) / "tag_rules.json").read_text(encoding="utf-8"))
-        chk(saved.get("alias", {}).get("보고서") == "외국보고서" and saved.get("format_off") == ["기사"], "C 규칙 파일", str(saved))
-        chk(auto_tag.load_rules().get("format_off") == ["기사"], "C 앱이 읽는 규칙도 같다")
-        chk(store.get_auto(A) == ["외국보고서"], "C 형식 이름 바꾸기 — 이미 붙은 자동 태그도", str(store.get_auto(A)))
-        chk(store.get_auto(B) == ["아스팔트"], "C 끈 형식은 빠지고 다른 태그는 그대로", str(store.get_auto(B)))
+        chk(saved.get("alias") == {"SamsungSM-S918N": "GalaxyS23"} and saved.get("format_off") == ["논문"] and saved.get("pdf_auto_v") == 2,
+            "C 규칙 파일 — 형식 이름 바꾸기는 버리고 정리 표시", str(saved))
+        chk(auto_tag.load_rules().get("format_off") == ["논문"], "C 앱이 읽는 규칙도 같다")
+        chk(store.get_auto(A) == ["보고서"], "C 종전 형식 이름 바꾸기는 원래 이름으로(261113-10)", str(store.get_auto(A)))
+        chk(store.get_auto(B) == ["아스팔트"], "C 끈 형식·뺀 형식(기사)은 빠지고 다른 태그는 그대로", str(store.get_auto(B)))
         chk(store.get_manual(C) == ["보고서"], "C 사용자 태그는 그대로", str(store.get(C)))
         chk(store.get_auto_part(str(P1), "meta") == ["2026-11-05", "고양시", "GalaxyS23"], "C 사진 장비 별칭 — 부분째",
             str(store.get_auto_part(str(P1), "meta")))
@@ -182,7 +186,7 @@ try:
             for i in range(20000):
                 big.set_auto(str(tmp / "z" / ("f%05d.pdf" % i)), ["보고서", "아스팔트"])
         t0 = time.perf_counter()
-        ch = big.remap_auto(TR.remapper({}, {"alias": {"보고서": "외국보고서"}}))
+        ch = big.remap_auto(TR.remapper({}, {"format_off": ["보고서"]}))   # 261113-10: 형식 이름은 못 바꾼다 — 끄기로 모두 옮김
         dt = time.perf_counter() - t0
         print("   F 2만 개 옮기기 %.3f초" % dt)
         # 응답성 SOT §5 기준(최장 정지 < 1초) — 단독 0.28초, 검사 여럿을 함께 돌리면 0.6초까지(261107 실측)

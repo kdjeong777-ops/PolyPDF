@@ -335,8 +335,13 @@ class TagStore:
 
     def remap_auto(self, fn) -> list:
         """모든 파일의 **자동** 태그를 `fn(태그) → 새 태그 | None(뺀다)` 으로 옮긴다(§5.8 — 규칙을 바꾼 뒤, 파일을 다시 읽지 않는다).
-        모든 부분(`auto_parts`)·`auto`·`auto_conf` 를 함께. 사용자 태그·거절한 태그와 겹치면 뺀다(§6). 바뀐 키 목록을 돌려준다."""
+        모든 부분(`auto_parts`)·`auto`·`auto_conf` 를 함께. 사용자 태그·거절한 태그와 겹치면 뺀다(§6). 바뀐 키 목록을 돌려준다.
+        `fn.wants_key` 면 `fn(태그, 파일 키)` — PDF 에만 쓰는 규칙(§5.8 의 7, 261113-10)."""
         changed = []
+        _k = [""]
+        if getattr(fn, "wants_key", False):
+            _f0 = fn
+            fn = lambda t: _f0(t, _k[0])                 # noqa: E731
 
         def _map(ts, block):
             out, low = [], set()
@@ -350,6 +355,7 @@ class TagStore:
             for k, v in list(self._data.items()):
                 if not isinstance(v, dict) or not v.get("auto"):
                     continue
+                _k[0] = k
                 block = {t.lower() for t in (v.get("rejected") or [])} | {t.lower() for t in (v.get("manual") or [])}
                 new_auto = _map(v["auto"], block)
                 parts = v.get("auto_parts")
