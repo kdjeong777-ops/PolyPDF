@@ -42,7 +42,8 @@ jobs:
             "test_i18n_core","test_i18n_packs","test_i18n_keys",
             "test_i18n_coverage","test_i18n_switch","test_i18n_outputs","test_i18n_external","test_i18n_installer",
             "test_i18n_settings_layout","test_i18n_panel_layout","test_i18n_bookmarker_layout","test_page_crop","test_design_text_btn","test_perf_study_reads","test_update_registry",
-            "test_index_corrupt_recover","test_startup_open_arg","test_present_decorations","test_kiwi_space","test_index_proc","test_profile_isolation","test_thumbs_rerender","test_portable_mode","test_release_plan"
+            "test_index_corrupt_recover","test_startup_open_arg","test_present_decorations","test_kiwi_space","test_index_proc","test_profile_isolation","test_thumbs_rerender","test_portable_mode","test_release_plan",
+            "test_release_notes_draft_261114"
           )
           $fail = 0
           foreach ($t in $tests) {

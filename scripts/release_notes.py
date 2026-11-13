@@ -12,7 +12,13 @@
   - 261008-27(다국어 SOT §10.4): 커밋 꼬리말 `Release-Note-<코드>: …`(한 줄에 한 항목, 여러 개 가능)으로
     다른 언어 설명을 쓴다. 본문은 언어마다 `<!-- lang:<코드> -->` 로 시작하는 절로 나뉜다(GitHub 페이지에서는
     표시가 보이지 않는다). 한국어 절은 언제나 있고, 꼬리말이 없는 커밋은 한국어 절에만 들어간다.
+  - ★ 261114-9(릴리스 SOT §6, 사용자 지시): 판마다 초안 `release_notes/<태그>.md` 가 있으면 커밋 목록 대신 그 글을 쓴다
+    ('이번 판에서 달라진 점'·'이렇게 써 보세요', 언어별 절). '그 밖의 고침' 이 초안에 없으면 feat·fix·perf 커밋 제목을
+    한 줄씩(영어는 꼬리말) 붙인다. 초안이 없으면 위의 종전 꼴.
+
+초안 점검:  python scripts/release_notes.py --check release_notes/v1.1.0-beta.13.md   (오류면 종료 코드 1)
 """
+import os
 import re
 import subprocess
 import sys
@@ -59,7 +65,113 @@ def commits(prev: str, tag: str):
         yield subj.strip(), body
 
 
+DRAFT_DIR = "release_notes"
+# 초안의 절 제목(언어마다): 주요 기능 · 써 볼 것 · 그 밖의 고침 — 업데이트 창의 버전 제목이 `###` 라 `####` 부터
+DRAFT_HEADS = {"ko": ("이번 판에서 달라진 점", "이렇게 써 보세요", "그 밖의 고침"),
+               "en": ("What's new", "Try it", "Other fixes")}
+SHORT_KINDS = ("feat", "fix", "perf")       # '그 밖의 고침' 에 한 줄로 드는 커밋(docs·test·build 등은 사용자 몫이 아니다)
+HIGHLIGHTS = (3, 6)                         # 사용자 결정: 주요 항목 3~6개
+_LANG_MARK = re.compile(r"^<!--\s*lang:([A-Za-z_\-]+)\s*-->\s*$", re.M)     # = update_dialog._LANG_MARK
+_HEADING = re.compile(r"^(#{1,6})\s*(.*?)\s*$")
+_HTML = re.compile(r"<\s*/?\s*[A-Za-z!]")
+# 내부 시험 기록은 비공개(릴리스 SOT §6, 261109-2)
+_INTERNAL = ("test_", "_review", "summary.md", "확인한 것", "못 한 것", "release_test")
+
+
+def split_sections(text: str) -> dict:
+    """`<!-- lang:xx -->` 로 나뉜 글 → {코드: 절}. 표시가 없으면 {"ko": 전체}."""
+    marks = list(_LANG_MARK.finditer(text or ""))
+    if not marks:
+        return {"ko": (text or "").strip()}
+    return {m.group(1).lower(): text[m.end():(marks[i + 1].start() if i + 1 < len(marks) else len(text))].strip()
+            for i, m in enumerate(marks)}
+
+
+def _heads(code):
+    return DRAFT_HEADS.get(code, DRAFT_HEADS["en"])
+
+
+def check_draft(text: str):
+    """초안 점검 → (오류, 경고). 오류는 앱 창에서 깨지거나 비공개가 새는 것, 경고는 꼴의 권장."""
+    errs, warns = [], []
+    secs = split_sections(text)
+    if not _LANG_MARK.search(text or ""):
+        errs.append("언어 표시(<!-- lang:ko -->·<!-- lang:en -->)가 없다")
+    for need in ("ko", "en"):
+        if not secs.get(need):
+            errs.append("%s 절이 없다 — 영어 화면의 업데이트 창도 설명을 보인다(다국어 SOT §10.4)" % need)
+    for code, body in secs.items():
+        new, tryit, _other = _heads(code)
+        titles, items, cur = [], {}, None
+        for ln in body.splitlines():
+            m = _HEADING.match(ln)
+            if m:
+                cur = m.group(2)
+                titles.append(cur)
+                if len(m.group(1)) < 4:
+                    errs.append("[%s] '%s' — 제목은 #### 부터(업데이트 창의 버전 제목이 ###)" % (code, ln.strip()))
+                continue
+            if ln.startswith("- ") and cur is not None:
+                items[cur] = items.get(cur, 0) + 1
+        plain = "".join(p for i, p in enumerate(_CODE.split(body)) if not i % 2)
+        if _HTML.search(plain):
+            errs.append("[%s] HTML(접기 <details> 등)은 업데이트 창에 글자 그대로 보인다 — 쓰지 않는다" % code)
+        bad = [w for w in _INTERNAL if w in body]
+        if bad:
+            errs.append("[%s] 내부 시험 기록은 공개하지 않는다(릴리스 SOT §6): %s" % (code, ", ".join(bad)))
+        if new not in titles:
+            errs.append("[%s] '#### %s' 절이 없다" % (code, new))
+        else:
+            n = items.get(new, 0)
+            if n == 0:
+                errs.append("[%s] '%s' 에 항목(- …)이 없다" % (code, new))
+            elif not HIGHLIGHTS[0] <= n <= HIGHLIGHTS[1]:
+                warns.append("[%s] '%s' 항목 %d개 — 권장 %d~%d개" % (code, new, n, *HIGHLIGHTS))
+        if tryit not in titles:
+            warns.append("[%s] '#### %s' 절이 없다 — 새 기능이 없는 판이면 괜찮다" % (code, tryit))
+    return errs, warns
+
+
+def read_draft(tag: str):
+    """`release_notes/<태그>.md`(저장소 맨 위 기준) — CI 는 태그를 받아 두므로 태그 때의 파일, 태그 전 미리 보기는 작업 트리."""
+    top = git("rev-parse", "--show-toplevel").strip() or "."
+    path = os.path.join(top, DRAFT_DIR, tag + ".md")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def render_draft(draft: str, tag: str, prev: str) -> str:
+    short = {"ko": []}
+    for subj, body in commits(prev, tag):
+        for b in body.splitlines():
+            mt = _TRAILER.match(b.strip())
+            if mt:
+                short.setdefault(mt.group(1).lower(), []).append("- " + escape_angles(mt.group(2)))
+        m = _HEAD.match(subj)
+        if not m or m.group(1).lower() not in SHORT_KINDS:
+            continue
+        title = escape_angles(_TAIL.sub("", subj[m.end():]).strip())
+        if title:
+            short["ko"].append("- " + title)
+    out = []
+    for code, body in split_sections(draft).items():
+        other = _heads(code)[2]
+        _h, cmp_label, _e = HEADS.get(code, HEADS["en"])
+        out += ["<!-- lang:%s -->" % code, escape_angles(body.strip()), ""]
+        has_other = re.search(r"^#{1,6}\s*%s\s*$" % re.escape(other), body, re.M)
+        if not has_other and short.get(code):
+            out += ["#### " + other, ""] + short[code] + [""]
+        if prev:
+            out += [f"{cmp_label}: {REPO_URL}/compare/{prev}...{tag}", ""]
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
 def render(tag: str, prev: str) -> str:
+    draft = read_draft(tag)
+    if draft is not None:
+        return render_draft(draft, tag, prev)
     lines = []
     other = {}                             # 코드 → [꼬리말 항목]
     for subj, body in commits(prev, tag):
@@ -98,8 +210,18 @@ def render(tag: str, prev: str) -> str:
 
 def main():
     if len(sys.argv) < 2:
-        print("usage: release_notes.py <tag> [out.md]", file=sys.stderr)
+        print("usage: release_notes.py <tag> [out.md]  |  release_notes.py --check <draft.md>", file=sys.stderr)
         return 2
+    if sys.argv[1] == "--check":
+        sys.stdout.reconfigure(encoding="utf-8")
+        with open(sys.argv[2], encoding="utf-8") as f:
+            errs, warns = check_draft(f.read())
+        for e in errs:
+            print("오류 -", e)
+        for w in warns:
+            print("경고 -", w)
+        print("통과" if not errs else "고칠 것 %d" % len(errs))
+        return 1 if errs else 0
     tag = sys.argv[1]
     text = render(tag, previous_tag(tag))
     if len(sys.argv) > 2:

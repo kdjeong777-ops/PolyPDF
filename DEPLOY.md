@@ -25,6 +25,10 @@
   PR 없이 커밋하는 이 저장소에서는 링크 한 줄만 남았다). 커밋 메시지가 곧 사용자가 보는 설명이다.
   **다른 언어**: 커밋 본문에 꼬리말 `Release-Note-en: …`(한 줄에 한 항목)을 쓰면 영어 절이 생기고, 영어 화면의
   업데이트 창은 그 절을 보인다(꼬리말이 없는 커밋은 한국어 절에만 — 영어 화면에는 '한국어로만 있다' 안내와 함께).
+- **판마다 설명 초안(우선)**: `release_notes/<태그>.md` 가 있으면 커밋 목록 대신 그 글을 쓴다 —
+  `<!-- lang:ko -->`·`<!-- lang:en -->` 절마다 `#### 이번 판에서 달라진 점`(3~6개)·`#### 이렇게 써 보세요`,
+  `#### 그 밖의 고침` 은 없으면 도구가 `feat`·`fix`·`perf` 커밋 제목을 한 줄씩 붙인다. 제목은 `####` 부터, HTML·접기는
+  쓰지 않는다(앱 창이 글자 그대로 보인다). 태그 전에 `python scripts\release_notes.py --check release_notes\<태그>.md`.
 - **업데이트가 가벼운 이유**: `update` zip 은 안 바뀌는 무거운 부분(ffmpeg·Tesseract·한국어
   모델·NLTK)을 제외 → 덮어쓰기 시 기존 설치분이 **그대로 보존**되어 다시 받지 않음.
 - 저장소는 앱 기본값 `kdjeong777-ops/PolyPDF` 고정(설정 `update_repo` 로 변경 가능).
@@ -83,7 +87,7 @@ CI를 쓰지 않거나 빠르게 올릴 때:
 ```powershell
 .\build_ci.bat
 powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # full + update zip 2종 생성
-python scripts\release_notes.py v2.26.0 notes.md                         # 릴리스 설명(커밋 메시지로)
+python scripts\release_notes.py v2.26.0 notes.md                         # 릴리스 설명(초안 release_notes\v2.26.0.md, 없으면 커밋 메시지로)
 gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip PolyPDF-v2.26.0-win64.zip.sha256 PolyPDF-v2.26.0-win64-update.zip.sha256 --title "PolyPinax v2.26.0" --notes-file notes.md
 #   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.26.0 → 두 zip 업로드)
 ```
