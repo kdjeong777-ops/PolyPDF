@@ -455,8 +455,8 @@ class UpdateMixin:
             return True
         updater.request_close(wins)
         from PyQt6.QtWidgets import QProgressDialog
-        dlg = QProgressDialog(tr("다른 PolyPDF 창을 닫는 중... ({n}개)").format(n=len(wins)), "", 0, 0, self)
-        dlg.setWindowTitle(tr("PolyPDF 업데이트"))
+        dlg = QProgressDialog(tr("다른 PolyPinax 창을 닫는 중... ({n}개)").format(n=len(wins)), "", 0, 0, self)
+        dlg.setWindowTitle(tr("PolyPinax 업데이트"))
         dlg.setCancelButton(None)
         dlg.setMinimumDuration(0)
         dlg.show()
@@ -468,7 +468,7 @@ class UpdateMixin:
                 left = updater.other_windows()
                 if not left:
                     break
-                dlg.setLabelText(tr("다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)").format(n=len(left)))
+                dlg.setLabelText(tr("다른 PolyPinax 창이 닫히기를 기다리는 중... ({n}개 남음)").format(n=len(left)))
                 QTimer.singleShot(400, loop.quit)
                 loop.exec()
         finally:
@@ -476,8 +476,8 @@ class UpdateMixin:
         if not left:
             return True
         ans = QMessageBox.warning(
-            self, tr("PolyPDF 업데이트"),
-            tr("다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
+            self, tr("PolyPinax 업데이트"),
+            tr("다른 PolyPinax 창 {n}개가 아직 열려 있습니다.\n"
                "열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 "
                "업데이트가 실패합니다.\n\n"
                "[예] 남은 창을 강제로 닫고 계속\n"

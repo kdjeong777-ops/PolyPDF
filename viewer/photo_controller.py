@@ -1118,10 +1118,10 @@ class PhotoMixin:
                    "빌드된 PolyPDF.exe 에서 실행해 주세요."))
             return
         exe = os.path.abspath(_sys.executable)
-        manual = tr("사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'")
+        manual = tr("사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'")
         try:
             plan = photo_default.prepare(exe, True, reg if reg is not None else pdf_default.Reg(),
-                                         desc=tr("사진 (PolyPDF)"), app_name=tr("PolyPDF 사진"), app_desc=tr("사진 뷰어"))
+                                         desc=tr("사진 (PolyPinax)"), app_name=tr("PolyPinax 사진"), app_desc=tr("사진 뷰어"))
         except Exception as e:
             QMessageBox.warning(self, tr("기본 앱으로 설정하지 못했습니다"), str(e) + "\n\n" + manual)
             return
@@ -1130,7 +1130,7 @@ class PhotoMixin:
             from PyQt6.QtGui import QDesktopServices
             opener = lambda u: QDesktopServices.openUrl(QUrl(u))
         if photo_default.open_settings(plan["uris"], opener):
-            self.status.showMessage(tr("Windows 기본 앱 화면에서 사진 확장자마다 PolyPDF 를 고르세요."), 8000)
+            self.status.showMessage(tr("Windows 기본 앱 화면에서 사진 확장자마다 PolyPinax 를 고르세요."), 8000)
         else:
             QMessageBox.information(self, tr("기본 사진 앱으로 설정"),
                                     tr("Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:") + "\n" + manual)

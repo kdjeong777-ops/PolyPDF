@@ -1,16 +1,16 @@
-﻿PolyPDF — Getting Started
+﻿PolyPinax — Getting Started
 ====================================================
 
 [ Basic use ]
 Viewing and editing PDFs, bookmarks, search, screenshots, reading aloud
 and screen recording all work right away — no sign-up or setup needed.
 
-[ Setting PolyPDF as the default PDF app ]
-If you checked 'Set PolyPDF as the default PDF app' during setup, the Windows
-'Default apps' settings open after installation. Choose  .pdf  →  PolyPDF  there.
+[ Setting PolyPinax as the default PDF app ]
+If you checked 'Set PolyPinax as the default PDF app' during setup, the Windows
+'Default apps' settings open after installation. Choose  .pdf  →  PolyPinax  there.
    * For security, Windows 10/11 makes you confirm the final choice yourself,
      so the installer does not change the default app automatically (this is normal).
-   * You can also right-click a PDF file → 'Open with' → PolyPDF.
+   * You can also right-click a PDF file → 'Open with' → PolyPinax.
 
 [ Language ]
 Menus, dialogs and help follow the language you chose during setup.
@@ -18,7 +18,7 @@ You can change it later in the 'Language' group at the top of Tools → Settings
 
 [ Updates ]
 Help → 'Check for Updates'. If a new version is available, it shows what changed,
-downloads the update first, then closes PolyPDF and installs it.
+downloads the update first, then closes PolyPinax and installs it.
 
 [ Sound in screen recordings ]
 If you need sound in recordings, check your audio devices first with

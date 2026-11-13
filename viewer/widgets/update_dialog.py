@@ -235,7 +235,7 @@ class UpdateDialog(QDialog):
         self.head.setText(title + "<br>" + line)
         self.notes.setMarkdown(changes_markdown(changes))
         self.notes.setVisible(True)
-        self.how.setText(tr("업데이트 파일을 <b>먼저 받은 뒤</b>, 열린 PolyPDF 창을 모두 닫고 설치합니다.")
+        self.how.setText(tr("업데이트 파일을 <b>먼저 받은 뒤</b>, 열린 PolyPinax 창을 모두 닫고 설치합니다.")
                          + ("<br>" + tr("이 버전은 테스트(베타)입니다.") if is_beta else ""))
         self.how.setVisible(True)
         if self.mode == "close":

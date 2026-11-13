@@ -324,7 +324,7 @@ class EditMixin:
             out += ".pdf"
         if _os.path.normcase(_os.path.abspath(out)) == _os.path.normcase(_os.path.abspath(str(src))):
             QMessageBox.information(self, tr("평탄화 사본"),
-                                    tr("원본과 다른 이름으로 내보내세요 — 원본은 PolyPDF 에서 계속 고칠 수 있게 그대로 둡니다."))
+                                    tr("원본과 다른 이름으로 내보내세요 — 원본은 PolyPinax 에서 계속 고칠 수 있게 그대로 둡니다."))
             return
         plan = self._resign_prepare(str(src))          # 서명된 원본: 확인·키 열기(보안 SOT §4.1). None = 취소
         if plan is None:

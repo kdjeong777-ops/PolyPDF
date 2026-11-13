@@ -3197,7 +3197,7 @@ class BookmarkTree(QWidget):
         add_save_menu(
             menu,
             save={"cb": lambda f=target: self._op_save(file_path=f),
-                  "tip": tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작).")},
+                  "tip": tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPinax 에서 계속 고칠 수 있습니다(💾 와 같은 동작).")},
             save_as={"text": self._kt(tr("다른 이름으로 저장"), "save_as"),     # 261107-20: F12 도 이 창의 지금 줄 파일(key_actions.save_as)
                      "cb": lambda f=target: self.saveAsFileRequested.emit(f),
                      "tip": tr("책갈피·꾸밈·쪽 편집을 새 파일로 — 폴더와 이름을 고릅니다(기본 <원본>_edited.pdf).")},
@@ -3208,7 +3208,7 @@ class BookmarkTree(QWidget):
                     {"text": tr("개인정보 지운 사본"), "cb": lambda f=target: self._copy_ok([f]) and self.redactFileRequested.emit(str(f)),
                      "tip": tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로).")},
                     {"text": tr("전달 묶음") + nn, "cb": lambda fs=list(files): self._copy_ok(fs) and self.shareFilesRequested.emit(fs),
-                     "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다.")}],
+                     "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPinax 로 열면 그대로 봅니다.")}],
             make=[mk,
                   {"text": tr("변환") + nn, "cb": lambda fs=list(files): self.convertFilesRequested.emit(fs, ""),
                    "tip": tr("Word·한글·Excel·PowerPoint·이미지·텍스트로 바꾼 새 파일을 만듭니다 — 형식은 변환 창에서 고릅니다.")}])

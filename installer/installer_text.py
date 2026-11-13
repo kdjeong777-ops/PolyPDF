@@ -14,17 +14,17 @@ from viewer.i18n import trp
 MESSAGES = {
     "DesktopIcon": trp("installer", "바탕화면에 바로가기 만들기"),
     "AdditionalTasks": trp("installer", "추가 작업:"),
-    "PdfDefault": trp("installer", "PolyPDF 를 PDF 기본 앱으로 설정 (설치 후 Windows 설정에서 한 번 선택 필요)"),
+    "PdfDefault": trp("installer", "PolyPinax 를 PDF 기본 앱으로 설정 (설치 후 Windows 설정에서 한 번 선택 필요)"),
     "FileAssoc": trp("installer", "파일 연결:"),
     # 261017(가상 프린터 SOT §4.5): 설치 작업 항목·진행 문구
-    "VPrinter": trp("installer", "가상 프린터 'PolyPDF' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"),
-    "VPrinterInstalling": trp("installer", "가상 프린터 'PolyPDF' 를 설치하는 중..."),
-    "ProgIdDesc": trp("installer", "PDF 문서 (PolyPDF)"),
+    "VPrinter": trp("installer", "가상 프린터 'PolyPinax' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"),
+    "VPrinterInstalling": trp("installer", "가상 프린터 'PolyPinax' 를 설치하는 중..."),
+    "ProgIdDesc": trp("installer", "PDF 문서 (PolyPinax)"),
     "AppDesc": trp("installer", "PDF 뷰어·편집·책갈피·검색·단어장"),
-    "RunApp": trp("installer", "PolyPDF 실행"),
-    "OpenDefaultApps": trp("installer", "Windows '기본 앱' 설정 열기 ( .pdf → PolyPDF 선택 )"),
-    "UninstallIcon": trp("installer", "PolyPDF 제거"),
-    "AlreadyInstalled": trp("installer", "이미 PolyPDF 가 설치되어 있습니다."),
+    "RunApp": trp("installer", "PolyPinax 실행"),
+    "OpenDefaultApps": trp("installer", "Windows '기본 앱' 설정 열기 ( .pdf → PolyPinax 선택 )"),
+    "UninstallIcon": trp("installer", "PolyPinax 제거"),
+    "AlreadyInstalled": trp("installer", "이미 PolyPinax 가 설치되어 있습니다."),
     "OldVersion": trp("installer", "기존 버전: %1"),
     "NewVersion": trp("installer", "새 버전:   %1"),
     "IsUpgrade": trp("installer", "→ 업그레이드입니다."),
@@ -32,9 +32,9 @@ MESSAGES = {
     "IsDowngrade": trp("installer", "→ 더 낮은 버전입니다(다운그레이드)."),
     "AskReplace": trp("installer", "기존 버전을 제거한 뒤 새로 설치합니다. 계속하시겠습니까?"),
     "UninstallFailed": trp("installer", "기존 버전 제거를 실행하지 못했습니다.\n"
-                                        "제어판에서 기존 PolyPDF 를 수동 제거한 뒤 다시 설치해 주세요."),
-    "LangPageTitle": trp("installer", "PolyPDF 언어 / Language"),   # 한국어 마법사에서도 영어 사용자가 알아보게
-    "LangPageDesc": trp("installer", "PolyPDF 화면에 쓸 언어를 고르세요."),
+                                        "제어판에서 기존 PolyPinax 를 수동 제거한 뒤 다시 설치해 주세요."),
+    "LangPageTitle": trp("installer", "PolyPinax 언어 / Language"),   # 한국어 마법사에서도 영어 사용자가 알아보게
+    "LangPageDesc": trp("installer", "PolyPinax 화면에 쓸 언어를 고르세요."),
     "LangPageSub": trp("installer", "설치 마법사의 언어와 따로 고를 수 있습니다. 나중에 도구 → 환경설정 맨 위 '언어 / Language' 에서 바꿀 수 있습니다(다시 시작)."),
 }
 

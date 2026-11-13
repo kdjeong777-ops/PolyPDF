@@ -219,7 +219,7 @@ class InstanceLink(QObject):
                     pass
                 continue
             if res.get("open"):
-                found.append({"server": name, "title": res.get("title") or "PolyPDF",
+                found.append({"server": name, "title": res.get("title") or "PolyPinax",   # 261114-6: 보이는 이름
                               "dirty": bool(res.get("dirty"))})
         return found
 

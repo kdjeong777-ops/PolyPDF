@@ -73,9 +73,10 @@ msgstr "kengdic Korean-English dictionary"
 msgid "행정동 경계 (admdongkor ver20261001)"
 msgstr "Korean administrative-dong boundaries (admdongkor ver20261001)"
 
+# | github.com/vuski/admdongkor, PolyPDF 가 단순화"
 #: viewer/about.py
-msgid "통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPDF 가 단순화"
-msgstr "Statistics Korea SGIS boundaries (KOGL Type 1), processed by vuski/admdongkor — github.com/vuski/admdongkor, simplified by PolyPDF"
+msgid "통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPinax 가 단순화"
+msgstr "Statistics Korea SGIS boundaries (KOGL Type 1), processed by vuski/admdongkor — github.com/vuski/admdongkor, simplified by PolyPinax"
 
 #: viewer/about.py
 msgid "OpenStreetMap 지도 그림"
@@ -126,8 +127,8 @@ msgid "Mark Hammond 외"
 msgstr "Mark Hammond et al."
 
 #: viewer/about.py
-msgid "PolyPDF — 정보"
-msgstr "PolyPDF — About"
+msgid "PolyPinax — 정보"
+msgstr "PolyPinax — About"
 
 #: viewer/about.py
 msgid "각 구성요소의 라이선스 전문은 해당 프로젝트 배포물을 참조하십시오."
@@ -189,8 +190,8 @@ msgid "전체"
 msgstr "All"
 
 #: viewer/app.py
-msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'"
-msgstr "Right-click a PDF file → 'Open with' → 'Choose another app' → PolyPDF → 'Always'"
+msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
+msgstr "Right-click a PDF file → 'Open with' → 'Choose another app' → PolyPinax → 'Always'"
 
 #: viewer/app.py
 msgid "책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다."
@@ -338,9 +339,10 @@ msgid "저장"
 msgstr "Save"
 
 # | page_meta.json·hyperlinks.json 에 저장합니다 — PolyPDF 에서 보입니다(💾 와 같은 동작)."
+# | 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."
-msgstr "Bookmarks, page edits, rotation and crop go into the original PDF; annotations (lines, shapes, text, photos), hyperlinks and tags are also put into the PDF so other viewers show them — you can keep editing in PolyPDF (same as 💾)."
+msgid "책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPinax 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."
+msgstr "Bookmarks, page edits, rotation and crop go into the original PDF; annotations (lines, shapes, text, photos), hyperlinks and tags are also put into the PDF so other viewers show them — you can keep editing in PolyPinax (same as 💾)."
 
 #: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
 #: viewer/sign_controller.py viewer/widgets/bookmark_tree.py
@@ -662,16 +664,16 @@ msgid "제목"
 msgstr "Title"
 
 #: viewer/app.py
-msgid "다른 PolyPDF 창에서 열려 있음"
-msgstr "File Is Open in Another PolyPDF Window"
+msgid "다른 PolyPinax 창에서 열려 있음"
+msgstr "File Is Open in Another PolyPinax Window"
 
 #: viewer/app.py
 msgid "새 이름으로 저장"
 msgstr "Save with New Name"
 
 #: viewer/app.py
-msgid "다른 PolyPDF 창"
-msgstr "Other PolyPDF windows"
+msgid "다른 PolyPinax 창"
+msgstr "Other PolyPinax windows"
 
 #: viewer/app.py viewer/photo_controller.py
 msgid "되돌리기"
@@ -838,13 +840,14 @@ msgstr "Save Screenshot PDF"
 msgid "설정 저장됨"
 msgstr "Settings saved"
 
+# | applied after PolyPDF restarts."
 #: viewer/app.py
 msgid ""
-"화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
-"The display language will be applied after PolyPDF restarts."
+"화면 언어는 PolyPinax 를 다시 시작하면 적용됩니다.\n"
+"The display language will be applied after PolyPinax restarts."
 msgstr ""
-"화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
-"The display language will be applied after PolyPDF restarts."
+"화면 언어는 PolyPinax 를 다시 시작하면 적용됩니다.\n"
+"The display language will be applied after PolyPinax restarts."
 
 #: viewer/app.py
 msgid "지금 다시 시작 / Restart now"
@@ -1093,16 +1096,17 @@ msgid "기본 PDF 앱으로 설정"
 msgstr "Set as Default PDF App"
 
 #: viewer/app.py
-msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요"
-msgstr "Opens the Windows Default apps page — choose PolyPDF for .pdf there"
+msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPinax 로 고르세요"
+msgstr "Opens the Windows Default apps page — choose PolyPinax for .pdf there"
 
 #: viewer/app.py viewer/photo_controller.py viewer/widgets/settings_dialog.py
 msgid "기본 사진 앱으로 설정"
 msgstr "Set as Default Photo App"
 
+# | 고르세요"
 #: viewer/app.py viewer/widgets/settings_dialog.py
-msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPDF 로 고르세요"
-msgstr "Opens the Windows Default apps page — choose PolyPDF there for photo extensions (.jpg, .png, .heic, etc.)"
+msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요"
+msgstr "Opens the Windows Default apps page — choose PolyPinax there for photo extensions (.jpg, .png, .heic, etc.)"
 
 #: viewer/app.py viewer/update_controller.py
 msgid "구성요소 설치 (녹화·OCR)"
@@ -1125,8 +1129,8 @@ msgid "가상 프린터"
 msgstr "Virtual Printer"
 
 #: viewer/app.py
-msgid "가상 프린터(PolyPDF) 설치·제거"
-msgstr "Virtual Printer (PolyPDF) Install/Remove"
+msgid "가상 프린터(PolyPinax) 설치·제거"
+msgstr "Virtual Printer (PolyPinax) Install/Remove"
 
 #: viewer/app.py
 msgid "새 창을 열지 못했습니다."
@@ -1158,8 +1162,8 @@ msgstr ""
 "Please run the built PolyPDF.exe."
 
 #: viewer/app.py
-msgid "Windows 기본 앱 화면에서 PolyPDF 를 고르세요."
-msgstr "Choose PolyPDF on the Windows Default apps page."
+msgid "Windows 기본 앱 화면에서 PolyPinax 를 고르세요."
+msgstr "Choose PolyPinax on the Windows Default apps page."
 
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
@@ -1315,11 +1319,11 @@ msgstr "Save canceled — the original is unchanged."
 #: viewer/app.py
 #, python-brace-format
 msgid ""
-"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n"
+"'{name}' 을(를) 다른 PolyPinax 창 {n}개에서 보고 있습니다.\n"
 "\n"
 "그 창이 파일을 읽는 동안 덮어쓰면, 그 창은 바뀐 파일을 옛 상태로 읽어 화면이 깨지거나 오류가 날 수 있습니다."
 msgstr ""
-"'{name}' is open in {n} other PolyPDF window(s).\n"
+"'{name}' is open in {n} other PolyPinax window(s).\n"
 "\n"
 "If it is overwritten while that window reads the file, that window may read the changed file as the old one, and the display may break or an error may occur."
 
@@ -1575,8 +1579,8 @@ msgid "(최근 파일 없음)"
 msgstr "(No recent files)"
 
 #: viewer/app.py
-msgid "검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."
-msgstr "The search index could not be repaired. Restart PolyPDF, then rebuild it with 'Tools → Index'."
+msgid "검색 색인을 고치지 못했습니다. PolyPinax 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."
+msgstr "The search index could not be repaired. Restart PolyPinax, then rebuild it with 'Tools → Index'."
 
 #: viewer/app.py
 msgid "인덱싱 중단 — 다음에 폴더를 열면 남은 파일부터 이어서 색인합니다."
@@ -1858,8 +1862,8 @@ msgid "포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)�
 msgstr "Applies to the pane that has focus (main view, thumbnails, Bookmarks panel, Text pane)"
 
 #: viewer/app.py
-msgid "PDF 문서 (PolyPDF)"
-msgstr "PDF Document (PolyPDF)"
+msgid "PDF 문서 (PolyPinax)"
+msgstr "PDF Document (PolyPinax)"
 
 #: viewer/app.py
 msgid "PDF 뷰어"
@@ -1882,8 +1886,8 @@ msgid "파일 작업"
 msgstr "File Operation"
 
 #: viewer/app.py viewer/share_controller.py
-msgid "PolyPDF 전달 묶음"
-msgstr "PolyPDF share bundle"
+msgid "PolyPinax 전달 묶음"
+msgstr "PolyPinax share bundle"
 
 #: viewer/app.py
 #, python-brace-format
@@ -1927,8 +1931,8 @@ msgid "파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하�
 msgstr "Checking the markers shown in the file list (encryption · bookmarks). <b>Scrolling may pause briefly while this runs.</b> A file is checked only once."
 
 #: viewer/app.py
-msgid "PolyPDF — 목록 조사"
-msgstr "PolyPDF — Checking the list"
+msgid "PolyPinax — 목록 조사"
+msgstr "PolyPinax — Checking the list"
 
 #: viewer/app.py
 msgid "OCR·작업 결과 복사 중…"
@@ -2021,12 +2025,12 @@ msgid "저장을 취소했습니다 — 서명한 원본은 그대로입니다."
 msgstr "Save cancelled — the signed original is unchanged."
 
 #: viewer/app.py
-msgid "다른 PolyPDF 창 확인 중…"
-msgstr "Checking other PolyPDF windows…"
+msgid "다른 PolyPinax 창 확인 중…"
+msgstr "Checking other PolyPinax windows…"
 
 #: viewer/app.py
-msgid "다른 PolyPDF 창에 다시 열게 하는 중…"
-msgstr "Asking other PolyPDF windows to reopen the file…"
+msgid "다른 PolyPinax 창에 다시 열게 하는 중…"
+msgstr "Asking other PolyPinax windows to reopen the file…"
 
 #: viewer/app.py
 msgid "원본에 저장"
@@ -2678,8 +2682,8 @@ msgstr "Child of the bookmark above (level {base})"
 
 #: viewer/app.py
 #, python-brace-format
-msgid "다른 PolyPDF 창이 '{name}' 을(를) 저장하는 동안 닫았습니다."
-msgstr "Closed while another PolyPDF window was saving '{name}'."
+msgid "다른 PolyPinax 창이 '{name}' 을(를) 저장하는 동안 닫았습니다."
+msgstr "Closed while another PolyPinax window was saving '{name}'."
 
 #: viewer/app.py
 #, python-brace-format
@@ -2706,8 +2710,8 @@ msgstr ""
 "That window closes the file briefly while saving, then reopens it at the page it was showing."
 
 #: viewer/app.py
-msgid "다른 PolyPDF 창이 파일을 놓기를 기다리는 중…"
-msgstr "Waiting for other PolyPDF windows to release the file…"
+msgid "다른 PolyPinax 창이 파일을 놓기를 기다리는 중…"
+msgstr "Waiting for other PolyPinax windows to release the file…"
 
 #: viewer/app.py
 #, python-brace-format
@@ -2847,9 +2851,10 @@ msgstr "Makes a new file with the chosen areas and personal data such as ID and 
 msgid "전달 묶음"
 msgstr "Transfer bundle"
 
+# | 로 열면 그대로 봅니다."
 #: viewer/app.py viewer/widgets/bookmark_tree.py
-msgid "PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다."
-msgstr "Puts the PDF with its OCR results, corrections, annotations and hyperlinks into one bundle file (.polypdf.zip) — the recipient sees them as is in PolyPDF."
+msgid "PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPinax 로 열면 그대로 봅니다."
+msgstr "Puts the PDF with its OCR results, corrections, annotations and hyperlinks into one bundle file (.polypdf.zip) — the recipient sees them as is in PolyPinax."
 
 #: viewer/app.py
 msgid "선택 글상자 삭제"
@@ -3078,8 +3083,8 @@ msgid "3-12 처럼 적어 주세요."
 msgstr "Enter a range like 3-12."
 
 #: viewer/app.py
-msgid "다른 PolyPDF 창이 연 원본에는 새 이름으로 저장할 수 없습니다."
-msgstr "You cannot save as the original while another PolyPDF window has it open."
+msgid "다른 PolyPinax 창이 연 원본에는 새 이름으로 저장할 수 없습니다."
+msgstr "You cannot save as the original while another PolyPinax window has it open."
 
 #: viewer/app.py
 #, python-brace-format
@@ -3088,8 +3093,8 @@ msgstr "Restore '{name}' to its first original?"
 
 # | 저장하거나 되돌린 뒤 다시 저장하거나, 새 이름으로 저장하세요."
 #: viewer/app.py
-msgid "다른 PolyPDF 창에 이 파일의 저장하지 않은 편집이 있습니다 — 그 창에서 저장하거나 되돌린 뒤 다시 해 주세요."
-msgstr "Another PolyPDF window has unsaved edits to this file — save or revert them in that window, then try again."
+msgid "다른 PolyPinax 창에 이 파일의 저장하지 않은 편집이 있습니다 — 그 창에서 저장하거나 되돌린 뒤 다시 해 주세요."
+msgstr "Another PolyPinax window has unsaved edits to this file — save or revert them in that window, then try again."
 
 #: viewer/app.py
 #, python-brace-format
@@ -3354,10 +3359,10 @@ msgstr "Reopened '{name}' (saved)."
 #: viewer/app.py
 #, python-brace-format
 msgid ""
-"'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n"
+"'{name}' 을(를) 다른 PolyPinax 창 {n}개에서 보고 있습니다.\n"
 "그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?"
 msgstr ""
-"'{name}' is open in {n} other PolyPDF window(s).\n"
+"'{name}' is open in {n} other PolyPinax window(s).\n"
 "Close it there for a moment, restore it, and reopen it?"
 
 #: viewer/app.py
@@ -3940,8 +3945,8 @@ msgid "계속 편집"
 msgstr "Keep Editing"
 
 #: viewer/edit_controller.py
-msgid "원본과 다른 이름으로 내보내세요 — 원본은 PolyPDF 에서 계속 고칠 수 있게 그대로 둡니다."
-msgstr "Export under a different name — the original stays as it is so you can keep editing it in PolyPDF."
+msgid "원본과 다른 이름으로 내보내세요 — 원본은 PolyPinax 에서 계속 고칠 수 있게 그대로 둡니다."
+msgstr "Export under a different name — the original stays as it is so you can keep editing it in PolyPinax."
 
 #: viewer/edit_controller.py
 msgid "크롭 바깥 지우는 중"
@@ -4542,8 +4547,8 @@ msgid "행정동을 찾지 못함"
 msgstr "Administrative area not found"
 
 #: viewer/photo_controller.py
-msgid "사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'"
-msgstr "Right-click a photo file → 'Open with' → 'Choose another app' → PolyPDF → 'Always'"
+msgid "사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
+msgstr "Right-click a photo file → 'Open with' → 'Choose another app' → PolyPinax → 'Always'"
 
 #: viewer/photo_controller.py
 msgid "사진 정보"
@@ -4816,8 +4821,8 @@ msgid "사진을 열려고 보기 종류를 '혼용'으로 바꿨습니다 — �
 msgstr "View type was changed to 'Mixed' to open the photo — you can change it back in Settings."
 
 #: viewer/photo_controller.py
-msgid "Windows 기본 앱 화면에서 사진 확장자마다 PolyPDF 를 고르세요."
-msgstr "Choose PolyPDF for each photo extension on the Windows Default apps page."
+msgid "Windows 기본 앱 화면에서 사진 확장자마다 PolyPinax 를 고르세요."
+msgstr "Choose PolyPinax for each photo extension on the Windows Default apps page."
 
 #: viewer/photo_controller.py
 msgid "사진 이름"
@@ -5051,12 +5056,12 @@ msgid "사진 {n}장의 이름을 바꿨습니다."
 msgstr "Renamed {n} photos."
 
 #: viewer/photo_controller.py
-msgid "사진 (PolyPDF)"
-msgstr "Photo (PolyPDF)"
+msgid "사진 (PolyPinax)"
+msgstr "Photo (PolyPinax)"
 
 #: viewer/photo_controller.py
-msgid "PolyPDF 사진"
-msgstr "PolyPDF Photo"
+msgid "PolyPinax 사진"
+msgstr "PolyPinax Photo"
 
 #: viewer/photo_controller.py
 msgid "사진 뷰어"
@@ -5648,12 +5653,12 @@ msgid "크기"
 msgstr "Size"
 
 #: viewer/photo_map.py
-msgid "PolyPDF 에서 열기"
-msgstr "Open in PolyPDF"
+msgid "PolyPinax 에서 열기"
+msgstr "Open in PolyPinax"
 
 #: viewer/photo_map.py
-msgid "PolyPDF 에서 고르기"
-msgstr "Select in PolyPDF"
+msgid "PolyPinax 에서 고르기"
+msgstr "Select in PolyPinax"
 
 #: viewer/photo_map.py viewer/widgets/bookmark_tree.py
 #, python-brace-format
@@ -5665,12 +5670,12 @@ msgid "날짜 없음"
 msgstr "No date"
 
 #: viewer/photo_map.py
-msgid "PolyPDF 로 보냈습니다"
-msgstr "Sent to PolyPDF"
+msgid "PolyPinax 로 보냈습니다"
+msgstr "Sent to PolyPinax"
 
 #: viewer/photo_map.py
-msgid "PolyPDF 에 닿지 않습니다 — 앱이 닫혔을 수 있습니다"
-msgstr "Can't reach PolyPDF — the app may be closed"
+msgid "PolyPinax 에 닿지 않습니다 — 앱이 닫혔을 수 있습니다"
+msgstr "Can't reach PolyPinax — the app may be closed"
 
 #: viewer/photo_map.py
 #, python-brace-format
@@ -5688,8 +5693,8 @@ msgid "클라우드에만 있는 사진 {n}장 뺌"
 msgstr "{n} cloud-only photos left out"
 
 #: viewer/photo_map.py
-msgid "지도 페이지가 없습니다 — PolyPDF 에서 다시 여세요."
-msgstr "This map page is gone — open it again from PolyPDF."
+msgid "지도 페이지가 없습니다 — PolyPinax 에서 다시 여세요."
+msgstr "This map page is gone — open it again from PolyPinax."
 
 #: viewer/present_controller.py
 msgid "녹화 전환 중… (이전 파일 마무리)"
@@ -6104,12 +6109,12 @@ msgid "주의: 아래 자리에 글이 남았습니다 — 새 파일을 확인�
 msgstr "Warning: text remains in the places below — check the new file."
 
 #: viewer/share_bundle.py
-msgid "PolyPDF 전달 묶음이 아닙니다."
-msgstr "This is not a PolyPDF share bundle."
+msgid "PolyPinax 전달 묶음이 아닙니다."
+msgstr "This is not a PolyPinax share bundle."
 
 #: viewer/share_bundle.py
-msgid "더 새 PolyPDF 가 만든 묶음입니다 — PolyPDF 를 업데이트하세요."
-msgstr "This bundle was made by a newer PolyPDF — please update PolyPDF."
+msgid "더 새 PolyPinax 가 만든 묶음입니다 — PolyPinax 를 업데이트하세요."
+msgstr "This bundle was made by a newer PolyPinax — please update PolyPinax."
 
 #: viewer/share_bundle.py
 #, python-brace-format
@@ -6125,8 +6130,8 @@ msgid "묶음 목록이 너무 큽니다."
 msgstr "The bundle list is too large."
 
 #: viewer/share_bundle.py
-msgid "PolyPDF 전달 묶음이 아닙니다(목록 없음)."
-msgstr "This is not a PolyPDF share bundle (no list)."
+msgid "PolyPinax 전달 묶음이 아닙니다(목록 없음)."
+msgstr "This is not a PolyPinax share bundle (no list)."
 
 #: viewer/share_controller.py
 msgid "전달"
@@ -6204,11 +6209,11 @@ msgstr "Extract to folder"
 #: viewer/share_controller.py
 #, python-brace-format
 msgid ""
-"PolyPDF 전달 묶음 — PDF {n}개\n"
+"PolyPinax 전달 묶음 — PDF {n}개\n"
 "\n"
 "풀 폴더: {here}"
 msgstr ""
-"PolyPDF share bundle — {n} PDF(s)\n"
+"PolyPinax share bundle — {n} PDF(s)\n"
 "\n"
 "Extract to: {here}"
 
@@ -6216,10 +6221,10 @@ msgstr ""
 #, python-brace-format
 msgid ""
 "PDF {n}개를 묶음 파일(.polypdf.zip)로 만듭니다.\n"
-"받는 사람이 PolyPDF 로 열면 아래 자료까지 함께 봅니다 — 원본 PDF 는 바뀌지 않습니다."
+"받는 사람이 PolyPinax 로 열면 아래 자료까지 함께 봅니다 — 원본 PDF 는 바뀌지 않습니다."
 msgstr ""
 "Puts {n} PDF(s) into one bundle file (.polypdf.zip).\n"
-"When the recipient opens it in PolyPDF, they also see the data below — the original PDFs are not changed."
+"When the recipient opens it in PolyPinax, they also see the data below — the original PDFs are not changed."
 
 #: viewer/share_controller.py
 #, python-brace-format
@@ -6503,9 +6508,10 @@ msgstr "The author locked this document against changes after signing — no sig
 msgid "암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."
 msgstr "The document password is unknown. Open it with the owner password, then sign."
 
+# | 그 파일에 서명하세요."
 #: viewer/sign_controller.py viewer/sign_draft_controller.py
-msgid "이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."
-msgstr "This PDF cannot be signed as is (damaged file structure). Save it with PolyPDF first (Save As) and sign that file."
+msgid "이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPinax 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."
+msgstr "This PDF cannot be signed as is (damaged file structure). Save it with PolyPinax first (Save As) and sign that file."
 
 #: viewer/sign_controller.py
 #, python-brace-format
@@ -7347,8 +7353,8 @@ msgid "업데이트"
 msgstr "Update"
 
 #: viewer/update_controller.py viewer/updater.py
-msgid "PolyPDF 업데이트"
-msgstr "PolyPDF Update"
+msgid "PolyPinax 업데이트"
+msgstr "PolyPinax Update"
 
 #: viewer/update_controller.py
 msgid "업데이트 저장소 설정"
@@ -7406,19 +7412,21 @@ msgstr ""
 
 #: viewer/update_controller.py viewer/updater.py
 #, python-brace-format
-msgid "다른 PolyPDF 창을 닫는 중... ({n}개)"
-msgstr "Closing other PolyPDF windows... ({n})"
+msgid "다른 PolyPinax 창을 닫는 중... ({n}개)"
+msgstr "Closing other PolyPinax windows... ({n})"
 
+# | 파일이 교체되지 않아 업데이트가 실패합니다.\n" "\n" "[예] 남은 창을 강제로 닫고 계속\n" "[아니오] 업데이트 취소
+# | (저장하지 않은 작업이 있으면 이쪽을 선택하세요)"
 #: viewer/update_controller.py viewer/updater.py
 #, python-brace-format
 msgid ""
-"다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
+"다른 PolyPinax 창 {n}개가 아직 열려 있습니다.\n"
 "열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 업데이트가 실패합니다.\n"
 "\n"
 "[예] 남은 창을 강제로 닫고 계속\n"
 "[아니오] 업데이트 취소 (저장하지 않은 작업이 있으면 이쪽을 선택하세요)"
 msgstr ""
-"{n} other PolyPDF window(s) are still open.\n"
+"{n} other PolyPinax window(s) are still open.\n"
 "Open windows lock files, so if you continue some files will not be replaced and the update will fail.\n"
 "\n"
 "[Yes] Force the remaining windows to close and continue\n"
@@ -7505,12 +7513,12 @@ msgstr "New {kind} v{latest} available — Help → Check for Updates"
 
 #: viewer/update_controller.py viewer/updater.py
 #, python-brace-format
-msgid "다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)"
-msgstr "Waiting for other PolyPDF windows to close... ({n} left)"
+msgid "다른 PolyPinax 창이 닫히기를 기다리는 중... ({n}개 남음)"
+msgstr "Waiting for other PolyPinax windows to close... ({n} left)"
 
 #: viewer/updater.py
-msgid "PolyPDF 업데이트 설치"
-msgstr "Installing PolyPDF Update"
+msgid "PolyPinax 업데이트 설치"
+msgstr "Installing PolyPinax Update"
 
 #: viewer/updater.py
 msgid "업데이트를 준비하는 중..."
@@ -7525,8 +7533,8 @@ msgid "업데이트 다운로드 중..."
 msgstr "Downloading the update..."
 
 #: viewer/updater.py
-msgid "다른 PolyPDF 창이 닫히기를 기다리는 중..."
-msgstr "Waiting for other PolyPDF windows to close..."
+msgid "다른 PolyPinax 창이 닫히기를 기다리는 중..."
+msgstr "Waiting for other PolyPinax windows to close..."
 
 #: viewer/updater.py
 msgid "남은 창을 닫는 중..."
@@ -7606,8 +7614,8 @@ msgstr ""
 "Run the latest installer (PolyPDF-Setup-*.exe) as administrator."
 
 #: viewer/vprinter_controller.py
-msgid "PolyPDF 프린터"
-msgstr "PolyPDF Printer"
+msgid "PolyPinax 프린터"
+msgstr "PolyPinax Printer"
 
 #: viewer/vprinter_controller.py
 msgid "받은 문서를 PDF 로 바꾸는 중…"
@@ -7618,17 +7626,17 @@ msgid "저장하는 중…"
 msgstr "Saving…"
 
 #: viewer/vprinter_controller.py
-msgid "그 폴더를 보고 있는 PolyPDF 창을 찾는 중…"
-msgstr "Looking for a PolyPDF window showing that folder…"
+msgid "그 폴더를 보고 있는 PolyPinax 창을 찾는 중…"
+msgstr "Looking for a PolyPinax window showing that folder…"
 
 #: viewer/vprinter_controller.py
-msgid "받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPDF 를 켤 때 다시 바꿔 봅니다."
-msgstr "The received print file was kept — PolyPDF will try converting it again the next time it starts."
+msgid "받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPinax 를 켤 때 다시 바꿔 봅니다."
+msgstr "The received print file was kept — PolyPinax will try converting it again the next time it starts."
 
 #: viewer/vprinter_controller.py
 #, python-brace-format
-msgid "PolyPDF 프린터 — 저장: {path}"
-msgstr "PolyPDF Printer — saved: {path}"
+msgid "PolyPinax 프린터 — 저장: {path}"
+msgstr "PolyPinax Printer — saved: {path}"
 
 #: viewer/vprinter_controller.py
 #, python-brace-format
@@ -7636,8 +7644,8 @@ msgid "받은 문서를 PDF 로 바꾸지 못했습니다: {err}"
 msgstr "Could not convert the printed document to PDF: {err}"
 
 #: viewer/vprinter_recv.py
-msgid "변환 도구(Ghostscript)가 없습니다 — PolyPDF 를 다시 설치하세요(수리로는 되살아나지 않습니다)."
-msgstr "The conversion tool (Ghostscript) is missing — reinstall PolyPDF ('Repair' cannot restore it)."
+msgid "변환 도구(Ghostscript)가 없습니다 — PolyPinax 를 다시 설치하세요(수리로는 되살아나지 않습니다)."
+msgstr "The conversion tool (Ghostscript) is missing — reinstall PolyPinax ('Repair' cannot restore it)."
 
 #: viewer/vprinter_recv.py
 #, python-brace-format
@@ -9288,8 +9296,8 @@ msgid "사용법 파일을 찾지 못했습니다."
 msgstr "The user guide file could not be found."
 
 #: viewer/widgets/help_dialog.py
-msgid "PolyPDF — 사용법"
-msgstr "PolyPDF — User Guide"
+msgid "PolyPinax — 사용법"
+msgstr "PolyPinax — User Guide"
 
 #: viewer/widgets/hyperlink_dialog.py
 msgid "⬇  파일을 여기에 놓으세요  ⬇"
@@ -9678,8 +9686,8 @@ msgid "{n}가지 색"
 msgstr "{n} colors"
 
 #: viewer/widgets/indexing_dialog.py
-msgid "PolyPDF — 인덱싱"
-msgstr "PolyPDF — Indexing"
+msgid "PolyPinax — 인덱싱"
+msgstr "PolyPinax — Indexing"
 
 #: viewer/widgets/indexing_dialog.py
 msgid "준비 중..."
@@ -12070,8 +12078,8 @@ msgid "오디오 입력 장치를 찾지 못했습니다(ffmpeg 확인)."
 msgstr "No audio input device found (check ffmpeg)."
 
 #: viewer/widgets/settings_dialog.py
-msgid "PolyPDF 시작 모드:"
-msgstr "PolyPDF startup mode:"
+msgid "PolyPinax 시작 모드:"
+msgstr "PolyPinax startup mode:"
 
 #: viewer/widgets/settings_dialog.py
 msgid "원본 백업 폴더 (사진·PDF):"
@@ -12110,9 +12118,10 @@ msgstr "Limit changes apply immediately. Lowering it removes the oldest items fi
 msgid "캡처 목록은 항상 빈 상태로 시작합니다. 종료할 때 목록이 있으면 PDF 저장 여부를 묻습니다."
 msgstr "The capture list always starts empty. On exit, you will be asked whether to save the list as a PDF."
 
+# | 시작합니다."
 #: viewer/widgets/settings_dialog.py
-msgid "둘 다 지금 저장된 설정을 다룹니다 — 이 창에서 바꾼 것은 [적용] 뒤에 들어갑니다. 초기화하면 PolyPDF 를 다시 시작합니다."
-msgstr "Both work on the currently saved settings — changes made in this window take effect after [Apply]. Resetting restarts PolyPDF."
+msgid "둘 다 지금 저장된 설정을 다룹니다 — 이 창에서 바꾼 것은 [적용] 뒤에 들어갑니다. 초기화하면 PolyPinax 를 다시 시작합니다."
+msgstr "Both work on the currently saved settings — changes made in this window take effect after [Apply]. Resetting restarts PolyPinax."
 
 #: viewer/widgets/settings_dialog.py
 msgid "모듈 없음"
@@ -12221,8 +12230,8 @@ msgid "Google 비밀번호 관리자 열기"
 msgstr "Open Google Password Manager"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "기본 브라우저로 passwords.google.com 을 엽니다 — PolyPDF 는 아무 값도 넘기지 않습니다."
-msgstr "Opens passwords.google.com in your default browser — PolyPDF sends nothing."
+msgid "기본 브라우저로 passwords.google.com 을 엽니다 — PolyPinax 는 아무 값도 넘기지 않습니다."
+msgstr "Opens passwords.google.com in your default browser — PolyPinax sends nothing."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "(그림 없음)"
@@ -12402,8 +12411,8 @@ msgid "백업 후 지우기"
 msgstr "Back Up and Delete"
 
 #: viewer/widgets/sign_dialogs.py
-msgid "가져올 인증서를 고르세요. 원래 인증서 폴더는 건드리지 않고 PolyPDF 디지털 ID 로 복사합니다."
-msgstr "Choose the certificate to import. PolyPDF copies it as a digital ID without touching the original certificate folder."
+msgid "가져올 인증서를 고르세요. 원래 인증서 폴더는 건드리지 않고 PolyPinax 디지털 ID 로 복사합니다."
+msgstr "Choose the certificate to import. PolyPinax copies it as a digital ID without touching the original certificate folder."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "폴더 고르기"
@@ -12846,10 +12855,11 @@ msgid "모든 쪽 ({n}쪽)"
 msgstr "All pages ({n})"
 
 # | 파일로 저장하라고 묻습니다."
+# | 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
 #: viewer/widgets/sign_dialogs.py
 #, python-brace-format
-msgid "서명한 결과는 새 파일 '{name}' 로 저장되고 원본은 그대로입니다. 서명한 파일을 PolyPDF 에서 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
-msgstr "The signed result is saved as a new file '{name}' and the original stays unchanged. Saving the signed file again in PolyPDF would break the signatures, so you will be asked to save to a new file instead."
+msgid "서명한 결과는 새 파일 '{name}' 로 저장되고 원본은 그대로입니다. 서명한 파일을 PolyPinax 에서 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다."
+msgstr "The signed result is saved as a new file '{name}' and the original stays unchanged. Saving the signed file again in PolyPinax would break the signatures, so you will be asked to save to a new file instead."
 
 #: viewer/widgets/sign_dialogs.py
 msgid "양식 채우기·서명 추가"
@@ -14808,8 +14818,8 @@ msgid "현재 v{cur} → 새 v{new}"
 msgstr "Current v{cur} → new v{new}"
 
 #: viewer/widgets/update_dialog.py
-msgid "업데이트 파일을 <b>먼저 받은 뒤</b>, 열린 PolyPDF 창을 모두 닫고 설치합니다."
-msgstr "The update file is <b>downloaded first</b>, then all open PolyPDF windows are closed and it is installed."
+msgid "업데이트 파일을 <b>먼저 받은 뒤</b>, 열린 PolyPinax 창을 모두 닫고 설치합니다."
+msgstr "The update file is <b>downloaded first</b>, then all open PolyPinax windows are closed and it is installed."
 
 #: viewer/widgets/update_dialog.py
 msgid "1.0 이전에는 항상 베타(테스트) 버전을 받습니다."
@@ -15050,8 +15060,8 @@ msgid "재생 중"
 msgstr "Playing"
 
 #: viewer/widgets/vprinter_dialog.py
-msgid "가상 프린터 (PolyPDF)"
-msgstr "Virtual Printer (PolyPDF)"
+msgid "가상 프린터 (PolyPinax)"
+msgstr "Virtual Printer (PolyPinax)"
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "상태 확인 중…"
@@ -15106,8 +15116,8 @@ msgid "이 배포본에는 가상 프린터 구성요소가 없습니다."
 msgstr "This build does not include the virtual printer components."
 
 #: viewer/widgets/vprinter_dialog.py
-msgid "다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저장하고 PolyPDF 에서 엽니다."
-msgstr "Print to the 'PolyPDF' printer from any program to save a PDF and open it in PolyPDF."
+msgid "다른 프로그램에서 'PolyPinax' 프린터로 인쇄하면 PDF 로 저장하고 PolyPinax 에서 엽니다."
+msgstr "Print to the 'PolyPinax' printer from any program to save a PDF and open it in PolyPinax."
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "사진·그림 해상도"
@@ -15118,8 +15128,8 @@ msgid "저장 창 없이 바로 저장하고 엽니다. 쪽 범위·여러 쪽 �
 msgstr "Saves and opens right away, without a save dialog. Choose the page range and pages per sheet in the print dialog of the program you print from."
 
 #: viewer/widgets/vprinter_dialog.py
-msgid "설치됨 ✓ — 프린터 'PolyPDF'"
-msgstr "Installed ✓ — printer 'PolyPDF'"
+msgid "설치됨 ✓ — 프린터 'PolyPinax'"
+msgstr "Installed ✓ — printer 'PolyPinax'"
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "수리"
@@ -15146,8 +15156,8 @@ msgid "Windows 의 PostScript 드라이버가 없어 쓸 수 없습니다."
 msgstr "Not available because the Windows PostScript driver is missing."
 
 #: viewer/widgets/vprinter_dialog.py
-msgid "휴대용 판에서는 쓸 수 없습니다 — 설치판 PolyPDF 에서 설치하세요."
-msgstr "Not available in the portable version — install it from the installed PolyPDF."
+msgid "휴대용 판에서는 쓸 수 없습니다 — 설치판 PolyPinax 에서 설치하세요."
+msgstr "Not available in the portable version — install it from the installed PolyPinax."
 
 #: viewer/widgets/vprinter_dialog.py
 msgid "일부만 설치됨 — '수리' 를 누르세요."
@@ -15158,8 +15168,8 @@ msgid "설치되지 않음"
 msgstr "Not installed"
 
 #: viewer/widgets/vprinter_dialog.py
-msgid "개발 실행에는 포트 모니터(printer\\bin)가 없습니다 — 빌드된 PolyPDF 에서 설치하세요."
-msgstr "The development run has no port monitor (printer\\bin) — install from a built PolyPDF."
+msgid "개발 실행에는 포트 모니터(printer\\bin)가 없습니다 — 빌드된 PolyPinax 에서 설치하세요."
+msgstr "The development run has no port monitor (printer\\bin) — install from a built PolyPinax."
 
 #: viewer/widgets/vprinter_dialog.py
 #, python-brace-format
@@ -15267,8 +15277,8 @@ msgstr "Additional tasks:"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "PolyPDF 를 PDF 기본 앱으로 설정 (설치 후 Windows 설정에서 한 번 선택 필요)"
-msgstr "Set PolyPDF as the default PDF app (you confirm it once in Windows Settings after setup)"
+msgid "PolyPinax 를 PDF 기본 앱으로 설정 (설치 후 Windows 설정에서 한 번 선택 필요)"
+msgstr "Set PolyPinax as the default PDF app (you confirm it once in Windows Settings after setup)"
 
 #: installer/installer_text.py
 msgctxt "installer"
@@ -15277,18 +15287,18 @@ msgstr "File association:"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "가상 프린터 'PolyPDF' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"
-msgstr "Install the 'PolyPDF' virtual printer (print from other programs to save as PDF)"
+msgid "가상 프린터 'PolyPinax' 설치 (다른 프로그램에서 인쇄하면 PDF 로 저장)"
+msgstr "Install the 'PolyPinax' virtual printer (print from other programs to save as PDF)"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "가상 프린터 'PolyPDF' 를 설치하는 중..."
-msgstr "Installing the 'PolyPDF' virtual printer..."
+msgid "가상 프린터 'PolyPinax' 를 설치하는 중..."
+msgstr "Installing the 'PolyPinax' virtual printer..."
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "PDF 문서 (PolyPDF)"
-msgstr "PDF Document (PolyPDF)"
+msgid "PDF 문서 (PolyPinax)"
+msgstr "PDF Document (PolyPinax)"
 
 #: installer/installer_text.py
 msgctxt "installer"
@@ -15297,23 +15307,23 @@ msgstr "PDF viewer · editing · bookmarks · search"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "PolyPDF 실행"
-msgstr "Launch PolyPDF"
+msgid "PolyPinax 실행"
+msgstr "Launch PolyPinax"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "Windows '기본 앱' 설정 열기 ( .pdf → PolyPDF 선택 )"
-msgstr "Open Windows 'Default apps' settings ( .pdf → PolyPDF )"
+msgid "Windows '기본 앱' 설정 열기 ( .pdf → PolyPinax 선택 )"
+msgstr "Open Windows 'Default apps' settings ( .pdf → PolyPinax )"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "PolyPDF 제거"
-msgstr "Uninstall PolyPDF"
+msgid "PolyPinax 제거"
+msgstr "Uninstall PolyPinax"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "이미 PolyPDF 가 설치되어 있습니다."
-msgstr "PolyPDF is already installed."
+msgid "이미 PolyPinax 가 설치되어 있습니다."
+msgstr "PolyPinax is already installed."
 
 #: installer/installer_text.py
 msgctxt "installer"
@@ -15349,20 +15359,20 @@ msgstr "The installed version will be removed and then the new one installed. Co
 msgctxt "installer"
 msgid ""
 "기존 버전 제거를 실행하지 못했습니다.\n"
-"제어판에서 기존 PolyPDF 를 수동 제거한 뒤 다시 설치해 주세요."
+"제어판에서 기존 PolyPinax 를 수동 제거한 뒤 다시 설치해 주세요."
 msgstr ""
 "Could not run the uninstaller of the installed version.\n"
-"Please uninstall PolyPDF from Control Panel and run setup again."
+"Please uninstall PolyPinax from Control Panel and run setup again."
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "PolyPDF 언어 / Language"
-msgstr "PolyPDF Language"
+msgid "PolyPinax 언어 / Language"
+msgstr "PolyPinax Language"
 
 #: installer/installer_text.py
 msgctxt "installer"
-msgid "PolyPDF 화면에 쓸 언어를 고르세요."
-msgstr "Choose the language for PolyPDF."
+msgid "PolyPinax 화면에 쓸 언어를 고르세요."
+msgstr "Choose the language for PolyPinax."
 
 #: installer/installer_text.py
 msgctxt "installer"

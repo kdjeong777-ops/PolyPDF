@@ -63,7 +63,8 @@ try:
     r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", p],
                        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
     out = dict(l.split("=", 1) for l in r.stdout.strip().splitlines() if "=" in l)
-    chk(out.get("A") == "9.9.9-beta.1|PolyPDF v9.9.9-beta.1", "A 같은 설치 위치 → 새 판", r.stdout + r.stderr[:300])
+    # 261114-6(마스터 §1.1): 옛 이름(PolyPDF v…) 항목도 찾아 보이는 새 이름으로 쓴다
+    chk(out.get("A") == "9.9.9-beta.1|PolyPinax v9.9.9-beta.1", "A 같은 설치 위치 → 새 판·새 이름", r.stdout + r.stderr[:300])
     chk(out.get("B") == "0.1|PolyPDF v0.1", "B 다른 설치 위치는 그대로", str(out.get("B")))
     chk(out.get("cleaned") == "True", "시험 키를 지웠다")
 finally:

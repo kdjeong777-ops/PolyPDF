@@ -76,14 +76,14 @@ class _Job(QObject):
 class VPrinterDialog(QDialog):
     def __init__(self, parent=None, prefs: dict | None = None, keep: list | None = None):
         super().__init__(parent)
-        self.setWindowTitle(tr("가상 프린터 (PolyPDF)"))
+        self.setWindowTitle(tr("가상 프린터 (PolyPinax)"))
         self.resize(560, 360)
         # 261017-19(SOT §4.6, 점검): 배경 일(상태 읽기·UAC 대기 최대 3분)은 **창보다 오래 사는 목록**(앱의 `_vp_keep`)에 둔다 —
         #   창의 목록이면 대기 중 [닫기] 뒤 `deleteLater` 로 창과 함께 사라져 아직 도는 QThread 가 지워졌다(앱 종료 위험)
         self._keep = keep if keep is not None else []
         self._prefs = dict(prefs or {})
         v = QVBoxLayout(self)
-        v.addWidget(QLabel(tr("다른 프로그램에서 'PolyPDF' 프린터로 인쇄하면 PDF 로 저장하고 PolyPDF 에서 엽니다.")))
+        v.addWidget(QLabel(tr("다른 프로그램에서 'PolyPinax' 프린터로 인쇄하면 PDF 로 저장하고 PolyPinax 에서 엽니다.")))
         self.lbl_state = QLabel(tr("상태 확인 중…"))
         self.lbl_state.setWordWrap(True)
         v.addWidget(self.lbl_state)
@@ -177,7 +177,7 @@ class VPrinterDialog(QDialog):
             try:
                 from viewer import settings_store
                 if getattr(settings_store, "PORTABLE", False):   # 261017-19(SOT §7): 예약 작업을 만들 수 없어 인쇄해도 열리지 않는다
-                    why = tr("휴대용 판에서는 쓸 수 없습니다 — 설치판 PolyPDF 에서 설치하세요.")
+                    why = tr("휴대용 판에서는 쓸 수 없습니다 — 설치판 PolyPinax 에서 설치하세요.")
             except Exception:
                 pass
         if why:
@@ -187,7 +187,7 @@ class VPrinterDialog(QDialog):
             return
         ok = all(st.get(k) for k in ("monitor", "dll", "port", "driver", "printer"))
         if ok:
-            self.lbl_state.setText(tr("설치됨 ✓ — 프린터 'PolyPDF'"))
+            self.lbl_state.setText(tr("설치됨 ✓ — 프린터 'PolyPinax'"))
             self.btn_install.setText(tr("수리"))
         elif any(st.get(k) for k in ("monitor", "dll", "port", "driver", "printer")):
             self.lbl_state.setText(tr("일부만 설치됨 — '수리' 를 누르세요."))
@@ -202,7 +202,7 @@ class VPrinterDialog(QDialog):
         if not getattr(sys, "frozen", False) and action == "install":
             from viewer.vprinter import default_source_dir, MONITOR_DLL
             if not os.path.exists(os.path.join(default_source_dir(), "bin", MONITOR_DLL)):
-                self.lbl_state.setText(tr("개발 실행에는 포트 모니터(printer\\bin)가 없습니다 — 빌드된 PolyPDF 에서 설치하세요."))
+                self.lbl_state.setText(tr("개발 실행에는 포트 모니터(printer\\bin)가 없습니다 — 빌드된 PolyPinax 에서 설치하세요."))
                 return
         for b in (self.btn_install, self.btn_remove):
             b.setEnabled(False)

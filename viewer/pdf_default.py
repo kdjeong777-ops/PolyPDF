@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import os
 
-APP = "PolyPDF"
+from viewer.branding import APP_NAME
+
+APP = "PolyPDF"                             # 내부 ID — 등록 키·값 이름·기본 앱 화면 URI(261114-6, 마스터 §1.1: 바꾸지 않는다)
 PROG_ID = "PolyPDF.pdf"                     # installer/PolyPDF.iss MyProgId 와 같다
 CAPS = r"Software\PolyPDF\Capabilities"
 REG_APPS = r"Software\RegisteredApplications"
@@ -123,16 +125,16 @@ def write_user_keys(reg, exe: str, desc: str, app_desc: str) -> None:
     reg.set(HKCU, PROG_KEY + r"\DefaultIcon", "", '"%s",0' % exe)
     reg.set(HKCU, PROG_KEY + r"\shell\open\command", "", _cmd(exe))
     reg.set(HKCU, OPEN_WITH, PROG_ID, None, none_type=True)
-    reg.set(HKCU, CAPS, "ApplicationName", APP)
+    reg.set(HKCU, CAPS, "ApplicationName", APP_NAME)          # 기본 앱 화면에 보이는 이름(261114-6)
     reg.set(HKCU, CAPS, "ApplicationDescription", app_desc)
     reg.set(HKCU, CAPS + r"\FileAssociations", ".pdf", PROG_ID)
     reg.set(HKCU, REG_APPS, APP, CAPS)
     base = os.path.basename(exe)
     reg.set(HKCU, r"Software\Classes\Applications\%s\shell\open\command" % base, "", _cmd(exe))
-    reg.set(HKCU, r"Software\Classes\Applications\%s" % base, "FriendlyAppName", APP)
+    reg.set(HKCU, r"Software\Classes\Applications\%s" % base, "FriendlyAppName", APP_NAME)   # '연결 프로그램' 목록 이름
 
 
-def prepare(exe: str, frozen: bool, reg, desc: str = "PDF (PolyPDF)", app_desc: str = "PolyPDF") -> dict:
+def prepare(exe: str, frozen: bool, reg, desc: str = "PDF (" + APP_NAME + ")", app_desc: str = APP_NAME) -> dict:
     """무엇을 할지 정하고 레지스트리를 맞춘다. → {"kind": "dev"|"installed"|"user", "uris": [...], "removed": [...]}"""
     if not frozen:
         return {"kind": "dev", "uris": [], "removed": []}

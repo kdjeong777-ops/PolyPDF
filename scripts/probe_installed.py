@@ -182,7 +182,7 @@ def _main_window(pid):
     'PolyPDF' 로 시작하므로 그것을 잡으면 열림 판정·WM_CLOSE 가 엉뚱한 창으로 간다(261009-13 T6 에서 겪음)."""
     wins = _windows_of(pid)
     for hwnd, title in wins:
-        if title.startswith("PolyPDF") and " v" in title:
+        if title.startswith(("PolyPinax", "PolyPDF")) and " v" in title:     # 261114-6: 새 이름·옛 판(기준점) 모두
             return hwnd, title
     return None, ""
 

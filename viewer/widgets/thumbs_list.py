@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 
 from viewer.pdf_doc import PdfDocument
 from viewer.i18n import tr          # 261008: 화면 문구(다국어 SOT §6)
+from viewer.branding import APP_NAME   # 261114-6(마스터 §1.1): 보이는 이름
 
 
 PAGES_MIME = "application/x-polypdf-pages"     # 261012-12(마스터 §4.7.18): 끄는 썸네일 — {"src": 파일, "pages": [[파일, 쪽], …]}
@@ -907,7 +908,7 @@ class PageThumbs(QWidget):
     def _need_save_first(self) -> None:
         """261016-3: 붙여넣은 쪽에는 파일의 쪽 번호로 하는 일을 할 수 없다 — 까닭을 알린다(앱의 같은 이름 함수와 같은 문구)."""
         from PyQt6.QtWidgets import QMessageBox
-        QMessageBox.information(self, "PolyPDF", tr("붙여넣은 쪽은 아직 파일에 없습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
+        QMessageBox.information(self, APP_NAME, tr("붙여넣은 쪽은 아직 파일에 없습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
 
     def _next_visible_row(self, row: int, step: int):
         """260610-1: row 에서 step(±1) 방향 첫 '보이는'(필터 통과) 행. 없으면 None."""

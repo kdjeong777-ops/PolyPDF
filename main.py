@@ -104,6 +104,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
 from viewer.resources_path import resource_path
+from viewer.branding import APP_ID, APP_NAME   # 261114-6(마스터 §1.1): 보이는 이름 / 내부 ID(설정 폴더 이름 — 바꾸지 않는다)
 
 
 def _profile() -> str:
@@ -352,7 +353,7 @@ def _make_splash(icon_path):
     # 제목 / 안내
     p.setPen(QColor(240, 240, 240))
     f = QFont(); f.setPointSize(20); f.setBold(True); p.setFont(f)
-    p.drawText(QRect(0, 228, W, 36), Qt.AlignmentFlag.AlignCenter, "PolyPDF")
+    p.drawText(QRect(0, 228, W, 36), Qt.AlignmentFlag.AlignCenter, APP_NAME)
     p.setPen(QColor(170, 170, 175))
     f2 = QFont(); f2.setPointSize(11); p.setFont(f2)
     p.drawText(QRect(0, 270, W, 28), Qt.AlignmentFlag.AlignCenter, "실행 중…")
@@ -421,7 +422,7 @@ def main():
     #   창 찾기(설정 폴더의 instances)는 앱 이름이 있어야 해서 이름을 먼저 넣는다(아래에서 같은 값으로 다시 넣는다)
     if photo_args:
         try:
-            app.setApplicationName("PolyPDF" + ("-" + _profile() if _profile() else ""))
+            app.setApplicationName(APP_ID + ("-" + _profile() if _profile() else ""))
             app.setOrganizationName("LocalTools")
             from viewer.instance_link import send_photo
             if send_photo(photo_args[0]):
@@ -465,8 +466,7 @@ def main():
         splash = None
 
     # 스플래시가 뜬 뒤 나머지 초기 설정(모두 가벼움)
-    app.setApplicationName("PolyPDF" + ("-" + _profile() if _profile() else ""))   # 261009-19: 시험 프로필은 다른 폴더
-    app.setOrganizationName("LocalTools")
+    app.setApplicationName(APP_ID + ("-" + _profile() if _profile() else ""))   # 261009-19: 시험 프로필은 다른 폴더    app.setOrganizationName("LocalTools")
     if _ico:
         app.setWindowIcon(QIcon(_ico))    # v1.6.1 G1: 작업표시줄/타이틀바 아이콘
 

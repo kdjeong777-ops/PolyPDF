@@ -776,13 +776,13 @@ class PrintMixin:
             QApplication.restoreOverrideCursor()
 
     def _print_cap_dpi(self, painter):
-        """보내는 그림의 최대 dpi — 'PolyPDF' 가상 프린터면 도구 메뉴의 '사진·그림 해상도'(기본 300, 0 = 줄이지 않음 → None),
+        """보내는 그림의 최대 dpi — 이 앱의 가상 프린터(새 이름·옛 이름)면 도구 메뉴의 '사진·그림 해상도'(기본 300, 0 = 줄이지 않음 → None),
         다른 프린터는 None(종전대로 장치 해상도). 600dpi 로 키워 보낸 사진이 PS 수백 MB·느린 PDF 가 됐다(261105-15)."""
         try:
             from viewer import vprinter
             from viewer.vprinter_controller import PREF_KEY, image_dpi
             dev = painter.device()
-            if not hasattr(dev, "printerName") or dev.printerName() != vprinter.PRINTER_NAME:
+            if not hasattr(dev, "printerName") or dev.printerName() not in vprinter.ALL_PRINTER_NAMES:
                 return None
             return image_dpi((getattr(self, "_prefs", {}) or {}).get(PREF_KEY)) or None
         except Exception:

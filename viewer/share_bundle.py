@@ -193,16 +193,16 @@ def read_manifest(zip_path) -> dict:
             try:
                 info = z.getinfo(MANIFEST)
             except KeyError:
-                raise BundleError(tr("PolyPDF 전달 묶음이 아닙니다(목록 없음)."))
+                raise BundleError(tr("PolyPinax 전달 묶음이 아닙니다(목록 없음)."))
             if info.file_size > MAX_JSON_BYTES:
                 raise BundleError(tr("묶음 목록이 너무 큽니다."))
             man = json.loads(z.read(MANIFEST).decode("utf-8"))
     except zipfile.BadZipFile:
         raise BundleError(tr("압축 파일이 손상됐습니다."))
     if not isinstance(man, dict) or man.get("format") != FORMAT:
-        raise BundleError(tr("PolyPDF 전달 묶음이 아닙니다."))
+        raise BundleError(tr("PolyPinax 전달 묶음이 아닙니다."))
     if int(man.get("version") or 0) > VERSION:
-        raise BundleError(tr("더 새 PolyPDF 가 만든 묶음입니다 — PolyPDF 를 업데이트하세요."))
+        raise BundleError(tr("더 새 PolyPinax 가 만든 묶음입니다 — PolyPinax 를 업데이트하세요."))
     files = [f for f in (man.get("files") or []) if isinstance(f, dict) and _safe_name(f.get("name"))]
     man["files"] = files
     return man

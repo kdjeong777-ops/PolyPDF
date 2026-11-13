@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from html import escape
 from viewer.i18n import tr, tr_noop, language
+from viewer.branding import APP_NAME          # 261114-6(마스터 §1.1): 보이는 이름
 
 COPYRIGHT_YEAR = "2026"
 AUTHOR = "KDJ"
@@ -47,7 +48,7 @@ OSS = (
     ("Wiktionary (kaikki.org)", "CC BY-SA 4.0", "Wiktionary contributors · wiktextract (Tatu Ylönen) · kaikki.org", ()),
     # 261105-6(태그 SOT §5.7): 사진 위치 → 행정동 — resources/geo/kr_dong.bin(단순화·압축해 넣음). CC BY 4.0 출처 표시
     (tr_noop("행정동 경계 (admdongkor ver20261001)"), "CC BY 4.0",
-     tr_noop("통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPDF 가 단순화"), ()),
+     tr_noop("통계청 SGIS 행정동 경계(공공누리 제1유형)를 vuski/admdongkor 가 가공 — github.com/vuski/admdongkor, PolyPinax 가 단순화"), ()),
     # 261105-17(사진 보기 SOT §4.29): 고른 사진 지도 — resources/map 의 Leaflet·markercluster 를 브라우저 페이지에 싣는다. 지도 그림은 OpenStreetMap(ODbL)
     ("Leaflet 1.9.4", "BSD-2-Clause", "Volodymyr Agafonkin", ()),
     ("Leaflet.markercluster 1.5.3", "MIT", "David Leaver", ()),
@@ -93,8 +94,8 @@ def about_html(version: str) -> str:
     if language() != "ko":
         note = "<p><i>%s</i></p>" % escape(tr("이 안내는 번역문이며, 효력은 라이선스 원문을 따릅니다."))
     return (
-        "<h3>PolyPDF</h3>"
-        "<p>%s</p>" % tr("버전 v{version}").format(version=escape(version))
+        "<h3>%s</h3>" % escape(APP_NAME)
+        + "<p>%s</p>" % tr("버전 v{version}").format(version=escape(version))
         + "<p><b>Copyright © %s %s</b><br>" % (COPYRIGHT_YEAR, escape(AUTHOR))
         + tr("이 프로그램의 저작권은 개발자에게 있습니다.") + "<br>"
         + "<b>%s</b>: <a href='mailto:%s'>%s</a></p>" % (tr("이메일"), EMAIL, EMAIL)
@@ -122,7 +123,7 @@ def show_about(parent, version: str):
     """정보 창 — 고지가 길어(약 1,400px) 메시지 상자로는 작은 화면에서 아래가 잘린다 → 스크롤되는 창."""
     from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox
     dlg = QDialog(parent)
-    dlg.setWindowTitle(tr("PolyPDF — 정보"))
+    dlg.setWindowTitle(tr("PolyPinax — 정보"))
     dlg.resize(620, 640)
     lay = QVBoxLayout(dlg)
     view = QTextBrowser(dlg)

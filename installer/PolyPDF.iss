@@ -11,7 +11,10 @@
 #ifndef DistDir
   #define DistDir "..\dist\PolyPDF"
 #endif
-#define MyAppName "PolyPDF"
+; 261114-6(마스터 §1.1, 사용자 결정 'A안: 보이는 이름만'): MyAppName = 보이는 이름(마법사·바로가기·제거 목록·기본 앱 화면),
+;   MyAppId = 내부 ID(설치 폴더·레지스트리 키·등록 값 이름 — 바꾸지 않는다). AppId·ProgID·실행 파일·설치 파일 이름도 그대로.
+#define MyAppName "PolyPinax"
+#define MyAppId "PolyPDF"
 #define MyAppPublisher "kdjeong777-ops"
 #define MyAppURL "https://github.com/kdjeong777-ops/PolyPDF"
 #define MyAppExe "PolyPDF.exe"
@@ -26,9 +29,11 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppId}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+; 261114-6: 업그레이드도 시작 메뉴 폴더를 새 이름으로(옛 'PolyPDF' 폴더는 옛 제거 프로그램이 지운다). 설치 폴더는 이어 쓴다(UsePreviousAppDir 기본)
+UsePreviousGroup=no
 OutputDir=..\
 OutputBaseFilename=PolyPDF-Setup-v{#MyAppVersion}
 SetupIconFile=..\resources\icon.ico
@@ -72,7 +77,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; AppUserModelI
 
 [Registry]
 ; ── 261008-27: PolyPDF 언어 — 앱이 처음 켜질 때 이 값으로 초기 설정한다(다국어 SOT §4·§10.1). 제거 때 지운다 ──
-Root: HKLM; Subkey: "Software\{#MyAppName}"; ValueType: string; ValueName: "InstallLanguage"; ValueData: "{code:GetAppLang}"; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\{#MyAppId}"; ValueType: string; ValueName: "InstallLanguage"; ValueData: "{code:GetAppLang}"; Flags: uninsdeletevalue
 ; ── ProgID 등록: '연결 프로그램'·'기본 앱' 후보로 PolyPDF 노출(기본값 강제 아님) ──
 Root: HKLM; Subkey: "Software\Classes\{#MyProgId}"; ValueType: string; ValueName: ""; ValueData: "{cm:ProgIdDesc}"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\{#MyProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExe},0"
@@ -80,10 +85,12 @@ Root: HKLM; Subkey: "Software\Classes\{#MyProgId}\shell\open\command"; ValueType
 ; .pdf 의 '연결 가능 목록'에 추가('연결 프로그램 → PolyPDF' 가능)
 Root: HKLM; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "{#MyProgId}"; ValueData: ""; Flags: uninsdeletevalue
 ; ── 기본 앱(설정 → 기본 앱)에 애플리케이션 등록: Capabilities ──
-Root: HKLM; Subkey: "Software\{#MyAppName}\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#MyAppName}"
-Root: HKLM; Subkey: "Software\{#MyAppName}\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "{cm:AppDesc}"
-Root: HKLM; Subkey: "Software\{#MyAppName}\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "{#MyProgId}"
-Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "Software\{#MyAppName}\Capabilities"; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\{#MyAppId}\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#MyAppName}"
+Root: HKLM; Subkey: "Software\{#MyAppId}\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "{cm:AppDesc}"
+Root: HKLM; Subkey: "Software\{#MyAppId}\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "{#MyProgId}"
+Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#MyAppId}"; ValueData: "Software\{#MyAppId}\Capabilities"; Flags: uninsdeletevalue
+; 261114-6: '연결 프로그램' 목록에 보이는 이름 — 실행 파일 이름(PolyPDF.exe)은 내부 ID 라 그대로 두고 이름만 준다
+Root: HKLM; Subkey: "Software\Classes\Applications\{#MyAppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
 
 [Run]
 ; 261009-21: 아이콘 캐시 새로 고침 — 업그레이드 뒤 바로가기 아이콘이 흰색으로 남았다(사용자 보고).
@@ -251,7 +258,7 @@ begin
   if Result <> '' then Exit;
   ReadSettingsLanguage(exists);
   if exists then begin Result := 'ko'; Exit; end;           { 2) 설정은 있는데 language 없음 = 이 기능 전의 앱 }
-  if RegQueryStringValue(HKLM, 'Software\{#MyAppName}', 'InstallLanguage', v) and (v <> '') then
+  if RegQueryStringValue(HKLM, 'Software\{#MyAppId}', 'InstallLanguage', v) and (v <> '') then
   begin
     Result := NormLang(v); Exit;                             { 3) 설치만 하고 앱을 안 켠 경우 }
   end;

@@ -41,11 +41,11 @@ try:
     i18n.install(None, "ko")
     chk(i18n.resource_chain() == ["ko"], "A ko 사슬", str(i18n.resource_chain()))
     ko_html = usage_html()
-    chk("PolyPDF 사용법" in ko_html and "단어장" in ko_html, "A ko 는 한국어 도움말(종전 내용)")
+    chk("PolyPinax 사용법" in ko_html and "단어장" in ko_html, "A ko 는 한국어 도움말(종전 내용)")
     i18n.install(None, "en")
     chk(i18n.resource_chain() == ["en", "ko"], "A en 사슬", str(i18n.resource_chain()))
     en_html = usage_html()
-    chk("Using PolyPDF" in en_html, "A en 은 영어 도움말")
+    chk("Using PolyPinax" in en_html, "A en 은 영어 도움말")
 
     # 도움말이 없는 언어 → fallback(en) → ko. 임시 언어팩 'ja'(fallback en) 를 만들어 본다
     from babel.messages.catalog import Catalog
@@ -63,7 +63,7 @@ try:
     try:
         i18n.install(None, "ja")
         chk(i18n.resource_chain() == ["ja", "en", "ko"], "A 도움말 없는 언어(ja→en)의 사슬", str(i18n.resource_chain()))
-        chk("Using PolyPDF" in usage_html(), "A ja 는 영어 도움말로 물러난다")
+        chk("Using PolyPinax" in usage_html(), "A ja 는 영어 도움말로 물러난다")
     finally:
         i18n.pack_dir = real_dir
 
@@ -112,8 +112,8 @@ try:
     dlg = HelpDialog(); dlg.show(); app.processEvents()
     from PyQt6.QtWidgets import QTextBrowser
     b = dlg.findChild(QTextBrowser)
-    chk(b is not None and "Using PolyPDF" in b.toPlainText(), "E 영어 사용법 창이 영어 도움말을 보여 준다")
-    chk(dlg.windowTitle() == i18n.tr("PolyPDF — 사용법") and not H.search(dlg.windowTitle()), "E 창 제목도 영어")
+    chk(b is not None and "Using PolyPinax" in b.toPlainText(), "E 영어 사용법 창이 영어 도움말을 보여 준다")
+    chk(dlg.windowTitle() == i18n.tr("PolyPinax — 사용법") and not H.search(dlg.windowTitle()), "E 창 제목도 영어")
     dlg.close()
 
     # ── F — 도움말이 실제 기능과 어긋나지 않게 (261009-11) ──

@@ -115,7 +115,7 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(200, data, LIB_FILES[parts[1]] + "; charset=utf-8", cache=86400)
         pg = self._page(parts)
         if pg is None:
-            return self._send(404, tr("지도 페이지가 없습니다 — PolyPDF 에서 다시 여세요.").encode("utf-8"))
+            return self._send(404, tr("지도 페이지가 없습니다 — PolyPinax 에서 다시 여세요.").encode("utf-8"))
         if len(parts) == 2:
             if not path.endswith("/"):
                 self.send_response(301)
@@ -211,8 +211,8 @@ def page_html(points: list, skipped_gps: int = 0, skipped_cloud: int = 0) -> str
         "pts": [[round(float(p["lat"]), 6), round(float(p["lon"]), 6), p.get("name", ""), p.get("date", ""), p.get("day", "")] for p in points],
         "tile": MAP_TILE_URL, "attr": MAP_ATTRIBUTION, "icon": MAP_ICON_SIDE, "pop": MAP_POPUP_SIDE,
         "title": tr("사진 위치 — {n}장").format(n=len(points)), "note": " · ".join(note),
-        "t": {"open": tr("PolyPDF 에서 열기"), "pick": tr("PolyPDF 에서 고르기"), "zoom": tr("확대"),
-              "n": tr("{n}장"), "noday": tr("날짜 없음"), "sent": tr("PolyPDF 로 보냈습니다"), "fail": tr("PolyPDF 에 닿지 않습니다 — 앱이 닫혔을 수 있습니다")},
+        "t": {"open": tr("PolyPinax 에서 열기"), "pick": tr("PolyPinax 에서 고르기"), "zoom": tr("확대"),
+              "n": tr("{n}장"), "noday": tr("날짜 없음"), "sent": tr("PolyPinax 로 보냈습니다"), "fail": tr("PolyPinax 에 닿지 않습니다 — 앱이 닫혔을 수 있습니다")},
     }
     js = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     return _TEMPLATE.replace("__TITLE__", _esc(data["title"])).replace("__DATA__", js)

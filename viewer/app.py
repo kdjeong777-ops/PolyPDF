@@ -47,6 +47,7 @@ from PyQt6.QtWidgets import (
 
 from viewer import side_panel_host as _sp
 from viewer.i18n import tr, korea_only, korea_only_visible   # 261008: 화면 문구·한국 전용(다국어 SOT §6·§7)
+from viewer.branding import APP_NAME                          # 261114-6(마스터 §1.1): 보이는 이름
 from viewer.edit_controller import EditMixin
 from viewer.present_controller import PresentMixin
 from viewer.print_controller import PrintMixin
@@ -162,7 +163,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"PolyPDF  v{__version__}")
+        self.setWindowTitle(f"{APP_NAME}  v{__version__}")
         self.resize(1700, 980)
         # 261009-16(응답성 SOT §4 ③·§4.4): 한국어 띄어쓰기(kiwi)는 자식 프로세스에 — 이 스레드는 그 준비를 기다리지 않는다.
         #   261009-17: 자식은 **처음 물을 때** 띄운다(약 300MB — 한글 본문을 안 보는 실행에서 쓰지 않게, CLAUDE.md '자원 최소').
@@ -1268,7 +1269,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception:
                 pass
             title = "  —  ".join(parts)
-            self.setWindowTitle(f"PolyPDF  v{__version__}" + (f"  —  {title}" if title else ""))
+            self.setWindowTitle(f"{APP_NAME}  v{__version__}" + (f"  —  {title}" if title else ""))
         except Exception:
             pass
 
@@ -1733,7 +1734,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         a_save_as.triggered.connect(self._action_save_as)
         # 261011-2(§4.7.16): '저장(PolyPDF용)' → '저장' — 다른 뷰어에서도 보이게 PDF 에 사본을 넣는다
         a_save = self._sc_act_save = QAction(tr("저장"), self)      # 261021-5: Ctrl+S(입력 SOT §3.2)
-        a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPDF 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
+        a_save.setToolTip(tr("책갈피·쪽 편집·회전·크롭은 원본 PDF 에, 꾸밈(선·도형·글·사진)·하이퍼링크·태그는 다른 뷰어에서도 보이게 PDF 에 함께 넣습니다 — PolyPinax 에서 계속 고칠 수 있습니다(💾 와 같은 동작)."))
         a_save.triggered.connect(lambda: self.action_save())       # 261024-5: 포커스 책갈피창(Ctrl+R 과 같게)
         m_file.addAction(a_save)
         m_file.addAction(a_save_as)                 # 261031-13: 차례는 책갈피창 우클릭 저장 그룹과 같게(저장 · 다른 이름)
@@ -1935,13 +1936,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         _inst = m_tools.addMenu(tr("설치·설정"))
         for _t, _s, _cid, _short, _tip in (
                 (tr("기본 PDF 앱으로 설정"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱으로 설정"),
-                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPDF 로 고르세요")),   # 261107-14(마스터 §14.10)
+                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPinax 로 고르세요")),   # 261107-14(마스터 §14.10)
                 (tr("기본 사진 앱으로 설정"), self._register_photo_handler, "tools.photo_handler", tr("기본 사진 앱으로 설정"),
-                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPDF 로 고르세요")),   # 261112-10(사진 보기 SOT §4.45)
+                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요")),   # 261112-10(사진 보기 SOT §4.45)
                 (tr("구성요소 설치 (녹화·OCR)"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
                  tr("구성요소 설치(녹화·OCR)")),
                 (tr("가상 프린터 설치·제거"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
-                 tr("가상 프린터(PolyPDF) 설치·제거"))):
+                 tr("가상 프린터(PolyPinax) 설치·제거"))):
             _a = QAction(_t, self)
             _a.triggered.connect(_no_checked(_s))
             _inst.addAction(_a)
@@ -2402,10 +2403,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 "빌드된 PolyPDF.exe 에서 실행해 주세요."))
             return
         exe = _os.path.abspath(_sys.executable)
-        manual = tr("PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPDF → '항상'")
+        manual = tr("PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'")
         try:
             plan = pdf_default.prepare(exe, True, reg if reg is not None else pdf_default.Reg(),
-                                       desc=tr("PDF 문서 (PolyPDF)"), app_desc=tr("PDF 뷰어"))
+                                       desc=tr("PDF 문서 (PolyPinax)"), app_desc=tr("PDF 뷰어"))
         except Exception as e:
             QMessageBox.warning(self, tr("기본 앱으로 설정하지 못했습니다"), str(e) + "\n\n" + manual)
             return
@@ -2414,7 +2415,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             from PyQt6.QtGui import QDesktopServices
             opener = lambda u: QDesktopServices.openUrl(QUrl(u))
         if pdf_default.open_settings(plan["uris"], opener):
-            self.status.showMessage(tr("Windows 기본 앱 화면에서 PolyPDF 를 고르세요."), 8000)
+            self.status.showMessage(tr("Windows 기본 앱 화면에서 PolyPinax 를 고르세요."), 8000)
         else:
             QMessageBox.information(self, tr("기본 PDF 앱으로 설정"),
                                     tr("Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:") + "\n" + manual)
@@ -2809,7 +2810,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """v1.6.11 I1: 단일 PDF 파일 열기."""
         start = self._dialog_start_dir()
         fn, _ = QFileDialog.getOpenFileName(self, tr("PDF 파일 열기"), start,
-                                            "PDF (*.pdf);;" + tr("PolyPDF 전달 묶음") + " (*.polypdf.zip)")
+                                            "PDF (*.pdf);;" + tr("PolyPinax 전달 묶음") + " (*.polypdf.zip)")
         if fn and fn.lower().endswith(".polypdf.zip"):        # 261105-9(§4.7.23)
             self.open_share_bundle(Path(fn))
         elif fn:
@@ -2851,7 +2852,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self.search_results.set_bookmark_order({})
             self._refresh_search_scope()        # 260616-3: 이 파일로만 검색 한정
             self.setWindowTitle(
-                f"PolyPDF  v{__version__}  —  {pdf_path.name}")
+                f"{APP_NAME}  v{__version__}  —  {pdf_path.name}")
             self.status.showMessage(tr('파일 로드: {pdf_path}').format(pdf_path=pdf_path))
         finally:
             QApplication.restoreOverrideCursor()
@@ -3403,7 +3404,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                               tr("파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
                               "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
                               "한 번 조사한 파일은 다시 조사하지 않습니다."),
-                              tr("PolyPDF — 목록 조사"))
+                              tr("PolyPinax — 목록 조사"))
                 dlg.on_progress(done, total, name)
             except Exception:
                 pass
@@ -3460,7 +3461,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                   tr("파일 목록에 붙일 표식(암호화·책갈피 유무)을 확인하는 중입니다. "
                                   "<b>진행 중에는 목록 스크롤이 잠깐 끊길 수 있습니다.</b> "
                                   "한 번 조사한 파일은 다시 조사하지 않습니다."),
-                                  tr("PolyPDF — 목록 조사"))
+                                  tr("PolyPinax — 목록 조사"))
                 except Exception:
                     pass
             return
@@ -4660,7 +4661,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._close_main_view_doc()
             QApplication.processEvents()
             self.status.showMessage(
-                tr("다른 PolyPDF 창이 '{name}' 을(를) 저장하는 동안 닫았습니다.").format(name=Path(path).name), 8000)
+                tr("다른 PolyPinax 창이 '{name}' 을(를) 저장하는 동안 닫았습니다.").format(name=Path(path).name), 8000)
             return {"ok": True, "page": pg}
         if op == "reload":
             st = getattr(self, "_peer_released", None)
@@ -4695,9 +4696,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         dirty = any(h.get("dirty") for h in holders)
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning if dirty else QMessageBox.Icon.Question)
-        box.setWindowTitle(tr("다른 PolyPDF 창에서 열려 있음"))
+        box.setWindowTitle(tr("다른 PolyPinax 창에서 열려 있음"))
         n = len(holders)
-        head = (tr("'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n\n그 창이 파일을 읽는 동안 덮어쓰면, 그 창은 바뀐 파일을 옛 상태로 읽어 화면이 깨지거나 오류가 날 수 있습니다.").format(name=name, n=n))
+        head = (tr("'{name}' 을(를) 다른 PolyPinax 창 {n}개에서 보고 있습니다.\n\n그 창이 파일을 읽는 동안 덮어쓰면, 그 창은 바뀐 파일을 옛 상태로 읽어 화면이 깨지거나 오류가 날 수 있습니다.").format(name=name, n=n))
         if dirty:
             box.setText(tr('{head}\n\n그 창에 이 파일의 저장하지 않은 편집이 있어 닫을 수 없습니다.\n그 창에서 편집을 저장하거나 되돌린 뒤 다시 저장하거나, 새 이름으로 저장하세요.').format(head=head))
             b_rel = None
@@ -4841,7 +4842,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         link = getattr(self, "_instance_link", None)
         released = []
         if link is not None:
-            holders = self._peer_bg(lambda: link.holders(dst), tr("다른 PolyPDF 창 확인 중…")) or []
+            holders = self._peer_bg(lambda: link.holders(dst), tr("다른 PolyPinax 창 확인 중…")) or []
             if holders:
                 choice = self._ask_peer_release(dst.name, holders)
                 if choice == "cancel":
@@ -4859,7 +4860,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                         except Exception:
                             pass
                         from viewer.file_overwrite import SaveCancelled
-                        raise SaveCancelled(tr("다른 PolyPDF 창이 연 원본에는 새 이름으로 저장할 수 없습니다."))
+                        raise SaveCancelled(tr("다른 PolyPinax 창이 연 원본에는 새 이름으로 저장할 수 없습니다."))
                     err = self._file_op_bg(lambda: _os.replace(str(produced), str(fb)),
                                            tr('새 이름으로 저장 중: {name}').format(name=fb.name))
                     if err is not None:
@@ -4867,12 +4868,12 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     self._close_main_view_doc()      # 위 Shift 저장과 같은 이유
                     return str(fb)
                 released = self._peer_bg(lambda: link.release(holders, dst),
-                                          tr("다른 PolyPDF 창이 파일을 놓기를 기다리는 중…")) or []
+                                          tr("다른 PolyPinax 창이 파일을 놓기를 기다리는 중…")) or []
         try:
             return self._place_over_original(src, produced, dst)
         finally:
             if released:
-                self._peer_bg(lambda: link.reload(released, dst), tr("다른 PolyPDF 창에 다시 열게 하는 중…"))
+                self._peer_bg(lambda: link.reload(released, dst), tr("다른 PolyPinax 창에 다시 열게 하는 중…"))
 
     def _peer_bg(self, fn, label: str):
         """261014-17(응답성 SOT §4.4, 마스터 §4.7.8): 다른 PolyPDF 창에 묻고 기다리는 일을 **배경 스레드**에서 — 멈춘 창 하나가
@@ -4887,7 +4888,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             except Exception:                        # noqa: BLE001 — 확인 실패는 '다른 창 없음' 과 같게
                 out["v"] = None
             progress(1, 1, tr("완료"))
-        self._run_merge_job(_job, tr("다른 PolyPDF 창"), cancellable=False)
+        self._run_merge_job(_job, tr("다른 PolyPinax 창"), cancellable=False)
         return out.get("v")
 
     def _file_op_bg(self, fn, label: str, title: str = None):
@@ -5042,15 +5043,15 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         released = []
         try:
             if link is not None:
-                holders = self._peer_bg(lambda: link.holders(path), tr("다른 PolyPDF 창 확인 중…")) or []
+                holders = self._peer_bg(lambda: link.holders(path), tr("다른 PolyPinax 창 확인 중…")) or []
                 if holders:
                     if any(h.get("dirty") for h in holders):
-                        QMessageBox.information(self, title, tr("다른 PolyPDF 창에 이 파일의 저장하지 않은 편집이 있습니다 — 그 창에서 저장하거나 되돌린 뒤 다시 해 주세요."))
+                        QMessageBox.information(self, title, tr("다른 PolyPinax 창에 이 파일의 저장하지 않은 편집이 있습니다 — 그 창에서 저장하거나 되돌린 뒤 다시 해 주세요."))
                         return False
-                    if QMessageBox.question(self, title, tr("'{name}' 을(를) 다른 PolyPDF 창 {n}개에서 보고 있습니다.\n그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?").format(
+                    if QMessageBox.question(self, title, tr("'{name}' 을(를) 다른 PolyPinax 창 {n}개에서 보고 있습니다.\n그 창에서 잠시 닫고 되돌린 뒤 다시 열까요?").format(
                             name=Path(path).name, n=len(holders))) != QMessageBox.StandardButton.Yes:
                         return False
-                    released = self._peer_bg(lambda: link.release(holders, path), tr("다른 PolyPDF 창이 파일을 놓기를 기다리는 중…")) or []
+                    released = self._peer_bg(lambda: link.release(holders, path), tr("다른 PolyPinax 창이 파일을 놓기를 기다리는 중…")) or []
             pw, remembered = None, False
             try:
                 from viewer import secure_store
@@ -5099,7 +5100,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         finally:
             self._photo_orig_busy = False
             if released:
-                self._peer_bg(lambda: link.reload(released, path), tr("다른 PolyPDF 창에 다시 열게 하는 중…"))
+                self._peer_bg(lambda: link.reload(released, path), tr("다른 PolyPinax 창에 다시 열게 하는 중…"))
 
     def _pdf_drop_page_records(self, path: str) -> None:
         """되돌린 PDF 의 쪽 구조에 묶인 앱 기록 — 꾸밈·숨김(`page_meta`)·하이퍼링크 사이드카, 저장 전 크롭·회전 — 을 지운다(처음 원본에는 없던 것)."""
@@ -6599,7 +6600,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             if dirty:
                 break
         if dirty:
-            QMessageBox.information(self, "PolyPDF", tr("저장하지 않은 쪽 편집(회전·크롭·삭제·이동·붙여넣은 쪽)이 있어 사본에 들어가지 않습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
+            QMessageBox.information(self, APP_NAME, tr("저장하지 않은 쪽 편집(회전·크롭·삭제·이동·붙여넣은 쪽)이 있어 사본에 들어가지 않습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
         return dirty
 
     def _ctx_pdf_save(self, menu, path, *, pages=None, staged=False, thumbs=False) -> None:
@@ -6630,7 +6631,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     {"text": tr("개인정보 지운 사본"), "cb": lambda: self._copy_blocked([f]) or self.action_redact(f),
                      "tip": tr("고른 영역·주민번호·전화번호 같은 개인정보를 실제로 지운 새 파일을 만듭니다(원본은 그대로).")},
                     {"text": tr("전달 묶음"), "cb": lambda: self._copy_blocked([f]) or self.action_share_files([f]),
-                     "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPDF 로 열면 그대로 봅니다.")}],
+                     "tip": tr("PDF 와 OCR 결과·고친 글·꾸밈·하이퍼링크를 묶음 파일(.polypdf.zip) 하나로 — 받는 사람이 PolyPinax 로 열면 그대로 봅니다.")}],
             make=[{"text": tr("PDF 저장") + (" " + tr("({n}쪽)").format(n=len(pages)) if len(pages) > 1 else ""),
                    "cb": (lambda ps=list(pages): self.action_pages_to_pdf(f, ps)) if mk_ok else None,
                    "enabled": mk_ok,
@@ -6722,7 +6723,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     def _need_save_first(self) -> None:
         """261016-3(마스터 §4.7.7·§4.7.20, 사용자 지시): 붙여넣은 쪽(저장 전)에는 파일의 쪽 번호로 하는 일을 할 수 없다 — 까닭을 알린다."""
-        QMessageBox.information(self, "PolyPDF", tr("붙여넣은 쪽은 아직 파일에 없습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
+        QMessageBox.information(self, APP_NAME, tr("붙여넣은 쪽은 아직 파일에 없습니다.\n💾 '저장' 한 뒤에 다시 해 주세요."))
 
     def _paste_clipboard_on_page(self) -> bool:
         """261016-2(마스터 §4.7.20): 본문 '클립보드 붙여넣기' — 마지막에 복사한 것이 쪽이면 그 첫 쪽을 **그림**으로,
@@ -7152,7 +7153,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 파일을 못 지우는 상황에서 '오류 → 복구 → 오류' 가 되풀이되지 않게 실행당 두 번까지
         self._index_recover_count = getattr(self, "_index_recover_count", 0) + 1
         if self._index_recover_count > 2:
-            self.status.showMessage(tr("검색 색인을 고치지 못했습니다. PolyPDF 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."), 15000)
+            self.status.showMessage(tr("검색 색인을 고치지 못했습니다. PolyPinax 를 다시 시작한 뒤 '도구 → 인덱스' 로 다시 만들어 주세요."), 15000)
             return
         self._index_recovering = True
         self.status.showMessage(tr("검색 색인이 손상되어 새로 만듭니다. 끝나면 다시 검색해 주세요."), 10000)
@@ -9924,9 +9925,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         """261008(다국어 SOT §4): 화면 언어는 재시작 뒤 적용 — 지금 언어와 새 언어로 함께 안내."""
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle("PolyPDF")
-        box.setText(tr("화면 언어는 PolyPDF 를 다시 시작하면 적용됩니다.\n"
-                    "The display language will be applied after PolyPDF restarts."))
+        box.setWindowTitle(APP_NAME)
+        box.setText(tr("화면 언어는 PolyPinax 를 다시 시작하면 적용됩니다.\n"
+                    "The display language will be applied after PolyPinax restarts."))
         b_now = box.addButton(tr("지금 다시 시작 / Restart now"), QMessageBox.ButtonRole.AcceptRole)
         box.addButton(tr("나중에 / Later"), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(b_now)

@@ -759,10 +759,11 @@ if ($fail -eq 0) {
                                 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')) {
                 foreach ($k in (Get-ChildItem $root -ErrorAction SilentlyContinue)) {
                     $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
-                    if ($p -and $p.DisplayName -like 'PolyPDF*' -and $p.InstallLocation -and
+                    # 261114-6(마스터 §1.1): 보이는 이름이 PolyPinax 로 — 옛 이름(PolyPDF v…)도 찾아 새 이름으로 쓴다
+                    if ($p -and ($p.DisplayName -like 'PolyPinax*' -or $p.DisplayName -like 'PolyPDF*') -and $p.InstallLocation -and
                         ([IO.Path]::GetFullPath($p.InstallLocation).TrimEnd('\') -ieq $want)) {
                         Set-ItemProperty -LiteralPath $k.PSPath -Name DisplayVersion -Value $nv -ErrorAction SilentlyContinue
-                        Set-ItemProperty -LiteralPath $k.PSPath -Name DisplayName -Value ('PolyPDF v' + $nv) -ErrorAction SilentlyContinue
+                        Set-ItemProperty -LiteralPath $k.PSPath -Name DisplayName -Value ('PolyPinax v' + $nv) -ErrorAction SilentlyContinue
                     }
                 }
             }
@@ -804,16 +805,16 @@ def installer_texts() -> dict:
             text = text.replace("{%s}" % nm, "{%d}" % i)
         return text
     return {
-        "title_install": tr("PolyPDF 업데이트 설치"),
-        "title_update": tr("PolyPDF 업데이트"),
+        "title_install": tr("PolyPinax 업데이트 설치"),
+        "title_update": tr("PolyPinax 업데이트"),
         "preparing": tr("업데이트를 준비하는 중..."),
         "wait_exit": tr("기존 프로그램이 종료되기를 기다리는 중..."),
         "downloading": tr("업데이트 다운로드 중..."),
         "dl_failed": ps(tr("다운로드 실패: {msg}"), "msg"),
-        "closing_others": ps(tr("다른 PolyPDF 창을 닫는 중... ({n}개)"), "n"),
-        "waiting_others": ps(tr("다른 PolyPDF 창이 닫히기를 기다리는 중... ({n}개 남음)"), "n"),
-        "waiting_others_plain": tr("다른 PolyPDF 창이 닫히기를 기다리는 중..."),
-        "others_left": ps(tr("다른 PolyPDF 창 {n}개가 아직 열려 있습니다.\n"
+        "closing_others": ps(tr("다른 PolyPinax 창을 닫는 중... ({n}개)"), "n"),
+        "waiting_others": ps(tr("다른 PolyPinax 창이 닫히기를 기다리는 중... ({n}개 남음)"), "n"),
+        "waiting_others_plain": tr("다른 PolyPinax 창이 닫히기를 기다리는 중..."),
+        "others_left": ps(tr("다른 PolyPinax 창 {n}개가 아직 열려 있습니다.\n"
                              "열린 창이 파일을 잠그고 있어, 이대로 진행하면 일부 파일이 교체되지 않아 "
                              "업데이트가 실패합니다.\n\n"
                              "[예] 남은 창을 강제로 닫고 계속\n"

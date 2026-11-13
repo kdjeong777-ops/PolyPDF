@@ -72,7 +72,7 @@ def _printer_installed() -> bool:
     GIL 을 놓지 않아, 설치 직후(스풀러가 막 다시 시작해 느릴 때) 배경 스레드에서 불러도 창이 섰다(beta.289 설치 시험 T1 5.3초).
     로컬 프린터는 스풀러가 이 키에 적는다 — 창이 뜰 때마다 도는 길이라 스풀러를 깨우지 않는다."""
     from viewer import vprinter
-    return vprinter._reg_exists(PRINTERS_KEY + vprinter.PRINTER_NAME)
+    return any(vprinter._reg_exists(PRINTERS_KEY + n) for n in vprinter.ALL_PRINTER_NAMES)   # 261114-6: 옛 이름도
 
 
 class VPrinterMixin:
@@ -178,12 +178,12 @@ class VPrinterMixin:
                 raise
             progress(2, 2, tr("완료"))
 
-        res = self._run_merge_job(job, tr("PolyPDF 프린터"), cancellable=False)
+        res = self._run_merge_job(job, tr("PolyPinax 프린터"), cancellable=False)
         if res.get("err") or "conv" not in box:
             self._vp_failed = getattr(self, "_vp_failed", set()) | {ps}
-            QMessageBox.warning(self, tr("PolyPDF 프린터"),
+            QMessageBox.warning(self, tr("PolyPinax 프린터"),
                                 tr("받은 문서를 PDF 로 바꾸지 못했습니다: {err}").format(err=res.get("err") or "?") + "\n\n"
-                                + tr("받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPDF 를 켤 때 다시 바꿔 봅니다."))
+                                + tr("받은 인쇄 파일은 지우지 않았습니다 — 다음에 PolyPinax 를 켤 때 다시 바꿔 봅니다."))
             return                                   # PS 는 남긴다(잃지 않게), 이 창에서는 다시 시도하지 않는다
         plan, conv = box["plan"], box["conv"]
         # 261017-14 사용자 지시: 저장 창(인쇄 창 저장 모드) 없이 — 도구 메뉴 설정(폴더 종류·기본 폴더·흑백)대로 바로 저장하고 연다.
@@ -210,12 +210,12 @@ class VPrinterMixin:
                 shutil.rmtree(box["tmp"], ignore_errors=True)
             progress(1, 1, tr("완료"))
 
-        res = self._run_merge_job(save_job, tr("PolyPDF 프린터"), cancellable=False)
+        res = self._run_merge_job(save_job, tr("PolyPinax 프린터"), cancellable=False)
         if res.get("err") or "final" not in box2:
             self._vp_failed = getattr(self, "_vp_failed", set()) | {ps}
-            QMessageBox.warning(self, tr("PolyPDF 프린터"), tr("저장하지 못했습니다: {err}").format(err=res.get("err") or "?"))
+            QMessageBox.warning(self, tr("PolyPinax 프린터"), tr("저장하지 못했습니다: {err}").format(err=res.get("err") or "?"))
             return
-        self.status.showMessage(tr("PolyPDF 프린터 — 저장: {path}").format(path=box2["final"]), 6000)
+        self.status.showMessage(tr("PolyPinax 프린터 — 저장: {path}").format(path=box2["final"]), 6000)
         self._vprinter_open(box2["final"])
 
     # ── 여는 곳(SOT §4.4) ─────────────────────────────────────────────
@@ -283,7 +283,7 @@ class VPrinterMixin:
         link = getattr(self, "_instance_link", None)
         if link is None:
             return False
-        return bool(self._peer_bg(lambda: link.show_file(path), tr("그 폴더를 보고 있는 PolyPDF 창을 찾는 중…")))
+        return bool(self._peer_bg(lambda: link.show_file(path), tr("그 폴더를 보고 있는 PolyPinax 창을 찾는 중…")))
 
     def _vprinter_peer_show(self, path) -> dict:
         """261031-4: 다른 창(받는 창)이 넘긴 파일 — 이 창이 그 폴더를 보고 있으면 응답을 먼저 보내고 연다(`_on_instance_request` 'show')."""

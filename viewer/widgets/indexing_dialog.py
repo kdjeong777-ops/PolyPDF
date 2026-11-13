@@ -87,7 +87,7 @@ class IndexingDialog(QDialog):
         super().__init__(parent)
         # 261012-15(사용자 지시): '폴더 준비' 는 폴더를 만드는 것으로 읽혔다 — 지금 하는 일을 쓴다.
         #   같은 창이 목록 조사 단계도 보이므로 그때는 set_phase 가 제목을 바꾼다.
-        self.setWindowTitle(tr("PolyPDF — 인덱싱"))
+        self.setWindowTitle(tr("PolyPinax — 인덱싱"))
         # 도구 창: 메인 위에 머물되 모달 아님. 닫기(✕)는 '아래로 숨기기'와 같다.
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowTitleHint
                             | Qt.WindowType.CustomizeWindowHint

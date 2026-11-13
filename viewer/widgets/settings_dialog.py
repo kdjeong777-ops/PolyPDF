@@ -772,7 +772,7 @@ class SettingsDialog(QDialog):
         gl.addWidget(self.chk_last_page)
         # 260822: PolyPDF 시작 모드 — 편집 / 보기 (기본 = 편집)
         mrow = QHBoxLayout()
-        mrow.addWidget(QLabel(tr("PolyPDF 시작 모드:")))
+        mrow.addWidget(QLabel(tr("PolyPinax 시작 모드:")))
         self.cmb_open_mode = QComboBox()
         self.cmb_open_mode.addItem(tr("편집 모드 (수정·저장 가능)"), "edit")
         self.cmb_open_mode.addItem(tr("보기 모드 (읽기 전용)"), "view")
@@ -795,7 +795,7 @@ class SettingsDialog(QDialog):
         vl.addRow(tr("보기 종류:"), self.cmb_view_kind)
         # 261112-10(사진 보기 SOT §4.45, 사용자 지시): 기본 사진 앱으로 설정 — 도구 탭 `설치·설정 ▾` 의 같은 항목과 같은 함수
         self.btn_photo_default = QPushButton(tr("기본 사진 앱으로 설정"))
-        self.btn_photo_default.setToolTip(tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPDF 로 고르세요"))
+        self.btn_photo_default.setToolTip(tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요"))
         self.btn_photo_default.setEnabled(hasattr(self._host, "_register_photo_handler"))
         self.btn_photo_default.clicked.connect(lambda _=False: self._host._register_photo_handler())
         vl.addRow("", self.btn_photo_default)
@@ -1021,7 +1021,7 @@ class SettingsDialog(QDialog):
         dl.addWidget(self.btn_save_default)
         dl.addWidget(self.btn_reset_default)
         dl.addWidget(_small(tr("둘 다 지금 저장된 설정을 다룹니다 — 이 창에서 바꾼 것은 [적용] 뒤에 들어갑니다. "
-                               "초기화하면 PolyPDF 를 다시 시작합니다.")))
+                               "초기화하면 PolyPinax 를 다시 시작합니다.")))
         host = self._host
         if host is not None:
             from PyQt6.QtCore import QTimer as _QT

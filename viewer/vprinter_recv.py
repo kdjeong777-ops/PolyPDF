@@ -468,7 +468,7 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
     그림은 `img_dpi` 로 줄인다(0 = 그대로). 실패하면 예외."""
     gs = gs or gs_exe()
     if not gs:
-        raise FileNotFoundError(tr("변환 도구(Ghostscript)가 없습니다 — PolyPDF 를 다시 설치하세요(수리로는 되살아나지 않습니다)."))
+        raise FileNotFoundError(tr("변환 도구(Ghostscript)가 없습니다 — PolyPinax 를 다시 설치하세요(수리로는 되살아나지 않습니다)."))
     tmp = out_pdf + ".gs.pdf"
     prolog = out_pdf + ".prolog.ps"           # 글자표가 길어 명령 줄(-c)에 넣지 않고 파일로
     with open(prolog, "w", encoding="latin-1", errors="replace") as f:
@@ -502,7 +502,7 @@ def convert(ps_path: str, out_pdf: str, title: str = "", gray: bool = False, gs:
                 pg.remove_rotation()           # 보이는 방향 그대로 놓는다(알PDF 의 회전 표시 흠 — SOT §3.10)
         meta = dict(d.metadata or {})
         meta["title"] = title or meta.get("title", "")
-        meta["creator"] = "PolyPDF virtual printer"
+        meta["creator"] = "PolyPinax virtual printer"
         d.set_metadata(meta)
         d.save(out_pdf, garbage=3, deflate=True)
     finally:
@@ -517,7 +517,7 @@ def to_gray(src_pdf: str, out_pdf: str, gs: str | None = None) -> None:
     """도구 메뉴의 '흑백으로 저장' 이면 — 벡터 그대로 회색조로(Ghostscript)."""
     gs = gs or gs_exe()
     if not gs:
-        raise FileNotFoundError(tr("변환 도구(Ghostscript)가 없습니다 — PolyPDF 를 다시 설치하세요(수리로는 되살아나지 않습니다)."))
+        raise FileNotFoundError(tr("변환 도구(Ghostscript)가 없습니다 — PolyPinax 를 다시 설치하세요(수리로는 되살아나지 않습니다)."))
     env = dict(os.environ)
     env["GS_LIB"] = ""
     r = subprocess.run([gs, "-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-sDEVICE=pdfwrite", "-dAutoRotatePages=/None",
@@ -539,15 +539,15 @@ TASK_POLICY = "Parallel"
 
 
 # 261108-19(SOT §4.4): 작업은 **보이게**(작업 스케줄러에 그대로 보이고 설명이 무엇을 하는지 말한다) — 종전 `<Hidden>true` 는 숨은 지속 실행처럼 보였다.
-TASK_DESCRIPTION = ("PolyPDF virtual printer: when you print to the 'PolyPDF' printer, the printer port starts this task "
-                    "to open the printed document as a PDF in PolyPDF. Removed when PolyPDF is uninstalled.")
+TASK_DESCRIPTION = ("PolyPinax virtual printer: when you print to the 'PolyPinax' printer, the printer port starts this task "
+                    "to open the printed document as a PDF in PolyPinax. Removed when PolyPinax is uninstalled.")
 
 
 def _task_xml(exe_cmd: str, args: str) -> str:
     from xml.sax.saxutils import escape
     return ("<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n"
             "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n"
-            "  <RegistrationInfo><Author>PolyPDF</Author><Description>" + escape(TASK_DESCRIPTION) + "</Description></RegistrationInfo>\n"
+            "  <RegistrationInfo><Author>PolyPinax</Author><Description>" + escape(TASK_DESCRIPTION) + "</Description></RegistrationInfo>\n"
             "  <Principals><Principal id=\"Author\"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\n"
             "  <Settings><MultipleInstancesPolicy>" + TASK_POLICY + "</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"
             "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><AllowStartOnDemand>true</AllowStartOnDemand>"

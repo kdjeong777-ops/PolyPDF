@@ -38,7 +38,7 @@ def google_hint_label() -> QLabel:
 
 def google_button(parent=None) -> QPushButton:
     b = QPushButton(tr("Google 비밀번호 관리자 열기"), parent)
-    b.setToolTip(tr("기본 브라우저로 passwords.google.com 을 엽니다 — PolyPDF 는 아무 값도 넘기지 않습니다."))
+    b.setToolTip(tr("기본 브라우저로 passwords.google.com 을 엽니다 — PolyPinax 는 아무 값도 넘기지 않습니다."))
     b.clicked.connect(open_google_password_manager)
     return b
 
@@ -1010,7 +1010,7 @@ class NpkiDialog(QDialog):
         self.setWindowTitle(tr("공동인증서 가져오기"))
         self.chosen = None
         v = QVBoxLayout(self)
-        lab = QLabel(tr("가져올 인증서를 고르세요. 원래 인증서 폴더는 건드리지 않고 PolyPDF 디지털 ID 로 복사합니다."))
+        lab = QLabel(tr("가져올 인증서를 고르세요. 원래 인증서 폴더는 건드리지 않고 PolyPinax 디지털 ID 로 복사합니다."))
         lab.setWordWrap(True)
         v.addWidget(lab)
         self.lst = QListWidget()
@@ -1447,7 +1447,7 @@ class SignDialog(QDialog):
         self._win_note = QLabel(tr("Windows 인증서 저장소의 키로 서명합니다 — 비밀번호 대신 Windows 가 PIN·확인을 물을 수 있습니다."))
         self._win_note.setWordWrap(True)
         v.addWidget(self._win_note)
-        note = QLabel(tr("서명한 결과는 새 파일 '{name}' 로 저장되고 원본은 그대로입니다. 서명한 파일을 PolyPDF 에서 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다.").format(
+        note = QLabel(tr("서명한 결과는 새 파일 '{name}' 로 저장되고 원본은 그대로입니다. 서명한 파일을 PolyPinax 에서 다시 저장하면 서명이 깨지므로 그때는 새 파일로 저장하라고 묻습니다.").format(
             name=out_name or tr("{stem}_서명.pdf").format(stem=Path(file_name).stem if file_name else "")))
         note.setWordWrap(True)
         v.addWidget(note)

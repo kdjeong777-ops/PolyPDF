@@ -683,7 +683,7 @@ class SignDraftMixin:
                 "certify_one_page": tr("'인증 — 변경 금지' 는 서명 하나에만 할 수 있습니다(뒤따르는 서명도 변경이 됩니다)."),
                 "tsa_failed": tr("타임스탬프 기관에서 시각을 받지 못해 서명하지 않았습니다. 주소·인터넷을 확인하거나 타임스탬프를 끄고 서명하세요.\n({d})").format(d=e.detail[:120]),
                 "need_doc_password": tr("암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."),
-                "unreadable": tr("이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."),
+                "unreadable": tr("이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPinax 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요."),
                 "no_font": tr("겉모양 글자에 쓸 한글 글꼴이 없습니다. 서명 그림을 고르거나 겉모양 글자를 끄세요.")
                 }.get(e.reason, tr("서명하지 못했습니다: {e}").format(e=e.detail or e.reason))
 

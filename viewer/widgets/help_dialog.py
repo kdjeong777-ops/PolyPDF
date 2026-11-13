@@ -26,7 +26,7 @@ def usage_html() -> str:
 class HelpDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("PolyPDF — 사용법"))
+        self.setWindowTitle(tr("PolyPinax — 사용법"))
         self.resize(760, 680)
 
         layout = QVBoxLayout(self)

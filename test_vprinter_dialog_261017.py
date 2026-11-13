@@ -49,7 +49,7 @@ dlg.deleteLater()
 
 # C — Ghostscript 없음 안내
 src = io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer", "vprinter_recv.py"), encoding="utf-8").read()
-chk("'수리' 하세요" not in src and src.count("PolyPDF 를 다시 설치하세요") == 2, "C Ghostscript 가 없으면 '다시 설치' 를 권한다(수리 아님)")
+chk("'수리' 하세요" not in src and src.count("PolyPinax 를 다시 설치하세요") == 2, "C Ghostscript 가 없으면 '다시 설치' 를 권한다(수리 아님)")
 
 # D — 261108-19(백신 오인 줄이기): 설치본은 권한 올린 설치 도구를 '숨긴 창' 으로 띄우지 않는다(창을 만들지 않는 실행이라 보이는 것은 같다)
 import win32con

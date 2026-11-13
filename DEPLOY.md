@@ -1,4 +1,4 @@
-# PolyPDF 배포 & 자동 업데이트 가이드 (260618-11)
+# PolyPinax 배포 & 자동 업데이트 가이드 (260618-11)
 
 사용자가 **도움말 → 업데이트 확인…** 으로 새 버전을 받고, **[업데이트]** 한 번으로
 자동 교체·재시작되게 하는 구성입니다. (GitHub Releases 기반, 공개 저장소)
@@ -19,7 +19,7 @@
 - 앱이 **전체 릴리스 목록에서 최고 SemVer 태그**(예 `v2.26.0`)를 `__version__` 과 비교
   (`components` 등 비버전·draft 제외). 새 버전이면 **`update` zip 자산을 우선**(없으면 full)
   **앱이 켜진 채 먼저 내려받고 검증**한 뒤(취소·실패면 앱을 닫지 않음) 앱을 닫고, 설치 도우미가
-  **다른 PolyPDF 창을 모두 닫고 0개인지 확인** → 설치 폴더 **덮어쓰기(없는 파일은 보존)** → 재실행.
+  **다른 PolyPinax 창을 모두 닫고 0개인지 확인** → 설치 폴더 **덮어쓰기(없는 파일은 보존)** → 재실행.
 - **릴리스 설명은 커밋 메시지로 만든다**: `release.yml` 이 `scripts/release_notes.py <태그> notes.md` 로
   이전 `v*` 태그부터의 커밋 제목·본문 항목을 모아 `--notes-file` 로 올린다(`--generate-notes` 는 PR 기준이라
   PR 없이 커밋하는 이 저장소에서는 링크 한 줄만 남았다). 커밋 메시지가 곧 사용자가 보는 설명이다.
@@ -43,7 +43,7 @@
 ```powershell
 cd C:\My\PolyPDF\public
 # git init·첫 커밋은 이미 되어 있을 수 있음(git log 로 확인). 없으면:
-#   git init; git add .; git commit -m "PolyPDF v2.23.0"
+#   git init; git add .; git commit -m "PolyPinax v2.23.0"
 
 gh auth login
 gh repo create PolyPDF --public --source . --remote origin --push
@@ -84,7 +84,7 @@ CI를 쓰지 않거나 빠르게 올릴 때:
 .\build_ci.bat
 powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # full + update zip 2종 생성
 python scripts\release_notes.py v2.26.0 notes.md                         # 릴리스 설명(커밋 메시지로)
-gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip PolyPDF-v2.26.0-win64.zip.sha256 PolyPDF-v2.26.0-win64-update.zip.sha256 --title "PolyPDF v2.26.0" --notes-file notes.md
+gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip PolyPDF-v2.26.0-win64.zip.sha256 PolyPDF-v2.26.0-win64-update.zip.sha256 --title "PolyPinax v2.26.0" --notes-file notes.md
 #   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.26.0 → 두 zip 업로드)
 ```
 
@@ -170,7 +170,7 @@ gh release create components ffmpeg.exe tesseract.zip --title "Components (ffmpe
 
 ```powershell
 # 베타(나이트리) 올리기 — 프리릴리즈 태그로 push (CI 가 zip+설치본 생성)
-cd C:\My\PolyPDF\public; git tag -a v2.42.0-beta.1 -m "PolyPDF v2.42.0-beta.1"; git push origin main v2.42.0-beta.1
+cd C:\My\PolyPDF\public; git tag -a v2.42.0-beta.1 -m "PolyPinax v2.42.0-beta.1"; git push origin main v2.42.0-beta.1
 #   260628-6: prerelease 표시는 **release.yml 이 자동 부여**한다(태그에 '-' 가 있으면
 #   --prerelease, 없으면 --latest). 수동 `gh release edit` 불필요.
 ```
@@ -204,8 +204,8 @@ zip(압축 풀어 실행) 외에 **정식 설치 프로그램**도 함께 배포
 
 설치본이 하는 일:
 - `C:\Program Files\PolyPDF` 에 설치(관리자 권한), 시작 메뉴·(선택)바탕화면 바로가기.
-- **PDF 기본 앱 연결**(체크박스, 기본 꺼짐): PolyPDF 를 `.pdf` 연결 후보로 **등록**(ProgID·RegisteredApplications)
-  하고, 설치 후 **Windows '기본 앱' 설정창**을 열어 사용자가 `.pdf → PolyPDF` 를 직접 선택하게 함.
+- **PDF 기본 앱 연결**(체크박스, 기본 꺼짐): PolyPinax 를 `.pdf` 연결 후보로 **등록**(ProgID·RegisteredApplications)
+  하고, 설치 후 **Windows '기본 앱' 설정창**을 열어 사용자가 `.pdf → PolyPinax` 를 직접 선택하게 함.
   > Windows 10/11 은 보안상 설치 프로그램이 기본 앱을 **자동 강제 지정할 수 없음** → 등록+안내가 정상 방식.
   > (앱은 `PolyPDF.exe "<file.pdf>"` 인자를 처리하므로 연결 시 더블클릭으로 열림.)
 - **API 키 안내**: 설치 마지막에 `guide_ko.txt`(무료 오픈API 4종 — 표준국어대사전·우리말샘·온용어·법제처 OC —
@@ -232,5 +232,5 @@ zip(압축 풀어 실행) 외에 **정식 설치 프로그램**도 함께 배포
   ffmpeg.exe 를 Windows 보안 예외에 추가하면 됩니다.
 - **가상 프린터(백신)**: 포트 모니터 `polypdfmon.dll`(System32 에 복사, 스풀러가 SYSTEM 으로 싣는다)과 동봉 Ghostscript 는
   서명되지 않은 실행 코드라 백신이 오탐할 수 있습니다. 설치 도구는 즉석 컴파일을 하지 않습니다(그 방식은 알약이 잡았다).
-  설치 실패는 `%ProgramData%\PolyPDF\printer.log` 에 남고, 상태는 도구 메뉴 '가상 프린터(PolyPDF) 설치·제거…' 창에서 봅니다.
+  설치 실패는 `%ProgramData%\PolyPDF\printer.log` 에 남고, 상태는 도구 메뉴 '가상 프린터(PolyPinax) 설치·제거…' 창에서 봅니다.
 - **비공개 저장소**: 릴리스 조회에 토큰 내장이 필요해 비권장(현재 공개 전제).

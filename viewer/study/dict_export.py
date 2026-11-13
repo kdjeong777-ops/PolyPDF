@@ -53,7 +53,7 @@ def export_tbx(store, path: str, *, source_id: Optional[str] = None) -> int:
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
            '<tbx type="TBX-Basic" style="dca" '
            'xmlns="urn:iso:std:iso:30042:ed-2" xml:lang="ko">',
-           "<tbxHeader><fileDesc><sourceDesc><p>PolyPDF terminology export"
+           "<tbxHeader><fileDesc><sourceDesc><p>PolyPinax terminology export"
            "</p></sourceDesc></fileDesc></tbxHeader>",
            "<text><body>"]
     n = 0

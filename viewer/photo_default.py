@@ -40,8 +40,8 @@ def write_user_keys(reg, exe: str, desc: str, app_name: str, app_desc: str) -> N
     reg.set(HKCU, REG_APPS, APP, CAPS)
 
 
-def prepare(exe: str, frozen: bool, reg, desc: str = "Photo (PolyPDF)", app_name: str = "PolyPDF Photo",
-            app_desc: str = "PolyPDF") -> dict:
+def prepare(exe: str, frozen: bool, reg, desc: str = "Photo (PolyPinax)", app_name: str = "PolyPinax Photo",
+            app_desc: str = "PolyPinax") -> dict:
     """→ {"kind": "dev"|"user", "uris": [...]}. 개발 실행(파이썬)은 쓰지 않는다 — `main.py` 를 연결하면 파이썬이 열린다."""
     if not frozen:
         return {"kind": "dev", "uris": []}

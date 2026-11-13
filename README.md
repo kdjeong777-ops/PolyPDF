@@ -1,4 +1,10 @@
-# PolyPDF
+# PolyPinax
+
+**폴더째 펼쳐 보는 PDF·사진 뷰어** — *A PDF & photo viewer that opens whole folders.*
+
+> **PolyPDF 가 PolyPinax 로 이름을 바꿨습니다.** 설정·검색 색인·기본 앱·작업 표시줄 고정·가상 프린터는 그대로 이어지고,
+> 설치 폴더·실행 파일(`PolyPDF.exe`)·이 저장소 주소도 그대로입니다. 그리스어 *pinax* 는 '그림을 그린 판' 이자 '목록'
+> (알렉산드리아 도서관의 첫 장서 목록 *Pinakes*)이라, 여러(*poly*) 판을 엮은 목록처럼 폴더 속 PDF·사진을 한곳에서 찾고 보고 고칩니다.
 
 한글 PDF 뷰어·편집·발표 도구 (PyQt6 + PyMuPDF). 책갈피 탐색, 다중 검색(FTS5),
 편집모드 주석(선·도형·글쓰기·지시선·이미지), 전체화면 발표(펜·포인터·녹화·하이퍼링크
@@ -69,7 +75,7 @@ python main.py            # 개발 실행 (또는 .\run.bat)
 
 ### 최초 1회
 ```powershell
-git init; git add .; git commit -m "PolyPDF 1.88.0"
+git init; git add .; git commit -m "PolyPinax 1.88.0"
 git branch -M main
 gh repo create PolyPDF --private --source . --remote origin --push   # gh CLI (또는 웹에서 repo 생성 후 remote add)
 ```

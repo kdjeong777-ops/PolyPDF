@@ -27,7 +27,8 @@ WORK = ROOT.parent                                      # 비공개 작업 폴�
 sys.path.insert(0, str(ROOT))
 sys.stdout.reconfigure(encoding="utf-8")
 
-PRINTER = "PolyPDF"
+PRINTER = "PolyPinax"          # 261114-6(마스터 §1.1): 보이는 프린터 이름(옛 이름 'PolyPDF' 는 설치 때 바뀐다)
+APP_TITLES = ("PolyPinax", "PolyPDF")   # 창 제목 머리 — 새 이름·옛 판
 INSTALLED_GS = r"C:\Program Files\PolyPDF\_internal\printer\bin\gs\gswin64c.exe"
 BANNER = "중동 지역 정세 불안 지속 대응과 성능 기반 시공 지침 개정 요구"
 
@@ -255,7 +256,7 @@ def cmd_compare(args) -> int:
             rd, gd = fitz.open(str(ref)), fitz.open(str(got))
             nup = ps_nup(str(ps))
             if nup > 1:
-                rep.note("%s — 'PolyPDF' 프린터 설정이 한 장에 %d쪽" % (name, nup), "프린터 기본 설정(인쇄 창의 프린터 속성)에서 바뀐 값")
+                rep.note("%s — '%s' 프린터 설정이 한 장에 %d쪽" % (name, PRINTER, nup), "프린터 기본 설정(인쇄 창의 프린터 속성)에서 바뀐 값")
             want = -(-rd.page_count // nup)
             rep.check(gd.page_count == want, "%s 장 수(슬라이드 %d ÷ 한 장에 %d)" % (name, rd.page_count, nup), "%d / %d" % (gd.page_count, want))
             for i in range(gd.page_count):
@@ -305,7 +306,7 @@ def polypdf_windows() -> list:
     import win32gui
     titles = []
     win32gui.EnumWindows(lambda h, _: titles.append(win32gui.GetWindowText(h)) if win32gui.IsWindowVisible(h) else None, None)
-    return [t for t in titles if t.startswith("PolyPDF")]
+    return [t for t in titles if t.startswith(APP_TITLES)]
 
 
 def dev_receiver(rep: Report):
@@ -382,7 +383,7 @@ def cmd_e2e(args) -> int:
     left = R.pending_jobs()
     rep.check(not left, "스풀 폴더가 비었다", ", ".join(Path(p).name for p in left[:3]))
     if dev is not None:                                    # 시작 때 창이 없었다 — 지금 있는 PolyPDF 창은 이 시험이 띄운 것
-        close_windows(lambda t: t.startswith("PolyPDF"))
+        close_windows(lambda t: t.startswith(APP_TITLES))
     return rep.write("e2e")
 
 

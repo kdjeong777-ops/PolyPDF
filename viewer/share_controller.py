@@ -40,7 +40,7 @@ class ShareDialog(QDialog):
         self.setWindowTitle(tr("전달"))
         last = dict(last or {})
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel(tr("PDF {n}개를 묶음 파일(.polypdf.zip)로 만듭니다.\n받는 사람이 PolyPDF 로 열면 아래 자료까지 함께 봅니다 — 원본 PDF 는 바뀌지 않습니다.").format(n=n)))
+        lay.addWidget(QLabel(tr("PDF {n}개를 묶음 파일(.polypdf.zip)로 만듭니다.\n받는 사람이 PolyPinax 로 열면 아래 자료까지 함께 봅니다 — 원본 PDF 는 바뀌지 않습니다.").format(n=n)))
         self.cb = {}
         for key, label, on in (("ocr", tr("OCR 결과·단어장(고른 낱말 포함)"), True),
                                ("fix", tr("텍스트 창 고친 글·하이라이트"), True),
@@ -83,7 +83,7 @@ class ShareMixin:
         parts = [k for k in share_bundle.PARTS if opts.get(k)]
         start = str(Path(files[0]).parent / share_bundle.default_name(files))
         out, _ = QFileDialog.getSaveFileName(self, tr("전달 묶음 저장"), start,
-                                             tr("PolyPDF 전달 묶음") + " (*" + share_bundle.SUFFIX + ")")
+                                             tr("PolyPinax 전달 묶음") + " (*" + share_bundle.SUFFIX + ")")
         if not out:
             return ""
         if not out.lower().endswith(share_bundle.SUFFIX):
@@ -209,7 +209,7 @@ class ShareMixin:
         here = zp.parent / zp.name[: -len(".polypdf.zip")] if zp.name.lower().endswith(".polypdf.zip") else zp.parent / zp.stem
         box = QMessageBox(self)
         box.setWindowTitle(tr("전달 묶음 열기"))
-        box.setText(tr("PolyPDF 전달 묶음 — PDF {n}개\n\n풀 폴더: {here}").format(n=n, here=here))
+        box.setText(tr("PolyPinax 전달 묶음 — PDF {n}개\n\n풀 폴더: {here}").format(n=n, here=here))
         b_here = box.addButton(tr("여기에 풀기"), QMessageBox.ButtonRole.AcceptRole)
         b_pick = box.addButton(tr("다른 폴더"), QMessageBox.ButtonRole.ActionRole)
         box.addButton(tr("취소"), QMessageBox.ButtonRole.RejectRole)

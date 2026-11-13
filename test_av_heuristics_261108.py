@@ -219,7 +219,7 @@ try:
     mw2.close()
     app.processEvents()
     chk(("close-req", [999999]) in log, "D3 다른 창에 먼저 닫기 요청", str(log))
-    chk(any(x[0] == "warn" and "다른 PolyPDF 창" in x[1] for x in log) and not launched,
+    chk(any(x[0] == "warn" and "다른 PolyPinax 창" in x[1] for x in log) and not launched,
         "D3 남으면 묻고, '아니오' 면 설치본을 실행하지 않는다", str(log))
     chk(not any(x[0] == "warn" and "업그레이드 시작" in x[1] for x in log), "D3 거절은 '시작 실패' 경고가 아니다", str(log))
 

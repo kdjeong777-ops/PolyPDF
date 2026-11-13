@@ -117,7 +117,7 @@ chk("느려질 수 있으니" in dlg.lbl_hint.text() and "끝난 뒤에 작업" 
 chk(not dlg.btn_hide.autoDefault() and not dlg.btn_hide.isDefault(), "④ 숨기기 버튼 Enter 비기본(디자인 §2.7)")
 # 261012-15(사용자 보고): 제목은 하는 일('인덱싱'), 파일 이름이 길어져도 막대가 흔들리지 않는다
 chk("인덱싱하는 중" in dlg.lbl_title.text() and "표본폴더" in dlg.lbl_title.text()
-    and "폴더를 준비" not in dlg.lbl_title.text() and dlg.windowTitle() == "PolyPDF — 인덱싱",
+    and "폴더를 준비" not in dlg.lbl_title.text() and dlg.windowTitle() == "PolyPinax — 인덱싱",
     "④ 261012-15: 제목이 '인덱싱하는 중입니다 — 폴더명'(종전 '폴더를 준비하는 중입니다')", dlg.lbl_title.text())
 _names = ["a.pdf",
           "ASTM CONSIDERATION OF HOT-MIX ASPHALT THERMAL PROPERTIES DURING COMPACTION " * 3 + ".pdf",
@@ -132,8 +132,8 @@ chk(len(_ys) == 1 and len(_hs) == 1 and len(_ws) == 1,
 dlg.on_progress(4, 10, _names[2]); app.processEvents()
 chk(dlg.lbl_file.text().endswith(".pdf") and "…" in dlg.lbl_file.text() and dlg.lbl_file.toolTip() == _names[2],
     "④ 261012-15: 넘치는 이름은 가운데를 줄이고(끝 .pdf 보임) 전체는 툴팁", dlg.lbl_file.text()[-30:])
-dlg.set_phase("목록을 조사하는 중입니다", "", "PolyPDF — 목록 조사"); app.processEvents()
-chk(dlg.windowTitle() == "PolyPDF — 목록 조사" and "표본폴더" in dlg.lbl_title.text(),
+dlg.set_phase("목록을 조사하는 중입니다", "", "PolyPinax — 목록 조사"); app.processEvents()
+chk(dlg.windowTitle() == "PolyPinax — 목록 조사" and "표본폴더" in dlg.lbl_title.text(),
     "④ 261012-15: 목록 조사 단계는 창 제목도 그 일로(폴더명 유지)", dlg.windowTitle())
 dlg.btn_hide.click(); app.processEvents()
 chk(not dlg.isVisible() and dlg._hidden_by_user, "④ [아래로 숨기기] → 창만 닫힘")

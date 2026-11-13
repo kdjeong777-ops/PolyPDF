@@ -187,7 +187,7 @@ def exe_for_build(a, out: Path) -> Path:
 def installed_info():
     ps = ("$k = Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',"
           "'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue |"
-          " Where-Object { $_.DisplayName -like 'PolyPDF*' } | Select-Object -First 1;"
+          " Where-Object { $_.DisplayName -like 'PolyPinax*' -or $_.DisplayName -like 'PolyPDF*' } | Select-Object -First 1;"   # 261114-6: 새 이름·옛 판
           " if ($k) { $k.DisplayVersion + '|' + $k.InstallLocation }")
     r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
     dv, _, loc = r.stdout.strip().partition("|")

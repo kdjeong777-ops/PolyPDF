@@ -22,7 +22,11 @@ import sys
 import time
 from ctypes import wintypes
 
-PRINTER_NAME = "PolyPDF"
+# 261114-6(마스터 §1.1, 사용자 결정 'A안: 보이는 이름만'): 인쇄 창에 보이는 프린터 이름만 새 이름 — 드라이버·포트·모니터·
+#   예약 작업 이름은 내부 ID 그대로(바꾸면 드라이버를 다시 깔고 스풀러를 다시 시작해야 한다). 옛 이름 프린터는 설치 때 새 이름으로 바꾼다.
+PRINTER_NAME = "PolyPinax"
+LEGACY_PRINTER_NAMES = ("PolyPDF",)
+ALL_PRINTER_NAMES = (PRINTER_NAME,) + LEGACY_PRINTER_NAMES
 DRIVER_NAME = "PolyPDF"
 PORT_NAME = "PolyPDF Port"
 MONITOR_NAME = "PolyPDF Port Monitor"
@@ -232,6 +236,49 @@ def _printers() -> list:
     return [p[2] for p in win32print.EnumPrinters(flags)]
 
 
+def printer_plan(printers) -> tuple:
+    """설치 때 프린터를 어떻게 할지 — (동작, 옛 이름). 동작: 'add'(없음) · 'rename'(옛 이름만 있음 → 새 이름으로 바꿔
+    기본 프린터 지정·인쇄 기본 설정을 지킨다) · 'keep'(새 이름 있음 — 옛 이름도 있으면 그 옛 것을 지운다). 261114-6."""
+    names = list(printers or ())
+    legacy = next((n for n in LEGACY_PRINTER_NAMES if n in names), None)
+    if PRINTER_NAME in names:
+        return ("keep", legacy)
+    if legacy:
+        return ("rename", legacy)
+    return ("add", None)
+
+
+def _delete_printer(name: str) -> None:
+    import win32print
+    h = win32print.OpenPrinter(name, {"DesiredAccess": win32print.PRINTER_ALL_ACCESS})
+    try:
+        try:
+            win32print.SetPrinter(h, 0, None, 3)        # PRINTER_CONTROL_PURGE — 대기 작업 지우기
+        except Exception:
+            pass
+        win32print.DeletePrinter(h)
+    finally:
+        win32print.ClosePrinter(h)
+
+
+def _rename_printer(old: str, default: str) -> bool:
+    """옛 이름 프린터를 새 이름으로(SetPrinter 2 의 pPrinterName). 기본 프린터였으면 새 이름을 기본으로. 261114-6."""
+    import win32print
+    h = win32print.OpenPrinter(old, {"DesiredAccess": win32print.PRINTER_ALL_ACCESS})
+    try:
+        pinfo = win32print.GetPrinter(h, 2)
+        pinfo["pPrinterName"] = PRINTER_NAME
+        win32print.SetPrinter(h, 2, pinfo, 0)
+    finally:
+        win32print.ClosePrinter(h)
+    if default == old:
+        try:
+            win32print.SetDefaultPrinter(PRINTER_NAME)
+        except Exception:
+            pass
+    return PRINTER_NAME in _printers()
+
+
 def _driver_exists() -> bool:
     import win32print
     try:
@@ -252,10 +299,10 @@ def state() -> dict:
         "dll": os.path.exists(os.path.join(_sys32(), MONITOR_DLL)),
         "port": port_exists(),
         "driver": _driver_exists(),
-        "printer": PRINTER_NAME in _printers(),
+        "printer": any(n in _printers() for n in ALL_PRINTER_NAMES),   # 261114-6: 옛 이름도(다음 설치 때 새 이름으로)
         "ppd": os.path.exists(os.path.join(driver_dir(), "3", PPD_NAME)),
         "spool": os.path.isdir(spool_root()),
-        "default": default == PRINTER_NAME,
+        "default": default in ALL_PRINTER_NAMES,
     }
 
 
@@ -411,7 +458,22 @@ def install(src: str | None = None) -> int:
             return EXIT_FAIL
         info("install", "드라이버 등록(PSCRIPT5: %s)" % ps)
 
-    # 4) 프린터
+    # 4) 프린터 — 옛 이름(PolyPDF)만 있으면 새 이름으로 바꾸고, 둘 다 있으면 옛 것을 지운다(261114-6, printer_plan)
+    action, legacy = printer_plan(_printers())
+    if action == "rename":
+        try:
+            if _rename_printer(legacy, default):
+                info("install", "프린터 이름 바꿈: %s → %s" % (legacy, PRINTER_NAME))
+                if default == legacy:
+                    default = PRINTER_NAME              # 아래 '기본 프린터 되돌림' 이 옛 이름으로 되돌리지 않게
+        except Exception as ex:
+            info("install", "프린터 이름 바꾸기 실패(%s) — 새로 만든다" % ex)
+    elif action == "keep" and legacy:
+        try:
+            _delete_printer(legacy)
+            info("install", "옛 이름 프린터 지움: " + legacy)
+        except Exception as ex:
+            info("install", "옛 이름 프린터 지우기 실패: %s" % ex)
     if PRINTER_NAME not in _printers():
         ok = False
         for i in range(5):
@@ -465,17 +527,11 @@ def remove(keep: bool = False) -> int:
         info("remove", "업그레이드 — 프린터 유지")
         return EXIT_OK
     import win32print
-    if PRINTER_NAME in _printers():
-        h = win32print.OpenPrinter(PRINTER_NAME, {"DesiredAccess": win32print.PRINTER_ALL_ACCESS})
-        try:
-            try:
-                win32print.SetPrinter(h, 0, None, 3)        # PRINTER_CONTROL_PURGE — 대기 작업 지우기
-            except Exception:
-                pass
-            win32print.DeletePrinter(h)
-        finally:
-            win32print.ClosePrinter(h)
-        info("remove", "프린터 지움")
+    present = _printers()
+    for name in (PRINTER_NAME,) + LEGACY_PRINTER_NAMES:      # 261114-6: 옛 이름 프린터도
+        if name in present:
+            _delete_printer(name)
+            info("remove", "프린터 지움: " + name)
     # 261017 설치 시험: 인쇄한 프로그램(PowerPoint)이 아직 프린터 핸들을 쥐고 있으면 프린터 삭제가 '대기' 로 남아
     #   드라이버 지우기(3001)·모니터 해제(3008)가 '사용 중' 으로 실패했다 → 스풀러를 다시 시작해 대기 삭제를 끝낸 뒤 다시 한다.
     def _del_driver():

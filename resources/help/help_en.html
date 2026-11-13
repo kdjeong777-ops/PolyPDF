@@ -1,5 +1,5 @@
-<!-- PolyPDF help (English) — multilingual SOT §8. Same sections as help_ko.html except its §5 (Korea-only features: §7 of the SOT), which is left out. Edit both files together (master §11.3). -->
-<h2>Using PolyPDF</h2>
+<!-- PolyPinax help (English) — multilingual SOT §8. Same sections as help_ko.html except its §5 (Korea-only features: §7 of the SOT), which is left out. Edit both files together (master §11.3). -->
+<h2>Using PolyPinax</h2>
 
 <h3>1. Getting started</h3>
 <ul>
@@ -13,8 +13,8 @@
   <li>The first time you open a folder, its text is indexed in the background (progress in the status bar).
     If search results look out of date, use <b>Tools → Index</b> (rebuild).</li>
   <li><b>Edit mode / view mode</b>: switch with the <b>Edit</b> button above the bookmark panel (blue pencil = view, red pencil = edit).
-    The mode at startup is <b>PolyPDF startup mode</b> under 'General › Startup' in Settings.</li>
-  <li><b>Tools → Install &amp; Setup → Set as Default PDF App</b>: opens the Windows Default apps page — choose PolyPDF for .pdf there
+    The mode at startup is <b>PolyPinax startup mode</b> under 'General › Startup' in Settings.</li>
+  <li><b>Tools → Install &amp; Setup → Set as Default PDF App</b>: opens the Windows Default apps page — choose PolyPinax for .pdf there
     (Windows does not let an app change the default by itself).</li>
 </ul>
 
@@ -196,11 +196,11 @@
     bookmark folder) or an <b>external link (URL)</b> (https, allowed domains). It shows as a blue button on the page. Executables are blocked.
     Hyperlinks are kept in N-up printing and exports.</li>
   <li><b>Save</b> (💾) = bookmarks, page edits, rotation and crop go into the original PDF, and annotations (lines, shapes, text, photos), hyperlinks and tags
-    are also put into the PDF <b>so other PDF viewers show them</b> (a 'PolyPDF' layer you can hide in another viewer's layer panel). Keep editing in PolyPDF and save again. Signed documents do not get the annotation copy ·
+    are also put into the PDF <b>so other PDF viewers show them</b> (a 'PolyPDF' layer you can hide in another viewer's layer panel). Keep editing in PolyPinax and save again. Signed documents do not get the annotation copy ·
     <b>Save As</b> (F12) · <b>Flattened copy</b> (Save ▸) = a <b>new file</b> (<code>_flattened.pdf</code>) with annotations, photos and hyperlinks
     flattened into the page and the content outside a crop really removed (text stays searchable; the original is untouched). Use it for programs that ignore annotations, for submissions, or to remove cropped-out content.
     Signed documents are <b>signed again</b> at the same places (your digital ID is confirmed — cancel and that signature is left out).</li>
-  <li>If <b>another PolyPDF window</b> has the file open when you save, you are asked <b>Close and Save / Save with New Name / Cancel</b>.</li>
+  <li>If <b>another PolyPinax window</b> has the file open when you save, you are asked <b>Close and Save / Save with New Name / Cancel</b>.</li>
 </ul>
 
 <h3>9. Page editing (thumbnails, edit mode)</h3>
@@ -266,10 +266,10 @@
     When creating a field you can designate the <b>signer</b> by that person's public certificate (.cer), and <b>Lock all fields in the document when this field is signed</b> prevents any further change or signature after that signature (use it on the last signature field).</li>
   <li><b>Password</b>: on a PC with Windows Hello (fingerprint · PIN) the password is locked with Windows Hello when you create the ID, and starting to sign only asks
     for Windows Hello; the opened key is used only until you confirm or cancel that signing. Without Windows Hello, keep the password in a password manager such as Google Password Manager and paste it (Ctrl+V).
-    PolyPDF never stores the password in plain text.</li>
+    PolyPinax never stores the password in plain text.</li>
   <li><b>Checking signatures</b>: a signed document shows a band above the page — ✅ Valid · Trusted / ⚠ Valid · Identity unknown / ⚠ Changed after signing / ❌ Invalid.
     <b>Signatures</b> shows the signer, time and certificate fingerprint; <b>Trust This Certificate</b> adds it (only after confirming the fingerprint with that person). <b>Save Signed Version…</b> saves the file exactly as it was when that signature was made.</li>
-  <li><b>Saving after signing</b>: saving the file again in PolyPDF (bookmarks, page edits, crop and so on) breaks the signature, so you are asked to <b>save to a new file</b>.
+  <li><b>Saving after signing</b>: saving the file again in PolyPinax (bookmarks, page edits, crop and so on) breaks the signature, so you are asked to <b>save to a new file</b>.
     If there are unsaved edits or annotations not yet in the PDF, you are asked <b>[Save and Sign]</b> — only the saved version is covered by the signature.</li>
   <li><b>Good to know</b>: a self-created digital ID shows as 'identity unknown' in the recipient's PDF viewer until they trust your public certificate (.cer).
     Changes after signing are detected even without trusting it. The signing time comes from the signing PC's clock.
@@ -329,7 +329,7 @@
 <h3>14. Keyboard shortcuts</h3>
 <table border="1" cellpadding="4" cellspacing="0">
 <tr><th>Shortcut</th><th>Action</th></tr>
-<tr><td>Ctrl+N</td><td>New window (one more PolyPDF)</td></tr>
+<tr><td>Ctrl+N</td><td>New window (one more PolyPinax)</td></tr>
 <tr><td>Ctrl+O / Ctrl+Shift+O</td><td>Open folder / open file</td></tr>
 <tr><td>Ctrl+R</td><td>Refresh (🔄 of the bookmark pane that has focus)</td></tr>
 <tr><td>Ctrl+S</td><td>Save (same as 💾 in the bookmark pane)</td></tr>
@@ -378,7 +378,7 @@
 <p>Type in the <b>Search settings</b> box at the top to keep only the matching items and highlight the matching rows. The list on the left is split into
 <b>General</b> and <b>Advanced</b>; at the bottom, <b>[OK]</b> (save and close) · <b>[Apply]</b> (save, keep the window) · <b>[Cancel]</b> (discard changes since the last Apply).</p>
 <ul>
-  <li><b>General › General</b>: Language (after restarting) · theme auto (system) / light / dark · startup (the last folder/file / a chosen folder/file / a blank screen · the last viewed page · PolyPDF startup mode) · view type (PDF only / mixed).</li>
+  <li><b>General › General</b>: Language (after restarting) · theme auto (system) / light / dark · startup (the last folder/file / a chosen folder/file / a blank screen · the last viewed page · PolyPinax startup mode) · view type (PDF only / mixed).</li>
   <li><b>General › View &amp; Paging</b>: page navigation · page-turn animation · go to the next/previous file from the last/first page · Show Ribbon.</li>
   <li><b>General › Photos</b> (mixed view type): slideshow auto-advance · backup folder for originals of straightened photos.</li>
   <li><b>General › Hashtags</b>: auto-assign file hashtags/keywords · automatic photo hashtags · photo kinds.</li>
@@ -393,12 +393,12 @@
   <li>Open this guide any time from Help → <b>User Guide</b>.</li>
   <li>Version, copyright, license (GNU AGPL v3) and open-source notices are in Help → <b>About</b>.</li>
   <li><b>Check for Updates</b>: if a new version is available, it shows <b>what changes</b> in each version.
-    Pressing [Update] <b>downloads the file first</b>, then closes all open PolyPDF windows and installs
+    Pressing [Update] <b>downloads the file first</b>, then closes all open PolyPinax windows and installs
     (if you cancel the download or it fails, nothing is closed).
     At the bottom of that window, <b>Download Updates Automatically</b> (on by default) fetches new versions in advance. <b>Also Receive Beta (Test) Versions</b> (off by default) also fetches test versions before a stable release.</li>
   <li><b>Tools → Install &amp; Setup → Install Components (recording · OCR)</b>: downloads ffmpeg for recording and the OCR engine (installed ✓ / not installed).</li>
-  <li><b>Tools → Install &amp; Setup → Install/Remove Virtual Printer</b>: when you print to the <b>'PolyPDF'</b> printer from another program
-    (PowerPoint, Word, Notepad …), it saves a PDF without a save dialog and opens it in PolyPDF. It saves next to the original file
+  <li><b>Tools → Install &amp; Setup → Install/Remove Virtual Printer</b>: when you print to the <b>'PolyPinax'</b> printer from another program
+    (PowerPoint, Word, Notepad …), it saves a PDF without a save dialog and opens it in PolyPinax. It saves next to the original file
     (or in the default save folder if the original can't be found) and adds (1), (2) if the name exists.
     Choose the save folder, black-and-white and the photo/image resolution (only larger images are reduced, to keep the PDF light) in that window. Available in the installed version only (not the portable one); it can also be installed during setup.
     Because it goes through printing, <b>hyperlinks and bookmarks are not kept</b> — use the program's own 'Save as PDF' if you need them.
@@ -431,7 +431,7 @@
   <li><b>Format conversion</b>: the File tab's 'Convert' makes Word · Hangul HWPX · text from the text read (OCR first). Right-click 'Save ▸ Convert ▸ JPEG · PNG · WebP' saves a new file in another picture format (the original is unchanged).</li>
   <li><b>Photos → PDF</b>: right-click 'Save ▸ Save as PDF' opens the Images to PDF window with the chosen photos (the thumbnail strip also offers all photos in the strip). Annotations, view rotation and crop go in as they are shown. Printing works the same way.</li>
   <li><b>Show Location on Map</b>: shows the photos that have a GPS position on a map (OpenStreetMap) in your default browser — nearby photos are grouped with their count and dates,
-    and [Select in PolyPDF] selects those photos in the app. Before map images are fetched you are told that the rough location of the visible area is sent to the map server.</li>
+    and [Select in PolyPinax] selects those photos in the app. Before map images are fetched you are told that the rough location of the visible area is sent to the map server.</li>
   <li><b>Batch</b>: rename the chosen photos (<code>new name_001</code> …) · reduce size · change format — size and format make new files; the originals are unchanged.</li>
   <li><b>Hashtags</b>: <b>automatic photo hashtags</b> in Settings 'General › Hashtags' (on by default) add date-taken, region, device and screenshot tags, and <b>photo kinds</b> adds receipt · business card · document.
     Filter with <b>#</b> in the bookmark panel (also by the start, like <code>#2026</code> or <code>#2026-11</code>).</li>

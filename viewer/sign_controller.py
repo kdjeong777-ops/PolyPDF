@@ -503,7 +503,7 @@ class SignMixin(SignDraftMixin):
                    "certified": tr("작성자가 서명 뒤 변경을 금지한 문서입니다 — 서명을 더할 수 없습니다."),
                    "certified_new_field": tr("작성자가 인증한 문서입니다 — 서명 칸을 더하면 인증이 허용하지 않은 변경이 됩니다."),
                    "need_doc_password": tr("암호 문서의 암호를 모릅니다. 권한 암호로 연 뒤 서명하세요."),
-                   "unreadable": tr("이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPDF 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요.")
+                   "unreadable": tr("이 PDF 는 그대로 서명할 수 없습니다(파일 구조 손상). 먼저 PolyPinax 로 저장(다른 이름으로 저장)해 정리한 뒤 그 파일에 서명하세요.")
                    }.get(e.reason, tr("서명 칸을 만들지 못했습니다: {e}").format(e=e.detail or e.reason))
             QMessageBox.warning(self, tr("빈 서명 칸"), msg)
             return
