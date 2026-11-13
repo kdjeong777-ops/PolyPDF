@@ -983,7 +983,9 @@ class SettingsDialog(QDialog):
         _li = self.cmb_lite_flip.findData(str(self._prefs.get("lite_flip", "auto")))
         self.cmb_lite_flip.setCurrentIndex(_li if _li >= 0 else 0)
         self.cmb_lite_flip.setToolTip(tr("켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, "
-                                         "텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다."))
+                                         "텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다. "
+                                         "책갈피창에서 파일을 옮길 때도 멈춘 파일만 열어 표지를 먼저 보여 주고, "
+                                         "썸네일 등 나머지는 멈춘 뒤 채웁니다."))   # 261114-5(응답성 SOT §4.7 ⑤)
         fl.addRow(tr("가벼운 넘김(느린 컴퓨터):"), self.cmb_lite_flip)
         layout.addWidget(grp)
         # 260609-11(C8): 하이퍼링크 버튼 상단 오프셋

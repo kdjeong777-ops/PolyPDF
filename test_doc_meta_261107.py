@@ -176,7 +176,8 @@ try:
         r = bt._op_save(pdf, quiet=True)
         pump(lambda: not doc_meta.has_pending(pdf), timeout=15)
         m = info_of(pdf)
-        chk(m["title"] == "고친 제목" and m["keywords"] == "열쇠, 낱말", "B [저장] (책갈피 그대로) → PDF 정보에", str(m))
+        # 261114-5: 자동 해시태그(261113-10 기본 켬)가 [저장] 때 키워드 끝에 붙는다(빈 쪽 시험 파일은 '스캔문서') — 고친 값이 앞에 그대로인지 본다
+        chk(m["title"] == "고친 제목" and (m["keywords"] or "").startswith("열쇠, 낱말"), "B [저장] (책갈피 그대로) → PDF 정보에", str(m))
         chk(m["_hash"] == "keep-me" and m["producer"] == "Maker" and m["author"] == "Old Author", "B 다른 키 그대로", str(m))
         chk("고친 제목" in m["_xmp"], "B XMP 도", m["_xmp"][:200])
         chk(not doc_meta.has_pending(pdf), "B 보류가 비었다")

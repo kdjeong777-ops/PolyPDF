@@ -19,6 +19,8 @@ class HistoryItem:
     query: str = ""
     origin: Origin = "bookmark"
     label: str = ""
+    # 261114-5(응답성 SOT §4.7 ⑤): 책갈피창 파일 옮김 '표지 먼저' — 여는 그 한 번에만 쓰고 저장하지 않는다(to_dict 에 없음)
+    quick: bool = False
 
     def __post_init__(self):
         if not self.label:

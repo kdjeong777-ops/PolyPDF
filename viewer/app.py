@@ -1156,7 +1156,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if i != self._active_pane:
             return
         self.page_thumbs.select_page(page)
-        if self._lite_refresh():
+        if self._lite_refresh() or self._quick_holds(i):   # 261114-5(응답성 SOT §4.7 ⑤): 표지 먼저 옮김도 멈춘 뒤
             # 261021-1(응답성 SOT §4.7 ③): 가벼운 넘김이면 텍스트 창·단어장은 넘김이 멈춘 뒤 한 번 —
             #   텍스트 창 추출(표 인식)은 배경 스레드여도 GIL 을 쥐어 다음 넘김을 끊는다.
             tp = getattr(self, "text_panel", None)
@@ -8155,7 +8155,14 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self.status.showMessage(tr('로딩 중: {name}').format(name=Path(item.file_path).name))
         try:
             path = Path(item.file_path)
+            # 261114-5(응답성 SOT §4.7 ⑤): 책갈피창 파일 옮김 '표지 먼저' — 본문 첫 쪽만, 썸네일·텍스트 창·정보 줄·서명 확인은 멈춘 뒤
+            quick = bool(getattr(item, "quick", False)) and path.suffix.lower() == ".pdf"
+            if quick:
+                self._quick_begin(self._active_pane, path)
+            else:
+                self._quick_end()
             if path.suffix.lower() == ".pdf":
+                self.main_view.set_quick_open(quick)     # 끝(`finally`)에서 끈다 — 숨김·회전 다시 그리기(`_refresh_hidden_ui`)도 낱말을 읽지 않게
                 ok = self.main_view.load_document(
                     path, page_index=item.page_index or 0, query=item.query
                 )
@@ -8167,7 +8174,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                     note_warm(path)              # 261108-22(§4.9): 연 파일 — 다시 열 때는 데우지 않는다
                 except Exception:
                     pass
+                if quick:
+                    self.page_thumbs.hold_render()             # 261114-5: 썸네일은 옮김이 멈춘 뒤(`_quick_thumbs_fire`)
+                elif self.page_thumbs.is_render_held():
+                    self.page_thumbs.release_render(False)
                 self.page_thumbs.load_document(path)
+                if quick:
+                    self.page_thumbs.seed_page(self.main_view.current_page(), self.main_view.current_page_pixmap())
                 self._hist_pages_baseline()            # 261012-10(§4.6.8): 쪽 편집 되돌리기 기준
                 # 260902-6(사용자 보고): 이전 파일로 넘어가면 본문은 마지막 쪽인데 썸네일은
                 #   맨 위(row -1)에 머물렀다 — load_document 의 pageChanged 가 썸네일 재로드
@@ -8179,7 +8192,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 self._study_pdf = path           # 단어장 컨텍스트
                 # 261103-12(응답성 SOT §4.4): 단어장 창이 보일 때만 — 숨은 창 때문에 메인이 사전·NLTK 를
                 #   읽지 않는다(빌드 측정 9.35초 정지). 보이게 되면 shownChanged 가 그 쪽으로 다시 그린다.
-                if self.study_panel.isVisible():
+                if self.study_panel.isVisible() and not quick:   # 261114-5: 표지 먼저면 멈춘 뒤(`_lite_follow` → 단어장)
                     self._refresh_study_panel(item.page_index or 0)
                 else:
                     self.main_view.set_hover_words([])
@@ -8219,24 +8232,110 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                         and mv._current_page not in set(mv._nav_pages)):
                     mv.go_to_page(mv._current_page)
             self._apply_doc_permissions()              # 260618-1: 권한 기반 UI 활성/비활성
-            self._sign_on_doc_loaded()                 # 보안 SOT §5: 서명된 문서면 배경 검증 → 띠
+            if quick:                                  # 261114-5: 서명 확인은 옮김이 멈춘 뒤(`_quick_rest_fire`) — 앞 파일 띠는 지운다
+                try:
+                    _band = getattr(self.main_view, "sign_band", None)
+                    if _band is not None:
+                        _band.clear()
+                except Exception:
+                    pass
+            else:
+                self._sign_on_doc_loaded()             # 보안 SOT §5: 서명된 문서면 배경 검증 → 띠
             # 260618-23: 책갈피 트리(상=좌/하=우) 표시/숨김만 갱신. **폴더는 바꾸지 않음** —
             #   상단 트리에서 하위폴더 파일을 클릭해도 그 창의 폴더(=열었던 폴더)는 유지.
             #   폴더 변경은 '폴더/파일 열기'(open_folder/open_pdf)에서만 일어남.
             self._sync_right_pane_bookmark()
         finally:
+            try:
+                self.main_view.set_quick_open(False)     # 261114-5
+            except Exception:
+                pass
             QApplication.restoreOverrideCursor()
 
     def _on_bookmark_activated(self, file_path: str, page_index: int):
         # 260618-22: 상단 책갈피 → 좌측 창(2단이면 좌측 활성화 후 로드)
         if getattr(self, "_split_on", False):
             self._set_active_pane(0)
-        self._load_main(HistoryItem(file_path, page_index, "", "bookmark"))
+        self._load_main(HistoryItem(file_path, page_index, "", "bookmark",
+                                    quick=self._quick_wanted(self.bookmark_tree, file_path)))
 
     def _on_bookmark_activated_right(self, file_path: str, page_index: int):
         """260618-22: 하단 책갈피 → 우측 창에 열기."""
         self._set_active_pane(1)
-        self._load_main(HistoryItem(file_path, page_index, "", "bookmark"))
+        self._load_main(HistoryItem(file_path, page_index, "", "bookmark",
+                                    quick=self._quick_wanted(self.bookmark_tree_right, file_path)))
+
+    # ===== 261114-5(응답성 SOT §4.7 ⑤, 사용자 지시·결정): 책갈피창 파일 옮김 — 표지 먼저, 나머지는 멈춘 뒤 =====
+    QUICK_THUMBS_MS = 150     # 옮김이 이만큼 멈추면 보이는 썸네일
+    QUICK_REST_MS = 450       # 이만큼 멈추면 나머지(한 화면 아래 썸네일·쪽 낱말·문서 정보 줄·서명 확인)
+
+    def _quick_wanted(self, tree, file_path) -> bool:
+        """책갈피창이 '표지 먼저' 로 내보낸 옮김인가 — 이미 그 창에 열린 파일이면 종전대로(다시 여는 일은 같다)."""
+        try:
+            if not tree.last_nav_quick():
+                return False
+            from viewer.pathutil import norm_key
+            cur = self.main_view.current_file() if self.main_view else None
+            return not (cur and norm_key(str(cur)) == norm_key(str(file_path)))
+        except Exception:
+            return False
+
+    def _quick_holds(self, pane: int) -> bool:
+        """그 창이 '표지 먼저' 로 연 뒤 뒤처리를 미루고 있나 — 텍스트 창·문서 정보 줄이 묻는다."""
+        q = self.__dict__.get("_quick_cur")
+        return bool(q) and q[0] == pane
+
+    def _quick_begin(self, pane: int, path) -> None:
+        self._quick_cur = (pane, str(path))
+        for name, ms, fn in (("_quick_thumbs_t", self.QUICK_THUMBS_MS, self._quick_thumbs_fire),
+                             ("_quick_rest_t", self.QUICK_REST_MS, self._quick_rest_fire)):
+            t = self.__dict__.get(name)
+            if t is None:
+                t = QTimer(self)
+                t.setSingleShot(True)
+                t.timeout.connect(fn)
+                setattr(self, name, t)
+            t.start(ms)                                   # 옮길 때마다 다시 — 멈춘 뒤에만 돈다
+
+    def _quick_end(self) -> None:
+        """보통 열기·뒤처리 끝 — 미룬 것이 없다."""
+        self._quick_cur = None
+        for name in ("_quick_thumbs_t", "_quick_rest_t"):
+            t = self.__dict__.get(name)
+            if t is not None:
+                t.stop()
+
+    def _quick_thumbs_fire(self) -> None:
+        if self.__dict__.get("_quick_cur") and self.page_thumbs.is_render_held():
+            self.page_thumbs.release_render(True)         # 보이는 칸만 먼저(사용자 지시 '화면에 1차로 보이는 썸네일')
+
+    def _quick_rest_fire(self) -> None:
+        q = self.__dict__.get("_quick_cur")
+        self._quick_cur = None
+        try:
+            self.page_thumbs.release_render(False)        # 한 화면 아래까지 — 종전 미리 그리기
+        except Exception:
+            pass
+        if not q:
+            return
+        pane, path = q
+        mv = self._mv[pane] if pane < len(self._mv) else None
+        try:
+            from viewer.pathutil import norm_key
+            if mv is None or not mv.current_file() or norm_key(str(mv.current_file())) != norm_key(path):
+                return                                    # 그 사이 다른 것을 열었다 — 그 열기가 제 일을 했다
+        except Exception:
+            return
+        try:
+            mv.ensure_page_words()
+        except Exception:
+            pass
+        self._doc_info_refresh(pane)
+        if pane == self._active_pane:
+            try:
+                self._sign_on_doc_loaded()
+            except Exception:
+                pass
 
     def _on_file_password_entered(self, file_path: str):
         """260618-1: 책갈피창 우클릭 '암호 입력' 성공 — 그 파일이 현재 열려 있으면

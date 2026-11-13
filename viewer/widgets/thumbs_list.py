@@ -149,6 +149,10 @@ class PageThumbs(QWidget):
         self._render_timer.setSingleShot(True)
         self._render_timer.setInterval(16)    # 260611-12: 80→16ms(한 프레임) — 더 빨리 표시
         self._render_timer.timeout.connect(self._render_visible)
+        # 261114-5(응답성 SOT §4.7 ⑤): 파일 옮김 '표지 먼저' — 붙들면 그리지 않고, 풀 때 보이는 칸만 먼저
+        self._render_hold = False
+        self._visible_only = False
+        self._seed_pix = {}           # {쪽: 본문이 그린 픽스맵} — 그 쪽 썸네일은 그것을 줄여 쓴다(`seed_page`)
         # 260915-1(마스터 §4.7.7): 목록 순서가 바뀌면(Alt+↑/↓·Delete·끌어 놓기·붙여넣기) 한 번만 알린다.
         #   끌어 놓기는 Qt 가 행을 넣고 지우는 신호로만 알 수 있어 모델 신호를 모은다.
         #   간격 0 타이머는 쓰지 않는다(응답성 SOT §6) — 한 번만 예약하는 깃발로 모은다.
@@ -1149,6 +1153,7 @@ class PageThumbs(QWidget):
         self._drop_staged_temps()                   # 260930-1(§4.7.11): 사진 임시 파일도 함께
         self.list.clear()
         self._iconed = {}
+        self._seed_pix = {}
         self._doc_path = None
         self._doc_mtime = None
 
@@ -1187,6 +1192,7 @@ class PageThumbs(QWidget):
         self._drop_staged_temps()                   # 260930-1(§4.7.11): 사진 임시 파일도 함께
         self.list.clear()
         self._iconed = {}
+        self._seed_pix = {}                         # 261114-5: 앞 문서 표지는 버린다
 
         if not path.exists() or path.suffix.lower() != ".pdf":
             self._doc_path = None; self._doc_mtime = None
@@ -1221,6 +1227,26 @@ class PageThumbs(QWidget):
         # 260611-12: 첫 화면을 즉시 렌더(레이아웃 확정 후) — '늦게 뜨는' 체감 완화
         QTimer.singleShot(0, self._render_visible)
 
+    def hold_render(self) -> None:
+        """261114-5(응답성 SOT §4.7 ⑤): 썸네일 그리기를 붙든다 — 파일을 잇달아 옮기는 동안(앱이 `release_render` 로 푼다)."""
+        self._render_hold = True
+        self._render_timer.stop()
+
+    def release_render(self, visible_only: bool) -> None:
+        """붙든 그리기를 푼다 — `visible_only` 면 보이는 칸만(한 화면 아래 미리 그리기는 다음 `release_render(False)` 에)."""
+        self._render_hold = False
+        self._visible_only = bool(visible_only)
+        self._render_timer.start()
+
+    def is_render_held(self) -> bool:
+        return bool(self._render_hold)
+
+    def seed_page(self, page_index: int, pix) -> None:
+        """본문이 막 그린 그 쪽 픽스맵을 썸네일로 쓰게 둔다 — 그림 많은 표지는 한 번 그리는 데 0.8초(실측 document1.pdf)라 두 번 그리지 않는다.
+        `load_document` 뒤에 부른다(열 때 비운다). 회전한 쪽은 쓰지 않는다(본문 픽스맵은 이미 돌아가 있다)."""
+        if pix is not None and not pix.isNull() and page_index is not None and page_index >= 0:
+            self._seed_pix = {int(page_index): pix}
+
     def select_page(self, page_index: int):
         """260618-9: 메인뷰 페이지 동기 — 현재 페이지 표시.
         단, 사용자가 Shift/Ctrl 로 여러 썸네일을 선택 중이면 그 선택을 지우지 않고
@@ -1252,12 +1278,12 @@ class PageThumbs(QWidget):
 
         이제 `RENDER_SLICE_MS` 를 넘기면 남은 것은 타이머에 넘기고 즉시 돌아온다.
         화면에 차는 속도는 사실상 그대로고(한 틱에 여러 장), 창은 계속 살아 있다."""
-        if not self._doc:
+        if not self._doc or self._render_hold:
             return
         import time as _time
         # 260611-12: 보이는 영역 + 한 화면 아래까지 미리 렌더 → 스크롤 시 '뒤늦게 뜸' 완화
         vr = self.list.viewport().rect()
-        viewport = vr.adjusted(0, -vr.height(), 0, vr.height())
+        viewport = vr if self._visible_only else vr.adjusted(0, -vr.height(), 0, vr.height())
         deadline = _time.monotonic() + self.RENDER_SLICE_MS / 1000.0
         for i in range(self.list.count()):
             item = self.list.item(i)
@@ -1276,10 +1302,15 @@ class PageThumbs(QWidget):
                 self._render_ext_item(item, str(page_idx[0]), int(page_idx[1]))
                 continue
             try:
-                rp = self._doc.render_thumbnail(page_idx, dpi=self._thumb_dpi())
-                qimg = QImage(rp.samples, rp.width, rp.height,
-                              rp.width * 3, QImage.Format.Format_RGB888)
-                pix = QPixmap.fromImage(qimg)
+                seed = self._seed_pix.pop(int(page_idx), None) if self._seed_pix else None
+                if seed is not None and not seed.isNull() and not self._rotations.get(int(page_idx), 0):
+                    pix = QPixmap(seed)                      # 261114-5(응답성 SOT §4.7 ⑤): 본문이 막 그린 표지 — 다시 그리지 않는다
+                    pix.setDevicePixelRatio(1.0)
+                else:
+                    rp = self._doc.render_thumbnail(page_idx, dpi=self._thumb_dpi())
+                    qimg = QImage(rp.samples, rp.width, rp.height,
+                                  rp.width * 3, QImage.Format.Format_RGB888)
+                    pix = QPixmap.fromImage(qimg)
                 # 260611-18(A5): 삽입 이미지(개체) 베이킹 — 회전 전(정규화 좌표) 합성
                 if self._img_resolver is not None:
                     bp = QPainter(pix)

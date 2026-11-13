@@ -73,6 +73,9 @@ class DocInfoMixin:
         host = getattr(self, "page_nav_host", None)
         if host is None:
             return
+        if getattr(self, "_quick_holds", None) is not None and self._quick_holds(i):
+            host.info_line(i).set_info(None)                    # 261114-5(응답성 SOT §4.7 ⑤): 파일 옮김 중 — 멈춘 뒤 읽는다(배경 읽기도 GIL 을 쥔다)
+            return
         st = self._doc_info_state[i]
         doc = self._doc_info_pdf(i)
         if doc is None:

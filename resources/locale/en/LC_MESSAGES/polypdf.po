@@ -4342,9 +4342,10 @@ msgstr "🔋 Light page turning"
 
 # | 따라갑니다. 환경설정의 '패널 툴바' 묶음에서 바꿀 수 있습니다."
 # | 따라갑니다. 환경설정의 '세부 줄 (메뉴 탭 아래 한 줄)' 묶음에서 바꿀 수 있습니다."
+# | 따라갑니다. 환경설정 '고급 › 세부 조정' 에서 바꿀 수 있습니다."
 #: viewer/lite_controller.py
-msgid "쪽이 부드럽게 넘어가도록 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라갑니다. 환경설정 '고급 › 세부 조정' 에서 바꿀 수 있습니다."
-msgstr "To keep page turning smooth, the page-turn animation is off, pages in between are skipped when you turn several in a row, and the Text pane follows once you stop. You can change this in Settings under 'Advanced › Fine-tuning'."
+msgid "쪽이 부드럽게 넘어가도록 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라갑니다. 책갈피창에서 파일을 옮기면 멈춘 파일의 표지를 먼저 보여 줍니다. 환경설정 '고급 › 세부 조정' 에서 바꿀 수 있습니다."
+msgstr "To keep page turning smooth, the page-turn animation is off, pages in between are skipped when you turn several in a row, and the Text pane follows once you stop. When you move between files in the Bookmarks panel, the cover of the file you stop on is shown first. You can change this in Settings under 'Advanced › Fine-tuning'."
 
 # | 있습니다."
 # | 묶음에서 바꿀 수 있습니다."
@@ -11984,9 +11985,10 @@ msgstr "Automatic (power saving or slow page turning)"
 msgid "항상"
 msgstr "Always"
 
+# | 그려 둡니다."
 #: viewer/widgets/settings_dialog.py
-msgid "켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다."
-msgstr "When on, the page-turn animation is off, pages in between are skipped when you turn several in a row, the Text pane follows once you stop, and the next pages are drawn in advance."
+msgid "켜지면 넘김 애니메이션을 끄고, 잇달아 넘기면 가운데 쪽은 건너뛰며, 텍스트 창은 넘김이 멈춘 뒤 따라가고, 다음 쪽을 미리 그려 둡니다. 책갈피창에서 파일을 옮길 때도 멈춘 파일만 열어 표지를 먼저 보여 주고, 썸네일 등 나머지는 멈춘 뒤 채웁니다."
+msgstr "When on, the page-turn animation is off, pages in between are skipped when you turn several in a row, the Text pane follows once you stop, and the next pages are drawn in advance. When moving between files in the Bookmarks panel, only the file you stop on is opened and its cover is shown first; thumbnails and the rest fill in once you stop."
 
 #: viewer/widgets/settings_dialog.py
 msgid "가벼운 넘김(느린 컴퓨터):"

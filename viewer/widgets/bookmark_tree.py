@@ -2685,33 +2685,113 @@ class BookmarkTree(QWidget):
         if self._is_zip_path(path) and not self._photo_on():
             item.setExpanded(not item.isExpanded())      # PDF 모드 zip 줄은 펼치기/접기(본문에 zip 을 열지 않는다)
             return
+        quick = False
         if not self._photo_on() and self._keep_collapsed(item):
             item.setExpanded(True)                       # 261114-3(§4.7.3): 모두 접기 상태 — Enter·마우스 누름 때만 펼친다(→ 는 Qt 기본)
+        elif path and not self._photo_on():
+            try:                                         # 261114-5(응답성 SOT §4.7 ⑤): 가벼운 넘김이면 누름도 표지 먼저
+                from viewer import perf_mode
+                quick = perf_mode.is_lite()
+            except Exception:
+                quick = False
         # 260606-4: 편집 모드에서도 선택 시 해당 책갈피 위치로 메인 이동
         if self._edit_mode:
             if path:
-                self._emit_nav(path, item.data(0, self.DATA_PAGE) or 0)
+                self._emit_nav(path, item.data(0, self.DATA_PAGE) or 0, quick=quick)
             return
         if not path:
             # 가지 노드면 펼치기/접기
             item.setExpanded(not item.isExpanded())
             return
-        self._emit_nav(path, item.data(0, self.DATA_PAGE) or 0)
+        self._emit_nav(path, item.data(0, self.DATA_PAGE) or 0, quick=quick)
 
-    def _emit_nav(self, path, page):
+    def _emit_nav(self, path, page, quick: bool = False):
         """260611-61: 클릭의 이중 발화를 1회로 합치고, 선택 하이라이트가 먼저
-        그려진 뒤 이동(+암호창)이 뜨도록 지연 발행."""
-        self._pending_nav = (path, int(page or 0))
+        그려진 뒤 이동(+암호창)이 뜨도록 지연 발행.
+        261114-5(응답성 SOT §4.7 ⑤): `quick` = 파일 옮김 '표지 먼저' — 앱이 `last_nav_quick()` 으로 읽는다.
+        보통 이동(클릭·Enter)은 모아 둔 표지 먼저 옮김을 버린다."""
+        if not quick:
+            self._quick_cancel()
+        self.__dict__["_pending_nav_v"] = (path, int(page or 0), bool(quick))
         if not self._nav_scheduled:
             self._nav_scheduled = True
             QTimer.singleShot(0, self._flush_nav)
 
+    @property
+    def _pending_nav(self):
+        return self.__dict__.get("_pending_nav_v")
+
+    @_pending_nav.setter
+    def _pending_nav(self, v):
+        """앱·사진·가상 프린터가 `None` 을 넣어 예약한 이동을 버린다 — 모아 둔 표지 먼저 옮김(261114-5)도 함께 버린다."""
+        self.__dict__["_pending_nav_v"] = v
+        if v is None:
+            self._quick_cancel()
+
     def _flush_nav(self):
         self._nav_scheduled = False
-        nav = self._pending_nav
-        self._pending_nav = None
+        nav = self.__dict__.get("_pending_nav_v")
+        self.__dict__["_pending_nav_v"] = None          # 모아 둔 표지 먼저 옮김은 그대로 둔다(그 사이 새로 눌렀을 수 있다)
         if nav:
-            self.bookmarkActivated.emit(nav[0], int(nav[1]))
+            self._last_nav_quick = bool(nav[2]) if len(nav) > 2 else False
+            self._last_nav_path = str(nav[0])
+            try:
+                self.bookmarkActivated.emit(nav[0], int(nav[1]))
+            finally:
+                self._last_nav_quick = False
+
+    # ---- 261114-5(응답성 SOT §4.7 ⑤, 사용자 지시·결정): 파일 옮김 — 잇단 옮김 모으기 + 표지 먼저 ----
+    QUICK_HOLD_MS = 250       # 앞 옮김 뒤 이 안에 온 옮김은 모은다(마지막 것만)
+    QUICK_SETTLE_MS = 130     # 모은 옮김은 키가 이만큼 멈추면 연다
+
+    def last_nav_quick(self) -> bool:
+        """지금 내보내는 `bookmarkActivated` 가 '표지 먼저' 옮김인가 — 신호를 받는 그 자리에서만 참."""
+        return bool(self.__dict__.get("_last_nav_quick"))
+
+    def _quick_eligible(self, item, path) -> bool:
+        """표지 먼저로 옮기나 — '모두 접기' 상태의 접힌 파일 줄, 또는 가벼운 넘김이면 **다른 파일**로 옮길 때(사용자 결정 '모두 접기 상태 + 느린 PC')."""
+        if not path or self._photo_on():
+            return False
+        if self._keep_collapsed(item):
+            return True
+        try:
+            from viewer import perf_mode
+            if not perf_mode.is_lite():
+                return False
+        except Exception:
+            return False
+        from viewer.pathutil import norm_key
+        last = self.__dict__.get("_last_nav_path")
+        return not last or norm_key(str(last)) != norm_key(str(path))
+
+    def _quick_nav(self, path, page) -> None:
+        """잇단 옮김은 마지막 것만 — 앞 옮김 뒤 `QUICK_HOLD_MS` 가 지났으면 곧바로, 아니면 키가 `QUICK_SETTLE_MS` 멈출 때(사용자 결정 '멈춘 파일만 열기')."""
+        import time as _t
+        now = _t.monotonic()
+        tmr = self.__dict__.get("_quick_timer")
+        if tmr is None:
+            tmr = self._quick_timer = QTimer(self)
+            tmr.setSingleShot(True)
+            tmr.timeout.connect(self._quick_fire)
+        if not tmr.isActive() and (now - self.__dict__.get("_quick_last_t", -1e9)) * 1000.0 >= self.QUICK_HOLD_MS:
+            self._quick_last_t = now
+            self._emit_nav(path, page, quick=True)
+            return
+        self._quick_pend = (path, int(page or 0))
+        tmr.start(self.QUICK_SETTLE_MS)
+
+    def _quick_fire(self) -> None:
+        pend = self.__dict__.pop("_quick_pend", None)
+        if pend is not None:
+            import time as _t
+            self._quick_last_t = _t.monotonic()
+            self._emit_nav(pend[0], pend[1], quick=True)
+
+    def _quick_cancel(self) -> None:
+        tmr = self.__dict__.get("_quick_timer")
+        if tmr is not None:
+            tmr.stop()
+        self.__dict__.pop("_quick_pend", None)
 
     def _on_current_changed(self, cur, _prev):
         """260611-60: 선택 항목 변경 시(키보드 이동 포함) 파일/페이지로 이동.
@@ -2729,6 +2809,9 @@ class BookmarkTree(QWidget):
         if self._is_zip_path(path) and not self._photo_on():
             return                                       # 261106-5(§4.24.1): PDF 모드 zip 줄은 본문에 열지 않는다
         if path and not cur.data(0, self.DATA_IS_TOC_PLACEHOLDER):
+            if self._quick_eligible(cur, path):          # 261114-5(응답성 SOT §4.7 ⑤)
+                self._quick_nav(path, cur.data(0, self.DATA_PAGE) or 0)
+                return
             self._emit_nav(path, cur.data(0, self.DATA_PAGE) or 0)
 
     # ---- 260606-4: 더블클릭 편집 / 우클릭 메뉴 / 변경 추적 ----------------
