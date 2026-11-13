@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-13 23:42+0900\n"
+"POT-Creation-Date: 2026-11-13 23:56+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -11943,6 +11943,11 @@ msgstr "Automatic photo hashtags (date taken, region, device, screenshot)"
 msgid "사진 종류도 구분 (영수증·명함·서류 — 글자 있는 사진만 OCR)"
 msgstr "Also detect photo type (receipt, business card, document — OCR only on photos with text)"
 
+# | 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다.</small>"
+#: viewer/widgets/settings_dialog.py
+msgid "사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다."
+msgstr "Added in the background when you open a folder in Photo mode. Locations are looked up in the bundled boundary data and never sent anywhere (Korea only). Text read for type detection is not saved."
+
 #: viewer/widgets/settings_dialog.py
 msgid " 개"
 msgstr " items"
@@ -12083,11 +12088,6 @@ msgstr "Turn off for more vertical space in the main viewer. Clicking a menu tab
 #: viewer/widgets/settings_dialog.py
 msgid "슬라이드쇼 자동 넘김:"
 msgstr "Slideshow auto-advance:"
-
-# | 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다.</small>"
-#: viewer/widgets/settings_dialog.py
-msgid "사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다."
-msgstr "Added in the background when you open a folder in Photo mode. Locations are looked up in the bundled boundary data and never sent anywhere (Korea only). Text read for type detection is not saved."
 
 # | 수가 한도를 넘으면 자동으로 한도가 늘어납니다.</small>"
 #: viewer/widgets/settings_dialog.py

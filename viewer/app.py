@@ -9765,6 +9765,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         sc_before = dict((self._prefs or {}).get("shortcuts") or {})
         cap_before = bool((self._prefs or {}).get("capture_global", False))
         col_before = list((self._prefs or {}).get("ribbon_collection") or [])
+        at_before = bool((self._prefs or {}).get("auto_tag_enabled", True))
         self._apply_prefs(new_prefs)
         self._photo_apply_view_kind()          # 261104-2(사진 보기 SOT 4.10): 바로 적용 — 재시작 없음
         if dict(self._prefs.get("shortcuts") or {}) != sc_before or bool(self._prefs.get("capture_global")) != cap_before:
@@ -9786,6 +9787,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             from viewer.auto_tag import load_rules
             if _tr.normalize(rules) != _tr.normalize(load_rules()):
                 _tr.apply(self, rules)
+        if bool(self._prefs.get("auto_tag_enabled", True)) and not at_before:
+            # 261113-10 덧붙임(태그 SOT §8.2): PDF 자동 부여를 켜면 곧바로 지금 목록부터 — 종전엔 폴더를 다시 열어야 붙었다(사용자 보고)
+            QTimer.singleShot(0, self._start_autotag_scan)
 
     def _offer_language_restart(self):
         """261008(다국어 SOT §4): 화면 언어는 재시작 뒤 적용 — 지금 언어와 새 언어로 함께 안내."""

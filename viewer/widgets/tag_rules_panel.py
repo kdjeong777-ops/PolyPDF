@@ -48,6 +48,7 @@ class TagRulesPanel(QWidget):
         v1.addWidget(_small(tr("켜고 끄기만 합니다 — 이름은 고칠 수 없습니다.")))
         lay.addWidget(g1)
 
+
         # 별칭 표 — 사진·주제 태그(§5.8). PDF 자동 해시태그 이름은 바꾸지 않는다
         g2 = QGroupBox(tr("별칭 — 이 태그 대신 붙일 이름"))
         v2 = QVBoxLayout(g2)
@@ -69,11 +70,13 @@ class TagRulesPanel(QWidget):
         hb.addStretch(1)
         v2.addLayout(hb)
         v2.addWidget(_small(tr("예: SamsungSM-S918N → GalaxyS23. 사진 장비·지역·종류 태그에도 쓰입니다.")))
-        lay.addWidget(g2)
 
-        # 자동 해시태그 (사진 모드) — 사진 머리 태그 종류(261113-10: 종전 '사진 자동 해시태그 종류')
+        # 자동 해시태그 (사진 모드) — 사진 머리 태그 종류(261113-10: 종전 '사진 자동 해시태그 종류').
+        #   261113-10 덧붙임(사용자 지시 'PDF 위·사진 아래로 모아'): 차례 PDF 모드 → 사진 모드 → 별칭, 사진 켜기 체크도 이 묶음 맨 위(attach)
         g3 = QGroupBox(tr("자동 해시태그 (사진 모드)"))
-        h3 = QHBoxLayout(g3)
+        self.photo_lay = QVBoxLayout(g3)
+        h3 = QHBoxLayout()
+        self.photo_lay.addLayout(h3)
         self.photo_chk = {}
         for key, label in PHOTO_LABELS:
             cb = QCheckBox(tr(label))
@@ -82,6 +85,7 @@ class TagRulesPanel(QWidget):
             self.photo_chk[key] = cb
         h3.addStretch(1)
         lay.addWidget(g3)
+        lay.addWidget(g2)
         lay.addWidget(_small(tr("저장하면 이미 붙은 자동 해시태그도 곧바로 새 규칙으로 바꿉니다(백그라운드, 작업 창에서 멈춤). "
                                 "직접 붙인 해시태그는 그대로입니다.")))
 
@@ -144,6 +148,12 @@ def attach(dlg) -> TagRulesPanel:
         cb.toggled.connect(lambda on: [c.setEnabled(on) for c in panel.fmt_chk.values()])
         for c in panel.fmt_chk.values():
             c.setEnabled(cb.isChecked())
+        # 261113-10 덧붙임: 사진 켜기·종류 구분 체크와 안내를 '자동 해시태그 (사진 모드)' 맨 위로, 빈 위 묶음은 숨긴다
+        for i, w in enumerate((dlg.chk_photo_tag, dlg.chk_photo_kind, getattr(dlg, "lbl_photo_tag_note", None))):
+            if w is not None:
+                panel.photo_lay.insertWidget(i, w)
+        if getattr(dlg, "grp_auto_tags", None) is not None:
+            dlg.grp_auto_tags.setVisible(False)
     except Exception:
         pass
     try:

@@ -901,9 +901,11 @@ class SettingsDialog(QDialog):
         self.chk_photo_kind.setEnabled(self.chk_photo_tag.isChecked())
         self.chk_photo_tag.toggled.connect(self.chk_photo_kind.setEnabled)
         gl.addWidget(self.chk_photo_kind)
-        gl.addWidget(_small(tr("사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 "
-                               "찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다.")))
+        self.lbl_photo_tag_note = _small(tr("사진 모드에서 폴더를 열면 백그라운드에서 붙입니다. 위치는 동봉한 행정동 자료로 "
+                                            "찾아 밖으로 보내지 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다."))
+        gl.addWidget(self.lbl_photo_tag_note)
         layout.addWidget(grp)
+        self.grp_auto_tags = grp                 # 261113-10 덧붙임: 체크들은 해시태그 내용의 모드별 묶음으로 옮기고 이 묶음은 숨긴다
         # 해시태그 내용(261107-10 태그 세션이 붙인다 — 디자인 SOT §2.14 '해시태그 내용 자리')
         self.tag_content_box = QWidget()
         self.tag_content_layout = QVBoxLayout(self.tag_content_box)

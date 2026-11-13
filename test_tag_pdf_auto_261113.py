@@ -97,6 +97,14 @@ try:
         chk(not any(c.isEnabled() for c in pn.fmt_chk.values()), "E 끄면 13 항목이 잠긴다")
         dlg.chk_auto_tag.setChecked(True)
         chk(all(c.isEnabled() for c in pn.fmt_chk.values()), "E 다시 켜면 풀린다")
+        # E2 차례(사용자 지시 'PDF 위·사진 아래로 모아') — PDF 모드 → 사진 모드 → 별칭, 위 '자동 해시태그' 묶음은 숨김
+        gs = {g.title(): g for g in pn.findChildren(QGroupBox)}
+        g_pdf, g_ph, g_al = gs.get("자동 해시태그 (PDF 모드)"), gs.get("자동 해시태그 (사진 모드)"), gs.get("별칭 — 이 태그 대신 붙일 이름")
+        ys = [pn.layout().indexOf(g) for g in (g_pdf, g_ph, g_al)]
+        chk(None not in (g_pdf, g_ph, g_al) and ys == sorted(ys) and -1 not in ys, "E2 묶음 차례 PDF → 사진 → 별칭", str(ys))
+        chk(g_ph is not None and g_ph.isAncestorOf(dlg.chk_photo_tag) and g_ph.isAncestorOf(dlg.chk_photo_kind)
+            and pn.photo_lay.itemAt(0).widget() is dlg.chk_photo_tag, "E2 사진 켜기·종류 구분 체크는 사진 모드 묶음 맨 위")
+        chk(dlg.grp_auto_tags.isHidden(), "E2 빈 위 '자동 해시태그' 묶음은 숨김")
     g1 = [g for g in pn.findChildren(QGroupBox) if g.title() == "자동 해시태그 (PDF 모드)"]
     chk(bool(g1), "A 묶음 '자동 해시태그 (PDF 모드)'", str([g.title() for g in pn.findChildren(QGroupBox)]))
     if g1:
@@ -164,6 +172,20 @@ try:
     mw._pdf_auto_migrated = False
     chk(TR.migrate_if_needed(mw) is None and len(ends) == n0, "C 표시가 있으면 다시 하지 않는다")
     TR.apply = real_apply
+
+    # E3 환경설정에서 켜면 곧바로 지금 목록부터 계산(종전엔 폴더를 다시 열어야 붙었다 — 사용자 보고)
+    calls = []
+    real_scan = mw._start_autotag_scan
+    mw._start_autotag_scan = lambda force=False: calls.append(force)
+    mw._prefs["auto_tag_enabled"] = False
+    sd2 = SettingsDialog(dict(mw._prefs), mw, host=mw, page="tags")
+    sd2.chk_auto_tag.setChecked(True)
+    sd2.apply(); pump(lambda: bool(calls), 3)
+    chk(calls == [False], "E3 [적용] 으로 켜면 곧바로 태그 계산을 시작한다", str(calls))
+    calls.clear(); sd2.apply(); pump(lambda: False, 0.3)
+    chk(calls == [], "E3 이미 켜져 있으면 다시 시작하지 않는다", str(calls))
+    sd2.reject()
+    mw._start_autotag_scan = real_scan
 
     # D
     fn = TR.remapper({"pdf_auto_v": 2}, {"format_off": ["영수증", "날짜"], "pdf_auto_v": 2})
