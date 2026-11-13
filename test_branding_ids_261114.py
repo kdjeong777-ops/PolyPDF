@@ -130,7 +130,7 @@ try:
     pdfd = importlib.import_module("viewer.pdf_default")
     chk((pdfd.APP, pdfd.PROG_ID, pdfd.CAPS) == ("PolyPDF", "PolyPDF.pdf", r"Software\PolyPDF\Capabilities"), "F 기본 PDF 앱 등록 이름")
     phd = importlib.import_module("viewer.photo_default")
-    chk((phd.APP, phd.PROG_ID, phd.CAPS) == (branding.PHOTO_APP, branding.PHOTO_PROG_ID, "Software\%s\PhotoCapabilities" % branding.APP_ID)
+    chk((phd.APP, phd.PROG_ID, phd.CAPS) == (branding.PHOTO_APP, branding.PHOTO_PROG_ID, r"Software\%s\PhotoCapabilities" % branding.APP_ID)
         and branding.ids(False)["PHOTO_PROG_ID"] == "PolyPDF.photo", "F 기본 사진 앱 등록 이름 — branding(이사 전 PolyPDF.photo)")
     sh = importlib.import_module("viewer.sign_hello")
     chk((sh.KEY_NAME, sh._INFO) == ("PolyPDF.sign", b"PolyPDF sign password v1"), "F Windows Hello 키 이름(바꾸면 서명 비밀번호를 못 연다)")
