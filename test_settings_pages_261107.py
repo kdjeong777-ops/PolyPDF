@@ -109,7 +109,8 @@ try:
             owner[k] = pid
         d.done(0)
     allkeys = set(flat(sd.SettingsDialog(dict(mw._prefs), parent=mw, host=mw).result_prefs()))
-    derived = {"restore_session", "restore_screenshots", "ffmpeg_path"}   # 다른 칸에서 끌어오거나 화면에 없는 값
+    derived = {"restore_session", "restore_screenshots", "ffmpeg_path",   # 다른 칸에서 끌어오거나 화면에 없는 값
+               "picture.view_kind_261114"}                            # 보기 종류를 한 번 혼용으로 바꿨다는 표식(사진 보기 SOT §4.10, 261114-7)
     missing = sorted(allkeys - set(owner) - derived)
     chk(not dup, "A 설정 키는 한 항목에만 있다", str(dup))
     chk(not missing, "A 모든 설정 키가 어느 항목에 있다", str(missing))

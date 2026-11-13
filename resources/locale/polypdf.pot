@@ -190,10 +190,6 @@ msgid "전체"
 msgstr ""
 
 #: viewer/app.py
-msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
-msgstr ""
-
-#: viewer/app.py
 msgid "책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다."
 msgstr ""
 
@@ -1074,20 +1070,12 @@ msgstr ""
 msgid "PDF병합"
 msgstr ""
 
-#: viewer/app.py
-msgid "기본 PDF 앱으로 설정"
-msgstr ""
-
-#: viewer/app.py
-msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPinax 로 고르세요"
-msgstr ""
-
 #: viewer/app.py viewer/photo_controller.py viewer/widgets/settings_dialog.py
-msgid "기본 사진 앱으로 설정"
+msgid "기본 앱 설정"
 msgstr ""
 
 #: viewer/app.py viewer/widgets/settings_dialog.py
-msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요"
+msgid "Windows 기본 앱 화면을 엽니다 — 보기 종류가 혼용이면 PDF 다음에 사진 확장자도 PolyPinax 로 고르세요"
 msgstr ""
 
 #: viewer/app.py viewer/update_controller.py
@@ -1130,21 +1118,6 @@ msgstr ""
 msgid "축소"
 msgstr ""
 
-#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
-msgid "안내"
-msgstr ""
-
-#: viewer/app.py viewer/photo_controller.py
-msgid ""
-"개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
-"빌드된 {exe} 에서 실행해 주세요."
-msgstr ""
-
-#: viewer/app.py
-msgid "Windows 기본 앱 화면에서 PolyPinax 를 고르세요."
-msgstr ""
-
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
 msgstr ""
@@ -1161,6 +1134,11 @@ msgstr ""
 
 #: viewer/app.py
 msgid "책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."
+msgstr ""
+
+#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
+msgid "안내"
 msgstr ""
 
 #: viewer/app.py
@@ -1818,18 +1796,6 @@ msgid "포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)�
 msgstr ""
 
 #: viewer/app.py
-msgid "PDF 문서 (PolyPinax)"
-msgstr ""
-
-#: viewer/app.py
-msgid "PDF 뷰어"
-msgstr ""
-
-#: viewer/app.py viewer/photo_controller.py
-msgid "기본 앱으로 설정하지 못했습니다"
-msgstr ""
-
-#: viewer/app.py
 msgid "전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"
 msgstr ""
 
@@ -2474,10 +2440,6 @@ msgstr ""
 
 #: viewer/app.py
 msgid "종료"
-msgstr ""
-
-#: viewer/app.py viewer/photo_controller.py
-msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
 msgstr ""
 
 #: viewer/app.py
@@ -4397,10 +4359,6 @@ msgid "행정동을 찾지 못함"
 msgstr ""
 
 #: viewer/photo_controller.py
-msgid "사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
-msgstr ""
-
-#: viewer/photo_controller.py
 msgid "사진 정보"
 msgstr ""
 
@@ -4462,6 +4420,24 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "일괄 작업"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid ""
+"Windows 기본 앱 화면에서 .pdf 를 PolyPinax 로 고른 뒤 [사진 계속]을 누르세요.\n"
+"사진 확장자(.jpg·.png·.heic 등)를 고르는 화면이 열립니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 계속"
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4668,6 +4644,10 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "사진을 열려고 보기 종류를 '혼용'으로 바꿨습니다 — 환경설정에서 되돌릴 수 있습니다."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "Windows 기본 앱 화면에서 .pdf 를 PolyPinax 로 고르세요."
 msgstr ""
 
 #: viewer/photo_controller.py
@@ -4906,18 +4886,6 @@ msgid "사진 {n}장의 이름을 바꿨습니다."
 msgstr ""
 
 #: viewer/photo_controller.py
-msgid "사진 (PolyPinax)"
-msgstr ""
-
-#: viewer/photo_controller.py
-msgid "PolyPinax 사진"
-msgstr ""
-
-#: viewer/photo_controller.py
-msgid "사진 뷰어"
-msgstr ""
-
-#: viewer/photo_controller.py
 #, python-brace-format
 msgid "{dev}: 장치를 열 수 없습니다 — 잠금을 풀고 '이 컴퓨터 신뢰' 를 누른 뒤 🔄 를 누르세요."
 msgstr ""
@@ -5145,6 +5113,21 @@ msgstr ""
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid ""
+"개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
+"빌드된 {exe} 에서 실행해 주세요."
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "기본 앱으로 설정하지 못했습니다"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
+msgstr ""
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "{dev}: 사진 {n}장(읽기 전용)"
 msgstr ""
 
@@ -5310,6 +5293,26 @@ msgstr ""
 
 #: viewer/photo_controller.py
 msgid "사진 바꾸는 중"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "PDF 문서 (PolyPinax)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "PDF 뷰어"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 (PolyPinax)"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "PolyPinax 사진"
+msgstr ""
+
+#: viewer/photo_controller.py
+msgid "사진 뷰어"
 msgstr ""
 
 #: viewer/photo_controller.py

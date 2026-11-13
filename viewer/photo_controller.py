@@ -19,8 +19,9 @@ from pathlib import Path
 from viewer.i18n import tr, tr_noop
 from viewer import branding as _br          # 261114-8(마스터 §1.1): 실행 파일 이름
 
-VIEW_PDF = "pdf"                 # 'PDF 전용' — 사진 모드 없음(기본)
-VIEW_MIXED = "mixed"             # '혼용' — PDF 모드 ↔ 사진 모드
+VIEW_PDF = "pdf"                 # 'PDF 전용' — 사진 모드 없음
+VIEW_MIXED = "mixed"             # '혼용' — PDF 모드 ↔ 사진 모드(기본, 261114-7 — 종전 기본 PDF 전용)
+VIEW_MIGRATED = "view_kind_261114"   # 옛 설정도 한 번 혼용으로 바꿨다는 표식(4.10, 사용자 결정 '모두 혼용으로 한 번 바꿈')
 MODE_ICON_PX = 20                # 탭 줄 높이 안 — 탭 글자보다 크게(261104-2 사용자 지시). TV 그림은 가로로 길어 실제 높이는 약 15px
 # 사진 모드에서 끄는 명령(사진 보기 SOT 4.13 표) — 사진에 뜻이 없거나 사진용 동작이 아직 없는 것(평탄화·인쇄는 P2 에서 사진용으로 켠다)
 PHOTO_OFF_CMDS = ("file.save_as",                                    # 인쇄·평탄화는 사진용으로 켠다(261104-3, 4.21) · 변환은 사진 → Word·HWPX·텍스트(261104-10 P4-b, 4.35)
@@ -98,6 +99,7 @@ class PhotoMixin:
             "pdf": {k: data.get(k) for k in ("last_open", "last_main", "last_folder")},
             "photo": {"last_open": pic.get("last_open"), "last_main": pic.get("last_main")},
         }
+        self._photo_migrate_view_kind()
         self._photo_apply_view_kind(restore=True)
         self._photo_started = True
 
@@ -166,8 +168,15 @@ class PhotoMixin:
             pic = self._prefs["picture"] = {}
         return pic
 
+    def _photo_migrate_view_kind(self) -> None:
+        """261114-7(4.10, 사용자 결정 '모두 혼용으로 한 번 바꿈'): 옛 설정도 한 번 혼용으로 — 표식 뒤 사용자가 고른 PDF 전용은 지킨다."""
+        pic = self._photo_prefs()
+        if not pic.get(VIEW_MIGRATED):
+            pic["view_kind"] = VIEW_MIXED
+            pic[VIEW_MIGRATED] = True
+
     def _photo_view_kind(self) -> str:
-        return VIEW_MIXED if self._photo_prefs().get("view_kind") == VIEW_MIXED else VIEW_PDF
+        return VIEW_PDF if self._photo_prefs().get("view_kind") == VIEW_PDF else VIEW_MIXED   # 값이 없으면 혼용(261114-7)
 
     def _photo_enabled(self) -> bool:
         return self._photo_view_kind() == VIEW_MIXED
@@ -1107,34 +1116,70 @@ class PhotoMixin:
         QTimer.singleShot(0, _go)
         return {"ok": True}
 
-    def _register_photo_handler(self, reg=None, opener=None):
-        """도구 탭 `설치·설정 ▾ › 기본 사진 앱으로 설정`·환경설정 보기 종류 옆 단추 — HKCU 에 사진 후보를 쓰고
-        `ms-settings:defaultapps?registeredAppUser=PolyPDFPhoto` 를 연다(설치판도 HKCU — 설치 프로그램은 그대로). reg·opener 는 검사용(가짜)."""
+    def _register_default_apps(self, view_kind=None, reg=None, opener=None, ask=None, parent=None):
+        """`기본 앱 설정`(사진 보기 SOT §4.45 '메뉴·단추'·'두 단계', 마스터 §14.10, 261114-7 사용자 지시·결정) — 도구 탭
+        `설치·설정 ▾` 한 항목과 환경설정 '보기 종류' 콤보 오른쪽 단추가 함께 쓴다. 보기 종류에 맞춰 **혼용 = PDF + 사진,
+        PDF 전용 = PDF 만** 후보로 쓴 뒤 PDF 화면 → (혼용) 안내 창 [사진 계속] → 사진 화면. Windows 는 기본 앱 화면이 앱마다
+        따로라(PDF `PolyPDF`·사진 `PolyPDFPhoto`) 한 화면에 함께 나오지 않는다.
+        view_kind: 환경설정 콤보에서 지금 고른 값(없으면 저장된 값). reg·opener·ask 는 검사용(가짜 레지스트리·화면 열기·[사진 계속] 답)."""
         import sys as _sys
         from viewer import photo_default, pdf_default
+        par = parent or self
+        kinds = ["pdf"] + (["photo"] if (view_kind or self._photo_view_kind()) == VIEW_MIXED else [])
         if not getattr(_sys, "frozen", False):
             QMessageBox.information(
-                self, tr("안내"),
+                par, tr("안내"),
                 tr("개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
                    "빌드된 {exe} 에서 실행해 주세요.").format(exe=_br.EXE_NAME))   # 261114-8: 실행 파일 이름은 branding(이사 스위치)
             return
         exe = os.path.abspath(_sys.executable)
-        manual = tr("사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'")
-        try:
-            plan = photo_default.prepare(exe, True, reg if reg is not None else pdf_default.Reg(),
-                                         desc=tr("사진 (PolyPinax)"), app_name=tr("PolyPinax 사진"), app_desc=tr("사진 뷰어"))
-        except Exception as e:
-            QMessageBox.warning(self, tr("기본 앱으로 설정하지 못했습니다"), str(e) + "\n\n" + manual)
-            return
+        reg = reg if reg is not None else pdf_default.Reg()
+        manual = {"pdf": tr("PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"),
+                  "photo": tr("사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'")}
+        plans = {}
+        for k in kinds:
+            try:
+                if k == "pdf":                   # 설치판 HKLM 이면 쓰지 않고 옛 HKCU 를 지운다(마스터 §14.10)
+                    plans[k] = pdf_default.prepare(exe, True, reg, desc=tr("PDF 문서 (PolyPinax)"), app_desc=tr("PDF 뷰어"))
+                else:                            # 사진은 늘 HKCU(§4.45 '쓰는 키')
+                    plans[k] = photo_default.prepare(exe, True, reg, desc=tr("사진 (PolyPinax)"),
+                                                     app_name=tr("PolyPinax 사진"), app_desc=tr("사진 뷰어"))
+            except Exception as e:
+                QMessageBox.warning(par, tr("기본 앱으로 설정하지 못했습니다"), str(e) + "\n\n" + manual[k])
+                return
         if opener is None:
             from PyQt6.QtCore import QUrl
             from PyQt6.QtGui import QDesktopServices
             opener = lambda u: QDesktopServices.openUrl(QUrl(u))
-        if photo_default.open_settings(plan["uris"], opener):
+
+        def show(k):
+            mod = pdf_default if k == "pdf" else photo_default
+            if mod.open_settings(plans[k]["uris"], opener):
+                return True
+            QMessageBox.information(par, tr("기본 앱 설정"),
+                                    tr("Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:") + "\n" + manual[k])
+            return False
+
+        show("pdf")
+        if "photo" not in kinds:
+            self.status.showMessage(tr("Windows 기본 앱 화면에서 .pdf 를 PolyPinax 로 고르세요."), 8000)
+            return
+        if (ask or (lambda: self._default_apps_ask(par)))():
+            show("photo")
             self.status.showMessage(tr("Windows 기본 앱 화면에서 사진 확장자마다 PolyPinax 를 고르세요."), 8000)
-        else:
-            QMessageBox.information(self, tr("기본 사진 앱으로 설정"),
-                                    tr("Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:") + "\n" + manual)
+
+    def _default_apps_ask(self, parent) -> bool:
+        """두 단계의 가운데 — PDF 화면에서 고른 뒤 [사진 계속] 이면 사진 화면으로(§4.45 '두 단계')."""
+        box = QMessageBox(parent)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle(tr("기본 앱 설정"))
+        box.setText(tr("Windows 기본 앱 화면에서 .pdf 를 PolyPinax 로 고른 뒤 [사진 계속]을 누르세요.\n"
+                       "사진 확장자(.jpg·.png·.heic 등)를 고르는 화면이 열립니다."))
+        go = box.addButton(tr("사진 계속"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("닫기"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(go)
+        box.exec()
+        return box.clickedButton() is go
 
     def _root_folder_differs(self, folder) -> bool:
         cur = getattr(self.bookmark_tree, "_root_dir", None)

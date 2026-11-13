@@ -190,10 +190,6 @@ msgid "전체"
 msgstr "All"
 
 #: viewer/app.py
-msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
-msgstr "Right-click a PDF file → 'Open with' → 'Choose another app' → PolyPinax → 'Always'"
-
-#: viewer/app.py
 msgid "책갈피 생성을 멈췄습니다. PDF 는 바뀌지 않았습니다."
 msgstr "Bookmark generation stopped. The PDF was not changed."
 
@@ -1091,22 +1087,13 @@ msgstr "Convert image files → PDF"
 msgid "PDF병합"
 msgstr "Merge PDFs"
 
-#: viewer/app.py
-msgid "기본 PDF 앱으로 설정"
-msgstr "Set as Default PDF App"
-
-#: viewer/app.py
-msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPinax 로 고르세요"
-msgstr "Opens the Windows Default apps page — choose PolyPinax for .pdf there"
-
 #: viewer/app.py viewer/photo_controller.py viewer/widgets/settings_dialog.py
-msgid "기본 사진 앱으로 설정"
-msgstr "Set as Default Photo App"
+msgid "기본 앱 설정"
+msgstr "Set Default Apps"
 
-# | 고르세요"
 #: viewer/app.py viewer/widgets/settings_dialog.py
-msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요"
-msgstr "Opens the Windows Default apps page — choose PolyPinax there for photo extensions (.jpg, .png, .heic, etc.)"
+msgid "Windows 기본 앱 화면을 엽니다 — 보기 종류가 혼용이면 PDF 다음에 사진 확장자도 PolyPinax 로 고르세요"
+msgstr "Opens the Windows Default apps page — if View type is Mixed, choose PolyPinax for the photo extensions too, after PDF"
 
 #: viewer/app.py viewer/update_controller.py
 msgid "구성요소 설치 (녹화·OCR)"
@@ -1148,23 +1135,6 @@ msgstr "Default Size"
 msgid "축소"
 msgstr "Zoom Out"
 
-#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
-#: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
-msgid "안내"
-msgstr "Information"
-
-#: viewer/app.py viewer/photo_controller.py
-msgid ""
-"개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
-"빌드된 {exe} 에서 실행해 주세요."
-msgstr ""
-"PolyPinax can't be set as the default app when running from source (Python).\n"
-"Please run the built {exe}."
-
-#: viewer/app.py
-msgid "Windows 기본 앱 화면에서 PolyPinax 를 고르세요."
-msgstr "Choose PolyPinax on the Windows Default apps page."
-
 #: viewer/app.py viewer/widgets/image_to_pdf_dialog.py
 msgid "파일 추가"
 msgstr "Add Files"
@@ -1184,6 +1154,11 @@ msgstr "The file is already in the list."
 #: viewer/app.py
 msgid "책갈피를 만드는 중입니다. 끝나거나 중단한 뒤 다시 시도하세요."
 msgstr "Bookmarks are being generated. Try again after it finishes or is stopped."
+
+#: viewer/app.py viewer/edit_controller.py viewer/photo_controller.py
+#: viewer/widgets/bookmark_tree.py viewer/widgets/hyperlink_dialog.py
+msgid "안내"
+msgstr "Information"
 
 #: viewer/app.py
 msgid "입력 PDF를 지정하세요."
@@ -1862,18 +1837,6 @@ msgid "포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)�
 msgstr "Applies to the pane that has focus (main view, thumbnails, Bookmarks panel, Text pane)"
 
 #: viewer/app.py
-msgid "PDF 문서 (PolyPinax)"
-msgstr "PDF Document (PolyPinax)"
-
-#: viewer/app.py
-msgid "PDF 뷰어"
-msgstr "PDF viewer"
-
-#: viewer/app.py viewer/photo_controller.py
-msgid "기본 앱으로 설정하지 못했습니다"
-msgstr "Could not set as the default app"
-
-#: viewer/app.py
 msgid "전역 화면캡처 단축키 해제됨(앱 활성 시에만 작동)"
 msgstr "Global screen-capture shortcut released (works only while the app is active)"
 
@@ -2541,10 +2504,6 @@ msgstr "Redo"
 #: viewer/app.py
 msgid "종료"
 msgstr "Exit"
-
-#: viewer/app.py viewer/photo_controller.py
-msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
-msgstr "Could not open the Windows Default apps page. Choose it yourself like this:"
 
 #: viewer/app.py
 msgid "전역 단축키 등록 실패"
@@ -4548,10 +4507,6 @@ msgid "행정동을 찾지 못함"
 msgstr "Administrative area not found"
 
 #: viewer/photo_controller.py
-msgid "사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
-msgstr "Right-click a photo file → 'Open with' → 'Choose another app' → PolyPinax → 'Always'"
-
-#: viewer/photo_controller.py
 msgid "사진 정보"
 msgstr "Photo Info"
 
@@ -4614,6 +4569,26 @@ msgstr "Format:"
 #: viewer/photo_controller.py
 msgid "일괄 작업"
 msgstr "Batch"
+
+#: viewer/photo_controller.py
+msgid "PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
+msgstr "Right-click a PDF file → 'Open with' → 'Choose another app' → PolyPinax → 'Always'"
+
+#: viewer/photo_controller.py
+msgid "사진 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'"
+msgstr "Right-click a photo file → 'Open with' → 'Choose another app' → PolyPinax → 'Always'"
+
+#: viewer/photo_controller.py
+msgid ""
+"Windows 기본 앱 화면에서 .pdf 를 PolyPinax 로 고른 뒤 [사진 계속]을 누르세요.\n"
+"사진 확장자(.jpg·.png·.heic 등)를 고르는 화면이 열립니다."
+msgstr ""
+"Choose PolyPinax for .pdf on the Windows Default apps page, then press [Continue to Photos].\n"
+"A page for choosing the photo extensions (.jpg, .png, .heic, etc.) opens."
+
+#: viewer/photo_controller.py
+msgid "사진 계속"
+msgstr "Continue to Photos"
 
 #: viewer/photo_controller.py
 msgid "사진 글자 줄을 만드는 중…"
@@ -4820,6 +4795,10 @@ msgstr "Play / stop animation"
 #: viewer/photo_controller.py
 msgid "사진을 열려고 보기 종류를 '혼용'으로 바꿨습니다 — 환경설정에서 되돌릴 수 있습니다."
 msgstr "View type was changed to 'Mixed' to open the photo — you can change it back in Settings."
+
+#: viewer/photo_controller.py
+msgid "Windows 기본 앱 화면에서 .pdf 를 PolyPinax 로 고르세요."
+msgstr "Choose PolyPinax for .pdf on the Windows Default apps page."
 
 #: viewer/photo_controller.py
 msgid "Windows 기본 앱 화면에서 사진 확장자마다 PolyPinax 를 고르세요."
@@ -5057,18 +5036,6 @@ msgid "사진 {n}장의 이름을 바꿨습니다."
 msgstr "Renamed {n} photos."
 
 #: viewer/photo_controller.py
-msgid "사진 (PolyPinax)"
-msgstr "Photo (PolyPinax)"
-
-#: viewer/photo_controller.py
-msgid "PolyPinax 사진"
-msgstr "PolyPinax Photo"
-
-#: viewer/photo_controller.py
-msgid "사진 뷰어"
-msgstr "Photo viewer"
-
-#: viewer/photo_controller.py
 #, python-brace-format
 msgid "{dev}: 장치를 열 수 없습니다 — 잠금을 풀고 '이 컴퓨터 신뢰' 를 누른 뒤 🔄 를 누르세요."
 msgstr "{dev}: Can't open the device — unlock it, tap 'Trust This Computer', then press 🔄."
@@ -5296,6 +5263,23 @@ msgstr "A name already exists, so nothing was renamed: {name}"
 
 #: viewer/photo_controller.py
 #, python-brace-format
+msgid ""
+"개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
+"빌드된 {exe} 에서 실행해 주세요."
+msgstr ""
+"PolyPinax can't be set as the default app when running from source (Python).\n"
+"Please run the built {exe}."
+
+#: viewer/photo_controller.py
+msgid "기본 앱으로 설정하지 못했습니다"
+msgstr "Could not set as the default app"
+
+#: viewer/photo_controller.py
+msgid "Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:"
+msgstr "Could not open the Windows Default apps page. Choose it yourself like this:"
+
+#: viewer/photo_controller.py
+#, python-brace-format
 msgid "{dev}: 사진 {n}장(읽기 전용)"
 msgstr "{dev}: {n} photos (read-only)"
 
@@ -5462,6 +5446,26 @@ msgstr "Could not rename: {name}"
 #: viewer/photo_controller.py
 msgid "사진 바꾸는 중"
 msgstr "Converting photos"
+
+#: viewer/photo_controller.py
+msgid "PDF 문서 (PolyPinax)"
+msgstr "PDF Document (PolyPinax)"
+
+#: viewer/photo_controller.py
+msgid "PDF 뷰어"
+msgstr "PDF viewer"
+
+#: viewer/photo_controller.py
+msgid "사진 (PolyPinax)"
+msgstr "Photo (PolyPinax)"
+
+#: viewer/photo_controller.py
+msgid "PolyPinax 사진"
+msgstr "PolyPinax Photo"
+
+#: viewer/photo_controller.py
+msgid "사진 뷰어"
+msgstr "Photo viewer"
 
 #: viewer/photo_controller.py
 #, python-brace-format
@@ -16527,4 +16531,14 @@ msgstr "Getting Started"
 
 #~ msgid "#{tag}  ({n}건)"
 #~ msgstr "#{tag}  ({n})"
+
+#~ msgid "PDF 문서 (PolyPDF)"
+#~ msgstr "PDF Document (PolyPDF)"
+
+#~ msgid "기본 PDF 앱으로 설정"
+#~ msgstr "Set as Default PDF App"
+
+# | 고르세요"
+#~ msgid "Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요"
+#~ msgstr "Opens the Windows Default apps page — choose PolyPinax there for photo extensions (.jpg, .png, .heic, etc.)"
 

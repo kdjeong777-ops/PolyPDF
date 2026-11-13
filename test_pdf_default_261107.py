@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""기본 PDF 앱으로 설정 — Windows 기본 앱 화면을 연다 (261107-14, 마스터 §14.10).
+"""기본 앱 설정의 PDF 단계 — Windows 기본 앱 화면을 연다 (261107-14, 마스터 §14.10 · 261114-7 사진과 한 함수 `_register_default_apps`).
 
 **실제 레지스트리·Windows 설정은 건드리지 않는다** — 가짜 레지스트리(`FakeReg`)·가짜 화면 열기만. 처리기가 가짜를 받지 못하면
 (수정 전 코드) 부르지 않고 실패로 적는다(그 코드는 실제 HKCU 에 쓴다).
@@ -8,7 +8,7 @@ B. HKLM 이 다른 exe 를 가리키면 휴대용처럼(HKCU)
 C. 휴대용(설치 정보 없음): HKCU 에 ProgID·OpenWithProgids·Capabilities·RegisteredApplications → `registeredAppUser`
 D. 폴더를 옮겨 다시 누르면 HKCU 명령이 새 exe 로
 E. 화면을 못 열면 `ms-settings:defaultapps` 로 물러서고, 그것도 안 되면 손으로 고르는 법을 알린다
-F. 개발 실행은 아무것도 쓰지 않는다 · 메뉴 이름 '기본 PDF 앱으로 설정'
+F. 개발 실행은 아무것도 쓰지 않는다 · 메뉴 이름 '기본 앱 설정'(261114-7 — 종전 이름 → 사진과 합침)
 """
 import inspect, os, sys, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -81,8 +81,9 @@ from viewer.app import MainWindow
 import viewer.app as appmod
 mw = MainWindow(); mw._skip_save_on_close = True
 mw.show(); app.processEvents()
-fn = mw._register_pdf_handler
-safe = "reg" in inspect.signature(fn).parameters and "opener" in inspect.signature(fn).parameters
+_fn = mw._register_default_apps
+fn = lambda **k: _fn(view_kind="pdf", **k)           # PDF 단계만(보기 종류 PDF 전용과 같은 길)
+safe = "reg" in inspect.signature(_fn).parameters and "opener" in inspect.signature(_fn).parameters
 chk(safe, "처리기가 가짜 레지스트리·화면 열기를 받는다(아니면 실제 레지스트리에 쓰므로 부르지 않는다)")
 
 infos = []
@@ -175,7 +176,7 @@ for a in mw.menuBar().actions():
     for b in m.actions():
         if b.menu() is not None and b.text() == "설치·설정":
             names = [c.text() for c in b.menu().actions()]
-chk(names[:1] == ["기본 PDF 앱으로 설정"], "F 메뉴 이름 '기본 PDF 앱으로 설정'", str(names))
+chk(names[:1] == ["기본 앱 설정"], "F 메뉴 이름 '기본 앱 설정'(261114-7)", str(names))
 
 appmod.QMessageBox.information = _orig_info
 mw.close()

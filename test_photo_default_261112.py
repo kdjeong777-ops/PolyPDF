@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""기본 사진 앱으로 설정 · 사진 인자 → 사진 모드 · 다른 창 넘김 (사진 보기 SOT §4.45, 261112-10 사용자 지시·결정).
+"""기본 앱 설정의 사진 단계 · 사진 인자 → 사진 모드 · 다른 창 넘김 (사진 보기 SOT §4.45, 261112-10 사용자 지시·결정 · 261114-7 PDF 와 한 단추).
 
 **실제 레지스트리·Windows 설정은 건드리지 않는다** — 가짜 레지스트리(`pdf_default.Reg` 를 가짜로 바꿔 끼움)·가짜 화면 열기만.
 실제 MainWindow(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 마스터 §14.7.2 의 3), 실제 메뉴 항목·환경설정 단추를 눌러 본다.
 A. HKCU 꼴 — ProgID `PolyPDF.photo`(명령 `"exe" "%1"`)·사진 확장자 전부의 OpenWithProgids·PhotoCapabilities·RegisteredApplications `PolyPDFPhoto`,
    PDF 이름(`PolyPDF.pdf`·`Capabilities`·값 `PolyPDF`)은 쓰지 않는다, 설치판에서도 HKCU(HKLM 에 PDF 등록이 있어도)
-B. 설치판의 '기본 PDF 앱으로 설정'(옛 HKCU PDF 키 지우기)이 사진 키를 지우지 않는다
+B. 설치판의 PDF 단계(옛 HKCU PDF 키 지우기)가 사진 키를 지우지 않는다
 C. 개발 실행은 쓰지도 열지도 않는다(안내만)
-D. 도구 탭 `설치·설정 ▾` 의 실제 항목 '기본 사진 앱으로 설정'(PDF 바로 아래)을 누르면 등록 + `registeredAppUser=PolyPDFPhoto` 화면, 다시 누르면 새 exe 로
-E. 환경설정 '보기 종류' 묶음의 같은 단추를 눌러도 같은 등록
+D. 도구 탭 `설치·설정 ▾` 의 실제 항목 '기본 앱 설정'(혼용 — [사진 계속])을 누르면 사진 등록 + `registeredAppUser=PolyPDFPhoto` 화면, 다시 누르면 새 exe 로
+E. 환경설정 '보기 종류' 콤보 오른쪽 [기본 앱 설정] 을 눌러도 같은 등록
 F. 명령줄 가르기(`main._startup_args`) — 사진만이면 사진, PDF 가 섞이면 PDF 만, 없는 파일·스위치는 뺀다
 G. PDF 전용 · PDF 모드 창에 사진 인자(`_photo_open_arg`) → 혼용으로 바꾸고 사진 모드, 그 폴더가 책갈피창에, 그 사진이 본문에
 H. 다른 실행이 넘긴 사진(`instance_link.send_photo`) — 사진 모드인 창은 받아 그 사진을 열고, PDF 모드 창은 받지 않는다
@@ -153,7 +153,7 @@ try:
         chk(not bad, "A PDF 이름·HKLM 에는 쓰지 않는다", str(bad))
 
         # B
-        pdd.prepare(EXE, True, r)                                                          # 설치판 '기본 PDF 앱으로 설정'
+        pdd.prepare(EXE, True, r)                                                          # 설치판 '기본 앱 설정' 의 PDF 단계
         chk(photo_ok(r, EXE), "B 설치판 PDF 정리가 사진 키를 지우지 않는다")
 
     from viewer.app import MainWindow
@@ -162,8 +162,8 @@ try:
 
     # C
     fake["reg"] = FakeReg(); opened.clear(); infos.clear()
-    fn = getattr(mw, "_register_photo_handler", None)
-    chk(fn is not None, "C 창에 사진 등록 처리기")
+    fn = getattr(mw, "_register_default_apps", None)
+    chk(fn is not None, "C 창에 기본 앱 처리기")
     if fn is not None:
         with Frozen(frozen=False):
             fn()
@@ -180,14 +180,15 @@ try:
                 inst = b.menu()
     items = [a for a in (inst.actions() if inst else [])]
     names = [a.text() for a in items]
-    chk(names[:2] == ["기본 PDF 앱으로 설정", "기본 사진 앱으로 설정"], "D 설치·설정 ▾ — PDF 바로 아래 '기본 사진 앱으로 설정'", str(names))
-    act = next((a for a in items if cmd_id(a) == "tools.photo_handler"), None)
-    chk(act is not None, "D 명령 id tools.photo_handler")
+    chk(names[:1] == ["기본 앱 설정"] and names.count("기본 앱 설정") == 1, "D 설치·설정 ▾ — '기본 앱 설정' 한 항목(261114-7)", str(names))
+    act = next((a for a in items if cmd_id(a) == "tools.pdf_handler"), None)
+    chk(act is not None, "D 명령 id tools.pdf_handler(모음 단추가 남게 그대로)")
+    mw._default_apps_ask = lambda parent: True                 # 두 단계 가운데 [사진 계속]
     if act is not None and phd is not None:
         fake["reg"] = FakeReg(); opened.clear()
         with Frozen(EXE2):
             act.trigger()
-        chk(photo_ok(fake["reg"], EXE2) and opened[:1] == [phd.URI_USER], "D 메뉴 항목을 누르면 HKCU 등록 + 기본 앱 화면", str(opened))
+        chk(photo_ok(fake["reg"], EXE2) and phd.URI_USER in opened, "D 메뉴 항목을 누르면 HKCU 등록 + 기본 앱 화면", str(opened))
         with Frozen(r"E:\Moved\PolyPDF.exe"):
             act.trigger()
         chk(photo_ok(fake["reg"], r"E:\Moved\PolyPDF.exe"), "D 옮긴 뒤 다시 누르면 새 exe 로")
@@ -195,13 +196,13 @@ try:
     # E
     from viewer.widgets.settings_dialog import SettingsDialog
     dlg = SettingsDialog(mw._prefs, mw, host=mw)
-    btn = getattr(dlg, "btn_photo_default", None)
-    chk(btn is not None and btn.isEnabled() and btn.text() == "기본 사진 앱으로 설정", "E 환경설정 보기 종류 옆 단추")
+    btn = getattr(dlg, "btn_default_apps", None)
+    chk(btn is not None and btn.isEnabled() and btn.text() == "기본 앱 설정", "E 환경설정 보기 종류 옆 단추")
     if btn is not None and phd is not None:
         fake["reg"] = FakeReg(); opened.clear()
         with Frozen(EXE2):
             btn.click()
-        chk(photo_ok(fake["reg"], EXE2) and opened[:1] == [phd.URI_USER], "E 단추를 눌러도 같은 등록", str(opened))
+        chk(photo_ok(fake["reg"], EXE2) and phd.URI_USER in opened, "E 단추를 눌러도 같은 등록", str(opened))
     dlg.deleteLater()
 
     # F

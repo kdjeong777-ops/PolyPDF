@@ -788,17 +788,21 @@ class SettingsDialog(QDialog):
         self.cmb_view_kind.addItem(tr("PDF 전용"), "pdf")
         self.cmb_view_kind.addItem(tr("혼용 (PDF 모드 ↔ 사진 모드)"), "mixed")
         self._pic = self._prefs.get("picture") if isinstance(self._prefs.get("picture"), dict) else {}
-        self.cmb_view_kind.setCurrentIndex(1 if self._pic.get("view_kind") == "mixed" else 0)
+        self.cmb_view_kind.setCurrentIndex(0 if self._pic.get("view_kind") == "pdf" else 1)   # 값이 없으면 혼용(261114-7)
         self.cmb_view_kind.setToolTip(tr("혼용이면 리본 맨 왼쪽 단추로 사진 모드(PolyPix)를 켜고 끕니다. "
                                          "PDF 전용이면 사진 모드를 쓰지 않습니다."))
         self.cmb_view_kind.currentIndexChanged.connect(lambda *_: self._sync_photo_item())
-        vl.addRow(tr("보기 종류:"), self.cmb_view_kind)
-        # 261112-10(사진 보기 SOT §4.45, 사용자 지시): 기본 사진 앱으로 설정 — 도구 탭 `설치·설정 ▾` 의 같은 항목과 같은 함수
-        self.btn_photo_default = QPushButton(tr("기본 사진 앱으로 설정"))
-        self.btn_photo_default.setToolTip(tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요"))
-        self.btn_photo_default.setEnabled(hasattr(self._host, "_register_photo_handler"))
-        self.btn_photo_default.clicked.connect(lambda _=False: self._host._register_photo_handler())
-        vl.addRow("", self.btn_photo_default)
+        # 261114-7(사진 보기 SOT §4.10·§4.45, 사용자 지시·결정): 콤보 오른쪽에 [기본 앱 설정] — 도구 탭 `설치·설정 ▾` 의 같은 항목과
+        #   같은 함수. 지금 콤보에서 고른 보기 종류대로(혼용 = PDF + 사진, PDF 전용 = PDF) — [확인] 전이라도
+        vk_row = QHBoxLayout()
+        vk_row.addWidget(self.cmb_view_kind, 1)
+        self.btn_default_apps = QPushButton(tr("기본 앱 설정"))
+        self.btn_default_apps.setToolTip(tr("Windows 기본 앱 화면을 엽니다 — 보기 종류가 혼용이면 PDF 다음에 사진 확장자도 PolyPinax 로 고르세요"))
+        self.btn_default_apps.setEnabled(hasattr(self._host, "_register_default_apps"))
+        self.btn_default_apps.clicked.connect(lambda _=False: self._host._register_default_apps(
+            view_kind=str(self.cmb_view_kind.currentData() or "mixed"), parent=self))
+        vk_row.addWidget(self.btn_default_apps)
+        vl.addRow(tr("보기 종류:"), vk_row)
         layout.addWidget(grp_vk)
 
         # 원본 백업 — 261106-15(사진 펴기 [저장] 이 원본을 대체할 때)·261107-29(PDF 첫 덮어쓰기 저장 때) 사진·PDF 공용(사진 보기 SOT §4.43,
@@ -1265,7 +1269,7 @@ class SettingsDialog(QDialog):
             "cross_file_nav": self.chk_cross_file_nav.isChecked(),
             "page_flip_anim": self.chk_page_flip_anim.isChecked(),         # 260914-1
             "lite_flip": str(self.cmb_lite_flip.currentData() or "auto"),  # 261021-1(응답성 SOT §4.7)
-            "picture": dict(self._pic, view_kind=str(self.cmb_view_kind.currentData() or "pdf"),
+            "picture": dict(self._pic, view_kind=str(self.cmb_view_kind.currentData() or "mixed"),
                             slide_interval_s=int(self.sp_slide_s.value()),    # 261104-2 · 261104-7
                             warp_backup_dir=self.ed_warp_backup.text().strip()),   # 261106-15
             "page_scroll_mode": self.cmb_page_scroll_mode.currentData() or "page",

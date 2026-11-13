@@ -1935,10 +1935,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         # 261025-1(디자인 SOT §2.9.1, 사용자 지시·결정): 세 항목을 `설치·설정 ▾`(261107-24 이름) 하나로 — 명령 id 는 그대로(모음에 넣은 단추가 남는다)
         _inst = m_tools.addMenu(tr("설치·설정"))
         for _t, _s, _cid, _short, _tip in (
-                (tr("기본 PDF 앱으로 설정"), self._register_pdf_handler, "tools.pdf_handler", tr("기본 PDF 앱으로 설정"),
-                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 .pdf 를 PolyPinax 로 고르세요")),   # 261107-14(마스터 §14.10)
-                (tr("기본 사진 앱으로 설정"), self._register_photo_handler, "tools.photo_handler", tr("기본 사진 앱으로 설정"),
-                 tr("Windows 기본 앱 화면을 엽니다 — 그 화면에서 사진 확장자(.jpg·.png·.heic 등)를 PolyPinax 로 고르세요")),   # 261112-10(사진 보기 SOT §4.45)
+                # 261114-7(사진 보기 SOT §4.45, 사용자 결정 '하나로 합침'): 종전 PDF·사진 두 항목 → '기본 앱 설정' 하나 — 보기 종류에 맞춰
+                #   PDF 화면 → [사진 계속] → 사진 화면. 명령 id 는 tools.pdf_handler 그대로(모음 단추가 남는다)
+                (tr("기본 앱 설정"), self._register_default_apps, "tools.pdf_handler", tr("기본 앱 설정"),
+                 tr("Windows 기본 앱 화면을 엽니다 — 보기 종류가 혼용이면 PDF 다음에 사진 확장자도 PolyPinax 로 고르세요")),
                 (tr("구성요소 설치 (녹화·OCR)"), self._open_components_installer, "tools.components", tr("구성요소 설치"),
                  tr("구성요소 설치(녹화·OCR)")),
                 (tr("가상 프린터 설치·제거"), self._open_vprinter_dialog, "tools.vprinter", tr("가상 프린터"),   # 가상 프린터 SOT §4.6
@@ -2390,35 +2390,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             b.setToolTip((name + " (" + k + ")" if k else name) + "\n"
                          + tr("포커스가 있는 창(본문·썸네일·책갈피창·텍스트 창)에 적용합니다"))
 
-    # ===== 261107-14(마스터 §14.10): 기본 PDF 앱으로 설정 — Windows 기본 앱 화면을 연다 ============
-    def _register_pdf_handler(self, reg=None, opener=None):
-        """설치판이면 설치 프로그램의 HKLM 등록 그대로(옛 HKCU 키는 지운다), 설치 정보가 없으면(휴대용·zip) HKCU 에
-        같은 꼴을 쓰고 → `ms-settings:defaultapps?registeredApp…=PolyPDF` 를 연다. reg·opener 는 검사용(가짜)."""
-        import sys as _sys, os as _os
-        from viewer import pdf_default
-        if not getattr(_sys, "frozen", False):
-            QMessageBox.information(
-                self, tr("안내"),
-                tr("개발 실행(파이썬)에서는 기본 앱으로 설정할 수 없습니다.\n"
-                "빌드된 PolyPDF.exe 에서 실행해 주세요."))
-            return
-        exe = _os.path.abspath(_sys.executable)
-        manual = tr("PDF 파일 우클릭 → '연결 프로그램' → '다른 앱 선택' → PolyPinax → '항상'")
-        try:
-            plan = pdf_default.prepare(exe, True, reg if reg is not None else pdf_default.Reg(),
-                                       desc=tr("PDF 문서 (PolyPinax)"), app_desc=tr("PDF 뷰어"))
-        except Exception as e:
-            QMessageBox.warning(self, tr("기본 앱으로 설정하지 못했습니다"), str(e) + "\n\n" + manual)
-            return
-        if opener is None:
-            from PyQt6.QtCore import QUrl
-            from PyQt6.QtGui import QDesktopServices
-            opener = lambda u: QDesktopServices.openUrl(QUrl(u))
-        if pdf_default.open_settings(plan["uris"], opener):
-            self.status.showMessage(tr("Windows 기본 앱 화면에서 PolyPinax 를 고르세요."), 8000)
-        else:
-            QMessageBox.information(self, tr("기본 PDF 앱으로 설정"),
-                                    tr("Windows 기본 앱 화면을 열지 못했습니다. 다음처럼 직접 고르세요:") + "\n" + manual)
+    # 261107-14(마스터 §14.10) 기본 PDF 앱 — 261114-7 부터 사진과 한 함수 `PhotoMixin._register_default_apps`(사진 보기 SOT §4.45)
 
     # ===== 260611-3(6): 화면 캡처 전역 단축키 ============================
     def _capture_key(self) -> str:
