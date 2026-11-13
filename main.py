@@ -466,7 +466,8 @@ def main():
         splash = None
 
     # 스플래시가 뜬 뒤 나머지 초기 설정(모두 가벼움)
-    app.setApplicationName(APP_ID + ("-" + _profile() if _profile() else ""))   # 261009-19: 시험 프로필은 다른 폴더    app.setOrganizationName("LocalTools")
+    app.setApplicationName(APP_ID + ("-" + _profile() if _profile() else ""))   # 261009-19: 시험 프로필은 다른 폴더
+    app.setOrganizationName("LocalTools")      # ★ 설정 폴더 %APPDATA%\LocalTools\<앱 이름> — 빠지면 %APPDATA%\<앱 이름> 으로 갈린다(261114-6 결함)
     if _ico:
         app.setWindowIcon(QIcon(_ico))    # v1.6.1 G1: 작업표시줄/타이틀바 아이콘
 
