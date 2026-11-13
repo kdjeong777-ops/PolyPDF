@@ -7183,6 +7183,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             return
         self._cancel_active_indexing()
         self._index_workers.append(worker)
+        lw = (self.__dict__.get("_light") or {}).get("worker")
+        if lw is not None:
+            lw.request_cancel()
+        self._light = {"t": 0.0, "n": 0, "done": set(), "backup": False, "worker": lw, "pending": False}   # 261114-4: 색인 회차마다
         # 261105-25(응답성 SOT §4.6, 사용자 결정): 폴더·여러 파일 색인은 작업 창에 — [중단] 하면 다음에 폴더를 열 때
         #   남은 파일부터(`needs_reindex`). 파일 하나 색인은 짧아 올리지 않는다(진행 창도 없다)
         if getattr(worker, "single_file", None) is None:
@@ -7228,6 +7232,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if total > 0:
             self.progress.setRange(0, total)
             self.progress.setValue(done)
+        try:
+            self._light_tag_tick(int(done))           # 261114-4(태그 SOT §8.2): 50개(또는 10초)마다 종류·속성
+        except Exception:
+            pass
         self.status.showMessage(tr('인덱싱 {done}/{total} - {name}').format(done=done, total=total, name=name))
 
     def _index_stop_user(self, worker):
@@ -7310,7 +7318,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                           known_tags=store.all_tags(), rules=load_rules(),
                           today_year=date.today().year,
                           store_keys=set(store._data.keys()),
-                          fp_missing_keys=fp_missing, kw_skip_keys=kw_skip)
+                          fp_missing_keys=fp_missing, kw_skip_keys=kw_skip,
+                          force=force, store_hash=self._autotag_store_hash(store, paths))   # 261114-4(태그 SOT §8.2)
         self._autotag_worker = w
         self._set_probe_paused(True)              # 260906-8(응답성 SOT §4 ①)
         w.progress.connect(lambda d, t, n: self.status.showMessage(_autotag_text(d, t), 1500))
@@ -7351,6 +7360,121 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             self._autotag_rescan = False
             QTimer.singleShot(200, self._start_autotag_scan)
 
+    @staticmethod
+    def _autotag_store_hash(store, paths) -> str:
+        """261114-4(태그 SOT §8.2): 그 파일들의 태그 기록(직접·자동·거절 — 시각은 빼고) 해시 — 태그 계산 입력 서명에 든다."""
+        import hashlib as _h
+        import json as _json
+        h = _h.sha1()
+        for p in sorted(map(str, paths), key=str.lower):
+            v = store._data.get(store._key(p))
+            if isinstance(v, dict):
+                rec = [v.get("manual") or [], v.get("auto") or [], v.get("rejected") or []]
+            else:
+                rec = [list(v or []), [], []]
+            h.update((p.lower() + _json.dumps(rec, ensure_ascii=False) + "|").encode("utf-8"))
+        return h.hexdigest()
+
+    def _autotag_save_sig(self, stats, paths):
+        """적용한 뒤의 저장소 상태로 최종 서명을 배경에서 적는다 — 다음에 같은 폴더를 열면 건너뛴다."""
+        base, key = stats.get("base_sig"), stats.get("sig_key")
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if not base or not key or store is None:
+            return
+        from viewer.workers import AutoTagWorker
+        sig = AutoTagWorker.final_sig(base, self._autotag_store_hash(store, paths), store.all_tags())
+        db = self._db_path
+
+        def _write():
+            try:
+                from viewer.indexer import PdfIndex
+                ix = PdfIndex(db)
+                try:
+                    ix.set_tagscan_sig(key, sig)
+                finally:
+                    ix.close()
+            except Exception:
+                pass
+        import threading as _th
+        t = _th.Thread(target=_write, name="tagscan-sig", daemon=True)
+        self._tagscan_thread = t                      # 검사용
+        t.start()
+
+    # ── 261114-4(태그 SOT §8.2): 색인하는 동안 50개마다 문서 종류·속성 ─────────
+    LIGHT_EVERY, LIGHT_SECS = 50, 10.0
+
+    def _light_tag_tick(self, done: int, force: bool = False):
+        import time as _t
+        if not self._prefs.get("auto_tag_enabled", True) or getattr(self, "_photo_mode", False):
+            return
+        st = self.__dict__.setdefault("_light", {"t": 0.0, "n": 0, "done": set(), "backup": False, "worker": None, "pending": False})
+        if not force and done - st["n"] < self.LIGHT_EVERY and _t.monotonic() - st["t"] < self.LIGHT_SECS:
+            return
+        if st["worker"] is not None:
+            st["pending"] = True
+            return
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None:
+            return
+        try:
+            paths = [p for p in self.bookmark_tree.all_file_paths()
+                     if str(p).lower().endswith(".pdf") and os.path.normcase(str(p)) not in st["done"]]
+        except Exception:
+            paths = []
+        st["t"], st["n"] = _t.monotonic(), done
+        if not paths:
+            return
+        tagged = {}
+        for p in paths:
+            for t in store.get_manual(p):
+                tagged.setdefault(t, []).append(str(p))
+        from viewer.auto_tag import load_rules
+        from viewer.workers import TagLightWorker, run_in_thread
+        w = TagLightWorker(self._db_path, paths, load_rules(), tagged)
+        st["worker"] = w
+        w.found.connect(self._on_light_found)
+        w.finished.connect(self._on_light_finished)
+        run_in_thread(w, self._thread_keep)
+
+    def _on_light_found(self, found: dict):
+        st = self.__dict__.get("_light") or {}
+        store = getattr(self.bookmark_tree, "_tags", None)
+        if store is None or not found:
+            return
+        if not st.get("backup"):
+            if not store.backup():
+                return
+            st["backup"] = True
+        from viewer.auto_tag import axis_of
+        n = 0
+        with store.bulk():
+            for p, tags in found.items():
+                st.setdefault("done", set()).add(os.path.normcase(str(p)))
+                cur = store.get_auto(p)
+                keep = [t for t in cur if axis_of(t) == "주제"]        # 주제 태그는 전체 계산 몫 — 그대로 둔다
+                low = {k.lower() for k in keep}
+                new = keep + [t for t in tags if t.lower() not in low]
+                if new != cur:
+                    conf = {}
+                    v = store._data.get(store._key(p))
+                    if isinstance(v, dict):
+                        conf = {t: c for t, c in (v.get("auto_conf") or {}).items() if t in keep}
+                    conf.update({t: 1.0 for t in tags})
+                    store.set_auto(p, new, conf=conf)
+                    n += 1
+        if n:
+            try:
+                self.bookmark_tree.refresh_tag_labels()
+            except Exception:
+                pass
+
+    def _on_light_finished(self):
+        st = self.__dict__.get("_light") or {}
+        st["worker"] = None
+        if st.get("pending"):
+            st["pending"] = False
+            QTimer.singleShot(0, lambda: self._light_tag_tick(st.get("n", 0), force=True))
+
     def _on_autotag_finished(self, results, stats):
         """워커 결과를 UI 스레드에서 적용 — 재연결(§6.1)·자동 부여(§5.6)·연도(§9.4).
         ★ 일괄 적용 전 백업 필수(§6) — 실패하면 아무것도 쓰지 않는다."""
@@ -7361,6 +7485,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if w is not None and getattr(w, "profiles", None) is not None:
             self._autotag_ctx = (w.profiles, w.df, w.n_docs)
         store = getattr(self.bookmark_tree, "_tags", None)
+        if stats.get("skipped"):                     # 261114-4(태그 SOT §8.2): 입력이 지난번과 같다 — 그대로
+            self._autotag_maybe_rescan()
+            return
         if store is None or not results:
             return
         if not store.backup():
@@ -7402,6 +7529,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         if n_moved:
             msg += tr(', 이동 재연결 {n_moved}건').format(n_moved=n_moved)
         self.status.showMessage(msg, 5000)
+        if w is not None:
+            self._autotag_save_sig(stats, w.paths)   # 261114-4: 다음에 같은 입력이면 건너뛴다
         self._autotag_first_summary(stats, n_auto)
         self._autotag_maybe_rescan()
 

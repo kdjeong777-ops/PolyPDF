@@ -1685,6 +1685,78 @@ class OnlineDictFetchWorker(QThread):
         self.done.emit(out)
 
 
+def learn_formats(tagged_docs: dict):
+    """261114-2(태그 SOT §5.3.2): 사람이 직접 붙인 종류 — (직접 종류가 있는 파일 정규화 경로 집합, {정규화 폴더: 종류}).
+    같은 폴더 2개 이상이 같은 종류이고 다른 종류가 그보다 적으면 폴더 규칙."""
+    import os as _os
+    from collections import Counter as _Counter
+    from viewer.auto_tag import FORMAT_VOCAB as _FV
+    vocab = {v.lower(): v for v in _FV}
+    man_fmt, dir_cnt = set(), {}
+    for tag, plist in (tagged_docs or {}).items():
+        fv = vocab.get(str(tag).lower())
+        if not fv:
+            continue
+        for mp in plist:
+            man_fmt.add(_os.path.normcase(mp))
+            dir_cnt.setdefault(_os.path.normcase(_os.path.dirname(mp)), _Counter())[fv] += 1
+    learned = {}
+    for dk, cnt in dir_cnt.items():
+        ranked = cnt.most_common()
+        if ranked[0][1] >= 2 and (len(ranked) == 1 or ranked[1][1] < ranked[0][1]):
+            learned[dk] = ranked[0][0]
+    return man_fmt, learned
+
+
+class TagLightWorker(QObject):
+    """261114-4(태그 SOT §8.2): 색인하는 동안 50개마다 — 색인 DB 의 태그 재료(`tagfeat`)만 읽어 **문서 종류·속성**을 판정한다.
+    파일을 열지 않는다. 결과만 내보내고 저장소에는 메인이 쓴다. 주제·키워드는 색인이 끝난 뒤 `AutoTagWorker` 몫."""
+    found = pyqtSignal(dict)                  # {경로: [종류·속성 태그]}
+    finished = pyqtSignal()
+
+    def __init__(self, db_path, paths, rules=None, tagged_docs=None):
+        super().__init__()
+        self.db_path, self.paths = db_path, [str(p) for p in paths]
+        self.rules = dict(rules or {})
+        self.tagged_docs = dict(tagged_docs or {})
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def run(self):
+        import os as _os
+        from viewer import pacing as _pacing
+        from viewer.auto_tag import classify_format, features_from_dict, pdf_attr_tags
+        out = {}
+        try:
+            man_fmt, learned = learn_formats(self.tagged_docs)
+            ix = PdfIndex(self.db_path)
+            try:
+                for i, p in enumerate(self.paths):
+                    if self._cancel:
+                        break
+                    got = ix.tagfeat(p)
+                    if not got:
+                        continue
+                    f = features_from_dict(p, got[0])
+                    tags = pdf_attr_tags(f, self.rules)
+                    if _os.path.normcase(p) not in man_fmt:
+                        fmt = classify_format(f, self.rules, {"dir": learned.get(_os.path.normcase(_os.path.dirname(p)))})
+                        if fmt:
+                            tags.append(fmt)
+                    out[p] = tags
+                    if i % 50 == 49:
+                        _pacing.pace(self)
+            finally:
+                ix.close()
+        except Exception:
+            pass
+        finally:
+            self.found.emit(out)
+            self.finished.emit()
+
+
 class AutoTagWorker(QObject):
     """260829(태그 SOT §8.2·P2): 태그·연도 자동 계산 워커.
 
@@ -1699,9 +1771,15 @@ class AutoTagWorker(QObject):
 
     YIELD_S = 0.005      # 260906-8(응답성 SOT §4 ②): 파일마다 GIL 양보
 
+    TAGGER_VER = 1                               # 261114-4: 판정 규칙을 바꾸면 올린다(입력 서명이 달라져 다시 계산)
+
     def __init__(self, db_path, paths, tagged_docs, known_tags, rules,
-                 today_year, store_keys, fp_missing_keys, kw_skip_keys=()):
+                 today_year, store_keys, fp_missing_keys, kw_skip_keys=(), force=False, store_hash=""):
         super().__init__()
+        self.force = bool(force)                  # 261114-4: True = 입력이 같아도 계산('태그 다시 계산'·규칙 적용)
+        self.store_hash = str(store_hash or "")   # 메인이 센 저장소 기록(그 파일들의 직접·자동·거절) — 입력 서명에 든다
+        self.skipped = False
+        self.profiles = self.df = self.n_docs = None   # 건너뛰어도 메인이 읽는 속성(지워진 Qt 객체를 건드리지 않게)
         self.db_path = db_path
         self.paths = [str(p) for p in paths]
         self.tagged_docs = dict(tagged_docs)      # {태그: [경로…]} — 프로파일 학습용
@@ -1781,10 +1859,38 @@ class AutoTagWorker(QObject):
     def request_cancel(self):
         self._cancel = True
 
+    def _base_sig(self):
+        """(입력 서명 — 저장소 기록 빼고, 서명 열쇠 — 경로 묶음). 파일 상태는 여기(배경)에서 stat."""
+        import hashlib as _h
+        import json as _json
+        import os as _os
+        from viewer.auto_tag import FEAT_VER
+        try:
+            files = []
+            for p in sorted(self.paths, key=str.lower):
+                st = _os.stat(p)
+                files.append([p.lower(), int(st.st_size), int(st.st_mtime)])
+            rules = {k: v for k, v in self.rules.items() if k != "pdf_auto_v"}     # 정리 표시는 판정과 무관
+            payload = _json.dumps([files, rules, sorted((str(t).lower(), sorted(map(str, v))) for t, v in self.tagged_docs.items()),
+                                   FEAT_VER, self.TAGGER_VER, self.today_year,
+                                   sorted(self.kw_skip_keys)], ensure_ascii=False, sort_keys=True, default=str)
+            key = _h.sha1("\n".join(f[0] for f in files).encode("utf-8")).hexdigest()
+            return _h.sha1(payload.encode("utf-8")).hexdigest(), key
+        except Exception:
+            return "", ""
+
+    @staticmethod
+    def final_sig(base_sig: str, store_hash: str, known_tags=()) -> str:
+        """입력 서명 = 바탕(파일·규칙·직접 태그…) + 저장소 기록 + 알려진 태그 — 뒤의 둘은 적용한 **뒤** 값으로 적는다
+        (이 계산이 붙인 태그가 다음 비교를 어긋나게 하지 않게)."""
+        import hashlib as _h
+        known = "\n".join(sorted({str(t).lower() for t in (known_tags or ())}))
+        return _h.sha1((base_sig + "|" + (store_hash or "") + "|" + known).encode("utf-8")).hexdigest()
+
     def run(self):
         try:
             import os as _os
-            from viewer.auto_tag import (build_profiles, extract_features,
+            from viewer.auto_tag import (build_profiles, extract_features, features_from_dict, features_to_dict,
                                          extract_year, new_tag_candidates,
                                          partition, suggest_keywords,
                                          suggest_tags)
@@ -1801,6 +1907,18 @@ class AutoTagWorker(QObject):
                         return t
                 return None                       # extract_features 가 fitz 폴백
 
+            # 261114-4(태그 SOT §8.2): 입력 서명이 지난번과 같으면 계산을 통째로 건너뛴다
+            base_sig, sig_key = self._base_sig()
+            if (not self.force and ix is not None and base_sig
+                    and ix.tagscan_sig(sig_key) == self.final_sig(base_sig, self.store_hash, self.known_tags)):
+                self.skipped = True
+                ix.close()
+                self.finished.emit([], {"total": len(self.paths), "auto_files": 0, "new_candidates": 0, "candidates": {},
+                                        "known_tags": len(self.known_tags), "skipped": True,
+                                        "base_sig": base_sig, "sig_key": sig_key})
+                return
+            fps = {}                                  # 재료에 적힌 지문(§6.1) — 다시 열지 않는다
+
             folder_names, big_dirs, dir_count = self._folder_ctx()
             ko_map = self._ko_lookup_map()
             ko_lookup = (lambda w: ko_map.get(w.lower())) if ko_map else None
@@ -1816,8 +1934,21 @@ class AutoTagWorker(QObject):
                 #   `extract_features` 가 fitz 로 폴백해 그 사이 메인이 굶는다.
                 _pacing.pace(self)            # 260908-5: 간격이 아니라 점유율(§4 ⑦)
                 try:
-                    f = extract_features(p, page_texts=texts(p),
-                                         folder_names=folder_names.get(p))
+                    # 261114-4: 색인 때 만든 재료가 맞으면 그것으로(파일·본문을 다시 읽지 않는다), 없거나 낡았으면 만들어 적어 둔다
+                    got = ix.tagfeat(p) if ix is not None else None
+                    if got:
+                        f = features_from_dict(p, got[0], folder_names.get(p))
+                        if got[1]:
+                            fps[p] = got[1]
+                    else:
+                        f0 = extract_features(p, page_texts=texts(p), folder_names=folder_names.get(p))
+                        d0 = features_to_dict(f0)
+                        f = features_from_dict(p, d0, folder_names.get(p))      # 재료와 같은 결과가 되게
+                        if ix is not None and str(p).lower().endswith(".pdf"):
+                            try:
+                                ix.save_tagfeat(p, d0, None)
+                            except Exception:
+                                pass
                 except Exception:
                     continue
                 feats[p] = f
@@ -1847,22 +1978,7 @@ class AutoTagWorker(QObject):
             self.profiles, self.df, self.n_docs = profiles, df, n_docs
 
             # 261114-2(태그 SOT §5.3.2): 사람이 직접 붙인 종류를 배운다 — 그 파일은 자동 종류 없음, 같은 폴더 2개 이상이면 폴더 규칙
-            from collections import Counter as _Counter
-            from viewer.auto_tag import FORMAT_VOCAB as _FV
-            _vocab = {v.lower(): v for v in _FV}
-            man_fmt, dir_cnt = set(), {}
-            for tag, plist in self.tagged_docs.items():
-                fv = _vocab.get(str(tag).lower())
-                if not fv:
-                    continue
-                for mp in plist:
-                    man_fmt.add(_os.path.normcase(mp))
-                    dir_cnt.setdefault(_os.path.normcase(_os.path.dirname(mp)), _Counter())[fv] += 1
-            learned_dirs = {}
-            for dk, cnt in dir_cnt.items():
-                ranked = cnt.most_common()
-                if ranked[0][1] >= 2 and (len(ranked) == 1 or ranked[1][1] < ranked[0][1]):
-                    learned_dirs[dk] = ranked[0][0]
+            man_fmt, learned_dirs = learn_formats(self.tagged_docs)
             self.learned_dirs = learned_dirs            # 검사용
 
             # 2패스: 제안·게이트·연도·지문·키워드(§9)·신규 후보 적립(§5.4-5)
@@ -1887,7 +2003,10 @@ class AutoTagWorker(QObject):
                 fp = size = None
                 try:
                     if k not in self.store_keys or k in self.fp_missing_keys:
-                        fp, size = TagStore._fp_of(p)      # 무거운 계산은 워커에서(§6.1)
+                        if fps.get(p):                     # 261114-4: 재료에 적힌 지문
+                            fp, size = fps[p], _os.path.getsize(p)
+                        else:
+                            fp, size = TagStore._fp_of(p)      # 무거운 계산은 워커에서(§6.1)
                 except Exception:
                     pass
                 # §9 키워드 — 게이트 없음, kw_edited 만 생략. 표시는 병기(치환 아님)
@@ -1917,6 +2036,6 @@ class AutoTagWorker(QObject):
             self.finished.emit(results, {
                 "total": total, "auto_files": n_auto_files,
                 "new_candidates": len(candidates), "candidates": candidates,
-                "known_tags": len(self.known_tags)})
+                "known_tags": len(self.known_tags), "base_sig": base_sig, "sig_key": sig_key})
         except Exception as e:                    # noqa: BLE001
             self.error.emit(str(e))

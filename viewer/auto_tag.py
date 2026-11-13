@@ -111,6 +111,7 @@ class Features:
     image_ratio: float = 0.0       # 이미지 면적비(표본)
     terms: Counter = field(default_factory=Counter)   # 가중 tf
     folder_names: list = field(default_factory=list)  # 상위 폴더명(연도 신호용)
+    bigrams: dict = field(default_factory=dict)       # 261114-4: 재료에서 되살린 키워드용 두 낱말 묶음(본문 전체 대신, §8.2)
 
 
 def _tokenize(text: str) -> list:
@@ -249,6 +250,42 @@ def _one_image(pg):
         return (min(1.0, cov), min(w, h), max(w, h))
     except Exception:
         return None
+
+
+# ── 261114-4(태그 SOT §8.2): 태그 재료 — 색인 때 만들어 색인 DB `tagfeat` 에 둔다 ─────────────────
+FEAT_VER = 1                     # 재료 모양·뽑는 법을 바꾸면 올린다(낡은 재료는 다시 만든다)
+FEAT_TERMS_MAX, FEAT_BIGRAMS_MAX = 600, 300
+FEAT_HEAD_MAX, FEAT_STRUCT_MAX = 4000, 20000      # 연도는 앞 4,000자·종류는 20,000자만 본다
+_META_KEYS = ("title", "subject", "keywords", "author", "creationDate", "modDate")
+
+
+def features_to_dict(f: "Features") -> dict:
+    """본문 전체(`full_text`)는 두지 않는다 — 키워드가 쓰는 두 낱말 묶음 상위만(색인 DB 가 두 배가 되지 않게)."""
+    bg = Counter(_bigrams(_token_seq(f.full_text))) if f.full_text and not f.scanned else Counter(f.bigrams or {})
+    return {
+        "v": FEAT_VER, "stem": f.stem, "page_count": f.page_count,
+        "meta": {k: f.meta.get(k) for k in _META_KEYS if f.meta.get(k)},
+        "toc": list(f.toc_titles)[:80], "head": f.head_text[:FEAT_HEAD_MAX], "struct": f.struct_text[:FEAT_STRUCT_MAX],
+        "scanned": bool(f.scanned), "aspect": f.aspect, "tpp": f.text_per_page, "img": f.image_ratio,
+        "img_pages": [list(x) if x else None for x in f.img_pages],
+        "terms": dict(Counter(f.terms).most_common(FEAT_TERMS_MAX)),
+        "bigrams": dict(bg.most_common(FEAT_BIGRAMS_MAX)),
+    }
+
+
+def features_from_dict(path, d: dict, folder_names=None) -> "Features":
+    f = Features(path=str(path), stem=d.get("stem") or Path(path).stem, folder_names=list(folder_names or []))
+    f.page_count = int(d.get("page_count") or 0)
+    f.meta = dict(d.get("meta") or {})
+    f.toc_titles = list(d.get("toc") or [])
+    f.head_text = d.get("head") or ""
+    f.struct_text = d.get("struct") or ""
+    f.scanned = bool(d.get("scanned"))
+    f.aspect, f.text_per_page, f.image_ratio = float(d.get("aspect") or 0), float(d.get("tpp") or 0), float(d.get("img") or 0)
+    f.img_pages = [tuple(x) if x else None for x in d.get("img_pages") or []]
+    f.terms = Counter(d.get("terms") or {})
+    f.bigrams = dict(d.get("bigrams") or {})
+    return f
 
 
 def extract_features(path, page_texts=None, folder_names=None,
@@ -709,7 +746,7 @@ def suggest_keywords(f: Features, df: dict, n_docs: int,
     top = top or MAX_KEYWORDS_SUGGEST
     n_docs = max(1, n_docs)
     cand = Counter(f.terms)
-    cand.update(_bigrams(_token_seq(f.full_text)))
+    cand.update(f.bigrams if (f.bigrams and not f.full_text) else _bigrams(_token_seq(f.full_text)))   # 261114-4 재료면 저장된 묶음
     fc = folder_common or set()
 
     scored = []

@@ -71,6 +71,7 @@ def _apply_text_fixes(file_path, page: int, text: str) -> str:
 
 
 class PdfIndex:
+    MAKE_TAGFEAT = True              # 261114-4: 색인할 때 태그 재료도 만든다(검사에서 끌 수 있다)
     """PDF 폴더에 대한 FTS5 인덱스를 관리.
 
     스키마:
@@ -328,6 +329,22 @@ class PdfIndex:
             """
         )
 
+        # 261114-4(태그 SOT §8.2): 태그 재료 — 색인 때 파일을 연 김에 만든 `auto_tag.features_to_dict`(크기·수정시각이
+        #   같으면 그대로 쓴다) · 태그 계산 입력 서명(같으면 계산을 건너뛴다)
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tagfeat(
+                key TEXT PRIMARY KEY,      -- pathutil.norm_key(경로)
+                size INTEGER NOT NULL,
+                mtime REAL NOT NULL,
+                ver INTEGER NOT NULL,      -- auto_tag.FEAT_VER
+                fp TEXT,                   -- 태그 저장소 지문(§6.1)
+                data TEXT NOT NULL
+            );
+            """
+        )
+        self.conn.execute("CREATE TABLE IF NOT EXISTS tagscan(key TEXT PRIMARY KEY, sig TEXT NOT NULL)")
+
         # 260825: FTS5 tokenizer 를 trigram 으로 — LIKE '%…%' 부분일치(한글 포함)를 **색인**으로.
         #   ★ 기존 인덱스 텍스트를 **보존 복사**(재인덱싱 없이) → 검색이 비는 구간 없음.
         row = self.conn.execute(
@@ -506,6 +523,67 @@ class PdfIndex:
             self.conn.execute("DELETE FROM pages2 WHERE file_id = ?", (fid,))
             self.conn.execute("DELETE FROM files WHERE id = ?", (fid,))
             self.conn.commit()
+        try:
+            from viewer.pathutil import norm_key
+            with self.conn:
+                self.conn.execute("DELETE FROM tagfeat WHERE key = ?", (norm_key(str(file_path)),))
+        except Exception:
+            pass
+
+    # ── 261114-4(태그 SOT §8.2) 태그 재료 ───────────────────────────────
+    def save_tagfeat(self, file_path, data: dict, fp=None) -> None:
+        import json as _json
+        from viewer.pathutil import norm_key
+        from viewer.auto_tag import FEAT_VER
+        st = Path(file_path).stat()
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO tagfeat(key, size, mtime, ver, fp, data) VALUES(?,?,?,?,?,?)",
+                              (norm_key(str(file_path)), int(st.st_size), st.st_mtime, int(FEAT_VER), fp,
+                               _json.dumps(data, ensure_ascii=False)))
+
+    def tagfeat(self, file_path):
+        """(재료 dict, 지문) — 크기·수정시각·FEAT_VER 가 지금과 같을 때만, 아니면 None."""
+        import json as _json
+        from viewer.pathutil import norm_key
+        from viewer.auto_tag import FEAT_VER
+        try:
+            st = Path(file_path).stat()
+            r = self.conn.execute("SELECT size, mtime, ver, fp, data FROM tagfeat WHERE key=?",
+                                  (norm_key(str(file_path)),)).fetchone()
+        except Exception:
+            return None
+        if not r or int(r[0]) != int(st.st_size) or abs(float(r[1]) - st.st_mtime) > 1e-6 or int(r[2]) != int(FEAT_VER):
+            return None
+        try:
+            return _json.loads(r[4]), r[3]
+        except Exception:
+            return None
+
+    def make_tagfeat(self, file_path, page_texts=None) -> None:
+        """색인한 김에 태그 재료를 만든다(실패해도 색인에는 영향 없음)."""
+        try:
+            from viewer import auto_tag as _at
+            from viewer.tag_store import TagStore
+            texts = page_texts if page_texts is not None else self.page_texts(file_path)
+            f = _at.extract_features(file_path, page_texts=texts)
+            try:
+                fp = TagStore._fp_of(file_path)[0]
+            except Exception:
+                fp = None
+            self.save_tagfeat(file_path, _at.features_to_dict(f), fp)
+        except Exception:
+            pass
+
+    def tagscan_sig(self, key: str):
+        try:
+            r = self.conn.execute("SELECT sig FROM tagscan WHERE key=?", (key,)).fetchone()
+            return r[0] if r else None
+        except Exception:
+            return None
+
+    def set_tagscan_sig(self, key: str, sig: str) -> None:
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO tagscan(key, sig) VALUES(?,?)", (key, sig))
 
     def invalidate(self, file_path) -> bool:
         """261019-4: 이 파일을 다음 색인 때 다시 읽게 표시한다(내용은 그대로 — 검색은 계속 된다).
@@ -637,6 +715,7 @@ class PdfIndex:
             doc = fitz.open(file_path)
         except Exception:
             return  # 손상된 파일은 건너뜀
+        _texts = None
         # 261011-5(마스터 §4.7.16): '저장' 이 넣은 'PolyPDF' 레이어(꾸밈 글상자 글)는 추출에서 뺀다 — 본문 화면처럼
         try:
             from viewer import pdf_mirror as _pm
@@ -685,6 +764,7 @@ class PdfIndex:
                         "SELECT page FROM ocr_page WHERE file_key=?", (fkey,))}
                 except Exception:
                     ocr_pages = set()
+            _texts = []                                    # 261114-4: 태그 재료용(쪽 글 — 아래에서 한 번만)
             for i in range(doc.page_count):
                 try:
                     page = doc.load_page(i)
@@ -698,6 +778,7 @@ class PdfIndex:
                 #   검색만 옛 글자로 남아, 찾은 것이 안 찾아지는 일이 생긴다.
                 text = _apply_text_fixes(file_path, i, text)
                 rows.append((flat_text(text), text, file_id, i))
+                _texts.append(text)
                 # 260906-5(응답성 SOT §4 ②): 쪽 묶음마다 GIL 양보 — 쪽이 많은 파일 하나가
                 #   메인을 통째로 굶기지 않게. 비용은 파일당 수 ms.
                 if (i & 0x1F) == 0x1F:
@@ -722,6 +803,8 @@ class PdfIndex:
                 pass
         finally:
             doc.close()
+        if self.MAKE_TAGFEAT and _texts is not None:
+            self.make_tagfeat(file_path, _texts)      # 261114-4(태그 SOT §8.2): 연 김에 태그 재료 — 앱 밖(색인 자식)에서
 
     def index_folder(
         self,
