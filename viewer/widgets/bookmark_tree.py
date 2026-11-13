@@ -1842,22 +1842,12 @@ class BookmarkTree(QWidget):
         wa.setDefaultWidget(area)
         self._tag_menu.addAction(wa)
         self._tag_menu.addSeparator()
-        clr_tags = self._tag_menu.addAction(tr("모두 해제"))
-        clr_tags.triggered.connect(self._clear_tag_tokens)
+        # 261113-10 덧붙임(검색 SOT §5.1, 사용자 지시 '항목에서 모두 해제 삭제'): 종전 '모두 해제'(# 토큰만 빼기)는 없앴다 —
+        #   '검색 비우기' 가 태그 토큰과 글자를 함께 지운다, 태그 하나는 풀다운 체크를 풀어 뺀다
         clr = self._tag_menu.addAction(tr("검색 비우기"))
         clr.triggered.connect(lambda: self.search_edit.clear())
-        # 260829 P2(태그 SOT §8.5): 한 태그가 잘못 퍼졌을 때 그것만 회수
-        auto_ts = []
-        try:
-            auto_ts = self._tags.auto_tag_set()
-        except Exception:
-            pass
-        auto_ts = [t for t in auto_ts if not _pt.is_date_tag(t)]   # 촬영일은 사진마다 달라 회수 메뉴에 늘어놓지 않는다
-        if auto_ts:
-            sub = self._tag_menu.addMenu(tr("자동 부여 취소"))
-            for t in auto_ts[:30]:
-                act = sub.addAction("·#" + t)
-                act.triggered.connect(lambda _=False, tag=t: self._revoke_auto_tag(tag))
+        # 261113-10 덧붙임(태그 SOT §8.5, 사용자 지시): 종전 '자동 부여 취소 ▸' 는 없앴다 — 자동 태그 끄기는 환경설정
+        #   '자동 해시태그 (PDF 모드)·(사진 모드)' 에서(이미 붙은 것도 곧바로 뺀다, §5.8)
         self._add_tag_tool_items()
 
     def _add_tag_tool_items(self):
@@ -1874,13 +1864,6 @@ class BookmarkTree(QWidget):
             b = self._tag_menu.addAction(tr("해시태그 폴더로 사본 저장"))
             b.triggered.connect(lambda: self.tag_export_provider())
 
-    def _revoke_auto_tag(self, tag: str):
-        """§8.5 '이 태그의 자동 부여만 취소' — 수동·다른 태그는 그대로."""
-        if self._tags is None:
-            return
-        self._tags.clear_auto_tag(tag)
-        self.refresh_tag_labels()
-
     def _add_tag_to_search(self, tag: str):
         cur = self.search_edit.text().split()
         if ("#" + tag).lower() not in [c.lower() for c in cur]:
@@ -1890,10 +1873,6 @@ class BookmarkTree(QWidget):
         """§5.1 체크 해제 = 토큰 제거(진실은 검색박스 텍스트)."""
         keep = [c for c in self.search_edit.text().split()
                 if not (c.startswith("#") and c.lstrip("#").lower() == tag.lower())]
-        self.search_edit.setText(" ".join(keep))
-
-    def _clear_tag_tokens(self):
-        keep = [c for c in self.search_edit.text().split() if not c.startswith("#")]
         self.search_edit.setText(" ".join(keep))
 
     def _edit_file_tags(self, path: str):

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-13 23:02+0900\n"
+"POT-Creation-Date: 2026-11-13 23:42+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7539,10 +7539,6 @@ msgid "속성"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
-msgid "모두 해제"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
 msgid "검색 비우기"
 msgstr ""
 
@@ -7698,10 +7694,6 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
-msgstr ""
-
-#: viewer/widgets/bookmark_tree.py
-msgid "자동 부여 취소"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
@@ -11630,6 +11622,10 @@ msgid "파일 해시태그·키워드 자동 부여"
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py
+msgid "인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, 도구 탭 '태그 ▾' 에서 되돌릴 수 있습니다."
+msgstr ""
+
+#: viewer/widgets/settings_dialog.py
 msgid "사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"
 msgstr ""
 
@@ -11772,10 +11768,6 @@ msgstr ""
 
 #: viewer/widgets/settings_dialog.py
 msgid "슬라이드쇼 자동 넘김:"
-msgstr ""
-
-#: viewer/widgets/settings_dialog.py
-msgid "인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, 도구 탭 '태그 ▾' 에서 되돌릴 수 있습니다."
 msgstr ""
 
 #: viewer/widgets/settings_dialog.py

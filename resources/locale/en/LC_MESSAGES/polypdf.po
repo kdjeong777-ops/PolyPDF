@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-13 23:02+0900\n"
+"POT-Creation-Date: 2026-11-13 23:42+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -7776,10 +7776,6 @@ msgid "속성"
 msgstr "Attribute"
 
 #: viewer/widgets/bookmark_tree.py
-msgid "모두 해제"
-msgstr "Clear All"
-
-#: viewer/widgets/bookmark_tree.py
 msgid "검색 비우기"
 msgstr "Clear Search"
 
@@ -7938,10 +7934,6 @@ msgstr "📄 File"
 #: viewer/widgets/bookmark_tree.py
 msgid "(이 목록의 파일에 해시태그 없음 — 파일 우클릭 → 해시태그 편집)"
 msgstr "(No hashtags on files in this list — right-click a file → Edit Hashtags)"
-
-#: viewer/widgets/bookmark_tree.py
-msgid "자동 부여 취소"
-msgstr "Cancel Automatic Tag"
 
 #: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
 msgid "해시태그 수정"
@@ -11938,6 +11930,11 @@ msgstr "Automatic hashtags"
 msgid "파일 해시태그·키워드 자동 부여"
 msgstr "Auto-assign file hashtags/keywords"
 
+# | 있습니다.</small>"
+#: viewer/widgets/settings_dialog.py
+msgid "인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, 도구 탭 '태그 ▾' 에서 되돌릴 수 있습니다."
+msgstr "Assigned in the background after indexing. Auto tags are marked ·# and can be undone from the Tools tab 'Tags ▾'."
+
 #: viewer/widgets/settings_dialog.py
 msgid "사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"
 msgstr "Automatic photo hashtags (date taken, region, device, screenshot)"
@@ -12086,11 +12083,6 @@ msgstr "Turn off for more vertical space in the main viewer. Clicking a menu tab
 #: viewer/widgets/settings_dialog.py
 msgid "슬라이드쇼 자동 넘김:"
 msgstr "Slideshow auto-advance:"
-
-# | 있습니다.</small>"
-#: viewer/widgets/settings_dialog.py
-msgid "인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, 도구 탭 '태그 ▾' 에서 되돌릴 수 있습니다."
-msgstr "Assigned in the background after indexing. Auto tags are marked ·# and can be undone from the Tools tab 'Tags ▾'."
 
 # | 않습니다(국내만). 읽은 글은 종류 판정에만 쓰고 저장하지 않습니다.</small>"
 #: viewer/widgets/settings_dialog.py
@@ -16433,4 +16425,10 @@ msgstr "Getting Started"
 
 #~ msgid "'{f}' 붙이기"
 #~ msgstr "Tag files as '{f}'"
+
+#~ msgid "모두 해제"
+#~ msgstr "Clear All"
+
+#~ msgid "자동 부여 취소"
+#~ msgstr "Cancel Automatic Tag"
 

@@ -603,26 +603,29 @@ check("§8.3 표시 — 수동 #·자동 ·# 구분", "#수동태그" in lbl and
 check("§8.3 연도·키워드는 접미 아님·툴팁", "2024" not in lbl
       and "2024" in it.toolTip(0) and "키워드하나" in it.toolTip(0))
 check("§8.5 자동 취소 어휘", "자동태그" in tstore.auto_tag_set())
-tree._revoke_auto_tag("자동태그")
-check("§8.5 이 태그만 회수", not tstore.is_auto(tree_pdf, "자동태그")
+tstore.clear_auto_tag("자동태그")                 # 261113-10 덧붙임: '#' 메뉴 '자동 부여 취소 ▸' 는 없앴다 — 저장소 기능만 남는다
+check("§8.5 이 태그만 회수(저장소)", not tstore.is_auto(tree_pdf, "자동태그")
       and tstore.get_manual(tree_pdf) == ["수동태그"])
 # 정리 — 실제 사용자 store 에 넣은 테스트 항목 제거
 tstore.set(tree_pdf, [])
 tstore.set_year(tree_pdf, None)
 tstore.set_keywords(tree_pdf, [])
 
-# 설정 키 회귀(§14.2 허용목록 함정) — 260830: 옵트인 전환(기본 꺼짐)
-check("P2 ★ 설정 기본값 = 꺼짐(옵트인)", mw._prefs.get("auto_tag_enabled") is False)
-check("P2 기본(꺼짐) → 스캔 미시작", mw._start_autotag_scan() is None
+# 설정 키 회귀(§14.2 허용목록 함정) — 260830 옵트인 → 261113-10 덧붙임 기본 켬(사용자 결정, 태그 SOT §3.5)
+check("P2 ★ 설정 기본값 = 켬(261113-10 덧붙임)", mw._prefs.get("auto_tag_enabled") is True
+      and mw._prefs.get("auto_tag_on_migrated") is True)
+mw._prefs["auto_tag_enabled"] = False
+check("P2 끄면 → 스캔 미시작", mw._start_autotag_scan() is None
       and getattr(mw, "_autotag_worker", None) is None)
+mw._prefs["auto_tag_enabled"] = True
 # 환경설정 체크박스 배선
 from viewer.widgets.settings_dialog import SettingsDialog  # noqa: E402
 
 sd = SettingsDialog(dict(mw._prefs), mw, host=mw)
-check("P2 환경설정 체크박스 존재·기본 해제", hasattr(sd, "chk_auto_tag")
-      and not sd.chk_auto_tag.isChecked())
-sd.chk_auto_tag.setChecked(True)
-check("P2 체크 → result_prefs 반영", sd.result_prefs().get("auto_tag_enabled") is True)
+check("P2 환경설정 체크박스 존재·기본 켬", hasattr(sd, "chk_auto_tag")
+      and sd.chk_auto_tag.isChecked())
+sd.chk_auto_tag.setChecked(False)
+check("P2 체크 해제 → result_prefs 반영", sd.result_prefs().get("auto_tag_enabled") is False)
 sd.deleteLater()
 mw._prefs["auto_tag_enabled"] = True
 
@@ -782,9 +785,9 @@ check("§5.1 버튼 #N 표시", tree.btn_tag.text() == "#1")
 tree._remove_tag_from_search("필터태그")
 check("§5.1 해제→토큰 제거", "#필터태그" not in tree.search_edit.text()
       and tree.btn_tag.text() == "#")
-tree.search_edit.setText("텍스트 #필터태그 #둘")
-tree._clear_tag_tokens()
-check("§5.1 모두 해제 — 텍스트는 보존", tree.search_edit.text() == "텍스트")
+tree._rebuild_tag_menu()                          # 261113-10 덧붙임: '모두 해제' 는 없앴다 — '검색 비우기' 만
+_mt = [a_.text() for a_ in tree._tag_menu.actions()]
+check("§5.1 '#' 메뉴에 '모두 해제' 없음·'검색 비우기' 있음", "모두 해제" not in _mt and "검색 비우기" in _mt, str(_mt))
 check("§5.1 연도 미노출(§3.6)", "2023" not in tstore.all_tags())
 tree.search_edit.setText("")
 tstore.set(s_pdf, [])

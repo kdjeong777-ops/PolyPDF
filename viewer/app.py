@@ -9393,15 +9393,18 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 getattr(self, "_settings_existed", True))
         self._prefs.setdefault("restore_session", True)
         self._prefs.setdefault("start_view_single", True)   # 260628-13: 시작 시 1단+쪽맞춤
-        # 260830(사용자 결정): 태그 자동 부여는 **옵트인** — 환경설정에서 체크해야 동작.
-        #   실사용 정확도 피드백(발표자료→보고서 오분류)으로 기본 꺼짐 전환(태그 SOT §3.5).
-        self._prefs.setdefault("auto_tag_enabled", False)
+        # 태그 SOT §3.5: 260830 옵트인(기본 꺼짐) → 261113-10 덧붙임(사용자 결정) **기본 켬** — 사진(§5.7)처럼
+        #   자동 태그가 목록에 나오게. 형식을 정해진 7개로 줄이고 확실한 속성(§5.3.1)을 더해 옵트인 이유가 약해졌다.
+        self._prefs.setdefault("auto_tag_enabled", True)
         # ★ 1회 마이그레이션: beta.104 는 옵트인 UI 없이 기본 켜짐으로 나가
         #   settings.json 에 true 가 저장돼 있다 — 그것은 사용자의 명시적 선택이
         #   아니므로 한 번 강제로 끈다(이후에는 환경설정 체크가 유일한 켜는 길).
         if not self._prefs.get("auto_tag_optin_migrated", False):
             self._prefs["auto_tag_enabled"] = False
             self._prefs["auto_tag_optin_migrated"] = True
+        if not self._prefs.get("auto_tag_on_migrated", False):     # 261113-10 덧붙임: 꺼 둔 설정을 한 번 켠다
+            self._prefs["auto_tag_enabled"] = True
+            self._prefs["auto_tag_on_migrated"] = True
         self._prefs.setdefault("autotag_summary_shown", False)  # §8.2 첫 실행 요약 1회
         # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그(날짜·동·장비·스크린샷)·종류(영수증·명함·서류)는 기본 켬
         self._prefs.setdefault("photo_auto_tag", True)
@@ -9856,9 +9859,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                                                old.get("text_hl_mark_pdf", False))),
             # 260829 P2: 태그 자동 부여 — 허용목록 미등재 시 조용히 유실(§14.2 함정)
             "auto_tag_enabled": bool(prefs.get("auto_tag_enabled",
-                                               old.get("auto_tag_enabled", False))),
+                                               old.get("auto_tag_enabled", True))),
             "auto_tag_optin_migrated": bool(prefs.get("auto_tag_optin_migrated",
                                             old.get("auto_tag_optin_migrated", False))),
+            "auto_tag_on_migrated": bool(prefs.get("auto_tag_on_migrated",
+                                         old.get("auto_tag_on_migrated", False))),   # 261113-10 덧붙임(태그 SOT §3.5)
             "autotag_summary_shown": bool(prefs.get("autotag_summary_shown",
                                                     old.get("autotag_summary_shown", False))),
             # 261105-6(태그 SOT §5.7): 사진 자동 태그 — 기본 켬, 허용목록에 빠지면 조용히 사라진다(§14.2)

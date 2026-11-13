@@ -34,6 +34,7 @@ class TagRulesPanel(QWidget):
         #   항목 이름은 태그 데이터라 번역하지 않는다 — 다국어 SOT §5
         g1 = QGroupBox(tr("자동 해시태그 (PDF 모드)"))
         v1 = QVBoxLayout(g1)
+        self.pdf_lay = v1                       # 261113-10 덧붙임: 맨 위에 '파일 해시태그·키워드 자동 부여' 체크가 들어온다(attach)
         gl = QGridLayout()
         gl.setHorizontalSpacing(16)
         self.fmt_chk = {}
@@ -132,6 +133,19 @@ def attach(dlg) -> TagRulesPanel:
     from viewer.auto_tag import load_rules
     panel = TagRulesPanel(load_rules())
     dlg.tag_content_layout.addWidget(panel)
+    try:                                         # 261113-10 덧붙임(태그 SOT §3.5): PDF 자동 부여 켜기를 PDF 묶음 맨 위로, 끄면 13 항목 잠김
+        cb = dlg.chk_auto_tag
+        f = cb.font()
+        f.setBold(True)
+        cb.setFont(f)
+        panel.pdf_lay.insertWidget(0, cb)
+        if getattr(dlg, "lbl_auto_tag_note", None) is not None:
+            panel.pdf_lay.insertWidget(1, dlg.lbl_auto_tag_note)
+        cb.toggled.connect(lambda on: [c.setEnabled(on) for c in panel.fmt_chk.values()])
+        for c in panel.fmt_chk.values():
+            c.setEnabled(cb.isChecked())
+    except Exception:
+        pass
     try:
         dlg.chk_photo_tag.toggled.connect(lambda on: [cb.setEnabled(on) for cb in panel.photo_chk.values()])
         for cb in panel.photo_chk.values():

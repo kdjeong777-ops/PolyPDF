@@ -2,8 +2,9 @@
 """사진 기본 정보 태그(meta) 지키기 · 새 태그 후보 쓰기를 메인에서 빼기 (태그 SOT §8.1·§5.7·§6.1-⑥, 응답성 SOT §4.8 — 261111-26·-28).
 
 261111-26 (SOT 점검 D·D', 사용자 답 '둘 다 막기'):
-A. '#' 메뉴 '자동 부여 취소 ▸' 에 사진 기본 정보 태그(지역·장비·날짜·스크린샷)가 없다 — 실제 메뉴를 만들어 본다.
+A. 자동 태그 회수(`auto_tag_set`·`clear_auto_tag`)에 사진 기본 정보 태그(지역·장비·날짜·스크린샷)가 없다.
    다른 부분(kind 등)에도 같은 태그가 있으면 그 부분만 회수하고, 기본 정보로 붙은 파일은 그대로.
+   261113-10 덧붙임(사용자 지시 '해시태그에서 자동부여 취소 항목 삭제 (환경설정에서 적용)'): '#' 메뉴에 '자동 부여 취소 ▸' 가 없다.
 B. 정보를 지운 사본(공유용 — 위치만·정보 모두, PDF 가림)은 기본 정보 태그를 넘기지 않는다 — 직접 붙인 태그·다른
    자동 태그는 그대로 따라간다(261111-10). 보통 사본(복사·다른 이름으로 저장)과 사진 평탄화 사본(261111-26 덧붙임, 사용자 답 '평탄화는 따라가게')은 종전대로 모두 따라간다.
 261111-28 (SOT 점검 결함 1):
@@ -50,14 +51,14 @@ try:
     st.set_auto_part(p3, "kind", ["영수증"])
     bt._list_tag_counts = lambda: {"영수증": 2}            # 목록 줄 개수는 이 검사와 무관 — 풀다운 본문이 만들어지게만
     bt._rebuild_tag_menu()
-    sub = [a.menu() for a in bt._tag_menu.actions() if a.menu() is not None and a.text() == "자동 부여 취소"]
-    names = [a.text().lstrip("·#") for a in sub[0].actions()] if sub else []
-    chk(names and "영수증" in names, "A 준비 — 다른 자동 태그는 메뉴에 있다", str(names))
-    chk(not {"고양시", "Galaxy S24", "2026-11-05"} & set(names), "A 사진 기본 정보 태그는 '자동 부여 취소' 에 없다", str(names))
+    texts = [a.text() for a in bt._tag_menu.actions()]
+    chk(texts and "자동 부여 취소" not in texts and not any(a.menu() for a in bt._tag_menu.actions()),
+        "A '#' 메뉴에 '자동 부여 취소 ▸' 가 없다(261113-10 덧붙임 — 환경설정에서)", str(texts))
+    names = st.auto_tag_set()
+    chk("영수증" in names, "A 준비 — 다른 자동 태그는 회수 대상", str(names))
+    chk(not {"고양시", "Galaxy S24", "2026-11-05"} & set(names), "A 사진 기본 정보 태그는 회수 대상이 아니다", str(names))
     chk("스크린샷" in names, "A 다른 부분에도 붙은 태그는 남는다(그 부분만 회수)", str(names))
-    act = [a for a in sub[0].actions() if a.text().lstrip("·#") == "스크린샷"] if sub else []
-    if act:
-        act[0].trigger(); app.processEvents()
+    st.clear_auto_tag("스크린샷")
     chk("스크린샷" in st.get_auto(p1) and "스크린샷" not in st.get_auto(p2),
         "A 회수해도 기본 정보로 붙은 파일은 그대로, 다른 부분만 빠진다", f"{st.get_auto(p1)} {st.get_auto(p2)}")
 

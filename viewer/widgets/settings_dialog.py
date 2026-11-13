@@ -884,12 +884,14 @@ class SettingsDialog(QDialog):
     def _build_tags(self, layout):
         grp = QGroupBox(tr("자동 해시태그"))
         gl = QVBoxLayout(grp)
-        # 260830(태그 SOT §3.5, 사용자 결정): 태그 자동 부여는 옵트인 — 기본 꺼짐
+        # 태그 SOT §3.5: PDF 자동 부여 — 기본 켬(261113-10 덧붙임, 종전 260830 옵트인). 체크·안내는 해시태그 내용 패널의
+        #   '자동 해시태그 (PDF 모드)' 묶음 맨 위로 옮긴다(`tag_rules_panel.attach`) — 패널이 없을 때만 여기 남는다
         self.chk_auto_tag = QCheckBox(tr("파일 해시태그·키워드 자동 부여"))
-        self.chk_auto_tag.setChecked(bool(self._prefs.get("auto_tag_enabled", False)))
+        self.chk_auto_tag.setChecked(bool(self._prefs.get("auto_tag_enabled", True)))
         gl.addWidget(self.chk_auto_tag)
-        gl.addWidget(_small(tr("인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, "
-                               "도구 탭 '태그 ▾' 에서 되돌릴 수 있습니다.")))
+        self.lbl_auto_tag_note = _small(tr("인덱싱 뒤 백그라운드에서 붙입니다. 자동 태그는 ·# 로 구분되고, "
+                                           "도구 탭 '태그 ▾' 에서 되돌릴 수 있습니다."))
+        gl.addWidget(self.lbl_auto_tag_note)
         # 261105-6(태그 SOT §5.7, 사용자 결정): 사진 자동 태그 — 기본 켬
         self.chk_photo_tag = QCheckBox(tr("사진 자동 해시태그 (촬영일·지역·장비·스크린샷)"))
         self.chk_photo_tag.setChecked(bool(self._prefs.get("photo_auto_tag", True)))
@@ -1250,7 +1252,7 @@ class SettingsDialog(QDialog):
             "restore_session": not self.rb_start_none.isChecked(),
             "restore_last_page": self.chk_last_page.isChecked(),
             "restore_screenshots": False,          # 260906-3: 시작은 항상 빈 목록
-            "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 260830: 옵트인(태그 SOT §3.5)
+            "auto_tag_enabled": self.chk_auto_tag.isChecked(),      # 태그 SOT §3.5 — 기본 켬(261113-10 덧붙임)
             "photo_auto_tag": self.chk_photo_tag.isChecked(),       # 261105-6(태그 SOT §5.7): 기본 켬
             "photo_kind_ocr": self.chk_photo_kind.isChecked(),
             "open_edit_mode": (self.cmb_open_mode.currentData() == "edit"),

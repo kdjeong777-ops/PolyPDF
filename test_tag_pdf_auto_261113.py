@@ -9,6 +9,8 @@ A. 환경설정 '자동 해시태그 (PDF 모드)' — 13 체크 상자(글 = �
 B. 속성 판정 — 날짜(PDF 만든 날)·한글/영어·스캔문서/텍스트문서·스크린샷(이름·화면 크기 그림), 끈 항목은 뺀다, 자동 부여 대상
 C. 한 번 정리 — 빠진 형식(기사)·사용자 분류·바꾼 형식 이름의 PDF 자동 태그를 정리, 직접 태그·사진 태그는 그대로, 표시를 쓰고 다시는 안 한다
 D. 끈 PDF 자동 해시태그는 PDF 에서만 뺀다 — 사진의 같은 이름(영수증·촬영일)은 그대로
+E. 261113-10 덧붙임(사용자 지시 '자동부여된 것이 해시태그 목록으로 안나와. 사진모드와 유사하게'·결정 '기본 켬 + 켜기 체크를 PDF 묶음 맨 위'):
+   PDF 자동 부여가 기본 켬이고 꺼 둔 설정도 한 번 켠다, 켜기 체크가 '자동 해시태그 (PDF 모드)' 맨 위(굵게)이고 끄면 13 항목이 잠긴다
 """
 import os, sys, tempfile, shutil, time, json
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -72,6 +74,9 @@ try:
     rp.write_text(json.dumps({"alias": {"보고서": "외국보고서", "SamsungSM-S918N": "GalaxyS23"},
                               "format_custom": [{"name": "계약서", "words": ["계약"]}], "format_off": ["기사", "논문"], "mine": 1},
                              ensure_ascii=False), encoding="utf-8")
+    # E 준비 — 종전 옵트인으로 꺼 둔 설정(한 번 켜기 표시 없음)
+    (Path(settings_dir()) / "settings.json").write_text(json.dumps({"auto_tag_enabled": False, "auto_tag_optin_migrated": True}),
+                                                        encoding="utf-8")
     from viewer.app import MainWindow
     from viewer.widgets.settings_dialog import SettingsDialog
     mw = MainWindow(); mw._skip_save_on_close = True
@@ -79,12 +84,23 @@ try:
     store = mw.bookmark_tree._tags
 
     # A
+    chk(mw._prefs.get("auto_tag_enabled") is True and mw._prefs.get("auto_tag_on_migrated") is True,
+        "E 꺼 둔 PDF 자동 부여를 한 번 켠다(기본 켬)", str({k: mw._prefs.get(k) for k in ("auto_tag_enabled", "auto_tag_on_migrated")}))
     dlg = SettingsDialog(mw._prefs, mw, host=mw, page="tags")
     pn = dlg.tag_rules_panel
+    g1e = [g for g in pn.findChildren(QGroupBox) if g.title() == "자동 해시태그 (PDF 모드)"]
+    if g1e:
+        top = pn.pdf_lay.itemAt(0).widget() if pn.pdf_lay.count() else None
+        chk(top is dlg.chk_auto_tag and g1e[0].isAncestorOf(top) and top.font().bold() and top.isChecked(),
+            "E 켜기 체크가 'PDF 모드' 묶음 맨 위(굵게, 켜짐)", str(top.text() if top else None))
+        dlg.chk_auto_tag.setChecked(False)
+        chk(not any(c.isEnabled() for c in pn.fmt_chk.values()), "E 끄면 13 항목이 잠긴다")
+        dlg.chk_auto_tag.setChecked(True)
+        chk(all(c.isEnabled() for c in pn.fmt_chk.values()), "E 다시 켜면 풀린다")
     g1 = [g for g in pn.findChildren(QGroupBox) if g.title() == "자동 해시태그 (PDF 모드)"]
     chk(bool(g1), "A 묶음 '자동 해시태그 (PDF 모드)'", str([g.title() for g in pn.findChildren(QGroupBox)]))
     if g1:
-        cbs = [c.text() for c in g1[0].findChildren(QCheckBox)]
+        cbs = [c.text() for c in g1[0].findChildren(QCheckBox) if c is not dlg.chk_auto_tag]
         chk(cbs == list(AT.PDF_AUTO_ITEMS) and cbs[:6] == ["날짜", "한글", "영어", "스크린샷", "스캔문서", "텍스트문서"]
             and cbs[6:] == ["설명서", "영수증", "공문", "견적서", "보고서", "발표자료", "논문"], "A 13 항목 — 사용자 차례", str(cbs))
         chk(not g1[0].findChildren(QLineEdit), "A 이름을 고칠 글 상자가 없다")
