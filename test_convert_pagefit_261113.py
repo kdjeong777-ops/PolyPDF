@@ -12,6 +12,7 @@ Word 모양 그대로도 71쪽이었다.
      목록 줄은 따로, 줄 간격은 '정확히', 설치 안 된 글꼴 이름이 남지 않는다
   E  Word 머리글은 원본에 머리말이 있던 쪽의 구역에만 — 없던 쪽(표지)은 빈 머리글·거리 0(머리글이 본문을 밀어 쪽마다 넘쳤다), 구역 끝 빈 문단은 1 pt
   F  (Word 가 있을 때만) Word 로 연 쪽 수 = 원본 쪽 수 — 모양 그대로·편집 가능
+  G  넘침 줄이기 B 안(사용자 결정) — Word 너비 어림 × 1.10(바꾼 글꼴·설치된 글꼴 둘 다), 표 칸 밖 문단 위 간격 90 %. **수정 전 코드로 실패**
 픽스처는 `test_fixtures.paragraph_pdf()`(3쪽 한글 문단) — 업무 PDF 는 쓰지 않는다. **수정 전 코드로 C·D·E 실패.**
 """
 import os, re, shutil, sys, tempfile, zipfile
@@ -172,6 +173,34 @@ try:
     ends = [p for p in de.paragraphs if p._p.pPr is not None and p._p.pPr.sectPr is not None and not p.text.strip()]
     chk(ends and all(p.paragraph_format.line_spacing is not None and abs(p.paragraph_format.line_spacing.pt - 1) < 0.01 for p in ends),
         "E 구역 끝 빈 문단은 1 pt(넘쳐 빈 쪽을 만들지 않게)", str(len(ends)))
+
+    # G. 넘침 줄이기 B 안(§1.2 'Word 너비 여유'·'Word 문단 위 간격') — 너비는 × WIDTH_MARGIN, 표 칸 밖 문단 위 간격은 × BEFORE_K
+    if word_fit is not None:
+        mk = layout.measure_fit("가나다라마바사", 10, False)
+        hw = word_fit.Hook({"mode": "shape"}).width("가나다라마바사", 10, "H2hdrM", 0, 50.0)
+        chk(mk and abs(hw / mk - getattr(word_fit, "WIDTH_MARGIN", 1.0)) < 0.01 and getattr(word_fit, "WIDTH_MARGIN", 1.0) >= 1.10,
+            "G Word 너비 어림 = 잰 너비 × 1.10(여유)", f"{hw} {mk}")
+        hi = word_fit.Hook({"mode": "shape"}).width("abc", 10, "Malgun Gothic", 0, 50.0)
+        chk(abs(hi - 50.0 * getattr(word_fit, "WIDTH_MARGIN", 1.0)) < 0.01 and hi > 50.0, "G 설치된 글꼴도 원본 너비 × 여유", str(hi))
+        import logging
+        logging.disable(logging.CRITICAL)
+        from viewer._vendor.pdf2docx import Converter, polypdf_fit
+
+        class _Flat(word_fit.Hook):
+            before_k = 1.0
+        befores = {}
+        for tag, hook in (("B", word_fit.Hook({"mode": "shape"})), ("1", _Flat({"mode": "shape"}))):
+            polypdf_fit.HOOK = hook
+            dstg = ROOT / f"g_{tag}.docx"
+            cv = Converter(str(src))
+            cv.convert(str(dstg), **word_fit.MARGIN_SETTINGS)
+            cv.close()
+            xg = Document(str(dstg)).element.body.xml
+            body_only = re.sub(r"<w:tbl>.*?</w:tbl>", "", xg, flags=re.S)
+            befores[tag] = sum(int(v) for v in re.findall(r'<w:spacing [^>]*w:before="(\d+)"', body_only))
+        polypdf_fit.HOOK = None
+        ratio = befores["B"] / max(1, befores["1"])
+        chk(0.85 <= ratio <= 0.95, "G 본문 문단 위 간격 = 90 %(표 칸 밖)", f"{befores} {ratio:.3f}")
 
     # F. Word 로 연 쪽 수
     from viewer.convert.word_com import word_installed

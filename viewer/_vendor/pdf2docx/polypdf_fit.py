@@ -62,6 +62,15 @@ def _text_spans(line):
     return [s for s in line.spans if isinstance(s, TextSpan)]
 
 
+def _in_cell(block):
+    p, k = getattr(block, 'parent', None), 0
+    while p is not None and k < 6:
+        if type(p).__name__ == 'Cell':
+            return True
+        p, k = getattr(p, 'parent', None), k + 1
+    return False
+
+
 def fit_block(block, layout_width):
     '''블록을 원본 줄 수 안에 — 줄 간격은 '정확히' 원본 줄 간격으로(Word 글꼴의 줄 높이를 타지 않게).'''
     if HOOK is None or not block.is_horizontal_text or not layout_width:
@@ -72,6 +81,8 @@ def fit_block(block, layout_width):
     if block.line_space_type != 0 and getattr(HOOK, 'exact', True):   # 상대 줄 간격 → 정확히(원본 줄 간격)
         block.line_space_type = 0
         block.parse_exact_line_spacing()
+    if not _in_cell(block):                          # 표 칸 밖 글 문단의 위 간격 — 꺾임이 남은 쪽의 여유(SOT §1.2 B 안)
+        block.before_space = max(0.0, float(block.before_space or 0) * float(getattr(HOOK, 'before_k', 1.0)))
     pitch = float(block.line_space or 0)
     # 문단 너비 — make_docx 가 쓰는 들여쓰기와 같게(오른쪽 들여쓰기는 0.1 인치 아래로 내림)
     from .common import constants

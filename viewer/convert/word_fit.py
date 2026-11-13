@@ -12,6 +12,8 @@ from viewer.convert import layout
 
 MARGIN_SETTINGS = {"page_margin_factor_top": 1.0, "page_margin_factor_bottom": 1.0}   # §1.2 'Word 쪽 여백'
 BOLD_K = 1.04      # 굵은 글자는 보통 글꼴 파일로 잰 너비보다 넓다(재는 글꼴 파일은 보통 굵기 하나)
+WIDTH_MARGIN = 1.10  # §1.2 'Word 너비 여유' — 문단 너비 어림·낱말 단위 줄 바꿈 몫(별첨4 검토: 1.05 → 47쪽, 1.10 → 43쪽)
+BEFORE_K = 0.9     # §1.2 'Word 문단 위 간격' — 표 칸 밖 글 문단의 위 간격 배율(사용자 결정 B 안)
 
 
 # ---- 부모: 쪽마다 줄 잇기 계획 ----------------------------------------------------
@@ -125,15 +127,17 @@ class Hook:
         return xml_safe(text)
 
     def width(self, text: str, size: float, name: str, flags: int, orig_w: float) -> float:
-        """Word 가 그릴 너비 — 설치된 글꼴이면 원본 너비, 아니면 바꿔 쓸 글꼴로 잰 너비."""
+        """Word 가 그릴 너비(쪽 맞춤용 어림) — 설치된 글꼴이면 원본 너비, 아니면 바꿔 쓸 글꼴로 잰 너비. 둘 다 × `WIDTH_MARGIN`(§1.2)."""
         face, inst = resolve_font(name, flags)
         if inst:
-            return float(orig_w)
+            return float(orig_w) * WIDTH_MARGIN
         serif = face == layout.SERIF_FACE
         m = layout.measure_fit(text, size, serif)
         if m is None:
-            return float(orig_w)
-        return float(m) * (BOLD_K if layout.font_kind(name, flags)[0] else 1.0)
+            return float(orig_w) * WIDTH_MARGIN
+        return float(m) * (BOLD_K if layout.font_kind(name, flags)[0] else 1.0) * WIDTH_MARGIN
+
+    before_k = BEFORE_K
 
     def fit(self, width, n_rows, avail, size, pitch=None, indent=0.0) -> dict:
         return layout.fit_plan(width, n_rows, avail, size, pitch, indent=indent)
