@@ -686,7 +686,7 @@ class TagApplyDialog(QDialog):
     def _fill_lists(self):
         """두 목록을 지금 고른 파일 기준으로(261114-2 덧붙임) — 붙은 태그: `#태그  n/m`(◐ = 일부, `·#` = 자동으로만),
         붙일 수 있는 태그: 문서 종류 · 기존 태그 · 새 태그 후보(고른 파일 중 하나라도 가진 태그는 오른쪽에만)."""
-        from viewer.auto_tag import FORMAT_VOCAB
+        from viewer.auto_tag import FORMAT_VOCAB, PDF_ATTR_ITEMS
         from viewer.tag_pairs import shared as _pairs
         pt = _pairs()
         files = self.target_paths()
@@ -726,14 +726,18 @@ class TagApplyDialog(QDialog):
         la.blockSignals(True)
         la.clear()
         sections = []
-        fmts = [f for f in FORMAT_VOCAB if f.lower() not in have and (not q or q in f.lower())]
-        sections.append((tr("문서 종류"), "fmt", fmts))
-        fl = {f.lower() for f in FORMAT_VOCAB}
+        # 261114-2 덧붙임 2(사용자 결정 '늘 보이게'): 문서 종류 7 + 자동 해시태그 속성 6 = 13 항목은 늘 보인다(붙어 있으면 ✓·◐)
+        sections.append((tr("문서 종류"), "fmt", [f for f in FORMAT_VOCAB if not q or q in f.lower()]))
+        sections.append((tr("자동 해시태그 속성"), "attr", [a for a in PDF_ATTR_ITEMS if not q or q in a.lower()]))
+        fl = {f.lower() for f in FORMAT_VOCAB} | {a.lower() for a in PDF_ATTR_ITEMS}
         known = [t for t in self._all_known() if t.lower() not in have and t.lower() not in fl and (not q or q in t.lower())]
         sections.append((tr("기존 태그"), "tag", self._order(known)))
         sections.append((tr("새 태그 후보"), "cand", [t for t, _h in self._cand_rows() if t.lower() not in have and (not q or q in t.lower())]))
         if self._show_cand_first:
-            sections = [sections[2]] + sections[:2]
+            sections = [sections[3]] + sections[:3]
+        import re as _re
+        lowc = {t.lower(): n for t, n in counts.items()}
+        n_date = sum(1 for p in files if any(_re.match(r"^\d{4}-\d{2}-\d{2}$", t) for t in self.shown_tags(p)))
         cand_n = {t: len(h) for t, h in self._cand_rows()}
         hf = la.font()
         hf.setBold(True)
@@ -747,6 +751,12 @@ class TagApplyDialog(QDialog):
             for t in tags:
                 mate = pt.partner(t)
                 txt = "  #%s%s" % (t, (" ⇄ " + mate) if mate else "")
+                if kind in ("fmt", "attr"):
+                    n_on = n_date if t == "날짜" else lowc.get(t.lower(), 0)
+                    if m and n_on >= m:
+                        txt += "  ✓"
+                    elif n_on:
+                        txt += "  ◐"
                 if kind == "cand":
                     txt += tr("  ({n}건)").format(n=cand_n.get(t, 0))
                 it = QListWidgetItem(txt)
@@ -754,6 +764,9 @@ class TagApplyDialog(QDialog):
                 it.setData(KIND_ROLE, kind)
                 if kind == "fmt":
                     it.setToolTip(tr("문서 종류 — 붙이면 고른 PDF 의 종류가 이것 하나로 바뀝니다"))
+                elif kind == "attr":
+                    it.setToolTip(tr("날짜는 고른 파일마다 그 파일 날짜로, 한글·영어와 스캔문서·텍스트문서는 짝 중 하나만 붙습니다")
+                                  if t in ("날짜", "한글", "영어", "스캔문서", "텍스트문서") else tr("자동 해시태그 속성"))
                 la.addItem(it)
                 if t in keep_a:
                     it.setSelected(True)
@@ -874,14 +887,31 @@ class TagApplyDialog(QDialog):
             return 0
         st = self._store
         before = {p: st.record(p) for p in files}
+        from viewer.auto_tag import PDF_ATTR_ITEMS
         fvl = {f.lower() for f in FORMAT_VOCAB}
         fmts = [t for t in tags if t.lower() in fvl] if on else []
-        if fmts:
-            tags = [t for t in tags if t.lower() not in fvl]
+        attrs = [t for t in tags if t in PDF_ATTR_ITEMS] if on else []
+        if fmts or attrs:
+            tags = [t for t in tags if t.lower() not in fvl and t not in PDF_ATTR_ITEMS]
         tl = {t.lower() for t in tags}
         with st.bulk():
             if fmts:
                 st.set_format([p for p in files if str(p).lower().endswith(".pdf")], fmts[-1])
+            for a in attrs:                              # 261114-2 덧붙임 2 — 속성 붙이기
+                for p in files:
+                    if a == "날짜":
+                        d = self._file_date(p)
+                        if d:
+                            self._add_manual(p, d)
+                        continue
+                    other = {"한글": "영어", "영어": "한글", "스캔문서": "텍스트문서", "텍스트문서": "스캔문서"}.get(a)
+                    if other:
+                        man = st.get_manual(p)
+                        if other in man:
+                            st.set(p, [m for m in man if m != other])
+                        if other in st.get_auto(p):
+                            st.reject(p, [other])
+                    self._add_manual(p, a)
             for p in files:
                 if not tags:
                     break
@@ -920,6 +950,29 @@ class TagApplyDialog(QDialog):
             self._after_change()
         self._refresh_marks()
         return len(changed)
+
+    def _add_manual(self, p, t):
+        """직접 태그로 붙인다(거절했던 것이면 거절을 푼다)."""
+        st = self._store
+        v = st._data.get(st._key(p))
+        if isinstance(v, dict) and any(r.lower() == t.lower() for r in v.get("rejected") or ()):
+            v["rejected"] = [r for r in v["rejected"] if r.lower() != t.lower()]
+        man = st.get_manual(p)
+        if t.lower() not in {m.lower() for m in man}:
+            st.set(p, man + [t])
+        else:
+            st._save()
+
+    def _file_date(self, p) -> str:
+        """그 파일 날짜 — 썸네일 위 '기간' 과 같은 기준(사진은 촬영일, PDF 는 파일 날짜). 아직 못 읽었으면 파일 날짜."""
+        d = (self._dates or {}).get(_norm(p))
+        if d:
+            return d
+        import time as _t
+        try:
+            return _t.strftime("%Y-%m-%d", _t.localtime(os.stat(p).st_mtime))
+        except (OSError, ValueError, OverflowError):
+            return ""
 
     def _restore(self, snap: dict):
         with self._store.bulk():

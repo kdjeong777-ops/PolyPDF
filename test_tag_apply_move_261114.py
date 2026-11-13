@@ -4,7 +4,8 @@
 사용자 지시: "사람이 고치기 어려운게 기존 '설명서'라는 등록된 명칭이 보이지 않아. 그리고, 해제하고, 등록하는 과정의 ux가 편리하지 않아.
 좌측은 등록가능한거, 우측은 등록된거 와 같은 스타일이 좋은데". 사용자 결정: 가로 두 목록·종류+모든 태그+후보·붙은 쪽에 ◐ n/m·썸네일 위 콤보.
 실제 MainWindow·TagApplyDialog 로(오프스크린, 실제 설정 폴더를 쓰지 않는다 — 검사 작성 SOT §14.7.2).
-A. 배치 — [붙일 수 있는 태그] [→ ←] [붙은 태그] | 썸네일, 붙일 수 있는 쪽에 문서 종류 7개·기존 태그·후보, 고른 파일에 있는 태그는 오른쪽에만
+A. 배치 — [붙일 수 있는 태그] [→ ←] [붙은 태그] | 썸네일, 문서 종류 7개·속성 6개는 늘 보이고(✓·◐ — 261114-2 덧붙임 2) 기존 태그는 고른 파일에 있으면 오른쪽에만
+H. 속성 붙이기 — 날짜는 파일마다 그 파일 날짜, 한글·영어·스캔문서·텍스트문서는 짝 중 하나만
 B. 붙은 태그 줄 — `n/m`·`◐ n/m`·자동으로만이면 `·#`
 C. 문서 종류 '설명서' 를 [→] — PDF 종류가 설명서 하나로(자동 발표자료는 거절)
 D. 기존 태그 두 번 누르기 = 붙이기, 붙은 줄 두 번 누르기 = 떼기, 끌어 놓기도
@@ -93,8 +94,12 @@ try:
         str([g(la), g(dlg.btn_to), g(lt), g(dlg.lst_files)]))
     heads = [la.item(i).text() for i in range(la.count()) if not la.item(i).data(Qt.ItemDataRole.UserRole)]
     av = rows(la)
-    chk(heads[:2] == ["문서 종류", "기존 태그"] and all(f in av for f in FORMAT_VOCAB if f != "발표자료"), "A 문서 종류 7개(붙은 것 빼고)·기존 태그 묶음", str(heads) + str(list(av)))
-    chk("포장" in av and "균열" not in av and "발표자료" not in av, "A 고른 파일에 있는 태그는 오른쪽에만, 다른 파일의 태그는 왼쪽에", str(list(av)))
+    from viewer.auto_tag import PDF_ATTR_ITEMS
+    chk(heads[:3] == ["문서 종류", "자동 해시태그 속성", "기존 태그"] and all(f in av for f in FORMAT_VOCAB) and all(a in av for a in PDF_ATTR_ITEMS),
+        "A 문서 종류 7개·자동 해시태그 속성 6개는 늘 보인다(261114-2 덧붙임 2)·기존 태그 묶음", str(heads) + str(list(av)))
+    chk(av.get("발표자료", "").endswith("✓") and av.get("스캔문서", "").endswith("◐") and not av.get("설명서", "").endswith(("✓", "◐")),
+        "A 13 항목 — 고른 파일 모두에 있으면 ✓, 일부만이면 ◐", str({k: av.get(k) for k in ("발표자료", "스캔문서", "설명서")}))
+    chk("포장" in av and "균열" not in av, "A 기존 태그는 고른 파일에 있으면 오른쪽에만, 다른 파일의 태그는 왼쪽에", str(list(av)))
 
     # B
     at = rows(lt)
@@ -107,7 +112,7 @@ try:
     QTest.mouseClick(dlg.btn_to, Qt.MouseButton.LeftButton); pump()
     chk(st.get_manual(P[0]) == ["설명서"] and "발표자료" in st.get_rejected(P[0]) and "설명서" in st.get_manual(P[1])
         and "발표자료" not in st.get(P[1]), "C 문서 종류 [→] — 종류가 설명서 하나로", f"{st.record(P[0])} {st.record(P[1])}")
-    chk("설명서" in rows(lt) and "설명서" not in rows(la), "C 옮긴 뒤 목록 — 설명서는 오른쪽으로")
+    chk("설명서" in rows(lt) and rows(la).get("설명서", "").endswith("✓"), "C 옮긴 뒤 목록 — 설명서는 오른쪽에, 왼쪽 줄은 ✓")
 
     # D
     it = pick(la, "포장")
@@ -139,6 +144,23 @@ try:
     chk(dlg.btn_find_add.isEnabled(), "F 없는 이름 — [추가] 켜짐")
     QTest.mouseClick(dlg.btn_find_add, Qt.MouseButton.LeftButton); pump()
     chk("newtag" in st.get_manual(P[0]) and "newtag" in st.get_manual(P[1]) and "newtag" not in st.get(P[2]), "F [추가] 로 곧바로 고른 파일에 붙인다")
+
+    # H 속성 붙이기(261114-2 덧붙임 2)
+    dlg.cmb_tagf.setCurrentIndex(0); dlg.cmb_has.setCurrentIndex(0); pump()
+    dlg.lst_files.clearSelection()
+    for k in range(dlg.lst_files.count()):
+        dlg.lst_files.item(k).setSelected(dlg.lst_files.item(k).data(Qt.ItemDataRole.UserRole) in (P[0], P[1]))
+    pump()
+    want = {p: dlg._file_date(p) for p in (P[0], P[1])}
+    pick(la, "날짜"); pump(); QTest.mouseClick(dlg.btn_to, Qt.MouseButton.LeftButton); pump()
+    chk(all(want[p] and want[p] in st.get_manual(p) for p in (P[0], P[1])), "H 날짜 — 고른 파일마다 그 파일 날짜(기간 거르기와 같은 날짜)", str(want))
+    pick(la, "한글"); pump(); QTest.mouseClick(dlg.btn_to, Qt.MouseButton.LeftButton); pump()
+    pick(la, "영어"); pump(); QTest.mouseClick(dlg.btn_to, Qt.MouseButton.LeftButton); pump()
+    chk("영어" in st.get_manual(P[0]) and "한글" not in st.get(P[0]), "H 한글·영어는 짝 중 하나만", str(st.get(P[0])))
+    pick(la, "텍스트문서"); pump(); QTest.mouseClick(dlg.btn_to, Qt.MouseButton.LeftButton); pump()
+    chk("텍스트문서" in st.get_manual(P[0]) and "스캔문서" not in st.get(P[0]) and "스캔문서" in st.get_rejected(P[0]),
+        "H 스캔문서·텍스트문서도 하나만 — 자동 스캔문서는 거절", str(st.record(P[0])))
+    chk(rows(la).get("텍스트문서", "").endswith("✓"), "H 붙인 속성 줄은 ✓ 로 남는다")
 
     # G
     i = dlg.cmb_tagf.findData("newtag")

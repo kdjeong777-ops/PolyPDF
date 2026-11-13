@@ -13143,6 +13143,10 @@ msgid "직접"
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "자동 해시태그 속성"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
 msgid "기존 태그"
 msgstr ""
 
@@ -13177,6 +13181,10 @@ msgstr ""
 #: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
 msgid "  ({n}건)"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+msgid "날짜는 고른 파일마다 그 파일 날짜로, 한글·영어와 스캔문서·텍스트문서는 짝 중 하나만 붙습니다"
 msgstr ""
 
 #: viewer/widgets/tag_batch_dialog.py
